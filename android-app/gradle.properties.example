@@ -1,0 +1,14 @@
+# Project-wide Gradle settings.
+org.gradle.jvmargs=-Xmx2048m --add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+android.useAndroidX=true
+android.enableJetifier=false
+kotlin.code.style=official
+android.nonTransitiveRClass=true
+kapt.use.worker.api=true
+android.overridePathCheck=true
+
+# MQTT HiveMQ Cloud Credentials
+# NOTE: This file should be in .gitignore to prevent committing credentials
+MQTT_BROKER_URL=ssl://YOUR_BROKER_URL:8883
+MQTT_BROKER_USER=YOUR_USERNAME
+MQTT_BROKER_PASS=YOUR_PASSWORD

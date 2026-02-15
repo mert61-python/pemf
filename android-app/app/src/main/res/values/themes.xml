@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PEMFVetSystem" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorPrimaryVariant">@color/primary_purple</item>
+        <item name="colorOnPrimary">@color/text_white</item>
+        <item name="colorSurface">@color/background_primary</item>
+        <item name="colorBackground">@color/background_primary</item>
+        <item name="android:windowBackground">@color/background_primary</item>
+        <item name="android:statusBarColor">@color/primary_blue</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+

@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_marginBottom="12dp"
+    android:background="@drawable/card_background"
+    android:elevation="2dp">
+
+    <!-- ESP ID and Connection Status -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/textESPId"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ESP_001"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <View
+            android:id="@+id/indicatorConnectionStatus"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/circle_indicator" />
+
+        <TextView
+            android:id="@+id/textConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bağlı"
+            android:textSize="14sp"
+            android:textColor="@color/text_secondary" />
+    </LinearLayout>
+
+    <!-- PWM Status -->
+    <LinearLayout
+        android:id="@+id/layoutPWMStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PWM Durumu: "
+            android:textStyle="bold"
+            android:textSize="14sp" />
+        <TextView
+            android:id="@+id/textPWMStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Aktif"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:id="@+id/layoutPWMFrequency"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Frekans: "
+                android:textStyle="bold"
+                android:textSize="14sp" />
+            <TextView
+                android:id="@+id/textPWMFrequency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="100 Hz"
+                android:layout_marginStart="16dp"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layoutPWMDutyCycle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Duty Cycle: "
+                android:textStyle="bold"
+                android:textSize="14sp" />
+            <TextView
+                android:id="@+id/textPWMDutyCycle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="50%"
+                android:layout_marginStart="16dp"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layoutPWMRemainingTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/textPWMRemainingTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kalan: 0:00"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Temperature -->
+    <LinearLayout
+        android:id="@+id/layoutTemperature"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bobin Sıcaklığı: "
+            android:textStyle="bold"
+            android:textSize="14sp" />
+        <TextView
+            android:id="@+id/textObjectTemperature"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="32.8°C"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- PWM Control Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="8dp">
+
+        <!-- Frequency Slider -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Frekans: "
+                android:textStyle="bold"
+                android:textSize="14sp" />
+
+            <SeekBar
+                android:id="@+id/seekBarFrequency"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:max="1000"
+                android:progress="100"
+                android:minHeight="48dp"
+                android:progressTint="@color/primary_blue"
+                android:thumbTint="@color/primary_blue"
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/editTextFrequency"
+                android:layout_width="80dp"
+                android:layout_height="48dp"
+                android:text="100"
+                android:textSize="14sp"
+                android:inputType="number"
+                android:gravity="center"
+                android:background="@drawable/edit_text_background"
+                android:textColor="@color/text_primary"
+                android:hint="Hz"
+                android:textColorHint="@color/text_secondary" />
+        </LinearLayout>
+
+        <!-- Duty Cycle Slider -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Duty Cycle: "
+                android:textStyle="bold"
+                android:textSize="14sp" />
+
+            <SeekBar
+                android:id="@+id/seekBarDuty"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:max="998"
+                android:progress="499"
+                android:minHeight="48dp"
+                android:progressTint="@color/primary_blue"
+                android:thumbTint="@color/primary_blue"
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/editTextDuty"
+                android:layout_width="80dp"
+                android:layout_height="48dp"
+                android:text="50.0"
+                android:textSize="14sp"
+                android:inputType="numberDecimal"
+                android:gravity="center"
+                android:background="@drawable/edit_text_background"
+                android:textColor="@color/text_primary"
+                android:hint="%"
+                android:textColorHint="@color/text_secondary" />
+        </LinearLayout>
+
+        <!-- Duration Slider -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Zaman (dk): "
+                android:textStyle="bold"
+                android:textSize="14sp" />
+
+            <SeekBar
+                android:id="@+id/seekBarDuration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:max="9999"
+                android:progress="0"
+                android:minHeight="48dp"
+                android:progressTint="@color/primary_blue"
+                android:thumbTint="@color/primary_blue"
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/editTextDuration"
+                android:layout_width="80dp"
+                android:layout_height="48dp"
+                android:text="0"
+                android:textSize="14sp"
+                android:inputType="number"
+                android:gravity="center"
+                android:background="@drawable/edit_text_background"
+                android:textColor="@color/text_primary"
+                android:hint="dk"
+                android:textColorHint="@color/text_secondary" />
+        </LinearLayout>
+
+        <!-- Start/Stop Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="Başlat"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/primary_blue" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonStop"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="Durdur"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/status_disconnected" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
+

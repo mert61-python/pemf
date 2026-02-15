@@ -1,0 +1,11 @@
+{
+  "coil_id": 1,
+  "wifi_ssid": "",
+  "wifi_pass": "",
+  "mqtt_server": "8593bfdb2f324ad88d08b54b5e37c0a9.s1.eu.hivemq.cloud",
+  "mqtt_port": 8883,
+  "mqtt_user": "afsuampemf",
+  "mqtt_pass": "Pemf1234",
+  "pwm_freq": 1000
+}
+

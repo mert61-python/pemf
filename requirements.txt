@@ -1,0 +1,10 @@
+onnxruntime
+PyQt6
+matplotlib
+paho-mqtt
+zeroconf
+pyqtgraph
+pandas
+PyOpenGL
+PyOpenGL_accelerate
+numpy

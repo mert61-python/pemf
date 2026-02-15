@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Automatic/gear icon -->
+  <circle cx="12" cy="12" r="3" stroke="#06b6d4" stroke-width="2" fill="none"/>
+  <path d="M12 1v6m0 10v6m11-7h-6m-10 0H1m15.5-6.5l-4.24 4.24M7.76 7.76L3.52 3.52m12.96 12.96l-4.24-4.24M7.76 16.24L3.52 20.48" stroke="#06b6d4" stroke-width="2" stroke-linecap="round"/>
+</svg>
