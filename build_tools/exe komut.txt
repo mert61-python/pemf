@@ -1,3 +1,0 @@
-& "c:\Users\merta\.conda\envs\gui\gui\myenv\Scripts\Activate.ps1"
-cd "c:\Users\merta\.conda\envs\gui\gui"
-python -m PyInstaller --clean --noconfirm build_tools\PEMF_GUI.spec
