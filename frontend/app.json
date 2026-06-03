@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "PEMF Vet",
+    "slug": "pemf-vet-responsive",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "pemfvet",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121827"
+      }
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

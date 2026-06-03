@@ -1,0 +1,84 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Databases
+database/*.db
+database/*.db-journal
+database/*.db-shm
+database/*.db-wal
+# Sablon (template) veritabanlarini HARIC tut (onlari repoda istiyoruz)
+!database/*_template.db
+
+# Logs
+logs/
+*.log
+
+# Large files & AI Models
+*.onnx
+# Küçük PKL modelleri (XGBoost vb.) repoda kalmalı, sadece çok büyükleri exclude ediyoruz
+# Eger belirli modeller indirelecekse, onnx'leri zaten sildik
+# ai_hub/**/*.pkl
+*.pt
+*.pth
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PyInstaller Spec output (optional)
+build_tools/Output/
+
+# LatteKurulum binaries (Too large for basic git repo)
+lattekurulum/VC_redist.x64.exe
+lattekurulum/stsw-stm32102/VCP_V1.5.0_Setup_W8_x64_64bits.exe
+dataset/

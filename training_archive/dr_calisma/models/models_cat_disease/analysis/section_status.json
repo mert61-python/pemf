@@ -1,0 +1,82 @@
+{
+  "ok": 15,
+  "skip": 0,
+  "fail": 0,
+  "sections": [
+    {
+      "id": 1,
+      "name": "CONFUSION MATRIX HEATMAP (top-1 model)",
+      "status": "OK"
+    },
+    {
+      "id": 2,
+      "name": "PER-CLASS PERFORMANCE BAR CHART",
+      "status": "OK"
+    },
+    {
+      "id": 3,
+      "name": "MODEL COMPARISON BAR CHART (top-20)",
+      "status": "OK"
+    },
+    {
+      "id": 4,
+      "name": "ROC CURVES (top-3, one-vs-rest)",
+      "status": "OK"
+    },
+    {
+      "id": 5,
+      "name": "RAW vs NORMAL vs DIAMOND COMPARISON",
+      "status": "OK"
+    },
+    {
+      "id": 6,
+      "name": "SIZE EFFECT (Small -> XXL)",
+      "status": "OK"
+    },
+    {
+      "id": 7,
+      "name": "SKLEARN MODEL COMPARISON",
+      "status": "OK"
+    },
+    {
+      "id": 8,
+      "name": "FEATURE IMPORTANCE (top sklearn)",
+      "status": "OK"
+    },
+    {
+      "id": 9,
+      "name": "SHAP (top-1 sklearn, 500 samples)",
+      "status": "OK"
+    },
+    {
+      "id": 10,
+      "name": "TRAINING CURVES (top-5 DL)",
+      "status": "OK"
+    },
+    {
+      "id": 11,
+      "name": "BOOTSTRAP CI (top-10)",
+      "status": "OK"
+    },
+    {
+      "id": 12,
+      "name": "MISCLASSIFICATION ANALYSIS",
+      "status": "OK"
+    },
+    {
+      "id": 13,
+      "name": "STATISTICAL TESTS (Friedman + Wilcoxon)",
+      "status": "OK"
+    },
+    {
+      "id": 14,
+      "name": "CALIBRATION (top-3)",
+      "status": "OK"
+    },
+    {
+      "id": 15,
+      "name": "LATEX TABLES (4 tablo)",
+      "status": "OK"
+    }
+  ]
+}

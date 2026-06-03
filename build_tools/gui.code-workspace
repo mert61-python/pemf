@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../../../Desktop/inference"
+		},
+		{
+			"path": "../../../../../Desktop/inference_kedi"
+		}
+	],
+	"settings": {
+		"python.envFile": "\"C:\\Users\\merta\\.conda\\envs\\gui\\python.exe\"",
+		"python.experiments.enabled": true,
+		"python.defaultInterpreterPath": "\"C:\\Users\\merta\\.conda\\envs\\gui\\python.exe\"",
+		"python-envs.defaultEnvManager": "\"C:\\Users\\merta\\.conda\\envs\\gui\\python.exe\""
+	}
+}

@@ -1,0 +1,37 @@
+\begin{table}[htbp]
+\centering
+\caption{Performance comparison of all 25 models on the cat disease classification benchmark.}
+\label{tab:main_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccccr}
+\toprule
+Model & Type & Acc (\%) & Top-2 (\%) & Top-3 (\%) & F1$_\text{macro}$ & $\kappa$ & MCC \\
+\midrule
+Stacking\_All\_Top5 & Ensemble & 93.1 & 99.2 & 99.7 & 93.1 & 92.7 & 92.7 \\
+Ensemble\_All\_Top5 & Ensemble & 93.0 & 99.5 & 99.9 & 93.0 & 92.6 & 92.6 \\
+Stacking\_SK\_Top5 & Ensemble & 92.9 & 99.2 & 99.7 & 92.9 & 92.5 & 92.5 \\
+Ensemble\_SK\_Top5 & Ensemble & 92.9 & 99.4 & 99.9 & 92.9 & 92.5 & 92.5 \\
+Ensemble\_DL\_Top5 & Ensemble & 92.7 & 99.4 & 99.9 & 92.7 & 92.3 & 92.3 \\
+Stacking\_DL\_Top5 & Ensemble & 92.7 & 99.1 & 99.6 & 92.6 & 92.2 & 92.2 \\
+HistGradientBoosting & Sklearn & 92.6 & 99.4 & 99.9 & 92.6 & 92.2 & 92.2 \\
+MLP\_Medium & DL Normal & 92.5 & 99.3 & 99.9 & 92.5 & 92.1 & 92.1 \\
+MLP\_Small & DL Normal & 92.5 & 99.3 & 99.9 & 92.5 & 92.1 & 92.1 \\
+RandomForest & Sklearn & 92.5 & 99.4 & 99.9 & 92.5 & 92.1 & 92.1 \\
+MLP\_XXL & DL Normal & 92.3 & 99.4 & 99.8 & 92.3 & 91.9 & 91.9 \\
+MLP\_Large & DL Normal & 92.3 & 99.3 & 99.8 & 92.3 & 91.9 & 91.9 \\
+XGBoost & Sklearn & 92.3 & 99.4 & 99.9 & 92.3 & 91.8 & 91.8 \\
+MLP\_XL & DL Normal & 92.2 & 99.4 & 99.8 & 92.2 & 91.8 & 91.8 \\
+MLP\_diamond\_Small & DL Diamond & 92.1 & 99.2 & 99.8 & 92.2 & 91.7 & 91.7 \\
+MLP\_diamond\_Medium & DL Diamond & 91.8 & 99.3 & 99.9 & 91.8 & 91.3 & 91.3 \\
+MLP\_diamond\_Large & DL Diamond & 91.7 & 99.1 & 99.8 & 91.7 & 91.2 & 91.2 \\
+MLP\_diamond\_XL & DL Diamond & 91.7 & 99.0 & 99.8 & 91.7 & 91.2 & 91.2 \\
+MLP\_diamond\_XXL & DL Diamond & 91.6 & 99.1 & 99.8 & 91.5 & 91.1 & 91.2 \\
+Bagging & Sklearn & 91.3 & 98.8 & 99.5 & 91.3 & 90.8 & 90.8 \\
+LogisticRegression & Sklearn & 91.1 & 99.1 & 99.8 & 91.1 & 90.6 & 90.6 \\
+ExtraTrees & Sklearn & 90.8 & 98.5 & 99.6 & 90.8 & 90.3 & 90.3 \\
+DecisionTree & Sklearn & 87.9 & 88.5 & 88.8 & 87.9 & 87.2 & 87.2 \\
+KNeighbors & Sklearn & 83.6 & 93.5 & 95.1 & 83.6 & 82.7 & 82.7 \\
+GaussianNB & Sklearn & 83.6 & 94.7 & 97.6 & 83.9 & 82.7 & 82.7 \\
+\bottomrule
+\end{tabular}}
+\end{table}

@@ -1,0 +1,68 @@
+{
+    "mqtt": {
+        "mode": "hybrid",
+        "description": "hybrid: Once local, sonra cloud | local: Sadece local | cloud: Sadece cloud",
+        "local_broker": {
+            "broker_url": "127.0.0.1",
+            "broker_port": 1883,
+            "use_tls": false,
+            "username": "",
+            "password": "",
+            "description": "GUI ayni makinede calisir (localhost). ESP'ler 192.168.137.1 (hotspot IP) uzerinden baglanir."
+        },
+        "cloud_broker": {
+            "broker_url": "8593bfdb2f324ad88d08b54b5e37c0a9.s1.eu.hivemq.cloud",
+            "broker_port": 8883,
+            "use_tls": true,
+            "username": "afsuampemf",
+            "password": "Pemf1234",
+            "tls_cert_sha256": "87b3632cbd9fbe4dbfa9bc767ef6cdebc6362fec4726d84558f49fdcacbcd97d",
+            "ca_cert_path": ""
+        },
+        "bridge_status_topic": "pemf/bridge/status",
+        "retry_delay_ms": 2000,
+        "max_retry_delay_ms": 60000,
+        "max_retries": 10
+    },
+    "email": {
+        "gmail_email": "mertproje12345@gmail.com",
+        "gmail_password": "ehcz tgbe frha fgxz"
+    },
+    "timers": {
+        "unified_tick_ms": 1000,
+        "graph_update_ms": 500,
+        "connection_check_ms": 5000,
+        "portal_check_ms": 10000
+    },
+    "performance": {
+        "latency_target_ms": 200,
+        "esp_publish_hz": 5,
+        "metrics": {
+            "latency_history_size": 2000,
+            "publish_every_renders": 5
+        },
+        "sensor_window": {
+            "update_interval_ms": 500,
+            "max_data_points": 150,
+            "skip_redraw_if_no_new_data": true,
+            "antialias": false,
+            "downsampling_method": "subsample"
+        },
+        "sqlite": {
+            "sensor_batch_size": 100,
+            "sensor_flush_interval_seconds": 1.0
+        },
+        "sync": {
+            "check_interval_ms": 30000,
+            "max_batch_size": 100,
+            "batch_pacing_ms": 5,
+            "max_queue_age_hours": 72,
+            "max_retry_count": 20,
+            "inflight_stale_seconds": 120,
+            "publish_ack_timeout_seconds": 3.0
+        }
+    },
+    "system": {
+        "version": "1"
+    }
+}

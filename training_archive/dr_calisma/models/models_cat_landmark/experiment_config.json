@@ -1,0 +1,19 @@
+{
+  "task": "keypoint_detection",
+  "dataset": "/home/user02/dr/dataset/cat_landmark/yolo_pose/data.yaml",
+  "keypoints": 48,
+  "models": [
+    "yolov8n-pose",
+    "yolov8s-pose",
+    "yolov8m-pose",
+    "yolo11n-pose",
+    "yolo11s-pose",
+    "yolo11m-pose",
+    "yolo26n-pose",
+    "yolo26s-pose",
+    "yolo26m-pose"
+  ],
+  "device": "cuda:0",
+  "imgsz": 640,
+  "best_model": "yolo26m-pose"
+}

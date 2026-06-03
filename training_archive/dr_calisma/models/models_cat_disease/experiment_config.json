@@ -1,0 +1,79 @@
+{
+  "seed": 42,
+  "approach": "cat disease multi-class classification",
+  "in_dim": 19,
+  "out_dim": 18,
+  "epoch_map": {
+    "Small": 500,
+    "Medium": 500,
+    "Large": 300,
+    "XL": 200,
+    "XXL": 200
+  },
+  "batch_size": 512,
+  "learning_rate": 0.001,
+  "optimizer": "AdamW",
+  "loss": "CrossEntropyLoss",
+  "dataset": {
+    "path": "/home/user02/dr/dataset/synthetic_cat_disease_100000.csv",
+    "total_rows": 100000,
+    "train_size": 80000,
+    "val_size": 10000,
+    "test_size": 10000,
+    "split_ratio": "80/10/10",
+    "stratified_on": "Disease_Prediction",
+    "n_classes": 18,
+    "classes": [
+      "Conjunctivitis",
+      "Feline Asthma",
+      "Feline Calicivirus",
+      "Feline Chlamydiosis",
+      "Feline Herpesvirus",
+      "Feline Immunodeficiency Virus",
+      "Feline Infectious Peritonitis",
+      "Feline Leukemia Virus",
+      "Feline Panleukopenia",
+      "Feline Renal Disease",
+      "Fungal Infection",
+      "Gastroenteritis",
+      "Hyperthyroidism",
+      "Inflammatory Bowel Disease",
+      "Intestinal Parasites",
+      "Pancreatitis",
+      "Ringworm",
+      "Upper Respiratory Infection"
+    ],
+    "feature_columns": [
+      "Age",
+      "Weight",
+      "Heart_Rate",
+      "Body_Temperature",
+      "Duration_days",
+      "Appetite_Loss_bin",
+      "Vomiting_bin",
+      "Diarrhea_bin",
+      "Coughing_bin",
+      "Labored_Breathing_bin",
+      "Lameness_bin",
+      "Skin_Lesions_bin",
+      "Nasal_Discharge_bin",
+      "Eye_Discharge_bin",
+      "has_Lethargy",
+      "has_Weight_Loss",
+      "has_Sneezing",
+      "has_Dehydration",
+      "has_Fever"
+    ]
+  },
+  "preprocessing": {
+    "dataset_shuffle": true,
+    "X_scaler": "StandardScaler",
+    "target_encoding": "LabelEncoder"
+  },
+  "models": {
+    "dl_models": 10,
+    "sklearn_models": 9,
+    "ensemble_models": 6,
+    "total": 25
+  }
+}

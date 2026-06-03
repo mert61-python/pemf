@@ -1,0 +1,97 @@
+{
+  "mqtt": {
+    "mode": "hybrid",
+    "local_broker": {
+      "broker_url": "127.0.0.1",
+      "broker_port": 1883,
+      "use_tls": false,
+      "username": "",
+      "password": ""
+    },
+    "cloud_broker": {
+      "broker_url": "8593bfdb2f324ad88d08b54b5e37c0a9.s1.eu.hivemq.cloud",
+      "broker_port": 8883,
+      "use_tls": true,
+      "username": "",
+      "password": "",
+      "tls_cert_sha256": "87b3632cbd9fbe4dbfa9bc767ef6cdebc6362fec4726d84558f49fdcacbcd97d",
+      "ca_cert_path": ""
+    },
+    "retry_delay_ms": 2000,
+    "max_retry_delay_ms": 60000,
+    "max_retries": 10,
+    "bridge_status_topic": "pemf/bridge/status"
+  },
+  "email": {
+    "gmail_email": "",
+    "gmail_password": ""
+  },
+  "timers": {
+    "unified_tick_ms": 1000,
+    "graph_update_ms": 150,
+    "connection_check_ms": 2000,
+    "portal_check_ms": 5000
+  },
+  "performance": {
+    "latency_target_ms": 200,
+    "esp_publish_hz": 5,
+    "metrics": {
+      "latency_history_size": 2000,
+      "publish_every_renders": 5
+    },
+    "sensor_window": {
+      "update_interval_ms": 50,
+      "max_data_points": 1500,
+      "skip_redraw_if_no_new_data": true
+    },
+    "sqlite": {
+      "sensor_batch_size": 100,
+      "sensor_flush_interval_seconds": 1.0
+    },
+    "sync": {
+      "check_interval_ms": 30000,
+      "max_batch_size": 100,
+      "batch_pacing_ms": 5,
+      "max_queue_age_hours": 72,
+      "max_retry_count": 20,
+      "inflight_stale_seconds": 120,
+      "publish_ack_timeout_seconds": 3.0
+    }
+  },
+  "system": {
+    "version": "1.0"
+  },
+  "application": {
+    "theme": "dark",
+    "language": "tr",
+    "auto_save": true,
+    "log_level": "INFO"
+  },
+  "treatment": {
+    "max_duration": 60,
+    "default_frequency": 10,
+    "default_intensity": 50
+  },
+  "serial": {
+    "port": "",
+    "baudrate": 115200,
+    "timeout": 1.0,
+    "emulation_mode": false,
+    "auto_connect": true
+  },
+  "websocket_port": 5555,
+  "http_port": 5050,
+  "udp_discovery_port": 5051,
+  "esp_udp_listening_port": 8767,
+  "default_websocket_host": "localhost",
+  "max_connections": 20,
+  "connection_timeout": 45,
+  "heartbeat_interval": 12,
+  "max_graph_points": 1500,
+  "coil_colors": [
+    "#FF0000",
+    "#00FF00",
+    "#0000FF"
+  ]
+}
+

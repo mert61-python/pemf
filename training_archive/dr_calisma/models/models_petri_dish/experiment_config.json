@@ -1,0 +1,20 @@
+{
+  "task": "instance_segmentation",
+  "dataset": "/home/user02/dr/dataset/petri_dish/data.yaml",
+  "models": [
+    "yolov8n-seg",
+    "yolov8s-seg",
+    "yolov8m-seg",
+    "yolo11n-seg",
+    "yolo11s-seg",
+    "yolo11m-seg",
+    "yolo26n-seg",
+    "yolo26s-seg",
+    "yolo26m-seg"
+  ],
+  "device": "cuda:0",
+  "imgsz": 640,
+  "seed": 42,
+  "framework": "ultralytics",
+  "results_csv": "/home/user02/dr/models/models_petri_dish/model_petri_dish_karsilastirma.csv"
+}

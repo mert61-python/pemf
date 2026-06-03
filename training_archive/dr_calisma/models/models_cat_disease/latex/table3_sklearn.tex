@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\caption{Sklearn model comparison for cat disease classification}
+\label{tab:sklearn}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\toprule
+Model & Accuracy & F1\_macro & Balanced\_Accuracy & Cohen\_Kappa & MCC & Log\_Loss & Train\_Time(s) \\
+\midrule
+HistGradientBoosting & 0.9259 & 0.9258 & 0.9259 & 0.9215 & 0.9216 & 0.1757 & 11.8 \\
+RandomForest & 0.9250 & 0.9249 & 0.9250 & 0.9206 & 0.9206 & 0.2313 & 0.6 \\
+XGBoost & 0.9226 & 0.9225 & 0.9226 & 0.9180 & 0.9181 & 0.2049 & 10.1 \\
+Bagging & 0.9134 & 0.9132 & 0.9134 & 0.9083 & 0.9083 & 0.3096 & 3.3 \\
+LogisticRegression & 0.9109 & 0.9108 & 0.9109 & 0.9057 & 0.9057 & 0.2145 & 3.2 \\
+ExtraTrees & 0.9082 & 0.9079 & 0.9082 & 0.9028 & 0.9028 & 0.3071 & 0.5 \\
+DecisionTree & 0.8787 & 0.8787 & 0.8787 & 0.8716 & 0.8716 & 4.2041 & 0.1 \\
+KNeighbors & 0.8364 & 0.8359 & 0.8364 & 0.8268 & 0.8269 & 1.9308 & 0.0 \\
+GaussianNB & 0.8364 & 0.8394 & 0.8364 & 0.8268 & 0.8275 & 0.9549 & 0.0 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
