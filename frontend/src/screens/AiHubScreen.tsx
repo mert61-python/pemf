@@ -52,18 +52,27 @@ export function AiHubScreen() {
 function PetOwnerAiScreen() {
   const { showToast } = useToast();
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [treatmentStatus, setTreatmentStatus] = useState<string>("");
 
   const takePhoto = async () => {
-    let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
-    if (!res.canceled) { setImageUri(res.assets[0].uri); setResult(null); setTreatmentStatus(""); }
+    let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7, base64: true });
+    if (!res.canceled) { 
+      setImageUri(res.assets[0].uri); 
+      setImageBase64(res.assets[0].base64 || null);
+      setResult(null); setTreatmentStatus(""); 
+    }
   };
 
   const pickImage = async () => {
-    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7 });
-    if (!res.canceled) { setImageUri(res.assets[0].uri); setResult(null); setTreatmentStatus(""); }
+    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7, base64: true });
+    if (!res.canceled) { 
+      setImageUri(res.assets[0].uri); 
+      setImageBase64(res.assets[0].base64 || null);
+      setResult(null); setTreatmentStatus(""); 
+    }
   };
 
   const analyzeImage = async () => {
@@ -73,7 +82,15 @@ function PetOwnerAiScreen() {
       const formData = new FormData();
       if (Platform.OS === 'web') {
         let blob;
-        if (imageUri.startsWith('data:')) {
+        if (imageBase64) {
+          const bstr = atob(imageBase64);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          blob = new Blob([u8arr], { type: 'image/jpeg' });
+        } else if (imageUri.startsWith('data:')) {
           const arr = imageUri.split(',');
           const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
           const bstr = atob(arr[1]);
@@ -144,7 +161,7 @@ function PetOwnerAiScreen() {
             <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => setImageUri(null)} />
+                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); }} />
               </View>
               <View style={{ flex: 1 }}>
                 <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={analyzeImage} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
