@@ -49,20 +49,12 @@ export function CoilControlCard({ coil, onCommand }: CoilControlCardProps) {
       </View>
 
       <View style={styles.actions}>
-        <Button 
-          label={coil.running ? "Güncelle" : "Başlat"} 
-          icon={<PlayCircle color={colors.white} size={18} />} 
-          onPress={handleStart} 
-          style={styles.actionBtn} 
-        />
-        <Button 
-          label="Durdur" 
-          variant="danger" 
-          icon={<Square color={colors.white} size={16} fill={colors.white} />} 
-          onPress={handleStop} 
-          disabled={!coil.running}
-          style={styles.actionBtn} 
-        />
+        <View style={{ flex: 1 }}>
+          <Button label={coil.running ? "Güncelle" : "Başlat"} icon={<PlayCircle color={colors.white} size={18} />} onPress={handleStart} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Durdur" variant="danger" icon={<Square color={colors.white} size={16} fill={colors.white} />} onPress={handleStop} disabled={!coil.running} />
+        </View>
       </View>
     </Card>
   );

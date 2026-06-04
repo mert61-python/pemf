@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { StyleSheet, Text, View, Image, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Alert } from "react-native";
+import { useState, useEffect, useRef } from "react";
+import { StyleSheet, Text, View, Image, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Alert, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Image as ImageIcon, Sparkles, Stethoscope, ScissorsSquare as Scan, Activity, Microscope, CheckCircle2 } from "lucide-react-native";
+import { Camera, Image as ImageIcon, Sparkles, Stethoscope, ScissorsSquare as Scan, Activity, Microscope, CheckCircle2, Video } from "lucide-react-native";
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -9,7 +10,6 @@ import { colors, radius, spacing, typography } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost } from "@/services/apiClient";
 import { serviceConfig } from "@/services/config";
-import { Platform } from "react-native";
 import { useUserMode } from "@/context/UserModeContext";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes";
@@ -130,29 +130,67 @@ function PetOwnerAiScreen() {
           <View style={{ gap: spacing.lg, marginTop: spacing.md }}>
             <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <Button style={{ flex: 1 }} variant="secondary" label="Yeni Fotoğraf" onPress={() => setImageUri(null)} />
-              <Button style={{ flex: 1 }} variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={analyzeImage} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
+              <View style={{ flex: 1 }}>
+                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => setImageUri(null)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={analyzeImage} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
+              </View>
             </View>
           </View>
         )}
 
-        {result && (
-          <View style={styles.petOwnerResult}>
-            <Text style={styles.petOwnerResultTitle}>Teşhis Sonucu</Text>
-            <Text style={styles.body}>Ağrı Skoru (FGS): <Text style={{ fontWeight: 'bold' }}>{result.fgs_total} / 10</Text></Text>
-            <Text style={styles.body}>Durum: <Text style={{ fontWeight: 'bold', color: result.fgs_total > 3 ? colors.danger : colors.success }}>{result.pain_level}</Text></Text>
-            {result.fgs_total > 3 && (
-              <View style={styles.recommendationBox}>
-                <Text style={styles.recommendationText}>Dostumuzun hafif ağrısı var gibi görünüyor. PEMF terapi ile onu rahatlatabiliriz.</Text>
-                <TouchableOpacity style={styles.startTherapyBtn} onPress={startAutoTreatment}>
-                  <CheckCircle2 color="#fff" size={20} />
-                  <Text style={styles.startTherapyText}>Otonom Tedaviyi Başlat</Text>
-                </TouchableOpacity>
+        {result && (() => {
+          let recommendation = "";
+          let requiresVet = false;
+          let showTherapy = false;
+          const score = result.fgs_total;
+          
+          if (score === 0) {
+            recommendation = "Dostunuzun yüz hatlarında herhangi bir ağrı veya stres belirtisi görülmüyor. Oldukça rahat görünüyor!";
+          } else if (score > 0 && score <= 3) {
+            recommendation = "Dostunuzda hafif bir rahatsızlık veya yorgunluk belirtisi olabilir. Bu durum geçici olabilir ancak gözlemlemeye devam edin. İsteğe bağlı olarak PEMF terapisi ile onu rahatlatabilirsiniz.";
+            showTherapy = true;
+          } else if (score > 3 && score <= 5) {
+            recommendation = "Orta derecede ağrı veya stres belirtileri tespit edildi! Yüz hatlarında belirgin bir gerginlik var. Otonom PEMF terapisi uygulayarak rahatlamasını sağlayabilirsiniz. Belirtiler 1-2 günden uzun sürerse hekime danışın.";
+            showTherapy = true;
+          } else {
+            recommendation = "ŞİDDETLİ AĞRI BELİRTİSİ! Dostumuz ciddi bir rahatsızlık yaşıyor olabilir. Lütfen vakit kaybetmeden VETERİNER HEKİMİNİZE BAŞVURUN.";
+            requiresVet = true;
+          }
+
+          return (
+            <View style={styles.petOwnerResult}>
+              <Text style={styles.petOwnerResultTitle}>Yapay Zeka Analiz Sonucu</Text>
+              
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+                <Text style={styles.body}>Ağrı Skoru (FGS):</Text>
+                <Text style={[styles.title, { color: score > 3 ? colors.danger : colors.success }]}>{score} / 10</Text>
               </View>
-            )}
-            {treatmentStatus ? <Text style={[styles.statusText, { textAlign: 'center', marginTop: spacing.md }]}>{treatmentStatus}</Text> : null}
-          </View>
-        )}
+
+              <View style={[styles.recommendationBox, requiresVet && { backgroundColor: colors.danger + "22", borderColor: colors.danger }]}>
+                <Text style={[styles.recommendationText, requiresVet && { color: colors.danger, fontWeight: 'bold' }]}>
+                  {recommendation}
+                </Text>
+                
+                {showTherapy && (
+                  <TouchableOpacity style={styles.startTherapyBtn} onPress={startAutoTreatment}>
+                    <CheckCircle2 color="#fff" size={20} />
+                    <Text style={styles.startTherapyText}>Otonom Rahatlama Terapisini Başlat</Text>
+                  </TouchableOpacity>
+                )}
+                {requiresVet && (
+                  <View style={[styles.startTherapyBtn, { backgroundColor: colors.danger }]}>
+                    <Stethoscope color="#fff" size={20} />
+                    <Text style={styles.startTherapyText}>Veteriner Kliniğini Ara</Text>
+                  </View>
+                )}
+              </View>
+
+              {treatmentStatus ? <Text style={[styles.statusText, { textAlign: 'center', marginTop: spacing.md }]}>{treatmentStatus}</Text> : null}
+            </View>
+          );
+        })()}
       </Card>
 
       <View style={{ marginTop: spacing.xl }}>
@@ -219,7 +257,27 @@ function DiseaseModule() {
           </TouchableOpacity>
         ))}
       </View>
-      <Button style={styles.analyzeBtn} variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhisi Başlat"} onPress={analyze} disabled={loading} />
+      <View style={{ marginTop: spacing.sm }}>
+        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhisi Başlat"} onPress={analyze} disabled={loading} />
+      </View>
+      
+      {result && (
+        <View style={styles.resultBox}>
+          <Text style={styles.resultTitle}>Yapay Zeka Olası Hastalık Tahminleri:</Text>
+          {result.length === 0 ? (
+            <Text style={styles.resultText}>Bu semptomlarla eşleşen belirgin bir hastalık bulunamadı.</Text>
+          ) : (
+            result.map((r, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
+                <Text style={[styles.resultText, { flex: 1 }]}>{r.disease}</Text>
+                <Text style={[styles.resultText, { fontWeight: 'bold', color: r.probability > 0.6 ? colors.danger : colors.warning }]}>
+                  %{(r.probability * 100).toFixed(1)}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      )}
     </Card>
   );
 }
@@ -229,6 +287,42 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  
+  const [isLive, setIsLive] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<any>(null);
+  const liveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isLive) {
+      if (!permission?.granted) requestPermission();
+      // Canlı yayın döngüsü (2 saniyede bir frame alır)
+      liveIntervalRef.current = setInterval(async () => {
+        if (cameraRef.current && !loading) {
+          try {
+            const photo = await cameraRef.current.takePictureAsync({ quality: 0.3, base64: true });
+            if (photo) {
+              setImageUri(photo.uri);
+              analyzeImage(photo.uri);
+            }
+          } catch (e) {
+            console.log("Kamera okuma hatası", e);
+          }
+        }
+      }, 2000);
+    } else {
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    }
+    return () => {
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    };
+  }, [isLive, permission, loading]);
+
+  const toggleLive = () => {
+    setIsLive(!isLive);
+    setImageUri(null);
+    setResult(null);
+  };
 
   const takePhoto = async () => {
     let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
@@ -239,17 +333,17 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
     if (!res.canceled) setImageUri(res.assets[0].uri);
   };
 
-  const analyzeImage = async () => {
-    if (!imageUri) return;
+  const analyzeImage = async (uriToAnalyze = imageUri) => {
+    if (!uriToAnalyze) return;
     setLoading(true);
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const res = await fetch(imageUri);
+        const res = await fetch(uriToAnalyze);
         const blob = await res.blob();
         formData.append("file", blob, "upload.jpg");
       } else {
-        formData.append("file", { uri: imageUri, name: "upload.jpg", type: "image/jpeg" } as any);
+        formData.append("file", { uri: uriToAnalyze, name: "upload.jpg", type: "image/jpeg" } as any);
       }
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
@@ -257,10 +351,13 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
         headers: { "Accept": "application/json" }
       });
       const data = await response.json();
-      if (response.ok && data.status === "success") setResult(data);
-      else showToast("Analiz sırasında hata oluştu.", "error");
+      if (response.ok && data.status === "success") {
+        setResult(data);
+        if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
+      }
+      else if (!isLive) showToast("Analiz sırasında hata oluştu.", "error");
     } catch (error) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      if (!isLive) showToast("Ağ veya sunucu hatası.", "error");
     } finally {
       setLoading(false);
     }
@@ -272,7 +369,18 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       <Text style={styles.subtitle}>{subtitle}</Text>
       
       <View style={styles.imagePreviewContainer}>
-        {imageUri ? (
+        {isLive ? (
+          <View style={styles.cameraContainer}>
+            <CameraView ref={cameraRef} style={styles.cameraView} facing="back" />
+            {result?.image_base64 && (
+              <Image source={{ uri: `data:image/jpeg;base64,${result.image_base64}` }} style={styles.cameraOverlay} />
+            )}
+            <View style={styles.liveIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>CANLI ANALİZ</Text>
+            </View>
+          </View>
+        ) : imageUri ? (
           <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} />
         ) : (
           <View style={styles.placeholderBox}>
@@ -283,11 +391,25 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       </View>
 
       <View style={styles.btnRow}>
-        <Button style={{ flex: 1 }} label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
-        <Button style={{ flex: 1 }} label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} />
+        <View style={{ flex: 1 }}>
+          <Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} disabled={isLive} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Fotoğraf Çek" icon={<Camera color={colors.white} size={16} />} onPress={takePhoto} disabled={isLive} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button 
+            label={isLive ? "Canlıyı Durdur" : "Canlı Kamera"} 
+            variant={isLive ? "danger" : "secondary"} 
+            icon={<Video color={isLive ? colors.white : colors.primary} size={16} />} 
+            onPress={toggleLive} 
+          />
+        </View>
       </View>
 
-      <Button style={styles.analyzeBtn} variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyzeImage} />
+      <View style={styles.analyzeBtn}>
+        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyzeImage} />
+      </View>
 
       {result && (
         <View style={styles.resultBox}>
@@ -313,8 +435,8 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
           {result.cat_count !== undefined && <Text style={styles.resultText}>Tespit Edilen Kedi: <Text style={{fontWeight:'bold'}}>{result.cat_count}</Text></Text>}
           {result.prediction && (() => {
              const lbl = result.prediction.label === "Sick" ? "Hasta (Riskli)" : "Sağlıklı";
-             const prob = result.prediction.probability_sick !== undefined ? (result.prediction.probability_sick * 100).toFixed(1) : "?";
-             return <Text style={styles.resultText}>Termal Tespit: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}}>{lbl}</Text> (Olasılık: %{prob})</Text>;
+             const prob = result.prediction.confidence !== undefined ? (result.prediction.confidence * 100).toFixed(1) : "?";
+             return <Text style={styles.resultText}>Termal Tespit: <Text style={{fontWeight:'bold', color: result.prediction.label === "Sick" ? colors.danger : colors.success}}>{lbl}</Text> (Doğruluk: %{prob})</Text>;
           })()}
           {result.counts && (
             <>
@@ -332,12 +454,13 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   tabContainer: { flexDirection: "row", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
-  tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.full, backgroundColor: colors.bgAlt, gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  tabBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: 9999, backgroundColor: colors.bgAlt, gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
   tabBtnActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   tabLabel: { color: colors.textMuted, fontSize: typography.body, fontWeight: "700" },
   tabLabelActive: { color: colors.primary },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   card: { gap: spacing.lg },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },
   subtitle: { color: colors.textMuted, fontSize: typography.body, marginBottom: spacing.sm },
   input: { backgroundColor: colors.bg, color: colors.text, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
@@ -346,13 +469,33 @@ const styles = StyleSheet.create({
   symptomBtnActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   symptomLabel: { color: colors.textMuted, fontSize: typography.small },
   symptomLabelActive: { color: colors.primary, fontWeight: "bold" },
-  imagePreviewContainer: { width: "100%", height: 300, backgroundColor: colors.bg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden", justifyContent: "center", alignItems: "center" },
+  imagePreviewContainer: { width: "100%", height: 300, backgroundColor: colors.bg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden", justifyContent: "center", alignItems: "center", position: "relative" },
   imagePreview: { width: "100%", height: "100%", resizeMode: "contain" },
+  cameraContainer: { width: "100%", height: "100%", position: "relative" },
+  cameraView: { flex: 1 },
+  cameraOverlay: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", resizeMode: "contain", opacity: 0.8 },
+  liveIndicator: { position: "absolute", top: 12, right: 12, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 6 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
+  liveText: { color: colors.white, fontSize: 10, fontWeight: "bold" },
   placeholderBox: { alignItems: "center", gap: spacing.md },
   placeholderText: { color: colors.textMuted, fontSize: typography.body },
   btnRow: { flexDirection: "row", gap: spacing.md },
   analyzeBtn: { marginTop: spacing.sm },
   resultBox: { marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.bgAlt, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.primarySoft },
   resultTitle: { color: colors.primary, fontSize: typography.body, fontWeight: "800", marginBottom: spacing.xs },
-  resultText: { color: colors.text, fontSize: typography.body, marginTop: spacing.xs }
+  resultText: { color: colors.text, fontSize: typography.body, marginTop: spacing.xs },
+  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  bigActionBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: radius.md, alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
+  bigActionText: { color: '#fff', fontSize: typography.subtitle, fontWeight: '800' },
+  secondaryActionBtn: { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
+  secondaryActionText: { color: colors.primary, fontSize: typography.subtitle, fontWeight: '700' },
+  previewImage: { width: '100%', height: 300, borderRadius: radius.md, backgroundColor: colors.bg },
+  petOwnerResult: { marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  petOwnerResultTitle: { fontSize: typography.subtitle, color: colors.text, fontWeight: '800', marginBottom: spacing.sm },
+  body: { color: colors.text, fontSize: typography.body, marginBottom: 4 },
+  recommendationBox: { backgroundColor: colors.warning + "22", padding: spacing.md, borderRadius: radius.md, marginTop: spacing.md, borderWidth: 1, borderColor: colors.warning },
+  recommendationText: { color: colors.text, fontSize: typography.small, marginBottom: spacing.md },
+  startTherapyBtn: { backgroundColor: colors.success, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: spacing.md, borderRadius: radius.md, gap: spacing.sm },
+  startTherapyText: { color: '#fff', fontWeight: '800', fontSize: typography.body },
+  statusText: { color: colors.primary, fontWeight: 'bold' }
 });

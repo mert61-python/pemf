@@ -534,7 +534,7 @@ class MainWindow(QMainWindow, StyleMixin):
     def check_for_updates(self):
         try:
             from services.updater_service import UpdateCheckerThread
-            url = "https://raw.githubusercontent.com/mert61-python/pemf/esp/version.json"
+            url = "https://raw.githubusercontent.com/mert61-python/pemf-update/main/version.json"
             self.update_checker = UpdateCheckerThread(self.SOFTWARE_VERSION, url, self)
             self.update_checker.update_available.connect(self.on_update_available)
             self.update_checker.start()
@@ -829,6 +829,17 @@ class MainWindow(QMainWindow, StyleMixin):
         
         self.logger.info("=== GUI Application Started ===")
         self.logger.info(f"Log directory: {log_dir}")
+        
+        # ─── FRONTEND OTO-GÜNCELLEYİCİ BAŞLAT ─────────
+        try:
+            from services.frontend_updater_service import FrontendUpdaterThread
+            self.frontend_updater = FrontendUpdaterThread(current_version="1.0.0", parent=self)
+            self.frontend_updater.update_finished.connect(
+                lambda msg: QTimer.singleShot(3000, lambda: self.notification_panel.add_notification(msg, "info")) if hasattr(self, 'notification_panel') else self.logger.info(msg)
+            )
+            self.frontend_updater.start()
+        except Exception as e:
+            self.logger.error(f"Frontend Updater başlatılamadı: {e}")
         
         # Log user context
         if self.current_user:

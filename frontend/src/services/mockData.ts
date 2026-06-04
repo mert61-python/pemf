@@ -11,10 +11,22 @@ export const mockSnapshot: DashboardSnapshot = {
     owner: "Demo Sahip"
   },
   activeTreatment: {
-    mode: "Otomatik Doku İyileşmesi",
-    frequencyHz: 42,
-    intensityMt: 2.4,
-    remainingMin: 18
+    mode: "Doku Yenileme",
+    frequencyHz: 12.5,
+    intensityMt: 4.2,
+    remainingMin: 18,
+    elapsedSec: 720,
+    durationSec: 1800,
+    isActive: true
+  },
+  notifications: [],
+  system: {
+    softwareVersion: "1.0.0",
+    hardwareVersion: "v1.2",
+    deviceId: "PEMF-MOCK",
+    totalSessions: 124,
+    uptime: "02:15:43",
+    startTime: "2024-03-20T08:00:00Z"
   },
   coils: Array.from({ length: 8 }, (_, index) => ({
     id: index + 1,

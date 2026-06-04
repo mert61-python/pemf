@@ -849,7 +849,7 @@ class ThermalPanel(QWidget):
 
     def _on_done(self, result: dict):
         label      = result.get("label", "Unknown")
-        prob_sick  = float(result.get("prob_sick", 0.0))
+        prob_sick  = float(result.get("probability_sick", 0.0))
         confidence = float(result.get("confidence", 0.0))
 
         is_sick = label.upper() == "SICK"

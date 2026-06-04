@@ -7,14 +7,15 @@ interface StatusPillProps {
   state: ConnectionState;
 }
 
-const stateColors: Record<ConnectionState, { bg: string; fg: string }> = {
-  online: { bg: colors.successSoft, fg: colors.success },
-  warning: { bg: colors.warningSoft, fg: colors.warning },
-  offline: { bg: colors.dangerSoft, fg: colors.danger }
+const STATE_COLORS: Record<ConnectionState, { bg: string; fg: string }> = {
+  online: { bg: "#052e16", fg: "#22c55e" }, // success soft
+  warning: { bg: "#451a03", fg: "#f59e0b" }, // warning soft
+  offline: { bg: "#450a0a", fg: "#ef4444" }, // danger soft
+  error: { bg: "#450a0a", fg: "#ef4444" } // danger soft
 };
 
 export function StatusPill({ label, state }: StatusPillProps) {
-  const palette = stateColors[state];
+  const palette = STATE_COLORS[state];
   return (
     <View style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.fg }]}>
       <View style={[styles.dot, { backgroundColor: palette.fg }]} />

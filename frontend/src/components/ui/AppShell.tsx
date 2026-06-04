@@ -1,11 +1,12 @@
 import { ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Activity, BarChart3, BrainCircuit, Gauge, History, LayoutDashboard, Settings, SlidersHorizontal, Waves, Users, type LucideIcon } from "lucide-react-native";
+import { Activity, BarChart3, Bell, BrainCircuit, Gauge, History, LayoutDashboard, Settings, SlidersHorizontal, Waves, Users, type LucideIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useResponsive } from "@/hooks/useResponsive";
 import { colors, radius, spacing, typography } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { useUserMode } from "@/context/UserModeContext";
+import { useLiveData } from "@/context/LiveDataContext";
 
 interface NavItem {
   key: RouteKey;
@@ -38,6 +39,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { isExpert } = useUserMode();
+  const { unreadCount, wsConnected } = useLiveData();
   const desktop = responsive.isDesktop || responsive.isTablet;
 
   const navItems = allNavItems.filter(item => !item.expertOnly || isExpert);
@@ -69,9 +71,20 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
 
       <View style={styles.main}>
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerLeft}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <View style={[styles.wsIndicator, !wsConnected && styles.wsIndicatorOff]} />
+            {unreadCount > 0 && (
+              <View style={styles.notifBadgeWrap}>
+                <Bell size={16} color={colors.textMuted} />
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -171,8 +184,27 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg
+    paddingVertical: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
+  headerLeft: { flex: 1 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  wsIndicator: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: "#22c55e",
+    shadowColor: "#22c55e", shadowOpacity: 0.8, shadowRadius: 4,
+  },
+  wsIndicatorOff: { backgroundColor: "#f59e0b", shadowColor: "#f59e0b" },
+  notifBadgeWrap: { position: "relative", padding: spacing.xs },
+  notifBadge: {
+    position: "absolute", top: 0, right: 0,
+    backgroundColor: "#ef4444",
+    borderRadius: 8, minWidth: 16, height: 16,
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
   title: {
     color: colors.text,
     fontSize: typography.title,

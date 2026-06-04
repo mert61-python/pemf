@@ -91,6 +91,54 @@ class PatientInput(BaseModel):
 class AutoPresetPayload(BaseModel):
     target_condition: str
 
+class SessionStartPayload(BaseModel):
+    patient_id: str = ""
+    patient_name: str = ""
+    mode: str = "Manuel"  # Manuel | Otomatik | AI
+    target_condition: str = ""
+    frequency: float = 50.0
+    duty: float = 25.0
+    intensity: float = 25.0
+    duration_minutes: int = 20
+    coil_ids: list = []  # empty = all coils
+
+class CoilControlPayload(BaseModel):
+    freq: float = 50.0
+    duty: float = 25.0
+    phase: float = 0.0
+    duration: int = 0
+    start: bool = True
+
+class BatchCoilPayload(BaseModel):
+    coil_ids: list[int]  # e.g. [1,2,3]
+    freq: float = 50.0
+    duty: float = 25.0
+    phase: float = 0.0
+    duration: int = 0
+    start: bool = True
+
+# ── MQTT publish helper (used by headless and GUI-less mode) ─────────────────
+import json as _json
+
+def _mqtt_publish(topic: str, payload: dict) -> bool:
+    """Publish a JSON payload to the local MQTT broker. Returns success."""
+    try:
+        import paho.mqtt.client as _mqtt
+        c = _mqtt.Client(client_id="api_server_pub", clean_session=True)
+        c.connect("127.0.0.1", 1883, 5)
+        c.publish(topic, _json.dumps(payload), qos=1)
+        c.disconnect()
+        return True
+    except Exception:
+        return False
+
+# ── Active session state (in-memory, shared) ─────────────────────────────────
+from datetime import datetime as _dt
+import threading as _threading
+
+_session_lock = _threading.Lock()
+_active_session: dict = {}  # empty when no session running
+
 @app.post("/api/hardware/auto_preset")
 async def auto_preset(payload: AutoPresetPayload):
     """
@@ -171,6 +219,215 @@ async def hardware_command(payload: CommandPayload):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Per-coil MQTT control (direct ESP command via MQTT) ───────────────────────
+@app.post("/api/coil/{coil_id}/control")
+async def control_single_coil(coil_id: int, payload: CoilControlPayload):
+    """Send a start/stop command to a specific ESP coil via MQTT."""
+    import time
+    if coil_id < 1 or coil_id > 8:
+        raise HTTPException(status_code=400, detail="Geçersiz bobin ID (1-8)")
+
+    command_id = f"react_{coil_id}_{int(time.time() * 1000)}"
+
+    if payload.start:
+        mqtt_payload = {
+            "command": "start",
+            "command_id": command_id,
+            "freq": payload.freq,
+            "duty": payload.duty,
+            "phase": payload.phase,
+            "duration": payload.duration,
+        }
+    else:
+        mqtt_payload = {"command": "stop", "command_id": command_id}
+
+    # Also update hardware controller if available
+    if state.hardware and coil_id <= 5:
+        state.hardware.update_coil(
+            coil_id, payload.freq, payload.duty, payload.phase, payload.duration, start=payload.start
+        )
+
+    # Publish to MQTT broker (ESP listens here)
+    ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+    return {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id}
+
+
+@app.post("/api/coil/batch")
+async def control_batch_coils(payload: BatchCoilPayload):
+    """Send the same command to multiple coils at once."""
+    import time
+    results = []
+    for coil_id in payload.coil_ids:
+        if coil_id < 1 or coil_id > 8:
+            results.append({"coilId": coil_id, "status": "invalid"})
+            continue
+        command_id = f"react_batch_{coil_id}_{int(time.time() * 1000)}"
+        if payload.start:
+            mqtt_payload = {
+                "command": "start",
+                "command_id": command_id,
+                "freq": payload.freq,
+                "duty": payload.duty,
+                "phase": payload.phase,
+                "duration": payload.duration,
+            }
+        else:
+            mqtt_payload = {"command": "stop", "command_id": command_id}
+        ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+        if state.hardware and coil_id <= 5:
+            state.hardware.update_coil(
+                coil_id, payload.freq, payload.duty, payload.phase, payload.duration, start=payload.start
+            )
+        results.append({"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable"})
+    return {"status": "success", "results": results}
+
+
+# ── Session management ────────────────────────────────────────────────────────
+@app.post("/api/session/start")
+async def start_session(payload: SessionStartPayload):
+    """Start a new treatment session."""
+    import time
+    global _active_session
+    with _session_lock:
+        if _active_session.get("is_active"):
+            raise HTTPException(status_code=409, detail="Zaten aktif bir seans var.")
+
+        coil_ids = payload.coil_ids or list(range(1, 9))
+        _active_session = {
+            "is_active": True,
+            "session_id": f"react_{int(time.time())}",
+            "patient_id": payload.patient_id,
+            "patient_name": payload.patient_name,
+            "mode": payload.mode,
+            "target_condition": payload.target_condition,
+            "frequency": payload.frequency,
+            "duty": payload.duty,
+            "intensity": payload.intensity,
+            "duration_minutes": payload.duration_minutes,
+            "start_time": time.time(),
+            "coil_ids": coil_ids,
+        }
+
+    # Send MQTT commands to all target coils
+    import time as _t
+    for coil_id in coil_ids:
+        mqtt_payload = {
+            "command": "start",
+            "command_id": f"sess_{coil_id}_{int(_t.time() * 1000)}",
+            "freq": payload.frequency,
+            "duty": payload.duty,
+            "phase": 0.0,
+            "duration": payload.duration_minutes * 60,
+        }
+        _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+
+    if state.hardware:
+        state.hardware.start_all_coils(payload.frequency, payload.duty, 0.0, payload.duration_minutes * 60)
+
+    # Sync to bridge for WS broadcast
+    try:
+        from servers.frontend_bridge import update_session_state
+        update_session_state(
+            is_active=True,
+            mode=payload.mode,
+            freq=payload.frequency,
+            intensity=payload.intensity,
+            remaining_min=payload.duration_minutes,
+            duration_sec=payload.duration_minutes * 60,
+        )
+    except Exception:
+        pass
+
+    return {"status": "success", "session": _active_session}
+
+
+@app.post("/api/session/stop")
+async def stop_session():
+    """Stop the active treatment session."""
+    global _active_session
+    with _session_lock:
+        if not _active_session.get("is_active"):
+            return {"status": "ok", "message": "Aktif seans yok."}
+        coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
+        _active_session["is_active"] = False
+
+    for coil_id in coil_ids:
+        import time
+        _mqtt_publish(f"pemf/coil/{coil_id}/control", {
+            "command": "stop",
+            "command_id": f"stop_{coil_id}_{int(time.time() * 1000)}"
+        })
+
+    if state.hardware:
+        state.hardware.stop_all_coils()
+
+    try:
+        from servers.frontend_bridge import update_session_state
+        update_session_state(is_active=False, mode="Sistem Hazır")
+    except Exception:
+        pass
+
+    return {"status": "success", "message": "Seans durduruldu."}
+
+
+@app.get("/api/session/active")
+async def get_active_session():
+    """Return current active session state."""
+    import time
+    with _session_lock:
+        sess = dict(_active_session)
+    if sess.get("is_active"):
+        elapsed = int(time.time() - sess.get("start_time", time.time()))
+        total = sess.get("duration_minutes", 0) * 60
+        remaining = max(0, total - elapsed)
+        sess["elapsed_sec"] = elapsed
+        sess["remaining_sec"] = remaining
+        sess["remaining_min"] = remaining // 60
+        # Auto-stop if time is up
+        if remaining == 0 and total > 0:
+            sess["is_active"] = False
+            with _session_lock:
+                _active_session["is_active"] = False
+    return sess
+
+
+# ── System info & gateway status ──────────────────────────────────────────────
+@app.get("/api/system/info")
+async def system_info():
+    """Return software/hardware version, device ID, uptime."""
+    from datetime import datetime
+    try:
+        from utils.path_utils import get_unique_device_id
+        device_id = get_unique_device_id()
+    except Exception:
+        device_id = "PEMF-001"
+    return {
+        "softwareVersion": "1",
+        "hardwareVersion": "HW-2025.1",
+        "deviceId": device_id,
+        "stmConnected": state.core.stm_is_connected if state.core else False,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+@app.get("/api/gateway/status")
+async def gateway_status():
+    """Return Mosquitto/Network/Bridge status."""
+    status = {
+        "mqttConnected": False,
+        "brokerRunning": False,
+        "bridgeConnected": False,
+        "networkOnline": False,
+        "hotspotActive": False,
+    }
+    try:
+        from servers.frontend_bridge import _live_state
+        status["mqttConnected"] = _live_state.get("mqtt") == "online"
+        status["gatewayState"] = _live_state.get("gateway", "offline")
+    except Exception:
+        pass
+    return status
 
 @app.get("/api/dashboard-snapshot")
 async def get_dashboard_snapshot():

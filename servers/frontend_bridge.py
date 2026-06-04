@@ -1,16 +1,24 @@
-"""Small HTTP bridge for the Expo frontend.
+"""HTTP + WebSocket bridge for the Expo frontend.
 
 This server is intentionally dependency-free so it can run inside the
 embedded Python build. It exposes a narrow JSON API for the new responsive
 frontend while the existing PyQt/backend stack stays intact.
+
+WebSocket support uses the built-in socket module (no third-party libs).
+RFC-6455 handshake + framing implemented manually so it works in the
+embedded Python environment without websockets/aiohttp.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import mimetypes
 import os
+import struct
 import threading
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,7 +37,167 @@ _server: ThreadingHTTPServer | None = None
 _thread: threading.Thread | None = None
 _mqtt_client = None
 
-# --- CANLI DURUM (LIVE STATE) BAZLI YAPI ---
+# ── WebSocket client registry ──────────────────────────────────────────────
+_ws_clients: list[Any] = []          # list of _WSClient instances
+_ws_lock = threading.Lock()
+
+
+class _WSClient:
+    """Represents a connected WebSocket peer."""
+
+    def __init__(self, sock, addr):
+        self.sock = sock
+        self.addr = addr
+        self._lock = threading.Lock()
+        self.alive = True
+
+    def send(self, data: str) -> bool:
+        """Send a text frame. Returns False if the connection is dead."""
+        if not self.alive:
+            return False
+        try:
+            payload = data.encode("utf-8")
+            length = len(payload)
+            with self._lock:
+                if length <= 125:
+                    header = struct.pack("!BB", 0x81, length)
+                elif length <= 65535:
+                    header = struct.pack("!BBH", 0x81, 126, length)
+                else:
+                    header = struct.pack("!BBQ", 0x81, 127, length)
+                self.sock.sendall(header + payload)
+            return True
+        except Exception:
+            self.alive = False
+            return False
+
+    def close(self):
+        self.alive = False
+        try:
+            self.sock.close()
+        except Exception:
+            pass
+
+
+def _broadcast(message: dict) -> None:
+    """Send a JSON message to every connected WebSocket client."""
+    data = json.dumps(message, ensure_ascii=False)
+    dead = []
+    with _ws_lock:
+        clients = list(_ws_clients)
+    for client in clients:
+        if not client.send(data):
+            dead.append(client)
+    if dead:
+        with _ws_lock:
+            for d in dead:
+                try:
+                    _ws_clients.remove(d)
+                except ValueError:
+                    pass
+
+
+def _ws_handshake(rfile, wfile, headers: dict) -> bool:
+    """Perform RFC-6455 upgrade handshake. Returns True on success."""
+    key = headers.get("Sec-WebSocket-Key", "").strip()
+    if not key:
+        return False
+    magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    accept = base64.b64encode(
+        hashlib.sha1((key + magic).encode()).digest()
+    ).decode()
+    response = (
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Accept: {accept}\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "\r\n"
+    )
+    wfile.write(response.encode())
+    wfile.flush()
+    return True
+
+
+def _ws_read_frame(sock) -> tuple[int, bytes] | None:
+    """Read one WebSocket frame. Returns (opcode, payload) or None on error."""
+    try:
+        b1, b2 = struct.unpack("!BB", _recv_exact(sock, 2))
+        opcode = b1 & 0x0F
+        masked = bool(b2 & 0x80)
+        length = b2 & 0x7F
+        if length == 126:
+            length = struct.unpack("!H", _recv_exact(sock, 2))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", _recv_exact(sock, 8))[0]
+        mask_key = _recv_exact(sock, 4) if masked else b""
+        payload = bytearray(_recv_exact(sock, length))
+        if masked:
+            for i in range(length):
+                payload[i] ^= mask_key[i % 4]
+        return opcode, bytes(payload)
+    except Exception:
+        return None
+
+
+def _recv_exact(sock, n: int) -> bytes:
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionResetError("Connection closed")
+        buf += chunk
+    return buf
+
+
+def _handle_ws_connection(client: _WSClient) -> None:
+    """Loop reading frames from a WebSocket client (runs in its own thread)."""
+    # Send initial snapshot immediately on connect
+    _broadcast_snapshot_to(client)
+    try:
+        while client.alive:
+            frame = _ws_read_frame(client.sock)
+            if frame is None:
+                break
+            opcode, payload = frame
+            if opcode == 0x8:          # close frame
+                break
+            if opcode == 0x9:          # ping → pong
+                try:
+                    client.sock.sendall(struct.pack("!BB", 0x8A, 0))
+                except Exception:
+                    break
+            # opcode 1 = text: handle incoming commands from React
+            if opcode == 0x1:
+                _handle_ws_command(json.loads(payload.decode("utf-8", errors="replace")))
+    except Exception:
+        pass
+    finally:
+        client.alive = False
+        with _ws_lock:
+            try:
+                _ws_clients.remove(client)
+            except ValueError:
+                pass
+        client.close()
+
+
+def _broadcast_snapshot_to(client: _WSClient) -> None:
+    """Send the current live snapshot to a single newly-connected client."""
+    msg = {
+        "type": "snapshot",
+        "data": _build_snapshot()
+    }
+    client.send(json.dumps(msg, ensure_ascii=False))
+
+
+def _handle_ws_command(msg: dict) -> None:
+    """Handle commands sent from React over the WebSocket (e.g. silent mode)."""
+    # Currently a no-op placeholder; commands go through REST API
+    pass
+
+
+# ── CANLI DURUM (LIVE STATE) ────────────────────────────────────────────────
 _live_state = {
     "gateway": "offline",
     "mqtt": "warning",
@@ -53,78 +221,249 @@ _live_state = {
         "frequencyHz": 0,
         "intensityMt": 0.0,
         "remainingMin": 0,
-    }
+        "elapsedSec": 0,
+        "durationSec": 0,
+        "isActive": False,
+    },
+    "notifications": [],     # last 50 notifications
+    "system": {
+        "softwareVersion": "1",
+        "hardwareVersion": "HW-2025.1",
+        "deviceId": "PEMF-001",
+        "startTime": datetime.now().isoformat(timespec="seconds"),
+        "totalSessions": 0,
+    },
 }
+_live_state_lock = threading.Lock()
+_notification_id_counter = 0
 
-# --- MQTT CALLBACKLERI ---
+
+def _push_notification(message: str, level: str = "info") -> None:
+    """Add a notification to live state and broadcast it."""
+    global _notification_id_counter
+    _notification_id_counter += 1
+    notif = {
+        "id": _notification_id_counter,
+        "message": message,
+        "level": level,
+        "timestamp": _now_iso(),
+    }
+    with _live_state_lock:
+        _live_state["notifications"].insert(0, notif)
+        if len(_live_state["notifications"]) > 50:
+            _live_state["notifications"].pop()
+    _broadcast({"type": "notification", "data": notif})
+
+
+# ── MQTT CALLBACKS ───────────────────────────────────────────────────────────
 def _on_mqtt_connect(client, userdata, flags, rc):
     if rc == 0:
-        _live_state["mqtt"] = "online"
+        with _live_state_lock:
+            _live_state["mqtt"] = "online"
         client.subscribe("pemf/coil/+/sensors")
         client.subscribe("pemf/coil/+/status")
+        client.subscribe("pemf/coil/+/events")
+        client.subscribe("pemf/coil/+/alarm")
         client.subscribe("pemf/gateway/status")
+        client.subscribe("pemf/bridge/status")
+        client.subscribe("pemf/system/session/control")
+        _push_notification("MQTT broker bağlantısı kuruldu", "success")
     else:
-        _live_state["mqtt"] = "error"
+        with _live_state_lock:
+            _live_state["mqtt"] = "error"
+
 
 def _on_mqtt_disconnect(client, userdata, rc):
-    _live_state["mqtt"] = "error"
+    with _live_state_lock:
+        _live_state["mqtt"] = "error"
+    _push_notification("MQTT bağlantısı kesildi", "warning")
+
 
 def _on_mqtt_message(client, userdata, msg):
     try:
-        topic_parts = msg.topic.split('/')
-        payload = json.loads(msg.payload.decode('utf-8'))
-        
+        topic_parts = msg.topic.split("/")
+        is_retained = getattr(msg, "retain", False)
+
+        # Bridge status
+        if msg.topic == "pemf/bridge/status":
+            connected = msg.payload.decode("utf-8", errors="ignore").strip() in ("1", "true", "connected")
+            with _live_state_lock:
+                _live_state["gateway"] = "online" if connected else "offline"
+            _broadcast({"type": "gateway_status", "data": {"gateway": _live_state["gateway"]}})
+            return
+
+        # Gateway status
+        if len(topic_parts) >= 3 and topic_parts[1] == "gateway":
+            payload = json.loads(msg.payload.decode("utf-8"))
+            with _live_state_lock:
+                _live_state["gateway"] = payload.get("status", "offline")
+            _broadcast({"type": "gateway_status", "data": {"gateway": _live_state["gateway"]}})
+            return
+
+        # Session control (from Android)
+        if msg.topic == "pemf/system/session/control":
+            # Just forward to React
+            payload = json.loads(msg.payload.decode("utf-8"))
+            _broadcast({"type": "session_control", "data": payload})
+            return
+
+        payload = json.loads(msg.payload.decode("utf-8"))
+
         if len(topic_parts) >= 4 and topic_parts[1] == "coil":
             coil_id_str = topic_parts[2]
             msg_type = topic_parts[3]
-            
-            if coil_id_str.isdigit():
-                coil_index = int(coil_id_str) - 1
-                if 0 <= coil_index < 8:
-                    if msg_type == "sensors":
-                        _live_state["coils"][coil_index]["objectTemp"] = round(payload.get("object_temp", 0.0), 1)
-                        _live_state["coils"][coil_index]["ambientTemp"] = round(payload.get("ambient_temp", 0.0), 1)
-                        _live_state["coils"][coil_index]["currentA"] = round(payload.get("current", 0.0), 2)
-                        _live_state["coils"][coil_index]["magneticMt"] = round(payload.get("magnetic_field", 0.0), 2)
-                    elif msg_type == "status":
-                        status = payload.get("status", "")
-                        _live_state["coils"][coil_index]["connected"] = (status in ["online", "ready", "running"])
-                        _live_state["coils"][coil_index]["running"] = (status == "running")
-                        
-                        # Eğer değerler varsa güncelle
-                        if "frequency" in payload:
-                            _live_state["coils"][coil_index]["frequencyHz"] = payload["frequency"]
-                        if "duty_cycle" in payload:
-                            _live_state["coils"][coil_index]["dutyCycle"] = payload["duty_cycle"]
-                            
-        elif topic_parts[1] == "gateway" and topic_parts[2] == "status":
-            _live_state["gateway"] = payload.get("status", "offline")
-            
+
+            if not coil_id_str.isdigit():
+                return
+            coil_index = int(coil_id_str) - 1
+            if not (0 <= coil_index < 8):
+                return
+
+            if msg_type == "sensors":
+                if is_retained:
+                    return
+                with _live_state_lock:
+                    coil = _live_state["coils"][coil_index]
+                    coil["objectTemp"] = round(float(payload.get("object_temp", 0.0)), 1)
+                    coil["ambientTemp"] = round(float(payload.get("ambient_temp", 0.0)), 1)
+                    coil["currentA"] = round(float(payload.get("current", 0.0)), 3)
+                    coil["magneticMt"] = round(float(payload.get("magnetic_field", 0.0)), 2)
+                    coil["connected"] = True
+                    snapshot = dict(coil)
+
+                _broadcast({
+                    "type": "sensor_data",
+                    "coilId": int(coil_id_str),
+                    "data": snapshot,
+                    "timestamp": time.time(),
+                })
+
+            elif msg_type == "status":
+                if is_retained:
+                    return
+                with _live_state_lock:
+                    coil = _live_state["coils"][coil_index]
+                    status = payload.get("status", "")
+                    coil["connected"] = status in ("online", "ready", "running")
+                    coil["running"] = status == "running"
+                    if "frequency" in payload:
+                        coil["frequencyHz"] = payload["frequency"]
+                    if "duty_cycle" in payload:
+                        coil["dutyCycle"] = payload["duty_cycle"]
+                    if "pwm_active" in payload:
+                        coil["running"] = bool(payload["pwm_active"])
+                    if "pwm_frequency" in payload:
+                        coil["frequencyHz"] = payload["pwm_frequency"]
+                    if "object_temp" in payload:
+                        coil["objectTemp"] = round(float(payload["object_temp"]), 1)
+                    if "magnetic_field" in payload:
+                        coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
+                    snapshot = dict(coil)
+
+                _broadcast({
+                    "type": "coil_status",
+                    "coilId": int(coil_id_str),
+                    "data": snapshot,
+                })
+
+            elif msg_type == "events":
+                event_type = payload.get("type") or payload.get("event_type", "unknown")
+                if event_type in ("wifi_disconnected", "offline"):
+                    with _live_state_lock:
+                        _live_state["coils"][coil_index]["connected"] = False
+                        _live_state["coils"][coil_index]["running"] = False
+                    _push_notification(f"⚠️ Bobin {coil_id_str} bağlantısı kesildi", "warning")
+                    _broadcast({"type": "coil_status", "coilId": int(coil_id_str),
+                                "data": _live_state["coils"][coil_index]})
+                elif event_type == "wifi_connected":
+                    with _live_state_lock:
+                        _live_state["coils"][coil_index]["connected"] = True
+                    _push_notification(f"✅ Bobin {coil_id_str} bağlandı", "success")
+                _broadcast({"type": "esp_event", "coilId": int(coil_id_str),
+                            "eventType": event_type, "data": payload})
+
+            elif msg_type == "alarm":
+                alarm_type = payload.get("alarm_type", "unknown")
+                reason = payload.get("reason", "Bilinmeyen sebep")
+                level = "error" if alarm_type == "safety_violation" else "warning"
+                _push_notification(f"🚨 Bobin {coil_id_str} Alarm ({alarm_type}): {reason}", level)
+                _broadcast({"type": "alarm", "coilId": int(coil_id_str), "data": payload})
+
     except Exception:
         pass
 
-def _start_mqtt_listener():
+
+def _start_mqtt_listener() -> None:
     global _mqtt_client
     if mqtt is None or _mqtt_client is not None:
         return
-        
-    _mqtt_client = mqtt.Client(client_id="frontend_bridge_listener", clean_session=True)
+
+    _mqtt_client = mqtt.Client(client_id="frontend_bridge_listener_v2", clean_session=True)
     _mqtt_client.on_connect = _on_mqtt_connect
     _mqtt_client.on_disconnect = _on_mqtt_disconnect
     _mqtt_client.on_message = _on_mqtt_message
-    
+
     try:
         _mqtt_client.connect("127.0.0.1", 1883, 60)
         _mqtt_client.loop_start()
     except Exception:
         pass
 
-def _stop_mqtt_listener():
+
+def _stop_mqtt_listener() -> None:
     global _mqtt_client
     if _mqtt_client:
         _mqtt_client.loop_stop()
         _mqtt_client.disconnect()
         _mqtt_client = None
+
+
+# ── Helper functions ────────────────────────────────────────────────────────
+def _build_snapshot() -> dict[str, Any]:
+    sessions = _load_recent_sessions()
+    with _live_state_lock:
+        coils_list = [_live_state["coils"][i] for i in range(8)]
+        patient_data = {
+            "name": sessions[0]["patientName"] if sessions else "Cihaz Hazır",
+            "species": "",
+            "breed": "",
+            "owner": "PEMF Medical",
+        }
+        return {
+            "gateway": _live_state["gateway"],
+            "mqtt": _live_state["mqtt"],
+            "stm": _live_state["stm"],
+            "patient": patient_data,
+            "activeTreatment": _live_state["activeTreatment"],
+            "coils": coils_list,
+            "sessions": sessions,
+            "notifications": _live_state["notifications"][:10],
+            "system": _live_state["system"],
+        }
+
+
+def update_stm_status(connected: bool) -> None:
+    """Called from PyQt main window to update STM32 connection state."""
+    with _live_state_lock:
+        _live_state["stm"] = "online" if connected else "warning"
+    _broadcast({"type": "stm_status", "data": {"stm": _live_state["stm"], "connected": connected}})
+
+
+def update_session_state(is_active: bool, mode: str = "", freq: float = 0,
+                         intensity: float = 0, remaining_min: int = 0,
+                         elapsed_sec: int = 0, duration_sec: int = 0) -> None:
+    """Called from PyQt main window to sync active treatment state."""
+    with _live_state_lock:
+        _live_state["activeTreatment"].update({
+            "isActive": is_active,
+            "mode": mode,
+            "frequencyHz": freq,
+            "intensityMt": intensity,
+            "remainingMin": remaining_min,
+            "elapsedSec": elapsed_sec,
+            "durationSec": duration_sec,
+        })
+    _broadcast({"type": "session_update", "data": _live_state["activeTreatment"]})
 
 
 def get_frontend_backend_port(project_root: Path | None = None) -> int:
@@ -170,7 +509,6 @@ def start_frontend_bridge(
     except OSError:
         return host, resolved_port
 
-    # Canlı veri dinleyicisini başlat
     _start_mqtt_listener()
 
     _thread = threading.Thread(
@@ -188,6 +526,12 @@ def stop_frontend_bridge() -> None:
 
     _stop_mqtt_listener()
 
+    # Close all WebSocket clients
+    with _ws_lock:
+        for c in list(_ws_clients):
+            c.close()
+        _ws_clients.clear()
+
     if _server:
         _server.shutdown()
         _server.server_close()
@@ -195,9 +539,10 @@ def stop_frontend_bridge() -> None:
     _thread = None
 
 
+# ── HTTP / WebSocket request handler ────────────────────────────────────────
 def _make_handler(project_root: Path):
     class FrontendBridgeHandler(BaseHTTPRequestHandler):
-        server_version = "PEMFFrontendBridge/1.0"
+        server_version = "PEMFFrontendBridge/2.0"
 
         def do_OPTIONS(self) -> None:
             self._send_empty(204)
@@ -205,11 +550,17 @@ def _make_handler(project_root: Path):
         def do_GET(self) -> None:
             path = urlparse(self.path).path
 
+            # WebSocket upgrade
+            upgrade = self.headers.get("Upgrade", "").lower()
+            if upgrade == "websocket" and path == "/ws":
+                self._handle_ws_upgrade()
+                return
+
             if path == "/api/health":
                 self._send_json({"ok": True, "service": "pemf-frontend-bridge", "timestamp": _now_iso()})
                 return
             if path == "/api/dashboard-snapshot":
-                self._send_json(_dashboard_snapshot(project_root))
+                self._send_json(_build_snapshot())
                 return
             if path == "/api/status":
                 self._send_json(_legacy_status())
@@ -218,7 +569,18 @@ def _make_handler(project_root: Path):
                 self._send_json(_legacy_sensor_data())
                 return
             if path == "/api/treatment-history":
-                self._send_json({"sessions": _dashboard_snapshot(project_root)["sessions"]})
+                self._send_json({"sessions": _build_snapshot()["sessions"]})
+                return
+            if path == "/api/gateway/status":
+                self._send_json(_gateway_status())
+                return
+            if path == "/api/system/info":
+                self._send_json(_system_info())
+                return
+            if path == "/api/notifications":
+                with _live_state_lock:
+                    notifs = list(_live_state["notifications"])
+                self._send_json({"notifications": notifs})
                 return
             if not path.startswith("/api/"):
                 self._send_static(path)
@@ -230,14 +592,63 @@ def _make_handler(project_root: Path):
             path = urlparse(self.path).path
             payload = self._read_json_body()
 
-            if path in {"/api/start-treatment", "/api/stop-treatment", "/api/update-parameters"}:
+            if path == "/api/start-treatment":
+                with _live_state_lock:
+                    _live_state["activeTreatment"]["isActive"] = True
+                    _live_state["activeTreatment"]["mode"] = payload.get("mode", "Manuel")
+                _broadcast({"type": "session_update", "data": _live_state["activeTreatment"]})
+                _push_notification("Tedavi başlatıldı", "success")
+                self._send_json({"ok": True, "timestamp": _now_iso()})
+                return
+
+            if path == "/api/stop-treatment":
+                with _live_state_lock:
+                    _live_state["activeTreatment"]["isActive"] = False
+                    _live_state["activeTreatment"]["mode"] = "Sistem Hazır"
+                _broadcast({"type": "session_update", "data": _live_state["activeTreatment"]})
+                _push_notification("Tedavi durduruldu", "warning")
+                self._send_json({"ok": True, "timestamp": _now_iso()})
+                return
+
+            if path == "/api/update-parameters":
                 self._send_json({"ok": True, "path": path, "payload": payload, "timestamp": _now_iso()})
+                return
+
+            if path == "/api/notifications/clear":
+                with _live_state_lock:
+                    _live_state["notifications"].clear()
+                self._send_json({"ok": True})
                 return
 
             self._send_json({"error": "not_found", "path": path}, status=404)
 
+        def _handle_ws_upgrade(self) -> None:
+            """Perform WebSocket handshake then hand off to a reader thread."""
+            headers_dict = {k: v for k, v in self.headers.items()}
+            try:
+                self.wfile.write(b"")  # flush
+                if not _ws_handshake(self.rfile, self.wfile, headers_dict):
+                    self.send_error(400, "Bad WebSocket Handshake")
+                    return
+            except Exception:
+                return
+
+            client = _WSClient(self.connection, self.client_address)
+            with _ws_lock:
+                _ws_clients.append(client)
+
+            t = threading.Thread(
+                target=_handle_ws_connection,
+                args=(client,),
+                daemon=True,
+                name=f"WSClient-{self.client_address}",
+            )
+            t.start()
+            # Block this HTTP handler thread until the WS connection closes
+            t.join()
+
         def log_message(self, format: str, *args: Any) -> None:
-            return
+            return  # Suppress HTTP logs
 
         def _read_json_body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length", "0") or "0")
@@ -269,7 +680,10 @@ def _make_handler(project_root: Path):
             self.send_header("Cache-Control", "no-store")
 
         def _send_static(self, path: str) -> None:
-            static_root = project_root / "frontend" / "dist"
+            app_data_path = Path(os.environ.get("APPDATA", "C:/")) / "PEMF_GUI" / "frontend_dist"
+            fallback_root = project_root / "frontend" / "dist"
+            static_root = app_data_path if app_data_path.exists() and (app_data_path / "index.html").exists() else fallback_root
+            
             if path in {"", "/"}:
                 target = static_root / "index.html"
             else:
@@ -305,35 +719,36 @@ def _make_handler(project_root: Path):
     return FrontendBridgeHandler
 
 
-def _dashboard_snapshot(project_root: Path) -> dict[str, Any]:
-    sessions = _load_recent_sessions()
-    
-    patient_data = {
-        "name": sessions[0]["patientName"] if sessions else "Cihaz Hazır",
-        "species": "",
-        "breed": "",
-        "owner": "PEMF Medical",
-    }
-    
-    coils_list = [
-        _live_state["coils"][i] for i in range(8)
-    ]
-    
-    return {
-        "gateway": _live_state["gateway"],
-        "mqtt": _live_state["mqtt"],
-        "stm": _live_state["stm"],
-        "patient": patient_data,
-        "activeTreatment": _live_state["activeTreatment"],
-        "coils": coils_list,
-        "sessions": sessions,
-    }
+# ── Data helpers ─────────────────────────────────────────────────────────────
+def _gateway_status() -> dict[str, Any]:
+    with _live_state_lock:
+        return {
+            "gateway": _live_state["gateway"],
+            "mqtt": _live_state["mqtt"],
+            "stm": _live_state["stm"],
+        }
+
+
+def _system_info() -> dict[str, Any]:
+    with _live_state_lock:
+        sys_data = dict(_live_state["system"])
+    # Calculate uptime
+    try:
+        start = datetime.fromisoformat(sys_data["startTime"])
+        uptime_sec = int((datetime.now() - start).total_seconds())
+        h = uptime_sec // 3600
+        m = (uptime_sec % 3600) // 60
+        s = uptime_sec % 60
+        sys_data["uptime"] = f"{h:02d}:{m:02d}:{s:02d}"
+    except Exception:
+        sys_data["uptime"] = "00:00:00"
+    return sys_data
 
 
 def _load_recent_sessions() -> list[dict[str, Any]]:
     app_data = Path(os.environ.get("APPDATA", "C:/")) / "PEMF_GUI"
     db_path = app_data / "pemf_treatment_history.db"
-    
+
     if not db_path.exists():
         return []
 
@@ -351,10 +766,10 @@ def _load_recent_sessions() -> list[dict[str, Any]]:
                 LIMIT 10
                 """
             ).fetchall()
-            
+
         if not rows:
             return []
-            
+
         return [
             {
                 "id": str(row["session_id"]),
@@ -372,20 +787,21 @@ def _load_recent_sessions() -> list[dict[str, Any]]:
 
 
 def _legacy_status() -> dict[str, Any]:
-    return {
-        "system_status": _live_state["gateway"],
-        "treatment_active": _live_state["activeTreatment"]["mode"] != "Sistem Hazır",
-        "current_parameters": {
-            "frequency": _live_state["activeTreatment"]["frequencyHz"],
-            "intensity": _live_state["activeTreatment"]["intensityMt"],
-            "duration": _live_state["activeTreatment"]["remainingMin"]
-        },
-    }
+    with _live_state_lock:
+        return {
+            "system_status": _live_state["gateway"],
+            "treatment_active": _live_state["activeTreatment"]["isActive"],
+            "current_parameters": {
+                "frequency": _live_state["activeTreatment"]["frequencyHz"],
+                "intensity": _live_state["activeTreatment"]["intensityMt"],
+                "duration": _live_state["activeTreatment"]["remainingMin"],
+            },
+        }
 
 
 def _legacy_sensor_data() -> dict[str, Any]:
-    # Geriye dönük uyumluluk için 1. bobinin verisini döndürür
-    coil = _live_state["coils"][0]
+    with _live_state_lock:
+        coil = _live_state["coils"][0]
     return {
         "object_temp": coil["objectTemp"],
         "ambient_temp": coil["ambientTemp"],
@@ -405,6 +821,7 @@ if __name__ == "__main__":
     if not address:
         raise SystemExit(1)
     print(f"PEMF frontend backend running at http://{address[0]}:{address[1]}")
+    print(f"WebSocket: ws://{address[0]}:{address[1]}/ws")
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

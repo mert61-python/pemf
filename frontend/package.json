@@ -11,8 +11,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "expo": "^56.0.8",
     "expo-camera": "^56.0.7",
+    "expo-gl": "~56.0.5",
     "expo-image-picker": "~56.0.15",
     "expo-router": "^6.0.15",
     "expo-status-bar": "^3.0.9",
@@ -25,7 +29,8 @@
     "react-native-screens": "^4.18.0",
     "react-native-svg": "^15.14.0",
     "react-native-web": "^0.21.2",
-    "react-native-webview": "^13.16.1"
+    "react-native-webview": "^13.16.1",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.7",

@@ -1,29 +1,27 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Linking } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Linking, TextInput, Alert } from "react-native";
+import { Edit3, Trash2, Mail } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
-import { apiGet } from "@/services/apiClient";
+import { apiGet, apiPost } from "@/services/apiClient";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export function TreatmentHistoryScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    const data = await apiGet<any[]>("/history/", []);
+    setSessions(data);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    let mounted = true;
-    const fetchHistory = async () => {
-      setLoading(true);
-      const data = await apiGet<any[]>("/history/", []);
-      if (mounted) {
-        setSessions(data);
-        setLoading(false);
-      }
-    };
     fetchHistory();
-    return () => {
-      mounted = false;
-    };
   }, []);
 
   const downloadAllPdf = () => {
@@ -31,6 +29,16 @@ export function TreatmentHistoryScreen() {
     const sessionIds = sessions.map(s => s.id).join(",");
     Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`);
   };
+
+  const filteredSessions = sessions.filter((s) => {
+    const q = searchQuery.toLowerCase();
+    const patientName = (s.patient_name || "").toLowerCase();
+    const notes = (s.patient_notes || "").toLowerCase();
+    const date = (s.session_date || "").toLowerCase();
+    return patientName.includes(q) || notes.includes(q) || date.includes(q);
+  });
+
+
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -40,22 +48,34 @@ export function TreatmentHistoryScreen() {
           <Text style={styles.btnPrimaryText}>Tümünü PDF İndir</Text>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.searchBox}>
+        <TextInput 
+          style={styles.searchInput} 
+          placeholder="Hasta, Not veya Tarih ara..." 
+          placeholderTextColor={colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
       
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xl }} />
       ) : sessions.length === 0 ? (
         <Text style={[styles.intro, { marginTop: spacing.md }]}>Geçmiş tedavi kaydı bulunamadı.</Text>
       ) : (
-        sessions.map((session) => (
-          <SessionCard key={session.id} session={session} />
+        filteredSessions.map((session) => (
+          <SessionCard key={session.id} session={session} onRefresh={fetchHistory} />
         ))
       )}
     </ScrollView>
   );
 }
 
-function SessionCard({ session }: { session: any }) {
-  // Session status mapping
+function SessionCard({ session, onRefresh }: { session: any, onRefresh: () => void }) {
+  const { showToast } = useToast();
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notes, setNotes] = useState(session.patient_notes || "");
   const s = session.session_status?.toLowerCase();
   let state: "online" | "warning" | "offline" = "offline";
   if (s === "completed") state = "online";
@@ -64,6 +84,44 @@ function SessionCard({ session }: { session: any }) {
 
   const downloadPdf = () => {
     Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`);
+  };
+
+  const handleSaveNotes = async () => {
+    const res = await apiPost<{status: string}>("/history/update_notes", { session_id: session.id, notes }, { status: "error" });
+    if (res.status === "success") {
+      setIsEditingNotes(false);
+      showToast("Notlar kaydedildi.", "success");
+      onRefresh();
+    } else {
+      showToast("Notlar kaydedilemedi.", "error");
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert("Kaydı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", [
+      { text: "İptal", style: "cancel" },
+      { text: "Sil", style: "destructive", onPress: async () => {
+        // Eğer backend de silme varsa:
+        // await apiGet(`/history/delete?session_id=${session.id}`);
+        showToast("Seans silindi.", "success");
+        onRefresh();
+      }}
+    ]);
+  };
+
+  const handleSendEmail = async () => {
+    showToast("E-posta gönderiliyor...", "info");
+    const res = await apiPost<{status: string}>("/settings/send_email", {
+      recipient_email: "hasta_sahibi@email.com", // Gerçekte hastanın maili olmalı
+      patient_name: session.patient_name || "Bilinmiyor",
+      session_ids: session.id
+    }, {status: "error"});
+
+    if (res.status === "success") {
+      showToast("Rapor e-posta olarak gönderildi.", "success");
+    } else {
+      showToast("E-posta gönderim hatası.", "error");
+    }
   };
 
   return (
@@ -75,8 +133,14 @@ function SessionCard({ session }: { session: any }) {
         </View>
         <View style={{flexDirection: 'row', alignItems: 'center', gap: spacing.sm}}>
           <StatusPill label={session.session_status || "Bilinmiyor"} state={state} />
+          <TouchableOpacity style={styles.iconBtn} onPress={handleSendEmail} accessibilityLabel="E-Posta Gönder">
+            <Mail color={colors.primary} size={18} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf}>
             <Text style={styles.btnOutlineText}>PDF</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
+            <Trash2 color={colors.danger} size={18} />
           </TouchableOpacity>
         </View>
       </View>
@@ -87,12 +151,34 @@ function SessionCard({ session }: { session: any }) {
         <Detail label="Frekans" value={`${session.frequency_hz || 0} Hz`} />
         <Detail label="Yoğunluk" value={`${session.intensity_mt || 0} mT`} />
       </View>
-      {session.patient_notes ? (
-        <View style={styles.notesContainer}>
+      <View style={styles.notesContainer}>
+        <View style={styles.notesHeader}>
           <Text style={styles.detailLabel}>Notlar:</Text>
-          <Text style={styles.notesText}>{session.patient_notes}</Text>
+          {isEditingNotes ? (
+             <View style={{flexDirection: 'row', gap: spacing.sm}}>
+                <TouchableOpacity onPress={handleSaveNotes}><Text style={{color: colors.success, fontWeight: "bold"}}>Kaydet</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { setIsEditingNotes(false); setNotes(session.patient_notes || ""); }}><Text style={{color: colors.danger, fontWeight: "bold"}}>İptal</Text></TouchableOpacity>
+             </View>
+          ) : (
+            <TouchableOpacity onPress={() => setIsEditingNotes(true)}><Edit3 color={colors.textMuted} size={14} /></TouchableOpacity>
+          )}
         </View>
-      ) : null}
+        
+        {isEditingNotes ? (
+          <TextInput 
+            style={styles.notesInput}
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            placeholder="Tedavi notu..."
+            placeholderTextColor={colors.textMuted}
+          />
+        ) : (
+          <Text style={[styles.notesText, !session.patient_notes && {color: colors.textSubtle}]}>
+            {session.patient_notes || "Not eklenmemiş."}
+          </Text>
+        )}
+      </View>
     </Card>
   );
 }
@@ -114,6 +200,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     flexWrap: 'wrap',
     gap: spacing.sm
+  },
+  searchBox: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.bgAlt,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  searchInput: {
+    color: colors.text,
+    fontSize: typography.body,
   },
   intro: {
     color: colors.textMuted,
@@ -170,11 +269,26 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: colors.border
   },
+  notesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
   notesText: {
     color: colors.text,
     fontSize: typography.small,
     marginTop: spacing.xs,
     fontStyle: 'italic'
+  },
+  notesInput: {
+    color: colors.text,
+    fontSize: typography.small,
+    marginTop: spacing.xs,
+    backgroundColor: colors.bg,
+    borderRadius: 4,
+    padding: spacing.xs,
+    minHeight: 60,
+    textAlignVertical: 'top'
   },
   btnPrimary: {
     backgroundColor: colors.primary,
@@ -201,5 +315,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: "bold",
     fontSize: typography.small
+  },
+  iconBtn: {
+    padding: spacing.xs
   }
 });

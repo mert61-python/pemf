@@ -17,23 +17,27 @@ export function WelcomeScreen() {
 
       <View style={styles.cardsContainer}>
         <TouchableOpacity style={styles.cardWrapper} onPress={() => setUserMode('pet_owner')}>
-          <Card style={[styles.card, styles.ownerCard]}>
-            <Heart size={48} color={colors.primary} />
-            <Text style={styles.cardTitle}>Evcil Hayvan Sahibi</Text>
-            <Text style={styles.cardDesc}>
-              Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli tedavi başlatın. Karmaşık ayarlarla uğraşmayın.
-            </Text>
-          </Card>
+          <View style={[styles.cardContainer, styles.ownerCard]}>
+            <Card style={styles.card}>
+              <Heart size={48} color={colors.primary} />
+              <Text style={styles.cardTitle}>Evcil Hayvan Sahibi</Text>
+              <Text style={styles.cardDesc}>
+                Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli tedavi başlatın. Karmaşık ayarlarla uğraşmayın.
+              </Text>
+            </Card>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cardWrapper} onPress={() => setUserMode('veterinarian')}>
-          <Card style={[styles.card, styles.vetCard]}>
-            <Stethoscope size={48} color={colors.warning} />
-            <Text style={styles.cardTitle}>Veteriner Hekim</Text>
-            <Text style={styles.cardDesc}>
-              Manuel frekans kontrolü, sensör takibi, geçmiş tedavi analizleri ve klinik ayarlarına tam erişim sağlayın.
-            </Text>
-          </Card>
+          <View style={[styles.cardContainer, styles.vetCard]}>
+            <Card style={styles.card}>
+              <Stethoscope size={48} color={colors.warning} />
+              <Text style={styles.cardTitle}>Veteriner Hekim</Text>
+              <Text style={styles.cardDesc}>
+                Manuel frekans kontrolü, sensör takibi, geçmiş tedavi analizleri ve klinik ayarlarına tam erişim sağlayın.
+              </Text>
+            </Card>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -53,7 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   title: {
-    fontSize: typography.h1,
+    fontSize: 32,
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
@@ -75,13 +79,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 300,
   },
+  cardContainer: {
+    flex: 1,
+  },
   card: {
     alignItems: 'center',
     padding: spacing.xxl,
     gap: spacing.lg,
     borderWidth: 2,
     borderColor: 'transparent',
-    transition: 'all 0.2s ease',
   },
   ownerCard: {
     backgroundColor: colors.bgAlt,
@@ -90,7 +96,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgAlt,
   },
   cardTitle: {
-    fontSize: typography.h2,
+    fontSize: typography.title,
     fontWeight: '800',
     color: colors.text,
   },
