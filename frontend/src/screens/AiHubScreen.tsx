@@ -72,8 +72,21 @@ function PetOwnerAiScreen() {
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const res = await fetch(imageUri);
-        const blob = await res.blob();
+        let blob;
+        if (imageUri.startsWith('data:')) {
+          const arr = imageUri.split(',');
+          const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          blob = new Blob([u8arr], { type: mime });
+        } else {
+          const res = await fetch(imageUri);
+          blob = await res.blob();
+        }
         formData.append("file", blob, "camera_capture.jpg");
       } else {
         formData.append("file", { uri: imageUri, name: "camera_capture.jpg", type: "image/jpeg" } as any);

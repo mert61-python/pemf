@@ -52,8 +52,14 @@ async def analyze_landmark(file: UploadFile = File(...)):
     """YOLO Pose + FGS Ağrı Skoru"""
     try:
         content = await file.read()
+        print(f"DEBUG: Received file size: {len(content)} bytes")
+        
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            print("DEBUG: cv2.imdecode returned None. Content starts with: ", content[:20])
+            raise ValueError(f"Image could not be decoded. Size was {len(content)} bytes. Starts with: {content[:20]}")
 
         if "landmark" not in _models:
             from ultralytics import YOLO
