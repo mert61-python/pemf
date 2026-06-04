@@ -189,12 +189,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, [updateSnapshot]);
 
   // ── Connect WebSocket ──────────────────────────────────────────────────
+  const wsConnectedRef = useRef(wsConnected);
+  useEffect(() => {
+    wsConnectedRef.current = wsConnected;
+  }, [wsConnected]);
+
   useEffect(() => {
     const disconnect = connectPemfWebSocket(handleWsMessage, (connected) => {
       setWsConnected(connected);
-      if (!connected) {
-        // fallback: poll HTTP every 5s when WS is down
-      }
     });
 
     // Also load initial snapshot via HTTP in case WS takes time
@@ -202,7 +204,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
     // HTTP polling fallback (5s) — only active when WS is disconnected
     const pollId = setInterval(() => {
-      if (!wsConnected) refresh();
+      if (!wsConnectedRef.current) refresh();
     }, 5000);
 
     return () => {

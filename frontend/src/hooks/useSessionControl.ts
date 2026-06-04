@@ -53,12 +53,13 @@ export function useSessionControl(): SessionControlResult {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationSecRef = useRef(0);
 
-  const stopTimer = () => {
+  // useCallback ile sabit referans — startSession/stopSession closure'u için gerekli
+  const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  };
+  }, []);
 
   const startTimer = (totalSec: number, alreadyElapsed = 0) => {
     stopTimer();

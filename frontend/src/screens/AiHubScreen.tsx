@@ -40,10 +40,12 @@ export function AiHubScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         {activeModule === "disease" && <DiseaseModule />}
-        {activeModule === "landmark" && <VisionModule endpoint="/vision/landmark" title="Yüz Ağrısı Skoru (FGS)" subtitle="YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder." />}
-        {activeModule === "segmentation" && <VisionModule endpoint="/vision/segmentation" title="Kedi Segmentasyonu" subtitle="YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder." />}
-        {activeModule === "thermal" && <VisionModule endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." />}
-        {activeModule === "reticulocytes" && <VisionModule endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." />}
+        {/* BUG #4 FIX: key={activeModule} sayesinde tab değişiminde VisionModule sıfırdan mount olur,
+            önceki sekmeye ait imageFile/imageUri state'i bir sonraki sekmeye sızmaz. */}
+        {activeModule === "landmark" && <VisionModule key="landmark" endpoint="/vision/landmark" title="Yüz Ağrısı Skoru (FGS)" subtitle="YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder." />}
+        {activeModule === "segmentation" && <VisionModule key="segmentation" endpoint="/vision/segmentation" title="Kedi Segmentasyonu" subtitle="YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder." />}
+        {activeModule === "thermal" && <VisionModule key="thermal" endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." />}
+        {activeModule === "reticulocytes" && <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." />}
       </ScrollView>
     </View>
   );
@@ -92,6 +94,8 @@ function PetOwnerAiScreen() {
       input.onchange = (e: any) => {
         const file = e.target.files[0];
         if (file) {
+          // BUG #3 FIX: Eski objectURL'yi revoke et, memory leak önlenir
+          if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
           setImageFile(file);
           setImageUri(URL.createObjectURL(file));
           setResult(null); setTreatmentStatus("");
@@ -357,13 +361,16 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
   const liveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // BUG #2 FIX: loading state'ini useRef ile takip et, setInterval closure'u her zaman güncel değeri okur
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     if (isLive) {
       if (!permission?.granted) requestPermission();
       // Canlı yayın döngüsü (2 saniyede bir frame alır)
       liveIntervalRef.current = setInterval(async () => {
-        if (cameraRef.current && !loading) {
+        // loadingRef.current kullanılıyor — stale closure problemi çözüldü
+        if (cameraRef.current && !loadingRef.current) {
           try {
             const photo = await cameraRef.current.takePictureAsync({ quality: 0.3, base64: true });
             if (photo) {
@@ -381,7 +388,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
     return () => {
       if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
     };
-  }, [isLive, permission, loading]);
+  }, [isLive, permission]);
 
   const toggleLive = () => {
     setIsLive(!isLive);
@@ -400,6 +407,8 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       input.onchange = (e: any) => {
         const file = e.target.files[0];
         if (file) {
+          // BUG #3 FIX: eski objectURL'yi temizle
+          if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
           setImageFile(file);
           setImageUri(URL.createObjectURL(file));
           setImageBase64(null);
@@ -426,6 +435,8 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       input.onchange = (e: any) => {
         const file = e.target.files[0];
         if (file) {
+          // BUG #3 FIX: eski objectURL'yi temizle
+          if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
           setImageFile(file);
           setImageUri(URL.createObjectURL(file));
           setImageBase64(null);
@@ -447,7 +458,9 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
   const analyzeImage = async (uriToAnalyze?: string | null) => {
     uriToAnalyze = typeof uriToAnalyze === "string" ? uriToAnalyze : imageUri;
     if (!uriToAnalyze) return;
+    // BUG #2 FIX: loadingRef hem state hem de interval closure için güncelleniyor
     setLoading(true);
+    loadingRef.current = true;
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
@@ -501,6 +514,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       if (!isLive) showToast("Ağ veya sunucu hatası.", "error");
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   };
 

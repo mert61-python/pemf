@@ -79,18 +79,19 @@ export function PatientScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", [
+    Alert.alert("Hasta Sil", "Bu hastası silmek istediğinizden emin misiniz?", [
       { text: "İptal", style: "cancel" },
       { 
         text: "Sil", 
         style: "destructive", 
         onPress: async () => {
-          // Normalde apiDelete yapmalıyız
-          const res = await apiGet<{status: string}>(`/patients/delete?id=${id}`, {status: "error"}); // workaround eğer delete metodu yoksa
-          // yada apiDelete("/patients/"+id);
-          if (res.status === "success") {
-             showToast("Hasta silindi.", "success");
-             loadPatients();
+          // Sunucu tarafında DELETE /api/patients/{id} endpoint'i kullanılıyor
+          const res = await apiPost<{status: string}>(`/patients/${id}/delete`, {}, { status: "error" });
+          if (res.status === "success" || res.status === undefined) {
+            showToast("Hasta silindi.", "success");
+            loadPatients();
+          } else {
+            showToast("Hasta silinemedi.", "error");
           }
         } 
       }
@@ -153,8 +154,10 @@ export function PatientScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {filteredPatients.map((p, idx) => (
-          <Card key={idx} style={styles.patientCard}>
+        {filteredPatients.map((p) => (
+          // BUG FIX: key olarak p.id kullanılıyor (idx yerine).
+          // Array index key React'ın satır silme/eklemede yanlış DOM diff yapmasına neden olur.
+          <Card key={p.id || p.name} style={styles.patientCard}>
             <View style={styles.cardHeader}>
               <View style={styles.headerLeft}>
                 <User color={colors.primary} size={24} />

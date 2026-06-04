@@ -86,3 +86,19 @@ def initialize_database():
         generated_paths[real_name] = target_db_path
         
     return generated_paths
+
+def packaged_resource_path(*parts):
+    """
+    Returns the correct absolute path to bundled resources.
+    If running as a PyInstaller bundle, resolves via sys.executable parent + _internal.
+    If running from source, resolves relative to project root.
+    """
+    if getattr(sys, "frozen", False):
+        # We are running in a PyInstaller bundle (usually OneDir)
+        base = Path(sys.executable).parent / "_internal"
+    else:
+        # We are running from standard Python source
+        base = Path(__file__).resolve().parents[1]
+    
+    return base.joinpath(*parts)
+

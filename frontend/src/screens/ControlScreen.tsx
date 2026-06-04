@@ -85,7 +85,7 @@ export function ControlScreen() {
       targetCondition: autoTarget,
       frequency: parseFloat(autoFreq) || 50,
       duty: parseFloat(autoDuty) || 25,
-      intensity: parseFloat(autoDuty) || 25,
+      intensity: parseFloat(autoDuty) || 25,  // Otomatik mod: intensity = duty (mevcut)
       durationMinutes: parseInt(autoDuration) || 20,
       coilIds: Array.from(selectedCoils),
     });
@@ -102,7 +102,7 @@ export function ControlScreen() {
       mode: "Manuel",
       frequency: parseFloat(masterFreq) || 50,
       duty: parseFloat(masterDuty) || 25,
-      intensity: parseFloat(masterDuty) || 25,
+      intensity: parseFloat(masterDuty) || 25,  // Manuel mod: intensity = duty (mevcut)
       durationMinutes: parseInt(masterDuration) || 20,
       coilIds: Array.from(selectedCoils),
     });

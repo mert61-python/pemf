@@ -5,6 +5,11 @@ import numpy as np
 import base64
 import os
 import sys
+import logging
+
+logger = logging.getLogger("ai_router")
+
+import threading
 
 ai_router = APIRouter()
 
@@ -14,8 +19,32 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Lazy loading için model önbelleği
-_models = {}
+# Thread-safe lazy loading için model önbelleği
+_models: dict = {}
+_model_lock = threading.Lock()
+
+def _get_or_load_model(key: str, loader_fn):
+    """
+    Thread-safe model yükleme yardımcısı.
+    Model daha önce yüklendiyse direk döner.
+    Yükleme sırasında kilidi tutar, hata olursa cache'i temizler.
+    """
+    if key in _models:
+        return _models[key]
+    with _model_lock:
+        # Double-check after acquiring lock
+        if key in _models:
+            return _models[key]
+        logger.info(f"Model yükleniyor: {key}")
+        try:
+            model = loader_fn()
+            _models[key] = model
+            logger.info(f"Model yüklendi ve önbelleğe alındı: {key}")
+            return model
+        except Exception as e:
+            logger.error(f"Model yüklenemedi ({key}): {e}", exc_info=True)
+            _models.pop(key, None)  # kırık model kalmasın
+            raise
 
 class DiseaseInput(BaseModel):
     age: float = 0.0
@@ -29,13 +58,13 @@ class DiseaseInput(BaseModel):
 async def analyze_disease(data: DiseaseInput):
     """XGBoost Kedi Hastalık Analizi"""
     try:
-        if "disease" not in _models:
+        def _load():
             from utils.model_downloader import download_model_sync
             download_model_sync("ai_hub/cat_disease/XGBoost.pkl")
             from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor
-            _models["disease"] = CatDiseasePredictor()
+            return CatDiseasePredictor()
         
-        predictor = _models["disease"]
+        predictor = _get_or_load_model("disease", _load)
         results = predictor.predict(
             data.age, data.weight, data.hr, data.temp, data.duration, data.symptom_indices
         )
@@ -45,7 +74,8 @@ async def analyze_disease(data: DiseaseInput):
         
         return {"status": "success", "results": formatted}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Disease inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Hastalık analizi hatası: {str(e)}")
 
 @ai_router.post("/api/ai/vision/landmark")
 async def analyze_landmark(file: UploadFile = File(...)):
@@ -58,16 +88,19 @@ async def analyze_landmark(file: UploadFile = File(...)):
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if img is None:
-            print("DEBUG: cv2.imdecode returned None. Content starts with: ", content[:20])
-            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
+            logger.error(f"Landmark decode failed. Size: {len(content)}. Start: {content[:40]}")
+            if content.strip().startswith(b"<!DOCTYPE html>") or content.strip().startswith(b"<html"):
+                logger.error("Received HTML instead of image. Frontend might be sending index.html as a fallback!")
+                raise ValueError("Görüntü yerine HTML (index.html) alındı. Lütfen React paketini kontrol edin.")
+            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes.")
 
-        if "landmark" not in _models:
+        def _load_landmark():
             from ultralytics import YOLO
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
-            _models["landmark"] = YOLO(path, task="pose")
-            
-        model = _models["landmark"]
+            return YOLO(path, task="pose")
+        
+        model = _get_or_load_model("landmark", _load_landmark)
         
         # Görüntüyü gecici dosyaya kaydet çünkü predict file path istiyor
         import tempfile
@@ -113,7 +146,8 @@ async def analyze_landmark(file: UploadFile = File(...)):
             "image_base64": b64_image
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Landmark inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Landmark model hatası: {str(e)}")
 
 @ai_router.post("/api/ai/vision/segmentation")
 async def analyze_segmentation(file: UploadFile = File(...)):
@@ -123,15 +157,18 @@ async def analyze_segmentation(file: UploadFile = File(...)):
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
+            logger.error(f"Segmentation decode failed. Size: {len(content)}. Start: {content[:40]}")
+            if content.strip().startswith(b"<!DOCTYPE html>") or content.strip().startswith(b"<html"):
+                raise ValueError("Görüntü yerine HTML alındı. React frontend'i güncelleyin.")
+            raise ValueError(f"Geçersiz görüntü verisi. Boyut: {len(content)} bytes.")
 
-        if "seg" not in _models:
+        def _load_seg():
             from ultralytics import YOLO
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/cat_segmentation/yolov8m-seg.onnx")
-            _models["seg"] = YOLO(path, task="segment")
-            
-        model = _models["seg"]
+            return YOLO(path, task="segment")
+        
+        model = _get_or_load_model("seg", _load_seg)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -163,7 +200,8 @@ async def analyze_segmentation(file: UploadFile = File(...)):
             "image_base64": b64_image
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Segmentation inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Segmentasyon hatası: {str(e)}")
 
 @ai_router.post("/api/ai/vision/thermal")
 async def analyze_thermal(file: UploadFile = File(...)):
@@ -173,13 +211,16 @@ async def analyze_thermal(file: UploadFile = File(...)):
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
+            logger.error(f"Thermal decode failed. Size: {len(content)}. Start: {content[:40]}")
+            if content.strip().startswith(b"<!DOCTYPE html>") or content.strip().startswith(b"<html"):
+                raise ValueError("Görüntü yerine HTML alındı.")
+            raise ValueError(f"Geçersiz görüntü verisi. Boyut: {len(content)} bytes.")
 
-        if "thermal" not in _models:
+        def _load_thermal():
             from ai_hub.cat_thermal.inference_cat_thermal import CatThermalPredictor
-            _models["thermal"] = CatThermalPredictor(model_name="GhostNetV2")
-            
-        predictor = _models["thermal"]
+            return CatThermalPredictor(model_name="GhostNetV2")
+        
+        predictor = _get_or_load_model("thermal", _load_thermal)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -198,7 +239,8 @@ async def analyze_thermal(file: UploadFile = File(...)):
             "image_base64": b64_image
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Thermal inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Termal model hatası: {str(e)}")
 
 @ai_router.post("/api/ai/vision/reticulocytes")
 async def analyze_reticulocytes(file: UploadFile = File(...)):
@@ -208,15 +250,18 @@ async def analyze_reticulocytes(file: UploadFile = File(...)):
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
+            logger.error(f"Reticulocytes decode failed. Size: {len(content)}. Start: {content[:40]}")
+            if content.strip().startswith(b"<!DOCTYPE html>") or content.strip().startswith(b"<html"):
+                raise ValueError("Görüntü yerine HTML alındı.")
+            raise ValueError(f"Geçersiz görüntü verisi. Boyut: {len(content)} bytes.")
 
-        if "retic" not in _models:
+        def _load_retic():
             from ultralytics import YOLO
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/feline_reticulocytes/yolov8s.onnx")
-            _models["retic"] = YOLO(path, task="detect")
-            
-        model = _models["retic"]
+            return YOLO(path, task="detect")
+        
+        model = _get_or_load_model("retic", _load_retic)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -260,4 +305,5 @@ async def analyze_reticulocytes(file: UploadFile = File(...)):
             "image_base64": b64_image
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Reticulocytes inference error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Retikülosit model hatası: {str(e)}")

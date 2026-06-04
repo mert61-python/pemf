@@ -35,17 +35,21 @@ function MainRouter() {
     return <WelcomeScreen />;
   }
 
+  const EXPERT_ROUTES: RouteKey[] = ["control", "sensors", "history", "patients", "kpi"];
+  // Uzman olmayan kullanıcı uzman rotaya geçerse dashboard'a yönlendir
+  const effectiveRoute = (!isExpert && EXPERT_ROUTES.includes(activeRoute)) ? "dashboard" : activeRoute;
+
   return (
-    <AppShell activeRoute={activeRoute} title={meta.title} subtitle={meta.subtitle} onRouteChange={setActiveRoute}>
-      {activeRoute === "dashboard"  ? <DashboardScreen /> : null}
-      {activeRoute === "control" && isExpert ? <ControlScreen /> : null}
-      {activeRoute === "sensors" && isExpert ? <SensorMonitorScreen /> : null}
-      {activeRoute === "history" && isExpert ? <TreatmentHistoryScreen /> : null}
-      {activeRoute === "patients" && isExpert ? <PatientScreen /> : null}
-      {activeRoute === "kpi" && isExpert ? <KpiDashboardScreen /> : null}
-      {activeRoute === "simulator" ? <DemaSimulatorScreen /> : null}
-      {activeRoute === "ai" ? <AiHubScreen /> : null}
-      {activeRoute === "settings" ? <SettingsScreen /> : null}
+    <AppShell activeRoute={effectiveRoute} title={routeMeta[effectiveRoute].title} subtitle={routeMeta[effectiveRoute].subtitle} onRouteChange={setActiveRoute}>
+      {effectiveRoute === "dashboard"  ? <DashboardScreen /> : null}
+      {effectiveRoute === "control" && isExpert ? <ControlScreen /> : null}
+      {effectiveRoute === "sensors" && isExpert ? <SensorMonitorScreen /> : null}
+      {effectiveRoute === "history" && isExpert ? <TreatmentHistoryScreen /> : null}
+      {effectiveRoute === "patients" && isExpert ? <PatientScreen /> : null}
+      {effectiveRoute === "kpi" && isExpert ? <KpiDashboardScreen /> : null}
+      {effectiveRoute === "simulator" ? <DemaSimulatorScreen /> : null}
+      {effectiveRoute === "ai" ? <AiHubScreen /> : null}
+      {effectiveRoute === "settings" ? <SettingsScreen /> : null}
     </AppShell>
   );
 }

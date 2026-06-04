@@ -115,6 +115,38 @@ if (Test-Path $BuildDir) {
     Write-OK "build/ temizlendi"
 }
 
+# --- Adim 4.5: React Web Export ---
+Write-Step "React Frontend Web Export"
+
+$FrontendDir = Join-Path $ProjectRoot "frontend"
+if (-not (Test-Path $FrontendDir)) {
+    Write-Fail "frontend\ klasoru bulunamadi!"
+}
+
+Push-Location $FrontendDir
+try {
+    Write-Host "  Bagimliliklar yukleniyor (npm ci)..." -ForegroundColor DarkGray
+    & npm ci
+    if ($LASTEXITCODE -ne 0) { Write-Fail "npm ci basarisiz!" }
+
+    Write-Host "  Typecheck calistiriliyor (npm run typecheck)..." -ForegroundColor DarkGray
+    & npm run typecheck
+    if ($LASTEXITCODE -ne 0) { Write-Fail "npm run typecheck basarisiz! (TypeScript hatalarini duzeltin)" }
+
+    Write-Host "  Expo Web Export aliniyor..." -ForegroundColor DarkGray
+    $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
+    & npx expo export --platform web
+    if ($LASTEXITCODE -ne 0) { Write-Fail "Expo web export basarisiz!" }
+} finally {
+    Pop-Location
+}
+
+$FrontendIndex = Join-Path $FrontendDir "dist\index.html"
+if (-not (Test-Path $FrontendIndex)) {
+    Write-Fail "frontend\dist\index.html uretilemedi! React build adimi hatali."
+}
+Write-OK "React web export basariyla tamamlandi ve dogrulandi."
+
 # --- Adim 5: PyInstaller OneDir Build ---
 Write-Step "PyInstaller OneDir Build Baslatiliyor"
 Write-Host "  Bu islem 5-15 dakika surebilir..." -ForegroundColor DarkGray

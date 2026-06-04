@@ -98,21 +98,30 @@ function SessionCard({ session, onRefresh }: { session: any, onRefresh: () => vo
   };
 
   const handleDelete = () => {
-    Alert.alert("Kaydı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", [
+    Alert.alert("Kayıtı Sil", "Bu seans kaydını silmek istediğinizden emin misiniz?", [
       { text: "İptal", style: "cancel" },
       { text: "Sil", style: "destructive", onPress: async () => {
-        // Eğer backend de silme varsa:
-        // await apiGet(`/history/delete?session_id=${session.id}`);
-        showToast("Seans silindi.", "success");
-        onRefresh();
+        const res = await apiPost<{status: string}>("/history/delete", { session_id: session.id }, { status: "error" });
+        if (res.status === "success") {
+          showToast("Seans silindi.", "success");
+          onRefresh();
+        } else {
+          showToast("Silme işlemi başarısız.", "error");
+        }
       }}
     ]);
   };
 
   const handleSendEmail = async () => {
+    // Hastanın sahibi yoksa bildir
+    const ownerEmail = session.owner_email || session.vet_contact || null;
+    if (!ownerEmail) {
+      showToast("Hasta sahibinin e-posta adresi kayıtlı değil.", "error");
+      return;
+    }
     showToast("E-posta gönderiliyor...", "info");
     const res = await apiPost<{status: string}>("/settings/send_email", {
-      recipient_email: "hasta_sahibi@email.com", // Gerçekte hastanın maili olmalı
+      recipient_email: ownerEmail,
       patient_name: session.patient_name || "Bilinmiyor",
       session_ids: session.id
     }, {status: "error"});

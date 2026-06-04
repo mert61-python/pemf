@@ -108,10 +108,11 @@ export function RealtimeChart({
       if (pts.length < 2) continue;
       const color = COIL_COLORS[(coilId - 1) % 8];
 
-      // Magnetic field — solid line (left axis)
+      // Magnetic field — solid line (left axis), per-coil color
       if (showMagnetic) {
-        ctx.strokeStyle = "#22c55e";
+        ctx.strokeStyle = color;  // her bobine özgü renk
         ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
         ctx.beginPath();
         for (let i = 0; i < pts.length; i++) {
           const x = PAD.left + (i / (pts.length - 1)) * plotW;

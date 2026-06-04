@@ -44,7 +44,8 @@ app.include_router(settings_router)
 
 # DEMA Simülatörü host etme
 import os
-sim_path = os.path.join(os.getcwd(), "dema-terapi-simülatörü", "dist")
+from utils.path_utils import packaged_resource_path
+sim_path = str(packaged_resource_path("dema-terapi-simülatörü", "dist"))
 if os.path.exists(sim_path):
     app.mount("/simulator", StaticFiles(directory=sim_path, html=True), name="simulator")
 

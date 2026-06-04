@@ -11,13 +11,13 @@ export const mockSnapshot: DashboardSnapshot = {
     owner: "Demo Sahip"
   },
   activeTreatment: {
-    mode: "Doku Yenileme",
-    frequencyHz: 12.5,
-    intensityMt: 4.2,
-    remainingMin: 18,
-    elapsedSec: 720,
-    durationSec: 1800,
-    isActive: true
+    mode: "Sistem Hazır",
+    frequencyHz: 0,
+    intensityMt: 0,
+    remainingMin: 0,
+    elapsedSec: 0,
+    durationSec: 0,
+    isActive: false  // Uygulama açılışında sahte aktif seans gösterilmemeli
   },
   notifications: [],
   system: {

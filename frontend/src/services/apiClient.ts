@@ -2,17 +2,23 @@ import { serviceConfig } from "@/services/config";
 
 export async function apiGet<T>(path: string, fallback: T): Promise<T> {
   try {
-    const response = await fetch(`${serviceConfig.apiBaseUrl}${path}`);
-    if (!response.ok) return fallback;
+    const url = `${serviceConfig.apiBaseUrl}${path}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`API GET Hatası [${response.status}]: ${url}`);
+      return fallback;
+    }
     return (await response.json()) as T;
-  } catch {
+  } catch (error) {
+    console.error(`API GET İstek Başarısız: ${path}`, error);
     return fallback;
   }
 }
 
 export async function apiPost<T>(path: string, body: unknown, fallback: T): Promise<T> {
   try {
-    const response = await fetch(`${serviceConfig.apiBaseUrl}${path}`, {
+    const url = `${serviceConfig.apiBaseUrl}${path}`;
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -20,9 +26,13 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T): Prom
       },
       body: JSON.stringify(body)
     });
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+      console.error(`API POST Hatası [${response.status}]: ${url}`);
+      return fallback;
+    }
     return (await response.json()) as T;
-  } catch {
+  } catch (error) {
+    console.error(`API POST İstek Başarısız: ${path}`, error);
     return fallback;
   }
 }

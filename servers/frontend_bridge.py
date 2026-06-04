@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+from utils.path_utils import packaged_resource_path
 
 try:
     import paho.mqtt.client as mqtt
@@ -681,7 +682,7 @@ def _make_handler(project_root: Path):
 
         def _send_static(self, path: str) -> None:
             app_data_path = Path(os.environ.get("APPDATA", "C:/")) / "PEMF_GUI" / "frontend_dist"
-            fallback_root = project_root / "frontend" / "dist"
+            fallback_root = packaged_resource_path("frontend", "dist")
             static_root = app_data_path if app_data_path.exists() and (app_data_path / "index.html").exists() else fallback_root
             
             if path in {"", "/"}:
