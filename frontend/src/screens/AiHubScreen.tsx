@@ -150,7 +150,7 @@ function PetOwnerAiScreen() {
       if (response.ok && data.status === "success") {
         setResult(data);
       } else {
-        showToast("Teşhis sırasında hata oluştu.", "error");
+        showToast(data?.detail || "Teşhis sırasında hata oluştu.", "error");
       }
     } catch (error) {
       showToast("Bağlantı hatası.", "error");
@@ -197,7 +197,7 @@ function PetOwnerAiScreen() {
                 <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); }} />
               </View>
               <View style={{ flex: 1 }}>
-                <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={analyzeImage} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
+                <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={() => analyzeImage()} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
               </View>
             </View>
           </View>
@@ -348,6 +348,8 @@ function DiseaseModule() {
 function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: string, subtitle: string }) {
   const { showToast } = useToast();
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   
@@ -384,26 +386,102 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
   const toggleLive = () => {
     setIsLive(!isLive);
     setImageUri(null);
+    setImageBase64(null);
+    setImageFile(null);
     setResult(null);
   };
 
   const takePhoto = async () => {
-    let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
-    if (!res.canceled) setImageUri(res.assets[0].uri);
-  };
-  const pickImage = async () => {
-    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
-    if (!res.canceled) setImageUri(res.assets[0].uri);
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      (input as any).capture = 'environment';
+      input.onchange = (e: any) => {
+        const file = e.target.files[0];
+        if (file) {
+          setImageFile(file);
+          setImageUri(URL.createObjectURL(file));
+          setImageBase64(null);
+          setResult(null);
+        }
+      };
+      input.click();
+    } else {
+      let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8, base64: true });
+      if (!res.canceled) {
+        setImageUri(res.assets[0].uri);
+        setImageBase64(res.assets[0].base64 || null);
+        setImageFile((res.assets[0] as any).file || null);
+        setResult(null);
+      }
+    }
   };
 
-  const analyzeImage = async (uriToAnalyze = imageUri) => {
+  const pickImage = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target.files[0];
+        if (file) {
+          setImageFile(file);
+          setImageUri(URL.createObjectURL(file));
+          setImageBase64(null);
+          setResult(null);
+        }
+      };
+      input.click();
+    } else {
+      let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8, base64: true });
+      if (!res.canceled) {
+        setImageUri(res.assets[0].uri);
+        setImageBase64(res.assets[0].base64 || null);
+        setImageFile((res.assets[0] as any).file || null);
+        setResult(null);
+      }
+    }
+  };
+
+  const analyzeImage = async (uriToAnalyze?: string | null) => {
+    uriToAnalyze = typeof uriToAnalyze === "string" ? uriToAnalyze : imageUri;
     if (!uriToAnalyze) return;
     setLoading(true);
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const res = await fetch(uriToAnalyze);
-        const blob = await res.blob();
+        let blob: Blob | null = null;
+        if (uriToAnalyze === imageUri && imageFile) {
+          blob = imageFile;
+        } else if (uriToAnalyze.startsWith('data:')) {
+          const arr = uriToAnalyze.split(',');
+          const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          blob = new Blob([u8arr], { type: mime });
+        } else if (uriToAnalyze === imageUri && imageBase64) {
+          const bstr = atob(imageBase64);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          blob = new Blob([u8arr], { type: 'image/jpeg' });
+        } else {
+          const res = await fetch(uriToAnalyze);
+          blob = await res.blob();
+          if (blob.type && !blob.type.startsWith("image/")) {
+            throw new Error("Seçilen dosya görsel olarak okunamadı.");
+          }
+        }
+        if (!blob) {
+          throw new Error("Görüntü dosyası hazırlanamadı.");
+        }
         formData.append("file", blob, "upload.jpg");
       } else {
         formData.append("file", { uri: uriToAnalyze, name: "upload.jpg", type: "image/jpeg" } as any);
@@ -418,7 +496,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
         setResult(data);
         if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
       }
-      else if (!isLive) showToast("Analiz sırasında hata oluştu.", "error");
+      else if (!isLive) showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
     } catch (error) {
       if (!isLive) showToast("Ağ veya sunucu hatası.", "error");
     } finally {
@@ -471,7 +549,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       </View>
 
       <View style={styles.analyzeBtn}>
-        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyzeImage} />
+        <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={() => analyzeImage()} />
       </View>
 
       {result && (

@@ -59,7 +59,7 @@ async def analyze_landmark(file: UploadFile = File(...)):
         
         if img is None:
             print("DEBUG: cv2.imdecode returned None. Content starts with: ", content[:20])
-            raise ValueError(f"Image could not be decoded. Size was {len(content)} bytes. Starts with: {content[:20]}")
+            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
 
         if "landmark" not in _models:
             from ultralytics import YOLO
@@ -122,6 +122,8 @@ async def analyze_segmentation(file: UploadFile = File(...)):
         content = await file.read()
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
 
         if "seg" not in _models:
             from ultralytics import YOLO
@@ -170,6 +172,8 @@ async def analyze_thermal(file: UploadFile = File(...)):
         content = await file.read()
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
 
         if "thermal" not in _models:
             from ai_hub.cat_thermal.inference_cat_thermal import CatThermalPredictor
@@ -203,6 +207,8 @@ async def analyze_reticulocytes(file: UploadFile = File(...)):
         content = await file.read()
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Geçersiz görüntü verisi. Alınan boyut: {len(content)} bytes. İlk bytes: {content[:20]}")
 
         if "retic" not in _models:
             from ultralytics import YOLO
