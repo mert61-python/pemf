@@ -53,25 +53,59 @@ function PetOwnerAiScreen() {
   const { showToast } = useToast();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [treatmentStatus, setTreatmentStatus] = useState<string>("");
 
   const takePhoto = async () => {
-    let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7, base64: true });
-    if (!res.canceled) { 
-      setImageUri(res.assets[0].uri); 
-      setImageBase64(res.assets[0].base64 || null);
-      setResult(null); setTreatmentStatus(""); 
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      (input as any).capture = 'environment';
+      input.onchange = (e: any) => {
+        const file = e.target.files[0];
+        if (file) {
+          setImageFile(file);
+          setImageUri(URL.createObjectURL(file));
+          setResult(null); setTreatmentStatus("");
+        }
+      };
+      input.click();
+    } else {
+      let res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7, base64: true });
+      if (!res.canceled) { 
+        setImageUri(res.assets[0].uri); 
+        setImageBase64(res.assets[0].base64 || null);
+        setImageFile((res.assets[0] as any).file || null);
+        setResult(null); setTreatmentStatus(""); 
+      }
     }
   };
 
   const pickImage = async () => {
-    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7, base64: true });
-    if (!res.canceled) { 
-      setImageUri(res.assets[0].uri); 
-      setImageBase64(res.assets[0].base64 || null);
-      setResult(null); setTreatmentStatus(""); 
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target.files[0];
+        if (file) {
+          setImageFile(file);
+          setImageUri(URL.createObjectURL(file));
+          setResult(null); setTreatmentStatus("");
+        }
+      };
+      input.click();
+    } else {
+      let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.7, base64: true });
+      if (!res.canceled) { 
+        setImageUri(res.assets[0].uri); 
+        setImageBase64(res.assets[0].base64 || null);
+        setImageFile((res.assets[0] as any).file || null);
+        setResult(null); setTreatmentStatus(""); 
+      }
     }
   };
 
@@ -81,8 +115,8 @@ function PetOwnerAiScreen() {
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        let blob;
-        if (imageBase64) {
+        let blob = imageFile;
+        if (!blob && imageBase64) {
           const bstr = atob(imageBase64);
           let n = bstr.length;
           const u8arr = new Uint8Array(n);
@@ -90,7 +124,7 @@ function PetOwnerAiScreen() {
             u8arr[n] = bstr.charCodeAt(n);
           }
           blob = new Blob([u8arr], { type: 'image/jpeg' });
-        } else if (imageUri.startsWith('data:')) {
+        } else if (!blob && imageUri && imageUri.startsWith('data:')) {
           const arr = imageUri.split(',');
           const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
           const bstr = atob(arr[1]);
@@ -100,9 +134,8 @@ function PetOwnerAiScreen() {
             u8arr[n] = bstr.charCodeAt(n);
           }
           blob = new Blob([u8arr], { type: mime });
-        } else {
-          const res = await fetch(imageUri);
-          blob = await res.blob();
+        } else if (!blob) {
+          throw new Error("Web ortamında geçerli bir dosya bulunamadı.");
         }
         formData.append("file", blob, "camera_capture.jpg");
       } else {
@@ -161,7 +194,7 @@ function PetOwnerAiScreen() {
             <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); }} />
+                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); }} />
               </View>
               <View style={{ flex: 1 }}>
                 <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={analyzeImage} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
