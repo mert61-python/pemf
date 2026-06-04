@@ -13,7 +13,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical System"
-#define MyAppVersion   "1.1"
+#define MyAppVersion   "1.2"
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define MyAppExeName   "PEMF_GUI.exe"

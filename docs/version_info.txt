@@ -6,9 +6,9 @@
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    # filevers ve prodvers 4 sayıdan oluşmalı: (1, 0, 0, 0)
-    filevers=(1, 0, 0, 0),
-    prodvers=(1, 0, 0, 0),
+    # filevers ve prodvers 4 sayıdan oluşmalı: (1, 2, 0, 0)
+    filevers=(1, 2, 0, 0),
+    prodvers=(1, 2, 0, 0),
     # mask: Binary mask değeri
     mask=0x3f,
     # flags: 0x0 = son sürüm, 0x1 = debug, 0x2 = prerelease, vb.
@@ -29,12 +29,12 @@ VSVersionInfo(
         u'040904B0',  # 0409 = US English, 04B0 = Unicode
         [StringStruct(u'CompanyName', u'PEMF Medical Technologies'),
         StringStruct(u'FileDescription', u'PEMF Therapeutic Device Control Software'),
-        StringStruct(u'FileVersion', u'1.0.0.0'),
+        StringStruct(u'FileVersion', u'1.2.0.0'),
         StringStruct(u'InternalName', u'PEMF_GUI'),
-        StringStruct(u'LegalCopyright', u'Copyright (C) 2025 PEMF Medical Technologies. All rights reserved.'),
+        StringStruct(u'LegalCopyright', u'Copyright (C) 2026 PEMF Medical Technologies. All rights reserved.'),
         StringStruct(u'OriginalFilename', u'PEMF_GUI.exe'),
         StringStruct(u'ProductName', u'PEMF Control Suite'),
-        StringStruct(u'ProductVersion', u'1.0.0.0')])
+        StringStruct(u'ProductVersion', u'1.2.0.0')])
       ]
     ),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])  # 1033 = English (US), 1200 = Unicode
