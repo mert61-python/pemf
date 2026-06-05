@@ -364,14 +364,14 @@ hiddenimports = [
 # ADIM 5: VERSION INFO
 # ---------------------------------------------------------------------------
 version_info = {
-    'version': '1.0.0.0',
+    'version': '1.3',
     'company_name': 'PEMF Medical Technologies',
     'file_description': 'PEMF Therapeutic Device Control Software',
     'internal_name': 'PEMF_GUI',
     'legal_copyright': 'Copyright (C) 2026 PEMF Medical Technologies',
     'original_filename': 'PEMF_GUI.exe',
     'product_name': 'PEMF Control Suite',
-    'product_version': '1.0.0.0',
+    'product_version': '1.3',
 }
 
 # ---------------------------------------------------------------------------
@@ -419,13 +419,13 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='PEMF_GUI',
-    debug=True,
+    debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True, 
+    console=False, 
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -73,7 +73,8 @@ class UpdateDownloaderThread(QThread):
             with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
                 total_size = int(response.info().get('Content-Length', 0))
                 downloaded = 0
-                chunk_size = 8192
+                # İndirme hızını artırmak için chunk boyutunu 8KB'dan 1MB'a çıkarıyoruz
+                chunk_size = 1024 * 1024 
 
                 with open(self.save_path, 'wb') as f:
                     while not self.is_cancelled:

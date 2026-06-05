@@ -9,11 +9,11 @@
 ;   3. Bu scripti Inno Setup IDE'de aç ve "Build > Compile" yap.
 ;      VEYA komut satırından: iscc.exe PEMF_Setup.iss
 ;
-; ÇIKTI: build_tools\Output\PEMFSetup_v1.0.exe
+; ÇIKTI: build_tools\Output\PEMFSetup_v1.3.exe
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical System"
-#define MyAppVersion   "1.2"
+#define MyAppVersion   "1.3"
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define MyAppExeName   "PEMF_GUI.exe"

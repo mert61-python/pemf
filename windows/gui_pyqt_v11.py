@@ -380,8 +380,21 @@ class MainWindow(QMainWindow, StyleMixin):
     Design System entegrasyonu ile merkezi stil yönetimi kullanır.
     """
     # Yazılım sürümü
-    SOFTWARE_VERSION = "1"
+    SOFTWARE_VERSION = "1.3"
     
+    def get_dynamic_software_version(self):
+        try:
+            import json, os
+            from pathlib import Path
+            app_data_dir = Path(os.environ.get("APPDATA", "C:/")) / "PEMF_GUI"
+            v_file = app_data_dir / "frontend_version.json"
+            if v_file.exists():
+                with open(v_file, "r", encoding="utf-8") as f:
+                    return json.load(f).get("version", self.SOFTWARE_VERSION)
+        except Exception:
+            pass
+        return self.SOFTWARE_VERSION
+        
     # Benzersiz cihaz kimliği (uzaktan izleme için)
     device_id = None
     
@@ -474,10 +487,11 @@ class MainWindow(QMainWindow, StyleMixin):
         """STM bağlantı durumu değiştiğinde çağrılır."""
         self.stm_is_connected = connected
         if connected:
-            self.connection_status_label.setText("🔗 Sürücü Bağlı (5 Bobin)")
-            self.connection_status_label.setStyleSheet(
-                RS.connection_status_stm(color="#22c55e")
-            )
+            if hasattr(self, 'connection_status_label'):
+                self.connection_status_label.setText("🔗 Sürücü Bağlı (5 Bobin)")
+                self.connection_status_label.setStyleSheet(
+                    RS.connection_status_stm(color="#22c55e")
+                )
             self.statusBar().showMessage("Sürücü Bağlandı — 5 Bobin PWM Aktif")
             self.statusBar().setStyleSheet(RS.status_bar_connected())
             
@@ -491,12 +505,14 @@ class MainWindow(QMainWindow, StyleMixin):
                 }
                 self.update_esp_status_internal(str(i), mock_data)
         else:
-            self.connection_status_label.setText("⚠️ Sürücü Bağlı Değil")
-            self.connection_status_label.setStyleSheet(
-                RS.connection_status_stm(color="#ef4444")
-            )
+            if hasattr(self, 'connection_status_label'):
+                self.connection_status_label.setText("⚠️ Sürücü Bağlı Değil")
+                self.connection_status_label.setStyleSheet(
+                    RS.connection_status_stm(color="#ef4444")
+                )
             self.statusBar().showMessage("Sürücü Bağlantısı Bekleniyor...")
             self.statusBar().setStyleSheet(RS.status_bar_disconnected())
+            
         # UCW açıksa ilet
         if self._is_window_alive(self.unified_control_window):
             self.unified_control_window.set_stm_connected(connected)
@@ -547,7 +563,7 @@ class MainWindow(QMainWindow, StyleMixin):
         from PyQt6.QtCore import Qt
         reply = QMessageBox.question(
             self, 'Güncelleme Bulundu',
-            f'Yeni bir sürüm (v{version}) yayınlandı!\n\nDeğişiklikler:\n{release_notes}\n\nŞimdi otomatik olarak indirip kurmak ister misiniz?',
+            f'Yeni bir sürüm (v{version}) yayınlandı!\n\nDeğişiklikler:\n{release_notes}\n\nŞimdi otomatik olarak indirip kurmak ister misiniz?\n\n(Not: Güncelleme paketinin boyutu büyüktür. İndirme işlemi bağlantı hızınıza göre uzun sürebilir, lütfen arka planda tamamlanmasını bekleyin.)',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -560,7 +576,7 @@ class MainWindow(QMainWindow, StyleMixin):
 
             # Otomatik indir ve kur (Sessiz Kurulum)
             self.progress_dialog = QProgressDialog("Güncelleme indiriliyor...", "İptal", 0, 100, self)
-            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setWindowModality(Qt.WindowModality.NonModal)
             self.progress_dialog.setWindowTitle("İndiriliyor")
             self.progress_dialog.setAutoClose(True)
             self.progress_dialog.setAutoReset(True)
@@ -850,10 +866,21 @@ class MainWindow(QMainWindow, StyleMixin):
         # ─── FRONTEND OTO-GÜNCELLEYİCİ BAŞLAT ─────────
         try:
             from services.frontend_updater_service import FrontendUpdaterThread
-            self.frontend_updater = FrontendUpdaterThread(current_version="1.0.0", parent=self)
-            self.frontend_updater.update_finished.connect(
-                lambda msg: QTimer.singleShot(3000, lambda: self.notification_panel.add_notification(msg, "info")) if hasattr(self, 'notification_panel') else self.logger.info(msg)
-            )
+            current_dyn_ver = self.get_dynamic_software_version()
+            self.frontend_updater = FrontendUpdaterThread(current_version=current_dyn_ver, parent=self)
+            
+            def on_frontend_updated(msg):
+                if hasattr(self, 'notification_panel'):
+                    QTimer.singleShot(3000, lambda: self.notification_panel.add_notification(msg, "info"))
+                else:
+                    self.logger.info(msg)
+                
+                # Sürümü dinamik olarak güncelle
+                new_ver = self.get_dynamic_software_version()
+                if hasattr(self, 'software_version_label'):
+                    self.software_version_label.setText(f"v{new_ver}")
+
+            self.frontend_updater.update_finished.connect(on_frontend_updated)
             self.frontend_updater.start()
         except Exception as e:
             self.logger.error(f"Frontend Updater başlatılamadı: {e}")
@@ -1808,15 +1835,27 @@ class MainWindow(QMainWindow, StyleMixin):
             system_info_layout.addWidget(row_widget)
 
         # Dinamik değer alanları
+        self.hw_version_label = QLabel("HW-2025.1")
+        
+        try:
+            import datetime as dt_module
+            update_date = dt_module.datetime.fromtimestamp(os.path.getmtime(os.path.abspath(__file__))).strftime('%d.%m.%Y')
+        except:
+            update_date = "8.11.2025"
+            
+        self.last_update_label = QLabel(update_date)
         self.working_time_label = QLabel()
         self.total_treatment_label = QLabel("0 seans")
+        self.software_version_label = QLabel(f"v{self.get_dynamic_software_version()}")
 
         # Bilgi satırları
-        add_info_row("🔄 Yazılım Sürümü:", QLabel(f"v{self.SOFTWARE_VERSION}"), RS.info_row_version_px())
-        add_info_row("💻 Donanım Sürümü:", QLabel("HW-2025.1"), RS.info_row_version_px())
-        add_info_row("📅 Son Güncelleme:", QLabel("8.11.2025"), RS.info_row_version_px())
-        device_id_val = self.device_id if hasattr(self, 'device_id') else "PEMF-001-2025"
-        add_info_row("🆔 Cihaz ID:", QLabel(device_id_val), RS.info_row_version_px())
+        add_info_row("🔄 Yazılım Sürümü:", self.software_version_label, RS.info_row_version_px())
+        add_info_row("💻 Donanım Sürümü:", self.hw_version_label, RS.info_row_version_px())
+        add_info_row("📅 Son Güncelleme:", self.last_update_label, RS.info_row_version_px())
+        
+        device_id_val = self.device_id if hasattr(self, 'device_id') and self.device_id else "PEMF-001-2025"
+        self.device_id_label = QLabel(device_id_val)
+        add_info_row("🆔 Cihaz ID:", self.device_id_label, RS.info_row_version_px())
         add_info_row("⏳ Çalışma Süresi:", self.working_time_label, RS.info_row_version_px())
         add_info_row("📈 Toplam Seans:", self.total_treatment_label, RS.info_row_version_px())
 
@@ -4227,6 +4266,11 @@ class MainWindow(QMainWindow, StyleMixin):
                 QThreadPool.globalInstance().start(writer)
             except Exception as e:
                 self.logger.error(f"Çalışma süresi kaydedilemedi: {e}")
+                
+        # Total seans sayısını düzenli olarak güncelle (her 10 saniyede bir)
+        if hasattr(self, 'total_treatment_label') and self.working_seconds % 10 == 0:
+            self.update_total_treatment_count()
+            
         self.update_working_time_label()
 
     def update_working_time_label(self):
@@ -4844,6 +4888,12 @@ class MainWindow(QMainWindow, StyleMixin):
                 
                 # Birleştirilmiş veriyi kalıcı buffer'a geri yaz (ASLA TEMİZLEME)
                 self.esp_status_buffer[coil_id] = current_status
+                
+                # Update dynamic hardware version label if available
+                if hasattr(self, 'hw_version_label') and 'hw_version' in current_status:
+                    hw_ver = current_status.get('hw_version')
+                    if hw_ver and hw_ver != self.hw_version_label.text():
+                        self.hw_version_label.setText(hw_ver)
             finally:
                 self.esp_status_buffer_mutex.unlock()
             # --- BİRLEŞTİRME MANTIĞI SONU ---
