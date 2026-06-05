@@ -11,7 +11,8 @@ export type WsMessageType =
   | "gateway_status"
   | "stm_status"
   | "session_update"
-  | "session_control";
+  | "session_control"
+  | "ai_vision";
 
 export interface WsMessage {
   type: WsMessageType;

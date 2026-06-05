@@ -3,13 +3,15 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Switch
 import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { apiGet, apiPost } from "@/services/apiClient";
-import { Save, Mail, Radio, UserCog, Network } from "lucide-react-native";
+import { Save, Mail, Radio, UserCog, Network, ServerCrash, RefreshCcw, Trash2 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig } from "@/services/config";
 import { useUserMode } from "@/context/UserModeContext";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export function SettingsScreen() {
   const { userMode, setUserMode, isExpert } = useUserMode();
+  const { showToast } = useToast();
   const [settings, setSettings] = useState({
     clinic_name: "",
     email_sender: "",
@@ -229,6 +231,51 @@ export function SettingsScreen() {
             </TouchableOpacity>
           </View>
             {testStatus ? <Text style={styles.statusText}>{testStatus}</Text> : null}
+          </Card>
+          
+          <Card style={[styles.card as any, { marginTop: spacing.xl, borderColor: colors.danger, borderWidth: 1 }]}>
+            <View style={styles.cardHeader}>
+              <ServerCrash color={colors.danger} size={20} />
+              <Text style={[styles.cardTitle, {color: colors.danger}]}>Donanım Bakım ve Servis</Text>
+            </View>
+            <Text style={styles.helperText}>Sadece acil durumlarda veya sistem kilitlenmelerinde kullanın.</Text>
+            
+            <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+              <TouchableOpacity 
+                style={[styles.btnOutline, { borderColor: colors.warning }]} 
+                onPress={async () => {
+                  const res = await apiPost<any>("/hardware/selftest", {}, {status: "error"});
+                  if (res.status === "success") showToast("Self-Test komutu donanıma gönderildi.", "success");
+                  else showToast("Self-Test gönderilemedi.", "error");
+                }}
+              >
+                <RefreshCcw color={colors.warning} size={16} style={{marginRight: 8}} />
+                <Text style={[styles.btnOutlineText, { color: colors.warning }]}>Donanım Self-Test Başlat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.btnOutline, { borderColor: colors.danger }]} 
+                onPress={async () => {
+                  const res = await apiPost<any>("/hardware/reset_pwm", {}, {status: "error"});
+                  if (res.status === "success") showToast("Tüm bobin PWM sinyalleri sıfırlandı.", "success");
+                  else showToast("PWM sıfırlama başarısız.", "error");
+                }}
+              >
+                <Trash2 color={colors.danger} size={16} style={{marginRight: 8}} />
+                <Text style={[styles.btnOutlineText, { color: colors.danger }]}>Tüm PWM Sinyallerini Sıfırla (Reset)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.btnOutline, { borderColor: colors.textMuted }]} 
+                onPress={async () => {
+                  const res = await apiPost<any>("/hardware/cleanup_esp", {}, {status: "error"});
+                  if (res.status === "success") showToast("Kopmuş cihaz bağlantıları temizlendi.", "info");
+                }}
+              >
+                <Network color={colors.textMuted} size={16} style={{marginRight: 8}} />
+                <Text style={[styles.btnOutlineText, { color: colors.textMuted }]}>Kopmuş Cihazları Ağdan Temizle</Text>
+              </TouchableOpacity>
+            </View>
           </Card>
         </View>
       )}

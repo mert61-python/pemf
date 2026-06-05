@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import cv2
 import numpy as np
@@ -10,6 +11,8 @@ import logging
 logger = logging.getLogger("ai_router")
 
 import threading
+import time
+from utils.model_downloader import download_model_sync
 
 ai_router = APIRouter()
 
@@ -77,9 +80,11 @@ async def analyze_disease(data: DiseaseInput):
         logger.error(f"Disease inference error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Hastalık analizi hatası: {str(e)}")
 
+from fastapi import Form
+
 @ai_router.post("/api/ai/vision/landmark")
-async def analyze_landmark(file: UploadFile = File(...)):
-    """YOLO Pose + FGS Ağrı Skoru"""
+async def analyze_landmark(file: UploadFile = File(...), auto_adjust: bool = Form(False)):
+    """YOLO Pose + FGS Ağrı Skoru + Otonom Biyogeribildirim"""
     try:
         content = await file.read()
         print(f"DEBUG: Received file size: {len(content)} bytes")
@@ -138,16 +143,149 @@ async def analyze_landmark(file: UploadFile = File(...)):
         total = fgs_result.get("fgs_total", fgs_result.get("total", 0))
         pain_level = fgs_result.get("pain_level", "Unknown")
         
-        return {
+        # Otonom Biofeedback
+        hw_status = "idle"
+        hw_params = {}
+        if auto_adjust:
+            try:
+                from servers.api_server import state
+                if state and state.hardware:
+                    # Basit Algoritma: FGS skoru 0-10 arası, Frekansı 10'dan başlayıp skor başına 5Hz artırıyoruz.
+                    target_freq = 10.0 + (total * 5.0)
+                    target_duty = 25.0 + (total * 3.0) # Duty de artsın
+                    if target_duty > 50.0:
+                        target_duty = 50.0
+                    if target_freq > 100.0:
+                        target_freq = 100.0
+                    
+                    state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
+                    update_session_state(True, mode="AI Pro (Auto)", freq=target_freq, duty=target_duty, duration=30)
+                    hw_status = "updated"
+                    hw_params = {"freq": target_freq, "duty": target_duty}
+            except Exception as e:
+                logger.error(f"Otonom biofeedback hatası: {e}")
+
+        return JSONResponse(content={
             "status": "success",
+            "image_base64": b64_image,
             "fgs_total": total,
             "pain_level": pain_level,
-            "raw_fgs": fgs_result,
-            "image_base64": b64_image
-        }
+            "hw_status": hw_status,
+            "hw_params": hw_params
+        })
     except Exception as e:
         logger.error(f"Landmark inference error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Landmark model hatası: {str(e)}")
+
+def _ai_pro_loop():
+    global _ai_loop_active
+    logger.info("AI Pro Closed-Loop arkaplan görevi BAŞLADI.")
+    cap = cv2.VideoCapture(0)
+    
+    if not cap.isOpened():
+        logger.error("Kamera açılamadı (VideoCapture(0)). AI Pro durduruluyor.")
+        _ai_loop_active = False
+        return
+
+    # Load Model
+    from ultralytics import YOLO
+    path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
+    model = YOLO(path, task="pose")
+
+    while _ai_loop_active:
+        start_time = time.time()
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.5)
+            continue
+            
+        try:
+            # Predict
+            results = model.predict(frame, conf=0.25, device="cpu", verbose=False)
+            fgs_result = {}
+            total = 0
+            
+            if results and len(results) > 0:
+                r = results[0]
+                if r.keypoints is not None and len(r.keypoints.xy) > 0 and r.boxes is not None and len(r.boxes) > 0:
+                    kp_xy = r.keypoints.xy[0].cpu().numpy()
+                    x1, y1, x2, y2 = r.boxes[0].xyxy[0].cpu().numpy()
+                    bw = max(x2 - x1, 1.0)
+                    bh = max(y2 - y1, 1.0)
+                    kp_norm = kp_xy.copy()
+                    kp_norm[:, 0] = (kp_norm[:, 0] - x1) / bw
+                    kp_norm[:, 1] = (kp_norm[:, 1] - y1) / bh
+                    
+                    from ai_hub.cat_landmark.inference_cat_landmark import compute_fgs
+                    fgs_result = compute_fgs(kp_norm)
+                    total = fgs_result.get("fgs_total", fgs_result.get("total", 0))
+                    
+                    for pt in kp_xy:
+                        px, py = int(pt[0]), int(pt[1])
+                        if px > 0 or py > 0:
+                            cv2.circle(frame, (px, py), 4, (0, 255, 80), -1)
+
+            # Hardware Control (Biofeedback)
+            from servers.api_server import state
+            if state and state.hardware:
+                target_freq = 10.0 + (total * 5.0)
+                target_duty = 25.0 + (total * 3.0)
+                target_duty = min(target_duty, 50.0)
+                target_freq = min(target_freq, 100.0)
+                state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
+                from servers.frontend_bridge import update_session_state
+                update_session_state(True, mode="AI Pro (Auto)", freq=target_freq, duty=target_duty, duration=30)
+            
+            # Broadcast WS
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            b64_image = base64.b64encode(buffer).decode('utf-8')
+            
+            ws_data = {
+                "imageBase64": b64_image,
+                "fgs_total": total,
+                "fgs_raw": fgs_result
+            }
+            try:
+                import servers.frontend_bridge as fb
+                fb._broadcast({"type": "ai_vision", "data": ws_data})
+            except Exception as wse:
+                logger.error(f"WS broadcast error in AI loop: {wse}")
+            
+        except Exception as e:
+            logger.error(f"AI Loop iteration error: {e}")
+            
+        elapsed = time.time() - start_time
+        sleep_time = max(0.1, 1.0 - elapsed)
+        time.sleep(sleep_time)
+
+    cap.release()
+    logger.info("AI Pro Closed-Loop arkaplan görevi DURDU.")
+
+@ai_router.post("/api/ai/pro/start")
+def start_ai_pro():
+    global _ai_loop_active, _ai_thread
+    if _ai_loop_active:
+        return {"status": "success", "message": "Already running"}
+        
+    _ai_loop_active = True
+    import threading
+    _ai_thread = threading.Thread(target=_ai_pro_loop, daemon=True)
+    _ai_thread.start()
+    return {"status": "success", "message": "AI Pro Closed-Loop Started"}
+
+@ai_router.post("/api/ai/pro/stop")
+def stop_ai_pro():
+    global _ai_loop_active
+    _ai_loop_active = False
+    
+    from servers.api_server import state
+    if state and state.hardware:
+        state.hardware.stop_all_coils()
+        from servers.frontend_bridge import update_session_state
+        update_session_state(False, mode="Manuel")
+        
+    return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
+
 
 @ai_router.post("/api/ai/vision/segmentation")
 async def analyze_segmentation(file: UploadFile = File(...)):

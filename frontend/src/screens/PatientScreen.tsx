@@ -98,6 +98,25 @@ export function PatientScreen() {
     ]);
   };
 
+  const handleDeleteAll = () => {
+    Alert.alert("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", [
+      { text: "İptal", style: "cancel" },
+      { 
+        text: "Hepsini Sil", 
+        style: "destructive", 
+        onPress: async () => {
+          const res = await apiPost<{status: string}>(`/patients/delete_all`, {}, { status: "error" });
+          if (res.status === "success") {
+            showToast("Tüm hastalar silindi.", "success");
+            loadPatients();
+          } else {
+            showToast("Toplu silme işlemi başarısız.", "error");
+          }
+        } 
+      }
+    ]);
+  };
+
   const handleStartSession = (p: any) => {
     // Navigation to control screen with patient info
     // navigation.navigate("ControlScreen", { patient: p });
@@ -111,18 +130,26 @@ export function PatientScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Hasta Veritabanı</Text>
-        <Button 
-          label={isAdding ? "İptal" : "Yeni Hasta Kayıt"} 
-          icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
-          variant={isAdding ? "secondary" : "primary"}
-          onPress={() => {
-            if (isAdding) {
-              setEditingId(null);
-              setForm({ id: "", name: "", species: "", breed: "", age: "", weight: "", owner: "", vet_contact: "" });
-            }
-            setIsAdding(!isAdding);
-          }} 
-        />
+        <View style={{flexDirection: 'row', gap: spacing.sm}}>
+          <Button 
+            label="Tümünü Sil" 
+            icon={<Trash2 color={colors.danger} size={16} />}
+            variant="secondary"
+            onPress={handleDeleteAll}
+          />
+          <Button 
+            label={isAdding ? "İptal" : "Yeni Hasta Kayıt"} 
+            icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
+            variant={isAdding ? "secondary" : "primary"}
+            onPress={() => {
+              if (isAdding) {
+                setEditingId(null);
+                setForm({ id: "", name: "", species: "", breed: "", age: "", weight: "", owner: "", vet_contact: "" });
+              }
+              setIsAdding(!isAdding);
+            }} 
+          />
+        </View>
       </View>
 
       {isAdding && (

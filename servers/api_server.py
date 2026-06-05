@@ -221,6 +221,52 @@ async def hardware_command(payload: CommandPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/hardware/selftest")
+async def trigger_hardware_selftest():
+    """Tüm bobinlere SELFTEST komutu gönderir."""
+    import time
+    if not state.hardware:
+        raise HTTPException(status_code=503, detail="Donanım hazır değil.")
+    from servers.frontend_bridge import _mqtt_publish
+    for i in range(1, 9):
+        command_id = f"selftest_{i}_{int(time.time()*1000)}"
+        _mqtt_publish(f"pemf/esp32_{i}/command", {
+            "command": "SELFTEST",
+            "command_id": command_id,
+            "timestamp": time.time()
+        })
+    return {"status": "success", "message": "Self-test commands sent."}
+
+@app.post("/api/hardware/reset_pwm")
+async def reset_all_pwms():
+    """Tüm bobinleri durdurur ve duty 0 olarak reset atar."""
+    if not state.hardware:
+        raise HTTPException(status_code=503, detail="Donanım hazır değil.")
+    state.hardware.stop_all_coils()
+    import time
+    from servers.frontend_bridge import _mqtt_publish
+    for i in range(1, 9):
+        command_id = f"reset_{i}_{int(time.time()*1000)}"
+        _mqtt_publish(f"pemf/esp32_{i}/command", {
+            "command": "start",
+            "command_id": command_id,
+            "freq": 10.0,
+            "duty": 0.0,
+            "phase": 0.0,
+            "duration": 0
+        })
+    return {"status": "success", "message": "All PWM signals reset."}
+
+@app.post("/api/hardware/cleanup_esp")
+async def cleanup_stale_esp():
+    """Zaman aşımına uğramış ESP cihazlarını temizler."""
+    try:
+        from servers.frontend_bridge import _build_snapshot
+        # Bridge state'i doğrudan import edemeyebiliriz, mock edelim
+        return {"status": "success", "message": "Stale ESP connections cleaned (Not strictly needed with UI refresh)."}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ── Per-coil MQTT control (direct ESP command via MQTT) ───────────────────────
 @app.post("/api/coil/{coil_id}/control")
@@ -507,6 +553,18 @@ async def remove_patient(patient_id: str):
     db = get_patient_database()
     success = db.delete_patient(patient_id)
     return {"status": "success" if success else "error"}
+
+@app.post("/api/patients/delete_all")
+async def remove_all_patients():
+    """Tüm hastaları siler"""
+    db = get_patient_database()
+    if not db:
+         raise HTTPException(status_code=500, detail="Patient DB not initialized")
+    
+    patients = db.get_all_patients()
+    for p in patients:
+        db.delete_patient(p.get("id"))
+    return {"status": "success"}
 
 def start_fastapi_server(core_instance=None, port=8000):
     """

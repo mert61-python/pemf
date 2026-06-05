@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost } from "@/services/apiClient";
 import { serviceConfig } from "@/services/config";
 import { useUserMode } from "@/context/UserModeContext";
+import { useLiveData } from "@/context/LiveDataContext";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes";
 
@@ -358,44 +359,46 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
   const [result, setResult] = useState<any>(null);
   
   const [isLive, setIsLive] = useState(false);
+  const [autoAdjust, setAutoAdjust] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
   const liveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // BUG #2 FIX: loading state'ini useRef ile takip et, setInterval closure'u her zaman güncel değeri okur
   const loadingRef = useRef(false);
+  const autoAdjustRef = useRef(autoAdjust);
+  const { aiVisionData } = useLiveData();
 
   useEffect(() => {
-    if (isLive) {
-      if (!permission?.granted) requestPermission();
-      // Canlı yayın döngüsü (2 saniyede bir frame alır)
-      liveIntervalRef.current = setInterval(async () => {
-        // loadingRef.current kullanılıyor — stale closure problemi çözüldü
-        if (cameraRef.current && !loadingRef.current) {
-          try {
-            const photo = await cameraRef.current.takePictureAsync({ quality: 0.3, base64: true });
-            if (photo) {
-              setImageUri(photo.uri);
-              analyzeImage(photo.uri);
-            }
-          } catch (e) {
-            console.log("Kamera okuma hatası", e);
-          }
-        }
-      }, 2000);
+    autoAdjustRef.current = autoAdjust;
+  }, [autoAdjust]);
+
+  useEffect(() => {
+    let active = true;
+    if (isLive && autoAdjust) {
+      // Otonom (Kapalı Döngü) Modu - Backend'i Başlat
+      apiPost<{status: string}>("/ai/pro/start", {}, {status: "error"}).then(() => {
+        if (!active) return;
+        showToast("Otonom Biofeedback başladı", "success");
+      });
     } else {
-      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+      // Backend'i durdur (Kamerayı serbest bırakır)
+      apiPost<{status: string}>("/ai/pro/stop", {}, {status: "error"}).catch(() => {});
     }
+
     return () => {
-      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+      active = false;
+      apiPost<{status: string}>("/ai/pro/stop", {}, {status: "error"}).catch(() => {});
     };
-  }, [isLive, permission]);
+  }, [isLive, autoAdjust]);
 
   const toggleLive = () => {
     setIsLive(!isLive);
-    setImageUri(null);
-    setImageBase64(null);
-    setImageFile(null);
-    setResult(null);
+    if (isLive) {
+      setImageUri(null);
+      setImageBase64(null);
+      setImageFile(null);
+      setResult(null);
+    }
   };
 
   const takePhoto = async () => {
@@ -499,6 +502,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
       } else {
         formData.append("file", { uri: uriToAnalyze, name: "upload.jpg", type: "image/jpeg" } as any);
       }
+      formData.append("auto_adjust", autoAdjustRef.current ? "true" : "false");
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
         body: formData,
@@ -520,11 +524,34 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
+      <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+        <View style={{flex: 1}}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
+        </View>
+        {endpoint === "/vision/landmark" && (
+          <TouchableOpacity 
+            style={[styles.autoAdjustBtn, autoAdjust ? styles.autoAdjustActive : null]} 
+            onPress={() => setAutoAdjust(!autoAdjust)}
+          >
+            <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
+            <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
+              Otonom Biofeedback
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
       
       <View style={styles.imagePreviewContainer}>
-        {isLive ? (
+        {(isLive && autoAdjust && aiVisionData?.imageBase64) ? (
+          <View style={styles.cameraContainer}>
+            <Image source={{ uri: `data:image/jpeg;base64,${aiVisionData.imageBase64}` }} style={styles.cameraView} resizeMode="contain" />
+            <View style={styles.liveIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>OTONOM BİOFEEDBACK AKTİF</Text>
+            </View>
+          </View>
+        ) : isLive ? (
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.cameraView} facing="back" />
             {result?.image_base64 && (
@@ -532,7 +559,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
             )}
             <View style={styles.liveIndicator}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveText}>CANLI ANALİZ</Text>
+              <Text style={styles.liveText}>KAMERA AKTİF</Text>
             </View>
           </View>
         ) : imageUri ? (
@@ -566,7 +593,7 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={() => analyzeImage()} />
       </View>
 
-      {result && (
+      {result && !autoAdjust && (
         <View style={styles.resultBox}>
           <Text style={styles.resultTitle}>Analiz Sonucu:</Text>
           {result.pain_level && (() => {
@@ -600,6 +627,23 @@ function VisionModule({ endpoint, title, subtitle }: { endpoint: string, title: 
               <Text style={styles.resultText}>Agrege Retikülosit: {result.counts["aggregate reticulocyte"]}</Text>
             </>
           )}
+          {result.hw_status === "updated" && (
+            <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
+              <Text style={[styles.resultText, {fontWeight: 'bold', color: colors.success}]}>Cihaz Otonom Olarak Güncellendi!</Text>
+              <Text style={styles.resultText}>Yeni Frekans: {result.hw_params?.freq?.toFixed(1)} Hz</Text>
+              <Text style={styles.resultText}>Yeni Şiddet: {result.hw_params?.duty?.toFixed(1)} %</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {isLive && autoAdjust && aiVisionData && (
+        <View style={styles.resultBox}>
+          <Text style={styles.resultTitle}>Otonom Canlı Sonuç:</Text>
+          <Text style={styles.resultText}>Anlık FGS Skoru: <Text style={{fontWeight:'bold'}}>{aiVisionData.fgs_total} / 10</Text></Text>
+          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
+             <Text style={[styles.resultText, {fontWeight: 'bold', color: colors.success}]}>Cihaz Otonom Olarak Güncelleniyor (Saniyede 1)</Text>
+          </View>
         </View>
       )}
     </Card>
@@ -652,5 +696,8 @@ const styles = StyleSheet.create({
   recommendationText: { color: colors.text, fontSize: typography.small, marginBottom: spacing.md },
   startTherapyBtn: { backgroundColor: colors.success, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: spacing.md, borderRadius: radius.md, gap: spacing.sm },
   startTherapyText: { color: '#fff', fontWeight: '800', fontSize: typography.body },
-  statusText: { color: colors.primary, fontWeight: 'bold' }
+  statusText: { color: colors.primary, fontWeight: 'bold' },
+  autoAdjustBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.sm },
+  autoAdjustActive: { backgroundColor: colors.primary },
+  autoAdjustText: { color: colors.primary, fontSize: typography.small, fontWeight: 'bold' }
 });

@@ -76,7 +76,10 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
           <View style={styles.headerRight}>
-            <View style={[styles.wsIndicator, !wsConnected && styles.wsIndicatorOff]} />
+            <View style={styles.wsContainer}>
+              {!wsConnected && <Text style={styles.wsTextOff}>Çevrimdışı</Text>}
+              <View style={[styles.wsIndicator, !wsConnected && styles.wsIndicatorOff]} />
+            </View>
             {unreadCount > 0 && (
               <View style={styles.notifBadgeWrap}>
                 <Bell size={16} color={colors.textMuted} />
@@ -191,6 +194,8 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  wsContainer: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  wsTextOff: { color: "#f59e0b", fontSize: 10, fontWeight: "700" },
   wsIndicator: {
     width: 10, height: 10, borderRadius: 5,
     backgroundColor: "#22c55e",

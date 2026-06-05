@@ -45,6 +45,8 @@ export interface LiveDataContextValue {
   clearNotifications: () => void;
   /** Manually refresh snapshot (HTTP fallback) */
   refresh: () => Promise<void>;
+  /** Live AI Vision data for Closed-Loop mode */
+  aiVisionData?: { imageBase64: string; fgs_total: number; fgs_raw: any };
 }
 
 const LiveDataContext = createContext<LiveDataContextValue>({
@@ -63,6 +65,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [sensorHistory, setSensorHistory] = useState<CoilSensorHistory>({});
   const [wsConnected, setWsConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [aiVisionData, setAiVisionData] = useState<{ imageBase64: string; fgs_total: number; fgs_raw: any }>();
 
   // Keep a mutable ref of snapshot so WS handlers can read/mutate it without stale closures
   const snapshotRef = useRef<DashboardSnapshot>(mockSnapshot as any);
@@ -163,6 +166,19 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         break;
       }
 
+      // -- Control Session --
+      case "session_control": {
+        const data = msg.data as ActiveTreatment;
+        updateSnapshot({ activeTreatment: data });
+        break;
+      }
+
+      // -- AI Vision Data --
+      case "ai_vision": {
+        setAiVisionData(msg.data);
+        break;
+      }
+
       // Active treatment update
       case "session_update": {
         const d = msg.data as ActiveTreatment;
@@ -232,21 +248,18 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  return (
-    <LiveDataContext.Provider
-      value={{
-        snapshot,
-        sensorHistory,
-        wsConnected,
-        unreadCount,
-        markAllRead,
-        clearNotifications,
-        refresh,
-      }}
-    >
-      {children}
-    </LiveDataContext.Provider>
-  );
+  const value = {
+    snapshot,
+    sensorHistory,
+    wsConnected,
+    unreadCount,
+    markAllRead,
+    clearNotifications,
+    refresh,
+    aiVisionData,
+  };
+
+  return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────

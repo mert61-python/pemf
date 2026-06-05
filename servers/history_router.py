@@ -3,8 +3,10 @@ import json
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
+import csv
+import io
 import logging
 
 from database.treatment_history_db import get_treatment_db
@@ -66,6 +68,49 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
     except Exception as e:
         logger.error(f"Error generating PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/export_csv")
+def export_csv(db=Depends(get_db)):
+    """Tüm seans geçmişini CSV olarak indir"""
+    try:
+        sessions = db.get_session_history(limit=10000)
+        if not sessions:
+            return Response(content="Veri bulunamadi", media_type="text/plain")
+            
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Headers
+        headers = ["ID", "Hasta", "Hedef", "Mod", "Sure(dk)", "Frekans(Hz)", "Siddet(mT)", "Tarih", "Baslangic", "Durum", "Notlar"]
+        writer.writerow(headers)
+        
+        for s in sessions:
+            writer.writerow([
+                s.get("id", ""),
+                s.get("patient_name", ""),
+                s.get("target_condition", ""),
+                s.get("treatment_mode", ""),
+                s.get("duration_minutes", ""),
+                s.get("frequency_hz", ""),
+                s.get("intensity_mt", ""),
+                s.get("session_date", ""),
+                s.get("start_time", ""),
+                s.get("session_status", ""),
+                s.get("patient_notes", "")
+            ])
+            
+        csv_data = output.getvalue()
+        output.close()
+        
+        return Response(
+            content=csv_data,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=PEMF_History.csv"}
+        )
+    except Exception as e:
+        logger.error(f"Error generating CSV: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/export_patient_pdf")
 def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):

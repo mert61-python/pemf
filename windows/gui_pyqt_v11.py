@@ -551,6 +551,13 @@ class MainWindow(QMainWindow, StyleMixin):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            # Bildirim goster
+            if hasattr(self, 'notification_panel') and self.notification_panel:
+                try:
+                    self.notification_panel.add_notification("Yeni versiyon indiriliyor. Lütfen bekleyin...", "info")
+                except Exception:
+                    pass
+
             # Otomatik indir ve kur (Sessiz Kurulum)
             self.progress_dialog = QProgressDialog("Güncelleme indiriliyor...", "İptal", 0, 100, self)
             self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
@@ -569,12 +576,22 @@ class MainWindow(QMainWindow, StyleMixin):
             def on_download_finished(file_path):
                 if hasattr(self, 'progress_dialog'):
                     self.progress_dialog.setValue(100)
+                if hasattr(self, 'notification_panel') and self.notification_panel:
+                    try:
+                        self.notification_panel.add_notification("Güncelleme indirildi. Kurulum başlatılıyor...", "success")
+                    except Exception:
+                        pass
                 QMessageBox.information(self, "İndirme Tamamlandı", "Kurulum arka planda başlatılıyor. Uygulama güncellenmek üzere kapanacak...")
                 launch_installer_and_exit(file_path)
 
             def on_download_error(error_msg):
                 if hasattr(self, 'progress_dialog'):
                     self.progress_dialog.close()
+                if hasattr(self, 'notification_panel') and self.notification_panel:
+                    try:
+                        self.notification_panel.add_notification(f"Güncelleme hatası: {error_msg}", "error")
+                    except Exception:
+                        pass
                 QMessageBox.critical(self, "İndirme Hatası", f"Güncelleme indirilirken hata oluştu:\n{error_msg}")
 
             def on_cancel():

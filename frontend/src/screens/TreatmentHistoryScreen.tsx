@@ -30,6 +30,10 @@ export function TreatmentHistoryScreen() {
     Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`);
   };
 
+  const downloadCsv = () => {
+    Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_csv`);
+  };
+
   const filteredSessions = sessions.filter((s) => {
     const q = searchQuery.toLowerCase();
     const patientName = (s.patient_name || "").toLowerCase();
@@ -44,9 +48,14 @@ export function TreatmentHistoryScreen() {
     <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş tedavi kayıtları ve raporlamalar.</Text>
-        <TouchableOpacity style={styles.btnPrimary} onPress={downloadAllPdf}>
-          <Text style={styles.btnPrimaryText}>Tümünü PDF İndir</Text>
-        </TouchableOpacity>
+        <View style={{flexDirection: 'row', gap: spacing.sm}}>
+          <TouchableOpacity style={styles.btnOutline} onPress={downloadCsv}>
+            <Text style={styles.btnOutlineText}>Excel/CSV İndir</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnPrimary} onPress={downloadAllPdf}>
+            <Text style={styles.btnPrimaryText}>Tümünü PDF İndir</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchBox}>
