@@ -1,0 +1,17 @@
+name: Upload to TestFlight
+
+on:
+  push:
+    branches:
+      - upload-testflight
+
+jobs:
+  upload:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Upload to TestFlight
+        run: |
+          xcrun altool --upload-app -f "mobile_builds/PEMF-Vet-1.0.0-ios-production.ipa" -t ios -u "${{ secrets.APPLE_ID }}" -p "${{ secrets.APP_SPECIFIC_PASSWORD }}"
