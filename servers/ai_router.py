@@ -60,22 +60,47 @@ class DiseaseInput(BaseModel):
 @ai_router.post("/api/ai/disease")
 async def analyze_disease(data: DiseaseInput):
     """XGBoost Kedi Hastalık Analizi"""
+    # ── Girdi validasyonu — sıfır/boş vital ile anlamsız tahmin üretilmesin (audit P1).
+    # Canlı bir kedide kilo/nabız/sıcaklık 0 olamaz; eksikse SESSİZ yanlış tahmin yerine
+    # 422 dönüp kullanıcıdan geçerli vital iste.
+    problems = []
+    if not (0 < data.weight <= 30):
+        problems.append("kilo (kg) 0-30 aralığında girilmeli")
+    if not (0 < data.hr <= 400):
+        problems.append("nabız (bpm) girilmeli (makul: ~120-220)")
+    if not (0 < data.temp <= 50):
+        problems.append("vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)")
+    if data.age < 0:
+        problems.append("yaş negatif olamaz")
+    if problems:
+        raise HTTPException(
+            status_code=422,
+            detail="Güvenilir hastalık tahmini için geçerli vital veriler gerekli: " + "; ".join(problems),
+        )
+
     try:
         def _load():
             from utils.model_downloader import download_model_sync
             download_model_sync("ai_hub/cat_disease/XGBoost.pkl")
             from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor
             return CatDiseasePredictor()
-        
+
         predictor = _get_or_load_model("disease", _load)
         results = predictor.predict(
             data.age, data.weight, data.hr, data.temp, data.duration, data.symptom_indices
         )
-        
+
         # Sonuçlar list of tuples [('Hastalık A', 0.85), ...] formatında geliyor.
         formatted = [{"disease": d, "probability": p} for d, p in results]
-        
-        return {"status": "success", "results": formatted}
+        # Güven-eşiği: en yüksek olasılık düşükse FE "düşük güven — veteriner doğrulaması
+        # gerekir" uyarısı göstersin (audit: güven-eşiği yoktu).
+        top_p = max((float(p) for _, p in results), default=0.0)
+        return {
+            "status": "success",
+            "results": formatted,
+            "top_probability": round(top_p, 3),
+            "low_confidence": top_p < 0.40,
+        }
     except Exception as e:
         logger.error(f"Disease inference error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Hastalık analizi hatası: {str(e)}")
@@ -232,13 +257,22 @@ def _ai_pro_loop():
     
     if not cap.isOpened():
         logger.error("Kamera açılamadı (VideoCapture(0)). AI Pro durduruluyor.")
+        cap.release()
         _ai_loop_active = False
         return
 
-    # Load Model
-    from ultralytics import YOLO
-    path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
-    model = YOLO(path, task="pose")
+    # Load Model — hata fırlarsa kamerayı BIRAK. Eskiden cap.release yalnız normal
+    # döngü çıkışındaydı → model indirme/yükleme istisnasında VideoCapture kalıcı
+    # sızıyordu (kamera başka süreçlerce açılamaz hale geliyordu). Audit P1.
+    try:
+        from ultralytics import YOLO
+        path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
+        model = YOLO(path, task="pose")
+    except Exception as e:
+        logger.error("AI Pro model yüklenemedi, kamera bırakılıyor: %s", e)
+        cap.release()
+        _ai_loop_active = False
+        return
 
     while _ai_loop_active:
         start_time = time.time()

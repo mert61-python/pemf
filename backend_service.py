@@ -162,6 +162,19 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         logger.exception("DB maintenance init failed (non-fatal).")
 
+    # Cloudflare tünel (OPT-IN) — DEPLOYMENT.md'de vaat edilen farklı-ağdan TEMASSIZ uzaktan
+    # erişim. Cihazı internete açtığından VARSAYILAN KAPALI; PEMF_ENABLE_TUNNEL=1 ile aç.
+    # Eskiden tunnel_manager headless serviste HİÇ çağrılmıyordu → yalnız LAN çalışıyordu (audit P1).
+    if os.environ.get("PEMF_ENABLE_TUNNEL") == "1":
+        try:
+            from servers.tunnel_manager import start_tunnel
+            if start_tunnel(port=args.port):
+                logger.info("Cloudflare tunnel started (uzaktan erişim aktif).")
+            else:
+                logger.warning("Cloudflare tunnel başlatılamadı (yalnız LAN).")
+        except Exception:
+            logger.exception("Tunnel init failed (non-fatal).")
+
     config = uvicorn.Config(
         api_server.app,
         host=args.host,
@@ -208,6 +221,11 @@ def main(argv: list[str] | None = None) -> int:
                 cloud.stop()
         except Exception:
             logger.exception("Cloud sync shutdown failed")
+        try:
+            from servers.tunnel_manager import stop_tunnel
+            stop_tunnel()
+        except Exception:
+            logger.exception("Tunnel shutdown failed")
         try:
             core.quit()
         except Exception:

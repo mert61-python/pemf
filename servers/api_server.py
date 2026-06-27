@@ -674,6 +674,7 @@ class AutoPresetPayload(BaseModel):
 class SessionStartPayload(BaseModel):
     patient_id: str = ""
     patient_name: str = ""
+    operator_name: str = ""  # denetim izi — seansı başlatan operatör (audit P1)
     mode: str = "Manuel"  # Manuel | Otomatik | AI
     target_condition: str = ""
     frequency: float = 50.0
@@ -983,6 +984,7 @@ async def start_session(payload: SessionStartPayload):
             "session_id": f"react_{int(time.time())}",
             "patient_id": payload.patient_id,
             "patient_name": payload.patient_name,
+            "operator_name": payload.operator_name,
             "mode": payload.mode,
             "target_condition": payload.target_condition,
             "frequency": payload.frequency,
@@ -993,6 +995,31 @@ async def start_session(payload: SessionStartPayload):
             "start_time": time.time(),
             "coil_ids": coil_ids,
         }
+
+    # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
+    # parametreler. Eskiden seans yalnız SONDA DB'ye yazılıyordu → backend seans ortasında
+    # çökerse hiçbir kayıt kalmıyordu ve operatör kimliği hiç tutulmuyordu. session_events
+    # append-only olduğundan bu, ana seans satırı sonradan yazılsa da bağımsız kanıt sağlar.
+    try:
+        from database.treatment_history_db import get_treatment_db
+        get_treatment_db().record_session_event(
+            None, "session_started",
+            payload={
+                "ref": _active_session["session_id"],
+                "operator_name": payload.operator_name,
+                "patient_id": payload.patient_id,
+                "mode": payload.mode,
+                "frequency": payload.frequency,
+                "duty": payload.duty,
+                "intensity": payload.intensity,
+                "phase": payload.phase,
+                "duration_minutes": payload.duration_minutes,
+                "coil_ids": coil_ids,
+            },
+            severity="info",
+        )
+    except Exception:
+        logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
 
     # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
     with _sensor_sample_buffer_lock:

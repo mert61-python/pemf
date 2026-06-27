@@ -524,7 +524,11 @@ class EventBus:
         
         # ThreadPoolExecutor'ı kapat
         try:
-            self._executor.shutdown(wait=True, timeout=5)
+            # ThreadPoolExecutor.shutdown() 'timeout' argümanı KABUL ETMEZ → eskiden her
+            # kapanışta TypeError fırlatıp aşağıdaki except'e düşüyordu, yani executor ASLA
+            # drain edilmiyordu (askıda worker thread'ler). cancel_futures=True bekleyen
+            # görevleri iptal eder, wait=True çalışanların bitmesini bekler (Python 3.9+).
+            self._executor.shutdown(wait=True, cancel_futures=True)
         except Exception as e:
             logger.warning("Executor shutdown warning: %s", e)
         
