@@ -326,8 +326,12 @@ def _on_mqtt_message_api(client, userdata, msg):
                 except Exception:
                     logging.exception("ESP alarm STOP failed")
 
-    except Exception:
-        pass
+    except Exception as _e:
+        # Audit #23: eskiden 'except: pass' ile sessizce yutuluyordu → bozuk/beklenmedik MQTT
+        # mesajları (örn. coil status güncellenememesi) görünmezdi. Artık WARN'la (özet, traceback'siz).
+        logging.getLogger(__name__).warning(
+            "MQTT on_message islenemedi (topic=%s): %s", getattr(msg, "topic", "?"), _e
+        )
 
 
 def _start_mqtt_for_api() -> None:

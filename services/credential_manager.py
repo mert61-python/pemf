@@ -299,6 +299,16 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
         2. Dosya da yoksa cryptographically secure bir secret üret ve dosyaya kaydet
         Bu sayede uyarı yalnızca gerçek bir güvenlik sorunu olduğunda çıkar.
         """
+        # Audit #17: PEMF_MASTER_SECRET ayarlanmamış. Üretimde set EDİLMELİ (cihazlar/yeniden
+        # kurulumlar arası kimlik tutarlılığı + merkezi yönetim). PEMF_REQUIRE_MASTER_SECRET=1
+        # ise FAIL-FAST; değilse GÖRÜNÜR uyarı + cihaza özgü otomatik dosya secret'i (çalışır
+        # ama taşınmaz/yedeklenmezse kurtarılamaz). Eskiden bu sessizce gerçekleşiyordu.
+        if os.environ.get("PEMF_REQUIRE_MASTER_SECRET") == "1":
+            raise RuntimeError(
+                "PEMF_MASTER_SECRET ayarlanmamış ve PEMF_REQUIRE_MASTER_SECRET=1 → fail-fast "
+                "(üretim güvenlik politikası: master secret zorunlu)."
+            )
+        logger.warning(_DEFAULT_MASTER_SECRET_WARNING)
         secret_file = CREDENTIALS_DIR.parent / "pemf_secret.key"
         
         # Mevcut secret dosyasını oku

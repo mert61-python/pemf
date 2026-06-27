@@ -79,6 +79,16 @@ def _safe_stop_outputs(api_server_module) -> None:
     try:
         if api_server_module.state.hardware:
             api_server_module.state.hardware.stop_all_coils()
+            # STM STOP yalnız async _hw_send_queue'ye konuyor; sender thread core.quit() ile
+            # join edilmeden ÖNCE seri porta yazdığından emin ol — kuyruk boşalana kadar kısa
+            # süre bekle (audit #21). Aksi halde STOP gönderilmeden süreç kapanıp bobinler
+            # firmware süre-watchdog'u dolana kadar çalışmaya devam edebilir.
+            import time as _t
+            _q = getattr(getattr(api_server_module.state, "core", None), "_hw_send_queue", None)
+            if _q is not None:
+                _deadline = _t.time() + 1.5
+                while not _q.empty() and _t.time() < _deadline:
+                    _t.sleep(0.05)
     except Exception:
         logger.exception("STM safe stop failed")
 
@@ -100,12 +110,50 @@ def _safe_stop_outputs(api_server_module) -> None:
         logger.exception("MQTT safe stop failed")
 
 
+def _install_crash_handler(app_data_dir: Path) -> None:
+    """Yakalanmamış istisnaları (ana thread + worker thread'ler) AYRI bir crash.log'a + ana
+    log'a CRITICAL yaz → saha cihazında çökme/güvenlik olayı görünür olsun (audit #24: merkezi
+    telemetri yok). En azından adanmış, kolay-bulunur bir çökme kaydı + (varsa) cloud outbox'a not."""
+    import threading as _th
+    logger = logging.getLogger("backend_service")
+    crash_log = Path(os.environ.get("PEMF_LOG_DIR", app_data_dir / "logs")) / "crash.log"
+
+    def _record(exc_type, exc_value, exc_tb, where: str) -> None:
+        try:
+            import traceback as _tb
+            import datetime as _dt
+            crash_log.parent.mkdir(parents=True, exist_ok=True)
+            with open(crash_log, "a", encoding="utf-8") as f:
+                f.write(f"\n===== CRASH [{where}] {_dt.datetime.now().isoformat()} =====\n")
+                _tb.print_exception(exc_type, exc_value, exc_tb, file=f)
+        except Exception:
+            pass
+        logger.critical("YAKALANMAMIS ISTISNA (%s): %s", where, exc_value,
+                        exc_info=(exc_type, exc_value, exc_tb))
+
+    def _sys_hook(exc_type, exc_value, exc_tb):
+        if not issubclass(exc_type, KeyboardInterrupt):
+            _record(exc_type, exc_value, exc_tb, "main")
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    def _thread_hook(args):
+        _record(args.exc_type, args.exc_value, args.exc_traceback,
+                f"thread:{getattr(args.thread, 'name', '?')}")
+
+    sys.excepthook = _sys_hook
+    try:
+        _th.excepthook = _thread_hook  # Python 3.8+
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     os.environ.setdefault("PEMF_HEADLESS", "1")
 
     app_data_dir = get_app_data_directory()
     _configure_logging(app_data_dir, args.log_level)
+    _install_crash_handler(app_data_dir)
     logger = logging.getLogger("backend_service")
 
     logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
@@ -129,6 +177,30 @@ def main(argv: list[str] | None = None) -> int:
     api_server.state.core = core
     api_server.state.hardware = HardwareController(core)
     api_server._register_event_bus_handlers()
+
+    # Çökme-kurtarma mutabakatı (audit #15): önceki süreç seans ortasında çöktüyse ESP bobinleri
+    # firmware kendi süresince çalışmaya devam edebilir (STM keep-alive durduğundan STM kendi
+    # duration'ı bitince durur). Yeni süreç TEMİZ başlasın diye broker/STM hazır olunca bir kez
+    # TÜM bobinlere STOP gönder. Eşzamanlı kilit yalnız in-memory olduğundan bu, crash sonrası
+    # orphan/ghost donanım durumunu temizler.
+    def _startup_reconcile():
+        try:
+            import time as _t
+            _t.sleep(3.0)  # broker + STM bağlantısının oturması için
+            with api_server._session_lock:
+                if api_server._active_session.get("is_active"):
+                    logger.info("Başlangıç mutabakatı atlandı: bu arada aktif seans başlatılmış.")
+                    return
+            if api_server.state.hardware:
+                api_server.state.hardware.stop_all_coils()
+            for _cid in range(1, 9):
+                api_server._mqtt_publish(f"pemf/coil/{_cid}/control",
+                                         {"command": "stop", "command_id": f"startup_reconcile_{_cid}"})
+            logger.info("Başlangıç donanım mutabakatı: tüm bobinlere STOP (orphan/ghost temizliği).")
+        except Exception:
+            logger.warning("Başlangıç mutabakatı başarısız (non-fatal).", exc_info=True)
+    import threading as _threading_recon
+    _threading_recon.Thread(target=_startup_reconcile, daemon=True, name="startup-reconcile").start()
 
     # Cloud sync + device registry (offline-first + TEMASSIZ uzaktan erişim).
     # Headless servis, güncel tunnel URL'sini/IP'sini Supabase 'devices' tablosuna

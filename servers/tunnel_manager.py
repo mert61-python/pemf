@@ -16,6 +16,7 @@ import os
 import platform
 import re
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -44,8 +45,37 @@ def _get_binary_path() -> Path:
         return _BIN_DIR / "cloudflared-linux"
 
 
+def _bundled_cloudflared() -> Path | None:
+    """Uygulamayla PAKETLENMİŞ cloudflared binary'sini ara (offline kurulum). PyInstaller
+    _MEIPASS, EXE yanı ve kaynak bin/ dizinleri. Audit #18: eskiden yalnız runtime'da
+    GitHub'dan iniyordu → internetsiz sahada kurulum bozuluyordu."""
+    system = platform.system()
+    fname = "cloudflared.exe" if system == "Windows" else (
+        "cloudflared-darwin" if system == "Darwin" else "cloudflared-linux")
+    roots = []
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            roots.append(Path(meipass) / "bin" / "cloudflared")
+        roots.append(Path(sys.executable).resolve().parent / "bin" / "cloudflared")
+    roots.append(Path(__file__).resolve().parent.parent / "bin" / "cloudflared")
+    for r in roots:
+        try:
+            cand = r / fname
+            if cand.exists() and cand.is_file():
+                return cand
+        except Exception:
+            pass
+    return None
+
+
 def _download_cloudflared() -> Path | None:
-    """cloudflared binary'yi resmi GitHub release'den indirir."""
+    """cloudflared binary'yi (varsa) PAKETTEN kullanır, yoksa resmi GitHub release'den indirir."""
+    bundled = _bundled_cloudflared()
+    if bundled is not None:
+        logger.info("cloudflared paketlenmiş binary kullanılıyor (offline): %s", bundled)
+        return bundled
+
     system = platform.system()
     machine = platform.machine().lower()
 

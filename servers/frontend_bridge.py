@@ -754,14 +754,24 @@ def _make_handler(project_root: Path):
                         except Exception:
                             pass
                 # GUI tarafında emergency stop signal'ini tetikle (thread-safe)
+                stm_stopped = False
                 try:
                     from servers import frontend_bridge as _fb
                     if hasattr(_fb, '_gui_emergency_stop_callback') and callable(_fb._gui_emergency_stop_callback):
                         import threading as _th
                         _th.Thread(target=_fb._gui_emergency_stop_callback, daemon=True).start()
+                        stm_stopped = True
                 except Exception:
                     pass
-                self._send_json({"ok": True, "timestamp": _now_iso()})
+                # Audit #22: STM bobinleri (1-5) yalnız GUI callback varsa durur (headless'ta YOK).
+                # Eskiden her hâlükârda ok:true dönüyordu → FE durduğunu sanıp operatörü yanıltıyordu.
+                # stmStopped'ı DÜRÜST dön ki FE doğrulanamadığında uyarı göstersin.
+                resp = {"ok": True, "stmStopped": stm_stopped, "mqttSent": bool(_mqtt_client),
+                        "timestamp": _now_iso()}
+                if not stm_stopped:
+                    resp["warning"] = ("STM bobinleri (1-5) bu legacy köprüden durdurulamadı "
+                                       "(GUI callback yok). api_server /hardware/emergency_stop kullanın.")
+                self._send_json(resp)
                 return
 
             if path == "/api/notifications/clear":
