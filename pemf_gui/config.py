@@ -76,7 +76,11 @@ class ConfigManager:
         
         self.config = self.default_config.copy()
         self.load()
-    
+        # At-rest güvenlik (audit P2): _ENCRYPTED_KEYS listesindeki ama config.json'da hâlâ
+        # DÜZ-METİN duran sırları (Gmail App Password, MQTT/email/api creds) bir kereye mahsus
+        # şifrele. Eskiden bu değerler düz-metin hardcoded duruyordu.
+        self._migrate_plaintext_secrets()
+
     def _get_or_create_key(self) -> bytes:
         """Birincil şifreleme anahtarı: keyring'de RASTGELE (yüksek entropi, MAC'ten bağımsız → ağ
         kartı/makine değişse bile stabil). Keyring yoksa .pemf_key_v2 dosyası fallback. Eski
@@ -249,6 +253,35 @@ class ConfigManager:
         
         if save:
             self.save()
+
+    def _raw_get(self, key: str):
+        """Ham (decrypt edilmemiş) değeri döndürür — düz-metin/şifreli (enc:) ayrımı için."""
+        node = self.config
+        for k in key.split('.'):
+            if not isinstance(node, dict) or k not in node:
+                return None
+            node = node[k]
+        return node
+
+    def _migrate_plaintext_secrets(self) -> None:
+        """_ENCRYPTED_KEYS'te olup config.json'da hâlâ DÜZ-METİN (enc: öneksiz) duran sırları
+        at-rest şifrele (audit P2). Şifreleme mekanizması öncesi yazılmış / elle girilmiş
+        değerleri tek seferde korur; enc: önekli olanlara dokunmaz."""
+        changed = False
+        for dotted in self._ENCRYPTED_KEYS:
+            raw = self._raw_get(dotted)
+            if isinstance(raw, str) and raw and not raw.startswith('enc:'):
+                try:
+                    self.set(dotted, raw, save=False)  # set() enc: önekli şifreli değere çevirir
+                    changed = True
+                except Exception:
+                    pass
+        if changed:
+            try:
+                self.save()
+                logger.info("At-rest: config.json'daki duz-metin sirlar sifrelendi (audit P2).")
+            except Exception:
+                pass
 
 # Global config instance
 config = ConfigManager()

@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - headless backend without PyQt6
         return None
 import warnings
 import socket
+import hashlib
 
 # hf_xet vb. uyarilari gizle
 warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
@@ -150,6 +151,36 @@ def _candidate_model_roots():
     return unique_roots
 
 
+_MODEL_MIN_BYTES = {".onnx": 100_000, ".pt": 100_000, ".pth": 100_000, ".pkl": 200, ".bin": 1000}
+
+
+def _model_integrity_ok(path: Path) -> bool:
+    """Yarım/bozuk indirilen modeli 'kurulu' saymamak için bütünlük sağlaması (audit P2).
+    (1) Asgari-boyut → truncated/0-byte ONNX tespiti (eskiden bozuk model 'kurulu' sayılıp
+        yükleme anında çöküyordu). (2) Yanında <model>.sha256 varsa SHA256 doğrulaması."""
+    try:
+        size = path.stat().st_size
+        min_bytes = _MODEL_MIN_BYTES.get(path.suffix.lower(), 1)
+        if size < min_bytes:
+            print(f"Model butunluk UYARISI: {path.name} beklenenden kucuk ({size}B < {min_bytes}B) "
+                  f"-> bozuk/yarim sayilip yeniden indirilecek.")
+            return False
+        sha_file = path.with_name(path.name + ".sha256")
+        if sha_file.exists():
+            expected = sha_file.read_text(encoding="utf-8").split()[0].strip().lower()
+            if expected:
+                h = hashlib.sha256()
+                with open(path, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        h.update(chunk)
+                if h.hexdigest().lower() != expected:
+                    print(f"Model butunluk UYARISI: {path.name} SHA256 uyusmuyor -> yeniden indirilecek.")
+                    return False
+        return True
+    except Exception:
+        return True  # şüpheli durumda engelleme yapma — mevcut davranışı koru
+
+
 def find_installed_model(repo_path: str):
     """
     Inno ile kurulan ya da daha once indirilen modeli bulur.
@@ -165,7 +196,7 @@ def find_installed_model(repo_path: str):
             root / basename,
         ]
         for candidate in candidates:
-            if candidate.exists() and candidate.is_file():
+            if candidate.exists() and candidate.is_file() and _model_integrity_ok(candidate):
                 return str(candidate)
     return None
 
