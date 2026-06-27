@@ -8,6 +8,22 @@ import urllib.request
 import urllib.error
 from PyQt6.QtCore import QThread, pyqtSignal
 
+
+def _version_tuple(v: str) -> tuple:
+    """'1.4.0' → (1, 4, 0). SEMVER karşılaştırma için: string-compare '1.10' < '1.9' yanlışını
+    ve '!=' ile downgrade-tetikleme sorununu düzeltir (audit P3)."""
+    parts = []
+    for p in str(v).strip().split("."):
+        num = ""
+        for ch in p:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
+
+
 class UpdateCheckerThread(QThread):
     """
     Belirtilen URL'den version.json dosyasını çekip sürüm kontrolü yapar.
@@ -23,8 +39,8 @@ class UpdateCheckerThread(QThread):
 
     def run(self):
         try:
-# Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
-            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit P2 güvenlik).
+            # Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
+            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit güvenlik).
             ctx = ssl.create_default_context()
 
             req = urllib.request.Request(self.version_json_url, headers={'User-Agent': 'PEMF-Updater'})
@@ -35,9 +51,9 @@ class UpdateCheckerThread(QThread):
             download_url = data.get("download_url", "")
             release_notes = data.get("release_notes", "")
 
-            if latest_version and latest_version != self.current_version:
-                # Basit bir eşitsizlik kontrolü yaptık, isterseniz semver kütüphanesi ile daha gelişmiş yapılabilir.
-                # String karşılaştırmasında "1.3" > "1.2" olarak çalışır.
+            if latest_version and _version_tuple(latest_version) > _version_tuple(self.current_version):
+                # SEMVER karşılaştırma: yalnız GERÇEKTEN daha yeni sürümde güncelle. Eskiden '!='
+                # downgrade'i de tetikliyordu + string-compare "1.10" < "1.9" yanlıştı (audit P3).
                 self.update_available.emit(latest_version, download_url, release_notes)
             else:
                 self.up_to_date.emit()
