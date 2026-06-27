@@ -23,10 +23,9 @@ class UpdateCheckerThread(QThread):
 
     def run(self):
         try:
-            # SSL doğrulama sorunlarını aşmak için context
+# Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
+            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit P2 güvenlik).
             ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
 
             req = urllib.request.Request(self.version_json_url, headers={'User-Agent': 'PEMF-Updater'})
             with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
@@ -65,9 +64,9 @@ class UpdateDownloaderThread(QThread):
 
     def run(self):
         try:
+            # Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
+            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit P2 güvenlik).
             ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
 
             req = urllib.request.Request(self.download_url, headers={'User-Agent': 'PEMF-Updater'})
             with urllib.request.urlopen(req, context=ctx, timeout=15) as response:

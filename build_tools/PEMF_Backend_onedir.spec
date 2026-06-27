@@ -41,13 +41,17 @@ datas = []
 # --- Embedded Python DLL'leri: SADECE embeddable ile build edilirse ekle ---
 # Tam CPython 3.10 ile build'de bunlar interpreter'dan gelir; embeddable DLL'i
 # karıştırmamak için yalnızca embeddable python ile çalışırken eklenir.
-embedded_python_dir = r'C:\Users\merta\Downloads\python-3.10.2-embed-amd64'
-if embedded_python_dir.lower() in os.path.abspath(sys.executable).lower():
-    for dll_name in ('sqlite3.dll', 'libffi-7.dll', 'libssl-1_1.dll', 'libcrypto-1_1.dll'):
-        dll_path = os.path.join(embedded_python_dir, dll_name)
-        if os.path.exists(dll_path):
-            binaries.append((dll_path, '.'))
-            print(f"[OK] Embedded DLL eklendi: {dll_name}")
+# Build reproducibility (audit P2): embeddable Python yolu artık MAKİNEYE-ÖZGÜ HARDCODE değil;
+# build'i çalıştıran yorumlayıcıdan (sys.executable) türetilir (PEMF_EMBED_PYTHON ile override).
+# Eskiden başka makinede yol eşleşmeyince DLL'ler SESSİZCE atlanıyordu → eksik DLL → runtime çökme.
+embedded_python_dir = os.environ.get('PEMF_EMBED_PYTHON') or os.path.dirname(os.path.abspath(sys.executable))
+# Embeddable python'da kritik DLL'ler python.exe YANINDADIR; tam CPython'da DLLs/ altında olduğundan
+# bu yolda bulunmaz → eklenmez (yorumlayıcı zaten sağlar). Varlık kontrolü iki durumu da doğru yönetir.
+for dll_name in ('sqlite3.dll', 'libffi-7.dll', 'libssl-1_1.dll', 'libcrypto-1_1.dll'):
+    dll_path = os.path.join(embedded_python_dir, dll_name)
+    if os.path.exists(dll_path):
+        binaries.append((dll_path, '.'))
+        print(f"[OK] Embedded DLL eklendi: {dll_name}")
 
 # --- Üçüncü-parti veri/lib toplama (AI/ML/web) ---
 for pkg in ('numpy', 'pandas', 'mediapipe', 'onnxruntime', 'fastapi', 'uvicorn',

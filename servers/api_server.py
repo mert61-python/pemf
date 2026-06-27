@@ -744,7 +744,15 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
         if _u:
             c.username_pw_set(_u, _pw)  # broker auth açıksa (allow_anonymous false) kimlik gönder
         c.connect("127.0.0.1", 1883, 5)
-        c.publish(topic, _json.dumps(payload), qos=1)
+        info = c.publish(topic, _json.dumps(payload), qos=1)
+        # wait_for_publish: qos=1 mesajı disconnect'ten ÖNCE broker'a teslim edilsin (audit #4).
+        # Eskiden publish hemen disconnect ediliyordu → ağ döngüsü çalışmadan mesaj ara sıra
+        # gönderilmeden düşebiliyordu (bobin komutu kaybı).
+        c.loop_start()
+        try:
+            info.wait_for_publish(timeout=2.0)
+        finally:
+            c.loop_stop()
         c.disconnect()
         return True
     except Exception:

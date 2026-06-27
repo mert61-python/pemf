@@ -64,7 +64,9 @@ print("=" * 80)
 binaries = []
 
 # Embedded Python Ana Klasörü
-embedded_python_dir = r'C:\Users\merta\Downloads\python-3.10.2-embed-amd64'
+# Build reproducibility (audit P2): makineye-özgü hardcode yerine build yorumlayıcısından türet
+# (PEMF_EMBED_PYTHON ile override). Eskiden başka makinede yol eşleşmeyip DLL'ler atlanıyordu.
+embedded_python_dir = os.environ.get('PEMF_EMBED_PYTHON') or os.path.dirname(os.path.abspath(sys.executable))
 
 print(f"--- DLL Arama Yolu (Embedded Python) ---")
 print(f"[OK] Hedef Klasör: {embedded_python_dir}")
