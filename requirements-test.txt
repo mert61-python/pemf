@@ -1,0 +1,3 @@
+# Kritik-yol testleri için (üretim runtime'ına dahil değil).
+pytest>=7.0
+httpx>=0.24

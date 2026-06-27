@@ -1,0 +1,599 @@
+/* PEMF GUI Main Window Styles - Performance Optimized */
+/* Using CSS selectors with properties instead of inline styles */
+
+/* ============================================
+   GLOBAL STYLES
+   ============================================ */
+
+QMainWindow {
+    background-color: #1e1e2e;
+}
+
+QWidget {
+    background-color: transparent;
+    color: #ffffff;
+}
+
+/* ============================================
+   TOP BAR STYLES
+   ============================================ */
+
+QWidget#topBar {
+    background: transparent;
+    border-radius: 18px;
+}
+
+QLabel#logoIcon {
+    font-size: 32px;
+}
+
+QLabel#titleText {
+    color: #fff;
+}
+
+QLabel#clockLabel {
+    color: #fff;
+    background: transparent;
+    border-radius: 0;
+}
+
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+QPushButton#manualButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #6c2b8f, stop:1 #8e44ad);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+QPushButton#manualButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #7d3ba0, stop:1 #9f55be);
+}
+
+QPushButton#silentModeButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4a90e2, stop:1 #7bb3f0);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+QPushButton#silentModeButton[silent="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ff6b6b, stop:1 #ff8e8e);
+}
+
+QPushButton#emergencyButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ff5e62, stop:1 #ff9966);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+}
+
+QPushButton#emergencyButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #e45357, stop:1 #ff7f50);
+}
+
+QPushButton#savePatientButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #28a745, stop:1 #20c997);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+}
+
+QPushButton#navButton {
+    background: transparent;
+    color: #fff;
+    border: none;
+    font-weight: bold;
+}
+
+QPushButton#navButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   SIDEBAR STYLES
+   ============================================ */
+
+QWidget#sidebar {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2d185a, stop:1 #6c2b8f);
+    border-radius: 16px;
+}
+
+QLabel#sidebarTitle {
+    color: #fff;
+    font-weight: bold;
+}
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    width: 0px;
+    height: 0px;
+}
+
+/* ============================================
+   SEPARATOR STYLES
+   ============================================ */
+
+QWidget#separator {
+    background: #6c2b8f;
+}
+
+/* ============================================
+   INPUT FIELD STYLES
+   ============================================ */
+
+QLabel#inputLabel {
+    color: #fff;
+    font-weight: bold;
+}
+
+QLineEdit#inputField {
+    background: #3d206b;
+    color: white;
+    border: none;
+    border-radius: 10px;
+}
+
+QLineEdit#inputField:focus {
+    background: #4d307b;
+}
+
+/* ============================================
+   NAVIGATION BAR STYLES
+   ============================================ */
+
+QWidget#navBar {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2d185a, stop:1 #6c2b8f);
+    border-radius: 18px;
+}
+
+/* ============================================
+   TREATMENT CARD STYLES
+   ============================================ */
+
+QWidget#treatmentCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3d206b, stop:1 #6c2b8f);
+    border-radius: 14px;
+}
+
+QLabel#treatmentTitle {
+    color: #6cffb0;
+    font-weight: bold;
+}
+
+QLabel#treatmentLabel {
+    color: #fff;
+    font-weight: bold;
+}
+
+QLabel#treatmentValue {
+    color: #fff;
+    font-weight: bold;
+}
+
+QLabel#treatmentValue[type="frequency"] {
+    color: #4f8cff;
+}
+
+QLabel#treatmentValue[type="intensity"] {
+    color: #4f8cff;
+}
+
+QProgressBar#treatmentProgress {
+    border: none;
+    border-radius: 7px;
+    background-color: #2d1b69;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+}
+
+QProgressBar#treatmentProgress::chunk {
+    background-color: #3b82f6;
+    border-top-left-radius: 7px;
+    border-bottom-left-radius: 7px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    margin: 0px;
+}
+
+QLabel#treatmentStatus {
+    border-radius: 6px;
+}
+
+QLabel#treatmentStatus[status="waiting"] {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+QLabel#treatmentStatus[status="running"] {
+    background: #d1fae5;
+    color: #22c55e;
+}
+
+QLabel#treatmentStatus[status="stopped"] {
+    background: #fecaca;
+    color: #ef4444;
+}
+
+/* ============================================
+   KPI CARD STYLES
+   ============================================ */
+
+QWidget#kpiCard {
+    background: transparent;
+}
+
+QLabel#kpiTitle {
+    color: #fff;
+    font-weight: bold;
+}
+
+QWidget#kpiWidget1 {
+    background: #d1fae5;
+    border-radius: 8px;
+}
+
+QWidget#kpiWidget2 {
+    background: #fef9c3;
+    border-radius: 8px;
+}
+
+QWidget#kpiWidget3 {
+    background: #dbeafe;
+    border-radius: 8px;
+}
+
+QLabel#kpiIcon1 {
+    color: #22c55e;
+}
+
+QLabel#kpiIcon2 {
+    color: #eab308;
+}
+
+QLabel#kpiIcon3 {
+    color: #2563eb;
+}
+
+QLabel#kpiLabel1 {
+    color: #166534;
+    font-weight: bold;
+}
+
+QLabel#kpiLabel2 {
+    color: #a16207;
+    font-weight: bold;
+}
+
+QLabel#kpiLabel3 {
+    color: #2563eb;
+    font-weight: bold;
+}
+
+QLabel#kpiValue1 {
+    color: #22c55e;
+    font-weight: bold;
+}
+
+QLabel#kpiValue2 {
+    color: #eab308;
+    font-weight: bold;
+}
+
+QLabel#kpiValue3 {
+    color: #2563eb;
+    font-weight: bold;
+}
+
+/* ============================================
+   CENTER PANEL STYLES
+   ============================================ */
+
+QWidget#centerPanel {
+    background: rgba(40,20,80,0.85);
+    border-radius: 24px;
+}
+
+QLabel#systemStatusTitle {
+    color: #fff;
+    font-weight: bold;
+}
+
+QWidget#statusRow {
+    background: transparent;
+}
+
+/* ============================================
+   COIL BUTTON STYLES
+   ============================================ */
+
+QPushButton#coilButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1ed6b5, stop:1 #3ed6b5);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+}
+
+QPushButton#coilButton:checked {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ff6b6b, stop:1 #ff8e8e);
+}
+
+QPushButton#coilButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3ed6b5, stop:1 #5ed6b5);
+}
+
+QPushButton#coilButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00b894, stop:1 #00cec9);
+}
+
+QPushButton#stopButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ff5e62, stop:1 #ff9966);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: bold;
+}
+
+QPushButton#stopButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #e45357, stop:1 #ff7f50);
+}
+
+/* ============================================
+   INFO PANEL STYLES
+   ============================================ */
+
+QWidget#infoPanel {
+    background: rgba(40,20,80,0.85);
+    border-radius: 24px;
+}
+
+QWidget#systemInfoCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3d206b, stop:1 #6c2b8f);
+    border-radius: 16px;
+}
+
+QLabel#infoLabel {
+    color: #bdb8e3;
+}
+
+QLabel#infoValue {
+    color: #fff;
+    font-weight: bold;
+}
+
+QWidget#notificationCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3d206b, stop:1 #6c2b8f);
+    border-radius: 16px;
+}
+
+QLabel#notificationTitle {
+    color: #ffffff;
+    font-weight: bold;
+}
+
+/* ============================================
+   ESP STATUS PANEL STYLES
+   ============================================ */
+
+QLabel#espPanelTitle {
+    color: #6cffb0;
+    font-weight: bold;
+}
+
+QWidget#espContainer {
+    background: rgba(61, 32, 107, 0.3);
+    border: 1px solid #6c2b8f;
+    border-radius: 12px;
+}
+
+QLabel#noEspLabel {
+    color: #ffa500;
+    text-align: center;
+}
+
+QWidget#espWidget {
+    background: rgba(45, 24, 90, 0.6);
+    border: 1px solid #4a2c7a;
+    border-radius: 8px;
+}
+
+QLabel#espTitle {
+    color: #fff;
+    font-weight: bold;
+}
+
+/* ESP Status Indicator with property-based styling */
+QLabel#espStatusIndicator[status="connected"] {
+    color: #44ff44;
+}
+
+QLabel#espStatusIndicator[status="portal"] {
+    color: #ffaa44;
+}
+
+QLabel#espStatusIndicator[status="wifi_only"] {
+    color: #ffaa44;
+}
+
+QLabel#espStatusIndicator[status="disconnected"] {
+    color: #ff4444;
+}
+
+/* WiFi Status */
+QLabel#wifiStatus {
+    color: #ccc;
+}
+
+QLabel#wifiStatus[connected="true"] {
+    color: #44ff44;
+}
+
+QLabel#wifiStatus[connected="false"] {
+    color: #ff4444;
+}
+
+QLabel#wifiStatus[portal="true"] {
+    color: #ffaa44;
+}
+
+QLabel#wifiLabel {
+    color: #ccc;
+}
+
+/* MQTT Status */
+QLabel#mqttStatus {
+    color: #ccc;
+}
+
+QLabel#mqttStatus[connected="true"] {
+    color: #44ff44;
+}
+
+QLabel#mqttStatus[connected="false"] {
+    color: #ff4444;
+}
+
+QLabel#mqttLabel {
+    color: #ccc;
+}
+
+/* Sensor Status */
+QLabel#sensorStatus {
+    color: #ffa500;
+}
+
+QLabel#sensorStatus[status="ok"] {
+    color: #44ff44;
+}
+
+QLabel#sensorStatus[status="error"] {
+    color: #ff4444;
+}
+
+QLabel#sensorLabel {
+    color: #ccc;
+}
+
+/* PWM Status */
+QLabel#pwmStatus {
+    color: #ff4444;
+}
+
+QLabel#pwmStatus[active="true"] {
+    color: #44ff44;
+}
+
+QLabel#pwmStatus[active="false"] {
+    color: #ff4444;
+}
+
+QLabel#pwmLabel {
+    color: #ccc;
+}
+
+/* Uptime */
+QLabel#uptimeStatus {
+    color: #ccc;
+}
+
+QLabel#uptimeLabel {
+    color: #ccc;
+}
+
+/* Sensor Details */
+QWidget#sensorDetails {
+    background: rgba(30, 20, 50, 0.5);
+    border-radius: 6px;
+}
+
+QLabel#sensorLabel {
+    color: #ccc;
+    font-size: 11px;
+}
+
+QLabel#sensorLabel[sensor_ok="true"] {
+    color: #44ff44;
+}
+
+QLabel#sensorLabel[sensor_ok="false"] {
+    color: #ff4444;
+}
+
+/* ============================================
+   ESP PANEL CONTAINER
+   ============================================ */
+
+QLabel#espPanelTitle {
+    color: #6cffb0;
+    font-size: 16px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+QWidget#espContainer {
+    background: rgba(61, 32, 107, 0.3);
+    border: 1px solid #6c2b8f;
+    border-radius: 12px;
+    padding: 12px;
+    margin: 5px 0;
+}
+
+QLabel#noEspLabel {
+    color: #ffa500;
+    font-size: 14px;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ============================================
+   TREATMENT STATUS STATES (Performance Fix)
+   ============================================ */
+
+QLabel#treatmentStatus[status="waiting"] {
+    background: #f3f4f6;
+    border-radius: 6px;
+    color: #6b7280;
+}
+
+QLabel#treatmentStatus[status="running"] {
+    background: #d1fae5;
+    border-radius: 6px;
+    color: #22c55e;
+}
+
+QLabel#treatmentStatus[status="stopped"] {
+    background: #fecaca;
+    border-radius: 6px;
+    color: #ef4444;
+}
+
+QLabel#treatmentStatus[status="completed"] {
+    background: #dbeafe;
+    border-radius: 6px;
+    color: #3b82f6;
+}
+
+/* ============================================
+   PARAMETER SECTION STYLES
+   ============================================ */
+
+QLabel#paramTitle {
+    color: #6cffb0;
+    font-weight: bold;
+}

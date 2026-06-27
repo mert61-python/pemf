@@ -1,0 +1,79 @@
+# =============================================================================
+# PEMF HEADLESS BACKEND — servis bağımlılıkları (Qt'siz).  Faz 4.
+# -----------------------------------------------------------------------------
+# requirements.txt'in GUI'siz türevi. TAM CPython 3.10 venv'e kurulur, sonra
+# PyInstaller ile PEMF_Backend.exe derlenir.
+#
+#   python -m venv .venv-build
+#   .\.venv-build\Scripts\Activate.ps1
+#   pip install -r requirements-service.txt
+#
+# ÇIKARILANLAR (GUI-only): PyQt6, PyQt6-WebEngine, PyQt6-Qt6,
+#   PyQt6-WebEngine-Qt6, pyqtgraph, PyOpenGL  -> headless'te kullanılmaz.
+# =============================================================================
+
+# --- Web sunucu (REST + WebSocket) ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9          # ai_router UploadFile
+websockets>=12.0
+
+# --- MQTT / keşif / seri ---
+paho-mqtt>=2.1.0
+zeroconf>=0.147.3
+pyserial>=3.5
+bleak>=1.1.1                     # BLE gateway provisioning (opsiyonel)
+
+# --- QR (auto_discovery, saf-Python; QtPixmap yerine) ---
+qrcode>=7.4
+Pillow>=10.0.0
+
+# --- ONNX & AI ---
+onnxruntime>=1.19.2
+numpy>=2.0.0
+pandas>=2.2.2
+scikit-learn>=1.6.1
+opencv-python>=4.10.0
+mediapipe>=0.10.8
+ultralytics>=8.3.0
+scipy>=1.11.0
+huggingface_hub>=0.23.0          # model_downloader.download_model_sync
+
+# PyTorch CPU (LattePanda/sunucu CPU-only):
+#   pip install torch>=2.1.2+cpu torchvision>=0.16.2+cpu --index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.2
+torchvision>=0.16.2
+
+# --- Sinyal/veri (AI inference yardımcıları) ---
+h5py>=3.9.0
+biosppy>=2.2.0
+neurokit2>=0.2.12
+heartpy>=1.2.7
+statsmodels>=0.14.0
+
+# --- Raporlama (PDF, server-side; Agg backend) ---
+matplotlib>=3.9.0
+jinja2>=3.1.2
+reportlab>=4.0.7
+# weasyprint KALDIRILDI: kodda kullanılmıyor + Windows'ta GTK/Pango/Cairo gerektirir
+# (build'i kırar). PDF üretimi reportlab ile yapılır.
+
+# --- Ağ / yardımcı ---
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+urllib3>=2.0.0
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+cryptography>=41.0.3
+keyring>=20.0.0
+joblib>=1.3.0
+certifi>=2023.0.0
+
+# --- Bulut senkron (offline-first; opsiyonel, headless'te aktif değilse kaldırılabilir) ---
+supabase>=2.0.0
+
+# --- Build aracı ---
+pyinstaller>=6.3.0
+
+# At-rest sifreleme (Windows pre-built wheel). PEMF_ENCRYPT_AT_REST=1 ile aktif.
+sqlcipher3

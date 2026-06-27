@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="tr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEMF Medical - Yeni Nesil Tedavi Sistemi</title>
+    <meta name="description" content="PEMF Medical AI destekli Veteriner ve İnsan Tedavi Cihazı Yönetim Arayüzü.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            400: '#34d399',
+                            500: '#10b981', // Emerald-500
+                            600: '#059669',
+                        },
+                        dark: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155'
+                        }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        /* Glassmorphism Classes */
+        .glass {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.3);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        .gradient-text {
+            background: linear-gradient(to right, #34d399, #10b981, #059669);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body class="antialiased bg-grid min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- Background glow effects -->
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-brand-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse-slow pointer-events-none"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse-slow pointer-events-none" style="animation-delay: 2s;"></div>
+
+    <!-- Navbar -->
+    <nav class="fixed w-full z-50 glass border-b-0 border-white/5 transition-all duration-300" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg shadow-brand-500/30">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight">PEMF<span class="text-brand-500">Medical</span></span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-8">
+                        <a href="#features" class="hover:text-brand-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Özellikler</a>
+                        <a href="#ai-modules" class="hover:text-brand-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Yapay Zeka</a>
+                        <a href="#download" class="bg-brand-500 hover:bg-brand-400 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)]">Hemen İndir</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <main class="flex-grow pt-32 pb-20 lg:pt-48 lg:pb-32 z-10 flex items-center">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center gap-16">
+            <div class="lg:w-1/2 text-center lg:text-left">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-brand-400 text-xs font-semibold uppercase tracking-wide mb-6">
+                    <span class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
+                    Versiyon 1.2 Çıktı
+                </div>
+                <h1 class="text-5xl lg:text-7xl font-bold tracking-tight mb-6 leading-tight">
+                    Geleceğin <br />
+                    <span class="gradient-text">Tedavi Teknolojisi</span>
+                </h1>
+                <p class="text-gray-400 text-lg lg:text-xl mb-10 max-w-2xl mx-auto lg:mx-0">
+                    Pulsed Electromagnetic Field (PEMF) cihazınızı yöneteceğiniz, Yapay Zeka destekli tanı ve tedavi arayüzü ile tanışın.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="#download" class="bg-white text-dark-900 hover:bg-gray-100 px-8 py-4 rounded-full font-bold text-lg transition-all flex items-center justify-center gap-2 group">
+                        <svg class="w-5 h-5 group-hover:-translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Windows İçin İndir
+                    </a>
+                    <a href="#features" class="glass text-white hover:bg-white/10 px-8 py-4 rounded-full font-bold text-lg transition-all flex items-center justify-center">
+                        Daha Fazla Bilgi
+                    </a>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">Windows 10 ve 11 destekler. Boyut: ~250MB</p>
+            </div>
+            
+            <div class="lg:w-1/2 w-full animate-float">
+                <div class="glass p-4 rounded-2xl shadow-2xl border border-white/10 relative">
+                    <div class="absolute -top-3 -right-3 w-12 h-12 bg-brand-500 rounded-full flex items-center justify-center shadow-lg shadow-brand-500/50">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <!-- App UI Mockup (Abstracted) -->
+                    <div class="bg-dark-900 rounded-xl overflow-hidden border border-white/5 h-[400px] flex flex-col">
+                        <!-- header -->
+                        <div class="h-12 border-b border-white/5 flex items-center px-4 gap-2">
+                            <div class="flex gap-1.5"><div class="w-3 h-3 rounded-full bg-red-500"></div><div class="w-3 h-3 rounded-full bg-yellow-500"></div><div class="w-3 h-3 rounded-full bg-green-500"></div></div>
+                        </div>
+                        <!-- body -->
+                        <div class="flex-grow p-6 flex gap-6">
+                            <!-- sidebar -->
+                            <div class="w-1/4 flex flex-col gap-3">
+                                <div class="h-8 bg-white/5 rounded"></div>
+                                <div class="h-8 bg-brand-500/20 rounded border border-brand-500/50"></div>
+                                <div class="h-8 bg-white/5 rounded"></div>
+                            </div>
+                            <!-- content -->
+                            <div class="flex-grow flex flex-col gap-4">
+                                <div class="h-40 bg-white/5 rounded-xl border border-white/5"></div>
+                                <div class="flex gap-4">
+                                    <div class="w-1/2 h-32 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center text-brand-400 font-bold text-2xl">7.83 Hz</div>
+                                    <div class="w-1/2 h-32 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center text-blue-400 font-bold text-2xl">45.0 mT</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Features Section -->
+    <section id="features" class="py-24 bg-dark-900/50 z-10 border-y border-white/5">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold mb-4">Gelişmiş Teknolojik Özellikler</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">Kliniğinizin veya kişisel tedavinizi yönetmeniz için ihtiyacınız olan her şey tek bir güvenli arayüzde.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="glass glass-card p-8 rounded-2xl transition-all duration-300">
+                    <div class="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center mb-6 text-brand-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Akıllı Seans Yönetimi</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Frekans, yoğunluk ve zamanlayıcıyı saniyesi saniyesine yönetin. Her bir seans geçmişe güvenle kaydedilir.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="glass glass-card p-8 rounded-2xl transition-all duration-300">
+                    <div class="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mb-6 text-blue-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Hasta ve Veri Güvenliği</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">SQLite altyapısıyla hasta kayıtlarınız, notlarınız ve tedavi geçmişiniz şifreli ve cihazınızda lokal olarak saklanır.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="glass glass-card p-8 rounded-2xl transition-all duration-300">
+                    <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center mb-6 text-purple-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Yapay Zeka Destekli</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">Entegre PyTorch AI modelleri ile Veteriner tıbbında hastalık tespiti ve analizleri saniyeler içinde lokal donanımda gerçekleştirilir.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AI Modules -->
+    <section id="ai-modules" class="py-24 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center gap-12">
+                <div class="md:w-1/2 space-y-6">
+                    <h2 class="text-3xl lg:text-4xl font-bold">Ultralytics YOLOv8 Tabanlı <br/><span class="text-brand-400">Tanı Modülleri</span></h2>
+                    <p class="text-gray-400 text-lg">Program içerisinde özel eğitilmiş Yapay Zeka (AI) modülleri bulunur. Bu modüller resim/kan analizleri yaparak saniyeler içinde klinisyenlere yol gösterir.</p>
+                    <ul class="space-y-4 mt-8">
+                        <li class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                            <span class="text-gray-300">Kedi Retikülosit Sayımı (Mikroskopi Analizi)</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                            <span class="text-gray-300">Görüntü İşleme ve Hücre Tespiti</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                            <span class="text-gray-300">%100 Lokal ve Güvenli Çalışma (İnternet Gerektirmez)</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="md:w-1/2 w-full">
+                    <div class="glass p-2 rounded-2xl shadow-2xl overflow-hidden relative group">
+                        <div class="absolute inset-0 bg-gradient-to-tr from-brand-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <img src="https://images.unsplash.com/photo-1579684385127-1ef15d508118?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Medical UI" class="rounded-xl w-full h-auto opacity-70 border border-white/5">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="py-24 bg-brand-600/10 z-10 border-t border-brand-500/20 relative overflow-hidden">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <h2 class="text-4xl font-bold mb-6">Uygulamayı Denemeye Hazır Mısınız?</h2>
+            <p class="text-gray-300 mb-10 text-lg">Kurulum dosyasını indirin ve saniyeler içinde kullanmaya başlayın. Uygulama, yeni güncellemeleri otomatik olarak indirip kuracaktır.</p>
+            
+            <a href="https://github.com/mert61-python/pemf/releases/latest" id="download-btn" class="inline-flex items-center gap-3 bg-brand-500 hover:bg-brand-400 text-white px-10 py-5 rounded-full font-bold text-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:shadow-[0_0_30px_rgba(16,185,129,0.8)] hover:-translate-y-1">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Setup Dosyasını İndir (v1.1)
+            </a>
+            <div class="mt-8 text-gray-500 text-sm flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                Tamamen güvenli, Auto-Update destekli
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="glass border-t border-white/5 py-8 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-gray-400 text-sm">
+                &copy; 2026 PEMF Medical. Tüm Hakları Saklıdır.
+            </div>
+            <div class="flex gap-4">
+                <span class="text-gray-500 text-sm">Otomatik Güncelleme Sistemi ile desteklenmektedir.</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Fetch current version from json to dynamically update buttons if needed
+        fetch('version.json')
+            .then(res => res.json())
+            .then(data => {
+                if(data.download_url && data.download_url.includes("http")) {
+                    document.getElementById('download-btn').href = data.download_url;
+                }
+            }).catch(e => console.log("Version check disabled on local"));
+    </script>
+</body>
+</html>

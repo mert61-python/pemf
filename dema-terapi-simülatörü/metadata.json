@@ -1,0 +1,5 @@
+{
+  "name": "DEMA Terapi Simülatörü",
+  "description": "Düşük Enerjili Manyetik Alan (DEMA) terapi parametrelerini ayarlayarak biyolojik etkileri simüle eden interaktif tıbbi cihaz arayüzü.",
+  "requestFramePermissions": []
+}
