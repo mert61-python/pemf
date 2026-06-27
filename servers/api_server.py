@@ -746,6 +746,18 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
     except Exception:
         return False
 
+
+def _broker_reachable(timeout: float = 0.3) -> bool:
+    """MQTT broker (127.0.0.1:1883) hızlı erişilebilirlik sağlaması — ESP bobin yolunun
+    broker kapalıyken sessizce 'success' dönmesini önlemek için (audit #4)."""
+    import socket as _socket
+    try:
+        _c = _socket.create_connection(("127.0.0.1", 1883), timeout=timeout)
+        _c.close()
+        return True
+    except Exception:
+        return False
+
 # ── Active session state (in-memory, shared) ─────────────────────────────────
 from datetime import datetime as _dt
 import threading as _threading
@@ -1054,7 +1066,16 @@ async def start_session(payload: SessionStartPayload):
         duration_sec=payload.duration_minutes * 60,
     )
 
-    return {"status": "success", "session": _active_session}
+    # ESP fail-safe (audit #4): broker erişilemezse ESP bobinleri (6-8) sessizce başlamaz →
+    # operatöre WARN dön. Eskiden seans her hâlükârda 'success' dönüp ESP'ler ölü kalıyordu
+    # ve kimse fark etmiyordu (STM bobinleri çalışsa da ESP yolu sessizce başarısızdı).
+    resp = {"status": "success", "session": _active_session}
+    if esp_coils and not _broker_reachable():
+        msg = f"MQTT broker erişilemez — ESP bobinleri {esp_coils} aktif OLMAYABİLİR (STM bobinleri çalışıyor)."
+        logging.getLogger(__name__).warning("Seans başladı ama %s", msg)
+        resp["warning"] = msg
+        resp["esp_unreachable"] = True
+    return resp
 
 
 def _stop_session_coils(coil_ids):

@@ -217,8 +217,22 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
 
                     # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar
                     # (tek-kare auto_adjust artık sonsuza sürmez; süresi dolunca watchdog durdurur).
-                    start_ai_session(target_freq, target_duty, 30, range(1, 6), "AI (Auto)")
+                    start_ai_session(target_freq, target_duty, 30, range(1, 9), "AI (Auto)")
                     state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
+                    # ESP 6-8'i de sür (audit #13, kullanıcı onaylı 8-bobin) — tek-atış publish.
+                    try:
+                        import servers.api_server as _api_esp
+                        for _cid in (6, 7, 8):
+                            _api_esp._mqtt_publish(f"pemf/coil/{_cid}/control", {
+                                "command": "start",
+                                "command_id": f"aiauto_{_cid}_{int(time.time() * 1000)}",
+                                "freq": round(target_freq, 1),
+                                "duty": round(target_duty, 1),
+                                "phase": 0,
+                                "duration": 30 * 60,
+                            })
+                    except Exception as _ee:
+                        logger.warning("AI (Auto) ESP 6-8 publish hatasi: %s", _ee)
                     update_live_session_state(is_active=True, mode="AI (Auto)", freq=target_freq, intensity=target_duty, duration_sec=30 * 60)
                     hw_status = "updated"
                     hw_params = {"freq": target_freq, "duty": target_duty}
@@ -246,13 +260,18 @@ _ai_thread = None
 _ai_organ_id = 0
 _ai_duration_min = 20
 _ai_started_at = 0.0
+# AI biofeedback'in ESP 6-8'e en son publish ettiği freq/duty (eşikli yeniden-publish için;
+# -999 = henüz publish edilmedi → ilk tespitte kesin publish). Audit #13 (kullanıcı onaylı 8-bobin).
+_ai_last_esp_freq = -999.0
+_ai_last_esp_duty = -999.0
 _ai_calibration = {"z_ref": 0.0, "calibrated": False}
 _ORGAN_NAMES = {0: "Tüm Vücut", 1: "Mide", 2: "Böbrek", 3: "Karaciğer", 4: "Mesane", 5: "Pankreas", 6: "Bağırsak"}
 
 
 def _ai_pro_loop():
-    global _ai_loop_active
+    global _ai_loop_active, _ai_last_esp_freq, _ai_last_esp_duty
     logger.info("AI Pro Closed-Loop arkaplan görevi BAŞLADI.")
+    _ai_last_esp_freq = _ai_last_esp_duty = -999.0  # yeni seans → ESP eşik durumunu sıfırla
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
@@ -349,6 +368,25 @@ def _ai_pro_loop():
             if state and state.hardware and detected:
                 state.hardware.start_all_coils(target_freq, target_duty, 0.0, _ai_duration_min)
 
+            # ESP bobinleri (6-8) de sür — start_all_coils yalnız STM 1-5'i sürüyordu; ESP 6-8
+            # telemetride 'aktif' görünüp komut almıyordu (audit #13, kullanıcı onaylı 8-bobin).
+            # Spam'ı önlemek için freq/duty belirgin değişince yeniden publish (eşik).
+            if detected and (abs(target_freq - _ai_last_esp_freq) >= 1.0 or abs(target_duty - _ai_last_esp_duty) >= 2.0):
+                _ai_last_esp_freq, _ai_last_esp_duty = target_freq, target_duty
+                try:
+                    import servers.api_server as _api_esp
+                    for _cid in (6, 7, 8):
+                        _api_esp._mqtt_publish(f"pemf/coil/{_cid}/control", {
+                            "command": "start",
+                            "command_id": f"ai_{_cid}_{int(time.time() * 1000)}",
+                            "freq": round(target_freq, 1),
+                            "duty": round(target_duty, 1),
+                            "phase": 0,
+                            "duration": int(_ai_duration_min * 60),
+                        })
+                except Exception as _ee:
+                    logger.warning("AI ESP 6-8 publish hatasi: %s", _ee)
+
             remaining = max(0, int(_ai_duration_min * 60 - (time.time() - _ai_started_at))) if _ai_started_at else 0
             if _ai_started_at and remaining <= 0:
                 _ai_loop_active = False  # süre doldu → otomatik durdur
@@ -399,6 +437,15 @@ def _ai_pro_loop():
         import servers.api_server as _api2
         if _api2.state and _api2.state.hardware:
             _api2.state.hardware.stop_all_coils()
+        # ESP 6-8'i de durdur (AI bunları da sürüyordu — audit #13).
+        for _cid in (6, 7, 8):
+            try:
+                _api2._mqtt_publish(f"pemf/coil/{_cid}/control", {
+                    "command": "stop",
+                    "command_id": f"ai_stop_{_cid}_{int(time.time() * 1000)}",
+                })
+            except Exception:
+                pass
         with _api2._session_lock:
             if str(_api2._active_session.get("mode", "")).startswith("AI"):
                 _api2._active_session["is_active"] = False
@@ -425,7 +472,7 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
     try:
         from servers.api_server import start_ai_session
-        start_ai_session(0.0, 0.0, _ai_duration_min, range(1, 6), "AI Pro")
+        start_ai_session(0.0, 0.0, _ai_duration_min, range(1, 9), "AI Pro")  # 1-8: ESP 6-8 de sürülüyor (audit #13)
     except Exception:
         logger.exception("start_ai_session failed")
     import threading
