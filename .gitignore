@@ -99,7 +99,7 @@ buildPEMF/
 mobile_builds/
 release_assets/
 lattekurulum/
-training_archive/
+# training_archive/ -> guii disina tasindi: ../ml_training_archive (ML egitim arsivi)
 github_pemf/
 
 # Çalışma/derleme artefaktları
