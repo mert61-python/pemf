@@ -95,7 +95,15 @@ except Exception as _e:
 # Config + credential dosyaları (ProductionConfigManager ilk açılışta üretir)
 config_dir = os.path.join(project_path, 'config')
 if os.path.exists(config_dir):
-    for root, _, files in os.walk(config_dir):
+    for root, dirs, files in os.walk(config_dir):
+        # GÜVENLİK (P0 audit 2026-06-28): config/credentials/ GERÇEK MQTT/HiveMQ/ESP
+        # şifrelerini içerir (hivemq_users.json, mosquitto_passwords.txt, secrets_coil_*.h,
+        # credentials.json). EXE'ye GÖMME → EXE/disk sızıntısı = tüm broker kimlikleri ele
+        # geçer = bobin topic'lerine publish = donanım kontrolü. Runtime'da credential_manager
+        # ÜRETİR; cloud-cred fill (production_config_manager) dosya yoksa cred_path.exists()
+        # ile ZARİFÇE atlar (yalnız cloud-mode; local broker anon).
+        if 'credentials' in dirs:
+            dirs.remove('credentials')
         for f in files:
             # GÜVENLİK (P1): config.json GERÇEK Gmail App Password içerir; runtime'da
             # %USERPROFILE%\.pemf_gui\config.json okunur (bu bundled dosya DEĞİL) → sırrı
@@ -105,9 +113,10 @@ if os.path.exists(config_dir):
             if f.endswith(('.json', '.template', '.conf', '.txt', '.h')):
                 datas.append((os.path.join(root, f), os.path.relpath(root, project_path)))
 
-data_config = os.path.join(project_path, 'data', 'config.json')
-if os.path.exists(data_config):
-    datas.append((data_config, 'data'))
+# GÜVENLİK (P0 audit 2026-06-28): data/config.json ESP provisioning sırları içerir
+# (wifi_pass/mqtt_user/mqtt_pass DÜZ-METİN) ve runtime'da headless kodca OKUNMUYOR → EXE'ye
+# GÖMME. (Eskiden datas.append ile her klinik PC'sine _internal/data/config.json olarak
+# düz-metin kopyalanıyordu — P0 disk sızıntısı.)
 
 for tmpl in ('pemf_treatment_history_template.db', 'patients_template.db'):
     p = os.path.join(project_path, 'database', tmpl)

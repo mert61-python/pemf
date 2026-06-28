@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import contextlib
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
@@ -29,6 +30,27 @@ except ModuleNotFoundError:
         sys.path.insert(0, project_root)
     from pemf_gui.config import get_config
 
+# P0 audit 2026-06-28: hasta PII whole-DB SQLCipher sifrelemesi (paylasilan yardimci modul).
+from database.sqlcipher_util import (
+    import_sqlcipher,
+    get_sqlcipher_key,
+    open_encrypted_conn,
+    migrate_to_encrypted_if_needed,
+)
+
+# P0 audit 2026-06-28: SQLCipher baglantilarinda exception'lar sqlcipher3.dbapi2.* tipinde gelir;
+# duz sqlite3.* except'leri bunlari YAKALAMAZ (ornek: ALTER 'duplicate column' patlar). Hem
+# sqlite3 hem sqlcipher3 variantini yakala (treatment_history_db deseni).
+_sqlcipher_mod_exc = import_sqlcipher()
+if _sqlcipher_mod_exc is not None:
+    _DB_OPERATIONAL = (sqlite3.OperationalError, _sqlcipher_mod_exc.OperationalError)
+    _DB_ERROR = (sqlite3.Error, _sqlcipher_mod_exc.Error)
+    _DB_INTEGRITY = (sqlite3.IntegrityError, _sqlcipher_mod_exc.IntegrityError)
+else:
+    _DB_OPERATIONAL = sqlite3.OperationalError
+    _DB_ERROR = sqlite3.Error
+    _DB_INTEGRITY = sqlite3.IntegrityError
+
 
 class PatientDatabase:
     """Hasta veritabani yonetim sinifi."""
@@ -39,9 +61,22 @@ class PatientDatabase:
     def __init__(self, db_file: str = "patients.db"):
         self.db_file = Path(db_file)
         self.lock = threading.Lock()
+        self.logger = logging.getLogger("PatientDatabase")
         self.config_manager = get_config()
         self._local = threading.local()  # Performans Fix (4.2): Thread-local connection pool
-        
+
+        # P0 audit 2026-06-28: whole-DB SQLCipher at-rest (keyring 'sqlcipher_key' — treatment
+        # DB ile AYNI anahtar). Anahtar/binding BIR KEZ cozulur (per-op keyring okumasi olmasin).
+        self._key_dir = Path(self.db_file).resolve().parent
+        self._sqlcipher_mod = import_sqlcipher()
+        self._cipher_key = get_sqlcipher_key(self._key_dir, self.logger)
+        self.at_rest_encrypted = bool(self._cipher_key and self._sqlcipher_mod is not None)
+        # P0 audit 2026-06-28: SQLCipher cursor'i sqlite3.Row KABUL ETMEZ (TypeError) -> baglantiya
+        # uygun Row sec (sqlcipher3.Row sifreli iken, sqlite3.Row duz-metin iken).
+        self._row_factory = getattr(self._sqlcipher_mod, "Row", sqlite3.Row) if self.at_rest_encrypted else sqlite3.Row
+        # Mevcut DB duz-metinse ve anahtar varsa -> sifreliye MIGRATE et (.plain.bak yedek).
+        migrate_to_encrypted_if_needed(self.db_file, self._key_dir, self.logger)
+
         # Ayrik bir arama HMAC anahtari tureterek sifreleme anahtarini dogrudan kullanmiyoruz.
         self._search_hmac_key = hashlib.sha256(
             self.config_manager._encryption_key + b":patient_search_index:v1"
@@ -53,9 +88,21 @@ class PatientDatabase:
         """Thread-safe connection pool context manager."""
         created_in_this_context = False
         if not hasattr(self._local, 'conn') or self._local.conn is None:
-            self._local.conn = sqlite3.connect(self.db_file, timeout=30.0)
-            self._local.conn.execute("PRAGMA journal_mode=WAL")
-            self._local.conn.execute("PRAGMA synchronous=NORMAL")
+            # P0 audit 2026-06-28: whole-DB SQLCipher (anahtar+binding varsa); yoksa duz-metin
+            # sqlite (geriye uyumlu) + operatore GORUNUR tek-seferlik uyari.
+            if self._cipher_key and self._sqlcipher_mod is not None:
+                conn = open_encrypted_conn(self.db_file, self._cipher_key, self._sqlcipher_mod)
+            else:
+                if not getattr(self, "_enc_warned", False):
+                    self._enc_warned = True
+                    self.logger.warning(
+                        "PATIENT DB AT-REST SIFRELEME KAPALI: hasta PII duz-metin SQLite yaziliyor. "
+                        "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 (keyring) ayarlayin."
+                    )
+                conn = sqlite3.connect(self.db_file, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._local.conn = conn
             created_in_this_context = True
 
         try:
@@ -98,13 +145,13 @@ class PatientDatabase:
                 # Sürüm güncellemesi (Migration) için sync_status kolonunu ekle
                 try:
                     cursor.execute("ALTER TABLE patients ADD COLUMN sync_status INTEGER DEFAULT 0")
-                except sqlite3.OperationalError:
+                except _DB_OPERATIONAL:
                     pass # Kolon zaten var
 
                 # owner_email kolonu (rapor e-postasi) — eski DB'lere idempotent ekle.
                 try:
                     cursor.execute("ALTER TABLE patients ADD COLUMN owner_email TEXT")
-                except sqlite3.OperationalError:
+                except _DB_OPERATIONAL:
                     pass # Kolon zaten var
 
                 cursor.execute(
@@ -143,7 +190,7 @@ class PatientDatabase:
                 if count == 0:
                     self._rebuild_search_index(cursor)
                 conn.commit()
-        except sqlite3.Error as e:
+        except _DB_ERROR as e:
             raise RuntimeError(f"Database initialization failed: {e}") from e
 
     def _normalize_search_value(self, value: str) -> str:
@@ -307,7 +354,7 @@ class PatientDatabase:
                     self._index_patient_search_terms(cursor, patient_id, patient_info)
                     conn.commit()
                 return patient_id
-            except sqlite3.Error as e:
+            except _DB_ERROR as e:
                 raise RuntimeError(f"Failed to add patient: {e}") from e
 
     def get_patient(self, patient_id: str) -> Optional[Dict[str, Any]]:
@@ -315,7 +362,7 @@ class PatientDatabase:
         with self.lock:
             try:
                 with self._get_connection() as conn:
-                    conn.row_factory = sqlite3.Row
+                    conn.row_factory = self._row_factory
                     cursor = conn.cursor()
                     cursor.execute("SELECT * FROM patients WHERE id = ?", (patient_id,))
                     row = cursor.fetchone()
@@ -325,7 +372,7 @@ class PatientDatabase:
 
                     patient = dict(row)
                     return self._decrypt_patient_fields(patient)
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return None
 
     def get_all_patients(self) -> List[Dict[str, Any]]:
@@ -333,7 +380,7 @@ class PatientDatabase:
         with self.lock:
             try:
                 with self._get_connection() as conn:
-                    conn.row_factory = sqlite3.Row
+                    conn.row_factory = self._row_factory
                     cursor = conn.cursor()
                     cursor.execute("SELECT * FROM patients ORDER BY created_at DESC")
                     rows = cursor.fetchall()
@@ -343,7 +390,7 @@ class PatientDatabase:
                         patient = dict(row)
                         patients.append(self._decrypt_patient_fields(patient))
                     return patients
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return []
 
     def update_patient(self, patient_id: str, patient_info: Dict[str, str]) -> bool:
@@ -373,7 +420,7 @@ class PatientDatabase:
                         self._refresh_search_index_for_patient(cursor, patient_id)
                     conn.commit()
                     return cursor.rowcount > 0
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return False
 
     def delete_patient(self, patient_id: str) -> bool:
@@ -394,7 +441,7 @@ class PatientDatabase:
                 cursor.execute("DELETE FROM patient_search_index WHERE patient_id = ?", (patient_id,))
                 conn.commit()
                 return rowcount > 0
-        except sqlite3.Error:
+        except _DB_ERROR:
             return False
         finally:
             self.lock.release()
@@ -410,7 +457,7 @@ class PatientDatabase:
                     conn.commit()
                     cursor.execute("VACUUM")
                     return True
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return False
 
     def search_patients(self, search_term: str) -> List[Dict[str, Any]]:
@@ -427,7 +474,7 @@ class PatientDatabase:
         with self.lock:
             try:
                 with self._get_connection() as conn:
-                    conn.row_factory = sqlite3.Row
+                    conn.row_factory = self._row_factory
                     cursor = conn.cursor()
 
                     placeholders = ", ".join("?" for _ in token_hashes)
@@ -452,7 +499,7 @@ class PatientDatabase:
                         results.append(self._decrypt_patient_fields(patient))
 
                     return results
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return []
 
     def get_patient_count(self) -> int:
@@ -463,7 +510,7 @@ class PatientDatabase:
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM patients")
                     return int(cursor.fetchone()[0])
-            except sqlite3.Error:
+            except _DB_ERROR:
                 return 0
 
 

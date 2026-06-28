@@ -13,6 +13,7 @@ import base64
 import json
 import threading
 import time
+import asyncio  # P0 audit 2026-06-28: senkron MQTT publish'i event-loop'tan cikar (to_thread)
 from datetime import datetime
 from servers.ai_router import ai_router
 from servers.history_router import router as history_router
@@ -1076,7 +1077,8 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     else:
         mqtt_payload = {"command": "stop", "command_id": command_id}
 
-    ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+    # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
+    ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
     # Asama-2: per-bobin run logging (ESP/MQTT dali).
     if payload.start:
         _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
@@ -1126,7 +1128,8 @@ async def control_batch_coils(payload: BatchCoilPayload):
             }
         else:
             mqtt_payload = {"command": "stop", "command_id": command_id}
-        ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+        # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
+        ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
         # Asama-2: per-bobin run logging (ESP/MQTT dali).
         if payload.start:
             _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
@@ -1800,12 +1803,22 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
             stm_stopped = bool(state.hardware.stop_all_coils())
         except Exception:
             logging.exception("STM emergency stop failed")
-    mqtt_results = []
-    for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
+    # P0 audit 2026-06-28: ESP stop publish'lerini PARALEL gonder (eskiden bobin basina 2 senkron
+    # publish sirayla → acil-durdurma N-bobin x ~7sn gecikiyordu). _emergency_stop_all DAIMA bir
+    # thread'de calisir (async endpoint asyncio.to_thread; ESP-alarm/STM-disconnect zaten thread),
+    # dolayisiyla burada ThreadPoolExecutor guvenli + event-loop'u etkilemez.
+    def _estop_one(coil_id):
         command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}"
         ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
         legacy_ok = _mqtt_publish(f"pemf/esp32_{coil_id}/command", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
-        mqtt_results.append({"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"})
+        return {"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"}
+    _estop_coils = [cid for cid in coil_ids if cid in ESP_COIL_IDS]
+    if _estop_coils:
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=len(_estop_coils)) as _ex:
+            mqtt_results = list(_ex.map(_estop_one, _estop_coils))
+    else:
+        mqtt_results = []
     with _live_state_lock:
         for idx in range(8):
             coil = _live_state["coils"][idx]
@@ -1822,7 +1835,10 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
 @app.post("/api/hardware/emergency_stop")
 async def emergency_stop():
     """Stop all outputs through every available transport and notify clients."""
-    result = _emergency_stop_all(reason="manual")
+    # P0 audit 2026-06-28: _emergency_stop_all senkron MQTT publish yapar (~7sn worst-case) →
+    # event-loop'u BLOKLARDI (acil-durdurma yaniti gecikir + tum WS/istemci donardi). to_thread
+    # ile thread'e al — loop responsive kalir; fonksiyon icindeki ESP publish'leri de paralel.
+    result = await asyncio.to_thread(_emergency_stop_all, "manual")
     _push_notification("Acil durdurma uygulandı", "error")
     return result
 
