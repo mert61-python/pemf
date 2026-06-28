@@ -1,0 +1,110 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Cihaz kimliği — ilk LAN bağlantısında /api/health'ten yakalanır, saklanır;
+// sonra farklı ağda Supabase 'devices' tablosundan güncel tunnel_url'i bulmak için
+// kullanılır (TEMASSIZ uzaktan erişim, QR'sız).
+const DEVICE_ID_KEY = "@pemf_device_id";
+// Oto-eşleştirme görünür onayı (#11): yeni/değişen device_id geldiğinde bu bayrak
+// yazılır; AppShell mount'ta okuyup "Cihaz otomatik eşleştirildi" toast'ı gösterir.
+const JUST_PAIRED_KEY = "@pemf_just_paired";
+export async function setStoredDeviceId(id: string): Promise<void> {
+  try {
+    if (!id) return;
+    // YENİ eşleşme: saklanan ESKİ id'den farklıysa (ilk kez veya değişince) bayrağı yaz.
+    const prev = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (prev !== id) await AsyncStorage.setItem(JUST_PAIRED_KEY, id);
+    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+export async function getStoredDeviceId(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(DEVICE_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function getRuntimeBaseUrl(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return "http://127.0.0.1:8000";
+}
+
+function toWebSocketUrl(baseUrl: string): string {
+  if (baseUrl.startsWith("https://")) {
+    return baseUrl.replace(/^https:\/\//, "wss://") + "/ws";
+  }
+  return baseUrl.replace(/^http:\/\//, "ws://") + "/ws";
+}
+
+const runtimeBaseUrl = getRuntimeBaseUrl();
+
+export let serviceConfig = {
+  // REST API — FastAPI server (port 8000) — Tek port mimarisi
+  apiBaseUrl: process.env.EXPO_PUBLIC_PEMF_API_BASE_URL ?? `${runtimeBaseUrl}/api`,
+  // WebSocket — Artık FastAPI port 8000 üzerinden (5050 devre dışı)
+  websocketUrl: process.env.EXPO_PUBLIC_PEMF_WS_URL ?? toWebSocketUrl(runtimeBaseUrl),
+  // HTTP snapshot fallback
+  bridgeBaseUrl: process.env.EXPO_PUBLIC_PEMF_BRIDGE_URL ?? `${runtimeBaseUrl}/api`,
+  // Cihaz API token'ı — backend PEMF_REQUIRE_AUTH=1 iken zorunlu. Boşsa gönderilmez (auth kapalı = değişiklik yok).
+  apiToken: process.env.EXPO_PUBLIC_PEMF_API_TOKEN ?? "",
+};
+
+const API_TOKEN_KEY = "@pemf_api_token";
+export async function setStoredApiToken(token: string): Promise<void> {
+  try {
+    serviceConfig.apiToken = token || "";
+    if (token) await AsyncStorage.setItem(API_TOKEN_KEY, token);
+    else await AsyncStorage.removeItem(API_TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+export async function loadStoredApiToken(): Promise<void> {
+  try {
+    const t = await AsyncStorage.getItem(API_TOKEN_KEY);
+    if (t) serviceConfig.apiToken = t;
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Yerel IP veya Cloudflare tünel URL'si ile tüm ayarları günceller.
+ * Tünel URL'si http/https veya doğrudan IP olabilir.
+ * Örn: "192.168.1.147" veya "https://abcd-xyz.trycloudflare.com"
+ */
+export const updateServiceConfig = (serverAddress: string) => {
+  let apiBase: string;
+  let wsBase: string;
+
+  // Cloudflare/ngrok tünelleri genelde https ile başlar. Local IP'ler http veya düz IP olabilir.
+  // Eğer düz IP veya hostname verilmişse (örn: 192.168.1.147), varsayılan olarak http ve 8000 portunu ekle.
+  let baseUrl = serverAddress;
+  if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+    baseUrl = `http://${baseUrl}:8000`;
+  }
+  
+  // Sondaki '/' işaretini kaldır (varsa)
+  baseUrl = baseUrl.replace(/\/$/, "");
+
+  // URL'i oluştur
+  apiBase = `${baseUrl}/api`;
+
+  // WebSocket URL'ini http(s) protokolüne göre dinamik oluştur
+  if (baseUrl.startsWith("https://")) {
+    wsBase = baseUrl.replace(/^https:\/\//, "wss://") + "/ws";
+  } else {
+    wsBase = baseUrl.replace(/^http:\/\//, "ws://") + "/ws";
+  }
+
+  serviceConfig = {
+    apiBaseUrl: apiBase,
+    websocketUrl: wsBase,
+    bridgeBaseUrl: apiBase,
+    apiToken: serviceConfig.apiToken || "",
+  };
+};

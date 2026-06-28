@@ -1,0 +1,149 @@
+import React, { useState } from "react";
+import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions } from "react-native";
+import { WebView } from "react-native-webview";
+import { Card } from "@/components/ui/Card";
+import { colors, spacing, typography, radius } from "@/theme/tokens";
+import { serviceConfig } from "@/services/config";
+import { RefreshCcw, ExternalLink } from "lucide-react-native";
+
+export function DemaSimulatorScreen() {
+  const [key, setKey] = useState(0); // WebView'ı yeniden yüklemek için
+  const { height } = useWindowDimensions();
+  // KÖK NEDEN: WebView dikey dokunuş jestlerini yutuyor → ne dış ScrollView ne de simülatör
+  // kayıyordu; ayrıca sabit yükseklik simülatör sayfasından kısaydı → alt kontroller kesik.
+  // ÇÖZÜM: WebView'i İÇERİĞİNİN TAM yüksekliğine büyüt (postMessage ile ölç) + nestedScrollEnabled
+  // → dış AppShell ScrollView'i tüm sayfayı kaydırır, WebView scroll'u kilitlemez. Ölçüm gelene
+  // kadar cömert fallback (kesilme yerine fazladan boşluk daha iyi).
+  const [webHeight, setWebHeight] = useState(Math.max(640, Math.round(height * 0.78)));
+
+  // apiBaseUrl'den base URL'yi çıkar: http://IP:8000/api → http://IP:8000
+  const baseUrl = serviceConfig.apiBaseUrl
+    .replace(/\/api\/?$/, "")       // /api sonunu kaldır
+    .replace(/\/$/, "");            // trailing slash kaldır
+  const simulatorUrl = `${baseUrl}/simulator/index.html`;
+
+  return (
+    <View style={styles.container}>
+      <Card style={styles.headerCard}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>DEMA Terapi Simülatörü</Text>
+            <Text style={styles.muted}>
+              Manyetik alan etkileşimlerini canlı olarak izleyebilirsiniz.
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.refreshBtn} onPress={() => setKey(k => k + 1)}>
+            <RefreshCcw color={colors.textMuted} size={18} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.urlText}>{simulatorUrl}</Text>
+      </Card>
+      
+      <View style={[styles.simulatorContainer, { height: webHeight }]}>
+        {Platform.OS === "web" ? (
+          <iframe 
+            key={key}
+            src={simulatorUrl} 
+            style={{ width: "100%", height: "100%", border: "none", borderRadius: 8 }} 
+            title="DEMA Simulator"
+          />
+        ) : (
+          <WebView
+            key={key}
+            source={{ uri: simulatorUrl }}
+            style={styles.webview}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            scalesPageToFit={true}
+            nestedScrollEnabled={true}
+            onMessage={(e) => {
+              const h = parseInt(e.nativeEvent.data, 10);
+              if (!isNaN(h) && h > 240 && h < 12000) setWebHeight(h);
+            }}
+            injectedJavaScriptBeforeContentLoaded={`
+              (function(){
+                // Simülatör Tailwind-responsive (sm:640/md:768). device-width vererek app KENDİ
+                // mobil layout'unu kullanır — width=1024 zorlaması desktop-layout'u küçültüp bozuyordu.
+                var m=document.querySelector('meta[name=viewport]');
+                if(!m){m=document.createElement('meta');m.name='viewport';(document.head||document.documentElement).appendChild(m);}
+                m.setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
+              })(); true;
+            `}
+            injectedJavaScript={`
+              (function(){
+                // Yatay taşmayı (iç içe geçen yazı/kaydırma) kesin engelle.
+                var s=document.createElement('style');
+                s.innerHTML='html,body,#root{overflow-x:hidden!important;max-width:100vw!important}img,canvas,svg{max-width:100%!important;height:auto}';
+                (document.head||document.documentElement).appendChild(s);
+                // İçeriğin TAM yüksekliğini RN'e bildir → WebView içeriğe göre büyür, dış
+                // ScrollView tüm simülatör sayfasını kaydırır (WebView jesti yutup kilitlemez).
+                function postH(){
+                  try {
+                    var h = Math.max(document.body.scrollHeight||0, document.documentElement.scrollHeight||0, document.body.offsetHeight||0);
+                    if (h && window.ReactNativeWebView) window.ReactNativeWebView.postMessage(String(h));
+                  } catch(e){}
+                }
+                window.addEventListener('load', postH);
+                window.addEventListener('resize', postH);
+                [300,800,1500,3000].forEach(function(t){ setTimeout(postH, t); });
+                try { new ResizeObserver(postH).observe(document.body); } catch(e){}
+              })(); true;
+            `}
+            onError={() => {
+              // Hata durumunu WebView kendi içinde handle eder
+            }}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  container: {
+    gap: spacing.lg,
+  },
+  headerCard: {
+    gap: spacing.xs,
+  },
+  title: {
+    color: colors.text,
+    fontSize: typography.title,
+    fontWeight: "800",
+  },
+  muted: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+  },
+  simulatorContainer: {
+    backgroundColor: colors.bgAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+  },
+  refreshBtn: {
+    padding: spacing.sm,
+    backgroundColor: colors.bgAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  urlText: {
+    color: colors.textSubtle,
+    fontSize: 10,
+    fontFamily: "monospace",
+    marginTop: spacing.xs,
+  },
+});
