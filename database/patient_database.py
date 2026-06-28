@@ -33,7 +33,7 @@ except ModuleNotFoundError:
 class PatientDatabase:
     """Hasta veritabani yonetim sinifi."""
 
-    _ENCRYPTED_FIELDS = {"name", "owner", "vet_contact", "species", "breed", "age", "weight"}
+    _ENCRYPTED_FIELDS = {"name", "owner", "vet_contact", "species", "breed", "age", "weight", "owner_email"}
     _SEARCHABLE_FIELDS = ("name", "owner", "species", "breed", "age", "weight")
 
     def __init__(self, db_file: str = "patients.db"):
@@ -87,16 +87,23 @@ class PatientDatabase:
                         weight TEXT,
                         owner TEXT,
                         vet_contact TEXT,
+                        owner_email TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         sync_status INTEGER DEFAULT 0
                     )
                     """
                 )
-                
+
                 # Sürüm güncellemesi (Migration) için sync_status kolonunu ekle
                 try:
                     cursor.execute("ALTER TABLE patients ADD COLUMN sync_status INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass # Kolon zaten var
+
+                # owner_email kolonu (rapor e-postasi) — eski DB'lere idempotent ekle.
+                try:
+                    cursor.execute("ALTER TABLE patients ADD COLUMN owner_email TEXT")
                 except sqlite3.OperationalError:
                     pass # Kolon zaten var
 
@@ -280,8 +287,8 @@ class PatientDatabase:
                     cursor.execute(
                         """
                         INSERT INTO patients
-                        (id, name, species, breed, age, weight, owner, vet_contact, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (id, name, species, breed, age, weight, owner, vet_contact, owner_email, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             patient_id,
@@ -292,6 +299,7 @@ class PatientDatabase:
                             self._encrypt_field(patient_info.get("weight", "")),
                             self._encrypt_field(patient_info.get("owner", "")),
                             self._encrypt_field(patient_info.get("vet_contact", "")),
+                            self._encrypt_field(patient_info.get("owner_email", "")),
                             now,
                             now,
                         ),

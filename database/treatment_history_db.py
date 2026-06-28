@@ -568,6 +568,7 @@ class TreatmentHistoryDB:
                         age TEXT,
                         weight_kg REAL,
                         owner_name TEXT,
+                        owner_email TEXT,
                         vet_contact TEXT,
                         veteriner TEXT,
                         notes TEXT,
@@ -625,6 +626,13 @@ class TreatmentHistoryDB:
                 try:
                     cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN ended_epoch REAL')
                     self.logger.info("treatment_sessions.ended_epoch sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+
+                # patients.owner_email (rapor e-postasi) — eski DB'lere idempotent ekle.
+                try:
+                    cursor.execute('ALTER TABLE patients ADD COLUMN owner_email TEXT')
+                    self.logger.info("patients.owner_email sütunu eklendi")
                 except _DB_OPERATIONAL:
                     pass
 
@@ -1215,7 +1223,8 @@ class TreatmentHistoryDB:
                            sp_owner.parameter_value as patient_owner,
                            sp_vet.parameter_value as patient_vet_contact,
                            sp_veteriner.parameter_value as patient_veteriner,
-                           sp_duration.parameter_value as treatment_duration
+                           sp_duration.parameter_value as treatment_duration,
+                           COALESCE(NULLIF(sp_owner_email.parameter_value, ''), pt.owner_email) as owner_email
                     FROM treatment_sessions ts
                     LEFT JOIN session_parameters sp_name ON ts.id = sp_name.session_id AND sp_name.parameter_name = 'patient_name'
                     LEFT JOIN session_parameters sp_surname ON ts.id = sp_surname.session_id AND sp_surname.parameter_name = 'patient_surname'
@@ -1227,6 +1236,8 @@ class TreatmentHistoryDB:
                     LEFT JOIN session_parameters sp_vet ON ts.id = sp_vet.session_id AND sp_vet.parameter_name = 'patient_vet_contact'
                     LEFT JOIN session_parameters sp_veteriner ON ts.id = sp_veteriner.session_id AND sp_veteriner.parameter_name = 'patient_veteriner'
                     LEFT JOIN session_parameters sp_duration ON ts.id = sp_duration.session_id AND sp_duration.parameter_name = 'duration'
+                    LEFT JOIN session_parameters sp_owner_email ON ts.id = sp_owner_email.session_id AND sp_owner_email.parameter_name = 'patient_owner_email'
+                    LEFT JOIN patients pt ON ts.patient_id = pt.id
                     WHERE 1=1
                 '''
                 params = []
@@ -1418,6 +1429,7 @@ class TreatmentHistoryDB:
                 patient_age = ""
                 patient_weight = ""
                 owner_name = ""
+                owner_email = ""
                 veteriner_name = ""
                 patient_name = "Bilinmiyor"
                 
@@ -1435,6 +1447,8 @@ class TreatmentHistoryDB:
                     patient_weight = str(weight_val) if weight_val else ''
                     
                     owner_name = info_dict.get('owner', '')
+                    # Sahip e-postasi (rapor gonderimi icin) — varsa kaydet.
+                    owner_email = info_dict.get('owner_email', '') or ''
                     # Veteriner bilgisi için hem 'veteriner' hem 'vet_contact' kontrol et
                     veteriner_name = info_dict.get('veteriner', '') or info_dict.get('vet_contact', '')
                 
@@ -1516,6 +1530,7 @@ class TreatmentHistoryDB:
                     ('patient_age', patient_age, ''),
                     ('patient_weight', patient_weight, 'kg'),
                     ('patient_owner', owner_name, ''),
+                    ('patient_owner_email', owner_email, ''),
                     ('patient_veteriner', veteriner_name, ''),
                 ]
                 
@@ -1912,6 +1927,7 @@ class TreatmentHistoryDB:
                             age = ?,
                             weight_kg = ?,
                             owner_name = ?,
+                            owner_email = COALESCE(?, owner_email),
                             vet_contact = ?,
                             veteriner = ?,
                             notes = ?,
@@ -1926,6 +1942,7 @@ class TreatmentHistoryDB:
                         patient.get('age'),
                         patient.get('weight_kg'),
                         owner_name,
+                        (patient.get('owner_email') or None),
                         patient.get('vet_contact'),
                         patient.get('veteriner'),
                         patient.get('notes'),
@@ -1938,8 +1955,8 @@ class TreatmentHistoryDB:
                 cursor.execute('''
                     INSERT INTO patients
                     (patient_uuid, name, species, breed, age, weight_kg, owner_name,
-                     vet_contact, veteriner, notes, updated_at, sync_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                     owner_email, vet_contact, veteriner, notes, updated_at, sync_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 ''', (
                     patient_uuid,
                     name,
@@ -1948,6 +1965,7 @@ class TreatmentHistoryDB:
                     patient.get('age'),
                     patient.get('weight_kg'),
                     owner_name,
+                    (patient.get('owner_email') or None),
                     patient.get('vet_contact'),
                     patient.get('veteriner'),
                     patient.get('notes'),
@@ -2071,6 +2089,33 @@ class TreatmentHistoryDB:
                 conn.commit()
         except Exception as e:
             self.logger.error(f"set_session_meta hatası: {e}")
+
+    def set_session_parameter(self, session_id, parameter_name: str,
+                              parameter_value: str, parameter_unit: str = '') -> None:
+        """Seansa tek bir parametre yaz (varsa GUNCELLE, yoksa EKLE) — idempotent.
+        React seans-akisinda hasta meta-parametrelerini (orn. patient_owner_email)
+        kaydetmek icin. Best-effort: hata seansi/donanimi DURDURMAZ."""
+        try:
+            self._ensure_write_guardrail()
+            if not session_id or not parameter_name:
+                return
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE session_parameters SET parameter_value = ?, parameter_unit = ? '
+                    'WHERE session_id = ? AND parameter_name = ?',
+                    (str(parameter_value), parameter_unit, int(session_id), parameter_name)
+                )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        'INSERT INTO session_parameters '
+                        '(session_id, parameter_name, parameter_value, parameter_unit) '
+                        'VALUES (?, ?, ?, ?)',
+                        (int(session_id), parameter_name, str(parameter_value), parameter_unit)
+                    )
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"set_session_parameter hatası: {e}")
 
     def get_session_coil_runs(self, session_id: int) -> List[Dict]:
         """Bir seansa ait bobin calismalarini rapor icin getir

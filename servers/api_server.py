@@ -679,6 +679,7 @@ class PatientInput(BaseModel):
     weight: str = ""
     owner: str = ""
     vet_contact: str = ""
+    owner_email: str = ""  # hasta sahibinin e-postasi (rapor gonderimi icin)
 
 class AutoPresetPayload(BaseModel):
     target_condition: str
@@ -811,6 +812,24 @@ def _get_treatment_db():
     except Exception:
         logging.getLogger(__name__).debug("Treatment DB erisilemedi", exc_info=True)
         return None
+
+
+def _lookup_owner_email(patient_uuid: str) -> str:
+    """Hasta sahibinin e-postasini PatientDatabase'ten (UUID ile) getir. Bulunamazsa ''.
+    Best-effort: hata seansi DURDURMAZ. ('raporu sahibe e-posta gonder' icin owner_email zinciri.)"""
+    if not patient_uuid:
+        return ""
+    try:
+        pdb = get_patient_database()
+        if not pdb:
+            return ""
+        p = pdb.get_patient(patient_uuid)
+        if not p:
+            return ""
+        return (p.get("owner_email") or "").strip()
+    except Exception:
+        logging.getLogger(__name__).debug("_lookup_owner_email hatasi", exc_info=True)
+        return ""
 
 
 def _coil_hw_type(coil_id):
@@ -1179,6 +1198,10 @@ async def start_session(payload: SessionStartPayload):
         logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
 
     # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
+    # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
+    # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
+    owner_email = _lookup_owner_email(payload.patient_id)
+
     # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
     try:
         db = _get_treatment_db()
@@ -1189,6 +1212,7 @@ async def start_session(payload: SessionStartPayload):
                     patient_id = db.upsert_patient({
                         "name": payload.patient_name,
                         "patient_uuid": (payload.patient_id or None),
+                        "owner_email": (owner_email or None),
                     })
                 except Exception:
                     logging.getLogger(__name__).debug("upsert_patient hatasi", exc_info=True)
@@ -1208,6 +1232,12 @@ async def start_session(payload: SessionStartPayload):
                 db.set_session_meta(sid, started_epoch=_active_session.get("started_epoch"), patient_id=patient_id)
             except Exception:
                 logging.getLogger(__name__).debug("set_session_meta(start) hatasi", exc_info=True)
+            # Sahip e-postasini seans-parametresi olarak yaz (history JOIN'i bunu okur).
+            if owner_email:
+                try:
+                    db.set_session_parameter(sid, "patient_owner_email", owner_email, "")
+                except Exception:
+                    logging.getLogger(__name__).debug("set_session_parameter(owner_email) hatasi", exc_info=True)
     except Exception:
         logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
 
