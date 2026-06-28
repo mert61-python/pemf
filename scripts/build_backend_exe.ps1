@@ -15,7 +15,8 @@
 param(
     [string]$Python    = "",
     [string]$BuildRoot = "C:\PEMF_BUILD",
-    [switch]$SkipGuard
+    [switch]$SkipGuard,
+    [switch]$SkipWeb
 )
 $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[build] $m" -ForegroundColor Cyan }
@@ -56,6 +57,85 @@ if ($LASTEXITCODE -ne 0) {
     Info "PyInstaller yok, kuruluyor (küçük)..."
     & $PY -m pip install pyinstaller
     if ($LASTEXITCODE -ne 0) { Die "PyInstaller kurulamadı." }
+}
+
+# --- 4.5. React (Expo) WEB EXPORT — backend EXE'sinin sunacağı web UI'yi TAZE üret ---
+# Spec (PEMF_Backend_onedir.spec:138-141) frontend\dist'i _internal\frontend\dist'e bundle'lar
+# ve FastAPI '/' kökünden serve eder. build_installer.ps1 OLMADAN bu script ile build edilince
+# web export TAZE üretilmezse EXE eski/eksik web içerir → STM takip web'de açılmaz (sessiz bug).
+# Bu adım, build_installer.ps1'deki 'React Frontend Web Export' bölümünü (out: frontend\dist) REPLİKE eder.
+$FrontendDir = Join-Path $GuiRoot "frontend"
+if ($SkipWeb) {
+    $FrontendIndex = Join-Path $FrontendDir "dist\index.html"
+    if (-not (Test-Path $FrontendIndex)) {
+        Die "-SkipWeb verildi ama mevcut web export yok ($FrontendIndex). Önce -SkipWeb'siz çalıştırın."
+    }
+    Info "Web export ATLANDI (-SkipWeb) — mevcut frontend\dist kullanılacak."
+} else {
+    Info "React (Expo) web export üretiliyor (backend bunu localhost:8000'de sunacak)..."
+    if (-not (Test-Path $FrontendDir)) { Die "frontend\ klasörü bulunamadı: $FrontendDir" }
+
+    # npm / npx zorunlu (web build edilemezse GÜR-sesle fail)
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) { Die "npm bulunamadı. React web export için Node.js/npm gerekli (web zorunlu)." }
+    $npxCmd = Get-Command npx -ErrorAction SilentlyContinue
+    if (-not $npxCmd) { Die "npx bulunamadı. Expo web export için npx gerekli (web zorunlu)." }
+
+    Push-Location $FrontendDir
+    try {
+        # Idempotent: eski dist'i temizle ki bayat dosya kalmasın
+        $FrontendDistDir = Join-Path $FrontendDir "dist"
+        if (Test-Path $FrontendDistDir) {
+            Info "Eski frontend\dist temizleniyor..."
+            Remove-Item $FrontendDistDir -Recurse -Force
+        }
+
+        # Bağımlılık kurulumu (build_installer.ps1 ile aynı: ci varsa ci, yoksa install)
+        if (Test-Path "package-lock.json") {
+            Info "Frontend bağımlılıkları yükleniyor (npm ci --legacy-peer-deps)..."
+            & npm ci --legacy-peer-deps
+        } else {
+            Info "package-lock.json yok; npm install --legacy-peer-deps kullanılıyor."
+            & npm install --legacy-peer-deps
+        }
+        if ($LASTEXITCODE -ne 0) { Die "Frontend npm bağımlılık kurulumu başarısız!" }
+
+        Info "Typecheck çalıştırılıyor (npm run typecheck)..."
+        & npm run typecheck
+        if ($LASTEXITCODE -ne 0) { Die "npm run typecheck başarısız! (TypeScript hatalarını düzeltin)" }
+
+        Info "Expo web export alınıyor (npx expo export --platform web)..."
+        $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
+        & npx expo export --platform web
+        if ($LASTEXITCODE -ne 0) { Die "Expo web export başarısız!" }
+    } finally {
+        Pop-Location
+    }
+
+    # DOĞRULAMA: spec'in topladığı tam yol (frontend\dist) üretilmiş mi?
+    $FrontendIndex = Join-Path $FrontendDir "dist\index.html"
+    if (-not (Test-Path $FrontendIndex)) {
+        Die "frontend\dist\index.html üretilemedi! React web export hatalı."
+    }
+    $FrontendJsDir = Join-Path $FrontendDir "dist\_expo\static\js\web"
+    $FrontendJsFiles = @()
+    if (Test-Path $FrontendJsDir) {
+        $FrontendJsFiles = Get-ChildItem $FrontendJsDir -Filter "*.js" -File -ErrorAction SilentlyContinue
+    }
+    if ($FrontendJsFiles.Count -eq 0) {
+        Die "frontend\dist\_expo\static\js\web altında JS bundle yok! React export eksik."
+    }
+
+    # version.json (build_installer.ps1 ile parite) — VERSION dosyasından
+    $VersionFile = Join-Path $GuiRoot "VERSION"
+    $AppVersion = if (Test-Path $VersionFile) { (Get-Content -Path $VersionFile -Raw).Trim() } else { "0.0.0" }
+    $FrontendVersionJson = @{
+        version = $AppVersion
+        builtAt = (Get-Date).ToString("o")
+    } | ConvertTo-Json
+    Set-Content -Path (Join-Path $FrontendDir "dist\version.json") -Value $FrontendVersionJson -Encoding UTF8
+
+    Info "Web export tamamlandı ve doğrulandı → frontend\dist (sürüm $AppVersion)."
 }
 
 # --- 5. Build — KISA yola (260-karakter sınırı) ---
