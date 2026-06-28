@@ -247,7 +247,7 @@ class CloudSyncWorker:
             from datetime import datetime, timezone
             from servers.tunnel_manager import get_tunnel_url
             from servers.auto_discovery import _get_local_ip
-            from utils.path_utils import get_unique_device_id
+            from utils.path_utils import get_unique_device_id, get_pairing_code
 
             payload = {
                 "device_id": get_unique_device_id(),
@@ -255,12 +255,38 @@ class CloudSyncWorker:
                 "tunnel_url": get_tunnel_url() or None,
                 "local_ip": _get_local_ip(),
                 "api_port": 8000,
+                "pairing_code": get_pairing_code(),
                 "last_seen": datetime.now(timezone.utc).isoformat(),
             }
-            self.client.table("devices").upsert(payload, on_conflict="device_id").execute()
+            try:
+                # GUVENLI YOL: SECURITY DEFINER 'upsert_device' RPC ile yaz. RLS'i guvenli
+                # sekilde asar → anon'a DOGRUDAN tablo INSERT/UPDATE vermeye gerek yok
+                # (cross-tenant dump + tunnel poisoning yuzeyi daralir). Kullanici RPC SQL'ini
+                # calistirdiysa bu yol calisir; degilse asagidaki eski tablo-upsert'e duser.
+                self.client.rpc("upsert_device", {
+                    "p_device_id": payload["device_id"],
+                    "p_name": payload["name"],
+                    "p_tunnel_url": payload["tunnel_url"],
+                    "p_local_ip": payload["local_ip"],
+                    "p_api_port": payload["api_port"],
+                    "p_pairing_code": payload["pairing_code"],
+                }).execute()
+            except Exception as rpc_err:
+                # RPC henuz deploy edilmemisse (eski sema) -> eski dogrudan tablo upsert.
+                try:
+                    self.client.table("devices").upsert(payload, on_conflict="device_id").execute()
+                except Exception as inner:
+                    # pairing_code SUTUNU yoksa kodsuz upsert ile devam et (geriye uyum).
+                    if "pairing_code" in str(inner):
+                        fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
+                        self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
+                        logger.debug("Device registry: pairing_code sutunu yok, kodsuz publish yapildi.")
+                    else:
+                        raise
         except Exception as e:
-            # Tablo yoksa / RLS izin vermiyorsa sessizce gec (sync'i bozma).
-            logger.debug(f"Device registry publish skipped: {e}")
+            # Yazilamadi (tablo yok / RLS / RPC yok). Sync'i bozma ama GORUNUR logla
+            # (eskiden DEBUG'ta sessizce yutuluyordu → registry'nin neden bos kaldigi gizleniyordu).
+            logger.warning(f"Device registry publish BASARISIZ: {e}")
 
 
 # Global instance for easy access

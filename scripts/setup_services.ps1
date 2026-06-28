@@ -9,6 +9,8 @@
 # =============================================================================
 param(
     [string]$AppDir = "",
+    [ValidateSet("device","server")]
+    [string]$Mode = "device",   # device=klinik (donanım+mosquitto) / server=demo (simülasyon, mosquitto YOK)
     [switch]$Uninstall
 )
 $ErrorActionPreference = "Continue"   # installer akışını tek bir hata kesmesin
@@ -53,8 +55,11 @@ if ($Uninstall) {
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
-# ───────────────────── 1. MOSQUITTO SERVİSİ ─────────────────────
-if (Test-Path (Join-Path $MosqSrc "mosquitto.exe")) {
+# ───────────────────── 1. MOSQUITTO SERVİSİ (yalnız KLİNİK) ─────────────────────
+# Sunucu (server) modunda donanım yok → MQTT broker GEREKMEZ, kurulmaz.
+if ($Mode -eq "server") {
+    Log "Sunucu modu: Mosquitto/MQTT atlandı (donanım yok)." "Gray"
+} elseif (Test-Path (Join-Path $MosqSrc "mosquitto.exe")) {
     Log "Mosquitto servisi kuruluyor (bundled → $MosqInstallDir)..." "Yellow"
     New-Item -ItemType Directory -Path $MosqInstallDir, "$MosqDataRoot\data", "$MosqDataRoot\log", "$MosqDataRoot\conf.d" -Force | Out-Null
 
@@ -90,7 +95,11 @@ include_dir $($MosqDataRoot -replace '\\','/')/conf.d
     Set-Service -Name $ServiceMosq -StartupType Automatic
     sc.exe failure $ServiceMosq reset= 86400 actions= restart/5000/restart/5000/restart/10000 | Out-Null
     if (-not (Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -Action Allow -Profile Any | Out-Null
+        # P0-3 (GÜVENLİK): Broker'a 1883 yalnız HOTSPOT subnet'inden (ESP bobin 6-8, 192.168.137.x)
+        # erişilebilsin; klinik LAN'ından KAPALI. ESP firmware'i broker'a ANON bağlandığından
+        # (BLE provisioner kimlik göndermiyor) auth açılamaz → savunma: hotspot WPA2 + bu subnet
+        # kısıtı. Loopback (127.0.0.1) firewall'dan muaftır → backend localhost bağlantısı çalışır.
+        New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any | Out-Null
     }
     Start-Service $ServiceMosq -ErrorAction SilentlyContinue
     Log "Mosquitto servisi hazır." "Green"
@@ -125,7 +134,9 @@ if (Get-Service -Name $ServiceBackend -ErrorAction SilentlyContinue) {
     Start-Sleep 2
 }
 # Mosquitto kendi servisi olduğu için backend onu başlatmaz, sadece izler.
-& $NssmExe install $ServiceBackend $BackendExe "--host" "0.0.0.0" "--port" "8000" "--no-mosquitto-ensure"
+# host/port deploy\<Mode>.env'den (PEMF_API_HOST/PEMF_API_PORT) okunur; CLI'da SABİTLENMEZ
+# → server modunda 127.0.0.1 (yalnız reverse-proxy arkası), device modunda 0.0.0.0 (LAN).
+& $NssmExe install $ServiceBackend $BackendExe "--no-mosquitto-ensure"
 & $NssmExe set $ServiceBackend AppDirectory        $AppDir
 & $NssmExe set $ServiceBackend DisplayName         "PEMF Backend Service"
 & $NssmExe set $ServiceBackend Description          "Headless PEMF backend: FastAPI, WebSocket, STM32, MQTT, React Web."
@@ -139,7 +150,28 @@ if (Get-Service -Name $ServiceBackend -ErrorAction SilentlyContinue) {
 & $NssmExe set $ServiceBackend AppRestartDelay      5000
 & $NssmExe set $ServiceBackend AppStopMethodConsole 15000
 & $NssmExe set $ServiceBackend AppThrottle          5000
-& $NssmExe set $ServiceBackend AppEnvironmentExtra  "PYTHONUNBUFFERED=1" "PEMF_HEADLESS=1" "PEMF_LOG_DIR=$LogDir"
+# Dağıtım profili env'leri: deploy\<Mode>.env (device=klinik / server=demo). Bulunamazsa
+# yalnız temel env yazılır. Profil değerleri temel değerleri override eder (aynı KEY → profil).
+$EnvMap = [ordered]@{ "PYTHONUNBUFFERED" = "1"; "PEMF_HEADLESS" = "1"; "PEMF_LOG_DIR" = $LogDir }
+$EnvFile = @(
+    (Join-Path $AppDir "_internal\deploy\$Mode.env"),
+    (Join-Path $AppDir "deploy\$Mode.env"),
+    (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\deploy\$Mode.env")
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($EnvFile) {
+    Log "Profil yükleniyor ($Mode): $EnvFile" "Cyan"
+    foreach ($ln in (Get-Content $EnvFile)) {
+        $t = $ln.Trim()
+        if ($t -and -not $t.StartsWith("#") -and $t.Contains("=")) {
+            $k, $v = $t.Split("=", 2); $EnvMap[$k.Trim()] = $v.Trim()
+        }
+    }
+} else {
+    Log "UYARI: deploy\$Mode.env bulunamadı; yalnız temel env yazıldı." "Yellow"
+}
+$AppEnv = @($EnvMap.Keys | ForEach-Object { "$_=$($EnvMap[$_])" })
+& $NssmExe set $ServiceBackend AppEnvironmentExtra @AppEnv
+Log ("Env (" + $Mode + "): " + ($AppEnv -join '  ')) "Gray"
 
 if (Get-Service -Name $ServiceMosq -ErrorAction SilentlyContinue) {
     sc.exe config $ServiceBackend depend= mosquitto | Out-Null

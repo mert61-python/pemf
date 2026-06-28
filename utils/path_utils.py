@@ -44,9 +44,78 @@ def get_app_data_directory():
     return app_data_dir
 
 def get_unique_device_id():
-    """Her bilgisayar için benzersiz bir ID üretir (MAC adresinden)"""
-    # Bu ID, uzaktan izleme yaparken hangi verinin kimden geldiğini anlamanızı sağlar.
-    return str(uuid.getnode())
+    """Her bilgisayar için KALICI benzersiz ID.
+
+    uuid.getnode() bazı makinelerde KARARSIZ: gerçek MAC okunamazsa rastgele bir değer
+    döner ve restart'ta DEĞİŞİR → device_id sürekli değişirse uzaktan eşleşme bozulur
+    (FE'nin sakladığı kimlik bayatlar, devices registry'sinde çöp satırlar birikir).
+    Bu yüzden device_id'yi BİR KEZ üretip app_data/device_id.txt'de saklarız; sonraki
+    açılışlarda hep aynısını döndürür. (FE bu ID'yi /api/health'ten alıp eşleşme için saklar.)"""
+    id_path = None
+    try:
+        id_path = get_app_data_directory() / "device_id.txt"
+        if id_path.exists():
+            existing = id_path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except Exception:
+        pass
+    new_id = str(uuid.getnode())
+    try:
+        if id_path is not None:
+            id_path.write_text(new_id, encoding="utf-8")
+    except Exception:
+        pass
+    return new_id
+
+# Eşleştirme kodu için kullanılan karakter kümesi:
+# A-Z + 2-9 ama BELİRSİZ olanlar HARİÇ (0, O, 1, I, L → karışmasın).
+_PAIRING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_PAIRING_CODE_LENGTH = 6
+
+def get_pairing_code():
+    """Bu cihaza ait KALICI 6 haneli eşleştirme kodunu döndürür.
+
+    Mobil uygulama, cihazı bu kod ile eşleştirir. Kod ilk çağrıda BİR KEZ
+    üretilir (secrets modülü → kriptografik) ve app_data/pairing_code.txt
+    dosyasına yazılır; sonraki tüm çağrılarda hep aynı dosyadan okunur.
+    Karakterler büyük harf, belirsiz olanlar (0,O,1,I,L) hariç tutulur.
+    """
+    import secrets
+
+    code_path = get_app_data_directory() / "pairing_code.txt"
+
+    # Rotasyon kancası: PEMF_RESET_PAIRING_CODE=1 ise mevcut kodu sil → bir sonraki
+    # satırda yeniden üretilsin (kod sızdıysa/operatör yenilemek isterse).
+    if os.getenv("PEMF_RESET_PAIRING_CODE") == "1":
+        try:
+            code_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Daha önce üretildiyse onu oku (kalıcılık).
+    try:
+        if code_path.exists():
+            existing = code_path.read_text(encoding="utf-8").strip().upper()
+            # Yalnızca geçerli (doğru uzunluk + alfabe) ise kabul et; bozuksa yeniden üret.
+            if (
+                len(existing) == _PAIRING_CODE_LENGTH
+                and all(ch in _PAIRING_CODE_ALPHABET for ch in existing)
+            ):
+                return existing
+    except Exception:
+        pass
+
+    # İlk kez: kriptografik olarak güvenli yeni kod üret ve kalıcı yaz.
+    code = "".join(
+        secrets.choice(_PAIRING_CODE_ALPHABET) for _ in range(_PAIRING_CODE_LENGTH)
+    )
+    try:
+        code_path.write_text(code, encoding="utf-8")
+    except Exception:
+        # Yazılamasa bile (ör. salt-okunur FS) çalışma zamanı kodunu döndür.
+        pass
+    return code
 
 def initialize_database():
     """

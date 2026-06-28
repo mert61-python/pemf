@@ -555,7 +555,122 @@ class TreatmentHistoryDB:
                     CREATE INDEX IF NOT EXISTS idx_treatment_sessions_uuid
                     ON treatment_sessions(session_uuid)
                 ''')
-                
+
+                # === VETERINER YEREL KATMAN GENISLETMESI (geriye uyumlu, idempotent) ===
+                # Hasta (patient) kayit defteri — cloud sync icin sync_status ile.
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS patients (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        patient_uuid TEXT UNIQUE,
+                        name TEXT NOT NULL,
+                        species TEXT,
+                        breed TEXT,
+                        age TEXT,
+                        weight_kg REAL,
+                        owner_name TEXT,
+                        vet_contact TEXT,
+                        veteriner TEXT,
+                        notes TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT,
+                        sync_status INTEGER DEFAULT 0
+                    )
+                ''')
+
+                # Bobin calismalari — "hangi bobin, hangi parametreyle, saat kacta
+                # basladi/durdu, ne kadar surdu" sorusunu cevaplar.
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS session_coil_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id INTEGER,
+                        coil_id INTEGER NOT NULL,
+                        started_epoch REAL NOT NULL,
+                        ended_epoch REAL,
+                        duration_seconds REAL,
+                        frequency_hz REAL,
+                        duty_percent REAL,
+                        phase REAL,
+                        intensity_mt REAL,
+                        hw_type TEXT,
+                        created_at REAL NOT NULL
+                    )
+                ''')
+
+                # Bobin calismasi basina sensor ozet istatistigi (1-1, coil_run_id UNIQUE).
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS sensor_run_summary (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        coil_run_id INTEGER UNIQUE,
+                        sample_count INTEGER,
+                        temp_min REAL,
+                        temp_max REAL,
+                        temp_avg REAL,
+                        current_avg REAL,
+                        field_avg REAL,
+                        created_at REAL NOT NULL
+                    )
+                ''')
+
+                # treatment_sessions yeni kolonlari (her biri ayri try/except, nullable).
+                try:
+                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN patient_id INTEGER')
+                    self.logger.info("treatment_sessions.patient_id sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN started_epoch REAL')
+                    self.logger.info("treatment_sessions.started_epoch sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN ended_epoch REAL')
+                    self.logger.info("treatment_sessions.ended_epoch sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+
+                # sensor_samples yeni kolonlari (her biri ayri try/except, nullable).
+                # SEMANTIK NOT: sensor_samples artik DAKIKA-ORTALAMASI tutabilir;
+                # sample_count = ortalamaya giren ham okuma sayisi. Sema ayni kalir,
+                # mevcut satirlar (ham okuma) icin bu kolonlar NULL kalir — geriye uyumlu.
+                try:
+                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN coil_run_id INTEGER')
+                    self.logger.info("sensor_samples.coil_run_id sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN ambient_temp_c REAL')
+                    self.logger.info("sensor_samples.ambient_temp_c sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN phase REAL')
+                    self.logger.info("sensor_samples.phase sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN sample_count INTEGER')
+                    self.logger.info("sensor_samples.sample_count sütunu eklendi")
+                except _DB_OPERATIONAL:
+                    pass
+
+                # Yeni tablolar icin indeksler (mevcut idx'lere dokunulmadi).
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_coil_runs_session
+                    ON session_coil_runs(session_id, started_epoch)
+                ''')
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_coil_runs_coil
+                    ON session_coil_runs(coil_id, started_epoch)
+                ''')
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_sensor_run_summary
+                    ON sensor_run_summary(coil_run_id)
+                ''')
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_patients_name
+                    ON patients(name)
+                ''')
+
                 conn.commit()
                 self.logger.info(f"Veritabanı başarıyla başlatıldı: {self.db_path}")
                 
@@ -1694,7 +1809,14 @@ class TreatmentHistoryDB:
             self.logger.warning(f"Pending outbox temizleme uyarısı: {e}")
 
     def add_sensor_samples_batch(self, session_id: int, samples: List[Dict]) -> int:
-        """Aktif seans için sensör örneklerini batch olarak kaydet."""
+        """Aktif seans için sensör örneklerini batch olarak kaydet.
+
+        Geriye uyumlu genisletme: her ornek dict'i opsiyonel olarak coil_run_id,
+        ambient_temp_c, phase, sample_count alanlarini icerebilir; verilmezse NULL
+        yazilir. Mevcut cagiranlar (sadece eski alanlari veren) bozulmaz.
+        sensor_samples artik dakika-ortalamasi tutabilir; sample_count = ortalamaya
+        giren ham okuma sayisi.
+        """
         if not samples:
             return 0
 
@@ -1713,7 +1835,11 @@ class TreatmentHistoryDB:
                     sample.get('pwm_frequency_hz'),
                     sample.get('pwm_duty_percent'),
                     json.dumps(sample.get('payload', {}), ensure_ascii=True),
-                    now_ts
+                    now_ts,
+                    sample.get('coil_run_id'),
+                    sample.get('ambient_temp_c'),
+                    sample.get('phase'),
+                    sample.get('sample_count')
                 ))
 
             with self._get_connection() as conn:
@@ -1721,14 +1847,306 @@ class TreatmentHistoryDB:
                 cursor.executemany('''
                     INSERT INTO sensor_samples
                     (session_id, coil_id, sample_ts, temperature_c, magnetic_field_mt,
-                     current_a, pwm_frequency_hz, pwm_duty_percent, payload, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     current_a, pwm_frequency_hz, pwm_duty_percent, payload, created_at,
+                     coil_run_id, ambient_temp_c, phase, sample_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', rows)
                 conn.commit()
                 return len(rows)
         except Exception as e:
             self.logger.error(f"Sensor sample batch kaydetme hatası: {e}")
             return 0
+
+    def upsert_patient(self, patient: Dict) -> Optional[int]:
+        """Hasta kaydini ekle/guncelle. patient_uuid varsa ona gore, yoksa
+        name (+owner_name) ile eslestir; varsa UPDATE, yoksa INSERT eder.
+        Geri donus: patient_id (int) veya hata halinde None."""
+        try:
+            self._ensure_write_guardrail()
+            name = patient.get('name')
+            if not name:
+                self.logger.warning("upsert_patient: 'name' zorunlu, atlandi")
+                return None
+
+            patient_uuid = patient.get('patient_uuid')
+            owner_name = patient.get('owner_name')
+            now_iso = datetime.now().isoformat(sep=' ', timespec='seconds')
+
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+
+                existing_id = None
+                if patient_uuid:
+                    cursor.execute(
+                        'SELECT id FROM patients WHERE patient_uuid = ?',
+                        (patient_uuid,)
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        existing_id = int(row['id'])
+                else:
+                    # name (+ owner_name) ile eslestir
+                    if owner_name is not None:
+                        cursor.execute(
+                            'SELECT id FROM patients WHERE name = ? AND IFNULL(owner_name, "") = ? '
+                            'ORDER BY id LIMIT 1',
+                            (name, owner_name)
+                        )
+                    else:
+                        cursor.execute(
+                            'SELECT id FROM patients WHERE name = ? AND owner_name IS NULL '
+                            'ORDER BY id LIMIT 1',
+                            (name,)
+                        )
+                    row = cursor.fetchone()
+                    if row:
+                        existing_id = int(row['id'])
+
+                if existing_id is not None:
+                    cursor.execute('''
+                        UPDATE patients SET
+                            patient_uuid = COALESCE(?, patient_uuid),
+                            name = ?,
+                            species = ?,
+                            breed = ?,
+                            age = ?,
+                            weight_kg = ?,
+                            owner_name = ?,
+                            vet_contact = ?,
+                            veteriner = ?,
+                            notes = ?,
+                            updated_at = ?,
+                            sync_status = 0
+                        WHERE id = ?
+                    ''', (
+                        patient_uuid,
+                        name,
+                        patient.get('species'),
+                        patient.get('breed'),
+                        patient.get('age'),
+                        patient.get('weight_kg'),
+                        owner_name,
+                        patient.get('vet_contact'),
+                        patient.get('veteriner'),
+                        patient.get('notes'),
+                        now_iso,
+                        existing_id
+                    ))
+                    conn.commit()
+                    return existing_id
+
+                cursor.execute('''
+                    INSERT INTO patients
+                    (patient_uuid, name, species, breed, age, weight_kg, owner_name,
+                     vet_contact, veteriner, notes, updated_at, sync_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                ''', (
+                    patient_uuid,
+                    name,
+                    patient.get('species'),
+                    patient.get('breed'),
+                    patient.get('age'),
+                    patient.get('weight_kg'),
+                    owner_name,
+                    patient.get('vet_contact'),
+                    patient.get('veteriner'),
+                    patient.get('notes'),
+                    now_iso
+                ))
+                conn.commit()
+                return cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"Hasta upsert hatası: {e}")
+            return None
+
+    def start_coil_run(self, session_id: Optional[int], coil_id: int, *,
+                       frequency_hz: Optional[float] = None,
+                       duty_percent: Optional[float] = None,
+                       phase: Optional[float] = None,
+                       intensity_mt: Optional[float] = None,
+                       hw_type: Optional[str] = None,
+                       started_epoch: float) -> Optional[int]:
+        """Bir bobinin calismaya basladigini kaydet. created_at=started_epoch.
+        Geri donus: run_id (int) veya hata halinde None."""
+        try:
+            self._ensure_write_guardrail()
+            started = float(started_epoch)
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO session_coil_runs
+                    (session_id, coil_id, started_epoch, ended_epoch, duration_seconds,
+                     frequency_hz, duty_percent, phase, intensity_mt, hw_type, created_at)
+                    VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    session_id,
+                    int(coil_id),
+                    started,
+                    frequency_hz,
+                    duty_percent,
+                    phase,
+                    intensity_mt,
+                    hw_type,
+                    started
+                ))
+                conn.commit()
+                return cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"Coil run baslatma hatası: {e}")
+            return None
+
+    def end_coil_run(self, run_id: int, ended_epoch: float) -> None:
+        """Bobin calismasini bitir; duration_seconds = ended_epoch - started_epoch
+        (started_epoch satirdan okunur)."""
+        try:
+            self._ensure_write_guardrail()
+            ended = float(ended_epoch)
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT started_epoch FROM session_coil_runs WHERE id = ?',
+                    (int(run_id),)
+                )
+                row = cursor.fetchone()
+                if not row or row['started_epoch'] is None:
+                    self.logger.warning(f"end_coil_run: run_id {run_id} bulunamadi/started_epoch yok")
+                    return
+                started = float(row['started_epoch'])
+                cursor.execute('''
+                    UPDATE session_coil_runs
+                    SET ended_epoch = ?, duration_seconds = ?
+                    WHERE id = ?
+                ''', (ended, ended - started, int(run_id)))
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"Coil run bitirme hatası: {e}")
+
+    def add_sensor_run_summary(self, coil_run_id: int, *, sample_count=None,
+                               temp_min=None, temp_max=None, temp_avg=None,
+                               current_avg=None, field_avg=None) -> None:
+        """Bir bobin calismasinin sensor ozet istatistigini kaydet.
+        coil_run_id UNIQUE oldugu icin INSERT OR REPLACE kullanilir (yeniden hesapta uzerine yazar)."""
+        try:
+            self._ensure_write_guardrail()
+            now_ts = datetime.now().timestamp()
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO sensor_run_summary
+                    (coil_run_id, sample_count, temp_min, temp_max, temp_avg,
+                     current_avg, field_avg, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    int(coil_run_id),
+                    sample_count,
+                    temp_min,
+                    temp_max,
+                    temp_avg,
+                    current_avg,
+                    field_avg,
+                    now_ts
+                ))
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"Sensor run summary kaydetme hatası: {e}")
+
+    def set_session_meta(self, session_id, *, started_epoch=None, ended_epoch=None, patient_id=None) -> None:
+        """treatment_sessions satirina yeni kolonlari (gercek wall-clock epoch + patient_id FK)
+        baglar. Mevcut start_session/end_session bu Asama-2 kolonlarini bilmedigi icin ayrica cagrilir.
+        Yalniz verilen alanlar UPDATE edilir; hepsi best-effort."""
+        try:
+            self._ensure_write_guardrail()
+            sets, params = [], []
+            if started_epoch is not None:
+                sets.append('started_epoch = ?'); params.append(float(started_epoch))
+            if ended_epoch is not None:
+                sets.append('ended_epoch = ?'); params.append(float(ended_epoch))
+            if patient_id is not None:
+                sets.append('patient_id = ?'); params.append(int(patient_id))
+            if not sets:
+                return
+            params.append(int(session_id))
+            with self._get_connection() as conn:
+                conn.execute('UPDATE treatment_sessions SET ' + ', '.join(sets) + ' WHERE id = ?', params)
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"set_session_meta hatası: {e}")
+
+    def get_session_coil_runs(self, session_id: int) -> List[Dict]:
+        """Bir seansa ait bobin calismalarini rapor icin getir
+        (coil_id, started/ended_epoch, duration, parametreler)."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT id, session_id, coil_id, started_epoch, ended_epoch,
+                           duration_seconds, frequency_hz, duty_percent, phase,
+                           intensity_mt, hw_type, created_at
+                    FROM session_coil_runs
+                    WHERE session_id = ?
+                    ORDER BY started_epoch ASC
+                ''', (session_id,))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except _DB_ERROR as e:
+            self.logger.error(f"Coil run listeleme hatası: {e}")
+            return []
+
+    def get_run_summaries(self, session_id: int) -> Dict:
+        """Bir seansin tum bobin-calismalarinin sensor ozetlerini getir.
+        sensor_run_summary'yi session_coil_runs ile JOIN'leyip o seansa ait
+        coil_run_id'leri filtreler.
+        Donus: {coil_run_id: {sample_count, temp_min, temp_max, temp_avg,
+                              current_avg, field_avg}}.
+        Ozet bulunmayan run'lar sozlukte yer almaz (rapor tarafinda null'a duser)."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT s.coil_run_id, s.sample_count, s.temp_min, s.temp_max,
+                           s.temp_avg, s.current_avg, s.field_avg
+                    FROM sensor_run_summary s
+                    JOIN session_coil_runs r ON r.id = s.coil_run_id
+                    WHERE r.session_id = ?
+                ''', (session_id,))
+                rows = cursor.fetchall()
+                summaries = {}
+                for row in rows:
+                    d = dict(row)
+                    summaries[d['coil_run_id']] = {
+                        'sample_count': d.get('sample_count'),
+                        'temp_min': d.get('temp_min'),
+                        'temp_max': d.get('temp_max'),
+                        'temp_avg': d.get('temp_avg'),
+                        'current_avg': d.get('current_avg'),
+                        'field_avg': d.get('field_avg'),
+                    }
+                return summaries
+        except _DB_ERROR as e:
+            self.logger.error(f"Run summary listeleme hatası: {e}")
+            return {}
+
+    def get_sensor_samples(self, session_id: int) -> List[Dict]:
+        """Bir seansin sensor orneklerini grafik icin getir (sample_ts ASC).
+        Donus alanlari: coil_id, sample_ts, temperature_c, ambient_temp_c,
+        current_a, magnetic_field_mt, pwm_frequency_hz, pwm_duty_percent,
+        coil_run_id, sample_count."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT coil_id, sample_ts, temperature_c, ambient_temp_c,
+                           current_a, magnetic_field_mt, pwm_frequency_hz,
+                           pwm_duty_percent, coil_run_id, sample_count
+                    FROM sensor_samples
+                    WHERE session_id = ?
+                    ORDER BY sample_ts ASC
+                ''', (session_id,))
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except _DB_ERROR as e:
+            self.logger.error(f"Sensor sample listeleme hatası: {e}")
+            return []
 
 
 # Singleton instance

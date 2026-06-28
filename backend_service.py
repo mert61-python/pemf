@@ -15,6 +15,11 @@ from event_bus import get_event_bus
 from headless_core import HeadlessCore
 from utils.path_utils import get_app_data_directory, initialize_database
 
+# anon publishable anahtar, FE deviceRegistry.ts'dekiyle AYNI; backend registry'ye
+# yazabilsin diye. service_role DEĞİL (sadece publishable/anon yetkisi).
+_DEFAULT_SUPABASE_URL = "https://wmsxonunkphjeregpvuj.supabase.co"
+_DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT"
+
 
 def _configure_logging(app_data_dir: Path, level: str) -> None:
     # Windows consoles and NSSM-redirected pipes default to the legacy ANSI
@@ -157,6 +162,18 @@ def main(argv: list[str] | None = None) -> int:
     logger = logging.getLogger("backend_service")
 
     logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
+
+    # Eşleştirme kodu + cihaz kimliğini GÖRÜNÜR logla → operatör LattePanda konsolunda
+    # okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme).
+    try:
+        from utils.path_utils import get_pairing_code, get_unique_device_id
+        logger.info("=" * 60)
+        logger.info("EŞLEŞTİRME KODU: %s | Cihaz Kimliği: %s",
+                    get_pairing_code(), get_unique_device_id())
+        logger.info("=" * 60)
+    except Exception:
+        logger.exception("Eşleştirme kodu loglanamadı (non-fatal).")
+
     try:
         initialize_database()
     except Exception:
@@ -216,10 +233,10 @@ def main(argv: list[str] | None = None) -> int:
 
                 cfg = get_config()
                 sb_url = sb_url or cfg.get("supabase_url", "https://wmsxonunkphjeregpvuj.supabase.co")
-                sb_key = sb_key or cfg.get("supabase_key", "")
+                sb_key = sb_key or cfg.get("supabase_key", "") or _DEFAULT_SUPABASE_ANON_KEY
             except Exception:
                 sb_url = sb_url or "https://wmsxonunkphjeregpvuj.supabase.co"
-                sb_key = sb_key or ""
+                sb_key = sb_key or _DEFAULT_SUPABASE_ANON_KEY
         init_cloud_sync(supabase_url=sb_url, supabase_key=sb_key)
         logger.info("Cloud sync + device registry started.")
     except Exception:
@@ -238,6 +255,18 @@ def main(argv: list[str] | None = None) -> int:
     # erişim. Cihazı internete açtığından VARSAYILAN KAPALI; PEMF_ENABLE_TUNNEL=1 ile aç.
     # Eskiden tunnel_manager headless serviste HİÇ çağrılmıyordu → yalnız LAN çalışıyordu (audit P1).
     if os.environ.get("PEMF_ENABLE_TUNNEL") == "1":
+        # GÜVENLİK (fail-closed): Tünel cihazı İNTERNETE açar → auth ZORUNLU olmalı. Operatör
+        # PEMF_REQUIRE_AUTH'u kapalı bıraktıysa burada ZORLA aç → internete KİMLİKSİZ donanım/
+        # hasta erişimi engellenir. (Eskiden coupling yalnız .env'e güveniyordu = fail-open risk.)
+        if os.environ.get("PEMF_REQUIRE_AUTH") != "1":
+            os.environ["PEMF_REQUIRE_AUTH"] = "1"
+            try:
+                from servers import auth as _auth
+                _auth._require = True  # lazy-cache'i de güncelle (ilk isteği beklemeden)
+            except Exception:
+                pass
+            logger.warning("GÜVENLİK: Tünel AÇIK → PEMF_REQUIRE_AUTH=1 ZORLA etkinleştirildi "
+                           "(internete kimliksiz erişim engellendi). API token'ı istemcilere dağıtın.")
         try:
             from servers.tunnel_manager import start_tunnel
             if start_tunnel(port=args.port):

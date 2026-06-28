@@ -1,6 +1,7 @@
 import os
 import json
 from pathlib import Path
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -104,10 +105,14 @@ def export_csv(db=Depends(get_db)):
             
         csv_data = output.getvalue()
         output.close()
-        
+
+        # Excel (özellikle Türkçe Windows) BOM'suz UTF-8'i sistem codepage'i (Windows-1254)
+        # sanıp Türkçe karakterleri bozuyor. utf-8-sig ile BOM ekleyip charset belirtiyoruz.
+        csv_bytes = csv_data.encode("utf-8-sig")
+
         return Response(
-            content=csv_data,
-            media_type="text/csv",
+            content=csv_bytes,
+            media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=PEMF_History.csv"}
         )
     except Exception as e:
@@ -159,6 +164,137 @@ def update_notes(payload: HistoryNotesPayload, db=Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error updating notes for session {payload.session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _epoch_to_hms(epoch):
+    """Wall-clock epoch -> 'HH:MM:SS'. None/gecersizde bos string."""
+    if epoch is None:
+        return ""
+    try:
+        return datetime.fromtimestamp(float(epoch)).strftime("%H:%M:%S")
+    except (ValueError, OSError, OverflowError, TypeError):
+        return ""
+
+
+@router.get("/{session_id}/details")
+def get_session_full_details(session_id: int, db=Depends(get_db)):
+    """Asama-3: Bir seansin tam rapor sozlesmesi (seans + bobin calismalari +
+    her run'in sensor ozeti + grafik icin sensor ornekleri)."""
+    try:
+        raw = db.get_session_details(session_id)
+        if not raw:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        session = {
+            "id": raw.get("id"),
+            "session_date": raw.get("session_date"),
+            "start_time": raw.get("start_time"),
+            "end_time": raw.get("end_time"),
+            "duration_minutes": raw.get("duration_minutes"),
+            "started_epoch": raw.get("started_epoch"),
+            "ended_epoch": raw.get("ended_epoch"),
+            "treatment_mode": raw.get("treatment_mode"),
+            "target_condition": raw.get("target_condition"),
+            "operator_name": raw.get("operator_name"),
+            "patient_name": raw.get("patient_name"),
+            "patient_notes": raw.get("patient_notes"),
+            "session_status": raw.get("session_status"),
+        }
+
+        summaries = db.get_run_summaries(session_id)
+        runs = db.get_session_coil_runs(session_id)
+        coil_runs = []
+        for r in runs:
+            coil_runs.append({
+                "coil_id": r.get("coil_id"),
+                "hw_type": r.get("hw_type"),
+                "started_epoch": r.get("started_epoch"),
+                "ended_epoch": r.get("ended_epoch"),
+                "duration_seconds": r.get("duration_seconds"),
+                "frequency_hz": r.get("frequency_hz"),
+                "duty_percent": r.get("duty_percent"),
+                "phase": r.get("phase"),
+                "intensity_mt": r.get("intensity_mt"),
+                "summary": summaries.get(r.get("id")),
+            })
+
+        sensor_samples = []
+        for s in db.get_sensor_samples(session_id):
+            sensor_samples.append({
+                "coil_id": s.get("coil_id"),
+                "sample_ts": s.get("sample_ts"),
+                "temperature_c": s.get("temperature_c"),
+                "ambient_temp_c": s.get("ambient_temp_c"),
+                "current_a": s.get("current_a"),
+                "magnetic_field_mt": s.get("magnetic_field_mt"),
+                "coil_run_id": s.get("coil_run_id"),
+                "sample_count": s.get("sample_count"),
+            })
+
+        return {
+            "session": session,
+            "coil_runs": coil_runs,
+            "sensor_samples": sensor_samples,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching session details {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{session_id}/coil_runs.csv")
+def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
+    """Asama-3: Bir seansin bobin calismalarini CSV olarak indir."""
+    try:
+        runs = db.get_session_coil_runs(session_id)
+        summaries = db.get_run_summaries(session_id)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        headers = [
+            "Bobin", "Donanim", "Baslangic", "Bitis", "Sure(sn)",
+            "Frekans(Hz)", "Duty(%)", "Faz", "Siddet(mT)",
+            "Ort.Sicaklik(C)", "Maks.Sicaklik(C)", "Ort.Akim(A)",
+            "Ort.Alan(mT)", "Ornek",
+        ]
+        writer.writerow(headers)
+
+        for r in runs:
+            summ = summaries.get(r.get("id")) or {}
+            writer.writerow([
+                r.get("coil_id", ""),
+                r.get("hw_type", ""),
+                _epoch_to_hms(r.get("started_epoch")),
+                _epoch_to_hms(r.get("ended_epoch")),
+                r.get("duration_seconds", ""),
+                r.get("frequency_hz", ""),
+                r.get("duty_percent", ""),
+                r.get("phase", ""),
+                r.get("intensity_mt", ""),
+                summ.get("temp_avg", ""),
+                summ.get("temp_max", ""),
+                summ.get("current_avg", ""),
+                summ.get("field_avg", ""),
+                summ.get("sample_count", ""),
+            ])
+
+        csv_data = output.getvalue()
+        output.close()
+
+        # Excel (Türkçe Windows) BOM'suz UTF-8'i Windows-1254 sanip bozuyor;
+        # utf-8-sig ile BOM ekleyip charset belirtiyoruz.
+        csv_bytes = csv_data.encode("utf-8-sig")
+
+        return Response(
+            content=csv_bytes,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename=PEMF_Session_{session_id}_Coils.csv"}
+        )
+    except Exception as e:
+        logger.error(f"Error generating coil runs CSV for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

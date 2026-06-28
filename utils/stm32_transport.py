@@ -1,20 +1,32 @@
 """Shared STM32 serial transport helpers.
 
-STM32 connection is pinned to COM10 (ST-Link Virtual COM Port) at 115200 baud.
-Nucleo-F429ZI board uses ST-Link VCP which maps to USART3 (PD8/PD9) on the MCU.
-Firmware must use USART3 for direct ST-Link USB cable communication.
+Port seçimi:
+  1) env PEMF_STM_PORT='COM7' → o portu kullanır (saha override'ı),
+  2) PEMF_STM_PORT verilmezse → VARSAYILAN sabit COM10 (LattePanda gibi kartlarda onboard
+     STM/co-processor de USB-seri (örn COM3) göründüğü için oto-algılama VARSAYILAN DEĞİL),
+  3) PEMF_STM_PORT='auto' → ST-Link VCP'yi ST-Link'e ÖZGÜ USB PID/açıklama ile bulur
+     (onboard STM'i eler); bulamazsa COM10'a düşer.
+115200 baud. Nucleo-F429ZI ST-Link VCP → USART3 (PD8/PD9). Firmware doğrudan
+ST-Link USB için USART3 kullanmalı.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 import struct
 import time
 from typing import Any, Callable, Optional
 import zlib
 
 
-FIXED_STM32_PORT = "COM10"       # ST-Link VCP (Nucleo-F429ZI, USART3 @ PD8/PD9)
+# VARSAYILAN port (PEMF_STM_PORT verilmediğinde). Sahada sabit COM10; gerekirse env ile
+# değiştirin (PEMF_STM_PORT=COMx) veya oto-algılama açın (PEMF_STM_PORT=auto).
+FIXED_STM32_PORT = "COM10"       # default/legacy (ST-Link VCP, Nucleo-F429ZI USART3 @ PD8/PD9)
+ST_LINK_USB_VID = 0x0483         # STMicroelectronics
+# ST-Link VCP USB PID'leri (V1/V2/V2-1/V3). Onboard STM CDC (örn LattePanda, PID 0x5740)
+# BU SETTE YOK → oto-algılamada onboard STM'i ELER, yanlış porta (COM3) gitmez.
+ST_LINK_USB_PIDS = frozenset({0x3744, 0x3748, 0x374B, 0x374D, 0x374E, 0x374F, 0x3752, 0x3753})
 DEFAULT_BAUDRATE = 115200
 DEFAULT_HANDSHAKE_TIMEOUT_SEC = 12.0
 DEFAULT_NO_PORT_LOG_INTERVAL_SEC = 15.0
@@ -140,19 +152,74 @@ class Stm32SerialTransport:
     # ── Candidate Seçimi ──────────────────────────────────────────────────────
 
     def _select_candidate(self) -> Optional[Stm32PortCandidate]:
-        bad_until = self._bad_ports_until.get(FIXED_STM32_PORT.upper(), 0.0)
+        configured = (os.environ.get("PEMF_STM_PORT", "") or "").strip()
+
+        # VARSAYILAN = COM10 (sabit). LattePanda gibi platformlarda onboard STM/co-processor
+        # de USB-seri (örn COM3) göründüğünden oto-algılama yanlış porta gidebilir → varsayılan
+        # sabit COM10. Oto-algılama yalnız PEMF_STM_PORT=auto ile (opt-in) açılır.
+        if not configured:
+            configured = FIXED_STM32_PORT
+
+        # Oto-algılama (opt-in): ST-Link'e ÖZGÜ eşleştirme (onboard STM'i eler).
+        if configured.lower() in ("auto", "otomatik"):
+            detected = self._autodetect_stlink()
+            if detected is not None:
+                return self._candidate_if_ready(detected)
+            self._throttled_no_port_log(
+                f"[STM32] Oto-algılama: ST-Link VCP bulunamadı → {FIXED_STM32_PORT} denenecek "
+                f"(gerekirse PEMF_STM_PORT=COMx ile sabitleyin)."
+            )
+            return self._candidate_if_ready(
+                Stm32PortCandidate(device=FIXED_STM32_PORT, description="auto->COM10 fallback")
+            )
+
+        # Açık/varsayılan sabit port (COM10 veya PEMF_STM_PORT=COMx).
+        return self._candidate_if_ready(
+            Stm32PortCandidate(device=configured, description="sabit (PEMF_STM_PORT/COM10)")
+        )
+
+    def _candidate_if_ready(self, candidate: Stm32PortCandidate) -> Optional[Stm32PortCandidate]:
+        """Seçilen port cooldown'da değilse aday olarak döndür."""
+        bad_until = self._bad_ports_until.get(candidate.device.upper(), 0.0)
         if bad_until > time.monotonic():
             self._throttled_no_port_log(
-                f"[STM32] {FIXED_STM32_PORT} cooldown dolana kadar bekleniyor."
+                f"[STM32] {candidate.device} cooldown dolana kadar bekleniyor."
             )
             return None
+        self._log_info("[STM32] Port seçimi: %s @ %d baud", candidate.label(), self.baudrate)
+        return candidate
 
-        self._log_info(
-            "[STM32] Sabit port seçimi: %s @ %d baud",
-            FIXED_STM32_PORT,
-            self.baudrate,
-        )
-        return Stm32PortCandidate(device=FIXED_STM32_PORT, description="fixed STM32 port")
+    def _autodetect_stlink(self) -> Optional[Stm32PortCandidate]:
+        """Bağlı COM portları arasında ST-Link VCP'yi bul (ST-Link'e ÖZGÜ eşleştirme).
+
+        Yalnız VID 0x0483 YETMEZ: LattePanda gibi kartların onboard STM co-processor'ü de
+        VID 0x0483 olabilir (örn COM3) ama ST-Link DEĞİLDİR. Bu yüzden ST-Link'e özgü USB
+        PID seti (V1/V2/V2-1/V3) veya açıklamada 'ST-Link' ile eşleştirir; onboard STM CDC'yi
+        (farklı PID + açıklamada 'ST-Link' yok) ELER. Birden çok eşleşmede ilkini alır.
+        """
+        try:
+            from serial.tools import list_ports
+        except Exception:
+            return None
+        try:
+            ports = list(list_ports.comports())
+        except Exception:
+            return None
+        for p in ports:
+            vid = getattr(p, "vid", None)
+            pid = getattr(p, "pid", None)
+            desc = (getattr(p, "description", "") or "")
+            descu = desc.upper().replace("-", "")
+            is_stlink = (
+                (vid == ST_LINK_USB_VID and pid in ST_LINK_USB_PIDS)
+                or "STLINKVIRTUALCOM" in descu
+                or "STLINK" in descu
+            )
+            if is_stlink:
+                return Stm32PortCandidate(
+                    device=p.device, description=f"oto ST-Link: {desc}".strip()
+                )
+        return None
 
     # ── Port Açma ─────────────────────────────────────────────────────────────
 

@@ -19,21 +19,29 @@
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define ProjectRoot    ".."
-#define BuildOutput    "..\dist\PEMF_Backend"
+; BuildOutput ve ModeName komut satirindan /D ile override edilebilir:
+;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" PEMF_Backend_Setup.iss            (device)
+;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" "/DModeName=server" ...           (server)
+#ifndef BuildOutput
+  #define BuildOutput  "..\dist\PEMF_Backend"
+#endif
+#ifndef ModeName
+  #define ModeName     "device"
+#endif
 
 [Setup]
 ; GUI installer'dan FARKLI AppId -> yan yana kurulabilir, cakismaz.
 AppId={{B7A1C2D3-E4F5-4061-8273-A1B2C3D4E5F6}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} v{#MyAppVersion}
+AppVerName={#MyAppName} v{#MyAppVersion} ({#ModeName})
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 DefaultDirName={autopf}\PEMF Backend
 DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName} v{#MyAppVersion}
 OutputDir=Output
-OutputBaseFilename=PEMFBackendSetup_v{#MyAppVersion}
+OutputBaseFilename=PEMFBackendSetup_{#ModeName}_v{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -74,7 +82,7 @@ Filename: "{tmp}\VC_redist.x64.exe"; Parameters: "/install /quiet /norestart"; \
   Check: VCRedistNeedsInstall and FileExists(ExpandConstant('{tmp}\VC_redist.x64.exe'))
 ; 2. Mosquitto + Backend servislerini kur ve baslat
 Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\setup_services.ps1"" -AppDir ""{app}"""; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\setup_services.ps1"" -AppDir ""{app}"" -Mode {#ModeName}"; \
   StatusMsg: "{cm:InstallingServices}"; Flags: waituntilterminated runhidden
 ; 3. Web arayuzunu ac (opsiyonel, sessiz kurulumda atlanir)
 Filename: "http://localhost:8000"; Description: "Web arayuzunu simdi ac"; \

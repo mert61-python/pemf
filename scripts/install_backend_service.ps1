@@ -6,8 +6,16 @@
 # 'depends' ile bağlanır ve broker'ı kendi başlatmaz (--no-mosquitto-ensure).
 # Çökme -> NSSM otomatik restart. Kapanış -> backend_service donanımı güvenli durdurur.
 #
-# Yönetici PowerShell:  .\install_backend_service.ps1
+# Yönetici PowerShell:  .\install_backend_service.ps1                 (yalnız-LAN, güvenli)
+#   Uzaktan erişim (internete açar):  .\install_backend_service.ps1 -EnableTunnel
 # =============================================================================
+param(
+    # Cloudflare tüneli (uzaktan erişim) — VARSAYILAN KAPALI. Açarsanız cihaz internete
+    # açılır; bu durumda kimlik doğrulama (PEMF_REQUIRE_AUTH) OTOMATİK zorunlu kılınır.
+    [switch]$EnableTunnel,
+    # API kimlik doğrulamasını zorla (LAN'da bile önerilir). Tünel açıksa zaten zorunlu.
+    [switch]$RequireAuth
+)
 $ErrorActionPreference = "Stop"
 
 function Write-Status($msg, $color = "White") {
@@ -119,13 +127,22 @@ Write-Status "Servis kuruluyor: $ServiceName" "Yellow"
 & $NssmExe set $ServiceName AppStopMethodConsole 15000
 & $NssmExe set $ServiceName AppThrottle         5000
 
-# Ortam değişkenleri (EXE'de PYTHONPATH'e gerek yok -> bundled modüller kullanılır)
-if ($UsingExe) {
-    & $NssmExe set $ServiceName AppEnvironmentExtra `
-        "PYTHONUNBUFFERED=1" "PEMF_HEADLESS=1" "PEMF_LOG_DIR=$LogDir"
+# Ortam değişkenleri. GÜVENLİK: tünel (internete açma) VARSAYILAN KAPALI. Açılırsa
+# kimlik doğrulama OTOMATİK zorunlu kılınır (public + kimliksiz erişim engellenir).
+# EXE'de PYTHONPATH'e gerek yok -> bundled modüller kullanılır.
+if ($EnableTunnel -and -not $RequireAuth) {
+    Write-Status "Tünel açık -> PEMF_REQUIRE_AUTH otomatik ZORUNLU (public+kimliksiz engellendi)." "Yellow"
+    $RequireAuth = $true
+}
+$EnvList = @("PYTHONUNBUFFERED=1", "PEMF_HEADLESS=1", "PEMF_LOG_DIR=$LogDir")
+if (-not $UsingExe) { $EnvList = @("PYTHONPATH=$GuiRoot") + $EnvList }
+if ($EnableTunnel)  { $EnvList += "PEMF_ENABLE_TUNNEL=1" }
+if ($RequireAuth)   { $EnvList += "PEMF_REQUIRE_AUTH=1" }
+& $NssmExe set $ServiceName AppEnvironmentExtra @EnvList
+if ($EnableTunnel) {
+    Write-Status "Uzaktan erişim (Cloudflare tüneli) AÇIK + auth zorunlu. Token'ı istemcilere verin." "Cyan"
 } else {
-    & $NssmExe set $ServiceName AppEnvironmentExtra `
-        "PYTHONPATH=$GuiRoot" "PYTHONUNBUFFERED=1" "PEMF_HEADLESS=1" "PEMF_LOG_DIR=$LogDir"
+    Write-Status "Yalnız-LAN modu (tünel kapalı, güvenli). Uzaktan erişim için: -EnableTunnel" "Gray"
 }
 
 # --- Mosquitto bağımlılığı (kendi servisi varsa) ---

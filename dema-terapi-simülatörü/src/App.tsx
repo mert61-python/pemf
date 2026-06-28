@@ -1000,9 +1000,9 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       </motion.div>
 
       {/* Doku Kesiti Label */}
-      <div 
-        className="absolute -translate-y-1/2 -translate-x-4 bg-white border-2 border-red-500 text-red-600 text-[8px] md:text-[10px] font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full shadow-sm"
-        style={{ left: `21.66%`, top: `60%` }}
+      <div
+        className="absolute -translate-y-1/2 -translate-x-4 bg-white border-2 border-red-500 text-red-600 text-[7px] md:text-[10px] font-bold px-1 py-0 md:px-3 md:py-1 rounded-full shadow-sm whitespace-nowrap"
+        style={{ left: `21.66%`, top: `57%` }}
       >
         DOKU KESİTİ
       </div>
@@ -1015,77 +1015,76 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       </div>
 
       {/* Induced E-Field Legend */}
-      <div className="absolute flex items-center gap-1.5 bg-amber-50/80 backdrop-blur-sm px-2 py-1 rounded border border-amber-100" style={{ left: `25%`, top: `82.5%` }}>
-        <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-spin" style={{ animationDuration: `${Math.max(0.5, 3 / (frequency / 10 + 1))}s` }} />
+      <div className="absolute flex items-center gap-1 md:gap-1.5 bg-amber-50/80 backdrop-blur-sm px-1 py-0.5 md:px-2 md:py-1 rounded border border-amber-100" style={{ left: `26%`, top: `81%` }}>
+        <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-amber-400 rounded-full animate-spin" style={{ animationDuration: `${Math.max(0.5, 3 / (frequency / 10 + 1))}s` }} />
         <span className="text-[5px] md:text-[7px] font-bold text-amber-600 uppercase tracking-tighter hidden md:block">İndüklenen E-Alan (Girdap Akımları)</span>
-        <span className="text-[5px] font-bold text-amber-600 uppercase tracking-tighter md:hidden">E-Alan</span>
+        <span className="text-[5px] font-bold text-amber-600 uppercase tracking-tighter md:hidden whitespace-nowrap">E-Alan</span>
       </div>
 
       {/* Dielectric Info Badge */}
-      <div className="absolute flex items-center gap-1.5 bg-red-50/80 backdrop-blur-sm px-2 py-1 rounded border border-red-100" style={{ left: `25%`, top: `63.75%` }}>
-        <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+      <div className="absolute flex items-center gap-1 md:gap-1.5 bg-red-50/80 backdrop-blur-sm px-1 py-0.5 md:px-2 md:py-1 rounded border border-red-100" style={{ left: `26%`, top: `70%` }}>
+        <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-red-400 rounded-full animate-pulse" />
         <span className="text-[5px] md:text-[7px] font-bold text-red-500 uppercase tracking-tighter hidden md:block">Yoğun Alan Dağılımı</span>
-        <span className="text-[5px] font-bold text-red-500 uppercase tracking-tighter md:hidden">Yoğun Alan</span>
+        <span className="text-[5px] font-bold text-red-500 uppercase tracking-tighter md:hidden whitespace-nowrap">Yoğun Alan</span>
       </div>
 
       {/* Field Concentration Zone Label */}
-      <div className="absolute -translate-x-1/2 flex items-center gap-1.5 bg-blue-50/60 backdrop-blur-sm px-2 py-0.5 rounded border border-blue-100" style={{ left: `50%`, top: `92.5%` }}>
+      <div className="absolute -translate-x-1/2 flex items-center gap-1 md:gap-1.5 bg-blue-50/60 backdrop-blur-sm px-1 py-0 md:px-2 md:py-0.5 rounded border border-blue-100" style={{ left: `50%`, top: `90%` }}>
         <div className="w-1 h-1 bg-blue-400 rounded-full animate-ping" />
-        <span className="text-[5px] md:text-[6px] font-bold text-blue-500 uppercase tracking-widest">Dielektrik Çıkış</span>
+        <span className="text-[5px] md:text-[6px] font-bold text-blue-500 uppercase tracking-widest whitespace-nowrap">Dielektrik Çıkış</span>
       </div>
 
       {/* Etki Derinliği Label */}
-      <div 
-        className="absolute -translate-x-1/2 bg-white border-2 border-green-600 text-green-700 text-[8px] md:text-[10px] font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full shadow-sm whitespace-nowrap"
-        style={{ left: `75%`, top: `90%` }}
+      <div
+        className="absolute -translate-x-1/2 bg-white border-2 border-green-600 text-green-700 text-[7px] md:text-[10px] font-bold px-1 py-0 md:px-3 md:py-1 rounded-full shadow-sm whitespace-nowrap left-[64%] top-[53%] md:left-[75%] md:top-[90%]"
       >
         ETKİ DERİNLİĞİ: {intensity} mT
       </div>
 
       {/* Effect Type Indicator (Yüzeysel vs Derin) */}
-      <div className="absolute -translate-x-1/2 flex flex-col items-center gap-1" style={{ left: `75%`, top: `100%` }}>
-        <motion.div 
-          animate={{ 
+      <div className="absolute -translate-x-1/2 flex flex-col items-center gap-0.5 md:gap-1 left-[64%] top-[66%] md:left-[75%] md:top-[100%]">
+        <motion.div
+          animate={{
             backgroundColor: intensity <= 2 ? '#3b82f6' : '#1d4ed8',
             scale: intensity <= 2 ? 1 : 1.05,
-            boxShadow: intensity <= 2 
-              ? "0 4px 6px -1px rgba(59, 130, 246, 0.2)" 
+            boxShadow: intensity <= 2
+              ? "0 4px 6px -1px rgba(59, 130, 246, 0.2)"
               : "0 10px 15px -3px rgba(29, 78, 216, 0.3)"
           }}
-          className="px-4 py-1.5 rounded-xl border border-white/20 backdrop-blur-md flex items-center gap-2 transition-colors"
+          className="px-1.5 py-0.5 md:px-4 md:py-1.5 rounded-lg md:rounded-xl border border-white/20 backdrop-blur-md flex items-center gap-1 md:gap-2 transition-colors"
         >
           {intensity <= 2 ? (
-            <Layers className="w-3 h-3 text-white" />
+            <Layers className="w-2.5 h-2.5 md:w-3 md:h-3 text-white" />
           ) : (
-            <Stethoscope className="w-3 h-3 text-white" />
+            <Stethoscope className="w-2.5 h-2.5 md:w-3 md:h-3 text-white" />
           )}
-          <span className="text-[9px] font-black text-white uppercase tracking-widest">
+          <span className="text-[7px] md:text-[9px] font-black text-white uppercase tracking-wider md:tracking-widest whitespace-nowrap">
             {intensity <= 2 ? 'Yüzeysel Etki' : 'Derin Etki'}
           </span>
         </motion.div>
-        
+
         {/* Progress-style indicator */}
         <div className="flex gap-1">
-          <motion.div 
+          <motion.div
             animate={{ opacity: intensity <= 2 ? 1 : 0.3 }}
-            className="h-1 w-8 rounded-full bg-blue-400" 
+            className="h-1 w-6 md:w-8 rounded-full bg-blue-400"
           />
-          <motion.div 
+          <motion.div
             animate={{ opacity: intensity > 2 ? 1 : 0.3 }}
-            className="h-1 w-8 rounded-full bg-blue-700" 
+            className="h-1 w-6 md:w-8 rounded-full bg-blue-700"
           />
         </div>
       </div>
 
       {/* Legend (Etki Derinliği Bilgisi) */}
-      <div className="absolute flex gap-2 md:gap-4 bg-white/50 backdrop-blur-sm p-1.5 md:p-2 rounded-lg border border-slate-100" style={{ left: `21.66%`, bottom: `3%` }}>
-        <div className="flex items-center gap-1.5">
+      <div className="absolute flex flex-col md:flex-row gap-0.5 md:gap-4 bg-white/60 backdrop-blur-sm p-1 md:p-2 rounded-lg border border-slate-100" style={{ left: `4%`, bottom: `3%` }}>
+        <div className="flex items-center gap-1 md:gap-1.5">
           <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-colors ${intensity <= 2 ? 'bg-blue-500 ring-2 ring-blue-200' : 'bg-slate-300'}`} />
-          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider ${intensity <= 2 ? 'text-blue-600' : 'text-slate-400'}`}>1-2 mT: Yüzeysel</span>
+          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity <= 2 ? 'text-blue-600' : 'text-slate-400'}`}>1-2 mT: Yüzeysel</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 md:gap-1.5">
           <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-colors ${intensity > 2 ? 'bg-blue-600 ring-2 ring-blue-200' : 'bg-slate-300'}`} />
-          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider ${intensity > 2 ? 'text-blue-700' : 'text-slate-400'}`}>3-5 mT: Derin</span>
+          <span className={`text-[6px] md:text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${intensity > 2 ? 'text-blue-700' : 'text-slate-400'}`}>3-5 mT: Derin</span>
         </div>
       </div>
 

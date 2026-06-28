@@ -506,7 +506,76 @@ class PDFReportGenerator:
             story.append(Spacer(1, 10))
             story.append(Paragraph("<b>Hasta Notları:</b>", self.styles['UnicodeNormal']))
             story.append(Paragraph(patient_notes, self.styles['PatientInfo']))
-    
+
+        # Asama-3 BONUS: Bobin calismalari tablosu (best-effort, mevcut PDF'i bozmaz)
+        try:
+            self._add_coil_runs_table(story, session.get('id'))
+        except Exception as e:
+            self.logger.warning(f"Bobin calismalari tablosu atlandi (session {session.get('id')}): {e}")
+
+    def _add_coil_runs_table(self, story, session_id):
+        """Bir seansin bobin calismalarini PDF tablosu olarak ekle.
+        Veri yoksa hicbir sey eklemez. Sicaklik/akim ozeti sensor_run_summary'den."""
+        if session_id is None:
+            return
+        runs = self.db.get_session_coil_runs(session_id)
+        if not runs:
+            return
+        summaries = self.db.get_run_summaries(session_id)
+
+        def _hms(epoch):
+            if epoch is None:
+                return "-"
+            try:
+                return datetime.fromtimestamp(float(epoch)).strftime("%H:%M:%S")
+            except (ValueError, OSError, OverflowError, TypeError):
+                return "-"
+
+        def _num(v, fmt="{:.1f}"):
+            if v is None:
+                return "-"
+            try:
+                return fmt.format(float(v))
+            except (ValueError, TypeError):
+                return str(v)
+
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("Bobin Çalışmaları", self.styles['Heading3']))
+
+        table_data = [[
+            "Bobin", "Saat", "Süre (sn)", "Hz", "Duty (%)",
+            "Şiddet (mT)", "Ort. Sıc. (C)", "Maks. Sıc. (C)"
+        ]]
+        for r in runs:
+            summ = summaries.get(r.get('id')) or {}
+            table_data.append([
+                str(r.get('coil_id', '-')),
+                _hms(r.get('started_epoch')),
+                _num(r.get('duration_seconds'), "{:.0f}"),
+                _num(r.get('frequency_hz'), "{:.0f}"),
+                _num(r.get('duty_percent'), "{:.0f}"),
+                _num(r.get('intensity_mt')),
+                _num(summ.get('temp_avg')),
+                _num(summ.get('temp_max')),
+            ])
+
+        coil_table = Table(
+            table_data,
+            colWidths=[1.4*cm, 2*cm, 1.8*cm, 1.4*cm, 1.6*cm, 2*cm, 2.2*cm, 2.2*cm]
+        )
+        coil_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
+            ('FONTNAME', (0, 1), (-1, -1), getattr(self, 'unicode_font', 'Helvetica')),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(coil_table)
+
     def _add_patient_header(self, story, session, patient_name):
         """Hasta raporu başlığını ekle"""
         story.append(Paragraph(f"HASTA RAPORU: {patient_name.upper()}", self.styles['SectionHeader']))

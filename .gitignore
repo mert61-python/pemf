@@ -124,3 +124,8 @@ config/credentials/
 # Üretilen raporlar
 architecture_report.json
 models_size.json
+
+# P0/dagitim (commit edilmez): ucuncu-parti binary + build log + sifreleme-migrate yedegi
+bin/cloudflared/
+build_exe_*.txt
+*.plain.bak

@@ -76,6 +76,21 @@ try:
 except Exception as e:
     print("Metadata uyarısı:", e)
 
+# --- SQLCipher (AT-REST ŞİFRELEME) — KRİTİK ---
+# treatment_history_db lazy try-except ile import ettiğinden PyInstaller static analizi
+# sqlcipher3'ü KAÇIRIR → frozen EXE'de paket eksik bundle olur → `from sqlcipher3 import
+# dbapi2` ImportError → kod SESSİZCE düz-metne düşer → hasta PII'si şifresiz diskte (KVKK).
+# collect_all ile py dosyaları + derlenmiş _sqlite3 (SQLCipher-bağlı) extension'ı açıkça topla.
+try:
+    from PyInstaller.utils.hooks import collect_all as _collect_all
+    _sc_datas, _sc_bins, _sc_hidden = _collect_all('sqlcipher3')
+    datas += _sc_datas
+    binaries += _sc_bins
+    print(f"[OK] sqlcipher3 toplandı: {len(_sc_datas)} data, {len(_sc_bins)} binary, {len(_sc_hidden)} hidden")
+except Exception as _e:
+    _sc_hidden = ['sqlcipher3', 'sqlcipher3.dbapi2']
+    print("[UYARI] sqlcipher3 collect_all başarısız:", _e)
+
 # --- Proje veri dosyaları (headless için gerekli olanlar) ---
 # Config + credential dosyaları (ProductionConfigManager ilk açılışta üretir)
 config_dir = os.path.join(project_path, 'config')
@@ -98,6 +113,16 @@ for tmpl in ('pemf_treatment_history_template.db', 'patients_template.db'):
 mosquitto_dir = os.path.join(project_path, 'bin', 'mosquitto')
 if os.path.exists(mosquitto_dir):
     datas.append((mosquitto_dir, 'bin/mosquitto'))
+
+# Dağıtım profilleri (deploy/device.env, deploy/server.env) → setup_services.ps1 -Mode okur
+deploy_dir = os.path.join(project_path, 'deploy')
+if os.path.exists(deploy_dir):
+    datas.append((deploy_dir, 'deploy'))
+
+# cloudflared (opt-in uzaktan erişim tüneli) — REPODA varsa bundle (offline saha için elle eklenir)
+cloudflared_dir = os.path.join(project_path, 'bin', 'cloudflared')
+if os.path.exists(cloudflared_dir):
+    datas.append((cloudflared_dir, 'bin/cloudflared'))
 
 # React frontend (FastAPI '/' kökünden serve eder)
 frontend_dir = os.path.join(project_path, 'frontend', 'dist')
@@ -169,7 +194,7 @@ hidden += [
     'paho.mqtt.enums', 'paho.mqtt.properties', 'paho.mqtt.reasoncodes',
     'paho.mqtt.packettypes', 'paho.mqtt.matcher',
     'zeroconf', 'serial', 'serial.tools', 'serial.tools.list_ports',
-    'sqlite3', '_sqlite3',
+    'sqlite3', '_sqlite3', 'sqlcipher3', 'sqlcipher3.dbapi2',
     # QR / images
     'qrcode', 'qrcode.image.pil', 'PIL', 'PIL.Image',
     # AI / ML
@@ -193,6 +218,7 @@ hidden += [
     # first-party: pemf_gui.config headless'te kullanılıyor (database.patient_database)
     'pemf_gui', 'pemf_gui.config',
 ]
+hidden += _sc_hidden if '_sc_hidden' in dir() else []  # sqlcipher3 submodulleri
 hidden = list(dict.fromkeys(hidden))  # dedup
 
 a = Analysis(

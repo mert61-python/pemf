@@ -6,6 +6,7 @@ import uvicorn
 import logging
 import tempfile
 import os
+import shutil
 import cv2
 import numpy as np
 import base64
@@ -594,6 +595,12 @@ async def health_check():
         device_id = get_unique_device_id()
     except Exception:
         device_id = "PEMF-001"
+    # Eşleştirme kodu — FE bu cihazın kodunu kullanıcıya gösterir.
+    try:
+        from utils.path_utils import get_pairing_code
+        pairing_code = get_pairing_code()
+    except Exception:
+        pairing_code = None
     service_status = state.core.get_service_status() if state.core and hasattr(state.core, "get_service_status") else {}
     # At-rest şifreleme durumu (görünürlük — düz-metin fallback'i sessizce gizleme).
     at_rest_encrypted = None
@@ -608,6 +615,7 @@ async def health_check():
         "status": "online",
         "service": "PEMF-Vet",
         "deviceId": device_id,
+        "pairingCode": pairing_code,
         "localIp": local_ip,
         "tunnelUrl": tunnel_url or None,
         "core_initialized": state.core is not None,
@@ -776,9 +784,111 @@ import threading as _threading
 
 _session_lock = _threading.Lock()
 _active_session: dict = {}  # empty when no session running
-# Sensör örnekleri aktif seans boyunca burada toplanır; /api/session/notes ile gerçek session_id'ye yazılır.
+# Sensör örnekleri aktif seans boyunca burada toplanır; /api/session/notes ve /api/session/stop ile
+# gerçek session_id'ye (db_session_id) flush edilir.
 _sensor_sample_buffer: list = []
 _sensor_sample_buffer_lock = _threading.Lock()
+
+# ── Asama-2: per-bobin run logging + dakika-ortalama aggregator state ──────────
+# Aktif (acik) bobin calismalari: coil_id(int) -> run_id(int). _begin/_finish_coil_run yonetir.
+_active_coil_runs: dict = {}
+_active_coil_runs_lock = _threading.Lock()
+# Per-RUN sensor istatistik akumulatoru (run summary icin): run_id -> {n,t_min,t_max,t_sum,i_sum,b_sum}
+_coil_run_stats: dict = {}
+_coil_run_stats_lock = _threading.Lock()
+# Per-coil dakika-akumulatoru (dakika-ortalama aggregator). Modul-duzeyi → /api/session/stop
+# bekleyen kismi dakikayi flush'tan ONCE emit edebilsin. {coil_id: {t_sum,t_min,t_max,i_sum,b_sum,amb_sum,n,freq,duty,phase}}
+_minute_acc: dict = {}
+_minute_acc_lock = _threading.Lock()
+
+
+def _get_treatment_db():
+    """Asama-2 yardimci: kanonik app_data ile TreatmentHistoryDB singleton'ini getir.
+    Hata halinde None (cagiranlar try/except ile sarmali; DB hatasi seansi/donanimi DURDURMAZ)."""
+    try:
+        from database.treatment_history_db import get_treatment_db
+        return get_treatment_db(_app_data_dir())
+    except Exception:
+        logging.getLogger(__name__).debug("Treatment DB erisilemedi", exc_info=True)
+        return None
+
+
+def _coil_hw_type(coil_id):
+    """coil_id<=5 -> 'stm', >=6 -> 'esp' (STM_COIL_IDS/ESP_COIL_IDS uyumlu)."""
+    return "stm" if int(coil_id) in STM_COIL_IDS else "esp"
+
+
+def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
+    """Aktif seans (db_session_id) varsa bir bobin calismasini DB'de baslat ve run-map'e koy.
+    Ayni coil zaten acik run'daysa once eskisini _finish_coil_run ile kapatir. Hepsi best-effort."""
+    try:
+        coil_id = int(coil_id)
+    except Exception:
+        return
+    try:
+        with _session_lock:
+            sid = _active_session.get("db_session_id")
+        if not sid:
+            return
+        # Ayni coil zaten acik run'daysa once kapat (cift-acik kalmasin).
+        with _active_coil_runs_lock:
+            already_open = coil_id in _active_coil_runs
+        if already_open:
+            _finish_coil_run(coil_id)
+        db = _get_treatment_db()
+        if db is None:
+            return
+        run_id = db.start_coil_run(
+            sid, coil_id,
+            frequency_hz=freq, duty_percent=duty, phase=phase,
+            intensity_mt=intensity, hw_type=hw_type, started_epoch=time.time(),
+        )
+        if run_id is not None:
+            with _active_coil_runs_lock:
+                _active_coil_runs[coil_id] = run_id
+            with _coil_run_stats_lock:
+                _coil_run_stats[run_id] = {"n": 0, "t_min": None, "t_max": None,
+                                           "t_sum": 0.0, "i_sum": 0.0, "b_sum": 0.0}
+    except Exception:
+        logging.getLogger(__name__).debug("_begin_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
+
+
+def _finish_coil_run(coil_id):
+    """Acik bobin calismasini kapat: end_coil_run + run-ozetini (add_sensor_run_summary) yaz.
+    Run-map ve istatistik akumulatorundan siler. Best-effort (hata seansi durdurmaz)."""
+    try:
+        coil_id = int(coil_id)
+    except Exception:
+        return
+    try:
+        with _active_coil_runs_lock:
+            run_id = _active_coil_runs.pop(coil_id, None)
+        if run_id is None:
+            return
+        db = _get_treatment_db()
+        if db is not None:
+            try:
+                db.end_coil_run(run_id, time.time())
+            except Exception:
+                logging.getLogger(__name__).debug("end_coil_run hatasi", exc_info=True)
+        with _coil_run_stats_lock:
+            st = _coil_run_stats.pop(run_id, None)
+        if db is not None and st and st.get("n", 0) > 0:
+            n = st["n"]
+            try:
+                db.add_sensor_run_summary(
+                    run_id,
+                    sample_count=n,
+                    temp_min=st.get("t_min"),
+                    temp_max=st.get("t_max"),
+                    temp_avg=(st["t_sum"] / n),
+                    current_avg=(st["i_sum"] / n),
+                    field_avg=(st["b_sum"] / n),
+                )
+            except Exception:
+                logging.getLogger(__name__).debug("add_sensor_run_summary hatasi", exc_info=True)
+    except Exception:
+        logging.getLogger(__name__).debug("_finish_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
 
 @app.post("/api/hardware/auto_preset")
 async def auto_preset(payload: AutoPresetPayload):
@@ -928,6 +1038,11 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         state.hardware.update_coil(
             coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min, start=payload.start
         )
+        # Asama-2: per-bobin run logging (best-effort, seansi bozmaz).
+        if payload.start:
+            _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+        else:
+            _finish_coil_run(coil_id)
         return {"status": "success", "command_id": command_id, "transport": "stm32"}
 
     if payload.start:
@@ -943,6 +1058,11 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         mqtt_payload = {"command": "stop", "command_id": command_id}
 
     ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+    # Asama-2: per-bobin run logging (ESP/MQTT dali).
+    if payload.start:
+        _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
+    else:
+        _finish_coil_run(coil_id)
     return {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
 
 
@@ -969,6 +1089,11 @@ async def control_batch_coils(payload: BatchCoilPayload):
             state.hardware.update_coil(
                 coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min, start=payload.start
             )
+            # Asama-2: per-bobin run logging.
+            if payload.start:
+                _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+            else:
+                _finish_coil_run(coil_id)
             results.append({"coilId": coil_id, "status": "success", "transport": "stm32"})
             continue
         if payload.start:
@@ -983,6 +1108,11 @@ async def control_batch_coils(payload: BatchCoilPayload):
         else:
             mqtt_payload = {"command": "stop", "command_id": command_id}
         ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", mqtt_payload)
+        # Asama-2: per-bobin run logging (ESP/MQTT dali).
+        if payload.start:
+            _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
+        else:
+            _finish_coil_run(coil_id)
         results.append({"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"})
     return {"status": "success", "results": results}
 
@@ -1017,7 +1147,10 @@ async def start_session(payload: SessionStartPayload):
             "phase": payload.phase,
             "duration_minutes": payload.duration_minutes,
             "start_time": time.time(),
+            "started_epoch": time.time(),
             "coil_ids": coil_ids,
+            "db_session_id": None,   # Asama-2: seans BASINDA olusan gercek int DB session_id
+            "db_patient_id": None,
         }
 
     # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
@@ -1045,9 +1178,47 @@ async def start_session(payload: SessionStartPayload):
     except Exception:
         logging.getLogger(__name__).warning("Seans başlangıç audit kaydı yapılamadı.", exc_info=True)
 
+    # Asama-2 (1a): seans BASINDA gercek DB satirini ac (coil-run + sensor ona baglanir).
+    # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
+    try:
+        db = _get_treatment_db()
+        if db is not None:
+            patient_id = None
+            if payload.patient_name:
+                try:
+                    patient_id = db.upsert_patient({
+                        "name": payload.patient_name,
+                        "patient_uuid": (payload.patient_id or None),
+                    })
+                except Exception:
+                    logging.getLogger(__name__).debug("upsert_patient hatasi", exc_info=True)
+            sid = db.start_session(
+                treatment_mode=payload.mode,
+                target_condition=payload.target_condition or None,
+                operator_name=payload.operator_name or None,
+                patient_name=payload.patient_name or None,
+            )
+            with _session_lock:
+                # Yalniz hala bu seans aktifse yaz (arada /stop gelmis olabilir).
+                if _active_session.get("is_active"):
+                    _active_session["db_session_id"] = sid
+                    _active_session["db_patient_id"] = patient_id
+            # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
+            try:
+                db.set_session_meta(sid, started_epoch=_active_session.get("started_epoch"), patient_id=patient_id)
+            except Exception:
+                logging.getLogger(__name__).debug("set_session_meta(start) hatasi", exc_info=True)
+    except Exception:
+        logging.getLogger(__name__).warning("Seans DB satiri olusturulamadi (db_session_id=None).", exc_info=True)
+
     # Yeni seans → önceki (kaydedilmemiş) sensör buffer'ını temizle.
     with _sensor_sample_buffer_lock:
         _sensor_sample_buffer.clear()
+    # Asama-2: onceki seanstan artmis acik coil-run / istatistik kalmasin.
+    with _active_coil_runs_lock:
+        _active_coil_runs.clear()
+    with _coil_run_stats_lock:
+        _coil_run_stats.clear()
 
     # Session API accepts minutes; ESP/MQTT duration remains seconds.
     import time as _t
@@ -1063,11 +1234,15 @@ async def start_session(payload: SessionStartPayload):
         }
         # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
         _threading.Thread(target=_mqtt_publish, args=(f"pemf/coil/{coil_id}/control", mqtt_payload), daemon=True).start()
+        # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
+        # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
+        _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "esp")
 
     for coil_id in stm_coils:
         state.hardware.update_coil(
             coil_id, payload.frequency, payload.duty, payload.phase, payload.duration_minutes, start=True
         )
+        _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "stm")
 
     update_live_session_state(
         is_active=True,
@@ -1102,6 +1277,12 @@ def _stop_session_coils(coil_ids):
     if state.hardware:
         for coil_id in [cid for cid in coil_ids if cid in STM_COIL_IDS]:
             state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False)
+    # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin).
+    for coil_id in coil_ids:
+        try:
+            _finish_coil_run(coil_id)
+        except Exception:
+            logging.getLogger(__name__).debug("_stop_session_coils _finish_coil_run hatasi", exc_info=True)
 
 
 def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
@@ -1209,44 +1390,213 @@ def _hardware_simulation_loop():
         _t.sleep(0.5)
 
 
+def _emit_minute_averages(now=None):
+    """Modul-duzeyi _minute_acc icindeki n>0 her bobin icin DAKIKA-ortalamasi satirini
+    _sensor_sample_buffer'a ekler ve akumulatoru SIFIRLAR. Ayrica per-RUN istatistigini
+    (_coil_run_stats) gunceller. Ham veri YERINE dakika-ortalamasi → 20dk seans ≈ bobin basina ~20 satir.
+    Hem dakika-loop hem /api/session/stop (kismi dakika) cagirir; thread-safe."""
+    if now is None:
+        now = time.time()
+    rows = []
+    with _minute_acc_lock:
+        snapshot = list(_minute_acc.items())
+        _minute_acc.clear()
+    for coil_id, acc in snapshot:
+        n = acc.get("n", 0)
+        if n <= 0:
+            continue
+        with _active_coil_runs_lock:
+            run_id = _active_coil_runs.get(coil_id)
+        amb_avg = (acc["amb_sum"] / n) if n else None
+        rows.append({
+            "coil_id": str(coil_id),
+            "sample_ts": now,
+            "temperature_c": acc["t_sum"] / n,
+            "ambient_temp_c": amb_avg,
+            "current_a": acc["i_sum"] / n,
+            "magnetic_field_mt": acc["b_sum"] / n,
+            "pwm_frequency_hz": acc.get("freq"),
+            "pwm_duty_percent": acc.get("duty"),
+            "phase": acc.get("phase"),
+            "sample_count": n,
+            "coil_run_id": run_id,
+            "payload": {"aggregated": True, "minute": True},
+        })
+        # Per-RUN ozet akumulatoru: dakika-ortalamasi run istatistigine de katki saglar.
+        if run_id is not None:
+            with _coil_run_stats_lock:
+                st = _coil_run_stats.get(run_id)
+                if st is not None:
+                    st["n"] += n
+                    st["t_sum"] += acc["t_sum"]
+                    st["i_sum"] += acc["i_sum"]
+                    st["b_sum"] += acc["b_sum"]
+                    tmn, tmx = acc.get("t_min"), acc.get("t_max")
+                    if tmn is not None:
+                        st["t_min"] = tmn if st["t_min"] is None else min(st["t_min"], tmn)
+                    if tmx is not None:
+                        st["t_max"] = tmx if st["t_max"] is None else max(st["t_max"], tmx)
+    if rows:
+        with _sensor_sample_buffer_lock:
+            _sensor_sample_buffer.extend(rows)
+            if len(_sensor_sample_buffer) > 20000:
+                del _sensor_sample_buffer[:len(_sensor_sample_buffer) - 20000]
+
+
 def _sensor_persistence_loop():
-    """Aktif seans boyunca her ~2sn _live_state'ten ÇALIŞAN bobinlerin sensör örneğini toplar.
-    Seans /api/session/notes ile DB'ye yazılınca gerçek session_id ile flush edilir.
-    Gerçek donanım + simülasyon ikisinde de çalışır (her ikisi de _live_state'i günceller)."""
+    """Aktif seans boyunca her ~2sn _live_state'ten ÇALIŞAN bobinlerin sensör değerlerini
+    DAKIKA-ortalama akumulatorunde toplar (canli WS yayini KORUNUR; yayin sim/HW kendi
+    looplarinda). Her 60sn'de per-bobin dakika-ortalamasi _sensor_sample_buffer'a yazilir.
+    Buffer /api/session/notes + /api/session/stop ile gercek db_session_id ile flush edilir.
+    Boylece HAM yazma YERINE dakika-ortalamasi (20dk seans ≈ bobin basina ~20 satir)."""
     import time as _t
+    minute_start = _t.time()
     while True:
         try:
             with _session_lock:
                 active = bool(_active_session.get("is_active"))
             if active:
-                now = _t.time()
                 with _live_state_lock:
                     coils = [dict(_live_state["coils"][i]) for i in range(8)]
-                samples = []
-                for coil in coils:
-                    if not coil.get("running"):
-                        continue
-                    samples.append({
-                        "coil_id": str(coil.get("id")),
-                        "sample_ts": now,
-                        "temperature_c": coil.get("objectTemp"),
-                        "magnetic_field_mt": coil.get("magneticMt"),
-                        "current_a": coil.get("currentA"),
-                        "pwm_frequency_hz": coil.get("frequencyHz"),
-                        "pwm_duty_percent": coil.get("dutyCycle"),
-                        "payload": {"ambientTemp": coil.get("ambientTemp"), "running": coil.get("running")},
-                    })
-                if samples:
-                    with _sensor_sample_buffer_lock:
-                        _sensor_sample_buffer.extend(samples)
-                        if len(_sensor_sample_buffer) > 20000:
-                            del _sensor_sample_buffer[:len(_sensor_sample_buffer) - 20000]
+                with _minute_acc_lock:
+                    for coil in coils:
+                        if not coil.get("running"):
+                            continue
+                        try:
+                            cid = int(coil.get("id"))
+                        except Exception:
+                            continue
+                        temp = coil.get("objectTemp")
+                        cur = coil.get("currentA")
+                        fld = coil.get("magneticMt")
+                        amb = coil.get("ambientTemp")
+                        acc = _minute_acc.get(cid)
+                        if acc is None:
+                            acc = {"t_sum": 0.0, "t_min": None, "t_max": None,
+                                   "i_sum": 0.0, "b_sum": 0.0, "amb_sum": 0.0, "n": 0,
+                                   "freq": coil.get("frequencyHz"), "duty": coil.get("dutyCycle"),
+                                   "phase": coil.get("phase")}
+                            _minute_acc[cid] = acc
+                        if temp is not None:
+                            tv = float(temp)
+                            acc["t_sum"] += tv
+                            acc["t_min"] = tv if acc["t_min"] is None else min(acc["t_min"], tv)
+                            acc["t_max"] = tv if acc["t_max"] is None else max(acc["t_max"], tv)
+                        if cur is not None:
+                            acc["i_sum"] += float(cur)
+                        if fld is not None:
+                            acc["b_sum"] += float(fld)
+                        if amb is not None:
+                            acc["amb_sum"] += float(amb)
+                        acc["n"] += 1
+                        # En guncel parametreleri sakla (dakika boyunca degisebilir).
+                        acc["freq"] = coil.get("frequencyHz")
+                        acc["duty"] = coil.get("dutyCycle")
+                        if coil.get("phase") is not None:
+                            acc["phase"] = coil.get("phase")
+                # Dakika siniri: ortalama satirlarini emit et (akumulatoru sifirlar).
+                if (_t.time() - minute_start) >= 60.0:
+                    _emit_minute_averages(_t.time())
+                    minute_start = _t.time()
+            else:
+                minute_start = _t.time()
         except Exception:
             logging.exception("sensor persistence loop error")
         _t.sleep(2.0)
 
 
 _threading.Thread(target=_sensor_persistence_loop, daemon=True, name="sensor-persist").start()
+
+
+def _daily_maintenance_loop():
+    """Asama-2 (4): GUNLUK arka-plan bakim — retention temizligi + .db yedek.
+    - Retention: sensor_samples (PEMF_SENSOR_RETAIN_DAYS, vars. 90) + session_events (365).
+      Run-ozetleri run bitiminde yazildigindan ham silinince ozet kalir.
+    - Haftada bir wal_checkpoint(TRUNCATE) + VACUUM (run_maintenance helper'i + VACUUM).
+    - Gunluk .db yedek: once wal_checkpoint, sonra pemf_treatment_history.db ->
+      app_data/backups/pemf_treatment_history_YYYYMMDD.db (shutil.copy2). Son 14 yedek tutulur.
+    Hata olursa loglanir, cokmez. Ilk calisma acilistan ~60sn sonra (acilisi yavaslatmamak icin)."""
+    import time as _t
+    from pathlib import Path as _Path
+    log = logging.getLogger(__name__)
+    _t.sleep(60)  # acilisi yavaslatma
+    run_count = 0
+    while True:
+        try:
+            retain_days = int(os.getenv("PEMF_SENSOR_RETAIN_DAYS", "90"))
+        except Exception:
+            retain_days = 90
+        try:
+            db = _get_treatment_db()
+            if db is not None:
+                # 1) Retention temizligi.
+                try:
+                    removed_s = db.purge_old_sensor_samples(retain_days)
+                    removed_e = db.purge_old_session_events(365)
+                    log.info("Retention: %s sensor_samples + %s session_events silindi.", removed_s, removed_e)
+                except Exception:
+                    log.warning("Retention temizleme hatasi", exc_info=True)
+
+                # 2) Haftada bir checkpoint + VACUUM.
+                if run_count % 7 == 0:
+                    try:
+                        if hasattr(db, "run_maintenance"):
+                            db.run_maintenance()  # wal_checkpoint(TRUNCATE) + optimize
+                        conn_fn = getattr(db, "_get_connection", None)
+                        if conn_fn is not None:
+                            with conn_fn() as conn:
+                                cur = conn.cursor()
+                                try:
+                                    cur.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                                except Exception:
+                                    pass
+                                try:
+                                    # VACUUM islem (transaction) icinde calismaz → autocommit'e gec.
+                                    conn.isolation_level = None
+                                    cur.execute("VACUUM")
+                                except Exception:
+                                    pass
+                    except Exception:
+                        log.warning("Haftalik VACUUM/checkpoint hatasi", exc_info=True)
+
+                # 3) Gunluk .db yedek.
+                try:
+                    # Yedekten ONCE checkpoint → tum veri ana .db dosyasinda olsun.
+                    conn_fn = getattr(db, "_get_connection", None)
+                    if conn_fn is not None:
+                        with conn_fn() as conn:
+                            try:
+                                conn.cursor().execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                            except Exception:
+                                pass
+                    db_path = getattr(db, "db_path", None) or (_app_data_dir() / "pemf_treatment_history.db")
+                    db_path = _Path(db_path)
+                    if db_path.exists():
+                        backups_dir = _app_data_dir() / "backups"
+                        backups_dir.mkdir(parents=True, exist_ok=True)
+                        stamp = datetime.now().strftime("%Y%m%d")
+                        dest = backups_dir / f"pemf_treatment_history_{stamp}.db"
+                        shutil.copy2(str(db_path), str(dest))
+                        log.info("Gunluk DB yedek olusturuldu: %s", dest)
+                        # Son 14 yedegi tut, eskileri sil.
+                        try:
+                            existing = sorted(backups_dir.glob("pemf_treatment_history_*.db"))
+                            for old in existing[:-14]:
+                                try:
+                                    old.unlink()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            log.debug("Eski yedek temizleme hatasi", exc_info=True)
+                except Exception:
+                    log.warning("Gunluk DB yedek hatasi", exc_info=True)
+        except Exception:
+            log.warning("daily maintenance loop genel hatasi", exc_info=True)
+        run_count += 1
+        _t.sleep(86400)  # gunde bir kez
+
+
+_threading.Thread(target=_daily_maintenance_loop, daemon=True, name="daily-maintenance").start()
 
 
 if os.environ.get("PEMF_SIMULATE") == "1":
@@ -1256,18 +1606,61 @@ if os.environ.get("PEMF_SIMULATE") == "1":
 
 @app.post("/api/session/stop")
 async def stop_session():
-    """Stop the active treatment session."""
+    """Stop the active treatment session.
+
+    Asama-2: donanim durdurulduktan sonra seans+sensor KALICI yazilir (not beklenmez):
+    bekleyen kismi dakika emit edilir, acik coil-run'lar kapatilir (run ozeti yazilir),
+    sensor buffer'i gercek db_session_id ile flush edilir ve end_session ile GERCEK
+    wall-clock sure yazilir. Hepsi best-effort (DB hatasi donanim durdurmayi engellemez)."""
     global _active_session
     with _session_lock:
         if not _active_session.get("is_active"):
             return {"status": "ok", "message": "Aktif seans yok."}
         coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
+        db_session_id = _active_session.get("db_session_id")
+        started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
         _active_session["is_active"] = False
 
+    # (a) Bekleyen kismi dakikayi emit et — acik run-ozetine de katki saglar (finish'ten ONCE).
+    try:
+        _emit_minute_averages(time.time())
+    except Exception:
+        logging.getLogger(__name__).debug("stop: minute emit hatasi", exc_info=True)
+
+    # Donanim STOP (ESP→MQTT, STM→update_coil). _stop_session_coils ayrica acik coil-run'lari kapatir.
     _stop_session_coils(coil_ids)
     update_live_session_state(is_active=False, mode="Sistem Hazır")
 
-    return {"status": "success", "message": "Seans durduruldu."}
+    # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
+    flushed = 0
+    if db_session_id:
+        try:
+            with _sensor_sample_buffer_lock:
+                pending = list(_sensor_sample_buffer)
+                _sensor_sample_buffer.clear()
+            db = _get_treatment_db()
+            if db is not None:
+                if pending:
+                    try:
+                        flushed = db.add_sensor_samples_batch(db_session_id, pending)
+                        logging.info("stop: sensor flush %d satir (session_id=%s)", flushed, db_session_id)
+                    except Exception:
+                        logging.exception("stop: sensor flush hatasi")
+                try:
+                    _now = time.time()
+                    dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
+                    db.end_session(db_session_id, duration_minutes=dur_min)
+                    # Yeni kolon: gercek wall-clock bitis epoch'u (end_session bunu yazmaz).
+                    db.set_session_meta(db_session_id, ended_epoch=_now)
+                except Exception:
+                    logging.exception("stop: end_session hatasi")
+            # Bu seansin DB satiri kapandi → notes endpoint cift-kayit yapmasin.
+            with _session_lock:
+                _active_session["db_finalized"] = True
+        except Exception:
+            logging.exception("stop: kalici kayit genel hatasi")
+
+    return {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
 
 
 class SessionNotesPayload(BaseModel):
@@ -1282,13 +1675,34 @@ class SessionNotesPayload(BaseModel):
 
 @app.post("/api/session/notes")
 async def save_session_notes(payload: SessionNotesPayload):
-    """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı)."""
+    """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı).
+
+    Asama-2 (1c): seans BASINDA gercek db_session_id olustuysa ARTIK YENI satir ACMAZ →
+    o satiri GUNCELLER (notlar + parametreler). Sensor buffer zaten /api/session/stop'ta
+    flush edildiginden burada tekrar flush ETMEZ (cift-kayit onlenir). db_session_id yoksa
+    eski start_session+end_session fallback'i korunur (geriye uyumlu)."""
     try:
-        from pathlib import Path
         from database.treatment_history_db import get_treatment_db
 
         app_data = _app_data_dir()
         db = get_treatment_db(app_data)
+
+        # Aktif seansin DB durumunu al (varsa).
+        with _session_lock:
+            existing_sid = _active_session.get("db_session_id")
+
+        if existing_sid:
+            # Var olan seans satirini GUNCELLE (yeni satir acma → cift-kayit yok).
+            db.end_session(
+                existing_sid,
+                parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
+                patient_notes=payload.notes or None,
+                duration_minutes=(int(payload.duration_minutes) if payload.duration_minutes else None),
+            )
+            # Buffer zaten /stop'ta flush edildi; tekrar flush etme (idempotent).
+            return {"status": "success", "session_id": existing_sid, "sensor_samples": 0, "updated": True}
+
+        # Eski yol (db_session_id yok): tek-seferlik start+end fallback'i.
         sid = db.start_session(
             treatment_mode=payload.mode,
             target_condition=payload.target_condition or None,
@@ -1439,6 +1853,12 @@ async def system_info():
         device_id = get_unique_device_id()
     except Exception:
         device_id = "PEMF-001"
+    # Eşleştirme kodu — FE bu cihazın kodunu kullanıcıya gösterir.
+    try:
+        from utils.path_utils import get_pairing_code
+        pairing_code = get_pairing_code()
+    except Exception:
+        pairing_code = None
     try:
         from servers.tunnel_manager import get_tunnel_url
         tunnel_url = get_tunnel_url() or None
@@ -1448,6 +1868,7 @@ async def system_info():
         "softwareVersion": "1",
         "hardwareVersion": "HW-2025.1",
         "deviceId": device_id,
+        "pairingCode": pairing_code,
         "tunnelUrl": tunnel_url,
         "stmConnected": state.core.stm_is_connected if state.core else False,
         "timestamp": datetime.now().isoformat(timespec="seconds"),

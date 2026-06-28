@@ -122,9 +122,11 @@ Write-Status "Sertleştirilmiş mosquitto.conf yazıldı: $ConfPath" "Green"
 
 # --- 5. Firewall (TCP 1883) ---
 if (-not (Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)) {
+    # P0-3 (GÜVENLİK): 1883 yalnız hotspot subnet'inden (ESP bobinleri) — klinik LAN'a KAPALI.
+    # (ESP anon bağlandığından MQTT auth açılamaz; savunma hotspot WPA2 + subnet kısıtı.)
     New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound `
-        -Protocol TCP -LocalPort 1883 -Action Allow -Profile Any | Out-Null
-    Write-Status "Firewall kuralı eklendi: TCP 1883 inbound." "Green"
+        -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any | Out-Null
+    Write-Status "Firewall kuralı eklendi: TCP 1883 inbound (yalnız hotspot subnet 192.168.137.0/24)." "Green"
 }
 
 # --- 6. Servisi (yeniden) kaydet ---
