@@ -168,7 +168,7 @@ def start_tunnel(port: int = 8000) -> bool:
     Cloudflare Tünelini başlatır.
     Returns True if started successfully, False otherwise.
     """
-    global _tunnel_process, _tunnel_thread
+    global _tunnel_process, _tunnel_thread, _tunnel_url
 
     with _tunnel_lock:
         if _tunnel_process and _tunnel_process.poll() is None:
@@ -184,8 +184,17 @@ def start_tunnel(port: int = 8000) -> bool:
             logger.error("cloudflared binary hazırlanamadı, tünel başlatılamıyor.")
             return False
 
-    cmd = [str(bin_path), "tunnel", "--url", f"http://localhost:{port}"]
-    logger.info("Cloudflare tüneli başlatılıyor → port %d", port)
+    # ÜRETİM (P1): PEMF_CLOUDFLARE_TUNNEL_TOKEN ayarlıysa NAMED tunnel — KALICI hostname +
+    # SLA + (istenirse) Cloudflare Access. Yoksa QUICK tunnel (trycloudflare, URL her restart
+    # değişir, SLA yok) — geliştirme/yedek. Tıbbi üretimde NAMED + sabit hostname önerilir.
+    token = os.environ.get("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()
+    hostname = os.environ.get("PEMF_TUNNEL_HOSTNAME", "").strip()
+    if token:
+        cmd = [str(bin_path), "tunnel", "run", "--token", token]
+        logger.info("Cloudflare NAMED tunnel başlatılıyor (kalıcı hostname, üretim-grade).")
+    else:
+        cmd = [str(bin_path), "tunnel", "--url", f"http://localhost:{port}"]
+        logger.info("Cloudflare QUICK tunnel başlatılıyor → port %d (URL her restart DEĞİŞİR; üretimde NAMED önerilir).", port)
 
     try:
         process = subprocess.Popen(
@@ -197,7 +206,20 @@ def start_tunnel(port: int = 8000) -> bool:
         with _tunnel_lock:
             _tunnel_process = process
 
-        # URL okuma thread'ini başlat
+        # NAMED tunnel'da hostname SABİT (config'ten gelir) → stderr'den URL parse etmeye gerek yok.
+        if token and hostname:
+            url = hostname if hostname.startswith("http") else f"https://{hostname}"
+            with _tunnel_lock:
+                _tunnel_url = url
+            logger.info("🌐 NAMED tunnel kalıcı hostname: %s", url)
+            for cb in list(_url_callbacks):
+                try:
+                    cb(url)
+                except Exception:
+                    pass
+            return True
+
+        # QUICK tunnel: trycloudflare URL'sini stderr'den okuma thread'i ile yakala.
         _tunnel_thread = threading.Thread(
             target=_read_url_from_output,
             args=(process, port),

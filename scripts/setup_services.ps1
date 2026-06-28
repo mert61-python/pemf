@@ -21,7 +21,10 @@ if (-not $AppDir) { $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $ServiceBackend = "PemfBackend"
 $ServiceMosq    = "mosquitto"
 $LogDir         = "C:\ProgramData\PEMF_System\logs"
-$NssmExe        = "C:\nssm\nssm.exe"
+# NSSM: ÖNCE bundled (offline, {app}\_internal\bin\nssm) → yoksa C:\nssm → en son indir (internet).
+# Offline klinikte internet gerekmesin diye nssm.exe EXE'ye bundle edildi (spec bin/nssm).
+$NssmBundled    = Join-Path $AppDir "_internal\bin\nssm\nssm.exe"
+$NssmExe        = if (Test-Path $NssmBundled) { $NssmBundled } else { "C:\nssm\nssm.exe" }
 $MosqInstallDir = "C:\Program Files\PEMF\mosquitto"
 $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
 $BackendExe     = Join-Path $AppDir "PEMF_Backend.exe"

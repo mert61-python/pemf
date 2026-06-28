@@ -1559,37 +1559,12 @@ def _daily_maintenance_loop():
                     except Exception:
                         log.warning("Haftalik VACUUM/checkpoint hatasi", exc_info=True)
 
-                # 3) Gunluk .db yedek.
-                try:
-                    # Yedekten ONCE checkpoint → tum veri ana .db dosyasinda olsun.
-                    conn_fn = getattr(db, "_get_connection", None)
-                    if conn_fn is not None:
-                        with conn_fn() as conn:
-                            try:
-                                conn.cursor().execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                            except Exception:
-                                pass
-                    db_path = getattr(db, "db_path", None) or (_app_data_dir() / "pemf_treatment_history.db")
-                    db_path = _Path(db_path)
-                    if db_path.exists():
-                        backups_dir = _app_data_dir() / "backups"
-                        backups_dir.mkdir(parents=True, exist_ok=True)
-                        stamp = datetime.now().strftime("%Y%m%d")
-                        dest = backups_dir / f"pemf_treatment_history_{stamp}.db"
-                        shutil.copy2(str(db_path), str(dest))
-                        log.info("Gunluk DB yedek olusturuldu: %s", dest)
-                        # Son 14 yedegi tut, eskileri sil.
-                        try:
-                            existing = sorted(backups_dir.glob("pemf_treatment_history_*.db"))
-                            for old in existing[:-14]:
-                                try:
-                                    old.unlink()
-                                except Exception:
-                                    pass
-                        except Exception:
-                            log.debug("Eski yedek temizleme hatasi", exc_info=True)
-                except Exception:
-                    log.warning("Gunluk DB yedek hatasi", exc_info=True)
+                # 3) GUNLUK YEDEK: BURADA YAPILMIYOR (P1 cift-yazici cakismasi giderildi).
+                # Yedegi services/headless_db_maintenance.py (HeadlessDBMaintenance) aliyor:
+                # KEYED create_backup() → SIFRELI + atomik (sifreli DB'de duz-metin sizmaz).
+                # Eskiden burada shutil.copy2 (duz-metin) ile AYNI backups/ dizinine + AYNI glob'a
+                # (pemf_treatment_history_*.db, son-14) yaziliyordu → iki zamanlayici birbirinin
+                # yedegini SILIYORDU ve PII duz-metin yedekleniyordu. Yedek tek noktada toplandi.
         except Exception:
             log.warning("daily maintenance loop genel hatasi", exc_info=True)
         run_count += 1

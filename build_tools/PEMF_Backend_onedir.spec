@@ -97,6 +97,11 @@ config_dir = os.path.join(project_path, 'config')
 if os.path.exists(config_dir):
     for root, _, files in os.walk(config_dir):
         for f in files:
+            # GÜVENLİK (P1): config.json GERÇEK Gmail App Password içerir; runtime'da
+            # %USERPROFILE%\.pemf_gui\config.json okunur (bu bundled dosya DEĞİL) → sırrı
+            # EXE'ye GÖMME. Yalnız config.json.template (boş şablon) ve diğer dosyalar bundle'lanır.
+            if f == 'config.json':
+                continue
             if f.endswith(('.json', '.template', '.conf', '.txt', '.h')):
                 datas.append((os.path.join(root, f), os.path.relpath(root, project_path)))
 
@@ -123,6 +128,12 @@ if os.path.exists(deploy_dir):
 cloudflared_dir = os.path.join(project_path, 'bin', 'cloudflared')
 if os.path.exists(cloudflared_dir):
     datas.append((cloudflared_dir, 'bin/cloudflared'))
+
+# NSSM (Windows servis sarmalayıcı) — OFFLINE bundle: internetsiz klinikte servis kurulabilsin
+# (eskiden setup_services/install scriptleri nssm.cc'den indiriyordu → offline saha kuramıyordu).
+nssm_dir = os.path.join(project_path, 'bin', 'nssm')
+if os.path.exists(nssm_dir):
+    datas.append((nssm_dir, 'bin/nssm'))
 
 # React frontend (FastAPI '/' kökünden serve eder)
 frontend_dir = os.path.join(project_path, 'frontend', 'dist')
