@@ -107,6 +107,7 @@ def send_email(payload: EmailPayload):
     if not sender_email or not sender_pwd:
         raise HTTPException(status_code=400, detail="E-posta ayarları yapılmamış.")
         
+    pdf_path = None
     try:
         from utils.pdf_report_generator import get_pdf_generator
         pdf_gen = get_pdf_generator(_app_data_dir)
@@ -136,3 +137,11 @@ def send_email(payload: EmailPayload):
     except Exception as e:
         logger.error(f"Email send error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # P1 audit 2026-06-28: gonderim sonrasi (basari VEYA hata) PII PDF'i diskten sil —
+        # at-rest SQLCipher korumasini duz-metin email_report*.pdf ile baypas etmesin.
+        try:
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+        except Exception:
+            pass

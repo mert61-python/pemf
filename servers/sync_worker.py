@@ -116,13 +116,13 @@ class CloudSyncWorker:
                             "updated_at": patient_data["updated_at"]
                         }
                         
-                        # Supabase'e push (Upsert)
-                        res = self.client.table("patients").upsert(payload).execute()
-                        if res.data:
-                            # Basarili, sync_status guncelle
-                            cursor.execute("UPDATE patients SET sync_status = 1 WHERE id = ?", (patient_data["id"],))
-                            conn.commit()
-                            logger.info(f"Hasta {patient_data['id']} Supabase'e senkronize edildi.")
+                        # P1 audit 2026-06-28: RLS+RPC — dogrudan tablo upsert (anon, RLS-yok) YERINE
+                        # SECURITY DEFINER upsert_patient RPC (device_id'yi SUNUCU-TARAFI zorlar).
+                        self.client.rpc("upsert_patient", {"p_device_id": self.device_id, "p_patient": payload}).execute()
+                        # RPC istisna firlatmadiysa basarili → sync_status guncelle.
+                        cursor.execute("UPDATE patients SET sync_status = 1 WHERE id = ?", (patient_data["id"],))
+                        conn.commit()
+                        logger.info(f"Hasta {patient_data['id']} Supabase'e senkronize edildi (RPC).")
                         
         except Exception as e:
             logger.error(f"Patient PUSH hatasi: {e}")
@@ -134,7 +134,8 @@ class CloudSyncWorker:
                     cursor = conn.cursor()
                     # Gerçek senaryoda burası last_sync_time ile filtrelenmeli
                     # Sadece BU cihazın kayıtları (cross-tenant izolasyon); decrypt-guard defense-in-depth.
-                    res = self.client.table("patients").select("*").eq("device_id", self.device_id).execute()
+                    # P1 audit: RLS+RPC — dogrudan SELECT (anon kapali) YERINE resolve_patients RPC.
+                    res = self.client.rpc("resolve_patients", {"p_device_id": self.device_id}).execute()
                     if res.data:
                         skipped = 0
                         for rp in res.data:
@@ -202,11 +203,11 @@ class CloudSyncWorker:
                         "created_at": session_data["created_at"]
                     }
                     
-                    res = self.client.table("treatment_sessions").upsert(payload).execute()
-                    if res.data:
-                        cursor.execute("UPDATE treatment_sessions SET sync_status = 1 WHERE id = ?", (session_data["id"],))
-                        conn.commit()
-                        logger.info(f"Seans {session_data['id']} Supabase'e senkronize edildi.")
+                    # P1 audit 2026-06-28: RLS+RPC — upsert_session RPC (device_id sunucu-tarafi).
+                    self.client.rpc("upsert_session", {"p_device_id": self.device_id, "p_session": payload}).execute()
+                    cursor.execute("UPDATE treatment_sessions SET sync_status = 1 WHERE id = ?", (session_data["id"],))
+                    conn.commit()
+                    logger.info(f"Seans {session_data['id']} Supabase'e senkronize edildi (RPC).")
                         
         except Exception as e:
             logger.error(f"Session PUSH hatasi: {e}")
@@ -215,7 +216,8 @@ class CloudSyncWorker:
         try:
             with session_db._get_connection() as conn:
                 cursor = conn.cursor()
-                res = self.client.table("treatment_sessions").select("*").eq("device_id", self.device_id).execute()
+                # P1 audit: RLS+RPC — resolve_sessions RPC.
+                res = self.client.rpc("resolve_sessions", {"p_device_id": self.device_id}).execute()
                 if res.data:
                     for rs in res.data:
                         cursor.execute(

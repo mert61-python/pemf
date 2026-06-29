@@ -8,7 +8,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 import csv
 import io
+import time
 import logging
+from starlette.background import BackgroundTask
 
 from database.treatment_history_db import get_treatment_db
 from utils.pdf_report_generator import get_pdf_generator
@@ -24,6 +26,34 @@ class HistoryDeletePayload(BaseModel):
 # Canonical veri klasörü — api_server (gözlem-notu/KPI/AI-log) ile AYNI olmalı,
 # yoksa yazıcı/okuyucu farklı DB dosyalarına düşer (split-brain → geçmiş boş görünür).
 _app_data_dir = get_app_data_directory()
+_REPORTS_DIR = _app_data_dir / "temp_reports"
+
+def _safe_unlink(path):
+    """P1 audit 2026-06-28: rapor PDF'i (tam hasta PII) gonderildikten SONRA sil — at-rest
+    SQLCipher korumasini diskteki duz-metin PDF ile baypas etmesin."""
+    try:
+        os.remove(path)
+    except Exception:
+        pass
+
+def _purge_old_reports(max_age_sec: int = 3600):
+    """temp_reports/ icindeki >1 saatlik orphan PDF'leri sil (crash/eski surum kalintilari).
+    FileResponse BackgroundTask normal akisi temizler; bu yalniz orphanlar icindir."""
+    try:
+        if not _REPORTS_DIR.exists():
+            return
+        now = time.time()
+        for f in _REPORTS_DIR.glob("*.pdf"):
+            try:
+                if now - f.stat().st_mtime > max_age_sec:
+                    f.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+_purge_old_reports()  # import-zamani orphan temizligi
+
 
 def get_db():
     return get_treatment_db(_app_data_dir)
@@ -60,14 +90,16 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
         # PDF'i tmp bir yere üret
         tmp_dir = _app_data_dir / "temp_reports"
         tmp_dir.mkdir(exist_ok=True)
-        out_path = str(tmp_dir / f"report_{id_list[0]}.pdf")
+        _purge_old_reports()
+        out_path = str(tmp_dir / f"report_{id_list[0]}_{int(time.time()*1000)}.pdf")
         
         pdf_path = pdf_gen.generate_session_report(session_ids=id_list, output_path=out_path)
         
         return FileResponse(
             path=pdf_path, 
             media_type='application/pdf', 
-            filename=f"PEMF_Report.pdf"
+            filename=f"PEMF_Report.pdf",
+            background=BackgroundTask(_safe_unlink, pdf_path),  # P1 audit: gonderim sonrasi PII PDF'i sil
         )
     except Exception as e:
         logger.error(f"Error generating PDF: {e}")
@@ -126,14 +158,15 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
     try:
         tmp_dir = _app_data_dir / "temp_reports"
         tmp_dir.mkdir(exist_ok=True)
-        out_path = str(tmp_dir / f"patient_report.pdf")
+        out_path = str(tmp_dir / f"patient_report_{int(time.time()*1000)}.pdf")
         
         pdf_path = pdf_gen.generate_patient_report(patient_name=patient_name, output_path=out_path)
         
         return FileResponse(
             path=pdf_path, 
             media_type='application/pdf', 
-            filename=f"{patient_name}_PEMF_Report.pdf"
+            filename=f"{patient_name}_PEMF_Report.pdf",
+            background=BackgroundTask(_safe_unlink, pdf_path),  # P1 audit: gonderim sonrasi PII PDF'i sil
         )
     except Exception as e:
         logger.error(f"Error generating patient PDF: {e}")

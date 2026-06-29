@@ -80,18 +80,32 @@ async def _auth_middleware(request: Request, call_next):
     (emergency_stop/health/discovery/simulator). Auth KAPALIYKEN hiçbir şey değişmez (geriye uyumlu)."""
     if request.method == "OPTIONS":
         return await call_next(request)
+    # P1 audit 2026-06-28: FAIL-CLOSED. Eskiden auth yolundaki HERHANGI istisna (servers.auth
+    # import hatasi, check_token bug) except'e dusup KOSULSUZ call_next ediyordu → TUM enforcement
+    # bypass (sessiz fail-open). Artik: auth-katmani yuklenemezse guvenlik-muaf yollar (emergency_stop/
+    # health/discovery/simulator) gecer, GERISI 503; token kontrolu patlarsa 401.
     try:
         from servers.auth import require_auth, is_exempt, check_token
-        if require_auth() and not is_exempt(request.url.path):
-            provided = request.headers.get("X-API-Key") or request.query_params.get("token") or ""
-            if not check_token(provided):
-                return Response(
-                    status_code=401,
-                    content='{"detail":"Gecersiz veya eksik API anahtari (X-API-Key)"}',
-                    media_type="application/json",
-                )
+        required = bool(require_auth())
+        exempt = is_exempt(request.url.path)
     except Exception:
-        logging.exception("auth middleware error")
+        logging.exception("auth katmani yuklenemedi (FAIL-CLOSED)")
+        p = request.url.path
+        if any(s in p for s in ("emergency_stop", "/health", "/discovery", "/simulator")):
+            return await call_next(request)
+        return Response(status_code=503, content='{"detail":"Auth katmani kullanilamiyor"}', media_type="application/json")
+    if required and not exempt:
+        try:
+            ok = check_token(request.headers.get("X-API-Key") or request.query_params.get("token") or "")
+        except Exception:
+            logging.exception("token kontrol hatasi (FAIL-CLOSED)")
+            ok = False
+        if not ok:
+            return Response(
+                status_code=401,
+                content='{"detail":"Gecersiz veya eksik API anahtari (X-API-Key)"}',
+                media_type="application/json",
+            )
     return await call_next(request)
 
 app.include_router(ai_router)
@@ -549,15 +563,25 @@ def _start_mdns_service() -> None:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """Tek port (8000) üzerinden canlı sensör verisi WebSocket bağlantısı."""
+    # P1 audit 2026-06-28: FAIL-CLOSED. Eskiden auth istisnasi except'e dusup KOSULSUZ accept()
+    # ediyordu (kimliksiz WS kabul). Artik istisnada baglanti KAPATILIR (sessiz bypass YOK).
     try:
         from servers.auth import require_auth, check_token
-        if require_auth():
-            tok = websocket.query_params.get("token") or websocket.headers.get("X-API-Key") or ""
-            if not check_token(tok):
-                await websocket.close(code=1008)  # policy violation
-                return
+        required = bool(require_auth())
     except Exception:
-        logging.exception("WS auth error")
+        logging.exception("WS auth katmani yuklenemedi (FAIL-CLOSED)")
+        await websocket.close(code=1011)  # internal error
+        return
+    if required:
+        try:
+            tok = websocket.query_params.get("token") or websocket.headers.get("X-API-Key") or ""
+            ok = check_token(tok)
+        except Exception:
+            logging.exception("WS token kontrol hatasi (FAIL-CLOSED)")
+            ok = False
+        if not ok:
+            await websocket.close(code=1008)  # policy violation
+            return
     await websocket.accept()
     with _ws_lock:
         _ws_clients.append(websocket)
@@ -1180,8 +1204,10 @@ async def start_session(payload: SessionStartPayload):
     # çökerse hiçbir kayıt kalmıyordu ve operatör kimliği hiç tutulmuyordu. session_events
     # append-only olduğundan bu, ana seans satırı sonradan yazılsa da bağımsız kanıt sağlar.
     try:
-        from database.treatment_history_db import get_treatment_db
-        get_treatment_db().record_session_event(
+        # P1 audit 2026-06-28: get_treatment_db() ARGUMANSIZ cagriliyordu (imza app_data_dir
+        # zorunlu) → TypeError → except yutuyordu → session_started AUDIT IZI HIC yazilmazdi.
+        # _get_treatment_db() sarmalayicisi app_data_dir gecer (dosyadaki diger cagrilarla tutarli).
+        _get_treatment_db().record_session_event(
             None, "session_started",
             payload={
                 "ref": _active_session["session_id"],
@@ -1325,18 +1351,41 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
     global _active_session
     import time as _t
     with _session_lock:
-        cont = bool(_active_session.get("is_active")) and str(_active_session.get("mode", "")).startswith("AI")
+        prev = dict(_active_session)
+        cont = bool(prev.get("is_active")) and str(prev.get("mode", "")).startswith("AI")
         _active_session = {
             "is_active": True,
-            "session_id": _active_session.get("session_id") if cont else f"ai_{int(_t.time())}",
+            "session_id": prev.get("session_id") if cont else f"ai_{int(_t.time())}",
             "mode": mode,
             "frequency": freq,
             "duty": duty,
             "phase": 0.0,
             "duration_minutes": int(duration_minutes),
-            "start_time": _active_session.get("start_time") if cont else _t.time(),
+            "start_time": prev.get("start_time") if cont else _t.time(),
             "coil_ids": list(coil_ids),
         }
+    # P1 audit 2026-06-28: AKTIF MANUEL (non-AI) seans varken AI baslayinca _active_session KOSULSUZ
+    # eziliyordu → manuel db_session_id/coil_ids kayboluyor, acik coil-run'lar kapanmiyor, DB satiri
+    # kalici 'active' kaliyor (KPI/history sisiyor + STM keep-alive surer ama UI 'AI' gosterir).
+    # Yeni AI seansini kurduktan SONRA eski manuel seansi DUZGUN kapat (orphan onle). Hizli: coil-run
+    # in-memory + ~ms DB write; AI coil komutlari start_ai_session DONDUKTEN sonra → race yok.
+    if not cont and prev.get("is_active"):
+        try:
+            for cid in (prev.get("coil_ids") or []):
+                try:
+                    _finish_coil_run(cid)
+                except Exception:
+                    pass
+            prev_db_id = prev.get("db_session_id")
+            if prev_db_id:
+                st = prev.get("start_time")
+                dur_min = max(1, round((_t.time() - st) / 60.0)) if st else None
+                _get_treatment_db().end_session(prev_db_id, duration_minutes=dur_min)
+            logging.getLogger(__name__).warning(
+                "AI seansi (%s) aktif MANUEL seansi devraldi → eski seans (db_id=%s) duzgun kapatildi (orphan onlendi).",
+                mode, prev.get("db_session_id"))
+        except Exception:
+            logging.getLogger(__name__).exception("AI gecisinde eski manuel seans kapatma hatasi")
 
 
 def _session_duration_watchdog():
