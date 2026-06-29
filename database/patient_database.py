@@ -187,8 +187,25 @@ class PatientDatabase:
                 # Performans Fix (4.1): Sadece index tablosu bossa rebuild yap
                 cursor.execute("SELECT COUNT(*) FROM patient_search_index")
                 count = cursor.fetchone()[0]
-                if count == 0:
+                # P2 audit 2026-06-28: HMAC arama indeksi _search_hmac_key'e bagli; anahtar degisirse
+                # (keyring reset) eski token'lar eslesmez → arama SESSIZCE bozulur. Parmak-izini sakla;
+                # bos-tablo VEYA anahtar-degisimi durumunda indeksi YENIDEN kur.
+                _fp = hashlib.sha256(self._search_hmac_key).hexdigest()[:16]
+                _fp_file = self._key_dir / ".patient_search_keyfp"
+                _stored_fp = ""
+                try:
+                    if _fp_file.exists():
+                        _stored_fp = _fp_file.read_text(encoding="utf-8").strip()
+                except Exception:
+                    pass
+                if count == 0 or (_stored_fp and _stored_fp != _fp):
+                    if count > 0:
+                        self.logger.warning("Hasta arama anahtari degismis → HMAC indeksi yeniden kuruluyor.")
                     self._rebuild_search_index(cursor)
+                try:
+                    _fp_file.write_text(_fp, encoding="utf-8")
+                except Exception:
+                    pass
                 conn.commit()
         except _DB_ERROR as e:
             raise RuntimeError(f"Database initialization failed: {e}") from e

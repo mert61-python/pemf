@@ -678,6 +678,13 @@ class TreatmentHistoryDB:
                     CREATE INDEX IF NOT EXISTS idx_patients_name
                     ON patients(name)
                 ''')
+                # P2 audit 2026-06-28: get_session_history patients'a ts.patient_id ile JOIN yapar;
+                # index yoksa full-scan (binlerce seansta yavas). patient_id sutunu migration'dan
+                # SONRA olustugu icin index'i burada (sema sonrasi) ekliyoruz.
+                try:
+                    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ts_patient_id ON treatment_sessions(patient_id)')
+                except _DB_OPERATIONAL:
+                    pass  # patient_id sutunu yoksa (cok eski DB) sessizce atla
 
                 conn.commit()
                 self.logger.info(f"Veritabanı başarıyla başlatıldı: {self.db_path}")
@@ -1012,6 +1019,24 @@ class TreatmentHistoryDB:
             self.logger.warning(f"Sensor retention temizleme uyarısı: {e}")
             return 0
 
+    def purge_old_coil_runs(self, retain_days: int = 90) -> int:
+        """P2 audit 2026-06-28: retention suresini asan per-bobin run kayitlarini (session_coil_runs
+        + sensor_run_summary) temizle — eskiden HIC temizlenmiyordu (sinirsiz buyume)."""
+        cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
+                    '(SELECT id FROM session_coil_runs WHERE started_epoch < ?)', (cutoff_ts,))
+                cursor.execute('DELETE FROM session_coil_runs WHERE started_epoch < ?', (cutoff_ts,))
+                removed = int(cursor.rowcount)
+                conn.commit()
+                return removed
+        except Exception as e:
+            self.logger.warning(f"Coil-run retention temizleme uyarisi: {e}")
+            return 0
+
     def purge_old_session_events(self, retain_days: int = 365) -> int:
         """Retention süresini aşan session event kayıtlarını temizle."""
         cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
@@ -1058,6 +1083,7 @@ class TreatmentHistoryDB:
         }
 
         report['sensor_samples_removed'] = self.purge_old_sensor_samples(sensor_retain_days)
+        report['coil_runs_removed'] = self.purge_old_coil_runs(sensor_retain_days)  # P2 audit 2026-06-28
         report['session_events_removed'] = self.purge_old_session_events(event_retain_days)
         report['dead_outbox_removed'] = self.purge_old_dead_outbox(dead_outbox_retain_days)
 
@@ -1543,10 +1569,11 @@ class TreatmentHistoryDB:
                 
                 conn.commit()
                 
+                # P2 audit 2026-06-28: KVKK — hasta ADINI INFO log'a YAZMA (loglar retention/sifreleme
+                # disinda kalir → duz-metin PII sizar). Tani icin session_id yeterli.
                 self.logger.info(
                     f"Completed session saved: ID={session_id}, mode={mode}, "
-                    f"patient={patient_name}, duration={duration_minutes:.1f}min, "
-                    f"status={session_status}"
+                    f"duration={duration_minutes:.1f}min, status={session_status}"
                 )
                 
                 return session_id
@@ -1573,6 +1600,11 @@ class TreatmentHistoryDB:
                 # silmek FOREIGN KEY hatasıyla 500 döner.
                 cursor.execute('DELETE FROM sensor_samples WHERE session_id = ?', (session_id,))
                 cursor.execute('DELETE FROM session_events WHERE session_id = ?', (session_id,))
+                # P2 audit 2026-06-28: per-bobin run tablolari da silinsin (eskiden orphan kaliyordu).
+                cursor.execute(
+                    'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
+                    '(SELECT id FROM session_coil_runs WHERE session_id = ?)', (session_id,))
+                cursor.execute('DELETE FROM session_coil_runs WHERE session_id = ?', (session_id,))
 
                 # Sonra seansı sil
                 cursor.execute('DELETE FROM treatment_sessions WHERE id = ?',

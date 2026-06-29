@@ -1525,6 +1525,27 @@ def _emit_minute_averages(now=None):
                 del _sensor_sample_buffer[:len(_sensor_sample_buffer) - 20000]
 
 
+def _flush_sensor_buffer_if_active():
+    """P2 audit 2026-06-28: aktif seansin db_session_id'si varsa _sensor_sample_buffer'i DB'ye yaz
+    (periyodik kalicilastirma → cokmede/20k-cap'te telemetri kaybini onler). Basarisizsa GERI koyar.
+    Yalniz arka-plan _sensor_persistence_loop thread'inden cagrilir → event-loop'u bloklamaz."""
+    with _session_lock:
+        _db_sid = _active_session.get("db_session_id")
+    if not _db_sid:
+        return
+    with _sensor_sample_buffer_lock:
+        pending = list(_sensor_sample_buffer)
+        _sensor_sample_buffer.clear()
+    if not pending:
+        return
+    try:
+        _get_treatment_db().add_sensor_samples_batch(_db_sid, pending)
+    except Exception:
+        with _sensor_sample_buffer_lock:
+            _sensor_sample_buffer[:0] = pending  # geri koy (sonraki flush/stop yazar)
+        logging.getLogger(__name__).debug("periyodik sensor flush hatasi", exc_info=True)
+
+
 def _sensor_persistence_loop():
     """Aktif seans boyunca her ~2sn _live_state'ten ÇALIŞAN bobinlerin sensör değerlerini
     DAKIKA-ortalama akumulatorunde toplar (canli WS yayini KORUNUR; yayin sim/HW kendi
@@ -1579,6 +1600,7 @@ def _sensor_persistence_loop():
                 # Dakika siniri: ortalama satirlarini emit et (akumulatoru sifirlar).
                 if (_t.time() - minute_start) >= 60.0:
                     _emit_minute_averages(_t.time())
+                    _flush_sensor_buffer_if_active()  # P2 audit: periyodik DB flush (cokme/cap kaybi onle)
                     minute_start = _t.time()
             else:
                 minute_start = _t.time()
@@ -1716,6 +1738,15 @@ async def stop_session():
                 _active_session["db_finalized"] = True
         except Exception:
             logging.exception("stop: kalici kayit genel hatasi")
+    else:
+        # P2 audit 2026-06-28: db_session_id YOK → bu seansin sensor verisi DB'ye yazilamaz; eskiden
+        # SESSIZCE kayboluyordu (sonraki seans start'inda buffer temizlenir). UYAR + buffer'i simdi
+        # temizle (sonraki seansa sizmasin).
+        with _sensor_sample_buffer_lock:
+            _lost = len(_sensor_sample_buffer)
+            _sensor_sample_buffer.clear()
+        if _lost:
+            logging.warning("stop: db_session_id YOK → %d sensor satiri KALICI DEGIL (kayip). Seans DB'ye baglanmamis.", _lost)
 
     return {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
 
@@ -1802,9 +1833,12 @@ async def log_ai_result(payload: AiLogPayload):
 
         app_data = _app_data_dir()
         app_data.mkdir(parents=True, exist_ok=True)
+        # P2 audit 2026-06-28: KVKK — ai_diagnoses.jsonl DUZ-METIN diskte (SQLCipher disinda,
+        # retention'siz). Hasta adini MASKELE (ilk harf + ***); tam PII yazma.
+        _pn = str(payload.patient_name or "").strip()
         rec = {
             "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "patient_name": payload.patient_name,
+            "patient_name": (_pn[0] + "***") if _pn else "",
             "module": payload.module,
             "summary": payload.summary,
         }
@@ -2137,17 +2171,7 @@ else:
     import logging
     logging.getLogger(__name__).warning("Frontend derlemesi bulunamadı! Tarayıcıda boş sayfa çıkabilir.")
 
-def start_fastapi_server(core_instance=None, port=8000):
-    """
-    Bu fonksiyon HeadlessCore içinden veya main.py'den bir Thread ile başlatılır.
-    Tüm sistem tek port (8000) üzerinden çalışır: REST API + WebSocket + Simülatör.
-    """
-    state.core = core_instance
-    if core_instance:
-        state.hardware = HardwareController(core_instance)
-    _register_event_bus_handlers()
-
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
-
-if __name__ == "__main__":
-    start_fastapi_server()
+# P2 audit 2026-06-28: start_fastapi_server() + __main__ KALDIRILDI — main.py silindi, HeadlessCore
+# cagirmiyordu, backend_service.py kullanmiyordu (olu). Bu alt-giris uvicorn.run'i backend_service.py'nin
+# guvenlik/reconcile setup'i (PEMF_REQUIRE_AUTH zorlama, stale-session reconcile, named-tunnel) OLMADAN
+# yapiyordu → kaza-guvensiz. TEK gercek giris noktasi: backend_service.py.

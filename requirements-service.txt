@@ -76,4 +76,4 @@ supabase>=2.0.0
 pyinstaller>=6.3.0
 
 # At-rest sifreleme (Windows pre-built wheel). PEMF_ENCRYPT_AT_REST=1 ile aktif.
-sqlcipher3
+sqlcipher3==0.6.2  # P2 audit 2026-06-28: surum PIN (build tekrarlanabilirligi + ani API kirilmasi onle)
