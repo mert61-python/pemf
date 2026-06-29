@@ -184,7 +184,17 @@ export function useSessionControl(): SessionControlResult {
   const stopSession = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     try {
-      await apiPost<any>("/session/stop", {}, null);
+      // P1 audit 2026-06-28: apiPost ağ-hatası/non-2xx'te THROW ETMEZ → fallback(null) döner.
+      // Eskiden yanıt kontrol edilmeden 'durduruldu' deniyordu → backend erişilemezken UI seansı
+      // bitmiş gösterir ama STM'ye STOP ULAŞMAMIŞ olabilir (donanım çalışmaya devam). Yanıtı DOĞRULA.
+      const res = await apiPost<any>("/session/stop", {}, null);
+      if (!res || res.status === "error") {
+        platformAlert(
+          "Durdurma onaylanamadı",
+          "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+        );
+        return false;
+      }
       stopTimer();
       setIsActive(false);
       setTreatment((prev) => prev ? { ...prev, isActive: false } : null);

@@ -13,6 +13,14 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useAppNav } from "@/context/AppNavContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 
+// P1 audit 2026-06-28: PEMF_REQUIRE_AUTH=1 iken /history/export_* auth-muaf DEĞİL; Linking.openURL
+// header gönderemediği için 401 ile sessizce başarısız oluyordu. Backend ?token= query'sini kabul
+// ediyor (auth middleware) → token varsa URL'e ekle.
+const withToken = (url: string): string =>
+  serviceConfig.apiToken
+    ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(serviceConfig.apiToken)}`
+    : url;
+
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.
 const STATUS_LABELS_TR: Record<string, string> = {
@@ -69,11 +77,11 @@ export function TreatmentHistoryScreen() {
   const downloadAllPdf = () => {
     if (sessions.length === 0) return;
     const sessionIds = sessions.map(s => s.id).join(",");
-    Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`);
+    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`));
   };
 
   const downloadCsv = () => {
-    Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_csv`);
+    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_csv`));
   };
 
   const filteredSessions = sessions.filter((s) => {
@@ -156,7 +164,7 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
   else if (s === "interrupted" || s === "error" || s === "aborted_recovered") state = "offline";
 
   const downloadPdf = () => {
-    Linking.openURL(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`);
+    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`));
   };
 
   const handleSaveNotes = async () => {
