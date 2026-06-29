@@ -1,15 +1,14 @@
 """
 Mosquitto Manager — Mosquitto MQTT Broker + Python Bridge Yönetim Servisi
 
-LattePanda üzerinde Mosquitto broker'ı ve Python MQTT bridge'ini yönetir:
-- Mosquitto: Otomatik başlatma, durdurma, durum kontrolü
-- Python Bridge: Local Mosquitto ↔ HiveMQ Cloud arasında mesaj iletimi
-  (Mosquitto 2.0.18 native bridge TLS Windows bug'ı nedeniyle Python bridge kullanılıyor)
+LattePanda üzerinde YEREL Mosquitto broker'ını yönetir (başlat/durdur/durum).
+NOT (2026-06-28): HiveMQ cloud bridge KALDIRILDI — sistem yerel-mosquitto-only (ESP'ler
+anon yerel broker'a bağlanır). start_bridge/stop_bridge artık inaktif no-op'tur
+(services/mqtt_bridge.py silindi → import hatasını yutar, False döner).
 
 Kullanım:
     manager = MosquittoManager()
     manager.start()  # Broker'ı başlat
-    manager.start_bridge()  # Python bridge'i başlat
     status = manager.get_status()  # Durumu sorgula
 """
 

@@ -96,14 +96,7 @@ if (Test-Path $mainConf) {
     Write-Host "  [!] mosquitto.conf bulunamadı: $mainConf" -ForegroundColor Yellow
 }
 
-# Bridge config
-$bridgeConf = Join-Path $PROJECT_CONFIG_DIR "bridge_hivemq.conf"
-if (Test-Path $bridgeConf) {
-    Copy-Item $bridgeConf -Destination (Join-Path $MOSQUITTO_CONF_DIR "bridge_hivemq.conf") -Force
-    Write-Host "  [✓] bridge_hivemq.conf kopyalandı" -ForegroundColor Green
-} else {
-    Write-Host "  [!] bridge_hivemq.conf bulunamadı: $bridgeConf" -ForegroundColor Yellow
-}
+# Bridge config KALDIRILDI (2026-06-28): HiveMQ cloud bridge yok → yerel-mosquitto-only.
 
 # --- 5. Windows Firewall Kuralı ---
 Write-Host "[*] Firewall kuralı ekleniyor (port 1883)..." -ForegroundColor Yellow

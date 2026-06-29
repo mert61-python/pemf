@@ -1,6 +1,6 @@
 {
   "mqtt": {
-    "mode": "hybrid",
+    "mode": "local",
     "local_broker": {
       "broker_url": "127.0.0.1",
       "broker_port": 1883,
@@ -8,19 +8,9 @@
       "username": "",
       "password": ""
     },
-    "cloud_broker": {
-      "broker_url": "8593bfdb2f324ad88d08b54b5e37c0a9.s1.eu.hivemq.cloud",
-      "broker_port": 8883,
-      "use_tls": true,
-      "username": "",
-      "password": "",
-      "tls_cert_sha256": "87b3632cbd9fbe4dbfa9bc767ef6cdebc6362fec4726d84558f49fdcacbcd97d",
-      "ca_cert_path": ""
-    },
     "retry_delay_ms": 2000,
     "max_retry_delay_ms": 60000,
-    "max_retries": 10,
-    "bridge_status_topic": "pemf/bridge/status"
+    "max_retries": 10
   },
   "email": {
     "gmail_email": "",

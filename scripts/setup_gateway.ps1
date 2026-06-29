@@ -219,11 +219,10 @@ Write-Host "  Hotspot IP   : $hotspotIP" -ForegroundColor White
 Write-Host "  MQTT Broker  : localhost:1883" -ForegroundColor White
 if ($internetIP) {
     Write-Host "  Internet     : Bağlı ($internetIP)" -ForegroundColor Green
-    Write-Host "  Bridge       : HiveMQ Cloud aktif" -ForegroundColor Green
 } else {
     Write-Host "  Internet     : Offline" -ForegroundColor Yellow
-    Write-Host "  Bridge       : Devre dışı (offline mod)" -ForegroundColor Yellow
 }
+# NOT (2026-06-28): HiveMQ cloud bridge KALDIRILDI — sistem yerel-mosquitto-only.
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "ESP'ler '$HotspotSSID' WiFi ağına bağlanmalı." -ForegroundColor White

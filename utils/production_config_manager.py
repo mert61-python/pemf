@@ -44,9 +44,6 @@ class ProductionConfigManager:
     _ENCRYPTED_KEYS = {
         'mqtt.user',
         'mqtt.pass',
-        'mqtt.cloud_broker.username',
-        'mqtt.cloud_broker.password',
-        'mqtt.cloud_broker.tls_cert_sha256',
         'email.password',
         'email.gmail_password',
         'api.key',
@@ -274,38 +271,8 @@ class ProductionConfigManager:
 
         add_missing(self._config, template)
 
-        # If cloud credentials missing, try bundled credentials file
-        try:
-            cloud = self._config.get('mqtt', {}).get('cloud_broker', {})
-            if (not cloud.get('username')) or (not cloud.get('password')):
-                cred_path = self._get_bundled_resource_path('config/credentials/hivemq_users.json')
-                if cred_path and cred_path.exists():
-                    try:
-                        with open(cred_path, 'r', encoding='utf-8') as cf:
-                            cred_blob = json.load(cf)
-                        users = cred_blob.get('users', [])
-                        # Prefer known usernames if present
-                        preferred = None
-                        for name in ('afsuampemf', 'gui_bridge'):
-                            for u in users:
-                                if u.get('username') == name:
-                                    preferred = u
-                                    break
-                            if preferred:
-                                break
-                        if not preferred and users:
-                            preferred = users[0]
-
-                        if preferred:
-                            mb = self._config.setdefault('mqtt', {}).setdefault('cloud_broker', {})
-                            if not mb.get('username'):
-                                mb['username'] = preferred.get('username')
-                            if not mb.get('password'):
-                                mb['password'] = preferred.get('password')
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        # HiveMQ cloud-cred doldurma KALDIRILDI (2026-06-28): bundled hivemq_users.json zaten EXE
+        # bundle'dan cikarildi + cloud bridge atil (yerel-only mimari) → blok gereksiz/olu.
     
     def get(self, key_path: str, default: Any = None) -> Any:
         """
