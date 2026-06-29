@@ -16,7 +16,7 @@ import re
 import sys
 import contextlib
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
 
@@ -135,6 +135,8 @@ class PatientDatabase:
                         owner TEXT,
                         vet_contact TEXT,
                         owner_email TEXT,
+                        last_treatment_at TEXT,
+                        anonymized INTEGER DEFAULT 0,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         sync_status INTEGER DEFAULT 0
@@ -153,6 +155,17 @@ class PatientDatabase:
                     cursor.execute("ALTER TABLE patients ADD COLUMN owner_email TEXT")
                 except _DB_OPERATIONAL:
                     pass # Kolon zaten var
+
+                # KVKK retention (2026-06-28): son tedavi tarihi + anonim bayragi — inaktiflik bazli
+                # anonimlestirme icin. Idempotent.
+                try:
+                    cursor.execute("ALTER TABLE patients ADD COLUMN last_treatment_at TEXT")
+                except _DB_OPERATIONAL:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE patients ADD COLUMN anonymized INTEGER DEFAULT 0")
+                except _DB_OPERATIONAL:
+                    pass
 
                 cursor.execute(
                     """
@@ -439,6 +452,53 @@ class PatientDatabase:
                     return cursor.rowcount > 0
             except _DB_ERROR:
                 return False
+
+    def touch_last_treatment(self, patient_id: str) -> None:
+        """KVKK retention: bir tedavi gerceklestiginde hastanin last_treatment_at'ini guncelle
+        (inaktiflik-bazli anonimlestirmenin tarih kaynagi). Hata sessizce loglanir (tedaviyi bloklamaz)."""
+        if not patient_id:
+            return
+        try:
+            with self.lock:
+                with self._get_connection() as conn:
+                    conn.execute("UPDATE patients SET last_treatment_at = ? WHERE id = ?",
+                                 (datetime.now().isoformat(), patient_id))
+                    conn.commit()
+        except Exception:
+            self.logger.debug("touch_last_treatment hatasi", exc_info=True)
+
+    def anonymize_inactive_patients(self, inactive_days: int = 1825) -> List[str]:
+        """KVKK: son tedaviden (yoksa kayit tarihinden) inactive_days'ten (vars. 5 YIL=1825) uzun
+        sure gecmis hastalarin PII'sini (ad/sahip/iletisim/e-posta) ANONIMLESTIR — SILMEZ (klinik
+        istatistikleri/tedavi gecmisi korunur). Muafiyet yok. Anonimlestirilen UUID listesini doner
+        (treatment-history DB'deki hasta kopyasi da guncellensin diye)."""
+        cutoff = (datetime.now() - timedelta(days=max(1, int(inactive_days)))).isoformat()
+        anonymized: List[str] = []
+        try:
+            with self.lock:
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT id FROM patients WHERE COALESCE(anonymized,0)=0 "
+                        "AND COALESCE(last_treatment_at, created_at) < ?", (cutoff,))
+                    ids = [r[0] for r in cursor.fetchall()]
+                    enc_anon = self._encrypt_field("[ANONIM]")
+                    enc_empty = self._encrypt_field("")
+                    now_iso = datetime.now().isoformat()
+                    for pid in ids:
+                        cursor.execute(
+                            "UPDATE patients SET name=?, owner=?, vet_contact=?, owner_email=?, "
+                            "anonymized=1, updated_at=? WHERE id=?",
+                            (enc_anon, enc_anon, enc_empty, enc_empty, now_iso, pid))
+                        # Arama indeksini tazele — eski ad/sahip token'lari gitsin (artik aranmaz).
+                        self._refresh_search_index_for_patient(cursor, pid)
+                        anonymized.append(pid)
+                    conn.commit()
+            if anonymized:
+                self.logger.warning("KVKK: %d inaktif hasta (>%d gun) anonimlestirildi.", len(anonymized), inactive_days)
+        except Exception:
+            self.logger.exception("anonymize_inactive_patients hatasi")
+        return anonymized
 
     def delete_patient(self, patient_id: str) -> bool:
         """Belirtilen hastayi siler."""

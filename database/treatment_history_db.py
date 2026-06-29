@@ -1005,6 +1005,28 @@ class TreatmentHistoryDB:
 
         return report
 
+    def anonymize_patients_by_uuid(self, patient_uuids) -> int:
+        """KVKK retention (2026-06-28): patient_database'de anonimlestirilen hastalarin bu DB'deki
+        kopyasini da anonimlestir (get_session_history JOIN'i eski ad/sahibi gostermesin). Canonical
+        karar patient_database.anonymize_inactive_patients'te; bu yalniz kopyayi senkronlar."""
+        uuids = [u for u in (patient_uuids or []) if u]
+        if not uuids:
+            return 0
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                ph = ",".join("?" * len(uuids))
+                cursor.execute(
+                    f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
+                    f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE patient_uuid IN ({ph})",
+                    uuids)
+                n = int(cursor.rowcount)
+                conn.commit()
+                return n
+        except Exception as e:
+            self.logger.warning(f"treatment-history hasta anonimlestirme uyarisi: {e}")
+            return 0
+
     def purge_old_sensor_samples(self, retain_days: int = 90) -> int:
         """Retention süresini aşan sensör örneklerini temizle."""
         cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)

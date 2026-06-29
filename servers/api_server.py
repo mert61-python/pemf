@@ -1230,6 +1230,15 @@ async def start_session(payload: SessionStartPayload):
     # Sahip e-postasini hasta kayittan (patient_id=UUID) cek — "raporu sahibe e-posta gonder"
     # icin history'de session.owner_email dolu gelsin. Best-effort (yoksa bos string).
     owner_email = _lookup_owner_email(payload.patient_id)
+    # KVKK retention (2026-06-28): bu tedavi icin hastanin last_treatment_at'ini guncelle
+    # (inaktiflik sayaci → 5 yil sonra anonimlestirme bunu baz alir).
+    if payload.patient_id:
+        try:
+            _pdb = get_patient_database()
+            if _pdb is not None:
+                _pdb.touch_last_treatment(payload.patient_id)
+        except Exception:
+            logging.getLogger(__name__).debug("touch_last_treatment hatasi", exc_info=True)
 
     # Best-effort: DB hatasi seansi/donanimi DURDURMASIN → db_session_id=None kalir (eski davranis).
     try:
@@ -1637,7 +1646,19 @@ def _daily_maintenance_loop():
                 try:
                     removed_s = db.purge_old_sensor_samples(retain_days)
                     removed_e = db.purge_old_session_events(365)
-                    log.info("Retention: %s sensor_samples + %s session_events silindi.", removed_s, removed_e)
+                    removed_c = db.purge_old_coil_runs(retain_days)  # P2 audit: per-bobin run retention
+                    log.info("Retention: %s sensor + %s event + %s coil_run silindi.", removed_s, removed_e, removed_c)
+                    # KVKK retention (2026-06-28): 5 YIL inaktif hastalari ANONIMLESTIR (canonical
+                    # patient_database + treatment-history kopyasi). Muafiyet yok.
+                    try:
+                        _pdb = get_patient_database()
+                        if _pdb is not None:
+                            _anon = _pdb.anonymize_inactive_patients(1825)
+                            if _anon:
+                                db.anonymize_patients_by_uuid(_anon)
+                                log.warning("KVKK: %d inaktif hasta anonimlestirildi.", len(_anon))
+                    except Exception:
+                        log.warning("Hasta retention (anonimlestirme) hatasi", exc_info=True)
                 except Exception:
                     log.warning("Retention temizleme hatasi", exc_info=True)
 
