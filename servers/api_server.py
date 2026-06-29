@@ -1962,19 +1962,11 @@ async def get_kpi_summary():
         "modeDistribution": {},
         "last7Days": [],
     }
-    if not db_path.exists():
-        return result
     try:
-        with sqlite3.connect(str(db_path)) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT session_date, treatment_mode, duration_minutes, session_status
-                FROM treatment_sessions
-                ORDER BY session_date DESC
-                LIMIT 200
-                """
-            ).fetchall()
+        # P2 audit 2026-06-28: Eskiden duz sqlite3.connect ile DB okunuyordu; SQLCipher sifreli iken
+        # (PEMF_ENCRYPT_AT_REST=1) acilamiyor → 'except: pass' yutuyor → KPI SESSIZCE BOS. SQLCipher-
+        # farkindali _get_treatment_db().get_session_history() (dict listesi) kullan.
+        rows = _get_treatment_db().get_session_history(limit=200)
 
         if not rows:
             return result
@@ -2005,6 +1997,18 @@ async def get_kpi_summary():
         sorted_days = sorted(daily.items(), reverse=True)[:7]
         last7 = [{"date": d, "count": c} for d, c in sorted_days]
 
+        # coilUsage: session_coil_runs'tan bobin-bazli kosum sayisi (P2: eskiden hep 0 idi).
+        try:
+            _cc = _get_treatment_db()._create_connection()
+            try:
+                for _row in _cc.execute("SELECT coil_id, COUNT(*) AS n FROM session_coil_runs GROUP BY coil_id").fetchall():
+                    _cid = int(_row["coil_id"]) if _row["coil_id"] is not None else 0
+                    if 1 <= _cid <= 8:
+                        result["coilUsage"][str(_cid)] = int(_row["n"])
+            finally:
+                _cc.close()
+        except Exception:
+            pass  # session_coil_runs yok/bos → coilUsage 0 kalir
         result.update({
             "totalSessions": total,
             "completedSessions": completed,
@@ -2014,7 +2018,7 @@ async def get_kpi_summary():
             "last7Days": last7,
         })
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("KPI ozeti hesaplanamadi")  # P2: sessiz yutma yerine logla
     return result
 
 

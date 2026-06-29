@@ -120,7 +120,7 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
 
         if len(content) > 20 * 1024 * 1024:  # DoS/bellek koruması: 20MB üst sınır
             raise HTTPException(status_code=413, detail="Görüntü çok büyük (en fazla 20MB).")
-        print(f"DEBUG: Received file size: {len(content)} bytes")
+        logger.debug("Landmark: alinan dosya boyutu %d bytes", len(content))  # P2 audit: print() -> logger.debug
         
         nparr = np.frombuffer(content, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -555,22 +555,25 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
         cv2.imwrite(tmp.name, img)
-        
-        results = model.predict(source=tmp.name, conf=0.25, iou=0.7, imgsz=640, device="cpu", verbose=False)
-        
-        r = results[0]
-        cat_count = len(r.boxes) if r.boxes else 0
-        
-        if r.masks is not None and len(r.masks) > 0:
-            for mask_data in r.masks.data:
-                mask_np = mask_data.cpu().numpy()
-                mask_resized = cv2.resize(mask_np, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
-                colored = np.zeros_like(img)
-                colored[:, :, 1] = 160
-                blend = cv2.addWeighted(img, 0.55, colored, 0.45, 0)
-                img = np.where(mask_resized[:, :, None] > 0.5, blend, img).astype(np.uint8)
-
-        os.unlink(tmp.name)
+        # P2 audit 2026-06-28: tmp .jpg'yi HER durumda sil (predict/mask hata yolunda sizmasin → disk
+        # dolar → _ensure_write_guardrail sensor/seans yazimini engelleyebilir). landmark deseni.
+        try:
+            results = model.predict(source=tmp.name, conf=0.25, iou=0.7, imgsz=640, device="cpu", verbose=False)
+            r = results[0]
+            cat_count = len(r.boxes) if r.boxes else 0
+            if r.masks is not None and len(r.masks) > 0:
+                for mask_data in r.masks.data:
+                    mask_np = mask_data.cpu().numpy()
+                    mask_resized = cv2.resize(mask_np, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+                    colored = np.zeros_like(img)
+                    colored[:, :, 1] = 160
+                    blend = cv2.addWeighted(img, 0.55, colored, 0.45, 0)
+                    img = np.where(mask_resized[:, :, None] > 0.5, blend, img).astype(np.uint8)
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
         
         _, buffer = cv2.imencode('.jpg', img)
         b64_image = base64.b64encode(buffer).decode('utf-8')
@@ -613,8 +616,14 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
         tmp.close()
         cv2.imwrite(tmp.name, img)
         
-        result = predictor.predict(tmp.name, threshold=0.5)
-        os.unlink(tmp.name)
+        # P2 audit 2026-06-28: tmp .jpg'yi HER durumda sil (predict hata yolunda sizmasin → disk dolar).
+        try:
+            result = predictor.predict(tmp.name, threshold=0.5)
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
         
         _, buffer = cv2.imencode('.jpg', img)
         b64_image = base64.b64encode(buffer).decode('utf-8')
