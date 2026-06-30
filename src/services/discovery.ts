@@ -12,7 +12,7 @@
  */
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { updateServiceConfig, serviceConfig, setStoredDeviceId, getStoredDeviceId } from "@/services/config";
+import { updateServiceConfig, serviceConfig, setStoredDeviceId, getStoredDeviceId, setStoredApiToken } from "@/services/config";
 import { getRemoteUrlForDevice } from "@/services/deviceRegistry";
 
 const ADDR_KEY = "@pemf_server_address";
@@ -29,8 +29,50 @@ function toBase(addr: string): string {
   return addr.startsWith("http") ? addr.replace(/\/$/, "") : `http://${addr}:8000`;
 }
 
-/** /api/health doğrular; başarılıysa deviceId'yi saklar (uzaktan eşleşme için). */
-export async function checkHealth(addr: string): Promise<boolean> {
+/** TEMASSIZ UZAKTAN AUTH: YERELken (LAN) cihazın api_token'ını çekip saklar. Backend bu endpoint'i
+ *  UZAK (tünel) isteğe 403 verir → token YALNIZ aynı-WiFi'deyken alınır. Sonra farklı ağda tünel
+ *  üzerinden HTTP (X-API-Key) + WS (?token=) bu token'la geçer. (Auth alanı UI'dan kaldırıldığı için
+ *  uzaktan auth aksi halde imkânsızdı → "uzaktan bağlanıyor ama veri/WS 401" kök çözümü.) */
+async function provisionToken(base: string): Promise<void> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+    const res = await fetch(`${base}/api/auth/token`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return; // uzak=403 / eski-backend=404 → mevcut saklı token korunur
+    const d = await res.json();
+    if (d?.token) await setStoredApiToken(String(d.token));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** TEMASSIZ UZAKTAN PAIRING: 6-haneli eşleştirme kodunu cihaz api_token'ıyla takas eder (hiç
+ *  LAN'a girmemiş telefon kod-yolu için — kodun kendisi kimlik; backend tünelden kabul eder,
+ *  kaba-kuvvete karşı throttle'lı). Başarılıysa token saklanır → uzaktan HTTP + WS auth geçer. */
+export async function exchangeCodeForToken(base: string, code: string): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+    const res = await fetch(`${toBase(base)}/api/auth/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    if (!res.ok) return false; // 403 yanlış kod / 429 throttle / 404 eski-backend
+    const d = await res.json();
+    if (d?.token) { await setStoredApiToken(String(d.token)); return true; }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** /api/health doğrular; başarılıysa deviceId + (yerelse) api_token'ı saklar (uzaktan erişim için).
+ *  requireDeviceId verilirse SADECE o cihaza bağlan (yanlış-cihaz koruması; oto-keşifte kullanılır). */
+export async function checkHealth(addr: string, requireDeviceId?: string | null): Promise<boolean> {
   try {
     const base = toBase(addr);
     const ctrl = new AbortController();
@@ -39,9 +81,14 @@ export async function checkHealth(addr: string): Promise<boolean> {
     clearTimeout(t);
     if (!res.ok) return false;
     const data = await res.json();
-    const ok = data?.service === "PEMF-Vet" || data?.status === "online";
-    if (ok && data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(() => {});
-    return ok;
+    // KESİN PEMF kimliği: 'status:online' TEK BAŞINA yetmez (router/NAS de döndürebilir) → service ŞART.
+    if (data?.service !== "PEMF-Vet") return false;
+    // YANLIŞ-CİHAZ KORUMASI: kayıtlı device_id varsa SADECE o cihaza bağlan (2-cihazlı klinikte
+    // yanlış makineyi sürmek = tıbbi risk). requireDeviceId yoksa (ilk eşleşme / manuel) serbest.
+    if (requireDeviceId && data?.deviceId && String(data.deviceId) !== requireDeviceId) return false;
+    if (data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(() => {});
+    await provisionToken(base); // yerelse token sakla; uzaksa backend 403 → no-op
+    return true;
   } catch {
     return false;
   }
@@ -116,7 +163,19 @@ async function localSubnets(): Promise<string[]> {
   return subs.filter((v, i, a) => !!v && a.indexOf(v) === i);
 }
 
-async function probeHost(ip: string, timeoutMs: number): Promise<boolean> {
+/** Telefon WiFi'de mi? — WiFi'de YEREL keşif (mDNS/subnet) önce; aksi halde REMOTE önce denenir. */
+async function isOnWifi(): Promise<boolean> {
+  try {
+    // @ts-ignore - opsiyonel native modül
+    const NetInfo = require("@react-native-community/netinfo").default;
+    const st = await NetInfo.fetch();
+    return st?.type === "wifi";
+  } catch {
+    return true; // bilinmiyorsa yerel-önce (eski davranış, güvenli)
+  }
+}
+
+async function probeHost(ip: string, timeoutMs: number, requireDeviceId?: string | null): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -124,17 +183,21 @@ async function probeHost(ip: string, timeoutMs: number): Promise<boolean> {
     clearTimeout(t);
     if (!res.ok) return false;
     const d = await res.json();
-    const ok = d?.service === "PEMF-Vet" || d?.status === "online";
-    if (ok && d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {});
-    return ok;
+    if (d?.service !== "PEMF-Vet") return false; // KESİN PEMF (rastgele :8000 sunucusuna bağlanma)
+    if (requireDeviceId && d?.deviceId && String(d.deviceId) !== requireDeviceId) return false; // yanlış cihaz
+    if (d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {});
+    await provisionToken(`http://${ip}:8000`); // yerel bulundu → token sakla (uzaktan için)
+    return true;
   } catch {
     return false;
   }
 }
 
-async function discoverSubnet(): Promise<string | null> {
+async function discoverSubnet(requireDeviceId?: string | null): Promise<string | null> {
   // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
+  // WiFi'de DEĞİLSE LAN /24 taraması anlamsız (cihaz aynı ağda olamaz) → pil/saniye boşa harcama.
+  if (!(await isOnWifi())) return null;
   const subs = await localSubnets();
   // Yaygın hostlar ÖNCE (hızlı isabet, .40 dahil), sonra kalan TÜM /24 (DHCP IP herhangi biri olabilir).
   const priority = [1, 100, 2, 101, 102, 110, 50, 200, 137, 40, 10, 20, 30, 254];
@@ -146,7 +209,7 @@ async function discoverSubnet(): Promise<string | null> {
       const results = await Promise.allSettled(
         chunk.map(async (h) => {
           const ip = `${sub}.${h}`;
-          if (await probeHost(ip, 1200)) return ip;
+          if (await probeHost(ip, 1200, requireDeviceId)) return ip;
           throw new Error("nf");
         })
       );
@@ -161,7 +224,7 @@ async function discoverRemote(): Promise<string | null> {
   const id = await getStoredDeviceId();
   if (id) {
     const url = await getRemoteUrlForDevice(id);
-    if (url && (await checkHealth(url))) return url;
+    if (url && (await checkHealth(url, id))) return url;
   }
   // GÜVENLİK: device_id yoksa kodsuz/kimliksiz OTOMATİK eşleştirme YAPMA
   // (cross-tenant yanlış-bağlanma riski). Eşleştirme yalnız açık kod/kimlik ile.
@@ -178,34 +241,36 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
     if (await checkHealth(origin)) return { address: origin, source: "current" };
   }
 
+  const wantId = await getStoredDeviceId(); // yanlış-cihaz koruması: oto-keşifte YALNIZ bu cihaza bağlan
+
+  // 1) Kayıtlı adres (en hızlı; device_id eşleşmesiyle doğrula → ölü/yanlış adresi atla)
   try {
     const saved =
       (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
-    if (saved && (await checkHealth(saved))) {
+    if (saved && (await checkHealth(saved, wantId))) {
       await apply(saved);
       return { address: saved, source: "saved" };
     }
   } catch {}
 
-  const m = await discoverMdns();
-  if (m && (await checkHealth(m))) {
-    await apply(m);
-    return { address: m, source: "mdns" };
-  }
+  // 2) Ağ tipine göre SIRALA: WiFi'de YEREL (mDNS→subnet) önce; aksi halde REMOTE önce.
+  //    (Farklı ağda yerel tarama backend'i bulamayıp ~sn harcıyordu; remote orada hızlı bağlar.
+  //     Aynı WiFi'de ise yerel bağlanmak hem hızlı hem token'ı provision eder + interneti by-pass.)
+  const tryLocal = async (): Promise<DiscoveryResult | null> => {
+    const m = await discoverMdns();
+    if (m && (await checkHealth(m, wantId))) { await apply(m); return { address: m, source: "mdns" }; }
+    const s = await discoverSubnet(wantId);
+    if (s) { await apply(s); return { address: s, source: "subnet" }; }
+    return null;
+  };
+  const tryRemote = async (): Promise<DiscoveryResult | null> => {
+    const r = await discoverRemote();
+    if (r) { await apply(r); return { address: r, source: "remote" }; }
+    return null;
+  };
 
-  // UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase'den güncel tünel URL → YEREL subnet taramasından
-  // ÖNCE dene. Farklı WiFi'de subnet tarama backend'i bulamayıp ~15sn boşa harcıyordu; remote burada hızlı bağlar.
-  const r = await discoverRemote();
-  if (r) {
-    await apply(r);
-    return { address: r, source: "remote" };
-  }
-
-  const s = await discoverSubnet();
-  if (s) {
-    await apply(s);
-    return { address: s, source: "subnet" };
-  }
-
-  return null;
+  const onWifi = await isOnWifi();
+  const first = onWifi ? tryLocal : tryRemote;
+  const second = onWifi ? tryRemote : tryLocal;
+  return (await first()) || (await second()) || null;
 }

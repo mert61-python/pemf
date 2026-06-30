@@ -13,7 +13,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { serviceConfig } from "@/services/config";
+import { AppState } from "react-native";
+import { serviceConfig, loadStoredApiToken } from "@/services/config";
+import { apiGet, apiPost } from "@/services/apiClient";
 import { connectPemfWebSocket, WsMessage } from "@/services/wsClient";
 import { discoverBackend } from "@/services/discovery";
 import { mockSnapshot } from "@/services/mockData";
@@ -94,6 +96,12 @@ export interface LiveDataContextValue {
   clearNotifications: () => void;
   /** Manually refresh snapshot (HTTP fallback) */
   refresh: () => Promise<void>;
+  /** Bağlantı kalitesi: live=WS canlı, stale=veri gecikmeli/donmuş riski, offline=GERÇEK veri YOK. */
+  connectionQuality: "live" | "stale" | "offline";
+  /** En az bir kez GERÇEK veri alındı mı (false iken ekrandaki değerler mock/örnek). */
+  haveRealData: boolean;
+  /** Elle yeniden bağlan: WS'i yeniden kur + keşif merdivenini çalıştır. */
+  reconnect: () => void;
   /** Live AI Vision data for Closed-Loop mode */
   aiVisionData?: AiVisionData;
 }
@@ -106,6 +114,9 @@ const LiveDataContext = createContext<LiveDataContextValue>({
   markAllRead: () => {},
   clearNotifications: () => {},
   refresh: async () => {},
+  connectionQuality: "offline",
+  haveRealData: false,
+  reconnect: () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────
@@ -117,6 +128,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [wsConnected, setWsConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [aiVisionData, setAiVisionData] = useState<AiVisionData>();
+  // Faz3 medikal-güvenlik: GERÇEK veri geldi mi + son veri zamanı → donmuş/örnek veriyi 'canlı' gösterme.
+  const [haveRealData, setHaveRealData] = useState(false);
+  const lastDataTsRef = useRef(0);
+  const [, setTick] = useState(0); // WS düşükken connectionQuality'yi zamanla tazelemek için hafif re-render
+  const markRealData = useCallback(() => {
+    lastDataTsRef.current = Date.now();
+    setHaveRealData(true); // React aynı değerde bail eder → ilk seferden sonra ekstra render yok
+  }, []);
 
   // Keep a mutable ref of snapshot so WS handlers can read/mutate it without stale closures
   const snapshotRef = useRef<DashboardSnapshot>(
@@ -133,20 +152,19 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── HTTP snapshot fallback ─────────────────────────────────────────────
   const refresh = useCallback(async () => {
-    try {
-      const resp = await fetch(`${serviceConfig.bridgeBaseUrl}/dashboard-snapshot`);
-      if (!resp.ok) return;
-      const data: DashboardSnapshot = await resp.json();
-      const normalized = normalizeStmCoils(data);
-      snapshotRef.current = normalized;
-      setSnapshot(normalized);
-    } catch {
-      /* bridge not running — keep mock */
-    }
-  }, []);
+    // apiGet üzerinden: X-API-Key (uzaktan auth) + zaman aşımı + 401'de token temizleme.
+    // (Audit: ham fetch tokensiz/timeout'suzdu → tünelde her 5sn 401, fallback hiç çalışmıyordu.)
+    const data = await apiGet<DashboardSnapshot | null>("/dashboard-snapshot", null, { silent: true });
+    if (!data) return;
+    const normalized = normalizeStmCoils(data);
+    snapshotRef.current = normalized;
+    setSnapshot(normalized);
+    markRealData(); // HTTP fallback başarılı → gerçek veri var
+  }, [markRealData]);
 
   // ── WebSocket message handler ──────────────────────────────────────────
   const handleWsMessage = useCallback((msg: WsMessage) => {
+    markRealData(); // GERÇEK veri akıyor → 'canlı' say (mock/donmuş veri ayrımı için)
     switch (msg.type) {
       // Full snapshot on connect
       case "snapshot": {
@@ -294,7 +312,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       default:
         break;
     }
-  }, [updateSnapshot]);
+  }, [updateSnapshot, markRealData]);
 
   // ── Bağlantı orkestrasyonu: keşif + WebSocket + güçlü yeniden-bağlanma ──
   const wsConnectedRef = useRef(wsConnected);
@@ -309,10 +327,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const runDiscovery = useCallback(async (forceReconnect: boolean) => {
     if (discoveringRef.current) return;
     discoveringRef.current = true;
+    const prevWs = serviceConfig.websocketUrl; // adres GERÇEKTEN değişti mi?
     try {
       const res = await discoverBackend();
-      // Yeni bir adres bulunduysa (mevcut web origin'i değilse) WS'i yeniden kur.
-      if (res && res.source !== "current" && forceReconnect) {
+      // SADECE adres değişince WS'i yeniden kur. Eskiden her başarılı keşif (native'de source asla
+      // "current" değil) epoch bump'lıyor → sağlıklı WS'i boşuna yıkıp telemetri boşluğu yaratıyordu.
+      if (res && forceReconnect && serviceConfig.websocketUrl !== prevWs) {
         setConnectionEpoch((e) => e + 1);
       }
     } catch {
@@ -322,9 +342,16 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 1) Açılışta otomatik keşif (web'de origin zaten doğru → hızlı geçer).
+  // 1) Açılışta: ÖNCE saklı api_token'ı serviceConfig'e yükle (uzaktan auth için ZORUNLU —
+  //    yoksa cold-start'ta WS/REST 401), SONRA keşif. Keşif yeni adresi uygulayıp connectionEpoch'u
+  //    bump'layınca WS token'la (yeniden) açılır. (Audit P0: loadStoredApiToken yalnız Ayarlar'da idi.)
   useEffect(() => {
-    runDiscovery(true);
+    let cancelled = false;
+    (async () => {
+      await loadStoredApiToken();
+      if (!cancelled) runDiscovery(true);
+    })();
+    return () => { cancelled = true; };
   }, [runDiscovery]);
 
   // 2) WebSocket — connectionEpoch değişince güncel URL ile yeniden bağlanır.
@@ -357,10 +384,19 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return; // paket yoksa (ör. web) atla
     }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last: boolean | null = null;
     const unsub = NetInfo.addEventListener((state: any) => {
-      if (state?.isConnected) runDiscovery(true);
+      const connected = !!state?.isConnected;
+      if (connected === last) return; // NetInfo aynı durumu sık tekrar yayar → gerçek değişimde tetikle
+      last = connected;
+      if (connected) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => runDiscovery(true), 1500); // debounce: flapping'de keşif/WS fırtınası yok
+      }
     });
     return () => {
+      if (timer) clearTimeout(timer);
       try {
         unsub?.();
       } catch {
@@ -368,6 +404,37 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [runDiscovery]);
+
+  // 4) Ön plana gelince (arka plandayken OS WS soketini/sayaçları dondurmuş/koparmış olabilir) →
+  //    yeniden keşif + reconnect; yoksa kullanıcı uygulamaya dönünce DONMUŞ "canlı" veri görürdü.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") runDiscovery(true);
+    });
+    return () => {
+      try { sub.remove(); } catch { /* ignore */ }
+    };
+  }, [runDiscovery]);
+
+  // Faz3: elle yeniden bağlan (gösterge/banner'a dokununca) — WS yeniden kur + keşif merdiveni.
+  const reconnect = useCallback(() => {
+    setConnectionEpoch((e) => e + 1);
+    runDiscovery(true);
+  }, [runDiscovery]);
+
+  // WS düşükken connectionQuality'nin 'stale'→'offline'a geçebilmesi için hafif ticker (4sn).
+  useEffect(() => {
+    if (wsConnected) return;
+    const id = setInterval(() => setTick((t) => t + 1), 4000);
+    return () => clearInterval(id);
+  }, [wsConnected]);
+
+  // Bağlantı kalitesi: WS canlıysa live; değilse son gerçek veri 15sn içindeyse stale (gecikmeli),
+  // yoksa offline (hiç gerçek veri yok / donmuş). Ekran böylece mock/donmuş veriyi 'canlı' göstermez.
+  const connectionQuality: "live" | "stale" | "offline" =
+    wsConnected ? "live"
+      : haveRealData && Date.now() - lastDataTsRef.current < 15000 ? "stale"
+      : "offline";
 
   const markAllRead = useCallback(() => {
     setUnreadCount(0);
@@ -380,11 +447,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const clearNotifications = useCallback(async () => {
     setUnreadCount(0);
     setSnapshot((prev) => ({ ...prev, notifications: [] }));
-    try {
-      await fetch(`${serviceConfig.bridgeBaseUrl}/notifications/clear`, { method: "POST" });
-    } catch {
-      /* ignore */
-    }
+    // apiPost: uzaktan auth header'ı + zaman aşımı (ham fetch tokensiz tünelde 401'liyordu).
+    await apiPost("/notifications/clear", {}, null, { silent: true });
   }, []);
 
   const value = {
@@ -395,6 +459,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     markAllRead,
     clearNotifications,
     refresh,
+    connectionQuality,
+    haveRealData,
+    reconnect,
     aiVisionData,
   };
 

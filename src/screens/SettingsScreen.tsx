@@ -7,7 +7,7 @@ import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, loadStoredApiToken, setStoredDeviceId } from "@/services/config";
 import { getDeviceByPairingCode, getRemoteUrlForDevice } from "@/services/deviceRegistry";
-import { checkHealth } from "@/services/discovery";
+import { checkHealth, exchangeCodeForToken } from "@/services/discovery";
 import { useUserMode } from "@/context/UserModeContext";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -47,7 +47,11 @@ export function SettingsScreen() {
                         await AsyncStorage.getItem("@pemf_server_ip");
         if (savedIp) {
           setSettings(prev => ({ ...prev, server_ip: savedIp }));
-          updateServiceConfig(savedIp);
+          // WEB: cihazın KENDİ paneli origin'den (localhost) serve edilir. Kayıtlı adrese
+          // (ör. ESKİ/ölü tünel URL'si — quick tünel her restart değişir) yönlendirirsek
+          // /health + /settings origin yerine ölü adrese gider → pairing kodu YAZILMAZ.
+          // Native mobilde gerekir (cihaza bağlanmak için), web'de DEĞİL.
+          if (Platform.OS !== "web") updateServiceConfig(savedIp);
         }
       } catch (e) {}
 
@@ -186,6 +190,9 @@ export function SettingsScreen() {
 
       // 3) Canlı → kaydet + bağlan.
       updateServiceConfig(tunnelUrl);
+      // Kod-yolu (hiç LAN'a girmemiş telefon): 6-haneli kodu cihaz token'ıyla takas et →
+      // uzaktan HTTP + WS auth çalışsın. Yoksa "bağlandı ✓" ama tüm veri 401 olurdu (audit P0).
+      if (input.length <= 8) { await exchangeCodeForToken(tunnelUrl, input); }
       await setStoredDeviceId(resolvedDeviceId);
       await AsyncStorage.setItem("@pemf_server_address", tunnelUrl).catch(() => {});
       setSettings(prev => ({ ...prev, server_ip: tunnelUrl as string }));

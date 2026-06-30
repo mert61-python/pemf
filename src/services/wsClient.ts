@@ -1,4 +1,4 @@
-import { serviceConfig } from "@/services/config";
+import { serviceConfig, setStoredApiToken } from "@/services/config";
 
 // ─── Message types from the bridge ───────────────────────────────────────────
 export type WsMessageType =
@@ -125,9 +125,17 @@ export function connectPemfWebSocket(
       };
       socket.onerror = () => onState?.(false);
       socket.onmessage = handleMessage;
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         stopHeartbeat();
         onState?.(false);
+        // 1008 = policy violation (auth/token). Token geçersiz/eksik → HOT-LOOP YAPMA:
+        // geçersiz token'ı temizle (LAN'a dönünce yeniden sağlanır), UZUN backoff'a geç,
+        // yeniden keşif iste (LAN'da token sağlanınca epoch bump ile hemen bağlanır).
+        if ((event as any)?.code === 1008) {
+          try { setStoredApiToken(""); } catch { /* ignore */ }
+          reconnectDelay = 30000;
+          if (onNeedRediscovery) { try { onNeedRediscovery(); } catch { /* ignore */ } }
+        }
         scheduleReconnect();
       };
     } catch {

@@ -43,7 +43,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { isExpert } = useUserMode();
-  const { unreadCount, wsConnected } = useLiveData();
+  const { unreadCount, connectionQuality, reconnect } = useLiveData();
   const { showToast } = useToast();
   const desktop = responsive.isDesktop || responsive.isTablet;
 
@@ -144,10 +144,18 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 <Settings size={22} color={colors.textMuted} />
               </Pressable>
             )}
-            <View style={styles.wsContainer}>
-              {!wsConnected && <Text style={styles.wsTextOff}>Çevrimdışı</Text>}
-              <View style={[styles.wsIndicator, !wsConnected && styles.wsIndicatorOff]} />
-            </View>
+            <Pressable onPress={reconnect} style={styles.wsContainer} accessibilityRole="button" accessibilityLabel="Bağlantıyı yenile">
+              {connectionQuality !== "live" && (
+                <Text style={[styles.wsTextOff, connectionQuality === "offline" && styles.wsTextOffline]}>
+                  {connectionQuality === "stale" ? "Veri gecikmeli" : "Çevrimdışı"}
+                </Text>
+              )}
+              <View style={[
+                styles.wsIndicator,
+                connectionQuality === "stale" && styles.wsIndicatorStale,
+                connectionQuality === "offline" && styles.wsIndicatorOff,
+              ]} />
+            </Pressable>
             <Pressable
               accessibilityLabel="Bildirimler"
               accessibilityRole="button"
@@ -163,6 +171,16 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             </Pressable>
           </View>
         </View>
+
+        {connectionQuality !== "live" && (
+          <Pressable onPress={reconnect} style={[styles.connBanner, connectionQuality === "offline" && styles.connBannerOffline]}>
+            <Text style={styles.connBannerText}>
+              {connectionQuality === "offline"
+                ? "⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Dokunup yeniden bağlan."
+                : "⚠ Bağlantı gecikmeli — değerler canlı olmayabilir. Dokunup yenile."}
+            </Text>
+          </Pressable>
+        )}
 
         <ScrollView contentContainerStyle={[styles.content, !desktop && { paddingBottom: 92 + insets.bottom }]} keyboardShouldPersistTaps="handled">
           {children}
@@ -318,7 +336,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#22c55e",
     shadowColor: "#22c55e", shadowOpacity: 0.8, shadowRadius: 4,
   },
-  wsIndicatorOff: { backgroundColor: "#f59e0b", shadowColor: "#f59e0b" },
+  wsIndicatorOff: { backgroundColor: "#ef4444", shadowColor: "#ef4444" },
+  wsIndicatorStale: { backgroundColor: "#f59e0b", shadowColor: "#f59e0b" },
+  wsTextOffline: { color: "#ef4444" },
+  connBanner: {
+    backgroundColor: "#3a2e0a",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+  },
+  connBannerOffline: { backgroundColor: "#3a1a1a" },
+  connBannerText: { color: "#fcd34d", fontSize: 12, fontWeight: "700", textAlign: "center" },
   notifBadgeWrap: { position: "relative", padding: spacing.xs },
   notifBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "flex-end", paddingHorizontal: spacing.lg },
   notifSheet: { width: "100%", maxWidth: 420 },
