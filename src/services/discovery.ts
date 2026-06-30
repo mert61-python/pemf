@@ -184,8 +184,7 @@ async function probeHost(ip: string, timeoutMs: number, requireDeviceId?: string
     if (!res.ok) return false;
     const d = await res.json();
     if (d?.service !== "PEMF-Vet") return false; // KESİN PEMF (rastgele :8000 sunucusuna bağlanma)
-    if (requireDeviceId && d?.deviceId && String(d.deviceId) !== requireDeviceId) return false; // yanlış cihaz
-    if (d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {});
+    if (d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {}); // bulunan GERÇEK id'yi sakla
     await provisionToken(`http://${ip}:8000`); // yerel bulundu → token sakla (uzaktan için)
     return true;
   } catch {
@@ -242,24 +241,26 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
     if (await checkHealth(origin)) return { address: origin, source: "current" };
   }
 
-  const wantId = await getStoredDeviceId(); // yanlış-cihaz koruması: oto-keşifte YALNIZ bu cihaza bağlan
+  // NOT: Oto-keşifte device_id EŞLEŞTİRMESİ YAPILMAZ. Saklanan device_id bayat/yanlış olabiliyordu
+  // (allowBackup ile reinstall'da geri yüklenen ESKİ id; ya da çok-arabirimli MAC'te getnode() farkı) →
+  // eşleşmeme yüzünden LAN'daki GERÇEK cihaz reddedilip "Çevrimdışı" kalıyordu (regresyon, logcat
+  // ile kanıtlandı: probe .40'ı buldu ama id farkı yüzünden reddetti). Artık LAN'daki herhangi
+  // "PEMF-Vet" cihazına bağlanır + bulunan GERÇEK id'yi saklar (kendi kendini onarır). Çok-cihazlı
+  // klinik için elle kod/kimlik girişi var.
 
-  // 1) Kayıtlı adres (en hızlı; device_id eşleşmesiyle doğrula → ölü/yanlış adresi atla)
+  // 1) Kayıtlı adres (en hızlı)
   try {
     const saved =
       (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
-    if (saved && (await checkHealth(saved, wantId))) {
+    if (saved && (await checkHealth(saved))) {
       await apply(saved);
       return { address: saved, source: "saved" };
     }
   } catch {}
 
-  // KANITLI LİNEER SIRA (saved→mDNS→remote→subnet). isOnWifi-tabanlı sıralama KALDIRILDI: açılışta
-  // NetInfo hazır olmadan false dönüp aynı-WiFi yerel keşfini kırıyordu (regresyon).
-
   // 2) mDNS (aynı WiFi, sıfır-konfig — varsa anında bulur)
   const m = await discoverMdns();
-  if (m && (await checkHealth(m, wantId))) { await apply(m); return { address: m, source: "mdns" }; }
+  if (m && (await checkHealth(m))) { await apply(m); return { address: m, source: "mdns" }; }
 
   // 3) UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase tünel URL → subnet'ten ÖNCE
   //    (farklı ağda tam /24 subnet ~sn boşa harcıyordu; remote orada hızlı bağlar).
@@ -267,7 +268,7 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
   if (r) { await apply(r); return { address: r, source: "remote" }; }
 
   // 4) Subnet tarama — HER ZAMAN son çare. Aynı WiFi'de mDNS başarısızsa cihazı bulan KANITLI yol.
-  const s = await discoverSubnet(wantId);
+  const s = await discoverSubnet();
   if (s) { await apply(s); return { address: s, source: "subnet" }; }
 
   return null;
