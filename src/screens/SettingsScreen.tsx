@@ -3,9 +3,9 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Activi
 import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography, radius } from "@/theme/tokens";
 import { apiGet, apiPost, platformAlert } from "@/services/apiClient";
-import { Save, Mail, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy } from "lucide-react-native";
+import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { updateServiceConfig, loadStoredApiToken, setStoredApiToken, setStoredDeviceId, serviceConfig } from "@/services/config";
+import { updateServiceConfig, loadStoredApiToken, setStoredDeviceId } from "@/services/config";
 import { getDeviceByPairingCode, getRemoteUrlForDevice } from "@/services/deviceRegistry";
 import { checkHealth } from "@/services/discovery";
 import { useUserMode } from "@/context/UserModeContext";
@@ -18,23 +18,16 @@ export function SettingsScreen() {
   const [settings, setSettings] = useState({
     clinic_name: "",
     clinic_phone: "",
-    email_sender: "",
-    email_password: "",
     ble_gateway_mac: "",
     mqtt_broker: "localhost",
     mqtt_port: "1883",
-    server_ip: "127.0.0.1",
-    api_token: ""
+    server_ip: "127.0.0.1"
   });
   
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [searching, setSearching] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "ok" | "fail">("idle");
-
-  const [passwordSet, setPasswordSet] = useState(false);
-  const [testEmail, setTestEmail] = useState("");
-  const [testStatus, setTestStatus] = useState("");
 
   // Bu cihazın eşleştirme kimliği (operatör paylaşsın diye) — /api/health'ten gelir.
   const [pairingCode, setPairingCode] = useState("");
@@ -48,7 +41,7 @@ export function SettingsScreen() {
     const fetchSettings = async () => {
       await loadStoredApiToken();
       const clinicPhone = (await AsyncStorage.getItem("pemf_clinic_phone")) || "";
-      setSettings(prev => ({ ...prev, api_token: serviceConfig.apiToken, clinic_phone: clinicPhone }));
+      setSettings(prev => ({ ...prev, clinic_phone: clinicPhone }));
       try {
         const savedIp = await AsyncStorage.getItem("@pemf_server_address") ||
                         await AsyncStorage.getItem("@pemf_server_ip");
@@ -63,13 +56,10 @@ export function SettingsScreen() {
         setSettings(prev => ({
           ...prev,
           clinic_name: data.clinic_name || "",
-          email_sender: data.email_sender || "",
-          email_password: "", // GÜVENLİK: şifre GET ile gelmez (yazma-amaçlı sır)
           ble_gateway_mac: data.ble_gateway_mac || "",
           mqtt_broker: data.mqtt_broker || "localhost",
           mqtt_port: data.mqtt_port?.toString() || "1883"
         }));
-        setPasswordSet(Boolean(data.email_password_set));
       }
 
       // Bağlı cihazın eşleştirme kimliğini al (operatör başka bir cihaza paylaşsın diye).
@@ -240,35 +230,11 @@ export function SettingsScreen() {
     setLoading(false);
     if (result.status === "success") {
       setSaveStatus("Ayarlar başarıyla kaydedildi.");
-      if (settings.email_password) {
-        setPasswordSet(true);
-        setSettings(prev => ({ ...prev, email_password: "" })); // sırrı UI'da tutma
-      }
       setTimeout(() => setSaveStatus(""), 3000);
     } else {
       setSaveStatus("Kaydetme hatası.");
     }
   };
-
-  const handleTestEmail = async () => {
-    if (!testEmail) return;
-    setTestStatus("Gönderiliyor...");
-    const payload = {
-      recipient_email: testEmail,
-      patient_name: "Test Hasta",
-      session_ids: "1", // Örnek olarak ID 1
-      additional_message: "Bu bir test e-postasıdır."
-    };
-    const result = await apiPost<any>("/settings/send_email", payload, { status: "error" });
-    if (result.status === "success") {
-      setTestStatus("E-posta başarıyla gönderildi!");
-    } else {
-      setTestStatus("Hata: E-posta gönderilemedi.");
-    }
-    setTimeout(() => setTestStatus(""), 5000);
-  };
-
-
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -289,8 +255,8 @@ export function SettingsScreen() {
       {isExpert && (
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
-            <Mail color={colors.primary} size={20} />
-            <Text style={styles.cardTitle}>E-Posta ve Klinik Bilgileri</Text>
+            <UserCog color={colors.primary} size={20} />
+            <Text style={styles.cardTitle}>Klinik Bilgileri</Text>
           </View>
           <Text style={styles.label}>Klinik Adı</Text>
           <TextInput 
@@ -308,28 +274,6 @@ export function SettingsScreen() {
             placeholder="Örn: +902125550000"
             keyboardType="phone-pad"
           />
-
-          <Text style={styles.label}>Gönderici E-Posta (SMTP Gmail)</Text>
-          <TextInput 
-            style={styles.input} 
-            value={settings.email_sender} 
-            onChangeText={val => setSettings({...settings, email_sender: val})} 
-            placeholder="klinik@gmail.com" 
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <Text style={styles.label}>E-Posta Şifresi (Uygulama Şifresi)</Text>
-          <TextInput
-            style={styles.input}
-            value={settings.email_password}
-            onChangeText={val => setSettings({...settings, email_password: val})}
-            placeholder={passwordSet ? "•••••••• (kayıtlı — değiştirmek için yeni şifre yazın)" : "Uygulama şifresi"}
-            secureTextEntry
-          />
-          <Text style={styles.helperText}>
-            🔒 Şifre yalnızca kaydedilir, geri gönderilmez. Boş bırakırsanız mevcut şifre korunur.
-          </Text>
         </Card>
       )}
 
@@ -456,19 +400,6 @@ export function SettingsScreen() {
             <Text style={styles.helperText}>
               Manuel yedek: aynı Wi-Fi'de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
             </Text>
-
-            <Text style={[styles.label, { marginTop: spacing.md }]}>Cihaz API Token (opsiyonel)</Text>
-            <TextInput
-              style={styles.input}
-              value={settings.api_token}
-              onChangeText={val => { setSettings({ ...settings, api_token: val }); setStoredApiToken(val.trim()); }}
-              placeholder="Sunucuda API kimlik doğrulama açıksa gerekir"
-              autoCapitalize="none"
-              secureTextEntry
-            />
-            <Text style={styles.helperText}>
-              🔐 Yalnızca backend PEMF_REQUIRE_AUTH=1 ise gerekir; boş bırakılırsa gönderilmez.
-            </Text>
           </Card>
 
           <View style={styles.actions}>
@@ -483,31 +414,7 @@ export function SettingsScreen() {
 
       {isExpert && (
         <View style={{ marginTop: spacing.xl }}>
-          <Card style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Mail color={colors.primary} size={20} />
-              <Text style={styles.cardTitle}>E-Posta Testi</Text>
-            </View>
-          <Text style={styles.helperText}>
-            Yukarıdaki ayarları kaydettikten sonra sistemin e-posta atabildiğini test edin. 
-            (Sistemde en az 1 geçmiş seans kaydı olmalıdır).
-          </Text>
-          <View style={styles.testRow}>
-            <TextInput 
-              style={[styles.input, { flex: 1, marginBottom: 0 }]} 
-              value={testEmail} 
-              onChangeText={setTestEmail} 
-              placeholder="Alıcı e-posta adresi girin" 
-              autoCapitalize="none"
-            />
-            <TouchableOpacity style={styles.btnOutline} onPress={handleTestEmail}>
-              <Text style={styles.btnOutlineText}>Test Gönder</Text>
-            </TouchableOpacity>
-          </View>
-            {testStatus ? <Text style={styles.statusText}>{testStatus}</Text> : null}
-          </Card>
-          
-          <Card style={[styles.card as any, { marginTop: spacing.xl, borderColor: colors.danger, borderWidth: 1 }]}>
+          <Card style={[styles.card as any, { borderColor: colors.danger, borderWidth: 1 }]}>
             <View style={styles.cardHeader}>
               <ServerCrash color={colors.danger} size={20} />
               <Text style={[styles.cardTitle, {color: colors.danger}]}>Donanım Bakım ve Servis</Text>
@@ -650,12 +557,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
     fontSize: typography.small
-  },
-  testRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.sm
   },
   autoConnectRow: {
     flexDirection: 'row',

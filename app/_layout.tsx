@@ -2,25 +2,11 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ToastProvider } from "@/components/ui/ToastProvider";
-import { useEffect } from "react";
-import { initOfflineDb, syncWithCloud } from "@/database/offlineDb";
+// NOT (P0 audit 2026-06-28): offlineDb.ts kaldirildi — hasta PII'sini DUZ-METIN Supabase
+// 'patients' tablosuna (gate/device_id/RLS yok) push/pull eden olu/paralel yoldu (KVKK ihlali).
+// Aktif hasta yolu backend /api/patients (yerel SQLCipher). Burada artik bulut-sync YOK.
 
 export default function RootLayout() {
-  useEffect(() => {
-    // 1. Initialize local SQLite
-    initOfflineDb();
-    
-    // 2. Start Cloud Sync if connected
-    syncWithCloud();
-    
-    // 3. Optional: setup a background interval
-    const interval = setInterval(() => {
-      syncWithCloud();
-    }, 60000); // every minute
-    
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <SafeAreaProvider>
       <ToastProvider>

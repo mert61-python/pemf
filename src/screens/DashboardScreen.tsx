@@ -8,7 +8,6 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import { SystemInfoPanel } from "@/components/domain/SystemInfoPanel";
 import { GatewayStatusPanel } from "@/components/domain/GatewayStatusPanel";
-import RemoteConnectionPanel from "@/components/domain/RemoteConnectionPanel";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
@@ -119,7 +118,6 @@ export function DashboardScreen() {
           <NotificationCenter maxVisible={8} compact />
         </View>
         <View style={styles.bottomRight}>
-          <RemoteConnectionPanel />
           <SystemInfoPanel />
           <GatewayStatusPanel />
         </View>

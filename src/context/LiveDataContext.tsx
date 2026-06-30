@@ -33,9 +33,12 @@ const STM_COIL_MAX_ID = 5;
 
 // AI Pro kapalı-döngü canlı telemetrisi (backend ai_router._ai_pro_loop yayını).
 export interface AiVisionData {
-  imageBase64: string;
-  fgs_total: number;
-  fgs_raw: any;
+  imageBase64?: string;
+  /** El (operatör eli) tespit edildi mi — AI Pro el-takibi pipeline'ı. */
+  detected?: boolean;
+  /** Eski FGS alanları (artık AI Pro yayını göndermiyor; geriye uyumluluk için opsiyonel). */
+  fgs_total?: number | null;
+  fgs_raw?: any;
   target?: { x: number; y: number; z: number };
   eField?: number;
   organId?: number;

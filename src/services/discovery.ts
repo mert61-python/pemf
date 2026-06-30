@@ -93,27 +93,65 @@ async function discoverMdns(): Promise<string | null> {
   });
 }
 
-// ── 3. Subnet tarama (mDNS fallback) ────────────────────────────────────────
+// ── 3. Subnet tarama (mDNS fallback) — TAM /24 ──────────────────────────────
+// KRİTİK FIX: eskiden yalnız SABİT host listesi [100,1,101,2,102,110,50,200,137] taranıyordu →
+// backend DHCP ile ör. .40 alırsa BULUNAMIYORDU (mobil "otomatik bağlanmıyor" kök nedeni). Artık
+// telefonun KENDİ alt-ağı (netinfo) + mevcut/yaygın alt-ağlarda TÜM /24 (1-254) paralel-parça taranır.
+async function localSubnets(): Promise<string[]> {
+  const subs: string[] = [];
+  try {
+    // @ts-ignore - opsiyonel native modül
+    const NetInfo = require("@react-native-community/netinfo").default;
+    const st = await NetInfo.fetch();
+    const ip: string | undefined = st?.details?.ipAddress;
+    if (ip && ip.includes(".")) {
+      const p = ip.split(".");
+      if (p.length === 4) subs.push(p.slice(0, 3).join("."));
+    }
+  } catch {}
+  const cur = serviceConfig.apiBaseUrl.replace(/^https?:\/\//, "").split(":")[0];
+  const cp = cur.split(".");
+  if (cp.length === 4) subs.push(cp.slice(0, 3).join("."));
+  subs.push("192.168.1", "192.168.0", "192.168.137");
+  return subs.filter((v, i, a) => !!v && a.indexOf(v) === i);
+}
+
+async function probeHost(ip: string, timeoutMs: number): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(`http://${ip}:8000/api/health`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return false;
+    const d = await res.json();
+    const ok = d?.service === "PEMF-Vet" || d?.status === "online";
+    if (ok && d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {});
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 async function discoverSubnet(): Promise<string | null> {
-  // Web'de tarayıcı keyfi IP'lere ham health/TCP bağlantısı yapamaz (CORS/sandbox) → subnet
-  // taraması yalnız boşa hata üretir. Web'de origin zaten doğru (backend serve eder) → atla (audit).
+  // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
-  const cur = serviceConfig.apiBaseUrl.replace("/api", "").replace(/^https?:\/\//, "").split(":")[0];
-  const parts = cur.split(".");
-  const here = parts.length === 4 ? parts.slice(0, 3).join(".") : null;
-  const subnets = [here, "192.168.1", "192.168.0", "192.168.137", "10.0.0", "172.16.0"].filter(
-    (v, i, a): v is string => !!v && a.indexOf(v) === i
-  );
-  const hosts = [100, 1, 101, 2, 102, 110, 50, 200, 137];
-  for (const sub of subnets) {
-    const results = await Promise.allSettled(
-      hosts.map(async (h) => {
-        const ip = `${sub}.${h}`;
-        if (await checkHealth(ip)) return ip;
-        throw new Error("nf");
-      })
-    );
-    for (const r of results) if (r.status === "fulfilled" && r.value) return `http://${r.value}:8000`;
+  const subs = await localSubnets();
+  // Yaygın hostlar ÖNCE (hızlı isabet, .40 dahil), sonra kalan TÜM /24 (DHCP IP herhangi biri olabilir).
+  const priority = [1, 100, 2, 101, 102, 110, 50, 200, 137, 40, 10, 20, 30, 254];
+  const order: number[] = [...priority];
+  for (let h = 2; h <= 254; h++) if (!priority.includes(h)) order.push(h);
+  for (const sub of subs) {
+    for (let i = 0; i < order.length; i += 40) {
+      const chunk = order.slice(i, i + 40);
+      const results = await Promise.allSettled(
+        chunk.map(async (h) => {
+          const ip = `${sub}.${h}`;
+          if (await probeHost(ip, 1200)) return ip;
+          throw new Error("nf");
+        })
+      );
+      for (const r of results) if (r.status === "fulfilled" && r.value) return `http://${r.value}:8000`;
+    }
   }
   return null;
 }

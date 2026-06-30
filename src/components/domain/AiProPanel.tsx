@@ -1,25 +1,43 @@
 /**
  * AiProPanel — AI Pro kapalı-döngü kontrol yüzeyi (Kontrol sekmesi).
  * ================================================================
- * Sunucu kamerasından (backend VideoCapture(0)) gelen canlı görüntü + FGS + hedef
- * konumu + organ seçimi + Z-kalibrasyon + süre/sayaç + per-coil diagnostik tablo.
+ * Girdi = OPERATÖRÜN ELİ (MediaPipe Hands ile takip; işaret-parmağı ucu → x/y,
+ * avuç genişliği → z) → em_kedi (KediPredictor) → bobin 1-7 PER-COIL AI duty/phase
+ * (D1-D7 / P1-P7, P bobin-1 referanslı). Bobin 8 KAPALI → 7 bobin gösterilir.
  *
- * Canlı veri: WebSocket 'ai_vision' (LiveDataContext.aiVisionData).
- * Kontrol:    /api/ai/pro/start | stop | organ | calibrate | status
+ * Web   (Platform.OS === "web"): sunucu kamerası (backend VideoCapture(0)).
+ *   Canlı veri: WebSocket 'ai_vision' (LiveDataContext.aiVisionData).
+ * Mobil (iOS/Android): telefon kamerası kareleri → POST /ai/ai_pro/frame
+ *   (backend aynı el-takibi + em_kedi + donanım sürüşünü çalıştırır) → tablo/metrikler
+ *   HTTP yanıtından gelir. /ai/pro/start|stop yine seansı/süreyi backend'de yönetir.
  *
- * NOT: Tam per-organ per-coil DDS hedefleme backend'de KediPredictor (em_kedi)
- * modeli ile gelecek; şimdilik FGS + organ-bias ile uniform sürüş + canlı telemetri.
+ * Kontrol: /api/ai/pro/start | stop | organ | calibrate | status
  */
-import { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput } from "react-native";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost } from "@/services/apiClient";
+import { serviceConfig } from "@/services/config";
 
 const ORGANS = [
   { id: 0, name: "Tüm Vücut" }, { id: 1, name: "Mide" }, { id: 2, name: "Böbrek" },
   { id: 3, name: "Karaciğer" }, { id: 4, name: "Mesane" }, { id: 5, name: "Pankreas" }, { id: 6, name: "Bağırsak" },
 ];
+
+const IS_WEB = Platform.OS === "web";
+
+type Coil = { id: number; freq: number; duty: number; phase: number };
+type FrameResult = {
+  image_base64?: string;
+  detected?: boolean;
+  perCoil?: Coil[];
+  target?: { x: number; y: number; z: number };
+  eField?: number;
+  organId?: number;
+  organName?: string;
+};
 
 function fmtSec(sec: number): string {
   const s0 = Math.max(0, Math.floor(sec));
@@ -36,6 +54,17 @@ export function AiProPanel() {
   const [calibrated, setCalibrated] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // ── Mobil kamera state'i (web'de kullanılmaz) ──
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<"back" | "front">("back");
+  const [mobileResult, setMobileResult] = useState<FrameResult | null>(null);
+  const [remainingSec, setRemainingSec] = useState(0);
+  const cameraRef = useRef<any>(null);
+  const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inFlightRef = useRef(false);
+  const runningRef = useRef(false);
+  useEffect(() => { runningRef.current = running; }, [running]);
+
   // Backend durumunu senkronla (özellikle süre dolup auto-stop olduğunda).
   useEffect(() => {
     let alive = true;
@@ -45,6 +74,7 @@ export function AiProPanel() {
       setRunning(Boolean(st.active));
       setCalibrated(Boolean(st.calibrated));
       if (typeof st.organId === "number") setOrganId(st.organId);
+      if (typeof st.remainingSec === "number") setRemainingSec(st.remainingSec);
     };
     sync();
     const id = setInterval(sync, 3000);
@@ -53,15 +83,23 @@ export function AiProPanel() {
 
   const start = useCallback(async () => {
     setBusy(true);
+    // Mobilde önce kamera izni iste (web'de gerek yok — sunucu kamerası).
+    if (!IS_WEB) {
+      if (!permission?.granted) {
+        const p = await requestPermission();
+        if (!p?.granted) { setBusy(false); return; }
+      }
+    }
     const res = await apiPost<any>("/ai/pro/start", { organ_id: organId, duration_minutes: parseInt(duration) || 20 }, null);
     if (res?.status === "success") setRunning(true);
     setBusy(false);
-  }, [organId, duration]);
+  }, [organId, duration, permission]);
 
   const stop = useCallback(async () => {
     setBusy(true);
     await apiPost<any>("/ai/pro/stop", {}, null);
     setRunning(false);
+    setMobileResult(null);
     setBusy(false);
   }, []);
 
@@ -75,30 +113,98 @@ export function AiProPanel() {
     if (res?.calibrated) setCalibrated(true);
   }, []);
 
-  const remaining = v?.remainingSec ?? 0;
-  const perCoil = v?.perCoil ?? [];
+  // ── Mobil: telefon kamerasından periyodik kare yakala → /ai/ai_pro/frame ──
+  useEffect(() => {
+    if (IS_WEB || !running) return;
+    const capture = async () => {
+      if (inFlightRef.current || !cameraRef.current || !runningRef.current) return;
+      inFlightRef.current = true;
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
+        if (photo?.base64) {
+          const fd = new FormData();
+          fd.append("image_base64", photo.base64);
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 15000);
+          const headers: Record<string, string> = { Accept: "application/json" };
+          if (serviceConfig.apiToken) headers["X-API-Key"] = serviceConfig.apiToken;
+          const r = await fetch(serviceConfig.apiBaseUrl + "/ai/ai_pro/frame", {
+            method: "POST", body: fd, headers, signal: ctrl.signal,
+          });
+          clearTimeout(t);
+          const data = await r.json();
+          if (r.ok && data?.status === "success") setMobileResult(data);
+        }
+      } catch {
+        /* canlı modda kare hatalarını sessiz geç */
+      } finally {
+        inFlightRef.current = false;
+      }
+    };
+    captureIntervalRef.current = setInterval(capture, 400);
+    return () => {
+      if (captureIntervalRef.current) {
+        clearInterval(captureIntervalRef.current);
+        captureIntervalRef.current = null;
+      }
+    };
+  }, [running]);
+
+  // Unmount'ta interval'i temizle (kamera CameraView unmount ile serbest kalır).
+  useEffect(() => () => {
+    if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+  }, []);
+
+  // ── Görüntülenecek değerler: web = WS (aiVisionData), mobil = HTTP yanıtı ──
+  const detected = IS_WEB ? Boolean(v?.detected) : Boolean(mobileResult?.detected);
+  const eField = IS_WEB ? v?.eField : mobileResult?.eField;
+  const targetX = IS_WEB ? v?.target?.x : mobileResult?.target?.x;
+  const targetY = IS_WEB ? v?.target?.y : mobileResult?.target?.y;
+  const targetZ = IS_WEB ? v?.target?.z : mobileResult?.target?.z;
+  const overlayB64 = IS_WEB ? v?.imageBase64 : mobileResult?.image_base64;
+  const perCoil: Coil[] = (IS_WEB ? v?.perCoil : mobileResult?.perCoil) ?? [];
+  const remaining = IS_WEB ? (v?.remainingSec ?? 0) : remainingSec;
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.note}>
-        📷 Sunucu kamerasından canlı kapalı-döngü tedavi. (Tam per-organ DDS hedefleme yakında.)
+        {IS_WEB
+          ? "📷 Sunucu kamerasından canlı kapalı-döngü tedavi (el-takibi + em_kedi, 7 bobin)."
+          : "📷 Telefon kameranızı ELİNİZE doğrultun — el takibi (em_kedi) ile 7 bobin per-coil sürülür."}
       </Text>
 
-      {/* Canlı kamera görüntüsü (sunucudan) */}
+      {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
       <View style={styles.camBox}>
-        {v?.imageBase64 ? (
-          <Image source={{ uri: `data:image/jpeg;base64,${v.imageBase64}` }} style={styles.cam} resizeMode="contain" />
+        {IS_WEB ? (
+          overlayB64 ? (
+            <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.cam} resizeMode="contain" />
+          ) : (
+            <Text style={styles.camPlaceholder}>{running ? "Görüntü bekleniyor…" : "AI Pro durdu."}</Text>
+          )
+        ) : running && permission?.granted ? (
+          <View style={styles.cam}>
+            <CameraView ref={cameraRef} style={styles.cam} facing={facing} />
+            {overlayB64 ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.camOverlay} resizeMode="contain" />
+            ) : null}
+            <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}>
+              <Text style={styles.flipText}>🔄</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <Text style={styles.camPlaceholder}>{running ? "Görüntü bekleniyor…" : "AI Pro durdu."}</Text>
+          <Text style={styles.camPlaceholder}>
+            {running ? "Kamera izni bekleniyor…" : "AI Pro durdu. Başlat → kamera açılır."}
+          </Text>
         )}
       </View>
 
       {/* Canlı metrikler */}
       <View style={styles.metricRow}>
-        <Metric label="FGS" value={`${v?.fgs_total ?? "—"}`} />
-        <Metric label="E-Alan" value={`${v?.eField ?? "—"}`} />
-        <Metric label="Hedef X" value={`${v?.target?.x ?? "—"}`} />
-        <Metric label="Hedef Y" value={`${v?.target?.y ?? "—"}`} />
+        <Metric label="El" value={detected ? "✓ Var" : "—"} />
+        <Metric label="E-Alan" value={`${eField ?? "—"}`} />
+        <Metric label="X (mm)" value={`${targetX ?? "—"}`} />
+        <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
+        <Metric label="Z (mm)" value={`${targetZ ?? "—"}`} />
       </View>
 
       {/* Organ seçimi */}
@@ -141,7 +247,7 @@ export function AiProPanel() {
         <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
       </TouchableOpacity>
 
-      {/* Per-coil diagnostik tablo */}
+      {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
       <Text style={styles.label}>📊 Bobin Diagnostiği</Text>
       <View style={styles.table}>
         <View style={styles.tr}>
@@ -150,7 +256,7 @@ export function AiProPanel() {
           <Text style={[styles.th, { flex: 1 }]}>Duty</Text>
           <Text style={[styles.th, { flex: 1 }]}>Faz</Text>
         </View>
-        {(perCoil.length ? perCoil : Array.from({ length: 8 }, (_, i) => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
+        {(perCoil.length ? perCoil : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, freq: 0, duty: 0, phase: 0 }))).map((c) => (
           <View key={c.id} style={styles.tr}>
             <Text style={[styles.td, { flex: 1 }]}>{c.id}</Text>
             <Text style={[styles.td, { flex: 1 }]}>{c.freq} Hz</Text>
@@ -181,7 +287,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#1e3a5f",
   },
   cam: { width: "100%", height: "100%" },
+  camOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
   camPlaceholder: { color: colors.textMuted, fontSize: typography.small },
+  flipBtn: {
+    position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 16, width: 32, height: 32, alignItems: "center", justifyContent: "center",
+  },
+  flipText: { fontSize: 16 },
   metricRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   metric: { flex: 1, backgroundColor: "#0f172a", borderRadius: 8, padding: spacing.sm, alignItems: "center" },
   metricLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
