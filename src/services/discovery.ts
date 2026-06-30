@@ -196,8 +196,9 @@ async function probeHost(ip: string, timeoutMs: number, requireDeviceId?: string
 async function discoverSubnet(requireDeviceId?: string | null): Promise<string | null> {
   // Web'de tarayıcı keyfi IP'lere health bağlantısı yapamaz (CORS) → atla; web'de origin zaten doğru.
   if (Platform.OS === "web") return null;
-  // WiFi'de DEĞİLSE LAN /24 taraması anlamsız (cihaz aynı ağda olamaz) → pil/saniye boşa harcama.
-  if (!(await isOnWifi())) return null;
+  // NOT: isOnWifi() ile ATLANMAZ — açılışta NetInfo henüz hazır değilken false dönüp aynı-WiFi yerel
+  // keşfini KIRIYORDU (regresyon). Subnet farklı ağda zaten EN SON denendiğinden (remote'tan sonra)
+  // ekstra maliyet sadece remote da başarısızken oluşur — kabul edilebilir.
   const subs = await localSubnets();
   // Yaygın hostlar ÖNCE (hızlı isabet, .40 dahil), sonra kalan TÜM /24 (DHCP IP herhangi biri olabilir).
   const priority = [1, 100, 2, 101, 102, 110, 50, 200, 137, 40, 10, 20, 30, 254];
@@ -253,24 +254,21 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
     }
   } catch {}
 
-  // 2) Ağ tipine göre SIRALA: WiFi'de YEREL (mDNS→subnet) önce; aksi halde REMOTE önce.
-  //    (Farklı ağda yerel tarama backend'i bulamayıp ~sn harcıyordu; remote orada hızlı bağlar.
-  //     Aynı WiFi'de ise yerel bağlanmak hem hızlı hem token'ı provision eder + interneti by-pass.)
-  const tryLocal = async (): Promise<DiscoveryResult | null> => {
-    const m = await discoverMdns();
-    if (m && (await checkHealth(m, wantId))) { await apply(m); return { address: m, source: "mdns" }; }
-    const s = await discoverSubnet(wantId);
-    if (s) { await apply(s); return { address: s, source: "subnet" }; }
-    return null;
-  };
-  const tryRemote = async (): Promise<DiscoveryResult | null> => {
-    const r = await discoverRemote();
-    if (r) { await apply(r); return { address: r, source: "remote" }; }
-    return null;
-  };
+  // KANITLI LİNEER SIRA (saved→mDNS→remote→subnet). isOnWifi-tabanlı sıralama KALDIRILDI: açılışta
+  // NetInfo hazır olmadan false dönüp aynı-WiFi yerel keşfini kırıyordu (regresyon).
 
-  const onWifi = await isOnWifi();
-  const first = onWifi ? tryLocal : tryRemote;
-  const second = onWifi ? tryRemote : tryLocal;
-  return (await first()) || (await second()) || null;
+  // 2) mDNS (aynı WiFi, sıfır-konfig — varsa anında bulur)
+  const m = await discoverMdns();
+  if (m && (await checkHealth(m, wantId))) { await apply(m); return { address: m, source: "mdns" }; }
+
+  // 3) UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase tünel URL → subnet'ten ÖNCE
+  //    (farklı ağda tam /24 subnet ~sn boşa harcıyordu; remote orada hızlı bağlar).
+  const r = await discoverRemote();
+  if (r) { await apply(r); return { address: r, source: "remote" }; }
+
+  // 4) Subnet tarama — HER ZAMAN son çare. Aynı WiFi'de mDNS başarısızsa cihazı bulan KANITLI yol.
+  const s = await discoverSubnet(wantId);
+  if (s) { await apply(s); return { address: s, source: "subnet" }; }
+
+  return null;
 }
