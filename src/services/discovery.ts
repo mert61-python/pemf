@@ -193,16 +193,18 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
     return { address: m, source: "mdns" };
   }
 
-  const s = await discoverSubnet();
-  if (s) {
-    await apply(s);
-    return { address: s, source: "subnet" };
-  }
-
+  // UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase'den güncel tünel URL → YEREL subnet taramasından
+  // ÖNCE dene. Farklı WiFi'de subnet tarama backend'i bulamayıp ~15sn boşa harcıyordu; remote burada hızlı bağlar.
   const r = await discoverRemote();
   if (r) {
     await apply(r);
     return { address: r, source: "remote" };
+  }
+
+  const s = await discoverSubnet();
+  if (s) {
+    await apply(s);
+    return { address: s, source: "subnet" };
   }
 
   return null;
