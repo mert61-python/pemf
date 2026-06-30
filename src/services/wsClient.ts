@@ -93,9 +93,10 @@ export function connectPemfWebSocket(
   const scheduleReconnect = () => {
     if (closedByCaller) return;
     consecutiveFails += 1;
-    // Birkaç başarısız denemeden sonra adres değişmiş olabilir (DHCP / ağ geçişi):
-    // yeniden keşif iste (mDNS / subnet / Supabase remote).
-    if (onNeedRediscovery && consecutiveFails === REDISCOVER_AFTER_FAILS) {
+    // Adres değişmiş olabilir (DHCP / ağ geçişi / tünel URL rotasyonu) → yeniden keşif iste.
+    // TEK-SEFER değil HER REDISCOVER_AFTER_FAILS denemede: uzun kesintide tünel URL'si bağlıyken
+    // rotasyona uğrarsa tek denemede bulunamayıp kalıcı kopuk kalıyordu (audit P1).
+    if (onNeedRediscovery && consecutiveFails % REDISCOVER_AFTER_FAILS === 0) {
       try {
         onNeedRediscovery();
       } catch {

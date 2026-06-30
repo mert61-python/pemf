@@ -323,20 +323,27 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // connectionEpoch artınca WS, güncel serviceConfig.websocketUrl ile yeniden kurulur.
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const discoveringRef = useRef(false);
+  const pendingDiscoverRef = useRef(false);
 
   const runDiscovery = useCallback(async (forceReconnect: boolean) => {
-    if (discoveringRef.current) return;
+    // Keşif sürüyorsa AT-MA, BEKLET → mevcut bitince bir kez daha çalışır. (Audit P1: WiFi↔mobil-veri
+    // geçişinde, devam eden uzun keşif yüzünden NetInfo tetiği düşüp uzun süre kopuk kalıyordu.)
+    if (discoveringRef.current) { pendingDiscoverRef.current = true; return; }
     discoveringRef.current = true;
-    const prevWs = serviceConfig.websocketUrl; // adres GERÇEKTEN değişti mi?
     try {
-      const res = await discoverBackend();
-      // SADECE adres değişince WS'i yeniden kur. Eskiden her başarılı keşif (native'de source asla
-      // "current" değil) epoch bump'lıyor → sağlıklı WS'i boşuna yıkıp telemetri boşluğu yaratıyordu.
-      if (res && forceReconnect && serviceConfig.websocketUrl !== prevWs) {
-        setConnectionEpoch((e) => e + 1);
-      }
-    } catch {
-      /* keşif hatası — mevcut bağlantıyla devam */
+      do {
+        pendingDiscoverRef.current = false;
+        const prevWs = serviceConfig.websocketUrl; // adres GERÇEKTEN değişti mi?
+        try {
+          const res = await discoverBackend();
+          // SADECE adres değişince WS'i yeniden kur (sağlıklı WS'i boşuna yıkıp telemetri boşluğu yaratma).
+          if (res && forceReconnect && serviceConfig.websocketUrl !== prevWs) {
+            setConnectionEpoch((e) => e + 1);
+          }
+        } catch {
+          /* keşif hatası — mevcut bağlantıyla devam */
+        }
+      } while (pendingDiscoverRef.current); // keşif sırasında yeni istek geldiyse (ağ değişti) tekrarla
     } finally {
       discoveringRef.current = false;
     }
