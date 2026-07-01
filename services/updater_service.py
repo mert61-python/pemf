@@ -1,0 +1,132 @@
+import os
+import sys
+import json
+import ssl
+import subprocess
+import tempfile
+import urllib.request
+import urllib.error
+from PyQt6.QtCore import QThread, pyqtSignal
+
+
+def _version_tuple(v: str) -> tuple:
+    """'1.4.0' → (1, 4, 0). SEMVER karşılaştırma için: string-compare '1.10' < '1.9' yanlışını
+    ve '!=' ile downgrade-tetikleme sorununu düzeltir (audit P3)."""
+    parts = []
+    for p in str(v).strip().split("."):
+        num = ""
+        for ch in p:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
+
+
+class UpdateCheckerThread(QThread):
+    """
+    Belirtilen URL'den version.json dosyasını çekip sürüm kontrolü yapar.
+    """
+    update_available = pyqtSignal(str, str, str)  # version, download_url, release_notes
+    check_failed = pyqtSignal(str)
+    up_to_date = pyqtSignal()
+
+    def __init__(self, current_version, version_json_url, parent=None):
+        super().__init__(parent)
+        self.current_version = current_version
+        self.version_json_url = version_json_url
+
+    def run(self):
+        try:
+            # Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
+            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit güvenlik).
+            ctx = ssl.create_default_context()
+
+            req = urllib.request.Request(self.version_json_url, headers={'User-Agent': 'PEMF-Updater'})
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            latest_version = data.get("version", "")
+            download_url = data.get("download_url", "")
+            release_notes = data.get("release_notes", "")
+
+            if latest_version and _version_tuple(latest_version) > _version_tuple(self.current_version):
+                # SEMVER karşılaştırma: yalnız GERÇEKTEN daha yeni sürümde güncelle. Eskiden '!='
+                # downgrade'i de tetikliyordu + string-compare "1.10" < "1.9" yanlıştı (audit P3).
+                self.update_available.emit(latest_version, download_url, release_notes)
+            else:
+                self.up_to_date.emit()
+
+        except Exception as e:
+            self.check_failed.emit(str(e))
+
+class UpdateDownloaderThread(QThread):
+    """
+    Setup dosyasını indirir ve kaydeder.
+    """
+    progress = pyqtSignal(int)
+    download_finished = pyqtSignal(str)  # İndirilen dosyanın tam yolu
+    download_error = pyqtSignal(str)
+
+    def __init__(self, download_url, parent=None):
+        super().__init__(parent)
+        self.download_url = download_url
+        self.save_path = os.path.join(tempfile.gettempdir(), "PEMF_GUI_Update_Setup.exe")
+        self.is_cancelled = False
+
+    def cancel(self):
+        self.is_cancelled = True
+
+    def run(self):
+        try:
+            # Sertifika + hostname DOĞRULANIR. Eski ssl.CERT_NONE MITM'e açıktı: saldırgan
+            # sahte güncelleme paketi sunup uzaktan kod çalıştırabilirdi (audit P2 güvenlik).
+            ctx = ssl.create_default_context()
+
+            req = urllib.request.Request(self.download_url, headers={'User-Agent': 'PEMF-Updater'})
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
+                total_size = int(response.info().get('Content-Length', 0))
+                downloaded = 0
+                # İndirme hızını artırmak için chunk boyutunu 8KB'dan 1MB'a çıkarıyoruz
+                chunk_size = 1024 * 1024 
+
+                with open(self.save_path, 'wb') as f:
+                    while not self.is_cancelled:
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = int((downloaded / total_size) * 100)
+                            self.progress.emit(percent)
+                            
+            if self.is_cancelled:
+                if os.path.exists(self.save_path):
+                    os.remove(self.save_path)
+                self.download_error.emit("İndirme kullanıcı tarafından iptal edildi.")
+            else:
+                self.download_finished.emit(self.save_path)
+
+        except Exception as e:
+            self.download_error.emit(str(e))
+
+def launch_installer_and_exit(installer_path):
+    """
+    İndirilen kurulum dosyasını başlatır ve mevcut uygulamayı kapatır.
+    /SILENT: Inno Setup sessiz kurulum parametresi.
+    """
+    try:
+        # Popen ile arka planda yeni işlem olarak başlat
+        subprocess.Popen([installer_path, '/SILENT'], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        # Uygulamayı hemen kapat
+        import PyQt6.QtWidgets as QtWidgets
+        app = QtWidgets.QApplication.instance()
+        if app:
+            app.quit()
+        else:
+            sys.exit(0)
+    except Exception as e:
+        print(f"Güncelleyici başlatılamadı: {e}")

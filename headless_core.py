@@ -1,0 +1,439 @@
+from __future__ import annotations
+
+import logging
+import queue
+import re
+import socket
+import threading
+import time
+from pathlib import Path
+from queue import Queue
+from typing import Any, Callable
+
+from database.patient_database import get_patient_database
+from database.session_manager import get_session_manager
+from event_bus import EventPriority, get_event_bus
+from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
+from utils.simple_signal import SimpleSignal
+from utils.stm32_transport import Stm32SerialTransport
+
+
+class HeadlessCore:
+    """Qt-free backend core for STM32 communication and shared services."""
+
+    STM_COIL_COUNT = 5
+
+    def __init__(
+        self,
+        app_data_dir: str | Path,
+        *,
+        api_port: int = 8000,
+        start_headless_services: bool = True,
+        ensure_mosquitto: bool = True,
+        start_legacy_qt_services: bool = False,
+        event_bus=None,
+    ) -> None:
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.app_data_dir = Path(app_data_dir)
+        self.app_data_dir.mkdir(parents=True, exist_ok=True)
+        self.api_port = int(api_port)
+
+        self.event_bus = event_bus or get_event_bus()
+        self.stm_connected_signal = SimpleSignal()
+        self.stm_is_connected = False
+        self._stm_state_lock = threading.RLock()
+        self.stm_connected_signal.connect(self._on_stm_connected_slot)
+
+        self.patient_db = get_patient_database(self.app_data_dir)
+        self.session_manager = get_session_manager(self.app_data_dir)
+
+        self.mosquitto_manager = None
+        self.network_monitor = None
+        self.discovery_thread = None
+        self.mosquitto_supervisor = None
+        self.network_status_service = None
+        self.udp_discovery_service = None
+        if start_headless_services:
+            self.start_headless_services(ensure_mosquitto=ensure_mosquitto)
+        if start_legacy_qt_services:
+            self.start_legacy_qt_services()
+
+        self._hw_send_queue: Queue = Queue(maxsize=4)
+        self._hw_sender_stop = threading.Event()
+        self._hw_sender_thread = threading.Thread(
+            target=self._hw_sender_worker,
+            daemon=True,
+            name="HWSender",
+        )
+        self._hw_sender_thread.start()
+        self._publish_event("system.core.started", {"appDataDir": str(self.app_data_dir)})
+
+    def start_headless_services(self, *, ensure_mosquitto: bool = True) -> None:
+        """Start Qt-free support services used by production service mode."""
+        try:
+            self.mosquitto_supervisor = MosquittoSupervisor(
+                port=1883,
+                ensure_running=ensure_mosquitto,
+                start_mdns=True,
+                event_bus=self.event_bus,
+            )
+            self.mosquitto_supervisor.start()
+            self.logger.info("MosquittoSupervisor started.")
+        except Exception as exc:
+            self.logger.warning("MosquittoSupervisor could not start: %s", exc)
+
+        try:
+            self.network_status_service = NetworkStatusService(
+                mqtt_port=1883,
+                event_bus=self.event_bus,
+            )
+            self.network_status_service.start()
+            self.logger.info("NetworkStatusService started.")
+        except Exception as exc:
+            self.logger.warning("NetworkStatusService could not start: %s", exc)
+
+        try:
+            self.udp_discovery_service = UdpDiscoveryService(
+                api_port=self.api_port,
+                discovery_port=5051,
+                mqtt_port=1883,
+                event_bus=self.event_bus,
+                logger_instance=self.logger,
+            )
+            self.udp_discovery_service.start()
+            self.logger.info("UdpDiscoveryService started.")
+        except Exception as exc:
+            self.logger.warning("UdpDiscoveryService could not start: %s", exc)
+
+    def start_legacy_qt_services(self) -> None:
+        """
+        Start old Qt-backed helper services only for temporary legacy runs.
+
+        Production Windows Service mode keeps this disabled so importing the core
+        does not require QApplication/QThread/QTimer.
+        """
+        try:
+            from services.mosquitto_manager import MosquittoManager
+
+            self.mosquitto_manager = MosquittoManager()
+            self.mosquitto_manager.start_monitoring()
+            self.mosquitto_manager.ensure_running()
+            # HiveMQ bulut köprüsü KALDIRILDI — uzaktan erişim artık tunnel + Supabase device-registry
+            # ile sağlanıyor. Yerel mosquitto:1883 (ESP bobin 6-8) çalışmaya devam eder.
+            self.logger.info("Legacy MosquittoManager started (HiveMQ bridge devre disi).")
+        except Exception as exc:
+            self.logger.warning("Legacy MosquittoManager could not start: %s", exc)
+
+        try:
+            from services.network_monitor import NetworkMonitor
+
+            self.network_monitor = NetworkMonitor()
+            self.network_monitor.start_monitoring()
+            self.logger.info("Legacy NetworkMonitor started.")
+        except Exception as exc:
+            self.logger.warning("Legacy NetworkMonitor could not start: %s", exc)
+
+        try:
+            from threads.discovery_service_thread import DiscoveryServiceThread
+
+            self.discovery_thread = DiscoveryServiceThread(logger=self.logger)
+            self.discovery_thread.start()
+            self.logger.info("Legacy DiscoveryServiceThread started.")
+        except Exception as exc:
+            self.logger.warning("Legacy DiscoveryServiceThread could not start: %s", exc)
+
+    def _publish_event(
+        self,
+        event_type: str,
+        data: dict[str, Any],
+        priority: EventPriority = EventPriority.NORMAL,
+    ) -> None:
+        try:
+            self.event_bus.publish(
+                event_type,
+                data,
+                priority=priority,
+                source="headless_core",
+            )
+        except Exception:
+            self.logger.exception("Event publish failed: %s", event_type)
+
+    def _set_stm_connected(self, connected: bool) -> None:
+        with self._stm_state_lock:
+            if self.stm_is_connected == connected:
+                return
+        self.stm_connected_signal.emit(connected)
+
+    def _on_stm_connected_slot(self, is_connected: bool) -> None:
+        with self._stm_state_lock:
+            self.stm_is_connected = bool(is_connected)
+        self.logger.info("STM32 connection state updated: %s", self.stm_is_connected)
+        self._publish_event(
+            "hardware.stm.connected" if is_connected else "hardware.stm.disconnected",
+            {"connected": bool(is_connected)},
+            priority=EventPriority.HIGH,
+        )
+
+    def _parse_stm_ok(self, decoded: str) -> list[dict[str, Any]]:
+        num = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+        vals = rf"({num}(?:,{num})*)"
+        match = re.search(rf"D={vals}\s+P={vals}\s+F={vals}\s+T={vals}", decoded)
+        if not match:
+            return []
+
+        d_vals = [float(x) for x in match.group(1).split(",")]
+        p_vals = [float(x) for x in match.group(2).split(",")]
+        f_vals = [float(x) for x in match.group(3).split(",")]
+        t_vals = [int(float(x)) for x in match.group(4).split(",")]
+
+        updates: list[dict[str, Any]] = []
+        max_items = min(self.STM_COIL_COUNT, len(d_vals), len(p_vals), len(f_vals), len(t_vals))
+        for index in range(max_items):
+            coil_id = index + 1
+            duty = float(d_vals[index])
+            running = duty > 0.0
+            updates.append(
+                {
+                    "coil_id": coil_id,
+                    "duty": duty,
+                    "duty_cycle": duty,
+                    "freq": float(f_vals[index]),
+                    "frequency": float(f_vals[index]),
+                    "phase": float(p_vals[index]),
+                    "duration_min": int(t_vals[index]),
+                    "running": running,
+                    "pwm_active": running,
+                }
+            )
+        return updates
+
+    def _handle_stm_line(
+        self,
+        decoded: str,
+        retry_last_payload: Callable[[], None] | None = None,
+    ) -> None:
+        if not decoded:
+            return
+
+        self.logger.info("[STM32] %s", decoded)
+
+        if "STM_READY" in decoded or "STM_OK:" in decoded:
+            self._set_stm_connected(True)
+
+        if "STM_OK:" in decoded:
+            try:
+                for update in self._parse_stm_ok(decoded):
+                    self._publish_event("hardware.stm.coil_update", update)
+            except Exception as exc:
+                self.logger.error("STM_OK parse error: %s", exc)
+                self._publish_event(
+                    "hardware.stm.error",
+                    {"message": f"STM_OK parse error: {exc}", "raw": decoded},
+                    priority=EventPriority.HIGH,
+                )
+            return
+
+        if "STM_NACK" in decoded:
+            self.logger.warning("[STM32 NACK] Packet rejected; retrying last payload once.")
+            self._publish_event(
+                "hardware.stm.nack",
+                {"message": decoded},
+                priority=EventPriority.HIGH,
+            )
+            if retry_last_payload:
+                retry_last_payload()
+            return
+
+        if "Watchdog Timeout" in decoded:
+            self._publish_event(
+                "hardware.stm.watchdog_timeout",
+                {"message": decoded},
+                priority=EventPriority.CRITICAL,
+            )
+            for coil_id in range(1, self.STM_COIL_COUNT + 1):
+                self._publish_event(
+                    "hardware.stm.coil_update",
+                    {
+                        "coil_id": coil_id,
+                        "duty": 0.0,
+                        "duty_cycle": 0.0,
+                        "freq": 0.0,
+                        "frequency": 0.0,
+                        "phase": 0.0,
+                        "duration_min": 0,
+                        "running": False,
+                        "pwm_active": False,
+                    },
+                    priority=EventPriority.HIGH,
+                )
+            return
+
+        if "STM_ERR" in decoded:
+            self._publish_event(
+                "hardware.stm.error",
+                {"message": decoded},
+                priority=EventPriority.HIGH,
+            )
+
+    def _hw_sender_worker(self) -> None:
+        serial_conn = None
+        udp_sock = None
+        last_payload: list[Any | None] = [None]
+        last_reconnect_time = 0.0
+        transport = Stm32SerialTransport(self.logger)
+
+        def retry_last_payload() -> None:
+            if last_payload[0] is None:
+                return
+            try:
+                self._hw_send_queue.put_nowait(last_payload[0])
+                last_payload[0] = None
+            except queue.Full:
+                pass
+
+        def connect_serial() -> None:
+            nonlocal serial_conn
+            try:
+                if serial_conn:
+                    transport.close_serial(serial_conn)
+                self._set_stm_connected(False)
+                result = transport.open_and_handshake(
+                    stop_event=self._hw_sender_stop,
+                    on_line=lambda line: self._handle_stm_line(line, retry_last_payload),
+                )
+                if result is None:
+                    serial_conn = None
+                    return
+
+                serial_conn = result.serial
+                self._set_stm_connected(True)
+
+                def reader() -> None:
+                    nonlocal serial_conn
+                    while serial_conn and serial_conn.is_open and not self._hw_sender_stop.is_set():
+                        try:
+                            line = serial_conn.readline()
+                            if line:
+                                decoded = line.decode("utf-8", errors="ignore").strip()
+                                self._handle_stm_line(decoded, retry_last_payload)
+                        except Exception as exc:
+                            self.logger.warning("[STM32 READER] %s", exc)
+                            break
+                    self._set_stm_connected(False)
+                    if serial_conn:
+                        transport.close_serial(serial_conn)
+                    serial_conn = None
+
+                threading.Thread(target=reader, daemon=True, name="STM32Reader").start()
+            except Exception as exc:
+                serial_conn = None
+                self._set_stm_connected(False)
+                self.logger.warning("[STM32] Serial open failed: %s", exc)
+
+        connect_serial()
+
+        try:
+            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        except Exception as exc:
+            self.logger.warning("[UDP] Socket open failed: %s", exc)
+            udp_sock = None
+
+        while not self._hw_sender_stop.is_set():
+            now = time.time()
+            if (not serial_conn or not serial_conn.is_open) and (now - last_reconnect_time > 3.0):
+                last_reconnect_time = now
+                connect_serial()
+
+            try:
+                payload_tuple = self._hw_send_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            stm_msg, udp_pkt, esp_ip, esp_port = payload_tuple
+            if serial_conn and serial_conn.is_open and stm_msg:
+                try:
+                    last_payload[0] = payload_tuple
+                    serial_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
+                except Exception as exc:
+                    self.logger.warning("[STM32 SEND] %s", exc)
+                    self._set_stm_connected(False)
+
+            if udp_sock and udp_pkt:
+                try:
+                    udp_sock.sendto(udp_pkt, (esp_ip, esp_port))
+                except Exception as exc:
+                    self.logger.warning("[UDP SEND] %s", exc)
+
+        if serial_conn and serial_conn.is_open:
+            transport.close_serial(serial_conn)
+        if udp_sock:
+            try:
+                udp_sock.close()
+            except Exception:
+                pass
+
+    def quit(self) -> None:
+        """Clean up worker threads and optional legacy services."""
+        self._publish_event("system.core.stopping", {})
+        self._hw_sender_stop.set()
+        if self._hw_sender_thread.is_alive():
+            self._hw_sender_thread.join(timeout=2.0)
+
+        if self.discovery_thread:
+            try:
+                if hasattr(self.discovery_thread, "stop"):
+                    self.discovery_thread.stop()
+                if hasattr(self.discovery_thread, "wait"):
+                    self.discovery_thread.wait(2000)
+            except Exception:
+                self.logger.exception("Discovery thread shutdown failed")
+
+        if self.network_monitor:
+            try:
+                self.network_monitor.stop_monitoring()
+            except Exception:
+                self.logger.exception("Network monitor shutdown failed")
+
+        if self.mosquitto_manager:
+            try:
+                self.mosquitto_manager.stop_monitoring()
+            except Exception:
+                self.logger.exception("Mosquitto monitor shutdown failed")
+
+        if self.udp_discovery_service:
+            try:
+                self.udp_discovery_service.stop()
+            except Exception:
+                self.logger.exception("UDP discovery shutdown failed")
+
+        if self.network_status_service:
+            try:
+                self.network_status_service.stop()
+            except Exception:
+                self.logger.exception("Network status service shutdown failed")
+
+        if self.mosquitto_supervisor:
+            try:
+                self.mosquitto_supervisor.stop()
+            except Exception:
+                self.logger.exception("Mosquitto supervisor shutdown failed")
+
+        self._set_stm_connected(False)
+        self._publish_event("system.core.stopped", {})
+
+    stop = quit
+
+    def get_service_status(self) -> dict[str, Any]:
+        """Return a snapshot of headless support services."""
+        return {
+            "stm": {"connected": self.stm_is_connected},
+            "mosquitto": self.mosquitto_supervisor.get_status() if self.mosquitto_supervisor else {},
+            "network": self.network_status_service.get_status() if self.network_status_service else {},
+            "discovery": self.udp_discovery_service.get_status() if self.udp_discovery_service else {},
+            "legacyQtServices": {
+                "mosquittoManager": bool(self.mosquitto_manager),
+                "networkMonitor": bool(self.network_monitor),
+                "discoveryThread": bool(self.discovery_thread),
+            },
+        }

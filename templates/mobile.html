@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEMF Kontrol</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a6fd8;
+            --secondary: #764ba2;
+            --accent: #f093fb;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --error: #f87171;
+            --info: #60a5fa;
+            --text: #ffffff;
+            --text-secondary: #cbd5e1;
+            --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card: rgba(255, 255, 255, 0.1);
+            --card-hover: rgba(255, 255, 255, 0.15);
+            --border: rgba(255, 255, 255, 0.2);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --border-radius: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow);
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #f093fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+        
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            position: relative;
+            transition: var(--transition);
+        }
+        
+        .status-indicator::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: pulse 2s infinite;
+        }
+        
+        .connected {
+            background-color: var(--success);
+        }
+        
+        .connected::before {
+            background-color: var(--success);
+        }
+        
+        .disconnected {
+            background-color: var(--error);
+        }
+        
+        .disconnected::before {
+            background-color: var(--error);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.2); opacity: 0.1; }
+        }
+        
+        .coil-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        
+        .coil-card {
+            backdrop-filter: blur(20px);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .coil-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--primary));
+            opacity: 0;
+            transition: var(--transition);
+        }
+        
+        .coil-card:hover {
+            background: var(--card-hover);
+            transform: translateY(-4px);
+        }
+        
+        .coil-card:hover::before {
+            opacity: 1;
+        }
+        
+        .coil-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .coil-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .coil-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--accent), var(--primary));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .coil-status {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-active {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--success);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+        
+        .status-inactive {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--error);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+        }
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .data-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: var(--transition);
+        }
+        
+        .data-item:hover {
+            background: rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .data-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .data-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        
+        .pwm-info {
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .pwm-title {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            color: var(--text);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .pwm-title::before {
+            content: '⚡';
+            font-size: 1.2rem;
+        }
+        
+        .pwm-data {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        
+        .pwm-item {
+            text-align: center;
+            flex: 1;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .pwm-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        
+        .pwm-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        /* Bildirim Sistemi */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .notification {
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid;
+            position: relative;
+            overflow: hidden;
+            transform: translateX(100%);
+            opacity: 0;
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        .notification::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: currentColor;
+        }
+        
+        .notification-success {
+            background: rgba(74, 222, 128, 0.1);
+            border-color: rgba(74, 222, 128, 0.3);
+            color: var(--success);
+        }
+        
+        .notification-error {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: rgba(248, 113, 113, 0.3);
+            color: var(--error);
+        }
+        
+        .notification-warning {
+            background: rgba(251, 191, 36, 0.1);
+            border-color: rgba(251, 191, 36, 0.3);
+            color: var(--warning);
+        }
+        
+        .notification-info {
+            background: rgba(96, 165, 250, 0.1);
+            border-color: rgba(96, 165, 250, 0.3);
+            color: var(--info);
+        }
+        
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .notification-close {
+            background: none;
+            border: none;
+            color: currentColor;
+            cursor: pointer;
+            font-size: 1.2rem;
+            opacity: 0.7;
+            transition: var(--transition);
+            padding: 4px;
+            border-radius: 4px;
+        }
+        
+        .notification-close:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .notification-message {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+        
+        .notification-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: currentColor;
+            opacity: 0.3;
+            animation: progress 5s linear forwards;
+        }
+        
+        @keyframes slideIn {
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes progress {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .coil-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            h1 {
+                font-size: 1.6rem;
+            }
+            
+            .notification-container {
+                left: 16px;
+                right: 16px;
+                max-width: none;
+            }
+            
+            .data-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pwm-data {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+        
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🔬 PEMF Mobil Kontrol</h1>
+        <div class="status-bar">
+            <div class="status-indicator disconnected" id="connection-indicator"></div>
+            <span id="connection-text">Bağlanıyor...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="coil-grid" id="coil-grid">
+                <!-- Coil kartları JavaScript ile doldurulacak -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Bildirim Konteyneri -->
+    <div class="notification-container" id="notification-container"></div>
+
+    <script>
+        // WebSocket bağlantısı
+        const WS_HOST = window.location.hostname;
+        const WS_PORT = 8765;
+        const WS_PATH = "/ws/mobile";
+        
+        let websocket;
+        let coilData = {};
+        let previousCoilData = {}; // Önceki durumu takip etmek için
+        let isConnected = false;
+        let coilRemainingTime = new Map(); // Store remaining time for each coil (in seconds)
+        let countdownInterval = null; // Countdown timer interval
+        
+        // DOM elementleri
+        const connectionIndicator = document.getElementById('connection-indicator');
+        const connectionText = document.getElementById('connection-text');
+        const coilGrid = document.getElementById('coil-grid');
+        const notificationContainer = document.getElementById('notification-container');
+        
+        // Bildirim sistemi
+        function showNotification(title, message, type = 'info', duration = 5000) {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+            
+            notification.innerHTML = `
+                <div class="notification-header">
+                    <div class="notification-title">
+                        ${icons[type]} ${title}
+                    </div>
+                    <button class="notification-close" onclick="removeNotification(this.parentElement.parentElement)">×</button>
+                </div>
+                <div class="notification-message">${message}</div>
+                <div class="notification-progress"></div>
+            `;
+            
+            notificationContainer.appendChild(notification);
+            
+            // Otomatik kaldırma
+            setTimeout(() => {
+                removeNotification(notification);
+            }, duration);
+        }
+        
+        function removeNotification(notification) {
+            if (notification && notification.parentElement) {
+                notification.style.animation = 'slideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.parentElement.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }
+        
+        // Coil durumu değişikliklerini kontrol et
+        function checkCoilChanges(newData) {
+            for (const coilId in newData) {
+                const newCoil = newData[coilId];
+                const oldCoil = previousCoilData[coilId];
+                
+                if (!oldCoil) {
+                    // Yeni coil eklendi
+                    showNotification(
+                        `Coil ${coilId} Bağlandı`,
+                        `Coil ${coilId} sisteme başarıyla bağlandı.`,
+                        'success'
+                    );
+                    continue;
+                }
+                
+                // PWM durumu değişiklikleri
+                if (newCoil.pwm && oldCoil.pwm) {
+                    if (newCoil.pwm.running !== oldCoil.pwm.running) {
+                        if (newCoil.pwm.running) {
+                            showNotification(
+                                `Coil ${coilId} PWM Başlatıldı`,
+                                `Frekans: ${newCoil.pwm.frequency} Hz, Duty: ${newCoil.pwm.duty}%`,
+                                'success'
+                            );
+                        } else {
+                            showNotification(
+                                `Coil ${coilId} PWM Durduruldu`,
+                                `PWM sinyali başarıyla durduruldu.`,
+                                'warning'
+                            );
+                        }
+                    }
+                    
+                    // Frekans değişiklikleri
+                    if (newCoil.pwm.frequency !== oldCoil.pwm.frequency && newCoil.pwm.running) {
+                        showNotification(
+                            `Coil ${coilId} Frekans Güncellendi`,
+                            `Yeni frekans: ${newCoil.pwm.frequency} Hz`,
+                            'info'
+                        );
+                    }
+                    
+                    // Duty cycle değişiklikleri
+                    if (newCoil.pwm.duty !== oldCoil.pwm.duty && newCoil.pwm.running) {
+                        showNotification(
+                            `Coil ${coilId} Duty Cycle Güncellendi`,
+                            `Yeni duty cycle: ${newCoil.pwm.duty}%`,
+                            'info'
+                        );
+                    }
+                }
+            }
+            
+            // Kaldırılan coil'leri kontrol et
+            for (const coilId in previousCoilData) {
+                if (!newData[coilId]) {
+                    showNotification(
+                        `Coil ${coilId} Bağlantısı Kesildi`,
+                        `Coil ${coilId} sistemden ayrıldı.`,
+                        'error'
+                    );
+                }
+            }
+        }
+        
+        function connectWebSocket() {
+            const url = `ws://${WS_HOST}:${WS_PORT}${WS_PATH}`;
+            console.log(`WebSocket bağlanıyor: ${url}`);
+            websocket = new WebSocket(url);
+
+            websocket.onopen = function() {
+                isConnected = true;
+                connectionIndicator.classList.remove('disconnected');
+                connectionIndicator.classList.add('connected');
+                connectionText.textContent = 'Bağlandı';
+                console.log("WebSocket Bağlantısı Açıldı.");
+                
+                showNotification(
+                    'Bağlantı Kuruldu',
+                    'Sunucu ile bağlantı başarıyla kuruldu.',
+                    'success'
+                );
+            };
+
+            websocket.onmessage = function(event) {
+                try {
+                    const fullData = JSON.parse(event.data);
+                    
+                    // WebSocket server sends: {type: 'sensor_data', payload: {esps: [...]}}
+                    // or: {type: 'esp_list', payload: {esps: [...]}}
+                    let espList = null;
+                    if (fullData && fullData.type === 'sensor_data' && fullData.payload && fullData.payload.esps) {
+                        espList = fullData.payload.esps;
+                    } else if (fullData && fullData.type === 'esp_list' && fullData.payload && fullData.payload.esps) {
+                        espList = fullData.payload.esps;
+                    } else if (fullData && fullData.coils) {
+                        // Fallback for old format
+                        espList = fullData.coils;
+                    }
+                    
+                    if (espList && Array.isArray(espList)) {
+                        // Convert ESP list to coilData format
+                        const newCoilData = {};
+                        espList.forEach(esp => {
+                            const coilId = esp.esp_id || esp.coil_id || `ESP_${esp.coil_id || '001'}`;
+                            const pwmStatus = esp.pwm_status || {};
+                            
+                            // Update remaining time from WebSocket data
+                            // IMPORTANT: If duration is 0 or null, clear remaining time (unlimited PWM)
+                            if (pwmStatus.active && pwmStatus.duration && pwmStatus.duration > 0 && 
+                                pwmStatus.remaining_time !== undefined && pwmStatus.remaining_time !== null && 
+                                pwmStatus.remaining_time > 0) {
+                                coilRemainingTime.set(coilId, pwmStatus.remaining_time);
+                            } else {
+                                // Clear if PWM not running, no duration, or duration is 0 (unlimited)
+                                coilRemainingTime.delete(coilId);
+                            }
+                            
+                            // Build coil data structure
+                            newCoilData[coilId] = {
+                                pwm: {
+                                    running: pwmStatus.active || false,
+                                    frequency: pwmStatus.frequency || 0,
+                                    duty: pwmStatus.duty_cycle || 0,
+                                    duration: pwmStatus.duration,
+                                    remaining_time: pwmStatus.remaining_time
+                                },
+                                magnetic: esp.sensor_data ? {
+                                    magnitude: esp.sensor_data.magnetic_field || 0
+                                } : null,
+                                temperature: esp.sensor_data ? {
+                                    ambient: esp.sensor_data.ambient_temp || 0,
+                                    object: esp.sensor_data.object_temp || 0
+                                } : null
+                            };
+                        });
+                        
+                        // Manage countdown timer
+                        manageCountdownTimer();
+                        
+                        // Değişiklikleri kontrol et
+                        checkCoilChanges(newCoilData);
+                        
+                        // Önceki veriyi güncelle
+                        previousCoilData = JSON.parse(JSON.stringify(coilData));
+                        coilData = newCoilData;
+                        updateCoilCards();
+                    } else {
+                        console.warn("Gelen veri yapısı geçersiz:", fullData);
+                    }
+                } catch (e) {
+                    console.error("Gelen veri JSON formatında değil veya işlenemedi:", e);
+                    console.error("Ham veri:", event.data);
+                }
+            };
+                
+            websocket.onclose = function(event) {
+                console.log('WebSocket bağlantısı kesildi:', event.code, event.reason);
+                
+                isConnected = false;
+                connectionIndicator.classList.remove('connected');
+                connectionIndicator.classList.add('disconnected');
+                connectionText.textContent = 'Bağlantı Kesildi';
+                
+                // Cleanup countdown timer
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                
+                showNotification(
+                    'Bağlantı Kesildi',
+                    'Sunucu ile bağlantı kesildi. Yeniden bağlanmaya çalışılıyor...',
+                    'error'
+                );
+                
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            websocket.onerror = function(error) {
+                console.error('WebSocket hatası:', error);
+                
+                showNotification(
+                    'Bağlantı Hatası',
+                    'WebSocket bağlantısında bir hata oluştu.',
+                    'error'
+                );
+            };
+        }
+        
+        // Format remaining time as "Kalan: X:YY"
+        function formatRemainingTime(seconds) {
+            if (seconds <= 0) return "";
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `Kalan: ${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+        
+        // Update countdown for all coils
+        function updateCountdowns() {
+            let hasActiveCountdown = false;
+            coilRemainingTime.forEach((seconds, coilId) => {
+                if (seconds > 0) {
+                    hasActiveCountdown = true;
+                    // Decrement
+                    coilRemainingTime.set(coilId, seconds - 1);
+                    // Update display
+                    const element = document.getElementById(`pwm-remaining-time-${coilId}`);
+                    if (element) {
+                        const newSeconds = coilRemainingTime.get(coilId);
+                        if (newSeconds > 0) {
+                            element.textContent = formatRemainingTime(newSeconds);
+                        } else {
+                            element.textContent = "";
+                            // Hide the item if time expired
+                            const item = element.closest('.pwm-item');
+                            if (item) item.style.display = 'none';
+                        }
+                    }
+                }
+            });
+            
+            // Stop timer if no active countdowns
+            if (!hasActiveCountdown && countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+        
+        // Start countdown timer if needed
+        function manageCountdownTimer() {
+            const hasActiveCountdown = Array.from(coilRemainingTime.values()).some(seconds => seconds > 0);
+            
+            if (hasActiveCountdown && !countdownInterval) {
+                countdownInterval = setInterval(updateCountdowns, 1000);
+            } else if (!hasActiveCountdown && countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+        
+        // Coil kartlarını güncelle
+        function updateCoilCards() {
+            coilGrid.innerHTML = '';
+            
+            for (const coilId in coilData) {
+                const data = coilData[coilId];
+                const isRunning = data.pwm && data.pwm.running;
+                
+                const coilCard = document.createElement('div');
+                coilCard.className = 'coil-card';
+                
+                coilCard.innerHTML = `
+                    <div class="coil-header">
+                        <h3 class="coil-title">
+                            <div class="coil-icon">${coilId}</div>
+                            Coil ${coilId}
+                        </h3>
+                        <span class="coil-status ${isRunning ? 'status-active' : 'status-inactive'}">
+                            ${isRunning ? 'Aktif' : 'Pasif'}
+                        </span>
+                    </div>
+                    <div class="data-grid">
+                        <div class="data-item">
+                            <div class="data-label">Manyetik Alan</div>
+                            <div class="data-value">${data.magnetic ? data.magnetic.magnitude.toFixed(3) + ' mT' : '-- mT'}</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Ortam Sıcaklığı</div>
+                            <div class="data-value">${data.temperature ? data.temperature.ambient.toFixed(1) + ' °C' : '-- °C'}</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Nesne Sıcaklığı</div>
+                            <div class="data-value">${data.temperature ? data.temperature.object.toFixed(1) + ' °C' : '-- °C'}</div>
+                        </div>
+                    </div>
+                    <div class="pwm-info">
+                        <div class="pwm-title">PWM Durumu</div>
+                        <div class="pwm-data">
+                            <div class="pwm-item">
+                                <div class="pwm-label">Frekans</div>
+                                <div class="pwm-value">${data.pwm ? data.pwm.frequency + ' Hz' : '-- Hz'}</div>
+                            </div>
+                            <div class="pwm-item">
+                                <div class="pwm-label">Duty Cycle</div>
+                                <div class="pwm-value">${data.pwm ? data.pwm.duty + '%' : '--%'}</div>
+                            </div>
+                            ${isRunning && coilRemainingTime.has(coilId) && coilRemainingTime.get(coilId) > 0 ? `
+                            <div class="pwm-item">
+                                <div class="pwm-label" style="font-weight: bold;">Kalan Süre</div>
+                                <div class="pwm-value" id="pwm-remaining-time-${coilId}" style="font-weight: bold; color: var(--accent);">
+                                    ${formatRemainingTime(coilRemainingTime.get(coilId))}
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                coilGrid.appendChild(coilCard);
+            }
+            
+            if (Object.keys(coilData).length === 0) {
+                coilGrid.innerHTML = `
+                    <div class="coil-card" style="text-align: center; padding: 40px;">
+                        <div class="loading"></div>
+                        <p style="margin-top: 16px; opacity: 0.7;">Coil verisi bekleniyor...</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Sayfa yüklendiğinde WebSocket bağlantısını başlat
+        window.addEventListener('load', function() {
+            connectWebSocket();
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            if (websocket) {
+                websocket.close();
+            }
+        });
+        
+        // Pause timer when page is not visible (performance optimization)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // Page is hidden, pause timer
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            } else {
+                // Page is visible, resume timer if needed
+                manageCountdownTimer();
+            }
+        });
+    </script>
+</body>
+</html>

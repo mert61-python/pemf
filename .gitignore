@@ -1,0 +1,153 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Databases
+database/*.db
+database/*.db-journal
+database/*.db-shm
+database/*.db-wal
+# Sablon (template) veritabanlarini HARIC tut (onlari repoda istiyoruz)
+!database/*_template.db
+
+# Logs
+logs/
+*.log
+
+# Large files & AI Models
+*.onnx
+# Küçük PKL modelleri (XGBoost vb.) repoda kalmalı, sadece çok büyükleri exclude ediyoruz
+# Eger belirli modeller indirelecekse, onnx'leri zaten sildik
+# ai_hub/**/*.pkl
+*.pt
+*.pth
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PyInstaller Spec output (optional)
+build_tools/Output/
+
+# LatteKurulum binaries (Too large for basic git repo)
+lattekurulum/VC_redist.x64.exe
+lattekurulum/stsw-stm32102/VCP_V1.5.0_Setup_W8_x64_64bits.exe
+dataset/
+
+# ── Üretime-hazırlık eklemeleri (kaynak commit'i için) ──
+# Sanal ortamlar — mevcut .venv/venv kuralı .venv-build'i kaçırıyordu
+.venv-build/
+.venv*/
+myenv/
+
+# Frontend AYRI bir Expo projesi (C:\Users\merta\pf, junction) — bu repoda izlenmez
+frontend/
+frontend_temp/
+node_modules/
+
+# Build/dağıtım çıktıları + büyük/irrelevant dizinler
+buildPEMF/
+mobile_builds/
+release_assets/
+lattekurulum/
+# training_archive/ -> guii disina tasindi: ../ml_training_archive (ML egitim arsivi)
+github_pemf/
+
+# Çalışma/derleme artefaktları
+*.apk
+*.ipa
+_p2boot.*
+*.plain.bak
+*.enc.tmp
+*.db-wal
+*.db-shm
+*.db-journal
+
+# SIRLAR — ASLA commit etme (Gmail App Password / Supabase key / şifreleme anahtarları)
+config/config.json
+data/config.json
+config/credentials/
+**/.pemf_key
+**/.pemf_key_v2
+**/.sqlcipher_key
+**/api_token.txt
+
+# Üretilen raporlar
+architecture_report.json
+models_size.json
+
+# P0/dagitim (commit edilmez): ucuncu-parti binary + build log + sifreleme-migrate yedegi
+bin/cloudflared/
+build_exe_*.txt
+*.plain.bak
+
+# ── guii → pemf-update (KOD-ONLY push): tum bundle binary'leri + calistirilabilirler haric ──
+bin/
+*.exe
+*.dll
+*.pyd
+*.bin
+*.node
+# Model binary'leri (kod DEGIL — agir)
+*.pkl
+*.joblib
+*.h5
+*.pb
+*.tflite
+*.safetensors
+*.model
+# Dokumanlar/raporlar/gorseller (kod DEGIL)
+tübitak/
+*.docx
+*.pdf
+*.pptx
+*.xlsx
