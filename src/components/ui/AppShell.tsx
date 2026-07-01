@@ -10,6 +10,7 @@ import { useUserMode } from "@/context/UserModeContext";
 import { useLiveData } from "@/context/LiveDataContext";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import { useToast } from "@/components/ui/ToastProvider";
+import { UpdateBanner } from "@/components/ui/UpdateBanner";
 
 interface NavItem {
   key: RouteKey;
@@ -181,6 +182,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             </Text>
           </Pressable>
         )}
+
+        <UpdateBanner />
 
         <ScrollView contentContainerStyle={[styles.content, !desktop && { paddingBottom: 92 + insets.bottom }]} keyboardShouldPersistTaps="handled">
           {children}

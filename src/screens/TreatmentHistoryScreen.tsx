@@ -336,6 +336,8 @@ const styles = StyleSheet.create({
     gap: spacing.md
   },
   titleArea: {
+    flex: 1,
+    minWidth: 0,
     flexShrink: 1
   },
   title: {
