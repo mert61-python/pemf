@@ -916,8 +916,10 @@ async def auto_preset(payload: AutoPresetPayload):
         }
     except ImportError:
         raise HTTPException(status_code=501, detail="AI recommender bulunamadı.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        # B3 güvenlik-fix: ham str(e) istemciye SIZMAZ (bilgi ifşası) — sunucuda logla, generic dön.
+        logging.getLogger(__name__).exception("AI öneri hesaplanamadı")
+        raise HTTPException(status_code=500, detail="AI öneri hatası")
 
 @app.post("/api/hardware/command")
 async def hardware_command(payload: CommandPayload):
@@ -961,8 +963,10 @@ async def hardware_command(payload: CommandPayload):
         else:
             return {"status": "error", "message": f"Bilinmeyen komut: {cmd}"}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        # B3 güvenlik-fix: ham str(e) SIZMAZ — sunucuda logla, generic dön.
+        logging.getLogger(__name__).exception("Donanım komutu başarısız")
+        raise HTTPException(status_code=500, detail="Donanım komutu başarısız")
 
 @app.post("/api/hardware/selftest")
 async def trigger_hardware_selftest():
@@ -1775,9 +1779,10 @@ async def log_ai_result(payload: AiLogPayload):
         with open(app_data / "ai_diagnoses.jsonl", "a", encoding="utf-8") as f:
             f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
         return {"status": "success"}
-    except Exception as e:
+    except Exception:
+        # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.
         logging.exception("log_ai_result failed")
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error", "detail": "Kayıt başarısız"}
 
 
 @app.get("/api/ai/log")
@@ -1795,8 +1800,10 @@ async def get_ai_log(limit: int = 50):
             except Exception:
                 pass
         return {"status": "success", "data": list(reversed(data))}
-    except Exception as e:
-        return {"status": "error", "detail": str(e), "data": []}
+    except Exception:
+        # B3 güvenlik-fix: ham str(e) SIZMAZ — sunucuda logla, generic dön.
+        logging.exception("get_ai_log failed")
+        return {"status": "error", "detail": "Log okunamadı", "data": []}
 
 
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):

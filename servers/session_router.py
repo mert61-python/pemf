@@ -102,6 +102,7 @@ async def save_session_notes(payload: SessionNotesPayload):
         except Exception:
             logging.exception("Sensör örnekleri kaydedilemedi")
         return {"status": "success", "session_id": sid, "sensor_samples": pending_count}
-    except Exception as e:
+    except Exception:
+        # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.
         logging.exception("save_session_notes failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Not kaydedilemedi")
