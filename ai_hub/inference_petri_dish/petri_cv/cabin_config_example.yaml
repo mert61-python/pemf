@@ -1,0 +1,229 @@
+# =============================================================================
+# PETRI KUYUCUK CV KABIN KONFIGURASYONU (Multi-Well)
+# (Kedi inference_cat_organ cabin_config paterni — 10 organ x,y,z pattern)
+#
+# Mantik: Kedi -> 10 organ cabin frame mm
+#         Petri -> N kuyucuk cabin frame mm (W1, W2, ..., WN)
+#
+# Detection : YOLO11m-seg (mAP50=0.984, mAP50-95=0.961, 22.3M param)
+# Model     : ../yolo11m-seg.pt (ayni klasor)
+# Kalibrasyon: ArUco DICT_5X5_100 (kedi paterni) veya --petri-diameter-cm
+# Siniflandirma: HSV mavi piksel sayisi >= threshold -> kanser
+# =============================================================================
+#
+#                  +Y (dorsal/yukari)
+#                   ^
+#                   |
+#                  _____________________
+#                 /                    /|
+#                /                    / |
+#               /   PETRI KABI       /  |  20 cm
+#              /   (dairesel jel)   /   |  (yukseklik)
+#              /  - beyaz hucre     /    |
+#             / - mavi kanser odak /     |
+#             /                   /      |
+#           ____________________/        |
+#       (4) |                    |       |
+#    [MARK]→|        ● (3)       |←[KAM](5)
+#      sol  |    PETRI MERKEZI   |       |     KAMERA POZISYONU
+#      duvar|                    |     /       lens (0, 0, +15)
+#           |                    |    /
+#  (2)      |                    |   /
+# [-10]     |                    |  /
+#           |____________________| /  20 cm
+#                 20 cm           v   (en)
+#               (uzunluk)
+#                                 +Z (sag, kamera tarafi)
+#
+#              ────────────────────────────────────→ +X (lateral)
+#
+# KALIBRASYON STRATEJISI (oncelik sirasi):
+#   1. ArUco marker varsa: solvePnP + kedi paterni (TAM 6-DOF, ray-plane)
+#   2. ArUco yoksa: --petri-diameter-cm CLI param ile mm/px kalibrasyon
+#                   (YOLO bbox uzun kenari = petri_diameter_cm * 10 mm)
+#                   Standart petri capi: 5 cm, 9 cm, 10 cm
+#   3. Hicbiri yoksa: piksel modu (mm = px, manuel cevirme)
+#
+# AXIS:  +X lateral  +Y dorsal  +Z kamera tarafi
+#
+# =============================================================================
+
+
+cabin_id: "petri_helmholtz_v1"
+
+
+# -----------------------------------------------------------------------------
+# 1) ArUco — OPSIYONEL (kedi paterni); yoksa --petri-diameter-cm kullan
+# -----------------------------------------------------------------------------
+aruco:
+  dict: DICT_5X5_100              # OpenCV ArUco sozluk
+  real_cm: 5.0                    # marker kenar uzunlugu (kumpas)
+  plane_offset_cm: 0.0
+  normal_axis_in_cabin: "+Z"
+  refine_corners: true
+  use_apriltag_corners: false
+
+
+# -----------------------------------------------------------------------------
+# 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
+# -----------------------------------------------------------------------------
+geometry:
+  qr_to_origin_cm: [0.0, 0.0, 10.0]
+  cabin_extent_cm: [20.0, 20.0, 20.0]
+  axes: "x=lateral,y=dorsal,z=camera"
+
+
+# -----------------------------------------------------------------------------
+# 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
+# -----------------------------------------------------------------------------
+camera:
+  fixed_position_cm: [0.0, 0.0, 15.0]
+  look_at_cm: [0.0, 0.0, 0.0]
+  up_cabin: [0.0, 1.0, 0.0]
+  to_marker_cm: 25.0
+  to_origin_cm: 15.0
+  intrinsics_npz: null            # null -> approx intrinsics
+
+
+# =============================================================================
+# PETRI-OZEL ALANLAR
+# (Not: phantom_plate/phantom YAML key'leri cabin_config.py loader uyumu icin
+#       korundu — anlam petri kabi/petri fiziksel parametreleri)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 4) PETRI PLATE (geriye uyum; pipeline kullanmiyor — z=0 sabit)
+# -----------------------------------------------------------------------------
+phantom_plate:
+  plate_z_cm: 0.0
+  width_cm: 5.0                   # sanity check (petri yaklasik cap, cm)
+  height_cm: 5.0
+
+
+# -----------------------------------------------------------------------------
+# 5) KANSER HSV (kuyucuk siniflandirmasi: mavi varsa kanser)
+# -----------------------------------------------------------------------------
+# Her kuyucuk YOLO mask icinde mavi piksel sayilir.
+# >= cancer_pixel_threshold (CLI / 30 default) -> organ_id=1 (kanser)
+# Aksi -> organ_id=0 (saglikli)
+#
+#   cancer_blue   -> MAVI piksel araligi (kanser belirteci)
+#   healthy_white -> KORUNDU (cabin_config loader uyumu); pipeline kullanmiyor
+#                    (YOLO11m-seg kuyucuk tespit eder, HSV beyaz YOK)
+segmentation:
+  cancer_blue:                    # MAVI piksel araligi (kanser belirteci)
+    # S_min=45: belirgin+orta mavi (soluk gri-mavi <30 atilir)
+    # V_min=40: cok karanlik leke (yanik tonlari) atilir
+    # H=90-135: dar mavi spektrum (cyan/yesil-mavi atilir)
+    h_min: 90
+    h_max: 135
+    s_min: 45
+    s_max: 255
+    v_min: 40
+    v_max: 235
+  healthy_white:                  # KORUNDU (loader uyumu); kullanilmiyor
+    h_min: 0
+    h_max: 179
+    s_min: 0
+    s_max: 70
+    v_min: 100
+    v_max: 250
+  morphology:
+    open_kernel: 3
+    close_kernel: 7
+    iterations: 1
+  adaptive:
+    enabled: false
+    block_size: 21
+    C: 5
+  min_area_px: 5000
+  max_area_px: 2000000
+
+
+# -----------------------------------------------------------------------------
+# 6) PnP — ArUco modunda kullanilir
+# -----------------------------------------------------------------------------
+pnp:
+  method: "ITERATIVE"
+  reprojection_error_px: 3.0
+  refine_lm: true
+
+
+# -----------------------------------------------------------------------------
+# 7) PETRI PHYSICS — PetriPredictor varsayilan parametreleri
+# -----------------------------------------------------------------------------
+phantom:                          # YAML key korundu (cabin_config.py uyumu)
+  achieved_B: 0.001               # T (1 mT)
+  duty_sum: 2.4
+
+
+# -----------------------------------------------------------------------------
+# 8) CIKTI KATMANLARI
+# -----------------------------------------------------------------------------
+output:
+  json:
+    enabled: true
+    path: "petri_cv_result.json"
+    pretty: true
+  fastapi:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8765
+  mqtt:
+    enabled: false
+    broker: "localhost"
+    port: 1883
+    tls: false
+    qos: 1
+    keepalive: 60
+    client_id: "petri_cv_pipeline"
+    topic_state: "pemf/coil/state"
+    topic_cmd:   "pemf/coil/cmd"
+    username: null
+    password: null
+
+
+# =============================================================================
+# KURULUM NOTLARI
+# =============================================================================
+#
+# 0) DETECTION YONTEMI: YOLO11m-seg (ZORUNLU)
+#    Model yolu: ../yolo11m-seg.pt (inference_petri_dish/yolo11m-seg.pt)
+#    Performans: mAP50=0.984, mAP50-95=0.961, 22.3M param
+#    CLI flag'leri:
+#      --yolo-conf 0.25         (confidence esiki)
+#      --yolo-iou 0.7           (IoU esiki)
+#      --yolo-imgsz 640         (inference goruntu boyutu)
+#      --yolo-device 0          (GPU 0 veya 'cpu')
+#      --yolo-model PATH        (ozel model yolu)
+#
+# 1) En basit kullanim (ArUco yok, petri capi bilinen):
+#      python -m petri_cv.cli -c cabin_config.yaml \
+#             -i test.jpg --out results --petri-diameter-cm 5.0
+#      (Standart petri kabi capi: 5/6/9/10 cm)
+#
+# 2) ArUco modu (gercek mm/px + cabin frame):
+#      a) DICT_5X5_100 marker bas (5 cm kenar):
+#           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
+#                       cv2.aruco.DICT_5X5_100);
+#                       cv2.imwrite('marker.png',
+#                       cv2.aruco.generateImageMarker(d,0,500))"
+#      b) Kabin sol duvarina yapistir + camera.intrinsics_npz ayarla
+#
+# 3) cancer_blue SIKI eshik:
+#    - S_min<30 = FP riski (gri-mavi yakalanir)
+#    - S_min>=45 = sadece BELIRGIN mavi (mevcut)
+#    - V_min<40 = kahverengi yanik yakalanir (FP)
+#
+# 4) Multi-well modu (kedi 10 organ paterni):
+#    Pipeline YOLO bulduğu TUM kuyucuklari isler (W1, W2, ..., WN).
+#    Sol-ust -> sag-alt sirali numaralanir.
+#    En buyuk kuyucuk = origin (cabin frame 0,0,0).
+#    Her kuyucuga ayri x,y,z + PetriPredictor + D[7]/P[7]/E_kanser.
+#
+# 5) Kanser siniflandirma esikleri:
+#    --cancer-pixel-threshold N (default 30)
+#    Kuyucuk YOLO mask icinde N+ mavi HSV piksel varsa kanser
+#    Yuksek N -> daha az kanser (sıkı), Dusuk N -> daha çok kanser (gevşek)
+#
+# =============================================================================

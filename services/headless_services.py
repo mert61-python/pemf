@@ -155,7 +155,11 @@ class MosquittoSupervisor:
         service = self._check_service_status()
         port_open = _is_tcp_port_open("127.0.0.1", self.port)
         installed = bool(exe_path or service.get("service_exists"))
-        running = bool(service.get("running") or port_open)
+        # YANLIS-OK FIX: bir Windows servisi KAYITLIYSA durumu OTORITERdir — yalniz "port acik"
+        # (zombi/baska surec 1883'u tutuyor olabilir) "calisiyor" SAYILMASIN; yoksa cokmus broker
+        # saglikli gorunup restart edilmez ve health yanlis raporlar. Servis yoksa (native Popen)
+        # port_open tek gecerli sinyaldir.
+        running = bool(service.get("running")) if service.get("service_exists") else port_open
 
         status = {
             "installed": installed,
@@ -179,21 +183,46 @@ class MosquittoSupervisor:
         return status
 
     def start_broker(self) -> bool:
+        """Broker'ı başlat: zaten çalışıyorsa çık → (Windows) servisi dene → doğrudan süreç başlat."""
         status = self.check_once()
         if status.get("running"):
             return True
+        if self._try_start_windows_service(status):
+            return True
+        return self._launch_broker_process()
 
-        if platform.system() == "Windows" and status.get("service_exists"):
-            try:
-                result = _run_command(["net", "start", self.MOSQUITTO_SERVICE_NAME], timeout=15)
-                if result.returncode == 0:
-                    time.sleep(1)
-                    self.check_once()
-                    return True
-                logger.warning("Mosquitto service start failed: %s", result.stderr.strip())
-            except Exception as exc:
-                logger.warning("Mosquitto service start failed: %s", exc)
+    def _try_start_windows_service(self, status: dict) -> bool:
+        """Windows'ta mosquitto bir SERVİS olarak kuruluysa `net start` ile başlatmayı dene.
+        Başlatabildiyse True; uygun değil/başarısızsa False (çağıran doğrudan sürece düşer)."""
+        if platform.system() != "Windows" or not status.get("service_exists"):
+            return False
+        try:
+            result = _run_command(["net", "start", self.MOSQUITTO_SERVICE_NAME], timeout=15)
+            if result.returncode == 0:
+                time.sleep(1)
+                self.check_once()
+                return True
+            logger.warning("Mosquitto service start failed: %s", result.stderr.strip())
+        except Exception as exc:
+            logger.warning("Mosquitto service start failed: %s", exc)
+        return False
 
+    def _broker_popen_kwargs(self) -> dict[str, Any]:
+        """Broker'ı arkaplanda AYRIK başlatmak için platforma-özgü Popen bayrakları
+        (Windows: DETACHED_PROCESS; POSIX: start_new_session)."""
+        kwargs: dict[str, Any] = {}
+        if platform.system() == "Windows":
+            flags = _windows_creationflags()
+            if hasattr(subprocess, "DETACHED_PROCESS"):
+                flags |= subprocess.DETACHED_PROCESS
+            if flags:
+                kwargs["creationflags"] = flags
+        else:
+            kwargs["start_new_session"] = True
+        return kwargs
+
+    def _launch_broker_process(self) -> bool:
+        """mosquitto.exe'yi doğrudan (varsa yanındaki mosquitto.conf ile) AYRIK süreç olarak başlat."""
         exe_path = self._find_mosquitto_exe()
         if not exe_path:
             self._publish(
@@ -208,18 +237,8 @@ class MosquittoSupervisor:
         if config_path.exists():
             args.extend(["-c", str(config_path)])
 
-        popen_kwargs: dict[str, Any] = {}
-        if platform.system() == "Windows":
-            flags = _windows_creationflags()
-            if hasattr(subprocess, "DETACHED_PROCESS"):
-                flags |= subprocess.DETACHED_PROCESS
-            if flags:
-                popen_kwargs["creationflags"] = flags
-        else:
-            popen_kwargs["start_new_session"] = True
-
         try:
-            subprocess.Popen(args, **popen_kwargs)
+            subprocess.Popen(args, **self._broker_popen_kwargs())
             time.sleep(1)
             self.check_once()
             return True
@@ -233,11 +252,27 @@ class MosquittoSupervisor:
             return False
 
     def _monitor_loop(self) -> None:
+        fails = 0
         while not self._stop_event.is_set():
             try:
                 status = self.check_once()
                 if self.ensure_running and not status.get("running"):
-                    self.start_broker()
+                    # start_broker() Popen sonrasi True donebilir ama broker HEMEN olmus olabilir →
+                    # check_once ile GERCEK durumu dogrula. Basarisizsa exponential backoff ile bekle
+                    # (her interval'da yeni detached mosquitto.exe spawn edip churn/log-spam/proses
+                    # yigilmasi YAPMA). Ust sinir ~5 dk; basarida sayac sifirlanir.
+                    ok = self.start_broker() and bool(self.check_once().get("running"))
+                    if ok:
+                        fails = 0
+                    else:
+                        fails += 1
+                        if fails == 1:
+                            logger.warning("Mosquitto baslatilamadi; exponential backoff ile yeniden denenecek.")
+                        wait = min(self.interval_seconds * (2 ** min(fails, 5)), 300.0)
+                        self._stop_event.wait(wait)
+                        continue
+                else:
+                    fails = 0
             except Exception as exc:
                 logger.warning("Mosquitto monitor error: %s", exc)
             self._stop_event.wait(self.interval_seconds)

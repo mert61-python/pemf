@@ -13,6 +13,7 @@ This ensures:
 - No config corruption affects application startup
 """
 
+import copy
 import json
 import os
 import sys
@@ -32,6 +33,38 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Gömülü varsayılan config (son çare). Kullanım öncesi copy.deepcopy'lenir — iç içe dict'ler
+# _deep_merge ile mutasyona uğradığından bu sabit ASLA doğrudan değiştirilmemeli (paylaşım yok).
+_DEFAULT_CONFIG = {
+    'mqtt': {
+        'broker_url': 'localhost',
+        'broker_port': 1883,
+        'user': '',
+        'pass': '',
+        'keepalive': 60,
+        'use_tls': False
+    },
+    'serial': {
+        'port': 'COM10',
+        'baudrate': 115200,
+        'timeout': 1.0,
+        'emulation_mode': False,
+        'auto_connect': True
+    },
+    'application': {
+        'theme': 'dark',
+        'language': 'tr',
+        'auto_save': True,
+        'log_level': 'INFO'
+    },
+    'treatment': {
+        'max_duration': 60,
+        'default_frequency': 10,
+        'default_intensity': 50
+    }
+}
+
+
 class ProductionConfigManager:
     """
     Production-grade config manager with template fallback and encryption support.
@@ -44,8 +77,6 @@ class ProductionConfigManager:
     _ENCRYPTED_KEYS = {
         'mqtt.user',
         'mqtt.pass',
-        'email.password',
-        'email.gmail_password',
         'api.key',
     }
     
@@ -135,94 +166,53 @@ class ProductionConfigManager:
         return None
     
     def _load_config(self):
-        """
-        Load configuration with proper fallback hierarchy.
-        
-        Priority:
-        1. %APPDATA%/PEMF_GUI/config.json (user config)
-        2. Bundled config.json.template (exe template)
-        3. Hard-coded defaults
-        """
-        # Hard-coded defaults (last resort)
-        default_config = {
-            'mqtt': {
-                'broker_url': 'localhost',
-                'broker_port': 1883,
-                'user': '',
-                'pass': '',
-                'keepalive': 60,
-                'use_tls': False
-            },
-            'serial': {
-                'port': 'COM10',
-                'baudrate': 115200,
-                'timeout': 1.0,
-                'emulation_mode': False,
-                'auto_connect': True
-            },
-            'application': {
-                'theme': 'dark',
-                'language': 'tr',
-                'auto_save': True,
-                'log_level': 'INFO'
-            },
-            'treatment': {
-                'max_duration': 60,
-                'default_frequency': 10,
-                'default_intensity': 50
-            }
-        }
-        
-        # Start with defaults
-        self._config = default_config.copy()
+        """Config'i öncelik sırasıyla yükle (düşükten yükseğe derin-birleştir):
+        gömülü varsayılan → bundled config.json (veya template) → %APPDATA% kullanıcı config'i."""
+        self._config = copy.deepcopy(_DEFAULT_CONFIG)
         logger.info("Loaded hard-coded default config")
-        
-        # Try to load bundled config.json first (Production / Plug & Play)
+
         bundled_config_path = self._get_bundled_resource_path('config/config.json')
         template_path = self._get_bundled_resource_path('config/config.json.template')
-        
-        if bundled_config_path:
-            try:
-                with open(bundled_config_path, 'r', encoding='utf-8') as f:
-                    bundled_config = json.load(f)
-                    self._deep_merge(self._config, bundled_config)
-                logger.info(f"Loaded bundled config from: {bundled_config_path}")
-            except Exception as e:
-                logger.error(f"Failed to load bundled config: {e}")
+        self._merge_bundled_or_template(bundled_config_path, template_path)
+        self._load_or_create_user_config(bundled_config_path or template_path)
+
+    def _merge_bundled_or_template(self, bundled_path, template_path) -> None:
+        """Bundled config.json'ı (varsa), yoksa template'i _config'e derin-birleştir (Production/Plug&Play)."""
+        if bundled_path:
+            self._merge_json_config(bundled_path, "bundled")
         elif template_path:
-            # Fallback to template if actual config is missing
-            try:
-                with open(template_path, 'r', encoding='utf-8') as f:
-                    template_config = json.load(f)
-                    self._deep_merge(self._config, template_config)
-                logger.info(f"Loaded template config from: {template_path}")
-            except Exception as e:
-                logger.error(f"Failed to load template config: {e}")
-        
-        # Try to load user config from APPDATA (writable, highest priority)
+            self._merge_json_config(template_path, "template")
+
+    def _merge_json_config(self, path, label: str) -> None:
+        """Bir JSON config dosyasını yükleyip _config'e derin-birleştir (hata → logla, sürdür)."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                self._deep_merge(self._config, json.load(f))
+            logger.info(f"Loaded {label} config from: {path}")
+        except Exception as e:
+            logger.error(f"Failed to load {label} config: {e}")
+
+    def _load_or_create_user_config(self, template_source) -> None:
+        """%APPDATA% kullanıcı config'ini yükle (en yüksek öncelik) + template/bundled'dan eksik anahtarları
+        tamamla; dosya yoksa mevcut durumdan ilk kullanıcı config'ini oluştur."""
         user_config_path = self._get_app_data_dir() / 'config.json'
-        
         if user_config_path.exists():
             try:
                 with open(user_config_path, 'r', encoding='utf-8') as f:
-                    user_config = json.load(f)
-                    self._deep_merge(self._config, user_config)
+                    self._deep_merge(self._config, json.load(f))
                 logger.info(f"Loaded user config from: {user_config_path}")
-                # Ensure user config has any missing keys from template and bundled credentials
+                # Eksik anahtarları template + bundled credential'lardan tamamla; değişiklik varsa kaydet.
                 try:
-                    self._upgrade_user_config_with_template(bundled_config_path or template_path)
-                    # Persist upgrades if any
+                    self._upgrade_user_config_with_template(template_source)
                     self._save_user_config()
                 except Exception:
                     pass
             except Exception as e:
                 logger.error(f"Failed to load user config: {e}")
         else:
-            # Create initial user config from current state
             logger.info(f"Creating initial user config at: {user_config_path}")
-            # Merge missing values from template and bundled creds before saving
             try:
-                self._upgrade_user_config_with_template(bundled_config_path or template_path)
+                self._upgrade_user_config_with_template(template_source)
             except Exception:
                 pass
             self._save_user_config()

@@ -71,6 +71,18 @@ class PatientDatabase:
         self._sqlcipher_mod = import_sqlcipher()
         self._cipher_key = get_sqlcipher_key(self._key_dir, self.logger)
         self.at_rest_encrypted = bool(self._cipher_key and self._sqlcipher_mod is not None)
+        # B-1.4 (audit 2026-07-06): TreatmentHistoryDB ile TUTARLI fail-closed. PEMF_ENCRYPT_AT_REST=1
+        # ACIKCA istendi ama SQLCipher saglanamadi (binding yok / anahtar acilamadi) → hasta PII'sini
+        # DUZ-METIN yazmaktansa patients.db'yi ACMA. Eskiden PatientDatabase sessizce duz-metine
+        # dusuyordu (TreatmentHistoryDB hard-fail ederken) → "sifreli sanip cleartext PII yazma"
+        # sessiz sizinti + iki DB arasi tutarsiz PII garantisi. Uretimde sqlcipher3 EXE'ye bundle'li
+        # + anahtar var → buraya DUSMEZ. (test/dev: bayrak kapali → duz-metin, geriye uyumlu.)
+        if not self.at_rest_encrypted and os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1":
+            raise RuntimeError(
+                "PEMF_ENCRYPT_AT_REST=1 ama hasta DB'si icin SQLCipher saglanamadi (sqlcipher3 binding "
+                "yok veya .sqlcipher_key/keyring anahtari acilamadi) → hasta PII'sini duz-metin "
+                "yazmamak icin patients.db ACILMADI. sqlcipher3'u kurun ve anahtari dogrulayin."
+            )
         # P0 audit 2026-06-28: SQLCipher cursor'i sqlite3.Row KABUL ETMEZ (TypeError) -> baglantiya
         # uygun Row sec (sqlcipher3.Row sifreli iken, sqlite3.Row duz-metin iken).
         self._row_factory = getattr(self._sqlcipher_mod, "Row", sqlite3.Row) if self.at_rest_encrypted else sqlite3.Row
@@ -85,8 +97,11 @@ class PatientDatabase:
 
     @contextlib.contextmanager
     def _get_connection(self):
-        """Thread-safe connection pool context manager."""
-        created_in_this_context = False
+        """Thread-local baglanti havuzu — baglanti thread yasadikca YENIDEN KULLANILIR. Eskiden HER
+        context cikisinda kapatiliyordu → SQLCipher KDF'i her islemde yeniden turetiliyor (agir) ve
+        havuz anlamsizlasiyordu. Hata durumunda rollback ile transaction sizintisi temizlenir;
+        baglanti bozuksa kapatilip sifirlanir (sonraki cagri temiz baglanti acar)."""
+        created_here = False
         if not hasattr(self._local, 'conn') or self._local.conn is None:
             # P0 audit 2026-06-28: whole-DB SQLCipher (anahtar+binding varsa); yoksa duz-metin
             # sqlite (geriye uyumlu) + operatore GORUNUR tek-seferlik uyari.
@@ -99,129 +114,162 @@ class PatientDatabase:
                         "PATIENT DB AT-REST SIFRELEME KAPALI: hasta PII duz-metin SQLite yaziliyor. "
                         "Uretimde sqlcipher3 + PEMF_ENCRYPT_AT_REST=1 (keyring) ayarlayin."
                     )
-                conn = sqlite3.connect(self.db_file, timeout=30.0)
+                conn = sqlite3.connect(self.db_file, timeout=30.0, check_same_thread=False)  # B-6.2
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")   # B-7.3: patient_search_index ON DELETE CASCADE aktif
+            conn.execute("PRAGMA busy_timeout=5000")  # B-6.2: 'database is locked' yerine bekle
             self._local.conn = conn
-            created_in_this_context = True
+            created_here = True
 
         try:
             yield self._local.conn
         except Exception:
+            # Transaction sizintisini temizle (retained-connection tutarliligi); baglanti bozuksa
+            # kapat+sifirla → sonraki cagri temiz baglanti acar (bozuk baglantiyi yeniden kullanma).
+            try:
+                self._local.conn.rollback()
+            except Exception:
+                try:
+                    self._local.conn.close()
+                except Exception:
+                    pass
+                self._local.conn = None
             raise
         finally:
-            if created_in_this_context:
+            # B-6.2: kisa-omurlu WORKER thread'lerinde baglanti birikmesini onle — bu context'te
+            # ACILDIYSA + ana thread DEGILSE kapat. Ana thread'de REUSE korunur (SQLCipher KDF maliyeti).
+            if (created_here and self._local.conn is not None
+                    and threading.current_thread() is not threading.main_thread()):
                 try:
                     self._local.conn.close()
                 except Exception:
                     pass
                 self._local.conn = None
 
+    def create_backup(self, backup_path: str) -> bool:
+        """Çalışan hasta DB'sinden dosya yedeği (online backup API). DB ŞİFRELİYSE yedek de AYNI
+        anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu."""
+        try:
+            bdir = os.path.dirname(backup_path)
+            if bdir:
+                os.makedirs(bdir, exist_ok=True)
+            with self._get_connection() as src:
+                if self.at_rest_encrypted and self._sqlcipher_mod is not None:
+                    dst = self._sqlcipher_mod.connect(backup_path)
+                    dst.execute("PRAGMA key='{}'".format(self._cipher_key.replace("'", "''")))
+                else:
+                    dst = sqlite3.connect(backup_path)
+                try:
+                    src.backup(dst)
+                    dst.commit()
+                finally:
+                    dst.close()
+            return True
+        except Exception:
+            self.logger.exception("PatientDB create_backup hatası")
+            return False
+
+    def _safe_add_column(self, cursor, table: str, column_def: str) -> None:
+        """Idempotent şema-migrasyonu: ALTER TABLE ADD COLUMN; sütun zaten varsa sessizce geç.
+        (Eski DB'lere yeni kolon eklemenin tek noktası — tekrarlanan try/except kalıbı buraya toplandı.)"""
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
+        except _DB_OPERATIONAL:
+            pass
+
     def _init_database(self) -> None:
-        """SQLite veritabani ve tablolarini olusturur."""
+        """SQLite şemasını oluştur + HMAC arama indeksini garanti et."""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-
-                cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS patients (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        species TEXT,
-                        breed TEXT,
-                        age TEXT,
-                        weight TEXT,
-                        owner TEXT,
-                        vet_contact TEXT,
-                        owner_email TEXT,
-                        last_treatment_at TEXT,
-                        anonymized INTEGER DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        sync_status INTEGER DEFAULT 0
-                    )
-                    """
-                )
-
-                # Sürüm güncellemesi (Migration) için sync_status kolonunu ekle
-                try:
-                    cursor.execute("ALTER TABLE patients ADD COLUMN sync_status INTEGER DEFAULT 0")
-                except _DB_OPERATIONAL:
-                    pass # Kolon zaten var
-
-                # owner_email kolonu (rapor e-postasi) — eski DB'lere idempotent ekle.
-                try:
-                    cursor.execute("ALTER TABLE patients ADD COLUMN owner_email TEXT")
-                except _DB_OPERATIONAL:
-                    pass # Kolon zaten var
-
-                # KVKK retention (2026-06-28): son tedavi tarihi + anonim bayragi — inaktiflik bazli
-                # anonimlestirme icin. Idempotent.
-                try:
-                    cursor.execute("ALTER TABLE patients ADD COLUMN last_treatment_at TEXT")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute("ALTER TABLE patients ADD COLUMN anonymized INTEGER DEFAULT 0")
-                except _DB_OPERATIONAL:
-                    pass
-
-                cursor.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_patient_name
-                    ON patients(name)
-                    """
-                )
-                cursor.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_patient_owner
-                    ON patients(owner)
-                    """
-                )
-                cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS patient_search_index (
-                        patient_id TEXT NOT NULL,
-                        field_name TEXT NOT NULL,
-                        token_hmac TEXT NOT NULL,
-                        PRIMARY KEY (patient_id, field_name, token_hmac),
-                        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-                    )
-                    """
-                )
-                cursor.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_patient_search_token
-                    ON patient_search_index(token_hmac)
-                    """
-                )
-
-                # Performans Fix (4.1): Sadece index tablosu bossa rebuild yap
-                cursor.execute("SELECT COUNT(*) FROM patient_search_index")
-                count = cursor.fetchone()[0]
-                # P2 audit 2026-06-28: HMAC arama indeksi _search_hmac_key'e bagli; anahtar degisirse
-                # (keyring reset) eski token'lar eslesmez → arama SESSIZCE bozulur. Parmak-izini sakla;
-                # bos-tablo VEYA anahtar-degisimi durumunda indeksi YENIDEN kur.
-                _fp = hashlib.sha256(self._search_hmac_key).hexdigest()[:16]
-                _fp_file = self._key_dir / ".patient_search_keyfp"
-                _stored_fp = ""
-                try:
-                    if _fp_file.exists():
-                        _stored_fp = _fp_file.read_text(encoding="utf-8").strip()
-                except Exception:
-                    pass
-                if count == 0 or (_stored_fp and _stored_fp != _fp):
-                    if count > 0:
-                        self.logger.warning("Hasta arama anahtari degismis → HMAC indeksi yeniden kuruluyor.")
-                    self._rebuild_search_index(cursor)
-                try:
-                    _fp_file.write_text(_fp, encoding="utf-8")
-                except Exception:
-                    pass
+                self._create_patient_schema(cursor)
+                self._ensure_search_index(cursor)
                 conn.commit()
         except _DB_ERROR as e:
             raise RuntimeError(f"Database initialization failed: {e}") from e
+
+    def _create_patient_schema(self, cursor) -> None:
+        """patients + patient_search_index tabloları/indeksleri + idempotent kolon-migrasyonları."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS patients (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                species TEXT,
+                breed TEXT,
+                age TEXT,
+                weight TEXT,
+                owner TEXT,
+                vet_contact TEXT,
+                owner_email TEXT,
+                last_treatment_at TEXT,
+                anonymized INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                sync_status INTEGER DEFAULT 0
+            )
+            """
+        )
+        # Eski DB'lere idempotent kolon eklemeleri (yeni DB'de CREATE zaten içerir → ALTER sessizce geçer):
+        self._safe_add_column(cursor, "patients", "sync_status INTEGER DEFAULT 0")
+        self._safe_add_column(cursor, "patients", "owner_email TEXT")
+        # KVKK retention (2026-06-28): son tedavi tarihi + anonim bayragi (inaktiflik bazli anonimlestirme).
+        self._safe_add_column(cursor, "patients", "last_treatment_at TEXT")
+        self._safe_add_column(cursor, "patients", "anonymized INTEGER DEFAULT 0")
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_patient_name
+            ON patients(name)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_patient_owner
+            ON patients(owner)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS patient_search_index (
+                patient_id TEXT NOT NULL,
+                field_name TEXT NOT NULL,
+                token_hmac TEXT NOT NULL,
+                PRIMARY KEY (patient_id, field_name, token_hmac),
+                FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_patient_search_token
+            ON patient_search_index(token_hmac)
+            """
+        )
+
+    def _ensure_search_index(self, cursor) -> None:
+        """HMAC arama indeksini garanti et: tablo BOŞSA veya arama-anahtarı DEĞİŞTİYSE yeniden kur.
+        (P2 audit: HMAC indeksi _search_hmac_key'e bağlı; anahtar değişirse eski token'lar eşleşmez →
+        arama SESSİZCE bozulur. Anahtar parmak-izini saklayıp değişimi tespit ediyoruz.)"""
+        cursor.execute("SELECT COUNT(*) FROM patient_search_index")
+        count = cursor.fetchone()[0]
+        _fp = hashlib.sha256(self._search_hmac_key).hexdigest()[:16]
+        _fp_file = self._key_dir / ".patient_search_keyfp"
+        _stored_fp = ""
+        try:
+            if _fp_file.exists():
+                _stored_fp = _fp_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+        if count == 0 or (_stored_fp and _stored_fp != _fp):
+            if count > 0:
+                self.logger.warning("Hasta arama anahtari degismis → HMAC indeksi yeniden kuruluyor.")
+            self._rebuild_search_index(cursor)
+        try:
+            _fp_file.write_text(_fp, encoding="utf-8")
+        except Exception:
+            pass
 
     def _normalize_search_value(self, value: str) -> str:
         text = str(value or "").strip().lower()

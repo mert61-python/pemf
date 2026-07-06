@@ -1,61 +1,80 @@
-# PEMF GUI - Single source of truth for Python dependencies
-# Embedded Python / Windows 10+ / Python 3.10.x
+# =============================================================================
+# PEMF Headless Backend — Python bağımlılıkları  (TEK, KİLİTLİ kaynak dosya)
+# -----------------------------------------------------------------------------
+# Projenin DERLENMESİ (frozen EXE) + ÇALIŞMASI için gereken TÜM doğrudan
+# bağımlılıklar. Sürümler, kanıtlanmış build ortamına (myenv, CPython 3.10)
+# birebir KİLİTLİDİR (==). Eski requirements-service/-test/.lock dosyalarının
+# YERİNİ ALIR — kafa karıştıran çoklu dosya kaldırıldı.
+#
+# Kurulum (TAM CPython 3.10 venv içine — embeddable python DEĞİL):
+#   python -m pip install -r requirements.txt
+#
+# React'e geçildi → Qt/PyQt YOK.  QR eşleştirme KALDIRILDI → qrcode YOK.
+# El-takibi söküldü → mediapipe YOK.  Eski eğitim/ECG kütüphaneleri (wfdb,
+# neurokit2, heartpy, biosppy, statsmodels, tslearn, h5py, tables) YOK.
+# =============================================================================
 
-# Core UI
-PyQt6>=6.6.0
-PyQt6-WebEngine>=6.6.0
-PyQt6-Qt6>=6.6.0
-PyQt6-WebEngine-Qt6>=6.6.0
+# torch CPU tekerlekleri PyPI'de yok; bu ek index'ten gelir:
+--extra-index-url https://download.pytorch.org/whl/cpu
 
-# ONNX & AI
-onnxruntime>=1.19.2
-numpy>=2.0.0
-pandas>=2.2.2
-scikit-learn>=1.6.1
-opencv-python>=4.10.0
-mediapipe>=0.10.8
-ultralytics>=8.3.0
-scipy>=1.11.0
-h5py>=3.9.0
-tables>=3.8.0
-biosppy>=2.2.0
-wfdb>=4.1.0
-neurokit2>=0.2.12
-heartpy>=1.2.7
-imbalanced-learn>=0.11.0
-statsmodels>=0.14.0
-tslearn>=0.6.0
+# ── Web / API (FastAPI servis + WebSocket) ──
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+starlette==1.3.1                 # CVE fix (2026-07-06): 1.2.1→1.3.1 (FastAPI>=0.46 uyumlu, 86 test yeşil)
+pydantic==2.13.4
+python-multipart==0.0.31        # ai_router UploadFile/Form (runtime ŞART) — CVE fix: 0.0.30→0.0.31
+websockets==15.0.1
 
-# Visualization & Reporting
-matplotlib>=3.9.0
-pyqtgraph>=0.13.3
-PyOpenGL>=3.1.6
-seaborn>=0.12.0
-plotly>=5.17.0
-jinja2>=3.1.2
-weasyprint>=59.0
-reportlab>=4.0.7
+# ── Donanım / iletişim (STM32 serial + ESP MQTT + mDNS keşfi) ──
+paho-mqtt==2.1.0
+pyserial==3.5
+zeroconf==0.149.0               # CVE fix (2026-07-06): 0.147.3→0.149.0
 
-# Network & Communication
-paho-mqtt>=2.1.0
-zeroconf>=0.147.3
-bleak>=1.1.1
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-urllib3>=2.0.0
-tqdm>=4.66.0
+# ── AI/ML — görüntü + çekirdek ──
+numpy==1.26.4                    # KRİTİK: torch 2.1.2 numpy<2 ister (>=2.0 KIRAR)
+opencv-python==4.9.0.80
+onnxruntime==1.19.2
+# CVE ERTELENDİ (bilinçli, 2026-07-06): onnx 1.15→1.16+ / torch 2.1.2→2.6+ CVE'leri PİNLİ bırakıldı —
+# torch upgrade `numpy<2` kısıtını kaldırır → opencv/scipy/sklearn/librosa/pandas/numba CASCADE +
+# 8 AI modelin klinik-çıktısı yeniden-doğrulanmalı (bu ortamda yapılamaz). Ayrı maintainer görevi.
+onnx==1.15.0                     # ONNX model meta/graph (ultralytics export + inference)
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
+ultralytics==8.4.47             # YOLO (landmark/segmentasyon/CT/retikülosit/petri)
+pillow==12.2.0
+scipy==1.15.3                    # torch/sklearn/librosa çekirdeği
+scikit-learn==1.7.2             # CKD modeli PICKLE'dan yüklenir (statik import DEĞİL)
+xgboost==3.2.0                   # cat_disease XGBoost.pkl PICKLE (statik import DEĞİL)
 
-# Utilities & Config
-python-dotenv>=1.0.0
-cryptography>=41.0.3
-keyring>=20.0.0
-optuna>=2.0.0
-joblib>=1.3.0
-certifi>=2023.0.0
+# ── AI/ML — ses (kedi sesi sınıflandırma) ──
+librosa==0.11.0
+imageio-ffmpeg==0.6.0           # herhangi ses formatı → 22050Hz mono WAV
+numba==0.61.2                    # librosa mel-spektrogram JIT (frozen'da sürüm kritik)
+llvmlite==0.44.0
+soundfile==0.13.1
 
-# Serial Communication
-pyserial>=3.5
-# PyTorch CPU (ultralytics bağımlılığı - GPU versiyonu gereksiz, LattePanda CPU-only)
-# Kurulum: pip install torch>=2.1.2+cpu --index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.2
-torchvision>=0.16.2
+# ── Veri / raporlama ──
+pandas==2.3.3
+matplotlib==3.10.9              # yalnız Agg backend — PDF/rapor grafikleri
+reportlab==4.0.7                # PDF rapor üretimi
+PyYAML==6.0.3                    # cabin_config (em_fantom/em_petri/cat_organ)
+
+# ── DB / şifreleme / sırlar ──
+cryptography==43.0.1            # CVE fix (2026-07-06): 41.0.3→43.0.1 (CVE-2023-50782/2024-0727; Fernet/DPAPI) — 86 test yeşil
+sqlcipher3==0.6.2                # at-rest DB şifreleme (Windows'ta prebuilt wheel gerekir)
+keyring==25.7.0
+joblib==1.5.3                    # sklearn model yükleme
+
+# ── Bulut (offline-first Supabase cihaz kaydı) ──
+supabase==2.31.0
+
+# ── Gözlemlenebilirlik (opsiyonel uzaktan hata-izleme — audit B-5.1) ──
+# VARSAYILAN KAPALI (KVKK); yalnız PEMF_SENTRY_DSN set edilince aktif. EXE'ye gömülü ama dormant.
+sentry-sdk==2.24.1
+
+# ── Build (frozen EXE) ──
+pyinstaller==6.20.0
+
+# ── Test ──
+pytest==9.1.1
+httpx==0.28.1

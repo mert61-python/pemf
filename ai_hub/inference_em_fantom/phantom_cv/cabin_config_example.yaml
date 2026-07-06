@@ -1,0 +1,203 @@
+# =============================================================================
+# SENTETIK BOBREK FANTOM MODELI KABIN KONFIGURASYONU
+# (Kedi inference_cat_organ cabin_config paterni)
+# =============================================================================
+#
+#                  +Y (dorsal/yukari)
+#                   ^
+#                   |
+#                  _____________________
+#                 /                    /|
+#                /                    / |
+#               / SENTETIK BOBREK    /  |  20 cm
+#              / FANTOM MODELI      /   |  (yukseklik)
+#             /  - beyaz silikon   /    |
+#            / - mavi tumor odak  /     |
+#           /                    /      |
+#           ____________________/       |
+#       (4) |                    |      |
+#    [MARK]→|        ● (3)       |←[KAM](5)
+#      sol  |    FANTOM MERKEZI  |      |     KAMERA POZISYONU
+#      duvar|                    |     /      lens (0, 0, +15)
+#           |                    |    /
+#  (2)      |                    |   /
+# [-10]     |                    |  /
+#           |____________________| /  20 cm
+#                 20 cm           v   (en)
+#               (uzunluk)
+#                                 +Z (sag, kamera tarafi)
+#
+#              ────────────────────────────────────→ +X (lateral)
+#
+# KALIBRASYON STRATEJISI (oncelik sirasi):
+#   1. ArUco marker varsa: solvePnP + kedi paterni (TAM 6-DOF)
+#   2. ArUco yoksa: --phantom-length-cm CLI param ile mm/px kalibrasyon
+#                   (fantom bbox uzun kenari = phantom_length_cm)
+#   3. Hicbiri yoksa: piksel modu (mm = px, manuel cevirme)
+#
+# AXIS:  +X lateral  +Y dorsal  +Z kamera tarafi
+#
+# =============================================================================
+
+
+cabin_id: "phantom_helmholtz_v1"
+
+
+# -----------------------------------------------------------------------------
+# 1) ArUco — OPSIYONEL (kedi paterni); yoksa --phantom-length-cm kullan
+# -----------------------------------------------------------------------------
+aruco:
+  dict: DICT_5X5_100              # OpenCV ArUco sozluk
+  real_cm: 5.0                    # marker kenar uzunlugu (kumpas)
+  plane_offset_cm: 0.0
+  normal_axis_in_cabin: "+Z"
+  refine_corners: true
+  use_apriltag_corners: false
+
+
+# -----------------------------------------------------------------------------
+# 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
+# -----------------------------------------------------------------------------
+geometry:
+  qr_to_origin_cm: [0.0, 0.0, 10.0]
+  cabin_extent_cm: [20.0, 20.0, 20.0]
+  axes: "x=lateral,y=dorsal,z=camera"
+
+
+# -----------------------------------------------------------------------------
+# 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
+# -----------------------------------------------------------------------------
+camera:
+  fixed_position_cm: [0.0, 0.0, 15.0]
+  look_at_cm: [0.0, 0.0, 0.0]
+  up_cabin: [0.0, 1.0, 0.0]
+  to_marker_cm: 25.0
+  to_origin_cm: 15.0
+  intrinsics_npz: null            # null -> approx intrinsics (mavi peak'ten)
+
+
+# =============================================================================
+# FANTOM-OZEL ALANLAR
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 4) FANTOM PLATE (gerigeri uyum; pipeline kullanmiyor — z=0 sabit)
+# -----------------------------------------------------------------------------
+phantom_plate:
+  plate_z_cm: 0.0
+  width_cm: 8.5                   # sanity check (fantom yaklasik boyut)
+  height_cm: 13.0
+
+
+# -----------------------------------------------------------------------------
+# 5) RENK SEGMENTASYON — SIKI eshik (FP minimize)
+# -----------------------------------------------------------------------------
+#   cancer_blue   -> MAVI noktalar (tumor odaklari, organ_id=1)
+#   healthy_white -> BEYAZ silikon fantom dokusu (organ_id=0)
+#   (find_phantom watershed ile mask'i ayrik fantomlara boluyor)
+segmentation:
+  cancer_blue:                    # MAVI noktalar -> tumor (SIKI: FP engelle)
+    # S_min=45: belirgin+orta mavi (soluk gri-mavi <30 atilir)
+    # V_min=40: cok karanlik leke (yanik tonlari) atilir
+    # H=90-135: dar mavi spektrum (cyan/yesil-mavi atilir)
+    h_min: 90
+    h_max: 135
+    s_min: 45
+    s_max: 255
+    v_min: 40
+    v_max: 235
+  healthy_white:                  # BEYAZ silikon bobrek fantomu
+    # H umursamaz, S<70 (krem ve beyaz), V>100 (parlak)
+    h_min: 0
+    h_max: 179
+    s_min: 0
+    s_max: 70
+    v_min: 100
+    v_max: 250
+  morphology:
+    open_kernel: 3                # healthy mask icin (find_phantom)
+    close_kernel: 11              # delik doldurma
+    iterations: 1
+  adaptive:
+    enabled: false
+    block_size: 21
+    C: 5
+  min_area_px: 5000               # find_phantom adaptif kullanir
+  max_area_px: 2000000
+
+
+# -----------------------------------------------------------------------------
+# 6) PnP — ArUco modunda kullanilir
+# -----------------------------------------------------------------------------
+pnp:
+  method: "ITERATIVE"
+  reprojection_error_px: 3.0
+  refine_lm: true
+
+
+# -----------------------------------------------------------------------------
+# 7) FANTOM PHYSICS — PhantomPredictor varsayilan parametreleri
+# -----------------------------------------------------------------------------
+phantom:
+  achieved_B: 0.001               # T (1 mT)
+  duty_sum: 2.4
+
+
+# -----------------------------------------------------------------------------
+# 8) CIKTI KATMANLARI
+# -----------------------------------------------------------------------------
+output:
+  json:
+    enabled: true
+    path: "phantom_cv_result.json"
+    pretty: true
+  fastapi:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8765
+  mqtt:
+    enabled: false
+    broker: "localhost"
+    port: 1883
+    tls: false
+    qos: 1
+    keepalive: 60
+    client_id: "phantom_cv_pipeline"
+    topic_state: "pemf/coil/state"
+    topic_cmd:   "pemf/coil/cmd"
+    username: null
+    password: null
+
+
+# =============================================================================
+# KURULUM NOTLARI
+# =============================================================================
+#
+# 1) En basit kullanim (ArUco yok, fantom uzunlugu bilinen):
+#      python -m phantom_cv.cli -c cabin_config.yaml \
+#             -i test.jpg --out results --phantom-length-cm 10.0
+#
+# 2) ArUco modu (gercek mm/px + cabin frame):
+#      a) DICT_5X5_100 marker bas (5 cm kenar):
+#           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
+#                       cv2.aruco.DICT_5X5_100);
+#                       cv2.imwrite('marker.png',
+#                       cv2.aruco.generateImageMarker(d,0,500))"
+#      b) Kabin sol duvarina yapistir + camera.intrinsics_npz ayarla
+#
+# 3) RENK ESHIK KALIBRASYONU
+#    Yeni isik altinda gercek goruntu ile ayarla:
+#      python -c "import cv2; img=cv2.imread('foto.jpg');
+#                  hsv=cv2.cvtColor(img,cv2.COLOR_BGR2HSV);
+#                  print(hsv[y,x])"
+#
+# 4) cancer_blue SIKI eshik:
+#    - S_min<30 = FP riski (gri-mavi gri-yesil yakalanir)
+#    - S_min>=45 = sadece BELIRGIN mavi (mevcut)
+#    - V_min<40 = kahverengi yanik yakalanir (FP)
+#
+# 5) Tek fantom modu:
+#    Pipeline `max_phantoms=1` default — en yuksek skorlu segment secilir.
+#    Multi-fantom istersen color_segment.find_phantoms(max=N) cagri.
+#
+# =============================================================================

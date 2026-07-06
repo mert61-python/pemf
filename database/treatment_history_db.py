@@ -126,8 +126,10 @@ class TreatmentHistoryDB:
         if not stored_in_keyring:
             try:
                 keyfile.write_text(newkey, encoding="utf-8")
+                # NTFS ACL kilidi (audit B-1.2): SYSTEM + Administrators — os.chmod Windows'ta no-op.
                 try:
-                    os.chmod(keyfile, 0o600)
+                    from utils.file_acl import lock_down_file
+                    lock_down_file(keyfile)
                 except Exception:
                     pass
             except Exception:
@@ -240,7 +242,14 @@ class TreatmentHistoryDB:
                 os.remove(backup)
             shutil.move(db, backup)
             shutil.move(enc_tmp, db)
-            self.logger.warning("Tedavi DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek: %s", backup)
+            # op-doğrulama #8: .plain.bak = tüm eski düz-metin PII → SQLCipher'ı baypas eder. Escrow
+            # için tutulur ama SIKI ACL (SYSTEM+Admin) ile kilitlenir (B-1.2 escrow deseniyle tutarlı).
+            try:
+                from utils.file_acl import lock_down_file
+                lock_down_file(backup)
+            except Exception:
+                self.logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
+            self.logger.warning("Tedavi DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
         except Exception:
             self.logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
 
@@ -253,12 +262,24 @@ class TreatmentHistoryDB:
         else:
             # GÖRÜNÜRLÜK: at-rest şifreleme yoksa SESSİZCE düz-metne düşme — operatör bilsin.
             self.at_rest_encrypted = False
+            # P0 (KVKK): şifreleme AÇIKÇA istendiyse (PEMF_ENCRYPT_AT_REST=1) ama sağlanamıyorsa
+            # (sqlcipher3 binding yok / anahtar açılamadı) hasta PII'sini DÜZ-METİN yazmaktansa
+            # HARD FAIL et. Aksi halde "şifreli sanıp cleartext PII yazma" sessiz veri sızıntısı olur.
+            # Üretimde sqlcipher3 EXE'ye bundle'lı → şifre bağlantısı açılır, buraya DÜŞMEZ.
+            if os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1":
+                raise RuntimeError(
+                    "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı (sqlcipher3 binding yok veya "
+                    "anahtar açılamadı) → hasta PII'sini düz-metin yazmamak için tedavi DB'si AÇILMADI. "
+                    "sqlcipher3'ü kurun ve .sqlcipher_key/keyring anahtarını doğrulayın."
+                )
             if not getattr(self, "_encryption_warned", False):
                 self._encryption_warned = True
                 self.logger.warning(
-                    "AT-REST SIFRELEME KAPALI: tedavi gecmisi (seans/sensor/PII) DUZ-METIN SQLite "
-                    "olarak yaziliyor. Uretimde pysqlcipher3 kurun + PEMF_SQLCIPHER_KEY (keyring) "
-                    "ayarlayin. (health endpoint: at_rest_encrypted=false)"
+                    "AT-REST SIFRELEME KAPALI: tedavi gecmisi DUZ-METIN SQLite olarak yaziliyor. "
+                    "B-1.3 KORUMASI: kisi-tanimlayici PII (hasta/sahip/operator adi, e-posta, notlar) "
+                    "'%s' ile MASKELENIR (sifresiz DB'ye gercek PII yazilmaz). Uretimde pysqlcipher3 "
+                    "kurun + PEMF_ENCRYPT_AT_REST=1 → gercek degerler yazilir. (health: at_rest_encrypted=false)",
+                    self._PII_REDACTION,
                 )
             conn = self._connect_plain_sqlite()
         conn.execute('PRAGMA foreign_keys=ON')
@@ -353,338 +374,30 @@ class TreatmentHistoryDB:
             except Exception as e:
                 self.logger.error(f"Error closing connection: {e}")
     
+    def _safe_add_column(self, cursor, table: str, column_def: str, log_msg: str = None) -> None:
+        """Idempotent şema-migrasyonu: `ALTER TABLE <table> ADD COLUMN <column_def>`.
+        Sütun zaten varsa (yeni DB / önceki migrasyon) `_DB_OPERATIONAL` yutulur → sessizce geçilir.
+        Eski DB'lere yeni kolon eklemenin TEK noktası (tekrarlanan try/except kalıbı buraya toplandı)."""
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
+            if log_msg:
+                self.logger.info(log_msg)
+        except _DB_OPERATIONAL:
+            pass
+
     def _init_database(self):
         """Veritabanı tablolarını oluştur (HIGH FIX: WAL mode enabled)"""
         try:
             # HIGH FIX: Use connection pool
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Tedavi seansları tablosu
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS treatment_sessions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_date TEXT NOT NULL,
-                        start_time TEXT NOT NULL,
-                        end_time TEXT,
-                        duration_minutes INTEGER,
-                        treatment_mode TEXT NOT NULL,
-                        target_condition TEXT,
-                        frequency_hz REAL,
-                        intensity_mt REAL,
-                        pulse_duration_ms INTEGER,
-                        operator_name TEXT,
-                        patient_name TEXT,
-                        patient_notes TEXT,
-                        session_status TEXT DEFAULT 'completed',
-                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TEXT,
-                        sync_status INTEGER DEFAULT 0
-                    )
-                ''')
-                
-                try:
-                    cursor.execute("ALTER TABLE treatment_sessions ADD COLUMN sync_status INTEGER DEFAULT 0")
-                except _DB_OPERATIONAL:
-                    pass
 
-                # KRİTİK: mevcut DB'lerde updated_at yoksa ekle — end_session ve
-                # update_session_notes bu kolonu yazıyor; yoksa OperationalError (seans bitirme/not patlar).
-                try:
-                    cursor.execute("ALTER TABLE treatment_sessions ADD COLUMN updated_at TEXT")
-                except _DB_OPERATIONAL:
-                    pass
-                
-                # Tedavi parametreleri detay tablosu
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS session_parameters (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id INTEGER NOT NULL,
-                        parameter_name TEXT NOT NULL,
-                        parameter_value TEXT NOT NULL,
-                        parameter_unit TEXT,
-                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
-                    )
-                ''')
-                
-                # Sistem ayarları tablosu
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS system_settings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        setting_key TEXT UNIQUE NOT NULL,
-                        setting_value TEXT NOT NULL,
-                        description TEXT,
-                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-
-                # Schema migration kayıtları
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS schema_migrations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        version INTEGER NOT NULL,
-                        description TEXT,
-                        applied_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(version)
-                    )
-                ''')
-
-                # Unified outbox (cloud sync kuyruğu)
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS outbox_messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        message_uuid TEXT UNIQUE NOT NULL,
-                        idempotency_key TEXT,
-                        topic TEXT NOT NULL,
-                        payload TEXT NOT NULL,
-                        qos INTEGER DEFAULT 0,
-                        retain INTEGER DEFAULT 0,
-                        status TEXT NOT NULL DEFAULT 'pending',
-                        retry_count INTEGER NOT NULL DEFAULT 0,
-                        available_at REAL NOT NULL,
-                        sent_at REAL,
-                        last_error TEXT,
-                        source TEXT,
-                        correlation_id TEXT,
-                        created_at REAL NOT NULL
-                    )
-                ''')
-
-                # Session'e ait ham sensör örnekleri
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS sensor_samples (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id INTEGER NOT NULL,
-                        coil_id TEXT NOT NULL,
-                        sample_ts REAL NOT NULL,
-                        temperature_c REAL,
-                        magnetic_field_mt REAL,
-                        current_a REAL,
-                        pwm_frequency_hz REAL,
-                        pwm_duty_percent REAL,
-                        payload TEXT,
-                        created_at REAL NOT NULL,
-                        FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
-                    )
-                ''')
-
-                # Session lifecycle / operational events
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS session_events (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        event_uuid TEXT UNIQUE NOT NULL,
-                        session_id INTEGER,
-                        event_type TEXT NOT NULL,
-                        severity TEXT NOT NULL DEFAULT 'info',
-                        payload TEXT,
-                        created_at REAL NOT NULL,
-                        FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
-                    )
-                ''')
-                
-                # İndeksler oluştur
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_session_date 
-                    ON treatment_sessions(session_date)
-                ''')
-                
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_treatment_mode 
-                    ON treatment_sessions(treatment_mode)
-                ''')
-                
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_session_parameters 
-                    ON session_parameters(session_id)
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_outbox_status_available
-                    ON outbox_messages(status, available_at)
-                ''')
-
-                cursor.execute('''
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_idempotency
-                    ON outbox_messages(idempotency_key)
-                    WHERE idempotency_key IS NOT NULL
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_outbox_created_at
-                    ON outbox_messages(created_at)
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_session_events_session
-                    ON session_events(session_id, created_at)
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_sensor_samples_session_ts
-                    ON sensor_samples(session_id, sample_ts)
-                ''')
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_sensor_samples_coil_ts
-                    ON sensor_samples(coil_id, sample_ts)
-                ''')
-                
-                # Mevcut tabloya patient_name sütunu ekle (migration)
-                try:
-                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN patient_name TEXT')
-                    self.logger.info("patient_name sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    # Sütun zaten varsa hata vermez
-                    pass
-
-                # Session bazlı idempotent kimlik
-                try:
-                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN session_uuid TEXT')
-                    self.logger.info("session_uuid sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-
-                try:
-                    cursor.execute('ALTER TABLE outbox_messages ADD COLUMN idempotency_key TEXT')
-                    self.logger.info("idempotency_key sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_treatment_sessions_uuid
-                    ON treatment_sessions(session_uuid)
-                ''')
-
-                # === VETERINER YEREL KATMAN GENISLETMESI (geriye uyumlu, idempotent) ===
-                # Hasta (patient) kayit defteri — cloud sync icin sync_status ile.
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS patients (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        patient_uuid TEXT UNIQUE,
-                        name TEXT NOT NULL,
-                        species TEXT,
-                        breed TEXT,
-                        age TEXT,
-                        weight_kg REAL,
-                        owner_name TEXT,
-                        owner_email TEXT,
-                        vet_contact TEXT,
-                        veteriner TEXT,
-                        notes TEXT,
-                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TEXT,
-                        sync_status INTEGER DEFAULT 0
-                    )
-                ''')
-
-                # Bobin calismalari — "hangi bobin, hangi parametreyle, saat kacta
-                # basladi/durdu, ne kadar surdu" sorusunu cevaplar.
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS session_coil_runs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id INTEGER,
-                        coil_id INTEGER NOT NULL,
-                        started_epoch REAL NOT NULL,
-                        ended_epoch REAL,
-                        duration_seconds REAL,
-                        frequency_hz REAL,
-                        duty_percent REAL,
-                        phase REAL,
-                        intensity_mt REAL,
-                        hw_type TEXT,
-                        created_at REAL NOT NULL
-                    )
-                ''')
-
-                # Bobin calismasi basina sensor ozet istatistigi (1-1, coil_run_id UNIQUE).
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS sensor_run_summary (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        coil_run_id INTEGER UNIQUE,
-                        sample_count INTEGER,
-                        temp_min REAL,
-                        temp_max REAL,
-                        temp_avg REAL,
-                        current_avg REAL,
-                        field_avg REAL,
-                        created_at REAL NOT NULL
-                    )
-                ''')
-
-                # treatment_sessions yeni kolonlari (her biri ayri try/except, nullable).
-                try:
-                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN patient_id INTEGER')
-                    self.logger.info("treatment_sessions.patient_id sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN started_epoch REAL')
-                    self.logger.info("treatment_sessions.started_epoch sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute('ALTER TABLE treatment_sessions ADD COLUMN ended_epoch REAL')
-                    self.logger.info("treatment_sessions.ended_epoch sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-
-                # patients.owner_email (rapor e-postasi) — eski DB'lere idempotent ekle.
-                try:
-                    cursor.execute('ALTER TABLE patients ADD COLUMN owner_email TEXT')
-                    self.logger.info("patients.owner_email sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-
-                # sensor_samples yeni kolonlari (her biri ayri try/except, nullable).
-                # SEMANTIK NOT: sensor_samples artik DAKIKA-ORTALAMASI tutabilir;
-                # sample_count = ortalamaya giren ham okuma sayisi. Sema ayni kalir,
-                # mevcut satirlar (ham okuma) icin bu kolonlar NULL kalir — geriye uyumlu.
-                try:
-                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN coil_run_id INTEGER')
-                    self.logger.info("sensor_samples.coil_run_id sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN ambient_temp_c REAL')
-                    self.logger.info("sensor_samples.ambient_temp_c sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN phase REAL')
-                    self.logger.info("sensor_samples.phase sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-                try:
-                    cursor.execute('ALTER TABLE sensor_samples ADD COLUMN sample_count INTEGER')
-                    self.logger.info("sensor_samples.sample_count sütunu eklendi")
-                except _DB_OPERATIONAL:
-                    pass
-
-                # Yeni tablolar icin indeksler (mevcut idx'lere dokunulmadi).
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_coil_runs_session
-                    ON session_coil_runs(session_id, started_epoch)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_coil_runs_coil
-                    ON session_coil_runs(coil_id, started_epoch)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_sensor_run_summary
-                    ON sensor_run_summary(coil_run_id)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_patients_name
-                    ON patients(name)
-                ''')
-                # P2 audit 2026-06-28: get_session_history patients'a ts.patient_id ile JOIN yapar;
-                # index yoksa full-scan (binlerce seansta yavas). patient_id sutunu migration'dan
-                # SONRA olustugu icin index'i burada (sema sonrasi) ekliyoruz.
-                try:
-                    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ts_patient_id ON treatment_sessions(patient_id)')
-                except _DB_OPERATIONAL:
-                    pass  # patient_id sutunu yoksa (cok eski DB) sessizce atla
+                self._create_core_tables(cursor)
+                self._create_core_indexes(cursor)
+                self._migrate_and_index_core(cursor)
+                self._create_vet_tables(cursor)
+                self._migrate_vet_columns(cursor)
+                self._create_vet_indexes(cursor)
 
                 conn.commit()
                 self.logger.info(f"Veritabanı başarıyla başlatıldı: {self.db_path}")
@@ -692,6 +405,294 @@ class TreatmentHistoryDB:
         except _DB_ERROR as e:
             self.logger.error(f"Veritabanı başlatma hatası: {e}")
             raise
+
+    def _create_core_tables(self, cursor):
+        """Çekirdek tabloları oluştur (seans + parametreler + ayarlar + migration-kaydı + outbox + sensör örnekleri + event'ler)."""
+        # Tedavi seansları tablosu
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS treatment_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT,
+                duration_minutes INTEGER,
+                treatment_mode TEXT NOT NULL,
+                target_condition TEXT,
+                frequency_hz REAL,
+                intensity_mt REAL,
+                pulse_duration_ms INTEGER,
+                operator_name TEXT,
+                patient_name TEXT,
+                patient_notes TEXT,
+                session_status TEXT DEFAULT 'completed',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT,
+                sync_status INTEGER DEFAULT 0
+            )
+        ''')
+
+        self._safe_add_column(cursor, "treatment_sessions", "sync_status INTEGER DEFAULT 0")
+        # KRİTİK: mevcut DB'lerde updated_at yoksa ekle — end_session ve
+        # update_session_notes bu kolonu yazıyor; yoksa OperationalError (seans bitirme/not patlar).
+        self._safe_add_column(cursor, "treatment_sessions", "updated_at TEXT")
+
+        # Tedavi parametreleri detay tablosu
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS session_parameters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                parameter_name TEXT NOT NULL,
+                parameter_value TEXT NOT NULL,
+                parameter_unit TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
+            )
+        ''')
+
+        # Sistem ayarları tablosu
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT UNIQUE NOT NULL,
+                setting_value TEXT NOT NULL,
+                description TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Schema migration kayıtları
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version INTEGER NOT NULL,
+                description TEXT,
+                applied_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(version)
+            )
+        ''')
+
+        # Unified outbox (cloud sync kuyruğu)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS outbox_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_uuid TEXT UNIQUE NOT NULL,
+                idempotency_key TEXT,
+                topic TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                qos INTEGER DEFAULT 0,
+                retain INTEGER DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                available_at REAL NOT NULL,
+                sent_at REAL,
+                last_error TEXT,
+                source TEXT,
+                correlation_id TEXT,
+                created_at REAL NOT NULL
+            )
+        ''')
+
+        # Session'e ait ham sensör örnekleri
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sensor_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                coil_id TEXT NOT NULL,
+                sample_ts REAL NOT NULL,
+                temperature_c REAL,
+                magnetic_field_mt REAL,
+                current_a REAL,
+                pwm_frequency_hz REAL,
+                pwm_duty_percent REAL,
+                payload TEXT,
+                created_at REAL NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
+            )
+        ''')
+
+        # Session lifecycle / operational events
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS session_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_uuid TEXT UNIQUE NOT NULL,
+                session_id INTEGER,
+                event_type TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'info',
+                payload TEXT,
+                created_at REAL NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES treatment_sessions (id)
+            )
+        ''')
+
+    def _create_core_indexes(self, cursor):
+        """Çekirdek tabloların sorgu indekslerini oluştur."""
+        # İndeksler oluştur
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_session_date 
+            ON treatment_sessions(session_date)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_treatment_mode 
+            ON treatment_sessions(treatment_mode)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_session_parameters
+            ON session_parameters(session_id)
+        ''')
+        # B-6.3: get_session_history 11× self-JOIN'i (session_id + parameter_name filtreler) hızlandır →
+        # composite index ile her JOIN indeksli lookup olur (aksi halde parameter_name için tarama).
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_session_params_sid_name
+            ON session_parameters(session_id, parameter_name)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_outbox_status_available
+            ON outbox_messages(status, available_at)
+        ''')
+
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_idempotency
+            ON outbox_messages(idempotency_key)
+            WHERE idempotency_key IS NOT NULL
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_outbox_created_at
+            ON outbox_messages(created_at)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_session_events_session
+            ON session_events(session_id, created_at)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sensor_samples_session_ts
+            ON sensor_samples(session_id, sample_ts)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sensor_samples_coil_ts
+            ON sensor_samples(coil_id, sample_ts)
+        ''')
+
+    def _migrate_and_index_core(self, cursor):
+        """Çekirdek kolon-migrasyonları (patient_name/session_uuid/idempotency_key) + bağımlı session_uuid indeksi."""
+        # Mevcut tabloya patient_name sütunu ekle (migration)
+        self._safe_add_column(cursor, "treatment_sessions", "patient_name TEXT", "patient_name sütunu eklendi")
+        # Session bazlı idempotent kimlik
+        self._safe_add_column(cursor, "treatment_sessions", "session_uuid TEXT", "session_uuid sütunu eklendi")
+        self._safe_add_column(cursor, "outbox_messages", "idempotency_key TEXT", "idempotency_key sütunu eklendi")
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_treatment_sessions_uuid
+            ON treatment_sessions(session_uuid)
+        ''')
+
+    def _create_vet_tables(self, cursor):
+        """Veteriner katmanı tabloları: patients + bobin çalışmaları + sensör-özeti (geriye uyumlu)."""
+        # === VETERINER YEREL KATMAN GENISLETMESI (geriye uyumlu, idempotent) ===
+        # Hasta (patient) kayit defteri — cloud sync icin sync_status ile.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_uuid TEXT UNIQUE,
+                name TEXT NOT NULL,
+                species TEXT,
+                breed TEXT,
+                age TEXT,
+                weight_kg REAL,
+                owner_name TEXT,
+                owner_email TEXT,
+                vet_contact TEXT,
+                veteriner TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT,
+                sync_status INTEGER DEFAULT 0
+            )
+        ''')
+
+        # Bobin calismalari — "hangi bobin, hangi parametreyle, saat kacta
+        # basladi/durdu, ne kadar surdu" sorusunu cevaplar.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS session_coil_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER,
+                coil_id INTEGER NOT NULL,
+                started_epoch REAL NOT NULL,
+                ended_epoch REAL,
+                duration_seconds REAL,
+                frequency_hz REAL,
+                duty_percent REAL,
+                phase REAL,
+                intensity_mt REAL,
+                hw_type TEXT,
+                created_at REAL NOT NULL
+            )
+        ''')
+
+        # Bobin calismasi basina sensor ozet istatistigi (1-1, coil_run_id UNIQUE).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sensor_run_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                coil_run_id INTEGER UNIQUE,
+                sample_count INTEGER,
+                temp_min REAL,
+                temp_max REAL,
+                temp_avg REAL,
+                current_avg REAL,
+                field_avg REAL,
+                created_at REAL NOT NULL
+            )
+        ''')
+
+    def _migrate_vet_columns(self, cursor):
+        """Veteriner katmanı için idempotent kolon-migrasyonları (treatment_sessions/patients/sensor_samples)."""
+        # treatment_sessions yeni kolonlari (idempotent, nullable).
+        self._safe_add_column(cursor, "treatment_sessions", "patient_id INTEGER", "treatment_sessions.patient_id sütunu eklendi")
+        self._safe_add_column(cursor, "treatment_sessions", "started_epoch REAL", "treatment_sessions.started_epoch sütunu eklendi")
+        self._safe_add_column(cursor, "treatment_sessions", "ended_epoch REAL", "treatment_sessions.ended_epoch sütunu eklendi")
+        # patients.owner_email (rapor e-postasi) — eski DB'lere idempotent ekle.
+        self._safe_add_column(cursor, "patients", "owner_email TEXT", "patients.owner_email sütunu eklendi")
+        # sensor_samples yeni kolonlari (idempotent, nullable).
+        # SEMANTIK NOT: sensor_samples artik DAKIKA-ORTALAMASI tutabilir;
+        # sample_count = ortalamaya giren ham okuma sayisi. Sema ayni kalir,
+        # mevcut satirlar (ham okuma) icin bu kolonlar NULL kalir — geriye uyumlu.
+        self._safe_add_column(cursor, "sensor_samples", "coil_run_id INTEGER", "sensor_samples.coil_run_id sütunu eklendi")
+        self._safe_add_column(cursor, "sensor_samples", "ambient_temp_c REAL", "sensor_samples.ambient_temp_c sütunu eklendi")
+        self._safe_add_column(cursor, "sensor_samples", "phase REAL", "sensor_samples.phase sütunu eklendi")
+        self._safe_add_column(cursor, "sensor_samples", "sample_count INTEGER", "sensor_samples.sample_count sütunu eklendi")
+
+    def _create_vet_indexes(self, cursor):
+        """Veteriner tablo indeksleri + (migration SONRASI) treatment_sessions.patient_id indeksi."""
+        # Yeni tablolar icin indeksler (mevcut idx'lere dokunulmadi).
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_coil_runs_session
+            ON session_coil_runs(session_id, started_epoch)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_coil_runs_coil
+            ON session_coil_runs(coil_id, started_epoch)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sensor_run_summary
+            ON sensor_run_summary(coil_run_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_patients_name
+            ON patients(name)
+        ''')
+        # P2 audit 2026-06-28: get_session_history patients'a ts.patient_id ile JOIN yapar;
+        # index yoksa full-scan (binlerce seansta yavas). patient_id sutunu migration'dan
+        # SONRA olustugu icin index'i burada (sema sonrasi) ekliyoruz.
+        try:
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_ts_patient_id ON treatment_sessions(patient_id)')
+        except _DB_OPERATIONAL:
+            pass  # patient_id sutunu yoksa (cok eski DB) sessizce atla
 
     def _get_system_setting(self, key: str) -> Optional[str]:
         """System setting değeri oku."""
@@ -737,6 +738,17 @@ class TreatmentHistoryDB:
 
         # Migration öncesi backup
         self.create_backup(str(backup_path))
+        # B-7.2: migration_backups ROTASYONU — son 5; eskiden her migration bir tam-DB kopyası
+        # bırakıp sınırsız büyüyordu.
+        try:
+            _mbks = sorted(backup_dir.glob("pre_migration_*.db"))
+            for _old in _mbks[:-5]:
+                try:
+                    _old.unlink()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         try:
             self._ensure_schema_version()
@@ -1115,7 +1127,28 @@ class TreatmentHistoryDB:
 
         return report
     
-    def start_session(self, treatment_mode: str, target_condition: str = None, 
+    # ── B-1.3 (audit) — at-rest şifreleme YOKken PII düz-metin yazma koruması ──────────
+    # Tedavi-DB PII kolonları SQL'de display için okunur (whole-DB SQLCipher üretimde ZORUNLU +
+    # fail-closed → şifreli). Ama at_rest_encrypted=False iken (yalnız dev/yanlış-yapılandırma)
+    # gerçek PII'yi DÜZ-METİN yazmak yerine maskele: "kazara düz-metni kes" (kullanıcı kararı).
+    # session_parameters içindeki PII olan parametre ADLARI (değeri maskelenir; ad PII değil):
+    _PII_PARAM_NAMES = frozenset({
+        "patient_name", "patient_surname", "patient_owner", "patient_owner_email",
+        "patient_owner_phone", "patient_vet_contact", "patient_veteriner",
+    })
+    _PII_REDACTION = "[SIFRELENMEMIS-DB]"
+
+    def _redact_pii(self, value):
+        """at_rest_encrypted=False iken (dev/yanlış-yapılandırma) PII değerini maskele; ÜRETİMDE
+        (SQLCipher açık) değer AYNEN geçer. Boş/None değişmez. Whole-DB şifreleme birincil kontrol;
+        bu yalnız 'şifresiz DB'ye gerçek PII yazma' kazasını önleyen ikincil güvenlik ağı."""
+        if value is None or value == "":
+            return value
+        if getattr(self, "at_rest_encrypted", False):
+            return value
+        return self._PII_REDACTION
+
+    def start_session(self, treatment_mode: str, target_condition: str = None,
                      operator_name: str = None, patient_name: str = None) -> int:
         """
         Yeni tedavi seansı başlat
@@ -1145,7 +1178,8 @@ class TreatmentHistoryDB:
                     (session_date, start_time, treatment_mode, target_condition, 
                      operator_name, patient_name, session_status, session_uuid)
                     VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
-                ''', (session_date, start_time, treatment_mode, target_condition, operator_name, patient_name, session_uuid))
+                ''', (session_date, start_time, treatment_mode, target_condition,
+                      self._redact_pii(operator_name), self._redact_pii(patient_name), session_uuid))
                 
                 session_id = cursor.lastrowid
                 conn.commit()
@@ -1189,9 +1223,15 @@ class TreatmentHistoryDB:
                 end_time = now.strftime('%H:%M:%S')
 
                 if duration_minutes is None:
-                    start_datetime = datetime.strptime(f"{session_date} {start_time_str}", 
-                                                     '%Y-%m-%d %H:%M:%S')
-                    duration_minutes = int((now - start_datetime).total_seconds() / 60)
+                    # Savunmali: negatif-clamp (saat kaymasi/DST/session_date tutarsizligi) + malformed
+                    # tarih guard'i (strptime patlarsa end_session komple basarisiz olmasin, 0 yaz).
+                    try:
+                        start_datetime = datetime.strptime(f"{session_date} {start_time_str}",
+                                                         '%Y-%m-%d %H:%M:%S')
+                        duration_minutes = max(0, int((now - start_datetime).total_seconds() / 60))
+                    except Exception:
+                        self.logger.warning("Sure hesaplanamadi (session_date=%s start=%s) → 0 dk.", session_date, start_time_str)
+                        duration_minutes = 0
                 
                 # Seans bilgilerini güncelle
                 update_data = [end_time, duration_minutes, 'completed', session_id]
@@ -1215,7 +1255,7 @@ class TreatmentHistoryDB:
                 
                 if patient_notes:
                     update_query += ', patient_notes = ?'
-                    update_data.insert(-1, patient_notes)
+                    update_data.insert(-1, self._redact_pii(patient_notes))
                 
                 update_query += ' WHERE id = ?'
                 
@@ -1225,11 +1265,14 @@ class TreatmentHistoryDB:
                 if parameters:
                     for param_name, param_value in parameters.items():
                         if param_name not in ['frequency_hz', 'intensity_mt', 'pulse_duration_ms']:
+                            _pv = str(param_value)
+                            if param_name in self._PII_PARAM_NAMES:
+                                _pv = self._redact_pii(_pv)
                             cursor.execute('''
-                                INSERT INTO session_parameters 
+                                INSERT INTO session_parameters
                                 (session_id, parameter_name, parameter_value)
                                 VALUES (?, ?, ?)
-                            ''', (session_id, param_name, str(param_value)))
+                            ''', (session_id, param_name, _pv))
                 
                 conn.commit()
                 self.logger.info(f"Tedavi seansı sonlandırıldı: ID {session_id}")
@@ -1238,21 +1281,24 @@ class TreatmentHistoryDB:
             self.logger.error(f"Seans sonlandırma hatası: {e}")
             raise
     
-    def get_session_history(self, limit: int = 100, 
-                           start_date: str = None, 
+    def get_session_history(self, limit: int = 100,
+                           start_date: str = None,
                            end_date: str = None,
-                           treatment_mode: str = None) -> List[Dict]:
+                           treatment_mode: str = None,
+                           before_id: int = None) -> List[Dict]:
         """
         Tedavi geçmişini getir
-        
+
         Args:
             limit: Maksimum kayıt sayısı
             start_date: Başlangıç tarihi (YYYY-MM-DD)
             end_date: Bitiş tarihi (YYYY-MM-DD)
             treatment_mode: Tedavi modu filtresi
-            
+            before_id: audit B-8.2 keyset (cursor) pagination — verilirse yalnız bu id'den ESKİ
+                       (daha küçük id) seanslar döner. Bir sonraki sayfa için: son öğenin id'sini geçir.
+
         Returns:
-            List[Dict]: Tedavi seansları listesi
+            List[Dict]: Tedavi seansları listesi (id DESC = kronolojik, yeni önce)
         """
         try:
             with self._get_connection() as conn:
@@ -1301,8 +1347,16 @@ class TreatmentHistoryDB:
                 if treatment_mode:
                     query += ' AND treatment_mode = ?'
                     params.append(treatment_mode)
-                
-                query += ' ORDER BY session_date DESC, start_time DESC LIMIT ?'
+
+                # audit B-8.2: keyset (cursor) pagination — before_id verilirse ondan ESKI (daha kucuk id)
+                # satirlar. id PK (monoton+benzersiz, indexli) → buyuk-OFFSET taramasi YOK + araya yeni
+                # seans girse de sayfa kaymasi/atlama YOK (offset'in aksine). id DESC = kronolojik (yeni once);
+                # pratikte session_date DESC ile ozdes (id insertion-order = tedavi-baslama-order).
+                if before_id is not None:
+                    query += ' AND ts.id < ?'
+                    params.append(int(before_id))
+
+                query += ' ORDER BY ts.id DESC LIMIT ?'
                 params.append(limit)
                 
                 cursor.execute(query, params)
@@ -1385,7 +1439,14 @@ class TreatmentHistoryDB:
                 # Toplam seans sayısı
                 cursor.execute('SELECT COUNT(*) FROM treatment_sessions')
                 stats['total_sessions'] = cursor.fetchone()[0]
-                
+
+                # Tamamlanan seans (mobil KPI fallback 'completed_sessions' okuyor)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM treatment_sessions "
+                    "WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
+                )
+                stats['completed_sessions'] = cursor.fetchone()[0]
+
                 # Bu ay seans sayısı
                 current_month = datetime.now().strftime('%Y-%m')
                 cursor.execute('''
@@ -1484,21 +1545,22 @@ class TreatmentHistoryDB:
                 if patient_info:
                     # Önce 'info' dict'inden al, yoksa root'tan al
                     info_dict = patient_info.get('info', patient_info)
-                    patient_name = info_dict.get('name', 'Bilinmiyor')
+                    # B-1.3: at-rest şifreleme YOKken kişi-tanımlayıcı PII'yi maskele (üretimde AYNEN).
+                    patient_name = self._redact_pii(info_dict.get('name', 'Bilinmiyor'))
                     patient_species = info_dict.get('species', 'Bilinmiyor')
                     patient_breed = info_dict.get('breed', '')
-                    
+
                     # Yaş ve ağırlık string/number olabilir
                     age_val = info_dict.get('age', '')
                     patient_age = str(age_val) if age_val else ''
                     weight_val = info_dict.get('weight', '')
                     patient_weight = str(weight_val) if weight_val else ''
-                    
-                    owner_name = info_dict.get('owner', '')
-                    # Sahip e-postasi (rapor gonderimi icin) — varsa kaydet.
-                    owner_email = info_dict.get('owner_email', '') or ''
+
+                    owner_name = self._redact_pii(info_dict.get('owner', ''))
+                    # Sahip e-postasi — varsa kaydet (maskeli DB'de maskelenir).
+                    owner_email = self._redact_pii(info_dict.get('owner_email', '') or '')
                     # Veteriner bilgisi için hem 'veteriner' hem 'vet_contact' kontrol et
-                    veteriner_name = info_dict.get('veteriner', '') or info_dict.get('vet_contact', '')
+                    veteriner_name = self._redact_pii(info_dict.get('veteriner', '') or info_dict.get('vet_contact', ''))
                 
                 # Seans bilgilerini kaydet
                 session_date = start_time.strftime('%Y-%m-%d')
@@ -1941,6 +2003,15 @@ class TreatmentHistoryDB:
             owner_name = patient.get('owner_name')
             now_iso = datetime.now().isoformat(sep=' ', timespec='seconds')
 
+            # B-1.3: at-rest şifreleme YOKken kişi-tanımlayıcı PII'yi maskele (dedup öncesi de →
+            # maskeli name/owner tutarlı eşleşir). Üretimde (SQLCipher) değerler AYNEN geçer.
+            name = self._redact_pii(name)
+            owner_name = self._redact_pii(owner_name)
+            _owner_email = self._redact_pii(patient.get('owner_email') or None)
+            _vet_contact = self._redact_pii(patient.get('vet_contact'))
+            _veteriner = self._redact_pii(patient.get('veteriner'))
+            _notes = self._redact_pii(patient.get('notes'))
+
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
@@ -1996,10 +2067,10 @@ class TreatmentHistoryDB:
                         patient.get('age'),
                         patient.get('weight_kg'),
                         owner_name,
-                        (patient.get('owner_email') or None),
-                        patient.get('vet_contact'),
-                        patient.get('veteriner'),
-                        patient.get('notes'),
+                        _owner_email,
+                        _vet_contact,
+                        _veteriner,
+                        _notes,
                         now_iso,
                         existing_id
                     ))
@@ -2019,10 +2090,10 @@ class TreatmentHistoryDB:
                     patient.get('age'),
                     patient.get('weight_kg'),
                     owner_name,
-                    (patient.get('owner_email') or None),
-                    patient.get('vet_contact'),
-                    patient.get('veteriner'),
-                    patient.get('notes'),
+                    _owner_email,
+                    _vet_contact,
+                    _veteriner,
+                    _notes,
                     now_iso
                 ))
                 conn.commit()
@@ -2153,19 +2224,22 @@ class TreatmentHistoryDB:
             self._ensure_write_guardrail()
             if not session_id or not parameter_name:
                 return
+            _pv = str(parameter_value)
+            if parameter_name in self._PII_PARAM_NAMES:
+                _pv = self._redact_pii(_pv)  # B-1.3: şifresiz DB'ye gerçek PII yazma
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     'UPDATE session_parameters SET parameter_value = ?, parameter_unit = ? '
                     'WHERE session_id = ? AND parameter_name = ?',
-                    (str(parameter_value), parameter_unit, int(session_id), parameter_name)
+                    (_pv, parameter_unit, int(session_id), parameter_name)
                 )
                 if cursor.rowcount == 0:
                     cursor.execute(
                         'INSERT INTO session_parameters '
                         '(session_id, parameter_name, parameter_value, parameter_unit) '
                         'VALUES (?, ?, ?, ?)',
-                        (int(session_id), parameter_name, str(parameter_value), parameter_unit)
+                        (int(session_id), parameter_name, _pv, parameter_unit)
                     )
                 conn.commit()
         except Exception as e:

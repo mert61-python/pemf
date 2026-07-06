@@ -12,10 +12,6 @@
     "max_retry_delay_ms": 60000,
     "max_retries": 10
   },
-  "email": {
-    "gmail_email": "",
-    "gmail_password": ""
-  },
   "timers": {
     "unified_tick_ms": 1000,
     "graph_update_ms": 150,

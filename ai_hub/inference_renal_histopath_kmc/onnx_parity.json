@@ -1,0 +1,6 @@
+{
+  "best_model": "V22-KMC-ClassicTrio",
+  "onnx_file": "v22_kmc_classictrio_kmc.onnx",
+  "max_abs_proba_delta": 1.4901161193847656e-06,
+  "n_samples_compared": 256
+}

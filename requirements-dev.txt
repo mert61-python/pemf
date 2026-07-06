@@ -1,0 +1,9 @@
+# =============================================================================
+# PEMF Backend — GELİŞTİRME/CI araçları (audit B-2.1). runtime DEĞİL → requirements.txt'ten AYRI.
+# Kurulum:  pip install -r requirements-dev.txt
+# İçerik: lint (Ruff), tip-denetimi (mypy), pre-commit. Test araçları CI'da ayrıca kurulur.
+# =============================================================================
+
+ruff==0.15.20          # CI-enforced lint + format (pyproject.toml: select = F, E9)
+mypy>=1.13,<2.0        # kademeli tip-denetimi (lenient; CI'da zorunlu değil)
+pre-commit>=4.0,<5.0   # commit-öncesi hook'lar (.pre-commit-config.yaml)

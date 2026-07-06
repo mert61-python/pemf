@@ -30,7 +30,7 @@ RESULTS_DIR = _app_data_base / "results"
 try:
     for directory in [DATA_DIR, MODELS_DIR, LOGS_DIR, RESULTS_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
-except Exception as e:
+except Exception:
     pass
 
 # ==================== DATASET CONFIGURATION ====================

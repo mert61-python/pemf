@@ -1,0 +1,57 @@
+{
+  "best_model": "CatBoost",
+  "oof_log_loss": 0.0288548075100864,
+  "preprocessor_features": [
+    "age",
+    "bp",
+    "sg",
+    "al",
+    "su",
+    "bgr",
+    "bu",
+    "sc",
+    "sod",
+    "pot",
+    "hemo",
+    "pcv",
+    "wc",
+    "rc",
+    "rbc_normal",
+    "pc_normal",
+    "pcc_present",
+    "ba_present",
+    "htn_yes",
+    "dm_yes",
+    "cad_yes",
+    "appet_poor",
+    "pe_yes",
+    "ane_yes"
+  ],
+  "in_dim": 24,
+  "onnx_inputs": [
+    {
+      "name": "features",
+      "shape": [
+        "N",
+        24
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "onnx_outputs": [
+    {
+      "name": "label",
+      "shape": [
+        "N"
+      ],
+      "type": "tensor(int64)"
+    },
+    {
+      "name": "probabilities",
+      "shape": [],
+      "type": "seq(map(int64,tensor(float)))"
+    }
+  ],
+  "verification_max_abs_diff": 7.19463897230245e-08,
+  "exported_at_iso": "2026-05-29T16:20:19"
+}

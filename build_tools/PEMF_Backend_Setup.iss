@@ -63,12 +63,25 @@ turkish.InstallingServices=PEMF arka plan servisleri (Mosquitto + Backend) kurul
 Source: "{#BuildOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Servis kurulum scripti (installer bunu calistirir)
 Source: "{#ProjectRoot}\scripts\setup_services.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; Hotspot baslatici (PEMF-Gateway WiFi — ESP bobinleri icin; logon-task + kurulumda bir kez calisir)
+Source: "{#ProjectRoot}\scripts\start_hotspot.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; AI MODELLERI (OFFLINE, ~640MB): YOLO/XGBoost/segmentation/thermal vb. -> ProgramData. Servis (LocalSystem)
+; bunlari find_installed_model ile candidate-root #1'de (C:\ProgramData\PEMF_GUI\ai_models) bulur -> HF token
+; ve internet GEREKMEZ. (Eskiden model HF'den indiriliyordu; LocalSystem kullanici-env token'ini goremedigi
+; icin indirme 401 -> TUM AI endpoint'leri 500 veriyordu. Bundle bunu kokten cozer; offline klinik calisir.)
+Source: "{#ProjectRoot}\release_assets\ai_models\*"; DestDir: "{commonappdata}\PEMF_GUI\ai_models"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; VC++ Redistributable (gecici; torch/onnx/opencv MSVC runtime gerektirir)
-Source: "{#ProjectRoot}\lattekurulum\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall skipifsourcedoesntexist
+; skipifsourcedoesntexist KALDIRILDI — redist yoksa ISCC compile FAIL etsin (sessiz-eksik installer üretilmesin;
+; aksi halde taze klinikte VCRUNTIME140.dll eksik → torch/onnx/cv2 yüklü EXE açılmaz, sessiz başarısızlık).
+Source: "{#ProjectRoot}\lattekurulum\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [INI]
 ; Web arayuzu icin gercek internet kisayolu (.url) olustur
 Filename: "{app}\PEMF Web UI.url"; Section: "InternetShortcut"; Key: "URL"; String: "http://localhost:8000"
+; MASAUSTU kisayolu: React web arayuzunu (localhost:8000) tarayicida acar; ikon = backend EXE (kalp ikonu)
+Filename: "{commondesktop}\PEMF Web Arayuzu.url"; Section: "InternetShortcut"; Key: "URL"; String: "http://localhost:8000"
+Filename: "{commondesktop}\PEMF Web Arayuzu.url"; Section: "InternetShortcut"; Key: "IconFile"; String: "{app}\PEMF_Backend.exe"
+Filename: "{commondesktop}\PEMF Web Arayuzu.url"; Section: "InternetShortcut"; Key: "IconIndex"; String: "0"
 
 [Icons]
 ; GUI yok; Baslat Menusu kisayolu web arayuzunu (tarayicida) acar.
@@ -95,8 +108,10 @@ Filename: "powershell.exe"; \
   Flags: runhidden waituntilterminated; RunOnceId: "RemovePemfServices"
 
 [UninstallDelete]
+Type: files; Name: "{commondesktop}\PEMF Web Arayuzu.url"
 Type: filesandordirs; Name: "{app}"
 Type: filesandordirs; Name: "{commonappdata}\PEMF_System"
+Type: filesandordirs; Name: "{commonappdata}\PEMF_GUI\ai_models"
 
 [Registry]
 Root: HKLM; Subkey: "SOFTWARE\{#MyAppPublisher}\PEMF Backend"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
@@ -111,4 +126,27 @@ begin
   Result := not RegQueryDWordValue(
     HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed
   ) or (Installed = 0);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+    // [Files] kopyalamadan ONCE calisan backend'i durdur/kill -> kilitli-EXE kopyalama hatasini onler (re-install).
+    Exec('taskkill.exe', '/F /IM PEMF_Backend.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('sc.exe', 'stop PemfBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    // setup_services.ps1 YALNIZ gercek dogrulamada (/api/health 200) ".install_verified" yazar.
+    // Yoksa: servis kurulumu/baslatma BASARISIZ -> teknik-olmayan kurulumcuya GORUNUR hata (sessiz-basariyi kapat).
+    if not FileExists(ExpandConstant('{app}\.install_verified')) then
+      MsgBox('KURULUM TAMAMLANAMADI: PEMF backend baslatilamadi veya /api/health dogrulanamadi.' + #13#10 +
+             'Cihaz su an CALISMIYOR.' + #13#10#13#10 +
+             'Log: C:\ProgramData\PEMF_System\logs\backend_service_stderr.log' + #13#10 +
+             'Olasi neden: VC++ runtime eksik, port 8000 dolu, veya bozuk kurulum. Logu kontrol edin / destek ile gorusun.',
+             mbError, MB_OK);
+  end;
 end;

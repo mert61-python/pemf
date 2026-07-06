@@ -6,7 +6,6 @@ değişiklikleri arka planda kontrol edip Supabase bulut veritabanı ile eşitle
 """
 import logging
 import threading
-import time
 import os
 from typing import Optional
 
@@ -46,10 +45,26 @@ class CloudSyncWorker:
         else:
             logger.warning("Supabase URL veya Key belirtilmedigi icin Cloud Sync deaktif.")
 
+    def publish_now(self, _url=None):
+        """Tünel URL'si DEĞİŞİR DEĞİŞMEZ (tunnel_manager callback'i) cihaz kaydını ANINDA yayınla →
+        60sn döngü beklenmez; telefon rotasyon/cold-boot sonrası eski/null URL görmez (audit: yayın gecikmesi)."""
+        try:
+            self._publish_device_registry()
+        except Exception as e:
+            logger.debug(f"publish_now hatasi: {e}")
+
     def start(self):
         if not self.client:
             return
-        
+
+        # Tünel URL'si bulunur/değişir bulunmaz ANINDA yayın (60sn döngü beklemeden) — Supabase'deki
+        # eski/null URL penceresini kapatır. Callback module-global listede → tünel restart'larında kalıcı.
+        try:
+            from servers.tunnel_manager import register_url_callback
+            register_url_callback(self.publish_now)
+        except Exception:
+            pass
+
         self.thread = threading.Thread(target=self._sync_loop, daemon=True, name="CloudSyncWorker")
         self.thread.start()
         logger.info("CloudSyncWorker arka planda baslatildi.")
@@ -60,9 +75,11 @@ class CloudSyncWorker:
             self.thread.join(timeout=2.0)
 
     def _sync_loop(self):
-        import os
-        from pathlib import Path
-        app_data_dir = Path(os.environ.get('APPDATA', os.path.expanduser('~'))) / 'PEMF_GUI'
+        # SPLIT-BRAIN FIX: canonical app_data_dir (PEMF_DATA_DIR → ProgramData). Eskiden APPDATA
+        # kullaniliyordu; servis LocalSystem'de APPDATA=...\systemprofile\... → API/DB'nin yazdigi
+        # dosyadan FARKLI patients.db/treatment_history.db acilip BOS/eski DB Supabase'e sync ediliyordu.
+        from utils.path_utils import get_app_data_directory
+        app_data_dir = get_app_data_directory()
         patient_db = get_patient_database(app_data_dir)
         session_db = get_treatment_db(app_data_dir)
 
@@ -251,10 +268,15 @@ class CloudSyncWorker:
             from servers.auto_discovery import _get_local_ip
             from utils.path_utils import get_unique_device_id, get_pairing_code
 
+            # Tünel anlık düşse de (URL boş) registry'yi NULL ile EZME → son bilinen URL korunur,
+            # böylece app'in resolve'u boşa düşmez (watchdog tüneli toparlayınca yeni URL güncellenir).
+            cur_url = get_tunnel_url() or None
+            if cur_url:
+                self._last_tunnel_url = cur_url
             payload = {
                 "device_id": get_unique_device_id(),
                 "name": os.environ.get("PEMF_DEVICE_NAME", "PEMF-Vet"),
-                "tunnel_url": get_tunnel_url() or None,
+                "tunnel_url": cur_url or getattr(self, "_last_tunnel_url", None),
                 "local_ip": _get_local_ip(),
                 "api_port": 8000,
                 "pairing_code": get_pairing_code(),
@@ -273,7 +295,7 @@ class CloudSyncWorker:
                     "p_api_port": payload["api_port"],
                     "p_pairing_code": payload["pairing_code"],
                 }).execute()
-            except Exception as rpc_err:
+            except Exception:
                 # RPC henuz deploy edilmemisse (eski sema) -> eski dogrudan tablo upsert.
                 try:
                     self.client.table("devices").upsert(payload, on_conflict="device_id").execute()

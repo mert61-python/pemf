@@ -1,0 +1,19 @@
+# PEMF Backend — pre-commit (audit B-2.1: statik analiz/format hook'u yoktu).
+# Kurulum:  pip install -r requirements-dev.txt  &&  pre-commit install
+# Commit'te YALNIZ değişen dosyalarda çalışır → olgun kodu tek-seferde reformat etmeden
+# kademeli iyileştirme sağlar. Ruff config'i pyproject.toml'dan okur (enforced = F + E9).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff            # lint (F + E9) — --fix ile otomatik düzeltilebilirleri uygular
+        args: [--fix]
+      - id: ruff-format     # format (black-uyumlu) — yalnız değişen dosyalar
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]

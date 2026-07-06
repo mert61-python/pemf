@@ -15,10 +15,10 @@ import logging
 import os
 import platform
 import re
+import socket
 import subprocess
 import sys
 import threading
-import time
 import urllib.request
 from pathlib import Path
 
@@ -135,21 +135,22 @@ def _read_url_from_output(process: subprocess.Popen, port: int) -> None:
 
         match = url_pattern.search(decoded)
         if match:
+            new_url = match.group(0)
             with _tunnel_lock:
-                _tunnel_url = match.group(0)
-            logger.info("=" * 60)
-            logger.info("🌐 UZAKTAN ERİŞİM LİNKİNİZ: %s", _tunnel_url)
-            logger.info("   Mobil uygulamada Ayarlar > Sunucu IP kısmına")
-            logger.info("   bu adresi yapıştırın.")
-            logger.info("=" * 60)
-
-            # Kayıtlı callback'leri çağır (GUI'ye link iletmek için)
-            for cb in list(_url_callbacks):
-                try:
-                    cb(_tunnel_url)
-                except Exception:
-                    pass
-            break  # URL bulunduktan sonra okumaya devam etmeye gerek yok
+                changed = (new_url != _tunnel_url)
+                _tunnel_url = new_url
+            if changed:
+                logger.info("=" * 60)
+                logger.info("🌐 UZAKTAN ERİŞİM LİNKİNİZ: %s", new_url)
+                logger.info("=" * 60)
+                # Kayıtlı callback'leri çağır (sync_worker → Supabase'e ANINDA yeniden yayın).
+                for cb in list(_url_callbacks):
+                    try:
+                        cb(new_url)
+                    except Exception:
+                        pass
+            # break KALDIRILDI: cloudflared aynı süreçte URL'yi DEĞİŞTİREBİLİR (reconnect) → okumaya
+            # DEVAM et; değişince _tunnel_url güncellenir + callback'ler tetiklenir (audit: stale URL yayını).
 
 
 def get_tunnel_url() -> str:
@@ -187,8 +188,22 @@ def start_tunnel(port: int = 8000) -> bool:
     # ÜRETİM (P1): PEMF_CLOUDFLARE_TUNNEL_TOKEN ayarlıysa NAMED tunnel — KALICI hostname +
     # SLA + (istenirse) Cloudflare Access. Yoksa QUICK tunnel (trycloudflare, URL her restart
     # değişir, SLA yok) — geliştirme/yedek. Tıbbi üretimde NAMED + sabit hostname önerilir.
-    token = os.environ.get("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()
-    hostname = os.environ.get("PEMF_TUNNEL_HOSTNAME", "").strip()
+    # TEK-DOSYA: SecretsManager (env → pemf_secrets.json operator bölümü). Boşsa QUICK tunnel.
+    try:
+        from utils.secrets_manager import get_secret
+        token = get_secret("cloudflare_tunnel_token")
+        hostname = get_secret("tunnel_hostname")
+    except Exception:
+        token = os.environ.get("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()
+        hostname = os.environ.get("PEMF_TUNNEL_HOSTNAME", "").strip()
+    # GEÇERSİZ/PLACEHOLDER token koruması: GERÇEK cloudflared token uzun base64'tür (eyJ..., ~180+ char).
+    # Kısa/bogus token (ör. eski test artığı "1") NAMED tünel'i çökertip tünel URL'sini NULL bırakıyordu →
+    # Supabase'e null yazılıyor → UZAKTAN ERİŞİM ÇALIŞMIYORDU. İmplausibly-kısa token'ı YOK SAY → QUICK tünel
+    # (gerçek trycloudflare URL üretir, uzaktan erişim çalışır). Geçerli named token etkilenmez.
+    token = (token or "").strip()
+    if token and len(token) < 40:
+        logger.warning("cloudflare_tunnel_token geçersiz/placeholder (uzunluk %d) → YOK SAYILDI, QUICK tünele düşülüyor.", len(token))
+        token = ""
     if token:
         cmd = [str(bin_path), "tunnel", "run", "--token", token]
         logger.info("Cloudflare NAMED tunnel başlatılıyor (kalıcı hostname, üretim-grade).")
@@ -248,3 +263,102 @@ def stop_tunnel() -> None:
         except Exception:
             proc.kill()
         logger.info("Cloudflare tüneli durduruldu.")
+
+
+# ── WATCHDOG (SIFIR-MÜDAHALE uzaktan erişim) ────────────────────────────────────
+# Qt NetworkMonitor headless yolda ÖLÜ KOD → saf threading + socket ile internet
+# izleyip tüneli (yeniden) başlatan tek daemon. Kapsadığı 3 durum:
+#   (1) internetsiz boot → WiFi sonradan bağlanınca tünel OTOMATİK açılır,
+#   (2) cloudflared süreci ölürse OTOMATİK yeniden başlar,
+#   (3) internet düşüp gelince OTOMATİK toparlar.
+# NAMED tünelde cloudflared kendi reconnect'ini yapar; bu watchdog süreç-ölümünü kapsar.
+_INTERNET_HOSTS = [("1.1.1.1", 53), ("8.8.8.8", 53)]  # DNS portuna TCP connect = hafif internet kontrolü
+_watchdog_thread: threading.Thread | None = None
+_watchdog_stop = threading.Event()
+
+
+def _internet_up(timeout: float = 3.0) -> bool:
+    """Herhangi bir DNS host'una (53/tcp) bağlanılabiliyorsa internet VAR kabul edilir."""
+    for host, port in _INTERNET_HOSTS:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _tunnel_alive() -> bool:
+    """cloudflared süreci canlı mı?"""
+    with _tunnel_lock:
+        return _tunnel_process is not None and _tunnel_process.poll() is None
+
+
+def _tunnel_url_alive(timeout: float = 6.0) -> bool:
+    """Quick tünel URL'si DIŞARIDAN gerçekten forward ediyor mu? cloudflared süreci canlı olsa da
+    edge ölebilir (idle-reap/rate-limit) → process.poll() yetmez. Cihaz→Cloudflare→cihaz round-trip
+    ile /api/health erişilebilir mi diye bakar. URL henüz yoksa True döner (process kontrolüne bırak)."""
+    with _tunnel_lock:
+        url = _tunnel_url
+    if not url:
+        return True
+    try:
+        with urllib.request.urlopen(url + "/api/health", timeout=timeout) as r:
+            code = getattr(r, "status", None) or r.getcode()
+            return 200 <= int(code) < 500
+    except Exception:
+        return False
+
+
+def start_tunnel_watchdog(port: int = 8000, check_interval: int = 20) -> None:
+    """Tünel watchdog daemon'ını başlatır (tek-seferlik start_tunnel yerine).
+
+    İnternet VARSA ve tünel YOKSA/ÖLÜYSE (yeniden) başlatır; çevrimdışıyken denemez
+    (doomed subprocess açmaz, yerel çalışmaya dokunmaz). Başarısızlıkta exp backoff.
+    """
+    global _watchdog_thread
+    if _watchdog_thread and _watchdog_thread.is_alive():
+        return
+    _watchdog_stop.clear()
+
+    def _loop():
+        backoff = check_interval
+        max_backoff = 300
+        dead_url_strikes = 0
+        while not _watchdog_stop.is_set():
+            try:
+                if not _internet_up():
+                    _watchdog_stop.wait(check_interval)   # çevrimdışı → sadece bekle (yerel etkilenmez)
+                    continue
+                if _tunnel_alive():
+                    # Süreç canlı; ama quick tünel edge'i ölmüş olabilir (forward yok). DIŞ URL'yi probe et;
+                    # 2 ardışık ölüde yeniden başlat (audit P0: ölü-URL Supabase'e yayınlanmaya devam ediyordu).
+                    if _tunnel_url_alive():
+                        dead_url_strikes = 0
+                        backoff = check_interval           # sağlıklı → normal aralıkta tekrar bak
+                        _watchdog_stop.wait(check_interval)
+                        continue
+                    dead_url_strikes += 1
+                    if dead_url_strikes < 2:
+                        logger.info("Tünel watchdog: dış URL probe başarısız (%d/2) → bir tur daha bekleniyor.", dead_url_strikes)
+                        _watchdog_stop.wait(check_interval)
+                        continue
+                    logger.warning("Tünel watchdog: süreç canlı ama DIŞ URL ölü → tünel yeniden başlatılıyor.")
+                    dead_url_strikes = 0
+                    # düş → aşağıda stop_tunnel + start_tunnel (yeni URL alınır + yayınlanır)
+                stop_tunnel()                              # yarı-ölü süreç varsa temizle (None ise zararsız)
+                logger.info("Tünel watchdog: internet VAR, tünel yok/ölü → (yeniden) başlatılıyor.")
+                if start_tunnel(port=port):
+                    backoff = check_interval
+                    _watchdog_stop.wait(check_interval)    # QUICK tünel URL'yi yakalasın diye bekle
+                else:
+                    logger.warning("Tünel watchdog: başlatma başarısız, %ds sonra tekrar.", backoff)
+                    _watchdog_stop.wait(backoff)
+                    backoff = min(backoff * 2, max_backoff)
+            except Exception:
+                logger.exception("Tünel watchdog döngü hatası (devam ediliyor).")
+                _watchdog_stop.wait(check_interval)
+
+    _watchdog_thread = threading.Thread(target=_loop, daemon=True, name="CloudflareTunnelWatchdog")
+    _watchdog_thread.start()
+    logger.info("Cloudflare tünel watchdog başlatıldı (internet geldikçe/gittikçe uzaktan erişim otomatik).")

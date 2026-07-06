@@ -89,16 +89,20 @@ dataset/
 .venv*/
 myenv/
 
-# Frontend AYRI bir Expo projesi (C:\Users\merta\pf, junction) — bu repoda izlenmez
+# Frontend/mobil AYRI Expo projeleri (C:\Users\merta\pf junction + guii kopyalari) — backend repo'da izlenmez
 frontend/
 frontend_temp/
+pf/
+mobile/
 node_modules/
 
 # Build/dağıtım çıktıları + büyük/irrelevant dizinler
 buildPEMF/
+builds/
 mobile_builds/
 release_assets/
 lattekurulum/
+ai_hub/PEMF_AI_Test_Girdileri/
 # training_archive/ -> guii disina tasindi: ../ml_training_archive (ML egitim arsivi)
 github_pemf/
 
@@ -119,6 +123,7 @@ config/credentials/
 **/.pemf_key
 **/.pemf_key_v2
 **/.sqlcipher_key
+**/.encryption_key
 **/api_token.txt
 
 # Üretilen raporlar
@@ -129,3 +134,29 @@ models_size.json
 bin/cloudflared/
 build_exe_*.txt
 *.plain.bak
+
+# ── guii → pemf-update (KOD-ONLY push): tum bundle binary'leri + calistirilabilirler haric ──
+bin/
+*.exe
+*.dll
+*.pyd
+*.bin
+*.node
+# Model binary'leri (kod DEGIL — agir)
+*.pkl
+*.joblib
+*.h5
+*.pb
+*.tflite
+*.safetensors
+*.model
+# Dokumanlar/raporlar/gorseller (kod DEGIL)
+tübitak/
+*.docx
+*.pdf
+*.pptx
+*.xlsx
+
+# Lint/tip araç önbellekleri (audit B-2.1)
+.ruff_cache/
+.mypy_cache/

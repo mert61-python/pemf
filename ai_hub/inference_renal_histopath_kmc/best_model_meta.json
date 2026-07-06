@@ -1,0 +1,24 @@
+{
+  "name": "V22-KMC-ClassicTrio",
+  "family": "Flagship",
+  "onnx_file": "v22_kmc_classictrio_kmc.onnx",
+  "torch_state_dict": "v22_kmc_classictrio_kmc.pt",
+  "image_size": 224,
+  "selection_criterion": "calibration-best by mean cross-validated Brier score",
+  "cv_brier_mean": 0.062242081016302055,
+  "cv_auc_mean": 0.9972930571758046,
+  "cv_ece_mean": 0.041242250321806596,
+  "cv_balanced_acc_mean": 0.957956089563595,
+  "n_train_samples": 4079,
+  "class_labels": [
+    "grade0",
+    "grade1",
+    "grade2",
+    "grade3",
+    "grade4"
+  ],
+  "preprocessing": "Resize 224×224 → ImageNet mean/std → (train: HFlip+VFlip+RandRot15°+ColorJitter)",
+  "refit_epochs": 10,
+  "optimizer": "AdamW lr=1e-4 weight_decay=1e-4 cosine schedule",
+  "batch_size": 48
+}

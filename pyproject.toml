@@ -1,0 +1,68 @@
+# ============================================================================
+# PEMF Backend — araç yapılandırması (audit B-2.1: statik analiz/format/tip yoktu)
+# ----------------------------------------------------------------------------
+# Ruff = CI-ENFORCED lint (F + E9 = gerçek buglar; temiz baseline → CI yeşil).
+# Stil kuralları (E501/whitespace/annotation modernizasyonu) 28k satırlık olgun
+# kodda 2200+ ihlal → BİLİNÇLİ olarak enforce EDİLMEZ; aşağıda kademeli açma yolu var.
+# mypy = lenient (kademeli tipleme; kod büyük ölçüde untyped → CI'da ZORUNLU DEĞİL).
+# Kurulum:  pip install -r requirements-dev.txt  &&  pre-commit install
+# Çalıştır:  ruff check .   |   ruff format .   |   mypy servers utils database
+# ============================================================================
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+# Vendored / üretilmiş / build çıktısı DENETLENMEZ (bizim kaynağımız değil).
+extend-exclude = [
+    "ai_hub", "dist", "build", "builds", "buildPEMF", "release_assets",
+    "dema-terapi-simülatörü", "web_static", "website", "templates",
+    "frontend", "mobile", "bin", "data", "firmware", "lattekurulum",
+    "__pycache__", ".pytest_cache",
+]
+
+[tool.ruff.lint]
+# ENFORCED (CI yeşil kalmalı) — yalnız yüksek-sinyal gerçek-bug kuralları:
+#   F  = pyflakes  (undefined-name, unused-import/variable, bozuk f-string)
+#   E9 = syntax / IO hataları
+select = ["F", "E9"]
+
+# ── KADEMELİ AÇMA (hazır olunca select'e taşıyın; her biri bir temizlik gerektirir) ──
+#   "B"    flake8-bugbear      (~60 ihlal)  raise-without-from, mutable-default-arg…
+#   "I"    isort               (~50 ihlal)  import sıralama
+#   "UP"   pyupgrade           (~180 ihlal) PEP585/604 modern annotation
+#   "SIM"  flake8-simplify     (~75 ihlal)
+#   "E","W" pycodestyle        (~1900 ihlal, E501 uzun-satır dahil)
+# Önerilen kademe-1:  select = ["F", "E9", "B", "I"]   (önce B+I ihlallerini düzeltin)
+
+[tool.ruff.lint.per-file-ignores]
+# Testler: assert-kullanımı vb. serbest. Scriptler: CLI print/deneysel kod.
+"tests/*" = ["F811", "F401"]
+"scripts/*" = ["F401"]
+
+[tool.ruff.format]
+# `ruff format` (black-uyumlu) HAZIR ama otomatik uygulanmadı — 28k satır tek-seferde
+# reformat = dev-riskli devasa diff. pre-commit ile YALNIZ değişen dosyalarda kademeli uygulanır.
+quote-style = "preserve"
+indent-style = "space"
+
+[tool.coverage.run]
+# audit B-3.1: çekirdek modül kapsamı (AI-hub/scriptler hariç — ağır/ayrı).
+source = ["servers", "database", "controllers"]
+omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
+
+[tool.coverage.report]
+# Kapsam RATCHET'i (regresyon önler): şu an ~%36; eşik %33 (güvenli marj). CI kapsam bu eşiğin
+# altına düşerse KIRILIR. Kademeli yükseltin (kritik yol testleri arttıkça).
+fail_under = 33
+show_missing = false
+
+[tool.mypy]
+python_version = "3.10"
+# Kademeli tipleme (gradual typing): kod büyük ölçüde untyped → lenient başla; CI'da ZORUNLU DEĞİL.
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_return_any = false
+warn_unused_ignores = false
+disallow_untyped_defs = false
+check_untyped_defs = false
+exclude = "(ai_hub|dist|build|builds|buildPEMF|frontend|mobile|dema-terapi)/"

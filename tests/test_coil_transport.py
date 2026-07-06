@@ -1,0 +1,78 @@
+"""Kritik yol: bobin transport yönlendirmesi (STM 1-5 → HardwareController, ESP 6-8 → MQTT) +
+geçersiz bobin reddi + toplu (batch) yönlendirme + durdurma mekanizması. Donanım/broker mock'lanır."""
+import os
+
+os.environ.pop("PEMF_SIMULATE", None)
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture(scope="module")
+def api():
+    from servers import api_server
+    return api_server
+
+
+@pytest.fixture(scope="module")
+def client(api):
+    return TestClient(api.app)
+
+
+@pytest.fixture()
+def mocked_hw(api, monkeypatch):
+    """state.hardware (STM) + _mqtt_publish (ESP) çağrılarını yakalar."""
+    calls = {"stm": [], "mqtt": []}
+
+    class FakeHW:
+        def update_coil(self, coil_id, freq, duty, phase, duration, start=True):
+            calls["stm"].append({"coil": coil_id, "start": start})
+            return True
+
+        def stop_all_coils(self):
+            calls["stm"].append({"stop_all": True})
+            return True
+
+    monkeypatch.setattr(api.state, "hardware", FakeHW())
+    monkeypatch.setattr(api.state, "core", object())  # /api/hardware/command core+hardware ister
+    monkeypatch.setattr(api, "_mqtt_publish",
+                        lambda topic, payload: (calls["mqtt"].append(topic) or True))
+    # Aktif seans kalıntısını temizle (coil-run DB yan-etkisi olmasın).
+    with api._session_lock:
+        api._active_session.clear()
+    return calls
+
+
+def test_stm_coil_routes_to_hardware(client, mocked_hw):
+    r = client.post("/api/coil/3/control", json={"freq": 50, "duty": 25, "start": True})
+    assert r.status_code == 200
+    assert r.json()["transport"] == "stm32"
+    assert any(c.get("coil") == 3 for c in mocked_hw["stm"])
+    assert not mocked_hw["mqtt"]  # STM bobini MQTT'ye GİTMEZ
+
+
+def test_esp_coil_routes_to_mqtt(client, mocked_hw):
+    r = client.post("/api/coil/7/control", json={"freq": 50, "duty": 25, "start": True})
+    assert r.status_code == 200
+    assert r.json()["transport"] == "mqtt"
+    assert any("coil/7" in t for t in mocked_hw["mqtt"])  # ESP bobini MQTT'ye gitti
+
+
+def test_invalid_coil_rejected(client, mocked_hw):
+    assert client.post("/api/coil/9/control", json={"start": True}).status_code == 400
+    assert client.post("/api/coil/0/control", json={"start": True}).status_code == 400
+
+
+def test_batch_splits_stm_and_esp(client, mocked_hw):
+    r = client.post("/api/coil/batch", json={"coil_ids": [2, 6], "freq": 50, "duty": 25, "start": True})
+    assert r.status_code == 200
+    results = {x["coilId"]: x["transport"] for x in r.json()["results"]}
+    assert results[2] == "stm32"
+    assert results[6] == "mqtt"
+
+
+def test_stop_all_uses_hardware(client, mocked_hw):
+    r = client.post("/api/hardware/command", json={"command": "stop_all_coils"})
+    # HardwareController.stop_all_coils çağrılmalı (STM güvenli durdurma).
+    assert r.status_code == 200
+    assert any(c.get("stop_all") for c in mocked_hw["stm"])

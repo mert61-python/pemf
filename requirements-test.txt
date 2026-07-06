@@ -1,3 +1,32 @@
-# Kritik-yol testleri için (üretim runtime'ına dahil değil).
-pytest>=7.0
-httpx>=0.24
+# =============================================================================
+# PEMF Backend — CI TEST bağımlılıkları (audit B-3.3: CI 'requirements-test.txt'e
+# referans veriyordu ama dosya YOKtu → pytest hiç kurulmuyor, hat asla yeşile dönmüyordu).
+# -----------------------------------------------------------------------------
+# Testlerin (guii/tests) IMPORT + ÇALIŞMA zamanında gerçekten gereken paketler.
+# AĞIR AI bağımlılıkları (torch/ultralytics/onnx/librosa/numba/scikit-learn/xgboost)
+# model çalıştırma anında LAZY yüklenir → import edilen modüller için GEREKMEZ, CI'dan
+# çıkarıldı (kurulum ~2GB + dakikalarca sürerdi). sqlcipher3 de HARİÇ: ubuntu'da wheel
+# zor + kod onsuz gracefully düz-metine düşer (import_sqlcipher()→None); testler bunu mock'lar.
+# Sürümler ana requirements.txt (CPython 3.10) ile birebir kilitli.
+# Kurulum (CI):  pip install -r requirements-test.txt
+# =============================================================================
+
+# ── Test koşucu + HTTP istemci (FastAPI TestClient httpx kullanır) + kapsam (audit B-3.1) ──
+pytest==9.1.1
+httpx==0.28.1
+pytest-cov==7.1.0
+
+# ── Web/API (api_server + router'ları import etmek için) ──
+fastapi==0.136.3
+starlette==1.2.1
+pydantic==2.13.4
+python-multipart==0.0.30
+
+# ── Import-zamanı runtime bağımlılıkları (introspeksiyonla saptandı) ──
+numpy==1.26.4
+opencv-python-headless==4.9.0.80   # CI headless: opencv-python yerine (libGL gerektirmez)
+pillow==12.2.0
+reportlab==4.0.7                   # history_router → pdf_report_generator import-zamanı
+cryptography==41.0.3
+keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
+paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)

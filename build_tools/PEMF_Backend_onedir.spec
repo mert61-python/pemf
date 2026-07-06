@@ -4,8 +4,8 @@
 # -----------------------------------------------------------------------------
 # GUI spec'inden (PEMF_GUI_onedir.spec) uyarlanmıştır. Farklar:
 #   * Giriş noktası  : backend_service.py  (main.py DEĞİL -> GUI hiç paketlenmez)
-#   * EXCLUDES        : PyQt6 / PySide / pyqtgraph / OpenGL / tkinter ve tüm GUI
-#                       paketleri (windows, pemf_gui, styles, threads) çıkarıldı
+#   * EXCLUDES        : React'e geçildi → Qt/PyQt/pyqtgraph/PyOpenGL SÖKÜLDÜ (myenv'de
+#                       kurulu değil, kaynakta import yok). Yalnız tkinter + matplotlib-Qt defansif.
 #   * Korunan         : FastAPI/uvicorn, MQTT, STM32 serial, zeroconf, tüm AI/ML
 #                       stack, frontend/dist, dema simülatör, bin/mosquitto
 #
@@ -16,7 +16,7 @@
 # =============================================================================
 import sys
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules, collect_dynamic_libs, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, collect_dynamic_libs, copy_metadata, collect_all
 
 # --- Proje dizini ---
 spec_dir = os.getcwd()
@@ -55,9 +55,9 @@ for dll_name in ('sqlite3.dll', 'libffi-7.dll', 'libssl-1_1.dll', 'libcrypto-1_1
 
 # --- Üçüncü-parti veri/lib toplama (AI/ML/web) ---
 for pkg in ('numpy', 'pandas', 'mediapipe', 'onnxruntime', 'fastapi', 'uvicorn',
-            'starlette', 'pydantic', 'huggingface_hub', 'zeroconf', 'qrcode'):
+            'starlette', 'pydantic', 'zeroconf', 'xgboost'):
     try:
-        datas += collect_data_files(pkg)
+        datas += collect_data_files(pkg)   # xgboost: 'VERSION' veri dosyasi (eksikse disease 500: No such file _internal\xgboost\VERSION)
     except Exception:
         pass
 for pkg in ('numpy', 'torch', 'torchvision', 'xgboost'):
@@ -87,9 +87,18 @@ try:
     datas += _sc_datas
     binaries += _sc_bins
     print(f"[OK] sqlcipher3 toplandı: {len(_sc_datas)} data, {len(_sc_bins)} binary, {len(_sc_hidden)} hidden")
+    # NOT: collect_all'da binary 0 OLABİLİR — sqlcipher3'ün native _sqlite3 extension'ı datas/hidden
+    # üzerinden gelir (NORMAL, bundle eksik DEĞİL; smoke testleri şifrelemeyi doğruladı). Bu yüzden
+    # binary-sayısı kontrolü YOK. Gerçek koruma: (1) aşağıdaki except — collect_all HATA verirse
+    # (paket build venv'inde yok) build KIRILIR; (2) runtime'da setup_services.ps1 atRestEncrypted=false
+    # ise kurulum HATA verir. İki katmanlı güvenlik, false-positive build-kırma yok.
 except Exception as _e:
-    _sc_hidden = ['sqlcipher3', 'sqlcipher3.dbapi2']
-    print("[UYARI] sqlcipher3 collect_all başarısız:", _e)
+    # ESKİDEN sadece [UYARI] basıp hiddenimports'a düşerdi → sqlcipher eksik EXE SESSİZCE shiplenirdi.
+    # ARTIK HARD FAIL: at-rest şifreleme bu medikal cihaz için ZORUNLU; bundle edilemiyorsa build kırılsın.
+    raise SystemExit(
+        f"[BUILD FAIL] sqlcipher3 bundle edilemedi: {_e}. at-rest şifreleme ZORUNLU (hasta PII/KVKK). "
+        "Build venv'inde 'sqlcipher3==0.6.2' kurulu mu? (pip install sqlcipher3==0.6.2)"
+    )
 
 # --- Proje veri dosyaları (headless için gerekli olanlar) ---
 # Config + credential dosyaları (ProductionConfigManager ilk açılışta üretir)
@@ -149,6 +158,11 @@ frontend_dir = os.path.join(project_path, 'frontend', 'dist')
 if os.path.exists(frontend_dir):
     datas.append((frontend_dir, os.path.join('frontend', 'dist')))
 
+# Kurulu sürüm bilgisi (update_manager RUNTIME'da okur → oto-güncelleme sürüm karşılaştırması)
+ver_json = os.path.join(project_path, 'frontend_version.json')
+if os.path.exists(ver_json):
+    datas.append((ver_json, '.'))
+
 # DEMA simülatör (FastAPI '/simulator')
 sim_dir = os.path.join(project_path, 'dema-terapi-simülatörü', 'dist')
 if os.path.exists(sim_dir):
@@ -160,7 +174,7 @@ for dir_name in ('web_static', 'templates'):
     if os.path.exists(d_path):
         datas.append((d_path, dir_name))
 
-# AI HUB (inference kodu + küçük .pkl/.json; büyük ONNX runtime'da indirilir)
+# AI HUB (inference KODU + küçük .pkl/.json). Büyük ONNX'ler aşağıda ai_models ağacıyla gömülür.
 ai_hub_dir = os.path.join(project_path, 'ai_hub')
 if os.path.exists(ai_hub_dir):
     for root, _, files in os.walk(ai_hub_dir):
@@ -169,10 +183,29 @@ if os.path.exists(ai_hub_dir):
         for f in files:
             full = os.path.join(root, f)
             rel = os.path.relpath(root, project_path)
-            if f.endswith(('.py', '.json', '.txt')):
+            if f.endswith(('.py', '.json', '.txt', '.yaml', '.yml')):
                 datas.append((full, rel))
-            elif f.endswith('.pkl') and os.path.getsize(full) < 5 * 1024 * 1024:
+            elif f.endswith(('.pkl', '.onnx', '.npy')) and os.path.getsize(full) < 5 * 1024 * 1024:
                 datas.append((full, rel))
+
+# TÜM AI MODELLERİNİ EXE'YE GÖM (Hugging Face KALDIRILDI → self-contained; ProgramData staging'e
+# bağımlı kalma). release_assets/ai_models/** → _internal/ai_models/** ; download_model_sync /
+# find_installed_model resource_path("ai_models") köküyle bundle'dan çözer. Akıllı Teşhis + AI Pro
+# modellerinin TAMAMI (landmark/disease/segmentation/thermal/reticulocytes/em_*/cat_*/kidney_*/
+# histopath/cat_organ + em_kedi) EXE içinde taşınır. Bundle ~+2.1GB büyür.
+ai_models_src = os.path.join(project_path, 'release_assets', 'ai_models')
+if os.path.exists(ai_models_src):
+    _nmodel = 0
+    for root, _, files in os.walk(ai_models_src):
+        for f in files:
+            full = os.path.join(root, f)
+            sub = os.path.relpath(root, ai_models_src)
+            rel = 'ai_models' if sub == '.' else os.path.join('ai_models', sub)
+            datas.append((full, rel))
+            _nmodel += 1
+    print(f"[OK] ai_models EXE'ye gomuldu: {_nmodel} dosya ({ai_models_src})")
+else:
+    print(f"[UYARI] ai_models kaynagi YOK: {ai_models_src} -> modeller GOMULMEDI!")
 
 # --- Bloat filtresi ---
 def filter_bloat(items):
@@ -195,11 +228,48 @@ print(f"Toplam: {len(binaries)} binary, {len(datas)} data")
 # --- Hidden imports: SADECE headless paketler (GUI paketleri toplanmaz) ---
 hidden = []
 for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
-            'ai_hub', 'cryptography', 'numpy'):
+            'ai_hub', 'cryptography', 'numpy',
+            # sklearn: pickled preprocessor/scaler nesneleri unpickle'da sklearn.impute /
+            # sklearn.compose / sklearn.pipeline gibi alt modülleri ister; statik import'ta
+            # görünmediği için TÜM sklearn toplanmalı (CKD ColumnTransformer "No module
+            # named 'sklearn.impute'" hatası). Geleceğe dönük tüm pickled sklearn için.
+            'sklearn'):
     try:
         hidden += collect_submodules(pkg)
     except Exception:
         pass
+
+# cat_sound (ses) deps: librosa mel-spektrogram → numba/llvmlite JIT + soundfile
+# (libsndfile DLL) + audioread + imageio_ffmpeg (ffmpeg.exe binary). collect_all
+# submodül+data+binary'yi TOPLAR (numba/llvmlite/ffmpeg frozen'da çalışsın diye ŞART).
+for _apkg in ('librosa', 'soundfile', 'audioread', 'imageio_ffmpeg',
+              'numba', 'llvmlite', 'lazy_loader', 'pooch', 'soxr', 'msgpack'):
+    try:
+        _ad, _ab, _ah = collect_all(_apkg)
+        datas += _ad
+        binaries += _ab
+        hidden += _ah
+    except Exception as _ae:
+        print(f"[SES] collect_all({_apkg}) atlandı: {_ae}")
+
+# numba/llvmlite DERLENMİŞ uzantıları (.pyd) — collect_all/collect_dynamic_libs Windows'ta
+# .pyd'yi ATLIYOR → frozen'da "cannot import name '_typeconv' from numba.core.typeconv".
+# Tüm .pyd'leri paket-göreli yapıyı koruyarak elle binaries'e ekle.
+import glob as _glob
+import importlib.util as _ilu
+for _cext_pkg in ('numba', 'llvmlite', 'soxr'):
+    try:
+        _sp = _ilu.find_spec(_cext_pkg)
+        # SADECE paket (origin=__init__.py) — tek-modülde (soundfile.py) base=site-packages
+        # olur ve TÜM site-packages'i tarar (yanlış). soundfile DLL'i collect_all halleder.
+        if not _sp or not _sp.origin or not _sp.origin.endswith('__init__.py'):
+            continue
+        _pbase = os.path.dirname(_sp.origin)
+        _proot = os.path.dirname(_pbase)
+        for _pyd in _glob.glob(os.path.join(_pbase, '**', '*.pyd'), recursive=True):
+            binaries.append((_pyd, os.path.relpath(os.path.dirname(_pyd), _proot)))
+    except Exception as _ce:
+        print(f"[SES] {_cext_pkg} .pyd toplama hatası: {_ce}")
 
 hidden += [
     'event_bus', 'headless_core', 'backend_service',
@@ -215,8 +285,8 @@ hidden += [
     'paho.mqtt.packettypes', 'paho.mqtt.matcher',
     'zeroconf', 'serial', 'serial.tools', 'serial.tools.list_ports',
     'sqlite3', '_sqlite3', 'sqlcipher3', 'sqlcipher3.dbapi2',
-    # QR / images
-    'qrcode', 'qrcode.image.pil', 'PIL', 'PIL.Image',
+    # images
+    'PIL', 'PIL.Image',
     # AI / ML
     'cv2', 'onnx', 'onnx.defs', 'onnxruntime', 'onnxruntime.capi',
     'onnxruntime.capi._pybind_state', 'ultralytics',
@@ -228,7 +298,6 @@ hidden += [
     'scipy.spatial.transform', 'scipy.stats', 'scipy.linalg', 'scipy.sparse',
     'pandas', 'pandas._libs', 'pandas._libs.tslibs', 'pandas._libs.tslibs.base',
     'numpy._core', 'numpy._core._multiarray_umath', 'numpy.core._multiarray_umath',
-    'huggingface_hub',
     # cloud sync (offline-first Supabase)
     'supabase', 'postgrest', 'realtime', 'storage3', 'supabase_auth',
     # matplotlib SADECE Agg (Qt backend yok) — PDF/rapor grafikleri için
@@ -251,19 +320,15 @@ a = Analysis(
     hooksconfig={'matplotlib': {'backends': ['Agg']}},
     runtime_hooks=[],
     excludes=[
-        # --- GUI / Qt: headless'te ASLA paketlenmez ---
-        'PyQt6', 'PyQt5', 'PySide2', 'PySide6', 'pyqtgraph', 'OpenGL', 'PyOpenGL',
+        # --- GUI: React'e geçildi → Qt/PyQt/pyqtgraph/PyOpenGL TAMAMEN SÖKÜLDÜ.
+        # Bu paketler myenv'de KURULU DEĞİL ve kaynakta İMPORT EDİLMİYOR → zaten paketlenemez;
+        # exclude satırlarına gerek kalmadı. Defansif kalanlar: tkinter (stdlib) + matplotlib'in
+        # Qt backend'leri, ki matplotlib/cv2 transitif bir GUI backend çekmesin (matplotlib
+        # yalnız Agg — aşağıdaki hooksconfig ile zorlanıyor). pemf_gui exclude EDİLMEZ:
+        # pemf_gui.config headless'te (database.patient_database) kullanılıyor.
         'tkinter',
-        'PyQt6.QtWebEngine', 'PyQt6.QtWebEngineCore', 'PyQt6.QtWebEngineWidgets',
         'matplotlib.backends.backend_qt5agg', 'matplotlib.backends.backend_qtagg',
         'matplotlib.backends.backend_qt',
-        # --- GUI / legacy proje paketleri ---
-        # NOT: 'pemf_gui' exclude EDİLMEZ -> pemf_gui.config headless'te kullanılıyor
-        # (database.patient_database). Sadece pemf_gui/dialogs Qt'lidir ama o import edilmiyor.
-        'windows', 'styles', 'threads',
-        'services.mosquitto_manager', 'services.network_monitor',
-        'utils.notification_panel', 'utils.responsive_label', 'utils.responsive_utils',
-        'utils.hardware_aware_mixin', 'utils.device_profile', 'utils.email_settings_dialog',
         # --- ağır/gereksiz ---
         'tensorflow', 'tensorboard', 'keras', 'torchaudio', 'networkx', 'triton',
         'IPython', 'notebook', 'polars', 'numba', 'llvmlite', 'gevent',

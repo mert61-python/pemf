@@ -35,6 +35,26 @@ except ImportError:
 from database.treatment_history_db import get_treatment_db
 
 
+def _fmt_hms(epoch) -> str:
+    """Epoch saniyeyi HH:MM:SS'e çevir; None/geçersizse '-'."""
+    if epoch is None:
+        return "-"
+    try:
+        return datetime.fromtimestamp(float(epoch)).strftime("%H:%M:%S")
+    except (ValueError, OSError, OverflowError, TypeError):
+        return "-"
+
+
+def _fmt_num(v, fmt: str = "{:.1f}") -> str:
+    """Sayıyı biçimle (varsayılan 1 ondalık); None/geçersizse '-' (str fallback)."""
+    if v is None:
+        return "-"
+    try:
+        return fmt.format(float(v))
+    except (ValueError, TypeError):
+        return str(v)
+
+
 class PDFReportGenerator:
     """PEMF tedavi raporları için PDF oluşturucu"""
     
@@ -133,61 +153,25 @@ class PDFReportGenerator:
             self.unicode_font_bold = 'Helvetica-Bold'
     
     def _setup_custom_styles(self):
-        """Özel stil ayarlarını oluştur"""
-        # Unicode font varsa kullan, yoksa varsayılan font
+        """Rapor için özel paragraf stillerini kaydet (Unicode font varsa onu, yoksa Helvetica)."""
         font_name = getattr(self, 'unicode_font', 'Helvetica')
         font_bold = getattr(self, 'unicode_font_bold', 'Helvetica-Bold')
-        
-        # Başlık stilleri
-        self.styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=self.styles['Title'],
-            fontName=font_bold,
-            fontSize=18,
-            spaceAfter=30,
-            alignment=TA_CENTER,
-            textColor=colors.darkblue
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='SectionHeader',
-            parent=self.styles['Heading2'],
-            fontName=font_bold,
-            fontSize=14,
-            spaceAfter=12,
-            spaceBefore=20,
-            textColor=colors.darkblue,
-            borderWidth=1,
-            borderColor=colors.darkblue,
-            borderPadding=5
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='PatientInfo',
-            parent=self.styles['Normal'],
-            fontName=font_name,
-            fontSize=11,
-            spaceAfter=6,
-            leftIndent=20
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='Footer',
-            parent=self.styles['Normal'],
-            fontName=font_name,
-            fontSize=8,
-            alignment=TA_CENTER,
-            textColor=colors.grey
-        ))
-        
-        # Normal metin için Unicode font stili
-        self.styles.add(ParagraphStyle(
-            name='UnicodeNormal',
-            parent=self.styles['Normal'],
-            fontName=font_name,
-            fontSize=10,
-            spaceAfter=6
-        ))
+        # Stil tanımları veri-güdümlü: her biri bir spec sözlüğü → tek döngüde eklenir.
+        specs = [
+            dict(name='CustomTitle', parent=self.styles['Title'], fontName=font_bold, fontSize=18,
+                 spaceAfter=30, alignment=TA_CENTER, textColor=colors.darkblue),
+            dict(name='SectionHeader', parent=self.styles['Heading2'], fontName=font_bold, fontSize=14,
+                 spaceAfter=12, spaceBefore=20, textColor=colors.darkblue,
+                 borderWidth=1, borderColor=colors.darkblue, borderPadding=5),
+            dict(name='PatientInfo', parent=self.styles['Normal'], fontName=font_name, fontSize=11,
+                 spaceAfter=6, leftIndent=20),
+            dict(name='Footer', parent=self.styles['Normal'], fontName=font_name, fontSize=8,
+                 alignment=TA_CENTER, textColor=colors.grey),
+            dict(name='UnicodeNormal', parent=self.styles['Normal'], fontName=font_name, fontSize=10,
+                 spaceAfter=6),
+        ]
+        for spec in specs:
+            self.styles.add(ParagraphStyle(**spec))
     
     def generate_session_report(self, session_ids: List[int], 
                               output_path: str = None,
@@ -206,47 +190,15 @@ class PDFReportGenerator:
             str: Oluşturulan PDF dosya yolu
         """
         try:
-            # Çıktı dosya yolu belirle (masaüstü)
-            if not output_path:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                desktop_path = os.path.expanduser("~/Desktop")
-                output_path = os.path.join(desktop_path, f"PEMF_Tedavi_Raporu_{timestamp}.pdf")
-            
-            # PDF dokümanını oluştur
-            doc = SimpleDocTemplate(
-                output_path,
-                pagesize=A4,
-                rightMargin=2*cm,
-                leftMargin=2*cm,
-                topMargin=2*cm,
-                bottomMargin=2*cm
-            )
-            
-            # Rapor içeriğini oluştur
+            output_path = output_path or self._default_output_path("PEMF_Tedavi_Raporu")
             story = []
-            
-            # Başlık
             self._add_header(story)
-            
-            # Rapor bilgileri
             self._add_report_info(story, len(session_ids))
-            
-            # İstatistikler (eğer istenirse)
             if include_statistics:
                 self._add_statistics_section(story, session_ids)
-            
-            # Seans detayları
             self._add_sessions_section(story, session_ids, include_patient_info)
-            
-            # Footer
             self._add_footer(story)
-            
-            # PDF'i oluştur
-            doc.build(story)
-            
-            self.logger.info(f"PDF raporu oluşturuldu: {output_path}")
-            return output_path
-            
+            return self._build_pdf(story, output_path, "PDF raporu")
         except Exception as e:
             self.logger.error(f"PDF raporu oluşturma hatası: {e}")
             raise
@@ -268,66 +220,53 @@ class PDFReportGenerator:
             str: Oluşturulan PDF dosya yolu
         """
         try:
-            # Hasta seanslarını getir
-            sessions = self.db.get_session_history(
-                limit=1000,
-                start_date=start_date,
-                end_date=end_date
-            )
-            
-            # Hasta adına göre filtrele
-            patient_sessions = [
-                s for s in sessions 
-                if (s.get('patient_name', '') + ' ' + s.get('patient_surname', '')).strip().lower() 
-                == patient_name.lower()
-            ]
-            
-            if not patient_sessions:
-                raise ValueError(f"'{patient_name}' adlı hasta için seans bulunamadı")
-            
-            # Çıktı dosya yolu belirle (masaüstü)
-            if not output_path:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                safe_name = "".join(c for c in patient_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                desktop_path = os.path.expanduser("~/Desktop")
-                output_path = os.path.join(desktop_path, f"PEMF_Hasta_Raporu_{safe_name}_{timestamp}.pdf")
-            
-            # PDF dokümanını oluştur
-            doc = SimpleDocTemplate(
-                output_path,
-                pagesize=A4,
-                rightMargin=2*cm,
-                leftMargin=2*cm,
-                topMargin=2*cm,
-                bottomMargin=2*cm
-            )
-            
+            patient_sessions = self._get_patient_sessions(patient_name, start_date, end_date)
+            output_path = output_path or self._default_output_path("PEMF_Hasta_Raporu", patient_name)
             story = []
-            
-            # Başlık
             self._add_header(story)
-            
-            # Hasta bilgileri
             self._add_patient_header(story, patient_sessions[0], patient_name)
-            
-            # Hasta istatistikleri
             self._add_patient_statistics(story, patient_sessions)
-            
-            # Tedavi geçmişi
             self._add_patient_treatment_history(story, patient_sessions)
-            
-            # Footer
             self._add_footer(story)
-            
-            # PDF'i oluştur
-            doc.build(story)
-            
-            self.logger.info(f"Hasta raporu oluşturuldu: {output_path}")
-            return output_path
-            
+            return self._build_pdf(story, output_path, "Hasta raporu")
         except Exception as e:
             self.logger.error(f"Hasta raporu oluşturma hatası: {e}")
             raise
+
+    def _default_output_path(self, prefix: str, name_hint: str = "") -> str:
+        """Masaüstünde zaman-damgalı çıktı yolu üret (opsiyonel güvenli-karakterli hasta-adı parçası)."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        desktop = os.path.expanduser("~/Desktop")
+        if name_hint:
+            safe = "".join(c for c in name_hint if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            return os.path.join(desktop, f"{prefix}_{safe}_{timestamp}.pdf")
+        return os.path.join(desktop, f"{prefix}_{timestamp}.pdf")
+
+    def _build_pdf(self, story, output_path: str, label: str) -> str:
+        """Story'yi A4 (2cm kenar boşluğu) PDF'e derle, logla ve yolu döndür."""
+        doc = SimpleDocTemplate(output_path, pagesize=A4,
+                                rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+        doc.build(story)
+        self.logger.info(f"{label} oluşturuldu: {output_path}")
+        return output_path
+
+    def _get_patient_sessions(self, patient_name: str, start_date, end_date):
+        """Tam-ada göre (opsiyonel tarih aralığı) hasta seanslarını getir; hiç yoksa ValueError."""
+        sessions = self.db.get_session_history(limit=1000, start_date=start_date, end_date=end_date)
+        patient_sessions = [
+            s for s in sessions
+            if (s.get('patient_name', '') + ' ' + s.get('patient_surname', '')).strip().lower()
+            == patient_name.lower()
+        ]
+        if not patient_sessions:
+            raise ValueError(f"'{patient_name}' adlı hasta için seans bulunamadı")
+        return patient_sessions
+
+    def _fetch_sessions(self, session_ids):
+        """Verilen ID'lerin seanslarını getir — geçmişten TEK sorgu + ID eşleme (döngü-içi tekrar
+        sorgu yok). session_ids sırasını korur; bulunamayanları atlar."""
+        by_id = {s['id']: s for s in self.db.get_session_history(limit=1000)}
+        return [by_id[sid] for sid in session_ids if sid in by_id]
     
     def _add_header(self, story):
         """Rapor başlığını ekle"""
@@ -377,43 +316,34 @@ class PDFReportGenerator:
         story.append(Spacer(1, 20))
     
     def _add_statistics_section(self, story, session_ids):
-        """İstatistik bölümünü ekle"""
+        """İstatistik bölümünü ekle (toplam/ortalama süre + tedavi-modu dağılımı)."""
         story.append(Paragraph("İSTATİSTİKLER", self.styles['SectionHeader']))
-        
-        # Seansları getir
-        sessions = []
-        for session_id in session_ids:
-            session_data = self.db.get_session_history(limit=1000)
-            session = next((s for s in session_data if s['id'] == session_id), None)
-            if session:
-                sessions.append(session)
-        
+        sessions = self._fetch_sessions(session_ids)
         if not sessions:
             story.append(Paragraph("İstatistik verisi bulunamadı.", self.styles['UnicodeNormal']))
             return
-        
-        # İstatistikleri hesapla
+        story.append(self._build_stats_table(sessions))
+        story.append(Spacer(1, 20))
+
+    def _build_stats_table(self, sessions) -> "Table":
+        """Seans listesinden özet istatistik tablosu (toplam/ortalama süre + mod sayıları)."""
         total_duration = sum(s.get('duration_minutes', 0) or 0 for s in sessions)
         avg_duration = total_duration / len(sessions) if sessions else 0
-        
-        # Tedavi modları dağılımı
         mode_counts = {}
         for session in sessions:
             mode = session.get('treatment_mode', 'Bilinmiyor')
             mode_counts[mode] = mode_counts.get(mode, 0) + 1
-        
-        # İstatistik tablosu
+
         stats_data = [
             ["Toplam Seans Sayısı", str(len(sessions))],
             ["Toplam Tedavi Süresi", f"{total_duration} dakika"],
             ["Ortalama Seans Süresi", f"{avg_duration:.1f} dakika"],
         ]
-        
         for mode, count in mode_counts.items():
             stats_data.append([f"{mode} Modu", f"{count} seans"])
-        
-        stats_table = Table(stats_data, colWidths=[6*cm, 4*cm])
-        stats_table.setStyle(TableStyle([
+
+        table = Table(stats_data, colWidths=[6*cm, 4*cm])
+        table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (0, -1), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
             ('FONTNAME', (1, 0), (1, -1), getattr(self, 'unicode_font', 'Helvetica')),
@@ -421,23 +351,12 @@ class PDFReportGenerator:
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
         ]))
-        
-        story.append(stats_table)
-        story.append(Spacer(1, 20))
+        return table
     
     def _add_sessions_section(self, story, session_ids, include_patient_info):
         """Seans detayları bölümünü ekle"""
         story.append(Paragraph("TEDAVİ SEANSLARI", self.styles['SectionHeader']))
-        
-        # Seansları getir ve sırala
-        sessions = []
-        for session_id in session_ids:
-            session_data = self.db.get_session_history(limit=1000)
-            session = next((s for s in session_data if s['id'] == session_id), None)
-            if session:
-                sessions.append(session)
-        
-        # Tarihe göre sırala
+        sessions = self._fetch_sessions(session_ids)
         sessions.sort(key=lambda x: (x.get('session_date', ''), x.get('start_time', '')))
         
         for i, session in enumerate(sessions, 1):
@@ -446,48 +365,15 @@ class PDFReportGenerator:
                 story.append(Spacer(1, 15))
     
     def _add_single_session(self, story, session, session_num, include_patient_info):
-        """Tek seans detayını ekle"""
-        # Seans başlığı
-        session_title = f"Seans {session_num} - {session.get('session_date', 'Bilinmiyor')}"
-        story.append(Paragraph(session_title, self.styles['Heading3']))
-        
-        # Seans detaylarını ve parametrelerini al
-        session_details = self.db.get_session_details(session.get('id'))
-        parameters = session_details.get('parameters', {}) if session_details else {}
-        
-        # Dinamik süreyi kontrol et
-        duration = parameters.get('duration', {}).get('value') if 'duration' in parameters else session.get('duration_minutes', 0) or 0
-        if duration and str(duration).replace('.', '').isdigit():
-            duration_display = f"{float(duration):.0f}" if float(duration) == int(float(duration)) else f"{float(duration):.1f}"
-        else:
-            duration_display = "0"
-        
-        # Seans bilgileri tablosu
-        session_data = [
-            ["Tarih", session.get('session_date', 'Bilinmiyor')],
-            ["Başlangıç Saati", session.get('start_time', 'Bilinmiyor')],
-            ["Bitiş Saati", session.get('end_time', 'Bilinmiyor')],
-            ["Süre", f"{duration_display} dakika"],
-            ["Tedavi Modu", session.get('treatment_mode', 'Bilinmiyor')],
-            ["Hedef Durum", session.get('target_condition', 'Belirtilmemiş')],
-            ["Frekans", f"{parameters.get('frequency', {}).get('value', session.get('frequency_hz', 0)) or 0} Hz"],
-            ["Yoğunluk", f"{parameters.get('intensity', {}).get('value', session.get('intensity_mt', 0)) or 0} mT"],
-            ["Veteriner", parameters.get('patient_vet_contact', {}).get('value', session.get('operator_name', 'Belirtilmemiş'))],
-        ]
-        
-        # Hasta bilgileri (eğer istenirse)
-        if include_patient_info:
-            patient_name = parameters.get('patient_name', {}).get('value', '') or ''
-            patient_surname = parameters.get('patient_surname', {}).get('value', '') or ''
-            patient_full_name = f"{patient_name} {patient_surname}".strip()
-            
-            session_data.insert(4, ["Hasta Adı", patient_full_name or 'Bilinmiyor'])
-            session_data.insert(5, ["Hasta Yaşı", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')])
-            session_data.insert(6, ["Tür/Irk", f"{parameters.get('patient_species', {}).get('value', '')} / {parameters.get('patient_breed', {}).get('value', '')}".strip(' /')])
-            session_data.insert(7, ["Ağırlık", parameters.get('patient_weight', {}).get('value', 'Belirtilmemiş')])
-            session_data.insert(8, ["Sahip", parameters.get('patient_owner', {}).get('value', 'Belirtilmemiş')])
-        
-        session_table = Table(session_data, colWidths=[4*cm, 6*cm])
+        """Tek seans detayını ekle: başlık + bilgi tablosu + hasta notları + bobin çalışmaları."""
+        title = f"Seans {session_num} - {session.get('session_date', 'Bilinmiyor')}"
+        story.append(Paragraph(title, self.styles['Heading3']))
+
+        details = self.db.get_session_details(session.get('id'))
+        parameters = details.get('parameters', {}) if details else {}
+        rows = self._session_info_rows(session, parameters, include_patient_info)
+
+        session_table = Table(rows, colWidths=[4*cm, 6*cm])
         session_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (0, -1), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
@@ -497,51 +383,70 @@ class PDFReportGenerator:
             ('BACKGROUND', (0, 0), (0, -1), colors.lightblue),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ]))
-        
         story.append(session_table)
-        
-        # Hasta notları (eğer varsa)
+
+        # Hasta notları (varsa)
         patient_notes = session.get('patient_notes', '')
         if patient_notes:
             story.append(Spacer(1, 10))
             story.append(Paragraph("<b>Hasta Notları:</b>", self.styles['UnicodeNormal']))
             story.append(Paragraph(patient_notes, self.styles['PatientInfo']))
 
-        # Asama-3 BONUS: Bobin calismalari tablosu (best-effort, mevcut PDF'i bozmaz)
+        # Bobin çalışmaları tablosu (best-effort; hata olursa mevcut PDF'i bozmadan atla).
         try:
             self._add_coil_runs_table(story, session.get('id'))
         except Exception as e:
             self.logger.warning(f"Bobin calismalari tablosu atlandi (session {session.get('id')}): {e}")
 
+    @staticmethod
+    def _format_duration(parameters: dict, session: dict) -> str:
+        """Süre gösterimi: parametrelerdeki dinamik değer öncelikli, yoksa duration_minutes.
+        Tam sayıysa ondalıksız, değilse 1 ondalık; geçersiz/boşsa '0'."""
+        duration = parameters.get('duration', {}).get('value') if 'duration' in parameters else session.get('duration_minutes', 0) or 0
+        if duration and str(duration).replace('.', '').isdigit():
+            d = float(duration)
+            return f"{d:.0f}" if d == int(d) else f"{d:.1f}"
+        return "0"
+
+    def _session_info_rows(self, session: dict, parameters: dict, include_patient_info: bool):
+        """Seans bilgi tablosunun satırları; istenirse hasta bilgileri araya eklenir (aynı sıra)."""
+        rows = [
+            ["Tarih", session.get('session_date', 'Bilinmiyor')],
+            ["Başlangıç Saati", session.get('start_time', 'Bilinmiyor')],
+            ["Bitiş Saati", session.get('end_time', 'Bilinmiyor')],
+            ["Süre", f"{self._format_duration(parameters, session)} dakika"],
+            ["Tedavi Modu", session.get('treatment_mode', 'Bilinmiyor')],
+            ["Hedef Durum", session.get('target_condition', 'Belirtilmemiş')],
+            ["Frekans", f"{parameters.get('frequency', {}).get('value', session.get('frequency_hz', 0)) or 0} Hz"],
+            ["Yoğunluk", f"{parameters.get('intensity', {}).get('value', session.get('intensity_mt', 0)) or 0} mT"],
+            ["Veteriner", parameters.get('patient_vet_contact', {}).get('value', session.get('operator_name', 'Belirtilmemiş'))],
+        ]
+        if include_patient_info:
+            patient_name = parameters.get('patient_name', {}).get('value', '') or ''
+            patient_surname = parameters.get('patient_surname', {}).get('value', '') or ''
+            patient_full_name = f"{patient_name} {patient_surname}".strip()
+            rows.insert(4, ["Hasta Adı", patient_full_name or 'Bilinmiyor'])
+            rows.insert(5, ["Hasta Yaşı", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')])
+            rows.insert(6, ["Tür/Irk", f"{parameters.get('patient_species', {}).get('value', '')} / {parameters.get('patient_breed', {}).get('value', '')}".strip(' /')])
+            rows.insert(7, ["Ağırlık", parameters.get('patient_weight', {}).get('value', 'Belirtilmemiş')])
+            rows.insert(8, ["Sahip", parameters.get('patient_owner', {}).get('value', 'Belirtilmemiş')])
+        return rows
+
     def _add_coil_runs_table(self, story, session_id):
-        """Bir seansin bobin calismalarini PDF tablosu olarak ekle.
-        Veri yoksa hicbir sey eklemez. Sicaklik/akim ozeti sensor_run_summary'den."""
+        """Bir seansın bobin çalışmalarını PDF tablosu olarak ekle.
+        Veri yoksa hiçbir şey eklemez. Sıcaklık/akım özeti sensor_run_summary'den."""
         if session_id is None:
             return
         runs = self.db.get_session_coil_runs(session_id)
         if not runs:
             return
         summaries = self.db.get_run_summaries(session_id)
-
-        def _hms(epoch):
-            if epoch is None:
-                return "-"
-            try:
-                return datetime.fromtimestamp(float(epoch)).strftime("%H:%M:%S")
-            except (ValueError, OSError, OverflowError, TypeError):
-                return "-"
-
-        def _num(v, fmt="{:.1f}"):
-            if v is None:
-                return "-"
-            try:
-                return fmt.format(float(v))
-            except (ValueError, TypeError):
-                return str(v)
-
         story.append(Spacer(1, 10))
         story.append(Paragraph("Bobin Çalışmaları", self.styles['Heading3']))
+        story.append(self._build_coil_runs_table(runs, summaries))
 
+    def _build_coil_runs_table(self, runs, summaries) -> "Table":
+        """Bobin çalışması kayıtlarını başlıklı + stilli ReportLab Table'ına dönüştür."""
         table_data = [[
             "Bobin", "Saat", "Süre (sn)", "Hz", "Duty (%)",
             "Şiddet (mT)", "Ort. Sıc. (C)", "Maks. Sıc. (C)"
@@ -550,20 +455,20 @@ class PDFReportGenerator:
             summ = summaries.get(r.get('id')) or {}
             table_data.append([
                 str(r.get('coil_id', '-')),
-                _hms(r.get('started_epoch')),
-                _num(r.get('duration_seconds'), "{:.0f}"),
-                _num(r.get('frequency_hz'), "{:.0f}"),
-                _num(r.get('duty_percent'), "{:.0f}"),
-                _num(r.get('intensity_mt')),
-                _num(summ.get('temp_avg')),
-                _num(summ.get('temp_max')),
+                _fmt_hms(r.get('started_epoch')),
+                _fmt_num(r.get('duration_seconds'), "{:.0f}"),
+                _fmt_num(r.get('frequency_hz'), "{:.0f}"),
+                _fmt_num(r.get('duty_percent'), "{:.0f}"),
+                _fmt_num(r.get('intensity_mt')),
+                _fmt_num(summ.get('temp_avg')),
+                _fmt_num(summ.get('temp_max')),
             ])
 
-        coil_table = Table(
+        table = Table(
             table_data,
             colWidths=[1.4*cm, 2*cm, 1.8*cm, 1.4*cm, 1.6*cm, 2*cm, 2.2*cm, 2.2*cm]
         )
-        coil_table.setStyle(TableStyle([
+        table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), getattr(self, 'unicode_font_bold', 'Helvetica-Bold')),
             ('FONTNAME', (0, 1), (-1, -1), getattr(self, 'unicode_font', 'Helvetica')),
@@ -574,7 +479,7 @@ class PDFReportGenerator:
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
-        story.append(coil_table)
+        return table
 
     def _add_patient_header(self, story, session, patient_name):
         """Hasta raporu başlığını ekle"""

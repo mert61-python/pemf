@@ -53,10 +53,6 @@ def normalize_ai_pro_duty_ratio(ratio) -> float:
     return normalize_duty_ratio(ratio, max_ratio=AI_PRO_DUTY_MAX_RATIO)
 
 
-def normalize_esp_live_duty_ratio(ratio) -> float:
-    return normalize_duty_ratio(ratio, max_ratio=ESP_LIVE_DUTY_MAX_RATIO)
-
-
 def normalize_phase_deg(phase) -> float:
     return clamp_float(phase, PHASE_MIN_DEG, PHASE_MAX_DEG)
 

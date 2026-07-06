@@ -1,8 +1,14 @@
 # PEMF Backend — Dağıtım Rehberi (Klinik PC + 24/7 Sunucu)
 
-**Ana fikir:** Aynı frozen EXE (`PEMF_Backend.exe`) her iki yerde çalışır. Fark **yalnız ortam
-değişkenleri** ile yönetilir → `deploy/device.env` (klinik) ve `deploy/server.env` (sunucu).
-Python kodu değişmez. Kurulum scripti `setup_services.ps1 -Mode device|server` doğru profili okur.
+**Ana fikir:** Aynı frozen EXE (`PEMF_Backend.exe`) her yerde çalışır. Fark **yalnız ortam
+değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunucu/demo),
+`deploy/staging.env` (üretim-benzeri doğrulama — audit B-9.4). Python kodu değişmez; kurulum scripti
+`setup_services.ps1 -Mode device|server|staging` doğru profili okur.
+
+> **Staging (B-9.4):** Bir release'i GERÇEK klinik cihazına deploy ETMEDEN önce sınamak için
+> üretim-benzeri profil: simülasyon (donanımsız) + auth/at-rest-şifreleme AÇIK + AYRI port (8010)/
+> veri-kökü (`C:\ProgramData\PEMF_Staging`)/log → device/server ile çakışmaz. QA veya ayrı makine:
+> `setup_services.ps1 -AppDir C:\PEMF_Staging -Mode staging`.
 
 ---
 

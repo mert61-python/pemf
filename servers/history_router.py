@@ -1,10 +1,7 @@
 import os
-import json
-from pathlib import Path
 from datetime import datetime
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import csv
 import io
@@ -62,10 +59,15 @@ def get_pdf_gen():
     return get_pdf_generator(_app_data_dir)
 
 @router.get("/")
-def get_history(limit: int = 100, db=Depends(get_db)):
-    """Tüm seans geçmişini listele"""
+def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
+    """Seans geçmişini listele (audit B-8.2: keyset/cursor pagination).
+
+    - `limit`: sayfa boyutu (varsayılan 100).
+    - `cursor`: bir önceki sayfanın SON öğesinin `id`'si → ondan ESKİ seanslar (sonraki sayfa).
+      Verilmezse en yeni `limit` seans döner (ilk sayfa). "Sonraki sayfa var mı" = dönen kayıt == limit.
+    Geriye uyumlu: eski istemci `cursor` göndermez → eski davranış (en yeni `limit`)."""
     try:
-        sessions = db.get_session_history(limit=limit)
+        sessions = db.get_session_history(limit=limit, before_id=cursor)
         return sessions
     except Exception as e:
         logger.error(f"Error fetching history: {e}")
@@ -98,7 +100,7 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
         return FileResponse(
             path=pdf_path, 
             media_type='application/pdf', 
-            filename=f"PEMF_Report.pdf",
+            filename="PEMF_Report.pdf",
             background=BackgroundTask(_safe_unlink, pdf_path),  # P1 audit: gonderim sonrasi PII PDF'i sil
         )
     except Exception as e:

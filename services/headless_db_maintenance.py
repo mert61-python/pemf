@@ -11,7 +11,6 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +27,12 @@ class HeadlessDBMaintenance:
         from database.treatment_history_db import get_treatment_db
         self.app_data_dir = Path(app_data_dir) if app_data_dir else get_app_data_directory()
         self.db = get_treatment_db(self.app_data_dir)
+        # audit B-7.2: PatientDB de yedeklensin (eskiden yalnız treatment yedekleniyordu).
+        try:
+            from database.patient_database import get_patient_database
+            self.patient_db = get_patient_database()
+        except Exception:
+            self.patient_db = None
         self.maint_interval = max(1, maintenance_interval_hours) * 3600
         self.backup_interval = max(1, backup_interval_hours) * 3600
         self.disk_interval = max(1, disk_check_interval_minutes) * 60
@@ -44,6 +49,11 @@ class HeadlessDBMaintenance:
 
     def stop(self):
         self._stop.set()
+        # In-progress bakim/backup turunun bitmesine kisa sure taniy → servis kapanirken
+        # yaridan kesik/bozuk SQLite yedegi veya kilitli DB dosyasi birakilmaz.
+        t = self._thread
+        if t and t.is_alive():
+            t.join(timeout=10.0)
 
     def _loop(self):
         last_maint = last_backup = last_disk = 0.0
@@ -83,26 +93,61 @@ class HeadlessDBMaintenance:
             backup_dir = self.app_data_dir / "backups"
             backup_dir.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            created = []
+            # Tedavi geçmişi DB'si.
             backup_file = backup_dir / f"pemf_treatment_history_{stamp}.db"
             if self.db.create_backup(str(backup_file)):
-                logger.info("DB yedegi alindi: %s", backup_file)
-                self._cleanup_backups(backup_dir)
+                logger.info("Tedavi DB yedegi alindi: %s", backup_file)
+                created.append(backup_file)
             else:
-                logger.error("DB yedegi BASARISIZ")
+                logger.error("Tedavi DB yedegi BASARISIZ")
+            # audit B-7.2: Hasta DB'si (eskiden yedeklenmiyordu).
+            if self.patient_db is not None:
+                pfile = backup_dir / f"pemf_patients_{stamp}.db"
+                try:
+                    if self.patient_db.create_backup(str(pfile)):
+                        logger.info("Hasta DB yedegi alindi: %s", pfile)
+                        created.append(pfile)
+                except Exception:
+                    logger.warning("Hasta DB yedegi hatasi", exc_info=True)
+            self._cleanup_backups(backup_dir)
+            self._copy_offsite(created)  # audit B-7.2: off-machine kopya (PEMF_BACKUP_DIR)
         except Exception:
             logger.exception("backup hatasi")
 
     def _cleanup_backups(self, backup_dir: Path):
+        # Her iki yedek ailesini de ayrı ayrı rotasyona sok (son N).
+        for pattern in ("pemf_treatment_history_*.db", "pemf_patients_*.db"):
+            try:
+                files = sorted(backup_dir.glob(pattern))
+                if len(files) > self.backup_retention_keep:
+                    for old in files[:-self.backup_retention_keep]:
+                        try:
+                            old.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+            except Exception:
+                logger.warning("backup temizlik uyarisi (%s)", pattern)
+
+    def _copy_offsite(self, files):
+        """audit B-7.2: PEMF_BACKUP_DIR set ise YENİ yedekleri harici hedefe (ağ paylaşımı/USB) kopyala
+        → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op."""
+        import os
+        import shutil
+        dest = os.environ.get("PEMF_BACKUP_DIR", "").strip()
+        if not dest or not files:
+            return
         try:
-            files = sorted(backup_dir.glob("pemf_treatment_history_*.db"))
-            if len(files) > self.backup_retention_keep:
-                for old in files[:-self.backup_retention_keep]:
-                    try:
-                        old.unlink(missing_ok=True)
-                    except Exception:
-                        pass
+            dpath = Path(dest)
+            dpath.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                try:
+                    shutil.copy2(f, dpath / Path(f).name)
+                except Exception:
+                    logger.warning("off-machine kopya hatasi: %s", f, exc_info=True)
+            logger.info("Yedekler off-machine kopyalandi: %s (%d dosya)", dest, len(files))
         except Exception:
-            logger.warning("backup temizlik uyarisi")
+            logger.warning("off-machine backup dizini hatasi (%s)", dest, exc_info=True)
 
 
 def start_headless_db_maintenance(app_data_dir=None):
@@ -115,3 +160,15 @@ def start_headless_db_maintenance(app_data_dir=None):
         except Exception:
             logger.exception("Headless DB bakim servisi baslatilamadi")
     return _worker
+
+
+def stop_headless_db_maintenance():
+    """Idempotent — shutdown'da çağrılır. In-progress backup/maintenance turunun bitmesini
+    kisa sure bekler (join) → bozuk yedek/kilitli DB birakmaz. Eskiden HIC durdurulmuyordu."""
+    global _worker
+    if _worker is not None:
+        try:
+            _worker.stop()
+        except Exception:
+            logger.exception("Headless DB bakim servisi durdurulamadi")
+        _worker = None

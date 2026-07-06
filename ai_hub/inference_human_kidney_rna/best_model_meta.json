@@ -1,0 +1,18 @@
+{
+  "name": "MLP-medium",
+  "in_dim": 1000,
+  "onnx_file": "mlp_medium_kirc.onnx",
+  "torch_state_dict": "mlp_medium_kirc.pt",
+  "selection_criterion": "calibration-best by mean cross-validated Brier score",
+  "cv_brier_mean": 8.923996446726616e-05,
+  "cv_auc_mean": 1.0,
+  "cv_ece_mean": 0.0006703167890060134,
+  "n_train_samples": 801,
+  "n_input_genes_total": 20531,
+  "n_selected_features": 1000,
+  "class_labels": [
+    "other",
+    "KIRC"
+  ],
+  "preprocessing": "log2(x+1) → StandardScaler → SelectKBest top-1000 (ANOVA F)"
+}

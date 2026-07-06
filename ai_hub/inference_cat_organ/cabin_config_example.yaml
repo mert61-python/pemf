@@ -1,0 +1,125 @@
+# =============================================================================
+# KABIN KONFIGURASYONU - Yan kamera (sag taraftan)
+# =============================================================================
+#
+#                  +Y (dorsal/yukari, sirt yonu)
+#                   ^
+#                   |
+#                   |
+#                  _____________________
+#                 /                    /|
+#                /                    / |
+#               /       KEDI         /  |  40 cm
+#              /     sphinx         /   |  (yukseklik)
+#             /     pozisyonu      /    |
+#            /____________________/     |
+#       (4) |                    |      |
+#    [MARK]→|        ● (3)       |←[KAM](5)
+#      sol  |       ORIGIN       |      |     KAMERA POZISYONU
+#      duvar|     (coil merkez)  |     /      lens (0, 0, +25)
+#           |                    |    /  ←─── (45)
+#  (2)      |    ◄kuyruk  kafa►  |   /  ←─── (44)
+# [-15]     |                    |  /
+#           |____________________| /  30 cm
+#                 60 cm           v   (en)
+#               (uzunluk)
+#                                 +Z (sag, kedinin anatomik sagi = kamera tarafi)
+#
+#              ────────────────────────────────────→ +X (cranial, kafa yonu)
+#
+#
+# AXIS:  +X cranial(kafa)  +Y dorsal(yukari)  +Z right(kedinin sagi)
+# SAG-EL: parmaklar +X→+Y kivrildiginda bas parmak +Z (kediden disari kameraya)
+#
+# OLCULER (yukarda numarali):
+#   (1) cabin_extent_cm:    [60, 40, 30]   <- ic boyutlar
+#   (2) marker pozisyonu:   sol duvarda merkezde => (0, 0, -15)
+#   (3) origin:             kabin merkezi (0, 0, 0) - coil array merkezi
+#   (4) qr_to_origin_cm:    marker -> origin vektoru = (0, 0, +15)
+#   (5) fixed_position_cm:  kamera lens'i = (0, 0, +25) - sag duvardan 10cm disarida
+#       to_origin_cm:       lens -> origin = 25 cm (= |fixed_position_cm|)
+#       to_marker_cm:       lens -> marker = 40 cm (= 25 - (-15), Z ekseninde)
+#   (6) marker yuzu (siyah taraf) +Z yonune bakar => normal_axis_in_cabin: "+Z"
+#
+# =============================================================================
+
+
+cabin_id: "klinik_yan_v1"
+
+
+aruco:
+  dict: DICT_5X5_50            # OpenCV ArUco sozluk adi (yazdirmayla ayni)
+  real_cm: 10.0                # marker kenar uzunlugu (kumpas olcumu)
+
+  # SADECE tavan setup icin: marker zemine, kedi yatakta -> yatak kalinligi
+  # Yan setup'inda 0 (marker ve kedi paralel duzlemde degil)
+  plane_offset_cm: 0.0
+
+  # Marker yuzunun (siyah taraf) baktigi cabin ekseni (diyagramda (6))
+  normal_axis_in_cabin: "+Z"
+
+
+geometry:
+  # Diyagramda (4): marker -> origin vektoru
+  qr_to_origin_cm: [0.0, 0.0, 15.0]
+
+  # Diyagramda (1): kabin ic boyutlari [X uzunluk, Y yuk, Z en]
+  cabin_extent_cm: [60.0, 40.0, 30.0]
+
+  axes: "x=cranial,y=dorsal,z=right"
+
+
+camera:
+  # Diyagramda (5): kamera lens'in cabin frame'indeki konumu (cm)
+  fixed_position_cm: [0.0, 0.0, 25.0]
+
+  look_at_cm: [0.0, 0.0, 0.0]    # kameranin baktigi nokta (default: origin)
+  up_cabin: [0.0, 1.0, 0.0]       # cabin "up" yonu (default: +Y dorsal)
+
+  # Serit metre validation (sanity check)
+  to_marker_cm: 40.0
+  to_origin_cm: 25.0
+
+  # Chessboard kalibrasyon ciktisi. Yoksa to_marker_cm'den approx turetilir.
+  # Uretim: python calibrate_camera.py --images chess/ --pattern 9x6 --square-cm 2.5
+  intrinsics_npz: null
+
+
+# =============================================================================
+# KURULUM NOTLARI (yaml doldururken kontrol et)
+# =============================================================================
+#
+# 1) DUVAR ZIRLI HESAP (Z eksen ornegi)
+#    cabin_extent_cm[2] = 30 cm  ->  duvarlar ±15 cm'de (origin merkez)
+#    Marker sol duvarda     ->  marker pos = (0, 0, -15)
+#    qr_to_origin_cm = -marker_pos = (0, 0, +15)
+#
+# 2) KAMERA KABIN ICINDE Mi DISINDA Mi?
+#    fixed_position_cm[2] = 25, sag duvar = +15 -> kamera 10 cm DISARIDA
+#
+#    a) Cam/acik duvar + tripod (kamera disarida):
+#         fixed_position_cm: [0, 0, +25]  -> OK
+#    b) Kapali kabin + duvara gomulu kamera:
+#         fixed_position_cm: [0, 0, +15]  (lens duvar yuzeyinde)
+#         veya [0, 0, +10..+14] (icerí çıkıntılı)
+#
+# 3) MESAFE TUTARLILIK KONTROLU
+#    to_origin_cm  ==  |fixed_position_cm|   (±2 cm tolerans)
+#    to_marker_cm  ==  |fixed_position_cm - marker_pos|
+#
+#    Mevcut degerler:
+#      fixed_position_cm = (0, 0, 25)
+#      marker_pos        = (0, 0, -15)
+#      |fix|             = 25         ==  to_origin_cm: 25  ✓
+#      |fix - marker|    = 40         ==  to_marker_cm: 40  ✓
+#
+# 4) MARKER YONU SAGLAMASI
+#    Marker yuzu (siyah taraf) kameraya BAKMALI.
+#    Sol duvar + kamera sagda  ->  yuzu +Z'ye bakar  ->  normal_axis: "+Z"  ✓
+#    Aksi yon -> ArUco detect zorlanir.
+#
+# 5) PLANE_OFFSET NEZ KULLANILIR
+#    Yan kamera setup (mevcut)         -> 0
+#    Tavan kamera + taban marker        -> yatak kalinligi (orn. 2.0)
+#
+# =============================================================================

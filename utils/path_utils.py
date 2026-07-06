@@ -30,6 +30,15 @@ def get_icon_path(icon_name):
 
 def get_app_data_directory():
     """Verilerin saklanacağı kalıcı klasörü belirler"""
+    # AÇIK OVERRIDE: PEMF_DATA_DIR set ise onu kullan. Servis (LocalSystem) bağlamında APPDATA =
+    # ...\systemprofile\AppData\Roaming'e (operatöre GÖRÜNMEZ + yedeklenemez) düşer; bu yüzden
+    # device.env/server.env PEMF_DATA_DIR=C:\ProgramData\PEMF_System verir → hasta/tedavi DB +
+    # SQLCipher anahtar dosyası + device_id makine-genelinde, erişilebilir, yedeklenebilir olur.
+    override = os.getenv('PEMF_DATA_DIR', '').strip()
+    if override:
+        app_data_dir = Path(override) / "PEMF_GUI"
+        app_data_dir.mkdir(parents=True, exist_ok=True)
+        return app_data_dir
     if platform.system() == "Windows":
         # APPDATA bazı headless/SYSTEM servis bağlamlarında boş olabilir → deterministik fallback
         # (yoksa TypeError ve canonical yollar ~/.pemf_gui'ye düşüp split-brain'e yol açar).
@@ -151,7 +160,7 @@ def initialize_database():
                 shutil.copy2(source_template, target_db_path)
             else:
                 pass
-        except Exception as e:
+        except Exception:
             pass
             
         generated_paths[real_name] = target_db_path
@@ -165,11 +174,48 @@ def packaged_resource_path(*parts):
     If running from source, resolves relative to project root.
     """
     if getattr(sys, "frozen", False):
-        # We are running in a PyInstaller bundle (usually OneDir)
-        base = Path(sys.executable).parent / "_internal"
+        # PyInstaller bundle. Datas'ın açıldığı kökü _MEIPASS verir:
+        #   • onedir  → <exe_dir>/_internal  (executable/_internal ile aynı)
+        #   • onefile → %TEMP%\_MEIxxxxx     (executable yanında _internal YOK!)
+        # Bu yüzden _MEIPASS kullan; yoksa (çok eski PyInstaller) onedir'e düş.
+        meipass = getattr(sys, "_MEIPASS", None)
+        base = Path(meipass) if meipass else (Path(sys.executable).parent / "_internal")
     else:
         # We are running from standard Python source
         base = Path(__file__).resolve().parents[1]
     
     return base.joinpath(*parts)
+
+
+_APP_VERSION = None
+
+
+def get_app_version() -> str:
+    """TEK versiyon kaynağı (audit B-8.1): eskiden FastAPI/discovery/system_info farklı sabitler
+    (1.0.0 / 1.5 / 1) raporluyordu. Sıra: bundled frontend_version.json 'version' → VERSION dosyası
+    → fallback. Cache'lenir."""
+    global _APP_VERSION
+    if _APP_VERSION:
+        return _APP_VERSION
+    import json as _json
+    for base in (packaged_resource_path("frontend_version.json"),
+                 Path(__file__).resolve().parents[1] / "frontend_version.json"):
+        try:
+            v = str(_json.loads(Path(base).read_text(encoding="utf-8")).get("version", "")).strip()
+            if v:
+                _APP_VERSION = v
+                return v
+        except Exception:
+            pass
+    for base in (packaged_resource_path("VERSION"),
+                 Path(__file__).resolve().parents[1] / "VERSION"):
+        try:
+            v = Path(base).read_text(encoding="utf-8").strip()
+            if v:
+                _APP_VERSION = v
+                return v
+        except Exception:
+            pass
+    _APP_VERSION = "1.4.0"
+    return _APP_VERSION
 

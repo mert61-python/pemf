@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # PEMF Headless Backend — Windows Service kurulumu (NSSM).  Faz 5 (sağlamlaştırılmış)
 # =============================================================================
 # Öncelik: frozen EXE (dist\PEMF_Backend\PEMF_Backend.exe). Yoksa python + script.
@@ -107,6 +107,12 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 
 # --- Kur ---
 Write-Status "Servis kuruluyor: $ServiceName" "Yellow"
+# GUARD: nssm install'a GEÇERLİ program yolu verilmezse NSSM, sessiz kurulum yerine interaktif
+# config GUI'si açar (boş Path/Arguments penceresi → kafa karıştırır). Geçersiz binary'de net hata ver.
+if (-not $SvcBinary -or -not (Test-Path $SvcBinary)) {
+    Write-Status "HATA: Servis ikilisi geçersiz/bulunamadı ($SvcBinary). Önce build_backend_exe.ps1 ile EXE üretin VEYA installer kullanın. (nssm install ATLANDI — aksi halde elle-config GUI açılırdı.)" "Red"
+    exit 1
+}
 & $NssmExe install $ServiceName $SvcBinary @SvcArgs
 
 & $NssmExe set $ServiceName AppDirectory       $AppDir

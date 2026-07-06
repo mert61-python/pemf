@@ -75,7 +75,7 @@ class MDNSService:
     def start(self) -> bool:
         """mDNS yayınını başlat."""
         try:
-            from zeroconf import Zeroconf, ServiceInfo
+            from zeroconf import Zeroconf, ServiceInfo  # noqa: F401 — availability check (asıl kayıt _ip_monitor_loop'ta)
         except ImportError:
             logger.error(
                 "zeroconf kütüphanesi bulunamadı. "
@@ -100,8 +100,8 @@ class MDNSService:
             self._ip_monitor_thread.start()
             return True
 
-        except Exception as e:
-            logger.exception(f"mDNS başlatma hatası detayı:")
+        except Exception:
+            logger.exception("mDNS başlatma hatası detayı:")
             self._running = False
             return False
 
@@ -112,8 +112,7 @@ class MDNSService:
         self._running = False
         try:
             if self._zeroconf and self._service_info:
-                self._zeroconf.unregister_service(self._service_info)
-                self._zeroconf.close()
+                self._zeroconf.unregister_service(self._service_info)  # ortak Zeroconf'u CLOSE ETME (auto_discovery da kullanir)
                 logger.info("mDNS servisi durduruldu.")
         except Exception as e:
             logger.warning(f"mDNS durdurma hatası: {e}")
@@ -150,7 +149,6 @@ class MDNSService:
     def _ip_monitor_loop(self):
         """IP adresi değişirse mDNS kaydını günceller. İlk kaydı da burada yapar."""
         try:
-            from zeroconf import Zeroconf
             try:
                 from zeroconf._exceptions import NonUniqueNameException
             except ImportError:
@@ -158,14 +156,15 @@ class MDNSService:
 
             local_ip = self._ip_override or _get_local_ip()
             self._last_ip = local_ip
-            self._zeroconf = Zeroconf()
+            from utils.zeroconf_singleton import get_shared_zeroconf
+            self._zeroconf = get_shared_zeroconf()  # paylasilan TEK Zeroconf (cift-instance 5353 cakismasi yok)
             self._service_info = self._build_service_info(local_ip)
             
             try:
                 self._zeroconf.register_service(self._service_info)
             except Exception as e:
                 if 'NonUniqueNameException' in str(type(e)):
-                    logger.warning(f"mDNS adı çakıştı, random suffix ekleniyor...")
+                    logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
                     import random, string
                     suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
                     self._service_name = f"{self._service_name}-{suffix}"
@@ -178,7 +177,7 @@ class MDNSService:
                 f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local "
                 f"→ {local_ip}:{self._mqtt_port}"
             )
-        except Exception as e:
+        except Exception:
             logger.exception("mDNS arka plan başlatma hatası detayı:")
             self._running = False
             return

@@ -127,7 +127,7 @@ def migrate_patients(json_file: str, db_file: str) -> None:
             
             # Summary
             print("\n" + "="*50)
-            print(f"✅ Migration completed!")
+            print("✅ Migration completed!")
             print(f"   - Migrated: {migrated} patients")
             print(f"   - Skipped: {skipped} patients")
             print(f"   - Total in database: {migrated + skipped} patients")

@@ -26,6 +26,13 @@ import onnxruntime as ort
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BiLSTM_XXL_Raw"
 ONNX_PATH = os.path.join(_DIR, f"{MODEL_NAME}.onnx")
+MODEL_DOWNLOAD_ERROR = None
+if not os.path.exists(ONNX_PATH):
+    try:
+        from utils.model_downloader import download_model_sync
+        ONNX_PATH = download_model_sync(f"ai_hub/inference_em_fantom/{MODEL_NAME}.onnx")
+    except Exception as exc:
+        MODEL_DOWNLOAD_ERROR = exc
 SCALER_X_PATH = os.path.join(_DIR, "scaler_X.pkl")
 SCALER_EXTRA_PATH = os.path.join(_DIR, "scaler_extra.pkl")
 SCALER_Y_PATH = os.path.join(_DIR, "scaler_y.pkl")
@@ -45,6 +52,10 @@ class PhantomPredictor:
         self.sy = joblib.load(scaler_y)
         if providers is None:
             providers = ["CPUExecutionProvider"]
+        if not os.path.exists(onnx_path):
+            detail = f" İndirme hatası: {MODEL_DOWNLOAD_ERROR}" if MODEL_DOWNLOAD_ERROR else ""
+            raise FileNotFoundError(
+                f"{MODEL_NAME}.onnx bulunamadı ve otomatik indirilemedi.{detail}")
         self.session = ort.InferenceSession(onnx_path, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
         self.session.run(None, {self.input_name: np.zeros((1, IN_DIM), dtype=np.float32)})

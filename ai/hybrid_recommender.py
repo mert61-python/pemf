@@ -16,7 +16,6 @@ Features:
 @date: 2025-12-04
 """
 
-import json
 import logging
 import re
 from typing import Dict, Optional, List, Tuple
@@ -48,96 +47,91 @@ def clean_treatment_target(text: str) -> str:
     return text
 
 
+# Tür eşleştirme sözlüğü (yaygın yazım hataları + ırk varyasyonları → kanonik tür).
+# Fonksiyondan çıkarıldı: statik veri; her çağrıda yeniden kurulmaz + tek yerden güncellenir.
+# INVARYANT: girdi eşleşmeden ÖNCE clean_treatment_target()'ten geçer (Türkçe ı→i, küçük harf vb.).
+# Bu yüzden ANAHTARLAR da ASCII-temiz olmalı ('kopek'/'tavsan'/'malakli') — aksi halde hiç eşleşmez.
+_SPECIES_MAP = {
+    # Köpek
+    'dog': 'dog',
+    'kopek': 'dog',
+    'kopegi': 'dog',
+    'kopk': 'dog',
+    'doggo': 'dog',
+    'k9': 'dog',
+    # Yaygın köpek ırkları
+    'golden': 'dog',
+    'retriever': 'dog',
+    'labrador': 'dog',
+    'german': 'dog',
+    'shepherd': 'dog',
+    'bulldog': 'dog',
+    'poodle': 'dog',
+    'husky': 'dog',
+    'chihuahua': 'dog',
+    'beagle': 'dog',
+    'corgi': 'dog',
+    'kangal': 'dog',
+    'akbas': 'dog',
+    'malakli': 'dog',  # FIX: eskiden 'malaklı' (ı'lı) idi → clean() 'malakli' üretince eşleşmiyordu
+
+    # Kedi
+    'cat': 'cat',
+    'kedi': 'cat',
+    'kedı': 'cat',
+    'kitty': 'cat',
+    'feline': 'cat',
+    # Yaygın kedi ırkları
+    'persian': 'cat',
+    'siamese': 'cat',
+    'british': 'cat',
+    'shorthair': 'cat',
+    'scottish': 'cat',
+    'fold': 'cat',
+    'van': 'cat',
+    'ankara': 'cat',
+
+    # At
+    'horse': 'horse',
+    'at': 'horse',
+    'equine': 'horse',
+    'pony': 'horse',
+    'mare': 'horse',
+    'stallion': 'horse',
+    'arap': 'horse',
+    'safkan': 'horse',
+
+    # Tavşan
+    'rabbit': 'rabbit',
+    'tavsan': 'rabbit',
+    'bunny': 'rabbit',
+    'hare': 'rabbit',
+}
+
+
 def normalize_species(species: str) -> str:
-    """
-    Tür/ırk adını normalize et (yazım hatalarına toleranslı).
-    
-    Args:
-        species: Ham tür adı (örn: 'Köpek', 'kopek', 'DOG', 'Golden Retriever')
-        
-    Returns:
-        Normalize edilmiş tür adı ('dog', 'cat', 'horse', 'rabbit')
-    """
-    # Temizle ve küçük harfe çevir
+    """Tür/ırk adını kanonik türe normalize et (yazım-hatası toleranslı): 'dog'/'cat'/'horse'/'rabbit',
+    bilinmiyorsa None. Sıra: temizle → tam eşleşme → kelime-bazlı → substring → bilinmeyen."""
     normalized = clean_treatment_target(species)
-    
-    # Tür eşleştirme sözlüğü (yaygın yazım hataları ve varyasyonları)
-    species_map = {
-        # Köpek
-        'dog': 'dog',
-        'kopek': 'dog',
-        'kopegi': 'dog',
-        'kopk': 'dog',
-        'doggo': 'dog',
-        'k9': 'dog',
-        # Yaygın köpek ırkları
-        'golden': 'dog',
-        'retriever': 'dog',
-        'labrador': 'dog',
-        'german': 'dog',
-        'shepherd': 'dog',
-        'bulldog': 'dog',
-        'poodle': 'dog',
-        'husky': 'dog',
-        'chihuahua': 'dog',
-        'beagle': 'dog',
-        'corgi': 'dog',
-        'kangal': 'dog',
-        'akbas': 'dog',
-        'malaklı': 'dog',
-        
-        # Kedi
-        'cat': 'cat',
-        'kedi': 'cat',
-        'kedı': 'cat',
-        'kitty': 'cat',
-        'feline': 'cat',
-        # Yaygın kedi ırkları
-        'persian': 'cat',
-        'siamese': 'cat',
-        'british': 'cat',
-        'shorthair': 'cat',
-        'scottish': 'cat',
-        'fold': 'cat',
-        'van': 'cat',
-        'ankara': 'cat',
-        
-        # At
-        'horse': 'horse',
-        'at': 'horse',
-        'equine': 'horse',
-        'pony': 'horse',
-        'mare': 'horse',
-        'stallion': 'horse',
-        'arap': 'horse',
-        'safkan': 'horse',
-        
-        # Tavşan
-        'rabbit': 'rabbit',
-        'tavsan': 'rabbit',
-        'bunny': 'rabbit',
-        'hare': 'rabbit',
-    }
-    
-    # Önce direkt eşleşme dene
-    if normalized in species_map:
-        return species_map[normalized]
-    
-    # Kelime bazlı eşleşme (ırk adında tür geçiyor mu?)
-    words = normalized.split()
-    for word in words:
-        if word in species_map:
-            matched = species_map[word]
+
+    # 1) Tam eşleşme
+    if normalized in _SPECIES_MAP:
+        return _SPECIES_MAP[normalized]
+
+    # 2) Kelime bazlı eşleşme (ırk adında tür geçiyor mu?)
+    for word in normalized.split():
+        if word in _SPECIES_MAP:
+            matched = _SPECIES_MAP[word]
             logger.debug(f"Species normalized: '{species}' -> '{matched}' (via word '{word}')")
             return matched
-    
-    # Substring eşleşmesi (son çare)
-    for key, value in species_map.items():
+
+    # 3) Substring eşleşmesi (son çare)
+    for key, value in _SPECIES_MAP.items():
         if key in normalized or normalized in key:
             logger.debug(f"Species normalized: '{species}' -> '{value}' (via substring '{key}')")
             return value
-    
-    # Hiçbir şey bulunamazsa None dön (bilinmeyen tür)
+
+    # Bilinmeyen tür → None
     logger.warning(f"Unknown species '{species}', not supported for AI")
     return None
 
@@ -552,22 +546,6 @@ def create_recommender(app_data_dir: Optional[Path] = None) -> HybridPEMFRecomme
     return HybridPEMFRecommender(app_data_dir)
 
 
-def get_recommendation(patient_info: Dict, treatment_target: str, app_data_dir: Optional[Path] = None) -> Dict:
-    """
-    Quick recommendation function.
-    
-    Args:
-        patient_info: {'species': str, 'age': float, 'weight': float}
-        treatment_target: Treatment goal (e.g., "Kronik Ağrı")
-        app_data_dir: Optional app data directory
-        
-    Returns:
-        Recommendation dict with freq, duty, duration, etc.
-    """
-    # Patient-specific adaptation is intentionally bypassed in simplified runtime mode.
-    return get_literature_recommendation(treatment_target, app_data_dir)
-
-
 def get_literature_recommendation(treatment_target: str, app_data_dir: Optional[Path] = None) -> Dict:
     """
     Return literature protocol using only session target.
@@ -644,7 +622,7 @@ if __name__ == '__main__':
     print("\n4. PROTOCOL INFO TEST: Eklem Sorunu (unknown)")
     info = recommender.get_protocol_info("Eklem Sorunu")
     print(f"   Found: {info['found']}, Type: {info['type']}")
-    print(f"   Similar protocols:")
+    print("   Similar protocols:")
     for sim in info['similar_protocols'][:3]:
         print(f"     - {sim['name']} (similarity: {sim['similarity']:.2f})")
     

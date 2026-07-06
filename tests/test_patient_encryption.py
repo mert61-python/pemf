@@ -10,7 +10,14 @@ def _db(temp_app_data):
     return PatientDatabase(str(temp_app_data / "patients.db"))
 
 
-def test_patient_roundtrip_encrypted_at_rest(temp_app_data):
+def test_patient_roundtrip_encrypted_at_rest(temp_app_data, monkeypatch):
+    # Bu test ALAN-düzeyi Fernet şifrelemesini doğrular (ham DB'de 'enc:' + düz-metin YOK).
+    # Whole-DB SQLCipher'ı KAPAT: aksi halde makinenin keyring anahtarı varsa DB tümden şifreli
+    # açılır → plain sqlite3.connect okuyamaz ve test makine-durumuna bağlı hale gelir (kararsız).
+    import database.patient_database as _pdb
+    monkeypatch.setattr(_pdb, "import_sqlcipher", lambda: None)
+    monkeypatch.setattr(_pdb, "get_sqlcipher_key", lambda *a, **k: "")
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
     db = _db(temp_app_data)
     pid = db.add_patient({"name": "TestMia", "species": "Kedi", "owner": "Ahmet"})
     assert pid

@@ -40,6 +40,20 @@ def import_sqlcipher():
 def get_sqlcipher_key(app_data_dir, logger=None) -> str:
     """Anahtar: keyring -> env (PEMF_SQLCIPHER_KEY) -> .sqlcipher_key dosyasi. Hicbiri yok +
     PEMF_ENCRYPT_AT_REST=1 ise yeni uretip saklar (keyring tercih, dosya fallback). Aksi '' (duz-metin)."""
+    # TEK-DOSYA: SecretsManager (keyring->env->.sqlcipher_key MİGRATE eder; tek dosyada DPAPI saklar).
+    # Üretim YALNIZ PEMF_ENCRYPT_AT_REST=1 iken; MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli DB okunabilir kalır.
+    try:
+        from utils.secrets_manager import get_secret
+        _encrypt = os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1"
+        _k = get_secret("sqlcipher_key", generate=_encrypt)
+        if _k:
+            return _k
+        if not _encrypt:
+            return ""  # şifreleme kapalı + mevcut anahtar yok → düz-metin
+        # encrypt=True ama boş (üreteç hatası) → aşağıdaki eski yola düş
+    except Exception as _e:
+        if logger:
+            logger.warning(f"SecretsManager sqlcipher_key okunamadı, eski yola düşülüyor: {_e}")
     if keyring is not None:
         try:
             k = (keyring.get_password(_SERVICE, _KEY_NAME) or "").strip()
@@ -70,17 +84,30 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
             stored = True
         except Exception:
             pass
-    if not stored:
+    # DAYANIKLI DOSYA-YEDEGI: servis LocalSystem olarak kostugunda keyring, LocalSystem hesabinin
+    # Credential Manager kasasina yazar -> operatore GORUNMEZ + servis hesabi degisirse / PC
+    # tasinirsa KAYBOLUR. Bu yuzden keyring BASARILI olsa BILE anahtari ayrica dosyaya yaz:
+    # yedeklenebilir ve hesaptan bagimsiz okunur (okuma yolu keyring->env->dosya sirasini zaten dener).
+    keyfile_written = False
+    try:
+        keyfile.write_text(newkey, encoding="utf-8")
+        # NTFS ACL kilidi: yalnız SYSTEM + Administrators okuyabilsin (audit B-1.2 — os.chmod
+        # Windows'ta no-op'tu; anahtar dosyası Users'a açık kalıyordu). Escrow amacıyla dosya
+        # KALIR ama artık kilitli. Best-effort.
         try:
-            keyfile.write_text(newkey, encoding="utf-8")
-            try:
-                os.chmod(keyfile, 0o600)
-            except Exception:
-                pass
+            from utils.file_acl import lock_down_file
+            lock_down_file(keyfile)
         except Exception:
             pass
+        keyfile_written = True
+    except Exception:
+        pass
     if logger:
-        logger.warning("Yeni SQLCipher anahtari uretildi (keyring=%s). ANAHTAR KAYBOLURSA sifreli veri OKUNAMAZ.", stored)
+        logger.warning(
+            "Yeni SQLCipher anahtari uretildi (keyring=%s, dosya-yedek=%s @ %s). "
+            "BU ANAHTARI YEDEKLEYIN — kaybolursa sifreli hasta verisi KALICI OKUNAMAZ.",
+            stored, keyfile_written, keyfile,
+        )
     return newkey
 
 
@@ -178,8 +205,17 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
             os.remove(backup)
         shutil.move(db, backup)
         shutil.move(enc_tmp, db)
+        # op-doğrulama #8: .plain.bak TÜM eski düz-metin DB'yi içerir → SQLCipher'ı baypas eden PII
+        # kopyası. Escrow (migration-kurtarma) için TUTULUR ama SIKI ACL (SYSTEM+Admin) ile kilitlenir
+        # → yerel kullanıcı düz-metin PII okuyamaz (B-1.2 .sqlcipher_key escrow deseniyle tutarlı).
+        try:
+            from utils.file_acl import lock_down_file
+            lock_down_file(backup)
+        except Exception:
+            if logger:
+                logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
         if logger:
-            logger.warning("DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek: %s", backup)
+            logger.warning("DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")

@@ -1,28 +1,18 @@
 """
 PEMF Auto-Discovery Service
 ============================
-İki katmanlı otomatik bağlantı sistemi:
-
-1. mDNS (Bonjour/Zeroconf): Aynı Wi-Fi ağındaki telefonlar LattePanda'yı
-   otomatik bulur. Hiçbir konfigürasyon gerekmez.
-
-2. QR Kod: Farklı ağdayken, tünel URL'si hazır olunca LattePanda ekranında
-   (veya PyQt penceresinde) QR kod gösterilir. Telefon kamerasıyla bir kez
-   tarar, adres otomatik kaydedilir.
+mDNS (Bonjour/Zeroconf): Aynı Wi-Fi ağındaki telefonlar LattePanda'yı otomatik
+bulur, hiçbir konfigürasyon gerekmez. (Farklı ağdan erişim: Cloudflare tüneli +
+Supabase cihaz-kaydı; QR kod KALDIRILDI — React arayüzü kullanılıyor.)
 
 Kullanım:
-    from servers.auto_discovery import start_mdns, stop_mdns, generate_qr_pixmap
+    from servers.auto_discovery import start_mdns, stop_mdns
     start_mdns(port=8000)
-    pixmap = generate_qr_pixmap("https://xxxx.trycloudflare.com")
 """
 from __future__ import annotations
 
-import io
 import logging
 import socket
-import threading
-from pathlib import Path
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +39,8 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
     """
     global _zeroconf_instance, _mdns_service_info
     try:
-        from zeroconf import Zeroconf, ServiceInfo
+        from zeroconf import ServiceInfo
+        from utils.zeroconf_singleton import get_shared_zeroconf
         import socket as _socket
 
         local_ip = _get_local_ip()
@@ -68,7 +59,7 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
             server=f"{device_name}.local.",
         )
 
-        zc = Zeroconf()
+        zc = get_shared_zeroconf()  # paylasilan TEK Zeroconf (MDNSService ile ayni instance → 5343 cakismasi yok)
         zc.register_service(info)
         _zeroconf_instance = zc
         _mdns_service_info = info
@@ -85,91 +76,9 @@ def stop_mdns() -> None:
     global _zeroconf_instance, _mdns_service_info
     if _zeroconf_instance and _mdns_service_info:
         try:
-            _zeroconf_instance.unregister_service(_mdns_service_info)
-            _zeroconf_instance.close()
+            _zeroconf_instance.unregister_service(_mdns_service_info)  # ortak Zeroconf'u CLOSE ETME (MDNSService da kullanir)
         except Exception:
             pass
     _zeroconf_instance = None
     _mdns_service_info = None
     logger.info("mDNS servisi durduruldu.")
-
-
-# ── QR Kod Üreteci ──────────────────────────────────────────────────────────────
-
-def generate_qr_image_bytes(url: str) -> bytes | None:
-    """
-    Verilen URL için QR kod PNG bytes'ı döndürür.
-    Pillow ile PNG, QR ile kod üretilir.
-    """
-    try:
-        import qrcode
-        from PIL import Image
-
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=3,
-        )
-        qr.add_data(url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
-    except Exception as e:
-        logger.error("QR kod üretilemedi: %s", e)
-        return None
-
-
-def generate_qr_pixmap(url: str):
-    """
-    PyQt6 QPixmap döndürür (QLabel'da göstermek için).
-    PyQt6 olmayan ortamlarda None döner.
-    """
-    try:
-        from PyQt6.QtGui import QPixmap
-        from PyQt6.QtCore import QByteArray
-
-        png_bytes = generate_qr_image_bytes(url)
-        if not png_bytes:
-            return None
-
-        ba = QByteArray(png_bytes)
-        pixmap = QPixmap()
-        pixmap.loadFromData(ba, "PNG")
-        return pixmap
-    except Exception as e:
-        logger.error("QR Pixmap oluşturulamadı: %s", e)
-        return None
-
-
-def save_qr_to_file(url: str, path: Path | str) -> bool:
-    """QR kodu dosyaya kaydeder (PNG)."""
-    try:
-        png_bytes = generate_qr_image_bytes(url)
-        if png_bytes:
-            Path(path).write_bytes(png_bytes)
-            return True
-    except Exception as e:
-        logger.error("QR dosyaya kaydedilemedi: %s", e)
-    return False
-
-
-# ── FastAPI endpoint: /api/qr ──────────────────────────────────────────────────
-# Bu fonksiyon api_server.py tarafından import edilerek endpoint olarak eklenir.
-
-def get_qr_png_response(url: str):
-    """
-    FastAPI Response döndürür: GET /api/qr → PNG QR kodu.
-    Mobil uygulama bu endpoint'i çağırarak QR kodu yükler (opsiyonel).
-    """
-    try:
-        from fastapi.responses import Response
-        png_bytes = generate_qr_image_bytes(url)
-        if png_bytes:
-            return Response(content=png_bytes, media_type="image/png")
-    except Exception:
-        pass
-    return None

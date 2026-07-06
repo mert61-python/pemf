@@ -1,0 +1,6 @@
+{
+  "best_model": "MLP-medium",
+  "onnx_file": "mlp_medium_kirc.onnx",
+  "max_abs_proba_delta": 1.9099388737231493e-11,
+  "n_samples_compared": 801
+}

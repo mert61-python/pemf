@@ -47,9 +47,18 @@ class ConfigManager:
             config_file: Path to the configuration file. If None, uses default location.
         """
         if config_file is None:
-            # Default config location: user's app data directory
-            self.config_dir = os.path.join(os.path.expanduser('~'), '.pemf_gui')
+            # Kanonik veri dizini: PEMF_DATA_DIR (SecretsManager + SQLCipher anahtari ile AYNI kok →
+            # ~/.pemf_gui SPLIT-BRAIN'i kapanir). Birincil Fernet anahtari zaten SecretsManager'dadir;
+            # burada config.json + LEGACY fallback anahtar dosyalari da kanonik dizine tasinir.
+            override = os.getenv("PEMF_DATA_DIR", "").strip()
+            if override:
+                self.config_dir = os.path.join(override, "PEMF_GUI")
+            else:
+                self.config_dir = os.path.join(os.path.expanduser('~'), '.pemf_gui')
             os.makedirs(self.config_dir, exist_ok=True)
+            # Geriye-uyumlu ILERI-TASIMA (VERI KAYBI YOK): eski ~/.pemf_gui dosyalari yeni dizinde
+            # YOKSA kopyala (asla silme) → eski kurulumlarin config/legacy-anahtarlari korunur.
+            self._migrate_legacy_config_dir()
             self.config_file = os.path.join(self.config_dir, 'config.json')
         else:
             self.config_file = config_file
@@ -81,10 +90,42 @@ class ConfigManager:
         # şifrele. Eskiden bu değerler düz-metin hardcoded duruyordu.
         self._migrate_plaintext_secrets()
 
+    def _migrate_legacy_config_dir(self) -> None:
+        """Eski ~/.pemf_gui'deki config.json + fallback anahtar dosyalarini (.pemf_key_v2, .pemf_key)
+        kanonik config_dir'e KOPYALA — yalniz yeni dizinde YOKSA; ASLA silme. Split-brain kapanir,
+        veri kaybi olmaz. (Birincil Fernet anahtari zaten SecretsManager/ProgramData'da; bu, keyring
+        ve SecretsManager ikisi de basarisiz olursa devreye giren LEGACY fallback dosyalari icindir.)"""
+        try:
+            legacy = os.path.join(os.path.expanduser('~'), '.pemf_gui')
+            if os.path.abspath(legacy) == os.path.abspath(self.config_dir) or not os.path.isdir(legacy):
+                return
+            import shutil as _sh
+            for fn in ('config.json', '.pemf_key_v2', '.pemf_key'):
+                src = os.path.join(legacy, fn)
+                dst = os.path.join(self.config_dir, fn)
+                if os.path.exists(src) and not os.path.exists(dst):
+                    _sh.copy2(src, dst)
+                    try:
+                        from utils.file_acl import lock_down_file
+                        lock_down_file(dst)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
+                    except Exception:
+                        pass
+        except Exception:
+            logger.warning("Legacy config_dir ileri-tasima atlandi (kritik degil).", exc_info=True)
+
     def _get_or_create_key(self) -> bytes:
         """Birincil şifreleme anahtarı: keyring'de RASTGELE (yüksek entropi, MAC'ten bağımsız → ağ
         kartı/makine değişse bile stabil). Keyring yoksa .pemf_key_v2 dosyası fallback. Eski
         MAC-türevli anahtar artık BİRİNCİL DEĞİL (yalnız _get_legacy_cipher ile decrypt fallback)."""
+        # TEK-DOSYA: SecretsManager (keyring->.pemf_key_v2 MİGRATE; tek dosyada DPAPI saklar).
+        # MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli PII alanları (ad/sahip/iletişim) okunabilir kalır.
+        try:
+            from utils.secrets_manager import get_secret
+            _k = get_secret("patient_fernet_key")
+            if _k:
+                return _k.encode() if isinstance(_k, str) else _k
+        except Exception as _e:
+            logger.warning("SecretsManager patient_fernet_key okunamadı, eski yola düşülüyor: %s", _e)
         service, name = "PEMF_GUI", "patient_fernet_key"
         kr = None
         try:
@@ -120,7 +161,8 @@ class ConfigManager:
                 with open(key_file_v2, 'wb') as f:
                     f.write(new_key)
                 try:
-                    os.chmod(key_file_v2, 0o600)
+                    from utils.file_acl import lock_down_file
+                    lock_down_file(key_file_v2)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
                 except Exception:
                     pass
             except Exception:

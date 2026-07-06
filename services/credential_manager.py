@@ -78,9 +78,17 @@ class CredentialManager:
     """
 
     def __init__(self, master_secret: Optional[str] = None):
+        # TEK-DOSYA: env yoksa SecretsManager'dan master_secret (migrate; YOKSA üretme → eski uyarı+dosya yolu korunur).
+        _sm_secret = None
+        try:
+            from utils.secrets_manager import get_secret
+            _sm_secret = get_secret("master_secret", generate=False) or None
+        except Exception:
+            pass
         self._master_secret = (
             master_secret
             or os.environ.get(_ENV_MASTER_SECRET)
+            or _sm_secret
             or self._warn_and_use_default()
         )
         CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)

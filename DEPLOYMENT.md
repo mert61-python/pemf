@@ -155,3 +155,31 @@ Invoke-RestMethod http://localhost:8000/api/gateway/status # mqtt/broker durumu
 | MQTT yok | `services.msc` → `mosquitto` Running mı? Firewall 1883? |
 | STM bağlanmıyor | COM portu LocalSystem altında erişilebilir mi? Sürücü? |
 | Mobil bulamıyor | Firewall UDP 5051 + TCP 8000; aynı subnet mi? |
+
+## Sürüm geri alma (Rollback) — *runbook (audit B-9.2)*
+
+Kötü bir OTA güncellemesi sahada sorun çıkarırsa **önceki kararlı sürüme dönülür**. GitHub
+release'leri tag-başına immutable (silinmez) → her sürümün installer'ı korunur.
+
+**Yol 1 — Tek-tık (önerilen):** Backend, manifest'teki `previousStable` (son iyi sürüm) hedefini
+tanır. Operatör mobil/web'den **Geri Al** eylemini tetikler → `POST /api/update/rollback` →
+installer indirilir + **SHA256 + Authenticode doğrulanır** + **aktif tedavi yoksa** sessiz kurulur.
+Durum: `GET /api/update/status` → `previousStable` alanı rollback hedefini gösterir.
+
+```bash
+# Uzaktan (LAN'da token gerekmez; tünelde X-API-Key):
+curl -X POST http://<cihaz-ip>:8000/api/update/rollback
+```
+
+**Yol 2 — Elle:** `pemf-update` reposu → `exe` branch → önceki sürüm tag'inin
+`PEMFBackendSetup.exe` asset'ini indir → cihazda çalıştır:
+```bat
+PEMFBackendSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+Servis (`PemfBackend`) installer tarafından durdurulur, EXE değiştirilir, yeniden başlatılır.
+
+**Güvenlik:** Rollback de apply ile AYNI zinciri kullanır — SHA256 ZORUNLU, aktif-tedavi-varsa
+REDDED (fail-closed). `previousStable` manifest'te yoksa Yol-2 (elle) kullanılır.
+
+**Yayınlama tarafı:** `scripts/publish_release.ps1` yeni sürüm yayınlarken mevcut manifest'in
+sürümünü otomatik `previousStable` olarak taşır → rollback hedefi hep bir önceki sürümdür.

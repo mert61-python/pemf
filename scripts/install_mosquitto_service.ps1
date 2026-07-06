@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # PEMF — Mosquitto'yu BAĞIMSIZ Windows Servisi olarak kurar (OFFLINE / mühürlü)
 # =============================================================================
 # Faz 3 hedefi: 24/7 sunucuda Mosquitto kendi otomatik-başlayan Windows servisi

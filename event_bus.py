@@ -282,7 +282,8 @@ class EventBus:
         except RuntimeError:
             # Çalışan bir event loop yoksa ThreadPoolExecutor'a fire-and-forget olarak atıyoruz
             # Bu durum genelde sync bir thread'den async fonksiyon çağrılmaya çalışıldığında oluşur.
-            future = self._executor.submit(
+            # fire-and-forget (dönüş beklenmez)
+            self._executor.submit(
                 self.publish, event_type, data, priority, source, correlation_id
             )
             # asenkron sonuç bekleyenler için (fakat asenkron beklenemez, loop yok) True dön.
@@ -336,9 +337,9 @@ class EventBus:
                     except RuntimeError:
                         # Event loop yoksa executor'da çalıştır
                         logger.warning("No event loop available for async callback, using executor")
-                        future = self._executor.submit(
-                            self._run_async_in_executor, 
-                            subscription, 
+                        self._executor.submit(  # fire-and-forget
+                            self._run_async_in_executor,
+                            subscription,
                             event
                         )
                 else:
@@ -466,8 +467,8 @@ class EventBus:
                     task.cancel()
                     # Task'ın iptal edilmesini bekle (timeout ile)
                     try:
-                        # Event loop varsa task'ı bekle
-                        loop = asyncio.get_running_loop()
+                        # Event loop varsa task'ı bekle (get_running_loop yoksa RuntimeError → except)
+                        asyncio.get_running_loop()
                         # Task'ı bekleme işlemini executor'da yap
                         self._executor.submit(lambda: None)  # Placeholder
                     except RuntimeError:
@@ -534,43 +535,3 @@ def publish(event_type: str, data: Any, **kwargs) -> bool:
 async def publish_async(event_type: str, data: Any, **kwargs) -> bool:
     """Global async publish function"""
     return await get_event_bus().publish_async(event_type, data, **kwargs)
-
-
-# Event type constants
-class EventTypes:
-    """Sistem event type'ları"""
-    
-    # ESP Connection Events
-    ESP_CONNECTED = "esp.connected"
-    ESP_DISCONNECTED = "esp.disconnected"
-    ESP_HEARTBEAT = "esp.heartbeat"
-    ESP_DATA_RECEIVED = "esp.data_received"
-    ESP_ERROR = "esp.error"
-    
-    # System Events
-    SYSTEM_STARTUP = "system.startup"
-    SYSTEM_SHUTDOWN = "system.shutdown"
-    SYSTEM_ERROR = "system.error"
-    
-    # GUI Events
-    GUI_WINDOW_OPENED = "gui.window_opened"
-    GUI_WINDOW_CLOSED = "gui.window_closed"
-    GUI_USER_ACTION = "gui.user_action"
-    
-    # Data Events
-    DATA_SENSOR_UPDATE = "data.sensor_update"
-    DATA_PWM_UPDATE = "data.pwm_update"
-    DATA_CONFIG_CHANGED = "data.config_changed"
-    
-    # Configuration Events
-    CONFIG_CHANGED = "config.changed"
-    CONFIG_LOADED = "config.loaded"
-    CONFIG_SAVED = "config.saved"
-    CONFIG_RESET = "config.reset"
-    
-    # Wildcard patterns
-    ESP_ALL = "esp.*"
-    SYSTEM_ALL = "system.*"
-    GUI_ALL = "gui.*"
-    DATA_ALL = "data.*"
-    CONFIG_ALL = "config.*"

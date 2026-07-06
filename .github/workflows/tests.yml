@@ -1,8 +1,9 @@
 name: critical-path-tests
 
-# PEMF backend kritik-yol testleri: emergency_stop, çift-session 409, FGS no-detection,
-# patient field-encryption + cross-tenant maskeleme, treatment retention/at-rest görünürlük.
-# NOT: depo henüz git'te değil — git init + GitHub push sonrası otomatik çalışır.
+# PEMF backend kritik-yol testleri (32): emergency_stop, çift-session 409, coil transport
+# STM/ESP yönlendirme, PII maskeleme + fail-closed şifreleme, rate-limit, seans/DB kalıcılık,
+# auth zorlama/muafiyet. Bağımlılıklar TEK dosyada: requirements-test.txt (ağır AI'lar lazy →
+# kurulmaz; sqlcipher3 hariç → kod düz-metine graceful düşer). Temiz venv'de yeşil doğrulandı.
 
 on:
   push:
@@ -20,15 +21,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: pip
 
-      - name: Install runtime + test deps
+      - name: Install test deps
         run: |
           python -m pip install --upgrade pip
-          # Import-zamanı runtime bağımlılıkları (torch/ultralytics testlerde lazy → kurulmaz)
-          pip install fastapi "uvicorn" pydantic cryptography numpy opencv-python-headless paho-mqtt
           pip install -r requirements-test.txt
 
       - name: Run critical-path tests
         env:
           PEMF_SIMULATE: ""
-        run: pytest tests -v --no-header
+        run: pytest tests -v --no-header --cov --cov-report=term-missing

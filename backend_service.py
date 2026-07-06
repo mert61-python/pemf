@@ -21,6 +21,23 @@ _DEFAULT_SUPABASE_URL = "https://wmsxonunkphjeregpvuj.supabase.co"
 _DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT"
 
 
+class _JsonLogFormatter(logging.Formatter):
+    """Yapısal (JSON) log satırı (audit B-5.2): PEMF_LOG_JSON=1 iken. Log toplama/sorgulama
+    (Loki/ELK/CloudWatch) düz-metin regex yerine alan-bazlı çalışsın. Harici bağımlılık yok."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        import json as _json
+        doc = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            doc["exc"] = self.formatException(record.exc_info)
+        return _json.dumps(doc, ensure_ascii=False)
+
+
 def _configure_logging(app_data_dir: Path, level: str) -> None:
     # Windows consoles and NSSM-redirected pipes default to the legacy ANSI
     # codepage (e.g. cp1254 on Turkish Windows), which raises UnicodeEncodeError
@@ -36,10 +53,14 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_level = getattr(logging, level.upper(), logging.INFO)
 
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # PEMF_LOG_JSON=1 → yapısal JSON log (toplama/sorgulama); aksi düz-metin (varsayılan, insan-okur).
+    if os.environ.get("PEMF_LOG_JSON") == "1":
+        formatter: logging.Formatter = _JsonLogFormatter()
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
     file_handler = RotatingFileHandler(
         log_dir / "backend_service.log",
@@ -60,11 +81,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default=os.environ.get("PEMF_API_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PEMF_API_PORT", "8000")))
     parser.add_argument("--log-level", default=os.environ.get("PEMF_LOG_LEVEL", "INFO"))
-    parser.add_argument(
-        "--legacy-qt-services",
-        action="store_true",
-        help="Start old Qt-backed helper services. Do not use for production service mode.",
-    )
     parser.add_argument(
         "--no-headless-services",
         action="store_true",
@@ -152,19 +168,52 @@ def _install_crash_handler(app_data_dir: Path) -> None:
         pass
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
-    os.environ.setdefault("PEMF_HEADLESS", "1")
+def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None:
+    """Var olan sır/anahtar dosyalarının NTFS ACL'sini SYSTEM + Administrators'a kilitle (audit B-1.2).
+    Yeni yazımlar zaten kilitli üretiliyor; bu geçiş, ÖNCEDEN kurulmuş cihazlardaki (ACL'siz yazılmış)
+    mevcut dosyaları da kapatır. Best-effort — hata servisi durdurmaz."""
+    try:
+        from utils.file_acl import lock_down_file
+    except Exception:
+        return
+    candidates = []
+    try:
+        from utils.secrets_manager import secrets_path
+        candidates.append(secrets_path())
+    except Exception:
+        pass
+    try:
+        from servers.auth import _token_file
+        candidates.append(_token_file())
+    except Exception:
+        pass
+    for name in (".sqlcipher_key", ".pemf_key_v2", ".pemf_key", "api_token.txt", "pemf_secrets.json"):
+        candidates.append(app_data_dir / name)
+    # op-doğrulama #8: mevcut *.plain.bak (migration düz-metin PII yedeği) dosyalarını da kilitle —
+    # halihazırda dağıtılmış cihazlarda oluşturmada ACL yoktu → startup'ta geriye-dönük SYSTEM+Admin kilit.
+    try:
+        candidates.extend(app_data_dir.glob("*.plain.bak"))
+    except Exception:
+        pass
+    seen: set[str] = set()
+    locked = 0
+    for c in candidates:
+        try:
+            key = str(c).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if lock_down_file(c):
+                locked += 1
+        except Exception:
+            pass
+    if locked:
+        logger.info("Sır dosyası ACL kilidi uygulandı: %d dosya (yalnız SYSTEM + Administrators).", locked)
 
-    app_data_dir = get_app_data_directory()
-    _configure_logging(app_data_dir, args.log_level)
-    _install_crash_handler(app_data_dir)
-    logger = logging.getLogger("backend_service")
 
-    logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
-
-    # Eşleştirme kodu + cihaz kimliğini GÖRÜNÜR logla → operatör LattePanda konsolunda
-    # okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme).
+def _log_pairing_info(logger: logging.Logger) -> None:
+    """Eşleştirme kodu + cihaz kimliğini GÖRÜNÜR logla → operatör LattePanda konsolunda
+    okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme)."""
     try:
         from utils.path_utils import get_pairing_code, get_unique_device_id
         logger.info("=" * 60)
@@ -174,33 +223,31 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         logger.exception("Eşleştirme kodu loglanamadı (non-fatal).")
 
+
+def _initialize_database_safe(logger: logging.Logger) -> None:
+    """Şemayı hazırla; başarısız olsa bile servis runtime DB açılışıyla devam etsin."""
     try:
         initialize_database()
     except Exception:
         logger.exception("Database initialization failed; continuing with runtime DB open.")
 
-    event_bus = get_event_bus()
-    core = HeadlessCore(
-        app_data_dir,
-        api_port=args.port,
-        start_headless_services=not args.no_headless_services,
-        ensure_mosquitto=not args.no_mosquitto_ensure,
-        start_legacy_qt_services=args.legacy_qt_services,
-        event_bus=event_bus,
-    )
 
+def _wire_api_server(core: HeadlessCore):
+    """api_server modülünü HeadlessCore + HardwareController ile bağla ve modülü döndür."""
     from servers import api_server
-
     api_server.state.core = core
     api_server.state.hardware = HardwareController(core)
     api_server._register_event_bus_handlers()
+    return api_server
 
-    # Çökme-kurtarma mutabakatı (audit #15): önceki süreç seans ortasında çöktüyse ESP bobinleri
-    # firmware kendi süresince çalışmaya devam edebilir (STM keep-alive durduğundan STM kendi
-    # duration'ı bitince durur). Yeni süreç TEMİZ başlasın diye broker/STM hazır olunca bir kez
-    # TÜM bobinlere STOP gönder. Eşzamanlı kilit yalnız in-memory olduğundan bu, crash sonrası
-    # orphan/ghost donanım durumunu temizler.
-    def _startup_reconcile():
+
+def _start_startup_reconcile(api_server, logger: logging.Logger) -> None:
+    """Çökme-kurtarma mutabakatı (audit #15): önceki süreç seans ortasında çöktüyse ESP bobinleri
+    firmware kendi süresince çalışmaya devam edebilir (STM keep-alive durduğundan STM kendi
+    duration'ı bitince durur). Yeni süreç TEMİZ başlasın diye broker/STM hazır olunca bir kez
+    TÜM bobinlere STOP gönder. Eşzamanlı kilit yalnız in-memory olduğundan bu, crash sonrası
+    orphan/ghost donanım durumunu temizler."""
+    def _reconcile() -> None:
         try:
             import time as _t
             _t.sleep(3.0)  # broker + STM bağlantısının oturması için
@@ -216,34 +263,48 @@ def main(argv: list[str] | None = None) -> int:
             logger.info("Başlangıç donanım mutabakatı: tüm bobinlere STOP (orphan/ghost temizliği).")
         except Exception:
             logger.warning("Başlangıç mutabakatı başarısız (non-fatal).", exc_info=True)
-    import threading as _threading_recon
-    _threading_recon.Thread(target=_startup_reconcile, daemon=True, name="startup-reconcile").start()
+    import threading
+    threading.Thread(target=_reconcile, daemon=True, name="startup-reconcile").start()
 
-    # Cloud sync + device registry (offline-first + TEMASSIZ uzaktan erişim).
-    # Headless servis, güncel tunnel URL'sini/IP'sini Supabase 'devices' tablosuna
-    # yazar; mobil uygulama farklı ağdayken device_id ile QR'sız bağlanabilir.
+
+def _resolve_supabase_credentials() -> tuple[str, str]:
+    """Supabase URL + anon anahtarını çözümle: SecretsManager → env → pemf_gui.config → gömülü
+    varsayılan (TEK-DOSYA: pemf_secrets.json embedded; varsayılan anon key dahil)."""
     try:
-        from servers.sync_worker import init_cloud_sync
-
+        from utils.secrets_manager import get_secret
+        sb_url = get_secret("supabase_url")
+        sb_key = get_secret("supabase_anon_key")
+    except Exception:
         sb_url = os.environ.get("SUPABASE_URL", "")
         sb_key = os.environ.get("SUPABASE_KEY", "")
-        if not (sb_url and sb_key):
-            try:
-                from pemf_gui.config import get_config
+    if not (sb_url and sb_key):
+        try:
+            from pemf_gui.config import get_config
+            cfg = get_config()
+            sb_url = sb_url or cfg.get("supabase_url", _DEFAULT_SUPABASE_URL)
+            sb_key = sb_key or cfg.get("supabase_key", "") or _DEFAULT_SUPABASE_ANON_KEY
+        except Exception:
+            sb_url = sb_url or _DEFAULT_SUPABASE_URL
+            sb_key = sb_key or _DEFAULT_SUPABASE_ANON_KEY
+    return sb_url, sb_key
 
-                cfg = get_config()
-                sb_url = sb_url or cfg.get("supabase_url", "https://wmsxonunkphjeregpvuj.supabase.co")
-                sb_key = sb_key or cfg.get("supabase_key", "") or _DEFAULT_SUPABASE_ANON_KEY
-            except Exception:
-                sb_url = sb_url or "https://wmsxonunkphjeregpvuj.supabase.co"
-                sb_key = sb_key or _DEFAULT_SUPABASE_ANON_KEY
+
+def _start_cloud_sync(logger: logging.Logger) -> None:
+    """Cloud sync + device registry (offline-first + TEMASSIZ uzaktan erişim). Headless servis,
+    güncel tunnel URL'sini/IP'sini Supabase 'devices' tablosuna yazar; mobil uygulama farklı
+    ağdayken device_id ile QR'sız bağlanabilir."""
+    try:
+        from servers.sync_worker import init_cloud_sync
+        sb_url, sb_key = _resolve_supabase_credentials()
         init_cloud_sync(supabase_url=sb_url, supabase_key=sb_key)
         logger.info("Cloud sync + device registry started.")
     except Exception:
         logger.exception("Cloud sync init failed (non-fatal).")
 
-    # DB bakım/retention/PII-redaction/backup/disk-check (Qt'siz). Eskiden yalnız legacy GUI'de
-    # çalışıyordu → headless üretimde KVKK/GDPR retention + yedek HİÇ çalışmıyordu.
+
+def _start_db_maintenance(core: HeadlessCore, logger: logging.Logger) -> None:
+    """DB bakım/retention/PII-redaction/backup/disk-check (Qt'siz). Eskiden yalnız legacy GUI'de
+    çalışıyordu → headless üretimde KVKK/GDPR retention + yedek HİÇ çalışmıyordu."""
     try:
         from services.headless_db_maintenance import start_headless_db_maintenance
         start_headless_db_maintenance(getattr(core, "app_data_dir", None))
@@ -251,40 +312,66 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         logger.exception("DB maintenance init failed (non-fatal).")
 
-    # Cloudflare tünel (OPT-IN) — DEPLOYMENT.md'de vaat edilen farklı-ağdan TEMASSIZ uzaktan
-    # erişim. Cihazı internete açtığından VARSAYILAN KAPALI; PEMF_ENABLE_TUNNEL=1 ile aç.
-    # Eskiden tunnel_manager headless serviste HİÇ çağrılmıyordu → yalnız LAN çalışıyordu (audit P1).
-    if os.environ.get("PEMF_ENABLE_TUNNEL") == "1":
-        # GÜVENLİK (fail-closed): Tünel cihazı İNTERNETE açar → auth ZORUNLU olmalı. Operatör
-        # PEMF_REQUIRE_AUTH'u kapalı bıraktıysa burada ZORLA aç → internete KİMLİKSİZ donanım/
-        # hasta erişimi engellenir. (Eskiden coupling yalnız .env'e güveniyordu = fail-open risk.)
-        if os.environ.get("PEMF_REQUIRE_AUTH") != "1":
-            os.environ["PEMF_REQUIRE_AUTH"] = "1"
-            try:
-                from servers import auth as _auth
-                _auth._require = True  # lazy-cache'i de güncelle (ilk isteği beklemeden)
-            except Exception:
-                pass
-            logger.warning("GÜVENLİK: Tünel AÇIK → PEMF_REQUIRE_AUTH=1 ZORLA etkinleştirildi "
-                           "(internete kimliksiz erişim engellendi). API token'ı istemcilere dağıtın.")
-        try:
-            from servers.tunnel_manager import start_tunnel
-            if start_tunnel(port=args.port):
-                logger.info("Cloudflare tunnel started (uzaktan erişim aktif).")
-            else:
-                logger.warning("Cloudflare tunnel başlatılamadı (yalnız LAN).")
-        except Exception:
-            logger.exception("Tunnel init failed (non-fatal).")
 
+def _force_auth_for_tunnel(logger: logging.Logger) -> None:
+    """GÜVENLİK (fail-closed): Tünel cihazı İNTERNETE açar → auth ZORUNLU olmalı. Operatör
+    PEMF_REQUIRE_AUTH'u kapalı bıraktıysa burada ZORLA aç → internete KİMLİKSİZ donanım/hasta
+    erişimi engellenir. (Eskiden coupling yalnız .env'e güveniyordu = fail-open risk.)"""
+    if os.environ.get("PEMF_REQUIRE_AUTH") == "1":
+        return
+    os.environ["PEMF_REQUIRE_AUTH"] = "1"
+    try:
+        from servers import auth as _auth
+        _auth._require = True  # lazy-cache'i de güncelle (ilk isteği beklemeden)
+    except Exception:
+        pass
+    logger.warning("GÜVENLİK: Tünel AÇIK → PEMF_REQUIRE_AUTH=1 ZORLA etkinleştirildi "
+                   "(internete kimliksiz erişim engellendi). API token'ı istemcilere dağıtın.")
+
+
+def _maybe_start_tunnel(port: int, logger: logging.Logger) -> None:
+    """Cloudflare tünel (OPT-IN) — DEPLOYMENT.md'de vaat edilen farklı-ağdan TEMASSIZ uzaktan
+    erişim. Cihazı internete açtığından VARSAYILAN KAPALI; PEMF_ENABLE_TUNNEL=1 ile aç. Eskiden
+    tunnel_manager headless serviste HİÇ çağrılmıyordu → yalnız LAN çalışıyordu (audit P1)."""
+    if os.environ.get("PEMF_ENABLE_TUNNEL") != "1":
+        return
+    _force_auth_for_tunnel(logger)
+    try:
+        from servers.tunnel_manager import start_tunnel_watchdog
+        # Tek-seferlik start yerine WATCHDOG (SIFIR-MÜDAHALE): internet gelince/giderse veya
+        # cloudflared ölürse tüneli OTOMATİK (yeniden) başlatır → "WiFi sonradan bağlanınca
+        # uzaktan erişim otomatik açılır", boot'ta internetsizse yerel çalışmaya devam eder.
+        start_tunnel_watchdog(port=port)
+        logger.info("Cloudflare tunnel watchdog aktif (uzaktan erişim internet geldikçe otomatik).")
+    except Exception:
+        logger.exception("Tunnel watchdog init failed (non-fatal).")
+
+
+def _start_update_checker_safe(logger: logging.Logger) -> None:
+    """Oto-güncelleme denetleyici (BİLDİRİM + tek-tık onay): GitHub 'exe' branch latest.json'ı
+    periyodik kontrol eder → yeni sürüm varsa UI'da bildirilir (UYGULAMAZ; operatör
+    /api/update/apply ile onaylar → indir+SHA256+aktif-tedavi-yoksa sessiz kur). Tünelden bağımsız."""
+    try:
+        from servers.update_manager import start_update_checker
+        start_update_checker()
+    except Exception:
+        logger.exception("Update checker init failed (non-fatal).")
+
+
+def _build_server(app, args: argparse.Namespace) -> uvicorn.Server:
+    """Uvicorn sunucusunu servis argümanlarıyla kur (access-log kapalı — NSSM zaten yakalıyor)."""
     config = uvicorn.Config(
-        api_server.app,
+        app,
         host=args.host,
         port=args.port,
         log_level=args.log_level.lower(),
         access_log=False,
     )
-    server = uvicorn.Server(config)
+    return uvicorn.Server(config)
 
+
+def _install_signal_handlers(server: uvicorn.Server, logger: logging.Logger) -> None:
+    """SIGINT/SIGTERM/SIGBREAK'i yakala → uvicorn'a temiz kapanış (should_exit) sinyali ver."""
     def request_shutdown(signum=None, frame=None) -> None:
         logger.info("Shutdown requested%s", f" by signal {signum}" if signum else "")
         server.should_exit = True
@@ -297,6 +384,94 @@ def main(argv: list[str] | None = None) -> int:
             except Exception:
                 pass
 
+
+def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus) -> None:
+    """Servis dururken donanımı güvene al + tüm alt sistemleri sırayla kapat (her adım best-effort;
+    biri hata verse de diğerleri denenir). Zeroconf EN SON kapanır (servisler kendi kayıtlarını
+    önce unregister etti)."""
+    logger.info("PEMF backend service stopping")
+    try:
+        _safe_stop_outputs(api_server)
+    except Exception:
+        logger.exception("Safe output shutdown failed")
+    try:
+        if api_server.state.hardware:
+            api_server.state.hardware.stop()
+    except Exception:
+        logger.exception("HardwareController shutdown failed")
+    try:
+        from servers.sync_worker import get_cloud_sync
+        cloud = get_cloud_sync()
+        if cloud:
+            cloud.stop()
+    except Exception:
+        logger.exception("Cloud sync shutdown failed")
+    try:
+        from servers.tunnel_manager import stop_tunnel
+        stop_tunnel()
+    except Exception:
+        logger.exception("Tunnel shutdown failed")
+    try:
+        from services.headless_db_maintenance import stop_headless_db_maintenance
+        stop_headless_db_maintenance()
+    except Exception:
+        logger.exception("DB maintenance shutdown failed")
+    try:
+        core.quit()
+    except Exception:
+        logger.exception("HeadlessCore shutdown failed")
+    try:
+        from utils.zeroconf_singleton import close_shared_zeroconf
+        close_shared_zeroconf()
+    except Exception:
+        logger.exception("Zeroconf shutdown failed")
+    try:
+        event_bus.shutdown()
+    except Exception:
+        logger.exception("EventBus shutdown failed")
+    logger.info("PEMF backend service stopped")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    os.environ.setdefault("PEMF_HEADLESS", "1")
+
+    app_data_dir = get_app_data_directory()
+    _configure_logging(app_data_dir, args.log_level)
+    _install_crash_handler(app_data_dir)
+    logger = logging.getLogger("backend_service")
+    logger.info("PEMF backend service starting: host=%s port=%s", args.host, args.port)
+
+    # Opsiyonel uzaktan hata-izleme (audit B-5.1) — yalnız PEMF_SENTRY_DSN set + sentry-sdk varsa.
+    try:
+        from utils.telemetry import init_telemetry
+        init_telemetry()
+    except Exception:
+        logger.debug("Telemetri init atlandı", exc_info=True)
+    _harden_secret_file_acls(app_data_dir, logger)
+    _log_pairing_info(logger)
+    _initialize_database_safe(logger)
+
+    event_bus = get_event_bus()
+    core = HeadlessCore(
+        app_data_dir,
+        api_port=args.port,
+        start_headless_services=not args.no_headless_services,
+        ensure_mosquitto=not args.no_mosquitto_ensure,
+        event_bus=event_bus,
+    )
+    api_server = _wire_api_server(core)
+
+    # Başlangıç mutabakatı + opsiyonel alt sistemler — hepsi best-effort (biri patlarsa servis yine kalkar).
+    _start_startup_reconcile(api_server, logger)
+    _start_cloud_sync(logger)
+    _start_db_maintenance(core, logger)
+    _maybe_start_tunnel(args.port, logger)
+    _start_update_checker_safe(logger)
+
+    server = _build_server(api_server.app, args)
+    _install_signal_handlers(server, logger)
+
     try:
         server.run()
         return 0
@@ -304,38 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.exception("Backend service crashed")
         return 1
     finally:
-        logger.info("PEMF backend service stopping")
-        try:
-            _safe_stop_outputs(api_server)
-        except Exception:
-            logger.exception("Safe output shutdown failed")
-        try:
-            if api_server.state.hardware:
-                api_server.state.hardware.stop()
-        except Exception:
-            logger.exception("HardwareController shutdown failed")
-        try:
-            from servers.sync_worker import get_cloud_sync
-
-            cloud = get_cloud_sync()
-            if cloud:
-                cloud.stop()
-        except Exception:
-            logger.exception("Cloud sync shutdown failed")
-        try:
-            from servers.tunnel_manager import stop_tunnel
-            stop_tunnel()
-        except Exception:
-            logger.exception("Tunnel shutdown failed")
-        try:
-            core.quit()
-        except Exception:
-            logger.exception("HeadlessCore shutdown failed")
-        try:
-            event_bus.shutdown()
-        except Exception:
-            logger.exception("EventBus shutdown failed")
-        logger.info("PEMF backend service stopped")
+        _shutdown(logger, api_server, core, event_bus)
 
 
 if __name__ == "__main__":

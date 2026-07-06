@@ -1,0 +1,31 @@
+# Bağımlılık CVE taraması + otomatik güncelleme PR'ları (audit B-9.3).
+# GitHub Dependabot: requirements*.txt (pip) + workflow action'ları haftalık taranır;
+# açık/eski bağımlılıklar için otomatik PR açılır (maintainer test edip birleştirir).
+# NOT: torch/ultralytics/onnx AI-uyumluluğa bağlı → 'ignore' ile major-bump PR'ları kısılabilir.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Güvenlik yamaları tek PR'da toplansın (gürültü azalt).
+      security-patches:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # AI çekirdeği: major/minor bump'lar model-uyumluluğunu kırabilir → yalnız güvenlik-yaması.
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "torchvision"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "ultralytics"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"   # KRİTİK: torch 2.1.2 numpy<2 ister
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -1,0 +1,37 @@
+name: security-audit
+
+# Bağımlılık CVE taraması (audit B-9.3). pip-audit ile web/API çekirdek bağımlılıkları (kurulu
+# ortam üzerinden — torch+cpu/UTF-8 çözümleme sorunlarını atlar) OSV/PyPI advisory DB'ye karşı taranır.
+# BLOKLAYICI DEĞİL (continue-on-error): mevcut pinlerde bilinen CVE'ler var (cryptography 41.0.3,
+# starlette 1.2.1, python-multipart 0.0.30...) — bunlar maintainer'ca test edilip yükseltilecek.
+# Kapsamlı tarama (torch/onnx dahil TÜM ağaç) Dependabot ile (.github/dependabot.yml) yürür.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # her Pazartesi 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install core deps + pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+          pip install pip-audit
+
+      - name: pip-audit (kurulu çekirdek ortam — bilgi amaçlı, bloklamaz)
+        continue-on-error: true
+        run: pip-audit --desc

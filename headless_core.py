@@ -30,7 +30,6 @@ class HeadlessCore:
         api_port: int = 8000,
         start_headless_services: bool = True,
         ensure_mosquitto: bool = True,
-        start_legacy_qt_services: bool = False,
         event_bus=None,
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -47,16 +46,11 @@ class HeadlessCore:
         self.patient_db = get_patient_database(self.app_data_dir)
         self.session_manager = get_session_manager(self.app_data_dir)
 
-        self.mosquitto_manager = None
-        self.network_monitor = None
-        self.discovery_thread = None
         self.mosquitto_supervisor = None
         self.network_status_service = None
         self.udp_discovery_service = None
         if start_headless_services:
             self.start_headless_services(ensure_mosquitto=ensure_mosquitto)
-        if start_legacy_qt_services:
-            self.start_legacy_qt_services()
 
         self._hw_send_queue: Queue = Queue(maxsize=4)
         self._hw_sender_stop = threading.Event()
@@ -104,43 +98,6 @@ class HeadlessCore:
             self.logger.info("UdpDiscoveryService started.")
         except Exception as exc:
             self.logger.warning("UdpDiscoveryService could not start: %s", exc)
-
-    def start_legacy_qt_services(self) -> None:
-        """
-        Start old Qt-backed helper services only for temporary legacy runs.
-
-        Production Windows Service mode keeps this disabled so importing the core
-        does not require QApplication/QThread/QTimer.
-        """
-        try:
-            from services.mosquitto_manager import MosquittoManager
-
-            self.mosquitto_manager = MosquittoManager()
-            self.mosquitto_manager.start_monitoring()
-            self.mosquitto_manager.ensure_running()
-            # HiveMQ bulut köprüsü KALDIRILDI — uzaktan erişim artık tunnel + Supabase device-registry
-            # ile sağlanıyor. Yerel mosquitto:1883 (ESP bobin 6-8) çalışmaya devam eder.
-            self.logger.info("Legacy MosquittoManager started (HiveMQ bridge devre disi).")
-        except Exception as exc:
-            self.logger.warning("Legacy MosquittoManager could not start: %s", exc)
-
-        try:
-            from services.network_monitor import NetworkMonitor
-
-            self.network_monitor = NetworkMonitor()
-            self.network_monitor.start_monitoring()
-            self.logger.info("Legacy NetworkMonitor started.")
-        except Exception as exc:
-            self.logger.warning("Legacy NetworkMonitor could not start: %s", exc)
-
-        try:
-            from threads.discovery_service_thread import DiscoveryServiceThread
-
-            self.discovery_thread = DiscoveryServiceThread(logger=self.logger)
-            self.discovery_thread.start()
-            self.logger.info("Legacy DiscoveryServiceThread started.")
-        except Exception as exc:
-            self.logger.warning("Legacy DiscoveryServiceThread could not start: %s", exc)
 
     def _publish_event(
         self,
@@ -380,27 +337,6 @@ class HeadlessCore:
         if self._hw_sender_thread.is_alive():
             self._hw_sender_thread.join(timeout=2.0)
 
-        if self.discovery_thread:
-            try:
-                if hasattr(self.discovery_thread, "stop"):
-                    self.discovery_thread.stop()
-                if hasattr(self.discovery_thread, "wait"):
-                    self.discovery_thread.wait(2000)
-            except Exception:
-                self.logger.exception("Discovery thread shutdown failed")
-
-        if self.network_monitor:
-            try:
-                self.network_monitor.stop_monitoring()
-            except Exception:
-                self.logger.exception("Network monitor shutdown failed")
-
-        if self.mosquitto_manager:
-            try:
-                self.mosquitto_manager.stop_monitoring()
-            except Exception:
-                self.logger.exception("Mosquitto monitor shutdown failed")
-
         if self.udp_discovery_service:
             try:
                 self.udp_discovery_service.stop()
@@ -431,9 +367,4 @@ class HeadlessCore:
             "mosquitto": self.mosquitto_supervisor.get_status() if self.mosquitto_supervisor else {},
             "network": self.network_status_service.get_status() if self.network_status_service else {},
             "discovery": self.udp_discovery_service.get_status() if self.udp_discovery_service else {},
-            "legacyQtServices": {
-                "mosquittoManager": bool(self.mosquitto_manager),
-                "networkMonitor": bool(self.network_monitor),
-                "discoveryThread": bool(self.discovery_thread),
-            },
         }
