@@ -55,7 +55,14 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 **7 refactor commit**, hepsi davranış-birebir + characterization'lı, **94 test yeşil**:
 - `system_router` (8 route) + `session_router` (2 route: active, notes) ayrıldı.
 - **api_server.py: 2206 → 1881 satır (−325, −%15).**
-- Safety çekirdekleri **bilinçli korundu:** session/start+stop (bobin-orkestrasyon), hardware/coil, ai/pro, metrics (ağır coupling). Bunlar ya cohesive-safety ya da shared-state-refactor gerektirir → naive extraction net-negatif olurdu.
-- **Kalan (bu görev dışı / bloke):** `ai_router` handler ayıklama (ai/pro safety + ONNX dinamik dispatch → benzer dikkat); frontend F1/F2/F3 (kullanıcı WIP'inde → önce commit); `str(e)` B3 (ayrı güvenlik-fix, kullanıcı kararı).
+- Safety çekirdekleri **bilinçli korundu:** session/start+stop (bobin-orkestrasyon), hardware/coil, metrics (ağır coupling). Bunlar ya cohesive-safety ya da shared-state-refactor gerektirir → naive extraction net-negatif olurdu.
+- **`ai_router` (B2) — KARAR: cohesive BIRAKILDI.** Değerlendirme: 1384 satır/19 route ama HEPSİ paylaşılan çekirdeğe (`_get_or_load_model` model-cache, `_models`/`_model_lock`, `_decode_image`, `_ai_fail`) + ONNX dinamik-dispatch'e bağlı; ai/pro otonom-tedavi (bobin) safety. Alt-modüllere bölmek → her biri cache'e geri-uzanır = net-negatif. Zaten ayrı cohesive dosya (api_server değil). Gerçek ayrım = önce shared model-cache/helper refactor'u (ayrı, büyük). **session/start ile tutarlı karar.** (Monkeypatch B-2.3'te zaten `max_part_size`'a dönüşmüştü.)
+
+## B3 güvenlik-fix (refactor DIŞI, kullanıcı kararı: ayrı) — ✅ commit `52e734b`
+Ham `str(e)` istemci sızıntısı 5 noktada kesildi (api_server 4 + session_router 1); log + generic detail; HTTP status + shape KORUNDU, yalnız detail DEĞERİ değişti. Bkz. REFACTOR_BUGS.md.
+
+## KALAN (hepsi kullanıcıya BLOKE)
+- **Frontend F1/F2/F3** — tüm hedefler pf WIP'inde (53 değişiklik); kullanıcı WIP'ini commit edince çakışmasız yapılır.
+- **Publish v1.5** — obje R2'de; r2.dev TR-filtreli → custom-domain/slim-GitHub teslimat kararı kullanıcıda.
 
 > Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`, `_active_session`, `_session_lock`) → `servers/live_state.py`/`session_state.py`'ye taşınmalı.
