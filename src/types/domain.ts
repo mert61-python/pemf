@@ -42,6 +42,7 @@ export interface Patient extends PatientSummary {
   age?: string;
   weight?: string;
   vet_contact?: string;
+  owner_email?: string;  // hasta sahibi e-postası (rapor gönderimi) — backend PatientInput ile aynı
 }
 
 // ─── Session / Treatment ──────────────────────────────────────────────────────

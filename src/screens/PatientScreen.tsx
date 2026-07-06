@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 import { apiGet, apiPost } from "@/services/apiClient";
+import type { Patient } from "@/types/domain";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
 
 export function PatientScreen() {
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -27,7 +28,7 @@ export function PatientScreen() {
   const loadPatients = async () => {
     setLoading(true);
     setLoadError(false);
-    const res = await apiGet<{ status: string, data: any[] }>("/patients", { status: "error", data: [] });
+    const res = await apiGet<{ status: string, data: Patient[] }>("/patients", { status: "error", data: [] });
     if (res.status === "success") {
       setPatients(res.data);
     } else {
@@ -82,7 +83,7 @@ export function PatientScreen() {
     }
   };
 
-  const handleEdit = (p: any) => {
+  const handleEdit = (p: Patient) => {
     setForm({
       id: p.id || "",
       name: p.name || "",
@@ -94,7 +95,7 @@ export function PatientScreen() {
       vet_contact: p.vet_contact || "",
       owner_email: p.owner_email || ""
     });
-    setEditingId(p.id);
+    setEditingId(p.id ?? null);
     setIsAdding(true);
   };
 
@@ -138,7 +139,7 @@ export function PatientScreen() {
     ]);
   };
 
-  const handleStartSession = (p: any) => {
+  const handleStartSession = (p: Patient) => {
     // Seçili hastayı paylaş + Kontrol ekranına git (orada seans bu hastayla başlar).
     setSelectedPatient({ id: p.id, name: p.name, species: p.species });
     showToast(`${p.name} için kontrol paneline gidiliyor.`, "success");
@@ -233,7 +234,7 @@ export function PatientScreen() {
                   <View style={styles.actions}>
                     <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}><Activity color={colors.success} size={20} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => handleEdit(p)} style={styles.actionBtnIcon}><Edit color={colors.primary} size={20} /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(p.id)} style={styles.actionBtnIcon}><Trash2 color={colors.danger} size={20} /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(p.id!)} style={styles.actionBtnIcon}><Trash2 color={colors.danger} size={20} /></TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.detailsRow}>
