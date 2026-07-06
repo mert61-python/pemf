@@ -45,11 +45,9 @@ import time
 import zlib
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
+# NOT (audit B-5.3): basicConfig MODÜL-DÜZEYİNDE değil — import edildiğinde merkezî
+# logging yapılandırmasını (backend_service._configure_logging) ezmesin. Yalnız standalone
+# çalıştırıldığında (__main__) yapılandırılır. Modül kendi logger'ını kullanır (aşağıda).
 log = logging.getLogger("STM32Sim")
 
 # ─── Sabitler ─────────────────────────────────────────────────────────────────
@@ -327,4 +325,9 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
     main()

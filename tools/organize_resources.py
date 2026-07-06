@@ -29,7 +29,7 @@ def copy_files(src_dir, dest_dir, extensions):
         for file_path in src_dir.glob(f'*{ext}'):
             try:
                 shutil.copy2(file_path, dest_dir)
-            except Exception as e:
+            except Exception:
                 pass  # Silent error handling
 
 

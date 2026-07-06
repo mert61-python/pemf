@@ -29,7 +29,6 @@ import sys
 
 # Add parent directory
 sys.path.insert(0, str(Path(__file__).parent))
-from config import TRAINING
 
 
 def generate_ecg_signal(
@@ -414,7 +413,7 @@ def main():
     print("Data Generation Complete")
     print("="*60)
     print(f"Output directory: {output_dir.absolute()}")
-    print(f"\nFiles created:")
+    print("\nFiles created:")
     for file in output_dir.glob('*'):
         print(f"  - {file.name}")
     print("="*60)
