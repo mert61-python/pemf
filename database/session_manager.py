@@ -287,22 +287,6 @@ class SessionManager:
         if saved <= 0:
             self.logger.warning("Sensor sample batch kaydedilemedi")
     
-    def set_frequency(self, frequency_hz: float):
-        """Frekans parametresini ayarla"""
-        self.add_parameter('frequency_hz', frequency_hz, 'Hz')
-    
-    def set_intensity(self, intensity_mt: float):
-        """Yoğunluk parametresini ayarla"""
-        self.add_parameter('intensity_mt', intensity_mt, 'mT')
-    
-    def set_pulse_duration(self, duration_ms: int):
-        """Pulse süresi parametresini ayarla"""
-        self.add_parameter('pulse_duration_ms', duration_ms, 'ms')
-    
-    def set_treatment_duration(self, duration_minutes: int):
-        """Tedavi süresi parametresini ayarla"""
-        self.add_parameter('treatment_duration', duration_minutes, 'dakika')
-    
     def add_note(self, note: str):
         """Seans notunu ekle/güncelle"""
         if self.current_session_id is None:
@@ -440,14 +424,6 @@ class SessionManager:
             self.logger.error(error_msg)
             self.session_error.emit(error_msg)
             return False
-    
-    def is_session_active(self) -> bool:
-        """Aktif seans var mı kontrol et"""
-        return self.current_session_id is not None
-    
-    def get_current_session_id(self) -> Optional[int]:
-        """Aktif seans ID'sini getir"""
-        return self.current_session_id
     
     def get_session_duration(self) -> int:
         """Aktif seansın süresini dakika olarak getir"""
