@@ -19,6 +19,16 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 - **Yöntem:** paylaşılan runtime durumu çağrı-zamanı `from servers import api_server as _api` ile okunur (circular import yok; api_server router'ı include eder, router app'i yalnız handler çağrılınca import eder).
 - **api_server.py:** −77 satır (2206 → 2129). `include_router(system_router)` eklendi.
 - **Doğrulama:** `py_compile` + import OK · **route-contract golden (67 route) birebir** · **87 test yeşil**.
-- **Kalan system route'ları** (sonraki adımlar): `health` (`:674`), `discovery` (`:757`) — **auth-muaf + kurulum-doğrulama → dikkatli**; `kpi/summary` — ayrı domain, `_get_treatment_db` bağımlı.
+**Adım A2:** `health` + `favicon` + `discovery` → `servers/system_router.py`. **Önce characterization:** `tests/test_status_shapes.py` (5 uç response anahtar-kümesini dondurur — özellikle `/api/health` `atRestEncrypted`/`status`, kurulum-doğrulaması için kritik).
+
+| Handler | Yol (DEĞİŞMEDİ) | Lazy-import erişimi | Not |
+|---|---|---|---|
+| `health_check` | `GET /api/health` | `state.core`, `_app_data_dir()` | auth-muaf (path bazlı → korunur); shape testli |
+| `favicon` | `GET /favicon.ico` | — (trivial) | auth-muaf |
+| `discovery_info` | `GET /api/discovery` | `_APP_VERSION` | auth-muaf; shape testli |
+
+- **api_server.py:** −61 satır daha. `metrics` (`GET /metrics`) BIRAKILDI (ağır coupling: `_session_lock`/`_active_session`/`_ws_lock`/`_ws_clients` → ayrı observability pass).
+- **Doğrulama:** compile+import OK · route-contract (67) · **response-shape golden (health/discovery/system_info/gateway/kpi)** · **92 test yeşil**.
+- **Kalan system-ish:** `metrics` (ağır), `kpi/summary` (`_get_treatment_db`, ~100 satır — characterization + ayrı commit).
 
 > Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`) → `servers/live_state.py`'ye taşınmalı.

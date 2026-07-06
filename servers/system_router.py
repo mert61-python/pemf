@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 router = APIRouter(tags=["system"])
 logger = logging.getLogger("system_router")
@@ -99,3 +100,66 @@ async def clear_notifications():
         _api._live_state["notifications"].clear()
     _api._ws_broadcast_sync({"type": "notifications_cleared", "data": {"timestamp": time.time()}})
     return {"status": "success"}
+
+
+@router.get("/api/health")
+async def health_check():
+    """Sistemin ayakta olup olmadığını kontrol eder. Otomatik keşf için de kullanılır."""
+    from servers import api_server as _api
+    from servers.auto_discovery import _get_local_ip
+    from servers.tunnel_manager import get_tunnel_url
+    local_ip = _get_local_ip()
+    tunnel_url = get_tunnel_url()
+    try:
+        from utils.path_utils import get_unique_device_id
+        device_id = get_unique_device_id()
+    except Exception:
+        device_id = "PEMF-001"
+    # Eşleştirme kodu — FE bu cihazın kodunu kullanıcıya gösterir.
+    try:
+        from utils.path_utils import get_pairing_code
+        pairing_code = get_pairing_code()
+    except Exception:
+        pairing_code = None
+    service_status = _api.state.core.get_service_status() if _api.state.core and hasattr(_api.state.core, "get_service_status") else {}
+    # At-rest şifreleme durumu (görünürlük — düz-metin fallback'i sessizce gizleme).
+    at_rest_encrypted = None
+    try:
+        from database.treatment_history_db import get_treatment_db
+        _tdb = get_treatment_db(_api._app_data_dir())
+        at_rest_encrypted = bool(getattr(_tdb, "at_rest_encrypted", False))
+    except Exception:
+        pass
+    return {
+        "status": "online",
+        "service": "PEMF-Vet",
+        "deviceId": device_id,
+        "pairingCode": pairing_code,
+        "localIp": local_ip,
+        "tunnelUrl": tunnel_url or None,
+        "core_initialized": _api.state.core is not None,
+        "stmConnected": bool(getattr(_api.state.core, "stm_is_connected", False)) if _api.state.core else False,
+        "atRestEncrypted": at_rest_encrypted,
+        "services": service_status,
+    }
+
+
+@router.get("/favicon.ico")
+async def favicon():
+    return Response(status_code=204)
+
+
+@router.get("/api/discovery")
+async def discovery_info():
+    """Otomatik keşf endpoint'i. Telefon uygulaması bu endpoint'i sorgular."""
+    from servers import api_server as _api
+    from servers.auto_discovery import _get_local_ip
+    from servers.tunnel_manager import get_tunnel_url
+    return {
+        "service": "PEMF-Vet",
+        "version": _api._APP_VERSION,
+        "localIp": _get_local_ip(),
+        "port": 8000,
+        "tunnelUrl": get_tunnel_url() or None,
+        "capabilities": ["rest", "websocket", "mqtt", "ai", "database"],
+    }

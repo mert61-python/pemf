@@ -673,47 +673,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # --- REACT NATIVE (EXPO) ENDPOINT'LERİ ---
 
-@app.get("/api/health")
-async def health_check():
-    """Sistemin ayakta olup olmadığını kontrol eder. Otomatik keşf için de kullanılır."""
-    from servers.auto_discovery import _get_local_ip
-    from servers.tunnel_manager import get_tunnel_url
-    local_ip = _get_local_ip()
-    tunnel_url = get_tunnel_url()
-    try:
-        from utils.path_utils import get_unique_device_id
-        device_id = get_unique_device_id()
-    except Exception:
-        device_id = "PEMF-001"
-    # Eşleştirme kodu — FE bu cihazın kodunu kullanıcıya gösterir.
-    try:
-        from utils.path_utils import get_pairing_code
-        pairing_code = get_pairing_code()
-    except Exception:
-        pairing_code = None
-    service_status = state.core.get_service_status() if state.core and hasattr(state.core, "get_service_status") else {}
-    # At-rest şifreleme durumu (görünürlük — düz-metin fallback'i sessizce gizleme).
-    at_rest_encrypted = None
-    try:
-        from database.treatment_history_db import get_treatment_db
-        _tdb = get_treatment_db(_app_data_dir())
-        at_rest_encrypted = bool(getattr(_tdb, "at_rest_encrypted", False))
-    except Exception:
-        pass
-    return {
-        "status": "online",
-        "service": "PEMF-Vet",
-        "deviceId": device_id,
-        "pairingCode": pairing_code,
-        "localIp": local_ip,
-        "tunnelUrl": tunnel_url or None,
-        "core_initialized": state.core is not None,
-        "stmConnected": bool(getattr(state.core, "stm_is_connected", False)) if state.core else False,
-        "atRestEncrypted": at_rest_encrypted,
-        "services": service_status,
-    }
-
-
 @app.get("/metrics")
 async def metrics():
     """Prometheus-uyumlu metrikler (audit B-5.2) — sayısal zaman-serisi gözlemlenebilirliği.
@@ -749,26 +708,6 @@ async def metrics():
         lines.append(f"{name} {val}")
     return Response(content="\n".join(lines) + "\n",
                     media_type="text/plain; version=0.0.4; charset=utf-8")
-
-
-@app.get("/favicon.ico")
-async def favicon():
-    return Response(status_code=204)
-
-
-@app.get("/api/discovery")
-async def discovery_info():
-    """Otomatik keşf endpoint'i. Telefon uygulaması bu endpoint'i sorgular."""
-    from servers.auto_discovery import _get_local_ip
-    from servers.tunnel_manager import get_tunnel_url
-    return {
-        "service": "PEMF-Vet",
-        "version": _APP_VERSION,
-        "localIp": _get_local_ip(),
-        "port": 8000,
-        "tunnelUrl": get_tunnel_url() or None,
-        "capabilities": ["rest", "websocket", "mqtt", "ai", "database"],
-    }
 
 
 class CommandPayload(BaseModel):
