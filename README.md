@@ -123,7 +123,13 @@ Aynı EXE hem **klinik cihazı (device)** hem **sunucu (server)** için kullanı
 
 - **Yerel servise deploy (geliştirme):** `dist/PEMF_Backend`'i durdurup `C:\Program Files\PEMF Backend`'e kopyalar, servisi yeniden başlatır (yönetici gerekir). Bkz. `deploy/README.md`.
 - **Servis kur/mod seç:** `scripts/setup_services.ps1` (device/server modu, NSSM ile `PemfBackend` servisi).
-- **Installer üret (.exe kurulum):** `build_tools/build_installer.ps1` → Inno Setup ile `build_tools/*.iss`'i derler → `build_tools/Output/` altına installer `.exe` çıkar.
+- **Installer üret (.exe kurulum) — DOĞRUDAN ISCC (doğrulandı 2026-07-07):** onedir build'inden sonra:
+  ```bat
+  cd C:\Users\merta\Downloads\python-3.10.2-embed-amd64\guii
+  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build_tools\PEMF_Backend_Setup.iss
+  ```
+  → `build_tools/Output/PEMFBackendSetup_device_v1.5.0.exe` (~3.5 GB). Installer çalışınca eski `PemfBackend` servisini `sc stop` eder → Program Files'a kurar → ai_models'i ProgramData'ya kopyalar → `setup_services.ps1` ile servisi kurup başlatır. **Kurulum-öncesi UYARI:** eski servis durdurulsa da onun açtığı `cloudflared.exe` (tünel) çalışmaya devam edip dosyayı KİLİTLER → installer "DeleteFile kod 5" verir; yönetici PowerShell'de `taskkill /F /IM cloudflared.exe` (gerekirse `mosquitto.exe`) → "Yeniden denensin".
+  > *(Not: `build_installer.ps1` **eski** `PEMF_GUI_onedir.spec` adını referans alır — güncel spec `PEMF_Backend_onedir.spec` olduğundan o script patlar; yukarıdaki doğrudan ISCC yolu geçerlidir.)*
 
 Detaylı dağıtım: kökteki `DEPLOYMENT.md` + `deploy/README.md`.
 
