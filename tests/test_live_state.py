@@ -180,7 +180,10 @@ def test_get_active_session_is_readonly_on_expiry(api):
             "is_active": True, "session_id": "ro", "coil_ids": [6],
             "duration_minutes": 1, "start_time": time.time() - 120,  # 1dk seans, 2dk önce → dolmuş
         })
-    resp = asyncio.run(api.get_active_session())
+    # B-2.2: get_active_session servers/session_router.py'ye taşındı (davranış birebir; global _active_session'ı
+    # lazy-import ile okur → aynı salt-okunur invariant). Test yeni konumu çağırır.
+    from servers import session_router
+    resp = asyncio.run(session_router.get_active_session())
     # Yanıtta süre-dolmuş → is_active False GÖSTERİLİR...
     assert resp["is_active"] is False
     assert resp["remaining_sec"] == 0

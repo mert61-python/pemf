@@ -33,4 +33,19 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 
 - **Kalan system-ish:** yalnız `metrics` (`GET /metrics`; ağır coupling → ayrı observability pass'te).
 
-> Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`) → `servers/live_state.py`'ye taşınmalı.
+## Faz B — `session_router` (2026-07-06) — SAFETY-ADJACENT, dikkatli
+
+**Önce characterization:** `tests/test_session_char.py` (2 test) — `session/notes` fallback response shape + `session/active` read-only invariant. (`session/notes` mevcut testlerde KAPSANMIYORDU.)
+
+**Adım B1:** `session/active` + `session/notes` (+ `SessionNotesPayload`) → **`servers/session_router.py`**. Byte-exact (script + **word-boundary** `_api.` prefix — `get_active_session` gibi fonksiyon adlarını mangle etmeden).
+
+| Handler | Yol (DEĞİŞMEDİ) | Lazy-import erişimi |
+|---|---|---|
+| `get_active_session` | `GET /api/session/active` | `_session_lock`, `_active_session` (**salt-okunur**; global MUTATE yok — watchdog STOP korunur) |
+| `save_session_notes` | `POST /api/session/notes` | `_app_data_dir`, `_session_lock`, `_active_session`, `_sensor_sample_buffer(_lock)`, treatment-DB |
+
+- **"Dikkatli" ile YAKALANAN regresyon:** `test_live_state::test_get_active_session_is_readonly_on_expiry`, `api_server.get_active_session`'i **doğrudan** (HTTP değil) çağırıyordu → taşınınca `AttributeError`. Test yeni konuma yönlendirildi (`session_router.get_active_session`; davranış/güvenlik-invariant birebir). `test_session_char` state-bağımsız sağlam invariant'a çevrildi.
+- **api_server.py:** −89 satır. **94 test yeşil** (route-contract + shape + session-char + 9 mevcut session testi).
+- **⏸️ DEFERRED (human-review batch):** `session/start` (`:1114`, **bobin-sürer**) + `session/stop` (`:1680`) — safety-kritik; PR-boyu diff olarak ayrıca sunulacak (kullanıcı kararı).
+
+> Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`, `_active_session`, `_session_lock`) → `servers/live_state.py`/`session_state.py`'ye taşınmalı.

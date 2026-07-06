@@ -291,9 +291,11 @@ app.include_router(settings_router)
 from servers.update_router import router as update_router
 from servers.patient_router import router as patient_router
 from servers.system_router import router as system_router
+from servers.session_router import router as session_router
 app.include_router(update_router)
 app.include_router(patient_router)
 app.include_router(system_router)
+app.include_router(session_router)
 
 
 @app.get("/api/auth/token")
@@ -1749,74 +1751,6 @@ async def stop_session():
     return {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
 
 
-class SessionNotesPayload(BaseModel):
-    notes: str = ""
-    patient_name: str = ""
-    mode: str = "Manuel"
-    target_condition: str = ""
-    frequency: float = 0.0
-    intensity: float = 0.0
-    duration_minutes: int = 0
-
-
-@app.post("/api/session/notes")
-async def save_session_notes(payload: SessionNotesPayload):
-    """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı).
-
-    Asama-2 (1c): seans BASINDA gercek db_session_id olustuysa ARTIK YENI satir ACMAZ →
-    o satiri GUNCELLER (notlar + parametreler). Sensor buffer zaten /api/session/stop'ta
-    flush edildiginden burada tekrar flush ETMEZ (cift-kayit onlenir). db_session_id yoksa
-    eski start_session+end_session fallback'i korunur (geriye uyumlu)."""
-    try:
-        from database.treatment_history_db import get_treatment_db
-
-        app_data = _app_data_dir()
-        db = get_treatment_db(app_data)
-
-        # Aktif seansin DB durumunu al (varsa).
-        with _session_lock:
-            existing_sid = _active_session.get("db_session_id")
-
-        if existing_sid:
-            # Var olan seans satirini GUNCELLE (yeni satir acma → cift-kayit yok).
-            db.end_session(
-                existing_sid,
-                parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
-                patient_notes=payload.notes or None,
-                duration_minutes=(int(payload.duration_minutes) if payload.duration_minutes else None),
-            )
-            # Buffer zaten /stop'ta flush edildi; tekrar flush etme (idempotent).
-            return {"status": "success", "session_id": existing_sid, "sensor_samples": 0, "updated": True}
-
-        # Eski yol (db_session_id yok): tek-seferlik start+end fallback'i.
-        sid = db.start_session(
-            treatment_mode=payload.mode,
-            target_condition=payload.target_condition or None,
-            patient_name=payload.patient_name or None,
-        )
-        db.end_session(
-            sid,
-            parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},
-            patient_notes=payload.notes or None,
-            duration_minutes=int(payload.duration_minutes),
-        )
-        # Seans boyunca toplanan sensör örneklerini gerçek session_id ile kalıcı kaydet.
-        pending_count = 0
-        try:
-            with _sensor_sample_buffer_lock:
-                pending = list(_sensor_sample_buffer)
-                _sensor_sample_buffer.clear()
-            if pending:
-                pending_count = db.add_sensor_samples_batch(sid, pending)
-                logging.info("Sensör örnekleri kaydedildi: %d satır (session_id=%s)", pending_count, sid)
-        except Exception:
-            logging.exception("Sensör örnekleri kaydedilemedi")
-        return {"status": "success", "session_id": sid, "sensor_samples": pending_count}
-    except Exception as e:
-        logging.exception("save_session_notes failed")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 class AiLogPayload(BaseModel):
     patient_name: str = ""
     module: str = ""
@@ -1917,27 +1851,6 @@ async def emergency_stop():
     result = await asyncio.to_thread(_emergency_stop_all, "manual")
     _push_notification("Acil durdurma uygulandı", "error")
     return result
-
-
-@app.get("/api/session/active")
-async def get_active_session():
-    """Return current active session state."""
-    import time
-    with _session_lock:
-        sess = dict(_active_session)
-    if sess.get("is_active"):
-        elapsed = int(time.time() - sess.get("start_time", time.time()))
-        total = sess.get("duration_minutes", 0) * 60
-        remaining = max(0, total - elapsed)
-        sess["elapsed_sec"] = elapsed
-        sess["remaining_sec"] = remaining
-        sess["remaining_min"] = remaining // 60
-        # Süre dolduysa yalnız YANITTA göster — GLOBAL _active_session'ı MUTATE ETME. GET salt-okunur
-        # olmalı; aksi halde watchdog STOP'unu bastırıp bobinler fiziksel açık kalabilir (gerçek
-        # durdurma _session_duration_watchdog'un işi).
-        if remaining == 0 and total > 0:
-            sess["is_active"] = False
-    return sess
 
 
 # --- PATIENT DATABASE ENDPOINTS ---
