@@ -29,7 +29,7 @@ const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
   patients: { title: "Hasta Kayıtları", subtitle: "Dostlarımızın bilgileri." },
   kpi: { title: "Performans Raporu", subtitle: "Cihaz ve klinik göstergeleri." },
   simulator: { title: "Etki Simülasyonu", subtitle: "Manyetik alanın dostumuza etkisini görselleştirin." },
-  ai: { title: "Akıllı Teşhis (Kamera)", subtitle: "Kamera üzerinden otonom ağrı analizi ve tedavi." },
+  ai: { title: "Akıllı Teşhis", subtitle: "Kamera üzerinden otonom ağrı analizi ve tedavi." },
   settings: { title: "Ayarlar", subtitle: "Cihaz tercihleri ve gelişmiş mod." },
 };
 

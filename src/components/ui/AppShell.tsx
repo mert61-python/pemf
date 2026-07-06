@@ -127,7 +127,6 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             <Gauge color={colors.primary} size={24} />
             <View>
               <Text style={styles.brandTitle}>PEMF Vet</Text>
-              <Text style={styles.brandSub}>Responsive Console</Text>
             </View>
           </View>
           <ScrollView style={styles.navScroll} contentContainerStyle={styles.navList} showsVerticalScrollIndicator={false}>
