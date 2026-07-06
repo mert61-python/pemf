@@ -71,9 +71,16 @@ Ham `str(e)` istemci sızıntısı 5 noktada kesildi (api_server 4 + session_rou
 |---|---|---|
 | `e75658e` | `RealtimeChart`: 3 point-array `any` → `SensorDataPoint[]` (telemetri) | −3 |
 | `17ece89` | `ControlScreen`: `coils: any[]` → `CoilStatus[]` (hardware-control) | −1 |
+| `c7cd7ff` | `PatientScreen`: 4 `any` (patients/apiGet/handleEdit/handleStartSession) → `Patient`; domain `Patient.owner_email?` tamamlandı | −4 |
 
-  - Toplam: 102 → **98 any** (temiz domain-tipi swap'ları; `canvasRef as any` = web-canvas RN workaround bırakıldı).
-  - **Kalan ~94:** AiHubScreen (57), `apiPost<any>` response'ları (interface gerek), vb.
+  - Toplam: 102 → **94 any** (temiz domain-tipi swap'ları; `canvasRef as any` = web-canvas RN workaround bırakıldı).
+  - **PatientScreen'de 2 latent id-opsiyonellik** yakalandı (fetched patient'ta `id?` hep dolu ama tip gevşek): `setEditingId(p.id ?? null)` + `handleDelete(p.id!)` — runtime birebir, bug DEĞİL (tip-katılığı).
+  - **Kalan ~94 — çoğu "temiz swap" DEĞİL:** AiHubScreen (57; çoğu legit platform `as any` / native-modül köprüsü), `apiPost<any>`/`apiGet<any>` response'ları (yeni response-interface gerek), `discovery.ts` (Zeroconf untyped-lib), `TreatmentHistoryScreen` (ham backend record snake_case ≠ domain `TreatmentSession` camelCase → ham-tip tanımı gerek). Bunlar ya **legit cast** (bırak) ya da **interface/raw-type yazımı** (daha büyük, ayrı iş) → naive `any→X` swap net-negatif/riskli.
+  - **Somut kanıt (SystemInfoPanel araştırıldı → temiz-swap DEĞİL):** `apiGet<any>("/system/info")` `SystemInfo` ile tiplenemez — response şekli farklı (backend `pairingCode`/`tunnelUrl`/`stmConnected` döndürür, `uptime`/`totalSessions` döndürmez); üstelik tipleme sırasında **latent frontend bug** ortaya çıktı (`d.uptime` daima undefined → "Çalışma Süresi" hep 00:00:00). Bkz. `REFACTOR_BUGS.md` Faz F. `apiGet<any>` bilinçli bırakıldı (tipleme bug'ı gizler/build kırar).
+
+## Faz F-fix — SystemInfoPanel uptime bug (kullanıcı talebi, davranış-DEĞİŞTİREN, refactor DIŞI) — ✅ commit `pf@cf43816`
+Yukarıdaki latent bug, kullanıcı talebiyle ayrı bir **bug-fix** olarak düzeltildi (refactor değil — bilinçli davranış değişikliği). Uptime artık WS snapshot'taki `system.startTime`'dan istemci-tarafı hesaplanır: saf **`src/utils/uptime.ts` `formatUptime()`** (6 jest testi, TZ-bağımsız) + 1sn ticker. **Backend/EXE sözleşmesi değişmedi** (rebuild yok); `stmConnected` mount'ta bir kez (görünür davranış korundu); ölü 10sn `/system/info` poll kaldırıldı (−1 any → 93). tsc temiz, **36 jest yeşil (7 suite)**. Detay: `REFACTOR_BUGS.md` Faz F.
+  - **F3 temiz-hasat SONUCU:** öncelikli yollar (telemetri/hardware-control/hasta) tiplendi (3 commit, hepsi tsc+30 jest yeşil, davranış-birebir). Kalan any'ler bilinçli bırakıldı (legit cast / interface-yazımı-gerektiren / untyped-lib). Daha ileri tipleme = response-interface tasarımı (ayrı iş; latent-bug riski taşır — SystemInfoPanel örneği).
 - **F1 (LiveDataContext 458-satır split → telemetri/bağlantı/session)** + **F2 (AppNavContext → expo-router)** — henüz YAPILMADI. Delicate (F1 çok-tüketicili god-context; behavior-preservation React context'te ince — session/start gibi dikkat ister).
 
 ## KALAN (kullanıcı aksiyonu)
