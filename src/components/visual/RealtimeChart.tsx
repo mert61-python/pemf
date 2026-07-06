@@ -9,7 +9,7 @@ import { rf } from "@/theme/tokens";
 
 import { View, StyleSheet, Platform, Text } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText, G } from "react-native-svg";
-import type { CoilSensorHistory } from "@/types/domain";
+import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
 
 // 8 bobin için yüksek kontrastlı, kategorik (birbirinden barizce ayrık) palet.
 // Üst üste binen çizgiler ayırt edilebilsin diye kırmızı/mavi/yeşil/turuncu/mor/turkuaz/pembe/sarı.
@@ -215,15 +215,15 @@ function NativeRealtimeChart({
   const plotW = width - PAD.left - PAD.right;
   const plotH = height - PAD.top - PAD.bottom;
 
-  const downsample = (pts: any[]) => {
+  const downsample = (pts: SensorDataPoint[]): SensorDataPoint[] => {
     if (pts.length <= 120) return pts;
     const step = Math.ceil(pts.length / 120);
-    const out: any[] = [];
+    const out: SensorDataPoint[] = [];
     for (let i = 0; i < pts.length; i += step) out.push(pts[i]);
     return out;
   };
 
-  const series: { id: number; pts: any[] }[] = [];
+  const series: { id: number; pts: SensorDataPoint[] }[] = [];
   let magMin = Infinity, magMax = -Infinity, tempMin = Infinity, tempMax = -Infinity, maxPoints = 0;
   for (const coilId of visibleCoils) {
     const pts = downsample(history[coilId] ?? []);
