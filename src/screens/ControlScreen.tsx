@@ -14,6 +14,7 @@ import {
   Alert,
 } from "react-native";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import type { CoilStatus } from "@/types/domain";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { SessionProgressCard } from "@/components/domain/SessionProgressCard";
@@ -559,7 +560,7 @@ function ParamField({
 function CoilSelector({
   coils, selected, onToggle, stmConnected,
 }: {
-  coils: any[];
+  coils: CoilStatus[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   stmConnected: boolean;
