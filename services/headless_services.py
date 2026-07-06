@@ -402,11 +402,6 @@ class NetworkStatusService:
             self._publish("network.status", dict(self._status))
         return self.get_status()
 
-    def update_bridge_status(self, connected: bool) -> None:
-        with self._status_lock:
-            self._status["mqtt_bridge_connected"] = bool(connected)
-        self._publish("network.status", self.get_status())
-
     def _monitor_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
