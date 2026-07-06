@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { StyleSheet, Text, View, Animated } from "react-native";
 import { CheckCircle, AlertCircle, Info } from "lucide-react-native";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 
 type ToastType = "success" | "error" | "info";
 
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: rs(0), height: rs(4) },
     elevation: 5
   },
   success: { backgroundColor: colors.success },

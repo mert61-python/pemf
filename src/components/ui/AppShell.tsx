@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } fr
 import { Activity, BarChart3, Bell, BrainCircuit, Gauge, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, type LucideIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useResponsive } from "@/hooks/useResponsive";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { useUserMode } from "@/context/UserModeContext";
 import { useLiveData } from "@/context/LiveDataContext";
@@ -79,25 +79,35 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   // Güncel değerleri ref'lerden okuyoruz + tek-swipe-tek-geçiş debounce.
   const desktopRef = useRef(desktop); desktopRef.current = desktop;
   const activeRouteRef = useRef(activeRoute); activeRouteRef.current = activeRoute;
-  const navItemsRef = useRef(navItems); navItemsRef.current = navItems;
+  // Swipe, ALT BARDAKİ GÖRÜNÜR sekmeleri (primaryItems) gezsin — eskiden tüm navItems'i
+  // indeksliyordu, böylece kaydırma alt barda karşılığı olmayan "Daha Fazla" ekranlarına gidip
+  // yanan-sekme ile uyumsuz kalıyordu.
+  const primaryItemsRef = useRef(primaryItems); primaryItemsRef.current = primaryItems;
   const onRouteChangeRef = useRef(onRouteChange); onRouteChangeRef.current = onRouteChange;
   const lastNavRef = useRef(0);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      // Yalnız NET yatay hareketi yakala: |dx| baskın (dikeyin ~1.8 katı) + eşik. Diyagonal/dikey
+      // kaydırma ve dokunmalar dokunulmadan geçer → dikey scroll ve kart-tıklamaları bloklanmaz.
       onMoveShouldSetPanResponder: (_evt, g) => {
         if (desktopRef.current) return false;
-        return Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 24;
+        return Math.abs(g.dx) > 28 && Math.abs(g.dx) > Math.abs(g.dy) * 1.8;
       },
+      // Yatay swipe'ı sahiplenince başka bir bileşen (iç ScrollView vb.) ortadan ÇALMASIN.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_evt, g) => {
         if (desktopRef.current) return;
-        if (Math.abs(g.dx) < 60) return;
+        const horizontal = Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+        // Uzun sürükleme (>=64px) VEYA hızlı flick (>=32px + hız) sekme değiştirir; küçük/dikey oynama yok sayılır.
+        const strong = Math.abs(g.dx) >= 64 || (Math.abs(g.dx) >= 32 && Math.abs(g.vx) >= 0.35);
+        if (!horizontal || !strong) return;
         const now = Date.now();
-        if (now - lastNavRef.current < 600) return; // tek swipe = tek geçiş (çift-atlama önle)
-        const items = navItemsRef.current;
+        if (now - lastNavRef.current < 500) return; // tek swipe = tek geçiş (çift-atlama önle)
+        const items = primaryItemsRef.current;
         const idx = items.findIndex((i) => i.key === activeRouteRef.current);
-        if (idx === -1) return;
+        if (idx === -1) return; // aktif ekran alt barda değil (Daha Fazla içinden) → swipe-gezinme yok
         const dir = g.dx < 0 ? 1 : -1; // sola çek → sonraki tab, sağa çek → önceki tab
         const next = idx + dir;
         if (next >= 0 && next < items.length) {
@@ -105,6 +115,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           onRouteChangeRef.current(items[next].key);
         }
       },
+      onPanResponderTerminate: () => { /* iptal → sessizce bırak (yanlış geçiş yok) */ },
     })
   ).current;
 
@@ -279,7 +290,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     gap: spacing.xl,
     padding: spacing.xl,
-    width: 248
+    width: rs(248)
   },
   brand: {
     alignItems: "center",
@@ -288,7 +299,7 @@ const styles = StyleSheet.create({
   },
   brandTitle: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: rf(18),
     fontWeight: "800"
   },
   brandSub: {
@@ -304,7 +315,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     flexDirection: "row",
     gap: spacing.md,
-    minHeight: 44,
+    minHeight: rs(44),
     paddingHorizontal: spacing.md
   },
   navItemActive: {
@@ -333,9 +344,9 @@ const styles = StyleSheet.create({
   headerLeft: { flex: 1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   wsContainer: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  wsTextOff: { color: "#f59e0b", fontSize: 10, fontWeight: "700" },
+  wsTextOff: { color: "#f59e0b", fontSize: rf(10), fontWeight: "700" },
   wsIndicator: {
-    width: 10, height: 10, borderRadius: 5,
+    width: rs(10), height: rs(10), borderRadius: 5,
     backgroundColor: "#22c55e",
     shadowColor: "#22c55e", shadowOpacity: 0.8, shadowRadius: 4,
   },
@@ -350,17 +361,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   connBannerOffline: { backgroundColor: "#3a1a1a" },
-  connBannerText: { color: "#fcd34d", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  connBannerText: { color: "#fcd34d", fontSize: rf(12), fontWeight: "700", textAlign: "center" },
   notifBadgeWrap: { position: "relative", padding: spacing.xs },
   notifBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "flex-end", paddingHorizontal: spacing.lg },
-  notifSheet: { width: "100%", maxWidth: 420 },
+  notifSheet: { width: "100%", maxWidth: rs(420) },
   notifBadge: {
     position: "absolute", top: 0, right: 0,
     backgroundColor: "#ef4444",
-    borderRadius: 8, minWidth: 16, height: 16,
+    borderRadius: 8, minWidth: rs(16), height: rs(16),
     alignItems: "center", justifyContent: "center", paddingHorizontal: 3,
   },
-  notifBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  notifBadgeText: { color: "#fff", fontSize: rf(9), fontWeight: "800" },
   title: {
     color: colors.text,
     fontSize: typography.title,
@@ -392,13 +403,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     flex: 1,
     gap: spacing.xs,
-    minHeight: 56,
+    minHeight: rs(56),
     justifyContent: "center",
     paddingHorizontal: spacing.xs
   },
   bottomLabel: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: rf(10),
     fontWeight: "700"
   },
   moreBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
@@ -419,7 +430,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    minHeight: 48
+    minHeight: rs(48)
   },
   moreRowLabel: { color: colors.textMuted, fontSize: typography.body, fontWeight: "700" }
 });

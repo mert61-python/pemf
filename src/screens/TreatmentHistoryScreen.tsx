@@ -5,9 +5,9 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
-import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
+import { apiGet, apiPost, platformConfirm, platformAlert } from "@/services/apiClient";
 import { useToast } from "@/components/ui/ToastProvider";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useAppNav } from "@/context/AppNavContext";
@@ -52,6 +52,10 @@ export function TreatmentHistoryScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // audit B-8.2: keyset (cursor) pagination — ilk sayfa + "Daha Fazla" ile büyük geçmişe eriş.
+  const PAGE_SIZE = 50;
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Hastalar tabından "geçmiş"e gelindiyse aramayı o hastayla önceden doldur.
   const [searchQuery, setSearchQuery] = useState(selectedPatient?.name || "");
   // Seans BOBİN-DETAYI modalı için seçili seans (null → kapalı).
@@ -60,29 +64,37 @@ export function TreatmentHistoryScreen() {
   const fetchHistory = async () => {
     setLoading(true);
     setLoadError(false);
-    const data = await apiGet<any[] | null>("/history/", null);
+    const data = await apiGet<any[] | null>(`/history/?limit=${PAGE_SIZE}`, null);
     if (data === null) {
       setLoadError(true);
       setSessions([]);
+      setHasMore(false);
     } else {
       setSessions(data);
+      setHasMore(data.length === PAGE_SIZE);  // tam sayfa → daha fazlası olabilir
     }
     setLoading(false);
+  };
+
+  // audit B-8.2: sonraki sayfa — cursor = yüklü SON seansın id'si (keyset). Büyük geçmişte yalnız
+  // en yeni sayfayla sınırlı kalmadan tüm kayıtlara sayfalayarak eriş (offset yavaşlığı/kayması yok).
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || sessions.length === 0) return;
+    setLoadingMore(true);
+    const lastId = sessions[sessions.length - 1]?.id;
+    const data = await apiGet<any[] | null>(`/history/?limit=${PAGE_SIZE}&cursor=${lastId}`, null);
+    if (data && data.length > 0) {
+      setSessions((prev) => [...prev, ...data]);
+      setHasMore(data.length === PAGE_SIZE);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
   };
 
   useEffect(() => {
     fetchHistory();
   }, []);
-
-  const downloadAllPdf = () => {
-    if (sessions.length === 0) return;
-    const sessionIds = sessions.map(s => s.id).join(",");
-    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`));
-  };
-
-  const downloadCsv = () => {
-    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_csv`));
-  };
 
   const filteredSessions = sessions.filter((s) => {
     const q = searchQuery.toLowerCase();
@@ -92,10 +104,27 @@ export function TreatmentHistoryScreen() {
     return patientName.includes(q) || notes.includes(q) || date.includes(q);
   });
 
+  // "Tümünü PDF İndir" EKRANDA GÖRÜNEN (aktif filtre) kayıtları verir — eskiden filtreyi yok
+  // sayıp tüm seansları alıyordu. Ayrıca çok kayıtta uzun URL 414 vermesin diye üst sınır.
+  const PDF_MAX = 200;
+  const downloadAllPdf = () => {
+    const list = filteredSessions;
+    if (list.length === 0) return;
+    if (list.length > PDF_MAX) {
+      platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${PDF_MAX} tanesi PDF'e aktarılacak. Aramayı daraltın.`);
+    }
+    const sessionIds = list.slice(0, PDF_MAX).map(s => s.id).join(",");
+    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`));
+  };
+
+  const downloadCsv = () => {
+    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_csv`));
+  };
+
 
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: 1100, alignSelf: "center" }}>
+    <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1100), alignSelf: "center" }}>
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş tedavi kayıtları ve raporlamalar.</Text>
         <View style={{flexDirection: 'row', gap: spacing.sm}}>
@@ -142,6 +171,20 @@ export function TreatmentHistoryScreen() {
             />
           ))}
         </ResponsiveGrid>
+      )}
+
+      {hasMore && (
+        <TouchableOpacity
+          style={styles.loadMoreBtn}
+          onPress={loadMore}
+          disabled={loadingMore}
+          accessibilityRole="button"
+          accessibilityLabel="Daha fazla geçmiş yükle"
+        >
+          {loadingMore
+            ? <ActivityIndicator color={colors.primary} />
+            : <Text style={styles.loadMoreText}>Daha Fazla Yükle</Text>}
+        </TouchableOpacity>
       )}
 
       <SessionDetailModal
@@ -232,9 +275,9 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
           onPress={onOpenDetails}
           accessibilityLabel="Seans detayını aç"
         >
-          <Text style={styles.title}>{session.patient_name || "Bilinmeyen Hasta"}</Text>
-          <Text style={styles.muted}>{session.session_date} {session.start_time}</Text>
-          <Text style={styles.detailsHint}>Bobin detayını gör ›</Text>
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || "Bilinmeyen Hasta"}</Text>
+          <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
+          <Text style={styles.detailsHint} numberOfLines={1}>Bobin detayını gör ›</Text>
         </TouchableOpacity>
         <View style={{flexDirection: 'row', alignItems: 'center', gap: spacing.sm}}>
           <StatusPill label={statusLabelTr(session.session_status)} state={state} />
@@ -298,6 +341,19 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  loadMoreBtn: {
+    alignSelf: "center",
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: rs(10),
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: rs(44),
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadMoreText: { color: colors.primary, fontWeight: "700", fontSize: typography.body },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -323,7 +379,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.body,
     flex: 1,
-    minWidth: 200
+    minWidth: rs(200)
   },
   card: {
     gap: spacing.md,
@@ -337,7 +393,7 @@ const styles = StyleSheet.create({
   },
   titleArea: {
     flex: 1,
-    minWidth: 0,
+    minWidth: rs(0),
     flexShrink: 1
   },
   title: {
@@ -364,7 +420,7 @@ const styles = StyleSheet.create({
   detail: {
     backgroundColor: colors.bgAlt,
     borderRadius: 8,
-    minWidth: 100,
+    minWidth: rs(100),
     flex: 1,
     padding: spacing.md
   },
@@ -403,7 +459,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderRadius: 4,
     padding: spacing.xs,
-    minHeight: 60,
+    minHeight: rs(60),
     textAlignVertical: 'top'
   },
   btnPrimary: {

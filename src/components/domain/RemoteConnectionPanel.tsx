@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography, rf } from '@/theme/tokens';
 import { Wifi, Copy } from 'lucide-react-native';
 import { serviceConfig } from '@/services/config';
 import { platformAlert } from '@/services/apiClient';
@@ -8,11 +8,13 @@ import { platformAlert } from '@/services/apiClient';
 export default function RemoteConnectionPanel() {
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const apiBaseUrl = serviceConfig.apiBaseUrl;
 
   const fetchSystemInfo = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/system/info`);
+      // serviceConfig.apiBaseUrl HER çağrıda taze okunur — updateServiceConfig objeyi
+      // yeniden ATADIĞINDAN (config.ts), mount'ta yakalanan bir kopya yeniden-bağlanma
+      // sonrası ESKİ adrese takılı kalırdı (panel sürekli eski sunucuyu yoklardı).
+      const res = await fetch(`${serviceConfig.apiBaseUrl}/system/info`);
       const data = await res.json();
       // Backend artık camelCase 'tunnelUrl' döndürüyor (eski 'tunnel_url' bug'lıydı).
       const url = data.tunnelUrl || data.tunnel_url;
@@ -59,7 +61,7 @@ export default function RemoteConnectionPanel() {
       <View style={styles.content}>
         <View style={styles.infoContainer}>
           <Text style={styles.description}>
-            Mobil uygulamadan "Sunucu IP" bölümüne bu adresi girerek uzaktan bağlanabilirsiniz.
+            Mobil uygulamadan &quot;Sunucu IP&quot; bölümüne bu adresi girerek uzaktan bağlanabilirsiniz.
           </Text>
           
           {loading ? (
@@ -72,7 +74,7 @@ export default function RemoteConnectionPanel() {
               <Copy size={16} color={colors.text} />
             </TouchableOpacity>
           ) : (
-            <Text style={styles.waitingText}>Tünel URL'si bekleniyor...</Text>
+            <Text style={styles.waitingText}>Tünel URL&apos;si bekleniyor...</Text>
           )}
         </View>
       </View>
@@ -111,7 +113,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.small,
     marginBottom: spacing.sm,
-    lineHeight: 18,
+    lineHeight: rf(18),
   },
   urlBox: {
     flexDirection: 'row',

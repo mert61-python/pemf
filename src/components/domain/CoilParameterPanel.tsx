@@ -6,7 +6,7 @@
  */
 import { StyleSheet, Text, View, TextInput, TouchableOpacity } from "react-native";
 import { useState, useCallback, useEffect } from "react";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 
@@ -66,9 +66,11 @@ export function CoilParameterPanel({
     setLoading(true);
     setError(null);
     try {
-      let f = parseFloat(freq) || defaultFreq;
-      let d = parseFloat(duty) || defaultDuty;
-      let ph = parseFloat(phase) || defaultPhase;
+      // NaN-guard (|| DEĞİL): kullanıcı bilerek 0 yazarsa (bobini parkla) 0 KORUNSUN — eskiden
+      // `parseFloat("0") || defaultFreq` 0'ı falsy sayıp default'a döndürüp bobini süründürüyordu.
+      const pf = parseFloat(freq);   let f = Number.isNaN(pf) ? defaultFreq : pf;
+      const pd = parseFloat(duty);   let d = Number.isNaN(pd) ? defaultDuty : pd;
+      const pp = parseFloat(phase);  let ph = Number.isNaN(pp) ? defaultPhase : pp;
       let durMin = parseInt(duration) || 0;
       if (start) {
         // Güvenlik: yalnızca BAŞLAT'ta sınır uygula (stop meşru biçimde 0 olabilir).
@@ -171,6 +173,8 @@ export function CoilParameterPanel({
           style={[styles.btnStart, isDisabled && styles.btnDisabled]}
           onPress={() => sendCommand(true)}
           disabled={isDisabled || loading}
+          accessibilityRole="button"
+          accessibilityLabel="Bobini başlat"
         >
           <Text style={styles.btnStartText}>▶ Başlat</Text>
         </TouchableOpacity>
@@ -178,6 +182,8 @@ export function CoilParameterPanel({
           style={[styles.btnStop, (!running || loading) && styles.btnDisabled]}
           onPress={() => sendCommand(false)}
           disabled={!running || loading}
+          accessibilityRole="button"
+          accessibilityLabel="Bobini durdur"
         >
           <Text style={styles.btnStopText}>⏹ Durdur</Text>
         </TouchableOpacity>
@@ -224,6 +230,7 @@ function ParamInput({
         editable={!disabled}
         keyboardType={keyboardType}
         selectTextOnFocus
+        accessibilityLabel={label}
       />
     </View>
   );
@@ -244,9 +251,9 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  colorDot: { width: 10, height: 10, borderRadius: 5 },
+  colorDot: { width: rs(10), height: rs(10), borderRadius: 5 },
   coilTitle: { color: colors.text, fontWeight: "700", fontSize: typography.body },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusDot: { width: rs(8), height: rs(8), borderRadius: 4 },
   tempBadge: {
     backgroundColor: "#1e293b",
     paddingHorizontal: 6,
@@ -254,7 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   tempWarning: { backgroundColor: "#7f1d1d" },
-  tempText: { color: colors.text, fontSize: 11, fontWeight: "700" },
+  tempText: { color: colors.text, fontSize: rf(11), fontWeight: "700" },
 
   readings: {
     flexDirection: "row",
@@ -265,7 +272,7 @@ const styles = StyleSheet.create({
   },
   reading: { flex: 1, alignItems: "center" },
   readingValue: { color: colors.primary, fontSize: typography.body, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
-  readingLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  readingLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700" },
 
   paramGrid: {
     flexDirection: "row",
@@ -273,7 +280,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   paramInputWrap: { width: "48%", gap: 2 },
-  paramLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "600" },
+  paramLabel: { color: colors.textMuted, fontSize: rf(11), fontWeight: "600" },
   paramInput: {
     backgroundColor: "#1e293b",
     borderRadius: 6,
@@ -329,5 +336,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#22c55e",
   },
-  sourceBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+  sourceBadgeText: { color: "#fff", fontSize: rf(9), fontWeight: "800" },
 });

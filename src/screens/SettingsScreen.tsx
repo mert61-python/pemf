@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
 import { apiGet, apiPost, platformAlert } from "@/services/apiClient";
 import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 
 
 export function SettingsScreen() {
-  const { userMode, setUserMode, isExpert } = useUserMode();
+  const { setUserMode, isExpert } = useUserMode();
   const { showToast } = useToast();
   const [settings, setSettings] = useState({
     clinic_name: "",
@@ -266,9 +266,10 @@ export function SettingsScreen() {
             <Text style={styles.cardTitle}>Klinik Bilgileri</Text>
           </View>
           <Text style={styles.label}>Klinik Adı</Text>
-          <TextInput 
-            style={styles.input} 
-            value={settings.clinic_name} 
+          <TextInput
+            style={styles.input}
+            accessibilityLabel="Klinik adı"
+            value={settings.clinic_name}
             onChangeText={val => setSettings({...settings, clinic_name: val})}
             placeholder="Örn: VetCare Plus"
           />
@@ -276,6 +277,7 @@ export function SettingsScreen() {
           <Text style={styles.label}>Klinik Acil Telefon</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Klinik acil telefon"
             value={settings.clinic_phone}
             onChangeText={val => { setSettings({...settings, clinic_phone: val}); AsyncStorage.setItem("pemf_clinic_phone", val).catch(() => {}); }}
             placeholder="Örn: +902125550000"
@@ -347,6 +349,7 @@ export function SettingsScreen() {
               <Text style={[styles.label, { marginTop: spacing.md }]}>Uzak cihaza bağlan (kod ya da kimlik)</Text>
               <TextInput
                 style={styles.input}
+                accessibilityLabel="Uzak cihaza bağlan: eşleştirme kodu veya cihaz kimliği"
                 value={remoteInput}
                 onChangeText={(v) => setRemoteInput(v.replace(/\s+/g, "").toUpperCase())}
                 placeholder="Eşleştirme kodu (örn: A3F9K2) veya cihaz kimliği"
@@ -387,15 +390,16 @@ export function SettingsScreen() {
                 <Text style={{ color: connectionStatus === "ok" ? "#4ade80" : "#f87171", fontWeight: "700" }}>
                   {connectionStatus === "ok" ? "✅ Bağlı" : "❌ Bağlanamadı"}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{settings.server_ip}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: rf(12), marginTop: 2 }}>{settings.server_ip}</Text>
               </View>
             )}
 
             <Text style={styles.label}>Manuel Sunucu Adresi</Text>
-            <TextInput 
-              style={styles.input} 
-              value={settings.server_ip} 
-              onChangeText={val => setSettings({...settings, server_ip: val})} 
+            <TextInput
+              style={styles.input}
+              accessibilityLabel="Manuel sunucu adresi"
+              value={settings.server_ip}
+              onChangeText={val => setSettings({...settings, server_ip: val})}
               placeholder="192.168.1.100 veya https://xxxx.trycloudflare.com" 
               autoCapitalize="none"
               keyboardType="default"
@@ -405,7 +409,7 @@ export function SettingsScreen() {
               <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
             </TouchableOpacity>
             <Text style={styles.helperText}>
-              Manuel yedek: aynı Wi-Fi'de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
+              Manuel yedek: aynı Wi-Fi&apos;de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
             </Text>
           </Card>
 
@@ -476,7 +480,7 @@ const styles = StyleSheet.create({
   container: {
     paddingBottom: spacing.xxl,
     width: "100%",
-    maxWidth: 900,
+    maxWidth: rs(900),
     alignSelf: "center"
   },
   headerTitle: {

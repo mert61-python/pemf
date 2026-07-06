@@ -3,11 +3,11 @@
  * Gerçek veriye dayalı KPI kartları — API'den ve canlı sensör verisinden.
  */
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View, StyleSheet, Dimensions } from "react-native";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
@@ -18,7 +18,7 @@ interface KpiSummary {
   stoppedSessions: number;
   avgDurationMin: number;
   modeDistribution: Record<string, number>;
-  last7Days: Array<{ date: string; count: number }>;
+  last7Days: { date: string; count: number }[];
 }
 
 export function KpiDashboardScreen() {
@@ -35,27 +35,29 @@ export function KpiDashboardScreen() {
 
   useEffect(() => {
     let mounted = true;
-    // Önce bridge'den KPI özetini çek (DB'den)
-    const { serviceConfig } = require("@/services/config");
-    fetch(`${serviceConfig.bridgeBaseUrl}/kpi/summary`)
-      .then(r => r.json())
-      .then((data: KpiSummary) => {
-        if (mounted) { setKpi(data); setLoading(false); }
-      })
-      .catch(() => {
-        // Fallback: API server'dan history statistics dene
-        apiGet<any>("/history/statistics", {}).then((data) => {
-          if (mounted && data) {
-            setKpi(prev => ({
-              ...prev,
-              totalSessions: data.total_sessions ?? 0,
-              completedSessions: data.completed_sessions ?? 0,
-              avgDurationMin: data.avg_duration_minutes ?? 0,
-            }));
-            setLoading(false);
-          }
-        });
+    // KPI özetini auth'lu (X-API-Key) + timeout'lu apiGet ile çek — uzaktan (tünel,
+    // PEMF_REQUIRE_AUTH=1) ham fetch 401 alıp bozuluyordu. apiGet hata/401'de null döner.
+    apiGet<KpiSummary | null>("/kpi/summary", null, { silent: true }).then((data) => {
+      if (!mounted) return;
+      if (data && typeof data.totalSessions === "number") {
+        setKpi(data);
+        setLoading(false);
+        return;
+      }
+      // Fallback: /history/statistics (alan adları farklı → hepsini dene)
+      apiGet<any>("/history/statistics", null, { silent: true }).then((s) => {
+        if (!mounted) return;
+        if (s) {
+          setKpi(prev => ({
+            ...prev,
+            totalSessions: s.total_sessions ?? 0,
+            completedSessions: s.completed_sessions ?? 0,
+            avgDurationMin: s.avg_duration_minutes ?? s.average_duration ?? 0,
+          }));
+        }
+        setLoading(false);
       });
+    });
     return () => { mounted = false; };
   }, []);
 
@@ -80,9 +82,10 @@ export function KpiDashboardScreen() {
     ? Math.round((connectedCoils.length / 8) * 100)
     : 0;
 
-  // Geniş ekranda maxWidth (1200) ile sınırla — grafik kartı taşmasın.
-  const winW = Math.min(Dimensions.get("window").width, 1200);
-  const chartWidth = winW > 768 ? winW / 2 - 40 : winW - 32;
+  // Grafik genişliği kartın GERÇEK iç genişliğinden (onLayout) ölçülür → her telefon/
+  // yoğunluk/yön ve tek/çift-kolon gridde kart sınırına TAM oturur. Sabit Dimensions
+  // hesabı kartın kendi padding'ini kaçırıp grafiğin kutudan taşmasına yol açıyordu.
+  const [chartW, setChartW] = useState(0);
 
   const chartConfig = {
     backgroundGradientFrom: "#1e293b",
@@ -98,7 +101,18 @@ export function KpiDashboardScreen() {
   const last7 = kpi.last7Days.slice().reverse();
   const barData = {
     labels: last7.length > 0
-      ? last7.map(d => d.date.slice(5))  // MM-DD formatı
+      ? last7.map(d => {
+          // Güvenli MM-DD: backend string 'YYYY-MM-DD' bekleniyor ama sayı/epoch/ISO gelirse
+          // ham .slice(5) ya yanlış etiket ya da (sayıda) TypeError → KPI beyaz ekran veriyordu.
+          const raw: any = (d as any)?.date;
+          if (typeof raw === "number") {
+            const dt = new Date(raw < 1e12 ? raw * 1000 : raw);
+            return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+          }
+          const s = String(raw ?? "");
+          const m = s.match(/\d{4}-(\d{2}-\d{2})/);
+          return m ? m[1] : (s.length >= 5 ? s.slice(5) : (s || "—"));
+        })
       : ["—", "—", "—", "—", "—", "—", "—"],
     datasets: [{ data: last7.length > 0 ? last7.map(d => d.count) : [0, 0, 0, 0, 0, 0, 0] }]
   };
@@ -154,29 +168,37 @@ export function KpiDashboardScreen() {
       <ResponsiveGrid minItemWidth={300}>
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
-          <BarChart
-            data={barData}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            style={{ marginVertical: 8, borderRadius: 8 }}
-            yAxisLabel=""
-            yAxisSuffix=""
-          />
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <BarChart
+                data={barData}
+                width={chartW}
+                height={220}
+                chartConfig={chartConfig}
+                style={styles.chart}
+                yAxisLabel=""
+                yAxisSuffix=""
+              />
+            )}
+          </View>
         </Card>
         <Card style={styles.chartCard}>
           <Text style={styles.chartTitle}>Tedavi Modu Dağılımı</Text>
-          <PieChart
-            data={pieData}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            accessor={"population"}
-            backgroundColor={"transparent"}
-            paddingLeft={"15"}
-            center={[10, 0]}
-            absolute
-          />
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <PieChart
+                data={pieData}
+                width={chartW}
+                height={220}
+                chartConfig={chartConfig}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"15"}
+                center={[10, 0]}
+                absolute
+              />
+            )}
+          </View>
         </Card>
       </ResponsiveGrid>
 
@@ -206,7 +228,7 @@ export function KpiDashboardScreen() {
                   <Text style={[styles.tableCell, { color: "#22c55e" }]}>{mag.toFixed(2)}</Text>
                   <Text style={[styles.tableCell, { color: temp > 45 ? "#ef4444" : "#fb923c" }]}>{temp.toFixed(1)}</Text>
                   <Text style={[styles.tableCell, { color: "#60a5fa" }]}>{cur.toFixed(3)}</Text>
-                  <Text style={[styles.tableCell, { color: "#a78bfa" }]}>{power.toFixed(2)}</Text>
+                  <Text style={[styles.tableCell, { color: "#a78bfa" }]}>{cur > 0 ? power.toFixed(2) : "—"}</Text>
                   <Text style={styles.tableCell}>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
                 </View>
               );
@@ -219,9 +241,11 @@ export function KpiDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: 1200, alignSelf: "center" },
+  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
   sectionTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "700", marginTop: spacing.md },
-  chartCard: { padding: spacing.sm, alignItems: 'center' },
+  chartCard: { padding: spacing.sm, alignItems: 'center', overflow: "hidden" },
+  chartInner: { width: "100%", alignItems: "center" },
+  chart: { marginVertical: spacing.sm, borderRadius: 8 },
   chartTitle: { color: colors.text, fontSize: typography.body, fontWeight: "700", marginBottom: spacing.sm, alignSelf: 'flex-start', paddingLeft: spacing.sm },
   tableCard: { padding: 0, overflow: "hidden" },
   tableHeader: {
@@ -238,11 +262,11 @@ const styles = StyleSheet.create({
     borderColor: "#1e293b",
   },
   tableRowOff: { opacity: 0.35 },
-  tableHead: { color: colors.textMuted, fontWeight: "700", fontSize: 11 },
+  tableHead: { color: colors.textMuted, fontWeight: "700", fontSize: rf(11) },
   tableCell: {
     flex: 1,
     color: colors.text,
-    fontSize: 13,
+    fontSize: rf(13),
     fontWeight: "600",
     fontVariant: ["tabular-nums"] as any,
   },

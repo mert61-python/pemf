@@ -1,4 +1,4 @@
-import { serviceConfig, setStoredApiToken } from "@/services/config";
+import { serviceConfig } from "@/services/config";
 import { Alert, Platform } from "react-native";
 
 /** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
@@ -42,32 +42,40 @@ export function authHeaders(): Record<string, string> {
 // pairing kodu render olmuyor / butonlar "Kaydediliyor…"de takılı kalıyordu.)
 const REQUEST_TIMEOUT_MS = 8000;
 
-/** 401 = token eksik/geçersiz. Eskimiş token'ı temizle → sonraki LAN keşfinde yeniden sağlanır
- *  (backend reinstall sonrası eski token'la kalıcı uzak-401 döngüsünü kırar). */
-function onUnauthorized(): void {
-  if (serviceConfig.apiToken) setStoredApiToken("").catch(() => {});
-}
+// NOT: 401'de token ASLA SİLİNMEZ. Kullanıcı bir kez (LAN veya uzaktan) bağlandıysa token
+// saklı kalır; bir daha uğraştırılmaz. Yanlış/eski token, telefon LAN'a girince keşifteki
+// provisionToken (/api/auth/token) ile OTOMATİK ve koşulsuz tazelenir. Silmek gereksiz olduğu
+// gibi tünelde "bağlı ama kalıcı 401" tuzağı yaratıyordu.
 
 export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Promise<T> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const url = `${serviceConfig.apiBaseUrl}${path}`;
-    const response = await fetch(url, { headers: authHeaders(), signal: ctrl.signal });
-    if (!response.ok) {
-      if (response.status === 401) onUnauthorized();
-      console.error(`API GET Hatası [${response.status}]: ${url}`);
-      if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
+  const url = `${serviceConfig.apiBaseUrl}${path}`;
+  // audit B-10.3: GET İDEMPOTENT → geçici ağ hatasında (fetch throw/timeout) 1 kez daha dene
+  // (400ms sonra). HTTP hatasında (sunucu yanıt verdi) TEKRAR DENENMEZ. POST asla denenmez.
+  const MAX_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { headers: authHeaders(), signal: ctrl.signal });
+      if (!response.ok) {
+        console.error(`API GET Hatası [${response.status}]: ${url}`);
+        if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
+        return fallback;
+      }
+      return (await response.json()) as T;
+    } catch (error) {
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 400)); // kısa geri-çekilme, sonra bir kez daha
+        continue;
+      }
+      console.error(`API GET İstek Başarısız (${MAX_ATTEMPTS} deneme): ${path}`, error);
+      // Bağlantı kopması BLOKLAYAN uyarı GÖSTERMEZ — global çevrimdışı banner durumu bildirir.
       return fallback;
+    } finally {
+      clearTimeout(timer);
     }
-    return (await response.json()) as T;
-  } catch (error) {
-    console.error(`API GET İstek Başarısız: ${path}`, error);
-    if (!opts?.silent) showError("Bağlantı Koptu", "İnternet bağlantınız koptu veya sunucuya ulaşılamıyor.");
-    return fallback;
-  } finally {
-    clearTimeout(timer);
   }
+  return fallback;
 }
 
 export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?: ApiOpts): Promise<T> {
@@ -86,7 +94,6 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       signal: ctrl.signal,
     });
     if (!response.ok) {
-      if (response.status === 401) onUnauthorized();
       console.error(`API POST Hatası [${response.status}]: ${url}`);
       if (!opts?.silent) showError("Sunucu Hatası", "Sunucuya veri gönderilirken bir hata oluştu.");
       return fallback;
@@ -94,7 +101,8 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
     return (await response.json()) as T;
   } catch (error) {
     console.error(`API POST İstek Başarısız: ${path}`, error);
-    if (!opts?.silent) showError("Bağlantı Koptu", "İnternet bağlantınız koptu veya sunucuya ulaşılamıyor.");
+    // Bağlantı kopması BLOKLAYAN uyarı GÖSTERMEZ — global çevrimdışı banner + sağ-üst "Çevrimdışı"
+    // göstergesi zaten durumu bildirir; her tab-geçişi/mount fetch'inde pop-up spam'i olmasın.
     return fallback;
   } finally {
     clearTimeout(timer);

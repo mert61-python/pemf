@@ -5,6 +5,8 @@
  * Web'de Canvas 2D API kullanır. Sliding window (2000 veri noktası).
  */
 import { useEffect, useRef, useCallback } from "react";
+import { rf } from "@/theme/tokens";
+
 import { View, StyleSheet, Platform, Text } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText, G } from "react-native-svg";
 import type { CoilSensorHistory } from "@/types/domain";
@@ -236,7 +238,7 @@ function NativeRealtimeChart({
   if (maxPoints < 2) {
     return (
       <View style={[styles.fallback, { width, height }]}>
-        <Text style={{ color: "#334155", fontSize: 14 }}>Sensör verisi bekleniyor…</Text>
+        <Text style={{ color: "#334155", fontSize: rf(14) }}>Sensör verisi bekleniyor…</Text>
       </View>
     );
   }

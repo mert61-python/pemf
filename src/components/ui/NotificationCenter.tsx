@@ -4,7 +4,7 @@
  */
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated } from "react-native";
 import { useRef, useEffect } from "react";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
 
@@ -75,7 +75,7 @@ function NotificationItem({ notification: n, compact }: { notification: AppNotif
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [fadeAnim]);
 
   return (
     <Animated.View style={[styles.item, { backgroundColor: cfg.bg, borderLeftColor: cfg.color, opacity: fadeAnim }]}>
@@ -122,19 +122,19 @@ const styles = StyleSheet.create({
   badge: {
     backgroundColor: "#ef4444",
     borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    minWidth: rs(20),
+    height: rs(20),
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
   },
-  badgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  badgeText: { color: "#fff", fontSize: rf(11), fontWeight: "800" },
   headerActions: { flexDirection: "row", gap: spacing.sm },
   actionBtn: { padding: spacing.xs },
   actionBtnText: { color: colors.primary, fontSize: typography.small, fontWeight: "600" },
 
-  list: { maxHeight: 240 },
-  listCompact: { maxHeight: 120 },
+  list: { maxHeight: rs(240) },
+  listCompact: { maxHeight: rs(120) },
 
   item: {
     flexDirection: "row",
@@ -145,13 +145,13 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     marginBottom: spacing.xs,
   },
-  itemIcon: { fontSize: 14, marginTop: 1 },
+  itemIcon: { fontSize: rf(14), marginTop: 1 },
   itemBody: { flex: 1, gap: 2 },
-  itemMsg: { color: colors.text, fontSize: typography.small, lineHeight: 18 },
-  itemMsgCompact: { fontSize: 12 },
-  itemTime: { color: colors.textMuted, fontSize: 11 },
+  itemMsg: { color: colors.text, fontSize: typography.small, lineHeight: rf(18) },
+  itemMsgCompact: { fontSize: rf(12) },
+  itemTime: { color: colors.textMuted, fontSize: rf(11) },
 
   empty: { alignItems: "center", paddingVertical: spacing.xl, gap: spacing.xs },
-  emptyIcon: { fontSize: 28 },
+  emptyIcon: { fontSize: rf(28) },
   emptyText: { color: colors.textMuted, fontSize: typography.small },
 });

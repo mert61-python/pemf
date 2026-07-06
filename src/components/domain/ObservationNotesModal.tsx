@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { Modal, View, Text, StyleSheet, TouchableOpacity, TextInput } from "react-native";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -94,6 +94,7 @@ export function ObservationNotesModal({
           <Text style={styles.label}>Notlar</Text>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Gözlem notları"
             value={notes}
             onChangeText={setNotes}
             placeholder="Ek gözlemler…"
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
     textAlignVertical: "top",
-    minHeight: 70,
+    minHeight: rs(70),
   },
   btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
   btn: { flex: 1, borderRadius: 12, padding: spacing.md, alignItems: "center" },

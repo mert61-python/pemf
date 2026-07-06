@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography, rs } from "@/theme/tokens";
 import { ConnectionState } from "@/types/domain";
 
 interface StatusPillProps {
@@ -34,13 +34,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 32,
+    minHeight: rs(32),
     paddingHorizontal: spacing.md
   },
   dot: {
     borderRadius: 4,
-    height: 8,
-    width: 8
+    height: rs(8),
+    width: rs(8)
   },
   label: {
     fontSize: typography.caption,

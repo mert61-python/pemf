@@ -2,7 +2,7 @@
   "expo": {
     "name": "PEMF Vet Mobil",
     "slug": "pemf-vet-responsive",
-    "version": "1.0.3",
+    "version": "2.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "pemfvet",
@@ -14,12 +14,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pemf.vet",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "QR kod tarama ve AI fotoğraf analizi için kamera gereklidir.",
         "NSPhotoLibraryUsageDescription": "AI analizi için fotoğraf seçmek amacıyla galeri erişimi gereklidir.",
         "NSLocalNetworkUsageDescription": "Aynı Wi-Fi'deki PEMF cihazını otomatik bulmak için yerel ağ erişimi gereklidir.",
-        "NSBonjourServices": ["_pemfvet._tcp"],
+        "NSBonjourServices": [
+          "_pemfvet._tcp"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -29,7 +31,7 @@
         "backgroundColor": "#121827"
       },
       "package": "com.pemf.vet",
-      "versionCode": 4,
+      "versionCode": 5,
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
@@ -58,7 +60,9 @@
           }
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-audio",
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},

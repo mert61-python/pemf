@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 
 type ButtonVariant = "primary" | "danger" | "secondary" | "ghost";
 
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "center",
-    minHeight: 44,
+    minHeight: rs(44),
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md
   },

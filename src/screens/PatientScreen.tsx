@@ -4,7 +4,7 @@ import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "l
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 import { apiGet, apiPost } from "@/services/apiClient";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
@@ -125,7 +125,8 @@ export function PatientScreen() {
         text: "Hepsini Sil", 
         style: "destructive", 
         onPress: async () => {
-          const res = await apiPost<{status: string}>(`/patients/delete_all`, {}, { status: "error" });
+          // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
+          const res = await apiPost<{status: string}>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
           if (res.status === "success") {
             showToast("Tüm hastalar silindi.", "success");
             loadPatients();
@@ -176,14 +177,14 @@ export function PatientScreen() {
         <Card style={styles.formCard}>
           <Text style={styles.formTitle}>{editingId ? "Hasta Bilgilerini Düzenle" : "Yeni Hasta Ekle"}</Text>
           <ResponsiveGrid minItemWidth={200}>
-            <TextInput style={styles.input} placeholder="Hasta Adı (örn: Mia)" placeholderTextColor={colors.textMuted} value={form.name} onChangeText={t => setForm({...form, name: t})} />
-            <TextInput style={styles.input} placeholder="Türü (örn: Kedi)" placeholderTextColor={colors.textMuted} value={form.species} onChangeText={t => setForm({...form, species: t})} />
-            <TextInput style={styles.input} placeholder="Irkı" placeholderTextColor={colors.textMuted} value={form.breed} onChangeText={t => setForm({...form, breed: t})} />
-            <TextInput style={styles.input} placeholder="Yaş (Sayı)" placeholderTextColor={colors.textMuted} value={form.age} onChangeText={t => setForm({...form, age: t})} keyboardType="numeric" />
-            <TextInput style={styles.input} placeholder="Kilo (kg)" placeholderTextColor={colors.textMuted} value={form.weight} onChangeText={t => setForm({...form, weight: t})} keyboardType="numeric" />
-            <TextInput style={styles.input} placeholder="Sahibi" placeholderTextColor={colors.textMuted} value={form.owner} onChangeText={t => setForm({...form, owner: t})} />
-            <TextInput style={styles.input} placeholder="Veteriner / İletişim (Tel)" placeholderTextColor={colors.textMuted} value={form.vet_contact} onChangeText={t => setForm({...form, vet_contact: t})} keyboardType="phone-pad" />
-            <TextInput style={styles.input} placeholder="Sahip E-Posta (rapor için)" placeholderTextColor={colors.textMuted} value={form.owner_email} onChangeText={t => setForm({...form, owner_email: t})} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={styles.input} accessibilityLabel="Hasta adı" placeholder="Hasta Adı (örn: Mia)" placeholderTextColor={colors.textMuted} value={form.name} onChangeText={t => setForm({...form, name: t})} />
+            <TextInput style={styles.input} accessibilityLabel="Hayvan türü" placeholder="Türü (örn: Kedi)" placeholderTextColor={colors.textMuted} value={form.species} onChangeText={t => setForm({...form, species: t})} />
+            <TextInput style={styles.input} accessibilityLabel="Irk" placeholder="Irkı" placeholderTextColor={colors.textMuted} value={form.breed} onChangeText={t => setForm({...form, breed: t})} />
+            <TextInput style={styles.input} accessibilityLabel="Yaş" placeholder="Yaş (Sayı)" placeholderTextColor={colors.textMuted} value={form.age} onChangeText={t => setForm({...form, age: t})} keyboardType="numeric" />
+            <TextInput style={styles.input} accessibilityLabel="Kilo (kg)" placeholder="Kilo (kg)" placeholderTextColor={colors.textMuted} value={form.weight} onChangeText={t => setForm({...form, weight: t})} keyboardType="numeric" />
+            <TextInput style={styles.input} accessibilityLabel="Sahip adı" placeholder="Sahibi" placeholderTextColor={colors.textMuted} value={form.owner} onChangeText={t => setForm({...form, owner: t})} />
+            <TextInput style={styles.input} accessibilityLabel="Veteriner iletişim telefonu" placeholder="Veteriner / İletişim (Tel)" placeholderTextColor={colors.textMuted} value={form.vet_contact} onChangeText={t => setForm({...form, vet_contact: t})} keyboardType="phone-pad" />
+            <TextInput style={styles.input} accessibilityLabel="Sahip e-posta" placeholder="Sahip E-Posta (rapor için)" placeholderTextColor={colors.textMuted} value={form.owner_email} onChangeText={t => setForm({...form, owner_email: t})} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
           </ResponsiveGrid>
           <View style={styles.saveBtn}>
             <Button label={saving ? "Kaydediliyor…" : editingId ? "Güncelle" : "Kaydet"} icon={<CheckCircle color={colors.white} size={16} />} onPress={handleAddOrEditPatient} disabled={saving} />
@@ -193,9 +194,10 @@ export function PatientScreen() {
 
       <View style={styles.searchBox}>
         <Search color={colors.textMuted} size={20} />
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="Hasta veya Sahip Ara..." 
+        <TextInput
+          style={styles.searchInput}
+          accessibilityLabel="Hasta veya sahip ara"
+          placeholder="Hasta veya Sahip Ara..."
           placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -249,20 +251,20 @@ export function PatientScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: 1100, alignSelf: "center" },
+  container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: rs(1100), alignSelf: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: spacing.md },
   title: { color: colors.text, fontSize: typography.title, fontWeight: "800", marginBottom: spacing.xs },
   formCard: { gap: spacing.md, backgroundColor: colors.bgAlt, borderColor: colors.primarySoft, borderWidth: 1 },
   formTitle: { color: colors.primary, fontSize: typography.subtitle, fontWeight: "700" },
   input: { backgroundColor: colors.bg, color: colors.text, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   saveBtn: { marginTop: spacing.sm },
-  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgAlt, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, height: 48, gap: spacing.sm },
+  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgAlt, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, height: rs(48), gap: spacing.sm },
   searchInput: { flex: 1, color: colors.text, fontSize: typography.body },
   list: { gap: spacing.md, paddingBottom: spacing.xl },
   patientCard: { gap: spacing.md },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   headerLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
-  headerText: { flex: 1, minWidth: 0 },
+  headerText: { flex: 1, minWidth: rs(0) },
   patientName: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },
   patientSub: { color: colors.textMuted, fontSize: typography.small, marginTop: 2 },
   detailsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, backgroundColor: colors.bgAlt, padding: spacing.sm, borderRadius: radius.sm },

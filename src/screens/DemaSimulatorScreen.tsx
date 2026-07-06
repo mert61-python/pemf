@@ -1,14 +1,18 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions } from "react-native";
+import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
-import { RefreshCcw, ExternalLink } from "lucide-react-native";
+import { RefreshCcw } from "lucide-react-native";
 
 export function DemaSimulatorScreen() {
   const [key, setKey] = useState(0); // WebView'ı yeniden yüklemek için
+  // İlk açılışta simülatör (ayrı Vite app) yavaş yüklenir → boş kutu yerine "yükleniyor" göster.
+  const [loading, setLoading] = useState(true);
   const { height } = useWindowDimensions();
+  // Yenile: overlay'i tekrar göster + iframe/WebView'i remount et.
+  const reload = () => { setLoading(true); setKey(k => k + 1); };
   // KÖK NEDEN: WebView dikey dokunuş jestlerini yutuyor → ne dış ScrollView ne de simülatör
   // kayıyordu; ayrıca sabit yükseklik simülatör sayfasından kısaydı → alt kontroller kesik.
   // ÇÖZÜM: WebView'i İÇERİĞİNİN TAM yüksekliğine büyüt (postMessage ile ölç) + nestedScrollEnabled
@@ -32,7 +36,7 @@ export function DemaSimulatorScreen() {
               Manyetik alan etkileşimlerini canlı olarak izleyebilirsiniz.
             </Text>
           </View>
-          <TouchableOpacity style={styles.refreshBtn} onPress={() => setKey(k => k + 1)}>
+          <TouchableOpacity style={styles.refreshBtn} onPress={reload} accessibilityRole="button" accessibilityLabel="Simülatörü yeniden yükle">
             <RefreshCcw color={colors.textMuted} size={18} />
           </TouchableOpacity>
         </View>
@@ -41,11 +45,12 @@ export function DemaSimulatorScreen() {
       
       <View style={[styles.simulatorContainer, { height: webHeight }]}>
         {Platform.OS === "web" ? (
-          <iframe 
+          <iframe
             key={key}
-            src={simulatorUrl} 
-            style={{ width: "100%", height: "100%", border: "none", borderRadius: 8 }} 
+            src={simulatorUrl}
+            style={{ width: "100%", height: "100%", border: "none", borderRadius: 8 }}
             title="DEMA Simulator"
+            onLoad={() => setLoading(false)}
           />
         ) : (
           <WebView
@@ -54,7 +59,9 @@ export function DemaSimulatorScreen() {
             style={styles.webview}
             javaScriptEnabled={true}
             domStorageEnabled={true}
-            startInLoadingState={true}
+            startInLoadingState={false}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
             scalesPageToFit={true}
             nestedScrollEnabled={true}
             onMessage={(e) => {
@@ -90,10 +97,15 @@ export function DemaSimulatorScreen() {
                 try { new ResizeObserver(postH).observe(document.body); } catch(e){}
               })(); true;
             `}
-            onError={() => {
-              // Hata durumunu WebView kendi içinde handle eder
-            }}
+            onError={() => setLoading(false)}
           />
+        )}
+        {loading && (
+          <View style={styles.loadingOverlay} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Simülatör yükleniyor…</Text>
+            <Text style={styles.loadingHint}>İlk açılış birkaç saniye sürebilir</Text>
+          </View>
         )}
       </View>
     </View>
@@ -128,6 +140,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
   },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bgAlt,
+    gap: spacing.sm,
+  },
+  loadingText: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: "700",
+    marginTop: spacing.sm,
+  },
+  loadingHint: {
+    color: colors.textMuted,
+    fontSize: rf(12),
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -142,7 +175,7 @@ const styles = StyleSheet.create({
   },
   urlText: {
     color: colors.textSubtle,
-    fontSize: 10,
+    fontSize: rf(10),
     fontFamily: "monospace",
     marginTop: spacing.xs,
   },

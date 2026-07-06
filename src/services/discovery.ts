@@ -164,7 +164,7 @@ async function localSubnets(): Promise<string[]> {
 }
 
 /** Telefon WiFi'de mi? — WiFi'de YEREL keşif (mDNS/subnet) önce; aksi halde REMOTE önce denenir. */
-async function isOnWifi(): Promise<boolean> {
+async function _isOnWifi(): Promise<boolean> {
   try {
     // @ts-ignore - opsiyonel native modül
     const NetInfo = require("@react-native-community/netinfo").default;
@@ -175,7 +175,7 @@ async function isOnWifi(): Promise<boolean> {
   }
 }
 
-async function probeHost(ip: string, timeoutMs: number, requireDeviceId?: string | null): Promise<boolean> {
+async function probeHost(ip: string, timeoutMs: number, _requireDeviceId?: string | null): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);

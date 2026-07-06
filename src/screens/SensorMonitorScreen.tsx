@@ -4,16 +4,15 @@
  * Python sensor_data_window.py'nin React karşılığı.
  * Çift eksenli (mT + °C) canlı grafik, 8 bobin seçimi, anlık değerler.
  */
-import { useState, useCallback, useLayoutEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   ScrollView,
   Text,
   View,
   StyleSheet,
   TouchableOpacity,
-  useWindowDimensions,
 } from "react-native";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 
@@ -25,7 +24,9 @@ const COIL_COLORS = [
 
 export function SensorMonitorScreen() {
   const { snapshot, sensorHistory, wsConnected } = useLiveData();
-  const { width } = useWindowDimensions();
+  // Grafik genişliği, sarmalayıcının GERÇEK genişliğinden (onLayout) ölçülür → her telefon/
+  // yön için container'a tam oturur; tablet/geniş ekranda 1200'de sınırlanır.
+  const [chartW, setChartW] = useState(0);
   const coils = snapshot.coils ?? [];
 
   // Initially show all connected coils
@@ -40,8 +41,6 @@ export function SensorMonitorScreen() {
       return next;
     });
   }, []);
-
-  const chartW = Math.min(width - spacing.md * 2, 1200);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -103,14 +102,18 @@ export function SensorMonitorScreen() {
       </View>
 
       {/* Main chart */}
-      <RealtimeChart
-        history={sensorHistory}
-        visibleCoils={visibleCoils}
-        showMagnetic={showMagnetic}
-        showTemp={showTemp}
-        width={chartW}
-        height={280}
-      />
+      <View style={styles.chartArea} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+        {chartW > 0 && (
+          <RealtimeChart
+            history={sensorHistory}
+            visibleCoils={visibleCoils}
+            showMagnetic={showMagnetic}
+            showTemp={showTemp}
+            width={Math.min(chartW, 1200)}
+            height={280}
+          />
+        )}
+      </View>
 
       {/* Coil stats grid */}
       <Text style={styles.statsTitle}>Anlık Değerler</Text>
@@ -176,7 +179,8 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: 1200, alignSelf: "center" },
+  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
+  chartArea: { width: "100%", alignItems: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -198,7 +202,7 @@ const styles = StyleSheet.create({
     borderColor: "#16a34a",
   },
   wsBadgeOff: { backgroundColor: "#1c1917", borderColor: "#78350f" },
-  wsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e" },
+  wsDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: "#22c55e" },
   wsDotOff: { backgroundColor: "#f59e0b" },
   wsText: { color: "#22c55e", fontWeight: "700", fontSize: typography.small },
 
@@ -238,8 +242,8 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
   },
   coilBtnOffline: { opacity: 0.4 },
-  coilBtnDot: { width: 6, height: 6, borderRadius: 3 },
-  coilBtnText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  coilBtnDot: { width: rs(6), height: rs(6), borderRadius: 3 },
+  coilBtnText: { color: colors.textMuted, fontSize: rf(12), fontWeight: "600" },
 
   statsTitle: {
     color: colors.text,
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   statCard: {
-    minWidth: 140,
+    minWidth: rs(140),
     flex: 1,
     backgroundColor: "#0a0f1e",
     borderRadius: 12,
@@ -262,10 +266,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   statCardHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  statDot: { width: 8, height: 8, borderRadius: 4 },
+  statDot: { width: rs(8), height: rs(8), borderRadius: 4 },
   statCardTitle: { color: colors.text, fontWeight: "700", fontSize: typography.small },
   metric: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  metricLabel: { color: colors.textMuted, fontSize: 11 },
-  metricValue: { fontWeight: "700", fontSize: 12, fontVariant: ["tabular-nums"] as any },
+  metricLabel: { color: colors.textMuted, fontSize: rf(11) },
+  metricValue: { fontWeight: "700", fontSize: rf(12), fontVariant: ["tabular-nums"] as any },
   offlineText: { color: "#475569", fontSize: typography.small, textAlign: "center", paddingVertical: spacing.sm },
 });

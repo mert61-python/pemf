@@ -1,4 +1,4 @@
-import { serviceConfig, setStoredApiToken } from "@/services/config";
+import { serviceConfig } from "@/services/config";
 
 // ─── Message types from the bridge ───────────────────────────────────────────
 export type WsMessageType =
@@ -15,7 +15,8 @@ export type WsMessageType =
   | "session_control"
   | "session_tick"
   | "emergency_stop"
-  | "ai_vision";
+  | "ai_vision"
+  | "pong";  // heartbeat yanıtı (backend ping'e döner)
 
 export interface WsMessage {
   type: WsMessageType;
@@ -83,7 +84,7 @@ export function connectPemfWebSocket(
     lastMessageTs = Date.now();
     try {
       const msg: WsMessage = JSON.parse(event.data);
-      if ((msg as any).type === "pong") return; // heartbeat yanıtı — yut
+      if (msg.type === "pong") return; // heartbeat yanıtı — yut
       onMessage(msg);
     } catch {
       // non-JSON message — ignore
@@ -129,11 +130,10 @@ export function connectPemfWebSocket(
       socket.onclose = (event) => {
         stopHeartbeat();
         onState?.(false);
-        // 1008 = policy violation (auth/token). Token geçersiz/eksik → HOT-LOOP YAPMA:
-        // geçersiz token'ı temizle (LAN'a dönünce yeniden sağlanır), UZUN backoff'a geç,
-        // yeniden keşif iste (LAN'da token sağlanınca epoch bump ile hemen bağlanır).
-        if ((event as any)?.code === 1008) {
-          try { setStoredApiToken(""); } catch { /* ignore */ }
+        // 1008 = policy violation (auth/token). Token ASLA SİLİNMEZ (kullanıcı bir kez bağlandıysa
+        // tekrar uğraştırılmaz). HOT-LOOP YAPMA: uzun backoff + yeniden keşif iste. Yanlış/eski
+        // token LAN'da provisionToken ile otomatik tazelenir → epoch bump ile hemen bağlanır.
+        if (event?.code === 1008) {
           reconnectDelay = 30000;
           if (onNeedRediscovery) { try { onNeedRediscovery(); } catch { /* ignore */ } }
         }

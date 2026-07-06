@@ -33,15 +33,28 @@ export interface SessionControlResult {
   emergencyStop: () => Promise<void>;
 }
 
-const DEFAULT_TREATMENT: ActiveTreatment = {
-  mode: "Sistem Hazır",
-  frequencyHz: 0,
-  intensityMt: 0,
-  remainingMin: 0,
-  elapsedSec: 0,
-  durationSec: 0,
-  isActive: false,
-};
+// Backend yanıt sözleşmeleri (audit B-10.1: apiPost/apiGet<any> yerine) — alanlar opsiyonel.
+/** GET /api/session/active — aktif seans snapshot'ı. */
+interface SessionActiveResponse {
+  is_active?: boolean;
+  mode?: string;
+  frequency?: number;
+  intensity?: number;
+  duration_minutes?: number;
+  elapsed_sec?: number;
+  remaining_sec?: number;
+}
+/** POST /api/session/start|stop + /api/hardware/command ortak yanıt zarfı. */
+interface SessionActionResponse {
+  status?: string;
+  session?: unknown;
+  warning?: string;
+}
+/** POST /api/hardware/emergency_stop (bridge) yanıtı — donanım durdurma teyidi. */
+interface EmergencyStopResponse {
+  stmStopped?: boolean;
+  mqttResults?: { mqtt?: string }[];
+}
 
 export function useSessionControl(): SessionControlResult {
   const [isActive, setIsActive] = useState(false);
@@ -68,7 +81,7 @@ export function useSessionControl(): SessionControlResult {
     }
   }, []);
 
-  const startTimer = (totalSec: number, alreadyElapsed = 0) => {
+  const startTimer = useCallback((totalSec: number, alreadyElapsed = 0) => {
     stopTimer();
     durationSecRef.current = totalSec;
     elapsedRef.current = alreadyElapsed;
@@ -85,11 +98,11 @@ export function useSessionControl(): SessionControlResult {
         setTreatment((prev) => prev ? { ...prev, isActive: false } : null);
       }
     }, 1000);
-  };
+  }, [stopTimer]);
 
   // Check for existing active session on mount
   useEffect(() => {
-    apiGet<any>("/session/active", {}, { silent: true }).then((sess) => {
+    apiGet<SessionActiveResponse>("/session/active", {}, { silent: true }).then((sess) => {
       if (sess?.is_active) {
         setIsActive(true);
         const totalSec = (sess.duration_minutes ?? 0) * 60;
@@ -115,7 +128,7 @@ export function useSessionControl(): SessionControlResult {
   useEffect(() => {
     if (!isActive) return;
     const reconcile = async () => {
-      const sess = await apiGet<any>("/session/active", null, { silent: true }).catch(() => null);
+      const sess = await apiGet<SessionActiveResponse | null>("/session/active", null, { silent: true }).catch(() => null);
       if (!sess) return; // bağlantı yok — yerel timer devam etsin
       if (!sess.is_active) {
         stopTimer();
@@ -143,7 +156,7 @@ export function useSessionControl(): SessionControlResult {
     setLoading(true);
     setError(null);
     try {
-      const result = await apiPost<any>("/session/start", {
+      const result = await apiPost<SessionActionResponse | null>("/session/start", {
         patient_id: params.patientId ?? "",
         patient_name: params.patientName ?? "",
         mode: params.mode,
@@ -173,13 +186,13 @@ export function useSessionControl(): SessionControlResult {
       }
       setError("Seans başlatılamadı.");
       return false;
-    } catch (e: any) {
-      setError(e?.message ?? "Hata oluştu.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Hata oluştu.");
       return false;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [startTimer]);
 
   const stopSession = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -187,7 +200,7 @@ export function useSessionControl(): SessionControlResult {
       // P1 audit 2026-06-28: apiPost ağ-hatası/non-2xx'te THROW ETMEZ → fallback(null) döner.
       // Eskiden yanıt kontrol edilmeden 'durduruldu' deniyordu → backend erişilemezken UI seansı
       // bitmiş gösterir ama STM'ye STOP ULAŞMAMIŞ olabilir (donanım çalışmaya devam). Yanıtı DOĞRULA.
-      const res = await apiPost<any>("/session/stop", {}, null);
+      const res = await apiPost<SessionActionResponse | null>("/session/stop", {}, null);
       if (!res || res.status === "error") {
         platformAlert(
           "Durdurma onaylanamadı",
@@ -206,7 +219,7 @@ export function useSessionControl(): SessionControlResult {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [stopTimer]);
 
   const emergencyStop = useCallback(async (): Promise<void> => {
     let confirmed = false;
@@ -218,16 +231,16 @@ export function useSessionControl(): SessionControlResult {
         headers: { "Content-Type": "application/json" },
       });
       if (!response.ok) throw new Error(`Emergency stop failed: ${response.status}`);
-      const data = await response.json().catch(() => null);
+      const data = (await response.json().catch(() => null)) as EmergencyStopResponse | null;
       if (data) {
-        const mqttOk = Array.isArray(data.mqttResults) && data.mqttResults.some((r: any) => r?.mqtt === "success");
+        const mqttOk = Array.isArray(data.mqttResults) && data.mqttResults.some((r) => r?.mqtt === "success");
         confirmed = Boolean(data.stmStopped) || mqttOk;
       }
     } catch {
       // Bridge'e erişilemezse API server üzerinden dene
       try {
-        await apiPost<any>("/session/stop", {}, null);
-        const r = await apiPost<any>("/hardware/command", { command: "stop_all_coils", params: {} }, null);
+        await apiPost<SessionActionResponse | null>("/session/stop", {}, null);
+        const r = await apiPost<SessionActionResponse | null>("/hardware/command", { command: "stop_all_coils", params: {} }, null);
         confirmed = r?.status === "success";
       } catch { /* best effort */ }
     }

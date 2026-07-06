@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useUserMode } from "@/context/UserModeContext";
 import { Heart, Stethoscope } from "lucide-react-native";
 
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   title: {
-    fontSize: 32,
+    fontSize: rf(32),
     color: colors.text,
     fontWeight: '900',
     textAlign: 'center',
@@ -74,12 +74,12 @@ const styles = StyleSheet.create({
   cardsContainer: {
     gap: spacing.xl,
     justifyContent: 'center',
-    maxWidth: 900,
+    maxWidth: rs(900),
     width: '100%',
   },
   cardWrapper: {
     flex: 1,
-    minWidth: 280,
+    minWidth: rs(280),
   },
   cardContainer: {
     flex: 1,
@@ -109,6 +109,6 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: rf(24),
   }
 });

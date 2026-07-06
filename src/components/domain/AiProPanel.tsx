@@ -1,24 +1,24 @@
 /**
  * AiProPanel — AI Pro kapalı-döngü kontrol yüzeyi (Kontrol sekmesi).
  * ================================================================
- * Girdi = OPERATÖRÜN ELİ (MediaPipe Hands ile takip; işaret-parmağı ucu → x/y,
- * avuç genişliği → z) → em_kedi (KediPredictor) → bobin 1-7 PER-COIL AI duty/phase
- * (D1-D7 / P1-P7, P bobin-1 referanslı). Bobin 8 KAPALI → 7 bobin gösterilir.
+ * Girdi = KEDİ ORGAN LOKALİZASYONU (cat_organ: YOLOseg+DLC+RTMPose+PnP ile seçili organın
+ * 3B konumu) → em_kedi (KediPredictor) → bobin 1-7 PER-COIL AI duty/phase (D1-D7 / P1-P7,
+ * P bobin-1 referanslı). Bobin 8 KAPALI → 7 bobin. (El takibi TAMAMEN SÖKÜLDÜ.)
  *
  * Web   (Platform.OS === "web"): sunucu kamerası (backend VideoCapture(0)).
  *   Canlı veri: WebSocket 'ai_vision' (LiveDataContext.aiVisionData).
  * Mobil (iOS/Android): telefon kamerası kareleri → POST /ai/ai_pro/frame
- *   (backend aynı el-takibi + em_kedi + donanım sürüşünü çalıştırır) → tablo/metrikler
- *   HTTP yanıtından gelir. /ai/pro/start|stop yine seansı/süreyi backend'de yönetir.
+ *   (backend aynı organ-lokalizasyon + em_kedi + donanım sürüşünü çalıştırır) → tablo/metrikler
+ *   HTTP yanıtından gelir. cat_organ ağır → backend periyodik lokalize + cache.
  *
- * Kontrol: /api/ai/pro/start | stop | organ | calibrate | status
+ * Kontrol: /api/ai/pro/start | stop | organ | calibrate(=yeniden-konumla) | status
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
-import { apiGet, apiPost } from "@/services/apiClient";
+import { apiGet, apiPost, platformAlert } from "@/services/apiClient";
 import { serviceConfig } from "@/services/config";
 
 const ORGANS = [
@@ -37,6 +37,7 @@ type FrameResult = {
   eField?: number;
   organId?: number;
   organName?: string;
+  reliability?: number;
 };
 
 function fmtSec(sec: number): string {
@@ -45,13 +46,17 @@ function fmtSec(sec: number): string {
   return `${m}:${String(s0 % 60).padStart(2, "0")}`;
 }
 
+// Backend yanıt sözleşmeleri (audit B-10.1) — AI-Pro otonom tedavi uçları.
+interface AiProStatus { active?: boolean; localized?: boolean; organId?: number; remainingSec?: number }
+interface AiProAction { status?: string }
+
 export function AiProPanel() {
   const { aiVisionData: v } = useLiveData();
 
   const [organId, setOrganId] = useState(0);
   const [duration, setDuration] = useState("20");
   const [running, setRunning] = useState(false);
-  const [calibrated, setCalibrated] = useState(false);
+  const [localized, setLocalized] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // ── Mobil kamera state'i (web'de kullanılmaz) ──
@@ -69,10 +74,10 @@ export function AiProPanel() {
   useEffect(() => {
     let alive = true;
     const sync = async () => {
-      const st = await apiGet<any>("/ai/pro/status", null, { silent: true });
+      const st = await apiGet<AiProStatus | null>("/ai/pro/status", null, { silent: true });
       if (!alive || !st) return;
       setRunning(Boolean(st.active));
-      setCalibrated(Boolean(st.calibrated));
+      setLocalized(Boolean(st.localized));
       if (typeof st.organId === "number") setOrganId(st.organId);
       if (typeof st.remainingSec === "number") setRemainingSec(st.remainingSec);
     };
@@ -90,27 +95,37 @@ export function AiProPanel() {
         if (!p?.granted) { setBusy(false); return; }
       }
     }
-    const res = await apiPost<any>("/ai/pro/start", { organ_id: organId, duration_minutes: parseInt(duration) || 20 }, null);
+    const res = await apiPost<AiProAction | null>("/ai/pro/start", { organ_id: organId, duration_minutes: parseInt(duration) || 20 }, null);
     if (res?.status === "success") setRunning(true);
     setBusy(false);
-  }, [organId, duration, permission]);
+  }, [organId, duration, permission, requestPermission]);
 
   const stop = useCallback(async () => {
     setBusy(true);
-    await apiPost<any>("/ai/pro/stop", {}, null);
-    setRunning(false);
-    setMobileResult(null);
+    // apiPost hata/zaman-aşımı/non-2xx'te fallback (null) döndürür, THROW ETMEZ. Bu yüzden
+    // durdurma DOĞRULANMADAN running'i false yapmak, bobinler sürerken UI'nin "durdu" göstermesine
+    // yol açar. Yanıt gelmediyse durumu değiştirme (3sn status-poll gerçeği yansıtsın) + uyar.
+    const res = await apiPost<AiProAction | null>("/ai/pro/stop", {}, null);
+    if (res) {
+      setRunning(false);
+      setMobileResult(null);
+    } else {
+      platformAlert(
+        "Durdurulamadı",
+        "Otonom tedavi durdurma komutu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin; sorun sürerse ACİL DURDUR kullanın."
+      );
+    }
     setBusy(false);
   }, []);
 
   const changeOrgan = useCallback(async (id: number) => {
     setOrganId(id);
-    await apiPost<any>("/ai/pro/organ", { organ_id: id }, null).catch(() => {});
+    await apiPost<AiProAction | null>("/ai/pro/organ", { organ_id: id }, null).catch(() => {});
   }, []);
 
-  const calibrate = useCallback(async () => {
-    const res = await apiPost<any>("/ai/pro/calibrate", {}, null);
-    if (res?.calibrated) setCalibrated(true);
+  const relocalize = useCallback(async () => {
+    // Bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele (avuç-Z kalibrasyonu KALKTI).
+    await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null).catch(() => {});
   }, []);
 
   // ── Mobil: telefon kamerasından periyodik kare yakala → /ai/ai_pro/frame ──
@@ -157,7 +172,7 @@ export function AiProPanel() {
 
   // ── Görüntülenecek değerler: web = WS (aiVisionData), mobil = HTTP yanıtı ──
   const detected = IS_WEB ? Boolean(v?.detected) : Boolean(mobileResult?.detected);
-  const eField = IS_WEB ? v?.eField : mobileResult?.eField;
+  const reliability = IS_WEB ? (v as any)?.reliability : mobileResult?.reliability;
   const targetX = IS_WEB ? v?.target?.x : mobileResult?.target?.x;
   const targetY = IS_WEB ? v?.target?.y : mobileResult?.target?.y;
   const targetZ = IS_WEB ? v?.target?.z : mobileResult?.target?.z;
@@ -169,8 +184,8 @@ export function AiProPanel() {
     <View style={styles.wrap}>
       <Text style={styles.note}>
         {IS_WEB
-          ? "📷 Sunucu kamerasından canlı kapalı-döngü tedavi (el-takibi + em_kedi, 7 bobin)."
-          : "📷 Telefon kameranızı ELİNİZE doğrultun — el takibi (em_kedi) ile 7 bobin per-coil sürülür."}
+          ? "📷 Sunucu kamerasından canlı otonom tedavi: kedi organ lokalizasyonu → em_kedi → 7 bobin."
+          : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
       </Text>
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
@@ -200,8 +215,8 @@ export function AiProPanel() {
 
       {/* Canlı metrikler */}
       <View style={styles.metricRow}>
-        <Metric label="El" value={detected ? "✓ Var" : "—"} />
-        <Metric label="E-Alan" value={`${eField ?? "—"}`} />
+        <Metric label="Organ" value={detected ? "✓ Bulundu" : "—"} />
+        <Metric label="Güven" value={typeof reliability === "number" ? `%${Math.round(reliability * 100)}` : "—"} />
         <Metric label="X (mm)" value={`${targetX ?? "—"}`} />
         <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
         <Metric label="Z (mm)" value={`${targetZ ?? "—"}`} />
@@ -232,8 +247,8 @@ export function AiProPanel() {
           <Text style={styles.countdown}>{running ? fmtSec(remaining) : "—"}</Text>
         </View>
         <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <TouchableOpacity style={[styles.calBtn, calibrated && styles.calBtnDone]} onPress={calibrate}>
-            <Text style={styles.calBtnText}>{calibrated ? "✓ Kalibre" : "🎯 Z Kalibre"}</Text>
+          <TouchableOpacity style={[styles.calBtn, localized && styles.calBtnDone]} onPress={relocalize}>
+            <Text style={styles.calBtnText}>{localized ? "✓ Konumlandı" : "🎯 Yeniden Konumla"}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -282,7 +297,7 @@ const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
   note: { color: colors.textMuted, fontSize: typography.small, fontStyle: "italic" },
   camBox: {
-    height: 200, backgroundColor: "#000", borderRadius: 12,
+    height: rs(200), backgroundColor: "#000", borderRadius: 12,
     alignItems: "center", justifyContent: "center", overflow: "hidden",
     borderWidth: 1, borderColor: "#1e3a5f",
   },
@@ -291,12 +306,12 @@ const styles = StyleSheet.create({
   camPlaceholder: { color: colors.textMuted, fontSize: typography.small },
   flipBtn: {
     position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 16, width: 32, height: 32, alignItems: "center", justifyContent: "center",
+    borderRadius: 16, width: rs(32), height: rs(32), alignItems: "center", justifyContent: "center",
   },
-  flipText: { fontSize: 16 },
+  flipText: { fontSize: rf(16) },
   metricRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   metric: { flex: 1, backgroundColor: "#0f172a", borderRadius: 8, padding: spacing.sm, alignItems: "center" },
-  metricLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  metricLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700" },
   metricValue: { color: colors.primary, fontSize: typography.body, fontWeight: "800" },
   label: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700", marginBottom: spacing.xs },
   organGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
@@ -322,6 +337,6 @@ const styles = StyleSheet.create({
   toggleText: { color: "#fff", fontWeight: "800", fontSize: typography.body },
   table: { backgroundColor: "#0f172a", borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: "#1e293b" },
   tr: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#1e293b" },
-  th: { color: colors.textMuted, fontSize: 11, fontWeight: "800", padding: spacing.sm },
+  th: { color: colors.textMuted, fontSize: rf(11), fontWeight: "800", padding: spacing.sm },
   td: { color: colors.text, fontSize: typography.small, padding: spacing.sm },
 });

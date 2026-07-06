@@ -2,7 +2,7 @@
  * SystemInfoPanel — Python'daki "Sistem Bilgileri" panelinin React karşılığı.
  * Yazılım sürümü, donanım sürümü, cihaz ID, uptime, toplam seans.
  */
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useState, useEffect } from "react";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";

@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 // Cihaz kimliği — ilk LAN bağlantısında /api/health'ten yakalanır, saklanır;
 // sonra farklı ağda Supabase 'devices' tablosundan güncel tunnel_url'i bulmak için
@@ -53,19 +55,49 @@ export let serviceConfig = {
   apiToken: process.env.EXPO_PUBLIC_PEMF_API_TOKEN ?? "",
 };
 
-const API_TOKEN_KEY = "@pemf_api_token";
+const API_TOKEN_KEY = "@pemf_api_token";        // eski AsyncStorage anahtarı (web + migrasyon kaynağı)
+const API_TOKEN_SECURE_KEY = "pemf_api_token";  // SecureStore anahtarı ('@' yasak)
+
+// audit B-10.2: API token native'de SecureStore (iOS Keychain / Android Keystore) — eskiden
+// AsyncStorage'da DÜZ-METİNDİ. Web'de SecureStore yok → AsyncStorage (tarayıcı-yerel, geriye uyumlu).
+async function _secureSetToken(token: string): Promise<void> {
+  if (Platform.OS === "web") {
+    if (token) await AsyncStorage.setItem(API_TOKEN_KEY, token);
+    else await AsyncStorage.removeItem(API_TOKEN_KEY);
+    return;
+  }
+  if (token) await SecureStore.setItemAsync(API_TOKEN_SECURE_KEY, token);
+  else await SecureStore.deleteItemAsync(API_TOKEN_SECURE_KEY);
+}
+async function _secureGetToken(): Promise<string | null> {
+  if (Platform.OS === "web") return AsyncStorage.getItem(API_TOKEN_KEY);
+  const s = await SecureStore.getItemAsync(API_TOKEN_SECURE_KEY);
+  if (s) return s;
+  // MİGRASYON: eski kurulumlarda token AsyncStorage'daydı → SecureStore'a taşı, düz-metini sil.
+  const legacy = await AsyncStorage.getItem(API_TOKEN_KEY);
+  if (legacy) {
+    try {
+      await SecureStore.setItemAsync(API_TOKEN_SECURE_KEY, legacy);
+      await AsyncStorage.removeItem(API_TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    return legacy;
+  }
+  return null;
+}
+
 export async function setStoredApiToken(token: string): Promise<void> {
   try {
     serviceConfig.apiToken = token || "";
-    if (token) await AsyncStorage.setItem(API_TOKEN_KEY, token);
-    else await AsyncStorage.removeItem(API_TOKEN_KEY);
+    await _secureSetToken(token || "");
   } catch {
     /* ignore */
   }
 }
 export async function loadStoredApiToken(): Promise<void> {
   try {
-    const t = await AsyncStorage.getItem(API_TOKEN_KEY);
+    const t = await _secureGetToken();
     if (t) serviceConfig.apiToken = t;
   } catch {
     /* ignore */

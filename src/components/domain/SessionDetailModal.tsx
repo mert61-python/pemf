@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1e3a5f",
     width: "100%",
-    maxWidth: 900,
+    maxWidth: rs(900),
     maxHeight: "92%",
     padding: spacing.lg,
     gap: spacing.md,
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgAlt,
     borderRadius: 8,
     padding: spacing.md,
-    minWidth: 120,
+    minWidth: rs(120),
     flexGrow: 1,
     flexBasis: 120,
   },
@@ -614,12 +614,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   coilCell: { flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm },
-  coilDot: { width: 8, height: 8, borderRadius: 4 },
-  colCoil: { width: 96 },
-  colTime: { width: 92 },
-  colDur: { width: 90 },
-  colNum: { width: 78 },
-  colHw: { width: 70 },
+  coilDot: { width: rs(8), height: rs(8), borderRadius: 4 },
+  colCoil: { width: rs(96) },
+  colTime: { width: rs(92) },
+  colDur: { width: rs(90) },
+  colNum: { width: rs(78) },
+  colHw: { width: rs(70) },
   hwNote: {
     color: colors.textSubtle,
     fontSize: typography.small,
@@ -631,6 +631,6 @@ const styles = StyleSheet.create({
   chartWrap: { borderRadius: 8, overflow: "hidden", backgroundColor: "#0a0f1e" },
   legendRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.sm },
   legendItem: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendDot: { width: rs(10), height: rs(10), borderRadius: 5 },
   legendText: { color: colors.textMuted, fontSize: typography.small, fontWeight: "600" },
 });

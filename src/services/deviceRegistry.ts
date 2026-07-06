@@ -9,6 +9,10 @@
  */
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+// audit B-10.2: ÖNCE EXPO_PUBLIC_* env (build-time); yoksa gömülü varsayılan. Bu anahtar
+// Supabase **publishable/anon** (istemci-güvenli, tasarımı gereği paylaşılır — service_role DEĞİL) +
+// güvenlik RLS + SECURITY DEFINER RPC'lerdedir (anon tablo dökemez; bkz. database/supabase_*.sql).
+// Yine de kendi projenizde EXPO_PUBLIC_* ile override edip anahtarı rotate edebilirsiniz.
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://wmsxonunkphjeregpvuj.supabase.co";
 const SUPABASE_KEY =
@@ -53,6 +57,16 @@ function rowToRemoteDevice(row: Record<string, unknown>): RemoteDevice {
   };
 }
 
+// audit (skor-4 kalan: Supabase timeout): asılı RPC cihaz-keşfini DONDURMASIN. Timeout'ta reddeder →
+// çağıran fail-secure `null` döner (RPC arka planda biterse zararsız; supabase-js'in kendi timeout'u yok).
+const RPC_TIMEOUT_MS = 6000;
+function withTimeout<T>(p: PromiseLike<T>, ms = RPC_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("supabase timeout")), ms)),
+  ]);
+}
+
 /** Belirli device_id için güncel (taze) tunnel_url. */
 export async function getRemoteUrlForDevice(deviceId: string): Promise<string | null> {
   const c = client();
@@ -61,7 +75,7 @@ export async function getRemoteUrlForDevice(deviceId: string): Promise<string | 
   // Doğrudan-tablo fallback'i KALDIRILDI (P1) — RLS deploy edilmemişse cross-tenant
   // dump riski taşıyordu. Fail-secure: RPC yoksa/hata verirse null döner (sızdırmaz).
   try {
-    const { data, error } = await c.rpc("resolve_device", { p_device_id: deviceId });
+    const { data, error } = await withTimeout(c.rpc("resolve_device", { p_device_id: deviceId }));
     if (error) return null;
     const row = (data as Record<string, unknown>[] | null)?.[0];
     if (row) {
@@ -85,7 +99,7 @@ export async function getDeviceByPairingCode(code: string): Promise<RemoteDevice
   // GÜVENLİ: YALNIZ resolve_device RPC (anon kodla TEK satır çözer, listeleyemez/dökemez).
   // Doğrudan-tablo fallback'i KALDIRILDI (P1, dump riski). Fail-secure: RPC yoksa null.
   try {
-    const { data, error } = await c.rpc("resolve_device", { p_code: trimmed });
+    const { data, error } = await withTimeout(c.rpc("resolve_device", { p_code: trimmed }));
     if (error) return null;
     const row = (data as Record<string, unknown>[] | null)?.[0];
     if (row) {

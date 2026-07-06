@@ -3,12 +3,9 @@
  *
  * Python unified_control_window'daki seans timer göstergesinin React karşılığı.
  */
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Animated as RNAnimated, Easing as RNEasing } from "react-native";
 import { useEffect as useEff, useRef as useR } from "react";
-import { colors, spacing, typography } from "@/theme/tokens";
-
-// Animated ve Easing doğrudan react-native'den
-import { Animated as RNAnimated, Easing as RNEasing } from "react-native";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 
 interface Props {
   isActive: boolean;
@@ -66,7 +63,7 @@ export function SessionProgressCard({
       <View style={styles.idleCard}>
         <Text style={styles.idleIcon}>⚡</Text>
         <Text style={styles.idleTitle}>Tedavi Bekleniyor</Text>
-        <Text style={styles.idleSubtitle}>Parametreleri ayarlayıp "Seans Başlat" butonuna basın.</Text>
+        <Text style={styles.idleSubtitle}>Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın.</Text>
       </View>
     );
   }
@@ -112,10 +109,12 @@ export function SessionProgressCard({
 
       {/* Buttons */}
       <View style={styles.btnRow}>
-        <TouchableOpacity style={styles.btnStop} onPress={onStop} disabled={loading}>
+        <TouchableOpacity style={styles.btnStop} onPress={onStop} disabled={loading}
+          accessibilityRole="button" accessibilityLabel="Tedavi seansını durdur">
           <Text style={styles.btnStopText}>⏹ Durdur</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}>
+        <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}
+          accessibilityRole="button" accessibilityLabel="Acil durdurma — tüm bobinleri anında durdur">
           <Text style={styles.btnEmergencyText}>🚨 ACİL DURDUR</Text>
         </TouchableOpacity>
       </View>
@@ -142,7 +141,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: "#334155",
   },
-  idleIcon: { fontSize: 36, marginBottom: spacing.sm },
+  idleIcon: { fontSize: rf(36), marginBottom: spacing.sm },
   idleTitle: { color: colors.text, fontWeight: "700", fontSize: typography.subtitle },
   idleSubtitle: { color: colors.textMuted, fontSize: typography.small, marginTop: spacing.xs, textAlign: "center" },
 
@@ -172,8 +171,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   pulseDot: {
-    width: 8,
-    height: 8,
+    width: rs(8),
+    height: rs(8),
     borderRadius: 4,
     backgroundColor: "#22c55e",
   },
@@ -181,7 +180,7 @@ const styles = StyleSheet.create({
   modeText: { color: colors.textMuted, fontSize: typography.small },
 
   progressBg: {
-    height: 8,
+    height: rs(8),
     backgroundColor: "#1e293b",
     borderRadius: 4,
     overflow: "hidden",
@@ -199,7 +198,7 @@ const styles = StyleSheet.create({
   },
   timeBlock: { flex: 1 },
   timeBlockCenter: { flex: 1, alignItems: "center" },
-  timeLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700", letterSpacing: 1 },
+  timeLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700", letterSpacing: 1 },
   timeValue: { color: colors.text, fontSize: typography.title, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
   progressPct: { color: "#22c55e", fontSize: typography.subtitle, fontWeight: "700" },
 
@@ -211,7 +210,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     alignItems: "center",
   },
-  paramLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700", letterSpacing: 1 },
+  paramLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700", letterSpacing: 1 },
   paramValue: { color: colors.primary, fontSize: typography.body, fontWeight: "700" },
 
   btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },

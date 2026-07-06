@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
-import { Activity, Clock, HeartPulse, RadioTower, Wifi } from "lucide-react-native";
+import { Clock, HeartPulse, RadioTower, Wifi } from "lucide-react-native";
 import { CoilCard } from "@/components/domain/CoilCard";
 import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -8,7 +8,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import { SystemInfoPanel } from "@/components/domain/SystemInfoPanel";
 import { GatewayStatusPanel } from "@/components/domain/GatewayStatusPanel";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xxl,
     width: "100%",
-    maxWidth: 1200,
+    maxWidth: rs(1200),
     alignSelf: "center",
   },
   statusRow: {
@@ -153,20 +153,20 @@ const styles = StyleSheet.create({
     borderColor: "#16a34a",
   },
   wsBadgeOff: { backgroundColor: "#1c1917", borderColor: "#78350f" },
-  wsText: { color: "#22c55e", fontSize: 11, fontWeight: "700" },
+  wsText: { color: "#22c55e", fontSize: rf(11), fontWeight: "700" },
   wsTextOff: { color: "#f59e0b" },
 
   heroGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg },
-  patientCard: { flex: 1, gap: spacing.md, minWidth: 280 },
-  treatmentCard: { flex: 1.4, gap: spacing.md, minWidth: 280 },
+  patientCard: { flex: 1, gap: spacing.md, minWidth: rs(280) },
+  treatmentCard: { flex: 1.4, gap: spacing.md, minWidth: rs(280) },
 
   cardHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   cardTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800", flex: 1 },
   activeDot: {
-    width: 10, height: 10, borderRadius: 5, backgroundColor: "#22c55e",
+    width: rs(10), height: rs(10), borderRadius: 5, backgroundColor: "#22c55e",
     shadowColor: "#22c55e", shadowOpacity: 0.8, shadowRadius: 4,
   },
-  patientName: { color: colors.text, fontSize: 22, fontWeight: "800" },
+  patientName: { color: colors.text, fontSize: rf(22), fontWeight: "800" },
   body: { color: colors.textMuted, fontSize: typography.body },
 
   emergencyBtn: {
@@ -202,8 +202,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.sm,
   },
-  bottomLeft: { flex: 2, minWidth: 260 },
-  bottomRight: { flex: 1, minWidth: 220, gap: spacing.md },
+  bottomLeft: { flex: 2, minWidth: rs(260) },
+  bottomRight: { flex: 1, minWidth: rs(220), gap: spacing.md },
   offlineBanner: {
     backgroundColor: "#1c1917",
     borderColor: "#78350f",

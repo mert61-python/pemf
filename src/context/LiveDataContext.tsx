@@ -10,15 +10,17 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { AppState } from "react-native";
 import { serviceConfig, loadStoredApiToken } from "@/services/config";
 import { apiGet, apiPost } from "@/services/apiClient";
 import { connectPemfWebSocket, WsMessage } from "@/services/wsClient";
 import { discoverBackend } from "@/services/discovery";
 import { mockSnapshot } from "@/services/mockData";
+import { useNetworkReachability } from "@/hooks/useNetworkReachability";
+import { useForegroundReconnect } from "@/hooks/useForegroundReconnect";
 import type {
   ActiveTreatment,
   AppNotification,
@@ -26,7 +28,6 @@ import type {
   CoilStatus,
   ConnectionState,
   DashboardSnapshot,
-  SystemInfo,
 } from "@/types/domain";
 
 // ─── History max length ────────────────────────────────────────────────────
@@ -36,11 +37,13 @@ const STM_COIL_MAX_ID = 5;
 // AI Pro kapalı-döngü canlı telemetrisi (backend ai_router._ai_pro_loop yayını).
 export interface AiVisionData {
   imageBase64?: string;
-  /** El (operatör eli) tespit edildi mi — AI Pro el-takibi pipeline'ı. */
+  /** Organ lokalize edildi mi — AI Pro cat_organ pipeline'ı (el-takibi söküldü). */
   detected?: boolean;
+  /** Organ lokalizasyon güveni [0,1]. */
+  reliability?: number;
   /** Eski FGS alanları (artık AI Pro yayını göndermiyor; geriye uyumluluk için opsiyonel). */
   fgs_total?: number | null;
-  fgs_raw?: any;
+  fgs_raw?: unknown;  // eski/legacy alan — artık gönderilmiyor, hiçbir yerde okunmuyor
   target?: { x: number; y: number; z: number };
   eField?: number;
   organId?: number;
@@ -382,46 +385,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionEpoch]);
 
-  // 3) Ağ değişiminde (WiFi geçişi / yeniden bağlanma) keşfi tetikle.
-  useEffect(() => {
-    let NetInfo: any;
-    try {
-      // @ts-ignore - opsiyonel native modül (npm install sonrası mevcut)
-      NetInfo = require("@react-native-community/netinfo").default;
-    } catch {
-      return; // paket yoksa (ör. web) atla
-    }
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let last: boolean | null = null;
-    const unsub = NetInfo.addEventListener((state: any) => {
-      const connected = !!state?.isConnected;
-      if (connected === last) return; // NetInfo aynı durumu sık tekrar yayar → gerçek değişimde tetikle
-      last = connected;
-      if (connected) {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => runDiscovery(true), 1500); // debounce: flapping'de keşif/WS fırtınası yok
-      }
-    });
-    return () => {
-      if (timer) clearTimeout(timer);
-      try {
-        unsub?.();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [runDiscovery]);
-
-  // 4) Ön plana gelince (arka plandayken OS WS soketini/sayaçları dondurmuş/koparmış olabilir) →
-  //    yeniden keşif + reconnect; yoksa kullanıcı uygulamaya dönünce DONMUŞ "canlı" veri görürdü.
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") runDiscovery(true);
-    });
-    return () => {
-      try { sub.remove(); } catch { /* ignore */ }
-    };
-  }, [runDiscovery]);
+  // 3+4) Ağ değişimi (WiFi geçişi) + ön-plana dönüş → keşfi/yeniden-bağlanmayı tetikle.
+  //      (audit B-2.4: NetInfo + AppState mantığı tiplenmiş, test-edilebilir hook'lara çıkarıldı →
+  //      god-context küçüldü; `any`'ler giderildi. Public API/davranış AYNI.)
+  const triggerReconnect = useCallback(() => runDiscovery(true), [runDiscovery]);
+  useNetworkReachability(triggerReconnect);
+  useForegroundReconnect(triggerReconnect);
 
   // Faz3: elle yeniden bağlan (gösterge/banner'a dokununca) — WS yeniden kur + keşif merdiveni.
   const reconnect = useCallback(() => {
@@ -458,19 +427,27 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     await apiPost("/notifications/clear", {}, null, { silent: true });
   }, []);
 
-  const value = {
-    snapshot,
-    sensorHistory,
-    wsConnected,
-    unreadCount,
-    markAllRead,
-    clearNotifications,
-    refresh,
-    connectionQuality,
-    haveRealData,
-    reconnect,
-    aiVisionData,
-  };
+  // value'yu memoize et → sağlayıcı parent nedeniyle (state değişmeden) yeniden render
+  // olduğunda tüketiciler gereksiz render OLMASIN. (Not: snapshot/sensorHistory yüksek
+  // frekansta değiştiğinden telemetri sırasındaki render'ları tam elemek için ileride
+  // context'i canlı-veri / durağan-API olarak İKİYE bölmek gerekir — bu ayrı bir refactor.)
+  const value = useMemo(
+    () => ({
+      snapshot,
+      sensorHistory,
+      wsConnected,
+      unreadCount,
+      markAllRead,
+      clearNotifications,
+      refresh,
+      connectionQuality,
+      haveRealData,
+      reconnect,
+      aiVisionData,
+    }),
+    [snapshot, sensorHistory, wsConnected, unreadCount, markAllRead,
+     clearNotifications, refresh, connectionQuality, haveRealData, reconnect, aiVisionData]
+  );
 
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;
 }

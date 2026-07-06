@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet, Linking } from "react-native";
-import { colors, spacing } from "@/theme/tokens";
+import { colors, spacing, rf, rs } from "@/theme/tokens";
 import {
   checkBackendUpdate, applyBackendUpdate, checkMobileUpdate,
   type BackendUpdate, type MobileUpdate,
@@ -77,8 +77,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.xs,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 30 },
-  icon: { fontSize: 14 },
-  txt: { color: "#7dd3fc", fontSize: 13, fontWeight: "700", flex: 1 },
-  msg: { color: colors.textMuted, fontSize: 11 },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: rs(30) },
+  icon: { fontSize: rf(14) },
+  txt: { color: "#7dd3fc", fontSize: rf(13), fontWeight: "700", flex: 1 },
+  msg: { color: colors.textMuted, fontSize: rf(11) },
 });

@@ -13,7 +13,7 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { SessionProgressCard } from "@/components/domain/SessionProgressCard";
@@ -148,15 +148,18 @@ export function ControlScreen() {
       Alert.alert("Uyarı", "En az bir bobin seçin.");
       return;
     }
-    // STM bağlı değilse STM bobinlerini düş (ESP yine çalışsın); aksi halde /session/start 503 verir.
+    // Bağlı OLMAYAN bobinleri düş — hem STM (1-5, isStmConnected) hem ESP (6-8, coil.connected).
+    // Eskiden ESP koşulsuz 'true' geçiyordu → offline ESP bobinleri seansa dahil olup UI'de
+    // "aktif tedavi" yanlış-güvencesi veriyordu (bobinler aslında sürülmüyor).
     const requested = Array.from(selectedCoils);
-    const effective = requested.filter((id) => (id <= 5 ? isStmConnected : true));
+    const coilsById = new Map(snapshot.coils.map((c) => [c.id, c]));
+    const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
     if (effective.length === 0) {
-      Alert.alert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32 çevrimdışı).");
+      Alert.alert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).");
       return;
     }
     if (effective.length < requested.length) {
-      Alert.alert("STM32 çevrimdışı", "Bobin 1–5 atlandı; yalnızca WiFi bobinlerine komut gönderiliyor.");
+      Alert.alert("Bazı bobinler çevrimdışı", "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor.");
     }
     const p = clampWithAlert({
       freq: parseFloat(masterFreq) || 100,
@@ -547,6 +550,7 @@ function ParamField({
         onChangeText={onChangeText}
         keyboardType="numeric"
         selectTextOnFocus
+        accessibilityLabel={label}
       />
     </View>
   );
@@ -619,7 +623,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xxl,
     width: "100%",
-    maxWidth: 1100,
+    maxWidth: rs(1100),
     alignSelf: "center",
   },
   tabBar: {
@@ -637,7 +641,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tabActive: { backgroundColor: "#1e3a5f" },
-  tabIcon: { fontSize: 18 },
+  tabIcon: { fontSize: rf(18) },
   tabLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "600" },
   tabLabelActive: { color: colors.primary, fontWeight: "700" },
 
@@ -656,7 +660,7 @@ const styles = StyleSheet.create({
   hint: {
     color: colors.textMuted,
     fontSize: typography.small,
-    lineHeight: 20,
+    lineHeight: rf(20),
   },
   formLabel: {
     color: colors.textMuted,
@@ -685,8 +689,8 @@ const styles = StyleSheet.create({
   targetChipTextActive: { color: "#fff", fontWeight: "700" },
 
   paramRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  paramField: { flex: 1, minWidth: 140 },
-  paramFieldLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "600", marginBottom: 4 },
+  paramField: { flex: 1, minWidth: rs(140) },
+  paramFieldLabel: { color: colors.textMuted, fontSize: rf(11), fontWeight: "600", marginBottom: 4 },
   paramFieldInput: {
     backgroundColor: "#1e293b",
     borderRadius: 8,
@@ -714,8 +718,8 @@ const styles = StyleSheet.create({
   coilSelector: { gap: spacing.xs },
   coilSelectorGrid: { flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" },
   coilSelectorBtn: {
-    width: 40,
-    height: 40,
+    width: rs(40),
+    height: rs(40),
     borderRadius: 10,
     backgroundColor: "#1e293b",
     alignItems: "center",
@@ -765,7 +769,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     alignItems: "center",
   },
-  statChipLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  statChipLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700" },
   statChipValue: { color: colors.primary, fontSize: typography.body, fontWeight: "800" },
 
   emergencyBtn: {

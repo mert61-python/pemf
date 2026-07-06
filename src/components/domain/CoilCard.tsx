@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Activity, RadioTower, Thermometer, Zap } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { CoilStatus } from "@/types/domain";
 
 export function CoilCard({ coil }: { coil: CoilStatus }) {
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     flexBasis: "48%",
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 58,
+    minHeight: rs(58),
     padding: spacing.md
   },
   miniLabel: {

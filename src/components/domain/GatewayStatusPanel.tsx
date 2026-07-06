@@ -4,7 +4,7 @@
  */
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { useState, useEffect, useCallback } from "react";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import type { ConnectionState } from "@/types/domain";
@@ -29,8 +29,10 @@ export function GatewayStatusPanel() {
   });
 
   const refresh = useCallback(async () => {
-    const data = await apiGet<GatewayInfo>("/gateway/status", gwInfo, { silent: true });
-    setGwInfo(data);
+    // exhaustive-deps + hata-dayanıklılık: fallback null → başarısız poll SON İYİ değeri korur
+    // (eskiden yakalanan ilk gwInfo'ya set ediyordu = hatada başlangıca sıfırlama). refresh stable kalır.
+    const data = await apiGet<GatewayInfo | null>("/gateway/status", null, { silent: true });
+    if (data) setGwInfo(data);
   }, []);
 
   useEffect(() => {
@@ -98,7 +100,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.xs },
   title: { color: colors.text, fontWeight: "700", fontSize: typography.body },
   refreshBtn: { padding: spacing.xs },
-  refreshText: { color: colors.primary, fontSize: 18, fontWeight: "700" },
+  refreshText: { color: colors.primary, fontSize: rf(18), fontWeight: "700" },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -110,6 +112,6 @@ const styles = StyleSheet.create({
   },
   rowLabel: { color: colors.textMuted, fontSize: typography.small },
   rowRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dot: { width: rs(8), height: rs(8), borderRadius: 4 },
   rowValue: { fontSize: typography.small, fontWeight: "700" },
 });

@@ -1,3 +1,27 @@
+import { Dimensions } from "react-native";
+
+// ── RESPONSIVE ÖLÇEK ─────────────────────────────────────────────────────────
+// Tüm boyutlandırma (spacing/typography/radius + bileşenlerdeki ham sayılar) bu
+// fabrikadan geçer → her telefon boyutunda orantılı görünür. Referans genişlik 375px
+// (yaygın telefon). Çok küçük (~320) ve çok büyük (tablet) ekranlarda aşırıya kaçmasın
+// diye clamp'lenir. Uygulama açılışında cihaz genişliğinden bir kez hesaplanır (portre).
+const BASE_WIDTH = 375;
+const _screenW = Math.min(Dimensions.get("window").width, Dimensions.get("window").height); // kısa kenar (portre genişliği)
+const _rawScale = (_screenW || BASE_WIDTH) / BASE_WIDTH;
+// 0.85 (küçük telefon) … 1.30 (büyük telefon/küçük tablet) arası
+const SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);
+
+/** responsive size — ham pikseli cihaza göre ölçekle (yuvarlanmış). Hard-coded boyut yerine kullan. */
+export function rs(size: number): number {
+  return Math.round(size * SCALE);
+}
+
+/** responsive font — metinler için biraz daha yumuşak ölçek (aşırı büyümesin). */
+export function rf(size: number): number {
+  const softScale = 1 + (SCALE - 1) * 0.7;
+  return Math.round(size * softScale);
+}
+
 export const colors = {
   bg: "#121827",
   bgAlt: "#182033",
@@ -22,28 +46,28 @@ export const colors = {
 };
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32
+  xs: rs(4),
+  sm: rs(8),
+  md: rs(12),
+  lg: rs(16),
+  xl: rs(24),
+  xxl: rs(32)
 };
 
 export const radius = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 20,
+  sm: rs(6),
+  md: rs(8),
+  lg: rs(12),
+  xl: rs(20),
   full: 9999,
 };
 
 export const typography = {
-  title: 24,
-  subtitle: 16,
-  body: 14,
-  caption: 12,
-  small: 11
+  title: rf(24),
+  subtitle: rf(16),
+  body: rf(14),
+  caption: rf(12),
+  small: rf(11)
 };
 
 export const shadows = {

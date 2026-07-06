@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
-import { colors, spacing, typography, radius } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
 
 interface State {
   hasError: boolean;
@@ -43,9 +43,9 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
-  icon: { fontSize: 48 },
+  icon: { fontSize: rf(48) },
   title: { color: colors.text, fontSize: typography.title, fontWeight: "800", textAlign: "center" },
-  msgBox: { maxHeight: 160, alignSelf: "stretch", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  msgBox: { maxHeight: rs(160), alignSelf: "stretch", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   msg: { color: colors.textMuted, fontSize: typography.small, fontFamily: "monospace" },
   btn: { backgroundColor: colors.primary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, borderRadius: radius.md, marginTop: spacing.sm },
   btnText: { color: colors.white, fontSize: typography.body, fontWeight: "700" },

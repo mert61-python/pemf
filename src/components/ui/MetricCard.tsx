@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 
 interface MetricCardProps {
   label: string;
@@ -21,12 +21,12 @@ export function MetricCard({ label, value, tone = colors.primary }: MetricCardPr
 const styles = StyleSheet.create({
   card: {
     gap: spacing.sm,
-    minHeight: 112
+    minHeight: rs(112)
   },
   marker: {
     borderRadius: 2,
-    height: 4,
-    width: 44
+    height: rs(4),
+    width: rs(44)
   },
   label: {
     color: colors.textMuted,
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   },
   value: {
     color: colors.text,
-    fontSize: 26,
+    fontSize: rf(26),
     fontWeight: "800"
   }
 });
