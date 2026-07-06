@@ -398,10 +398,6 @@ class EventBus:
             logger.error("Sync callback failed: %s", e)
             self._stats['failed_deliveries'] += 1
     
-    def _call_qt_callback(self, subscription: Subscription, event: Event):
-        """Backward-compatible shim: execute as a normal Python callback."""
-        self._call_sync_callback(subscription, event)
-    
     def _add_to_history(self, event: Event):
         """Event'i history'ye ekle (Memory leak fix: aggressive cleanup)"""
         self._event_history.append(event)
@@ -453,48 +449,6 @@ class EventBus:
                 self._event_history = self._event_history[-50:]
             
             logger.debug("Cleanup completed: %d dead subscribers removed, %d event types, %d events in history", dead_count, len(self._subscribers), len(self._event_history))
-    
-    def get_event_history(self, 
-                         event_type: Optional[str] = None,
-                         limit: int = 100) -> List[Event]:
-        """
-        Event history'sini al.
-        
-        Args:
-            event_type: Belirli event type'ı filtrele (opsiyonel)
-            limit: Maksimum event sayısı
-            
-        Returns:
-            List[Event]: Event listesi
-        """
-        with self._lock:
-            history = self._event_history.copy()
-        
-        if event_type:
-            history = [e for e in history if self._event_matches(e.event_type, event_type)]
-        
-        return history[-limit:]
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """EventBus istatistiklerini al (Memory leak fix: detailed stats)"""
-        with self._lock:
-            stats = {
-                **self._stats,
-                'active_subscriptions': sum(len(subs) for subs in self._subscribers.values()),
-                'event_types': list(self._subscribers.keys()),
-                'history_size': len(self._event_history),
-                'last_cleanup': self._last_cleanup,
-                'cleanup_interval': self._cleanup_interval
-            }
-        with self._task_lock:
-            stats['pending_async_tasks'] = len(self._pending_tasks)
-        return stats
-    
-    def clear_history(self):
-        """Event history'sini temizle"""
-        with self._lock:
-            self._event_history.clear()
-            logger.info("Event history cleared")
     
     def shutdown(self):
         """EventBus'ı kapat (Memory leak fix: cleanup all resources)"""
