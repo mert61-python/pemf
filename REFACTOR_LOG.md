@@ -61,8 +61,22 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 ## B3 güvenlik-fix (refactor DIŞI, kullanıcı kararı: ayrı) — ✅ commit `52e734b`
 Ham `str(e)` istemci sızıntısı 5 noktada kesildi (api_server 4 + session_router 1); log + generic detail; HTTP status + shape KORUNDU, yalnız detail DEĞERİ değişti. Bkz. REFACTOR_BUGS.md.
 
-## KALAN (hepsi kullanıcıya BLOKE)
-- **Frontend F1/F2/F3** — tüm hedefler pf WIP'inde (53 değişiklik); kullanıcı WIP'ini commit edince çakışmasız yapılır.
+## Faz E — Frontend (pf reposu, ayrı; branch `main`)
+
+- **WIP commit'lendi** (`pf@main 2e544b6`, 57 dosya): kullanıcının frontend WIP'i (yeni hooks/test-altyapısı/config + bileşen güncellemeleri). `tsc --noEmit` + 30 jest yeşil; node_modules/build gitignore'lu. **Bu, çakışmasız refactor'ı açtı** (backend WIP-izolasyon deseniyle tutarlı).
+- **Frontend güvenlik-ağı:** `tsc --noEmit` (tip) + **jest 6 suite / 30 test** (davranış).
+- **F3 (any tiplendirme) — type-only, her commit tsc+30 jest yeşil:**
+
+| Commit (pf) | Değişiklik | any |
+|---|---|---|
+| `e75658e` | `RealtimeChart`: 3 point-array `any` → `SensorDataPoint[]` (telemetri) | −3 |
+| `17ece89` | `ControlScreen`: `coils: any[]` → `CoilStatus[]` (hardware-control) | −1 |
+
+  - Toplam: 102 → **98 any** (temiz domain-tipi swap'ları; `canvasRef as any` = web-canvas RN workaround bırakıldı).
+  - **Kalan ~94:** AiHubScreen (57), `apiPost<any>` response'ları (interface gerek), vb.
+- **F1 (LiveDataContext 458-satır split → telemetri/bağlantı/session)** + **F2 (AppNavContext → expo-router)** — henüz YAPILMADI. Delicate (F1 çok-tüketicili god-context; behavior-preservation React context'te ince — session/start gibi dikkat ister).
+
+## KALAN (kullanıcı aksiyonu)
 - **Publish v1.5** — obje R2'de; r2.dev TR-filtreli → custom-domain/slim-GitHub teslimat kararı kullanıcıda.
 
 > Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`, `_active_session`, `_session_lock`) → `servers/live_state.py`/`session_state.py`'ye taşınmalı.
