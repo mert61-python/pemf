@@ -86,7 +86,3 @@ export async function checkMobileUpdate(): Promise<MobileUpdate> {
     return { available: false };
   }
 }
-
-export function getAppVersion(): string {
-  return APP_VERSION;
-}
