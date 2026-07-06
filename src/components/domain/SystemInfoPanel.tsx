@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { colors, spacing, typography } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
+import { formatUptime } from "@/utils/uptime";
 
 export function SystemInfoPanel() {
   const { snapshot } = useLiveData();
@@ -14,17 +15,21 @@ export function SystemInfoPanel() {
   const [uptime, setUptime] = useState("00:00:00");
   const [stmConnected, setStmConnected] = useState(false);
 
+  // Çalışma süresi: WS snapshot'taki startTime'dan (process başlangıcı) her saniye hesaplanır.
+  // (/api/system/info `uptime` DÖNDÜRMÜYOR → eski `d.uptime` hep undefined idi, panel "00:00:00"
+  //  takılıydı. bkz. utils/uptime.ts + guii/REFACTOR_BUGS.md Faz F.)
+  useEffect(() => {
+    const tick = () => setUptime(formatUptime(sysInfo?.startTime, Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [sysInfo?.startTime]);
+
+  // STM32 bağlantı durumu: /system/info `stmConnected` döndürüyor (mount'ta bir kez — mevcut davranış korunur).
   useEffect(() => {
     apiGet<any>("/system/info", {}, { silent: true }).then((d) => {
-      if (d?.uptime) setUptime(d.uptime);
       if (typeof d?.stmConnected === "boolean") setStmConnected(d.stmConnected);
     });
-    const id = setInterval(() => {
-      apiGet<any>("/system/info", {}, { silent: true }).then((d) => {
-        if (d?.uptime) setUptime(d.uptime);
-      });
-    }, 10000);
-    return () => clearInterval(id);
   }, []);
 
   return (
