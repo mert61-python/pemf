@@ -337,20 +337,6 @@ class ProductionConfigManager:
             self._save_user_config()
             self._last_save_ts = time.monotonic()
 
-    def set_many(self, updates: Dict[str, Any], save: bool = True):
-        """Set multiple config values and optionally persist once."""
-        changed = False
-        for key_path, value in updates.items():
-            before = self.get(key_path, None)
-            self.set(key_path, value, save=False)
-            after = self.get(key_path, None)
-            if before != after:
-                changed = True
-
-        if save and changed:
-            self._save_user_config()
-            self._last_save_ts = time.monotonic()
-
     def save(self):
         """Persist current config to disk explicitly."""
         self._save_user_config()
@@ -381,14 +367,6 @@ class ProductionConfigManager:
             logger.error(f"Decryption failed: {e!r}", exc_info=True)
             return encrypted_value
     
-    def reload(self):
-        """Reload config from disk (useful after external changes)"""
-        self._load_config()
-    
-    def get_user_config_path(self) -> Path:
-        """Get path to user's writable config file"""
-        return self._get_app_data_dir() / 'config.json'
-
 
 # Global singleton instance
 _global_config = None
@@ -400,13 +378,3 @@ def get_production_config() -> ProductionConfigManager:
     if _global_config is None:
         _global_config = ProductionConfigManager()
     return _global_config
-
-
-def get_config_value(key_path: str, default: Any = None) -> Any:
-    """
-    Convenience function to get config value.
-    
-    Example:
-        broker_url = get_config_value('mqtt.broker_url', 'localhost')
-    """
-    return get_production_config().get(key_path, default)
