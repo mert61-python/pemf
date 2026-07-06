@@ -46,6 +46,16 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 
 - **"Dikkatli" ile YAKALANAN regresyon:** `test_live_state::test_get_active_session_is_readonly_on_expiry`, `api_server.get_active_session`'i **doğrudan** (HTTP değil) çağırıyordu → taşınınca `AttributeError`. Test yeni konuma yönlendirildi (`session_router.get_active_session`; davranış/güvenlik-invariant birebir). `test_session_char` state-bağımsız sağlam invariant'a çevrildi.
 - **api_server.py:** −89 satır. **94 test yeşil** (route-contract + shape + session-char + 9 mevcut session testi).
-- **⏸️ DEFERRED (human-review batch):** `session/start` (`:1114`, **bobin-sürer**) + `session/stop` (`:1680`) — safety-kritik; PR-boyu diff olarak ayrıca sunulacak (kullanıcı kararı).
+- **🔒 KARAR (human-review sonrası): `session/start` + `session/stop` api_server.py'de BIRAKILDI (bilinçli).** Değerlendirme: `session/start` ~170 satır, **8+ paylaşılan-global** (`state.hardware` bobin-sürer, `_session_duration_watchdog`, `_mqtt_publish`, `_get_treatment_db`, `_active_session`, `_ws_broadcast`, `_stop_session_coils`…). Bunları lazy-import ile çıkarmak → router'ın api_server iç-organına 8+ noktadan derin bağlanması = **temizlik net-negatif**. Bu cohesive safety/bobin-orkestrasyon çekirdeği; birarada tutmak DAHA temiz. (Gerçek ayrım isteniyorsa önce `session_state.py` shared-state refactor'u gerekir — ayrı, büyük iş.)
+
+---
+
+## SONUÇ — route-extraction fazı tamamlandı (2026-07-06)
+
+**7 refactor commit**, hepsi davranış-birebir + characterization'lı, **94 test yeşil**:
+- `system_router` (8 route) + `session_router` (2 route: active, notes) ayrıldı.
+- **api_server.py: 2206 → 1881 satır (−325, −%15).**
+- Safety çekirdekleri **bilinçli korundu:** session/start+stop (bobin-orkestrasyon), hardware/coil, ai/pro, metrics (ağır coupling). Bunlar ya cohesive-safety ya da shared-state-refactor gerektirir → naive extraction net-negatif olurdu.
+- **Kalan (bu görev dışı / bloke):** `ai_router` handler ayıklama (ai/pro safety + ONNX dinamik dispatch → benzer dikkat); frontend F1/F2/F3 (kullanıcı WIP'inde → önce commit); `str(e)` B3 (ayrı güvenlik-fix, kullanıcı kararı).
 
 > Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`, `_active_session`, `_session_lock`) → `servers/live_state.py`/`session_state.py`'ye taşınmalı.
