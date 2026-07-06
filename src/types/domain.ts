@@ -29,15 +29,6 @@ export interface CoilStatus {
   durationMin?: number;
 }
 
-export interface CoilCommand {
-  coilId: number;
-  command: "start_coil" | "stop_coil";
-  freq?: number;
-  duty?: number;
-  phase?: number;
-  duration?: number;
-}
-
 // ─── Patient ─────────────────────────────────────────────────────────────────
 export interface PatientSummary {
   name: string;
@@ -119,13 +110,3 @@ export interface SensorDataPoint {
 
 // Per-coil history: last 2000 samples
 export type CoilSensorHistory = Record<number, SensorDataPoint[]>;
-
-// ─── KPI ─────────────────────────────────────────────────────────────────────
-export interface KpiStats {
-  totalSessions: number;
-  completedSessions: number;
-  avgDurationMin: number;
-  totalEnergyWh: number;
-  uptimePercent: number;
-  patientCount: number;
-}
