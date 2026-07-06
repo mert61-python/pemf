@@ -290,8 +290,10 @@ app.include_router(settings_router)
 # audit B-2.2: cohesive uç grupları ayrı modüler router'lara çıkarıldı (api_server.py küçültüldü).
 from servers.update_router import router as update_router
 from servers.patient_router import router as patient_router
+from servers.system_router import router as system_router
 app.include_router(update_router)
 app.include_router(patient_router)
+app.include_router(system_router)
 
 
 @app.get("/api/auth/token")
@@ -2000,36 +2002,6 @@ async def get_active_session():
 
 
 # ── System info & gateway status ──────────────────────────────────────────────
-@app.get("/api/system/info")
-async def system_info():
-    """Return software/hardware version, device ID, uptime."""
-    from datetime import datetime
-    try:
-        from utils.path_utils import get_unique_device_id
-        device_id = get_unique_device_id()
-    except Exception:
-        device_id = "PEMF-001"
-    # Eşleştirme kodu — FE bu cihazın kodunu kullanıcıya gösterir.
-    try:
-        from utils.path_utils import get_pairing_code
-        pairing_code = get_pairing_code()
-    except Exception:
-        pairing_code = None
-    try:
-        from servers.tunnel_manager import get_tunnel_url
-        tunnel_url = get_tunnel_url() or None
-    except Exception:
-        tunnel_url = None
-    return {
-        "softwareVersion": _APP_VERSION,
-        "hardwareVersion": "HW-2025.1",
-        "deviceId": device_id,
-        "pairingCode": pairing_code,
-        "tunnelUrl": tunnel_url,
-        "stmConnected": state.core.stm_is_connected if state.core else False,
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-    }
-
 @app.get("/api/kpi/summary")
 async def get_kpi_summary():
     """KPI Özeti — DB'den seans istatistikleri."""
@@ -2130,53 +2102,6 @@ async def get_kpi_summary():
         logging.getLogger(__name__).exception("KPI ozeti hesaplanamadi")  # P2: sessiz yutma yerine logla
     return result
 
-
-@app.get("/api/gateway/status")
-async def gateway_status():
-    """Return Mosquitto/Network/Bridge status."""
-    with _live_state_lock:
-        mqtt_state = _live_state.get("mqtt", "warning")
-        gateway_state = _live_state.get("gateway", "offline")
-        stm_state = _live_state.get("stm", "warning")
-    service_status = state.core.get_service_status() if state.core and hasattr(state.core, "get_service_status") else {}
-    mosquitto_status = service_status.get("mosquitto", {})
-    network_status = service_status.get("network", {})
-    return {
-        "mqttConnected": mqtt_state == "online" or bool(mosquitto_status.get("port_open")),
-        "brokerRunning": bool(mosquitto_status.get("running") or mosquitto_status.get("port_open")),
-        "bridgeConnected": gateway_state == "online",
-        "gatewayState": gateway_state,
-        "stmConnected": stm_state == "online",
-        "networkOnline": bool(network_status.get("internet_connected")) or gateway_state == "online" or mqtt_state == "online",
-        "hotspotActive": bool(network_status.get("hotspot_active")),
-        "mosquitto": mosquitto_status,
-        "network": network_status,
-    }
-
-@app.get("/api/dashboard-snapshot")
-async def get_dashboard_snapshot():
-    """Donanımdan ve broker'dan alınan gerçek zamanlı veriler (React Native için)."""
-    snapshot = _build_ws_snapshot()
-    
-    # Eksik olan 'patient' ve 'sessions' alanlarını React hata vermesin diye ekliyoruz
-    snapshot["patient"] = {
-        "name": "Bilinmeyen",
-        "species": "Belirsiz",
-        "breed": "Belirsiz",
-        "owner": "Bilinmeyen"
-    }
-    snapshot["sessions"] = []
-    
-    return snapshot
-
-
-@app.post("/api/notifications/clear")
-async def clear_notifications():
-    """Clear in-memory notifications shown in React clients."""
-    with _live_state_lock:
-        _live_state["notifications"].clear()
-    _ws_broadcast_sync({"type": "notifications_cleared", "data": {"timestamp": time.time()}})
-    return {"status": "success"}
 
 # --- PATIENT DATABASE ENDPOINTS ---
 # (audit B-2.2) Hasta CRUD uçları servers/patient_router.py'ye taşındı (modüler ayrım; yollar aynı).
