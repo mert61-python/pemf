@@ -292,67 +292,12 @@ from servers.update_router import router as update_router
 from servers.patient_router import router as patient_router
 from servers.system_router import router as system_router
 from servers.session_router import router as session_router
+from servers.auth_router import router as auth_router
 app.include_router(update_router)
 app.include_router(patient_router)
 app.include_router(system_router)
 app.include_router(session_router)
-
-
-@app.get("/api/auth/token")
-async def _get_auth_token(request: Request):
-    """TEMASSIZ uzaktan-erişim: YEREL/LAN istemcisine cihazın api_token'ını verir. Mobil app aynı
-    WiFi'deyken token'ı çeker + saklar → farklı ağda tünel üzerinden gönderir (X-API-Key / ?token=).
-    UZAK (Cloudflare tünel) istek → 403: token YALNIZ yerel ağdan alınabilir = güvenli (operatör
-    token girmez, vet-dostu). Auth alanı kaldırıldığından uzaktan auth aksi halde imkânsızdı."""
-    try:
-        from servers.auth import is_local_request, get_api_token
-        _h = request.headers
-        _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
-        if not is_local_request(request.client.host if request.client else "", _via_proxy):
-            return Response(status_code=403, content='{"detail":"Token yalniz yerel agdan alinabilir"}', media_type="application/json")
-        return {"token": get_api_token()}
-    except Exception:
-        logging.exception("auth token endpoint hatasi")
-        return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
-
-
-# Kod→token takas throttle (tek-cihaz, global; kaba-kuvvete karşı).
-_exchange_throttle = {"fails": 0, "until": 0.0}
-
-
-@app.post("/api/auth/exchange")
-async def _exchange_code_for_token(request: Request):
-    """TEMASSIZ UZAKTAN PAIRING: 6-haneli eşleştirme kodunu cihaz api_token'ıyla takas eder.
-    Hiç LAN'a girmemiş telefon (kod-yolu) uzaktan token alabilsin diye TÜNELDEN de erişilir —
-    kodun KENDİSİ kimlik (auth-exempt). Kaba-kuvvete karşı 8 hatada 60sn global kilit. Yanlış→403."""
-    import time as _t
-    import secrets as _sec
-    now = _t.time()
-    if _exchange_throttle["until"] > now:
-        return Response(status_code=429, content='{"detail":"Cok fazla deneme, biraz bekleyin"}', media_type="application/json")
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    code = str((body or {}).get("code") or "").strip().upper()
-    try:
-        from utils.secrets_manager import get_secret
-        expected = (get_secret("pairing_code") or "").strip().upper()
-    except Exception:
-        expected = ""
-    if not expected or not code or not _sec.compare_digest(code, expected):
-        _exchange_throttle["fails"] += 1
-        if _exchange_throttle["fails"] >= 8:
-            _exchange_throttle["until"] = now + 60.0
-            _exchange_throttle["fails"] = 0
-        return Response(status_code=403, content='{"detail":"Eslestirme kodu hatali"}', media_type="application/json")
-    _exchange_throttle["fails"] = 0
-    try:
-        from servers.auth import get_api_token
-        return {"token": get_api_token()}
-    except Exception:
-        logging.exception("exchange token alinamadi")
-        return Response(status_code=500, content='{"detail":"token alinamadi"}', media_type="application/json")
+app.include_router(auth_router)
 
 
 # (audit B-2.2) /api/update/* uçları servers/update_router.py'ye taşındı (modüler ayrım).

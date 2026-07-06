@@ -58,6 +58,14 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 - Safety çekirdekleri **bilinçli korundu:** session/start+stop (bobin-orkestrasyon), hardware/coil, metrics (ağır coupling). Bunlar ya cohesive-safety ya da shared-state-refactor gerektirir → naive extraction net-negatif olurdu.
 - **`ai_router` (B2) — KARAR: cohesive BIRAKILDI.** Değerlendirme: 1384 satır/19 route ama HEPSİ paylaşılan çekirdeğe (`_get_or_load_model` model-cache, `_models`/`_model_lock`, `_decode_image`, `_ai_fail`) + ONNX dinamik-dispatch'e bağlı; ai/pro otonom-tedavi (bobin) safety. Alt-modüllere bölmek → her biri cache'e geri-uzanır = net-negatif. Zaten ayrı cohesive dosya (api_server değil). Gerçek ayrım = önce shared model-cache/helper refactor'u (ayrı, büyük). **session/start ile tutarlı karar.** (Monkeypatch B-2.3'te zaten `max_part_size`'a dönüşmüştü.)
 
+## Faz A3 — auth_router + test-env kurtarma (2026-07-07, ayrı oturum devamı)
+
+**Test-env geri kuruldu (ÖN-KOŞUL):** `myenv` (py3.10 + deps) SİLİNMİŞTİ → backend testleri koşulamıyordu. CI'daki `requirements-test.txt`'ten taze **py3.10 venv** + **`APPDATA=temp` global izolasyonu** kuruldu. (Kök neden: testler canlı servisin ÜRETİM data-dizinini kullanıyordu → SQLCipher-şifreli `patients.db` + çalışan-servisçe kilitli `pemf_secrets.json` → 6 test `RuntimeError: file is not a database`. conftest `temp_app_data` fixture'ı zaten var ama 6 test kullanmıyordu → APPDATA'yı tüm koşu için temp'e yönlendirdim.) → **94 yeşil baseline** doğrulandı.
+
+**auth_router extraction — ✅ commit `<bkz. git log>`:** `/api/auth/token` (GET) + `/api/auth/exchange` (POST) + route'a-özel `_exchange_throttle` → **`servers/auth_router.py`** (byte-exact; guard'lı satır-silme + EOL-safe wiring; `@app`→`@router`). **api_server iç durumuna SIFIR coupling** — yalnız `servers.auth` + `utils.secrets_manager` fonksiyon-içi import (lazy-`_api` bile gerekmedi) → system_router'dan bile temiz. **api_server.py: 1888 → 1833 (−55).** Route-contract (2 route aynı yolda) + **94 test yeşil** (birebir).
+
+**KARAR düzeltmesi (session_state ZATEN done):** footer'ın "gelecek cleanup" dediği `_active_session`/`_session_lock` → `session_state.py` taşıması **ZATEN YAPILMIŞ** (B-2.2 son kademe; api_server alias satır 829-830, in-place normalize 1134 → kimlik sabit, davranış birebir, `test_session_lifecycle` kilitli). Yani Faz D "ön-koşulu" tamam. **AMA Faz D (hardware_router) HÂLÂ net-negatif:** kalan coil/hardware route'ları (control/batch/emergency_stop/command…) state'e değil **orchestration'a** bağlı (`state.hardware`, `_mqtt_publish`, `_begin/_finish_coil_run`, coil-map, `_duration_seconds_to_stm_minutes` — 6+ nokta) = session/start ile birebir aynı profil. Faz D = önce hardware/MQTT orchestration'ı ayrı servise çıkar (api_server'ın ÇEKİRDEĞİ; büyük + safety + human-review) → ayrı planlı iş.
+
 ## B3 güvenlik-fix (refactor DIŞI, kullanıcı kararı: ayrı) — ✅ commit `52e734b`
 Ham `str(e)` istemci sızıntısı 5 noktada kesildi (api_server 4 + session_router 1); log + generic detail; HTTP status + shape KORUNDU, yalnız detail DEĞERİ değişti. Bkz. REFACTOR_BUGS.md.
 
@@ -95,4 +103,4 @@ Kullanıcı talebiyle ikisi de **dokunmadan** derinlemesine incelendi → **ikis
 ## KALAN (kullanıcı aksiyonu)
 - **Publish v1.5** — obje R2'de; r2.dev TR-filtreli → custom-domain/slim-GitHub teslimat kararı kullanıcıda.
 
-> Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`, `_active_session`, `_session_lock`) → `servers/live_state.py`/`session_state.py`'ye taşınmalı.
+> Shared-state DURUMU (2026-07-07 güncel): `_active_session`/`_session_lock` → **`session_state.py`'de (DONE, B-2.2)**; `_live_state`/`_build_ws_snapshot`/WS-havuzu → **`live_state.py`'de (DONE, B-2.2)**. api_server bunlara aynı-nesne alias'larıyla bağlı. Geriye yalnız `state` (donanım/core singleton) + hardware/MQTT orchestration helper'ları api_server'da — bunları ayırmak = **hardware_router (Faz D) ön-koşulu**, davranış-koruma DIŞI ayrı safety-iş (human-review'lı).
