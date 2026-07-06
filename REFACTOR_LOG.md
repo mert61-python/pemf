@@ -29,6 +29,8 @@ Davranış-koruyan refactor. Her adım: kaynak → hedef + doğrulama. **Sıfır
 
 - **api_server.py:** −61 satır daha. `metrics` (`GET /metrics`) BIRAKILDI (ağır coupling: `_session_lock`/`_active_session`/`_ws_lock`/`_ws_clients` → ayrı observability pass).
 - **Doğrulama:** compile+import OK · route-contract (67) · **response-shape golden (health/discovery/system_info/gateway/kpi)** · **92 test yeşil**.
-- **Kalan system-ish:** `metrics` (ağır), `kpi/summary` (`_get_treatment_db`, ~100 satır — characterization + ayrı commit).
+**Adım A3:** `kpi/summary` (~100 satır SQL) → `system_router.py`. **Byte-exact** çıkarıldı (script ile; yalnız `@app`→`@router`, lazy-import ekle, `_get_treatment_db()`→`_api._get_treatment_db()` — SQL/mantık birebir). Shape zaten `test_status_shapes.py`'de kilitli. api_server.py **−102 satır**. 92 test yeşil.
+
+- **Kalan system-ish:** yalnız `metrics` (`GET /metrics`; ağır coupling → ayrı observability pass'te).
 
 > Gelecek cleanup (davranış-koruma DIŞI, ayrı iş): lazy-import edilen paylaşılan durum (`_live_state`, `_build_ws_snapshot`, `state`) → `servers/live_state.py`'ye taşınmalı.

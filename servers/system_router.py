@@ -163,3 +163,105 @@ async def discovery_info():
         "tunnelUrl": get_tunnel_url() or None,
         "capabilities": ["rest", "websocket", "mqtt", "ai", "database"],
     }
+
+
+@router.get("/api/kpi/summary")
+async def get_kpi_summary():
+    """KPI Özeti — DB'den seans istatistikleri."""
+    from servers import api_server as _api
+    result = {
+        "totalSessions": 0,
+        "completedSessions": 0,
+        "stoppedSessions": 0,
+        "avgDurationMin": 0.0,
+        "coilUsage": {str(i): 0 for i in range(1, 9)},
+        "modeDistribution": {},
+        "last7Days": [],
+    }
+    try:
+        # P2 audit 2026-06-28: Eskiden duz sqlite3.connect ile DB okunuyordu; SQLCipher sifreli iken
+        # (PEMF_ENCRYPT_AT_REST=1) acilamiyor → 'except: pass' yutuyor → KPI SESSIZCE BOS. SQLCipher-
+        # farkindali _get_treatment_db()._get_connection() kullan.
+        # Audit 2026-07-01: Eskiden son 200 satir RAM'e cekilip Python'da toplaniyordu →
+        # 200+ seansli klinikte "Toplam Seans" 200'de takiliyor, oran/grafik yaniltici oluyordu.
+        # Simdi tum agregasyon SQL'de (LIMIT yok) → dogru toplam/oran; ayni SQLCipher baglantisi.
+        db = _api._get_treatment_db()
+        if db is None:
+            return result
+        from datetime import timedelta
+
+        with db._get_connection() as conn:
+            cur = conn.cursor()
+
+            cur.execute("SELECT COUNT(*) FROM treatment_sessions")
+            total = int(cur.fetchone()[0] or 0)
+
+            cur.execute(
+                "SELECT COUNT(*) FROM treatment_sessions "
+                "WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
+            )
+            completed = int(cur.fetchone()[0] or 0)
+
+            cur.execute(
+                "SELECT COUNT(*) FROM treatment_sessions "
+                "WHERE LOWER(COALESCE(session_status,'')) IN ('stopped','error','interrupted') "
+                "   OR LOWER(COALESCE(session_status,'')) LIKE '%abort%'"
+            )
+            stopped = int(cur.fetchone()[0] or 0)
+
+            cur.execute(
+                "SELECT AVG(duration_minutes) FROM treatment_sessions "
+                "WHERE duration_minutes IS NOT NULL"
+            )
+            _avg = cur.fetchone()[0]
+            avg_dur = round(float(_avg), 1) if _avg is not None else 0.0
+
+            modes = {}
+            for _r in cur.execute(
+                "SELECT COALESCE(treatment_mode,'Manuel') AS m, COUNT(*) "
+                "FROM treatment_sessions GROUP BY m"
+            ).fetchall():
+                modes[str(_r[0] or "Manuel")] = int(_r[1] or 0)
+
+            # Son 7 TAKVIM gunu (bugun dahil geriye 7); bos gunler 0 ile doldurulur.
+            # Eskiden yalniz seans OLAN gunler donuyordu → ardisik olmayan tarihler bitisik
+            # cizilip "son 7 gun trendi" gibi yaniltiyordu.
+            now_local = datetime.now()
+            since = (now_local - timedelta(days=6)).strftime("%Y-%m-%d")
+            day_counts = {}
+            for _r in cur.execute(
+                "SELECT substr(session_date,1,10) AS d, COUNT(*) FROM treatment_sessions "
+                "WHERE substr(session_date,1,10) >= ? GROUP BY d",
+                (since,),
+            ).fetchall():
+                if _r[0]:
+                    day_counts[str(_r[0])] = int(_r[1] or 0)
+            # En yeni gun once (FE .reverse() ile eskiden yeniye cizer) — eski sozlesme korunur.
+            last7 = [
+                {"date": (now_local - timedelta(days=_i)).strftime("%Y-%m-%d"),
+                 "count": day_counts.get((now_local - timedelta(days=_i)).strftime("%Y-%m-%d"), 0)}
+                for _i in range(0, 7)
+            ]
+
+            # coilUsage: bobin-bazli kosum sayisi (ayni SQLCipher-farkindali baglanti)
+            try:
+                for _row in cur.execute(
+                    "SELECT coil_id, COUNT(*) FROM session_coil_runs GROUP BY coil_id"
+                ).fetchall():
+                    _cid = int(_row[0]) if _row[0] is not None else 0
+                    if 1 <= _cid <= 8:
+                        result["coilUsage"][str(_cid)] = int(_row[1] or 0)
+            except Exception:
+                pass  # session_coil_runs yok/bos → coilUsage 0 kalir
+
+        result.update({
+            "totalSessions": total,
+            "completedSessions": completed,
+            "stoppedSessions": stopped,
+            "avgDurationMin": avg_dur,
+            "modeDistribution": modes,
+            "last7Days": last7,
+        })
+    except Exception:
+        logging.getLogger(__name__).exception("KPI ozeti hesaplanamadi")  # P2: sessiz yutma yerine logla
+    return result
