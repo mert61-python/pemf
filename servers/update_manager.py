@@ -97,9 +97,10 @@ def check_for_update(timeout: float = 15.0) -> dict:
             "error": "",
         }
     except Exception as e:
+        logger.warning("Güncelleme kontrolü hatası: %s", e)
         res = {"checked": True, "available": False, "currentVersion": cur, "latestVersion": "",
                "notes": "", "installerUrl": "", "sha256": "", "mandatory": False,
-               "previousStable": None, "error": str(e)}
+               "previousStable": None, "error": "Güncelleme kontrolü başarısız"}
     with _status_lock:
         _status.clear()
         _status.update(res)
@@ -236,7 +237,7 @@ def apply_update() -> dict:
         return {"ok": True, "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar."}
     except Exception as e:
         logger.exception("apply_update hatası")
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "Güncelleme uygulanamadı"}
     finally:
         _applying = False
 
@@ -296,7 +297,7 @@ def rollback() -> dict:
         return {"ok": True, "message": f"Önceki kararlı sürüme ({ver}) dönülüyor. Servis birazdan yeniden başlar."}
     except Exception as e:
         logger.exception("rollback hatası")
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "Geri alma başarısız"}
     finally:
         _applying = False
 

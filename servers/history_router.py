@@ -71,7 +71,7 @@ def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
         return sessions
     except Exception as e:
         logger.error(f"Error fetching history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 @router.get("/statistics")
 def get_statistics(db=Depends(get_db)):
@@ -81,7 +81,7 @@ def get_statistics(db=Depends(get_db)):
         return stats
     except Exception as e:
         logger.error(f"Error fetching statistics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 @router.get("/export_pdf")
 def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış session id listesi. Örn: 1,2,3"), 
@@ -105,7 +105,7 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
         )
     except Exception as e:
         logger.error(f"Error generating PDF: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 @router.get("/export_csv")
 def export_csv(db=Depends(get_db)):
@@ -151,7 +151,7 @@ def export_csv(db=Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error generating CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 @router.get("/export_patient_pdf")
@@ -172,7 +172,7 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
         )
     except Exception as e:
         logger.error(f"Error generating patient PDF: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 @router.post("/delete")
@@ -183,7 +183,7 @@ def delete_session_compat(payload: HistoryDeletePayload, db=Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error deleting session {payload.session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 class HistoryNotesPayload(BaseModel):
@@ -199,7 +199,7 @@ def update_notes(payload: HistoryNotesPayload, db=Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error updating notes for session {payload.session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 def _epoch_to_hms(epoch):
@@ -276,7 +276,7 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error fetching session details {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 @router.get("/{session_id}/coil_runs.csv")
@@ -330,7 +330,7 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error generating coil runs CSV for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 
 @router.get("/{session_id}")
@@ -343,7 +343,7 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
         return detail
     except Exception as e:
         logger.error(f"Error fetching session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
 
 @router.delete("/{session_id}")
 def delete_session(session_id: int, db=Depends(get_db)):
@@ -353,4 +353,4 @@ def delete_session(session_id: int, db=Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem başarısız")

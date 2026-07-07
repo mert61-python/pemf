@@ -171,6 +171,14 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
     response.headers["X-API-Version"] = _APP_VERSION  # istemci/monitoring sürüm görünürlüğü
+    # Klasik güvenlik header'ları (audit S-1): MIME-sniff / clickjacking / referrer-sızıntı önle.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    # HSTS YALNIZ TLS-proxy/tünel arkasından (LAN düz-HTTP'de anlamsız; tarayıcı HTTP'de yok sayar).
+    _h = request.headers
+    if _h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-proto", "").lower() == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
 

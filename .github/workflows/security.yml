@@ -2,8 +2,9 @@ name: security-audit
 
 # Bağımlılık CVE taraması (audit B-9.3). pip-audit ile web/API çekirdek bağımlılıkları (kurulu
 # ortam üzerinden — torch+cpu/UTF-8 çözümleme sorunlarını atlar) OSV/PyPI advisory DB'ye karşı taranır.
-# BLOKLAYICI DEĞİL (continue-on-error): mevcut pinlerde bilinen CVE'ler var (cryptography 41.0.3,
-# starlette 1.2.1, python-multipart 0.0.30...) — bunlar maintainer'ca test edilip yükseltilecek.
+# BLOKLAYICI DEĞİL (continue-on-error): web/crypto CVE'leri YAMALI (cryptography 43.0.1,
+# starlette 1.3.1, python-multipart 0.0.31 — 2026-07 fix'leri). Kalan bilinen-CVE yalnız AI-çekirdeği
+# (onnx 1.15 / torch 2.1.2) — numpy<2 cascade'i yüzünden BİLİNÇLİ pinli (Dependabot izler).
 # Kapsamlı tarama (torch/onnx dahil TÜM ağaç) Dependabot ile (.github/dependabot.yml) yürür.
 
 on:
