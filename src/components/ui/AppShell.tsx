@@ -266,6 +266,7 @@ function NavButton({ item, active, compact, onPress }: { item: NavItem; active: 
     <Pressable
       accessibilityLabel={item.label}
       accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[compact ? styles.bottomItem : styles.navItem, active && styles.navItemActive]}
     >

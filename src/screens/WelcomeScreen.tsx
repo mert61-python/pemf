@@ -18,7 +18,13 @@ export function WelcomeScreen() {
       </View>
 
       <View style={[styles.cardsContainer, { flexDirection: isMobile ? 'column' : 'row' }]}>
-        <TouchableOpacity style={styles.cardWrapper} onPress={() => setUserMode('pet_owner')}>
+        <TouchableOpacity
+          style={styles.cardWrapper}
+          onPress={() => setUserMode('pet_owner')}
+          accessibilityRole="button"
+          accessibilityLabel="Evcil Hayvan Sahibi profili"
+          accessibilityHint="Kamerayla akıllı teşhis ve tek-tuş güvenli tedavi modu"
+        >
           <View style={[styles.cardContainer, styles.ownerCard]}>
             <Card style={styles.card}>
               <Heart size={48} color={colors.primary} />
@@ -30,7 +36,13 @@ export function WelcomeScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.cardWrapper} onPress={() => setUserMode('veterinarian')}>
+        <TouchableOpacity
+          style={styles.cardWrapper}
+          onPress={() => setUserMode('veterinarian')}
+          accessibilityRole="button"
+          accessibilityLabel="Veteriner Hekim profili"
+          accessibilityHint="Manuel frekans kontrolü, sensör takibi ve klinik ayarlarına tam erişim"
+        >
           <View style={[styles.cardContainer, styles.vetCard]}>
             <Card style={styles.card}>
               <Stethoscope size={48} color={colors.warning} />

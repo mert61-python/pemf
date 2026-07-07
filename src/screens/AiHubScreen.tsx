@@ -723,11 +723,11 @@ function DiseaseModule({ patientName }: { patientName: string }) {
     <Card style={styles.card}>
       <Text style={styles.title}>Kedi Hastalık Tahmini (XGBoost)</Text>
       <ResponsiveGrid minItemWidth={150}>
-        <TextInput style={styles.input} placeholder="Yaş" keyboardType="numeric" value={form.age} onChangeText={t => setForm({...form, age: t})} />
-        <TextInput style={styles.input} placeholder="Kilo" keyboardType="numeric" value={form.weight} onChangeText={t => setForm({...form, weight: t})} />
-        <TextInput style={styles.input} placeholder="Nabız" keyboardType="numeric" value={form.hr} onChangeText={t => setForm({...form, hr: t})} />
-        <TextInput style={styles.input} placeholder="Ateş" keyboardType="numeric" value={form.temp} onChangeText={t => setForm({...form, temp: t})} />
-        <TextInput style={styles.input} placeholder="Süre" keyboardType="numeric" value={form.duration} onChangeText={t => setForm({...form, duration: t})} />
+        <TextInput style={styles.input} placeholder="Yaş" accessibilityLabel="Yaş" keyboardType="numeric" value={form.age} onChangeText={t => setForm({...form, age: t})} />
+        <TextInput style={styles.input} placeholder="Kilo" accessibilityLabel="Kilo (kg)" keyboardType="numeric" value={form.weight} onChangeText={t => setForm({...form, weight: t})} />
+        <TextInput style={styles.input} placeholder="Nabız" accessibilityLabel="Nabız (atım/dk)" keyboardType="numeric" value={form.hr} onChangeText={t => setForm({...form, hr: t})} />
+        <TextInput style={styles.input} placeholder="Ateş" accessibilityLabel="Ateş (°C)" keyboardType="numeric" value={form.temp} onChangeText={t => setForm({...form, temp: t})} />
+        <TextInput style={styles.input} placeholder="Süre" accessibilityLabel="Süre (gün)" keyboardType="numeric" value={form.duration} onChangeText={t => setForm({...form, duration: t})} />
       </ResponsiveGrid>
       <Text style={styles.diseaseHint}>
         En az 2 semptom seçmeniz yeterli. Nabız, ateş ve kilo girmek zorunlu değildir —
@@ -1417,6 +1417,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         <TextInput
           style={styles.fantomLenInput}
           keyboardType="numeric"
+          accessibilityLabel="Fantom boyu (cm)"
           placeholder="ör. 10 · boş = piksel"
           placeholderTextColor={colors.textMuted}
           value={phantomLen}
@@ -1636,6 +1637,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         <TextInput
           style={styles.fantomLenInput}
           keyboardType="numeric"
+          accessibilityLabel="Petri çapı (cm)"
           placeholder="ör. 8 · boş = piksel"
           placeholderTextColor={colors.textMuted}
           value={petriDia}

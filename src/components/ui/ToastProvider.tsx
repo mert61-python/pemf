@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useRe
 import { StyleSheet, Text, View, Animated } from "react-native";
 import { CheckCircle, AlertCircle, Info } from "lucide-react-native";
 import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
+import { setToastHandler } from "@/services/toastBridge";
 
 type ToastType = "success" | "error" | "info";
 
@@ -55,6 +56,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       ]).start(() => setToast(null));
     }, 3000);
   };
+
+  // F-6: service katmanı (apiClient) toast gönderebilsin diye handler'ı kaydet. Mount-time showToast
+  // instance'ı ref'lere (opacity/translateY/hideTimer) + stable setToast'a kapanır → geçerli kalır.
+  useEffect(() => {
+    setToastHandler(showToast);
+    return () => setToastHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>

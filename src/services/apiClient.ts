@@ -1,5 +1,6 @@
 import { serviceConfig } from "@/services/config";
 import { Alert, Platform } from "react-native";
+import { emitToast } from "@/services/toastBridge";
 
 /** Web-güvenli uyarı — Alert.alert web'de no-op olduğundan window.alert'e düşer. */
 export function platformAlert(title: string, message: string) {
@@ -24,7 +25,10 @@ export function platformConfirm(title: string, message: string, confirmLabel = "
 }
 
 function showError(title: string, message: string) {
-  platformAlert(title, message);
+  // F-6: önce non-blocking toast (medikal konsolda bloklayan window.alert kötü UX); ToastProvider
+  // kayıtlı değilse (mount öncesi / native provider'sız) bloklayan alert'e fallback. platformConfirm
+  // (yıkıcı-onay) DEĞİŞMEDİ — native dialog doğru.
+  if (!emitToast(`${title}: ${message}`, "error")) platformAlert(title, message);
 }
 
 /** İstek opsiyonları — `silent: true` arka-plan poll'lerinde hata pop-up'ını bastırır. */
