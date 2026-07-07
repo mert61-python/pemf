@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
+import { apiPost } from "@/services/apiClient";
 
 interface State {
   hasError: boolean;
@@ -18,6 +19,24 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("ErrorBoundary yakaladı:", error, info?.componentStack);
+    // F-7: crash'i backend'e fire-and-forget raporla (client_errors.jsonl) — tıbbi cihaz crash
+    // görünürlüğü; konsol kapanınca iz kalsın. Raporlama best-effort, ASLA ErrorBoundary'yi bozmaz.
+    try {
+      const route =
+        typeof window !== "undefined" ? window.location?.hash || window.location?.pathname || "" : "";
+      apiPost(
+        "/client/error",
+        {
+          message: String(error?.message || error || ""),
+          stack: String(info?.componentStack || error?.stack || "").slice(0, 2000),
+          route,
+        },
+        null,
+        { silent: true },
+      ).catch(() => {});
+    } catch {
+      /* raporlama başarısız olsa da hata kartı gösterilir */
+    }
   }
 
   reset = () => this.setState({ hasError: false, error: undefined });

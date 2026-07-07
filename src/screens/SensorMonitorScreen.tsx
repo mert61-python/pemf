@@ -4,7 +4,7 @@
  * Python sensor_data_window.py'nin React karşılığı.
  * Çift eksenli (mT + °C) canlı grafik, 8 bobin seçimi, anlık değerler.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import {
   ScrollView,
   Text,
@@ -142,7 +142,9 @@ export function SensorMonitorScreen() {
   );
 }
 
-function CoilStatCard({
+// F-3: memo → yalnız kendi bobininin değeri değişince render (WS her tick'te 8 kartı yeniden
+// reconcile etmesin). Tüm prop'lar primitive → shallow-compare kesin.
+const CoilStatCard = memo(function CoilStatCard({
   id, color, connected, running,
   magneticMt, objectTemp, currentA, frequencyHz,
 }: {
@@ -167,7 +169,7 @@ function CoilStatCard({
       )}
     </View>
   );
-}
+});
 
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
   return (

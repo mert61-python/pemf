@@ -2,7 +2,7 @@
  * KpiDashboardScreen — Python kpi_dashboard_window.py'nin React karşılığı.
  * Gerçek veriye dayalı KPI kartları — API'den ve canlı sensör verisinden.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -87,46 +87,87 @@ export function KpiDashboardScreen() {
   // hesabı kartın kendi padding'ini kaçırıp grafiğin kutudan taşmasına yol açıyordu.
   const [chartW, setChartW] = useState(0);
 
-  const chartConfig = {
-    backgroundGradientFrom: "#1e293b",
-    backgroundGradientTo: "#0f172a",
-    color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
-    strokeWidth: 2,
-    barPercentage: 0.5,
-    useShadowColorFromDataset: false
-  };
-
-  // Son 7 gün bar chart verisi
-  const last7 = kpi.last7Days.slice().reverse();
-  const barData = {
-    labels: last7.length > 0
-      ? last7.map(d => {
-          // Güvenli MM-DD: backend string 'YYYY-MM-DD' bekleniyor ama sayı/epoch/ISO gelirse
-          // ham .slice(5) ya yanlış etiket ya da (sayıda) TypeError → KPI beyaz ekran veriyordu.
-          const raw: any = (d as any)?.date;
-          if (typeof raw === "number") {
-            const dt = new Date(raw < 1e12 ? raw * 1000 : raw);
-            return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-          }
-          const s = String(raw ?? "");
-          const m = s.match(/\d{4}-(\d{2}-\d{2})/);
-          return m ? m[1] : (s.length >= 5 ? s.slice(5) : (s || "—"));
-        })
-      : ["—", "—", "—", "—", "—", "—", "—"],
-    datasets: [{ data: last7.length > 0 ? last7.map(d => d.count) : [0, 0, 0, 0, 0, 0, 0] }]
-  };
-
-  // Mod dağılımı pie verisi
-  const PIE_COLORS = ["#7c3aed", "#ec4899", "#0ea5e9", "#f59e0b", "#22c55e"];
-  const modeEntries = Object.entries(kpi.modeDistribution);
-  const pieData = modeEntries.length > 0
-    ? modeEntries.map(([name, count], i) => ({
-        name, population: count,
-        color: PIE_COLORS[i % PIE_COLORS.length],
-        legendFontColor: "#94a3b8", legendFontSize: 12
-      }))
-    : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: 12 }];
+  // F-3: grafik bölümünü useMemo'la → WS her tick'te ekran re-render OLSA da (anlık-durum kartları +
+  // bobin tablosu canlı-veri ister) BarChart/PieChart yalnız kpi/genişlik değişince yeniden hesaplanıp
+  // render olur (chart-kit render'ı pahalı). Aynı girdi → aynı element referansı = davranış-nötr.
+  const chartsSection = useMemo(() => {
+    const chartConfig = {
+      backgroundGradientFrom: "#1e293b",
+      backgroundGradientTo: "#0f172a",
+      color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+      strokeWidth: 2,
+      barPercentage: 0.5,
+      useShadowColorFromDataset: false
+    };
+    // Son 7 gün bar chart verisi
+    const last7 = kpi.last7Days.slice().reverse();
+    const barData = {
+      labels: last7.length > 0
+        ? last7.map(d => {
+            // Güvenli MM-DD: backend string 'YYYY-MM-DD' bekleniyor ama sayı/epoch/ISO gelirse
+            // ham .slice(5) ya yanlış etiket ya da (sayıda) TypeError → KPI beyaz ekran veriyordu.
+            const raw: any = (d as any)?.date;
+            if (typeof raw === "number") {
+              const dt = new Date(raw < 1e12 ? raw * 1000 : raw);
+              return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+            }
+            const s = String(raw ?? "");
+            const m = s.match(/\d{4}-(\d{2}-\d{2})/);
+            return m ? m[1] : (s.length >= 5 ? s.slice(5) : (s || "—"));
+          })
+        : ["—", "—", "—", "—", "—", "—", "—"],
+      datasets: [{ data: last7.length > 0 ? last7.map(d => d.count) : [0, 0, 0, 0, 0, 0, 0] }]
+    };
+    // Mod dağılımı pie verisi
+    const PIE_COLORS = ["#7c3aed", "#ec4899", "#0ea5e9", "#f59e0b", "#22c55e"];
+    const modeEntries = Object.entries(kpi.modeDistribution);
+    const pieData = modeEntries.length > 0
+      ? modeEntries.map(([name, count], i) => ({
+          name, population: count,
+          color: PIE_COLORS[i % PIE_COLORS.length],
+          legendFontColor: "#94a3b8", legendFontSize: 12
+        }))
+      : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: 12 }];
+    return (
+      <ResponsiveGrid minItemWidth={300}>
+        <Card style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <BarChart
+                data={barData}
+                width={chartW}
+                height={220}
+                chartConfig={chartConfig}
+                style={styles.chart}
+                yAxisLabel=""
+                yAxisSuffix=""
+              />
+            )}
+          </View>
+        </Card>
+        <Card style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Tedavi Modu Dağılımı</Text>
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <PieChart
+                data={pieData}
+                width={chartW}
+                height={220}
+                chartConfig={chartConfig}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"15"}
+                center={[10, 0]}
+                absolute
+              />
+            )}
+          </View>
+        </Card>
+      </ResponsiveGrid>
+    );
+  }, [kpi.last7Days, kpi.modeDistribution, chartW]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -165,42 +206,7 @@ export function KpiDashboardScreen() {
       </ResponsiveGrid>
 
       <Text style={styles.sectionTitle}>📈 Performans Grafikleri</Text>
-      <ResponsiveGrid minItemWidth={300}>
-        <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
-          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
-            {chartW > 0 && (
-              <BarChart
-                data={barData}
-                width={chartW}
-                height={220}
-                chartConfig={chartConfig}
-                style={styles.chart}
-                yAxisLabel=""
-                yAxisSuffix=""
-              />
-            )}
-          </View>
-        </Card>
-        <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Tedavi Modu Dağılımı</Text>
-          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
-            {chartW > 0 && (
-              <PieChart
-                data={pieData}
-                width={chartW}
-                height={220}
-                chartConfig={chartConfig}
-                accessor={"population"}
-                backgroundColor={"transparent"}
-                paddingLeft={"15"}
-                center={[10, 0]}
-                absolute
-              />
-            )}
-          </View>
-        </Card>
-      </ResponsiveGrid>
+      {chartsSection}
 
       {/* Per-coil instant table */}
       {connectedCoils.length > 0 && (
