@@ -29,7 +29,7 @@ class DeleteAllPayload(BaseModel):
 
 
 @router.get("/api/patients")
-async def get_all_patients(limit: int = 0, offset: int = 0):
+def get_all_patients(limit: int = 0, offset: int = 0):
     """Hastaları döndürür. Pagination (audit B-8.2): limit>0 ile sayfalanır (offset kaydırır);
     limit=0 → HEPSİ (geriye uyumlu — eski istemci parametre göndermez). Yanıt: {status,data,total}."""
     db = get_patient_database()
@@ -43,7 +43,7 @@ async def get_all_patients(limit: int = 0, offset: int = 0):
 
 
 @router.post("/api/patients")
-async def add_new_patient(patient: PatientInput):
+def add_new_patient(patient: PatientInput):
     """Yeni hasta ekler veya id verilirse mevcut hastayı günceller."""
     db = get_patient_database()
     if not db:
@@ -58,7 +58,7 @@ async def add_new_patient(patient: PatientInput):
 
 
 @router.delete("/api/patients/{patient_id}")
-async def remove_patient(patient_id: str):
+def remove_patient(patient_id: str):
     """Hasta siler"""
     db = get_patient_database()
     success = db.delete_patient(patient_id)
@@ -66,13 +66,13 @@ async def remove_patient(patient_id: str):
 
 
 @router.post("/api/patients/{patient_id}/delete")
-async def remove_patient_compat(patient_id: str):
+def remove_patient_compat(patient_id: str):
     """Backward-compatible delete route used by the current Expo app."""
-    return await remove_patient(patient_id)
+    return remove_patient(patient_id)
 
 
 @router.post("/api/patients/delete_all")
-async def remove_all_patients(payload: DeleteAllPayload = DeleteAllPayload()):
+def remove_all_patients(payload: DeleteAllPayload = DeleteAllPayload()):
     """TÜM hastaları siler — KORUMALI (audit B-8.2): gövdede {"confirm":"DELETE_ALL"} ZORUNLU.
     Eskiden boş POST tüm hastaları geri-dönülemez siliyordu (yalnız middleware auth). Yanlış-tık/
     otomatik-istek koruması; frontend confirm gönderir."""

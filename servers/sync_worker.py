@@ -168,12 +168,20 @@ class CloudSyncWorker:
                             if dec == "[okunamayan kayıt]":
                                 skipped += 1
                                 continue
-                            # SQLite'a INSERT OR IGNORE / REPLACE
+                            # D-1: INSERT OR REPLACE YERİNE ON CONFLICT DO UPDATE. REPLACE = DELETE+INSERT →
+                            # (a) sync'e-ait-OLMAYAN kolonları (owner_email/last_treatment_at/anonymized)
+                            # varsayılana sıfırlıyordu; (b) FK-cascade patient_search_index'i siliyordu
+                            # (hasta aranamaz olurdu). ON CONFLICT DO UPDATE yalnız sync-sahibi kolonları
+                            # günceller → diğerleri + arama-indeksi KORUNUR.
                             cursor.execute(
                                 """
-                                INSERT OR REPLACE INTO patients
+                                INSERT INTO patients
                                 (id, name, species, breed, age, weight, owner, vet_contact, created_at, updated_at, sync_status)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                                ON CONFLICT(id) DO UPDATE SET
+                                    name=excluded.name, species=excluded.species, breed=excluded.breed,
+                                    age=excluded.age, weight=excluded.weight, owner=excluded.owner,
+                                    vet_contact=excluded.vet_contact, updated_at=excluded.updated_at, sync_status=1
                                 """,
                                 (
                                     rp.get("id"), rp.get("name", ""), rp.get("species", ""), rp.get("breed", ""),
@@ -237,15 +245,27 @@ class CloudSyncWorker:
                 res = self.client.rpc("resolve_sessions", {"p_device_id": self.device_id}).execute()
                 if res.data:
                     for rs in res.data:
+                        # D-1: INSERT OR REPLACE YERİNE ON CONFLICT DO UPDATE. REPLACE = DELETE+INSERT →
+                        # (a) FK-cascade seansın TÜM child kayıtlarını (session_parameters/sensor_samples/
+                        # session_events/session_coil_runs) SİLERDİ = seans-detayı kaybı; (b) PUSH PII'yi
+                        # None redacte ettiğinden pull-back yerel patient_name/notes/operator'ı EZERDİ.
+                        # DO UPDATE: child-cascade YOK + PII kolonları güncellenMEZ (yerel PII KORUNUR).
                         cursor.execute(
                             """
-                            INSERT OR REPLACE INTO treatment_sessions 
-                            (id, session_date, start_time, end_time, duration_minutes, treatment_mode, target_condition, frequency_hz, intensity_mt, pulse_duration_ms, operator_name, patient_name, patient_notes, session_status, created_at, sync_status) 
+                            INSERT INTO treatment_sessions
+                            (id, session_date, start_time, end_time, duration_minutes, treatment_mode, target_condition, frequency_hz, intensity_mt, pulse_duration_ms, operator_name, patient_name, patient_notes, session_status, created_at, sync_status)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                            ON CONFLICT(id) DO UPDATE SET
+                                session_date=excluded.session_date, start_time=excluded.start_time,
+                                end_time=excluded.end_time, duration_minutes=excluded.duration_minutes,
+                                treatment_mode=excluded.treatment_mode, target_condition=excluded.target_condition,
+                                frequency_hz=excluded.frequency_hz, intensity_mt=excluded.intensity_mt,
+                                pulse_duration_ms=excluded.pulse_duration_ms, session_status=excluded.session_status,
+                                sync_status=1
                             """,
                             (
-                                rs.get("id"), rs.get("session_date"), rs.get("start_time"), rs.get("end_time"), rs.get("duration_minutes"), 
-                                rs.get("treatment_mode"), rs.get("target_condition"), rs.get("frequency_hz"), rs.get("intensity_mt"), rs.get("pulse_duration_ms"), 
+                                rs.get("id"), rs.get("session_date"), rs.get("start_time"), rs.get("end_time"), rs.get("duration_minutes"),
+                                rs.get("treatment_mode"), rs.get("target_condition"), rs.get("frequency_hz"), rs.get("intensity_mt"), rs.get("pulse_duration_ms"),
                                 rs.get("operator_name"), rs.get("patient_name"), rs.get("patient_notes"), rs.get("session_status"), rs.get("created_at")
                             )
                         )

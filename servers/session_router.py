@@ -27,7 +27,7 @@ class SessionNotesPayload(BaseModel):
 
 
 @router.get("/api/session/active")
-async def get_active_session():
+def get_active_session():
     """Return current active session state."""
     from servers import api_server as _api
     import time
@@ -49,7 +49,7 @@ async def get_active_session():
 
 
 @router.post("/api/session/notes")
-async def save_session_notes(payload: SessionNotesPayload):
+def save_session_notes(payload: SessionNotesPayload):
     """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı).
 
     Asama-2 (1c): seans BASINDA gercek db_session_id olustuysa ARTIK YENI satir ACMAZ →

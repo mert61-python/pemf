@@ -166,7 +166,7 @@ async def discovery_info():
 
 
 @router.get("/api/kpi/summary")
-async def get_kpi_summary():
+def get_kpi_summary():
     """KPI Özeti — DB'den seans istatistikleri."""
     from servers import api_server as _api
     result = {

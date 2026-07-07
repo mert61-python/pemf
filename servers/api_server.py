@@ -1665,7 +1665,9 @@ async def stop_session():
         logging.getLogger(__name__).debug("stop: minute emit hatasi", exc_info=True)
 
     # Donanim STOP (ESP→MQTT, STM→update_coil). _stop_session_coils ayrica acik coil-run'lari kapatir.
-    _stop_session_coils(coil_ids)
+    # P-1b: senkron _mqtt_publish (~2s/ESP-bobin) event-loop'u DONDURMASIN → to_thread (emergency_stop
+    # deseniyle birebir; bobinler yine durur, sadece threadpool'da). Watchdog'dan (1327) cagri sync kalir.
+    await asyncio.to_thread(_stop_session_coils, coil_ids)
     update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).

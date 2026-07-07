@@ -183,7 +183,7 @@ def test_get_active_session_is_readonly_on_expiry(api):
     # B-2.2: get_active_session servers/session_router.py'ye taşındı (davranış birebir; global _active_session'ı
     # lazy-import ile okur → aynı salt-okunur invariant). Test yeni konumu çağırır.
     from servers import session_router
-    resp = asyncio.run(session_router.get_active_session())
+    resp = session_router.get_active_session()  # P-1a: async def -> def (FastAPI threadpool); artık senkron
     # Yanıtta süre-dolmuş → is_active False GÖSTERİLİR...
     assert resp["is_active"] is False
     assert resp["remaining_sec"] == 0

@@ -57,7 +57,10 @@ def _ws_broadcast_sync(message: dict) -> None:
         async with _ws_send_lock_get():
             for ws in clients:
                 try:
-                    await ws.send_text(data)
+                    # P-2: per-send timeout — yavaş/yarı-açık istemci tüm broadcast'i (→ tüm filoyu)
+                    # bloklamasın; 5sn'de yanıtlamayan istemci DÜŞÜRÜLÜR (except Exception TimeoutError'ı
+                    # da yakalar → dead). Sağlıklı istemci ms'de gönderir → davranış aynı.
+                    await asyncio.wait_for(ws.send_text(data), timeout=5.0)
                 except Exception:
                     dead.append(ws)
         if dead:
