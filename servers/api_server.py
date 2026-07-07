@@ -166,6 +166,11 @@ async def add_security_headers(request: Request, call_next):
     _p = request.scope.get("path", "")
     if _p.startswith("/api/v1/"):
         request.scope["path"] = "/api/" + _p[len("/api/v1/"):]
+    # O-1: request-correlation-id — istemci X-Request-ID'sini (güvenli-karakter SÜZ → header/log-injection'a
+    # karşı) kullan ya da üret; JSON-log + yanıt header'ında izlenir (7/24 saha debug).
+    _rid = "".join(c for c in (request.headers.get("X-Request-ID") or "") if c.isalnum() or c in "._-")[:64] or _uuid.uuid4().hex[:12]
+    from utils.request_context import request_id_var
+    request_id_var.set(_rid)
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
@@ -179,6 +184,7 @@ async def add_security_headers(request: Request, call_next):
     _h = request.headers
     if _h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-proto", "").lower() == "https":
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    response.headers["X-Request-ID"] = _rid
     return response
 
 

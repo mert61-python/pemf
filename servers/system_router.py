@@ -12,7 +12,7 @@ import logging
 import time
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 router = APIRouter(tags=["system"])
@@ -265,3 +265,31 @@ async def get_kpi_summary():
     except Exception:
         logging.getLogger(__name__).exception("KPI ozeti hesaplanamadi")  # P2: sessiz yutma yerine logla
     return result
+
+
+@router.post("/api/client/error")
+async def log_client_error(request: Request):
+    """F-7: Frontend ErrorBoundary crash raporu (fire-and-forget). client_errors.jsonl'e ekler;
+    boyut-sınırlı. Hata olsa da 200 döner (istemci akışını bozmaz). Not: stack kod-yolu içerir,
+    hasta PII genelde bulunmaz; dosya app_data'da (ACL-bağlamlı) yerel kalır."""
+    import json as _json
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    try:
+        from servers import api_server as _api
+        app_data = _api._app_data_dir()
+        app_data.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "message": str(body.get("message") or "")[:500],
+            "stack": str(body.get("stack") or "")[:2000],
+            "route": str(body.get("route") or "")[:80],
+        }
+        with open(app_data / "client_errors.jsonl", "a", encoding="utf-8") as f:
+            f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        logging.getLogger("system_router").exception("client error log yazılamadı")
+    return {"status": "ok"}

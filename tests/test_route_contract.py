@@ -7,7 +7,7 @@ değişirse bu test KIRILIR → davranış-koruma ihlali erken yakalanır.
 Kapsam DIŞI: FastAPI iç uçları (/docs, /openapi.json, /redoc, /docs/oauth2-redirect) —
 bunlar framework-üretimi, dep sürümüne bağlı, refactor kapsamı değil.
 
-Baseline: 2026-07-06 (refactor ÖNCESİ), PEMF_SIMULATE=1. 67 route.
+Baseline: 2026-07-06 (refactor ÖNCESİ), PEMF_SIMULATE=1. 67 route → 68 (+1 F-7 /api/client/error, prod-readiness Faz 2).
 """
 import os
 
@@ -40,6 +40,7 @@ GOLDEN_ROUTES = {
     ("/api/ai/vision/thermal", "POST"),
     ("/api/auth/exchange", "POST"),
     ("/api/auth/token", "GET"),
+    ("/api/client/error", "POST"),  # F-7 (prod-readiness Faz 2): frontend ErrorBoundary crash raporu
     ("/api/coil/batch", "POST"),
     ("/api/coil/{coil_id}/control", "POST"),
     ("/api/dashboard-snapshot", "GET"),
@@ -107,4 +108,4 @@ def test_route_contract_unchanged():
     added = current - GOLDEN_ROUTES  # beklenmeyen route eklendi / path değişti
     assert not missing, f"Route KAYBOLDU veya path/method değişti: {sorted(missing)}"
     assert not added, f"Beklenmeyen/değişmiş route: {sorted(added)}"
-    assert len(current) == len(GOLDEN_ROUTES) == 67
+    assert len(current) == len(GOLDEN_ROUTES) == 68

@@ -27,10 +27,12 @@ class _JsonLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         import json as _json
+        from utils.request_context import get_request_id
         doc = {
             "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
             "logger": record.name,
+            "rid": get_request_id(),
             "msg": record.getMessage(),
         }
         if record.exc_info:

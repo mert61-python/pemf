@@ -45,3 +45,22 @@ def test_history_500_does_not_leak_exception_text(temp_app_data):
         assert body.get("detail") == "İşlem başarısız"
     finally:
         app.dependency_overrides.pop(history_router.get_db, None)
+
+
+def test_request_id_generated_and_echoed(temp_app_data):
+    """O-1: her yanıtta X-Request-ID üretilir; istemci gönderirse (güvenli-karakter) yankılanır."""
+    _app, c = _client()
+    rid = c.get("/api/health").headers.get("X-Request-ID")
+    assert rid and len(rid) >= 8, "üretilen id"
+    assert c.get("/api/health", headers={"X-Request-ID": "client-req-123"}).headers.get("X-Request-ID") == "client-req-123"
+    # header/log-injection: güvensiz karakterler (boşluk/#/slash) SÜZÜLÜR
+    got = c.get("/api/health", headers={"X-Request-ID": "a b#c/d"}).headers.get("X-Request-ID")
+    assert got == "abcd"
+
+
+def test_client_error_endpoint_never_5xx(temp_app_data):
+    """F-7: ErrorBoundary crash raporu 200 döner (istemci akışını bozmaz); bozuk gövde de tolere edilir."""
+    _app, c = _client()
+    r = c.post("/api/client/error", json={"message": "boom", "stack": "at X\nat Y", "route": "control"})
+    assert r.status_code == 200 and r.json().get("status") == "ok"
+    assert c.post("/api/client/error", content=b"not-json").status_code == 200
