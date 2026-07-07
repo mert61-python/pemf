@@ -1,5 +1,6 @@
 """COM port'tan gelen ham veriyi gösterir — firmware debug aracı."""
 import time
+
 import serial
 
 PORT   = "COM10"

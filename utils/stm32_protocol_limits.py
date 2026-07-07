@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 
-
 STM32_NUM_COILS = 5
 ESP_NUM_COILS = 8
 

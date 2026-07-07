@@ -1,24 +1,28 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-import uuid as _uuid
-from pydantic import BaseModel
+import asyncio  # P0 audit 2026-06-28: senkron MQTT publish'i event-loop'tan cikar (to_thread)
+import json
 import logging
 import os
-import json
 import threading
 import time
-import asyncio  # P0 audit 2026-06-28: senkron MQTT publish'i event-loop'tan cikar (to_thread)
+import uuid as _uuid
 from contextlib import asynccontextmanager  # audit B-2.2: on_event yerine lifespan
 from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from servers import (
+    coil_run_tracker,  # audit B-2.2: coil-run (treatment-DB) tracker ayrı modülde
+    live_state,  # audit B-2.2: canlı-durum (WS/live-state) çekirdeği ayrı modülde
+    session_state,  # audit B-2.2 (son kademe): aktif-seans state ayrı modülde
+)
 from servers.ai_router import ai_router
 from servers.history_router import router as history_router
 from servers.settings_router import router as settings_router
-from servers import live_state  # audit B-2.2: canlı-durum (WS/live-state) çekirdeği ayrı modülde
-from servers import coil_run_tracker  # audit B-2.2: coil-run (treatment-DB) tracker ayrı modülde
-from servers import session_state  # audit B-2.2 (son kademe): aktif-seans state ayrı modülde
 from utils.path_utils import get_app_version  # audit B-8.1: tek versiyon kaynağı
 
 _APP_VERSION = get_app_version()
@@ -44,9 +48,9 @@ update_live_session_state = live_state.update_live_session_state
 # Headless Core State referansı (Singleton Bridge)
 # Bu obje main.py'den enjekte edilebilir veya burada global import edilebilir
 try:
-    from headless_core import HeadlessCore
     from controllers.hardware_controller import HardwareController
     from database.patient_database import get_patient_database
+    from headless_core import HeadlessCore
 except ImportError:
     HeadlessCore = None
     HardwareController = None
@@ -200,7 +204,7 @@ async def _auth_middleware(request: Request, call_next):
     # bypass (sessiz fail-open). Artik: auth-katmani yuklenemezse guvenlik-muaf yollar (emergency_stop/
     # health/discovery/simulator) gecer, GERISI 503; token kontrolu patlarsa 401.
     try:
-        from servers.auth import require_auth, is_exempt, check_token, is_local_request
+        from servers.auth import check_token, is_exempt, is_local_request, require_auth
         required = bool(require_auth())
         exempt = is_exempt(request.url.path)
         # YEREL/LAN MUAF: masaüstü kısayolu (localhost:8000) + aynı-WiFi istekleri token İSTEMEZ;
@@ -302,11 +306,12 @@ app.include_router(ai_router)
 app.include_router(history_router)
 app.include_router(settings_router)
 # audit B-2.2: cohesive uç grupları ayrı modüler router'lara çıkarıldı (api_server.py küçültüldü).
-from servers.update_router import router as update_router
-from servers.patient_router import router as patient_router
-from servers.system_router import router as system_router
-from servers.session_router import router as session_router
 from servers.auth_router import router as auth_router
+from servers.patient_router import router as patient_router
+from servers.session_router import router as session_router
+from servers.system_router import router as system_router
+from servers.update_router import router as update_router
+
 app.include_router(update_router)
 app.include_router(patient_router)
 app.include_router(system_router)
@@ -318,6 +323,7 @@ app.include_router(auth_router)
 
 # DEMA Simülatörü host etme
 import os
+
 from utils.path_utils import packaged_resource_path
 
 # ═══════════════════════════════════════════════════════════════════
@@ -581,7 +587,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # P1 audit 2026-06-28: FAIL-CLOSED. Eskiden auth istisnasi except'e dusup KOSULSUZ accept()
     # ediyordu (kimliksiz WS kabul). Artik istisnada baglanti KAPATILIR (sessiz bypass YOK).
     try:
-        from servers.auth import require_auth, check_token, is_local_request
+        from servers.auth import check_token, is_local_request, require_auth
         required = bool(require_auth())
     except Exception:
         logging.exception("WS auth katmani yuklenemedi (FAIL-CLOSED)")
@@ -722,6 +728,7 @@ def _duration_seconds_to_stm_minutes(duration_seconds: int) -> int:
 # ── MQTT publish helper (used by headless and GUI-less mode) ─────────────────
 import json as _json
 
+
 def _mqtt_credentials():
     """Broker auth (allow_anonymous false) açıkken kullanılacak (kullanıcı, şifre) — env'den.
     Yapılandırılmamışsa (None, None) → anonim (geriye uyumlu). Üretimde PEMF_MQTT_USER/PASS ayarla."""
@@ -852,8 +859,9 @@ async def auto_preset(payload: AutoPresetPayload):
         raise HTTPException(status_code=503, detail="Çekirdek hazır değil.")
 
     try:
-        from ai.hybrid_recommender import get_literature_recommendation
         from pathlib import Path
+
+        from ai.hybrid_recommender import get_literature_recommendation
         app_data = Path.home() / ".pemf_gui"
         rec = get_literature_recommendation(payload.target_condition, app_data_dir=app_data)
 
@@ -1346,7 +1354,9 @@ def _hardware_simulation_loop():
     """PEMF_SIMULATE=1: gerçek donanım yokken sanal STM+ESP bobin + sensör verisi üretip
     WS ile yayınlar (Dashboard/Sensör/Kontrol/KPI testleri için). Seans aktifken bobinler
     seansın freq/duty'siyle 'çalışıyor' görünür; aksi halde boşta + ortam sıcaklığı."""
-    import time as _t, math, random
+    import math
+    import random
+    import time as _t
     t0 = _t.time()
     while True:
         try:

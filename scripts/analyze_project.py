@@ -1,7 +1,8 @@
 import ast
-import os
 import json
+import os
 from pathlib import Path
+
 
 class ProjectAnalyzer(ast.NodeVisitor):
     def __init__(self):

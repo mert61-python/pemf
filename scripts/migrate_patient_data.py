@@ -7,10 +7,10 @@ Usage:
 """
 
 import json
-import sys
 import sqlite3
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
 def migrate_patients(json_file: str, db_file: str) -> None:

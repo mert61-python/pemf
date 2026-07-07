@@ -1,7 +1,7 @@
 # PyInstaller hook for paho-mqtt
 # Ensures all paho.mqtt submodules are included
 
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # Collect all paho.mqtt submodules
 hiddenimports = collect_submodules('paho.mqtt')

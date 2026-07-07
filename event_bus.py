@@ -9,17 +9,17 @@ event-driven architecture implementasyonu sunar.
 @author: merta
 """
 
-import logging
 import asyncio
+import logging
 import threading
 import time
-from weakref import WeakMethod
-from typing import Dict, List, Callable, Any, Optional
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional
+from weakref import WeakMethod
 
 logger = logging.getLogger(__name__)
 

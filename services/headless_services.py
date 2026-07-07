@@ -16,7 +16,6 @@ from typing import Any, Optional
 
 from event_bus import EventPriority, get_event_bus
 
-
 logger = logging.getLogger(__name__)
 
 

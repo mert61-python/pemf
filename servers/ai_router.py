@@ -1,18 +1,20 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 import asyncio
-import cv2
-import numpy as np
 import base64
+import logging
 import os
 import sys
-import logging
+
+import cv2
+import numpy as np
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger("ai_router")
 
 import threading
 import time
+
 from utils.model_downloader import download_model_sync
 from utils.stm32_protocol_limits import (
     normalize_ai_pro_duty_ratio,
@@ -169,6 +171,7 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
 
         def _load_landmark():
             from ultralytics import YOLO
+
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
             return YOLO(path, task="pose")
@@ -240,7 +243,7 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
             hw_status = "skipped_no_detection"
         elif auto_adjust and detected:
             try:
-                from servers.api_server import state, update_live_session_state, start_ai_session
+                from servers.api_server import start_ai_session, state, update_live_session_state
                 if state and state.hardware:
                     target_freq = 10.0 + (total * 5.0)
                     target_duty = 25.0 + (total * 3.0)
@@ -291,6 +294,7 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
 # ── AI Pro durumu (modül seviyesi) ──
 _ai_loop_active = False
 import threading as _ai_threading
+
 # TOCTOU koruma: start/stop check-and-set atomik olsun → iki es-zamanli /ai/pro/start ikinci bir
 # kamera loop'u acip VideoCapture(0)'i cakistiramasin / bobinleri cift suremesin.
 _ai_loop_lock = _ai_threading.Lock()
@@ -510,7 +514,7 @@ def _ai_pro_loop():
             continue
 
         try:
-            from servers.api_server import update_live_session_state, _ws_broadcast_sync
+            from servers.api_server import _ws_broadcast_sync, update_live_session_state
             now = time.time()
 
             # ── cat_organ periyodik organ-lokalizasyon (HER KARE DEĞİL: ~1-4sn → cache) ──
@@ -778,6 +782,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 
         def _load_seg():
             from ultralytics import YOLO
+
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/cat_segmentation/yolov8m-seg.onnx")
             return YOLO(path, task="segment")
@@ -864,6 +869,7 @@ async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str
 
         def _load_retic():
             from ultralytics import YOLO
+
             from utils.model_downloader import download_model_sync
             path = download_model_sync("ai_hub/feline_reticulocytes/yolov8s.onnx")
             return YOLO(path, task="detect")
@@ -938,7 +944,8 @@ async def analyze_em_fantom(
             except Exception as _de:
                 logger.warning("em_fantom ONNX indirme/çözümleme uyarısı: %s", _de)
             from ai_hub.inference_em_fantom.phantom_cv import (
-                PhantomCvPipeline, load_cabin_config,
+                PhantomCvPipeline,
+                load_cabin_config,
             )
             cfg = load_cabin_config(None)               # gömülü cabin_config_example.yaml
             warm = PhantomCvPipeline(cfg, manual_fallback=False)
@@ -1002,7 +1009,8 @@ async def analyze_em_petri(
 
         def _load_em_petri():
             from ai_hub.inference_petri_dish.petri_cv import (
-                PetriCvPipeline, load_cabin_config,
+                PetriCvPipeline,
+                load_cabin_config,
             )
             # YOLO ONNX yolu (ProgramData/HF'den indir; yoksa yerel dev).
             try:
@@ -1078,6 +1086,7 @@ async def analyze_kidney_rna(file: UploadFile = File(None), csv_base64: str = Fo
             raise ValueError("CSV verisi bulunamadı.")
 
         import io as _io
+
         import pandas as _pd
         try:
             df = _pd.read_csv(_io.BytesIO(content), index_col=0)
@@ -1170,8 +1179,8 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
     delta²) → EfficientNet_Lite0 ONNX → 10 sınıf (Angry..Warning) + top-3. Foto/CSV/form
     DEĞİL — SES. `/api/ai/sound` prefix'iyle auth-muaf.
     """
-    import tempfile
     import subprocess
+    import tempfile
     tmp_in = None
     tmp_wav = None
     try:

@@ -39,9 +39,11 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
     """
     global _zeroconf_instance, _mdns_service_info
     try:
-        from zeroconf import ServiceInfo
-        from utils.zeroconf_singleton import get_shared_zeroconf
         import socket as _socket
+
+        from zeroconf import ServiceInfo
+
+        from utils.zeroconf_singleton import get_shared_zeroconf
 
         local_ip = _get_local_ip()
         ip_bytes = _socket.inet_aton(local_ip)

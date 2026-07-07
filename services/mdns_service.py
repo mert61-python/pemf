@@ -21,8 +21,8 @@ Kullanım:
     svc.stop()
 """
 
-import socket
 import logging
+import socket
 import threading
 import time
 from typing import Optional
@@ -75,7 +75,10 @@ class MDNSService:
     def start(self) -> bool:
         """mDNS yayınını başlat."""
         try:
-            from zeroconf import Zeroconf, ServiceInfo  # noqa: F401 — availability check (asıl kayıt _ip_monitor_loop'ta)
+            from zeroconf import (  # noqa: F401 — availability check (asıl kayıt _ip_monitor_loop'ta)
+                ServiceInfo,
+                Zeroconf,
+            )
         except ImportError:
             logger.error(
                 "zeroconf kütüphanesi bulunamadı. "
@@ -165,7 +168,8 @@ class MDNSService:
             except Exception as e:
                 if 'NonUniqueNameException' in str(type(e)):
                     logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
-                    import random, string
+                    import random
+                    import string
                     suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
                     self._service_name = f"{self._service_name}-{suffix}"
                     self._service_info = self._build_service_info(local_ip)

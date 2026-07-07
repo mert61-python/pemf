@@ -21,18 +21,20 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# ENFORCED (CI yeşil kalmalı) — yalnız yüksek-sinyal gerçek-bug kuralları:
+# ENFORCED (CI yeşil kalmalı) — yüksek-sinyal gerçek-bug + import-düzeni:
 #   F  = pyflakes  (undefined-name, unused-import/variable, bozuk f-string)
 #   E9 = syntax / IO hataları
-select = ["F", "E9"]
+#   I  = isort (import sıralama) — prod-readiness A-2 (2026-07-08): 62 ihlal auto-fix'lendi, CI-enforced.
+select = ["F", "E9", "I"]
 
 # ── KADEMELİ AÇMA (hazır olunca select'e taşıyın; her biri bir temizlik gerektirir) ──
-#   "B"    flake8-bugbear      (~60 ihlal)  raise-without-from, mutable-default-arg…
-#   "I"    isort               (~50 ihlal)  import sıralama
+#   "B"  flake8-bugbear (~62): B904 raise-from(30)+B905 zip-strict(6) düzeltilebilir; AMA B008(26)
+#        FastAPI `Depends()/Query()` default'ları = FALSE-POSITIVE → B'yi açmadan önce
+#        [tool.ruff.lint.flake8-bugbear] extend-immutable-calls ile FastAPI'yi muaf tut.
 #   "UP"   pyupgrade           (~180 ihlal) PEP585/604 modern annotation
 #   "SIM"  flake8-simplify     (~75 ihlal)
 #   "E","W" pycodestyle        (~1900 ihlal, E501 uzun-satır dahil)
-# Önerilen kademe-1:  select = ["F", "E9", "B", "I"]   (önce B+I ihlallerini düzeltin)
+# Kademe-1 YAPILDI (I eklendi). Sıradaki: B (yukarıdaki FastAPI-muafiyeti ile).
 
 [tool.ruff.lint.per-file-ignores]
 # Testler: assert-kullanımı vb. serbest. Scriptler: CLI print/deneysel kod.

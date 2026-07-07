@@ -27,6 +27,7 @@ class _JsonLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         import json as _json
+
         from utils.request_context import get_request_id
         doc = {
             "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
@@ -143,8 +144,8 @@ def _install_crash_handler(app_data_dir: Path) -> None:
 
     def _record(exc_type, exc_value, exc_tb, where: str) -> None:
         try:
-            import traceback as _tb
             import datetime as _dt
+            import traceback as _tb
             crash_log.parent.mkdir(parents=True, exist_ok=True)
             with open(crash_log, "a", encoding="utf-8") as f:
                 f.write(f"\n===== CRASH [{where}] {_dt.datetime.now().isoformat()} =====\n")

@@ -12,13 +12,12 @@ ST-Link USB için USART3 kullanmalı.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 import struct
 import time
-from typing import Any, Callable, Optional
 import zlib
-
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 # VARSAYILAN port (PEMF_STM_PORT verilmediğinde). Sahada sabit COM10; gerekirse env ile
 # değiştirin (PEMF_STM_PORT=COMx) veya oto-algılama açın (PEMF_STM_PORT=auto).

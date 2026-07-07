@@ -6,9 +6,9 @@ modelleri artık offline paketlenir — EXE'ye gömülü ya da ProgramData\\PEMF
 HF token'ı veya huggingface_hub bağımlılığı YOKTUR. Public API (download_model_sync,
 find_installed_model) korunur.
 """
+import hashlib
 import os
 import sys
-import hashlib
 from pathlib import Path
 
 from utils.path_utils import get_app_data_directory, resource_path

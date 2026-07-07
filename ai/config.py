@@ -4,8 +4,9 @@ Contains all configuration parameters for the PEMF AI system including
 dataset URLs, model hyperparameters, and system paths.
 """
 
-import os
 import logging
+import os
+
 try:
     import torch
 except ImportError:

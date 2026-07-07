@@ -3,13 +3,14 @@ Configuration management for the PEMF GUI application.
 Handles loading/saving settings including serial port configuration.
 """
 
-import json
-import os
-import logging
-from typing import Dict, Any
-from cryptography.fernet import Fernet
 import base64
 import hashlib
+import json
+import logging
+import os
+from typing import Any, Dict
+
+from cryptography.fernet import Fernet
 
 # Configure logging
 logger = logging.getLogger(__name__)

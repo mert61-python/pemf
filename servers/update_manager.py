@@ -235,7 +235,7 @@ def apply_update() -> dict:
         )
         logger.info("Güncelleme kurulumu başlatıldı: %s", dest)
         return {"ok": True, "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar."}
-    except Exception as e:
+    except Exception:
         logger.exception("apply_update hatası")
         return {"ok": False, "error": "Güncelleme uygulanamadı"}
     finally:
@@ -295,7 +295,7 @@ def rollback() -> dict:
         )
         logger.warning("ROLLBACK kurulumu başlatıldı → önceki kararlı sürüm %s (%s)", ver, dest)
         return {"ok": True, "message": f"Önceki kararlı sürüme ({ver}) dönülüyor. Servis birazdan yeniden başlar."}
-    except Exception as e:
+    except Exception:
         logger.exception("rollback hatası")
         return {"ok": False, "error": "Geri alma başarısız"}
     finally:

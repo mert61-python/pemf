@@ -1,15 +1,17 @@
-import time
+import logging
 import queue
 import struct
-import zlib
-import logging
 import threading
+import time
+import zlib
+
 from utils.stm32_protocol_limits import (
     duty_percent_to_ratio,
     normalize_duration_minutes,
     normalize_frequency_hz,
     normalize_phase_deg,
 )
+
 
 class HardwareController:
     """

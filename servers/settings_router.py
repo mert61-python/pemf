@@ -1,7 +1,8 @@
 import json
+import logging
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-import logging
 
 from utils.path_utils import get_app_data_directory
 

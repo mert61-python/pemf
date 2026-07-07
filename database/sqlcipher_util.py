@@ -11,8 +11,8 @@ NOT: treatment_history_db.py kendi (calisan, test-edilmis) inline kopyasini koru
 yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni anahtar paylasilir.
 """
 import os
-import sqlite3
 import shutil
+import sqlite3
 
 try:
     import keyring

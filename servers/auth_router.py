@@ -24,7 +24,7 @@ async def _get_auth_token(request: Request):
     UZAK (Cloudflare tünel) istek → 403: token YALNIZ yerel ağdan alınabilir = güvenli (operatör
     token girmez, vet-dostu). Auth alanı kaldırıldığından uzaktan auth aksi halde imkânsızdı."""
     try:
-        from servers.auth import is_local_request, get_api_token
+        from servers.auth import get_api_token, is_local_request
         _h = request.headers
         _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
         if not is_local_request(request.client.host if request.client else "", _via_proxy):
@@ -44,8 +44,8 @@ async def _exchange_code_for_token(request: Request):
     """TEMASSIZ UZAKTAN PAIRING: 6-haneli eşleştirme kodunu cihaz api_token'ıyla takas eder.
     Hiç LAN'a girmemiş telefon (kod-yolu) uzaktan token alabilsin diye TÜNELDEN de erişilir —
     kodun KENDİSİ kimlik (auth-exempt). Kaba-kuvvete karşı 8 hatada 60sn global kilit. Yanlış→403."""
-    import time as _t
     import secrets as _sec
+    import time as _t
     now = _t.time()
     if _exchange_throttle["until"] > now:
         return Response(status_code=429, content='{"detail":"Cok fazla deneme, biraz bekleyin"}', media_type="application/json")

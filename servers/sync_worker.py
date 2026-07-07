@@ -5,8 +5,8 @@ Bu modul, lokal SQLite veritabanlarındaki (patients, treatment_sessions)
 değişiklikleri arka planda kontrol edip Supabase bulut veritabanı ile eşitler.
 """
 import logging
-import threading
 import os
+import threading
 from typing import Optional
 
 from database.patient_database import get_patient_database
@@ -284,9 +284,10 @@ class CloudSyncWorker:
             return
         try:
             from datetime import datetime, timezone
-            from servers.tunnel_manager import get_tunnel_url
+
             from servers.auto_discovery import _get_local_ip
-            from utils.path_utils import get_unique_device_id, get_pairing_code
+            from servers.tunnel_manager import get_tunnel_url
+            from utils.path_utils import get_pairing_code, get_unique_device_id
 
             # Tünel anlık düşse de (URL boş) registry'yi NULL ile EZME → son bilinen URL korunur,
             # böylece app'in resolve'u boşa düşmez (watchdog tüneli toparlayınca yeni URL güncellenir).

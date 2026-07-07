@@ -1,17 +1,18 @@
+import csv
+import io
+import logging
 import os
+import time
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
-import csv
-import io
-import time
-import logging
 from starlette.background import BackgroundTask
 
 from database.treatment_history_db import get_treatment_db
-from utils.pdf_report_generator import get_pdf_generator
 from utils.path_utils import get_app_data_directory
+from utils.pdf_report_generator import get_pdf_generator
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 logger = logging.getLogger("HistoryRouter")

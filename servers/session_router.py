@@ -29,8 +29,9 @@ class SessionNotesPayload(BaseModel):
 @router.get("/api/session/active")
 def get_active_session():
     """Return current active session state."""
-    from servers import api_server as _api
     import time
+
+    from servers import api_server as _api
     with _api._session_lock:
         sess = dict(_api._active_session)
     if sess.get("is_active"):

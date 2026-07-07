@@ -23,8 +23,8 @@ class HeadlessDBMaintenance:
                  backup_interval_hours: int = 24,
                  disk_check_interval_minutes: int = 30,
                  backup_retention_keep: int = 14):
-        from utils.path_utils import get_app_data_directory
         from database.treatment_history_db import get_treatment_db
+        from utils.path_utils import get_app_data_directory
         self.app_data_dir = Path(app_data_dir) if app_data_dir else get_app_data_directory()
         self.db = get_treatment_db(self.app_data_dir)
         # audit B-7.2: PatientDB de yedeklensin (eskiden yalnız treatment yedekleniyordu).

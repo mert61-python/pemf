@@ -13,17 +13,18 @@ This ensures:
 - No config corruption affects application startup
 """
 
+import base64
 import copy
+import hashlib
 import json
+import logging
 import os
 import sys
-import logging
 import time
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
+
 from cryptography.fernet import Fernet
-import base64
-import hashlib
 
 try:
     from .path_utils import get_app_data_directory as get_shared_app_data_directory

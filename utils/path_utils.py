@@ -1,9 +1,10 @@
-import sys
 import os
-import shutil
 import platform
+import shutil
+import sys
 import uuid
 from pathlib import Path
+
 
 def resource_path(relative_path):
     """EXE içindeki gömülü dosyaları bulur (Okuma amaçlı)"""
