@@ -1,0 +1,60 @@
+# PEMF native Linux backend — PyInstaller onedir (Windows base.zip'in Linux karşılığı).
+# Docker'sız native: client bunu indirir → PEMF_Backend (ELF) çalıştırır → "Hazır/Başlat".
+# İteratif build; ilk turlar Linux-özgü dep/hidden-import'ta düşebilir → tur tur oturur.
+name: Linux Backend Build
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["backend-linux-v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sistem bağımlılıkları (sqlcipher / opencv / ses)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3.10 python3.10-venv python3.10-dev python3-pip \
+            build-essential pkg-config zip \
+            libsqlcipher-dev libgl1 libglib2.0-0 libsndfile1 ffmpeg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Python venv + backend bağımlılıkları (torch CPU extra-index requirements'ta)
+        run: |
+          python3.10 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip wheel
+          pip install -r requirements.txt
+
+      - name: Frontend web export (Expo → frontend/dist)
+        run: |
+          . .venv/bin/activate
+          cd frontend
+          npm ci --legacy-peer-deps
+          npx expo export --platform web
+
+      - name: PyInstaller onedir build
+        run: |
+          . .venv/bin/activate
+          python -m PyInstaller build_tools/PEMF_Backend_onedir.spec --noconfirm --distpath dist --workpath build
+
+      - name: Doğrula + paketle (base-linux.zip)
+        run: |
+          test -f "dist/PEMF_Backend/PEMF_Backend" || { echo "!!! ELF yok"; ls -la dist/PEMF_Backend || true; exit 1; }
+          ./dist/PEMF_Backend/PEMF_Backend --help >/dev/null 2>&1 || echo "(--help denendi; smoke sonra)"
+          cd dist && zip -rq ../base-linux.zip PEMF_Backend && cd ..
+          echo "base-linux.zip: $(du -h base-linux.zip | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PEMF-Backend-Linux
+          path: base-linux.zip
+          if-no-files-found: error
