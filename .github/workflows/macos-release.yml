@@ -18,6 +18,7 @@ on:
 jobs:
   macos:
     runs-on: macos-14            # Apple Silicon runner (universal build için ideal)
+    timeout-minutes: 30          # notarytool asılı kalırsa runaway 10x-fatura önle (2.5s hang yaşandı)
     steps:
       - uses: actions/checkout@v4
 
