@@ -3,7 +3,7 @@
 export const BRAND = {
   name: "PEMF Vet",
   clientName: "PEMF Vet Client",
-  version: "1.3.5",
+  version: "1.3.6",
   company: "V-PEMF Technologies",
   tagline: "Veteriner PEMF tedavi + yapay zekâ teşhis platformu",
   about:
