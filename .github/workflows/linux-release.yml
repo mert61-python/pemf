@@ -1,0 +1,45 @@
+# PEMF Vet Client — Linux build (.deb + .rpm + .AppImage), GitHub Actions ubuntu-runner'da.
+# İMZA GEREKMEZ (Linux'ta OS-seviye imza-kapısı yok) → tamamen ücretsiz + uyarısız.
+# ubuntu-22.04'te build → .deb 22.04 VE 24.04'te çalışır (eski taban = geniş uyumluluk).
+# AppImage burada TEMİZ üretilir (runner'da FUSE var; WSL'de linuxdeploy takılıyordu).
+name: Linux Client
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["client-linux-v*"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sistem bağımlılıkları (Tauri v2 Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Frontend bağımlılıkları
+        run: npm ci
+
+      - name: Build (.deb + .rpm + .AppImage)
+        uses: tauri-apps/tauri-action@v0
+
+      - name: Artifact yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: PEMF-Vet-Client-Linux
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn

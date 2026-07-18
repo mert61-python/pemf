@@ -1,0 +1,53 @@
+# PEMF Vet Client — macOS build (imzalı + notarized), Apple'ın bulut Mac-runner'ında.
+# Fiziksel Mac GEREKMEZ; sen bu makineden tetikle (Actions > Run workflow) → imzalı .dmg artifact.
+#
+# GEREKEN SECRET'lar (repo Settings > Secrets and variables > Actions > New repository secret):
+#   APPLE_CERTIFICATE          : "Developer ID Application" .p12 → base64 (bkz. MACOS-BUILD-GUIDE.md)
+#   APPLE_CERTIFICATE_PASSWORD : .p12 dışa-aktarma şifresi
+#   APPLE_SIGNING_IDENTITY     : "Developer ID Application: Adın (TEAMID)"
+#   APPLE_ID                   : Apple ID e-postan (notarization)
+#   APPLE_PASSWORD             : appleid.apple.com > app-specific password
+#   APPLE_TEAM_ID              : 10 karakterli Team ID
+name: macOS Client
+
+on:
+  workflow_dispatch: {}          # elle tetikle
+  push:
+    tags: ["client-mac-v*"]      # ya da tag push ile
+
+jobs:
+  macos:
+    runs-on: macos-14            # Apple Silicon runner (universal build için ideal)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Frontend bağımlılıkları
+        run: npm ci
+
+      - name: Build + imza + notarization (universal .dmg)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          args: --target universal-apple-darwin
+
+      - name: .dmg'yi artifact olarak yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: PEMF-Vet-Client-macOS
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
