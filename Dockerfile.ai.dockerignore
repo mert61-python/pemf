@@ -1,0 +1,33 @@
+# AI servisi build'ine ÖZEL ignore (ana .dockerignore'u geçersiz kılar).
+# Fark: ai_hub içindeki KÜÇÜK gömülü modelleri (kidney_disease/rna onnx, cat_disease pkl,
+# scaler'lar ~55MB) DAHİL eder → bu uçlar container'da model bulur. Büyük ağırlıklar
+# (histopath/YOLO/BiLSTM/cat_organ) zaten kaynakta YOK, /models mount'tan gelir.
+release_assets/            # büyük model deposu → /models olarak mount edilir, image'a girmesin
+pf/
+frontend/
+myenv/
+build/
+buildPEMF/
+builds/
+build_tools/Output/
+client_paketleri/
+outputs/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.git/
+.github/
+.gitignore
+*.log
+.vscode/
+.idea/
+.env
+.env.*
+Dockerfile*
+docker-compose*.yml
+*.dockerignore
+DOCKER_README.md
+*.zip

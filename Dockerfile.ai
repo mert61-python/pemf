@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# PEMF AI Servisi (GPU) — mikroservis (Faz 2a).
+# CUDA 12.8 + cuDNN 9 runtime (RTX 5090/Blackwell sm_120); torch cu128 → onnxruntime-gpu 1.19 ile GPU inference.
+# GERÇEK uçlar: /infer/histopath (görüntü), /infer/sound (ses). torch YOK (saf-ONNX).
+# Çalıştırma GPU ister:  compose'da deploy.resources / docker run --gpus all
+# =============================================================================
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+
+LABEL org.opencontainers.image.title="PEMF Vet AI Service" \
+      org.opencontainers.image.description="PEMF AI mikroservis — GPU/CUDA onnxruntime inference" \
+      org.opencontainers.image.licenses="Proprietary"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PEMF_AI_MODELS_DIR=/models \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    MPLCONFIGDIR=/tmp/mpl
+
+# python3.10 (ubuntu22.04 hazır) + ffmpeg (ses→wav, librosa) + libsndfile (soundfile)
+# + libgomp (numba/openmp) + libgl/glib (opencv cv2)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip ffmpeg libsndfile1 libgomp1 libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY ai_service/requirements-ai.txt ./ai_service/requirements-ai.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128 \
+ && pip3 install -r ai_service/requirements-ai.txt
+
+# ai_hub = predictor KODU (ağırlıklar .dockerignore ile hariç → /models mount'tan gelir)
+COPY ai_hub/ ./ai_hub/
+COPY ai_service/ ./ai_service/
+
+EXPOSE 8100
+CMD ["python3", "-m", "uvicorn", "ai_service.app:app", "--host", "0.0.0.0", "--port", "8100"]

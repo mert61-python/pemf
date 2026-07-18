@@ -1,0 +1,28 @@
+# PEMF AI Servisi (GPU) — Faz 2b bağımlılıkları (torch-cuda + ultralytics eklendi).
+# onnxruntime-gpu → CUDA 12.x + cuDNN 9 (base imaj). torch → YOLO/ultralytics modelleri için
+# (ultralytics import'u torch ister; .onnx inference'ı onnxruntime-gpu CUDA ile koşar).
+# NOT: torch cudnn'i kendi bundle'ında; onnxruntime sistem cudnn9 kullanır — aynı süreçte
+#      YOLO onnx torch-CUDA-op tetiklemediği için çakışma beklenmez (import-only torch).
+onnxruntime-gpu==1.19.2
+numpy==1.26.4
+opencv-python==4.9.0.80
+pillow==12.2.0
+scipy==1.15.3
+scikit-learn==1.7.2
+xgboost==3.2.0                    # cat_disease (XGBoost.pkl)
+joblib==1.5.3
+pandas==2.3.3
+PyYAML==6.0.3
+onnx==1.15.0
+# ses (cat_sound)
+librosa==0.11.0
+numba==0.61.2
+llvmlite==0.44.0
+soundfile==0.13.1
+# görüntü/YOLO (kidney_ct, segmentation, landmark, cat_organ, reticulocytes)
+# torch/torchvision cu128 (RTX 5090/Blackwell) → Dockerfile.ai'de AYRI index'ten kurulur. Buraya EKLEME.
+ultralytics==8.4.47
+# web
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+python-multipart==0.0.31
