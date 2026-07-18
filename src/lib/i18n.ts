@@ -134,8 +134,8 @@ const TR: Dict = {
   "common.cancel": "Vazgeç",
   "inst.listenErr": "Kurulum başlatılamadı (olay dinleyicisi). Lütfen tekrar deneyin.",
   // mac
-  "mac.title": "PEMF'i Mac'te çalıştır",
-  "mac.sub": "Mac'te PEMF, Docker ile çalışır. Aşağıdaki iki adımı tamamlayın, sonra başlatın.",
+  "mac.title": "PEMF'i Docker ile çalıştır",
+  "mac.sub": "PEMF burada Docker ile çalışır. Docker Desktop'ı çalıştırın, sonra Başlat'a basın.",
   "mac.checking": "Kontrol ediliyor…",
   "mac.notInstalled": "Kurulu değil — Docker Desktop gerekli.",
   "mac.notRunning": "Kurulu ama çalışmıyor — Docker Desktop'ı açın (balina yeşil olsun).",
@@ -144,7 +144,7 @@ const TR: Dict = {
   "mac.open": "Aç",
   "mac.pkg": "PEMF paketi",
   "mac.pkgMissing": "Bulunamadı — paketi indirip Downloads klasörüne PEMF-Mac-Paket olarak çıkarın.",
-  "mac.starting": "PEMF başlatılıyor… ilk açılışta imaj yüklemesi + AI ~1-3 dk sürebilir.",
+  "mac.starting": "PEMF başlatılıyor… ilk açılışta imajlar indirilir (birkaç GB), birkaç dk sürebilir.",
   "mac.runningMsg": "Çalışıyor — tarayıcıda http://localhost:8080 açıldı.",
   "mac.startErr": "Başlatma hatası: ",
   "mac.stopped": "PEMF durduruldu.",
@@ -154,6 +154,7 @@ const TR: Dict = {
   "mac.openBrowser": "Tarayıcıda aç",
   "mac.stop": "Durdur",
   "mac.refresh": "Durumu yenile",
+  "mac.pullNote": "İlk başlatmada uygulama + AI imajları ghcr'den indirilir (birkaç GB, tek sefer). NVIDIA GPU yoksa çekirdek platform çalışır; ağır AI sınırlıdır.",
 };
 
 const EN: Dict = {
@@ -260,8 +261,8 @@ const EN: Dict = {
   "common.cancel": "Cancel",
   "inst.listenErr": "Couldn't start installation (event listener). Please try again.",
   // mac
-  "mac.title": "Run PEMF on Mac",
-  "mac.sub": "On Mac, PEMF runs via Docker. Complete the two steps below, then start.",
+  "mac.title": "Run PEMF with Docker",
+  "mac.sub": "PEMF runs via Docker here. Start Docker Desktop, then press Start.",
   "mac.checking": "Checking…",
   "mac.notInstalled": "Not installed — Docker Desktop is required.",
   "mac.notRunning": "Installed but not running — open Docker Desktop (whale should be green).",
@@ -270,7 +271,7 @@ const EN: Dict = {
   "mac.open": "Open",
   "mac.pkg": "PEMF package",
   "mac.pkgMissing": "Not found — download the package and extract it to Downloads as PEMF-Mac-Paket.",
-  "mac.starting": "Starting PEMF… first launch may take ~1-3 min for image load + AI.",
+  "mac.starting": "Starting PEMF… first launch downloads images (several GB), may take a few min.",
   "mac.runningMsg": "Running — opened http://localhost:8080 in your browser.",
   "mac.startErr": "Start error: ",
   "mac.stopped": "PEMF stopped.",
@@ -280,6 +281,7 @@ const EN: Dict = {
   "mac.openBrowser": "Open in browser",
   "mac.stop": "Stop",
   "mac.refresh": "Refresh status",
+  "mac.pullNote": "First launch downloads the app + AI images from ghcr (several GB, one-time). Without an NVIDIA GPU the core platform runs; heavy AI is limited.",
 };
 
 const DICTS: Record<Lang, Dict> = { tr: TR, en: EN };

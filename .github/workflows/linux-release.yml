@@ -33,6 +33,8 @@ jobs:
 
       - name: Build (.deb + .rpm + .AppImage)
         uses: tauri-apps/tauri-action@v0
+        env:
+          PEMF_GHCR_TOKEN: ${{ secrets.PEMF_GHCR_TOKEN }}   # ghcr private imaj çekme (client'a gömülür)
 
       - name: Artifact yükle
         uses: actions/upload-artifact@v4

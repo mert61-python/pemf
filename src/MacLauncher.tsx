@@ -7,13 +7,12 @@ import { makeT, type Lang } from "./lib/i18n";
 
 type Docker = "checking" | "not_installed" | "not_running" | "running";
 
-/** macOS dalı — PEMF Windows kurulumu yerine Docker ile koşar. Bu ekran Docker'ı
- *  yönetir: durum kontrolü → paketi bul → docker compose up → tarayıcı. */
+/** macOS/Linux dalı — PEMF, Windows kurulumu yerine DOCKER ile koşar. Docker çalışınca
+ *  "Başlat" imajları ghcr'den çeker (ilk sefer birkaç GB) → compose up → tarayıcı. */
 export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
   const t = makeT(lang);
   const platform = os === "linux" ? "Linux" : "macOS";
   const [docker, setDocker] = useState<Docker>("checking");
-  const [pkgDir, setPkgDir] = useState("");
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -21,9 +20,7 @@ export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
   async function refresh() {
     setDocker("checking");
     const d = (await invoke<string>("mac_docker_status").catch(() => "not_installed")) as Docker;
-    const p = await invoke<string>("mac_package_dir").catch(() => "");
     setDocker(d);
-    setPkgDir(p);
     setRunning(await invoke<boolean>("mac_running").catch(() => false)); // gerçek compose durumu (pencere yeniden açılınca da doğru)
   }
   useEffect(() => {
@@ -31,7 +28,6 @@ export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
   }, []);
 
   const dockerOk = docker === "running";
-  const pkgOk = !!pkgDir;
 
   async function start() {
     setBusy(true);
@@ -59,13 +55,13 @@ export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
     }
   }
 
-  const Dot = ({ ok, n }: { ok: boolean; n: number }) => (
+  const Dot = ({ ok }: { ok: boolean }) => (
     <span
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sm font-bold ring-1 ${
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1 ${
         ok ? "bg-success/15 text-success ring-success/25" : "bg-primary/12 text-primary ring-primary/20"
       }`}
     >
-      {ok ? <Check className="h-4 w-4" /> : n}
+      {ok ? <Check className="h-4 w-4" /> : <span className="h-2 w-2 rounded-full bg-current" />}
     </span>
   );
 
@@ -80,10 +76,10 @@ export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
       </div>
 
       <div className="mt-7 flex flex-col gap-3">
-        {/* 1 — Docker Desktop */}
+        {/* Docker Desktop durumu — tek ön koşul (imajlar ghcr'den iner) */}
         <div className="card p-5">
           <div className="flex items-center gap-3">
-            <Dot ok={dockerOk} n={1} />
+            <Dot ok={dockerOk} />
             <div className="min-w-0 flex-1">
               <div className="font-bold">Docker Desktop</div>
               <p className="mt-0.5 text-xs text-muted">
@@ -109,32 +105,15 @@ export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
           </div>
         </div>
 
-        {/* 2 — PEMF paketi */}
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <Dot ok={pkgOk} n={2} />
-            <div className="min-w-0 flex-1">
-              <div className="font-bold">{t("mac.pkg")}</div>
-              <p className="mt-0.5 break-all text-xs text-muted">{pkgOk ? pkgDir : t("mac.pkgMissing")}</p>
-            </div>
-            {!pkgOk && (
-              <button className="btn-ghost shrink-0 text-sm" onClick={() => openUrl(MAC.packageUrl)}>
-                <Download className="h-4 w-4" /> {t("mac.download")}
-              </button>
-            )}
-          </div>
-        </div>
+        {/* İlk-başlatma bilgi notu (ghcr indirme + GPU) */}
+        <p className="px-1 text-center text-xs text-muted">{t("mac.pullNote")}</p>
       </div>
 
       {/* Başlat / Durdur */}
       <div className="card mt-4 flex flex-col items-center gap-3 p-5">
         {msg && <p className="break-words text-center text-xs text-muted">{msg}</p>}
         {!running ? (
-          <button
-            className="btn-primary !px-8 !py-3 text-base"
-            onClick={start}
-            disabled={!dockerOk || !pkgOk || busy}
-          >
+          <button className="btn-primary !px-8 !py-3 text-base" onClick={start} disabled={!dockerOk || busy}>
             <Play className="h-5 w-5" /> {busy ? t("mac.startingBtn") : t("mac.startBtn")}
           </button>
         ) : (

@@ -1352,37 +1352,104 @@ fn mac_open_docker() -> Result<(), String> {
     Ok(())
 }
 
-/// Stack'i başlat: (ilk sefer) imajları yükle → docker compose up -d → tarayıcı aç.
+/// ghcr.io private imaj erişimi. Token BUILD sırasında enjekte edilir (CI secret
+/// PEMF_GHCR_TOKEN); kaynak kodda TUTULMAZ. Windows native yol bunu kullanmaz.
+const GHCR_USER: &str = "mert61-python";
+fn ghcr_token() -> Option<&'static str> {
+    match option_env!("PEMF_GHCR_TOKEN") {
+        Some(t) if !t.is_empty() => Some(t),
+        _ => None,
+    }
+}
+
+/// docker nvidia-runtime var mı? Yoksa ağır AI ('ai' GPU servisi) atlanır — çekirdek
+/// platform (backend+frontend) yine çalışır. Mac'te NVIDIA yoktur, bu normaldir.
+fn has_nvidia_gpu() -> bool {
+    Command::new("docker")
+        .args(["info", "--format", "{{.Runtimes}}"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("nvidia"))
+        .unwrap_or(false)
+}
+
+/// Client çalışma klasörü (~/.pemf-client) — compose burada tutulur.
+fn client_dir() -> Result<PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME bulunamadı".to_string())?;
+    let d = Path::new(&home).join(".pemf-client");
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d)
+}
+
+/// ghcr imajlarıyla compose. GPU varsa ai(GPU)+backend+frontend; yoksa backend+frontend
+/// (ağır AI sınırlı). Portlar: web :8080, api :8000, ai :8100.
+fn client_compose(gpu: bool) -> String {
+    let ai_block = if gpu {
+        "  ai:\n    image: ghcr.io/mert61-python/pemf-ai:latest\n    environment:\n      PEMF_AI_MODELS_DIR: /models\n    ports: [\"8100:8100\"]\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              count: all\n              capabilities: [gpu]\n    restart: unless-stopped\n"
+    } else {
+        ""
+    };
+    let ai_url = if gpu {
+        "      PEMF_AI_SERVICE_URL: \"http://ai:8100\"\n"
+    } else {
+        ""
+    };
+    format!(
+        "name: pemf\nservices:\n{ai_block}  backend:\n    image: ghcr.io/mert61-python/pemf-backend:latest\n    init: true\n    environment:\n      PEMF_SIMULATE: \"1\"\n      PEMF_REQUIRE_AUTH: \"1\"\n{ai_url}      PEMF_DEVICE_NAME: \"PEMF-Client\"\n    volumes:\n      - pemf_data:/data\n    ports: [\"8000:8000\"]\n    healthcheck:\n      test: [\"CMD\", \"python\", \"-c\", \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)\"]\n      interval: 10s\n      timeout: 5s\n      retries: 15\n      start_period: 90s\n    restart: unless-stopped\n  frontend:\n    image: ghcr.io/mert61-python/pemf-frontend:latest\n    init: true\n    ports: [\"8080:80\"]\n    depends_on:\n      backend:\n        condition: service_healthy\n    restart: unless-stopped\nvolumes:\n  pemf_data:\n"
+    )
+}
+
+/// Stack'i başlat: ghcr login → compose pull (ilk sefer birkaç GB) → up -d → tarayıcı aç.
 #[tauri::command]
 fn mac_start() -> Result<String, String> {
-    let dir = mac_find_pkg()
-        .ok_or_else(|| "PEMF paketi bulunamadı (Downloads/PEMF-Mac-Paket).".to_string())?;
+    if mac_docker_status() != "running" {
+        return Err("Docker çalışmıyor — önce Docker Desktop'ı başlatın.".to_string());
+    }
 
-    // İmajlar yüklü değilse pemf-images.tar.gz'den yükle (ilk sefer ~1-2 dk).
-    let have_img = Command::new("docker")
-        .args(["image", "inspect", "pemf-backend:latest"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let tar = dir.join("pemf-images.tar.gz");
-    if !have_img && tar.exists() {
-        let load = Command::new("docker")
-            .arg("load")
-            .arg("-i")
-            .arg(&tar)
-            .current_dir(&dir)
-            .output()
+    // ghcr private imajlar için giriş (token derlemede gömülü — kaynak kodda yok).
+    if let Some(tok) = ghcr_token() {
+        use std::io::Write;
+        let mut child = Command::new("docker")
+            .args(["login", "ghcr.io", "-u", GHCR_USER, "--password-stdin"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| e.to_string())?;
-        if !load.status.success() {
+        if let Some(mut si) = child.stdin.take() {
+            let _ = si.write_all(tok.as_bytes());
+        }
+        let out = child.wait_with_output().map_err(|e| e.to_string())?;
+        if !out.status.success() {
             return Err(format!(
-                "İmaj yükleme başarısız: {}",
-                String::from_utf8_lossy(&load.stderr).trim()
+                "ghcr girişi başarısız: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
             ));
         }
     }
 
+    let gpu = has_nvidia_gpu();
+    let dir = client_dir()?;
+    let cf = dir.join("docker-compose.yml");
+    std::fs::write(&cf, client_compose(gpu)).map_err(|e| e.to_string())?;
+
+    let pull = Command::new("docker")
+        .args(["compose", "-f"])
+        .arg(&cf)
+        .arg("pull")
+        .current_dir(&dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !pull.status.success() {
+        return Err(format!(
+            "İmaj indirme başarısız: {}",
+            String::from_utf8_lossy(&pull.stderr).trim()
+        ));
+    }
+
     let up = Command::new("docker")
-        .args(["compose", "-f", "docker-compose.dist.yml", "up", "-d"])
+        .args(["compose", "-f"])
+        .arg(&cf)
+        .args(["up", "-d"])
         .current_dir(&dir)
         .output()
         .map_err(|e| e.to_string())?;
@@ -1391,18 +1458,23 @@ fn mac_start() -> Result<String, String> {
     }
 
     open_native("http://localhost:8080");
-    Ok("started".to_string())
+    Ok(if gpu { "started-gpu" } else { "started-nogpu" }.to_string())
 }
 
 /// Stack'i durdur (docker compose down).
 #[tauri::command]
 fn mac_stop() -> Result<(), String> {
-    let dir = mac_find_pkg().ok_or_else(|| "PEMF paketi bulunamadı.".to_string())?;
-    Command::new("docker")
-        .args(["compose", "-f", "docker-compose.dist.yml", "down"])
-        .current_dir(&dir)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let dir = client_dir()?;
+    let cf = dir.join("docker-compose.yml");
+    if cf.exists() {
+        Command::new("docker")
+            .args(["compose", "-f"])
+            .arg(&cf)
+            .arg("down")
+            .current_dir(&dir)
+            .output()
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

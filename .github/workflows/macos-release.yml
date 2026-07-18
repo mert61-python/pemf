@@ -36,6 +36,7 @@ jobs:
       - name: Build + imza + notarization (universal .dmg)
         uses: tauri-apps/tauri-action@v0
         env:
+          PEMF_GHCR_TOKEN: ${{ secrets.PEMF_GHCR_TOKEN }}   # ghcr private imaj çekme (client'a gömülür)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
