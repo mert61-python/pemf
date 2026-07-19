@@ -1,0 +1,4 @@
+# Shell maintainer script'leri (.deb/.rpm postinst/postrm) LF ZORUNLU — CRLF olursa
+# '#!/bin/sh\r' → "bad interpreter" ile bozulur. .desktop de LF.
+*.sh text eol=lf
+*.desktop text eol=lf
