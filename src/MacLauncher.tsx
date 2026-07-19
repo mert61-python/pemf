@@ -11,7 +11,9 @@ type Docker = "checking" | "not_installed" | "not_running" | "running";
  *  "Başlat" imajları ghcr'den çeker (ilk sefer birkaç GB) → compose up → tarayıcı. */
 export default function MacLauncher({ lang, os }: { lang: Lang; os?: string }) {
   const t = makeT(lang);
-  const platform = os === "linux" ? "Linux" : "macOS";
+  // Linux artık native install akışına gidiyor (App.tsx) → MacLauncher yalnız macOS için (Docker). #21
+  const platform = "macOS";
+  void os;
   const [docker, setDocker] = useState<Docker>("checking");
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);

@@ -94,7 +94,9 @@ export default function App() {
   const [launchErr, setLaunchErr] = useState(false);
   const [uninstalling, setUninstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isMac, setIsMac] = useState(false); // = Docker-host (macOS veya Linux)
+  // macOS+Linux ARTIK native → MacLauncher(Docker) yolu KULLANILMIYOR (isMac hep false, ölü dal).
+  // TODO(temizlik): MacLauncher import + isMac ternary'leri + mac_* Docker komutları kaldırılabilir.
+  const isMac = false;
   const [hostOs, setHostOs] = useState<string>("windows");
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modal, setModal] = useState<null | {
@@ -129,6 +131,7 @@ export default function App() {
     if (lang === "tr" || !raw) return raw;
     if (raw === "Sürüm bilgisi alınıyor…") return "Fetching version info…";
     if (raw === "Kuruluyor (yönetici izni gerekebilir)…") return "Installing (admin permission may be required)…";
+    if (raw === "Kuruluyor…") return "Installing…"; // #18: Linux native (elevation yok) etiketi
     if (raw === "Tamamlandı") return "Completed";
     const m = raw.match(/^(.*) indiriliyor$/);
     if (m) return `Downloading ${m[1]}`;
@@ -174,9 +177,11 @@ export default function App() {
       // macOS: Docker-yönlendiren MacLauncher.
       const os = await invoke<string>("get_os").catch(() => "windows");
       setHostOs(os);
-      // macOS + Linux: native frozen backend çalışmaz → Docker-launcher (Mac dalıyla ortak).
+      // macOS + Linux: ARTIK native (Windows gibi indir→Hazır→Başlat, Docker YOK). Client self-update
+      // PowerShell-tabanlı → bu platformlarda yok (.deb/.rpm/.AppImage/.dmg ile güncellenir) → update
+      // kontrolünü atla, doğrudan giriş/kurulum akışına geç. (MacLauncher/Docker yolu bırakıldı.)
       if (os === "macos" || os === "linux") {
-        setIsMac(true);
+        await continueBoot();
         return;
       }
       // 1) ÖNCE kendi güncellemesi var mı? (internet varsa; hata → sessizce geç)
@@ -833,7 +838,7 @@ export default function App() {
         <span className="inline-flex items-center gap-1.5">
           {isMac ? (
             <>
-              <Bolt className="h-3 w-3 text-primary" /> {hostOs === "linux" ? "Linux" : "macOS"} · Docker
+              <Bolt className="h-3 w-3 text-primary" /> macOS · Docker
             </>
           ) : step === "ready" ? (
             <>

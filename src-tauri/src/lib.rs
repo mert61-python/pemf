@@ -36,7 +36,11 @@ impl CreationFlagsExt for std::process::Command {
 }
 
 // Masaüstü kısayolu için PEMF (kalp) uygulama ikonu — binary'ye gömülü, kuruluma bağımsız.
+#[cfg(windows)] // .lnk ikonu — yalnız Windows create_shortcuts kullanır
 const APP_ICON: &[u8] = include_bytes!("../icons/pemf_app.ico");
+// Linux .desktop Icon= için PNG (çoğu Linux DE .ico'yu render etmez, #19). Windows .lnk .ico, mac .app kullanır.
+#[cfg(all(unix, not(target_os = "macos")))]
+const APP_ICON_PNG: &[u8] = include_bytes!("../icons/128x128.png");
 
 // Tek indirme aynı anda çalışır → global durum bayrakları (durdur/iptal).
 static PAUSED: AtomicBool = AtomicBool::new(false);
@@ -81,7 +85,14 @@ struct Manifest {
     #[allow(dead_code)]
     #[serde(default)]
     version: String,
+    #[allow(dead_code)] // Windows'ta okunur (base.zip push); Linux derlemesinde base_linux kullanılır
     base: Component,
+    #[allow(dead_code)]
+    #[serde(default)]
+    base_linux: Option<Component>, // Linux native backend (base-linux.zip); yoksa base'e düşer
+    #[allow(dead_code)]
+    #[serde(default)]
+    base_mac: Option<Component>, // macOS native backend (base-mac.zip)
     #[serde(default)]
     profiles: std::collections::HashMap<String, Component>,
 }
@@ -98,23 +109,101 @@ struct Component {
     kind: String,
 }
 
+#[cfg(windows)]
 fn data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+    PathBuf::from(base).join("PEMFVetClient")
+}
+#[cfg(target_os = "macos")]
+fn data_dir() -> PathBuf {
+    // mac: ~/Library/Application Support/PEMFVetClient (idiomatik konum).
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join("Library/Application Support/PEMFVetClient")
+}
+#[cfg(all(unix, not(target_os = "macos")))]
+fn data_dir() -> PathBuf {
+    // Linux: XDG_DATA_HOME (yalnız ABSOLUTE — spec gereği relative değeri yok say) veya ~/.local/share.
+    let base = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|s| s.starts_with('/'))
+        .unwrap_or_else(|| format!("{}/.local/share", std::env::var("HOME").unwrap_or_else(|_| ".".into())));
     PathBuf::from(base).join("PEMFVetClient")
 }
 fn marker() -> PathBuf {
     data_dir().join("installed.json")
 }
+#[cfg(windows)]
 fn install_dir() -> String {
     std::env::var("PEMF_INSTALL_DIR").unwrap_or_else(|_| r"C:\Program Files\PEMF Backend".into())
 }
+#[cfg(not(windows))]
+fn install_dir() -> String {
+    // Linux/mac: kullanıcı dizini — yönetici izni GEREKMEZ.
+    std::env::var("PEMF_INSTALL_DIR")
+        .unwrap_or_else(|_| data_dir().join("app").display().to_string())
+}
+#[cfg(windows)]
 fn models_parent() -> String {
     std::env::var("PEMF_MODELS_PARENT").unwrap_or_else(|_| r"C:\ProgramData\PEMF_GUI".into())
+}
+#[cfg(not(windows))]
+fn models_parent() -> String {
+    std::env::var("PEMF_MODELS_PARENT")
+        .unwrap_or_else(|_| data_dir().join("models").display().to_string())
+}
+
+/// Linux/mac: kurulmuş backend ELF'inin tam yolu (install_dir/PEMF_Backend/PEMF_Backend).
+#[cfg(not(windows))]
+fn linux_backend_elf() -> PathBuf {
+    PathBuf::from(install_dir()).join("PEMF_Backend").join("PEMF_Backend")
 }
 
 /// install_dir'in YIKICI işlem (rename-swap / recursive-delete) için GÜVENLİ olduğunu doğrular:
 /// mutlak + en az 2 seviye derin + sürücü-kökü/sistem-dizini değil. Yanlış/kötücül PEMF_INSTALL_DIR
 /// (boş, `C:\`, `C:\Windows\System32`) ile admin-yetkili felaket-silmeyi önler.
+#[cfg(not(windows))]
+fn validate_install_dir(inst: &str) -> Result<(), String> {
+    // Linux/mac: user-dir kurulum (elevation yok) → yıkıcı silme guard'ı (#9): mutlak + yeterince
+    // derin + HOME-kökü/kullanıcı-veri-klasörü/sistem-dizini DEĞİL. Kötücül/yanlış PEMF_INSTALL_DIR
+    // veya PEMF_MODELS_PARENT ile ev/belge/sistem dizinini silmeyi önler.
+    let p = Path::new(inst);
+    if !p.is_absolute() {
+        return Err(format!("Kurulum yolu mutlak değil: {inst}"));
+    }
+    // #9-followup: '..' bileşeni blocklist'i atlatıp (ör. /home/u/Downloads/../Documents) kernel'de
+    // yasak dizine çözülebilir → tam-eşleşme guard'ından ÖNCE reddet.
+    if p.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(format!("Kurulum yolu '..' içeremez: {inst}"));
+    }
+    let norm = inst.trim_end_matches('/');
+    let depth = p.components().filter(|c| matches!(c, std::path::Component::Normal(_))).count();
+    if depth < 2 {
+        return Err(format!("Kurulum yolu çok sığ: {inst}"));
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    if !home.is_empty() {
+        let home_n = home.trim_end_matches('/');
+        if norm == home_n {
+            return Err("Kurulum yolu HOME kökü olamaz.".into());
+        }
+        for d in ["Documents", "Desktop", "Downloads", "Pictures", "Music", "Videos", "Public", "Templates"] {
+            if norm == format!("{home_n}/{d}") {
+                return Err(format!("Kurulum yolu kullanıcı-veri klasörü olamaz: {inst}"));
+            }
+        }
+    }
+    for sys in [
+        "/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/var", "/boot", "/sys", "/proc", "/dev",
+        "/run", "/opt", "/srv", "/root", "/home",
+    ] {
+        if norm == sys {
+            return Err(format!("Kurulum yolu sistem dizini olamaz: {inst}"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 fn validate_install_dir(inst: &str) -> Result<(), String> {
     // PS meta-karakterleri (çift-tırnaklı bağlamda tehlikeli): $ → değişken, ` → escape, " → tırnak-kır.
     // Varsayılan yollarda yok; yalnız kötücül/yanlış PEMF_INSTALL_DIR'de olabilir → reddet (L1).
@@ -163,8 +252,13 @@ fn psq(s: &str) -> String {
 }
 
 /// Backend exe'si diskte var mı (kurulum en azından başlamış mı).
+#[cfg(windows)]
 fn backend_exe_present() -> bool {
     Path::new(&install_dir()).join("PEMF_Backend.exe").exists()
+}
+#[cfg(not(windows))]
+fn backend_exe_present() -> bool {
+    linux_backend_elf().exists()
 }
 
 /// Backend GERÇEKTEN ayakta + arayüz sunuyor mu? (localhost:8000 → 200). Kısa timeout + birkaç deneme.
@@ -192,6 +286,7 @@ fn backend_healthy() -> bool {
 /// PemfBackend Windows servisi KAYITLI mı? (anında, zamanlama-bağımsız SCM sorgusu). Bu, "tam kurulmuş
 /// ama yavaş-açılan" (servis VAR → YIKMA) ile "yarım kurulum" (servis YOK → tam onar) ayrımını yapar —
 /// böylece marker kayıp + yavaş backend, sağlık-probu zamanlamasına takılıp yıkıcı tam-kuruluma düşmez.
+#[cfg(windows)]
 fn backend_service_exists() -> bool {
     Command::new("sc")
         .args(["query", "PemfBackend"])
@@ -200,11 +295,74 @@ fn backend_service_exists() -> bool {
         .map(|o| o.status.success()) // sc query: servis varsa exit 0, yoksa 1060
         .unwrap_or(false)
 }
+#[cfg(not(windows))]
+fn backend_service_exists() -> bool {
+    // Linux/mac: kalıcı servis yok → "kurulu mu" göstergesi = backend ELF diskte mi.
+    backend_exe_present()
+}
+
+/// Linux/mac: kurulmuş backend ELF'ini AYRIK süreç olarak başlat (servis yerine). İDEMPOTENT
+/// (zaten sağlıklıysa yeniden spawn ETMEZ → çift-backend/EADDRINUSE önlenir). in-process setsid
+/// (harici 'setsid' binary'sine bağımlı DEĞİL) ile yeni oturum → client kapansa da yaşar.
+/// env: PEMF_AI_MODELS_DIR (backend'in GERÇEKTEN okuduğu değişken; kök=models_parent/ai_models),
+/// PEMF_ENCRYPT_AT_REST=1 (SQLCipher — Windows paritesi), PEMF_DATA_DIR (tüm veri tek kökte → temiz
+/// kaldırma). Log backend.log'a yazılır (null yerine → arıza teşhisi mümkün).
+#[cfg(not(windows))]
+fn spawn_backend() -> std::io::Result<()> {
+    if backend_healthy() {
+        return Ok(()); // #14: zaten çalışıyor → çift-spawn/EADDRINUSE yok
+    }
+    let elf = linux_backend_elf();
+    if !elf.exists() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "backend ELF bulunamadı"));
+    }
+    let workdir = elf.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+    fs::create_dir_all(data_dir()).ok();
+    let mut cmd = Command::new(&elf);
+    cmd.arg("--port")
+        .arg("8000")
+        // #2: backend PEMF_AI_MODELS_DIR okur (PEMF_MODELS_PARENT DEĞİL); kök = profil zip'lerinin
+        //     açıldığı ai_models alt-dizini (model_downloader.py _candidate_model_roots #1).
+        .env("PEMF_AI_MODELS_DIR", PathBuf::from(models_parent()).join("ai_models"))
+        .env("PEMF_MODELS_PARENT", models_parent()) // geriye-uyum (backend okumasa da zararsız)
+        // #5: hasta/tedavi DB SQLCipher şifreleme (Windows device.env paritesi; sqlcipher3 base-linux'ta gömülü)
+        .env("PEMF_ENCRYPT_AT_REST", "1")
+        // #7: tüm backend verisi (DB/secrets/config/device_id) tek kökte → uninstall temiz siler
+        .env("PEMF_DATA_DIR", data_dir().join("backend"))
+        .current_dir(&workdir)
+        .stdin(std::process::Stdio::null());
+    // Log dosyası (null yerine) → backend arızasını teşhis edebilelim.
+    match fs::OpenOptions::new().create(true).append(true).open(data_dir().join("backend.log")) {
+        Ok(f) => match f.try_clone() {
+            Ok(f2) => {
+                cmd.stdout(std::process::Stdio::from(f)).stderr(std::process::Stdio::from(f2));
+            }
+            Err(_) => {
+                cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+            }
+        },
+        Err(_) => {
+            cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        }
+    }
+    // #14: in-process setsid → yeni oturum (detached), harici binary yok.
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
+    }
+    cmd.spawn()?;
+    Ok(())
+}
 
 /// "Başlat" öncesi backend'in GERÇEKTEN hazır olmasını sağlar: hazır değilse (kurulu) servisi
 /// başlatmayı dener + arayüz (localhost:8000) yanıt verene dek sınırlı süre bekler. true = hazır.
 /// Reboot sonrası frozen-EXE soğuk-başlangıç + Defender taramasına tolerans → app açılınca çerçevesiz
 /// "Bu sayfaya ulaşılamıyor" ekranını önler (marker var ≠ servis O AN ayakta).
+#[cfg(windows)]
 fn wait_backend_ready(max: Duration) -> bool {
     if backend_healthy() {
         return true;
@@ -216,6 +374,22 @@ fn wait_backend_ready(max: Duration) -> bool {
             .creation_flags(CREATE_NO_WINDOW)
             .status();
     }
+    let deadline = Instant::now() + max;
+    while Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(800));
+        if backend_healthy() {
+            return true;
+        }
+    }
+    false
+}
+#[cfg(not(windows))]
+fn wait_backend_ready(max: Duration) -> bool {
+    if backend_healthy() {
+        return true;
+    }
+    // Linux/mac: servis yok → backend ELF'ini doğrudan spawn et, sonra arayüz hazır olana dek bekle.
+    let _ = spawn_backend();
     let deadline = Instant::now() + max;
     while Instant::now() < deadline {
         thread::sleep(Duration::from_millis(800));
@@ -491,6 +665,7 @@ fn download_to(
 /// sha256 hash-kapısı: betik RunAs ile okunmadan önce (TOCTOU) değiştirilirse admin-yetkiyle
 /// çalışmaz. Beklenen hash disk yerine tamper-edilemez process-argümanına gömülür (çift psq: inner
 /// PS komutu bir kez, dış Start-Process argümanı bir kez → RunAs tarafında doğru çözülür).
+#[cfg(windows)] // yalnız Windows kurulum/kaldırma akışı kullanır (elevation)
 fn elevated_hashgated_outer(ps_path: &Path) -> Result<String, String> {
     let bytes = fs::read(ps_path).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
@@ -511,6 +686,169 @@ fn elevated_hashgated_outer(ps_path: &Path) -> Result<String, String> {
 // is_full=true → TAM kurulum (temiz sil + base + modeller + servis). false → ARTIMLI: yalnız yeni
 // profil modellerini ekle, backend'e/base'e DOKUNMA. is_full çağıran tarafından `!backend_installed`
 // ile AÇIKÇA verilir — downloads'ta stale base.zip'e GÜVENİLMEZ (yanlış wipe'ı önler).
+// ── Linux/mac native finalize: elevation/servis/registry YOK → saf-Rust zip ile user-dir'e çıkar ──
+/// Saf-Rust zip çıkarma (harici 'unzip' YOK → AppImage/rpm/minimal ortamlarda da çalışır, #4).
+/// enclosed_name() zip-slip (../) korur; unix izinleri (varsa) korunur; büyük dosyalar stream'lenir.
+#[cfg(not(windows))]
+fn extract_zip_linux(zip_path: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    let dest = dest.canonicalize().map_err(|e| e.to_string())?;
+    let file = fs::File::open(zip_path).map_err(|e| format!("zip açılamadı: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("zip okunamadı ({}): {e}", zip_path.display()))?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        let rel = match entry.enclosed_name() {
+            Some(p) => p, // zip-slip korumalı (dizin-dışı yol → None)
+            None => return Err(format!("zip'te güvensiz yol: {}", entry.name())),
+        };
+        let out = dest.join(&rel);
+        if entry.is_dir() {
+            fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = out.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut f = fs::File::create(&out).map_err(|e| e.to_string())?;
+        std::io::copy(&mut entry, &mut f).map_err(|e| format!("çıkarma hatası ({}): {e}", out.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Some(mode) = entry.unix_mode() {
+                let _ = fs::set_permissions(&out, fs::Permissions::from_mode(mode));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// inst'in yanında güvenli kardeş yol (parent+file_name+suffix). String-birleştirme yerine bunu
+/// kullan → trailing-slash footgun'u (stage'in inst ÇOCUĞU olup remove ile silinmesi, #8) engellenir.
+#[cfg(not(windows))]
+fn sibling_suffixed(inst: &Path, suffix: &str) -> PathBuf {
+    let name = inst.file_name().and_then(|s| s.to_str()).unwrap_or("app");
+    inst.parent().unwrap_or_else(|| Path::new(".")).join(format!("{name}{suffix}"))
+}
+
+/// İndirilen base paketinin yerel dosya adı (platforma göre). base push + finalize AYNI adı kullanır.
+#[cfg(target_os = "macos")]
+fn base_local_name() -> &'static str {
+    "base-mac.zip"
+}
+#[cfg(all(unix, not(target_os = "macos")))]
+fn base_local_name() -> &'static str {
+    "base-linux.zip"
+}
+
+/// Çalışan backend'i durdur: SIGTERM (pkill), ölmezse SIGKILL. ELF tam-yolu deseni → yanlış-süreç
+/// eşleşmesi daralır; ölümü poll et (port serbest kalsın), swap/kaldırma öncesi güvenli (#14).
+#[cfg(not(windows))]
+fn stop_backend_linux() {
+    let pat = linux_backend_elf().display().to_string();
+    let _ = Command::new("pkill").args(["-TERM", "-f", &pat]).status();
+    for _ in 0..6 {
+        thread::sleep(Duration::from_millis(500));
+        let alive = Command::new("pgrep").args(["-f", &pat]).output().map(|o| o.status.success()).unwrap_or(false);
+        if !alive {
+            return;
+        }
+    }
+    let _ = Command::new("pkill").args(["-KILL", "-f", &pat]).status();
+    thread::sleep(Duration::from_millis(500));
+}
+
+#[cfg(not(windows))]
+fn finalize_install(profiles: &[String], is_full: bool) -> Result<(), String> {
+    let inst = PathBuf::from(install_dir());
+    validate_install_dir(&install_dir())?;
+    let dl = data_dir().join("downloads");
+    let models = PathBuf::from(models_parent());
+    fs::create_dir_all(&models).map_err(|e| e.to_string())?;
+
+    if is_full {
+        let base = dl.join(base_local_name());
+        if !base.exists() {
+            return Err(format!("base paketi bulunamadı ({}).", base_local_name()));
+        }
+        stop_backend_linux(); // port/dosya kilidi serbest kalsın
+        let stage = sibling_suffixed(&inst, "._stage");
+        let old = sibling_suffixed(&inst, "._old");
+        let _ = fs::remove_dir_all(&stage);
+        let _ = fs::remove_dir_all(&old);
+        // #16: çıkarma patlarsa stage'i temizle (GB sızıntı kalmasın).
+        if let Err(e) = extract_zip_linux(&base, &stage) {
+            let _ = fs::remove_dir_all(&stage);
+            return Err(e);
+        }
+        // #10: çıkarılan pakette backend ELF GERÇEKTEN var mı? (yanlış/bozuk base sessiz 'Tamamlandı' YAPMASIN)
+        if !stage.join("PEMF_Backend").join("PEMF_Backend").exists() {
+            let _ = fs::remove_dir_all(&stage);
+            return Err("Backend paketi geçersiz: PEMF_Backend/PEMF_Backend bulunamadı (yanlış/bozuk base-linux.zip).".into());
+        }
+        // #8: ATOMİK-TERSİNİR takas (Windows paritesi): inst→old, stage→inst; hata olursa old'u geri yükle.
+        if inst.exists() {
+            if let Err(e) = fs::rename(&inst, &old) {
+                let _ = fs::remove_dir_all(&stage);
+                return Err(format!("kurulum takası (eski taşıma) başarısız: {e}"));
+            }
+        } else if let Some(parent) = inst.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = fs::rename(&stage, &inst) {
+            let _ = fs::rename(&old, &inst); // geri yükle → çalışan kurulum YIKIK kalmasın
+            let _ = fs::remove_dir_all(&stage);
+            return Err(format!("kurulum takası başarısız: {e}"));
+        }
+        let _ = fs::remove_dir_all(&old); // başarılı → eski kurulumu temizle
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let elf = linux_backend_elf();
+            if let Ok(meta) = fs::metadata(&elf) {
+                let mut perm = meta.permissions();
+                perm.set_mode(0o755); // ELF çalıştırılabilir
+                let _ = fs::set_permissions(&elf, perm);
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // İnternetten inen mach-o binary'ler com.apple.quarantine ile işaretlenir → Gatekeeper
+            // spawn'ı ENGELLER ("... geliştirici doğrulanamıyor"). Kurulan ağaçtan bayrağı temizle,
+            // yoksa backend hiç başlamaz. (Client .app imzalı/notarized; bu, indirilen backend içindir.)
+            let _ = Command::new("xattr")
+                .args(["-dr", "com.apple.quarantine"])
+                .arg(&inst)
+                .status();
+        }
+        // #1-followup: kurulum-anında backend GERÇEKTEN çalışıyor mu doğrula (Windows verify paritesi).
+        // ELF var-ama-çalışamaz (glibc/runtime-dep uyumsuz) base'i 'Tamamlandı' demeden yakala → hata
+        // 'Başlat'a ERTELENMEZ. Başarılıysa backend zaten ayakta kalır (ilk 'Başlat' anında açılır).
+        spawn_backend().map_err(|e| format!("Backend başlatılamadı: {e}"))?;
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let mut healthy = false;
+        while Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1000));
+            if backend_healthy() {
+                healthy = true;
+                break;
+            }
+        }
+        if !healthy {
+            return Err("Kurulum tamamlandı ancak backend başlatılamadı (paket veya çalışma-zamanı uyumsuz olabilir). 'Onar' ile yeniden deneyin.".into());
+        }
+    }
+    // profil modelleri (ONNX = platform-agnostik, Windows'la AYNI zip; iç kök 'ai_models/') → models_parent
+    for p in profiles {
+        let zip = dl.join(format!("{p}.zip"));
+        if zip.exists() {
+            extract_zip_linux(&zip, &models)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 fn finalize_install(profiles: &[String], is_full: bool) -> Result<(), String> {
     let inst = install_dir();
     validate_install_dir(&inst)?; // yıkıcı rename-swap öncesi yol güvenliği (env-override footgun'u)
@@ -688,6 +1026,7 @@ fn finalize_install(profiles: &[String], is_full: bool) -> Result<(), String> {
 }
 
 /// Uygulama kaldırma betiği (elevated): servis durdur/sil + dosyalar + modeller + Add/Remove kaydı.
+#[cfg(windows)] // yalnız Windows do_uninstall_app kullanır
 fn app_removal_script(inst: &str, models: &str) -> String {
     format!(
         "$ErrorActionPreference='SilentlyContinue'\r\n\
@@ -701,6 +1040,50 @@ fn app_removal_script(inst: &str, models: &str) -> String {
 }
 
 /// Uygulamayı kaldır: elevated betik (servis/dosya/kayıt) + per-user temizlik (marker/kısayol).
+// Linux/mac: kaldırma — elevation/servis/registry YOK → backend'i durdur + user-dir'leri sil + .desktop temizle.
+#[cfg(not(windows))]
+fn do_uninstall_app() -> Result<(), String> {
+    stop_backend_linux();
+    let inst = install_dir();
+    validate_install_dir(&inst)?; // recursive-delete öncesi yol güvenliği
+    let _ = fs::remove_dir_all(&inst);
+    // #9: models_parent'ı KÖKTEN silme (env-override footgun) — yalnız bilinen ai_models alt-dizini
+    //     (Windows paritesi: orada da yalnız {models}\ai_models silinir).
+    let models_ai = PathBuf::from(models_parent()).join("ai_models");
+    if validate_install_dir(&models_ai.display().to_string()).is_ok() {
+        let _ = fs::remove_dir_all(&models_ai);
+    }
+    // Varsayılan konumdaysa models kökünü de temizle (data_dir/models — app'e ait, güvenli).
+    if PathBuf::from(models_parent()) == data_dir().join("models") {
+        let _ = fs::remove_dir_all(data_dir().join("models"));
+    }
+    // #7: backend veri dizini (hasta DB + SQLCipher anahtar + secrets) — KVKK: geride bırakma.
+    //     spawn PEMF_DATA_DIR=data_dir/backend verdi; eski/varsayılan konumları da best-effort sil.
+    let _ = fs::remove_dir_all(data_dir().join("backend"));
+    if let Ok(home) = std::env::var("HOME") {
+        #[cfg(target_os = "macos")]
+        {
+            // mac backend default app_data = ~/Library/Application Support/PEMF_GUI
+            let _ = fs::remove_dir_all(PathBuf::from(&home).join("Library/Application Support/PEMF_GUI"));
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            let _ = fs::remove_dir_all(PathBuf::from(&home).join(".local/share/PEMF_GUI")); // backend default app_data
+            let _ = fs::remove_dir_all(PathBuf::from(&home).join(".pemf_gui")); // eski config_dir
+        }
+    }
+    // .desktop kısayolları (uygulama menüsü + masaüstü)
+    if let Some(apps) = data_dir().parent().map(|p| p.join("applications")) {
+        let _ = fs::remove_file(apps.join("pemf-vet.desktop"));
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let _ = fs::remove_file(PathBuf::from(&home).join("Desktop").join("pemf-vet.desktop"));
+    }
+    let _ = fs::remove_file(marker());
+    Ok(())
+}
+
+#[cfg(windows)]
 fn do_uninstall_app() -> Result<(), String> {
     let inst = install_dir();
     validate_install_dir(&inst)?; // recursive-delete öncesi yol güvenliği
@@ -788,7 +1171,33 @@ fn run_install_core(
     // Manifest'te olmayan seçili profil ATLANIR → yalancı 'kurulu' işaretlenmesi önlenir.
     let mut comps: Vec<(String, &Component, String)> = Vec::new();
     if need_full {
+        // Platforma göre base: Windows=base.zip (.exe), macOS=base-mac.zip (mach-o), Linux=base-linux.zip (ELF).
+        // #1: native base manifest'te YOKSA sessizce Windows base.zip'e DÜŞME (yanlış backend → çalışmaz,
+        //     kurulum 'başarılı' görünür ama 'Başlat' hep başarısız). Yüksek sesle hata ver.
+        #[cfg(windows)]
         comps.push(("base.zip".into(), &manifest.base, "Uygulama".into()));
+        #[cfg(target_os = "macos")]
+        {
+            match manifest.base_mac.as_ref() {
+                Some(base_ref) => comps.push((base_local_name().into(), base_ref, "Uygulama".into())),
+                None => return Err(
+                    "Bu sürümde macOS uygulama paketi (base_mac) sunucuda yayınlanmamış. \
+                     Lütfen daha sonra tekrar deneyin veya destekle iletişime geçin."
+                        .into(),
+                ),
+            }
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            match manifest.base_linux.as_ref() {
+                Some(base_ref) => comps.push((base_local_name().into(), base_ref, "Uygulama".into())),
+                None => return Err(
+                    "Bu sürümde Linux uygulama paketi (base_linux) sunucuda yayınlanmamış. \
+                     Lütfen daha sonra tekrar deneyin veya destekle iletişime geçin."
+                        .into(),
+                ),
+            }
+        }
     }
     let mut resolved: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
@@ -864,9 +1273,14 @@ fn run_install_core(
         }
     }
 
+    // #18: Linux'ta elevation YOK → "yönetici izni" ibaresi yanlış/kafa-karıştırıcı.
+    #[cfg(windows)]
+    let install_label = "Kuruluyor (yönetici izni gerekebilir)…";
+    #[cfg(not(windows))]
+    let install_label = "Kuruluyor…";
     progress(Upd {
         pct: 99,
-        label: "Kuruluyor (yönetici izni gerekebilir)…".into(),
+        label: install_label.into(),
         state: "installing".into(),
         downloaded: total,
         total,
@@ -963,6 +1377,7 @@ fn cancel_install() {
     PAUSED.store(false, Ordering::Relaxed); // duraklamışsa uyandır → iptali görsün
 }
 
+#[cfg(windows)]
 #[tauri::command]
 fn launch_app(url: String) -> Result<(), String> {
     Command::new("cmd")
@@ -972,8 +1387,15 @@ fn launch_app(url: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+#[cfg(not(windows))]
+#[tauri::command]
+fn launch_app(url: String) -> Result<(), String> {
+    launch_app_window(&url); // Linux/mac: chromeless app penceresi (yoksa xdg-open/open yedeği içeride)
+    Ok(())
+}
 
 /// Microsoft Edge (msedge.exe) tam yolu — Windows'ta her zaman kurulu. `--app` chromeless penceresi için.
+#[cfg(windows)]
 fn edge_path() -> Option<String> {
     let mut candidates = vec![
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe".to_string(),
@@ -990,6 +1412,7 @@ fn edge_path() -> Option<String> {
 /// Uygulamayı KENDİ chromeless penceresinde açar (Edge `--app`: URL çubuğu/sekme YOK → app gibi). Gerçek
 /// tarayıcı motoru → yerel backend'e (loopback) erişebilir + kamera native izin akışıyla çalışır.
 /// Edge yoksa yedek: varsayılan tarayıcıda sekme.
+#[cfg(windows)]
 fn launch_app_window(url: &str) {
     if let Some(edge) = edge_path() {
         if Command::new(&edge)
@@ -1006,6 +1429,47 @@ fn launch_app_window(url: &str) {
         .creation_flags(CREATE_NO_WINDOW)
         .args(["/C", "start", "", url])
         .spawn();
+}
+
+/// Linux: chromeless "app" penceresi → Chrome/Chromium/Edge `--app=URL` (URL çubuğu/sekme YOK).
+/// Hiçbiri yoksa varsayılan tarayıcı sekmesi (xdg-open). Gerçek tarayıcı motoru → loopback backend +
+/// native kamera izni. (Windows'taki Edge `--app` deseninin Linux karşılığı.)
+#[cfg(all(unix, not(target_os = "macos")))]
+fn launch_app_window(url: &str) {
+    let browsers = [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "microsoft-edge",
+        "microsoft-edge-stable",
+        "brave-browser",
+    ];
+    for b in browsers {
+        if let Ok(mut child) = Command::new(b).arg(format!("--app={url}")).spawn() {
+            // #15: spawn başarı ≠ pencere açıldı. Kısa canlılık kontrolü: hemen HATA ile çıktıysa
+            //      (exec-var-ama-bozuk: sandbox/display/--app reddi) sıradaki tarayıcıyı dene.
+            thread::sleep(Duration::from_millis(400));
+            match child.try_wait() {
+                Ok(Some(status)) if !status.success() => continue, // hemen hata → sıradaki
+                _ => return, // hâlâ çalışıyor (None) veya başarıyla döndü → app açıldı
+            }
+        }
+    }
+    // Hiçbir app-mode tarayıcı tutmadı → varsayılan tarayıcı sekmesi.
+    let _ = Command::new("xdg-open").arg(url).spawn();
+}
+
+/// macOS: Chrome app-mode dene (yüklüyse), yoksa `open` (varsayılan tarayıcı).
+#[cfg(target_os = "macos")]
+fn launch_app_window(url: &str) {
+    let chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    if Path::new(chrome).exists()
+        && Command::new(chrome).arg(format!("--app={url}")).spawn().is_ok()
+    {
+        return;
+    }
+    let _ = Command::new("open").arg(url).spawn();
 }
 
 /// "Başlat" → uygulamayı chromeless app penceresinde aç. ÖNCE backend'in hazır olmasını bekle
@@ -1203,6 +1667,100 @@ fn client_update_status() -> String {
     fs::read_to_string(&p).map(|s| s.trim().to_string()).unwrap_or_default()
 }
 
+// Linux/mac: XDG `.desktop` kısayolu — client'i `--open-app URL` ile başlatır (Windows .lnk karşılığı).
+// Uygulama menüsü (~/.local/share/applications) her zaman; ~/Desktop best-effort (chmod +x).
+/// XDG .desktop Exec kaçışı (#11): literal '%' → '%%' (yoksa GLib percent-encoded URL'yi — çok-profilli
+/// kurulumda profiles=vet%2Cresearch — bozar); çift-tırnak içi " $ ` \ → '\' ile kaçış.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn desktop_exec_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '%' => out.push_str("%%"),
+            '"' | '$' | '`' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+// macOS: uygulama .app olarak /Applications'ta → ayrı kısayol GEREKMEZ (Launchpad/Dock'tan açılır);
+// .desktop mac'te işe yaramaz → no-op (başarı döndür ki UI 'kısayol eklendi' akışı bozulmasın).
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn create_shortcuts(_url: String) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[tauri::command]
+fn create_shortcuts(url: String) -> Result<(), String> {
+    // AppImage'da current_exe() geçici mount yolu (/tmp/.mount_XXX) döner → kısayol AppImage kapanınca
+    // KIRILIR. AppImage runtime kalıcı yolu APPIMAGE env'inde verir → onu tercih et. (.deb'de APPIMAGE
+    // set değil → current_exe = kalıcı /usr/bin yolu, doğru.)
+    let client_exe = std::env::var("APPIMAGE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default());
+    fs::create_dir_all(data_dir()).ok();
+    // #19: .desktop için PNG ikon (çoğu Linux DE .ico Icon= render etmez).
+    let icon = data_dir().join("pemf_app.png");
+    let _ = fs::write(&icon, APP_ICON_PNG);
+
+    let content = format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=PEMF Vet\n\
+         Comment=PEMF Vet\n\
+         Exec=\"{exe}\" --open-app \"{url}\"\n\
+         Icon={icon}\n\
+         Terminal=false\n\
+         StartupNotify=true\n\
+         Categories=Utility;Science;\n",
+        exe = desktop_exec_escape(&client_exe),
+        url = desktop_exec_escape(&url),
+        icon = icon.display(),
+    );
+
+    // Uygulama menüsü (standart XDG konumu — data_dir = ~/.local/share/PEMFVetClient → parent = ~/.local/share)
+    let apps = data_dir()
+        .parent()
+        .map(|p| p.join("applications"))
+        .unwrap_or_else(|| data_dir().join("applications"));
+    fs::create_dir_all(&apps).ok();
+    let menu_entry = apps.join("pemf-vet.desktop");
+    fs::write(&menu_entry, &content).map_err(|e| e.to_string())?;
+
+    // Masaüstü (best-effort — bazı DE'ler "güven" ister; chmod +x çalıştırılabilir yapar)
+    if let Ok(home) = std::env::var("HOME") {
+        let desktop = PathBuf::from(&home).join("Desktop");
+        if desktop.exists() {
+            let d = desktop.join("pemf-vet.desktop");
+            if fs::write(&d, &content).is_ok() {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Ok(meta) = fs::metadata(&d) {
+                        let mut perm = meta.permissions();
+                        perm.set_mode(0o755);
+                        let _ = fs::set_permissions(&d, perm);
+                    }
+                }
+            }
+        }
+    }
+
+    if menu_entry.exists() {
+        Ok(())
+    } else {
+        Err("Kısayol oluşturulamadı.".into())
+    }
+}
+
+#[cfg(windows)]
 #[tauri::command]
 fn create_shortcuts(url: String) -> Result<(), String> {
     let desktop =

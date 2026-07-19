@@ -61,7 +61,7 @@ const TR: Dict = {
   "inst.resume": "Devam et",
   "inst.pause": "Durdur",
   "inst.cancel": "İptal",
-  "inst.noteInstalling": "Dosyalar yerlerine kuruluyor (yönetici izni gerekebilir).",
+  "inst.noteInstalling": "Dosyalar yerlerine kuruluyor.",
   "inst.noteDownloading": "Bağlantı kesilirse otomatik olarak kaldığı yerden devam eder.",
   "inst.failTitle": "Kurulum başarısız",
   "inst.back": "Geri",
@@ -83,7 +83,7 @@ const TR: Dict = {
   "ready.repairConfirm":
     "Uygulama açılmıyor/hatalıysa onarın: çekirdek yeniden indirilip temiz kurulur (birkaç dakika, modeller/hasta verisi korunur). Devam edilsin mi?",
   "ready.uninstallConfirm":
-    "PEMF Vet uygulamasını (arka plan servisi + AI modelleri) kaldırmak istiyor musunuz? Bu işlem yönetici izni gerektirir.",
+    "PEMF Vet uygulamasını (arka plan uygulaması + AI modelleri + veriler) tamamen kaldırmak istiyor musunuz?",
   "ready.uninstallFail": "Kaldırma başarısız: ",
   // about
   "about.about":
@@ -103,10 +103,10 @@ const TR: Dict = {
   "how.s3.d": "Uygulama tarayıcıda açılır — kullanıma hazırsınız.",
   // system requirements
   "sys.title": "Sistem gereksinimleri",
-  "sys.os": "Windows 10/11 (64-bit)",
+  "sys.os": "Windows 10/11 · macOS 12+ · Ubuntu/Debian (64-bit)",
   "sys.ram": "8 GB RAM (16 GB önerilir)",
   "sys.disk": "Profillere göre 3–5 GB boş disk",
-  "sys.net": "Kurulum için internet + yönetici izni",
+  "sys.net": "Kurulum için internet bağlantısı",
   // update
   "upd.available": "Yeni sürüm {v} hazır",
   "upd.desc": "Güncellemede kurulu profilleriniz ve modelleriniz korunur.",
@@ -193,7 +193,7 @@ const EN: Dict = {
   "inst.resume": "Resume",
   "inst.pause": "Pause",
   "inst.cancel": "Cancel",
-  "inst.noteInstalling": "Placing files (administrator permission may be required).",
+  "inst.noteInstalling": "Placing files.",
   "inst.noteDownloading": "If the connection drops it automatically resumes.",
   "inst.failTitle": "Installation failed",
   "inst.back": "Back",
@@ -214,7 +214,7 @@ const EN: Dict = {
   "ready.repairConfirm":
     "Repair if the app won't open or is faulty: the core is re-downloaded and cleanly reinstalled (a few minutes; models/patient data are preserved). Continue?",
   "ready.uninstallConfirm":
-    "Remove the PEMF Vet app (background service + AI models)? This requires administrator permission.",
+    "Completely remove the PEMF Vet app (background app + AI models + data)?",
   "ready.uninstallFail": "Uninstall failed: ",
   "about.about":
     "PEMF Vet is a clinical platform that combines camera-assisted AI diagnosis with safe PEMF (pulsed electromagnetic field) therapy. This launcher downloads the AI models for the profiles you choose, installs the background service and launches the app.",
@@ -231,10 +231,10 @@ const EN: Dict = {
   "how.s3.t": "Launch",
   "how.s3.d": "The app opens in your browser — you're ready to go.",
   "sys.title": "System requirements",
-  "sys.os": "Windows 10/11 (64-bit)",
+  "sys.os": "Windows 10/11 · macOS 12+ · Ubuntu/Debian (64-bit)",
   "sys.ram": "8 GB RAM (16 GB recommended)",
   "sys.disk": "3–5 GB free disk depending on profiles",
-  "sys.net": "Internet + administrator rights to install",
+  "sys.net": "Internet connection to install",
   "upd.available": "Version {v} is available",
   "upd.desc": "Your installed profiles and models are preserved during the update.",
   "upd.update": "Update",
