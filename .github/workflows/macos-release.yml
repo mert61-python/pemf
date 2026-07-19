@@ -41,11 +41,11 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # NOTARIZATION geçici KAPALI — notarytool 2 kez asılı kaldı (timeout'a takıldı; Apple servisi
-          # sağlıklı → muhtemelen App Store Connect'te bekleyen sözleşme/onay). İmzalı .dmg üretilir
-          # (ilk açılış: sağ-tık→Aç). Fix sonrası açmak için 2 satırı aç (API-key yöntemi de denenebilir):
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # NOTARIZATION AÇIK (2026-07-19) — sözleşme/kimlik durumunu AMPİRİK teşhis için. notarytool
+          # asılırsa timeout-minutes:30 korur; başarısızsa hata mesajı (403 / "accept agreement" / auth)
+          # TAM sebebi verir (banner aramaktan kesin). Sorun çıkarsa API-key yöntemine geçilebilir.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target universal-apple-darwin
