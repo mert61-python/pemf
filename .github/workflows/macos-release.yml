@@ -39,8 +39,11 @@ jobs:
       - name: API key (.p8) yaz
         run: |
           mkdir -p "$HOME/private_keys"
-          echo "${{ secrets.APPLE_API_KEY_P8 }}" | base64 --decode > "$HOME/private_keys/AuthKey.p8"
+          # openssl base64 -d -A → macOS'ta bulletproof (BSD base64 '--decode' desteklemeyebilir)
+          echo "${{ secrets.APPLE_API_KEY_P8 }}" | openssl base64 -d -A > "$HOME/private_keys/AuthKey.p8"
           chmod 600 "$HOME/private_keys/AuthKey.p8"
+          # doğrula: PKCS#8 private key başlığı olmalı
+          head -1 "$HOME/private_keys/AuthKey.p8"
 
       - name: Build + imza + notarization (universal .dmg)
         uses: tauri-apps/tauri-action@v0
