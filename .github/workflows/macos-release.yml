@@ -18,7 +18,7 @@ on:
 jobs:
   macos:
     runs-on: macos-14            # Apple Silicon runner (universal build için ideal)
-    timeout-minutes: 30          # notarytool asılı kalırsa runaway 10x-fatura önle (2.5s hang yaşandı)
+    timeout-minutes: 40          # build(~8) + notarytool --wait(--timeout 20m) + log; runaway koruması
     steps:
       - uses: actions/checkout@v4
 
@@ -45,25 +45,45 @@ jobs:
           # doğrula: PKCS#8 private key başlığı olmalı
           head -1 "$HOME/private_keys/AuthKey.p8"
 
-      - name: Build + imza + notarization (universal .dmg)
+      # tauri-action YALNIZ build+sign (APPLE_API_* YOK → notarize etmez). Notarization'ı aşağıda MANUEL
+      # yapıyoruz çünkü tauri-action notarytool çıktısını yutup 4×30dk sessiz hang'i teşhis-edilemez kıldı.
+      - name: Build + imza (universal .dmg)
         uses: tauri-apps/tauri-action@v0
         env:
           PEMF_GHCR_TOKEN: ${{ secrets.PEMF_GHCR_TOKEN }}   # ghcr private imaj çekme (client'a gömülür)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # NOTARIZATION = App Store Connect API-KEY yöntemi. app-specific-password KALICI HANG ediyordu
-          # (2026-07-19 ampirik: notarytool submission-ID bile basmadan 30dk asıldı, 3. kez). API-key
-          # o auth-hang'i atlar (Apple'ın CI-önerdiği yol). Secret'lar:
-          #   APPLE_API_ISSUER  = Issuer ID (App Store Connect > Integrations > sağ üst, UUID)
-          #   APPLE_API_KEY     = Key ID (oluşturulan key'in 10-karakter ID'si)
-          #   APPLE_API_KEY_P8  = AuthKey_<KeyID>.p8 dosyasının base64'ü
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: /Users/runner/private_keys/AuthKey.p8
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target universal-apple-darwin
+
+      - name: Notarize .dmg (MANUEL — Apple durumu akışa yansısın)
+        run: |
+          set -o pipefail
+          DMG=$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
+          echo "DMG: $DMG"
+          KEY="$HOME/private_keys/AuthKey.p8"; KID="${{ secrets.APPLE_API_KEY }}"; ISS="${{ secrets.APPLE_API_ISSUER }}"
+          echo "::group::notarytool submit (--wait, --timeout 20m)"
+          set +e
+          xcrun notarytool submit "$DMG" --key "$KEY" --key-id "$KID" --issuer "$ISS" --wait --timeout 20m 2>&1 | tee /tmp/notary.log
+          RC=$?
+          set -e
+          echo "::endgroup::"
+          echo "notarytool_rc=$RC"
+          SID=$(grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/notary.log | head -1)
+          echo "submission_id=$SID"
+          if [ -n "$SID" ]; then
+            echo "::group::notarytool log $SID (Apple'in GERCEK sebebi: In Progress / Invalid / agreement)"
+            xcrun notarytool log "$SID" --key "$KEY" --key-id "$KID" --issuer "$ISS" || true
+            echo "::endgroup::"
+          fi
+          if [ "$RC" -eq 0 ]; then
+            xcrun stapler staple "$DMG" && echo "NOTARIZE_STAPLE_OK"
+          else
+            echo "NOTARIZE_FAILED — yukaridaki notarytool log Apple'in sebebini gosterir"
+            exit 1
+          fi
 
       - name: .dmg'yi artifact olarak yükle
         uses: actions/upload-artifact@v4
