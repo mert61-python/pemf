@@ -34,6 +34,14 @@ jobs:
       - name: Frontend bağımlılıkları
         run: npm ci
 
+      # App Store Connect API key'i (.p8) secret'tan dosyaya yaz — notarization API-key yöntemi için.
+      # Secret APPLE_API_KEY_P8 = AuthKey_XXXX.p8 dosyasının base64'ü.
+      - name: API key (.p8) yaz
+        run: |
+          mkdir -p "$HOME/private_keys"
+          echo "${{ secrets.APPLE_API_KEY_P8 }}" | base64 --decode > "$HOME/private_keys/AuthKey.p8"
+          chmod 600 "$HOME/private_keys/AuthKey.p8"
+
       - name: Build + imza + notarization (universal .dmg)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -41,11 +49,15 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # NOTARIZATION AÇIK (2026-07-19) — sözleşme/kimlik durumunu AMPİRİK teşhis için. notarytool
-          # asılırsa timeout-minutes:30 korur; başarısızsa hata mesajı (403 / "accept agreement" / auth)
-          # TAM sebebi verir (banner aramaktan kesin). Sorun çıkarsa API-key yöntemine geçilebilir.
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # NOTARIZATION = App Store Connect API-KEY yöntemi. app-specific-password KALICI HANG ediyordu
+          # (2026-07-19 ampirik: notarytool submission-ID bile basmadan 30dk asıldı, 3. kez). API-key
+          # o auth-hang'i atlar (Apple'ın CI-önerdiği yol). Secret'lar:
+          #   APPLE_API_ISSUER  = Issuer ID (App Store Connect > Integrations > sağ üst, UUID)
+          #   APPLE_API_KEY     = Key ID (oluşturulan key'in 10-karakter ID'si)
+          #   APPLE_API_KEY_P8  = AuthKey_<KeyID>.p8 dosyasının base64'ü
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: /Users/runner/private_keys/AuthKey.p8
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target universal-apple-darwin
