@@ -68,7 +68,7 @@ export const DOWNLOAD_HOST = {
   ready: true, // Windows launcher yayında (pemf-update/launcher-v1.8.0)
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
-  launcherTag: 'launcher-v1.9.0', // SABİT etiket (latest değil — paket release'iyle çakışmaz); 3-platform 1.9.0, macOS notarize'li (2026-07-26)
+  launcherTag: 'launcher-v1.9.1', // SABİT etiket; 3-platform 1.9.1 (self-update bildirimi eklendi), macOS notarize'li (2026-07-26)
   windowsAsset: 'PEMFVetClient-Setup.exe',
   macosAsset: 'PEMFVetClient.dmg',
   macosReady: true, // Mac native YAYINDA (base-mac.zip + imzalı .dmg 1.9.0, launcher-v1.8.0, 2026-07-26)
