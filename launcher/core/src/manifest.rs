@@ -46,6 +46,16 @@ fn default_kind() -> String {
     "zip".to_string()
 }
 
+/// Yayındaki EN SON launcher (client) sürümü + indirme sayfası. Launcher thin-bootstrapper
+/// olduğu için kendini güncellemez; açılışta bu alanı kendi sürümüyle kıyaslayıp KULLANICIYA
+/// "yeni sürüm var, indir" bildirir (opsiyonel — alan yoksa kontrol sessizce atlanır).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct LauncherInfo {
+    pub version: String,
+    #[serde(default)]
+    pub url: String,
+}
+
 /// Formatı ne olursa olsun normalize edilmiş manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
@@ -55,6 +65,8 @@ pub struct Manifest {
     pub runtimes: HashMap<String, Package>,
     /// profil adı -> model paketi
     pub models: HashMap<String, Package>,
+    /// Yayındaki en son launcher sürümü (opsiyonel; açılışta self-update bildirimi için).
+    pub launcher: Option<LauncherInfo>,
     /// Kaynak şema sürümü (1 veya 2) — teşhis/log için.
     pub schema: u8,
 }
@@ -68,6 +80,8 @@ struct RawV2 {
     runtimes: HashMap<String, Package>,
     #[serde(default)]
     models: HashMap<String, Package>,
+    #[serde(default)]
+    launcher: Option<LauncherInfo>,
 }
 
 #[derive(Deserialize)]
@@ -83,6 +97,8 @@ struct RawV1 {
     base_linux: Option<Package>,
     #[serde(default)]
     base_mac: Option<Package>,
+    #[serde(default)]
+    launcher: Option<LauncherInfo>,
 }
 
 impl Manifest {
@@ -97,6 +113,7 @@ impl Manifest {
                 tag: v2.tag,
                 runtimes: v2.runtimes,
                 models: v2.models,
+                launcher: v2.launcher,
                 schema: 2,
             }
         } else {
@@ -117,6 +134,7 @@ impl Manifest {
                 tag: v1.tag,
                 runtimes,
                 models: v1.profiles,
+                launcher: v1.launcher,
                 schema: 1,
             }
         };
@@ -168,6 +186,33 @@ fn sorted_keys(map: &HashMap<String, Package>) -> String {
     let mut keys: Vec<&str> = map.keys().map(|s| s.as_str()).collect();
     keys.sort_unstable();
     keys.join(", ")
+}
+
+/// `candidate` sürümü `current`'tan YENİ mi? ("1.9.1" > "1.9.0"). X.Y.Z parçaları sayısal
+/// kıyaslanır; eksik parça 0, ayrıştırılamayan parça 0 sayılır → asla panik atmaz (kötü
+/// manifest yanlış-güncelleme tetikleyemez). Baştaki `v` yok sayılır. Eşitlikte `false`.
+pub fn is_newer(candidate: &str, current: &str) -> bool {
+    fn parts(v: &str) -> Vec<u64> {
+        v.trim()
+            .trim_start_matches('v')
+            .split('.')
+            .map(|p| {
+                p.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse()
+                    .unwrap_or(0)
+            })
+            .collect()
+    }
+    let (a, b) = (parts(candidate), parts(current));
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x > y;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -264,5 +309,38 @@ mod tests {
         for p in ["home", "vet", "research"] {
             assert!(m.models.contains_key(p), "{p} profili eksik");
         }
+        // Self-update alanı eklendi → gerçek manifest launcher sürümünü taşımalı (bildirimi besler).
+        let l = m.launcher.expect("gerçek manifest'te launcher alanı olmali");
+        assert!(!l.version.is_empty(), "launcher sürümü bos olmamali");
+    }
+
+    #[test]
+    fn surum_karsilastirma_dogru() {
+        assert!(is_newer("1.9.1", "1.9.0"));
+        assert!(is_newer("1.10.0", "1.9.9"), "10 > 9 SAYISAL olmali (leksik degil)");
+        assert!(is_newer("2.0.0", "1.9.9"));
+        assert!(!is_newer("1.9.0", "1.9.0"), "esit -> guncelleme YOK");
+        assert!(!is_newer("1.9.0", "1.9.1"), "eski -> guncelleme YOK");
+        assert!(is_newer("v1.9.1", "1.9.0"), "'v' on eki yok sayilmali");
+        assert!(!is_newer("bozuk", "1.0.0"), "ayristirilamaz=0 -> yanlis-guncelleme YOK");
+        assert!(is_newer("1.9.1", ""), "bos current = 0.0.0");
+    }
+
+    #[test]
+    fn launcher_alani_opsiyonel_ve_ayristirilir() {
+        // Alan YOKSA None (geriye uyum: launcher alanı olmayan eski manifest kırılmaz).
+        let m = Manifest::parse(&v1_json("")).unwrap();
+        assert!(m.launcher.is_none(), "launcher alanı yoksa None olmali");
+        // Alan VARSA sürüm + url okunur.
+        let raw = format!(
+            r#"{{ "schema":2, "version":"1.9.1",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{ "vet": {{"url":"https://x/v.zip","sha256":"{D2}","size":1}} }},
+                 "launcher": {{ "version":"1.9.1", "url":"https://pemf-vet-web.vercel.app/" }} }}"#
+        );
+        let m = Manifest::parse(&raw).unwrap();
+        let l = m.launcher.expect("launcher alanı okunmali");
+        assert_eq!(l.version, "1.9.1");
+        assert!(l.url.contains("vercel.app"));
     }
 }

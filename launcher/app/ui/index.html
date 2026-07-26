@@ -59,11 +59,23 @@
         -webkit-user-select: text; user-select: text;
         max-height: 190px; overflow: auto;
       }
+      .update {
+        display: flex; align-items: center; gap: 12px;
+        border: 1px solid var(--accent); border-radius: 9px;
+        background: var(--card); padding: 10px 13px; margin-bottom: 16px;
+      }
+      .update .u-text { flex: 1; font-size: 12.5px; }
+      .update button { padding: 7px 15px; white-space: nowrap; }
     </style>
   </head>
   <body>
     <h1>PEMF Vet Client</h1>
     <div class="sub" id="env">Ortam algılanıyor…</div>
+
+    <div class="update" id="update" hidden>
+      <span class="u-text" id="update-text"></span>
+      <button type="button" id="update-btn">İndir</button>
+    </div>
 
     <fieldset id="profiles-box" hidden>
       <legend>Kullanım profili</legend>
@@ -142,6 +154,16 @@
           $("env").textContent =
             `${info.platform} · sürüm ${info.version}` +
             (env.already_installed ? " · kurulu (güncellenecek)" : "");
+
+          // Self-update bildirimi: manifest'teki en son launcher sürümü yüklüden yeniyse
+          // (backend kıyasladı → info.update dolu) kullanıcıyı indirme sayfasına yönlendir.
+          if (info.update) {
+            $("update-text").textContent =
+              `Yeni sürüm mevcut: ${info.update.version} (yüklü ${info.current_launcher}). Güncellemeniz önerilir.`;
+            $("update-btn").onclick = () =>
+              invoke("open_url", { url: info.update.url }).catch(() => {});
+            $("update").hidden = false;
+          }
 
           if (!info.platform_supported) {
             fail(

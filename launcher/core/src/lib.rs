@@ -20,4 +20,4 @@ pub mod net;
 pub mod platform;
 pub mod verify;
 
-pub use manifest::{Manifest, Package};
+pub use manifest::{is_newer, LauncherInfo, Manifest, Package};

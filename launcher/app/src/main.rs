@@ -68,14 +68,37 @@ fn fetch_profiles() -> Result<serde_json::Value, String> {
     let mut profiles: Vec<&str> = manifest.models.keys().map(|s| s.as_str()).collect();
     profiles.sort_unstable();
 
+    // Self-update BİLDİRİMİ: launcher thin-bootstrapper (kendini güncellemez). Manifest'teki
+    // en son launcher sürümü kendi sürümümüzden yeniyse UI "yeni sürüm var, indir" gösterir.
+    // (Mevcut kurulumlara ancak launcher'da bu kontrol VARSA ulaşır → bu sürümden itibaren.)
+    let current_launcher = env!("CARGO_PKG_VERSION");
+    let update = manifest.launcher.as_ref().and_then(|l| {
+        pemf_launcher_core::is_newer(&l.version, current_launcher)
+            .then(|| serde_json::json!({ "version": l.version, "url": l.url }))
+    });
+
     Ok(serde_json::json!({
         "version": manifest.version,
         "schema": manifest.schema,
         "profiles": profiles,
         "platform_supported": supported,
         "platform": platform::current(),
+        "current_launcher": current_launcher,
+        "update": update,
         "raw": raw,
     }))
+}
+
+/// Güncelleme indirme sayfasını varsayılan tarayıcıda aç. Manifest host-pinli kaynaktan gelir;
+/// yine de savunma: yalnız https + bilinen indirme host'ları (poisoned-manifest keyfi/zararlı
+/// URL açamasın). Sondaki "/" şart → "github.com.evil" ve userinfo (github.com@evil) hileleri geçmez.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    const ALLOWED: [&str; 2] = ["https://pemf-vet-web.vercel.app/", "https://github.com/"];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+        return Err(format!("İzin verilmeyen indirme adresi: {url}"));
+    }
+    backend::open_browser(&url).map_err(|e| e.to_string())
 }
 
 /// Kur ve başlat. İlerleme `install://progress` olayıyla akar.
@@ -115,7 +138,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             detect_environment,
             fetch_profiles,
-            install_and_launch
+            install_and_launch,
+            open_url
         ])
         .on_window_event(|window, event| {
             // Pencere kapanınca backend'i BIRAKMA: yetim süreç portu tutar ve
