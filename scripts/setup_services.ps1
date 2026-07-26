@@ -47,10 +47,16 @@ if ($Uninstall) {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
-    # {app}'e ÖZGÜ sertleştirme (SADECE burada $AppDir bilinir): nssm-remove + {app} altındaki TÜM
-    # süreçler GERÇEKTEN ölene kadar bekle → dosya kilidi bırakılsın, Inno {app}'i silebilsin. (cloudflared
-    # tünel-watchdog {app}\bin\cloudflared'den {app}'i kilitliyordu — asıl kalan-kilit nedeni.)
-    if (Test-Path $NssmExe) { & $NssmExe stop $ServiceBackend *>$null; & $NssmExe remove $ServiceBackend confirm *>$null }
+    # TIBBİ GÜVENLİK: kaldırmadan ÖNCE servisi GRACEFUL durdur — nssm stop → NSSM Ctrl+C
+    # (AppStopMethodConsole 15s) → backend signal-handler → bobin STOP + STM kuyruk-flush. Servis
+    # STOPPED olana kadar BEKLE ki bobinler (hasta üzerindeyse) güvene alınsın. Force-kill'i ÖNCE
+    # yaparsak (aşağıdaki wait-loop) bu graceful bobin-STOP ATLANIR → bobinler firmware-watchdog'una
+    # kadar açık kalır. Bu yüzden önce graceful-dur+bekle, SONRA remove + force-kill fallback.
+    if (Test-Path $NssmExe) { & $NssmExe stop $ServiceBackend *>$null }
+    for ($i = 0; $i -lt 40 -and ((Get-Service -Name $ServiceBackend -ErrorAction SilentlyContinue).Status -in @('Running', 'StopPending')); $i++) { Start-Sleep -Milliseconds 500 }
+    if (Test-Path $NssmExe) { & $NssmExe remove $ServiceBackend confirm *>$null }
+    # {app}'e ÖZGÜ FALLBACK: graceful başarısız/asılıysa, {app} altındaki TÜM süreçler GERÇEKTEN ölene
+    # kadar force-kill → dosya kilidi bırakılsın, Inno {app}'i silebilsin (cloudflared {app}\bin'den kilit).
     for ($i = 0; $i -lt 30; $i++) {
         $alive = @(Get-Process PEMF_Backend, mosquitto, cloudflared, nssm -ErrorAction SilentlyContinue)
         $alive += @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" })

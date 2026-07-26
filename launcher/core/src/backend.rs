@@ -128,6 +128,21 @@ fn read_tail(child: &mut Child) -> String {
     lines.into_iter().rev().collect::<Vec<_>>().join("\n")
 }
 
+/// Kapanmadan ÖNCE bobinleri güvene al (TIBBİ GÜVENLİK). Hard-kill (child.kill = TerminateProcess)
+/// sinyal GÖNDERMEZ → backend'in graceful shutdown'ı (bobin STOP + kuyruk-flush) ÇALIŞMAZ ve
+/// bobinler firmware süre-watchdog'u dolana kadar HASTANIN ÜZERİNDE açık kalabilir. Bu çağrı
+/// E-stop endpoint'iyle TÜM transport'lardan (STM 1-5 + ESP 6-8) DONANIM STOP tetikler; STM STOP
+/// async seri-kuyruğa konduğu için porta yazılsın diye kısa bekler. Best-effort: backend cevap
+/// vermese/erişilemese bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır, engellemez).
+pub fn safe_stop_coils(port: u16) {
+    let url = format!("http://127.0.0.1:{port}/api/hardware/emergency_stop");
+    let _ = ureq::post(&url)
+        .timeout(Duration::from_secs(3))
+        .call();
+    // STM STOP sender-thread'ce seri porta yazılana kadar bekle (backend flush deadline'ı ~1.5s).
+    std::thread::sleep(Duration::from_millis(1200));
+}
+
 /// Varsayılan tarayıcıda aç. Başarısızlık ÖLÜMCÜL DEĞİL — çağıran URL'yi gösterebilir.
 pub fn open_browser(url: &str) -> io::Result<()> {
     #[cfg(target_os = "macos")]
@@ -176,6 +191,38 @@ mod tests {
     fn url_yardimcilari_dogru_bicimde() {
         assert_eq!(health_url(8123), "http://127.0.0.1:8123/api/health");
         assert_eq!(app_url(8123), "http://127.0.0.1:8123/");
+    }
+
+    /// TIBBİ GÜVENLİK: safe_stop_coils, süreç öldürülmeden önce E-stop endpoint'ini POST etmeli.
+    /// (Bu çağrı kalkarsa seans sürerken pencere kapanışında bobinler açık kalır.)
+    #[test]
+    fn safe_stop_coils_estop_endpointini_post_eder() {
+        use std::io::Read;
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let body = b"{\"status\":\"success\"}";
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = s.write_all(body);
+                let _ = tx.send(String::from_utf8_lossy(&buf[..n]).into_owned());
+            }
+        });
+        safe_stop_coils(port);
+        let req = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("safe_stop_coils E-stop endpoint'ini ÇAĞIRMADI");
+        assert!(
+            req.starts_with("POST /api/hardware/emergency_stop"),
+            "yanlış istek gönderildi: {req}"
+        );
     }
 
     /// Sahte bir HTTP sunucusu 200 dönünce hazır kabul edilmeli.

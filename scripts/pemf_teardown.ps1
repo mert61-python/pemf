@@ -35,24 +35,28 @@ function Test-PemfScope([string]$Owner, [string]$Scope) {
     return $false
 }
 
-# Süreçleri öldür (dosya kilidi bırakılsın) + servisleri kaldır. Deneyim (setup_services.ps1):
-# mosquitto'da Stop-Service -Force StartPending'de ASILIR -> süreç-kill + sc delete kullan.
+# Servisleri durdur + kaldır. TIBBİ GÜVENLİK: önce GRACEFUL sc-stop (→ NSSM Ctrl+C → backend
+# bobin-STOP + STM kuyruk-flush) + servis STOPPED olana kadar BEKLE ki bobinler (hasta üzerindeyse)
+# güvene alınsın; force-kill'i ÖNCE yaparsak bu graceful bobin-STOP ATLANIR. SONRA sc-delete +
+# kalan için force-kill (fallback: graceful asılıysa dosya kilidi kalmasın). (mosquitto'da
+# Stop-Service -Force StartPending'de ASILIR → sc + süreç-kill kullanılır.)
 function Stop-PemfProcessesAndServices([string[]]$Services) {
+    foreach ($svc in $Services) {
+        if (Get-Service -Name $svc -ErrorAction SilentlyContinue) { & sc.exe stop $svc *>$null }
+    }
+    # sc stop asenkron döner → STOPPED olana kadar bekle (NSSM AppStopMethodConsole 15s + pay ~20sn).
+    foreach ($svc in $Services) {
+        for ($i = 0; $i -lt 40 -and ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -in @('Running', 'StopPending')); $i++) { Start-Sleep -Milliseconds 500 }
+    }
+    foreach ($svc in $Services) {
+        if (Get-Service -Name $svc -ErrorAction SilentlyContinue) { & sc.exe delete $svc *>$null; Write-PemfLog "servis kaldırıldı: $svc" }
+    }
     Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
-    foreach ($svc in $Services) {
-        if (Get-Service -Name $svc -ErrorAction SilentlyContinue) {
-            & sc.exe stop $svc *>$null
-            & sc.exe delete $svc *>$null
-            Write-PemfLog "servis kaldırıldı: $svc"
-        }
-    }
-    # Kayıtlar gerçekten silinene + handle'lar bırakılana kadar kısa poll (~10sn).
+    # Kayıtlar gerçekten silinene + handle'lar bırakılana kadar kısa poll.
     foreach ($svc in $Services) {
         for ($i = 0; $i -lt 10 -and (Get-Service -Name $svc -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
     }
-    Get-Process mosquitto, PEMF_Backend, cloudflared, nssm -ErrorAction SilentlyContinue |
-        Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 function Remove-PemfTasks([string[]]$Tasks, [switch]$DryRun) {

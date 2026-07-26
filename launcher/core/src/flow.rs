@@ -84,7 +84,7 @@ pub fn install_and_launch(
     profile: &str,
     install_root: &Path,
     on: &mut dyn FnMut(Progress),
-) -> Result<(std::process::Child, String), FlowError> {
+) -> Result<(std::process::Child, String, u16), FlowError> {
     let manifest = Manifest::parse(manifest_raw)?;
     on(Progress::ManifestFetched {
         version: manifest.version.clone(),
@@ -120,7 +120,8 @@ pub fn install_and_launch(
 
     let url = crate::backend::app_url(port);
     on(Progress::Ready { url: url.clone() });
-    Ok((child, url))
+    // Port da döner: launcher pencere kapanışında bobinleri güvene almak için (safe_stop_coils).
+    Ok((child, url, port))
 }
 
 #[cfg(test)]

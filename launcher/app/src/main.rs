@@ -19,6 +19,8 @@ const MANIFEST_URL: &str = "https://github.com/mert61-python/pemf-update/release
 #[derive(Default)]
 struct AppState {
     child: Mutex<Option<std::process::Child>>,
+    /// Backend portu — pencere kapanışında bobinleri E-stop ile güvene almak için (safe_stop_coils).
+    port: Mutex<Option<u16>>,
 }
 
 #[derive(serde::Serialize)]
@@ -123,8 +125,9 @@ async fn install_and_launch(
     .map_err(|e| format!("kurulum görevi çöktü: {e}"))?;
 
     match result {
-        Ok((child, url)) => {
+        Ok((child, url, port)) => {
             *state.child.lock().unwrap() = Some(child);
+            *state.port.lock().unwrap() = Some(port);
             let _ = backend::open_browser(&url);
             Ok(url)
         }
@@ -142,10 +145,15 @@ fn main() {
             open_url
         ])
         .on_window_event(|window, event| {
-            // Pencere kapanınca backend'i BIRAKMA: yetim süreç portu tutar ve
-            // sonraki açılışta "port meşgul" hatası verir.
+            // Pencere kapanınca backend'i BIRAKMA: yetim süreç portu tutar ve sonraki açılışta
+            // "port meşgul" hatası verir. AMA öldürmeden ÖNCE bobinleri GÜVENE AL (TIBBİ GÜVENLİK):
+            // child.kill() sinyal göndermez → backend'in bobin-STOP graceful'ı çalışmaz, seans
+            // sürerken pencere kapatılırsa bobinler hastanın üzerinde açık kalır. E-stop ile durdur.
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.app_handle().try_state::<AppState>() {
+                    if let Some(port) = *state.port.lock().unwrap() {
+                        backend::safe_stop_coils(port);
+                    }
                     if let Some(mut child) = state.child.lock().unwrap().take() {
                         let _ = child.kill();
                         let _ = child.wait();
