@@ -146,14 +146,17 @@ Filename: "netsh"; \
 ; UygulamanÄ±n kurulu olduÄŸu dizindeki Ã§alÄ±ÅŸÄ±rken Ã¼retilen dosyalarÄ± zorla sil
 Type: filesandordirs; Name: "{app}"
 ; AI modelleri klasÃ¶rÃ¼nÃ¼ (varsa) tamamen sil
-Type: filesandordirs; Name: "{commonappdata}\PEMF_GUI"
+; [KVKK] ai_models = uygulama modelleri (hasta-verisi DEGIL). Tum PEMF_GUI'yi SILME -> hasta DB'si
+; korunur. Tam hasta-verisi silme icin: scripts\pemf_uninstall_all.ps1 -PurgeData (birlesik teardown).
+Type: filesandordirs; Name: "{commonappdata}\PEMF_GUI\ai_models"
 ; Bridge/service loglarÄ± ve Ã§alÄ±ÅŸma zamanÄ± kalÄ±ntÄ±larÄ±
 Type: filesandordirs; Name: "{commonappdata}\PEMF_System"
-Type: filesandordirs; Name: "{userappdata}\PEMF_GUI"
-Type: filesandordirs; Name: "{userappdata}\Ultralytics"
+; [KVKK] "{userappdata}\PEMF_GUI" (HASTA VERISI) KOSULSUZ SILME KALDIRILDI -> operator hasta DB'sini
+; kaybetmesin. Tam silme kullanicinin ACIK onayiyla: pemf_uninstall_all.ps1 -PurgeData.
+; NOT: Ultralytics (ucuncu-parti ML cache, PEMF-markasi degil) da KASITEN kaldirildi.
 Type: filesandordirs; Name: "{localappdata}\PEMF_DigitalTwin_Installation"
 Type: filesandordirs; Name: "{localappdata}\PEMF_System"
-Type: filesandordirs; Name: "{%USERPROFILE}\.pemf_gui"
+; [KVKK] "{%USERPROFILE}\.pemf_gui" (HASTA VERISI) KOSULSUZ SILME KALDIRILDI (bkz. yukari; -PurgeData ile silinir).
 Type: files; Name: "{%TEMP}\PEMF_GUI_Update_Setup.exe"
 ; DiÄŸer Windows kullanÄ±cÄ± profillerindeki per-user kalÄ±ntÄ±lar Pascal Script ile ayrÄ±ca temizlenir.
 

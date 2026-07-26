@@ -70,6 +70,11 @@ Source: "{#BuildOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Source: "{#ProjectRoot}\scripts\setup_services.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; Hotspot baslatici (PEMF-Gateway WiFi â€” ESP bobinleri icin; logon-task + kurulumda bir kez calisir)
 Source: "{#ProjectRoot}\scripts\start_hotspot.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; BIRLESIK TEARDOWN (Faz 2): setup_services.ps1 -Uninstall bunlara delege eder; pemf_uninstall_all.ps1
+; standalone tam-kaldirici (destek/sifirlama + KVKK "tum veriyi sildim" raporu). UCU ayni {app}'te.
+Source: "{#ProjectRoot}\scripts\pemf_footprint.ps1";     DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ProjectRoot}\scripts\pemf_teardown.ps1";      DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ProjectRoot}\scripts\pemf_uninstall_all.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; AI MODELLERI (OFFLINE, ~640MB): YOLO/XGBoost/segmentation/thermal vb. -> ProgramData. Servis (LocalSystem)
 ; bunlari find_installed_model ile candidate-root #1'de (C:\ProgramData\PEMF_GUI\ai_models) bulur -> HF token
 ; ve internet GEREKMEZ. (Eskiden model HF'den indiriliyordu; LocalSystem kullanici-env token'ini goremedigi

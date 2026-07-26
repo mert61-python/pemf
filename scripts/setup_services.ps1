@@ -47,27 +47,10 @@ if ($Uninstall) {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Get-Process cloudflared, nssm, mosquitto, PEMF_Backend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
-    Stop-AppProcs
-    # Backend: nssm remove + sc delete (hiçbiri bloklamaz)
-    if (Test-Path $NssmExe) {
-        & $NssmExe stop $ServiceBackend *>$null
-        & $NssmExe remove $ServiceBackend confirm *>$null
-    }
-    & sc.exe delete $ServiceBackend *>$null
-    # Mosquitto: Stop-Service -Force YOK — StartPending'de ASILIR (install yolunda yasakladığımız
-    # anti-pattern; uninstall yolu da aynı 5dk donmaya yol açıyordu). Süreç-kill + native uninstall + sc delete.
-    if (Get-Service -Name $ServiceMosq -ErrorAction SilentlyContinue) {
-        Get-Process mosquitto -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        $mexe = Join-Path $MosqInstallDir "mosquitto.exe"
-        if (Test-Path $mexe) { & $mexe uninstall *>$null }
-        & sc.exe delete $ServiceMosq *>$null
-    }
-    # Servis kayıtlarının silinmesini poll et — max ~10sn
-    foreach ($s in @($ServiceBackend, $ServiceMosq)) {
-        for ($i = 0; $i -lt 10 -and (Get-Service -Name $s -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
-    }
-    # KRİTİK: TÜM ilgili süreçler GERÇEKTEN ölene kadar bekle (her turda yeniden öldür) → dosya kilidi serbest
-    # kalsın ki Inno {app}'i silebilsin. Max ~15sn + handle-release payı.
+    # {app}'e ÖZGÜ sertleştirme (SADECE burada $AppDir bilinir): nssm-remove + {app} altındaki TÜM
+    # süreçler GERÇEKTEN ölene kadar bekle → dosya kilidi bırakılsın, Inno {app}'i silebilsin. (cloudflared
+    # tünel-watchdog {app}\bin\cloudflared'den {app}'i kilitliyordu — asıl kalan-kilit nedeni.)
+    if (Test-Path $NssmExe) { & $NssmExe stop $ServiceBackend *>$null; & $NssmExe remove $ServiceBackend confirm *>$null }
     for ($i = 0; $i -lt 30; $i++) {
         $alive = @(Get-Process PEMF_Backend, mosquitto, cloudflared, nssm -ErrorAction SilentlyContinue)
         $alive += @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like "$AppDir\*" })
@@ -75,43 +58,20 @@ if ($Uninstall) {
         Stop-AppProcs
         Start-Sleep -Milliseconds 500
     }
-    Start-Sleep 1
-    Remove-Item (Join-Path $AppDir ".install_verified") -Force -ErrorAction SilentlyContinue
-    # Bundled mosquitto kurulum dizini Inno {app}'te DEĞİL (C:\Program Files\PEMF\mosquitto) → elle sil (artık kalmasın).
-    Remove-Item $MosqInstallDir -Recurse -Force -ErrorAction SilentlyContinue
-    schtasks /Delete /TN "PEMF-Hotspot" /F *>$null   # hotspot logon-task'ı kaldır
-    # Hotspot keep-alive wscript'i System32\wscript.exe'den çalışır → $AppDir kill'i yakalamaz; cmdline'la eşleştir.
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'wscript.exe' -and $_.CommandLine -match 'start_hotspot_hidden' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Remove-Item (Join-Path $AppDir "start_hotspot_hidden.vbs") -Force -ErrorAction SilentlyContinue
 
-    # FIREWALL: eski sürüm yalnız 3 kuralı isimle silerdi; sahada pemf_gui / PEMF_Service_Port_* /
-    # *_onefile.exe / cloudflared.exe / pemf_backend.exe gibi ~19 kural birikiyordu → WILDCARD ile hepsi.
-    Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'pemf|mosquitto|cloudflared' } | Remove-NetFirewallRule -ErrorAction SilentlyContinue
-
-    # ORTAM DEĞİŞKENLERİ: Makine-kapsamı PEMF_* (SetEnvironmentVariable($null) girdiyi BOŞ bırakır → Registry'den TAM sil).
-    $mEnv = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
-    (Get-ItemProperty $mEnv -ErrorAction SilentlyContinue).PSObject.Properties | Where-Object { $_.Name -match '^PEMF_' } | ForEach-Object { Remove-ItemProperty -Path $mEnv -Name $_.Name -Force -ErrorAction SilentlyContinue }
-
-    # REGISTRY: üretici anahtarı (HKLM). Client'ın HKCU anahtarları operatör bağlamında client-hook'la temizlenir.
-    Remove-Item -LiteralPath 'HKLM:\SOFTWARE\PEMF Medical Technologies' -Recurse -Force -ErrorAction SilentlyContinue
-
-    # ai_models = uygulama modelleri (HASTA VERİSİ DEĞİL) → her zaman kaldır.
-    Remove-Item 'C:\ProgramData\PEMF_GUI\ai_models' -Recurse -Force -ErrorAction SilentlyContinue
-
-    if ($PurgeData) {
-        # KVKK-BİLİNÇLİ TAM SİLME: hasta DB + SQLCipher/Fernet anahtarları. Backend LocalSystem çalıştığından
-        # hasta DB'si systemprofile altında; ayrıca ProgramData ve her operatör %APPDATA%'sında olabilir.
-        Log "PurgeData: HASTA VERİSİ + şifreleme anahtarları KALICI siliniyor." "Red"
-        foreach ($ck in 'fernet_key@PEMF_GUI','sqlcipher_key@PEMF_GUI','PEMF_GUI','api_token@PEMF_GUI') { cmdkey /delete:$ck *>$null }
-        Remove-Item 'C:\Windows\System32\config\systemprofile\AppData\Roaming\PEMF_GUI' -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item 'C:\ProgramData\PEMF_GUI', 'C:\ProgramData\PEMF_System' -Recurse -Force -ErrorAction SilentlyContinue
-        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-Item (Join-Path $_.FullName 'AppData\Roaming\PEMF_GUI') -Recurse -Force -ErrorAction SilentlyContinue
-            Remove-Item (Join-Path $_.FullName 'AppData\Local\PEMF_GUI_OneFile') -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Log "Servisler + TÜM veri kaldırıldı (tam temizlik)." "Green"
+    # Geri kalan HER ŞEY = BİRLEŞİK TEARDOWN modülü (Faz 2 tek-kaynak): servis-sil/görev/firewall/env/
+    # registry/veri + KVKK politikası. Eski dağınık inline mantık buraya konsolide edildi (client/gui/
+    # standalone ile AYNI kod). -PurgeData => hasta verisi de silinir (varsayılan KORU).
+    Set-Location $env:SystemRoot   # {app}'ten çık: teardown {app}'i de silebilir, CWD kilidi olmasın
+    $teardownScript = Join-Path $AppDir 'pemf_teardown.ps1'
+    if (Test-Path $teardownScript) {
+        . $teardownScript
+        Invoke-PemfTeardown -Scope backend -IncludePatientData:$PurgeData
     } else {
-        Log "Servisler + firewall + görev + env + üretici-registry kaldırıldı. HASTA VERİSİ KORUNDU (KVKK) — tam silme: -PurgeData." "Green"
+        # Paketleme hatası / çok-eski kurulum: modül yok → en azından servisleri sil (uninstall bloklamasın).
+        Log "UYARI: pemf_teardown.ps1 yok ($teardownScript) — asgari servis-silmeye düşülüyor." "Yellow"
+        & sc.exe delete $ServiceBackend *>$null
+        & sc.exe delete $ServiceMosq *>$null
     }
     exit 0
 }
