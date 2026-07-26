@@ -12,6 +12,52 @@ export const BRAND = {
   year: 2026,
 } as const
 
+/* ------------------------------------------------------------------
+   SATICI / ŞİRKET KİMLİĞİ — YASAL ZORUNLU
+   (6563 sy. E-Ticaret Kanunu m.5 + Mesafeli Sözleşmeler Yönetmeliği +
+   iyzico üye işyeri şartı). Footer ve TÜM yasal sayfalar buradan okur.
+   ⚠️ PLACEHOLDER'LARI GERÇEK BİLGİLERLE DOLDURUN → tüm site güncellenir.
+   ------------------------------------------------------------------ */
+export const COMPANY = {
+  legalName: '[TİCARİ ÜNVAN — ör. V-PEMF Teknoloji Ltd. Şti. / Ad Soyad]',
+  brandName: 'PEMF Vet',
+  entityType: '[Şahıs İşletmesi / Limited Şirket / Anonim Şirket]',
+  address: '[AÇIK ADRES — Mahalle, Cadde, No, İlçe]',
+  city: '[İL]',
+  country: 'Türkiye',
+  phone: '[TELEFON — +90 (___) ___ __ __]',
+  email: 'destek@v-pemf.com',
+  kvkkEmail: '[KVKK BAŞVURU E-POSTASI]',
+  taxOffice: '[VERGİ DAİRESİ]',
+  taxNo: '[VERGİ NO / TCKN]',
+  mersis: '[MERSIS NO — tüzel kişi ise]',
+  tradeRegistry: '[TİCARET SİCİL NO — tüzel kişi ise]',
+  withdrawalDays: 14, // dijital hizmet/abonelikte cayma; istisnalar Ön Bilgilendirme'de
+  updated: '14 Temmuz 2026',
+} as const
+
+/** Yasal belge sayfaları — App.tsx route'ları, Footer menüsü ve LegalPage içeriği buradan üretilir. */
+export const LEGAL_DOCS = [
+  { slug: 'mesafeli-satis', title: 'Mesafeli Satış Sözleşmesi' },
+  { slug: 'on-bilgilendirme', title: 'Ön Bilgilendirme Formu' },
+  { slug: 'iptal-iade', title: 'İptal, İade ve Cayma Hakkı' },
+  { slug: 'kvkk', title: 'KVKK Aydınlatma Metni' },
+  { slug: 'gizlilik', title: 'Gizlilik Politikası' },
+  { slug: 'cerez-politikasi', title: 'Çerez Politikası' },
+  { slug: 'kullanim-sartlari', title: 'Kullanım Şartları' },
+] as const
+export type LegalSlug = (typeof LEGAL_DOCS)[number]['slug']
+
+/** Tıbbi/veteriner sorumluluk uyarısı — footer + ürün sayfalarında gösterilir. */
+export const MEDICAL_DISCLAIMER =
+  'PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. ' +
+  'Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve ' +
+  'tedavisinin yerine geçmez. Otonom tedavi (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır.'
+
+/** TEST AŞAMASI: true → TÜM profiller (Araştırma dahil) ücretsiz/indirilebilir; ücret etiketleri
+ *  gizlenir. Abonelik satışı canlıya geçince false yapın (iyzico hazır olunca). */
+export const FREE_MODE = true
+
 /** 52 MB'lık client'ın barındırıldığı yer.
  *  GitHub Releases (OTA ile aynı mantık): her zaman en yeni sürümü verir →
  *  https://github.com/<owner>/<repo>/releases/latest/download/<asset>
@@ -19,20 +65,28 @@ export const BRAND = {
  *  Farklı host (Cloudflare R2 / S3 / kendi sunucu) isterseniz windows/macos url'lerini
  *  doğrudan CLIENT.downloads içinde elle yazın. */
 export const DOWNLOAD_HOST = {
-  ready: false, //  ⚠️ client yayınlanınca true yapın
-  githubOwner: 'mert61-python', //  ⚠️ GitHub kullanıcı/organizasyon — doğrulayın
-  githubRepo: 'pemf-vet-client', //  ⚠️ client release deposu (oluşturulacak)
+  ready: true, // Windows launcher yayında (pemf-update/launcher-v1.8.0)
+  githubOwner: 'mert61-python',
+  githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
+  launcherTag: 'launcher-v1.9.0', // SABİT etiket (latest değil — paket release'iyle çakışmaz); 3-platform 1.9.0, macOS notarize'li (2026-07-26)
   windowsAsset: 'PEMFVetClient-Setup.exe',
   macosAsset: 'PEMFVetClient.dmg',
+  macosReady: true, // Mac native YAYINDA (base-mac.zip + imzalı .dmg 1.9.0, launcher-v1.8.0, 2026-07-26)
+  linuxDebAsset: 'PEMFVetClient.deb', // Ubuntu / Debian (+ zip crate → 'unzip' sistem bağımlılığı YOK)
+  linuxAppImageAsset: 'PEMFVetClient.AppImage', // universal (AYRI flag; .deb'den bağımsız yayınlanır)
+  linuxRpmAsset: 'PEMFVetClient.rpm', // Fedora / RHEL (mosquitto Requires + %post config)
+  linuxReady: true, // .deb native sürüm YAYINDA (launcher-v1.8.0/PEMFVetClient.deb, 2026-07-19)
+  linuxAppImageReady: true, // taze AppImage YAYINDA (launcher-v1.8.0/PEMFVetClient.AppImage, fix'li, 2026-07-19)
+  linuxRpmReady: true, // .rpm YAYINDA (launcher-v1.8.0/PEMFVetClient.rpm, 2026-07-19)
 }
 
-const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/latest/download`
+const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`
 
 export const CLIENT = {
-  version: '1.2.4',
+  version: '1.8.0',
   channel: 'Sürüm 2026.1',
-  sizeMB: 52,
-  releaseDate: '12 Haz 2026',
+  sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner)
+  releaseDate: '14 Tem 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
@@ -40,12 +94,25 @@ export const CLIENT = {
       label: 'Windows',
       url: `${REL}/${DOWNLOAD_HOST.windowsAsset}`,
       os: 'Windows 10 / 11 (64-bit)',
+      ready: true,
     },
     macos: {
       key: 'macos' as const,
       label: 'macOS',
       url: `${REL}/${DOWNLOAD_HOST.macosAsset}`,
       os: 'macOS 12 Monterey+',
+      ready: DOWNLOAD_HOST.macosReady,
+    },
+    linux: {
+      key: 'linux' as const,
+      label: 'Linux',
+      url: `${REL}/${DOWNLOAD_HOST.linuxDebAsset}`,
+      appImageUrl: `${REL}/${DOWNLOAD_HOST.linuxAppImageAsset}`,
+      appImageReady: DOWNLOAD_HOST.linuxAppImageReady, // AppImage butonu yalnız bu true iken (404 önle)
+      rpmUrl: `${REL}/${DOWNLOAD_HOST.linuxRpmAsset}`,
+      rpmReady: DOWNLOAD_HOST.linuxRpmReady, // rpm butonu yalnız bu true iken
+      os: 'Ubuntu/Debian · Fedora/RHEL · universal (64-bit)',
+      ready: DOWNLOAD_HOST.linuxReady,
     },
   },
 }
@@ -109,10 +176,12 @@ export const MODULES: Module[] = [
   {
     id: 'research',
     name: 'Araştırma Modu',
-    tagline: 'Kanser-araştırma modelleri — ağır indirme; ücretli eklenti.',
+    tagline: FREE_MODE
+      ? 'Kanser-araştırma modelleri — test aşamasında ücretsiz.'
+      : 'Kanser-araştırma modelleri — ağır indirme; ücretli eklenti.',
     sizeGB: 1.9,
-    included: false,
-    addonMonthly: 390,
+    included: FREE_MODE,
+    addonMonthly: FREE_MODE ? 0 : 390,
     includes: [
       'Fantom tümör + EM alan',
       'Petri kuyu (kanser)',
@@ -126,6 +195,10 @@ export const MODULES: Module[] = [
 
 export type Plan = {
   name: string
+  /** Abonelik tier kimliği — backend/mobil ile birebir aynı (Supabase subscriptions.tier). */
+  tier: 'baslangic' | 'pro' | 'pro_plus'
+  /** true → Stripe Checkout'a gider (ücretli); false → indirmeye gider (ücretsiz deneme). */
+  paid: boolean
   monthly: number | null
   yearly: number | null
   priceLabel?: string
@@ -141,12 +214,17 @@ export type Plan = {
   badge?: string
 }
 
+/** Araştırma eklentisi — Pro/Pro+ üzerine eklenebilir (Supabase addons:["research"]). */
+export const RESEARCH_ADDON = { monthly: 390, label: 'Araştırma modülü' } as const
+
 /** Üyelik katmanları — fiyat politikası İŞLEM ÖNCELİĞİNE bağlı:
  *  Pro paylaşımlı KUYRUKTA bekler, Pro+ GERÇEK-ZAMANLI (kuyruksuz) öncelik alır.
  *  Fiyatlar ₺ (KDV hariç). yearly = 12 ayın toplamı (2 ay bedava). */
 export const PLANS: Plan[] = [
   {
     name: 'Başlangıç',
+    tier: 'baslangic',
+    paid: false,
     monthly: 0,
     yearly: 0,
     priceLabel: 'Ücretsiz',
@@ -166,6 +244,8 @@ export const PLANS: Plan[] = [
   },
   {
     name: 'Pro',
+    tier: 'pro',
+    paid: true,
     monthly: 990,
     yearly: 9900,
     period: 'klinik / ay',
@@ -185,6 +265,8 @@ export const PLANS: Plan[] = [
   },
   {
     name: 'Pro+',
+    tier: 'pro_plus',
+    paid: true,
     monthly: 1990,
     yearly: 19900,
     period: 'klinik / ay',
@@ -265,7 +347,7 @@ export const FEATURES = [
   {
     n: '06',
     title: 'Çoklu Platform',
-    desc: 'Tek istemci Windows ve macOS’ta; klinik verisi cihazda şifreli (SQLCipher), uzaktan erişim güvenli tünelle.',
+    desc: 'Tek istemci Windows, macOS ve Linux’ta; klinik verisi cihazda şifreli (SQLCipher), uzaktan erişim güvenli tünelle.',
     icon: 'monitor',
   },
 ] as const
@@ -304,7 +386,7 @@ export const FAQ = [
   },
   {
     q: 'Hangi işletim sistemleri destekleniyor?',
-    a: 'Windows 10/11 (64-bit) ve macOS 12 Monterey ve üzeri. Klinik cihaz kurulumları Windows üzerinde çalışır.',
+    a: 'Windows 10/11 (64-bit), macOS 12 Monterey+ ve Linux (Ubuntu/Debian). Klinik cihaz kurulumları Windows’ta yerel çalışır; macOS ve Linux de aynı şekilde yerel (native) çalışır.',
   },
   {
     q: 'İnternet olmadan çalışır mı?',
