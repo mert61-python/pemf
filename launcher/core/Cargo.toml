@@ -1,0 +1,17 @@
+[package]
+name = "pemf-launcher-core"
+description = "PEMF Vet Client launcher — indirme/doğrulama/kurulum çekirdeği (UI'dan bağımsız)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+zip.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

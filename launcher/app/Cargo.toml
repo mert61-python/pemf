@@ -1,0 +1,21 @@
+[package]
+name = "pemf-vet-client"
+description = "PEMF Vet Client — kurulum ve başlatma uygulaması"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# Windows'ta konsol penceresi açılmasın (GUI uygulaması).
+[[bin]]
+name = "PEMFVetClient"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+pemf-launcher-core = { path = "../core" }
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true

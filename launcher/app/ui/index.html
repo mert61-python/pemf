@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>PEMF Vet Client</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7f9;
+        --fg: #16181d;
+        --muted: #5f6672;
+        --card: #ffffff;
+        --line: #e3e6ea;
+        --accent: #0b6fd4;
+        --err: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16181d;
+          --fg: #eceef2;
+          --muted: #9aa2af;
+          --card: #1e2127;
+          --line: #2c3038;
+          --accent: #4c9aff;
+          --err: #ff6b60;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 28px 30px;
+        font: 14px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
+        background: var(--bg); color: var(--fg);
+        -webkit-user-select: none; user-select: none;
+      }
+      h1 { font-size: 19px; margin: 0 0 2px; }
+      .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 20px; }
+      fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+      legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+      label.opt {
+        display: flex; gap: 10px; align-items: flex-start;
+        border: 1px solid var(--line); border-radius: 9px;
+        background: var(--card); padding: 11px 13px; margin-bottom: 7px; cursor: pointer;
+      }
+      label.opt:has(input:checked) { border-color: var(--accent); }
+      label.opt input { margin-top: 3px; }
+      .opt b { font-weight: 600; }
+      .opt span { display: block; color: var(--muted); font-size: 12.5px; }
+      button {
+        font: inherit; font-weight: 600; color: #fff; background: var(--accent);
+        border: 0; border-radius: 8px; padding: 10px 20px; cursor: pointer;
+      }
+      button[disabled] { opacity: .5; cursor: default; }
+      progress { width: 100%; height: 7px; margin-top: 14px; }
+      #status { margin-top: 10px; color: var(--muted); font-size: 12.5px; min-height: 18px; }
+      #error {
+        margin-top: 14px; padding: 11px 13px; border-radius: 8px;
+        border: 1px solid var(--err); color: var(--err);
+        white-space: pre-wrap; font-size: 12.5px; display: none;
+        -webkit-user-select: text; user-select: text;
+        max-height: 190px; overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PEMF Vet Client</h1>
+    <div class="sub" id="env">Ortam algılanıyor…</div>
+
+    <fieldset id="profiles-box" hidden>
+      <legend>Kullanım profili</legend>
+      <div id="profiles"></div>
+    </fieldset>
+
+    <button id="go" disabled>Kur ve Başlat</button>
+    <progress id="bar" value="0" max="100" hidden></progress>
+    <div id="status"></div>
+    <div id="error"></div>
+
+    <script type="module">
+      const { invoke } = window.__TAURI__.core;
+      const { listen } = window.__TAURI__.event;
+
+      const $ = (id) => document.getElementById(id);
+      const PROFILE_DESC = {
+        home: ["Evcil Hayvan Sahibi", "Temel teşhis modelleri (~0.5 GB)"],
+        vet: ["Veteriner Hekim", "Klinik teşhis modelleri (~0.13 GB)"],
+        research: ["Araştırma Modu", "Tüm modeller, kanser araştırma dahil (~1.5 GB)"],
+      };
+
+      let manifestRaw = null;
+
+      function fail(msg) {
+        $("error").textContent = msg;
+        $("error").style.display = "block";
+        $("go").disabled = false;
+        $("bar").hidden = true;
+      }
+
+      function mb(n) { return (n / 1048576).toFixed(0); }
+
+      listen("install://progress", (e) => {
+        const p = e.payload;
+        const bar = $("bar");
+        switch (p.step) {
+          case "manifest_fetched":
+            $("status").textContent = `Sürüm ${p.version} (şema v${p.schema})`;
+            break;
+          case "downloading":
+            bar.hidden = false;
+            if (p.total > 0) {
+              bar.removeAttribute("indeterminate");
+              bar.value = (p.done / p.total) * 100;
+              $("status").textContent = `${p.what} indiriliyor — ${mb(p.done)} / ${mb(p.total)} MB`;
+            } else {
+              $("status").textContent = `${p.what} indiriliyor — ${mb(p.done)} MB`;
+            }
+            break;
+          case "cached":
+            $("status").textContent = `${p.what} zaten indirilmiş (doğrulandı)`;
+            break;
+          case "verifying":
+            $("status").textContent = `${p.what} bütünlüğü doğrulanıyor (SHA256)…`;
+            break;
+          case "extracting":
+            bar.removeAttribute("value");
+            $("status").textContent = `${p.what} kuruluyor…`;
+            break;
+          case "starting_backend":
+            $("status").textContent = `Uygulama başlatılıyor (port ${p.port})…`;
+            break;
+          case "ready":
+            bar.value = 100;
+            $("status").textContent = `Hazır — ${p.url} tarayıcıda açıldı.`;
+            break;
+        }
+      });
+
+      async function boot() {
+        try {
+          const env = await invoke("detect_environment");
+          const info = await invoke("fetch_profiles");
+
+          $("env").textContent =
+            `${info.platform} · sürüm ${info.version}` +
+            (env.already_installed ? " · kurulu (güncellenecek)" : "");
+
+          if (!info.platform_supported) {
+            fail(
+              `Bu platform (${info.platform}) için uygulama paketi henüz yayınlanmamış.\n\n` +
+              `Yanlış platformun paketi KURULMAZ. Yayın tamamlanınca bu ekran çalışacaktır.`
+            );
+            $("go").disabled = true;
+            return;
+          }
+
+          manifestRaw = info.raw;
+          const box = $("profiles");
+          info.profiles.forEach((key, i) => {
+            const [title, desc] = PROFILE_DESC[key] ?? [key, ""];
+            const el = document.createElement("label");
+            el.className = "opt";
+            el.innerHTML =
+              `<input type="radio" name="p" value="${key}" ${i === 0 ? "checked" : ""}>` +
+              `<div><b>${title}</b><span>${desc}</span></div>`;
+            box.appendChild(el);
+          });
+          $("profiles-box").hidden = false;
+          $("go").disabled = false;
+        } catch (e) {
+          fail(String(e));
+        }
+      }
+
+      $("go").addEventListener("click", async () => {
+        $("go").disabled = true;
+        $("error").style.display = "none";
+        const profile = document.querySelector('input[name="p"]:checked').value;
+        try {
+          await invoke("install_and_launch", { manifestRaw, profile });
+        } catch (e) {
+          fail(String(e));
+        }
+      });
+
+      boot();
+    </script>
+  </body>
+</html>
