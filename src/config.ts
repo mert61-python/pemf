@@ -71,13 +71,13 @@ export const DOWNLOAD_HOST = {
   launcherTag: 'launcher-v1.9.2', // SABİT etiket; 3-platform 1.9.2 (cihaz-güvenliği graceful-shutdown: bobinler kapanışta önce durur), macOS notarize'li (2026-07-26)
   windowsAsset: 'PEMFVetClient-Setup.exe',
   macosAsset: 'PEMFVetClient.dmg',
-  macosReady: true, // Mac native YAYINDA (base-mac.zip + imzalı .dmg 1.9.0, launcher-v1.8.0, 2026-07-26)
+  macosReady: false, // "Yakında": launcher Mac'te ÇALIŞIR ama DONANIM (STM seri + ESP MQTT + hotspot) Windows-ÖZEL → Mac'te cihaz sürülemez. Donanım desteği gelene kadar "Yakında" (kasıtlı; .dmg yayında ama gösterme).
   linuxDebAsset: 'PEMFVetClient.deb', // Ubuntu / Debian (+ zip crate → 'unzip' sistem bağımlılığı YOK)
   linuxAppImageAsset: 'PEMFVetClient.AppImage', // universal (AYRI flag; .deb'den bağımsız yayınlanır)
   linuxRpmAsset: 'PEMFVetClient.rpm', // Fedora / RHEL (mosquitto Requires + %post config)
-  linuxReady: true, // .deb native sürüm YAYINDA (launcher-v1.8.0/PEMFVetClient.deb, 2026-07-19)
-  linuxAppImageReady: true, // taze AppImage YAYINDA (launcher-v1.8.0/PEMFVetClient.AppImage, fix'li, 2026-07-19)
-  linuxRpmReady: true, // .rpm YAYINDA (launcher-v1.8.0/PEMFVetClient.rpm, 2026-07-19)
+  linuxReady: false, // "Yakında": donanım (STM/ESP/hotspot) Windows-özel → Linux'ta cihaz sürülemez (paketler yayında ama kasıtlı gizli, donanım desteği gelene kadar).
+  linuxAppImageReady: false, // (aynı neden — Linux donanım desteği yok)
+  linuxRpmReady: false, // (aynı neden)
 }
 
 const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`
