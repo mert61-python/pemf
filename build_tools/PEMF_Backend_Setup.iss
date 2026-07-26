@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.5.0"
+#define MyAppVersion   "1.8.0"
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define ProjectRoot    ".."
@@ -44,6 +44,11 @@ OutputDir=Output
 OutputBaseFilename=PEMFBackendSetup_{#ModeName}_v{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
+; UX: 3.5GB tek imzasiz exe'yi Windows Defender, exe calismadan ONCE tam tarar -> ~20sn siyah ekran
+; ("acilmiyor mu?" suphesi). DiskSpanning = kucuk launcher exe (~birkac MB) + ayri .bin veri dosyalari ->
+; kucuk exe aninda taranir, Inno sihirbazi 1-2sn'de acilir. exe + .bin AYNI klasorde birlikte dagitilir.
+DiskSpanning=yes
+DiskSliceSize=2100000000
 PrivilegesRequired=admin
 MinVersion=6.1sp1
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -63,7 +68,7 @@ turkish.InstallingServices=PEMF arka plan servisleri (Mosquitto + Backend) kurul
 Source: "{#BuildOutput}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Servis kurulum scripti (installer bunu calistirir)
 Source: "{#ProjectRoot}\scripts\setup_services.ps1"; DestDir: "{app}"; Flags: ignoreversion
-; Hotspot baslatici (PEMF-Gateway WiFi — ESP bobinleri icin; logon-task + kurulumda bir kez calisir)
+; Hotspot baslatici (PEMF-Gateway WiFi â€” ESP bobinleri icin; logon-task + kurulumda bir kez calisir)
 Source: "{#ProjectRoot}\scripts\start_hotspot.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; AI MODELLERI (OFFLINE, ~640MB): YOLO/XGBoost/segmentation/thermal vb. -> ProgramData. Servis (LocalSystem)
 ; bunlari find_installed_model ile candidate-root #1'de (C:\ProgramData\PEMF_GUI\ai_models) bulur -> HF token
@@ -71,8 +76,8 @@ Source: "{#ProjectRoot}\scripts\start_hotspot.ps1"; DestDir: "{app}"; Flags: ign
 ; icin indirme 401 -> TUM AI endpoint'leri 500 veriyordu. Bundle bunu kokten cozer; offline klinik calisir.)
 Source: "{#ProjectRoot}\release_assets\ai_models\*"; DestDir: "{commonappdata}\PEMF_GUI\ai_models"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; VC++ Redistributable (gecici; torch/onnx/opencv MSVC runtime gerektirir)
-; skipifsourcedoesntexist KALDIRILDI — redist yoksa ISCC compile FAIL etsin (sessiz-eksik installer üretilmesin;
-; aksi halde taze klinikte VCRUNTIME140.dll eksik → torch/onnx/cv2 yüklü EXE açılmaz, sessiz başarısızlık).
+; skipifsourcedoesntexist KALDIRILDI â€” redist yoksa ISCC compile FAIL etsin (sessiz-eksik installer Ã¼retilmesin;
+; aksi halde taze klinikte VCRUNTIME140.dll eksik â†’ torch/onnx/cv2 yÃ¼klÃ¼ EXE aÃ§Ä±lmaz, sessiz baÅŸarÄ±sÄ±zlÄ±k).
 Source: "{#ProjectRoot}\lattekurulum\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [INI]
@@ -101,11 +106,10 @@ Filename: "powershell.exe"; \
 Filename: "http://localhost:8000"; Description: "Web arayuzunu simdi ac"; \
   Flags: postinstall shellexec skipifsilent nowait
 
-[UninstallRun]
-; Kaldirmadan ONCE servisleri durdur + sil (dosyalar silinmeden once)
-Filename: "powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\setup_services.ps1"" -AppDir ""{app}"" -Uninstall"; \
-  Flags: runhidden waituntilterminated; RunOnceId: "RemovePemfServices"
+; NOT: Servis/hotspot/firewall kaldirma [UninstallRun]'dan [Code]'a (CurUninstallStepChanged)
+; tasindi -> operatore "hasta verilerini de sil?" ONAYI sorulup yanita gore
+; setup_services.ps1'e kosullu -PurgeData gecilebilsin ([UninstallRun] parametreleri
+; statiktir; kosullu bayrak orada mumkun degil). KVKK: varsayilan KORU.
 
 [UninstallDelete]
 Type: files; Name: "{commondesktop}\PEMF Web Arayuzu.url"
@@ -150,3 +154,53 @@ begin
              mbError, MB_OK);
   end;
 end;
+
+// Kaldirmada servisleri/hotspot/firewall/env/registry'yi kaldir. ONCE operatore sor:
+// hasta verisi + sifreleme anahtarlari da silinsin mi? KVKK geregi VARSAYILAN = KORU
+// (yalnizca ACIK onayla sil). usUninstall, {app} silinMEDEN once calisir -> setup_services.ps1 hazir.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+  Params: String;
+  Purge: Boolean;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    Purge := False;
+    // Sessiz kaldirmada SORMA -> veri KORUNUR (sessiz akis hasta verisini onaysiz silmesin).
+    if not UninstallSilent then
+      Purge := MsgBox(
+        'Hasta verilerini ve sifreleme anahtarlarini da KALICI olarak silmek istiyor musunuz?' + #13#10#13#10 +
+        'HAYIR (onerilen): Servisler/hotspot/firewall kaldirilir, HASTA VERISI KORUNUR' + #13#10 +
+        '(yeniden kurulumda erisilebilir kalir).' + #13#10#13#10 +
+        'EVET: Tum hasta veritabani + sifreleme anahtarlari GERI DONULEMEZ sekilde silinir (KVKK tam temizlik).',
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+
+    Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\setup_services.ps1') +
+              '" -AppDir "' + ExpandConstant('{app}') + '" -Uninstall';
+    if Purge then
+      Params := Params + ' -PurgeData';
+
+    // Best-effort: teardown hatasi kaldirmayi bloklamasin (script kendisi de ErrorAction=Continue).
+    Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
