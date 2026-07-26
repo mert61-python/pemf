@@ -18,13 +18,15 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-APP_NAME="PEMFVetClient"
+# .app adını productName belirler (Faz-1'de "PEMF Vet Client", boşluklu). Sabit-kodlama
+# yerine üretilen tek .app'i BUL → productName değişse de betik kırılmaz (eski sabit
+# "PEMFVetClient" adı, isim değişince "app yok" ile CI'yı düşürüyordu).
+APP="$(ls -d target/release/bundle/macos/*.app 2>/dev/null | head -1)"
+[[ -n "$APP" && -d "$APP" ]] || { echo "[HATA] target/release/bundle/macos/*.app yok. Önce: npx @tauri-apps/cli build --bundles app" >&2; exit 1; }
+APP_NAME="$(basename "$APP" .app)"
 VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
 ARCH="$(uname -m)"                     # arm64 | x86_64
-APP="target/release/bundle/macos/${APP_NAME}.app"
 OUT="target/release/bundle/dmg/${APP_NAME}_${VERSION}_${ARCH}.dmg"
-
-[[ -d "$APP" ]] || { echo "[HATA] $APP yok. Önce: npx @tauri-apps/cli build --bundles app" >&2; exit 1; }
 
 # tauri'nin yarım bıraktığı okuma-yazma DMG'leri temizle (rw.*.dmg) — kalırlarsa
 # hangi dosyanın yayınlanacağı karışır.
