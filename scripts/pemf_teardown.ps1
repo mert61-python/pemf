@@ -4,7 +4,9 @@
 # TÜKETİCİLER (hepsi AYNI mantık + AYNI KVKK politikası):
 #   • setup_services.ps1 -Uninstall      -> Invoke-PemfTeardown -Scope backend
 #   • pemf_uninstall_all.ps1 (standalone)-> Invoke-PemfTeardown -Scope all
-#   • PEMF_Setup.iss eski-GUI            -> Invoke-PemfTeardown -Scope gui
+# NOT: eski GUI installer'ı (PEMF_Setup.iss) EMEKLİYE AYRILDI (kaynağı Faz-8'de silindi, build
+# edilmiyordu). 'gui' scope + footprint KORUNUR: SAHADAKİ mevcut eski-GUI kurulumları standalone
+# tam-kaldırıcı (Scope=all) ile KVKK-doğru temizlenir.
 #
 # KVKK: hasta verisi (Kvkk=$true) VARSAYILAN KORUNUR; yalnız -IncludePatientData ile silinir.
 # -DryRun: hiçbir şey silmeden ne silineceğini logla (tam-kaldırıcı için güvenli önizleme).
