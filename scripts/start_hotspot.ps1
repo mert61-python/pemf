@@ -12,9 +12,21 @@ param(
 )
 $ErrorActionPreference = "Continue"
 
+# Sessiz calisma (endustri-standardi): konsola HICBIR SEY yazma — bu script logon'da + her 3dk
+# calistigi icin konsola yazmak gorunur/flash pencereye yol acardi. Tani icin dosyaya logla (rotasyonlu).
+$LogDir  = Join-Path $env:LOCALAPPDATA 'PEMF_System'
+$LogFile = Join-Path $LogDir 'hotspot.log'
+function Log([string]$m) {
+    try {
+        if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
+        if ((Test-Path $LogFile) -and (Get-Item $LogFile).Length -gt 524288) { Clear-Content -LiteralPath $LogFile -ErrorAction SilentlyContinue }
+        "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $m" | Add-Content -LiteralPath $LogFile -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch {}
+}
+
 # Zaten aktif mi? (hotspot subnet 192.168.137.x IP var mı)
 $active = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -like '192.168.137.*' }
-if ($active) { Write-Host "Hotspot zaten aktif ($($active[0].IPAddress)) — atlandı."; exit 0 }
+if ($active) { Log "Hotspot zaten aktif ($($active[0].IPAddress)) — atlandı."; exit 0 }
 
 $useNetsh = $false
 try {
@@ -31,7 +43,7 @@ try {
 
     $cp = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
     if (-not $cp) { $cp = ([Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() | Select-Object -First 1) }
-    if (-not $cp) { Write-Host "Ağ profili yok → netsh denenecek."; $useNetsh = $true }
+    if (-not $cp) { Log "Ağ profili yok → netsh denenecek."; $useNetsh = $true }
     else {
         $mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($cp)
         try {
@@ -48,19 +60,19 @@ try {
             $ok = $false
             for ($try = 1; $try -le 4 -and -not $ok; $try++) {
                 $r = AwaitResult ($mgr.StartTetheringAsync()) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
-                if ($r.Status -eq 'Success') { Write-Host "Hotspot AKTİF: $Ssid (2.4GHz)"; $ok = $true }
-                else { Write-Host "Deneme $try/4 — durum: $($r.Status) $($r.AdditionalErrorMessage)"; Start-Sleep 3 }
+                if ($r.Status -eq 'Success') { Log "Hotspot AKTİF: $Ssid (2.4GHz)"; $ok = $true }
+                else { Log "Deneme $try/4 — durum: $($r.Status) $($r.AdditionalErrorMessage)"; Start-Sleep 3 }
             }
-            if (-not $ok) { Write-Host "WinRT 4 denemede başlatamadı → netsh fallback (AX201'de desteklenmez)"; $useNetsh = $true }
+            if (-not $ok) { Log "WinRT 4 denemede başlatamadı → netsh fallback (AX201'de desteklenmez)"; $useNetsh = $true }
         }
-        else { Write-Host "Hotspot zaten On: $Ssid" }
+        else { Log "Hotspot zaten On: $Ssid" }
     }
 }
-catch { Write-Host "Mobile Hotspot API hatası: $_ → netsh denenecek."; $useNetsh = $true }
+catch { Log "Mobile Hotspot API hatası: $_ → netsh denenecek."; $useNetsh = $true }
 
 # Eski WiFi sürücüleri için HostedNetwork fallback (modern sürücülerde desteklenmeyebilir)
 if ($useNetsh) {
     netsh wlan set hostednetwork mode=allow ssid="$Ssid" key="$Pass" | Out-Null
     $res = (netsh wlan start hostednetwork 2>&1) -join ' '
-    Write-Host "netsh hostednetwork: $res"
+    Log "netsh hostednetwork: $res"
 }

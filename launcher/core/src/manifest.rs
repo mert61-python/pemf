@@ -255,12 +255,12 @@ mod tests {
             return;
         };
         let m = Manifest::parse(&raw).expect("gercek manifest ayristirilamadi");
-        assert_eq!(m.schema, 1);
+        assert_eq!(m.schema, 2);
         assert_eq!(m.version, "1.8.0");
         assert!(m.runtimes.contains_key(platform::WIN_X64), "base -> win-x64");
         assert!(m.runtimes.contains_key(platform::LINUX_X64), "base_linux -> linux-x64");
-        // base_mac HENÜZ yok → bu platformda kurulum sert hata vermeli (sessiz fallback değil).
-        assert!(!m.runtimes.contains_key(platform::MAC_ARM64), "base_mac heniz yayinlanmadi");
+        // base_mac artık YAYINDA (2026-07-26 notarize'li) → mac-arm64 runtime bulunmalı.
+        assert!(m.runtimes.contains_key(platform::MAC_ARM64), "base_mac yayinlandi -> mac-arm64");
         for p in ["home", "vet", "research"] {
             assert!(m.models.contains_key(p), "{p} profili eksik");
         }

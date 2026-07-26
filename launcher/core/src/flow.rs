@@ -95,6 +95,9 @@ pub fn install_and_launch(
     let runtime_pkg = manifest.runtime_for_current_platform()?;
     let model_pkg = manifest.model_package(profile)?;
 
+    // Yükseltme: eski boşluksuz "PEMFVetClient" kurulumu varsa yeni isme taşı (2 GB yeniden inmesin).
+    install::migrate_legacy_install_root(install_root);
+
     let cache = install::cache_dir(install_root);
     let runtime_zip = ensure_package(runtime_pkg, &cache, "base", on)?;
     let model_zip = ensure_package(model_pkg, &cache, profile, on)?;

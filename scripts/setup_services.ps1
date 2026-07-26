@@ -11,7 +11,8 @@ param(
     [string]$AppDir = "",
     [ValidateSet("device","server","staging")]
     [string]$Mode = "device",   # device=klinik (donanım+mosquitto) / server=demo (simülasyon) / staging=üretim-benzeri doğrulama (simülasyon, audit B-9.4)
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$PurgeData          # -Uninstall ile: hasta DB + şifreleme anahtarlarını da KALICI sil (KVKK; varsayılan KORU)
 )
 $ErrorActionPreference = "Continue"   # installer akışını tek bir hata kesmesin
 function Log($m, $c = "White") { Write-Host "[setup-services] $m" -ForegroundColor $c }
@@ -79,10 +80,39 @@ if ($Uninstall) {
     # Bundled mosquitto kurulum dizini Inno {app}'te DEĞİL (C:\Program Files\PEMF\mosquitto) → elle sil (artık kalmasın).
     Remove-Item $MosqInstallDir -Recurse -Force -ErrorAction SilentlyContinue
     schtasks /Delete /TN "PEMF-Hotspot" /F *>$null   # hotspot logon-task'ı kaldır
-    foreach ($r in @("PEMF Backend API", "PEMF UDP Discovery", "PEMF Mosquitto MQTT")) {
-        netsh advfirewall firewall delete rule name="$r" *>$null
+    # Hotspot keep-alive wscript'i System32\wscript.exe'den çalışır → $AppDir kill'i yakalamaz; cmdline'la eşleştir.
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'wscript.exe' -and $_.CommandLine -match 'start_hotspot_hidden' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Remove-Item (Join-Path $AppDir "start_hotspot_hidden.vbs") -Force -ErrorAction SilentlyContinue
+
+    # FIREWALL: eski sürüm yalnız 3 kuralı isimle silerdi; sahada pemf_gui / PEMF_Service_Port_* /
+    # *_onefile.exe / cloudflared.exe / pemf_backend.exe gibi ~19 kural birikiyordu → WILDCARD ile hepsi.
+    Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'pemf|mosquitto|cloudflared' } | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+
+    # ORTAM DEĞİŞKENLERİ: Makine-kapsamı PEMF_* (SetEnvironmentVariable($null) girdiyi BOŞ bırakır → Registry'den TAM sil).
+    $mEnv = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+    (Get-ItemProperty $mEnv -ErrorAction SilentlyContinue).PSObject.Properties | Where-Object { $_.Name -match '^PEMF_' } | ForEach-Object { Remove-ItemProperty -Path $mEnv -Name $_.Name -Force -ErrorAction SilentlyContinue }
+
+    # REGISTRY: üretici anahtarı (HKLM). Client'ın HKCU anahtarları operatör bağlamında client-hook'la temizlenir.
+    Remove-Item -LiteralPath 'HKLM:\SOFTWARE\PEMF Medical Technologies' -Recurse -Force -ErrorAction SilentlyContinue
+
+    # ai_models = uygulama modelleri (HASTA VERİSİ DEĞİL) → her zaman kaldır.
+    Remove-Item 'C:\ProgramData\PEMF_GUI\ai_models' -Recurse -Force -ErrorAction SilentlyContinue
+
+    if ($PurgeData) {
+        # KVKK-BİLİNÇLİ TAM SİLME: hasta DB + SQLCipher/Fernet anahtarları. Backend LocalSystem çalıştığından
+        # hasta DB'si systemprofile altında; ayrıca ProgramData ve her operatör %APPDATA%'sında olabilir.
+        Log "PurgeData: HASTA VERİSİ + şifreleme anahtarları KALICI siliniyor." "Red"
+        foreach ($ck in 'fernet_key@PEMF_GUI','sqlcipher_key@PEMF_GUI','PEMF_GUI','api_token@PEMF_GUI') { cmdkey /delete:$ck *>$null }
+        Remove-Item 'C:\Windows\System32\config\systemprofile\AppData\Roaming\PEMF_GUI' -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item 'C:\ProgramData\PEMF_GUI', 'C:\ProgramData\PEMF_System' -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item (Join-Path $_.FullName 'AppData\Roaming\PEMF_GUI') -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $_.FullName 'AppData\Local\PEMF_GUI_OneFile') -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Log "Servisler + TÜM veri kaldırıldı (tam temizlik)." "Green"
+    } else {
+        Log "Servisler + firewall + görev + env + üretici-registry kaldırıldı. HASTA VERİSİ KORUNDU (KVKK) — tam silme: -PurgeData." "Green"
     }
-    Log "Servisler kaldırıldı. (Veri/log korundu: $MosqDataRoot, $LogDir)" "Green"
     exit 0
 }
 
@@ -123,9 +153,10 @@ if ($Mode -eq "server" -or $Mode -eq "staging") {
 # PEMF — yerel MQTT broker (installer ile kuruldu, otomatik üretildi)
 listener 1883 0.0.0.0
 allow_anonymous true
-persistence true
-persistence_location $($MosqDataRoot -replace '\\','/')/data/
-autosave_interval 60
+# persistence KAPALI: bozuk persistence-DB ('Unrecognised file format') brokeri kilitliyordu — mosquitto
+# her acilista cokup NSSM throttle -> servis 'Paused' -> port 1883 kapali -> UI 'Sistem Baglantisi = Uyari'.
+# Bundled config de false. Retained/kuyruk mesajlari ESP reconnect'te yeniden yayinlanir (kritik degil).
+persistence false
 max_queued_messages 10000
 max_connections 30
 max_keepalive 120
@@ -328,25 +359,37 @@ if ($Mode -eq "device") {
         # LattePanda 3 = Intel AX201 → legacy hosted-network YOK (Intel SoftAP'yi AX2xx'te kaldırdı); tek yol WinRT
         # Mobile Hotspot, o da KULLANICI OTURUMU ister (LocalSystem servisi/session-0 AÇAMAZ). Bu yüzden logon-task +
         # keep-alive: ICS Mobile-Hotspot ~4dk boşta kapanır → idempotent script'i her 3dk tekrar çalıştır.
-        $hsArg = "-NoProfile -ExecutionPolicy Bypass -File `"$hotspotPs`""
+        # SESSİZ başlatıcı: task, kullanıcı oturumunda logon'da + her 3dk çalıştığı için powershell.exe
+        # GÖRÜNÜR konsol penceresi (flash) açardı → user-friendly'yi bozar. wscript, VBS'i PENCERESİZ (0)
+        # çalıştırır → hiçbir pencere görünmez. VBS kendi klasöründeki start_hotspot.ps1'i gizli başlatır.
+        $hotspotVbs = Join-Path $AppDir "start_hotspot_hidden.vbs"
+        $vbsBody = @'
+Dim sh, fso, ps1
+Set sh = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+ps1 = fso.GetParentFolderName(WScript.ScriptFullName) & "\start_hotspot.ps1"
+sh.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & ps1 & """", 0, False
+'@
+        Set-Content -Path $hotspotVbs -Value $vbsBody -Encoding ASCII
         try {
-            $act = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $hsArg
+            $act = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$hotspotVbs`""
             $trg = New-ScheduledTaskTrigger -AtLogOn
             $trg.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 3)).Repetition
             $prn = New-ScheduledTaskPrincipal -GroupId "S-1-5-32-545" -RunLevel Highest   # BUILTIN\Users = interaktif oturum
             $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+            $set.Hidden = $true
             Register-ScheduledTask -TaskName "PEMF-Hotspot" -Action $act -Trigger $trg -Principal $prn -Settings $set -Force -ErrorAction Stop | Out-Null
-            Log "Hotspot logon-task + keep-alive kuruldu (PEMF-Hotspot: logon'da + her 3dk yeniden doğrular)." "Green"
+            Log "Hotspot logon-task + keep-alive kuruldu (PEMF-Hotspot: logon'da + her 3dk; SESSİZ/penceresiz)." "Green"
         } catch {
-            schtasks /Create /TN "PEMF-Hotspot" /TR "powershell.exe $hsArg" /SC ONLOGON /RL HIGHEST /F *>$null   # keep-alive'siz fallback
-            Log "Hotspot logon-task kuruldu (keep-alive'siz fallback): $_" "Yellow"
+            schtasks /Create /TN "PEMF-Hotspot" /TR "wscript.exe `"$hotspotVbs`"" /SC ONLOGON /RL HIGHEST /F *>$null   # keep-alive'siz fallback
+            Log "Hotspot logon-task kuruldu (keep-alive'siz fallback, sessiz): $_" "Yellow"
         }
         # ICS/Mobile Hotspot reboot-persistence + servisleri Otomatik (AP yeniden başlatmadan sonra geri gelsin)
         reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\SharedAccess" /v EnableRebootPersistConnection /t REG_DWORD /d 1 /f *>$null
         Set-Service -Name SharedAccess -StartupType Automatic -ErrorAction SilentlyContinue
         Set-Service -Name icssvc -StartupType Automatic -ErrorAction SilentlyContinue
         # Kurulumda BİR KEZ hemen başlat (installer elevated-kullanıcı oturumu → WinRT çalışır)
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hotspotPs 2>&1 | ForEach-Object { Log "  [hotspot] $_" "Gray" }
+        & powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $hotspotPs 2>&1 | ForEach-Object { Log "  [hotspot] $_" "Gray" }
         # AUTO-LOGON kontrolü: hotspot oturum ister; auto-logon yoksa açılışta kimse login olana kadar başlamaz.
         $alog = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -ErrorAction SilentlyContinue).AutoAdminLogon
         if ("$alog" -ne "1") { Log "UYARI: AUTO-LOGON KAPALI → açılışta hotspot OTOMATİK başlamaz. Klinikte auto-logon AÇILMALI (netplwiz)." "Red" }

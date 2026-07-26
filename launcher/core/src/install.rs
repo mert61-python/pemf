@@ -86,17 +86,34 @@ pub fn backend_env(install_root: &Path, port: u16) -> BTreeMap<String, String> {
 /// kurulumu ilk adımda düşürür.
 pub fn default_install_root(home: &Path) -> PathBuf {
     if cfg!(target_os = "windows") {
-        home.join("AppData").join("Local").join("PEMFVetClient")
+        home.join("AppData").join("Local").join("PEMF Vet Client")
     } else if cfg!(target_os = "macos") {
-        home.join("Library").join("Application Support").join("PEMFVetClient")
+        home.join("Library").join("Application Support").join("PEMF Vet Client")
     } else {
-        home.join(".local").join("share").join("PEMFVetClient")
+        home.join(".local").join("share").join("PEMF Vet Client")
     }
 }
 
 /// İndirilen paketlerin önbelleği (yeniden kurulumda tekrar indirme yok).
 pub fn cache_dir(install_root: &Path) -> PathBuf {
     install_root.join("cache")
+}
+
+/// Yükseltme migrasyonu: eski sürüm kurulum kökünü boşluksuz `PEMFVetClient` olarak
+/// oluşturuyordu; productName `PEMF Vet Client` olunca yeni kök değişti. Eski dizin varsa
+/// ve yeni yoksa yeniden adlandır → indirilen ~2 GB payload (runtime + ai_models) tekrar
+/// inmez. Best-effort: eski dizin kilitliyse (backend çalışıyorsa) sessizce atlanır ve akış
+/// normal temiz-indirmeye düşer. Hasta DB'si ayrı dizinde (`PEMF_GUI`) → bundan etkilenmez.
+pub fn migrate_legacy_install_root(install_root: &Path) {
+    if install_root.exists() {
+        return;
+    }
+    if let Some(parent) = install_root.parent() {
+        let legacy = parent.join("PEMFVetClient");
+        if legacy.is_dir() {
+            let _ = std::fs::rename(&legacy, install_root);
+        }
+    }
 }
 
 /// Windows'ta eski kurulumun modelleri `%PROGRAMDATA%\PEMF_GUI\ai_models` altında
@@ -170,7 +187,8 @@ mod tests {
     #[test]
     fn backend_env_model_kokunu_ve_portu_verir() {
         let env = backend_env(Path::new("/opt/pemf"), 8123);
-        assert_eq!(env[ENV_MODELS_DIR], "/opt/pemf/ai_models");
+        // Platform-agnostik: Windows '\' vs POSIX '/' — Path karşılaştır (string değil).
+        assert_eq!(Path::new(&env[ENV_MODELS_DIR]), Path::new("/opt/pemf").join("ai_models"));
         assert_eq!(env[ENV_API_PORT], "8123");
     }
 
