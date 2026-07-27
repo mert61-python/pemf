@@ -255,6 +255,11 @@ class HeadlessCore:
             except queue.Full:
                 pass
 
+        # Audit P3 (NOT — serial reconnect yarışı): serial_conn kilitsiz paylaşılan nonlocal + last_payload
+        # reader/sender arası kilitsiz. DOĞRULANMIŞ cerrahi fix mevcut (reader'a kendi conn'unu geçir +
+        # kimlik-kontrollü nonlocal sıfırla + last_payload'ı Lock ile koru) ama DONANIM-serisi yolu +
+        # test-edilmemiş → donanım smoke-doğrulaması OLMADAN uygulanmadı (arıza modu fail-safe: keep-alive
+        # telafi eder). Detay: memory pemf-coverage-gap-audit. Donanım erişimi olunca uygula + birim-test ekle.
         def connect_serial() -> None:
             nonlocal serial_conn
             try:

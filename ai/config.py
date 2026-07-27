@@ -285,6 +285,11 @@ def get_device():
 DEVICE = get_device()
 
 # ==================== SPECIES-SPECIFIC PARAMETERS ====================
+# Audit P3 (UYARI — güvenlik-tuzağı): Bu sözlük YALNIZCA ml_training_archive eğitim scriptlerince
+# okunur; ÜRETİM backend'i (hybrid_recommender) KULLANMAZ. recommended_frequency değerleri
+# (dog=10/cat=15/rabbit=20/mouse=25 Hz) cihaz donanım-MİNİMUMU 50 Hz'in ALTINDADIR → bir öneri
+# motoruna/seans-başlatmaya BAĞLAMA (cihaz-altı frekans üretir). Silinecekse ml_training_archive
+# import'larıyla (predictor/monitor/preprocessor/synthetic_generator/neurokit_integration) BİRLİKTE.
 SPECIES_PARAMS = {
     "dog": {
         "normal_hr_range": [60, 140],  # bpm - varies by size
