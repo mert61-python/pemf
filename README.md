@@ -12,6 +12,28 @@ backend'e bağlanır.
 
 ---
 
+## 0) Arayüz — Ekran Görüntüleri
+
+Mobil/Web arayüzü **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'te çalışır.
+Üç kullanım profili — **Evcil Hayvan Sahibi · Veteriner Hekim · Araştırma Modu** — arayüzü kullanıcıya göre uyarlar.
+
+<p align="center">
+  <img src="docs/screenshots/react_login.png" width="620" alt="Giriş / Kimlik Doğrulama" /><br/>
+  <em>Kimlik doğrulama (Giriş / Kayıt) — yalnız yetkili operatör; Supabase tabanlı e-posta doğrulama + şifre sıfırlama.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/research_welcome.png" width="215" alt="Profil seçimi" />
+  <img src="docs/screenshots/research_home.png" width="215" alt="Araştırma Modu — ana ekran" />
+  <img src="docs/screenshots/research_aihub.png" width="215" alt="Araştırma Modu — AI Hub" />
+  <img src="docs/screenshots/ai_history.png" width="215" alt="AI Analiz Geçmişi" />
+</p>
+<p align="center"><em>Soldan sağa: <b>Profil Seçimi</b> (3 profil) · <b>Araştırma Modu</b> ana ekran · <b>Akıllı Teşhis</b> (Fantom Tümör / Petri Kuyu / Böbrek RNA·CT·Patoloji·Hastalık modelleri) · <b>AI Analiz Geçmişi</b> (şifreli, operatör-kapsamlı: Benim / Tüm Klinik).</em></p>
+
+> Klinik (Veteriner) modunun ekranları — Dashboard, Tedavi Kontrol, Sensör Monitörü, KPI, Hasta Kayıtları, Tedavi Geçmişi, AI Hub — TÜBİTAK sonuç raporunda (`../tübitak/PEMF_2209B_Sonuc_Raporu.docx`, Şekil 8–16) yer alır. Ekran görüntüsü dosyaları: `docs/screenshots/`.
+
+---
+
 ## 1) Hızlı Başlangıç — Ne Nerede?
 
 | İhtiyaç | Yer |

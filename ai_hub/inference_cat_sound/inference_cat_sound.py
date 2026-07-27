@@ -212,9 +212,11 @@ class CatSoundClassifier:
             "cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.model = build_sound_model()
+        # Audit P3: weights_only=True — güvensiz pickle __reduce__ RCE'sini engelle (yalnız tensor/
+        # temel-tip yükle). Ağırlık dosyaları saf state_dict → uyumlu (PT yolu yalnız CLI --runtime pt).
         state = torch.load(str(self.model_path),
                            map_location=self.device,
-                           weights_only=False)
+                           weights_only=True)
         try:
             self.model.load_state_dict(state)
         except RuntimeError:

@@ -41,6 +41,31 @@ class _JsonLogFormatter(logging.Formatter):
         return _json.dumps(doc, ensure_ascii=False)
 
 
+class _PlainLogFormatter(logging.Formatter):
+    """Düz-metin (insan-okur, varsayılan) log + request-correlation-id (O-2). `rid` artık yalnız
+    JSON-log'da değil, varsayılan formatta da her satıra [rid] olarak eklenir → 7/24 saha-cihazında
+    normal-yol izlenebilirliği (istek başına id log+header'da eşleşir). İstek-dışı (arka-plan) → '-'."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        if not hasattr(record, "rid"):
+            try:
+                from utils.request_context import get_request_id
+                record.rid = get_request_id() or "-"
+            except Exception:
+                record.rid = "-"
+        # Audit P2: mesaj + string arg'lardaki CR/LF'yi nötralize et — güvenilmez girdi (ör. anonim-broker
+        # MQTT topic'i on_message except'inde loglanınca) kalıcı denetim-loguna SAHTE SATIR ekleyip
+        # kayıt-forgery yapabilirdi. Traceback (exc_text) etkilenmez.
+        if isinstance(record.msg, str) and ("\r" in record.msg or "\n" in record.msg):
+            record.msg = record.msg.replace("\r", "\\r").replace("\n", "\\n")
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                (a.replace("\r", "\\r").replace("\n", "\\n") if isinstance(a, str) else a)
+                for a in record.args
+            )
+        return super().format(record)
+
+
 def _configure_logging(app_data_dir: Path, level: str) -> None:
     # Windows consoles and NSSM-redirected pipes default to the legacy ANSI
     # codepage (e.g. cp1254 on Turkish Windows), which raises UnicodeEncodeError
@@ -60,8 +85,8 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
     if os.environ.get("PEMF_LOG_JSON") == "1":
         formatter: logging.Formatter = _JsonLogFormatter()
     else:
-        formatter = logging.Formatter(
-            "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        formatter = _PlainLogFormatter(
+            "%(asctime)s %(levelname)s [%(name)s] [%(rid)s] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
@@ -118,18 +143,22 @@ def _safe_stop_outputs(api_server_module) -> None:
 
     try:
         import time
+        import concurrent.futures as _cf
 
-        for coil_id in range(6, 9):
+        # Audit P3: ESP STOP'larını PARALEL gönder + sıkı süre-bütçesi. Eskiden 6 publish SIRAYLA
+        # (broker yavaşken ~14s worst-case) SCM/NSSM stop-timeout'unu aşıp süreç kill → ESP STOP almadan
+        # bobinler firmware süre-watchdog'una kadar açık kalabiliyordu. emergency_stop zaten paralel.
+        def _stop_esp(coil_id):
             command_id = f"service_stop_{coil_id}_{int(time.time() * 1000)}"
             payload = {
-                "command": "stop",
-                "command_id": command_id,
-                "emergency": True,
-                "source": "backend_service_shutdown",
-                "timestamp": time.time(),
+                "command": "stop", "command_id": command_id, "emergency": True,
+                "source": "backend_service_shutdown", "timestamp": time.time(),
             }
             api_server_module._mqtt_publish(f"pemf/coil/{coil_id}/control", payload)
             api_server_module._mqtt_publish(f"pemf/esp32_{coil_id}/command", payload)
+        with _cf.ThreadPoolExecutor(max_workers=3) as _ex:
+            _futs = [_ex.submit(_stop_esp, c) for c in range(6, 9)]
+            _cf.wait(_futs, timeout=3.0)  # toplam güvenli-durdurma bütçesi ~3s (SCM-timeout aşma)
     except Exception:
         logger.exception("MQTT safe stop failed")
 
@@ -219,9 +248,13 @@ def _log_pairing_info(logger: logging.Logger) -> None:
     okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme)."""
     try:
         from utils.path_utils import get_pairing_code, get_unique_device_id
+        # Audit P3: eşleştirme kodu auth-bearer SIR (kod→/api/auth/exchange→token) → kalıcı log dosyasına
+        # DÜZ yazma. Maskele; tam kodu operatör /api/system/info (local-gate) veya cihaz ekranından alır.
+        _pc = get_pairing_code() or ""
+        _pc_masked = (_pc[:1] + "*****") if len(_pc) >= 6 else "******"
         logger.info("=" * 60)
-        logger.info("EŞLEŞTİRME KODU: %s | Cihaz Kimliği: %s",
-                    get_pairing_code(), get_unique_device_id())
+        logger.info("EŞLEŞTİRME KODU: %s (tam kod: /api/system/info veya cihaz ekranı — güvenlik) | Cihaz Kimliği: %s",
+                    _pc_masked, get_unique_device_id())
         logger.info("=" * 60)
     except Exception:
         logger.exception("Eşleştirme kodu loglanamadı (non-fatal).")

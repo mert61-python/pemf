@@ -125,10 +125,13 @@ def _sync_stm_coils_locked() -> list[dict]:
 
 def _push_notification(message: str, level: str = "info") -> None:
     global _notif_counter
-    _notif_counter += 1
-    notif = {"id": _notif_counter, "message": message, "level": level,
-             "timestamp": datetime.now().isoformat()}
     with _live_state_lock:
+        # Audit P3: ID artışını KİLİT altına al — paho MQTT callback + STM seri-loop thread'leri
+        # aynı anda okuyup yazarsa iki bildirim aynı id'yi paylaşır (ID'ye göre dedup eden React
+        # istemci birini düşürür/yanlış render eder).
+        _notif_counter += 1
+        notif = {"id": _notif_counter, "message": message, "level": level,
+                 "timestamp": datetime.now().isoformat()}
         _live_state["notifications"].insert(0, notif)
         if len(_live_state["notifications"]) > 50:
             _live_state["notifications"].pop()

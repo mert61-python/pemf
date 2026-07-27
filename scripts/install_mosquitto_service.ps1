@@ -89,11 +89,9 @@ $conf = @"
 listener 1883 0.0.0.0
 allow_anonymous true
 
-# Offline veri koruma
-persistence true
-persistence_location $($DataDir -replace '\\','/')/
-autosave_interval 60
-autosave_on_changes true
+# persistence KAPALI: bozuk persistence-DB brokeri kilitliyordu (mosquitto cokup NSSM throttle ->
+# servis 'Paused' -> port 1883 kapali). Bundled config de false; ESP durumu reconnect'te yeniden yayinlanir.
+persistence false
 
 # Mesaj kuyruğu (ESP'ler offline'dayken biriken mesajlar)
 max_queued_messages 10000

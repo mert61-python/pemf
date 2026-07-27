@@ -56,10 +56,12 @@ CLASSES_PATH = _DIR / "classes.json"
 # META + CLASSES
 # ============================================================
 def _load_meta_and_classes():
+    # Audit P3: kütüphane modülünde sys.exit YERİNE RuntimeError — sys.exit SystemExit(BaseException)
+    # fırlatır, app.py'nin 'except Exception' bloğu YAKALAMAZ → temiz JSON 500 yerine kirli uvicorn hatası.
     if not META_PATH.exists():
-        sys.exit(f"HATA: {META_PATH.name} yok — training/renal_histopath_kmc/export_best_real.py calistirilmali")
+        raise RuntimeError(f"{META_PATH.name} yok — training/renal_histopath_kmc/export_best_real.py calistirilmali")
     if not CLASSES_PATH.exists():
-        sys.exit(f"HATA: {CLASSES_PATH.name} yok")
+        raise RuntimeError(f"{CLASSES_PATH.name} yok")
     meta = json.loads(META_PATH.read_text(encoding="utf-8"))
     classes = json.loads(CLASSES_PATH.read_text(encoding="utf-8"))
     return meta, classes

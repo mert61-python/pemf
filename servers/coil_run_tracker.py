@@ -18,6 +18,9 @@ _active_coil_runs = {}          # coil_id(int) -> run_id(int)
 _active_coil_runs_lock = threading.Lock()
 _coil_run_stats = {}            # run_id -> {n,t_min,t_max,t_sum,i_sum,b_sum,t_n,i_n,b_n}
 _coil_run_stats_lock = threading.Lock()
+# Audit P3: tüm _begin_coil_run dizisini (kontrol→kapat→aç→kaydet) serileştir → eş-zamanlı iki begin
+# çift DB-satırı + orphan üretmesin. _active_coil_runs_lock'tan AYRI → _finish_coil_run ile deadlock yok.
+_begin_coil_run_lock = threading.Lock()
 
 
 # ── Injection: api_server bağlar (döngüsel import yok). Varsayılanlar güvenli no-op. ──
@@ -56,26 +59,29 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
         sid = _db_session_id_getter()
         if not sid:
             return
-        # Ayni coil zaten acik run'daysa once kapat (cift-acik kalmasin).
-        with _active_coil_runs_lock:
-            already_open = coil_id in _active_coil_runs
-        if already_open:
-            _finish_coil_run(coil_id)
-        db = _treatment_db_getter()
-        if db is None:
-            return
-        run_id = db.start_coil_run(
-            sid, coil_id,
-            frequency_hz=freq, duty_percent=duty, phase=phase,
-            intensity_mt=intensity, hw_type=hw_type, started_epoch=time.time(),
-        )
-        if run_id is not None:
+        # Audit P3 (TOCTOU): kontrol→kapat→aç→kaydet dizisini begin-kilidiyle SERİLEŞTİR (eş-zamanlı iki
+        # _begin_coil_run çift DB-satırı + orphan üretmesin). _active_coil_runs_lock'tan AYRI kilit →
+        # içerideki _finish_coil_run/store'un kısa acquisition'ları deadlock yapmaz.
+        with _begin_coil_run_lock:
             with _active_coil_runs_lock:
-                _active_coil_runs[coil_id] = run_id
-            with _coil_run_stats_lock:
-                _coil_run_stats[run_id] = {"n": 0, "t_min": None, "t_max": None,
-                                           "t_sum": 0.0, "i_sum": 0.0, "b_sum": 0.0,
-                                           "t_n": 0, "i_n": 0, "b_n": 0}
+                already_open = coil_id in _active_coil_runs
+            if already_open:
+                _finish_coil_run(coil_id)
+            db = _treatment_db_getter()
+            if db is None:
+                return
+            run_id = db.start_coil_run(
+                sid, coil_id,
+                frequency_hz=freq, duty_percent=duty, phase=phase,
+                intensity_mt=intensity, hw_type=hw_type, started_epoch=time.time(),
+            )
+            if run_id is not None:
+                with _active_coil_runs_lock:
+                    _active_coil_runs[coil_id] = run_id
+                with _coil_run_stats_lock:
+                    _coil_run_stats[run_id] = {"n": 0, "t_min": None, "t_max": None,
+                                               "t_sum": 0.0, "i_sum": 0.0, "b_sum": 0.0,
+                                               "t_n": 0, "i_n": 0, "b_n": 0}
     except Exception:
         logging.getLogger(__name__).debug("_begin_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
 

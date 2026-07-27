@@ -19,6 +19,49 @@ logger = logging.getLogger(__name__)
 # ── mDNS (Zeroconf) Servisi ────────────────────────────────────────────────────
 _zeroconf_instance = None
 _mdns_service_info = None
+_mdns_port = 8000
+_mdns_device_name = "PEMF-Vet"
+
+
+def _build_info(local_ip: str, port: int, device_name: str):
+    """_pemfvet ServiceInfo'yu güncel IP ile kurar (start_mdns + re-register ortak kullanır)."""
+    import socket as _socket
+
+    from zeroconf import ServiceInfo
+    return ServiceInfo(
+        type_="_pemfvet._tcp.local.",
+        name=f"{device_name}._pemfvet._tcp.local.",
+        addresses=[_socket.inet_aton(local_ip)],
+        port=port,
+        properties={b"version": b"1.5", b"api": b"/api", b"ws": b"/ws"},
+        server=f"{device_name}.local.",
+    )
+
+
+def _reregister() -> None:
+    """Zeroconf arayüz/IP değişimiyle YENİDEN yaratıldığında _pemfvet servisini yeni instance'a
+    GÜNCEL IP ile re-register eder (zeroconf_singleton.ensure_interfaces_current çağırır). Bu ayrıca
+    auto_discovery'nin eskiden HİÇ olmayan IP-değişim yeniden-kaydını da kapatır. start_mdns
+    çağrılmadıysa no-op."""
+    global _zeroconf_instance, _mdns_service_info
+    if _mdns_service_info is None:
+        return
+    try:
+        from utils.zeroconf_singleton import get_shared_zeroconf
+        ip = _get_local_ip()
+        # Audit P3: loopback (127.*) ServiceInfo YAYINLAMA — telefon/ESP 127.0.0.1'i çözüp kendi
+        # loopback'ine gider (sessiz başarısız). Gerçek LAN IP yoksa kaydı ATLA (sonraki tur tekrar dener).
+        if not ip or ip.startswith("127."):
+            logger.debug("mDNS re-register atlandı: geçerli LAN IP yok (ip=%r).", ip)
+            return
+        info = _build_info(ip, _mdns_port, _mdns_device_name)
+        zc = get_shared_zeroconf()
+        zc.register_service(info)
+        _zeroconf_instance = zc
+        _mdns_service_info = info
+        logger.info("mDNS (_pemfvet) yeni arayüzlere re-register edildi: %s", ip)
+    except Exception as e:
+        logger.warning("_pemfvet re-register hatası: %s", e)
 
 
 def _get_local_ip() -> str:
@@ -37,34 +80,19 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
     LattePanda'yı otomatik keşfedebilir.
     Servis tipi: _pemfvet._tcp.local.
     """
-    global _zeroconf_instance, _mdns_service_info
+    global _zeroconf_instance, _mdns_service_info, _mdns_port, _mdns_device_name
     try:
-        import socket as _socket
+        from utils.zeroconf_singleton import add_reregister_callback, get_shared_zeroconf
 
-        from zeroconf import ServiceInfo
-
-        from utils.zeroconf_singleton import get_shared_zeroconf
-
+        _mdns_port, _mdns_device_name = port, device_name
         local_ip = _get_local_ip()
-        ip_bytes = _socket.inet_aton(local_ip)
-
-        info = ServiceInfo(
-            type_="_pemfvet._tcp.local.",
-            name=f"{device_name}._pemfvet._tcp.local.",
-            addresses=[ip_bytes],
-            port=port,
-            properties={
-                b"version": b"1.5",
-                b"api": b"/api",
-                b"ws": b"/ws",
-            },
-            server=f"{device_name}.local.",
-        )
+        info = _build_info(local_ip, port, device_name)
 
         zc = get_shared_zeroconf()  # paylasilan TEK Zeroconf (MDNSService ile ayni instance → 5343 cakismasi yok)
         zc.register_service(info)
         _zeroconf_instance = zc
         _mdns_service_info = info
+        add_reregister_callback(_reregister)  # arayüz/IP değişiminde yeni instance'a otomatik re-register
 
         logger.info("mDNS servisi başlatıldı: %s:%d (%s)", local_ip, port, device_name)
         return True

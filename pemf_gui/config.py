@@ -125,6 +125,12 @@ class ConfigManager:
             _k = get_secret("patient_fernet_key")
             if _k:
                 return _k.encode() if isinstance(_k, str) else _k
+        except RuntimeError:
+            # Audit P3: SecretsManager brick-koruma (kritik anahtar VAR ama çözülemez → fail-closed
+            # RuntimeError) → YUTMA. Yeni patient_fernet_key üretmek mevcut şifreli PII'yi kalıcı
+            # okunamaz yapar (veri-kaybı) → fail-closed propagate et.
+            logger.error("patient_fernet_key BRICK (var ama çözülemez) → yeni anahtar ÜRETİLMİYOR (veri-kaybı önlendi).")
+            raise
         except Exception as _e:
             logger.warning("SecretsManager patient_fernet_key okunamadı, eski yola düşülüyor: %s", _e)
         service, name = "PEMF_GUI", "patient_fernet_key"

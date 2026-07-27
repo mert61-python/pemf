@@ -33,6 +33,15 @@ jobs:
           pip install -r requirements-test.txt
           pip install pip-audit
 
-      - name: pip-audit (kurulu çekirdek ortam — bilgi amaçlı, bloklamaz)
+      - name: pip-audit — çekirdek + SHIPPED AI ağacı (bilgi amaçlı, bloklamaz)
+        # Audit P2: shiplenen AI yığını (torch 2.1.2 / onnx 1.15 / ultralytics / xgboost / librosa...) da
+        # TARANSIN — eskiden yalnız requirements-test.txt kuruluyordu → AI-CVE'leri (CVE-2025-32434 dahil)
+        # HİÇ görünmüyordu. requirement-file modu kurulum gerektirmez. Bilinen-ertelenen (torch→2.6.0
+        # ayrı görev) DIŞINDA yeni CVE'ler burada GÖRÜNÜR. Bloklayıcı yapmak için known-CVE'leri
+        # --ignore-vuln <ID> ile allowlist'le + continue-on-error'ı kaldır (sahip: exact ID gerekir).
         continue-on-error: true
-        run: pip-audit --desc
+        run: |
+          echo "== kurulu çekirdek ortam (web/crypto) =="
+          pip-audit --desc || true
+          echo "== SHIPPED ağaç (requirements.txt — AI yığını DAHİL) =="
+          pip-audit -r requirements.txt --desc || true

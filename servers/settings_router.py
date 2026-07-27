@@ -1,5 +1,8 @@
 import json
 import logging
+import os
+import tempfile
+import threading
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -12,6 +15,7 @@ logger = logging.getLogger("SettingsRouter")
 # Canonical veri klasörü — diğer router'larla AYNI olmalı (split-brain önler).
 _app_data_dir = get_app_data_directory()
 _settings_file = _app_data_dir / "system_settings.json"
+_settings_lock = threading.Lock()  # Audit P3: eş-zamanlı POST'lar system_settings.json'u bozmasın
 
 from utils.production_config_manager import get_production_config
 
@@ -61,8 +65,21 @@ def save_settings(data: dict):
         "clinic_name": data.get("clinic_name", ""),
         "ble_gateway_mac": data.get("ble_gateway_mac", ""),
     }
-    with open(_settings_file, "w", encoding="utf-8") as f:
-        json.dump(save_data, f, ensure_ascii=False, indent=2)
+    # Audit P3: atomik yaz (temp + os.replace) + kilit — eş-zamanlı POST veya yazma-sırası süreç-kill
+    # system_settings.json'u yarım/bozuk bırakmasın (sonraki açılışta sessiz config kaybı).
+    with _settings_lock:
+        _dir = os.path.dirname(_settings_file) or "."
+        _fd, _tmp = tempfile.mkstemp(dir=_dir, suffix=".tmp")
+        try:
+            with os.fdopen(_fd, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            os.replace(_tmp, _settings_file)
+        except Exception:
+            try:
+                os.unlink(_tmp)
+            except Exception:
+                pass
+            raise
 
 
 @router.get("/")

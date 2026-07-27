@@ -28,6 +28,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Sır/anahtar dosyalarına NTFS ACL kilidi (Audit P1). Windows'ta os.chmod no-op'tur →
+# düz-metin cred/anahtar dosyaları yerel 'Users' tarafından okunabilir kalıyordu.
+try:
+    from utils.file_acl import lock_down_file
+except Exception:  # best-effort: helper yoksa çağıran akış DURMAZ
+    def lock_down_file(_path):
+        return False
+
 logger = logging.getLogger(__name__)
 
 # ── Yapılandırma ─────────────────────────────────────────────────────────────
@@ -142,6 +150,7 @@ class CredentialManager:
         for cred in self._credentials.values():
             lines.append(f"{cred.username}:{cred.password}")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        lock_down_file(path)  # düz-metin şifreler → sadece SYSTEM+Admin okusun (Audit P1)
         logger.info(f"Mosquitto password file yazıldı: {path}")
         return str(path)
 
@@ -161,6 +170,7 @@ class CredentialManager:
                 lines.append(f"topic read {topic}")
             lines.append("")
         path.write_text("\n".join(lines), encoding="utf-8")
+        lock_down_file(path)
         logger.info(f"Mosquitto ACL file yazıldı: {path}")
         return str(path)
 
@@ -180,6 +190,7 @@ class CredentialManager:
                 "subscribe_topics": cred.allowed_subscribe,
             })
         path.write_text(json.dumps({"users": hivemq_users}, indent=2, ensure_ascii=False), encoding="utf-8")
+        lock_down_file(path)  # düz-metin şifreler → ACL kilidi (Audit P1)
         logger.info(f"HiveMQ kullanıcı listesi yazıldı: {path}")
         return str(path)
 
@@ -206,6 +217,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
 #endif // SECRETS_GENERATED_H
 """
         path.write_text(content, encoding="utf-8")
+        lock_down_file(path)  # ESP MQTT şifresi düz-metin → ACL kilidi (Audit P1)
         logger.info(f"ESP Secrets dosyası yazıldı: {path}")
         return str(path)
 
@@ -334,12 +346,10 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
         try:
             CREDENTIALS_DIR.parent.mkdir(parents=True, exist_ok=True)
             secret_file.write_text(new_secret, encoding="utf-8")
-            # Dosyayı sadece sahibi okuyabilsin (Unix'te; Windows'ta ignore edilir)
-            try:
-                import stat
-                secret_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:
-                pass
+            # Yazımdan HEMEN sonra ACL kilidi (Audit P1): eski os.chmod Windows'ta NO-OP'tu →
+            # master KDF secret'i yerel 'Users' tarafından okunup TÜM cihaz/ESP/bridge şifreleri
+            # türetilebiliyordu. lock_down_file Windows'ta icacls, POSIX'te 0o600 uygular.
+            lock_down_file(secret_file)
             logger.info(
                 f"PEMF master secret otomatik üretildi ve kaydedildi: {secret_file}\n"
                 "Güvenlik için bu dosyayı yedekleyin ve yetkisiz erişime kapatın."
@@ -368,6 +378,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
             self._credential_file.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            lock_down_file(self._credential_file)  # cihaz cred'leri düz-metin → ACL kilidi (Audit P1)
         except Exception as e:
             logger.error(f"Credential kaydetme hatası: {e}")
 
@@ -409,17 +420,20 @@ def main():
     mgr = CredentialManager()
 
     if args.command == "generate":
+        # Audit P3: şifreleri STDOUT'a YAZMA — 'generate > setup.log' ESP/bridge/android düz şifrelerini
+        # log/destek-paketi/git'e sızdırıyordu. Şifreler zaten ACL-kilitli export dosyalarında; burada
+        # yalnız kullanıcı-adı göster.
         if args.all_coils:
             for cid in args.all_coils:
                 c = mgr.get_or_create_esp_credential(cid)
-                print(f"  ESP Coil {cid}: user={c.username}  pass={c.password}")
+                print(f"  ESP Coil {cid}: user={c.username}")
         elif args.coil_id:
             c = mgr.get_or_create_esp_credential(args.coil_id)
-            print(f"  ESP Coil {args.coil_id}: user={c.username}  pass={c.password}")
+            print(f"  ESP Coil {args.coil_id}: user={c.username}")
         bc = mgr.get_or_create_bridge_credential()
-        print(f"  Bridge:       user={bc.username}  pass={bc.password}")
+        print(f"  Bridge:       user={bc.username}")
         ac = mgr.get_or_create_android_credential(args.android_uid if hasattr(args, 'android_uid') else "prod")
-        print(f"  Android:      user={ac.username}  pass={ac.password}")
+        print(f"  Android:      user={ac.username}")
 
     elif args.command == "list":
         for c in mgr.list_credentials():

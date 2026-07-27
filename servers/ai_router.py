@@ -10,6 +10,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from servers.entitlement import ai_queue_gate, require_research  # tier-enforcement (flag-gated, fail-open)
+from servers.ai_client import (ai_service_enabled, delegate_infer, delegate_json,
+                               delegate_infer_sync, delegate_json_sync)  # mikroservis: AI'yı GPU servisine devret (bayraklı; sync=AI Pro loop)
+
 logger = logging.getLogger("ai_router")
 
 import threading
@@ -36,7 +40,7 @@ async def _allow_large_upload(request: Request) -> None:
         await request.form(max_part_size=_RNA_MAX_PART)
 
 
-ai_router = APIRouter(dependencies=[Depends(_allow_large_upload)])
+ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_queue_gate)])
 
 
 def _ai_fail(label: str, e: Exception) -> HTTPException:
@@ -79,16 +83,42 @@ def _get_or_load_model(key: str, loader_fn):
             raise
 
 
+_MAX_IMAGE_BYTES = 25 * 1024 * 1024  # 25 MB — tek görüntü üst sınırı (sınırsız upload = RAM DoS koruması)
+_MAX_IMAGE_PIXELS = 50_000_000  # 50 MP — dekompresyon-bombası koruması (küçük dosya → dev BGR ayırma → OOM)
+
+
 async def _decode_image(file, image_base64, *, label: str) -> np.ndarray:
     """UploadFile veya base64'ten BGR görüntü çöz. İki yaygın hatayı TEK yerde, tutarlı ele alır:
       (1) girdi yok, (2) 'görüntü yerine HTML geldi' (React fallback index.html gönderdi).
-    Böylece görüntü-decode sorunu çıkınca bakılacak tek fonksiyon burasıdır (tekrar kaldırıldı)."""
+    Böylece görüntü-decode sorunu çıkınca bakılacak tek fonksiyon burasıdır (tekrar kaldırıldı).
+    GÜVENLİK: girdi _MAX_IMAGE_BYTES ile sınırlanır → devasa upload ile RAM tüketimi (DoS) engellenir."""
     if image_base64:
+        # base64 çözülünce ~%75'ine iner; çözmeden ÖNCE kaba string sınırı (dev RAM allocation'ı önle).
+        if len(image_base64) > (_MAX_IMAGE_BYTES * 4) // 3 + 1024:
+            raise ValueError(f"Görüntü çok büyük (base64 girdi > {_MAX_IMAGE_BYTES // (1024*1024)} MB sınırı).")
         content = base64.b64decode(image_base64)
     elif file:
-        content = await file.read()
+        # UploadFile.read(N): en fazla N bayt oku → tüm dosyayı RAM'e almadan sınırı aşanı reddet.
+        content = await file.read(_MAX_IMAGE_BYTES + 1)
+        if len(content) > _MAX_IMAGE_BYTES:
+            raise ValueError(f"Görüntü çok büyük (> {_MAX_IMAGE_BYTES // (1024*1024)} MB sınırı).")
     else:
         raise ValueError("Görüntü verisi bulunamadı.")
+    if len(content) > _MAX_IMAGE_BYTES:
+        raise ValueError(f"Görüntü çok büyük (> {_MAX_IMAGE_BYTES // (1024*1024)} MB sınırı).")
+    # Audit P2: dekompresyon-bombası guard — byte-limit yetmez (küçük PNG → dev BGR ayırma → OOM).
+    # Decode ÖNCESİ header'dan boyutu oku (PIL lazy; piksel decode etmez); megapiksel eşiğini aşan reddet.
+    try:
+        from PIL import Image as _PILImage
+        import io as _io
+        with _PILImage.open(_io.BytesIO(content)) as _im:
+            _w, _h = _im.size
+            if _w * _h > _MAX_IMAGE_PIXELS:
+                raise ValueError(f"Görüntü çözünürlüğü çok yüksek ({_w}x{_h}px > {_MAX_IMAGE_PIXELS // 1_000_000}MP sınırı).")
+    except ValueError:
+        raise
+    except Exception:
+        pass  # PIL header okuyamazsa cv2'ye bırak (bozuk/desteklenmeyen format zaten reddedilir)
     img = cv2.imdecode(np.frombuffer(content, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         stripped = content.strip()
@@ -136,13 +166,15 @@ async def analyze_disease(data: DiseaseInput):
         )
 
     try:
+        if ai_service_enabled():
+            return await delegate_json("disease", data.model_dump())
         def _load():
             from utils.model_downloader import download_model_sync
             download_model_sync("ai_hub/cat_disease/XGBoost.pkl")
             from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor
             return CatDiseasePredictor()
 
-        predictor = _get_or_load_model("disease", _load)
+        predictor = await asyncio.to_thread(_get_or_load_model, "disease", _load)
         results = predictor.predict(
             data.age, data.weight, data.hr, data.temp, data.duration, data.symptom_indices
         )
@@ -164,9 +196,13 @@ async def analyze_disease(data: DiseaseInput):
 
 
 @ai_router.post("/api/ai/vision/landmark")
-async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)):
+async def analyze_landmark(request: Request, file: UploadFile = File(None), image_base64: str = Form(None), auto_adjust: bool = Form(False)):
     """YOLO Pose + FGS Ağrı Skoru + Otonom Biyogeribildirim"""
     try:
+        if ai_service_enabled():
+            # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
+            # AI servisi yalnız analiz döner. Sunucu/donanımsız profilde auto_adjust yok.
+            return await delegate_infer("landmark", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="landmark")
 
         def _load_landmark():
@@ -176,7 +212,7 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
             path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
             return YOLO(path, task="pose")
         
-        model = _get_or_load_model("landmark", _load_landmark)
+        model = await asyncio.to_thread(_get_or_load_model, "landmark", _load_landmark)
         
         # Görüntüyü gecici dosyaya kaydet çünkü predict file path istiyor.
         import tempfile
@@ -239,8 +275,22 @@ async def analyze_landmark(file: UploadFile = File(None), image_base64: str = Fo
         # Otonom Biofeedback — YALNIZCA geçerli tespit varsa donanım sür (gürültüde sürme yok).
         hw_status = "idle"
         hw_params = {}
+        # Audit P1: auto_adjust DONANIM SÜRÜŞÜ salt-analiz muafiyetini AŞAR → yalnız YEREL/LAN veya
+        # geçerli-token'lı istekte sür (tünelden kimliksiz 8-bobin 30dk tedavisini engelle). Analiz muaf kalır.
+        _drive_ok = False
+        try:
+            from servers.auth import is_local_request, check_token
+            _h = request.headers
+            _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
+            _drive_ok = (is_local_request(request.client.host if request.client else "", _via_proxy)
+                         or check_token(_h.get("X-API-Key") or request.query_params.get("token") or ""))
+        except Exception:
+            logger.exception("landmark auto_adjust yetki kontrolü hatası")
+            _drive_ok = False
         if auto_adjust and not detected:
             hw_status = "skipped_no_detection"
+        elif auto_adjust and detected and not _drive_ok:
+            hw_status = "skipped_unauthenticated"  # Audit P1: kimliksiz uzak istekte donanım SÜRÜLMEZ
         elif auto_adjust and detected:
             try:
                 from servers.api_server import start_ai_session, state, update_live_session_state
@@ -302,6 +352,9 @@ _ai_thread = None
 _ai_organ_id = 0
 _ai_duration_min = 20
 _ai_started_at = 0.0
+# Klinik güvenlik: AI Pro seans süresi üst sınırı (Audit P1). Uzaktan {duration_minutes: 999999}
+# ile günlerce/gözetimsiz PEMF sürüşünü engeller. (freq/duty/48°C safety-limit'lerine DOKUNMAZ.)
+_AI_PRO_MAX_DURATION_MIN = 120
 # AI Pro freq sabit 1 Hz (eski PyQt DDS varsayılanı). Sabit; backend'de limit/clamp EKLEME.
 _AI_PRO_FREQ_HZ = 1.0
 # em_kedi modelinin sabit ekstra girdileri (eski camera_ai_thread ile birebir).
@@ -321,6 +374,11 @@ _ai_organ_cache = {
     "reliability": 0.0, "localized": False,
     "overlay_bgr": None, "at": 0.0, "organ_id": -1,
 }
+# Audit P2: _ai_organ_cache arkaplan loop (_ai_pro_loop) VE mobil frame ucu (ai_pro_frame) arasinda
+# paylasilir. Cok-alanli okuma/.update() kilitsiz interleave olursa yirtik-okuma (bir organin
+# reliability'si baska koordinatla) + celiskili bobin komutu. Kisa kritik-bolumler icin tek kilit
+# (I/O kilit DISINDA → deadlock yok).
+_ai_cache_lock = _ai_threading.Lock()
 
 
 def _get_or_load_kedi():
@@ -345,15 +403,31 @@ def _get_or_load_catorgan():
     return _get_or_load_model("cat_organ", _load)
 
 
-def _localize_organ(frame, organ_id):
-    """Kareden seçili organı cat_organ ile lokalize et (el takibinin YERİNE).
+def _extract_organ_target(organs_by_id, organ_id, overlay):
+    """cat_organ sonucundan (CPU dict VEYA GPU-JSON'dan kurulmuş dict) seçili organ hedefini çıkar.
+    organs_by_id: {id: {coord_cabin_cm|coord_3d_cm, reliability}}. organ_id 0 (Tüm Vücut) → max-reliability
+    güven-geçidi + koordinat (0,0,0). NOT: estimate_organs_pnp INT-anahtarlı ama JSON'da str → ikisi denenir.
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr)."""
+    if int(organ_id) == 0:
+        # Tüm Vücut: EN AZ BİR organ güvenle lokalize değilse "bulunamadı" → coil SÜRÜLMEZ (max güven-geçidi;
+        # eski zorla-1.0 baypası KALDIRILDI — okluzyonlu organlara rağmen gerçek kediyi reddetmez, çöpte sürmez).
+        rels = [float(v.get("reliability") or 0.0) for v in organs_by_id.values() if isinstance(v, dict)]
+        conf = max(rels) if rels else 0.0
+        return (conf >= _MIN_RELIABILITY), 0.0, 0.0, 0.0, conf, overlay
+    o = organs_by_id.get(int(organ_id)) or organs_by_id.get(str(int(organ_id)))
+    if not o:
+        return False, 0.0, 0.0, 0.0, 0.0, overlay
+    coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
+    rel = float(o.get("reliability") or 0.0)
 
-    cat_organ pipeline (YOLOseg + DLC + RTMPose + PnP, ~1-4sn) → 10 organ 3B.
-    Hedef organın `coord_cabin_cm` (ArUco varsa) / `coord_3d_cm` → cm→mm, [-300,300] clamp
-    (em_kedi'nin eski el-aralığıyla aynı). organ_id 0 (Tüm Vücut) → kedi bulunduysa (0,0,0).
+    def _mm(v):
+        return max(-300.0, min(300.0, float(v) * 10.0))   # cm→mm + em_kedi aralığı
 
-    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr).
-    """
+    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay
+
+
+def _localize_organ_cpu(frame, organ_id):
+    """cat_organ'ı YEREL (in-process, CPU) çalıştır → hedef organ. (tek-EXE klinik + GPU-fallback yolu)."""
     import tempfile
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     tmp.close()
@@ -366,51 +440,91 @@ def _localize_organ(frame, organ_id):
             os.unlink(tmp.name)
         except Exception:
             pass
+    return _extract_organ_target(result.get("organs") or {}, organ_id, result.get("_overlay_bgr"))
 
-    overlay = result.get("_overlay_bgr")
-    organs = result.get("organs") or {}
 
-    if int(organ_id) == 0:
-        # Tüm Vücut: kedi bulunduysa (organlar var) sür, konum gövde-merkezi (0,0,0).
-        localized = len(organs) > 0
-        return localized, 0.0, 0.0, 0.0, (1.0 if localized else 0.0), overlay
+def _localize_organ_gpu(frame, organ_id):
+    """cat_organ inference'ını GPU servisine DEVRET (delegate_infer_sync; kare zaten to_thread'de).
+    GPU-JSON organs list → {id:organ} dict + overlay base64→BGR → paylaşılan _extract_organ_target.
+    (Hoca yönü: AI Pro'nun AĞIR 3B-lokalizasyonu Docker/GPU servisinde koşar.)"""
+    ok, buf = cv2.imencode(".jpg", frame)
+    if not ok:
+        raise RuntimeError("frame JPG encode başarısız")
+    resp = delegate_infer_sync("cat_organ", buf.tobytes(), filename="frame.jpg",
+                               data={"target_oid": (int(organ_id) or None)})
+    organs_by_id = {}
+    for o in (resp.get("organs") or []):
+        if isinstance(o, dict) and "id" in o:
+            try:
+                organs_by_id[int(o["id"])] = o
+            except (TypeError, ValueError):
+                pass
+    overlay = None
+    img_b64 = resp.get("image_base64")
+    if img_b64:
+        try:
+            arr = np.frombuffer(base64.b64decode(img_b64), np.uint8)
+            overlay = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        except Exception:
+            overlay = None
+    return _extract_organ_target(organs_by_id, organ_id, overlay)
 
-    # NOT: estimate_organs_pnp organs dict'i INTEGER anahtarlı ({2: {...}}); JSON'a yazılınca
-    # string olur. Bellek-içi int anahtar → int ile ara (str fallback güvenli).
-    o = organs.get(int(organ_id)) or organs.get(str(int(organ_id)))
-    if not o:
-        return False, 0.0, 0.0, 0.0, 0.0, overlay
-    coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
-    rel = float(o.get("reliability") or 0.0)
 
-    def _mm(v):
-        return max(-300.0, min(300.0, float(v) * 10.0))   # cm→mm + em_kedi aralığı
+def _localize_organ(frame, organ_id):
+    """Kareden seçili organı cat_organ ile lokalize et (el takibinin YERİNE).
+    cat_organ pipeline (YOLOseg + DLC + RTMPose + PnP, ~1-4sn) → 10 organ 3B. Hedefin
+    coord_cabin_cm(ArUco)/coord_3d_cm → cm→mm [-300,300] clamp; organ_id 0 (Tüm Vücut) → (0,0,0).
+    ai_service_enabled() ise inference GPU servisine DEVREDİLİR (hata → CPU-yerel fallback, davranış korunur).
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr)."""
+    if ai_service_enabled():
+        try:
+            return _localize_organ_gpu(frame, organ_id)
+        except Exception as e:
+            logger.warning("AI Pro cat_organ GPU delegasyonu başarısız → CPU-yerel: %s", e)
+    return _localize_organ_cpu(frame, organ_id)
 
-    x_mm, y_mm, z_mm = _mm(coord[0]), _mm(coord[1]), _mm(coord[2])
-    localized = rel >= _MIN_RELIABILITY
-    return localized, x_mm, y_mm, z_mm, rel, overlay
+
+def _predict_and_drive_cpu(x_mm, y_mm, z_mm, organ_id):
+    """em_kedi'yi YEREL (in-process CPU) çalıştır → D[7]/P[7]/e_field. (tek-EXE + GPU-fallback yolu).
+    Eski PyQt davranışı: duty 0..0.50 clip (modelin kendi politikası); EK clamp yok."""
+    predictor = _get_or_load_kedi()
+    result = predictor.predict(
+        x=x_mm, y=y_mm, z=z_mm, organ_id=organ_id,
+        achieved_B=_AI_ACHIEVED_B, duty_sum=_AI_DUTY_SUM,
+    )
+    D = np.clip([result.get(f"D{i}", 0.0) for i in range(1, 8)], 0.0, 0.50).tolist()
+    P = [float(result.get(f"P{i}", 0.0)) for i in range(1, 8)]  # zaten bobin-1 referanslı
+    e_field = float(max(0.0, result.get("result_E", 0.0)))
+    return D, P, e_field
+
+
+def _predict_and_drive_gpu(x_mm, y_mm, z_mm, organ_id):
+    """em_kedi sürüş inference'ını GPU servisine DEVRET (delegate_json_sync; zaten to_thread'de) → D/P/E.
+    (Hoca yönü: AI Pro'nun bobin-sürüş modeli de Docker/GPU'da.) Aynı duty-clip(0..0.50) + faz-referansı."""
+    resp = delegate_json_sync("em_kedi", {
+        "x": x_mm, "y": y_mm, "z": z_mm, "organ_id": int(organ_id),
+        "achieved_B": _AI_ACHIEVED_B, "duty_sum": _AI_DUTY_SUM,
+    })
+    D = np.clip([resp.get(f"D{i}", 0.0) for i in range(1, 8)], 0.0, 0.50).tolist()
+    P = [float(resp.get(f"P{i}", 0.0)) for i in range(1, 8)]
+    e_field = float(max(0.0, resp.get("result_E", 0.0)))
+    return D, P, e_field
 
 
 def _predict_and_drive(x_mm, y_mm, z_mm, organ_id):
     """em_kedi.predict(x,y,z,organ_id) → D[7]/P[7]/e_field (eski el-pipeline'ının em_kedi kısmı, aynen).
-
-    Döner: (D_list[7], P_list[7], e_field). em_kedi + duty-clip (0..0.50) + faz DEĞİŞMEDİ.
-    """
+    ai_service_enabled() ise GPU servisine DEVREDİLİR (hata → CPU-yerel fallback). duty-clip+faz DEĞİŞMEDİ;
+    TAM başarısızlıkta (0,0,0) döner = coil SÜRÜLMEZ (güvenli). Döner: (D_list[7], P_list[7], e_field)."""
     D = [0.0] * 7
     P = [0.0] * 7
     e_field = 0.0
     try:
-        predictor = _get_or_load_kedi()
-        result = predictor.predict(
-            x=x_mm, y=y_mm, z=z_mm,
-            organ_id=organ_id,
-            achieved_B=_AI_ACHIEVED_B,
-            duty_sum=_AI_DUTY_SUM,
-        )
-        # Eski PyQt davranışı: duty 0..0.50 clip (modelin kendi politikası); EK clamp yok.
-        D = np.clip([result.get(f"D{i}", 0.0) for i in range(1, 8)], 0.0, 0.50).tolist()
-        P = [float(result.get(f"P{i}", 0.0)) for i in range(1, 8)]  # zaten bobin-1 referanslı
-        e_field = float(max(0.0, result.get("result_E", 0.0)))
+        if ai_service_enabled():
+            try:
+                return _predict_and_drive_gpu(x_mm, y_mm, z_mm, organ_id)
+            except Exception as e:
+                logger.warning("AI Pro em_kedi GPU delegasyonu başarısız → CPU-yerel: %s", e)
+        return _predict_and_drive_cpu(x_mm, y_mm, z_mm, organ_id)
     except Exception as pred_err:
         logger.error("KediPredictor tahmin hatası: %s", pred_err)
     return D, P, e_field
@@ -524,21 +638,36 @@ def _ai_pro_loop():
             if need_localize:
                 try:
                     lz, lx, ly, lzz, lrel, lov = _localize_organ(frame, _ai_organ_id)
-                    _ai_organ_cache.update({
-                        "x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
-                        "localized": lz, "overlay_bgr": lov, "at": now,
-                        "organ_id": _ai_organ_id,
-                    })
+                    with _ai_cache_lock:
+                        _ai_organ_cache.update({
+                            "x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
+                            "localized": lz, "overlay_bgr": lov, "at": now,
+                            "organ_id": _ai_organ_id,
+                        })
                     _ai_relocalize = False
                 except Exception as le:
                     logger.error("cat_organ lokalizasyon hatası: %s", le)
+                    # Audit P2: lokalizasyon HATASINDA cache'i geçersiz kıl — aksi halde ESKİ localized=True
+                    # + bayat x/y/z ile bobinler eski (yanlış) hedefe sürülüyordu (kedi kabinden çıkınca /
+                    # hareket edince). mobil ai_pro_frame zaten 500 dönüp sürmüyordu → asimetriyi kapatır.
+                    with _ai_cache_lock:
+                        _ai_organ_cache["localized"] = False
 
-            localized = _ai_organ_cache["localized"]
-            x_mm = _ai_organ_cache["x_mm"]; y_mm = _ai_organ_cache["y_mm"]; z_mm = _ai_organ_cache["z_mm"]
-            rel = _ai_organ_cache["reliability"]
+            with _ai_cache_lock:
+                localized = _ai_organ_cache["localized"]
+                x_mm = _ai_organ_cache["x_mm"]; y_mm = _ai_organ_cache["y_mm"]; z_mm = _ai_organ_cache["z_mm"]
+                rel = _ai_organ_cache["reliability"]
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
             if localized:
+                # Audit P1: E-stop/stop lokalizasyon (~1-4s) sırasında gelmiş olabilir → SÜRMEDEN ÖNCE
+                # is_active'i yeniden doğrula (E-stop'un ~1 iterasyon geçersiz kılınmasını engelle).
+                import servers.api_server as _apx
+                with _apx._session_lock:
+                    _still = bool(_apx._active_session.get("is_active"))
+                if not _still:
+                    _ai_loop_active = False
+                    break
                 D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _ai_organ_id)
                 _drive_coils_ai_pro(D, P)
             else:
@@ -594,6 +723,12 @@ def _ai_pro_loop():
         time.sleep(sleep_time)
 
     cap.release()
+    # Audit P2 (teardown-race seal): süre-doldu ile bu teardown arasındaki ~1sn'de yeni bir
+    # start_ai_pro başlamış olabilir (_ai_loop_active tekrar True + yeni seans). O durumda YENİ seans
+    # bobinlere sahiptir → bu ESKİ thread'in teardown'ı onları DURDURMASIN + is_active'ini EZMESİN.
+    if _ai_loop_active:
+        logger.info("AI Pro teardown atlandı: yeni loop başlamış (bobinler yeni seansa ait).")
+        return
     # Loop bittiğinde (süre doldu / durduruldu / hata) bobinleri DONANIM düzeyinde durdur —
     # keep-alive ile sonsuza sürmesin (AI artık sürmüyor).
     try:
@@ -631,8 +766,18 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
             return {"status": "success", "message": "Already running"}
         _ai_loop_active = True
 
-    _ai_organ_id = int(payload.organ_id)
-    _ai_duration_min = max(1, int(payload.duration_minutes))
+    # Audit P2: em_kedi yalnız organ 0-6'yı TEDAVİ eder; 7-10 (Kalp/Dalak/Akciğer) cat_organ ile
+    # lokalize olur ama _build_input ValueError→D=P=0 (sessiz sıfır-tedavi) YİNE 'aktif+lokalize·Kalp'
+    # gösterir → klinisyeni 'kalp tedavi ediliyor' diye yanıltır. Desteklenmeyeni reddet + loop'u geri al.
+    _organ_req = int(payload.organ_id)
+    if _organ_req not in (0, 1, 2, 3, 4, 5, 6):
+        with _ai_loop_lock:
+            _ai_loop_active = False
+        raise HTTPException(status_code=422, detail=f"organ_id {_organ_req} AI Pro tedavisi için desteklenmiyor (geçerli 0-6).")
+    _ai_organ_id = _organ_req
+    # Süreyi klinik üst sınıra kapla (Audit P1) — aksi halde {duration_minutes: 999999} uzaktan
+    # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne (_ai_duration_min*60) gider.
+    _ai_duration_min = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(payload.duration_minutes)))
     _ai_started_at = time.time()
     _ai_relocalize = True   # başlangıçta hemen cat_organ lokalizasyonu yap
     _ai_organ_cache["localized"] = False
@@ -656,10 +801,22 @@ def stop_ai_pro():
     with _ai_loop_lock:
         _ai_loop_active = False
 
-    from servers.api_server import state, update_live_session_state
-    if state and state.hardware:
-        state.hardware.stop_all_coils()
-    update_live_session_state(is_active=False, mode="Sistem Hazır")
+    # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-7 (Audit P1 #3). Eskiden yalnız
+    # stop_all_coils (STM) çağrılıyordu; kamerasız/mobil yolda loop-cleanup çalışmadığı için
+    # ESP 6-7 STOP almadan enerjili kalıyordu. _stop_session_coils ikisini de durdurur + coil-run kapatır.
+    import servers.api_server as _api
+    try:
+        _api._stop_session_coils(range(1, 8))
+    except Exception:
+        logger.exception("stop_ai_pro: _stop_session_coils hatası")
+    # AI seansını da kapat → süre-watchdog ve frame-geçidi 'seans aktif değil' görsün.
+    try:
+        with _api._session_lock:
+            if str(_api._active_session.get("mode", "")).startswith("AI"):
+                _api._active_session["is_active"] = False
+    except Exception:
+        logger.exception("stop_ai_pro: _active_session reset hatası")
+    _api.update_live_session_state(is_active=False, mode="Sistem Hazır")
     return {"status": "success", "message": "AI Pro Closed-Loop Stopped"}
 
 
@@ -667,7 +824,10 @@ def stop_ai_pro():
 def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     """Hedef organı değiştir (loop çalışırken de geçerli) + hemen yeniden-lokalize et."""
     global _ai_organ_id, _ai_relocalize
-    _ai_organ_id = int(payload.organ_id)
+    _organ_req = int(payload.organ_id)
+    if _organ_req not in (0, 1, 2, 3, 4, 5, 6):  # Audit P2: em_kedi yalnız 0-6 TEDAVİ eder (7-10 sessiz-sıfır)
+        raise HTTPException(status_code=422, detail=f"organ_id {_organ_req} desteklenmiyor (geçerli 0-6).")
+    _ai_organ_id = _organ_req
     _ai_relocalize = True   # yeni organ için cat_organ'ı hemen yeniden çalıştır
     return {"status": "success", "organId": _ai_organ_id, "organName": _ORGAN_NAMES.get(_ai_organ_id, "")}
 
@@ -720,20 +880,41 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
                          or (now - _ai_organ_cache["at"]) >= _ORGAN_LOCALIZE_INTERVAL_S)
         if need_localize:
             lz, lx, ly, lzz, lrel, lov = await asyncio.to_thread(_localize_organ, img, _ai_organ_id)
-            _ai_organ_cache.update({"x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
-                                    "localized": lz, "overlay_bgr": lov, "at": now,
-                                    "organ_id": _ai_organ_id})
+            with _ai_cache_lock:
+                _ai_organ_cache.update({"x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
+                                        "localized": lz, "overlay_bgr": lov, "at": now,
+                                        "organ_id": _ai_organ_id})
             _ai_relocalize = False
 
-        localized = _ai_organ_cache["localized"]
-        x_mm = _ai_organ_cache["x_mm"]; y_mm = _ai_organ_cache["y_mm"]; z_mm = _ai_organ_cache["z_mm"]
-        rel = _ai_organ_cache["reliability"]
+        with _ai_cache_lock:
+            localized = _ai_organ_cache["localized"]
+            x_mm = _ai_organ_cache["x_mm"]; y_mm = _ai_organ_cache["y_mm"]; z_mm = _ai_organ_cache["z_mm"]
+            rel = _ai_organ_cache["reliability"]
+
+        # GÜVENLİK (Audit P0): bobin YALNIZCA süre-watchdog kapsamındaki AKTİF AI Pro seansı
+        # varken sürülür. /start çağrılmadan (veya süre dolduktan / durdurulduktan sonra) gelen
+        # kare bobin SÜRMEZ → watchdog'un izlemediği gözetimsiz/uzayan PEMF maruziyetini engeller.
+        session_active = False
+        try:
+            import servers.api_server as _api
+            with _api._session_lock:
+                _sess = _api._active_session
+                session_active = (bool(_sess.get("is_active"))
+                                  and str(_sess.get("mode", "")).startswith("AI"))
+            if session_active and _ai_started_at and \
+                    (time.time() - _ai_started_at) >= _ai_duration_min * 60:
+                session_active = False  # süre dolmuş (watchdog henüz kapatmamış olsa da) → sürme
+        except Exception:
+            logger.exception("ai_pro_frame: aktif-seans kontrolü hatası")
+            session_active = False
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
-        # GERÇEK donanımı sür (loop ile aynı yol) — yalnız organ bulunduysa. Bobin 1-7.
-        if localized:
+        # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa. Bobin 1-7.
+        if localized and session_active:
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _ai_organ_id)
-            _drive_coils_ai_pro(D, P)
+            # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
+            # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
+            await asyncio.to_thread(_drive_coils_ai_pro, D, P)
             remaining = max(0, int(_ai_duration_min * 60 - (time.time() - _ai_started_at))) if _ai_started_at else 0
             try:
                 from servers.api_server import update_live_session_state
@@ -760,6 +941,8 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             "status": "success",
             "image_base64": b64_image,
             "detected": localized,
+            "driven": bool(localized and session_active),
+            "sessionActive": session_active,
             "reliability": round(rel, 3),
             "perCoil": _build_ai_pro_percoil(D, P),
             "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
@@ -778,6 +961,8 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
 async def analyze_segmentation(file: UploadFile = File(None), image_base64: str = Form(None)):
     """YOLO Seg Kedi Segmentasyonu"""
     try:
+        if ai_service_enabled():
+            return await delegate_infer("segmentation", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="segmentation")
 
         def _load_seg():
@@ -787,7 +972,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
             path = download_model_sync("ai_hub/cat_segmentation/yolov8m-seg.onnx")
             return YOLO(path, task="segment")
         
-        model = _get_or_load_model("seg", _load_seg)
+        model = await asyncio.to_thread(_get_or_load_model, "seg", _load_seg)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -828,13 +1013,15 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 async def analyze_thermal(file: UploadFile = File(None), image_base64: str = Form(None)):
     """GhostNetV2 Termal Analiz"""
     try:
+        if ai_service_enabled():
+            return await delegate_infer("thermal", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="thermal")
 
         def _load_thermal():
             from ai_hub.cat_thermal.inference_cat_thermal import CatThermalPredictor
             return CatThermalPredictor(model_name="GhostNetV2")
         
-        predictor = _get_or_load_model("thermal", _load_thermal)
+        predictor = await asyncio.to_thread(_get_or_load_model, "thermal", _load_thermal)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -864,7 +1051,10 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
 @ai_router.post("/api/ai/vision/reticulocytes")
 async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str = Form(None)):
     """YOLO Detect Retikülosit Sayımı"""
+    tmp = None  # finally'de temizlenecek temp görüntü (hata olsa da sızmasın)
     try:
+        if ai_service_enabled():
+            return await delegate_infer("reticulocytes", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="reticulocytes")
 
         def _load_retic():
@@ -874,7 +1064,8 @@ async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str
             path = download_model_sync("ai_hub/feline_reticulocytes/yolov8s.onnx")
             return YOLO(path, task="detect")
         
-        model = _get_or_load_model("retic", _load_retic)
+        # model-load-thread: ilk-yükleme (indir+ONNX) event-loop'u bloklamasın → thread-safe cache'i offload et.
+        model = await asyncio.to_thread(_get_or_load_model, "retic", _load_retic)
         
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -918,9 +1109,18 @@ async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str
     except Exception as e:
         logger.error(f"Reticulocytes inference error: {e}", exc_info=True)
         raise _ai_fail("Retikülosit model hatası", e)
+    finally:
+        # reticulocytes-finally fix: temp dosyayı hata olsa da MUTLAKA sil (diğer uçlarla tutarlı).
+        # Eski kod os.unlink'i finally DIŞINDA çağırıyordu → predict/imwrite hata verirse temp sızardı.
+        if tmp is not None:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
 
 @ai_router.post("/api/ai/vision/em_fantom")
 async def analyze_em_fantom(
+    _res=Depends(require_research),
     file: UploadFile = File(None),
     image_base64: str = Form(None),
     phantom_length_cm: float = Form(None),
@@ -935,6 +1135,9 @@ async def analyze_em_fantom(
     Klasik CV (headless-güvenli), 6-panel annotated görsel döner.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("em_fantom", file=file, image_base64=image_base64,
+                data={"phantom_length_cm": phantom_length_cm, "achieved_B": achieved_B, "duty_sum": duty_sum})
         img = await _decode_image(file, image_base64, label="em_fantom")
 
         def _load_em_fantom():
@@ -952,7 +1155,7 @@ async def analyze_em_fantom(
             _ = warm.predictor                          # ONNX + scaler'ları bir kez yükle
             return {"cfg": cfg, "predictor": warm._predictor, "cls": PhantomCvPipeline}
 
-        cache = _get_or_load_model("em_fantom_cv", _load_em_fantom)
+        cache = await asyncio.to_thread(_get_or_load_model, "em_fantom_cv", _load_em_fantom)
         # Her istekte hafif pipeline (taze intrinsics), önbellekli predictor enjekte.
         # manual_fallback=False ŞART — headless serviste GUI açmamalı.
         pl = cache["cls"](cache["cfg"], phantom_length_cm=phantom_length_cm,
@@ -991,6 +1194,7 @@ async def analyze_em_fantom(
 
 @ai_router.post("/api/ai/vision/em_petri")
 async def analyze_em_petri(
+    _res=Depends(require_research),
     file: UploadFile = File(None),
     image_base64: str = Form(None),
     petri_diameter_cm: float = Form(None),
@@ -1005,6 +1209,9 @@ async def analyze_em_petri(
     7-panel annotated görsel döner.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("em_petri", file=file, image_base64=image_base64,
+                data={"petri_diameter_cm": petri_diameter_cm, "achieved_B": achieved_B, "duty_sum": duty_sum})
         img = await _decode_image(file, image_base64, label="em_petri")
 
         def _load_em_petri():
@@ -1030,7 +1237,7 @@ async def analyze_em_petri(
             return {"cfg": cfg, "cls": PetriCvPipeline, "yolo": warm.yolo,
                     "predictor": warm._predictor, "yolo_path": yolo_path}
 
-        cache = _get_or_load_model("em_petri_cv", _load_em_petri)
+        cache = await asyncio.to_thread(_get_or_load_model, "em_petri_cv", _load_em_petri)
         # Her istekte hafif pipeline (taze intrinsics); önbellekli YOLO + predictor enjekte
         # (ağır modeller yeniden yüklenmez, yarış yok). yolo_device="cpu" ŞART.
         pl = cache["cls"](cache["cfg"], petri_diameter_cm=petri_diameter_cm,
@@ -1070,7 +1277,7 @@ async def analyze_em_petri(
         raise _ai_fail("Petri analiz hatası", e)
 
 @ai_router.post("/api/ai/rna/kidney")
-async def analyze_kidney_rna(file: UploadFile = File(None), csv_base64: str = Form(None)):
+async def analyze_kidney_rna(file: UploadFile = File(None), csv_base64: str = Form(None), _res=Depends(require_research)):
     """Böbrek RNA-seq → KIRC sınıflandırma (MLP-medium ONNX).
 
     Girdi: CSV — satır=hasta, sütun=20531 gen (eğitim/TCGA sırasında), 1. sütun hasta ID.
@@ -1078,18 +1285,27 @@ async def analyze_kidney_rna(file: UploadFile = File(None), csv_base64: str = Fo
     Foto DEĞİL — bir sekans laboratuvarı çıktısı. Tümü <5MB → model EXE'ye gömülü.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("rna", file=file, csv_base64=csv_base64)
         if csv_base64:
             content = base64.b64decode(csv_base64)
         elif file:
-            content = await file.read()
+            # Audit P2: sınırsız file.read() → GB dosya OOM/temp-disk dolumu (Starlette max_part_size
+            # yalnız non-file form alanlarını sınırlar; file part sınır-kontrolsüz spool edilir). RNA CSV ~60MB.
+            content = await file.read(60 * 1024 * 1024 + 1)
+            if len(content) > 60 * 1024 * 1024:
+                raise ValueError("CSV çok büyük (> 60 MB sınırı).")
         else:
             raise ValueError("CSV verisi bulunamadı.")
 
         import io as _io
 
         import pandas as _pd
+        # event-loop-blok fix: 50MB'a kadar CSV × 20531 sütun pandas parse'ı CPU-yoğun → thread'e offload.
+        def _parse_csv():
+            return _pd.read_csv(_io.BytesIO(content), index_col=0)
         try:
-            df = _pd.read_csv(_io.BytesIO(content), index_col=0)
+            df = await asyncio.to_thread(_parse_csv)
         except Exception as pe:
             raise ValueError(f"CSV okunamadı ({pe}). Beklenen: satır=hasta, sütun=gen, 1. sütun hasta ID.")
         if df.shape[0] == 0:
@@ -1099,7 +1315,7 @@ async def analyze_kidney_rna(file: UploadFile = File(None), csv_base64: str = Fo
             from ai_hub.inference_human_kidney_rna import KidneyRnaPredictor
             return KidneyRnaPredictor()
 
-        predictor = _get_or_load_model("kidney_rna", _load_kidney_rna)
+        predictor = await asyncio.to_thread(_get_or_load_model, "kidney_rna", _load_kidney_rna)
 
         if predictor.expected_cols and df.shape[1] != predictor.expected_cols:
             raise HTTPException(status_code=400, detail=(
@@ -1149,7 +1365,7 @@ class KidneyDiseaseInput(BaseModel):
     ane: str | None = None
 
 @ai_router.post("/api/ai/disease/kidney")
-async def analyze_kidney_disease(data: KidneyDiseaseInput):
+async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_research)):
     """İnsan Kronik Böbrek Hastalığı (UCI-CKD) sınıflandırma (ExtraTrees ONNX).
 
     24 klinik özellik (14 sayısal + 10 kategorik; eksikler impute) → preprocessor →
@@ -1157,6 +1373,8 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput):
     Model EXE'ye gömülü (<5MB); CPU. Foto/CSV DEĞİL — form girişi.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_json("kidney_disease", data.model_dump())
         from ai_hub.inference_human_kidney_disease import predict_one
         features = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         result = await asyncio.to_thread(lambda: predict_one(features))
@@ -1184,10 +1402,16 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
     tmp_in = None
     tmp_wav = None
     try:
+        if ai_service_enabled():
+            return await delegate_infer("sound", file=file, audio_base64=audio_base64)
         if audio_base64:
             content = base64.b64decode(audio_base64)
         elif file:
-            content = await file.read()
+            # Audit P2: sınırsız file.read() → GB ses OOM/temp-disk dolumu; ffmpeg tüm girdiyi transcode
+            # eder. Ses üst-sınırı ~25MB.
+            content = await file.read(25 * 1024 * 1024 + 1)
+            if len(content) > 25 * 1024 * 1024:
+                raise ValueError("Ses dosyası çok büyük (> 25 MB sınırı).")
         else:
             raise ValueError("Ses verisi bulunamadı.")
         if len(content) < 200:
@@ -1204,7 +1428,7 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             # device="cpu" ŞART (headless); runtime onnx (torch YOK).
             return CatSoundClassifier(model_path=onnx, runtime="onnx", device="cpu")
 
-        clf = _get_or_load_model("cat_sound", _load_cat_sound)
+        clf = await asyncio.to_thread(_get_or_load_model, "cat_sound", _load_cat_sound)
 
         # Ham sesi temp'e yaz → ffmpeg ile 22050Hz mono WAV'a çevir (herhangi format:
         # mp3/wav/m4a/aac/ogg... — kayıt Android m4a olabilir; librosa/soundfile m4a decode
@@ -1215,8 +1439,11 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
         tmp_wav = tmp_in + ".wav"
         import imageio_ffmpeg
         ff = imageio_ffmpeg.get_ffmpeg_exe()
+        # Audit P2: ffmpeg sertleştir — -protocol_whitelist file (HLS/concat SSRF engelle), -nostdin,
+        # -t 30 (girdi okuma süresi cap), -fs (çıktı WAV boyut cap) → uzun/kötücül medya disk-dolumu+SSRF keser.
         proc = await asyncio.to_thread(lambda: subprocess.run(
-            [ff, "-y", "-i", tmp_in, "-ar", "22050", "-ac", "1", tmp_wav],
+            [ff, "-nostdin", "-protocol_whitelist", "file", "-t", "30", "-y", "-i", tmp_in,
+             "-ar", "22050", "-ac", "1", "-fs", "30000000", tmp_wav],
             capture_output=True, timeout=30))
         if proc.returncode != 0 or not os.path.exists(tmp_wav):
             raise ValueError("Ses çözümlenemedi (desteklenmeyen format?).")
@@ -1241,12 +1468,14 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
                     pass
 
 @ai_router.post("/api/ai/vision/kidney_ct")
-async def analyze_kidney_ct(file: UploadFile = File(None), image_base64: str = Form(None)):
+async def analyze_kidney_ct(file: UploadFile = File(None), image_base64: str = Form(None), _res=Depends(require_research)):
     """Böbrek CT Tespit (YOLOv8s ONNX, 3 sınıf: Kidney Stone / Kidney / Kidney Cyst).
 
     CT görüntüsü → YOLO detect → annotated görsel + tespit sayıları. `/vision/` auth-muaf.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("kidney_ct", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="kidney_ct")
 
         def _load_kidney_ct():
@@ -1259,7 +1488,7 @@ async def analyze_kidney_ct(file: UploadFile = File(None), image_base64: str = F
             from ai_hub.inference_human_kidney_ct import KidneyCTDetector
             return KidneyCTDetector(model_path=onnx, backend="onnx", device="cpu")
 
-        det = _get_or_load_model("kidney_ct", _load_kidney_ct)
+        det = await asyncio.to_thread(_get_or_load_model, "kidney_ct", _load_kidney_ct)
 
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -1287,13 +1516,15 @@ async def analyze_kidney_ct(file: UploadFile = File(None), image_base64: str = F
         raise _ai_fail("Böbrek CT analiz hatası", e)
 
 @ai_router.post("/api/ai/vision/histopath")
-async def analyze_histopath(file: UploadFile = File(None), image_base64: str = Form(None)):
+async def analyze_histopath(file: UploadFile = File(None), image_base64: str = Form(None), _res=Depends(require_research)):
     """Böbrek Histopatoloji Grade (V22-KMC-ClassicTrio ONNX, 5 sınıf grade0-4).
 
     Histoloji doku görüntüsü → 3-backbone ensemble → grade + olasılıklar (sınıflandırıcı,
     detektör değil → overlay yok). `/vision/` auth-muaf.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("histopath", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="histopath")
 
         def _load_histopath():
@@ -1306,7 +1537,7 @@ async def analyze_histopath(file: UploadFile = File(None), image_base64: str = F
             from ai_hub.inference_renal_histopath_kmc import RenalHistopathClassifier
             return RenalHistopathClassifier(model_path=onnx, backend="onnx", device="cpu")
 
-        clf = _get_or_load_model("histopath", _load_histopath)
+        clf = await asyncio.to_thread(_get_or_load_model, "histopath", _load_histopath)
 
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -1339,13 +1570,15 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
     değil, lokalizasyon pipeline'ı. `/vision/` auth-muaf.
     """
     try:
+        if ai_service_enabled():
+            return await delegate_infer("cat_organ", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="cat_organ")
 
         def _load_cat_organ():
             from ai_hub.inference_cat_organ.catorgan_predictor import CatOrganPredictor
             return CatOrganPredictor(device="cpu")
 
-        clf = _get_or_load_model("cat_organ", _load_cat_organ)
+        clf = await asyncio.to_thread(_get_or_load_model, "cat_organ", _load_cat_organ)
 
         import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)

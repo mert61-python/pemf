@@ -14,11 +14,13 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -26,6 +28,39 @@ logger = logging.getLogger(__name__)
 
 # exe branch manifest'i (mobil ayrı branch'te; karışmaz). raw.githubusercontent → API rate-limit yok.
 _MANIFEST_URL = "https://raw.githubusercontent.com/mert61-python/pemf-update/exe/latest.json"
+
+# K2 (defense-in-depth): OTA installer URL'sini HTTPS + bilinen GitHub-release host'larına pinle.
+# Manifest ele geçse bile (repo/hesap) URL'yi keyfi bir sunucuya yönlendirip LocalSystem-EXE indirtme
+# engellenir. NOT: Çekirdek koruma installer imza-pinleme / manifest-imzalama'dır (release-süreci +
+# özel anahtar gerektirir → operatörle koordineli); bu katman URL-yönlendirme + path-traversal'i kapatır.
+_ALLOWED_UPDATE_HOSTS = frozenset({
+    "github.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "raw.githubusercontent.com",
+})
+
+
+def _validate_installer_url(url: str):
+    """installerUrl'yi HTTPS + bilinen release host'una pinler. (ok: bool, hata: str) döner."""
+    try:
+        p = urllib.parse.urlparse(url or "")
+    except Exception:
+        return False, "Güncelleme URL'si çözümlenemedi (güvenlik)."
+    if p.scheme != "https":
+        return False, "Güncelleme URL'si HTTPS değil — indirilmedi (güvenlik)."
+    host = (p.hostname or "").lower()
+    if host not in _ALLOWED_UPDATE_HOSTS and not host.endswith(".githubusercontent.com"):
+        return False, f"Güncelleme host'u beklenen release sunucusu değil ({host}) — indirilmedi (güvenlik)."
+    return True, ""
+
+
+def _safe_ver(v) -> str:
+    """Sürüm etiketini dosya-adı-güvenli hale getir (path-traversal engelle)."""
+    s = re.sub(r"[^0-9A-Za-z._-]", "", str(v))[:40]
+    return s or "x"
+
 
 _status: dict = {"checked": False, "available": False, "currentVersion": "", "latestVersion": "",
                  "notes": "", "installerUrl": "", "sha256": "", "mandatory": False, "error": ""}
@@ -62,14 +97,30 @@ def get_current_version() -> str:
 
 
 def _vtuple(v: str):
-    try:
-        return tuple(int(x) for x in str(v).strip().lstrip("vV").split(".")[:3])
-    except Exception:
-        return (0, 0, 0)
+    """'1.8.1' / 'v1.8.1-safety' → (1,8,1): her parcanin sayisal on-ekini cikar (Audit P2: eskiden
+    '1-safety' int() ValueError → (0,0,0) → etiketli zorunlu guvenlik guncellemesi asla onerilmezdi).
+    Hicbir sayisal parca yoksa None → 'bilinmiyor' (guncelleme ONERILMEZ; sonsuz-reinstall onle)."""
+    import re
+    parts = str(v).strip().lstrip("vV").split(".")
+    nums = []
+    for p in parts[:3]:
+        m = re.match(r"\d+", p.strip())
+        if not m:
+            break
+        nums.append(int(m.group()))
+    return tuple(nums) if nums else None
 
 
 def _is_newer(latest: str, current: str) -> bool:
-    return _vtuple(latest) > _vtuple(current)
+    lv, cv = _vtuple(latest), _vtuple(current)
+    if lv is None or cv is None:
+        # Ayristirilamayan surum → guncelleme ONERME (yanlis-pozitif/sonsuz-reinstall onle).
+        logger.warning("Surum ayristirilamadi (latest=%r current=%r) → guncelleme onerilmiyor.", latest, current)
+        return False
+    n = max(len(lv), len(cv))
+    lv = lv + (0,) * (n - len(lv))
+    cv = cv + (0,) * (n - len(cv))
+    return lv > cv
 
 
 def check_for_update(timeout: float = 15.0) -> dict:
@@ -186,6 +237,10 @@ def apply_update() -> dict:
         return {"ok": False, "error": "Uygulanacak güncelleme yok."}
     if _has_active_treatment():
         return {"ok": False, "error": "Aktif tedavi sürüyor — güncelleme seans bitince yapılabilir."}
+    # K2 (defense-in-depth): installerUrl'yi indirmeden ÖNCE HTTPS + release-host'a pinle (kilit almadan).
+    _ok_url, _url_err = _validate_installer_url(st.get("installerUrl", ""))
+    if not _ok_url:
+        return {"ok": False, "error": _url_err}
     with _apply_lock:
         if _applying:
             return {"ok": False, "error": "Güncelleme zaten sürüyor."}
@@ -193,7 +248,7 @@ def apply_update() -> dict:
     url = st["installerUrl"]
     expected = (st.get("sha256") or "").lower()
     try:
-        dest = Path(tempfile.gettempdir()) / f"PEMF_Update_{st.get('latestVersion','x')}.exe"
+        dest = Path(tempfile.gettempdir()) / f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe"
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
             while True:
@@ -224,6 +279,15 @@ def apply_update() -> dict:
             except Exception:
                 pass
             return {"ok": False, "error": "Installer imzası GEÇERSİZ/kurcalanmış (Authenticode) — güncelleme İPTAL."}
+        # TOCTOU (Audit P1): indirme+imza penceresi ~200sn — bu sürede tedavi BAŞLAMIŞ olabilir.
+        # Installer'ı ÇALIŞTIRMADAN hemen önce tekrar kontrol et; aktifse kur BAŞLATMA (servis-restart
+        # bobinleri kontrolcüsüz bırakır → ESP son komutu sürdürür → aşırı-doz/yanık riski).
+        if _has_active_treatment():
+            try:
+                dest.unlink()
+            except Exception:
+                pass
+            return {"ok": False, "error": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin)."}
         # Detached: installer servisi (bu süreci) durdursa da hayatta kalır → değiştir → yeniden başlat.
         flags = 0
         if os.name == "nt":
@@ -249,14 +313,22 @@ def rollback() -> dict:
     Kötü bir güncelleme sahada sorun çıkarırsa operatör tek-tıkla son iyi sürüme döner."""
     global _applying
     st = get_status()
-    prev = st.get("previousStable") or {}
+    # Audit P3: previousStable dict DEĞİLSE (bozuk manifest: string/liste) `or {}` truthy-non-dict'i
+    # geçirir → prev.get() AttributeError → try'dan önce olduğu için generic 500 (operatör dönemez).
+    prev = st.get("previousStable")
+    if not isinstance(prev, dict):
+        prev = {}
     url = str(prev.get("installerUrl") or "")
     expected = str(prev.get("sha256") or "").lower()
     ver = str(prev.get("version") or "prev")
     if not url:
         return {"ok": False, "error": "Geri dönülecek önceki kararlı sürüm tanımlı değil (manifest 'previousStable' yok)."}
+    # Öncelik: aktif-tedavi güvenlik-guard'ı URL-doğrulamasından ÖNCE (apply_update ile tutarlı).
     if _has_active_treatment():
         return {"ok": False, "error": "Aktif tedavi sürüyor — rollback seans bitince yapılabilir."}
+    _ok_url, _url_err = _validate_installer_url(url)
+    if not _ok_url:
+        return {"ok": False, "error": _url_err}
     with _apply_lock:
         if _applying:
             return {"ok": False, "error": "Bir güncelleme/rollback zaten sürüyor."}
@@ -264,7 +336,7 @@ def rollback() -> dict:
     try:
         if not expected:
             return {"ok": False, "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
-        dest = Path(tempfile.gettempdir()) / f"PEMF_Rollback_{ver}.exe"
+        dest = Path(tempfile.gettempdir()) / f"PEMF_Rollback_{_safe_ver(ver)}.exe"
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
             while True:
@@ -285,6 +357,13 @@ def rollback() -> dict:
             except Exception:
                 pass
             return {"ok": False, "error": "Rollback installer imzası GEÇERSİZ/kurcalanmış — İPTAL."}
+        # TOCTOU (Audit P1): apply_update ile aynı — Popen'dan hemen önce tedavi re-check.
+        if _has_active_treatment():
+            try:
+                dest.unlink()
+            except Exception:
+                pass
+            return {"ok": False, "error": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin)."}
         flags = 0
         if os.name == "nt":
             flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP

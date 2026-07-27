@@ -164,6 +164,14 @@ CLINICAL_PROTOCOLS = {
     'ligament': {'freq': 75, 'duty': 40, 'duration': 37, 'intensity': 1.75, 'evidence': 'high'},
 }
 
+# Audit P1: anahtarları girdiyle AYNI normalizasyondan geçir. CLINICAL_PROTOCOLS anahtarları ham
+# Türkçe ('kırık','ödem','ağrı','kas yorgunluğu','nörolojik'...) ama clean_treatment_target girişte
+# ı/ğ/ö/ç/ş/ü'yü katlıyor → bu anahtarlar HİÇ eşleşmez, sessizce wellness dozu dönerdi (yanlış doz).
+# normalize_anahtar → (ham_anahtar, params). Çakışma yok (foldlanmış anahtarlar benzersiz).
+_CLINICAL_PROTOCOLS_NORM = {
+    clean_treatment_target(_k): (_k, _v) for _k, _v in CLINICAL_PROTOCOLS.items()
+}
+
 
 class PatientProfileAdaptor:
     """
@@ -278,6 +286,10 @@ class PatientProfileAdaptor:
         
         # Yaş adaptasyonu
         age = patient_info.get('age', 5)
+        try:
+            age = float(age)   # Audit P3: string age → categorize_age TypeError → coerce
+        except (TypeError, ValueError):
+            age = 5.0
         age_category = self.categorize_age(age)
         age_factor = self.ADAPTATION_RULES['age_categories'][age_category]
         adapted['intensity'] = adapted.get('intensity', 1.0) * age_factor['intensity']
@@ -285,6 +297,10 @@ class PatientProfileAdaptor:
         
         # Ağırlık adaptasyonu
         weight = patient_info.get('weight', 15)
+        try:
+            weight = float(weight)   # Audit P3: string weight → coerce
+        except (TypeError, ValueError):
+            weight = 15.0
         weight_category = self.categorize_weight(weight)
         weight_factor = self.ADAPTATION_RULES['weight_categories'][weight_category]
         adapted['duration'] = int(adapted['duration'] * weight_factor['duration'])
@@ -294,7 +310,17 @@ class PatientProfileAdaptor:
         
         # Duration'ı sınırla (5-90 dk)
         adapted['duration'] = max(5, min(90, adapted['duration']))
-        
+
+        # Audit P3: intensity ve freq DE sınırla. adapt() ÖLÜ yol (canlı get_literature_recommendation
+        # patient_info'yu yok sayar) ama bir seans-başlatma akışına bağlanırsa doz-katlanması güvenlik-riski
+        # (intensity çarpımla katlanıyordu: at+kırık≈2.6; freq'e hiç dokunulmuyordu). Klinik aralığa kapa.
+        adapted['intensity'] = max(0.5, min(2.0, float(adapted.get('intensity', 1.0) or 1.0)))
+        if 'freq' in adapted:
+            try:
+                adapted['freq'] = max(1, min(150, int(adapted['freq'])))
+            except (TypeError, ValueError):
+                pass
+
         return adapted
 
 
@@ -432,17 +458,21 @@ class HybridPEMFRecommender:
         
         logger.debug(f"Searching for: '{treatment_target}' -> cleaned: '{target_clean}'")
         
-        # Direkt eşleşme
-        if target_clean in self.clinical_db:
-            logger.info(f"Exact match found: '{target_clean}'")
-            return self.clinical_db[target_clean].copy()
-        
-        # Substring eşleşmesi (tedavi hedefinde protokol adı geçiyor mu?)
-        for protocol_name in self.clinical_db.keys():
-            if protocol_name in target_clean:
-                logger.info(f"Substring match found: '{protocol_name}' in '{target_clean}'")
-                return self.clinical_db[protocol_name].copy()
-        
+        # Direkt eşleşme — NORMALIZE edilmiş anahtarlar üzerinde (Audit P1: ham-Türkçe anahtarlar
+        # katlanmış girdiyle eşleşmiyordu → sessiz yanlış doz).
+        if target_clean in _CLINICAL_PROTOCOLS_NORM:
+            _raw, _params = _CLINICAL_PROTOCOLS_NORM[target_clean]
+            logger.info(f"Exact match found: '{target_clean}' ({_raw})")
+            return _params.copy()
+
+        # Substring eşleşmesi — EN UZUN anahtar öncelikli (kısa 'kas', 'kas yorgunluğu'nu
+        # gölgelemesin; Audit P1). Boş anahtarı atla.
+        for _norm_key in sorted(_CLINICAL_PROTOCOLS_NORM.keys(), key=len, reverse=True):
+            if _norm_key and _norm_key in target_clean:
+                _raw, _params = _CLINICAL_PROTOCOLS_NORM[_norm_key]
+                logger.info(f"Substring match found: '{_norm_key}' ({_raw}) in '{target_clean}'")
+                return _params.copy()
+
         return None
     
     def recommend_parameters(self, 

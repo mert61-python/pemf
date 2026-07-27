@@ -143,6 +143,13 @@ class HeadlessCore:
         f_vals = [float(x) for x in match.group(3).split(",")]
         t_vals = [int(float(x)) for x in match.group(4).split(",")]
 
+        # Audit P3: alan uzunlukları eşit değilse SESSİZCE kırpma yerine uyar + satırı reddet — min ötesi
+        # bobinler coil_update yayınlamaz → live_state bayat/yanlış kalır (UI/telemetri desync).
+        _lens = (len(d_vals), len(p_vals), len(f_vals), len(t_vals))
+        if len(set(_lens)) > 1:
+            import logging as _lg
+            _lg.getLogger("headless_core").warning("STM parse: alan uzunlukları uyuşmuyor %s → satır reddedildi.", _lens)
+            return []
         updates: list[dict[str, Any]] = []
         max_items = min(self.STM_COIL_COUNT, len(d_vals), len(p_vals), len(f_vals), len(t_vals))
         for index in range(max_items):

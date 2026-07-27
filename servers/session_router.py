@@ -24,6 +24,7 @@ class SessionNotesPayload(BaseModel):
     frequency: float = 0.0
     intensity: float = 0.0
     duration_minutes: int = 0
+    operator_email: str = ""  # klinik-içi sahiplik (fallback start_session için)
 
 
 @router.get("/api/session/active")
@@ -84,6 +85,7 @@ def save_session_notes(payload: SessionNotesPayload):
             treatment_mode=payload.mode,
             target_condition=payload.target_condition or None,
             patient_name=payload.patient_name or None,
+            operator_email=payload.operator_email or None,
         )
         db.end_session(
             sid,

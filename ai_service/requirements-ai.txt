@@ -5,7 +5,7 @@
 #      YOLO onnx torch-CUDA-op tetiklemediği için çakışma beklenmez (import-only torch).
 onnxruntime-gpu==1.19.2
 numpy==1.26.4
-opencv-python==4.9.0.80
+opencv-python==4.11.0.86          # requirements.txt / docker ile HİZALI (bkz. requirements.txt opencv notu)
 pillow==12.2.0
 scipy==1.15.3
 scikit-learn==1.7.2

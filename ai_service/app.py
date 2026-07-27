@@ -45,6 +45,15 @@ def _jpg_b64(bgr) -> str:
     return base64.b64encode(buf).decode("utf-8")
 
 
+def _err500(exc, code: int = 500):
+    """Audit P3: ham istisna metni (sunucu dosya yolları/iç detay) istemciye SIZMASIN — jenerik mesaj
+    + correlation-id döndür, tam istisnayı yalnız sunucu log'una yaz (keşif/bilgi-ifşası engellenir)."""
+    import logging as _lg, uuid as _uuid
+    eid = _uuid.uuid4().hex[:12]
+    _lg.getLogger("ai_service").error("infer hata [%s]: %s: %s", eid, type(exc).__name__, exc)
+    return JSONResponse({"error": "Sunucu hatasi (loglandi)", "error_id": eid}, status_code=code)
+
+
 # ── yardımcılar ──────────────────────────────────────────────────────────────
 def _list_onnx():
     out = []
@@ -108,11 +117,16 @@ def benchmark(model: Optional[str] = Query(None), runs: int = Query(20, ge=1, le
     if not lst:
         return JSONResponse({"error": f"{MODELS_DIR} altında .onnx yok"}, status_code=404)
     rel = model or lst[0]["path"]
-    full = os.path.join(MODELS_DIR, rel)
-    if not os.path.exists(full):
-        return JSONResponse({"error": f"model yok: {rel}"}, status_code=404)
+    # Audit P3: path-traversal engelle — rel MODELS_DIR ALTINDA olmalı ('../..' / mutlak yol reddet).
+    full = os.path.realpath(os.path.join(MODELS_DIR, rel))
+    _root = os.path.realpath(MODELS_DIR)
+    if not (full == _root or full.startswith(_root + os.sep)) or not os.path.exists(full):
+        return JSONResponse({"error": "model yok"}, status_code=404)
     provs = _providers(True)
-    t0 = time.time(); sess = ort.InferenceSession(full, providers=provs); load_ms = (time.time() - t0) * 1000
+    try:
+        t0 = time.time(); sess = ort.InferenceSession(full, providers=provs); load_ms = (time.time() - t0) * 1000
+    except Exception:
+        return JSONResponse({"error": "model yuklenemedi"}, status_code=400)
     used = sess.get_providers()
     name, arr = _synthetic_input(sess)
     sess.run(None, {name: arr})
@@ -125,11 +139,11 @@ def benchmark(model: Optional[str] = Query(None), runs: int = Query(20, ge=1, le
 
 # ── GERÇEK inference uçları ──────────────────────────────────────────────────
 @app.post("/infer/histopath")
-async def infer_histopath(file: UploadFile = File(...)):
+def infer_histopath(file: UploadFile = File(...)):
     """Böbrek histopatoloji doku görüntüsü → grade0-4 + olasılıklar (GPU)."""
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         clf = predictors.get("histopath")
@@ -141,25 +155,27 @@ async def infer_histopath(file: UploadFile = File(...)):
                 "top_1_class": result["top_1_class"], "top_1_prob": result["top_1_prob"],
                 "top_k": result["top_k"], "probabilities": result.get("probabilities")}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
 
 
 @app.post("/infer/sound")
-async def infer_sound(file: UploadFile = File(...)):
+def infer_sound(file: UploadFile = File(...)):
     """Kedi sesi (mp3/wav/m4a) → ffmpeg 22050 mono WAV → 10 sınıf + top-3 (ONNX GPU)."""
     tmp_in = tmp_wav = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "ses boş/çok küçük"}, status_code=400)
         clf = predictors.get("sound")
         tmp_in = _save_temp(data, ".bin")
         tmp_wav = tmp_in + ".wav"
         ff = shutil.which("ffmpeg") or "ffmpeg"
-        proc = subprocess.run([ff, "-y", "-i", tmp_in, "-ar", "22050", "-ac", "1", tmp_wav],
+        # Audit P2: ffmpeg sertleştir (SSRF/disk-dolumu) — -protocol_whitelist file, -nostdin, -t 30, -fs cap.
+        proc = subprocess.run([ff, "-nostdin", "-protocol_whitelist", "file", "-t", "30", "-y", "-i", tmp_in,
+                               "-ar", "22050", "-ac", "1", "-fs", "30000000", tmp_wav],
                               capture_output=True, timeout=30)
         if proc.returncode != 0 or not os.path.exists(tmp_wav):
             return JSONResponse({"error": "ses çözümlenemedi (ffmpeg)"}, status_code=400)
@@ -170,7 +186,7 @@ async def infer_sound(file: UploadFile = File(...)):
                 "top_1_class": result["top_1_class"], "top_1_prob": result["top_1_prob"],
                 "top_k": result["top_k"], "probabilities": result.get("probabilities")}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         for p in (tmp_in, tmp_wav):
             if p and os.path.exists(p):
@@ -179,11 +195,11 @@ async def infer_sound(file: UploadFile = File(...)):
 
 # ── YOLO/görüntü uçları (Faz 2b — GPU via ultralytics device=0 → onnxruntime CUDA) ──
 @app.post("/infer/kidney_ct")
-async def infer_kidney_ct(file: UploadFile = File(...)):
+def infer_kidney_ct(file: UploadFile = File(...)):
     """Böbrek CT → YOLOv8s tespit (taş/kist/normal) + annotated görsel (GPU)."""
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         det = predictors.get("kidney_ct")
@@ -198,19 +214,19 @@ async def infer_kidney_ct(file: UploadFile = File(...)):
                 "detections": result.get("detections"),
                 "image_base64": _jpg_b64(overlay)}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
 
 
 @app.post("/infer/segmentation")
-async def infer_segmentation(file: UploadFile = File(...)):
+def infer_segmentation(file: UploadFile = File(...)):
     """Kedi segmentasyon → YOLOv8m-seg maske overlay + kedi sayısı (GPU)."""
     import cv2
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         img = _read_bgr(data)
@@ -232,14 +248,14 @@ async def infer_segmentation(file: UploadFile = File(...)):
                 "inference_ms": round((time.time() - t0) * 1000, 1),
                 "cat_count": int(cat_count), "image_base64": _jpg_b64(img)}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
 
 
 @app.post("/infer/landmark")
-async def infer_landmark(file: UploadFile = File(...)):
+def infer_landmark(file: UploadFile = File(...)):
     """Kedi yüzü → YOLO-pose keypoint → FGS ağrı skoru + keypoint overlay (GPU).
 
     Tespit yoksa yanlış-güvence verme: fgs_total=null, detected=false.
@@ -247,7 +263,7 @@ async def infer_landmark(file: UploadFile = File(...)):
     import cv2
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         img = _read_bgr(data)
@@ -292,7 +308,7 @@ async def infer_landmark(file: UploadFile = File(...)):
                 "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
                 "image_base64": _jpg_b64(img)}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
@@ -300,11 +316,11 @@ async def infer_landmark(file: UploadFile = File(...)):
 
 # ── Faz 2c: termal (görüntü, GPU), cat_organ (görüntü 3B, GPU) ──
 @app.post("/infer/thermal")
-async def infer_thermal(file: UploadFile = File(...)):
+def infer_thermal(file: UploadFile = File(...)):
     """Termal görüntü → sağlık sınıflandırma (GhostNetV2 ONNX, GPU)."""
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         clf = predictors.get("thermal")
@@ -315,20 +331,20 @@ async def infer_thermal(file: UploadFile = File(...)):
         return {"status": "success", "device": dev,
                 "inference_ms": round((time.time() - t0) * 1000, 1), **result}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
 
 
 @app.post("/infer/cat_organ")
-async def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
+def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
     """Kedi görüntüsü → 10 organ 3B lokalizasyon (3 ONNX) + overlay (GPU).
     target_oid (ops): AI Pro seçili organı → overlay o organa odaklanır (CPU-parite; 0/None=Tüm Vücut)."""
     import cv2
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         clf = predictors.get("cat_organ")
@@ -354,7 +370,7 @@ async def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(N
                 "pose_type": (result.get("pose_classifier") or {}).get("type"),
                 "image_base64": image_b64}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
@@ -362,7 +378,7 @@ async def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(N
 
 # ── Faz 2c: JSON girdili uçlar (küçük/CPU modeller) ──
 @app.post("/infer/disease")
-async def infer_disease(payload: dict = Body(...)):
+def infer_disease(payload: dict = Body(...)):
     """Kedi hastalık (XGBoost) — JSON: age,weight,hr,temp,duration,symptom_indices."""
     try:
         clf = predictors.get("disease")
@@ -376,11 +392,11 @@ async def infer_disease(payload: dict = Body(...)):
                 "inference_ms": round((time.time() - t0) * 1000, 1),
                 "results": formatted, "top_probability": round(top_p, 3), "low_confidence": top_p < 0.40}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
 
 
 @app.post("/infer/kidney_disease")
-async def infer_kidney_disease(payload: dict = Body(...)):
+def infer_kidney_disease(payload: dict = Body(...)):
     """İnsan KBH (ExtraTrees ONNX) — JSON: 24 klinik özellik."""
     try:
         from ai_hub.inference_human_kidney_disease import predict_one
@@ -391,16 +407,16 @@ async def infer_kidney_disease(payload: dict = Body(...)):
                 "prob_ckd": r["prob_ckd"], "prob_pct": round(r["prob_ckd"] * 100, 1),
                 "label": r["label"], "model": r.get("model")}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
 
 
 @app.post("/infer/rna")
-async def infer_rna(file: UploadFile = File(...)):
+def infer_rna(file: UploadFile = File(...)):
     """Böbrek RNA-seq CSV (satır=hasta, sütun=gen) → KIRC sınıflandırma (MLP ONNX)."""
     try:
         import io as _io
         import pandas as pd
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 50:
             return JSONResponse({"error": "CSV boş/çok küçük"}, status_code=400)
         df = pd.read_csv(_io.BytesIO(data), index_col=0)
@@ -415,16 +431,16 @@ async def infer_rna(file: UploadFile = File(...)):
                 "inference_ms": round((time.time() - t0) * 1000, 1),
                 "n_patients": len(predictions), "classes": pred.classes, "predictions": predictions}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
 
 
 # ── Faz kalan: reticulocytes (YOLO detect) + em_fantom/em_petri (kabin-CV pipeline) ──
 @app.post("/infer/reticulocytes")
-async def infer_reticulocytes(file: UploadFile = File(...)):
+def infer_reticulocytes(file: UploadFile = File(...)):
     """Kan mikroskop görüntüsü → YOLOv8s retikülosit tespiti + sayım + overlay (GPU)."""
     tmp = None
     try:
-        data = await file.read()
+        data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
         model = predictors.get("reticulocytes")
@@ -438,7 +454,7 @@ async def infer_reticulocytes(file: UploadFile = File(...)):
                 "inference_ms": round((time.time() - t0) * 1000, 1),
                 "n_detections": int(n), "image_base64": _jpg_b64(r.plot())}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)
@@ -452,13 +468,13 @@ def _prov_dev(session):
 
 
 @app.post("/infer/em_fantom")
-async def infer_em_fantom(file: UploadFile = File(...),
+def infer_em_fantom(file: UploadFile = File(...),
                           phantom_length_cm: float = Form(None),
                           achieved_B: float = Form(None),
                           duty_sum: float = Form(None)):
     """Fantom tümör: klasik CV + BiLSTM (D/P/E). phantom_length_cm ile gerçek-mm ölçek."""
     try:
-        data = await file.read()
+        data = file.file.read()
         img = _read_bgr(data)
         c = predictors.get("em_fantom")
         pl = c["cls"](c["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
@@ -476,18 +492,18 @@ async def infer_em_fantom(file: UploadFile = File(...),
                 "tumor_regions": payload["tumor_regions"], "healthy_regions": payload["healthy_regions"],
                 "timing_ms": result.timing_ms, "image_base64": _jpg_b64(overlay)}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
 
 
 @app.post("/infer/em_petri")
-async def infer_em_petri(file: UploadFile = File(...),
+def infer_em_petri(file: UploadFile = File(...),
                          petri_diameter_cm: float = Form(None),
                          achieved_B: float = Form(None),
                          duty_sum: float = Form(None)):
     """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm."""
     from dataclasses import asdict
     try:
-        data = await file.read()
+        data = file.file.read()
         img = _read_bgr(data)
         c = predictors.get("em_petri")
         pl = c["cls"](c["cfg"], petri_diameter_cm=petri_diameter_cm,
@@ -505,7 +521,7 @@ async def infer_em_petri(file: UploadFile = File(...),
                 "wells": [asdict(w) for w in result.wells],
                 "timing_ms": result.timing_ms, "image_base64": _jpg_b64(overlay)}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)
 
 
 @app.post("/infer/em_kedi")
@@ -534,4 +550,4 @@ def infer_em_kedi(payload: dict = Body(...)):
         return {"status": "success", "device": _prov_dev(pred.session),
                 "inference_ms": round((time.time() - t0) * 1000, 1), **out}
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return _err500(e)

@@ -112,13 +112,19 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
 def export_csv(db=Depends(get_db)):
     """Tüm seans geçmişini CSV olarak indir"""
     try:
-        sessions = db.get_session_history(limit=10000)
+        sessions = db.get_session_history(limit=10000, internal_full=True)  # Audit P2: tam-export, 500'e kırpma
         if not sessions:
             return Response(content="Veri bulunamadi", media_type="text/plain")
             
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
+        def _csv_safe(value):
+            # CSV formula-injection koruması (OWASP): Excel/LibreOffice '=','+','-','@',TAB,CR ile başlayan
+            # hücreyi FORMÜL sanıp çalıştırır (komut yürütme/veri sızdırma). Başına ' ekleyip metne zorla.
+            s = "" if value is None else str(value)
+            return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
         # Headers
         headers = ["ID", "Hasta", "Hedef", "Mod", "Sure(dk)", "Frekans(Hz)", "Siddet(mT)", "Tarih", "Baslangic", "Durum", "Notlar"]
         writer.writerow(headers)
@@ -126,16 +132,16 @@ def export_csv(db=Depends(get_db)):
         for s in sessions:
             writer.writerow([
                 s.get("id", ""),
-                s.get("patient_name", ""),
-                s.get("target_condition", ""),
-                s.get("treatment_mode", ""),
+                _csv_safe(s.get("patient_name", "")),
+                _csv_safe(s.get("target_condition", "")),
+                _csv_safe(s.get("treatment_mode", "")),
                 s.get("duration_minutes", ""),
                 s.get("frequency_hz", ""),
                 s.get("intensity_mt", ""),
                 s.get("session_date", ""),
                 s.get("start_time", ""),
-                s.get("session_status", ""),
-                s.get("patient_notes", "")
+                _csv_safe(s.get("session_status", "")),
+                _csv_safe(s.get("patient_notes", ""))
             ])
             
         csv_data = output.getvalue()

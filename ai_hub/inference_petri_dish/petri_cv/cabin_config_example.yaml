@@ -7,7 +7,7 @@
 #
 # Detection : YOLO11m-seg (mAP50=0.984, mAP50-95=0.961, 22.3M param)
 # Model     : ../yolo11m-seg.pt (ayni klasor)
-# Kalibrasyon: ArUco DICT_5X5_100 (kedi paterni) veya --petri-diameter-cm
+# Kalibrasyon: ArUco DICT_5X5_50 (kedi paterni) veya --petri-diameter-cm
 # Siniflandirma: HSV mavi piksel sayisi >= threshold -> kanser
 # =============================================================================
 #
@@ -56,10 +56,10 @@ cabin_id: "petri_helmholtz_v1"
 # 1) ArUco — OPSIYONEL (kedi paterni); yoksa --petri-diameter-cm kullan
 # -----------------------------------------------------------------------------
 aruco:
-  dict: DICT_5X5_100              # OpenCV ArUco sozluk
-  real_cm: 5.0                    # marker kenar uzunlugu (kumpas)
+  dict: DICT_5X5_50              # OpenCV ArUco sozluk
+  real_cm: 10.0                    # marker kenar uzunlugu (kumpas)
   plane_offset_cm: 0.0
-  normal_axis_in_cabin: "+Z"
+  normal_axis_in_cabin: "+X"
   refine_corners: true
   use_apriltag_corners: false
 
@@ -68,8 +68,8 @@ aruco:
 # 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 geometry:
-  qr_to_origin_cm: [0.0, 0.0, 10.0]
-  cabin_extent_cm: [20.0, 20.0, 20.0]
+  qr_to_origin_cm: [30.0, -21.5, -10.0]
+  cabin_extent_cm: [60.0, 43.0, 20.0]
   axes: "x=lateral,y=dorsal,z=camera"
 
 
@@ -77,11 +77,11 @@ geometry:
 # 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 camera:
-  fixed_position_cm: [0.0, 0.0, 15.0]
+  fixed_position_cm: [30.0, -21.5, -10.0]
   look_at_cm: [0.0, 0.0, 0.0]
   up_cabin: [0.0, 1.0, 0.0]
-  to_marker_cm: 25.0
-  to_origin_cm: 15.0
+  to_marker_cm: 76.5
+  to_origin_cm: 38.2
   intrinsics_npz: null            # null -> approx intrinsics
 
 
@@ -203,9 +203,9 @@ output:
 #      (Standart petri kabi capi: 5/6/9/10 cm)
 #
 # 2) ArUco modu (gercek mm/px + cabin frame):
-#      a) DICT_5X5_100 marker bas (5 cm kenar):
+#      a) DICT_5X5_50 marker bas (5 cm kenar):
 #           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
-#                       cv2.aruco.DICT_5X5_100);
+#                       cv2.aruco.DICT_5X5_50);
 #                       cv2.imwrite('marker.png',
 #                       cv2.aruco.generateImageMarker(d,0,500))"
 #      b) Kabin sol duvarina yapistir + camera.intrinsics_npz ayarla

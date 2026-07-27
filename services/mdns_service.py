@@ -181,6 +181,10 @@ class MDNSService:
                 f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local "
                 f"→ {local_ip}:{self._mqtt_port}"
             )
+            # Arayüz/IP değişiminde bu servisi yeni Zeroconf instance'ına re-register et
+            # (0.149'da update_interfaces yok → recreate; bkz. zeroconf_singleton.ensure_interfaces_current).
+            from utils.zeroconf_singleton import add_reregister_callback
+            add_reregister_callback(self._reregister_mqtt)
         except Exception:
             logger.exception("mDNS arka plan başlatma hatası detayı:")
             self._running = False
@@ -192,26 +196,31 @@ class MDNSService:
                 if not self._running:
                     break
 
-                current_ip = _get_local_ip()
-                if current_ip != self._last_ip:
-                    logger.info(
-                        f"IP değişti: {self._last_ip} → {current_ip}. "
-                        "mDNS kaydı güncelleniyor..."
-                    )
-                    # Yeniden kaydet
-                    try:
-                        if self._zeroconf and self._service_info:
-                            self._zeroconf.unregister_service(self._service_info)
-                        self._service_info = self._build_service_info(current_ip)
-                        self._zeroconf.register_service(self._service_info)
-                        self._last_ip = current_ip
-                        logger.info(f"✓ mDNS güncellendi: pemf-gateway.local → {current_ip}")
-                    except Exception as e:
-                        logger.error(f"mDNS güncelleme hatası: {e}")
+                # Gerçek-LAN arayüz seti (WiFi/hotspot/Ethernet IP'leri) değiştiyse paylaşılan Zeroconf'u
+                # yeni arayüzlere YENİDEN bağla + tüm yayıncıları (mqtt + pemfvet) yeni instance'a re-register et.
+                # Birincil-IP (DHCP) değişimini de KAPSAR: gerçek-IP değişince arayüz-seti değişir → ayrı IP-takibi gereksiz.
+                from utils.zeroconf_singleton import ensure_interfaces_current
+                ensure_interfaces_current()
 
             except Exception as e:
                 if self._running:
-                    logger.error(f"IP monitor hatası: {e}")
+                    logger.error(f"mDNS arayüz-monitör hatası: {e}")
+
+    def _reregister_mqtt(self) -> None:
+        """Zeroconf arayüz/IP değişimiyle YENİDEN yaratıldığında _mqtt servisini yeni instance'a
+        GÜNCEL IP ile re-register eder (ensure_interfaces_current recreate sonrası çağırır)."""
+        if not self._running:
+            return  # Audit P3: stop() sonrası callback re-publish etmesin (kasıtlı-kaldırılan servisi canlandırma)
+        try:
+            from utils.zeroconf_singleton import get_shared_zeroconf
+            ip = self._ip_override or _get_local_ip()
+            self._zeroconf = get_shared_zeroconf()
+            self._service_info = self._build_service_info(ip)
+            self._zeroconf.register_service(self._service_info)
+            self._last_ip = ip
+            logger.info("✓ mDNS (_mqtt) yeni arayüzlere re-register: %s.local → %s", MDNS_HOST_NAME, ip)
+        except Exception as e:
+            logger.error("_mqtt re-register hatası: %s", e)
 
 
 # ── Standalone çalıştırma ────────────────────────────────────────────────────

@@ -38,7 +38,11 @@ GOLDEN_ROUTES = {
     ("/api/ai/vision/reticulocytes", "POST"),
     ("/api/ai/vision/segmentation", "POST"),
     ("/api/ai/vision/thermal", "POST"),
+    ("/api/auth/admin-code", "GET"),  # yönetici şifre-sıfırlama kodu (Ayarlar'da gösterilir; X-API-Key korumalı)
     ("/api/auth/exchange", "POST"),
+    ("/api/auth/login", "POST"),      # operatör hesap girişi (e-posta/şifre; .edu → araştırma modu)
+    ("/api/auth/register", "POST"),   # operatör hesap kaydı (PBKDF2)
+    ("/api/auth/reset", "POST"),      # 'Şifremi unuttum' — yönetici koduyla operatör şifre sıfırlama
     ("/api/auth/token", "GET"),
     ("/api/client/error", "POST"),  # F-7 (prod-readiness Faz 2): frontend ErrorBoundary crash raporu
     ("/api/coil/batch", "POST"),
@@ -108,4 +112,4 @@ def test_route_contract_unchanged():
     added = current - GOLDEN_ROUTES  # beklenmeyen route eklendi / path değişti
     assert not missing, f"Route KAYBOLDU veya path/method değişti: {sorted(missing)}"
     assert not added, f"Beklenmeyen/değişmiş route: {sorted(added)}"
-    assert len(current) == len(GOLDEN_ROUTES) == 68
+    assert len(current) == len(GOLDEN_ROUTES) == 72

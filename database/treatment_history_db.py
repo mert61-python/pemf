@@ -90,8 +90,24 @@ class TreatmentHistoryDB:
             return None
 
     def _get_sqlcipher_key(self) -> str:
-        """SQLCipher anahtarı: keyring → env → key-dosyası. Hiçbiri yoksa ve PEMF_ENCRYPT_AT_REST=1
-        ise yeni anahtar üretip saklar (keyring tercih, dosya fallback). Aksi halde '' (düz-metin)."""
+        """SQLCipher BİRİNCİL anahtarı — D-3 fix: patient_database ile TEK paylaşımlı yol
+        (sqlcipher_util.get_sqlcipher_key → SecretsManager-öncelikli). Eskiden bu metod
+        SecretsManager'ı ATLIYORDU (keyring→env→file→YENİ-üret) → taze şifreli kurulumda patient DB
+        önce init olursa SecretsManager K üretir, treatment DB SONRA K' üretirdi = ÇİFT ANAHTAR
+        (treatment DB latent OKUNAMAZ hale gelirdi). Artık ikisi de aynı kaynak → yeni DB birleşik;
+        üretim de TEK yerde (çift-üretim divergence'ı kökten biter). Mevcut şifreli DB: shared yol
+        keyring/env/file'ı zaten migrate ettiğinden AYNI anahtarı döndürür → sorunsuz açılır."""
+        try:
+            from database.sqlcipher_util import get_sqlcipher_key
+            return get_sqlcipher_key(self.app_data_dir, self.logger)
+        except Exception as e:
+            self.logger.warning(f"paylasimli sqlcipher_key alinamadi, legacy yola dusuluyor: {e}")
+            return self._get_sqlcipher_key_legacy()
+
+    def _get_sqlcipher_key_legacy(self) -> str:
+        """ESKİ anahtar yolu (keyring → env → .sqlcipher_key), ÜRETMEDEN (yoksa ''). D-3: divergence
+        yaşamış ESKİ kurulumda treatment DB bu anahtarla şifrelenmiş olabilir → _connect FALLBACK
+        adayı (veri-kaybı önlenir). Üretim BİLEREK yok: yeni anahtar YALNIZ paylaşımlı yolda üretilir."""
         service_name = "PEMF_GUI"
         key_name = "sqlcipher_key"
         if keyring is not None:
@@ -112,51 +128,51 @@ class TreatmentHistoryDB:
                     return k
         except Exception:
             pass
-        if os.getenv("PEMF_ENCRYPT_AT_REST", "0") != "1":
-            return ""  # açıkça istenmedikçe şifreleme açma (geriye uyumlu)
-        import secrets
-        newkey = secrets.token_urlsafe(32)
-        stored_in_keyring = False
-        if keyring is not None:
-            try:
-                keyring.set_password(service_name, key_name, newkey)
-                stored_in_keyring = True
-            except Exception:
-                pass
-        if not stored_in_keyring:
-            try:
-                keyfile.write_text(newkey, encoding="utf-8")
-                # NTFS ACL kilidi (audit B-1.2): SYSTEM + Administrators — os.chmod Windows'ta no-op.
-                try:
-                    from utils.file_acl import lock_down_file
-                    lock_down_file(keyfile)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-        self.logger.warning("Yeni SQLCipher anahtari uretildi (keyring=%s). ANAHTAR KAYBOLURSA sifreli veri OKUNAMAZ.", stored_in_keyring)
-        return newkey
+        return ""
 
     def _connect_sqlcipher_if_configured(self):
-        """SQLCipher anahtarı varsa SQLCipher bağlantısı dene, yoksa None döndür."""
-        cipher_key = self._get_sqlcipher_key()
-        if not cipher_key:
+        """SQLCipher anahtarı varsa bağlantı dener, yoksa None. D-3 fix: BİRDEN ÇOK aday anahtar
+        dener — [birincil(paylaşımlı/SecretsManager), legacy(keyring/file)] — ilk AÇAN bağlantıyı
+        döner. Böylece divergence yaşamış eski treatment DB legacy anahtarıyla GÜVENLE açılır
+        (veri-kaybı yok); yeni/mevcut-birleşik DB birincil ile açılır. Hiçbiri açmazsa None (düz-metin)."""
+        primary = self._get_sqlcipher_key()
+        legacy = self._get_sqlcipher_key_legacy()
+        # Aday sıra: birincil ÖNCE (birleştirme), sonra farklıysa legacy (kurtarma). Boş/yinelenen atlanır.
+        candidates = []
+        if primary:
+            candidates.append(("birincil", primary))
+        if legacy and legacy != primary:
+            candidates.append(("legacy", legacy))
+        if not candidates:
             return None
 
         sqlcipher = self._import_sqlcipher()
         if sqlcipher is None:
             self.logger.warning("SQLCipher anahtari var ama binding (sqlcipher3) kurulu DEGIL → duz-metin fallback.")
             return None
-        try:
-            conn = sqlcipher.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
-            conn.row_factory = getattr(sqlcipher, "Row", sqlite3.Row)  # sqlcipher3 cursor uyumlu Row
-            escaped_key = cipher_key.replace("'", "''")
-            conn.execute(f"PRAGMA key='{escaped_key}'")
-            conn.execute('SELECT count(*) FROM sqlite_master')
-            return conn
-        except Exception as e:
-            self.logger.warning(f"SQLCipher acilamadi (yanlis anahtar veya migrate gerekli?): {e}")
-            return None
+        last_err = None
+        for label, cipher_key in candidates:
+            conn = None
+            try:
+                conn = sqlcipher.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
+                conn.row_factory = getattr(sqlcipher, "Row", sqlite3.Row)  # sqlcipher3 cursor uyumlu Row
+                escaped_key = cipher_key.replace("'", "''")
+                conn.execute(f"PRAGMA key='{escaped_key}'")
+                conn.execute('SELECT count(*) FROM sqlite_master')
+                if label == "legacy":
+                    self.logger.warning("treatment DB LEGACY anahtarla acildi (D-3 anahtar-divergence "
+                                        "tespit + KURTARILDI). Birlestirme icin ileride re-key onerilir.")
+                return conn
+            except Exception as e:
+                last_err = e
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                continue
+        self.logger.warning(f"SQLCipher hicbir aday anahtarla acilamadi (yanlis anahtar/migrate?): {last_err}")
+        return None
 
     def _migrate_to_encrypted_if_needed(self):
         """Bir SQLCipher anahtarı varsa ve mevcut DB DÜZ-METİN ise içeriği şifreli kopyaya aktarır
@@ -422,6 +438,7 @@ class TreatmentHistoryDB:
                 intensity_mt REAL,
                 pulse_duration_ms INTEGER,
                 operator_name TEXT,
+                operator_email TEXT,
                 patient_name TEXT,
                 patient_notes TEXT,
                 session_status TEXT DEFAULT 'completed',
@@ -459,6 +476,27 @@ class TreatmentHistoryDB:
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # AI Analiz Geçmişi (2026-07): profesyonel DETAYLI kayıt — eski düz-metin ai_diagnoses.jsonl
+        # yerine SQLCipher-ŞİFRELİ (hasta adı TAM yazılabilir, KVKK-güvenli). TÜM profillerin AI analizleri.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                mode TEXT,
+                module_id TEXT,
+                module_label TEXT,
+                patient_name TEXT,
+                operator_email TEXT,
+                input_type TEXT,
+                result_summary TEXT,
+                result_detail TEXT,
+                confidence REAL
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ai_analyses_module ON ai_analyses(module_id)')
+        # Klinik-ici sahiplik (2026-07-12): islemi yapan hekim e-postasi (eski DB'lere idempotent).
+        self._safe_add_column(cursor, "ai_analyses", "operator_email TEXT", "ai_analyses.operator_email eklendi")
 
         # Schema migration kayıtları
         cursor.execute('''
@@ -656,6 +694,8 @@ class TreatmentHistoryDB:
         self._safe_add_column(cursor, "treatment_sessions", "patient_id INTEGER", "treatment_sessions.patient_id sütunu eklendi")
         self._safe_add_column(cursor, "treatment_sessions", "started_epoch REAL", "treatment_sessions.started_epoch sütunu eklendi")
         self._safe_add_column(cursor, "treatment_sessions", "ended_epoch REAL", "treatment_sessions.ended_epoch sütunu eklendi")
+        # Klinik-ici sahiplik (2026-07-12): seansi baslatan hekim e-postasi ("Benim/Tum Klinik" filtresi).
+        self._safe_add_column(cursor, "treatment_sessions", "operator_email TEXT", "treatment_sessions.operator_email sütunu eklendi")
         # patients.owner_email (rapor e-postasi) — eski DB'lere idempotent ekle.
         self._safe_add_column(cursor, "patients", "owner_email TEXT", "patients.owner_email sütunu eklendi")
         # sensor_samples yeni kolonlari (idempotent, nullable).
@@ -913,7 +953,9 @@ class TreatmentHistoryDB:
                 cursor.execute("SELECT COUNT(*) FROM treatment_sessions WHERE session_status = 'completed'")
                 health['sessions']['completed'] = int(cursor.fetchone()[0])
 
-                cursor.execute("SELECT COUNT(*) FROM treatment_sessions WHERE session_status = 'aborted_recovered'")
+                # Audit P3: recover_stale_active_sessions 'ABORTED_DUE_TO_POWER' yazar; eski sorgu
+                # 'aborted_recovered' ile HİÇ eşleşmiyordu → güç-kaybı kurtarma sayacı daima 0 (izleme kör).
+                cursor.execute("SELECT COUNT(*) FROM treatment_sessions WHERE session_status = 'ABORTED_DUE_TO_POWER'")
                 health['sessions']['aborted_recovered'] = int(cursor.fetchone()[0])
         except Exception as e:
             health['integrity']['ok'] = False
@@ -997,18 +1039,19 @@ class TreatmentHistoryDB:
                 ''', (cutoff_date,))
                 report['sessions_redacted'] = int(cursor.rowcount)
 
-                cursor.execute('''
+                # Audit P2: PII isim listesini TEK-KAYNAK self._PII_PARAM_NAMES'ten al. Gömülü liste
+                # sapmıştı — gerçek-yazılan 'patient_owner_email'i ATLIYOR, hiç-yazılmayan 'patient_email'i
+                # sayıyordu → owner e-postası retention sonrası süresiz düz-metin kalıyordu (KVKK).
+                _pii_names = tuple(self._PII_PARAM_NAMES)
+                _pii_ph = ",".join("?" * len(_pii_names))
+                cursor.execute(f'''
                     UPDATE session_parameters
                     SET parameter_value = '[REDACTED]'
                     WHERE session_id IN (
                         SELECT id FROM treatment_sessions WHERE session_date < ?
                     )
-                    AND parameter_name IN (
-                        'patient_name', 'patient_surname', 'patient_owner', 'patient_vet_contact',
-                        'patient_veteriner', 'patient_email', 'patient_phone', 'patient_address',
-                        'patient_medical_history'
-                    )
-                ''', (cutoff_date,))
+                    AND parameter_name IN ({_pii_ph})
+                ''', (cutoff_date, *_pii_names))
                 report['parameters_redacted'] = int(cursor.rowcount)
 
                 conn.commit()
@@ -1028,11 +1071,28 @@ class TreatmentHistoryDB:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 ph = ",".join("?" * len(uuids))
+                # 1) patients kopyasi (get_session_history JOIN ile gösterdiği ad/sahip)
                 cursor.execute(
                     f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
                     f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE patient_uuid IN ({ph})",
                     uuids)
                 n = int(cursor.rowcount)
+                # 2) KVKK BÜTÜNLÜK (sağ-unutulma): get_session_history patient_name'i session_parameters ve
+                #    ts.patient_name'den de okur (COALESCE). Şifreli-at-rest üretimde bu DENORMALİZE PII de
+                #    silinmezse anonimleştirme EKSİK kalırdı → ilgili session'ları patient_id üstünden temizle.
+                cursor.execute(f"SELECT id FROM patients WHERE patient_uuid IN ({ph})", uuids)
+                pids = [r[0] for r in cursor.fetchall() if r[0] is not None]
+                if pids:
+                    pph = ",".join("?" * len(pids))
+                    cursor.execute(
+                        f"UPDATE treatment_sessions SET patient_name='[ANONIM]', operator_name='[ANONIM]', "
+                        f"patient_notes='[ANONIM]' WHERE patient_id IN ({pph})", pids)
+                    pn_ph = ",".join("?" * len(self._PII_PARAM_NAMES))
+                    cursor.execute(
+                        f"UPDATE session_parameters SET parameter_value='[ANONIM]' "
+                        f"WHERE parameter_name IN ({pn_ph}) AND session_id IN "
+                        f"(SELECT id FROM treatment_sessions WHERE patient_id IN ({pph}))",
+                        (*self._PII_PARAM_NAMES, *pids))
                 conn.commit()
                 return n
         except Exception as e:
@@ -1149,7 +1209,8 @@ class TreatmentHistoryDB:
         return self._PII_REDACTION
 
     def start_session(self, treatment_mode: str, target_condition: str = None,
-                     operator_name: str = None, patient_name: str = None) -> int:
+                     operator_name: str = None, patient_name: str = None,
+                     operator_email: str = None) -> int:
         """
         Yeni tedavi seansı başlat
         
@@ -1174,12 +1235,13 @@ class TreatmentHistoryDB:
                 session_uuid = str(uuid.uuid4())
                 
                 cursor.execute('''
-                    INSERT INTO treatment_sessions 
-                    (session_date, start_time, treatment_mode, target_condition, 
-                     operator_name, patient_name, session_status, session_uuid)
-                    VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
+                    INSERT INTO treatment_sessions
+                    (session_date, start_time, treatment_mode, target_condition,
+                     operator_name, operator_email, patient_name, session_status, session_uuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
                 ''', (session_date, start_time, treatment_mode, target_condition,
-                      self._redact_pii(operator_name), self._redact_pii(patient_name), session_uuid))
+                      self._redact_pii(operator_name), (operator_email or None),
+                      self._redact_pii(patient_name), session_uuid))
                 
                 session_id = cursor.lastrowid
                 conn.commit()
@@ -1285,7 +1347,8 @@ class TreatmentHistoryDB:
                            start_date: str = None,
                            end_date: str = None,
                            treatment_mode: str = None,
-                           before_id: int = None) -> List[Dict]:
+                           before_id: int = None,
+                           internal_full: bool = False) -> List[Dict]:
         """
         Tedavi geçmişini getir
 
@@ -1307,7 +1370,7 @@ class TreatmentHistoryDB:
                 query = '''
                     SELECT ts.id, ts.session_date, ts.start_time, ts.end_time, ts.duration_minutes,
                            ts.treatment_mode, ts.target_condition, ts.frequency_hz, ts.intensity_mt,
-                           ts.pulse_duration_ms, ts.operator_name, ts.patient_notes, ts.session_status,
+                           ts.pulse_duration_ms, ts.operator_name, ts.operator_email, ts.patient_notes, ts.session_status,
                            COALESCE(sp_name.parameter_value, ts.patient_name) as patient_name,
                            sp_surname.parameter_value as patient_surname,
                            sp_age.parameter_value as patient_age,
@@ -1357,7 +1420,12 @@ class TreatmentHistoryDB:
                     params.append(int(before_id))
 
                 query += ' ORDER BY ts.id DESC LIMIT ?'
-                params.append(limit)
+                # DoS-clamp: istemci-kontrollü limit'i [1,500]'e sabitle (get_ai_analyses ile tutarlı) →
+                # limit=99999999 ile devasa fetch/RAM engellenir. Audit P2: iç export/PDF yolları
+                # (internal_full=True) TAM-geçmiş çektiği için daha yüksek kapak — eskiden 500'e sessizce
+                # kırpılıyor, >500 seanslı klinikte eski medikal kayıtlar 'tümü indirildi' denip düşüyordu.
+                _cap = 100000 if internal_full else 500
+                params.append(max(1, min(int(limit), _cap)))
                 
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
@@ -1494,7 +1562,7 @@ class TreatmentHistoryDB:
                     UPDATE treatment_sessions 
                     SET patient_notes = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (notes, session_id))
+                ''', (self._redact_pii(notes), session_id))  # Audit P3: end_session ile tutarlı PII maskesi (şifresiz modda da uygula)
                 
                 conn.commit()
                 self.logger.info(f"Seans notları güncellendi: ID {session_id}")
@@ -1730,6 +1798,72 @@ class TreatmentHistoryDB:
         except Exception as e:
             self.logger.warning(f"Session event kaydedilemedi: {e}")
             return None
+
+    # ---- AI Analiz Geçmişi (profesyonel detaylı kayıt; SQLCipher-şifreli → KVKK-güvenli) ----
+    def add_ai_analysis(self, mode: str = "", module_id: str = "", module_label: str = "",
+                        patient_name: str = "", input_type: str = "", result_summary: str = "",
+                        result_detail: Optional[Dict] = None, confidence: Optional[float] = None,
+                        operator_email: str = "") -> Optional[int]:
+        """Bir AI analiz sonucunu şifreli geçmişe ekle. Tüm profillerin tüm modelleri buraya yazar.
+        operator_email = analizi yapan hekim (klinik-içi "Benim/Tüm Klinik" filtresi; yeni param SONDA → pozisyonel çağrılar bozulmaz)."""
+        try:
+            self._ensure_write_guardrail()
+            # B-1.3 deseni (start_session ile tutarlı): at-rest şifreleme KAPALIYSA gerçek isim yerine
+            # [SIFRELENMEMIS-DB] yazılır → şifresiz DB'de düz-metin PII sızmaz. Şifreliyse isim korunur.
+            patient_name = self._redact_pii(patient_name)
+            # operator_email = hekimin KENDİ login e-postası (hasta PII'si değil); filtre için ham saklanır
+            # (üretimde DB zaten SQLCipher-şifreli). _redact_pii uygulanırsa "Benim" filtresi maskede bozulurdu.
+            operator_email = operator_email or ""
+            detail_json = json.dumps(result_detail or {}, ensure_ascii=False)
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO ai_analyses
+                    (created_at, mode, module_id, module_label, patient_name, operator_email, input_type, result_summary, result_detail, confidence)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    datetime.now().isoformat(timespec="seconds"),
+                    mode, module_id, module_label, patient_name, operator_email, input_type,
+                    result_summary, detail_json, confidence
+                ))
+                conn.commit()
+                return cursor.lastrowid
+        except Exception as e:
+            self.logger.warning(f"AI analiz kaydedilemedi: {e}")
+            return None
+
+    def get_ai_analyses(self, limit: int = 50, module_id: Optional[str] = None,
+                        patient_name: Optional[str] = None, before_id: Optional[int] = None) -> List[Dict]:
+        """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                clauses, params = [], []
+                if module_id:
+                    clauses.append("module_id = ?"); params.append(module_id)
+                if patient_name:
+                    clauses.append("patient_name LIKE ?"); params.append(f"%{patient_name}%")
+                if before_id:
+                    clauses.append("id < ?"); params.append(int(before_id))
+                where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+                params.append(max(1, min(int(limit), 500)))
+                cursor.execute(
+                    "SELECT id, created_at, mode, module_id, module_label, patient_name, operator_email, "
+                    "input_type, result_summary, result_detail, confidence "
+                    f"FROM ai_analyses{where} ORDER BY id DESC LIMIT ?", params)
+                cols = [c[0] for c in cursor.description]
+                out = []
+                for r in cursor.fetchall():
+                    d = dict(zip(cols, r))
+                    try:
+                        d["result_detail"] = json.loads(d.get("result_detail") or "{}")
+                    except Exception:
+                        d["result_detail"] = {}
+                    out.append(d)
+                return out
+        except Exception as e:
+            self.logger.warning(f"AI analiz geçmişi okunamadı: {e}")
+            return []
 
     def enqueue_outbox_message(self, topic: str, payload: str, qos: int = 0,
                                retain: bool = False, source: str = 'gateway',

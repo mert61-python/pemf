@@ -17,16 +17,21 @@ httpx==0.28.1
 pytest-cov==7.1.0
 
 # ── Web/API (api_server + router'ları import etmek için) ──
+# DO-1: güvenlik-ilgili web deps'i shipped requirements.txt ile BİREBİR eşit (CI pip-audit gerçek
+# prod ağacını tarasın + test/prod-parite; eskiden 1.2.1/0.0.30/41.0.3 = bayat → yanıltıcı CVE taraması).
 fastapi==0.136.3
-starlette==1.2.1
+starlette==1.3.1
 pydantic==2.13.4
-python-multipart==0.0.30
+python-multipart==0.0.31
 
 # ── Import-zamanı runtime bağımlılıkları (introspeksiyonla saptandı) ──
 numpy==1.26.4
-opencv-python-headless==4.9.0.80   # CI headless: opencv-python yerine (libGL gerektirmez)
+opencv-python-headless==4.11.0.86  # CI headless: opencv-python yerine (libGL gerektirmez).
+                                   # SÜRÜM üretimle aynı (4.11.0.86) — yalnız varyant farklı; testler
+                                   # prod'dan farklı bir cv2 API'siyle koşmasın diye hizalandı.
 pillow==12.2.0
 reportlab==4.0.7                   # history_router → pdf_report_generator import-zamanı
-cryptography==41.0.3
+cryptography==46.0.7               # DO-1: shipped ile eşit (2026-07-16: 43.0.1→46.0.7 CVE bump)
 keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
 paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)
+zeroconf==0.149.16                 # DO-1: ağ-açık mDNS (LAN keşif) — testler import etmese de pip-audit KAPSAMINA al (CVE geçmişi; shipped ile eşit)

@@ -17,12 +17,21 @@ _initialized = False
 
 
 def _scrub_event(event, hint):
-    """KVKK: olası PII taşıyan blokları at (request gövdesi, user, çerezler)."""
+    """KVKK: olası PII taşıyan blokları at. Audit P3: eskiden yalnız request/user/frame-vars atılıyordu;
+    breadcrumbs (LoggingIntegration log satırları), extra, logentry/message ve exception.value de PII
+    taşıyabilir → onları da temizle."""
     try:
-        for k in ("request", "user"):
+        for k in ("request", "user", "breadcrumbs", "extra"):
             event.pop(k, None)
-        # stack-frame local değişkenleri hasta verisi taşıyabilir → temizle
+        # logentry.message + üst-düzey message maskele (hasta adı/telefonu log satırında olabilir)
+        if event.get("logentry"):
+            event["logentry"] = {"message": "[scrubbed]"}
+        if "message" in event:
+            event["message"] = "[scrubbed]"
+        # istisna değeri (mesajı) + stack-frame local'leri hasta verisi taşıyabilir → temizle
         for exc in (event.get("exception", {}) or {}).get("values", []) or []:
+            if "value" in exc:
+                exc["value"] = "[scrubbed]"
             for frame in (exc.get("stacktrace", {}) or {}).get("frames", []) or []:
                 frame.pop("vars", None)
     except Exception:
@@ -49,6 +58,7 @@ def init_telemetry() -> bool:
             traces_sample_rate=0.0,          # yalnız hata; performans izleme yok
             send_default_pii=False,          # KVKK
             before_send=_scrub_event,
+            before_breadcrumb=lambda _crumb, _hint: None,  # Audit P3: breadcrumb'ları TAMAMEN düşür (log-PII buluta gitmesin)
             environment=os.environ.get("PEMF_DEVICE_NAME", "pemf-device"),
             release=(os.environ.get("PEMF_VERSION", "").strip() or None),
         )

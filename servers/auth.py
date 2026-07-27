@@ -10,6 +10,7 @@ import ipaddress
 import logging
 import os
 import secrets
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ _warned = False
 # RİSK: tünel URL'sini bilen HERKES tedavi başlatıp durdurabilir. GERİ ALMAK için bu iki öneki
 # ("/api/ai/pro","/api/ai/ai_pro") listeden çıkarın. (Acil-durdur zaten _EXEMPT_EXACT'te fail-safe.)
 _EXEMPT_PREFIXES = ("/api/health", "/api/discovery", "/api/auth/exchange",
+                    "/api/auth/register", "/api/auth/login", "/api/auth/reset",  # operatör kayıt/giriş/şifre-sıfırlama (kullanıcı-katmanı; reset YÖNETİCİ-koduyla self-gate)
                     "/api/ai/vision", "/api/ai/disease", "/api/ai/rna", "/api/ai/sound",
                     "/api/ai/pro", "/api/ai/ai_pro",
                     "/favicon", "/simulator", "/static", "/docs", "/openapi", "/redoc")
@@ -37,8 +39,25 @@ def _token_file() -> Path:
     # PEMF_DATA_DIR set ise onu kullan → DB + SQLCipher key ile AYNI erişilebilir dizin (ProgramData).
     # Aksi halde LocalSystem servisinde APPDATA = ...\systemprofile\... (operatöre GÖRÜNMEZ) → token
     # bulunamaz, web/mobil "eksik API anahtarı" der. (get_app_data_directory ile tutarlı.)
-    override = os.getenv("PEMF_DATA_DIR", "").strip()
-    base = (Path(override) / "PEMF_GUI") if override else (Path(os.getenv("APPDATA") or (Path.home() / ".config")) / "PEMF_GUI")
+    # get_app_data_directory'yi ÇAĞIR (elle taklit etme): PEMF_DATA_DIR override'ı + üç
+    # platformun kanonik dizinini tek yerde çözer. Eskiden buradaki `APPDATA or ~/.config`
+    # dalı yalnız Windows'ta doğruydu; macOS/Linux'ta token ~/.config/PEMF_GUI'ye düşerken
+    # DB + SQLCipher anahtarı ~/Library/Application Support (mac) veya ~/.local/share
+    # (Linux) altında kalıyordu → yorumun vaat ettiği tutarlılık yeni platformlarda YOKTU.
+    # secrets_manager._data_dir() ile birebir aynı desen (import-hatasında yerel yedek).
+    try:
+        from utils.path_utils import get_app_data_directory
+        base = get_app_data_directory()
+    except Exception:
+        override = os.getenv("PEMF_DATA_DIR", "").strip()
+        if override:
+            base = Path(override) / "PEMF_GUI"
+        elif sys.platform == "win32":
+            base = Path(os.getenv("APPDATA") or (Path.home() / "AppData" / "Roaming")) / "PEMF_GUI"
+        elif sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "PEMF_GUI"
+        else:
+            base = Path.home() / ".local" / "share" / "PEMF_GUI"
     try:
         base.mkdir(parents=True, exist_ok=True)
     except Exception:

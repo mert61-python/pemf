@@ -55,7 +55,7 @@ else:
 class PatientDatabase:
     """Hasta veritabani yonetim sinifi."""
 
-    _ENCRYPTED_FIELDS = {"name", "owner", "vet_contact", "species", "breed", "age", "weight", "owner_email"}
+    _ENCRYPTED_FIELDS = {"name", "owner", "vet_contact", "species", "breed", "age", "weight", "owner_email", "operator_email"}
     _SEARCHABLE_FIELDS = ("name", "owner", "species", "breed", "age", "weight")
 
     def __init__(self, db_file: str = "patients.db"):
@@ -203,6 +203,7 @@ class PatientDatabase:
                 owner TEXT,
                 vet_contact TEXT,
                 owner_email TEXT,
+                operator_email TEXT,
                 last_treatment_at TEXT,
                 anonymized INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
@@ -214,6 +215,9 @@ class PatientDatabase:
         # Eski DB'lere idempotent kolon eklemeleri (yeni DB'de CREATE zaten içerir → ALTER sessizce geçer):
         self._safe_add_column(cursor, "patients", "sync_status INTEGER DEFAULT 0")
         self._safe_add_column(cursor, "patients", "owner_email TEXT")
+        # Klinik-ici hasta sahipligi (2026-07-12): kaydi olusturan hekimin e-postasi (sifreli).
+        # "Benim Hastalarim" vs "Tum Klinik" gorunum filtresi icin; klinikler-arasi izolasyon zaten local-DB ile.
+        self._safe_add_column(cursor, "patients", "operator_email TEXT")
         # KVKK retention (2026-06-28): son tedavi tarihi + anonim bayragi (inaktiflik bazli anonimlestirme).
         self._safe_add_column(cursor, "patients", "last_treatment_at TEXT")
         self._safe_add_column(cursor, "patients", "anonymized INTEGER DEFAULT 0")
@@ -412,8 +416,8 @@ class PatientDatabase:
                     cursor.execute(
                         """
                         INSERT INTO patients
-                        (id, name, species, breed, age, weight, owner, vet_contact, owner_email, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (id, name, species, breed, age, weight, owner, vet_contact, owner_email, operator_email, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             patient_id,
@@ -425,6 +429,7 @@ class PatientDatabase:
                             self._encrypt_field(patient_info.get("owner", "")),
                             self._encrypt_field(patient_info.get("vet_contact", "")),
                             self._encrypt_field(patient_info.get("owner_email", "")),
+                            self._encrypt_field(patient_info.get("operator_email", "")),
                             now,
                             now,
                         ),
@@ -481,6 +486,10 @@ class PatientDatabase:
                     updates: List[str] = []
                     values: List[Any] = []
                     for key, value in patient_info.items():
+                        # operator_email = kaydi olusturan hekim; yalnizca add_patient'ta set edilir,
+                        # duzenlemede DEGISTIRILEMEZ (sahiplik sabit kalir).
+                        if key == "operator_email":
+                            continue
                         if key in self._ENCRYPTED_FIELDS:
                             updates.append(f"{key} = ?")
                             values.append(self._encrypt_field(value))
@@ -535,13 +544,18 @@ class PatientDatabase:
                     now_iso = datetime.now().isoformat()
                     for pid in ids:
                         cursor.execute(
+                            # Audit P2: sync_status=0 → anonimleştirme (redaction) bulut PUSH ile
+                            # yayılsın; aksi halde sonraki PULL orijinal PII'yi geri yazıp de-anonymize ediyordu.
                             "UPDATE patients SET name=?, owner=?, vet_contact=?, owner_email=?, "
-                            "anonymized=1, updated_at=? WHERE id=?",
+                            "anonymized=1, sync_status=0, updated_at=? WHERE id=?",
                             (enc_anon, enc_anon, enc_empty, enc_empty, now_iso, pid))
                         # Arama indeksini tazele — eski ad/sahip token'lari gitsin (artik aranmaz).
                         self._refresh_search_index_for_patient(cursor, pid)
-                        anonymized.append(pid)
                     conn.commit()
+            # Audit P2: pid'leri YALNIZ commit BASARILI olduktan sonra raporla. Eskiden dongu-ici
+            # append + orta-hata rollback'i → patients.db PII'yi TUTAR ama caller 'anonimlestirildi'
+            # sanip history-DB'yi anonimlestirir (iki-DB tutarsizligi + KVKK retention ihlali).
+            anonymized = list(ids)
             if anonymized:
                 self.logger.warning("KVKK: %d inaktif hasta (>%d gun) anonimlestirildi.", len(anonymized), inactive_days)
         except Exception:
@@ -591,7 +605,14 @@ class PatientDatabase:
         if not term:
             return self.get_all_patients()
 
-        tokens = sorted(self._tokenize_for_search(term))
+        # ARAMA-TOKEN'LARI (false-negative fix): _tokenize_for_search hem kelime-token'larını HEM tam-normalize
+        # 'birleşik' string'i döndürür. Birleşik token yalnız İNDEKSLEME için yararlı; aramada her token gerekli
+        # sayıldığından ('HAVING COUNT(DISTINCT token_hmac)=len'), çok-kelimeli/çok-ALANLI arama ('Ali Veli' =
+        # ad+sahip) için birleşik token tek bir alanın tamamına eşit olmadığından İNDEKSTE bulunmaz → tüm sonuç
+        # YANLIŞLIKLA boş dönerdi. Aramada birleşik token'ı çıkar → kelime-token'ların AND'i (tek kelimede korunur).
+        all_tokens = self._tokenize_for_search(term)
+        normalized = self._normalize_search_value(term)
+        tokens = sorted(t for t in all_tokens if t != normalized) or sorted(all_tokens)
         if not tokens:
             return []
         token_hashes = [self._hmac_token(token) for token in tokens]

@@ -82,20 +82,85 @@ def _dpapi(data: bytes, protect: bool) -> bytes:
         ctypes.windll.kernel32.LocalFree(blob_out.pbData)
 
 
-def _enc(plain: str) -> str:
-    """Düz-metin → 'DPAPI:<b64>' (makineye bağlı). DPAPI yoksa düz döner (uyarı)."""
+# ───────────────────────── makine-bağlı anahtar (Linux/mac — DPAPI eşdeğeri) ─────────────────────────
+# Windows'ta DPAPI (LOCAL_MACHINE) kritik anahtarları makineye bağlar. Linux/mac'te DPAPI YOK →
+# eskiden _enc sessizce DÜZ-METİN'e düşüyordu (sqlcipher_key/patient_fernet_key düz saklanır → disk/
+# yedek/imaj hırsızlığında şifreli DB + PII çözülür). Fix (#6): stabil makine-kimliğinden (/etc/
+# machine-id, mac IOPlatformUUID) türetilmiş Fernet ile "MKEY:" öneki → başka makinede çözülemez.
+_MKEY_PREFIX = "MKEY:"
+
+
+def _machine_secret() -> bytes:
+    """Makineye-bağlı stabil 32-byte gizli. Linux: /etc/machine-id (veya dbus). mac: IOPlatformUUID.
+    Bulunamazsa RuntimeError → çağıran düz-metin fallback + uyarıya düşer."""
+    import hashlib
+    import platform as _pf
+    ident = ""
+    if _pf.system() == "Darwin":
+        try:
+            import re
+            import subprocess
+            out = subprocess.run(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+            m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out)
+            if m:
+                ident = m.group(1).strip()
+        except Exception:
+            ident = ""
+    else:
+        for p in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+            try:
+                v = Path(p).read_text(encoding="utf-8").strip()
+                if v:
+                    ident = v
+                    break
+            except Exception:
+                continue
+    if not ident:
+        raise RuntimeError("makine kimliği bulunamadı (machine-id/IOPlatformUUID)")
+    return hashlib.sha256(("PEMF-secrets-v1:" + ident).encode("utf-8")).digest()
+
+
+def _machine_fernet():
+    from cryptography.fernet import Fernet
+    return Fernet(base64.urlsafe_b64encode(_machine_secret()))  # 32 bytes → geçerli Fernet anahtarı
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+def _enc(plain: str, critical: bool = False) -> str:
+    """Düz-metin → makineye-bağlı şifreli. Windows: 'DPAPI:'. Linux/mac: 'MKEY:' (machine-id Fernet).
+    critical=True (sqlcipher_key/patient_fernet_key gibi at-rest KRİTİK anahtarlar): şifreleme fail
+    ederse düz-metin yazmak yerine RuntimeError (fail-CLOSED, Audit P2) — aksi halde DB anahtarı
+    Users-okunur düz kalır → tüm PII. critical=False: eski davranış (uyarı + düz fallback)."""
+    if _is_windows():
+        try:
+            return _DPAPI_PREFIX + base64.b64encode(_dpapi(plain.encode("utf-8"), True)).decode("ascii")
+        except Exception as e:
+            if critical:
+                raise RuntimeError(f"Kritik anahtar DPAPI ile sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}") from e
+            logger.warning("DPAPI sifreleme yapilamadi, duz saklaniyor: %s", e)
+            return plain
     try:
-        return _DPAPI_PREFIX + base64.b64encode(_dpapi(plain.encode("utf-8"), True)).decode("ascii")
+        return _MKEY_PREFIX + _machine_fernet().encrypt(plain.encode("utf-8")).decode("ascii")
     except Exception as e:
-        logger.warning("DPAPI şifreleme yapılamadı, düz saklanıyor: %s", e)
+        if critical:
+            raise RuntimeError(f"Kritik anahtar makine-bagli sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}") from e
+        logger.warning("Makine-bagli sifreleme yapilamadi (machine-id yok?), duz saklaniyor: %s", e)
         return plain
 
 
 def _dec(stored: str) -> str:
-    if not stored.startswith(_DPAPI_PREFIX):
-        return stored  # düz-metin (eski/fallback)
-    raw = base64.b64decode(stored[len(_DPAPI_PREFIX):])
-    return _dpapi(raw, False).decode("utf-8")
+    if stored.startswith(_DPAPI_PREFIX):
+        raw = base64.b64decode(stored[len(_DPAPI_PREFIX):])
+        return _dpapi(raw, False).decode("utf-8")
+    if stored.startswith(_MKEY_PREFIX):
+        return _machine_fernet().decrypt(stored[len(_MKEY_PREFIX):].encode("ascii")).decode("utf-8")
+    return stored  # düz-metin (eski/fallback)
 
 
 # ───────────────────────── üreteçler ─────────────────────────
@@ -111,6 +176,12 @@ def _gen_fernet() -> str:
 def _gen_pairing() -> str:
     alpha = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 0,O,1,I,L hariç
     return "".join(_secrets.choice(alpha) for _ in range(6))
+
+
+def _gen_admin_code() -> str:
+    # Operatör şifre-sıfırlama yönetici kodu — okunaklı 8 karakter (0,O,1,I,L karışıklığı yok).
+    alpha = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(_secrets.choice(alpha) for _ in range(8))
 
 
 def _gen_device_id() -> str:
@@ -160,6 +231,8 @@ _REGISTRY: dict[str, tuple] = {
                            lambda: os.getenv("PEMF_API_TOKEN", "").strip() or _legacy_appdata_token()),
     "pairing_code":       ("auto", False, _gen_pairing,
                            lambda: _read_file(_data_dir() / "pairing_code.txt")),
+    "admin_reset_code":   ("auto", False, _gen_admin_code,  # operatör şifre-sıfırlama (login 'Şifremi unuttum' + Ayarlar)
+                           lambda: _read_file(_data_dir() / "admin_reset_code.txt")),
     "device_id":          ("auto", False, _gen_device_id,
                            lambda: _read_file(_data_dir() / "device_id.txt")),
     "sqlcipher_key":      ("auto", True, _gen_urlsafe32,
@@ -167,7 +240,12 @@ _REGISTRY: dict[str, tuple] = {
                                    or _read_file(_data_dir() / ".sqlcipher_key")),
     "patient_fernet_key": ("auto", True, _gen_fernet,
                            lambda: _keyring_get("patient_fernet_key") or _read_file(_config_dir() / ".pemf_key_v2")),
-    "master_secret":      ("operator", False, None,  # operatör/env; YOKSA credential_manager uyarı+dosya yolu (oto-üretme yok)
+    # Coverage-audit P1: bulut capability-token — Supabase RPC'lerinde device_id (gizli-değil) yerine
+    # YETKİ anahtarı. dpapi=True (kritik). İlk publish'te TOFU ile bulut secret_hash'e mühürlenir; sonra
+    # her RPC (upsert_device/upsert_patient/resolve_patients...) bunu p_secret olarak gönderir.
+    "device_registry_secret": ("auto", True, _gen_urlsafe32,
+                               lambda: os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip()),
+    "master_secret":      ("operator", True, None,  # Audit P3: dpapi=True — KDF kökü; set_secret ile girilirse makineye-bağlı şifrele (sqlcipher/patient_fernet ile tutarlı). operatör/env; YOKSA credential_manager uyarı+dosya yolu (oto-üretme yok)
                            lambda: os.getenv("PEMF_MASTER_SECRET", "").strip() or _keyring_get("master_secret")),
     # OPERATOR (operatör girer; üreteç YOK)
     "mqtt_user":               ("operator", False, None, lambda: os.getenv("PEMF_MQTT_USER", "").strip()),
@@ -215,6 +293,13 @@ def _save(doc: dict) -> None:
     p = secrets_path()
     tmp = p.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Audit P2: .tmp'yi de HEMEN kilitle — os.replace'e kadar miras-ACL ile Users-okunur pencere
+    # olusuyordu (tmp düz-metin TÜM sirlari tutar). ACL rename ile p'ye tasinir.
+    try:
+        from utils.file_acl import lock_down_file as _ldf_tmp
+        _ldf_tmp(tmp)
+    except Exception:
+        pass
     os.replace(tmp, p)
     # NTFS ACL kilidi (audit B-1.2): TÜM sırları taşıyan dosya yalnız SYSTEM + Administrators'a
     # açık olsun. os.chmod Windows'ta no-op'tur → düz-metin operatör-sırları Users'a açık kalırdı.
@@ -240,8 +325,17 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
             try:
                 return _dec(raw)
             except Exception as e:
-                logger.error("Sır çözülemedi (%s): %s", key, e)
-                # düşmeden migrate/gen denenir
+                # KRİTİK VERİ-KORUMA (brick koruması): sır DEPOLANMIŞ ama çözülemiyor (ör. DPAPI
+                # makine/kullanıcı-profili değişti, master-key döndü). Burada YENİ üretip dosyayı EZERSEK
+                # mevcut ciphertext'i (ör. patients.db SQLCipher anahtarı) KALICI kaybederiz → tüm şifreli
+                # hasta verisi geri-DÖNÜLEMEZ brick olur. Bu yüzden fail-closed: ÜRETME/MİGRATE ETME/EZME,
+                # HATA yükselt. Ciphertext dosyada korunur (DPAPI düzelince veya doğru makine/yedekle çözülür).
+                logger.error("Sır çözülemedi (%s): %s — mevcut şifreli değer KORUNUYOR, üretilmiyor (brick koruması).", key, e)
+                raise RuntimeError(
+                    f"Depolanmış sır '{key}' çözülemedi (DPAPI/makine/profil değişmiş olabilir). "
+                    f"Var olan şifreli veriyi korumak için yeni anahtar ÜRETİLMEDİ ve dosya EZİLMEDİ. "
+                    f"Doğru makineyi kullanın veya pemf_secrets.json yedeğinden geri yükleyin."
+                ) from e
         # 1) eski kaynaktan MİGRATE (her zaman — mevcut DB anahtarı korunur)
         val = ""
         if legacy:
@@ -258,7 +352,7 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
         if not val:
             return default
         # dosyaya yaz (kritikse DPAPI)
-        doc[section][key] = _enc(val) if dpapi else val
+        doc[section][key] = _enc(val, critical=True) if dpapi else val
         _save(doc)
         return val
 
@@ -270,5 +364,5 @@ def set_secret(key: str, value: str) -> None:
     section, dpapi, *_ = _REGISTRY[key]
     with _lock:
         doc = _load()
-        doc[section][key] = _enc(value) if (dpapi and value) else value
+        doc[section][key] = _enc(value, critical=True) if (dpapi and value) else value
         _save(doc)

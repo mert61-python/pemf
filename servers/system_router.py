@@ -20,7 +20,7 @@ logger = logging.getLogger("system_router")
 
 
 @router.get("/api/system/info")
-async def system_info():
+async def system_info(request: Request):
     """Return software/hardware version, device ID, uptime."""
     from servers import api_server as _api
     try:
@@ -39,12 +39,18 @@ async def system_info():
         tunnel_url = get_tunnel_url() or None
     except Exception:
         tunnel_url = None
+    # Audit P3 (K1 tutarlılık): pairingCode/tunnelUrl UZAK (tünel) istemciye SIZDIRILMAZ — /api/health
+    # bunu K1 ile _local'e kapatmıştı; system_info tutarsız kalmıştı. Yalnız YEREL/LAN'a ver.
+    _h = request.headers
+    _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
+    from servers.auth import is_local_request
+    _local = is_local_request(request.client.host if request.client else "", _via_proxy)
     return {
         "softwareVersion": _api._APP_VERSION,
         "hardwareVersion": "HW-2025.1",
-        "deviceId": device_id,
-        "pairingCode": pairing_code,
-        "tunnelUrl": tunnel_url,
+        "deviceId": (device_id if _local else None),  # Audit P2: tenant-anahtarı uzak sızıntısı kapatıldı
+        "pairingCode": (pairing_code if _local else None),
+        "tunnelUrl": ((tunnel_url or None) if _local else None),
         "stmConnected": _api.state.core.stm_is_connected if _api.state.core else False,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
@@ -103,7 +109,7 @@ async def clear_notifications():
 
 
 @router.get("/api/health")
-async def health_check():
+async def health_check(request: Request):
     """Sistemin ayakta olup olmadığını kontrol eder. Otomatik keşf için de kullanılır."""
     from servers import api_server as _api
     from servers.auto_discovery import _get_local_ip
@@ -121,6 +127,13 @@ async def health_check():
         pairing_code = get_pairing_code()
     except Exception:
         pairing_code = None
+    # K1 fix (uzaktan auth-bypass): pairingCode/tunnelUrl UZAK (tünel) istemciye SIZDIRILMAZ — aksi
+    # halde health→kod→/api/auth/exchange→token zinciri KİMLİKSİZ token verir. Yalnız YEREL/LAN'a ver;
+    # uzak app pairing-kodunu operatörden (cihaz ekranından) OUT-OF-BAND alır.
+    _h = request.headers
+    _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
+    from servers.auth import is_local_request
+    _local = is_local_request(request.client.host if request.client else "", _via_proxy)
     service_status = _api.state.core.get_service_status() if _api.state.core and hasattr(_api.state.core, "get_service_status") else {}
     # At-rest şifreleme durumu (görünürlük — düz-metin fallback'i sessizce gizleme).
     at_rest_encrypted = None
@@ -133,10 +146,12 @@ async def health_check():
     return {
         "status": "online",
         "service": "PEMF-Vet",
-        "deviceId": device_id,
-        "pairingCode": pairing_code,
+        # Audit P2: deviceId de _local'e kapatıldı — bulut RPC'lerinin tek tenant/yetki anahtarı;
+        # uzak sızıntısı upsert_device-zehirleme + cross-tenant-IDOR zincirlerini köprülüyordu.
+        "deviceId": (device_id if _local else None),
+        "pairingCode": (pairing_code if _local else None),
         "localIp": local_ip,
-        "tunnelUrl": tunnel_url or None,
+        "tunnelUrl": ((tunnel_url or None) if _local else None),
         "core_initialized": _api.state.core is not None,
         "stmConnected": bool(getattr(_api.state.core, "stm_is_connected", False)) if _api.state.core else False,
         "atRestEncrypted": at_rest_encrypted,
@@ -146,6 +161,19 @@ async def health_check():
 
 @router.get("/favicon.ico")
 async def favicon():
+    # Tek kaynak ikon (pemf_heart_emf_icon.ico) — dev + frozen fallback'li servis.
+    import sys
+    from pathlib import Path
+    bases = [Path(__file__).resolve().parent.parent]
+    if getattr(sys, "frozen", False):
+        bases += [Path(getattr(sys, "_MEIPASS", ".")), Path(sys.executable).resolve().parent]
+    for base in bases:
+        ico = base / "pemf_gui" / "resources" / "icons" / "pemf_heart_emf_icon.ico"
+        try:
+            if ico.exists():
+                return Response(content=ico.read_bytes(), media_type="image/x-icon")
+        except Exception:
+            pass
     return Response(status_code=204)
 
 
@@ -288,7 +316,21 @@ async def log_client_error(request: Request):
             "stack": str(body.get("stack") or "")[:2000],
             "route": str(body.get("route") or "")[:80],
         }
-        with open(app_data / "client_errors.jsonl", "a", encoding="utf-8") as f:
+        log_path = app_data / "client_errors.jsonl"
+        # Audit P2: sinirsiz append → dolu-disk → SQLCipher tedavi DB'si yazamaz (LAN'da auth+rate-limit
+        # muaf, ErrorBoundary flood mumkun). ~2MB'ta tek-dosya rotasyon (.jsonl + .1 = ~4MB tavan).
+        try:
+            if log_path.exists() and log_path.stat().st_size > 2_000_000:
+                bak = app_data / "client_errors.jsonl.1"
+                if bak.exists():
+                    bak.unlink()
+                log_path.rename(bak)
+        except Exception:
+            try:
+                log_path.write_text("", encoding="utf-8")
+            except Exception:
+                pass
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         logging.getLogger("system_router").exception("client error log yazılamadı")

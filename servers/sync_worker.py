@@ -32,6 +32,7 @@ class CloudSyncWorker:
             self.device_id = get_unique_device_id()
         except Exception:
             self.device_id = "unknown-device"
+        self._reg_secret = None  # Coverage-audit P1: bulut capability-token cache (_registry_secret)
 
         if self.supabase_url and self.supabase_key:
             try:
@@ -44,6 +45,19 @@ class CloudSyncWorker:
                 logger.error(f"Supabase baglanti hatasi: {e}")
         else:
             logger.warning("Supabase URL veya Key belirtilmedigi icin Cloud Sync deaktif.")
+
+    def _registry_secret(self) -> str:
+        """Coverage-audit P1: bulut capability-token (device_registry_secret) — Supabase RPC'lerinde
+        device_id (gizli-değil) yerine YETKİ. İlk publish'te bulut secret_hash'e TOFU ile mühürlenir;
+        sonra her RPC bunu p_secret olarak gönderir. Cache'li."""
+        if self._reg_secret:
+            return self._reg_secret
+        try:
+            from utils.secrets_manager import get_secret
+            self._reg_secret = get_secret("device_registry_secret") or ""
+        except Exception:
+            self._reg_secret = ""
+        return self._reg_secret
 
     def publish_now(self, _url=None):
         """Tünel URL'si DEĞİŞİR DEĞİŞMEZ (tunnel_manager callback'i) cihaz kaydını ANINDA yayınla →
@@ -107,7 +121,7 @@ class CloudSyncWorker:
         try:
             with patient_db.lock:
                 with patient_db._get_connection() as conn:
-                    conn.row_factory = __import__('sqlite3').Row
+                    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}  # SQLCipher-uyumlu (sqlite3.Row, sqlcipher3 cursor'ı SARMAZ → at-rest-şifreli DB'de PUSH TypeError'la patlıyordu)
                     cursor = conn.cursor()
                     
                     # Henuz senkronize edilmemis (sync_status=0) hastalari bul
@@ -135,7 +149,7 @@ class CloudSyncWorker:
                         
                         # P1 audit 2026-06-28: RLS+RPC — dogrudan tablo upsert (anon, RLS-yok) YERINE
                         # SECURITY DEFINER upsert_patient RPC (device_id'yi SUNUCU-TARAFI zorlar).
-                        self.client.rpc("upsert_patient", {"p_device_id": self.device_id, "p_patient": payload}).execute()
+                        self.client.rpc("upsert_patient", {"p_device_id": self.device_id, "p_patient": payload, "p_secret": self._registry_secret()}).execute()
                         # RPC istisna firlatmadiysa basarili → sync_status guncelle.
                         cursor.execute("UPDATE patients SET sync_status = 1 WHERE id = ?", (patient_data["id"],))
                         conn.commit()
@@ -146,13 +160,15 @@ class CloudSyncWorker:
             
         # PULL: Supabase'den lokal SQLite'a indir
         try:
+            # Sadece BU cihazın kayıtları (cross-tenant izolasyon); decrypt-guard defense-in-depth.
+            # P1 audit: RLS+RPC — dogrudan SELECT (anon kapali) YERINE resolve_patients RPC.
+            # Audit P2: RPC'yi patient_db.lock DIŞINDA çağır — kilidi ağ-çağrısı boyunca tutmak tüm
+            # hasta-DB işlemlerini (add/get/search + delete unutulma-hakkı) bloklardı. Sonucu al,
+            # SONRA kısa DB-yazımı için kilitle.
+            res = self.client.rpc("resolve_patients", {"p_device_id": self.device_id, "p_secret": self._registry_secret()}).execute()
             with patient_db.lock:
                 with patient_db._get_connection() as conn:
                     cursor = conn.cursor()
-                    # Gerçek senaryoda burası last_sync_time ile filtrelenmeli
-                    # Sadece BU cihazın kayıtları (cross-tenant izolasyon); decrypt-guard defense-in-depth.
-                    # P1 audit: RLS+RPC — dogrudan SELECT (anon kapali) YERINE resolve_patients RPC.
-                    res = self.client.rpc("resolve_patients", {"p_device_id": self.device_id}).execute()
                     if res.data:
                         skipped = 0
                         for rp in res.data:
@@ -199,7 +215,7 @@ class CloudSyncWorker:
         # PUSH: Lokalden Supabase'e gönder
         try:
             with session_db._get_connection() as conn:
-                conn.row_factory = __import__('sqlite3').Row
+                conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}  # SQLCipher-uyumlu (sqlite3.Row, sqlcipher3 cursor'ı SARMAZ → at-rest-şifreli DB'de PUSH TypeError'la patlıyordu)
                 cursor = conn.cursor()
                 
                 cursor.execute("SELECT * FROM treatment_sessions WHERE sync_status = 0")
@@ -229,7 +245,7 @@ class CloudSyncWorker:
                     }
                     
                     # P1 audit 2026-06-28: RLS+RPC — upsert_session RPC (device_id sunucu-tarafi).
-                    self.client.rpc("upsert_session", {"p_device_id": self.device_id, "p_session": payload}).execute()
+                    self.client.rpc("upsert_session", {"p_device_id": self.device_id, "p_session": payload, "p_secret": self._registry_secret()}).execute()
                     cursor.execute("UPDATE treatment_sessions SET sync_status = 1 WHERE id = ?", (session_data["id"],))
                     conn.commit()
                     logger.info(f"Seans {session_data['id']} Supabase'e senkronize edildi (RPC).")
@@ -242,7 +258,7 @@ class CloudSyncWorker:
             with session_db._get_connection() as conn:
                 cursor = conn.cursor()
                 # P1 audit: RLS+RPC — resolve_sessions RPC.
-                res = self.client.rpc("resolve_sessions", {"p_device_id": self.device_id}).execute()
+                res = self.client.rpc("resolve_sessions", {"p_device_id": self.device_id, "p_secret": self._registry_secret()}).execute()
                 if res.data:
                     for rs in res.data:
                         # D-1: INSERT OR REPLACE YERİNE ON CONFLICT DO UPDATE. REPLACE = DELETE+INSERT →
@@ -315,19 +331,15 @@ class CloudSyncWorker:
                     "p_local_ip": payload["local_ip"],
                     "p_api_port": payload["api_port"],
                     "p_pairing_code": payload["pairing_code"],
+                    "p_secret": self._registry_secret(),   # Coverage-audit P1: capability-token (TOFU + doğrulama)
                 }).execute()
             except Exception:
-                # RPC henuz deploy edilmemisse (eski sema) -> eski dogrudan tablo upsert.
-                try:
-                    self.client.table("devices").upsert(payload, on_conflict="device_id").execute()
-                except Exception as inner:
-                    # pairing_code SUTUNU yoksa kodsuz upsert ile devam et (geriye uyum).
-                    if "pairing_code" in str(inner):
-                        fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
-                        self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
-                        logger.debug("Device registry: pairing_code sutunu yok, kodsuz publish yapildi.")
-                    else:
-                        raise
+                # Audit P3: SECURITY DEFINER upsert_device RPC yok → eski anon tablo-upsert. pairing_code
+                # (auth-bearer sır) geniş-okunur tabloya ASLA yazılmaz (RLS yanlış-yapılandırılırsa
+                # okunur/tünel-zehirlenir) → pairing_code'u ÇIKAR + GÖRÜNÜR uyar (RPC deploy edilmeli).
+                logger.warning("Device registry: upsert_device RPC yok → anon tablo-upsert (pairing_code ATLANDI; uzaktan-pairing için RPC deploy edilmeli).")
+                fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
+                self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
         except Exception as e:
             # Yazilamadi (tablo yok / RLS / RPC yok). Sync'i bozma ama GORUNUR logla
             # (eskiden DEBUG'ta sessizce yutuluyordu → registry'nin neden bos kaldigi gizleniyordu).

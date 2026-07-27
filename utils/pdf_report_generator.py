@@ -252,11 +252,13 @@ class PDFReportGenerator:
 
     def _get_patient_sessions(self, patient_name: str, start_date, end_date):
         """Tam-ada göre (opsiyonel tarih aralığı) hasta seanslarını getir; hiç yoksa ValueError."""
-        sessions = self.db.get_session_history(limit=1000, start_date=start_date, end_date=end_date)
+        sessions = self.db.get_session_history(limit=1000, start_date=start_date, end_date=end_date, internal_full=True)
         patient_sessions = [
             s for s in sessions
-            if (s.get('patient_name', '') + ' ' + s.get('patient_surname', '')).strip().lower()
-            == patient_name.lower()
+            # None-güvenli: SQL NULL → Python None; .get(k, '') anahtar VAR ama None ise None döner
+            # → str+None TypeError → PDF daima 500 (Audit P1). `or ''` hem eksik hem None'u boşa çevirir.
+            if ((s.get('patient_name') or '') + ' ' + (s.get('patient_surname') or '')).strip().lower()
+            == (patient_name or '').lower()
         ]
         if not patient_sessions:
             raise ValueError(f"'{patient_name}' adlı hasta için seans bulunamadı")
@@ -265,7 +267,7 @@ class PDFReportGenerator:
     def _fetch_sessions(self, session_ids):
         """Verilen ID'lerin seanslarını getir — geçmişten TEK sorgu + ID eşleme (döngü-içi tekrar
         sorgu yok). session_ids sırasını korur; bulunamayanları atlar."""
-        by_id = {s['id']: s for s in self.db.get_session_history(limit=1000)}
+        by_id = {s['id']: s for s in self.db.get_session_history(limit=1000, internal_full=True)}
         return [by_id[sid] for sid in session_ids if sid in by_id]
     
     def _add_header(self, story):

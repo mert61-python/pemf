@@ -1,13 +1,13 @@
-﻿# UTF-8
+# UTF-8
 #
-# PEMF GUI Version Information Resource
+# PEMF Backend Version Information Resource
 # Bu dosya build_tools\build_installer.ps1 tarafindan VERSION dosyasindan uretilir.
 #
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 4, 0, 0),
-    prodvers=(1, 4, 0, 0),
+    filevers=(1, 8, 0, 0),
+    prodvers=(1, 8, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -22,12 +22,12 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u'PEMF Medical Technologies'),
         StringStruct(u'FileDescription', u'PEMF Therapeutic Device Control Software'),
-        StringStruct(u'FileVersion', u'1.4.0.0'),
-        StringStruct(u'InternalName', u'PEMF_GUI'),
+        StringStruct(u'FileVersion', u'1.8.0.0'),
+        StringStruct(u'InternalName', u'PEMF_Backend'),
         StringStruct(u'LegalCopyright', u'Copyright (C) 2026 PEMF Medical Technologies. All rights reserved.'),
-        StringStruct(u'OriginalFilename', u'PEMF_GUI.exe'),
+        StringStruct(u'OriginalFilename', u'PEMF_Backend.exe'),
         StringStruct(u'ProductName', u'PEMF Control Suite'),
-        StringStruct(u'ProductVersion', u'1.4.0.0')])
+        StringStruct(u'ProductVersion', u'1.8.0.0')])
       ]
     ),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])

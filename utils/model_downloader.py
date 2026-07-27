@@ -85,18 +85,24 @@ def _model_integrity_ok(path: Path) -> bool:
             return False
         sha_file = path.with_name(path.name + ".sha256")
         if sha_file.exists():
-            expected = sha_file.read_text(encoding="utf-8").split()[0].strip().lower()
-            if expected:
-                h = hashlib.sha256()
-                with open(path, "rb") as fh:
-                    for chunk in iter(lambda: fh.read(1 << 20), b""):
-                        h.update(chunk)
-                if h.hexdigest().lower() != expected:
-                    print(f"Model butunluk UYARISI: {path.name} SHA256 uyusmuyor.")
-                    return False
+            # Audit P2: sidecar VAR → doğrulama ZORUNLU + fail-CLOSED. Hash-ortası I/O hatasında dış
+            # except True dönüyordu (fail-open) → doğrulanamayan medikal-AI ağırlığı onnxruntime'a gidiyordu.
+            try:
+                expected = sha_file.read_text(encoding="utf-8").split()[0].strip().lower()
+                if expected:
+                    h = hashlib.sha256()
+                    with open(path, "rb") as fh:
+                        for chunk in iter(lambda: fh.read(1 << 20), b""):
+                            h.update(chunk)
+                    if h.hexdigest().lower() != expected:
+                        print(f"Model butunluk UYARISI: {path.name} SHA256 uyusmuyor.")
+                        return False
+            except Exception:
+                print(f"Model butunluk DOGRULANAMADI (sidecar var): {path.name} → reddedildi (fail-closed).")
+                return False
         return True
     except Exception:
-        return True  # şüpheli durumda engelleme yapma — mevcut davranışı koru
+        return True  # sidecar-YOK / altyapı hatası → mevcut davranış (min-byte + onnxruntime korur; sidecar shiplenince tam-kapalı)
 
 
 def find_installed_model(repo_path: str):

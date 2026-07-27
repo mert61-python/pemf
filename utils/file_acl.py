@@ -49,6 +49,7 @@ def lock_down_file(path) -> bool:
              "/grant:r", f"{_ADMINS_SID}:F"],
             check=True,
             capture_output=True,
+            timeout=10,                     # E-3: wedge'lenen handle başlangıçta bloklamasın (tek timeout'suz subprocess'ti)
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return True

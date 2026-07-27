@@ -92,7 +92,9 @@ def _download_cloudflared() -> Path | None:
         filename = "cloudflared-linux"
 
     bin_path = _BIN_DIR / filename
-    if bin_path.exists():
+    # Audit P3: bozuk/0-byte cache ASLA yeniden inmiyordu (bin_path.exists()→skip → Popen bozuk binary
+    # → watchdog sonsuz relaunch). Cache'i BOYUTLA doğrula; şüpheli-küçükse yeniden indir (self-heal).
+    if bin_path.exists() and bin_path.stat().st_size >= 5_000_000:
         logger.info("cloudflared zaten mevcut: %s", bin_path)
         return bin_path
 
@@ -100,8 +102,24 @@ def _download_cloudflared() -> Path | None:
     logger.info("cloudflared indiriliyor: %s", url)
 
     try:
-        with urllib.request.urlopen(url, timeout=60) as response, open(bin_path, "wb") as f:
-            f.write(response.read())
+        # Audit P3: ATOMİK indir — temp'e yaz + boyut doğrula + os.replace. Eskiden doğrudan bin_path'e
+        # yazılıyordu; indirme kesilirse 0-byte/kesik dosya kalıp bir daha inmiyordu.
+        import os as _os
+        import tempfile as _tf
+        _fd, _tmp = _tf.mkstemp(dir=str(_BIN_DIR), suffix=".part")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response, _os.fdopen(_fd, "wb") as f:
+                f.write(response.read())
+            _sz = _os.path.getsize(_tmp)
+            if _sz < 5_000_000:
+                raise ValueError(f"cloudflared indirmesi çok küçük ({_sz} bytes) — bozuk/kesik.")
+            _os.replace(_tmp, bin_path)
+        except Exception:
+            try:
+                _os.unlink(_tmp)
+            except Exception:
+                pass
+            raise
 
         # Linux/macOS: çalıştırma izni ver
         if system != "Windows":
@@ -212,10 +230,15 @@ def start_tunnel(port: int = 8000) -> bool:
         logger.info("Cloudflare QUICK tunnel başlatılıyor → port %d (URL her restart DEĞİŞİR; üretimde NAMED önerilir).", port)
 
     try:
+        # DEADLOCK fix: NAMED+hostname dalı (aşağıda) stderr-okuma thread'i BAŞLATMADAN döner. O durumda
+        # stderr=PIPE hiç boşaltılmaz → ~64KB OS pipe buffer'ı dolunca cloudflared write()'ta BLOKLANIR
+        # ve tünel ölür (uzaktan erişim kopar). Okumayacaksak stderr=DEVNULL; okuyacaksak (QUICK veya
+        # hostname'siz named → reader thread var) PIPE. stdout zaten hiç okunmuyor → daima DEVNULL.
+        _stderr_read = not (token and hostname)
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stderr=(subprocess.PIPE if _stderr_read else subprocess.DEVNULL),
             creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0,
         )
         with _tunnel_lock:

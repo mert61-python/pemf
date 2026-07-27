@@ -3,9 +3,11 @@
 # PyInstaller (OneDir) + Inno Setup
 # ============================================================================
 # KULLANIM: build_tools\ klasöründen calistirin:
-#   cd build_tools
-#   .\build_installer.ps1
+#   .\build_tools\build_installer.ps1               # device installer (varsayilan)
+#   .\build_tools\build_installer.ps1 -Mode server  # server installer
 # ============================================================================
+
+param([ValidateSet('device', 'server')][string]$Mode = 'device')
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -50,7 +52,7 @@ function Sync-ReleaseVersion {
     $versionInfo = @"
 # UTF-8
 #
-# PEMF GUI Version Information Resource
+# PEMF Backend Version Information Resource
 # Bu dosya build_tools\build_installer.ps1 tarafindan VERSION dosyasindan uretilir.
 #
 
@@ -73,9 +75,9 @@ VSVersionInfo(
         [StringStruct(u'CompanyName', u'PEMF Medical Technologies'),
         StringStruct(u'FileDescription', u'PEMF Therapeutic Device Control Software'),
         StringStruct(u'FileVersion', u'$fileVersion'),
-        StringStruct(u'InternalName', u'PEMF_GUI'),
+        StringStruct(u'InternalName', u'PEMF_Backend'),
         StringStruct(u'LegalCopyright', u'Copyright (C) 2026 PEMF Medical Technologies. All rights reserved.'),
-        StringStruct(u'OriginalFilename', u'PEMF_GUI.exe'),
+        StringStruct(u'OriginalFilename', u'PEMF_Backend.exe'),
         StringStruct(u'ProductName', u'PEMF Control Suite'),
         StringStruct(u'ProductVersion', u'$fileVersion')])
       ]
@@ -101,7 +103,7 @@ if (-not (Test-Path $VersionFile)) {
     Write-Fail "VERSION dosyasi bulunamadi: $VersionFile"
 }
 $AppVersion = (Get-Content -Path $VersionFile -Raw).Trim()
-$IssPath = Join-Path $ScriptDir "PEMF_Setup.iss"
+$IssPath = Join-Path $ScriptDir "PEMF_Backend_Setup.iss"
 $VersionInfoPath = Join-Path $ProjectRoot "docs\version_info.txt"
 Sync-ReleaseVersion -Version $AppVersion -IssPath $IssPath -VersionInfoPath $VersionInfoPath
 Write-OK "Surum senkronize edildi: $AppVersion"
@@ -214,30 +216,46 @@ if (Test-Path $BuildDir) {
 Write-Step "React Frontend Web Export"
 
 $FrontendDir = Join-Path $ProjectRoot "frontend"
-if (-not (Test-Path $FrontendDir)) {
-    Write-Fail "frontend\ klasoru bulunamadi!"
-}
 
-Push-Location $FrontendDir
-try {
-    $FrontendDistDir = Join-Path $FrontendDir "dist"
-    if (Test-Path $FrontendDistDir) {
-        Write-Host "  Eski frontend dist temizleniyor..." -ForegroundColor DarkGray
-        Remove-Item $FrontendDistDir -Recurse -Force
+if ($env:PEMF_SKIP_FRONTEND -eq '1') {
+    # Web UI (pf/) DEGISMEDIGINDE re-export'u ATLA: onceden saglanan frontend\dist KULLANILIR.
+    # (Expo deps kurulumu gerekmez; frozen backend'e mevcut web UI baked kalir. Asagidaki
+    # dogrulama HER IKI yolda da calisir -> gecersiz/eksik dist yine yakalanir.)
+    Write-OK "Frontend export ATLANDI (PEMF_SKIP_FRONTEND=1) - mevcut frontend\dist kullaniliyor."
+} else {
+    # GERCEK web-UI kaynagi = pf\ (Expo app; export:web + typecheck scriptleri var). Eski BOS guii\frontend\
+    # (git'te hic yoktu = leftover build-yolu) yerine pf\'den export edilir; cikti (pf\dist) kanonik
+    # frontend\dist'e kopyalanir (PyInstaller spec frontend\dist'i bundle'lar).
+    $PfDir = Join-Path $ProjectRoot "pf"
+    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Write-Fail "pf\ (web-UI kaynagi) bulunamadi!" }
+    Push-Location $PfDir
+    try {
+        $PfDist = Join-Path $PfDir "dist"
+        if (Test-Path $PfDist) {
+            Write-Host "  Eski pf\dist temizleniyor..." -ForegroundColor DarkGray
+            Remove-Item $PfDist -Recurse -Force
+        }
+
+        Invoke-NpmCleanInstall -Label "Frontend (pf)"
+
+        Write-Host "  Typecheck calistiriliyor (npm run typecheck)..." -ForegroundColor DarkGray
+        & npm run typecheck
+        if ($LASTEXITCODE -ne 0) { Write-Fail "npm run typecheck basarisiz! (pf TypeScript hatalarini duzeltin)" }
+
+        Write-Host "  Expo Web Export aliniyor (export:web = expo export + postexport-web patcher)..." -ForegroundColor DarkGray
+        $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
+        & npm run export:web
+        if ($LASTEXITCODE -ne 0) { Write-Fail "Expo web export (npm run export:web) basarisiz!" }
+    } finally {
+        Pop-Location
     }
 
-    Invoke-NpmCleanInstall -Label "Frontend"
-
-    Write-Host "  Typecheck calistiriliyor (npm run typecheck)..." -ForegroundColor DarkGray
-    & npm run typecheck
-    if ($LASTEXITCODE -ne 0) { Write-Fail "npm run typecheck basarisiz! (TypeScript hatalarini duzeltin)" }
-
-    Write-Host "  Expo Web Export aliniyor..." -ForegroundColor DarkGray
-    $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
-    & npx expo export --platform web
-    if ($LASTEXITCODE -ne 0) { Write-Fail "Expo web export basarisiz!" }
-} finally {
-    Pop-Location
+    # pf\dist -> frontend\dist (PyInstaller'in bekledigi kanonik konum)
+    $FrontendDistDir = Join-Path $FrontendDir "dist"
+    if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
+    if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
+    Copy-Item (Join-Path $PfDir "dist") $FrontendDistDir -Recurse -Force
+    Write-OK "pf web export -> frontend\dist kopyalandi."
 }
 
 $FrontendIndex = Join-Path $FrontendDir "dist\index.html"
@@ -298,18 +316,26 @@ Write-OK "DEMA Terapi Simulatoru build edildi ve dogrulandi."
 Write-Step "PyInstaller OneDir Build Baslatiliyor"
 Write-Host "  Bu islem 5-15 dakika surebilir..." -ForegroundColor DarkGray
 
-$SpecFile = Join-Path $ScriptDir "PEMF_GUI_onedir.spec"
+$SpecFile = Join-Path $ScriptDir "PEMF_Backend_onedir.spec"
 if (-not (Test-Path $SpecFile)) {
     Write-Fail "Spec dosyasi bulunamadi: $SpecFile"
 }
 
 $startTime = Get-Date
 
-& $PythonExe -m PyInstaller `
-    --distpath (Join-Path $ProjectRoot "dist") `
-    --workpath (Join-Path $ProjectRoot "build") `
-    --noconfirm `
-    $SpecFile
+# KRITIK: spec project_path'i os.getcwd()'den turetir (basename 'build_tools' ise parent=guii, degilse cwd).
+# build_installer artik herhangi bir dizinden calisabildigi icin CWD'yi $ProjectRoot (guii) yap ->
+# spec her zaman project_path=guii cozer (yoksa backend_service.py 'not found' + Surum 0.0.0 olur).
+Push-Location $ProjectRoot
+try {
+    & $PythonExe -m PyInstaller `
+        --distpath (Join-Path $ProjectRoot "dist") `
+        --workpath (Join-Path $ProjectRoot "build") `
+        --noconfirm `
+        $SpecFile
+} finally {
+    Pop-Location
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Fail "PyInstaller build basarisiz! (Exit code: $LASTEXITCODE)"
@@ -321,21 +347,21 @@ Write-OK "PyInstaller tamamlandi ($([int]$elapsed.TotalSeconds) saniye)"
 # --- Adim 6: Build Ciktisini Dogrula ---
 Write-Step "Build Ciktisi Dogrulanıyor"
 
-$OutputDir = Join-Path $ProjectRoot "dist\PEMF_GUI"
-$OutputExe = Join-Path $OutputDir "PEMF_GUI.exe"
+$OutputDir = Join-Path $ProjectRoot "dist\PEMF_Backend"
+$OutputExe = Join-Path $OutputDir "PEMF_Backend.exe"
 
 if (-not (Test-Path $OutputDir)) {
-    Write-Fail "dist\PEMF_GUI\ klasoru bulunamadi!"
+    Write-Fail "dist\PEMF_Backend\ klasoru bulunamadi!"
 }
 if (-not (Test-Path $OutputExe)) {
-    Write-Fail "PEMF_GUI.exe bulunamadi!"
+    Write-Fail "PEMF_Backend.exe bulunamadi!"
 }
 
 $DirSize   = (Get-ChildItem $OutputDir -Recurse | Measure-Object -Property Length -Sum).Sum
 $DirSizeMB = [math]::Round($DirSize / 1MB, 1)
 $FileCount = (Get-ChildItem $OutputDir -Recurse -File).Count
 
-Write-OK "PEMF_GUI.exe olusturuldu"
+Write-OK "PEMF_Backend.exe olusturuldu"
 Write-OK "Klasor boyutu: $DirSizeMB MB ($FileCount dosya)"
 
 # --- Adim 6.5: Release Artifact Config/Secret Kontrolu ---
@@ -347,7 +373,8 @@ Write-Step "Release Artifact Config/Secret Kontrolu"
 $BundledConfigFiles = @(
     "config.json",
     "credentials.json",
-    "hivemq_users.json",
+    "pemf_secrets.json",           # GUNCEL: TUM sirlar burada (SecretsManager) - release'e ASLA gomulmemeli
+    "hivemq_users.json",           # legacy: credential_manager.export_hivemq_config hala uretebilir
     "mosquitto_passwords.txt",
     "mosquitto_acl.conf",
     "bridge_hivemq.conf",
@@ -389,56 +416,45 @@ if ($PatternHits.Count -gt 0) {
     Write-Fail "Release artifact icinde Hugging Face veya benzeri token paterni bulundu."
 }
 
-$ExpectedBundledConfig = Join-Path $OutputDir "_internal\config\config.json"
-if (-not (Test-Path $ExpectedBundledConfig)) {
-    Write-Fail "Bundle config eksik: $ExpectedBundledConfig"
+# GUNCEL YAPI (spec:117 guvenlik): gercek config.json bundle EDILMEZ (Gmail App Password icerir);
+# yalniz config.json.template gomulur. Gercek config runtime'da %USERPROFILE%\.pemf_gui'den okunur.
+$ExpectedTemplate = Join-Path $OutputDir "_internal\config\config.json.template"
+if (-not (Test-Path $ExpectedTemplate)) {
+    Write-Warn "Bundle config template eksik: _internal\config\config.json.template (spec config bundling'i kontrol et)"
+} else {
+    Write-OK "Bundle config template dogrulandi: _internal\config\config.json.template"
 }
-Write-OK "Bundle config dogrulandi: _internal\config\config.json"
+$LeakedConfig = Join-Path $OutputDir "_internal\config\config.json"
+if (Test-Path $LeakedConfig) {
+    Write-Fail "SIZINTI: gercek config.json release'e gomulmus (_internal\config\config.json) - spec bunu skip etmeli!"
+}
 Write-OK "Yasakli HF token paterni bulunmadi."
 
 $AiAssetsDir = Join-Path $ProjectRoot "release_assets\ai_models"
-$RequiredAiAssets = @(
-    "ai_hub\cat_disease\XGBoost.onnx",
-    "ai_hub\cat_disease\XGBoost.pkl",
-    "ai_hub\cat_disease\label_encoder.pkl",
-    "ai_hub\cat_disease\scaler_X.pkl",
-    "ai_hub\cat_landmark\thresholds_calibrated.json",
-    "ai_hub\cat_landmark\yolo26m-pose.onnx",
-    "ai_hub\cat_segmentation\yolov8m-seg.onnx",
-    "ai_hub\cat_thermal\GhostNetV2.onnx",
-    "ai_hub\em_kedi_legacy\ResNet_kedi_v2.onnx",
-    "ai_hub\em_kedi_legacy\scaler_X_kedi_v2.pkl",
-    "ai_hub\em_kedi_legacy\scaler_extra_kedi.pkl",
-    "ai_hub\em_kedi_legacy\scaler_y_kedi_v2.pkl",
-    "ai_hub\em_kedi\BiLSTM_XXL_Raw.onnx"
-    "ai_hub\em_kedi\scaler_X.pkl",
-    "ai_hub\em_kedi\scaler_extra.pkl",
-    "ai_hub\em_kedi\scaler_y.pkl",
-    "ai_hub\em_petri\PetriNet_v3.onnx",
-    "ai_hub\em_petri\scaler_D_petri_v3.pkl",
-    "ai_hub\em_petri\scaler_E_petri_v3.pkl",
-    "ai_hub\em_petri\scaler_X_petri_v3.pkl",
-    "ai_hub\em_petri\scaler_extra_petri_v3.pkl",
-    "ai_hub\em_phantom\PhantomNet_v3.onnx",
-    "ai_hub\em_phantom\scaler_D_phantom_v3.pkl",
-    "ai_hub\em_phantom\scaler_E_phantom_v3.pkl",
-    "ai_hub\em_phantom\scaler_X_phantom_v3.pkl",
-    "ai_hub\em_phantom\scaler_extra_phantom_v3.pkl",
-    "ai_hub\feline_reticulocytes\yolov8s.onnx",
-    "ai_hub\petri_dish\yolo11m-seg.onnx"
-)
-
+# GUNCEL YAPI: model aileleri release_assets\ai_models\ai_hub\<aile>\ altinda (inference_* dahil, ~17 aile).
+# Sabit dosya-listesi STALE oluyordu (yeni inference_* modellerini kacirdi) -> DINAMIK dogrulama: her
+# aile-dizininde en az bir agirlik (.onnx/.pkl) olmali; yoksa uyar. Yeni model eklenince otomatik kapsanir.
 if (Test-Path $AiAssetsDir) {
-    foreach ($asset in $RequiredAiAssets) {
-        $assetPath = Join-Path $AiAssetsDir $asset
-        if (-not (Test-Path $assetPath)) {
-            Write-Warn "Kritik AI model eksik: release_assets\ai_models\$asset"
+    $AiHubDir = Join-Path $AiAssetsDir "ai_hub"
+    $ModelFamilies = @()
+    if (Test-Path $AiHubDir) {
+        $ModelFamilies = @(Get-ChildItem $AiHubDir -Directory -ErrorAction SilentlyContinue)
+    }
+    if ($ModelFamilies.Count -eq 0) {
+        Write-Warn "release_assets\ai_models\ai_hub altinda model-aile dizini bulunamadi!"
+    }
+    foreach ($fam in $ModelFamilies) {
+        $weights = @(Get-ChildItem $fam.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.onnx', '.pkl' })
+        if ($weights.Count -eq 0) {
+            Write-Warn "Model ailesi BOS (agirlik yok): ai_hub\$($fam.Name)"
         }
     }
 
+    $OnnxCount = @(Get-ChildItem $AiAssetsDir -Recurse -File -Filter *.onnx -ErrorAction SilentlyContinue).Count
     $AiSize = (Get-ChildItem $AiAssetsDir -Recurse -File | Measure-Object -Property Length -Sum).Sum
     $AiFiles = (Get-ChildItem $AiAssetsDir -Recurse -File).Count
-    Write-OK "Opsiyonel AI paketi hazir: $([math]::Round($AiSize / 1MB, 1)) MB ($AiFiles dosya)"
+    Write-OK "AI paketi: $($ModelFamilies.Count) model-aile, $OnnxCount ONNX, $([math]::Round($AiSize / 1MB, 1)) MB ($AiFiles dosya)"
 } else {
     Write-Warn "release_assets\ai_models bulunamadi; AI component bos kurulacak."
 }
@@ -470,9 +486,9 @@ if (-not $SkipInnoSetup) {
 
     Write-Step "Inno Setup ile Installer Olusturuluyor"
 
-    $IssFile = Join-Path $ScriptDir "PEMF_Setup.iss"
+    $IssFile = Join-Path $ScriptDir "PEMF_Backend_Setup.iss"
     if (-not (Test-Path $IssFile)) {
-        Write-Fail "PEMF_Setup.iss bulunamadi: $IssFile"
+        Write-Fail "PEMF_Backend_Setup.iss bulunamadi: $IssFile"
     }
 
     $InnoOutputDir = Join-Path $ScriptDir "Output"
@@ -481,7 +497,8 @@ if (-not $SkipInnoSetup) {
     }
 
     $startTime2 = Get-Date
-    & $IsccExe $IssFile
+    Write-Host "  ISCC modu: $Mode (ModeName=$Mode)" -ForegroundColor DarkGray
+    & $IsccExe "/DModeName=$Mode" $IssFile
 
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Inno Setup basarisiz! (Exit code: $LASTEXITCODE)"
@@ -505,11 +522,11 @@ Write-Host "============================================================" -Foreg
 Write-Host "                  BUILD TAMAMLANDI" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  PyInstaller Ciktisi : dist\PEMF_GUI\" -ForegroundColor White
+Write-Host "  PyInstaller Ciktisi : dist\PEMF_Backend\" -ForegroundColor White
 if (-not $SkipInnoSetup) {
-    Write-Host "  Kurulum Dosyasi    : build_tools\Output\PEMFSetup_v$BuildVersion.exe" -ForegroundColor White
+    Write-Host "  Kurulum Dosyasi    : build_tools\Output\PEMFBackendSetup_${Mode}_v$BuildVersion.exe" -ForegroundColor White
     Write-Host ""
-    Write-Host "  -> Veterinere dagitmak icin: PEMFSetup_v$BuildVersion.exe dosyasini gonderin." -ForegroundColor Cyan
+    Write-Host "  -> Klinige dagitmak icin: PEMFBackendSetup_${Mode}_v$BuildVersion.exe dosyasini gonderin." -ForegroundColor Cyan
 } else {
     Write-Host ""
     Write-Host "  -> Inno Setup kurulumu yapilip tekrar calistirin." -ForegroundColor Yellow

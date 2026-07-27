@@ -208,14 +208,35 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         # op-doğrulama #8: .plain.bak TÜM eski düz-metin DB'yi içerir → SQLCipher'ı baypas eden PII
         # kopyası. Escrow (migration-kurtarma) için TUTULUR ama SIKI ACL (SYSTEM+Admin) ile kilitlenir
         # → yerel kullanıcı düz-metin PII okuyamaz (B-1.2 .sqlcipher_key escrow deseniyle tutarlı).
-        try:
-            from utils.file_acl import lock_down_file
-            lock_down_file(backup)
-        except Exception:
+        # Audit P3: .plain.bak TÜM düz-metin PII'yi (SQLCipher-bypass) taşır → disk-çalınırsa/yedek/bulut-sync
+        # okursa at-rest garantisi çöker. Migrasyon başarılı (enc DB yerinde) → VARSAYILAN GÜVENLİ-SİL
+        # (üzerine-yaz + unlink). PEMF_KEEP_PLAIN_BACKUP=1 ile ACL-kilitli escrow saklanabilir (eski davranış).
+        if os.environ.get("PEMF_KEEP_PLAIN_BACKUP", "0") == "1":
+            try:
+                from utils.file_acl import lock_down_file
+                lock_down_file(backup)
+            except Exception:
+                if logger:
+                    logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
             if logger:
-                logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
-        if logger:
-            logger.warning("DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
+                logger.warning("DB SQLCipher MIGRATE edildi; düz-metin yedek ESCROW saklandı (ACL-kilitli): %s", backup)
+        else:
+            try:
+                _bsz = os.path.getsize(backup)
+                with open(backup, "r+b") as _bf:
+                    _rem = _bsz
+                    _rnd = os.urandom(1 << 20)
+                    while _rem > 0:
+                        _bf.write(_rnd if _rem >= len(_rnd) else _rnd[:_rem])
+                        _rem -= len(_rnd)
+                    _bf.flush()
+                    os.fsync(_bf.fileno())
+                os.remove(backup)
+                if logger:
+                    logger.warning("DB SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ (at-rest PII riski kapatıldı).")
+            except Exception:
+                if logger:
+                    logger.warning(".plain.bak güvenli-silinemedi (elle sil önerilir): %s", backup)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")

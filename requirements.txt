@@ -28,11 +28,18 @@ websockets==15.0.1
 # ── Donanım / iletişim (STM32 serial + ESP MQTT + mDNS keşfi) ──
 paho-mqtt==2.1.0
 pyserial==3.5
-zeroconf==0.149.0               # CVE fix (2026-07-06): 0.147.3→0.149.0
+zeroconf==0.149.16              # CVE fix: 0.147.3→0.149.0→0.149.16 (SEC-8 2026-07-12: 5 mDNS CVE, minor-içi güvenli bump)
 
 # ── AI/ML — görüntü + çekirdek ──
 numpy==1.26.4                    # KRİTİK: torch 2.1.2 numpy<2 ister (>=2.0 KIRAR)
-opencv-python==4.9.0.80
+# opencv-python (full) — headless DEĞİL, BİLİNÇLİ. ultralytics `opencv-python`i SERT bağımlılık
+# olarak ister; eskiden burada `opencv-python-headless==4.9.0.80` pinliyken pip ultralytics için
+# full opencv'yi de kuruyordu (PIN'SİZ) ve `import cv2` FULL olanı çözüyordu. Sonuç: pin'lenen
+# sürüm ile PAKETLENEN sürüm farklıydı (doğrulandı: bundle'da 4.11.0.86) → build tekrarlanabilir
+# değildi, yeni bir opencv çıkınca ne shiplendiği sessizce değişirdi. Artık sahada çalışan sürüm
+# AÇIKÇA pinli; headless satırı kaldırıldı (nasılsa gölgeleniyordu). Linux'ta libGL gerekir —
+# Dockerfile.backend/ai zaten libgl1+libglib2.0-0 kuruyor.
+opencv-python==4.11.0.86
 onnxruntime==1.19.2
 # CVE ERTELENDİ (bilinçli, 2026-07-06): onnx 1.15→1.16+ / torch 2.1.2→2.6+ CVE'leri PİNLİ bırakıldı —
 # torch upgrade `numpy<2` kısıtını kaldırır → opencv/scipy/sklearn/librosa/pandas/numba CASCADE +
@@ -60,7 +67,7 @@ reportlab==4.0.7                # PDF rapor üretimi
 PyYAML==6.0.3                    # cabin_config (em_fantom/em_petri/cat_organ)
 
 # ── DB / şifreleme / sırlar ──
-cryptography==43.0.1            # CVE fix (2026-07-06): 41.0.3→43.0.1 (CVE-2023-50782/2024-0727; Fernet/DPAPI) — 86 test yeşil
+cryptography==46.0.7           # CVE fix (2026-07-16): 43.0.1→46.0.7 (bundled-OpenSSL CVE'ler; yalnız Fernet API kullanılıyor=x509/TLS-yok→pratik-düşük ama pip-audit temiz; Fernet 43→46 cross-version decrypt DOĞRULANDI, 117 test yeşil)
 sqlcipher3==0.6.2                # at-rest DB şifreleme (Windows'ta prebuilt wheel gerekir)
 keyring==25.7.0
 joblib==1.5.3                    # sklearn model yükleme

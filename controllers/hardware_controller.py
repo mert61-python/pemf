@@ -6,6 +6,7 @@ import time
 import zlib
 
 from utils.stm32_protocol_limits import (
+    DURATION_MAX_MINUTES,
     duty_percent_to_ratio,
     normalize_duration_minutes,
     normalize_frequency_hz,
@@ -112,8 +113,11 @@ class HardwareController:
                 self.coils_state[coil_id]["duty"] = duty_percent_to_ratio(duty)
                 self.coils_state[coil_id]["phase"] = normalize_phase_deg(phase)
                 self.coils_state[coil_id]["duration"] = dur_min
-                # Istenen sure > 0 ise donanim-tarafi deadline kur (keep-alive'a ragmen durur).
-                self._coil_deadline[coil_id] = (time.monotonic() + dur_min * 60) if dur_min > 0 else None
+                # Audit P2: dur_min<=0'da deadline=None → keep-alive firmware timer'ini SINIRSIZ tazeler
+                # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme. Sinirsiz birakmak
+                # yerine DURATION_MAX_MINUTES ust-kapak (geriye-uyumlu; keep-alive'a ragmen eninde durur).
+                _dl_min = dur_min if dur_min > 0 else DURATION_MAX_MINUTES
+                self._coil_deadline[coil_id] = time.monotonic() + _dl_min * 60
             else:
                 self.coils_state[coil_id]["is_running"] = False
                 self.coils_state[coil_id]["duty"] = 0.0
@@ -128,7 +132,9 @@ class HardwareController:
         """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
         with self._state_lock:
             dur_min = normalize_duration_minutes(duration)
-            deadline = (time.monotonic() + dur_min * 60) if dur_min > 0 else None
+            # Audit P2: dur_min<=0'da kapaksiz kalmasin → DURATION_MAX_MINUTES ust-kapak (bkz. update_coil).
+            _dl_min = dur_min if dur_min > 0 else DURATION_MAX_MINUTES
+            deadline = time.monotonic() + _dl_min * 60
             for i in range(1, 6):
                 self.coils_state[i]["is_running"] = True
                 self.coils_state[i]["freq"] = normalize_frequency_hz(freq)

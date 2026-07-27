@@ -193,8 +193,19 @@ if os.path.exists(ai_hub_dir):
 # find_installed_model resource_path("ai_models") köküyle bundle'dan çözer. Akıllı Teşhis + AI Pro
 # modellerinin TAMAMI (landmark/disease/segmentation/thermal/reticulocytes/em_*/cat_*/kidney_*/
 # histopath/cat_organ + em_kedi) EXE içinde taşınır. Bundle ~+2.1GB büyür.
+#
+# PEMF_EMBED_MODELS=0 → GÖMME (varsayılan 1 = mevcut davranış, Windows/Linux build'leri
+# BİREBİR aynı kalır). Neden gerekli: yayındaki base.zip (1.29 GB, 6191 dosya) ai_models
+# İÇERMİYOR — modeller launcher'ın ayrıca indirdiği profil paketlerinden (home/vet/research)
+# geliyor ve o zip'lerdeki dosyalar release_assets/ai_models ile BİREBİR AYNI (boyutları
+# eşleştirildi). Gömülü build'de kullanıcı aynı 2.1 GB'ı İKİ KEZ indirir ve profil ayrımı
+# anlamsızlaşır (vet kullanıcısında research modelleri de bulunur). Yeni platformlar
+# (macOS/Linux) yayındaki Windows base'iyle aynı hizada kalsın diye bayrak eklendi.
+_embed_models = os.environ.get('PEMF_EMBED_MODELS', '1') != '0'
 ai_models_src = os.path.join(project_path, 'release_assets', 'ai_models')
-if os.path.exists(ai_models_src):
+if not _embed_models:
+    print("[BILGI] PEMF_EMBED_MODELS=0 -> ai_models GOMULMEDI (modeller profil paketlerinden iner).")
+elif os.path.exists(ai_models_src):
     _nmodel = 0
     for root, _, files in os.walk(ai_models_src):
         for f in files:

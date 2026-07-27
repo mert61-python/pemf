@@ -13,11 +13,15 @@ def client():
     return TestClient(api_server.app)
 
 
-def test_emergency_stop_always_succeeds(client):
+def test_emergency_stop_reports_transport_status(client):
+    # Audit P2: emergency_stop status'u artik transport sonuclarindan TURETIR (eskiden kosulsuz
+    # 'success' donuyordu = yanlis-guvence; STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi'
+    # saniyordu). Endpoint 200 doner + honest status (success/partial/error) + confirmed alani gelir.
     r = client.post("/api/hardware/emergency_stop")
     assert r.status_code == 200
     body = r.json()
-    assert body.get("status") == "success"
+    assert body.get("status") in ("success", "partial", "error")
+    assert "confirmed" in body
 
 
 def test_double_session_start_conflicts(client):

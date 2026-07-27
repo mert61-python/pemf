@@ -124,6 +124,18 @@ config/credentials/
 **/.pemf_key_v2
 **/.sqlcipher_key
 **/.encryption_key
+
+# KOD İMZALAMA SIRLARI — Apple Developer ID / App Store Connect.
+# Bunlar sızarsa ÜÇÜNCÜ ŞAHIS SİZİN ADINIZA imzalı macOS uygulaması dağıtabilir
+# (Gatekeeper geçer, kullanıcı sizin ürününüz sanır). Sertifika iptali + yeniden
+# notarization gerektirir. Kalıcı yeri: Keychain / parola yöneticisi / CI Secrets.
+*.p8
+*.p12
+*.key
+*.csr
+apple-mac-cert/
+AuthKey_*.p8
+developerID_application.cer
 **/api_token.txt
 
 # Üretilen raporlar
@@ -160,3 +172,9 @@ tübitak/
 # Lint/tip araç önbellekleri (audit B-2.1)
 .ruff_cache/
 .mypy_cache/
+
+# Rust launcher build ciktisi (launcher/) — 150 MB+, tamamen yeniden uretilebilir
+launcher/target/
+
+# Offline (çevrimdışı) dağıtım installer paketi — 3.5GB DiskSpanning, git dışı
+offline dağıtım/

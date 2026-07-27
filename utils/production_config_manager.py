@@ -18,6 +18,7 @@ import copy
 import hashlib
 import json
 import logging
+import threading
 import os
 import sys
 import time
@@ -73,7 +74,8 @@ class ProductionConfigManager:
     """
     _instance = None
     _initialized = False
-    
+    _cfg_lock = threading.Lock()  # Audit P3: singleton init yarış-koruması
+
     # Sensitive keys to encrypt
     _ENCRYPTED_KEYS = {
         'mqtt.user',
@@ -83,24 +85,29 @@ class ProductionConfigManager:
     
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._cfg_lock:  # Audit P3: çift-instance yarışı önle (double-checked)
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-        
-        self._initialized = True
-        self._config = {}
-        self._encryption_key = None
-        self._cipher = None
-        self._last_save_ts = 0.0
-        
-        # Initialize encryption
-        self._setup_encryption()
-        
-        # Load config with fallback
-        self._load_config()
+        # Audit P3: TÜM init'i kilit altında yap + _initialized'ı SONA al — eskiden kilitsiz + flag başta
+        # set ediliyordu → iki thread eş-zamanlı __init__ geçip _setup_encryption'ı iki kez çalıştırıp
+        # .pemf_key/cipher'ı ezebiliyordu (yarım/bozuk config veya iki farklı cipher).
+        with type(self)._cfg_lock:
+            if self._initialized:  # double-check
+                return
+            self._config = {}
+            self._encryption_key = None
+            self._cipher = None
+            self._last_save_ts = 0.0
+            # Initialize encryption
+            self._setup_encryption()
+            # Load config with fallback
+            self._load_config()
+            self._initialized = True   # SONA: init tamamlanınca (yarım-init obje görünmesin)
     
     def _setup_encryption(self):
         """Setup encryption for sensitive config values"""
@@ -111,22 +118,28 @@ class ProductionConfigManager:
                 with open(key_file, 'rb') as f:
                     self._encryption_key = f.read()
             else:
-                # Generate machine-specific key
-                import uuid
-                machine_id = str(uuid.getnode()).encode()
-                self._encryption_key = base64.urlsafe_b64encode(
-                    hashlib.sha256(machine_id).digest()
-                )
+                # Audit P2: MAC-tabanli anahtar (uuid.getnode → sha256) TAHMIN EDILEBILIR — cihazin
+                # MAC'ini bilen, yedek/exfil edilen config.json'daki sirlari (.pemf_key olmadan) cozer.
+                # Kriptografik-rastgele 32-byte anahtar uret + dosyada sakla (dosya zaten ACL-kilitli).
+                # Mevcut cihazlar kayitli .pemf_key'i dosyadan yukleyip calismaya devam eder (geriye-uyumlu).
+                self._encryption_key = base64.urlsafe_b64encode(os.urandom(32))
                 
                 # Save key with restricted permissions
                 key_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(key_file, 'wb') as f:
                     f.write(self._encryption_key)
                 
+                # NTFS ACL kilidi (audit B-1.2): Fernet anahtar dosyası yalnız SYSTEM+Administrators'a
+                # açık olsun. os.chmod Windows'ta NO-OP → anahtar dosyası Users'a okunur kalır ve config
+                # şifrelemesi anlamsızlaşırdı. Önce ACL; olmazsa chmod (POSIX) yedek.
                 try:
-                    os.chmod(key_file, 0o600)
+                    from utils.file_acl import lock_down_file
+                    lock_down_file(key_file)
                 except Exception:
-                    pass  # Windows may not support chmod
+                    try:
+                        os.chmod(key_file, 0o600)
+                    except Exception:
+                        pass  # Windows chmod no-op; ACL zaten denendi
             
             self._cipher = Fernet(self._encryption_key)
             logger.info("Encryption initialized successfully")
@@ -233,6 +246,12 @@ class ProductionConfigManager:
         try:
             with open(user_config_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=4, ensure_ascii=False)
+            # NTFS ACL kilidi (audit B-1.2): config hassas alanlar içerebilir → Users'a kapat.
+            try:
+                from utils.file_acl import lock_down_file
+                lock_down_file(user_config_path)
+            except Exception:
+                pass
             logger.info(f"Saved user config to: {user_config_path}")
         except Exception as e:
             logger.error(f"Failed to save user config: {e}")

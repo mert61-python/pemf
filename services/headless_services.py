@@ -158,7 +158,15 @@ class MosquittoSupervisor:
         # (zombi/baska surec 1883'u tutuyor olabilir) "calisiyor" SAYILMASIN; yoksa cokmus broker
         # saglikli gorunup restart edilmez ve health yanlis raporlar. Servis yoksa (native Popen)
         # port_open tek gecerli sinyaldir.
-        running = bool(service.get("running")) if service.get("service_exists") else port_open
+        # Windows: servis KAYITLIYSA otoriter (zombi/başka-süreç 1883'ü tutuyorsa 'çalışıyor' SAYMA).
+        # Linux/mac: backend broker'ı systemd DEĞİL kendi Popen'ıyla da yönetebilir → systemd unit
+        # TANIMLI-ama-inaktif olsa bile port 1883 açıksa ÇALIŞIYOR say. Aksi halde (Windows mantığını
+        # Linux'a taşırsak) kalıcı yanlış broker-DOWN raporu (tıbbi cihaz yanlış-alarmı) + _monitor_loop
+        # ensure_running → ikinci mosquitto'yu 1883'te spawn → EADDRINUSE → churn (#3 regresyon fix'i).
+        if platform.system() == "Windows":
+            running = bool(service.get("running")) if service.get("service_exists") else port_open
+        else:
+            running = bool(service.get("running")) or port_open
 
         status = {
             "installed": installed,
@@ -232,8 +240,18 @@ class MosquittoSupervisor:
             return False
 
         args = [str(exe_path)]
+        # config: exe yanında (Windows bundled) yoksa bundled bin/mosquitto/mosquitto.conf'u kullan
+        # (mac/Linux'ta exe = sistem /usr/sbin/mosquitto olur, yanında conf yoktur). Tek nokta.
+        from utils import platform_support as _ps
         config_path = exe_path.parent / "mosquitto.conf"
-        if config_path.exists():
+        if not config_path.exists():
+            config_path = _ps.find_bundled_file("mosquitto.conf", self._mosquitto_bundle_dirs())
+        # Linux/mac: bundled conf YOK (Windows conf'u Windows-yollu) → LAN broker config'i (0.0.0.0+anon)
+        # ÜRET. Birincil yol .deb/.rpm postinst'in sistem mosquitto'yu yapılandırması; bu, AppImage/
+        # postinst-yok veya backend-yönetimli broker için yedek (aksi halde defaults=loopback+anon-red → ESP kopar).
+        if (not config_path or not config_path.exists()) and platform.system() != "Windows":
+            config_path = self._ensure_linux_broker_config()
+        if config_path and config_path.exists():
             args.extend(["-c", str(config_path)])
 
         try:
@@ -276,34 +294,65 @@ class MosquittoSupervisor:
                 logger.warning("Mosquitto monitor error: %s", exc)
             self._stop_event.wait(self.interval_seconds)
 
-    def _find_mosquitto_exe(self) -> Optional[Path]:
-        candidates: list[Path] = []
+    def _mosquitto_bundle_dirs(self) -> list[Path]:
+        """mosquitto ikilisi/config'inin bundled aranacağı dizinler (frozen + dev). Tek yer."""
+        dirs: list[Path] = []
         appdata = os.environ.get("APPDATA")
         if appdata:
-            candidates.append(Path(appdata) / "PEMF_GUI" / "mosquitto" / "mosquitto.exe")
-
+            dirs.append(Path(appdata) / "PEMF_GUI" / "mosquitto")
         if getattr(sys, "frozen", False):
-            exe_dir = Path(sys.executable).resolve().parent
-            candidates.append(exe_dir / "bin" / "mosquitto" / "mosquitto.exe")
+            dirs.append(Path(sys.executable).resolve().parent / "bin" / "mosquitto")
             meipass = getattr(sys, "_MEIPASS", None)
             if meipass:
-                candidates.append(Path(meipass) / "bin" / "mosquitto" / "mosquitto.exe")
+                dirs.append(Path(meipass) / "bin" / "mosquitto")
         else:
-            candidates.append(Path(__file__).resolve().parents[1] / "bin" / "mosquitto" / "mosquitto.exe")
+            dirs.append(Path(__file__).resolve().parents[1] / "bin" / "mosquitto")
+        return dirs
 
-        candidates.extend(Path(path) for path in self.MOSQUITTO_EXE_PATHS)
+    def _ensure_linux_broker_config(self) -> Optional[Path]:
+        """Linux/mac: LAN broker config'ini (0.0.0.0 + anon, Windows bundled mosquitto.conf ile aynı
+        politika) app_data'ya yaz + döndür. Backend kendi broker'ını başlatırken (sistem servisi yoksa)
+        defaults (loopback + anon-red) yerine bunu kullanır → ESP/STM bağlanabilir."""
+        try:
+            from utils.path_utils import get_app_data_directory
+            conf = get_app_data_directory() / "mosquitto.conf"
+            # Audit P2: bağlama arayüzü + anon-erişim + password_file ENV ile daraltılabilir. VARSAYILAN
+            # 0.0.0.0 + anon (mevcut davranış, GERİYE-UYUMLU) — çünkü allow_anonymous=false ESP FIRMWARE'ine
+            # credential gerektirir (aksi halde bobinler broker'a bağlanamaz → cihaz kırılır). Firmware
+            # credential dağıtıldıktan sonra deployment: PEMF_MQTT_BIND=<hotspot-gw-ip> +
+            # PEMF_MQTT_REQUIRE_AUTH=1 + PEMF_MQTT_PASSWORD_FILE=<yol> ile kimliksiz-publish yolunu kapatır.
+            bind = os.environ.get("PEMF_MQTT_BIND", "0.0.0.0").strip() or "0.0.0.0"
+            allow_anon = os.environ.get("PEMF_MQTT_REQUIRE_AUTH", "0").strip() != "1"
+            lines = [
+                f"listener {self.port} {bind}",
+                f"allow_anonymous {'true' if allow_anon else 'false'}",
+                "persistence false",
+                "max_queued_messages 10000",
+                "max_connections 30",
+                "max_keepalive 120",
+            ]
+            pwfile = os.environ.get("PEMF_MQTT_PASSWORD_FILE", "").strip()
+            if not allow_anon and pwfile:
+                lines.append(f"password_file {pwfile}")
+            conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return conf
+        except Exception as exc:
+            logger.warning("Linux broker config yazilamadi: %s", exc)
+            return None
 
-        path_in_env = shutil.which("mosquitto")
-        if path_in_env:
-            candidates.append(Path(path_in_env))
-
-        for candidate in candidates:
-            try:
-                if candidate.exists():
-                    return candidate
-            except Exception:
-                continue
-        return None
+    def _find_mosquitto_exe(self) -> Optional[Path]:
+        # OS farkları utils.platform_support'ta (TEK NOKTA): Win → bundled mosquitto.exe önce;
+        # mac/Linux → sistem mosquitto (apt/brew) önce. MOSQUITTO_EXE_PATHS yalnız Windows ek-adayı.
+        from utils import platform_support as _ps
+        if _ps.IS_WIN:
+            extra = [Path(p) for p in self.MOSQUITTO_EXE_PATHS]
+        else:
+            # macOS/Linux sistem yolları (which PATH'i kaçırabilir; apt→/usr/sbin, brew→/opt/homebrew)
+            extra = [Path(p) for p in (
+                "/usr/sbin/mosquitto", "/usr/bin/mosquitto", "/usr/local/sbin/mosquitto",
+                "/usr/local/bin/mosquitto", "/opt/homebrew/sbin/mosquitto", "/opt/homebrew/bin/mosquitto",
+            )]
+        return _ps.find_executable("mosquitto", self._mosquitto_bundle_dirs(), extra=extra)
 
     def _read_version(self, exe_path: Optional[Path]) -> str:
         if not exe_path:
@@ -340,6 +389,20 @@ class MosquittoSupervisor:
                             data["pid"] = int(parts[1])
                         except ValueError:
                             pass
+            except Exception:
+                pass
+
+        # Linux/mac: sistem mosquitto genelde systemd servisi (.deb/.rpm postinst 0.0.0.0+anon yapılandırır).
+        # systemctl ile GERÇEK durumu al → health/karar authoritative olsun (eskiden Linux'ta service_exists
+        # HİÇ set edilmiyordu → running=yalnız-port-open; loopback-broker'ı 'sağlıklı' sanıp config'i yüklemiyordu).
+        if platform.system() != "Windows":
+            try:
+                enabled = _run_command(["systemctl", "is-enabled", self.MOSQUITTO_SERVICE_NAME], timeout=5)
+                en = (enabled.stdout or "").strip().lower()
+                if en in ("enabled", "disabled", "static", "masked", "indirect", "enabled-runtime"):
+                    data["service_exists"] = True  # systemd unit TANIMLI
+                    active = _run_command(["systemctl", "is-active", self.MOSQUITTO_SERVICE_NAME], timeout=5)
+                    data["running"] = (active.stdout or "").strip().lower() == "active"
             except Exception:
                 pass
         return data
@@ -589,6 +652,9 @@ class UdpDiscoveryService:
             self.logger.info("UDP discovery started on port %s", self.discovery_port)
             self._publish("discovery.started", self.get_status())
 
+            import ipaddress as _ipa
+            import time as _tm
+            _disc_rl = {}   # Audit P3: per-IP hız-sınırı (reflection-flood)
             while not self._stop_event.is_set():
                 try:
                     data, addr = self._socket.recvfrom(2048)
@@ -600,6 +666,19 @@ class UdpDiscoveryService:
                 client_ip = addr[0]
                 if not self._is_discovery_request(data):
                     continue
+                # Audit P3: yalnız YEREL/private kaynağa yanıt ver — spoofed PUBLIC kaynak reflection/
+                # amplifikasyon (~15-20x) + topoloji-ifşasını engelle. + per-IP hız-sınırı (0.5s).
+                try:
+                    if not _ipa.ip_address(client_ip).is_private:
+                        continue
+                except Exception:
+                    continue
+                _now = _tm.time()
+                if _now - _disc_rl.get(client_ip, 0.0) < 0.5:
+                    continue
+                _disc_rl[client_ip] = _now
+                if len(_disc_rl) > 256:
+                    _disc_rl.clear()
 
                 response = self._create_response()
                 self._socket.sendto(json.dumps(response, ensure_ascii=True).encode("utf-8"), addr)

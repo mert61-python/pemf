@@ -18,7 +18,7 @@ def test_rollback_refused_without_previous_stable(um):
 
 
 def test_rollback_fail_closed_on_active_treatment(um, monkeypatch):
-    um._status.update({"previousStable": {"version": "1.3.0", "installerUrl": "http://x/i.exe", "sha256": "ab" * 32}})
+    um._status.update({"previousStable": {"version": "1.3.0", "installerUrl": "https://github.com/mert61-python/pemf-update/releases/download/v1.3.0/i.exe", "sha256": "ab" * 32}})
     monkeypatch.setattr(um, "_has_active_treatment", lambda: True)
     r = um.rollback()
     assert r["ok"] is False
@@ -27,7 +27,7 @@ def test_rollback_fail_closed_on_active_treatment(um, monkeypatch):
 
 def test_rollback_refused_without_sha256(um, monkeypatch):
     # previousStable var ama SHA256 yok → doğrulanamayan installer çalıştırılmaz (güvenlik)
-    um._status.update({"previousStable": {"version": "1.3.0", "installerUrl": "http://x/i.exe", "sha256": ""}})
+    um._status.update({"previousStable": {"version": "1.3.0", "installerUrl": "https://github.com/mert61-python/pemf-update/releases/download/v1.3.0/i.exe", "sha256": ""}})
     monkeypatch.setattr(um, "_has_active_treatment", lambda: False)
     r = um.rollback()
     assert r["ok"] is False

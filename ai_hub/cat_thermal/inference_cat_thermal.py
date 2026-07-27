@@ -42,10 +42,11 @@ STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 class CatThermalPredictor:
-    def __init__(self, model_name=DEFAULT_MODEL):
+    def __init__(self, model_name=DEFAULT_MODEL, model_path=None, providers=None):
         import onnxruntime as ort
 
-        onnx_path = AVAILABLE_MODELS.get(model_name)
+        # mikroservis: explicit model_path (/models mount) + providers (CUDA) — geriye uyumlu.
+        onnx_path = model_path or AVAILABLE_MODELS.get(model_name)
         if onnx_path is None or not os.path.exists(onnx_path):
             try:
                 from utils.model_downloader import download_model_sync
@@ -54,7 +55,8 @@ class CatThermalPredictor:
             except Exception as e:
                 raise FileNotFoundError(f"Model bulunamadi ve indirilemedi ({model_name}): {e}")
 
-        providers = ["CPUExecutionProvider"]
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
         self.session = ort.InferenceSession(onnx_path, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
         self.model_name = model_name

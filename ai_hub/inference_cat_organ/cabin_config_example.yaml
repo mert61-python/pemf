@@ -32,14 +32,14 @@
 # SAG-EL: parmaklar +X→+Y kivrildiginda bas parmak +Z (kediden disari kameraya)
 #
 # OLCULER (yukarda numarali):
-#   (1) cabin_extent_cm:    [60, 40, 30]   <- ic boyutlar
+#   (1) cabin_extent_cm:    [60.0, 43.0, 20.0]   <- ic boyutlar
 #   (2) marker pozisyonu:   sol duvarda merkezde => (0, 0, -15)
 #   (3) origin:             kabin merkezi (0, 0, 0) - coil array merkezi
 #   (4) qr_to_origin_cm:    marker -> origin vektoru = (0, 0, +15)
 #   (5) fixed_position_cm:  kamera lens'i = (0, 0, +25) - sag duvardan 10cm disarida
 #       to_origin_cm:       lens -> origin = 25 cm (= |fixed_position_cm|)
 #       to_marker_cm:       lens -> marker = 40 cm (= 25 - (-15), Z ekseninde)
-#   (6) marker yuzu (siyah taraf) +Z yonune bakar => normal_axis_in_cabin: "+Z"
+#   (6) marker yuzu (siyah taraf) +Z yonune bakar => normal_axis_in_cabin: "+X"
 #
 # =============================================================================
 
@@ -56,29 +56,29 @@ aruco:
   plane_offset_cm: 0.0
 
   # Marker yuzunun (siyah taraf) baktigi cabin ekseni (diyagramda (6))
-  normal_axis_in_cabin: "+Z"
+  normal_axis_in_cabin: "+X"
 
 
 geometry:
   # Diyagramda (4): marker -> origin vektoru
-  qr_to_origin_cm: [0.0, 0.0, 15.0]
+  qr_to_origin_cm: [30.0, -21.5, -10.0]
 
   # Diyagramda (1): kabin ic boyutlari [X uzunluk, Y yuk, Z en]
-  cabin_extent_cm: [60.0, 40.0, 30.0]
+  cabin_extent_cm: [60.0, 43.0, 20.0]
 
   axes: "x=cranial,y=dorsal,z=right"
 
 
 camera:
   # Diyagramda (5): kamera lens'in cabin frame'indeki konumu (cm)
-  fixed_position_cm: [0.0, 0.0, 25.0]
+  fixed_position_cm: [30.0, -21.5, -10.0]
 
   look_at_cm: [0.0, 0.0, 0.0]    # kameranin baktigi nokta (default: origin)
   up_cabin: [0.0, 1.0, 0.0]       # cabin "up" yonu (default: +Y dorsal)
 
   # Serit metre validation (sanity check)
-  to_marker_cm: 40.0
-  to_origin_cm: 25.0
+  to_marker_cm: 76.5
+  to_origin_cm: 38.2
 
   # Chessboard kalibrasyon ciktisi. Yoksa to_marker_cm'den approx turetilir.
   # Uretim: python calibrate_camera.py --images chess/ --pattern 9x6 --square-cm 2.5
@@ -98,9 +98,9 @@ camera:
 #    fixed_position_cm[2] = 25, sag duvar = +15 -> kamera 10 cm DISARIDA
 #
 #    a) Cam/acik duvar + tripod (kamera disarida):
-#         fixed_position_cm: [0, 0, +25]  -> OK
+#         fixed_position_cm: [30.0, -21.5, -10.0]  -> OK
 #    b) Kapali kabin + duvara gomulu kamera:
-#         fixed_position_cm: [0, 0, +15]  (lens duvar yuzeyinde)
+#         fixed_position_cm: [30.0, -21.5, -10.0]  (lens duvar yuzeyinde)
 #         veya [0, 0, +10..+14] (icerí çıkıntılı)
 #
 # 3) MESAFE TUTARLILIK KONTROLU
@@ -110,8 +110,8 @@ camera:
 #    Mevcut degerler:
 #      fixed_position_cm = (0, 0, 25)
 #      marker_pos        = (0, 0, -15)
-#      |fix|             = 25         ==  to_origin_cm: 25  ✓
-#      |fix - marker|    = 40         ==  to_marker_cm: 40  ✓
+#      |fix|             = 25         ==  to_origin_cm: 38.2  ✓
+#      |fix - marker|    = 40         ==  to_marker_cm: 76.5  ✓
 #
 # 4) MARKER YONU SAGLAMASI
 #    Marker yuzu (siyah taraf) kameraya BAKMALI.
