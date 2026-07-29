@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# PEMF Backend image — Python 3.10 + AI (FastAPI/uvicorn)
+# Donanım BAĞIMSIZ (simulate mode) → her yerde çalışır (STM serial / ESP MQTT yok).
+# Build:  docker build -f Dockerfile.backend -t pemf-backend .
+# =============================================================================
+FROM python:3.10-slim-bookworm
+
+LABEL org.opencontainers.image.title="PEMF Vet Backend" \
+      org.opencontainers.image.description="PEMF veteriner backend — FastAPI + AI, simulate/donanımsız" \
+      org.opencontainers.image.vendor="PEMF Vet" \
+      org.opencontainers.image.licenses="Proprietary"
+
+# Çalışma-zamanı sistem kütüphaneleri:
+#   libsndfile1        → soundfile (kedi sesi WAV)   ffmpeg → librosa/imageio ses dönüşümü
+#   libgomp1           → OpenMP (numba / torch / xgboost)
+#   libgl1 libglib2.0-0 → OpenCV (cv2) çalışma-zamanı; yoksa görüntü AI'ları
+#                         'libGL.so.1 bulunamadı' ile ÇÖKER (ultralytics full opencv çeker)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libsndfile1 ffmpeg libgomp1 libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 1) Bağımlılıklar önce (Docker katman cache'i → kod değişince pip tekrar kurulmaz).
+#    BuildKit cache mount → yeniden-build'lerde indirilen wheel'ler yeniden kullanılır
+#    (imaja GİRMEZ, boyut artmaz). AYRI dosya: ana requirements.txt'e dokunulmaz.
+COPY requirements-docker.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements-docker.txt
+
+# 2) Non-root kullanıcı (güvenlik) + AI kütüphanelerinin cache dizinleri yazılabilir olsun.
+#    Named volume /data, imajdaki pemf-sahipli /data'dan initialize olur → non-root yazabilir.
+RUN groupadd -r pemf && useradd -r -g pemf -d /home/pemf -m pemf \
+    && mkdir -p /data /data/logs /models /home/pemf/.cache \
+    && chown -R pemf:pemf /data /home/pemf
+
+# 3) Uygulama kaynağı — pemf sahipliğinde kopyala (.dockerignore ağırları hariç tutar).
+COPY --chown=pemf:pemf . .
+
+# 4) Server/demo profili — donanım yok; mosquitto/UDP-keşif kapalı (--no-headless-services).
+ENV PEMF_HEADLESS=1 \
+    PEMF_SIMULATE=1 \
+    PEMF_API_HOST=0.0.0.0 \
+    PEMF_API_PORT=8000 \
+    PEMF_REQUIRE_AUTH=1 \
+    PEMF_ENCRYPT_AT_REST=1 \
+    PEMF_ENABLE_TUNNEL=0 \
+    PEMF_CLOUD_PATIENT_SYNC=0 \
+    PEMF_DEVICE_NAME=PEMF-Docker \
+    PEMF_DATA_DIR=/data \
+    PEMF_LOG_DIR=/data/logs \
+    PEMF_AI_MODELS_DIR=/models \
+    HOME=/home/pemf \
+    XDG_CACHE_HOME=/home/pemf/.cache \
+    MPLCONFIGDIR=/home/pemf/.cache/mpl \
+    MPLBACKEND=Agg \
+    NUMBA_CACHE_DIR=/home/pemf/.cache/numba \
+    TORCH_HOME=/home/pemf/.cache/torch \
+    YOLO_CONFIG_DIR=/home/pemf/.cache/ultralytics \
+    HF_HOME=/home/pemf/.cache/huggingface \
+    PYTHONUNBUFFERED=1
+
+# AI modelleri (2 GB+, image'a GÖMÜLMEZ) + veri/DB → volume ile bağlanır (compose).
+VOLUME ["/models", "/data"]
+EXPOSE 8000
+USER pemf
+
+CMD ["python", "backend_service.py", "--host", "0.0.0.0", "--port", "8000", "--no-headless-services"]

@@ -1,0 +1,60 @@
+# =============================================================================
+# PEMF — TEK komutla tüm sistem ayağa kalkar:   docker compose up --build
+#   • backend  : Python/AI + FastAPI (:8000)
+#   • frontend : nginx statik React web (:8080) → /api isteklerini backend'e proxy'ler
+# Konteyner adları: pemf-backend-1 / pemf-frontend-1 (name: pemf).
+# Ayarlar .env dosyasından okunur (bkz. .env.example) — sabit-kodlu değil.
+# =============================================================================
+name: pemf
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: pemf-backend
+    init: true                       # PID 1 = tini → düzgün sinyal/zombi yönetimi
+    environment:
+      PEMF_SIMULATE: "${PEMF_SIMULATE:-1}"        # donanım yok → simüle
+      PEMF_REQUIRE_AUTH: "${PEMF_REQUIRE_AUTH:-1}"
+      PEMF_DEVICE_NAME: "${PEMF_DEVICE_NAME:-PEMF-Docker}"
+    volumes:
+      - "${PEMF_MODELS_DIR:-./release_assets/ai_models}:/models:ro"  # AI ağırlıkları (host; image'a gömülmez)
+      - pemf_data:/data                                              # SQLCipher DB + loglar (kalıcı)
+    ports:
+      - "${PEMF_API_PORT:-8000}:8000"   # doğrudan API / debug (frontend zaten proxy'ler)
+    healthcheck:                        # /api/health auth-muaf → token'sız 200; AI import'ları ~30-60sn
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s                 # torch/ultralytics/onnx yüklenene dek 'starting' say
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }   # log rotasyonu (disk şişmesin)
+
+  frontend:
+    build:
+      context: ./pf
+      dockerfile: ../Dockerfile.frontend
+    image: pemf-frontend
+    init: true
+    ports:
+      - "${PEMF_WEB_PORT:-8080}:80"     # → tarayıcıda  http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy      # nginx, backend HAZIR olana dek başlamasın (yoksa /api → 502)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/healthz"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  pemf_data:

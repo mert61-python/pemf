@@ -1199,14 +1199,23 @@ class TreatmentHistoryDB:
     _PII_REDACTION = "[SIFRELENMEMIS-DB]"
 
     def _redact_pii(self, value):
-        """at_rest_encrypted=False iken (dev/yanlış-yapılandırma) PII değerini maskele; ÜRETİMDE
-        (SQLCipher açık) değer AYNEN geçer. Boş/None değişmez. Whole-DB şifreleme birincil kontrol;
-        bu yalnız 'şifresiz DB'ye gerçek PII yazma' kazasını önleyen ikincil güvenlik ağı."""
+        """at_rest_encrypted=True → değer AYNEN (whole-DB SQLCipher = birincil koruma, şifreli saklanır).
+
+        at_rest_encrypted=False → SAHİP KARARI (2026-07-28): maskeleme VARSAYILAN KAPALI. Tedavi
+        geçmişinde hasta/sahip/operatör adları GERÇEK görünür. Gerekçe: AYNI PII zaten patients.db'de
+        DÜZ-METİN tutuluyor → yalnız tedavi-geçmişinde maskelemek tutarsız bir yarım-önlemdi (klinik
+        kullanılabilirliği bozuyor '[SIFRELENMEMIS-DB]', gerçek gizlilik EKLEMİYOR). Eski maskeleme
+        davranışı PEMF_MASK_HISTORY_PII=1 ile geri açılabilir (opt-in). DOĞRU üretim çözümü:
+        PEMF_ENCRYPT_AT_REST=1 + sqlcipher → değerler ŞİFRELİ saklanır AMA gerçek görünür.
+        NOT: Bu değişiklik İLERİYE dönük — daha önce maskelenmiş kayıtlarda gerçek ad yazıya hiç
+        girmediği için geri getirilemez (yeni seanslar gerçek adla yazılır)."""
         if value is None or value == "":
             return value
         if getattr(self, "at_rest_encrypted", False):
             return value
-        return self._PII_REDACTION
+        if os.getenv("PEMF_MASK_HISTORY_PII", "0") == "1":
+            return self._PII_REDACTION
+        return value
 
     def start_session(self, treatment_mode: str, target_condition: str = None,
                      operator_name: str = None, patient_name: str = None,

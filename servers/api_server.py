@@ -44,6 +44,7 @@ _build_ws_snapshot = live_state._build_ws_snapshot
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
 update_live_session_state = live_state.update_live_session_state
+set_live_patient = live_state.set_live_patient
 
 # Headless Core State referansı (Singleton Bridge)
 # Bu obje main.py'den enjekte edilebilir veya burada global import edilebilir
@@ -198,6 +199,26 @@ async def add_security_headers(request: Request, call_next):
     _h = request.headers
     if _h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-proto", "").lower() == "https":
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    # CSP (audit P2 #62/#63/#64) — YALNIZ sunulan web (HTML) yanıtlarına. Kilit koruma connect-src:
+    # bir XSS/tedarik-zinciri script'i çalışsa bile localStorage'daki X-API-Key + Supabase token'ını
+    # DIŞ sunucuya sızdıramaz (self + Supabase + aynı-origin ws dışına ağ isteği bloklanır). script/
+    # style/asset yönergeleri Expo-web'i kırmayacak kadar geniş; object/base/frame-ancestors kilitli.
+    _ctype = response.headers.get("content-type", "")
+    if _ctype.startswith("text/html"):
+        _host = _h.get("host", "")
+        _connect = "'self' https://*.supabase.co"
+        if _host:
+            _connect += f" ws://{_host} wss://{_host}"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "worker-src 'self' blob:; "
+            f"connect-src {_connect}; "
+            "object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
+        )
     response.headers["X-Request-ID"] = _rid
     return response
 
@@ -262,12 +283,13 @@ _rl_last_purge = [0.0]
 
 
 def _rl_client_ip(request: Request) -> str:
-    """Gerçek istemci IP'si: cloudflared/reverse-proxy arkasında request.client.host=127.0.0.1
-    olduğundan CF-Connecting-IP / ilk X-Forwarded-For tercih edilir (per-istemci sayım)."""
-    h = request.headers
-    xff = (h.get("cf-connecting-ip") or h.get("x-forwarded-for") or "").strip()
-    if xff:
-        return xff.split(",")[0].strip()
+    """Gerçek istemci IP'si (per-istemci rate-limit anahtarı). GÜVENLİK (audit P3 #5): ham
+    X-Forwarded-For SPOOF-EDİLEBİLİR (istemci keyfi XFF gönderip her istekte anahtar-değiştirerek
+    rate-limit'i atlar) → ANAHTAR olarak KULLANMA. Yalnız Cloudflare'in DOĞRULADIĞI cf-connecting-ip
+    (cloudflared client-supplied değeri ezer) veya doğrudan SOKET IP'si."""
+    cf = (request.headers.get("cf-connecting-ip") or "").strip()
+    if cf:
+        return cf.split(",")[0].strip()
     return request.client.host if request.client else "?"
 
 
@@ -374,6 +396,43 @@ def _on_mqtt_disconnect_api(client, userdata, rc):
     _push_notification("Sistem bağlantısı kesildi", "warning")
 
 
+# ── ESP telemetri STALENESS watchdog (reconnect-audit self-heal) ──────────────
+# Gap: ESP güç kaybıyla LWT yaymadan (ungraceful) ölürse coil `connected:True` + BAYAT sensör değerleri
+# kalıyordu → UI'da "canlı" görünüyordu. ESP bobinleri sıcaklık izleme için PERİYODİK sensör yayınlar;
+# GENİŞ eşik (30sn) boyunca HİÇ mesaj gelmezse coil'i disconnected işaretle. Geniş eşik → normal yayın
+# aralığında yanlış-alarm yok; sonraki ESP mesajı gelince connected=True'ya KENDİ düzelir. Yalnız ESP
+# bobinlerine dokunur (STM 1-5 zaten _sync_stm_coils'ten türer). Timestamp yalnız gerçek MQTT mesajında
+# yazılır → PEMF_SIMULATE modda sözlük boş kalır, watchdog no-op (sim coil'lerini bozmaz).
+_coil_last_telemetry: dict = {}
+ESP_STALE_SEC = 30.0
+ESP_WATCHDOG_INTERVAL_SEC = 5.0
+
+
+def _esp_telemetry_watchdog():
+    while True:
+        try:
+            now = time.monotonic()
+            changed = []
+            with _live_state_lock:
+                for cid in ESP_COIL_IDS:
+                    idx = cid - 1
+                    if not (0 <= idx < 8):
+                        continue
+                    last = _coil_last_telemetry.get(idx)
+                    coil = _live_state["coils"][idx]
+                    # Yalnız: telemetri ALMIŞ (last var) + hâlâ connected + GENİŞ eşik sustu → demote.
+                    if last is not None and coil.get("connected") and (now - last) > ESP_STALE_SEC:
+                        coil["connected"] = False
+                        coil["running"] = False
+                        changed.append((cid, dict(coil)))
+            for cid, snap in changed:
+                _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
+                _push_notification(f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı", "warning")
+        except Exception:
+            logging.exception("esp telemetry watchdog error")
+        time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
+
+
 def _on_mqtt_message_api(client, userdata, msg):
     try:
         topic_parts = msg.topic.split("/")
@@ -403,6 +462,9 @@ def _on_mqtt_message_api(client, userdata, msg):
             coil_index = int(coil_id_str) - 1
             if not (0 <= coil_index < 8):
                 return
+            # ESP watchdog: bu bobinden HERHANGİ gerçek mesaj = canlı → staleness timestamp'ını tazele.
+            # (Explicit wifi_disconnected/offline zaten connected=False yapar → watchdog onu atlar.)
+            _coil_last_telemetry[coil_index] = time.monotonic()
 
             if msg_type == "sensors" and not is_retained:
                 with _live_state_lock:
@@ -620,6 +682,21 @@ async def websocket_endpoint(websocket: WebSocket):
     # YEREL/LAN WS de auth MUAF (token yalniz tunel/uzak — Cloudflare header'li)
     _wh = websocket.headers
     _ws_via_proxy = bool(_wh.get("cf-connecting-ip") or _wh.get("cf-ray") or _wh.get("x-forwarded-for"))
+    # Cross-origin CSRF (audit P2 #1): tarayıcı WS'inde Origin GELİR. DOĞRUDAN (proxy'siz) LAN'da
+    # Origin host'u Host ile eşleşmezse, başka-origin bir kötücül web sayfası cihaza WS açıyordur →
+    # reddet. Native mobil Origin GÖNDERMEZ → serbest. Proxy/tünelde Host/Origin güvenilmez +
+    # token-auth zaten zorunlu → orada uygulanmaz (yanlış-pozitif tünel erişimini kırmasın).
+    _ws_origin = _wh.get("origin")
+    if _ws_origin and not _ws_via_proxy:
+        try:
+            from urllib.parse import urlparse as _urlparse
+            _o_host = (_urlparse(_ws_origin).hostname or "").lower()
+            _h_host = (_wh.get("host") or "").rsplit(":", 1)[0].lower()
+            if _o_host and _h_host and _o_host != _h_host:
+                await websocket.close(code=1008)  # policy violation (cross-origin)
+                return
+        except Exception:
+            pass
     if required and is_local_request(websocket.client.host if websocket.client else "", _ws_via_proxy):
         required = False
     if required:
@@ -964,44 +1041,50 @@ async def hardware_command(payload: CommandPayload):
 
 @app.post("/api/hardware/selftest")
 async def trigger_hardware_selftest():
-    """Tüm bobinlere SELFTEST komutu gönderir."""
-    import time
+    """Tüm bobinlere SELFTEST komutu gönderir (fire-and-forget)."""
+    import time, threading
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
-    # event-loop-blok fix: her _mqtt_publish connect-publish-disconnect (socket-probe+connect) BLOKLAR;
-    # 8'lik döngü async-uçta doğrudan çalışınca sunucu saniyelerce donardı → thread'e offload et.
+    # 8× _mqtt_publish (her biri connect-publish-disconnect) SANİYELER sürebilir → HTTP yanıtını
+    # BEKLETME (eskiden await → istemci timeout'u "gönderilemedi" gösteriyordu, HTTP 000). Arka-plan
+    # daemon thread'de best-effort gönder, yanıtı hemen dön ("komut gönderildi" semantiği).
     def _selftest_all():
         for i in range(1, 9):
-            command_id = f"selftest_{i}_{int(time.time()*1000)}"
-            _mqtt_publish(f"pemf/esp32_{i}/command", {
-                "command": "SELFTEST",
-                "command_id": command_id,
-                "timestamp": time.time()
-            })
-    await asyncio.to_thread(_selftest_all)
+            try:
+                _mqtt_publish(f"pemf/esp32_{i}/command", {
+                    "command": "SELFTEST",
+                    "command_id": f"selftest_{i}_{int(time.time()*1000)}",
+                    "timestamp": time.time()
+                })
+            except Exception:
+                logging.getLogger(__name__).debug("selftest publish %d hatasi", i, exc_info=True)
+    threading.Thread(target=_selftest_all, name="hw-selftest", daemon=True).start()
     return {"status": "success", "message": "Self-test commands sent."}
 
 @app.post("/api/hardware/reset_pwm")
 async def reset_all_pwms():
-    """Tüm bobinleri durdurur ve duty 0 olarak reset atar."""
+    """Tüm bobinleri durdurur ve duty 0 olarak reset atar (fire-and-forget)."""
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
-    import time
-    # event-loop-blok fix: stop_all_coils (donanım I/O) + 8× _mqtt_publish (connect-publish) BLOKLAR →
-    # tümünü thread'e offload et (async sunucuyu dondurma).
+    import time, threading
+    # stop_all_coils (STM seri I/O; STM yoksa retry→saniyeler) + 8× _mqtt_publish (connect-publish) →
+    # HTTP yanıtını BEKLETME (eskiden await → timeout / HTTP 000). Arka-plan thread'de yürüt, hemen dön.
+    # Birincil güvenlik yolu /hardware/emergency_stop'tur; bu yalnız bakım-reset'idir.
     def _reset_all():
-        state.hardware.stop_all_coils()
+        try:
+            state.hardware.stop_all_coils()
+        except Exception:
+            logging.getLogger(__name__).debug("reset_pwm stop_all_coils hatasi", exc_info=True)
         for i in range(1, 9):
-            command_id = f"reset_{i}_{int(time.time()*1000)}"
-            _mqtt_publish(f"pemf/esp32_{i}/command", {
-                "command": "start",
-                "command_id": command_id,
-                "freq": 10.0,
-                "duty": 0.0,
-                "phase": 0.0,
-                "duration": 0
-            })
-    await asyncio.to_thread(_reset_all)
+            try:
+                _mqtt_publish(f"pemf/esp32_{i}/command", {
+                    "command": "start",
+                    "command_id": f"reset_{i}_{int(time.time()*1000)}",
+                    "freq": 10.0, "duty": 0.0, "phase": 0.0, "duration": 0
+                })
+            except Exception:
+                logging.getLogger(__name__).debug("reset_pwm publish %d hatasi", i, exc_info=True)
+    threading.Thread(target=_reset_all, name="hw-reset-pwm", daemon=True).start()
     return {"status": "success", "message": "All PWM signals reset."}
 
 @app.post("/api/hardware/cleanup_esp")
@@ -1135,6 +1218,19 @@ async def start_session(payload: SessionStartPayload):
     esp_coils = [coil_id for coil_id in coil_ids if coil_id in ESP_COIL_IDS]
     if stm_coils and not state.hardware:
         raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
+
+    # Güncelleme uygulanıyorken YENİ seans başlatma: installer servisi durdurup EXE'yi
+    # değiştirebilir → başlayan tedavi bobinleri kontrolcüsüz bırakabilir. (update_manager
+    # TOCTOU guard'ının TERS yönü — apply, başlamış tedaviyi zaten _has_active_treatment ile
+    # reddeder; bu da apply penceresinde yeni tedaviyi reddeder.)
+    try:
+        from servers import update_manager as _um
+        if _um.is_update_in_progress():
+            raise HTTPException(status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     with _session_lock:
         if _active_session.get("is_active"):
@@ -1310,6 +1406,28 @@ async def start_session(payload: SessionStartPayload):
         remaining_min=payload.duration_minutes,
         duration_sec=payload.duration_minutes * 60,
     )
+
+    # Dashboard 'Hasta Özeti' kartı için aktif hastayı canlı-duruma yaz (aktif seansın GERÇEK hastası).
+    # İsim in-memory payload'dan (maskesiz); tür/ırk/sahip patient_id ile hasta-DB'den (düz-metin, maskesiz)
+    # zenginleştirilir. Hasta yoksa None → kart "Aktif hasta yok" gösterir. set_live_patient tam snapshot yayınlar.
+    _patient_snap = None
+    _pname = (payload.patient_name or "").strip()
+    if _pname or payload.patient_id:
+        _patient_snap = {"name": _pname or "İsimsiz", "species": "", "breed": "", "owner": ""}
+        if payload.patient_id:
+            try:
+                _pdb = get_patient_database()
+                _rec = _pdb.get_patient(payload.patient_id) if _pdb else None
+                if _rec:
+                    _patient_snap = {
+                        "name": (_rec.get("name") or _pname or "İsimsiz"),
+                        "species": _rec.get("species") or "",
+                        "breed": _rec.get("breed") or "",
+                        "owner": _rec.get("owner") or "",
+                    }
+            except Exception:
+                logging.getLogger(__name__).debug("Hasta Özeti snapshot lookup hatasi", exc_info=True)
+    set_live_patient(_patient_snap)
 
     # ESP fail-safe (audit #4): broker erişilemezse ESP bobinleri (6-8) sessizce başlamaz →
     # operatöre WARN dön. Eskiden seans her hâlükârda 'success' dönüp ESP'ler ölü kalıyordu
@@ -1723,6 +1841,9 @@ def _start_background_threads() -> None:
     _threading.Thread(target=_session_duration_watchdog, daemon=True, name="session-watchdog").start()
     _threading.Thread(target=_sensor_persistence_loop, daemon=True, name="sensor-persist").start()
     _threading.Thread(target=_daily_maintenance_loop, daemon=True, name="daily-maintenance").start()
+    # ESP sessiz-ölüm (ungraceful) tespiti: 30sn telemetri sustuysa coil'i disconnected işaretle
+    # (self-heal reconnect-audit). Sim modda no-op (timestamp sözlüğü boş).
+    _threading.Thread(target=_esp_telemetry_watchdog, daemon=True, name="esp-telemetry-watchdog").start()
     if os.environ.get("PEMF_SIMULATE") == "1":
         _threading.Thread(target=_hardware_simulation_loop, daemon=True, name="hw-sim").start()
         logging.info("HARDWARE SIMULATION aktif (sanal STM+ESP+sensor) - PEMF_SIMULATE=1")

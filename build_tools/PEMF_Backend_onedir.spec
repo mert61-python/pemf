@@ -295,6 +295,10 @@ hidden += [
     'paho.mqtt.enums', 'paho.mqtt.properties', 'paho.mqtt.reasoncodes',
     'paho.mqtt.packettypes', 'paho.mqtt.matcher',
     'zeroconf', 'serial', 'serial.tools', 'serial.tools.list_ports',
+    # serial_for_url handler'ları (socket:// STM-simülatör/uzak-seri + rfc2217): PyInstaller dinamik
+    # import'u kaçırır → frozen'da serial_for_url("socket://...") ImportError. Açıkça bundle et.
+    'serial.urlhandler', 'serial.urlhandler.protocol_socket', 'serial.urlhandler.protocol_rfc2217',
+    'serial.urlhandler.protocol_loop',
     'sqlite3', '_sqlite3', 'sqlcipher3', 'sqlcipher3.dbapi2',
     # images
     'PIL', 'PIL.Image',

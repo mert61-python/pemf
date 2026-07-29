@@ -15,6 +15,8 @@ pub enum Progress {
     ManifestFetched { version: String, schema: u8 },
     /// `total` 0 olabilir (sunucu Content-Length vermezse).
     Downloading { what: String, done: u64, total: u64 },
+    /// Geçici ağ hatası (timeout/kopma) → `.part`'tan otomatik yeniden bağlanılıyor.
+    Reconnecting { what: String, attempt: u32, max: u32 },
     Verifying { what: String },
     /// Paket önbellekte bulundu, indirme atlandı.
     Cached { what: String },
@@ -39,6 +41,17 @@ pub enum FlowError {
     Io(#[from] std::io::Error),
 }
 
+/// Cache dosya-adı güvenli mi: tek segment, yol-ayırıcı / sürücü / `..` / NUL YOK.
+fn is_safe_filename(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains(':')
+        && !name.contains('\0')
+}
+
 /// Bir paketi hazır et: önbellekte geçerli kopya varsa indirme, yoksa indir + doğrula.
 ///
 /// Doğrulama İKİ yolda da yapılır — önbellekteki dosya bozulmuş olabilir (disk hatası,
@@ -48,14 +61,17 @@ pub fn ensure_package(
     cache: &Path,
     label: &str,
     on: &mut dyn FnMut(Progress),
+    control: &dyn Fn() -> net::Control,
 ) -> Result<PathBuf, FlowError> {
     fs::create_dir_all(cache)?;
-    let file_name = pkg
-        .url
-        .rsplit('/')
-        .next()
-        .filter(|s| !s.is_empty())
-        .unwrap_or(label);
+    // #131/#139: dosya adı SALDIRGAN-ETKİLİ pkg.url'den türüyor. Yol-kaçış karakteri (Windows '\',
+    // sürücü ':', '/', '..', NUL) içeriyorsa cache DIŞINA yazabilir → güvenli ada düş. İlk güvenli
+    // adayı seç: url-son-segment → label → sabit "package.bin".
+    let raw_name = pkg.url.rsplit('/').next().unwrap_or("");
+    let file_name = [raw_name, label, "package.bin"]
+        .into_iter()
+        .find(|s| is_safe_filename(s))
+        .unwrap_or("package.bin");
     let dest = cache.join(file_name);
 
     if dest.exists() && verify::verify_file(&dest, &pkg.sha256).is_ok() {
@@ -63,10 +79,45 @@ pub fn ensure_package(
         return Ok(dest);
     }
 
-    let mut cb = |done, total| {
-        on(Progress::Downloading { what: label.to_string(), done, total });
-    };
-    net::download_to_file(&pkg.url, &dest, pkg.size, &mut cb)?;
+    // Otomatik yeniden-deneme: GEÇİCİ ağ hataları (timeout/kopma/5xx — ör. os error 10060, büyük
+    // paket sonrası bağlantı düşmesi) kurulumu düşürmesin. `.part` korunduğu için her deneme Range
+    // ile KALDIĞI YERDEN sürer. Pause/Cancel + KALICI hatalar (host-pin/HTTPS/4xx) yeniden denenmez.
+    const MAX_ATTEMPTS: u32 = 6;
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        let result = {
+            let mut cb = |done, total| {
+                on(Progress::Downloading { what: label.to_string(), done, total });
+            };
+            net::download_to_file(&pkg.url, &dest, pkg.size, &mut cb, control)
+        };
+        match result {
+            Ok(_) => break,
+            Err(e) => {
+                let retriable = matches!(
+                    e,
+                    net::NetError::Io(_) | net::NetError::Transport(_) | net::NetError::HttpStatus { .. }
+                );
+                if !retriable || attempt >= MAX_ATTEMPTS {
+                    return Err(e.into());
+                }
+                on(Progress::Reconnecting { what: label.to_string(), attempt, max: MAX_ATTEMPTS });
+                // Artan bekleme (1.5s→7.5s), ama Pause/Cancel gelirse HEMEN dön (asılı kalma).
+                let wait_ms = (attempt.min(5) as u64) * 1500;
+                let mut waited = 0u64;
+                while waited < wait_ms {
+                    match control() {
+                        net::Control::Cancel => return Err(net::NetError::Cancelled.into()),
+                        net::Control::Pause => return Err(net::NetError::Paused.into()),
+                        net::Control::Continue => {}
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    waited += 200;
+                }
+            }
+        }
+    }
 
     on(Progress::Verifying { what: label.to_string() });
     if let Err(e) = verify::verify_file(&dest, &pkg.sha256) {
@@ -78,13 +129,17 @@ pub fn ensure_package(
     Ok(dest)
 }
 
-/// manifest → base + profil → kurulum → backend başlat. Hazır olan URL'yi döndürür.
-pub fn install_and_launch(
+/// manifest → base + SEÇİLEN PROFİLLER → kurulum (backend BAŞLATMAZ). Kurulan profiller kaydedilir.
+///
+/// Çoklu-profil: kullanıcı birden çok profil (Ev Sahibi + Veteriner + Araştırma) seçebilir;
+/// base BİR KEZ, her profil model-zip'i sırayla kurulur. Boş liste = yalnız base (onarım/temel).
+pub fn install_profiles(
     manifest_raw: &str,
-    profile: &str,
+    profiles: &[String],
     install_root: &Path,
     on: &mut dyn FnMut(Progress),
-) -> Result<(std::process::Child, String, u16), FlowError> {
+    control: &dyn Fn() -> net::Control,
+) -> Result<(), FlowError> {
     let manifest = Manifest::parse(manifest_raw)?;
     on(Progress::ManifestFetched {
         version: manifest.version.clone(),
@@ -93,23 +148,38 @@ pub fn install_and_launch(
 
     // Platform paketi YOKSA burada durur — asla başka platformun paketine düşmez.
     let runtime_pkg = manifest.runtime_for_current_platform()?;
-    let model_pkg = manifest.model_package(profile)?;
+    // TÜM profilleri İNDİRMEDEN ÖNCE doğrula (biri manifestte yoksa hiç indirme başlamasın).
+    let model_pkgs: Vec<(&String, &crate::Package)> = profiles
+        .iter()
+        .map(|p| manifest.model_package(p).map(|pk| (p, pk)))
+        .collect::<Result<_, _>>()?;
 
     // Yükseltme: eski boşluksuz "PEMFVetClient" kurulumu varsa yeni isme taşı (2 GB yeniden inmesin).
     install::migrate_legacy_install_root(install_root);
 
     let cache = install::cache_dir(install_root);
-    let runtime_zip = ensure_package(runtime_pkg, &cache, "base", on)?;
-    let model_zip = ensure_package(model_pkg, &cache, profile, on)?;
-
+    let runtime_zip = ensure_package(runtime_pkg, &cache, "base", on, control)?;
     on(Progress::Extracting { what: "base".into() });
     extract::extract_zip(&runtime_zip, &install::runtime_dir(install_root))?;
 
-    // Profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
+    // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
-    on(Progress::Extracting { what: profile.into() });
-    extract::extract_zip(&model_zip, install_root)?;
+    for (name, pkg) in &model_pkgs {
+        let model_zip = ensure_package(pkg, &cache, name, on, control)?;
+        on(Progress::Extracting { what: (*name).clone() });
+        extract::extract_zip(&model_zip, install_root)?;
+    }
 
+    // Kurulu profilleri kaydet (UI çip'leri + Onar bunu okur; mevcutlarla birleşir).
+    install::add_installed_profiles(install_root, profiles);
+    Ok(())
+}
+
+/// Kurulu backend'i başlat (İNDİRME YOK). Hem ilk kurulum sonrası hem "Başlat" bunu kullanır.
+pub fn start_backend(
+    install_root: &Path,
+    on: &mut dyn FnMut(Progress),
+) -> Result<(std::process::Child, String, u16), FlowError> {
     let port = crate::backend::find_free_port(install::DEFAULT_PORT, 50)?;
     on(Progress::StartingBackend { port });
     let child = crate::backend::start_and_wait(
@@ -117,11 +187,40 @@ pub fn install_and_launch(
         port,
         std::time::Duration::from_secs(180),
     )?;
-
     let url = crate::backend::app_url(port);
     on(Progress::Ready { url: url.clone() });
     // Port da döner: launcher pencere kapanışında bobinleri güvene almak için (safe_stop_coils).
     Ok((child, url, port))
+}
+
+/// Onar: kurulu profilleri (+base) YENİDEN doğrula/çıkar. `ensure_package` önbellekteki dosyayı
+/// SHA ile doğrular → bozuksa yeniden indirir; her paket yeniden extract edilir (eksik/bozuk
+/// dosyalar onarılır). Hiç profil kurulu değilse yalnız base onarılır. Backend BAŞLATMAZ.
+pub fn repair(
+    manifest_raw: &str,
+    install_root: &Path,
+    on: &mut dyn FnMut(Progress),
+    control: &dyn Fn() -> net::Control,
+) -> Result<(), FlowError> {
+    let installed = install::read_installed_profiles(install_root);
+    install_profiles(manifest_raw, &installed, install_root, on, control)
+}
+
+/// manifest → base + tek profil → kurulum → backend başlat. (Geriye-uyum: tek-profil sarmalayıcı.)
+pub fn install_and_launch(
+    manifest_raw: &str,
+    profile: &str,
+    install_root: &Path,
+    on: &mut dyn FnMut(Progress),
+) -> Result<(std::process::Child, String, u16), FlowError> {
+    install_profiles(
+        manifest_raw,
+        std::slice::from_ref(&profile.to_string()),
+        install_root,
+        on,
+        &|| net::Control::Continue,
+    )?;
+    start_backend(install_root, on)
 }
 
 #[cfg(test)]
@@ -155,6 +254,7 @@ mod tests {
             cache,
             "base",
             &mut on,
+            &|| net::Control::Continue,
         )
         .unwrap();
 
@@ -176,6 +276,7 @@ mod tests {
             cache,
             "base",
             &mut on,
+            &|| net::Control::Continue,
         )
         .unwrap_err();
         assert!(matches!(err, FlowError::Net(_)), "beklenmeyen: {err:?}");
@@ -190,6 +291,7 @@ mod tests {
             dir.path(),
             "base",
             &mut on,
+            &|| net::Control::Continue,
         )
         .unwrap_err();
         assert!(matches!(err, FlowError::Net(net::NetError::HostNotAllowed(_))));

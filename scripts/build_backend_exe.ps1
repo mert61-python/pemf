@@ -4,17 +4,20 @@
 # Mevcut, kanıtlanmış build ortamına (build_onedir_exe.ps1) uyumlu:
 #   * Yorumlayıcı   : -Python > myenv > embeddable  (FRESH venv KURMAZ, indirme YOK)
 #   * İzolasyon     : PYTHONNOUSERSITE=1 + PYTHONPATH=""  (Conda/Roaming sızıntısı yok)
-#   * Çıktı yolu    : C:\PEMF_BUILD (KISA) — Windows 260-karakter sınırı için
+#   * Çıktı yolu    : guii\PEMF_BUILD (VARSAYILAN, tek-yer + taşınabilir).
+#                     En uzun yol ~238<260 + LongPathsEnabled=1. Derin hedefte
+#                     MAX_PATH riski olursa: -BuildRoot C:\PEMF_BUILD (kısa) ile override.
 #   * Guard         : önce check_headless_imports.py (KIRMIZI ise build YOK)
 #
 # Kullanım:
-#   .\scripts\build_backend_exe.ps1                 # myenv/embeddable otomatik
+#   .\scripts\build_backend_exe.ps1                 # myenv/embeddable otomatik, çıktı guii\PEMF_BUILD
 #   .\scripts\build_backend_exe.ps1 -Python "...\myenv\Scripts\python.exe"
-# Çıktı: C:\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe
+#   .\scripts\build_backend_exe.ps1 -BuildRoot C:\PEMF_BUILD   # MAX_PATH kaçışı (derin/uzun hedef)
+# Çıktı: <BuildRoot>\dist\PEMF_Backend\PEMF_Backend.exe  (varsayılan guii\PEMF_BUILD\...)
 # =============================================================================
 param(
     [string]$Python    = "",
-    [string]$BuildRoot = "C:\PEMF_BUILD",
+    [string]$BuildRoot = "",
     [switch]$SkipGuard,
     [switch]$SkipWeb
 )
@@ -25,6 +28,10 @@ function Die($m)  { Write-Host "[build] HATA: $m" -ForegroundColor Red; exit 1 }
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $GuiRoot   = Split-Path -Parent $ScriptDir
 $EmbRoot   = Split-Path -Parent $GuiRoot     # embeddable python kökü (guii'nin üstü)
+
+# --- Çıktı kökü: boşsa guii\PEMF_BUILD (tek-yer + taşınabilir). Derin hedefte -BuildRoot ile kısa yol verilebilir. ---
+if (-not $BuildRoot) { $BuildRoot = Join-Path $GuiRoot "PEMF_BUILD" }
+Info "Build kökü: $BuildRoot"
 
 # --- 1. Yorumlayıcı seç: -Python > myenv (guii veya üst) > embeddable ---
 $cands = @()

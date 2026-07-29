@@ -88,7 +88,25 @@ pub fn start_and_wait(
     for (k, v) in install::backend_env(install_root, port) {
         cmd.env(k, v);
     }
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    // ⚠️ DEADLOCK FIX: backend'in stdout/stderr'ini pipe'layıp DRENAJLAMAMAK (eski hal) tüm servisi
+    // kilitliyordu. Backend logging'i HER satırı `sys.stdout`'a da yazar (StreamHandler); pipe okunmadığı
+    // için ~saatlerce log sonrası buffer dolunca `stdout.flush()` SÜRESİZ BLOKE olur, Python logging
+    // kilidini tutarak asılır → o kilidi bekleyen TÜM AI model yüklemeleri (`_get_or_load_model`) +
+    // STM logları + telemetri DEADLOCK (py-spy: CloudSyncWorker `flush`'ta, asyncio_* `logger.info`'da).
+    // Backend zaten her şeyi backend_service.log'a yazıyor → stdout/stderr'e İHTİYAÇ YOK. NUL'e yönlendir:
+    // flush asla bloke olmaz. (Hazırlık HTTP `/api/health` ile algılanır; başlangıç-hatası teşhisi
+    // read_tail → backend_service.log'a bakar.)
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
+
+    // Windows: launcher windowed (konsolsuz) olduğundan, KONSOL-altsistem backend exe'si spawn
+    // edilince Windows ona YENİ KONSOL açar → kullanıcıya siyah cmd penceresi görünür. CREATE_NO_WINDOW
+    // konsolu hiç açtırmaz (stdout/stderr NUL'e gittiği için ekstra pencere/pipe sorunu da olmaz).
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
 
     let mut child = cmd.spawn().map_err(BackendError::Spawn)?;
 
@@ -115,7 +133,8 @@ pub fn start_and_wait(
     })
 }
 
-/// Teşhis için stderr'in sonunu oku (bloklamadan, elde olanı).
+/// Başlangıç-hatası teşhisi. stdout/stderr NUL'e yönlendirildi (drenajsız pipe deadlock'luyordu) →
+/// canlı çıktı yok; ayrıntı backend'in kendi günlüğünde. (stderr yine de doluysa son 20 satırı ekle.)
 fn read_tail(child: &mut Child) -> String {
     use std::io::Read;
     let mut buf = String::new();
@@ -124,8 +143,12 @@ fn read_tail(child: &mut Child) -> String {
         let _ = err.take(64 * 1024).read_to_end(&mut raw);
         buf = String::from_utf8_lossy(&raw).into_owned();
     }
-    let lines: Vec<&str> = buf.lines().rev().take(20).collect();
-    lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+    let tail: String = {
+        let lines: Vec<&str> = buf.lines().rev().take(20).collect();
+        lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+    };
+    let hint = "Ayrıntı için backend günlüğü: %APPDATA%\\PEMF_GUI\\logs\\backend_service.log";
+    if tail.trim().is_empty() { hint.to_string() } else { format!("{tail}\n{hint}") }
 }
 
 /// Kapanmadan ÖNCE bobinleri güvene al (TIBBİ GÜVENLİK). Hard-kill (child.kill = TerminateProcess)
@@ -143,6 +166,38 @@ pub fn safe_stop_coils(port: u16) {
     std::thread::sleep(Duration::from_millis(1200));
 }
 
+/// ARTAKALAN (orphan) backend süreçlerini sistem-genelinde durdur.
+///
+/// SORUN: backend `child.kill()` (Windows TerminateProcess) SİNYALSİZDİR ve ÇOCUK-AĞACINI
+/// öldürmez → backend'in spawn ettiği `mosquitto.exe`/`cloudflared.exe` YETİM kalır ve
+/// `runtime/.../mosquitto.exe`'yi KİLİTLER. Sonraki kurulum base'i re-extract ederken bu kilitli
+/// dosyaya çarpar → "os error 32" (sharing violation). Bu yüzden yeniden-kurulumdan/onarımdan
+/// ÖNCE bu üç bundled süreci (+ çocuk-ağaçları) zorla kapatırız. Klinik makinesinde bu isimli
+/// süreçler bize aittir. TIBBİ GÜVENLİK: çağırandan ÖNCE safe_stop_coils POST edilmeli.
+pub fn kill_stray_backends() {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        for image in ["PEMF_Backend.exe", "mosquitto.exe", "cloudflared.exe"] {
+            let mut c = Command::new("taskkill");
+            c.args(["/F", "/IM", image, "/T"]); // /T = süreç + çocuk-ağacı
+            c.creation_flags(CREATE_NO_WINDOW); // siyah konsol açma
+            let _ = c.stdout(Stdio::null()).stderr(Stdio::null()).status();
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        for pat in ["PEMF_Backend", "mosquitto", "cloudflared"] {
+            let _ = Command::new("pkill")
+                .args(["-f", pat])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+}
+
 /// Varsayılan tarayıcıda aç. Başarısızlık ÖLÜMCÜL DEĞİL — çağıran URL'yi gösterebilir.
 pub fn open_browser(url: &str) -> io::Result<()> {
     #[cfg(target_os = "macos")]
@@ -153,8 +208,11 @@ pub fn open_browser(url: &str) -> io::Result<()> {
     };
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = Command::new("cmd");
-        c.args(["/C", "start", "", url]);
+        // GÜVENLİK: `cmd /C start "" <url>` URL'yi KABUK'a verir → manifest-türevi (zehirli/MITM)
+        // bir URL'deki cmd metakarakterleri (&, |, ^) ikinci komut zincirleyip RCE olur.
+        // rundll32 FileProtocolHandler URL'yi TEK argüman olarak alır; hiçbir kabuk ayrıştırmaz.
+        let mut c = Command::new("rundll32.exe");
+        c.args(["url.dll,FileProtocolHandler", url]);
         c
     };
     #[cfg(all(unix, not(target_os = "macos")))]

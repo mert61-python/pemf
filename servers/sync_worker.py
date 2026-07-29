@@ -34,17 +34,31 @@ class CloudSyncWorker:
             self.device_id = "unknown-device"
         self._reg_secret = None  # Coverage-audit P1: bulut capability-token cache (_registry_secret)
 
+        self.client = None
         if self.supabase_url and self.supabase_key:
-            try:
-                from supabase import create_client
-                self.client = create_client(self.supabase_url, self.supabase_key)
-                logger.info("Supabase istemcisi basariyla olusturuldu.")
-            except ImportError:
-                logger.error("Supabase paketi kurulu degil! Lutfen 'pip install supabase' calistirin.")
-            except Exception as e:
-                logger.error(f"Supabase baglanti hatasi: {e}")
+            self._ensure_client()  # ilk deneme; başarısızsa _sync_loop HER TURDA tekrar dener (self-heal)
         else:
             logger.warning("Supabase URL veya Key belirtilmedigi icin Cloud Sync deaktif.")
+
+    def _ensure_client(self) -> bool:
+        """Supabase istemcisini (yeniden) kur. Self-heal: internetsiz/paket-hatalı boot'ta client None
+        kalırsa döngü her turda tekrar dener → 'client YALNIZ __init__'te kurulur, patlarsa restart'a
+        kadar sync ölür' boşluğunu kapatır (reconnect-audit)."""
+        if self.client:
+            return True
+        if not (self.supabase_url and self.supabase_key):
+            return False
+        try:
+            from supabase import create_client
+            self.client = create_client(self.supabase_url, self.supabase_key)
+            logger.info("Supabase istemcisi olusturuldu.")
+            return True
+        except ImportError:
+            logger.error("Supabase paketi kurulu degil (pip install supabase).")
+            return False
+        except Exception as e:
+            logger.debug(f"Supabase client kurulamadi (sonraki turda tekrar denenecek): {e}")
+            return False
 
     def _registry_secret(self) -> str:
         """Coverage-audit P1: bulut capability-token (device_registry_secret) — Supabase RPC'lerinde
@@ -68,7 +82,9 @@ class CloudSyncWorker:
             logger.debug(f"publish_now hatasi: {e}")
 
     def start(self):
-        if not self.client:
+        # client HENÜZ kurulamamış olsa da (internetsiz boot) döngüyü başlat → _ensure_client her turda
+        # tekrar dener (self-heal). Yalnız yapılandırma yoksa (url/key) hiç başlatma.
+        if not (self.supabase_url and self.supabase_key):
             return
 
         # Tünel URL'si bulunur/değişir bulunmaz ANINDA yayın (60sn döngü beklemeden) — Supabase'deki
@@ -100,61 +116,78 @@ class CloudSyncWorker:
         if not self.patient_sync_enabled:
             logger.warning("Hasta/seans BULUT SYNC KAPALI (gizlilik korumasi). Acmak icin PEMF_CLOUD_PATIENT_SYNC=1. Cihaz kayit defteri/uzaktan erisim aktif kalir.")
 
+        backoff = self.interval_sec
         while not self.stop_event.is_set():
+            # Self-heal: client henüz kurulamadıysa (internetsiz boot / paket) tekrar KUR; olmuyorsa backoff.
+            if not self._ensure_client():
+                backoff = min(max(backoff, self.interval_sec) * 2, 300)
+                self.stop_event.wait(backoff)
+                continue
             # Cihaz erisim bilgisini (tunnel_url/local_ip) once yayinla -> mobil
             # temassiz uzaktan baglanti icin kritik; hasta/seans sync'ten bagimsiz.
+            ok = True
             try:
-                self._publish_device_registry()
+                if not self._publish_device_registry():
+                    ok = False
             except Exception as e:
                 logger.debug(f"Device registry publish hatasi: {e}")
+                ok = False
             if self.patient_sync_enabled:
                 try:
                     self._sync_patients(patient_db)
                     self._sync_sessions(session_db)
                 except Exception as e:
                     logger.error(f"Sync sirasinda beklenmeyen hata: {e}")
+                    ok = False
 
-            # interval_sec kadar bekle (event kullanarak interrupt edilebilir)
-            self.stop_event.wait(self.interval_sec)
+            # BACKOFF (reconnect-audit): başarılı→interval_sec'e SIFIRLA; ağ-down→×2 (üst 300sn) → uzun
+            # kesintide gereksiz RPC + log-gürültüsü azalır; geri gelince ilk başarıda hemen normale döner.
+            backoff = self.interval_sec if ok else min(max(backoff, self.interval_sec) * 2, 300)
+            self.stop_event.wait(backoff)
 
     def _sync_patients(self, patient_db):
         try:
+            # Audit P2 #14: kilidi ağ-RPC boyunca TUTMA (PULL ile aynı desen). Unsynced satırları
+            # kilit altında SNAPSHOT'la, kilidi BIRAK, upsert_patient RPC'lerini KİLİTSİZ yap, sonra
+            # yalnız sync_status UPDATE için KISA yeniden-kilitle. Aksi halde Supabase yavaş/erişilmezse
+            # add/get/search + KVKK unutulma-hakkı silme dahil TÜM hasta-DB işlemleri bloklanırdı.
             with patient_db.lock:
                 with patient_db._get_connection() as conn:
-                    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}  # SQLCipher-uyumlu (sqlite3.Row, sqlcipher3 cursor'ı SARMAZ → at-rest-şifreli DB'de PUSH TypeError'la patlıyordu)
+                    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}  # SQLCipher-uyumlu
                     cursor = conn.cursor()
-                    
-                    # Henuz senkronize edilmemis (sync_status=0) hastalari bul
                     cursor.execute("SELECT * FROM patients WHERE sync_status = 0")
-                    unsynced_patients = cursor.fetchall()
-                    
-                    for row in unsynced_patients:
-                        patient_data = dict(row)
-                        
-                        # SQLite row'u supabase formatina donustur
-                        payload = {
-                            "id": patient_data["id"],
-                            "device_id": self.device_id,  # cross-tenant izolasyon
-                            # PII alanları ŞİFRELİ (enc:) gönderilir → buluta düz-metin PII YAZILMAZ.
-                            "name": patient_data["name"],
-                            "species": patient_data["species"],
-                            "breed": patient_data["breed"],
-                            "age": patient_data["age"],
-                            "weight": patient_data["weight"],
-                            "owner": patient_data["owner"],
-                            "vet_contact": patient_data["vet_contact"],
-                            "created_at": patient_data["created_at"],
-                            "updated_at": patient_data["updated_at"]
-                        }
-                        
-                        # P1 audit 2026-06-28: RLS+RPC — dogrudan tablo upsert (anon, RLS-yok) YERINE
-                        # SECURITY DEFINER upsert_patient RPC (device_id'yi SUNUCU-TARAFI zorlar).
-                        self.client.rpc("upsert_patient", {"p_device_id": self.device_id, "p_patient": payload, "p_secret": self._registry_secret()}).execute()
-                        # RPC istisna firlatmadiysa basarili → sync_status guncelle.
-                        cursor.execute("UPDATE patients SET sync_status = 1 WHERE id = ?", (patient_data["id"],))
+                    unsynced_patients = [dict(row) for row in cursor.fetchall()]
+
+            for patient_data in unsynced_patients:
+                # SQLite row'u supabase formatina donustur
+                payload = {
+                    "id": patient_data["id"],
+                    "device_id": self.device_id,  # cross-tenant izolasyon
+                    # PII alanları ŞİFRELİ (enc:) gönderilir → buluta düz-metin PII YAZILMAZ.
+                    "name": patient_data["name"],
+                    "species": patient_data["species"],
+                    "breed": patient_data["breed"],
+                    "age": patient_data["age"],
+                    "weight": patient_data["weight"],
+                    "owner": patient_data["owner"],
+                    "vet_contact": patient_data["vet_contact"],
+                    "created_at": patient_data["created_at"],
+                    "updated_at": patient_data["updated_at"]
+                }
+                # P1 audit 2026-06-28: RLS+RPC — dogrudan tablo upsert (anon, RLS-yok) YERINE
+                # SECURITY DEFINER upsert_patient RPC (device_id'yi SUNUCU-TARAFI zorlar). KİLİTSİZ.
+                try:
+                    self.client.rpc("upsert_patient", {"p_device_id": self.device_id, "p_patient": payload, "p_secret": self._registry_secret()}).execute()
+                except Exception as _re:
+                    logger.error(f"Hasta {patient_data['id']} PUSH RPC hatasi: {_re}")
+                    continue
+                # RPC istisna firlatmadiysa basarili → sync_status'u KISA kilitle güncelle.
+                with patient_db.lock:
+                    with patient_db._get_connection() as conn:
+                        conn.execute("UPDATE patients SET sync_status = 1 WHERE id = ?", (patient_data["id"],))
                         conn.commit()
-                        logger.info(f"Hasta {patient_data['id']} Supabase'e senkronize edildi (RPC).")
-                        
+                logger.info(f"Hasta {patient_data['id']} Supabase'e senkronize edildi (RPC).")
+
         except Exception as e:
             logger.error(f"Patient PUSH hatasi: {e}")
             
@@ -297,7 +330,7 @@ class CloudSyncWorker:
         'last_seen' bir heartbeat'tir (cihazin canli oldugunu gosterir).
         """
         if not self.client:
-            return
+            return False
         try:
             from datetime import datetime, timezone
 
@@ -340,10 +373,12 @@ class CloudSyncWorker:
                 logger.warning("Device registry: upsert_device RPC yok → anon tablo-upsert (pairing_code ATLANDI; uzaktan-pairing için RPC deploy edilmeli).")
                 fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
                 self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
+            return True   # publish OK → _sync_loop backoff'u interval_sec'e sıfırlar
         except Exception as e:
             # Yazilamadi (tablo yok / RLS / RPC yok). Sync'i bozma ama GORUNUR logla
             # (eskiden DEBUG'ta sessizce yutuluyordu → registry'nin neden bos kaldigi gizleniyordu).
             logger.warning(f"Device registry publish BASARISIZ: {e}")
+            return False  # ağ/RPC hatası → _sync_loop backoff'u ×2 (üst 300sn) → uzun kesintide gürültü azalır
 
 
 # Global instance for easy access

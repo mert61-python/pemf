@@ -86,12 +86,19 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
 
         _mdns_port, _mdns_device_name = port, device_name
         local_ip = _get_local_ip()
-        info = _build_info(local_ip, port, device_name)
 
         zc = get_shared_zeroconf()  # paylasilan TEK Zeroconf (MDNSService ile ayni instance → 5343 cakismasi yok)
-        zc.register_service(info)
-        _zeroconf_instance = zc
-        _mdns_service_info = info
+        # #32: loopback (127.*) IP'yi mDNS'e YAYINLAMA (telefon/ESP 127.0.0.1'i çözüp kendi loopback'ine
+        # gider → sessiz başarısız). Gerçek LAN IP yoksa İLK kaydı ATLA; add_reregister_callback ile
+        # arayüz/IP gelince otomatik kaydolur (_reregister aynı 127.* guard'ına sahip).
+        if local_ip and not local_ip.startswith("127."):
+            info = _build_info(local_ip, port, device_name)
+            zc.register_service(info)
+            _zeroconf_instance = zc
+            _mdns_service_info = info
+        else:
+            _zeroconf_instance = zc
+            logger.info("mDNS ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip)
         add_reregister_callback(_reregister)  # arayüz/IP değişiminde yeni instance'a otomatik re-register
 
         logger.info("mDNS servisi başlatıldı: %s:%d (%s)", local_ip, port, device_name)

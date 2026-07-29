@@ -98,10 +98,23 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
     )
     file_handler.setFormatter(formatter)
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
+    # stdout StreamHandler'ı YALNIZ gerçek interaktif konsolda ekle. Frozen/headless serviste
+    # (launcher CREATE_NO_WINDOW ya da NSSM stdout'u DRENAJSIZ pipe'a bağlar) stdout'a yazmak,
+    # pipe buffer'ı dolunca `sys.stdout.flush()`'ı SÜRESİZ BLOKE eder → thread Python logging kilidini
+    # tutarak asılır → o kilidi bekleyen TÜM AI model yüklemeleri + STM + telemetri DEADLOCK olur
+    # (py-spy ile doğrulandı). RotatingFileHandler zaten her şeyi yakalar. (Launcher tarafı da backend
+    # stdout'unu NUL'e yönlendirir → bu ikinci/derinlemesine savunma.)
+    handlers = [file_handler]
+    try:
+        _interactive = bool(sys.stdout is not None and sys.stdout.isatty())
+    except Exception:
+        _interactive = False
+    if _interactive and not getattr(sys, "frozen", False):
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        handlers.append(stream_handler)
 
-    logging.basicConfig(level=log_level, handlers=[file_handler, stream_handler], force=True)
+    logging.basicConfig(level=log_level, handlers=handlers, force=True)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

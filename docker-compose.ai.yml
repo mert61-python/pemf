@@ -1,0 +1,28 @@
+# =============================================================================
+# PEMF AI Servisi (GPU) — bağımsız test/çalıştırma.
+# NVIDIA GPU + nvidia-container-runtime ister.
+#   docker compose -f docker-compose.ai.yml up --build
+#   → http://localhost:8100/health  ·  /models  ·  /benchmark
+# =============================================================================
+name: pemf-ai
+
+services:
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    image: pemf-ai
+    environment:
+      PEMF_AI_MODELS_DIR: /models
+    volumes:
+      - ./release_assets/ai_models:/models:ro
+    ports:
+      - "8100:8100"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

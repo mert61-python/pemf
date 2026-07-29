@@ -169,6 +169,14 @@ def get_status() -> dict:
     return s
 
 
+def is_update_in_progress() -> bool:
+    """Güncelleme İNDİRİLİYOR/UYGULANIYOR mu (apply veya rollback). True ise tedavi/seans
+    başlatma yolları YENİ seans AÇMAMALI: apply penceresinde (indirme + installer servisi
+    durdurma + EXE değişimi) başlayan bir tedavi bobinleri kontrolcüsüz bırakabilir. Bu, TOCTOU
+    guard'ının TERS yönüdür (apply, başlamış tedaviyi zaten _has_active_treatment ile reddeder)."""
+    return _applying
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:

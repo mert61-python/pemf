@@ -2,207 +2,1038 @@
 <html lang="tr">
   <head>
     <meta charset="utf-8" />
-    <title>PEMF Vet Client</title>
+    <title>PEMF Vet</title>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #f6f7f9;
-        --fg: #16181d;
-        --muted: #5f6672;
-        --card: #ffffff;
-        --line: #e3e6ea;
-        --accent: #0b6fd4;
-        --err: #b3261e;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #16181d;
-          --fg: #eceef2;
-          --muted: #9aa2af;
-          --card: #1e2127;
-          --line: #2c3038;
-          --accent: #4c9aff;
-          --err: #ff6b60;
-        }
+        --bg: #070b11;
+        --bg2: #0b1017;
+        --grid: rgba(45, 212, 191, 0.045);
+        --surface: #101822;
+        --surface2: #142030;
+        --line: #1e2c3a;
+        --line2: #26384a;
+        --fg: #eef4f8;
+        --muted: #8b9bad;
+        --muted2: #5f7183;
+        --teal: #2dd4bf;
+        --teal-d: #14b8a6;
+        --teal-l: #5eead4;
+        --teal-glow: rgba(45, 212, 191, 0.25);
+        --ok: #34d399;
+        --err: #ff6b60;
+        --radius: 14px;
       }
       * { box-sizing: border-box; }
+      /* `hidden` attribute'unu class kuralları (display:flex vb.) ezemesin — garanti gizle. */
+      [hidden] { display: none !important; }
+      html, body { height: 100%; }
       body {
-        margin: 0; padding: 28px 30px;
-        font: 14px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
-        background: var(--bg); color: var(--fg);
-        -webkit-user-select: none; user-select: none;
+        margin: 0;
+        font: 14px/1.55 "Segoe UI", -apple-system, system-ui, sans-serif;
+        color: var(--fg);
+        background:
+          radial-gradient(1100px 480px at 50% -8%, rgba(45, 212, 191, 0.10), transparent 60%),
+          linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 42px 42px,
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 42px 42px,
+          linear-gradient(180deg, var(--bg2), var(--bg));
+        -webkit-user-select: none;
+        user-select: none;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
-      h1 { font-size: 19px; margin: 0 0 2px; }
-      .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 20px; }
-      fieldset { border: 0; padding: 0; margin: 0 0 18px; }
-      legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
-      label.opt {
-        display: flex; gap: 10px; align-items: flex-start;
-        border: 1px solid var(--line); border-radius: 9px;
-        background: var(--card); padding: 11px 13px; margin-bottom: 7px; cursor: pointer;
+      button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+      button:disabled { cursor: default; }
+      .icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* ---------- Header ---------- */
+      header {
+        display: flex; align-items: center; gap: 14px;
+        padding: 16px 26px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(9, 14, 20, 0.55);
+        backdrop-filter: blur(8px);
       }
-      label.opt:has(input:checked) { border-color: var(--accent); }
-      label.opt input { margin-top: 3px; }
-      .opt b { font-weight: 600; }
-      .opt span { display: block; color: var(--muted); font-size: 12.5px; }
-      button {
-        font: inherit; font-weight: 600; color: #fff; background: var(--accent);
-        border: 0; border-radius: 8px; padding: 10px 20px; cursor: pointer;
+      .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      .logo {
+        width: 42px; height: 42px; flex: none;
+        display: grid; place-items: center;
+        border-radius: 12px;
+        background: linear-gradient(150deg, rgba(45, 212, 191, 0.22), rgba(20, 184, 166, 0.10));
+        border: 1px solid rgba(45, 212, 191, 0.35);
+        box-shadow: 0 0 22px -6px var(--teal-glow);
       }
-      button[disabled] { opacity: .5; cursor: default; }
-      progress { width: 100%; height: 7px; margin-top: 14px; }
-      #status { margin-top: 10px; color: var(--muted); font-size: 12.5px; min-height: 18px; }
+      .logo svg { width: 24px; height: 24px; }
+      .brand h1 { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: 0.2px; }
+      .brand p { margin: 1px 0 0; font-size: 11.5px; color: var(--muted); white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; }
+      .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+      .seg {
+        display: inline-flex; border: 1px solid var(--line2); border-radius: 9px; overflow: hidden;
+        background: var(--surface);
+      }
+      .seg button { padding: 5px 11px; font-size: 12px; font-weight: 700; color: var(--muted); }
+      .seg button.on { background: linear-gradient(180deg, var(--teal), var(--teal-d)); color: #04211d; }
+      .hbtn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 12px; border-radius: 9px; font-size: 12.5px; color: var(--muted);
+        border: 1px solid transparent;
+      }
+      .hbtn:hover { color: var(--teal-l); border-color: var(--line2); background: var(--surface); }
+      .hbtn .icon { width: 15px; height: 15px; }
+      .ver {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 6px 12px; border-radius: 999px; font-size: 12px; color: var(--muted);
+        border: 1px solid var(--line2); background: var(--surface);
+      }
+      .ver .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+        box-shadow: 0 0 8px var(--ok); }
+
+      /* ---------- Main / stage ---------- */
+      main { flex: 1; overflow: auto; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; padding: 18px 30px; text-align: center; }
+      .stage { width: 100%; max-width: 560px; }
+      .title { font-size: 26px; font-weight: 800; margin: 0 0 5px; letter-spacing: -0.4px; }
+      .lead { color: var(--muted); font-size: 13.5px; margin: 0 auto 16px; max-width: 460px; }
+
+      /* success check */
+      .check {
+        width: 92px; height: 92px; margin: 0 auto 20px; border-radius: 22px;
+        display: grid; place-items: center;
+        background: rgba(45, 212, 191, 0.12);
+        border: 1px solid rgba(45, 212, 191, 0.35);
+        box-shadow: 0 0 40px -8px var(--teal-glow);
+        animation: pop 0.35s ease;
+      }
+      .check svg { width: 46px; height: 46px; stroke: var(--teal); stroke-width: 2.4; }
+      @keyframes pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+      /* spinner */
+      .spinner { width: 46px; height: 46px; margin: 0 auto 18px; border-radius: 50%;
+        border: 3px solid var(--line2); border-top-color: var(--teal); animation: spin 0.9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* profile chips (ready state) */
+      .chips { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin: 0 0 26px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 8px 15px; border-radius: 999px; font-size: 13px; font-weight: 600;
+        color: var(--teal-l);
+        background: rgba(45, 212, 191, 0.08);
+        border: 1px solid rgba(45, 212, 191, 0.32);
+      }
+      .chip .icon { width: 15px; height: 15px; color: var(--teal); }
+
+      /* profile select cards */
+      .cards { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; text-align: left; }
+      .card {
+        display: flex; align-items: center; gap: 14px;
+        padding: 12px 15px; border-radius: var(--radius);
+        background: var(--surface); border: 1px solid var(--line);
+        transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      }
+      .card:hover { border-color: var(--line2); }
+      .card.sel { border-color: var(--teal); background: rgba(45, 212, 191, 0.06); }
+      .card .box {
+        width: 22px; height: 22px; flex: none; border-radius: 7px;
+        border: 2px solid var(--line2); display: grid; place-items: center; transition: 0.15s;
+      }
+      .card.sel .box { border-color: var(--teal); background: var(--teal); }
+      .card .box svg { width: 13px; height: 13px; stroke: #04211d; stroke-width: 3; opacity: 0; }
+      .card.sel .box svg { opacity: 1; }
+      .card .pico {
+        width: 40px; height: 40px; flex: none; border-radius: 10px; display: grid; place-items: center;
+        background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.22); color: var(--teal-l);
+      }
+      .card .pico svg { width: 21px; height: 21px; }
+      .card .meta { min-width: 0; flex: 1; }
+      .card .meta b { display: block; font-size: 14.5px; font-weight: 650; }
+      .card .meta b .reqtag { margin-left: 8px; font-size: 10px; font-weight: 700; font-style: normal;
+        color: var(--teal); background: rgba(45, 212, 191, 0.12); border: 1px solid rgba(45, 212, 191, 0.32);
+        padding: 1px 7px; border-radius: 999px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px; }
+      .card .meta span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+      .card .size { flex: none; font-size: 12px; color: var(--muted2); font-variant-numeric: tabular-nums;
+        padding: 4px 9px; border-radius: 7px; background: var(--bg2); border: 1px solid var(--line); }
+
+      /* buttons */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+        padding: 14px 30px; border-radius: var(--radius); font-size: 15px; font-weight: 700;
+        background: linear-gradient(180deg, var(--teal), var(--teal-d)); color: #04211d;
+        box-shadow: 0 10px 26px -10px var(--teal-glow); transition: transform 0.1s, filter 0.15s, opacity 0.15s;
+      }
+      .btn:hover:not(:disabled) { filter: brightness(1.06); }
+      .btn:active:not(:disabled) { transform: translateY(1px); }
+      .btn:disabled { opacity: 0.4; box-shadow: none; }
+      .btn.big { padding: 16px 44px; font-size: 16px; }
+      .btn .icon { width: 19px; height: 19px; color: #04211d; }
+
+      .subactions { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: center; margin-top: 22px; }
+      .link {
+        display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted);
+        padding: 6px 4px; border-radius: 8px;
+      }
+      .link:hover { color: var(--teal-l); }
+      .link.danger:hover { color: var(--err); }
+      .link .icon { width: 15px; height: 15px; }
+
+      /* progress */
+      .pct { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; margin: 2px 0 12px;
+        color: var(--teal-l); font-variant-numeric: tabular-nums; min-height: 50px; }
+      .progress { height: 10px; border-radius: 999px; background: var(--surface2);
+        overflow: hidden; margin: 0 auto 14px; max-width: 460px; box-shadow: inset 0 0 0 1px var(--line); }
+      .progress > i { display: block; height: 100%; width: 0%; border-radius: 999px;
+        background: linear-gradient(90deg, var(--teal-d), var(--teal-l));
+        box-shadow: 0 0 12px -2px var(--teal-glow); transition: width 0.3s ease; }
+      .progress.indet > i { width: 34%; box-shadow: none; animation: indet 1.15s ease-in-out infinite; }
+      @keyframes indet { 0% { margin-left: -34%; } 100% { margin-left: 100%; } }
+      .dlmeta { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 28px;
+        margin: 0 auto 8px; font-size: 13px; color: var(--muted); max-width: 460px; }
+      .dlmeta span { display: inline-flex; align-items: center; }
+      .dlmeta .icon { width: 14px; height: 14px; color: var(--teal); margin-right: 6px; }
+      .dlmeta b { color: var(--fg); font-weight: 650; font-variant-numeric: tabular-nums; }
+      #status { color: var(--muted); font-size: 13px; min-height: 18px; margin-top: 4px; }
+      .install-actions { display: flex; gap: 10px; justify-content: center; margin-top: 22px; }
+      .ctlbtn {
+        display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 11px;
+        font-size: 13.5px; font-weight: 650; color: var(--fg);
+        border: 1px solid var(--line2); background: var(--surface2); transition: 0.15s;
+      }
+      .ctlbtn:hover:not(:disabled) { border-color: var(--muted2); }
+      .ctlbtn:disabled { opacity: 0.4; cursor: default; }
+      .ctlbtn.primary { background: linear-gradient(180deg, var(--teal), var(--teal-d)); color: #04211d; border: 0; }
+      .ctlbtn.danger { color: var(--err); border-color: rgba(255, 107, 96, 0.4); background: rgba(255, 107, 96, 0.08); }
+      .ctlbtn.danger:hover:not(:disabled) { background: rgba(255, 107, 96, 0.16); }
+      .ctlbtn .icon { width: 15px; height: 15px; }
+      .ctlbtn.primary .icon { color: #04211d; }
+      .ctlbtn.danger .icon { color: var(--err); }
+
+      /* error box */
       #error {
-        margin-top: 14px; padding: 11px 13px; border-radius: 8px;
-        border: 1px solid var(--err); color: var(--err);
-        white-space: pre-wrap; font-size: 12.5px; display: none;
-        -webkit-user-select: text; user-select: text;
-        max-height: 190px; overflow: auto;
+        margin: 16px auto 0; max-width: 460px; text-align: left;
+        padding: 12px 14px; border-radius: 10px; border: 1px solid var(--err);
+        background: rgba(255, 107, 96, 0.06); color: var(--err); font-size: 12.5px;
+        white-space: pre-wrap; -webkit-user-select: text; user-select: text; max-height: 150px; overflow: auto;
       }
-      .update {
-        display: flex; align-items: center; gap: 12px;
-        border: 1px solid var(--accent); border-radius: 9px;
-        background: var(--card); padding: 10px 13px; margin-bottom: 16px;
+
+      /* ---------- Footer ---------- */
+      footer {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding: 12px 26px; border-top: 1px solid var(--line);
+        font-size: 11.5px; color: var(--muted2); background: rgba(9, 14, 20, 0.4);
       }
-      .update .u-text { flex: 1; font-size: 12.5px; }
-      .update button { padding: 7px 15px; white-space: nowrap; }
+      footer .mid { margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+      footer a { color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+      footer a:hover { color: var(--teal-l); }
+      footer .icon { width: 13px; height: 13px; }
+      footer .brandmini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted2); }
+      footer .brandmini .icon { color: var(--teal); }
+
+      /* ---------- Modal ---------- */
+      .overlay {
+        position: fixed; inset: 0; background: rgba(3, 7, 11, 0.72); backdrop-filter: blur(4px);
+        display: grid; place-items: center; z-index: 30; padding: 24px;
+      }
+      .modal {
+        width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line2);
+        border-radius: 18px; padding: 24px; text-align: left; box-shadow: 0 30px 80px -20px #000;
+      }
+      .modal h3 { margin: 0 0 6px; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+      .modal h3 .logo { width: 34px; height: 34px; }
+      .modal h3 .logo svg { width: 19px; height: 19px; }
+      .modal p { color: var(--muted); font-size: 13px; margin: 8px 0; }
+      .modal .row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 0;
+        border-top: 1px solid var(--line); color: var(--muted); }
+      .modal .row b { color: var(--fg); font-weight: 600; }
+      .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+      .mbtn { padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+        border: 1px solid var(--line2); color: var(--fg); background: var(--surface2); }
+      .mbtn:hover { border-color: var(--muted2); }
+      .mbtn.primary { background: linear-gradient(180deg, var(--teal), var(--teal-d)); color: #04211d; border: 0; }
+      .mbtn.danger { background: rgba(255, 107, 96, 0.12); border-color: var(--err); color: var(--err); }
+      .mbtn.danger:hover { background: rgba(255, 107, 96, 0.2); }
+
+      /* ---------- Kullanım Kılavuzu ---------- */
+      .guide-modal { width: 100%; max-width: 780px; max-height: 88vh; display: flex; flex-direction: column;
+        background: var(--surface); border: 1px solid var(--line2); border-radius: 18px; overflow: hidden;
+        box-shadow: 0 30px 80px -20px #000; }
+      .guide-head { display: flex; align-items: center; gap: 12px; padding: 16px 22px;
+        border-bottom: 1px solid var(--line); background: rgba(9, 14, 20, 0.5); }
+      .guide-head h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; flex: 1; }
+      .guide-head .logo { width: 34px; height: 34px; } .guide-head .logo svg { width: 19px; height: 19px; }
+      .gclose { margin-left: auto; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+        color: var(--muted); border: 1px solid var(--line2); background: var(--surface2); }
+      .gclose:hover { color: var(--fg); border-color: var(--muted2); }
+      .gclose .icon { width: 17px; height: 17px; }
+      .guide-body { padding: 22px; overflow-y: auto; text-align: left; }
+      .guide-intro { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 8px; }
+      .gsec-title { display: flex; align-items: center; gap: 9px; font-size: 15.5px; font-weight: 700; margin: 26px 0 13px; }
+      .gsec-title .icon { width: 18px; height: 18px; color: var(--teal); }
+      .gsteps { display: flex; flex-direction: column; gap: 11px; }
+      .gstep { display: flex; gap: 13px; align-items: flex-start; }
+      .gstep .num { width: 28px; height: 28px; flex: none; border-radius: 8px; display: grid; place-items: center;
+        font-size: 13px; font-weight: 800; color: #04211d; background: linear-gradient(180deg, var(--teal), var(--teal-d)); }
+      .gstep .gtxt b { display: block; font-size: 13.5px; font-weight: 650; }
+      .gstep .gtxt span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.55; }
+      .gprofiles { display: flex; flex-direction: column; gap: 12px; }
+      .gprofile { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--surface2); }
+      .gprofile .gp-head { display: flex; align-items: center; gap: 11px; }
+      .gprofile .pico { width: 36px; height: 36px; flex: none; border-radius: 9px; display: grid; place-items: center;
+        background: rgba(45, 212, 191, 0.1); border: 1px solid rgba(45, 212, 191, 0.22); color: var(--teal-l); }
+      .gprofile .pico svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 2; }
+      .gprofile h4 { margin: 0; font-size: 14.5px; font-weight: 700; }
+      .gprofile .who { font-size: 11.5px; color: var(--teal-l); margin-top: 1px; }
+      .gprofile .does { font-size: 12.5px; color: var(--muted); margin: 9px 0 0; line-height: 1.55; }
+      .gprofile ol { margin: 9px 0 0; padding-left: 18px; }
+      .gprofile ol li { font-size: 12.5px; color: var(--fg); margin: 4px 0; line-height: 1.5; }
+      .gtips { display: flex; flex-direction: column; gap: 9px; }
+      .gtip { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+      .gtip .icon { width: 15px; height: 15px; color: var(--teal); flex: none; margin-top: 2px; }
+      .gtip b { color: var(--fg); font-weight: 600; }
+
+      @media (max-width: 680px) {
+        .brand p { display: none; }
+        .hbtn span { display: none; }
+        .title { font-size: 24px; }
+      }
     </style>
   </head>
   <body>
-    <h1>PEMF Vet Client</h1>
-    <div class="sub" id="env">Ortam algılanıyor…</div>
+    <!-- ===== Header ===== -->
+    <header>
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="#2dd4bf" stroke-width="1.6" opacity="0.55" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#2dd4bf" stroke-width="1.7" stroke-linecap="round" />
+            <path d="M12 15.4c-2.4-1.6-3.9-3-3.9-4.7a2.1 2.1 0 0 1 3.9-1.06A2.1 2.1 0 0 1 15.9 10.7c0 1.7-1.5 3.1-3.9 4.7Z" fill="#2dd4bf" />
+          </svg>
+        </span>
+        <div>
+          <h1>PEMF Vet</h1>
+          <p id="tagline">Veteriner PEMF tedavi + yapay zekâ teşhis platformu</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="seg" role="group" aria-label="dil">
+          <button id="lang-tr" class="on">TR</button>
+          <button id="lang-en">EN</button>
+        </div>
+        <button class="hbtn" id="btn-web">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>
+          <span id="t-web">Web Sitesi</span>
+        </button>
+        <button class="hbtn" id="btn-guide">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2V5Z"/><path d="M20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5Z"/></svg>
+          <span id="t-guide">Kılavuz</span>
+        </button>
+        <button class="hbtn" id="btn-about">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span id="t-about">Hakkında</span>
+        </button>
+        <span class="ver"><span class="dot"></span><span id="ver">v—</span></span>
+      </div>
+    </header>
 
-    <div class="update" id="update" hidden>
-      <span class="u-text" id="update-text"></span>
-      <button type="button" id="update-btn">İndir</button>
+    <!-- ===== Main stage ===== -->
+    <main>
+      <div class="stage">
+        <!-- detecting -->
+        <section id="s-detect">
+          <div class="spinner"></div>
+          <p class="lead" id="t-detect">Ortam algılanıyor…</p>
+        </section>
+
+        <!-- profile selection (multi-select) -->
+        <section id="s-select" hidden>
+          <h2 class="title" id="t-sel-title">Kullanım profilinizi seçin</h2>
+          <p class="lead" id="t-sel-lead">Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.</p>
+          <div class="cards" id="cards"></div>
+          <button class="btn big" id="btn-install" disabled>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            <span id="t-install">Kur ve Başlat</span>
+          </button>
+          <div class="subactions" id="sel-back-wrap" hidden>
+            <button class="link" id="btn-sel-cancel">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+              <span id="t-sel-cancel">Geri dön</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- installing / working -->
+        <section id="s-install" hidden>
+          <h2 class="title" id="inst-title">İndiriliyor…</h2>
+          <div class="pct" id="pct">%0</div>
+          <div class="progress" id="bar"><i></i></div>
+          <div class="dlmeta">
+            <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><b id="dl-bytes">—</b></span>
+            <span><svg class="icon" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg><b id="dl-speed">—</b></span>
+            <span><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="dl-eta">—</b></span>
+          </div>
+          <div id="status"></div>
+          <div class="install-actions">
+            <button class="ctlbtn" id="btn-pause"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span id="t-pause">Duraklat</span></button>
+            <button class="ctlbtn primary" id="btn-resume" hidden><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13l11-6.5z"/></svg><span id="t-resume">Devam Et</span></button>
+            <button class="ctlbtn danger" id="btn-cancel"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg><span id="t-cancel">İptal</span></button>
+          </div>
+        </section>
+
+        <!-- ready -->
+        <section id="s-ready" hidden>
+          <div class="check">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7"/></svg>
+          </div>
+          <h2 class="title" id="t-ready-title">Hazır!</h2>
+          <p class="lead" id="t-ready-lead">PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.</p>
+          <div class="chips" id="chips"></div>
+          <button class="btn big" id="btn-start">
+            <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13l11-6.5z"/></svg>
+            <span id="t-start">Başlat</span>
+          </button>
+          <div class="subactions">
+            <button class="link" id="btn-change">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
+              <span id="t-change">Profilleri değiştir</span>
+            </button>
+            <button class="link" id="btn-repair">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6 2 2 6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5z"/></svg>
+              <span id="t-repair">Onar</span>
+            </button>
+            <button class="link danger" id="btn-uninstall">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              <span id="t-uninstall">Uygulamayı kaldır</span>
+            </button>
+          </div>
+        </section>
+
+        <div id="error" hidden></div>
+      </div>
+    </main>
+
+    <!-- ===== Footer ===== -->
+    <footer>
+      <span class="brandmini">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+        © V-PEMF Technologies
+      </span>
+      <span class="mid">
+        <a id="foot-support"><span id="t-foot-support">Destek</span></a>
+      </span>
+    </footer>
+
+    <!-- ===== About modal ===== -->
+    <div class="overlay" id="about" hidden>
+      <div class="modal">
+        <h3>
+          <span class="logo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#2dd4bf" stroke-width="1.6" opacity="0.55"/><path d="M12 15.4c-2.4-1.6-3.9-3-3.9-4.7a2.1 2.1 0 0 1 3.9-1.06A2.1 2.1 0 0 1 15.9 10.7c0 1.7-1.5 3.1-3.9 4.7Z" fill="#2dd4bf"/></svg></span>
+          <span id="t-about-title">PEMF Vet hakkında</span>
+        </h3>
+        <p id="t-about-body">Hafif client. Seçtiğiniz kullanım profillerini indirir, SHA-256 ile doğrular, kurar ve uygulamayı tarayıcıda açar. Cihazınıza aynı ağdaki PEMF donanımına otomatik bağlanır.</p>
+        <div class="row"><span id="t-about-ver">Sürüm</span><b id="about-ver">—</b></div>
+        <div class="row"><span id="t-about-plat">Platform</span><b id="about-plat">—</b></div>
+        <div class="modal-actions">
+          <button class="mbtn primary" id="about-close" data-i18n="ok">Tamam</button>
+        </div>
+      </div>
     </div>
 
-    <fieldset id="profiles-box" hidden>
-      <legend>Kullanım profili</legend>
-      <div id="profiles"></div>
-    </fieldset>
+    <!-- ===== Kullanım Kılavuzu ===== -->
+    <div class="overlay" id="guide" hidden>
+      <div class="guide-modal">
+        <div class="guide-head">
+          <h3>
+            <span class="logo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#2dd4bf" stroke-width="1.6" opacity="0.55"/><path d="M12 15.4c-2.4-1.6-3.9-3-3.9-4.7a2.1 2.1 0 0 1 3.9-1.06A2.1 2.1 0 0 1 15.9 10.7c0 1.7-1.5 3.1-3.9 4.7Z" fill="#2dd4bf"/></svg></span>
+            <span id="t-guide-title">Kullanım Kılavuzu</span>
+          </h3>
+          <button class="gclose" id="guide-close" aria-label="kapat"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="guide-body" id="guide-body"></div>
+      </div>
+    </div>
 
-    <button id="go" disabled>Kur ve Başlat</button>
-    <progress id="bar" value="0" max="100" hidden></progress>
-    <div id="status"></div>
-    <div id="error"></div>
+    <!-- ===== Confirm modal ===== -->
+    <div class="overlay" id="confirm" hidden>
+      <div class="modal">
+        <h3 id="confirm-title">Emin misiniz?</h3>
+        <p id="confirm-body"></p>
+        <div class="modal-actions">
+          <button class="mbtn" id="confirm-no">Vazgeç</button>
+          <button class="mbtn" id="confirm-yes">Devam</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module">
       const { invoke } = window.__TAURI__.core;
       const { listen } = window.__TAURI__.event;
-
       const $ = (id) => document.getElementById(id);
-      const PROFILE_DESC = {
-        home: ["Evcil Hayvan Sahibi", "Temel teşhis modelleri (~0.5 GB)"],
-        vet: ["Veteriner Hekim", "Klinik teşhis modelleri (~0.13 GB)"],
-        research: ["Araştırma Modu", "Tüm modeller, kanser araştırma dahil (~1.5 GB)"],
+
+      // ---------- i18n ----------
+      const I18N = {
+        tr: {
+          tagline: "Veteriner PEMF tedavi + yapay zekâ teşhis platformu",
+          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…",
+          selTitle: "Kullanım profilinizi seçin",
+          selLead: "Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.",
+          install: "Kur ve Başlat", selCancel: "Geri dön",
+          instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
+          appCore: "Uygulama çekirdeği", calc: "hesaplanıyor",
+          pause: "Duraklat", resume: "Devam Et", cancelDl: "İptal",
+          pausedTitle: "Duraklatıldı", pausedLead: "İndirme duraklatıldı — indirilen kısım cache'te korundu. Kaldığınız yerden devam edebilirsiniz.",
+          resumeTitle: "Kurulum yarım kaldı", resumeBody: "Önceki kurulum tamamlanmadı (internet kesilmiş veya kapatılmış olabilir). İndirilen kısım korundu — kaldığınız yerden devam edilsin mi?",
+          resumeYes: "Devam Et", resumeNo: "İptal et",
+          readyTitle: "Hazır!",
+          readyLead: "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
+          start: "Başlat", change: "Profilleri değiştir", repair: "Onar", uninstall: "Uygulamayı kaldır",
+          footWeb: "Web Sitesi", footSupport: "Destek", ok: "Tamam", cancel: "Vazgeç", cont: "Devam",
+          aboutTitle: "PEMF Vet hakkında",
+          aboutBody: "Hafif client. Seçtiğiniz kullanım profillerini indirir, SHA-256 ile doğrular, kurar ve uygulamayı tarayıcıda açar. Cihazınızdaki aynı ağda bulunan PEMF donanımına otomatik bağlanır.",
+          aboutVer: "Sürüm", aboutPlat: "Platform",
+          repairTitle: "Kurulumu onar", repairBody: "Kurulu paketler yeniden doğrulanıp eksik/bozuk dosyalar onarılacak. Bu birkaç dakika sürebilir. Devam edilsin mi?",
+          uninTitle: "Uygulamayı kaldır", uninBody: "İndirilen uygulama ve AI modelleri silinecek (hasta verileriniz KORUNUR). Daha sonra tekrar kurabilirsiniz. Devam edilsin mi?",
+          notInstalled: "Uygulama kurulu değil.",
+          dl: "indiriliyor", verifying: "bütünlük doğrulanıyor", extracting: "kuruluyor",
+          reconnecting: "bağlantı koptu, yeniden deneniyor", reconnTitle: "Yeniden bağlanılıyor…",
+          cached: "zaten indirilmiş", starting: "başlatılıyor", ready: "hazır — tarayıcıda açıldı",
+          notSupported: (p) => `Bu platform (${p}) için uygulama paketi henüz yayınlanmadı.`,
+          updatingTitle: "Client güncelleniyor…", updatingLead: "Yeni bir client sürümü bulundu — indirilip kuruluyor. Uygulama otomatik yeniden başlayacak.",
+          updatingApply: "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
+        },
+        en: {
+          tagline: "Veterinary PEMF therapy + AI diagnostics platform",
+          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…",
+          selTitle: "Choose your usage profile",
+          selLead: "You can select multiple profiles — only the ones you pick are downloaded.",
+          install: "Install & Start", selCancel: "Back",
+          instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
+          appCore: "App core", calc: "calculating",
+          pause: "Pause", resume: "Resume", cancelDl: "Cancel",
+          pausedTitle: "Paused", pausedLead: "Download paused — the downloaded part is kept in cache. You can resume where you left off.",
+          resumeTitle: "Installation unfinished", resumeBody: "The previous installation didn't complete (internet may have dropped or the device was closed). The downloaded part is kept — resume where you left off?",
+          resumeYes: "Resume", resumeNo: "Discard",
+          readyTitle: "Ready!",
+          readyLead: "PEMF Vet is installed. Start the app or update your profiles.",
+          start: "Start", change: "Change profiles", repair: "Repair", uninstall: "Uninstall",
+          footWeb: "Website", footSupport: "Support", ok: "OK", cancel: "Cancel", cont: "Continue",
+          aboutTitle: "About PEMF Vet",
+          aboutBody: "Lightweight client. It downloads your selected usage profiles, verifies them with SHA-256, installs, and opens the app in your browser. It auto-connects to PEMF hardware on the same network.",
+          aboutVer: "Version", aboutPlat: "Platform",
+          repairTitle: "Repair installation", repairBody: "Installed packages will be re-verified and missing/corrupt files repaired. This may take a few minutes. Continue?",
+          uninTitle: "Uninstall app", uninBody: "The downloaded app and AI models will be removed (your patient data is KEPT). You can reinstall later. Continue?",
+          notInstalled: "App is not installed.",
+          dl: "downloading", verifying: "verifying integrity", extracting: "installing",
+          reconnecting: "connection lost, retrying", reconnTitle: "Reconnecting…",
+          cached: "already downloaded", starting: "starting", ready: "ready — opened in browser",
+          notSupported: (p) => `The package for this platform (${p}) is not published yet.`,
+          updatingTitle: "Updating client…", updatingLead: "A new client version was found — downloading and installing. The app will restart automatically.",
+          updatingApply: "Applying update, restarting the app…",
+        },
       };
+      const PROFILE_META = {
+        home:     { tr: ["Ev Sahibi", "Kedi teşhis modelleri — hastalık, organ, görüntü, ses"], en: ["Pet Owner", "Feline diagnostic models — disease, organ, imaging, sound"], icon: "M4 11l8-7 8 7M6 10v9h12v-9" },
+        vet:      { tr: ["Veteriner Hekim", "Klinik teşhis + tedavi (em_kedi, termal)"], en: ["Veterinarian", "Clinical diagnosis + therapy (em_kedi, thermal)"], icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
+        research: { tr: ["Araştırma Modu", "Araştırma modelleri — petri, histopatoloji, böbrek, fantom"], en: ["Research Mode", "Research models — petri, histopathology, kidney, phantom"], icon: "M9 3v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M9 3h6" },
+      };
+      // Profil BAĞIMLILIKLARI (nested-delta paketleme): "vet" klinik AI'ı home'daki teşhis
+      // modellerini KULLANIR (AiPro: cat_organ[home] → em_kedi[vet] zinciri). Bu yüzden "vet"
+      // seçilince "home" OTOMATİK dahil edilir — aksi halde veteriner eksik/çalışmaz model kurar.
+      // (Kullanıcı gözlemi: veterinerde daha çok model var → kümülatif boyut home'dan büyük olmalı.)
+      const PROFILE_DEPS = { home: [], vet: ["home"], research: [] };
+      const PROFILE_ORDER = ["home", "vet", "research"];
+      // Bir seçim kümesini bağımlılıklarıyla genişlet.
+      function withDeps(keys) {
+        const out = new Set();
+        const add = (k) => { if (out.has(k)) return; out.add(k); (PROFILE_DEPS[k] || []).forEach(add); };
+        keys.forEach(add); return out;
+      }
+      // Bir profilin KÜMÜLATİF açık boyutu (kendi + bağımlılıkları).
+      function cumBytes(key) { let s = 0; withDeps([key]).forEach((k) => { s += sizes[k] || 0; }); return s; }
 
+      // ---------- Kullanım Kılavuzu içeriği (görsel, adım-adım, 3 profil) ----------
+      const GUIDE = {
+        tr: {
+          intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile tedavi sağlayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
+          stepsTitle: "Kurulum — 3 adım",
+          steps: [
+            ["Profil(ler)inizi seçin", "Aşağıdaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her birinin indirme boyutu kartının sağında yazar."],
+            ["‘Kur ve Başlat’a tıklayın", "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz."],
+            ["Uygulama otomatik açılır", "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız."],
+          ],
+          profTitle: "3 Profil — hangisi sizin için?",
+          profiles: [
+            { key: "home", who: "Evcil hayvan (kedi) sahipleri için",
+              does: "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya tedavi İÇERMEZ.",
+              use: ["Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.", "‘Akıllı Teşhis’ ekranına gidin.", "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.", "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."] },
+            { key: "vet", who: "Veteriner hekimler ve klinikler için",
+              does: "Teşhis + PEMF cihazıyla tedavi + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+              use: ["‘Veteriner Hekim’ profilini seçip girin.", "‘Hastalar’ ekranından yeni hasta ekleyin.", "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.", "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."] },
+            { key: "research", who: "Araştırmacılar ve laboratuvarlar için",
+              does: "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
+              use: ["‘Araştırma Modu’ profilini seçip girin.", "‘Akıllı Teşhis’ten ilgili araştırma modelini seçin.", "Görüntü veya veri dosyanızı yükleyin.", "Sonuçları inceleyip ‘Geçmiş’e kaydedin."] },
+          ],
+          connectTitle: "Cihaza bağlanma (Veteriner)",
+          connect: "Veteriner modunda PEMF donanımı, bilgisayarınızla AYNI Wi-Fi ağında olmalıdır. Uygulama cihazı otomatik bulur. Bulamazsa uygulama içindeki Ayarlar’dan cihazın IP adresini elle girebilirsiniz.",
+          troubleTitle: "Sorun giderme",
+          trouble: [
+            ["Uygulama açılmıyor veya bir model eksik", "Bu penceredeki ‘Onar’a basın — paketleri yeniden doğrular ve eksikleri tamamlar."],
+            ["İndirme yarıda kaldı (internet kesildi / bilgisayar kapandı)", "Uygulamayı tekrar açın; ‘Kaldığınız yerden devam edilsin mi?’ sorusuna ‘Devam Et’ deyin. İndirilen kısım korunmuştur."],
+            ["Baştan kurmak istiyorum", "‘Uygulamayı kaldır’a basın (hasta verileriniz KORUNUR), sonra tekrar kurun."],
+            ["Daha fazla yardım", "Üstteki ‘Web Sitesi’ veya alttaki ‘Destek’ bağlantısını kullanın."],
+          ],
+        },
+        en: {
+          intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) therapy in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
+          stepsTitle: "Installation — 3 steps",
+          steps: [
+            ["Choose your profile(s)", "Tick at least one of the 3 profiles below (Pet Owner, Veterinarian, Research). You can pick several; each card shows its download size on the right."],
+            ["Click ‘Install & Start’", "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen."],
+            ["The app opens automatically", "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds."],
+          ],
+          profTitle: "3 Profiles — which one is for you?",
+          profiles: [
+            { key: "home", who: "For pet (cat) owners",
+              does: "Runs AI pre-diagnosis from your cat's camera image: disease, organ, imaging and sound analysis. Does NOT include a device or therapy.",
+              use: ["When the app opens, choose ‘Pet Owner’ and sign in.", "Go to the ‘Smart Diagnosis’ screen.", "Point your camera at the cat or upload a photo/sound file.", "Read the result and suggestions — always consult a veterinarian for a definitive diagnosis."] },
+            { key: "vet", who: "For veterinarians and clinics",
+              does: "Diagnosis + PEMF device therapy + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+              use: ["Choose ‘Veterinarian’ and sign in.", "Add a new patient from ‘Patients’.", "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.", "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."] },
+            { key: "research", who: "For researchers and laboratories",
+              does: "Petri, histopathology, kidney and phantom AI models; sample/data records and history. Does NOT include a device.",
+              use: ["Choose ‘Research Mode’ and sign in.", "Pick the relevant research model from ‘Smart Diagnosis’.", "Upload your image or data file.", "Review the results and save them to ‘History’."] },
+          ],
+          connectTitle: "Connecting to the device (Vet)",
+          connect: "In veterinarian mode the PEMF hardware must be on the SAME Wi-Fi network as your computer. The app finds it automatically; if not, enter the device IP manually in the app's Settings.",
+          troubleTitle: "Troubleshooting",
+          trouble: [
+            ["The app won't open or a model is missing", "Click ‘Repair’ in this window — it re-verifies the packages and fills in what's missing."],
+            ["Download interrupted (internet dropped / computer closed)", "Reopen the app; answer ‘Resume where you left off?’ with ‘Resume’. The downloaded part is kept."],
+            ["I want to reinstall from scratch", "Click ‘Uninstall’ (your patient data is KEPT), then install again."],
+            ["More help", "Use the ‘Website’ link at the top or ‘Support’ at the bottom."],
+          ],
+        },
+      };
+      function renderGuide() {
+        const g = GUIDE[LANG], box = $("guide-body"); box.textContent = "";
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const secTitle = (iconInner, text) => {
+          const h = el("div", "gsec-title");
+          h.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconInner}</svg>`;
+          h.appendChild(el("span", null, text)); return h;
+        };
+        box.appendChild(el("p", "guide-intro", g.intro));
+        box.appendChild(secTitle('<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>', g.stepsTitle));
+        const steps = el("div", "gsteps");
+        g.steps.forEach(([tt, d], i) => {
+          const s = el("div", "gstep"); s.appendChild(el("span", "num", String(i + 1)));
+          const tx = el("div", "gtxt"); tx.appendChild(el("b", null, tt)); tx.appendChild(el("span", null, d));
+          s.appendChild(tx); steps.appendChild(s);
+        });
+        box.appendChild(steps);
+        box.appendChild(secTitle('<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>', g.profTitle));
+        const profs = el("div", "gprofiles");
+        g.profiles.forEach((p) => {
+          const meta = PROFILE_META[p.key], card = el("div", "gprofile"), head = el("div", "gp-head");
+          const pico = el("span", "pico"); pico.innerHTML = `<svg viewBox="0 0 24 24"><path d="${meta ? meta.icon : ""}"/></svg>`;
+          const htext = el("div");
+          htext.appendChild(el("h4", null, profName(p.key)));
+          htext.appendChild(el("div", "who", p.who));
+          head.appendChild(pico); head.appendChild(htext); card.appendChild(head);
+          card.appendChild(el("p", "does", p.does));
+          const ol = el("ol"); p.use.forEach((u) => ol.appendChild(el("li", null, u))); card.appendChild(ol);
+          profs.appendChild(card);
+        });
+        box.appendChild(profs);
+        box.appendChild(secTitle('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>', g.connectTitle));
+        box.appendChild(el("p", "guide-intro", g.connect));
+        box.appendChild(secTitle('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6 2 2 6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5z"/>', g.troubleTitle));
+        const tips = el("div", "gtips");
+        g.trouble.forEach(([tt, d]) => {
+          const tip = el("div", "gtip");
+          tip.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>';
+          const sp = el("span"); sp.appendChild(el("b", null, tt + " — ")); sp.appendChild(document.createTextNode(d));
+          tip.appendChild(sp); tips.appendChild(tip);
+        });
+        box.appendChild(tips);
+      }
+      let LANG = "tr";
+      const t = () => I18N[LANG];
+
+      // ---------- app state ----------
       let manifestRaw = null;
+      let profileKeys = [];           // manifest sırası
+      let sizes = {};                 // key -> bytes
+      let baseBytes = 0;              // uygulama çekirdeği (base) boyutu
+      let baseInstalled = false;      // base kurulu mu (kuruluysa butonda sayma)
+      let installed = [];             // kurulu profiller
+      const selected = new Set();     // seçim (select ekranı)
+      let ver = "—", platform = "—", pkgVersion = "—";
+      let busy = false;
+      let lastProfiles = [];   // duraklat→devam için son kurulum seçimi
+      let resumeOp = null;     // "Devam Et" hangi işlemi sürdürecek (kurulum mu onarım mı)
 
-      function fail(msg) {
-        $("error").textContent = msg;
-        $("error").style.display = "block";
-        $("go").disabled = false;
-        $("bar").hidden = true;
+      const mb = (n) => (n / 1048576).toFixed(0);
+      const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 ? 1 : 2);
+      const profName = (k) => (PROFILE_META[k]?.[LANG]?.[0]) ?? k;
+      // İndirme ilerleme durumu (hız/ETA JS'te done-deltalarından hesaplanır — performance.now() webview'de var).
+      let dl = { what: null, done: 0, t: 0, speed: 0 };
+      const fmtBytes = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : (n / 1048576).toFixed(0) + " MB");
+      const fmtSpeed = (bps) => (bps >= 1048576 ? (bps / 1048576).toFixed(1) + " MB/s" : Math.max(0, bps / 1024).toFixed(0) + " KB/s");
+      const fmtEta = (sec) => {
+        if (!isFinite(sec) || sec <= 0) return t().calc;
+        if (sec < 60) return "~" + Math.ceil(sec) + " sn";
+        if (sec < 3600) return "~" + Math.ceil(sec / 60) + " dk";
+        return "~" + (sec / 3600).toFixed(1) + " sa";
+      };
+      const pkgLabel = (what) => (what === "base" ? t().appCore : profName(what));
+      function resetInstallUI() {
+        dl = { what: null, done: 0, t: 0, speed: 0 };
+        const bar = $("bar"); bar.classList.add("indet"); bar.querySelector("i").style.width = "0%";
+        $("pct").textContent = ""; $("dl-bytes").textContent = "—";
+        $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—"; $("status").textContent = "";
+        $("inst-title").textContent = t().instDl;
+        // kontrol düğmeleri varsayılan gizli (start_installed indirmez → göstermez).
+        $("btn-pause").hidden = true; $("btn-resume").hidden = true; $("btn-cancel").hidden = true;
       }
 
-      function mb(n) { return (n / 1048576).toFixed(0); }
+      function show(id) {
+        for (const s of ["s-detect", "s-select", "s-install", "s-ready"]) $(s).hidden = (s !== id);
+      }
+      function fail(msg) {
+        $("error").textContent = String(msg);
+        $("error").hidden = false;
+      }
+      function clearErr() { $("error").hidden = true; }
 
-      listen("install://progress", (e) => {
-        const p = e.payload;
-        const bar = $("bar");
+      // ---------- i18n apply ----------
+      function applyLang() {
+        const x = t();
+        document.documentElement.lang = LANG;
+        $("tagline").textContent = x.tagline;
+        $("t-web").textContent = x.web; $("t-about").textContent = x.about;
+        $("t-guide").textContent = x.guide; $("t-guide-title").textContent = x.guideTitle;
+        if ($("guide") && !$("guide").hidden) renderGuide();
+        $("t-detect").textContent = x.detect;
+        $("t-sel-title").textContent = x.selTitle; $("t-sel-lead").textContent = x.selLead;
+        $("t-install").textContent = x.install; $("t-sel-cancel").textContent = x.selCancel;
+        $("t-pause").textContent = x.pause; $("t-resume").textContent = x.resume; $("t-cancel").textContent = x.cancelDl;
+        $("t-ready-title").textContent = x.readyTitle; $("t-ready-lead").textContent = x.readyLead;
+        $("t-start").textContent = x.start; $("t-change").textContent = x.change;
+        $("t-repair").textContent = x.repair; $("t-uninstall").textContent = x.uninstall;
+        $("t-foot-support").textContent = x.footSupport;
+        $("t-about-title").textContent = x.aboutTitle; $("t-about-body").textContent = x.aboutBody;
+        $("t-about-ver").textContent = x.aboutVer; $("t-about-plat").textContent = x.aboutPlat;
+        $("about-close").textContent = x.ok;
+        $("lang-tr").classList.toggle("on", LANG === "tr");
+        $("lang-en").classList.toggle("on", LANG === "en");
+        renderCards(); renderChips();
+      }
+      $("lang-tr").onclick = () => { LANG = "tr"; applyLang(); };
+      $("lang-en").onclick = () => { LANG = "en"; applyLang(); };
+
+      // ---------- select cards ----------
+      function orderedKeys() {
+        return [
+          ...PROFILE_ORDER.filter((k) => profileKeys.includes(k)),
+          ...profileKeys.filter((k) => !PROFILE_ORDER.includes(k)),
+        ];
+      }
+      function updateInstallBtn() {
+        const eff = withDeps([...selected]);
+        let total = 0; eff.forEach((k) => { total += sizes[k] || 0; });
+        // base (uygulama çekirdeği) kurulu değilse toplama ekle — gerçek indirme miktarı.
+        if (!baseInstalled) total += baseBytes;
+        $("btn-install").disabled = eff.size === 0 || busy;
+        $("t-install").textContent = eff.size ? `${t().install} · ${gb(total)} GB` : t().install;
+      }
+      function renderCards() {
+        const box = $("cards"); box.textContent = "";
+        const eff = withDeps([...selected]);
+        for (const key of orderedKeys()) {
+          const meta = PROFILE_META[key];
+          const [name, desc] = meta ? meta[LANG] : [key, ""];
+          const on = eff.has(key);
+          const isDep = on && !selected.has(key);       // başka profil için otomatik dahil
+          const card = document.createElement("div");
+          card.className = "card" + (on ? " sel" : "");
+          const cb = document.createElement("span"); cb.className = "box";
+          cb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#04211d"><path d="m5 13 4 4L19 7"/></svg>';
+          const pico = document.createElement("span"); pico.className = "pico";
+          pico.innerHTML = `<svg class="icon" viewBox="0 0 24 24">${meta ? `<path d="${meta.icon}"/>` : ""}</svg>`;
+          const m = document.createElement("div"); m.className = "meta";
+          const b = document.createElement("b"); b.textContent = name;
+          if (isDep) { const tag = document.createElement("em"); tag.className = "reqtag"; tag.textContent = LANG === "tr" ? "gerekli" : "required"; b.appendChild(tag); }
+          const s = document.createElement("span"); s.textContent = desc;
+          m.append(b, s);
+          const size = document.createElement("span"); size.className = "size";
+          // KÜMÜLATİF boyut: vet = home + vet → home'dan büyük görünür (kullanıcı beklentisi).
+          size.textContent = sizes[key] ? `${gb(cumBytes(key))} GB` : "";
+          card.append(cb, pico, m, size);
+          card.onclick = () => {
+            if (busy) return;
+            // Bağımlılık olarak zorunlu bir kartı doğrudan kapatma → onu gerektiren profili de kaldır.
+            if (isDep) {
+              for (const sel of [...selected]) if ((PROFILE_DEPS[sel] || []).includes(key)) selected.delete(sel);
+            } else if (selected.has(key)) {
+              selected.delete(key);
+            } else {
+              selected.add(key);
+            }
+            renderCards();
+          };
+          box.appendChild(card);
+        }
+        updateInstallBtn();
+      }
+
+      // ---------- ready chips ----------
+      function renderChips() {
+        const box = $("chips"); box.textContent = "";
+        for (const key of installed) {
+          const chip = document.createElement("span"); chip.className = "chip";
+          chip.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7"/></svg>';
+          const s = document.createElement("span"); s.textContent = profName(key);
+          chip.appendChild(s);
+          box.appendChild(chip);
+        }
+      }
+
+      // ---------- progress events ----------
+      const indet = (on) => { const b = $("bar"); b.classList.toggle("indet", on); if (on) b.querySelector("i").style.width = "34%"; };
+      function applyProgress(p) {
+        if (!p) return;
+        const x = t(), fill = $("bar").querySelector("i");
         switch (p.step) {
           case "manifest_fetched":
-            $("status").textContent = `Sürüm ${p.version} (şema v${p.schema})`;
+            $("inst-title").textContent = x.instDl; indet(true); $("status").textContent = "";
             break;
-          case "downloading":
-            bar.hidden = false;
-            if (p.total > 0) {
-              bar.removeAttribute("indeterminate");
-              bar.value = (p.done / p.total) * 100;
-              $("status").textContent = `${p.what} indiriliyor — ${mb(p.done)} / ${mb(p.total)} MB`;
-            } else {
-              $("status").textContent = `${p.what} indiriliyor — ${mb(p.done)} MB`;
+          case "downloading": {
+            $("inst-title").textContent = x.instDl;
+            const now = performance.now();
+            if (dl.what !== p.what) { dl = { what: p.what, done: p.done, t: now, speed: 0 }; }
+            else if (now - dl.t > 350) {
+              const inst = ((p.done - dl.done) / ((now - dl.t) / 1000)); // bayt/sn
+              dl.speed = dl.speed > 0 ? dl.speed * 0.6 + inst * 0.4 : inst; // EMA yumuşatma
+              dl.done = p.done; dl.t = now;
             }
+            const has = p.total > 0;
+            $("bar").classList.toggle("indet", !has);
+            const pct = has ? (p.done / p.total) * 100 : 0;
+            if (has) fill.style.width = pct.toFixed(1) + "%";
+            $("pct").textContent = has ? "%" + pct.toFixed(0) : "";
+            $("dl-bytes").textContent = has ? `${fmtBytes(p.done)} / ${fmtBytes(p.total)}` : fmtBytes(p.done);
+            $("dl-speed").textContent = dl.speed > 0 ? fmtSpeed(dl.speed) : "—";
+            $("dl-eta").textContent = dl.speed > 0 && has ? fmtEta((p.total - p.done) / dl.speed) : "—";
+            $("status").textContent = `${pkgLabel(p.what)} ${x.dl}`;
+            break;
+          }
+          case "reconnecting":
+            $("inst-title").textContent = x.reconnTitle; indet(true); $("pct").textContent = "";
+            $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—";
+            $("status").textContent = `${pkgLabel(p.what)} — ${x.reconnecting} (${p.attempt}/${p.max})`;
             break;
           case "cached":
-            $("status").textContent = `${p.what} zaten indirilmiş (doğrulandı)`;
+            indet(true); $("pct").textContent = ""; $("dl-bytes").textContent = "—";
+            $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—";
+            $("status").textContent = `${pkgLabel(p.what)} ${x.cached}`;
             break;
           case "verifying":
-            $("status").textContent = `${p.what} bütünlüğü doğrulanıyor (SHA256)…`;
+            $("inst-title").textContent = x.instVerify; indet(true); $("pct").textContent = "";
+            $("dl-bytes").textContent = "—"; $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—";
+            $("status").textContent = `${pkgLabel(p.what)} ${x.verifying}`;
             break;
           case "extracting":
-            bar.removeAttribute("value");
-            $("status").textContent = `${p.what} kuruluyor…`;
+            $("inst-title").textContent = x.instExtract; indet(true); $("pct").textContent = "";
+            $("dl-bytes").textContent = "—"; $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—";
+            $("status").textContent = `${pkgLabel(p.what)} ${x.extracting}`;
             break;
           case "starting_backend":
-            $("status").textContent = `Uygulama başlatılıyor (port ${p.port})…`;
+            $("inst-title").textContent = x.instStart; indet(true); $("pct").textContent = "";
+            $("dl-bytes").textContent = "—"; $("dl-speed").textContent = "—"; $("dl-eta").textContent = "—";
+            $("status").textContent = `${x.starting} (:${p.port})`;
             break;
           case "ready":
-            bar.value = 100;
-            $("status").textContent = `Hazır — ${p.url} tarayıcıda açıldı.`;
+            $("bar").classList.remove("indet"); fill.style.width = "100%"; $("pct").textContent = "%100";
+            $("status").textContent = x.ready;
             break;
         }
-      });
+      }
+      // Emit'i de dinle (bazı ortamlarda çalışır, zararsız); ASIL mekanizma polling — Tauri emit
+      // spawn_blocking thread'inden webview'e güvenilir ulaşmıyor, invoke ise kesin çalışıyor.
+      try { listen("install://progress", (e) => applyProgress(e.payload)); } catch (_) {}
+      let pollTimer = null;
+      function startPolling() {
+        stopPolling();
+        pollTimer = setInterval(async () => {
+          try { const p = await invoke("get_progress"); if (p) applyProgress(p); } catch (_) {}
+        }, 150);
+      }
+      function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-      async function boot() {
+      // ---------- actions ----------
+      async function refreshEnv() {
+        const env = await invoke("detect_environment");
+        installed = Array.isArray(env.installed_profiles) ? env.installed_profiles.slice() : [];
+        platform = env.platform || platform;
+        return env;
+      }
+
+      // Kurulum kontrol düğmeleri: running=Duraklat+İptal, paused=Devam Et+İptal.
+      function setInstallControls(mode) {
+        const running = mode === "running";
+        $("btn-cancel").hidden = false;
+        $("btn-pause").hidden = !running; $("btn-resume").hidden = running;
+        $("btn-pause").disabled = false; $("btn-resume").disabled = false; $("btn-cancel").disabled = false;
+      }
+      function showPaused() {
+        stopPolling();
+        $("inst-title").textContent = t().pausedTitle; $("status").textContent = t().pausedLead;
+        setInstallControls("paused");
+      }
+      async function doInstall(profiles) {
+        clearErr(); busy = true; lastProfiles = profiles.slice(); resumeOp = () => doInstall(lastProfiles);
+        show("s-install"); resetInstallUI(); setInstallControls("running"); startPolling();
         try {
-          const env = await invoke("detect_environment");
-          const info = await invoke("fetch_profiles");
+          const r = await invoke("install_and_launch", { manifestRaw, profiles });
+          const status = r && r.status;
+          if (status === "paused") { showPaused(); return; } // s-install'da kal, "Devam Et" beklenir
+          if (status === "cancelled") { show("s-select"); return; }
+          await refreshEnv(); renderChips(); show("s-ready");
+        } catch (e) { show("s-select"); fail(e); }
+        finally { busy = false; stopPolling(); }
+      }
+      async function doRepair() {
+        clearErr(); busy = true; resumeOp = doRepair;
+        show("s-install"); resetInstallUI(); setInstallControls("running"); startPolling();
+        try {
+          const r = await invoke("repair", { manifestRaw });
+          const status = r && r.status;
+          if (status === "paused") { showPaused(); return; }
+          if (status === "cancelled") { show("s-ready"); return; }
+          await refreshEnv(); renderChips(); show("s-ready");
+        } catch (e) { show("s-ready"); fail(e); }
+        finally { busy = false; stopPolling(); }
+      }
+      $("btn-install").onclick = () => { const eff = withDeps([...selected]); if (!busy && eff.size) doInstall([...eff]); };
+      $("btn-pause").onclick = () => { $("btn-pause").disabled = true; invoke("pause_install").catch(() => {}); };
+      $("btn-resume").onclick = () => { if (!busy && resumeOp) resumeOp(); };
+      $("btn-cancel").onclick = () => { $("btn-cancel").disabled = true; invoke("cancel_install").catch(() => {}); };
 
-          $("env").textContent =
-            `${info.platform} · sürüm ${info.version}` +
-            (env.already_installed ? " · kurulu (güncellenecek)" : "");
+      $("btn-start").onclick = async () => {
+        if (busy) return; clearErr(); busy = true; show("s-install"); resetInstallUI(); startPolling();
+        $("inst-title").textContent = t().instStart; indet(true); $("status").textContent = t().starting;
+        try { await invoke("start_installed"); show("s-ready"); }
+        catch (e) { show("s-ready"); fail(e); }
+        finally { busy = false; stopPolling(); }
+      };
 
-          // Self-update bildirimi: manifest'teki en son launcher sürümü yüklüden yeniyse
-          // (backend kıyasladı → info.update dolu) kullanıcıyı indirme sayfasına yönlendir.
-          if (info.update) {
-            $("update-text").textContent =
-              `Yeni sürüm mevcut: ${info.update.version} (yüklü ${info.current_launcher}). Güncellemeniz önerilir.`;
-            $("update-btn").onclick = () =>
-              invoke("open_url", { url: info.update.url }).catch(() => {});
-            $("update").hidden = false;
-          }
+      $("btn-change").onclick = () => {
+        if (busy) return;
+        selected.clear(); installed.forEach((k) => selected.add(k));
+        $("sel-back-wrap").hidden = false;
+        renderCards(); clearErr(); show("s-select");
+      };
+      $("btn-sel-cancel").onclick = () => { $("sel-back-wrap").hidden = true; show("s-ready"); };
 
-          if (!info.platform_supported) {
-            fail(
-              `Bu platform (${info.platform}) için uygulama paketi henüz yayınlanmamış.\n\n` +
-              `Yanlış platformun paketi KURULMAZ. Yayın tamamlanınca bu ekran çalışacaktır.`
-            );
-            $("go").disabled = true;
-            return;
-          }
+      $("btn-repair").onclick = () => askConfirm(t().repairTitle, t().repairBody, doRepair);
 
-          manifestRaw = info.raw;
-          const box = $("profiles");
-          info.profiles.forEach((key, i) => {
-            const [title, desc] = PROFILE_DESC[key] ?? [key, ""];
-            const el = document.createElement("label");
-            el.className = "opt";
-            el.innerHTML =
-              `<input type="radio" name="p" value="${key}" ${i === 0 ? "checked" : ""}>` +
-              `<div><b>${title}</b><span>${desc}</span></div>`;
-            box.appendChild(el);
-          });
-          $("profiles-box").hidden = false;
-          $("go").disabled = false;
+      $("btn-uninstall").onclick = () => askConfirm(t().uninTitle, t().uninBody, async () => {
+        clearErr(); busy = true;
+        try {
+          await invoke("uninstall");
+          installed = []; selected.clear(); $("sel-back-wrap").hidden = true;
+          renderCards(); show("s-select");
+        } catch (e) { show("s-ready"); fail(e); } finally { busy = false; }
+      }, { danger: true });
+
+      // ---------- web + about ----------
+      const WEB = "https://pemf-vet-web.vercel.app/";
+      const openWeb = () => invoke("open_url", { url: WEB }).catch(() => {});
+      $("btn-web").onclick = openWeb;
+      $("foot-support").onclick = () => invoke("open_url", { url: WEB + "support" }).catch(() => openWeb());
+      $("btn-about").onclick = () => {
+        $("about-ver").textContent = ver; $("about-plat").textContent = platform;
+        $("about").hidden = false;
+      };
+      $("about-close").onclick = () => { $("about").hidden = true; };
+      $("about").onclick = (e) => { if (e.target === $("about")) $("about").hidden = true; };
+      $("btn-guide").onclick = () => { renderGuide(); $("guide").hidden = false; };
+      $("guide-close").onclick = () => { $("guide").hidden = true; };
+      $("guide").onclick = (e) => { if (e.target === $("guide")) $("guide").hidden = true; };
+
+      // ---------- confirm modal ----------
+      let confirmCb = null, confirmNoCb = null;
+      function askConfirm(title, body, cb, opts = {}) {
+        $("confirm-title").textContent = title; $("confirm-body").textContent = body;
+        $("confirm-yes").textContent = opts.yesLabel || t().cont;
+        $("confirm-no").textContent = opts.noLabel || t().cancel;
+        $("confirm-yes").className = "mbtn " + (opts.danger ? "danger" : "primary");
+        confirmCb = cb; confirmNoCb = opts.noCb || null;
+        $("confirm").hidden = false;
+      }
+      $("confirm-no").onclick = () => { $("confirm").hidden = true; const cb = confirmNoCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
+      $("confirm-yes").onclick = () => { $("confirm").hidden = true; const cb = confirmCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
+
+      // OTO-GÜNCELLEME: yeni client sürümü (installer_url'li) varsa açılışta SESSİZCE indir + SHA doğrula
+      // + kur + yeniden başlat. Başarılıysa Rust uygulamadan çıkar (true döner, boot durur). Başarısızsa
+      // (indirme/doğrulama hatası) false → normal boot sürer; güncelleme kullanıcıyı ASLA bloklamaz.
+      // İnternet yoksa fetch_profiles zaten patlar → buraya hiç gelinmez (güncelleme sessizce atlanır).
+      async function trySelfUpdate(u) {
+        if (!u || !u.installer_url || !u.sha256) return false; // eski-tip bildirim / eksik veri → normal boot
+        try {
+          show("s-install"); resetInstallUI();
+          $("btn-pause").hidden = true; $("btn-resume").hidden = true; $("btn-cancel").hidden = true;
+          $("inst-title").textContent = t().updatingTitle; $("status").textContent = t().updatingLead;
+          startPolling();
+          await invoke("apply_self_update", { url: u.installer_url, sha256: u.sha256, size: u.size || 0 });
+          // Normalde buraya gelinmez (Rust app.exit yapar); gelinirse "uygulanıyor/yeniden başlıyor" göster.
+          stopPolling(); indet(true);
+          $("inst-title").textContent = t().updatingTitle; $("status").textContent = t().updatingApply;
+          return true;
         } catch (e) {
-          fail(String(e));
+          stopPolling();
+          return false; // güncelleme başarısız → normal boot (uygulama yine açılır)
         }
       }
 
-      $("go").addEventListener("click", async () => {
-        $("go").disabled = true;
-        $("error").style.display = "none";
-        const profile = document.querySelector('input[name="p"]:checked').value;
+      // ---------- boot ----------
+      async function boot() {
+        applyLang();
         try {
-          await invoke("install_and_launch", { manifestRaw, profile });
-        } catch (e) {
-          fail(String(e));
-        }
-      });
+          const env = await refreshEnv();
+          const info = await invoke("fetch_profiles");
+          manifestRaw = info.raw;
+          ver = "v" + (info.current_launcher || info.version || "");
+          pkgVersion = "v" + (info.version || "");
+          $("ver").textContent = ver;
 
+          // Açılış oto-güncelleme kontrolü: EN BAŞTA (yoksa/başarısızsa aşağıdan normal boot sürer).
+          if (info.update && (await trySelfUpdate(info.update))) return;
+
+          if (!info.platform_supported) { show("s-select"); $("cards").textContent = ""; fail(t().notSupported(info.platform)); return; }
+
+          // manifest'ten profil sırası + boyutlar
+          profileKeys = (info.profiles || []).filter((k) => /^[A-Za-z0-9_-]{1,64}$/.test(k));
+          try {
+            const m = JSON.parse(info.raw);
+            for (const k of profileKeys) sizes[k] = m.models?.[k]?.size ?? m.profiles?.[k]?.size ?? 0;
+            baseBytes = m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0;
+          } catch {}
+          baseInstalled = !!env.already_installed;
+
+          if (env.already_installed) { renderChips(); show("s-ready"); }
+          else { renderCards(); show("s-select"); }
+          // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?
+          if (Array.isArray(env.pending_profiles) && env.pending_profiles.length) {
+            const names = env.pending_profiles.map(profName).join(", ");
+            askConfirm(t().resumeTitle, `${t().resumeBody}\n\n(${names})`, () => doInstall(env.pending_profiles), {
+              yesLabel: t().resumeYes, noLabel: t().resumeNo,
+              noCb: () => invoke("discard_pending").catch(() => {}),
+            });
+          }
+        } catch (e) { show("s-select"); fail(e); }
+      }
       boot();
     </script>
   </body>

@@ -86,13 +86,9 @@ async def get_dashboard_snapshot():
     from servers import api_server as _api
     snapshot = _api._build_ws_snapshot()
 
-    # Eksik olan 'patient' ve 'sessions' alanlarını React hata vermesin diye ekliyoruz
-    snapshot["patient"] = {
-        "name": "Bilinmeyen",
-        "species": "Belirsiz",
-        "breed": "Belirsiz",
-        "owner": "Bilinmeyen"
-    }
+    # 'patient' artık _build_ws_snapshot() içinde (aktif seansın GERÇEK hastası ya da None) — eski
+    # sabit "Bilinmeyen" placeholder'ı KALDIRILDI (Hasta Özeti kartı yanlış/boş gösteriyordu).
+    snapshot.setdefault("patient", None)
     snapshot["sessions"] = []
 
     return snapshot

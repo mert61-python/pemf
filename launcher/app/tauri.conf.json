@@ -1,23 +1,26 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PEMF Vet Client",
-  "version": "1.9.2",
+  "version": "1.9.5",
   "identifier": "com.pemfmedical.vetclient",
   "build": {
     "frontendDist": "./ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
-        "title": "PEMF Vet Client",
-        "width": 720,
-        "height": 560,
-        "resizable": false,
+        "title": "PEMF Vet",
+        "width": 880,
+        "height": 600,
+        "minWidth": 700,
+        "minHeight": 540,
+        "resizable": true,
         "center": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {
@@ -36,7 +39,10 @@
     "longDescription": "PEMF Vet uygulamasını indirir, SHA256 ile doğrular, kurar ve backend'i başlatır.",
     "windows": {
       "nsis": {
-        "installerHooks": "./windows/hooks.nsi"
+        "installerHooks": "./windows/hooks.nsi",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "windows/header.bmp",
+        "sidebarImage": "windows/sidebar.bmp"
       }
     },
     "macOS": {

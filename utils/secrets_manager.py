@@ -297,17 +297,22 @@ def _save(doc: dict) -> None:
     # olusuyordu (tmp düz-metin TÜM sirlari tutar). ACL rename ile p'ye tasinir.
     try:
         from utils.file_acl import lock_down_file as _ldf_tmp
-        _ldf_tmp(tmp)
+        # Audit P2 #8: dönüş değerini KONTROL et — icacls/eski-Windows'ta sessizce başarısız olursa
+        # geçici sır-dosyası Users-okunur kalır. Kritik DPAPI değerleri şifreli (fail-closed) ama düz
+        # alanlar risklidir → belirgin UYAR (sessiz yutma yok). Hard-fail etmiyoruz (dosya yazımını brick'lemez).
+        if not _ldf_tmp(tmp):
+            logger.warning("SIR .tmp ACL kilidi UYGULANAMADI — geçici sır dosyası yerel Users'a açık kalmış olabilir (icacls/OS?).")
     except Exception:
-        pass
+        logger.warning("SIR .tmp ACL kilidi hata verdi", exc_info=True)
     os.replace(tmp, p)
     # NTFS ACL kilidi (audit B-1.2): TÜM sırları taşıyan dosya yalnız SYSTEM + Administrators'a
     # açık olsun. os.chmod Windows'ta no-op'tur → düz-metin operatör-sırları Users'a açık kalırdı.
     try:
         from utils.file_acl import lock_down_file
-        lock_down_file(p)
+        if not lock_down_file(p):
+            logger.warning("SIR dosyası ACL kilidi UYGULANAMADI — tüm sırları taşıyan dosya yerel Users'a açık kalmış olabilir (icacls/OS?).")
     except Exception:
-        pass
+        logger.warning("SIR dosyası ACL kilidi hata verdi", exc_info=True)
 
 
 # ───────────────────────── genel API ─────────────────────────

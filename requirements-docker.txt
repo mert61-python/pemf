@@ -1,0 +1,78 @@
+# =============================================================================
+# PEMF Backend — DOCKER (Linux konteyner) bağımlılıkları
+# -----------------------------------------------------------------------------
+# ⚠️ ANA `requirements.txt`'e DOKUNMA — o Windows/lokal build için (myenv, CPython
+# 3.10) KİLİTLİ kalsın. Docker/Linux'ta birkaç paket FARKLI olmalı; ana sistem
+# bozulmasın diye AYRI dosya tutuyoruz. `Dockerfile.backend` bunu çağırır:
+#     pip install -r requirements-docker.txt
+#
+# LOKAL ile FARKLAR (yalnız bunlar):
+#   • opencv-python  4.11.0.86 SABİTLENDİ  (numpy 1.26.4 uyumlu; ultralytics de aynı
+#       paketi ister → pip BACKTRACKING'i biter. libGL apt ile image'a eklendi →
+#       headless'a gerek yok, cv2 tam çalışır.)
+#       NOT: artık requirements.txt de AYNI sürümü pinliyor → bu satır bir "fark" değil,
+#       yalnız hizalama teyidi. (Eskiden lokal headless-4.9.0.80 pinliyken fiilen 4.11.0.86
+#       paketleniyordu; docker 4.9.0.80'de kalıyordu → aynı kod, iki farklı cv2.)
+#   • sqlcipher3 (derlenir)    → sqlcipher3-binary       (Linux prebuilt wheel)
+#   • pyinstaller  ÇIKARILDI   (frozen EXE derlemesi Docker'da gereksiz)
+#   • pytest       ÇIKARILDI   (test aracı; runtime'da gereksiz)
+# Gerisi ana requirements.txt ile BİREBİR aynı pinler.
+# =============================================================================
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# ── Web / API ──
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+starlette==1.3.1
+pydantic==2.13.4
+python-multipart==0.0.31
+websockets==15.0.1
+
+# ── İletişim (server modunda donanım yok; import edilir) ──
+paho-mqtt==2.1.0
+pyserial==3.5
+zeroconf==0.149.16
+
+# ── AI/ML — görüntü ──
+numpy==1.26.4
+opencv-python==4.11.0.86           # SABİT (numpy1.26 uyumlu; libGL apt'te). requirements.txt ile HİZALI —
+                                   # frozen exe fiilen bu sürümü taşıyordu, docker 4.9.0.80'de kalınca
+                                   # aynı kod iki ortamda farklı cv2 ile koşuyordu.
+onnxruntime==1.19.2
+onnx==1.15.0
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
+ultralytics==8.4.47
+pillow==12.2.0
+scipy==1.15.3
+scikit-learn==1.7.2
+xgboost==3.2.0
+
+# ── AI/ML — ses ──
+librosa==0.11.0
+imageio-ffmpeg==0.6.0
+numba==0.61.2
+llvmlite==0.44.0
+soundfile==0.13.1
+
+# ── Veri / raporlama ──
+pandas==2.3.3
+matplotlib==3.10.9
+reportlab==4.0.7
+PyYAML==6.0.3
+
+# ── DB / şifreleme / sırlar ──
+cryptography==46.0.7
+sqlcipher3-binary                  # DOCKER FARKI (lokal: sqlcipher3==0.6.2 derlenir)
+keyring==25.7.0
+joblib==1.5.3
+
+# ── Bulut ──
+supabase==2.31.0
+
+# ── Gözlemlenebilirlik (opsiyonel, dormant — PEMF_SENTRY_DSN yoksa kapalı) ──
+sentry-sdk==2.24.1
+
+# ── Runtime HTTP (supabase async) ──
+httpx==0.28.1

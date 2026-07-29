@@ -54,6 +54,17 @@ pub struct LauncherInfo {
     pub version: String,
     #[serde(default)]
     pub url: String,
+    /// OTO-GÜNCELLEME: yeni launcher setup'ının DOĞRUDAN indirme URL'i (NSIS `PEMFVetClient-Setup.exe`).
+    /// Varsa açılışta sessizce indirilip (host-pinli) SHA doğrulanıp kurulur; yoksa yalnız bildirim.
+    #[serde(default)]
+    pub installer_url: Option<String>,
+    /// Setup exe'nin SHA256'sı — `installer_url` ile birlikte ZORUNLU (imzasız exe'yi çalıştırmadan önce
+    /// bütünlük/orijinallik doğrulaması; manifest host-pinli kaynaktan geldiği için sha güven çıpasıdır).
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Setup exe boyutu (bayt) — opsiyonel, indirme ilerlemesi/ön-tahsis için.
+    #[serde(default)]
+    pub size: Option<u64>,
 }
 
 /// Formatı ne olursa olsun normalize edilmiş manifest.
@@ -342,5 +353,29 @@ mod tests {
         let l = m.launcher.expect("launcher alanı okunmali");
         assert_eq!(l.version, "1.9.1");
         assert!(l.url.contains("vercel.app"));
+        // installer_url/sha256/size YOKSA None (geriye uyum: yalnız bildirim).
+        assert!(l.installer_url.is_none() && l.sha256.is_none() && l.size.is_none());
+    }
+
+    /// OTO-GÜNCELLEME: launcher.installer_url + sha256 + size varsa ayrıştırılır (apply_self_update besler).
+    #[test]
+    fn launcher_installer_alanlari_ayristirilir() {
+        let raw = format!(
+            r#"{{ "schema":2, "version":"1.9.1",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{ "vet": {{"url":"https://x/v.zip","sha256":"{D2}","size":1}} }},
+                 "launcher": {{ "version":"1.9.3", "url":"https://pemf-vet-web.vercel.app/",
+                    "installer_url":"https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.3/PEMFVetClient-Setup.exe",
+                    "sha256":"{D1}", "size":2596084 }} }}"#
+        );
+        let m = Manifest::parse(&raw).unwrap();
+        let l = m.launcher.expect("launcher alanı okunmali");
+        assert_eq!(l.version, "1.9.3");
+        assert_eq!(
+            l.installer_url.as_deref(),
+            Some("https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.3/PEMFVetClient-Setup.exe")
+        );
+        assert!(l.sha256.is_some());
+        assert_eq!(l.size, Some(2596084));
     }
 }

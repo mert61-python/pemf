@@ -131,6 +131,82 @@ where
     dir.is_dir().then_some(dir)
 }
 
+/// Kurulu profillerin kaydı (`Ev Sahibi`/`Veteriner`/`Araştırma` — UI çip'leri + Onar bunu okur).
+/// install_root içinde tutulur → kaldırınca birlikte gider (durum sıfırlanır).
+pub fn installed_profiles_path(install_root: &Path) -> PathBuf {
+    install_root.join("installed_profiles.json")
+}
+
+/// Kurulu profilleri oku (JSON dizi). Dosya yok/bozuksa boş liste (fail-safe).
+pub fn read_installed_profiles(install_root: &Path) -> Vec<String> {
+    std::fs::read_to_string(installed_profiles_path(install_root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Yeni kurulan profilleri mevcut kayda EKLE (birleştir, tekilleştir, sırala). Best-effort.
+pub fn add_installed_profiles(install_root: &Path, profiles: &[String]) {
+    let mut set = read_installed_profiles(install_root);
+    for p in profiles {
+        if !set.iter().any(|x| x == p) {
+            set.push(p.clone());
+        }
+    }
+    set.sort();
+    set.dedup();
+    if let Ok(json) = serde_json::to_string(&set) {
+        let _ = std::fs::write(installed_profiles_path(install_root), json);
+    }
+}
+
+/// Devam-eden kurulum kaydı: kurulum BAŞLARKEN seçilen profiller yazılır, BİTİNCE/İPTAL'de silinir.
+/// Açılışta bu dosya varsa "kurulum yarım kaldı — devam et?" gösterilir (internet kesildi/laptop
+/// kapandı → `.part` cache'te durur, Range ile kaldığı yerden sürer).
+pub fn pending_path(install_root: &Path) -> PathBuf {
+    install_root.join("pending_install.json")
+}
+
+pub fn write_pending(install_root: &Path, profiles: &[String]) {
+    let _ = std::fs::create_dir_all(install_root);
+    if let Ok(json) = serde_json::to_string(profiles) {
+        let _ = std::fs::write(pending_path(install_root), json);
+    }
+}
+
+pub fn read_pending(install_root: &Path) -> Vec<String> {
+    std::fs::read_to_string(pending_path(install_root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .unwrap_or_default()
+}
+
+pub fn clear_pending(install_root: &Path) {
+    let _ = std::fs::remove_file(pending_path(install_root));
+}
+
+/// Cache'teki yarım `.part` dosyalarını sil (İPTAL'de çağrılır → disk boşalt).
+pub fn clear_partials(install_root: &Path) {
+    let cache = cache_dir(install_root);
+    if let Ok(entries) = std::fs::read_dir(&cache) {
+        for e in entries.flatten() {
+            if e.path().extension().is_some_and(|x| x == "part") {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
+}
+
+/// Kurulu uygulamayı (runtime + ai_models + cache + kayıtlar) SİL. Hasta verisi AYRI dizinde
+/// (`PEMF_GUI`, %APPDATA%) → buradan ETKİLENMEZ (KVKK/tıbbi: hasta DB'si kazara silinmez).
+/// Not: backend çalışıyorsa exe kilitli olur → çağırandan ÖNCE süreç öldürülmeli (main.rs yapar).
+pub fn remove_install(install_root: &Path) -> std::io::Result<()> {
+    if install_root.exists() {
+        std::fs::remove_dir_all(install_root)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

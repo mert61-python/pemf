@@ -308,11 +308,20 @@ class HeadlessCore:
             self.logger.warning("[UDP] Socket open failed: %s", exc)
             udp_sock = None
 
+        reconnect_thread = None  # tek eşzamanlı non-blocking reconnect
         while not self._hw_sender_stop.is_set():
             now = time.time()
-            if (not serial_conn or not serial_conn.is_open) and (now - last_reconnect_time > 3.0):
+            _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
+            if (not serial_conn or not serial_conn.is_open) and not _reconnecting and (now - last_reconnect_time > 3.0):
                 last_reconnect_time = now
-                connect_serial()
+                # NON-BLOCKING reconnect (reconnect-audit fix): connect_serial() handshake'i ~14sn BLOKLARDI →
+                # sender döngüsü + UDP/ESP komut yolu + kuyruk tüketimi o süre DONARDI. Ayrı thread'de koş;
+                # sender akmaya devam eder. Race FAIL-SAFE: serial_conn tek-atama atomik (GIL); tüm write/
+                # is_open try/except'li + kapalı-port kontrollü; tek-reconnect guard eşzamanlı denemeyi keser;
+                # eski-reader None-ataması handshake penceresinde YENİ atamadan önce olur (clobber yok).
+                # Sanal-STM (socket://127.0.0.1:5100 stm32_simulator) ile smoke-test edildi.
+                reconnect_thread = threading.Thread(target=connect_serial, daemon=True, name="STM32Reconnect")
+                reconnect_thread.start()
 
             try:
                 payload_tuple = self._hw_send_queue.get(timeout=0.5)

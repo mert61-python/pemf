@@ -1,0 +1,52 @@
+# PEMF native macOS backend — base.zip / base-linux.zip'in macOS karşılığı.
+# linux-backend.yml'in eşleniği; farkı build_mac.sh'ı çağırması (sürüm/pin
+# mantığı tek yerde dursun diye adımlar burada TEKRARLANMAZ).
+#
+# macos-14 = Apple Silicon runner → mac-arm64 paketi. PyInstaller cross-compile
+# etmediği için bu iş başka hiçbir runner'da yapılamaz.
+name: macOS Backend Build
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["backend-mac-v*"]
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.10 (requirements.txt bu sürüme kilitli)
+        run: brew install python@3.10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # build_mac.sh: ön koşul kontrolü → venv → macOS'a uyarlanmış requirements
+      # (torch '+cpu' etiketi mac'te YOK) → sqlcipher doğrulaması → frontend export
+      # → PyInstaller → zip + sha256.
+      - name: base-mac.zip üret
+        env:
+          PEMF_CODESIGN_ID: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: ./build_mac.sh
+
+      # Paketin gerçekten AÇILIP ÇALIŞTIĞINI doğrula — zip üretmek yetmez.
+      # (Bu test, sembolik linkleri düz dosya olarak açan bir hatayı yakalamıştı:
+      # _internal/Python bozulunca backend hiç başlamıyordu.)
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Paket doğrulama + uçtan uca açılış testi
+        working-directory: launcher
+        env:
+          PEMF_LAUNCHER_E2E: "1"
+        run: cargo test --test real_artifacts -- --test-threads=1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PEMF-Backend-macOS
+          path: |
+            base-mac.zip
+            base-mac.sha256.txt
+          if-no-files-found: error

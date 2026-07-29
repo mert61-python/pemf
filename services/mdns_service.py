@@ -161,26 +161,31 @@ class MDNSService:
             self._last_ip = local_ip
             from utils.zeroconf_singleton import get_shared_zeroconf
             self._zeroconf = get_shared_zeroconf()  # paylasilan TEK Zeroconf (cift-instance 5353 cakismasi yok)
-            self._service_info = self._build_service_info(local_ip)
-            
-            try:
-                self._zeroconf.register_service(self._service_info)
-            except Exception as e:
-                if 'NonUniqueNameException' in str(type(e)):
-                    logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
-                    import random
-                    import string
-                    suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
-                    self._service_name = f"{self._service_name}-{suffix}"
-                    self._service_info = self._build_service_info(local_ip)
+
+            # #32: loopback (127.*) IP'yi mDNS'e YAYINLAMA — ESP/telefon pemf-gateway.local'i 127.0.0.1'e
+            # çözüp KENDİ loopback'ine gider (broker'a bağlanamaz). Gerçek LAN IP yoksa İLK kaydı ATLA;
+            # arayüz gelince ensure_interfaces_current → _reregister_mqtt (aynı guard'lı) kaydeder.
+            if local_ip and not str(local_ip).startswith("127."):
+                self._service_info = self._build_service_info(local_ip)
+                try:
                     self._zeroconf.register_service(self._service_info)
-                else:
-                    raise e
-                    
-            logger.info(
-                f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local "
-                f"→ {local_ip}:{self._mqtt_port}"
-            )
+                except Exception as e:
+                    if 'NonUniqueNameException' in str(type(e)):
+                        logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
+                        import random
+                        import string
+                        suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
+                        self._service_name = f"{self._service_name}-{suffix}"
+                        self._service_info = self._build_service_info(local_ip)
+                        self._zeroconf.register_service(self._service_info)
+                    else:
+                        raise e
+                logger.info(
+                    f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local "
+                    f"→ {local_ip}:{self._mqtt_port}"
+                )
+            else:
+                logger.info("mDNS (_mqtt) ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip)
             # Arayüz/IP değişiminde bu servisi yeni Zeroconf instance'ına re-register et
             # (0.149'da update_interfaces yok → recreate; bkz. zeroconf_singleton.ensure_interfaces_current).
             from utils.zeroconf_singleton import add_reregister_callback
@@ -214,6 +219,10 @@ class MDNSService:
         try:
             from utils.zeroconf_singleton import get_shared_zeroconf
             ip = self._ip_override or _get_local_ip()
+            # #32: loopback IP'yi re-register'da da YAYINLAMA (guard tutarlılığı).
+            if not ip or str(ip).startswith("127."):
+                logger.debug("mDNS (_mqtt) re-register atlandı: geçerli LAN IP yok (ip=%r).", ip)
+                return
             self._zeroconf = get_shared_zeroconf()
             self._service_info = self._build_service_info(ip)
             self._zeroconf.register_service(self._service_info)

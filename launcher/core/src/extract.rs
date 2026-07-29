@@ -17,7 +17,15 @@ pub enum ExtractError {
     Zip(#[from] zip::result::ZipError),
     #[error("GÜVENLİK: arşiv girdisi kurulum dizininin dışına yazmaya çalıştı: {0:?}")]
     PathEscape(String),
+    #[error("GÜVENLİK: arşiv kaynak-limitini aştı (zip-bomb?): {0}")]
+    ResourceLimit(String),
 }
+
+/// Açılan toplam-boyut bütçesi (disk-doldurma/zip-bomb DoS). base~600MB + ai_models~2GB →
+/// 8 GB güvenli üst-sınır; meşru paket bunu aşmaz. Girdi-sayısı ve symlink-hedef de sınırlı.
+const MAX_TOTAL_UNCOMPRESSED: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_ENTRIES: usize = 300_000;
+const MAX_SYMLINK_LEN: u64 = 4096;
 
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
 /// Açılan dosya sayısını döndürür.
@@ -26,7 +34,12 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
     let mut zip = zip::ZipArchive::new(file)?;
     fs::create_dir_all(dest)?;
 
+    if zip.len() > MAX_ENTRIES {
+        return Err(ExtractError::ResourceLimit(format!("çok fazla girdi: {}", zip.len())));
+    }
+
     let mut written = 0usize;
+    let mut total_bytes: u64 = 0;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         // `enclosed_name()` zip-slip'e karşı ilk savunma (mutlak yol / `..` reddeder),
@@ -51,8 +64,10 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
         // hedef yolun METNİ olur ve dlopen "slice is not valid mach-o file" ile ÇÖKER —
         // backend hiç açılmaz. (Bu hata gerçek pakette uçtan uca testle yakalandı.)
         if is_symlink(&entry) {
+            // Symlink hedefini SINIRLI oku (aksi halde dev bir girdi read_to_string ile OOM'a
+            // sürükleyebilir); gerçek hedefler PATH_MAX (<4KiB) altındadır.
             let mut target = String::new();
-            entry.read_to_string(&mut target)?;
+            (&mut entry).take(MAX_SYMLINK_LEN).read_to_string(&mut target)?;
             create_symlink(&target, &out, dest, &raw_name)?;
             written += 1;
             continue;
@@ -61,16 +76,28 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
             fs::create_dir_all(parent)?;
         }
         let mut target = fs::File::create(&out)?;
-        io::copy(&mut entry, &mut target)?;
+        // Toplam açılım bütçesi: yalan-başlıklı zip-bomb'a karşı GERÇEK yazılan byte'ı sınırla
+        // (kalan bütçe + 1 alıp aşımı yakala). Meşru paket 8GB'ı aşmaz.
+        let remaining = MAX_TOTAL_UNCOMPRESSED.saturating_sub(total_bytes);
+        let n = io::copy(&mut (&mut entry).take(remaining + 1), &mut target)?;
+        total_bytes = total_bytes.saturating_add(n);
+        if total_bytes > MAX_TOTAL_UNCOMPRESSED {
+            drop(target);
+            let _ = fs::remove_file(&out);
+            return Err(ExtractError::ResourceLimit(
+                "açılım boyut bütçesi aşıldı".to_string(),
+            ));
+        }
         written += 1;
 
-        // Çalıştırma bitini KORU: PEMF_Backend ve yanındaki ikili/kütüphaneler
-        // Unix'te +x olmadan başlatılamaz (zip mode'u kaybolursa kurulum çalışmaz).
+        // Çalıştırma bitini KORU: PEMF_Backend ve yanındaki ikili/kütüphaneler Unix'te +x
+        // olmadan başlatılamaz. Ama setuid/setgid/sticky (0o7000) MASKELE — arşiv keyfi bir
+        // dosyaya setuid-root veremesin (yerel yetki-yükseltme yüzeyi).
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = entry.unix_mode() {
-                fs::set_permissions(&out, fs::Permissions::from_mode(mode))?;
+                fs::set_permissions(&out, fs::Permissions::from_mode(mode & 0o777))?;
             }
         }
     }

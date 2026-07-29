@@ -225,14 +225,23 @@ class Stm32SerialTransport:
     def _open_serial(self, candidate: Stm32PortCandidate) -> Any:
         import serial as serial_lib
 
-        serial_obj = serial_lib.Serial(
-            candidate.device,
-            self.baudrate,
-            timeout=0.3,
-            write_timeout=1.0,
-            dsrdtr=False,   # DTR kapalı: ST-Link VCP’de aynı anda MCU reset'ini önler
-            rtscts=False,
-        )
+        dev = candidate.device
+        # socket:// (STM simülatörü / uzak-seri köprü) + rfc2217:// + loop:// → serial_for_url.
+        # Gerçek COM (ST-Link VCP) → klasik Serial. Böylece SANAL-STM ile test edilebilir + sahada
+        # uzak-seri desteklenir; gerçek-COM yolu ve DTR/RTS davranışı DEĞİŞMEZ (geriye uyumlu).
+        if "://" in dev:
+            serial_obj = serial_lib.serial_for_url(
+                dev, baudrate=self.baudrate, timeout=0.3, write_timeout=1.0
+            )
+        else:
+            serial_obj = serial_lib.Serial(
+                candidate.device,
+                self.baudrate,
+                timeout=0.3,
+                write_timeout=1.0,
+                dsrdtr=False,   # DTR kapalı: ST-Link VCP’de aynı anda MCU reset'ini önler
+                rtscts=False,
+            )
         try:
             serial_obj.dtr = False
             serial_obj.rts = False

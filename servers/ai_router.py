@@ -292,18 +292,18 @@ async def analyze_landmark(request: Request, file: UploadFile = File(None), imag
         elif auto_adjust and detected and not _drive_ok:
             hw_status = "skipped_unauthenticated"  # Audit P1: kimliksiz uzak istekte donanım SÜRÜLMEZ
         elif auto_adjust and detected:
-            try:
-                from servers.api_server import start_ai_session, state, update_live_session_state
-                if state and state.hardware:
-                    target_freq = 10.0 + (total * 5.0)
-                    target_duty = 25.0 + (total * 3.0)
-                    if target_duty > 50.0:
-                        target_duty = 50.0
-                    if target_freq > 100.0:
-                        target_freq = 100.0
-
-                    # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar
-                    # (tek-kare auto_adjust artık sonsuza sürmez; süresi dolunca watchdog durdurur).
+            # Audit P2 #3: bloklayan donanım/MQTT çağrılarını (socket-probe 0.3s + connect 5s +
+            # wait_for_publish 2s, 3× ESP) event-loop'tan ÇIKAR → to_thread (ai_pro_frame ile aynı
+            # desen). Aksi halde her auto_adjust isteği loop'u saniyelerce kilitler → AI Pro kapalı-
+            # döngü sürüş inference'ı ve /health dahil tüm async uçlar gecikir.
+            def _drive_landmark_auto():
+                try:
+                    from servers.api_server import start_ai_session, state, update_live_session_state
+                    if not (state and state.hardware):
+                        return "idle", {}
+                    target_freq = min(100.0, 10.0 + (total * 5.0))
+                    target_duty = min(50.0, 25.0 + (total * 3.0))
+                    # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar.
                     start_ai_session(target_freq, target_duty, 30, range(1, 9), "AI (Auto)")
                     state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
                     # ESP 6-8'i de sür (audit #13, kullanıcı onaylı 8-bobin) — tek-atış publish.
@@ -321,10 +321,11 @@ async def analyze_landmark(request: Request, file: UploadFile = File(None), imag
                     except Exception as _ee:
                         logger.warning("AI (Auto) ESP 6-8 publish hatasi: %s", _ee)
                     update_live_session_state(is_active=True, mode="AI (Auto)", freq=target_freq, intensity=target_duty, duration_sec=30 * 60)
-                    hw_status = "updated"
-                    hw_params = {"freq": target_freq, "duty": target_duty}
-            except Exception as e:
-                logger.error(f"Otonom biofeedback hatası: {e}")
+                    return "updated", {"freq": target_freq, "duty": target_duty}
+                except Exception as e:
+                    logger.error(f"Otonom biofeedback hatası: {e}")
+                    return "idle", {}
+            hw_status, hw_params = await asyncio.to_thread(_drive_landmark_auto)
 
         return JSONResponse(content={
             "status": "success",
@@ -760,6 +761,16 @@ class AiProStartPayload(BaseModel):
 @ai_router.post("/api/ai/pro/start")
 def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize
+    # Güncelleme uygulanıyorken otonom AI Pro tedavisi BAŞLATMA: installer servisi durdurup
+    # EXE'yi değiştirebilir → bobinler kontrolcüsüz kalır (update TOCTOU guard'ının ters yönü).
+    try:
+        from servers import update_manager as _um
+        if _um.is_update_in_progress():
+            raise HTTPException(status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar AI Pro başlatılamaz.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     # ATOMIK check-and-set: iki es-zamanli start ikinci loop'u ACMASIN (TOCTOU).
     with _ai_loop_lock:
         if _ai_loop_active:
@@ -1611,6 +1622,9 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
             "coord_3d_cm": o.get("coord_3d_cm"),
             "coord_cabin_cm": o.get("coord_cabin_cm"),
             "reliability": o.get("reliability"),
+            # #49: kalibrasyon durumunu İLET → istemci/UI ölçülmüş (ArUco kalibreli) vs kanonik
+            # şablon koordinatını ayırt edebilsin (aksi halde şablonu ölçülmüş sanabilir).
+            "calibrated": o.get("calibrated"),
         } for oid, o in sorted(organs_dict.items(), key=lambda kv: int(kv[0]))]
 
         return {

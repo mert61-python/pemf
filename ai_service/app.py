@@ -12,6 +12,7 @@ import time
 import glob
 import shutil
 import base64
+import asyncio
 import tempfile
 import subprocess
 from typing import Optional
@@ -28,6 +29,37 @@ MODELS_DIR = os.environ.get("PEMF_AI_MODELS_DIR", "/models")
 app = FastAPI(title="PEMF AI Service (GPU)", version="0.3.0")
 
 # GPU tespiti (_gpu_ok / _yolo_device / _providers) → ai_service.gpu (tek nokta; üstte import edildi).
+
+# ── Auth-muaf /infer uçları için DoS sertleştirme (upload boyut + eşzamanlılık) ──────────────
+# Bu servisin /infer uçları kimlik-muaf (core→GPU dahili çağrı). Sınır yoksa: (1) dev yükler
+# belleği/diski doldurur (_save_temp), (2) sınırsız paralel ağır GPU inference GPU/bellek/loop'u
+# tüketip AI Pro kapalı-döngü sürüşünü geciktirir. Aşağıdaki middleware her ikisini de kapatır.
+MAX_UPLOAD_BYTES = int(os.environ.get("PEMF_AI_MAX_UPLOAD_MB", "100")) * 1024 * 1024
+_MAX_CONCURRENT_INFER = max(1, int(os.environ.get("PEMF_AI_MAX_CONCURRENT", "4")))
+_infer_sem = asyncio.Semaphore(_MAX_CONCURRENT_INFER)
+
+
+@app.middleware("http")
+async def _guard_infer(request, call_next):
+    """Yalnız ağır /infer + /benchmark uçlarını sınırla; /health, /models vb. serbest."""
+    path = request.url.path
+    if not (path.startswith("/infer/") or path == "/benchmark"):
+        return await call_next(request)
+    # (1) Boyut kapağı: Content-Length aşarsa gövdeyi OKUMADAN 413 döndür (bellek/disk DoS).
+    cl = request.headers.get("content-length")
+    if cl:
+        try:
+            if int(cl) > MAX_UPLOAD_BYTES:
+                return JSONResponse(
+                    {"error": f"Yük çok büyük (max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)"},
+                    status_code=413,
+                )
+        except ValueError:
+            pass
+    # (2) Eşzamanlılık sınırı: asyncio.Semaphore event-loop'u BLOKLAMAZ (await ile bekler),
+    # aynı anda en çok _MAX_CONCURRENT_INFER ağır inference koşar → GPU/bellek/loop korunur.
+    async with _infer_sem:
+        return await call_next(request)
 
 
 def _read_bgr(data: bytes):
@@ -76,6 +108,10 @@ def _synthetic_input(sess):
 
 
 def _save_temp(data: bytes, suffix: str) -> str:
+    # İkincil boyut-kapağı: Content-Length'siz (chunked) istekte middleware'in header-kontrolü
+    # devreye girmez → burada da diske yazmadan reddet (disk-dolumu DoS savunma-derinliği).
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"yük çok büyük (max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)")
     tf = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     tf.write(data); tf.close()
     return tf.name

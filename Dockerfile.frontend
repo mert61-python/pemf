@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# PEMF Frontend image — Expo/React web export → nginx statik servis + /api proxy
+# Build context = guii/pf   (compose: context: ./pf, dockerfile: ../Dockerfile.frontend)
+# =============================================================================
+
+# ── Aşama 1: web derlemesi (expo export → dist/) ──
+FROM node:20-bookworm AS build
+ENV CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_INTERACTIVE=1
+WORKDIR /pf
+COPY package*.json ./
+# jest-expo (dev) ile @react-native/jest-preset arasinda peer-dep catismasi var (yalnizca test araci);
+# web export'u etkilemez. Lockfile de bu sekilde uretilmis → --legacy-peer-deps ile npm 10 uyumu.
+RUN npm ci --legacy-peer-deps
+COPY . .
+# export:web = "expo export --platform web && node scripts/postexport-web.js"
+RUN npm run export:web
+
+# ── Aşama 2: nginx ile servis ──
+FROM nginx:1.27-alpine
+
+LABEL org.opencontainers.image.title="PEMF Vet Frontend" \
+      org.opencontainers.image.description="PEMF veteriner web arayüzü — Expo/React web, nginx + /api proxy" \
+      org.opencontainers.image.vendor="PEMF Vet" \
+      org.opencontainers.image.licenses="Proprietary"
+
+COPY --from=build /pf/dist /usr/share/nginx/html
+COPY <<'NGINX' /etc/nginx/conf.d/default.conf
+map $sent_http_content_type $cache_control_for_type {
+  default                   "public, max-age=2592000, immutable";
+  "text/html"               "no-cache";
+}
+
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # ── sıkıştırma ──
+  gzip on;
+  gzip_vary on;
+  gzip_min_length 1024;
+  gzip_proxied any;
+  gzip_types text/plain text/css application/json application/javascript
+             application/wasm image/svg+xml font/woff2;
+
+  # ── güvenlik başlıkları (tüm yanıtlara) ──
+  add_header X-Content-Type-Options nosniff always;
+  add_header X-Frame-Options SAMEORIGIN always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+  add_header Cache-Control $cache_control_for_type always;
+
+  # ── sağlık ucu (compose healthcheck; log'a yazma) ──
+  location = /healthz {
+    access_log off;
+    add_header Content-Type text/plain;
+    return 200 "ok\n";
+  }
+
+  # ── API + WebSocket → backend konteyneri (compose servis adı: "backend") ──
+  location /api/ {
+    proxy_pass http://backend:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 300s;
+  }
+
+  # ── SPA — bilinmeyen yolları index.html'e düşür ──
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+NGINX
+EXPOSE 80

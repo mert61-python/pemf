@@ -10,6 +10,24 @@
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path;
+use std::time::Duration;
+
+/// Bağlantı/okuma zaman aşımları: slowloris/asılı-uç indirmeyi süresiz askıya alamasın.
+const CONNECT_TIMEOUT_S: u64 = 15;
+const READ_TIMEOUT_S: u64 = 60;
+/// Content-Length YOKSA mutlak indirme tavanı (disk-dolum DoS'a karşı). base.zip ~600MB +
+/// ai_models ~2GB → 4 GB güvenli üst-sınır; meşru paket bunu aşmaz.
+const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Zaman aşımlı + yalnız-HTTPS ajan. `https_only` HTTPS→HTTP downgrade redirect'ini reddeder;
+/// redirect HEDEF host'u ayrıca download_to_file'da validate_url ile yeniden doğrulanır.
+fn build_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(CONNECT_TIMEOUT_S))
+        .timeout_read(Duration::from_secs(READ_TIMEOUT_S))
+        .https_only(true)
+        .build()
+}
 
 /// `update_manager.py::_ALLOWED_UPDATE_HOSTS` ile birebir.
 pub const ALLOWED_HOSTS: &[&str] = &[
@@ -37,6 +55,21 @@ pub enum NetError {
     Io(#[from] io::Error),
     #[error("indirme aktarımı başarısız: {0}")]
     Transport(String),
+    /// Kullanıcı DURAKLATTI — `.part` KORUNUR, sonra Range ile kaldığı yerden sürer.
+    #[error("indirme duraklatıldı")]
+    Paused,
+    /// Kullanıcı İPTAL etti — `.part` SİLİNİR.
+    #[error("indirme iptal edildi")]
+    Cancelled,
+}
+
+/// İndirme akış-kontrolü: her yığında kontrol edilir. `Continue` sürdürür, `Pause` `.part`'ı
+/// koruyup durur (Range ile devam edilebilir), `Cancel` `.part`'ı silip durur.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Control {
+    Continue,
+    Pause,
+    Cancel,
 }
 
 /// URL'yi şema + host bakımından doğrula. Kabul edilirse host'u döndürür.
@@ -80,19 +113,124 @@ pub fn validate_url(url: &str) -> Result<String, NetError> {
 /// İlerleme geri çağrımı: (inen_bayt, toplam_bayt_veya_0).
 pub type ProgressFn<'a> = &'a mut dyn FnMut(u64, u64);
 
-/// `url`'yi `dest`e indirir. Host pinlemesi UYGULANIR.
+/// `url`'yi `dest`e indirir — RESUMABLE (kaldığı yerden). Host pinlemesi UYGULANIR.
 ///
-/// Doğrulama ÇAĞIRANIN sorumluluğu (`verify::verify_file`); burada ayrılmasının sebebi
-/// önbellekten gelen dosyanın da aynı doğrulamadan geçmesi gerektiği.
+/// Devam mantığı (Steam-benzeri): önce `.part`'a yazılır. `.part` varsa `Range: bytes=N-` ile
+/// SUNUCUDAN kalan kısmı ister (206) ve APPEND eder → internet kesilse/laptop kapansa da
+/// tekrar çağrıldığında baştan değil KALDIĞI YERDEN sürer. `.part` yarım kalırsa KORUNUR
+/// (eski davranış: silinirdi). `control()` her yığında bakılır: Pause → `.part` kalır + `Paused`;
+/// Cancel → `.part` silinir + `Cancelled`. Bütünlük ÇAĞIRANDA (`verify::verify_file`) SHA ile
+/// denetlenir → yanlış-ofset/bozuk devam yakalanır ve `.zip` reddedilip taze inilir.
 pub fn download_to_file(
     url: &str,
     dest: &Path,
     expected_size: u64,
     progress: ProgressFn<'_>,
+    control: &dyn Fn() -> Control,
 ) -> Result<u64, NetError> {
     validate_url(url)?;
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let part = dest.with_extension("part");
 
-    let resp = ureq::get(url)
+    // Baştan Cancel istenmişse: yarım .part'ı temizle, hemen dön.
+    if control() == Control::Cancel {
+        let _ = fs::remove_file(&part);
+        return Err(NetError::Cancelled);
+    }
+
+    // Devam noktası = mevcut .part boyutu. Beklenen boyuta eşit/aşkınsa şüpheli → sıfırla (416'dan kaçın).
+    let mut done: u64 = fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+    if expected_size > 0 && done >= expected_size {
+        let _ = fs::remove_file(&part);
+        done = 0;
+    }
+
+    let mut req = build_agent().get(url);
+    if done > 0 {
+        req = req.set("Range", &format!("bytes={done}-"));
+    }
+    let resp = req.call().map_err(|e| match e {
+        ureq::Error::Status(status, _) => NetError::HttpStatus {
+            status,
+            url: url.to_string(),
+        },
+        other => NetError::Transport(other.to_string()),
+    })?;
+
+    // Redirect host-pin: SON URL'nin host'u allowlist içinde olmalı.
+    validate_url(resp.get_url())?;
+
+    // 206 = Partial (Range kabul, kaldığı yerden). 200 = sunucu Range'i yok saydı → BAŞTAN.
+    let resuming = resp.status() == 206 && done > 0;
+    if !resuming {
+        done = 0;
+    }
+    let cl = resp
+        .header("Content-Length")
+        .and_then(|v| v.parse::<u64>().ok());
+    // resuming ise Content-Length = KALAN; toplam = done + kalan. Değilse Content-Length = toplam.
+    let total = if resuming {
+        cl.map(|c| done + c).unwrap_or(expected_size)
+    } else {
+        cl.unwrap_or(expected_size)
+    };
+    let ceiling = if total > 0 {
+        total.saturating_add(1 << 20)
+    } else {
+        MAX_DOWNLOAD_BYTES
+    };
+
+    // resuming → APPEND (mevcut baytları koru); değilse create (truncate = baştan).
+    let mut out = if resuming {
+        fs::OpenOptions::new().append(true).open(&part)?
+    } else {
+        fs::File::create(&part)?
+    };
+    let mut reader = resp.into_reader();
+    let mut buf = vec![0u8; 256 * 1024];
+    progress(done, total); // devam noktasını hemen bildir
+
+    loop {
+        match control() {
+            Control::Pause => {
+                let _ = out.flush(); // .part KORUNUR → sonra Range ile sürer
+                return Err(NetError::Paused);
+            }
+            Control::Cancel => {
+                drop(out);
+                let _ = fs::remove_file(&part);
+                return Err(NetError::Cancelled);
+            }
+            Control::Continue => {}
+        }
+        // Okuma hatası (internet kesildi) → `.part` KORUNUR (silinmez) → sonraki denemede devam.
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        done += n as u64;
+        if done > ceiling {
+            return Err(NetError::Transport(format!(
+                "indirme boyut sınırını aştı ({done} > {ceiling} bayt) — iptal edildi"
+            )));
+        }
+        out.write_all(&buf[..n])?;
+        progress(done, total);
+    }
+    out.flush()?;
+    drop(out);
+    fs::rename(&part, dest)?;
+    Ok(done)
+}
+
+/// Küçük metin kaynağını (manifest) pinli + zaman-aşımlı indir. Host hem başlangıçta hem
+/// redirect-sonrası doğrulanır; `into_string` ureq'te ~10MB'a kapalı (metin-DoS sınırı hazır).
+pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
+    validate_url(url)?;
+    let resp = build_agent()
+        .get(url)
         .call()
         .map_err(|e| match e {
             ureq::Error::Status(status, _) => NetError::HttpStatus {
@@ -101,35 +239,8 @@ pub fn download_to_file(
             },
             other => NetError::Transport(other.to_string()),
         })?;
-
-    let total = resp
-        .header("Content-Length")
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(expected_size);
-
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    // Yarım kalan indirmenin geçerli sanılmaması için ÖNCE .part'a yaz, bitince taşı.
-    let part = dest.with_extension("part");
-    let mut out = fs::File::create(&part)?;
-    let mut reader = resp.into_reader();
-    let mut buf = vec![0u8; 256 * 1024];
-    let mut done: u64 = 0;
-
-    loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        out.write_all(&buf[..n])?;
-        done += n as u64;
-        progress(done, total);
-    }
-    out.flush()?;
-    drop(out);
-    fs::rename(&part, dest)?;
-    Ok(done)
+    validate_url(resp.get_url())?;
+    resp.into_string().map_err(NetError::from)
 }
 
 #[cfg(test)]

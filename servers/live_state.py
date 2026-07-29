@@ -94,6 +94,9 @@ _live_state = {
         "mode": "Sistem Hazır", "frequencyHz": 0, "intensityMt": 0.0,
         "remainingMin": 0, "elapsedSec": 0, "durationSec": 0, "isActive": False,
     },
+    # Dashboard 'Hasta Özeti' kartının okuduğu aktif-seans hastası. None → aktif hasta yok.
+    # Seans başlat/durdur'da set_live_patient/update_live_session_state ile güncellenir.
+    "patient": None,
     "notifications": [],
     "system": {
         "softwareVersion": _APP_VERSION,
@@ -151,6 +154,7 @@ def _build_ws_snapshot() -> dict:
             "coils": coils_list,
             "notifications": _live_state["notifications"][:10],
             "system": _live_state["system"],
+            "patient": _live_state.get("patient"),
         }
 
 
@@ -196,5 +200,22 @@ def update_live_session_state(is_active: bool, mode: str = "Sistem Hazır", freq
             "elapsedSec": elapsed_sec,
             "durationSec": duration_sec,
         })
+        if not is_active:
+            # Seans bitti (durdur/watchdog/acil) → Hasta Özeti "Aktif hasta yok"a dönsün. TÜM stop
+            # yolları buradan geçtiği için hasta temizliği tek noktada garanti (kilit içinde, hafif).
+            _live_state["patient"] = None
         snapshot = dict(_live_state["activeTreatment"])
     _ws_broadcast_sync({"type": "session_update", "data": snapshot})
+    if not is_active:
+        # patient session_update ile TAŞINMAZ → tam snapshot yayınla ki kart canlı temizlensin.
+        _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
+
+
+def set_live_patient(patient) -> None:
+    """Aktif seansın hastasını canlı-duruma yazar (Dashboard 'Hasta Özeti' kartı okur).
+    patient=dict {name,species,breed,owner} veya None (aktif hasta yok). Yazımdan sonra TAM snapshot
+    yayınlar → kart canlı güncellenir (session_update patient taşımadığı için full snapshot şart).
+    Not: _build_ws_snapshot() kilidi kendisi alır → burada kilit BIRAKILDIKTAN sonra çağrılır (deadlock yok)."""
+    with _live_state_lock:
+        _live_state["patient"] = dict(patient) if isinstance(patient, dict) else None
+    _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
