@@ -7,17 +7,22 @@ import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, loadStoredApiToken, setStoredDeviceId } from "@/services/config";
 import { getDeviceByPairingCode, getRemoteUrlForDevice } from "@/services/deviceRegistry";
-import { checkHealth, exchangeCodeForToken } from "@/services/discovery";
+import { checkHealth, exchangeCodeForToken, discoverBackend } from "@/services/discovery";
 import { useUserMode } from "@/context/UserModeContext";
+import { useAuth } from "@/context/AuthContext";
+import { updateProfile } from "@/services/supabaseAuth";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useLiveData } from "@/context/LiveDataContext";
 
 
 export function SettingsScreen() {
-  const { setUserMode, isExpert } = useUserMode();
+  const { setUserMode, isExpert, isResearcher } = useUserMode();
+  const { reconnect: liveReconnect } = useLiveData();
+  const { session } = useAuth();
+  const prof = session?.profile || {};
   const { showToast } = useToast();
+  // Klinik/profil bilgisi artık KAYIT (login) formunda toplanır (Supabase user_metadata) → burada salt-okunur gösterilir.
   const [settings, setSettings] = useState({
-    clinic_name: "",
-    clinic_phone: "",
     ble_gateway_mac: "",
     mqtt_broker: "localhost",
     mqtt_port: "1883",
@@ -36,12 +41,44 @@ export function SettingsScreen() {
   const [remoteInput, setRemoteInput] = useState("");
   const [connecting, setConnecting] = useState(false);
 
+  // Profil düzenleme (Supabase user_metadata → updateProfile). E-posta değiştirilemez.
+  const [editP, setEditP] = useState(false);
+  const [savingP, setSavingP] = useState(false);
+  const [pForm, setPForm] = useState({
+    first_name: "", last_name: "", title: "", phone: "",
+    clinic_name: "", clinic_phone: "", city: "", district: "", address: ""
+  });
+  const startEditProfile = () => {
+    setPForm({
+      first_name: prof.first_name || "", last_name: prof.last_name || "",
+      title: prof.title || "", phone: prof.phone || "",
+      clinic_name: prof.clinic_name || "", clinic_phone: prof.clinic_phone || "",
+      city: prof.city || "", district: prof.district || "", address: prof.address || ""
+    });
+    setEditP(true);
+  };
+  const saveProfile = async () => {
+    if (!pForm.first_name.trim() || !pForm.last_name.trim()) {
+      showToast("Ad ve soyad boş olamaz.", "error");
+      return;
+    }
+    setSavingP(true);
+    const meta = {
+      ...pForm,
+      first_name: pForm.first_name.trim(),
+      last_name: pForm.last_name.trim(),
+      full_name: `${pForm.first_name.trim()} ${pForm.last_name.trim()}`.trim(),
+    };
+    const r = await updateProfile(meta);
+    setSavingP(false);
+    if (r.ok) { showToast("Profil güncellendi.", "success"); setEditP(false); }
+    else showToast(r.error || "Profil güncellenemedi.", "error");
+  };
+
   useEffect(() => {
     let mounted = true;
     const fetchSettings = async () => {
       await loadStoredApiToken();
-      const clinicPhone = (await AsyncStorage.getItem("pemf_clinic_phone")) || "";
-      setSettings(prev => ({ ...prev, clinic_phone: clinicPhone }));
       try {
         const savedIp = await AsyncStorage.getItem("@pemf_server_address") ||
                         await AsyncStorage.getItem("@pemf_server_ip");
@@ -59,7 +96,6 @@ export function SettingsScreen() {
       if (mounted && data) {
         setSettings(prev => ({
           ...prev,
-          clinic_name: data.clinic_name || "",
           ble_gateway_mac: data.ble_gateway_mac || "",
           mqtt_broker: data.mqtt_broker || "localhost",
           mqtt_port: data.mqtt_port?.toString() || "1883"
@@ -77,75 +113,80 @@ export function SettingsScreen() {
     return () => { mounted = false; };
   }, []);
 
-  /** Girilen adrese bağlanmayı test eder */
+  /** Bağlantıyı test eder. Web: app KENDİ origin'ine bağlıdır → onu test et, base'i ASLA repoint etme
+   *  (server_ip alanı native içindir; web'de repoint = çalışan bağlantıyı kırar). Native: girilen adresi test+kaydet. */
   const handleTestConnection = async () => {
     setSearching(true);
     setConnectionStatus("idle");
     try {
-      const addr = settings.server_ip;
-      const base = addr.startsWith("http") ? addr.replace(/\/$/, "") : `http://${addr}:8000`;
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${base}/api/health`, { signal: controller.signal });
-      if (res.ok) {
-        updateServiceConfig(addr);
-        await AsyncStorage.setItem("@pemf_server_address", addr).catch(() => {});
-        setConnectionStatus("ok");
-        showToast("✅ Bağlantı başarılı! Adres kaydedildi.", "success");
+      if (Platform.OS === "web") {
+        const origin = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : "";
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${origin}/api/health`, { signal: controller.signal });
+        setConnectionStatus(res.ok ? "ok" : "fail");
+        showToast(res.ok ? "✅ Sunucuya bağlısınız." : "❌ Sunucuya ulaşılamadı.", res.ok ? "success" : "error");
       } else {
-        setConnectionStatus("fail");
-        showToast("❌ Sunucuya ulaşılamadı.", "error");
+        const addr = settings.server_ip;
+        const base = addr.startsWith("http") ? addr.replace(/\/$/, "") : `http://${addr}:8000`;
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${base}/api/health`, { signal: controller.signal });
+        if (res.ok) {
+          updateServiceConfig(addr);
+          await AsyncStorage.setItem("@pemf_server_address", addr).catch(() => {});
+          setConnectionStatus("ok");
+          showToast("✅ Bağlantı başarılı! Adres kaydedildi.", "success");
+        } else {
+          setConnectionStatus("fail");
+          showToast("❌ Sunucuya ulaşılamadı.", "error");
+        }
       }
     } catch {
       setConnectionStatus("fail");
-      showToast("❌ Bağlantı zaman aşımına uğradi.", "error");
+      showToast("❌ Bağlantı zaman aşımına uğradı.", "error");
     }
     setSearching(false);
   };
 
-  /** Otomatik ağ tarama */
+  /** Otomatik ağ tarama (yalnız NATIVE). Web: tarayıcı LAN cross-origin fetch'i engeller + sunucu
+   *  zaten bu sayfanın origin'i → tarama anlamsız/yanlış-negatif. Web'de origin'i doğrula, repoint YOK. */
   const handleAutoSearch = async () => {
     setSearching(true);
     setConnectionStatus("idle");
+    if (Platform.OS === "web") {
+      try {
+        const origin = (typeof window !== "undefined" && window.location?.origin) ? window.location.origin : "";
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 5000);
+        const res = await fetch(`${origin}/api/health`, { signal: ctrl.signal });
+        setConnectionStatus(res.ok ? "ok" : "fail");
+        showToast(res.ok ? "✅ Sunucuya bağlısınız (bu sayfanın sunucusu)." : "❌ Sunucuya ulaşılamadı.", res.ok ? "success" : "error");
+      } catch { setConnectionStatus("fail"); showToast("❌ Sunucuya ulaşılamadı.", "error"); }
+      setSearching(false);
+      return;
+    }
+    // NATIVE: app'in GERÇEK keşif merdivenini kullan (discovery.ts: kayıtlı-adres → mDNS → remote →
+    // TAM /24 subnet 1-254). Eski sabit-liste [100,1,101,2,102,110,50,200] backend'in DHCP IP'sini
+    // (ör. .37) KAÇIRIYORDU → "bağlı olmasına rağmen bulunamadı". discoverBackend zaten config'i uygular +
+    // PEMF kimliğini doğrular; bağlıyken kayıtlı adresi ilk sırada onaylar (yanlış-negatif biter).
     showToast("🔍 Ağ taranıyor...", "info");
     try {
-      const subnets = ["192.168.1", "192.168.0", "10.0.0", "172.16.0"];
-      const candidates = [100, 1, 101, 2, 102, 110, 50, 200];
-
-      for (const subnet of subnets) {
-        // Her subnet için paralel tarama
-        const results = await Promise.allSettled(
-          candidates.map(async (last) => {
-            const ip = `${subnet}.${last}`;
-            const ctrl = new AbortController();
-            const timeout = setTimeout(() => ctrl.abort(), 1500);
-            try {
-              const res = await fetch(`http://${ip}:8000/api/health`, { signal: ctrl.signal });
-              clearTimeout(timeout);
-              if (res.ok) {
-                const data = await res.json();
-                if (data?.service === "PEMF-Vet") return ip;
-              }
-            } catch { clearTimeout(timeout); }
-            throw new Error("not found");
-          })
-        );
-
-        for (const r of results) {
-          if (r.status === "fulfilled" && r.value) {
-            const ip = r.value;
-            setSettings(prev => ({ ...prev, server_ip: ip }));
-            updateServiceConfig(ip);
-            await AsyncStorage.setItem("@pemf_server_address", ip).catch(() => {});
-            setConnectionStatus("ok");
-            showToast(`✅ PEMF sunucusu bulundu: ${ip}`, "success");
-            setSearching(false);
-            return;
-          }
-        }
+      const found = await discoverBackend();
+      if (found) {
+        const ipOnly = found.address.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
+        setSettings(prev => ({ ...prev, server_ip: ipOnly }));
+        setConnectionStatus("ok");
+        showToast(`✅ PEMF cihazı bulundu: ${ipOnly}`, "success");
+        liveReconnect(); // doğrulanmış/yeni adrese WS'i bağla
+      } else {
+        setConnectionStatus("fail");
+        showToast("⚠️ Ağda PEMF cihazı bulunamadı. Cihazla aynı WiFi'de olduğunuzdan emin olun ya da IP'yi elle girin.", "info");
       }
-      showToast("⚠️ Ağda PEMF sunucusu bulunamadı. QR kodu tarayın.", "info");
-    } catch { }
+    } catch {
+      setConnectionStatus("fail");
+      showToast("⚠️ Tarama başarısız. Cihaz IP'sini elle girin.", "info");
+    }
     setSearching(false);
   };
 
@@ -181,21 +222,31 @@ export function SettingsScreen() {
       }
 
       // 2) Kayıt var ama cihaz şu an erişilemez → KAYDETMEDEN ÖNCE health doğrula.
-      const alive = await checkHealth(tunnelUrl);
+      // GÜVENLİK: resolvedDeviceId'yi de geç (auto-yolla AYNI): Cloudflare tünel-URL'i başka bir
+      // kliniğin cihazına yeniden atanmış / Supabase satırı zehirlenmişse /api/health deviceId
+      // uyuşmazlığında BAĞLANMA — yanlış hastaya/cihaza komut gönderme riski.
+      const alive = await checkHealth(tunnelUrl, resolvedDeviceId);
       if (!alive) {
         setConnectionStatus("fail");
-        showToast("Cihaz bulundu ama şu an çevrimdışı/erişilemiyor.", "error");
+        showToast("Cihaz bulundu ama şu an çevrimdışı ya da kimlik doğrulanamadı.", "error");
         return;
       }
 
       // 3) Canlı → kaydet + bağlan.
-      updateServiceConfig(tunnelUrl);
+      if (!updateServiceConfig(tunnelUrl)) {  // #63: geçersiz adres → ayarı bozma
+        setConnectionStatus("fail");
+        showToast("Geçersiz cihaz adresi biçimi.", "error");
+        return;
+      }
       // Kod-yolu (hiç LAN'a girmemiş telefon): 6-haneli kodu cihaz token'ıyla takas et →
       // uzaktan HTTP + WS auth çalışsın. Yoksa "bağlandı ✓" ama tüm veri 401 olurdu (audit P0).
       if (input.length <= 8) { await exchangeCodeForToken(tunnelUrl, input); }
       await setStoredDeviceId(resolvedDeviceId);
       await AsyncStorage.setItem("@pemf_server_address", tunnelUrl).catch(() => {});
       setSettings(prev => ({ ...prev, server_ip: tunnelUrl as string }));
+      // #87: yeni serviceConfig ile WS'i HEMEN yeniden bağla → önceki cihazın telemetrisi
+      // gösterilmeye devam etmesin (yanlış-cihaz görüntüsü). reconnect() connectionEpoch bump eder.
+      liveReconnect();
       setConnectionStatus("ok");
       showToast("Cihaz eşleştirildi ve bağlanıldı ✓", "success");
     } catch {
@@ -231,7 +282,9 @@ export function SettingsScreen() {
       // Canonical anahtar @pemf_server_address (discovery + ilk-yükleme bunu okur) + geri-uyum için ip.
       await AsyncStorage.setItem("@pemf_server_address", settings.server_ip);
       await AsyncStorage.setItem("@pemf_server_ip", settings.server_ip);
-      updateServiceConfig(settings.server_ip);
+      // KRİTİK: web'de app KENDİ origin'ine bağlıdır → base'i repoint ETME. Aksi halde bir sonraki
+      // apiPost("/settings/") yanlış/boş adrese gider → "Kaydetme hatası" + tüm bağlantı kopar (yeşil kalır).
+      if (Platform.OS !== "web") updateServiceConfig(settings.server_ip);
     } catch(e) {}
     const result = await apiPost<any>("/settings/", settings, { status: "error" });
     setLoading(false);
@@ -253,41 +306,86 @@ export function SettingsScreen() {
           <UserCog color={colors.primary} size={20} />
           <Text style={styles.cardTitle}>Profil Ayarları</Text>
         </View>
-        <Text style={styles.label}>Şu anki mod: {isExpert ? 'Veteriner Hekim' : 'Evcil Hayvan Sahibi'}</Text>
+        <Text style={styles.label}>Şu anki mod: {isExpert ? 'Veteriner Hekim' : isResearcher ? 'Araştırma Modu' : 'Evcil Hayvan Sahibi'}</Text>
         <TouchableOpacity style={[styles.btnOutline, { marginTop: spacing.md }]} onPress={() => setUserMode(null)}>
           <Text style={styles.btnOutlineText}>Farklı Bir Profile Geçiş Yap</Text>
         </TouchableOpacity>
       </Card>
 
-      {isExpert && (
-        <Card style={styles.card}>
+      {/* Hesap/Klinik bilgileri — kayıt (login) formunda girildi; buradan düzenlenebilir (Supabase user_metadata). */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeaderRow}>
           <View style={styles.cardHeader}>
             <UserCog color={colors.primary} size={20} />
-            <Text style={styles.cardTitle}>Klinik Bilgileri</Text>
+            <Text style={styles.cardTitle}>Hesap Bilgileri</Text>
           </View>
-          <Text style={styles.label}>Klinik Adı</Text>
-          <TextInput
-            style={styles.input}
-            accessibilityLabel="Klinik adı"
-            value={settings.clinic_name}
-            onChangeText={val => setSettings({...settings, clinic_name: val})}
-            placeholder="Örn: VetCare Plus"
-          />
+          {!editP ? (
+            <TouchableOpacity onPress={startEditProfile} accessibilityLabel="Profili düzenle">
+              <Text style={styles.editLink}>Düzenle</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
-          <Text style={styles.label}>Klinik Acil Telefon</Text>
-          <TextInput
-            style={styles.input}
-            accessibilityLabel="Klinik acil telefon"
-            value={settings.clinic_phone}
-            onChangeText={val => { setSettings({...settings, clinic_phone: val}); AsyncStorage.setItem("pemf_clinic_phone", val).catch(() => {}); }}
-            placeholder="Örn: +902125550000"
-            keyboardType="phone-pad"
-          />
-        </Card>
-      )}
+        {editP ? (
+          <>
+            <View style={styles.row2}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Ad</Text>
+                <TextInput style={styles.input} value={pForm.first_name} onChangeText={t => setPForm({ ...pForm, first_name: t })} placeholder="Ad" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Soyad</Text>
+                <TextInput style={styles.input} value={pForm.last_name} onChangeText={t => setPForm({ ...pForm, last_name: t })} placeholder="Soyad" />
+              </View>
+            </View>
+            <Text style={styles.label}>Ünvan</Text>
+            <TextInput style={styles.input} value={pForm.title} onChangeText={t => setPForm({ ...pForm, title: t })} placeholder="Örn. Vet. Hekim" />
+            <Text style={styles.label}>Telefon</Text>
+            <TextInput style={styles.input} value={pForm.phone} onChangeText={t => setPForm({ ...pForm, phone: t })} placeholder="Cep telefonu" keyboardType="phone-pad" />
+            <Text style={styles.label}>Klinik / Muayenehane</Text>
+            <TextInput style={styles.input} value={pForm.clinic_name} onChangeText={t => setPForm({ ...pForm, clinic_name: t })} placeholder="Klinik adı" />
+            <View style={styles.row2}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Şehir (İl)</Text>
+                <TextInput style={styles.input} value={pForm.city} onChangeText={t => setPForm({ ...pForm, city: t })} placeholder="Şehir" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>İlçe</Text>
+                <TextInput style={styles.input} value={pForm.district} onChangeText={t => setPForm({ ...pForm, district: t })} placeholder="İlçe" />
+              </View>
+            </View>
+            <Text style={styles.label}>Adres</Text>
+            <TextInput style={styles.input} value={pForm.address} onChangeText={t => setPForm({ ...pForm, address: t })} placeholder="Açık adres" />
+            <Text style={styles.label}>Klinik Acil Telefon</Text>
+            <TextInput style={styles.input} value={pForm.clinic_phone} onChangeText={t => setPForm({ ...pForm, clinic_phone: t })} placeholder="Klinik acil telefon" keyboardType="phone-pad" />
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.btnPrimary} onPress={saveProfile} disabled={savingP}>
+                <Save color="#fff" size={16} />
+                <Text style={styles.btnPrimaryText}>{savingP ? "Kaydediliyor..." : "Kaydet"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btnOutline, { marginLeft: spacing.md }]} onPress={() => setEditP(false)} disabled={savingP}>
+                <Text style={styles.btnOutlineText}>İptal</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <Info label="Ad Soyad" value={prof.full_name || [prof.first_name, prof.last_name].filter(Boolean).join(" ")} />
+            {prof.title ? <Info label="Ünvan" value={prof.title} /> : null}
+            <Info label="E-posta" value={session?.email} />
+            {prof.clinic_name ? <Info label="Klinik / Muayenehane" value={prof.clinic_name} /> : null}
+            {(prof.city || prof.district) ? <Info label="Şehir / İlçe" value={[prof.city, prof.district].filter(Boolean).join(" / ")} /> : null}
+            {prof.address ? <Info label="Adres" value={prof.address} /> : null}
+            {prof.phone ? <Info label="Telefon" value={prof.phone} /> : null}
+            {prof.clinic_phone ? <Info label="Klinik Acil Telefon" value={prof.clinic_phone} /> : null}
+            <Text style={styles.mutedNote}>E-posta hesap kimliğidir, değiştirilemez. Diğer bilgileri "Düzenle" ile güncelleyebilirsin.</Text>
+          </>
+        )}
+      </Card>
 
-      {isExpert && (
-        <>
+      {/* Bağlantı/eşleştirme TÜM profillerde görünür: AI modelleri backend bağlantısı olmadan çalışmaz →
+          Evcil Hayvan Sahibi + Araştırma + Veteriner hepsi cihaza bağlanabilmeli (eskiden yalnız vet+araştırma). */}
+      <>
           <Card style={styles.card}>
             <View style={styles.cardHeader}>
               <Network color={colors.primary} size={20} />
@@ -394,23 +492,29 @@ export function SettingsScreen() {
               </View>
             )}
 
-            <Text style={styles.label}>Manuel Sunucu Adresi</Text>
-            <TextInput
-              style={styles.input}
-              accessibilityLabel="Manuel sunucu adresi"
-              value={settings.server_ip}
-              onChangeText={val => setSettings({...settings, server_ip: val})}
-              placeholder="192.168.1.100 veya https://xxxx.trycloudflare.com" 
-              autoCapitalize="none"
-              keyboardType="default"
-            />
-            <TouchableOpacity style={styles.testBtn} onPress={handleTestConnection} disabled={searching}>
-              <Wifi color={colors.text} size={14} />
-              <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
-            </TouchableOpacity>
-            <Text style={styles.helperText}>
-              Manuel yedek: aynı Wi-Fi&apos;de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
-            </Text>
+            {/* Manuel IP yedeği YALNIZ Veteriner (uzman) modunda — otomatik+eşleştirme çoğu durumu kapsar;
+                normal kullanıcıyı karmaşadan uzak tut, kısıtlı-ağ yedeği uzmanda dursun. */}
+            {isExpert && (
+              <>
+                <Text style={styles.label}>Manuel Sunucu Adresi</Text>
+                <TextInput
+                  style={styles.input}
+                  accessibilityLabel="Manuel sunucu adresi"
+                  value={settings.server_ip}
+                  onChangeText={val => setSettings({...settings, server_ip: val})}
+                  placeholder="192.168.1.100 veya https://xxxx.trycloudflare.com"
+                  autoCapitalize="none"
+                  keyboardType="default"
+                />
+                <TouchableOpacity style={styles.testBtn} onPress={handleTestConnection} disabled={searching}>
+                  <Wifi color={colors.text} size={14} />
+                  <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
+                </TouchableOpacity>
+                <Text style={styles.helperText}>
+                  Manuel yedek: aynı Wi-Fi&apos;de IP (192.168.x.x:8000), farklı ağda tünel linki (https://...trycloudflare.com).
+                </Text>
+              </>
+            )}
           </Card>
 
           <View style={styles.actions}>
@@ -421,7 +525,6 @@ export function SettingsScreen() {
             {saveStatus ? <Text style={styles.statusText}>{saveStatus}</Text> : null}
           </View>
         </>
-      )}
 
       {isExpert && (
         <View style={{ marginTop: spacing.xl }}>
@@ -445,8 +548,8 @@ export function SettingsScreen() {
                 <Text style={[styles.btnOutlineText, { color: colors.warning }]}>Donanım Self-Test Başlat</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.btnOutline, { borderColor: colors.danger }]} 
+              <TouchableOpacity
+                style={[styles.btnOutline, { borderColor: colors.danger }]}
                 onPress={async () => {
                   const res = await apiPost<any>("/hardware/reset_pwm", {}, {status: "error"});
                   if (res.status === "success") showToast("Tüm bobin PWM sinyalleri sıfırlandı.", "success");
@@ -456,23 +559,22 @@ export function SettingsScreen() {
                 <Trash2 color={colors.danger} size={16} style={{marginRight: 8}} />
                 <Text style={[styles.btnOutlineText, { color: colors.danger }]}>Tüm PWM Sinyallerini Sıfırla (Reset)</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.btnOutline, { borderColor: colors.textMuted }]} 
-                onPress={async () => {
-                  const res = await apiPost<any>("/hardware/cleanup_esp", {}, {status: "error"});
-                  if (res.status === "success") showToast("Kopmuş cihaz bağlantıları temizlendi.", "info");
-                }}
-              >
-                <Network color={colors.textMuted} size={16} style={{marginRight: 8}} />
-                <Text style={[styles.btnOutlineText, { color: colors.textMuted }]}>Kopmuş Cihazları Ağdan Temizle</Text>
-              </TouchableOpacity>
             </View>
           </Card>
         </View>
       )}
 
     </ScrollView>
+  );
+}
+
+/** Salt-okunur profil satırı (etiket + değer). */
+function Info({ label, value }: { label: string; value?: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} selectable numberOfLines={2}>{value || "—"}</Text>
+    </View>
   );
 }
 
@@ -530,6 +632,46 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     color: colors.textMuted,
     fontStyle: 'italic'
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  editLink: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: typography.small
+  },
+  row2: {
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
+  infoLabel: {
+    fontSize: typography.small,
+    fontWeight: '600',
+    color: colors.textMuted
+  },
+  infoValue: {
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'right'
+  },
+  mutedNote: {
+    fontSize: typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm
   },
   actions: {
     flexDirection: 'row',

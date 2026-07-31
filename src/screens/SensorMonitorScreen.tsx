@@ -23,7 +23,10 @@ const COIL_COLORS = [
 ];
 
 export function SensorMonitorScreen() {
-  const { snapshot, sensorHistory, wsConnected } = useLiveData();
+  // YÜKSEK fix: ham wsConnected yerine connectionQuality (live/stale/offline). WS soketi açık ama backend
+  // sensör yayınını durdurduysa (STM/köprü/MQTT donması) "CANLI" göstermek operatörü DONMUŞ veriyi canlı
+  // sanmaya iter (medikal yanıltma). connectionQuality 'stale' bunu "GECİKMELİ" olarak ayırt eder.
+  const { snapshot, sensorHistory, connectionQuality, telemetryStale } = useLiveData();
   // Grafik genişliği, sarmalayıcının GERÇEK genişliğinden (onLayout) ölçülür → her telefon/
   // yön için container'a tam oturur; tablet/geniş ekranda 1200'de sınırlanır.
   const [chartW, setChartW] = useState(0);
@@ -52,9 +55,11 @@ export function SensorMonitorScreen() {
             Gerçek zamanlı manyetik alan ve sıcaklık izleme
           </Text>
         </View>
-        <View style={[styles.wsBadge, !wsConnected && styles.wsBadgeOff]}>
-          <View style={[styles.wsDot, !wsConnected && styles.wsDotOff]} />
-          <Text style={styles.wsText}>{wsConnected ? "CANLI" : "BAĞLANTI YOK"}</Text>
+        <View style={[styles.wsBadge, telemetryStale && styles.wsBadgeStale, connectionQuality === "offline" && styles.wsBadgeOff]}>
+          <View style={[styles.wsDot, telemetryStale && styles.wsDotStale, connectionQuality === "offline" && styles.wsDotOff]} />
+          <Text style={[styles.wsText, telemetryStale && { color: "#f59e0b" }, connectionQuality === "offline" && { color: "#ef4444" }]}>
+            {connectionQuality === "offline" ? "BAĞLANTI YOK" : telemetryStale ? "GECİKMELİ" : "CANLI"}
+          </Text>
         </View>
       </View>
 
@@ -110,7 +115,7 @@ export function SensorMonitorScreen() {
             showMagnetic={showMagnetic}
             showTemp={showTemp}
             width={Math.min(chartW, 1200)}
-            height={280}
+            height={rs(280)}
           />
         )}
       </View>
@@ -203,9 +208,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#16a34a",
   },
-  wsBadgeOff: { backgroundColor: "#1c1917", borderColor: "#78350f" },
+  wsBadgeStale: { backgroundColor: "#1c1917", borderColor: "#78350f" }, // amber — WS açık ama telemetri donuk
+  wsBadgeOff: { backgroundColor: "#1f1315", borderColor: "#7f1d1d" },   // red — gerçek bağlantı yok
   wsDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: "#22c55e" },
-  wsDotOff: { backgroundColor: "#f59e0b" },
+  wsDotStale: { backgroundColor: "#f59e0b" },
+  wsDotOff: { backgroundColor: "#ef4444" },
   wsText: { color: "#22c55e", fontWeight: "700", fontSize: typography.small },
 
   controlRow: {

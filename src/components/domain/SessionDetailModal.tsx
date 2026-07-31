@@ -178,9 +178,15 @@ export function SessionDetailModal({
     };
   }, [visible, sessionId]);
 
-  const session = details?.session ?? null;
-  const coilRuns = details?.coil_runs ?? [];
-  const sensorSamples = details?.sensor_samples ?? [];
+  // ORTA fix (yanlış-hasta flash): sessionId değişince effect setDetails(null)'ı fetch ÖNCESİ değil
+  // render-SONRASI yaptığından, bir render ESKİ seansın (başka hastanın) adı/notunu çizebiliyordu.
+  // Yalnız yüklenen detay GÜNCEL sessionId'ye aitse göster (session.id eşleşmesi); stale ise null →
+  // render yükleniyor/boş gösterir, başka hastanın PII'si SIZMAZ.
+  const rawSession = details?.session ?? null;
+  const isCurrent = rawSession != null && String(rawSession.id) === String(sessionId);
+  const session = isCurrent ? rawSession : null;
+  const coilRuns = isCurrent ? (details?.coil_runs ?? []) : [];
+  const sensorSamples = isCurrent ? (details?.sensor_samples ?? []) : [];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -303,13 +309,13 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                   <Text style={[styles.td, styles.colTime]}>{fmtClock(run.started_epoch)}</Text>
                   <Text style={[styles.td, styles.colDur]}>{fmtDuration(run.duration_seconds)}</Text>
                   <Text style={[styles.td, styles.colNum]}>
-                    {run.frequency_hz !== undefined ? `${run.frequency_hz} Hz` : "—"}
+                    {run.frequency_hz != null ? `${run.frequency_hz} Hz` : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colNum]}>
-                    {run.duty_percent !== undefined ? `%${run.duty_percent}` : "—"}
+                    {run.duty_percent != null ? `%${run.duty_percent}` : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colNum]}>
-                    {run.intensity_mt !== undefined ? `${run.intensity_mt} mT` : "—"}
+                    {run.intensity_mt != null ? `${run.intensity_mt} mT` : "—"}
                   </Text>
                   <Text style={[styles.td, styles.colHw]}>{hwLabel(run.hw_type)}</Text>
                   <Text style={[styles.td, styles.colNum]}>
@@ -431,7 +437,7 @@ function TempChart({
 
   return (
     <View style={styles.chartWrap}>
-      <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+      <Svg width="100%" height={rs(260)} viewBox={`0 0 ${width} ${height}`}>
         <Rect x={0} y={0} width={width} height={height} fill="#0a0f1e" />
         {/* Yatay grid + °C ekseni */}
         {Array.from({ length: 5 }, (_, i) => {
@@ -579,7 +585,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     minWidth: rs(120),
     flexGrow: 1,
-    flexBasis: 120,
+    flexBasis: rs(120),
   },
   itemLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700" },
   itemValue: { color: colors.text, fontSize: typography.body, fontWeight: "700", marginTop: spacing.xs },

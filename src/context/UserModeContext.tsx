@@ -1,41 +1,38 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
-type UserMode = 'pet_owner' | 'veterinarian' | null;
+export type UserMode = 'pet_owner' | 'veterinarian' | 'researcher' | null;
 
 interface UserModeContextType {
   userMode: UserMode;
   setUserMode: (mode: UserMode) => void;
-  isExpert: boolean;
+  isExpert: boolean;       // Veteriner Hekim (klinik + tedavi + kedi modelleri)
+  isResearcher: boolean;   // Araştırma Modu (klinik kanser araştırma analizleri — cihaz YOK)
+  hasAiHub: boolean;       // modüler AI Hub erişimi (vet ‖ researcher); pet_owner basit ekran görür
 }
 
 const UserModeContext = createContext<UserModeContextType | undefined>(undefined);
 
 export const UserModeProvider = ({ children }: { children: ReactNode }) => {
+  // Profil seçimi BİLİNÇLİ olarak KALICI DEĞİL: her açılışta userMode=null ile başlar →
+  // MainRouter WelcomeScreen'i (profil seçimi) hem mobilde hem webte HER SEFERİNDE gösterir.
+  // (Eskiden AsyncStorage 'pemf_user_mode'a kaydedilip açılışta restore ediliyordu → kaldırıldı.)
   const [userMode, setUserModeState] = useState<UserMode>(null);
 
-  // AsyncStorage: hem native (APK'de KALICI) hem web. Eskiden localStorage idi → APK'de kalmıyordu.
-  useEffect(() => {
-    AsyncStorage.getItem('pemf_user_mode')
-      .then((saved) => {
-        if (saved === 'pet_owner' || saved === 'veterinarian') setUserModeState(saved);
-      })
-      .catch(() => {});
-  }, []);
-
-  const setUserMode = (mode: UserMode) => {
-    setUserModeState(mode);
-    if (mode) {
-      AsyncStorage.setItem('pemf_user_mode', mode).catch(() => {});
-    } else {
-      AsyncStorage.removeItem('pemf_user_mode').catch(() => {});
-    }
-  };
+  // Yalnız oturum-içi state; hiçbir kalıcı depolamaya (AsyncStorage/localStorage) YAZILMAZ.
+  // DÜŞÜK fix: setUserMode'u useCallback + value'yu useMemo ile sabitle → gereksiz tüketici-render önle.
+  const setUserMode = useCallback((mode: UserMode) => setUserModeState(mode), []);
 
   const isExpert = userMode === 'veterinarian';
+  const isResearcher = userMode === 'researcher';
+  const hasAiHub = isExpert || isResearcher;
+
+  const value = useMemo(
+    () => ({ userMode, setUserMode, isExpert, isResearcher, hasAiHub }),
+    [userMode, setUserMode, isExpert, isResearcher, hasAiHub],
+  );
 
   return (
-    <UserModeContext.Provider value={{ userMode, setUserMode, isExpert }}>
+    <UserModeContext.Provider value={value}>
       {children}
     </UserModeContext.Provider>
   );

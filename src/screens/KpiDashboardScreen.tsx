@@ -22,7 +22,8 @@ interface KpiSummary {
 }
 
 export function KpiDashboardScreen() {
-  const { snapshot, sensorHistory } = useLiveData();
+  const { snapshot, sensorHistory, connectionQuality } = useLiveData();
+  const instantStale = connectionQuality !== "live";
   const [kpi, setKpi] = useState<KpiSummary>({
     totalSessions: 0,
     completedSessions: 0,
@@ -64,6 +65,9 @@ export function KpiDashboardScreen() {
   const coils = snapshot.coils ?? [];
   const connectedCoils = coils.filter((c) => c.connected);
   const runningCoils = coils.filter((c) => c.running);
+  // #85: bobin-sayısı denominator'ını literal 8 yerine gerçek yapılandırmadan türet (8-olmayan
+  // cihazlarda oran yanlış raporlanmasın). Veri yokken güvenli varsayılan 8.
+  const coilCount = coils.length || 8;
 
   const COIL_R = 0.5;
   const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
@@ -79,7 +83,7 @@ export function KpiDashboardScreen() {
     : null;
 
   const uptimePct = connectedCoils.length > 0
-    ? Math.round((connectedCoils.length / 8) * 100)
+    ? Math.round((connectedCoils.length / coilCount) * 100)
     : 0;
 
   // Grafik genişliği kartın GERÇEK iç genişliğinden (onLayout) ölçülür → her telefon/
@@ -117,18 +121,19 @@ export function KpiDashboardScreen() {
             return m ? m[1] : (s.length >= 5 ? s.slice(5) : (s || "—"));
           })
         : ["—", "—", "—", "—", "—", "—", "—"],
-      datasets: [{ data: last7.length > 0 ? last7.map(d => d.count) : [0, 0, 0, 0, 0, 0, 0] }]
+      // ORTA fix: ham d.count null/NaN olursa chart-kit Math.max/ölçekleme NaN → bar grafik bozulur. Sanitize.
+      datasets: [{ data: last7.length > 0 ? last7.map(d => Number(d.count) || 0) : [0, 0, 0, 0, 0, 0, 0] }]
     };
     // Mod dağılımı pie verisi
     const PIE_COLORS = ["#7c3aed", "#ec4899", "#0ea5e9", "#f59e0b", "#22c55e"];
     const modeEntries = Object.entries(kpi.modeDistribution);
     const pieData = modeEntries.length > 0
       ? modeEntries.map(([name, count], i) => ({
-          name, population: count,
+          name, population: Number(count) || 0,
           color: PIE_COLORS[i % PIE_COLORS.length],
-          legendFontColor: "#94a3b8", legendFontSize: 12
+          legendFontColor: "#94a3b8", legendFontSize: rf(12)
         }))
-      : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: 12 }];
+      : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: rf(12) }];
     return (
       <ResponsiveGrid minItemWidth={300}>
         <Card style={styles.chartCard}>
@@ -138,7 +143,7 @@ export function KpiDashboardScreen() {
               <BarChart
                 data={barData}
                 width={chartW}
-                height={220}
+                height={rs(220)}
                 chartConfig={chartConfig}
                 style={styles.chart}
                 yAxisLabel=""
@@ -154,7 +159,7 @@ export function KpiDashboardScreen() {
               <PieChart
                 data={pieData}
                 width={chartW}
-                height={220}
+                height={rs(220)}
                 chartConfig={chartConfig}
                 accessor={"population"}
                 backgroundColor={"transparent"}
@@ -196,14 +201,21 @@ export function KpiDashboardScreen() {
       </ResponsiveGrid>
 
       <Text style={styles.sectionTitle}>⚡ Anlık Cihaz Durumu</Text>
-      <ResponsiveGrid>
-        <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
-        <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / 8`} tone={colors.primary} />
-        <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / 8`} tone={colors.success} />
-        <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
-        <MetricCard label="Ort. Sıcaklık" value={`${avgTemp.toFixed(1)} °C`} tone={colors.warning} />
-        <MetricCard label="Ort. Manyetik" value={`${avgMag.toFixed(2)} mT`} tone={colors.cyan} />
-      </ResponsiveGrid>
+      {instantStale && (
+        <Text style={styles.staleBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          ⚠️ Bağlantı bayat/çevrimdışı — aşağıdaki anlık değerler son bilinen veriden olabilir, GERÇEK ZAMANLI DEĞİL.
+        </Text>
+      )}
+      <View style={instantStale ? { opacity: 0.55 } : undefined}>
+        <ResponsiveGrid>
+          <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
+          <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
+          <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
+          <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
+          <MetricCard label="Ort. Sıcaklık" value={`${avgTemp.toFixed(1)} °C`} tone={colors.warning} />
+          <MetricCard label="Ort. Manyetik" value={`${avgMag.toFixed(2)} mT`} tone={colors.cyan} />
+        </ResponsiveGrid>
+      </View>
 
       <Text style={styles.sectionTitle}>📈 Performans Grafikleri</Text>
       {chartsSection}
@@ -214,12 +226,12 @@ export function KpiDashboardScreen() {
           <Text style={styles.sectionTitle}>🔬 Bobin Detayları</Text>
           <Card style={styles.tableCard}>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableCell, styles.tableHead]}>Bobin</Text>
-              <Text style={[styles.tableCell, styles.tableHead]}>mT</Text>
-              <Text style={[styles.tableCell, styles.tableHead]}>°C</Text>
-              <Text style={[styles.tableCell, styles.tableHead]}>A</Text>
-              <Text style={[styles.tableCell, styles.tableHead]}>W</Text>
-              <Text style={[styles.tableCell, styles.tableHead]}>Hz</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Bobin</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>mT</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>°C</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>A</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>W</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Hz</Text>
             </View>
             {coils.map((c) => {
               const pts = sensorHistory[c.id] ?? [];
@@ -230,12 +242,12 @@ export function KpiDashboardScreen() {
               const power = cur * cur * COIL_R;
               return (
                 <View key={c.id} style={[styles.tableRow, !c.connected && styles.tableRowOff]}>
-                  <Text style={styles.tableCell}>{c.id}</Text>
-                  <Text style={[styles.tableCell, { color: "#22c55e" }]}>{mag.toFixed(2)}</Text>
-                  <Text style={[styles.tableCell, { color: temp > 45 ? "#ef4444" : "#fb923c" }]}>{temp.toFixed(1)}</Text>
-                  <Text style={[styles.tableCell, { color: "#60a5fa" }]}>{cur.toFixed(3)}</Text>
-                  <Text style={[styles.tableCell, { color: "#a78bfa" }]}>{cur > 0 ? power.toFixed(2) : "—"}</Text>
-                  <Text style={styles.tableCell}>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
+                  <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.id}</Text>
+                  <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{mag.toFixed(2)}</Text>
+                  <Text style={[styles.tableCell, { color: temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{temp.toFixed(1)}</Text>
+                  <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur.toFixed(3)}</Text>
+                  <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur > 0 ? power.toFixed(2) : "—"}</Text>
+                  <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
                 </View>
               );
             })}
@@ -249,6 +261,15 @@ export function KpiDashboardScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
   sectionTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "700", marginTop: spacing.md },
+  staleBanner: {
+    color: "#f59e0b",
+    fontSize: typography.small,
+    fontWeight: "600",
+    backgroundColor: "#f59e0b18",
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   chartCard: { padding: spacing.sm, alignItems: 'center', overflow: "hidden" },
   chartInner: { width: "100%", alignItems: "center" },
   chart: { marginVertical: spacing.sm, borderRadius: 8 },
@@ -271,6 +292,7 @@ const styles = StyleSheet.create({
   tableHead: { color: colors.textMuted, fontWeight: "700", fontSize: rf(11) },
   tableCell: {
     flex: 1,
+    minWidth: rs(34),
     color: colors.text,
     fontSize: rf(13),
     fontWeight: "600",

@@ -109,19 +109,30 @@ export async function loadStoredApiToken(): Promise<void> {
  * Tünel URL'si http/https veya doğrudan IP olabilir.
  * Örn: "192.168.1.147" veya "https://abcd-xyz.trycloudflare.com"
  */
-export const updateServiceConfig = (serverAddress: string) => {
+export const updateServiceConfig = (serverAddress: string): boolean => {
   let apiBase: string;
   let wsBase: string;
 
+  // #63: trim + temel doğrulama — kullanıcı-girdisi adres trim'siz/doğrulamasız base-URL'e
+  // çevriliyordu. Boş/geçersiz ise ayarı DEĞİŞTİRME + false dön (çağıran kullanıcıya hata gösterir).
+  const addr = (serverAddress || "").trim();
+  if (!addr) return false;
+
   // Cloudflare/ngrok tünelleri genelde https ile başlar. Local IP'ler http veya düz IP olabilir.
   // Eğer düz IP veya hostname verilmişse (örn: 192.168.1.147), varsayılan olarak http ve 8000 portunu ekle.
-  let baseUrl = serverAddress;
+  let baseUrl = addr;
   if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
     baseUrl = `http://${baseUrl}:8000`;
   }
-  
+
   // Sondaki '/' işaretini kaldır (varsa)
   baseUrl = baseUrl.replace(/\/$/, "");
+
+  // TÜM authority (host[:port]) geçerli karakterlerden oluşmalı — PATH/slash İÇERMESİN (aksi halde
+  // "192.168.1.1/evil" → "http://192.168.1.1/evil:8000" bozuk base URL üretilirdi). Boşluk/kontrol/
+  // kaçış da yasak. Hassas Bearer ayrıca apiClient.isSafeBackendBase ile https/RFC1918-taban'a geçitli.
+  const _authority = baseUrl.replace(/^https?:\/\//, "");
+  if (!_authority || !/^[A-Za-z0-9._:-]+$/.test(_authority)) return false;
 
   // URL'i oluştur
   apiBase = `${baseUrl}/api`;
@@ -139,4 +150,5 @@ export const updateServiceConfig = (serverAddress: string) => {
     bridgeBaseUrl: apiBase,
     apiToken: serviceConfig.apiToken || "",
   };
+  return true;
 };

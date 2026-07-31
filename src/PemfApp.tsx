@@ -6,9 +6,13 @@ import { WelcomeScreen } from "@/screens/WelcomeScreen";
 import { colors } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { UserModeProvider, useUserMode } from "@/context/UserModeContext";
+import { canAccess } from "@/config/access";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { LiveDataProvider } from "@/context/LiveDataContext";
 import { AppNavProvider } from "@/context/AppNavContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { EntitlementProvider } from "@/context/EntitlementContext";
+import { AuthScreen } from "@/screens/AuthScreen";
 
 // audit B-6.1: code-splitting — ilk-boyama (Welcome/Dashboard) EAGER; ağır/nadir ekranlar LAZY →
 // açılış bundle'ı küçülür (özellikle web tek-bundle). Named export → default'a sar. Suspense fallback altta.
@@ -20,6 +24,7 @@ const TreatmentHistoryScreen = lazy(() => import("@/screens/TreatmentHistoryScre
 const PatientScreen = lazy(() => import("@/screens/PatientScreen").then((m) => ({ default: m.PatientScreen })));
 const AiHubScreen = lazy(() => import("@/screens/AiHubScreen").then((m) => ({ default: m.AiHubScreen })));
 const SettingsScreen = lazy(() => import("@/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
+const AiHistoryScreen = lazy(() => import("@/screens/AiHistoryScreen").then((m) => ({ default: m.AiHistoryScreen })));
 
 const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
   dashboard: { title: "Hoş Geldiniz", subtitle: "Bugün Hangi Dostumuzu Tedavi Ediyoruz?" },
@@ -30,20 +35,21 @@ const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
   kpi: { title: "Performans Raporu", subtitle: "Cihaz ve klinik göstergeleri." },
   simulator: { title: "Etki Simülasyonu", subtitle: "Manyetik alanın dostumuza etkisini görselleştirin." },
   ai: { title: "Akıllı Teşhis", subtitle: "Kamera üzerinden otonom ağrı analizi ve tedavi." },
+  ai_history: { title: "AI Analiz Geçmişi", subtitle: "Tüm modellerin analiz sonuçları — şifreli, detaylı kayıt." },
   settings: { title: "Ayarlar", subtitle: "Cihaz tercihleri ve gelişmiş mod." },
 };
 
 function MainRouter() {
-  const { userMode, isExpert } = useUserMode();
+  const { userMode } = useUserMode();
   const [activeRoute, setActiveRoute] = useState<RouteKey>("dashboard");
 
   if (!userMode) {
     return <WelcomeScreen />;
   }
 
-  const EXPERT_ROUTES: RouteKey[] = ["control", "sensors", "history", "patients", "kpi"];
-  // Uzman olmayan kullanıcı uzman rotaya geçerse dashboard'a yönlendir
-  const effectiveRoute = (!isExpert && EXPERT_ROUTES.includes(activeRoute)) ? "dashboard" : activeRoute;
+  // Profil bu rotaya erişemiyorsa dashboard'a düş. TEK KAYNAK: config/access (PemfApp + AppShell tutarlı) →
+  // yanlış profile cihaz/tedavi ekranı sızmaz (ör. researcher control/sensors/kpi göremez).
+  const effectiveRoute = canAccess(userMode, activeRoute) ? activeRoute : "dashboard";
 
   return (
     <AppNavProvider navigateTo={setActiveRoute}>
@@ -53,13 +59,16 @@ function MainRouter() {
       <ErrorBoundary key={effectiveRoute}>
         <Suspense fallback={<View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}><ActivityIndicator size="large" color={colors.primary} /></View>}>
           {effectiveRoute === "dashboard"  ? <DashboardScreen /> : null}
-          {effectiveRoute === "control" && isExpert ? <ControlScreen /> : null}
-          {effectiveRoute === "sensors" && isExpert ? <SensorMonitorScreen /> : null}
-          {effectiveRoute === "history" && isExpert ? <TreatmentHistoryScreen /> : null}
-          {effectiveRoute === "patients" && isExpert ? <PatientScreen /> : null}
-          {effectiveRoute === "kpi" && isExpert ? <KpiDashboardScreen /> : null}
+          {/* Gate TEK KAYNAK: effectiveRoute yukarıda canAccess ile kapılandı → erişilemez rota buraya
+              ulaşamaz. Ekstra kontrol gereksiz + tutarsız olurdu; hepsi effectiveRoute'a güvenir. */}
+          {effectiveRoute === "control" ? <ControlScreen /> : null}
+          {effectiveRoute === "sensors" ? <SensorMonitorScreen /> : null}
+          {effectiveRoute === "history" ? <TreatmentHistoryScreen /> : null}
+          {effectiveRoute === "patients" ? <PatientScreen /> : null}
+          {effectiveRoute === "kpi" ? <KpiDashboardScreen /> : null}
           {effectiveRoute === "simulator" ? <DemaSimulatorScreen /> : null}
           {effectiveRoute === "ai" ? <AiHubScreen /> : null}
+          {effectiveRoute === "ai_history" ? <AiHistoryScreen /> : null}
           {effectiveRoute === "settings" ? <SettingsScreen /> : null}
         </Suspense>
       </ErrorBoundary>
@@ -68,15 +77,40 @@ function MainRouter() {
   );
 }
 
+function AuthGate() {
+  const { session, loading } = useAuth();
+  if (loading) {
+    // Saklı oturum kontrol edilirken kısa yükleme (splash)
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+  // Giriş yapılmadı → login/kayıt ekranı (backend, LiveDataProvider'ın discovery'siyle erişilebilir).
+  if (!session) {
+    return <AuthScreen />;
+  }
+  // Giriş yapıldı → profil seçimi + uygulama.
+  return (
+    <UserModeProvider>
+      <MainRouter />
+    </UserModeProvider>
+  );
+}
+
 export function PemfApp() {
   return (
     <ErrorBoundary>
-      <UserModeProvider>
-        {/* LiveDataProvider wraps everything — all screens share one WS connection */}
-        <LiveDataProvider>
-          <MainRouter />
-        </LiveDataProvider>
-      </UserModeProvider>
+      {/* LiveDataProvider EN DIŞTA → discovery/WS login ekranında da aktif (backend erişilebilir).
+          AuthProvider giriş-oturumunu yönetir; giriş yapılınca UserModeProvider + uygulama gelir. */}
+      <LiveDataProvider>
+        <AuthProvider>
+          <EntitlementProvider>
+            <AuthGate />
+          </EntitlementProvider>
+        </AuthProvider>
+      </LiveDataProvider>
     </ErrorBoundary>
   );
 }

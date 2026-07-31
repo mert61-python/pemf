@@ -55,7 +55,7 @@ export default function RemoteConnectionPanel() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Wifi size={20} color={colors.primary} />
-        <Text style={styles.title}>Uzaktan Erişim (Mobil Uygulama İçin)</Text>
+        <Text style={styles.title} numberOfLines={2}>Uzaktan Erişim (Mobil Uygulama İçin)</Text>
       </View>
 
       <View style={styles.content}>
@@ -94,10 +94,12 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     marginBottom: spacing.md,
-    gap: 8,
+    gap: spacing.sm,
   },
   title: {
+    flexShrink: 1,
     fontSize: typography.subtitle,
     fontWeight: 'bold',
     color: colors.text,
@@ -131,6 +133,7 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontFamily: 'monospace',
     flex: 1,
+    minWidth: 0,
     marginRight: 8,
   },
   waitingText: {

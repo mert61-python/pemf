@@ -76,9 +76,12 @@ export function AiProPanel() {
     const sync = async () => {
       const st = await apiGet<AiProStatus | null>("/ai/pro/status", null, { silent: true });
       if (!alive || !st) return;
-      setRunning(Boolean(st.active));
+      const active = Boolean(st.active);
+      setRunning(active);
       setLocalized(Boolean(st.localized));
-      if (typeof st.organId === "number") setOrganId(st.organId);
+      // ORTA fix: organId'yi YALNIZ aktif seansta backend'den senkronla. Seans yokken kullanıcının seçtiği
+      // organ'ı 3sn'lik poll EZMESİN (kullanıcı organ seçerken seçim geri zıplıyordu).
+      if (active && typeof st.organId === "number") setOrganId(st.organId);
       if (typeof st.remainingSec === "number") setRemainingSec(st.remainingSec);
     };
     sync();
@@ -120,12 +123,15 @@ export function AiProPanel() {
 
   const changeOrgan = useCallback(async (id: number) => {
     setOrganId(id);
-    await apiPost<AiProAction | null>("/ai/pro/organ", { organ_id: id }, null).catch(() => {});
+    // DÜŞÜK fix: sessiz yutma yerine başarısızlıkta uyar (komut ulaşmadıysa kullanıcı bilsin).
+    const res = await apiPost<AiProAction | null>("/ai/pro/organ", { organ_id: id }, null);
+    if (!res) platformAlert("Organ değiştirilemedi", "Komut sunucuya ulaşmadı — tekrar deneyin.");
   }, []);
 
   const relocalize = useCallback(async () => {
     // Bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele (avuç-Z kalibrasyonu KALKTI).
-    await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null).catch(() => {});
+    const res = await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null);
+    if (!res) platformAlert("Yeniden konumlandırılamadı", "Komut sunucuya ulaşmadı — tekrar deneyin.");
   }, []);
 
   // ── Mobil: telefon kamerasından periyodik kare yakala → /ai/ai_pro/frame ──
@@ -165,9 +171,15 @@ export function AiProPanel() {
     };
   }, [running]);
 
-  // Unmount'ta interval'i temizle (kamera CameraView unmount ile serbest kalır).
+  // Unmount'ta: interval'i temizle + ÇALIŞAN otonom tedaviyi DURDUR.
+  // YÜKSEK fix: panel kapanınca (tab/modül değişimi) backend bobinleri BAŞSIZ sürmeye devam ediyordu
+  // (operatör göremez/kontrol edemez = güvenlik riski). runningRef güncel durumu tutar (cleanup closure'u
+  // stale 'running' yakalamasın). Best-effort fire-and-forget stop (unmount'ta await edilemez).
   useEffect(() => () => {
     if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+    if (runningRef.current) {
+      apiPost<AiProAction | null>("/ai/pro/stop", {}, null).catch(() => {});
+    }
   }, []);
 
   // ── Görüntülenecek değerler: web = WS (aiVisionData), mobil = HTTP yanıtı ──
@@ -202,7 +214,8 @@ export function AiProPanel() {
             {overlayB64 ? (
               <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.camOverlay} resizeMode="contain" />
             ) : null}
-            <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}>
+            <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+              accessibilityRole="button" accessibilityLabel="Kamerayı çevir (ön/arka)">
               <Text style={styles.flipText}>🔄</Text>
             </TouchableOpacity>
           </View>
@@ -230,6 +243,9 @@ export function AiProPanel() {
             key={o.id}
             style={[styles.organChip, organId === o.id && styles.organChipActive]}
             onPress={() => changeOrgan(o.id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: organId === o.id }}
+            accessibilityLabel={`Hedef organ: ${o.name}`}
           >
             <Text style={[styles.organText, organId === o.id && styles.organTextActive]}>{o.name}</Text>
           </TouchableOpacity>
@@ -248,7 +264,7 @@ export function AiProPanel() {
         </View>
         <View style={{ flex: 1, justifyContent: "flex-end" }}>
           <TouchableOpacity style={[styles.calBtn, localized && styles.calBtnDone]} onPress={relocalize}>
-            <Text style={styles.calBtnText}>{localized ? "✓ Konumlandı" : "🎯 Yeniden Konumla"}</Text>
+            <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? "✓ Konumlandı" : "🎯 Yeniden Konumla"}</Text>
           </TouchableOpacity>
         </View>
       </View>

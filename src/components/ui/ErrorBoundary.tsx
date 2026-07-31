@@ -8,6 +8,43 @@ interface State {
   error?: Error;
 }
 
+// YÜKSEK fix — GLOBAL (React-DIŞI) hata ağı: ErrorBoundary yalnız RENDER-fazı hatalarını yakalar.
+// Event-handler / setTimeout / promise içindeki uncaught throw sınırı ATLAR → tıbbi cihazda tedavi
+// sırasında tüm app çökebilir + /client/error raporu GİTMEZDİ. Aşağıdaki handler bunları da yakalayıp
+// aynı sink'e best-effort raporlar. Yalnız BİR KEZ kurulur; native'de mevcut RN handler'ı KORUNUR.
+let _globalHandlerInstalled = false;
+// #93 (KVKK): hata mesajı/stack'i düz-metin kalıcı /client/error jsonl'ine yazılıyor → hasta PII
+// (e-posta/telefon/TC) sızabilir. Rapordan ÖNCE bilinen PII kalıplarını maskele + kırp.
+function _redactPII(s: string): string {
+  return String(s || "")
+    .replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, "[email]")   // e-posta
+    .replace(/\b\d{10,}\b/g, "[num]")                   // TC/telefon/uzun sayı
+    .slice(0, 2000);
+}
+function reportGlobalError(message: string, stack: string) {
+  try {
+    const route = typeof window !== "undefined" ? (window.location?.hash || window.location?.pathname || "") : "";
+    apiPost("/client/error", { message: _redactPII(message), stack: _redactPII(stack), route: `[global] ${route}` }, null, { silent: true }).catch(() => {});
+  } catch { /* raporlama best-effort — asla akışı bozma */ }
+}
+function installGlobalErrorHandler() {
+  if (_globalHandlerInstalled) return;
+  _globalHandlerInstalled = true;
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("error", (e: any) => reportGlobalError(e?.message || "window.onerror", e?.error?.stack || ""));
+    window.addEventListener("unhandledrejection", (e: any) => reportGlobalError("unhandledrejection: " + String(e?.reason?.message ?? e?.reason ?? ""), e?.reason?.stack || ""));
+  }
+  const g: any = typeof global !== "undefined" ? global : undefined;
+  if (g?.ErrorUtils?.getGlobalHandler && g?.ErrorUtils?.setGlobalHandler) {
+    const prev = g.ErrorUtils.getGlobalHandler();
+    g.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+      reportGlobalError(`[${isFatal ? "FATAL" : "non-fatal"}] ${String(error?.message ?? error ?? "")}`, String(error?.stack || ""));
+      if (typeof prev === "function") prev(error, isFatal); // orijinal RN handler (red-box/crash raporu) korunur
+    });
+  }
+}
+installGlobalErrorHandler();
+
 /** Uygulama genelinde React hata sınırı — bir ekran çökse bile beyaz-ekran yerine
  *  kurtarılabilir bir hata kartı gösterir (tıbbi cihazda donup kalma önlenir). */
 export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
@@ -27,8 +64,8 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
       apiPost(
         "/client/error",
         {
-          message: String(error?.message || error || ""),
-          stack: String(info?.componentStack || error?.stack || "").slice(0, 2000),
+          message: _redactPII(String(error?.message || error || "")),  // #93: PII maskele
+          stack: _redactPII(String(info?.componentStack || error?.stack || "")),
           route,
         },
         null,

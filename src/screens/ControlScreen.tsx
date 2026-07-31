@@ -11,7 +11,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Alert,
 } from "react-native";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
@@ -19,9 +18,10 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { SessionProgressCard } from "@/components/domain/SessionProgressCard";
 import { CoilParameterPanel } from "@/components/domain/CoilParameterPanel";
-import { apiPost } from "@/services/apiClient";
+import { apiPost, platformAlert } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 import { useAppNav } from "@/context/AppNavContext";
+import { useAuth } from "@/context/AuthContext";
 import { AiProPanel } from "@/components/domain/AiProPanel";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -45,8 +45,9 @@ const AUTO_TARGETS = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function ControlScreen() {
-  const { snapshot } = useLiveData();
+  const { snapshot, telemetryStale } = useLiveData();
   const { selectedPatient } = useAppNav();
+  const { session } = useAuth();
   const {
     isActive, treatment, elapsedSec, remainingSec,
     loading, error, startSession, stopSession, emergencyStop,
@@ -96,9 +97,16 @@ export function ControlScreen() {
   // Güvenlik: parametreleri aralığa çek, düzeltme olduysa kullanıcıyı uyar.
   const clampWithAlert = useCallback((input: Parameters<typeof clampTherapyParams>[0]) => {
     const { values, warnings } = clampTherapyParams(input);
-    if (warnings.length) Alert.alert("Parametre güvenliği", warnings.join("\n"));
+    if (warnings.length) platformAlert("Parametre güvenliği", warnings.join("\n"));
     return values;
   }, []);
+
+  // ORTA fix: süre girişini normalize et — NaN/boş/≤0 (ör. "-5" → parseInt=-5 TRUTHY, `||20`'yi ATLAR →
+  // clampTherapyParams min=0'a çeker → süresiz-seans körlüğüne sızar) yerine 20dk varsayılan (backend ge=1).
+  const parseDurationMin = (s: string): number => {
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) && n >= 1 ? n : 20;
+  };
 
   // Hedef seçilince literatür-tabanlı parametreleri backend'den çek (auto_preset).
   const applyAutoPreset = useCallback(async (target: string) => {
@@ -121,12 +129,35 @@ export function ControlScreen() {
   }, []);
 
   // ─── Session start handlers ───────────────────────────────────────────────
+  // YÜKSEK fix: Seçili bobinlerden bağlı OLANLARı döndür (STM 1-5 isStmConnected + ESP 6-8 coil.connected);
+  // hiç seçilmemiş/hiçbiri bağlı değilse uyarıp null döner. Manuel + Auto + AI AYNI filtreyi kullansın →
+  // offline bobinin seansa girip "sahte aktif tedavi" göstermesi (ve "en az bir bobin" guard eksikliği) önlenir.
+  const resolveEffectiveCoils = (): number[] | null => {
+    if (selectedCoils.size === 0) {
+      platformAlert("Uyarı", "En az bir bobin seçin.");
+      return null;
+    }
+    const requested = Array.from(selectedCoils);
+    const coilsById = new Map(snapshot.coils.map((c) => [c.id, c]));
+    const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
+    if (effective.length === 0) {
+      platformAlert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).");
+      return null;
+    }
+    if (effective.length < requested.length) {
+      platformAlert("Bazı bobinler çevrimdışı", "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor.");
+    }
+    return effective;
+  };
+
   const handleStartAuto = async () => {
+    const effective = resolveEffectiveCoils();
+    if (!effective) return;
     const p = clampWithAlert({
       freq: parseFloat(autoFreq) || 50,
       duty: parseFloat(autoDuty) || 25,
       intensity: parseFloat(autoIntensity) || 1.0,
-      duration: parseInt(autoDuration) || 20,
+      duration: parseDurationMin(autoDuration),
     });
     const ok = await startSession({
       patientId: selectedPatient?.id,
@@ -137,36 +168,22 @@ export function ControlScreen() {
       duty: p.duty,
       intensity: p.intensity,  // Yoğunluk (mT) — ayrı alan
       durationMinutes: p.duration,
-      coilIds: Array.from(selectedCoils),
+      coilIds: effective,
+      operatorEmail: session?.email,
     });
-    if (!ok) Alert.alert("Hata", error ?? "Seans başlatılamadı.");
+    if (!ok) platformAlert("Hata", error ?? "Seans başlatılamadı.");
   };
 
   // Manuel "Toplu Uygulama" → SEANS olarak başlat (ilerleme/timer/gözlem-notu/history +
   // 409 interlock kazanır). /session/start STM+ESP'yi faz dahil sürer.
   const handleStartManual = async () => {
-    if (selectedCoils.size === 0) {
-      Alert.alert("Uyarı", "En az bir bobin seçin.");
-      return;
-    }
-    // Bağlı OLMAYAN bobinleri düş — hem STM (1-5, isStmConnected) hem ESP (6-8, coil.connected).
-    // Eskiden ESP koşulsuz 'true' geçiyordu → offline ESP bobinleri seansa dahil olup UI'de
-    // "aktif tedavi" yanlış-güvencesi veriyordu (bobinler aslında sürülmüyor).
-    const requested = Array.from(selectedCoils);
-    const coilsById = new Map(snapshot.coils.map((c) => [c.id, c]));
-    const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
-    if (effective.length === 0) {
-      Alert.alert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).");
-      return;
-    }
-    if (effective.length < requested.length) {
-      Alert.alert("Bazı bobinler çevrimdışı", "Bağlı olmayan bobinler atlandı; yalnızca aktif bobinlere komut gönderiliyor.");
-    }
+    const effective = resolveEffectiveCoils();
+    if (!effective) return;
     const p = clampWithAlert({
       freq: parseFloat(masterFreq) || 100,
       duty: parseFloat(masterDuty) || 25,
       phase: parseFloat(masterPhase) || 0,
-      duration: parseInt(masterDuration) || 20,
+      duration: parseDurationMin(masterDuration),
     });
     const ok = await startSession({
       patientId: selectedPatient?.id,
@@ -178,8 +195,9 @@ export function ControlScreen() {
       phase: p.phase,
       durationMinutes: p.duration,
       coilIds: effective,
+      operatorEmail: session?.email,
     });
-    if (!ok) Alert.alert("Hata", error ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
+    if (!ok) platformAlert("Hata", error ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
   };
 
   // Manuel "Durdur": aktif seansı durdur (timer/not/history) + seçili bobinleri sıfırla.
@@ -187,15 +205,26 @@ export function ControlScreen() {
     if (isActive) await stopSession().catch(() => {});
     const stmCoils = Array.from(selectedCoils).filter((id) => id <= 5);
     const espCoils = Array.from(selectedCoils).filter((id) => id >= 6);
+    // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
+    // yanıt yutuluyordu → STOP düşse bile kullanıcı bobinin durduğunu sanıyordu (per-coil panelle tutarsız).
+    let allOk = true;
     if (stmCoils.length > 0) {
-      await apiPost<any>("/coil/batch", {
+      const r = await apiPost<{ status?: string } | null>("/coil/batch", {
         coil_ids: stmCoils, freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-      }, null).catch(() => {});
+      }, null);
+      if (!r || r.status === "error") allOk = false;
     }
     for (const coilId of espCoils) {
-      await apiPost<any>(`/coil/${coilId}/control`, {
+      const r = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
         freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-      }, null).catch(() => {});
+      }, null);
+      if (!r || r.status === "error") allOk = false;
+    }
+    if (!allOk && (stmCoils.length > 0 || espCoils.length > 0)) {
+      platformAlert(
+        "Durdurma onaylanamadı",
+        "Bir veya daha fazla bobinin durduğu teyit edilemedi — bobinler HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
+      );
     }
   };
 
@@ -231,14 +260,18 @@ export function ControlScreen() {
 
   const handleStartAi = async () => {
     if (!aiResult?.parameters) {
-      Alert.alert("Uyarı", "Önce AI analizi yapın.");
+      platformAlert("Uyarı", "Önce AI analizi yapın.");
       return;
     }
+    const effective = resolveEffectiveCoils();
+    if (!effective) return;
     const src = aiResult.parameters;
     const p = clampWithAlert({
       freq: src.freq ?? 50,
       duty: src.duty ?? 25,
-      intensity: parseFloat(autoIntensity) || 1.0, // mT — duty değil (eski hata düzeltildi)
+      // ORTA fix: AI-önerilen intensity'yi kullan; GÖRÜNMEYEN Otomatik-sekme autoIntensity'sini DEĞİL
+      // (AI sekmesinde yoğunluk alanı yok → kullanıcı görmeden başka sekmenin değeriyle başlıyordu).
+      intensity: src.intensity ?? 1.0,
       duration: Math.round(src.duration ?? 20),
     });
     const ok = await startSession({
@@ -250,9 +283,10 @@ export function ControlScreen() {
       duty: p.duty,
       intensity: p.intensity,
       durationMinutes: p.duration,
-      coilIds: Array.from(selectedCoils),
+      coilIds: effective,
+      operatorEmail: session?.email,
     });
-    if (!ok) Alert.alert("Hata", error ?? "Seans başlatılamadı.");
+    if (!ok) platformAlert("Hata", error ?? "Seans başlatılamadı.");
   };
 
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
@@ -297,6 +331,7 @@ export function ControlScreen() {
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={loading}
+        stale={isActive && telemetryStale}
       />
 
       {/* ── Tab bar ───────────────────────────────────────────── */}
@@ -306,9 +341,12 @@ export function ControlScreen() {
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab.key }}
+            accessibilityLabel={tab.label}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit>
               {tab.label}
             </Text>
           </TouchableOpacity>
@@ -407,7 +445,7 @@ export function ControlScreen() {
                 defaultFreq={parseFloat(masterFreq) || 100}
                 defaultDuty={parseFloat(masterDuty) || 25}
                 defaultPhase={parseFloat(masterPhase) || 0}
-                defaultDuration={parseInt(masterDuration) || 20}
+                defaultDuration={parseDurationMin(masterDuration)}
                 stm32Driven={true}
                 stmConnected={isStmConnected}
                 disabled={isActive}
@@ -432,7 +470,7 @@ export function ControlScreen() {
                 defaultFreq={parseFloat(masterFreq) || 50}
                 defaultDuty={parseFloat(masterDuty) || 25}
                 defaultPhase={parseFloat(masterPhase) || 0}
-                defaultDuration={parseInt(masterDuration) || 20}
+                defaultDuration={parseDurationMin(masterDuration)}
                 stm32Driven={false}
                 stmConnected={false}
                 disabled={isActive}
@@ -515,7 +553,10 @@ export function ControlScreen() {
       )}
 
       {/* ── Emergency Stop (always visible) ──────────────────── */}
-      <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}>
+      <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
+        accessibilityRole="button"
+        accessibilityLabel="Tüm bobinleri acil durdur"
+        accessibilityHint="Tüm bobinleri anında durdurur ve aktif tedaviyi sonlandırır">
         <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
       </TouchableOpacity>
 
@@ -580,6 +621,10 @@ function CoilSelector({
                 !connected && styles.coilSelectorBtnOffline,
               ]}
               onPress={() => onToggle(c.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selected.has(c.id) }}
+              accessibilityLabel={`Bobin ${c.id}, ${selected.has(c.id) ? "seçili" : "seçili değil"}, ${connected ? "çevrimiçi" : "çevrimdışı"}`}
             >
               <Text style={[styles.coilSelectorText, selected.has(c.id) && styles.coilSelectorTextActive]}>
                 {c.id}

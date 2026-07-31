@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { RefreshCcw } from "lucide-react-native";
 
@@ -116,6 +116,9 @@ export function DemaSimulatorScreen() {
 const styles = StyleSheet.create({
   container: {
     gap: spacing.lg,
+    width: "100%",
+    maxWidth: rs(1100),
+    alignSelf: "center",
   },
   headerCard: {
     gap: spacing.xs,

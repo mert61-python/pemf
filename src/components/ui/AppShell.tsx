@@ -1,13 +1,18 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
-import { Activity, BarChart3, Bell, BrainCircuit, Gauge, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, type LucideIcon } from "lucide-react-native";
+import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, Gauge, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, type LucideIcon } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useResponsive } from "@/hooks/useResponsive";
-import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rf, rs, gradients, elevation } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { useUserMode } from "@/context/UserModeContext";
+import { useAuth } from "@/context/AuthContext";
+import { canAccess } from "@/config/access";
 import { useLiveData } from "@/context/LiveDataContext";
+import { AuroraBackground } from "@/components/ui/AuroraBackground";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import { useToast } from "@/components/ui/ToastProvider";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
@@ -16,20 +21,28 @@ interface NavItem {
   key: RouteKey;
   label: string;
   icon: LucideIcon;
-  expertOnly: boolean;
 }
 
-// İlk 4 (uzman) bottom-nav'da; gerisi "Daha Fazla" menüsünde (keşfedilebilirlik fix).
+// Görünürlük profile göre config/access (canAccess) ile filtrelenir. İlk 4 erişilebilir öğe
+// bottom-nav'da; gerisi "Daha Fazla" menüsünde (keşfedilebilirlik fix).
 const allNavItems: NavItem[] = [
-  { key: "ai", label: "Akıllı Teşhis", icon: BrainCircuit, expertOnly: false },
-  { key: "dashboard", label: "Ana Ekran", icon: LayoutDashboard, expertOnly: false },
-  { key: "control", label: "Kontrol", icon: SlidersHorizontal, expertOnly: true },
-  { key: "patients", label: "Hastalar", icon: Users, expertOnly: true },
-  { key: "sensors", label: "Sensörler", icon: Activity, expertOnly: true },
-  { key: "history", label: "Geçmiş", icon: History, expertOnly: true },
-  { key: "kpi", label: "Raporlar", icon: BarChart3, expertOnly: true },
-  { key: "simulator", label: "Simülasyon", icon: Waves, expertOnly: true },
-  { key: "settings", label: "Ayarlar", icon: Settings, expertOnly: false }
+  { key: "ai", label: "Akıllı Teşhis", icon: BrainCircuit },
+  { key: "dashboard", label: "Ana Ekran", icon: LayoutDashboard },
+  { key: "control", label: "Kontrol", icon: SlidersHorizontal },
+  { key: "patients", label: "Hastalar", icon: Users },
+  { key: "sensors", label: "Sensörler", icon: Activity },
+  { key: "history", label: "Geçmiş", icon: History },
+  { key: "kpi", label: "Raporlar", icon: BarChart3 },
+  { key: "simulator", label: "Simülasyon", icon: Waves },
+  { key: "ai_history", label: "AI Geçmişi", icon: ClipboardList },
+  { key: "settings", label: "Ayarlar", icon: Settings }
+];
+
+// Üst-bar profil-çipi/menüsü için profil meta (araştırma yalnız .edu e-postada seçilebilir → researchOnly).
+const PROFILE_LIST = [
+  { mode: "pet_owner" as const, label: "Evcil Hayvan Sahibi", short: "Evcil", icon: Heart },
+  { mode: "veterinarian" as const, label: "Veteriner Hekim", short: "Veteriner", icon: Stethoscope },
+  { mode: "researcher" as const, label: "Araştırma Modu", short: "Araştırma", icon: FlaskConical, researchOnly: true },
 ];
 
 interface AppShellProps {
@@ -43,10 +56,14 @@ interface AppShellProps {
 export function AppShell({ activeRoute, title, subtitle, onRouteChange, children }: AppShellProps) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  const { isExpert } = useUserMode();
+  const { userMode, setUserMode } = useUserMode();
+  const { logout } = useAuth();
   const { unreadCount, connectionQuality, reconnect } = useLiveData();
   const { showToast } = useToast();
   const desktop = responsive.isDesktop || responsive.isTablet;
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMeta = PROFILE_LIST.find((p) => p.mode === userMode);
+  const ProfileIcon = profileMeta?.icon ?? Heart;
 
   // Oto-eşleştirme görünür onayı (#11): config.setStoredDeviceId yeni/değişen cihaz
   // id'sinde "@pemf_just_paired" yazar. Mount'ta okuyup toast göster + bayrağı sil.
@@ -66,7 +83,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
     return () => { cancelled = true; };
   }, [showToast]);
 
-  const navItems = allNavItems.filter(item => !item.expertOnly || isExpert);
+  const navItems = allNavItems.filter(item => canAccess(userMode, item.key));
   const [showMore, setShowMore] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const showMoreBtn = navItems.length > 5;
@@ -121,10 +138,13 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      <AuroraBackground intensity={0.4} />
       {desktop ? (
         <View style={styles.sidebar}>
           <View style={styles.brand}>
-            <Gauge color={colors.primary} size={24} />
+            <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.brandLogo}>
+              <Gauge color={colors.white} size={20} />
+            </LinearGradient>
             <View>
               <Text style={styles.brandTitle}>PEMF Vet</Text>
             </View>
@@ -146,24 +166,30 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
       <View style={styles.main} {...(!desktop ? panResponder.panHandlers : {})}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
           </View>
           <View style={styles.headerRight}>
+            {userMode && (
+              <Pressable style={styles.profileChip} onPress={() => setProfileMenuOpen(true)} accessibilityRole="button" accessibilityLabel="Profil değiştir">
+                <ProfileIcon size={16} color={colors.primary} />
+                {desktop && <Text style={styles.profileChipText}>{profileMeta?.short}</Text>}
+                <ChevronDown size={14} color={colors.textMuted} />
+              </Pressable>
+            )}
             {!desktop && (
               <Pressable onPress={() => onRouteChange("settings")} style={{ padding: spacing.xs }}>
                 <Settings size={22} color={colors.textMuted} />
               </Pressable>
             )}
             <Pressable onPress={reconnect} style={styles.wsContainer} accessibilityRole="button" accessibilityLabel="Bağlantıyı yenile">
-              {connectionQuality !== "live" && (
-                <Text style={[styles.wsTextOff, connectionQuality === "offline" && styles.wsTextOffline]}>
-                  {connectionQuality === "stale" ? "Veri gecikmeli" : "Çevrimdışı"}
+              {connectionQuality === "offline" && (
+                <Text style={[styles.wsTextOff, styles.wsTextOffline]} numberOfLines={1}>
+                  Çevrimdışı
                 </Text>
               )}
               <View style={[
                 styles.wsIndicator,
-                connectionQuality === "stale" && styles.wsIndicatorStale,
                 connectionQuality === "offline" && styles.wsIndicatorOff,
               ]} />
             </Pressable>
@@ -183,19 +209,50 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           </View>
         </View>
 
-        {connectionQuality !== "live" && (
-          <Pressable onPress={reconnect} style={[styles.connBanner, connectionQuality === "offline" && styles.connBannerOffline]}>
+        {/* Profil hızlı-geçiş menüsü — üst-bar çipinden açılır (araştırma yalnız .edu'da) + Çıkış */}
+        <Modal visible={profileMenuOpen} transparent animationType="fade" onRequestClose={() => setProfileMenuOpen(false)}>
+          <Pressable style={styles.profileMenuBackdrop} onPress={() => setProfileMenuOpen(false)}>
+            <BlurView intensity={18} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={[styles.profileMenuCard, { marginTop: insets.top + rs(52) }]}>
+              <Text style={styles.profileMenuTitle}>Profil Değiştir</Text>
+              {/* Açık-erişim: 3 profil de menüde (WelcomeScreen ile tutarlı). Ödeme/entitlement
+                  geri geldiğinde researchOnly gate'i burada tekrar uygulanır. */}
+              {PROFILE_LIST.map((p) => {
+                const Icon = p.icon;
+                const active = userMode === p.mode;
+                return (
+                  <Pressable
+                    key={p.mode}
+                    onPress={() => { setUserMode(p.mode); setProfileMenuOpen(false); }}
+                    style={[styles.profileMenuRow, active && styles.profileMenuRowActive]}
+                    accessibilityRole="button"
+                  >
+                    <Icon size={18} color={active ? colors.primary : colors.textMuted} />
+                    <Text style={[styles.profileMenuLabel, active && styles.profileMenuLabelActive]}>{p.label}</Text>
+                    {active ? <Check size={16} color={colors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+              <View style={styles.profileMenuDivider} />
+              <Pressable onPress={() => { setProfileMenuOpen(false); logout(); }} style={styles.profileMenuRow} accessibilityRole="button">
+                <LogOut size={18} color={colors.danger} />
+                <Text style={[styles.profileMenuLabel, { color: colors.danger }]}>Çıkış Yap</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+
+        {connectionQuality === "offline" && (
+          <Pressable onPress={reconnect} style={[styles.connBanner, styles.connBannerOffline]}>
             <Text style={styles.connBannerText}>
-              {connectionQuality === "offline"
-                ? "⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Dokunup yeniden bağlan."
-                : "⚠ Bağlantı gecikmeli — değerler canlı olmayabilir. Dokunup yenile."}
+              ⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Dokunup yeniden bağlan.
             </Text>
           </Pressable>
         )}
 
         <UpdateBanner />
 
-        <ScrollView contentContainerStyle={[styles.content, !desktop && { paddingBottom: 92 + insets.bottom }]} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.content, !desktop && { paddingBottom: rs(92) + insets.bottom }]} keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
       </View>
@@ -218,7 +275,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
               onPress={() => setShowMore(true)}
               style={[styles.bottomItem, moreActive && styles.navItemActive]}
             >
-              <MoreHorizontal size={18} color={moreActive ? colors.text : colors.textMuted} />
+              <MoreHorizontal size={18} color={moreActive ? colors.primary : colors.textMuted} />
               <Text style={[styles.bottomLabel, moreActive && styles.navLabelActive]} numberOfLines={1}>Daha Fazla</Text>
             </Pressable>
           ) : null}
@@ -228,6 +285,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
       {!desktop && showMoreBtn ? (
         <Modal visible={showMore} transparent animationType="fade" onRequestClose={() => setShowMore(false)}>
           <Pressable style={styles.moreBackdrop} onPress={() => setShowMore(false)}>
+            <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={[styles.moreSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
               <Text style={styles.moreTitle}>Diğer Ekranlar</Text>
               {moreItems.map((item) => {
@@ -239,7 +297,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                     onPress={() => { onRouteChange(item.key); setShowMore(false); }}
                     style={[styles.moreRow, active && styles.navItemActive]}
                   >
-                    <Icon size={20} color={active ? colors.text : colors.textMuted} />
+                    <Icon size={20} color={active ? colors.primary : colors.textMuted} />
                     <Text style={[styles.moreRowLabel, active && styles.navLabelActive]}>{item.label}</Text>
                   </Pressable>
                 );
@@ -251,6 +309,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
 
       <Modal visible={showNotifications} transparent animationType="fade" onRequestClose={() => setShowNotifications(false)}>
         <Pressable style={styles.notifBackdrop} onPress={() => setShowNotifications(false)}>
+          <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
           <Pressable style={[styles.notifSheet, { marginTop: insets.top + spacing.xl }]} onPress={() => {}}>
             <NotificationCenter maxVisible={20} />
           </Pressable>
@@ -270,7 +329,7 @@ function NavButton({ item, active, compact, onPress }: { item: NavItem; active: 
       onPress={onPress}
       style={[compact ? styles.bottomItem : styles.navItem, active && styles.navItemActive]}
     >
-      <Icon size={18} color={active ? colors.text : colors.textMuted} />
+      <Icon size={18} color={active ? colors.primary : colors.textMuted} />
       <Text style={[compact ? styles.bottomLabel : styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>
         {item.label}
       </Text>
@@ -321,13 +380,21 @@ const styles = StyleSheet.create({
   navItemActive: {
     backgroundColor: colors.primarySoft
   },
+  brandLogo: {
+    width: rs(40),
+    height: rs(40),
+    borderRadius: rs(12),
+    alignItems: "center",
+    justifyContent: "center",
+    ...elevation("glowPrimary"),
+  },
   navLabel: {
     color: colors.textMuted,
     fontSize: typography.body,
     fontWeight: "700"
   },
   navLabelActive: {
-    color: colors.text
+    color: colors.primary
   },
   main: {
     flex: 1
@@ -341,10 +408,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerLeft: { flex: 1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  wsContainer: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  wsTextOff: { color: "#f59e0b", fontSize: rf(10), fontWeight: "700" },
+  headerLeft: { flex: 1, minWidth: 0, marginRight: spacing.sm },
+  headerRight: { flexShrink: 0, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  profileChip: {
+    flexDirection: "row", alignItems: "center", gap: rs(5),
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgAlt,
+  },
+  profileChipText: { color: colors.text, fontSize: typography.small, fontWeight: "700" },
+  profileMenuBackdrop: { flex: 1, alignItems: "flex-end", paddingRight: spacing.md },
+  profileMenuCard: {
+    backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
+    padding: spacing.xs, minWidth: rs(230),
+    shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: rs(6) }, elevation: 10,
+  },
+  profileMenuTitle: {
+    color: colors.textMuted, fontSize: typography.caption, fontWeight: "700",
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, letterSpacing: 0.5,
+  },
+  profileMenuRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radius.sm,
+  },
+  profileMenuRowActive: { backgroundColor: colors.primarySoft },
+  profileMenuLabel: { flex: 1, color: colors.textMuted, fontSize: typography.body, fontWeight: "600" },
+  profileMenuLabelActive: { color: colors.text, fontWeight: "800" },
+  profileMenuDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs, marginHorizontal: spacing.sm },
+  wsContainer: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  wsTextOff: { flexShrink: 1, color: "#f59e0b", fontSize: rf(10), fontWeight: "700" },
   wsIndicator: {
     width: rs(10), height: rs(10), borderRadius: 5,
     backgroundColor: "#22c55e",

@@ -8,7 +8,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { rf } from "@/theme/tokens";
 
 import { View, StyleSheet, Platform, Text } from "react-native";
-import Svg, { Line, Polyline, Rect, Text as SvgText, G } from "react-native-svg";
+import Svg, { Line, Polyline, Rect, Text as SvgText, G, Circle } from "react-native-svg";
 import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
 
 // 8 bobin için yüksek kontrastlı, kategorik (birbirinden barizce ayrık) palet.
@@ -43,6 +43,8 @@ export function RealtimeChart({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.lineJoin = "round";  // premium: yumuşak çizgi köşeleri/uçları
+    ctx.lineCap = "round";
 
     const W = canvas.width;
     const H = canvas.height;
@@ -125,6 +127,13 @@ export function RealtimeChart({
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
+        // Canlı-değer ucu (premium): son noktada parlak nokta + hâle
+        const lx = PAD.left + plotW;
+        const ly = PAD.top + plotH - ((pts[pts.length - 1].magneticMt - magMin) / magRange) * plotH;
+        ctx.fillStyle = color + "40";
+        ctx.beginPath(); ctx.arc(lx, ly, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
       }
 
       // Temperature — dashed line (right axis)
@@ -270,22 +279,25 @@ function NativeRealtimeChart({
           const n = pts.length;
           const magStr = pts.map((p, i) => `${xAt(i, n)},${yMag(p.magneticMt)}`).join(" ");
           const tempStr = pts.map((p, i) => `${xAt(i, n)},${yTemp(p.objectTemp)}`).join(" ");
+          const lastMag = pts[pts.length - 1];
           return (
             <G key={id}>
-              {showMagnetic ? <Polyline points={magStr} fill="none" stroke={color} strokeWidth={1.5} /> : null}
-              {showTemp ? <Polyline points={tempStr} fill="none" stroke={color} strokeWidth={1} strokeDasharray="4,4" /> : null}
+              {showMagnetic ? <Polyline points={magStr} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {showTemp ? <Polyline points={tempStr} fill="none" stroke={color} strokeWidth={1} strokeDasharray="4,4" strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {showMagnetic ? <Circle cx={xAt(n - 1, n)} cy={yMag(lastMag.magneticMt)} r={5.5} fill={color} opacity={0.25} /> : null}
+              {showMagnetic ? <Circle cx={xAt(n - 1, n)} cy={yMag(lastMag.magneticMt)} r={3} fill={color} /> : null}
             </G>
           );
         })}
         {Array.from({ length: 5 }, (_, i) => {
           const val = magMin + (magRange / 4) * i;
           const y = PAD.top + plotH - (plotH / 4) * i;
-          return <SvgText key={`ml${i}`} x={PAD.left - 6} y={y + 4} fill="#22c55e" fontSize={11} textAnchor="end">{val.toFixed(1)}</SvgText>;
+          return <SvgText key={`ml${i}`} x={PAD.left - 6} y={y + 4} fill="#22c55e" fontSize={rf(11)} textAnchor="end">{val.toFixed(1)}</SvgText>;
         })}
         {showTemp ? Array.from({ length: 5 }, (_, i) => {
           const val = tempMin + (tempRange / 4) * i;
           const y = PAD.top + plotH - (plotH / 4) * i;
-          return <SvgText key={`tl${i}`} x={PAD.left + plotW + 6} y={y + 4} fill="#fb923c" fontSize={11} textAnchor="start">{val.toFixed(1)}</SvgText>;
+          return <SvgText key={`tl${i}`} x={PAD.left + plotW + 6} y={y + 4} fill="#fb923c" fontSize={rf(11)} textAnchor="start">{val.toFixed(1)}</SvgText>;
         }) : null}
         <Rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} fill="none" stroke="#334155" strokeWidth={1} />
       </Svg>

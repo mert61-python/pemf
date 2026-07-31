@@ -1,26 +1,64 @@
 import { PropsWithChildren } from "react";
-import { Platform, StyleSheet, View, ViewStyle, StyleProp } from "react-native";
-import { colors, radius, shadows, spacing } from "@/theme/tokens";
+import { StyleSheet, View, ViewStyle, StyleProp } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, radius, spacing, glass, gradients, elevation } from "@/theme/tokens";
+
+type CardVariant = "solid" | "glass" | "outline" | "gradient";
 
 interface CardProps extends PropsWithChildren {
   style?: StyleProp<ViewStyle>;
+  variant?: CardVariant;
 }
 
-export function Card({ children, style }: CardProps) {
-  return <View style={[styles.card, cardShadow, style]}>{children}</View>;
+/**
+ * Premium kart: katmanlı gölge + üst-kenar iç-ışığı (yukarıdan aydınlatılmış his).
+ * variant="glass" yarı-saydam cam (aurora/renkli arka planlarda parlar),
+ * "gradient" ince yüzey gradyanı, "outline" gölgesiz çerçeve.
+ */
+export function Card({ children, style, variant = "solid" }: CardProps) {
+  const glassy = variant === "glass";
+  const outline = variant === "outline";
+  const gradient = variant === "gradient";
+  return (
+    <View
+      style={[
+        styles.card,
+        elevation(outline ? "sm" : "md"),
+        glassy && styles.glass,
+        outline && styles.outline,
+        style,
+      ]}
+    >
+      {gradient ? (
+        <LinearGradient
+          colors={gradients.surface}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.fill]}
+          pointerEvents="none"
+        />
+      ) : null}
+      {children}
+    </View>
+  );
 }
-
-const cardShadow: ViewStyle =
-  Platform.OS === "web"
-    ? ({ boxShadow: "0 10px 18px rgba(0, 0, 0, 0.24)" } as ViewStyle)
-    : shadows.panel;
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.panel,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderTopColor: "rgba(255,255,255,0.09)", // üst-kenar ışığı — premium derinlik
+    borderRadius: radius.card,
     borderWidth: 1,
-    padding: spacing.lg
-  }
+    padding: spacing.lg,
+  },
+  glass: {
+    backgroundColor: glass.bg,
+    borderColor: glass.border,
+    borderTopColor: glass.highlight,
+  },
+  outline: {
+    backgroundColor: "transparent",
+  },
+  fill: { borderRadius: radius.card },
 });

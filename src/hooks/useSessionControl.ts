@@ -19,6 +19,7 @@ export interface SessionStartParams {
   phase?: number;
   durationMinutes: number;
   coilIds?: number[];
+  operatorEmail?: string;  // klinik-içi sahiplik — seansı başlatan hekim
 }
 
 export interface SessionControlResult {
@@ -83,14 +84,21 @@ export function useSessionControl(): SessionControlResult {
 
   const startTimer = useCallback((totalSec: number, alreadyElapsed = 0) => {
     stopTimer();
+    // KRİTİK fix: totalSec<=0 (süresiz/0-dk seans veya bozuk giriş) durumunda ilk tick
+    // 'remaining=max(0,0-1)=0' olduğundan seansı YANLIŞLIKLA ~1sn'de bitirip UI'ı ÇALIŞAN tedaviye
+    // KÖR bırakıyordu (isActive=false→reconcile durur; kart "Bekleniyor" der, bobinler enerjili).
+    // Süresiz modda YALNIZ geçen süreyi say, OTOMATİK BİTİRME YOK — backend watchdog/operatör durdurur;
+    // isActive=true kaldığından reconcile backend durunca UI'ı senkronlar.
+    const indefinite = totalSec <= 0;
     durationSecRef.current = totalSec;
     elapsedRef.current = alreadyElapsed;
     setElapsedSec(elapsedRef.current);
-    setRemainingSec(Math.max(0, totalSec - elapsedRef.current));
+    setRemainingSec(indefinite ? 0 : Math.max(0, totalSec - elapsedRef.current));
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
-      const remaining = Math.max(0, totalSec - elapsedRef.current);
       setElapsedSec(elapsedRef.current);
+      if (indefinite) return; // süresiz: bitiş kontrolü YOK (kör kalma önlenir)
+      const remaining = Math.max(0, totalSec - elapsedRef.current);
       setRemainingSec(remaining);
       if (remaining === 0) {
         stopTimer();
@@ -102,7 +110,12 @@ export function useSessionControl(): SessionControlResult {
 
   // Check for existing active session on mount
   useEffect(() => {
+    // YÜKSEK fix: iptal-guard. Yavaş /session/active yanıtı unmount'tan SONRA çözülürse cleanup'ın
+    // stopTimer'ı boşa çalışır, ardından startTimer YENİ (sahipsiz) bir interval kurar → unmount sonrası
+    // setState + dakikalarca yaşayan yetim sayaç. cancelled bayrağı bunu önler.
+    let cancelled = false;
     apiGet<SessionActiveResponse>("/session/active", {}, { silent: true }).then((sess) => {
+      if (cancelled) return;
       if (sess?.is_active) {
         setIsActive(true);
         const totalSec = (sess.duration_minutes ?? 0) * 60;
@@ -119,7 +132,10 @@ export function useSessionControl(): SessionControlResult {
         startTimer(totalSec, elapsed);
       }
     });
-    return stopTimer;
+    return () => {
+      cancelled = true;
+      stopTimer();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -127,8 +143,10 @@ export function useSessionControl(): SessionControlResult {
   // ve seans backend'de bittiyse (süre dolması / başka istemci durdurması) UI'ı kapatır.
   useEffect(() => {
     if (!isActive) return;
+    let cancelled = false;
     const reconcile = async () => {
       const sess = await apiGet<SessionActiveResponse | null>("/session/active", null, { silent: true }).catch(() => null);
+      if (cancelled) return; // unmount sonrası setState'i önle
       if (!sess) return; // bağlantı yok — yerel timer devam etsin
       if (!sess.is_active) {
         stopTimer();
@@ -140,11 +158,12 @@ export function useSessionControl(): SessionControlResult {
         const total = durationSecRef.current || (sess.duration_minutes ?? 0) * 60;
         elapsedRef.current = sess.elapsed_sec;
         setElapsedSec(sess.elapsed_sec);
-        setRemainingSec(Math.max(0, total - sess.elapsed_sec));
+        setRemainingSec(total > 0 ? Math.max(0, total - sess.elapsed_sec) : 0);
       }
     };
     reconcileRef.current = setInterval(reconcile, 2000);  // 5s→2s: acil-durdur/backend-stop UI senkronu daha hızlı
     return () => {
+      cancelled = true;
       if (reconcileRef.current) {
         clearInterval(reconcileRef.current);
         reconcileRef.current = null;
@@ -167,6 +186,7 @@ export function useSessionControl(): SessionControlResult {
         phase: params.phase ?? 0,
         duration_minutes: params.durationMinutes,
         coil_ids: params.coilIds ?? [],
+        operator_email: params.operatorEmail ?? "",
       }, null);
 
       if (result?.status === "success" || result?.session) {
@@ -226,10 +246,22 @@ export function useSessionControl(): SessionControlResult {
     try {
       // Backend emergency stop hem STM32'ye hem MQTT/ESP'ye stop gönderir.
       const { serviceConfig } = require("@/services/config");
-      const response = await fetch(`${serviceConfig.bridgeBaseUrl}/hardware/emergency_stop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      // GÜVENLİK: ham fetch TIMEOUT'suzdu → yarı-açık tünelde (cihaz erişilir ama soket takılı)
+      // ne resolve ne reject eder; catch fallback'i (/session/stop + stop_all_coils) ve
+      // "DOĞRULANAMADI → fiziksel güç düğmesi" uyarısı HİÇ çalışmaz, buton sessizce asılır.
+      // AbortController ile ~5sn sonra abort → deterministik olarak catch'e düşer.
+      const _esCtrl = new AbortController();
+      const _esTimer = setTimeout(() => _esCtrl.abort(), 5000);
+      let response: Response;
+      try {
+        response = await fetch(`${serviceConfig.bridgeBaseUrl}/hardware/emergency_stop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: _esCtrl.signal,
+        });
+      } finally {
+        clearTimeout(_esTimer);
+      }
       if (!response.ok) throw new Error(`Emergency stop failed: ${response.status}`);
       const data = (await response.json().catch(() => null)) as EmergencyStopResponse | null;
       if (data) {

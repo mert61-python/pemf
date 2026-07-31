@@ -1,22 +1,30 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, TextInput, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
-import { apiGet, apiPost } from "@/services/apiClient";
+import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import type { Patient } from "@/types/domain";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
+import { useUserMode } from "@/context/UserModeContext";
+import { useAuth } from "@/context/AuthContext";
+import { canAccess } from "@/config/access";
 
 export function PatientScreen() {
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
+  const { userMode, isExpert } = useUserMode();
+  const { session } = useAuth();
+  const myEmail = (session?.email || "").toLowerCase();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Klinik-ici gorunum: "mine" = benim kaydettiklerim (+ sahipsiz eski kayitlar), "all" = tum klinik.
+  const [scope, setScope] = useState<"mine" | "all">("mine");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,7 +75,10 @@ export function PatientScreen() {
 
     // Ondalıkları nokta-normalize ederek gönder (backend/AI parse edebilsin).
     const normalized = { ...form, age: form.age ? String(ageN) : "", weight: form.weight ? String(weightN) : "" };
-    const payload = editingId ? { ...normalized, id: editingId } : normalized;
+    // Yeni kayitta operator_email = giris yapan hekim (klinik-ici sahiplik). Duzenlemede DEGISMEZ (backend de yok sayar).
+    const payload = editingId
+      ? { ...normalized, id: editingId }
+      : { ...normalized, operator_email: session?.email || "" };
     setSaving(true);
     const res = await apiPost<{ status: string }>("/patients", payload, { status: "error" });
     setSaving(false);
@@ -99,44 +110,30 @@ export function PatientScreen() {
     setIsAdding(true);
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert("Hasta Sil", "Bu hastası silmek istediğinizden emin misiniz?", [
-      { text: "İptal", style: "cancel" },
-      { 
-        text: "Sil", 
-        style: "destructive", 
-        onPress: async () => {
-          // Sunucu tarafında DELETE /api/patients/{id} endpoint'i kullanılıyor
-          const res = await apiPost<{status: string}>(`/patients/${id}/delete`, {}, { status: "error" });
-          if (res.status === "success" || res.status === undefined) {
-            showToast("Hasta silindi.", "success");
-            loadPatients();
-          } else {
-            showToast("Hasta silinemedi.", "error");
-          }
-        } 
-      }
-    ]);
+  const handleDelete = async (id: string) => {
+    // platformConfirm = web-güvenli onay. (Alert.alert çoklu-buton WEB'de tetiklenmez → "Sil" onPress
+    // hiç çalışmıyor, istek gitmiyordu → "hasta silme çalışmıyor". window.confirm'e düşer.)
+    if (!(await platformConfirm("Hasta Sil", "Bu hastayı silmek istediğinizden emin misiniz?", "Sil"))) return;
+    // Sunucu: POST /api/patients/{id}/delete (Expo-uyumlu) veya DELETE /api/patients/{id}.
+    const res = await apiPost<{ status: string }>(`/patients/${id}/delete`, {}, { status: "error" });
+    if (res.status === "success" || res.status === undefined) {
+      showToast("Hasta silindi.", "success");
+      loadPatients();
+    } else {
+      showToast("Hasta silinemedi.", "error");
+    }
   };
 
-  const handleDeleteAll = () => {
-    Alert.alert("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", [
-      { text: "İptal", style: "cancel" },
-      { 
-        text: "Hepsini Sil", 
-        style: "destructive", 
-        onPress: async () => {
-          // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
-          const res = await apiPost<{status: string}>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
-          if (res.status === "success") {
-            showToast("Tüm hastalar silindi.", "success");
-            loadPatients();
-          } else {
-            showToast("Toplu silme işlemi başarısız.", "error");
-          }
-        } 
-      }
-    ]);
+  const handleDeleteAll = async () => {
+    if (!(await platformConfirm("Tüm Hastaları Sil", "Veritabanındaki TÜM HASTALARI silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", "Hepsini Sil"))) return;
+    // Backend (audit B-8.2) kazara toplu-silmeye karşı confirm ister.
+    const res = await apiPost<{ status: string }>(`/patients/delete_all`, { confirm: "DELETE_ALL" }, { status: "error" });
+    if (res.status === "success") {
+      showToast("Tüm hastalar silindi.", "success");
+      loadPatients();
+    } else {
+      showToast("Toplu silme işlemi başarısız.", "error");
+    }
   };
 
   const handleStartSession = (p: Patient) => {
@@ -146,19 +143,35 @@ export function PatientScreen() {
     navigateTo("control");
   };
 
-  const filteredPatients = patients.filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.owner || "").toLowerCase().includes(search.toLowerCase()));
+  // "Benim Hastalarım" = operator_email eşleşen VEYA sahipsiz (eski/migrasyon) kayıtlar → hiçbir hasta kaybolmaz.
+  // "Tüm Klinik" = filtresiz. Oturum yoksa (myEmail boş) filtreleme yapılmaz (hepsi).
+  const scopedPatients = patients.filter(p => {
+    if (scope === "all" || !myEmail) return true;
+    const op = (p.operator_email || "").toLowerCase();
+    return !op || op === myEmail;
+  });
+  const mineCount = patients.filter(p => {
+    if (!myEmail) return false;
+    const op = (p.operator_email || "").toLowerCase();
+    return !op || op === myEmail;
+  }).length;
+  const filteredPatients = scopedPatients.filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.owner || "").toLowerCase().includes(search.toLowerCase()));
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Hasta Veritabanı</Text>
         <View style={{flexDirection: 'row', gap: spacing.sm}}>
-          <Button 
-            label="Tümünü Sil" 
-            icon={<Trash2 color={colors.danger} size={16} />}
-            variant="secondary"
-            onPress={handleDeleteAll}
-          />
+          {/* Güvenlik/KVKK (inceleme): "Tümünü Sil" paylaşılan hasta-DB'sini yıkar → yalnız VETERİNER (isExpert).
+              Araştırma modu (PIN'li de olsa) tüm klinik kayıtlarını silememeli. */}
+          {isExpert && (
+            <Button
+              label="Tümünü Sil"
+              icon={<Trash2 color={colors.danger} size={16} />}
+              variant="secondary"
+              onPress={handleDeleteAll}
+            />
+          )}
           <Button 
             label={isAdding ? "İptal" : "Yeni Hasta Kayıt"} 
             icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
@@ -192,6 +205,30 @@ export function PatientScreen() {
           </View>
         </Card>
       )}
+
+      {/* Klinik-içi görünüm: hekim varsayılan kendi hastalarını görür, isterse tüm kliniğe geçer. */}
+      {myEmail ? (
+        <View style={styles.segment}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]}
+            onPress={() => setScope("mine")}
+            accessibilityLabel="Benim hastalarım"
+          >
+            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>
+              Benim Hastalarım{mineCount ? ` (${mineCount})` : ""}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]}
+            onPress={() => setScope("all")}
+            accessibilityLabel="Tüm klinik hastaları"
+          >
+            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>
+              Tüm Klinik ({patients.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={styles.searchBox}>
         <Search color={colors.textMuted} size={20} />
@@ -232,7 +269,11 @@ export function PatientScreen() {
                     </View>
                   </View>
                   <View style={styles.actions}>
-                    <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}><Activity color={colors.success} size={20} /></TouchableOpacity>
+                    {/* Seans Başlat yalnız control erişimi olan profillere (vet) — araştırma modu control'e
+                        giremez, buton effectiveRoute kapısında dashboard'a düşen çıkmaz-sokaktı (UX + tutarlılık). */}
+                    {canAccess(userMode, "control") && (
+                      <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}><Activity color={colors.success} size={20} /></TouchableOpacity>
+                    )}
                     <TouchableOpacity onPress={() => handleEdit(p)} style={styles.actionBtnIcon}><Edit color={colors.primary} size={20} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDelete(p.id!)} style={styles.actionBtnIcon}><Trash2 color={colors.danger} size={20} /></TouchableOpacity>
                   </View>
@@ -241,6 +282,10 @@ export function PatientScreen() {
                   <Text style={styles.detailText} numberOfLines={1}>Sahip: <Text style={{fontWeight: "bold"}}>{p.owner || "Belirtilmemiş"}</Text></Text>
                   <Text style={styles.detailText}>Kilo: {p.weight || "-"} kg</Text>
                   <Text style={styles.detailText}>Yaş: {p.age || "-"}</Text>
+                  {/* Tüm Klinik görünümünde kaydı hangi hekimin oluşturduğunu göster. */}
+                  {scope === "all" && p.operator_email ? (
+                    <Text style={styles.detailText} numberOfLines={1}>Kaydeden: {p.operator_email}</Text>
+                  ) : null}
                 </View>
               </Card>
             ))}
@@ -259,6 +304,11 @@ const styles = StyleSheet.create({
   formTitle: { color: colors.primary, fontSize: typography.subtitle, fontWeight: "700" },
   input: { backgroundColor: colors.bg, color: colors.text, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   saveBtn: { marginTop: spacing.sm },
+  segment: { flexDirection: "row", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: rs(4), gap: rs(4) },
+  segmentBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
+  segmentBtnActive: { backgroundColor: colors.primary },
+  segmentText: { color: colors.textMuted, fontSize: typography.caption, fontWeight: "700" },
+  segmentTextActive: { color: colors.white },
   searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgAlt, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, height: rs(48), gap: spacing.sm },
   searchInput: { flex: 1, color: colors.text, fontSize: typography.body },
   list: { gap: spacing.md, paddingBottom: spacing.xl },

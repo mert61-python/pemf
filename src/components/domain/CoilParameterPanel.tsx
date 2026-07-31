@@ -4,8 +4,8 @@
  * Python unified_control_window'daki per-coil kontrol panelinin karşılığı.
  * Frekans, duty, faz, süre girişleri ve start/stop butonu içerir.
  */
-import { StyleSheet, Text, View, TextInput, TouchableOpacity } from "react-native";
-import { useState, useCallback, useEffect } from "react";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, AccessibilityInfo } from "react-native";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
@@ -62,7 +62,7 @@ export function CoilParameterPanel({
 
   const color = COIL_COLORS[(coilId - 1) % 8];
 
-  const sendCommand = useCallback(async (start: boolean) => {
+  const sendCommand = useCallback(async (start: boolean): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
@@ -71,33 +71,67 @@ export function CoilParameterPanel({
       const pf = parseFloat(freq);   let f = Number.isNaN(pf) ? defaultFreq : pf;
       const pd = parseFloat(duty);   let d = Number.isNaN(pd) ? defaultDuty : pd;
       const pp = parseFloat(phase);  let ph = Number.isNaN(pp) ? defaultPhase : pp;
-      let durMin = parseInt(duration) || 0;
+      // NaN-guard (|| DEĞİL): boş/geçersiz süre `parseInt(NaN)||0 = 0` ile SESSİZCE "süresiz"
+      // oluyordu. Geçersizse default'a düş; ayrıca 0/süresiz'e çözülürse AÇIK uyar (aşağıda).
+      const pDur = parseInt(duration, 10);
+      let durMin = Number.isNaN(pDur) ? defaultDuration : pDur;
       if (start) {
         // Güvenlik: yalnızca BAŞLAT'ta sınır uygula (stop meşru biçimde 0 olabilir).
         const c = clampTherapyParams({ freq: f, duty: d, phase: ph, duration: durMin });
         f = c.values.freq; d = c.values.duty; ph = c.values.phase; durMin = c.values.duration;
-        if (c.warnings.length) setError(c.warnings.join(" "));
+        const warns = [...c.warnings];
+        // Süre 0/süresiz: donanım watchdog'u DURATION_MAX'a kaplar (kontrolsüz kalmaz) ama operatör
+        // süre girmediğini BİLMELİ — sessiz süresiz-seans olmasın.
+        if (durMin <= 0) warns.push("Süre girilmedi — bobin donanım üst-sınırına kadar çalışır; süre belirtmeniz önerilir.");
+        if (warns.length) setError(warns.join(" "));
       }
-      await apiPost<any>(`/coil/${coilId}/control`, {
+      // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.
+      // Eskiden yanıt kontrol edilmeden "başarılı" sayılıyordu → STOP sessizce düşse bile kullanıcı
+      // bobinin durduğunu sanıyordu (bobin ÇALIŞMAYA DEVAM). null/status:error → açık uyarı ver.
+      const res = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
         freq: f,
         duty: d,
         phase: ph,
         duration: durMin * 60,
         start,
       }, null);
-    } catch (e: any) {
+      const ok = !!res && res.status !== "error";
+      if (!ok) {
+        setError(start
+          ? "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin."
+          : "DURDURMA ONAYLANAMADI — bobin HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.");
+      }
+      return ok;
+    } catch {
       setError("Komut gönderilemedi");
+      return false;
     } finally {
       setLoading(false);
     }
-  }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase]);
+  }, [coilId, freq, duty, phase, duration, defaultFreq, defaultDuty, defaultPhase, defaultDuration]);
 
   // Güvenlik interlock: aşırı ısınmada bobini otomatik durdur (yanık riski).
+  // YÜKSEK fix: (1) sendCommand'i AWAIT et → yalnız TEYİTLİ başarıda "durduruldu" de (sessiz stop-hatasında
+  // sahte güvence verme). (2) tek-atış ref → aşırı-ısınma sürerken her telemetri-tick'inde durdurma-spam etme.
+  const overheatHandledRef = useRef(false);
   useEffect(() => {
-    if (running && objectTemp > SAFE_TEMP_CUTOFF) {
-      sendCommand(false);
-      setError(`Aşırı ısınma (${objectTemp.toFixed(1)}°C) — bobin otomatik durduruldu.`);
+    const overheating = running && objectTemp > SAFE_TEMP_CUTOFF;
+    if (!overheating) {
+      overheatHandledRef.current = false; // durum normale döndü → yeni episode için guard sıfırla
+      return;
     }
+    if (overheatHandledRef.current) return; // bu episode zaten ele alındı
+    overheatHandledRef.current = true;
+    const t = objectTemp;
+    (async () => {
+      const ok = await sendCommand(false);
+      const msg = ok
+        ? `Aşırı ısınma (${t.toFixed(1)}°C) — bobin otomatik durduruldu.`
+        : `⚠️ AŞIRI ISINMA (${t.toFixed(1)}°C) — otomatik DURDURMA ONAYLANAMADI! ACİL DURDUR'a basın veya cihazı fiziksel güç düğmesinden kapatın.`;
+      setError(msg);
+      // A11y (#68): yanık-riski uyarısını ekran-okuyucuya AÇIKÇA duyur (live-region'a ek güvence).
+      AccessibilityInfo.announceForAccessibility(msg);
+    })();
   }, [running, objectTemp, sendCommand]);
 
   const isDisabled = disabled || !connected || (stm32Driven && !stmConnected);
@@ -117,11 +151,27 @@ export function CoilParameterPanel({
         </View>
         <View style={styles.headerRight}>
           {objectTemp > 0 && (
-            <View style={[styles.tempBadge, objectTemp > 45 && styles.tempWarning]}>
-              <Text style={styles.tempText}>{objectTemp.toFixed(1)}°C</Text>
+            <View style={[styles.tempBadge, objectTemp > 45 && styles.tempWarning]}
+              accessibilityLabel={`Sıcaklık ${objectTemp.toFixed(1)} derece${objectTemp > 45 ? ", yüksek" : ""}`}>
+              {/* #121: >45°C uyarısı yalnız-RENK değil — ⚠ ikonu + metin (renk-körü operatör görsün). */}
+              <Text style={styles.tempText}>{objectTemp > 45 ? "⚠ " : ""}{objectTemp.toFixed(1)}°C</Text>
             </View>
           )}
-          <View style={[styles.statusDot, { backgroundColor: running ? "#22c55e" : connected ? "#f59e0b" : "#ef4444" }]} />
+          {/* A11y (#67): durum YALNIZ-RENK değil — nokta + kısa metin (renk-körü operatör AKTİF ile
+              HAZIR/durmuş bobini ayırt edebilsin; ekran-okuyucu için accessibilityLabel). */}
+          <View style={styles.statusWrap}>
+            <View
+              style={[styles.statusDot, { backgroundColor: running ? "#22c55e" : connected ? "#f59e0b" : "#ef4444" }]}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+            <Text
+              style={[styles.statusLabel, { color: running ? "#22c55e" : connected ? "#f59e0b" : "#ef4444" }]}
+              accessibilityLabel={running ? "Durum: Aktif, bobin çalışıyor" : connected ? "Durum: Hazır, bobin durdu" : "Durum: Çevrimdışı"}
+            >
+              {running ? "Aktif" : connected ? "Hazır" : "Offline"}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -165,7 +215,13 @@ export function CoilParameterPanel({
         />
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {/* A11y (#68): aşırı-ısınma/otomatik-kesme-başarısız gibi güvenlik uyarıları ekran-okuyucuya
+          DUYURULSUN (yanık riski). accessibilityLiveRegion='assertive' + role='alert'. */}
+      {error ? (
+        <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+          {error}
+        </Text>
+      ) : null}
 
       {/* Control buttons */}
       <View style={styles.btnRow}>
@@ -254,6 +310,8 @@ const styles = StyleSheet.create({
   colorDot: { width: rs(10), height: rs(10), borderRadius: 5 },
   coilTitle: { color: colors.text, fontWeight: "700", fontSize: typography.body },
   statusDot: { width: rs(8), height: rs(8), borderRadius: 4 },
+  statusWrap: { flexDirection: "row", alignItems: "center", gap: rs(4) },
+  statusLabel: { fontSize: rf(10), fontWeight: "700", letterSpacing: 0.3 },
   tempBadge: {
     backgroundColor: "#1e293b",
     paddingHorizontal: 6,

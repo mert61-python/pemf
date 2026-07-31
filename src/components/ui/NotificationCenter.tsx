@@ -6,6 +6,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated } from "
 import { useRef, useEffect } from "react";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
+import { platformConfirm } from "@/services/apiClient";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
 
 const LEVEL_CONFIG: Record<NotificationLevel, { color: string; bg: string; icon: string }> = {
@@ -23,6 +24,14 @@ interface Props {
 export function NotificationCenter({ maxVisible = 20, compact = false }: Props) {
   const { snapshot, unreadCount, markAllRead, clearNotifications } = useLiveData();
   const notifications = (snapshot.notifications ?? []).slice(0, maxVisible);
+
+  // DÜŞÜK fix: "Temizle" tüm bildirim geçmişini geri-DÖNÜLEMEZ siler (yanlış-dokunuşla tıbbi uyarı geçmişi
+  // kaybolur) → onay iste.
+  const handleClear = async () => {
+    if (await platformConfirm("Bildirimleri temizle", "Tüm bildirim geçmişi silinsin mi? Bu işlem geri alınamaz.", "Temizle")) {
+      clearNotifications();
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -42,7 +51,7 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
             </TouchableOpacity>
           )}
           {notifications.length > 0 && (
-            <TouchableOpacity style={styles.actionBtn} onPress={clearNotifications}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleClear}>
               <Text style={[styles.actionBtnText, { color: "#ef4444" }]}>Temizle</Text>
             </TouchableOpacity>
           )}
@@ -56,8 +65,10 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
         </View>
       ) : (
         <ScrollView style={compact ? styles.listCompact : styles.list} showsVerticalScrollIndicator={false}>
-          {notifications.map((n) => (
-            <NotificationItem key={n.id} notification={n} compact={compact} />
+          {notifications.map((n, idx) => (
+            // ORTA fix: n.id backend sayacı — benzersiz garanti DEĞİL (backend restart→1'e döner çakışma / id
+            // yoksa undefined). timestamp+idx ile stabil bileşik key → yanlış-satır render/animasyon önlenir.
+            <NotificationItem key={`${n.id ?? "n"}-${(n as any).timestamp ?? idx}`} notification={n} compact={compact} />
           ))}
         </ScrollView>
       )}
@@ -75,6 +86,7 @@ function NotificationItem({ notification: n, compact }: { notification: AppNotif
       duration: 300,
       useNativeDriver: true,
     }).start();
+    return () => fadeAnim.stopAnimation(); // DÜŞÜK fix: unmount'ta animasyonu durdur (sızıntı önle)
   }, [fadeAnim]);
 
   return (

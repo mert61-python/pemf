@@ -9,7 +9,7 @@ import { CoilStatus } from "@/types/domain";
 export function CoilCard({ coil }: { coil: CoilStatus }) {
   const isStmCoil = coil.stm32Driven || coil.id <= 5;
   const sourceText = coil.connected
-    ? isStmCoil ? "STM32 senkron" : "Gateway senkron"
+    ? isStmCoil ? "Kablolu senkron" : "Kablosuz senkron"
     : "Veri bekleniyor";
 
   return (
@@ -36,9 +36,9 @@ function MiniMetric({ icon, label, value }: { icon: ReactNode; label: string; va
   return (
     <View style={styles.mini}>
       {icon}
-      <View>
-        <Text style={styles.miniLabel}>{label}</Text>
-        <Text style={styles.miniValue}>{value}</Text>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={styles.miniLabel} numberOfLines={1}>{label}</Text>
+        <Text style={styles.miniValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       </View>
     </View>
   );

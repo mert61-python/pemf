@@ -63,13 +63,24 @@ export function connectPemfWebSocket(
     stopHeartbeat();
     lastMessageTs = Date.now();
     pingTimer = setInterval(() => {
-      // Half-open tespiti: uzun süredir hiç mesaj yoksa soketi zorla kapat → reconnect.
+      // Half-open tespiti: uzun süredir hiç mesaj yok. YÜKSEK fix: sadece socket.close() çağırıp
+      // reconnect'i onclose'a bırakmak YETMEZ — half-open sokette onclose bazen HİÇ tetiklenmez →
+      // kalıcı SESSİZ kopukluk (UI "CANLI/bağlı" kalır, veri donuk). Burada PROAKTİF reconnect yap:
+      // ölü soketin handler'larını sök (onclose çift-tetiklemesin) + kapat + durum-bildir + reconnect.
       if (Date.now() - lastMessageTs > STALE_TIMEOUT_MS) {
-        try {
-          socket?.close();
-        } catch {
-          /* ignore */
+        const dead = socket;
+        socket = null;
+        stopHeartbeat();
+        if (dead) {
+          try {
+            dead.onclose = null as any;
+            dead.onmessage = null as any;
+            dead.onerror = null as any;
+            dead.close();
+          } catch { /* ignore */ }
         }
+        onState?.(false);
+        scheduleReconnect();
         return;
       }
       try {
@@ -120,6 +131,9 @@ export function connectPemfWebSocket(
         : wsBase;
       socket = new WebSocket(wsUrl);
       socket.onopen = () => {
+        // DÜŞÜK fix: CONNECTING sokette unmount olduysa (closedByCaller) heartbeat başlatma → kapat + çık
+        // (aksi halde temizlenmemiş interval + kapanmış-context setState).
+        if (closedByCaller) { try { socket?.close(); } catch { /* ignore */ } return; }
         reconnectDelay = 1000; // backoff sıfırla
         consecutiveFails = 0;
         onState?.(true);

@@ -4,16 +4,20 @@
  */
 import { StyleSheet, Text, View } from "react-native";
 import { useState, useEffect } from "react";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { colors, spacing, typography, rs, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
-import { apiGet } from "@/services/apiClient";
 import { formatUptime } from "@/utils/uptime";
 
 export function SystemInfoPanel() {
-  const { snapshot } = useLiveData();
+  const { snapshot, connectionQuality } = useLiveData();
   const sysInfo = snapshot.system;
   const [uptime, setUptime] = useState("00:00:00");
-  const [stmConnected, setStmConnected] = useState(false);
+  // ORTA fix: STM32 durumunu mount'ta BİR KEZ REST yerine CANLI snapshot.stm'den türet → seans sırasında
+  // STM kablosu çıkar/koparsa panel bayat "Bağlı ✅" göstermesin. snapshot.stm WS ile sürekli güncellenir.
+  // #69: bağlantı bayat/çevrimdışıyken (connectionQuality!='live') snapshot.stm de BAYAT olur → "Bağlı"
+  // gösterme, "Bilinmiyor" de (yanlış-güvence yok).
+  const stale = connectionQuality !== "live";
+  const stmConnected = !stale && snapshot.stm === "online";
 
   // Çalışma süresi: WS snapshot'taki startTime'dan (process başlangıcı) her saniye hesaplanır.
   // (/api/system/info `uptime` DÖNDÜRMÜYOR → eski `d.uptime` hep undefined idi, panel "00:00:00"
@@ -25,13 +29,6 @@ export function SystemInfoPanel() {
     return () => clearInterval(id);
   }, [sysInfo?.startTime]);
 
-  // STM32 bağlantı durumu: /system/info `stmConnected` döndürüyor (mount'ta bir kez — mevcut davranış korunur).
-  useEffect(() => {
-    apiGet<any>("/system/info", {}, { silent: true }).then((d) => {
-      if (typeof d?.stmConnected === "boolean") setStmConnected(d.stmConnected);
-    });
-  }, []);
-
   return (
     <View style={styles.card}>
       <Text style={styles.title}>💻 Sistem Bilgileri</Text>
@@ -42,8 +39,8 @@ export function SystemInfoPanel() {
       <InfoRow label="Toplam Seans" value={`${sysInfo?.totalSessions ?? 0} seans`} />
       <InfoRow
         label="STM32 Bağlantısı"
-        value={stmConnected ? "Bağlı ✅" : "Bekleniyor ⏳"}
-        valueColor={stmConnected ? "#22c55e" : "#f59e0b"}
+        value={stale ? "Bilinmiyor ⚠️" : stmConnected ? "Bağlı ✅" : "Bekleniyor ⏳"}
+        valueColor={stale ? "#94a3b8" : stmConnected ? "#22c55e" : "#f59e0b"}
       />
     </View>
   );
@@ -78,12 +75,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    gap: spacing.sm,
+    paddingVertical: rs(6),
     paddingHorizontal: spacing.sm,
     backgroundColor: "#0f172a",
-    borderRadius: 8,
+    borderRadius: radius.md,
   },
-  rowLabel: { color: colors.textMuted, fontSize: typography.small },
-  rowValue: { color: colors.text, fontSize: typography.small, fontWeight: "700" },
+  rowLabel: { flexShrink: 1, color: colors.textMuted, fontSize: typography.small },
+  rowValue: { flexShrink: 0, color: colors.text, fontSize: typography.small, fontWeight: "700", textAlign: "right" },
   rowValueAccent: { color: colors.primary },
 });

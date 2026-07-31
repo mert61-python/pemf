@@ -20,14 +20,19 @@ export function DashboardScreen() {
   const coils = snapshot.coils ?? [];
   const connectedCount = coils.filter((c) => c.connected).length;
   const runningCount = coils.filter((c) => c.running).length;
+  // GÜVENLİK: E-stop + "çalışıyor" göstergesi seans-bayrağından BAĞIMSIZ olmalı. AI Pro
+  // (/ai/pro/start, kimliksiz uzaktan başlatılabilir) / fiziksel / başka-istemci bobinleri
+  // enerjiler ama session_* yayınlamaz → at.isActive false kalır. runningCount>0 iken E-stop
+  // GİZLİ kalırsa operatör "Sistem Hazır" sanır, oysa donanım hastanın üzerinde çalışıyordur.
+  const hardwareRunning = at.isActive || runningCount > 0;
 
   return (
     <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
       {/* Connection status row */}
       <View style={styles.statusRow}>
-        <StatusPill label="Gateway" state={snapshot.gateway} />
-        <StatusPill label="MQTT" state={snapshot.mqtt} />
-        <StatusPill label="STM32" state={snapshot.stm} />
+        <StatusPill label="Bağlantı" state={snapshot.gateway} />
+        <StatusPill label="Sistem" state={snapshot.mqtt} />
+        <StatusPill label="Donanım" state={snapshot.stm} />
         <View style={[styles.wsBadge, !wsConnected && styles.wsBadgeOff]}>
           <Wifi size={12} color={wsConnected ? "#22c55e" : "#f59e0b"} />
           <Text style={[styles.wsText, !wsConnected && styles.wsTextOff]}>
@@ -74,19 +79,36 @@ export function DashboardScreen() {
         {/* Active session card */}
         <Card style={styles.treatmentCard}>
           <View style={styles.cardHeader}>
-            <Clock color={at.isActive ? colors.success : colors.textMuted} size={22} />
+            <Clock color={hardwareRunning ? colors.success : colors.textMuted} size={22} />
             <Text style={styles.cardTitle}>Aktif Seans</Text>
-            {at.isActive && (
+            {hardwareRunning && (
               <View style={styles.activeDot} />
             )}
           </View>
-          <Text style={styles.patientName}>{at.mode || "Sistem Hazır"}</Text>
-          {at.isActive ? (
+          <Text style={styles.patientName}>
+            {at.isActive
+              ? (at.mode || "Aktif Seans")
+              : hardwareRunning
+                ? "⚠️ DONANIM ÇALIŞIYOR"
+                : "Sistem Hazır"}
+          </Text>
+          {hardwareRunning ? (
             <>
               <Text style={styles.body}>
-                Çalışan bobin: {runningCount} | Kalan: {at.remainingMin} dk
+                Çalışan bobin: {runningCount}
+                {at.isActive
+                  ? ` | Kalan: ${at.remainingMin} dk`
+                  : " | Seans bağlamı dışı — donanım enerjili"}
               </Text>
-              <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}>
+              {/* F-1 a11y: ekran-okuyucu için rol+etiket+ipucu (WCAG 4.1.2). Çift-tık koruması BİLEREK YOK —
+                  acil-durdurma her dokunuşta anında ateşlenmeli (panik çift-dokunuş yutulmamalı). */}
+              <TouchableOpacity
+                style={styles.emergencyBtn}
+                onPress={emergencyStop}
+                accessibilityRole="button"
+                accessibilityLabel="Acil durdur"
+                accessibilityHint="Tüm bobinleri anında durdurur ve aktif tedaviyi sonlandırır"
+              >
                 <Text style={styles.emergencyBtnText}>🚨 ACİL DURDUR</Text>
               </TouchableOpacity>
             </>

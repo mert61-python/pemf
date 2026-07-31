@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- GÜVENLİK (#59): CSP — script yalnız self + pinlenmiş jsdelivr; ağ yalnız Supabase'e; obje yok,
+     base-uri kilitli. (frame-ancestors meta ile uygulanmaz; GitHub Pages header'ı ayrı.) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'" />
+<title>PEMF Vet — Yeni Şifre Belirle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#0E1320;--card:rgba(24,32,52,.7);--brd:rgba(255,255,255,.09);--field:#141A29;--text:#F5F8FF;--muted:#A7B3CC;--primary:#4F8CFF;--danger:#F98A84;--success:#5BE38B;}
+  *{box-sizing:border-box;margin:0;}
+  body{min-height:100vh;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;padding:24px;overflow:hidden;}
+  .aurora{position:fixed;inset:0;z-index:0;}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;}
+  .b1{width:52vw;height:52vw;left:-12vw;top:-14vw;background:radial-gradient(circle,#7C3AED,transparent 62%);}
+  .b2{width:54vw;height:54vw;right:-16vw;bottom:-18vw;background:radial-gradient(circle,#4F8CFF,transparent 60%);opacity:.42;}
+  .card{position:relative;z-index:1;max-width:440px;width:100%;background:var(--card);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--brd);border-radius:24px;padding:40px 32px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);}
+  .ring{width:76px;height:76px;margin:0 auto 22px;border-radius:22px;display:grid;place-items:center;background:linear-gradient(135deg,#6EA0FF,#3466D6);box-shadow:0 10px 30px rgba(79,140,255,.45);}
+  .ring svg{width:38px;height:38px;}
+  h1{font-size:24px;font-weight:800;letter-spacing:-.02em;}
+  p{color:var(--muted);font-size:15px;line-height:1.55;margin-top:12px;}
+  input{width:100%;margin-top:14px;background:var(--field);border:1px solid var(--brd);border-radius:13px;padding:15px 16px;color:var(--text);font-size:16px;font-family:inherit;outline:none;}
+  input:focus{border-color:var(--primary);}
+  button{width:100%;margin-top:18px;background:linear-gradient(135deg,#6EA0FF,#3466D6);color:#fff;border:none;font-weight:700;font-size:16px;padding:16px;border-radius:14px;box-shadow:0 8px 26px rgba(79,140,255,.5);cursor:pointer;font-family:inherit;}
+  button:disabled{opacity:.5;cursor:default;box-shadow:none;}
+  .msg{margin-top:14px;font-size:14px;font-weight:600;min-height:20px;}
+  .msg.err{color:var(--danger);} .msg.ok{color:var(--success);}
+  .btn-link{display:inline-block;margin-top:24px;background:linear-gradient(135deg,#5BE38B,#16A34A);color:#053b1a;text-decoration:none;font-weight:700;font-size:16px;padding:14px 28px;border-radius:14px;box-shadow:0 8px 24px rgba(34,197,94,.4);}
+  .done h1{color:var(--success);}
+</style>
+</head>
+<body>
+  <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div></div>
+  <div class="card" id="card">
+    <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <h1>Yeni Şifre Belirle</h1>
+    <p id="sub">Hesabın için yeni bir şifre gir.</p>
+    <div id="form">
+      <input id="pw" type="password" placeholder="Yeni şifre (en az 6 karakter)" autocomplete="new-password" />
+      <input id="pw2" type="password" placeholder="Yeni şifre (tekrar)" autocomplete="new-password" />
+      <button id="go">Şifreyi Güncelle</button>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+  <!-- GÜVENLİK (#59): dalgalı @2 yerine SÜRÜME PİN + SRI + crossorigin → jsdelivr/CDN uzlaşırsa
+       değiştirilmiş bundle hash-uyuşmazlığıyla REDDEDİLİR (recovery-token/parola çalınamaz). -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.1"
+          integrity="sha384-UQ9Ztz63gzT2JZCuDRkNXV8RP/gXxdPUuM9LKlz2BzqGx9xFYNAK8yAEgbfZHs7P"
+          crossorigin="anonymous"></script>
+  <script>
+    // Supabase (publishable/anon — istemci-güvenli). Kendi projene göre değiştir.
+    const SUPABASE_URL = "https://wmsxonunkphjeregpvuj.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
+
+    const msg = document.getElementById("msg");
+    const setMsg = (t, ok) => { msg.textContent = t; msg.className = "msg " + (ok ? "ok" : "err"); };
+
+    // Supabase İngilizce hatalarını Türkçe'ye çevir (süreç tamamen Türkçe).
+    function mapErr(raw) {
+      const m = (raw || "").toLowerCase();
+      if (m.includes("different from the old") || m.includes("should be different") || m.includes("same_password") || m.includes("same as")) return "Yeni şifre eskisiyle aynı olamaz.";
+      if (m.includes("at least") || (m.includes("password") && m.includes("6")) || m.includes("too short")) return "Şifre en az 6 karakter olmalı.";
+      if (m.includes("weak") || m.includes("pwned") || m.includes("leaked")) return "Şifre çok zayıf, daha güçlü bir şifre seç.";
+      if (m.includes("session") || m.includes("expired") || m.includes("invalid") || m.includes("token") || m.includes("missing")) return "Bağlantı süresi dolmuş. E-postandaki sıfırlama linkine tekrar tıkla.";
+      if (m.includes("rate") || m.includes("too many") || m.includes("seconds") || m.includes("security purposes")) return "Çok fazla deneme. Biraz bekleyip tekrar dene.";
+      if (m.includes("network") || m.includes("fetch") || m.includes("failed to")) return "Bağlantı hatası. İnternetini kontrol et.";
+      return "İşlem başarısız. Lütfen tekrar dene.";
+    }
+
+    // Recovery token'ı URL'den okuyup (detectSessionInUrl) oturum kurulur; sonra updateUser çalışır.
+    let ready = false;
+    sb.auth.onAuthStateChange((event) => { if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") ready = true; });
+
+    document.getElementById("go").onclick = async () => {
+      const pw = document.getElementById("pw").value, pw2 = document.getElementById("pw2").value;
+      if (pw.length < 6) return setMsg("Şifre en az 6 karakter olmalı.", false);
+      if (pw !== pw2) return setMsg("Şifreler eşleşmiyor.", false);
+      setMsg("Güncelleniyor…", true);
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) return setMsg(mapErr(error.message), false);
+      document.getElementById("card").className = "card done";
+      document.getElementById("sub").style.display = "none";
+      document.getElementById("form").innerHTML =
+        '<h1 style="color:#5BE38B">Şifren güncellendi ✓</h1>' +
+        '<p>Uygulamaya dönüp yeni şifrenle giriş yapabilirsin.</p>' +
+        '<a class="btn-link" href="pemfvet://">Uygulamaya Dön</a>';
+    };
+  </script>
+</body>
+</html>

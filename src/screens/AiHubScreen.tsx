@@ -5,19 +5,23 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 import { useAudioRecorder, RecordingPresets, setAudioModeAsync, requestRecordingPermissionsAsync } from "expo-audio";
-import { Camera, Image as ImageIcon, Sparkles, Stethoscope, ScissorsSquare as Scan, Activity, Microscope, CheckCircle2, Video, SwitchCamera, Crosshair, FlaskConical, Dna, FileText, HeartPulse, Mic, Square, AudioLines, ScanLine, PawPrint } from "lucide-react-native";
+import { Camera, Image as ImageIcon, Sparkles, Stethoscope, ScissorsSquare as Scan, Activity, Microscope, Video, SwitchCamera, Crosshair, FlaskConical, Dna, FileText, HeartPulse, Mic, Square, AudioLines, ScanLine, PawPrint, Lock } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
-import { apiPost, platformAlert } from "@/services/apiClient";
+import { apiPost, authHeaders, platformAlert } from "@/services/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
-import { useUserMode } from "@/context/UserModeContext";
+import { useUserMode, UserMode } from "@/context/UserModeContext";
+import { cleanDetail, trValue } from "@/utils/aiDetail";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useAppNav } from "@/context/AppNavContext";
+import { useAuth } from "@/context/AuthContext";
+import { useEntitlement } from "@/context/EntitlementContext";
+import { UpgradeModal, type UpgradeFeature } from "@/components/UpgradeModal";
 import { useResponsive } from "@/hooks/useResponsive";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ";
@@ -39,7 +43,9 @@ async function shrinkForUpload(uri: string): Promise<{ uri: string; base64: stri
   try {
     const out = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: rs(1500) } }],
+      // ORTA fix: SABİT 1500px hedef. rs() yoğunluk-ölçeklidir → yüksek-DPI cihazda 3000-4500px'e şişip
+      // "<1MB upload" hedefini bozuyor + gereksiz RAM/ağ tüketiyordu. Upload boyutu cihaz-DPI'dan bağımsız olmalı.
+      [{ resize: { width: 1500 } }],
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     return { uri: out.uri, base64: out.base64 ?? null };
@@ -49,9 +55,32 @@ async function shrinkForUpload(uri: string): Promise<{ uri: string; base64: stri
 }
 
 /** AI teşhis sonucunu kalıcı audit loguna gönderir (hasta + modül + özet). */
-async function logAiResult(patientName: string, module: string, summary: string) {
+// AiHubScreen mount'ta set eder → logAiResult (modül-seviyesi, hook DEĞİL) aktif profili bilir.
+let currentAiMode: UserMode = null;
+// Aynı desen: giriş yapan hekim e-postası (klinik-içi "Benim/Tüm Klinik" AI-analiz filtresi).
+let currentOperatorEmail: string = "";
+
+// Tüm AI modelleri sonuçlarını buradan ŞİFRELİ ai_analyses geçmişine yazar (profesyonel + detaylı).
+// result_detail utils/aiDetail.cleanDetail ile temizlenir (görsel/binary/devasa alanlar atılır).
+// extra: modül-id + girdi-tipi + sonuç detayı (cleanDetail ile temizlenir) + opsiyonel güven. mode oto.
+async function logAiResult(
+  patientName: string,
+  module: string,
+  summary: string,
+  extra?: { moduleId?: string; inputType?: string; detail?: unknown; confidence?: number }
+) {
   try {
-    await apiPost("/ai/log", { patient_name: patientName || "", module, summary }, null);
+    await apiPost("/ai/log", {
+      patient_name: patientName || "",
+      module,
+      summary,
+      mode: currentAiMode || "",
+      module_id: extra?.moduleId || "",
+      input_type: extra?.inputType || "",
+      result_detail: cleanDetail(extra?.detail),
+      confidence: extra?.confidence ?? null,
+      operator_email: currentOperatorEmail || "",
+    }, null);
   } catch {
     /* audit başarısız — kullanıcı akışını bozma */
   }
@@ -101,40 +130,59 @@ interface AiResult {
 }
 
 function summarizeVision(d: any): string {
-  if (d?.fgs_total !== undefined) return `FGS ${d.fgs_total}/10${d?.pain_level ? ` (${d.pain_level})` : ""}`;
+  if (d?.fgs_total !== undefined) return `FGS ${d.fgs_total}/10${d?.pain_level ? ` (${trValue(d.pain_level)})` : ""}`;
   if (d?.cat_count !== undefined) return `${d.cat_count} kedi tespit edildi`;
-  if (d?.prediction?.label) return `Termal: ${d.prediction.label}`;
+  if (d?.prediction?.label) return `Termal: ${trValue(d.prediction.label)}`;
   if (d?.counts) return `Eritrosit ${d.counts["erythrocyte"] ?? "?"} / Retikülosit ${(d.counts["punctate reticulocyte"] ?? 0) + (d.counts["aggregate reticulocyte"] ?? 0)}`;
   return "Analiz tamamlandı";
 }
 
 export function AiHubScreen() {
-  const { isExpert } = useUserMode();
+  const { userMode, hasAiHub } = useUserMode();
   const { selectedPatient } = useAppNav();
+  const { session } = useAuth();
   // null = hepsi kapalı (akordeon). Karta tıkla → altında açılır; tekrar tıkla → kapanır.
+  const { research } = useEntitlement();
+  const [upgradeFor, setUpgradeFor] = useState<UpgradeFeature | null>(null);
   const [activeModule, setActiveModule] = useState<AiModule | null>(null);
 
-  if (!isExpert) {
+  // logAiResult (hook değil) aktif profili bilsin diye modül-değişkenine yaz (analiz kaydına mode gitsin).
+  useEffect(() => { currentAiMode = userMode; }, [userMode]);
+  // Aynı desen: giriş yapan hekim e-postasını modül-değişkenine yaz (AI analiz sahipliği).
+  useEffect(() => { currentOperatorEmail = session?.email || ""; }, [session]);
+
+  // KRİTİK fix (bkz. resetAiCachesForOwner): profil/hasta değişince AI cache'lerini TEMİZLE + açık modülü
+  // kapat → önceki hastanın görüntüsü/sonucu yeni hastada görünmesin ve yanlış hastaya analiz yazılmasın.
+  const aiCacheOwnerKey = `${userMode ?? ""}:${selectedPatient?.id ?? selectedPatient?.name ?? ""}`;
+  useEffect(() => {
+    if (resetAiCachesForOwner(aiCacheOwnerKey)) setActiveModule(null);
+  }, [aiCacheOwnerKey]);
+
+  // pet_owner → basit ekran; veterinarian/researcher → modüler AI Hub (modüller profile göre filtreli).
+  if (!hasAiHub) {
     return <PetOwnerAiScreen />;
   }
 
   const patientName = selectedPatient?.name || "";
 
-  const MODULES: { id: AiModule; label: string; desc: string; icon: any }[] = [
-    { id: "landmark", label: "Yüz Ağrısı (FGS)", desc: "YOLO-pose ile yüz ağrı skoru", icon: Scan },
-    { id: "disease", label: "Hastalık", desc: "XGBoost ile hastalık tahmini", icon: Stethoscope },
-    { id: "segmentation", label: "Segmentasyon", desc: "Vücut sınırı tespiti", icon: Scan },
-    { id: "thermal", label: "Termal", desc: "Termal anormallik analizi", icon: Activity },
-    { id: "reticulocytes", label: "Retikülosit", desc: "Mikroskobik hücre sayımı", icon: Microscope },
-    { id: "em_fantom", label: "Fantom Tümör", desc: "Fantomda tümör + EM alan tahmini", icon: Crosshair },
-    { id: "em_petri", label: "Petri Kuyu", desc: "Kuyularda kanser + EM alan tahmini", icon: FlaskConical },
-    { id: "kidney_rna", label: "Böbrek RNA", desc: "RNA-seq → KIRC sınıflandırma", icon: Dna },
-    { id: "kidney_disease", label: "Böbrek Hastalığı", desc: "Klinik değerlerden CKD tahmini", icon: HeartPulse },
-    { id: "cat_sound", label: "Kedi Sesi", desc: "Miyavdan duygu/durum sınıflandırma", icon: AudioLines },
-    { id: "kidney_ct", label: "Böbrek CT", desc: "CT'de taş / kist tespiti", icon: ScanLine },
-    { id: "histopath", label: "Böbrek Patoloji", desc: "Histopatoloji derece (grade 0–4)", icon: Microscope },
-    { id: "cat_organ", label: "Kedi Organ", desc: "Organ 3B lokalizasyon (10 organ)", icon: PawPrint },
+  // Modüller profile göre filtrelenir: veterinarian → 7 kedi modeli; researcher → 6 araştırma modeli
+  // (fantom/petri/böbrek). Yeni model eklenince yalnız modes'unu ayarla. (pet_owner yukarıda ayrılır.)
+  const ALL_MODULES: { id: AiModule; label: string; desc: string; icon: any; modes: UserMode[] }[] = [
+    { id: "landmark", label: "Yüz Ağrısı (FGS)", desc: "YOLO-pose ile yüz ağrı skoru", icon: Scan, modes: ["veterinarian"] },
+    { id: "disease", label: "Hastalık", desc: "XGBoost ile hastalık tahmini", icon: Stethoscope, modes: ["veterinarian"] },
+    { id: "segmentation", label: "Segmentasyon", desc: "Vücut sınırı tespiti", icon: Scan, modes: ["veterinarian"] },
+    { id: "thermal", label: "Termal", desc: "Termal anormallik analizi", icon: Activity, modes: ["veterinarian"] },
+    { id: "reticulocytes", label: "Retikülosit", desc: "Mikroskobik hücre sayımı", icon: Microscope, modes: ["veterinarian"] },
+    { id: "em_fantom", label: "Fantom Tümör", desc: "Fantomda tümör + EM alan tahmini", icon: Crosshair, modes: ["researcher"] },
+    { id: "em_petri", label: "Petri Kuyu", desc: "Kuyularda kanser + EM alan tahmini", icon: FlaskConical, modes: ["researcher"] },
+    { id: "kidney_rna", label: "Böbrek RNA", desc: "RNA-seq → KIRC sınıflandırma", icon: Dna, modes: ["researcher"] },
+    { id: "kidney_disease", label: "Böbrek Hastalığı", desc: "Klinik değerlerden CKD tahmini", icon: HeartPulse, modes: ["researcher"] },
+    { id: "cat_sound", label: "Kedi Sesi", desc: "Miyavdan duygu/durum sınıflandırma", icon: AudioLines, modes: ["veterinarian"] },
+    { id: "kidney_ct", label: "Böbrek CT", desc: "CT'de taş / kist tespiti", icon: ScanLine, modes: ["researcher"] },
+    { id: "histopath", label: "Böbrek Patoloji", desc: "Histopatoloji derece (grade 0–4)", icon: Microscope, modes: ["researcher"] },
+    { id: "cat_organ", label: "Kedi Organ", desc: "Organ 3B lokalizasyon (10 organ)", icon: PawPrint, modes: ["veterinarian"] },
   ];
+  const MODULES = ALL_MODULES.filter((m) => userMode != null && m.modes.includes(userMode));
 
   // Aktif modülün içeriğini döndür (akordeon gövdesi). key= sabit → cache ile sonuç korunur.
   const renderModuleBody = (id: AiModule) => {
@@ -175,6 +223,7 @@ export function AiHubScreen() {
           {MODULES.map((m) => {
             const Icon = m.icon;
             const active = activeModule === m.id;
+            const gated = m.modes.includes("researcher") && !research;
             return (
               <View key={m.id}>
                 <TouchableOpacity
@@ -189,6 +238,17 @@ export function AiHubScreen() {
                     <Text style={[styles.moduleLabel, active && styles.moduleLabelActive]} numberOfLines={1}>{m.label}</Text>
                     <Text style={styles.moduleDesc} numberOfLines={2}>{m.desc}</Text>
                   </View>
+                  {gated && (
+                    <TouchableOpacity
+                      onPress={() => setUpgradeFor("research")}
+                      style={styles.gateBadge}
+                      accessibilityRole="button"
+                      accessibilityLabel="Araştırma eklentisi gerekli"
+                    >
+                      <Lock size={11} color={colors.violet} />
+                      <Text style={styles.gateBadgeText}>Eklenti</Text>
+                    </TouchableOpacity>
+                  )}
                   <Text style={[styles.moduleChevron, active && styles.moduleChevronActive]}>{active ? "▲" : "▼"}</Text>
                 </TouchableOpacity>
                 {active && <View style={styles.moduleBody}>{renderModuleBody(m.id)}</View>}
@@ -197,17 +257,20 @@ export function AiHubScreen() {
           })}
         </View>
       </ScrollView>
+      <UpgradeModal visible={!!upgradeFor} onClose={() => setUpgradeFor(null)} feature={upgradeFor ?? "tier"} />
     </View>
   );
 }
 
 function PetOwnerAiScreen() {
   const { showToast } = useToast();
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<any>(null);
+  const { session } = useAuth();
+  // Sonuç + görüntü modül-cache'ten init → tab değişip geri gelince KAYBOLMAZ (yeni analize/hastaya kadar kalıcı).
+  const [imageUri, setImageUri] = useState<string | null>(moduleCache.pet_owner?.imageUri ?? null);
+  const [imageBase64, setImageBase64] = useState<string | null>(moduleCache.pet_owner?.imageBase64 ?? null);
+  const [imageFile, setImageFile] = useState<any>(moduleCache.pet_owner?.imageFile ?? null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const [result, setResult] = useState<AiResult | null>(moduleCache.pet_owner?.result ?? null);
   const [treatmentStatus, setTreatmentStatus] = useState<string>("");
   const [longLoading, setLongLoading] = useState(false);
   useEffect(() => {
@@ -215,6 +278,8 @@ function PetOwnerAiScreen() {
     const t = setTimeout(() => setLongLoading(true), 8000);
     return () => clearTimeout(t);
   }, [loading]);
+  // Cache'i güncel tut → unmount'ta (tab değişimi) sonuç/görüntü korunur. resetAiCachesForOwner (profil/hasta değişimi) temizler.
+  useEffect(() => { moduleCache.pet_owner = { result, imageUri, imageBase64, imageFile }; }, [result, imageUri, imageBase64, imageFile]);
 
   const takePhoto = async () => {
     if (Platform.OS === 'web') {
@@ -310,11 +375,13 @@ function PetOwnerAiScreen() {
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/landmark", {
         method: "POST",
         body: formData,
-        headers: { "Accept": "application/json" }
+        headers: { "Accept": "application/json", ...authHeaders() }
       });
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
+        // AI Geçmişi'ne kaydet (Evcil Hayvan Sahibi FGS ağrı analizi de audit'e yazılsın — eskiden atlanıyordu).
+        logAiResult("", "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
       } else {
         showToast(data?.detail || "Teşhis sırasında hata oluştu.", "error");
       }
@@ -325,15 +392,8 @@ function PetOwnerAiScreen() {
     }
   };
 
-  const startAutoTreatment = async () => {
-    setTreatmentStatus("Otonom tedavi cihazlara iletiliyor...");
-    const res = await apiPost<any>("/hardware/auto_preset", { target_condition: "pain" }, { status: "error" });
-    if (res.status === "success") {
-      setTreatmentStatus("Tedavi Başladı! Dostunuz güvende.");
-    } else {
-      setTreatmentStatus("Cihazla iletişim kurulamadı.");
-    }
-  };
+  // NOT: Evcil Hayvan Sahibi profili YALNIZ ANALİZ yapar — otonom rahatlama terapisi (auto_preset)
+  // buradan KALDIRILDI. Ev kullanıcısı cihaz sürmez; ağrı bulgusunda veteriner hekime yönlendirilir.
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -342,7 +402,7 @@ function PetOwnerAiScreen() {
           <Sparkles color={colors.primary} size={28} />
           <Text style={[styles.title, { fontSize: rf(24) }]}>Akıllı Teşhis Asistanı</Text>
         </View>
-        <Text style={styles.subtitle}>Dostunuzun fotoğrafını çekin, yapay zeka anında ağrı ve stres durumunu analiz etsin. Gerekirse tek tuşla otomatik rahatlama terapisini başlatsın.</Text>
+        <Text style={styles.subtitle}>Dostunuzun fotoğrafını çekin, yapay zeka anında ağrı ve stres durumunu analiz etsin. Gerekirse veteriner hekiminize danışın.</Text>
 
         {!imageUri ? (
           <>
@@ -382,7 +442,6 @@ function PetOwnerAiScreen() {
         {result && (() => {
           let recommendation = "";
           let requiresVet = false;
-          let showTherapy = false;
           const score = result.fgs_total;
           // GÜVENLİK: tespit yoksa (detected=false / score yok / <0) "ağrı yok" YANLIŞ güvencesi VERME.
           const notDetected = result.detected === false || score == null || score < 0;
@@ -392,11 +451,9 @@ function PetOwnerAiScreen() {
           } else if (score === 0) {
             recommendation = "Dostunuzun yüz hatlarında herhangi bir ağrı veya stres belirtisi görülmüyor. Oldukça rahat görünüyor!";
           } else if (score > 0 && score <= 3) {
-            recommendation = "Dostunuzda hafif bir rahatsızlık veya yorgunluk belirtisi olabilir. Bu durum geçici olabilir ancak gözlemlemeye devam edin. İsteğe bağlı olarak PEMF terapisi ile onu rahatlatabilirsiniz.";
-            showTherapy = true;
+            recommendation = "Dostunuzda hafif bir rahatsızlık veya yorgunluk belirtisi olabilir. Bu durum geçici olabilir ancak gözlemlemeye devam edin. Belirtiler sürerse veteriner hekiminize danışın.";
           } else if (score > 3 && score <= 5) {
-            recommendation = "Orta derecede ağrı veya stres belirtileri tespit edildi! Yüz hatlarında belirgin bir gerginlik var. Otonom PEMF terapisi uygulayarak rahatlamasını sağlayabilirsiniz. Belirtiler 1-2 günden uzun sürerse hekime danışın.";
-            showTherapy = true;
+            recommendation = "Orta derecede ağrı veya stres belirtileri tespit edildi! Yüz hatlarında belirgin bir gerginlik var. Belirtiler 1-2 günden uzun sürerse veteriner hekiminize danışın.";
           } else {
             recommendation = "ŞİDDETLİ AĞRI BELİRTİSİ! Dostumuz ciddi bir rahatsızlık yaşıyor olabilir. Lütfen vakit kaybetmeden VETERİNER HEKİMİNİZE BAŞVURUN.";
             requiresVet = true;
@@ -416,19 +473,16 @@ function PetOwnerAiScreen() {
                   {recommendation}
                 </Text>
                 
-                {showTherapy && (
-                  <TouchableOpacity style={styles.startTherapyBtn} onPress={startAutoTreatment}>
-                    <CheckCircle2 color="#fff" size={20} />
-                    <Text style={styles.startTherapyText}>Otonom Rahatlama Terapisini Başlat</Text>
-                  </TouchableOpacity>
-                )}
                 {requiresVet && (
                   <TouchableOpacity
                     style={[styles.startTherapyBtn, { backgroundColor: colors.danger }]}
                     onPress={async () => {
-                      const phone = ((await AsyncStorage.getItem("pemf_clinic_phone")) || "").replace(/\s/g, "");
+                      // Klinik acil telefon: önce hesap profili (kayıtta girilir), yoksa eski AsyncStorage yedeği.
+                      const fromProfile = session?.profile?.clinic_phone || "";
+                      const legacy = fromProfile ? "" : ((await AsyncStorage.getItem("pemf_clinic_phone")) || "");
+                      const phone = (fromProfile || legacy).replace(/\s/g, "");
                       if (phone) Linking.openURL(`tel:${phone}`).catch(() => {});
-                      else platformAlert("Klinik telefonu ayarlı değil", "Ayarlar ekranından klinik telefon numarasını girin.");
+                      else platformAlert("Klinik telefonu ayarlı değil", "Kayıt (hesap) bilgilerinde klinik acil telefonu girilmemiş.");
                     }}
                   >
                     <Stethoscope color="#fff" size={20} />
@@ -465,7 +519,7 @@ const CAT_SOUND_ADVICE: Record<string, { emoji: string; title: string; text: str
   Defence: { emoji: "🛡️", title: "Savunmada", text: "Kendini tehdit altında hissediyor olabilir. Zorlamadan ona güvenli bir alan tanıyın.", tone: "alert" },
   Angry: { emoji: "😾", title: "Kızgın / Gergin", text: "Şu an gergin. Ona alan tanıyın, zorlamayın; kısa sürede sakinleşebilir.", tone: "alert" },
   Fighting: { emoji: "🙀", title: "Kavga / Çatışma", text: "Bir çatışma sesi. Diğer hayvanlardan uzaklaştırıp güvenli bir yere alın.", tone: "alert" },
-  Paining: { emoji: "😿", title: "Ağrı Belirtisi Olabilir", text: "Bu ses bir ağrı ya da rahatsızlık işareti olabilir. Dostunuzu yakından gözlemleyin; PEMF ile rahatlatabilir, belirti sürerse veteriner hekime danışabilirsiniz.", tone: "pain" },
+  Paining: { emoji: "😿", title: "Ağrı Belirtisi Olabilir", text: "Bu ses bir ağrı ya da rahatsızlık işareti olabilir. Dostunuzu yakından gözlemleyin; belirti sürerse veteriner hekiminize danışın.", tone: "pain" },
 };
 
 /**
@@ -475,14 +529,16 @@ const CAT_SOUND_ADVICE: Record<string, { emoji: string; title: string; text: str
  */
 function PetOwnerSoundCard() {
   const { showToast } = useToast();
-  const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [webFile, setWebFile] = useState<any>(null);
+  const [audioUri, setAudioUri] = useState<string | null>(moduleCache.pet_owner_sound?.audioUri ?? null);
+  const [fileName, setFileName] = useState<string>(moduleCache.pet_owner_sound?.fileName ?? "");
+  const [webFile, setWebFile] = useState<any>(moduleCache.pet_owner_sound?.webFile ?? null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const [result, setResult] = useState<AiResult | null>(moduleCache.pet_owner_sound?.result ?? null);
   const [treatmentStatus, setTreatmentStatus] = useState<string>("");
+  // Sonuç tab değişince kaybolmasın (yeni kayda/hastaya kadar kalıcı) — modül-cache.
+  useEffect(() => { moduleCache.pet_owner_sound = { result, audioUri, fileName, webFile }; }, [result, audioUri, fileName, webFile]);
 
   const startRecording = async () => {
     try {
@@ -538,13 +594,13 @@ function PetOwnerSoundCard() {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
-        method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal,
+        method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult("", "Kedi Sesi", `${data.top_1_class} %${Math.round((data.top_1_prob || 0) * 100)}`);
+        logAiResult("", "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -555,11 +611,8 @@ function PetOwnerSoundCard() {
     }
   };
 
-  const startTherapy = async () => {
-    setTreatmentStatus("Otonom tedavi cihazlara iletiliyor...");
-    const res = await apiPost<any>("/hardware/auto_preset", { target_condition: "pain" }, { status: "error" });
-    setTreatmentStatus(res.status === "success" ? "Tedavi Başladı! Dostunuz güvende." : "Cihazla iletişim kurulamadı.");
-  };
+  // Evcil Hayvan Sahibi = YALNIZ ANALİZ: ses ağrı bulgusunda otonom terapi (auto_preset) KALDIRILDI;
+  // ev kullanıcısı cihaz sürmez, veteriner hekime yönlendirilir.
 
   const advice = result ? (CAT_SOUND_ADVICE[result.top_1_class ?? ""] || { emoji: "🐈", title: result.top_1_class ?? "", text: "Ses analiz edildi.", tone: "info" as const }) : null;
   const toneColor = advice ? (advice.tone === "positive" ? colors.success : advice.tone === "pain" ? colors.danger : advice.tone === "alert" ? colors.warning : colors.primary) : colors.primary;
@@ -604,12 +657,6 @@ function PetOwnerSoundCard() {
           </View>
           <View style={[styles.recommendationBox, advice.tone === "pain" && { backgroundColor: colors.danger + "22", borderColor: colors.danger }]}>
             <Text style={[styles.recommendationText, advice.tone === "pain" && { color: colors.danger, fontWeight: "bold" }]}>{advice.text}</Text>
-            {advice.tone === "pain" && (
-              <TouchableOpacity style={styles.startTherapyBtn} onPress={startTherapy}>
-                <CheckCircle2 color="#fff" size={20} />
-                <Text style={styles.startTherapyText}>Otonom Rahatlama Terapisini Başlat</Text>
-              </TouchableOpacity>
-            )}
           </View>
           {treatmentStatus ? <Text style={[styles.statusText, { textAlign: "center", marginTop: spacing.md }]}>{treatmentStatus}</Text> : null}
         </View>
@@ -714,7 +761,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
       setResult(res.results);
       setResultUsedDefaults(usedDefaults);
       const top = res.results?.[0];
-      logAiResult(patientName, "Hastalık Analizi", top ? `${top.disease} (%${(top.probability * 100).toFixed(0)})` : "Belirgin sonuç yok");
+      logAiResult(patientName, "Hastalık Analizi", top ? `${trValue(top.disease)} (%${(top.probability * 100).toFixed(0)})` : "Belirgin sonuç yok", { moduleId: "disease", inputType: "clinical", detail: res, confidence: top?.probability });
     }
     // Hata durumunda apiClient zaten kullanıcıya bildirim gösterir (çift-popup önlendi).
   };
@@ -796,8 +843,23 @@ const visionCache: Record<string, { imageUri: string | null; imageBase64: string
 // (akordeon) veya tab değişiminde sonuç KORUNUR; yeni analiz/girdi başlatana ya da app kapanana kadar.
 const moduleCache: Record<string, any> = {};
 
+// KRİTİK (yanlış-hasta + KVKK): Yukarıdaki cache'ler modül/endpoint-anahtarlı — HASTA-anahtarlı DEĞİL.
+// aiCacheOwner cache'in hangi (profil+hasta)ya ait olduğunu izler. Sahip değişince cache TEMİZLENİR:
+// yoksa önceki hastanın tıbbi görüntüsü/formu yeni hastada geri gelir, Analiz'e basınca stale görüntü
+// gönderilir ama sonuç GÜNCEL (yanlış) hastaya yazılır; ayrıca base64 görüntüler bellekte/ekranda kalır.
+// Aynı sahip içinde (aynı hastada ekranlar arası gidiş-geliş) cache KORUNUR (gereksiz temizleme yok).
+let aiCacheOwner: string | null = null;
+function resetAiCachesForOwner(owner: string | null): boolean {
+  if (aiCacheOwner === owner) return false;
+  for (const k of Object.keys(visionCache)) delete visionCache[k];
+  for (const k of Object.keys(moduleCache)) delete moduleCache[k];
+  aiCacheOwner = owner;
+  return true;
+}
+
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean }) {
   const { showToast } = useToast();
+  const { realtime } = useEntitlement();
   const [imageUri, setImageUri] = useState<string | null>(visionCache[endpoint]?.imageUri ?? null);
   const [imageBase64, setImageBase64] = useState<string | null>(visionCache[endpoint]?.imageBase64 ?? null);
   const [imageFile, setImageFile] = useState<any>(null);
@@ -821,6 +883,15 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
   useEffect(() => {
     autoAdjustRef.current = autoAdjust;
   }, [autoAdjust]);
+
+  // YÜKSEK fix: unmount'ta uçuştaki MANUEL analizi iptal et → boşa 60-90sn model pipeline'ı + unmount-sonrası
+  // setState (stale sonuç/yanlış-loglama) önlenir. mountedRef await-sonrası setState'leri de kapılar.
+  const mountedRef = useRef(true);
+  const analyzeAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    analyzeAbortRef.current?.abort();
+  }, []);
 
   // Foto/sonuç'u cache'e yaz → tab değişip geri dönünce korunur (tekrar yükleme gerekmez).
   useEffect(() => {
@@ -873,7 +944,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
           const ctrl = new AbortController();
           const t = setTimeout(() => ctrl.abort(), 15000);
           const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
-            method: "POST", body: fd, headers: { Accept: "application/json" }, signal: ctrl.signal,
+            method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
           });
           clearTimeout(t);
           const data = await r.json();
@@ -1035,25 +1106,27 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
       }
       formData.append("auto_adjust", autoAdjustRef.current ? "true" : "false");
       const ctrl = new AbortController();
+      analyzeAbortRef.current = ctrl; // unmount iptali için sakla
       const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş timeout
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
         body: formData,
-        headers: { "Accept": "application/json" },
+        headers: { "Accept": "application/json", ...authHeaders() },
         signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
+      if (!mountedRef.current) return; // unmount olduysa stale setState/yanlış-loglama yapma
       if (response.ok && data.status === "success") {
         setResult(data);
         if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
-        else logAiResult(patientName, title, summarizeVision(data)); // sadece manuel analizleri audit'e yaz
+        else logAiResult(patientName, title, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data }); // sadece manuel analizleri audit'e yaz
       }
       else if (!isLive) showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
     } catch (error) {
-      if (!isLive) showToast("Ağ veya sunucu hatası.", "error");
+      if (mountedRef.current && !isLive) showToast("Ağ veya sunucu hatası.", "error");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
       loadingRef.current = false;
     }
   };
@@ -1066,15 +1139,27 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
         {endpoint === "/vision/landmark" && (
-          <TouchableOpacity 
-            style={[styles.autoAdjustBtn, autoAdjust ? styles.autoAdjustActive : null]} 
-            onPress={() => setAutoAdjust(!autoAdjust)}
-          >
-            <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
-            <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
-              Otonom Biofeedback
-            </Text>
-          </TouchableOpacity>
+          <View style={{ alignItems: "flex-end", gap: 6 }}>
+            <TouchableOpacity
+              style={[styles.autoAdjustBtn, autoAdjust ? styles.autoAdjustActive : null]}
+              onPress={() => setAutoAdjust(!autoAdjust)}
+            >
+              <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
+              <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
+                Otonom Biofeedback
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { if (!realtime) showToast("Gerçek-zamanlı işlem Pro+ planında sunulur; Pro'da istekler paylaşımlı kuyruğa girer.", "info"); }}
+              style={[styles.rtTag, realtime ? styles.rtTagOn : styles.rtTagOff]}
+              accessibilityRole="button"
+              accessibilityLabel={realtime ? "Gerçek-zamanlı işlem" : "Kuyruklu işlem — Pro+ ile anlık"}
+            >
+              <Text style={realtime ? styles.rtTagOnText : styles.rtTagOffText}>
+                {realtime ? "⚡ Gerçek-zamanlı" : "Kuyruklu · Pro+ anlık"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
       
@@ -1098,13 +1183,25 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
         </View>
       )}
       <View style={styles.imagePreviewContainer}>
-        {(isLive && autoAdjust && aiVisionData?.imageBase64) ? (
+        {(isLive && autoAdjust) ? (
+          // Otonom Biofeedback: SUNUCU (klinik) kamerası sürüyor — telefon kamerası DEĞİL.
+          // Sunucu karesi gelene kadar telefon CameraView'ı GÖSTERME (kafa-karışıklığı önlenir).
           <View style={styles.cameraContainer}>
-            <Image source={{ uri: `data:image/jpeg;base64,${aiVisionData.imageBase64}` }} style={styles.cameraView} resizeMode="contain" />
-            <View style={styles.liveIndicator}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>OTONOM BİOFEEDBACK AKTİF</Text>
-            </View>
+            {aiVisionData?.imageBase64 ? (
+              <>
+                <Image source={{ uri: `data:image/jpeg;base64,${aiVisionData.imageBase64}` }} style={styles.cameraView} resizeMode="contain" />
+                <View style={styles.liveIndicator}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>OTONOM BİOFEEDBACK AKTİF</Text>
+                </View>
+              </>
+            ) : (
+              <View style={[styles.cameraView, { alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
+                <Activity color={colors.primary} size={32} />
+                <Text style={styles.placeholderText}>Sunucu kamerası bekleniyor…</Text>
+              </View>
+            )}
+            <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası tedaviyi sürüyor — telefon kamerası kullanılmıyor</Text>
           </View>
         ) : isLive ? (
           <View style={styles.cameraContainer}>
@@ -1364,7 +1461,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_fantom", {
-        method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal,
+        method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
@@ -1372,7 +1469,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         setResult(data);
         if (data.status === "success") {
           const ec = data.tumor_regions?.[0]?.E_cancer;
-          logAiResult(patientName, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`);
+          logAiResult(patientName, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`, { moduleId: "em_fantom", inputType: "image", detail: data });
         }
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
@@ -1585,14 +1682,14 @@ function PetriModule({ patientName }: { patientName: string }) {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_petri", {
-        method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal,
+        method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && (data.status === "success" || data.status === "no_detection")) {
         setResult(data);
         if (data.status === "success") {
-          logAiResult(patientName, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`);
+          logAiResult(patientName, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`, { moduleId: "em_petri", inputType: "image", detail: data });
         }
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
@@ -1772,13 +1869,13 @@ function RnaModule({ patientName }: { patientName: string }) {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/rna/kidney", {
-        method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal,
+        method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`);
+        logAiResult(patientName, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`, { moduleId: "kidney_rna", inputType: "csv", detail: data });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -1895,7 +1992,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
       const res = await apiPost<any>("/ai/disease/kidney", payload, null);
       if (res && res.status === "success") {
         setResult(res);
-        logAiResult(patientName, "Böbrek Hastalığı (CKD)", `${res.label} %${res.prob_pct}`);
+        logAiResult(patientName, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
       } else {
         showToast("Analiz sırasında hata oluştu.", "error");
       }
@@ -2063,13 +2160,13 @@ function CatSoundModule({ patientName }: { patientName: string }) {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
-        method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal,
+        method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Kedi Sesi", `${data.top_1_class} %${Math.round(data.top_1_prob * 100)}`);
+        logAiResult(patientName, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob ?? 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -2236,13 +2333,13 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       }
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal });
+      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
         const c = data.class_counts || {};
-        logAiResult(patientName, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`);
+        logAiResult(patientName, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`, { moduleId: "kidney_ct", inputType: "image", detail: data });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -2428,12 +2525,12 @@ function HistopathModule({ patientName }: { patientName: string }) {
       }
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 60000);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal });
+      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Böbrek Patoloji", `${data.top_1_class} %${Math.round((data.top_1_prob || 0) * 100)}`);
+        logAiResult(patientName, "Böbrek Patoloji", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "histopath", inputType: "image", detail: data, confidence: data.top_1_prob });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -2555,7 +2652,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           fd.append("image_base64", shrunk.base64);
           const ctrl = new AbortController();
           const t = setTimeout(() => ctrl.abort(), 25000);
-          const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json" }, signal: ctrl.signal });
+          const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
           clearTimeout(t);
           const data = await r.json();
           if (r.ok && data?.status === "success") setResult(data); // overlay = data.image_base64
@@ -2630,12 +2727,12 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       }
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 90000);
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json" }, signal: ctrl.signal });
+      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
-        logAiResult(patientName, "Kedi Organ", `${data.n_organs} organ lokalize`);
+        logAiResult(patientName, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
       } else {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
@@ -2759,6 +2856,13 @@ const styles = StyleSheet.create({
   moduleGrid: { gap: spacing.sm, marginBottom: spacing.lg },
   moduleCard: { width: "100%", flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.bgAlt, borderWidth: 1, borderColor: colors.border },
   moduleCardActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  gateBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999, backgroundColor: "rgba(139,92,246,0.14)", borderWidth: 1, borderColor: "rgba(139,92,246,0.40)" },
+  gateBadgeText: { color: colors.violet, fontWeight: "700", fontSize: 11 },
+  rtTag: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1 },
+  rtTagOn: { backgroundColor: "rgba(79,140,255,0.12)", borderColor: "rgba(79,140,255,0.40)" },
+  rtTagOff: { backgroundColor: colors.bgAlt, borderColor: colors.border },
+  rtTagOnText: { color: colors.primary, fontWeight: "700", fontSize: 11 },
+  rtTagOffText: { color: colors.textMuted, fontWeight: "700", fontSize: 11 },
   moduleChevron: { color: colors.textMuted, fontSize: rf(12), marginLeft: spacing.xs },
   moduleChevronActive: { color: colors.primary },
   moduleBody: { marginTop: -1, marginBottom: spacing.xs, paddingHorizontal: 2 },
@@ -2795,6 +2899,7 @@ const styles = StyleSheet.create({
   flipCameraBtn: { position: "absolute", bottom: 12, right: 12, width: rs(44), height: rs(44), borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   liveDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: colors.danger },
   liveText: { color: colors.white, fontSize: rf(10), fontWeight: "bold" },
+  serverCamNote: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.65)", color: colors.white, fontSize: rf(10), textAlign: "center", paddingVertical: 5, paddingHorizontal: 8 },
   placeholderBox: { alignItems: "center", gap: spacing.md },
   placeholderText: { color: colors.textMuted, fontSize: typography.body },
   btnRow: { flexDirection: "row", gap: spacing.md },

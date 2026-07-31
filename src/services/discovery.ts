@@ -234,7 +234,54 @@ async function discoverRemote(): Promise<string | null> {
 /**
  * Tam keşif merdiveni. Çalışan adresi config'e uygular + döndürür (yoksa null).
  */
-export async function discoverBackend(): Promise<DiscoveryResult | null> {
+/** AYNI-WiFi LAN ÖNCELİĞİ (kök-neden fix). Bağlanılan adres TÜNEL/uzak ise, cihazın /api/health'ten
+ *  dönen `localIp`'sini telefondan DOĞRUDAN dener; ulaşılıyorsa LAN'a GEÇER.
+ *
+ *  NEDEN: Keşif merdiveni (mDNS başarısızsa) remote-tüneli subnet-taramasından ÖNCE bağlıyordu →
+ *  telefon aynı WiFi'de cihaza HTTP ile ulaşabildiği hâlde TÜNEL üzerinden bağlanıp orada kalıyordu.
+ *  Tünel auth-ister (reinstall api_token'ı değişince app'in bayat token'ı → 401); LAN ise auth-MUAF.
+ *  localIp-yükseltmesi hem "aynı-WiFi'de otomatik bağlanmıyor" hem "uzaktan bağlanıyor ama 401" kökünü
+ *  çözer + checkHealth(lan) provisionToken ile GÜNCEL token'ı çeker (bayat-token'ı tazeler). */
+async function preferLanIfReachable(result: DiscoveryResult | null): Promise<DiscoveryResult | null> {
+  if (!result) return result;
+  if (Platform.OS === "web") return result; // web origin zaten doğru
+  const isLan = /\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|localhost)/i.test(result.address);
+  if (isLan) return result; // zaten LAN → yükseltme gereksiz
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+    const res = await fetch(`${toBase(result.address)}/api/health`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return result;
+    const d = await res.json();
+    const lan: string | undefined = d?.localIp;
+    if (lan && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(lan)) {
+      const lanAddr = `http://${lan}:8000`;
+      // Telefon aynı-WiFi'de mi? checkHealth GERÇEK LAN erişimini dener + (yerelse) güncel token'ı saklar.
+      if (await checkHealth(lanAddr)) {
+        await apply(lanAddr);
+        return { address: lanAddr, source: "subnet" };
+      }
+    }
+  } catch {
+    /* ulaşılamadı → tünel adresinde kal (farklı WiFi) */
+  }
+  return result;
+}
+
+let _discoverInFlight: Promise<DiscoveryResult | null> | null = null;
+// ORTA fix: örtüşen keşif FIRTINASINI önle — WS düşünce onNeedRediscovery HER başarısızlıkta çağrılıyor;
+// önceki uzun (~70sn) subnet taraması bitmeden yenisi başlıyordu (80+ eşzamanlı fetch + yarışlı apply/
+// AsyncStorage yazımı → WS hedefi çırpınıyordu). Aynı anda TEK keşif; ikinci çağrı mevcut Promise'i döndürür.
+export function discoverBackend(): Promise<DiscoveryResult | null> {
+  if (_discoverInFlight) return _discoverInFlight;
+  // Sonuç TÜNEL ise LAN'a yükselt (aynı-WiFi önceliği) → tünel-401 + LAN-gölgeleme kök çözümü.
+  _discoverInFlight = _discoverBackendImpl()
+    .then(preferLanIfReachable)
+    .finally(() => { _discoverInFlight = null; });
+  return _discoverInFlight;
+}
+async function _discoverBackendImpl(): Promise<DiscoveryResult | null> {
   // Web: origin zaten doğru kaynaktır.
   if (Platform.OS === "web") {
     const origin = serviceConfig.apiBaseUrl.replace("/api", "");
@@ -252,9 +299,16 @@ export async function discoverBackend(): Promise<DiscoveryResult | null> {
   try {
     const saved =
       (await AsyncStorage.getItem(ADDR_KEY)) || (await AsyncStorage.getItem("@pemf_server_ip"));
-    if (saved && (await checkHealth(saved))) {
-      await apply(saved);
-      return { address: saved, source: "saved" };
+    if (saved) {
+      // YÜKSEK fix: LAN IP'de device_id GEVŞEK kalsın (yukarıdaki regresyon: bayat id gerçek LAN cihazını
+      // reddediyordu). Ama TÜNEL/https adreste device_id ŞART: bayat trycloudflare URL'si BAŞKA kiracıya
+      // atanabilir → yanlışlıkla başka kliniğin cihazına + BAŞKA HASTANIN verisine bağlanma riski.
+      const isLan = /\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|localhost)/i.test(saved);
+      const requireId = isLan ? null : await getStoredDeviceId();
+      if (await checkHealth(saved, requireId)) {
+        await apply(saved);
+        return { address: saved, source: "saved" };
+      }
     }
   } catch {}
 

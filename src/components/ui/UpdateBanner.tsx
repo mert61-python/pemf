@@ -4,19 +4,28 @@
  * • Uygulama (APK): "İndir" → yeni APK indirme linki açılır (sideload).
  * Güncelleme yoksa hiçbir şey göstermez. AppShell'de connection banner'ın altına yerleşir.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet, Linking } from "react-native";
 import { colors, spacing, rf, rs } from "@/theme/tokens";
 import {
   checkBackendUpdate, applyBackendUpdate, checkMobileUpdate,
   type BackendUpdate, type MobileUpdate,
 } from "@/services/updates";
+import { platformConfirm, platformAlert } from "@/services/apiClient";
+import { useLiveData } from "@/context/LiveDataContext";
 
 export function UpdateBanner() {
+  const { snapshot } = useLiveData();
+  const _at = snapshot.activeTreatment;
+  const _running = (snapshot.coils ?? []).filter((c) => c.running).length;
+  const treatmentActive = !!_at?.isActive || _running > 0;
   const [backend, setBackend] = useState<BackendUpdate>({ available: false });
   const [mobile, setMobile] = useState<MobileUpdate>({ available: false });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  // ORTA fix: başarı-sonrası 15sn refresh timeout'u ref'te tut → unmount'ta temizle (unmounted setState önle).
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current); }, []);
 
   const refresh = useCallback(async () => {
     try { setBackend(await checkBackendUpdate()); } catch { /* ignore */ }
@@ -31,13 +40,33 @@ export function UpdateBanner() {
 
   const applyBackend = useCallback(async () => {
     if (busy) return;
+    // #88/#92: aktif tedavide cihaz-yazılımı güncellemesi YAPILMAZ (installer servisi durdurup EXE'yi
+    // değiştirir → bobinler kontrolcüsüz). Client-tarafı da engelle (backend zaten reddeder, ama UX).
+    if (treatmentActive) {
+      platformAlert("Tedavi aktif", "Cihaz yazılımı güncellemesi aktif tedavi/çalışan bobin sırasında yapılamaz. Önce seansı bitirin.");
+      return;
+    }
+    // Medikal-uygun ONAY: cihaz YENİDEN BAŞLAR — tek-tık yerine açık teyit.
+    const ok = await platformConfirm(
+      "Cihaz yazılımı güncellemesi",
+      `Cihaz güncellenecek ve YENİDEN BAŞLAYACAK (v${backend.latestVersion}). Tedavi olmadığından emin olun. Devam edilsin mi?`,
+      "Güncelle",
+    );
+    if (!ok) return;
     setBusy(true); setMsg("İndiriliyor + doğrulanıyor…");
-    const r = await applyBackendUpdate();
-    setMsg(r.ok ? (r.message || "Kurulum başladı — cihaz birazdan yeniden başlar.") : ("⚠ " + (r.error || "Güncelleme başarısız")));
-    setBusy(false);
-    // Başarılıysa birazdan backend yeniden başlar; durumu tazele.
-    if (r.ok) setTimeout(refresh, 15000);
-  }, [busy, refresh]);
+    try {
+      const r = await applyBackendUpdate();
+      setMsg(r.ok ? (r.message || "Kurulum başladı — cihaz birazdan yeniden başlar.") : ("⚠ " + (r.error || "Güncelleme başarısız")));
+      // Başarılıysa birazdan backend yeniden başlar; durumu tazele (timeout ref → unmount'ta temizlenir).
+      if (r.ok) {
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(refresh, 15000);
+      }
+    } finally {
+      // ORTA fix: hata olsa da busy kilidini AÇ — yoksa banner kalıcı "İndiriliyor" + disabled kalır (kilit).
+      setBusy(false);
+    }
+  }, [busy, refresh, treatmentActive, backend.latestVersion]);
 
   const downloadMobile = useCallback(() => {
     if (mobile.apkUrl) Linking.openURL(mobile.apkUrl).catch(() => {});

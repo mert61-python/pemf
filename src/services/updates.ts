@@ -65,9 +65,24 @@ export interface MobileUpdate {
   latestVersion?: string;
   apkUrl?: string;
   notes?: string;
+  /** Yayınlanan APK SHA256 (manifest'ten). NOT: tam in-app kriptografik doğrulama + release-imza
+   *  (debug-keystore yerine özel keystore) BUILD/RELEASE-ALTYAPISI işidir (owner); burada değer
+   *  yüzeye çıkarılır ki güncelleme banner'ı operatöre gösterip bilinçli onay isteyebilsin. */
+  sha256?: string;
 }
+// GÜVENLİK (DÜŞÜK — backend K2 simetrisi): apkUrl'yi HTTPS + bilinen GitHub-release host'una pinle.
+// apkUrl sonra Linking.openURL ile açılıyor → manifest ele geçse bile sideload'ı keyfi/zararlı APK'ya
+// yönlendirme engellenir. Geçersiz/beklenmeyen host → undefined (banner "İndir" göstermez).
+function _safeApkUrl(url: unknown): string | undefined {
+  if (typeof url !== "string" || !url) return undefined;
+  if (/^https:\/\/(github\.com|[a-z0-9.-]*\.githubusercontent\.com)\//i.test(url)) return url;
+  return undefined;
+}
+
 export async function checkMobileUpdate(): Promise<MobileUpdate> {
-  if (Platform.OS === "web") return { available: false }; // web'de APK güncellemesi anlamsız
+  // #89: APK güncellemesi YALNIZ Android'de anlamlı. iOS'ta APK sideload edilemez → yanıltıcı/
+  // karşılanamayan banner gösterme; web'de de anlamsız.
+  if (Platform.OS !== "android") return { available: false };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
@@ -76,11 +91,14 @@ export async function checkMobileUpdate(): Promise<MobileUpdate> {
     if (!res.ok) return { available: false };
     const m = await res.json();
     const latest = String(m?.version || "");
+    const apkUrl = _safeApkUrl(m?.apkUrl);
+    const sha256 = typeof m?.sha256 === "string" && /^[a-f0-9]{64}$/i.test(m.sha256) ? m.sha256 : undefined;
     return {
-      available: !!latest && isNewer(latest, APP_VERSION),
+      available: !!latest && !!apkUrl && isNewer(latest, APP_VERSION),
       latestVersion: latest,
-      apkUrl: m?.apkUrl,
+      apkUrl,
       notes: m?.notes,
+      sha256,
     };
   } catch {
     return { available: false };

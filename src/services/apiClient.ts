@@ -36,9 +36,49 @@ export interface ApiOpts {
   silent?: boolean;
 }
 
-/** Backend auth (PEMF_REQUIRE_AUTH=1) açıksa X-API-Key gönder. Token boşsa boş → geriye uyumlu. */
+// Entitlement (abonelik tier/eklenti) header'ları — EntitlementContext günceller; backend
+// tier-enforcement (PEMF_TIER_ENFORCED) AÇIKKEN kullanılır. Kapalıyken backend yok sayar (zararsız).
+let _entitlementHeaders: Record<string, string> = {};
+export function setEntitlementHeaders(tier: string | null, addons: string[] = []): void {
+  _entitlementHeaders = tier ? { "X-PEMF-Tier": tier, "X-PEMF-Addons": addons.join(",") } : {};
+}
+
+// Supabase erişim JWT'si — backend bunu Supabase'e iletip tier'ı DOĞRULAR (spoof-proof). Device
+// auth X-API-Key kullandığından Authorization serbest. Bayatsa backend fail-open (tedavi bloklanmaz).
+let _authBearer: string | null = null;
+export function setAuthBearer(token: string | null): void {
+  _authBearer = token || null;
+}
+
+/** Backend tabanı GÜVENLİ mi: https (tünel, TLS) VEYA RFC1918-LAN/localhost (yerel cihaz TLS'siz).
+ * Keşfedilen/elle-girilen KEYFİ bir host'a (zehirli Supabase devices kaydı / sahte tünel) kurbanın
+ * Supabase JWT'sini teslim etmemek için Authorization yalnız buraya eklenir. */
+export function isSafeBackendBase(baseUrl: string): boolean {
+  if (!baseUrl) return false;
+  if (baseUrl.startsWith("https://")) return true; // tünel = TLS
+  const m = baseUrl.match(/^http:\/\/([^/:]+)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  // RFC1918 özel aralıklar + localhost (yerel klinik cihazı)
+  return (
+    host === "localhost" ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}
+
+/** Backend auth (PEMF_REQUIRE_AUTH=1) açıksa X-API-Key + entitlement + Supabase-Bearer gönder. Token boşsa geriye uyumlu. */
 export function authHeaders(): Record<string, string> {
-  return serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {};
+  const bearerSafe = _authBearer && isSafeBackendBase(serviceConfig.apiBaseUrl);
+  return {
+    ...(serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {}),
+    ..._entitlementHeaders,
+    // Supabase Bearer'ı YALNIZ güvenli tabana ekle: aksi halde poisoned/sahte host kurbanın
+    // ~1sa RLS-kapsamlı JWT'sini ele geçirir (public-plaintext http'de de sızmasın).
+    ...(bearerSafe ? { Authorization: `Bearer ${_authBearer}` } : {}),
+  };
 }
 
 // Asılı bağlantı (yarı-açık tünel / backend restart / captive portal) UI'yi sonsuza dek
@@ -50,6 +90,19 @@ const REQUEST_TIMEOUT_MS = 8000;
 // saklı kalır; bir daha uğraştırılmaz. Yanlış/eski token, telefon LAN'a girince keşifteki
 // provisionToken (/api/auth/token) ile OTOMATİK ve koşulsuz tazelenir. Silmek gereksiz olduğu
 // gibi tünelde "bağlı ama kalıcı 401" tuzağı yaratıyordu.
+
+// ORTA fix: 2xx yanıt gövdesi BOŞ veya JSON-OLMAYAN (captive-portal HTML) olabilir. Ham `response.json()`
+// "Unexpected end of JSON input" fırlatıp BAŞARILI isteği hata sayıyordu → POST'ta çift-submit / yanlış hata.
+// Güvenli: boş gövde = başarı (boş sonuç `{}`); JSON-olmayan gövde = gerçek hata → fallback.
+async function parseJsonSafe<T>(response: Response, fallback: T): Promise<T> {
+  const text = await response.text();
+  if (!text) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Promise<T> {
   const url = `${serviceConfig.apiBaseUrl}${path}`;
@@ -66,7 +119,7 @@ export async function apiGet<T>(path: string, fallback: T, opts?: ApiOpts): Prom
         if (!opts?.silent) showError("Sunucu Hatası", "Sunucu ile iletişimde bir sorun oluştu.");
         return fallback;
       }
-      return (await response.json()) as T;
+      return await parseJsonSafe(response, fallback);
     } catch (error) {
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400)); // kısa geri-çekilme, sonra bir kez daha
@@ -102,7 +155,7 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       if (!opts?.silent) showError("Sunucu Hatası", "Sunucuya veri gönderilirken bir hata oluştu.");
       return fallback;
     }
-    return (await response.json()) as T;
+    return await parseJsonSafe(response, fallback);
   } catch (error) {
     console.error(`API POST İstek Başarısız: ${path}`, error);
     // Bağlantı kopması BLOKLAYAN uyarı GÖSTERMEZ — global çevrimdışı banner + sağ-üst "Çevrimdışı"

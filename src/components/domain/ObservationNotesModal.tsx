@@ -4,10 +4,10 @@
  * Seans bitince açılır: 6 hızlı-tepki chip'i + serbest not. "Kaydet" → seansı notuyla
  * birlikte history'ye yazar (/api/session/notes). "Atla" → kaydetmeden kapatır.
  */
-import { useState } from "react";
-import { Modal, View, Text, StyleSheet, TouchableOpacity, TextInput } from "react-native";
+import { useState, useEffect } from "react";
+import { Modal, View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from "react-native";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
-import { apiPost } from "@/services/apiClient";
+import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const REACTIONS = ["Sakinleşti", "Hareket etti", "Uyudu", "Endişeli", "Tepki yok", "Rahatsızlık"];
@@ -45,11 +45,21 @@ export function ObservationNotesModal({
     setNotes("");
   };
 
+  // GÜVENLİK (#48): hedef seans/hasta DEĞİŞİNCE veya sayfa (yeniden) AÇILINCA not+tepkileri SIFIRLA.
+  // Aksi halde A hastası için yazılıp kaydedilmemiş not, uzaktan/AI-Pro ile B hastası (farklı hasta)
+  // seansı başlayınca modalda kalır → B'nin kaydına YANLIŞ-HASTA notu kontaminasyonu.
+  useEffect(() => {
+    setSelected(new Set());
+    setNotes("");
+  }, [session?.patientName, visible]);
+
   const save = async () => {
     setSaving(true);
     const reactionText = Array.from(selected).join(", ");
     const full = [reactionText, notes.trim()].filter(Boolean).join(" — ");
-    await apiPost<any>(
+    // DÜŞÜK fix: apiPost throw ETMEZ (null döner). Eskiden yanıt yutuluyordu → kaydetme başarısız olsa da
+    // modal kapanıp gözlem-notu SESSİZCE kayboluyordu. Yanıtı doğrula; başarısızsa modalı AÇIK tut + uyar.
+    const res = await apiPost<{ status?: string } | null>(
       "/session/notes",
       {
         notes: full,
@@ -60,8 +70,12 @@ export function ObservationNotesModal({
         duration_minutes: session?.durationMinutes ?? 0,
       },
       null
-    ).catch(() => {});
+    );
     setSaving(false);
+    if (!res || res.status === "error") {
+      platformAlert("Not kaydedilemedi", "Gözlem notu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin.");
+      return;
+    }
     reset();
     onClose();
   };
@@ -74,7 +88,12 @@ export function ObservationNotesModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={skip}>
       <View style={styles.backdrop}>
-        <View style={[styles.card, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <View style={styles.card}>
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + spacing.lg, gap: spacing.md }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <Text style={styles.title}>📝 Seans Gözlem Notu</Text>
           {session?.patientName ? <Text style={styles.sub}>{session.patientName}</Text> : null}
 
@@ -115,6 +134,7 @@ export function ObservationNotesModal({
               <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit>{saving ? "Kaydediliyor…" : "💾 Kaydet"}</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -125,12 +145,14 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   card: {
     backgroundColor: "#0f172a",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: spacing.lg,
-    gap: spacing.md,
+    borderTopLeftRadius: rs(20),
+    borderTopRightRadius: rs(20),
     borderWidth: 1,
     borderColor: "#1e3a5f",
+    width: "100%",
+    maxWidth: rs(560),
+    alignSelf: "center",
+    maxHeight: "90%",
   },
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },
   sub: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },

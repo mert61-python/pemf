@@ -57,12 +57,30 @@ function isStmCoil(coilId: number): boolean {
   return coilId >= 1 && coilId <= STM_COIL_MAX_ID;
 }
 
+// #73: WS'ten gelen `any` sayısal alanlar string/undefined/NaN olabilir → .toFixed() RUNTIME CRASH
+// (CoilCard/CoilParameterPanel/KPI-tablosu). Tek-noktada Number'a zorla → downstream formatlar
+// crash-proof. Geçersiz → 0.
+const _num = (v: unknown, d = 0): number => {
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : d;
+};
+
 function normalizeStmCoils(snapshot: DashboardSnapshot): DashboardSnapshot {
   const stmOnline = snapshot.stm === "online";
   const coils = (snapshot.coils ?? []).map((coil) => {
-    if (!isStmCoil(coil.id)) return coil;
-    return {
+    // Sayısal alanları TÜM coil'ler için (ESP dahil) güvene al.
+    const base = {
       ...coil,
+      frequencyHz: _num(coil.frequencyHz),
+      dutyCycle: _num(coil.dutyCycle),
+      magneticMt: _num(coil.magneticMt),
+      objectTemp: _num(coil.objectTemp),
+      ambientTemp: _num(coil.ambientTemp),
+      currentA: _num(coil.currentA),
+    };
+    if (!isStmCoil(coil.id)) return base;
+    return {
+      ...base,
       stm32Driven: true,
       connected: stmOnline,
       running: stmOnline ? coil.running : false,
@@ -99,8 +117,14 @@ export interface LiveDataContextValue {
   clearNotifications: () => void;
   /** Manually refresh snapshot (HTTP fallback) */
   refresh: () => Promise<void>;
-  /** Bağlantı kalitesi: live=WS canlı, stale=veri gecikmeli/donmuş riski, offline=GERÇEK veri YOK. */
-  connectionQuality: "live" | "stale" | "offline";
+  /** Bağlantı DURUMU (salt backend bağlantısı): live=çevrimiçi (WS bağlı), offline=çevrimdışı.
+   *  Kullanıcı-mantığı: backend'e bağlı olduğu sürece çevrimiçi. "Veri gecikmeli" GLOBAL durum olarak
+   *  KALDIRILDI (boşta/AI'da yanlış-alarmdı); telemetri-tazeliği artık ayrı `telemetryStale`'de. */
+  connectionQuality: "live" | "offline";
+  /** TIBBİ GÜVENLİK: yalnız AKTİF TEDAVİ/bobin çalışırken beklenen canlı telemetri donduysa (WS kopuk
+   *  VEYA veri ≥20sn eski) true → tedavi kartı (SessionProgressCard) "VERİ DOĞRULANMADI" uyarısı verir.
+   *  Global bağlantı durumunu KİRLETMEZ (uyarı yalnız tedaviyle ilgili yerde görünür). */
+  telemetryStale: boolean;
   /** En az bir kez GERÇEK veri alındı mı (false iken ekrandaki değerler mock/örnek). */
   haveRealData: boolean;
   /** Elle yeniden bağlan: WS'i yeniden kur + keşif merdivenini çalıştır. */
@@ -118,6 +142,7 @@ const LiveDataContext = createContext<LiveDataContextValue>({
   clearNotifications: () => {},
   refresh: async () => {},
   connectionQuality: "offline",
+  telemetryStale: false,
   haveRealData: false,
   reconnect: () => {},
 });
@@ -134,6 +159,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // Faz3 medikal-güvenlik: GERÇEK veri geldi mi + son veri zamanı → donmuş/örnek veriyi 'canlı' gösterme.
   const [haveRealData, setHaveRealData] = useState(false);
   const lastDataTsRef = useRef(0);
+  // ORTA fix (E-stop sticky): acil-durdurma sonrası kısa pencere — soket-tamponundaki GEÇ gelen tick/coil-update
+  // acil-durdurmayı görsel GERİ ALMASIN (donanım durmuşken UI "tedavi sürüyor/bobin çalışıyor" göstermesin).
+  const emergencyStopTsRef = useRef(0);
   const [, setTick] = useState(0); // WS düşükken connectionQuality'yi zamanla tazelemek için hafif re-render
   const markRealData = useCallback(() => {
     lastDataTsRef.current = Date.now();
@@ -167,7 +195,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── WebSocket message handler ──────────────────────────────────────────
   const handleWsMessage = useCallback((msg: WsMessage) => {
-    markRealData(); // GERÇEK veri akıyor → 'canlı' say (mock/donmuş veri ayrımı için)
+    // GÜVENLİK (#53): ping/pong KONTROL mesajları GERÇEK TELEMETRİ SAYILMAZ. Aksi halde backend'in
+    // telemetri yayıncısı (MQTT köprüsü/session-tick) ölse bile yalnız pong dönerken lastDataTsRef
+    // taze kalır → connectionQuality yanlışça 'live' der ve donmuş sıcaklık/bobin canlı gösterilir.
+    if ((msg.type as string) !== "pong" && (msg.type as string) !== "ping") {
+      markRealData(); // GERÇEK veri akıyor → 'canlı' say (mock/donmuş veri ayrımı için)
+    }
     switch (msg.type) {
       // Full snapshot on connect
       case "snapshot": {
@@ -195,12 +228,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         // Append to history (sliding window)
         setSensorHistory((prev) => {
           const arr = prev[coilId] ?? [];
+          // #73 (D1): WS `any` alanları string/NaN olabilir → _num ile Number'a zorla (nullish `?? 0`
+          // yetmez: "44.5" string kalır ve KPI tablosunda .toFixed() CRASH eder).
           const point = {
-            magneticMt: d.magneticMt ?? 0,
-            objectTemp: d.objectTemp ?? 0,
-            ambientTemp: d.ambientTemp ?? 0,
-            currentA: d.currentA ?? 0,
-            timestamp: msg.timestamp ?? Date.now() / 1000,
+            magneticMt: _num(d.magneticMt),
+            objectTemp: _num(d.objectTemp),
+            ambientTemp: _num(d.ambientTemp),
+            currentA: _num(d.currentA),
+            timestamp: _num(msg.timestamp, Date.now() / 1000),
           };
           const next = arr.length >= MAX_HISTORY ? [...arr.slice(1), point] : [...arr, point];
           return { ...prev, [coilId]: next };
@@ -212,7 +247,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       case "coil_status": {
         if (!msg.coilId || !msg.data) break;
         const coilId = msg.coilId;
-        const d = msg.data as CoilStatus;
+        let d = msg.data as CoilStatus;
+        if ((d as any)?.running && Date.now() - emergencyStopTsRef.current < 3000) d = { ...d, running: false };
         setSnapshot((prev) => {
           const updated = mergeCoilIntoSnapshot(prev, coilId, d);
           snapshotRef.current = updated;
@@ -252,15 +288,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Active treatment update
-      case "session_update": {
-        const d = msg.data as ActiveTreatment;
-        updateSnapshot({ activeTreatment: d });
-        break;
-      }
-
+      case "session_update":
       // Session timer tick (elapsed/remaining güncelleme)
       case "session_tick": {
-        const d = msg.data as ActiveTreatment;
+        let d = msg.data as ActiveTreatment;
+        // E-stop sticky: acil-durdurmadan hemen sonra gelen geç tick, isActive'i yeniden true yapmasın.
+        if (d?.isActive && Date.now() - emergencyStopTsRef.current < 3000) d = { ...d, isActive: false };
         updateSnapshot({ activeTreatment: d });
         break;
       }
@@ -269,7 +302,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       case "stm_coil_update": {
         if (!msg.coilId || !msg.data) break;
         const coilId = msg.coilId;
-        const d = msg.data as CoilStatus;
+        let d = msg.data as CoilStatus;
+        // E-stop sticky: geç coil-update bobini yeniden running:true göstermesin (donanım durmuş).
+        if ((d as any)?.running && Date.now() - emergencyStopTsRef.current < 3000) d = { ...d, running: false };
         setSnapshot((prev) => {
           const updated = mergeCoilIntoSnapshot(
             prev,
@@ -285,6 +320,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
       // Acil durdurma sinyali
       case "emergency_stop": {
+        emergencyStopTsRef.current = Date.now();
         setSnapshot((prev) => {
           const coils = prev.coils.map((c) => ({ ...c, running: false }));
           const activeTreatment = {
@@ -398,19 +434,31 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     runDiscovery(true);
   }, [runDiscovery]);
 
-  // WS düşükken connectionQuality'nin 'stale'→'offline'a geçebilmesi için hafif ticker (4sn).
+  // telemetryStale veri-YAŞINA bağlı (tedavi sırasında WS canlı olsa bile donmuş telemetriyi yakalar),
+  // bu yüzden ticker çalışır: data-frozen-but-socket-alive geçişini re-render'la tetikler. (Boştayken
+  // telemetryStale daima false → memo bail eder, tüketiciler render OLMAZ; yalnız hafif provider tick'i.)
   useEffect(() => {
-    if (wsConnected) return;
     const id = setInterval(() => setTick((t) => t + 1), 4000);
     return () => clearInterval(id);
-  }, [wsConnected]);
+  }, []);
 
-  // Bağlantı kalitesi: WS canlıysa live; değilse son gerçek veri 15sn içindeyse stale (gecikmeli),
-  // yoksa offline (hiç gerçek veri yok / donmuş). Ekran böylece mock/donmuş veriyi 'canlı' göstermez.
-  const connectionQuality: "live" | "stale" | "offline" =
-    wsConnected ? "live"
-      : haveRealData && Date.now() - lastDataTsRef.current < 15000 ? "stale"
-      : "offline";
+  // (Bağlantı durumu + telemetri-tazeliği ayrımı hemen aşağıda; connectionQuality=salt-bağlantı,
+  //  telemetryStale=aktif-tedavide-donmuş-veri. Detay: pemf-connection-status-2state.)
+  const _dataAge = Date.now() - lastDataTsRef.current;
+  // Beklenen canlı-telemetri var mı: yalnız AKTİF TEDAVİ ya da bir bobin çalışırken izlenecek
+  // değişen değer (sıcaklık/akım/alan) VARDIR; boştayken (seans yok) yoktur.
+  const _expectLiveTelemetry =
+    (snapshot as any)?.activeTreatment?.isActive === true ||
+    (snapshot?.coils ?? []).some((c) => (c as any)?.running === true);
+  // GLOBAL bağlantı DURUMU = SALT backend bağlantısı: bağlıysa çevrimiçi, değilse çevrimdışı.
+  // (Eski 3-durumlu 'veri gecikmeli' KALDIRILDI — boşta/AI'da yanlış-alarm + sinir bozucuydu;
+  // kullanıcı-mantığı: backend'e bağlı olduğu sürece çevrimiçi.)
+  const connectionQuality: "live" | "offline" = wsConnected ? "live" : "offline";
+  // TIBBİ GÜVENLİK: yalnız beklenen-canlı-telemetri varken (tedavi/bobin) donmuş/kayıp veriyi işaretle
+  // → tedavi kartı "VERİ DOĞRULANMADI" der. WS kopuk VEYA telemetri ≥20sn eskiyse stale. Boştayken
+  // (izlenecek canlı değer yok) DAİMA false → global durum temiz kalır.
+  const telemetryStale =
+    _expectLiveTelemetry && (!wsConnected || !haveRealData || _dataAge >= 20000);
 
   const markAllRead = useCallback(() => {
     setUnreadCount(0);
@@ -441,12 +489,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       clearNotifications,
       refresh,
       connectionQuality,
+      telemetryStale,
       haveRealData,
       reconnect,
       aiVisionData,
     }),
     [snapshot, sensorHistory, wsConnected, unreadCount, markAllRead,
-     clearNotifications, refresh, connectionQuality, haveRealData, reconnect, aiVisionData]
+     clearNotifications, refresh, connectionQuality, telemetryStale, haveRealData, reconnect, aiVisionData]
   );
 
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;

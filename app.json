@@ -2,7 +2,7 @@
   "expo": {
     "name": "PEMF Vet Mobil",
     "slug": "pemf-vet-responsive",
-    "version": "2.0.0",
+    "version": "2.3.2",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "pemfvet",
@@ -31,8 +31,12 @@
         "backgroundColor": "#121827"
       },
       "package": "com.pemf.vet",
-      "versionCode": 5,
+      "versionCode": 9,
+      "allowBackup": false,
       "usesCleartextTraffic": true,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -62,7 +66,8 @@
       ],
       "expo-sharing",
       "expo-audio",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ],
     "extra": {
       "router": {},

@@ -14,7 +14,8 @@ let h = fs.readFileSync(f, "utf8");
 const before = h;
 
 // 1) lang=tr (Expo varsayılanı "en"; UI Türkçe)
-h = h.replace(/<html\s+lang="[a-zA-Z-]+"/, '<html lang="tr"');
+// #113: her iki tırnak stilini eşle (Expo gelecekte tek-tırnak emisyonu yaparsa lang=en kalmasın).
+h = h.replace(/<html\s+lang=("[a-zA-Z-]+"|'[a-zA-Z-]+')/i, '<html lang="tr"');
 if (!/<html\s+lang=/.test(h)) h = h.replace(/<html(\s|>)/, '<html lang="tr"$1');
 
 // 2) description + favicon (yoksa <head> kapanışından önce ekle)

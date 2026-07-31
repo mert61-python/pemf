@@ -31,6 +31,11 @@ export function useNetworkReachability(onReconnect: () => void): void {
       if (connected) {
         if (timer) clearTimeout(timer);
         timer = setTimeout(onReconnect, 1500); // debounce
+      } else if (timer) {
+        // DÜŞÜK fix: offline'a düşünce bekleyen reconnect timer'ını İPTAL et → flapping'de 1.5sn sonra
+        // OFFLINE durumdayken onReconnect (başarısız keşif) tetiklenmesin.
+        clearTimeout(timer);
+        timer = null;
       }
     });
     return () => {

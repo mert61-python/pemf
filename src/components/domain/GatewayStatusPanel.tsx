@@ -4,7 +4,7 @@
  */
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { useState, useEffect, useCallback } from "react";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import type { ConnectionState } from "@/types/domain";
@@ -47,17 +47,17 @@ export function GatewayStatusPanel() {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.title}>🌐 Ağ Geçidi Durumu</Text>
+        <Text style={styles.title}>🌐 Sistem Durumu</Text>
         <TouchableOpacity onPress={refresh} style={styles.refreshBtn}>
           <Text style={styles.refreshText}>↻</Text>
         </TouchableOpacity>
       </View>
 
-      <GatewayRow label="WebSocket Bağlantısı" state={wsConnected ? "online" : "offline"} />
-      <GatewayRow label="MQTT Broker" state={mqttState} />
-      <GatewayRow label="Gateway Köprüsü" state={gatewayState} />
-      <GatewayRow label="STM32 Sürücüsü" state={snapshot.stm ?? "warning"} />
-      <GatewayRow label="Ağ Bağlantısı" state={gwInfo.networkOnline ? "online" : "offline"} />
+      <GatewayRow label="Uygulama Bağlantısı" state={wsConnected ? "online" : "offline"} />
+      <GatewayRow label="Sistem Bağlantısı" state={mqttState} />
+      <GatewayRow label="Cihaz Köprüsü" state={gatewayState} />
+      <GatewayRow label="Donanım Sürücüsü" state={snapshot.stm ?? "warning"} />
+      <GatewayRow label="İnternet Bağlantısı" state={gwInfo.networkOnline ? "online" : "offline"} />
     </View>
   );
 }
@@ -105,13 +105,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    gap: spacing.sm,
+    paddingVertical: rs(6),
     paddingHorizontal: spacing.sm,
     backgroundColor: "#0f172a",
-    borderRadius: 8,
+    borderRadius: radius.md,
   },
-  rowLabel: { color: colors.textMuted, fontSize: typography.small },
-  rowRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rowLabel: { flexShrink: 1, color: colors.textMuted, fontSize: typography.small },
+  rowRight: { flexShrink: 0, flexDirection: "row", alignItems: "center", gap: rs(6) },
   dot: { width: rs(8), height: rs(8), borderRadius: 4 },
   rowValue: { fontSize: typography.small, fontWeight: "700" },
 });

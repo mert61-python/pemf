@@ -6,7 +6,7 @@
  * Böylece Hastalar ekranından "Seans Başlat" → Kontrol ekranına gidip hastayı
  * seansta kullanabiliriz.
  */
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useMemo } from "react";
 import type { RouteKey } from "@/types/domain";
 
 export interface SelectedPatient {
@@ -35,8 +35,11 @@ export function AppNavProvider({
   children: React.ReactNode;
 }) {
   const [selectedPatient, setSelectedPatient] = useState<SelectedPatient | null>(null);
+  // DÜŞÜK fix: value'yu memoize et → her render'da yeni obje üretip tüm useAppNav tüketicilerini
+  // gereksiz yere render etme (setSelectedPatient stabil setter, navigateTo stabil prop).
+  const value = useMemo(() => ({ navigateTo, selectedPatient, setSelectedPatient }), [navigateTo, selectedPatient]);
   return (
-    <AppNavContext.Provider value={{ navigateTo, selectedPatient, setSelectedPatient }}>
+    <AppNavContext.Provider value={value}>
       {children}
     </AppNavContext.Provider>
   );

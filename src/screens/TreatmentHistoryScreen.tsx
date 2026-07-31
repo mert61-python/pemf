@@ -1,25 +1,57 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Linking, TextInput, Platform } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Edit3, Trash2, Share2 } from "lucide-react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { colors, spacing, typography, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rs, radius } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { apiGet, apiPost, platformConfirm, platformAlert } from "@/services/apiClient";
 import { useToast } from "@/components/ui/ToastProvider";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useAppNav } from "@/context/AppNavContext";
+import { useAuth } from "@/context/AuthContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 
-// P1 audit 2026-06-28: PEMF_REQUIRE_AUTH=1 iken /history/export_* auth-muaf DEĞİL; Linking.openURL
-// header gönderemediği için 401 ile sessizce başarısız oluyordu. Backend ?token= query'sini kabul
-// ediyor (auth middleware) → token varsa URL'e ekle.
-const withToken = (url: string): string =>
-  serviceConfig.apiToken
-    ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(serviceConfig.apiToken)}`
-    : url;
+// GÜVENLİK (YÜKSEK fix): Raporu X-API-Key HEADER'ı ile indir → cihaz MASTER token'ı URL'de
+// (tarayıcı geçmişi / sunucu & Cloudflare tünel erişim-logları / PDF disk-cache) SIZMASIN. Eski
+// `withToken` token'ı ?token= olarak URL'e koyuyordu (Linking header gönderemediği için). Şimdi:
+// Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
+async function downloadFileWithAuth(
+  url: string,
+  filename: string,
+  toast?: (m: string, t?: "success" | "error" | "info") => void,
+): Promise<void> {
+  const headers: Record<string, string> = serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {};
+  const safeName = filename.replace(/[^\w.\-]/g, "_");
+  try {
+    if (Platform.OS === "web") {
+      const res = await fetch(url, { headers });
+      if (!res.ok) { toast?.(`İndirilemedi (${res.status}).`, "error"); return; }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl; a.download = safeName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
+      return;
+    }
+    const localPath = `${FileSystem.cacheDirectory}${safeName}`;
+    const { uri, status } = await FileSystem.downloadAsync(url, localPath, { headers });
+    if (status !== 200) { toast?.("İndirilemedi.", "error"); return; }
+    try {
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
+      else toast?.(`İndirildi: ${safeName}`, "success");
+    } finally {
+      // #84 (KVKK): paylaşım/indirme SONRASI önbellekteki hasta-raporu PDF'ini SİL — aksi halde
+      // hasta PII'si app cache'inde sınırsız birikir. (shareAsync resolve → share-sheet kapandı.)
+      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    }
+  } catch {
+    toast?.("İndirme sırasında hata oluştu.", "error");
+  }
+}
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.
@@ -49,6 +81,11 @@ function statusLabelTr(status?: string): string {
 
 export function TreatmentHistoryScreen() {
   const { selectedPatient } = useAppNav();
+  const { session } = useAuth();
+  const myEmail = (session?.email || "").toLowerCase();
+  // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
+  const [scope, setScope] = useState<"mine" | "all">("mine");
+  const { showToast } = useToast();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -97,6 +134,11 @@ export function TreatmentHistoryScreen() {
   }, []);
 
   const filteredSessions = sessions.filter((s) => {
+    // "Benim Seanslarım" = operator_email eşleşen VEYA sahipsiz (eski/migrasyon) kayıtlar → hiçbiri kaybolmaz.
+    if (scope === "mine" && myEmail) {
+      const op = (s.operator_email || "").toLowerCase();
+      if (op && op !== myEmail) return false;
+    }
     const q = searchQuery.toLowerCase();
     const patientName = (s.patient_name || "").toLowerCase();
     const notes = (s.patient_notes || "").toLowerCase();
@@ -114,11 +156,25 @@ export function TreatmentHistoryScreen() {
       platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${PDF_MAX} tanesi PDF'e aktarılacak. Aramayı daraltın.`);
     }
     const sessionIds = list.slice(0, PDF_MAX).map(s => s.id).join(",");
-    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`));
+    downloadFileWithAuth(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${sessionIds}`, `PEMF_Rapor_${list.length}_seans.pdf`, showToast);
   };
 
+  // KVKK (#49): CSV artık aktif KAPSAM+ARAMA'yı onurlandırır (eskiden filtreyi yok sayıp TÜM
+  // kliniğin PII'sini döküyordu). "Benim Seanslarım" veya arama aktifse yalnız GÖRÜNEN kayıtları
+  // gönder; "Tüm Klinik" + aramasız ise operatör bilinçli tam-export istemiştir (parametresiz).
+  const CSV_MAX = 1000; // URL 414 olmasın; aşımda uyar + kırp (PDF deseniyle tutarlı).
   const downloadCsv = () => {
-    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_csv`));
+    const filtered = scope === "mine" || searchQuery.trim().length > 0;
+    let url = `${serviceConfig.apiBaseUrl}/history/export_csv`;
+    if (filtered) {
+      const list = filteredSessions;
+      if (list.length === 0) { showToast("Dışa aktarılacak kayıt yok.", "error"); return; }
+      if (list.length > CSV_MAX) {
+        platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${CSV_MAX} tanesi CSV'ye aktarılacak. Aramayı daraltın.`);
+      }
+      url += `?session_ids=${list.slice(0, CSV_MAX).map(s => s.id).join(",")}`;
+    }
+    downloadFileWithAuth(url, "PEMF_Gecmis.csv", showToast);
   };
 
 
@@ -127,7 +183,7 @@ export function TreatmentHistoryScreen() {
     <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1100), alignSelf: "center" }}>
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş tedavi kayıtları ve raporlamalar.</Text>
-        <View style={{flexDirection: 'row', gap: spacing.sm}}>
+        <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
           <TouchableOpacity style={styles.btnOutline} onPress={downloadCsv}>
             <Text style={styles.btnOutlineText}>Excel/CSV İndir</Text>
           </TouchableOpacity>
@@ -137,10 +193,21 @@ export function TreatmentHistoryScreen() {
         </View>
       </View>
 
+      {myEmail ? (
+        <View style={styles.segment}>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]} onPress={() => setScope("mine")} accessibilityLabel="Benim seanslarım">
+            <Text style={[styles.segmentText, scope === "mine" && styles.segmentTextActive]} numberOfLines={1}>Benim Seanslarım</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.segmentBtn, scope === "all" && styles.segmentBtnActive]} onPress={() => setScope("all")} accessibilityLabel="Tüm klinik seansları">
+            <Text style={[styles.segmentText, scope === "all" && styles.segmentTextActive]} numberOfLines={1}>Tüm Klinik</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <View style={styles.searchBox}>
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="Hasta, Not veya Tarih ara..." 
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Hasta, Not veya Tarih ara..."
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -157,8 +224,12 @@ export function TreatmentHistoryScreen() {
           </TouchableOpacity>
         </View>
       ) : filteredSessions.length === 0 ? (
-        <Text style={[styles.intro, { marginTop: spacing.md, flex: undefined }]}>
-          {searchQuery ? "Aramayla eşleşen kayıt yok." : "Geçmiş tedavi kaydı bulunamadı."}
+        <Text style={[styles.intro, { marginTop: spacing.md, flex: undefined, textAlign: "center" }]}>
+          {searchQuery
+            ? (hasMore
+                ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."
+                : "Aramayla eşleşen kayıt yok.")
+            : "Geçmiş tedavi kaydı bulunamadı."}
         </Text>
       ) : (
         <ResponsiveGrid minItemWidth={360}>
@@ -207,7 +278,7 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
   else if (s === "interrupted" || s === "error" || s === "aborted_recovered") state = "offline";
 
   const downloadPdf = () => {
-    Linking.openURL(withToken(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`));
+    downloadFileWithAuth(`${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`, `PEMF_Rapor_${session.patient_name || "hasta"}_${session.id}.pdf`, showToast);
   };
 
   const handleSaveNotes = async () => {
@@ -237,34 +308,13 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
   // e-posta/herhangi biri). App Password/SMTP GEREKTİRMEZ — vet kime gönüldüğünü paylaş
   // hedefinde seçer. Web'de native menü yok → PDF'i yeni sekmede açar (kullanıcı paylaşır).
   const handleShareReport = async () => {
-    const url = `${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`;
-    if (Platform.OS === "web") {
-      Linking.openURL(url);
-      return;
-    }
-    try {
-      showToast("Rapor hazırlanıyor...", "info");
-      const safeName = `PEMF_Rapor_${session.patient_name || "hasta"}_${session.id}.pdf`.replace(/[^\w.\-]/g, "_");
-      const localPath = `${FileSystem.cacheDirectory}${safeName}`;
-      // Backend PEMF_REQUIRE_AUTH=1 ise X-API-Key gerekir; token boşsa header gönderilmez.
-      const headers: Record<string, string> = serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {};
-      const { uri, status } = await FileSystem.downloadAsync(url, localPath, { headers });
-      if (status !== 200) {
-        showToast("Rapor indirilemedi.", "error");
-        return;
-      }
-      if (!(await Sharing.isAvailableAsync())) {
-        showToast("Bu cihazda paylaşım desteklenmiyor.", "error");
-        return;
-      }
-      await Sharing.shareAsync(uri, {
-        mimeType: "application/pdf",
-        dialogTitle: "Raporu paylaş",
-        UTI: "com.adobe.pdf",
-      });
-    } catch (e) {
-      showToast("Paylaşım sırasında hata oluştu.", "error");
-    }
+    showToast("Rapor hazırlanıyor...", "info");
+    // Ortak header-tabanlı indirici (token URL'de SIZMAZ); web fetch+blob, native downloadAsync+paylaşım.
+    await downloadFileWithAuth(
+      `${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`,
+      `PEMF_Rapor_${session.patient_name || "hasta"}_${session.id}.pdf`,
+      showToast,
+    );
   };
 
   return (
@@ -279,7 +329,7 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
           <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
           <Text style={styles.detailsHint} numberOfLines={1}>Bobin detayını gör ›</Text>
         </TouchableOpacity>
-        <View style={{flexDirection: 'row', alignItems: 'center', gap: spacing.sm}}>
+        <View style={{flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm}}>
           <StatusPill label={statusLabelTr(session.session_status)} state={state} />
           <TouchableOpacity style={styles.iconBtn} onPress={handleShareReport} accessibilityLabel="Raporu Paylaş">
             <Share2 color={colors.primary} size={18} />
@@ -341,6 +391,11 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  segment: { flexDirection: "row", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: rs(4), gap: rs(4), marginBottom: spacing.md },
+  segmentBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: rs(6), alignItems: "center", justifyContent: "center" },
+  segmentBtnActive: { backgroundColor: colors.primary },
+  segmentText: { color: colors.textMuted, fontSize: typography.caption, fontWeight: "700" },
+  segmentTextActive: { color: colors.white },
   loadMoreBtn: {
     alignSelf: "center",
     marginTop: spacing.md,

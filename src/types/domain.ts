@@ -8,6 +8,7 @@ export type RouteKey =
   | "kpi"
   | "simulator"
   | "ai"
+  | "ai_history"
   | "settings";
 
 // ─── Connection ──────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ export interface Patient extends PatientSummary {
   weight?: string;
   vet_contact?: string;
   owner_email?: string;  // hasta sahibi e-postası (rapor gönderimi) — backend PatientInput ile aynı
+  operator_email?: string;  // kaydı oluşturan hekim e-postası (klinik-içi "Benim Hastalarım" filtresi)
 }
 
 // ─── Session / Treatment ──────────────────────────────────────────────────────

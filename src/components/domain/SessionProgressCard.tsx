@@ -18,6 +18,8 @@ interface Props {
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
+  /** Bağlantı bayat/çevrimdışı: gösterilen süre/değerler GERÇEK ZAMANLI DOĞRULANAMIYOR → görsel işaretle. */
+  stale?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -39,12 +41,15 @@ export function SessionProgressCard({
   onStop,
   onEmergencyStop,
   loading = false,
+  stale = false,
 }: Props) {
   const progress = durationSec > 0 ? Math.min(1, elapsedSec / durationSec) : 0;
+  const indefinite = durationSec <= 0; // #72: süresiz seans → 00:00/%0 yerine "Süresiz"
   const pulseAnim = useR(new RNAnimated.Value(1)).current;
 
   useEff(() => {
-    if (!isActive) {
+    // Bayat veride nabız animasyonunu DURDUR: "canlı çalışıyor" izlenimi verme.
+    if (!isActive || stale) {
       pulseAnim.setValue(1);
       return;
     }
@@ -56,7 +61,7 @@ export function SessionProgressCard({
     );
     loop.start();
     return () => loop.stop();
-  }, [isActive]);
+  }, [isActive, stale]);
 
   if (!isActive) {
     return (
@@ -72,12 +77,21 @@ export function SessionProgressCard({
     <RNAnimated.View style={[styles.card, { transform: [{ scale: pulseAnim }] }]}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.activeBadge}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.activeBadgeText}>AKTİF SEANS</Text>
+        <View style={[styles.activeBadge, stale && styles.staleBadge]}>
+          <View style={[styles.pulseDot, stale && styles.staleDot]} />
+          <Text style={[styles.activeBadgeText, stale && styles.staleBadgeText]}>
+            {stale ? "VERİ DOĞRULANMADI" : "AKTİF SEANS"}
+          </Text>
         </View>
         <Text style={styles.modeText}>{mode}</Text>
       </View>
+
+      {stale && (
+        <Text style={styles.staleNote}
+          accessibilityRole="alert" accessibilityLiveRegion="polite">
+          ⚠️ Bağlantı bayat/çevrimdışı — gösterilen süre ve değerler gerçek zamanlı doğrulanamıyor.
+        </Text>
+      )}
 
       {/* Progress bar */}
       <View style={styles.progressBg}>
@@ -91,12 +105,12 @@ export function SessionProgressCard({
           <Text style={styles.timeValue}>{formatTime(elapsedSec)}</Text>
         </View>
         <View style={styles.timeBlockCenter}>
-          <Text style={styles.progressPct}>{Math.round(progress * 100)}%</Text>
+          <Text style={styles.progressPct}>{indefinite ? "∞" : `${Math.round(progress * 100)}%`}</Text>
         </View>
         <View style={[styles.timeBlock, { alignItems: "flex-end" }]}>
           <Text style={styles.timeLabel}>KALAN</Text>
-          <Text style={[styles.timeValue, { color: remainingSec < 60 ? "#ef4444" : colors.primary }]}>
-            {formatTime(remainingSec)}
+          <Text style={[styles.timeValue, { color: indefinite ? colors.textMuted : remainingSec < 60 ? "#ef4444" : colors.primary }]}>
+            {indefinite ? "Süresiz" : formatTime(remainingSec)}
           </Text>
         </View>
       </View>
@@ -111,11 +125,11 @@ export function SessionProgressCard({
       <View style={styles.btnRow}>
         <TouchableOpacity style={styles.btnStop} onPress={onStop} disabled={loading}
           accessibilityRole="button" accessibilityLabel="Tedavi seansını durdur">
-          <Text style={styles.btnStopText}>⏹ Durdur</Text>
+          <Text style={styles.btnStopText} numberOfLines={1} adjustsFontSizeToFit>⏹ Durdur</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}
           accessibilityRole="button" accessibilityLabel="Acil durdurma — tüm bobinleri anında durdur">
-          <Text style={styles.btnEmergencyText}>🚨 ACİL DURDUR</Text>
+          <Text style={styles.btnEmergencyText} numberOfLines={1} adjustsFontSizeToFit>🚨 ACİL DURDUR</Text>
         </TouchableOpacity>
       </View>
     </RNAnimated.View>
@@ -178,6 +192,17 @@ const styles = StyleSheet.create({
   },
   activeBadgeText: { color: "#22c55e", fontWeight: "700", fontSize: typography.small },
   modeText: { color: colors.textMuted, fontSize: typography.small },
+  staleBadge: { backgroundColor: "#f59e0b22" },
+  staleDot: { backgroundColor: "#f59e0b" },
+  staleBadgeText: { color: "#f59e0b" },
+  staleNote: {
+    color: "#f59e0b",
+    fontSize: typography.small,
+    fontWeight: "600",
+    backgroundColor: "#f59e0b18",
+    borderRadius: 8,
+    padding: spacing.sm,
+  },
 
   progressBg: {
     height: rs(8),

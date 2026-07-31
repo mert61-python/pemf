@@ -1,4 +1,5 @@
-import { Dimensions } from "react-native";
+import { Dimensions, Platform } from "react-native";
+import type { ViewStyle } from "react-native";
 
 // ── RESPONSIVE ÖLÇEK ─────────────────────────────────────────────────────────
 // Tüm boyutlandırma (spacing/typography/radius + bileşenlerdeki ham sayılar) bu
@@ -60,6 +61,8 @@ export const radius = {
   lg: rs(12),
   xl: rs(20),
   full: 9999,
+  card: rs(16), // PREMIUM: yumuşak kart yarıçapı
+  btn: rs(13),  // PREMIUM: buton yarıçapı
 };
 
 export const typography = {
@@ -71,11 +74,58 @@ export const typography = {
 };
 
 export const shadows = {
-  panel: {
-    shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6
-  }
+  panel: { shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
+  // PREMIUM: elevation ölçeği
+  sm: { shadowColor: "#000", shadowOpacity: 0.30, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  md: { shadowColor: "#000", shadowOpacity: 0.40, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  lg: { shadowColor: "#000", shadowOpacity: 0.50, shadowRadius: 26, shadowOffset: { width: 0, height: 16 }, elevation: 14 },
+  // PREMIUM: renkli ışıltılar (CTA/aktif öğeler öne çıksın)
+  glowPrimary: { shadowColor: colors.primary, shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  glowDanger: { shadowColor: colors.danger, shadowOpacity: 0.50, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  glowSuccess: { shadowColor: colors.success, shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 9 },
+};
+
+// Web'de RN shadow* prop'ları yerine boxShadow — renkli glow web'de de görünür.
+const webShadow: Record<keyof typeof shadows, string> = {
+  panel: "0 10px 18px rgba(0,0,0,0.24)",
+  sm: "0 1px 2px rgba(0,0,0,0.35)",
+  md: "0 6px 16px rgba(0,0,0,0.40), 0 2px 5px rgba(0,0,0,0.30)",
+  lg: "0 18px 40px rgba(0,0,0,0.50), 0 6px 14px rgba(0,0,0,0.32)",
+  glowPrimary: "0 8px 26px rgba(79,140,255,0.50)",
+  glowDanger: "0 8px 26px rgba(239,68,68,0.42)",
+  glowSuccess: "0 8px 24px rgba(34,197,94,0.36)",
+};
+
+/** Platforma uygun gölge/ışıltı: native shadow* prop'ları, web'de boxShadow. */
+export function elevation(key: keyof typeof shadows): ViewStyle {
+  return Platform.OS === "web" ? ({ boxShadow: webShadow[key] } as ViewStyle) : (shadows[key] as ViewStyle);
+}
+
+// ── PREMIUM: gradyanlar (expo-linear-gradient `colors` prop'u — [başlangıç, bitiş]) ──
+export const gradients = {
+  primary: ["#6EA0FF", "#3466D6"] as [string, string],
+  primaryDeep: ["#4F8CFF", "#2F63D6"] as [string, string],
+  danger: ["#F98A84", "#DC2626"] as [string, string],
+  success: ["#5BE38B", "#16A34A"] as [string, string],
+  violet: ["#A78BFA", "#7C3AED"] as [string, string],
+  cyan: ["#67E8F9", "#0891B2"] as [string, string],
+  surface: ["#1E273F", "#161D30"] as [string, string],
+  sheen: ["rgba(255,255,255,0.16)", "rgba(255,255,255,0)"] as [string, string],
+};
+
+// ── PREMIUM: cam yüzey (yarı-saydam + üst-kenar iç ışık) ──
+export const glass = {
+  bg: "rgba(24,32,52,0.55)",
+  bgStrong: "rgba(24,32,52,0.72)",
+  border: "rgba(255,255,255,0.09)",
+  highlight: "rgba(255,255,255,0.10)",
+};
+
+// ── PREMIUM: hareket token'ları (built-in Animated; ileride reanimated) ──
+export const motion = {
+  fast: 140,
+  base: 220,
+  slow: 380,
+  pressScale: 0.97,
+  spring: { damping: 15, stiffness: 210, mass: 0.7 },
 };
