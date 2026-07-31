@@ -377,7 +377,7 @@ export function AuthScreen() {
             {/* Alt geçiş */}
             {isReset ? (
               <TouchableOpacity onPress={() => switchMode("login")} style={styles.switchRow}>
-                <Text style={styles.switchText}><Text style={styles.switchLink}>← Giriş'e dön</Text></Text>
+                <Text style={styles.switchText}><Text style={styles.switchLink}>{"← Giriş'e dön"}</Text></Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => switchMode(isRegister ? "login" : "register")} style={styles.switchRow}>

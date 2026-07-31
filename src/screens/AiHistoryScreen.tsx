@@ -149,7 +149,7 @@ export function AiHistoryScreen() {
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xxl }} />
       ) : error ? (
-        <Text style={styles.empty}>Geçmiş yüklenemedi. Cihaza bağlı olduğunuzdan emin olun, sonra Yenile'ye dokunun.</Text>
+        <Text style={styles.empty}>{"Geçmiş yüklenemedi. Cihaza bağlı olduğunuzdan emin olun, sonra Yenile'ye dokunun."}</Text>
       ) : shown.length === 0 ? (
         <Text style={styles.empty}>
           {filter !== "__all__"

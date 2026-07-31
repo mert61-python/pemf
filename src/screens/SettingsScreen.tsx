@@ -378,7 +378,7 @@ export function SettingsScreen() {
             {prof.address ? <Info label="Adres" value={prof.address} /> : null}
             {prof.phone ? <Info label="Telefon" value={prof.phone} /> : null}
             {prof.clinic_phone ? <Info label="Klinik Acil Telefon" value={prof.clinic_phone} /> : null}
-            <Text style={styles.mutedNote}>E-posta hesap kimliğidir, değiştirilemez. Diğer bilgileri "Düzenle" ile güncelleyebilirsin.</Text>
+            <Text style={styles.mutedNote}>{'E-posta hesap kimliğidir, değiştirilemez. Diğer bilgileri "Düzenle" ile güncelleyebilirsin.'}</Text>
           </>
         )}
       </Card>
