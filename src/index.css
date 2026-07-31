@@ -138,6 +138,22 @@
     background: color-mix(in oklch, var(--color-primary) 14%, transparent);
     border: 1px solid color-mix(in oklch, var(--color-primary) 30%, transparent);
   }
+
+  /* Form girişi (ödeme formu) */
+  .input {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-soft, transparent);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.875rem;
+    color: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input:focus {
+    border-color: color-mix(in oklch, var(--color-primary) 55%, transparent);
+  }
 }
 
 @layer utilities {

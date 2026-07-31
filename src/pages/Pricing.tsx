@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { PLANS, ADDONS, COMPARE, type Plan } from '../config'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { PLANS, ADDONS, COMPARE, RESEARCH_ADDON, FREE_MODE, type Plan } from '../config'
 import { Check, Sparkle, Bolt } from '../components/Icons'
 import PackageBuilder from '../components/PackageBuilder'
 
@@ -17,9 +17,45 @@ function priceView(p: Plan, yearly: boolean) {
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(true)
+  const [research, setResearch] = useState(false)
+  const navigate = useNavigate()
+  const [sp] = useSearchParams()
+  const checkout = sp.get('checkout') // success | incomplete | error (iyzico callback dönüşü)
+
+  // Ödeme sayfasına yönlendir (fatura bilgisi + iyzico formu orada). Giriş /odeme'de istenir.
+  // TEST AŞAMASI (FREE_MODE): satış kapalı → "Seç" ücretsiz indirmeye götürür.
+  function buy(p: Plan) {
+    if (!p.paid) return
+    if (FREE_MODE) return navigate('/download')
+    navigate(`/odeme?tier=${p.tier}&yearly=${yearly ? 1 : 0}&research=${research ? 1 : 0}`)
+  }
 
   return (
     <>
+      {checkout && (
+        <div className="mx-auto max-w-6xl px-5 pt-6 sm:px-6">
+          <div className={`rounded-lg border px-4 py-3 text-sm ${
+            checkout === 'success'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+          }`}>
+            {checkout === 'success'
+              ? '✓ Ödemeniz alındı, aboneliğiniz aktifleştirildi. Client’ı indirip aynı hesapla giriş yapın.'
+              : checkout === 'incomplete'
+                ? 'Ödeme tamamlanmadı. Dilerseniz tekrar deneyebilirsiniz.'
+                : 'Ödeme sırasında bir sorun oluştu. Lütfen tekrar deneyin veya destek ile iletişime geçin.'}
+          </div>
+        </div>
+      )}
+
+      {FREE_MODE && (
+        <div className="mx-auto max-w-6xl px-5 pt-6 sm:px-6">
+          <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-primary">
+            🎉 Test aşaması: tüm planlar şu an <strong>ücretsiz</strong>. Aşağıdaki “Seç” butonları sizi doğrudan ücretsiz indirmeye götürür — ödeme alınmaz.
+          </div>
+        </div>
+      )}
+
       {/* Hero + billing toggle */}
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-6 sm:py-20">
@@ -36,6 +72,16 @@ export default function Pricing() {
             <button onClick={() => setYearly(true)} className={`rounded-full px-4 py-1.5 font-medium transition-colors ${yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>
               Yıllık<span className={`ml-1.5 text-xs ${yearly ? 'text-primary-fg/80' : 'text-primary'}`}>2 ay bedava</span>
             </button>
+          </div>
+
+          {/* Araştırma eklentisi — Pro/Pro+ satın alımına eklenir */}
+          <div className="mt-5">
+            <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-full border border-border bg-bg-soft px-4 py-2 text-sm">
+              <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="h-4 w-4 accent-primary" />
+              <span className="text-muted">
+                Araştırma modülü ekle <span className="font-medium text-fg">+{tl(RESEARCH_ADDON.monthly)}/ay</span>
+              </span>
+            </label>
           </div>
         </div>
       </section>
@@ -67,7 +113,13 @@ export default function Pricing() {
                     {p.queue}
                   </div>
 
-                  <Link to={p.to} className={`mt-6 ${p.highlight ? 'btn-primary' : 'btn-ghost'}`}>{p.cta}</Link>
+                  {p.paid ? (
+                    <button onClick={() => buy(p)} className={`mt-6 ${p.highlight ? 'btn-primary' : 'btn-ghost'}`}>
+                      {p.cta}
+                    </button>
+                  ) : (
+                    <Link to={p.to} className={`mt-6 ${p.highlight ? 'btn-primary' : 'btn-ghost'}`}>{p.cta}</Link>
+                  )}
 
                   <ul className="mt-6 space-y-2.5 border-t border-border pt-6">
                     {p.features.map((f, i) => (

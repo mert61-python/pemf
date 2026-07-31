@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { BRAND, NAV } from '../config'
 import { Logo, Download, Menu, Close } from './Icons'
+import AccountButton from './AccountButton'
 
 export default function Header() {
   const [open, setOpen] = useState(false)
@@ -32,7 +33,8 @@ export default function Header() {
           ))}
         </nav>
 
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-3 md:flex">
+          <AccountButton />
           <Link to="/download" className="btn-primary text-sm">
             <Download className="h-4 w-4" />
             İstemciyi İndir
@@ -65,6 +67,9 @@ export default function Header() {
                 {n.label}
               </NavLink>
             ))}
+            <div className="mt-2 px-3">
+              <AccountButton onNavigate={() => setOpen(false)} />
+            </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />
               İstemciyi İndir

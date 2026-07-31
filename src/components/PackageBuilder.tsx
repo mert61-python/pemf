@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MODULES, CLIENT_BASE_MB } from '../config'
+import { MODULES, CLIENT_BASE_MB, FREE_MODE } from '../config'
 import { Check } from './Icons'
 
 const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
@@ -102,8 +102,10 @@ export default function PackageBuilder() {
 
       <p className="mt-3 text-center text-xs text-muted">
         Seçimi <span className="font-medium text-fg/80">client içinde</span> yaparsınız — yalnız
-        seçtiğiniz profillerin modelleri iner. Ev Sahibi ve Veteriner seviyenize dahildir; Araştırma
-        ücretli eklentidir. Yukarısı tahmini indirme ve ek ücreti gösterir.
+        seçtiğiniz profillerin modelleri iner.{' '}
+        {FREE_MODE
+          ? 'Test aşamasında tüm profiller (Araştırma dahil) ücretsizdir.'
+          : 'Ev Sahibi ve Veteriner seviyenize dahildir; Araştırma ücretli eklentidir.'}
       </p>
     </div>
   )

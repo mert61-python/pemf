@@ -65,10 +65,11 @@ export const FREE_MODE = true
  *  Farklı host (Cloudflare R2 / S3 / kendi sunucu) isterseniz windows/macos url'lerini
  *  doğrudan CLIENT.downloads içinde elle yazın. */
 export const DOWNLOAD_HOST = {
-  ready: true, // Windows launcher yayında (pemf-update/launcher-v1.8.0)
+  ready: true, // Windows launcher yayında (pemf-update/launcher-v1.9.2)
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
-  launcherTag: 'launcher-v1.9.2', // SABİT etiket; 3-platform 1.9.2 (cihaz-güvenliği graceful-shutdown: bobinler kapanışta önce durur), macOS notarize'li (2026-07-26)
+  launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
+  windowsTag: 'launcher-v1.9.5', // 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
   windowsAsset: 'PEMFVetClient-Setup.exe',
   macosAsset: 'PEMFVetClient.dmg',
   macosReady: false, // "Yakında": launcher Mac'te ÇALIŞIR ama DONANIM (STM seri + ESP MQTT + hotspot) Windows-ÖZEL → Mac'te cihaz sürülemez. Donanım desteği gelene kadar "Yakında" (kasıtlı; .dmg yayında ama gösterme).
@@ -78,21 +79,27 @@ export const DOWNLOAD_HOST = {
   linuxReady: false, // "Yakında": donanım (STM/ESP/hotspot) Windows-özel → Linux'ta cihaz sürülemez (paketler yayında ama kasıtlı gizli, donanım desteği gelene kadar).
   linuxAppImageReady: false, // (aynı neden — Linux donanım desteği yok)
   linuxRpmReady: false, // (aynı neden)
+  // Android: mobil app STANDALONE APK (Hermes gömülü, Metro gerekmez). GitHub'da launcher release'inde
+  // barındırılır → Windows/Mac/Linux ile AYNI REL. Backend'e aynı WiFi'de mDNS/subnet ile oto-bağlanır.
+  androidAsset: 'PEMF_Vet_Mobil.apk',
+  androidReady: true, // Android standalone APK yayında (v2.3.2)
 }
 
 const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`
+// Windows AYRI etiket (self-update = Windows-only → mac/linux/android REL'inden bağımsız).
+const WIN_REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.windowsTag}`
 
 export const CLIENT = {
-  version: '1.8.0',
+  version: '1.9.5',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner)
-  releaseDate: '14 Tem 2026',
+  releaseDate: '29 Tem 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
       key: 'windows' as const,
       label: 'Windows',
-      url: `${REL}/${DOWNLOAD_HOST.windowsAsset}`,
+      url: `${WIN_REL}/${DOWNLOAD_HOST.windowsAsset}`,
       os: 'Windows 10 / 11 (64-bit)',
       ready: true,
     },
@@ -113,6 +120,13 @@ export const CLIENT = {
       rpmReady: DOWNLOAD_HOST.linuxRpmReady, // rpm butonu yalnız bu true iken
       os: 'Ubuntu/Debian · Fedora/RHEL · universal (64-bit)',
       ready: DOWNLOAD_HOST.linuxReady,
+    },
+    android: {
+      key: 'android' as const,
+      label: 'Android',
+      url: `${REL}/${DOWNLOAD_HOST.androidAsset}`,
+      os: 'Android 8.0+ · APK (bilinmeyen kaynağa izin verin)',
+      ready: DOWNLOAD_HOST.androidReady,
     },
   },
 }

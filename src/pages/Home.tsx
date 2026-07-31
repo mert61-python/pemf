@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { BRAND, CLIENT, FEATURES, LAUNCHER_STEPS, MODULES } from '../config'
 import { ICONS } from '../components/Icons'
-import { Sparkle, ArrowRight, Check, Download, Bolt } from '../components/Icons'
+import { Sparkle, ArrowRight, Check, Bolt } from '../components/Icons'
 import DownloadButtons from '../components/DownloadButtons'
 import LauncherMock from '../components/LauncherMock'
+import AppScreenshots from '../components/AppScreenshots'
 
 export default function Home() {
   return (
@@ -32,6 +33,7 @@ export default function Home() {
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.windows.os}</span>
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.macos.os}</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Linux (Ubuntu / Debian)</span>
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> v{CLIENT.version} · hafif client</span>
             </p>
           </div>
@@ -103,6 +105,9 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── UYGULAMA EKRANLARI ──────────────────────────────── */}
+      <AppScreenshots />
+
       {/* ── PROFİLLER + PLAN TEASER ─────────────────────────── */}
       <section className="border-b border-border/60 bg-bg-soft/60">
         <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:items-center">
@@ -156,27 +161,6 @@ export default function Home() {
             <Link to="/pricing" className="btn-primary mt-6 w-full">
               Planları karşılaştır <ArrowRight className="h-4 w-4" />
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── İNDİR CTA ───────────────────────────────────────── */}
-      <section>
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-6">
-          <div className="card glow-ring relative overflow-hidden p-10 text-center sm:p-14">
-            <div className="bg-hero pointer-events-none absolute inset-0 opacity-40" />
-            <div className="relative">
-              <span className="grid mx-auto h-14 w-14 place-items-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25">
-                <Download className="h-7 w-7" />
-              </span>
-              <h2 className="mt-6 text-3xl font-bold sm:text-4xl">PEMF Vet Client’ı indirin</h2>
-              <p className="mx-auto mt-3 max-w-lg text-muted">
-                Hafif client · v{CLIENT.version}. İndirin, kurun ve uygulamayı client içinden başlatın.
-              </p>
-              <div className="mt-8 flex justify-center">
-                <DownloadButtons size="lg" />
-              </div>
-            </div>
           </div>
         </div>
       </section>
