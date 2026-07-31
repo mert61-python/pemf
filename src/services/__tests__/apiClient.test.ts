@@ -31,9 +31,11 @@ describe("apiGet", () => {
 
   it("200'de JSON döner + X-API-Key başlığını iletir", async () => {
     serviceConfig.apiToken = "tok";
+    // parseJsonSafe gövdeyi response.text() ile okur (boş/JSON-olmayan gövdeyi
+    // "Unexpected end of JSON input" fırlatmadan karşılamak için) → mock text() vermeli.
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ status: "online" }),
+      text: async () => JSON.stringify({ status: "online" }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -42,6 +44,23 @@ describe("apiGet", () => {
     // İkinci arg headers → X-API-Key taşımalı
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
     expect(headers["X-API-Key"]).toBe("tok");
+  });
+
+  // parseJsonSafe'in var oluş sebebi (ORTA fix): 2xx gövde BOŞ ya da JSON-OLMAYAN olabilir.
+  it("2xx + BOŞ gövde → boş sonuç ({}), hata sayılmaz", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, text: async () => "" }) as unknown as typeof fetch;
+    const res = await apiGet("/api/session/stop", { status: "error" });
+    expect(res).toEqual({});
+  });
+
+  it("2xx + JSON-OLMAYAN gövde (captive-portal HTML) → fallback", async () => {
+    const fallback = { status: "offline" };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "<html>Oturum açmanız gerekiyor</html>",
+    }) as unknown as typeof fetch;
+    const res = await apiGet("/api/health", fallback);
+    expect(res).toBe(fallback);
   });
 
   it("HTTP hatası (500) → fallback döner, throw ETMEZ", async () => {
@@ -69,7 +88,7 @@ describe("apiPost", () => {
   });
 
   it("POST gövdeyi JSON serialize eder + JSON Content-Type gönderir", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "success" }) });
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, text: async () => JSON.stringify({ status: "success" }) });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const res = await apiPost("/api/session/start", { mode: "Manuel", duration_minutes: 20 }, { status: "error" });
