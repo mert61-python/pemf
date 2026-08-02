@@ -53,16 +53,29 @@ npm run build      # tsc + vite build → dist/
 npm run preview    # dist/ önizleme
 ```
 
-## Vercel’e deploy
+## Site güncelleme / Deploy
 
-**Yol 1 — Git (önerilen):** repoyu GitHub’a push edin → Vercel’de “New Project” → repoyu seçin. Vercel Vite’ı otomatik algılar (Build: `npm run build`, Output: `dist`). `vercel.json` SPA yönlendirmesini halleder.
+**Git bağlı (2026-08-01’den beri):** bu repo (`mert61-python/pemf-vet-web`, dal **`master`**) Vercel projesine bağlıdır → **`master`’a her push = otomatik production deploy** (canlı: https://pemf-vet-web.vercel.app). Vercel, Vite’ı otomatik algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirmesini halleder.
 
-**Yol 2 — Vercel CLI:**
+### İş akışı — siteyi güncellemek
+```bash
+cd pemf-vet-web
+# içeriği düzenle (genellikle src/config.ts: sürüm, fiyat, link…)
+git add -A
+git commit -m "açıklama"
+git push                 # → Vercel otomatik deploy eder (~1-2 dk)
+```
+Hepsi bu. Deploy’u izlemek: Vercel panosu → pemf-vet-web → Deployments.
+
+> ⚠️ **ALTIN KURAL — değişikliği HER ZAMAN commit + push et.** Sadece `vercel --prod` (CLI) ile deploy edip commit’lemezsen repo geride kalır → bir sonraki push canlı siteyi **ESKİ koda döndürür**. (Sürüm-etiketi “mayını” tam bu yüzden oluşmuştu: CLI-deploy’lar commit’siz kalınca repo 1.9.5’te takıldı.)
+
+**CLI (yedek — normalde gerekmez):**
 ```bash
 npm i -g vercel
-vercel            # önizleme dağıtımı (ilk seferde login + proje bağlama)
-vercel --prod     # production
+vercel login      # TERMINAL’de device-code + tarayıcıda onay (vercel.com’a web-girişi CLI’yi authlamaz)
+vercel --prod     # production’a doğrudan deploy
 ```
+Git bağlı olduğu için CLI’yi yalnız acil bir tek-seferlik durumda kullan; kullanırsan **hemen ardından commit + push** et ki repo geri kalmasın.
 
 Framework preset: **Vite** · Build: `npm run build` · Output dir: `dist`.
 
