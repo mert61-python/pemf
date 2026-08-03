@@ -134,3 +134,22 @@ def test_keepalive_has_margin_against_firmware_deadman(hw):
     # STOP telafi penceresi wall-clock olarak ~3 sn kalmalı (kadanstan bağımsız)
     resend_s = hw.STOP_RESEND_TICKS * hw.KEEP_ALIVE_INTERVAL_S
     assert 2.0 <= resend_s <= 4.0, f"düşen-STOP telafi penceresi ~3 sn olmalı, hesaplanan {resend_s}s"
+
+
+def test_update_coil_does_not_partially_apply_on_bad_param(hw):
+    """DENETIM P2 regresyonu: normalize hatası bobini YARIM güncellenmiş bırakmamalı.
+
+    Hata: normalize_* çağrıları state'e YAZARKEN çalışıyordu; duty_percent_to_ratio içindeki
+    float(percent) sayısal olmayan girdide ValueError verir (clamp_float'un try'ı DIŞINDA) →
+    bobin is_running=True + YENİ freq ama ESKİ duty/faz ve deadline YOK durumda kalıyor,
+    keep-alive bu karma durumu sürerken API 'başarısız' dönüyordu.
+    """
+    hw.update_coil(1, 100.0, 25.0, 0.0, duration=10)          # sağlıklı başlangıç
+    before = dict(hw.coils_state[1])
+    before_deadline = hw._coil_deadline[1]
+
+    ok = hw.update_coil(1, 250.0, "bozuk-duty", 0.0, duration=10)   # duty sayısal değil
+
+    assert ok is False, "geçersiz parametre başarısız dönmeli"
+    assert hw.coils_state[1] == before, "bobin durumu HİÇ değişmemeli (kısmi uygulama yok)"
+    assert hw._coil_deadline[1] == before_deadline, "deadline değişmemeli"

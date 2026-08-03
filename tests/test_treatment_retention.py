@@ -74,3 +74,33 @@ def test_retention_env_overrides_are_read(monkeypatch):
     assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90, "geçersiz değer varsayılana düşmeli"
     monkeypatch.delenv("PEMF_RETAIN_SENSOR_DAYS", raising=False)
     assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90
+
+
+def test_startup_backup_skipped_when_recent_one_exists(tmp_path, monkeypatch):
+    """DENETIM P2 regresyonu: restart döngüsü yedek geçmişini imha etmemeli.
+
+    Hata: döngü koşulu `first or ...` idi → servis HER açılışta yedek alıyordu. Rotasyon yalnız
+    son N yedeği tuttuğundan crash-loop / art arda restart, N açılışta TÜM yedek geçmişini aynı
+    günün kopyalarıyla değiştiriyordu (felaket-kurtarma penceresi yok olur).
+    """
+    import time
+
+    from services.headless_db_maintenance import HeadlessDBMaintenance as M
+
+    obj = M.__new__(M)                       # __init__'i atla (DB/thread gerekmesin)
+    obj.app_data_dir = tmp_path
+    obj.backup_interval = 24 * 3600.0
+
+    bdir = tmp_path / "backups"
+    bdir.mkdir()
+    assert obj._recent_backup_exists() is False, "yedek yokken açılışta yedek ALINMALI"
+
+    taze = bdir / "pemf_treatment_history_20260803_120000.db"
+    taze.write_bytes(b"x")
+    assert obj._recent_backup_exists() is True, "taze yedek varken açılış yedeği ATLANMALI"
+
+    # Bayat yedek → tekrar yedeklenmeli (servis uzun süre kapalı kaldıysa)
+    eski = time.time() - (25 * 3600)
+    import os
+    os.utime(taze, (eski, eski))
+    assert obj._recent_backup_exists() is False, "bayat yedek varken yeniden yedeklenmeli"

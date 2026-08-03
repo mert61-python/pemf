@@ -66,8 +66,16 @@ class HeadlessDBMaintenance:
                     self._check_disk(); last_disk = now
                 if first or now - last_maint >= self.maint_interval:
                     self._run_maintenance(); last_maint = now
-                if first or now - last_backup >= self.backup_interval:
+                # DENETIM P2 (restart-dongusu yedek imhasi): kosul `first or ...` idi → servis HER
+                # acilista yedek aliyordu. Rotasyon yalnizca son N yedegi tuttugundan, bir crash-loop
+                # ya da operatorun art arda yeniden baslatmasi N acilista TUM YEDEK GECMISINI ayni
+                # gunun kopyalariyla degistiriyordu (felaket-kurtarma penceresi yok olur).
+                # Cozum: acilista yedek al AMA yalnizca diskteki EN YENI yedek bayatsa. Boylece
+                # "servis uzun sure kapali kaldi" durumu yine yedeklenir, restart dongusu yedegi imha etmez.
+                if (first and not self._recent_backup_exists()) or now - last_backup >= self.backup_interval:
                     self._run_backup(); last_backup = now
+                elif first:
+                    logger.info("Acilis yedegi ATLANDI: diskte taze yedek var (restart-dongusu korumasi).")
             except Exception:
                 logger.exception("DB bakim turu hatasi")
             first = False
@@ -107,6 +115,24 @@ class HeadlessDBMaintenance:
             logger.info("DB bakim+retention tamam: maintenance=%s retention=%s", m, r)
         except Exception:
             logger.exception("maintenance hatasi")
+
+    def _recent_backup_exists(self) -> bool:
+        """Diskteki EN YENI yedek `backup_interval`'dan taze mi? (restart-dongusu korumasi)
+
+        "Son yedek ne zaman alindi" bilgisini ayri bir durum dosyasinda tutmak yerine yedek
+        dosyalarinin KENDI mtime'indan turetiyoruz — surec yeniden basladiginda da gecerli
+        kalan tek gercek kaynak budur.
+        """
+        try:
+            backup_dir = self.app_data_dir / "backups"
+            newest = max(
+                (p.stat().st_mtime for p in backup_dir.glob("pemf_treatment_history_*.db")),
+                default=0.0,
+            )
+            return newest > 0.0 and (time.time() - newest) < self.backup_interval
+        except Exception:
+            logger.debug("yedek tazelik kontrolu basarisiz", exc_info=True)
+            return False   # emin degilsek yedek AL (veri kaybetmektense fazladan yedek)
 
     def _run_backup(self):
         try:

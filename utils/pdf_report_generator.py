@@ -44,6 +44,13 @@ except ImportError:
 from database.treatment_history_db import get_treatment_db
 
 
+# DENETIM P2: rapor sorgulari SABIT limit=1000 kullaniyordu → yogun bir klinikte en yeni 1000
+# seansin DISINDA kalan kayitlar rapora SESSIZCE girmiyordu (hasta raporunda eksik gecmis;
+# ID ile ACIKCA istenen seanslar ise hic uyari vermeden dusuyordu). Limit yukseltildi ve
+# kirpilma/eksik-ID durumlari artik GORUNUR loglaniyor — sessiz eksik tibbi rapor kabul edilemez.
+_HISTORY_FETCH_LIMIT = 50000
+
+
 def _esc(text) -> str:
     """Serbest-metni ReportLab mini-XML'ine vermeden ONCE kacir.
 
@@ -274,7 +281,11 @@ class PDFReportGenerator:
 
     def _get_patient_sessions(self, patient_name: str, start_date, end_date):
         """Tam-ada göre (opsiyonel tarih aralığı) hasta seanslarını getir; hiç yoksa ValueError."""
-        sessions = self.db.get_session_history(limit=1000, start_date=start_date, end_date=end_date, internal_full=True)
+        sessions = self.db.get_session_history(limit=_HISTORY_FETCH_LIMIT, start_date=start_date,
+                                               end_date=end_date, internal_full=True)
+        if len(sessions) >= _HISTORY_FETCH_LIMIT:
+            self.logger.warning("Hasta raporu: gecmis %d kayitta KIRPILDI — rapor EKSIK olabilir "
+                           "(tarih araligi daraltin).", _HISTORY_FETCH_LIMIT)
         patient_sessions = [
             s for s in sessions
             # None-güvenli: SQL NULL → Python None; .get(k, '') anahtar VAR ama None ise None döner
@@ -289,8 +300,15 @@ class PDFReportGenerator:
     def _fetch_sessions(self, session_ids):
         """Verilen ID'lerin seanslarını getir — geçmişten TEK sorgu + ID eşleme (döngü-içi tekrar
         sorgu yok). session_ids sırasını korur; bulunamayanları atlar."""
-        by_id = {s['id']: s for s in self.db.get_session_history(limit=1000, internal_full=True)}
-        return [by_id[sid] for sid in session_ids if sid in by_id]
+        by_id = {s['id']: s for s in self.db.get_session_history(limit=_HISTORY_FETCH_LIMIT,
+                                                                 internal_full=True)}
+        found = [by_id[sid] for sid in session_ids if sid in by_id]
+        missing = [sid for sid in session_ids if sid not in by_id]
+        if missing:
+            # ACIKCA istenen seans rapora GIRMEDI → sessizce atlamak tibbi raporu yaniltir.
+            self.logger.error("PDF raporu: istenen %d seans bulunamadi ve rapora GIRMEDI: %s",
+                         len(missing), missing[:20])
+        return found
     
     def _add_header(self, story):
         """Rapor başlığını ekle"""

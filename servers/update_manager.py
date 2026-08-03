@@ -271,6 +271,13 @@ def apply_update() -> dict:
         _applying = True
     url = st["installerUrl"]
     expected = (st.get("sha256") or "").lower()
+    # DENETIM P2: asagidaki `finally` _applying'i installer BASLATILIR BASLATILMAZ False
+    # yapiyordu. Oysa tehlikeli pencere tam o noktada BASLIYOR: installer servisi durduracak
+    # ve EXE'yi degistirecek. Guard kapaninca /session/start ve /ai/pro/start yeniden serbest
+    # kalip o pencerede TEDAVI baslatabiliyor → bobinler kontrolcusuz kalir. Installer basariyla
+    # baslatildiysa guard ACIK KALMALI (surec zaten yeniden baslatilacak); yalnizca BASARISIZ
+    # yollarda serbest birak.
+    _installer_launched = False
     try:
         dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
@@ -321,13 +328,18 @@ def apply_update() -> dict:
             creationflags=flags,
             close_fds=True,
         )
+        _installer_launched = True
         logger.info("Güncelleme kurulumu başlatıldı: %s", dest)
         return {"ok": True, "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar."}
     except Exception:
         logger.exception("apply_update hatası")
         return {"ok": False, "error": "Güncelleme uygulanamadı"}
     finally:
-        _applying = False
+        if not _installer_launched:
+            _applying = False   # basarisiz → normale don
+        else:
+            logger.info("Guncelleme guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
+                        "degistirene kadar YENI tedavi/seans baslatilamaz.")
 
 
 def rollback() -> dict:

@@ -118,14 +118,34 @@ class HardwareController:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
             return False
 
+        # DENETIM P2 (kismi uygulama): normalize_* cagrilari ESKIDEN state'e YAZARKEN
+        # calisiyordu. Biri istisna firlatirsa (ornegin duty_percent_to_ratio icindeki
+        # float(percent) sayisal-olmayan girdide ValueError verir; clamp_float'un try'i
+        # DISINDA kalir) bobin YARIM guncellenmis kaliyordu: is_running=True + YENI freq,
+        # ama ESKI duty/faz ve deadline YOK. Keep-alive bu karma durumu surmeye devam
+        # ederken API 'basarisiz' donuyordu — operator komutun uygulanmadigini saniyor.
+        # Cozum: TUM degerleri state'e DOKUNMADAN once hesapla; biri patlarsa hicbir sey
+        # degismez ve cagirana durustce hata gider (bobin eski, tutarli durumunda kalir).
+        if start:
+            try:
+                _dur_min = normalize_duration_minutes(duration)
+                _freq = normalize_frequency_hz(freq)
+                # duty birimi her zaman yüzde kabul edilir; ust limit firmware/timer tarafinda saturate olur.
+                _duty = duty_percent_to_ratio(duty)
+                _phase = normalize_phase_deg(phase)
+            except Exception:
+                self.logger.exception(
+                    "Coil %s parametre normalizasyonu basarisiz (freq=%r duty=%r phase=%r dur=%r) "
+                    "→ bobin durumu DEGISTIRILMEDI.", coil_id, freq, duty, phase, duration)
+                return False
+
         with self._state_lock:
             if start:
-                dur_min = normalize_duration_minutes(duration)
+                dur_min = _dur_min
                 self.coils_state[coil_id]["is_running"] = True
-                self.coils_state[coil_id]["freq"] = normalize_frequency_hz(freq)
-                # duty birimi her zaman yüzde kabul edilir; ust limit firmware/timer tarafinda saturate olur.
-                self.coils_state[coil_id]["duty"] = duty_percent_to_ratio(duty)
-                self.coils_state[coil_id]["phase"] = normalize_phase_deg(phase)
+                self.coils_state[coil_id]["freq"] = _freq
+                self.coils_state[coil_id]["duty"] = _duty
+                self.coils_state[coil_id]["phase"] = _phase
                 self.coils_state[coil_id]["duration"] = dur_min
                 # Audit P2: dur_min<=0'da deadline=None → keep-alive firmware timer'ini SINIRSIZ tazeler
                 # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme. Sinirsiz birakmak
