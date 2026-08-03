@@ -17,6 +17,10 @@ pemf_secrets*.json*
 .pemf_key*
 api_token.txt
 apple-mac-cert/
+# Yedek kurtarma malzemesi: kod TÜM veritabanı anahtarlarını açar, zarf onları taşır.
+KURTARMA-KODU.txt
+kurtarma-zarfi.enc
+.recovery_fp
 
 # ── Hasta/tedavi verisi ve yedekler ──
 *.db

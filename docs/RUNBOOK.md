@@ -36,12 +36,37 @@ Get-Content C:\ProgramData\PEMF_System\logs\crash.log -Tail 50
 | **STM bobinleri ölü** | `PEMF_STM_PORT=auto` ST-Link'i buldu mu? Sürücü? `/api/health` → `stmConnected`. |
 | **atRestEncrypted=false (beklenmedik)** | `PEMF_ENCRYPT_AT_REST=1` set mi? sqlcipher3 wheel EXE'de mi? Anahtar (`.sqlcipher_key`/keyring) okunuyor mu? PatientDB fail-closed → başlatma reddeder. |
 | **Kötü güncelleme sonrası sorun** | **Rollback**: `curl -X POST http://127.0.0.1:8000/api/update/rollback` (previousStable'a döner, SHA256+aktif-tedavi kontrollü). Bkz. DEPLOYMENT.md. |
-| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (son 14). `PEMF_BACKUP_DIR` set ise off-machine kopya. |
+| **Disk dolu / yedek** | `<data>\backups\` günlük şifreli yedek (son 14) + `kurtarma-zarfi.enc`. `PEMF_BACKUP_DIR` set ise off-machine kopya. |
 
 ## Anahtar / veri kurtarma (KRİTİK)
-- **SQLCipher anahtarı** `<data>\PEMF_GUI\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** Kurulumda YEDEKLEYİN (güvenli, off-machine). ACL: yalnız SYSTEM+Administrators.
-- **Yedekten dönüş**: servisi durdur → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → servisi başlat.
+- **SQLCipher anahtarı** `<data>\PEMF_GUI\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
 - Sırlar tek dosyada: `<data>\PEMF_GUI\pemf_secrets.json` (kripto anahtarları DPAPI'li).
+- **Aynı makinede yedekten dönüş**: servisi durdur → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → servisi başlat.
+
+### Kurtarma kodu — donanım arızası / makine değişimi
+Kripto anahtarları DPAPI `CRYPTPROTECT_LOCAL_MACHINE` ile **makineye bağlıdır**. Bu nedenle
+anakart/disk arızasından ya da Windows yeniden kurulumundan sonra yedekler — off-site kopya
+dahil — tek başına **açılamaz**. Bunun için kurulum bir kez **150-bit kurtarma kodu** üretir:
+
+| | |
+|---|---|
+| **Kod nerede** | `<data>\PEMF_GUI\KURTARMA-KODU.txt` (ilk yedekte oluşur). **Operatör bunu makine dışına almalı** — kasa / parola yöneticisi. Aldıktan sonra dosya silinebilir. |
+| **Zarf nerede** | `<data>\backups\kurtarma-zarfi.enc` ve `PEMF_BACKUP_DIR` set ise off-site kopyada. İçinde `sqlcipher_key` + `patient_fernet_key`, koddan scrypt ile türetilen anahtarla şifreli. |
+| **Kodu görüntüle** | `python tools\kurtarma.py --kodu-goster` (cihaz hâlâ çalışırken) |
+
+**Kod ve zarf ASLA aynı yerde durmamalı** — zarfın tüm koruması buna dayanır. Kod dosyası
+yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
+
+**Yeni makinede geri yükleme:**
+1. PEMF'i kur, **servisi henüz BAŞLATMA** (başlatırsan yeni bir `sqlcipher_key` üretilir ve yedekler açılmaz).
+2. `python tools\kurtarma.py --zarf <yedek>\kurtarma-zarfi.enc --kod <KOD> --yaz`
+   Makinede zaten anahtar varsa araç **durur** (üzerine yazmak mevcut şifreli veriyi kalıcı kaybettirir);
+   gerçekten taze kurulumsa `PEMF_KURTARMA_USTUNE_YAZ=1` ile zorla.
+3. En yeni yedeği kopyala: `pemf_treatment_history_<tarih>.db` → `pemf_treatment_history.db`,
+   `pemf_patients_<tarih>.db` → `pemf_patients.db`
+4. Servisi başlat.
+
+**Kod kaybolursa** yedekler yalnız orijinal makinede açılır. Kod, kaybı geri alınamaz tek şeydir.
 
 ## Güvenli kapanış
 Servis durdurulunca backend tüm bobinlere STOP gönderir (STM kuyruğu boşalana kadar bekler + ESP MQTT stop). Elle acil-durdur: `curl -X POST http://127.0.0.1:8000/api/hardware/emergency_stop` (auth-muaf, fail-safe).

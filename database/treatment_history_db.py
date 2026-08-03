@@ -11,6 +11,7 @@ import shutil
 import sqlite3
 import threading
 import uuid
+import weakref
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -37,7 +38,18 @@ class TreatmentHistoryDB:
 
     TARGET_SCHEMA_VERSION = 3
     MIN_FREE_DISK_MB = 500
-    
+
+    # ── Bağlantı havuzu sınırı ────────────────────────────────────────────────
+    # Ana-thread-dışı bağlantılar artık context sonunda KAPATILMIYOR (aşağıdaki
+    # _get_connection'a bakın): SQLCipher'da her açılış tam PRAGMA key PBKDF2'si
+    # demek (ölçüm: 86 ms/bağlantı; sorgunun kendisi 0,025 ms → maliyetin %99,5'i
+    # anahtar türetme). DB'ye dokunan thread'lerin hepsi uzun-ömürlü daemon
+    # döngüleri ya da anyio'nun SINIRLI + yeniden-kullanılan havuz thread'leri
+    # olduğundan bağlantı sayısı doğal olarak küçük kalır; bu tavan yine de bir
+    # emniyet valfi: aşılırsa fazlalık bağlantılar ESKİ davranışa (context sonunda
+    # kapat) düşer — yavaş ama doğru. 24 × ~2 MB sayfa önbelleği ≈ 48 MB tavan.
+    MAX_POOLED_CONNECTIONS = 24
+
     def __init__(self, app_data_dir):
         """
         Veritabanı bağlantısını başlat
@@ -54,6 +66,18 @@ class TreatmentHistoryDB:
         # HIGH FIX: Thread-local connection storage (connection pool pattern)
         self._local = threading.local()
         self._lock = threading.Lock()
+
+        # ── Havuz defteri ─────────────────────────────────────────────────────
+        # _conn_generation: DB DOSYASI altımızdan değiştiğinde (migration rollback,
+        # yedekten geri yükleme, re-key) artar. Bir thread'in sakladığı bağlantı
+        # eski kuşaktansa bir sonraki kullanımda kapatılıp yeniden açılır → bayat
+        # dosya tanıtıcısıyla çalışma imkânsız. Havuzun TEK gerçek riski buydu.
+        # _live_conns: ident -> (thread'e weakref, conn). Ölmüş thread'lerin
+        # bağlantıları burada takılı kalmasın diye her yaratımda budanır
+        # (threading.local zaten bırakır ama defter güçlü referans tutar).
+        self._conn_generation = 0
+        self._live_conns = {}
+        self._pool_lock = threading.Lock()
 
         # SQLCipher anahtarı yapılandırılmışsa ve mevcut DB düz-metinse → şifreliye MIGRATE et.
         self._migrate_to_encrypted_if_needed()
@@ -393,45 +417,135 @@ class TreatmentHistoryDB:
                 f"Disk free space critical: {status.get('free_mb')}MB < {status.get('threshold_mb')}MB"
             )
     
+    def _prune_dead_pool_entries(self):
+        """Ölmüş thread'lere ait bağlantıları defterden düşür ve kapat.
+
+        threading.local, thread ölünce kendi sözlüğünü bırakır; ama _live_conns
+        güçlü referans tuttuğu için bağlantı (ve dosya tanıtıcısı) GC olamazdı.
+        Yalnız yeni bağlantı yaratılırken çağrılır → sıcak yolda maliyeti yok.
+        """
+        dead = []
+        for ident, (thr_ref, conn) in list(self._live_conns.items()):
+            thr = thr_ref()
+            if thr is None or not thr.is_alive():
+                dead.append(ident)
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        for ident in dead:
+            self._live_conns.pop(ident, None)
+
     @contextmanager
     def _get_connection(self):
         """
-        HIGH FIX: Thread-safe connection pool context manager.
-        Her thread kendi connection'ını kullanır, shared state yok.
-        """
-        created_in_this_context = False
+        Thread-safe bağlantı havuzu. Her thread kendi bağlantısını kullanır.
 
-        # Check if this thread already has a connection
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
-            # Create new connection for this thread
-            self._local.conn = self._create_connection()
-            created_in_this_context = True
-        
+        DENETİM (per-call-sqlcipher-connect): eskiden ana-thread-DIŞI her context
+        yeni bağlantı açıp kapatıyordu → SQLCipher'da her seferinde tam PBKDF2
+        (ölçüm: 86,49 ms/çağrı; yeniden kullanımda 0,025 ms). Bağlantı artık
+        thread'de KALIYOR. Ana thread bunu ilk günden beri zaten böyle yapıyordu;
+        yeni olan tek şey aynı davranışın worker thread'lere de uygulanması.
+        Üç koruma eklendi:
+          1) Kuşak kontrolü — DB dosyası değiştiyse bayat bağlantı yeniden açılır.
+          2) MAX_POOLED_CONNECTIONS tavanı — aşılırsa eski (aç-kapa) davranışa düş.
+          3) Açık-kalmış işlem denetimi — commit'i unutulmuş bir yazma işlemi
+             eskiden close() ile düşerdi; havuzda kalsa RESERVED kilidini tutup
+             TÜM yazarları bloke ederdi. Context çıkışında rollback + uyarı.
+        """
+        ephemeral = False
+        gen = self._conn_generation
+
+        conn = getattr(self._local, 'conn', None)
+
+        # (1) Kuşak eskimiş mi? (migration rollback / restore / re-key sonrası)
+        if conn is not None and getattr(self._local, 'conn_gen', None) != gen:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            with self._pool_lock:
+                self._live_conns.pop(threading.get_ident(), None)
+            self._local.conn = conn = None
+
+        if conn is None:
+            conn = self._create_connection()
+            cur = threading.current_thread()
+            with self._pool_lock:
+                self._prune_dead_pool_entries()
+                # (2) Tavan aşıldıysa bu bağlantı GEÇİCİ: eski davranış (yavaş ama doğru).
+                if len(self._live_conns) >= self.MAX_POOLED_CONNECTIONS and cur is not threading.main_thread():
+                    ephemeral = True
+                else:
+                    self._live_conns[threading.get_ident()] = (weakref.ref(cur), conn)
+            if not ephemeral:
+                self._local.conn = conn
+                self._local.conn_gen = gen
+
         try:
-            yield self._local.conn
+            yield conn
         except Exception:
-            # Rollback on error
-            if getattr(self._local, 'conn', None) is not None:
-                self._local.conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             raise
         finally:
-            # Worker thread'lerde açılan bağlantıları context sonunda kapat
-            # böylece kısa ömürlü thread'lerde connection birikimi olmaz.
-            if created_in_this_context and threading.current_thread() is not threading.main_thread():
+            if ephemeral:
                 try:
-                    self._local.conn.close()
-                finally:
-                    self._local.conn = None
-    
-    def close_connections(self):
-        """Close all thread-local connections (call on shutdown)"""
-        if hasattr(self._local, 'conn') and self._local.conn is not None:
+                    conn.close()
+                except Exception:
+                    pass
+            else:
+                # (3) Açık kalmış işlem havuzda kilit tutar → geri al ve haber ver.
+                try:
+                    if conn.in_transaction:
+                        conn.rollback()
+                        self.logger.warning(
+                            "DB baglantisi commit edilmemis islemle birakildi → rollback yapildi "
+                            "(cagiran kod commit'i atliyor).")
+                except Exception:
+                    pass
+
+    def _invalidate_connections(self, reason: str = ""):
+        """DB dosyası altımızdan değişti → tüm havuz bağlantılarını geçersiz kıl.
+
+        Kuşak ÖNCE artırılır: yarışan bir thread bu andan sonra taze bağlantı alır.
+        Ardından defterdeki bağlantılar kapatılır (migration rollback / kapanış gibi
+        tek-thread'li anlarda çağrılır; yine de her kapatma tek tek korunur).
+        """
+        with self._pool_lock:
+            self._conn_generation += 1
+            entries = list(self._live_conns.items())
+            self._live_conns.clear()
+        for _ident, (_ref, conn) in entries:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        if getattr(self._local, 'conn', None) is not None:
             try:
                 self._local.conn.close()
-                self._local.conn = None
-            except Exception as e:
-                self.logger.error(f"Error closing connection: {e}")
-    
+            except Exception:
+                pass
+            self._local.conn = None
+        if reason:
+            self.logger.info("DB baglanti havuzu gecersiz kilindi (%s), kusak=%d",
+                             reason, self._conn_generation)
+
+    def close_connections(self):
+        """TÜM havuz bağlantılarını kapat (kapanışta / DB dosyası değişmeden önce).
+
+        DENETİM: eskiden YALNIZ çağıran thread'in bağlantısını kapatıyordu; migration
+        rollback burayı çağırıp hemen ardından db dosyasını siliyordu → diğer
+        thread'lerin tanıtıcıları açık kalıyordu. Artık defterdeki hepsi kapanır ve
+        kuşak artar (geri dönen thread taze bağlantı açar).
+        """
+        try:
+            self._invalidate_connections("close_connections")
+        except Exception as e:
+            self.logger.error(f"Error closing connection: {e}")
+
     def _safe_add_column(self, cursor, table: str, column_def: str, log_msg: str = None) -> None:
         """Idempotent şema-migrasyonu: `ALTER TABLE <table> ADD COLUMN <column_def>`.
         Sütun zaten varsa (yeni DB / önceki migrasyon) `_DB_OPERATIONAL` yutulur → sessizce geçilir.

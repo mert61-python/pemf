@@ -23,18 +23,33 @@ _OFFSITE_README_TEXT = """PEMF — YEDEK KURTARMA NOTU
 =============================================================
 Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR.
 
-ONEMLI: Sifre-cozme anahtari (sqlcipher_key) yedegi ALAN MAKINEYE baglidir
-(Windows DPAPI / CRYPTPROTECT_LOCAL_MACHINE). Bu nedenle:
+Sifre-cozme anahtari yedegi ALAN MAKINEYE baglidir (Windows DPAPI /
+CRYPTPROTECT_LOCAL_MACHINE). Bu yuzden .db dosyalari TEK BASINA yetmez.
 
-  * Bu dosyalar TEK BASINA yeterli DEGILDIR.
-  * Anakart/disk arizasinda ya da BASKA bir makinede ACILAMAZLAR.
+KURTARMA ZARFI
+  Bu dizinde  kurtarma-zarfi.enc  varsa, veritabani anahtarlari onun icinde
+  KURTARMA KODU ile sifreli olarak durur. Kod + zarf ile yedekler BASKA bir
+  makinede acilabilir.
 
-Kurtarma icin ayrica su gerekir:
-  1) Yedegi alan makinedeki  pemf_secrets.json  dosyasi (ayni makinede cozulebilir), VEYA
-  2) Kurulum sirasinda disari alinmis  sqlcipher_key  degeri.
+  Kurtarma kodu, kurulum makinesinde bir kez uretilip
+  <veri-dizini>\\KURTARMA-KODU.txt  dosyasina yazilir ve operator tarafindan
+  makine disinda (kasa / parola yoneticisi) saklanmalidir.
+  Kod BU DIZINDE SAKLANMAZ — zarf ve kod ayni yerde durursa koruma kalmaz.
 
-Ikisi de yoksa bu yedekler kurtarilamaz. Klinik surecinize anahtar escrow'u
-(guvenli bir yerde saklanan anahtar kopyasi) EKLEYIN.
+NASIL GERI YUKLENIR
+  1) Yeni makineye PEMF kurun (henuz baslatmadan).
+  2) Anahtarlari zarftan cikarip yerlestirin:
+       python tools/kurtarma.py --zarf kurtarma-zarfi.enc --kod <KOD> --yaz
+  3) Bu dizindeki  pemf_treatment_history_*.db / pemf_patients_*.db  dosyalarindan
+     en yenisini veri dizinine  pemf_treatment_history.db / pemf_patients.db
+     adiyla kopyalayin.
+  4) Servisi baslatin.
+
+ZARF YOKSA
+  Kurtarma icin sunlardan biri gerekir:
+    1) Yedegi alan makinedeki  pemf_secrets.json  (yalniz AYNI makinede cozulur), VEYA
+    2) Disari alinmis  sqlcipher_key  ve  patient_fernet_key  degerleri.
+  Ikisi de yoksa bu yedekler kurtarilamaz.
 =============================================================
 """
 
@@ -180,9 +195,33 @@ class HeadlessDBMaintenance:
                 except Exception:
                     logger.warning("Hasta DB yedegi hatasi", exc_info=True)
             self._cleanup_backups(backup_dir)
+            # DENETIM: kurtarma zarfi .db'lerden ONCE yazilir ki off-site kopyaya da GİRSİN —
+            # zarfsiz bir off-site kopya donanim arizasindan sonra acilamaz.
+            env = self._refresh_recovery(backup_dir)
+            if env is not None:
+                created.append(env)
             self._copy_offsite(created)  # audit B-7.2: off-machine kopya (PEMF_BACKUP_DIR)
         except Exception:
             logger.exception("backup hatasi")
+
+    def _refresh_recovery(self, backup_dir: Path):
+        """DENETIM (offsite-backup-no-key-escrow): yedeklerin yanina kurtarma zarfini yaz.
+
+        Zarf olmadan hicbir yedek — yerel ya da off-site — donanim arizasindan sonra
+        acilamazdi (anahtar DPAPI ile makineye bagli). Zarf, sistem uretimi 150-bit
+        kurtarma koduyla sifrelidir; kod operatorde, zarf yedeklerin yaninda durur.
+
+        Yedek almanin KENDISI bundan etkilenmemeli → tum hatalar yutulur (zarf
+        yazilamasa bile .db yedekleri alinmis olur). Returns: zarf yolu ya da None.
+        """
+        try:
+            from utils.backup_recovery import ENVELOPE_NAME, refresh_recovery_material
+            if refresh_recovery_material(self.app_data_dir, [backup_dir]):
+                p = backup_dir / ENVELOPE_NAME
+                return p if p.exists() else None
+        except Exception:
+            logger.warning("kurtarma zarfi guncellenemedi (yedekler ALINDI)", exc_info=True)
+        return None
 
     def _cleanup_backups(self, backup_dir: Path):
         # Her iki yedek ailesini de ayrı ayrı rotasyona sok (son N).
@@ -217,16 +256,21 @@ class HeadlessDBMaintenance:
             # DENETIM P2 (yanlis guvence): eskiden yalnizca "kopyalandi" bilgisi loglaniyordu; bu,
             # yedeklerin FELAKET KURTARMA icin kullanilabilir oldugu izlenimini veriyordu. Oysa
             # kopyalanan .db dosyalari SQLCipher ile sifreli ve onlari acan anahtar
-            # pemf_secrets.json icinde CRYPTPROTECT_LOCAL_MACHINE (DPAPI) ile MAKINEYE bagli —
-            # anakart/disk arizasinda ya da yeni bir makinede bu yedekler ACILAMAZ. Anahtar
-            # escrow'u UYGULANMADI (bilincli): onerilen "operator parolasindan turetilen kurtarma
-            # zarfi" guvenlik modelini degistirir (zayif parola tum hasta verisini koruyan en
-            # zayif halka olur) → SAHIP KARARI gerekir. Yapilan: riski GORUNUR kilmak.
-            logger.warning(
-                "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: bu dosyalar SQLCipher ile "
-                "sifreli ve anahtar BU MAKINEYE bagli (DPAPI). Donanim arizasinda/baska makinede "
-                "ACILAMAZLAR. Gercek felaket-kurtarma icin sqlcipher_key'in ayrica escrow edilmesi "
-                "SART — bkz. %s", dest, len(files), _OFFSITE_README_NAME)
+            # pemf_secrets.json icinde CRYPTPROTECT_LOCAL_MACHINE (DPAPI) ile MAKINEYE bagliydi
+            # → anakart/disk arizasinda bu yedekler ACILAMIYORDU. Cozuldu: _refresh_recovery
+            # yedeklerin yanina kurtarma zarfini yaziyor. Zarfin GERCEKTEN yerinde olup
+            # olmadigina gore log seviyesi degisir — "kopyalandi" demek yetmez, kurtarilabilir
+            # olup olmadigini soylemek gerekir.
+            from utils.backup_recovery import ENVELOPE_NAME as _ENV_NAME
+            if (dpath / _ENV_NAME).exists():
+                logger.info(
+                    "Yedekler off-machine kopyalandi: %s (%d dosya). Kurtarma zarfi (%s) yerinde → "
+                    "KURTARMA KODU ile baska makinede geri yuklenebilir.", dest, len(files), _ENV_NAME)
+            else:
+                logger.warning(
+                    "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: kurtarma zarfi (%s) YOK "
+                    "→ bu dosyalar SQLCipher ile sifreli ve anahtar BU MAKINEYE bagli (DPAPI); donanim "
+                    "arizasinda ACILAMAZLAR. bkz. %s", dest, len(files), _ENV_NAME, _OFFSITE_README_NAME)
             # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")

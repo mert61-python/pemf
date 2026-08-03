@@ -124,6 +124,11 @@ config/credentials/
 **/.pemf_key_v2
 **/.sqlcipher_key
 **/.encryption_key
+**/pemf_secrets.json
+# Yedek kurtarma malzemesi: kod TÜM veritabanı anahtarlarını açar, zarf onları taşır.
+**/KURTARMA-KODU.txt
+**/kurtarma-zarfi.enc
+**/.recovery_fp
 
 # KOD İMZALAMA SIRLARI — Apple Developer ID / App Store Connect.
 # Bunlar sızarsa ÜÇÜNCÜ ŞAHIS SİZİN ADINIZA imzalı macOS uygulaması dağıtabilir

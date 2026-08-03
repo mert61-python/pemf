@@ -241,6 +241,12 @@ _REGISTRY: dict[str, tuple] = {
                                    or _read_file(_data_dir() / ".sqlcipher_key")),
     "patient_fernet_key": ("auto", True, _gen_fernet,
                            lambda: _keyring_get("patient_fernet_key") or _read_file(_config_dir() / ".pemf_key_v2")),
+    # DENETIM (offsite-backup-no-key-escrow): yedeklerin yanina yazilan kurtarma zarfini acan
+    # 150-bit kod. Zarf olmadan yedekler BASKA makinede acilamaz (sqlcipher_key DPAPI ile bu
+    # makineye bagli). ÜRETİM utils/backup_recovery.get_or_create_code icinde — burada generator
+    # YOK ki get_secret(generate=True) ile kazara yeni kod uretilip mevcut zarf ORPHAN kalmasin.
+    "backup_recovery_code": ("auto", True, None,
+                             lambda: os.getenv("PEMF_BACKUP_RECOVERY_CODE", "").strip()),
     # Coverage-audit P1: bulut capability-token — Supabase RPC'lerinde device_id (gizli-değil) yerine
     # YETKİ anahtarı. dpapi=True (kritik). İlk publish'te TOFU ile bulut secret_hash'e mühürlenir; sonra
     # her RPC (upsert_device/upsert_patient/resolve_patients...) bunu p_secret olarak gönderir.
