@@ -260,12 +260,30 @@ class TreatmentHistoryDB:
             shutil.move(enc_tmp, db)
             # op-doğrulama #8: .plain.bak = tüm eski düz-metin PII → SQLCipher'ı baypas eder. Escrow
             # için tutulur ama SIKI ACL (SYSTEM+Admin) ile kilitlenir (B-1.2 escrow deseniyle tutarlı).
+            # DENETIM P2: ACL BASARISIZ olursa eskiden yalnizca UYARI loglaniyor ve TUM hasta
+            # PII'sinin duz-metin tam kopyasi korumasiz diskte KALIYORDU — SQLCipher'i tamamen
+            # baypas eden bir dosya. Escrow degerlidir ama korumasiz escrow, sifrelemenin kendisini
+            # anlamsiz kilar. FAIL-CLOSED: kilitlenemiyorsa SIL (sifreli DB zaten yerinde).
+            # PEMF_KEEP_PLAIN_BAK=0 ile escrow tamamen kapatilabilir (kilit basarili olsa bile silinir).
+            _locked = False
             try:
                 from utils.file_acl import lock_down_file
-                lock_down_file(backup)
+                _locked = bool(lock_down_file(backup))
             except Exception:
-                self.logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
-            self.logger.warning("Tedavi DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
+                self.logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
+            _keep = os.getenv("PEMF_KEEP_PLAIN_BAK", "1") == "1"
+            if not _locked or not _keep:
+                try:
+                    os.remove(backup)
+                    self.logger.warning(
+                        "Duz-metin yedek SILINDI (%s): %s — tum hasta PII'sini korumasiz "
+                        "birakmaktansa escrow'dan vazgecildi (sifreli DB yerinde).",
+                        "ACL uygulanamadi" if not _locked else "PEMF_KEEP_PLAIN_BAK=0", backup)
+                except Exception:
+                    self.logger.error("KRITIK: korumasiz duz-metin yedek SILINEMEDI → ELLE SILIN: %s",
+                                      backup, exc_info=True)
+            else:
+                self.logger.warning("Tedavi DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
         except Exception:
             self.logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
 
@@ -776,8 +794,27 @@ class TreatmentHistoryDB:
         stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_path = backup_dir / f'pre_migration_v{current_version}_{stamp}.db'
 
-        # Migration öncesi backup
-        self.create_backup(str(backup_path))
+        # Migration öncesi backup.
+        # DENETIM P2: donus degeri YOK SAYILIYORDU. create_backup hata halinde istisnayi yutup
+        # sessizce False doner ve geride 0-baytlik/yarim bir dosya BIRAKABILIR. Asagidaki rollback
+        # dali ise yedegin gecerliligini HIC dogrulamadan once CANLI DB'yi siliyordu → disk-dolu
+        # gibi bilesik bir arizada (once create_backup, sonra _ensure_schema_version basarisiz)
+        # tum tedavi gecmisi bos/bozuk bir dosyayla degistirilip KALICI kayboluyordu.
+        _backup_ok = False
+        try:
+            _backup_ok = bool(self.create_backup(str(backup_path)))
+        except Exception:
+            self.logger.exception("Migration oncesi yedek alinamadi (istisna).")
+        if not _backup_ok or not os.path.exists(backup_path) or os.path.getsize(backup_path) == 0:
+            _backup_ok = False
+            self.logger.error(
+                "Migration oncesi yedek OLUSTURULAMADI (%s) → rollback GUVENLI DEGIL; "
+                "yarim yedek dosyasi temizleniyor ve rollback denenmeyecek.", backup_path)
+            try:
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+            except Exception:
+                pass
         # B-7.2: migration_backups ROTASYONU — son 5; eskiden her migration bir tam-DB kopyası
         # bırakıp sınırsız büyüyordu.
         try:
@@ -794,10 +831,29 @@ class TreatmentHistoryDB:
             self._ensure_schema_version()
         except Exception as migration_error:
             self.logger.error(f"Schema migration başarısız, rollback deneniyor: {migration_error}")
+            # DENETIM P2: yedek GECERSIZSE rollback yapma — canli DB'yi silip yerine bos/bozuk
+            # dosya koymak, migration hatasindan cok daha kotudur (kalici veri kaybi). Yedek yoksa
+            # canli DB'ye DOKUNMA ve orijinal hatayi yukselt; veri diskte saglam kalir.
+            if not _backup_ok:
+                self.logger.error("Gecerli yedek YOK → rollback ATLANDI, canli DB'ye DOKUNULMADI. "
+                                  "Veri saglam; migration hatasi yukseltiliyor.")
+                raise
             try:
                 self.close_connections()
                 if os.path.exists(self.db_path):
                     os.remove(self.db_path)
+                # DENETIM P2: WAL modunda kalan yan-dosyalar SILINMIYORDU. Son baglanti temiz
+                # kapandiginda SQLite bunlari kendi siler; ama kapanis-checkpoint'i de basarisiz
+                # olduysa (ayni disk-dolu/I-O arizasi) bayat -wal cerceveleri geri-yuklenen DB'ye
+                # REPLAY edilip sema/veriyi karistirir. Kopyalamadan once acikca temizle
+                # (sqlcipher_util'daki dogrulanmis desenin aynisi).
+                for _sfx in ("-wal", "-shm"):
+                    try:
+                        _side = self.db_path + _sfx
+                        if os.path.exists(_side):
+                            os.remove(_side)
+                    except Exception:
+                        self.logger.warning("Rollback: %s temizlenemedi", _sfx, exc_info=True)
                 shutil.copy2(backup_path, self.db_path)
                 self.logger.warning(f"Migration rollback tamamlandı: {backup_path}")
             except Exception as rollback_error:
@@ -2020,7 +2076,15 @@ class TreatmentHistoryDB:
                 conn.commit()
                 return len(rows)
         except Exception as e:
-            self.logger.error(f"Sensor sample batch kaydetme hatası: {e}")
+            # DENETIM P2: hata SESSIZCE 0 donuyordu ve cagiran bunu "yazacak satir yoktu"dan
+            # AYIRT EDEMIYORDU → 'basarisizsa buffer'a geri koy' kurtarma yollari fiilen olu
+            # kaliyor, seansin sensor/sicaklik telemetrisi kayboluyordu. Donus sozlesmesi
+            # (int) KORUNDU (tum cagiranlar try/except icinde ve int bekliyor); ayirt
+            # edilebilirlik cagiran tarafinda "pending vardi ama 0 yazildi" ile saglanir.
+            # Kayip miktarini GORUNUR yap: sessiz kayip en kotu turden veri kaybidir.
+            self.logger.error(
+                "Sensor sample batch kaydetme hatasi (session_id=%s): %s — %d ORNEK YAZILAMADI.",
+                session_id, e, len(samples or []))
             return 0
 
     def upsert_patient(self, patient: Dict) -> Optional[int]:

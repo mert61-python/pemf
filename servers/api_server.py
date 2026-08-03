@@ -1640,6 +1640,14 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                     flushed = db.add_sensor_samples_batch(db_session_id, pending)
                 except Exception:
                     logging.exception("finalize: sensor flush hatasi")
+                # DENETIM P2: yazim BASARISIZSA (istisna ya da sessiz 0) ornekleri KAYBETME —
+                # buffer'a geri koy ki bir sonraki flush (dakika-loop / sonraki finalize)
+                # yeniden denesin. Buffer'in kendi 20k tavani sinirsiz buyumeyi zaten onler.
+                if not flushed:
+                    with _sensor_sample_buffer_lock:
+                        _sensor_sample_buffer[:0] = pending
+                    logging.warning("finalize: %d sensor ornegi yazilamadi → buffer'a geri konuldu.",
+                                    len(pending))
             try:
                 _now = time.time()
                 dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None

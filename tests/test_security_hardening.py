@@ -161,3 +161,35 @@ def test_secrets_save_writes_file_when_not_admin(tmp_path, monkeypatch):
 
     assert secrets_file.exists(), "sırlar kalıcılaşmalı (replace ACL'den ÖNCE olmalı)"
     assert not list(tmp_path.glob("*.tmp")), "yetim .tmp bırakılmamalı"
+
+
+def test_sqlcipher_key_does_not_swallow_brick_guard(tmp_path, monkeypatch):
+    """DENETIM P2 regresyonu: SecretsManager'ın fail-closed brick koruması YUTULMAMALI.
+
+    Hata: get_sqlcipher_key'deki geniş `except Exception`, SecretsManager'ın mevcut şifreli
+    veriyi korumak için BİLEREK yükselttiği RuntimeError'u ("sır çözülemedi" / "dosya bozuk")
+    yutup eski yola düşüyordu; eski yol YENİ bir anahtar üretip keyring + .sqlcipher_key'e
+    yazıyordu → patients.db, tedavi geçmişi ve TÜM yedekler kalıcı olarak çözülemez hale
+    geliyordu. Tam da korumanın önlemek için var olduğu sonuç.
+    """
+    import pytest
+
+    import database.sqlcipher_util as scu
+
+    monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
+    monkeypatch.setattr(scu, "keyring", None)   # gerçek keyring'e yazma
+
+    def _brick(*a, **k):
+        raise RuntimeError("Depolanmis sir cozulemedi (brick korumasi)")
+
+    monkeypatch.setattr("utils.secrets_manager.get_secret", _brick)
+
+    with pytest.raises(RuntimeError):
+        scu.get_sqlcipher_key(tmp_path)
+
+    # Diğer hatalar (ör. import/IO) hâlâ eski yola düşebilmeli — fail-closed YALNIZ brick için
+    def _other(*a, **k):
+        raise OSError("keyring servisi yok")
+
+    monkeypatch.setattr("utils.secrets_manager.get_secret", _other)
+    assert scu.get_sqlcipher_key(tmp_path)  # istisna YÜKSELTMEMELİ, eski yol anahtar üretir

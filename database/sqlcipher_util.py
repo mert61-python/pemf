@@ -51,6 +51,16 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
         if not _encrypt:
             return ""  # şifreleme kapalı + mevcut anahtar yok → düz-metin
         # encrypt=True ama boş (üreteç hatası) → aşağıdaki eski yola düş
+    except RuntimeError:
+        # DENETIM P2 (brick korumasının deviril­mesi): SecretsManager, mevcut şifreli veriyi
+        # korumak için BİLEREK RuntimeError yükseltir — "sır saklanmış ama ÇÖZÜLEMİYOR"
+        # (DPAPI/makine değişmiş) ve "pemf_secrets.json BOZUK" durumlarında. Aşağıdaki geniş
+        # `except Exception` bunu YUTUP eski yola düşüyordu; eski yol ise YENİ bir SQLCipher
+        # anahtarı üretip keyring + .sqlcipher_key'e yazıyordu → mevcut patients.db /
+        # pemf_treatment_history.db ve TÜM yedekler kalıcı olarak çözülemez hale geliyordu.
+        # Tam da fail-closed korumasının önlemek için var olduğu sonuç. Yeniden yükselt:
+        # backend açılmaz ama VERİ SAĞLAM kalır (operatör yedekten/doğru makineden döner).
+        raise
     except Exception as _e:
         if logger:
             logger.warning(f"SecretsManager sqlcipher_key okunamadı, eski yola düşülüyor: {_e}")

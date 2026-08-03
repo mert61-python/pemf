@@ -205,3 +205,25 @@ def test_minute_acc_cleared_on_new_session(temp_app_data, monkeypatch):
     src = inspect.getsource(api.start_session)
     assert "_minute_acc.clear()" in src, \
         "start_session önceki seansın dakika-birikimini temizlemeli"
+
+
+def test_migration_rollback_requires_valid_backup(temp_app_data, monkeypatch):
+    """DENETIM P2 regresyonu: geçersiz yedekle rollback CANLI DB'yi yok etmemeli.
+
+    Hata: create_backup dönüş değeri yok sayılıyordu; hata halinde istisnayı yutup sessizce
+    False dönüyor ve geride 0-baytlık dosya bırakabiliyordu. Rollback dalı ise yedeği hiç
+    doğrulamadan `os.remove(db_path)` yapıp boş/bozuk yedeği üzerine kopyalıyordu → disk-dolu
+    gibi bileşik arızada tüm tedavi geçmişi KALICI kayboluyordu.
+    """
+    import inspect
+
+    from database.treatment_history_db import TreatmentHistoryDB
+
+    src = inspect.getsource(TreatmentHistoryDB._run_startup_migrations_with_rollback)
+    assert "_backup_ok" in src, "yedek geçerliliği doğrulanmalı"
+    # Yedek geçersizken canlı DB'ye dokunulmamalı: remove'dan ÖNCE guard olmalı
+    i_guard = src.index("if not _backup_ok")
+    i_remove = src.index("os.remove(self.db_path)")
+    assert i_guard < i_remove, "yedek kontrolü canlı DB silinmeden ÖNCE gelmeli"
+    # WAL yan-dosyaları geri-yüklemeden önce temizlenmeli (bayat frame replay'i)
+    assert '"-wal"' in src and '"-shm"' in src, "rollback öncesi WAL/SHM temizlenmeli"
