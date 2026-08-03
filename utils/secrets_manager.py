@@ -354,7 +354,7 @@ def _save(doc: dict) -> None:
     # açık olsun. os.chmod Windows'ta no-op'tur → düz-metin operatör-sırları Users'a açık kalırdı.
     try:
         from utils.file_acl import lock_down_file
-        if not lock_down_file(p):
+        if not lock_down_file(p, keep_current_user=True):
             logger.warning("SIR dosyası ACL kilidi UYGULANAMADI — tüm sırları taşıyan dosya yerel Users'a açık kalmış olabilir (icacls/OS?).")
     except Exception:
         logger.warning("SIR dosyası ACL kilidi hata verdi", exc_info=True)

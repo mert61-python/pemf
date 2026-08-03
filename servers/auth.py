@@ -69,7 +69,17 @@ def get_api_token() -> str:
     global _token
     if _token:
         return _token
-    # TEK-DOSYA: SecretsManager (env PEMF_API_TOKEN → eski api_token.txt → üret; pemf_secrets.json'da saklar).
+    # DENETIM P3: ACIK ENV OVERRIDE ONCE. Docstring "Token kaynagi: env PEMF_API_TOKEN, yoksa
+    # dosya" diyor ama uygulama once SecretsManager'a bakiyordu; SecretsManager env'i yalnizca
+    # LEGACY-MIGRATE kaynagi olarak kullanir → anahtar bir kez pemf_secrets.json'a yazildiktan
+    # sonra operatorun deploy/device.env ile verdigi PEMF_API_TOKEN SESSIZCE YOK SAYILIYORDU
+    # (token dondurmek/istemcilere sabit token dagitmak imkansizlasir). Bu, sir dosyasi
+    # kalicilasmadigi surece gorunmuyordu; .tmp tikanmasi duzelince yuzeye cikti.
+    _env_tok = os.getenv("PEMF_API_TOKEN", "").strip()
+    if _env_tok:
+        _token = _env_tok
+        return _token
+    # TEK-DOSYA: SecretsManager (eski api_token.txt → üret; pemf_secrets.json'da saklar).
     try:
         from utils.secrets_manager import get_secret
         _token = get_secret("api_token")
