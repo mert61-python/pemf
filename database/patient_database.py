@@ -52,6 +52,12 @@ else:
     _DB_INTEGRITY = sqlite3.IntegrityError
 
 
+# DENETIM P3: cozulemeyen (farkli anahtar / eski surum / template) sifreli alan icin UI'ya
+# gonderilen yer-tutucu. Bu metin GERI YAZILIRSA orijinal ciphertext KALICI kaybolur →
+# update_patient bunu ozel olarak eler (bkz. "CIPHERTEXT KORUMA").
+_UNREADABLE_PLACEHOLDER = "[okunamayan kayıt]"
+
+
 class PatientDatabase:
     """Hasta veritabani yonetim sinifi."""
 
@@ -385,7 +391,7 @@ class PatientDatabase:
                 dec = inner
             # _decrypt_value başarısızsa girdiyi aynen döndürür → çözülemeyen (farklı anahtar/eski/template) kayıt.
             if dec == inner or (isinstance(dec, str) and dec.startswith("Z0FBQUFB")):
-                return "[okunamayan kayıt]"
+                return _UNREADABLE_PLACEHOLDER
             return dec
 
         # Backward compatibility: older rows may contain encrypted payloads
@@ -399,7 +405,7 @@ class PatientDatabase:
             # kayıt) ham ciphertext'i KULLANICIYA GÖSTERME; düz-metin legacy ise olduğu gibi bırak.
             try:
                 if base64.urlsafe_b64decode(value.encode()).startswith(b"gAAAAA"):
-                    return "[okunamayan kayıt]"
+                    return _UNREADABLE_PLACEHOLDER
             except Exception:
                 pass
             return value
@@ -520,6 +526,18 @@ class PatientDatabase:
                         if key == "operator_email":
                             continue
                         if key in self._ENCRYPTED_FIELDS:
+                            # CIPHERTEXT KORUMA (DENETIM P3): cozulemeyen alan UI'ya
+                            # "[okunamayan kayıt]" olarak gider. Operator baska bir alani duzenleyip
+                            # kaydettiginde form bu yer-tutucuyu AYNEN geri gonderiyordu → orijinal
+                            # (belki dogru anahtarla hala kurtarilabilir) ciphertext bu sabit metnin
+                            # sifrelenmis haliyle EZILIYOR ve hasta verisi KALICI kayboluyordu.
+                            # Yer-tutucu geldiginde o alani GUNCELLEME (mevcut deger korunur).
+                            if isinstance(value, str) and value.strip() == _UNREADABLE_PLACEHOLDER:
+                                self.logger.warning(
+                                    "Hasta %s alani '%s' cozulemeyen yer-tutucu ile geri yazilmak "
+                                    "istendi → ATLANDI (orijinal sifreli deger korundu).",
+                                    patient_id, key)
+                                continue
                             updates.append(f"{key} = ?")
                             values.append(self._encrypt_field(value))
 

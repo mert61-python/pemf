@@ -88,3 +88,32 @@ def test_get_all_patients_paginates_in_sql(temp_app_data, monkeypatch):
     # limit=0 → hepsi (geriye uyumlu)
     calls["n"] = 0
     assert len(db.get_all_patients()) == 7 and calls["n"] == 7
+
+
+def test_unreadable_placeholder_never_overwrites_ciphertext(temp_app_data, monkeypatch):
+    """DENETIM P3 regresyonu: '[okunamayan kayıt]' yer-tutucusu GERİ YAZILMAMALI.
+
+    Çözülemeyen (farklı anahtar/eski sürüm) şifreli alan UI'ya yer-tutucu olarak gider. Operatör
+    BAŞKA bir alanı düzenleyip kaydettiğinde form bu metni aynen geri gönderiyordu → orijinal
+    (doğru anahtarla belki hâlâ kurtarılabilir) ciphertext, sabit metnin şifrelenmiş hâliyle
+    EZİLİYOR ve hasta verisi KALICI kayboluyordu.
+    """
+    import database.patient_database as pdb
+
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.setattr(pdb, "import_sqlcipher", lambda: None)
+    monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")
+    db = pdb.PatientDatabase(str(temp_app_data / "patients.db"))
+
+    pid = db.add_patient({"name": "Boncuk", "owner": "Ayşe", "species": "Kedi"})
+    assert pid
+
+    # Operatör yalnız 'species' değiştiriyor; 'name' alanı çözülemediği için form
+    # yer-tutucuyu aynen geri gönderiyor.
+    ok = db.update_patient(pid, {"name": pdb._UNREADABLE_PLACEHOLDER, "species": "Köpek"})
+    assert ok, "diğer alanların güncellenmesi başarılı olmalı"
+
+    row = next(p for p in db.get_all_patients() if p["id"] == pid)
+    assert row["species"] == "Köpek", "gerçek düzenleme uygulanmalı"
+    assert row["name"] == "Boncuk", "yer-tutucu orijinal değeri EZMEMELİ"
+    assert row["name"] != pdb._UNREADABLE_PLACEHOLDER

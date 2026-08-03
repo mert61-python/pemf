@@ -310,7 +310,21 @@ def _load() -> dict:
 
 def _save(doc: dict) -> None:
     p = secrets_path()
-    tmp = p.with_suffix(".json.tmp")
+    # DENETIM P3 (canli kanittan): tmp adi SABITTI. ACL-sirasi hatasindan (bkz. asagi) geride
+    # kalan KILITLI bir .tmp, sonraki TUM sir yazimlarini PermissionError ile KALICI olarak
+    # engelliyordu — kod duzeltilse bile makine bozuk kaliyordu (sahada gorulen durum:
+    # pemf_secrets.json YOK, okunamayan pemf_secrets.json.tmp VAR). Surece-ozel benzersiz ad
+    # kullan → bayat bir kalinti asla yolu tikayamaz. Ayrica eski kalintilari temizlemeyi dene.
+    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+    try:
+        for _stale in p.parent.glob(f"{p.name}*.tmp"):
+            if _stale != tmp:
+                try:
+                    _stale.unlink()
+                except Exception:
+                    logger.warning("Bayat sir .tmp temizlenemedi (ACL?): %s", _stale)
+    except Exception:
+        pass
     with open(tmp, "w", encoding="utf-8") as _f:
         _f.write(json.dumps(doc, ensure_ascii=False, indent=2))
         # DENETIM P0 (dayaniklilik): fsync YOKTU → guc kesintisinde NTFS'te 0-baytlik/yarim dosya

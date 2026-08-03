@@ -155,8 +155,8 @@ def _safe_stop_outputs(api_server_module) -> None:
         logger.exception("STM safe stop failed")
 
     try:
+        import threading
         import time
-        import concurrent.futures as _cf
 
         # Audit P3: ESP STOP'larını PARALEL gönder + sıkı süre-bütçesi. Eskiden 6 publish SIRAYLA
         # (broker yavaşken ~14s worst-case) SCM/NSSM stop-timeout'unu aşıp süreç kill → ESP STOP almadan
@@ -169,9 +169,23 @@ def _safe_stop_outputs(api_server_module) -> None:
             }
             api_server_module._mqtt_publish(f"pemf/coil/{coil_id}/control", payload)
             api_server_module._mqtt_publish(f"pemf/esp32_{coil_id}/command", payload)
-        with _cf.ThreadPoolExecutor(max_workers=3) as _ex:
-            _futs = [_ex.submit(_stop_esp, c) for c in range(6, 9)]
-            _cf.wait(_futs, timeout=3.0)  # toplam güvenli-durdurma bütçesi ~3s (SCM-timeout aşma)
+        # DENETIM P3: eskiden `with ThreadPoolExecutor(...) as _ex:` kullaniliyordu. Context
+        # manager cikisi shutdown(wait=True) cagirir → `_cf.wait(timeout=3.0)` dolsa BILE blok
+        # devam eder; ayrica concurrent.futures bir atexit kancasiyla is thread'lerini join eder.
+        # Sonuc: "toplam ~3 sn butce" HIC uygulanmiyordu; broker erisilemezken kapanis
+        # 3 bobin x ~2 sn x 2 publish kadar uzayip Windows SCM stop-timeout'unu asabiliyordu
+        # (servis "durduruldu" sayilmadan oldurulur → kapanis mutabakati yarim kalir).
+        # DAEMON thread + join(timeout): butce GERCEKTEN uygulanir, kalanlar surec bitince duser.
+        _threads = [threading.Thread(target=_stop_esp, args=(c,), daemon=True,
+                                     name=f"shutdown-estop-{c}") for c in range(6, 9)]
+        for _t in _threads:
+            _t.start()
+        _deadline = time.monotonic() + 3.0     # toplam güvenli-durdurma bütçesi
+        for _t in _threads:
+            _t.join(timeout=max(0.0, _deadline - time.monotonic()))
+        if any(_t.is_alive() for _t in _threads):
+            logger.warning("Kapanis ESP STOP butcesi (3 sn) doldu — kalan publish'ler birakildi "
+                           "(bobinler firmware olu-adam devresiyle de durur).")
     except Exception:
         logger.exception("MQTT safe stop failed")
 

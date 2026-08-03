@@ -7,12 +7,17 @@ değişiklikleri arka planda kontrol edip Supabase bulut veritabanı ile eşitle
 import logging
 import os
 import threading
+import time as _t
 from typing import Optional
 
 from database.patient_database import get_patient_database
 from database.treatment_history_db import get_treatment_db
 
 logger = logging.getLogger(__name__)
+
+# DENETIM P3: tunel URL'si bu sureden uzun dogrulanamazsa registry'de NULL yayinlanir
+# (bayat/olu adres + taze last_seen = "cevrimici ama ulasilamaz" yaniltmasi).
+_TUNNEL_URL_TTL_S = 15 * 60.0
 
 class CloudSyncWorker:
     def __init__(self, supabase_url: str, supabase_key: str, interval_sec: int = 60):
@@ -343,6 +348,17 @@ class CloudSyncWorker:
             cur_url = get_tunnel_url() or None
             if cur_url:
                 self._last_tunnel_url = cur_url
+                self._last_tunnel_seen = _t.monotonic()
+            elif getattr(self, "_last_tunnel_url", None):
+                # DENETIM P3: son bilinen URL SURESIZ yayinlaniyordu. Kayda TAZE bir last_seen ile
+                # birlikte gidiyordu → mobil "cihaz cevrimici" gorup ULASILAMAYAN adrese baglanmaya
+                # calisiyor, kullanici sebebini anlamiyordu. Tunel kisa sureli dususte korunur
+                # (watchdog toparlayinca yeni URL yazilir) ama TTL'den sonra NULL'lanir: "adres
+                # bilinmiyor" durustce bildirilir.
+                if _t.monotonic() - getattr(self, "_last_tunnel_seen", 0.0) > _TUNNEL_URL_TTL_S:
+                    logger.warning("Tunel URL'si %.0f sn'dir dogrulanmadi → registry'de NULL'lanıyor "
+                                   "(mobil ulasilamayan adrese baglanmasin).", _TUNNEL_URL_TTL_S)
+                    self._last_tunnel_url = None
             payload = {
                 "device_id": get_unique_device_id(),
                 "name": os.environ.get("PEMF_DEVICE_NAME", "PEMF-Vet"),
