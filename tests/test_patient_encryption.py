@@ -44,3 +44,47 @@ def test_foreign_key_record_is_masked_not_leaked(temp_app_data):
     decoded = db._decrypt_field(foreign_value)
     assert decoded == "[okunamayan kayıt]"
     assert "gAAAA" not in decoded and "Z0FBQ" not in decoded
+
+
+def test_get_all_patients_paginates_in_sql(temp_app_data, monkeypatch):
+    """DENETIM P2 regresyonu: sayfalama SQL'de yapılmalı, tüm tablo deşifre EDİLMEMELİ.
+
+    Hata: get_all_patients her çağrıda TÜM hastaları çekip TÜMÜNÜN alan-başı Fernet deşifresini
+    yapıyor ve bunu self.lock TUTARAK sonuçlandırıyordu; sayfalama yalnız çağıranda (Python
+    dilimi) vardı → /api/patients?limit=20 bile binlerce kayıtlık klinikte tüm tabloyu deşifre
+    ediyor, o süre boyunca hasta-DB'sine erişen her işlem blokleniyordu.
+    """
+    import database.patient_database as pdb
+
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.setattr(pdb, "import_sqlcipher", lambda: None)
+    monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")
+    db = pdb.PatientDatabase(str(temp_app_data / "patients.db"))
+
+    for i in range(7):
+        assert db.add_patient({"name": f"Hasta{i}", "species": "Kedi"})
+
+    assert db.count_patients() == 7, "toplam sayım deşifre gerektirmeden doğru olmalı"
+
+    # Deşifre edilen kayıt sayısını say → sayfa boyutuyla sınırlı olmalı
+    calls = {"n": 0}
+    _orig = pdb.PatientDatabase._decrypt_patient_fields
+
+    def _counting(self, p):
+        calls["n"] += 1
+        return _orig(self, p)
+
+    monkeypatch.setattr(pdb.PatientDatabase, "_decrypt_patient_fields", _counting)
+
+    page = db.get_all_patients(limit=3, offset=0)
+    assert len(page) == 3
+    assert calls["n"] == 3, f"yalnız istenen sayfa deşifre edilmeli, edilen: {calls['n']}"
+
+    calls["n"] = 0
+    page2 = db.get_all_patients(limit=3, offset=3)
+    assert len(page2) == 3 and calls["n"] == 3
+    assert {p["name"] for p in page}.isdisjoint({p["name"] for p in page2}), "sayfalar örtüşmemeli"
+
+    # limit=0 → hepsi (geriye uyumlu)
+    calls["n"] = 0
+    assert len(db.get_all_patients()) == 7 and calls["n"] == 7

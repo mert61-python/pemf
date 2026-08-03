@@ -16,6 +16,18 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 router = APIRouter(tags=["system"])
+
+
+def _cloud_registry_status() -> str:
+    """Bulut cihaz-registry yayin durumu (ok | secret_mismatch | rpc_missing | error | unknown).
+    Lazy import: sync_worker opsiyoneldir, saglik ucunu ASLA bozmamali."""
+    try:
+        from servers.sync_worker import get_registry_status
+        return get_registry_status()
+    except Exception:
+        return "unknown"
+
+
 logger = logging.getLogger("system_router")
 
 
@@ -151,6 +163,10 @@ async def health_check(request: Request):
         "core_initialized": _api.state.core is not None,
         "stmConnected": bool(getattr(_api.state.core, "stm_is_connected", False)) if _api.state.core else False,
         "atRestEncrypted": at_rest_encrypted,
+        # DENETIM P2: bulut cihaz-registry'sinin son yayin durumu. 'secret_mismatch' KALICI bir
+        # durumdur (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve eskiden yalnizca
+        # log'a dusuyordu; operator uzaktan erisimin neden sessizce guncellenmedigini goremiyordu.
+        "cloudRegistry": _cloud_registry_status(),
         "services": service_status,
     }
 

@@ -53,10 +53,13 @@ def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
-    all_patients = db.get_all_patients()
-    total = len(all_patients)
+    # DENETIM P2: eskiden TUM hastalar cekilip (hepsinin alan-basi Fernet desifresi yapilarak,
+    # DB kilidi tutularak) sonra Python'da dilimleniyordu → limit=20 istegi bile binlerce
+    # kayitlik klinikte tum tabloyu desifre ediyor ve o sure boyunca hasta-DB'sini blokluyordu.
+    # Sayfalama artik SQL'de; 'total' ise desifre gerektirmeyen COUNT ile alinir.
     off = max(0, offset)
-    data = all_patients[off:off + limit] if limit and limit > 0 else all_patients[off:]
+    data = db.get_all_patients(limit=limit, offset=off)
+    total = db.count_patients()
     return {"status": "success", "data": data, "total": total}
 
 

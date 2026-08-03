@@ -18,6 +18,12 @@ GOLDEN_SHAPES = {
     "/api/health": {
         "atRestEncrypted", "core_initialized", "deviceId", "localIp", "pairingCode",
         "service", "services", "status", "stmConnected", "tunnelUrl",
+        # DENETIM P2 (BILINCLI sekil degisikligi): bulut cihaz-registry durumu. 'secret_mismatch'
+        # KALICI bir hatadir (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve
+        # eskiden yalnizca log'a dusuyordu; operator uzaktan erisimin neden sessizce
+        # guncellenmedigini goremiyordu. Bu test tam da sekil degisikliklerini yakalamak icin
+        # var → altin kume kasitli olarak genisletildi.
+        "cloudRegistry",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {

@@ -135,14 +135,26 @@ class TreatmentHistoryDB:
         dener — [birincil(paylaşımlı/SecretsManager), legacy(keyring/file)] — ilk AÇAN bağlantıyı
         döner. Böylece divergence yaşamış eski treatment DB legacy anahtarıyla GÜVENLE açılır
         (veri-kaybı yok); yeni/mevcut-birleşik DB birincil ile açılır. Hiçbiri açmazsa None (düz-metin)."""
-        primary = self._get_sqlcipher_key()
-        legacy = self._get_sqlcipher_key_legacy()
-        # Aday sıra: birincil ÖNCE (birleştirme), sonra farklıysa legacy (kurtarma). Boş/yinelenen atlanır.
-        candidates = []
-        if primary:
-            candidates.append(("birincil", primary))
-        if legacy and legacy != primary:
-            candidates.append(("legacy", legacy))
+        # DENETIM P2 (cagri-basi sir arama): ana-thread DISINDAKI her DB cagrisi yeni baglanti
+        # aciyor (FastAPI senkron uclari, asyncio.to_thread, tum arka-plan thread'leri) ve her
+        # baglantida SecretsManager + keyring YENIDEN okunuyordu — keyring cagrisi Windows'ta
+        # RPC'dir. Calisan anahtari ornekte cache'le: sonraki baglantilar sir aramasini ATLAR.
+        # KAPSAM NOTU: PRAGMA key'in PBKDF2 maliyeti baglanti basina KALIR — onu kaldirmak
+        # baglanti HAVUZU ister; havuz, her hasta/seans yazisinin gectigi cekirdek yoldur ve
+        # thread-safety/WAL/kilit semantigini degistirir → donanim-uzeri dogrulama olmadan
+        # BILEREK yapilmadi (bkz. denetim raporu per-call-sqlcipher-connect).
+        _cached = getattr(self, "_cipher_key_cache", None)
+        if _cached:
+            candidates = [("cache", _cached)]
+        else:
+            primary = self._get_sqlcipher_key()
+            legacy = self._get_sqlcipher_key_legacy()
+            # Aday sıra: birincil ÖNCE (birleştirme), sonra farklıysa legacy (kurtarma). Boş/yinelenen atlanır.
+            candidates = []
+            if primary:
+                candidates.append(("birincil", primary))
+            if legacy and legacy != primary:
+                candidates.append(("legacy", legacy))
         if not candidates:
             return None
 
@@ -162,9 +174,21 @@ class TreatmentHistoryDB:
                 if label == "legacy":
                     self.logger.warning("treatment DB LEGACY anahtarla acildi (D-3 anahtar-divergence "
                                         "tespit + KURTARILDI). Birlestirme icin ileride re-key onerilir.")
+                self._cipher_key_cache = cipher_key   # CALISAN anahtari hatirla (sir aramasini atla)
                 return conn
             except Exception as e:
                 last_err = e
+                if label == "cache":
+                    # Cache'lenmis anahtar artik ACMIYOR (re-key / anahtar degisimi) → cache'i
+                    # bosalt ve TAM cozumleme ile bir kez daha dene (kurtarma yolu korunur).
+                    self._cipher_key_cache = None
+                    self.logger.info("Cache'li SQLCipher anahtari acmadi → tam anahtar cozumlemesi yeniden denenecek.")
+                    if conn is not None:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+                    return self._connect_sqlcipher_if_configured()
                 if conn is not None:
                     try:
                         conn.close()

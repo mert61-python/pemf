@@ -458,14 +458,43 @@ class PatientDatabase:
             except _DB_ERROR:
                 return None
 
-    def get_all_patients(self) -> List[Dict[str, Any]]:
-        """Tum hastalari getirir."""
+    def count_patients(self) -> int:
+        """Toplam hasta sayisi (sayfalamada 'total' icin — desifre GEREKTIRMEZ)."""
+        with self.lock:
+            try:
+                with self._get_connection() as conn:
+                    return int(conn.cursor().execute("SELECT COUNT(*) FROM patients").fetchone()[0])
+            except _DB_ERROR:
+                return 0
+
+    def get_all_patients(self, limit: int = 0, offset: int = 0) -> List[Dict[str, Any]]:
+        """Hastalari getirir. limit>0 ise SAYFAYI SQL'de sinirlar (limit=0 → hepsi, geriye uyumlu).
+
+        DENETIM P2: sayfalama YALNIZCA cagiran tarafinda (Python dilimi) yapiliyordu; bu metod
+        her cagrida TUM hastalari cekip TUMUNUN alan-basi Fernet desifresini yapiyor ve bunu
+        `self.lock` TUTARAK sonuclandiriyordu. Sonuc: /api/patients?limit=20 istegi bile binlerce
+        kayitlik klinikte tum tabloyu desifre ediyor, o sure boyunca hasta-DB'sine erisen HER
+        islem (yeni hasta, seans basligi, arama) blokleniyordu. Sayfalama artik SQL'e itiliyor →
+        yalnizca istenen sayfa desifre edilir.
+        """
         with self.lock:
             try:
                 with self._get_connection() as conn:
                     conn.row_factory = self._row_factory
                     cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM patients ORDER BY created_at DESC")
+                    if limit and limit > 0:
+                        cursor.execute(
+                            "SELECT * FROM patients ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                            (int(limit), max(0, int(offset))),
+                        )
+                    elif offset and offset > 0:
+                        # LIMIT olmadan OFFSET SQLite'ta gecersiz → -1 "sinirsiz" demektir.
+                        cursor.execute(
+                            "SELECT * FROM patients ORDER BY created_at DESC LIMIT -1 OFFSET ?",
+                            (int(offset),),
+                        )
+                    else:
+                        cursor.execute("SELECT * FROM patients ORDER BY created_at DESC")
                     rows = cursor.fetchall()
 
                     patients: List[Dict[str, Any]] = []

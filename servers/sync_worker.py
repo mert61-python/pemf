@@ -366,19 +366,55 @@ class CloudSyncWorker:
                     "p_pairing_code": payload["pairing_code"],
                     "p_secret": self._registry_secret(),   # Coverage-audit P1: capability-token (TOFU + doğrulama)
                 }).execute()
-            except Exception:
-                # Audit P3: SECURITY DEFINER upsert_device RPC yok → eski anon tablo-upsert. pairing_code
-                # (auth-bearer sır) geniş-okunur tabloya ASLA yazılmaz (RLS yanlış-yapılandırılırsa
-                # okunur/tünel-zehirlenir) → pairing_code'u ÇIKAR + GÖRÜNÜR uyar (RPC deploy edilmeli).
-                logger.warning("Device registry: upsert_device RPC yok → anon tablo-upsert (pairing_code ATLANDI; uzaktan-pairing için RPC deploy edilmeli).")
-                fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
-                self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
+            except Exception as _rpc_err:
+                # DENETIM P2: BU except HER hatayi "RPC yok" sayiyordu (yetki, ag, secret-mismatch
+                # hepsi ayni dala dusuyordu). En zararlisi TOFU muhru: cihaz yeniden kurulunca
+                # device_secret degisir, RPC "secret mismatch" verir; kod bunu "RPC yok" sanip
+                # anon tablo-upsert deniyor, v2 SQL'de anon INSERT/UPDATE politikalari kaldirildigi
+                # icin O DA basarisiz oluyor → registry KALICI olarak guncellenmiyor ve operatore
+                # yalnizca yaniltici "RPC yok" uyarisi gorunuyordu. Artik siniflandiriliyor.
+                _msg = str(_rpc_err).lower()
+                if "secret" in _msg and ("mismatch" in _msg or "match" in _msg):
+                    # Kalici durum: fallback DENEME (zaten reddedilir) — GORUNUR hata yayinla.
+                    self._registry_status = "secret_mismatch"
+                    logger.error(
+                        "Device registry: SIR UYUSMAZLIGI (TOFU muhru). Bu cihaz-id bulutta BASKA "
+                        "bir sirla muhurlenmis — muhtemelen yeniden kurulum sonrasi device_secret "
+                        "degisti. Uzaktan erisim GUNCELLENMEYECEK. Cozum: Supabase'de bu device_id "
+                        "kaydini silin ya da eski siri geri yukleyin. Ayrinti: %s", _rpc_err)
+                    return False
+                if "pgrst202" in _msg or "does not exist" in _msg or "not found" in _msg:
+                    # Audit P3: SECURITY DEFINER upsert_device RPC yok → eski anon tablo-upsert. pairing_code
+                    # (auth-bearer sır) geniş-okunur tabloya ASLA yazılmaz (RLS yanlış-yapılandırılırsa
+                    # okunur/tünel-zehirlenir) → pairing_code'u ÇIKAR + GÖRÜNÜR uyar (RPC deploy edilmeli).
+                    logger.warning("Device registry: upsert_device RPC yok → anon tablo-upsert (pairing_code ATLANDI; uzaktan-pairing için RPC deploy edilmeli).")
+                    self._registry_status = "rpc_missing"
+                    fallback = {k: v for k, v in payload.items() if k != "pairing_code"}
+                    self.client.table("devices").upsert(fallback, on_conflict="device_id").execute()
+                else:
+                    # Ag/gecici hata → fallback DENEME (yanlis-pozitif "RPC yok" uyarisi uretmesin);
+                    # disaridaki except backoff'u ×2 yapsin.
+                    self._registry_status = "error"
+                    raise
+            else:
+                self._registry_status = "ok"
             return True   # publish OK → _sync_loop backoff'u interval_sec'e sıfırlar
         except Exception as e:
             # Yazilamadi (tablo yok / RLS / RPC yok). Sync'i bozma ama GORUNUR logla
             # (eskiden DEBUG'ta sessizce yutuluyordu → registry'nin neden bos kaldigi gizleniyordu).
             logger.warning(f"Device registry publish BASARISIZ: {e}")
             return False  # ağ/RPC hatası → _sync_loop backoff'u ×2 (üst 300sn) → uzun kesintide gürültü azalır
+
+
+def get_registry_status() -> str:
+    """Bulut cihaz-registry'sinin SON yayin durumu: ok | secret_mismatch | rpc_missing | error | unknown.
+
+    DENETIM P2: 'secret_mismatch' (TOFU muhru — yeniden kurulum sonrasi device_secret degisti)
+    KALICI bir durumdur ve yalnizca log'a dusuyordu; operator uzaktan erisimin neden sessizce
+    guncellenmedigini goremiyordu. /api/health uzerinden gorunur kilinir.
+    """
+    w = _sync_worker
+    return getattr(w, "_registry_status", "unknown") if w is not None else "unknown"
 
 
 # Global instance for easy access

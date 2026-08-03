@@ -15,6 +15,29 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# DENETIM P2: off-machine yedeklerin YANINA birakilan kurtarma notu. Kurtarma anindaki kisi
+# (baska bir teknisyen, aylar sonra) log'lara bakamaz; "sifreli .db var ama acilmiyor" ile
+# bas basa kalmasin diye NE GEREKTIGI dosyanin yanina yazilir.
+_OFFSITE_README_NAME = "OKU-KURTARMA.txt"
+_OFFSITE_README_TEXT = """PEMF — YEDEK KURTARMA NOTU
+=============================================================
+Bu dizindeki .db dosyalari SQLCipher ile SIFRELIDIR.
+
+ONEMLI: Sifre-cozme anahtari (sqlcipher_key) yedegi ALAN MAKINEYE baglidir
+(Windows DPAPI / CRYPTPROTECT_LOCAL_MACHINE). Bu nedenle:
+
+  * Bu dosyalar TEK BASINA yeterli DEGILDIR.
+  * Anakart/disk arizasinda ya da BASKA bir makinede ACILAMAZLAR.
+
+Kurtarma icin ayrica su gerekir:
+  1) Yedegi alan makinedeki  pemf_secrets.json  dosyasi (ayni makinede cozulebilir), VEYA
+  2) Kurulum sirasinda disari alinmis  sqlcipher_key  degeri.
+
+Ikisi de yoksa bu yedekler kurtarilamaz. Klinik surecinize anahtar escrow'u
+(guvenli bir yerde saklanan anahtar kopyasi) EKLEYIN.
+=============================================================
+"""
+
 _worker = None  # type: Optional[HeadlessDBMaintenance]
 
 
@@ -191,7 +214,24 @@ class HeadlessDBMaintenance:
                     shutil.copy2(f, dpath / Path(f).name)
                 except Exception:
                     logger.warning("off-machine kopya hatasi: %s", f, exc_info=True)
-            logger.info("Yedekler off-machine kopyalandi: %s (%d dosya)", dest, len(files))
+            # DENETIM P2 (yanlis guvence): eskiden yalnizca "kopyalandi" bilgisi loglaniyordu; bu,
+            # yedeklerin FELAKET KURTARMA icin kullanilabilir oldugu izlenimini veriyordu. Oysa
+            # kopyalanan .db dosyalari SQLCipher ile sifreli ve onlari acan anahtar
+            # pemf_secrets.json icinde CRYPTPROTECT_LOCAL_MACHINE (DPAPI) ile MAKINEYE bagli —
+            # anakart/disk arizasinda ya da yeni bir makinede bu yedekler ACILAMAZ. Anahtar
+            # escrow'u UYGULANMADI (bilincli): onerilen "operator parolasindan turetilen kurtarma
+            # zarfi" guvenlik modelini degistirir (zayif parola tum hasta verisini koruyan en
+            # zayif halka olur) → SAHIP KARARI gerekir. Yapilan: riski GORUNUR kilmak.
+            logger.warning(
+                "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: bu dosyalar SQLCipher ile "
+                "sifreli ve anahtar BU MAKINEYE bagli (DPAPI). Donanim arizasinda/baska makinede "
+                "ACILAMAZLAR. Gercek felaket-kurtarma icin sqlcipher_key'in ayrica escrow edilmesi "
+                "SART — bkz. %s", dest, len(files), _OFFSITE_README_NAME)
+            # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
+            try:
+                (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")
+            except Exception:
+                logger.debug("off-machine kurtarma notu yazilamadi", exc_info=True)
         except Exception:
             logger.warning("off-machine backup dizini hatasi (%s)", dest, exc_info=True)
 
