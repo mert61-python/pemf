@@ -45,7 +45,14 @@ _exchange_throttle: dict = {}   # Audit P3: trusted-IP -> {"fails","until"} (esk
 #    Not: oturum-token gerçek API-gate DEĞİL (cihaz-token gate'ler) → bu defense-in-depth + her login'in
 #    200k-PBKDF2 CPU maliyetine karşı kimliksiz-DoS sınırı. LAN'da da uygulanır (kötücül LAN-sayfası vektörü). ──
 _login_throttle: dict = {}                 # email -> {"fails": int, "until": float}
+# DENETIM P3: reset throttle'i TEK bir surec-geneli kovaydi → kimliksiz UZAK bir saldirgan
+# arka arkaya yanlis yonetici kodu gondererek "Sifremi unuttum" akisini TUM operatorler icin
+# suresiz kilitleyebiliyordu (hedefli DoS: kimse giris yapamazken kimse sifre de sifirlayamaz).
+# Artik IP-BASINA kova birincil kilit; global kova YALNIZCA dagitik kaba-kuvvete karsi cok
+# daha genis bir arka-durak olarak kalir (mesru operatoru hemen kilitlemez).
 _reset_throttle = {"fails": 0, "until": 0.0}
+_reset_throttle_by_ip: dict = {}           # ip -> {"fails": int, "until": float}
+_RESET_GLOBAL_MAX_FAILS = 100              # arka-durak (IP-basina kilit birincil korumadir)
 _THROTTLE_MAX_FAILS = 10
 _THROTTLE_LOCK_SEC = 30.0
 
@@ -64,6 +71,32 @@ def _throttle_note_fail(bucket: dict) -> None:
 def _throttle_clear(bucket: dict) -> None:
     bucket["fails"] = 0
     bucket["until"] = 0.0
+
+
+def _safe_compare(a: str, b: str) -> bool:
+    """Sabit-zamanli karsilastirma — ASCII-DISI girdide COKMEZ.
+
+    DENETIM P3: `secrets.compare_digest` STR argumanlarda yalnizca ASCII kabul eder; kullanici
+    kontrolundeki kod/parola alanina Turkce harf ya da emoji konursa TypeError firlatiyordu.
+    Istisna handler'in DISINDA kaldigi icin iki sonuc doguyordu: (1) 403 yerine 500, (2) basarisiz
+    deneme throttle'a HIC yazilmiyor → saldirgan ASCII-disi bayt ekleyerek kaba-kuvvet sayacini
+    tamamen atlayabiliyordu. Bayta cevirerek karsilastirmak ikisini de koker.
+    """
+    import hmac as _h   # modul-duzeyinde _sec YOK (fonksiyon-ici import ediliyor) → yerel al
+    try:
+        return _h.compare_digest(str(a).encode("utf-8", "surrogatepass"),
+                                 str(b).encode("utf-8", "surrogatepass"))
+    except Exception:
+        return False
+
+
+def _reset_bucket(ip: str) -> dict:
+    """Sifre-sifirlama icin IP-basina throttle kovasi (bellek korumali)."""
+    if len(_reset_throttle_by_ip) > 1000:
+        now = _time.time()
+        for k in [k for k, v in _reset_throttle_by_ip.items() if v.get("until", 0.0) < now]:
+            _reset_throttle_by_ip.pop(k, None)
+    return _reset_throttle_by_ip.setdefault(ip or "?", {"fails": 0, "until": 0.0})
 
 
 def _login_bucket(email: str) -> dict:
@@ -112,7 +145,7 @@ async def _exchange_code_for_token(request: Request):
         expected = (get_secret("pairing_code") or "").strip().upper()
     except Exception:
         expected = ""
-    if not expected or not code or not _sec.compare_digest(code, expected):
+    if not _safe_compare(code, expected) or not expected or not code:
         _bkt["fails"] += 1
         if _bkt["fails"] >= 8:
             _bkt["until"] = now + 60.0
@@ -223,30 +256,40 @@ def _admin_reset_code() -> str:
 
 
 @router.post("/api/auth/reset")
-async def _reset_password(payload: _ResetPayload):
+async def _reset_password(payload: _ResetPayload, request: Request):
     """'Şifremi unuttum' — YÖNETİCİ koduyla operatör şifresini sıfırlar (login ekranından, oturumsuz).
     admin_code = cihaz yönetici kodu (Ayarlar'da görünür) VEYA cihaz api_token'ı (break-glass:
     ProgramData'daki api_token.txt — kimse giriş yapamıyorsa bile yönetici sıfırlayabilir)."""
     import hmac
 
     from database.auth_db import EMAIL_RE, PASSWORD_RE, get_auth_db
-    if _throttle_locked(_reset_throttle):               # SEC-2: admin-kod kaba-kuvvetine karşı global throttle
+    # SEC-2 + DENETIM P3: birincil kilit IP-BASINA (bir saldirgan tum operatorleri kilitlemesin);
+    # global kova cok genis esikle dagitik kaba-kuvvete karsi arka-durak olarak korunur.
+    _ip = request.client.host if request.client else "?"
+    _rbkt = _reset_bucket(_ip)
+    if _throttle_locked(_rbkt) or _throttle_locked(_reset_throttle):
         return _throttle_429()
     email = (payload.email or "").strip().lower()
     supplied = (payload.admin_code or "").strip()
-    valid = bool(supplied) and hmac.compare_digest(supplied, _admin_reset_code())
+    valid = bool(supplied) and _safe_compare(supplied, _admin_reset_code())
     if not valid and supplied:  # break-glass: api_token da geçerli (ProgramData'dan okunabilir)
         try:
             from utils.secrets_manager import get_secret
             api_tok = (get_secret("api_token") or "").strip()
             if api_tok:
-                valid = hmac.compare_digest(supplied, api_tok)
+                valid = _safe_compare(supplied, api_tok)
         except Exception:
             pass
     if not valid:
-        _throttle_note_fail(_reset_throttle)
+        _throttle_note_fail(_rbkt)
+        # Global kova yalniz ARKA-DURAK: cok daha genis esikle say.
+        _reset_throttle["fails"] = _reset_throttle.get("fails", 0) + 1
+        if _reset_throttle["fails"] >= _RESET_GLOBAL_MAX_FAILS:
+            _reset_throttle["until"] = _time.time() + _THROTTLE_LOCK_SEC
+            _reset_throttle["fails"] = 0
         return {"ok": False, "error": "Yönetici kodu hatalı. Kodu cihaz Ayarlar'ında veya ProgramData'daki api_token.txt'de bulabilirsiniz."}
-    _throttle_clear(_reset_throttle)                    # doğru admin-kod → sayaç sıfırla
+    _throttle_clear(_rbkt)                              # doğru admin-kod → sayaç sıfırla
+    _throttle_clear(_reset_throttle)
     if not EMAIL_RE.match(email):
         return {"ok": False, "error": "Geçerli bir e-posta adresi girin."}
     if not PASSWORD_RE.match(payload.new_password or ""):

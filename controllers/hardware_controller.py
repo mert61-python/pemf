@@ -264,11 +264,22 @@ class HardwareController:
         ESP32_IP = "192.168.137.255"
         ESP32_PORT = 5005
 
-        try:
-            self.core._hw_send_queue.put_nowait((stm_msg, udp_pkt, ESP32_IP, ESP32_PORT))
-        except queue.Full:
+        # DENETIM P3: kuyruk dolu iken EN ESKI paket atilip yenisi konuyordu, ama ikinci
+        # put_nowait icin queue.Full YAKALANMIYORDU (yalniz queue.Empty). Es-zamanli bir
+        # tuketici/uretici (STM_NACK retry) araya girip kuyrugu yeniden doldurursa istisna
+        # cagirana SIZAR: _stop_session_coils dongusu ORTASINDA kesilir → kalan bobinlere STOP
+        # hic gonderilmez. Guvenlik yolunda (STOP) istisna sizmasi kabul edilemez.
+        # Yeni davranis: kisa bir yeniden-deneme, sonra SESSIZ-DEGIL kayip (keep-alive/
+        # _force_send_left zaten sonraki tur telafi eder — bkz. STOP_RESEND_TICKS).
+        _pkt = (stm_msg, udp_pkt, ESP32_IP, ESP32_PORT)
+        for _attempt in range(3):
             try:
-                self.core._hw_send_queue.get_nowait()
-                self.core._hw_send_queue.put_nowait((stm_msg, udp_pkt, ESP32_IP, ESP32_PORT))
-            except queue.Empty:
-                pass
+                self.core._hw_send_queue.put_nowait(_pkt)
+                return
+            except queue.Full:
+                try:
+                    self.core._hw_send_queue.get_nowait()   # en eskiyi at, yer ac
+                except queue.Empty:
+                    pass
+        self.logger.warning(
+            "HW kuyrugu dolu — paket kuyruga alinamadi (keep-alive sonraki turda tazeleyecek).")

@@ -396,7 +396,12 @@ class EventBus:
             callback(event)
             self._stats['events_processed'] += 1
         except Exception as e:
-            logger.error("Sync callback failed: %s", e)
+            # DENETIM P3: traceback YOKTU → STM-kopma guvenlik zincirinde (hardware.stm.disconnected
+            # → acil-durdurma) bir abone patlarsa hangi satirda/neden patladigi kaybolur ve olay
+            # sessizce yarim kalir. exc_info ile tam iz + hangi olay/abone oldugu loglanir.
+            logger.error("Sync callback failed (event=%s, callback=%s): %s",
+                         getattr(event, "event_type", "?"),
+                         getattr(callback, "__qualname__", repr(callback)), e, exc_info=True)
             self._stats['failed_deliveries'] += 1
     
     def _add_to_history(self, event: Event):

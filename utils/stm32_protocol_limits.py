@@ -63,6 +63,10 @@ def normalize_frequency_hz(freq) -> float:
 def normalize_duration_minutes(duration) -> int:
     try:
         numeric = int(duration)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # DENETIM P3: OverflowError YAKALANMIYORDU → duration=float('inf') gelirse int() coker
+        # ve istisna cagirana (update_coil → /api/coil/{id}/control) sizardi. Diger normalize_*
+        # yardimcilari clamp_float uzerinden inf/nan'i zaten guvenle ele aliyor; bu yalniz burada
+        # eksikti. NaN da ValueError verir ve ayni dala duser → guvenli varsayilan.
         numeric = DURATION_MIN_MINUTES
     return max(DURATION_MIN_MINUTES, min(DURATION_MAX_MINUTES, numeric))
