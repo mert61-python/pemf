@@ -18,6 +18,11 @@ from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
 
 
+# STM_NACK sonrasi ham-paket tekrar oynatma icin AZAMI YAS (sn). Keep-alive turundan
+# (0.5 sn) biraz genis tutuldu; daha eskisi 'guncel niyet' sayilmaz.
+_RETRY_MAX_AGE_S = 0.75
+
+
 class HeadlessCore:
     """Qt-free backend core for STM32 communication and shared services."""
 
@@ -242,15 +247,29 @@ class HeadlessCore:
     def _hw_sender_worker(self) -> None:
         serial_conn = None
         udp_sock = None
-        last_payload: list[Any | None] = [None]
+        # [0]=son yazilan paket, [1]=yazildigi monotonic an (bkz. retry_last_payload yas siniri)
+        last_payload: list[Any] = [None, 0.0]
         last_reconnect_time = 0.0
         transport = Stm32SerialTransport(self.logger)
 
         def retry_last_payload() -> None:
-            if last_payload[0] is None:
+            # DENETIM P2: STM_NACK gelince EN SON YAZILAN ham paket kosulsuz yeniden kuyruga
+            # konuyordu. Paketin icerigi/yasi hic sorgulanmadigi icin, NACK bir STOP kuyruga
+            # girdikten SONRA islenirse FIFO sirasi [P_stop, P_run] olabiliyor ve bobinler
+            # acil-durdurmadan SONRA tekrar enerjileniyordu. Iki kapak:
+            #   (1) YAS SINIRI — paket bir keep-alive turundan (0.5 sn) eskiyse artik "guncel
+            #       niyet" degildir; tazelemeyi keep-alive'a birak (o zaten guncel durumu gonderir).
+            #   (2) Baglanti kopmasinda cagiran taraf last_payload'i None yapar (asagi bkz.).
+            payload, ts = last_payload[0], last_payload[1]
+            if payload is None:
+                return
+            if (time.monotonic() - ts) > _RETRY_MAX_AGE_S:
+                self.logger.info("[STM32 NACK] son paket bayat (%.2fs) → tekrar gonderilmedi; "
+                                 "keep-alive guncel durumu tazeleyecek.", time.monotonic() - ts)
+                last_payload[0] = None
                 return
             try:
-                self._hw_send_queue.put_nowait(last_payload[0])
+                self._hw_send_queue.put_nowait(payload)
                 last_payload[0] = None
             except queue.Full:
                 pass
@@ -332,10 +351,23 @@ class HeadlessCore:
             if serial_conn and serial_conn.is_open and stm_msg:
                 try:
                     last_payload[0] = payload_tuple
+                    last_payload[1] = time.monotonic()
                     serial_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
                 except Exception as exc:
                     self.logger.warning("[STM32 SEND] %s", exc)
                     self._set_stm_connected(False)
+                    # DENETIM P2: port KAPATILMIYORDU. Yeniden-baglanma kosulu
+                    # `not serial_conn or not serial_conn.is_open` oldugundan, yalnizca
+                    # "baglanti koptu" BAYRAGINI dusurmek hicbir zaman reconnect tetiklemiyordu →
+                    # USB yarim-kopmasinda (kablo gevsemesi/surucu hatasi) port sonsuza dek acik
+                    # ama olu kaliyor, bobin komutlari sessizce kayboluyordu. Acikca kapat →
+                    # dongu basindaki reconnect devreye girer. (Bu arada keep-alive kesildigi icin
+                    # firmware olu-adam devresi 1.5 sn'de bobinleri sifirlar = fail-safe yon.)
+                    try:
+                        transport.close_serial(serial_conn)
+                    except Exception:
+                        pass
+                    last_payload[0] = None   # kopuk baglantida BAYAT paketi tekrar oynatma
 
             if udp_sock and udp_pkt:
                 try:

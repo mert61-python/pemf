@@ -2036,6 +2036,7 @@ async def stop_session():
         coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
         db_session_id = _active_session.get("db_session_id")
         started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
+        _stopping_session_id = _active_session.get("session_id")   # TOCTOU muhru (asagi bkz.)
         _active_session["is_active"] = False
 
     # (a) Bekleyen kismi dakikayi emit et — acik run-ozetine de katki saglar (finish'ten ONCE).
@@ -2047,8 +2048,22 @@ async def stop_session():
     # Donanim STOP (ESP→MQTT, STM→update_coil). _stop_session_coils ayrica acik coil-run'lari kapatir.
     # P-1b: senkron _mqtt_publish (~2s/ESP-bobin) event-loop'u DONDURMASIN → to_thread (emergency_stop
     # deseniyle birebir; bobinler yine durur, sadece threadpool'da). Watchdog'dan (1327) cagri sync kalir.
-    await asyncio.to_thread(_stop_session_coils, coil_ids)
-    update_live_session_state(is_active=False, mode="Sistem Hazır")
+    # DENETIM P2 (TOCTOU): yukarida is_active=False yapilip KILIT BIRAKILIYOR. Bu await
+    # penceresinde (saglikli broker'da ~10-100 ms, cokuk broker'da saniyeler) BASKA bir istemci
+    # /api/session/start atabilir → yeni seans bobinleri ENERJILER, hemen ardindan buradaki
+    # _stop_session_coils AYNI fiziksel bobinleri durdurur: yeni seans sessizce olur (UI 'suruyor'
+    # sanir, coil-run/sensor kayitlari bozulur). Sure-watchdog'da bu muhur (1600-1604 `_still_same`)
+    # ZATEN vardi; /stop yolunda YOKTU. Donanima dokunmadan hemen once ayni seansta miyiz diye bak.
+    with _session_lock:
+        _takeover = (bool(_active_session.get("is_active"))
+                     and _active_session.get("session_id") != _stopping_session_id)
+    if _takeover:
+        logging.getLogger(__name__).warning(
+            "stop: bu seans (%s) durdurulurken YENI seans (%s) baslamis → donanim STOP'u ATLANDI "
+            "(bobinler yeni seansa ait).", _stopping_session_id, _active_session.get("session_id"))
+    else:
+        await asyncio.to_thread(_stop_session_coils, coil_ids)
+        update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
     # P-2 fix: senkron SQLCipher yazimlari (add_sensor_samples_batch/end_session/set_meta) event-loop'u

@@ -301,6 +301,27 @@ async def analyze_landmark(request: Request, file: UploadFile = File(None), imag
                     from servers.api_server import start_ai_session, state, update_live_session_state
                     if not (state and state.hardware):
                         return "idle", {}
+                    # DENETIM P2: BASKA bir otonom surucu calisirken donanima DOKUNMA.
+                    # Eskiden kosulsuz start_ai_session + start_all_coils cagriliyordu; AI Pro
+                    # suruyorken gelen bir landmark auto_adjust istegi (ikinci istemci / dogrudan
+                    # API) AI Pro'nun per-bobin duty/fazinin uzerine TEK-TIP degerler yaziyor,
+                    # AI Pro'nun surmedigi BOBIN 8'i de enerjilendiriyor ve seans meta-verisini
+                    # ("AI (Auto)", 30 dk, coil_ids 1-8) sessizce DEVRALIYORDU — iki otonom surucu
+                    # ayni donanimda catisiyor, kayitta yanlis mod gorunuyordu.
+                    if _ai_loop_active:
+                        logger.info("AI (Auto): AI Pro aktif → donanim SURULMEDI (catisma onlendi).")
+                        return "skipped_session_active", {}
+                    try:
+                        import servers.api_server as _apx3
+                        with _apx3._session_lock:
+                            _cur_mode = str(_apx3._active_session.get("mode", ""))
+                            _cur_active = bool(_apx3._active_session.get("is_active"))
+                        # Farkli modda AKTIF bir seans (Manuel/Otomatik/AI Pro) varsa devralma.
+                        if _cur_active and _cur_mode != "AI (Auto)":
+                            logger.info("AI (Auto): '%s' seansi aktif → donanim SURULMEDI.", _cur_mode)
+                            return "skipped_session_active", {}
+                    except Exception:
+                        logger.warning("AI (Auto): aktif-seans kontrolu basarisiz", exc_info=True)
                     target_freq = min(100.0, 10.0 + (total * 5.0))
                     target_duty = min(50.0, 25.0 + (total * 3.0))
                     # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar.
@@ -649,14 +670,30 @@ def _ai_pro_loop():
                              or (now - _ai_organ_cache["at"]) >= _ORGAN_LOCALIZE_INTERVAL_S)
             if need_localize:
                 try:
-                    lz, lx, ly, lzz, lrel, lov = _localize_organ(frame, _ai_organ_id)
+                    # DENETIM P2 (organ-degisim yarisi): lokalizasyon 1-4 sn surer. Eskiden
+                    # cache guncellenirken `_ai_organ_id` GLOBALI YENIDEN okunuyordu → bu sure
+                    # icinde klinisyen /api/ai/pro/organ ile organi degistirdiyse ESKI organin
+                    # koordinatlari YENI organin etiketiyle damgalaniyordu. Sonraki 10 sn boyunca
+                    # need_localize'in uc kosulu da False kaldigindan em_kedi, yeni organ icin
+                    # uretilmis duty/faz desenini ESKI organin konumuna odakliyordu; UI ise dogru
+                    # organ adini gosteriyordu (enerji yanlis organa). Ayrica `_ai_relocalize`
+                    # KOSULSUZ temizlendigi icin, lokalizasyon ucarken basilan "yeniden konumla"
+                    # istegi de sessizce yutuluyordu.
+                    # Cozum: iterasyon basinda organ kimligini SNAPSHOT al, cache'i onunla damgala;
+                    # relocalize bayragini yalnizca ARADA yeni istek GELMEDIYSE temizle.
+                    _oid = _ai_organ_id
+                    # Bayragi ONCE tuket: bu lokalizasyon zaten mevcut istegi karsiliyor. Boylece
+                    # islem SIRASINDA gelen yeni bir istek bayragi tekrar True yapar ve SONRAKI
+                    # iterasyonda yeniden lokalize edilir — istek YUTULMAZ. (Sonradan kosulsuz
+                    # temizlemek, ayirt edilemedigi icin taze istegi siliyordu.)
+                    _ai_relocalize = False
+                    lz, lx, ly, lzz, lrel, lov = _localize_organ(frame, _oid)
                     with _ai_cache_lock:
                         _ai_organ_cache.update({
                             "x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
                             "localized": lz, "overlay_bgr": lov, "at": now,
-                            "organ_id": _ai_organ_id,
+                            "organ_id": _oid,   # SNAPSHOT: global yeniden okunmaz
                         })
-                    _ai_relocalize = False
                 except Exception as le:
                     logger.error("cat_organ lokalizasyon hatası: %s", le)
                     # Audit P2: lokalizasyon HATASINDA cache'i geçersiz kıl — aksi halde ESKİ localized=True
@@ -932,12 +969,17 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
                          or _ai_organ_cache["organ_id"] != _ai_organ_id
                          or (now - _ai_organ_cache["at"]) >= _ORGAN_LOCALIZE_INTERVAL_S)
         if need_localize:
-            lz, lx, ly, lzz, lrel, lov = await asyncio.to_thread(_localize_organ, img, _ai_organ_id)
+            # DENETIM P2 (mobil yolda AYNI organ-degisim yarisi — loop tarafiyla simetrik):
+            # organ kimligini SNAPSHOT al (await sonrasi global yeniden okunmasin, yoksa ESKI
+            # organin koordinatlari YENI organin etiketiyle 10 sn cache'lenir) ve relocalize
+            # bayragini ONCE tuket (islem sirasinda gelen yeni istek yutulmasin).
+            _oid = _ai_organ_id
+            _ai_relocalize = False
+            lz, lx, ly, lzz, lrel, lov = await asyncio.to_thread(_localize_organ, img, _oid)
             with _ai_cache_lock:
                 _ai_organ_cache.update({"x_mm": lx, "y_mm": ly, "z_mm": lzz, "reliability": lrel,
                                         "localized": lz, "overlay_bgr": lov, "at": now,
-                                        "organ_id": _ai_organ_id})
-            _ai_relocalize = False
+                                        "organ_id": _oid})
 
         with _ai_cache_lock:
             localized = _ai_organ_cache["localized"]

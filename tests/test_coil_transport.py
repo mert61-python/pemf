@@ -76,3 +76,32 @@ def test_stop_all_uses_hardware(client, mocked_hw):
     # HardwareController.stop_all_coils çağrılmalı (STM güvenli durdurma).
     assert r.status_code == 200
     assert any(c.get("stop_all") for c in mocked_hw["stm"])
+
+
+def test_serial_write_failure_closes_port_and_drops_stale_payload():
+    """DENETIM P2 regresyonu: seri yazım hatası portu KAPATMALI + bayat paketi düşürmeli.
+
+    (1) Yazım hatasında yalnız 'bağlantı koptu' bayrağı düşürülüyordu; reconnect koşulu
+        `not serial_conn or not serial_conn.is_open` olduğu için yeniden bağlanma HİÇ
+        tetiklenmiyordu → USB yarım-kopmasında port sonsuza dek açık ama ölü kalıyor,
+        bobin komutları sessizce kayboluyordu.
+    (2) STM_NACK sonrası son ham paket koşulsuz yeniden kuyruğa konuyordu; NACK bir STOP
+        kuyruğa girdikten SONRA işlenirse bobinler acil-durdurmadan sonra tekrar
+        enerjilenebiliyordu. Artık yaş sınırı var.
+    """
+    import inspect
+
+    import headless_core
+
+    src = inspect.getsource(headless_core.HeadlessCore._hw_sender_worker)
+
+    # (1) yazım hatası dalında port kapatılmalı (dal = [STM32 SEND] logundan UDP bloğuna kadar)
+    _after_send_err = src.split("[STM32 SEND]")[1].split("if udp_sock")[0]
+    assert "close_serial(serial_conn)" in _after_send_err, \
+        "yazım hatasında port kapatılmalı (yoksa reconnect tetiklenmez)"
+    assert "last_payload[0] = None" in _after_send_err, \
+        "kopuk bağlantıda bayat paket düşürülmeli (re-fire önlemi)"
+
+    # (2) retry yaş sınırına tabi olmalı
+    assert "_RETRY_MAX_AGE_S" in src, "NACK tekrar-oynatması yaş sınırlı olmalı"
+    assert 0 < headless_core._RETRY_MAX_AGE_S <= 2.0, "yaş sınırı keep-alive turuna yakın olmalı"

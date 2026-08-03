@@ -179,3 +179,27 @@ def test_target_lost_stops_coils_after_streak(client, monkeypatch):
 
     with api._session_lock:
         api._active_session.clear()
+
+
+def test_organ_switch_race_snapshots_id_and_consumes_flag_first():
+    """DENETIM P2 regresyonu: organ değişimi yarışı (hem loop hem mobil yol).
+
+    (1) Lokalizasyon 1-4 sn sürerken cache güncellenirken `_ai_organ_id` GLOBALİ yeniden
+        okunuyordu → o sırada organ değişirse ESKİ organın koordinatları YENİ organın
+        etiketiyle 10 sn cache'leniyor, em_kedi yeni organ için üretilmiş deseni eski organın
+        konumuna odaklıyordu (UI doğru organ adını gösterirken enerji yanlış organa).
+    (2) `_ai_relocalize` KOŞULSUZ ve SONRADAN temizleniyordu → lokalizasyon uçarken basılan
+        'yeniden konumla' isteği sessizce yutuluyordu. Artık bayrak ÖNCE tüketilir.
+    """
+    import inspect
+
+    import servers.ai_router as air
+
+    for fn, ad in ((air._ai_pro_loop, "loop"), (air.ai_pro_frame, "mobil")):
+        src = inspect.getsource(fn)
+        blok = src.split("need_localize")[-1]
+        assert '"organ_id": _oid' in blok, f"{ad}: cache snapshot organ kimliğiyle damgalanmalı"
+        # bayrak, lokalizasyon çağrısından ÖNCE tüketilmeli
+        i_flag = blok.index("_ai_relocalize = False")
+        i_call = blok.index("_localize_organ")
+        assert i_flag < i_call, f"{ad}: relocalize bayrağı lokalizasyondan ÖNCE tüketilmeli"
