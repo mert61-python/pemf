@@ -24,6 +24,13 @@ use std::path::{Path, PathBuf};
 pub const ENV_MODELS_DIR: &str = "PEMF_AI_MODELS_DIR";
 pub const ENV_DATA_DIR: &str = "PEMF_DATA_DIR";
 pub const ENV_API_PORT: &str = "PEMF_API_PORT";
+/// DENETİM P0: launcher backend'i yalnız model-kökü + port ile başlatıyordu. Backend `.env`
+/// dosyalarını OTOMATİK YÜKLEMEZ (`load_dotenv` yok) — `deploy/device.env`'deki sıkılaştırma
+/// yalnız NSSM servis kaydında uygulanır. Launcher exe'yi doğrudan spawn ettiği için
+/// `PEMF_REQUIRE_AUTH` tanımsız kalıyor ve `servers/auth.py` varsayılanı "0" → uzak/tünel
+/// erişiminde bile kimlik doğrulaması KAPALI oluyordu. LAN/localhost istekleri
+/// `is_local_request` ile zaten muaf olduğundan bunu açmak yerel arayüzü ETKİLEMEZ.
+pub const ENV_REQUIRE_AUTH: &str = "PEMF_REQUIRE_AUTH";
 
 /// Varsayılan backend portu (`backend_service.py` ile aynı).
 pub const DEFAULT_PORT: u16 = 8000;
@@ -76,6 +83,8 @@ pub fn backend_env(install_root: &Path, port: u16) -> BTreeMap<String, String> {
         models_dir(install_root).to_string_lossy().into_owned(),
     );
     env.insert(ENV_API_PORT.to_string(), port.to_string());
+    // Güvenli varsayılan (bkz. ENV_REQUIRE_AUTH): uzak/tünel erişimi token ister; LAN muaf kalır.
+    env.insert(ENV_REQUIRE_AUTH.to_string(), "1".to_string());
     env
 }
 
@@ -266,6 +275,16 @@ mod tests {
         // Platform-agnostik: Windows '\' vs POSIX '/' — Path karşılaştır (string değil).
         assert_eq!(Path::new(&env[ENV_MODELS_DIR]), Path::new("/opt/pemf").join("ai_models"));
         assert_eq!(env[ENV_API_PORT], "8123");
+    }
+
+    /// DENETİM P0 regresyonu: launcher backend'i kimlik doğrulaması KAPALI başlatmamalı.
+    /// Backend `.env` dosyalarını okumaz; bu env verilmezse `servers/auth.py` varsayılanı "0"dır
+    /// ve uzak/tünel erişimi kimliksiz açılır. LAN/localhost `is_local_request` ile muaf olduğu
+    /// için bu bayrak yerel arayüzü bozmaz.
+    #[test]
+    fn backend_env_auth_zorunlulugunu_acik_verir() {
+        let env = backend_env(Path::new("/opt/pemf"), 8123);
+        assert_eq!(env[ENV_REQUIRE_AUTH], "1");
     }
 
     #[test]

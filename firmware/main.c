@@ -132,7 +132,12 @@
 #define DDS_DEAD_TIME_TICKS                                                    \
   0U /**< Yazılımsal dead time (DONANIMSAL gecikme ile değiştirildi) */
 #define DDS_MAX_DUTY_SLEW                                                      \
-  25 /**< Periyot başı max duty değişimi (tick cinsinden) */
+  25 /**< Periyot başı max duty değişimi (tick) — 100 Hz referans değeri */
+#define DDS_SLEW_FULLSCALE_S                                                   \
+  0.2f /**< Tam-ölçek (0↔%100) duty rampasının hedef SÜRESİ, saniye.           \
+        *   slew = tpp / (freq * bu) → ramp süresi frekanstan BAĞIMSIZ.        \
+        *   100 Hz'de 500/(100*0.2) = 25 tick = eski sabitin AYNISI.           \
+        *   (DENETİM P0: sabit 25, 1 Hz'de STOP'u ~16.7 dk geciktiriyordu.) */
 
 /** @} */
 
@@ -308,6 +313,21 @@ static int32_t g_duty_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
 /** Hedef duty tick değerleri (slew rate limiter girişi) */
 static int32_t g_target_duty_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
 
+/**
+ * Periyot başına izin verilen duty değişimi (tick) — FREKANSA GÖRE ölçeklenir.
+ *
+ * DENETİM P0: eskiden sabit DDS_MAX_DUTY_SLEW (=25 tick/periyot) kullanılıyordu. Periyot süresi
+ * 1/f olduğundan ramp SÜRESİ 1/f² ile büyüyordu: 100 Hz'de 0.1 s, 10 Hz'de 10 s, 1 Hz'de
+ * ~16.7 DAKİKA. AI Pro tam da 1 Hz'de sürüyor (_AI_PRO_FREQ_HZ). Acil durdurma / süre-bitişi /
+ * ölü-adam watchdog'unun hepsi yalnızca HEDEFİ sıfırlıyor, çıkış ise slew'lenmiş değere göre
+ * sürüldüğü için bobin dakikalarca enerjili kalabiliyordu.
+ * Yeni ölçek: slew = tpp / (f * DDS_SLEW_FULLSCALE_S) → tam-ölçek ramp süresi frekanstan
+ * BAĞIMSIZ ~0.1 s. 100 Hz'de sonuç tam olarak 25'tir; nominal davranış birebir korunur.
+ */
+static int32_t g_slew_ticks[NUM_COILS] = {DDS_MAX_DUTY_SLEW, DDS_MAX_DUTY_SLEW,
+                                          DDS_MAX_DUTY_SLEW, DDS_MAX_DUTY_SLEW,
+                                          DDS_MAX_DUTY_SLEW};
+
 /** Faz offset tick değerleri */
 static int32_t g_phase_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
 
@@ -363,6 +383,14 @@ static void Coil_GpioInit(void);
 /* Core */
 void SystemClock_Config(void);
 void Error_Handler(void);
+
+/**
+ * @brief  TÜM bobin çıkışlarını doğrudan BSRR ile LOW'a çeker (ISR-güvenli, yeniden-girişli).
+ * @note   DIŞA AÇIK (static DEĞİL): `Core/Src/stm32f4xx_it.c` içindeki fault işleyicileri
+ *         buradan çağırır — bkz. firmware/README.md "Fault işleyici yaması". Yalnız BSRR
+ *         yazar; kesme/HAL/kilit gerektirmez, bu yüzden fault bağlamında güvenlidir.
+ */
+void PEMF_ForceAllCoilOutputsLow(void);
 
 static void Coil_SendNack(const char *reason) {
   static char msg[160];
@@ -804,6 +832,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         d = DUTY_MIN;
       g_target_duty_ticks[i] = (int32_t)(d * tpp_f);
 
+      /* Slew adımını periyoda ölçekle → ramp SÜRESİ frekanstan bağımsız (bkz. g_slew_ticks). */
+      {
+        float slew_f = tpp_f / (f * DDS_SLEW_FULLSCALE_S);
+        int32_t slew_i = (int32_t)slew_f;
+        if (slew_i < 1)
+          slew_i = 1; /* en az 1 tick/periyot (çok yüksek frekansta tpp küçülür) */
+        g_slew_ticks[i] = slew_i;
+      }
+
       /* Faz → tick */
       float p = g_active.coil[i].phase;
       if (p < PHASE_DEG_MIN)
@@ -843,15 +880,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         g_sync_pulse_countdown = DDS_SYNC_PULSE_TICKS;
       }
 
-      /* Slew rate limiter */
-      int32_t err = g_target_duty_ticks[i] - g_duty_ticks[i];
-      if (err > DDS_MAX_DUTY_SLEW)
-        err = DDS_MAX_DUTY_SLEW;
-      if (err < -DDS_MAX_DUTY_SLEW)
-        err = -DDS_MAX_DUTY_SLEW;
-      g_duty_ticks[i] += err;
-      if (g_duty_ticks[i] < 0)
+      /* Slew rate limiter.
+       *
+       * DENETİM P0 — DURDURMA RAMPAYA TABİ DEĞİLDİR: hedef 0 ise (acil durdurma, süre-bitişi,
+       * ölü-adam watchdog'u, STM_NACK sonrası sıfır-duty paketi) çıkışı ANINDA kes. Eskiden
+       * bu yol da rampadan geçiyordu ve 1 Hz'de bobin ~16.7 dk enerjili kalıyordu. Enerjiyi
+       * ARTIRAN yön hâlâ sınırlıdır (inrush/EMI koruması) ama artık frekanstan bağımsız süreyle.
+       */
+      if (g_target_duty_ticks[i] <= 0) {
         g_duty_ticks[i] = 0;
+      } else {
+        const int32_t slew = g_slew_ticks[i];
+        int32_t err = g_target_duty_ticks[i] - g_duty_ticks[i];
+        if (err > slew)
+          err = slew;
+        if (err < -slew)
+          err = -slew;
+        g_duty_ticks[i] += err;
+        if (g_duty_ticks[i] < 0)
+          g_duty_ticks[i] = 0;
+      }
 
       /* Duty güvenlik klempi (max tpp-1, dead time dahil) */
       int32_t max_d = (int32_t)(tpp - 1U) - (int32_t)DDS_DEAD_TIME_TICKS;
@@ -879,7 +927,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
    * uygulanıyor. */
 
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
-    const int32_t duty = g_duty_ticks[i];
+    /* DENETİM P0 — STOP PERİYOT SONUNU BEKLEMEZ: g_duty_ticks yalnızca periyot başında
+     * (period_reset) güncellenir. Düşük frekansta periyot uzundur (1 Hz → 1 s), dolayısıyla
+     * yalnız slew'e bakmak durdurmayı bir periyot kadar geciktirirdi. Hedef sıfırlanmışsa
+     * (acil durdurma / süre-bitişi / ölü-adam watchdog'u) çıkışı BU tick'te kes: gecikme
+     * periyottan bağımsız olarak en fazla bir ISR tick'i = 20 µs. */
+    const int32_t duty = (g_target_duty_ticks[i] <= 0) ? 0 : g_duty_ticks[i];
     const int32_t tpp = (int32_t)g_tpp[i];
     const int32_t itick = (int32_t)g_dds_tick[i];
 
@@ -1177,13 +1230,56 @@ void SystemClock_Config(void) {
  * HATA İŞLEYİCİ
  * ============================================================================
  */
+/**
+ * @brief  TÜM bobin çıkışlarını doğrudan BSRR ile LOW'a çeker.
+ *
+ * DENETİM P1: hata/fault yollarında bobin pinlerine DOKUNULMUYORDU. Bir HardFault'ta
+ * Cortex-M varsayılan işleyicisi sonsuz döngüye girer → main() durur → 1500 ms'lik ölü-adam
+ * kontrolü BİR DAHA ÇALIŞMAZ. TIM1 ISR'ı hâlâ koşuyorsa son duty sonsuza dek sürülür; ISR de
+ * durursa GPIO'lar periyot ortasında DONAR ve IN_A o an HIGH ise tam-köprü tek yönde DC olarak
+ * enerjili kalır. Backend'in gönderdiği sıfır-duty paketleri işlenmez, _emergency_stop_all STM
+ * tarafında etkisizdir. Bu fonksiyon donanıma en yakın, kesme gerektirmeyen kesme yoludur.
+ * ISR-güvenli ve yeniden-girişli: yalnız BSRR yazar.
+ */
+void PEMF_ForceAllCoilOutputsLow(void) {
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA << 16U;
+    coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
+  }
+}
+
 void Error_Handler(void) {
+  /* Bobinleri ÖNCE kes, sonra kesmeleri kapat (hasta güvenliği > hata göstergesi). */
+  PEMF_ForceAllCoilOutputsLow();
   __disable_irq();
   /* Hata LED'ini yak (PB0) */
   GPIOB->BSRR = (uint32_t)GPIO_PIN_0;
   while (1) { /* Sonsuz bekle */
   }
 }
+
+/* ============================================================================
+ * FAULT İŞLEYİCİLERİ — bu dosyada TANIMLANMAZ (bilinçli)
+ * ----------------------------------------------------------------------------
+ * DENETİM P1: HardFault/MemManage/BusFault/UsageFault işleyicileri bobinleri KESMİYOR.
+ * Bir HardFault'ta Cortex-M işleyicisi sonsuz döngüye girer → main() durur → 1500 ms'lik
+ * ölü-adam kontrolü BİR DAHA ÇALIŞMAZ. TIM1 ISR'ı hâlâ koşuyorsa son duty sonsuza dek
+ * sürülür; ISR de durursa GPIO'lar periyot ortasında DONAR ve IN_A o an HIGH ise tam-köprü
+ * tek yönde DC olarak enerjili kalır.
+ *
+ * Bu dört işleyici CubeMX projesinde `Core/Src/stm32f4xx_it.c` içinde ZATEN TANIMLIDIR
+ * (arm-none-eabi-ld ile doğrulandı: burada da tanımlanırsa
+ * "multiple definition of `HardFault_Handler'" link hatası olur). Bu depo yalnız `main.c`
+ * tuttuğundan düzeltme oraya taşındı: aşağıdaki `PEMF_ForceAllCoilOutputsLow()` DIŞA AÇIK
+ * bırakılmıştır; `stm32f4xx_it.c` içindeki USER CODE bloklarından çağrılır.
+ * Uygulanacak yama: bkz. `firmware/README.md` → "Fault işleyici yaması".
+ *
+ * NOT (bilinçli olarak YAPILMADI): bağımsız donanım watchdog'u (IWDG) EKLENMEDİ. IWDG,
+ * main() döngüsünün her turda süre sınırına uymasını gerektirir; yanlış bir timeout seçimi
+ * tedavi ortasında MCU resetine yol açar — tezgâh ölçümü isteyen ayrı bir iştir
+ * (denetim raporu P1 fw-no-iwdg-no-fault-safe).
+ * ============================================================================
+ */
 
 /* ============================================================================
  * IRQ HANDLER'LAR

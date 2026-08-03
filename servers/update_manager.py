@@ -56,6 +56,22 @@ def _validate_installer_url(url: str):
     return True, ""
 
 
+def _private_temp_path(filename: str) -> Path:
+    """Installer icin SURECE OZEL, tahmin EDILEMEZ bir gecici dizinde yol uret.
+
+    DENETIM P1 (TOCTOU / yerel yetki yukseltme): installer PAYLASIMLI gecici dizine SABIT bir
+    adla (PEMF_Update_<surum>.exe) indiriliyordu. Backend LocalSystem olarak kostugu icin bu
+    C:\\Windows\\Temp'tir; yetkisiz bir yerel hesap dosyayi ONCEDEN olusturup sahipligini
+    koruyabilir ve SHA256 + Authenticode dogrulamasi GECTIKTEN SONRA icerigi degistirerek
+    LocalSystem'e keyfi EXE calistirtabilirdi (dogrulama ile calistirma arasindaki pencere).
+    mkdtemp rastgele adli + yalniz olusturan hesaba acik ACL'li bir dizin verir → hem tahmin
+    hem onceden-olusturma saldirisi kapanir. Cevredeki OTA sertlestirmesi (host-pin, ZORUNLU
+    SHA256, Authenticode, aktif-tedavi yeniden-kontrolu) korunur.
+    NOT: dizin bilerek silinmez — installer surec olarak devam eder (ve servisi durdurabilir).
+    """
+    return Path(tempfile.mkdtemp(prefix="pemf_upd_")) / filename
+
+
 def _safe_ver(v) -> str:
     """Sürüm etiketini dosya-adı-güvenli hale getir (path-traversal engelle)."""
     s = re.sub(r"[^0-9A-Za-z._-]", "", str(v))[:40]
@@ -256,7 +272,7 @@ def apply_update() -> dict:
     url = st["installerUrl"]
     expected = (st.get("sha256") or "").lower()
     try:
-        dest = Path(tempfile.gettempdir()) / f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe"
+        dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
             while True:
@@ -344,7 +360,7 @@ def rollback() -> dict:
     try:
         if not expected:
             return {"ok": False, "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
-        dest = Path(tempfile.gettempdir()) / f"PEMF_Rollback_{_safe_ver(ver)}.exe"
+        dest = _private_temp_path(f"PEMF_Rollback_{_safe_ver(ver)}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
             while True:

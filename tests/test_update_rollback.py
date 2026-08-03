@@ -43,3 +43,27 @@ def test_rollback_endpoint_registered():
     from servers import api_server
     paths = [r.path for r in api_server.app.routes if hasattr(r, "path")]
     assert "/api/update/rollback" in paths
+
+
+def test_installer_temp_path_is_private_and_unpredictable():
+    """DENETIM P1 regresyonu: installer PAYLAŞIMLI temp'e SABİT adla indirilmemeli.
+
+    Hata: `Path(tempfile.gettempdir()) / f"PEMF_Update_{sürüm}.exe"`. Backend LocalSystem olduğu
+    için bu C:\Windows\Temp'tir; yetkisiz yerel bir hesap dosyayı ÖNCEDEN oluşturup sahipliğini
+    koruyabilir ve SHA256+Authenticode doğrulaması GEÇTİKTEN SONRA içeriği değiştirerek
+    LocalSystem'e keyfi EXE çalıştırtabilirdi (doğrulama→çalıştırma penceresi).
+    """
+    import tempfile
+    from pathlib import Path
+
+    from servers import update_manager as um
+
+    p1 = um._private_temp_path("PEMF_Update_1.2.3.exe")
+    p2 = um._private_temp_path("PEMF_Update_1.2.3.exe")
+
+    assert p1 != p2, "yol tahmin edilebilir/sabit olmamalı"
+    assert p1.name == "PEMF_Update_1.2.3.exe"
+    # Dosya adı aynı olsa da dizin süreç-özel ve paylaşımlı temp KÖKÜ değil.
+    assert p1.parent != Path(tempfile.gettempdir())
+    assert p1.parent.is_dir(), "özel dizin oluşturulmuş olmalı"
+    assert p1.parent.name.startswith("pemf_upd_")

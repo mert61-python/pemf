@@ -29,6 +29,7 @@ import logging
 import os
 import secrets as _secrets
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -281,8 +282,26 @@ def _load() -> dict:
             for s in ("auto", "operator", "embedded"):
                 doc.setdefault(s, {})
         except Exception as e:
-            logger.error("pemf_secrets.json okunamadı (%s) — yeni oluşturuluyor.", e)
-            doc = _empty_doc()
+            # KRITIK VERI-KORUMA (DENETIM P0): burada FAIL-OPEN vardi — parse hatasinda sessizce
+            # BOS dokuman donuluyordu. Ardindan get_secret eksik anahtari (sqlcipher_key /
+            # patient_fernet_key) yeniden URETIP _save() ile dosyanin UZERINE yaziyordu →
+            # patients.db + pemf_treatment_history.db + TUM yedekler SONSUZA DEK cozulemez hale
+            # geliyordu. get_secret'teki brick-korumasi yalnizca "saklanmis ama COZULEMIYOR"
+            # halini kapsiyor; "dosya PARSE EDILEMIYOR" hali bu excepte dusup korumayi ATLIYORDU.
+            # Artik FAIL-CLOSED: bozuk dosyayi ASLA ezme, kanit icin sakla, HATA yukselt.
+            # (Cagiranlarin tamami try/except ile sarili → surec cokmez, eski yollara duser.)
+            try:
+                _ts = time.strftime("%Y%m%d_%H%M%S")
+                _bad = p.with_name(p.name + f".corrupt.{_ts}")
+                p.replace(_bad)
+                logger.error("pemf_secrets.json BOZUK (%s) — %s olarak saklandi, YENI URETILMEDI.", e, _bad.name)
+            except Exception:
+                logger.error("pemf_secrets.json BOZUK (%s) ve yeniden adlandirilamadi — YENI URETILMEDI.", e)
+            raise RuntimeError(
+                "pemf_secrets.json okunamadi/bozuk. Mevcut sifreli hasta verisini korumak icin "
+                "yeni anahtar URETILMEDI ve dosya EZILMEDI. Yedekten geri yukleyin "
+                "(bozuk kopya .corrupt.<zaman> olarak saklandi)."
+            ) from e
     else:
         doc = _empty_doc()
     _cache = doc
@@ -292,19 +311,31 @@ def _load() -> dict:
 def _save(doc: dict) -> None:
     p = secrets_path()
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    with open(tmp, "w", encoding="utf-8") as _f:
+        _f.write(json.dumps(doc, ensure_ascii=False, indent=2))
+        # DENETIM P0 (dayaniklilik): fsync YOKTU → guc kesintisinde NTFS'te 0-baytlik/yarim dosya
+        # kalabiliyordu; bir sonraki acilisda _load() onu "bozuk" gorup (eskiden) anahtarlari
+        # yeniden uretiyordu. Once veriyi diske indir, sonra atomik replace yap.
+        _f.flush()
+        os.fsync(_f.fileno())
     # Audit P2: .tmp'yi de HEMEN kilitle — os.replace'e kadar miras-ACL ile Users-okunur pencere
-    # olusuyordu (tmp düz-metin TÜM sirlari tutar). ACL rename ile p'ye tasinir.
+    # olusuyordu (tmp düz-metin TÜM sirlari tutar).
+    #
+    # DENETIM P1 — SIRALAMA HATASI: ACL kilidi os.replace'ten ONCE uygulaniyordu. lock_down_file
+    # erisimi SYSTEM+Administrators'a kisitladigi icin, surec YONETICI DEGILSE (Tauri launcher
+    # "kullanici-basina kurulum, yonetici hakki GEREKTIRMEZ" ile calisir) kendi actigi .tmp
+    # uzerindeki DELETE/WRITE hakkini KAYBEDIYOR → os.replace PermissionError firlatiyor →
+    # sirlar HIC kalicilasmiyor ve geride okunamaz bir .tmp kaliyordu. (Sahada dogrulandi:
+    # %APPDATA%\PEMF_GUI icinde pemf_secrets.json YOK ama pemf_secrets.json.tmp duruyordu.)
+    # Cozum: ONCE atomik replace, SONRA hedefe ACL uygula. Basarisizlikta .tmp'yi temizle.
     try:
-        from utils.file_acl import lock_down_file as _ldf_tmp
-        # Audit P2 #8: dönüş değerini KONTROL et — icacls/eski-Windows'ta sessizce başarısız olursa
-        # geçici sır-dosyası Users-okunur kalır. Kritik DPAPI değerleri şifreli (fail-closed) ama düz
-        # alanlar risklidir → belirgin UYAR (sessiz yutma yok). Hard-fail etmiyoruz (dosya yazımını brick'lemez).
-        if not _ldf_tmp(tmp):
-            logger.warning("SIR .tmp ACL kilidi UYGULANAMADI — geçici sır dosyası yerel Users'a açık kalmış olabilir (icacls/OS?).")
+        os.replace(tmp, p)
     except Exception:
-        logger.warning("SIR .tmp ACL kilidi hata verdi", exc_info=True)
-    os.replace(tmp, p)
+        try:
+            tmp.unlink()          # yetim .tmp birakma (icinde duz-metin sirlar var)
+        except Exception:
+            pass
+        raise
     # NTFS ACL kilidi (audit B-1.2): TÜM sırları taşıyan dosya yalnız SYSTEM + Administrators'a
     # açık olsun. os.chmod Windows'ta no-op'tur → düz-metin operatör-sırları Users'a açık kalırdı.
     try:

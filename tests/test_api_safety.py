@@ -42,3 +42,28 @@ def test_emergency_stop_deactivates_session(client):
     active = client.get("/api/session/active").json()
     is_active = active.get("is_active") or (active.get("session") or {}).get("is_active")
     assert not is_active
+
+
+def test_session_start_rejects_oversized_coil_ids(client):
+    """DENETIM P1 regresyonu: /api/session/start bobin listesi sınırsız olmamalı.
+
+    Hata: `coil_ids: list = []` (eleman tipi/uzunluk kısıtı yok) → {"coil_ids": [6]*20000}
+    ESP bobin başına AYRI daemon-thread açıyordu (her biri socket+paho connect) → thread/handle
+    tükenmesi; aynı anda süren gerçek tedavide süre-watchdog açlık çekip bobinler planlanandan
+    uzun enerjili kalabilirdi. /api/coil/batch zaten `_seen[:8]` ile korunuyordu.
+    """
+    r = client.post("/api/session/start", json={"coil_ids": [6] * 20000, "duration_minutes": 1})
+    assert r.status_code == 422, "8'den uzun bobin listesi sınırda reddedilmeli"
+
+
+def test_session_start_dedups_coil_ids(client):
+    """Tekrarlı/aralık-dışı bobin id'leri normalize edilmeli (derinlemesine savunma)."""
+    try:
+        r = client.post("/api/session/start", json={
+            "coil_ids": [1, 1, 2, 2], "duration_minutes": 1, "patient_name": "T",
+        })
+        # STM donanımı yoksa 503 dönebilir; o durumda normalizasyon zaten uygulanmıştır.
+        if r.status_code == 200:
+            assert r.json()["session"]["coil_ids"] == [1, 2]
+    finally:
+        client.post("/api/session/stop")

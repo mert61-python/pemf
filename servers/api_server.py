@@ -125,14 +125,36 @@ app = FastAPI(
 
 # CORS configurable: üretimde PEMF_CORS_ORIGINS="https://app1,https://app2" ile daraltın.
 # Native uygulamada Origin yok (CORS uygulanmaz); web paneli için anlamlıdır.
-_cors_env = os.getenv("PEMF_CORS_ORIGINS", "*").strip()
-_cors_origins = ["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",") if o.strip()]
+# DENETIM P0: VARSAYILAN "*" idi. deploy/device.env bunu daraltiyor ama backend .env dosyalarini
+# OTOMATIK YUKLEMEZ (load_dotenv yok) → env yalniz NSSM servis kaydinda uygulanir. Tauri launcher
+# ("PEMF Vet Client", canli dagitim yolu) exe'yi DOGRUDAN spawn edip yalniz 2 env verdiginden
+# ACAO:* etkin kaliyordu: operatorun actigi HERHANGI bir web sayfasi cihaza fetch atip
+# /api/auth/token (kalici cihaz anahtari) ve /api/patients (tum hasta PII) YANITLARINI OKUYABILIYORDU.
+# Varsayilan artik loopback + RFC1918 + *.local kokenleriyle sinirli; internetteki bir sayfa
+# yanitlari okuyamaz. Acik "*" hala MUMKUN ama artik bilincli bir tercih (PEMF_CORS_ORIGINS=*).
+_LAN_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\]|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|"
+    r"169\.254\.\d{1,3}\.\d{1,3}|"
+    r"[A-Za-z0-9-]+\.local"
+    r")(:\d+)?$"
+)
+_cors_env = os.getenv("PEMF_CORS_ORIGINS", "").strip()
+if _cors_env == "*":
+    _cors_kwargs = {"allow_origins": ["*"]}                      # acik opt-in (geriye uyumlu)
+elif _cors_env:
+    _cors_kwargs = {"allow_origins": [o.strip() for o in _cors_env.split(",") if o.strip()]}
+else:
+    _cors_kwargs = {"allow_origins": [], "allow_origin_regex": _LAN_ORIGIN_REGEX}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
     allow_credentials=False,  # API stateless (cookie yok)
     allow_methods=["*"],
     allow_headers=["*"],
+    **_cors_kwargs,
 )
 
 # Audit P2: TrustedHostMiddleware — DNS-rebinding'e karşı Host allowlist. Kötücül bir sayfa,
@@ -801,7 +823,14 @@ class SessionStartPayload(BaseModel):
     # ge=1: süre 0/negatif olursa auto-end mantığı (total>0) hiç tetiklenmez → seans SONSUZ sürerdi.
     # Bu bir SÜRE (seans-uzunluğu) doğrulaması; frekans/duty/intensity TEDAVİ parametrelerine DOKUNULMADI.
     duration_minutes: int = Field(default=20, ge=1)
-    coil_ids: list = []  # empty = all coils
+    # DENETIM P1 (thread-bombasi): tip `list` idi (eleman tipi/uzunluk kisiti YOK) →
+    # {"coil_ids": [6]*20000} ESP bobin basina AYRI daemon-thread aciyordu (her biri socket
+    # connect + paho connect) → 'can't start new thread' / handle tukenmesi; ayni anda suren
+    # gercek tedavide sure-watchdog aclik cekip bobinler planlanandan uzun enerjili kalabilirdi.
+    # /api/coil/batch zaten `_seen[:8]` ile sertlestirilmisti, start yolu unutulmustu.
+    # Cihazda toplam 8 bobin var → 8'den uzun liste MESRU DEGIL, sinirda 422 ile reddedilir.
+    # list[int]: tip-disi eleman artik sessizce "tedavi yok"a dusmek yerine 422 verir.
+    coil_ids: list[int] = Field(default_factory=list, max_length=8)  # empty = all coils
 
 class CoilControlPayload(BaseModel):
     freq: float = 50.0
@@ -1213,7 +1242,13 @@ async def control_batch_coils(payload: BatchCoilPayload):
 async def start_session(payload: SessionStartPayload):
     """Start a new treatment session."""
     import time
-    coil_ids = payload.coil_ids or list(range(1, 9))
+    # Derinlemesine savunma (Pydantic max_length=8 sinirda zaten reddeder): tekrarlari at ve
+    # gecerli bobin araligina (1-8) filtrele → /api/coil/batch'teki `_seen[:8]` deseniyle ayni.
+    _seen_coils = []
+    for _c in (payload.coil_ids or []):
+        if 1 <= _c <= 8 and _c not in _seen_coils:
+            _seen_coils.append(_c)
+    coil_ids = _seen_coils or list(range(1, 9))
     stm_coils = [coil_id for coil_id in coil_ids if coil_id in STM_COIL_IDS]
     esp_coils = [coil_id for coil_id in coil_ids if coil_id in ESP_COIL_IDS]
     if stm_coils and not state.hardware:
@@ -1471,9 +1506,10 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
         cont = bool(prev.get("is_active")) and str(prev.get("mode", "")).startswith("AI")
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
+        _new_session_id = prev.get("session_id") if cont else f"ai_{int(_t.time())}"
         _active_session.update({
             "is_active": True,
-            "session_id": prev.get("session_id") if cont else f"ai_{int(_t.time())}",
+            "session_id": _new_session_id,
             "mode": mode,
             "frequency": freq,
             "duty": duty,
@@ -1481,7 +1517,16 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             "duration_minutes": int(duration_minutes),
             "start_time": prev.get("start_time") if cont else _t.time(),
             "coil_ids": list(coil_ids),
+            # DENETIM P1: bu iki alan HIC kurulmuyordu → _flush_sensor_buffer_if_active
+            # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
+            # tedavinin DB'de seans satiri OLUSMUYORDU (doz/sicaklik kaydi kalici kayip).
+            # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
+            # istekte cagirir) → MEVCUT satiri koru, YENI satir acma.
+            "db_session_id": prev.get("db_session_id") if cont else None,
+            "db_patient_id": prev.get("db_patient_id") if cont else None,
+            "started_epoch": prev.get("started_epoch") if cont else _t.time(),
         })
+        _started_epoch_ai = _active_session["started_epoch"]
     # P1 audit 2026-06-28: AKTIF MANUEL (non-AI) seans varken AI baslayinca _active_session KOSULSUZ
     # eziliyordu → manuel db_session_id/coil_ids kayboluyor, acik coil-run'lar kapanmiyor, DB satiri
     # kalici 'active' kaliyor (KPI/history sisiyor + STM keep-alive surer ama UI 'AI' gosterir).
@@ -1504,6 +1549,30 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
                 mode, prev.get("db_session_id"))
         except Exception:
             logging.getLogger(__name__).exception("AI gecisinde eski manuel seans kapatma hatasi")
+
+    # DENETIM P1: otonom (AI Pro / AI Auto) tedavinin DB seans satirini AC. Eskiden hic
+    # acilmadigi icin canli hayvana uygulanan dozun, dakika-ortalamali sensor/sicaklik
+    # telemetrisinin ve seansin kendisinin KALICI KAYDI YOKTU (buffer 20k tavaninda kirpilip
+    # atiliyordu). Yalniz YENI seansta (cont=False) acilir; tekrarli AI cagrilari mevcut
+    # satiri kullanir. Best-effort: DB hatasi otonom tedaviyi DURDURMAZ (eski davranis).
+    if not cont:
+        try:
+            _db = _get_treatment_db()
+            if _db is not None:
+                _ai_sid = _db.start_session(treatment_mode=mode, target_condition=None)
+                try:
+                    _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai)
+                except Exception:
+                    logging.getLogger(__name__).debug("AI set_session_meta hatasi", exc_info=True)
+                # YARIS MUHRU: DB yazimi sirasinda seans durdurulmus/devralinmis olabilir →
+                # db_session_id'yi YALNIZ hala AYNI seans aktifse damgala (yanlis seansa
+                # sensor satiri baglama).
+                with _session_lock:
+                    if (_active_session.get("is_active")
+                            and _active_session.get("session_id") == _new_session_id):
+                        _active_session["db_session_id"] = _ai_sid
+        except Exception:
+            logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
 
 
 def _session_duration_watchdog():
@@ -2035,13 +2104,18 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
         legacy_ok = _mqtt_publish(f"pemf/esp32_{coil_id}/command", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
         return {"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"}
-    _estop_coils = [cid for cid in coil_ids if cid in ESP_COIL_IDS]
-    if _estop_coils:
-        import concurrent.futures as _cf
-        with _cf.ThreadPoolExecutor(max_workers=len(_estop_coils)) as _ex:
-            mqtt_results = list(_ex.map(_estop_one, _estop_coils))
-    else:
-        mqtt_results = []
+    # DENETIM P0: kapsam `[cid for cid in coil_ids if cid in ESP_COIL_IDS]` idi → ESP STOP'lari
+    # AKTIF SEANSIN bobin listesiyle sinirlaniyordu. STM tarafi ise kosulsuz stop_all_coils()
+    # cagiriyor; bu asimetri hatanin kasitsiz oldugunu gosteriyor. Somut ariza: seans coil_ids=[1,2,3]
+    # (yalniz STM) iken bobin 7 seans-disi surulmusse (/api/coil/7/control veya onceki seans),
+    # _estop_coils BOS kaliyor → bobin 7'ye HIC stop yayinlanmiyor, ustelik asagida mqtt_results
+    # bos oldugu icin _esp_ok=True → yanit "success"/confirmed=True ve canli-durum 8 bobini de
+    # "durdu" gosteriyor: operatore YANLIS guvence. Acil durdurma ASLA seans kapsamiyla
+    # sinirlandirilmaz → DAIMA tum ESP bobinleri. Calismayan bobine STOP zararsiz/idempotenttir.
+    _estop_coils = sorted(ESP_COIL_IDS)
+    import concurrent.futures as _cf
+    with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:
+        mqtt_results = list(_ex.map(_estop_one, _estop_coils))
     with _live_state_lock:
         for idx in range(8):
             coil = _live_state["coils"][idx]
@@ -2055,11 +2129,16 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # Audit P2: ust-seviye status'u transport sonuclarindan TURET — eskiden kosulsuz 'success'
     # donuyordu (STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi' saniyordu). Bir transport
     # dogrulanamadiysa 'partial'/'error' don + confirmed=False (keep-alive/firmware fiziksel-telafi P2).
-    _esp_ok = all(r.get("mqtt") == "success" for r in mqtt_results) if mqtt_results else True
+    # DENETIM P0 (yukaridaki kapsam fix'inin ikinci yarisi): mqtt_results BOS iken _esp_ok=True
+    # varsayimi "dogrulanmadi"yi "basarili" sayiyordu. Kapsam artik daima tum ESP bobinleri
+    # oldugundan liste bos olamaz; yine de bos-liste FAIL-CLOSED yorumlanir (bos = dogrulanmadi).
+    _esp_ok = bool(mqtt_results) and all(r.get("mqtt") == "success" for r in mqtt_results)
     _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
     return {"status": _status, "confirmed": bool(_stm_ok and _esp_ok),
-            "stmStopped": stm_stopped, "mqttResults": mqtt_results, "reason": reason}
+            "stmStopped": stm_stopped, "mqttResults": mqtt_results, "reason": reason,
+            # Denetim izi: acil-durdurma ANINDAKI seans kapsami (STOP kapsamini ARTIK belirlemez).
+            "sessionCoilIds": list(coil_ids)}
 
 
 def _emergency_stop_async(reason: str = "manual", mode: str = "Acil Durdurma"):

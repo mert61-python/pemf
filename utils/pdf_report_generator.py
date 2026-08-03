@@ -27,12 +27,34 @@ try:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    # DENETIM P1 (SSRF + askida kalma): ReportLab'in mini-XML ayristiricisi <img src="http://...">
+    # gorunce TIMEOUT'SUZ urlopen ile o adrese gider. Serbest-metin hasta notu PDF'e boyle
+    # girdiginde LAN'daki bir istemci backend'i keyfi bir adrese GET atmaya zorlayabiliyor ve
+    # yanit gelmezse SENKRON uc FastAPI threadpool'unu (vars. 40) kilitleyip API'yi yanit veremez
+    # hale getiriyordu. Dis kaynak cozumlemesini TAMAMEN kapat: rapor icin gerekli degil.
+    import reportlab.rl_config as _rl_config
+    _rl_config.trustedHosts = []      # hicbir dis host cozulmez
+    _rl_config.trustedSchemes = []    # http/https/ftp/file semalari kapali
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
 
 from database.treatment_history_db import get_treatment_db
+
+
+def _esc(text) -> str:
+    """Serbest-metni ReportLab mini-XML'ine vermeden ONCE kacir.
+
+    DENETIM P1: kullanici yazdigi metin (hasta notu, hasta adi) HIC kacirilmadan Paragraph'a
+    veriliyordu. Iki sonuc: (1) <img src="http://..."> ile SSRF/askida kalma (bkz. rl_config
+    sertlestirmesi), (2) '<b>kalin' gibi KAPANMAMIS bir etiket ValueError firlatip o seansin
+    PDF'ini KALICI olarak 500 yapiyordu. Kacirma ikisini de kokten keser: metin artik veri,
+    biçimlendirme dili degil.
+    """
+    from xml.sax.saxutils import escape
+    return escape("" if text is None else str(text))
 
 
 def _fmt_hms(epoch) -> str:
@@ -368,7 +390,7 @@ class PDFReportGenerator:
     
     def _add_single_session(self, story, session, session_num, include_patient_info):
         """Tek seans detayını ekle: başlık + bilgi tablosu + hasta notları + bobin çalışmaları."""
-        title = f"Seans {session_num} - {session.get('session_date', 'Bilinmiyor')}"
+        title = f"Seans {session_num} - {_esc(session.get('session_date', 'Bilinmiyor'))}"
         story.append(Paragraph(title, self.styles['Heading3']))
 
         details = self.db.get_session_details(session.get('id'))
@@ -392,7 +414,7 @@ class PDFReportGenerator:
         if patient_notes:
             story.append(Spacer(1, 10))
             story.append(Paragraph("<b>Hasta Notları:</b>", self.styles['UnicodeNormal']))
-            story.append(Paragraph(patient_notes, self.styles['PatientInfo']))
+            story.append(Paragraph(_esc(patient_notes), self.styles['PatientInfo']))
 
         # Bobin çalışmaları tablosu (best-effort; hata olursa mevcut PDF'i bozmadan atla).
         try:
@@ -485,7 +507,7 @@ class PDFReportGenerator:
 
     def _add_patient_header(self, story, session, patient_name):
         """Hasta raporu başlığını ekle"""
-        story.append(Paragraph(f"HASTA RAPORU: {patient_name.upper()}", self.styles['SectionHeader']))
+        story.append(Paragraph(f"HASTA RAPORU: {_esc(patient_name).upper()}", self.styles['SectionHeader']))
         
         # Hasta bilgileri - Parametrelerden al
         session_details = self.db.get_session_details(session.get('id'))

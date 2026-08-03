@@ -68,9 +68,26 @@ def save_session_notes(payload: SessionNotesPayload):
         # Aktif seansin DB durumunu al (varsa).
         with _api._session_lock:
             existing_sid = _api._active_session.get("db_session_id")
+            already_final = bool(_api._active_session.get("db_finalized"))
 
         if existing_sid:
-            # Var olan seans satirini GUNCELLE (yeni satir acma → cift-kayit yok).
+            if already_final:
+                # DENETIM P1: /api/session/stop GERCEK sureyi (now - started_epoch) + end_time'i
+                # zaten yazdi ve db_finalized bayragini dikti. Burada end_session'i TEKRAR
+                # cagirmak o alanlari EZIYORDU: istemci PLANLANAN sureyi gonderdiginde 4 dk'lik
+                # seans 20 dk gorunuyor; alan hic gelmezse (0 → None) end_session sureyi
+                # `now - start` ile yeniden hesapliyor → notu 45 dk sonra yazan operatorde
+                # 65 dk cikiyordu. db_finalized tam bunun icin yaziliyordu ama HIC OKUNMUYORDU.
+                # Artik yalniz not + parametre guncellenir; zaman/durum alanlarina dokunulmaz.
+                db.update_session_finalized_extras(
+                    existing_sid,
+                    notes=(payload.notes or None),
+                    frequency_hz=(payload.frequency or None),
+                    intensity_mt=(payload.intensity or None),
+                )
+                return {"status": "success", "session_id": existing_sid, "sensor_samples": 0,
+                        "updated": True, "durationPreserved": True}
+            # Seans DB'de henuz kapatilmamis (ör. /stop hic cagrilmadi) → normal finalize.
             db.end_session(
                 existing_sid,
                 parameters={"frequency_hz": payload.frequency, "intensity_mt": payload.intensity},

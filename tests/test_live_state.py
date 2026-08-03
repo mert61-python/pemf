@@ -154,6 +154,38 @@ def test_emergency_stop_all_defaults_to_all_coils_without_session(api):
     assert estopped == {6, 7, 8}, "seanssız estop ESP 6-8'i varsayılan kapsamalı"
 
 
+def test_emergency_stop_all_ignores_narrow_session_scope(api, monkeypatch):
+    """DENETIM P0 regresyonu: acil-durdurma ESP kapsamını AKTİF SEANSIN coil_ids'ine DARALTMAMALI.
+
+    Hata: `_estop_coils = [cid for cid in coil_ids if cid in ESP_COIL_IDS]`. Seans coil_ids=[1,2,3]
+    (yalnız STM) iken seans-DIŞI sürülen bobin 7'ye (ör. /api/coil/7/control) hiç stop yayınlanmıyor;
+    üstelik boş mqtt_results `_esp_ok=True` sayıldığı için yanıt "success"/confirmed=True dönüyor ve
+    canlı-durum 8 bobini de "durdu" gösteriyordu → operatöre YANLIŞ güvence. STM tarafı zaten
+    koşulsuz stop_all_coils() çağırıyordu; bu asimetri hatanın kasıtsız olduğunun kanıtı.
+    """
+    import time
+
+    published = []
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: published.append(topic) or True)
+
+    with api._session_lock:
+        api._active_session.update({
+            "is_active": True, "session_id": "narrow", "coil_ids": [1, 2, 3],
+            "duration_minutes": 20, "start_time": time.time(),
+        })
+    # Bobin 7 seans DIŞINDA sürülüyor
+    with api._live_state_lock:
+        api._live_state["coils"][6].update({"running": True, "dutyCycle": 40.0})
+
+    result = api._emergency_stop_all(reason="test")
+
+    estopped = {r["coilId"] for r in result["mqttResults"]}
+    assert estopped == {6, 7, 8}, f"dar seans kapsamı ESP stop'unu daraltmamalı; gelen: {estopped}"
+    assert any("/7/" in t for t in published), "seans-dışı bobin 7'ye STOP publish edilmeliydi"
+    # Seans kapsamı ARTIK yalnız denetim izinde; durdurma kapsamını belirlemez.
+    assert result["sessionCoilIds"] == [1, 2, 3]
+
+
 # ── B-2.2 refactor kilidi: lifespan event-loop'u live_state'e bağlar (tek davranış-değişim noktası) ─
 def test_lifespan_wires_event_loop_into_live_state():
     """Eskiden `api_server._event_loop` modül-global'iydi; B-2.2'de canlı-durum modülüne taşındı.

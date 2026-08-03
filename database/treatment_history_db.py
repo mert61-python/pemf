@@ -1555,6 +1555,48 @@ class TreatmentHistoryDB:
             self.logger.error(f"İstatistik getirme hatası: {e}")
             raise
     
+    def update_session_finalized_extras(self, session_id: int, notes: str = None,
+                                        frequency_hz=None, intensity_mt=None) -> None:
+        """ZATEN kapatilmis (finalized) bir seansta YALNIZ not/parametre alanlarini gunceller.
+
+        DENETIM P1: gozlem-notu akisi (POST /api/session/notes) eskiden end_session'i TEKRAR
+        cagiriyordu; end_session ise end_time / duration_minutes / session_status alanlarini
+        KOSULSUZ yeniden yaziyor ve duration_minutes=None gelirse sureyi `now - start` ile
+        YENIDEN hesapliyor. Sonuc: /stop'un yazdigi GERCEK tedavi suresi, istemcinin gonderdigi
+        PLANLANAN sure ile (4 dk -> 20 dk) ya da notun yazildigi ana kadar gecen sureyle
+        (45 dk sonra not -> 65 dk) eziliyordu = tibbi kayit bozulmasi. Bu metod zaman/durum
+        alanlarina DOKUNMAZ; yalnizca verilen alanlari gunceller.
+        """
+        try:
+            self._ensure_write_guardrail()
+            if not session_id:
+                return
+            sets, vals = [], []
+            if notes is not None:
+                sets.append('patient_notes = ?')
+                vals.append(self._redact_pii(notes))
+            if frequency_hz is not None:
+                sets.append('frequency_hz = ?')
+                vals.append(frequency_hz)
+            if intensity_mt is not None:
+                sets.append('intensity_mt = ?')
+                vals.append(intensity_mt)
+            if not sets:
+                return
+            sets.append('updated_at = CURRENT_TIMESTAMP')
+            vals.append(int(session_id))
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                # SET parcalari yalnizca yukaridaki SABIT literallerden gelir (kullanici girdisi
+                # DEGIL); tum degerler parametrelidir → enjeksiyon yuzeyi yok.
+                cursor.execute(
+                    'UPDATE treatment_sessions SET ' + ', '.join(sets) + ' WHERE id = ?', vals
+                )
+                conn.commit()
+            self.logger.info(f"Kapatilmis seansin not/parametreleri guncellendi: ID {session_id}")
+        except _DB_ERROR as e:
+            self.logger.error(f"update_session_finalized_extras hatasi: {e}")
+
     def update_session_notes(self, session_id: int, notes: str):
         """
         Tedavi seansının notlarını güncelle

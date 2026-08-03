@@ -149,6 +149,32 @@ def _trusted_nets():
     return _TRUSTED_NETS
 
 
+_TRUSTED_PROXIES = None
+
+
+def _trusted_proxies():
+    """DENETIM P0: BEYAN EDILMIS ters-proxy adresleri (PEMF_TRUSTED_PROXIES, virgullu IP/CIDR).
+
+    Yerel/uzak karari yalnizca soket kaynak-IP'sine + proxy BASLIKLARINA dayaniyordu. Basligi
+    EKLEMEYEN bir ters-proxy (repo'nun kendi docker/nginx'i boyleydi) arkasinda proxy'nin
+    konteyner IP'si 172.16.0.0/12'ye dustugu icin INTERNETTEN gelen her istek "LAN" sayilip
+    auth-muaf oluyordu — PEMF_REQUIRE_AUTH=1 olsa bile. Buraya yazilan adresten gelen istek
+    ASLA yerel sayilmaz (fail-closed), basliklar olmasa bile. Varsayilan BOS = davranis degismez.
+    """
+    global _TRUSTED_PROXIES
+    if _TRUSTED_PROXIES is None:
+        _TRUSTED_PROXIES = []
+        for c in (os.getenv("PEMF_TRUSTED_PROXIES", "") or "").split(","):
+            c = c.strip()
+            if not c:
+                continue
+            try:
+                _TRUSTED_PROXIES.append(ipaddress.ip_network(c, strict=False))
+            except Exception:
+                logger.warning("PEMF_TRUSTED_PROXIES gecersiz deger yok sayildi: %s", c)
+    return _TRUSTED_PROXIES
+
+
 def is_local_request(client_host, via_proxy: bool = False) -> bool:
     """Yerel/LAN isteği mi → auth MUAF. Tünel/uzak (Cloudflare) ise token ZORUNLU.
 
@@ -161,6 +187,9 @@ def is_local_request(client_host, via_proxy: bool = False) -> bool:
         if via_proxy:
             return False
         ip = ipaddress.ip_address(str(client_host or "").strip())
+        # Beyan edilmis proxy'den geliyorsa (baslik olmasa bile) UZAK kabul et → token iste.
+        if any(ip in net for net in _trusted_proxies()):
+            return False
         return any(ip in net for net in _trusted_nets())
     except Exception:
         return False

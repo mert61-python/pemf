@@ -620,6 +620,15 @@ def _ai_pro_loop():
                 _ext_active = bool(_api._active_session.get("is_active"))
             if not _ext_active:
                 logger.info("AI Pro: seans dışarıdan durduruldu → loop sonlandırılıyor.")
+                # DENETIM P0: bayrak TEMIZLENMEDEN break edilirse asagidaki teardown guard'i
+                # (:730 `if _ai_loop_active: return`) bunu "yeni loop basladi" sanip bobin
+                # STOP'unu ATLIYORDU. Dis durdurma (E-stop / sure-watchdog / /session/stop)
+                # surus penceresine denk geldiginde bobinler keep-alive ile ENERJILI kaliyordu.
+                # Sure-bitisi (:679) ve /ai/pro/stop (:813) yollari zaten temizliyor; yalniz bu
+                # yol asimetrikti. start_ai_pro atomik check-and-set yaptigindan (:775-778)
+                # bayrak True iken ikinci loop zaten baslayamaz → burada temizlemek guvenli;
+                # bundan SONRA yeni loop baslarsa teardown guard'i onu dogru korur.
+                _ai_loop_active = False
                 break
         except Exception:
             logger.debug("AI Pro loop: seans durum kontrolü hatası (yok sayıldı)", exc_info=True)  # B-4.2
@@ -812,12 +821,18 @@ def stop_ai_pro():
     with _ai_loop_lock:
         _ai_loop_active = False
 
-    # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-7 (Audit P1 #3). Eskiden yalnız
+    # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-8 (Audit P1 #3). Eskiden yalnız
     # stop_all_coils (STM) çağrılıyordu; kamerasız/mobil yolda loop-cleanup çalışmadığı için
     # ESP 6-7 STOP almadan enerjili kalıyordu. _stop_session_coils ikisini de durdurur + coil-run kapatır.
+    # DENETIM P1: kapsam range(1,8) idi = bobin 8 ATLANIYORDU. "AI (Auto)" landmark yolu
+    # (_drive_landmark_auto) 8 BOBINLI seans acar (start_ai_session(..., range(1,9)) + ESP 6,7,8'e
+    # duration=1800 publish) ve /ai/pro/start'i HIC cagirmaz → _ai_pro_loop teardown'u da yok.
+    # Boylece acik STOP komutundan sonra bobin 8, ESP'de 30 dk enerjili kaliyordu; onu durduracak
+    # baska yazilim katmani da yok (sure-watchdog ve /session/stop 'aktif seans yok' diye erken doner).
+    # Calismayan bobine STOP gondermek zararsiz/idempotenttir → kapsami TUM 8 bobine cikar.
     import servers.api_server as _api
     try:
-        _api._stop_session_coils(range(1, 8))
+        _api._stop_session_coils(range(1, 9))
     except Exception:
         logger.exception("stop_ai_pro: _stop_session_coils hatası")
     # AI seansını da kapat → süre-watchdog ve frame-geçidi 'seans aktif değil' görsün.

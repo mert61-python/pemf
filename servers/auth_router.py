@@ -9,6 +9,7 @@ api_server iç durumuna BAĞIMLI DEĞİL: yalnız `servers.auth` + `utils.secret
 fonksiyonları (fonksiyon-içi import, api_server'daki gibi). `_exchange_throttle` bu uca
 özeldi → route ile birlikte taşındı (aliaslama gerekmez). Yollar/yanıtlar/gövde aynen korunur.
 """
+import asyncio
 import logging
 import time as _time
 
@@ -162,7 +163,10 @@ async def _register_user(payload: _AuthCredentials):
         return {"ok": False, "error": "Geçerli bir e-posta adresi girin."}
     if not PASSWORD_RE.match(payload.password or ""):
         return {"ok": False, "error": "Şifre en az 8 karakter olmalı; en az bir büyük harf, bir küçük harf ve bir rakam içermeli."}
-    ok, err = get_auth_db().register(email, payload.password)
+    # DENETIM P1: PBKDF2 (200k tur) EVENT-LOOP'ta calisiyordu → kimliksiz istemci arka arkaya
+    # /register atarak tek-thread'li loop'u CPU'ya bogup TUM API'yi (WS yayinlari + seans
+    # uclari dahil) yanit veremez hale getirebiliyordu. Bloklayan hash'i thread'e al.
+    ok, err = await asyncio.to_thread(get_auth_db().register, email, payload.password)
     if not ok:
         return {"ok": False, "error": err}
     return {"ok": True, "email": email, "token": _issue_session_token(email)}
@@ -183,16 +187,16 @@ async def _login_user(payload: _AuthCredentials):
     # 'no_user' kodunu kayıt-yönlendirmesi için kullanıyor → açmak frontend koordinasyonu ister.
     import os as _os
     _generic = _os.getenv("PEMF_GENERIC_LOGIN_ERRORS", "0") == "1"
-    if not db.email_exists(email):
+    if not await asyncio.to_thread(db.email_exists, email):
         _throttle_note_fail(bucket)
         if _generic:
             try:
-                db.verify(email, payload.password or "")   # dummy: no_user'ı bad_password ile eşitle (timing)
+                await asyncio.to_thread(db.verify, email, payload.password or "")   # dummy: no_user'ı bad_password ile eşitle (timing)
             except Exception:
                 pass
             return {"ok": False, "code": "invalid", "error": "E-posta veya şifre hatalı."}
         return {"ok": False, "code": "no_user", "error": "Bu e-posta ile kayıtlı bir hesap yok. Yeni hesap için Kayıt Ol'u kullanın."}
-    if not db.verify(email, payload.password or ""):
+    if not await asyncio.to_thread(db.verify, email, payload.password or ""):
         _throttle_note_fail(bucket)
         if _generic:
             return {"ok": False, "code": "invalid", "error": "E-posta veya şifre hatalı."}
@@ -247,7 +251,7 @@ async def _reset_password(payload: _ResetPayload):
         return {"ok": False, "error": "Geçerli bir e-posta adresi girin."}
     if not PASSWORD_RE.match(payload.new_password or ""):
         return {"ok": False, "error": "Yeni şifre en az 8 karakter olmalı; bir büyük harf, bir küçük harf ve bir rakam içermeli."}
-    ok, err = get_auth_db().reset_password(email, payload.new_password)
+    ok, err = await asyncio.to_thread(get_auth_db().reset_password, email, payload.new_password)
     return {"ok": True} if ok else {"ok": False, "error": err}
 
 
