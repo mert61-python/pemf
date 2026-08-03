@@ -109,7 +109,8 @@ class HardwareController:
     def stop(self):
         self._keep_alive_stop.set()
 
-    def update_coil(self, coil_id: int, freq: float, duty: float, phase: float, duration: int, start: bool = True):
+    def update_coil(self, coil_id: int, freq: float, duty: float, phase: float, duration: int,
+                    start: bool = True, duration_seconds: float | None = None):
         """
         Belirli bir bobinin durumunu günceller ve STM32'ye yeni komut paketini fırlatır.
         duration birimi STM32 firmware ile uyumlu olarak dakikadır.
@@ -151,7 +152,17 @@ class HardwareController:
                 # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme. Sinirsiz birakmak
                 # yerine DURATION_MAX_MINUTES ust-kapak (geriye-uyumlu; keep-alive'a ragmen eninde durur).
                 _dl_min = dur_min if dur_min > 0 else DURATION_MAX_MINUTES
-                self._coil_deadline[coil_id] = time.monotonic() + _dl_min * 60
+                # DENETIM P3 (fazla-tedavi): STM firmware suresi DAKIKA granulerliginde oldugundan
+                # saniye→dakika donusumu YUKARI yuvarlanir (30 sn → 1 dk). Firmware icin bu dogru
+                # (tedaviyi yarida kesmez), ama YAZILIM deadline'i monotonik SANIYE tutar → gercek
+                # sureyi tam uygulayabilir. Cagiran hassas saniyeyi verirse onu kullan; vermezse
+                # eski davranis (dakika x 60). Boylece 30 sn'lik komut 30 sn surer, 60 sn degil;
+                # firmware yine 1 dk'lik yedek kapak olarak kalir.
+                if duration_seconds and duration_seconds > 0:
+                    _dl_secs = min(float(duration_seconds), DURATION_MAX_MINUTES * 60.0)
+                else:
+                    _dl_secs = _dl_min * 60
+                self._coil_deadline[coil_id] = time.monotonic() + _dl_secs
             else:
                 self.coils_state[coil_id]["is_running"] = False
                 self.coils_state[coil_id]["duty"] = 0.0

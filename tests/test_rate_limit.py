@@ -16,7 +16,13 @@ def api():
 
 @pytest.fixture(scope="module")
 def client(api):
-    return TestClient(api.app)
+    # DENETIM P3: cf-connecting-ip artik YALNIZCA soket LOOPBACK ise ya da soket beyan edilmis
+    # bir ters-proxy ise (PEMF_TRUSTED_PROXIES) rate-limit anahtari olarak kabul edilir —
+    # aksi halde saldirgan her istekte farkli bir deger uydurup siniri tamamen atlardi.
+    # Gercek dagitimda cloudflared cihazin KENDISINDE kosar ve 127.0.0.1'den iletir; testin de
+    # o yolu temsil etmesi icin istemci loopback'ten baglanir (TestClient varsayilani
+    # "testclient"tir, gecerli bir IP degildir).
+    return TestClient(api.app, client=("127.0.0.1", 45678))
 
 
 def test_remote_rate_limited_after_threshold(client, api, monkeypatch):
@@ -55,11 +61,33 @@ def test_health_exempt_from_rate_limit(client, api, monkeypatch):
     assert 429 not in codes
 
 
-def test_unresolvable_client_counted_failclosed(client, api, monkeypatch):
-    """Belirsiz/çözülemeyen istemci (TestClient host'u IP değil, proxy header YOK) UZAK sayılır
-    → fail-closed olarak sınırlanır. (Gerçek LAN muafiyeti is_local_request ile; TestClient bunu
-    header'sız simüle edemez — LAN muafiyeti izole birim testinde doğrulandı.)"""
+def test_unresolvable_client_counted_failclosed(api, monkeypatch):
+    """Belirsiz/çözülemeyen istemci (host IP DEĞİL, proxy header YOK) UZAK sayılır
+    → fail-closed olarak sınırlanır.
+
+    NOT: paylaşılan `client` fixture'ı artık loopback'ten bağlanıyor (cf-başlığı güven kapısı
+    için) ve loopback LAN-muaf olduğundan sınırlanmaz → bu test KENDİ istemcisini kurar ve
+    TestClient'ın çözülemeyen varsayılan host'unu ("testclient") kullanır."""
     monkeypatch.setattr(api, "_RL_REMOTE_MAX", 2)
     api._rl_hits.clear()
-    codes = [client.get("/api/system/info").status_code for _ in range(3)]
+    c = TestClient(api.app)          # varsayilan host: "testclient" (IP degil → cozulemez)
+    codes = [c.get("/api/system/info").status_code for _ in range(3)]
     assert codes[2] == 429  # header yoksa da fail-closed sayım (remote kabul)
+
+
+def test_cf_header_ignored_from_untrusted_source(api, monkeypatch):
+    """DENETIM P3 regresyonu: cf-connecting-ip GUVENILMEYEN kaynaktan gelirse anahtar OLMAMALI.
+
+    Hata: baslik kosulsuz kullaniliyordu → Cloudflare'siz kurulumda (dogrudan LAN / port-forward)
+    saldirgan her istekte farkli bir cf-connecting-ip uydurarak rate-limit kovasini degistirip
+    siniri TAMAMEN atlayabiliyordu.
+    """
+    monkeypatch.setattr(api, "_RL_REMOTE_MAX", 3)
+    api._rl_hits.clear()
+    # LAN'dan (loopback DEGIL, beyan edilmis proxy DEGIL) gelen istemci: baslik yok sayilmali
+    c = TestClient(api.app, client=("203.0.113.99", 40000))
+    h1 = {"cf-connecting-ip": "198.51.100.1"}
+    h2 = {"cf-connecting-ip": "198.51.100.2"}   # her istekte farkli "IP" uydur
+    codes = [c.get("/api/system/info", headers=(h1 if i % 2 else h2)).status_code
+             for i in range(6)]
+    assert 429 in codes, "uydurma cf-connecting-ip ile rate-limit ATLANMAMALI (tek kova = soket IP)"

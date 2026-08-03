@@ -25,8 +25,13 @@ def mocked_hw(api, monkeypatch):
     calls = {"stm": [], "mqtt": []}
 
     class FakeHW:
-        def update_coil(self, coil_id, freq, duty, phase, duration, start=True):
-            calls["stm"].append({"coil": coil_id, "start": start})
+        # İmza GERÇEK HardwareController.update_coil ile aynı olmalı; duration_seconds
+        # (DENETIM P3: dakikaya yuvarlanmış süre yerine hassas saniye) kaydedilir ki
+        # aşağıdaki test onun GERÇEKTEN iletildiğini doğrulayabilsin.
+        def update_coil(self, coil_id, freq, duty, phase, duration, start=True,
+                        duration_seconds=None):
+            calls["stm"].append({"coil": coil_id, "start": start,
+                                 "duration_min": duration, "duration_seconds": duration_seconds})
             return True
 
         def stop_all_coils(self):
@@ -105,3 +110,20 @@ def test_serial_write_failure_closes_port_and_drops_stale_payload():
     # (2) retry yaş sınırına tabi olmalı
     assert "_RETRY_MAX_AGE_S" in src, "NACK tekrar-oynatması yaş sınırlı olmalı"
     assert 0 < headless_core._RETRY_MAX_AGE_S <= 2.0, "yaş sınırı keep-alive turuna yakın olmalı"
+
+
+def test_precise_duration_seconds_forwarded_to_deadline(client, mocked_hw):
+    """DENETIM P3 regresyonu: hassas saniye donanım katmanına İLETİLMELİ.
+
+    STM firmware süresi DAKİKA granülerliğinde olduğundan saniye→dakika dönüşümü YUKARI
+    yuvarlanır: 30 sn'lik komut firmware'e 1 dk gider (2x fazla tedavi). Firmware için bu doğru
+    (tedaviyi yarıda kesmez), ama yazılım deadline'ı monotonik SANİYE tuttuğu için gerçek süreyi
+    tam uygulayabilir → çağrı hassas saniyeyi de geçmeli.
+    """
+    mocked_hw["stm"].clear()
+    r = client.post("/api/coil/1/control",
+                    json={"freq": 50, "duty": 25, "phase": 0, "duration": 30, "start": True})
+    assert r.status_code == 200
+    rec = next(c for c in mocked_hw["stm"] if c.get("coil") == 1)
+    assert rec["duration_min"] == 1, "firmware'e yukarı yuvarlanmış dakika gider (yarıda kesmesin)"
+    assert rec["duration_seconds"] == 30, "yazılım deadline'ı GERÇEK saniyeyi almalı"

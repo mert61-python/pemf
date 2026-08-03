@@ -198,11 +198,6 @@ async def add_security_headers(request: Request, call_next):
     Bu nesnenin tarayıcıda tanımlı olabilmesi için COOP ve COEP header'larının 'same-origin' / 'require-corp' olarak ayarlanması ZORUNLUDUR.
     Aksi halde uygulama beyaz ekranda kalır ve 'SharedArrayBuffer is not defined' hatası fırlatır.
     """
-    # API versiyonlama (audit B-8.1): /api/v1/* yolları /api/* handler'larına yönlendirilir → hem
-    # ESKİ istemciler (/api, "v1-uyumlu") hem YENİ istemciler (/api/v1) çalışır; route çoğaltmadan.
-    _p = request.scope.get("path", "")
-    if _p.startswith("/api/v1/"):
-        request.scope["path"] = "/api/" + _p[len("/api/v1/"):]
     # O-1: request-correlation-id — istemci X-Request-ID'sini (güvenli-karakter SÜZ → header/log-injection'a
     # karşı) kullan ya da üret; JSON-log + yanıt header'ında izlenir (7/24 saha debug).
     _rid = "".join(c for c in (request.headers.get("X-Request-ID") or "") if c.isalnum() or c in "._-")[:64] or _uuid.uuid4().hex[:12]
@@ -250,6 +245,16 @@ async def _auth_middleware(request: Request, call_next):
     """P0 #1: PEMF_REQUIRE_AUTH=1 iken donanım/hasta/seans endpoint'lerine token zorunlu kılar.
     İstemci: X-API-Key header veya ?token= query. OPTIONS(preflight) + muaf yollar serbesttir
     (emergency_stop/health/discovery/simulator). Auth KAPALIYKEN hiçbir şey değişmez (geriye uyumlu)."""
+    # API versiyonlama (audit B-8.1): /api/v1/* yolları /api/* handler'larına yönlendirilir → hem
+    # ESKİ istemciler (/api) hem YENİ istemciler (/api/v1) çalışır; route çoğaltmadan.
+    # DENETIM P3: bu yeniden-yazim eskiden add_security_headers icindeydi; Starlette'te en SON
+    # eklenen middleware EN DISTA calistigindan (kayit sirasi: headers, auth, rate-limit) o
+    # middleware auth'tan SONRA kosuyordu → auth, yeniden-YAZILMAMIS yolu goruyordu ve
+    # is_exempt("/api/v1/hardware/emergency_stop") tutmuyordu: fail-safe ACIL DURDURMA ucu
+    # /api/v1 alias'inda 401 veriyordu. Yeniden-yazim artik auth'tan ONCE.
+    _p = request.scope.get("path", "")
+    if _p.startswith("/api/v1/"):
+        request.scope["path"] = "/api/" + _p[len("/api/v1/"):]
     if request.method == "OPTIONS":
         return await call_next(request)
     # P1 audit 2026-06-28: FAIL-CLOSED. Eskiden auth yolundaki HERHANGI istisna (servers.auth
@@ -309,10 +314,29 @@ def _rl_client_ip(request: Request) -> str:
     X-Forwarded-For SPOOF-EDİLEBİLİR (istemci keyfi XFF gönderip her istekte anahtar-değiştirerek
     rate-limit'i atlar) → ANAHTAR olarak KULLANMA. Yalnız Cloudflare'in DOĞRULADIĞI cf-connecting-ip
     (cloudflared client-supplied değeri ezer) veya doğrudan SOKET IP'si."""
+    # DENETIM P3: cf-connecting-ip KOSULSUZ kullaniliyordu — soket-IP'nin gercekten guvenilir bir
+    # proxy olup olmadigi hic sorulmuyordu. Cloudflare'siz kurulumda (dogrudan LAN/port-forward)
+    # saldirgan her istekte farkli bir cf-connecting-ip uydurup rate-limit anahtarini degistirerek
+    # siniri TAMAMEN atlayabiliyordu. Baslik artik YALNIZCA istek beyan edilmis bir ters-proxy'den
+    # geliyorsa kullanilir (PEMF_TRUSTED_PROXIES); aksi halde SOKET IP'si esas alinir.
     cf = (request.headers.get("cf-connecting-ip") or "").strip()
+    _sock = request.client.host if request.client else "?"
+    # Baslik SU IKI durumda guvenilir: (a) istek LOOPBACK'ten geliyor — cloudflared cihazin
+    # KENDISINDE kosar ve tunel trafigini 127.0.0.1'den iletir, dolayisiyla gercek tunel
+    # istemcilerini birbirinden ayirmak icin baslik ZORUNLUDUR; (b) soket-IP acikca beyan
+    # edilmis bir ters-proxy (PEMF_TRUSTED_PROXIES). Diger her durumda (dogrudan LAN/port-forward)
+    # baslik saldirgan tarafindan uydurulabilir → SOKET IP'si esas alinir.
     if cf:
-        return cf.split(",")[0].strip()
-    return request.client.host if request.client else "?"
+        try:
+            import ipaddress as _ip
+
+            from servers.auth import _trusted_proxies
+            _a = _ip.ip_address(_sock)
+            if _a.is_loopback or any(_a in n for n in _trusted_proxies()):
+                return cf.split(",")[0].strip()
+        except Exception:
+            pass
+    return _sock
 
 
 @app.middleware("http")
@@ -546,6 +570,19 @@ def _on_mqtt_message_api(client, userdata, msg):
             elif msg_type == "alarm":
                 # ESP firmware'inin KENDİ güvenlik alarmı (overtemp / safety_violation / overcurrent).
                 # Backend eşik dayatmaz; donanım "tehlikedeyim" dediğinde TÜM bobinleri durdurur.
+                #
+                # DENETIM P3: RETAINED filtresi yoktu. Broker'da kalmis ESKI bir retained alarm,
+                # her MQTT yeniden-baglanmasinda (broker restart / ag dalgalanmasi) yeniden teslim
+                # edilip acil-durdurma tetikliyordu → suren tedavi durdurulur, operator sebebi
+                # goremez ("hayalet alarm"). Sensor dalinda (yukarida) `not is_retained` kosulu
+                # ZATEN vardi; alarm dali unutulmustu. Retained mesaj GECMISTEKI bir durumdur,
+                # CANLI bir tehlike bildirimi degil → yok say ama GORUNUR logla (fail-safe yon
+                # kaybi yok: gercek/canli alarm retain'siz gelir).
+                if is_retained:
+                    logging.warning(
+                        "ESP bobin %s icin RETAINED alarm alindi → acil-durdurma TETIKLENMEDI "
+                        "(broker'da kalmis eski mesaj; canli alarm retain'siz gelir).", coil_id_str)
+                    return
                 atype = payload.get("type") or payload.get("alarm") or payload.get("reason") or "alarm"
                 logging.error("ESP ALARM bobin %s: %s -> tum bobinler durduruluyor", coil_id_str, atype)
                 _push_notification(f"🚨 Bobin {coil_id_str} ALARM ({atype}) — tedavi güvenlik için durduruldu", "error")
@@ -756,9 +793,14 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     with _ws_lock:
         _ws_clients.append(websocket)
-    # Bağlantı açıldığında anlık durumu gönder
-    await websocket.send_text(json.dumps({"type": "snapshot", "data": _build_ws_snapshot()}, ensure_ascii=False))
+    # DENETIM P3: ilk snapshot gonderimi try/finally'nin DISINDA idi. Istemci accept ile ilk
+    # send_text arasinda koparsa (mobilde ekran-kilidi/ag gecisi siradan) send_text firlatir,
+    # `finally: _ws_clients.remove(...)` HIC calismaz ve OLU soket yayin listesinde KALIR →
+    # her broadcast onun icin 5 sn timeout bekler (tum filoyu yavaslatir) ve ancak o zaman
+    # dusurulur. try bloguna ALINDI: hata olsa da temizlik garanti.
     try:
+        # Bağlantı açıldığında anlık durumu gönder
+        await websocket.send_text(json.dumps({"type": "snapshot", "data": _build_ws_snapshot()}, ensure_ascii=False))
         while True:
             data = await websocket.receive_text()
             # İstemciden gelen komutları işle (şimdilik ping/pong)
@@ -1163,7 +1205,13 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
         stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
         state.hardware.update_coil(
-            coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min, start=payload.start
+            coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min,
+            start=payload.start,
+            # DENETIM P3: STM firmware suresi DAKIKA granulerliginde oldugundan saniye→dakika
+            # donusumu YUKARI yuvarlanir (30 sn → 1 dk = 2x fazla tedavi). Firmware icin bu dogru
+            # (yarida kesmez); ama yazilim deadline'i monotonik SANIYE tuttugundan gercek sureyi
+            # tam uygulayabilir → hassas saniyeyi de gecir. Firmware 1 dk'lik yedek kapak kalir.
+            duration_seconds=payload.duration,
         )
         # Asama-2: per-bobin run logging (best-effort, seansi bozmaz).
         if payload.start:
@@ -1222,7 +1270,13 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 continue
             stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
             state.hardware.update_coil(
-                coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min, start=payload.start
+                coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min,
+                start=payload.start,
+                # DENETIM P3: STM firmware suresi DAKIKA granulerliginde oldugundan saniye→dakika
+                # donusumu YUKARI yuvarlanir (30 sn → 1 dk = 2x fazla tedavi). Firmware icin bu dogru
+                # (yarida kesmez); ama yazilim deadline'i monotonik SANIYE tuttugundan gercek sureyi
+                # tam uygulayabilir → hassas saniyeyi de gecir. Firmware 1 dk'lik yedek kapak kalir.
+                duration_seconds=payload.duration,
             )
             # Asama-2: per-bobin run logging.
             if payload.start:
@@ -1495,7 +1549,14 @@ async def start_session(payload: SessionStartPayload):
     # ESP fail-safe (audit #4): broker erişilemezse ESP bobinleri (6-8) sessizce başlamaz →
     # operatöre WARN dön. Eskiden seans her hâlükârda 'success' dönüp ESP'ler ölü kalıyordu
     # ve kimse fark etmiyordu (STM bobinleri çalışsa da ESP yolu sessizce başarısızdı).
-    resp = {"status": "success", "session": _active_session}
+    # DENETIM P3: canli global `_active_session` REFERANSLA donuyordu. FastAPI yaniti bu
+    # fonksiyon dondukten SONRA serilestirir; arada bir arka-plan thread'i (sure-watchdog,
+    # AI loop, /stop) sozlugu mutate ederse serilestirme sirasinda "dictionary changed size
+    # during iteration" → 500, ya da yanit yari-eski/yari-yeni alanlar tasir. Kilit altinda
+    # SNAPSHOT dondur (istemci sozlesmesi ayni; yalniz yasam suresi guvenli).
+    with _session_lock:
+        _sess_snapshot = dict(_active_session)
+    resp = {"status": "success", "session": _sess_snapshot}
     if esp_coils and not _broker_reachable():
         msg = f"Sistem bağlantısı yok — ESP bobinleri {esp_coils} aktif OLMAYABİLİR (STM bobinleri çalışıyor)."
         logging.getLogger(__name__).warning("Seans başladı ama %s", msg)
@@ -1974,7 +2035,20 @@ def _daily_maintenance_loop():
                     log.warning("Retention temizleme hatasi", exc_info=True)
 
                 # 2) Haftada bir checkpoint + VACUUM.
-                if run_count % 7 == 0:
+                # DENETIM P3: kosul `run_count % 7 == 0` idi ve run_count 0'dan basladigi icin
+                # VACUUM "haftada bir" DEGIL, HER BACKEND ACILISINDAN ~60 sn SONRA calisiyordu.
+                # VACUUM tum DB'yi yeniden yazar ve OZEL kilit tutar; busy_timeout 5 sn oldugundan
+                # o pencerede baslayan bir seansin sensor/coil-run yazimlari "database is locked"
+                # ile dusebiliyordu (sessiz telemetri kaybi). Iki kapak: (a) ilk turda ATLA →
+                # restart dongusu her seferinde VACUUM tetiklemesin; (b) AKTIF SEANS varken ATLA →
+                # tedavi sirasinda DB'yi kilitleme (bir sonraki turda yapilir).
+                _sess_active = False
+                try:
+                    with _session_lock:
+                        _sess_active = bool(_active_session.get("is_active"))
+                except Exception:
+                    _sess_active = True   # emin degilsek VACUUM YAPMA (fail-safe)
+                if run_count > 0 and run_count % 7 == 0 and not _sess_active:
                     try:
                         if hasattr(db, "run_maintenance"):
                             db.run_maintenance()  # wal_checkpoint(TRUNCATE) + optimize
