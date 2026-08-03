@@ -9,6 +9,7 @@ DAVRANIŞ BİREBİR KORUNUR. api_server.py bu isimlere aynı-nesne alias'larıyl
 in-place mutasyon → çağrı yerleri değişmez). WS broadcast event-loop'a bağımlı: api_server lifespan
 `set_event_loop()` çağırır; `_event_loop` None iken broadcast erken-return no-op (thread güvenli)."""
 import json
+import logging
 import threading
 from datetime import datetime
 
@@ -43,38 +44,75 @@ def _ws_send_lock_get():
     return _ws_send_lock
 
 
+# DENETIM P2 (geri-basinc): her yayin icin AYRI bir _send_all() planlaniyordu ve hepsi TEK bir
+# _ws_send_lock'ta sıraya giriyordu. Yavas/yari-acik tek bir istemci her turda 5 sn tuttugu icin
+# arkada sinirsiz coroutine + JSON gövdesi birikiyordu (bellek + gecikme). Telemetri yayinlari
+# PERIYODIK ANLIK GORUNTU oldugundan bekleyen is birikince ESKISINI dusurmek dogru davranistir:
+# istemci bir sonraki turda zaten guncel durumu alir. Sinir normalde asla tetiklenmez.
+_WS_MAX_PENDING_BROADCASTS = 64
+_ws_pending = 0
+_ws_pending_lock = threading.Lock()
+_ws_dropped_total = 0
+
+
 def _ws_broadcast_sync(message: dict) -> None:
     """Thread-safe senkron broadcast (MQTT callback'lerinden çağrılır)."""
     import asyncio
+    global _ws_pending, _ws_dropped_total
     if not _event_loop or not _ws_clients:
         return
+    with _ws_pending_lock:
+        if _ws_pending >= _WS_MAX_PENDING_BROADCASTS:
+            _ws_dropped_total += 1
+            if _ws_dropped_total % 100 == 1:   # log seli olmasin
+                logging.getLogger(__name__).warning(
+                    "WS yayin kuyrugu dolu (%d bekleyen) → anlik goruntu dusuruldu "
+                    "(toplam %d). Yavas/yari-acik istemci olabilir.",
+                    _ws_pending, _ws_dropped_total)
+            return
+        _ws_pending += 1
     data = json.dumps(message, ensure_ascii=False)
     with _ws_lock:
         clients = list(_ws_clients)
 
     async def _send_all():
-        dead = []
-        async with _ws_send_lock_get():
-            for ws in clients:
-                try:
-                    # P-2: per-send timeout — yavaş/yarı-açık istemci tüm broadcast'i (→ tüm filoyu)
-                    # bloklamasın; 5sn'de yanıtlamayan istemci DÜŞÜRÜLÜR (except Exception TimeoutError'ı
-                    # da yakalar → dead). Sağlıklı istemci ms'de gönderir → davranış aynı.
-                    await asyncio.wait_for(ws.send_text(data), timeout=5.0)
-                except Exception:
-                    dead.append(ws)
-        if dead:
-            with _ws_lock:
+        global _ws_pending
+        try:
+            dead = []
+            async with _ws_send_lock_get():
+                for ws in clients:
+                    try:
+                        # P-2: per-send timeout — yavaş/yarı-açık istemci tüm broadcast'i (→ tüm filoyu)
+                        # bloklamasın; 5sn'de yanıtlamayan istemci DÜŞÜRÜLÜR (except Exception TimeoutError'ı
+                        # da yakalar → dead). Sağlıklı istemci ms'de gönderir → davranış aynı.
+                        await asyncio.wait_for(ws.send_text(data), timeout=5.0)
+                    except Exception:
+                        dead.append(ws)
+            if dead:
+                with _ws_lock:
+                    for d in dead:
+                        try:
+                            _ws_clients.remove(d)
+                        except ValueError:
+                            pass
+                # DENETIM P2: soket KAPATILMIYORDU — istemci yayin listesinden cikarilsa da
+                # TCP baglantisi acik kaliyor, istemci kendini "bagli" sanip DONMUS telemetri
+                # gostermeye devam ediyordu (yeniden baglanma da tetiklenmez). Acikca kapat →
+                # istemci kopmayi gorur ve reconnect merdivenini calistirir.
                 for d in dead:
                     try:
-                        _ws_clients.remove(d)
-                    except ValueError:
+                        await d.close(code=1011)   # 1011 = internal error / sunucu dusurdu
+                    except Exception:
                         pass
+        finally:
+            with _ws_pending_lock:
+                _ws_pending -= 1
 
     try:
         _event_loop.call_soon_threadsafe(lambda: asyncio.ensure_future(_send_all(), loop=_event_loop))
     except Exception:
-        pass
+        with _ws_pending_lock:
+            _ws_pending -= 1   # planlanamadi → sayaci geri al (sizinti olmasin)
 
 
 # ── Canlı Durum (Live State) ───────────────────────────────────────

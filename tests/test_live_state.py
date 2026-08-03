@@ -225,3 +225,26 @@ def test_get_active_session_is_readonly_on_expiry(api):
             "get_active_session global state'i mutate etti → watchdog STOP'unu bastırıp "
             "bobinler fiziksel açık kalabilir (GÜVENLİK regresyonu)"
         )
+
+
+def test_ws_broadcast_closes_dead_clients_and_bounds_backlog(api):
+    """DENETIM P2 regresyonu: ölü WS istemcisi KAPATILMALI + yayın kuyruğu SINIRLI olmalı.
+
+    (1) Yanıt vermeyen istemci yayın listesinden çıkarılıyordu ama SOKET kapatılmıyordu →
+        istemci kendini 'bağlı' sanıp DONMUŞ telemetri gösteriyor, reconnect de tetiklenmiyordu.
+    (2) Her yayın için ayrı coroutine planlanıp tek kilitte sıraya giriyordu; yavaş bir istemci
+        her turda 5 sn tuttuğu için arkada sınırsız iş + JSON gövdesi birikiyordu.
+    """
+    import inspect
+
+    from servers import live_state
+
+    src = inspect.getsource(live_state._ws_broadcast_sync)
+    assert ".close(" in src, "düşürülen istemcinin soketi kapatılmalı"
+    assert "_WS_MAX_PENDING_BROADCASTS" in src, "yayın kuyruğu sınırlanmalı (geri-basınç)"
+    assert live_state._WS_MAX_PENDING_BROADCASTS > 0
+
+    # Sayaç sızmamalı: event-loop yokken erken dönüşte artırılmamalı
+    before = live_state._ws_pending
+    live_state._ws_broadcast_sync({"type": "noop"})
+    assert live_state._ws_pending == before, "erken dönüşte bekleyen sayacı sızmamalı"

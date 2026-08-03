@@ -55,3 +55,23 @@ def test_watchdog_keeps_active_unexpired_session(monkeypatch):
         # temizle
         with api_server._session_lock:
             api_server._active_session["is_active"] = False
+
+
+def test_watchdog_uses_monotonic_not_wallclock(monkeypatch):
+    """DENETIM P2 regresyonu: süre-watchdog DUVAR SAATİ farkıyla çalışmamalı.
+
+    Hata: `_t.time() - start_time`. NTP düzeltmesi / DST / elle saat değişimi İLERİ giderse seans
+    ERKEN kesilir, GERİ giderse planlanandan UZUN sürer (maruziyet artar). start_time istemciye
+    gösterim için gittiğinden epoch olarak korundu; güvenlik kararı ayrı monotonic işaretle verilir.
+    """
+    import inspect
+
+    from servers import api_server as api
+
+    src = inspect.getsource(api._session_duration_watchdog)
+    assert "start_mono" in src, "watchdog monotonic işareti kullanmalı"
+    assert "_t.monotonic()" in src, "geçen süre monotonic saatten hesaplanmalı"
+
+    # Her iki seans kurucusu da işareti dikmeli (yoksa watchdog eski yola düşer)
+    assert '"start_mono"' in inspect.getsource(api.start_session)
+    assert '"start_mono"' in inspect.getsource(api.start_ai_session)

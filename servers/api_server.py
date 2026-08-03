@@ -447,9 +447,25 @@ def _esp_telemetry_watchdog():
                         coil["connected"] = False
                         coil["running"] = False
                         changed.append((cid, dict(coil)))
+            # DENETIM P2: bobin YALNIZCA "durdu" ISARETLENIYORDU; gercek bir STOP komutu
+            # GONDERILMIYORDU. ESP guc kaybiyla degil de WiFi/broker kopmasiyla sessizlestiyse
+            # kendisi hala son `start` komutuyla SURUYOR olabilir (kendi duration'i bitene dek).
+            # Bu durumda UI "durdu" gosterirken bobin fiziksel olarak enerjili kalirdi — tam da
+            # operatore yanlis guvence veren desen. Broker'a ulasilabiliyorsa STOP yayinla:
+            # ESP geri geldiginde retained/yeniden-baglanma ile komutu alir; ulasilamiyorsa
+            # zaten yapabilecegimiz bir sey yok (log'a dusulur).
             for cid, snap in changed:
+                try:
+                    _mqtt_publish(f"pemf/coil/{cid}/control", {
+                        "command": "stop",
+                        "command_id": f"stale_{cid}_{int(time.time() * 1000)}",
+                        "reason": "telemetry_stale",
+                    })
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "esp watchdog: bobin %s STOP publish edilemedi", cid, exc_info=True)
                 _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
-                _push_notification(f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı", "warning")
+                _push_notification(f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi", "warning")
         except Exception:
             logging.exception("esp telemetry watchdog error")
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
@@ -1288,6 +1304,11 @@ async def start_session(payload: SessionStartPayload):
             "phase": payload.phase,
             "duration_minutes": payload.duration_minutes,
             "start_time": time.time(),
+            # DENETIM P2: sure-watchdog DUVAR SAATI farkiyla calisiyordu. NTP duzeltmesi/DST/
+            # elle saat degisimi ILERI giderse seans ERKEN kesilir, GERI giderse planlanandan
+            # UZUN surer (maruziyet artar). start_time istemciye/gosterime gittigi icin epoch
+            # olarak KORUNDU; guvenlik karari icin AYRI monotonic isaret kullanilir.
+            "start_mono": time.monotonic(),
             "started_epoch": time.time(),
             "coil_ids": coil_ids,
             "db_session_id": None,   # Asama-2: seans BASINDA olusan gercek int DB session_id
@@ -1523,6 +1544,7 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             "phase": 0.0,
             "duration_minutes": int(duration_minutes),
             "start_time": prev.get("start_time") if cont else _t.time(),
+            "start_mono": prev.get("start_mono") if cont else _t.monotonic(),
             "coil_ids": list(coil_ids),
             # DENETIM P1: bu iki alan HIC kurulmuyordu → _flush_sensor_buffer_if_active
             # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
@@ -1646,7 +1668,10 @@ def _session_duration_watchdog():
                 sess = dict(_active_session)
             if sess.get("is_active"):
                 total = int(sess.get("duration_minutes", 0)) * 60
-                if total > 0 and (_t.time() - sess.get("start_time", _t.time())) >= total:
+                _sm = sess.get("start_mono")
+                _elapsed = ((_t.monotonic() - _sm) if _sm is not None
+                            else (_t.time() - sess.get("start_time", _t.time())))
+                if total > 0 and _elapsed >= total:
                     # Audit P2 (TOCTOU seal): fiziksel STOP'tan HEMEN önce seansın HÂLÂ aynı olduğunu
                     # doğrula — aksi halde operatör A'yı durdurup B'yi aynı bobinlerde başlattıysa bayat
                     # snapshot B'nin TAZE bobinlerini durdurur + coil-run'larını bozar (pencere ~µs'e iner).
