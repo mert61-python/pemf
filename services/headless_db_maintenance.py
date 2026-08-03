@@ -7,6 +7,7 @@ periyodik çağırır. apply_data_retention_policy() purge (sensor/event/outbox)
 zaten içerir.
 """
 import logging
+import os
 import threading
 import time
 from datetime import datetime
@@ -80,10 +81,29 @@ class HeadlessDBMaintenance:
         except Exception:
             logger.exception("disk check hatasi")
 
+    @staticmethod
+    def _retain_days(env_name: str, default: int) -> int:
+        """Retention suresi (gun). 0 → O ADIM KAPALI. Gecersiz deger → varsayilan."""
+        try:
+            return int(os.environ.get(env_name, default))
+        except (TypeError, ValueError):
+            logger.warning("%s gecersiz — varsayilan %d gun kullaniliyor.", env_name, default)
+            return default
+
     def _run_maintenance(self):
         try:
             m = self.db.run_maintenance()
-            r = self.db.apply_data_retention_policy()
+            # DENETIM P2: apply_data_retention_policy() PARAMETRESIZ cagriliyordu → sabit-kodlu
+            # 90/365/30/365 gun ZORLANIYORDU ve bobin-calisma kayitlari + seans olaylari
+            # GERI DONUSSUZ siliniyor, hasta/operator adlari maskeleniyordu; opt-out YOKTU.
+            # Tibbi-hukuki saklama suresi ulkeye/kliniğe gore degisir → operator karari.
+            # 0 = o adim KAPALI (hicbir sey silinmez/maskelenmez).
+            r = self.db.apply_data_retention_policy(
+                sensor_retain_days=self._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90),
+                event_retain_days=self._retain_days("PEMF_RETAIN_EVENT_DAYS", 365),
+                dead_outbox_retain_days=self._retain_days("PEMF_RETAIN_OUTBOX_DAYS", 30),
+                pii_retain_days=self._retain_days("PEMF_RETAIN_PII_DAYS", 365),
+            )
             logger.info("DB bakim+retention tamam: maintenance=%s retention=%s", m, r)
         except Exception:
             logger.exception("maintenance hatasi")

@@ -1167,23 +1167,36 @@ class TreatmentHistoryDB:
                                     event_retain_days: int = 365,
                                     dead_outbox_retain_days: int = 30,
                                     pii_retain_days: int = 365) -> Dict[str, int]:
-        """Toplu retention policy uygula (ticari operasyon bakımı)."""
+        """Toplu retention policy uygula (ticari operasyon bakımı).
+
+        DENETIM P2: her sure <= 0 ise O ADIM ATLANIR (kapali). Eskiden adimlar kosulsuzdu ve
+        cagiran hicbir parametre gecirmedigi icin sabit 90/365/30/365 gun ZORLANIYORDU:
+        bobin-calisma kayitlari ve seans olaylari GERI DONUSSUZ siliniyor, hasta/operator
+        adlari maskeleniyordu — opt-out YOKTU. Tibbi-hukuki saklama suresi ulkeye/kliniğe gore
+        degisir (KVKK silmeyi ister, dava dosyasi saklamayi) → operator karari olmali.
+        Yapilandirma: services/headless_db_maintenance.py (PEMF_RETAIN_* env degiskenleri).
+        """
         report = {
             'sensor_samples_removed': 0,
+            'coil_runs_removed': 0,
             'session_events_removed': 0,
             'dead_outbox_removed': 0,
             'sessions_pii_redacted': 0,
             'parameters_pii_redacted': 0,
         }
 
-        report['sensor_samples_removed'] = self.purge_old_sensor_samples(sensor_retain_days)
-        report['coil_runs_removed'] = self.purge_old_coil_runs(sensor_retain_days)  # P2 audit 2026-06-28
-        report['session_events_removed'] = self.purge_old_session_events(event_retain_days)
-        report['dead_outbox_removed'] = self.purge_old_dead_outbox(dead_outbox_retain_days)
+        if sensor_retain_days and sensor_retain_days > 0:
+            report['sensor_samples_removed'] = self.purge_old_sensor_samples(sensor_retain_days)
+            report['coil_runs_removed'] = self.purge_old_coil_runs(sensor_retain_days)  # P2 audit 2026-06-28
+        if event_retain_days and event_retain_days > 0:
+            report['session_events_removed'] = self.purge_old_session_events(event_retain_days)
+        if dead_outbox_retain_days and dead_outbox_retain_days > 0:
+            report['dead_outbox_removed'] = self.purge_old_dead_outbox(dead_outbox_retain_days)
 
-        pii_report = self.redact_old_session_pii(pii_retain_days)
-        report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
-        report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
+        if pii_retain_days and pii_retain_days > 0:
+            pii_report = self.redact_old_session_pii(pii_retain_days)
+            report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
+            report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
 
         return report
     

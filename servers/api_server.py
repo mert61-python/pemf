@@ -1393,6 +1393,13 @@ async def start_session(payload: SessionStartPayload):
         _active_coil_runs.clear()
     with _coil_run_stats_lock:
         _coil_run_stats.clear()
+    # DENETIM P2 (hasta-verisi karismasi): _minute_acc bu temizlikte YOKTU. Tek temizleme
+    # noktasi _emit_minute_averages'ti; onu ise SADECE dakika-loop'u ve /api/session/stop
+    # cagiriyor. Sure-watchdog otomatik bitisi ve acil-durdurma is_active=False yaptigindan
+    # /stop "Aktif seans yok" ile erken doner → birikmis kismi dakika HIC bosaltilmaz ve
+    # SONRAKI hastanin ilk dakika-ortalamasina karisirdi (tibbi kayit kirlenmesi).
+    with _minute_acc_lock:
+        _minute_acc.clear()
 
     # Audit P1 (TOCTOU): DB-persist await'i sırasında eşzamanlı /stop is_active=False yapmış olabilir.
     # Bobinleri ENERJİLEMEDEN ÖNCE yeniden doğrula — aksi halde bobinler fiziksel açılır ama
@@ -1575,6 +1582,59 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
 
 
+def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: str = "auto") -> int:
+    """Seansi DB'de KAPAT: kismi dakika-ortalamasi + sensor buffer flush + end_session/ended_epoch.
+
+    DENETIM P2: /api/session/stop DISINDAKI bitis yollari DB'ye HIC dokunmuyordu:
+      - sure-watchdog otomatik tamamlanmasi (frontend timer bitiminde /stop CAGIRMAZ → NORMAL
+        tam-sure bitisi de bu yoldan gecer),
+      - acil durdurma (_emergency_stop_all).
+    Sonuc: treatment_sessions satiri kalici 'active' kalir (KPI/gecmis sisir), son dakikanin
+    sensor/sicaklik verisi ve acik coil-run'lar KAYBOLUR — acil durdurmada guvenlik olayinin
+    telemetri kaniti da yok olur. SENKRONDUR: yalniz thread'lerden cagrilir (watchdog / e-stop
+    thread'i), event-loop'tan DEGIL.
+    """
+    if not db_session_id:
+        return 0
+    # Acik coil-run'lari kapat (watchdog yolunda _stop_session_coils zaten yapar; e-stop yapmaz).
+    for _cid in (coil_ids or []):
+        try:
+            _finish_coil_run(_cid)
+        except Exception:
+            logging.getLogger(__name__).debug("finalize: _finish_coil_run(%s) hatasi", _cid, exc_info=True)
+    flushed = 0
+    try:
+        _emit_minute_averages()   # birikmis KISMI dakikayi da buffer'a dok (yoksa kaybolur)
+    except Exception:
+        logging.exception("finalize: dakika-ortalamasi hatasi")
+    try:
+        with _sensor_sample_buffer_lock:
+            pending = list(_sensor_sample_buffer)
+            _sensor_sample_buffer.clear()
+        db = _get_treatment_db()
+        if db is not None:
+            if pending:
+                try:
+                    flushed = db.add_sensor_samples_batch(db_session_id, pending)
+                except Exception:
+                    logging.exception("finalize: sensor flush hatasi")
+            try:
+                _now = time.time()
+                dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
+                db.end_session(db_session_id, duration_minutes=dur_min)
+                db.set_session_meta(db_session_id, ended_epoch=_now)
+            except Exception:
+                logging.exception("finalize: end_session hatasi")
+        # notes ucu cift-kayit yapmasin (bkz. session_router db_finalized kontrolu).
+        with _session_lock:
+            if _active_session.get("db_session_id") == db_session_id:
+                _active_session["db_finalized"] = True
+        logging.info("Seans DB'de kapatildi (%s): db_id=%s, %d sensor satiri", reason, db_session_id, flushed)
+    except Exception:
+        logging.exception("finalize: kalici kayit hatasi")
+    return flushed
+
+
 def _session_duration_watchdog():
     """KRİTİK GÜVENLİK: seans süresi dolunca bobinleri DONANIM düzeyinde durdurur.
     Firmware keep-alive süreyi her sn tazelediğinden tek başına auto-stop OLMAZ; bu watchdog
@@ -1599,6 +1659,11 @@ def _session_duration_watchdog():
                     with _session_lock:
                         if _active_session.get("session_id") == sess.get("session_id"):
                             _active_session["is_active"] = False
+                    # DENETIM P2: seansi DB'de de KAPAT. Frontend timer bitiminde /stop
+                    # cagirmadigindan NORMAL tam-sure bitisi buradan gecer; eskiden satir
+                    # kalici 'active' kaliyor ve son dakikanin sensor verisi kayboluyordu.
+                    _finalize_session_db(sess.get("db_session_id"), sess.get("started_epoch"),
+                                         reason="sure-doldu")
                     try:
                         update_live_session_state(is_active=False, mode="Sistem Hazır")
                         _ws_broadcast_sync({"type": "session_completed", "data": {"session_id": sess.get("session_id")}})
@@ -1772,6 +1837,20 @@ def _sensor_persistence_loop():
                         try:
                             cid = int(coil.get("id"))
                         except Exception:
+                            continue
+                        # DENETIM P2 (sahte olcum): STM bobinlerinde (1-5) sicaklik/akim/alan
+                        # telemetrisi YOKTUR — seri protokol yalniz duty/phase/freq/duration
+                        # dondurur ve update_live_coil_from_stm bu alanlara hic dokunmaz. Ama
+                        # _live_state baslangic degeri 0.0 oldugu icin "is not None" kontrolu
+                        # onu GERCEK olcum sayip DB'ye "temperature_c=0.0, sample_count=30"
+                        # yaziyordu → gecmis/PDF raporunda "olculmedi" yerine "0.0 °C olculdu"
+                        # gorunuyor, asiri-isinma analizi ve hasta sahibine giden rapor yanlis
+                        # veriyle uretiliyordu. Olcum KAYNAGI (gercek MQTT telemetrisi) yoksa
+                        # hic biriktirme → _emit_minute_averages n<=0 satirini zaten atlar.
+                        # NOT: 0.0-yerine-NULL yolu BILEREK secilmedi; asagi-akis (PDF/KPI/grafik)
+                        # 0.0 bekliyor (onceki denetimin bilincli karari) — sahte satiri hic
+                        # uretmemek ayni sonucu downstream riski OLMADAN verir.
+                        if _coil_last_telemetry.get(cid - 1) is None:
                             continue
                         temp = coil.get("objectTemp")
                         cur = coil.get("currentA")
@@ -2088,6 +2167,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     import time as _t
     with _session_lock:
         coil_ids = _active_session.get("coil_ids") or list(range(1, 9))
+        _was_active = bool(_active_session.get("is_active"))
+        _db_sid = _active_session.get("db_session_id")
+        _started_ep = _active_session.get("started_epoch")
         _active_session["is_active"] = False
     stm_stopped = False
     if state.hardware:
@@ -2126,6 +2208,20 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     for coil in snapshots:
         _ws_broadcast_sync({"type": "coil_status", "coilId": coil["id"], "data": coil})
     _ws_broadcast_sync({"type": "emergency_stop", "data": {"timestamp": _t.time(), "reason": reason}})
+    # DENETIM P2: acil durdurma seansi DB'de KAPATMIYOR, acik coil-run'lari ve son dakikanin
+    # sensor verisini kaybediyordu → guvenlik olayinin telemetri KANITI yok oluyordu. Bobinler
+    # ZATEN durduruldu (yukarida); bu blok yalnizca kaydi tamamlar, durdurmayi geciktirmez.
+    # Denetim izi olarak ayrica session_events'e emergency_stop olayi yazilir.
+    if _was_active and _db_sid:
+        try:
+            _get_treatment_db().record_session_event(
+                _db_sid, "emergency_stop",
+                payload={"reason": reason, "mode": mode, "coil_ids": list(coil_ids)},
+                severity="critical",
+            )
+        except Exception:
+            logging.getLogger(__name__).warning("estop: session_event yazilamadi", exc_info=True)
+        _finalize_session_db(_db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}")
     # Audit P2: ust-seviye status'u transport sonuclarindan TURET — eskiden kosulsuz 'success'
     # donuyordu (STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi' saniyordu). Bir transport
     # dogrulanamadiysa 'partial'/'error' don + confirmed=False (keep-alive/firmware fiziksel-telafi P2).

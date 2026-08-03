@@ -132,3 +132,50 @@ def test_external_stop_runs_teardown_and_stops_coils(client, monkeypatch):
     assert stopped["stm"] == 1, "teardown STM bobinlerini durdurmalıydı (guard yanlış atladı)"
     assert any("/6/" in t or "/7/" in t or "/8/" in t for t in stopped["esp"]), \
         "teardown ESP 6-8'e STOP publish etmeliydi"
+
+
+def test_target_lost_stops_coils_after_streak(client, monkeypatch):
+    """DENETIM P2 regresyonu: AI Pro hedefi kaybedince bobinler DURDURULMALI.
+
+    Hata: 'localized=False' dalında yalnızca yeni komut gönderilmiyordu; enerjili bobinlere STOP
+    gitmiyordu. STM keep-alive son duty paketini saniyede bir tazelediği için hayvan kabinden
+    çıkınca hedefsiz tedavi seans sonuna kadar sürüyordu — üstelik WS perCoil %0 yayınladığından
+    operatör bobinleri kapalı sanıyordu. Tek kare kaybında durdurmak kırılgan olurdu → ardışık
+    _AI_LOST_STOP_STREAK kayıptan sonra durur, hedef bulununca sürüş devam eder.
+    """
+    import servers.ai_router as air
+    import servers.api_server as api
+
+    assert air._AI_LOST_STOP_STREAK >= 2, "tek kare kaybında durdurmak tedaviyi kırılgan yapar"
+
+    stopped = []
+    monkeypatch.setattr(api, "_stop_session_coils", lambda ids: stopped.append(list(ids)))
+    monkeypatch.setattr(air.cv2, "VideoCapture", _FakeCap)
+    monkeypatch.setattr(air, "_get_or_load_kedi", lambda: None)
+    monkeypatch.setattr(air, "_get_or_load_catorgan", lambda: None)
+    # Lokalizasyon HER ZAMAN başarısız → ardışık kayıp
+    monkeypatch.setattr(air, "_localize_organ", lambda *a, **k: (False, 0.0, 0.0, 0.0, 0.0, None))
+
+    with api._session_lock:
+        api._active_session.clear()
+        api._active_session.update({"is_active": True, "session_id": "lost", "mode": "AI Pro",
+                                    "coil_ids": list(range(1, 8)), "duration_minutes": 20})
+    air._ai_started_at = 0.0          # süre kontrolünü devre dışı bırak
+    air._ai_loop_active = True
+
+    # Yalnız streak'e ulaşacak kadar iterasyon koştur, sonra döngüyü kes
+    import threading
+    t = threading.Thread(target=air._ai_pro_loop, daemon=True)
+    t.start()
+    for _ in range(80):               # ~8 s üst sınır (iterasyon ~0.1 s)
+        if stopped:
+            break
+        __import__("time").sleep(0.1)
+    air._ai_loop_active = False
+    t.join(timeout=5)
+
+    assert stopped, "ardışık hedef kaybından sonra bobinlere STOP gönderilmeliydi"
+    assert set(stopped[0]) == set(range(1, 8)), f"AI Pro bobinleri (1-7) durdurulmalı: {stopped[0]}"
+
+    with api._session_lock:
+        api._active_session.clear()

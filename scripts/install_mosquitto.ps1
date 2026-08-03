@@ -105,14 +105,21 @@ $firewallRule = Get-NetFirewallRule -DisplayName "Mosquitto MQTT" -ErrorAction S
 if ($firewallRule) {
     Write-Host "  [✓] Firewall kuralı zaten mevcut." -ForegroundColor Green
 } else {
+    # DENETİM P2 (yetkisiz bobin sürme): kural -Profile Any ile TÜM ağ profillerine (Public
+    # dahil) açılıyordu. Broker yapılandırması allow_anonymous=true olduğundan, kliniğin
+    # misafir/halka açık WiFi'sindeki HERHANGİ bir cihaz pemf/coil/{6,7,8}/control konusuna
+    # publish edip ESP bobinlerini kimliksiz sürebilirdi. ESP bobinleri yalnız yerel hotspot/
+    # LAN üzerinden bağlanır → Private profil yeterlidir; Public'e açmanın meşru gerekçesi yok.
+    # Kapsam ayrıca yerel alt ağlarla sınırlandırıldı (RFC1918 + hotspot 192.168.137.0/24).
     New-NetFirewallRule `
         -DisplayName "Mosquitto MQTT" `
         -Direction Inbound `
         -Protocol TCP `
         -LocalPort 1883 `
         -Action Allow `
-        -Profile Any `
-        -Description "PEMF Gateway - ESP32 cihazlarından MQTT bağlantılarına izin ver" | Out-Null
+        -Profile Private,Domain `
+        -RemoteAddress LocalSubnet,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 `
+        -Description "PEMF Gateway - ESP32 cihazlarindan MQTT (yalniz yerel ag; Public profil KAPALI)" | Out-Null
     Write-Host "  [✓] Firewall kuralı eklendi." -ForegroundColor Green
 }
 

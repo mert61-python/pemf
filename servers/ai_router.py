@@ -368,6 +368,7 @@ _ORGAN_NAMES = {0: "Tüm Vücut", 1: "Mide", 2: "Böbrek", 3: "Karaciğer", 4: "
 # ── cat_organ organ-lokalizasyon (el takibi YERİNE; kullanıcı kararı: MediaPipe Hands SÖKÜLDÜ) ──
 # cat_organ ~1-4sn/kare (ağır) → loop HER KAREDE çalıştırmaz; periyodik lokalize + cache.
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
+_AI_LOST_STOP_STREAK = 3   # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
 _MIN_RELIABILITY = 0.3   # organ güveni bu eşiğin altında → "bulunamadı" → coil SÜRÜLMEZ
 _ai_relocalize = True    # bir sonraki karede zorla yeniden-lokalize (start/organ-değişim/yeniden-konumla)
 _ai_organ_cache = {
@@ -611,6 +612,7 @@ def _ai_pro_loop():
         _ai_loop_active = False
         return
 
+    _lost_streak = 0   # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
     while _ai_loop_active:
         start_time = time.time()
         # Dış STOP (acil-durdur / süre-watchdog / STM-disconnect / /session/stop) AI loop'u da durdursun.
@@ -680,10 +682,31 @@ def _ai_pro_loop():
                     break
                 D, P, e_field = _predict_and_drive(x_mm, y_mm, z_mm, _ai_organ_id)
                 _drive_coils_ai_pro(D, P)
+                _lost_streak = 0          # hedef yeniden bulundu
             else:
                 D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
+                # DENETIM P2: bu dalda YALNIZCA yeni komut gonderilmiyordu; halihazirda enerjili
+                # bobinlere STOP GITMIYORDU. STM keep-alive son duty paketini saniyede bir
+                # tazeledigi ve ESP kendi `duration`i boyunca surdugu icin, hayvan kabinden
+                # cikinca/kimildayinca (guven < _MIN_RELIABILITY) HEDEFSIZ tedavi seans sonuna
+                # kadar devam ediyordu. Ustelik WS `perCoil` %0 yayinladigi icin operator
+                # bobinleri kapali saniyordu. _MIN_RELIABILITY yorumunun NIYETI zaten
+                # "coil SURULMEZ"di; artik aktif olarak durduruluyor.
+                # Tek kare kaybinda durdurmak tedaviyi kirilgan yapar (tespit anlik sekebilir) →
+                # ARDISIK _AI_LOST_STOP_STREAK kayiptan sonra durdur, tekrar bulununca surmeye
+                # devam eder (seansi bitirmez; sure-watchdog + teardown kendi isini gorur).
+                _lost_streak += 1
+                if _lost_streak == _AI_LOST_STOP_STREAK:
+                    try:
+                        import servers.api_server as _apx2
+                        _apx2._stop_session_coils(range(1, 8))
+                        logger.warning(
+                            "AI Pro: hedef %d ardisik iterasyondur bulunamadi → bobinler DURDURULDU "
+                            "(hedef yeniden bulunursa surus devam eder).", _lost_streak)
+                    except Exception:
+                        logger.exception("AI Pro: hedef-kayip STOP hatasi")
 
-            remaining = max(0, int(_ai_duration_min * 60 - (time.time() - _ai_started_at))) if _ai_started_at else 0
+            remaining = max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at))) if _ai_started_at else 0
             if _ai_started_at and remaining <= 0:
                 _ai_loop_active = False  # süre doldu → otomatik durdur
 
@@ -798,7 +821,11 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # Süreyi klinik üst sınıra kapla (Audit P1) — aksi halde {duration_minutes: 999999} uzaktan
     # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne (_ai_duration_min*60) gider.
     _ai_duration_min = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(payload.duration_minutes)))
-    _ai_started_at = time.time()
+    # DENETIM P2: DUVAR SAATI idi. AI Pro sure siniri gecen-sure farkiyla hesaplandigindan
+    # NTP duzeltmesi/DST/elle saat degisimi GERI giderse maruziyet UZAR (donanim deadline'i
+    # keep-alive ile her saniye tazelendigi icin onu da kesmez). Dort kullanimin hepsi delta
+    # oldugundan monotonic'e gecildi (epoch olarak hicbir yerde gosterilmiyor).
+    _ai_started_at = time.monotonic()
     _ai_relocalize = True   # başlangıçta hemen cat_organ lokalizasyonu yap
     _ai_organ_cache["localized"] = False
     # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
@@ -871,7 +898,7 @@ def calibrate_ai_pro():
 def ai_pro_status():
     remaining = 0
     if _ai_loop_active and _ai_started_at:
-        remaining = max(0, int(_ai_duration_min * 60 - (time.time() - _ai_started_at)))
+        remaining = max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at)))
     return {
         "active": _ai_loop_active,
         "organId": _ai_organ_id,
@@ -928,7 +955,7 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
                 session_active = (bool(_sess.get("is_active"))
                                   and str(_sess.get("mode", "")).startswith("AI"))
             if session_active and _ai_started_at and \
-                    (time.time() - _ai_started_at) >= _ai_duration_min * 60:
+                    (time.monotonic() - _ai_started_at) >= _ai_duration_min * 60:
                 session_active = False  # süre dolmuş (watchdog henüz kapatmamış olsa da) → sürme
         except Exception:
             logger.exception("ai_pro_frame: aktif-seans kontrolü hatası")
@@ -941,7 +968,7 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
             await asyncio.to_thread(_drive_coils_ai_pro, D, P)
-            remaining = max(0, int(_ai_duration_min * 60 - (time.time() - _ai_started_at))) if _ai_started_at else 0
+            remaining = max(0, int(_ai_duration_min * 60 - (time.monotonic() - _ai_started_at))) if _ai_started_at else 0
             try:
                 from servers.api_server import update_live_session_state
                 rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)

@@ -39,3 +39,38 @@ def test_delete_session_with_children_no_fk_error(temp_app_data):
     # Çocuk kayıtlı seansı silmek FK 500 ATMAMALI (sensor_samples/session_events manuel CASCADE).
     db.delete_session(sid)
     db.delete_session(sid)  # idempotent — tekrar silmek de patlamamalı
+
+
+def test_retention_steps_can_be_disabled(temp_app_data):
+    """DENETIM P2 regresyonu: retention adımları kapatılabilmeli (0 = kapalı).
+
+    Hata: apply_data_retention_policy() parametresiz çağrılıyordu → sabit 90/365/30/365 gün
+    zorlanıyor, bobin-çalışma kayıtları + seans olayları GERİ DÖNÜŞSÜZ siliniyor ve hasta/operatör
+    adları maskeleniyordu; opt-out yoktu. Tıbbi-hukuki saklama süresi ülkeye/kliniğe göre değişir.
+    """
+    from database.treatment_history_db import TreatmentHistoryDB
+
+    db = TreatmentHistoryDB(temp_app_data)
+    db.at_rest_encrypted = True
+    sid = db.start_session("Manuel", patient_name="Minnos", operator_name="Dr Mert")
+    db.end_session(sid, patient_notes="klinik gözlem", duration_minutes=20)
+
+    # Hepsi kapalı → hiçbir şey silinmemeli/maskelenmemeli
+    rep = db.apply_data_retention_policy(sensor_retain_days=0, event_retain_days=0,
+                                         dead_outbox_retain_days=0, pii_retain_days=0)
+    assert all(v == 0 for v in rep.values()), f"tüm adımlar kapalıyken hiçbir şey silinmemeli: {rep}"
+
+    row = next(h for h in db.get_session_history(limit=10) if h["id"] == sid)
+    assert row["patient_name"] == "Minnos", "PII maskeleme kapalıyken isim korunmalı"
+
+
+def test_retention_env_overrides_are_read(monkeypatch):
+    """Bakım thread'i sabit süre yerine PEMF_RETAIN_* env'lerini okumalı."""
+    from services.headless_db_maintenance import HeadlessDBMaintenance as M
+
+    monkeypatch.setenv("PEMF_RETAIN_SENSOR_DAYS", "0")
+    assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 0, "0 = kapalı olarak okunmalı"
+    monkeypatch.setenv("PEMF_RETAIN_SENSOR_DAYS", "bozuk")
+    assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90, "geçersiz değer varsayılana düşmeli"
+    monkeypatch.delenv("PEMF_RETAIN_SENSOR_DAYS", raising=False)
+    assert M._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90) == 90

@@ -53,7 +53,8 @@ def test_deadline_auto_stop(hw, monkeypatch):
     assert hw.coils_state[1]["duty"] == 0.0
     assert hw._coil_deadline[1] is None
     # _tick expired'da 3 set eder, AYNI tick'te 1 azaltır → 2 kalır; sonraki tick'lerde STOP tekrar
-    assert hw._force_send_left == 2  # STOP paketi birkaç döngü tekrar gönderilir (telafi)
+    # Sabiti GÖMME: kadans (KEEP_ALIVE_INTERVAL_S) değişince wall-clock kapsama korunur.
+    assert hw._force_send_left == hw.STOP_RESEND_TICKS - 1  # aynı tick'te 1 azaldı
 
 
 def test_duration_zero_is_capped_not_unlimited(hw, monkeypatch):
@@ -97,7 +98,7 @@ def test_stop_all_sets_force_send(hw):
         assert hw.coils_state[i]["is_running"] is False
         assert hw.coils_state[i]["duty"] == 0.0
         assert hw._coil_deadline[i] is None
-    assert hw._force_send_left == 3  # düşen STOP telafisi
+    assert hw._force_send_left == hw.STOP_RESEND_TICKS  # düşen STOP telafisi
 
 
 def test_invalid_coil_id_rejected(hw):
@@ -116,3 +117,20 @@ def test_stm_packet_crc_roundtrip(hw, monkeypatch):
     assert stm_msg[0] == 0xAA and stm_msg[1] == 0x55
     body, crc = stm_msg[:-4], struct.unpack("<I", stm_msg[-4:])[0]
     assert zlib.crc32(body) & 0xFFFFFFFF == crc
+
+
+def test_keepalive_has_margin_against_firmware_deadman(hw):
+    """DENETIM P2 regresyonu: keep-alive kadansı firmware ölü-adam watchdog'una PAY bırakmalı.
+
+    Hata: 1 Hz keep-alive vs firmware 1500 ms watchdog → yalnız ~500 ms pay. Windows'ta tek bir
+    GC duraklaması, ağır AI çıkarımı veya DÜŞEN tek bir seri paket bu payı yiyip firmware'in TÜM
+    bobinleri sıfırlamasına yol açabiliyordu (fail-safe yönde ama tedavi ortasında kesinti).
+    En az bir kaçırılmış paketi tolere edecek pay olmalı: 2 * aralık < watchdog.
+    """
+    interval_ms = hw.KEEP_ALIVE_INTERVAL_S * 1000.0
+    assert 2 * interval_ms < hw._FIRMWARE_DEADMAN_MS, (
+        f"tek paket kaybı tolere edilmeli: 2*{interval_ms}ms >= {hw._FIRMWARE_DEADMAN_MS}ms"
+    )
+    # STOP telafi penceresi wall-clock olarak ~3 sn kalmalı (kadanstan bağımsız)
+    resend_s = hw.STOP_RESEND_TICKS * hw.KEEP_ALIVE_INTERVAL_S
+    assert 2.0 <= resend_s <= 4.0, f"düşen-STOP telafi penceresi ~3 sn olmalı, hesaplanan {resend_s}s"

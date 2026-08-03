@@ -58,13 +58,27 @@ class HardwareController:
         self._keep_alive_thread = threading.Thread(target=self._keep_alive_loop, daemon=True, name="HWKeepAlive")
         self._keep_alive_thread.start()
 
+    # DENETIM P2 (marj): keep-alive 1 Hz iken firmware'in 1500 ms "Olu Adam" watchdog'una
+    # yalnizca ~500 ms pay kaliyordu. Windows'ta tek bir GC duraklamasi, agir AI cikarimi,
+    # yogun log yazimi ya da DUSEN tek bir seri paket bu payi yiyip firmware'in TUM bobinleri
+    # sifirlamasina yol acabiliyordu — tedavi ortasinda gereksiz kesinti (fail-safe yonde ama
+    # klinik olarak kotu). 2 Hz'e cikarildi → pay ~1000 ms ve tek paket kaybi tolere edilir.
+    # Maliyet ihmal edilebilir: 88 baytlik paket, 2 Hz = ~176 B/s (115200 baud hattinda %0.2).
+    # _tick ayrica bobin-basi sure-deadline'ini kontrol ettiginden, deadline uygulamasi da
+    # iki kat hassaslasir.
+    KEEP_ALIVE_INTERVAL_S = 0.5
+    # Dusen STOP telafisi TICK cinsindendir → kadans degisirse WALL-CLOCK kapsama
+    # sabit kalsin diye sureden turetilir (~3 sn, eski 3 tick x 1.0 sn ile ayni).
+    STOP_RESEND_TICKS = 6
+    _FIRMWARE_DEADMAN_MS = 1500   # firmware/main.c ile AYNI olmali (bkz. main.c watchdog blogu)
+
     def _keep_alive_loop(self):
         while not self._keep_alive_stop.is_set():
             try:
                 self._tick()
             except Exception:
                 self.logger.exception("keep-alive tick hatasi")
-            time.sleep(1.0)
+            time.sleep(self.KEEP_ALIVE_INTERVAL_S)
 
     def _tick(self):
         """Her saniye: (1) sure-limiti dolan bobinleri donanim-tarafi otomatik durdur,
@@ -82,7 +96,7 @@ class HardwareController:
                 self.coils_state[i]["duty"] = 0.0
                 self._coil_deadline[i] = None
             if expired:
-                self._force_send_left = 3
+                self._force_send_left = self.STOP_RESEND_TICKS
                 self.logger.info("Bobin(ler) %s sure limiti doldu → donanim-tarafi otomatik durduruldu.", expired)
 
             any_running = any(self.coils_state[i]["is_running"] for i in range(1, 6))
@@ -122,7 +136,7 @@ class HardwareController:
                 self.coils_state[coil_id]["is_running"] = False
                 self.coils_state[coil_id]["duty"] = 0.0
                 self._coil_deadline[coil_id] = None
-                self._force_send_left = 3  # dusen STOP'u telafi et
+                self._force_send_left = self.STOP_RESEND_TICKS  # dusen STOP'u telafi et
 
             self.logger.info(f"Coil {coil_id} durumu güncellendi: Start={start}, Freq={freq}, Duty={duty}, Phase={phase}, Dur={duration}")
             self._send_stm_manual_update()
@@ -153,7 +167,7 @@ class HardwareController:
                 self.coils_state[i]["is_running"] = False
                 self.coils_state[i]["duty"] = 0.0
                 self._coil_deadline[i] = None
-            self._force_send_left = 3  # dusen STOP'u telafi et
+            self._force_send_left = self.STOP_RESEND_TICKS  # dusen STOP'u telafi et
 
             self.logger.info("Tüm bobinler (1-5) durduruldu.")
             self._send_stm_manual_update()
