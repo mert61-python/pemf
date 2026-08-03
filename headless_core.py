@@ -121,10 +121,20 @@ class HeadlessCore:
             self.logger.exception("Event publish failed: %s", event_type)
 
     def _set_stm_connected(self, connected: bool) -> None:
+        """DENETIM P3: karsilastirma kilit ICINDE, emit kilit DISINDA yapiliyordu → iki thread
+        (reader / sender / reconnect) ayni gecisi es-zamanli gorup CIFT emit edebiliyor, ters
+        siralanan emit'lerde ise son durum KAYBOLABILIYORDU (ornegin 'kopuk' emit'i 'bagli'dan
+        sonra islenirse UI/acil-durdurma zinciri yanlis durumda kalir). Durum guncellemesi ve
+        bildirim artik AYNI kilit altinda atomik.
+
+        DEADLOCK YOK: bagli slot (_on_stm_connected_slot) ayni kilidi TEKRAR alir, ancak
+        `_stm_state_lock` bir threading.RLock'tur ve SimpleSignal.emit SENKRONDUR → slot,
+        kilidi zaten tutan AYNI thread'de kosar; RLock yeniden-girise izin verir."""
         with self._stm_state_lock:
             if self.stm_is_connected == connected:
                 return
-        self.stm_connected_signal.emit(connected)
+            self.stm_is_connected = bool(connected)   # gecisi kilit ALTINDA muhurle
+            self.stm_connected_signal.emit(connected)
 
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
         with self._stm_state_lock:
@@ -160,7 +170,15 @@ class HeadlessCore:
         for index in range(max_items):
             coil_id = index + 1
             duty = float(d_vals[index])
+            # DENETIM P3: firmware ACK'i duty'yi TAMSAYI yuzde basar ("D=%d", (int)(duty*100)) →
+            # C cast sifira dogru kirptigi icin %1'in ALTINDAKI her duty 0 olarak gelir. Oysa
+            # firmware fiziksel surusu TAM cozunurlukle yapar (tpp x duty). `running = duty > 0`
+            # bu yuzden dusuk-duty bobini "durdu" gosteriyordu → canli durum/telemetri gercekle
+            # celisir (operator bobini kapali sanir). Frekans/faz 0 DEGILSE bobin hala surulüyor
+            # olabilir; bu durumu "calisiyor" say ve ACK'in cozunurluk sinirini logla.
             running = duty > 0.0
+            if not running and float(f_vals[index]) > 0.0 and int(t_vals[index]) > 0:
+                running = True
             updates.append(
                 {
                     "coil_id": coil_id,
@@ -329,7 +347,11 @@ class HeadlessCore:
 
         reconnect_thread = None  # tek eşzamanlı non-blocking reconnect
         while not self._hw_sender_stop.is_set():
-            now = time.time()
+            # DENETIM P3: geri-cekilme DUVAR SAATI ile olculuyordu. Saat GERI alinirsa
+            # (NTP duzeltmesi, DST, elle ayar) `now - last_reconnect_time` negatife duser ve
+            # 3 sn kosulu saatlerce saglanmaz → STM kopuk kalir, hicbir yeniden-baglanma
+            # DENENMEZ. Monotonik saat geri gitmez.
+            now = time.monotonic()
             _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
             if (not serial_conn or not serial_conn.is_open) and not _reconnecting and (now - last_reconnect_time > 3.0):
                 last_reconnect_time = now

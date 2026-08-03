@@ -5,8 +5,12 @@ import pytest
 
 
 # ── K2: OTA installer URL HTTPS + release-host pinleme (URL-yönlendirme vektörü) ──
+# DENETIM P3: pin ESKIDEN tum github.com'u (herhangi bir kullanicinin repo'sunu) kabul ediyordu →
+# manifest ele gecerse saldirgan KENDI repo'sundaki EXE'yi gosterebilir, SHA256 de manifest'ten
+# geldigi icin eslesirdi. github.com yolu artik BEKLENEN REPO'ya sabit.
 @pytest.mark.parametrize("url,ok", [
-    ("https://github.com/o/r/releases/download/v1/i.exe", True),
+    ("https://github.com/mert61-python/pemf-update/releases/download/v1/i.exe", True),
+    ("https://github.com/saldirgan/kotu-repo/releases/download/v1/i.exe", False),  # YABANCI repo
     ("https://objects.githubusercontent.com/x/i.exe", True),
     ("https://release-assets.githubusercontent.com/x/i.exe", True),
     ("http://github.com/o/r/i.exe", False),          # HTTPS değil

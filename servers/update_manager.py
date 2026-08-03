@@ -27,7 +27,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # exe branch manifest'i (mobil ayrı branch'te; karışmaz). raw.githubusercontent → API rate-limit yok.
-_MANIFEST_URL = "https://raw.githubusercontent.com/mert61-python/pemf-update/exe/latest.json"
+_UPDATE_REPO = "mert61-python/pemf-update"   # host-pin bu repoya daraltilir (bkz. _validate_installer_url)
+_MANIFEST_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/exe/latest.json"
 
 # K2 (defense-in-depth): OTA installer URL'sini HTTPS + bilinen GitHub-release host'larına pinle.
 # Manifest ele geçse bile (repo/hesap) URL'yi keyfi bir sunucuya yönlendirip LocalSystem-EXE indirtme
@@ -53,7 +54,38 @@ def _validate_installer_url(url: str):
     host = (p.hostname or "").lower()
     if host not in _ALLOWED_UPDATE_HOSTS and not host.endswith(".githubusercontent.com"):
         return False, f"Güncelleme host'u beklenen release sunucusu değil ({host}) — indirilmedi (güvenlik)."
+    # DENETIM P3: host-pin TUM github.com'u (yani HERHANGI bir kullanicinin repo/release'ini) ve
+    # TUM *.githubusercontent.com alt alanlarini kabul ediyordu → "pin" pratikte yalnizca
+    # "GitHub'da bir yer" demekti. Manifest ele gecerse saldirgan KENDI repo'sundaki bir EXE'yi
+    # gosterebilirdi (SHA256 manifest'ten geldigi icin hash de eslesirdi). github.com yolunu
+    # BEKLENEN REPO'ya sabitle. Nesne-depolama alan adlarinda (objects/release-assets) yol
+    # opak oldugundan orada yol kontrolu yapilamaz — asil koruma yine SHA256 + Authenticode.
+    if host == "github.com" and not p.path.startswith(f"/{_UPDATE_REPO}/"):
+        return False, (f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) "
+                       f"— indirilmedi (güvenlik).")
     return True, ""
+
+
+# DENETIM P3: indirmelerde BOYUT SINIRI yoktu — ne Content-Length kontrolu ne toplam-bayt
+# sayaci. Bozuk/ele gecmis bir manifest sonsuz (ya da devasa) bir govde gosterirse tibbi
+# cihazin sistem diski dolar; disk dolunca SQLite yazimlari ve yedekleme de basarisiz olur
+# (tedavi kaydi kaybi). Installer'lar ~100 MB mertebesinde → 512 MB genis ama sonlu bir tavan.
+_MAX_INSTALLER_BYTES = 512 * 1024 * 1024
+_MAX_MANIFEST_BYTES = 1 * 1024 * 1024
+
+
+def _download_to(resp, dest_file, limit: int, what: str) -> int:
+    """Yanit govdesini SINIRLI sekilde dosyaya yaz; tavan asilirsa hata firlat."""
+    total = 0
+    while True:
+        chunk = resp.read(1 << 20)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ValueError(f"{what} boyut siniri asildi ({limit} bayt) — indirme IPTAL.")
+        dest_file.write(chunk)
+    return total
 
 
 def _private_temp_path(filename: str) -> Path:
@@ -282,11 +314,7 @@ def apply_update() -> dict:
         dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
-            while True:
-                chunk = r.read(1 << 20)
-                if not chunk:
-                    break
-                f.write(chunk)
+            _download_to(r, f, _MAX_INSTALLER_BYTES, "Installer")
         # GÜVENLİK (P0): SHA256 ZORUNLU. Manifest hash vermezse indirilen installer'ı ÇALIŞTIRMA.
         # Aksi halde manifest'i değiştirebilen (repo/hesap ele geçirme, TLS-pinsiz MITM) biri
         # keyfi bir EXE'yi LocalSystem yetkisiyle sessiz kurdurabilir (RCE). Hash boşsa İPTAL.
@@ -375,11 +403,7 @@ def rollback() -> dict:
         dest = _private_temp_path(f"PEMF_Rollback_{_safe_ver(ver)}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
-            while True:
-                chunk = r.read(1 << 20)
-                if not chunk:
-                    break
-                f.write(chunk)
+            _download_to(r, f, _MAX_INSTALLER_BYTES, "Installer")
         actual = _sha256(dest)
         if actual != expected:
             try:

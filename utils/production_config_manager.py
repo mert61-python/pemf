@@ -34,6 +34,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# DENETIM P3: config.json yazimini serilestiren surec-geneli kilit (atomik replace ile birlikte).
+_SAVE_LOCK = threading.Lock()
+
 
 # Gömülü varsayılan config (son çare). Kullanım öncesi copy.deepcopy'lenir — iç içe dict'ler
 # _deep_merge ile mutasyona uğradığından bu sabit ASLA doğrudan değiştirilmemeli (paylaşım yok).
@@ -243,9 +246,18 @@ class ProductionConfigManager:
         """Save current config to user's APPDATA directory"""
         user_config_path = self._get_app_data_dir() / 'config.json'
         
+        # DENETIM P3: truncate-then-write idi (gecici dosya + os.replace YOK, kilit YOK).
+        # Guc kesintisi ya da es-zamanli iki kaydetme, config.json'i YARIM/BOS birakabiliyordu →
+        # TUM kullanici ayarlari sessizce kaybolur (bir sonraki acilista varsayilanlara doner).
+        # Ayni projedeki settings_router zaten atomik desen kullaniyor; burada eksikti.
         try:
-            with open(user_config_path, 'w', encoding='utf-8') as f:
-                json.dump(self._config, f, indent=4, ensure_ascii=False)
+            with _SAVE_LOCK:
+                tmp_path = user_config_path.with_suffix('.json.tmp')
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    json.dump(self._config, f, indent=4, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())   # once diske indir, sonra atomik takas
+                os.replace(tmp_path, user_config_path)
             # NTFS ACL kilidi (audit B-1.2): config hassas alanlar içerebilir → Users'a kapat.
             try:
                 from utils.file_acl import lock_down_file
@@ -332,8 +344,21 @@ class ProductionConfigManager:
             config = config[key]
         
         # Encrypt sensitive values
+        # DENETIM P3 (yanlis guvence): 'enc:' oneki KOSULSUZ ekleniyordu. _encrypt_value ise
+        # cipher kurulamamissa (anahtar yok/kripto import hatasi) degeri OLDUGU GIBI dondurur →
+        # diske "enc:<DUZ METIN>" yaziliyordu. Dosyayi inceleyen (ya da guvenlik denetimi yapan)
+        # biri sirri sifreli sanar; ustelik _decrypt_value da cipher yokken degeri aynen
+        # dondurdugu icin hata hicbir yerde YUZEYE CIKMAZ. Artik onek YALNIZCA gercekten
+        # sifrelendiyse eklenir; sifrelenemediyse duz-metin DURUSTCE yazilir + GORUNUR uyarilir.
         if key_path in self._ENCRYPTED_KEYS and isinstance(value, str) and value:
-            value = 'enc:' + self._encrypt_value(value)
+            _enc = self._encrypt_value(value)
+            if self._cipher and _enc != value:
+                value = 'enc:' + _enc
+            else:
+                logger.warning(
+                    "HASSAS AYAR SIFRELENEMEDI (%s) — DUZ METIN olarak saklaniyor. 'enc:' oneki "
+                    "EKLENMEDI (yanlis guvence vermemek icin). Kripto anahtarini/kurulumunu kontrol edin.",
+                    key_path)
         
         # Set only if changed
         key_name = keys[-1]
