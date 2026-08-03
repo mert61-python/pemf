@@ -359,6 +359,11 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
         if not detail:
             raise HTTPException(status_code=404, detail="Session not found")
         return detail
+    except HTTPException:
+        # DENETIM P3: genis `except Exception` KENDI 404'unu da yakalayip 500'e ceviriyordu →
+        # istemci "seans yok" ile "sunucu hatasi"ni ayirt edemiyor; mobil taraf 500'u gecici
+        # ariza sanip yeniden deniyor (silinmis seansta sonsuz retry). HTTPException'i gecir.
+        raise
     except Exception as e:
         logger.error(f"Error fetching session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")

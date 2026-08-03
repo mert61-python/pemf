@@ -30,6 +30,32 @@ class AuthDB:
         self.db_path = Path(app_data_dir) / "auth_users.db"
         self._lock = threading.Lock()
         self._init()
+        self._harden_permissions()
+
+    def _harden_permissions(self) -> None:
+        """DENETIM P3: auth_users.db (operator e-postalari + PBKDF2 hash'leri) duz SQLite ve NTFS
+        ACL kilidi YOK → ProgramData'nin miras izinleriyle makinedeki herhangi bir kullanici
+        hash'leri kopyalayip CEVRIMDISI kaba-kuvvet uygulayabilir.
+
+        ⚠️ Bu DB, sir dosyalarindan FARKLI olarak surekli acilip yazilir (her giris/kayit).
+        Kilidi SYSTEM+Administrators ile SINIRLAMAK, yonetici OLMAYAN bir surecte (Tauri launcher
+        "kullanici-basina kurulum, yonetici hakki GEREKTIRMEZ") sureci KENDI DB'sinden disari
+        atar ve kimlik dogrulamayi TAMAMEN kirar — bulgunun kendisinden kotu bir sonuc (bu
+        gelistirme sirasinda fiilen yasandi). Bu yuzden keep_current_user=True kullanilir:
+        yerel `Users` grubu yine erisemez, ama sureci calistiran hesap erisimini KORUR.
+        """
+        try:
+            from utils.file_acl import lock_down_file
+            for _sfx in ("", "-wal", "-shm"):
+                _f = Path(str(self.db_path) + _sfx)
+                if _f.exists():
+                    # keep_current_user=True ZORUNLU: bu DB surekli acilip yazilir; kilidi
+                    # SYSTEM+Admins ile SINIRLAMAK yonetici olmayan surecte (launcher) kimlik
+                    # dogrulamayi tamamen kirar. Yerel `Users` grubu yine ERISEMEZ.
+                    lock_down_file(_f, keep_current_user=True)
+        except Exception:
+            logger.warning("auth_users.db ACL kilidi uygulanamadi (elle icacls onerilir): %s",
+                           self.db_path, exc_info=True)
 
     def _conn(self):
         c = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10.0)

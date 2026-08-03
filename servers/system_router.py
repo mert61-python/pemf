@@ -190,17 +190,25 @@ async def favicon():
 
 
 @router.get("/api/discovery")
-async def discovery_info():
+async def discovery_info(request: Request):
     """Otomatik keşf endpoint'i. Telefon uygulaması bu endpoint'i sorgular."""
     from servers import api_server as _api
     from servers.auto_discovery import _get_local_ip
+    from servers.auth import is_local_request
     from servers.tunnel_manager import get_tunnel_url
+    # DENETIM P3: bu uc auth-MUAF (kesif icin) ve tunnelUrl'yi KOSULSUZ veriyordu; oysa
+    # /api/health ve /api/system/info ayni alani bilincli olarak _local'e kapatiyor (K1).
+    # Tunel uzerinden gelen kimliksiz bir cagirici icin tunnelUrl yeni bilgi degildir ama
+    # LAN'a sizmis herhangi bir cihaz icin cihazin INTERNET adresini ifsa eder → tutarli ol.
+    _h = request.headers
+    _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
+    _local = is_local_request(request.client.host if request.client else "", _via_proxy)
     return {
         "service": "PEMF-Vet",
         "version": _api._APP_VERSION,
         "localIp": _get_local_ip(),
         "port": 8000,
-        "tunnelUrl": get_tunnel_url() or None,
+        "tunnelUrl": ((get_tunnel_url() or None) if _local else None),
         "capabilities": ["rest", "websocket", "mqtt", "ai", "database"],
     }
 

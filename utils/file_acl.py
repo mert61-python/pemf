@@ -26,8 +26,14 @@ _SYSTEM_SID = "*S-1-5-18"          # NT AUTHORITY\SYSTEM (servis LocalSystem)
 _ADMINS_SID = "*S-1-5-32-544"      # BUILTIN\Administrators (operatör yedek/kurtarma)
 
 
-def lock_down_file(path) -> bool:
+def lock_down_file(path, keep_current_user: bool = False) -> bool:
     """`path` dosyasını yalnız SYSTEM + Administrators erişebilecek şekilde kilitle.
+
+    keep_current_user=True → SYSTEM + Administrators'a EK OLARAK süreci çalıştıran hesaba da
+    tam erişim verilir. Bu, SÜREKLİ açılıp yazılan dosyalar (ör. auth_users.db) için ZORUNLUDUR:
+    aksi halde yönetici OLMAYAN bir süreç (Tauri launcher kullanıcı-başına kurulum) kendi
+    dosyasından dışarı atılır ve o özellik tamamen kırılır (DENETİM P3 — sahada yaşandı).
+    Yerel `Users` grubu her iki modda da ERİŞEMEZ; korunan şey budur.
 
     True = ACL uygulandı. Dosya yoksa / hata olursa False (best-effort — çağıran DURMAZ).
     Windows dışında POSIX 0o600'e düşer.
@@ -42,11 +48,15 @@ def lock_down_file(path) -> bool:
         except Exception:
             return False
     try:
+        _args = ["icacls", p,
+                 "/inheritance:r",          # miras alınan (Users dahil) tüm ACE'leri kaldır
+                 "/grant:r", f"{_SYSTEM_SID}:F",
+                 "/grant:r", f"{_ADMINS_SID}:F"]
+        if keep_current_user:
+            import getpass
+            _args += ["/grant:r", f"{getpass.getuser()}:F"]
         subprocess.run(
-            ["icacls", p,
-             "/inheritance:r",              # miras alınan (Users dahil) tüm ACE'leri kaldır
-             "/grant:r", f"{_SYSTEM_SID}:F",
-             "/grant:r", f"{_ADMINS_SID}:F"],
+            _args,
             check=True,
             capture_output=True,
             timeout=10,                     # E-3: wedge'lenen handle başlangıçta bloklamasın (tek timeout'suz subprocess'ti)

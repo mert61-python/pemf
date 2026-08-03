@@ -639,16 +639,35 @@ class UdpDiscoveryService:
                 "lastClientIp": self._last_client_ip,
             }
 
+    def _open_socket(self) -> None:
+        """Kesif soketini (yeniden) kur. Hem ilk acilis hem self-heal yolu bunu kullanir."""
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except Exception:
+            pass
+        self._socket.bind(("", self.discovery_port))
+        self._socket.settimeout(1.0)
+
+    def _reopen_socket(self) -> bool:
+        """DENETIM P3 self-heal: bozulan soketi kapatip yeniden kur. Basarili mi doner."""
+        try:
+            if self._socket is not None:
+                try:
+                    self._socket.close()
+                except Exception:
+                    pass
+            self._open_socket()
+            self.logger.info("UDP kesif soketi yeniden kuruldu (port %s).", self.discovery_port)
+            return True
+        except Exception as exc:
+            self.logger.warning("UDP kesif soketi yeniden kurulamadi: %s", exc)
+            return False
+
     def _run(self) -> None:
         try:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            except Exception:
-                pass
-            self._socket.bind(("", self.discovery_port))
-            self._socket.settimeout(1.0)
+            self._open_socket()
             self.logger.info("UDP discovery started on port %s", self.discovery_port)
             self._publish("discovery.started", self.get_status())
 
@@ -660,8 +679,16 @@ class UdpDiscoveryService:
                     data, addr = self._socket.recvfrom(2048)
                 except socket.timeout:
                     continue
-                except OSError:
-                    break
+                except OSError as _oe:
+                    # DENETIM P3: `break` ile dongu KALICI olarak oluyordu → gecici bir soket
+                    # hatasi (ag arayuzu degisimi, hotspot yeniden kurulmasi, uyku/uyanma)
+                    # kesif servisini surec omru boyunca kapatiyordu; yeniden baslatma YOK.
+                    # Soketi yeniden kurmayi dene; olmazsa kisa bekleyip tekrar dene.
+                    self.logger.warning("UDP kesif soket hatasi: %s → soket yeniden kuruluyor.", _oe)
+                    if not self._reopen_socket():
+                        if self._stop_event.wait(5.0):
+                            break
+                    continue
 
                 client_ip = addr[0]
                 if not self._is_discovery_request(data):
