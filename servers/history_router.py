@@ -116,14 +116,17 @@ def export_csv(
     """Seans geçmişini CSV indir. session_ids verilirse YALNIZ o kayıtlar (ekranda görünen
     operatör-kapsam+arama) döner → 'Benim Seanslarım' seçiliyken tüm-klinik PII dökümü olmaz (KVKK)."""
     try:
-        sessions = db.get_session_history(limit=10000, internal_full=True)  # Audit P2: tam-export, 500'e kırpma
+        # DENETIM P3: session_ids SQL'e HIC girmiyordu → birkac seans istense bile 10.000 satir
+        # 11 LEFT JOIN ile belleğe cekilip Python'da filtreleniyordu. Filtre artik SQL'de.
         _sid = session_ids.strip()
+        _idset = None
         if _sid:
             try:
-                _idset = {int(x.strip()) for x in _sid.split(",") if x.strip()}
+                _idset = [int(x.strip()) for x in _sid.split(",") if x.strip()]
             except ValueError:
                 return Response(content="Geçersiz session_ids", media_type="text/plain", status_code=400)
-            sessions = [s for s in sessions if s.get("id") in _idset]
+        sessions = db.get_session_history(limit=10000, internal_full=True,
+                                          session_ids=_idset)  # Audit P2: tam-export, 500'e kırpma
         if not sessions:
             return Response(content="Veri bulunamadi", media_type="text/plain")
             

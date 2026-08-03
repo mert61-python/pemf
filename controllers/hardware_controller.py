@@ -247,6 +247,20 @@ class HardwareController:
                     stm32_freqs.append(state["freq"]) # kapalıysa da son freq kalır
                     stm32_durs.append(0)
 
+        # DENETIM P3 — BILINCLI OLARAK DEGISTIRILMEDI (firmware protokol degisikligi + tezgah
+        # olcumu ister). Sorun: bu paket-kurucu HER keep-alive turunda (2 Hz) taze bir ref_ms
+        # tasir; firmware tarafinda `out->ref_ms_valid = 1U` KOSULSUZDUR (main.c:415) ve
+        # main.c:568-591 blogu 5 bobinin g_dds_tick'ini kosulsuz yeniden konumlandirir → DDS faz
+        # sayaci duzenli olarak Python'un saatinden turetilen bir degere ZIPLAR. Python
+        # time.monotonic() ile STM HAL_GetTick() ayri saatler oldugundan, periyodun 1000 ms'i tam
+        # bolmedigi frekanslarda (or. AI Pro'nun 1 Hz'i) her turda gercek bir faz sicramasi olur.
+        # ZARAR SINIRI (kodda dogrulandi): elektriksel degil, dalga-formu sureklilik kaybi —
+        # ISR once tick'i tpp'ye klempler (main.c:829-837), her polarite gecisinde ~500 ns
+        # dead-time uygulanir (904-919), duty slew-limiter + tpp-1 klempi korunur → shoot-through
+        # ya da sinir-disi surus YOK. DOGRU COZUM: protokole "yeniden hizalama YAPMA" isareti
+        # eklemek (ref_ms icin ayrilmis bir deger ya da ayri bir bayrak) ve yalnizca parametre
+        # GERCEKTEN degistiginde hizalamak. Bu iki tarafi birden degistirir ve 1 Hz'de
+        # osiloskopla dogrulanmadan uygulanmamalidir.
         ref_ms = int(time.monotonic() * 1000) % 1000
 
         # Binary STM32 Packet Format:

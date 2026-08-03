@@ -513,7 +513,36 @@ class NetworkStatusService:
                 return True
         return False
 
+    # DENETIM P3 (yoklama firtinasi): _check_hotspot 2 (powershell + arp), _get_network_ips 1
+    # daha surec baslatiyordu ve dongu 5 sn → gunde ~52.000 surec. Ustelik _run_command
+    # timeout'u (5 sn) SESSIZCE yutuldugu icin tek bir yavas yanit hotspot'u "kapali"
+    # gosteriyordu. Hotspot/IP durumu SANIYELER mertebesinde degismez → TTL onbellek + hata
+    # halinde SON BILINEN degeri koru (yanlis-negatif titremesini de keser). Internet kontrolu
+    # saf soket oldugundan (ucuz) 5 sn'de kalir.
+    _EXPENSIVE_POLL_TTL_S = 60.0
+
+    def _cached_poll(self, key: str, producer):
+        """Pahali (subprocess) yoklamalari TTL ile onbellekle; hata/timeout'ta son degeri koru."""
+        now = time.monotonic()
+        cache = getattr(self, "_poll_cache", None)
+        if cache is None:
+            cache = self._poll_cache = {}
+        hit = cache.get(key)
+        if hit and (now - hit[0]) < self._EXPENSIVE_POLL_TTL_S:
+            return hit[1]
+        try:
+            val = producer()
+        except Exception:
+            logger.debug("%s yoklamasi basarisiz — son bilinen deger korunuyor", key, exc_info=True)
+            return hit[1] if hit else None
+        cache[key] = (now, val)
+        return val
+
     def _check_hotspot(self) -> dict[str, Any]:
+        cached = self._cached_poll("hotspot", self._check_hotspot_uncached)
+        return cached if cached is not None else {"active": False, "ssid": "", "ip": "", "clients": 0}
+
+    def _check_hotspot_uncached(self) -> dict[str, Any]:
         info = {"active": False, "ssid": "", "ip": "", "clients": 0}
         if platform.system() != "Windows":
             return info
@@ -542,6 +571,10 @@ class NetworkStatusService:
         return info
 
     def _get_network_ips(self) -> dict[str, Optional[str]]:
+        cached = self._cached_poll("net_ips", self._get_network_ips_uncached)
+        return cached if cached is not None else {"ethernet": None, "wifi": None, "hotspot": None}
+
+    def _get_network_ips_uncached(self) -> dict[str, Optional[str]]:
         ips: dict[str, Optional[str]] = {"ethernet": None, "wifi": None, "hotspot": None}
         if platform.system() != "Windows":
             local_ip = get_local_ip()

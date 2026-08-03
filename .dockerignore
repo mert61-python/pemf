@@ -1,75 +1,56 @@
-# Backend image (Dockerfile.backend) build context = guii/
-# Ağır / gereksiz olanları image'a ALMA (modeller volume ile gelir).
+# DENETİM P3: kökte .dockerignore YOKTU. Sır hariçlemesi tamamen BuildKit'e özgü
+# per-Dockerfile ignore dosyalarına (docker/Dockerfile.*.dockerignore) bağlıydı; bunlar
+# yalnız BuildKit ile okunur. Bu dosya build context'ini HER build yolunda daraltır —
+# savunma-derinliği: sır/hasta-verisi/anahtar imaja hiçbir koşulda girmesin.
 
-# AI model ağırlıkları — /models volume olarak bağlanır (image'a girmez)
-release_assets/ai_models/
-ai_hub/**/models/
-ai_hub/**/*.onnx
-ai_hub/**/*.pt
-ai_hub/**/*.pkl
+# ── Sırlar ve anahtarlar (imaja ASLA girmemeli) ──
+*.env
+!deploy/*.env.example
+.env*
+config/credentials/
+pemf_secrets*.json*
+*.p8
+*.cer
+*.pem
+*.key
+.sqlcipher_key
+.pemf_key*
+api_token.txt
+apple-mac-cert/
 
-# Frontend (ayrı image'da build edilir)
-pf/
-frontend/
+# ── Hasta/tedavi verisi ve yedekler ──
+*.db
+*.db-wal
+*.db-shm
+*.plain.bak
+backups/
+migration_backups/
+data/
 
-# Python build/venv/cache
-myenv/
-build/
-build_tools/Output/
-dist/
-buildPEMF/
-builds/
-__pycache__/
-**/__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-
-# Paketler / çıktılar / yedekler
-client_paketleri/
-outputs/
-*.zip
-
-# VCS / IDE / log
+# ── Ağır/üretilen çıktılar (context'i şişirir, imaj gerektirmez) ──
 .git/
 .github/
-.gitignore
-*.log
-.vscode/
-.idea/
+__pycache__/
+*.pyc
+build/
+dist/
+PEMF_BUILD/
+release_assets/
+pemf-app-packages/
+launcher/target/
+node_modules/
+pf/node_modules/
+frontend/node_modules/
+*.zip
+*.rar
+*.apk
+*.exe
+*.ipa
 
-# Ortam dosyaları — compose'a ait, image'a GİRMESİN (sır sızıntısı önlemi)
-.env
-.env.*
-docker.env.example
-deploy/*.env
-
-# Audit P1: GERÇEK sırlar image'a GİRMESİN — düz-metin MQTT/WiFi parolaları + credential dosyaları
-# + at-rest anahtarları. Runtime'da volume/secret ile enjekte edilmeli (COPY . . bunları gömüyordu).
-config/credentials/
-config/config.json
-data/config.json
-*.pemf_key
-.pemf_key
-.pemf_key_v2
-.sqlcipher_key
-pemf_secrets.json
-pemf_secret.key
-
-# Audit P1: Apple kod-imzalama özel anahtarları + sertifikalar image/context'e ASLA girmesin
-*.p8
-*.p12
-*.pfx
-*.key
-*.pem
-*.cer
-AuthKey_*.p8
-apple-mac-cert/
-_p12_pw.txt
-
-# Docker'ın kendi dosyaları
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-DOCKER_README.md
+# ── Geliştirme/dokümantasyon (runtime'da gereksiz) ──
+tests/
+docs/screenshots/
+*.md
+!README.md
+.coverage
+.pytest_cache/

@@ -1450,7 +1450,8 @@ class TreatmentHistoryDB:
                            end_date: str = None,
                            treatment_mode: str = None,
                            before_id: int = None,
-                           internal_full: bool = False) -> List[Dict]:
+                           internal_full: bool = False,
+                           session_ids=None) -> List[Dict]:
         """
         Tedavi geçmişini getir
 
@@ -1520,6 +1521,21 @@ class TreatmentHistoryDB:
                 if before_id is not None:
                     query += ' AND ts.id < ?'
                     params.append(int(before_id))
+
+                # DENETIM P3: cagiranlar (CSV export, PDF) istenen id kumesini SQL'e HIC
+                # gecirmiyor; 10.000 satirlik tam sonucu 11 LEFT JOIN ile cekip Python'da
+                # filtreliyorlardi (olculen tepe ~24 MB + gereksiz JOIN isi). Filtre artik
+                # SQL'de: yalnizca istenen satirlar okunur/materyalize edilir.
+                # GUVENLIK: id'ler int()'e zorlanir → SQL enjeksiyonu yuzeyi yok.
+                # None = filtre YOK (geriye uyumlu). BOS LISTE = "hicbir kayit" demektir:
+                # istemci ?session_ids=, gonderdiginde filtreyi yok sayip TUM KLINIGI dokmek
+                # KVKK ihlalidir ("Benim Seanslarim" secili iken tum-klinik PII dokumu).
+                if session_ids is not None:
+                    _ids = [int(x) for x in session_ids]
+                    if not _ids:
+                        return []
+                    query += f" AND ts.id IN ({','.join('?' * len(_ids))})"
+                    params.extend(_ids)
 
                 query += ' ORDER BY ts.id DESC LIMIT ?'
                 # DoS-clamp: istemci-kontrollü limit'i [1,500]'e sabitle (get_ai_analyses ile tutarlı) →

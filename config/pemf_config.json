@@ -1,4 +1,5 @@
 {
+  "_DEPRECATED": "BU DOSYA KULLANILMIYOR (denetim 2026-08-03: hicbir kod tarafindan okunmuyor). Icindeki allowed_origins/'*', 0.0.0.0 bind ve enable_ssl=false degerleri CANLI YAPILANDIRMA DEGILDIR ve hicbir etkisi yoktur. Gercek ayarlar: CORS/host/auth icin deploy/*.env (PEMF_CORS_ORIGINS, PEMF_API_HOST, PEMF_REQUIRE_AUTH); uygulama ayarlari icin config/config.json + utils/production_config_manager.py. Yeni ayar EKLEMEYIN.",
   "http_port": 5080,
   "websocket_port": 5555,
   "websocket_broadcast_ports": [

@@ -54,3 +54,28 @@ def test_no_cursor_returns_latest_backward_compat(temp_app_data):
     ids = [db.start_session("Manuel", patient_name=f"P{i}") for i in range(3)]
     rows = db.get_session_history(limit=10)
     assert [r["id"] for r in rows] == sorted(ids, reverse=True)
+
+
+def test_session_ids_filter_is_pushed_into_sql(temp_app_data):
+    """DENETIM P3 regresyonu: istenen id kümesi SQL'e GEÇMELİ (Python'da post-filtre değil).
+
+    Hata: CSV export birkaç seans istense bile 10.000 satırı 11 LEFT JOIN ile belleğe çekip
+    Python'da filtreliyordu (ölçülen tepe ~24 MB + gereksiz JOIN işi).
+    """
+    from database.treatment_history_db import TreatmentHistoryDB
+
+    db = TreatmentHistoryDB(temp_app_data)
+    db.at_rest_encrypted = True
+    ids = [db.start_session("Manuel", patient_name=f"H{i}") for i in range(5)]
+    for sid in ids:
+        db.end_session(sid, duration_minutes=1)
+
+    want = [ids[1], ids[3]]
+    rows = db.get_session_history(limit=10000, internal_full=True, session_ids=want)
+    assert {r["id"] for r in rows} == set(want), "yalnız istenen satırlar dönmeli"
+
+    # Boş liste → hiç satır (tüm tabloyu döndürme tuzağına düşme)
+    assert db.get_session_history(limit=10000, internal_full=True, session_ids=[]) == []
+
+    # Parametre verilmezse eski davranış korunur (geriye uyumlu)
+    assert len(db.get_session_history(limit=10000, internal_full=True)) == 5

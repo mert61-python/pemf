@@ -113,7 +113,31 @@ def _download_cloudflared() -> Path | None:
             _sz = _os.path.getsize(_tmp)
             if _sz < 5_000_000:
                 raise ValueError(f"cloudflared indirmesi çok küçük ({_sz} bytes) — bozuk/kesik.")
-            _os.replace(_tmp, bin_path)
+            # DENETIM P3 (macOS): Darwin varliği .tgz ARSIVIDIR. Eskiden arsiv dogrudan
+            # "cloudflared-darwin" adiyla kaydedilip CALISTIRILIYORDU → exec basarisiz olur,
+            # ustelik dosya 5 MB esigini gectigi icin cache "gecerli" sayilip BIR DAHA
+            # INDIRILMEZ; watchdog sonsuz yeniden-baslatma dongusune girer. Arsivi ac ve
+            # ICINDEKI gercek ikiliyi yaz.
+            if system == "Darwin":
+                import tarfile as _tar
+                _member_path = None
+                with _tar.open(_tmp, "r:gz") as _tf_arch:
+                    for _m in _tf_arch.getmembers():
+                        if _m.isfile() and _os.path.basename(_m.name) == "cloudflared":
+                            _member_path = _m
+                            break
+                    if _member_path is None:
+                        raise ValueError("cloudflared .tgz icinde 'cloudflared' ikilisi bulunamadi.")
+                    _extracted = _tf_arch.extractfile(_member_path)
+                    with _os.fdopen(_os.open(_tmp + ".bin", _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o755), "wb") as _bf:
+                        _bf.write(_extracted.read())
+                _os.replace(_tmp + ".bin", bin_path)
+                try:
+                    _os.unlink(_tmp)          # arsivi birakma
+                except Exception:
+                    pass
+            else:
+                _os.replace(_tmp, bin_path)
         except Exception:
             try:
                 _os.unlink(_tmp)
