@@ -29,6 +29,26 @@ function Write-PemfLog($msg, $color = 'Gray') {
     Write-Host "[pemf-teardown] $msg" -ForegroundColor $color
 }
 
+# ⚠️ DENETİM 2026-08-04 — SESSİZ SİLME BAŞARISIZLIĞI (KVKK YANLIŞ-GÜVENCE)
+# Silme çağrılarının hepsi `-ErrorAction SilentlyContinue` ile yapılıyor (kaldırıcıda bu DOĞRU:
+# bir adım patlayınca temizliğin geri kalanı sürmeli). AMA başarı KOŞULSUZ loglanıyordu:
+# "silindi (HASTA-VERİSİ): <yol>" ve sonunda "HASTA VERİSİ DE SİLİNDİ (tam temizlik)".
+# Dosya kilitliyse (çalışan backend/AV taraması) veya izin yoksa silme SESSİZCE başarısız olur,
+# operatör ise kalıcı silme talebinin YERİNE GETİRİLDİĞİNİ sanır. Hasta verisi diskte kalırken
+# kayıt "silindi" der — bir tıbbi cihazda kabul edilemez bir yanlış-güvence.
+# Artık her silme DOĞRULANIR; başarısızlıklar sayılır ve sonuç raporu buna göre değişir.
+$script:PemfFailed = @()
+function Assert-PemfRemoved {
+    param([string]$Path, [string]$Tag)
+    if (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue) {
+        $script:PemfFailed += $Path
+        Write-PemfLog "SİLİNEMEDİ ($Tag): $Path — dosya kilitli veya izin yok" 'Red'
+        return $false
+    }
+    Write-PemfLog "silindi ($Tag): $Path"
+    return $true
+}
+
 # Bir öğe verilen kapsamda kaldırılmalı mı? 'shared' = backend+gui (ve all); client per-user kalır.
 function Test-PemfScope([string]$Owner, [string]$Scope) {
     if ($Scope -eq 'all') { return $true }
@@ -110,7 +130,10 @@ function Remove-PemfRegistry($Registry, [string]$Scope, [switch]$DryRun) {
         if (-not (Test-PemfScope $r.Owner $Scope)) { continue }
         if (Test-Path -LiteralPath $r.Path) {
             if ($DryRun) { Write-PemfLog "[DRY] registry: $($r.Path)" 'Yellow' }
-            else { Remove-Item -LiteralPath $r.Path -Recurse -Force -ErrorAction SilentlyContinue; Write-PemfLog "registry silindi: $($r.Path)" }
+            else {
+                Remove-Item -LiteralPath $r.Path -Recurse -Force -ErrorAction SilentlyContinue
+                [void](Assert-PemfRemoved -Path $r.Path -Tag 'registry')
+            }
         }
     }
 }
@@ -128,7 +151,10 @@ function Remove-PemfPaths($Footprint, [string]$Scope, [switch]$IncludePatientDat
             if (Test-Path -LiteralPath $t -ErrorAction SilentlyContinue) {
                 $tag = if ($item.Kvkk) { 'HASTA-VERİSİ' } else { 'veri' }
                 if ($DryRun) { Write-PemfLog "[DRY] silinecek ($tag): $t" 'Yellow' }
-                else { Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue; Write-PemfLog "silindi ($tag): $t" }
+                else {
+                    Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue
+                    [void](Assert-PemfRemoved -Path $t -Tag $tag)
+                }
             }
         }
     }
@@ -172,6 +198,17 @@ function Invoke-PemfTeardown {
     # 7. Kimlikler (KVKK — yalnız -IncludePatientData)
     if ($IncludePatientData) { Remove-PemfCredentials -TargetNames $fp.Credentials -DryRun:$DryRun }
 
+    # ⚠️ Rapor GERÇEĞE dayanmalı: tek bir silme bile başarısızsa "tam temizlik" DENMEZ.
+    if ($script:PemfFailed.Count -gt 0) {
+        Write-PemfLog "TEARDOWN EKSİK — $($script:PemfFailed.Count) öğe SİLİNEMEDİ:" 'Red'
+        foreach ($f in $script:PemfFailed) { Write-PemfLog "   kalan: $f" 'Red' }
+        if ($IncludePatientData) {
+            Write-PemfLog "HASTA VERİSİ TAM SİLİNMEDİ — yukarıdaki yollar diskte DURUYOR. Backend/servisleri durdurup yeniden çalıştırın." 'Red'
+        }
+        Write-PemfLog "TEARDOWN bitti — EKSİK (bkz. yukarıdaki liste)" 'Red'
+        return $false
+    }
     $policy = if ($IncludePatientData) { 'HASTA VERİSİ DE SİLİNDİ (tam temizlik)' } else { 'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir)' }
     Write-PemfLog "TEARDOWN bitti — $policy" 'Green'
+    return $true
 }

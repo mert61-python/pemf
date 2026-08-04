@@ -47,8 +47,17 @@ if (-not $DryRun -and -not $Yes) {
 }
 
 . (Join-Path $tmp 'pemf_teardown.ps1')
-Invoke-PemfTeardown -Scope all -IncludePatientData:$PurgeData -DryRun:$DryRun
+# ⚠️ DENETİM 2026-08-04: dönüş değeri YOK SAYILIYORDU ve aşağıda KOŞULSUZ "tamamlandı" yazılıyordu.
+# Silme çağrıları -ErrorAction SilentlyContinue olduğundan kilitli/izinsiz bir hasta DB'si sessizce
+# kalır, operatör ise kalıcı silmenin yapıldığını sanırdı. Artık sonuç rapora ve ÇIKIŞ KODUNA yansır
+# (otomasyon da fark etsin).
+$teardownOk = Invoke-PemfTeardown -Scope all -IncludePatientData:$PurgeData -DryRun:$DryRun
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
+if (-not $teardownOk) {
+    Write-Host "`nPEMF kaldırma EKSİK — bazı öğeler silinemedi. Ayrıntı: $report" -ForegroundColor Red
+    Write-Host "Çalışan PEMF süreçlerini/servislerini durdurup yeniden çalıştırın." -ForegroundColor Red
+    exit 2
+}
 $sonuc = if ($DryRun) { "ÖNİZLEME tamamlandı (hiçbir şey silinmedi)" } else { "PEMF kaldırma tamamlandı" }
 Write-Host "`n$sonuc. Rapor: $report" -ForegroundColor Green

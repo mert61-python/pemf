@@ -116,7 +116,12 @@ if ($Uninstall) {
     $teardownScript = Join-Path $AppDir 'pemf_teardown.ps1'
     if (Test-Path $teardownScript) {
         . $teardownScript
-        Invoke-PemfTeardown -Scope backend -IncludePatientData:$PurgeData
+        # Denetim 2026-08-04: dönüş değeri yok sayılıyordu → kilitli dosya yüzünden eksik kalan
+        # temizlik "başarılı" görünüyordu. Uninstall'ı BLOKLAMIYORUZ (kullanıcı takılı kalmasın)
+        # ama durumu AÇIKÇA bildiriyoruz; ayrıntı teardown log'unda.
+        if (-not (Invoke-PemfTeardown -Scope backend -IncludePatientData:$PurgeData)) {
+            Log "UYARI: teardown EKSİK tamamlandı — bazı öğeler silinemedi (bkz. teardown log'u)." "Red"
+        }
     } else {
         # Paketleme hatası / çok-eski kurulum: modül yok → en azından servisleri sil (uninstall bloklamasın).
         Log "UYARI: pemf_teardown.ps1 yok ($teardownScript) — asgari servis-silmeye düşülüyor." "Yellow"
