@@ -10,16 +10,28 @@ name: pemf
 services:
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ..
+      dockerfile: docker/Dockerfile.backend
     image: pemf-backend
     init: true                       # PID 1 = tini → düzgün sinyal/zombi yönetimi
     environment:
       PEMF_SIMULATE: "${PEMF_SIMULATE:-1}"        # donanım yok → simüle
       PEMF_REQUIRE_AUTH: "${PEMF_REQUIRE_AUTH:-1}"
+      # DENETİM P0: nginx artık X-Forwarded-For/X-Real-IP iletiyor (Dockerfile.frontend).
+      # Bu, backend'in proxy arkasındaki istekleri UZAK sınıflandırmasını sağlar — ki
+      # PEMF_REQUIRE_AUTH=1'in ANLAMI budur. ÖNCEDEN nginx başlık eklemediği için proxy'nin
+      # konteyner IP'si (172.x) "LAN" sayılıyor ve internetten gelen HER istek auth'u
+      # atlıyordu. Aşağıdaki beyan, başlıklar bir şekilde düşse bile fail-closed kalmasını
+      # sağlar (docker köprü ağı ASLA "yerel operatör" değildir).
+      #
+      # ⚠️ DAVRANIŞ DEĞİŞİKLİĞİ: /api artık token ister. Token:
+      #     docker compose exec backend cat /data/PEMF_GUI/api_token.txt
+      # İstemciye `X-API-Key` header'ı veya `?token=` ile verin. Açık demo isteniyorsa
+      # bilinçli olarak PEMF_REQUIRE_AUTH=0 verin (internete açmayın).
+      PEMF_TRUSTED_PROXIES: "${PEMF_TRUSTED_PROXIES:-172.16.0.0/12}"
       PEMF_DEVICE_NAME: "${PEMF_DEVICE_NAME:-PEMF-Docker}"
     volumes:
-      - "${PEMF_MODELS_DIR:-./release_assets/ai_models}:/models:ro"  # AI ağırlıkları (host; image'a gömülmez)
+      - "${PEMF_MODELS_DIR:-../release_assets/ai_models}:/models:ro"  # AI ağırlıkları (host; image'a gömülmez)
       - pemf_data:/data                                              # SQLCipher DB + loglar (kalıcı)
     ports:
       - "${PEMF_API_PORT:-8000}:8000"   # doğrudan API / debug (frontend zaten proxy'ler)
@@ -36,8 +48,8 @@ services:
 
   frontend:
     build:
-      context: ./pf
-      dockerfile: ../Dockerfile.frontend
+      context: ../pf
+      dockerfile: ../docker/Dockerfile.frontend
     image: pemf-frontend
     init: true
     ports:

@@ -17,7 +17,7 @@ Sistem **2 image + 1 compose** ile ayağa kalkar (donanım bağımsız — STM/E
 
 ## Çalıştırma
 ```bash
-# guii/ klasöründe (WSL/Linux):
+# guii/docker/ klasöründe (WSL/Linux) — tüm Docker dosyaları burada toplandı:
 docker compose up --build -d      # build + arka planda başlat
 docker compose ps                 # durum (healthy?)
 docker compose logs -f            # canlı log
@@ -57,7 +57,7 @@ arm64'te bazı AI wheel'leri (`torch+cpu` / `onnxruntime` / `sqlcipher3-binary`)
 En sorunsuz yol imajları **amd64** olarak (Rosetta/QEMU emülasyonu) çalıştırmaktır:
 
 ```bash
-# guii/ içinde — tüm stack'i amd64 platformunda build+çalıştır:
+# guii/docker/ içinde — tüm stack'i amd64 platformunda build+çalıştır:
 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up --build -d
 ```
 Kalıcı istersen `docker-compose.yml`'de her iki servise ekle:

@@ -1,0 +1,7 @@
+# pemf-ai + gömülü model ağırlıkları (self-contained; /models mount GEREKMEZ).
+# Base = mevcut pemf-ai (kod+torch/cuda); üstüne ai_models (2.1GB, 49 model) /models'e kopyalanır.
+# ⚠️ Build context = release_assets (ai_models orada). Dockerfile docker/'a taşındı (2026-08-01);
+#    context DEĞİŞMEDİ → COPY ai_models yolu aynen geçerli.
+# Build (guii kökünden):  docker build -f docker/Dockerfile.ai-full -t pemf-ai-full:latest release_assets
+FROM pemf-ai:latest
+COPY ai_models /models

@@ -9,15 +9,20 @@ name: pemf-ai
 services:
   ai:
     build:
-      context: .
-      dockerfile: Dockerfile.ai
+      context: ..
+      dockerfile: docker/Dockerfile.ai
     image: pemf-ai
     environment:
       PEMF_AI_MODELS_DIR: /models
     volumes:
-      - ./release_assets/ai_models:/models:ro
+      - ../release_assets/ai_models:/models:ro
     ports:
-      - "8100:8100"
+      # DENETİM 2026-08-04 (P3): "8100:8100" portu TÜM arayüzlere (0.0.0.0) yayınlıyordu.
+      # ai_service/app.py'deki 16 `/infer/...` ucunda auth/token/Depends YOKTUR ve konteyner
+      # root çalışır → LAN'daki herkes GPU inference servisini kullanabiliyordu. Aynı sertleştirme
+      # docker-compose.micro.yml'de yapılmıştı; bu profile uygulanmamıştı.
+      # Host'tan erişim gerekiyorsa loopback yeter; servisler zaten aynı compose ağındadır.
+      - "127.0.0.1:8100:8100"
     deploy:
       resources:
         reservations:

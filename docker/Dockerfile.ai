@@ -2,7 +2,12 @@
 # =============================================================================
 # PEMF AI Servisi (GPU) — mikroservis (Faz 2a).
 # CUDA 12.8 + cuDNN 9 runtime (RTX 5090/Blackwell sm_120); torch cu128 → onnxruntime-gpu 1.19 ile GPU inference.
-# GERÇEK uçlar: /infer/histopath (görüntü), /infer/sound (ses). torch YOK (saf-ONNX).
+# GERÇEK uçlar: /infer/histopath (görüntü), /infer/sound (ses).
+# ⚠️ DENETİM 2026-08-04: burada eskiden "torch YOK (saf-ONNX)" yazıyordu — YANLIŞ. Aşağıdaki
+# RUN adımı torch 2.7.1 + torchvision 0.22.1 KURAR ve bu ZORUNLUDUR: `ai_service/app.py` ile
+# `gpu.py` doğrudan `import torch` yapar, ultralytics de import anında torch ister, ayrıca
+# histopath ve cat_sound predictor'ları torch kullanır. Yorumu okuyup "gereksiz" diye kaldıran
+# biri servisi tamamen bozar. (torch ~2 GB imaj ağırlığının ve CVE yüzeyinin de kaynağıdır.)
 # Çalıştırma GPU ister:  compose'da deploy.resources / docker run --gpus all
 # =============================================================================
 FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
@@ -35,5 +40,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY ai_hub/ ./ai_hub/
 COPY ai_service/ ./ai_service/
 
+# ⚠️ DENETİM 2026-08-04: bu imaj ROOT olarak koşuyordu — kardeşi Dockerfile.backend'de
+# `USER pemf` varken burada hiç USER yoktu. Servis `/infer/...` uçlarında AUTH'suz olarak
+# kullanıcı yüklemesi (görüntü/ses) işler; bu yol ffmpeg, libsndfile, opencv, pillow ve
+# ONNX çözücülerine kadar iner. Oralardaki bir bellek-bozma hatası root konteynerde çok daha
+# değerli bir sonuç verir. Ayrıcalık gerekmiyor: /models salt-okunur mount, önbellek dizinleri
+# zaten /tmp altında (NUMBA_CACHE_DIR / MPLCONFIGDIR), yazılan başka yer yok.
+RUN groupadd -r pemfai && useradd -r -g pemfai -d /home/pemfai -m pemfai     && chown -R pemfai:pemfai /app
+
 EXPOSE 8100
+
+# Sağlık yoklaması: compose/orchestrator servisin GERÇEKTEN hazır olduğunu bilsin (model
+# yükleme uzun sürer; port açık ≠ hazır). curl kurmamak için python3 kullanılıyor.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3     CMD python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=4).status==200 else 1)"
+
+USER pemfai
 CMD ["python3", "-m", "uvicorn", "ai_service.app:app", "--host", "0.0.0.0", "--port", "8100"]

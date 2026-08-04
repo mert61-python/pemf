@@ -1,0 +1,60 @@
+# AI servisi build'ine ÖZEL ignore (Dockerfile.backend.dockerignore'dan bağımsız; docker/'a taşındı, context=guii kökü DEĞİŞMEDİ).
+# Fark: ai_hub içindeki KÜÇÜK gömülü modelleri (kidney_disease/rna onnx, cat_disease pkl,
+# scaler'lar ~55MB) DAHİL eder → bu uçlar container'da model bulur. Büyük ağırlıklar
+# (histopath/YOLO/BiLSTM/cat_organ) zaten kaynakta YOK, /models mount'tan gelir.
+release_assets/            # büyük model deposu → /models olarak mount edilir, image'a girmesin
+pf/
+frontend/
+myenv/
+build/
+buildPEMF/
+builds/
+build_tools/Output/
+client_paketleri/
+outputs/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.git/
+.github/
+.gitignore
+*.log
+.vscode/
+.idea/
+.env
+.env.*
+docker/                    # tüm Docker config (compose/Dockerfile/README/.env) — AI image COPY etmiyor
+*.zip
+
+# ── SIRLAR (denetim 2026-08-04, P3) ──────────────────────────────────────────
+# ⚠️ BuildKit'te `<Dockerfile>.dockerignore` VARSA context kökündeki `.dockerignore`
+# TAMAMEN DEVRE DIŞI kalır (birleşmez). Dockerfile.ai `# syntax=` + `--mount=type=cache`
+# kullandığı için build ZORUNLU olarak BuildKit'tedir → yalnız BU dosya geçerlidir ve
+# içinde hiçbir sır kalıbı YOKTU. Sonuç: Apple özel anahtarları ve düz-metin MQTT parola
+# dosyaları AI build context'ine giriyordu. Kalıplar Dockerfile.backend.dockerignore ile
+# BİREBİR aynı tutulmalı — biri güncellenirse diğeri de güncellenmeli.
+deploy/*.env
+config/credentials/
+config/config.json
+data/config.json
+*.pemf_key
+.pemf_key
+.pemf_key_v2
+.sqlcipher_key
+pemf_secrets.json
+pemf_secret.key
+*.p8
+*.p12
+*.pfx
+*.key
+*.pem
+*.cer
+AuthKey_*.p8
+apple-mac-cert/
+_p12_pw.txt
+*.db
+*.db-wal
+*.db-shm
