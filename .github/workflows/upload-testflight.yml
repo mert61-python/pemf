@@ -5,13 +5,29 @@ on:
     branches:
       - upload-testflight
 
+# DENETİM 2026-08-04 (P3): `permissions:` bloğu YOKTU → iş akışı deponun VARSAYILAN
+# GITHUB_TOKEN yetkisini alıyordu (çoğu depoda contents: write). Bu iş akışlarının hiçbiri
+# yazma yapmıyor (release/push/paket yok — doğrulandı). Ele geçirilmiş bir bağımlılık ya da
+# üçüncü-parti action, token'la depoya YAZABİLİRDİ. En az yetki: yalnız okuma.
+permissions:
+  contents: read
+
 jobs:
   upload:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4 (SHA-pinli; v3 Node16 ile KULLANIMDAN KALKTI)
 
       - name: Upload to TestFlight
+        # DENETİM 2026-08-04 (P3): sırlar `${{ secrets.* }}` ile DOĞRUDAN komut satırına
+        # gömülüyordu. İki sorun: (a) argümanlar runner'da `ps`/proses listesinden okunabilir —
+        # aynı işte koşan başka bir adım ya da ele geçirilmiş bir bağımlılık görebilir;
+        # (b) komut hata verip kabuk satırı yankılanırsa parola log'a düşer (GitHub maskelemesi
+        # yalnız TAM eşleşmeyi yakalar, parçalanmış/kodlanmış hâlini değil).
+        # Ortam değişkeni olarak verilip kabukta genişletiliyor.
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
         run: |
-          xcrun altool --upload-app -f "mobile_builds/PEMF-Vet-1.0.0-ios-production.ipa" -t ios -u "${{ secrets.APPLE_ID }}" -p "${{ secrets.APP_SPECIFIC_PASSWORD }}"
+          xcrun altool --upload-app -f "mobile_builds/PEMF-Vet-1.0.0-ios-production.ipa" -t ios -u "$APPLE_ID" -p "$APP_SPECIFIC_PASSWORD"

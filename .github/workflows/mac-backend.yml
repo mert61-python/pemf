@@ -11,6 +11,13 @@ on:
   push:
     tags: ["backend-mac-v*"]
 
+# DENETİM 2026-08-04 (P3): `permissions:` bloğu YOKTU → iş akışı deponun VARSAYILAN
+# GITHUB_TOKEN yetkisini alıyordu (çoğu depoda contents: write). Bu iş akışlarının hiçbiri
+# yazma yapmıyor (release/push/paket yok — doğrulandı). Ele geçirilmiş bir bağımlılık ya da
+# üçüncü-parti action, token'la depoya YAZABİLİRDİ. En az yetki: yalnız okuma.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-14
@@ -36,7 +43,12 @@ jobs:
       # Paketin gerçekten AÇILIP ÇALIŞTIĞINI doğrula — zip üretmek yetmez.
       # (Bu test, sembolik linkleri düz dosya olarak açan bir hatayı yakalamıştı:
       # _internal/Python bozulunca backend hiç başlamıyordu.)
-      - uses: dtolnay/rust-toolchain@stable
+      # DENETİM 2026-08-04 (P3): `@stable` DEĞİŞKEN bir git ref'idir — üçüncü-parti depo ele
+      # geçirilirse bu iş akışı, Apple İMZALAMA SIRLARINA erişimi olan bir işte saldırganın
+      # kodunu çalıştırır. launcher.yml'de SHA'ya pinlenmişti; burada atlanmıştı.
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable dali
+        with:
+          toolchain: stable
       - name: Paket doğrulama + uçtan uca açılış testi
         working-directory: launcher
         env:

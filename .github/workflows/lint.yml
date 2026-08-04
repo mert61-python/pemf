@@ -8,6 +8,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# DENETİM 2026-08-04 (P3): `permissions:` bloğu YOKTU → iş akışı deponun VARSAYILAN
+# GITHUB_TOKEN yetkisini alıyordu (çoğu depoda contents: write). Bu iş akışlarının hiçbiri
+# yazma yapmıyor (release/push/paket yok — doğrulandı). Ele geçirilmiş bir bağımlılık ya da
+# üçüncü-parti action, token'la depoya YAZABİLİRDİ. En az yetki: yalnız okuma.
+permissions:
+  contents: read
+
 jobs:
   ruff:
     runs-on: ubuntu-latest
