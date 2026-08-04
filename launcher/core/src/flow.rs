@@ -118,7 +118,7 @@ pub fn ensure_package(
             let mut cb = |done, total| {
                 on(Progress::Downloading { what: label.to_string(), done, total });
             };
-            net::download_to_file(&pkg.url, &dest, pkg.size, &mut cb, control)
+            net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)
         };
         match result {
             Ok(_) => break,

@@ -339,8 +339,21 @@ mod tests {
             assert!(m.models.contains_key(p), "{p} profili eksik");
         }
         // Self-update alanı eklendi → gerçek manifest launcher sürümünü taşımalı (bildirimi besler).
-        let l = m.launcher.expect("gerçek manifest'te launcher alanı olmali");
+        let l = m.launcher.clone().expect("gerçek manifest'te launcher alanı olmali");
         assert!(!l.version.is_empty(), "launcher sürümü bos olmamali");
+
+        // ⚠️ DENETİM 2026-08-04 (#97/#99) REGRESYON KAPISI: kaynak-URL pinlemesi daraltıldı
+        // (github.com yolu repo'ya sabit, joker sonek kaynak için geçersiz). YAYINDAKİ manifest'in
+        // HER URL'si bu kontrolü GEÇMELİ — geçmezse sahadaki tüm indirmeler kırılır. Pin bir daha
+        // sıkılaştırılırsa bu test önce KIRILIR, kullanıcı değil.
+        for (key, pkg) in m.runtimes.iter().chain(m.models.iter()) {
+            crate::net::validate_download_source(&pkg.url)
+                .unwrap_or_else(|e| panic!("YAYINDAKI '{key}' url'i kaynak-pinlemesini GECMIYOR: {} → {e}", pkg.url));
+        }
+        if let Some(iu) = l.installer_url.as_deref().filter(|u| !u.is_empty()) {
+            crate::net::validate_download_source(iu)
+                .unwrap_or_else(|e| panic!("YAYINDAKI launcher installer_url pinlemeyi GECMIYOR: {iu} → {e}"));
+        }
     }
 
     /// DENETİM 2026-08-04: `installer_url` VARSA `sha256` de ZORUNLU ve 64-hex olmalı —

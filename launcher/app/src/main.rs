@@ -569,7 +569,7 @@ async fn apply_self_update(
                 let mut dl = |done, total| {
                     on(flow::Progress::Downloading { what: "Güncelleme".to_string(), done, total });
                 };
-                net::download_to_file(&u, &dest2, size, &mut dl, &control)
+                net::download_to_file(&u, &dest2, size, &sha, &mut dl, &control)
                     .map_err(|e| e.to_string())?;
             }
             on(flow::Progress::Verifying { what: "Güncelleme".to_string() });

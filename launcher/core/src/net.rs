@@ -48,7 +48,50 @@ pub const ALLOWED_HOSTS: &[&str] = &[
 ];
 
 /// Python tarafındaki `host.endswith(".githubusercontent.com")` gevşetmesi.
+///
+/// ⚠️ Bu joker YALNIZCA **redirect hedefleri** için geçerlidir (GitHub kendi CDN'ine yönlendirir
+/// ve alt alan adı zamanla değişebilir). Manifest'ten gelen **KAYNAK** URL'ler için değil —
+/// bkz. `validate_download_source`.
 const ALLOWED_SUFFIX: &str = ".githubusercontent.com";
+
+/// Sürüm varlıklarının yayınlandığı repo. `github.com` yolu buna PİNLENİR.
+/// (`launcher/app/src/main.rs::MANIFEST_URL` ile aynı repo — ayrışırsa pin anlamsızlaşır.)
+const UPDATE_REPO_PATH: &str = "/mert61-python/pemf-update/";
+
+/// KAYNAK (manifest'ten gelen) URL doğrulaması — `validate_url`'den DAHA KATI.
+///
+/// DENETİM 2026-08-04 (#97/#99): host-pin'i yalnızca "GitHub'da bir yer" anlamına geliyordu:
+///   • `github.com` için YOL kontrolü yoktu → `github.com/<saldirgan>/<repo>/releases/download/...`
+///     kabul ediliyordu (Python ikizi `update_manager.py` bu daraltmayı YAPIYOR — parite kırıktı).
+///   • `.githubusercontent.com` JOKERİ `raw.githubusercontent.com/<herhangi-hesap>/<repo>/…`
+///     adresini de kabul ediyordu; oraya ÜCRETSİZ bir GitHub hesabı keyfi bayt koyabilir.
+/// Bu URL'ler yalnız indirme değil, `apply_self_update`'in de girdisidir: imzasız setup.exe
+/// indirilip `/S` ile SESSİZCE kurulur ve SHA da AYNI manifest'ten gelir (orijinallik kanıtlamaz).
+///
+/// Artık kaynak URL: ya repo-yolu pinli `github.com`, ya da AÇIKÇA sayılmış nesne-depoları.
+/// Joker sonek burada KABUL EDİLMEZ (redirect'lerde hâlâ geçerli — GitHub CDN'i oraya yönlendirir).
+pub fn validate_download_source(url: &str) -> Result<String, NetError> {
+    let host = validate_url(url)?;
+    if host == "github.com" {
+        // https://github.com<path…> — authority'den sonrası yol.
+        let rest = url.strip_prefix("https://").unwrap_or(url);
+        let path_start = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        let path = &rest[path_start..];
+        if !path.starts_with(UPDATE_REPO_PATH) {
+            return Err(NetError::HostNotAllowed(format!(
+                "github.com{} — beklenen repo {UPDATE_REPO_PATH}",
+                path.split("/releases").next().unwrap_or(path)
+            )));
+        }
+        return Ok(host);
+    }
+    // github.com değilse: AÇIKÇA listelenmiş olmalı; joker sonek kaynak URL için YETMEZ.
+    if ALLOWED_HOSTS.contains(&host.as_str()) {
+        Ok(host)
+    } else {
+        Err(NetError::HostNotAllowed(host))
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
@@ -147,14 +190,29 @@ pub fn download_to_file(
     url: &str,
     dest: &Path,
     expected_size: u64,
+    expected_sha: &str,
     progress: ProgressFn<'_>,
     control: &dyn Fn() -> Control,
 ) -> Result<u64, NetError> {
-    validate_url(url)?;
+    // KAYNAK URL: repo-yolu pinli (bkz. validate_download_source). Redirect HEDEFİ aşağıda
+    // daha gevşek `validate_url` ile doğrulanır — GitHub kendi CDN'ine yönlendirir.
+    validate_download_source(url)?;
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }
-    let part = dest.with_extension("part");
+    // ⚠️ DENETİM 2026-08-04 (#95): `.part`'ın HANGİ İÇERİĞE ait olduğu hiçbir yerde kayıtlı
+    // değildi ve adı yalnız URL'nin son parçasından türüyordu — bu projede SABİTTİR: manifest
+    // hep `client-app-v1.8.0/base.zip` etiketine işaret eder ve yayın akışı asset'i AYNI URL
+    // üzerine `--clobber` ile YENİDEN yükler. Sonuç: eski sürümün yarım `.part`'ı, YENİ sürümün
+    // içeriği için geçerli bir devam noktası sanılıyor → `Range` ile üstüne eklenip MELEZ dosya
+    // oluşuyor. SHA bunu yakalar ama gigabaytlarca trafik boşa gider ve kullanıcı sahte bir
+    // "kurcalanma" hatası görür. Çözüm: `.part` adını beklenen SHA'ya bağla — farklı içerik
+    // farklı `.part` demektir; TAMAMLANMIŞ önbellek (`dest`) ADI DEĞİŞMEDİĞİ için korunur.
+    let part = if expected_sha.len() >= 12 {
+        dest.with_extension(format!("{}.part", expected_sha[..12].to_ascii_lowercase()))
+    } else {
+        dest.with_extension("part")
+    };
 
     // Baştan Cancel istenmişse: yarım .part'ı temizle, hemen dön.
     if control() == Control::Cancel {
@@ -215,11 +273,23 @@ pub fn download_to_file(
     } else {
         cl.unwrap_or(expected_size)
     };
-    let ceiling = if total > 0 {
-        total.saturating_add(1 << 20)
+    // DENETİM 2026-08-04 (#94): tavan ÖNCE sunucunun Content-Length'inden hesaplanıyordu ve
+    // `MAX_DOWNLOAD_BYTES` (4 GB) YALNIZCA `total == 0` dalında devreye giriyordu → "disk-dolum
+    // DoS'a karşı MUTLAK tavan" diye belgelenen sabit, sunucunun TEK BİR BAŞLIK göndermesiyle
+    // tamamen devre dışı kalıyordu (Content-Length: 100 GB → 100 GB yazılırdı). Ayrıca manifest'in
+    // kendi `size` alanıyla hiçbir çapraz kontrol yoktu.
+    // Artık: sunucu tavanı ile manifest boyutunun KÜÇÜĞÜ alınır ve her hâlükârda
+    // MAX_DOWNLOAD_BYTES'ı AŞAMAZ.
+    let declared = if total > 0 { total } else { MAX_DOWNLOAD_BYTES };
+    let manifest_cap = if expected_size > 0 {
+        expected_size.saturating_add(1 << 20)
     } else {
-        MAX_DOWNLOAD_BYTES
+        u64::MAX
     };
+    let ceiling = declared
+        .saturating_add(1 << 20)
+        .min(manifest_cap)
+        .min(MAX_DOWNLOAD_BYTES);
 
     // resuming → APPEND (mevcut baytları koru); değilse create (truncate = baştan).
     let mut out = if resuming {
@@ -276,7 +346,7 @@ pub fn download_to_file(
 /// Küçük metin kaynağını (manifest) pinli + zaman-aşımlı indir. Host hem başlangıçta hem
 /// redirect-sonrası doğrulanır; `into_string` ureq'te ~10MB'a kapalı (metin-DoS sınırı hazır).
 pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
-    validate_url(url)?;
+    validate_download_source(url)?;
     let resp = build_agent()
         .get(url)
         .call()
@@ -305,6 +375,69 @@ mod tests {
         ] {
             assert!(validate_url(u).is_ok(), "reddedildi: {u}");
         }
+    }
+
+    /// DENETİM 2026-08-04 (#97/#99): KAYNAK URL'ler repo-yolu pinli olmalı; joker
+    /// `.githubusercontent.com` soneki kaynak için YETMEZ (redirect'te hâlâ geçerli).
+    #[test]
+    fn kaynak_url_repo_yoluna_pinli() {
+        // ── GERÇEK yayın URL'leri GEÇMELİ (aksi halde tüm indirmeler kırılır) ──
+        for u in [
+            "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/base.zip",
+            "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/vet.zip",
+            "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.8/PEMFVetClient-Setup.exe",
+            "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json",
+            // Nesne-depoları AÇIKÇA listeli → kaynak olarak da kabul.
+            "https://objects.githubusercontent.com/x/y.zip",
+            "https://release-assets.githubusercontent.com/a/b.zip",
+        ] {
+            assert!(validate_download_source(u).is_ok(), "GERCEK yayin URL'si reddedildi: {u}");
+        }
+
+        // ── BAŞKA repo → REDDET (eskiden geçiyordu; Python ikizi zaten reddediyordu) ──
+        for u in [
+            "https://github.com/saldirgan/pemf-update/releases/download/v1/evil.exe",
+            "https://github.com/mert61-python/baska-repo/releases/download/v1/evil.exe",
+            "https://github.com/evil.exe",
+        ] {
+            assert!(
+                matches!(validate_download_source(u), Err(NetError::HostNotAllowed(_))),
+                "BASKA repo KAYNAK olarak kabul edildi: {u}"
+            );
+        }
+
+        // ── Joker sonek KAYNAK için yetmez: raw.* AÇIKÇA listeli olduğu için geçer, ama
+        //    listelenmemiş bir *.githubusercontent.com alt alanı KAYNAK olarak REDDEDİLİR.
+        assert!(validate_download_source("https://gist.githubusercontent.com/x/y/evil.exe").is_err());
+        // Aynı URL redirect HEDEFİ olarak hâlâ kabul edilir (GitHub CDN'i değişebilir).
+        assert!(validate_url("https://gist.githubusercontent.com/x/y/evil.exe").is_ok());
+    }
+
+    /// DENETİM 2026-08-04 (#95): `.part` adı yalnız URL'den türüyordu ve bu projede SABİT
+    /// (`--clobber` ile aynı URL'e yeniden yayın). Eski sürümün yarım `.part`'ı YENİ içerik için
+    /// "devam noktası" sanılıp `Range` ile üstüne ekleniyordu → MELEZ dosya + sahte kurcalanma
+    /// alarmı + gigabaytlarca boşa trafik. Ad artık beklenen SHA'ya bağlı.
+    #[test]
+    fn part_dosyasi_beklenen_shaya_bagli() {
+        // Saf ad hesabı — ağ gerekmez (download_to_file içindeki mantığın aynısı).
+        fn part_of(dest: &Path, sha: &str) -> std::path::PathBuf {
+            if sha.len() >= 12 {
+                dest.with_extension(format!("{}.part", sha[..12].to_ascii_lowercase()))
+            } else {
+                dest.with_extension("part")
+            }
+        }
+        let dest = Path::new("C:/cache/base.zip");
+        let a = part_of(dest, "387aa4076bc3e52c03dbe7cff5502146984000c7c0ba9d7405e004e416cef448");
+        let b = part_of(dest, "1b49fd93454c4ce558edde8cc345eb3e4aec673167033000e19dd42106aeaf53");
+        assert_ne!(a, b, "FARKLI icerik AYNI .part adini paylasiyor (melez dosya riski)");
+        assert!(a.to_string_lossy().contains("387aa4076bc3"));
+
+        // `install::clear_partials` `extension() == "part"` ile temizler → ad değişse de bulunmalı.
+        assert_eq!(a.extension().unwrap(), "part");
+
+        // sha yoksa (eski/eksik manifest) eski davranışa düş — kırılma yok.
+        assert_eq!(part_of(dest, "").extension().unwrap(), "part");
     }
 
     #[test]

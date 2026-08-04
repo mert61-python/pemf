@@ -14,6 +14,20 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn gercek_base_paketi_dogrulanir_ve_acilir() {
+    // ⚠️ DENETİM 2026-08-04 (#100): bu test bir macOS PAKETİNİ açar; `base-mac.zip` içinde
+    // GERÇEK sembolik linkler var (`_internal/*.dylib`, `_internal/Python`). Windows'ta symlink
+    // ayrıcalık ister ve `extract` bunu bilerek reddeder → test, artefakt çalışma ağacında
+    // durduğu SÜRECE bu makinede DAİMA kırmızıydı ("acma basarisiz: bu platformda sembolik link
+    // desteklenmiyor"). Kalıcı kırmızı test, gerçek regresyonların da yok sayılmasına yol açar.
+    // Testin kendi son satırı zaten `assert_eq!(platform::current(), MAC_ARM64)` diyor — yani
+    // TASARIMI gereği yalnız macOS testi. Kapıyı en başa alıyoruz: başka platformda ATLANIR.
+    if platform::current() != platform::MAC_ARM64 {
+        eprintln!(
+            "ATLANDI: base-mac.zip yalniz macOS'ta acilabilir (symlink); host={}",
+            platform::current()
+        );
+        return;
+    }
     let root = repo_root();
     let zip_path = root.join("base-mac.zip");
     let sha_path = root.join("base-mac.sha256.txt");
@@ -77,14 +91,18 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     for p in ["home", "vet", "research"] {
         assert!(m.models.contains_key(p), "{p} profili eksik");
     }
-    // Bu platformun paketi çözülebilmeli (mac'te artık base_mac var).
+    // Bu platformun paketi çözülebilmeli.
     let pkg = m.runtime_for_current_platform().expect("platform paketi cozulemedi");
-    assert!(pkg.url.ends_with("base-mac.zip"), "beklenmeyen url: {}", pkg.url);
+    assert!(pkg.url.starts_with("https://"), "beklenmeyen url: {}", pkg.url);
 
-    // Manifest'teki digest, diskteki gerçek dosyayla uyuşmalı.
+    // #100: digest karşılaştırması, diskteki dosyayla AYNI platformun paketi üzerinden yapılmalı.
+    // Önceden MEVCUT platformun paketi alınıp `base-mac.zip`e karşı doğrulanıyordu — mac dışında
+    // her zaman uyumsuz çıkardı (test yalnız PEMF_MANIFEST_FILE verilmediği için sessiz kalıyordu).
     let local = repo_root().join("base-mac.zip");
     if local.exists() {
-        verify::verify_file(&local, &pkg.sha256)
+        let mac = m.runtimes.get(platform::MAC_ARM64).expect("mac runtime eksik");
+        assert!(mac.url.ends_with("base-mac.zip"), "beklenmeyen mac url: {}", mac.url);
+        verify::verify_file(&local, &mac.sha256)
             .expect("manifest digest'i gercek base-mac.zip ile UYUSMUYOR");
     }
 }
@@ -99,6 +117,11 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
 fn gercek_backend_baslatilir_ve_health_doner() {
     if std::env::var("PEMF_LAUNCHER_E2E").as_deref() != Ok("1") {
         eprintln!("ATLANDI: PEMF_LAUNCHER_E2E=1 ile calistirin");
+        return;
+    }
+    // #100: mac paketi + mac ikilisi — başka platformda açılamaz, çalıştırılamaz.
+    if platform::current() != platform::MAC_ARM64 {
+        eprintln!("ATLANDI: base-mac.zip E2E'si yalniz macOS'ta kosar");
         return;
     }
     let root = repo_root();
