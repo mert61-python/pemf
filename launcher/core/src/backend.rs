@@ -374,7 +374,24 @@ fn read_log_tail(path: &Path, n: usize) -> String {
         lines.into_iter().rev().collect::<Vec<_>>().join("
 ")
     };
-    let hint = format!("Ayrıntı için backend günlüğü: {}", path.display());
+    // ⚠️ DENETİM 2026-08-04 (P3): günlüğün TAZE olup olmadığı hiç kontrol edilmiyordu. Dosya
+    // append-mode'dur; backend loglama YAPILANDIRILMADAN ÖNCE çökerse (ör. AV bir .dll'i
+    // karantinaya aldı → PyInstaller önyükleyicisi Python'u hiç çalıştıramadı) tek satır bile
+    // yazılmaz ve kullanıcıya ÖNCEKİ BAŞARILI koşunun satırları "Son çıktı" diye gösterilirdi —
+    // teşhisi iyileştirmek yerine aktif olarak YANILTIR ("startup complete" yazıyor ama açılmıyor).
+    let yas = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
+    let bayat = yas.map(|d| d > Duration::from_secs(120)).unwrap_or(false);
+    let hint = match yas {
+        Some(d) if bayat => format!(
+            "⚠️ Aşağıdaki satırlar {} dk ÖNCESİNE ait — bu çalışmaya ait OLMAYABİLİR (backend              günlüğe hiç yazamadan çökmüş olabilir). Günlük: {}",
+            d.as_secs() / 60,
+            path.display()
+        ),
+        _ => format!("Ayrıntı için backend günlüğü: {}", path.display()),
+    };
     if tail.trim().is_empty() { hint } else { format!("{tail}
 {hint}") }
 }
@@ -726,6 +743,32 @@ mod tests {
         assert!(
             sure < Duration::from_secs(ESTOP_TIMEOUT_S + 5),
             "safe_stop_coils cok uzun blokladi: {sure:?}"
+        );
+    }
+
+    /// P3: gunluk BAYAT ise (backend loglama yapilandirilmadan cokmus) kullaniciya ONCEKI
+    /// kosunun satirlari "Son cikti" diye gosteriliyordu — teshis yaniltiyordu.
+    #[test]
+    fn bayat_gunluk_acikca_isaretlenir() {
+        let d = tempfile::tempdir().unwrap();
+        let log = d.path().join("backend_service.log");
+        std::fs::write(&log, b"2026-08-03 10:00:00 INFO [uvicorn] Application startup complete.
+").unwrap();
+
+        // Taze dosya → uyari YOK.
+        let taze = read_log_tail(&log, 5);
+        assert!(!taze.contains("OLMAYABILIR") && !taze.contains("OLMAYABİLİR"), "taze gunluge bayat uyarisi kondu");
+
+        // mtime'i 1 saat geriye al → BAYAT.
+        let eski = std::time::SystemTime::now() - Duration::from_secs(3600);
+        let f = std::fs::File::options().write(true).open(&log).unwrap();
+        f.set_modified(eski).unwrap();
+        drop(f);
+
+        let t = read_log_tail(&log, 5);
+        assert!(
+            t.contains("OLMAYABİLİR") || t.contains("ONCESINE") || t.contains("ÖNCESİNE"),
+            "BAYAT gunluk isaretlenmedi — kullanici onceki kosunun 'startup complete' satirini              bu kosuya ait sanir: {t}"
         );
     }
 

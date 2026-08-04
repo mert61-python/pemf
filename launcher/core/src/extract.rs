@@ -403,7 +403,6 @@ mod tests {
         assert!(out.path().join("PEMF_Backend/_internal/x.dat").exists());
     }
 
-    /// ZIP-SLIP: `../` ile dışarı yazmaya çalışan arşiv REDDEDİLMELİ.
     /// #109: ~2 GB'lık `ai_models` açılırken UI'daki İptal ÖLÜYDÜ (`control` yalnız indirmede
     /// okunuyordu). Kullanıcı yanlış profili seçtiğini fark etse bile dakikalarca bekliyordu.
     #[test]

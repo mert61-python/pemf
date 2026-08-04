@@ -163,6 +163,16 @@ ver_json = os.path.join(project_path, 'frontend_version.json')
 if os.path.exists(ver_json):
     datas.append((ver_json, '.'))
 
+# DENETIM 2026-08-04 (P3): `VERSION` bundle'i yalniz ONEDIR spec'ine eklenmisti. Iki sonucu var:
+#   1) update_manager._version_paths() `VERSION`i tercih eder -> onefile derlemesinde dosya YOK,
+#      bayat `frontend_version.json`a duser (surum karsilastirmasi yanlis).
+#   2) launcher `install::backend_supports_health_nonce()` `_internal/VERSION` VARLIGINA bakip
+#      nonce dogrulamasi yapip yapmayacagina karar verir -> onefile'da nonce sessizce DEVRE DISI.
+# Iki spec parite icinde olmali.
+ver_txt = os.path.join(project_path, 'VERSION')
+if os.path.exists(ver_txt):
+    datas.append((ver_txt, '.'))
+
 # DEMA simülatör (FastAPI '/simulator')
 sim_dir = os.path.join(project_path, 'dema-terapi-simülatörü', 'dist')
 if os.path.exists(sim_dir):

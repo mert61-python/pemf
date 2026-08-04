@@ -121,13 +121,25 @@ def test_security_definer_fonksiyonlari_sabit_search_path_kullanir(sql_bodies):
         for m in re.finditer(r"security\s+definer", low):
             bulunan += 1
             # Tanım satırının devamında (aynı ifade içinde) `set search_path` gelmeli.
-            pencere = low[m.start() : m.start() + 240]
+            # ⚠️ DENETİM 2026-08-04 (P3): sabit 240 karakterlik pencere BİR SONRAKİ fonksiyonun
+            # tanımına TAŞABİLİYORDU → `set search_path` içermeyen bir SECURITY DEFINER,
+            # komşusunun `search_path`'ini görüp "geçmiş" sayılabilirdi. Pencereyi ifadenin
+            # kendi sonuna (gövde başlangıcı `as $$` ya da `;`) kadar kırp.
+            _adaylar = [x for x in (low.find("as $$", m.start()), low.find(";", m.start())) if x != -1]
+            _son = min(_adaylar + [m.start() + 240])
+            pencere = low[m.start() : _son]
             satir_bas = low.rfind("\n", 0, m.start()) + 1
             satir = body[satir_bas : body.find("\n", m.start())].strip()
             assert "search_path" in pencere, (
                 f"{name}: SABIT search_path'siz SECURITY DEFINER -> {satir[:100]!r}"
             )
-    assert bulunan >= 6, (
+    # ⚠️ DENETİM 2026-08-04 (P3): eşik 6'ydı ve TAM SINIRDAYDI — en güvenlik-kritik dosya olan
+    # `supabase_secure_v2.sql` (6 SECURITY DEFINER) KOMPLE silinse bile kalan 6 fonksiyon eşiği
+    # geçerdi ve test "hâlâ koruyorum" der gibi yeşil kalırdı. Eşik gerçek sayıya çekildi ve
+    # güvenlik-kritik dosyaların VARLIĞI ayrıca şart koşuldu.
+    assert bulunan >= 12, (
         f"beklenenden az SECURITY DEFINER bulundu ({bulunan}) — dosyalar tasinmis/silinmis olabilir, "
         f"bu test sessizce anlamsizlasir."
     )
+    eksik = {"supabase_devices.sql", "supabase_patients.sql", "supabase_secure_v2.sql"} - set(sql_bodies)
+    assert not eksik, f"guvenlik-kritik SQL dosya(lari) EKSIK: {sorted(eksik)}"

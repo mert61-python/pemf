@@ -95,8 +95,52 @@ def test_simulator_sevkedilen_cihazla_ayni_limitleri_uyguluyor(sim, fw_src):
 def test_paket_boyutu_88_uc_kaynakta_da_ayni(sim, fw_src):
     """88 bayt: firmware `#pragma pack(1)` struct'ı ↔ Python struct formatı."""
     assert sim.PKT_SIZE == 88
-    # firmware yorumu da 88 demeli (struct alanları: 2 + 5*4*3 + 5*4 + 2 + 4)
-    assert 2 + (5 * 4) * 3 + (5 * 4) + 2 + 4 == 88
+    # ⚠️ DENETİM 2026-08-04 (P3): burada `2 + (5*4)*3 + (5*4) + 2 + 4 == 88` yazıyordu — SAF
+    # SABİT ARİTMETİĞİ, girdiden tamamen bağımsız; firmware struct'ı değişse bile HEP geçerdi.
+    # Yani "üç kaynakta da aynı" iddiasının firmware ayağı hiç ölçülmüyordu.
+    # NOT: `typedef\s+struct.*?\}\s*BinaryCmdPacket_t` yazmak YANLIŞ olur — dosyadaki İLK
+    # `typedef struct`tan başlar ve aradaki diğer struct'ların alanlarını da sayar (ilk yazımda
+    # tam olarak bu oldu). Gövdeyi kapanış etiketinden GERİYE giderek sınırlandır.
+    _kapanis = fw_src.find("} BinaryCmdPacket_t")
+    assert _kapanis != -1, "BinaryCmdPacket_t struct'i firmware kaynaginda bulunamadi"
+    _acilis = fw_src.rfind("{", 0, _kapanis)
+    assert _acilis != -1, "BinaryCmdPacket_t govdesi ayristirilamadi"
+
+    class _M:
+        def __init__(self, g):
+            self._g = g
+
+        def group(self, i):
+            return self._g
+
+    m = _M(fw_src[_acilis + 1 : _kapanis])
+    # Dizi boyutları makroyla yazılı (`float duty[NUM_COILS]`) → makroyu kaynaktan çöz.
+    mc = re.search(r"#define\s+NUM_COILS\s+(\d+)", fw_src)
+    assert mc, "NUM_COILS #define'i bulunamadi"
+    sabitler = {"NUM_COILS": int(mc.group(1))}
+    boyutlar = {"uint8_t": 1, "int8_t": 1, "uint16_t": 2, "int16_t": 2,
+                "uint32_t": 4, "int32_t": 4, "float": 4}
+    toplam = 0
+    alan_sayisi = 0
+    for alan in re.finditer(
+        r"\b(uint8_t|int8_t|uint16_t|int16_t|uint32_t|int32_t|float)\s+(\w+)\s*(?:\[\s*(\w+)\s*\])?\s*;",
+        m.group(1),
+    ):
+        boyut_ifadesi = alan.group(3)
+        if boyut_ifadesi is None:
+            n = 1
+        elif boyut_ifadesi.isdigit():
+            n = int(boyut_ifadesi)
+        else:
+            assert boyut_ifadesi in sabitler, f"cozulemeyen dizi boyutu: {boyut_ifadesi}"
+            n = sabitler[boyut_ifadesi]
+        toplam += boyutlar[alan.group(1)] * n
+        alan_sayisi += 1
+    assert alan_sayisi >= 6, f"struct alanlari ayristirilamadi (yalniz {alan_sayisi} alan)"
+    assert toplam == 88, (
+        f"firmware BinaryCmdPacket_t alanlarindan hesaplanan boyut {toplam} != 88 "
+        f"(Python struct formati ve simulator 88 varsayiyor -> sessiz protokol kaymasi)"
+    )
     assert "BINARY_PKT_SIZE sizeof(BinaryCmdPacket_t)" in fw_src
 
 

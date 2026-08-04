@@ -21,10 +21,16 @@ jobs:
 
       - name: Upload to TestFlight
         # DENETİM 2026-08-04 (P3): sırlar `${{ secrets.* }}` ile DOĞRUDAN komut satırına
-        # gömülüyordu. İki sorun: (a) argümanlar runner'da `ps`/proses listesinden okunabilir —
-        # aynı işte koşan başka bir adım ya da ele geçirilmiş bir bağımlılık görebilir;
-        # (b) komut hata verip kabuk satırı yankılanırsa parola log'a düşer (GitHub maskelemesi
-        # yalnız TAM eşleşmeyi yakalar, parçalanmış/kodlanmış hâlini değil).
+        # gömülüyordu. Kazanç (b) maddesindedir: komut hata verip kabuk satırı yankılanırsa ya da
+        # `set -x` benzeri bir izleme açılırsa, artık log'a parolanın KENDİSİ değil `$APP_...`
+        # değişken ADI düşer (GitHub maskelemesi yalnız TAM eşleşmeyi yakalar; parçalanmış ya da
+        # kodlanmış hâlini değil). Ayrıca sır tek bir ADIMA kapsanır, tüm job'a değil.
+        #
+        # ⚠️ DÜRÜSTLÜK NOTU (denetim 2026-08-04): bu değişiklik `ps`/proses-listesi sızıntısını
+        # ORTADAN KALDIRMAZ — kabuk `$APP_SPECIFIC_PASSWORD`'ü genişlettiği için parola yine
+        # altool'un argv'sinde görünür. İlk yazdığım gerekçe bu yönüyle YANLIŞTI. Gerçek çözüm
+        # `--apiKey`/`--apiIssuer` (App Store Connect API anahtarı) ile parolayı komut satırından
+        # tamamen çıkarmaktır; o değişiklik Apple hesabı tarafında anahtar üretmeyi gerektirir.
         # Ortam değişkeni olarak verilip kabukta genişletiliyor.
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

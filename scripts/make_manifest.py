@@ -55,6 +55,12 @@ def main() -> int:
         action="store_true",
         help="Yerelde olmayan paketleri manifest'ten DÜŞÜR (varsayılan: mevcut manifest'ten taşı)",
     )
+    ap.add_argument(
+        "--allow-missing-launcher",
+        action="store_true",
+        help="'launcher' blogu olmadan manifest yazmaya IZIN VER (varsayilan: HATA). Blok "
+             "duserse sahadaki tum client'larin oto-guncellemesi sessizce olur.",
+    )
     args = ap.parse_args()
 
     base_url = f"https://github.com/{args.repo}/releases/download/{args.tag}"
@@ -155,6 +161,19 @@ def main() -> int:
 
     if not manifest["runtimes"]:
         print("[HATA] hiçbir base paketi bulunamadı — manifest yazılmadı.", file=sys.stderr)
+        return 1
+
+    # ⚠️ DENETİM 2026-08-04 (P3): `launcher` bloğu düşerse yalnızca stderr'e UYARI basılıp ÇIKIŞ
+    # KODU 0 ile manifest yazılıyordu. Yayın akışı (publish_release.ps1 / CI) sıfır çıkışı
+    # "başarılı" sayar → sahadaki TÜM client'lar için oto-güncelleme SESSİZCE ölür ve bu ancak
+    # kimse güncelleme alamayınca fark edilir. Uyarı, sessiz bir üretim arızasını durdurmaz.
+    # Bilerek launcher'sız manifest üretmek isteyen açıkça `--allow-missing-launcher` demeli.
+    if not manifest.get("launcher") and not args.allow_missing_launcher:
+        print(
+            "[HATA] 'launcher' bloğu YOK — client oto-güncellemesi ÇALIŞMAZDI, manifest "
+            "yazılmadı. Bilerek istiyorsanız --allow-missing-launcher verin.",
+            file=sys.stderr,
+        )
         return 1
 
     out_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
