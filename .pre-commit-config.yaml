@@ -17,3 +17,15 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=2048]
+      - id: detect-private-key   # *.p8/*.p12/PEM özel anahtarı commit'e girerse DURDUR
+
+  # ── SIR TARAMASI (denetim 2026-08-04, P0) ──────────────────────────────────
+  # NEDEN: `.gitignore` yalnız İZLENMEYEN dosyayı korur; bir kez `git add` edilmiş
+  # dosyayı takipten ÇIKARMAZ ve geçmişi TEMİZLEMEZ. Nitekim `config/config.json` +
+  # `config/credentials/*` bu depoya 7dd9fec ile girmiş ve PUBLIC `esp` dalında
+  # canlı Gmail App Password + HiveMQ MQTT kimliğiyle durmaktadır. gitleaks,
+  # aynı sınıf bir sızıntının BİR DAHA commit'e girmesini engelleyen tek kapıdır.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks

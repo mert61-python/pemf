@@ -10,7 +10,7 @@
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Bağlantı/okuma zaman aşımları: slowloris/asılı-uç indirmeyi süresiz askıya alamasın.
 const CONNECT_TIMEOUT_S: u64 = 15;
@@ -18,6 +18,15 @@ const READ_TIMEOUT_S: u64 = 60;
 /// Content-Length YOKSA mutlak indirme tavanı (disk-dolum DoS'a karşı). base.zip ~600MB +
 /// ai_models ~2GB → 4 GB güvenli üst-sınır; meşru paket bunu aşmaz.
 const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// TEK bir indirme denemesi için KÜRESEL süre tavanı.
+///
+/// DENETİM 2026-08-04: `timeout_read` ureq'te HER SOKET OKUMASINA ayrı uygulanır, toplam transfere
+/// DEĞİL. Modül başlığı "slowloris/asılı-uç indirmeyi süresiz askıya alamasın" diyordu ama slowloris
+/// tam olarak bu modelde çalışır: 59 saniyede bir 1 bayt gönderen sunucu HİÇBİR ZAMAN zaman aşımına
+/// uğramaz, `reader.read` daima n>0 döner, döngü ilerler ve `progress` artan değer bildirir — hata
+/// oluşmadığı için flow.rs'teki yeniden-deneme de devreye girmez. Kurulum SONSUZA KADAR asılı kalır.
+/// 6 saat: 2 GB'lık research.zip bile ~1 Mbps'te ~4.5 saatte iner → meşru klinik hattını kesmez.
+const MAX_DOWNLOAD_DURATION_S: u64 = 6 * 60 * 60;
 
 /// Zaman aşımlı + yalnız-HTTPS ajan. `https_only` HTTPS→HTTP downgrade redirect'ini reddeder;
 /// redirect HEDEF host'u ayrıca download_to_file'da validate_url ile yeniden doğrulanır.
@@ -110,6 +119,19 @@ pub fn validate_url(url: &str) -> Result<String, NetError> {
     Ok(host)
 }
 
+/// `Content-Range: bytes <start>-<end>/<total>` değerindeki BAŞLANGIÇ ofsetini çıkar.
+/// Biçim tanınmazsa `None` — çağıran bunu "doğrulanamadı" sayıp devam ettirmez (fail-closed).
+/// (Saf fonksiyon: `ureq::Response` kurmadan birim-test edilebilsin diye ayrıldı.)
+fn parse_content_range_start(value: &str) -> Option<u64> {
+    let v = value.trim().to_ascii_lowercase();
+    let rest = v.strip_prefix("bytes")?.trim_start();
+    rest.split(['-', '/']).next()?.trim().parse::<u64>().ok()
+}
+
+fn content_range_start(resp: &ureq::Response) -> Option<u64> {
+    parse_content_range_start(resp.header("Content-Range")?)
+}
+
 /// İlerleme geri çağrımı: (inen_bayt, toplam_bayt_veya_0).
 pub type ProgressFn<'a> = &'a mut dyn FnMut(u64, u64);
 
@@ -162,7 +184,24 @@ pub fn download_to_file(
     // Redirect host-pin: SON URL'nin host'u allowlist içinde olmalı.
     validate_url(resp.get_url())?;
 
-    // 206 = Partial (Range kabul, kaldığı yerden). 200 = sunucu Range'i yok saydı → BAŞTAN.
+    // DENETİM 2026-08-04: 206 durum kodu TEK BAŞINA yeterli sayılıyordu; `Content-Range` başlığı
+    // ne okunuyor ne de istenen ofsetle karşılaştırılıyordu. RFC'ye göre 206 dönen bir sunucu ya da
+    // ara-vekil İSTENENDEN FARKLI bir aralık (hatta 0'dan itibaren tam gövde) dönebilir — CDN'ler,
+    // şeffaf vekiller ve kurumsal proxy'ler bunu pratikte yapar. Kod ise dosyayı APPEND modunda açıp
+    // gelen baytları körlemesine SONA ekliyordu → ilk `done` baytı ESKİ indirmeden, gerisi YENİ
+    // aralıktan olan MELEZ dosya. (SHA sonunda yakalar ama gigabaytlarca trafik boşa gider ve
+    // kullanıcı sahte bir "kurcalanma" hatası görür.) Artık ofset DOĞRULANIR.
+    if resp.status() == 206 && done > 0 {
+        let got = content_range_start(&resp);
+        if got != Some(done) {
+            let _ = fs::remove_file(&part); // bozuk devam noktası → bir sonraki deneme SIFIRDAN
+            return Err(NetError::Transport(format!(
+                "sunucu istenen aralığı vermedi (beklenen ofset {done}, gelen {got:?}) — .part sıfırlandı"
+            )));
+        }
+    }
+
+    // 206 = Partial (Range kabul edildi VE ofset doğrulandı). 200 = sunucu Range'i yok saydı → BAŞTAN.
     let resuming = resp.status() == 206 && done > 0;
     if !resuming {
         done = 0;
@@ -191,8 +230,17 @@ pub fn download_to_file(
     let mut reader = resp.into_reader();
     let mut buf = vec![0u8; 256 * 1024];
     progress(done, total); // devam noktasını hemen bildir
+    let started = Instant::now(); // küresel süre tavanı (bkz. MAX_DOWNLOAD_DURATION_S)
 
     loop {
+        // Slowloris koruması: sunucu sürekli AZ ama SIFIR-OLMAYAN veri gönderirse hiçbir okuma
+        // zaman aşımına uğramaz. Duraklat/İptal'de `.part` korunur, saat sonraki denemede sıfırlanır.
+        if started.elapsed() > Duration::from_secs(MAX_DOWNLOAD_DURATION_S) {
+            let _ = out.flush(); // `.part` KORUNUR → sonraki deneme Range ile sürer
+            return Err(NetError::Transport(format!(
+                "indirme küresel süre sınırını aştı ({MAX_DOWNLOAD_DURATION_S} sn) — iptal edildi"
+            )));
+        }
         match control() {
             Control::Pause => {
                 let _ = out.flush(); // .part KORUNUR → sonra Range ile sürer
@@ -315,5 +363,23 @@ mod tests {
     #[test]
     fn yerel_test_urlsi_uretimde_reddedilir() {
         assert!(validate_url("http://127.0.0.1:8100/base.zip").is_err());
+    }
+
+    /// DENETİM 2026-08-04: 206 yanıtında `Content-Range` HİÇ doğrulanmıyordu → sunucu/vekil farklı
+    /// bir aralık dönerse baytlar körlemesine APPEND edilip MELEZ dosya oluşuyordu.
+    #[test]
+    fn content_range_baslangic_ofseti_dogru_ayristirilir() {
+        assert_eq!(parse_content_range_start("bytes 1024-2047/4096"), Some(1024));
+        assert_eq!(parse_content_range_start("bytes 0-99/100"), Some(0));
+        // Büyük/küçük harf ve fazladan boşluk toleransı (RFC'ye uymayan sunucular).
+        assert_eq!(parse_content_range_start("  BYTES   500-999/1000 "), Some(500));
+        // Toplam bilinmiyor (`*`) ama başlangıç var → yine okunmalı.
+        assert_eq!(parse_content_range_start("bytes 42-99/*"), Some(42));
+
+        // FAIL-CLOSED: tanınmayan biçim → None (çağıran devam ETTİRMEZ).
+        assert_eq!(parse_content_range_start("items 0-10/20"), None);
+        assert_eq!(parse_content_range_start("bytes */4096"), None);
+        assert_eq!(parse_content_range_start(""), None);
+        assert_eq!(parse_content_range_start("bytes abc-def/1"), None);
     }
 }

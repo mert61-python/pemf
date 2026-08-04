@@ -46,7 +46,7 @@ def test_rollback_endpoint_registered():
 
 
 def test_installer_temp_path_is_private_and_unpredictable():
-    """DENETIM P1 regresyonu: installer PAYLAŞIMLI temp'e SABİT adla indirilmemeli.
+    r"""DENETIM P1 regresyonu: installer PAYLAŞIMLI temp'e SABİT adla indirilmemeli.
 
     Hata: `Path(tempfile.gettempdir()) / f"PEMF_Update_{sürüm}.exe"`. Backend LocalSystem olduğu
     için bu C:\Windows\Temp'tir; yetkisiz yerel bir hesap dosyayı ÖNCEDEN oluşturup sahipliğini
@@ -67,3 +67,52 @@ def test_installer_temp_path_is_private_and_unpredictable():
     assert p1.parent != Path(tempfile.gettempdir())
     assert p1.parent.is_dir(), "özel dizin oluşturulmuş olmalı"
     assert p1.parent.name.startswith("pemf_upd_")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Denetim 2026-08-04 (P2): sürüm KANALI karışıklığı.
+# `check_for_update` sonucu exe kanalının latest.json'ıyla karşılaştırılır, ama kurulu sürüm
+# `frontend_version.json`'dan (versions.json → frontendOta, 1.4.x) okunuyordu. İki AYRI yayın
+# kanalı aynı isim uzayında kıyaslanınca yayındaki base.zip kendini "1.4.0" sanıyordu.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_kurulu_surum_backend_kanalindan_okunur(um):
+    """VERSION (exe/installer kanalı) frontend_version.json'dan ÖNCE gelmeli."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    beklenen = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert um.get_current_version() == beklenen, (
+        "kurulu sürüm VERSION (backend kanalı) yerine başka kanaldan okunuyor"
+    )
+
+    import json as _json
+
+    frontend_ota = str(_json.loads((root / "frontend_version.json").read_text(encoding="utf-8"))["version"])
+    if frontend_ota != beklenen:  # iki kanal ayrıştığında karışıklık görünür olur
+        assert um.get_current_version() != frontend_ota, (
+            "kurulu sürüm frontendOta kanalından okunuyor — exe latest.json ile kıyaslanamaz"
+        )
+
+
+def test_version_paths_sirasi_once_VERSION(um):
+    adlar = [p.name for p in um._version_paths()]
+    assert adlar.index("VERSION") < adlar.index("frontend_version.json"), (
+        "VERSION, frontend_version.json'dan ÖNCE aranmalı"
+    )
+
+
+def test_version_dosyasi_hem_duz_metin_hem_json_okunur(um, tmp_path):
+    """VERSION düz metin, frontend_version.json ise {'version': ...} taşır."""
+    duz = tmp_path / "VERSION"
+    duz.write_text("1.9.5\n", encoding="utf-8")
+    assert um._read_version_file(duz) == "1.9.5"
+
+    js = tmp_path / "frontend_version.json"
+    js.write_text('{"version": "1.4.1"}', encoding="utf-8")
+    assert um._read_version_file(js) == "1.4.1"
+
+    bos = tmp_path / "VERSION_bos"
+    bos.write_text("   \n", encoding="utf-8")
+    assert um._read_version_file(bos) == ""

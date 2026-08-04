@@ -39,6 +39,14 @@ pub enum FlowError {
     Backend(#[from] crate::backend::BackendError),
     #[error("dosya sistemi hatası: {0}")]
     Io(#[from] std::io::Error),
+    /// DENETİM 2026-08-04: onarım, hangi profillerin kurulu olduğunu bilmeden model paketlerini
+    /// SESSİZCE atlayıp "Hazır" diyordu. Artık kullanıcıya ne yapacağını söyleyen açık hata.
+    #[error(
+        "Kurulu profil kaydı okunamadı ama diskte model verisi VAR — hangi profillerin \
+         onarılacağı bilinmiyor. Profilleri yeniden seçip kurun (indirilenler önbellekten gelir, \
+         yeniden İNMEZ)."
+    )]
+    ProfileRecordUnreadable,
 }
 
 /// Cache dosya-adı güvenli mi: tek segment, yol-ayırıcı / sürücü / `..` / NUL YOK.
@@ -50,6 +58,26 @@ fn is_safe_filename(name: &str) -> bool {
         && !name.contains('\\')
         && !name.contains(':')
         && !name.contains('\0')
+}
+
+/// Bir indirme hatası GEÇİCİ mi (yeniden denenmeli) yoksa KALICI mı?
+///
+/// DENETİM 2026-08-04: `ensure_package`'ın yorumu "KALICI hatalar (host-pin/HTTPS/4xx) yeniden
+/// denenmez" diyordu ama kod TÜM `HttpStatus` varyantlarını geçici sayıyordu. 404 (asset
+/// `--clobber` ile silinmiş / yanlış tag) ya da 403'te kullanıcı ~22 sn "Yeniden bağlanılıyor"
+/// görüp sonunda yine aynı hatayı alıyordu. Karar saf bir fonksiyona alındı → doğrudan test
+/// edilebilir (host-pinlemesi yüzünden yerel HTTP sunucusuyla uçtan uca test edilemiyor).
+fn is_retriable(e: &net::NetError) -> bool {
+    match e {
+        // Ağ kopması / timeout / aktarım hatası → geçici.
+        net::NetError::Io(_) | net::NetError::Transport(_) => true,
+        // 5xx sunucu tarafı geçicidir; 408 (Request Timeout) ve 429 (Too Many Requests) da öyle.
+        // Diğer 4xx'ler KALICI: yeniden denemek yalnız kullanıcıyı bekletir.
+        net::NetError::HttpStatus { status, .. } => *status >= 500 || *status == 408 || *status == 429,
+        // Malformed / NotHttps / HostNotAllowed → GÜVENLİK reddi, ASLA yeniden deneme.
+        // Paused / Cancelled → kullanıcı kararı, yeniden deneme YANLIŞ olur.
+        _ => false,
+    }
 }
 
 /// Bir paketi hazır et: önbellekte geçerli kopya varsa indirme, yoksa indir + doğrula.
@@ -95,10 +123,7 @@ pub fn ensure_package(
         match result {
             Ok(_) => break,
             Err(e) => {
-                let retriable = matches!(
-                    e,
-                    net::NetError::Io(_) | net::NetError::Transport(_) | net::NetError::HttpStatus { .. }
-                );
+                let retriable = is_retriable(&e);
                 if !retriable || attempt >= MAX_ATTEMPTS {
                     return Err(e.into());
                 }
@@ -159,8 +184,25 @@ pub fn install_profiles(
 
     let cache = install::cache_dir(install_root);
     let runtime_zip = ensure_package(runtime_pkg, &cache, "base", on, control)?;
+
+    // ⚠️ DENETİM 2026-08-04 (P2): `extract_zip` SALT-EKLEME/ÜZERİNE-YAZMA yapar — yalnız arşivde
+    // BULUNAN girdileri yazar, arşivde OLMAYAN dosyaları KALDIRMAZ ve hedef ağacı önce silmez.
+    // Kurulum yolunda hiçbir yerde `remove_dir_all(runtime_dir)` çağrılmıyordu (`remove_install`
+    // yalnız Kaldır'da kullanılır). Sonuç: "başarılı" bir yükseltmeden sonra bile disk İKİ SÜRÜMÜN
+    // BİRLEŞİMİYDİ — yeni sürümde KALDIRILAN dosyalar (eski .pyd/.dll, eski web bundle parçaları)
+    // yaşamaya devam ediyordu. PyInstaller onedir düzeninde bayat bir DLL/uzantı, sürümü
+    // uyuşmayan bir Python ikilisiyle yüklendiğinde tanımsız davranış üretir ve bu, sürüm
+    // numarasına bakan hiçbir teşhisle görünmez.
+    // base.zip runtime ağacının TAMAMINI içerir → ÖNCE TEMİZLE, sonra aç.
+    // (Backend bu noktada zaten durdurulmuştur: install/repair yolları `stop_tracked_backend`
+    //  çağırır. Dosya kilidi varsa burada AÇIK hata veririz — sessiz karışık-kurulumdan iyidir.)
+    let rt = install::runtime_dir(install_root);
+    if rt.exists() {
+        on(Progress::Extracting { what: "eski sürüm temizleniyor".into() });
+        fs::remove_dir_all(&rt)?;
+    }
     on(Progress::Extracting { what: "base".into() });
-    extract::extract_zip(&runtime_zip, &install::runtime_dir(install_root))?;
+    extract::extract_zip(&runtime_zip, &rt)?;
 
     // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
@@ -168,10 +210,14 @@ pub fn install_profiles(
         let model_zip = ensure_package(pkg, &cache, name, on, control)?;
         on(Progress::Extracting { what: (*name).clone() });
         extract::extract_zip(&model_zip, install_root)?;
+        // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir).
+        // ÖNEMLİ: işaretlemeyi döngü SONUNA bırakma. Çoklu-profil kurulumunda kullanıcı
+        // sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda iptal),
+        // erken-return burayı atlar → tamamlanan profil KAYBOLURDU. Her profili kendi
+        // extract'ından hemen sonra kaydederek, iptal-sonrası kullanıcı tamamlanmış
+        // profil(ler)le uygulamayı kurup başlatabilir.
+        install::add_installed_profiles(install_root, std::slice::from_ref(*name));
     }
-
-    // Kurulu profilleri kaydet (UI çip'leri + Onar bunu okur; mevcutlarla birleşir).
-    install::add_installed_profiles(install_root, profiles);
     Ok(())
 }
 
@@ -202,7 +248,19 @@ pub fn repair(
     on: &mut dyn FnMut(Progress),
     control: &dyn Fn() -> net::Control,
 ) -> Result<(), FlowError> {
-    let installed = install::read_installed_profiles(install_root);
+    // DENETİM 2026-08-04: liste `read_installed_profiles`'tan alınıyordu; o fonksiyon dosya yoksa
+    // VEYA JSON bozuksa BOŞ liste döndüğü için onarım YALNIZ base'i yeniliyor, model paketlerine
+    // HİÇ dokunmuyor ve yine de `Ok(())` dönüyordu → UI "Hazır" diyordu. Artık kaydın durumu
+    // ayırt ediliyor: okunamıyorsa ve diskte model verisi VARSA hangi profillerin onarılacağı
+    // BİLİNEMEZ → sessiz başarı yerine AÇIK hata.
+    let installed = match install::read_installed_profiles_detailed(install_root) {
+        install::ProfileRecord::Ok(v) => v,
+        _ if install::has_model_data(install_root) => {
+            return Err(FlowError::ProfileRecordUnreadable);
+        }
+        // Kayıt yok/bozuk AMA diskte model de yok → gerçekten yalnız base kurulu; onarım doğru.
+        _ => Vec::new(),
+    };
     install_profiles(manifest_raw, &installed, install_root, on, control)
 }
 
@@ -309,6 +367,66 @@ mod tests {
             err,
             FlowError::Manifest(crate::manifest::ManifestError::UnsupportedPlatform { .. })
         ));
+    }
+
+    /// DENETİM 2026-08-04: 4xx KALICIDIR — yeniden denemek kullanıcıyı ~22 sn boşuna bekletiyordu.
+    /// Güvenlik reddi ve kullanıcı iptali de ASLA yeniden denenmemeli.
+    #[test]
+    fn yalniz_gercekten_gecici_hatalar_yeniden_denenir() {
+        let st = |s: u16| net::NetError::HttpStatus { status: s, url: "https://x/y.zip".into() };
+
+        // KALICI 4xx → yeniden deneme YOK.
+        for s in [400u16, 401, 403, 404, 410, 416, 451] {
+            assert!(!is_retriable(&st(s)), "{s} KALICI olmali (bosuna bekletme)");
+        }
+        // GEÇİCİ: 5xx + 408 + 429.
+        for s in [408u16, 429, 500, 502, 503, 504] {
+            assert!(is_retriable(&st(s)), "{s} GECICI olmali");
+        }
+        // Ağ/aktarım → geçici.
+        assert!(is_retriable(&net::NetError::Transport("baglanti koptu".into())));
+        assert!(is_retriable(&net::NetError::Io(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timeout"
+        ))));
+        // GÜVENLİK reddi → ASLA yeniden deneme (host-pin/HTTPS zorunluluğu kalıcıdır).
+        assert!(!is_retriable(&net::NetError::HostNotAllowed("evil.example".into())));
+        assert!(!is_retriable(&net::NetError::NotHttps("http://x".into())));
+        assert!(!is_retriable(&net::NetError::Malformed("x".into())));
+        // Kullanıcı kararı → yeniden deneme YANLIŞ.
+        assert!(!is_retriable(&net::NetError::Paused));
+        assert!(!is_retriable(&net::NetError::Cancelled));
+    }
+
+    /// DENETİM 2026-08-04: profil kaydı okunamaz + diskte MODEL VARSA onarım SESSİZCE yalnız
+    /// base'i yenileyip "Hazır" diyordu. Artık açık hata verir (kullanıcı ne yapacağını bilir).
+    #[test]
+    fn onarim_profil_kaydi_okunamazken_sessizce_basarili_olmaz() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Diskte model verisi VAR ama kayıt BOZUK → onarım hangi profilleri onaracağını bilemez.
+        fs::create_dir_all(install::models_dir(root).join("ai_hub")).unwrap();
+        fs::write(install::installed_profiles_path(root), "{bozuk").unwrap();
+
+        let mut on = |_: Progress| {};
+        let err = repair("{}", root, &mut on, &|| net::Control::Continue).unwrap_err();
+        assert!(
+            matches!(err, FlowError::ProfileRecordUnreadable),
+            "sessiz basari/farkli hata: {err:?}"
+        );
+    }
+
+    /// Kayıt yok AMA disk de boşsa: gerçekten yalnız base kurulu → onarım DEVAM etmeli
+    /// (ProfileRecordUnreadable DEĞİL; burada manifest bozuk olduğu için Manifest hatası bekleriz).
+    #[test]
+    fn onarim_model_yokken_normal_akista_kalir() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut on = |_: Progress| {};
+        let err = repair("{}", dir.path(), &mut on, &|| net::Control::Continue).unwrap_err();
+        assert!(
+            !matches!(err, FlowError::ProfileRecordUnreadable),
+            "model verisi yokken onarim engellenmemeli: {err:?}"
+        );
     }
 
     #[test]

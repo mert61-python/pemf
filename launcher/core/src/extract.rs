@@ -180,12 +180,27 @@ fn stays_within(root: &Path, base: &Path, target: &Path) -> bool {
 }
 
 /// Hedefin gerçekten kökün altında kaldığını sembolik link çözümünden SONRA doğrular.
-/// (Kurulum sonrası savunma; `dest` yoksa `true` döner.)
+///
+/// DENETİM 2026-08-04: bu fonksiyon `canonicalize` başarısız olduğunda `true` (= "kök altında")
+/// dönüyordu — bir GÜVENLİK YÜKLEMİ için FAIL-OPEN varsayılan. Dosya yoksa, izin yoksa, Windows'ta
+/// kilitliyse veya yol çok uzunsa "güvenli" deniyordu. Artık FAIL-CLOSED.
+///
+/// Aday HENÜZ YOKSA (yazmadan önce kontrol) en yakın VAR OLAN atası çözümlenir: "buraya yazsam
+/// kökün altında kalır mıydım?" sorusunun doğru cevabı budur. Hiçbir ata çözümlenemezse `false`.
 pub fn is_within(root: &Path, candidate: &Path) -> bool {
-    let (Ok(root), Ok(cand)) = (root.canonicalize(), candidate.canonicalize()) else {
-        return true;
+    let Ok(root) = root.canonicalize() else {
+        return false; // kök çözümlenemiyorsa hiçbir şey doğrulanamaz → reddet
     };
-    cand.starts_with(root)
+    let mut probe = candidate;
+    loop {
+        if let Ok(cand) = probe.canonicalize() {
+            return cand.starts_with(&root);
+        }
+        match probe.parent() {
+            Some(p) if p != probe => probe = p,
+            _ => return false, // var olan ata bulunamadı → reddet
+        }
+    }
 }
 
 
@@ -315,6 +330,32 @@ mod tests {
         let out = tempfile::tempdir().unwrap();
         extract_zip(&zip_path, out.path()).unwrap();
         assert!(fs::symlink_metadata(out.path().join("a/b/link")).unwrap().file_type().is_symlink());
+    }
+
+    /// DENETİM 2026-08-04: `is_within` bir GÜVENLİK yüklemidir → çözümlenemeyen yol "güvenli"
+    /// sayılmamalı (eski hâli `true` dönüyordu = FAIL-OPEN).
+    #[test]
+    fn is_within_fail_closed_ve_var_olmayan_yolu_dogru_degerlendirir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        // 1) Kök altındaki VAR OLAN dosya → true
+        let inside = root.join("a");
+        fs::create_dir_all(&inside).unwrap();
+        let f = inside.join("x.bin");
+        fs::write(&f, b"x").unwrap();
+        assert!(is_within(root, &f));
+
+        // 2) Kök altında HENÜZ YOK olan yol → en yakın var olan ata (a/) çözümlenir → true
+        assert!(is_within(root, &inside.join("daha").join("olmayan.bin")));
+
+        // 3) Kökün DIŞINDAKİ var olan yol → false
+        let outside = dir.path().parent().unwrap().to_path_buf();
+        assert!(!is_within(root, &outside));
+
+        // 4) Kök çözümlenemiyorsa (yok) → FAIL-CLOSED, true DEĞİL
+        let yok = root.join("hic-olmayan-kok");
+        assert!(!is_within(&yok, &yok.join("x")), "kok cozumlenemedi ama 'guvenli' dendi (fail-open)");
     }
 
     #[test]

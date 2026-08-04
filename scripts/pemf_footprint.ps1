@@ -32,7 +32,21 @@ function Get-PemfFootprint {
         @{ Kind = 'PerUser'; Path = 'AppData\Local\PEMFVetClient';                 Owner = 'client';  Kvkk = $false }  # eski isim
         # ── Uygulama verisi (non-patient) ──
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_GUI\ai_models';           Owner = 'shared';  Kvkk = $false }
-        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System';                  Owner = 'shared';  Kvkk = $false }
+        # ⚠️ DENETİM 2026-08-04 (P1): 'C:\ProgramData\PEMF_System' KÖKÜ Kvkk=$false olarak
+        # listeleniyordu ve koşulsuz `Remove-Item -Recurse` ile siliniyordu. Oysa üretim profili
+        # (deploy/device.env:58) `PEMF_DATA_DIR=C:\ProgramData\PEMF_System` veriyor ve
+        # utils/path_utils.py bunu `<PEMF_DATA_DIR>\PEMF_GUI` yapıyor → hasta DB'si (patients.db),
+        # tedavi geçmişi, `.sqlcipher_key` ve `pemf_secrets.json` TAM OLARAK o ağacın içindeydi.
+        # Sonuç: "HASTA VERİSİ KORUNACAK" diyen varsayılan kaldırma, hasta verisini SİLİYORDU.
+        # ÇÖZÜM: kökü ARTIK LİSTELEME; yalnız hasta-verisi OLMAYAN alt dizinleri say. Veri kökü
+        # aşağıda KVKK bloğunda ayrıca korunuyor. (Üst dizin silinirse alt-koruma anlamsız olurdu.)
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\logs';             Owner = 'shared';  Kvkk = $false }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\mosquitto';        Owner = 'shared';  Kvkk = $false }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\hotspot.json';     Owner = 'shared';  Kvkk = $false }
+        # staging profili (deploy/staging.env: PEMF_DATA_DIR=C:\ProgramData\PEMF_Staging) —
+        # footprint'te HİÇ yoktu → kaldırma sonrası kalıntı kalıyordu (KVKK "sildim" raporu eksik).
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\logs';            Owner = 'shared';  Kvkk = $false }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\mosquitto';       Owner = 'shared';  Kvkk = $false }
         @{ Kind = 'PerUser'; Path = 'AppData\Local\PEMF_System';                   Owner = 'shared';  Kvkk = $false }
         @{ Kind = 'PerUser'; Path = 'AppData\Local\PEMF_DigitalTwin_Installation'; Owner = 'gui';     Kvkk = $false }
         @{ Kind = 'PerUser'; Path = 'AppData\Local\PEMF_GUI_OneFile';              Owner = 'gui';     Kvkk = $false }
@@ -45,6 +59,10 @@ function Get-PemfFootprint {
         @{ Kind = 'PerUser'; Path = 'AppData\Local\com.vpemf.client';              Owner = 'client';  Kvkk = $false }
         # ── HASTA VERİSİ (KVKK) — yalnız -IncludePatientData ile silinir ──
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_GUI';                     Owner = 'shared';  Kvkk = $true  }
+        # device/server profilinin GERÇEK veri kökü (PEMF_DATA_DIR=C:\ProgramData\PEMF_System):
+        # patients.db + treatment geçmişi + .sqlcipher_key + pemf_secrets.json BURADA.
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\PEMF_GUI';         Owner = 'shared';  Kvkk = $true  }
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\PEMF_GUI';        Owner = 'shared';  Kvkk = $true  }
         @{ Kind = 'PerUser'; Path = 'AppData\Roaming\PEMF_GUI';                    Owner = 'shared';  Kvkk = $true  }
         @{ Kind = 'PerUser'; Path = '.pemf_gui';                                   Owner = 'gui';     Kvkk = $true  }
     )

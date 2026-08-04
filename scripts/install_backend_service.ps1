@@ -41,8 +41,42 @@ $BackendFile = "$GuiRoot\backend_service.py"
 $ExePath     = @("$GuiRoot\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe", "C:\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe", "$GuiRoot\dist\PEMF_Backend\PEMF_Backend.exe") |
                Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $ExePath) { $ExePath = "$GuiRoot\dist\PEMF_Backend\PEMF_Backend.exe" }
-$NssmDir     = "C:\nssm"
+
+# ⚠️ DENETİM 2026-08-04: servis LocalSystem olarak çalışır → ImagePath'teki ikili KORUMALI bir
+# dizinde olmalı. Aday listesi `C:\PEMF_BUILD\...` ve kullanıcı profili altındaki build çıktılarını
+# da içeriyor; oralar yönetici-olmayan kullanıcılarca YAZILABİLİR → ikili değiştirilirse bir
+# sonraki servis başlangıcında LocalSystem'de keyfi kod çalışır. Bu script bir GELİŞTİRME/elle
+# kurulum aracı olduğu için build dizininden çalıştırmayı ENGELLEMİYORUZ, ama SESSİZ bırakmıyoruz.
+# Üretim yolu: Inno installer → setup_services.ps1 → C:\Program Files\PEMF Backend (korumalı).
+function Test-PemfProtectedPath([string]$P) {
+    $p = $P.ToLowerInvariant()
+    return ($p.StartsWith("c:\program files\") -or $p.StartsWith("c:\program files (x86)\") -or $p.StartsWith("c:\windows\"))
+}
+if (-not (Test-PemfProtectedPath $ExePath)) {
+    Write-Status "UYARI: servis ikilisi KORUMASIZ dizinde: $ExePath" "Red"
+    Write-Status "       Yonetici olmayan bir kullanici bu dosyayi degistirip LocalSystem'de kod calistirabilir." "Red"
+    Write-Status "       Uretim kurulumu icin Inno installer + setup_services.ps1 kullanin (Program Files)." "Yellow"
+}
+# ⚠️ DENETİM 2026-08-04 (P2 — YEREL AYRICALIK YÜKSELTME): NSSM servis-sarmalayıcısıdır; servisin
+# ImagePath'i nssm.exe'dir ve LocalSystem olarak çalışır. `C:\nssm` kullanılıyordu; `C:\` kökünün
+# varsayılan ACL'i `Authenticated Users:(OI)(CI)(IO)(M)` içerdiğinden orada oluşan dosyaları
+# YÖNETİCİ OLMAYAN her kullanıcı DEĞİŞTİREBİLİR → nssm.exe değiştirilip LocalSystem'de kod
+# çalıştırılabilirdi. Korumalı dizine taşındı; eski dizin varsa YERİNDE sertleştirilir.
+$NssmDir     = if (Test-Path "C:\nssm\nssm.exe") { "C:\nssm" } else { "C:\Program Files\PEMF\nssm" }
 $NssmExe     = "$NssmDir\nssm.exe"
+
+# Dizini SYSTEM+Administrators'a tam, Users'a yalnız OKU/ÇALIŞTIR yap. SID kullanılır:
+# Türkçe Windows'ta grup adları "Yöneticiler"/"Kullanıcılar" olduğundan isimle eşleşme
+# SESSİZCE başarısız olurdu.
+function Protect-PemfDir([string]$Dir) {
+    if (-not (Test-Path $Dir)) { return }
+    try {
+        & icacls $Dir /inheritance:r `
+            /grant '*S-1-5-18:(OI)(CI)F' `
+            /grant '*S-1-5-32-544:(OI)(CI)F' `
+            /grant '*S-1-5-32-545:(OI)(CI)RX' *>$null
+    } catch { }
+}
 $ServiceName = "PemfBackend"
 $LogDir      = "C:\ProgramData\PEMF_System\logs"
 
@@ -82,17 +116,28 @@ if (-not (Test-Path $LogDir)) {
 
 # --- NSSM hazır mı? (yoksa indir) ---
 if (-not (Test-Path $NssmExe)) {
-    Write-Status "NSSM bulunamadı, indiriliyor..." "Yellow"
+    Write-Status "NSSM bulunamadı, indiriliyor (bu indirme DOĞRULANMIYOR — bundled NSSM tercih edilir)..." "Yellow"
     if (-not (Test-Path $NssmDir)) { New-Item -ItemType Directory -Path $NssmDir -Force | Out-Null }
-    $NssmZip = "$env:TEMP\nssm.zip"
-    Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $NssmZip -UseBasicParsing
-    Expand-Archive -Path $NssmZip -DestinationPath "$env:TEMP\nssm_ext" -Force
-    $NssmBin = Get-ChildItem "$env:TEMP\nssm_ext" -Filter "nssm.exe" -Recurse |
-        Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
-    if (-not $NssmBin) { $NssmBin = Get-ChildItem "$env:TEMP\nssm_ext" -Filter "nssm.exe" -Recurse | Select-Object -First 1 }
-    Copy-Item $NssmBin.FullName $NssmExe -Force
-    Write-Status "NSSM kuruldu: $NssmExe" "Green"
+    Protect-PemfDir $NssmDir   # dosya yazılmadan ÖNCE kilitle (yarış penceresi)
+    # Paylaşımlı TEMP'te SABİT ad + `-Recurse | Select -First 1`, önceden yerleştirilmiş bir
+    # nssm.exe'nin seçilmesine yol açabilirdi → süreç-özel benzersiz dizin.
+    $TmpRoot = Join-Path $env:TEMP ("pemf_nssm_" + [guid]::NewGuid().ToString("N"))
+    try {
+        New-Item -ItemType Directory -Path $TmpRoot -Force | Out-Null
+        $NssmZip = Join-Path $TmpRoot "nssm.zip"
+        Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $NssmZip -UseBasicParsing
+        Expand-Archive -Path $NssmZip -DestinationPath (Join-Path $TmpRoot "ext") -Force
+        $NssmBin = Get-ChildItem (Join-Path $TmpRoot "ext") -Filter "nssm.exe" -Recurse |
+            Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
+        if (-not $NssmBin) { $NssmBin = Get-ChildItem (Join-Path $TmpRoot "ext") -Filter "nssm.exe" -Recurse | Select-Object -First 1 }
+        Copy-Item $NssmBin.FullName $NssmExe -Force
+        Protect-PemfDir $NssmDir
+        Write-Status "NSSM kuruldu: $NssmExe" "Green"
+    } finally {
+        Remove-Item $TmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 } else {
+    Protect-PemfDir $NssmDir   # eski/mevcut dizin AÇIK olabilir → yerinde sertleştir
     Write-Status "NSSM bulundu: $NssmExe" "Green"
 }
 

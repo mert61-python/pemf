@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.8.0"
+#define MyAppVersion   "1.9.5"
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define ProjectRoot    ".."
@@ -119,7 +119,16 @@ Filename: "http://localhost:8000"; Description: "Web arayuzunu simdi ac"; \
 [UninstallDelete]
 Type: files; Name: "{commondesktop}\PEMF Web Arayuzu.url"
 Type: filesandordirs; Name: "{app}"
-Type: filesandordirs; Name: "{commonappdata}\PEMF_System"
+; DENETIM 2026-08-04 (P1): burada `{commonappdata}\PEMF_System` KOKU siliniyordu.
+; O agac uretim profilinin VERI KOKUDUR (deploy/device.env: PEMF_DATA_DIR=C:\ProgramData\PEMF_System)
+; ve altinda `PEMF_GUI\` = patients.db + tedavi gecmisi + .sqlcipher_key + pemf_secrets.json bulunur.
+; [UninstallDelete] usPostUninstall'da, yani asagidaki CurUninstallStepChanged onayindan SONRA ve
+; ONDAN BAGIMSIZ calisir -> operator "HAYIR, hasta verisi KORUNSUN" dese bile veri SILINIYORDU.
+; Artik yalnizca hasta-verisi OLMAYAN alt dizinler silinir; veri kokunun silinmesi tek yetkili
+; yere birakildi: setup_services.ps1 -Uninstall -PurgeData (yalnizca acik onayla).
+Type: filesandordirs; Name: "{commonappdata}\PEMF_System\logs"
+Type: filesandordirs; Name: "{commonappdata}\PEMF_System\mosquitto"
+Type: files;          Name: "{commonappdata}\PEMF_System\hotspot.json"
 Type: filesandordirs; Name: "{commonappdata}\PEMF_GUI\ai_models"
 
 [Registry]
@@ -127,6 +136,48 @@ Root: HKLM; Subkey: "SOFTWARE\{#MyAppPublisher}\PEMF Backend"; ValueType: string
 Root: HKLM; Subkey: "SOFTWARE\{#MyAppPublisher}\PEMF Backend"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"
 
 [Code]
+// == DENETIM 2026-08-04 (P2): DiskSpanning + OTA UYUSMAZLIGI ==============================
+// [Setup] DiskSpanning=yes -> kurulum UC dosyaya bolunur: setup.exe (~2.7 MB) + "-1.bin" +
+// "-2.bin". UCU DE AYNI KLASORDE olmak ZORUNDADIR. Oysa OTA kanali
+// (servers/update_manager.py::apply_update) TEK dosya indirir: manifest'teki `installerUrl`
+// -> setup.exe -> Popen(/VERYSILENT). Dilimleri indirecek kod YOKTUR; publish_release.ps1 de
+// tek `-AssetPath` alir.
+// ESKI DAVRANIS (tehlikeli): eksik dilim ancak DOSYA CIKARMA sirasinda anlasiliyordu; oysa
+// CurStepChanged(ssInstall) ondan ONCE calisip `taskkill /F PEMF_Backend.exe` +
+// `sc stop PemfBackend` yapiyordu. Sonuc: OTA guncellemesi tibbi cihazin backend'ini OLDURUP
+// kuruluma devam edemiyor ve cihaz DURMUS halde kaliyordu.
+// YENI: dilim varligi EN BASTA (InitializeSetup) denetlenir - hicbir sey oldurulmez.
+// NOT: [Setup] DiskSpanning kapatilirsa bu kontrol de KALDIRILMALIDIR.
+function SliceFilesPresent: Boolean;
+var
+  FR: TFindRec;
+begin
+  Result := False;
+  if FindFirst(ExtractFilePath(ExpandConstant('{srcexe}')) + '*-1.bin', FR) then
+  try
+    Result := True;
+  finally
+    FindClose(FR);
+  end;
+end;
+
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  if not SliceFilesPresent then
+  begin
+    Result := False;
+    SuppressibleMsgBox(
+      'KURULUM DOSYALARI EKSIK - kurulum BASLATILMADI.' + #13#10#13#10 +
+      'Bu kurulum bolunmus olarak uretilir: setup .exe dosyasinin YANINDA' + #13#10 +
+      '"-1.bin" ve "-2.bin" veri dosyalari da AYNI KLASORDE bulunmalidir.' + #13#10#13#10 +
+      'Yalnizca .exe indirilmisse (ornegin otomatik guncelleme kanali) kurulum' + #13#10 +
+      'YAPILAMAZ. Tum dosyalari ayni klasore indirip tekrar deneyin.' + #13#10#13#10 +
+      'GUVENLIK NOTU: Calisan PEMF servisi DURDURULMADI, cihaz calismaya devam ediyor.',
+      mbCriticalError, MB_OK, IDOK);
+  end;
+end;
+
 // VC++ 2015-2022 x64 Redistributable kurulu mu?
 function VCRedistNeedsInstall: Boolean;
 var
@@ -190,6 +241,8 @@ begin
     Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
+
+
 
 
 

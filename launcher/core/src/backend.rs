@@ -63,6 +63,52 @@ pub fn health_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/api/health")
 }
 
+/// `<install_root>/backend.port` içeriğini GÜVENLE oku. Rakam-dışı / aralık-dışı → `None`.
+pub fn read_backend_port(install_root: &Path) -> Option<u16> {
+    let txt = std::fs::read_to_string(install_root.join("backend.port")).ok()?;
+    txt.trim().parse::<u16>().ok().filter(|p| *p > 0)
+}
+
+/// Bu portta GERÇEKTEN bir PEMF backend'i mi var? (`/api/health` gövdesinde `"service":"PEMF-Vet"`)
+///
+/// `wait_for_health` yalnız HTTP 200'e bakar; KENDİ başlattığımız süreci beklerken bu yeterlidir.
+/// Ama BAŞKASININ başlattığı bir backend'i sahiplenmeden önce kimliğini doğrulamak gerekir —
+/// aynı porta bağlanmış ilgisiz bir yerel servis de 200 dönebilir.
+fn probe_pemf_backend(port: u16) -> bool {
+    ureq::get(&health_url(port))
+        .timeout(Duration::from_secs(2))
+        .call()
+        .ok()
+        .filter(|r| r.status() == 200)
+        .and_then(|r| r.into_string().ok())
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.get("service").and_then(|s| s.as_str().map(str::to_owned)))
+        .is_some_and(|s| s == "PEMF-Vet")
+}
+
+/// Kurulu backend ZATEN çalışıyor mu? Çalışıyorsa portunu döndürür.
+///
+/// DENETİM 2026-08-04: launcher yalnız KENDİ `state.proc`'una bakıyordu. Sistemde çalışan bir
+/// backend varken "Başlat" İKİNCİ bir süreç açıyordu (`find_free_port` meşgul 8000'i atlayıp 8001
+/// veriyor; backend tarafında da tek-instance kilidi YOK). İki süreç aynı hasta DB'sine ve aynı
+/// COM/MQTT kaynağına talip oluyor; seri port Windows'ta exclusive olduğundan ikincisi donanımı
+/// SÜREMEZ ama UI'yı "boşta/temiz" gösterir → veteriner donanımı KONTROL ETMEYEN bir ekrana bakar.
+/// Üstelik `backend.port` üzerine yazılıp ilk sürecin E-stop adresi kayboluyordu.
+/// Artık: çalışan varsa İKİNCİSİNİ BAŞLATMA, mevcut olanı SAHİPLEN.
+pub fn detect_running_backend(install_root: &Path) -> Option<u16> {
+    // 1) Kayıtlı port — kim başlattıysa yazmıştır.
+    if let Some(port) = read_backend_port(install_root) {
+        if probe_pemf_backend(port) {
+            return Some(port);
+        }
+    }
+    // 2) Port dosyası silinmiş/bayat olabilir → varsayılan portu da yokla.
+    if probe_pemf_backend(install::DEFAULT_PORT) {
+        return Some(install::DEFAULT_PORT);
+    }
+    None
+}
+
 pub fn app_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/")
 }
@@ -157,13 +203,44 @@ fn read_tail(child: &mut Child) -> String {
 /// E-stop endpoint'iyle TÜM transport'lardan (STM 1-5 + ESP 6-8) DONANIM STOP tetikler; STM STOP
 /// async seri-kuyruğa konduğu için porta yazılsın diye kısa bekler. Best-effort: backend cevap
 /// vermese/erişilemese bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır, engellemez).
+/// E-stop HTTP bütçesi. DENETİM 2026-08-04: eskiden 3 sn idi; backend AYNI ucu kendi kaynağında
+/// "senkron MQTT publish yapar (~7sn worst-case)" diye belgeliyor (`servers/api_server.py`
+/// `emergency_stop` yorumu) ve `_estop_one` bobin-başına iki senkron publish yapıyor. 3 sn dolunca
+/// ureq isteği bırakıyordu, çağıran hemen `child.kill()` (TerminateProcess) çağırıyordu ve E-stop'u
+/// yürüten `asyncio.to_thread` thread'i ORTASINDA ölüyordu. STM bobinleri 1-5 firmware'in 1500 ms
+/// ölü-adam devresiyle kurtulur; **ESP bobinleri 6-8'in link-watchdog'u YOKTUR** → yalnızca broker'a
+/// ulaşan STOP publish'iyle dururlar. Bu yüzden bütçe backend'in worst-case'inin üstüne çekildi.
+const ESTOP_TIMEOUT_S: u64 = 10;
+/// Yanıt döndükten SONRA STM STOP'un sender-thread'ce seri porta YAZILMASI için beklenen süre.
+/// Backend'in kendi kuyruk-boşaltma deadline'ı 1.5 sn (`backend_service.py`), eski 1200 ms bunun
+/// ALTINDAYDI → kuyruk boşalmadan süreç öldürülebiliyordu.
+const ESTOP_FLUSH_MS: u64 = 1600;
+
 pub fn safe_stop_coils(port: u16) {
     let url = format!("http://127.0.0.1:{port}/api/hardware/emergency_stop");
-    let _ = ureq::post(&url)
-        .timeout(Duration::from_secs(3))
-        .call();
-    // STM STOP sender-thread'ce seri porta yazılana kadar bekle (backend flush deadline'ı ~1.5s).
-    std::thread::sleep(Duration::from_millis(1200));
+    // Backend `{"status":"success|partial|error","confirmed":bool,...}` döner ve "bir transport
+    // doğrulanamadı" durumunu BİLEREK bildirir. Eski kod yanıtı `let _ =` ile tamamen atıyordu →
+    // "STM durdu ama MQTT yayınlanamadı" sinyali görülmüyordu. Doğrulanmazsa BİR KEZ daha dene:
+    // ESP publish'i geçici broker/ağ hatasında sıklıkla ikinci denemede geçer.
+    for attempt in 0..2u8 {
+        let confirmed = ureq::post(&url)
+            .timeout(Duration::from_secs(ESTOP_TIMEOUT_S))
+            .call()
+            .ok()
+            .and_then(|r| r.into_string().ok())
+            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+            .and_then(|v| v.get("confirmed").and_then(|c| c.as_bool()))
+            .unwrap_or(false);
+        if confirmed {
+            break;
+        }
+        if attempt == 0 {
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+    // Best-effort: doğrulanmasa bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır,
+    // engellemez). Doğrulanmadıysa kuyruğun yazılması için tam bütçeyi tanı.
+    std::thread::sleep(Duration::from_millis(ESTOP_FLUSH_MS));
 }
 
 /// ARTAKALAN (orphan) backend süreçlerini sistem-genelinde durdur.
@@ -188,9 +265,14 @@ pub fn kill_stray_backends() {
     }
     #[cfg(not(windows))]
     {
-        for pat in ["PEMF_Backend", "mosquitto", "cloudflared"] {
+        // DENETİM 2026-08-04: burada `pkill -f <ad>` vardı. `-f` TÜM KOMUT SATIRINDA arar →
+        // `tail -f /var/log/mosquitto.log`, `less cloudflared.log`, hatta argümanında bu kelime
+        // geçen editör/grep gibi TAMAMEN İLGİSİZ süreçler de öldürülüyordu. Windows kolu zaten
+        // `/IM` ile YALNIZ imaj adına bakıyor; Unix kolu bundan çok daha genişti.
+        // `-x` = süreç ADI TAM eşleşmeli (komut satırı değil) → Windows `/IM` ile aynı davranış.
+        for name in ["PEMF_Backend", "mosquitto", "cloudflared"] {
             let _ = Command::new("pkill")
-                .args(["-f", pat])
+                .args(["-x", name])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status();
@@ -263,7 +345,10 @@ mod tests {
             if let Ok((mut s, _)) = listener.accept() {
                 let mut buf = [0u8; 1024];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let body = b"{\"status\":\"success\"}";
+                // GERÇEK yanıt şekli (servers/api_server.py `emergency_stop`): `confirmed` alanı
+                // "her iki transport da doğrulandı" demektir. safe_stop_coils bunu OKUR ve
+                // doğrulanmadıysa bir kez daha dener → burada true dönerek tek denemede biter.
+                let body = br#"{"status":"success","confirmed":true,"stmStopped":true}"#;
                 let _ = write!(
                     s,
                     "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -280,6 +365,107 @@ mod tests {
         assert!(
             req.starts_with("POST /api/hardware/emergency_stop"),
             "yanlış istek gönderildi: {req}"
+        );
+    }
+
+    /// TIBBİ GÜVENLİK: backend `confirmed:false` (ör. "STM durdu ama MQTT yayınlanamadı") derse
+    /// E-stop TEK denemeyle bırakılmamalı — ESP bobinleri 6-8'in link-watchdog'u YOKTUR, tek
+    /// durdurma yolu broker'a ulaşan STOP publish'idir.
+    #[test]
+    fn dogrulanmayan_estop_yeniden_denenir() {
+        use std::io::Read;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits2 = hits.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf);
+                let n = hits2.fetch_add(1, Ordering::SeqCst);
+                // 1. istek: partial/confirmed=false → yeniden denenmeli. 2. istek: confirmed=true.
+                let body: &[u8] = if n == 0 {
+                    br#"{"status":"partial","confirmed":false}"#
+                } else {
+                    br#"{"status":"success","confirmed":true}"#
+                };
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = s.write_all(body);
+            }
+        });
+
+        safe_stop_coils(port);
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            2,
+            "confirmed=false yaniti YENIDEN DENENMEDI — ESP bobinleri durdurulmadan kalabilir"
+        );
+    }
+
+    /// `backend.port` KULLANICI-YAZILABİLİR bir dizindedir → içeriği asla ham güvenilmez.
+    #[test]
+    fn backend_port_dosyasi_guvenle_okunur() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path();
+        assert_eq!(read_backend_port(p), None, "dosya yokken None olmali");
+
+        std::fs::write(p.join("backend.port"), "8123\r\n").unwrap();
+        assert_eq!(read_backend_port(p), Some(8123), "CR/LF kirpilmali");
+
+        for bad in ["", "   ", "0", "abc", "8123; calc", "-1", "99999"] {
+            std::fs::write(p.join("backend.port"), bad).unwrap();
+            assert_eq!(read_backend_port(p), None, "gecersiz deger kabul edildi: {bad:?}");
+        }
+    }
+
+    /// DENETİM 2026-08-04: çalışan bir backend'i SAHİPLENMEDEN (ikinci süreç başlatmayı
+    /// engellemeden) önce KİMLİĞİ doğrulanmalı — aynı porta bağlanmış İLGİSİZ bir yerel servis
+    /// de HTTP 200 döner. Yanlış sahiplenme, veterinere donanımı kontrol etmeyen bir UI gösterir.
+    #[test]
+    fn calisan_backend_yalniz_pemf_imzasiyla_sahiplenilir() {
+        use std::io::Read;
+
+        fn serve(body: &'static [u8]) -> u16 {
+            let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+            let port = l.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                for stream in l.incoming() {
+                    let Ok(mut s) = stream else { continue };
+                    let mut buf = [0u8; 1024];
+                    let _ = s.read(&mut buf);
+                    let _ = write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = s.write_all(body);
+                }
+            });
+            port
+        }
+
+        let pemf = serve(br#"{"status":"online","service":"PEMF-Vet"}"#);
+        let other = serve(br#"{"status":"online","service":"BaskaServis"}"#);
+
+        let tmp = tempfile::tempdir().unwrap();
+        // backend.port GERÇEK backend'i gösteriyor → tespit edilmeli (ikinci süreç açılmaz).
+        std::fs::write(tmp.path().join("backend.port"), pemf.to_string()).unwrap();
+        assert_eq!(detect_running_backend(tmp.path()), Some(pemf));
+
+        // backend.port İLGİSİZ bir servisi gösteriyor → SAHİPLENİLMEMELİ.
+        std::fs::write(tmp.path().join("backend.port"), other.to_string()).unwrap();
+        assert_ne!(
+            detect_running_backend(tmp.path()),
+            Some(other),
+            "PEMF olmayan bir servis backend sanildi"
         );
     }
 

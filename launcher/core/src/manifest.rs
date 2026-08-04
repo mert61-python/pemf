@@ -161,12 +161,25 @@ impl Manifest {
     /// yoksa gigabaytlarca indirip sonunda doğrulama hatası alınır.
     fn validate_digests(&self) -> Result<(), ManifestError> {
         for (key, pkg) in self.runtimes.iter().chain(self.models.iter()) {
-            let ok = pkg.sha256.len() == 64 && pkg.sha256.chars().all(|c| c.is_ascii_hexdigit());
-            if !ok {
+            if !is_hex64(&pkg.sha256) {
                 return Err(ManifestError::BadDigest {
                     key: key.clone(),
                     got: pkg.sha256.clone(),
                 });
+            }
+        }
+        // DENETİM 2026-08-04: doğrulama YALNIZ runtimes+models üzerinde dönüyordu; `launcher.sha256`
+        // kapsam DIŞINDAYDI — oysa o, açılışta KULLANICI ONAYI OLMADAN indirilip `/S` ile SESSİZCE
+        // kurulan İMZASIZ setup.exe'nin tek güven çıpasıdır. Satır 61-62'deki yorum bu alanı
+        // `installer_url` ile birlikte "ZORUNLU" ilan ediyor ama tip `Option<String>` ve parse
+        // aşamasında hiçbir zorunluluk yoktu; tek kontrol çalışma zamanında (main.rs, boş-mu) idi.
+        // Bozuk digest'i İNDİRMEDEN ÖNCE yakala — paketler için zaten uygulanan ilkenin aynısı.
+        if let Some(l) = &self.launcher {
+            if l.installer_url.as_deref().is_some_and(|u| !u.trim().is_empty()) {
+                let got = l.sha256.clone().unwrap_or_default();
+                if !is_hex64(&got) {
+                    return Err(ManifestError::BadDigest { key: "launcher".into(), got });
+                }
             }
         }
         Ok(())
@@ -191,6 +204,11 @@ impl Manifest {
                 available: sorted_keys(&self.models),
             })
     }
+}
+
+/// 64 haneli, salt-hex bir SHA256 mi?
+fn is_hex64(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn sorted_keys(map: &HashMap<String, Package>) -> String {
@@ -323,6 +341,47 @@ mod tests {
         // Self-update alanı eklendi → gerçek manifest launcher sürümünü taşımalı (bildirimi besler).
         let l = m.launcher.expect("gerçek manifest'te launcher alanı olmali");
         assert!(!l.version.is_empty(), "launcher sürümü bos olmamali");
+    }
+
+    /// DENETİM 2026-08-04: `installer_url` VARSA `sha256` de ZORUNLU ve 64-hex olmalı —
+    /// o exe imzasızdır, kullanıcı onayı olmadan `/S` ile sessizce kurulur ve TEK güven çıpası
+    /// bu digest'tir. Bozuk/eksik digest 2.7 MB indirildikten SONRA değil, ayrıştırmada yakalanmalı.
+    #[test]
+    fn launcher_installer_sha256i_da_dogrulanir() {
+        let mk = |launcher: &str| {
+            format!(
+                r#"{{ "schema":2, "version":"1.9.1",
+                     "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                     "models": {{ "vet": {{"url":"https://x/v.zip","sha256":"{D2}","size":1}} }},
+                     "launcher": {launcher} }}"#
+            )
+        };
+
+        // installer_url VAR + sha256 YOK → REDDET
+        let err = Manifest::parse(&mk(
+            r#"{ "version":"1.9.3", "installer_url":"https://github.com/o/r/releases/download/v/S.exe" }"#,
+        ))
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::BadDigest { .. }), "eksik sha kabul edildi: {err:?}");
+
+        // installer_url VAR + sha256 BOZUK (kısa) → REDDET
+        let err = Manifest::parse(&mk(
+            r#"{ "version":"1.9.3", "installer_url":"https://x/S.exe", "sha256":"kisa" }"#,
+        ))
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::BadDigest { .. }));
+
+        // installer_url YOK (yalnız bildirim) → sha256 gerekmez, GEÇMELİ (geriye uyum)
+        let m = Manifest::parse(&mk(r#"{ "version":"1.9.3", "url":"https://pemf-vet-web.vercel.app/" }"#))
+            .expect("installer_url'siz launcher blogu kabul edilmeli");
+        assert_eq!(m.launcher.unwrap().version, "1.9.3");
+
+        // installer_url + geçerli sha256 → GEÇMELİ
+        let m = Manifest::parse(&mk(&format!(
+            r#"{{ "version":"1.9.3", "installer_url":"https://x/S.exe", "sha256":"{D1}", "size":1 }}"#
+        )))
+        .expect("gecerli digest reddedildi");
+        assert!(m.launcher.unwrap().sha256.is_some());
     }
 
     #[test]

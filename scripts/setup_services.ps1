@@ -12,7 +12,14 @@ param(
     [ValidateSet("device","server","staging")]
     [string]$Mode = "device",   # device=klinik (donanım+mosquitto) / server=demo (simülasyon) / staging=üretim-benzeri doğrulama (simülasyon, audit B-9.4)
     [switch]$Uninstall,
-    [switch]$PurgeData          # -Uninstall ile: hasta DB + şifreleme anahtarlarını da KALICI sil (KVKK; varsayılan KORU)
+    [switch]$PurgeData,         # -Uninstall ile: hasta DB + şifreleme anahtarlarını da KALICI sil (KVKK; varsayılan KORU)
+    # DENETİM 2026-08-04 (P0): hotspot SSID/parolası start_hotspot.ps1'de GÖMÜLÜYDÜ ve o script
+    # base.zip ile PUBLIC dağıtılıyor → parola gizli değildi ve TÜM cihazlarda aynıydı. Artık
+    # kurulumda verilir ve hotspot.json'a yazılır. VERİLMEZSE sahadaki kurulumlar bozulmasın diye
+    # start_hotspot.ps1 eski varsayılana düşer (uyarı loglar).
+    # ⚠️ Parolayı değiştirmek ESP bobinlerinin (6-8) `secrets_coil_*.h` ile YENİDEN FLASH'lanmasını gerektirir.
+    [string]$HotspotSsid = "",
+    [string]$HotspotPass = ""
 )
 $ErrorActionPreference = "Continue"   # installer akışını tek bir hata kesmesin
 function Log($m, $c = "White") { Write-Host "[setup-services] $m" -ForegroundColor $c }
@@ -25,7 +32,43 @@ $LogDir         = "C:\ProgramData\PEMF_System\logs"
 # NSSM: ÖNCE bundled (offline, {app}\_internal\bin\nssm) → yoksa C:\nssm → en son indir (internet).
 # Offline klinikte internet gerekmesin diye nssm.exe EXE'ye bundle edildi (spec bin/nssm).
 $NssmBundled    = Join-Path $AppDir "_internal\bin\nssm\nssm.exe"
-$NssmExe        = if (Test-Path $NssmBundled) { $NssmBundled } else { "C:\nssm\nssm.exe" }
+
+# ⚠️ DENETİM 2026-08-04 (P2 — YEREL AYRICALIK YÜKSELTME): NSSM bir servis-SARMALAYICISIDIR;
+# servisin ImagePath'i nssm.exe'dir ve `ObjectName LocalSystem` ile çalışır. Eski kod onu
+# `C:\nssm\nssm.exe`'ye koyuyordu. `C:\` kökünün VARSAYILAN ACL'i
+# `NT AUTHORITY\Authenticated Users:(OI)(CI)(IO)(M)` içerir → C:\ altında OLUŞTURULAN her dizin
+# ve dosya, makinedeki HERHANGİ bir kimliği doğrulanmış (yönetici OLMAYAN) kullanıcı tarafından
+# DEĞİŞTİRİLEBİLİR. Yani standart bir kullanıcı nssm.exe'yi kendi ikilisiyle değiştirip bir
+# sonraki servis başlangıcında LocalSystem olarak kod çalıştırabilirdi.
+# ÇÖZÜM: indirme hedefi korumalı dizine taşındı + dizin ACL'i açıkça sertleştiriliyor.
+$NssmFallbackDir = "C:\Program Files\PEMF\nssm"
+$NssmLegacyDir   = "C:\nssm"   # eski kurulumlar — bulunursa YERİNDE sertleştirilir
+
+# Dizini SYSTEM+Administrators'a tam, Users'a yalnız OKU/ÇALIŞTIR olacak şekilde kilitle.
+# SID kullanılır: Türkçe Windows'ta grup adları "Yöneticiler"/"Kullanıcılar"dır, isimle
+# eşleşme SESSİZCE başarısız olurdu.
+function Protect-PemfDir([string]$Dir) {
+    if (-not (Test-Path $Dir)) { return }
+    try {
+        & icacls $Dir /inheritance:r `
+            /grant '*S-1-5-18:(OI)(CI)F' `
+            /grant '*S-1-5-32-544:(OI)(CI)F' `
+            /grant '*S-1-5-32-545:(OI)(CI)RX' *>$null
+        if ($LASTEXITCODE -eq 0) { Log "ACL sertlestirildi: $Dir (Users = salt oku/calistir)" "Green" }
+        else { Log "UYARI: ACL sertlestirilemedi ($Dir) — icacls kodu $LASTEXITCODE" "Yellow" }
+    } catch { Log "UYARI: ACL sertlestirilemedi ($Dir): $_" "Yellow" }
+}
+# Çözümleme sırası: bundled ({app}\_internal — Program Files, zaten korumalı)
+#   → eski C:\nssm (VARSA kullan ama YERİNDE sertleştir; kurulumu bozmamak için)
+#   → korumalı fallback (indirme buraya yapılır).
+$NssmExe = if (Test-Path $NssmBundled) {
+    $NssmBundled
+} elseif (Test-Path (Join-Path $NssmLegacyDir "nssm.exe")) {
+    Protect-PemfDir $NssmLegacyDir   # eski kurulumdaki AÇIK dizini kapat
+    Join-Path $NssmLegacyDir "nssm.exe"
+} else {
+    Join-Path $NssmFallbackDir "nssm.exe"
+}
 $MosqInstallDir = "C:\Program Files\PEMF\mosquitto"
 $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
 $BackendExe     = Join-Path $AppDir "PEMF_Backend.exe"
@@ -188,17 +231,31 @@ log_timestamp true
 
 # ───────────────────── 2. NSSM (yoksa indir) ─────────────────────
 if (-not (Test-Path $NssmExe)) {
-    Log "NSSM indiriliyor..." "Yellow"
-    New-Item -ItemType Directory -Path (Split-Path $NssmExe) -Force | Out-Null
+    # ⚠️ Bu ikili LocalSystem servisinin ImagePath'i olacak. İndirmenin BÜTÜNLÜK DOĞRULAMASI
+    # YOKTUR (nssm.cc yayınlanmış bir SHA256 sağlamıyor) → yalnızca SON ÇARE. Normal kurulumda
+    # bundled nssm ({app}\_internal\bin\nssm) kullanılır ve buraya HİÇ gelinmez.
+    Log "UYARI: bundled NSSM yok → internetten indiriliyor. Bu indirme DOGRULANMIYOR;" "Yellow"
+    Log "       tercih edilen yol bundled NSSM'dir (offline + dogrulanmis)." "Yellow"
+    $NssmDestDir = Split-Path $NssmExe
+    New-Item -ItemType Directory -Path $NssmDestDir -Force | Out-Null
+    # ÖNCE kilitle: dosya oraya YAZILMADAN dizin korumalı olsun (yarış penceresini kapat).
+    Protect-PemfDir $NssmDestDir
+    # Paylaşımlı TEMP'te SABİT ad kullanmak, önceden yerleştirilmiş bir nssm.exe'nin
+    # `Get-ChildItem -Recurse | Select -First 1` ile seçilmesine yol açabilir → benzersiz dizin.
+    $tmpRoot = Join-Path $env:TEMP ("pemf_nssm_" + [guid]::NewGuid().ToString("N"))
     try {
-        $zip = "$env:TEMP\nssm.zip"
+        New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+        $zip = Join-Path $tmpRoot "nssm.zip"
         Invoke-WebRequest "https://nssm.cc/release/nssm-2.24.zip" -OutFile $zip -UseBasicParsing -TimeoutSec 20
-        Expand-Archive $zip "$env:TEMP\nssm_ext" -Force
-        $bin = Get-ChildItem "$env:TEMP\nssm_ext" -Filter nssm.exe -Recurse | Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
-        if (-not $bin) { $bin = Get-ChildItem "$env:TEMP\nssm_ext" -Filter nssm.exe -Recurse | Select-Object -First 1 }
+        Expand-Archive $zip (Join-Path $tmpRoot "ext") -Force
+        $bin = Get-ChildItem (Join-Path $tmpRoot "ext") -Filter nssm.exe -Recurse | Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
+        if (-not $bin) { $bin = Get-ChildItem (Join-Path $tmpRoot "ext") -Filter nssm.exe -Recurse | Select-Object -First 1 }
         Copy-Item $bin.FullName $NssmExe -Force
+        Protect-PemfDir $NssmDestDir   # kopyalama sonrası da doğrula
     } catch {
         Log "HATA: NSSM indirilemedi: $_" "Red"
+    } finally {
+        Remove-Item $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -322,6 +379,25 @@ Set-Content -Path (Join-Path $AppDir ".install_verified") -Value (Get-Date -Form
 if ($Mode -eq "device") {
     $hotspotPs = Join-Path $AppDir "start_hotspot.ps1"
     if (Test-Path $hotspotPs) {
+        # Hotspot kimliğini TEK KAYNAĞA yaz (start_hotspot.ps1 buradan okur; script'te literal YOK).
+        # Yalnız operatör değer verdiyse yazılır — verilmezse dosya oluşturulmaz ve script eski
+        # varsayılana düşüp UYARI loglar (sahadaki mevcut ESP'ler bozulmaz).
+        if ($HotspotSsid -or $HotspotPass) {
+            try {
+                $hcDir = "C:\ProgramData\PEMF_System"
+                if (-not (Test-Path $hcDir)) { New-Item -ItemType Directory -Path $hcDir -Force | Out-Null }
+                $hcPath = Join-Path $hcDir "hotspot.json"
+                $hcObj  = @{
+                    ssid = $(if ($HotspotSsid) { $HotspotSsid } else { "PEMF-Gateway" })
+                    pass = $HotspotPass
+                }
+                ($hcObj | ConvertTo-Json -Compress) | Set-Content -LiteralPath $hcPath -Encoding UTF8
+                Log "Hotspot kimliği yazıldı: $hcPath (SSID=$($hcObj.ssid))" "Green"
+                Log "HATIRLATMA: parola değiştiyse ESP bobinleri 6-8 secrets_coil_*.h ile YENİDEN FLASH'LANMALI." "Yellow"
+            } catch { Log "hotspot.json yazılamadı: $_" "Yellow" }
+        } else {
+            Log "Hotspot kimliği verilmedi (-HotspotPass) → PAYLAŞILAN ESKİ VARSAYILAN kullanılacak. Bu değer base.zip ile PUBLIC dağıtılıyor, GİZLİ DEĞİLDİR." "Yellow"
+        }
         # LattePanda 3 = Intel AX201 → legacy hosted-network YOK (Intel SoftAP'yi AX2xx'te kaldırdı); tek yol WinRT
         # Mobile Hotspot, o da KULLANICI OTURUMU ister (LocalSystem servisi/session-0 AÇAMAZ). Bu yüzden logon-task +
         # keep-alive: ICS Mobile-Hotspot ~4dk boşta kapanır → idempotent script'i her 3dk tekrar çalıştır.

@@ -154,6 +154,93 @@ pub fn read_installed_profiles(install_root: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Aynı hedef sürüm için izin verilen OTOMATİK self-update denemesi sayısı.
+pub const MAX_SELFUPDATE_ATTEMPTS: u32 = 2;
+
+fn selfupdate_state_path(install_root: &Path) -> PathBuf {
+    install_root.join("selfupdate_attempt.json")
+}
+
+/// Son denenen self-update hedefi ve deneme sayısı: `(sürüm, sayı)`.
+///
+/// DENETİM 2026-08-04 (P2 — SONSUZ DÖNGÜ): karar YALNIZ `manifest.launcher.version` vs
+/// `CARGO_PKG_VERSION` kıyasına dayanıyordu; hangi hedefin DENENDİĞİ/BAŞARISIZ olduğu hiçbir
+/// yerde tutulmuyordu. Manifest "1.9.9" derken `installer_url` gerçekte 1.9.8'i gösterirse
+/// (klasik `--clobber`/yanlış-asset yayın hatası) kurulum "başarılı" olur ama SÜRÜM DEĞİŞMEZ →
+/// bir sonraki açılışta aynı karar yeniden verilir → indir-kur-yeniden başlat DÖNGÜSÜ.
+/// Üstelik UI o ekranda Duraklat/İptal'i GİZLEDİĞİ için kullanıcı döngüyü kıramıyordu.
+pub fn read_selfupdate_attempt(install_root: &Path) -> Option<(String, u32)> {
+    let s = std::fs::read_to_string(selfupdate_state_path(install_root)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&s).ok()?;
+    let ver = v.get("version")?.as_str()?.to_string();
+    let n = v.get("count").and_then(|c| c.as_u64()).unwrap_or(0) as u32;
+    Some((ver, n))
+}
+
+/// Bu hedef için deneme sayacını artır (aynı sürümse +1, farklı sürümse 1'den başlar).
+pub fn record_selfupdate_attempt(install_root: &Path, version: &str) {
+    let n = match read_selfupdate_attempt(install_root) {
+        Some((v, c)) if v == version => c.saturating_add(1),
+        _ => 1,
+    };
+    let _ = std::fs::create_dir_all(install_root);
+    if let Ok(json) = serde_json::to_string(&serde_json::json!({ "version": version, "count": n })) {
+        let _ = std::fs::write(selfupdate_state_path(install_root), json);
+    }
+}
+
+/// Güncelleme GERÇEKTEN uygulandığında (çalışan sürüm hedefe ulaştı) sayacı sıfırla.
+pub fn clear_selfupdate_attempt(install_root: &Path) {
+    let _ = std::fs::remove_file(selfupdate_state_path(install_root));
+}
+
+/// Bu hedef sürüm için OTOMATİK (sessiz) güncelleme hâlâ denenmeli mi?
+/// Sınır aşıldıysa `false` → bildirim kalır ama sessiz kurulum DURUR (döngü kırılır).
+pub fn selfupdate_auto_allowed(install_root: &Path, target_version: &str) -> bool {
+    match read_selfupdate_attempt(install_root) {
+        Some((v, c)) if v == target_version => c < MAX_SELFUPDATE_ATTEMPTS,
+        _ => true,
+    }
+}
+
+/// `installed_profiles.json` kaydının DURUMU.
+///
+/// DENETİM 2026-08-04 (P2): `read_installed_profiles` FAIL-SAFE tasarlanmıştı — dosya yoksa VEYA
+/// JSON bozuksa `.unwrap_or_default()` ile BOŞ liste dönüyordu. `repair()` onarılacak paket
+/// listesini TAMAMEN bundan aldığı için boş listeyle çağrılıyor, YALNIZ base indirilip açılıyor,
+/// HİÇBİR model paketi doğrulanmıyor/onarılmıyordu — ve fonksiyon `Ok(())` dönüp UI "Hazır"
+/// diyordu. Oysa bu dosya tam da onarımı gerektiren senaryolarda (yarım kalan kurulum, disk
+/// hatası, kısmi silme) bozulur; üstelik profil zip'lerinin açıldığı `install_root`'un
+/// İÇİNDEDİR, yani bir profil arşivi tarafından da ezilebilir.
+/// "Modeller onarılmadı" durumu artık SESSİZ KALMIYOR — çağıran ayırt edebiliyor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileRecord {
+    /// Kayıt okundu. Boş olabilir — gerçekten yalnız base kurulu demektir.
+    Ok(Vec<String>),
+    /// Kayıt dosyası YOK.
+    Missing,
+    /// Dosya var ama JSON olarak ayrıştırılamıyor.
+    Corrupt,
+}
+
+pub fn read_installed_profiles_detailed(install_root: &Path) -> ProfileRecord {
+    match std::fs::read_to_string(installed_profiles_path(install_root)) {
+        Err(_) => ProfileRecord::Missing,
+        Ok(s) => match serde_json::from_str::<Vec<String>>(&s) {
+            Ok(v) => ProfileRecord::Ok(v),
+            Err(_) => ProfileRecord::Corrupt,
+        },
+    }
+}
+
+/// Diskte GERÇEKTEN model verisi var mı? Kayıt kayıp/bozukken "aslında profil kurulu muydu?"
+/// sorusunun tek güvenilir cevabı budur.
+pub fn has_model_data(install_root: &Path) -> bool {
+    std::fs::read_dir(models_dir(install_root))
+        .map(|mut d| d.next().is_some())
+        .unwrap_or(false)
+}
+
 /// Yeni kurulan profilleri mevcut kayda EKLE (birleştir, tekilleştir, sırala). Best-effort.
 pub fn add_installed_profiles(install_root: &Path, profiles: &[String]) {
     let mut set = read_installed_profiles(install_root);
@@ -296,6 +383,107 @@ mod tests {
         } else {
             assert!(got.is_none(), "windows disi platformda ProgramData kullanilmamali");
         }
+    }
+
+    /// DENETİM 2026-08-04 regresyonu: migrasyon YALNIZ kök yokken çalışır (erken-return).
+    /// Bu yüzden ÇAĞRI SIRASI kritiktir: `write_pending` (create_dir_all yapar) migrasyondan
+    /// ÖNCE koşarsa migrasyon SESSİZCE ölür ve eski `PEMFVetClient` kurulumundan yükseltenler
+    /// ~2.6 GB payload'u (runtime + ai_models) HER yükseltmede yeniden indirir.
+    #[test]
+    fn legacy_kok_tasinir_ama_kok_varsa_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path();
+        let legacy = parent.join("PEMFVetClient");
+        let target = parent.join("PEMF Vet Client");
+        std::fs::create_dir_all(legacy.join("runtime")).unwrap();
+        std::fs::write(legacy.join("runtime").join("marker.txt"), b"payload").unwrap();
+
+        // 1) Kök YOK → taşınır, payload korunur (yeniden indirme YOK).
+        migrate_legacy_install_root(&target);
+        assert!(
+            target.join("runtime").join("marker.txt").exists(),
+            "legacy payload tasinmadi — yukseltmede 2.6 GB yeniden inecek"
+        );
+        assert!(!legacy.exists(), "eski dizin yerinde kalmis");
+
+        // 2) Kök VARSA → no-op. (write_pending önce koşarsa tam olarak bu duruma düşülür;
+        //    bu yüzden main.rs'te migrate ÖNCE çağrılır.)
+        std::fs::create_dir_all(legacy.join("runtime")).unwrap();
+        std::fs::write(legacy.join("runtime").join("yeni.txt"), b"z").unwrap();
+        migrate_legacy_install_root(&target); // target ARTIK var
+        assert!(
+            legacy.join("runtime").join("yeni.txt").exists(),
+            "kok varken tasima YAPILMAMALI (erken-return bekleniyor)"
+        );
+    }
+
+    /// DENETİM 2026-08-04 (P2 — SONSUZ DÖNGÜ): aynı hedef sürüm N kez denenip sürüm DEĞİŞMEZSE
+    /// (manifest sürümü ↔ paketin gerçek sürümü ayrışması) otomatik kurulum DURMALI. Aksi halde
+    /// launcher her açılışta indir-kur-yeniden başlat döngüsüne girer.
+    #[test]
+    fn selfupdate_ayni_surumu_sonsuz_denemez() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert!(selfupdate_auto_allowed(root, "1.9.9"), "hic denenmemisken izinli olmali");
+
+        record_selfupdate_attempt(root, "1.9.9");
+        assert_eq!(read_selfupdate_attempt(root), Some(("1.9.9".into(), 1)));
+        assert!(selfupdate_auto_allowed(root, "1.9.9"), "1. denemeden sonra hala izinli");
+
+        record_selfupdate_attempt(root, "1.9.9");
+        assert_eq!(read_selfupdate_attempt(root), Some(("1.9.9".into(), 2)));
+        assert!(
+            !selfupdate_auto_allowed(root, "1.9.9"),
+            "sinir dolunca OTOMATIK kurulum DURMALI (dongu kirilmali)"
+        );
+
+        // FARKLI bir hedef sürüm sayacı sıfırdan başlatır — yeni yayın yine denenebilmeli.
+        assert!(selfupdate_auto_allowed(root, "2.0.0"));
+        record_selfupdate_attempt(root, "2.0.0");
+        assert_eq!(read_selfupdate_attempt(root), Some(("2.0.0".into(), 1)));
+
+        // Güncelleme GERÇEKTEN uygulandıysa (çalışan sürüm hedefe ulaştı) kayıt temizlenir.
+        clear_selfupdate_attempt(root);
+        assert_eq!(read_selfupdate_attempt(root), None);
+        assert!(selfupdate_auto_allowed(root, "2.0.0"));
+    }
+
+    /// DENETİM 2026-08-04: kayıt YOK / BOZUK / okundu birbirinden ayırt edilebilmeli — eski
+    /// `read_installed_profiles` üçünü de "boş liste"ye indirgiyordu ve onarım sessizce
+    /// model paketlerini atlayıp "Hazır" diyordu.
+    #[test]
+    fn profil_kaydi_durumu_ayirt_edilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        assert_eq!(read_installed_profiles_detailed(root), ProfileRecord::Missing);
+
+        std::fs::write(installed_profiles_path(root), "{bozuk-json").unwrap();
+        assert_eq!(read_installed_profiles_detailed(root), ProfileRecord::Corrupt);
+
+        std::fs::write(installed_profiles_path(root), r#"["vet","research"]"#).unwrap();
+        assert_eq!(
+            read_installed_profiles_detailed(root),
+            ProfileRecord::Ok(vec!["vet".into(), "research".into()])
+        );
+
+        // Boş liste GEÇERLİ bir kayıttır (gerçekten yalnız base kurulu) — Corrupt değil.
+        std::fs::write(installed_profiles_path(root), "[]").unwrap();
+        assert_eq!(read_installed_profiles_detailed(root), ProfileRecord::Ok(vec![]));
+    }
+
+    /// Kayıt kayıp/bozukken "aslında profil kurulu muydu?" sorusunun tek güvenilir cevabı disktir.
+    #[test]
+    fn model_verisi_varligi_dogru_tespit_edilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert!(!has_model_data(root), "ai_models yokken var denmemeli");
+
+        std::fs::create_dir_all(models_dir(root)).unwrap();
+        assert!(!has_model_data(root), "BOŞ ai_models dizini 'model var' sayılmamalı");
+
+        std::fs::create_dir_all(models_dir(root).join("ai_hub")).unwrap();
+        assert!(has_model_data(root));
     }
 
     #[test]

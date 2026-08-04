@@ -43,12 +43,24 @@ function Test-PemfScope([string]$Owner, [string]$Scope) {
 # kalan için force-kill (fallback: graceful asılıysa dosya kilidi kalmasın). (mosquitto'da
 # Stop-Service -Force StartPending'de ASILIR → sc + süreç-kill kullanılır.)
 function Stop-PemfProcessesAndServices([string[]]$Services) {
-    foreach ($svc in $Services) {
-        if (Get-Service -Name $svc -ErrorAction SilentlyContinue) { & sc.exe stop $svc *>$null }
-    }
-    # sc stop asenkron döner → STOPPED olana kadar bekle (NSSM AppStopMethodConsole 15s + pay ~20sn).
-    foreach ($svc in $Services) {
+    # ⚠️ TIBBİ GÜVENLİK — SIRA ÖNEMLİ (denetim 2026-08-04, P2).
+    # ESKİ HÂLİ: ilk döngü TÜM servislere milisaniyeler içinde `sc.exe stop` gönderiyor, beklemeyi
+    # AYRI bir döngüde SONRA yapıyordu. mosquitto <1 sn'de kapanır; backend ise `_safe_stop_outputs`
+    # içinde ÖNCE 1.5 sn STM kuyruğunu boşaltır, ESP bobinleri (6-8) için MQTT STOP'u ANCAK ondan
+    # sonra yayınlar → o an broker ÇOKTAN ÖLMÜŞTÜR. `_mqtt_publish` 127.0.0.1:1883'e bağlanamayınca
+    # SESSİZCE False döner ve `_safe_stop_outputs` dönüş değerini kontrol etmez → ESP bobinleri
+    # kapanış STOP'unu HİÇ ALMAZ. ESP'nin link-watchdog'u YOKTUR (STM'in 1500 ms ölü-adam devresinin
+    # karşılığı yok) → bobin kendi süresi dolana kadar HASTANIN ÜZERİNDE sürmeye devam eder.
+    # setup_services.ps1 bu sırayı DOĞRU kuruyor; teardown modülü kaybetmişti.
+    # YENİ: her servisi SIRAYLA durdur ve STOPPED olmasını BEKLE; broker DAİMA EN SON kapanır.
+    $ordered = @($Services | Where-Object { $_ -ne 'mosquitto' }) +
+               @($Services | Where-Object { $_ -eq 'mosquitto' })
+    foreach ($svc in $ordered) {
+        if (-not (Get-Service -Name $svc -ErrorAction SilentlyContinue)) { continue }
+        & sc.exe stop $svc *>$null
+        # sc stop asenkron döner → STOPPED olana kadar bekle (NSSM AppStopMethodConsole 15s + pay ~20sn).
         for ($i = 0; $i -lt 40 -and ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -in @('Running', 'StopPending')); $i++) { Start-Sleep -Milliseconds 500 }
+        Write-PemfLog "servis durduruldu: $svc"
     }
     foreach ($svc in $Services) {
         if (Get-Service -Name $svc -ErrorAction SilentlyContinue) { & sc.exe delete $svc *>$null; Write-PemfLog "servis kaldırıldı: $svc" }

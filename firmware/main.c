@@ -273,8 +273,9 @@ static const PEMF_CoilGPIO_t coil_gpio[NUM_COILS] = {
  * ----------------------------------------------------------------------------
  * g_shadow  : main() veya UART ISR tarafından yazılır
  *             TIM1 Update ISR tarafından okunur
- * g_active  : YALNIZCA TIM1 Update ISR içinde değiştirilir
- *             Donanıma son uygulanan değerlerdir
+ * g_active  : YALNIZCA TIM1 Update ISR içinde YAZILIR (donanıma son uygulanan değerler),
+ *             ama main() döngüsünde OKUNUR (süre auto-stop + ölü-adam watchdog kapısı)
+ *             → volatile ZORUNLU (bkz. tanımındaki DENETİM notu)
  * ============================================================================
  */
 static volatile CoilParamSet_t g_shadow = {
@@ -287,8 +288,21 @@ static volatile CoilParamSet_t g_shadow = {
     .ref_ms_valid = 0,
     .ref_ms = 0};
 
-/** ISR'ın doğrudan eriştiği aktif parametre seti */
-static CoilParamSet_t g_active;
+/** ISR'ın doğrudan eriştiği aktif parametre seti.
+ *
+ * DENETİM 2026-08-04: `volatile` EKSİKTİ ve bu bir stil sorunu DEĞİLDİ. g_active TIM1 Update
+ * ISR'ında YAZILIR (memcpy, aşağıda) ama main() `while(1)` döngüsünde OKUNUR:
+ *   - süre auto-stop kontrolü : `g_active.coil[i].dur_min` / `.duty`
+ *   - ÖLÜ-ADAM WATCHDOG KAPISI: `if (g_active.coil[i].duty > 0.0f) any_coil_active = 1;`
+ * Derleyici, main döngüsü içinde bu değişkeni değiştiren bir şey GÖREMEZ (ISR'ı bilmez), bu yüzden
+ * okumaları döngü dışına taşıyıp registera önbellekleyebilir. O anda `any_coil_active` sonsuza dek
+ * 0 (başlangıç değeri) sabitlenir ve 1500 ms'lik ölü-adam kontrolü BİR DAHA ATEŞLEMEZ — sessizce,
+ * hiçbir uyarı vermeden. Bugün çalışmasının tek sebebi HAL_GetTick()'in ayrı bir çeviri biriminde
+ * olması (derleyici çağrı sonrası globalleri yeniden yüklemek zorunda); LTO açıldığı ya da HAL
+ * inline edildiği gün bu tesadüfi koruma kaybolur. Diğer TÜM paylaşılan değişkenler (g_shadow,
+ * g_dds_tick, g_tpp, g_start_ms, g_pktReady, g_rxState) zaten volatile — g_active tek istisnaydı.
+ */
+static volatile CoilParamSet_t g_active;
 
 /** PWM çıkışlarının başlatılıp başlatılmadığını takip eden bayrak */
 static uint8_t g_pwm_started = 0;
@@ -524,7 +538,7 @@ int main(void) {
   Coil_UartInit();
 
   /* Aktif parametreleri gölge başlangıç değerleriyle başlat */
-  memcpy(&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
+  memcpy((void *)&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
   g_active.pending = 0;
 
   /* ---- DDS Timer'ı kur ve başlat ---- */
@@ -811,7 +825,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
   /* ---- Ortak Shadow → Active Transfer ---- */
   if (g_shadow.pending) {
-    memcpy(&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
+    memcpy((void *)&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
     g_active.pending = 0;
     ((volatile CoilParamSet_t *)&g_shadow)->pending = 0;
 

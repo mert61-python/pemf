@@ -875,6 +875,7 @@
       async function refreshEnv() {
         const env = await invoke("detect_environment");
         installed = Array.isArray(env.installed_profiles) ? env.installed_profiles.slice() : [];
+        baseInstalled = !!env.already_installed; // base kurulu mu — iptal/hata sonrasi "Hazir!" karari icin taze tut
         platform = env.platform || platform;
         return env;
       }
@@ -898,9 +899,21 @@
           const r = await invoke("install_and_launch", { manifestRaw, profiles });
           const status = r && r.status;
           if (status === "paused") { showPaused(); return; } // s-install'da kal, "Devam Et" beklenir
-          if (status === "cancelled") { show("s-select"); return; }
+          if (status === "cancelled") {
+            // Yarim-kalan coklu-kurulum: tamamlanmis profil(ler) varsa (backend her profili extract
+            // olur olmaz "kurulu" isaretler) "Hazir!" goster -> kullanici Ev Sahibi ile baslatabilir;
+            // hicbiri tamamlanmadiysa secim ekranina don.
+            await refreshEnv(); renderChips();
+            show(baseInstalled && installed.length ? "s-ready" : "s-select"); return;
+          }
           await refreshEnv(); renderChips(); show("s-ready");
-        } catch (e) { show("s-select"); fail(e); }
+        } catch (e) {
+          // Kalici hata da tamamlanan profili kaybettirmesin: en az bir profil kurulduysa
+          // "Hazir!" + hata mesaji (kullanici kurulanla devam edebilir), yoksa secim ekrani.
+          try { await refreshEnv(); } catch (_) {}
+          renderChips();
+          show(baseInstalled && installed.length ? "s-ready" : "s-select"); fail(e);
+        }
         finally { busy = false; stopPolling(); }
       }
       async function doRepair() {
@@ -981,12 +994,23 @@
       // İnternet yoksa fetch_profiles zaten patlar → buraya hiç gelinmez (güncelleme sessizce atlanır).
       async function trySelfUpdate(u) {
         if (!u || !u.installer_url || !u.sha256) return false; // eski-tip bildirim / eksik veri → normal boot
+        // DENETİM 2026-08-04 (P2 — SONSUZ DÖNGÜ): Rust tarafı aynı hedef sürüm için deneme sayacı
+        // tutar. Manifest sürümü ile paketin gerçek sürümü ayrışırsa kurulum "başarılı" olur ama
+        // sürüm değişmez → her açılışta yeniden denenirdi. auto=false → SESSİZ kurulumu ATLA,
+        // normal boot sürsün (bildirim ekranda kalır, kullanıcı elle indirebilir).
+        if (u.auto === false) return false;
         try {
           show("s-install"); resetInstallUI();
-          $("btn-pause").hidden = true; $("btn-resume").hidden = true; $("btn-cancel").hidden = true;
+          // DENETİM 2026-08-04 (P2): burada ÜÇ kontrol düğmesi de gizleniyordu ve hemen ardından
+          // süresiz `await` yapılıyordu → yavaş-akıtan/asılı bir güncelleme sunucusu client'ı HER
+          // AÇILIŞTA kalıcı olarak kilitliyordu ve kullanıcının kaçış yolu YOKTU. İptal düğmesi
+          // artık GÖRÜNÜR: `cancel_install` CTL_CANCEL'i set eder, indirme döngüsü onu her yığında
+          // okur (net.rs) ve `Cancelled` ile döner → catch → normal boot.
+          $("btn-pause").hidden = true; $("btn-resume").hidden = true;
+          $("btn-cancel").hidden = false; $("btn-cancel").disabled = false;
           $("inst-title").textContent = t().updatingTitle; $("status").textContent = t().updatingLead;
           startPolling();
-          await invoke("apply_self_update", { url: u.installer_url, sha256: u.sha256, size: u.size || 0 });
+          await invoke("apply_self_update", { url: u.installer_url, sha256: u.sha256, size: u.size || 0, version: u.version || "" });
           // Normalde buraya gelinmez (Rust app.exit yapar); gelinirse "uygulanıyor/yeniden başlıyor" göster.
           stopPolling(); indet(true);
           $("inst-title").textContent = t().updatingTitle; $("status").textContent = t().updatingApply;

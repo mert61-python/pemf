@@ -25,6 +25,46 @@ updates:
       - dependency-name: "numpy"   # KRİTİK: torch 2.1.2 numpy<2 ister
         update-types: ["version-update:semver-major"]
 
+  # ── DENETİM 2026-08-04 (P3): kapsam YALNIZ pip:"/" + github-actions idi. ──────────────
+  # Kapsam dışı kalanlar tam da güvenlik-kritik olanlardı: Rust launcher (bütünlük kökü —
+  # zip açma, TLS indirme, backend spawn; 300+ crate), iki npm projesi (biri ÖDEME sitesi) ve
+  # iki ek requirements dosyası. security.yml de tabloyu kapatmıyor (yalnız pip-audit,
+  # `continue-on-error: true`). Aşağıdakiler o boşlukları kapatır.
+
+  # Rust launcher — SHA256 doğrulama + zip-slip koruması + E-stop mantığı burada.
+  - package-ecosystem: "cargo"
+    directory: "/launcher"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      security-patches:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # Docker imajının requirements'ı (dizin /docker → pip:"/" bunu GÖRMEZ).
+  - package-ecosystem: "pip"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GPU inference mikroservisi (:8100) — kendi web yığını var.
+  - package-ecosystem: "pip"
+    directory: "/ai_service"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # ⚠️ npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER:
+  #   `pf/`            → .gitignore:94 (mobil/web UI kaynağı)
+  #   `pemf-vet-web/`  → depoya hiç eklenmemiş (iyzico ÖDEME sitesi + serverless api/)
+  # `git ls-files` ile doğrulandı: ikisinin de package.json'ı izlenmiyor. Dependabot yalnız
+  # depodaki dosyaları tarar → bu iki ağaç hiçbir otomatik CVE taramasında değil ve bağımlılık
+  # kapanışları tek bir iş istasyonunda yaşıyor. (Denetimde bulunan somut örnek: pemf-vet-web
+  # lock'unda undici 5.28.4 / CVE-2025-22150 ve path-to-regexp 6.1.0 / CVE-2024-45296.)
+  # ÇÖZÜM kod değil SÜREÇ: bu iki projeyi (node_modules hariç, lock DAHİL) depoya alın; sonra
+  # buraya `npm` ekosistemi olarak `/pf` ve `/pemf-vet-web` girdilerini ekleyin.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

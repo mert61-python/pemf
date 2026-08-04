@@ -175,3 +175,38 @@ def test_o2_plain_log_formatter_renders_rid_without_error():
     out = fmt.format(rec)
     assert "merhaba" in out
     assert "[-]" in out or "[" in out   # rid alanı render edildi (KeyError yok)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Denetim 2026-08-04 (P2): uvicorn graceful-shutdown tavanı.
+# Verilmezse varsayılan None = SINIRSIZ bekleme. Bu üründe açık WebSocket bağlantıları
+# olduğundan `server.run()` dönmez → main()'deki `finally: _shutdown()` HİÇ çalışmaz →
+# `_safe_stop_outputs()` (STM stop_all_coils + ESP 6-8 MQTT STOP) gönderilmez.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_uvicorn_graceful_shutdown_tavani_ayarli():
+    """Kapanış SINIRSIZ beklememeli — yoksa servis durdurmada bobin-STOP yolu hiç çalışmaz."""
+    import argparse
+
+    import backend_service as bs
+
+    args = argparse.Namespace(host="127.0.0.1", port=8123, log_level="info")
+    server = bs._build_server(object(), args)
+
+    t = server.config.timeout_graceful_shutdown
+    assert t is not None, (
+        "timeout_graceful_shutdown AYARLI DEĞİL → uvicorn açık WebSocket'te süresiz bekler, "
+        "_safe_stop_outputs() hiç çalışmaz ve bobinler enerjili kalır"
+    )
+    assert 0 < t <= 12, f"tavan makul aralıkta olmalı (NSSM stop bütçesi 15 sn), bulunan: {t}"
+
+
+def test_graceful_shutdown_nssm_butcesine_sigiyor():
+    """graceful + güvenli-durdurma toplamı NSSM AppStopMethodConsole (15 sn) altında kalmalı;
+    aşarsa NSSM süreci SERT öldürür ve bobin-STOP yarıda kesilir."""
+    import backend_service as bs
+
+    SAFE_STOP_BUDGET_S = 3.0   # backend_service._safe_stop_outputs toplam bütçesi
+    NSSM_STOP_BUDGET_S = 15.0  # scripts/setup_services.ps1: AppStopMethodConsole 15000
+    assert bs._GRACEFUL_SHUTDOWN_TIMEOUT_S + SAFE_STOP_BUDGET_S < NSSM_STOP_BUDGET_S

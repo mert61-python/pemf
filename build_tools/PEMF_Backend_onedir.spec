@@ -159,6 +159,14 @@ if os.path.exists(frontend_dir):
     datas.append((frontend_dir, os.path.join('frontend', 'dist')))
 
 # Kurulu sürüm bilgisi (update_manager RUNTIME'da okur → oto-güncelleme sürüm karşılaştırması)
+# DENETİM 2026-08-04 (P2): `VERSION` (backend/installer KANALI) bundle EDİLMİYORDU → frozen EXE
+# kendi sürümünü okuyamıyor, update_manager `frontend_version.json`'a (frontendOta kanalı, 1.4.x)
+# düşüyordu ve bu değer exe kanalının latest.json'ıyla (1.9.x) KARŞILAŞTIRILIYORDU. İki dosya da
+# bundle edilir; okuma sırası servers/update_manager.py::_version_paths()'te VERSION önceliklidir.
+ver_txt = os.path.join(project_path, 'VERSION')
+if os.path.exists(ver_txt):
+    datas.append((ver_txt, '.'))
+
 ver_json = os.path.join(project_path, 'frontend_version.json')
 if os.path.exists(ver_json):
     datas.append((ver_json, '.'))

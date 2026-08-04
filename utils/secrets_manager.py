@@ -61,6 +61,35 @@ def secrets_path() -> Path:
     return _data_dir() / _FILENAME
 
 
+# DENETIM 2026-08-04 (P2): sir DIZINI sertlestirilmiyordu. ProgramData mirasi Users'a
+# "yeni dosya olustur" + "yeni dosyalari oku" veriyor. Iki somut sonuc:
+#   (a) _save() .tmp'yi yazip ACL'i BILEREK ancak os.replace'ten SONRA uyguluyor (sira ZORUNLU;
+#       aksi halde yonetici-olmayan surec kendi .tmp'sinin DELETE hakkini kaybedip replace'i
+#       dusuruyordu). Dizin kilitli DEGILSE .tmp, TUM duz-metin sirlarla birlikte kisa sure
+#       Users-OKUNUR kaliyordu. Dizin kilitliyse .tmp DOGDUGU ANDA kisitlidir → pencere kapanir.
+#   (b) _legacy_appdata_token() / sqlcipher legacy okuyucusu <data_dir>/api_token.txt ve
+#       .sqlcipher_key'i KOSULSUZ migrate eder → Users-yazilabilir dizinde bu dosyalar ONCEDEN
+#       YERLESTIRILEBILIRDI (bilinen-anahtar enjeksiyonu).
+# icacls maliyetli → surec basina BIR KEZ.
+_dir_hardened = False
+
+
+def _ensure_dir_hardened(d: Path) -> None:
+    global _dir_hardened
+    if _dir_hardened:
+        return
+    _dir_hardened = True
+    try:
+        from utils.file_acl import lock_down_dir
+        if not lock_down_dir(d, keep_current_user=True):
+            logger.warning(
+                "SIR DIZINI ACL kilidi UYGULANAMADI (%s) — .tmp yazim penceresinde duz-metin "
+                "sirlar yerel Users'a okunur kalabilir ve eski-kaynak dosyalari onceden "
+                "yerlestirilebilir.", d)
+    except Exception:
+        logger.warning("SIR DIZINI ACL kilidi hata verdi", exc_info=True)
+
+
 # ───────────────────────── DPAPI (makine kapsamı) ─────────────────────────
 def _dpapi(data: bytes, protect: bool) -> bytes:
     import ctypes
@@ -278,6 +307,7 @@ def _empty_doc() -> dict:
 
 
 def _load() -> dict:
+    _ensure_dir_hardened(_data_dir())
     global _cache
     if _cache is not None:
         return _cache
@@ -316,6 +346,8 @@ def _load() -> dict:
 
 def _save(doc: dict) -> None:
     p = secrets_path()
+    # .tmp YAZILMADAN ONCE dizini kilitle → tmp kisitli ACL'i MIRAS alsin (bkz. _ensure_dir_hardened).
+    _ensure_dir_hardened(p.parent)
     # DENETIM P3 (canli kanittan): tmp adi SABITTI. ACL-sirasi hatasindan (bkz. asagi) geride
     # kalan KILITLI bir .tmp, sonraki TUM sir yazimlarini PermissionError ile KALICI olarak
     # engelliyordu — kod duzeltilse bile makine bozuk kaliyordu (sahada gorulen durum:

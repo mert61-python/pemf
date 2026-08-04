@@ -421,6 +421,25 @@ def _start_update_checker_safe(logger: logging.Logger) -> None:
         logger.exception("Update checker init failed (non-fatal).")
 
 
+# ⚠️ TIBBİ GÜVENLİK — uvicorn graceful-shutdown TAVANI (denetim 2026-08-04, P2).
+#
+# Bu değer VERİLMEZSE uvicorn.Config varsayılanı `None`'dır ve kapanış
+# `asyncio.wait_for(self._wait_tasks_to_complete(), timeout=None)` ile SINIRSIZ bekler.
+# `_wait_tasks_to_complete` şu döngüdedir: `while self.server_state.connections and not
+# self.force_exit`. `force_exit` YALNIZCA İKİNCİ bir SIGINT'te set edilir; SIGTERM/SIGBREAK
+# kaç kez gelirse gelsin ASLA set etmez — NSSM servisi tam da böyle durdurur.
+#
+# Bu üründe AÇIK WEBSOCKET bağlantıları vardır (klinik UI tarayıcıda açık durur). Yani
+# `server_state.connections` boşalmaz → `server.run()` DÖNMEZ → `main()`'deki
+# `finally: _shutdown(...)` HİÇ ÇALIŞMAZ → `_safe_stop_outputs()` çağrılmaz → ne STM
+# `stop_all_coils()` ne de ESP 6-8 MQTT STOP'ları gönderilir. Operatör servisi durdurur,
+# bobinler HASTANIN ÜZERİNDE enerjili kalır (ESP'nin link-watchdog'u yoktur).
+#
+# 8 sn: uçuşan HTTP istekleri bitsin ama kapanış DAİMA ilerlesin. Bütçe:
+#   8 sn (graceful) + ~3 sn (_shutdown güvenli-durdurma) = ~11 sn < NSSM AppStopMethodConsole 15 sn.
+_GRACEFUL_SHUTDOWN_TIMEOUT_S = 8
+
+
 def _build_server(app, args: argparse.Namespace) -> uvicorn.Server:
     """Uvicorn sunucusunu servis argümanlarıyla kur (access-log kapalı — NSSM zaten yakalıyor)."""
     config = uvicorn.Config(
@@ -429,6 +448,9 @@ def _build_server(app, args: argparse.Namespace) -> uvicorn.Server:
         port=args.port,
         log_level=args.log_level.lower(),
         access_log=False,
+        # Bkz. yukarıdaki not: bu OLMADAN açık bir WebSocket kapanışı SÜRESİZ bloklar ve
+        # bobin-STOP yolu hiç çalışmaz.
+        timeout_graceful_shutdown=_GRACEFUL_SHUTDOWN_TIMEOUT_S,
     )
     return uvicorn.Server(config)
 

@@ -121,6 +121,38 @@ def main() -> int:
                     missing.remove(name)
                     carried.append(f"{name} -> {section}.{key} (mevcut manifest'ten)")
 
+    # ── launcher bloğu: ÜRETİLMEZ, TAŞINIR (denetim 2026-08-04, P2) ──────────────
+    # `launcher{version,url,installer_url,sha256,size}` client'ın KENDİ oto-güncellemesini
+    # besler: launcher/app/src/main.rs `manifest.launcher.as_ref().and_then(...)` — alan
+    # Option olduğu için YOKSA kontrol SESSİZCE atlanır, hiçbir hata görünmez.
+    # Bu blok ASSETS tablosunda YOK ve yukarıdaki taşıma döngüsü yalnız ASSETS'i geziyor →
+    # manifest her yeniden üretildiğinde launcher bloğu DÜŞÜYORDU. Sonuç: sahadaki TÜM
+    # client'lar oto-güncellemeyi kalıcı olarak kaybeder. Setup.exe ayrı bir yayın kanalı
+    # (launcher-v* tag'i) olduğundan burada üretilemez → mevcut manifest'ten AYNEN taşınır.
+    prev_for_launcher = out_path if out_path.exists() else (args.dir / "manifest.json")
+    if prev_for_launcher.exists():
+        try:
+            _prev_l = json.loads(prev_for_launcher.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[HATA] mevcut manifest okunamadı ({prev_for_launcher}): {e}", file=sys.stderr)
+            return 1
+        _launcher = _prev_l.get("launcher")
+        if _launcher:
+            manifest["launcher"] = _launcher
+            carried.append(f"launcher v{_launcher.get('version', '?')} (mevcut manifest'ten)")
+        else:
+            print(
+                "[UYARI] mevcut manifest'te 'launcher' bloğu YOK → client oto-güncellemesi "
+                "ÇALIŞMAYACAK. launcher-v* yayınından sonra bloğu elle ekleyin.",
+                file=sys.stderr,
+            )
+    else:
+        print(
+            "[UYARI] önceki manifest bulunamadı → 'launcher' bloğu taşınamadı; client "
+            "oto-güncellemesi ÇALIŞMAYACAK.",
+            file=sys.stderr,
+        )
+
     if not manifest["runtimes"]:
         print("[HATA] hiçbir base paketi bulunamadı — manifest yazılmadı.", file=sys.stderr)
         return 1

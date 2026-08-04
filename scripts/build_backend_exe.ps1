@@ -23,6 +23,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[build] $m" -ForegroundColor Cyan }
+function Warn($m) { Write-Host "[build] UYARI: $m" -ForegroundColor Yellow }
 function Die($m)  { Write-Host "[build] HATA: $m" -ForegroundColor Red; exit 1 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -80,7 +81,23 @@ if ($SkipWeb) {
     Info "Web export ATLANDI (-SkipWeb) — mevcut frontend\dist kullanılacak."
 } else {
     Info "React (Expo) web export üretiliyor (backend bunu localhost:8000'de sunacak)..."
-    if (-not (Test-Path $FrontendDir)) { Die "frontend\ klasörü bulunamadı: $FrontendDir" }
+
+    # ⚠️ DENETİM 2026-08-04 (P1): burada export KAYNAĞI `guii\frontend\` idi. O dizin `pf\`'in
+    # 27 Temmuz'da DONMUŞ bir KOPYASIDIR (45 dosya fark) ve içinde
+    # `src/components/ui/GlobalEmergencyStop.tsx` (AppShell'de HER ekrana basılan kayan ACİL DURDUR)
+    # ile `hooks/useTeardownGuard.ts` HİÇ YOKTUR. Yani bu script'le üretilen base.zip, aynı sürüm
+    # numarasıyla, ACİL DURDUR'u ekranların çoğunda OLMAYAN bir web UI sevk ediyordu —
+    # build_installer.ps1 ile üretilen Inno kurulumunda ise buton VARDI (iki farklı UI, tek sürüm).
+    # TEK KAYNAK = `pf\` (README: "Web/mobil UI'yi pf/'te düzenle — frontend/src bayat kopyadır").
+    # build_tools/build_installer.ps1:237-269 ile AYNI desen: pf'te export al → frontend\dist'e kopyala.
+    $PfDir = Join-Path $GuiRoot "pf"
+    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Die "pf\ (web-UI kaynağı) bulunamadı: $PfDir" }
+
+    # İKİNCİ-KAYNAK NÖBETİ: `frontend\` yalnızca ÜRETİLEN `dist\` aynası olmalı. İçinde bir Expo
+    # projesi (package.json) duruyorsa bu bug bir daha oluşabilir → gürültülü uyar.
+    if (Test-Path (Join-Path $FrontendDir "package.json")) {
+        Warn "frontend\package.json VAR — bu bayat ikinci UI kaynağıdır ve karışıklığa yol açar. İçeriği (dist hariç) SİLİN; frontend\ yalnız dist aynası olmalı."
+    }
 
     # npm / npx zorunlu (web build edilemezse GÜR-sesle fail)
     $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
@@ -88,13 +105,13 @@ if ($SkipWeb) {
     $npxCmd = Get-Command npx -ErrorAction SilentlyContinue
     if (-not $npxCmd) { Die "npx bulunamadı. Expo web export için npx gerekli (web zorunlu)." }
 
-    Push-Location $FrontendDir
+    Push-Location $PfDir
     try {
-        # Idempotent: eski dist'i temizle ki bayat dosya kalmasın
-        $FrontendDistDir = Join-Path $FrontendDir "dist"
-        if (Test-Path $FrontendDistDir) {
-            Info "Eski frontend\dist temizleniyor..."
-            Remove-Item $FrontendDistDir -Recurse -Force
+        # Idempotent: eski pf\dist'i temizle ki bayat dosya kalmasın
+        $PfDist = Join-Path $PfDir "dist"
+        if (Test-Path $PfDist) {
+            Info "Eski pf\dist temizleniyor..."
+            Remove-Item $PfDist -Recurse -Force
         }
 
         # Bağımlılık kurulumu (build_installer.ps1 ile aynı: ci varsa ci, yoksa install)
@@ -111,13 +128,22 @@ if ($SkipWeb) {
         & npm run typecheck
         if ($LASTEXITCODE -ne 0) { Die "npm run typecheck başarısız! (TypeScript hatalarını düzeltin)" }
 
-        Info "Expo web export alınıyor (npx expo export --platform web)..."
+        # `npm run export:web` = expo export + postexport-web patcher. Ham `npx expo export`
+        # patcher'ı ATLAR → build_installer.ps1 ile ÇIKTI FARKI oluşur. Aynı komutu kullan.
+        Info "Expo web export alınıyor (npm run export:web)..."
         $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
-        & npx expo export --platform web
-        if ($LASTEXITCODE -ne 0) { Die "Expo web export başarısız!" }
+        & npm run export:web
+        if ($LASTEXITCODE -ne 0) { Die "Expo web export (npm run export:web) başarısız!" }
     } finally {
         Pop-Location
     }
+
+    # pf\dist -> frontend\dist (PyInstaller spec'inin bundle'ladığı kanonik konum)
+    $FrontendDistDir = Join-Path $FrontendDir "dist"
+    if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
+    if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
+    Copy-Item (Join-Path $PfDir "dist") $FrontendDistDir -Recurse -Force
+    Info "pf web export -> frontend\dist kopyalandı."
 
     # DOĞRULAMA: spec'in topladığı tam yol (frontend\dist) üretilmiş mi?
     $FrontendIndex = Join-Path $FrontendDir "dist\index.html"

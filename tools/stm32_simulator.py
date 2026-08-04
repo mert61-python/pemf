@@ -70,7 +70,14 @@ DUTY_MIN          = 0.0
 PHASE_MIN         = 0.0
 PHASE_MAX         = 360.0
 FREQ_MIN          = 1.0
-FREQ_MAX          = 10000.0
+# ⚠️ DENETİM 2026-08-04: burada 10000.0 yazıyordu. Firmware'in GERÇEK sınırı
+# FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD = 50000/2 = 25000 Hz (main.c:158-160) ve
+# utils/stm32_protocol_limits.FREQ_MAX_HZ de 25000. Simülatör 10 kHz üstünü NACK'lediği için
+# E2E güvenlik testleri SEVKEDİLENDEN FARKLI bir cihazı doğruluyordu (10–25 kHz aralığı hiç
+# test edilmiyordu). Değer artık firmware ile AYNI formülden türetiliyor.
+DDS_ISR_HZ               = 50000.0
+DDS_MIN_TICKS_PER_PERIOD = 2.0
+FREQ_MAX          = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD   # = 25000.0
 DUR_MAX           = 9999
 REF_MS_MAX        = 999
 WATCHDOG_MS       = 1500   # ms — main.c ile aynı

@@ -42,6 +42,13 @@ services:
     environment:
       PEMF_SIMULATE: "1"
       PEMF_REQUIRE_AUTH: "1"                  # /api/ai/* zaten auth-muaf
+      # ⚠️ DENETİM 2026-08-04 (P2): bu satır YOKTU ve PEMF_REQUIRE_AUTH="1" TEK BAŞINA YETMİYORDU.
+      # servers/auth.py varsayılan güven listesi 172.16.0.0/12'yi "yerel/LAN" sayar; docker-proxy
+      # üzerinden host'a yayınlanan 8000 portuna gelen HER istek backend'e kaynak IP 172.17.0.1
+      # olarak görünür → api_server.py `exempt = True` → auth TAMAMEN bypass olur.
+      # PEMF_TRUSTED_PROXIES bu ağı FAIL-CLOSED (her zaman UZAK) yapar. Ana docker-compose.yml'de
+      # "DENETİM P0" olarak düzeltilmişti; mikroservis profiline uygulanmamıştı.
+      PEMF_TRUSTED_PROXIES: "${PEMF_TRUSTED_PROXIES:-172.16.0.0/12}"
       PEMF_AI_SERVICE_URL: "http://ai:8100"   # ← AI'yı GPU servisine devret (Faz 3)
     volumes:
       - ../release_assets/ai_models:/models:ro  # devredilmeyen uçlar (em_fantom vb.) in-process

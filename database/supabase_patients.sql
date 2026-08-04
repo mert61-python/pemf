@@ -13,6 +13,40 @@
 -- =============================================================================
 
 -- 1) Tablolar (idempotent) — device_id ile cross-tenant ayrim
+
+-- =============================================================================
+-- SIRA GUVENLIGI KAPISI (denetim 2026-08-04, P2) — DOSYAYI SILMEYIN
+-- -----------------------------------------------------------------------------
+-- Bu dosya v1 modelini kurar: RPC'ler YALNIZ `device_id` ile yetkilendirir ve
+-- `grant execute ... to anon` yapar. `supabase_secure_v2.sql` ise bu imzalari
+-- `drop function` ile DUSURUP `p_secret` (bcrypt capability-token) isteyen
+-- surumleri kurar.
+--
+-- TEHLIKE: v2 uygulandiktan SONRA bu dosya yeniden calistirilirsa (yeni kurulum,
+-- "once tabloyu olusturayim" refleksi, ikinci/staging ortam) SIRSIZ asiri-yukler
+-- GERI GELIR ve anon rolune YENIDEN grant edilir. v2 fonksiyonlari da yerinde
+-- kaldigi icin HICBIR HATA GORUNMEZ — guvenlik sessizce v1'e duser.
+--
+-- DOGRU SIRA:  supabase_devices.sql  ->  supabase_patients.sql  ->  supabase_secure_v2.sql
+-- Bu blok, v2 zaten uygulanmissa calismayi DURDURUR.
+-- =============================================================================
+do $$
+begin
+  if exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = '_pemf_verify_device'   -- yalnizca v2 bu fonksiyonu olusturur
+  ) then
+    raise exception
+      'DURDURULDU: supabase_secure_v2.sql ZATEN uygulanmis. Bu v1 dosyasini simdi calistirmak, '
+      'p_secret ISTEMEYEN RPC asiri-yuklerini geri getirir ve anon rolune yeniden grant eder '
+      '(sessiz guvenlik gerilemesi). Dogru sira: devices -> patients -> secure_v2. '
+      'Bu dosyayi YALNIZCA sifirdan kurulumda, v2 den ONCE calistirin.';
+  end if;
+end $$;
+
 create table if not exists public.patients (
   id           text primary key,
   device_id    text not null,

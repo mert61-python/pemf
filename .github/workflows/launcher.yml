@@ -25,11 +25,14 @@ jobs:
     # `if:` koşulunda GÖRÜNMEZ (koşul env'den önce değerlendirilir) — böyle
     # yazılırsa imzalama/notarization adımları sessizce hiç çalışmaz.
     env:
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      # DENETIM 2026-08-04 (P2): Apple imzalama/notarization SIRLARI burada, JOB seviyesindeydi →
+      # AYNI job'daki HER adim onlari okuyabiliyordu; ucuncu-parti action'lar (checkout,
+      # rust-toolchain, rust-cache, upload-artifact) dahil. Sirlar artik YALNIZ ihtiyaci olan
+      # adimlarin KENDI `env:` blogunda. Burada kalan sey SIR DEGIL, yalnizca VAR/YOK bayragi —
+      # `if:` kosullari adim-seviyesi env'i GOREMEDIGI icin (kosul env'den once degerlendirilir)
+      # bu bayraklar job seviyesinde olmak ZORUNDA. Bayraklar "true"/"false" string'idir.
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID != '' }}
     strategy:
       fail-fast: false # bir platform düşerse diğerleri yine de üretilsin
       matrix:
@@ -45,7 +48,12 @@ jobs:
             artifact: PEMFVetClient-linux
 
     steps:
-      - uses: actions/checkout@v4
+      # DENETIM 2026-08-04: action'lar DEGISTIRILEBILIR ref'lerle cagriliyordu. `@v4`/`@v2`
+      # TASINABILIR etiketlerdir; `dtolnay/rust-toolchain@stable` ise bir DALDIR (dogrulandi:
+      # `git/ref/heads/stable` cozumlendi). Imzalama sirlarinin bulundugu bir job'da bu,
+      # ref'i degistiren birinin CI'da kod calistirmasi demektir → COMMIT SHA'ya pinlendi.
+      # Yukseltirken: `gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq .object.sha`
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       # WebKitGTK + Tauri'nin Linux bağımlılıkları (yalnız Linux).
       - name: Linux sistem bağımlılıkları
@@ -56,20 +64,31 @@ jobs:
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
             patchelf libssl-dev build-essential file rpm
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # `stable` DALININ action.yml'si `toolchain: default: stable` tasir → SHA pin davranisi
+      # DEGISTIRMEZ; yine de acikca belirtiyoruz (ileride master'a pinlenirse de dogru kalsin).
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4  # stable dali
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
         with:
           workspaces: launcher
 
       # Testler ÖNCE: bozuk çekirdekle paket üretmenin anlamı yok.
+      # DENETİM 2026-08-04: `--locked` YOKTU. Workspace bağımlılıkları geniş caret aralıklarıyla
+      # tanımlı (`zip = "2"`, `tauri = "2"`, `ureq = "2"`) → kilit dosyası tutarsız/eski kaldığında
+      # cargo onu SESSİZCE günceller ve yayın paketi kayıt altına ALINMAMIŞ sürümlerle üretilir.
+      # `--locked` kilit ile Cargo.toml ayrışırsa BURADA (paketlemeden önce) sert hata verir.
       - name: Çekirdek testleri
         working-directory: launcher
-        run: cargo test --lib
+        run: cargo test --locked --lib
 
       # --- macOS imzalama kimliği (notarization'ın ön koşulu) ------------------
       # Sertifika CI Secrets'ta durur; çalışma ağacında ASLA (bkz. .gitignore).
       - name: macOS imzalama sertifikasını yükle
-        if: matrix.os == 'macos-14' && env.APPLE_CERTIFICATE != ''
+        if: matrix.os == 'macos-14' && env.HAS_APPLE_CERT == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN=build.keychain
           KEYCHAIN_PW=$(uuidgen)
@@ -91,7 +110,19 @@ jobs:
       - name: Tauri bundle (macOS → .app)
         if: matrix.os == 'macos-14'
         working-directory: launcher/app
-        run: npx --yes @tauri-apps/cli@^2 build --ci --bundles app
+        # tauri-bundler macOS imzalamada bu degiskenleri KENDISI de okuyabildigi icin adim
+        # seviyesinde veriliyor (job seviyesinden kaldirildi — bkz. yukaridaki DENETIM notu).
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        # DENETIM 2026-08-04 (P1): `@^2` = o an yayindaki HERHANGI bir 2.x -> paketleyici
+        # her CI kosusunda npm'den TAZE cekiliyordu ve bu adim APPLE_CERTIFICATE /
+        # APPLE_API_KEY_P8 sirlarinin env'de oldugu, keychain'e imzalama kimliginin
+        # yuklendigi bir baglamda kosuyor. npm tedarik zinciri kirilirsa IMZALI +
+        # NOTARIZE EDILMIS tibbi cihaz kurulumu uretilirdi ve launcher'in SHA256'si bunu
+        # YAKALAYAMAZDI (hash zehirlenmis artefakttan uretilir). TAM SURUME sabitlendi.
+        # Yukseltirken: `npm view @tauri-apps/cli version` -> bu iki satiri BIRLIKTE guncelle.
+        run: npx --yes @tauri-apps/cli@2.11.4 build --ci --bundles app
 
       - name: DMG üret (AppleScript'siz)
         if: matrix.os == 'macos-14'
@@ -103,15 +134,19 @@ jobs:
       - name: Tauri bundle (Windows / Linux)
         if: matrix.os != 'macos-14'
         working-directory: launcher/app
-        run: npx --yes @tauri-apps/cli@^2 build --ci
+        run: npx --yes @tauri-apps/cli@2.11.4 build --ci   # sabit surum — bkz. macOS adimindaki DENETIM notu
 
       # --- Notarization (yalnız imzalıysa anlamlı) ------------------------------
       # Ön koşul: Apple Developer hesabının GÜNCEL sözleşmeleri KABUL EDİLMİŞ olmalı.
       # Kabul edilmemişse gönderim "In Progress"te saatlerce asılı kalır — kod ya da
       # imza hatası sanılır. Bu adım o durumda zaman aşımıyla AÇIKÇA başarısız olur.
       - name: Notarize + staple
-        if: matrix.os == 'macos-14' && env.APPLE_API_KEY_ID != ''
+        if: matrix.os == 'macos-14' && env.HAS_APPLE_API_KEY == 'true'
         working-directory: launcher
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
           set -euo pipefail
           DMG=$(ls target/release/bundle/dmg/*.dmg | head -1)
@@ -135,7 +170,7 @@ jobs:
             -exec cp {} dist-launcher/ \;
           ls -lh dist-launcher
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ matrix.artifact }}
           path: dist-launcher/*

@@ -6,7 +6,11 @@ sürümü kurulu sürümle karşılaştırır → yeni varsa UI'ya bildirir. Ope
 (POST /api/update/apply) installer'ı indirir → SHA256 doğrular → AKTİF TEDAVİ YOKKEN
 sessiz (`/VERYSILENT`) çalıştırır → installer servisi durdurur+değiştirir+yeniden başlatır.
 
-Repo public → token GEREKMEZ. Kurulu sürüm = frontend_version.json (build sürümü, spec bundle'lar).
+Repo public → token GEREKMEZ.
+
+Kurulu sürüm = `VERSION` (backend/installer kanalı — latest.json'ın YAYINLADIĞI kanal; spec
+bundle'lar). Geriye uyum için `frontend_version.json`'a düşülür ama o AYRI bir kanaldır
+(versions.json → `frontendOta`) ve exe sürümüyle kıyaslanmamalıdır — bkz. `_version_paths()`.
 """
 from __future__ import annotations
 
@@ -120,23 +124,48 @@ _stop = threading.Event()
 
 
 def _version_paths():
+    """Kurulu BACKEND surumunun arandigi yollar (SIRA ONEMLI).
+
+    DENETIM 2026-08-04 (P2): burada YALNIZ `frontend_version.json` araniyordu. O dosya
+    versions.json'daki `frontendOta` KANALINI tasir (1.4.x); oysa `check_for_update` sonucu
+    exe kanalinin `latest.json`'iyla (backend/installer surumu, 1.9.x) KARSILASTIRILIYOR.
+    Iki AYRI yayin kanali ayni isim uzayinda kiyaslaniyordu → yayindaki base.zip kendini
+    "1.4.0" saniyordu; guncelleme karari anlamsiz bir kiyasa dayaniyordu.
+    Once `VERSION` (exe/installer kanali = DOGRU kaynak) aranir; bulunamazsa VERSION'i bundle
+    ETMEYEN eski build'ler icin eski davranisa dusulur (geriye uyum).
+    """
     roots = []
-    if getattr(sys, "frozen", False):
-        mp = getattr(sys, "_MEIPASS", "")
-        if mp:
-            roots.append(Path(mp) / "frontend_version.json")
-        exe_dir = Path(sys.executable).resolve().parent
-        roots.append(exe_dir / "frontend_version.json")
-        roots.append(exe_dir / "_internal" / "frontend_version.json")
-    roots.append(Path(__file__).resolve().parent.parent / "frontend_version.json")
+
+    def _add(name: str):
+        if getattr(sys, "frozen", False):
+            mp = getattr(sys, "_MEIPASS", "")
+            if mp:
+                roots.append(Path(mp) / name)
+            exe_dir = Path(sys.executable).resolve().parent
+            roots.append(exe_dir / name)
+            roots.append(exe_dir / "_internal" / name)
+        roots.append(Path(__file__).resolve().parent.parent / name)
+
+    _add("VERSION")                # exe/installer kanali (latest.json ile AYNI kanal)
+    _add("frontend_version.json")  # geriye uyum: VERSION'i bundle etmeyen eski build'ler
     return roots
+
+
+def _read_version_file(p: Path) -> str:
+    """`VERSION` duz-metin, `frontend_version.json` ise {"version": "..."} tasir — ikisini de oku."""
+    txt = p.read_text(encoding="utf-8").strip()
+    if not txt:
+        return ""
+    if p.suffix.lower() == ".json" or txt.lstrip().startswith("{"):
+        return str(json.loads(txt).get("version", "")).strip()
+    return txt.splitlines()[0].strip()
 
 
 def get_current_version() -> str:
     for p in _version_paths():
         try:
             if p.exists():
-                v = str(json.loads(p.read_text(encoding="utf-8")).get("version", "")).strip()
+                v = _read_version_file(p)
                 if v:
                     return v
         except Exception:
@@ -180,7 +209,16 @@ def check_for_update(timeout: float = 15.0) -> dict:
             headers={"User-Agent": "pemf-updater", "Cache-Control": "no-cache"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            m = json.loads(r.read().decode("utf-8"))
+            # DENETIM 2026-08-04: `_MAX_MANIFEST_BYTES` TANIMLI ama HIC UYGULANMIYORDU —
+            # `r.read()` govdeyi SINIRSIZ bellege aliyordu. Installer indirmeleri `_download_to`
+            # ile 512 MB'a sinirliyken manifest yolu korumasizdi: bozuk/ele gecmis bir sunucu
+            # devasa bir govde donerse tibbi cihazin RAM'i tukenir. Tavan+1 oku, asimi YAKALA.
+            raw = r.read(_MAX_MANIFEST_BYTES + 1)
+        if len(raw) > _MAX_MANIFEST_BYTES:
+            raise ValueError(
+                f"manifest boyut tavanini asti (> {_MAX_MANIFEST_BYTES} bayt) — reddedildi"
+            )
+        m = json.loads(raw.decode("utf-8"))
         latest = str(m.get("version", "")).strip()
         res = {
             "checked": True,
@@ -397,6 +435,13 @@ def rollback() -> dict:
         if _applying:
             return {"ok": False, "error": "Bir güncelleme/rollback zaten sürüyor."}
         _applying = True
+    # DENETIM 2026-08-04 (P2): asagidaki `finally` _applying'i KOSULSUZ False yapiyordu — oysa
+    # apply_update ayni zincirde (satir ~310) bunu bilerek ACIK BIRAKIYOR. Tehlikeli pencere
+    # installer BASLATILDIKTAN sonra baslar: installer servisi durdurup EXE'yi degistirecektir.
+    # Guard erken kapaninca /session/start ve /ai/pro/start yeniden serbest kalir ve tam o
+    # pencerede TEDAVI baslatilabilir → bobinler kontrolcusuz kalir. apply_update ile AYNI desen:
+    # yalnizca BASARISIZ yollarda serbest birak.
+    _installer_launched = False
     try:
         if not expected:
             return {"ok": False, "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
@@ -432,13 +477,18 @@ def rollback() -> dict:
             creationflags=flags,
             close_fds=True,
         )
+        _installer_launched = True
         logger.warning("ROLLBACK kurulumu başlatıldı → önceki kararlı sürüm %s (%s)", ver, dest)
         return {"ok": True, "message": f"Önceki kararlı sürüme ({ver}) dönülüyor. Servis birazdan yeniden başlar."}
     except Exception:
         logger.exception("rollback hatası")
         return {"ok": False, "error": "Geri alma başarısız"}
     finally:
-        _applying = False
+        if not _installer_launched:
+            _applying = False   # basarisiz → normale don
+        else:
+            logger.info("Rollback guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
+                        "degistirene kadar YENI tedavi/seans baslatilamaz.")
 
 
 def start_update_checker(interval_sec: int = 6 * 3600) -> None:

@@ -132,35 +132,52 @@ fn on_backend_ready(
         install::default_install_root(&home_dir()).join("backend.port"),
         port.to_string(),
     );
-    // Chrome/harici tarayıcı YERİNE: uygulamayı CLIENT PENCERESİNE göm (WebView2 içinde localhost).
-    show_app_in_window(app, url);
+    // Uygulamayı AYRI pencerede aç → client/profil penceresi ("main") AÇIK KALIR.
+    open_app_window(app, url);
 }
 
-/// Ana pencerenin webview'ını (localhost) uygulamaya yönlendir + pencereyi büyüt. Host-başlatımlı
-/// navigasyon (adres-çubuğu gibi) → launcher CSP'si engellemez. Pencere kapanınca on_window_event
-/// Destroyed → backend GÜVENLE durur (E-stop + kill). navigate imkânsızsa tarayıcıya düş (fail-safe).
-fn show_app_in_window(app: &tauri::AppHandle, url: &str) {
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.maximize();
-        // WebView2 CACHE-BUST: kalıcı user-data-folder aynı origin'de (127.0.0.1:8000) ESKİ index.html'i
-        // cache'ler → önceki bir kurulumun eski bundle'ı yüklenip (ör. giriş Supabase'e ulaşamaz, "hatalı")
-        // Chrome'da sorun yokken WebView2'de kalır. Zaman-damgalı query her açılışta TAZE index.html
-        // çektirir; onun referans ettiği hash'li JS zaten yeni dosya adıyla taze gelir.
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0);
-        let sep = if url.contains('?') { '&' } else { '?' };
-        let busted = format!("{url}{sep}_={ts}");
-        match busted.parse::<tauri::Url>() {
-            Ok(u) => {
-                let _ = win.navigate(u);
-            }
-            Err(_) => {
-                let _ = backend::open_browser(url);
-            }
+/// Uygulamayı AYRI bir pencerede aç — client/profil penceresi ("main") AÇIK KALIR (kullanıcı isteği:
+/// Başlat'a basınca client kapanmasın, uygulama ikinci pencerede açılsın). Zaten açık bir "app"
+/// penceresi varsa onu tazele + öne getir (ikinci Başlat yeni pencere YIĞMASIN). WebView2 cache-bust
+/// korunur. Her pencere kapanınca on_window_event Destroyed → backend GÜVENLE durur (E-stop + kill);
+/// "main" açık kaldığı için "app" kapanınca kullanıcı client'a döner. Oluşturma imkânsızsa tarayıcıya düş.
+fn open_app_window(app: &tauri::AppHandle, url: &str) {
+    // WebView2 CACHE-BUST: kalıcı user-data-folder aynı origin'de (127.0.0.1:8000) ESKİ index.html'i
+    // cache'ler → eski bundle yüklenip "hata" verir (Chrome'da yok, WebView2'de kalır). Zaman-damgalı
+    // query her açılışta TAZE index.html çektirir; referans ettiği hash'li JS zaten yeni adla taze gelir.
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let busted = format!("{url}{sep}_={ts}");
+
+    // Zaten açık bir uygulama penceresi varsa → tazele + öne getir (yeni pencere açma).
+    if let Some(win) = app.get_webview_window("app") {
+        if let Ok(u) = busted.parse::<tauri::Url>() {
+            let _ = win.navigate(u);
         }
-    } else {
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+        let _ = win.maximize();
+        return;
+    }
+
+    // Yeni "app" penceresi oluştur (client "main" DOKUNULMADAN açık kalır). Harici URL = localhost backend;
+    // host-başlatımlı yükleme → launcher CSP'si engellemez (main-window navigate ile aynı yol).
+    let parsed = match busted.parse::<tauri::Url>() {
+        Ok(u) => u,
+        Err(_) => {
+            let _ = backend::open_browser(url);
+            return;
+        }
+    };
+    let built = tauri::WebviewWindowBuilder::new(app, "app", tauri::WebviewUrl::External(parsed))
+        .title("PEMF Vet")
+        .maximized(true)
+        .build();
+    if built.is_err() {
+        // Pencere açılamazsa (nadir) → uygulamayı tarayıcıda göster; client yine açık kalır (fail-safe).
         let _ = backend::open_browser(url);
     }
 }
@@ -211,6 +228,15 @@ fn fetch_profiles() -> Result<serde_json::Value, String> {
     // `apply_self_update`); yalnız sürüm/url varsa (eski manifest) UI "yeni sürüm var" bildirir.
     // İnternet yoksa fetch_profiles zaten hata verir → kontrol hiç çalışmaz (sessiz atlama).
     let current_launcher = env!("CARGO_PKG_VERSION");
+    // DENETİM 2026-08-04 (P2 — sonsuz döngü): kayıtlı deneme hedefine ULAŞTIYSAK güncelleme
+    // gerçekten uygulanmış → sayacı temizle. Ulaşamadıysak sayaç durur ve N denemeden sonra
+    // OTOMATİK kurulum kapanır (bildirim kalır, kullanıcı elle indirebilir).
+    let su_root = install::default_install_root(&home_dir());
+    if let Some((tried, _)) = install::read_selfupdate_attempt(&su_root) {
+        if tried == current_launcher {
+            install::clear_selfupdate_attempt(&su_root);
+        }
+    }
     let update = manifest.launcher.as_ref().and_then(|l| {
         pemf_launcher_core::is_newer(&l.version, current_launcher).then(|| {
             serde_json::json!({
@@ -219,6 +245,8 @@ fn fetch_profiles() -> Result<serde_json::Value, String> {
                 "installer_url": l.installer_url,
                 "sha256": l.sha256,
                 "size": l.size,
+                // `false` ise UI SESSİZ kurulumu ATLAR (döngü kırıcı) ama bildirimi gösterir.
+                "auto": install::selfupdate_auto_allowed(&su_root, &l.version),
             })
         })
     });
@@ -270,6 +298,14 @@ async fn install_and_launch(
     let root = install::default_install_root(&home_dir());
     // Yeniden-kurulum: çalışan backend varsa ÖNCE güvenle durdur (exe kilidi + port çakışması).
     stop_tracked_backend(&state, &root);
+    // ⚠️ SIRA ÖNEMLİ (denetim 2026-08-04): migrasyon `write_pending`'DEN ÖNCE olmalı.
+    // `migrate_legacy_install_root` ilk satırında `if install_root.exists() { return; }` der;
+    // `write_pending` ise `create_dir_all(install_root)` yapar. Migrasyon şimdiye kadar yalnız
+    // `flow::install_profiles` içinden (spawn_blocking'in İÇİNDE, yani buradan SONRA) çağrıldığı
+    // için kök ARTIK VAR oluyordu ve migrasyon HER ZAMAN erken dönüyordu → eski boşluksuz
+    // `PEMFVetClient` kurulumundan yükseltenler ~2.6 GB payload'u HER SEFERİNDE yeniden indiriyordu.
+    // (flow.rs'teki çağrı idempotent olduğu için orada KALIYOR — kütüphane yolu da korunsun.)
+    install::migrate_legacy_install_root(&root);
     // Açılışta "devam et?" için seçimi kaydet (internet kesilir/laptop kapanırsa .part + bu dosya kalır).
     install::write_pending(&root, &profiles);
     *state.progress.lock().unwrap() = None;
@@ -333,7 +369,18 @@ async fn start_installed(
     let running_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
     if let Some(port) = running_port {
         let url = backend::app_url(port);
-        show_app_in_window(&app, &url);
+        open_app_window(&app, &url);
+        return Ok(url);
+    }
+
+    // DENETİM 2026-08-04: BAŞKA bir launcher instance'ı (ya da çökmüş bir önceki oturum) backend'i
+    // çalıştırıyor olabilir. Eskiden yalnız KENDİ state.proc'umuza bakılıyordu → İKİNCİ bir backend
+    // başlatılıyor, seri portu alamadığı için donanımı süremiyor ama UI'da "boşta" görünüyordu.
+    // Çalışan varsa yenisini BAŞLATMA, mevcut olanı SAHİPLEN (state.proc'a KOYMA: onu biz
+    // başlatmadık, dolayısıyla pencere kapanışında ÖLDÜRME hakkımız da yok).
+    if let Some(port) = backend::detect_running_backend(&root) {
+        let url = backend::app_url(port);
+        open_app_window(&app, &url);
         return Ok(url);
     }
 
@@ -405,16 +452,45 @@ async fn repair(
     }
 }
 
-/// Uygulamayı kaldır: KURULU uygulamayı (runtime + ai_models + cache + profil kaydı) sil, seçim
-/// ekranına dön. TIBBİ-GÜVENLİ: önce bobin E-stop + backend kill. Hasta verisi (PEMF_GUI, %APPDATA%)
-/// AYRI dizinde → SİLİNMEZ. Launcher'ın kendisi kalır (kullanıcı istediğinde yeniden kurabilir).
+/// Uygulamayı kaldır — Windows'ta kayıtlı NSIS uninstaller'ı (`uninstall.exe`) başlatır.
+///
+/// NEDEN süreç-içi silme DEĞİL: `install_root` (%LOCALAPPDATA%\PEMF Vet Client) ÇALIŞAN launcher
+/// exe'sini (`PEMFVetClient.exe`) + `uninstall.exe`'yi İÇERİR → `remove_dir_all` çalışan kendi
+/// exe'sini silemez → **os error 5 (erişim engellendi)**. Windows-doğru yol: Denetim Masası'ndakiyle
+/// AYNI kayıtlı uninstaller'ı ayrı süreç başlat + launcher'dan çık. NSIS uninstaller kendini $TEMP'e
+/// kopyalar (böylece $INSTDIR'ı silebilir), launcher+runtime+ai_models'i kaldırır, 'uygulama verisini
+/// sil' checkbox'ını sunar (işaretsiz = indirilenleri koru → yeniden kurulum hızlı) ve PREUNINSTALL
+/// hook'unda bobinlere E-stop atar (windows/hooks.nsi). Hasta DB'si (%APPDATA%\PEMF_GUI) KVKK: KORUNUR.
+///
+/// TIBBİ GÜVENLİK: uninstaller'ı başlatmadan önce burada da E-stop + backend/child (mosquitto/
+/// cloudflared) kill yapılır — hook zaten yapar, bu ekstra kemer + runtime dosya-kilidini bırakır.
 #[tauri::command]
-fn uninstall(state: tauri::State<'_, AppState>) -> Result<(), String> {
+fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let root = install::default_install_root(&home_dir());
     stop_tracked_backend(&state, &root);
-    install::remove_install(&root).map_err(|e| {
-        format!("Kaldırma başarısız (uygulama çalışıyor olabilir): {e}")
-    })
+
+    #[cfg(windows)]
+    {
+        // uninstall.exe launcher exe'sinin YANINDADIR (NSIS ikisini de $INSTDIR'a koyar). current_exe
+        // üzerinden bul → özel kurulum dizinlerinde de doğru (sabit yol varsaymaz).
+        let uninstaller = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("uninstall.exe")))
+            .filter(|p| p.exists())
+            .ok_or_else(|| {
+                "Kaldırıcı (uninstall.exe) bulunamadı. Windows 'Ayarlar → Uygulamalar'dan kaldırabilirsiniz."
+                    .to_string()
+            })?;
+        spawn_uninstaller_detached(&uninstaller)?;
+        app.exit(0); // launcher ÇIKMALI ki uninstaller çalışan PEMFVetClient.exe'yi silebilsin
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app; // mac/linux: platform paket-kaldırıcısı ayrı → indirilen payload'u temizle
+        install::remove_install(&root)
+            .map_err(|e| format!("Kaldırma başarısız (uygulama çalışıyor olabilir): {e}"))
+    }
 }
 
 /// Son ilerleme snapshot'ını döndür (frontend kurulum/onarım sırasında ~150ms'de bir POLL eder).
@@ -459,10 +535,12 @@ async fn apply_self_update(
     url: String,
     sha256: String,
     size: u64,
+    // Hedef sürüm — SONSUZ DÖNGÜ koruması için kaydedilir (bkz. install::record_selfupdate_attempt).
+    version: String,
 ) -> Result<(), String> {
     #[cfg(not(windows))]
     {
-        let _ = (&app, &state, &url, &sha256, size);
+        let _ = (&app, &state, &url, &sha256, size, &version);
         Err("Bu platformda oto-güncelleme desteklenmiyor".to_string())
     }
     #[cfg(windows)]
@@ -505,6 +583,11 @@ async fn apply_self_update(
         .await
         .map_err(|e| format!("güncelleme görevi çöktü: {e}"))??;
 
+        // DENETİM 2026-08-04: denemeyi installer'ı BAŞLATMADAN ÖNCE kaydet. Kurulum "başarılı"
+        // olup sürüm DEĞİŞMEZSE (manifest sürümü ile paketin gerçek sürümü ayrışmışsa) bir sonraki
+        // açılışta sayaç dolar ve OTOMATİK kurulum durur → sonsuz indir-kur-yeniden başlat
+        // döngüsü kırılır. Sürüm gerçekten yükselirse fetch_profiles kaydı temizler.
+        install::record_selfupdate_attempt(&install::default_install_root(&home_dir()), &version);
         // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
         spawn_update_relauncher(&dest)?;
         app.exit(0);
@@ -561,6 +644,48 @@ fn spawn_update_relauncher(installer: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Kaldırma batch'inin İÇERİĞİNİ üret (saf → birim-test edilebilir). Batch-enjeksiyon savunması:
+/// yol tırnak/yeni-satır içeremez (meşru Windows yollarında bulunmaz). `ping` = taşınabilir uyku
+/// (`timeout.exe` redirected-stdin'de çalışmaz): ~5sn bekle (launcher çıksın, `PEMFVetClient.exe`
+/// kilidi kalksın) → uninstaller'ı İNTERAKTİF başlat (kullanıcı 'uygulama verisini sil' checkbox'ını
+/// görsün; `/S` YOK) → batch kendini sil.
+#[cfg(windows)]
+fn build_uninstall_script(uninstaller: &str) -> Result<String, String> {
+    if uninstaller.contains('"') || uninstaller.contains('\r') || uninstaller.contains('\n') {
+        return Err("Kaldırıcı yolu güvensiz karakter içeriyor".to_string());
+    }
+    Ok(format!(
+        "@echo off\r\n\
+         ping -n 6 127.0.0.1 >nul\r\n\
+         start \"\" \"{unins}\"\r\n\
+         del \"%~f0\"\r\n",
+        unins = uninstaller,
+    ))
+}
+
+/// Kayıtlı NSIS uninstaller'ı, launcher ÇIKTIKTAN sonra çalışacak şekilde DETACHED başlat (self-update
+/// relauncher'la aynı desen). Launcher exe kilidi kalkınca uninstaller $INSTDIR'ı (launcher+runtime) siler.
+#[cfg(windows)]
+fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let unins_s = uninstaller.to_str().ok_or("kaldırıcı yolu UTF-8 değil")?;
+    let script = build_uninstall_script(unins_s)?;
+    let bat = std::env::temp_dir().join("pemf_uninstall.bat");
+    std::fs::write(&bat, script).map_err(|e| e.to_string())?;
+
+    std::process::Command::new("cmd.exe")
+        .arg("/c")
+        .arg(&bat)
+        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
@@ -585,20 +710,41 @@ fn main() {
             // sürerken pencere kapatılırsa bobinler hastanın üzerinde açık kalır. E-stop ile durdur.
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.app_handle().try_state::<AppState>() {
+                    // ⚠️ SAHİPLİK KURALI (denetim 2026-08-04): yalnız BU instance'ın BAŞLATTIĞI
+                    // backend durdurulur. Eskiden `kill_stray_backends()` (sistem-genelinde
+                    // `taskkill /F /IM PEMF_Backend.exe /T`) ve `backend.port` silme KOŞULSUZ
+                    // çalışıyordu. Tek-instance koruması olmadığı için ikinci bir client penceresi
+                    // kapandığında, AKTİF TEDAVİ süren ve BAŞKASININ başlattığı backend
+                    // E-STOP'SUZ öldürülüyordu — STM bobinleri 1-5'i firmware'in 1500 ms ölü-adam
+                    // devresi kurtarır ama ESP bobinleri 6-8'in link-watchdog'u YOKTUR ve tek
+                    // durdurma yolu broker'a ulaşan STOP publish'idir (o da backend'le birlikte ölür).
                     // #141: child+port tek kilitten atomik alınır → E-stop(port) HER ZAMAN kill'den önce.
                     if let Some((mut child, port)) = state.proc.lock().unwrap().take() {
                         backend::safe_stop_coils(port);
                         let _ = child.kill();
                         let _ = child.wait();
+                        // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
+                        // mosquitto/cloudflared YETİM kalır ve runtime/ dosyalarını kilitler
+                        // (sonraki kurulum "os error 32"). Yalnız SAHİBİYSEK ağacı temizle.
+                        backend::kill_stray_backends();
+                        // Temiz kapanış: bobinler durduruldu + backend öldürüldü → port dosyasını
+                        // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
+                        // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
+                        let root = install::default_install_root(&home_dir());
+                        let _ = std::fs::remove_file(root.join("backend.port"));
                     }
-                    // child.kill() ÇOCUK-AĞACINI öldürmez → spawn edilen mosquitto/cloudflared YETİM
-                    // kalır ve runtime/ dosyalarını kilitler (sonraki kurulum "os error 32"). Ağacı temizle.
-                    backend::kill_stray_backends();
-                    // Temiz kapanış: bobinler durduruldu + backend öldürüldü → port dosyasını
-                    // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
-                    // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
-                    let root = install::default_install_root(&home_dir());
-                    let _ = std::fs::remove_file(root.join("backend.port"));
+                    // SAHİBİ DEĞİLSEK: hiçbir şey öldürme ve `backend.port`'a DOKUNMA — o dosya
+                    // çalışan backend'in E-stop adresidir; silersek NSIS uninstaller'ının ve
+                    // onarım yolunun E-stop yedeği KÖR kalır (bobinler enerjili öldürülür).
+                }
+                // Client/profil penceresi ("main") kapandı → uygulama penceresini de kapat ki süreç
+                // ÇIKSIN (yoksa "app" penceresi ölü-backend'le açık kalır, süreç kapanmaz). "app"
+                // penceresi kapanınca ise "main" açık kaldığından süreç yaşar → kullanıcı client'a
+                // döner (backend yukarıda GÜVENLE durduruldu). Böylece Başlat client'ı KAPATMAZ.
+                if window.label() == "main" {
+                    if let Some(appwin) = window.app_handle().get_webview_window("app") {
+                        let _ = appwin.close();
+                    }
                 }
             }
         })
@@ -650,5 +796,22 @@ mod tests {
         assert!(build_relaunch_script("C:\\a\".exe", "C:\\b.exe").is_err());
         assert!(build_relaunch_script("C:\\a.exe", "C:\\b\n.exe").is_err());
         assert!(build_relaunch_script("C:\\a\r.exe", "C:\\b.exe").is_err());
+    }
+
+    /// KALDIRMA: uninstaller batch'i yolu gömer + İNTERAKTİF başlatır (/S YOK) + enjeksiyon REDDEDER.
+    #[cfg(windows)]
+    #[test]
+    fn uninstall_script_gomer_ve_enjeksiyon_reddeder() {
+        let path = r"C:\Users\x\AppData\Local\PEMF Vet Client\uninstall.exe";
+        let s = build_uninstall_script(path).unwrap();
+        assert!(s.contains(path)); // uninstaller yolu tam gömülü
+        assert!(s.contains("start \"\" \"")); // ayrı süreç başlat
+        assert!(!s.contains("/S")); // SİLENT değil → kullanıcı 'veri sil' checkbox'ını görür
+        assert!(s.contains("ping -n 6 127.0.0.1 >nul")); // launcher çıksın diye bekle (exe kilidi)
+        assert!(s.contains("del \"%~f0\"")); // batch kendini sil
+        // Batch-enjeksiyonu: tırnak / yeni-satır içeren yol → REDDET.
+        assert!(build_uninstall_script("C:\\a\".exe").is_err());
+        assert!(build_uninstall_script("C:\\a\n.exe").is_err());
+        assert!(build_uninstall_script("C:\\a\r.exe").is_err());
     }
 }

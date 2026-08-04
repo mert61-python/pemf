@@ -7,10 +7,28 @@
 # SSID/şifre ESP firmware'i (secrets_coil_*.h) ile EŞLEŞMELİ → varsayılan sabit.
 # =============================================================================
 param(
-    [string]$Ssid = "PEMF-Gateway",
-    [string]$Pass = "pemf1234"
+    [string]$Ssid,
+    [string]$Pass
 )
 $ErrorActionPreference = "Continue"
+
+# ── DENETİM 2026-08-04 (P0): WPA2 parolası ARTIK BU DOSYADA GÖMÜLÜ DEĞİL ──────
+# Neden: make_base_zip.py bu script'i base.zip'e paketliyor ve base.zip PUBLIC bir
+# GitHub Release'ten servis ediliyor → gömülü 'pemf1234' herkesin indirip okuyabildiği
+# bir kimlik bilgisiydi ve SAHADAKİ TÜM cihazlarda aynıydı. mosquitto.conf'un
+# allow_anonymous=true kararı açıkça "WPA2 parolası GÜÇLÜ + cihaz-başına BENZERSİZ"
+# telafi kontrolüne dayanıyor; bu kontrol uygulanamaz durumdaydı.
+#
+# ⚠️ PAROLAYI DEĞİŞTİRMEK TEK BAŞINA YETMEZ: ESP bobinleri (6-8) SSID/parolayı kendi
+# firmware'lerinde (`config/credentials/secrets_coil_*.h`) taşır. Parola değişirse
+# O ESP'LER DE YENİDEN FLASH'LANMALIDIR — aksi halde bobin 6-8 hotspot'a bağlanamaz.
+# Bu yüzden burada rastgele üretim YAPILMAZ; değer dışarıdan (kurulum) verilir ve
+# verilmediğinde sahadaki kurulumları bozmamak için ESKİ varsayılana düşülür + uyarılır.
+#
+# Çözümleme sırası: parametre → ortam değişkeni → hotspot.json → (eski varsayılan + UYARI)
+$LegacySsid = "PEMF-Gateway"
+$LegacyPass = "pemf1234"
+$HotspotConf = Join-Path $env:ProgramData 'PEMF_System\hotspot.json'
 
 # Sessiz calisma (endustri-standardi): konsola HICBIR SEY yazma — bu script logon'da + her 3dk
 # calistigi icin konsola yazmak gorunur/flash pencereye yol acardi. Tani icin dosyaya logla (rotasyonlu).
@@ -23,6 +41,26 @@ function Log([string]$m) {
         "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $m" | Add-Content -LiteralPath $LogFile -Encoding UTF8 -ErrorAction SilentlyContinue
     } catch {}
 }
+
+# ── SSID/parola çözümle (bkz. başlıktaki DENETİM notu) ──────────────────────
+if (-not $Ssid -and $env:PEMF_HOTSPOT_SSID) { $Ssid = $env:PEMF_HOTSPOT_SSID }
+if (-not $Pass -and $env:PEMF_HOTSPOT_PASS) { $Pass = $env:PEMF_HOTSPOT_PASS }
+if ((-not $Ssid -or -not $Pass) -and (Test-Path -LiteralPath $HotspotConf)) {
+    try {
+        $hc = Get-Content -LiteralPath $HotspotConf -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $Ssid -and $hc.ssid) { $Ssid = [string]$hc.ssid }
+        if (-not $Pass -and $hc.pass) { $Pass = [string]$hc.pass }
+    } catch { Log "hotspot.json okunamadi ($_) — varsayilana dusuluyor." }
+}
+if (-not $Ssid) { $Ssid = $LegacySsid }
+if (-not $Pass) {
+    $Pass = $LegacyPass
+    Log ("UYARI: hotspot parolasi yapilandirilmamis -> ESKI PAYLASILAN VARSAYILAN kullaniliyor. " +
+         "Bu deger base.zip ile PUBLIC dagitildigi icin GIZLI DEGILDIR. Cihaza ozel parola icin: " +
+         "$HotspotConf -> {`"ssid`":`"...`",`"pass`":`"...`"} (ESP bobinleri 6-8 YENIDEN FLASH'LANMALI).")
+}
+# WPA2 asgari uzunluk (8) — kisa parola ConfigureAccessPointAsync'i sessizce dusurur.
+if ($Pass.Length -lt 8) { Log "UYARI: parola 8 karakterden kisa; WPA2 reddedebilir."; }
 
 # Zaten aktif mi? (hotspot subnet 192.168.137.x IP var mı)
 $active = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -like '192.168.137.*' }
@@ -48,10 +86,17 @@ try {
         $mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($cp)
         try {
             $cfg = $mgr.GetCurrentAccessPointConfiguration()
-            $cfg.Ssid = $Ssid
-            $cfg.Passphrase = $Pass
-            try { $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::TwoPointFourGigahertz } catch {}  # ESP32 = 2.4GHz
-            AwaitAction ($mgr.ConfigureAccessPointAsync($cfg))
+            # DENETİM 2026-08-04: AP yapılandırması KOŞULSUZ yeniden yazılıyordu → operatörün
+            # Windows Ayarlar'dan koyduğu cihaza-özel parola, ilk boşta-kalma (ICS ~4 dk) döngüsünde
+            # sessizce eski değere DÖNÜYORDU. Artık yalnız GERÇEKTEN farklıysa yaz.
+            $needCfg = ($cfg.Ssid -ne $Ssid) -or ($cfg.Passphrase -ne $Pass)
+            if ($needCfg) {
+                $cfg.Ssid = $Ssid
+                $cfg.Passphrase = $Pass
+                try { $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::TwoPointFourGigahertz } catch {}  # ESP32 = 2.4GHz
+                AwaitAction ($mgr.ConfigureAccessPointAsync($cfg))
+                Log "AP yapilandirmasi guncellendi (SSID=$Ssid)."
+            } else { Log "AP yapilandirmasi zaten dogru — dokunulmadi." }
         } catch {}
         if ($mgr.TetheringOperationalState -ne 'On') {
             # LattePanda 3 = Intel AX201 → WinRT TEK yol (hosted-network YOK). Radyo init / internet-profili
