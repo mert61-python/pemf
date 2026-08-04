@@ -5,7 +5,7 @@
 //! zaman aşımında süreç öldürülür ve stderr çağırana verilir.
 
 use std::io;
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -26,12 +26,40 @@ pub enum BackendError {
     NoFreePort { start: u16, end: u16 },
 }
 
+/// Port GERÇEKTEN boş mu? — backend'in bağlanacağı adresle UYUMLU kontrol.
+///
+/// ⚠️ DENETİM 2026-08-04: eskiden yalnız `TcpListener::bind(127.0.0.1:port)` deneniyordu; oysa
+/// backend `0.0.0.0`'a bağlanır (`backend_service.py --host` varsayılanı — mobil istemciler LAN'dan
+/// erişsin diye). Windows'ta bu ikisi ÇAKIŞMAZ ve bu ampirik olarak doğrulandı:
+///   biri `0.0.0.0:8000`'i DİNLERKEN → `bind(127.0.0.1:8000)` BAŞARILI, `bind(0.0.0.0:8000)` RED.
+/// Yani orada yetim bir backend (ya da başka bir web servisi) varken launcher portu "boş" sanıp
+/// 8000'i seçiyor, uvicorn `0.0.0.0:8000`'de WinError 10048 alıp ÖLÜYOR, `wait_for_health` ~180 sn
+/// boşuna bekleyip genel bir hata gösteriyordu. Klinikte: cihaz açılmıyor, mesaj da yol göstermiyor.
+/// (`kill_stray_backends` her zaman başaramaz — başka oturumun yükseltilmiş süreci kalabilir.)
+///
+/// Düzeltme neden `bind(0.0.0.0)` DEĞİL: launcher bugün hiçbir sokete bağlanmıyor; loopback dışı
+/// bir `listen` Windows Güvenlik Duvarı'nda YENİ bir izin istemi doğurur (klinik kurulumunda
+/// istenmeyen bir sürpriz). Bunun yerine ÖNCE bağlanma-yoklaması: `0.0.0.0`'a bağlı bir dinleyici
+/// loopback üzerinden de bağlantı kabul eder → connect başarılıysa port MEŞGULDÜR.
+///
+/// Kalan boşluk (bilinçli): YALNIZCA belirli bir LAN IP'sine (ör. 192.168.1.5:8000) bağlı bir
+/// dinleyici loopback'ten görünmez; o durumda uvicorn yine 10048 alır. Bu senaryo bu üründe
+/// pratikte görülmedi ve yakalamak için loopback-dışı `listen` gerekirdi (güvenlik duvarı istemi).
+fn port_is_free(port: u16) -> bool {
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    // 1) Dinleyen biri var mı? (0.0.0.0'a bağlı dinleyiciyi de yakalar)
+    if TcpStream::connect_timeout(&addr.into(), Duration::from_millis(150)).is_ok() {
+        return false;
+    }
+    // 2) Bizim de bağlanabildiğimizi teyit et (TIME_WAIT vb. durumları eler).
+    TcpListener::bind(addr).is_ok()
+}
+
 /// `start`'tan itibaren bağlanabilen ilk portu bulur.
 /// Klinik makinesinde 8000 sıkça meşguldür (başka servis) → sabit port varsaymayız.
 pub fn find_free_port(start: u16, tries: u16) -> Result<u16, BackendError> {
     for port in start..start.saturating_add(tries) {
-        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-        if TcpListener::bind(addr).is_ok() {
+        if port_is_free(port) {
             return Ok(port);
         }
     }
@@ -372,6 +400,26 @@ mod tests {
         assert!((48000..48050).contains(&port));
     }
 
+    /// ⚠️ DENETİM 2026-08-04 — ASIL SENARYO: backend `0.0.0.0`'a bağlanır, launcher ise
+    /// yalnız `127.0.0.1`'i yokluyordu. Windows'ta biri `0.0.0.0:P`'yi DİNLERKEN
+    /// `bind(127.0.0.1:P)` BAŞARILI olur (ampirik olarak doğrulandı) → port "boş" sanılır,
+    /// uvicorn `0.0.0.0:P`'de WinError 10048 alıp ölür, kullanıcı ~180 sn sonra genel hata görür.
+    /// Yetim backend / başka bir web servisi tam olarak bu durumu yaratır.
+    #[test]
+    fn tum_arayuzlere_bagli_dinleyici_bos_sayilmaz() {
+        let ln = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        let port = ln.local_addr().unwrap().port();
+
+        // Eski kod bu portu "boş" bulup dönerdi; artık MEŞGUL sayılmalı.
+        assert!(!port_is_free(port), "0.0.0.0'a bagli dinleyici varken port BOS sayildi");
+        assert_ne!(
+            find_free_port(port, 1).ok(),
+            Some(port),
+            "find_free_port mesgul portu dondurdu — backend baslangicta 10048 alir"
+        );
+        drop(ln);
+    }
+
     #[test]
     fn dolu_port_atlanir() {
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
@@ -395,9 +443,14 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            if let Ok((mut s, _)) = listener.accept() {
+            // Boş yoklama bağlantılarını (bkz. `port_is_free`) atlayıp GERÇEK isteği bekle.
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
                 let mut buf = [0u8; 1024];
                 let n = s.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    continue;
+                }
                 // GERÇEK yanıt şekli (servers/api_server.py `emergency_stop`): `confirmed` alanı
                 // "her iki transport da doğrulandı" demektir. safe_stop_coils bunu OKUR ve
                 // doğrulanmadıysa bir kez daha dener → burada true dönerek tek denemede biter.
@@ -409,6 +462,7 @@ mod tests {
                 );
                 let _ = s.write_all(body);
                 let _ = tx.send(String::from_utf8_lossy(&buf[..n]).into_owned());
+                break;
             }
         });
         safe_stop_coils(port);
@@ -438,7 +492,13 @@ mod tests {
             for stream in listener.incoming() {
                 let Ok(mut s) = stream else { continue };
                 let mut buf = [0u8; 1024];
-                let _ = s.read(&mut buf);
+                let read = s.read(&mut buf).unwrap_or(0);
+                // ⚠️ Yalnız GERÇEK istekleri say. `find_free_port`'un boşluk yoklaması (ve paralel
+                // koşan komşu testler) bağlanıp hiçbir şey göndermeden kapatabilir; ham `accept`
+                // sayılırsa bu test port-uzayı yarışına bağlı hale gelir (flaky).
+                if read == 0 {
+                    continue;
+                }
                 let n = hits2.fetch_add(1, Ordering::SeqCst);
                 // 1. istek: partial/confirmed=false → yeniden denenmeli. 2. istek: confirmed=true.
                 let body: &[u8] = if n == 0 {
