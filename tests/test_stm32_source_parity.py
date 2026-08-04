@@ -200,3 +200,56 @@ def test_ref_ms_hizalamasi_ISR_icinde_yapiliyor(fw_src):
     assert all(a > tpp_atama for a in atamalar), (
         "hizalama g_tpp hesabindan ONCE yapiliyor — eski/yeni tpp ayrismasi geri gelir."
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (#65 REGRESYON) — ref_ms HİZALAMASI TEK ATIŞLIK OLMALI
+#
+# Hizalama main() döngüsünden TIM1 ISR'ına taşındığında `ref_ms_valid` hiçbir yerde
+# temizlenmiyordu. Oysa `g_shadow.pending = 1` yalnız yeni bir PAKET geldiğinde değil,
+# şu iki yerde daha yazılır:
+#     • süre auto-stop      (bobinin dur_min'i doldu → duty = 0)
+#     • ölü-adam watchdog   (1500 ms sessizlik → tüm duty = 0)
+# Bu yollar `ref_ms_valid`'e dokunmaz → bayrak son gerçek paketten 1 olarak kalır ve ISR,
+# BAYAT bir `ref_ms` ile HÂLÂ ÇALIŞAN bobinlerin `g_dds_tick`'ini yeniden konumlandırır:
+# tedavi ortasında faz sıçraması + olası sahte/kayıp PB1 sync darbesi. Çok-bobinli faz
+# senkronu bu cihazın temel işlevi olduğu için bu gerçek bir kusurdur.
+#
+# Düzeltme: bayrak `pending` ile AYNI şekilde hem gölgede hem aktifte sıfırlanır.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_ref_ms_valid_pending_gibi_tuketiliyor(fw_src):
+    """Hizalama bayrağı ISR'da HEM g_active HEM g_shadow üzerinde sıfırlanmalı."""
+    isr = fw_src.index("void HAL_TIM_PeriodElapsedCallback")
+    govde = fw_src[isr:]
+
+    assert re.search(r"g_active\.ref_ms_valid\s*=\s*0", govde), (
+        "g_active.ref_ms_valid ISR'da SIFIRLANMIYOR — hizalama tek atislik degil."
+    )
+    assert re.search(r"&g_shadow\)->ref_ms_valid\s*=\s*0", govde), (
+        "g_shadow.ref_ms_valid ISR'da SIFIRLANMIYOR — bayrak sonraki pending'de de 1 kalir "
+        "ve sure-auto-stop/watchdog BAYAT ref_ms ile calisan bobinlerin fazini kaydirir."
+    )
+
+    # Sıfırlama, hizalamayı KULLANAN bloktan SONRA gelmeli (önce sıfırlanırsa hiç hizalanmaz).
+    kullanim = govde.index("g_dds_tick[i] = new_tick")
+    sifirlama = govde.index("g_active.ref_ms_valid = 0")
+    assert sifirlama > kullanim, (
+        "ref_ms_valid, hizalama uygulanmadan ONCE sifirlaniyor — hizalama hic calismaz."
+    )
+
+
+def test_pending_yazan_yollar_biliniyor(fw_src):
+    """`pending=1` yazan yer sayısı artarsa, yeni yolun ref_ms semantiğini gözden geçir.
+
+    Bu test bir 'kusur' aramaz; DEĞİŞİKLİĞİ görünür kılar. Yeni bir `pending=1` eklenirse
+    (ör. yeni bir güvenlik durdurması) o yolun bayat `ref_ms` ile faz kaydırıp kaydırmadığı
+    DÜŞÜNÜLMELİDİR — yukarıdaki regresyon tam olarak bu gözden kaçtığı için oluştu.
+    """
+    n = len(re.findall(r"g_shadow\.pending\s*=\s*1", fw_src))
+    assert n == 3, (
+        f"`g_shadow.pending = 1` yazan yol sayisi {n} (beklenen 3: paket, sure-auto-stop, "
+        f"watchdog). Yeni bir yol eklendiyse ref_ms tek-atislik semantigini dogrula ve bu "
+        f"sayiyi guncelle."
+    )

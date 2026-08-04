@@ -943,6 +943,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         g_start_ms[i] = 0;
       }
     }
+
+    /* ⚠️ ref_ms hizalaması TEK ATIŞLIKTIR — `pending` gibi TÜKETİLİR.
+     *
+     * DENETİM 2026-08-04 (#65 REGRESYON DÜZELTMESİ): hizalama main() döngüsünden buraya
+     * taşınınca `ref_ms_valid` hiçbir yerde temizlenmiyordu. Ama `pending=1` yalnız yeni bir
+     * PAKET geldiğinde değil, ŞU İKİ YERDE DAHA yazılıyor:
+     *   • süre auto-stop  (bobinin dur_min'i doldu → duty=0)
+     *   • ölü-adam watchdog (1500 ms sessizlik → tüm duty=0)
+     * Bu yollar `ref_ms_valid`'e DOKUNMAZ; bayrak son gerçek paketten 1 olarak kalırdı. Sonuç:
+     * bir bobinin süresi dolduğu anda ISR, BAYAT bir `ref_ms` ile HÂLÂ ÇALIŞAN tüm bobinlerin
+     * `g_dds_tick`'ini yeniden konumlandırır → tedavi ortasında FAZ SIÇRAMASI ve olası sahte/
+     * kayıp PB1 sync darbesi. Çok-bobinli faz senkronu bu cihazın temel işlevi olduğundan bu
+     * gerçek bir kusurdur. (Eski kodda yoktu: hizalama yalnız paket ayrıştırıldıktan hemen
+     * sonra, main() içinde çalışıyordu.)
+     * Bayrağı `pending` ile AYNI şekilde hem gölgede hem aktifte sıfırlıyoruz → hizalama
+     * yalnızca onu taşıyan paketin uygulandığı anda, TAM BİR KEZ olur. */
+    g_active.ref_ms_valid = 0U;
+    ((volatile CoilParamSet_t *)&g_shadow)->ref_ms_valid = 0U;
   }
 
   /* ---- Bobin bazlı tick, period ve slew rate limiter ---- */
