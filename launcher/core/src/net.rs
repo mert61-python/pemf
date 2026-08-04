@@ -122,13 +122,29 @@ pub fn validate_download_source(url: &str) -> Result<String, NetError> {
         }
         return Ok(host);
     }
-    // github.com değilse: AÇIKÇA listelenmiş olmalı; joker sonek kaynak URL için YETMEZ.
-    if ALLOWED_HOSTS.contains(&host.as_str()) {
+    // ⚠️ DENETİM 2026-08-04 (P2 — YANLIŞ GÜVENCE): burada `ALLOWED_HOSTS` kullanılıyordu ve o
+    // liste `raw.githubusercontent.com` ile `codeload.github.com`'u da içeriyor. Bu ikisinde YOL
+    // kontrolü yapılmadığı için `raw.githubusercontent.com/<saldirgan>/<repo>/main/base.zip`
+    // KAYNAK olarak kabul ediliyordu — yani fonksiyonun kendi yorumunun "kapattım" dediği saldırı
+    // açıktı. İkisi de ücretsiz bir GitHub hesabıyla tamamen saldırgan-kontrollü bayt sunar.
+    // Yayındaki manifest yalnızca `github.com/mert61-python/pemf-update/releases/...` kullanıyor
+    // (doğrulandı) → kaynak allowlist'i OPAK NESNE DEPOLARIYLA sınırlandırıldı. Bu ikisi
+    // REDIRECT hedefi olarak hâlâ geçerli (`validate_url` değişmedi) — GitHub CDN'i oraya yönlendirir.
+    if SOURCE_OBJECT_HOSTS.contains(&host.as_str()) {
         Ok(host)
     } else {
         Err(NetError::HostNotAllowed(host))
     }
 }
+
+/// KAYNAK URL'lerinde kabul edilen OPAK nesne-depoları. GitHub bu adreslerde yolu kendisi
+/// üretir (imzalı, geçici) → yol-pini uygulanamaz; koruma SHA256'dır. `raw.githubusercontent.com`
+/// ve `codeload.github.com` BİLEREK YOK: oralarda yol `<sahip>/<repo>/...` biçimindedir ve
+/// herkes kendi deposundan içerik sunabilir (bkz. validate_download_source notu).
+const SOURCE_OBJECT_HOSTS: &[&str] = &[
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
@@ -150,6 +166,12 @@ pub enum NetError {
     /// Kullanıcı İPTAL etti — `.part` SİLİNİR.
     #[error("indirme iptal edildi")]
     Cancelled,
+    /// ⚠️ DENETİM 2026-08-04 (P2): boyut tavanı / küresel süre aşımı gibi DETERMİNİSTİK politika
+    /// iptalleri eskiden `Transport` olarak dönüyordu; `flow::is_retriable` `Transport`'u koşulsuz
+    /// GEÇİCİ saydığı için aynı hata 6 kez TAM YENİDEN İNDİRME tetikliyordu (klinik hattında
+    /// gigabaytlarca boşuna trafik ve dakikalarca donma). Bunlar yeniden denemeyle DÜZELMEZ.
+    #[error("indirme politika sınırı: {0}")]
+    PolicyLimit(String),
 }
 
 /// İndirme akış-kontrolü: her yığında kontrol edilir. `Continue` sürdürür, `Pause` `.part`'ı
@@ -344,7 +366,7 @@ pub fn download_to_file(
         // zaman aşımına uğramaz. Duraklat/İptal'de `.part` korunur, saat sonraki denemede sıfırlanır.
         if started.elapsed() > Duration::from_secs(MAX_DOWNLOAD_DURATION_S) {
             let _ = out.flush(); // `.part` KORUNUR → sonraki deneme Range ile sürer
-            return Err(NetError::Transport(format!(
+            return Err(NetError::PolicyLimit(format!(
                 "indirme küresel süre sınırını aştı ({MAX_DOWNLOAD_DURATION_S} sn) — iptal edildi"
             )));
         }
@@ -367,7 +389,7 @@ pub fn download_to_file(
         }
         done += n as u64;
         if done > ceiling {
-            return Err(NetError::Transport(format!(
+            return Err(NetError::PolicyLimit(format!(
                 "indirme boyut sınırını aştı ({done} > {ceiling} bayt) — iptal edildi"
             )));
         }
@@ -521,6 +543,34 @@ mod tests {
         assert!(!path_has_traversal("/mert61-python/pemf-update/releases/download/v1/base.zip"));
         // sorgu icindeki '//' YOL degildir — yanlis-pozitif olmamali
         assert!(!path_has_traversal("/a/b?x=1//2#frag"));
+    }
+
+    /// ⚠️ P2 (denetim 2026-08-04): `validate_download_source`'un YORUMU
+    /// `raw.githubusercontent.com/<herhangi-hesap>/...` saldirisinin kapatildigini soyluyordu
+    /// ama KOD o host'u (ve codeload'u) yol kontrolu OLMADAN kabul ediyordu — yanlis guvence.
+    /// Ikisi de ucretsiz bir GitHub hesabiyla tamamen saldirgan-kontrollu bayt sunar.
+    #[test]
+    fn raw_ve_codeload_kaynak_olarak_kabul_edilmez() {
+        for u in [
+            "https://raw.githubusercontent.com/saldirgan/kotu/main/base.zip",
+            "https://raw.githubusercontent.com/mert61-python/pemf-update/main/base.zip",
+            "https://codeload.github.com/saldirgan/kotu/zip/refs/heads/main",
+        ] {
+            assert!(
+                validate_download_source(u).is_err(),
+                "KAYNAK olarak kabul edildi (saldirgan kendi deposundan bayt sunar): {u}"
+            );
+            // Ama REDIRECT hedefi olarak hala gecerli — GitHub CDN'i oraya yonlendirir.
+            assert!(validate_url(u).is_ok(), "redirect hedefi olarak reddedildi: {u}");
+        }
+
+        // Opak nesne depolari KAYNAK olarak gecerli (yol GitHub tarafindan uretilir, imzalidir).
+        for u in [
+            "https://objects.githubusercontent.com/github-production-release-asset/1/2?x=y",
+            "https://release-assets.githubusercontent.com/a/b",
+        ] {
+            assert!(validate_download_source(u).is_ok(), "opak nesne deposu reddedildi: {u}");
+        }
     }
 
     #[test]

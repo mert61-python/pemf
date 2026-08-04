@@ -40,12 +40,17 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// açıldıktan sonra o ağacı yeniden doğrulayan hiçbir mekanizma yoktur. `installed_profiles.json`
 /// ve `backend.port` da aynı şekilde ezilebilir (E-stop adresi!).
 /// Katı bir `ai_models/` ÖNEK ZORUNLULUĞU meşru bir paketi kırabileceğinden, hedefli yasak-liste.
-const PROFILE_FORBIDDEN_TOP: [&str; 5] = [
+const PROFILE_FORBIDDEN_TOP: [&str; 6] = [
     "runtime",
     "cache",
     "installed_profiles.json",
     "pending_install.json",
     "backend.port",
+    // DENETİM 2026-08-04 (P2): bu denetimde EKLENEN durum dosyası listeye alınmamıştı. Profil
+    // zip'i kök seviyeye `selfupdate_attempt.json` koyup `{"version":"<bir sonraki launcher>",
+    // "count":99}` yazarsa `selfupdate_auto_allowed` false döner ve launcher'ın SESSİZ
+    // oto-güncellemesi o sürüm için KALICI durur (güvenlik yamaları da gelmez).
+    "selfupdate_attempt.json",
 ];
 
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
@@ -139,8 +144,31 @@ pub fn extract_zip_cancellable(
         }
 
         let out = dest.join(&rel);
+
+        // ⚠️ DENETİM 2026-08-04 (P2 — BU KORUMANIN KENDİ AÇIĞI): aşağıdaki #102 kontrolü
+        // ESKİDEN yalnız DÜZ-DOSYA dalındaydı. Dizin girdileri (`is_dir` → `continue`) ve
+        // symlink girdileri (`is_symlink` → `continue`) kontrolden ÖNCE dönüyordu, yani
+        // korumayı TAMAMEN atlıyorlardı. Somut: kurulum kökünde bir junction varken
+        // (`mklink /J` — Windows'ta yönetici gerektirmez) arşivdeki tek bir DİZİN girdisi
+        // `link/kacak/` → `create_dir_all` junction'ı İZLER, kökün DIŞINDA dizin oluşur ve
+        // fonksiyon hata bile vermez. Kontrol artık girdi tipine bakmadan, HER dal için ve
+        // `create_dir_all`'DAN ÖNCE yapılır.
+        let hedef_dizin: &Path = if entry.is_dir() {
+            out.as_path()
+        } else {
+            out.parent().unwrap_or(dest)
+        };
+        if last_checked_parent.as_deref() != Some(hedef_dizin) {
+            if !is_within(dest, hedef_dizin) {
+                return Err(ExtractError::PathEscape(format!(
+                    "{raw_name} (hedef dizin symlink/junction üzerinden kurulum kökünün DIŞINA çözümlendi)"
+                )));
+            }
+            last_checked_parent = Some(hedef_dizin.to_path_buf());
+        }
+        fs::create_dir_all(hedef_dizin)?;
+
         if entry.is_dir() {
-            fs::create_dir_all(&out)?;
             continue;
         }
 
@@ -162,28 +190,10 @@ pub fn extract_zip_cancellable(
                 ));
             }
             create_symlink(&target, &out, dest, &raw_name)?;
+            // Yeni bir symlink, SONRAKİ yolların çözümlenmesini değiştirebilir → önbelleği düşür.
+            last_checked_parent = None;
             written += 1;
             continue;
-        }
-        if let Some(parent) = out.parent() {
-            fs::create_dir_all(parent)?;
-            // ⚠️ DENETİM 2026-08-04 (#102 — ZİNCİRLEME SYMLINK): `stays_within` yalnız METİNSEL
-            // sadeleştirme yapar, dosya sistemine BAKMAZ. Tek başına her biri "kök altında"
-            // görünen İKİ symlink zincirlenince kökün DIŞINA çıkan bir dizin elde edilir
-            // (örn. `a -> "."` ve `b -> "a/.."` → `<kök>/b` = kökün EBEVEYNİ). Ardından gelen
-            // sıradan bir girdi (`b/x.dat`) o link ÜZERİNDEN dışarı yazar; `File::create` linki
-            // İZLER ve yol kontrolü bunu göremez.
-            // Bu yüzden yazmadan ÖNCE, hedef dizinin GERÇEK (symlink çözümlenmiş) konumunu
-            // doğrula. `is_within` canonicalize eder ve fail-closed'dur.
-            // Maliyet: dizin DEĞİŞTİĞİNDE tek canonicalize (girdiler dizin dizin gruplu gelir).
-            if last_checked_parent.as_deref() != Some(parent) {
-                if !is_within(dest, parent) {
-                    return Err(ExtractError::PathEscape(format!(
-                        "{raw_name} (hedef dizin symlink üzerinden kurulum kökünün DIŞINA çözümlendi)"
-                    )));
-                }
-                last_checked_parent = Some(parent.to_path_buf());
-            }
         }
         let mut target = fs::File::create(&out)?;
         // Toplam açılım bütçesi: yalan-başlıklı zip-bomb'a karşı GERÇEK yazılan byte'ı sınırla
@@ -695,6 +705,47 @@ mod tests {
             "junction uzerinden kok DISINA yazma ENGELLENMEDI: {err:?}"
         );
         assert!(!disari.join("kacak.txt").exists(), "dosya kok disina yazilmis");
+    }
+
+    /// ⚠️ P2 (denetim 2026-08-04): #102 kontrolü YALNIZ düz-dosya dalındaydı. DİZİN girdisi
+    /// (`is_dir` → `continue`) kontrolden ÖNCE dönüyordu → junction izlenip kurulum kökünün
+    /// DIŞINDA dizin oluşuyor ve fonksiyon HATA BİLE VERMİYORDU (`Ok(0)`).
+    #[cfg(windows)]
+    #[test]
+    fn junction_uzerinden_dizin_olusturma_da_reddedilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("kurulum");
+        let disari = dir.path().join("disari");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&disari).unwrap();
+
+        let st = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(root.join("link"))
+            .arg(&disari)
+            .output();
+        if !st.map(|o| o.status.success()).unwrap_or(false) {
+            eprintln!("atlandi: junction olusturulamadi");
+            return;
+        }
+
+        // Arşivde YALNIZCA bir DİZİN girdisi var — hiç dosya yok.
+        let path = dir.path().join("d.zip");
+        let f = fs::File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        w.add_directory("link/kacak_dizin/", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        w.finish().unwrap();
+
+        let err = extract_zip(&path, &root).unwrap_err();
+        assert!(
+            matches!(err, ExtractError::PathEscape(_)),
+            "DIZIN girdisi junction uzerinden kok DISINA cikti: {err:?}"
+        );
+        assert!(
+            !disari.join("kacak_dizin").exists(),
+            "dizin kurulum kokunun DISINDA olusturulmus"
+        );
     }
 
     /// #104: profil (model) paketi `install_root`'a açılır → DOĞRULANMIŞ `runtime/` ağacını ya da

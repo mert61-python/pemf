@@ -74,6 +74,12 @@ fn is_retriable(e: &net::NetError) -> bool {
         // 5xx sunucu tarafı geçicidir; 408 (Request Timeout) ve 429 (Too Many Requests) da öyle.
         // Diğer 4xx'ler KALICI: yeniden denemek yalnız kullanıcıyı bekletir.
         net::NetError::HttpStatus { status, .. } => *status >= 500 || *status == 408 || *status == 429,
+        // ⚠️ DENETİM 2026-08-04 (P2): boyut tavanı / küresel süre aşımı ESKİDEN `Transport`
+        // olarak dönüyordu ve yukarıdaki kol onları GEÇİCİ sayıyordu → aynı deterministik hata
+        // 6 kez TAM YENİDEN İNDİRME tetikliyordu (gigabaytlarca boşuna trafik). Artık ayrı
+        // varyant ve AÇIKÇA kalıcı. (Alttaki `_` zaten false döndürüyor; bu kol niyeti
+        // belgeliyor ve varyant eklendiğinde sessizce yanlış tarafa düşmesini engelliyor.)
+        net::NetError::PolicyLimit(_) => false,
         // Malformed / NotHttps / HostNotAllowed → GÜVENLİK reddi, ASLA yeniden deneme.
         // Paused / Cancelled → kullanıcı kararı, yeniden deneme YANLIŞ olur.
         _ => false,
@@ -205,9 +211,26 @@ pub fn install_profiles(
     // sayacı sıfırlıyordu → belgelenen 8 GB tavanı base + 3 profil için pratikte 32 GB'dı.
     let mut extract_budget: u64 = 0;
     on(Progress::Extracting { what: "base".into() });
-    extract::extract_zip_cancellable(&runtime_zip, &rt, &mut extract_budget, false, &|| {
-        control() == net::Control::Cancel
-    })?;
+    // ⚠️ DENETİM 2026-08-04 (P2 — İPTAL ÖZELLİĞİNİN YAN ETKİSİ): iptali eklerken "yarım ağaç
+    // zararsız, durum dosyaları güncellenmiyor" demiştim. YANLIŞTI. Launcher "kurulu mu"
+    // kararını `installed_profiles.json`'a değil `install::backend_path().exists()`'e göre
+    // veriyor (bkz. detect_environment) ve `make_base_zip.py` kökteki tek dosya olan
+    // `PEMF_Backend.exe`'yi İLK girdi olarak yazıyor. Yani base açılımı %1'de iptal edilse
+    // bile exe diske düşmüş oluyor → UI kurulumu "kurulu" gösterip 6155 girdisi (~1,29 GB
+    // `_internal/` PyInstaller ağacı) EKSİK bir backend'i başlatmaya çalışıyor.
+    // Bu yüzden base açılımı BAŞARISIZ olursa (iptal ya da G/Ç hatası) `runtime/` SİLİNİR —
+    // "hiç kurulmamış" durumu, "yarım kurulmuş"tan her zaman iyidir. Maliyet düşük: iptal
+    // genelde erken gelir ve zaten yeniden indirme gerektirmez (paketler önbellekte).
+    if let Err(e) = extract::extract_zip_cancellable(
+        &runtime_zip,
+        &rt,
+        &mut extract_budget,
+        false,
+        &|| control() == net::Control::Cancel,
+    ) {
+        let _ = fs::remove_dir_all(&rt);
+        return Err(e.into());
+    }
 
     // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
@@ -405,6 +428,8 @@ mod tests {
         // Kullanıcı kararı → yeniden deneme YANLIŞ.
         assert!(!is_retriable(&net::NetError::Paused));
         assert!(!is_retriable(&net::NetError::Cancelled));
+        // P2: politika iptalleri DETERMINISTIK — yeniden denemek 6x tam indirme demek.
+        assert!(!is_retriable(&net::NetError::PolicyLimit("boyut".into())));
     }
 
     /// DENETİM 2026-08-04: profil kaydı okunamaz + diskte MODEL VARSA onarım SESSİZCE yalnız
@@ -427,6 +452,33 @@ mod tests {
 
     /// Kayıt yok AMA disk de boşsa: gerçekten yalnız base kurulu → onarım DEVAM etmeli
     /// (ProfileRecordUnreadable DEĞİL; burada manifest bozuk olduğu için Manifest hatası bekleriz).
+    /// ⚠️ P2 (denetim 2026-08-04): base açılımı iptal/hata ile yarım kalırsa `runtime/`
+    /// SİLİNMELİ. Aksi halde `make_base_zip.py`'nin İLK girdi olarak yazdığı
+    /// `PEMF_Backend.exe` diske düşmüş olur, `detect_environment` `backend_path().exists()`
+    /// ile "kurulu" der ve UI EKSİK bir backend'i başlatmaya çalışır.
+    #[test]
+    fn yarim_kalan_base_acilimi_kurulu_gorunmez() {
+        use std::io::Write;
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let rt = install::runtime_dir(root);
+
+        // İptal edilmiş bir açılımı taklit et: backend exe yazılmış, gerisi yok.
+        let bp = install::backend_path(root);
+        std::fs::create_dir_all(bp.parent().unwrap()).unwrap();
+        let mut f = std::fs::File::create(&bp).unwrap();
+        f.write_all(b"yarim").unwrap();
+        assert!(bp.exists(), "on kosul: backend exe yerinde");
+
+        // flow'un iptal/hata dalindaki temizligi ile AYNI islem.
+        let _ = std::fs::remove_dir_all(&rt);
+
+        assert!(
+            !install::backend_path(root).exists(),
+            "yarim agac temizlenmedi — UI kurulumu 'kurulu' gosterir ve EKSIK backend baslatilir"
+        );
+    }
+
     #[test]
     fn onarim_model_yokken_normal_akista_kalir() {
         let dir = tempfile::tempdir().unwrap();
