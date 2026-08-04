@@ -185,6 +185,30 @@ def _trusted_proxies():
     return _TRUSTED_PROXIES
 
 
+_LOOPBACK_BIND = None
+
+
+def _loopback_only_bind() -> bool:
+    """Backend YALNIZ loopback'e mi bağlanmış? (PEMF_API_HOST)
+
+    DENETIM P0 (proxy-auth, `server` profili): backend loopback'e bağlıyken makineye
+    DIŞARIDAN doğrudan bağlanmak imkânsızdır — 127.0.0.1'den gelen HER istek zorunlu
+    olarak önündeki ters-proxy'den (IIS/Nginx/Caddy) gelir. Yani o durumda "loopback =
+    yerel/güvenli" çıkarımı GEÇERSİZDİR.
+    """
+    global _LOOPBACK_BIND
+    if _LOOPBACK_BIND is None:
+        h = (os.getenv("PEMF_API_HOST", "0.0.0.0") or "").strip().strip("[]")
+        if h.lower() == "localhost":
+            _LOOPBACK_BIND = True
+        else:
+            try:
+                _LOOPBACK_BIND = ipaddress.ip_address(h).is_loopback
+            except Exception:
+                _LOOPBACK_BIND = False
+    return _LOOPBACK_BIND
+
+
 def is_local_request(client_host, via_proxy: bool = False) -> bool:
     """Yerel/LAN isteği mi → auth MUAF. Tünel/uzak (Cloudflare) ise token ZORUNLU.
 
@@ -199,6 +223,19 @@ def is_local_request(client_host, via_proxy: bool = False) -> bool:
         ip = ipaddress.ip_address(str(client_host or "").strip())
         # Beyan edilmis proxy'den geliyorsa (baslik olmasa bile) UZAK kabul et → token iste.
         if any(ip in net for net in _trusted_proxies()):
+            return False
+        # DENETIM P0 (proxy-auth'un ters-proxy yarisi, `server` profili — Docker'a OZEL DEGIL):
+        # deploy/server.env PEMF_API_HOST=127.0.0.1 + PEMF_REQUIRE_AUTH=1 ile public sunucu
+        # kurar; TLS'i operatorun kendi IIS/Nginx/Caddy'si sonlandirir. Nginx `proxy_pass` ile
+        # X-Forwarded-For'u KENDILIGINDEN EKLEMEZ (proxy_set_header gerekir) → via_proxy False
+        # kalir, soket kaynak-IP'si 127.0.0.1 olur ve 127.0.0.0/8 _trusted_nets'te oldugu icin
+        # INTERNETTEN gelen HER istek "yerel" sayilip auth-MUAF olurdu (PEMF_REQUIRE_AUTH=1
+        # olmasina ragmen). Docker'daki esdegeri PEMF_TRUSTED_PROXIES ile kapatilmisti; bu yol
+        # operatorun kendi proxy'sine bagli oldugundan env'e GUVENILEMEZ.
+        # Loopback'e bagliyken disaridan dogrudan baglanti IMKANSIZ → loopback'ten gelen her
+        # istek bir proxy'den gelir → "yerel" cikarimi gecersiz; fail-closed (token iste).
+        # PEMF_API_HOST varsayilani 0.0.0.0 → klinik (device.env) ve launcher ETKILENMEZ.
+        if ip.is_loopback and _loopback_only_bind() and require_auth():
             return False
         return any(ip in net for net in _trusted_nets())
     except Exception:

@@ -54,8 +54,41 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
    - Mosquitto **atlanır** (donanım yok).
    - `deploy\server.env`: `PEMF_SIMULATE=1`, `PEMF_REQUIRE_AUTH=1`, `PEMF_API_HOST=127.0.0.1`, CORS daraltılmış, tünel kapalı.
 4. **Reverse-proxy** `https://<domain>` → `http://127.0.0.1:8000` (TLS proxy'de sonlanır). Dışarıya yalnız **443**.
+   **Proxy gerçek istemci IP'sini İLETMELİ** — aşağıdaki uyarıya bakın.
 5. `server.env`'de `PEMF_CORS_ORIGINS`'i kendi web domain'inizle değiştir. `PEMF_ENCRYPT_AT_REST=1` → `/api/health`'te `atRestEncrypted` doğrula.
 6. Doğrula: `https://<domain>/api/health` 200, token'sız kontrol endpoint'i **401**.
+
+### ⚠️ Ters-proxy başlıkları (DENETİM P0)
+
+Yerel/uzak kararı soket kaynak-IP'sine bakar. Proxy loopback'ten bağlandığı için backend her
+isteği `127.0.0.1`'den görür. **Nginx `proxy_pass` `X-Forwarded-For`'u kendiliğinden EKLEMEZ.**
+Bu iki gerçek birleşince internetten gelen her istek "yerel" sanılıp **auth'tan muaf** olurdu.
+
+İki koruma katmanı devrede: kod (loopback'e bağlıyken loopback ≠ yerel) ve `server.env`'deki
+`PEMF_TRUSTED_PROXIES=127.0.0.1,::1`. **`server.env`'den o satırı silmeyin.** Buna rağmen doğru
+oran-sınırlama (rate-limit) için proxy'nin gerçek istemci IP'sini iletmesi gerekir:
+
+**Nginx**
+```nginx
+location / {
+    proxy_pass         http://127.0.0.1:8000;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $remote_addr;   # append DEĞİL: istemcinin gönderdiğini EZ
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;                              # WebSocket (canlı telemetri)
+    proxy_set_header   Upgrade           $http_upgrade;
+    proxy_set_header   Connection        "upgrade";
+    proxy_read_timeout 3600s;
+}
+```
+`X-Forwarded-For $remote_addr` (`$proxy_add_x_forwarded_for` DEĞİL) — aksi halde istemcinin
+kendi gönderdiği sahte IP zincire girer ve oran-sınırlama sahte IP döndürerek atlatılır.
+
+**Caddy** `reverse_proxy 127.0.0.1:8000` — `X-Forwarded-For`'u zaten kendi ekler, ek ayar gerekmez.
+
+**IIS (ARR)** URL Rewrite ile `X-Forwarded-For` = `{REMOTE_ADDR}` sunucu değişkenini **set** edin
+(append eden varsayılan kuralı değil).
 
 ---
 

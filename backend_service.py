@@ -527,6 +527,11 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     os.environ.setdefault("PEMF_HEADLESS", "1")
+    # DENETIM P0 (proxy-auth): servers/auth._loopback_only_bind() GERCEKTE baglanilan host'a
+    # gore yerel/uzak karari verir ama bunu env'den okur. --host CLI'da verilirse (ornegin
+    # scripts/install_backend_service.ps1 "--host 0.0.0.0" sabitler) env ile GERCEK AYRISIRDI →
+    # guvenlik karari yanlis girdiyle alinirdi. Cozulen degeri env'e geri yaz: tek gercek kaynak.
+    os.environ["PEMF_API_HOST"] = str(args.host)
 
     app_data_dir = get_app_data_directory()
     _configure_logging(app_data_dir, args.log_level)
