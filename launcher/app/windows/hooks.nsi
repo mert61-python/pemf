@@ -23,9 +23,27 @@
   Push $2
   ClearErrors
   FileOpen $0 "$INSTDIR\backend.port" r
+  IfErrors pemf_estop_fallback
+  FileRead $0 $1
+  FileClose $0
+  Goto pemf_estop_haveport
+  pemf_estop_fallback:
+  ; DENETİM 2026-08-04: "$INSTDIR == veri kökü" bugün DOĞRU ama TESADÜFİDİR ve hiçbir yerde
+  ; zorlanmıyor. Tauri NSIS varsayılanı installMode=currentUser → $INSTDIR = $LOCALAPPDATA\
+  ; PEMF Vet Client; launcher da backend.port'u install::default_install_root() ile TAM AYNI
+  ; yere yazıyor (doğrulandı: PEMFVetClient.exe ile runtime/ yan yana). Biri "kurulum Program
+  ; Files'a gitsin" deyip installMode=perMachine yaparsa bu eşitlik SESSİZCE bozulur: dosya
+  ; açılamaz, E-stop atlanır, hemen ardından taskkill /F koşar → bobinler HASTANIN ÜZERİNDE
+  ; ENERJİLİ kalır (ESP bobinleri 6-8'in firmware watchdog'u YOK). Kaldırıcı sessizce "başarılı"
+  ; görünür. Bu yüzden kanonik veri köküne AÇIK bir yedek yol: hasta güvenliği tek bir
+  ; yapılandırma varsayımına bağlı kalmasın.
+  ClearErrors
+  FileOpen $0 "$LOCALAPPDATA\PEMF Vet Client\backend.port" r
   IfErrors pemf_estop_done
   FileRead $0 $1
   FileClose $0
+  DetailPrint "PEMF: backend.port $INSTDIR'de yok — veri kökünden okundu."
+  pemf_estop_haveport:
   StrCmp $1 "" pemf_estop_done
   ; DENETİM 2026-08-04: $1 HAM satırdı ve doğrudan PowerShell -Command dizesine gömülüyordu.
   ; İki ayrı sorun: (a) backend.port kullanıcı-yazılabilir bir dizindedir (%LOCALAPPDATA%),

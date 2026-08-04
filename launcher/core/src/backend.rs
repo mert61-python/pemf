@@ -121,7 +121,7 @@ pub fn read_backend_port(install_root: &Path) -> Option<u16> {
 /// `wait_for_health` yalnız HTTP 200'e bakar; KENDİ başlattığımız süreci beklerken bu yeterlidir.
 /// Ama BAŞKASININ başlattığı bir backend'i sahiplenmeden önce kimliğini doğrulamak gerekir —
 /// aynı porta bağlanmış ilgisiz bir yerel servis de 200 dönebilir.
-fn probe_pemf_backend(port: u16) -> bool {
+pub fn probe_pemf_backend(port: u16) -> bool {
     ureq::get(&health_url(port))
         .timeout(Duration::from_secs(2))
         .call()

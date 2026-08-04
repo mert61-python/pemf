@@ -89,6 +89,24 @@ fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Pa
     backend::kill_stray_backends();
     // taskkill sonrası OS'un dosya kilitlerini bırakması için kısa bekle (extract'tan ÖNCE).
     std::thread::sleep(std::time::Duration::from_millis(800));
+    clear_port_if_stopped(root, None);
+}
+
+/// `backend.port`'u YALNIZ backend gerçekten sustuysa sil.
+///
+/// ⚠️ DENETİM 2026-08-04 — TIBBİ GÜVENLİK: bu dosya çalışan backend'in E-STOP ADRESİDİR; NSIS
+/// uninstaller ve onarım yolu bobinleri durdurmak için SADECE ondan okur. Önceden silme KOŞULSUZDU:
+/// `child.kill()` ya da `taskkill` BAŞARISIZ olsa bile (erişim reddi, süreç askıda, yükseltilmiş
+/// başka oturumun süreci) dosya gidiyordu. Sonuç: backend hâlâ ayakta ve ESP bobinleri 6-8 enerjili
+/// iken adres kayboluyor — o bobinlerin firmware'de link-watchdog'u YOKTUR, tek durdurma yolu
+/// broker'a ulaşan STOP publish'idir. Artık portu yokluyoruz: hâlâ yanıt veriyorsa dosya KORUNUR.
+fn clear_port_if_stopped(root: &std::path::Path, port: Option<u16>) {
+    let live = port
+        .or_else(|| backend::read_backend_port(root))
+        .is_some_and(backend::probe_pemf_backend);
+    if live {
+        return; // backend AYAKTA → E-stop adresi korunur (kaldırıcı/onarım kullanacak).
+    }
     let _ = std::fs::remove_file(root.join("backend.port"));
 }
 
@@ -182,11 +200,28 @@ fn open_app_window(app: &tauri::AppHandle, url: &str) {
     }
 }
 
+/// Ev dizini için ortam-değişkeni ÖNCELİK sırası (saf → test edilebilir; env yarışı yok).
+fn home_var_order(windows: bool) -> (&'static str, &'static str) {
+    if windows {
+        ("USERPROFILE", "HOME")
+    } else {
+        ("HOME", "USERPROFILE")
+    }
+}
+
 fn home_dir() -> std::path::PathBuf {
     // std::env::home_dir() eski Rust'larda Windows'ta yanlış davrandığı için
     // ortam değişkenlerinden çözüyoruz.
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
+    // ⚠️ DENETİM 2026-08-04: sıra platforma göre. Windows'ta `HOME` İŞLETİM SİSTEMİNİN değil,
+    // Git-Bash/MSYS/Cygwin/conda gibi araçların kurduğu bir değişkendir ve sıklıkla POSIX-tarzı
+    // (`/c/Users/merta`) ya da başka bir dizin olur. NSIS kurulumu ise $LOCALAPPDATA'yı GERÇEK
+    // profilden türetir. `HOME` öne alınınca launcher kurulum kökünü BAŞKA bir yerde arar →
+    // "kurulu değil" sanıp ~1,3 GB'ı yeniden indirir ve çalışan backend'in `backend.port`'unu
+    // bulamaz (E-stop yedeği kör kalır). Windows'un kanonik değişkeni USERPROFILE'dır.
+    let (first, second) = home_var_order(cfg!(target_os = "windows"));
+    std::env::var_os(first)
+        .or_else(|| std::env::var_os(second))
+        .filter(|v| !v.is_empty())
         .map(std::path::PathBuf::from)
         // #146: HOME/USERPROFILE yoksa CWD-relative "." (fail-open) YERİNE mutlak temp dizini —
         // kurulumu çalışma-dizinine (öngörülemez/yazılabilir) yazma riskini keser.
@@ -731,7 +766,7 @@ fn main() {
                         // sil ki sonraki bir uninstall ölü bir porta E-stop POST'lamasın. (Çökme
                         // yolunda bu handler ÇALIŞMAZ → dosya kalır ve uninstaller E-stop'lar.)
                         let root = install::default_install_root(&home_dir());
-                        let _ = std::fs::remove_file(root.join("backend.port"));
+                        clear_port_if_stopped(&root, Some(port));
                     }
                     // SAHİBİ DEĞİLSEK: hiçbir şey öldürme ve `backend.port`'a DOKUNMA — o dosya
                     // çalışan backend'in E-stop adresidir; silersek NSIS uninstaller'ının ve
@@ -813,5 +848,85 @@ mod tests {
         assert!(build_uninstall_script("C:\\a\".exe").is_err());
         assert!(build_uninstall_script("C:\\a\n.exe").is_err());
         assert!(build_uninstall_script("C:\\a\r.exe").is_err());
+    }
+
+    /// DENETİM 2026-08-04: Windows'ta `HOME` öncelikliydi. Git-Bash/MSYS/conda bu değişkeni
+    /// kurar (sık sık `/c/Users/...` POSIX biçiminde); NSIS ise $LOCALAPPDATA'yı GERÇEK
+    /// profilden türetir. Sıra yanlışsa launcher kurulumu BAŞKA yerde arar → "kurulu değil"
+    /// deyip ~1,3 GB yeniden indirir ve çalışan backend'in `backend.port`'unu bulamaz.
+    #[test]
+    fn ev_dizini_degisken_sirasi_platforma_uygun() {
+        assert_eq!(home_var_order(true), ("USERPROFILE", "HOME"), "Windows'ta USERPROFILE once olmali");
+        assert_eq!(home_var_order(false), ("HOME", "USERPROFILE"), "unix'te HOME once olmali");
+    }
+
+    /// `backend.port` çalışan backend'in E-STOP adresidir. PEMF backend YOKSA (ölü ya da
+    /// yabancı bir dinleyici) dosya temizlenmeli — ölü adres birikmesin.
+    #[test]
+    fn olu_veya_yabanci_port_dosyasi_temizlenir() {
+        let d = std::env::temp_dir().join(format!("pemf_port_test_{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("backend.port");
+
+        std::fs::write(&f, "65000").unwrap();
+        clear_port_if_stopped(&d, Some(65000));
+        assert!(!f.exists(), "olu/yabanci port icin dosya korunmus (olu adres birikir)");
+
+        std::fs::write(&f, "bozuk").unwrap();
+        clear_port_if_stopped(&d, None);
+        assert!(!f.exists(), "gecersiz port dosyasi temizlenmedi");
+
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// ⚠️ ASIL GÜVENLİK DALI — backend HÂLÂ AYAKTAYKEN `backend.port` KORUNMALI.
+    ///
+    /// Bu dosya çalışan backend'in tek E-STOP adresidir; NSIS uninstaller ve onarım yolu
+    /// bobinleri durdurmak için SADECE onu okur. `child.kill()`/`taskkill` başarısız olur da
+    /// dosya yine silinirse, kaldırma E-stop'suz `taskkill /F` çalıştırır ve ESP bobinleri 6-8
+    /// HASTANIN ÜZERİNDE ENERJİLİ kalır (o bobinlerin firmware link-watchdog'u YOKTUR).
+    /// Sahte bir PEMF backend'i (`/api/health` → `"service":"PEMF-Vet"`) ayağa kaldırıp
+    /// dosyanın DOKUNULMADAN kaldığını doğruluyoruz.
+    #[test]
+    fn backend_ayaktayken_estop_adresi_korunur() {
+        use std::io::{Read, Write};
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let h = std::thread::spawn(move || {
+            // Tek istek yeterli (probe bir kez yoklar).
+            if let Ok((mut c, _)) = ln.accept() {
+                let mut buf = [0u8; 1024];
+                let _ = c.read(&mut buf);
+                let body = br#"{"service":"PEMF-Vet","status":"ok"}"#;
+                let _ = c.write_all(
+                    format!(
+                        "HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: {}
+Connection: close
+
+",
+                        body.len()
+                    )
+                    .as_bytes(),
+                );
+                let _ = c.write_all(body);
+                let _ = c.flush();
+            }
+        });
+
+        let d = std::env::temp_dir().join(format!("pemf_port_live_{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("backend.port");
+        std::fs::write(&f, port.to_string()).unwrap();
+
+        clear_port_if_stopped(&d, Some(port));
+        assert!(
+            f.exists(),
+            "backend AYAKTA iken E-stop adresi SILINDI — kaldirma bobinleri enerjili oldurur"
+        );
+
+        let _ = h.join();
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
