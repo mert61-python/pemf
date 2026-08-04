@@ -405,16 +405,35 @@ pub fn safe_stop_coils(port: u16) {
     // doğrulanamadı" durumunu BİLEREK bildirir. Eski kod yanıtı `let _ =` ile tamamen atıyordu →
     // "STM durdu ama MQTT yayınlanamadı" sinyali görülmüyordu. Doğrulanmazsa BİR KEZ daha dene:
     // ESP publish'i geçici broker/ağ hatasında sıklıkla ikinci denemede geçer.
+    // ⚠️ DENETİM 2026-08-04 (P2 — BU DÜZELTMENİN YAN ETKİSİ): bütçeyi 3 sn'den 10 sn'ye çıkarıp
+    // ikinci denemeyi eklediğimde EN KÖTÜ blokaj 4,2 sn'den ~21,9 sn'ye çıktı (ölçüldü). Bu çağrı
+    // pencere kapanışında Tauri OLAY DÖNGÜSÜ thread'inden yapılıyor → istemci o süre boyunca
+    // DONUYOR, Windows "Yanıt vermiyor" diyor ve kullanıcı Görev Yöneticisi'nden launcher'ı
+    // sonlandırırsa `child.kill()` + `kill_stray_backends()` HİÇ çalışmıyor → yetim backend seri
+    // portu ve `runtime/` dosyalarını tutmaya devam ediyor (sonraki kurulumda "os error 32").
+    //
+    // Çözüm bütçeyi kısmak DEĞİL (backend `emergency_stop`'u ~7 sn worst-case MQTT publish diye
+    // belgeliyor; kısaltmak ESP bobinlerini yayınlanmadan bırakır). Çözüm: İKİNCİ denemeyi
+    // yalnızca backend GERÇEKTEN YANIT VERDİĞİNDE ama `confirmed:false` dediğinde yap. O durumda
+    // ikinci istek hızlı döner ve anlamlıdır ("STM durdu, MQTT yayınlanamadı" → tekrar dene).
+    // Yanıt HİÇ gelmediyse (timeout) ikinci 10 sn beklemek hiçbir şey kazandırmaz, yalnız donmayı
+    // ikiye katlar. Yeni en kötü durum: ~11,6 sn (10 + flush), yanıtlı-doğrulanmamışta ~12 sn.
     for attempt in 0..2u8 {
-        let confirmed = ureq::post(&url)
+        let yanit = ureq::post(&url)
             .timeout(Duration::from_secs(ESTOP_TIMEOUT_S))
             .call()
             .ok()
             .and_then(|r| r.into_string().ok())
-            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok());
+        let confirmed = yanit
+            .as_ref()
             .and_then(|v| v.get("confirmed").and_then(|c| c.as_bool()))
             .unwrap_or(false);
         if confirmed {
+            break;
+        }
+        // Yanıt YOKSA (ulaşılamadı/timeout) tekrar denemenin faydası yok — donmayı katlamaz.
+        if yanit.is_none() {
             break;
         }
         if attempt == 0 {
@@ -667,6 +686,47 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
         }
         assert!(backend_is_definitely_gone(port), "kapali port kesin-olu sayilmadi");
+    }
+
+    /// ⚠️ P2 (denetim 2026-08-04): E-stop bütçesini 10 sn'ye çıkarıp ikinci deneme eklemek,
+    /// YANIT VERMEYEN backend'de blokajı ~21,9 sn'ye çıkarmıştı. Bu çağrı pencere kapanışında
+    /// olay-döngüsü thread'inden yapılıyor → istemci donuyor, kullanıcı Görev Yöneticisi'yle
+    /// öldürürse yetim backend seri portu tutuyor. Yanıt gelmiyorsa TEKRAR DENENMEMELİ.
+    #[test]
+    fn yanitsiz_estop_ikinci_kez_denenmez() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        let ln = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let sayac = Arc::new(AtomicUsize::new(0));
+        let s2 = sayac.clone();
+        std::thread::spawn(move || {
+            // Kabul et, isteği oku, ama ASLA yanıt yazma (asılı backend).
+            let mut tut = Vec::new();
+            for c in ln.incoming() {
+                let Ok(mut c) = c else { continue };
+                use std::io::Read;
+                let mut buf = [0u8; 512];
+                if c.read(&mut buf).unwrap_or(0) > 0 {
+                    s2.fetch_add(1, Ordering::SeqCst);
+                }
+                tut.push(c);
+            }
+        });
+
+        let t = Instant::now();
+        safe_stop_coils(port);
+        let sure = t.elapsed();
+
+        assert_eq!(
+            sayac.load(Ordering::SeqCst),
+            1,
+            "yanitsiz backend'e IKINCI istek gonderildi — UI donmasi ikiye katlanir"
+        );
+        assert!(
+            sure < Duration::from_secs(ESTOP_TIMEOUT_S + 5),
+            "safe_stop_coils cok uzun blokladi: {sure:?}"
+        );
     }
 
     #[test]

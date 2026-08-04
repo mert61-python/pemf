@@ -689,6 +689,31 @@ async fn apply_self_update(
         // olup sürüm DEĞİŞMEZSE (manifest sürümü ile paketin gerçek sürümü ayrışmışsa) bir sonraki
         // açılışta sayaç dolar ve OTOMATİK kurulum durur → sonsuz indir-kur-yeniden başlat
         // döngüsü kırılır. Sürüm gerçekten yükselirse fetch_profiles kaydı temizler.
+        // ⚠️ DENETİM 2026-08-04 (P2 — KAPININ TOCTOU'SU): aktif-seans kontrolü İNDİRMEDEN ÖNCE
+        // bir kez yapılıyordu. İndirme klinik hattında dakikalar sürer (ve kullanıcı
+        // DURAKLATABİLİR → pencere sınırsız uzar). O sırada veteriner tedaviyi başlatırsa,
+        // indirme bitince NSIS `taskkill /F /IM PEMF_Backend.exe` ile SÜREN SEANSI keserdi —
+        // kapının engellemek için var olduğu sonucun aynısı. Yıkıcı adımdan HEMEN ÖNCE tekrar bak.
+        {
+            let root = install::default_install_root(&home_dir());
+            if let Some(p) = backend::detect_running_backend(&root) {
+                match backend::session_active(p) {
+                    Some(true) => {
+                        return Err(
+                            "Tedavi seansı başladı — güncelleme kuruldu değil, ertelendi. İndirilen dosya saklandı."
+                                .to_string(),
+                        )
+                    }
+                    None => {
+                        return Err(
+                            "Backend yanıt vermiyor, tedavi sürüyor olabilir — kurulum ertelendi."
+                                .to_string(),
+                        )
+                    }
+                    Some(false) => {}
+                }
+            }
+        }
         install::record_selfupdate_attempt(&install::default_install_root(&home_dir()), &version);
         // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
         spawn_update_relauncher(&dest)?;
