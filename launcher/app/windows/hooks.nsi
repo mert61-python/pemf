@@ -37,8 +37,16 @@
   ; ENERJİLİ kalır (ESP bobinleri 6-8'in firmware watchdog'u YOK). Kaldırıcı sessizce "başarılı"
   ; görünür. Bu yüzden kanonik veri köküne AÇIK bir yedek yol: hasta güvenliği tek bir
   ; yapılandırma varsayımına bağlı kalmasın.
+  ; ⚠️ DENETİM 2026-08-04 (P2 — BU YEDEK YOLUN KENDİ HATASI): Tauri'nin uninstaller'ı
+  ; `un.onInit` içinde `SetShellVarContext all` çağırır; O BAĞLAMDA `$LOCALAPPDATA`
+  ; `C:\ProgramData`ya çözümlenir. Yani yedek yol, TAM DA yazıldığı senaryoda
+  ; (installMode=perMachine) YANLIŞ dizine bakar ve E-stop yine atlanırdı —
+  ; bobinler enerjili öldürülürdü. Okuma süresince bağlamı KULLANICIYA çevir, hemen
+  ; sonra geri al (kaldırıcının geri kalanı makine bağlamına güvenir).
+  SetShellVarContext current
   ClearErrors
   FileOpen $0 "$LOCALAPPDATA\PEMF Vet Client\backend.port" r
+  SetShellVarContext all
   IfErrors pemf_estop_done
   FileRead $0 $1
   FileClose $0

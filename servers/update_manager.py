@@ -145,6 +145,17 @@ _status: dict = {"checked": False, "available": False, "currentVersion": "", "la
 _status_lock = threading.Lock()
 _apply_lock = threading.Lock()
 _applying = False
+# ⚠️ DENETİM 2026-08-04 (P2): `_applying` installer BAŞLATILDIKTAN sonra BİLEREK açık bırakılır
+# (tehlikeli pencere orada başlar). Ama hiçbir yerde KAPANMIYORDU: installer kurulumu
+# tamamlamazsa (Inno "another instance is running" ile exit, AV bloğu, kullanıcı iptali)
+# backend KALICI olarak "güncelleme sürüyor" durumunda kilitleniyor ve `is_update_in_progress()`
+# üzerinden /session/start ile /ai/pro/start SONSUZA KADAR reddediliyordu — tıbbi cihaz hiç
+# tedavi başlatamaz hale gelir ve tek çözüm servisi elle yeniden başlatmaktır.
+# Çözüm: bayrağa son-kullanma ver. BAŞARILI kurulum zaten backend'i yeniden başlatır (bayrak
+# doğal olarak sıfırlanır); yalnızca BAŞARISIZ kurulumun bıraktığı bayat bayrak süresi dolar.
+_applying_since: float | None = None
+# Inno /VERYSILENT kurulumu ~1-2 dk sürer; 5 dk cömert ama sonsuz değil.
+_APPLYING_GRACE_S = 300.0
 _check_thread: threading.Thread | None = None
 _stop = threading.Event()
 
@@ -285,7 +296,26 @@ def is_update_in_progress() -> bool:
     """Güncelleme İNDİRİLİYOR/UYGULANIYOR mu (apply veya rollback). True ise tedavi/seans
     başlatma yolları YENİ seans AÇMAMALI: apply penceresinde (indirme + installer servisi
     durdurma + EXE değişimi) başlayan bir tedavi bobinleri kontrolcüsüz bırakabilir. Bu, TOCTOU
-    guard'ının TERS yönüdür (apply, başlamış tedaviyi zaten _has_active_treatment ile reddeder)."""
+    guard'ının TERS yönüdür (apply, başlamış tedaviyi zaten _has_active_treatment ile reddeder).
+
+    DENETİM 2026-08-04 (P2): bayrak installer başlatıldıktan sonra hiç kapanmıyordu → kurulum
+    tamamlanmazsa cihaz KALICI olarak seans açamaz hale geliyordu. Bayat bayrak burada süresi
+    dolunca temizlenir (bkz. _APPLYING_GRACE_S)."""
+    global _applying, _applying_since
+    if not _applying:
+        return False
+    if _applying_since is not None and (time.monotonic() - _applying_since) > _APPLYING_GRACE_S:
+        with _apply_lock:
+            # Kilit altında yeniden doğrula (başka bir apply araya girmiş olabilir).
+            if _applying_since is not None and (time.monotonic() - _applying_since) > _APPLYING_GRACE_S:
+                logger.warning(
+                    "Guncelleme guard'i %.0f sn'dir acik ve kurulum tamamlanmadi — bayat bayrak "
+                    "temizlendi (seans acma yeniden serbest).",
+                    time.monotonic() - _applying_since,
+                )
+                _applying = False
+                _applying_since = None
+        return _applying
     return _applying
 
 
@@ -351,7 +381,7 @@ def _verify_authenticode(path: Path) -> str:
 
 def apply_update() -> dict:
     """Operatör onayıyla: installer'ı indir → SHA256 doğrula → aktif tedavi yoksa sessiz kur."""
-    global _applying
+    global _applying, _applying_since
     st = get_status()
     if not st.get("available") or not st.get("installerUrl"):
         return {"ok": False, "error": "Uygulanacak güncelleme yok."}
@@ -365,6 +395,7 @@ def apply_update() -> dict:
         if _applying:
             return {"ok": False, "error": "Güncelleme zaten sürüyor."}
         _applying = True
+        _applying_since = time.monotonic()
     url = st["installerUrl"]
     expected = (st.get("sha256") or "").lower()
     # DENETIM P2: asagidaki `finally` _applying'i installer BASLATILIR BASLATILMAZ False
@@ -429,6 +460,7 @@ def apply_update() -> dict:
     finally:
         if not _installer_launched:
             _applying = False   # basarisiz → normale don
+            _applying_since = None
         else:
             logger.info("Guncelleme guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
                         "degistirene kadar YENI tedavi/seans baslatilamaz.")
@@ -439,7 +471,7 @@ def rollback() -> dict:
     indir → SHA256 (ZORUNLU) + Authenticode doğrula → aktif tedavi yoksa sessiz kur. apply_update
     ile AYNI güvenlik zinciri, yön 'geri'. previousStable yoksa/manifest vermezse rollback yapılamaz.
     Kötü bir güncelleme sahada sorun çıkarırsa operatör tek-tıkla son iyi sürüme döner."""
-    global _applying
+    global _applying, _applying_since
     st = get_status()
     # Audit P3: previousStable dict DEĞİLSE (bozuk manifest: string/liste) `or {}` truthy-non-dict'i
     # geçirir → prev.get() AttributeError → try'dan önce olduğu için generic 500 (operatör dönemez).
@@ -512,6 +544,7 @@ def rollback() -> dict:
     finally:
         if not _installer_launched:
             _applying = False   # basarisiz → normale don
+            _applying_since = None
         else:
             logger.info("Rollback guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
                         "degistirene kadar YENI tedavi/seans baslatilamaz.")

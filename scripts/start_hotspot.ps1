@@ -89,13 +89,25 @@ try {
             # DENETİM 2026-08-04: AP yapılandırması KOŞULSUZ yeniden yazılıyordu → operatörün
             # Windows Ayarlar'dan koyduğu cihaza-özel parola, ilk boşta-kalma (ICS ~4 dk) döngüsünde
             # sessizce eski değere DÖNÜYORDU. Artık yalnız GERÇEKTEN farklıysa yaz.
-            $needCfg = ($cfg.Ssid -ne $Ssid) -or ($cfg.Passphrase -ne $Pass)
+            # DENETIM 2026-08-04 (P2): band zorlamasi `if ($needCfg)` BLOGUNUN ICINDEYDI. SSID+parola
+            # zaten esitse (ilk basarili yapilandirmadan SONRAKI HER kosu = kararli durum) 2.4GHz
+            # zorlamasi HIC calismiyordu. Band disaridan degisebiliyor (Ayarlar > Mobil erisim
+            # noktasi > Band, ya da surucu/Windows Update sonrasi AP konfigurasyonunun sifirlanmasi)
+            # ve 5 GHz'e dusen AP'ye ESP32 bobinleri (6-8) BAGLANAMAZ — yalniz 2.4GHz destekler.
+            # Band artik KARSILASTIRMAYA dahil; property yoksa (eski WinRT) karsilastirma atlanir.
+            $wantBand = $null
+            try { $wantBand = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::TwoPointFourGigahertz } catch {}
+            $bandYanlis = $false
+            if ($null -ne $wantBand) {
+                try { $bandYanlis = ($cfg.Band -ne $wantBand) } catch { $bandYanlis = $false }
+            }
+            $needCfg = ($cfg.Ssid -ne $Ssid) -or ($cfg.Passphrase -ne $Pass) -or $bandYanlis
             if ($needCfg) {
                 $cfg.Ssid = $Ssid
                 $cfg.Passphrase = $Pass
-                try { $cfg.Band = [Windows.Networking.NetworkOperators.TetheringWiFiBand]::TwoPointFourGigahertz } catch {}  # ESP32 = 2.4GHz
+                if ($null -ne $wantBand) { try { $cfg.Band = $wantBand } catch {} }  # ESP32 = 2.4GHz
                 AwaitAction ($mgr.ConfigureAccessPointAsync($cfg))
-                Log "AP yapilandirmasi guncellendi (SSID=$Ssid)."
+                Log "AP yapilandirmasi guncellendi (SSID=$Ssid, band-duzeltme=$bandYanlis)."
             } else { Log "AP yapilandirmasi zaten dogru — dokunulmadi." }
         } catch {}
         if ($mgr.TetheringOperationalState -ne 'On') {

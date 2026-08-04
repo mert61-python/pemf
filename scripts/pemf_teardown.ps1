@@ -177,6 +177,11 @@ function Invoke-PemfTeardown {
         [switch]$IncludePatientData,   # KVKK: hasta DB + şifreleme anahtarlarını da KALICI sil
         [switch]$DryRun                # hiçbir şey silme, yalnız logla (önizleme)
     )
+    # DENETIM 2026-08-04 (P2): sayaç MODÜL yüklenirken bir kez sıfırlanıyordu, çağrı başına
+    # DEĞİL. Dosya başlığındaki resmi kullanım dot-source + tekrar çağrıdır; operatör servisi
+    # durdurup AYNI oturumda tekrar çalıştırdığında ilk turun başarısızlıkları taşınıyor ve
+    # ZATEN SİLİNMİŞ yollar "SİLİNEMEDİ" diye raporlanıp fonksiyon $false dönüyordu.
+    $script:PemfFailed = @()
     $fp = Get-PemfFootprint
     Write-PemfLog "TEARDOWN başladı — Scope=$Scope IncludePatientData=$IncludePatientData DryRun=$DryRun" 'Cyan'
 
@@ -208,7 +213,16 @@ function Invoke-PemfTeardown {
         Write-PemfLog "TEARDOWN bitti — EKSİK (bkz. yukarıdaki liste)" 'Red'
         return $false
     }
-    $policy = if ($IncludePatientData) { 'HASTA VERİSİ DE SİLİNDİ (tam temizlik)' } else { 'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir)' }
+    # DENETIM 2026-08-04 (P2): -DryRun'da da "HASTA VERİSİ DE SİLİNDİ (tam temizlik)" yazıyordu.
+    # Bu log dosyası, dosya başlığında KVKK "tüm hasta verisini sildim" KANITI olarak tanımlı;
+    # önizleme koşusunun raporu silme kanıtı gibi okunurdu.
+    $policy = if ($DryRun) {
+        'ÖNİZLEME — HİÇBİR ŞEY SİLİNMEDİ (DryRun)'
+    } elseif ($IncludePatientData) {
+        'HASTA VERİSİ DE SİLİNDİ (tam temizlik)'
+    } else {
+        'HASTA VERİSİ KORUNDU (KVKK; -IncludePatientData ile silinir)'
+    }
     Write-PemfLog "TEARDOWN bitti — $policy" 'Green'
     return $true
 }

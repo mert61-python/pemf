@@ -175,3 +175,55 @@ def test_rust_ve_python_pin_ikizleri_ayni_yazimlari_reddediyor():
     )
     for tok in ("%2e", "%2f", "%5c"):
         assert tok in src, f"Rust ikizi {tok} yazimini kontrol etmiyor"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (P2) — GÜNCELLEME GUARD'I KALICI AÇIK KALIYORDU
+# `_applying`, installer başlatıldıktan sonra BİLEREK açık bırakılır (tehlikeli pencere orada
+# başlar: installer servisi durdurup EXE'yi değiştirecek). Ama hiçbir yerde KAPANMIYORDU:
+# installer kurulumu tamamlamazsa (Inno "another instance is running", AV bloğu, iptal) backend
+# KALICI olarak "güncelleme sürüyor" durumunda kilitlenir ve is_update_in_progress() üzerinden
+# /session/start + /ai/pro/start SONSUZA KADAR reddedilir — cihaz hiç tedavi başlatamaz.
+# BAŞARILI kurulum backend'i zaten yeniden başlatır (bayrak doğal sıfırlanır); süresi dolan
+# yalnızca BAŞARISIZ kurulumun bıraktığı bayat bayraktır.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _guard_ayarla(active: bool, yas_sn: float | None):
+    import time as _t
+
+    from servers import update_manager as um
+
+    um._applying = active
+    um._applying_since = None if yas_sn is None else (_t.monotonic() - yas_sn)
+    return um
+
+
+def test_taze_guncelleme_guardi_seans_acmayi_engeller():
+    um = _guard_ayarla(True, 5.0)
+    try:
+        assert um.is_update_in_progress() is True, (
+            "taze guard kapandi — installer EXE'yi degistirirken tedavi baslatilabilir"
+        )
+    finally:
+        _guard_ayarla(False, None)
+
+
+def test_bayat_guncelleme_guardi_SURESI_DOLAR():
+    um = _guard_ayarla(True, 1_000_000.0)  # grace'in çok ötesi
+    try:
+        assert um.is_update_in_progress() is False, (
+            "bayat guard temizlenmedi — cihaz KALICI olarak seans acamaz halde kalir"
+        )
+        assert um._applying is False and um._applying_since is None, "durum sifirlanmadi"
+    finally:
+        _guard_ayarla(False, None)
+
+
+def test_zaman_damgasi_yoksa_eski_davranis_korunur():
+    """Damgasız (eski akıştan kalan) bayrak sessizce temizlenmemeli — geriye uyum."""
+    um = _guard_ayarla(True, None)
+    try:
+        assert um.is_update_in_progress() is True
+    finally:
+        _guard_ayarla(False, None)
