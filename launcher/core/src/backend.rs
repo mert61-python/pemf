@@ -173,16 +173,60 @@ pub fn probe_pemf_backend(port: u16) -> bool {
 /// `false` döneriz. "Bilinmiyor = aktif" deseydik eski backend'i olan HER kurulum kendini
 /// bir daha ASLA güncelleyemezdi (kilitlenme). Yalnız AÇIKÇA `true` güncellemeyi erteler;
 /// backend tarafı okuma hatasında zaten fail-safe olarak `true` yayınlıyor.
-pub fn session_active(port: u16) -> bool {
-    ureq::get(&health_url(port))
-        .timeout(Duration::from_secs(2))
+pub fn session_active(port: u16) -> Option<bool> {
+    // ⚠️ P1 (denetim 2026-08-04): eskiden `bool` dönüyordu ve ULAŞILAMAYAN/ZAMAN AŞIMINA UĞRAYAN
+    // sağlık yanıtı da `false` ("seans yok") sayılıyordu. Ölçüldü: yük altındaki (yanıt yazmayan)
+    // bir backend'de `session_active = false (2003 ms)`. Çağıran o an backend'in CANLI olduğunu
+    // zaten kanıtlamış oluyor → "bilinmiyor"u "seans yok" saymak, süren tedaviyi kesen sessiz
+    // güncellemeye izin verirdi. Backend tarafı bilinçli olarak TERS yönde fail-safe
+    // (system_router.py: `except Exception: _session_active = True`); istemci de öyle olmalı.
+    //
+    // `None` = BİLİNMİYOR (ulaşılamadı / bozuk yanıt). Alan YOKSA `Some(false)` döner —
+    // bu, `sessionActive` yayınlamayan ESKİ base.zip'lerin kendini bir daha asla
+    // güncelleyememesini önleyen bilinçli geriye-uyum kararıdır (bkz. test).
+    //
+    // Zaman aşımı 2 sn değil: bu çağrı YIKICI bir işlemi (sessiz `/S` kurulum) kapıyor ve
+    // klinik makinesinde backend AI çıkarımı yaparken /api/health saniyeler sürebilir.
+    let r = ureq::get(&health_url(port))
+        .timeout(Duration::from_secs(SESSION_PROBE_TIMEOUT_S))
         .call()
-        .ok()
-        .filter(|r| r.status() == 200)
-        .and_then(|r| r.into_string().ok())
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.get("sessionActive").and_then(serde_json::Value::as_bool))
-        .unwrap_or(false)
+        .ok()?;
+    if r.status() != 200 {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_str(&r.into_string().ok()?).ok()?;
+    match v.get("sessionActive") {
+        // Alan var ve bool → net cevap.
+        Some(x) if x.is_boolean() => x.as_bool(),
+        // Alan YOK / null → eski backend. Geriye uyum: engelleme.
+        Some(x) if x.is_null() => Some(false),
+        None => Some(false),
+        // Beklenmedik tip → güvenilmez, BİLİNMİYOR say.
+        Some(_) => None,
+    }
+}
+
+/// Seans yoklaması için zaman aşımı — yıkıcı bir işlemi kapıdığı için cömert.
+const SESSION_PROBE_TIMEOUT_S: u64 = 10;
+
+/// Backend KESİN olarak yok mu? (TCP bağlantısı reddedildi ⇒ o portta dinleyen YOK)
+///
+/// ⚠️ DENETİM 2026-08-04 (P1 — BU DÜZELTMENİN KENDİ AÇIĞI): `clear_port_if_stopped`
+/// `probe_pemf_backend`'in `false`'ına bakıyordu; oysa o `false` İKİ AYRI ŞEYİ birleştiriyor:
+///   • "orada kimse yok"            (kesin ölü)
+///   • "dinleyici var ama 2 sn'de cevap vermedi" (BİLİNMİYOR — yük altındaki backend)
+/// Ölçüldü: TCP kabul eden ama yanıt yazmayan bir dinleyicide `probe_pemf_backend = false
+/// (2002 ms)`. Yani `taskkill` başarısız olmuş, backend HÂLÂ AYAKTA ve bobinler enerjiliyken
+/// launcher `backend.port`'u siliyordu → NSIS uninstaller / onarım yolu E-stop adresini
+/// bulamıyor → E-stop'suz `taskkill /F` → link-watchdog'u OLMAYAN ESP bobinleri 6-8 HASTANIN
+/// ÜZERİNDE ENERJİLİ kalıyor. Düzeltmenin önlemeyi vaat ettiği sonucun ta kendisi.
+///
+/// Artık silme kararı YALNIZ "kesin ölü"ye dayanır. Yanılma maliyeti asimetriktir: ölü bir
+/// adres dosyasının kalması ZARARSIZ (bir sonraki başlatma üzerine yazar), canlı bir adresin
+/// silinmesi HASTA GÜVENLİĞİ sorunudur.
+pub fn backend_is_definitely_gone(port: u16) -> bool {
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    TcpStream::connect_timeout(&addr.into(), Duration::from_millis(400)).is_err()
 }
 
 /// Kurulu backend ZATEN çalışıyor mu? Çalışıyorsa portunu döndürür.
@@ -507,7 +551,7 @@ mod tests {
     #[test]
     fn aktif_seans_bildirildiginde_true_doner() {
         let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":true}"#);
-        assert!(session_active(p), "aktif seans goz ardi edildi — guncelleme tedaviyi keser");
+        assert_eq!(session_active(p), Some(true), "aktif seans goz ardi edildi — guncelleme tedaviyi keser");
     }
 
     /// ⚠️ GERİYE UYUM KİLİDİ: `sessionActive` ALANI OLMAYAN eski backend'de `false` dönmeli.
@@ -517,7 +561,7 @@ mod tests {
     fn alan_yoksa_guncelleme_engellenmez() {
         let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","status":"online"}"#);
         assert!(
-            !session_active(p),
+            session_active(p) == Some(false),
             "eski backend guncellemeyi KALICI engelliyor — self-update bir daha calismaz"
         );
     }
@@ -525,7 +569,7 @@ mod tests {
     #[test]
     fn seans_yokken_false_doner() {
         let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":false}"#);
-        assert!(!session_active(p));
+        assert_eq!(session_active(p), Some(false));
     }
 
     /// DENETİM 2026-08-04: `read_tail` `child.stderr`'i okuyordu ama stderr `Stdio::null()`
@@ -581,6 +625,48 @@ mod tests {
         let t = read_log_tail(&log, 5);
         assert!(t.contains("SON-SATIR-GORUNMELI"), "son satir alinmadi");
         assert!(!t.contains("ILK-SATIR-BULUNMAMALI"), "3 MB'lik gunlugun tamami okunmus");
+    }
+
+    /// ⚠️ P1 (denetim 2026-08-04) — "BİLİNMİYOR"u "ÖLÜ" saymak HASTA GÜVENLİĞİ sorunuydu.
+    ///
+    /// Yük altındaki backend (TCP kabul ediyor ama yanıt yazmıyor) `probe_pemf_backend`'de
+    /// `false (2002 ms)` dönüyordu → `clear_port_if_stopped` E-stop adresini siliyordu →
+    /// kaldırıcı bobinleri E-stop'suz öldürüyordu. Artık silme kararı YALNIZ "TCP reddedildi".
+    #[test]
+    fn asili_backend_kesin_olu_sayilmaz() {
+        let ln = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = ln.local_addr().unwrap().port();
+        // Kabul et ama hiç yanıt yazma (GIL/AI yükü altındaki backend).
+        std::thread::spawn(move || {
+            let _tut: Vec<_> = ln.incoming().take(4).filter_map(|c| c.ok()).collect();
+            std::thread::sleep(Duration::from_secs(20));
+        });
+
+        assert!(
+            !backend_is_definitely_gone(port),
+            "ASILI backend 'kesin olu' sayildi — E-stop adresi silinir, bobinler enerjili oldurulur"
+        );
+        assert_eq!(
+            session_active(port),
+            None,
+            "ULASILAMAYAN backend 'seans yok' sayildi — sessiz guncelleme tedaviyi keser"
+        );
+    }
+
+    /// Gerçekten kapalı bir port KESİN ölü sayılmalı (aksi halde ölü adresler birikir).
+    #[test]
+    fn dinleyici_yoksa_kesin_olu() {
+        let ln = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = ln.local_addr().unwrap().port();
+        drop(ln);
+        // Portun gerçekten boşaldığını teyit et (efemer port yarışına karşı).
+        for _ in 0..20 {
+            if TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(backend_is_definitely_gone(port), "kapali port kesin-olu sayilmadi");
     }
 
     #[test]

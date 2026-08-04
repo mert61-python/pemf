@@ -101,11 +101,19 @@ fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Pa
 /// iken adres kayboluyor — o bobinlerin firmware'de link-watchdog'u YOKTUR, tek durdurma yolu
 /// broker'a ulaşan STOP publish'idir. Artık portu yokluyoruz: hâlâ yanıt veriyorsa dosya KORUNUR.
 fn clear_port_if_stopped(root: &std::path::Path, port: Option<u16>) {
-    let live = port
-        .or_else(|| backend::read_backend_port(root))
-        .is_some_and(backend::probe_pemf_backend);
-    if live {
-        return; // backend AYAKTA → E-stop adresi korunur (kaldırıcı/onarım kullanacak).
+    // ⚠️ P1 (denetim 2026-08-04): burada `probe_pemf_backend` kullanılıyordu; onun `false`'ı
+    // "kimse yok" ile "yük altında, 2 sn'de cevap vermedi"yi AYNI kovaya koyuyor. Ölçüldü:
+    // yanıt yazmayan canlı bir dinleyicide `false (2002 ms)`. Yani taskkill başarısız olmuş,
+    // backend hâlâ ayakta ve bobinler enerjiliyken E-stop adresini SİLİYORDUK.
+    // Artık silme YALNIZ "kesin ölü" (TCP reddedildi) durumunda. Yanılma maliyeti asimetrik:
+    // ölü adres kalması zararsız, canlı adresin silinmesi hasta güvenliği sorunudur.
+    let Some(p) = port.or_else(|| backend::read_backend_port(root)) else {
+        // Port hiç bilinmiyorsa silinecek anlamlı bir adres de yok; dosyayı temizle.
+        let _ = std::fs::remove_file(root.join("backend.port"));
+        return;
+    };
+    if !backend::backend_is_definitely_gone(p) {
+        return; // AYAKTA ya da BİLİNMİYOR → E-stop adresi KORUNUR.
     }
     let _ = std::fs::remove_file(root.join("backend.port"));
 }
@@ -605,11 +613,22 @@ async fn apply_self_update(
         {
             let root = install::default_install_root(&home_dir());
             if let Some(p) = backend::detect_running_backend(&root) {
-                if backend::session_active(p) {
-                    return Err(
-                        "Şu anda bir tedavi seansı sürüyor — güncelleme seans bittikten sonra yapılacak."
-                            .to_string(),
-                    );
+                // P1: `None` = BİLİNMİYOR. Backend'in CANLI olduğu bir satır önce kanıtlandı;
+                // seans durumunu öğrenemiyorsak tedaviyi kesme riskini ALMAYIZ → ertele.
+                match backend::session_active(p) {
+                    Some(true) => {
+                        return Err(
+                            "Şu anda bir tedavi seansı sürüyor — güncelleme seans bittikten sonra yapılacak."
+                                .to_string(),
+                        )
+                    }
+                    None => {
+                        return Err(
+                            "Backend yanıt vermiyor, tedavi sürüyor olabilir — güncelleme ertelendi."
+                                .to_string(),
+                        )
+                    }
+                    Some(false) => {}
                 }
             }
         }
