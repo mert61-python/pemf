@@ -161,6 +161,30 @@ pub fn probe_pemf_backend(port: u16) -> bool {
         .is_some_and(|s| s == "PEMF-Vet")
 }
 
+/// Bu portta AKTİF BİR TEDAVİ SEANSI sürüyor mu? (`/api/health` → `sessionActive`)
+///
+/// ⚠️ DENETİM 2026-08-04: launcher açılışta manifest'e bakıp yeni sürümü SESSİZCE indirip `/S`
+/// ile kurar. NSIS yükseltme kancası `taskkill /F /IM PEMF_Backend.exe` çalıştırır → HASTA
+/// ÜZERİNDE SÜREN seans yarıda kesilir. (E-stop kancası bobinleri güvene alır, yani hasta
+/// güvenliği korunur; ama tedavi yarım kalır ve veteriner sebebini göremez.) Launcher artık
+/// güncellemeden ÖNCE burayı okur.
+///
+/// GERİYE UYUM — bu ayrım kritiktir: alan YOKSA (`sessionActive` döndürmeyen ESKİ base.zip)
+/// `false` döneriz. "Bilinmiyor = aktif" deseydik eski backend'i olan HER kurulum kendini
+/// bir daha ASLA güncelleyemezdi (kilitlenme). Yalnız AÇIKÇA `true` güncellemeyi erteler;
+/// backend tarafı okuma hatasında zaten fail-safe olarak `true` yayınlıyor.
+pub fn session_active(port: u16) -> bool {
+    ureq::get(&health_url(port))
+        .timeout(Duration::from_secs(2))
+        .call()
+        .ok()
+        .filter(|r| r.status() == 200)
+        .and_then(|r| r.into_string().ok())
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.get("sessionActive").and_then(serde_json::Value::as_bool))
+        .unwrap_or(false)
+}
+
 /// Kurulu backend ZATEN çalışıyor mu? Çalışıyorsa portunu döndürür.
 ///
 /// DENETİM 2026-08-04: launcher yalnız KENDİ `state.proc`'una bakıyordu. Sistemde çalışan bir
@@ -418,6 +442,56 @@ mod tests {
             "find_free_port mesgul portu dondurdu — backend baslangicta 10048 alir"
         );
         drop(ln);
+    }
+
+    /// `/api/health` gövdesini taklit eden tek-atışlık sunucu (testler için).
+    fn saglik_sunucusu(body: &'static str) -> u16 {
+        use std::io::Read;
+        let ln = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = ln.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in ln.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut buf = [0u8; 1024];
+                if s.read(&mut buf).unwrap_or(0) == 0 {
+                    continue; // boş yoklama bağlantısı (bkz. port_is_free)
+                }
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                break;
+            }
+        });
+        port
+    }
+
+    /// Tedavi sürerken launcher SESSİZ oto-güncelleme yapmamalı (NSIS yükseltmesi backend'i
+    /// `taskkill` ile öldürür → hasta üzerindeki seans yarıda kesilir).
+    #[test]
+    fn aktif_seans_bildirildiginde_true_doner() {
+        let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":true}"#);
+        assert!(session_active(p), "aktif seans goz ardi edildi — guncelleme tedaviyi keser");
+    }
+
+    /// ⚠️ GERİYE UYUM KİLİDİ: `sessionActive` ALANI OLMAYAN eski backend'de `false` dönmeli.
+    /// "Bilinmiyor = aktif" deseydik eski base.zip'i olan her kurulum kendini bir daha ASLA
+    /// güncelleyemezdi (kalıcı kilitlenme).
+    #[test]
+    fn alan_yoksa_guncelleme_engellenmez() {
+        let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","status":"online"}"#);
+        assert!(
+            !session_active(p),
+            "eski backend guncellemeyi KALICI engelliyor — self-update bir daha calismaz"
+        );
+    }
+
+    #[test]
+    fn seans_yokken_false_doner() {
+        let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":false}"#);
+        assert!(!session_active(p));
     }
 
     #[test]

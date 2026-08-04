@@ -260,3 +260,46 @@ def test_health_nonce_yokken_alan_None(monkeypatch):
         body = c.get("/api/health").json()
     assert body.get("launcherNonce") is None
     assert body.get("status") == "online"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 — AKTİF TEDAVİ BAYRAĞI (`/api/health` → `sessionActive`)
+# Launcher açılışta manifest'e bakıp yeni sürümü SESSİZCE indirip `/S` ile kurar; NSIS
+# yükseltme kancası `taskkill /F /IM PEMF_Backend.exe` çalıştırır → HASTA ÜZERİNDE SÜREN
+# seans yarıda kesilirdi. Launcher artık güncellemeden ÖNCE bunu okuyup seansı bekliyor.
+# Bayrak launcherNonce ile AYNI gerekçeyle yalnız loopback'e verilir.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _health_with_session(active: bool, headers: dict | None = None):
+    from fastapi.testclient import TestClient
+
+    from servers import api_server
+
+    prev = dict(api_server._active_session)
+    # IN-PLACE guncelle: `_active_session` session_state ile PAYLASILAN dict kimligidir,
+    # rebind edilirse baglanti kopar (bkz. api_server.py B-2.2 notu).
+    api_server._active_session["is_active"] = active
+    try:
+        with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
+            return c.get("/api/health", headers=headers or {}).json()
+    finally:
+        api_server._active_session.clear()
+        api_server._active_session.update(prev)
+
+
+def test_health_aktif_seansi_loopbacke_bildirir():
+    """Seans SÜRERKEN launcher oto-güncellemeyi ertelemeli — bayrak True gelmeli."""
+    assert _health_with_session(True).get("sessionActive") is True, (
+        "aktif seans bildirilmiyor — launcher tedaviyi yarida kesen sessiz guncelleme yapar"
+    )
+
+
+def test_health_seans_yokken_guncellemeye_izin_verir():
+    assert _health_with_session(False).get("sessionActive") is False
+
+
+def test_health_seans_bilgisi_tunele_SIZDIRILMAZ():
+    """'Şu an tedavi sürüyor' bilgisi auth-muaf uçtan dışarı çıkmamalı."""
+    body = _health_with_session(True, {"cf-connecting-ip": "203.0.113.10"})
+    assert body.get("sessionActive") is None, "aktif-seans bilgisi UZAK istemciye sizdi"

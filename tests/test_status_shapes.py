@@ -31,6 +31,12 @@ GOLDEN_SHAPES = {
         # kaliyordu. Deger YALNIZ loopback'e verilir (tunele/LAN'a sizarsa dogrulama anlamsiz);
         # `PEMF_HEALTH_NONCE` verilmemisse None doner. Bkz. launcher/core/src/backend.rs.
         "launcherNonce",
+        # DENETIM 2026-08-04 (BILINCLI sekil degisikligi): launcher oto-guncellemesi acilista
+        # SESSIZCE `/S` kurulum yapar; NSIS yukseltme kancasi PEMF_Backend.exe'yi oldurur →
+        # HASTA UZERINDE SUREN seans yarida kesilirdi. Launcher artik guncellemeden ONCE bunu
+        # okuyup seans varsa ERTELIYOR. launcherNonce ile ayni gerekcede YALNIZ loopback'e verilir
+        # (auth-muaf + tunelden erisilebilir bir uc; "su an tedavi suruyor" disari sizmamali).
+        "sessionActive",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {

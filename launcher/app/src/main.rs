@@ -585,6 +585,24 @@ async fn apply_self_update(
         if sha256.trim().is_empty() {
             return Err("Güncelleme SHA256 yok — güvenlik gereği atlandı".to_string());
         }
+        // ⚠️ DENETİM 2026-08-04: AKTİF TEDAVİ SIRASINDA GÜNCELLEME YOK.
+        // Bu akış açılışta SESSİZ çalışır ve sonunda `/S` kurulum yapar; NSIS yükseltme kancası
+        // `taskkill /F /IM PEMF_Backend.exe` ile backend'i öldürür. Backend'i launcher'dan bağımsız
+        // sahiplenebildiğimiz için (bkz. detect_running_backend) launcher yeniden açıldığında
+        // HASTA ÜZERİNDE SÜREN bir seans olabilir; güncelleme onu yarıda keserdi. Bobinler
+        // uninstaller kancasının E-stop'uyla güvene alınır — yani hasta güvenliği korunur — ama
+        // tedavi yarım kalır ve veteriner sebebini göremez. Seans bitince güncelleme yapılır.
+        {
+            let root = install::default_install_root(&home_dir());
+            if let Some(p) = backend::detect_running_backend(&root) {
+                if backend::session_active(p) {
+                    return Err(
+                        "Şu anda bir tedavi seansı sürüyor — güncelleme seans bittikten sonra yapılacak."
+                            .to_string(),
+                    );
+                }
+            }
+        }
         *state.progress.lock().unwrap() = None;
         state.control.store(CTL_RUN, Ordering::Relaxed);
 

@@ -169,11 +169,27 @@ async def health_check(request: Request):
     _peer = (request.client.host if request.client else "") or ""
     _loopback_only = (not _via_proxy) and _peer in ("127.0.0.1", "::1")
 
+    # Aktif seans bayrağı — okuma ASLA health'i düşürmemeli (fail-safe: bilinmiyorsa "aktif" say,
+    # böylece launcher şüphede kalırsa tedaviyi kesmek yerine güncellemeyi erteler).
+    try:
+        _session_active = bool(_api._active_session.get("is_active"))
+    except Exception:
+        _session_active = True
+
     return {
         "status": "online",
         "service": "PEMF-Vet",
         # Launcher'ın "bu port GERÇEKTEN benim başlattığım backend mi?" doğrulaması (bkz. üstteki not).
         "launcherNonce": (_health_nonce if (_health_nonce and _loopback_only) else None),
+        # ── DENETİM 2026-08-04: AKTİF TEDAVİ BAYRAĞI (launcher oto-güncellemesi için) ─────────
+        # Launcher açılışta manifest'e bakıp yeni sürümü SESSİZCE indirip `/S` ile kurar. NSIS
+        # yükseltme kancası `taskkill /F /IM PEMF_Backend.exe` çalıştırır → HASTA ÜZERİNDE SÜREN
+        # bir seans yarıda kesilir. (E-stop kancası bobinleri güvene alır, yani hasta güvenliği
+        # korunur; ama tedavi kaydı yarım kalır ve veteriner sebebini göremez.) Launcher artık
+        # güncellemeden ÖNCE bunu okuyup seans varsa ERTELİYOR.
+        # ⚠️ launcherNonce ile aynı gerekçeyle YALNIZ loopback: `/api/health` auth-muaftır ve
+        # tünelden erişilebilir; "şu an tedavi sürüyor" bilgisi dışarıya sızmamalı.
+        "sessionActive": (_session_active if _loopback_only else None),
         # Audit P2: deviceId de _local'e kapatıldı — bulut RPC'lerinin tek tenant/yetki anahtarı;
         # uzak sızıntısı upsert_device-zehirleme + cross-tenant-IDOR zincirlerini köprülüyordu.
         "deviceId": (device_id if _local else None),
