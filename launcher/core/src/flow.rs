@@ -205,7 +205,9 @@ pub fn install_profiles(
     // sayacı sıfırlıyordu → belgelenen 8 GB tavanı base + 3 profil için pratikte 32 GB'dı.
     let mut extract_budget: u64 = 0;
     on(Progress::Extracting { what: "base".into() });
-    extract::extract_zip_budgeted(&runtime_zip, &rt, &mut extract_budget, false)?;
+    extract::extract_zip_cancellable(&runtime_zip, &rt, &mut extract_budget, false, &|| {
+        control() == net::Control::Cancel
+    })?;
 
     // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
@@ -214,7 +216,9 @@ pub fn install_profiles(
         on(Progress::Extracting { what: (*name).clone() });
         // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum
         // dosyalarını EZEMEZ (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
-        extract::extract_zip_budgeted(&model_zip, install_root, &mut extract_budget, true)?;
+        extract::extract_zip_cancellable(&model_zip, install_root, &mut extract_budget, true, &|| {
+            control() == net::Control::Cancel
+        })?;
         // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir).
         // ÖNEMLİ: işaretlemeyi döngü SONUNA bırakma. Çoklu-profil kurulumunda kullanıcı
         // sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda iptal),

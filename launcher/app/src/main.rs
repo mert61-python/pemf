@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
-use pemf_launcher_core::{backend, flow, install, net, platform, verify};
+use pemf_launcher_core::{backend, extract, flow, install, net, platform, verify};
 use tauri::{Emitter, Manager};
 
 /// İndirme akış-kontrolü bayrağı (AppState.control): frontend pause/cancel komutları bunu set eder,
@@ -362,6 +362,11 @@ async fn install_and_launch(
             Ok(()) => {}
             Err(flow::FlowError::Net(net::NetError::Paused)) => return Ok(InstallOutcome::Paused),
             Err(flow::FlowError::Net(net::NetError::Cancelled)) => return Ok(InstallOutcome::Cancelled),
+            // #109: açma da iptal edilebilir. Bu bir HATA değil kullanıcı kararıdır — aynı
+            // "cancelled" durumuna düşmeli, yoksa UI kırmızı bir arıza mesajı gösterir.
+            Err(flow::FlowError::Extract(extract::ExtractError::Cancelled)) => {
+                return Ok(InstallOutcome::Cancelled)
+            }
             Err(e) => return Err(e.to_string()),
         }
         flow::start_backend(&root2, &mut on)
@@ -467,6 +472,11 @@ async fn repair(
             Ok(()) => {}
             Err(flow::FlowError::Net(net::NetError::Paused)) => return Ok(InstallOutcome::Paused),
             Err(flow::FlowError::Net(net::NetError::Cancelled)) => return Ok(InstallOutcome::Cancelled),
+            // #109: açma da iptal edilebilir. Bu bir HATA değil kullanıcı kararıdır — aynı
+            // "cancelled" durumuna düşmeli, yoksa UI kırmızı bir arıza mesajı gösterir.
+            Err(flow::FlowError::Extract(extract::ExtractError::Cancelled)) => {
+                return Ok(InstallOutcome::Cancelled)
+            }
             Err(e) => return Err(e.to_string()),
         }
         flow::start_backend(&root2, &mut on)

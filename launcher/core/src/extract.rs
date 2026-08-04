@@ -19,6 +19,10 @@ pub enum ExtractError {
     PathEscape(String),
     #[error("GÜVENLİK: arşiv kaynak-limitini aştı (zip-bomb?): {0}")]
     ResourceLimit(String),
+    /// Kullanıcı açma sırasında İPTAL etti. Yarım açılmış `runtime/` bir sonraki kurulumda
+    /// zaten silinir (bkz. `flow::install_profiles`), durum dosyaları güncellenmez.
+    #[error("açma iptal edildi")]
+    Cancelled,
 }
 
 /// Açılan toplam-boyut bütçesi (disk-doldurma/zip-bomb DoS). base~600MB + ai_models~2GB →
@@ -65,6 +69,27 @@ pub fn extract_zip_budgeted(
     used: &mut u64,
     is_profile: bool,
 ) -> Result<usize, ExtractError> {
+    extract_zip_cancellable(archive, dest, used, is_profile, &|| false)
+}
+
+/// İPTAL EDİLEBİLİR açma.
+///
+/// ⚠️ DENETİM 2026-08-04 (#109): açma tamamen bloklayıcıydı. `ai_models` paketi ~2 GB ve yavaş
+/// bir klinik diskinde dakikalar sürebiliyor; bu süre boyunca UI'daki İptal düğmesi ÖLÜYDÜ
+/// (`control` yalnız indirmede okunuyordu). Kullanıcı yanlış profili seçtiğini fark etse bile
+/// işlemi durduramıyor, pencereyi kapatmak da yarım bir ağaç bırakıyordu. `cancel` her GİRDİDE
+/// yoklanır → en fazla bir dosya gecikmeyle durur.
+///
+/// Yarım kalan ağaç KASITLI olarak geri alınmaz: `flow::install_profiles` base açmadan önce
+/// `runtime/`'ı zaten siler ve `installed_profiles.json` güncellenmediği için kurulum "yapılmış"
+/// sayılmaz. Geri-alma eklemek, iptal anında ~2 GB silme işlemi demek olurdu.
+pub fn extract_zip_cancellable(
+    archive: &Path,
+    dest: &Path,
+    used: &mut u64,
+    is_profile: bool,
+    cancel: &dyn Fn() -> bool,
+) -> Result<usize, ExtractError> {
     let file = fs::File::open(archive)?;
     let mut zip = zip::ZipArchive::new(file)?;
     fs::create_dir_all(dest)?;
@@ -78,6 +103,9 @@ pub fn extract_zip_budgeted(
     // canonicalize'i tekrarlamamak icin son dogrulanan ebeveyn (girdiler gruplu gelir).
     let mut last_checked_parent: Option<std::path::PathBuf> = None;
     for i in 0..zip.len() {
+        if cancel() {
+            return Err(ExtractError::Cancelled);
+        }
         let mut entry = zip.by_index(i)?;
         // `enclosed_name()` zip-slip'e karşı ilk savunma (mutlak yol / `..` reddeder),
         // ama kendi kontrolümüzü de yapıyoruz: tek savunma hattına güvenme.
@@ -358,6 +386,49 @@ mod tests {
     }
 
     /// ZIP-SLIP: `../` ile dışarı yazmaya çalışan arşiv REDDEDİLMELİ.
+    /// #109: ~2 GB'lık `ai_models` açılırken UI'daki İptal ÖLÜYDÜ (`control` yalnız indirmede
+    /// okunuyordu). Kullanıcı yanlış profili seçtiğini fark etse bile dakikalarca bekliyordu.
+    #[test]
+    fn acma_iptal_edilebilir() {
+        let (_d, zip_path) = build_zip_many(50);
+        let out = tempfile::tempdir().unwrap();
+        let mut used = 0u64;
+
+        // 5. girdiden sonra iptal et.
+        let seen = std::cell::Cell::new(0usize);
+        let err = extract_zip_cancellable(&zip_path, out.path(), &mut used, false, &|| {
+            seen.set(seen.get() + 1);
+            seen.get() > 5
+        })
+        .unwrap_err();
+        assert!(matches!(err, ExtractError::Cancelled), "iptal edilmedi: {err}");
+        assert!(seen.get() <= 7, "iptal cok gec fark edildi: {} girdi", seen.get());
+
+        // İptal ETMEYEN çağrı hâlâ tam açmalı (regresyon: cancel her zaman true dönmesin).
+        let out2 = tempfile::tempdir().unwrap();
+        let mut used2 = 0u64;
+        assert_eq!(
+            extract_zip_cancellable(&zip_path, out2.path(), &mut used2, false, &|| false).unwrap(),
+            50
+        );
+    }
+
+    /// N adet küçük dosya içeren zip (iptal/bütçe testleri için).
+    fn build_zip_many(n: usize) -> (tempfile::TempDir, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("many.zip");
+        let f = fs::File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        let opts: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        for i in 0..n {
+            w.start_file(format!("dir/f{i}.bin"), opts).unwrap();
+            std::io::Write::write_all(&mut w, b"x").unwrap();
+        }
+        w.finish().unwrap();
+        (d, path)
+    }
+
     #[test]
     fn zip_slip_reddedilir() {
         let (_d, zip_path) = build_zip(&[("../kotucul.txt", b"pwned" as &[u8])]);
