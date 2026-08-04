@@ -37,8 +37,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
  && pip3 install -r ai_service/requirements-ai.txt
 
 # ai_hub = predictor KODU (ağırlıklar .dockerignore ile hariç → /models mount'tan gelir)
-COPY ai_hub/ ./ai_hub/
-COPY ai_service/ ./ai_service/
+# DENETİM 2026-08-04 (P3): önce `COPY` + sonra `chown -R /app` yapılıyordu; bu, /app'in
+# TAMAMINI ikinci bir katmana kopyalayıp imajı boşuna ~67 MB büyütüyordu. Kullanıcı COPY'lerden
+# ÖNCE oluşturulup COPY'ler `--chown` ile yapılıyor → ekstra katman yok.
+RUN groupadd -r pemfai && useradd -r -g pemfai -d /home/pemfai -m pemfai
+
+COPY --chown=pemfai:pemfai ai_hub/ ./ai_hub/
+COPY --chown=pemfai:pemfai ai_service/ ./ai_service/
 
 # ⚠️ DENETİM 2026-08-04: bu imaj ROOT olarak koşuyordu — kardeşi Dockerfile.backend'de
 # `USER pemf` varken burada hiç USER yoktu. Servis `/infer/...` uçlarında AUTH'suz olarak
@@ -46,8 +51,6 @@ COPY ai_service/ ./ai_service/
 # ONNX çözücülerine kadar iner. Oralardaki bir bellek-bozma hatası root konteynerde çok daha
 # değerli bir sonuç verir. Ayrıcalık gerekmiyor: /models salt-okunur mount, önbellek dizinleri
 # zaten /tmp altında (NUMBA_CACHE_DIR / MPLCONFIGDIR), yazılan başka yer yok.
-RUN groupadd -r pemfai && useradd -r -g pemfai -d /home/pemfai -m pemfai     && chown -R pemfai:pemfai /app
-
 EXPOSE 8100
 
 # Sağlık yoklaması: compose/orchestrator servisin GERÇEKTEN hazır olduğunu bilsin (model

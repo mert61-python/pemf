@@ -15,6 +15,9 @@ on:
 # GITHUB_TOKEN yetkisini alıyordu (çoğu depoda contents: write). Bu iş akışlarının hiçbiri
 # yazma yapmıyor (release/push/paket yok — doğrulandı). Ele geçirilmiş bir bağımlılık ya da
 # üçüncü-parti action, token'la depoya YAZABİLİRDİ. En az yetki: yalnız okuma.
+# DENETİM 2026-08-04 (P3): action pinlemesi bu dosyada YARIMDI — yalnız üçüncü-parti
+# `dtolnay/rust-toolchain` SHA'ya bağlanmıştı. Ama bu job Apple İMZALAMA SIRLARINA erişiyor;
+# GitHub-sahipli action'lar da mutable etiketle çekiliyordu (etiket taşınabilir). Hepsi pinlendi.
 permissions:
   contents: read
 
@@ -23,12 +26,12 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4 (SHA-pinli)
 
       - name: Python 3.10 (requirements.txt bu sürüme kilitli)
         run: brew install python@3.10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4 (SHA-pinli)
         with:
           node-version: 20
 
@@ -55,7 +58,7 @@ jobs:
           PEMF_LAUNCHER_E2E: "1"
         run: cargo test --test real_artifacts -- --test-threads=1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4 (SHA-pinli)
         with:
           name: PEMF-Backend-macOS
           path: |

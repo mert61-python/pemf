@@ -2,7 +2,11 @@
 # Fark: ai_hub içindeki KÜÇÜK gömülü modelleri (kidney_disease/rna onnx, cat_disease pkl,
 # scaler'lar ~55MB) DAHİL eder → bu uçlar container'da model bulur. Büyük ağırlıklar
 # (histopath/YOLO/BiLSTM/cat_organ) zaten kaynakta YOK, /models mount'tan gelir.
-release_assets/            # büyük model deposu → /models olarak mount edilir, image'a girmesin
+# büyük model deposu → /models olarak mount edilir, image'a girmesin
+# ⚠️ DENETİM 2026-08-04 (P3): bu satırda SATIR-İÇİ yorum vardı. `.dockerignore` ayrıştırıcısı
+# satır-içi yorumu DESTEKLEMEZ — `#`'ten sonrası kalıbın PARÇASI olur, dolayısıyla desen
+# hiçbir şeyle eşleşmiyordu ve release_assets/ (2,36 GB) build context'e GİRİYORDU.
+release_assets/
 pf/
 frontend/
 myenv/
@@ -26,7 +30,9 @@ __pycache__/
 .idea/
 .env
 .env.*
-docker/                    # tüm Docker config (compose/Dockerfile/README/.env) — AI image COPY etmiyor
+# tüm Docker config (compose/Dockerfile/README/.env) — AI image COPY etmiyor
+# (aynı satır-içi yorum hatası buradaydı — bkz. yukarıdaki not)
+docker/
 *.zip
 
 # ── SIRLAR (denetim 2026-08-04, P3) ──────────────────────────────────────────

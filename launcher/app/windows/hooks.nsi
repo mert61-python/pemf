@@ -123,8 +123,15 @@
     ; olabilir (MUI_PAGE_DIRECTORY gösteriliyor, installer.nsi:384) ve /r o dizindeki PEMF-dışı
     ; her şeyi de yok eder. Kendi bıraktığımız dosyaları TEK TEK silip özyinelemesiz RMDir yap:
     ; dizin bize aitse boşalıp gider, kullanıcının başka dosyası varsa DOKUNULMAZ.
+    ; DENETİM 2026-08-04 (P3): liste EKSİKTİ. `selfupdate_attempt.json` (bu denetimde eklendi)
+    ; ve `installed_profiles.json.bak` (atomik yazımın yedeği — kurulu makinede diskte GÖRÜLDÜ)
+    ; atlanıyordu → özyinelemesiz `RMDir "$INSTDIR"` boş olmayan dizinde BAŞARISIZ olur ve
+    ; kurulum dizini artıkla birlikte geride kalır. Yeni bir durum dosyası eklenirse BURAYA da
+    ; eklenmeli (aynı küme: extract.rs::PROFILE_FORBIDDEN_TOP).
     Delete "$INSTDIR\installed_profiles.json"
+    Delete "$INSTDIR\installed_profiles.json.bak"
     Delete "$INSTDIR\pending_install.json"
+    Delete "$INSTDIR\selfupdate_attempt.json"
     Delete "$INSTDIR\backend.port"
     RMDir "$INSTDIR"
     ; Yükseltme-öncesi eski boşluksuz kurulum kökü (rename migrasyonu atlanmışsa) kalıntısı.

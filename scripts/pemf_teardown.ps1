@@ -80,7 +80,18 @@ function Stop-PemfProcessesAndServices([string[]]$Services) {
         & sc.exe stop $svc *>$null
         # sc stop asenkron döner → STOPPED olana kadar bekle (NSSM AppStopMethodConsole 15s + pay ~20sn).
         for ($i = 0; $i -lt 40 -and ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -in @('Running', 'StopPending')); $i++) { Start-Sleep -Milliseconds 500 }
-        Write-PemfLog "servis durduruldu: $svc"
+        # DENETİM 2026-08-04 (P3): burada KOŞULSUZ "servis durduruldu" yazılıyordu. 20 sn'lik
+        # bekleme zaman aşımına uğrayıp servis hâlâ Running/StopPending olsa bile log "durduruldu"
+        # diyordu — aynı raporun KVKK silme kanıtı olarak kullanıldığı düşünülürse yanıltıcı.
+        # Ayrıca durmayan bir backend, hemen ardından gelen dosya silmelerini de kilitler; bu
+        # satır o başarısızlığın TEK görünür işareti olurdu.
+        $son = (Get-Service -Name $svc -ErrorAction SilentlyContinue)
+        if ($son -and $son.Status -in @('Running', 'StopPending')) {
+            $script:PemfFailed += "servis: $svc ($($son.Status))"
+            Write-PemfLog "SERVİS DURMADI: $svc — durum $($son.Status) (dosya kilitleri sürebilir)" 'Red'
+        } else {
+            Write-PemfLog "servis durduruldu: $svc"
+        }
     }
     foreach ($svc in $Services) {
         if (Get-Service -Name $svc -ErrorAction SilentlyContinue) { & sc.exe delete $svc *>$null; Write-PemfLog "servis kaldırıldı: $svc" }
