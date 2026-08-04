@@ -324,10 +324,15 @@ mod tests {
     #[test]
     fn depodaki_gercek_manifest_ayristirilir() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../pemf-app-packages/manifest.json");
-        let Ok(raw) = std::fs::read_to_string(path) else {
-            eprintln!("atlandi: {path} yok");
-            return;
-        };
+        // ⚠️ DENETİM 2026-08-04 (P2): burada SESSİZ erken-dönüş vardı ve manifest git'te
+        // İZLENMİYORDU → CI (`cargo test --locked --lib`) temiz checkout'ta dosyayı hiç bulamıyor,
+        // test `atlandi` deyip YEŞİL raporlanıyordu. Yani URL-pin/şema regresyon kapısı CI'da
+        // HİÇ KOŞMUYORDU. Manifest artık izleniyor (3,5 KB) ve yokluğu HATADIR.
+        let raw = std::fs::read_to_string(path).unwrap_or_else(|e| {
+            panic!(
+                "gercek manifest okunamadi ({path}): {e}. Bu dosya BILEREK git'te izlenir —                  URL-pin ve sema regresyon kapisi onun uzerinde kosar."
+            )
+        });
         let m = Manifest::parse(&raw).expect("gercek manifest ayristirilamadi");
         assert_eq!(m.schema, 2);
         assert_eq!(m.version, "1.8.0");

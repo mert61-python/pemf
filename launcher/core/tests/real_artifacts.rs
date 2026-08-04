@@ -76,10 +76,18 @@ fn gercek_base_paketi_dogrulanir_ve_acilir() {
 /// çıktı ayrıştırılarak yakalanır. `PEMF_MANIFEST_FILE` ile dosya verilir.
 #[test]
 fn uretilen_manifest_launcher_tarafindan_okunur() {
-    let Ok(path) = std::env::var("PEMF_MANIFEST_FILE") else {
-        eprintln!("ATLANDI: PEMF_MANIFEST_FILE verilmedi");
-        return;
-    };
+    // ⚠️ DENETİM 2026-08-04 (P2): `PEMF_MANIFEST_FILE` deponun HİÇBİR yerinde (workflow, script,
+    // Makefile) set edilmiyor → bu test her koşuda ilk satırda dönüyor ve "ok" raporlanıyordu.
+    // Yani üretici (make_manifest.py) / tüketici (Rust Manifest::parse) sapmasını yakalamak için
+    // yazılmış test HİÇ ÇALIŞMAMIŞTI. Env verilmezse artık depodaki İZLENEN manifest'e düşüyoruz —
+    // o dosya zaten make_manifest.py çıktısıdır, dolayısıyla sözleşmeyi gerçekten sınar.
+    let path = std::env::var("PEMF_MANIFEST_FILE").unwrap_or_else(|_| {
+        repo_root()
+            .join("pemf-app-packages")
+            .join("manifest.json")
+            .to_string_lossy()
+            .into_owned()
+    });
     let raw = std::fs::read_to_string(&path).expect("manifest okunamadi");
     let m = pemf_launcher_core::Manifest::parse(&raw).expect("uretilen manifest AYRISTIRILAMADI");
 

@@ -183,3 +183,11 @@ launcher/target/
 
 # Offline (çevrimdışı) dağıtım installer paketi — 3.5GB DiskSpanning, git dışı
 offline dağıtım/
+
+# DENETIM 2026-08-04 (P2): pemf-app-packages/ yayin cikti klasoru. `manifest.json` (3,5 KB)
+# BILEREK izlenir — CI'daki cift-base/URL-pin regresyon kapilari onun uzerinde kosar; izlenmezse
+# o testler temiz checkout'ta sessizce ATLANIR ve YESIL raporlanir (koruma sifira duser).
+# Paketlerin KENDISI (yuzlerce MB - GB) ASLA izlenmemeli.
+pemf-app-packages/*.zip
+pemf-app-packages/*.bin
+pemf-app-packages/*.exe

@@ -152,20 +152,55 @@ _HWC = Path(__file__).resolve().parent.parent / "controllers" / "hardware_contro
 
 
 def test_host_tarafi_sure_deadlineI_hala_uygulaniyor():
-    """Bobin enerjilenmesini gerçekten sınırlayan TEK mekanizma bu — kaybolursa süresiz kalır."""
-    if not _HWC.exists():
-        pytest.skip(f"hardware_controller yok: {_HWC}")
-    src = _HWC.read_text(encoding="utf-8", errors="replace")
+    """Bobin enerjilenmesini gerçekten sınırlayan TEK mekanizma bu — kaybolursa süresiz kalır.
 
-    assert "_coil_deadline" in src, (
-        "_coil_deadline KALDIRILMIS — firmware'in kendi sure sayacini keep-alive resetledigi icin "
-        "bobin enerjilenmesini sinirlayan baska bir mekanizma KALMAZ (suresiz enerjileme)."
-    )
-    # Sadece tanımlı olması yetmez; okunup UYGULANMALI da.
-    reads = len(re.findall(r"_coil_deadline\[", src))
-    assert reads >= 2, (
-        f"_coil_deadline yalnizca {reads} yerde kullanilmis — tanimlanip UYGULANMIYOR olabilir."
-    )
+    ⚠️ DENETİM 2026-08-04 (P2): bu test önce SALT METİN-GREP'ti (`"_coil_deadline" in src`).
+    Uygulama bloğunu (expired listesi + is_running=False + duty=0 + deadline=None) tamamen
+    silsen bile dosyada geriye kalan `_coil_deadline` geçişleri yüzünden YEŞİL kalıyordu —
+    yani sıfır koruma sağlıyordu. Artık DAVRANIŞ testi: süresi geçmiş bir bobinin `_tick()`
+    ile gerçekten durdurulduğunu doğrular.
+    """
+    import time as _t
+    from unittest.mock import patch
+
+    try:
+        from controllers.hardware_controller import HardwareController
+    except Exception as e:  # donanım bağımlılığı yoksa atla (CI'da import edilebilir olmalı)
+        pytest.skip(f"HardwareController import edilemedi: {e}")
+
+    # Keep-alive thread'i başlatmadan örnekle (yan etki istemiyoruz).
+    with patch.object(HardwareController, "_keep_alive_loop", lambda self: None):
+        hc = HardwareController(core_instance=None)
+    try:
+        gonderilen = []
+        hc._send_stm_manual_update = lambda: gonderilen.append(True)
+
+        # 1. bobin ÇALIŞIYOR ve süresi 1 sn ÖNCE doldu.
+        hc.coils_state[1]["is_running"] = True
+        hc.coils_state[1]["duty"] = 0.7
+        hc._coil_deadline[1] = _t.monotonic() - 1.0
+
+        hc._tick()
+
+        assert hc.coils_state[1]["is_running"] is False, (
+            "SURESI DOLAN bobin durdurulmadi — firmware'in kendi sayacini keep-alive "
+            "resetledigi icin bobin SURESIZ enerjili kalir (bkz. #69)."
+        )
+        assert hc.coils_state[1]["duty"] == 0.0, "duty sifirlanmadi — bobin surulmeye devam eder"
+        assert hc._coil_deadline[1] is None, "deadline temizlenmedi"
+        assert gonderilen, "STM'e sifir-duty paketi GONDERILMEDI — donanim haberdar olmaz"
+
+        # Süresi DOLMAYAN bobin etkilenmemeli (yanlış-pozitif durdurma tedaviyi keser).
+        hc.coils_state[2]["is_running"] = True
+        hc.coils_state[2]["duty"] = 0.5
+        hc._coil_deadline[2] = _t.monotonic() + 3600.0
+        hc._tick()
+        assert hc.coils_state[2]["is_running"] is True, "suresi DOLMAYAN bobin yanlislikla durduruldu"
+    finally:
+        try:
+            hc.stop()
+        except Exception:
+            pass
 
 
 def test_firmware_sure_sayaci_keep_alive_ile_resetleniyor_BELGELI(fw_src):

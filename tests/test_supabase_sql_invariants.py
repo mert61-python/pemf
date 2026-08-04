@@ -62,17 +62,51 @@ def test_her_tabloda_rls_acik(sql_bodies):
 
 
 def test_anon_rollerine_dogrudan_tablo_yetkisi_verilmiyor(sql_bodies):
-    """Erişim yalnız SECURITY DEFINER RPC'lerinden olmalı (device_id sunucuda zorlanır)."""
+    """Erişim yalnız SECURITY DEFINER RPC'lerinden olmalı (device_id sunucuda zorlanır).
+
+    ⚠️ DENETİM 2026-08-04 (P2): kapsam iki yönden DARDI:
+      (a) tablo kümesi DOSYA BAŞINA kuruluyordu; oysa projenin fiilî deseni "yeni .sql dosyası"
+          (secure_v2 tabloları önceki dosyalarda tanımlı) → yeni bir dosyadaki grant hiç
+          eşleşmezdi. Küme artık TÜM dosyaların birleşimi.
+      (b) Supabase'de bu yetkinin verilmesinin EN yaygın biçimi olan
+          `grant ... on all tables in schema public to anon` ve `alter default privileges`
+          regex'e hiç uymuyordu → tamamen görünmezdi.
+    """
+    tum_tablolar: set[str] = set()
+    for body in sql_bodies.values():
+        tum_tablolar |= set(
+            re.findall(
+                r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)",
+                body.lower(),
+            )
+        )
+    assert tum_tablolar, "hic tablo bulunamadi — regex/dosya duzeni degismis olabilir"
+
     for name, body in sql_bodies.items():
         low = body.lower()
-        tables = set(
-            re.findall(r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)", low)
-        )
+        # (b) Toplu yetkilendirme — tek başına yeterli sebep.
+        for m in re.finditer(
+            r"grant\s+[^;]*?\bon\s+all\s+tables\s+in\s+schema\s+\w+\s+to\s+([a-z_, ]+)", low
+        ):
+            if "anon" in m.group(1) or "authenticated" in m.group(1):
+                pytest.fail(
+                    f"{name}: `GRANT ... ON ALL TABLES IN SCHEMA ... TO {m.group(1).strip()}` — "
+                    f"TUM tablolara dogrudan erisim, RLS/device_id zorlamasini baypas eder."
+                )
+        for m in re.finditer(
+            r"alter\s+default\s+privileges[^;]*?\bgrant\s+[^;]*?\bto\s+([a-z_, ]+)", low
+        ):
+            if "anon" in m.group(1) or "authenticated" in m.group(1):
+                pytest.fail(
+                    f"{name}: `ALTER DEFAULT PRIVILEGES ... TO {m.group(1).strip()}` — "
+                    f"BUNDAN SONRA olusturulacak her tabloya otomatik erisim verir."
+                )
+        # (a) Tekil tablo grant'i — kume artik TUM dosyalardan.
         for perms, obj, roles in re.findall(
             r"grant\s+([a-z, ]+?)\s+on\s+(?:table\s+)?(?:public\.)?([a-z_0-9.]+)\s+to\s+([a-z_, ]+)",
             low,
         ):
-            if obj in tables and ("anon" in roles or "authenticated" in roles):
+            if obj in tum_tablolar and ("anon" in roles or "authenticated" in roles):
                 pytest.fail(
                     f"{name}: `{obj}` tablosuna DOGRUDAN grant ({perms.strip()} -> {roles.strip()}). "
                     f"RPC disi erisim RLS/device_id zorlamasini baypas eder."

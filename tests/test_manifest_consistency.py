@@ -33,8 +33,14 @@ _RUNTIME_PAIRS = [
 
 @pytest.fixture(scope="module")
 def manifest() -> dict:
-    if not _MANIFEST.exists():
-        pytest.skip(f"manifest yok: {_MANIFEST}")
+    # ⚠️ DENETİM 2026-08-04 (P2): burada `pytest.skip` vardı ve `pemf-app-packages/manifest.json`
+    # git'te İZLENMİYORDU → temiz bir CI checkout'unda dosya hiç bulunmuyor, üç test de sessizce
+    # ATLANIYOR ve CI YEŞİL raporluyordu. Yani kapı, koruduğunu sandığı ayrışmayı hiç görmüyordu.
+    # Manifest artık izleniyor (3,5 KB; paketlerin kendisi .gitignore'da) ve YOKLUĞU HATADIR.
+    assert _MANIFEST.exists(), (
+        f"manifest bulunamadi: {_MANIFEST}. Bu dosya BILEREK git'te izlenir — cift-base "
+        f"regresyon kapisi onun uzerinde kosar. Silinmis/tasinmissa kapi etkisizlesir."
+    )
     return json.loads(_MANIFEST.read_text(encoding="utf-8"))
 
 
@@ -83,3 +89,24 @@ def test_her_paketin_digesti_ve_boyutu_makul(manifest):
                 f"{section}.{key}: url HTTPS degil: {entry.get('url')!r}"
             )
     assert sayac >= 4, f"beklenenden az paket ({sayac}) — manifest bozulmus olabilir"
+
+
+def test_launcher_blogu_da_dogrulanir(manifest):
+    """⚠️ DENETİM 2026-08-04 (P2): kapı `launcher` bloğunu HİÇ denetlemiyordu.
+
+    Oysa aynı denetimde Rust tarafı sertleştirildi: `installer_url` varken bozuk bir
+    `launcher.sha256` artık TÜM manifest'i reddediyor. Yani operatör elle düzenlerken 63
+    karakter yapıştırırsa kapı YEŞİL kalırken sahadaki HER kurulum kırılabilirdi.
+    """
+    l = manifest.get("launcher")
+    if not l:
+        pytest.skip("manifest'te launcher blogu yok (opsiyonel)")
+    if not l.get("installer_url"):
+        return  # installer_url yoksa sha256 zorunlu degil (Rust tarafi da oyle)
+    sha = str(l.get("sha256", ""))
+    assert len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
+        f"launcher.sha256 gecersiz ({sha!r}) — Rust tarafi TUM manifest'i reddeder, "
+        f"sahadaki her kurulum kirilir."
+    )
+    assert isinstance(l.get("size"), int) and l["size"] > 0, f"launcher.size gecersiz: {l.get('size')!r}"
+    assert str(l["installer_url"]).startswith("https://"), "launcher.installer_url HTTPS degil"
