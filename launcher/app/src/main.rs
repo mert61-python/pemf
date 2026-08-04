@@ -616,7 +616,27 @@ async fn apply_self_update(
         *state.progress.lock().unwrap() = None;
         state.control.store(CTL_RUN, Ordering::Relaxed);
 
-        let dest = std::env::temp_dir().join("PEMFVetClient-Update.exe");
+        // ⚠️ DENETİM 2026-08-04: hedef SABİT bir addı (`PEMFVetClient-Update.exe`) ve batch onu
+        // ~3 sn SONRA `/S` ile SESSİZCE kuruyor. Sabit + tahmin edilebilir ad iki soruna yol açar:
+        //   (a) önceki bir denemeden kalan BAYAT exe aynı yolda durur (SHA doğrulaması onu yakalar
+        //       ama kullanıcı sebebi anlaşılmayan bir "doğrulanamadı" hatası görür);
+        //   (b) yol önceden bilindiği için dosya indirilmeden ÖNCE oraya bir şey konabilir.
+        // Adı beklenen SHA'ya bağlıyoruz: farklı içerik = farklı dosya, bayat dosya zararsız,
+        // yol da önceden tahmin edilemez. (Temp Windows'ta kullanıcıya özeldir; bu, aynı
+        // kullanıcı olarak koşan bir saldırganı DEĞİL, kaza ve önden-yerleştirmeyi keser.)
+        // Yalnız hex karakterleri al: manifest'ten gelen değer beklenmedik biçimdeyse bayt-indeksli
+        // dilimleme UTF-8 sınırını bölüp PANİKLEYEBİLİRDİ (launcher'da panik = pencere kapanır).
+        let sfx: String = sha256
+            .trim()
+            .chars()
+            .filter(|c| c.is_ascii_hexdigit())
+            .take(16)
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        let sfx = if sfx.is_empty() { "x".to_string() } else { sfx };
+        let dest = std::env::temp_dir().join(format!("PEMFVetClient-Update-{sfx}.exe"));
+        // Eski sürümlerin bıraktığı sabit-adlı artığı temizle (disk + karışıklık).
+        let _ = std::fs::remove_file(std::env::temp_dir().join("PEMFVetClient-Update.exe"));
         let (u, sha, dest2) = (url.clone(), sha256.clone(), dest.clone());
         let store = state.progress.clone();
         let app2 = app.clone();
@@ -695,7 +715,13 @@ fn spawn_update_relauncher(installer: &std::path::Path) -> Result<(), String> {
     let exe_s = exe.to_str().ok_or("launcher yolu UTF-8 değil")?;
     let inst_s = installer.to_str().ok_or("setup yolu UTF-8 değil")?;
     let script = build_relaunch_script(inst_s, exe_s)?;
-    let bat = std::env::temp_dir().join("pemf_selfupdate.bat");
+    // Batch adı da kuruluma özel: sabit ad, iki eşzamanlı denemede birbirini ezerdi ve
+    // yol önceden bilinirdi. Kurulum exe'sinin adından türetiliyor (o da SHA'ya bağlı).
+    let stem = installer
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("pemf_selfupdate");
+    let bat = std::env::temp_dir().join(format!("{stem}.bat"));
     std::fs::write(&bat, script).map_err(|e| e.to_string())?;
 
     std::process::Command::new("cmd.exe")
