@@ -148,17 +148,34 @@ Root: HKLM; Subkey: "SOFTWARE\{#MyAppPublisher}\PEMF Backend"; ValueType: string
 // kuruluma devam edemiyor ve cihaz DURMUS halde kaliyordu.
 // YENI: dilim varligi EN BASTA (InitializeSetup) denetlenir - hicbir sey oldurulmez.
 // NOT: [Setup] DiskSpanning kapatilirsa bu kontrol de KALDIRILMALIDIR.
+// DENETIM 2026-08-04 (P2 - BU KORUMANIN KENDI ACIGI): kontrol JOKER ("*-1.bin") ile
+// yapiliyordu, yani AYNI KLASORDEKI ALAKASIZ herhangi bir "-1.bin" dosyasi korumayi
+// tatmin ediyordu. Bu SAHADA GOZLENDI: klasorde ilgisiz bir "yabanci-1.bin" varken
+// InitializeSetup GECTI, kurulum basladi ve kullanici ancak dosya-cikarma asamasinda
+// "The file ...-1.bin could not be located. Please insert the correct disk" diyalogunu
+// gordu - korumanin tam olarak onlemek icin yazildigi gec/karisik basarisizlik.
+// Artik beklenen ad {srcexe}'den TURETILIR (setup.exe'nin taban adi = OutputBaseFilename),
+// yani yalnizca GERCEK dilim dosyalari sayilir. Ayrica dilimlerin SUREKLI oldugu (1..N
+// arasinda bosluk olmadigi) da denetlenir.
+// KALAN BOSLUK (bilincli): dilim setinin SONU eksikse (or. -1 var, -2 hic kopyalanmamis)
+// bu erken kontrol bunu goremez - toplam dilim sayisi ancak derleme sonunda belli olur ve
+// setup.exe icinde saklanmaz. Gec basarisizlik o durumda surer; ama en yaygin vaka olan
+// "OTA kanalindan YALNIZ .exe indirildi" artik EN BASTA ve dogru sekilde yakalanir.
 function SliceFilesPresent: Boolean;
 var
-  FR: TFindRec;
+  Base: String;
+  I, Highest: Integer;
 begin
-  Result := False;
-  if FindFirst(ExtractFilePath(ExpandConstant('{srcexe}')) + '*-1.bin', FR) then
-  try
-    Result := True;
-  finally
-    FindClose(FR);
-  end;
+  Base := ChangeFileExt(ExpandConstant('{srcexe}'), '');
+  Highest := 0;
+  for I := 1 to 20 do
+    if FileExists(Base + '-' + IntToStr(I) + '.bin') then
+      Highest := I;
+  Result := Highest >= 1;
+  if Result then
+    for I := 1 to Highest do
+      if not FileExists(Base + '-' + IntToStr(I) + '.bin') then
+        Result := False;
 end;
 
 function InitializeSetup: Boolean;
