@@ -58,6 +58,27 @@ const ALLOWED_SUFFIX: &str = ".githubusercontent.com";
 /// (`launcher/app/src/main.rs::MANIFEST_URL` ile aynı repo — ayrışırsa pin anlamsızlaşır.)
 const UPDATE_REPO_PATH: &str = "/mert61-python/pemf-update/";
 
+/// URL yolu, istemci-tarafı normalizasyonuyla BİZİM gördüğümüz metni ayrıştıracak bir yazım
+/// içeriyor mu? (nokta-segmenti, yüzde-kodlu nokta/ayraç, ters-eğik, boş segment)
+///
+/// Bunlar meşru release-asset URL'lerinde ASLA bulunmaz; varlıkları tek başına şüphelidir.
+/// Sorgu/parça (`?`/`#`) segment analizine dahil edilmez — pin yalnız YOL için anlamlıdır.
+fn path_has_traversal(path_with_query: &str) -> bool {
+    let path = path_with_query
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(path_with_query);
+    let low = path.to_ascii_lowercase();
+    // %2e = '.', %2f = '/', %5c = '\' → normalize eden istemci bunları çözüp yolu değiştirebilir.
+    if low.contains("%2e") || low.contains("%2f") || low.contains("%5c") || path.contains('\\') {
+        return true;
+    }
+    // Baştaki '/' yüzünden ilk parça daima boştur; onu atla.
+    path.split('/')
+        .skip(1)
+        .any(|seg| seg == "." || seg == ".." || seg.is_empty())
+}
+
 /// KAYNAK (manifest'ten gelen) URL doğrulaması — `validate_url`'den DAHA KATI.
 ///
 /// DENETİM 2026-08-04 (#97/#99): host-pin'i yalnızca "GitHub'da bir yer" anlamına geliyordu:
@@ -77,6 +98,22 @@ pub fn validate_download_source(url: &str) -> Result<String, NetError> {
         let rest = url.strip_prefix("https://").unwrap_or(url);
         let path_start = rest.find(['/', '?', '#']).unwrap_or(rest.len());
         let path = &rest[path_start..];
+        // ⚠️ DENETİM 2026-08-04 (P0 — BU DÜZELTMENİN KENDİ AÇIĞI): repo-yolu pini HAM METİN
+        // üzerinde `starts_with` ile çalışıyordu, oysa ureq isteği göndermeden ÖNCE yolu
+        // RFC 3986 "remove_dot_segments" kuralıyla NORMALİZE eder. Yani pinin gördüğü metin ile
+        // sunucuya giden yol AYNI DEĞİL. Yerel bir sunucuya gerçek ureq isteğiyle ölçüldü:
+        //   URL : /mert61-python/pemf-update/../../saldirgan/kotu/evil.exe
+        //   GİDEN: GET /saldirgan/kotu/evil.exe
+        // Zehirli bir manifest (pinin tam olarak savunduğu tehdit) böyle bir URL vererek pini
+        // TAMAMEN atlatır; sha da aynı manifest'ten geldiği için doğrulama geçer ve
+        // `apply_self_update` imzasız setup.exe'yi `/S` ile SESSİZCE kurar.
+        // Çözüm: normalize edenle bizim aramızda AYRIŞMA üreten her yazımı REDDET.
+        if path_has_traversal(path) {
+            return Err(NetError::HostNotAllowed(format!(
+                "github.com{} — yol nokta-segmenti/kodlanmış ayraç içeriyor (pin atlatma)",
+                path.split("/releases").next().unwrap_or(path)
+            )));
+        }
         if !path.starts_with(UPDATE_REPO_PATH) {
             return Err(NetError::HostNotAllowed(format!(
                 "github.com{} — beklenen repo {UPDATE_REPO_PATH}",
@@ -438,6 +475,52 @@ mod tests {
 
         // sha yoksa (eski/eksik manifest) eski davranışa düş — kırılma yok.
         assert_eq!(part_of(dest, "").extension().unwrap(), "part");
+    }
+
+    /// ⚠️ P0 (denetim 2026-08-04) — repo-yolu pini NOKTA-SEGMENTİYLE ATLATILIYORDU.
+    ///
+    /// Pin ham metinde `starts_with` yapıyordu; ureq ise isteği göndermeden önce yolu RFC 3986
+    /// `remove_dot_segments` ile NORMALİZE ediyor. Yerel sunucuya GERÇEK ureq isteğiyle ölçüldü:
+    ///   URL   : /mert61-python/pemf-update/../../saldirgan/kotu/evil.exe
+    ///   GİDEN : GET /saldirgan/kotu/evil.exe
+    /// Yani zehirli manifest pini tamamen atlatıp kendi deposundan imzasız setup.exe indirtebilirdi
+    /// (sha da aynı manifest'ten geldiği için doğrulama geçer, `/S` ile sessizce kurulur).
+    #[test]
+    fn nokta_segmentli_url_pini_atlatamaz() {
+        let kotu = [
+            "https://github.com/mert61-python/pemf-update/../../saldirgan/kotu/releases/download/v1/evil.exe",
+            "https://github.com/mert61-python/pemf-update/%2e%2e/%2e%2e/saldirgan/kotu/base.zip",
+            "https://github.com/mert61-python/pemf-update/%2E%2E/saldirgan/x.zip",
+            "https://github.com/mert61-python/pemf-update/./../saldirgan/x.zip",
+            "https://github.com/mert61-python/pemf-update//../saldirgan/x.zip",
+            "https://github.com/mert61-python/pemf-update/..%2fsaldirgan/x.zip",
+        ];
+        for u in kotu {
+            assert!(
+                validate_download_source(u).is_err(),
+                "PIN ATLATILDI (istek saldirganin deposuna gider): {u}"
+            );
+        }
+
+        // MEŞRU URL'ler etkilenmemeli.
+        for u in [
+            "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/base.zip",
+            "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json",
+        ] {
+            assert!(validate_download_source(u).is_ok(), "mesru URL reddedildi: {u}");
+        }
+    }
+
+    /// Saf yardımcının kendisi: sorgu/parça segment analizine karışmamalı.
+    #[test]
+    fn path_has_traversal_dogru_ayirir() {
+        assert!(path_has_traversal("/a/../b"));
+        assert!(path_has_traversal("/a/%2e%2e/b"));
+        assert!(path_has_traversal("/a//b"));
+        assert!(path_has_traversal("/a/./b"));
+        assert!(!path_has_traversal("/mert61-python/pemf-update/releases/download/v1/base.zip"));
+        // sorgu icindeki '//' YOL degildir — yanlis-pozitif olmamali
+        assert!(!path_has_traversal("/a/b?x=1//2#frag"));
     }
 
     #[test]

@@ -116,3 +116,62 @@ def test_version_dosyasi_hem_duz_metin_hem_json_okunur(um, tmp_path):
     bos = tmp_path / "VERSION_bos"
     bos.write_text("   \n", encoding="utf-8")
     assert um._read_version_file(bos) == ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (P0) — REPO-YOLU PİNİ NOKTA-SEGMENTİYLE ATLATILIYORDU
+# `urlparse` nokta-segmentlerini SADELEŞTİRMEZ ama HTTP sunucusu RFC 3986 gereği çözer.
+# Bu yüzden `p.path.startswith("/mert61-python/pemf-update/")` HAM metinde geçerken GitHub
+# `/saldirgan/kotu/setup.exe` sunuyordu → zehirli manifest kendi deposundaki imzasız EXE'yi
+# indirtebiliyordu (sha da aynı manifest'ten geldiği için doğrulama geçer).
+# Rust ikizi: launcher/core/src/net.rs::nokta_segmentli_url_pini_atlatamaz
+# ─────────────────────────────────────────────────────────────────────────────
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/mert61-python/pemf-update/../../saldirgan/kotu/setup.exe",
+        "https://github.com/mert61-python/pemf-update/%2e%2e/%2e%2e/saldirgan/setup.exe",
+        "https://github.com/mert61-python/pemf-update/%2E%2E/saldirgan/setup.exe",
+        "https://github.com/mert61-python/pemf-update/./../saldirgan/setup.exe",
+        "https://github.com/mert61-python/pemf-update//../saldirgan/setup.exe",
+        "https://github.com/mert61-python/pemf-update/..%2fsaldirgan/setup.exe",
+    ],
+)
+def test_nokta_segmentli_url_repo_pinini_atlatamaz(url):
+    from servers.update_manager import _validate_installer_url
+
+    ok, msg = _validate_installer_url(url)
+    assert not ok, f"PIN ATLATILDI — indirme saldirganin deposuna gider: {url}"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/mert61-python/pemf-update/releases/download/exe-v1.9.5/PEMF_Setup.exe",
+        "https://objects.githubusercontent.com/github-production-release-asset/1/2?x=y",
+    ],
+)
+def test_mesru_guncelleme_urlleri_hala_kabul_ediliyor(url):
+    from servers.update_manager import _validate_installer_url
+
+    ok, msg = _validate_installer_url(url)
+    assert ok, f"mesru URL reddedildi ({msg}): {url}"
+
+
+def test_rust_ve_python_pin_ikizleri_ayni_yazimlari_reddediyor():
+    """İki taraf ayrışırsa biri zayıf kalır — Rust tarafında da AYNI yardımcı olmalı."""
+    from pathlib import Path
+
+    rs = Path(__file__).resolve().parent.parent / "launcher" / "core" / "src" / "net.rs"
+    if not rs.exists():
+        pytest.skip("launcher kaynagi yok")
+    src = rs.read_text(encoding="utf-8", errors="replace")
+    assert "fn path_has_traversal" in src, (
+        "Rust tarafinda path_has_traversal YOK — pin atlatma orada hala acik olabilir."
+    )
+    for tok in ("%2e", "%2f", "%5c"):
+        assert tok in src, f"Rust ikizi {tok} yazimini kontrol etmiyor"

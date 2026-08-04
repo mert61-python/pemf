@@ -47,6 +47,27 @@ _ALLOWED_UPDATE_HOSTS = frozenset({
 })
 
 
+def _path_has_traversal(path: str) -> bool:
+    """Yol, sunucu-tarafı normalizasyonuyla BİZİM gördüğümüzden AYRIŞACAK bir yazım içeriyor mu?
+
+    ⚠️ DENETİM 2026-08-04 (P0): repo-yolu pini `p.path.startswith(...)` ile HAM metin üzerinde
+    çalışıyordu. `urlparse` nokta-segmentlerini SADELEŞTİRMEZ (ampirik olarak doğrulandı), ama
+    HTTP sunucusu RFC 3986 gereği çözer. Yani:
+        /mert61-python/pemf-update/../../saldirgan/kotu/setup.exe
+    pinden GEÇER, GitHub ise `/saldirgan/kotu/setup.exe` sunar → zehirli manifest kendi
+    deposundaki imzasız EXE'yi indirtir (sha da aynı manifest'ten gelir).
+    Meşru release URL'lerinde bu yazımlar ASLA bulunmaz; varlıkları tek başına şüphelidir.
+    Rust ikizi: launcher/core/src/net.rs::path_has_traversal — İKİSİ BİRLİKTE güncellenmeli.
+    """
+    path = (path or "").split("?")[0].split("#")[0]
+    low = path.lower()
+    # %2e='.'  %2f='/'  %5c='\'
+    if "%2e" in low or "%2f" in low or "%5c" in low or "\\" in path:
+        return True
+    # Baştaki '/' yüzünden ilk parça daima boştur; onu atla.
+    return any(seg in (".", "..", "") for seg in path.split("/")[1:])
+
+
 def _validate_installer_url(url: str):
     """installerUrl'yi HTTPS + bilinen release host'una pinler. (ok: bool, hata: str) döner."""
     try:
@@ -64,9 +85,14 @@ def _validate_installer_url(url: str):
     # gosterebilirdi (SHA256 manifest'ten geldigi icin hash de eslesirdi). github.com yolunu
     # BEKLENEN REPO'ya sabitle. Nesne-depolama alan adlarinda (objects/release-assets) yol
     # opak oldugundan orada yol kontrolu yapilamaz — asil koruma yine SHA256 + Authenticode.
-    if host == "github.com" and not p.path.startswith(f"/{_UPDATE_REPO}/"):
-        return False, (f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) "
-                       f"— indirilmedi (güvenlik).")
+    if host == "github.com":
+        # P0 (2026-08-04): önce pin-atlatma yazımlarını ele — bkz. _path_has_traversal.
+        if _path_has_traversal(p.path):
+            return False, ("Güncelleme URL'si nokta-segmenti/kodlanmış ayraç içeriyor "
+                           "(repo pini atlatma) — indirilmedi (güvenlik).")
+        if not p.path.startswith(f"/{_UPDATE_REPO}/"):
+            return False, (f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) "
+                           f"— indirilmedi (güvenlik).")
     return True, ""
 
 
