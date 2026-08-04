@@ -117,6 +117,19 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
     logging.basicConfig(level=log_level, handlers=handlers, force=True)
 
 
+def publish_bind_host(host: str) -> str:
+    """GERÇEKTEN bağlanılan host'u PEMF_API_HOST'a yaz (tek gerçek kaynak).
+
+    DENETIM P0 (proxy-auth): `servers/auth._loopback_only_bind()` yerel/uzak kararını
+    bağlanılan host'a göre verir ama bunu env'den okur. `--host` CLI'da verilebildiğinden
+    (ör. `scripts/install_backend_service.ps1` "--host 0.0.0.0" sabitler) env ile GERÇEK
+    ayrışabiliyordu → güvenlik kararı yanlış girdiyle alınırdı. Ayrı fonksiyon: `main()`
+    tüm servisi ayağa kaldırdığı için testten çağrılamaz; bu sözleşme tek başına sınanabilir.
+    """
+    os.environ["PEMF_API_HOST"] = str(host)
+    return os.environ["PEMF_API_HOST"]
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PEMF headless backend service")
     parser.add_argument("--host", default=os.environ.get("PEMF_API_HOST", "0.0.0.0"))
@@ -527,11 +540,7 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     os.environ.setdefault("PEMF_HEADLESS", "1")
-    # DENETIM P0 (proxy-auth): servers/auth._loopback_only_bind() GERCEKTE baglanilan host'a
-    # gore yerel/uzak karari verir ama bunu env'den okur. --host CLI'da verilirse (ornegin
-    # scripts/install_backend_service.ps1 "--host 0.0.0.0" sabitler) env ile GERCEK AYRISIRDI →
-    # guvenlik karari yanlis girdiyle alinirdi. Cozulen degeri env'e geri yaz: tek gercek kaynak.
-    os.environ["PEMF_API_HOST"] = str(args.host)
+    publish_bind_host(args.host)
 
     app_data_dir = get_app_data_directory()
     _configure_logging(app_data_dir, args.log_level)

@@ -139,6 +139,62 @@ def test_ai_session_opens_db_row_and_reuses_it(temp_app_data, monkeypatch):
             api_server._active_session.clear()
 
 
+def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkeypatch):
+    """MUTASYON TESTİ BULGUSU: AI yolu (yukarıdaki test) korunuyordu ama ASIL KLİNİK YOL —
+    manuel `/api/session/start` — korumasızdı: `_active_session["db_session_id"]` damgasını
+    silen bir mutasyon TÜM takımdan geçti.
+
+    Damga düşerse sessizce şunların hepsi kaybolur (hata da vermez):
+      - `_finalize_session_db` daha ilk satırda `if not db_session_id: return 0` ile çıkar
+        → seans DB'de kalıcı 'active' kalır (KPI/geçmiş şişer),
+      - `session_state.current_db_session_id()` None → bobin çalışma kayıtları yazılmaz,
+      - sensör/sıcaklık dakika-ortalamaları flush edilmez.
+    Yani canlı hayvana uygulanan manuel tedavinin kalıcı kaydı olmaz.
+    """
+    import asyncio
+
+    import database.treatment_history_db as thdb
+    from servers import api_server
+
+    db = thdb.TreatmentHistoryDB(temp_app_data)
+    db.at_rest_encrypted = True
+    monkeypatch.setattr(api_server, "_get_treatment_db", lambda *a, **k: db)
+    # ESP-only bobinler (6-8) → STM donanımı gerekmez; MQTT/broker mock'lanır
+    # (test_session_lifecycle.py'deki yerleşik desen). Ölçtüğümüz şey DB damgası.
+    monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
+    monkeypatch.setattr(api_server, "_broker_reachable", lambda: True)
+
+    try:
+        with api_server._session_lock:
+            api_server._active_session.clear()
+
+        payload = api_server.SessionStartPayload(
+            coil_ids=[6, 7], mode="Manuel", operator_name="op", frequency=10.0,
+            duty=25.0, intensity=2.0, phase=0, duration_minutes=20, patient_name="Boncuk")
+        asyncio.run(api_server.start_session(payload))
+
+        with api_server._session_lock:
+            sid = api_server._active_session.get("db_session_id")
+            started = api_server._active_session.get("started_epoch")
+
+        assert sid, ("manuel seans DB satırı açmalı ve db_session_id'yi _active_session'a "
+                     "DAMGALAMALI — yoksa finalize/coil-run/sensör persist'in tamamı sessizce düşer")
+        assert started, "started_epoch kurulmalı (finalize süreyi buradan hesaplar)"
+
+        # Damganın GERÇEK bir satırı gösterdiğini doğrula (rastgele bir int değil)
+        satirlar = [h for h in db.get_session_history(limit=20) if h["id"] == sid]
+        assert len(satirlar) == 1, "db_session_id gerçek bir treatment_sessions satırına işaret etmeli"
+
+        # Ve damga zinciri gerçekten çalışıyor: finalize kapatabilmeli
+        api_server._finalize_session_db(sid, started, coil_ids=[1, 2], reason="test")
+        kapali = [h for h in db.get_session_history(limit=20) if h["id"] == sid][0]
+        assert str(kapali.get("session_status", "")).lower() != "active", (
+            "damga doğru ama seans DB'de kapatılamadı → zincir kopuk")
+    finally:
+        with api_server._session_lock:
+            api_server._active_session.clear()
+
+
 def test_session_finalized_in_db_on_watchdog_and_estop(temp_app_data, monkeypatch):
     """DENETIM P2 regresyonu: /session/stop DIŞINDAKİ bitiş yolları da seansı DB'de kapatmalı.
 

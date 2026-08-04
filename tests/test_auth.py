@@ -1,4 +1,6 @@
 """Kritik yol: PEMF_REQUIRE_AUTH=1 iken token zorunlu; emergency_stop/health MUAF (fail-safe)."""
+import os
+
 from fastapi.testclient import TestClient
 
 
@@ -154,6 +156,54 @@ def test_server_profilinde_basliksiz_proxy_istegi_401(monkeypatch):
         _reset_auth_cache()
 
 
+def test_baglanilan_host_env_e_YAYINLANIR(monkeypatch):
+    """Güvenlik kararının girdisi GERÇEK bağlama olmalı.
+
+    `--host` CLI'da verilebiliyor (scripts/install_backend_service.ps1 "--host 0.0.0.0"
+    sabitler) → env'deki PEMF_API_HOST gerçekle ayrışabilirdi ve
+    `_loopback_only_bind()` yanlış girdiyle karar verirdi. Mutasyon testi bu sözleşmenin
+    hiç korunmadığını gösterdi; burada kilitleniyor.
+    """
+    import backend_service
+    from servers import auth
+
+    # CLI env'den FARKLI bir host dayatıyor → env gerçeğe uymalı
+    monkeypatch.setenv("PEMF_API_HOST", "0.0.0.0")
+    backend_service.publish_bind_host("127.0.0.1")
+    assert os.environ["PEMF_API_HOST"] == "127.0.0.1"
+
+    _reset_auth_cache()
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")
+    try:
+        assert auth._loopback_only_bind() is True
+        assert auth.is_local_request("127.0.0.1", via_proxy=False) is False, (
+            "gerçek bağlama loopback iken karar hâlâ 'yerel' diyor")
+    finally:
+        _reset_auth_cache()
+
+    # Ters yön: 0.0.0.0'a bağlanınca klinik davranışı geri gelmeli
+    backend_service.publish_bind_host("0.0.0.0")
+    _reset_auth_cache()
+    try:
+        assert auth._loopback_only_bind() is False
+        assert auth.is_local_request("127.0.0.1", via_proxy=False) is True
+    finally:
+        _reset_auth_cache()
+
+
+def test_main_baglanilan_hostu_YAYINLAR():
+    """main() gerçekten publish_bind_host'u çağırıyor mu (fonksiyon yetim kalmasın)."""
+    import ast
+    import inspect
+
+    import backend_service
+    tree = ast.parse(inspect.getsource(backend_service.main))
+    cagrilar = {n.func.id for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "publish_bind_host" in cagrilar, (
+        "main() publish_bind_host'u çağırmıyor → env gerçek bağlamayla ayrışır")
+
+
 def test_server_env_profili_TRUSTED_PROXIES_beyan_eder():
     """İkinci savunma katmanı: kod kuralından bağımsız olarak deploy/server.env loopback'i
     açıkça ters-proxy ilan etmeli. Biri kaldırılsa diğeri açığı kapatmaya devam eder."""
@@ -180,21 +230,106 @@ def test_auth_endpoints_do_not_block_event_loop(temp_app_data):
     src = inspect.getsource(auth_router)
     tree = ast.parse(src)
 
-    # Bloklayan auth_db çağrıları await'li olmalı (to_thread ile sarılı)
+    # MUTASYON TESTI BULGUSU — bu kontrol İKİ ayrı şekilde boş güvence veriyordu:
+    #
+    #  (1) Desen YALNIZ `db.register(...)` (ast.Call) biçimini arıyordu. Düzeltilmiş kod
+    #      `await asyncio.to_thread(db.register, ...)` yazar; orada `db.register` bir
+    #      ast.Attribute REFERANSIDIR, Call DEĞİL → döngü HİÇ eşleşmiyordu ve test hiçbir
+    #      assert çalıştırmadan yeşil geçiyordu. Yani test yalnız HATALI biçimi tanıyordu;
+    #      düzeltme uygulanınca kendi kendini devre dışı bıraktı.
+    #  (2) Eşleşse bile yalnız "bir Await içinde mi" bakıyordu; `await baska_sey(db.register)`
+    #      de Await'tir → to_thread silinse test yine geçerdi.
+    #
+    # Artık: her iki biçim de yakalanır, gerçek bir devir sarmalayıcısı aranır ve eşleşme
+    # SAYISI da doğrulanır (desen kayarsa test sessizce boşa düşmesin).
+    OFFLOAD = {"to_thread", "run_in_executor", "run_sync"}
+
+    def _devre_sarili(fn_node, hedef):
+        for outer in ast.walk(fn_node):
+            if not isinstance(outer, ast.Call) or outer is hedef:
+                continue
+            ad = outer.func.attr if isinstance(outer.func, ast.Attribute) else \
+                getattr(outer.func, "id", "")
+            if ad in OFFLOAD and hedef in ast.walk(outer):
+                return True
+        return False
+
     blocking = {"register", "verify", "email_exists", "reset_password"}
+    bulunan = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.AsyncFunctionDef):
             continue
         for sub in ast.walk(node):
-            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) \
-                    and sub.func.attr in blocking:
-                # Bu çağrı bir Await içinde mi? (to_thread(...) → await)
-                parents = [p for p in ast.walk(node)
-                           if isinstance(p, ast.Await) and sub in ast.walk(p)]
-                assert parents, (
-                    f"{node.name} içindeki bloklayan '{sub.func.attr}' çağrısı "
-                    f"asyncio.to_thread ile await edilmeli"
-                )
+            # Attribute'u yakala → hem `db.register(...)` (Call.func) hem de
+            # `to_thread(db.register, ...)` (bare referans) biçimini kapsar.
+            if not (isinstance(sub, ast.Attribute) and sub.attr in blocking):
+                continue
+            bulunan.append(f"{node.name}.{sub.attr}")
+            assert _devre_sarili(node, sub), (
+                f"{node.name} içindeki bloklayan '{sub.attr}' asyncio.to_thread/"
+                f"run_in_executor ile THREAD'E DEVREDİLMİYOR → PBKDF2 event-loop'ta çalışır"
+            )
+    assert len(bulunan) >= 3, (
+        f"bloklayan auth_db çağrısı bulunamadı (yalnız {bulunan}) — desen kaymış olabilir; "
+        "test hiçbir şeyi korumuyor demektir")
+
+
+def test_pbkdf2_gercekten_baska_THREADDE_calisiyor(temp_app_data, monkeypatch):
+    """ÇALIŞMA-ZAMANI kanıtı (AST'nin göremediği): kayıt/giriş sırasında PBKDF2'yi yapan
+    auth_db çağrısı event-loop thread'inde ÇALIŞMAMALI.
+
+    AST kontrolü kodun ŞEKLİNE bakar; bu test DAVRANIŞA bakar — çağrının hangi thread'de
+    koştuğunu kaydeder. İkisi birlikte hem `to_thread` silinmesini hem de anlamını yitiren
+    bir yeniden yazımı yakalar.
+    """
+    import asyncio
+    import threading
+
+    from servers import auth_router
+
+    kosan_threadler = {}
+    loop_thread_id = {}
+
+    class _SahteDB:
+        def register(self, email, password):
+            kosan_threadler["register"] = threading.get_ident()
+            return True, None
+
+        def email_exists(self, email):
+            kosan_threadler["email_exists"] = threading.get_ident()
+            return True
+
+        def verify(self, email, password):
+            kosan_threadler["verify"] = threading.get_ident()
+            return True
+
+        def reset_password(self, email, new_password):
+            kosan_threadler["reset_password"] = threading.get_ident()
+            return True, None
+
+        def get_user(self, email):
+            return {"email": email, "role": "vet"}
+
+    # _register_user, get_auth_db'yi FONKSİYON İÇİNDE `database.auth_db`'den import eder →
+    # auth_router üzerinde yamalamak ETKİSİZDİR (ilk denemede sahte DB hiç çağrılmadı).
+    import database.auth_db as _adb
+    monkeypatch.setattr(_adb, "get_auth_db", lambda: _SahteDB())
+
+    async def _kos():
+        loop_thread_id["id"] = threading.get_ident()
+        try:
+            await auth_router._register_user(
+                auth_router._AuthCredentials(email="a@b.com", password="Abcdef12"))
+        except Exception:
+            pass   # iş mantığı hatası önemsiz; ölçtüğümüz şey HANGİ THREAD
+
+    asyncio.run(_kos())
+
+    assert "register" in kosan_threadler, (
+        "auth_db.register hiç çağrılmadı — test kurulumu uçla eşleşmiyor, koruma YOK")
+    assert kosan_threadler["register"] != loop_thread_id["id"], (
+        "PBKDF2 (auth_db.register) EVENT-LOOP thread'inde çalıştı → kimliksiz istemci "
+        "arka arkaya /register atarak tüm API'yi yanıt veremez hale getirebilir")
 
 
 def test_non_ascii_code_does_not_500_and_counts_against_throttle():
