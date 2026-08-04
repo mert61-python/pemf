@@ -284,23 +284,57 @@ pub fn start_and_wait(
     })
 }
 
-/// Başlangıç-hatası teşhisi. stdout/stderr NUL'e yönlendirildi (drenajsız pipe deadlock'luyordu) →
-/// canlı çıktı yok; ayrıntı backend'in kendi günlüğünde. (stderr yine de doluysa son 20 satırı ekle.)
-fn read_tail(child: &mut Child) -> String {
-    use std::io::Read;
+/// Başlangıç-hatası teşhisi.
+///
+/// ⚠️ DENETİM 2026-08-04: bu fonksiyon `child.stderr`'i okuyordu — ama stderr `Stdio::null()`'a
+/// yönlendirilmiş durumda (drenajsız pipe TÜM servisi deadlock'luyordu; bkz. üstteki not), yani
+/// `child.stderr` HER ZAMAN `None` olur. Kod hiç çalışmayan bir dal taşıyordu ve kullanıcı backend
+/// her başlatılamadığında SADECE "günlüğe bak" cümlesini görüyordu — hatanın kendisini değil.
+/// Klinikte bu, cihazın neden açılmadığını kimsenin söyleyemediği bir durum demek. Artık
+/// backend'in GERÇEK günlüğünün son satırları hataya konur (port çakışması, eksik model, bozuk
+/// yapılandırma doğrudan görünür).
+fn read_tail(_child: &mut Child) -> String {
+    let home = std::env::var_os(if cfg!(target_os = "windows") { "USERPROFILE" } else { "HOME" })
+        .or_else(|| {
+            std::env::var_os(if cfg!(target_os = "windows") { "HOME" } else { "USERPROFILE" })
+        })
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let log = install::backend_log_path_with(|k| std::env::var(k).ok(), &home);
+    read_log_tail(&log, 20)
+}
+
+/// Günlük dosyasının SON `n` satırı + yol ipucu. Dosya yoksa/boşsa yalnız ipucu döner.
+/// Tamamını okumaz: sondan en fazla 64 KB alır (günlük 10 MB'a kadar büyüyebiliyor).
+fn read_log_tail(path: &Path, n: usize) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    const WINDOW: u64 = 64 * 1024;
     let mut buf = String::new();
-    if let Some(err) = child.stderr.as_mut() {
-        let mut raw = Vec::new();
-        let _ = err.take(64 * 1024).read_to_end(&mut raw);
-        buf = String::from_utf8_lossy(&raw).into_owned();
+    if let Ok(mut f) = std::fs::File::open(path) {
+        let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+        let start = len.saturating_sub(WINDOW);
+        if f.seek(SeekFrom::Start(start)).is_ok() {
+            let mut raw = Vec::new();
+            let _ = f.take(WINDOW).read_to_end(&mut raw);
+            buf = String::from_utf8_lossy(&raw).into_owned();
+            // Pencerenin ortasından başladıysak ilk (yarım) satırı at.
+            if start > 0 {
+                if let Some(i) = buf.find('\n') {
+                    buf = buf[i + 1..].to_string();
+                }
+            }
+        }
     }
     let tail: String = {
-        let lines: Vec<&str> = buf.lines().rev().take(20).collect();
-        lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+        let lines: Vec<&str> = buf.lines().rev().take(n).collect();
+        lines.into_iter().rev().collect::<Vec<_>>().join("
+")
     };
-    let hint = "Ayrıntı için backend günlüğü: %APPDATA%\\PEMF_GUI\\logs\\backend_service.log";
-    if tail.trim().is_empty() { hint.to_string() } else { format!("{tail}\n{hint}") }
+    let hint = format!("Ayrıntı için backend günlüğü: {}", path.display());
+    if tail.trim().is_empty() { hint } else { format!("{tail}
+{hint}") }
 }
+
 
 /// Kapanmadan ÖNCE bobinleri güvene al (TIBBİ GÜVENLİK). Hard-kill (child.kill = TerminateProcess)
 /// sinyal GÖNDERMEZ → backend'in graceful shutdown'ı (bobin STOP + kuyruk-flush) ÇALIŞMAZ ve
@@ -492,6 +526,61 @@ mod tests {
     fn seans_yokken_false_doner() {
         let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":false}"#);
         assert!(!session_active(p));
+    }
+
+    /// DENETİM 2026-08-04: `read_tail` `child.stderr`'i okuyordu ama stderr `Stdio::null()`
+    /// olduğu için o dal HİÇ çalışmıyordu → backend açılmadığında kullanıcı yalnız "günlüğe bak"
+    /// görüyor, hatanın kendisini göremiyordu. Artık gerçek günlüğün sonu hataya konuyor.
+    #[test]
+    fn gunluk_sonu_hataya_ekleniyor() {
+        let d = tempfile::tempdir().unwrap();
+        let log = d.path().join("backend_service.log");
+
+        // Dosya yoksa: yalnız yol ipucu (çökmemeli).
+        let yok = read_log_tail(&log, 20);
+        assert!(yok.contains("backend_service.log"), "yol ipucu yok: {yok}");
+
+        // Gerçek bir başlatma hatası senaryosu.
+        let mut icerik = String::new();
+        for i in 0..500 {
+            icerik.push_str(&format!("2026-08-04 10:00:{i:02} INFO [x] dolgu satiri {i}
+"));
+        }
+        icerik.push_str("2026-08-04 10:01:00 ERROR [uvicorn] [Errno 10048] port 8000 kullanimda
+");
+        std::fs::write(&log, &icerik).unwrap();
+
+        let t = read_log_tail(&log, 20);
+        assert!(
+            t.contains("10048") && t.contains("port 8000 kullanimda"),
+            "GERCEK hata satiri teshise girmedi: {t}"
+        );
+        assert!(t.contains("backend_service.log"), "yol ipucu kayboldu");
+        // Yalnız son n satır — tüm dosya değil.
+        assert!(!t.contains("dolgu satiri 0
+"), "tum dosya kopyalanmis");
+        assert!(t.lines().count() <= 22, "beklenenden fazla satir: {}", t.lines().count());
+    }
+
+    /// Günlük 10 MB'a kadar büyüyebiliyor; teşhis için tamamı OKUNMAMALI (sondan 64 KB pencere).
+    #[test]
+    fn cok_buyuk_gunluk_tamamen_okunmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let log = d.path().join("backend_service.log");
+        let mut big = String::with_capacity(3 * 1024 * 1024);
+        big.push_str("ILK-SATIR-BULUNMAMALI
+");
+        while big.len() < 3 * 1024 * 1024 {
+            big.push_str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+");
+        }
+        big.push_str("SON-SATIR-GORUNMELI
+");
+        std::fs::write(&log, &big).unwrap();
+
+        let t = read_log_tail(&log, 5);
+        assert!(t.contains("SON-SATIR-GORUNMELI"), "son satir alinmadi");
+        assert!(!t.contains("ILK-SATIR-BULUNMAMALI"), "3 MB'lik gunlugun tamami okunmus");
     }
 
     #[test]

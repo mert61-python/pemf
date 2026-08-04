@@ -22,6 +22,8 @@ use std::path::{Path, PathBuf};
 /// (`PROGRAMDATA` yoksa atlanır) → macOS/Linux'ta hiç devreye girmez. Kök #1 üç
 /// platformda da aynı çalışır ve en yüksek önceliklidir.
 pub const ENV_MODELS_DIR: &str = "PEMF_AI_MODELS_DIR";
+pub const ENV_LOG_DIR: &str = "PEMF_LOG_DIR";
+
 pub const ENV_DATA_DIR: &str = "PEMF_DATA_DIR";
 pub const ENV_API_PORT: &str = "PEMF_API_PORT";
 /// DENETİM P0: launcher backend'i yalnız model-kökü + port ile başlatıyordu. Backend `.env`
@@ -80,6 +82,21 @@ where
     } else {
         home.join(".local").join("share").join("PEMF_GUI")
     }
+}
+
+/// Backend'in günlük dosyası — `backend_service.py:80` ile AYNI kural:
+/// `PEMF_LOG_DIR` varsa o, yoksa `<app_data>/logs`.
+///
+/// DENETİM 2026-08-04: başlatma hatası teşhisinde kullanılır (bkz. `backend::read_tail`).
+/// `getenv` enjekte edilir → testler gerçek ortam değişkenlerine dokunmaz.
+pub fn backend_log_path_with<F>(getenv: F, home: &Path) -> PathBuf
+where
+    F: Fn(&str) -> Option<String> + Copy,
+{
+    if let Some(d) = getenv(ENV_LOG_DIR).filter(|v| !v.trim().is_empty()) {
+        return PathBuf::from(d.trim()).join("backend_service.log");
+    }
+    app_data_dir_with(getenv, home).join("logs").join("backend_service.log")
 }
 
 /// Backend süreci için ortam değişkenleri. `health_nonce` boşsa değişken hiç verilmez.
