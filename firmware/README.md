@@ -80,10 +80,14 @@ okuyucunun bunları "zaten hallolmuş" sanmaması.
 
 ### Süre sınırı tek başına bir güvenlik sınırı DEĞİL (#69)
 Bobinin `dur_min` süresi dolunca firmware duty'yi sıfırlar ve `g_start_ms[i]`'yi 0'lar. Ancak ISR'ın
-shadow→active bloğu "duty>0 ve `g_start_ms==0` ise süreyi başlat" der; host ise **ölü-adam
-watchdog'u (1500 ms) yüzünden aynı paketi 2 Hz göndermek zorundadır** → keep-alive her seferinde
-sayacı baştan başlatır. Yani firmware'in süre sınırı tedaviyi **hiçbir zaman sonlandırmaz**, döngüye
-sokar. Enerjilemeyi gerçekten sınırlayan tek mekanizma host tarafındaki
+shadow→active bloğu "duty>0 ve `g_start_ms==0` ise süreyi başlat" der.
+
+**Mekanizma (dikkat — sık yanlış anlatılıyor):** bobin çalışırken `g_start_ms` sıfır *değildir*,
+dolayısıyla keep-alive paketleri sayaca **dokunmaz**; süre normal işler ve dolduğunda auto-stop
+bobini kapatır. Sorun ondan *sonra* başlar: auto-stop `g_start_ms`'i 0'lar, host ise ölü-adam
+watchdog'u (1500 ms) yüzünden aynı paketi (duty>0) 2 Hz göndermeye **devam etmek zorundadır** →
+bir sonraki paket "kapalıyken açıldı" sayılıp süreyi baştan başlatır. Net sonuç: sınır tedaviyi
+**sonlandırmaz**, süre-dolar/yeniden-başlar döngüsüne sokar. Enerjilemeyi gerçekten sınırlayan tek mekanizma host tarafındaki
 `controllers/hardware_controller.py` → `_coil_deadline`'dır; **silinirse bobin süresiz enerjili
 kalır.** Regresyon kapısı: `tests/test_stm32_source_parity.py::test_host_tarafi_sure_deadlineI_hala_uygulaniyor`.
 
@@ -99,9 +103,12 @@ donarsa tam-köprü tek yönde DC olarak enerjili kalır (`PEMF_ForceAllCoilOutp
 çağrılırsa yardımcı olur). Doğru çözüm, BOR'u option byte'tan `BOR_LEVEL_3`'e almak ve PVD ISR'ında
 `PEMF_ForceAllCoilOutputsLow()` çağırmaktır.
 
-Burada kod eklenmedi çünkü bu depoda **gerçek CubeMX HAL başlıkları yok**; derleme doğrulaması
-bir stub-HAL ile yapılıyor (aşağıdaki bölüm) ve o stub `HAL_PWR_ConfigPVD` / `HAL_FLASHEx_OBProgram`
-imzalarını **doğrulayamaz**. Denetlenmemiş bir güç-yönetimi çağrısı eklemek, doğrulanmış bir
+Burada kod eklenmedi çünkü bu depoda **gerçek CubeMX HAL başlıkları yok**. Derleme doğrulaması,
+denetim sırasında geçici olarak yazılan asgari bir **stub-HAL** ile yapıldı (`arm-none-eabi-gcc
+-mcpu=cortex-m4 -O2 -Wall -Wextra -Wsign-compare` → 0 uyarı). ⚠️ O stub depoda DEĞİLDİR ve
+bilerek öyle bırakıldı: sahte bir HAL'i depoya koymak, gerçek API yüzeyiyle karıştırılma riski
+taşır. Stub yalnızca *bizim kodumuzun kendi iç tutarlılığını* sınar; `HAL_PWR_ConfigPVD` /
+`HAL_FLASHEx_OBProgram` gibi çağrıların imzalarını **doğrulayamaz**. Denetlenmemiş bir güç-yönetimi çağrısı eklemek, doğrulanmış bir
 düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırakıldı.
 
 ## ⚠️ Dikkat

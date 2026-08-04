@@ -841,6 +841,11 @@ static void Coil_StartPwmOutputs(void) {
  * Not: dead-time A/B geçiş anında NOP döngüsüyle uygulanır (süre ÖLÇÜLMEMİŞ).
  *
  * CPU yükü: ~120 cycle / 3360 available = ~%3.6
+ *   ⚠️ Bu rakam KARARLI-DURUM (her tick koşan) yolu içindir: tick/slew/BSRR bloğu.
+ *   `g_shadow.pending` uygulanan blok (tpp + duty-tick + faz-tick + ref_ms hizalaması, bobin
+ *   başına float bölme) BUNA DAHİL DEĞİLDİR ve belirgin biçimde daha ağırdır — ama YALNIZCA
+ *   yeni bir parametre seti geldiğinde (host 2 Hz keep-alive) koşar, 50 kHz'de değil.
+ *   Ölçülmemiştir; DDS zamanlaması şüpheli olursa önce burası ölçülmeli.
  * ============================================================================
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -916,11 +921,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       /* Süre takibi resetlemesi (yeni komut geldiğinde)
        *
        * ⚠️ DENETİM 2026-08-04 (#69) — BU SAYAÇ TEK BAŞINA BİR GÜVENLİK SINIRI DEĞİLDİR.
-       * Aşağıdaki "kapalıyken açıldıysa başlat" kuralı, `dur_min` dolup bobin otomatik
-       * kapandıktan SONRA gelen paketleri de "yeni başlatma" sayar (auto-stop `g_start_ms[i]`'yi
-       * 0'lar). Host ise ÖLÜ-ADAM watchdog'u (1500 ms) yüzünden aynı paketi 2 Hz ile GÖNDERMEK
-       * ZORUNDADIR — yani keep-alive her seferinde sayacı BAŞTAN başlatır ve firmware'in süre
-       * sınırı tedaviyi hiçbir zaman SONLANDIRMAZ, yalnızca döngüye sokar.
+       *
+       * DİKKAT (aynı denetimde düzeltilen yanlış anlatım): keep-alive sayacı HER SEFERİNDE
+       * sıfırlamaz. Bobin çalışırken `g_start_ms[i]` sıfır DEĞİLDİR, dolayısıyla gelen keep-alive
+       * paketleri sayaca DOKUNMAZ — süre normal işler ve dolduğunda auto-stop bobini kapatır.
+       * Sorun ONDAN SONRA başlar: auto-stop `g_start_ms[i]`'yi 0'lar; host ise ÖLÜ-ADAM
+       * watchdog'u (1500 ms) yüzünden AYNI paketi (duty>0) 2 Hz göndermeye DEVAM ETMEK
+       * zorundadır → bir sonraki paket "kapalıyken açıldı" sayılıp süreyi BAŞTAN başlatır.
+       * Net sonuç: sınır tedaviyi SONLANDIRMAZ, süre-dolar/yeniden-başlar DÖNGÜSÜNE sokar.
        *
        * Enerjilemeyi gerçekten sınırlayan TEK mekanizma host tarafındadır:
        * controllers/hardware_controller.py → `_coil_deadline` (bobin-başı monotonic deadline).
@@ -1355,7 +1363,10 @@ void SystemClock_Config(void) {
  * durursa GPIO'lar periyot ortasında DONAR ve IN_A o an HIGH ise tam-köprü tek yönde DC olarak
  * enerjili kalır. Backend'in gönderdiği sıfır-duty paketleri işlenmez, _emergency_stop_all STM
  * tarafında etkisizdir. Bu fonksiyon donanıma en yakın, kesme gerektirmeyen kesme yoludur.
- * ISR-güvenli ve yeniden-girişli: yalnız BSRR yazar.
+ * ISR-güvenli ve yeniden-girişli: BSRR'ye yazar ve `g_prev_state[i]`'yi IDLE'a (2) çeker.
+ * (DENETİM 2026-08-04: eskiden "yalnız BSRR yazar" yazıyordu; g_prev_state sıfırlaması bu
+ * denetimde eklendi — bkz. gövdedeki not. Yazılan değer sabit (2U) olduğu için ISR ile
+ * araya girse bile sonuç aynıdır, yani yeniden-girişlilik korunur.)
  */
 void PEMF_ForceAllCoilOutputsLow(void) {
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
