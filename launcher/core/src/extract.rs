@@ -27,9 +27,44 @@ const MAX_TOTAL_UNCOMPRESSED: u64 = 8 * 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 300_000;
 const MAX_SYMLINK_LEN: u64 = 4096;
 
+/// Profil (model) zip'inin EZMESİ YASAK olan üst-düzey girdiler.
+///
+/// DENETİM 2026-08-04 (#104): profil paketleri `install_root`'a açılır ve yorum onların
+/// `ai_models/` önekiyle geldiğini VARSAYAR — ama kod bunu DOĞRULAMAZ. Bir profil zip'indeki
+/// `runtime/PEMF_Backend/PEMF_Backend.exe` girdisi zip-slip korumasını tamamen MEŞRU geçer
+/// (kök altındadır) ve base.zip'in SHA256 ile DOĞRULANMIŞ backend ikilisini sessizce EZER;
+/// açıldıktan sonra o ağacı yeniden doğrulayan hiçbir mekanizma yoktur. `installed_profiles.json`
+/// ve `backend.port` da aynı şekilde ezilebilir (E-stop adresi!).
+/// Katı bir `ai_models/` ÖNEK ZORUNLULUĞU meşru bir paketi kırabileceğinden, hedefli yasak-liste.
+const PROFILE_FORBIDDEN_TOP: [&str; 5] = [
+    "runtime",
+    "cache",
+    "installed_profiles.json",
+    "pending_install.json",
+    "backend.port",
+];
+
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
-/// Açılan dosya sayısını döndürür.
+/// Açılan dosya sayısını döndürür. (Bütçe bu çağrıya özeldir — çok-paketli kurulumda
+/// `extract_zip_budgeted` kullanın.)
 pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
+    let mut used = 0u64;
+    extract_zip_budgeted(archive, dest, &mut used, false)
+}
+
+/// Açılım bütçesini ÇAĞRILAR ARASINDA paylaşan sürüm.
+///
+/// DENETİM 2026-08-04 (#110): `total_bytes` her `extract_zip` çağrısında SIFIRLANIYORDU; oysa
+/// `flow::install_profiles` base + 3 profil için 4 AYRI çağrı yapar → belgelenen 8 GB tavanı
+/// pratikte 32 GB'dı (sabitin kendi gerekçesi ise "base ~600MB + ai_models ~2GB" diyerek
+/// KURULUM BÜTÜNÜ üzerinden akıl yürütüyor). `used` artık çağıran tarafından taşınır.
+/// `is_profile = true` → `PROFILE_FORBIDDEN_TOP` uygulanır (bkz. #104).
+pub fn extract_zip_budgeted(
+    archive: &Path,
+    dest: &Path,
+    used: &mut u64,
+    is_profile: bool,
+) -> Result<usize, ExtractError> {
     let file = fs::File::open(archive)?;
     let mut zip = zip::ZipArchive::new(file)?;
     fs::create_dir_all(dest)?;
@@ -39,7 +74,6 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
     }
 
     let mut written = 0usize;
-    let mut total_bytes: u64 = 0;
     // #102: yazmadan once hedef dizinin GERCEK konumunu dogrularken ayni dizin icin
     // canonicalize'i tekrarlamamak icin son dogrulanan ebeveyn (girdiler gruplu gelir).
     let mut last_checked_parent: Option<std::path::PathBuf> = None;
@@ -54,6 +88,18 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
         };
         if !is_safe_relative(&rel) {
             return Err(ExtractError::PathEscape(raw_name));
+        }
+        // #104: profil paketi, DOĞRULANMIŞ runtime/ ağacını veya launcher durum dosyalarını EZEMEZ.
+        if is_profile {
+            if let Some(Component::Normal(top)) = rel.components().find(|c| matches!(c, Component::Normal(_))) {
+                if let Some(t) = top.to_str() {
+                    if PROFILE_FORBIDDEN_TOP.contains(&t) {
+                        return Err(ExtractError::PathEscape(format!(
+                            "{raw_name} (profil paketi '{t}' altına yazamaz — doğrulanmış runtime/durum dosyası)"
+                        )));
+                    }
+                }
+            }
         }
 
         let out = dest.join(&rel);
@@ -71,6 +117,14 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
             // sürükleyebilir); gerçek hedefler PATH_MAX (<4KiB) altındadır.
             let mut target = String::new();
             (&mut entry).take(MAX_SYMLINK_LEN).read_to_string(&mut target)?;
+            // #110: symlink gövdeleri bütçeye HİÇ sayılmıyordu → MAX_ENTRIES(300k) ×
+            // MAX_SYMLINK_LEN(4KiB) ≈ 1.2 GB bütçe-dışı yazım mümkündü.
+            *used = used.saturating_add(target.len() as u64);
+            if *used > MAX_TOTAL_UNCOMPRESSED {
+                return Err(ExtractError::ResourceLimit(
+                    "açılım boyut bütçesi aşıldı (symlink)".to_string(),
+                ));
+            }
             create_symlink(&target, &out, dest, &raw_name)?;
             written += 1;
             continue;
@@ -98,10 +152,10 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
         let mut target = fs::File::create(&out)?;
         // Toplam açılım bütçesi: yalan-başlıklı zip-bomb'a karşı GERÇEK yazılan byte'ı sınırla
         // (kalan bütçe + 1 alıp aşımı yakala). Meşru paket 8GB'ı aşmaz.
-        let remaining = MAX_TOTAL_UNCOMPRESSED.saturating_sub(total_bytes);
+        let remaining = MAX_TOTAL_UNCOMPRESSED.saturating_sub(*used);
         let n = io::copy(&mut (&mut entry).take(remaining + 1), &mut target)?;
-        total_bytes = total_bytes.saturating_add(n);
-        if total_bytes > MAX_TOTAL_UNCOMPRESSED {
+        *used = used.saturating_add(n);
+        if *used > MAX_TOTAL_UNCOMPRESSED {
             drop(target);
             let _ = fs::remove_file(&out);
             return Err(ExtractError::ResourceLimit(
@@ -516,6 +570,63 @@ mod tests {
             "junction uzerinden kok DISINA yazma ENGELLENMEDI: {err:?}"
         );
         assert!(!disari.join("kacak.txt").exists(), "dosya kok disina yazilmis");
+    }
+
+    /// #104: profil (model) paketi `install_root`'a açılır → DOĞRULANMIŞ `runtime/` ağacını ya da
+    /// launcher durum dosyalarını EZEBİLİYORDU. `backend.port` ezilirse E-stop adresi de kaybolur.
+    #[test]
+    fn profil_paketi_runtime_ve_durum_dosyalarini_ezemez() {
+        for kotu in [
+            "runtime/PEMF_Backend/PEMF_Backend.exe",
+            "installed_profiles.json",
+            "backend.port",
+            "cache/base.zip",
+            "pending_install.json",
+        ] {
+            let (_d, zip_path) = build_zip(&[(kotu, b"sahte" as &[u8])]);
+            let out = tempfile::tempdir().unwrap();
+            let mut used = 0u64;
+            let err = extract_zip_budgeted(&zip_path, out.path(), &mut used, true).unwrap_err();
+            assert!(
+                matches!(err, ExtractError::PathEscape(_)),
+                "profil paketi '{kotu}' yazabildi: {err:?}"
+            );
+        }
+
+        // MEŞRU profil içeriği (`ai_models/...`) ve BASE paketi (is_profile=false) etkilenmemeli.
+        let (_d, ok_zip) = build_zip(&[("ai_models/ai_hub/em_kedi/m.onnx", b"x" as &[u8])]);
+        let out = tempfile::tempdir().unwrap();
+        let mut used = 0u64;
+        assert_eq!(extract_zip_budgeted(&ok_zip, out.path(), &mut used, true).unwrap(), 1);
+
+        let (_d2, base_zip) = build_zip(&[("runtime/PEMF_Backend/x", b"y" as &[u8])]);
+        let out2 = tempfile::tempdir().unwrap();
+        let mut used2 = 0u64;
+        assert_eq!(
+            extract_zip_budgeted(&base_zip, out2.path(), &mut used2, false).unwrap(),
+            1,
+            "base paketi runtime/ altina yazabilmeli"
+        );
+    }
+
+    /// #110: açılım bütçesi her çağrıda SIFIRLANIYORDU → base + 3 profil için belgelenen 8 GB
+    /// tavanı pratikte 32 GB'dı. Artık çağıran tarafından TAŞINIR.
+    #[test]
+    fn acilim_butcesi_cagrilar_arasinda_tasinir() {
+        let (_d, z) = build_zip(&[("a.bin", b"0123456789" as &[u8])]);
+        let mut used = 0u64;
+        let out1 = tempfile::tempdir().unwrap();
+        extract_zip_budgeted(&z, out1.path(), &mut used, false).unwrap();
+        let after_first = used;
+        assert_eq!(after_first, 10, "yazilan bayt butceye islenmedi");
+
+        let out2 = tempfile::tempdir().unwrap();
+        extract_zip_budgeted(&z, out2.path(), &mut used, false).unwrap();
+        assert_eq!(used, 20, "ikinci cagri butceyi SIFIRLADI (paylasim yok)");
+
+        // Eski `extract_zip` sarmalayicisi hala calisir (cagri-basi butce).
+        let out3 = tempfile::tempdir().unwrap();
+        assert_eq!(extract_zip(&z, out3.path()).unwrap(), 1);
     }
 
     #[test]

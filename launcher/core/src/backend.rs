@@ -600,12 +600,25 @@ mod tests {
     }
 
     /// Kimse dinlemiyorsa zaman aşımına düşmeli (sessizce "hazır" DEMEMELİ).
+    ///
+    /// DENETİM 2026-08-04 (test kararlılığı): bu test EFEMERAL bir portu serbest bırakıp
+    /// "artık kimse dinlemiyor" VARSAYIYORDU. Aynı süreçteki diğer testler port 0 ile sunucu
+    /// açtığı için işletim sistemi tam o portu ONLARA verebiliyor ve test SAHTE-KIRMIZI oluyordu
+    /// (gerçek regresyon değil). Flaky bir test, gerçek bir kırılmayı gürültüde saklar → portun
+    /// gerçekten boş olduğunu DOĞRULA, kapılmışsa başka bir port dene.
     #[test]
     fn dinleyen_yoksa_hazir_demez() {
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener); // port serbest, kimse dinlemiyor
-        assert!(!wait_for_health(port, Duration::from_secs(2), None));
+        for _ in 0..8 {
+            let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+            let port = listener.local_addr().unwrap().port();
+            drop(listener); // port serbest bırakıldı
+            if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                continue; // yarış: başka bir test bu portu kapmış → yeni port dene
+            }
+            assert!(!wait_for_health(port, Duration::from_secs(2), None));
+            return;
+        }
+        panic!("gercekten bos bir port bulunamadi (8 deneme)");
     }
 
     /// 200 DIŞI yanıt hazır sayılmamalı (404 veren başka bir servis olabilir).

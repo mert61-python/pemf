@@ -201,15 +201,20 @@ pub fn install_profiles(
         on(Progress::Extracting { what: "eski sürüm temizleniyor".into() });
         fs::remove_dir_all(&rt)?;
     }
+    // #110: açılım bütçesi TÜM kurulum boyunca PAYLAŞILIR. Eskiden her `extract_zip` çağrısı
+    // sayacı sıfırlıyordu → belgelenen 8 GB tavanı base + 3 profil için pratikte 32 GB'dı.
+    let mut extract_budget: u64 = 0;
     on(Progress::Extracting { what: "base".into() });
-    extract::extract_zip(&runtime_zip, &rt)?;
+    extract::extract_zip_budgeted(&runtime_zip, &rt, &mut extract_budget, false)?;
 
     // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
     for (name, pkg) in &model_pkgs {
         let model_zip = ensure_package(pkg, &cache, name, on, control)?;
         on(Progress::Extracting { what: (*name).clone() });
-        extract::extract_zip(&model_zip, install_root)?;
+        // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum
+        // dosyalarını EZEMEZ (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
+        extract::extract_zip_budgeted(&model_zip, install_root, &mut extract_budget, true)?;
         // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir).
         // ÖNEMLİ: işaretlemeyi döngü SONUNA bırakma. Çoklu-profil kurulumunda kullanıcı
         // sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda iptal),
