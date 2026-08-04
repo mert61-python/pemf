@@ -148,7 +148,7 @@ def _safe_stop_outputs(api_server_module) -> None:
             import time as _t
             _q = getattr(getattr(api_server_module.state, "core", None), "_hw_send_queue", None)
             if _q is not None:
-                _deadline = _t.time() + 1.5
+                _deadline = _t.time() + _STM_FLUSH_BUDGET_S
                 while not _q.empty() and _t.time() < _deadline:
                     _t.sleep(0.05)
     except Exception:
@@ -180,7 +180,7 @@ def _safe_stop_outputs(api_server_module) -> None:
                                      name=f"shutdown-estop-{c}") for c in range(6, 9)]
         for _t in _threads:
             _t.start()
-        _deadline = time.monotonic() + 3.0     # toplam güvenli-durdurma bütçesi
+        _deadline = time.monotonic() + _ESP_STOP_BUDGET_S  # ESP durdurma bütçesi
         for _t in _threads:
             _t.join(timeout=max(0.0, _deadline - time.monotonic()))
         if any(_t.is_alive() for _t in _threads):
@@ -437,6 +437,13 @@ def _start_update_checker_safe(logger: logging.Logger) -> None:
 #
 # 8 sn: uçuşan HTTP istekleri bitsin ama kapanış DAİMA ilerlesin. Bütçe:
 #   8 sn (graceful) + ~3 sn (_shutdown güvenli-durdurma) = ~11 sn < NSSM AppStopMethodConsole 15 sn.
+# ⚠️ DENETİM 2026-08-04 (P3): güvenli-durdurma bütçeleri koda GÖMÜLÜ sayılardı ve
+# `test_graceful_shutdown_nssm_butcesine_sigiyor` bunları ELLE 3.0 diye kopyalamıştı — YANLIŞ:
+# gerçek toplam 1.5 (STM kuyruk flush) + 3.0 (ESP stop) = 4.5 sn. Test yanlış bir marj
+# doğruluyordu. Sabitler adlandırıldı; test artık BURADAN türetiyor (kopya sürüklenmesi biter).
+_STM_FLUSH_BUDGET_S = 1.5
+_ESP_STOP_BUDGET_S = 3.0
+_SAFE_STOP_BUDGET_S = _STM_FLUSH_BUDGET_S + _ESP_STOP_BUDGET_S
 _GRACEFUL_SHUTDOWN_TIMEOUT_S = 8
 
 

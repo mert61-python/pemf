@@ -167,14 +167,42 @@ async def health_check(request: Request):
     # daima 127.0.0.1'den sorar.
     _health_nonce = os.getenv("PEMF_HEALTH_NONCE", "").strip()
     _peer = (request.client.host if request.client else "") or ""
-    _loopback_only = (not _via_proxy) and _peer in ("127.0.0.1", "::1")
-
-    # Aktif seans bayrağı — okuma ASLA health'i düşürmemeli (fail-safe: bilinmiyorsa "aktif" say,
-    # böylece launcher şüphede kalırsa tedaviyi kesmek yerine güncellemeyi erteler).
+    # ⚠️ DENETİM 2026-08-04 (P3): loopback kontrolü ham soket-IP'siydi. Ama CLOUDFLARED DE
+    # 127.0.0.1'DEN BAĞLANIR — tünelden gelen bir istek proxy başlığı taşımıyorsa `_via_proxy`
+    # False kalır ve nonce + aktif-seans bilgisi TÜNELE SIZARDI. `is_local_request` bu tuzağa
+    # karşı `_trusted_proxies()`i ayrıca eler; burada da elemek gerekiyordu.
+    # NOT: `is_local_request`'in KENDİSİ kullanılamaz — o LAN'ı da yerel sayar, oysa bu iki alan
+    # için kasıtlı olarak YALNIZ loopback yeterlidir (launcher daima 127.0.0.1'den sorar).
+    _peer_proxy = False
     try:
-        _session_active = bool(_api._active_session.get("is_active"))
+        import ipaddress as _ipa
+
+        from servers.auth import _trusted_proxies as _tp
+
+        _ip = _ipa.ip_address(_peer.strip())
+        _peer_proxy = any(_ip in net for net in _tp())
     except Exception:
-        _session_active = True
+        _peer_proxy = False
+    _loopback_only = (not _via_proxy) and (not _peer_proxy) and _peer in ("127.0.0.1", "::1")
+
+    # Aktif tedavi bayrağı — okuma ASLA health'i düşürmemeli (fail-safe: bilinmiyorsa "aktif" say,
+    # böylece launcher şüphede kalırsa tedaviyi kesmek yerine güncellemeyi erteler).
+    #
+    # ⚠️ DENETİM 2026-08-04 (P3): burada YALNIZ `_active_session["is_active"]` okunuyordu. Oysa
+    # AYNI tehlike için olgun bir kontrol zaten var: `update_manager._has_active_treatment()` —
+    # o, resmi seans DIŞINDA sürülen bobinleri de (`/api/coil/{id}/control`, AI Pro kare akışı)
+    # AKTİF sayar ve fail-closed'dur. Ayrışma somut bir boşluk yaratıyordu: veteriner bobinleri
+    # manuel sürerken `is_active` False olur → launcher "seans yok" deyip SESSİZ güncellemeyi
+    # sürdürür → NSIS `taskkill` → bobinler HASTANIN ÜZERİNDE kontrolcüsüz kalır.
+    # Tek kaynağa bağlandı. Yalnız loopback için hesaplanır (dışarıya zaten verilmiyor).
+    _session_active = True
+    if _loopback_only:
+        try:
+            from servers.update_manager import _has_active_treatment
+
+            _session_active = bool(_has_active_treatment())
+        except Exception:
+            _session_active = True
 
     return {
         "status": "online",

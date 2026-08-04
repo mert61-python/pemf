@@ -78,10 +78,15 @@ def _ensure_dir_hardened(d: Path) -> None:
     global _dir_hardened
     if _dir_hardened:
         return
-    _dir_hardened = True
+    # ⚠️ DENETİM 2026-08-04 (P3): bayrak DENEMEDEN ÖNCE True yapılıyordu → tek bir geçici
+    # `icacls` hatası (dosya kilidi, AV, geçici izin sorunu) sertleştirmeyi SÜREÇ ÖMRÜ BOYUNCA
+    # kapatıyordu; oysa asıl korunmak istenen `_save()` yolu her yazımda tekrar denenebilir.
+    # Bayrak artık YALNIZ BAŞARIDA set edilir → sonraki yazımlar yeniden dener.
     try:
         from utils.file_acl import lock_down_dir
-        if not lock_down_dir(d, keep_current_user=True):
+        if lock_down_dir(d, keep_current_user=True):
+            _dir_hardened = True
+        else:
             logger.warning(
                 "SIR DIZINI ACL kilidi UYGULANAMADI (%s) — .tmp yazim penceresinde duz-metin "
                 "sirlar yerel Users'a okunur kalabilir ve eski-kaynak dosyalari onceden "

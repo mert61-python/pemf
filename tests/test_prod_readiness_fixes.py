@@ -205,11 +205,35 @@ def test_uvicorn_graceful_shutdown_tavani_ayarli():
 def test_graceful_shutdown_nssm_butcesine_sigiyor():
     """graceful + güvenli-durdurma toplamı NSSM AppStopMethodConsole (15 sn) altında kalmalı;
     aşarsa NSSM süreci SERT öldürür ve bobin-STOP yarıda kesilir."""
+    import re
+    from pathlib import Path
+
     import backend_service as bs
 
-    SAFE_STOP_BUDGET_S = 3.0   # backend_service._safe_stop_outputs toplam bütçesi
-    NSSM_STOP_BUDGET_S = 15.0  # scripts/setup_services.ps1: AppStopMethodConsole 15000
-    assert bs._GRACEFUL_SHUTDOWN_TIMEOUT_S + SAFE_STOP_BUDGET_S < NSSM_STOP_BUDGET_S
+    # ⚠️ DENETİM 2026-08-04 (P3): iki sayı da testte ELLE kopyalanmıştı ve `SAFE_STOP` değeri
+    # YANLIŞTI (3.0 yazıyordu; gerçek toplam 1.5 STM-flush + 3.0 ESP-stop = 4.5). Yani test
+    # olmayan bir marjı doğruluyordu. Artık İKİSİ DE kaynaktan okunuyor — kopya sürüklenemez.
+    toplam = bs._GRACEFUL_SHUTDOWN_TIMEOUT_S + bs._SAFE_STOP_BUDGET_S
+
+    ps1 = Path(__file__).resolve().parent.parent / "scripts" / "setup_services.ps1"
+    assert ps1.exists(), f"setup_services.ps1 yok: {ps1}"
+    # YORUM satirlarini ele: dosyada aciklama olarak "AppStopMethodConsole 15s" gecıyor ve
+    # naif bir regex onu yakalayip 15 ms sanıyordu (ilk yazimda tam olarak bu oldu).
+    kod = "\n".join(
+        satir
+        for satir in ps1.read_text(encoding="utf-8", errors="replace").splitlines()
+        if not satir.strip().startswith("#")
+    )
+    m = re.search(r"AppStopMethodConsole\s+(\d{3,})", kod)
+    assert m, "AppStopMethodConsole degeri setup_services.ps1'de bulunamadi — parite kirilmis olabilir"
+    nssm_s = int(m.group(1)) / 1000.0
+    assert nssm_s >= 1.0, f"NSSM stop butcesi anlamsiz okundu ({nssm_s} sn) — regex yanlis satiri yakalamis"
+
+    assert toplam < nssm_s, (
+        f"kapanis butcesi NSSM sinirini asiyor: graceful({bs._GRACEFUL_SHUTDOWN_TIMEOUT_S}) + "
+        f"safe_stop({bs._SAFE_STOP_BUDGET_S}) = {toplam} sn >= NSSM {nssm_s} sn. NSSM sureci SERT "
+        f"oldurur ve bobin-STOP yarida kesilir."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -271,21 +295,37 @@ def test_health_nonce_yokken_alan_None(monkeypatch):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _health_with_session(active: bool, headers: dict | None = None):
+def _health_with_session(active: bool, headers: dict | None = None, *, snapshot=None):
+    """DENETİM 2026-08-04 (P3): bayrak artık `_active_session` yerine TEK KAYNAK olan
+    `update_manager._has_active_treatment()`ten geliyor — o, resmi seans DIŞINDA sürülen
+    bobinleri de aktif sayar ve fail-closed'dur. Test o kaynağı sürer.
+
+    `snapshot` verilirse `_build_ws_snapshot` onunla değiştirilir → gerçek kod yolu (seans +
+    koşan bobin taraması) uçtan uca koşar."""
     from fastapi.testclient import TestClient
 
     from servers import api_server
 
-    prev = dict(api_server._active_session)
-    # IN-PLACE guncelle: `_active_session` session_state ile PAYLASILAN dict kimligidir,
-    # rebind edilirse baglanti kopar (bkz. api_server.py B-2.2 notu).
-    api_server._active_session["is_active"] = active
+    if snapshot is not None:
+        onceki = getattr(api_server, "_build_ws_snapshot", None)
+        api_server._build_ws_snapshot = lambda: snapshot
+    else:
+        onceki = None
+        from servers import update_manager as um
+
+        um_prev = um._has_active_treatment
+        um._has_active_treatment = lambda: active
     try:
         with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
             return c.get("/api/health", headers=headers or {}).json()
     finally:
-        api_server._active_session.clear()
-        api_server._active_session.update(prev)
+        if snapshot is not None:
+            if onceki is not None:
+                api_server._build_ws_snapshot = onceki
+        else:
+            from servers import update_manager as um2
+
+            um2._has_active_treatment = um_prev
 
 
 def test_health_aktif_seansi_loopbacke_bildirir():
@@ -303,3 +343,40 @@ def test_health_seans_bilgisi_tunele_SIZDIRILMAZ():
     """'Şu an tedavi sürüyor' bilgisi auth-muaf uçtan dışarı çıkmamalı."""
     body = _health_with_session(True, {"cf-connecting-ip": "203.0.113.10"})
     assert body.get("sessionActive") is None, "aktif-seans bilgisi UZAK istemciye sizdi"
+
+
+def test_health_seans_DISINDA_kosan_bobini_de_aktif_sayar():
+    """⚠️ P3: bayrak yalnız `_active_session["is_active"]`e bakıyordu.
+
+    Veteriner bobinleri RESMİ SEANS OLMADAN sürerken (`/api/coil/{id}/control`, AI Pro kare
+    akışı) `is_active` False olur → launcher "seans yok" deyip SESSİZ güncellemeyi sürdürür →
+    NSIS `taskkill` → bobinler HASTANIN ÜZERİNDE kontrolcüsüz kalır. Artık koşan bobin de sayılır.
+    """
+    snap = {"activeTreatment": {"isActive": False}, "coils": [{"running": True}]}
+    body = _health_with_session(False, snapshot=snap)
+    assert body.get("sessionActive") is True, (
+        "seans DISINDA kosan bobin 'aktif' sayilmadi — sessiz guncelleme bobinleri "
+        "kontrolcusuz birakir"
+    )
+
+
+def test_health_bobin_de_seans_da_yokken_guncellemeye_izin_verir():
+    snap = {"activeTreatment": {"isActive": False}, "coils": [{"running": False}]}
+    assert _health_with_session(False, snapshot=snap).get("sessionActive") is False
+
+
+def test_health_aktif_seans_bayragi_tunel_proxysinden_SIZDIRILMAZ():
+    """cloudflared 127.0.0.1'den baglanir; beyan edilmis proxy elenmezse bilgi tunele sizar."""
+    import os
+
+    from servers import auth as _auth
+
+    os.environ["PEMF_TRUSTED_PROXIES"] = "127.0.0.1"
+    _auth._TRUSTED_PROXIES = None  # onbellegi dusur
+    try:
+        body = _health_with_session(True)
+        assert body.get("sessionActive") is None, "aktif-tedavi bilgisi BEYAN EDILMIS proxy'ye sizdi"
+        assert body.get("launcherNonce") is None, "nonce BEYAN EDILMIS proxy'ye sizdi"
+    finally:
+        os.environ.pop("PEMF_TRUSTED_PROXIES", None)
+        _auth._TRUSTED_PROXIES = None
