@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -129,9 +130,51 @@ def _private_temp_path(filename: str) -> Path:
     mkdtemp rastgele adli + yalniz olusturan hesaba acik ACL'li bir dizin verir → hem tahmin
     hem onceden-olusturma saldirisi kapanir. Cevredeki OTA sertlestirmesi (host-pin, ZORUNLU
     SHA256, Authenticode, aktif-tedavi yeniden-kontrolu) korunur.
-    NOT: dizin bilerek silinmez — installer surec olarak devam eder (ve servisi durdurabilir).
+    NOT: installer BASARIYLA BASLATILDIYSA dizin bilerek silinmez — installer surec olarak
+    devam eder (ve servisi durdurabilir), dosyayi altindan cekemeyiz. Diger TUM yollarda
+    (SHA uyusmadi / imza kurcalanmis / tedavi basladi / indirme hatasi) dizin
+    `_discard_temp_dir` ile silinir; aksi halde her basarisiz guncelleme denemesi
+    %TEMP%'e yetim bir `pemf_upd_*` dizini birakir.
     """
     return Path(tempfile.mkdtemp(prefix="pemf_upd_")) / filename
+
+
+def _discard_temp_dir(dest) -> None:
+    """`_private_temp_path`'in yarattigi ozel dizini komple sil (installer BASLATILMADIYSA)."""
+    if dest is None:
+        return
+    try:
+        parent = Path(dest).parent
+        if parent.name.startswith("pemf_upd_"):
+            shutil.rmtree(parent, ignore_errors=True)
+    except Exception:
+        logger.debug("gecici guncelleme dizini silinemedi", exc_info=True)
+
+
+def sweep_stale_update_temp(max_age_s: float = 6 * 3600) -> int:
+    """Eski `pemf_upd_*` dizinlerini topla (kendi kendini onaran temizlik).
+
+    Gecmiste birakilmis yetimler (ve baska bir surecten kalanlar) burada temizlenir.
+    Yalnizca YASI buyuk olanlara dokunur → su an indirme yapan baska bir surecin
+    dizinini silmez. Guncelleme kontrol dongusunun basinda bir kez cagrilir.
+    """
+    silinen = 0
+    try:
+        kok = Path(tempfile.gettempdir())
+        simdi = time.time()
+        for d in kok.glob("pemf_upd_*"):
+            try:
+                if d.is_dir() and (simdi - d.stat().st_mtime) > max_age_s:
+                    shutil.rmtree(d, ignore_errors=True)
+                    if not d.exists():
+                        silinen += 1
+            except Exception:
+                continue
+    except Exception:
+        logger.debug("gecici dizin suepuermesi basarisiz", exc_info=True)
+    if silinen:
+        logger.info("Eski guncelleme gecici dizini temizlendi: %d", silinen)
+    return silinen
 
 
 def _safe_ver(v) -> str:
@@ -405,6 +448,7 @@ def apply_update() -> dict:
     # baslatildiysa guard ACIK KALMALI (surec zaten yeniden baslatilacak); yalnizca BASARISIZ
     # yollarda serbest birak.
     _installer_launched = False
+    dest = None
     try:
         dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
@@ -460,6 +504,9 @@ def apply_update() -> dict:
     finally:
         if not _installer_launched:
             _applying = False   # basarisiz → normale don
+            # Ozel gecici dizin YALNIZ installer basladiysa yasamali; aksi halde her
+            # basarisiz deneme %TEMP%'e yetim bir `pemf_upd_*` dizini birakirdi.
+            _discard_temp_dir(dest)
             _applying_since = None
         else:
             logger.info("Guncelleme guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
@@ -500,6 +547,7 @@ def rollback() -> dict:
     # pencerede TEDAVI baslatilabilir → bobinler kontrolcusuz kalir. apply_update ile AYNI desen:
     # yalnizca BASARISIZ yollarda serbest birak.
     _installer_launched = False
+    dest = None
     try:
         if not expected:
             return {"ok": False, "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
@@ -544,6 +592,7 @@ def rollback() -> dict:
     finally:
         if not _installer_launched:
             _applying = False   # basarisiz → normale don
+            _discard_temp_dir(dest)   # apply_update ile AYNI desen (yetim dizin birakma)
             _applying_since = None
         else:
             logger.info("Rollback guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
@@ -559,6 +608,12 @@ def start_update_checker(interval_sec: int = 6 * 3600) -> None:
 
     def _loop():
         _stop.wait(20)  # açılışta kısa bekle (ağ hazır olsun)
+        # Kendi kendini onarma: gecmiste birakilmis yetim `pemf_upd_*` dizinlerini bir kez topla
+        # (bu duzeltmeden ONCEKI surumlerin ve cokmus deneme kalintilarinin izini siler).
+        try:
+            sweep_stale_update_temp()
+        except Exception:
+            logger.debug("acilis gecici-dizin suepuermesi hatasi", exc_info=True)
         while not _stop.is_set():
             try:
                 r = check_for_update()

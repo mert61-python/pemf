@@ -53,20 +53,30 @@ def test_installer_temp_path_is_private_and_unpredictable():
     koruyabilir ve SHA256+Authenticode doğrulaması GEÇTİKTEN SONRA içeriği değiştirerek
     LocalSystem'e keyfi EXE çalıştırtabilirdi (doğrulama→çalıştırma penceresi).
     """
+    import shutil
     import tempfile
     from pathlib import Path
 
     from servers import update_manager as um
 
-    p1 = um._private_temp_path("PEMF_Update_1.2.3.exe")
-    p2 = um._private_temp_path("PEMF_Update_1.2.3.exe")
+    # NOT: _private_temp_path GERÇEK bir mkdtemp dizini yaratır. Bu test onu temizlemiyordu →
+    # her koşuda %TEMP%'e 2 yetim `pemf_upd_*` dizini bırakıyordu (mutasyon testi takımı
+    # onlarca kez koşturunca 228 dizin birikti). Testin kendi çöpünü toplaması şart.
+    olusan = []
+    try:
+        p1 = um._private_temp_path("PEMF_Update_1.2.3.exe")
+        p2 = um._private_temp_path("PEMF_Update_1.2.3.exe")
+        olusan += [p1.parent, p2.parent]
 
-    assert p1 != p2, "yol tahmin edilebilir/sabit olmamalı"
-    assert p1.name == "PEMF_Update_1.2.3.exe"
-    # Dosya adı aynı olsa da dizin süreç-özel ve paylaşımlı temp KÖKÜ değil.
-    assert p1.parent != Path(tempfile.gettempdir())
-    assert p1.parent.is_dir(), "özel dizin oluşturulmuş olmalı"
-    assert p1.parent.name.startswith("pemf_upd_")
+        assert p1 != p2, "yol tahmin edilebilir/sabit olmamalı"
+        assert p1.name == "PEMF_Update_1.2.3.exe"
+        # Dosya adı aynı olsa da dizin süreç-özel ve paylaşımlı temp KÖKÜ değil.
+        assert p1.parent != Path(tempfile.gettempdir())
+        assert p1.parent.is_dir(), "özel dizin oluşturulmuş olmalı"
+        assert p1.parent.name.startswith("pemf_upd_")
+    finally:
+        for d in olusan:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

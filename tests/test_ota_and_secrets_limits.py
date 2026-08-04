@@ -155,3 +155,62 @@ def test_sirlar_dosyasi_Users_a_ACIK_DEGIL(tmp_path, monkeypatch):
     # S-1-5-32-545 = BUILTIN\Users. Yerelleştirmeden bağımsız olması için SID de kabul edilir.
     assert "s-1-5-32-545" not in dusuk and "\\users:" not in dusuk and "\\kullanıcılar:" not in dusuk, (
         f"sır dosyasında yerel Users ACE'si DURUYOR → tüm sırlar okunabilir:\n{out}")
+
+
+# ────────────────── OTA geçici dizin sızıntısı (kurulum sonrası bulundu) ──────────────────
+# Makinede 228 yetim `pemf_upd_*` dizini bulundu. Asıl kaynak testin kendisiydi
+# (test_update_rollback her koşuda 2 mkdtemp bırakıyordu — düzeltildi), ama ÜRETİM yolunda
+# da gerçek bir sızıntı vardı: `_private_temp_path` mkdtemp ile dizin açıyor, `apply_update`
+# / `rollback_update` ise yalnız DOSYAYI siliyordu. Installer başlatılmayan HER yolda
+# (SHA uyuşmadı / imza kurcalanmış / tedavi başladı / indirme hatası) dizin kalıyordu.
+
+def test_installer_baslatilmadiysa_gecici_dizin_SILINIR(tmp_path):
+    """`_discard_temp_dir` yalnız kendi ürettiği `pemf_upd_*` dizinini siler."""
+    from servers import update_manager as um
+
+    dest = um._private_temp_path("PEMF_Update_9.9.9.exe")
+    ozel = dest.parent
+    assert ozel.is_dir() and ozel.name.startswith("pemf_upd_")
+
+    um._discard_temp_dir(dest)
+    assert not ozel.exists(), "installer başlatılmadı ama özel dizin KALDI (yetim birikir)"
+
+
+def test_discard_YABANCI_dizine_dokunmaz(tmp_path):
+    """Güvenlik: silme yalnız `pemf_upd_` önekli dizinlerle sınırlı olmalı — yanlış bir
+    yol verilirse kullanıcı verisini silmemeli."""
+    from servers import update_manager as um
+
+    yabanci = tmp_path / "hasta_verisi"
+    yabanci.mkdir()
+    (yabanci / "onemli.db").write_text("veri", encoding="utf-8")
+
+    um._discard_temp_dir(yabanci / "PEMF_Update_1.0.0.exe")
+    assert (yabanci / "onemli.db").exists(), "pemf_upd_ olmayan dizin SİLİNDİ (veri kaybı riski)"
+
+    um._discard_temp_dir(None)   # None güvenli olmalı
+
+
+def test_eski_yetim_dizinler_supuruluyor(monkeypatch, tmp_path):
+    """Kendi kendini onarma: bu düzeltmeden ÖNCE birikmiş yetimler temizlenmeli.
+    YENİ dizinlere dokunulmamalı (o an indirme yapan başka bir süreç olabilir)."""
+    import os
+    import time as _t
+
+    from servers import update_manager as um
+
+    monkeypatch.setattr(um.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    eski = tmp_path / "pemf_upd_eski"; eski.mkdir()
+    yeni = tmp_path / "pemf_upd_yeni"; yeni.mkdir()
+    baska = tmp_path / "baska_klasor"; baska.mkdir()
+    # eski'yi 10 saat geriye al
+    geri = _t.time() - 10 * 3600
+    os.utime(eski, (geri, geri))
+
+    silinen = um.sweep_stale_update_temp(max_age_s=6 * 3600)
+
+    assert not eski.exists(), "eski yetim dizin süpürülmedi"
+    assert yeni.exists(), "TAZE dizin silindi — aktif indirme bozulabilir"
+    assert baska.exists(), "pemf_upd_ olmayan klasöre dokunuldu"
+    assert silinen == 1
