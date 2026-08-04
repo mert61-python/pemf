@@ -156,13 +156,42 @@ pub fn cache_dir(install_root: &Path) -> PathBuf {
 /// inmez. Best-effort: eski dizin kilitliyse (backend çalışıyorsa) sessizce atlanır ve akış
 /// normal temiz-indirmeye düşer. Hasta DB'si ayrı dizinde (`PEMF_GUI`) → bundan etkilenmez.
 pub fn migrate_legacy_install_root(install_root: &Path) {
-    if install_root.exists() {
+    // ⚠️ DENETİM 2026-08-04 (P2): koşul `install_root.exists()` idi ve bu migrasyonu TAMAMEN
+    // ÖLDÜRÜYORDU. `install_root`, NSIS `$INSTDIR`'ın TA KENDİSİDİR (ampirik olarak doğrulandı:
+    // `PEMFVetClient.exe` + `uninstall.exe` `runtime/` ile AYNI dizinde) ve launcher hiç
+    // çalışmadan ÖNCE, kurulum anında oluşturulur → erken-return HER ZAMAN tetikleniyordu.
+    // Bu denetimde eklenen `record_selfupdate_attempt` da `create_dir_all(install_root)` yaparak
+    // durumu ayrıca pekiştiriyordu. Sonuç: yükseltmede ~2,6 GB payload YENİDEN İNDİRİLİYORDU.
+    // Doğru ölçüt dizinin VARLIĞI değil, YÜKÜN varlığıdır.
+    if runtime_dir(install_root).exists() || has_model_data(install_root) {
+        return; // yeni kökte zaten payload var → taşınacak bir şey yok
+    }
+    let Some(parent) = install_root.parent() else {
+        return;
+    };
+    let legacy = parent.join("PEMFVetClient");
+    if !legacy.is_dir() {
         return;
     }
-    if let Some(parent) = install_root.parent() {
-        let legacy = parent.join("PEMFVetClient");
-        if legacy.is_dir() {
-            let _ = std::fs::rename(&legacy, install_root);
+    // Eski kökte de payload yoksa uğraşma (boş/artık dizin).
+    if !(runtime_dir(&legacy).exists() || has_model_data(&legacy)) {
+        return;
+    }
+
+    // En ucuz yol: hedef hiç yoksa dizini komple yeniden adlandır.
+    if !install_root.exists() && std::fs::rename(&legacy, install_root).is_ok() {
+        return;
+    }
+    // Hedef VAR (NSIS oluşturdu) → `rename` başarısız olur; İÇERİĞİ taşı.
+    // Yeni kurulumun kendi dosyalarını (exe, uninstall.exe) ASLA EZME.
+    let _ = std::fs::create_dir_all(install_root);
+    if let Ok(rd) = std::fs::read_dir(&legacy) {
+        for e in rd.flatten() {
+            let hedef = install_root.join(e.file_name());
+            if hedef.exists() {
+                continue;
+            }
+            let _ = std::fs::rename(e.path(), &hedef);
         }
     }
 }
@@ -225,6 +254,10 @@ pub fn record_selfupdate_attempt(install_root: &Path, version: &str) {
         Some((v, c)) if v == version => c.saturating_add(1),
         _ => 1,
     };
+    // P2: burada `create_dir_all` yapmak, migrasyonun eski "kök varsa erken-return" korumasını
+    // tetikleyip eski ağacın taşınmasını engelliyordu. Migrasyon artık yük-temelli olduğu için
+    // sıra kritik değil, yine de önce göç denenir (idempotent, ucuz).
+    migrate_legacy_install_root(install_root);
     let _ = std::fs::create_dir_all(install_root);
     if let Ok(json) = serde_json::to_string(&serde_json::json!({ "version": version, "count": n })) {
         let _ = std::fs::write(selfupdate_state_path(install_root), json);
@@ -416,6 +449,56 @@ mod tests {
         assert_eq!(env[ENV_REQUIRE_AUTH], "1");
     }
 
+    /// ⚠️ P2 (denetim 2026-08-04): migrasyon `install_root.exists()` ile erken donuyordu, ama
+    /// `install_root` NSIS `$INSTDIR`'in TA KENDISI ve kurulum aninda olusturuluyor →
+    /// migrasyon HIC calismiyordu ve yukseltmede ~2,6 GB payload YENIDEN INDIRILIYORDU.
+    /// GERCEK senaryo: yeni kok VAR (icinde exe/uninstaller) ama PAYLOAD YOK.
+    #[test]
+    fn nsis_kokU_varken_de_eski_payload_tasinir() {
+        let d = tempfile::tempdir().unwrap();
+        let parent = d.path();
+        let yeni = parent.join("PEMF Vet Client");
+        let eski = parent.join("PEMFVetClient");
+
+        // NSIS'in yaptigi: kok + kendi dosyalari (payload YOK).
+        std::fs::create_dir_all(&yeni).unwrap();
+        std::fs::write(yeni.join("PEMFVetClient.exe"), b"yeni-exe").unwrap();
+        std::fs::write(yeni.join("uninstall.exe"), b"unins").unwrap();
+
+        // Eski kurulum: GERCEK payload.
+        std::fs::create_dir_all(runtime_dir(&eski).join("PEMF_Backend")).unwrap();
+        std::fs::write(runtime_dir(&eski).join("PEMF_Backend").join("x.dll"), b"payload").unwrap();
+        std::fs::create_dir_all(models_dir(&eski).join("vet")).unwrap();
+        std::fs::write(models_dir(&eski).join("vet").join("m.onnx"), b"model").unwrap();
+
+        migrate_legacy_install_root(&yeni);
+
+        assert!(runtime_dir(&yeni).join("PEMF_Backend").join("x.dll").exists(),
+            "payload TASINMADI — kullanici ~2,6 GB'i yeniden indirir");
+        assert!(has_model_data(&yeni), "ai_models tasinmadi");
+        // Yeni kurulumun KENDI dosyalari EZILMEMELI.
+        assert_eq!(std::fs::read(yeni.join("PEMFVetClient.exe")).unwrap(), b"yeni-exe",
+            "yeni launcher exe'si eski dosyayla EZILDI");
+    }
+
+    /// Yeni kokte ZATEN payload varsa migrasyon calismamali (eskiyi uzerine yazmasin).
+    #[test]
+    fn yeni_kokte_payload_varsa_goc_yapilmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let yeni = d.path().join("PEMF Vet Client");
+        let eski = d.path().join("PEMFVetClient");
+        std::fs::create_dir_all(runtime_dir(&yeni)).unwrap();
+        std::fs::write(runtime_dir(&yeni).join("guncel.txt"), b"yeni").unwrap();
+        std::fs::create_dir_all(runtime_dir(&eski)).unwrap();
+        std::fs::write(runtime_dir(&eski).join("bayat.txt"), b"eski").unwrap();
+
+        migrate_legacy_install_root(&yeni);
+
+        assert!(runtime_dir(&yeni).join("guncel.txt").exists());
+        assert!(!runtime_dir(&yeni).join("bayat.txt").exists(), "eski agac uzerine tasinmis");
+        assert!(eski.exists(), "eski dizin gereksiz yere tuketilmis");
+    }
+
     #[test]
     fn legacy_programdata_yalniz_windowsta() {
         let got = legacy_windows_models_dir(env_from(&[("PROGRAMDATA", "/c/ProgramData")]));
@@ -448,8 +531,9 @@ mod tests {
         );
         assert!(!legacy.exists(), "eski dizin yerinde kalmis");
 
-        // 2) Kök VARSA → no-op. (write_pending önce koşarsa tam olarak bu duruma düşülür;
-        //    bu yüzden main.rs'te migrate ÖNCE çağrılır.)
+        // 2) Hedefte ARTIK PAYLOAD VAR (1. adımda taşındı) → no-op.
+        //    DENETİM 2026-08-04: ölçüt eskiden "kök dizini var mı" idi; bu, NSIS kökü her zaman
+        //    oluşturduğu için migrasyonu tamamen öldürüyordu. Artık ölçüt YÜKÜN varlığı.
         std::fs::create_dir_all(legacy.join("runtime")).unwrap();
         std::fs::write(legacy.join("runtime").join("yeni.txt"), b"z").unwrap();
         migrate_legacy_install_root(&target); // target ARTIK var
