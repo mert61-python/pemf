@@ -121,7 +121,15 @@ pub fn extract_zip_cancellable(
         if is_profile {
             if let Some(Component::Normal(top)) = rel.components().find(|c| matches!(c, Component::Normal(_))) {
                 if let Some(t) = top.to_str() {
-                    if PROFILE_FORBIDDEN_TOP.contains(&t) {
+                    // ⚠️ DENETİM 2026-08-04 (P1 — BU KORUMANIN KENDİ AÇIĞI): karşılaştırma TAM
+                    // EŞLEŞMEYDİ. Windows (NTFS) ve macOS (APFS/HFS+) dosya adlarında HARF
+                    // DUYARSIZDIR: `RUNTIME/PEMF_Backend/...` içeren bir profil zip'i bu kontrolü
+                    // geçer ama diske TAM OLARAK `runtime/` ağacının üstüne yazar — yani SHA'sı
+                    // doğrulanmış backend ikilisi profil paketiyle DEĞİŞTİRİLEBİLİRDİ.
+                    // Windows ayrıca ad sonundaki NOKTA ve BOŞLUKLARI atar (`runtime.` → `runtime`),
+                    // bu da ikinci bir atlatma yazımıdır. Normalize edip karşılaştırıyoruz.
+                    let norm = t.trim_end_matches(['.', ' ']).to_ascii_lowercase();
+                    if PROFILE_FORBIDDEN_TOP.iter().any(|f| f.eq_ignore_ascii_case(&norm)) {
                         return Err(ExtractError::PathEscape(format!(
                             "{raw_name} (profil paketi '{t}' altına yazamaz — doğrulanmış runtime/durum dosyası)"
                         )));
@@ -425,6 +433,52 @@ mod tests {
             w.start_file(format!("dir/f{i}.bin"), opts).unwrap();
             std::io::Write::write_all(&mut w, b"x").unwrap();
         }
+        w.finish().unwrap();
+        (d, path)
+    }
+
+    /// ⚠️ P1 (denetim 2026-08-04): #104 korumasi TAM-ESLESME yapiyordu. Windows (NTFS) ve
+    /// macOS (APFS) HARF DUYARSIZ oldugu icin `RUNTIME/...` kontrolu gecer ama diske
+    /// `runtime/` agacinin UZERINE yazardi — SHA'si dogrulanmis backend ikilisi profil
+    /// paketiyle DEGISTIRILEBILIRDI. Windows ayrica sondaki nokta/boslugu atar.
+    #[test]
+    fn profil_paketi_harf_varyantiyla_runtimei_ezemez() {
+        for ad in [
+            "RUNTIME/PEMF_Backend/x.dll",
+            "Runtime/PEMF_Backend/x.dll",
+            "runtime./PEMF_Backend/x.dll",
+            "RUNTIME /PEMF_Backend/x.dll",
+            "CACHE/base.zip",
+            "Installed_Profiles.json",
+            "BACKEND.PORT",
+        ] {
+            let (_d, zip_path) = build_zip_named(ad);
+            let out = tempfile::tempdir().unwrap();
+            let mut used = 0u64;
+            let r = extract_zip_budgeted(&zip_path, out.path(), &mut used, true);
+            assert!(
+                r.is_err(),
+                "profil paketi '{ad}' ile korumayi ATLATTI — dogrulanmis runtime/durum dosyasi ezilir"
+            );
+        }
+
+        // Mesru profil icerigi etkilenmemeli.
+        let (_d, ok_zip) = build_zip_named("ai_models/vet/model.onnx");
+        let out = tempfile::tempdir().unwrap();
+        let mut used = 0u64;
+        assert_eq!(extract_zip_budgeted(&ok_zip, out.path(), &mut used, true).unwrap(), 1);
+    }
+
+    /// Tek dosyali zip uretici (ad testleri icin).
+    fn build_zip_named(name: &str) -> (tempfile::TempDir, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("t.zip");
+        let f = fs::File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        let opts: zip::write::FileOptions<'_, ()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        w.start_file(name, opts).unwrap();
+        std::io::Write::write_all(&mut w, b"x").unwrap();
         w.finish().unwrap();
         (d, path)
     }

@@ -58,3 +58,41 @@ _p12_pw.txt
 *.db
 *.db-wal
 *.db-shm
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (P1): BuildKit, Dockerfile'ın yanındaki `<dockerfile>.dockerignore`
+# dosyasını bulursa kökteki `.dockerignore`'u KULLANMAZ — birleştirmez, YERİNE GEÇER.
+# Bu dosya kökün taşıdığı bazı dışlamaları içermiyordu. Ölçüldü:
+#     PEMF_BUILD/       3,68 GB
+#     launcher/target/  7,43 GB
+# → build context'e ~11 GB gereksiz veri giriyor (yavaş build, şişmiş katman) ve `COPY . .`
+# bunların bir kısmını IMAJA GÖMÜYOR.
+#
+# ⚠️ Kökteki `*.db` deseni BİLEREK kopyalanmadı: `database/*_template.db` dosyaları ÇALIŞMA
+# ZAMANINDA gereklidir (utils/path_utils.py:140 runtime DB'yi şablondan oluşturur). Bunun
+# yerine yalnız ÇALIŞMA-ZAMANI veritabanı artıkları dışlanır — hasta verisi imaja girmesin.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Ağır derleme çıktıları (image'a girmez, build'i yavaşlatır)
+PEMF_BUILD/
+launcher/target/
+backups/
+*.exe
+*.apk
+*.ipa
+*.rar
+
+# Hasta verisi (KVKK) — ÇALIŞMA ZAMANI DB'leri. Şablonlar (`*_template.db`) HARİÇ TUTULMAZ.
+data/*.db
+**/patients.db
+**/pemf_treatment_history.db
+*.db-wal
+*.db-shm
+
+# Kökte olup burada eksik kalan sır/kurtarma dosyaları
+api_token.txt
+**/api_token.txt
+KURTARMA-KODU.txt
+kurtarma-zarfi.enc
+.recovery_fp
+*.plain.bak
