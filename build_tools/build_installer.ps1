@@ -98,6 +98,17 @@ Write-Host "============================================================" -Foreg
 # --- Adim 0: Release Surumu ---
 Write-Step "Release Surumu Senkronizasyonu"
 
+# TEK KAYNAK: versions.json -> VERSION / Cargo.toml / tauri.conf.json / app.json /
+# frontend_version.json. Asagidaki Sync-ReleaseVersion ise VERSION'dan .iss ve
+# version_info.txt uretmeye devam eder.
+$SyncScript = Join-Path $ScriptDir "sync_versions.ps1"
+if (Test-Path $SyncScript) {
+    & $SyncScript
+    if ($LASTEXITCODE -ne 0) { Write-Fail "Surum senkronizasyonu basarisiz (versions.json)." }
+} else {
+    Write-Warn "sync_versions.ps1 yok; VERSION dosyasi oldugu gibi kullanilacak."
+}
+
 $VersionFile = Join-Path $ProjectRoot "VERSION"
 if (-not (Test-Path $VersionFile)) {
     Write-Fail "VERSION dosyasi bulunamadi: $VersionFile"
@@ -111,40 +122,55 @@ Write-OK "Surum senkronize edildi: $AppVersion"
 # --- Adim 1: Python Kontrolu ---
 Write-Step "Python Ortami Kontrolu"
 
+# 2026-08-01 konsolidasyonu myenv'i ve sistem Python'unu KALDIRDI; build artik klasordeki
+# EMBEDDED yorumlayiciyi kullanir (bkz. BUILD.md + scripts\build_backend_exe.ps1). Bu script
+# guncellenmemisti: yalnizca silinmis myenv yollarina bakip son care olarak PATH'teki "python"u
+# SECIYOR ve onu DOGRULAMADAN kabul ediyordu. Windows'ta PATH'teki "python" cogu kez Microsoft
+# Store ALIAS STUB'idir; `--version` calistirilinca surum yerine "Python was not found..."
+# yazar. Eski kod bunu surum satiri sanip yalnizca UYARI verip devam ediyordu ve build bir
+# sonraki adimda "PyInstaller bulunamadi" ile anlamsiz bicimde patliyordu.
 $PythonCandidates = @()
 if ($env:PEMF_BUILD_PYTHON) {
     $PythonCandidates += $env:PEMF_BUILD_PYTHON
 }
 $PythonCandidates += @(
-    (Join-Path $ProjectRoot "myenv\Scripts\python.exe"),
+    (Join-Path (Split-Path -Parent $ProjectRoot) "python.exe"),   # embedded (klasor koku) — ASIL
+    (Join-Path $ProjectRoot "myenv\Scripts\python.exe"),          # legacy (kaldirildi, geriye uyum)
     (Join-Path (Split-Path -Parent $ProjectRoot) "myenv\Scripts\python.exe"),
     "C:\build_envs\pemf_py310\Scripts\python.exe",
     "python"
 )
-
-$PythonExe = $null
-foreach ($candidate in $PythonCandidates) {
-    if ($candidate -eq "python") {
-        $PythonExe = $candidate
-        break
-    }
-    if (Test-Path $candidate) {
-        $PythonExe = $candidate
-        break
-    }
-}
 
 $env:PYTHONNOUSERSITE = "1"
 $env:PYTHONPATH = ""
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
-try {
-    $PyVersion = & $PythonExe --version 2>&1
-    Write-OK "Python: $PyVersion"
-} catch {
-    Write-Fail "Python bulunamadi: $PythonExe"
+# Adayi SECMEDEN ONCE gercekten calistigini dogrula: `--version` gecerli bir surum
+# yazmali. Store stub'i / bozuk kurulum boylece elenir ve siradaki adaya gecilir.
+$PythonExe = $null
+$PyVersion = $null
+foreach ($candidate in $PythonCandidates) {
+    if ($candidate -ne "python" -and -not (Test-Path $candidate)) { continue }
+    try {
+        $out = (& $candidate --version 2>&1 | Out-String).Trim()
+    } catch {
+        continue
+    }
+    if ($out -match "Python (\d+\.\d+\.\d+)") {
+        $PythonExe = $candidate
+        $PyVersion = "Python $($Matches[1])"
+        break
+    }
+    Write-Warn "Aday Python calismiyor, atlaniyor: $candidate  ($($out -replace '\s+',' '))"
 }
+
+if (-not $PythonExe) {
+    Write-Fail ("Calisan Python yorumlayicisi bulunamadi. Beklenen: klasor kokundeki embedded " +
+                "python.exe ($((Join-Path (Split-Path -Parent $ProjectRoot) 'python.exe'))). " +
+                "Override: `$env:PEMF_BUILD_PYTHON = '<tam yol>'")
+}
+Write-OK "Python: $PyVersion  ($PythonExe)"
 
 if ($PyVersion -notmatch "Python 3\.10\.") {
     Write-Warn "Release build icin Python 3.10.x onerilir. Su an: $PyVersion"
