@@ -210,3 +210,53 @@ def test_graceful_shutdown_nssm_butcesine_sigiyor():
     SAFE_STOP_BUDGET_S = 3.0   # backend_service._safe_stop_outputs toplam bütçesi
     NSSM_STOP_BUDGET_S = 15.0  # scripts/setup_services.ps1: AppStopMethodConsole 15000
     assert bs._GRACEFUL_SHUTDOWN_TIMEOUT_S + SAFE_STOP_BUDGET_S < NSSM_STOP_BUDGET_S
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Denetim 2026-08-04 (P2 #13): /api/health launcher nonce'u.
+# find_free_port portu bind edip HEMEN bırakır; frozen backend'in onu gerçekten bind etmesi
+# onlarca saniye sürer. O pencerede loopback'e bağlanabilen herhangi bir yerel süreç portu
+# kapabilir ve wait_for_health yalnız HTTP 200'e baktığı için launcher onu "hazır" sanardı →
+# kapanışta E-stop POST'u SALDIRGANIN dinleyicisine giderdi.
+# Nonce YALNIZ loopback'e verilmeli: /api/health auth-muaftır ve tünelden de erişilebilir.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _health(monkeypatch, nonce: str, headers: dict | None = None):
+    """NOT: TestClient varsayilan `client.host` degeri "testclient"tir, 127.0.0.1 DEGIL.
+    Launcher daima loopback'ten sorar → `client=("127.0.0.1", ...)` ile gercek yolu simule et.
+    (Bu fark testi ilk yazdigimda yakalandi: kod dogru, kurulum yanlisti.)"""
+    from fastapi.testclient import TestClient
+
+    from servers import api_server
+
+    monkeypatch.setenv("PEMF_HEALTH_NONCE", nonce)
+    with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
+        return c.get("/api/health", headers=headers or {}).json()
+
+
+def test_health_nonce_loopbacke_verilir(monkeypatch):
+    """TestClient soketi 127.0.0.1'dir → launcher'ın gördüğü yol."""
+    body = _health(monkeypatch, "NONCE-123")
+    assert body.get("launcherNonce") == "NONCE-123", (
+        "launcher backend'i dogrulayamaz — port kapan surec 'hazir' sanilir"
+    )
+
+
+def test_health_nonce_tunele_SIZDIRILMAZ(monkeypatch):
+    """Cloudflare proxy başlığı taşıyan istek UZAKTIR; nonce sızarsa doğrulama anlamsızlaşır."""
+    body = _health(monkeypatch, "NONCE-123", {"cf-connecting-ip": "203.0.113.10"})
+    assert body.get("launcherNonce") is None, "nonce UZAK istemciye sizdi"
+
+
+def test_health_nonce_yokken_alan_None(monkeypatch):
+    """Env verilmemişse (servis modu / eski akış) alan None — 200 davranışı değişmez."""
+    monkeypatch.delenv("PEMF_HEALTH_NONCE", raising=False)
+    from fastapi.testclient import TestClient
+
+    from servers import api_server
+
+    with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
+        body = c.get("/api/health").json()
+    assert body.get("launcherNonce") is None
+    assert body.get("status") == "online"

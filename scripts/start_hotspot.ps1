@@ -12,18 +12,19 @@ param(
 )
 $ErrorActionPreference = "Continue"
 
-# ── DENETİM 2026-08-04 (P0): WPA2 parolası ARTIK BU DOSYADA GÖMÜLÜ DEĞİL ──────
-# Neden: make_base_zip.py bu script'i base.zip'e paketliyor ve base.zip PUBLIC bir
-# GitHub Release'ten servis ediliyor → gömülü 'pemf1234' herkesin indirip okuyabildiği
-# bir kimlik bilgisiydi ve SAHADAKİ TÜM cihazlarda aynıydı. mosquitto.conf'un
-# allow_anonymous=true kararı açıkça "WPA2 parolası GÜÇLÜ + cihaz-başına BENZERSİZ"
-# telafi kontrolüne dayanıyor; bu kontrol uygulanamaz durumdaydı.
+# ── SSID/PAROLA ÇÖZÜMLEMESİ — ⚠️ BİLİNÇLİ SAHİP KARARI (2026-08-04) ───────────
+# VARSAYILAN SABİTTİR ve öyle KALACAKTIR: her kurulan makinede SSID `PEMF-Gateway`,
+# parola `pemf1234`. Sahip bunu bilerek böyle istiyor — sahadaki tüm cihazlar eskisi
+# gibi çalışmaya devam etmeli.
 #
-# ⚠️ PAROLAYI DEĞİŞTİRMEK TEK BAŞINA YETMEZ: ESP bobinleri (6-8) SSID/parolayı kendi
-# firmware'lerinde (`config/credentials/secrets_coil_*.h`) taşır. Parola değişirse
-# O ESP'LER DE YENİDEN FLASH'LANMALIDIR — aksi halde bobin 6-8 hotspot'a bağlanamaz.
-# Bu yüzden burada rastgele üretim YAPILMAZ; değer dışarıdan (kurulum) verilir ve
-# verilmediğinde sahadaki kurulumları bozmamak için ESKİ varsayılana düşülür + uyarılır.
+# NEDEN DEĞİŞTİRİLEMEZ: ESP bobinleri (6-8) SSID/parolayı KENDİ firmware'lerinde
+# (`config/credentials/secrets_coil_*.h`) taşır ve o firmware bu depoda DEĞİLDİR.
+# Parola değişirse o ESP'ler de YENİDEN FLASH'LANMAK zorundadır; aksi halde bobin 6-8
+# hotspot'a bağlanamaz. Bu yüzden burada rastgele üretim YAPILMAZ.
+#
+# Aşağıdaki param/env/hotspot.json zinciri yalnızca İLERİDE cihaz-başına parola
+# istenirse kullanılabilsin diye vardır (ESP reflash'ıyla BİRLİKTE). Hiçbiri
+# verilmezse davranış eski hâliyle BİREBİR aynıdır. Bunu "eksik" sanıp değiştirme.
 #
 # Çözümleme sırası: parametre → ortam değişkeni → hotspot.json → (eski varsayılan + UYARI)
 $LegacySsid = "PEMF-Gateway"
@@ -54,10 +55,9 @@ if ((-not $Ssid -or -not $Pass) -and (Test-Path -LiteralPath $HotspotConf)) {
 }
 if (-not $Ssid) { $Ssid = $LegacySsid }
 if (-not $Pass) {
+    # Varsayilan yol (BEKLENEN DURUM — bkz. basliktaki SAHIP KARARI notu).
     $Pass = $LegacyPass
-    Log ("UYARI: hotspot parolasi yapilandirilmamis -> ESKI PAYLASILAN VARSAYILAN kullaniliyor. " +
-         "Bu deger base.zip ile PUBLIC dagitildigi icin GIZLI DEGILDIR. Cihaza ozel parola icin: " +
-         "$HotspotConf -> {`"ssid`":`"...`",`"pass`":`"...`"} (ESP bobinleri 6-8 YENIDEN FLASH'LANMALI).")
+    Log "Hotspot kimligi: varsayilan SSID/parola kullaniliyor (ESP 6-8 firmware'iyle eslesir)."
 }
 # WPA2 asgari uzunluk (8) — kisa parola ConfigureAccessPointAsync'i sessizce dusurur.
 if ($Pass.Length -lt 8) { Log "UYARI: parola 8 karakterden kisa; WPA2 reddedebilir."; }

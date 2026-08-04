@@ -13,11 +13,12 @@ param(
     [string]$Mode = "device",   # device=klinik (donanım+mosquitto) / server=demo (simülasyon) / staging=üretim-benzeri doğrulama (simülasyon, audit B-9.4)
     [switch]$Uninstall,
     [switch]$PurgeData,         # -Uninstall ile: hasta DB + şifreleme anahtarlarını da KALICI sil (KVKK; varsayılan KORU)
-    # DENETİM 2026-08-04 (P0): hotspot SSID/parolası start_hotspot.ps1'de GÖMÜLÜYDÜ ve o script
-    # base.zip ile PUBLIC dağıtılıyor → parola gizli değildi ve TÜM cihazlarda aynıydı. Artık
-    # kurulumda verilir ve hotspot.json'a yazılır. VERİLMEZSE sahadaki kurulumlar bozulmasın diye
-    # start_hotspot.ps1 eski varsayılana düşer (uyarı loglar).
-    # ⚠️ Parolayı değiştirmek ESP bobinlerinin (6-8) `secrets_coil_*.h` ile YENİDEN FLASH'lanmasını gerektirir.
+    # ⚠️ BİLİNÇLİ SAHİP KARARI (2026-08-04): hotspot SSID/parolası SABİTTİR
+    # (`PEMF-Gateway` / `pemf1234`) ve her kurulan makinede AYNI kalacaktır — ESP bobinleri
+    # (6-8) bu değerleri KENDİ firmware'lerinde (`secrets_coil_*.h`, bu depoda DEĞİL) taşır.
+    # Bu iki parametre VERİLMEZSE davranış eski hâliyle BİREBİR aynıdır; yalnızca ileride
+    # cihaz-başına parola istenirse (ESP reflash'ıyla BİRLİKTE) kullanılmak üzere vardır.
+    # Verilirse C:\ProgramData\PEMF_System\hotspot.json'a yazılır ve start_hotspot.ps1 oradan okur.
     [string]$HotspotSsid = "",
     [string]$HotspotPass = ""
 )
@@ -396,7 +397,7 @@ if ($Mode -eq "device") {
                 Log "HATIRLATMA: parola değiştiyse ESP bobinleri 6-8 secrets_coil_*.h ile YENİDEN FLASH'LANMALI." "Yellow"
             } catch { Log "hotspot.json yazılamadı: $_" "Yellow" }
         } else {
-            Log "Hotspot kimliği verilmedi (-HotspotPass) → PAYLAŞILAN ESKİ VARSAYILAN kullanılacak. Bu değer base.zip ile PUBLIC dağıtılıyor, GİZLİ DEĞİLDİR." "Yellow"
+            Log "Hotspot kimliği verilmedi → varsayılan SSID/parola kullanılacak (bilinçli karar; ESP 6-8 firmware'iyle eşleşir)." "Gray"
         }
         # LattePanda 3 = Intel AX201 → legacy hosted-network YOK (Intel SoftAP'yi AX2xx'te kaldırdı); tek yol WinRT
         # Mobile Hotspot, o da KULLANICI OTURUMU ister (LocalSystem servisi/session-0 AÇAMAZ). Bu yüzden logon-task +

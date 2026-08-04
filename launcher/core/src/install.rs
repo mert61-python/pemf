@@ -31,6 +31,13 @@ pub const ENV_API_PORT: &str = "PEMF_API_PORT";
 /// erişiminde bile kimlik doğrulaması KAPALI oluyordu. LAN/localhost istekleri
 /// `is_local_request` ile zaten muaf olduğundan bunu açmak yerel arayüzü ETKİLEMEZ.
 pub const ENV_REQUIRE_AUTH: &str = "PEMF_REQUIRE_AUTH";
+/// DENETİM 2026-08-04 (P2 #13): tek-seferlik sağlık nonce'u. `find_free_port` portu bind edip
+/// HEMEN bırakır; frozen backend'in onu gerçekten bind etmesi onlarca saniye sürer. O pencerede
+/// loopback'e bağlanabilen HERHANGİ bir yerel süreç portu kapabilir ve `wait_for_health` yalnız
+/// HTTP 200'e baktığı için launcher onu "hazır" sanardı → kapanışta E-stop POST'u SALDIRGANIN
+/// dinleyicisine gider, gerçek bobinler hastanın üzerinde çalışmaya devam ederdi.
+/// Backend bu değeri `/api/health` yanıtında YALNIZ loopback'e yansıtır (bkz. system_router).
+pub const ENV_HEALTH_NONCE: &str = "PEMF_HEALTH_NONCE";
 
 /// Varsayılan backend portu (`backend_service.py` ile aynı).
 pub const DEFAULT_PORT: u16 = 8000;
@@ -75,8 +82,8 @@ where
     }
 }
 
-/// Backend süreci için ortam değişkenleri.
-pub fn backend_env(install_root: &Path, port: u16) -> BTreeMap<String, String> {
+/// Backend süreci için ortam değişkenleri. `health_nonce` boşsa değişken hiç verilmez.
+pub fn backend_env(install_root: &Path, port: u16, health_nonce: &str) -> BTreeMap<String, String> {
     let mut env = BTreeMap::new();
     env.insert(
         ENV_MODELS_DIR.to_string(),
@@ -85,7 +92,25 @@ pub fn backend_env(install_root: &Path, port: u16) -> BTreeMap<String, String> {
     env.insert(ENV_API_PORT.to_string(), port.to_string());
     // Güvenli varsayılan (bkz. ENV_REQUIRE_AUTH): uzak/tünel erişimi token ister; LAN muaf kalır.
     env.insert(ENV_REQUIRE_AUTH.to_string(), "1".to_string());
+    if !health_nonce.is_empty() {
+        env.insert(ENV_HEALTH_NONCE.to_string(), health_nonce.to_string());
+    }
     env
+}
+
+/// Kurulu backend `PEMF_HEALTH_NONCE`'u yansıtabiliyor mu?
+///
+/// Nonce desteği ile `VERSION` dosyasının PyInstaller bundle'ına eklenmesi AYNI sürümde geldi
+/// (bkz. `build_tools/PEMF_Backend_onedir.spec`). Dolayısıyla `_internal/VERSION` varlığı,
+/// "bu backend nonce'u yansıtır" için güvenilir ve SÜRÜM AYRIŞTIRMAYA gerek bırakmayan bir
+/// göstergedir. Sahadaki ESKİ base.zip'lerde dosya YOKTUR → launcher hoşgörülü moda düşer ve
+/// kurulumu kırmaz. Yeni base.zip yayınlandığı anda doğrulama KENDİLİĞİNDEN katılaşır.
+pub fn backend_supports_health_nonce(install_root: &Path) -> bool {
+    runtime_dir(install_root)
+        .join("PEMF_Backend")
+        .join("_internal")
+        .join("VERSION")
+        .exists()
 }
 
 /// Uygulamanın (base + modeller) kurulacağı kök.
@@ -358,7 +383,7 @@ mod tests {
 
     #[test]
     fn backend_env_model_kokunu_ve_portu_verir() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123);
+        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
         // Platform-agnostik: Windows '\' vs POSIX '/' — Path karşılaştır (string değil).
         assert_eq!(Path::new(&env[ENV_MODELS_DIR]), Path::new("/opt/pemf").join("ai_models"));
         assert_eq!(env[ENV_API_PORT], "8123");
@@ -370,7 +395,7 @@ mod tests {
     /// için bu bayrak yerel arayüzü bozmaz.
     #[test]
     fn backend_env_auth_zorunlulugunu_acik_verir() {
-        let env = backend_env(Path::new("/opt/pemf"), 8123);
+        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
         assert_eq!(env[ENV_REQUIRE_AUTH], "1");
     }
 

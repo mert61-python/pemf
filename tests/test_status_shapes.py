@@ -24,6 +24,13 @@ GOLDEN_SHAPES = {
         # guncellenmedigini goremiyordu. Bu test tam da sekil degisikliklerini yakalamak icin
         # var → altin kume kasitli olarak genisletildi.
         "cloudRegistry",
+        # DENETIM 2026-08-04 P2 #13 (BILINCLI sekil degisikligi): launcher'in "bu porttaki
+        # GERCEKTEN benim baslattigim backend mi?" dogrulamasi. find_free_port portu bind edip
+        # hemen birakiyor; o pencerede portu kapan yerel bir surec HTTP 200 dondugu icin "hazir"
+        # saniliyordu → kapanistaki E-stop POST'u ONA gidiyor, gercek bobinler hastanin uzerinde
+        # kaliyordu. Deger YALNIZ loopback'e verilir (tunele/LAN'a sizarsa dogrulama anlamsiz);
+        # `PEMF_HEALTH_NONCE` verilmemisse None doner. Bkz. launcher/core/src/backend.rs.
+        "launcherNonce",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {

@@ -9,6 +9,7 @@ NOT (gelecek cleanup): paylaşılan durum ileride servers/live_state.py'ye taş�
 davranış-koruyan ARTIMLI extraction için lazy-import deseni kullanılıyor.
 """
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -151,9 +152,28 @@ async def health_check(request: Request):
         at_rest_encrypted = bool(getattr(_tdb, "at_rest_encrypted", False))
     except Exception:
         pass
+    # ── DENETİM 2026-08-04 (P2 #13): LAUNCHER NONCE'U ────────────────────────────────────
+    # SORUN: launcher `find_free_port` ile portu bind edip HEMEN BIRAKIYOR; frozen backend'in
+    # o portu gerçekten bind etmesi onlarca saniye sürüyor. Bu pencerede loopback'e bağlanabilen
+    # HERHANGİ bir yerel süreç portu kapabilir ve `wait_for_health` yalnız HTTP 200'e baktığı için
+    # launcher onu "backend hazır" sanardı. Sonuç TIBBİ: kapanışta gönderilen
+    # `POST /api/hardware/emergency_stop` SALDIRGANIN dinleyicisine gider → E-stop SESSİZCE
+    # "başarılı" görünür, gerçek bobinler HASTANIN ÜZERİNDE çalışmaya devam eder.
+    # ÇÖZÜM: launcher, çocuk sürece `PEMF_HEALTH_NONCE` ortam değişkeniyle tek-seferlik rastgele
+    # bir değer verir; yalnız GERÇEK backend onu geri yansıtabilir (port kapan süreç bilemez).
+    #
+    # ⚠️ YALNIZ LOOPBACK'e verilir. `/api/health` auth-muaftır ve tünelden de erişilebilir;
+    # nonce LAN'a/tünele sızarsa doğrulama anlamsızlaşır. LAN de yeterli DEĞİL — launcher
+    # daima 127.0.0.1'den sorar.
+    _health_nonce = os.getenv("PEMF_HEALTH_NONCE", "").strip()
+    _peer = (request.client.host if request.client else "") or ""
+    _loopback_only = (not _via_proxy) and _peer in ("127.0.0.1", "::1")
+
     return {
         "status": "online",
         "service": "PEMF-Vet",
+        # Launcher'ın "bu port GERÇEKTEN benim başlattığım backend mi?" doğrulaması (bkz. üstteki not).
+        "launcherNonce": (_health_nonce if (_health_nonce and _loopback_only) else None),
         # Audit P2: deviceId de _local'e kapatıldı — bulut RPC'lerinin tek tenant/yetki anahtarı;
         # uzak sızıntısı upsert_device-zehirleme + cross-tenant-IDOR zincirlerini köprülüyordu.
         "deviceId": (device_id if _local else None),

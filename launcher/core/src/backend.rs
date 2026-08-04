@@ -41,15 +41,62 @@ pub fn find_free_port(start: u16, tries: u16) -> Result<u16, BackendError> {
     })
 }
 
-/// `/api/health` 200 dönene kadar bekler.
-pub fn wait_for_health(port: u16, timeout: Duration) -> bool {
+/// Tek-seferlik sağlık nonce'u üret (DENETİM 2026-08-04, P2 #13).
+///
+/// Yeni bağımlılık eklemeden OS entropisi: `RandomState` her örneklemede işletim sisteminden
+/// tohumlanır; buna süreç kimliği ve nanosaniye çözünürlüklü zaman karıştırılıp SHA-256'dan
+/// geçirilir. Nonce'un tek gereksinimi, portu kapmaya çalışan YEREL bir sürecin onu ~180 sn'lik
+/// başlatma penceresinde TAHMİN EDEMEMESİDİR (değer çocuk sürecin ortamındadır; aynı kullanıcı
+/// zaten her şeyi yapabilir — korunan şey FARKLI kullanıcı/düşük-yetkili süreçtir).
+pub fn generate_health_nonce() -> String {
+    use sha2::{Digest, Sha256};
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+
+    let mut h = Sha256::new();
+    for i in 0..4u64 {
+        let mut hh = RandomState::new().build_hasher();
+        hh.write_u64(i.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        h.update(hh.finish().to_le_bytes());
+    }
+    h.update(std::process::id().to_le_bytes());
+    if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        h.update(d.as_nanos().to_le_bytes());
+    }
+    h.finalize().iter().fold(String::with_capacity(64), |mut s, b| {
+        use std::fmt::Write;
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
+/// `/api/health` hazır olana kadar bekler.
+///
+/// `expected_nonce = Some(n)`: yanıt 200 OLMASI YETMEZ — gövdedeki `launcherNonce` alanı `n` ile
+/// EŞLEŞMELİDİR. Bu, portu bizden önce kapmış bir sürecin "hazır" sanılmasını engeller
+/// (bkz. `install::ENV_HEALTH_NONCE`). `None`: eski davranış (yalnız HTTP 200) — nonce'u
+/// yansıtmayan ESKİ base.zip'ler için geriye uyum.
+pub fn wait_for_health(port: u16, timeout: Duration, expected_nonce: Option<&str>) -> bool {
     let url = health_url(port);
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         let ok = ureq::get(&url)
             .timeout(Duration::from_secs(2))
             .call()
-            .map(|r| r.status() == 200)
+            .ok()
+            .filter(|r| r.status() == 200)
+            .map(|r| match expected_nonce {
+                None => true, // eski backend: yalnız 200
+                Some(want) => r
+                    .into_string()
+                    .ok()
+                    .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+                    .and_then(|v| {
+                        v.get("launcherNonce")
+                            .and_then(|n| n.as_str().map(str::to_owned))
+                    })
+                    .is_some_and(|got| got == want),
+            })
             .unwrap_or(false);
         if ok {
             return true;
@@ -131,7 +178,13 @@ pub fn start_and_wait(
     if let Some(dir) = exe.parent() {
         cmd.current_dir(dir);
     }
-    for (k, v) in install::backend_env(install_root, port) {
+    // DENETİM 2026-08-04 (P2 #13): tek-seferlik nonce → yalnız GERÇEK backend onu yansıtabilir.
+    // Kurulu backend nonce'u desteklemiyorsa (eski base.zip, `_internal/VERSION` yok) doğrulama
+    // hoşgörülü moda düşer ve mevcut kurulumlar KIRILMAZ; yeni base.zip yayınlanınca
+    // KENDİLİĞİNDEN katılaşır (bkz. install::backend_supports_health_nonce).
+    let nonce = generate_health_nonce();
+    let verify_nonce = install::backend_supports_health_nonce(install_root);
+    for (k, v) in install::backend_env(install_root, port, &nonce) {
         cmd.env(k, v);
     }
     // ⚠️ DEADLOCK FIX: backend'in stdout/stderr'ini pipe'layıp DRENAJLAMAMAK (eski hal) tüm servisi
@@ -156,7 +209,7 @@ pub fn start_and_wait(
 
     let mut child = cmd.spawn().map_err(BackendError::Spawn)?;
 
-    if wait_for_health(port, timeout) {
+    if wait_for_health(port, timeout, verify_nonce.then_some(nonce.as_str())) {
         return Ok(child);
     }
 
@@ -469,6 +522,61 @@ mod tests {
         );
     }
 
+    /// DENETİM 2026-08-04 (P2 #13): portu bizden önce kapan bir süreç HTTP 200 dönse bile
+    /// "hazır" SAYILMAMALI — aksi halde kapanışta E-stop POST'u ONA gider ve gerçek bobinler
+    /// hastanın üzerinde çalışmaya devam eder.
+    #[test]
+    fn health_nonce_uyusmazsa_hazir_demez() {
+        use std::io::Read;
+
+        fn serve(body: &'static str) -> u16 {
+            let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+            let port = l.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                for stream in l.incoming() {
+                    let Ok(mut s) = stream else { continue };
+                    let mut buf = [0u8; 1024];
+                    let _ = s.read(&mut buf);
+                    let _ = write!(
+                        s,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                }
+            });
+            port
+        }
+
+        // 1) GERÇEK backend: nonce'u yansıtıyor → hazır.
+        let ok_port = serve(r#"{"status":"online","service":"PEMF-Vet","launcherNonce":"DOGRU"}"#);
+        assert!(wait_for_health(ok_port, Duration::from_secs(5), Some("DOGRU")));
+
+        // 2) PORT KAPAN SÜREÇ: 200 döner, PEMF gibi görünür ama nonce'u BİLEMEZ → hazır DEĞİL.
+        let squat = serve(r#"{"status":"online","service":"PEMF-Vet"}"#);
+        assert!(
+            !wait_for_health(squat, Duration::from_secs(2), Some("DOGRU")),
+            "nonce YOKKEN hazir dendi — port kapan surece E-stop gonderilir"
+        );
+
+        // 3) YANLIŞ nonce (tahmin denemesi) → hazır DEĞİL.
+        let wrong = serve(r#"{"status":"online","service":"PEMF-Vet","launcherNonce":"YANLIS"}"#);
+        assert!(!wait_for_health(wrong, Duration::from_secs(2), Some("DOGRU")));
+
+        // 4) ESKİ backend (nonce desteklemiyor) + doğrulama KAPALI → geriye uyum korunur.
+        assert!(wait_for_health(squat, Duration::from_secs(5), None));
+    }
+
+    /// Nonce tahmin edilebilir OLMAMALI: her çağrı farklı ve 256-bit hex.
+    #[test]
+    fn health_nonce_benzersiz_ve_yeterli_uzunlukta() {
+        let a = generate_health_nonce();
+        let b = generate_health_nonce();
+        assert_eq!(a.len(), 64, "SHA-256 hex = 64 karakter");
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b, "ardisik iki nonce AYNI cikti — entropi yok");
+    }
+
     /// Sahte bir HTTP sunucusu 200 dönünce hazır kabul edilmeli.
     #[test]
     fn health_200_gorunce_hazir_der() {
@@ -488,7 +596,7 @@ mod tests {
                 let _ = s.write_all(body);
             }
         });
-        assert!(wait_for_health(port, Duration::from_secs(5)));
+        assert!(wait_for_health(port, Duration::from_secs(5), None));
     }
 
     /// Kimse dinlemiyorsa zaman aşımına düşmeli (sessizce "hazır" DEMEMELİ).
@@ -497,7 +605,7 @@ mod tests {
         let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener); // port serbest, kimse dinlemiyor
-        assert!(!wait_for_health(port, Duration::from_secs(2)));
+        assert!(!wait_for_health(port, Duration::from_secs(2), None));
     }
 
     /// 200 DIŞI yanıt hazır sayılmamalı (404 veren başka bir servis olabilir).
@@ -511,7 +619,7 @@ mod tests {
                 let _ = write!(s, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
             }
         });
-        assert!(!wait_for_health(port, Duration::from_secs(2)));
+        assert!(!wait_for_health(port, Duration::from_secs(2), None));
     }
 
     #[test]
