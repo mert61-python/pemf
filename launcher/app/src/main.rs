@@ -227,9 +227,13 @@ fn home_dir() -> std::path::PathBuf {
     // "kurulu değil" sanıp ~1,3 GB'ı yeniden indirir ve çalışan backend'in `backend.port`'unu
     // bulamaz (E-stop yedeği kör kalır). Windows'un kanonik değişkeni USERPROFILE'dır.
     let (first, second) = home_var_order(cfg!(target_os = "windows"));
-    std::env::var_os(first)
-        .or_else(|| std::env::var_os(second))
-        .filter(|v| !v.is_empty())
+    // DENETİM 2026-08-04 (P3): `filter` `or_else`'ten SONRA uygulanıyordu → ilk değişken
+    // TANIMLI-AMA-BOŞ ise (`set USERPROFILE=` ya da servis bağlamı) `var_os` `Some("")` döner,
+    // `or_else` HİÇ çalışmaz ve boş değer filtrelenip doğrudan `temp_dir()`e düşülürdü. Yani
+    // ikinci değişkene geçiş imkânsızdı. Filtreyi HER değişkene ayrı uygula.
+    let al = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
+    al(first)
+        .or_else(|| al(second))
         .map(std::path::PathBuf::from)
         // #146: HOME/USERPROFILE yoksa CWD-relative "." (fail-open) YERİNE mutlak temp dizini —
         // kurulumu çalışma-dizinine (öngörülemez/yazılabilir) yazma riskini keser.

@@ -285,9 +285,20 @@ pub fn repair(
     // HİÇ dokunmuyor ve yine de `Ok(())` dönüyordu → UI "Hazır" diyordu. Artık kaydın durumu
     // ayırt ediliyor: okunamıyorsa ve diskte model verisi VARSA hangi profillerin onarılacağı
     // BİLİNEMEZ → sessiz başarı yerine AÇIK hata.
+    // DENETİM 2026-08-04 (P3): `Missing` ile `Corrupt` AYNI kovadaydı → `installed_profiles.json`
+    // (2026-07-29) ÖNCESİ yapılmış TÜM meşru kurulumlarda "Onar" tamamen çalışmaz olmuştu.
+    // `Missing` belirsiz DEĞİL: profiller `ai_models/<profil>/` dizinlerinden çıkarılabilir.
+    // `Corrupt` (dosya var, JSON bozuk) gerçekten belirsizdir → açık hata doğru kalır.
     let installed = match install::read_installed_profiles_detailed(install_root) {
         install::ProfileRecord::Ok(v) => v,
-        _ if install::has_model_data(install_root) => {
+        install::ProfileRecord::Missing if install::has_model_data(install_root) => {
+            let v = install::infer_profiles_from_disk(install_root);
+            on(Progress::Extracting {
+                what: format!("eski kurulum algılandı ({} profil)", v.len()),
+            });
+            v
+        }
+        install::ProfileRecord::Corrupt if install::has_model_data(install_root) => {
             return Err(FlowError::ProfileRecordUnreadable);
         }
         // Kayıt yok/bozuk AMA diskte model de yok → gerçekten yalnız base kurulu; onarım doğru.
@@ -477,6 +488,42 @@ mod tests {
             !install::backend_path(root).exists(),
             "yarim agac temizlenmedi — UI kurulumu 'kurulu' gosterir ve EKSIK backend baslatilir"
         );
+    }
+
+    /// ⚠️ P3 (denetim 2026-08-04): `Missing` ile `Corrupt` AYNI kovadaydi → kayit dosyasi
+    /// (2026-07-29) ONCESI yapilmis TUM mesru kurulumlarda "Onar" tamamen calismaz olmustu.
+    /// `Missing` belirsiz DEGIL: profiller `ai_models/<profil>/` dizinlerinden cikarilabilir.
+    #[test]
+    fn kayit_yokken_profiller_diskten_cikarilir() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        // Eski kurulum: kayit dosyasi YOK ama model verisi VAR.
+        for prof in ["home", "vet"] {
+            std::fs::create_dir_all(install::models_dir(root).join(prof)).unwrap();
+            std::fs::write(install::models_dir(root).join(prof).join("m.onnx"), b"x").unwrap();
+        }
+        assert!(matches!(
+            install::read_installed_profiles_detailed(root),
+            install::ProfileRecord::Missing
+        ));
+
+        let bulunan = install::infer_profiles_from_disk(root);
+        assert_eq!(bulunan, vec!["home".to_string(), "vet".to_string()],
+            "profiller diskten cikarilamadi — eski kurulumlarda Onar calismaz");
+    }
+
+    /// BOZUK kayitta ise gercekten belirsiz → sessiz basari yerine ACIK hata (davranis korunuyor).
+    #[test]
+    fn bozuk_kayitta_hata_davranisi_korunur() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        std::fs::create_dir_all(install::models_dir(root).join("vet")).unwrap();
+        std::fs::write(install::models_dir(root).join("vet").join("m.onnx"), b"x").unwrap();
+        std::fs::write(install::installed_profiles_path(root), b"{bu json degil").unwrap();
+        assert!(matches!(
+            install::read_installed_profiles_detailed(root),
+            install::ProfileRecord::Corrupt
+        ));
     }
 
     #[test]

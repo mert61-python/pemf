@@ -298,6 +298,28 @@ pub enum ProfileRecord {
     Corrupt,
 }
 
+/// Kayıt dosyası YOKKEN kurulu profilleri DİSKTEN çıkar (`ai_models/<profil>/`).
+///
+/// ⚠️ DENETİM 2026-08-04 (P3): `repair()` `Missing` ile `Corrupt`'ı AYNI kovaya koyuyordu ve
+/// diskte model verisi varsa ikisinde de HATA veriyordu. Ama `installed_profiles.json` bu
+/// projeye 2026-07-29'da eklendi — ONDAN ÖNCE yapılmış TÜM meşru kurulumlarda kayıt `Missing`
+/// olur ve model verisi de vardır. Sonuç: o kullanıcılarda "Onar" düğmesi tamamen çalışmaz hale
+/// gelmişti. Kayıt yoksa profiller diskten güvenle çıkarılabilir; `Corrupt` (dosya var ama
+/// bozuk) ise gerçekten belirsizdir ve hata vermek doğrudur.
+pub fn infer_profiles_from_disk(install_root: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(models_dir(install_root))
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().to_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v.dedup();
+    v
+}
+
 pub fn read_installed_profiles_detailed(install_root: &Path) -> ProfileRecord {
     match std::fs::read_to_string(installed_profiles_path(install_root)) {
         Err(_) => ProfileRecord::Missing,

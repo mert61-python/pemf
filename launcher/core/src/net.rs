@@ -267,6 +267,28 @@ pub fn download_to_file(
     // oluşuyor. SHA bunu yakalar ama gigabaytlarca trafik boşa gider ve kullanıcı sahte bir
     // "kurcalanma" hatası görür. Çözüm: `.part` adını beklenen SHA'ya bağla — farklı içerik
     // farklı `.part` demektir; TAMAMLANMIŞ önbellek (`dest`) ADI DEĞİŞMEDİĞİ için korunur.
+    // ⚠️ DENETİM 2026-08-04 (P3): `.part` adını sha'ya bağlamak, sha DEĞİŞTİĞİNDE (yeni sürüm
+    // yayını) eski yarım indirmeyi KALICI YETİM dosyaya çeviriyor — `install::clear_partials`
+    // yalnız AÇIK iptalde koşar, normal akış onları hiç temizlemez. Klinik diskinde her sürümde
+    // yüzlerce MB birikir. Yeni indirmeye başlarken AYNI hedefin farklı-sha artıklarını sil.
+    if let (Some(dir), Some(stem)) = (dest.parent(), dest.file_stem().and_then(|s| s.to_str())) {
+        let onek = format!("{stem}.");
+        if let Ok(rd) = fs::read_dir(dir) {
+            for e in rd.flatten() {
+                let ad = e.file_name();
+                let Some(ad) = ad.to_str() else { continue };
+                if ad.starts_with(&onek) && ad.ends_with(".part") {
+                    // Bizim kullanacağımız `.part` aşağıda hesaplanıyor; onu ELEMEK için
+                    // beklenen sha ön-ekini taşıyanı atlıyoruz.
+                    let bizim = expected_sha.len() >= 12
+                        && ad.contains(&expected_sha[..12].to_ascii_lowercase());
+                    if !bizim {
+                        let _ = fs::remove_file(e.path());
+                    }
+                }
+            }
+        }
+    }
     let part = if expected_sha.len() >= 12 {
         dest.with_extension(format!("{}.part", expected_sha[..12].to_ascii_lowercase()))
     } else {
@@ -571,6 +593,41 @@ mod tests {
         ] {
             assert!(validate_download_source(u).is_ok(), "opak nesne deposu reddedildi: {u}");
         }
+    }
+
+    /// P3 (denetim 2026-08-04): sha degisince eski `.part` KALICI YETIM kaliyordu — hicbir
+    /// normal akis temizlemiyordu (clear_partials yalniz acik iptalde kosar). Klinik diskinde
+    /// her surumde yuzlerce MB birikirdi.
+    #[test]
+    fn eski_shali_part_artiklari_temizlenir() {
+        let d = tempfile::tempdir().unwrap();
+        let dest = d.path().join("base.zip");
+        let eski = d.path().join("base.aaaaaaaaaaaa.part");
+        let yeni_sha = "bbbbbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        let yeni = d.path().join(format!("base.{}.part", &yeni_sha[..12]));
+        let alakasiz = d.path().join("baska.dddddddddddd.part");
+        std::fs::write(&eski, b"bayat").unwrap();
+        std::fs::write(&yeni, b"devam").unwrap();
+        std::fs::write(&alakasiz, b"baska-indirme").unwrap();
+
+        // download_to_file'in temizlik adiminin AYNISI (ag gerekmez).
+        let dir = dest.parent().unwrap();
+        let stem = dest.file_stem().unwrap().to_str().unwrap();
+        let onek = format!("{stem}.");
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let ad = e.file_name();
+            let ad = ad.to_str().unwrap().to_string();
+            if ad.starts_with(&onek) && ad.ends_with(".part") {
+                let bizim = ad.contains(&yeni_sha[..12]);
+                if !bizim {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
+
+        assert!(!eski.exists(), "eski sha'li .part temizlenmedi (yetim dosya birikir)");
+        assert!(yeni.exists(), "DEVAM EDILECEK .part silindi — indirme bastan baslar");
+        assert!(alakasiz.exists(), "BASKA bir indirmenin .part'i silindi");
     }
 
     #[test]
