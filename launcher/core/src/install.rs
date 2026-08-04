@@ -454,7 +454,7 @@ mod tests {
     /// migrasyon HIC calismiyordu ve yukseltmede ~2,6 GB payload YENIDEN INDIRILIYORDU.
     /// GERCEK senaryo: yeni kok VAR (icinde exe/uninstaller) ama PAYLOAD YOK.
     #[test]
-    fn nsis_kokU_varken_de_eski_payload_tasinir() {
+    fn nsis_koku_varken_de_eski_payload_tasinir() {
         let d = tempfile::tempdir().unwrap();
         let parent = d.path();
         let yeni = parent.join("PEMF Vet Client");
