@@ -73,6 +73,37 @@ kabul ediliyordu — `for (int i = 0; i < NUM_COILS; i++)` ile `NUM_COILS`'un `5
 karşılaştırması. Denetim 2026-08-04'te döngü sayaçları `uint32_t`'ye çevrildi; artık
 `-Wall -Wextra` temiz. Uyarıları sıfırda tutun: gürültü, gerçek bir uyarıyı görünmez yapar.)
 
+## Bilinen sınırlar (denetim 2026-08-04)
+
+Aşağıdakiler **kusur olarak biliniyor ve bilinçli olarak kod değişikliği yapılmadı.** Amaç, sonraki
+okuyucunun bunları "zaten hallolmuş" sanmaması.
+
+### Süre sınırı tek başına bir güvenlik sınırı DEĞİL (#69)
+Bobinin `dur_min` süresi dolunca firmware duty'yi sıfırlar ve `g_start_ms[i]`'yi 0'lar. Ancak ISR'ın
+shadow→active bloğu "duty>0 ve `g_start_ms==0` ise süreyi başlat" der; host ise **ölü-adam
+watchdog'u (1500 ms) yüzünden aynı paketi 2 Hz göndermek zorundadır** → keep-alive her seferinde
+sayacı baştan başlatır. Yani firmware'in süre sınırı tedaviyi **hiçbir zaman sonlandırmaz**, döngüye
+sokar. Enerjilemeyi gerçekten sınırlayan tek mekanizma host tarafındaki
+`controllers/hardware_controller.py` → `_coil_deadline`'dır; **silinirse bobin süresiz enerjili
+kalır.** Regresyon kapısı: `tests/test_stm32_source_parity.py::test_host_tarafi_sure_deadlineI_hala_uygulaniyor`.
+
+Firmware'de düzeltilmedi çünkü keep-alive'ı "yeni tedavi"den ayırmak 88 baytlık **sabit** pakete
+sıra-numarası/başlat-bayrağı eklemeyi gerektirir (firmware + backend + simülatör üçünü birden
+değiştiren protokol değişikliği). "Süre doldu" mandalı alternatifi ise hekimin aynı parametrelerle
+yeniden başlat demesini sessizce etkisiz kılabilirdi — klinik bir cihazda kötü bir başarısızlık biçimi.
+
+### Brown-out / PVD yapılandırılmıyor (#71)
+`SystemClock_Config` yalnız HSE+PLL kurar; **BOR seviyesi (option byte) ve PVD kesmesi
+ayarlanmıyor.** Besleme düşerken MCU tanımsız bir bölgede çalışabilir: GPIO'lar periyot ortasında
+donarsa tam-köprü tek yönde DC olarak enerjili kalır (`PEMF_ForceAllCoilOutputsLow` yalnız
+çağrılırsa yardımcı olur). Doğru çözüm, BOR'u option byte'tan `BOR_LEVEL_3`'e almak ve PVD ISR'ında
+`PEMF_ForceAllCoilOutputsLow()` çağırmaktır.
+
+Burada kod eklenmedi çünkü bu depoda **gerçek CubeMX HAL başlıkları yok**; derleme doğrulaması
+bir stub-HAL ile yapılıyor (aşağıdaki bölüm) ve o stub `HAL_PWR_ConfigPVD` / `HAL_FLASHEx_OBProgram`
+imzalarını **doğrulayamaz**. Denetlenmemiş bir güç-yönetimi çağrısı eklemek, doğrulanmış bir
+düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırakıldı.
+
 ## ⚠️ Dikkat
 - **Termal/sıcaklık kesme mantığı bu firmware'de YOK** — termal koruma sensör/ESP tarafındadır. Sahip bunu bilerek böyle bıraktı.
 - Güvenlik-clamp'leri **hasta güvenliğidir** — zayıflatma. Python tarafı bilinçli olarak duty satüre etmez (firmware doyurur). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py`.

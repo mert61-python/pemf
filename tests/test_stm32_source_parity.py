@@ -121,3 +121,82 @@ def test_keep_alive_deadman_esiginden_yeterince_hizli():
         f"keep-alive ({ka_ms} ms) ölü-adam eşiğine ({HardwareController._FIRMWARE_DEADMAN_MS} ms) "
         "çok yakın — ağ/GC gecikmesinde tedavi ortasında beklenmedik durma riski"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (P3 #69) — FIRMWARE SÜRE SINIRI TEK BAŞINA BİR SINIR DEĞİLDİR
+#
+# firmware/main.c'de her bobinin `dur_min` süresi dolunca `g_shadow.coil[i].duty = 0` yazılır
+# ve `g_start_ms[i] = 0` ile sayaç sıfırlanır. Ancak ISR'daki shadow→active bloğu şunu yapar:
+#
+#     if (g_active.coil[i].duty > 0.0f) { if (g_start_ms[i] == 0) g_start_ms[i] = HAL_GetTick(); }
+#
+# Yani host AYNI paketi (duty>0 + duration=N) yeniden gönderdiğinde sayaç BAŞTAN başlar.
+# Keep-alive tam olarak bunu yapar (ölü-adam watchdog'u 1500 ms; host 2 Hz paket gönderMEK
+# ZORUNDA). Sonuç: firmware'in süre sınırı pratikte hiçbir zaman tedaviyi SONLANDIRMAZ —
+# yalnızca döngüye sokar. Bu, hardware_controller.py'de zaten P0 olarak tespit edilmiş ve
+# `_coil_deadline` (host-tarafı, bobin-başı monotonic deadline) ile karşılanmıştır.
+#
+# BURADAKİ RİSK: enerjilemeyi sınırlayan TEK gerçek mekanizma o host-tarafı deadline'dır.
+# Bir yeniden-düzenlemede sessizce kaybolursa, firmware "süre sınırı var" görüntüsü verdiği
+# için kimse fark etmez ve bobin SÜRESİZ enerjili kalabilir. Bu test o kaybolmayı engeller.
+#
+# ⚠️ Protokol tarafında düzeltme BİLEREK yapılmadı: firmware'in keep-alive'ı "yeni tedavi"den
+# ayırt edebilmesi için 88 baytlık sabit pakete sıra-numarası/başlat-bayrağı eklemek gerekir
+# (üç kaynağı birden değiştiren bir protokol değişikliği). Alternatif "süre doldu" mandalı ise
+# hekimin aynı parametrelerle YENİDEN başlat demesini sessizce etkisiz kılma riski taşıyordu —
+# klinik bir cihazda kötü bir başarısızlık biçimi. Karar sahibe bırakıldı.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HWC = Path(__file__).resolve().parent.parent / "controllers" / "hardware_controller.py"
+
+
+def test_host_tarafi_sure_deadlineI_hala_uygulaniyor():
+    """Bobin enerjilenmesini gerçekten sınırlayan TEK mekanizma bu — kaybolursa süresiz kalır."""
+    if not _HWC.exists():
+        pytest.skip(f"hardware_controller yok: {_HWC}")
+    src = _HWC.read_text(encoding="utf-8", errors="replace")
+
+    assert "_coil_deadline" in src, (
+        "_coil_deadline KALDIRILMIS — firmware'in kendi sure sayacini keep-alive resetledigi icin "
+        "bobin enerjilenmesini sinirlayan baska bir mekanizma KALMAZ (suresiz enerjileme)."
+    )
+    # Sadece tanımlı olması yetmez; okunup UYGULANMALI da.
+    reads = len(re.findall(r"_coil_deadline\[", src))
+    assert reads >= 2, (
+        f"_coil_deadline yalnizca {reads} yerde kullanilmis — tanimlanip UYGULANMIYOR olabilir."
+    )
+
+
+def test_firmware_sure_sayaci_keep_alive_ile_resetleniyor_BELGELI(fw_src):
+    """Bu davranış firmware'de AÇIKÇA belgelenmiş olmalı; yoksa okuyan onu güvenlik sınırı sanar."""
+    assert "keep-alive" in fw_src.lower() and "g_start_ms" in fw_src, (
+        "firmware/main.c sure sayacinin keep-alive ile resetlendigini BELGELEMIYOR — sonraki "
+        "okuyucu bunu bagimsiz bir guvenlik siniri sanar ve host-tarafi deadline'i gereksiz gorup silebilir."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DENETİM 2026-08-04 (P3 #65) — ref_ms FAZ HİZALAMASI ISR'DA OLMALI
+# Hizalama eskiden main() döngüsünde, paket ayrıştırılır ayrıştırılmaz yapılıyordu; ama
+# `g_tpp[i]` YALNIZCA ISR'ın pending-uygulama bloğunda güncellenir. Arada 50 kHz'lik ISR
+# çalışırsa tick YENİ frekansa, tpp hâlâ ESKİ frekansa göre olur → hizalama kaybolur ve
+# ESP slave'lerine SAHTE bir PB1 sync darbesi gider. Formül main'de KOPYALANMIŞ olduğu için
+# daha önce zaten bir kez sürüklenmişti (main tamsayı, ISR float bölme).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_ref_ms_hizalamasi_ISR_icinde_yapiliyor(fw_src):
+    """`g_dds_tick[...] = new_tick` ataması TIM1 ISR'ının içinde olmalı, main() döngüsünde değil."""
+    isr = fw_src.index("void HAL_TIM_PeriodElapsedCallback")
+    atamalar = [m.start() for m in re.finditer(r"g_dds_tick\[i\]\s*=\s*new_tick", fw_src)]
+    assert atamalar, "ref_ms faz hizalamasi KAYBOLMUS (g_dds_tick = new_tick yok)"
+    assert all(a > isr for a in atamalar), (
+        "ref_ms hizalamasi main() dongusune GERI TASINMIS — g_tpp ile ayrisip hizalamayi bozar "
+        "ve ESP slave'lerine sahte sync darbesi gonderir (bkz. #65)."
+    )
+    # Hizalama, tpp'nin hesaplandigi ayni blokta olmali (g_tpp atamasindan SONRA gelmeli).
+    tpp_atama = fw_src.index("g_tpp[i] = (uint32_t)(50000.0f / f)")
+    assert all(a > tpp_atama for a in atamalar), (
+        "hizalama g_tpp hesabindan ONCE yapiliyor — eski/yeni tpp ayrismasi geri gelir."
+    )

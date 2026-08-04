@@ -636,43 +636,10 @@ int main(void) {
       if (pkt_ok) {
         last_communication_ms = current_time;
 
-        /* [FIX-1b] ref_ms_valid varsa tüm bobinler üzerinden senkron ofseti
-         * hesapla */
-        if (parsed.ref_ms_valid) {
-          __disable_irq();
-          for (uint32_t i = 0U; i < NUM_COILS; i++) {
-            /* DENETIM 2026-08-04: burada frekans TAMSAYIYA KIRPILIYOR ve tpp ondan
-             * turetiliyordu; ISR ise `g_tpp[i] = (uint32_t)(50000.0f / f)` ile FLOAT bolme
-             * yapiyor. Kesirli frekanslarda ikisi AYRISIYORDU (or. f=2.5 → main tpp=25000,
-             * ISR tpp=20000) ve `new_tick` YANLIS tpp'ye gore klemplenip g_dds_tick periyot
-             * DISINA konumlanabiliyordu. ISR ile AYNI formulu kullan — otorite ISR'dir. */
-            float p_f = parsed.coil[i].freq;
-            if (p_f < FREQ_MIN)
-              p_f = FREQ_MIN;
-            if (p_f > FREQ_MAX)
-              p_f = FREQ_MAX;
-            uint32_t period_ms = (uint32_t)(1000.0f / p_f);
-            if (period_ms == 0U)
-              period_ms = 1U;
-            /* NOT: p_freq > 1000 Hz icin period_ms integer bolme sonucu 0'a
-             * yuvarlanir ve yukarida 1'e zorlanir. Bu durumda
-             * (ref_ms % period_ms) her zaman 0 olur, yani 1 kHz uzerindeki
-             * frekanslarda ms-cozunurlukli ref_ms ile faz hizalamasi
-             * (HW_SYNC) etkisiz kalir — bu, ms bazli senkron protokolunun
-             * dogal cozunurluk siniridir, hata degildir. */
-
-            uint32_t tpp = (uint32_t)(DDS_ISR_HZ / p_f); /* ISR ile BIREBIR AYNI */
-            if (tpp == 0U)
-              tpp = 1U;
-            uint32_t new_tick =
-                (((uint32_t)parsed.ref_ms % period_ms) * tpp) / period_ms;
-            if (new_tick >= tpp)
-              new_tick = tpp - 1U;
-
-            g_dds_tick[i] = new_tick;
-          }
-          __enable_irq();
-        }
+        /* [FIX-1b] ref_ms faz hizalaması ARTIK BURADA DEĞİL — TIM1 ISR'ında, `g_tpp`
+         * ile AYNI kritik bölgede uygulanıyor (bkz. HAL_TIM_PeriodElapsedCallback, #65).
+         * Burada yapıldığında tick YENİ frekansa, tpp ise hâlâ ESKİ frekansa göre oluyordu.
+         * `ref_ms` / `ref_ms_valid` zaten `parsed` ile gölgeye taşınıyor. */
 
         /* İlk komut geldiğinde PWM çıkışlarını başlat */
         if (g_pwm_started == 0) {
@@ -922,7 +889,51 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         p = PHASE_DEG_MAX;
       g_phase_ticks[i] = (int32_t)((p / 360.0f) * tpp_f);
 
-      /* Süre takibi resetlemesi (yeni komut geldiğinde) */
+      /* [FIX-1b] HW_SYNC faz hizalaması — ⚠️ DENETİM 2026-08-04 (#65): BURAYA TAŞINDI.
+       * Eskiden main() döngüsünde, paket ayrıştırılır ayrıştırılmaz `g_dds_tick[i]`
+       * yazılıyordu; ama `g_tpp[i]` YALNIZCA burada (pending uygulanınca) güncelleniyor.
+       * Arada 50 kHz'lik ISR çalışırsa tick YENİ frekansa göre, tpp ise HÂLÂ ESKİ frekansa
+       * göredir. Örnek: bobin 25 kHz'de (tpp=2) iken 1 Hz komutu gelir (yeni tpp=50000);
+       * main new_tick=30000 yazar, ISR `30001 >= 2` görüp tick'i 0'lar → HİZALAMA KAYBOLUR
+       * ve üstelik `period_reset` tetiklenip ESP slave'lerine SAHTE bir PB1 sync darbesi gider.
+       * Artık tpp, duty-tick, faz-tick ve dds-tick'in HEPSİ aynı parametre setinden, tek
+       * kritik bölgede türetiliyor — ayrışma imkânsız. (Formül main'de kopyalanmış olduğu için
+       * daha önce zaten bir kez sürüklenmişti: main tamsayı, ISR float bölme yapıyordu.) */
+      if (g_active.ref_ms_valid) {
+        uint32_t period_ms = (uint32_t)(1000.0f / f);
+        if (period_ms == 0U)
+          period_ms = 1U; /* >1 kHz: ms çözünürlüklü senkron etkisiz — protokolün doğal sınırı */
+        uint32_t tpp_u = g_tpp[i];
+        if (tpp_u == 0U)
+          tpp_u = 1U;
+        uint32_t new_tick =
+            (((uint32_t)g_active.ref_ms % period_ms) * tpp_u) / period_ms;
+        if (new_tick >= tpp_u)
+          new_tick = tpp_u - 1U;
+        g_dds_tick[i] = new_tick;
+      }
+
+      /* Süre takibi resetlemesi (yeni komut geldiğinde)
+       *
+       * ⚠️ DENETİM 2026-08-04 (#69) — BU SAYAÇ TEK BAŞINA BİR GÜVENLİK SINIRI DEĞİLDİR.
+       * Aşağıdaki "kapalıyken açıldıysa başlat" kuralı, `dur_min` dolup bobin otomatik
+       * kapandıktan SONRA gelen paketleri de "yeni başlatma" sayar (auto-stop `g_start_ms[i]`'yi
+       * 0'lar). Host ise ÖLÜ-ADAM watchdog'u (1500 ms) yüzünden aynı paketi 2 Hz ile GÖNDERMEK
+       * ZORUNDADIR — yani keep-alive her seferinde sayacı BAŞTAN başlatır ve firmware'in süre
+       * sınırı tedaviyi hiçbir zaman SONLANDIRMAZ, yalnızca döngüye sokar.
+       *
+       * Enerjilemeyi gerçekten sınırlayan TEK mekanizma host tarafındadır:
+       * controllers/hardware_controller.py → `_coil_deadline` (bobin-başı monotonic deadline).
+       * ORASI SİLİNİRSE bobin SÜRESİZ enerjili kalır — firmware "süre sınırı var" görüntüsü
+       * verdiği için bu sessizce fark edilmez. Koruma: tests/test_stm32_source_parity.py
+       * (`test_host_tarafi_sure_deadlineI_hala_uygulaniyor`).
+       *
+       * Neden burada düzeltilmedi: firmware'in keep-alive tazelemesini "yeni tedavi"den ayırt
+       * edebilmesi için 88 baytlık SABİT pakete sıra-numarası/başlat-bayrağı eklemek gerekir
+       * (firmware + backend + simülatör üçünü birden değiştiren protokol değişikliği).
+       * "Süre doldu" mandalı alternatifi ise hekimin aynı parametrelerle YENİDEN başlat
+       * demesini sessizce etkisiz kılabilirdi — klinik bir cihazda kötü bir başarısızlık biçimi.
+       */
       if (g_active.coil[i].duty > 0.0f) {
         if (g_start_ms[i] == 0) {
           g_start_ms[i] =
