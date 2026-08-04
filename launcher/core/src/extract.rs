@@ -40,6 +40,9 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
 
     let mut written = 0usize;
     let mut total_bytes: u64 = 0;
+    // #102: yazmadan once hedef dizinin GERCEK konumunu dogrularken ayni dizin icin
+    // canonicalize'i tekrarlamamak icin son dogrulanan ebeveyn (girdiler gruplu gelir).
+    let mut last_checked_parent: Option<std::path::PathBuf> = None;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         // `enclosed_name()` zip-slip'e karşı ilk savunma (mutlak yol / `..` reddeder),
@@ -74,6 +77,23 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
         }
         if let Some(parent) = out.parent() {
             fs::create_dir_all(parent)?;
+            // ⚠️ DENETİM 2026-08-04 (#102 — ZİNCİRLEME SYMLINK): `stays_within` yalnız METİNSEL
+            // sadeleştirme yapar, dosya sistemine BAKMAZ. Tek başına her biri "kök altında"
+            // görünen İKİ symlink zincirlenince kökün DIŞINA çıkan bir dizin elde edilir
+            // (örn. `a -> "."` ve `b -> "a/.."` → `<kök>/b` = kökün EBEVEYNİ). Ardından gelen
+            // sıradan bir girdi (`b/x.dat`) o link ÜZERİNDEN dışarı yazar; `File::create` linki
+            // İZLER ve yol kontrolü bunu göremez.
+            // Bu yüzden yazmadan ÖNCE, hedef dizinin GERÇEK (symlink çözümlenmiş) konumunu
+            // doğrula. `is_within` canonicalize eder ve fail-closed'dur.
+            // Maliyet: dizin DEĞİŞTİĞİNDE tek canonicalize (girdiler dizin dizin gruplu gelir).
+            if last_checked_parent.as_deref() != Some(parent) {
+                if !is_within(dest, parent) {
+                    return Err(ExtractError::PathEscape(format!(
+                        "{raw_name} (hedef dizin symlink üzerinden kurulum kökünün DIŞINA çözümlendi)"
+                    )));
+                }
+                last_checked_parent = Some(parent.to_path_buf());
+            }
         }
         let mut target = fs::File::create(&out)?;
         // Toplam açılım bütçesi: yalan-başlıklı zip-bomb'a karşı GERÇEK yazılan byte'ı sınırla
@@ -97,7 +117,15 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
         {
             use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = entry.unix_mode() {
-                fs::set_permissions(&out, fs::Permissions::from_mode(mode & 0o777))?;
+                // DENETİM 2026-08-04 (#105): eski maske `mode & 0o777` yalnız setuid/setgid/
+                // sticky'yi (0o7000) düşürüyordu; GRUP ve DİĞER kullanıcıların YAZMA bitleri
+                // (0o022) AYNEN korunuyordu. umask 000 ile üretilmiş bir build makinesinde
+                // 0o777 işaretli girdiler herkes-yazılabilir olarak açılır → `PEMF_Backend`
+                // ikilisi ve `_internal/*.so` başka bir yerel kullanıcı tarafından DEĞİŞTİRİLİR
+                // (bir sonraki çalıştırmada bobin kontrolü devralınır). Çalıştırma biti KORUNUR
+                // (backend +x olmadan başlamaz), yalnız grup/diğer YAZMA kaldırılır.
+                let safe_mode = (mode & 0o777) & !0o022;
+                fs::set_permissions(&out, fs::Permissions::from_mode(safe_mode))?;
             }
         }
     }
@@ -105,8 +133,45 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<usize, ExtractError> {
 }
 
 /// Yol yalnız normal bileşenlerden oluşmalı: kök, önek (Windows `C:`), `..` YASAK.
+///
+/// DENETİM 2026-08-04 (iki düzeltme):
+///
+/// 1. **`./` YANLIŞ-POZİTİFİ**: Rust `Path::components()` yolun BAŞINDAKİ `.` bileşenini
+///    sadeleştirmez, `Component::CurDir` olarak döndürür. `./PEMF_Backend/x` gibi TAMAMEN MEŞRU
+///    bir arşiv girdisi (birçok zip aracı bu öneki üretir) "GÜVENLİK: kurulum dizininin dışına
+///    yazmaya çalıştı" hatasıyla TÜM kurulumu ilk girdide düşürüyordu. `CurDir` zararsızdır —
+///    yolu ileri taşımaz; artık kabul edilir. `..` (`ParentDir`) hâlâ REDDEDİLİR.
+///
+/// 2. **NTFS ALTERNATE DATA STREAM**: Windows'ta `a.txt:gizli` adı TEK bir `Component::Normal`
+///    olarak görünür (sürücü öneki tek harf gerektirdiği için `Prefix` sayılmaz) ve eski kontrolü
+///    GEÇİYORDU. `File::create(dest/a.txt:gizli)` `dest/a.txt` dosyasının ALTERNATİF VERİ
+///    AKIŞINA yazar: içerik dizin listelemesinde ve boyut hesabında GÖRÜNMEZ, SHA doğrulaması
+///    ana akışı okur → arşive gizli yük saklanabilir. Kurulum kökünden ÇIKIŞ yok ama bütünlük
+///    ve gizlenebilirlik sorunudur; meşru bir paket ADS içermez → reddet.
 fn is_safe_relative(p: &Path) -> bool {
-    p.components().all(|c| matches!(c, Component::Normal(_)))
+    p.components().all(|c| match c {
+        Component::CurDir => true, // `./` zararsız (bkz. not 1)
+        Component::Normal(seg) => !segment_is_hostile(seg),
+        _ => false, // RootDir / Prefix / ParentDir
+    })
+}
+
+/// Tek bir yol parçası düşmanca mı? (NTFS ADS ayıracı + Windows rezerve aygıt adları)
+fn segment_is_hostile(seg: &std::ffi::OsStr) -> bool {
+    let Some(s) = seg.to_str() else {
+        return false; // UTF-8 olmayan ad: ayrıca kısıtlamıyoruz (kök altında kalır)
+    };
+    if s.contains(':') {
+        return true; // `dosya:akış` → NTFS ADS
+    }
+    // `NUL`, `CON`, `COM1`… → `File::create` AYGITA açar, içerik SESSİZCE yutulur ve
+    // `written` sayacı yine artar (kurulum "başarılı" görünür, dosya hiç oluşmaz).
+    let stem = s.split('.').next().unwrap_or("").to_ascii_uppercase();
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    RESERVED.contains(&stem.as_str())
 }
 
 /// ZIP girdisi sembolik link mi? (unix mode'da S_IFLNK)
@@ -266,6 +331,31 @@ mod tests {
         assert!(!is_safe_relative(Path::new("/mutlak/yol")));
     }
 
+    /// DENETİM 2026-08-04: `./` önekli MEŞRU arşiv tüm kurulumu düşürüyordu (yanlış-pozitif).
+    #[test]
+    fn nokta_egik_onekli_mesru_yol_kabul_edilir() {
+        assert!(is_safe_relative(Path::new("./PEMF_Backend/x.dat")));
+        assert!(is_safe_relative(Path::new("./a/./b")));
+        // Ama `..` HÂLÂ reddedilmeli.
+        assert!(!is_safe_relative(Path::new("./../disari")));
+    }
+
+    /// DENETİM 2026-08-04: `a.txt:akis` Windows'ta TEK Normal bileşendir ve eski kontrolü
+    /// GEÇİYORDU → arşiv, dizin listelemesinde GÖRÜNMEYEN bir alternatif veri akışına yazabilirdi.
+    #[test]
+    fn ntfs_ads_ve_rezerve_aygit_adlari_reddedilir() {
+        assert!(!is_safe_relative(Path::new("a.txt:gizli")));
+        assert!(!is_safe_relative(Path::new("PEMF_Backend/x.exe:payload")));
+        // Rezerve aygıt adları: File::create AYGITA açar, içerik sessizce yutulur.
+        for bad in ["NUL", "CON", "com1", "LPT9", "nul.txt", "PEMF_Backend/CON"] {
+            assert!(!is_safe_relative(Path::new(bad)), "rezerve ad kabul edildi: {bad}");
+        }
+        // Benzeyen ama MEŞRU adlar reddedilmemeli.
+        for ok in ["console.js", "CONFIG", "com.dat", "nullable.py", "LPT10"] {
+            assert!(is_safe_relative(Path::new(ok)), "mesru ad reddedildi: {ok}");
+        }
+    }
+
     #[cfg(unix)]
     fn build_zip_with_symlink(link: &str, target: &str) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -356,6 +446,76 @@ mod tests {
         // 4) Kök çözümlenemiyorsa (yok) → FAIL-CLOSED, true DEĞİL
         let yok = root.join("hic-olmayan-kok");
         assert!(!is_within(&yok, &yok.join("x")), "kok cozumlenemedi ama 'guvenli' dendi (fail-open)");
+    }
+
+    /// ⚠️ DENETİM 2026-08-04 (#102): İKİ symlink tek tek "kök altında" görünür ama ZİNCİRLENİNCE
+    /// kökün DIŞINA çıkar (`a -> "."`, `b -> "a/.."` → `<kök>/b` = kökün EBEVEYNİ). Ardından
+    /// sıradan bir girdi o link ÜZERİNDEN dışarı yazar. `stays_within` salt sözdizimsel olduğu
+    /// için bunu GÖREMİYORDU; artık yazmadan önce hedef dizin GERÇEKTEN çözümleniyor.
+    #[cfg(unix)]
+    #[test]
+    fn zincirleme_symlink_ile_disari_yazma_reddedilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("chain.zip");
+        let f = fs::File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        let opts: zip::write::SimpleFileOptions = zip::write::FileOptions::default();
+        // 1) a -> "."          (kök altında görünür)
+        w.add_symlink("a", ".", opts).unwrap();
+        // 2) b -> "a/.."       (sadeleştirilince kök; ama GERÇEKTE kökün EBEVEYNİ)
+        w.add_symlink("b", "a/..", opts).unwrap();
+        // 3) b/ustunden DIŞARI yazma denemesi
+        w.start_file("b/kacak.txt", zip::write::FileOptions::<()>::default()).unwrap();
+        w.write_all(b"pwned").unwrap();
+        w.finish().unwrap();
+
+        let out = tempfile::tempdir().unwrap();
+        let err = extract_zip(&path, out.path()).unwrap_err();
+        assert!(
+            matches!(err, ExtractError::PathEscape(_)),
+            "zincirleme symlink ile kok DISINA yazma ENGELLENMEDI: {err:?}"
+        );
+        // Kökün ebeveynine hiçbir şey sızmamış olmalı.
+        assert!(!out.path().parent().unwrap().join("kacak.txt").exists());
+    }
+
+    /// Windows karşılığı (#102): zip-symlink'ler burada zaten reddedilir, ama hedef dizin
+    /// BAŞKA bir yolla (junction/reparse-point — `mklink /J`, yönetici GEREKTİRMEZ) kurulum
+    /// kökünün dışına yönlendirilmiş olabilir. Aynı koruma bunu da yakalamalı.
+    #[cfg(windows)]
+    #[test]
+    fn junction_uzerinden_disari_yazma_reddedilir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("kurulum");
+        let disari = dir.path().join("disari");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&disari).unwrap();
+
+        // <kök>/link  ->  <tmp>/disari   (kurulum kökünün DIŞI)
+        let st = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(root.join("link"))
+            .arg(&disari)
+            .output();
+        let ok = st.map(|o| o.status.success()).unwrap_or(false);
+        if !ok {
+            eprintln!("atlandi: junction olusturulamadi (mklink yok/izin yok)");
+            return;
+        }
+
+        let path = dir.path().join("j.zip");
+        let f = fs::File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        w.start_file("link/kacak.txt", zip::write::FileOptions::<()>::default()).unwrap();
+        w.write_all(b"pwned").unwrap();
+        w.finish().unwrap();
+
+        let err = extract_zip(&path, &root).unwrap_err();
+        assert!(
+            matches!(err, ExtractError::PathEscape(_)),
+            "junction uzerinden kok DISINA yazma ENGELLENMEDI: {err:?}"
+        );
+        assert!(!disari.join("kacak.txt").exists(), "dosya kok disina yazilmis");
     }
 
     #[test]
