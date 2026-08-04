@@ -380,3 +380,21 @@ def test_health_aktif_seans_bayragi_tunel_proxysinden_SIZDIRILMAZ():
     finally:
         os.environ.pop("PEMF_TRUSTED_PROXIES", None)
         _auth._TRUSTED_PROXIES = None
+
+
+def test_health_nonce_LAN_istemcisine_de_SIZDIRILMAZ():
+    """⚠️ P3: kodun açıkça yazdığı 'LAN de yeterli DEĞİL' invaryantı için negatif test yoktu.
+
+    Mevcut testler yalnız 127.0.0.1 (pozitif) ve Cloudflare-başlıklı istek (negatif) kapsıyordu.
+    Oysa `is_local_request` LAN'ı YEREL sayar; biri bu iki alanı ona bağlarsa nonce ve
+    aktif-tedavi bilgisi tüm LAN'a açılır ve TESTLER YEŞİL KALIRDI.
+    """
+    from fastapi.testclient import TestClient
+
+    from servers import api_server
+
+    for lan_ip in ("192.168.1.50", "10.0.0.7", "172.16.5.9"):
+        with TestClient(api_server.app, client=(lan_ip, 51234)) as c:
+            body = c.get("/api/health").json()
+        assert body.get("launcherNonce") is None, f"nonce LAN istemcisine ({lan_ip}) SIZDI"
+        assert body.get("sessionActive") is None, f"aktif-tedavi bilgisi LAN'a ({lan_ip}) SIZDI"

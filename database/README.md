@@ -41,3 +41,22 @@ dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hi�
 
 ---
 İlgili: [proje geneli](../README.md) · [servers/](../servers/README.md) · [utils/secrets_manager](../utils/README.md) · [mimari](../docs/ARCHITECTURE.md)
+
+## ⚠️ Uygulama sırası GÜVENLİĞİ — `ON_ERROR_STOP` ŞART
+
+`supabase_devices.sql` ve `supabase_patients.sql` başında bir **sıra-güvenliği kapısı** var:
+`secure_v2` şeması zaten kuruluysa (`_pemf_verify_device` işaretçisi) `raise exception` ile
+durur. Bu, ESKİ dosyaların YENİ şemayı geri sarmasını engeller.
+
+**Ama bu garanti, dosyanın hata anında GERÇEKTEN durmasına bağlıdır.** `psql -f dosya.sql` ile
+uygulanırsa `ON_ERROR_STOP` **varsayılan olarak KAPALIDIR**: `raise exception` yalnız o ifadeyi
+düşürür, `psql` kalan ifadeleri çalıştırmaya DEVAM EDER ve kapı hiçbir şeyi durdurmamış olur.
+
+Doğru kullanım:
+
+```bash
+psql -v ON_ERROR_STOP=1 -f database/supabase_devices.sql "$DATABASE_URL"
+```
+
+Supabase **SQL Editor**'da yapıştırıp çalıştırmak güvenlidir (tek transaction, ilk hata tüm
+çalıştırmayı iptal eder) — önerilen yol budur.

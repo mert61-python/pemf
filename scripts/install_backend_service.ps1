@@ -62,7 +62,15 @@ if (-not (Test-PemfProtectedPath $ExePath)) {
 # varsayılan ACL'i `Authenticated Users:(OI)(CI)(IO)(M)` içerdiğinden orada oluşan dosyaları
 # YÖNETİCİ OLMAYAN her kullanıcı DEĞİŞTİREBİLİR → nssm.exe değiştirilip LocalSystem'de kod
 # çalıştırılabilirdi. Korumalı dizine taşındı; eski dizin varsa YERİNDE sertleştirilir.
-$NssmDir     = if (Test-Path "C:\nssm\nssm.exe") { "C:\nssm" } else { "C:\Program Files\PEMF\nssm" }
+# ⚠️ DENETİM 2026-08-04 (P3 — BU DÜZELTMENİN KENDİ AÇIĞI): yukarıdaki düzeltme korumalı dizine
+# geçti AMA `C:\nssm\nssm.exe` VARSA hâlâ ONU TERCİH ediyordu. Oysa tam da anlatılan zafiyet
+# nedeniyle o dosya, kurulumdan ÖNCE yönetici olmayan biri tarafından YERLEŞTİRİLMİŞ olabilir
+# (`C:\` kökü Authenticated Users'a yazma verir). Dizinin ACL'ini sonradan sertleştirmek ZATEN
+# YERLEŞTİRİLMİŞ ikiliyi geri almaz — servis yine saldırganın exe'sini LocalSystem olarak koşar.
+# Artık HER ZAMAN korumalı dizin kullanılır; oradaki nssm.exe yoksa temiz kopya indirilir.
+# `C:\nssm` yalnızca ARTIK OLARAK ele alınır (aşağıda sertleştirilir/temizlenir), kaynak olarak DEĞİL.
+$NssmDir     = "C:\Program Files\PEMF\nssm"
+$LegacyNssm  = "C:\nssm"
 $NssmExe     = "$NssmDir\nssm.exe"
 
 # Dizini SYSTEM+Administrators'a tam, Users'a yalnız OKU/ÇALIŞTIR yap. SID kullanılır:
@@ -137,8 +145,17 @@ if (-not (Test-Path $NssmExe)) {
         Remove-Item $TmpRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 } else {
-    Protect-PemfDir $NssmDir   # eski/mevcut dizin AÇIK olabilir → yerinde sertleştir
+    Protect-PemfDir $NssmDir   # mevcut korumalı dizin — yine de sertleştir (idempotent)
     Write-Status "NSSM bulundu: $NssmExe" "Green"
+}
+
+# Eski `C:\nssm` ARTIK: kaynak olarak KULLANILMAZ (bkz. $NssmDir notu) ama diskte duruyorsa
+# yazılabilir bir dizinde LocalSystem'de koşabilecek bir ikili bırakmayalım — sertleştir ve
+# operatörü uyar. Silmiyoruz: başka bir servis onu kullanıyor olabilir.
+if (Test-Path $LegacyNssm) {
+    Protect-PemfDir $LegacyNssm
+    Write-Status "UYARI: eski '$LegacyNssm' dizini duruyor — KULLANILMADI, yalnız sertleştirildi." "Yellow"
+    Write-Status "       Baska bir servis kullanmiyorsa elle silin (yazilabilir konumda ikili birakmayin)." "Yellow"
 }
 
 # --- Varolan servisi kaldır ---
