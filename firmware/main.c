@@ -23,7 +23,7 @@
  *  │    PA8  (IN_A Bobin 5)   PA9  (IN_B Bobin 5)                      │
  *  │                                                                     │
  *  │  Her bobin BAĞIMSIZ faz kaydırmasına sahiptir!                      │
- *  │  Dead Time: 2 tick × 20µs = 40µs — periyot başında her iki çıkış LOW  │
+ *  │  Dead Time: A/B geçişinde NOP döngüsü (DDS_DEADTIME_NOP_ITERS) — ÖLÇÜLMEMİŞ  │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -130,7 +130,26 @@
 #define DDS_MIN_TICKS_PER_PERIOD                                               \
   2.0f /**< Nyquist/teknik alt sinir: periyot basina en az 2 tick */
 #define DDS_DEAD_TIME_TICKS                                                    \
-  0U /**< Yazılımsal dead time (DONANIMSAL gecikme ile değiştirildi) */
+  0U /**< TICK bazli yazilimsal dead-time KULLANILMIYOR (0). Gercek dead-time A/B
+      *   gecisinde NOP dongusuyle uygulanir → DDS_DEADTIME_NOP_ITERS. */
+/**
+ * A/B tam-kopru gecisinde uygulanan dead-time NOP dongusu iterasyon sayisi.
+ *
+ * ⚠️ DENETIM 2026-08-04: bu deger koda gomulu SIHIRLI bir sayiydi (21) ve BELGELER UC FARKLI
+ * DEGER soyluyordu: dosya basligi "2 tick x 20us = 40us", satir-ici yorum ve README ise
+ * "~500 ns". Ucu de kodla uyusmuyordu.
+ *
+ * GERCEK SURE OLCULMEMISTIR ve bu koddan HESAPLANAMAZ: dongu sayaci `volatile` oldugu icin her
+ * iterasyon bellek load/store yapar; sure -O seviyesine, FLASH_LATENCY_5 bekleme durumlarina ve
+ * ART hizlandirici isabet/kacirmasina baglidir. Kaba tahmin ~6-10 cevrim/iterasyon → 168 MHz'de
+ * 21 iterasyon ≈ 0.75-1.25 us. Yani gercek deger belgelenen 500 ns'den BUYUK (guvenli yon: daha
+ * fazla dead-time = shoot-through riski daha dusuk) ama 40 us'ten cok KUCUK.
+ *
+ * ⚠️ Bu, tam-kopruye karsi TEK yazilim korumasidir (MCU'da donanimsal dead-time ureteci YOK).
+ * Degistirmeden once OSILOSKOPLA olcun: IN_A dusen kenari ile IN_B yukselen kenari arasindaki
+ * sure, kullanilan MOSFET/surucunun veri sayfasindaki turn-off gecikmesinden BUYUK olmalidir.
+ */
+#define DDS_DEADTIME_NOP_ITERS 21U
 #define DDS_MAX_DUTY_SLEW                                                      \
   25 /**< Periyot başı max duty değişimi (tick) — 100 Hz referans değeri */
 #define DDS_SLEW_FULLSCALE_S                                                   \
@@ -371,6 +390,13 @@ static volatile uint16_t g_rxLen = 0;
 static volatile UartRxState_t g_rxState = RX_IDLE;
 static volatile uint8_t g_pktBuf[BINARY_PKT_SIZE];
 static volatile uint8_t g_pktReady = 0;
+/* DENETIM 2026-08-04: cerceve senkronizasyonunda BAYT-ARASI ZAMAN ASIMI yoktu. Durum makinesi
+ * yalnizca 0xAA/0x55 desenine ve 88-bayt sayimina dayaniyordu; bir bayt DUSERSE RX_DATA 88'i
+ * doldurmak icin BIR SONRAKI paketten bayt yiyor, boylece iki paket birden bozuluyordu.
+ * 115200 8N1'de 88 bayt = 7.64 ms → aralarinda 50 ms'lik bir sessizlik KESINLIKLE cerceve
+ * sinirdir. Sessizlik gorulurse yarim cerceve ATILIR ve taze senkronizasyona gecilir. */
+#define RX_FRAME_GAP_MS 50U
+static volatile uint32_t g_rxLastByteMs = 0;
 
 /* ============================================================================
  * FONKSİYON PROTOTİPLERİ
@@ -589,33 +615,45 @@ int main(void) {
       // CRC Kontrolu
       uint32_t calc_crc =
           calculate_crc32((const uint8_t *)pkt_copy, BINARY_PKT_SIZE - 4);
+      /* DENETIM 2026-08-04: burada `continue` vardi. Dongunun basina donmek, AYNI TURDAKI
+       * sure-bitimi kontrolunu (asagida) ve 1500 ms olu-adam watchdog'unu ATLIYORDU. Guvenlik
+       * kontrolleri hicbir kosulda atlanmamalidir — bozuk paket yalnizca PWM state'ine
+       * dokunmamali, watchdog'u askiya ALMAMALIDIR. Artik bayrakla ilerliyoruz. */
+      uint8_t pkt_ok = 1U;
       if (calc_crc != pkt_local.crc32) {
         Coil_SendNack("CRC");
-        continue; // paketi atla
+        pkt_ok = 0U;
       }
 
       CoilParamSet_t parsed = {0};
       char nack_reason[128];
-      if (!Coil_DecodeAndValidatePacket(&pkt_local, &parsed, nack_reason,
-                                        sizeof(nack_reason))) {
+      if (pkt_ok && !Coil_DecodeAndValidatePacket(&pkt_local, &parsed, nack_reason,
+                                                  sizeof(nack_reason))) {
         Coil_SendNack(nack_reason);
-        continue; // bozuk/range disi paket PWM state'ine dokunamaz
+        pkt_ok = 0U; // bozuk/range disi paket PWM state'ine dokunamaz
       }
 
-      last_communication_ms = current_time;
+      if (pkt_ok) {
+        last_communication_ms = current_time;
 
-      {
         /* [FIX-1b] ref_ms_valid varsa tüm bobinler üzerinden senkron ofseti
          * hesapla */
         if (parsed.ref_ms_valid) {
           __disable_irq();
-          for (int i = 0; i < NUM_COILS; i++) {
-            uint32_t p_freq = (uint32_t)parsed.coil[i].freq;
-            if (p_freq == 0)
-              p_freq = 100;
-            uint32_t period_ms = 1000U / p_freq;
-            if (period_ms == 0)
-              period_ms = 1;
+          for (uint32_t i = 0U; i < NUM_COILS; i++) {
+            /* DENETIM 2026-08-04: burada frekans TAMSAYIYA KIRPILIYOR ve tpp ondan
+             * turetiliyordu; ISR ise `g_tpp[i] = (uint32_t)(50000.0f / f)` ile FLOAT bolme
+             * yapiyor. Kesirli frekanslarda ikisi AYRISIYORDU (or. f=2.5 → main tpp=25000,
+             * ISR tpp=20000) ve `new_tick` YANLIS tpp'ye gore klemplenip g_dds_tick periyot
+             * DISINA konumlanabiliyordu. ISR ile AYNI formulu kullan — otorite ISR'dir. */
+            float p_f = parsed.coil[i].freq;
+            if (p_f < FREQ_MIN)
+              p_f = FREQ_MIN;
+            if (p_f > FREQ_MAX)
+              p_f = FREQ_MAX;
+            uint32_t period_ms = (uint32_t)(1000.0f / p_f);
+            if (period_ms == 0U)
+              period_ms = 1U;
             /* NOT: p_freq > 1000 Hz icin period_ms integer bolme sonucu 0'a
              * yuvarlanir ve yukarida 1'e zorlanir. Bu durumda
              * (ref_ms % period_ms) her zaman 0 olur, yani 1 kHz uzerindeki
@@ -623,7 +661,9 @@ int main(void) {
              * (HW_SYNC) etkisiz kalir — bu, ms bazli senkron protokolunun
              * dogal cozunurluk siniridir, hata degildir. */
 
-            uint32_t tpp = 50000U / p_freq;
+            uint32_t tpp = (uint32_t)(DDS_ISR_HZ / p_f); /* ISR ile BIREBIR AYNI */
+            if (tpp == 0U)
+              tpp = 1U;
             uint32_t new_tick =
                 (((uint32_t)parsed.ref_ms % period_ms) * tpp) / period_ms;
             if (new_tick >= tpp)
@@ -646,8 +686,14 @@ int main(void) {
         g_shadow.pending = 1;
         __enable_irq();
 
-        /* Debug/ACK Gönderimi */
+        /* Debug/ACK Gönderimi
+         * DENETIM 2026-08-04: `static ack_msg` HAL_UART_Transmit_IT ile KESME-tabanli
+         * gonderiliyor; fonksiyon donduğunde baytlar HALA tampondan okunuyordur. Bir sonraki
+         * paket islenirken snprintf AYNI tamponu YENIDEN yaziyordu → ucusan ACK bozuluyordu.
+         * Ustelik donus degeri (HAL_BUSY) hic kontrol edilmiyordu. ACK yalnizca TANI amaclidir:
+         * TX mesgulse bu turu ATLA (tamponu bozma), bosalinca bir sonraki ACK zaten gider. */
         static char ack_msg[256];
+        if (huart3.gState == HAL_UART_STATE_READY) {
         int len = snprintf(
             ack_msg, sizeof(ack_msg),
             "-> STM_OK: D=%d,%d,%d,%d,%d P=%d,%d,%d,%d,%d F=%d,%d,%d,%d,%d "
@@ -664,7 +710,20 @@ int main(void) {
             (unsigned long)(parsed.coil[2].dur_min),
             (unsigned long)(parsed.coil[3].dur_min),
             (unsigned long)(parsed.coil[4].dur_min));
-        HAL_UART_Transmit_IT(&huart3, (uint8_t *)ack_msg, (uint16_t)len);
+        /* DENETIM 2026-08-04: snprintf donus degeri kontrol EDILMIYORDU. Negatif donus
+         * (uint16_t)(-1) = 65535 olur ve 256 baytlik .bss tamponunun ~64 KB otesi hattan
+         * disari yazilirdi; kesilme (len >= sizeof) durumunda da tampon-disi okuma olurdu.
+         * Coil_SendNack bu iki durumu zaten dogru koruyor — ayni koruma buraya da. */
+        if (len < 0) {
+          len = 0;
+        }
+        if (len >= (int)sizeof(ack_msg)) {
+          len = (int)sizeof(ack_msg) - 1;
+        }
+        if (len > 0) {
+          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)ack_msg, (uint16_t)len);
+        }
+        }
 
         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
       }
@@ -674,7 +733,7 @@ int main(void) {
     if (g_pwm_started) {
       uint8_t duration_stopped = 0;
 
-      for (int i = 0; i < NUM_COILS; i++) {
+      for (uint32_t i = 0U; i < NUM_COILS; i++) {
         uint32_t dur_min = g_active.coil[i].dur_min;
         uint32_t start_ms = g_start_ms[i];
 
@@ -704,7 +763,7 @@ int main(void) {
     /* Watchdog Koruması (Ölü Adam Devresi) - Sadece en az bir bobin aktifse
      * kontrol et */
     uint8_t any_coil_active = 0;
-    for (int i = 0; i < NUM_COILS; i++) {
+    for (uint32_t i = 0U; i < NUM_COILS; i++) {
       if (g_active.coil[i].duty > 0.0f) {
         any_coil_active = 1;
         break;
@@ -712,7 +771,7 @@ int main(void) {
     }
     if (any_coil_active && (current_time - last_communication_ms > 1500)) {
       __disable_irq();
-      for (int i = 0; i < NUM_COILS; i++) {
+      for (uint32_t i = 0U; i < NUM_COILS; i++) {
         g_shadow.coil[i].duty = 0.0f;
       }
       g_shadow.pending = 1;
@@ -812,7 +871,7 @@ static void Coil_StartPwmOutputs(void) {
  *   [0, duty)          → A=HIGH, B=LOW   (pozitif yön)
  *   [duty, period)     → A=LOW,  B=HIGH  (negatif yön)
  *
- * Not: ~500 ns dead time, NOP döngüleriyle donanımsal geçiş anında uygulanır.
+ * Not: dead-time A/B geçiş anında NOP döngüsüyle uygulanır (süre ÖLÇÜLMEMİŞ).
  *
  * CPU yükü: ~120 cycle / 3360 available = ~%3.6
  * ============================================================================
@@ -888,8 +947,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     g_dds_tick[i] = tick;
 
     if (period_reset) {
-      /* Master Sync Pulse sadece Bobin 1 (Referans) için üretilir */
-      if (i == 0) {
+      /* Master Sync Pulse sadece Bobin 1 (Referans) için üretilir.
+       * DENETIM 2026-08-04: PB1'i HIGH yapan bu blok `g_pwm_started`'dan BAGIMSIZ calisiyordu,
+       * ama darbeyi LOW'a cekecek geri sayim asagidaki `if (!g_pwm_started) return;`in
+       * ARDINDA yer aliyor. Sonuc: acilistan ILK UART komutuna kadar PB1 KALICI HIGH kaliyor
+       * (ESP slave'leri RISING kenar goremez) ve ilk paket geldiginde bayat sayac rastgele bir
+       * tick'te esi olmayan bir DUSEN kenar uretiyordu. PWM baslamadan darbe URETME. */
+      if (i == 0 && g_pwm_started) {
         GPIOB->BSRR = (uint32_t)GPIO_PIN_1; /* PB1 = HIGH */
         g_sync_pulse_countdown = DDS_SYNC_PULSE_TICKS;
       }
@@ -970,18 +1034,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
     if (state != g_prev_state[i]) {
       if (state) {
-        /* A=1, B=0'a geçiş: Önce B'yi kapat, 500ns bekle, A'yı aç */
+        /* A=1, B=0'a geçiş: ÖNCE B'yi kapat, dead-time bekle, SONRA A'yı aç */
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
-        for (volatile uint32_t d = 0; d < 21; d++) {
+        for (volatile uint32_t d = 0; d < DDS_DEADTIME_NOP_ITERS; d++) {
           __asm volatile("nop");
-        } /* ~500ns @ 168MHz */
+        } /* süre ÖLÇÜLMEMİŞ — bkz. DDS_DEADTIME_NOP_ITERS */
         coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA;
       } else {
-        /* A=0, B=1'e geçiş: Önce A'yı kapat, 500ns bekle, B'yi aç */
+        /* A=0, B=1'e geçiş: ÖNCE A'yı kapat, dead-time bekle, SONRA B'yi aç */
         coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA << 16U;
-        for (volatile uint32_t d = 0; d < 21; d++) {
+        for (volatile uint32_t d = 0; d < DDS_DEADTIME_NOP_ITERS; d++) {
           __asm volatile("nop");
-        } /* ~500ns @ 168MHz */
+        } /* süre ÖLÇÜLMEMİŞ — bkz. DDS_DEADTIME_NOP_ITERS */
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB;
       }
       g_prev_state[i] = state;
@@ -1060,6 +1124,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   }
 
   uint8_t b = (uint8_t)g_rxByte;
+
+  /* Bayt-arasi bosluk: yarim kalmis cerceveyi BIR SONRAKI pakete karistirma (bkz. RX_FRAME_GAP_MS).
+   * (uint32 cikarma HAL_GetTick wrap'inde de dogru calisir.) */
+  uint32_t now_ms = HAL_GetTick();
+  if (g_rxState != RX_IDLE && (now_ms - g_rxLastByteMs) > RX_FRAME_GAP_MS) {
+    g_rxState = RX_IDLE;
+    g_rxLen = 0;
+  }
+  g_rxLastByteMs = now_ms;
 
   switch (g_rxState) {
   case RX_IDLE:
@@ -1259,6 +1332,14 @@ void PEMF_ForceAllCoilOutputsLow(void) {
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
     coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA << 16U;
     coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
+    /* DENETIM 2026-08-04: g_prev_state SIFIRLANMIYORDU. ISR "yalniz durum degistiyse GPIO yaz"
+     * optimizasyonu yapar (bkz. `if (state != g_prev_state[i])`); pinleri burada zorla LOW'a
+     * cekip prev_state'i ESKI degerde birakmak, ISR'in "cikis zaten dogru" sanmasina ve
+     * pinleri BIR DAHA surmemesine yol acar. Bugun tek cagiran yol fault-handler/Error_Handler
+     * (ikisi de reset ya da sonsuz dongu) oldugu icin canli regresyon yok — ama bu, hasta
+     * guvenligi kritik bir fonksiyonun "cagrildiktan sonra donulmez" varsayimina dayanmaktir
+     * ve o varsayim kodda hicbir yerde zorlanmiyor. IDLE (2) = "her iki cikis LOW". */
+    g_prev_state[i] = 2U;
   }
 }
 

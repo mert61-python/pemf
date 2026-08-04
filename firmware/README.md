@@ -15,7 +15,13 @@ Klinik cihazının 5 STM32 bobinini süren gömülü firmware. Backend seri port
 ## Güvenlik mantığı (firmware içinde)
 - Aralık clamp'leri: `DUTY_MIN` / `FREQ_MIN..FREQ_MAX` / faz `0..360` / `DURATION_MAX_MINUTES 9999` + CRC + NACK.
 - **Watchdog "Ölü Adam Devresi":** herhangi bobin aktif + seri >1500 ms yoksa → tüm duty 0.
-- Bobin-başı **süre auto-stop**; A/B geçişlerinde **dead-time** (~500 ns, shoot-through koruması); duty **slew-rate** sınırlayıcı + `tpp-1` clamp.
+- Bobin-başı **süre auto-stop**; A/B geçişlerinde **dead-time** (shoot-through koruması); duty **slew-rate** sınırlayıcı + `tpp-1` clamp.
+- ⚠️ **Dead-time süresi ÖLÇÜLMEMİŞTİR.** `DDS_DEADTIME_NOP_ITERS` (=21) `volatile` bir NOP
+  döngüsüdür; gerçek süre `-O` seviyesine, FLASH bekleme durumlarına ve ART hızlandırıcıya
+  bağlıdır (kaba tahmin ~0.75–1.25 µs). Daha önce belgelerde **üç farklı ve yanlış** değer
+  yazıyordu (40 µs / 500 ns / kod). Bu, tam-köprüye karşı **tek yazılım korumasıdır** — MCU'da
+  donanımsal dead-time üreteci yoktur. Değiştirmeden önce **osiloskopla ölçün**: IN_A düşen
+  kenarı ↔ IN_B yükselen kenarı arası, MOSFET/sürücünün turn-off gecikmesinden büyük olmalı.
 
 ## Fault işleyici yaması (`stm32f4xx_it.c`) — ELLE UYGULANMALI
 
@@ -62,7 +68,10 @@ arm-none-eabi-gcc -c -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard 
   firmware\main.c -o main.o
 ```
 
-Bilinen (önceden var olan) uyarılar: 4 adet `-Wsign-compare` (`int i < NUM_COILS`).
+**Beklenen sonuç: SIFIR uyarı.** (Daha önce 4 adet `-Wsign-compare` "bilinen uyarı" olarak
+kabul ediliyordu — `for (int i = 0; i < NUM_COILS; i++)` ile `NUM_COILS`'un `5U` olması
+karşılaştırması. Denetim 2026-08-04'te döngü sayaçları `uint32_t`'ye çevrildi; artık
+`-Wall -Wextra` temiz. Uyarıları sıfırda tutun: gürültü, gerçek bir uyarıyı görünmez yapar.)
 
 ## ⚠️ Dikkat
 - **Termal/sıcaklık kesme mantığı bu firmware'de YOK** — termal koruma sensör/ESP tarafındadır. Sahip bunu bilerek böyle bıraktı.
