@@ -44,7 +44,7 @@ onnx==1.15.0
 torch==2.1.2+cpu
 torchvision==0.16.2+cpu
 ultralytics==8.4.47
-pillow==12.2.0
+pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3
 scikit-learn==1.7.2
 xgboost==3.2.0
@@ -63,7 +63,7 @@ reportlab==4.0.7
 PyYAML==6.0.3
 
 # ── DB / şifreleme / sırlar ──
-cryptography==46.0.7
+cryptography==50.0.0
 # DENETIM P3: PINSIZDI → at-rest sifreleme kutuphanesi tekrarlanabilir degildi (her yeniden
 # build farkli surum cekebilir; kok requirements.txt sqlcipher3==0.6.2 ile pinli).
 sqlcipher3-binary==0.5.4           # DOCKER FARKI (lokal: sqlcipher3==0.6.2 derlenir)

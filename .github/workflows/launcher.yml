@@ -82,6 +82,22 @@ jobs:
         working-directory: launcher
         run: cargo test --locked --lib
 
+      # --- Bağımlılık güvenlik denetimi (DENETİM 2026-08-04, P3) ----------------
+      # Launcher imzasız bir setup.exe indirip `/S` ile SESSİZCE kuran ve klinik makinesinde
+      # backend'i başlatan bileşendir → zincirdeki bir açık doğrudan dağıtım bütünlüğünü
+      # etkiler. Denetimde zincir tarandı: 439 crate, 0 açık, 17 "bakımsız" uyarısı (hepsi
+      # Tauri'nin Linux GTK3 bağımlılıkları + idna→unic-*; bizim kodumuzdan erişilemez).
+      # `--deny warnings` + gerekçeli yoksayma listesi (launcher/.cargo/audit.toml) →
+      # LİSTEDE OLMAYAN her yeni uyarı/açık CI'yı kırar. Yoksayma listesine ASLA gerçek bir
+      # güvenlik açığı eklenmez (bkz. dosyadaki politika notu).
+      # Tek platformda koşar: Cargo.lock platformdan bağımsızdır, 3 kez taramak gereksiz.
+      - name: Bağımlılık güvenlik denetimi (cargo audit)
+        if: matrix.os == 'ubuntu-22.04'
+        working-directory: launcher
+        run: |
+          cargo install cargo-audit --locked --version ^0.22
+          cargo audit --deny warnings
+
       # --- macOS imzalama kimliği (notarization'ın ön koşulu) ------------------
       # Sertifika CI Secrets'ta durur; çalışma ağacında ASLA (bkz. .gitignore).
       - name: macOS imzalama sertifikasını yükle

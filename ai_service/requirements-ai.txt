@@ -6,7 +6,7 @@
 onnxruntime-gpu==1.19.2
 numpy==1.26.4
 opencv-python==4.11.0.86          # requirements.txt / docker ile HİZALI (bkz. requirements.txt opencv notu)
-pillow==12.2.0
+pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3
 scikit-learn==1.7.2
 xgboost==3.2.0                    # cat_disease (XGBoost.pkl)

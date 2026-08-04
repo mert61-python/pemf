@@ -1,0 +1,40 @@
+# cargo-audit yapılandırması — DENETİM 2026-08-04 (P3, CVE/bağımlılık)
+#
+# NEDEN VAR: launcher imzasız bir setup.exe indirip `/S` ile sessizce kuran ve klinik
+# makinesinde backend'i başlatan bileşendir; bağımlılık zincirindeki bir güvenlik açığı
+# doğrudan dağıtım bütünlüğünü etkiler. Denetim sırasında zincir tarandı: 439 crate,
+# **0 güvenlik açığı**, 17 "bakımsız/unsound" uyarısı.
+#
+# Uyarıların TAMAMI geçişli (transitive) ve bizim kodumuzdan erişilemez:
+#   • RUSTSEC-2024-0411..0420  gtk-rs GTK3 bağlayıcıları — Tauri'nin YALNIZCA LINUX webkit
+#     arka ucu için çektiği paketler. Windows/macOS derlemelerine hiç girmez. Tauri GTK4'e
+#     geçmeden kaldırılamaz (üst-akış kararı).
+#   • RUSTSEC-2024-0429        glib `VariantStrIter` unsoundness — aynı GTK3 zinciri, Linux'a
+#     özel; launcher bu API'yi hiç çağırmaz.
+#   • RUSTSEC-2025-0075/0080/0098/0100 unic-* bakımsız — `idna` üzerinden gelir (URL ayrıştırma).
+#   • RUSTSEC-2024-0370, 2024-0419, 2025-0081 — proc-macro/derive zinciri, çalışma-zamanı değil.
+#
+# ⚠️ POLİTİKA: `ignore` listesi YALNIZ "unmaintained/unsound" uyarıları içindir. Gerçek bir
+# GÜVENLİK AÇIĞI (vulnerability) buraya ASLA eklenmez — cargo-audit varsayılan olarak açıklarda
+# sıfır-dışı çıkış verir ve CI o yüzden kırmızıya döner. Bir madde eklerken NEDEN erişilemez
+# olduğunu yaz; gerekçesiz satır bir sonraki denetimde silinir.
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0370", # proc-macro-error bakımsız — derleme zamanı, çalışma zamanı değil
+    "RUSTSEC-2024-0411", # gdkwayland-sys (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0412", # gdk (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0413", # atk (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0414", # gdkx11-sys (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0415", # gtk (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0416", # atk-sys (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0417", # gdkx11 (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0418", # gdk-sys (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0419", # gtk3-macros (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0420", # gtk-sys (GTK3, yalnız Linux)
+    "RUSTSEC-2024-0429", # glib VariantStrIter unsound — GTK3 zinciri, çağrılmıyor
+    "RUSTSEC-2025-0075", # unic-char-range bakımsız (idna üzerinden)
+    "RUSTSEC-2025-0080", # unic-common bakımsız (idna üzerinden)
+    "RUSTSEC-2025-0081", # unic-char-property bakımsız (idna üzerinden)
+    "RUSTSEC-2025-0098", # unic-ucd-version bakımsız (idna üzerinden)
+    "RUSTSEC-2025-0100", # unic-ucd-ident bakımsız (idna üzerinden)
+]

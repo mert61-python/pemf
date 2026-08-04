@@ -48,7 +48,7 @@ onnx==1.15.0                     # ONNX model meta/graph (ultralytics export + i
 torch==2.1.2+cpu
 torchvision==0.16.2+cpu
 ultralytics==8.4.47             # YOLO (landmark/segmentasyon/CT/retikülosit/petri)
-pillow==12.2.0
+pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3                    # torch/sklearn/librosa çekirdeği
 scikit-learn==1.7.2             # CKD modeli PICKLE'dan yüklenir (statik import DEĞİL)
 xgboost==3.2.0                   # cat_disease XGBoost.pkl PICKLE (statik import DEĞİL)
@@ -67,7 +67,7 @@ reportlab==4.0.7                # PDF rapor üretimi
 PyYAML==6.0.3                    # cabin_config (em_fantom/em_petri/cat_organ)
 
 # ── DB / şifreleme / sırlar ──
-cryptography==46.0.7           # CVE fix (2026-07-16): 43.0.1→46.0.7 (bundled-OpenSSL CVE'ler; yalnız Fernet API kullanılıyor=x509/TLS-yok→pratik-düşük ama pip-audit temiz; Fernet 43→46 cross-version decrypt DOĞRULANDI, 117 test yeşil)
+cryptography==50.0.0           # CVE fix (denetim 2026-08-04): 46.0.7'de 7 acik (PKCS#7 Bleichenbacher, x509 wildcard-escape, us-sel zincir DoS, bundled-OpenSSL). Bu uründe YALNIZ Fernet kullaniliyor (x509/TLS/PKCS#7 yok) → pratik erisim DUSUK; yine de temizlendi. 46.0.7 ile sifrelenen token'in 50.0.0 ile ACILDIGI CAPRAZ-SURUM testiyle dogrulandi; 231 test yesil.
 sqlcipher3==0.6.2                # at-rest DB şifreleme (Windows'ta prebuilt wheel gerekir)
 keyring==25.7.0
 joblib==1.5.3                    # sklearn model yükleme

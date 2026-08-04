@@ -29,9 +29,9 @@ numpy==1.26.4
 opencv-python-headless==4.11.0.86  # CI headless: opencv-python yerine (libGL gerektirmez).
                                    # SÜRÜM üretimle aynı (4.11.0.86) — yalnız varyant farklı; testler
                                    # prod'dan farklı bir cv2 API'siyle koşmasın diye hizalandı.
-pillow==12.2.0
+pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 reportlab==4.0.7                   # history_router → pdf_report_generator import-zamanı
-cryptography==46.0.7               # DO-1: shipped ile eşit (2026-07-16: 43.0.1→46.0.7 CVE bump)
+cryptography==50.0.0               # DO-1: shipped ile esit (2026-08-04: 46.0.7->50.0.0 CVE bump)
 keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
 paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)
 zeroconf==0.149.16                 # DO-1: ağ-açık mDNS (LAN keşif) — testler import etmese de pip-audit KAPSAMINA al (CVE geçmişi; shipped ile eşit)
