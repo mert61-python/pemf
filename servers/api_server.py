@@ -1617,6 +1617,26 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             "started_epoch": prev.get("started_epoch") if cont else _t.time(),
         })
         _started_epoch_ai = _active_session["started_epoch"]
+        # DENETIM (2026-08-05, dogrulama turunda bulundu): yukarida `coil_ids` KOSULSUZ
+        # yeniden yaziliyor (satir "coil_ids": list(coil_ids)). Yeni seans ONCEKINDEN DAR bir
+        # kume sahiplenirse aradaki bobinler SESSIZCE sahipsiz kalir — donanima STOP gitmez.
+        #   Somut yol: `AI (Auto)` landmark surusu bobin 1-8'i 30 dk enerjiler → operator
+        #   `AI Pro` baslatir (yalniz 1-7). Bobin 8'i artik ne AI Pro dongusunun hedef-kayip
+        #   STOP'u (range(1,8)) ne sure-watchdog (sess["coil_ids"]=1-7) ne de teardown kapsar;
+        #   ESP kendi 30 dk suresi dolana kadar CANLI HAYVAN uzerinde surer.
+        # Hem cont=True (AI→AI devam) hem cont=False (devralma) yolunda gecerli → kilit
+        # BLOGUNUN DISINDA, tek yerde hesapla. STOP kilit birakildiktan SONRA gonderilir.
+        _orphan_coils = [int(c) for c in (prev.get("coil_ids") or [])
+                         if prev.get("is_active") and int(c) not in set(int(x) for x in coil_ids)]
+    if _orphan_coils:
+        try:
+            _stop_session_coils(_orphan_coils)
+            logging.getLogger(__name__).warning(
+                "AI seansi daha DAR bir bobin kumesi sahiplendi → sahipsiz kalan bobinler "
+                "durduruldu %s (aksi halde enerjili kalirlardi).", _orphan_coils)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Sahipsiz bobin STOP hatasi: %s", _orphan_coils)
     # P1 audit 2026-06-28: AKTIF MANUEL (non-AI) seans varken AI baslayinca _active_session KOSULSUZ
     # eziliyordu → manuel db_session_id/coil_ids kayboluyor, acik coil-run'lar kapanmiyor, DB satiri
     # kalici 'active' kaliyor (KPI/history sisiyor + STM keep-alive surer ama UI 'AI' gosterir).

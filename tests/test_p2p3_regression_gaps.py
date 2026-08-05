@@ -226,3 +226,57 @@ def test_guncelleme_guardi_installer_baslayinca_ACIK_kalir():
             ast.unparse(s) for f in finallyler for s in f.finalbody)
         assert "not _installer_launched" in govde, (
             f"{ad}: guard KOŞULSUZ kapatılıyor → installer EXE'yi değiştirirken tedavi başlatılabilir")
+
+
+# ── Doğrulama turunda BULUNAN yeni açık (2026-08-05) ─────────────────────────
+
+def test_seans_devralinca_SAHIPSIZ_kalan_bobinler_durdurulur(api, monkeypatch):
+    """Devralma önceki seansın DB satırlarını kapatıyordu ama DONANIMA dokunmuyordu.
+
+    Somut yol: `AI (Auto)` landmark sürüşü bobin 1-8'i 30 dk için enerjiler → operatör
+    `AI Pro` başlatır; o yalnız 1-7'yi sahiplenir. Bobin 8'i artık ne AI Pro döngüsünün
+    hedef-kayıp STOP'u (`range(1,8)`) ne de süre-watchdog'u (`sess["coil_ids"]`=1-7)
+    kapsar → ESP kendi 30 dk süresi dolana kadar CANLI HAYVAN ÜZERİNDE enerjili kalır.
+
+    Telafi katmanları var (acil durdurma ESP 6-8'i kapsar, `/ai/pro/stop` 1-8 kullanır,
+    ESP kendi süresiyle durur) — bu yüzden felaket değil; ama kök sebep devralmanın
+    donanıma hiç dokunmamasıydı.
+    """
+    durdurulan = []
+    monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.extend(int(i) for i in ids))
+    monkeypatch.setattr(api, "_finish_coil_run", lambda cid: None)
+
+    # Önceki seans: AI (Auto), bobin 1-8
+    with api._session_lock:
+        api._active_session.update({
+            "is_active": True, "session_id": "auto_1", "mode": "AI (Auto)",
+            "coil_ids": list(range(1, 9)), "db_session_id": None,
+            "start_time": 0, "started_epoch": 0, "duration_minutes": 30,
+        })
+
+    # AI Pro devralır — YALNIZ 1-7'yi sahiplenir
+    api.start_ai_session(0.0, 0.0, 20, range(1, 8), "AI Pro")
+
+    assert 8 in durdurulan, (
+        "devralmada sahipsiz kalan bobin 8 DURDURULMADI → ESP süresi dolana kadar enerjili kalır")
+    # Devredilen bobinlere gereksiz kesinti uygulanmamalı (yeni seans onları sürecek)
+    assert not (set(range(1, 8)) & set(durdurulan)), (
+        f"yeni seansın sahiplendiği bobinler de durduruldu {durdurulan} → gereksiz kesinti")
+
+
+def test_devralmada_TUM_bobinler_devredilirse_STOP_gonderilmez(api, monkeypatch):
+    """Fazla-koruma olmasın: önceki seansın bobinlerinin hepsi devredildiyse donanıma
+    dokunulmamalı (aksi halde her devralmada tedavi bir an kesilirdi)."""
+    durdurulan = []
+    monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.extend(int(i) for i in ids))
+    monkeypatch.setattr(api, "_finish_coil_run", lambda cid: None)
+
+    with api._session_lock:
+        api._active_session.update({
+            "is_active": True, "session_id": "manuel_1", "mode": "Manuel",
+            "coil_ids": [1, 2], "db_session_id": None,
+            "start_time": 0, "started_epoch": 0, "duration_minutes": 20,
+        })
+
+    api.start_ai_session(0.0, 0.0, 20, [1, 2, 3], "AI Pro")
+    assert durdurulan == [], f"tüm bobinler devredildiği hâlde STOP gönderildi: {durdurulan}"
