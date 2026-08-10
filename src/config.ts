@@ -75,7 +75,17 @@ export const DOWNLOAD_HOST = {
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
   windowsTag: 'launcher-v1.9.16', // 1.9.16 = URETIME-HAZIRLIK DENETIMI (Tier 0-3): geri cagirma (min_supported_version), kurulum oncesi disk-alani kontrolu + olu onbellek temizligi, guvenlik-duvari kurali, filo envanteri (surum alanlari heartbeat'te), surum dosyasi app katmaninda (siradan yayinda artik tazelenir). 1.9.13 = KATMANLI GUNCELLEME: paket app(~71MB)+deps(~1,19GB) olarak ayrildi → siradan surum 1,3 GB yerine ~71 MB iner. 1.9.12 = UYGULAMA OTO-GUNCELLEME: client acilista base.zip + model paketlerini de manifest sha'siyla karsilastirip yeniler ("Onar" gerekmez; seans sirasinda ertelenir). 1.9.11 = arayuz metinlerinde "tedavi" -> "seans" (client + kurulum + guncelleme uyarilari). 1.9.9 = client GIRISI (Supabase + Beni hatirla) + oturum devri (uygulamada cift login yok) + cevrimdisi acilis kilidi fix + header tasmasi fix. 1.9.8 = yarım-kalan çoklu-kurulumda tamamlanan profil korunur (iptal→Hazır!) + 1.9.7 Başlat ayrı-pencere (client açık kalır) + 1.9.6 uninstall (os error 5) fix → kayıtlı NSIS uninstaller'ı başlatır. 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
-  windowsAsset: 'PEMFVetClient-Setup.exe',
+  // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
+  // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
+  // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
+  // kalıyordu. Ad artık sürümü taşır: PEMFVetClient-Setup-1.9.16.exe
+  //
+  // ⚠️ TEK KAYNAK: `windowsTag`. Adı elle yazmak, etiket yükseltilip ad unutulduğunda 404
+  // üretirdi (indirme butonu sessizce ölürdü) — bu yüzden ad etiketten TÜRETİLİR, elle
+  // yazılmaz. `scripts/check-legal-config.mjs` testi ikisinin tutarlılığını ayrıca kilitler.
+  get windowsAsset(): string {
+    return `PEMFVetClient-Setup-${this.windowsTag.replace(/^launcher-v/, '')}.exe`
+  },
   macosAsset: 'PEMFVetClient.dmg',
   macosReady: false, // "Yakında": launcher Mac'te ÇALIŞIR ama DONANIM (STM seri + ESP MQTT + hotspot) Windows-ÖZEL → Mac'te cihaz sürülemez. Donanım desteği gelene kadar "Yakında" (kasıtlı; .dmg yayında ama gösterme).
   linuxDebAsset: 'PEMFVetClient.deb', // Ubuntu / Debian (+ zip crate → 'unzip' sistem bağımlılığı YOK)
