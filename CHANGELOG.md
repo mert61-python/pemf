@@ -107,8 +107,14 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) | rollout |
 |---|---|---|---|---|---|
+| 1.9.8 | `client-app-v1.9.8` | 2026-08-10 | `3fd701051e7c` | `38446e281313` / `82986dfd7215` | 100 |
+| 1.9.7 | `client-app-v1.9.7` | 2026-08-10 | `4c580cfc0489` | — | 100 |
 | 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | 100 |
 | 1.8.0 | `client-app-v1.8.0` | 2026-07-13 | `90cf004f9fa1` | `42b88557fe00` / `69cf344d0fc6` | 100 |
+
+> ⚠️ **1.9.8'de bağımlılık katmanı DEĞİŞTİ** (`inference_cat_organ` çekirdeğe girdi) → bu sürüme
+> **güncelleyen** kurulum ~1,46 GB indirir. Katman ayrımının amacı sıradan sürümlerde ~71 MB'da
+> kalmaktı; burada bilerek ödenen tek seferlik bedeldir ve karşılığında `home.zip` 209 MB küçüldü.
 
 > ⚠️ **1.9.6'da bağımlılık katmanı da değişti.** `_internal/VERSION` app katmanına taşındığı için
 > `base-deps.zip` yenilendi → bu sürümü **güncelleyen** bir kurulum ~1,19 GB indirir. Sonraki
@@ -135,6 +141,9 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | Installer sha (12) |
 |---|---|---|---|
+| 1.9.19 | `launcher-v1.9.19` | 2026-08-10 | `65093583277a` |
+| 1.9.18 | `launcher-v1.9.18` | 2026-08-10 | `8bdc6252b235` |
+| 1.9.17 | `launcher-v1.9.17` | 2026-08-10 | `8070971e5180` |
 | 1.9.16 | `launcher-v1.9.16` | 2026-08-10 | `04a39ee87701` |
 | 1.9.15 | `launcher-v1.9.15` | 2026-08-08 | `cca09c179fa0` |
 | 1.9.14 | `launcher-v1.9.14` | 2026-08-08 | — |
@@ -167,6 +176,39 @@ geçmiyorsa test kırılır.
 |---|---|
 | 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
+
+---
+
+## app 1.9.8 · launcher 1.9.19 — 2026-08-10 (profil bağımlılığı KALKTI)
+
+Bir önceki sürüm profilleri bağımsız *seçilebilir* yapmıştı ama altta yatan gerçek bağ
+duruyordu: **AI Pro'nun organ lokalizasyonunu çalıştıran modeller yalnız `home.zip` içindeydi.**
+Yalnız Veteriner kuran kullanıcıda özellik **sessizce** çalışmıyordu; arayüz de bunu bir uyarı
+notuyla telafi etmeye çalışıyordu. Bu sürümde bağ **kaynağından** kaldırıldı.
+
+- **`inference_cat_organ` (3 ONNX, ~209 MB) ÇEKİRDEĞE alındı** — `base-deps.zip` katmanına,
+  yani her kurulumda var. Uygulama katmanı (`base-app.zip`, ~71 MB) büyümedi: sıradan sürüm
+  güncellemeleri eskisi kadar küçük iner. Modeller `deps` katmanında olduğu için ancak
+  gerçekten değiştiklerinde yeniden indirilir.
+- **Profiller arasında artık HİÇBİR bağ yok** — ne zorunlu ne işlevsel. Bir önceki sürümdeki
+  bilgi notu kalktı (mekanizma, ileride yeni bir ortak model çıkarsa kullanmak üzere duruyor).
+- **`home.zip` 528 MB → 318 MB.** Aynı modeller hem çekirdekte hem profil paketinde olsaydı ev
+  sahibi kullanıcı ~209 MB'ı **iki kez** indirecekti.
+- **Profil paketlerinin içeriği artık KODDA** (`build_tools/make_model_zip.py`). Bu paketler
+  elle üretiliyordu; ne içerdikleri hiçbir yerde yazılı değildi — bu hatanın kaynağı da tam
+  olarak buydu. Betik, çekirdek modeli bir profil paketine koymayı **reddeder**.
+
+⚠️ Sahada işe yaradığı ölçüldü, varsayılmadı: launcher kuruluma `PEMF_AI_MODELS_DIR` verir ve o
+dizin vet-only kurulumda **vardır** (ama çekirdek modeli içermez). Model çözücü kök-başına değil
+**dosya-başına** düştüğü için bundle'daki kopya bulunur; `tests/test_cekirdek_model_cozumu.py`
+bunu kilitler (çözücü kök-başına seçime dönerse testler kırmızıya döner).
+
+### İndirme sayacı — macOS/Linux sayılmıyor
+
+Site o platformları **"Yakında"** gösteriyor (donanım yolu Windows'a özel), yani kullanıcı
+oradan indiremiyor. Paketler yayında olduğu için sayaç yine de onları topluyordu; indirilemeyen
+bir platformun indirmeleri çoğunlukla bizim kendi doğrulamalarımızdı ve "kaç kişi kullanıyor"
+izlenimini bozuyordu. Toplam artık **yalnız Windows + Android**.
 
 ---
 

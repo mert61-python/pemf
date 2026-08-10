@@ -544,10 +544,23 @@ mod tests {
             !sat.contains("[\""),
             "bir profil ZORUNLU bagimlilik tasiyor -> kullanici istemedigi profili kurmaya zorlanir: {sat}"
         );
-        // İşlevsel bağ KAYBOLMAMALI: kullanıcı neyin çalışmayacağını bilmeli.
+        // ✅ 2026-08-10: İŞLEVSEL bağ da KALKTI. `vet → home` bağı, AI Pro'nun organ
+        // lokalizasyonunu çalıştıran `inference_cat_organ` modellerinin `home.zip` içinde
+        // olmasından geliyordu; o ortak model ÇEKİRDEĞE alındı (make_base_zip::CORE_MODELS).
+        // Artık profiller arasında HİÇBİR bağ yok — ne zorunlu ne işlevsel.
+        let soft = s
+            .lines()
+            .find(|l| l.contains("const PROFILE_SOFT_DEPS"))
+            .expect("PROFILE_SOFT_DEPS bulunamadi");
         assert!(
-            s.contains("PROFILE_SOFT_DEPS") && s.contains("function depNotice"),
-            "islevsel bag notu kaldirilmis -> vet-only kurulumda AI Pro organ lokalizasyonu SESSIZCE calismaz"
+            !soft.contains(":"),
+            "profiller arasi ISLEVSEL bag geri gelmis: {soft} — ortak model cekirdege alinmali, \
+             kullanici istemedigi profili kurmaya ZORLANMAMALI"
+        );
+        // Mekanizma DURMALI: ileride yeni bir ortak model çıkarsa zorlamak yerine BİLGİ verilir.
+        assert!(
+            s.contains("function depNotice"),
+            "bilgi-notu mekanizmasi silinmis — sonraki ortak bagimlilik SESSIZCE bozar"
         );
         // `installed` bir DİZİdir; `.has()` TypeError atar (yazarken yakalandı).
         assert!(

@@ -44,6 +44,13 @@ def _sahte_dist(kok: Path) -> Path:
     (d / "_internal" / "bin" / "mosquitto" / "mosquitto.exe").write_bytes(b"MOSQ")
     (d / "_internal" / "torch" / "lib.dll").write_bytes(b"TORCH" * 100)
     (d / "_internal" / "ai_models" / "buyuk.onnx").write_bytes(b"MODEL")  # HARİÇ olmalı
+    # ÇEKİRDEK ORTAK MODEL (2026-08-10): `inference_cat_organ` AI Pro'nun organ lokalizasyonunu
+    # çalıştırır ve `home.zip` içindeydi → "Veteriner" profili "Ev Sahibi"ne BAĞIMLIYDI. Artık
+    # çekirdekte (deps katmanı) → profiller arası bağımlılık kalktı.
+    (d / "_internal" / "ai_models" / "ai_hub" / "inference_cat_organ" / "models").mkdir(parents=True)
+    (d / "_internal" / "ai_models" / "ai_hub" / "inference_cat_organ" / "models" / "rtmpose_s.onnx").write_bytes(
+        b"ORGAN"
+    )
     return d
 
 
@@ -160,10 +167,14 @@ def test_no_monolith_BAYAT_dosyayi_SILER(ortam):
 
 
 def test_ai_models_HARIC_kalir(ortam):
+    """⚠️ 2026-08-10: TEK İSTİSNA `inference_cat_organ` (çekirdeğe alınan ortak model). Geri
+    kalan ~2,1 GB'lık model ağacı hâlâ HARİÇ — profil zip'lerinde gelir. İstisnanın genişlemediği
+    ayrıca `test_DIGER_ai_models_HALA_HARIC` ile kilitli."""
     dist, cikti = ortam
     assert _calistir(dist).returncode == 0
     hepsi = set(_crc(cikti / "base.zip"))
-    assert not any("/_internal/ai_models/" in n for n in hepsi), "ai_models pakete girdi"
+    sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
+    assert not sizan, f"ai_models pakete girdi: {sizan[:5]}"
 
 
 def test_katmanlar_KESISMIYOR(ortam):
@@ -220,3 +231,42 @@ def test_belirlenimci_zip_ayni_sha(ortam):
     r2 = _calistir(dist)
     assert r1.returncode == r2.returncode == 0
     assert (cikti / "base-deps.zip").read_bytes() == ilk, "zip belirlenimci degil"
+
+
+# ── ÇEKİRDEK ORTAK MODEL (2026-08-10, sahip kararı) ──────────────────────────
+# `inference_cat_organ` (3 ONNX, ~200 MB) AI Pro'nun ORGAN LOKALİZASYONUNU çalıştırır ve
+# `home.zip` içindeydi. Bu yüzden "Veteriner" profili "Ev Sahibi"ne BAĞIMLIYDI: yalnız veteriner
+# kurmak isteyen kullanıcı gereksiz ~503 MB indirmek zorundaydı. Ortak model çekirdeğe alındı →
+# profiller arası bağımlılık TAMAMEN kalktı.
+
+
+def test_KRITIK_cekirdek_model_cat_organ_PAKETTE(ortam):
+    dist, cikti = ortam
+    assert _calistir(dist).returncode == 0
+    hepsi = set(_crc(cikti / "base.zip"))
+    assert any("inference_cat_organ" in n for n in hepsi), (
+        "cekirdek ortak model pakete GIRMEDI — vet-only kurulumda AI Pro organ lokalizasyonu "
+        "sessizce calismaz ve profil bagimliligini kaldirmak ANLAMSIZ olur"
+    )
+
+
+def test_KRITIK_cekirdek_model_DEPS_katmaninda(ortam):
+    """App katmanı HER sürümde iner (~71 MB). 200 MB'lık modeli oraya koymak sıradan bir yayını
+    271 MB'a çıkarırdı — katmanlı paketin bütün kazancı giderdi. Modeller seyrek değişir."""
+    dist, cikti = ortam
+    assert _calistir(dist).returncode == 0
+    app = set(_crc(cikti / "base-app.zip"))
+    deps = set(_crc(cikti / "base-deps.zip"))
+    assert not any("inference_cat_organ" in n for n in app), (
+        "cekirdek model APP katmaninda — her siradan yayin 200 MB sisirdi"
+    )
+    assert any("inference_cat_organ" in n for n in deps), "cekirdek model DEPS katmaninda degil"
+
+
+def test_DIGER_ai_models_HALA_HARIC(ortam):
+    """İstisna YALNIZ ortak modeldir. Genişlerse 2,1 GB'lık model ağacı çekirdeğe sızar."""
+    dist, cikti = ortam
+    assert _calistir(dist).returncode == 0
+    hepsi = set(_crc(cikti / "base.zip"))
+    sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
+    assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"

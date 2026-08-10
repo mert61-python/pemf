@@ -759,8 +759,16 @@
       // zorlama KALDIRILDI, yerine AÇIK ve engellemeyen bir bilgi notu kondu (bkz. `depNotice`).
       // Böylece kullanıcı ne kurduğunu bilerek seçer; sessizce eksik model kurmaz.
       const PROFILE_DEPS = { home: [], vet: [], research: [] };
-      /** Zorunlu değil ama İŞLEVSEL bağ: seçilirse şu profil olmadan bir özellik çalışmaz. */
-      const PROFILE_SOFT_DEPS = { vet: ["home"] };
+      /** İŞLEVSEL bağ: seçilirse şu profil olmadan bir özellik çalışmaz.
+       *
+       * ✅ 2026-08-10'da BOŞALDI. `vet → home` bağı, AI Pro'nun organ lokalizasyonunu çalıştıran
+       * `inference_cat_organ` modellerinin `home.zip` içinde olmasından geliyordu. O ~200 MB'lık
+       * ortak model ÇEKİRDEĞE alındı (`build_tools/make_base_zip.py::CORE_MODELS` → deps katmanı),
+       * dolayısıyla artık her kurulumda vardır ve profiller arası HİÇBİR bağ kalmadı.
+       *
+       * Mekanizma (harita + `depNotice`) BİLEREK duruyor: ileride yeni bir ortak model çıkarsa
+       * kullanıcıyı istemediği profili kurmaya zorlamak yerine yine burada BİLGİ verilir. */
+      const PROFILE_SOFT_DEPS = {};
       const PROFILE_ORDER = ["home", "vet", "research"];
       // Bir seçim kümesini bağımlılıklarıyla genişlet.
       function withDeps(keys) {

@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.5"
+#define MyAppVersion   "1.9.8"
 #define MyAppPublisher "PEMF Medical Technologies"
 #define MyAppURL       "https://pemf-medical.com"
 #define ProjectRoot    ".."

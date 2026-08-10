@@ -53,6 +53,19 @@ OUT_DEPS = os.path.join(OUTDIR, 'base-deps.zip')
 OUT_MONO = os.path.join(OUTDIR, 'base.zip')
 SCRIPTS = os.path.join(GUII, 'scripts')
 EXCLUDE = 'pemf_backend/_internal/ai_models/'  # kucuk-harf karsilastirma
+
+# ── CEKIRDEGE ALINAN ORTAK MODEL (2026-08-10, sahip karari) ──────────────────────────────────
+# `inference_cat_organ` (3 ONNX, ~200 MB) AI Pro'nun ORGAN LOKALIZASYONUNU calistirir ve
+# `home.zip` icindeydi. Bu yuzden "Veteriner" profili "Ev Sahibi"ne BAGIMLIYDI: vet-only kurmak
+# isteyen kullanici gereksiz ~503 MB indirmek zorunda kaliyordu.
+#
+# Dogru cozum, ORTAK modeli profil paketinden cikarip CEKIRDEGE almaktir — kullaniciyi istemedigi
+# profili kurmaya zorlamak degil. Boylece profiller arasi bagimlilik TAMAMEN kalkar.
+#
+# ⚠️ NEDEN DEPS KATMANI: app katmani HER surumde iner (~71 MB). 200 MB'lik modeli oraya koymak
+# siradan bir yayini 271 MB'a cikarirdi. Modeller seyrek degisir → yerleri DEPS katmanidir
+# (yilda birkac kez). `_app_katmaninda_mi` bu yolu app'e ALMAZ, dolayisiyla deps'e duser.
+CORE_MODELS = ('pemf_backend/_internal/ai_models/ai_hub/inference_cat_organ/',)
 ADD_SCRIPTS = [
     'setup_services.ps1',
     'start_hotspot.ps1',
@@ -99,7 +112,8 @@ for root, dirs, files in os.walk(DIST):
     for f in files:
         full = os.path.join(root, f)
         arc = os.path.relpath(full, PARENT).replace('\\', '/')
-        if arc.lower().startswith(EXCLUDE):
+        _al = arc.lower()
+        if _al.startswith(EXCLUDE) and not _al.startswith(CORE_MODELS):
             n_skip += 1
             continue
         (app_items if _app_katmaninda_mi(arc) else deps_items).append((full, arc))
@@ -121,7 +135,9 @@ _beklenen = sum(
     1
     for r, d, fs in os.walk(DIST)
     for f in fs
-    if not os.path.relpath(os.path.join(r, f), PARENT).replace('\\', '/').lower().startswith(EXCLUDE)
+    if not (lambda a: a.startswith(EXCLUDE) and not a.startswith(CORE_MODELS))(
+        os.path.relpath(os.path.join(r, f), PARENT).replace('\\', '/').lower()
+    )
 )
 _beklenen += sum(1 for s in ADD_SCRIPTS if os.path.exists(os.path.join(SCRIPTS, s)))
 if _toplam != _beklenen:
@@ -274,7 +290,11 @@ try:
         'PEMF_Backend/_internal/bin/mosquitto/mosquitto.exe': os.path.isfile(
             os.path.join(tmp, 'PEMF_Backend', '_internal', 'bin', 'mosquitto', 'mosquitto.exe')
         ),
-        'ai_models EXCLUDED (olmamali)': not any('/_internal/ai_models/' in n.lower() for n in names),
+        # ai_models HARIC — TEK ISTISNA cekirdege alinan ortak model (inference_cat_organ).
+        'ai_models HARIC (cekirdek model disinda)': not any(
+            '/_internal/ai_models/' in n.lower() and 'inference_cat_organ' not in n.lower() for n in names
+        ),
+        'cekirdek model (cat_organ) VAR': any('inference_cat_organ' in n.lower() for n in names),
         'setup_services.ps1 bundled': 'PEMF_Backend/setup_services.ps1' in names,
         # ── KOD KORUMASI KAPISI (2026-08-08, sahip ilkesi: "onefile da olsa onedir de olsa
         # client de olsa pyd olmalı") ───────────────────────────────────────────────────
