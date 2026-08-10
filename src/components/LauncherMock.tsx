@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { CLIENT } from '../config'
 import { Bolt } from './Icons'
 

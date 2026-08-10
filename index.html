@@ -39,12 +39,14 @@
       name="twitter:description"
       content="52 MB'lık launcher'ı indirin; PEMF Vet uygulamasını client içinden kurun ve tek merkezden güncelleyin."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <!--
+      KVKK/gizlilik: burada Google Fonts'a (fonts.googleapis.com + fonts.gstatic.com) dış istek
+      yapılıyordu. Bu istek ziyaretçinin IP adresini ve tarayıcı bilgisini Google'a taşır — oysa
+      yayınlanan Gizlilik Politikası üçüncü taraf olarak YALNIZ iyzico ve Supabase'i sayıyor.
+      Metni değiştirmek yerine isteği KALDIRDIK: Inter, `--font-sans` içinde zaten sistem
+      yazı tipi zinciriyle (ui-sans-serif / Segoe UI / -apple-system) yedekleniyor; modern
+      Windows/macOS/Android sistemlerinde görsel fark ihmal edilebilir ve hiçbir dış istek yok.
+    -->
   </head>
   <body>
     <div id="root"></div>

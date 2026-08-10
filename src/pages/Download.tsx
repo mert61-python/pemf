@@ -1,31 +1,37 @@
+// Author: mertaygn, cglrgrkn
 import type { FC } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CLIENT, LAUNCHER_STEPS, MODULES, FREE_MODE } from '../config'
 import { Windows, Apple, Linux, Android, Check, Download } from '../components/Icons'
+import { useDownloadGate, DownloadGateNote } from '../components/DownloadGate'
+import { DownloadStats } from '../components/DownloadStats'
+import type { DownloadTarget } from '../lib/download'
 
 function PlatformCard({
   Icon,
   label,
   os,
-  url,
+  target,
   ready,
-  altUrl,
+  altTarget,
   altLabel,
-  alt2Url,
+  alt2Target,
   alt2Label,
   primary,
 }: {
   Icon: FC<{ className?: string }>
   label: string
   os: string
-  url: string
+  /** URL yerine HEDEF anahtarı: adres çözümü tek yerde (lib/download.ts) kalsın. */
+  target: DownloadTarget
   ready: boolean
-  altUrl?: string
+  altTarget?: DownloadTarget
   altLabel?: string
-  alt2Url?: string
+  alt2Target?: DownloadTarget
   alt2Label?: string
   primary?: boolean
 }) {
+  const { loading, gated, download } = useDownloadGate()
   return (
     <div className="card flex flex-col p-7">
       <div className="flex items-center gap-3">
@@ -38,31 +44,53 @@ function PlatformCard({
         </div>
       </div>
       {ready ? (
-        <a href={url} className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'}`}>
+        // Kapı: giriş yoksa modal açılır, giriş bitince indirme KENDİLİĞİNDEN başlar (ikinci tık yok).
+        <button
+          type="button"
+          onClick={() => download(target)}
+          disabled={loading}
+          aria-busy={loading}
+          aria-label={gated ? `${label} için giriş yapıp indir` : `${label} için indir`}
+          className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-pointer disabled:cursor-wait disabled:opacity-60`}
+        >
           <Download className="h-4 w-4" />
-          {label} için indir
-        </a>
+          {gated ? 'Giriş yap ve indir' : `${label} için indir`}
+        </button>
       ) : (
         <span className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-not-allowed opacity-60`} aria-disabled>
           <Download className="h-4 w-4" />
           Yakında
         </span>
       )}
-      {altUrl && altLabel && (
+      {altTarget && altLabel && (
         /* #20-followup: alt-link (AppImage) kendi appImageReady kapısına sahip → ana `ready` (.deb)
-           koşuluna BAĞLAMA (aksi halde AppImage yalnız .deb de hazırsa görünür = bağımsız-yayın bozulur). */
-        <a href={altUrl} className="mt-2 text-center text-xs text-primary hover:underline">
+           koşuluna BAĞLAMA (aksi halde AppImage yalnız .deb de hazırsa görünür = bağımsız-yayın bozulur).
+           Bu alt paketler de AYRI birer indirmedir → kapının DIŞINDA bırakılırsa arka kapı olurdu. */
+        <button
+          type="button"
+          onClick={() => download(altTarget)}
+          disabled={loading}
+          className="mt-2 cursor-pointer text-center text-xs text-primary hover:underline disabled:opacity-60"
+        >
           {altLabel}
-        </a>
+        </button>
       )}
-      {alt2Url && alt2Label && (
-        <a href={alt2Url} className="mt-1 text-center text-xs text-primary hover:underline">
+      {alt2Target && alt2Label && (
+        <button
+          type="button"
+          onClick={() => download(alt2Target)}
+          disabled={loading}
+          className="mt-1 cursor-pointer text-center text-xs text-primary hover:underline disabled:opacity-60"
+        >
           {alt2Label}
-        </a>
+        </button>
       )}
       <div className="mt-4 space-y-1.5 text-xs text-muted">
         <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Sürüm {CLIENT.version} · {CLIENT.releaseDate}</div>
-        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> SHA-256 doğrulanır</div>
+        {/* Eskiden düz "SHA-256 doğrulanır" yazıyordu; sitede yayımlanan bir hash yok, bu yüzden
+            ziyaretçi indirdiği kurulum dosyasını KENDİSİ doğrulayamıyordu. İfadeyi gerçekte olan
+            şeye bağla: bütünlük doğrulaması client'ın indirdiği uygulama paketi için yapılıyor. */}
+        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Uygulama paketi kurulumda SHA-256 ile doğrulanır</div>
       </div>
     </div>
   )
@@ -87,12 +115,20 @@ export default function DownloadPage() {
           <p className="mx-auto mt-4 max-w-xl text-muted">
             Hafif client. Kurun; asıl uygulama client içinden inip “Başlat” ile açılır.
           </p>
+          {/* Kapı yalnız İNDİRME DÜĞMELERİNE uygulanır; sayfanın kalanı (gereksinimler, kurulum
+              adımları, profiller) herkese açık kalır — aksi halde arama motoru boş sayfa görür. */}
+          <DownloadGateNote />
+
+          {/* İndirme sayacı (2026-08-06): veri çekilemezse KENDİNİ GİZLER — yanlış sayı
+              göstermektense hiç göstermemek. "Kullanıcı" değil "indirme" der; oto-güncelleme
+              aynı dosyayı yeniden indirdiği için benzersiz kişi sayısı DEĞİLDİR. */}
+          <DownloadStats />
 
           <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} url={CLIENT.downloads.windows.url} ready={CLIENT.downloads.windows.ready} primary />
-            <PlatformCard Icon={Android} label="Android" os={CLIENT.downloads.android.os} url={CLIENT.downloads.android.url} ready={CLIENT.downloads.android.ready} />
-            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} url={CLIENT.downloads.linux.url} ready={CLIENT.downloads.linux.ready} altUrl={CLIENT.downloads.linux.appImageReady ? CLIENT.downloads.linux.appImageUrl : undefined} altLabel=".AppImage (universal)" alt2Url={CLIENT.downloads.linux.rpmReady ? CLIENT.downloads.linux.rpmUrl : undefined} alt2Label=".rpm (Fedora / RHEL)" />
-            <PlatformCard Icon={Apple} label="macOS" os={CLIENT.downloads.macos.os} url={CLIENT.downloads.macos.url} ready={CLIENT.downloads.macos.ready} />
+            <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} target="windows" ready={CLIENT.downloads.windows.ready} primary />
+            <PlatformCard Icon={Android} label="Android" os={CLIENT.downloads.android.os} target="android" ready={CLIENT.downloads.android.ready} />
+            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel=".AppImage (universal)" alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" />
+            <PlatformCard Icon={Apple} label="macOS" os={CLIENT.downloads.macos.os} target="macos" ready={CLIENT.downloads.macos.ready} />
           </div>
         </div>
       </section>

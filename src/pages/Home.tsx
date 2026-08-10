@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
 import { BRAND, CLIENT, FEATURES, LAUNCHER_STEPS, MODULES } from '../config'
 import { ICONS } from '../components/Icons'

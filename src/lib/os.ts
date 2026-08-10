@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 export type OS = 'windows' | 'macos' | 'linux' | 'other'
 
 /** Tarayıcıdan işletim sistemini sezer (SPA — navigator mevcut). */

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* GET/POST /api/callback — iyzico ödeme sonrası buraya yönlendirir (token). Aboneliği retrieve ile
    AUTHORITATIVE çeker → Supabase subscriptions'a yazar → kullanıcıyı sonuç sayfasına redirect eder.
    user_id: retrieve.conversationId (initialize'da set edildi) veya ?uid fallback. */
@@ -14,7 +15,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const r = await subRetrieveByToken(token)
-    const userId = String(r.conversationId ?? '') || uidQuery
+    // IDOR: `?uid=` KİMLİKSİZ bir sorgu parametresidir ve eskiden conversationId boşsa doğrudan
+    // user_id olarak GÜVENİLİYORDU. Geçerli bir iyzico token'ı ele geçiren biri, aboneliği
+    // istediği kullanıcıya yazdırabilir; `subscriptions.user_id` PRIMARY KEY olduğundan bu,
+    // kurbanın satırını EZER (Pro+ → düşük tier "downgrade" saldırısı). Otorite iyzico'dan
+    // dönen conversationId'dir; uid yalnız onunla BİREBİR eşleşirse yedek olarak kabul edilir.
+    const conversationId = String(r.conversationId ?? '')
+    if (uidQuery && conversationId && uidQuery !== conversationId) {
+      console.error('callback: uid/conversationId uyuşmuyor — istek reddedildi', { conversationId })
+      return res.redirect(302, '/pricing?checkout=error')
+    }
+    const userId = conversationId || uidQuery
     const meta = planMeta(String(r.pricingPlanReferenceCode ?? ''))
     const subRef = String(r.referenceCode ?? '')
     const custRef = String(r.customerReferenceCode ?? '')
@@ -32,6 +43,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       return res.redirect(302, '/download?checkout=success')
     }
+    // GÖZLEMLENEBİLİRLİK: ödeme alınmış ama alan eşlemesi tutmamış olabilir (plan referans kodu
+    // env'de tanımsız, conversationId boş, status beklenmedik). Eskiden sessizce 'incomplete'e
+    // yönlendiriliyordu → para tahsil edilmiş kullanıcı hakkı olmadan kalıyor ve GERİYE DÖNÜK
+    // teşhis için hiçbir iz bulunmuyordu. Sırları değil, yalnız eşleme alanlarını logla.
+    console.error('callback: abonelik yazılamadı', {
+      hasUserId: !!userId,
+      planRef: String(r.pricingPlanReferenceCode ?? ''),
+      planResolved: !!meta,
+      subRef,
+      status,
+    })
     return res.redirect(302, '/pricing?checkout=incomplete')
   } catch (e) {
     console.error('callback error', e)

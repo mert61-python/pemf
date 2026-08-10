@@ -1,15 +1,26 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useState } from 'react'
 import { CLIENT } from '../config'
 import { Windows, Apple, Linux, Android, Download } from './Icons'
 import { detectOS, type OS } from '../lib/os'
+import { useDownloadGate, DownloadGateNote } from './DownloadGate'
+import type { DownloadTarget } from '../lib/download'
 
-type Dl = { key: string; label: string; url: string; ready: boolean }
+// DENETIM 2026-08-06: `key` string idi ve tıklamada `as DownloadTarget` ile zorlanıyordu.
+// config.ts'e kapıda tanımsız bir platform eklenirse (ör. 'ios') `resolveDownload` switch'i
+// hiçbir dala girmeyip undefined döner → tıklamada TypeError, düğme sessizce ölür. Anahtarı
+// hedef birleşimine bağla ki uyumsuzluğu derleyici yakalasın. `url` alanı da KALDIRILDI:
+// adres çözümü yalnız lib/download.ts'in işi (yüzey adresi hiç görmesin).
+type Dl = { key: DownloadTarget; label: string; ready: boolean }
 
 /** Windows + macOS + Linux indirme butonları. Kullanıcının OS'u birincil olur; hazır
  *  olmayan platform (ör. macOS imzalı .dmg beklerken) "Yakında" gösterir. */
 export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' }) {
   const [os, setOs] = useState<OS>('other')
   useEffect(() => setOs(detectOS()), [])
+  // İndirme kapısı (kayıt adımı — erişim kontrolü DEĞİL, bkz. lib/download.ts).
+  // Hook koşulsuz çağrılmalı → aşağıdaki "Yakında" erken dönüşünden ÖNCE.
+  const { loading, gated, download } = useDownloadGate()
 
   const pad = size === 'lg' ? '!px-6 !py-3.5 text-[15px]' : ''
 
@@ -31,7 +42,7 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
     )
   }
 
-  const iconFor = (key: string) => (key === 'macos' ? Apple : key === 'linux' ? Linux : key === 'android' ? Android : Windows)
+  const iconFor = (key: DownloadTarget) => (key === 'macos' ? Apple : key === 'linux' ? Linux : key === 'android' ? Android : Windows)
 
   // Kullanıcının OS'u öne; hazır olmayanlar sona.
   const all: Dl[] = [CLIENT.downloads.windows, CLIENT.downloads.macos, CLIENT.downloads.linux, CLIENT.downloads.android]
@@ -48,17 +59,31 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
         </span>
       )
     }
+    // `<a href>` DEĞİL `<button>`: bağlantıda sağ tık → "Bağlantıyı farklı kaydet" kapıyı atlardı.
+    // (Adres paket içinde zaten açık olduğu için bu yalnızca akışı düzgün tutar, koruma sağlamaz.)
     return (
-      <a key={d.key} href={d.url} className={`${isPrimary ? 'btn-primary' : 'btn-ghost'} ${pad}`}>
+      <button
+        key={d.key}
+        type="button"
+        onClick={() => download(d.key)}
+        disabled={loading}
+        aria-busy={loading}
+        aria-label={gated ? `${d.label} için giriş yapıp indir` : `${d.label} için indir`}
+        className={`${isPrimary ? 'btn-primary' : 'btn-ghost'} ${pad} cursor-pointer disabled:cursor-wait disabled:opacity-60`}
+      >
         <Icon className="h-5 w-5" />
-        {isPrimary ? `${d.label} için indir` : d.label}
-      </a>
+        {isPrimary ? (gated ? 'Giriş yap ve indir' : `${d.label} için indir`) : d.label}
+      </button>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-      {sorted.map((d, i) => btn(d, i === 0))}
-    </div>
+    <>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {sorted.map((d, i) => btn(d, i === 0))}
+      </div>
+      {/* Kapının gerekçesini kullanıcıya AÇIKÇA söyle (düğmeye basınca sürpriz modal çıkmasın). */}
+      <DownloadGateNote />
+    </>
   )
 }

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* ============================================================
    PEMF Vet — Site içeriği & indirme yapılandırması
    Tek yerden düzenleyin. İndirme linkleri client yayınlanınca
@@ -8,7 +9,8 @@
 export const BRAND = {
   name: 'PEMF Vet',
   tagline: 'Veteriner PEMF Terapisinde Yeni Kontrol Standardı',
-  company: 'V-PEMF Technologies',
+  // Telif satırında TESCİLLİ ünvanın kısa hâli kullanılır; ürün markası 'PEMF Vet' ayrı kalır.
+  company: 'İBİA Teknoloji Ltd. Şti.',
   year: 2026,
 } as const
 
@@ -18,22 +20,25 @@ export const BRAND = {
    iyzico üye işyeri şartı). Footer ve TÜM yasal sayfalar buradan okur.
    ⚠️ PLACEHOLDER'LARI GERÇEK BİLGİLERLE DOLDURUN → tüm site güncellenir.
    ------------------------------------------------------------------ */
+// 2026-08-07: gerçek şirket kimliği işlendi (kaşeden). Placeholder KALMADI → yasal kapı açık.
+// NOT: boş bırakılan alanlar arayüzde GÖSTERİLMEZ (Footer/Legal koşullu render) — yer tutucu
+// yayınlamaktansa alanı gizlemek doğrudur.
 export const COMPANY = {
-  legalName: '[TİCARİ ÜNVAN — ör. V-PEMF Teknoloji Ltd. Şti. / Ad Soyad]',
+  legalName: 'İBİA Teknoloji Makina Arge Danışmanlık Sanayi ve Ticaret Limited Şirketi',
   brandName: 'PEMF Vet',
-  entityType: '[Şahıs İşletmesi / Limited Şirket / Anonim Şirket]',
-  address: '[AÇIK ADRES — Mahalle, Cadde, No, İlçe]',
-  city: '[İL]',
+  entityType: 'Limited Şirket',
+  address: 'Yeşiltepe Mah. İsmet İnönü 2 Cad. No: 2-57, Tepebaşı',
+  city: 'Eskişehir',
   country: 'Türkiye',
-  phone: '[TELEFON — +90 (___) ___ __ __]',
+  phone: '+90 531 388 04 13',
   email: 'destek@v-pemf.com',
-  kvkkEmail: '[KVKK BAŞVURU E-POSTASI]',
-  taxOffice: '[VERGİ DAİRESİ]',
-  taxNo: '[VERGİ NO / TCKN]',
-  mersis: '[MERSIS NO — tüzel kişi ise]',
-  tradeRegistry: '[TİCARET SİCİL NO — tüzel kişi ise]',
+  kvkkEmail: 'destek@v-pemf.com',   // ayrı KVKK adresi açılınca burayı değiştirin
+  taxOffice: 'Eskişehir Vergi Dairesi Başkanlığı',
+  taxNo: '4690841423',
+  mersis: '0469084142300001',
+  tradeRegistry: '45277',
   withdrawalDays: 14, // dijital hizmet/abonelikte cayma; istisnalar Ön Bilgilendirme'de
-  updated: '14 Temmuz 2026',
+  updated: '7 Ağustos 2026',
 } as const
 
 /** Yasal belge sayfaları — App.tsx route'ları, Footer menüsü ve LegalPage içeriği buradan üretilir. */
@@ -52,7 +57,7 @@ export type LegalSlug = (typeof LEGAL_DOCS)[number]['slug']
 export const MEDICAL_DISCLAIMER =
   'PEMF Vet, veteriner hekim gözetiminde kullanılmak üzere tasarlanmış klinik destek yazılımıdır. ' +
   'Akıllı teşhis ve AI analiz çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve ' +
-  'tedavisinin yerine geçmez. Otonom tedavi (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır.'
+  'tedavisinin yerine geçmez. Otonom seans (AI Pro) özellikleri veteriner hekim sorumluluğunda kullanılır.'
 
 /** TEST AŞAMASI: true → TÜM profiller (Araştırma dahil) ücretsiz/indirilebilir; ücret etiketleri
  *  gizlenir. Abonelik satışı canlıya geçince false yapın (iyzico hazır olunca). */
@@ -69,7 +74,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.8', // 1.9.8 = yarım-kalan çoklu-kurulumda tamamlanan profil korunur (iptal→Hazır!) + 1.9.7 Başlat ayrı-pencere (client açık kalır) + 1.9.6 uninstall (os error 5) fix → kayıtlı NSIS uninstaller'ı başlatır. 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
+  windowsTag: 'launcher-v1.9.16', // 1.9.16 = URETIME-HAZIRLIK DENETIMI (Tier 0-3): geri cagirma (min_supported_version), kurulum oncesi disk-alani kontrolu + olu onbellek temizligi, guvenlik-duvari kurali, filo envanteri (surum alanlari heartbeat'te), surum dosyasi app katmaninda (siradan yayinda artik tazelenir). 1.9.13 = KATMANLI GUNCELLEME: paket app(~71MB)+deps(~1,19GB) olarak ayrildi → siradan surum 1,3 GB yerine ~71 MB iner. 1.9.12 = UYGULAMA OTO-GUNCELLEME: client acilista base.zip + model paketlerini de manifest sha'siyla karsilastirip yeniler ("Onar" gerekmez; seans sirasinda ertelenir). 1.9.11 = arayuz metinlerinde "tedavi" -> "seans" (client + kurulum + guncelleme uyarilari). 1.9.9 = client GIRISI (Supabase + Beni hatirla) + oturum devri (uygulamada cift login yok) + cevrimdisi acilis kilidi fix + header tasmasi fix. 1.9.8 = yarım-kalan çoklu-kurulumda tamamlanan profil korunur (iptal→Hazır!) + 1.9.7 Başlat ayrı-pencere (client açık kalır) + 1.9.6 uninstall (os error 5) fix → kayıtlı NSIS uninstaller'ı başlatır. 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
   windowsAsset: 'PEMFVetClient-Setup.exe',
   macosAsset: 'PEMFVetClient.dmg',
   macosReady: false, // "Yakında": launcher Mac'te ÇALIŞIR ama DONANIM (STM seri + ESP MQTT + hotspot) Windows-ÖZEL → Mac'te cihaz sürülemez. Donanım desteği gelene kadar "Yakında" (kasıtlı; .dmg yayında ama gösterme).
@@ -81,19 +86,25 @@ export const DOWNLOAD_HOST = {
   linuxRpmReady: false, // (aynı neden)
   // Android: mobil app STANDALONE APK (Hermes gömülü, Metro gerekmez). GitHub'da launcher release'inde
   // barındırılır → Windows/Mac/Linux ile AYNI REL. Backend'e aynı WiFi'de mDNS/subnet ile oto-bağlanır.
+  // 2026-08-06: Android AYRI etiket. Eskiden mac/linux ile ORTAK launcherTag'i (1.9.2) kullanıyordu
+  // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
+  // bağımsız olduğu için kendi etiketi olmalı.
+  androidTag: 'launcher-v1.9.16',
   androidAsset: 'PEMF_Vet_Mobil.apk',
-  androidReady: true, // Android standalone APK yayında (v2.3.2)
+  androidReady: true, // Android standalone APK yayinda (v2.3.8 / versionCode 15)
 }
 
 const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`
 // Windows AYRI etiket (self-update = Windows-only → mac/linux/android REL'inden bağımsız).
 const WIN_REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.windowsTag}`
+// Android AYRI etiket (mobil sürüm döngüsü masaüstünden bağımsız — bkz. androidTag yorumu).
+const AND_REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.androidTag}`
 
 export const CLIENT = {
-  version: '1.9.8',
+  version: '1.9.16',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner)
-  releaseDate: '1 Ağu 2026',
+  releaseDate: '10 Ağu 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
@@ -124,7 +135,7 @@ export const CLIENT = {
     android: {
       key: 'android' as const,
       label: 'Android',
-      url: `${REL}/${DOWNLOAD_HOST.androidAsset}`,
+      url: `${AND_REL}/${DOWNLOAD_HOST.androidAsset}`,
       os: 'Android 8.0+ · APK (bilinmeyen kaynağa izin verin)',
       ready: DOWNLOAD_HOST.androidReady,
     },
@@ -159,7 +170,7 @@ export const MODULES: Module[] = [
   {
     id: 'home',
     name: 'Ev Sahibi',
-    tagline: 'Kamera destekli akıllı teşhis + tek-tuş güvenli tedavi.',
+    tagline: 'Kamera destekli akıllı teşhis + tek-tuş güvenli seans.',
     sizeGB: 0.6,
     included: true,
     addonMonthly: 0,
@@ -182,7 +193,7 @@ export const MODULES: Module[] = [
       'Manuel frekans & bobin kontrolü',
       'Sensör monitörü (mT / °C)',
       'Şifreli hasta veritabanı + KPI',
-      'AI Pro otonom kapalı-döngü tedavi',
+      'AI Pro otonom kapalı-döngü seans',
       'Tüm klinik AI modelleri',
     ],
     recommended: true,
@@ -268,7 +279,7 @@ export const PLANS: Plan[] = [
     queue: 'Standart kuyruk · yoğun saatlerde kısa bekleme',
     features: [
       'Veteriner profili · 5 cihaza kadar',
-      'AI Hub + AI Pro (otonom tedavi)',
+      'AI Hub + AI Pro (otonom seans)',
       'Standart işlem kuyruğu',
       'Hasta DB + KPI · otomatik güncelleme',
       'E-posta ve uzak destek',
@@ -301,11 +312,30 @@ export const PLANS: Plan[] = [
   },
 ]
 
-/** İsteğe bağlı eklentiler (uygulama içi satın alma). Araştırma modülü ayrı profil eklentisidir. */
+/** İsteğe bağlı eklentiler (uygulama içi satın alma). Araştırma modülü ayrı profil eklentisidir.
+ *
+ * ⚠️ 2026-08-09 — SAHİP KARARI: "Genişletilmiş Yedekleme (Bulut şifreli hasta verisi yedekleme
+ * ve arşiv, ₺190/ay)" KALDIRILDI ve GERİ EKLENMEYECEK. Unutulmuş değildir.
+ *
+ * İki gerekçe:
+ *   1) Arkasında ÜRÜN YOKTU — kod tabanında bulut yedekleme diye bir şey hiç olmadı. Var olmayan
+ *      bir hizmeti listelemek, veterinerin ona güvenip yedeksiz kalmasıyla sonuçlanır.
+ *   2) Ürün, hasta kayıtlarını bilinçli olarak MAKİNEDE tutar (bulut senkronu yok — kişisel veri
+ *      yurt dışına çıkmasın, kayıt kliniğin olsun); Supabase yalnız cihaz kaydı/eşleştirme için
+ *      kullanılır. Bulut yedekleme bu mimari kararı tersine çevirirdi.
+ * NOT: karar MALİYET sebebiyle değildi — sensör verisi dakika-ortalaması olarak yazıldığından
+ * depolama klinik başına ayda ~₺1 mertebesinde kalırdı. Sorun ürünün olmaması ve veri ikametiydi.
+ *
+ * Yerine ZATEN VAR OLANLAR: yerel/harici-disk şifreli yedek + kurtarma zarfı
+ * (utils/backup_recovery.py) ve şifreli cihaz taşıma (/api/data/export|import).
+ *
+ * Buraya yeni bir kalem eklerken kural: SATILAN ŞEYİN KODU OLMALI. Kalan ikisinin var:
+ * uzaktan erişim → servers/tunnel_manager.py (cloudflared + eşleştirme), cihaz yuvası →
+ * entitlement katmanı (henüz ENFORCED=false; ödeme başlayınca zorunlu kılınacak).
+ */
 export const ADDONS = [
   { name: 'Ek Cihaz Yuvası', desc: 'Plana cihaz başına ek eşzamanlı bağlantı.', price: '₺149 / ay' },
   { name: 'Uzaktan Erişim', desc: 'Güvenli tünelle klinik dışından cihaz kontrolü ve izleme.', price: '₺249 / ay' },
-  { name: 'Genişletilmiş Yedekleme', desc: 'Bulut şifreli hasta verisi yedekleme ve arşiv.', price: '₺190 / ay' },
 ] as const
 
 /** Riot/Valorant akışı: website'den küçük client → client asıl uygulamayı indirir → Başlat. */
@@ -329,15 +359,18 @@ export const LAUNCHER_STEPS = [
 
 export const FEATURES = [
   {
+    // DÜZELTİLDİ: burada "Bluetooth Low Energy" yazıyordu. Üründe BLE YOK — bağlantı yerel ağ
+    // üzerinden (mDNS keşfi + HTTP/WebSocket), bobinler ise USB seri (STM32) ve MQTT (ESP32) ile
+    // sürülüyor; uzaktan erişim güvenli tünelden. Yanlış yetenek beyanı satış vaadi doğurur.
     n: '01',
     title: 'Kesintisiz Senkronizasyon',
-    desc: 'Bluetooth Low Energy üzerinden tüm PEMF ünitelerinize anında bağlanın ve frekansları milisaniye hassasiyetle yönetin.',
+    desc: 'Cihazı aynı Wi-Fi ağında otomatik bulur; frekans ve şiddet değişiklikleri anında uygulanır, sensör verisi canlı akar.',
     icon: 'bluetooth',
   },
   {
     n: '02',
     title: 'Hasta Veritabanı',
-    desc: 'Her hasta için özelleştirilmiş protokoller oluşturun; tedavi geçmişini şifreli olarak detaylı grafiklerle takip edin.',
+    desc: 'Her hasta için özelleştirilmiş protokoller oluşturun; seans geçmişini şifreli olarak detaylı grafiklerle takip edin.',
     icon: 'database',
   },
   {
@@ -349,31 +382,38 @@ export const FEATURES = [
   {
     n: '04',
     title: 'Yapay Zekâ Merkezi',
-    desc: 'Kamera destekli akıllı teşhis: yüz-ağrısı skoru, organ 3B lokalizasyonu ve otonom kapalı-döngü tedavi (AI Pro).',
+    desc: 'Kamera destekli akıllı teşhis: yüz-ağrısı skoru, organ 3B lokalizasyonu ve otonom kapalı-döngü seans (AI Pro).',
     icon: 'brain',
   },
   {
     n: '05',
     title: 'Klinik Güvenlik',
-    desc: 'Acil durdurma, süre-watchdog ve güven-geçidi; tedavi yalnız hedef güvenle bulunduğunda uygulanır.',
+    desc: 'Acil durdurma, süre-watchdog ve güven-geçidi; seans yalnız hedef güvenle bulunduğunda uygulanır.',
     icon: 'shield',
   },
   {
+    // macOS derlemesi Apple notarizasyonu tamamlanana kadar YAYINDA DEĞİL (indirme butonu
+    // `DOWNLOAD_HOST.macosReady` ile "Yakında" gösteriyor). Özellik metni "üçünde de çalışır"
+    // diyerek indirme bölümüyle çelişiyordu; mevcut duruma hizala.
     n: '06',
     title: 'Çoklu Platform',
-    desc: 'Tek istemci Windows, macOS ve Linux’ta; klinik verisi cihazda şifreli (SQLCipher), uzaktan erişim güvenli tünelle.',
+    desc: 'Windows ve Linux’ta tek istemci (macOS yakında); klinik verisi cihazda şifreli (SQLCipher), uzaktan erişim güvenli tünelle.',
     icon: 'monitor',
   },
 ] as const
 
+// Sürüm notları CLIENT.version ile HİZALI olmalı: burası 1.2.4/12 Haz 2026'da donmuştu ve
+// üründe olmayan "Bluetooth"tan bahsediyordu — site 1.9.8 dağıtırken eski sürüm notu gösteriyordu.
 export const PATCH = {
-  version: '1.2.4',
-  date: '12 Haz 2026',
+  version: CLIENT.version,
+  date: CLIENT.releaseDate,
   notes: [
-    'Bluetooth bağlantı stabilitesi artırıldı.',
-    'Yeni “Hızlı Terapi” protokolleri eklendi.',
-    'Arayüz performansı ve açılış süresi iyileştirildi.',
-    'AI Analiz Geçmişi artık operatör bazlı filtrelenebiliyor.',
+    'Sıcaklık ölçümü olmayan bobinler artık “ölçüm yok” diye açıkça belirtiliyor — boş bir alan “sorun yok” diye okunmasın.',
+    'Seans kaydı tutulamıyorsa seans başlatılmıyor: uygulanan doz sonradan bilinemeyecek bir tedavi yapılmıyor.',
+    'Hekim kimliği artık cihazda doğrulanıyor; kayıtlar doğru hekime yazılıyor.',
+    'Geri dönüşsüz işlemler (toplu silme, veri aktarma) kalıcı bir denetim izine yazılıyor.',
+    'Tek tuşla destek paketi: hasta adları maskelenmiş, tek dosyalık teşhis kaydı.',
+    'Cihaz taşıma artık tüm klinik kayıtlarını eksiksiz taşıyor.',
   ],
 } as const
 

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* POST /api/cancel — aboneliği iptal eder (iyzico'da hosted billing portal yok).
    Body: { token:<supabase_jwt> }. Kullanıcının subscriptionReferenceCode'u Supabase'ten alınır. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -19,18 +20,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'iyzico', message: result.errorMessage || 'İptal edilemedi.' })
     }
 
-    // Supabase'i anında yansıt (webhook de gelir). Hak baslangic'e düşer.
-    await upsertSubscription({
-      user_id: user.id,
-      tier: 'baslangic',
-      status: 'canceled',
-      addons: [],
-      updated_at: new Date().toISOString(),
-    })
+    // SÖZLEŞMEYE UYUM: yayınlanan Mesafeli Satış / İptal-İade metinleri "iptal, içinde bulunulan
+    // (bedeli tahsil edilmiş) dönemin SONUNDA geçerli olur; bu dönem sonuna kadar erişim devam
+    // eder" diyor. Kod ise tier'ı ANINDA 'baslangic'e düşürüp hakkı hemen kesiyordu → ödenmiş
+    // dönemin ortasında erişim kaybı, yayınlanan sözleşmeye açık aykırılık. Tier KORUNUR; yalnız
+    // yenileme durdurulur (status='canceled'), erişim `current_period_end`e kadar sürer.
+    try {
+      await upsertSubscription({
+        user_id: user.id,
+        status: 'canceled',
+        updated_at: new Date().toISOString(),
+      })
+    } catch (e) {
+      // iyzico iptali BAŞARILI oldu; yalnız yerel yansıtma patladı. Eskiden bu durumda
+      // kullanıcıya "İptal edilemedi" deniyordu → aslında iptal edilmiş aboneliği tekrar
+      // iptal etmeye çalışıyor, panikliyordu. Doğruyu söyle, senkron farkını logla.
+      console.error('cancel: iyzico iptali başarılı ama Supabase yansıtması başarısız', e)
+      return res.status(200).json({
+        canceled: true,
+        warning: 'Abonelik iptal edildi; hesap durumunuz birkaç dakika içinde güncellenecek.',
+      })
+    }
     return res.status(200).json({ canceled: true })
   } catch (e) {
     console.error('cancel error', e)
-    const msg = e instanceof Error ? e.message : 'Sunucu hatası'
-    return res.status(500).json({ error: 'server', message: msg })
+    return res.status(500).json({ error: 'server', message: 'İşlem tamamlanamadı. Lütfen daha sonra tekrar deneyin.' })
   }
 }

@@ -1,23 +1,31 @@
+// Author: mertaygn, cglrgrkn
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode,
 } from 'react'
 import { useAuth } from './AuthContext'
 import { Close } from '../components/Icons'
 
-type ModalCtx = { requireAuth: (onAuthed?: () => void) => void }
+/** Modalın hangi akış için açıldığı — yalnız alt başlık metnini değiştirir.
+ *  Opsiyonel: mevcut `requireAuth(cb)` çağrıları (ödeme, hesap düğmesi) aynen çalışır. */
+export type AuthReason = 'checkout' | 'download'
+
+type ModalCtx = { requireAuth: (onAuthed?: () => void, reason?: AuthReason) => void }
 const Ctx = createContext<ModalCtx | undefined>(undefined)
 
 export function AuthModalProvider({ children }: { children: ReactNode }) {
   const { session, ready } = useAuth()
   const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState<AuthReason>('checkout')
   const pendingRef = useRef<(() => void) | null>(null)
 
-  const requireAuth = useCallback((onAuthed?: () => void) => {
+  const requireAuth = useCallback((onAuthed?: () => void, r: AuthReason = 'checkout') => {
     pendingRef.current = onAuthed ?? null
+    setReason(r)
     setOpen(true)
   }, [])
 
-  // Giriş başarılı olur olmaz bekleyen işlemi (ör. checkout) çalıştır + kapat.
+  // Giriş başarılı olur olmaz bekleyen işlemi (ör. checkout / indirme) çalıştır + kapat.
+  // İndirme kapısı buna dayanır: kullanıcı giriş bitince düğmeye İKİNCİ KEZ basmaz.
   useEffect(() => {
     if (open && session) {
       const cb = pendingRef.current
@@ -30,7 +38,18 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ requireAuth }}>
       {children}
-      {open && <AuthModal ready={ready} onClose={() => setOpen(false)} />}
+      {open && (
+        <AuthModal
+          ready={ready}
+          reason={reason}
+          onClose={() => {
+            // Kullanıcı modalı KAPATTIYSA bekleyen işi de düşür: aksi halde daha sonra
+            // (ör. hesap düğmesinden) giriş yapınca vazgeçtiği indirme kendiliğinden başlardı.
+            pendingRef.current = null
+            setOpen(false)
+          }}
+        />
+      )}
     </Ctx.Provider>
   )
 }
@@ -52,10 +71,11 @@ const ACCOUNT_TYPES: { id: AccountType; title: string; sub: string; icon: string
 const FIELD =
   'w-full rounded-lg border border-border bg-bg-soft px-3.5 py-2.5 text-sm outline-none focus:border-primary/60'
 
-function AuthModal({ ready, onClose }: { ready: boolean; onClose: () => void }) {
+function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthReason; onClose: () => void }) {
   const { signIn, signUp, resetPassword } = useAuth()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [accountType, setAccountType] = useState<AccountType>('individual')
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
@@ -99,7 +119,15 @@ function AuthModal({ ready, onClose }: { ready: boolean; onClose: () => void }) 
         }
         const { error, needConfirm } = await signUp(email.trim(), pw, meta)
         if (error) setMsg(error)
-        else if (needConfirm) setInfo('Doğrulama e-postası gönderildi. Onayladıktan sonra giriş yapın.')
+        // E-posta doğrulaması açıksa kayıt oturum AÇMAZ. Bekleyen iş (indirme) pendingRef'te
+        // durduğu için kullanıcı doğrulayıp AYNI modalda giriş yapınca indirme kendiliğinden
+        // başlar — bunu ona söyle, yoksa "kayıt oldum ama inmedi" sanır.
+        else if (needConfirm)
+          setInfo(
+            reason === 'download'
+              ? 'Doğrulama e-postası gönderildi. Onaylayıp buradan giriş yapın — indirme kaldığı yerden devam eder.'
+              : 'Doğrulama e-postası gönderildi. Onayladıktan sonra giriş yapın.',
+          )
       }
     } finally {
       setBusy(false)
@@ -118,22 +146,85 @@ function AuthModal({ ready, onClose }: { ready: boolean; onClose: () => void }) 
     }
   }
 
+  /** Formda veri varsa kazara kapanmayı önle (uzun kayıt formu tek tıkla siliniyordu). */
+  const requestClose = useCallback(() => {
+    const dirty = [email, pw, fullName, clinicName, city, phone, vetLicense, institution, department, academicTitle]
+      .some((v) => (v ?? '').trim().length > 0)
+    if (dirty && !window.confirm('Girdiğiniz bilgiler kaybolacak. Kapatılsın mı?')) return
+    onClose()
+  }, [email, pw, fullName, clinicName, city, phone, vetLicense, institution, department, academicTitle, onClose])
+
+  // ⚠️ DENETİM 2026-08-06 (MOBİLDE HER HARFTE KLAVYE KAPANIYORDU — sahip bildirimi):
+  // Aşağıdaki efektin bağımlılığı `[requestClose]` idi. `requestClose` ise "form kirli mi"
+  // bakabilmek için TÜM alanları (email, pw, fullName…) bağımlılık alır → HER TUŞ VURUŞUNDA
+  // yeni kimlik → efekt yeniden kurulur → temizlikte `prevFocus.focus()`, gövdede
+  // `node.focus()` çalışır ve odak input'tan diyalog kutusuna kayar. Masaüstünde "imleç
+  // kaçıyor", mobilde ise klavye tamamen KAPANIYORDU (her harf için bir kez).
+  // ÇÖZÜM: efekt bir KEZ kurulsun; kapatma çağrısı ref üzerinden HER ZAMAN güncel
+  // `requestClose`'a gitsin (Esc yine dolu formda onay sorar — davranış aynı).
+  const requestCloseRef = useRef(requestClose)
+  useEffect(() => { requestCloseRef.current = requestClose }, [requestClose])
+
+  // Esc ile kapat + odağı diyaloğa al + ODAK HAPSİ (Tab arkadaki sayfaya kaçmasın).
+  useEffect(() => {
+    const node = dialogRef.current
+    const prevFocus = document.activeElement as HTMLElement | null
+    node?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); requestCloseRef.current(); return }
+      if (e.key !== 'Tab' || !node) return
+      const items = node.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (items.length === 0) return
+      const first = items[0], last = items[items.length - 1]
+      if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      prevFocus?.focus?.()
+    }
+    // BOŞ bağımlılık KASITLI: efekt yalnız açılış/kapanışta çalışmalı. Buraya değişen bir
+    // değer eklenirse (özellikle form state'ine bağlı bir fonksiyon) odak her tuşta sıfırlanır
+    // ve mobil klavye kapanır — yukarıdaki denetim notuna bakın.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const isSignup = mode === 'signup'
   const isVet = accountType === 'veterinarian'
   const isResearch = accountType === 'researcher'
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+    // a11y: modal'da role/aria yoktu, Esc kapatmıyordu ve odak hapsi olmadığı için sekme tuşu
+    // arkadaki sayfada geziniyordu (ekran okuyucu kullanıcısı formda olduğunu anlamıyordu).
+    // Ayrıca dışa tıklama, uzun kayıt formunu UYARISIZ siliyordu → yalnız form boşken kapat.
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose() }}
+    >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        tabIndex={-1}
         className="card flex max-h-[90vh] w-full max-w-md flex-col p-7"
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold">{isSignup ? 'Hesap oluştur' : 'Giriş yap'}</h2>
-            <p className="mt-1 text-sm text-muted">Aboneliğiniz bu hesaba tanımlanır (mobil ve masaüstü ile aynı).</p>
+            <h2 id="auth-modal-title" className="text-lg font-bold">{isSignup ? 'Hesap oluştur' : 'Giriş yap'}</h2>
+            {/* Alt başlık akışa göre: indirme kapısında "aboneliğiniz tanımlanır" demek yanıltıcıydı
+                (indirme ücretsiz, kart istenmiyor). */}
+            <p className="mt-1 text-sm text-muted">
+              {reason === 'download'
+                ? 'İndirme için ücretsiz hesap yeterli — kart bilgisi istenmez. Giriş yapınca indirme kendiliğinden başlar.'
+                : 'Aboneliğiniz bu hesaba tanımlanır (mobil ve masaüstü ile aynı).'}
+            </p>
           </div>
-          <button onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:text-fg" aria-label="Kapat">
+          <button onClick={requestClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:text-fg" aria-label="Kapat">
             <Close className="h-5 w-5" />
           </button>
         </div>

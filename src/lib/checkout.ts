@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { supabase } from './supabase'
 
 /* iyzico akışı: /odeme sayfası müşteri bilgisini toplar → initCheckout → checkoutFormContent döner
@@ -30,17 +31,27 @@ export async function initCheckout(
 ): Promise<{ content?: string; error?: string; needAuth?: boolean }> {
   const token = await accessToken()
   if (!token) return { needAuth: true }
+  // Timeout YOKTU: yarı-açık bağlantıda istek ne çözülüyor ne reddediliyordu → "Hazırlanıyor…"
+  // butonu sonsuza dek kilitli kalıyor, kullanıcı ödemeye geçemiyordu.
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 20000)
   try {
     const r = await fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...p, token, origin: window.location.origin }),
+      signal: ctrl.signal,
     })
     const j = (await r.json().catch(() => ({}))) as { content?: string; message?: string; error?: string }
     if (!r.ok || !j.content) return { error: j.message || j.error || 'Ödeme başlatılamadı.' }
     return { content: j.content }
-  } catch {
+  } catch (e) {
+    if ((e as { name?: string })?.name === 'AbortError') {
+      return { error: 'Ödeme sunucusu yanıt vermedi (zaman aşımı). Tekrar deneyin.' }
+    }
     return { error: 'Ağ hatası — tekrar deneyin.' }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -48,16 +59,24 @@ export async function initCheckout(
 export async function cancelSubscription(): Promise<{ ok?: boolean; error?: string }> {
   const token = await accessToken()
   if (!token) return { error: 'Önce giriş yapın.' }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 20000)
   try {
     const r = await fetch('/api/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
+      signal: ctrl.signal,
     })
     const j = (await r.json().catch(() => ({}))) as { canceled?: boolean; message?: string }
     if (!r.ok || !j.canceled) return { error: j.message || 'İptal edilemedi.' }
     return { ok: true }
-  } catch {
+  } catch (e) {
+    if ((e as { name?: string })?.name === 'AbortError') {
+      return { error: 'Sunucu yanıt vermedi (zaman aşımı). Aboneliğinizin durumunu birazdan kontrol edin.' }
+    }
     return { error: 'Ağ hatası — tekrar deneyin.' }
+  } finally {
+    clearTimeout(timer)
   }
 }

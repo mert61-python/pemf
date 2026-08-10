@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { createClient } from '@supabase/supabase-js'
 
 /* Tarayıcı Supabase istemcisi — abonelik için giriş (aynı hesap mobil/client ile).
@@ -12,6 +13,13 @@ const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || S
 
 export const supabaseReady = Boolean(url && anon)
 
-export const supabase = createClient(url, anon, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-})
+/** Oturum ayarları AYRI sabit: indirme kapısı buna dayanıyor — `persistSession` kapanırsa
+ *  kullanıcı sekmeyi her kapattığında yeniden giriş yapmak zorunda kalır (kapı bir kayıt
+ *  adımıdır, her indirmede tekrarlanan bir engel DEĞİL). Test bunu regresyona karşı kilitler. */
+export const AUTH_OPTIONS = {
+  persistSession: true, // localStorage → oturum tarayıcıda kalıcı
+  autoRefreshToken: true, // uzun aradan sonra da geçerli oturum
+  detectSessionInUrl: true, // e-posta doğrulama / şifre sıfırlama dönüşü
+} as const
+
+export const supabase = createClient(url, anon, { auth: { ...AUTH_OPTIONS } })

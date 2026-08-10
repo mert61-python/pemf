@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PLANS, ADDONS, COMPARE, RESEARCH_ADDON, FREE_MODE, type Plan } from '../config'
@@ -190,7 +191,10 @@ export default function Pricing() {
             <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Uygulama içi satın alma</h2>
             <p className="mt-3 text-muted">Client içinden tek tıkla etkinleştirin; aboneliğinize eklenir.</p>
           </div>
-          <div className="mt-10 grid gap-5 sm:grid-cols-3">
+          {/* 2026-08-09: eklenti sayısı 3'ten 2'ye indi ("Genişletilmiş Yedekleme" kaldırıldı —
+              arkasında ürün yoktu, bkz. config.ts). Sabit 3 sütun boş bir hücre bırakıyordu;
+              ızgara kalem sayısına göre daralıyor. */}
+          <div className={`mt-10 grid gap-5 ${ADDONS.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:max-w-3xl'}`}>
             {ADDONS.map((a) => (
               <div key={a.name} className="card p-6">
                 <div className="flex items-baseline justify-between">

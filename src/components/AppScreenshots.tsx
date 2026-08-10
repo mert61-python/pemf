@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useRef } from 'react'
 import { ArrowRight } from './Icons'
 
@@ -6,7 +7,7 @@ const SHOTS = [
   { src: '/screenshots/01-profil.jpg',    title: 'Profil Seçimi',        desc: 'Ev Sahibi · Veteriner · Araştırma' },
   { src: '/screenshots/02-teshis.jpg',    title: 'Akıllı Teşhis',        desc: 'Kameradan anlık ağrı analizi' },
   { src: '/screenshots/03-modeller.jpg',  title: 'AI Tanı Modülleri',    desc: 'Görüntü, ses ve sinyal modelleri' },
-  { src: '/screenshots/04-aipro.jpg',     title: 'AI Pro · Otonom Tedavi', desc: 'Kapalı-döngü otomatik terapi' },
+  { src: '/screenshots/04-aipro.jpg',     title: 'AI Pro · Otonom Seans', desc: 'Kapalı-döngü otomatik terapi' },
   { src: '/screenshots/05-kontrol.jpg',   title: 'Cihaz Kontrolü',       desc: '8 bobin, frekans ve süre ayarı' },
   { src: '/screenshots/06-dashboard.jpg', title: 'Canlı Dashboard',      desc: 'Seans ve sensör telemetrisi' },
   { src: '/screenshots/07-hastalar.jpg',  title: 'Hasta Veritabanı',     desc: 'Klinik içi hasta ve seans kaydı' },
@@ -30,7 +31,7 @@ export default function AppScreenshots() {
             <span className="chip">Uygulama</span>
             <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Ekranlarla tanıyın</h2>
             <p className="mt-3 text-muted">
-              Profil seçiminden yapay zekâ teşhisine, otonom tedaviden hasta arşivine —
+              Profil seçiminden yapay zekâ teşhisine, otonom seanstan hasta arşivine —
               mobil ve masaüstünde aynı arayüz.
             </p>
           </div>

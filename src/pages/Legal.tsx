@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useLocation, Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { COMPANY, LEGAL_DOCS } from '../config'
@@ -37,7 +38,7 @@ function SellerIdentity() {
       <li>
         Adres: {COMPANY.address}, {COMPANY.city}, {COMPANY.country}
       </li>
-      <li>Telefon: {COMPANY.phone}</li>
+      {COMPANY.phone ? <li>Telefon: {COMPANY.phone}</li> : null}
       <li>E-posta: {COMPANY.email}</li>
       <li>
         Vergi Dairesi / Vergi No (veya TCKN): {COMPANY.taxOffice} / {COMPANY.taxNo}
@@ -279,7 +280,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
 
       <H2>5. İletişim</H2>
       <P>
-        İptal, iade ve cayma talepleriniz için: {COMPANY.email} — {COMPANY.phone}.
+        İptal, iade ve cayma talepleriniz için: {COMPANY.email}{COMPANY.phone ? ` — ${COMPANY.phone}` : ""}.
       </P>
     </>
   ),
@@ -312,6 +313,9 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       <H2>3. İşleme Amaçları</H2>
       <UL>
         <li>Abonelik sözleşmesinin kurulması, ifası ve hizmetin sunulması.</li>
+        {/* İndirme artık hesap gerektirdiği için YENİ bir işleme amacı doğdu; yayımlanan metin
+            fiili işlemeyi kapsamazsa aydınlatma yükümlülüğü eksik kalır. */}
+        <li>Yazılım indirme talebinin karşılanması ve sürüm/güncelleme bildirimlerinin iletilmesi.</li>
         <li>Ödeme, faturalandırma ve muhasebe süreçlerinin yürütülmesi.</li>
         <li>Müşteri destek, talep ve şikâyetlerin yönetimi.</li>
         <li>Hesap güvenliği, dolandırıcılığın önlenmesi ve sistem güvenliği.</li>
@@ -334,11 +338,78 @@ const DOCS: Record<LegalSlug, ReactNode> = {
         kişilere, KVKK m.8 ve m.9'daki şartlara uygun olarak aktarılabilir.
       </P>
 
+      {/* ⚠️ 2026-08-09 denetimi (Tier 3): metinde YURT DIŞINA AKTARIM başlığı hiç yoktu; oysa
+          hesap ve cihaz verileri fiilen yurt dışındaki bir işleyiciye (Supabase) gidiyor ve site
+          yurt dışında barındırılıyor (Vercel). Aşağıdaki kalemler koddan ÖLÇÜLEREK yazıldı:
+            • Supabase Auth  → e-posta, parola özeti, oturum jetonları, kayıt profil alanları
+            • devices tablosu (60 sn'de bir heartbeat, servers/sync_worker._publish_device_registry):
+              device_id, cihaz adı, tunnel_url, yerel IP, port, eşleştirme kodu, last_seen,
+              app_version, launcher_version, base_sha, at_rest_encrypted
+            • hasta/seans kayıtları → VARSAYILAN OLARAK GİTMEZ (PEMF_CLOUD_PATIENT_SYNC=0);
+              yalnız klinik açıkça açarsa ve o hâlde de PII şifreli gönderilir.
+          ⚠️ SAHİBİNE: Supabase proje BÖLGESİ (ör. eu-central-1 / us-east-1) panodan okunup
+          aşağıdaki cümleye somut olarak yazılmalıdır; ayrıca m.9 kapsamında hangi mekanizmaya
+          (taahhütname / standart sözleşme / açık rıza) dayanıldığı hukuk danışmanıyla
+          KESİNLEŞTİRİLMELİDİR. Bu metin fiili durumu bildirir, hukuki nitelemeyi yapmaz. */}
+      <H2>5.1. Yurt Dışına Aktarım (KVKK m.9)</H2>
+      <P>
+        Aşağıdaki veriler, hizmetin teknik olarak sunulabilmesi için <strong>yurt dışında yerleşik</strong>{' '}
+        hizmet sağlayıcıların altyapısında işlenmektedir:
+      </P>
+      <UL>
+        <li>
+          <strong>Hesap ve kimlik doğrulama verileri</strong> — e-posta adresi, parola özeti, oturum
+          jetonları, kayıt sırasında verilen ad-soyad/klinik/kurum bilgileri. Alıcı:{' '}
+          <strong>Supabase</strong> (kimlik doğrulama ve veritabanı hizmeti).
+        </li>
+        <li>
+          <strong>Cihaz kayıt defteri verileri</strong> — cihaz kimliği ve adı, uzaktan erişim adresi,
+          yerel IP adresi ve port, eşleştirme kodu, son görülme zamanı ve kurulu yazılım sürümleri. Bu
+          kayıt, mobil uygulamanın kliniğin cihazına bağlanabilmesi ve bir güvenlik güncellemesinin
+          hangi cihazlara ulaştığının izlenebilmesi için <strong>yaklaşık 60 saniyede bir</strong>{' '}
+          güncellenir. Alıcı: <strong>Supabase</strong>.
+        </li>
+        <li>
+          <strong>Site kullanım ve bağlantı verileri</strong> — IP adresi ve istek kayıtları. Alıcı:{' '}
+          <strong>Vercel</strong> (web sitesi barındırma).
+        </li>
+      </UL>
+      <P>
+        <strong>Hasta ve seans kayıtları (klinik verisi) yurt dışına aktarılmaz.</strong> Bu veriler
+        kliniğin kendi cihazında şifreli olarak tutulur. Yazılım, klinik verisinin buluta
+        eşitlenmesini <strong>varsayılan olarak kapalı</strong> tutar; bu ayar yalnızca klinik
+        tarafından açıkça etkinleştirilirse devreye girer ve o durumda da kişisel veri alanları
+        şifreli olarak gönderilir.
+      </P>
+      <P>
+        Ödeme işlemleri <strong>iyzico</strong> (Türkiye'de yerleşik ödeme kuruluşu) üzerinden yürütülür;
+        kart verileri tarafımızca saklanmaz.
+      </P>
+      <P>
+        Yurt dışına aktarım, KVKK m.9'da öngörülen şartlara dayanılarak yapılır. Aktarımın kapsamı,
+        alıcıları ve dayanağı hakkında bilgi talebinizi {COMPANY.kvkkEmail} adresine iletebilirsiniz.
+      </P>
+
       <H2>6. Saklama Süresi</H2>
       <P>
         Kişisel verileriniz, işleme amacının gerektirdiği süre ile ilgili mevzuatta öngörülen (ör. ticari ve
         vergisel kayıtlar için yasal) süreler boyunca saklanır; sürelerin sonunda silinir, yok edilir veya
         anonim hâle getirilir.
+      </P>
+      {/* ⚠️ 2026-08-09 denetimi: metin "öngörülen süreler" diyordu ama YAZILIM somut bir süre
+          uyguluyordu (varsayılan 365 gün) ve bunu operatöre hiçbir yerde söylemiyordu. Klinik
+          366. günde hasta adı yerine [REDACTED] görüp sebebini bulamıyordu. Uygulanan kuralın
+          hukuki metinde de somut olarak yazması gerekir. */}
+      <P>
+        <strong>Klinik cihazındaki tedavi kayıtları için uygulanan somut süre:</strong> seans kayıtlarındaki
+        hasta ve operatör adları ile serbest metin notlar, <strong>varsayılan olarak 365 gün</strong> sonra
+        geri dönüşsüz biçimde maskelenir (<code>[REDACTED]</code>). Tedavi verileri (uygulanan doz, süre,
+        frekans, sensör ölçümleri) maskelenmez ve klinik geçmişinde kalır.
+      </P>
+      <P>
+        Bu süre klinik tarafından uygulama içinden değiştirilebilir (Ayarlar → Veri Saklama Süresi) veya
+        tamamen kapatılabilir; tıbbi ve hukuki saklama yükümlülüğü ülkeye ve olaya göre değiştiğinden karar
+        veri sorumlusu kliniğe aittir. Maskeleme, klinik <strong>açıkça onaylamadan başlatılmaz</strong>.
       </P>
 
       <H2>7. İlgili Kişinin Hakları (KVKK m.11)</H2>
@@ -382,6 +453,8 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       <H2>2. Verilerin Kullanımı</H2>
       <UL>
         <li>Hizmetin sunulması, hesabınızın yönetimi ve aboneliğinizin işletilmesi.</li>
+        {/* Kayıtsız indirme kaldırıldı → indirme amacı burada da açıkça yazılmalı (KVKK metniyle tutarlı). */}
+        <li>Yazılım indirme talebinizin karşılanması ve sürüm/güncelleme bildirimlerinin iletilmesi.</li>
         <li>Ödeme ve faturalandırma işlemlerinin gerçekleştirilmesi.</li>
         <li>Destek taleplerinin karşılanması ve sizinle iletişim kurulması.</li>
         <li>Güvenlik, dolandırıcılığın önlenmesi ve hizmet kalitesinin iyileştirilmesi.</li>
@@ -511,7 +584,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
         <strong>Tıbbi/veteriner sorumluluk uyarısı:</strong> {COMPANY.brandName}, veteriner hekim gözetiminde
         kullanılmak üzere tasarlanmış bir klinik destek yazılımıdır. Akıllı teşhis ve yapay zekâ analiz
         çıktıları bilgilendirme amaçlıdır; veteriner hekimin tıbbi teşhis, karar ve tedavisinin yerine geçmez.
-        Otonom tedavi (AI Pro) özellikleri de dâhil olmak üzere tüm klinik kararlar ve uygulamalar, ilgili
+        Otonom seans (AI Pro) özellikleri de dâhil olmak üzere tüm klinik kararlar ve uygulamalar, ilgili
         veteriner hekimin gözetimi ve sorumluluğu altındadır.
       </div>
       <P>
@@ -548,7 +621,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
 
       <H2>9. İletişim</H2>
       <P>
-        Sorularınız için: {COMPANY.legalName} — {COMPANY.email} — {COMPANY.phone}.
+        Sorularınız için: {COMPANY.legalName} — {COMPANY.email}{COMPANY.phone ? ` — ${COMPANY.phone}` : ""}.
       </P>
     </>
   ),

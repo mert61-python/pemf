@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
 import { FAQ } from '../config'
 import { ArrowRight } from '../components/Icons'

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
 import { BRAND, COMPANY, LEGAL_DOCS, MEDICAL_DISCLAIMER, NAV } from '../config'
 import { Logo } from './Icons'
@@ -18,7 +19,8 @@ export default function Footer() {
             <div className="mt-3 space-y-0.5 text-xs leading-relaxed text-muted">
               <div className="font-medium text-fg/80">{COMPANY.legalName}</div>
               <div>{COMPANY.address}, {COMPANY.city}</div>
-              <div>Tel: {COMPANY.phone} · {COMPANY.email}</div>
+              {/* Telefon YOKSA hiç gösterilmez — boş "Tel:" satırı kırık görünür (2026-08-07). */}
+              <div>{COMPANY.phone ? `Tel: ${COMPANY.phone} · ` : ""}{COMPANY.email}</div>
               <div>Vergi Dairesi: {COMPANY.taxOffice} · VKN/TCKN: {COMPANY.taxNo}</div>
               <div>MERSIS: {COMPANY.mersis}</div>
             </div>

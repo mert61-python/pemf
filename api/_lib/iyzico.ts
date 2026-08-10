@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* iyzico Abonelik (Subscription) sarmalayıcı — SDK callback'lerini promisify eder + plan çözer +
    webhook imza doğrular. Plan referans kodları iyzico panelinde oluşturulur (Ürün → Ödeme Planı),
    env'e girilir. */
@@ -11,10 +12,23 @@ type Result = Record<string, unknown> & { status?: string; errorMessage?: string
 let _client: Iyzipay | null = null
 export function iyzico(): Iyzipay {
   if (!_client) {
+    // FAIL-CLOSED: varsayılan SANDBOX'tı. Vercel'de `IYZICO_URI` girilmeyi unutulursa üretim
+    // sitesi sessizce test ortamına bağlanır → kullanıcı "ödeme başarılı" ekranı görür, iyzico
+    // test onayı döner, callback aboneliği AKTİF yazar; ama GERÇEK tahsilat HİÇ yapılmamıştır.
+    // Böyle bir yanlış yapılandırma sessizce ücretsiz abonelik dağıtır. Üretimde uri ZORUNLU;
+    // sandbox'a düşmek yalnız açıkça izin verildiğinde (IYZICO_ALLOW_SANDBOX=1) mümkün.
+    const explicitUri = process.env.IYZICO_URI
+    const allowSandbox = (process.env.IYZICO_ALLOW_SANDBOX ?? '0') === '1'
+    if (!explicitUri && !allowSandbox) {
+      throw new Error(
+        'Eksik ortam değişkeni: IYZICO_URI (üretimde https://api.iyzipay.com). ' +
+        'Test ortamı için IYZICO_ALLOW_SANDBOX=1 gerekir.'
+      )
+    }
     _client = new Iyzipay({
       apiKey: env('IYZICO_API_KEY'),
       secretKey: env('IYZICO_SECRET_KEY'),
-      uri: process.env.IYZICO_URI || 'https://sandbox-api.iyzipay.com', // varsayılan SANDBOX
+      uri: explicitUri || 'https://sandbox-api.iyzipay.com',
     })
   }
   return _client

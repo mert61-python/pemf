@@ -1,6 +1,7 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { PLANS, RESEARCH_ADDON } from '../config'
+import { PLANS, RESEARCH_ADDON, FREE_MODE } from '../config'
 import { useAuth } from '../context/AuthContext'
 import { useAuthModal } from '../context/AuthModal'
 import { initCheckout, type CheckoutCustomer } from '../lib/checkout'
@@ -42,8 +43,17 @@ export default function Odeme() {
     }
   }, [paying, checkoutContent])
 
+  // Aylık-EŞDEĞER (yalnız bilgilendirme) ile O AN TAHSİL EDİLECEK tutarı ayır. Eskiden yalnız
+  // aylık-eşdeğer hesaplanıyor ve aşağıdaki cümlede "{tutar} tutarında YILLIK ödeme" diye
+  // sunuluyordu → yıllık Pro'da ekranda ₺825 yazarken karttan ₺9.900 çekiliyordu (12 kat fark).
+  // Gerçek dönem tutarı sayfanın hiçbir yerinde görünmüyordu; bu bir ön bilgilendirme ihlalidir.
   const monthly = yearly ? Math.round((plan?.yearly ?? 0) / 12) : plan?.monthly ?? 0
   const total = monthly + (research ? RESEARCH_ADDON.monthly : 0)
+  /** Bu siparişte HEMEN tahsil edilecek tutar (dönem bedeli). */
+  const chargeNow = yearly
+    ? (plan?.yearly ?? 0) + (research ? RESEARCH_ADDON.monthly * 12 : 0)
+    : total
+  const periodLabel = yearly ? 'yıllık' : 'aylık'
 
   function set<K extends keyof CheckoutCustomer>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }))
@@ -67,6 +77,21 @@ export default function Odeme() {
     } else {
       setErr('Ödeme başlatılamadı. Lütfen tekrar deneyin.')
     }
+  }
+
+  // FREE_MODE yalnız İSTEMCİ butonlarını gizliyordu; /odeme rotası App.tsx'te koşulsuz kayıtlı
+  // olduğundan adres çubuğuna doğrudan yazan (ya da eski bir link açan) kullanıcıda GERÇEK iyzico
+  // tahsilatı başlıyordu — site "Ücretsiz" derken. Kapıyı sayfanın kendisine koy.
+  if (FREE_MODE) {
+    return (
+      <section className="mx-auto max-w-2xl px-5 py-24 text-center">
+        <h1 className="text-2xl font-bold">Şu an ücretsiz</h1>
+        <p className="mt-2 text-muted">
+          Tüm profiller ve modüller şimdilik ücretsiz kullanılabiliyor; ödeme alınmıyor.
+        </p>
+        <Link to="/download" className="btn-primary mt-6">Client&apos;ı indir</Link>
+      </section>
+    )
   }
 
   if (!plan) {
@@ -98,13 +123,24 @@ export default function Odeme() {
           <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{yearly ? 'Yıllık ödeme (2 ay bedava)' : 'Aylık ödeme'}</li>
           {research && <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />Araştırma modülü eklendi</li>}
         </ul>
+        {/* ÖNCE gerçekte çekilecek tutar; aylık-eşdeğer yalnızca ikincil bilgi olarak. */}
         <div className="mt-4 flex items-baseline justify-between border-t border-border pt-4">
-          <span className="text-sm text-muted">Aylık toplam</span>
-          <span className="text-2xl font-extrabold">{tl(total)}<span className="text-sm font-normal text-muted">/ay</span></span>
+          <span className="text-sm text-muted">Bugün tahsil edilecek</span>
+          <span className="text-2xl font-extrabold">
+            {tl(chargeNow)}
+            <span className="text-sm font-normal text-muted">/{periodLabel}</span>
+          </span>
         </div>
+        {yearly && (
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="text-xs text-muted">Aylık eşdeğeri</span>
+            <span className="text-xs text-muted">{tl(total)}/ay</span>
+          </div>
+        )}
         <p className="mt-3 text-xs leading-relaxed text-muted">
-          <strong className="text-fg/80">Otomatik yenilenen abonelik:</strong> {tl(total)} tutarında {yearly ? 'yıllık' : 'aylık'} ödeme,
-          siz iptal edene kadar her dönem sonunda otomatik tahsil edilir. Fiyat ve vergi ayrıntıları için{' '}
+          <strong className="text-fg/80">Otomatik yenilenen abonelik:</strong> {tl(chargeNow)} tutarındaki {periodLabel} ödeme,
+          siz iptal edene kadar her dönem sonunda otomatik tahsil edilir. Fiyatlara KDV dâhil değildir.
+          Ayrıntılar için{' '}
           <a href="/on-bilgilendirme" target="_blank" rel="noreferrer" className="text-primary hover:underline">Ön Bilgilendirme Formu</a>'na bakınız.
         </p>
       </div>

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseReady } from '../lib/supabase'
@@ -28,10 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
+    // .catch: getSession reddedilirse `loading` sonsuza dek true kalıyordu.
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch(() => setSession(null))
+      .finally(() => setLoading(false))
     // TOKEN_REFRESHED dahil tüm oturum değişimlerinde session tazelenir.
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
@@ -56,7 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error?.message, needConfirm: !data.session }
     },
     resetPassword: async (email) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      // `redirectTo` ZORUNLU: verilmezse Supabase Site URL'ine (mobil uygulamanın GitHub Pages
+      // sayfasına) yönlenir ve web kullanıcısı şifresini hiç belirleyemezdi.
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/sifre-sifirla`,
+      })
       return { error: error?.message }
     },
     signOut: async () => {

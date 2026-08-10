@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* Ortak yardımcılar (Vercel serverless) — SAĞLAYICI-AGNOSTİK Supabase katmanı.
    A1: abonelik web'de satılır (iyzico), webhook Supabase `subscriptions`e yazar (service_role);
    mobil/backend yalnız okur. `_lib` → Vercel endpoint saymaz. */
@@ -11,6 +12,31 @@ export function env(name: string, required = true): string {
 const SB_URL = () => env('SUPABASE_URL')
 const SB_ANON = () => env('SUPABASE_ANON_KEY')
 const SB_SERVICE = () => env('SUPABASE_SERVICE_ROLE_KEY')
+
+/** İstemciden gelen `origin` yalnız İZİN LİSTESİNDEYSE kabul edilir (ödeme geri-dönüş adresi
+ *  keyfi bir host'a yönlendirilemesin). Liste: PUBLIC_SITE_URL + EXTRA_ALLOWED_ORIGINS (virgüllü)
+ *  + Vercel önizleme dağıtımları (*.vercel.app). */
+export function isAllowedOrigin(origin: unknown): boolean {
+  if (typeof origin !== 'string' || !origin) return false
+  let u: URL
+  try {
+    u = new URL(origin)
+  } catch {
+    return false
+  }
+  if (u.protocol !== 'https:') return false
+  const allow = [process.env.PUBLIC_SITE_URL ?? '', ...(process.env.EXTRA_ALLOWED_ORIGINS ?? '').split(',')]
+    .map((s) => s.trim())
+    .filter(Boolean)
+  for (const a of allow) {
+    try {
+      if (new URL(a).host === u.host) return true
+    } catch {
+      /* bozuk yapılandırma girdisi — atla */
+    }
+  }
+  return u.host.endsWith('.vercel.app')
+}
 
 /** Supabase JWT doğrula → kullanıcı (id, email). Geçersiz/eksikse null. */
 export async function verifyUser(token: string): Promise<{ id: string; email: string } | null> {
@@ -68,5 +94,11 @@ export function mapIyzicoStatus(s: string): 'trialing' | 'active' | 'past_due' |
   if (v === 'ACTIVE') return 'active'
   if (v === 'PENDING') return 'trialing'
   if (v === 'UNPAID') return 'past_due'
-  return 'canceled' // CANCELED, EXPIRED, UPGRADED …
+  if (v === 'CANCELED' || v === 'EXPIRED' || v === 'UPGRADED') return 'canceled'
+  // BİLİNMEYEN durum eskiden koşulsuz 'canceled'a düşüyordu: iyzico yeni/beklenmedik bir statü
+  // (ör. 'RETRY', boş gövde, geçici sağlayıcı hatası) döndüğünde ÖDEYEN kullanıcının hakkı
+  // sessizce iptal ediliyordu. Bilinmeyeni "askıda" say (erişim korunur, tahsilat takibi sürer)
+  // ve elle inceleme için iz bırak.
+  console.warn('iyzico: bilinmeyen subscriptionStatus, past_due sayıldı', { status: s })
+  return 'past_due'
 }

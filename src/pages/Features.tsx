@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
 import { FEATURES, PATCH } from '../config'
 import { ICONS, ArrowRight, Check } from '../components/Icons'
@@ -42,7 +43,7 @@ export default function Features() {
             <span className="chip">Launcher</span>
             <h2 className="mt-4 text-3xl font-bold">Tek pencereden yönetim</h2>
             <p className="mt-3 text-muted">
-              Cihaz durumu, anlık metrikler, tedavi başlatma ve güncellemeler tek ekranda. Uygulama ve AI modelleri client içinden inip güncel kalır.
+              Cihaz durumu, anlık metrikler, seans başlatma ve güncellemeler tek ekranda. Uygulama ve AI modelleri client içinden inip güncel kalır.
             </p>
             <div className="mt-6 rounded-lg border border-border p-5">
               <div className="mb-2 flex items-center justify-between">

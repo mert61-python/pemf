@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /* Inline SVG ikon seti — stroke = currentColor, className ile boyut/renk. */
 type P = { className?: string }
 

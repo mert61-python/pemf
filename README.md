@@ -81,3 +81,36 @@ Framework preset: **Vite** · Build: `npm run build` · Output dir: `dist`.
 
 ## Tasarım sistemi
 Teal marka (`oklch(66% 0.13 184)`), koyu navy zemin, **Inter**, radius `.625rem`, Tailwind v4. Token’lar `src/index.css` `@theme` içinde; koyu/premium launcher estetiği.
+
+## vercel.json — güvenlik başlıklarının gerekçesi
+
+> ⚠️ `vercel.json` **yorum kabul etmez**: şemada olmayan `"//"` anahtarı deploy'u
+> `Invalid vercel.json - should NOT have additional property "//"` ile düşürür
+> (2026-08-06'da bu şekilde patladı). Gerekçe bu yüzden burada tutuluyor.
+
+- **Neden başlık var:** sitede Supabase oturumu `localStorage`'da tutuluyor ve `/odeme`
+  sayfası iyzico ödeme formunu `createContextualFragment` ile gömüp script çalıştırıyor.
+  Hiçbir başlık yokken sayfa iframe'e alınabiliyordu (ödeme/hesap ekranında clickjacking)
+  ve HSTS olmadığı için ilk istek düz HTTP'ye düşürülebiliyordu.
+- **CSP:** iyzico ödeme formu kendi script/iframe'ini enjekte eder → `iyzipay.com`
+  host'larına izin verilir. `frame-ancestors 'none'` modern tarayıcılarda
+  `X-Frame-Options`'ın yerini tutar. `'unsafe-inline'` iyzico formunun gereğidir;
+  kaldırılırsa ödeme adımı çalışmaz.
+
+## İndirme sayacı (2026-08-06)
+
+`/indir` sayfasındaki sayaç GitHub Releases API'sinden (`download_count`) beslenir.
+
+⚠️ **"Kaç kişi" değil "kaç indirme".** İki bilinen şişme kaynağı var:
+1. **Oto-güncelleme** — client v1.9.3'ten beri kendini güncellerken `PEMFVetClient-Setup.exe`'yi
+   yeniden indirir; kurulu her cihaz her sürümde sayacı artırır (yeni kullanıcı olmadan).
+2. **Geliştirme/test indirmeleri** de sayılır.
+
+Bu yüzden arayüzde "kullanıcı" denmez ve dipnotta oto-güncellemenin dahil olduğu yazar.
+Gerçek benzersiz kullanıcı sayısı ancak Supabase `devices` kaydından çıkarılabilir.
+
+- Runtime paketleri (`base.zip`, model zip'leri, `manifest.json`) **sayılmaz** — client'ın
+  kendi çektiği bileşenlerdir, sayılsalardı sayaç anlamsızca şişerdi.
+- Veri çekilemezse (ağ / GitHub saatlik 60 istek sınırı) bölüm **kendini gizler**.
+- ⚠️ `vercel.json` → CSP `connect-src` **`https://api.github.com` içermek zorunda**; yoksa
+  tarayıcı isteği engeller ve sayaç sessizce hiç görünmez.
