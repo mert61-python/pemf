@@ -23,11 +23,16 @@ from pathlib import Path
 
 import pytest
 
-_SQL_DIR = Path(__file__).resolve().parent.parent / "database"
+_KOK = Path(__file__).resolve().parent.parent
+# ⚠️ İKİ DİZİN. Kapı başlangıçta yalnız `database/`e bakıyordu; 2026-08-09 denetiminde eklenen
+# `supabase/upsert_device_envanter.sql` bu yüzden HİÇ denetlenmedi ve içinde üretimi kıracak bir
+# imza çakışması vardı (dağıtımdan önce elle yakalandı). Yeni SQL'in nereye konacağı sabit
+# değilse, kapı da tek bir dizine bakmamalı.
+_SQL_DIRS = [_KOK / "database", _KOK / "supabase"]
 
 
 def _sql_files() -> list[Path]:
-    return sorted(_SQL_DIR.glob("*.sql"))
+    return sorted(p for d in _SQL_DIRS if d.is_dir() for p in d.glob("*.sql"))
 
 
 def _strip_comments(text: str) -> str:
@@ -39,7 +44,7 @@ def _strip_comments(text: str) -> str:
 def sql_bodies() -> dict[str, str]:
     files = _sql_files()
     if not files:
-        pytest.skip(f"SQL şeması yok: {_SQL_DIR}")
+        pytest.skip(f"SQL şeması yok: {[str(d) for d in _SQL_DIRS]}")
     return {f.name: _strip_comments(f.read_text(encoding="utf-8", errors="replace")) for f in files}
 
 
@@ -132,3 +137,99 @@ def test_security_definer_fonksiyonlari_sabit_search_path_kullanir(sql_bodies):
     )
     eksik = {"supabase_devices.sql", "supabase_patients.sql", "supabase_secure_v2.sql"} - set(sql_bodies)
     assert not eksik, f"guvenlik-kritik SQL dosya(lari) EKSIK: {sorted(eksik)}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# İMZA ÇAKIŞMASI (2026-08-10'da dağıtımdan ÖNCE yakalandı)
+#
+# `supabase/upsert_device_envanter.sql` ilk hâlinde `create or replace function
+# public.upsert_device(...11 parametre...)` diyordu. PostgreSQL fonksiyonları (ad + argüman
+# tipleri) ile anahtarlar: bu ifade yayındaki 7-parametreli fonksiyonu DEĞİŞTİRMEZ, yanına
+# İKİNCİSİNİ EKLER. Sonrasında 7 argümanlı her çağrı — geriye-uyum yolu ve güncellenmemiş her
+# backend — iki adaya birden uyar → PostgREST PGRST203 → heartbeat kırılır, uzaktan erişim ölür.
+#
+# Hata SAHADA, cihazlar sustuğunda görünürdü. Bu yüzden kural metin düzeyinde kilitlenir.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
+_FN_TANIM = re.compile(
+    r"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(\w+)\s*\(([^)]*)\)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _parametre_sayisi(ham: str) -> int:
+    """Parametre listesindeki virgülle ayrılmış üst-düzey öğe sayısı (varsayılanlar dâhil)."""
+    ham = ham.strip()
+    if not ham:
+        return 0
+    derinlik, n = 0, 1
+    for c in ham:
+        if c == "(":
+            derinlik += 1
+        elif c == ")":
+            derinlik -= 1
+        elif c == "," and derinlik == 0:
+            n += 1
+    return n
+
+
+def _dusurme_var_mi(govde: str, fn: str) -> bool:
+    """Bu dosya `fn`in eski imzalarını GERÇEKTEN düşürüyor mu?
+
+    ⚠️ İlk hâli `pg_proc` + fonksiyon adı geçmesini yeterli sayıyordu — ama dosyanın SONUNDAKİ
+    "tek imza kaldı mı?" DOĞRULAMA bloğu da tam olarak bu ikisini içeriyor. Sonuç: düşürme adımı
+    silinse bile kapı yeşil kalıyordu (mutasyon turunda ölçüldü). `drop function` ifadesinin
+    KENDİSİ aranmalı; doğrulama saymamalı.
+    """
+    low = govde.lower()
+    if "drop function" not in low:
+        return False
+    if re.search(rf"drop\s+function[^;]*\b{re.escape(fn)}\b", low):
+        return True  # düz: drop function ... fn(...)
+    # Dinamik katalog süpürmesi: pg_proc üzerinde proname='<fn>' + execute'lu drop
+    return "pg_proc" in low and f"'{fn}'" in low
+
+
+def test_KRITIK_ayni_RPC_farkli_arite_ile_tanimlaniyorsa_ESKISI_DUSURULUR(sql_bodies):
+    """Aynı RPC iki farklı parametre sayısıyla tanımlanıyorsa, YENİ (geniş) imzayı getiren dosya
+    eski imzaları DÜŞÜRMELİ. Aksi hâlde iki aşırı-yükleme birlikte yaşar ve az-argümanlı çağrılar
+    belirsiz kalır (PGRST203) — üstelik yalnız SAHADA, heartbeat sustuğunda görünen bir arıza.
+
+    ⚠️ "Başka bir dosyada drop var" YETMEZ: dosyalar ayrı ayrı ve farklı zamanlarda çalıştırılır.
+    Düşürme, yeni imzayı getiren betiğin İÇİNDE olmalı ki tek başına çalıştırıldığında da güvenli
+    olsun."""
+    ariteler: dict[str, dict[str, set[int]]] = {}
+    for ad, govde in sql_bodies.items():
+        for m in _FN_TANIM.finditer(govde):
+            fn = m.group(1).lower()
+            ariteler.setdefault(fn, {}).setdefault(ad, set()).add(_parametre_sayisi(m.group(2)))
+
+    for fn, dosyalar in ariteler.items():
+        hepsi = set().union(*dosyalar.values())
+        if len(hepsi) <= 1:
+            continue  # tek arite → çakışma yok
+        enis = max(hepsi)
+        getirenler = [ad for ad, ar in dosyalar.items() if enis in ar]
+        for ad in getirenler:
+            assert _dusurme_var_mi(sql_bodies[ad], fn), (
+                f"{ad}: `{fn}` en genis imzayi ({enis} parametre) getiriyor ama eski imzalari "
+                f"DUSURMUYOR. Depoda su ariteler var: {sorted(hepsi)}. PostgreSQL ikinci bir "
+                f"asiri-yukleme yaratir; az-argumanli cagrilar PGRST203 ile olur."
+            )
+
+
+def test_envanter_SQL_i_bcrypt_modelini_KORUR(sql_bodies):
+    """İkinci kusur: envanter dosyasının ilk hâli sırrı DÜZ METİN karşılaştırıyordu
+    (`device_secret` sütunu). Yayındaki v2 bcrypt kullanır (`secret_hash` + `crypt`). Envanter
+    eklemek bir güvenlik modeli değişikliği DEĞİLDİR."""
+    govde = sql_bodies.get("upsert_device_envanter.sql")
+    if not govde:
+        pytest.skip("envanter SQL'i yok")
+    low = govde.lower()
+    assert "secret_hash" in low and "crypt(" in low, "envanter SQL'i bcrypt modelini terk etmis"
+    assert "d.device_secret" not in low and "devices.device_secret" not in low, (
+        "duz-metin `device_secret` karsilastirmasi geri gelmis"
+    )
+    assert "grant execute on function public.upsert_device" in low, (
+        "yeni imza icin `grant execute ... to anon` YOK — cihaz fonksiyonu cagiramaz"
+    )
