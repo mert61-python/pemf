@@ -200,6 +200,13 @@
       }
       .pw-toggle:hover { color: var(--fg); border-color: var(--teal); }
       .pw-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+      /* İşlevsel bağ notu — uyarı DEĞİL bilgi: seçimi engellemez, ne olacağını söyler. */
+      .dep-notice {
+        display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+        margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+        background: rgba(125, 211, 252, 0.07); border: 1px solid rgba(125, 211, 252, 0.25);
+        color: var(--muted); font-size: 12.5px; line-height: 1.5; text-align: left;
+      }
       .remember { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); cursor: pointer; }
       .remember input { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
       .remember.off { opacity: 0.45; cursor: default; }
@@ -469,6 +476,8 @@
           <h2 class="title" id="t-sel-title">Kullanım profilinizi seçin</h2>
           <p class="lead" id="t-sel-lead">Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.</p>
           <div class="cards" id="cards"></div>
+          <!-- İşlevsel bağ notu: ENGELLEMEZ, yalnız söyler (bkz. JS `depNotice`). -->
+          <div class="dep-notice" id="dep-notice" hidden></div>
           <button class="btn big" id="btn-install" disabled>
             <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
             <span id="t-install">Kur ve Başlat</span>
@@ -736,11 +745,22 @@
         vet:      { tr: ["Veteriner Hekim", "Klinik teşhis + seans (em_kedi, termal)"], en: ["Veterinarian", "Clinical diagnosis + session (em_kedi, thermal)"], icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
         research: { tr: ["Araştırma Modu", "Araştırma modelleri — petri, histopatoloji, böbrek, fantom"], en: ["Research Mode", "Research models — petri, histopathology, kidney, phantom"], icon: "M9 3v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M9 3h6" },
       };
-      // Profil BAĞIMLILIKLARI (nested-delta paketleme): "vet" klinik AI'ı home'daki teşhis
-      // modellerini KULLANIR (AiPro: cat_organ[home] → em_kedi[vet] zinciri). Bu yüzden "vet"
-      // seçilince "home" OTOMATİK dahil edilir — aksi halde veteriner eksik/çalışmaz model kurar.
-      // (Kullanıcı gözlemi: veterinerde daha çok model var → kümülatif boyut home'dan büyük olmalı.)
-      const PROFILE_DEPS = { home: [], vet: ["home"], research: [] };
+      // ── PROFİLLER BAĞIMSIZ SEÇİLİR (2026-08-10, sahip kararı) ─────────────────────────────
+      // ÖNCEKİ DAVRANIŞ: `vet: ["home"]` → "Veteriner" seçilince "Ev Sahibi" ZORLA ekleniyordu.
+      // Sonuç: yalnız Veteriner + Araştırma kurmak isteyen kullanıcı bunu YAPAMIYORDU ve
+      // gereksiz 503 MB indiriyordu.
+      //
+      // ⚠️ BAĞIMLILIK UYDURMA DEĞİLDİ — ölçüldü (2026-08-10, uzak zip merkezi-dizini):
+      //     home.zip  → ai_hub/inference_cat_organ/models/{fasterrcnn, rtmpose_s, yolov8m-seg}.onnx
+      //     vet.zip   → cat_thermal, em_kedi, em_kedi_legacy
+      // AI Pro'nun organ lokalizasyonu (`servers/ai_router.py::_get_or_load_catorgan`) home'daki
+      // bu üç modeli kullanır. Doğru çözüm, ORTAK modeli çekirdeğe almaktır — kullanıcıyı
+      // istemediği bir profili kurmaya zorlamak değil. O paketleme değişikliği yapılana kadar:
+      // zorlama KALDIRILDI, yerine AÇIK ve engellemeyen bir bilgi notu kondu (bkz. `depNotice`).
+      // Böylece kullanıcı ne kurduğunu bilerek seçer; sessizce eksik model kurmaz.
+      const PROFILE_DEPS = { home: [], vet: [], research: [] };
+      /** Zorunlu değil ama İŞLEVSEL bağ: seçilirse şu profil olmadan bir özellik çalışmaz. */
+      const PROFILE_SOFT_DEPS = { vet: ["home"] };
       const PROFILE_ORDER = ["home", "vet", "research"];
       // Bir seçim kümesini bağımlılıklarıyla genişlet.
       function withDeps(keys) {
@@ -1087,7 +1107,9 @@
           const s = document.createElement("span"); s.textContent = desc;
           m.append(b, s);
           const size = document.createElement("span"); size.className = "size";
-          // KÜMÜLATİF boyut: vet = home + vet → home'dan büyük görünür (kullanıcı beklentisi).
+          // Kartta profilin KENDİ boyutu yazar. (Eskiden kümülatifti: `vet` kartında home+vet
+          // toplamı görünüyordu — zorunlu bağımlılık vardı, doğruydu. Bağımlılık kalkınca o
+          // gösterim YANILTICI olurdu: kullanıcı 0,6 GB yazan kartı seçip 0,12 GB indirirdi.)
           size.textContent = sizes[key] ? `${gb(cumBytes(key))} GB` : "";
           card.append(cb, pico, m, size);
           card.onclick = () => {
@@ -1104,7 +1126,40 @@
           };
           box.appendChild(card);
         }
+        depNotice();
         updateInstallBtn();
+      }
+
+      /** İŞLEVSEL bağ notu — ENGELLEMEZ, yalnız söyler (2026-08-10, sahip kararı).
+       *
+       * Zorunlu bağımlılık kaldırıldı; ama vet'in AI Pro organ lokalizasyonu home paketindeki
+       * `inference_cat_organ` modellerini kullanıyor (ölçüldü). Kullanıcı Veteriner'i home'suz
+       * seçebilmeli — ama neyin çalışmayacağını BİLEREK seçmeli. Sessizce eksik model kurmak,
+       * seçimi kısıtlamaktan da zorla eklemekten de kötüdür. */
+      function depNotice() {
+        const kutu = $("dep-notice");
+        if (!kutu) return;
+        const eksik = [];
+        for (const k of selected) {
+          for (const d of (PROFILE_SOFT_DEPS[k] || [])) {
+            // ⚠️ `installed` bir DİZİ (Set değil) — `.has()` burada TypeError atardı.
+            if (!selected.has(d) && !installed.includes(d)) eksik.push([k, d]);
+          }
+        }
+        if (!eksik.length) { kutu.hidden = true; kutu.textContent = ""; return; }
+        kutu.textContent = "";
+        const [k, d] = eksik[0];
+        const ad = (x) => (PROFILE_META[x] ? PROFILE_META[x][LANG][0] : x);
+        const p = document.createElement("span");
+        p.textContent = LANG === "tr"
+          ? `“${ad(k)}” seçildi ama “${ad(d)}” yok. Bunlar bağımsız kurulur; yalnız AI Pro’nun organ lokalizasyonu ${ad(d)} paketindeki modelleri kullanır — o özellik çalışmaz. Diğer her şey çalışır.`
+          : `“${ad(k)}” is selected without “${ad(d)}”. They install independently; only AI Pro’s organ localization uses models from the ${ad(d)} package — that feature will not work. Everything else works.`;
+        const btn = document.createElement("button");
+        btn.className = "link";
+        btn.textContent = LANG === "tr" ? `${ad(d)} ekle` : `Add ${ad(d)}`;
+        btn.onclick = () => { if (!busy) { selected.add(d); renderCards(); } };
+        kutu.append(p, btn);
+        kutu.hidden = false;
       }
 
       // ---------- ready chips ----------

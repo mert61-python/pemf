@@ -8,7 +8,7 @@
   },
 
   "backend": "1.9.6",
-  "launcher": "1.9.17",
+  "launcher": "1.9.18",
   "mobile": {
     "name": "2.3.8",
     "androidVersionCode": 15,

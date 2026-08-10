@@ -521,6 +521,39 @@ mod tests {
             s.contains(r#"$("btn-pw-toggle").onclick"#) && s.contains(r#"$("login-pass").type"#),
             "goster/gizle dugmesi var ama parola alaninin tipini DEGISTIRMIYOR (olu dugme)"
         );
+    }
+
+    /// PROFİLLER BAĞIMSIZ SEÇİLİR (2026-08-10 sahip kararı).
+    ///
+    /// Eskiden `vet: ["home"]` idi → "Veteriner" seçilince "Ev Sahibi" ZORLA ekleniyordu ve
+    /// yalnız Veteriner + Araştırma kurmak isteyen kullanıcı bunu yapamıyor, gereksiz 503 MB
+    /// indiriyordu. Zorunluluk kaldırıldı; işlevsel bağ (AI Pro organ lokalizasyonu home'daki
+    /// `inference_cat_organ` modellerini kullanır — uzak zip dizininden doğrulandı) ENGELLEMEYEN
+    /// bir bilgi notuna dönüştü.
+    #[test]
+    fn KRITIK_profiller_BAGIMSIZ_secilebilir() {
+        let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/ui/index.html");
+        let s = std::fs::read_to_string(p).expect("index.html okunamadi");
+
+        let sat = s
+            .lines()
+            .find(|l| l.contains("const PROFILE_DEPS"))
+            .expect("PROFILE_DEPS bulunamadi");
+        // Hiçbir profilin ZORUNLU bağımlılığı olmamalı: `{ home: [], vet: [], research: [] }`
+        assert!(
+            !sat.contains("[\""),
+            "bir profil ZORUNLU bagimlilik tasiyor -> kullanici istemedigi profili kurmaya zorlanir: {sat}"
+        );
+        // İşlevsel bağ KAYBOLMAMALI: kullanıcı neyin çalışmayacağını bilmeli.
+        assert!(
+            s.contains("PROFILE_SOFT_DEPS") && s.contains("function depNotice"),
+            "islevsel bag notu kaldirilmis -> vet-only kurulumda AI Pro organ lokalizasyonu SESSIZCE calismaz"
+        );
+        // `installed` bir DİZİdir; `.has()` TypeError atar (yazarken yakalandı).
+        assert!(
+            !s.contains("installed.has("),
+            "`installed` DIZI — `.has()` calisma aninda TypeError atar"
+        );
         // Hatalı girişte alan TEMİZLENMELİ.
         //
         // ⚠️ İlk yazımda dosyadaki İLK `} catch (e) {` aranıyordu — o BAŞKA bir fonksiyonun

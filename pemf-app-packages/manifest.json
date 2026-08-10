@@ -77,17 +77,17 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.17",
+    "version": "1.9.18",
     "url": "https://pemf-vet-web.vercel.app/",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.17/PEMFVetClient-Setup-1.9.17.exe",
-    "sha256": "8070971e51807f6b69d7b75251ed5dbca547dc9d9ca78bf7fe4aa75a290dc248",
-    "size": 2947818
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.18/PEMFVetClient-Setup-1.9.18.exe",
+    "sha256": "8bdc6252b2350587524f4f4934774ae7eaf57a6cfecd6f630beb37c2a342da89",
+    "size": 2950118
   },
   "mobile": {
     "android": {
       "version": "2.3.8",
       "versionCode": 15,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.17/PEMF_Vet_Mobil.apk",
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.18/PEMF_Vet_Mobil.apk",
       "sha256": "d6be2a3166fcdc200333bf95636758347e46a21fc2b67282c569e8510cfd1488",
       "size": 128382639,
       "notes": "Cihaz yazilimi guncelleme dugmesi kaldirildi (guncellemeyi yalniz Client yonetir); olcumu olmayan bobinlerde 'olcum yok'; acil durdurma teyidi."
