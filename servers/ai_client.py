@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 PEMF çekirdek → AI mikroservisi HTTP istemcisi (mikroservis Faz 3).
 
@@ -5,9 +6,10 @@ PEMF çekirdek → AI mikroservisi HTTP istemcisi (mikroservis Faz 3).
 ile devreder. YOKSA → çekirdek in-process çalışır (GERİYE UYUM: Mac/CPU demo, tek-EXE
 klinik kurulumu, mevcut davranış HİÇ bozulmaz). Tek bayrakla monolit ↔ mikroservis.
 """
-import os
+
 import base64
 import logging
+import os
 
 import httpx
 
@@ -22,8 +24,9 @@ def ai_service_enabled() -> bool:
     return bool(AI_SERVICE_URL)
 
 
-async def delegate_infer(name: str, file=None, image_base64: str = None,
-                         audio_base64: str = None, csv_base64: str = None, data: dict = None):
+async def delegate_infer(
+    name: str, file=None, image_base64: str = None, audio_base64: str = None, csv_base64: str = None, data: dict = None
+):
     """Girdiyi (UploadFile veya base64) pemf-ai `/infer/<name>`'e multipart devret → JSON.
 
     name: pemf-ai uç adı (histopath|sound|kidney_ct|segmentation|landmark|thermal|cat_organ|

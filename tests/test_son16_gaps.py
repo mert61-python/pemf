@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Mutasyon doğrulamasından geçmemiş SON 16 düzeltme için regresyon koruması.
 
 Önceki turlarda 64/80 Python düzeltmesi doğrulanmıştı; bu dosya kalan 16'yı kapatır.
@@ -10,8 +11,8 @@ import threading
 
 import pytest
 
-
 # ───────────────────── BOBİN / DONANIM ─────────────────────
+
 
 def test_parametre_normalizasyonu_patlarsa_bobin_YARIM_guncellenmez():
     """P2: `normalize_*` çağrıları eskiden state'e YAZARKEN çalışıyordu. Biri istisna
@@ -25,9 +26,11 @@ def test_parametre_normalizasyonu_patlarsa_bobin_YARIM_guncellenmez():
     hw = HardwareController.__new__(HardwareController)
     hw._state_lock = threading.RLock()
     import logging
+
     hw.logger = logging.getLogger("t")
-    hw.coils_state = {i: {"is_running": False, "freq": 10.0, "duty": 0.10,
-                          "phase": 0.0, "duration": 5} for i in range(1, 6)}
+    hw.coils_state = {
+        i: {"is_running": False, "freq": 10.0, "duty": 0.10, "phase": 0.0, "duration": 5} for i in range(1, 6)
+    }
     hw._coil_deadline = {i: None for i in range(1, 6)}
     hw._force_send_left = 0
 
@@ -39,7 +42,8 @@ def test_parametre_normalizasyonu_patlarsa_bobin_YARIM_guncellenmez():
     assert ok is False, "normalizasyon patladığında False dönmeli (çağırana dürüst hata)"
     assert hw.coils_state[1] == onceki, (
         f"bobin YARIM güncellendi: {hw.coils_state[1]} != {onceki} → keep-alive tanımsız "
-        "parametreleri sürmeye devam eder")
+        "parametreleri sürmeye devam eder"
+    )
 
 
 def test_gecerli_parametrelerle_bobin_NORMAL_guncellenir():
@@ -50,15 +54,17 @@ def test_gecerli_parametrelerle_bobin_NORMAL_guncellenir():
     hw = HardwareController.__new__(HardwareController)
     hw._state_lock = threading.RLock()
     import logging
+
     hw.logger = logging.getLogger("t")
-    hw.coils_state = {i: {"is_running": False, "freq": 10.0, "duty": 0.10,
-                          "phase": 0.0, "duration": 5} for i in range(1, 6)}
+    hw.coils_state = {
+        i: {"is_running": False, "freq": 10.0, "duty": 0.10, "phase": 0.0, "duration": 5} for i in range(1, 6)
+    }
     hw._coil_deadline = {i: None for i in range(1, 6)}
     hw._force_send_left = 0
 
-    hw.core = None   # transport yok → paket kuyruğa konmaz, state güncellemesi yine yapılır
+    hw.core = None  # transport yok → paket kuyruğa konmaz, state güncellemesi yine yapılır
 
-    ok = hw.update_coil(1, start=True, freq=50.0, duty=25.0, phase=0.0, duration=10)
+    hw.update_coil(1, start=True, freq=50.0, duty=25.0, phase=0.0, duration=10)
     assert hw.coils_state[1]["is_running"] is True
     assert hw.coils_state[1]["freq"] == pytest.approx(50.0)
     assert hw.coils_state[1]["duty"] == pytest.approx(0.25), "duty yüzde→oran çevrimi yapılmadı"
@@ -70,17 +76,14 @@ def test_coil_ids_TIP_DISI_eleman_422_verir_sessizce_tedavisiz_kalmaz():
     from servers.api_server import SessionStartPayload
 
     with pytest.raises(Exception):
-        SessionStartPayload(coil_ids=["a", "b"], mode="Manuel", frequency=10,
-                            duty=25, duration_minutes=10)
+        SessionStartPayload(coil_ids=["a", "b"], mode="Manuel", frequency=10, duty=25, duration_minutes=10)
 
     # 8'den uzun liste de reddedilmeli (thread bombası savunması)
     with pytest.raises(Exception):
-        SessionStartPayload(coil_ids=list(range(1, 20)), mode="Manuel", frequency=10,
-                            duty=25, duration_minutes=10)
+        SessionStartPayload(coil_ids=list(range(1, 20)), mode="Manuel", frequency=10, duty=25, duration_minutes=10)
 
     # Geçerli girdi kabul edilmeli
-    p = SessionStartPayload(coil_ids=[1, 2], mode="Manuel", frequency=10,
-                            duty=25, duration_minutes=10)
+    p = SessionStartPayload(coil_ids=[1, 2], mode="Manuel", frequency=10, duty=25, duration_minutes=10)
     assert p.coil_ids == [1, 2]
 
 
@@ -94,13 +97,15 @@ def test_stm_ok_duty_TAMSAYI_yuzde_kirpmasi_telafi_edilir():
 
     src = inspect.getsource(headless_core)
     assert "TAMSAYI yuzde" in src or "tamsayi yuzde" in src.lower(), (
-        "firmware ACK'indeki tamsayı-yüzde kırpması belgelenmemiş/telafi edilmemiş")
+        "firmware ACK'indeki tamsayı-yüzde kırpması belgelenmemiş/telafi edilmemiş"
+    )
     # _parse_stm_ok duty'yi oran olarak dönmeli (0..1), yüzde tamsayı değil
     fn = headless_core.HeadlessCore._parse_stm_ok
     assert callable(fn)
 
 
 # ───────────────────── ACİL DURDURMA KAYDI ─────────────────────
+
 
 def test_acil_durdurma_seansi_DBde_kapatir(temp_app_data, monkeypatch):
     """P2: acil durdurma bobinleri kesiyordu ama seansı DB'de KAPATMIYORDU → satır kalıcı
@@ -116,17 +121,24 @@ def test_acil_durdurma_seansi_DBde_kapatir(temp_app_data, monkeypatch):
 
     sid = db.start_session("Manuel", patient_name="Boncuk")
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "s1", "mode": "Manuel",
-            "coil_ids": [1, 2], "db_session_id": sid,
-            "start_time": 0, "started_epoch": 1, "duration_minutes": 20,
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "s1",
+                "mode": "Manuel",
+                "coil_ids": [1, 2],
+                "db_session_id": sid,
+                "start_time": 0,
+                "started_epoch": 1,
+                "duration_minutes": 20,
+            }
+        )
     try:
         api._finalize_session_db(sid, 1, coil_ids=[1, 2], reason="emergency_stop")
         kayit = [h for h in db.get_session_history(limit=10) if h["id"] == sid][0]
         assert str(kayit.get("session_status", "")).lower() != "active", (
-            "acil durdurma sonrası seans DB'de 'active' kaldı → KPI/geçmiş bozulur, "
-            "güvenlik olayının kaydı eksik")
+            "acil durdurma sonrası seans DB'de 'active' kaldı → KPI/geçmiş bozulur, güvenlik olayının kaydı eksik"
+        )
     finally:
         with api._session_lock:
             api._active_session.clear()
@@ -142,13 +154,14 @@ def test_acil_durdurma_yolu_finalize_CAGIRIR():
     from servers import api_server as api
 
     fn = ast.parse(textwrap.dedent(inspect.getsource(api._emergency_stop_all))).body[0]
-    cagrilar = {getattr(n.func, "id", getattr(n.func, "attr", ""))
-                for n in ast.walk(fn) if isinstance(n, ast.Call)}
+    cagrilar = {getattr(n.func, "id", getattr(n.func, "attr", "")) for n in ast.walk(fn) if isinstance(n, ast.Call)}
     assert "_finalize_session_db" in cagrilar, (
-        "_emergency_stop_all seansı DB'de kapatmıyor → satır kalıcı 'active', telemetri kaybı")
+        "_emergency_stop_all seansı DB'de kapatmıyor → satır kalıcı 'active', telemetri kaybı"
+    )
 
 
 # ───────────────────── EVENT BUS / ÇEKİRDEK ─────────────────────
+
 
 def test_eventbus_abone_hatasi_DIGER_aboneleri_engellemez():
     """P3: bir abonenin istisnası tüm yayın döngüsünü kesiyorsa, aynı olaya bağlı GÜVENLİK
@@ -170,7 +183,8 @@ def test_eventbus_abone_hatasi_DIGER_aboneleri_engellemez():
 
     assert cagrildi, (
         "bir abonenin istisnası diğerlerini engelledi → güvenlik zincirindeki dinleyiciler "
-        "(acil-durdurma/watchdog) hiç çağrılmaz")
+        "(acil-durdurma/watchdog) hiç çağrılmaz"
+    )
 
     # Yapısal: izolasyon ABONE BAŞINA try/except ile sağlanmalı (`_notify_subscribers`
     # döngüsünün İÇİNDE). Dış publish handler'ı bunu sağlamaz.
@@ -184,15 +198,13 @@ def test_eventbus_abone_hatasi_DIGER_aboneleri_engellemez():
     donguler = [n for n in ast.walk(fn) if isinstance(n, ast.For)]
     assert donguler, "_notify_subscribers artık abone döngüsü kullanmıyor"
     izole = any(isinstance(s, ast.Try) for d in donguler for s in ast.walk(d))
-    assert izole, (
-        "abone çağrıları try/except ile İZOLE EDİLMEMİŞ → tek bir bozuk abone tüm yayını keser")
+    assert izole, "abone çağrıları try/except ile İZOLE EDİLMEMİŞ → tek bir bozuk abone tüm yayını keser"
 
     # DENETİM P3'ün ASIL düzeltmesi: patlayan abone SESSİZ kalmamalı. STM-kopma güvenlik
     # zincirinde (hardware.stm.disconnected → acil-durdurma) bir abone patlarsa hangi
     # satırda/neden patladığı traceback'siz KAYBOLUR ve olay sessizce yarım kalır.
     sync_src = inspect.getsource(eb.EventBus._call_sync_callback)
-    assert "exc_info" in sync_src, (
-        "abone hatası traceback'SİZ loglanıyor → güvenlik zincirindeki arıza teşhis edilemez")
+    assert "exc_info" in sync_src, "abone hatası traceback'SİZ loglanıyor → güvenlik zincirindeki arıza teşhis edilemez"
     assert "event_type" in sync_src, "hangi OLAYIN abonesinin patladığı loglanmıyor"
 
 
@@ -215,18 +227,18 @@ def test_aktif_seans_disariya_KOPYA_olarak_verilir():
 
     # start_session'daki snapshot ataması canlı sözlüğü DOĞRUDAN bağlamamalı
     for n in ast.walk(fn):
-        if isinstance(n, ast.Assign) and any(
-                getattr(t, "id", "") == "_sess_snapshot" for t in n.targets):
+        if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "_sess_snapshot" for t in n.targets):
             atanan = ast.unparse(n.value).strip()
             assert atanan != "_active_session", (
                 "start_session canlı `_active_session` sözlüğünü dışarı veriyor → çağıran "
-                "bobin listesini/süreyi yerinde değiştirip seansı sessizce bozabilir")
+                "bobin listesini/süreyi yerinde değiştirip seansı sessizce bozabilir"
+            )
             assert atanan.startswith("dict("), f"snapshot kopya almıyor: {atanan}"
 
-    donusler = [ast.unparse(n.value) for n in ast.walk(fn)
-                if isinstance(n, ast.Return) and n.value is not None]
+    donusler = [ast.unparse(n.value) for n in ast.walk(fn) if isinstance(n, ast.Return) and n.value is not None]
     assert not any(d.strip() == "_active_session" for d in donusler), (
-        "start_session canlı `_active_session` sözlüğünü döndürüyor")
+        "start_session canlı `_active_session` sözlüğünü döndürüyor"
+    )
 
 
 def test_stm_baglanti_kontrol_sonra_kullan_yarisI_yok():
@@ -240,11 +252,7 @@ def test_stm_baglanti_kontrol_sonra_kullan_yarisI_yok():
     # ⚠️ `"_set_stm_connected(False)" in src` YETMEZ: kaynakta 5 kez geçiyor, birini bozan
     # mutasyon iddiayı yine sağlıyordu. Yapısal bak: reader'ın hata yolunda bağlantı
     # KAPATILMALI ve durum False'a çekilmeli — ikisi BİRLİKTE.
-    import ast
-    import textwrap
-
     src = inspect.getsource(headless_core)
-    tree = ast.parse(src)
 
     # Blok-içi arama da YETMEZ (iç içe try'larda dış blok iyi bir eşleşmeyi kapsayıp iddiayı
     # karşılıyordu). YAKINLIK say: her `close_serial` çağrısının ±3 satırında durum-False olmalı.
@@ -254,7 +262,8 @@ def test_stm_baglanti_kontrol_sonra_kullan_yarisI_yok():
     eslesen = sum(1 for k in kapat if any(abs(k - d) <= 3 for d in durum))
     assert eslesen >= 2, (
         f"seri kapatma yollarının yalnız {eslesen}'i durum-False ile eşleşiyor → port kapalıyken "
-        "durum 'bağlı' kalır, sonraki yazımlar sessizce kaybolur, yeniden-bağlanma tetiklenmez")
+        "durum 'bağlı' kalır, sonraki yazımlar sessizce kaybolur, yeniden-bağlanma tetiklenmez"
+    )
 
 
 def test_reconnect_geri_cekilmesi_MONOTONIC():
@@ -270,4 +279,5 @@ def test_reconnect_geri_cekilmesi_MONOTONIC():
     # DEĞERİ sına: 0 = her payload "bayat" sayılır (yeniden gönderim tamamen ölür),
     # devasa = bayat komut replay'i serbest kalır.
     assert 0 < headless_core._RETRY_MAX_AGE_S <= 5, (
-        f"_RETRY_MAX_AGE_S makul aralıkta değil: {headless_core._RETRY_MAX_AGE_S}")
+        f"_RETRY_MAX_AGE_S makul aralıkta değil: {headless_core._RETRY_MAX_AGE_S}"
+    )

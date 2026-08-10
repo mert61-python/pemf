@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Seans (session) uclari (refactor B1 Faz B: api_server.py'den ayrildi — modular router).
 
 Davranis BIREBIR korunur. Paylasilan runtime durumu (_active_session, _session_lock,
@@ -8,9 +9,10 @@ okunur (circular yok). Yollar birebir korunur. GUVENLIK: /api/session/active sal
 NOT: /api/session/start + /api/session/stop (bobin-suren, safety-kritik) BURADA DEGIL —
 human-review batch'inde ayrica ele alinacak.
 """
+
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 router = APIRouter(tags=["session"])
@@ -33,6 +35,7 @@ def get_active_session():
     import time
 
     from servers import api_server as _api
+
     with _api._session_lock:
         sess = dict(_api._active_session)
     if sess.get("is_active"):
@@ -51,7 +54,9 @@ def get_active_session():
 
 
 @router.post("/api/session/notes")
-def save_session_notes(payload: SessionNotesPayload):
+def save_session_notes(payload: SessionNotesPayload, request: Request):
+    from servers.auth import cozumlenmis_operator
+
     """Seans-sonrası gözlem notu + seansı history'ye yaz (PyQt observation_notes karşılığı).
 
     Asama-2 (1c): seans BASINDA gercek db_session_id olustuysa ARTIK YENI satir ACMAZ →
@@ -59,6 +64,7 @@ def save_session_notes(payload: SessionNotesPayload):
     flush edildiginden burada tekrar flush ETMEZ (cift-kayit onlenir). db_session_id yoksa
     eski start_session+end_session fallback'i korunur (geriye uyumlu)."""
     from servers import api_server as _api
+
     try:
         from database.treatment_history_db import get_treatment_db
 
@@ -85,8 +91,13 @@ def save_session_notes(payload: SessionNotesPayload):
                     frequency_hz=(payload.frequency or None),
                     intensity_mt=(payload.intensity or None),
                 )
-                return {"status": "success", "session_id": existing_sid, "sensor_samples": 0,
-                        "updated": True, "durationPreserved": True}
+                return {
+                    "status": "success",
+                    "session_id": existing_sid,
+                    "sensor_samples": 0,
+                    "updated": True,
+                    "durationPreserved": True,
+                }
             # Seans DB'de henuz kapatilmamis (ör. /stop hic cagrilmadi) → normal finalize.
             db.end_session(
                 existing_sid,
@@ -102,7 +113,8 @@ def save_session_notes(payload: SessionNotesPayload):
             treatment_mode=payload.mode,
             target_condition=payload.target_condition or None,
             patient_name=payload.patient_name or None,
-            operator_email=payload.operator_email or None,
+            # ⚠️ 2026-08-09 (Tier 1): sahibi sunucu belirler (bkz. auth.cozumlenmis_operator).
+            operator_email=cozumlenmis_operator(request, payload.operator_email) or None,
         )
         db.end_session(
             sid,

@@ -19,7 +19,10 @@ param(
     [string]$Python    = "",
     [string]$BuildRoot = "",
     [switch]$SkipGuard,
-    [switch]$SkipWeb
+    [switch]$SkipWeb,
+    # Kod korumasını (.pyd derleme) ATLA — YALNIZ hata ayıklama için.
+    # make_base_zip.py korumasız paketi zaten REDDEDER, bu yüzden yayına sızamaz.
+    [switch]$SkipProtect
 )
 $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[build] $m" -ForegroundColor Cyan }
@@ -182,6 +185,36 @@ if ($LASTEXITCODE -ne 0) { Die "PyInstaller build başarısız (log'a bakın)." 
 $dt = (Get-Date) - $t0
 
 $exe = Join-Path $dist "PEMF_Backend\PEMF_Backend.exe"
+
+# ── KOD KORUMASI (2026-08-08, sahip ilkesi: "onefile da olsa onedir de olsa client de olsa
+# pyd olmalı") — build'in AYRILMAZ parçası. Eskiden ayrı elle çalıştırılıyordu; unutulunca
+# ai_hub kaynağı DÜZ .py olarak dağıtılıyordu ve bu ancak sahada fark edilirdi.
+# `-SkipProtect` yalnız hata ayıklama içindir; make_base_zip zaten korumasız paketi REDDEDER.
+if (-not $SkipProtect -and (Test-Path $exe)) {
+    Info "Kod koruması: ai_hub .py -> .pyd (Cython) derleniyor..."
+    $vcv = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\*\VC\Auxiliary\Build\vcvarsall.bat",
+                         "$env:ProgramFiles\Microsoft Visual Studio\*\*\VC\Auxiliary\Build\vcvarsall.bat" -EA 0 |
+           Select-Object -First 1
+    if (-not $vcv) {
+        Warn "MSVC (vcvarsall.bat) bulunamadı → .pyd derlenemedi. Paket KORUMASIZ kalır;"
+        Warn "make_base_zip bunu reddedecektir. Çözüm: bootstrap.ps1 ile MSVC Build Tools kurun."
+    } else {
+        $protLog = Join-Path $BuildRoot "compile_pyd.log"
+        $c = "call `"$($vcv.FullName)`" x64 >nul 2>&1 && set DISTUTILS_USE_SDK=1&& set MSSdk=1&& " +
+             "set PYTHONIOENCODING=utf-8&& set PYTHONPATH=$GuiRoot&& " +
+             "`"$PY`" `"$GuiRoot\build_tools\compile_pyd.py`" --dist `"$dist\PEMF_Backend`" > `"$protLog`" 2>&1"
+        cmd /c $c
+        $ozet = (Select-String -Path $protLog -Pattern "^Derlendi|^Başarısız" -EA 0 | ForEach-Object { $_.Line }) -join "  "
+        if ($ozet) { Info "Kod koruması: $ozet" } else { Warn "Kod koruması çıktısı okunamadı → $protLog" }
+        $kalan = @(Get-ChildItem "$dist\PEMF_Backend\_internal\ai_hub" -Recurse -Filter *.py -EA 0 |
+                   Where-Object { $_.Name -ne "__init__.py" }).Count
+        if ($kalan -gt 0) {
+            Warn "$kalan modül derlenemedi → şifreleme uygulanıyor (yedek katman)..."
+            & $PY "$GuiRoot\build_tools\encrypt_sources.py" --dist "$dist\PEMF_Backend" --verify
+        }
+    }
+}
+
 if (Test-Path $exe) {
     $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
     Write-Host ""

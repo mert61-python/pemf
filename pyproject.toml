@@ -49,13 +49,21 @@ indent-style = "space"
 
 [tool.coverage.run]
 # audit B-3.1: çekirdek modül kapsamı (AI-hub/scriptler hariç — ağır/ayrı).
-source = ["servers", "database", "controllers"]
+#
+# ⚠️ `utils` EKLENDİ (2026-08-09 denetimi, Tier 3). Ratchet'in kapsamadığı kod ratchet'siz
+# demektir; oysa `utils` altında `data_export`, `encrypted_import`, `backup_recovery`,
+# `secrets_manager`, `stm32_transport`, `image_domain` gibi veri ve donanım yolları yaşıyor —
+# yani ölçülmesi en gerekli yerler tam da ölçüm dışındaydı.
+source = ["servers", "database", "controllers", "utils"]
 omit = ["*/__pycache__/*", "tests/*", "*/ai_hub/*"]
 
 [tool.coverage.report]
-# Kapsam RATCHET'i (regresyon önler): şu an ~%36; eşik %33 (güvenli marj). CI kapsam bu eşiğin
-# altına düşerse KIRILIR. Kademeli yükseltin (kritik yol testleri arttıkça).
-fail_under = 33
+# Kapsam RATCHET'i (regresyon önler): ÖLÇÜLEN %54,24 (2026-08-10, `utils` dâhil, 790 test).
+# Eşik %50 — ~4 puanlık güvenli marj. CI kapsam bu eşiğin altına düşerse KIRILIR.
+# Eski değer 33'tü ve gerçeğin 21 puan altındaydı: o kadar boşluk bırakan bir ratchet, büyük bir
+# gerilemeyi bile sessizce geçirir (örn. bir modülün testlerinin tamamı silinse hâlâ yeşil kalır).
+# Kademeli yükseltin (kritik yol testleri arttıkça).
+fail_under = 50
 show_missing = false
 
 [tool.mypy]

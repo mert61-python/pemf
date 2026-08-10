@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """cabin_config.py — Fantom kabin YAML loader.
 
 Kedi (inference_cat_organ/lib/cabin_config.py) paterniyle birebir uyumlu.

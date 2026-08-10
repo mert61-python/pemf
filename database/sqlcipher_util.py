@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 SQLCipher at-rest sifreleme yardimcilari (paylasilan).
 
@@ -10,6 +11,7 @@ eskiden duz sqlite3 + yalniz alan-Fernet idi; metadata/HMAC-index duz-metin kali
 NOT: treatment_history_db.py kendi (calisan, test-edilmis) inline kopyasini korur; bu modul
 yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni anahtar paylasilir.
 """
+
 import os
 import shutil
 import sqlite3
@@ -27,11 +29,13 @@ def import_sqlcipher():
     """sqlcipher3 (Windows wheel) veya pysqlcipher3 binding; yoksa None."""
     try:
         from sqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+
         return sqlcipher
     except Exception:
         pass
     try:
         from pysqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+
         return sqlcipher
     except Exception:
         return None
@@ -44,6 +48,7 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
     # Üretim YALNIZ PEMF_ENCRYPT_AT_REST=1 iken; MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli DB okunabilir kalır.
     try:
         from utils.secrets_manager import get_secret
+
         _encrypt = os.getenv("PEMF_ENCRYPT_AT_REST", "0") == "1"
         _k = get_secret("sqlcipher_key", generate=_encrypt)
         if _k:
@@ -86,6 +91,7 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
     if os.getenv("PEMF_ENCRYPT_AT_REST", "0") != "1":
         return ""  # acikca istenmedikce sifreleme acma
     import secrets
+
     newkey = secrets.token_urlsafe(32)
     stored = False
     if keyring is not None:
@@ -106,6 +112,7 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
         # KALIR ama artık kilitli. Best-effort.
         try:
             from utils.file_acl import lock_down_file
+
             lock_down_file(keyfile)
         except Exception:
             pass
@@ -116,7 +123,9 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
         logger.warning(
             "Yeni SQLCipher anahtari uretildi (keyring=%s, dosya-yedek=%s @ %s). "
             "BU ANAHTARI YEDEKLEYIN — kaybolursa sifreli hasta verisi KALICI OKUNAMAZ.",
-            stored, keyfile_written, keyfile,
+            stored,
+            keyfile_written,
+            keyfile,
         )
     return newkey
 
@@ -135,11 +144,13 @@ def open_encrypted_conn(db_path, key, sqlcipher_mod, row_factory=None, timeout=1
 def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
     """Anahtar varsa ve mevcut DB DUZ-METIN ise sifreli kopyaya aktar (sqlcipher_export); eski
     duz-metin .plain.bak olur. Anahtar/binding yok veya zaten sifreli ise no-op (veri kaybi yok)."""
+
     def _close(cn):
         try:
             cn.close()
         except Exception:
             pass
+
     try:
         key = get_sqlcipher_key(app_data_dir, logger)
         if not key:
@@ -224,6 +235,7 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         if os.environ.get("PEMF_KEEP_PLAIN_BACKUP", "0") == "1":
             try:
                 from utils.file_acl import lock_down_file
+
                 lock_down_file(backup)
             except Exception:
                 if logger:
@@ -243,7 +255,9 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
                     os.fsync(_bf.fileno())
                 os.remove(backup)
                 if logger:
-                    logger.warning("DB SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ (at-rest PII riski kapatıldı).")
+                    logger.warning(
+                        "DB SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ (at-rest PII riski kapatıldı)."
+                    )
             except Exception:
                 if logger:
                     logger.warning(".plain.bak güvenli-silinemedi (elle sil önerilir): %s", backup)

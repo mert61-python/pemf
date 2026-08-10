@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_cat_sound — Kedi sesi sınıflandırıcı paketi.
 
 CatSoundClassifier: ses (mp3/wav) → librosa mel-spektrogram (mel+delta+delta²) →

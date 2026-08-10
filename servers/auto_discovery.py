@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 PEMF Auto-Discovery Service
 ============================
@@ -9,6 +10,7 @@ Kullanım:
     from servers.auto_discovery import start_mdns, stop_mdns
     start_mdns(port=8000)
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +30,7 @@ def _build_info(local_ip: str, port: int, device_name: str):
     import socket as _socket
 
     from zeroconf import ServiceInfo
+
     return ServiceInfo(
         type_="_pemfvet._tcp.local.",
         name=f"{device_name}._pemfvet._tcp.local.",
@@ -48,6 +51,7 @@ def _reregister() -> None:
         return
     try:
         from utils.zeroconf_singleton import get_shared_zeroconf
+
         ip = _get_local_ip()
         # Audit P3: loopback (127.*) ServiceInfo YAYINLAMA — telefon/ESP 127.0.0.1'i çözüp kendi
         # loopback'ine gider (sessiz başarısız). Gerçek LAN IP yoksa kaydı ATLA (sonraki tur tekrar dener).
@@ -113,7 +117,9 @@ def stop_mdns() -> None:
     global _zeroconf_instance, _mdns_service_info
     if _zeroconf_instance and _mdns_service_info:
         try:
-            _zeroconf_instance.unregister_service(_mdns_service_info)  # ortak Zeroconf'u CLOSE ETME (MDNSService da kullanir)
+            _zeroconf_instance.unregister_service(
+                _mdns_service_info
+            )  # ortak Zeroconf'u CLOSE ETME (MDNSService da kullanir)
         except Exception:
             pass
     _zeroconf_instance = None

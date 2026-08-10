@@ -1,5 +1,7 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol (güvenlik B-1.6): uzak (tünel) istekler IP-başı sınırlı; LAN sınırsız;
 acil-durdurma/health muaf (fail-safe). Limit modül-globali monkeypatch ile düşürülür."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def api():
     from servers import api_server
+
     return api_server
 
 
@@ -70,7 +73,7 @@ def test_unresolvable_client_counted_failclosed(api, monkeypatch):
     TestClient'ın çözülemeyen varsayılan host'unu ("testclient") kullanır."""
     monkeypatch.setattr(api, "_RL_REMOTE_MAX", 2)
     api._rl_hits.clear()
-    c = TestClient(api.app)          # varsayilan host: "testclient" (IP degil → cozulemez)
+    c = TestClient(api.app)  # varsayilan host: "testclient" (IP degil → cozulemez)
     codes = [c.get("/api/system/info").status_code for _ in range(3)]
     assert codes[2] == 429  # header yoksa da fail-closed sayım (remote kabul)
 
@@ -87,7 +90,6 @@ def test_cf_header_ignored_from_untrusted_source(api, monkeypatch):
     # LAN'dan (loopback DEGIL, beyan edilmis proxy DEGIL) gelen istemci: baslik yok sayilmali
     c = TestClient(api.app, client=("203.0.113.99", 40000))
     h1 = {"cf-connecting-ip": "198.51.100.1"}
-    h2 = {"cf-connecting-ip": "198.51.100.2"}   # her istekte farkli "IP" uydur
-    codes = [c.get("/api/system/info", headers=(h1 if i % 2 else h2)).status_code
-             for i in range(6)]
+    h2 = {"cf-connecting-ip": "198.51.100.2"}  # her istekte farkli "IP" uydur
+    codes = [c.get("/api/system/info", headers=(h1 if i % 2 else h2)).status_code for i in range(6)]
     assert 429 in codes, "uydurma cf-connecting-ip ile rate-limit ATLANMAMALI (tek kova = soket IP)"

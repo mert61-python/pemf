@@ -183,6 +183,17 @@ for dir_name in ('web_static', 'templates'):
         datas.append((d_path, dir_name))
 
 # AI HUB (inference KODU + küçük .pkl/.json). Büyük ONNX'ler aşağıda ai_models ağacıyla gömülür.
+# KAYNAK ŞİFRELEME PAROLASI (2026-08-06) — `build_tools/_static_password.py` varsa EXE'ye
+# `pemf_source_key` adıyla gömülür; `utils/source_crypto.read_password()` onu arar.
+# YOKSA sessizce atlanır → şifresiz build normal çalışır (geliştirme akışı bozulmaz).
+# ⚠️ Parola üründe gider: kopyalamayı zorlaştırır, tersine mühendisliği ENGELLEMEZ.
+_pw_src = os.path.join(project_path, 'build_tools', '_static_password.py')
+if os.path.exists(_pw_src):
+    datas.append((_pw_src, '.'))
+    print('[OK] kaynak sifreleme parolasi EXE ye gomuldu (pemf_source_key)')
+else:
+    print('[..] _static_password.py yok -> kaynak sifreleme KAPALI (duz .py kalir)')
+
 ai_hub_dir = os.path.join(project_path, 'ai_hub')
 if os.path.exists(ai_hub_dir):
     for root, _, files in os.walk(ai_hub_dir):
@@ -292,6 +303,11 @@ for _cext_pkg in ('numba', 'llvmlite', 'soxr'):
 
 hidden += [
     'event_bus', 'headless_core', 'backend_service',
+    # ⚠️ FELAKET KURTARMA (2026-08-09 denetimi, ENGEL): `PEMF_Backend.exe --kurtarma ...`
+    # bunu çağırır. Pakete girmezse, makinesi ölmüş bir veteriner elinde yedek + kurtarma kodu
+    # olmasına rağmen zarfı AÇAMAZ (sahada Python yok). Yalnız `tools.kurtarma` bundle edilir;
+    # tools/ altındaki diğer araçlar geliştirme içindir.
+    'tools', 'tools.kurtarma',
     # web
     'fastapi', 'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
     'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',

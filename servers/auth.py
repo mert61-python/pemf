@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Cihaz-yerel API token doğrulama (P0 #1: kimliksiz donanım/hasta API'si).
 
 Token kaynağı: env PEMF_API_TOKEN, yoksa app_data/api_token.txt (yoksa otomatik üretilir).
@@ -6,6 +7,7 @@ Zorlama: PEMF_REQUIRE_AUTH=1 ise ZORUNLU; değilse KAPALI (prominent uyarı logl
 
 emergency_stop + health + discovery + statik (simulator) MUAFTIR (fail-safe / keşif).
 """
+
 import ipaddress
 import logging
 import os
@@ -27,11 +29,26 @@ _warned = False
 # (2026-07-01) uzaktan KİMLİKSİZ başlat/durdur için muaf edildi — sahibi riski bilerek kabul etti.
 # RİSK: tünel URL'sini bilen HERKES tedavi başlatıp durdurabilir. GERİ ALMAK için bu iki öneki
 # ("/api/ai/pro","/api/ai/ai_pro") listeden çıkarın. (Acil-durdur zaten _EXEMPT_EXACT'te fail-safe.)
-_EXEMPT_PREFIXES = ("/api/health", "/api/discovery", "/api/auth/exchange",
-                    "/api/auth/register", "/api/auth/login", "/api/auth/reset",  # operatör kayıt/giriş/şifre-sıfırlama (kullanıcı-katmanı; reset YÖNETİCİ-koduyla self-gate)
-                    "/api/ai/vision", "/api/ai/disease", "/api/ai/rna", "/api/ai/sound",
-                    "/api/ai/pro", "/api/ai/ai_pro",
-                    "/favicon", "/simulator", "/static", "/docs", "/openapi", "/redoc")
+_EXEMPT_PREFIXES = (
+    "/api/health",
+    "/api/discovery",
+    "/api/auth/exchange",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/reset",  # operatör kayıt/giriş/şifre-sıfırlama (kullanıcı-katmanı; reset YÖNETİCİ-koduyla self-gate)
+    "/api/ai/vision",
+    "/api/ai/disease",
+    "/api/ai/rna",
+    "/api/ai/sound",
+    "/api/ai/pro",
+    "/api/ai/ai_pro",
+    "/favicon",
+    "/simulator",
+    "/static",
+    "/docs",
+    "/openapi",
+    "/redoc",
+)
 _EXEMPT_EXACT = ("/api/hardware/emergency_stop",)
 
 
@@ -47,6 +64,7 @@ def _token_file() -> Path:
     # secrets_manager._data_dir() ile birebir aynı desen (import-hatasında yerel yedek).
     try:
         from utils.path_utils import get_app_data_directory
+
         base = get_app_data_directory()
     except Exception:
         override = os.getenv("PEMF_DATA_DIR", "").strip()
@@ -82,6 +100,7 @@ def get_api_token() -> str:
     # TEK-DOSYA: SecretsManager (eski api_token.txt → üret; pemf_secrets.json'da saklar).
     try:
         from utils.secrets_manager import get_secret
+
         _token = get_secret("api_token")
         if _token:
             return _token
@@ -102,6 +121,7 @@ def get_api_token() -> str:
             # NTFS ACL kilidi (audit B-1.2): API token dosyası yalnız SYSTEM + Administrators'a açık.
             try:
                 from utils.file_acl import lock_down_file
+
                 lock_down_file(f)
             except Exception:
                 pass
@@ -137,8 +157,10 @@ def check_token(provided: str) -> bool:
         # FAIL-CLOSED: auth zorunluyken token BOŞ ise (SecretsManager/ProgramData hatası) herkesi
         # geçirmek = internete KİMLİKSİZ açık. Reddet + yüksek-sesle logla. (Audit P1 fail-OPEN deliği;
         # check_token yalnız 'required' iken çağrılır → boş-token = yanlış-yapılandırma → erişim YOK.)
-        logger.error("API token BOŞ ama auth zorunlu → erişim REDDEDİLDİ (fail-closed). "
-                     "SecretsManager / ProgramData izinlerini kontrol edin.")
+        logger.error(
+            "API token BOŞ ama auth zorunlu → erişim REDDEDİLDİ (fail-closed). "
+            "SecretsManager / ProgramData izinlerini kontrol edin."
+        )
         return False
     return bool(provided) and secrets.compare_digest(str(provided), str(expected))
 
@@ -150,8 +172,15 @@ def _trusted_nets():
     global _TRUSTED_NETS
     if _TRUSTED_NETS is None:
         _TRUSTED_NETS = []
-        for c in ("127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12",
-                  "192.168.0.0/16", "169.254.0.0/16", "fc00::/7"):
+        for c in (
+            "127.0.0.0/8",
+            "::1/128",
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "169.254.0.0/16",
+            "fc00::/7",
+        ):
             try:
                 _TRUSTED_NETS.append(ipaddress.ip_network(c))
             except Exception:
@@ -240,3 +269,181 @@ def is_local_request(client_host, via_proxy: bool = False) -> bool:
         return any(ip in net for net in _trusted_nets())
     except Exception:
         return False
+
+
+def is_loopback_request(client_host, via_proxy: bool = False) -> bool:
+    """SIKI loopback denetimi: YALNIZ 127.0.0.1 / ::1 — LAN DEĞİL.
+
+    NEDEN AYRI BİR FONKSİYON (2026-08-06, masaüstü oturum devri): `is_local_request` LAN'ı da
+    "yerel" sayar (`_trusted_nets` 10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7 içerir).
+    Masaüstü oturum ucu gövdesinde SUPABASE ACCESS TOKEN taşır; oradaki gevşeklik "kliniğin
+    WiFi'sindeki HERHANGİ bir cihaz operatörün oturum token'ını okuyabilir" demek olurdu.
+    E-özelliği sözleşmesi açıkça "SADECE 127.0.0.1/::1" diyor.
+
+    `is_local_request`'e DOKUNULMADI (10+ çağıranı var: middleware, WS, ai_router, system_router,
+    auth_router) — davranış değişikliği regresyon riski taşır; bu sıkı kural yalnız yeni uçlarda.
+
+    Formül `servers/system_router.py`'deki launcher-nonce denetiminin aynısı: `_trusted_proxies()`
+    ELEMESİ ŞART, çünkü cloudflared 127.0.0.1'DEN bağlanır → başlıksız bir tünel isteği aksi
+    halde "loopback" görünürdü.
+    """
+    try:
+        if via_proxy:
+            return False
+        ip = ipaddress.ip_address(str(client_host or "").strip())
+        if any(ip in net for net in _trusted_proxies()):
+            return False
+        # DENETIM 2026-08-06: `is_local_request`'teki ters-proxy fail-closed'unun AYNISI, burada
+        # DAHA DA gerekli — bu yardimci Supabase access/refresh token TASIYAN uclari korur.
+        # deploy/server.env = PEMF_API_HOST=127.0.0.1 + PEMF_REQUIRE_AUTH=1: backend yalniz
+        # loopback dinler, TLS'i operatorun IIS/Nginx'i sonlandirir ve `proxy_pass` XFF'i
+        # KENDILIGINDEN EKLEMEZ → INTERNETTEN gelen istek soket-IP 127.0.0.1 + basliksiz gelir
+        # ve bu fonksiyon onu "ayni bilgisayar" sayardi. Cihaz-token'i olan UZAK biri (ornegin
+        # eslesmis bir telefon) masaustu oturumunu OKUYABILIR ya da KENDI oturumunu YERLESTIREBILIR
+        # (oturum sabitleme). Loopback'e bagliyken disaridan dogrudan baglanmak IMKANSIZ oldugu
+        # icin oradan gelen her istek bir proxy'dendir → "ayni bilgisayar" cikarimi GECERSIZ.
+        # Klinik profili (device.env PEMF_API_HOST=0.0.0.0) ve launcher ETKILENMEZ.
+        if ip.is_loopback and _loopback_only_bind() and require_auth():
+            return False
+        # Çift-yığın soket ::ffff:127.0.0.1 verebilir (aynı makine, meşru) → IPv4'e indir.
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            ip = mapped
+        return str(ip) in ("127.0.0.1", "::1")
+    except Exception:
+        return False
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════
+# AYRICALIKLI UÇLAR — LAN MUAFİYETİ YOK (2026-08-09 üretim-hazırlık denetimi, ENGEL)
+#
+# ARIZA: `is_local_request` LAN'ı (10/8, 172.16/12, 192.168/16) auth-MUAF sayar ve middleware
+# bunu tüm uçlara uygular. Bu, "operatör yerel ağda token'la uğraşmasın" kolaylığı için bilinçli
+# bir gevşemeydi ve sıradan uçlar (telemetri, kontrol) için savunulabilir. AMA 2026-08-08'de
+# eklenen uçlar niteliksel olarak farklı: `/api/data/export` TÜM hasta + seans + AI geçmişini
+# ÇAĞIRANIN SEÇTİĞİ parolayla tek dosyada dışarı verir; `/api/ai/log/delete_all` VACUUM'lu ve
+# geri dönülemez siler; `/api/operators/enroll` bir hekimin kimliğini devralmaya izin verir.
+# Bunlar LAN'a kimliksiz açıkken at-rest şifreleme HİÇBİR ŞEY korumaz — veriyi uygulamanın
+# kendisi çözüp teslim eder. Klinik hotspot parolası da her makinede aynıdır (`pemf1234`) ve
+# pakette dağıtılır → "güvenli yerel ağ" varsayımı bu uçlar için geçerli DEĞİLDİR.
+#
+# KURAL: loopback (cihazın KENDİSİ — fiziksel erişim zaten tam yetki demektir) VEYA geçerli
+# cihaz token'ı. Mobil uygulama LAN'dayken token'ı `/api/auth/token`'dan zaten alıp saklar →
+# meşru kullanım kırılmaz; token'sız rastgele bir LAN cihazı REDDEDİLİR.
+# ════════════════════════════════════════════════════════════════════════════════════════
+
+
+def _istek_tokeni(request) -> str:
+    """İstekten cihaz token'ını çıkar — middleware ile AYNI kaynaklar (X-API-Key / ?token=)
+    artı `Authorization: Bearer` (mobil istemci bazı yollarda onu kullanır)."""
+    try:
+        h = request.headers
+        t = (h.get("X-API-Key") or "").strip()
+        if not t:
+            t = (request.query_params.get("token") or "").strip()
+        if not t:
+            auth = (h.get("authorization") or "").strip()
+            if auth[:7].lower() == "bearer ":
+                t = auth[7:].strip()
+        return t
+    except Exception:
+        return ""
+
+
+def is_privileged_request(request) -> bool:
+    """Yıkıcı/PII ucu için yetki var mı? loopback VEYA geçerli token. LAN TEK BAŞINA YETMEZ."""
+    try:
+        h = request.headers
+        via_proxy = bool(h.get("cf-connecting-ip") or h.get("cf-ray") or h.get("x-forwarded-for"))
+        host = request.client.host if request.client else ""
+        if is_loopback_request(host, via_proxy):
+            return True
+        t = _istek_tokeni(request)
+        return bool(t) and check_token(t)
+    except Exception:
+        # FAIL-CLOSED: kararı veremiyorsak yetki YOK (bu uçlar tüm hasta verisine dokunur).
+        logger.exception("ayricalikli istek denetimi hatasi → REDDEDILDI (fail-closed)")
+        return False
+
+
+def enforce_privileged(request) -> None:
+    """`is_privileged_request` değilse 403 fırlatır. Yıkıcı/PII uçlarında İLK satır olmalı."""
+    if is_privileged_request(request):
+        return
+    from fastapi import HTTPException
+
+    raise HTTPException(
+        status_code=403,
+        detail="Bu işlem cihazın kendisinden ya da eşleştirilmiş bir istemciden yapılabilir. "
+        "Yerel ağda olmak yeterli değildir.",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════════
+# OPERATÖR KİMLİĞİ — kayıt kime yazılacak (2026-08-09 denetimi, Tier 1)
+#
+# `operator_email` her uçta İSTEMCİ BEYANIYDI: PIN doğrulaması (`/api/operators/verify`) ile
+# sonraki yazmalar arasında hiçbir bağ yoktu. Cihaza erişebilen herkes başka bir hekimin adıyla
+# seans başlatabilir, AI analizi ve hasta kaydı yazabilirdi — PBKDF2 + kilitlenme + PIN'in
+# tamamı doğrulanmayan bir dize yüzünden anlamsız kalıyordu.
+#
+# YENİ KURAL:
+#   1) İstek `X-PEMF-Operator` jetonu taşıyorsa → e-posta JETONDAN gelir (beyan YOK SAYILIR).
+#   2) Jeton yoksa ve cihazda KAYITLI OPERATÖR YOKSA → beyan kabul edilir. Tek veterinerli
+#      klinik ve eski istemciler bozulmaz; ortada taklit edilecek bir kimlik de yoktur.
+#   3) Jeton yoksa ama beyan edilen e-posta KAYITLI BİR OPERATÖRE aitse → REDDEDİLİR (boş döner).
+#      Kanıtsız olarak kayıtlı bir hekimin adına yazmak, korumanın delindiği tek durumdu.
+#
+# ⚠️ İşlemi DURDURMAZ, yalnız atfı düşürür. Seans başlatmayı 403'e çevirmek, hasta masadayken
+# eski bir istemci yüzünden tedaviyi engellerdi; kaydın "sahipsiz" yazılması bundan iyidir.
+# ══════════════════════════════════════════════════════════════════════════════════════════
+OPERATOR_HEADER = "X-PEMF-Operator"
+
+
+def _operator_jetonu(request) -> str:
+    """İstekten operatör jetonunu çıkar (header ya da ?operator_token=)."""
+    try:
+        t = (request.headers.get(OPERATOR_HEADER) or "").strip()
+        if t:
+            return t
+        return (request.query_params.get("operator_token") or "").strip()
+    except Exception:
+        return ""
+
+
+def _kayitli_operator_mu(email: str) -> bool:
+    """Bu e-posta cihazda kayıtlı bir operatöre mi ait? Hata halinde FAIL-CLOSED (True):
+    bilemiyorsak kanıtsız beyanı kabul etmeyiz."""
+    e = (email or "").strip().lower()
+    if not e:
+        return False
+    try:
+        from database.auth_db import get_auth_db
+
+        return bool(get_auth_db().operator_exists(e))
+    except Exception:
+        logger.exception("operator varlik kontrolu basarisiz → beyan REDDEDILIYOR (fail-closed)")
+        return True
+
+
+def cozumlenmis_operator(request, beyan: str = "") -> str:
+    """Kaydın yazılacağı operatör e-postası. Yukarıdaki üç kurala göre; ASLA istisna atmaz."""
+    try:
+        from servers import operator_tokens
+
+        jetonlu = operator_tokens.cozumle(_operator_jetonu(request))
+        if jetonlu:
+            return jetonlu
+        e = (beyan or "").strip().lower()
+        if not e:
+            return ""
+        if _kayitli_operator_mu(e):
+            logger.warning(
+                "Operatör beyanı KANITSIZ (jeton yok) ve e-posta cihazda kayıtlı → kayıt "
+                "SAHİPSİZ yazılıyor. İstemcinin PIN doğrulaması yapması gerekir."
+            )
+            return ""
+        return e
+    except Exception:
+        logger.exception("operator cozumleme hatasi → SAHIPSIZ")
+        return ""

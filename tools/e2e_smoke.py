@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """PEMF uctan-uca duman testi (E2E smoke) - GERCEK backend sureci uzerinde davranis dogrulamasi.
 
 pytest paketi birim/entegrasyon seviyesindedir; bu betik backend'i AYRI BIR SUREC olarak
@@ -17,6 +18,7 @@ Kapsam: denetim (2026-08-03) P0/P1/P2 duzeltmelerinin regresyon kilidi - acil-du
 kapsami, seans finalize, CORS varsayilani, thread-bombasi siniri, hasta sayfalama, AI Pro
 uclari, gecmis/KPI/metrics.
 """
+
 import json
 import os
 import subprocess
@@ -46,8 +48,9 @@ def check(name, cond, detail=""):
 def req(method, path, body=None, headers=None, timeout=30):
     url = BASE + path
     data = json.dumps(body).encode() if body is not None else None
-    r = urllib.request.Request(url, data=data, method=method,
-                               headers={"Content-Type": "application/json", **(headers or {})})
+    r = urllib.request.Request(
+        url, data=data, method=method, headers={"Content-Type": "application/json", **(headers or {})}
+    )
     try:
         with urllib.request.urlopen(r, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", "replace")
@@ -63,20 +66,22 @@ def req(method, path, body=None, headers=None, timeout=30):
 def main():
     data_dir = Path(tempfile.mkdtemp(prefix="pemf_e2e_"))
     env = dict(os.environ)
-    env.update({
-        "PEMF_SIMULATE": "1",           # sanal STM+ESP+8 bobin + sensör
-        "PEMF_DATA_DIR": str(data_dir),  # İZOLE veri dizini
-        "PEMF_API_HOST": "127.0.0.1",
-        "PEMF_API_PORT": str(PORT),
-        "PEMF_HEADLESS": "1",
-        "PEMF_ENABLE_TUNNEL": "0",
-        "PEMF_LOG_DIR": str(data_dir / "logs"),
-        # Gomulu Python dagitimi (._pth) betik dizinini sys.path'e eklemiyor → acikca ver.
-        "PYTHONPATH": str(GUII),
-        "PYTHONIOENCODING": "utf-8",
-    })
-    env.pop("PEMF_REQUIRE_AUTH", None)   # LAN muaf → token'sız test
-    env.pop("PEMF_CORS_ORIGINS", None)   # varsayılan CORS davranışını sına
+    env.update(
+        {
+            "PEMF_SIMULATE": "1",  # sanal STM+ESP+8 bobin + sensör
+            "PEMF_DATA_DIR": str(data_dir),  # İZOLE veri dizini
+            "PEMF_API_HOST": "127.0.0.1",
+            "PEMF_API_PORT": str(PORT),
+            "PEMF_HEADLESS": "1",
+            "PEMF_ENABLE_TUNNEL": "0",
+            "PEMF_LOG_DIR": str(data_dir / "logs"),
+            # Gomulu Python dagitimi (._pth) betik dizinini sys.path'e eklemiyor → acikca ver.
+            "PYTHONPATH": str(GUII),
+            "PYTHONIOENCODING": "utf-8",
+        }
+    )
+    env.pop("PEMF_REQUIRE_AUTH", None)  # LAN muaf → token'sız test
+    env.pop("PEMF_CORS_ORIGINS", None)  # varsayılan CORS davranışını sına
     env.pop("PEMF_MASK_HISTORY_PII", None)
 
     log = open(data_dir / "backend.out", "wb")
@@ -92,7 +97,10 @@ def main():
     )
     proc = subprocess.Popen(
         [str(PY), "-c", boot, "--host", "127.0.0.1", "--port", str(PORT)],
-        cwd=str(GUII), env=env, stdout=log, stderr=subprocess.STDOUT,
+        cwd=str(GUII),
+        env=env,
+        stdout=log,
+        stderr=subprocess.STDOUT,
     )
     try:
         ready = False
@@ -122,7 +130,7 @@ def main():
         log.close()
 
     ok = sum(1 for p, _, _ in _results if p)
-    print(f"\n{'='*70}\nSONUC: {ok}/{len(_results)} gecti")
+    print(f"\n{'=' * 70}\nSONUC: {ok}/{len(_results)} gecti")
     for p, n, d in _results:
         if not p:
             print(f"  KALDI: {n}  {d}")
@@ -133,28 +141,40 @@ def run_scenarios():
     # ── 1) Health: yeni cloudRegistry alani (P2 TOFU gorunurlugu) ──────────────
     s, h, _ = req("GET", "/api/health")
     check("health 200", s == 200)
-    check("health.cloudRegistry alani var (P2 TOFU gorunurlugu)", "cloudRegistry" in h,
-          str(h.get("cloudRegistry")))
+    check("health.cloudRegistry alani var (P2 TOFU gorunurlugu)", "cloudRegistry" in h, str(h.get("cloudRegistry")))
 
     # ── 2) CORS varsayilani: internet kokeni yetkilendirilmemeli (P0) ──────────
     _s, _b, hdr = req("GET", "/api/health", headers={"Origin": "http://evil.example.com"})
-    check("CORS: internet kokeni ACAO ALMAZ (P0)",
-          hdr.get("access-control-allow-origin") is None, str(hdr.get("access-control-allow-origin")))
+    check(
+        "CORS: internet kokeni ACAO ALMAZ (P0)",
+        hdr.get("access-control-allow-origin") is None,
+        str(hdr.get("access-control-allow-origin")),
+    )
     _s, _b, hdr2 = req("GET", "/api/health", headers={"Origin": "http://192.168.1.50:8123"})
-    check("CORS: LAN kokeni CALISIR (regresyon degil)",
-          hdr2.get("access-control-allow-origin") == "http://192.168.1.50:8123",
-          str(hdr2.get("access-control-allow-origin")))
+    check(
+        "CORS: LAN kokeni CALISIR (regresyon degil)",
+        hdr2.get("access-control-allow-origin") == "http://192.168.1.50:8123",
+        str(hdr2.get("access-control-allow-origin")),
+    )
 
     # ── 3) Thread-bombasi: 20k bobin listesi SINIRDA reddedilmeli (P1) ─────────
     s, _b, _ = req("POST", "/api/session/start", {"coil_ids": [6] * 20000, "duration_minutes": 1})
     check("start: 20k coil_ids 422 (P1 thread-bombasi)", s == 422, f"HTTP {s}")
 
     # ── 4) Seans yasam dongusu + normalize ────────────────────────────────────
-    s, b, _ = req("POST", "/api/session/start", {
-        "patient_name": "E2E-Minnos", "operator_name": "Dr E2E", "mode": "Manuel",
-        "frequency": 50.0, "duty": 25.0, "duration_minutes": 5,
-        "coil_ids": [1, 1, 2, 2, 7],     # tekrarli → dedup beklenir
-    })
+    s, b, _ = req(
+        "POST",
+        "/api/session/start",
+        {
+            "patient_name": "E2E-Minnos",
+            "operator_name": "Dr E2E",
+            "mode": "Manuel",
+            "frequency": 50.0,
+            "duty": 25.0,
+            "duration_minutes": 5,
+            "coil_ids": [1, 1, 2, 2, 7],  # tekrarli → dedup beklenir
+        },
+    )
     check("session/start 200", s == 200, f"HTTP {s}")
     sess = b.get("session", {})
     check("start: coil_ids dedup edildi", sess.get("coil_ids") == [1, 2, 7], str(sess.get("coil_ids")))
@@ -168,17 +188,22 @@ def run_scenarios():
     coils = snap.get("coils", [])
     running = [c for c in coils if c.get("running")]
     check("sim: bobinler calisiyor gorunuyor", len(running) >= 1, f"{len(running)} bobin")
-    check("sim: sicaklik telemetrisi akiyor",
-          any(float(c.get("objectTemp") or 0) > 0 for c in running))
+    check("sim: sicaklik telemetrisi akiyor", any(float(c.get("objectTemp") or 0) > 0 for c in running))
 
     # ── 6) ACIL DURDURMA: ESP 6-8'in HEPSI + sessionCoilIds (P0 #2) ───────────
     s, es, _ = req("POST", "/api/hardware/emergency_stop")
     check("emergency_stop 200", s == 200, f"HTTP {s}")
     estopped = {r.get("coilId") for r in es.get("mqttResults", [])}
-    check("E-STOP: ESP 6,7,8'in HEPSI durduruldu (P0 — dar seans kapsami YOK SAYILDI)",
-          estopped == {6, 7, 8}, str(sorted(estopped)))
-    check("E-STOP: sessionCoilIds denetim izi var (P0)",
-          es.get("sessionCoilIds") == [1, 2, 7], str(es.get("sessionCoilIds")))
+    check(
+        "E-STOP: ESP 6,7,8'in HEPSI durduruldu (P0 — dar seans kapsami YOK SAYILDI)",
+        estopped == {6, 7, 8},
+        str(sorted(estopped)),
+    )
+    check(
+        "E-STOP: sessionCoilIds denetim izi var (P0)",
+        es.get("sessionCoilIds") == [1, 2, 7],
+        str(es.get("sessionCoilIds")),
+    )
     check("E-STOP: seans kapatildi", es.get("status") in ("success", "partial"), es.get("status"))
 
     # ── 7) Seans DB'de KAPANDI mi (P2 finalize) ───────────────────────────────
@@ -187,29 +212,42 @@ def run_scenarios():
     # /api/history/ DOGRUDAN dizi doner (sarmalayici dict yok).
     rows = hist if isinstance(hist, list) else (hist.get("data") or hist.get("sessions") or [])
     row = next((r for r in rows if r.get("id") == db_sid), None)
-    check("history: E-STOP sonrasi seans DB'de bulunuyor", row is not None,
-          f"db_sid={db_sid} n={len(rows)}")
+    check("history: E-STOP sonrasi seans DB'de bulunuyor", row is not None, f"db_sid={db_sid} n={len(rows)}")
     if row:
-        check("history: seans 'active' KALMADI (P2 finalize)",
-              row.get("session_status") == "completed", str(row.get("session_status")))
-        check("history: PII maskelenmedi (sahip karari — varsayilan KAPALI)",
-              row.get("patient_name") == "E2E-Minnos", str(row.get("patient_name")))
+        check(
+            "history: seans 'active' KALMADI (P2 finalize)",
+            row.get("session_status") == "completed",
+            str(row.get("session_status")),
+        )
+        check(
+            "history: PII maskelenmedi (sahip karari — varsayilan KAPALI)",
+            row.get("patient_name") == "E2E-Minnos",
+            str(row.get("patient_name")),
+        )
 
     # ── 8) Not kaydi GERCEK sureyi EZMEMELI (P1) ──────────────────────────────
     if row:
         gercek = row.get("duration_minutes")
-        s, nb, _ = req("POST", "/api/session/notes", {
-            "notes": "E2E gozlem", "duration_minutes": 999,   # PLANLANAN sure gonder
-            "frequency": 50.0, "intensity": 2.0,
-        })
+        s, nb, _ = req(
+            "POST",
+            "/api/session/notes",
+            {
+                "notes": "E2E gozlem",
+                "duration_minutes": 999,  # PLANLANAN sure gonder
+                "frequency": 50.0,
+                "intensity": 2.0,
+            },
+        )
         check("notes 200", s == 200, f"HTTP {s}")
         time.sleep(1)
         _s, hist2, _ = req("GET", "/api/history/?limit=20")
         rows2 = hist2 if isinstance(hist2, list) else (hist2.get("data") or hist2.get("sessions") or [])
         row2 = next((r for r in rows2 if r.get("id") == db_sid), None)
-        check("notes: GERCEK sure korundu (P1 — 999 ile EZILMEDI)",
-              row2 and row2.get("duration_minutes") == gercek,
-              f"once={gercek} sonra={row2.get('duration_minutes') if row2 else '?'}")
+        check(
+            "notes: GERCEK sure korundu (P1 — 999 ile EZILMEDI)",
+            row2 and row2.get("duration_minutes") == gercek,
+            f"once={gercek} sonra={row2.get('duration_minutes') if row2 else '?'}",
+        )
 
     # ── 9) Hasta sayfalama SQL'de (P2) ────────────────────────────────────────
     for i in range(5):
@@ -232,9 +270,11 @@ def run_scenarios():
     check("ai/pro: desteklenmeyen organ 422", s == 422, f"HTTP {s}")
 
     # ── 11) KPI + metrics + istatistik uclari ayakta ──────────────────────────
-    for path, ad in (("/api/history/statistics", "istatistik"),
-                     ("/api/gateway/status", "gateway"),
-                     ("/api/system/info", "system info")):
+    for path, ad in (
+        ("/api/history/statistics", "istatistik"),
+        ("/api/gateway/status", "gateway"),
+        ("/api/system/info", "system info"),
+    ):
         try:
             st, _bb, _hh = req("GET", path)
             check(f"{ad} ucu 200", st == 200, f"HTTP {st}")

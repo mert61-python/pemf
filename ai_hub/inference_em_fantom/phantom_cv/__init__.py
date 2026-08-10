@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """phantom_cv — Sentetik bobrek fantom modeli CV pipeline.
 
 Kedi (inference_cat_organ) cabin paterniyle birebir uyumlu.

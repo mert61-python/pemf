@@ -7,23 +7,26 @@ PEMF AI Servisi (GPU) — mikroservis.
   • /infer/sound      → (ses)      Kedi sesi sınıflandırma — GPU (mel-spektrogram CPU)
 ai_hub predictor'ları GERÇEK inference; ağırlıklar /models mount. torch YOK (saf-ONNX).
 """
-import os
-import time
-import glob
-import shutil
-import base64
+
 import asyncio
-import tempfile
+import base64
+import glob
+import os
+import shutil
 import subprocess
+import tempfile
+import time
 from typing import Optional
 
 import numpy as np
 import onnxruntime as ort
-from fastapi import FastAPI, Query, UploadFile, File, Body, Form
+from fastapi import Body, FastAPI, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from ai_service import predictors
-from ai_service.gpu import gpu_ok as _gpu_ok, yolo_device as _yolo_device, onnx_providers as _providers
+from ai_service.gpu import gpu_ok as _gpu_ok
+from ai_service.gpu import onnx_providers as _providers
+from ai_service.gpu import yolo_device as _yolo_device
 
 MODELS_DIR = os.environ.get("PEMF_AI_MODELS_DIR", "/models")
 app = FastAPI(title="PEMF AI Service (GPU)", version="0.3.0")
@@ -64,6 +67,7 @@ async def _guard_infer(request, call_next):
 
 def _read_bgr(data: bytes):
     import cv2
+
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
@@ -73,6 +77,7 @@ def _read_bgr(data: bytes):
 
 def _jpg_b64(bgr) -> str:
     import cv2
+
     ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return base64.b64encode(buf).decode("utf-8")
 
@@ -80,7 +85,9 @@ def _jpg_b64(bgr) -> str:
 def _err500(exc, code: int = 500):
     """Audit P3: ham istisna metni (sunucu dosya yolları/iç detay) istemciye SIZMASIN — jenerik mesaj
     + correlation-id döndür, tam istisnayı yalnız sunucu log'una yaz (keşif/bilgi-ifşası engellenir)."""
-    import logging as _lg, uuid as _uuid
+    import logging as _lg
+    import uuid as _uuid
+
     eid = _uuid.uuid4().hex[:12]
     _lg.getLogger("ai_service").error("infer hata [%s]: %s: %s", eid, type(exc).__name__, exc)
     return JSONResponse({"error": "Sunucu hatasi (loglandi)", "error_id": eid}, status_code=code)
@@ -100,8 +107,14 @@ def _list_onnx():
 def _synthetic_input(sess):
     inp = sess.get_inputs()[0]
     shape = [d if isinstance(d, int) and d > 0 else (1 if i == 0 else 224) for i, d in enumerate(inp.shape)]
-    tmap = {"tensor(float)": np.float32, "tensor(float16)": np.float16, "tensor(int64)": np.int64,
-            "tensor(int32)": np.int32, "tensor(uint8)": np.uint8, "tensor(double)": np.float64}
+    tmap = {
+        "tensor(float)": np.float32,
+        "tensor(float16)": np.float16,
+        "tensor(int64)": np.int64,
+        "tensor(int32)": np.int32,
+        "tensor(uint8)": np.uint8,
+        "tensor(double)": np.float64,
+    }
     dt = tmap.get(inp.type, np.float32)
     arr = np.random.rand(*shape).astype(dt) if np.issubdtype(dt, np.floating) else np.zeros(shape, dtype=dt)
     return inp.name, arr
@@ -113,7 +126,8 @@ def _save_temp(data: bytes, suffix: str) -> str:
     if len(data) > MAX_UPLOAD_BYTES:
         raise ValueError(f"yük çok büyük (max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)")
     tf = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-    tf.write(data); tf.close()
+    tf.write(data)
+    tf.close()
     return tf.name
 
 
@@ -122,14 +136,22 @@ def _save_temp(data: bytes, suffix: str) -> str:
 def health():
     avail = ort.get_available_providers()
     gpu = _gpu_ok()
-    info = {"status": "online", "service": "pemf-ai", "onnxruntime": ort.__version__,
-            "onnx_providers": avail, "cuda": "CUDAExecutionProvider" in avail,
-            "gpu_usable": gpu, "device": "gpu" if gpu else "cpu",
-            "models_dir": MODELS_DIR, "onnx_count": len(_list_onnx()),
-            "infer_endpoints": sorted(predictors.REGISTRY.keys()),
-            "loaded": predictors.loaded()}
+    info = {
+        "status": "online",
+        "service": "pemf-ai",
+        "onnxruntime": ort.__version__,
+        "onnx_providers": avail,
+        "cuda": "CUDAExecutionProvider" in avail,
+        "gpu_usable": gpu,
+        "device": "gpu" if gpu else "cpu",
+        "models_dir": MODELS_DIR,
+        "onnx_count": len(_list_onnx()),
+        "infer_endpoints": sorted(predictors.REGISTRY.keys()),
+        "loaded": predictors.loaded(),
+    }
     try:
         import torch
+
         info["torch"] = torch.__version__
         info["torch_cuda"] = torch.cuda.is_available()
     except Exception as e:
@@ -160,7 +182,9 @@ def benchmark(model: Optional[str] = Query(None), runs: int = Query(20, ge=1, le
         return JSONResponse({"error": "model yok"}, status_code=404)
     provs = _providers(True)
     try:
-        t0 = time.time(); sess = ort.InferenceSession(full, providers=provs); load_ms = (time.time() - t0) * 1000
+        t0 = time.time()
+        sess = ort.InferenceSession(full, providers=provs)
+        load_ms = (time.time() - t0) * 1000
     except Exception:
         return JSONResponse({"error": "model yuklenemedi"}, status_code=400)
     used = sess.get_providers()
@@ -169,8 +193,14 @@ def benchmark(model: Optional[str] = Query(None), runs: int = Query(20, ge=1, le
     t1 = time.time()
     for _ in range(runs):
         sess.run(None, {name: arr})
-    return {"model": rel, "active_providers": used, "ran_on_gpu": bool(used) and used[0] == "CUDAExecutionProvider",
-            "load_ms": round(load_ms, 1), "inference_ms_avg": round((time.time() - t1) / runs * 1000, 2), "runs": runs}
+    return {
+        "model": rel,
+        "active_providers": used,
+        "ran_on_gpu": bool(used) and used[0] == "CUDAExecutionProvider",
+        "load_ms": round(load_ms, 1),
+        "inference_ms_avg": round((time.time() - t1) / runs * 1000, 2),
+        "runs": runs,
+    }
 
 
 # ── GERÇEK inference uçları ──────────────────────────────────────────────────
@@ -186,10 +216,15 @@ def infer_histopath(file: UploadFile = File(...)):
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
         result = clf.predict(tmp, top_k=5)
-        return {"status": "success", "device": getattr(clf, "device", "?"),
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "top_1_class": result["top_1_class"], "top_1_prob": result["top_1_prob"],
-                "top_k": result["top_k"], "probabilities": result.get("probabilities")}
+        return {
+            "status": "success",
+            "device": getattr(clf, "device", "?"),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "top_1_class": result["top_1_class"],
+            "top_1_prob": result["top_1_prob"],
+            "top_k": result["top_k"],
+            "probabilities": result.get("probabilities"),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -210,17 +245,41 @@ def infer_sound(file: UploadFile = File(...)):
         tmp_wav = tmp_in + ".wav"
         ff = shutil.which("ffmpeg") or "ffmpeg"
         # Audit P2: ffmpeg sertleştir (SSRF/disk-dolumu) — -protocol_whitelist file, -nostdin, -t 30, -fs cap.
-        proc = subprocess.run([ff, "-nostdin", "-protocol_whitelist", "file", "-t", "30", "-y", "-i", tmp_in,
-                               "-ar", "22050", "-ac", "1", "-fs", "30000000", tmp_wav],
-                              capture_output=True, timeout=30)
+        proc = subprocess.run(
+            [
+                ff,
+                "-nostdin",
+                "-protocol_whitelist",
+                "file",
+                "-t",
+                "30",
+                "-y",
+                "-i",
+                tmp_in,
+                "-ar",
+                "22050",
+                "-ac",
+                "1",
+                "-fs",
+                "30000000",
+                tmp_wav,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
         if proc.returncode != 0 or not os.path.exists(tmp_wav):
             return JSONResponse({"error": "ses çözümlenemedi (ffmpeg)"}, status_code=400)
         t0 = time.time()
         result = clf.predict(tmp_wav, top_k=3)
-        return {"status": "success", "device": getattr(clf, "device", "?"),
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "top_1_class": result["top_1_class"], "top_1_prob": result["top_1_prob"],
-                "top_k": result["top_k"], "probabilities": result.get("probabilities")}
+        return {
+            "status": "success",
+            "device": getattr(clf, "device", "?"),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "top_1_class": result["top_1_class"],
+            "top_1_prob": result["top_1_prob"],
+            "top_k": result["top_k"],
+            "probabilities": result.get("probabilities"),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -243,12 +302,15 @@ def infer_kidney_ct(file: UploadFile = File(...)):
         t0 = time.time()
         result = det.predict(tmp)
         overlay = det.draw_overlay(tmp, result)
-        return {"status": "success", "device": _yolo_device(),
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "n_detections": result.get("n_detections"),
-                "class_counts": result.get("class_counts"),
-                "detections": result.get("detections"),
-                "image_base64": _jpg_b64(overlay)}
+        return {
+            "status": "success",
+            "device": _yolo_device(),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "n_detections": result.get("n_detections"),
+            "class_counts": result.get("class_counts"),
+            "detections": result.get("detections"),
+            "image_base64": _jpg_b64(overlay),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -260,6 +322,7 @@ def infer_kidney_ct(file: UploadFile = File(...)):
 def infer_segmentation(file: UploadFile = File(...)):
     """Kedi segmentasyon → YOLOv8m-seg maske overlay + kedi sayısı (GPU)."""
     import cv2
+
     tmp = None
     try:
         data = file.file.read()
@@ -269,20 +332,24 @@ def infer_segmentation(file: UploadFile = File(...)):
         model = predictors.get("segmentation")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
-        results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640,
-                                device=_yolo_device(), verbose=False)
+        results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640, device=_yolo_device(), verbose=False)
         r = results[0]
         cat_count = len(r.boxes) if r.boxes is not None else 0
         if r.masks is not None and len(r.masks) > 0:
             for mask_data in r.masks.data:
                 mask_np = mask_data.cpu().numpy()
                 mask_rs = cv2.resize(mask_np, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
-                colored = np.zeros_like(img); colored[:, :, 1] = 160
+                colored = np.zeros_like(img)
+                colored[:, :, 1] = 160
                 blend = cv2.addWeighted(img, 0.55, colored, 0.45, 0)
                 img = np.where(mask_rs[:, :, None] > 0.5, blend, img).astype(np.uint8)
-        return {"status": "success", "device": _yolo_device(),
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "cat_count": int(cat_count), "image_base64": _jpg_b64(img)}
+        return {
+            "status": "success",
+            "device": _yolo_device(),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "cat_count": int(cat_count),
+            "image_base64": _jpg_b64(img),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -297,6 +364,7 @@ def infer_landmark(file: UploadFile = File(...)):
     Tespit yoksa yanlış-güvence verme: fgs_total=null, detected=false.
     """
     import cv2
+
     tmp = None
     try:
         data = file.file.read()
@@ -312,8 +380,7 @@ def infer_landmark(file: UploadFile = File(...)):
         fgs, detected = {}, False
         if results and len(results) > 0:
             r = results[0]
-            if (r.keypoints is not None and len(r.keypoints.xy) > 0
-                    and r.boxes is not None and len(r.boxes) > 0):
+            if r.keypoints is not None and len(r.keypoints.xy) > 0 and r.boxes is not None and len(r.boxes) > 0:
                 kp_xy = r.keypoints.xy[0].cpu().numpy()
                 kp_conf = None
                 try:
@@ -327,6 +394,7 @@ def infer_landmark(file: UploadFile = File(...)):
                 kp_norm[:, 0] = (kp_norm[:, 0] - x1) / bw
                 kp_norm[:, 1] = (kp_norm[:, 1] - y1) / bh
                 from ai_hub.cat_landmark.inference_cat_landmark import compute_fgs
+
                 fgs = compute_fgs(kp_norm)
                 _ft = fgs.get("fgs_total", -1)
                 _valid = int(np.count_nonzero((kp_xy[:, 0] > 0) | (kp_xy[:, 1] > 0)))
@@ -338,11 +406,15 @@ def infer_landmark(file: UploadFile = File(...)):
                         if px > 0 or py > 0:
                             cv2.circle(img, (px, py), 4, (0, 255, 80), -1)
 
-        return {"status": "success", "device": _yolo_device(), "inference_ms": infer_ms,
-                "detected": detected,
-                "fgs_total": (fgs.get("fgs_total") if detected else None),
-                "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
-                "image_base64": _jpg_b64(img)}
+        return {
+            "status": "success",
+            "device": _yolo_device(),
+            "inference_ms": infer_ms,
+            "detected": detected,
+            "fgs_total": (fgs.get("fgs_total") if detected else None),
+            "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
+            "image_base64": _jpg_b64(img),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -364,8 +436,7 @@ def infer_thermal(file: UploadFile = File(...)):
         t0 = time.time()
         result = clf.predict(tmp, threshold=0.5)
         dev = clf.session.get_providers()[0].replace("ExecutionProvider", "").lower()
-        return {"status": "success", "device": dev,
-                "inference_ms": round((time.time() - t0) * 1000, 1), **result}
+        return {"status": "success", "device": dev, "inference_ms": round((time.time() - t0) * 1000, 1), **result}
     except Exception as e:
         return _err500(e)
     finally:
@@ -378,6 +449,7 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
     """Kedi görüntüsü → 10 organ 3B lokalizasyon (3 ONNX) + overlay (GPU).
     target_oid (ops): AI Pro seçili organı → overlay o organa odaklanır (CPU-parite; 0/None=Tüm Vücut)."""
     import cv2
+
     tmp = None
     try:
         data = file.file.read()
@@ -398,13 +470,25 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
                 overlay = cv2.resize(overlay, (int(ow * scale), int(oh * scale)), interpolation=cv2.INTER_AREA)
             image_b64 = _jpg_b64(overlay)
         organs = result.get("organs") or {}
-        organs_list = [{"id": int(oid), "name": o.get("name"), "coord_3d_cm": o.get("coord_3d_cm"),
-                        "coord_cabin_cm": o.get("coord_cabin_cm"), "reliability": o.get("reliability")}
-                       for oid, o in sorted(organs.items(), key=lambda kv: int(kv[0]))]
-        return {"status": "success", "device": getattr(clf, "device", "?"), "inference_ms": infer_ms,
-                "n_organs": len(organs_list), "organs": organs_list,
-                "pose_type": (result.get("pose_classifier") or {}).get("type"),
-                "image_base64": image_b64}
+        organs_list = [
+            {
+                "id": int(oid),
+                "name": o.get("name"),
+                "coord_3d_cm": o.get("coord_3d_cm"),
+                "coord_cabin_cm": o.get("coord_cabin_cm"),
+                "reliability": o.get("reliability"),
+            }
+            for oid, o in sorted(organs.items(), key=lambda kv: int(kv[0]))
+        ]
+        return {
+            "status": "success",
+            "device": getattr(clf, "device", "?"),
+            "inference_ms": infer_ms,
+            "n_organs": len(organs_list),
+            "organs": organs_list,
+            "pose_type": (result.get("pose_classifier") or {}).get("type"),
+            "image_base64": image_b64,
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -419,14 +503,24 @@ def infer_disease(payload: dict = Body(...)):
     try:
         clf = predictors.get("disease")
         t0 = time.time()
-        results = clf.predict(payload.get("age", 0.0), payload.get("weight", 0.0),
-                              payload.get("hr", 0.0), payload.get("temp", 0.0),
-                              payload.get("duration", 0.0), payload.get("symptom_indices", []))
+        results = clf.predict(
+            payload.get("age", 0.0),
+            payload.get("weight", 0.0),
+            payload.get("hr", 0.0),
+            payload.get("temp", 0.0),
+            payload.get("duration", 0.0),
+            payload.get("symptom_indices", []),
+        )
         formatted = [{"disease": d, "probability": p} for d, p in results]
         top_p = max((float(p) for _, p in results), default=0.0)
-        return {"status": "success", "device": "cpu",
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "results": formatted, "top_probability": round(top_p, 3), "low_confidence": top_p < 0.40}
+        return {
+            "status": "success",
+            "device": "cpu",
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "results": formatted,
+            "top_probability": round(top_p, 3),
+            "low_confidence": top_p < 0.40,
+        }
     except Exception as e:
         return _err500(e)
 
@@ -436,12 +530,18 @@ def infer_kidney_disease(payload: dict = Body(...)):
     """İnsan KBH (ExtraTrees ONNX) — JSON: 24 klinik özellik."""
     try:
         from ai_hub.inference_human_kidney_disease import predict_one
+
         t0 = time.time()
         r = predict_one(payload)
-        return {"status": "success", "device": "cpu",
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "prob_ckd": r["prob_ckd"], "prob_pct": round(r["prob_ckd"] * 100, 1),
-                "label": r["label"], "model": r.get("model")}
+        return {
+            "status": "success",
+            "device": "cpu",
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "prob_ckd": r["prob_ckd"],
+            "prob_pct": round(r["prob_ckd"] * 100, 1),
+            "label": r["label"],
+            "model": r.get("model"),
+        }
     except Exception as e:
         return _err500(e)
 
@@ -451,7 +551,9 @@ def infer_rna(file: UploadFile = File(...)):
     """Böbrek RNA-seq CSV (satır=hasta, sütun=gen) → KIRC sınıflandırma (MLP ONNX)."""
     try:
         import io as _io
+
         import pandas as pd
+
         data = file.file.read()
         if len(data) < 50:
             return JSONResponse({"error": "CSV boş/çok küçük"}, status_code=400)
@@ -460,12 +562,20 @@ def infer_rna(file: UploadFile = File(...)):
             return JSONResponse({"error": "CSV boş — hasta satırı yok"}, status_code=400)
         pred = predictors.get("kidney_rna")
         if getattr(pred, "expected_cols", None) and df.shape[1] != pred.expected_cols:
-            return JSONResponse({"error": f"gen sütun sayısı uyuşmuyor: beklenen {pred.expected_cols}, gelen {df.shape[1]}"}, status_code=400)
+            return JSONResponse(
+                {"error": f"gen sütun sayısı uyuşmuyor: beklenen {pred.expected_cols}, gelen {df.shape[1]}"},
+                status_code=400,
+            )
         t0 = time.time()
         predictions = pred.predict(df)
-        return {"status": "success", "device": "cpu",
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "n_patients": len(predictions), "classes": pred.classes, "predictions": predictions}
+        return {
+            "status": "success",
+            "device": "cpu",
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "n_patients": len(predictions),
+            "classes": pred.classes,
+            "predictions": predictions,
+        }
     except Exception as e:
         return _err500(e)
 
@@ -482,13 +592,16 @@ def infer_reticulocytes(file: UploadFile = File(...)):
         model = predictors.get("reticulocytes")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
-        results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640,
-                                device=_yolo_device(), verbose=False)
+        results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640, device=_yolo_device(), verbose=False)
         r = results[0]
         n = len(r.boxes) if r.boxes is not None else 0
-        return {"status": "success", "device": _yolo_device(),
-                "inference_ms": round((time.time() - t0) * 1000, 1),
-                "n_detections": int(n), "image_base64": _jpg_b64(r.plot())}
+        return {
+            "status": "success",
+            "device": _yolo_device(),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "n_detections": int(n),
+            "image_base64": _jpg_b64(r.plot()),
+        }
     except Exception as e:
         return _err500(e)
     finally:
@@ -504,58 +617,81 @@ def _prov_dev(session):
 
 
 @app.post("/infer/em_fantom")
-def infer_em_fantom(file: UploadFile = File(...),
-                          phantom_length_cm: float = Form(None),
-                          achieved_B: float = Form(None),
-                          duty_sum: float = Form(None)):
+def infer_em_fantom(
+    file: UploadFile = File(...),
+    phantom_length_cm: float = Form(None),
+    achieved_B: float = Form(None),
+    duty_sum: float = Form(None),
+):
     """Fantom tümör: klasik CV + BiLSTM (D/P/E). phantom_length_cm ile gerçek-mm ölçek."""
     try:
         data = file.file.read()
         img = _read_bgr(data)
         c = predictors.get("em_fantom")
         pl = c["cls"](c["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
-        pl._predictor = c["predictor"]              # önbellekli predictor enjekte (router deseni)
+        pl._predictor = c["predictor"]  # önbellekli predictor enjekte (router deseni)
         t0 = time.time()
         result, ctx = pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum)
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
         payload = result.to_dict()
-        return {"status": "success" if result.success else "no_detection",
-                "device": _prov_dev(c["predictor"].session), "inference_ms": infer_ms,
-                "success": result.success, "error": result.error,
-                "n_tumor": result.n_tumor, "n_healthy": result.n_healthy, "method": result.method,
-                "mm_per_px": round(result.mm_per_px, 4),
-                "tumor_regions": payload["tumor_regions"], "healthy_regions": payload["healthy_regions"],
-                "timing_ms": result.timing_ms, "image_base64": _jpg_b64(overlay)}
+        return {
+            "status": "success" if result.success else "no_detection",
+            "device": _prov_dev(c["predictor"].session),
+            "inference_ms": infer_ms,
+            "success": result.success,
+            "error": result.error,
+            "n_tumor": result.n_tumor,
+            "n_healthy": result.n_healthy,
+            "method": result.method,
+            "mm_per_px": round(result.mm_per_px, 4),
+            "tumor_regions": payload["tumor_regions"],
+            "healthy_regions": payload["healthy_regions"],
+            "timing_ms": result.timing_ms,
+            "image_base64": _jpg_b64(overlay),
+        }
     except Exception as e:
         return _err500(e)
 
 
 @app.post("/infer/em_petri")
-def infer_em_petri(file: UploadFile = File(...),
-                         petri_diameter_cm: float = Form(None),
-                         achieved_B: float = Form(None),
-                         duty_sum: float = Form(None)):
+def infer_em_petri(
+    file: UploadFile = File(...),
+    petri_diameter_cm: float = Form(None),
+    achieved_B: float = Form(None),
+    duty_sum: float = Form(None),
+):
     """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm."""
     from dataclasses import asdict
+
     try:
         data = file.file.read()
         img = _read_bgr(data)
         c = predictors.get("em_petri")
-        pl = c["cls"](c["cfg"], petri_diameter_cm=petri_diameter_cm,
-                      yolo_model_path=c["yolo_path"], yolo_device=_yolo_device())
-        pl.yolo = c["yolo"]; pl._predictor = c["predictor"]
+        pl = c["cls"](
+            c["cfg"], petri_diameter_cm=petri_diameter_cm, yolo_model_path=c["yolo_path"], yolo_device=_yolo_device()
+        )
+        pl.yolo = c["yolo"]
+        pl._predictor = c["predictor"]
         t0 = time.time()
         result, ctx = pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum)
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
-        return {"status": "success" if result.success else "no_detection",
-                "device": _prov_dev(c["predictor"].session), "inference_ms": infer_ms,
-                "success": result.success, "error": result.error,
-                "n_wells": result.n_wells, "n_cancer": result.n_cancer, "n_healthy": result.n_healthy,
-                "method": result.method, "mm_per_px": round(result.mm_per_px, 4),
-                "wells": [asdict(w) for w in result.wells],
-                "timing_ms": result.timing_ms, "image_base64": _jpg_b64(overlay)}
+        return {
+            "status": "success" if result.success else "no_detection",
+            "device": _prov_dev(c["predictor"].session),
+            "inference_ms": infer_ms,
+            "success": result.success,
+            "error": result.error,
+            "n_wells": result.n_wells,
+            "n_cancer": result.n_cancer,
+            "n_healthy": result.n_healthy,
+            "method": result.method,
+            "mm_per_px": round(result.mm_per_px, 4),
+            "wells": [asdict(w) for w in result.wells],
+            "timing_ms": result.timing_ms,
+            "image_base64": _jpg_b64(overlay),
+        }
     except Exception as e:
         return _err500(e)
 
@@ -583,7 +719,11 @@ def infer_em_kedi(payload: dict = Body(...)):
                 out[k] = float(v)
             except (TypeError, ValueError):
                 out[k] = v
-        return {"status": "success", "device": _prov_dev(pred.session),
-                "inference_ms": round((time.time() - t0) * 1000, 1), **out}
+        return {
+            "status": "success",
+            "device": _prov_dev(pred.session),
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            **out,
+        }
     except Exception as e:
         return _err500(e)

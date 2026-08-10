@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """color_segment.py — Petri kabi ICINDE kanser (mavi) tespit.
 
 NOT: Petri kabi tespiti `petri_detector.py` (YOLO11m-seg) tarafindan yapilir.

@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """DENETİM (offsite-backup-no-key-escrow) — UÇTAN UCA FELAKET KURTARMA.
 
 Kilitlenen senaryo, düzeltmenin var oluş sebebinin ta kendisi:
@@ -42,6 +43,7 @@ class _SabitAnahtarDB:
 def izole_sirlar(monkeypatch):
     """Sır deposu = bellek içi sözlük. Gerçek pemf_secrets.json'a DOKUNULMAZ."""
     from utils import secrets_manager as sm
+
     store = {"sqlcipher_key": _KEY, "patient_fernet_key": "test-fernet-anahtari"}
     monkeypatch.setattr(sm, "get_secret", lambda k, default="", generate=True: store.get(k, default))
     monkeypatch.setattr(sm, "set_secret", lambda k, v: store.__setitem__(k, v))
@@ -51,6 +53,7 @@ def izole_sirlar(monkeypatch):
 def _bakim_servisi(app_data_dir, db):
     """HeadlessDBMaintenance'ı singleton'a bulaşmadan kur (_run_backup'ın kullandığı alanlar)."""
     from services.headless_db_maintenance import HeadlessDBMaintenance
+
     w = object.__new__(HeadlessDBMaintenance)
     w.app_data_dir = app_data_dir
     w.db = db
@@ -102,13 +105,11 @@ def test_donanim_arizasindan_sonra_yedekler_yeni_makinede_ACILIR(tmp_path, izole
     conn = sqlcipher.connect(str(yedekler[-1]))
     try:
         conn.execute("PRAGMA key='{}'".format(anahtarlar["sqlcipher_key"].replace("'", "''")))
-        adlar = {r[0] for r in conn.execute(
-            "SELECT patient_name FROM treatment_sessions ORDER BY id")}
+        adlar = {r[0] for r in conn.execute("SELECT patient_name FROM treatment_sessions ORDER BY id")}
     finally:
         conn.close()
 
-    assert adlar == {"Boncuk", "Karamel", "Zeytin"}, (
-        "yedek yeni makinede okunamadı → felaket kurtarma HÂLÂ çalışmıyor")
+    assert adlar == {"Boncuk", "Karamel", "Zeytin"}, "yedek yeni makinede okunamadı → felaket kurtarma HÂLÂ çalışmıyor"
 
 
 def test_zarfsiz_yedek_yeni_makinede_ACILAMAZ(tmp_path, izole_sirlar, monkeypatch):
@@ -124,7 +125,7 @@ def test_zarfsiz_yedek_yeni_makinede_ACILAMAZ(tmp_path, izole_sirlar, monkeypatc
     db.close_connections()
 
     yedek = sorted(nas.glob("pemf_treatment_history_*.db"))[-1]
-    (nas / br.ENVELOPE_NAME).unlink()          # zarfı yok say = eski davranış
+    (nas / br.ENVELOPE_NAME).unlink()  # zarfı yok say = eski davranış
     shutil.rmtree(app)
     izole_sirlar.clear()
 
@@ -147,7 +148,7 @@ def test_kurtarma_araci_anahtarlari_yeni_makineye_yazar(tmp_path, izole_sirlar, 
     assert br.refresh_recovery_material(app, [yedek])
     kod = izole_sirlar["backup_recovery_code"]
 
-    izole_sirlar.clear()                        # yeni makine: sır deposu boş
+    izole_sirlar.clear()  # yeni makine: sır deposu boş
     rc = kurtarma.main(["--zarf", str(yedek / br.ENVELOPE_NAME), "--kod", kod, "--yaz"])
 
     assert rc == 0
@@ -182,7 +183,6 @@ def test_kurtarma_araci_yanlis_kodda_hicbir_sey_yazmaz(tmp_path, izole_sirlar):
     br.refresh_recovery_material(app, [yedek])
     izole_sirlar.clear()
 
-    rc = kurtarma.main(["--zarf", str(yedek / br.ENVELOPE_NAME),
-                        "--kod", br.generate_recovery_code(), "--yaz"])
+    rc = kurtarma.main(["--zarf", str(yedek / br.ENVELOPE_NAME), "--kod", br.generate_recovery_code(), "--yaz"])
     assert rc == 2
     assert "sqlcipher_key" not in izole_sirlar

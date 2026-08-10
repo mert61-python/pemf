@@ -1,9 +1,22 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: tedavi seansı DB kalıcılığı — start→end round-trip, geçmişte görünürlük,
 sensör örnek batch yazımı, ve süre hesaplama. DB katmanı doğrudan (SQLCipher-farkında bağlantı)."""
 
 
+class _SahteIstek:
+    """`start_session` 2026-08-09'da `request` almaya başladı: kaydın SAHİBİNİ artık sunucu
+    belirliyor (bkz. servers.auth.cozumlenmis_operator) — `operator_email` istemci beyanı
+    olmaktan çıktı. Bu dosya HTTP katmanını atlayıp fonksiyonu doğrudan çağırdığı için asgari
+    bir istek nesnesi gerekiyor. Kimlik kapısı test_operator_identity_server_side.py'de test edilir.
+    """
+
+    headers: dict = {}
+    query_params: dict = {}
+
+
 def _db(temp_app_data):
     from database.treatment_history_db import TreatmentHistoryDB
+
     return TreatmentHistoryDB(temp_app_data)
 
 
@@ -12,8 +25,9 @@ def test_session_start_end_roundtrip(temp_app_data):
     db.at_rest_encrypted = True  # PII intact (round-trip'i doğrulamak için)
     sid = db.start_session("Otomatik", target_condition="artrit", patient_name="Minnos")
     assert isinstance(sid, int) and sid > 0
-    db.end_session(sid, parameters={"frequency_hz": 50.0, "intensity_mt": 2.0},
-                   patient_notes="tamamlandı", duration_minutes=20)
+    db.end_session(
+        sid, parameters={"frequency_hz": 50.0, "intensity_mt": 2.0}, patient_notes="tamamlandı", duration_minutes=20
+    )
     hist = db.get_session_history(limit=10)
     row = next((h for h in hist if h["id"] == sid), None)
     assert row is not None
@@ -25,16 +39,34 @@ def test_session_start_end_roundtrip(temp_app_data):
 def test_sensor_samples_batch_persist(temp_app_data):
     db = _db(temp_app_data)
     sid = db.start_session("Manuel", patient_name="Z")
-    n = db.add_sensor_samples_batch(sid, [
-        {"coil_id": "1", "sample_ts": 1.0, "temperature_c": 30.0, "magnetic_field_mt": 1.0,
-         "current_a": 0.5, "pwm_frequency_hz": 50, "pwm_duty_percent": 25, "payload": {}},
-        {"coil_id": "2", "sample_ts": 2.0, "temperature_c": 31.0, "magnetic_field_mt": 1.1,
-         "current_a": 0.6, "pwm_frequency_hz": 50, "pwm_duty_percent": 25, "payload": {}},
-    ])
+    n = db.add_sensor_samples_batch(
+        sid,
+        [
+            {
+                "coil_id": "1",
+                "sample_ts": 1.0,
+                "temperature_c": 30.0,
+                "magnetic_field_mt": 1.0,
+                "current_a": 0.5,
+                "pwm_frequency_hz": 50,
+                "pwm_duty_percent": 25,
+                "payload": {},
+            },
+            {
+                "coil_id": "2",
+                "sample_ts": 2.0,
+                "temperature_c": 31.0,
+                "magnetic_field_mt": 1.1,
+                "current_a": 0.6,
+                "pwm_frequency_hz": 50,
+                "pwm_duty_percent": 25,
+                "payload": {},
+            },
+        ],
+    )
     assert n == 2
     with db._get_connection() as conn:
-        cnt = conn.cursor().execute(
-            "SELECT COUNT(*) FROM sensor_samples WHERE session_id=?", (sid,)).fetchone()[0]
+        cnt = conn.cursor().execute("SELECT COUNT(*) FROM sensor_samples WHERE session_id=?", (sid,)).fetchone()[0]
     assert cnt == 2
 
 
@@ -76,20 +108,22 @@ def test_notes_do_not_overwrite_real_duration_after_stop(temp_app_data, monkeypa
     monkeypatch.setattr(api_server, "_app_data_dir", lambda: temp_app_data)
 
     sid = db.start_session("Manuel", patient_name="Minnos")
-    db.end_session(sid, duration_minutes=4)          # /stop GERÇEK süreyi yazdı
+    db.end_session(sid, duration_minutes=4)  # /stop GERÇEK süreyi yazdı
 
     with api_server._session_lock:
         api_server._active_session.clear()
-        api_server._active_session.update(
-            {"is_active": False, "db_session_id": sid, "db_finalized": True}
-        )
+        api_server._active_session.update({"is_active": False, "db_session_id": sid, "db_finalized": True})
 
     client = TestClient(api_server.app)
-    r = client.post("/api/session/notes", json={
-        "notes": "iyi tolere etti",
-        "duration_minutes": 20,      # istemci PLANLANAN süreyi gönderir
-        "frequency": 50.0, "intensity": 2.0,
-    })
+    r = client.post(
+        "/api/session/notes",
+        json={
+            "notes": "iyi tolere etti",
+            "duration_minutes": 20,  # istemci PLANLANAN süreyi gönderir
+            "frequency": 50.0,
+            "intensity": 2.0,
+        },
+    )
     assert r.status_code == 200
 
     # ÖNCE asıl zarar: tıbbi kayıttaki gerçek maruziyet süresi korunmalı.
@@ -169,16 +203,26 @@ def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkey
             api_server._active_session.clear()
 
         payload = api_server.SessionStartPayload(
-            coil_ids=[6, 7], mode="Manuel", operator_name="op", frequency=10.0,
-            duty=25.0, intensity=2.0, phase=0, duration_minutes=20, patient_name="Boncuk")
-        asyncio.run(api_server.start_session(payload))
+            coil_ids=[6, 7],
+            mode="Manuel",
+            operator_name="op",
+            frequency=10.0,
+            duty=25.0,
+            intensity=2.0,
+            phase=0,
+            duration_minutes=20,
+            patient_name="Boncuk",
+        )
+        asyncio.run(api_server.start_session(payload, _SahteIstek()))
 
         with api_server._session_lock:
             sid = api_server._active_session.get("db_session_id")
             started = api_server._active_session.get("started_epoch")
 
-        assert sid, ("manuel seans DB satırı açmalı ve db_session_id'yi _active_session'a "
-                     "DAMGALAMALI — yoksa finalize/coil-run/sensör persist'in tamamı sessizce düşer")
+        assert sid, (
+            "manuel seans DB satırı açmalı ve db_session_id'yi _active_session'a "
+            "DAMGALAMALI — yoksa finalize/coil-run/sensör persist'in tamamı sessizce düşer"
+        )
         assert started, "started_epoch kurulmalı (finalize süreyi buradan hesaplar)"
 
         # Damganın GERÇEK bir satırı gösterdiğini doğrula (rastgele bir int değil)
@@ -189,7 +233,8 @@ def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkey
         api_server._finalize_session_db(sid, started, coil_ids=[1, 2], reason="test")
         kapali = [h for h in db.get_session_history(limit=20) if h["id"] == sid][0]
         assert str(kapali.get("session_status", "")).lower() != "active", (
-            "damga doğru ama seans DB'de kapatılamadı → zincir kopuk")
+            "damga doğru ama seans DB'de kapatılamadı → zincir kopuk"
+        )
     finally:
         with api_server._session_lock:
             api_server._active_session.clear()
@@ -218,11 +263,18 @@ def test_session_finalized_in_db_on_watchdog_and_estop(temp_app_data, monkeypatc
     # Seansın son dakikası buffer'da bekliyor olsun
     with api._sensor_sample_buffer_lock:
         api._sensor_sample_buffer.clear()
-        api._sensor_sample_buffer.append({
-            "coil_id": "1", "sample_ts": time.time(), "temperature_c": 31.5,
-            "magnetic_field_mt": 1.2, "current_a": 0.5,
-            "pwm_frequency_hz": 50, "pwm_duty_percent": 25, "payload": {},
-        })
+        api._sensor_sample_buffer.append(
+            {
+                "coil_id": "1",
+                "sample_ts": time.time(),
+                "temperature_c": 31.5,
+                "magnetic_field_mt": 1.2,
+                "current_a": 0.5,
+                "pwm_frequency_hz": 50,
+                "pwm_duty_percent": 25,
+                "payload": {},
+            }
+        )
 
     flushed = api._finalize_session_db(sid, started, coil_ids=[1], reason="test")
 
@@ -235,10 +287,13 @@ def test_session_finalized_in_db_on_watchdog_and_estop(temp_app_data, monkeypatc
 
     # Yardımcının VAR olması yetmez — iki bitiş yolunun da onu ÇAĞIRDIĞINI kilitle.
     import inspect
-    assert "_finalize_session_db(" in inspect.getsource(api._session_duration_watchdog), \
+
+    assert "_finalize_session_db(" in inspect.getsource(api._session_duration_watchdog), (
         "süre-watchdog seansı DB'de kapatmalı"
-    assert "_finalize_session_db(" in inspect.getsource(api._emergency_stop_all), \
+    )
+    assert "_finalize_session_db(" in inspect.getsource(api._emergency_stop_all), (
         "acil durdurma seansı DB'de kapatmalı (güvenlik olayının telemetri kanıtı)"
+    )
 
 
 def test_minute_acc_cleared_on_new_session(temp_app_data, monkeypatch):
@@ -259,8 +314,7 @@ def test_minute_acc_cleared_on_new_session(temp_app_data, monkeypatch):
         api._minute_acc[1] = {"n": 5, "t_sum": 150.0, "t_n": 5}
 
     src = inspect.getsource(api.start_session)
-    assert "_minute_acc.clear()" in src, \
-        "start_session önceki seansın dakika-birikimini temizlemeli"
+    assert "_minute_acc.clear()" in src, "start_session önceki seansın dakika-birikimini temizlemeli"
 
 
 def test_migration_rollback_requires_valid_backup(temp_app_data, monkeypatch):

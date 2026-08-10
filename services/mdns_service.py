@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # mDNS servis adı — tüm cihazlar bu adı arar
 MDNS_SERVICE_NAME = "PEMF-Gateway"
 MDNS_SERVICE_TYPE = "_mqtt._tcp.local."
-MDNS_HOST_NAME = "pemf-gateway"   # pemf-gateway.local olarak çözünür
+MDNS_HOST_NAME = "pemf-gateway"  # pemf-gateway.local olarak çözünür
 
 
 def _get_local_ip() -> str:
@@ -80,10 +80,7 @@ class MDNSService:
                 Zeroconf,
             )
         except ImportError:
-            logger.error(
-                "zeroconf kütüphanesi bulunamadı. "
-                "Kurulum: pip install zeroconf"
-            )
+            logger.error("zeroconf kütüphanesi bulunamadı. Kurulum: pip install zeroconf")
             return False
 
         if self._running:
@@ -115,7 +112,9 @@ class MDNSService:
         self._running = False
         try:
             if self._zeroconf and self._service_info:
-                self._zeroconf.unregister_service(self._service_info)  # ortak Zeroconf'u CLOSE ETME (auto_discovery da kullanir)
+                self._zeroconf.unregister_service(
+                    self._service_info
+                )  # ortak Zeroconf'u CLOSE ETME (auto_discovery da kullanir)
                 logger.info("mDNS servisi durduruldu.")
         except Exception as e:
             logger.warning(f"mDNS durdurma hatası: {e}")
@@ -134,6 +133,7 @@ class MDNSService:
     def _build_service_info(self, ip: str):
         """Zeroconf ServiceInfo nesnesi oluşturur."""
         from zeroconf import ServiceInfo
+
         full_name = f"{self._service_name}.{MDNS_SERVICE_TYPE}"
         return ServiceInfo(
             MDNS_SERVICE_TYPE,
@@ -155,11 +155,14 @@ class MDNSService:
             try:
                 from zeroconf._exceptions import NonUniqueNameException
             except ImportError:
-                class NonUniqueNameException(Exception): pass
+
+                class NonUniqueNameException(Exception):
+                    pass
 
             local_ip = self._ip_override or _get_local_ip()
             self._last_ip = local_ip
             from utils.zeroconf_singleton import get_shared_zeroconf
+
             self._zeroconf = get_shared_zeroconf()  # paylasilan TEK Zeroconf (cift-instance 5353 cakismasi yok)
 
             # #32: loopback (127.*) IP'yi mDNS'e YAYINLAMA — ESP/telefon pemf-gateway.local'i 127.0.0.1'e
@@ -174,21 +177,22 @@ class MDNSService:
                         logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
                         import random
                         import string
+
                         suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
                         self._service_name = f"{self._service_name}-{suffix}"
                         self._service_info = self._build_service_info(local_ip)
                         self._zeroconf.register_service(self._service_info)
                     else:
                         raise e
-                logger.info(
-                    f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local "
-                    f"→ {local_ip}:{self._mqtt_port}"
-                )
+                logger.info(f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local → {local_ip}:{self._mqtt_port}")
             else:
-                logger.info("mDNS (_mqtt) ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip)
+                logger.info(
+                    "mDNS (_mqtt) ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip
+                )
             # Arayüz/IP değişiminde bu servisi yeni Zeroconf instance'ına re-register et
             # (0.149'da update_interfaces yok → recreate; bkz. zeroconf_singleton.ensure_interfaces_current).
             from utils.zeroconf_singleton import add_reregister_callback
+
             add_reregister_callback(self._reregister_mqtt)
         except Exception:
             logger.exception("mDNS arka plan başlatma hatası detayı:")
@@ -205,6 +209,7 @@ class MDNSService:
                 # yeni arayüzlere YENİDEN bağla + tüm yayıncıları (mqtt + pemfvet) yeni instance'a re-register et.
                 # Birincil-IP (DHCP) değişimini de KAPSAR: gerçek-IP değişince arayüz-seti değişir → ayrı IP-takibi gereksiz.
                 from utils.zeroconf_singleton import ensure_interfaces_current
+
                 ensure_interfaces_current()
 
             except Exception as e:
@@ -218,6 +223,7 @@ class MDNSService:
             return  # Audit P3: stop() sonrası callback re-publish etmesin (kasıtlı-kaldırılan servisi canlandırma)
         try:
             from utils.zeroconf_singleton import get_shared_zeroconf
+
             ip = self._ip_override or _get_local_ip()
             # #32: loopback IP'yi re-register'da da YAYINLAMA (guard tutarlılığı).
             if not ip or str(ip).startswith("127."):
@@ -233,6 +239,7 @@ class MDNSService:
 
 
 # ── Standalone çalıştırma ────────────────────────────────────────────────────
+
 
 def main():
     import signal

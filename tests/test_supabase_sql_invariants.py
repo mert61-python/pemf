@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Denetim 2026-08-04 (P3): Supabase SQL şemasının güvenlik değişmezleri.
 
 Bulut tarafı bu üründe kimlik doğrulama, cihaz kaydı ve (secure_v2 ile) hasta/seans verisi
@@ -46,14 +47,8 @@ def test_her_tabloda_rls_acik(sql_bodies):
     """RLS kapalı bir tablo, uygulamaya gömülü `anon` anahtarıyla doğrudan okunur/yazılır."""
     for name, body in sql_bodies.items():
         low = body.lower()
-        tables = set(
-            re.findall(r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)", low)
-        )
-        rls = set(
-            re.findall(
-                r"alter\s+table\s+(?:public\.)?([a-z_0-9]+)\s+enable\s+row\s+level\s+security", low
-            )
-        )
+        tables = set(re.findall(r"create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_0-9]+)", low))
+        rls = set(re.findall(r"alter\s+table\s+(?:public\.)?([a-z_0-9]+)\s+enable\s+row\s+level\s+security", low))
         eksik = tables - rls
         assert not eksik, (
             f"{name}: RLS ACILMAMIS tablo(lar): {sorted(eksik)} — uygulamaya gomulu anon "
@@ -85,17 +80,13 @@ def test_anon_rollerine_dogrudan_tablo_yetkisi_verilmiyor(sql_bodies):
     for name, body in sql_bodies.items():
         low = body.lower()
         # (b) Toplu yetkilendirme — tek başına yeterli sebep.
-        for m in re.finditer(
-            r"grant\s+[^;]*?\bon\s+all\s+tables\s+in\s+schema\s+\w+\s+to\s+([a-z_, ]+)", low
-        ):
+        for m in re.finditer(r"grant\s+[^;]*?\bon\s+all\s+tables\s+in\s+schema\s+\w+\s+to\s+([a-z_, ]+)", low):
             if "anon" in m.group(1) or "authenticated" in m.group(1):
                 pytest.fail(
                     f"{name}: `GRANT ... ON ALL TABLES IN SCHEMA ... TO {m.group(1).strip()}` — "
                     f"TUM tablolara dogrudan erisim, RLS/device_id zorlamasini baypas eder."
                 )
-        for m in re.finditer(
-            r"alter\s+default\s+privileges[^;]*?\bgrant\s+[^;]*?\bto\s+([a-z_, ]+)", low
-        ):
+        for m in re.finditer(r"alter\s+default\s+privileges[^;]*?\bgrant\s+[^;]*?\bto\s+([a-z_, ]+)", low):
             if "anon" in m.group(1) or "authenticated" in m.group(1):
                 pytest.fail(
                     f"{name}: `ALTER DEFAULT PRIVILEGES ... TO {m.group(1).strip()}` — "
@@ -130,9 +121,7 @@ def test_security_definer_fonksiyonlari_sabit_search_path_kullanir(sql_bodies):
             pencere = low[m.start() : _son]
             satir_bas = low.rfind("\n", 0, m.start()) + 1
             satir = body[satir_bas : body.find("\n", m.start())].strip()
-            assert "search_path" in pencere, (
-                f"{name}: SABIT search_path'siz SECURITY DEFINER -> {satir[:100]!r}"
-            )
+            assert "search_path" in pencere, f"{name}: SABIT search_path'siz SECURITY DEFINER -> {satir[:100]!r}"
     # ⚠️ DENETİM 2026-08-04 (P3): eşik 6'ydı ve TAM SINIRDAYDI — en güvenlik-kritik dosya olan
     # `supabase_secure_v2.sql` (6 SECURITY DEFINER) KOMPLE silinse bile kalan 6 fonksiyon eşiği
     # geçerdi ve test "hâlâ koruyorum" der gibi yeşil kalırdı. Eşik gerçek sayıya çekildi ve

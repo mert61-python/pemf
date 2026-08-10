@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 Abonelik tier-enforcement (A1) — real-time↔kuyruk + Araştırma-eklenti kapıları.
 
@@ -18,6 +19,7 @@ emniyet kontrolü DEĞİL. Bu yüzden her belirsizlikte FAIL-OPEN (tedaviyi asla
 Supabase erişilemezse / token bayatsa → DEFAULT_TIER. Backend safety-limit'leri (freq/duty/48°C)
 bundan tamamen bağımsızdır ve buradan etkilenmez.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -66,8 +68,13 @@ _QUEUE_BYPASS_FRAGMENTS = ("/ai/pro/", "/ai/ai_pro/", "/landmark")
 
 # Aktif sayılmayan abonelik durumları → hak "baslangic"e düşer (eklenti de düşer).
 _INACTIVE_STATUS = {
-    "canceled", "cancelled", "unpaid", "past_due",
-    "incomplete", "incomplete_expired", "paused",
+    "canceled",
+    "cancelled",
+    "unpaid",
+    "past_due",
+    "incomplete",
+    "incomplete_expired",
+    "paused",
 }
 
 # token → (expiry_monotonic, Entitlement); çok-thread erişim için kilit (bulgu #5).
@@ -120,11 +127,13 @@ def _supabase_entitlement(token: str) -> "Entitlement | None":
     """
     try:
         from utils.secrets_manager import get_secret
+
         base = (get_secret("supabase_url") or "").rstrip("/")
         anon = (get_secret("supabase_anon_key") or "").strip()
         if not base or not anon:
             return None  # Supabase yapılandırılmamış → header fallback
         import requests
+
         r = requests.get(
             f"{base}/rest/v1/subscriptions",
             params={"select": "tier,addons,status,trial_ends_at,current_period_end"},
@@ -151,7 +160,8 @@ def _supabase_entitlement(token: str) -> "Entitlement | None":
         if isinstance(av, str):
             av = [a for a in av.replace(" ", "").split(",") if a]
         addons: tuple[str, ...] = (
-            () if inactive
+            ()
+            if inactive
             else tuple(str(a).strip().lower() for a in (av if isinstance(av, (list, tuple)) else []) if a)
         )
         return Entitlement(tier=tier, addons=addons)
@@ -219,8 +229,10 @@ def require_research(request: Request) -> None:
     if not _bearer_token(request):
         raise HTTPException(
             status_code=402,
-            detail={"error": "research_required",
-                    "message": "Araştırma modelleri doğrulanmış abonelik gerektirir (kimlik doğrulama gerekli)."},
+            detail={
+                "error": "research_required",
+                "message": "Araştırma modelleri doğrulanmış abonelik gerektirir (kimlik doğrulama gerekli).",
+            },
         )
     ent = resolve_entitlement(request)
     # DOĞRULANAMADIYSA (token vardı, Supabase ulaşılamadı) BLOKLAMA — fail-open (bulgu #2):

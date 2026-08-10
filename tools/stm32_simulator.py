@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """
 STM32 Binary Protocol Simulator
 ================================
@@ -51,9 +52,9 @@ import zlib
 log = logging.getLogger("STM32Sim")
 
 # ─── Sabitler ─────────────────────────────────────────────────────────────────
-SIM_HOST      = "127.0.0.1"
-SIM_PORT      = 5100
-READY_DELAY_S = 2.0   # USB CDC enumerate simülasyonu (2 s)
+SIM_HOST = "127.0.0.1"
+SIM_PORT = 5100
+READY_DELAY_S = 2.0  # USB CDC enumerate simülasyonu (2 s)
 
 # Binary paket yapısı: <BB 5f 5f 5f 5I H I
 #   B  B         → header[2]         = 0xAA, 0x55
@@ -61,26 +62,26 @@ READY_DELAY_S = 2.0   # USB CDC enumerate simülasyonu (2 s)
 #   5I           → duration[5]
 #   H            → ref_ms
 #   I            → crc32
-PKT_FMT  = "<BB 5f 5f 5f 5I H I"
-PKT_SIZE = struct.calcsize(PKT_FMT)   # 88 byte
+PKT_FMT = "<BB 5f 5f 5f 5I H I"
+PKT_SIZE = struct.calcsize(PKT_FMT)  # 88 byte
 assert PKT_SIZE == 88, f"Paket boyutu {PKT_SIZE} != 88!"
 
-NUM_COILS         = 5
-DUTY_MIN          = 0.0
-PHASE_MIN         = 0.0
-PHASE_MAX         = 360.0
-FREQ_MIN          = 1.0
+NUM_COILS = 5
+DUTY_MIN = 0.0
+PHASE_MIN = 0.0
+PHASE_MAX = 360.0
+FREQ_MIN = 1.0
 # ⚠️ DENETİM 2026-08-04: burada 10000.0 yazıyordu. Firmware'in GERÇEK sınırı
 # FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD = 50000/2 = 25000 Hz (main.c:158-160) ve
 # utils/stm32_protocol_limits.FREQ_MAX_HZ de 25000. Simülatör 10 kHz üstünü NACK'lediği için
 # E2E güvenlik testleri SEVKEDİLENDEN FARKLI bir cihazı doğruluyordu (10–25 kHz aralığı hiç
 # test edilmiyordu). Değer artık firmware ile AYNI formülden türetiliyor.
-DDS_ISR_HZ               = 50000.0
+DDS_ISR_HZ = 50000.0
 DDS_MIN_TICKS_PER_PERIOD = 2.0
-FREQ_MAX          = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD   # = 25000.0
-DUR_MAX           = 9999
-REF_MS_MAX        = 999
-WATCHDOG_MS       = 1500   # ms — main.c ile aynı
+FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD  # = 25000.0
+DUR_MAX = 9999
+REF_MS_MAX = 999
+WATCHDOG_MS = 1500  # ms — main.c ile aynı
 
 
 def crc32_of(data: bytes) -> int:
@@ -99,7 +100,7 @@ def decode_packet(raw: bytes):
 
     # CRC doğrulama (son 4 byte hariç)
     calc_crc = crc32_of(raw[:-4])
-    pkt_crc  = struct.unpack_from("<I", raw, PKT_SIZE - 4)[0]
+    pkt_crc = struct.unpack_from("<I", raw, PKT_SIZE - 4)[0]
     if calc_crc != pkt_crc:
         return None, f"CRC calc={calc_crc:08X} pkt={pkt_crc:08X}"
 
@@ -108,11 +109,11 @@ def decode_packet(raw: bytes):
     if hdr0 != 0xAA or hdr1 != 0x55:
         return None, f"header={hdr0:02X}{hdr1:02X}"
 
-    duty     = list(fields[2 :7 ])   # float[5]
-    phase    = list(fields[7 :12])   # float[5]
-    freq     = list(fields[12:17])   # float[5]
-    duration = list(fields[17:22])   # uint32[5]
-    ref_ms   = fields[22]            # uint16
+    duty = list(fields[2:7])  # float[5]
+    phase = list(fields[7:12])  # float[5]
+    freq = list(fields[12:17])  # float[5]
+    duration = list(fields[17:22])  # uint32[5]
+    ref_ms = fields[22]  # uint16
     # fields[23] = crc32 (zaten doğrulandı)
 
     # Değer kontrolleri
@@ -121,13 +122,13 @@ def decode_packet(raw: bytes):
 
     for i in range(NUM_COILS):
         if duty[i] < DUTY_MIN:
-            return None, f"coil={i+1} duty={duty[i]:.3f} < {DUTY_MIN}"
+            return None, f"coil={i + 1} duty={duty[i]:.3f} < {DUTY_MIN}"
         if not (PHASE_MIN <= phase[i] <= PHASE_MAX):
-            return None, f"coil={i+1} phase={phase[i]:.1f} out of [0,360]"
+            return None, f"coil={i + 1} phase={phase[i]:.1f} out of [0,360]"
         if not (FREQ_MIN <= freq[i] <= FREQ_MAX):
-            return None, f"coil={i+1} freq={freq[i]:.1f} out of [{FREQ_MIN},{FREQ_MAX}]"
+            return None, f"coil={i + 1} freq={freq[i]:.1f} out of [{FREQ_MIN},{FREQ_MAX}]"
         if duration[i] > DUR_MAX:
-            return None, f"coil={i+1} duration={duration[i]} > {DUR_MAX}"
+            return None, f"coil={i + 1} duration={duration[i]} > {DUR_MAX}"
 
     return (duty, phase, freq, duration, ref_ms), None
 
@@ -139,10 +140,10 @@ class Stm32SimClient:
         self.conn = conn
         self.addr = addr
         self._lock = threading.Lock()
-        self._coil_duty     = [0.0] * NUM_COILS
-        self._coil_start_ms = [None] * NUM_COILS   # datetime.now() veya None
+        self._coil_duty = [0.0] * NUM_COILS
+        self._coil_start_ms = [None] * NUM_COILS  # datetime.now() veya None
         self._last_pkt_time = time.monotonic()
-        self._any_active    = False
+        self._any_active = False
 
     def _send(self, msg: str):
         try:
@@ -152,7 +153,7 @@ class Stm32SimClient:
             log.warning("Gönderim hatası: %s", e)
 
     def _send_ready(self):
-        time.sleep(READY_DELAY_S)   # USB enumerate simülasyonu
+        time.sleep(READY_DELAY_S)  # USB enumerate simülasyonu
         msg = "-> STM_READY: DDS v2.2 (5-ch SIM) Waiting for commands...\r\n"
         self._send(msg)
         log.info("✅ STM_READY gönderildi → %s", self.addr)
@@ -160,18 +161,20 @@ class Stm32SimClient:
     def _send_ack(self, duty, phase, freq, duration):
         msg = (
             "-> STM_OK: "
-            f"D={int(duty[0]*100)},{int(duty[1]*100)},{int(duty[2]*100)},{int(duty[3]*100)},{int(duty[4]*100)} "
+            f"D={int(duty[0] * 100)},{int(duty[1] * 100)},{int(duty[2] * 100)},{int(duty[3] * 100)},{int(duty[4] * 100)} "
             f"P={int(phase[0])},{int(phase[1])},{int(phase[2])},{int(phase[3])},{int(phase[4])} "
             f"F={int(freq[0])},{int(freq[1])},{int(freq[2])},{int(freq[3])},{int(freq[4])} "
             f"T={duration[0]},{duration[1]},{duration[2]},{duration[3]},{duration[4]}"
             "\r\n"
         )
         self._send(msg)
-        active = [i+1 for i in range(NUM_COILS) if duty[i] > 0]
-        log.info("📨 STM_OK | Aktif bobinler: %s | Duty: %s | Freq: %s Hz",
-                 active or "yok",
-                 [f"{d:.2f}" for d in duty],
-                 [f"{f:.0f}" for f in freq])
+        active = [i + 1 for i in range(NUM_COILS) if duty[i] > 0]
+        log.info(
+            "📨 STM_OK | Aktif bobinler: %s | Duty: %s | Freq: %s Hz",
+            active or "yok",
+            [f"{d:.2f}" for d in duty],
+            [f"{f:.0f}" for f in freq],
+        )
 
     def _watchdog_worker(self):
         """1.5 s iletişim yoksa bobinleri sıfırla — main.c ile aynı davranış."""
@@ -181,7 +184,7 @@ class Stm32SimClient:
                 elapsed_ms = (time.monotonic() - self._last_pkt_time) * 1000
                 if elapsed_ms > WATCHDOG_MS:
                     self._any_active = False
-                    self._coil_duty  = [0.0] * NUM_COILS
+                    self._coil_duty = [0.0] * NUM_COILS
                     msg = "-> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n"
                     self._send(msg)
                     log.warning("⏱️  Watchdog tetiklendi (%d ms iletişim yok)", int(elapsed_ms))
@@ -195,15 +198,15 @@ class Stm32SimClient:
                 if self._coil_start_ms[i] is not None and self._coil_duty[i] > 0:
                     # dur_min bilgisi burada yok; duration tracking için
                     # dışarıdan set edilen _coil_dur_min listesi kullanılıyor
-                    dur_min = getattr(self, "_coil_dur_min", [0]*NUM_COILS)[i]
+                    dur_min = getattr(self, "_coil_dur_min", [0] * NUM_COILS)[i]
                     if dur_min > 0:
-                        elapsed_s  = time.monotonic() - self._coil_start_ms[i]
-                        target_s   = dur_min * 60.0
+                        elapsed_s = time.monotonic() - self._coil_start_ms[i]
+                        target_s = dur_min * 60.0
                         if elapsed_s >= target_s:
-                            self._coil_duty[i]     = 0.0
+                            self._coil_duty[i] = 0.0
                             self._coil_start_ms[i] = None
                             stopped_any = True
-                            log.info("⏹️  Bobin %d süresi doldu (%d dk)", i+1, dur_min)
+                            log.info("⏹️  Bobin %d süresi doldu (%d dk)", i + 1, dur_min)
             if stopped_any:
                 msg = "-> STM_STOPPED: Sure(ler) doldu, bobinler kapatildi.\r\n"
                 self._send(msg)
@@ -235,7 +238,7 @@ class Stm32SimClient:
                         log.debug("  %d byte atlandı (header bekleniyordu)", aa_idx)
                         buf = buf[aa_idx:]
                     if len(buf) < PKT_SIZE:
-                        break   # daha fazla veri bekle
+                        break  # daha fazla veri bekle
                     raw = buf[:PKT_SIZE]
                     buf = buf[PKT_SIZE:]
 
@@ -248,9 +251,9 @@ class Stm32SimClient:
 
                     duty, phase, freq, duration, ref_ms = result
                     self._last_pkt_time = time.monotonic()
-                    self._any_active    = any(d > 0 for d in duty)
-                    self._coil_duty     = list(duty)
-                    self._coil_dur_min  = list(duration)
+                    self._any_active = any(d > 0 for d in duty)
+                    self._coil_duty = list(duty)
+                    self._coil_dur_min = list(duration)
 
                     # Süre başlangıcı güncelle
                     for i in range(NUM_COILS):
@@ -293,8 +296,7 @@ def run_server(host: str = SIM_HOST, port: int = SIM_PORT):
         try:
             conn, addr = srv.accept()
             client = Stm32SimClient(conn, addr)
-            t = threading.Thread(target=client.run, daemon=True,
-                                 name=f"SimClient-{addr[1]}")
+            t = threading.Thread(target=client.run, daemon=True, name=f"SimClient-{addr[1]}")
             t.start()
         except KeyboardInterrupt:
             log.info("Simulator kapatıldı.")
@@ -316,12 +318,9 @@ def main():
         description="STM32 Binary Protocol Simulator (GUI test aracı)",
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument("--host", default=SIM_HOST,
-                        help=f"Sunucu adresi (varsayılan: {SIM_HOST})")
-    parser.add_argument("--port", type=int, default=SIM_PORT,
-                        help=f"TCP port (varsayılan: {SIM_PORT})")
-    parser.add_argument("--set-port", action="store_true",
-                        help="Sabit COM10 modunda devre dışı; bilgi mesajı yazdırır")
+    parser.add_argument("--host", default=SIM_HOST, help=f"Sunucu adresi (varsayılan: {SIM_HOST})")
+    parser.add_argument("--port", type=int, default=SIM_PORT, help=f"TCP port (varsayılan: {SIM_PORT})")
+    parser.add_argument("--set-port", action="store_true", help="Sabit COM10 modunda devre dışı; bilgi mesajı yazdırır")
     args = parser.parse_args()
 
     if args.set_port:

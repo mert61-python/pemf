@@ -1,7 +1,7 @@
 # PEMF VETERİNER TEDAVİ SİSTEMİ — TAM SİSTEM RAPORU
 
-**Hazırlayan:** GitHub Copilot  
-**Tarih:** 1 Mart 2026  
+**Hazırlayan:** GitHub Copilot
+**Tarih:** 1 Mart 2026
 **Versiyon:** 1.0
 
 ---
@@ -250,8 +250,8 @@ Mosquitto (çalışıyor)
         └── Lokal mesajlar kuyrukta BEKLEMEZ (tamamen kesilir)
 ```
 
-**GUI'de görülen:** Bridge durumu → "Bağlantı Yok" (kırmızı)  
-**ESP'ler:** Normal çalışmaya devam eder, lokal komutlar çalışır  
+**GUI'de görülen:** Bridge durumu → "Bağlantı Yok" (kırmızı)
+**ESP'ler:** Normal çalışmaya devam eder, lokal komutlar çalışır
 **Android:** HiveMQ'ya bağlanamaz, veri gelmez
 
 ---

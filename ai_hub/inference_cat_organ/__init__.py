@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_cat_organ — Kedi organ 3B lokalizasyon pipeline paketi.
 
 CatOrganPredictor (catorgan_predictor.py): kedi görüntüsü → YOLOv8m-seg + SuperAnimal

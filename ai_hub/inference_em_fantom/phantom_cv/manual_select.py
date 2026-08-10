@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """manual_select.py — OpenCV window'da kullanici tikla -> fantom seed.
 
 Kullanim:

@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Coil-run tracker — B-2.2 shared-state modül ayrımı.
 
 Seans sırasında her bobinin treatment-DB'deki "coil run" yaşam-döngüsünü + per-run sensör istatistik
@@ -9,14 +10,15 @@ treatment-DB erişimi api_server'dan INJECTION ile gelir (`set_db_session_id_get
 karşılanır (getter çağrı-anında okur). Davranış BİREBİR (bkz. tests/test_coil_run_tracker.py —
 refactor-öncesi kilit). api_server state'e aynı-nesne alias'larıyla bağlanır (`_active_coil_runs` /
 `_coil_run_stats` yalnız in-place mutasyon: start_session `.clear()`, sensör-loop akümülasyonu)."""
+
 import logging
 import threading
 import time
 
 # ── Coil-run state (yalnız in-place mutasyon → api_server alias'ları aynı nesneye işaret eder) ──
-_active_coil_runs = {}          # coil_id(int) -> run_id(int)
+_active_coil_runs = {}  # coil_id(int) -> run_id(int)
 _active_coil_runs_lock = threading.Lock()
-_coil_run_stats = {}            # run_id -> {n,t_min,t_max,t_sum,i_sum,b_sum,t_n,i_n,b_n}
+_coil_run_stats = {}  # run_id -> {n,t_min,t_max,t_sum,i_sum,b_sum,t_n,i_n,b_n}
 _coil_run_stats_lock = threading.Lock()
 # Audit P3: tüm _begin_coil_run dizisini (kontrol→kapat→aç→kaydet) serileştir → eş-zamanlı iki begin
 # çift DB-satırı + orphan üretmesin. _active_coil_runs_lock'tan AYRI → _finish_coil_run ile deadlock yok.
@@ -71,17 +73,30 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
             if db is None:
                 return
             run_id = db.start_coil_run(
-                sid, coil_id,
-                frequency_hz=freq, duty_percent=duty, phase=phase,
-                intensity_mt=intensity, hw_type=hw_type, started_epoch=time.time(),
+                sid,
+                coil_id,
+                frequency_hz=freq,
+                duty_percent=duty,
+                phase=phase,
+                intensity_mt=intensity,
+                hw_type=hw_type,
+                started_epoch=time.time(),
             )
             if run_id is not None:
                 with _active_coil_runs_lock:
                     _active_coil_runs[coil_id] = run_id
                 with _coil_run_stats_lock:
-                    _coil_run_stats[run_id] = {"n": 0, "t_min": None, "t_max": None,
-                                               "t_sum": 0.0, "i_sum": 0.0, "b_sum": 0.0,
-                                               "t_n": 0, "i_n": 0, "b_n": 0}
+                    _coil_run_stats[run_id] = {
+                        "n": 0,
+                        "t_min": None,
+                        "t_max": None,
+                        "t_sum": 0.0,
+                        "i_sum": 0.0,
+                        "b_sum": 0.0,
+                        "t_n": 0,
+                        "i_n": 0,
+                        "b_n": 0,
+                    }
     except Exception:
         logging.getLogger(__name__).debug("_begin_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
 
@@ -110,7 +125,9 @@ def _finish_coil_run(coil_id):
             n = st["n"]
             # Her metrik KENDI dolu-ornek sayisina bolunur (eksik sensor okumalari
             # ortalamayi asagi cekmesin); metrik hic okunmadiysa None.
-            _tn = st.get("t_n", 0); _in = st.get("i_n", 0); _bn = st.get("b_n", 0)
+            _tn = st.get("t_n", 0)
+            _in = st.get("i_n", 0)
+            _bn = st.get("b_n", 0)
             try:
                 db.add_sensor_run_summary(
                     run_id,

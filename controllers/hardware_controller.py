@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 import logging
 import queue
 import struct
@@ -19,6 +20,7 @@ class HardwareController:
     Headless donanım kontrolcüsü. Eski PyQt tabanlı unified_control_window.py
     içindeki donanım paketleme ve kuyruğa (Queue) iletme mantığını soyutlar.
     """
+
     def __init__(self, core_instance):
         self.core = core_instance
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -26,13 +28,7 @@ class HardwareController:
         # 5 Bobin için bellek içi (In-Memory) state
         # Arayüz olmadığı için (Headless), parametreler burada tutulur
         self.coils_state = {
-            i: {
-                "is_running": False,
-                "duty": 0.0,
-                "phase": 0.0,
-                "freq": 100.0,
-                "duration": 0
-            } for i in range(1, 6)
+            i: {"is_running": False, "duty": 0.0, "phase": 0.0, "freq": 100.0, "duration": 0} for i in range(1, 6)
         }
 
         # P0 fix: coils_state + paket kurulumunu koruyan TEK kilit. API thread'leri
@@ -70,7 +66,7 @@ class HardwareController:
     # Dusen STOP telafisi TICK cinsindendir → kadans degisirse WALL-CLOCK kapsama
     # sabit kalsin diye sureden turetilir (~3 sn, eski 3 tick x 1.0 sn ile ayni).
     STOP_RESEND_TICKS = 6
-    _FIRMWARE_DEADMAN_MS = 1500   # firmware/main.c ile AYNI olmali (bkz. main.c watchdog blogu)
+    _FIRMWARE_DEADMAN_MS = 1500  # firmware/main.c ile AYNI olmali (bkz. main.c watchdog blogu)
 
     def _keep_alive_loop(self):
         while not self._keep_alive_stop.is_set():
@@ -86,7 +82,8 @@ class HardwareController:
         with self._state_lock:
             now = time.monotonic()
             expired = [
-                i for i in range(1, 6)
+                i
+                for i in range(1, 6)
                 if self.coils_state[i]["is_running"]
                 and self._coil_deadline[i] is not None
                 and now >= self._coil_deadline[i]
@@ -109,8 +106,16 @@ class HardwareController:
     def stop(self):
         self._keep_alive_stop.set()
 
-    def update_coil(self, coil_id: int, freq: float, duty: float, phase: float, duration: int,
-                    start: bool = True, duration_seconds: float | None = None):
+    def update_coil(
+        self,
+        coil_id: int,
+        freq: float,
+        duty: float,
+        phase: float,
+        duration: int,
+        start: bool = True,
+        duration_seconds: float | None = None,
+    ):
         """
         Belirli bir bobinin durumunu günceller ve STM32'ye yeni komut paketini fırlatır.
         duration birimi STM32 firmware ile uyumlu olarak dakikadır.
@@ -137,7 +142,13 @@ class HardwareController:
             except Exception:
                 self.logger.exception(
                     "Coil %s parametre normalizasyonu basarisiz (freq=%r duty=%r phase=%r dur=%r) "
-                    "→ bobin durumu DEGISTIRILMEDI.", coil_id, freq, duty, phase, duration)
+                    "→ bobin durumu DEGISTIRILMEDI.",
+                    coil_id,
+                    freq,
+                    duty,
+                    phase,
+                    duration,
+                )
                 return False
 
         with self._state_lock:
@@ -169,7 +180,9 @@ class HardwareController:
                 self._coil_deadline[coil_id] = None
                 self._force_send_left = self.STOP_RESEND_TICKS  # dusen STOP'u telafi et
 
-            self.logger.info(f"Coil {coil_id} durumu güncellendi: Start={start}, Freq={freq}, Duty={duty}, Phase={phase}, Dur={duration}")
+            self.logger.info(
+                f"Coil {coil_id} durumu güncellendi: Start={start}, Freq={freq}, Duty={duty}, Phase={phase}, Dur={duration}"
+            )
             self._send_stm_manual_update()
         return True
 
@@ -200,9 +213,18 @@ class HardwareController:
                 self._coil_deadline[i] = None
             self._force_send_left = self.STOP_RESEND_TICKS  # dusen STOP'u telafi et
 
-            self.logger.info("Tüm bobinler (1-5) durduruldu.")
-            self._send_stm_manual_update()
-        return True
+            # ⚠️ DENETİM 2026-08-09 (ENGEL) — ARTIK KOŞULSUZ `True` DÖNMÜYOR.
+            # Eski hâli, paket kuyruğa HİÇ alınamamış olsa bile True dönüyordu; `_emergency_stop_all`
+            # bunu `stmStopped` olarak yayınlıyor, arayüz de "çıktılar kesildi" diyordu. Yani
+            # STOP'un düştüğü durum ile başarılı durum operatöre AYNI görünüyordu.
+            # Bu dönüş "STOP paketi donanım kuyruğuna VERİLDİ" demektir (fiziksel teyit değil);
+            # False ise STOP kesinlikle gönderilmemiştir → çağıran fail-closed davranmalıdır.
+            kuyruga_verildi = self._send_stm_manual_update()
+            if kuyruga_verildi:
+                self.logger.info("Tüm bobinler (1-5) durduruldu.")
+            else:
+                self.logger.error("ACİL: STOP paketi STM kuyruğuna VERİLEMEDİ — bobinler durmamış olabilir!")
+        return kuyruga_verildi
 
     def on_disconnect(self):
         """STM seri bağlantısı koptuğunda çağrılır. Tüm bobin durumlarını SIFIRLA:
@@ -218,14 +240,18 @@ class HardwareController:
         self.logger.warning("STM bağlantısı koptu → tüm bobin durumları sıfırlandı (re-fire engellendi).")
         return True
 
-    def _send_stm_manual_update(self):
+    def _send_stm_manual_update(self) -> bool:
         """
         Tüm bobinlerin güncel statüsünü okur, binary STM32 paketine çevirir
         ve HeadlessCore.hw_send_queue kuyruğuna koyar.
+
+        Dönen: paket kuyruğa ALINDI mı. (2026-08-09: eskiden `None` dönüyordu; `stop_all_coils`
+        bunu kullanamadığı için başarısız STOP'u "başarılı" bildiriyordu — bkz. oradaki not.)
+        Diğer çağıranlar dönüşü yok sayar; davranışları DEĞİŞMEZ.
         """
         if not self.core or not hasattr(self.core, '_hw_send_queue'):
             self.logger.warning("HeadlessCore referansı veya '_hw_send_queue' bulunamadı!")
-            return
+            return False
 
         stm32_duties = []
         stm32_phases = []
@@ -244,7 +270,7 @@ class HardwareController:
                 else:
                     stm32_duties.append(0.0)
                     stm32_phases.append(0.0)
-                    stm32_freqs.append(state["freq"]) # kapalıysa da son freq kalır
+                    stm32_freqs.append(state["freq"])  # kapalıysa da son freq kalır
                     stm32_durs.append(0)
 
         # DENETIM P3 — BILINCLI OLARAK DEGISTIRILMEDI (firmware protokol degisikligi + tezgah
@@ -273,15 +299,7 @@ class HardwareController:
         # I   : crc32
 
         fmt = '<BB 5f 5f 5f 5I H'
-        data_bytes = struct.pack(
-            fmt,
-            0xAA, 0x55,
-            *stm32_duties,
-            *stm32_phases,
-            *stm32_freqs,
-            *stm32_durs,
-            ref_ms
-        )
+        data_bytes = struct.pack(fmt, 0xAA, 0x55, *stm32_duties, *stm32_phases, *stm32_freqs, *stm32_durs, ref_ms)
         crc32_val = zlib.crc32(data_bytes) & 0xFFFFFFFF
         stm_msg = data_bytes + struct.pack('<I', crc32_val)
 
@@ -300,11 +318,11 @@ class HardwareController:
         for _attempt in range(3):
             try:
                 self.core._hw_send_queue.put_nowait(_pkt)
-                return
+                return True
             except queue.Full:
                 try:
-                    self.core._hw_send_queue.get_nowait()   # en eskiyi at, yer ac
+                    self.core._hw_send_queue.get_nowait()  # en eskiyi at, yer ac
                 except queue.Empty:
                     pass
-        self.logger.warning(
-            "HW kuyrugu dolu — paket kuyruga alinamadi (keep-alive sonraki turda tazeleyecek).")
+        self.logger.warning("HW kuyrugu dolu — paket kuyruga alinamadi (keep-alive sonraki turda tazeleyecek).")
+        return False

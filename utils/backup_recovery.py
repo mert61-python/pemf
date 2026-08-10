@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Yedek kurtarma zarfı — makineden BAĞIMSIZ felaket kurtarma.
 
 DENETİM (offsite-backup-no-key-escrow) çözümü.
@@ -52,21 +53,22 @@ RECOVERY_SECRET_KEYS = ("sqlcipher_key", "patient_fernet_key")
 
 # base32 alfabesi: 0/1/8/9 yok → elle yazımda rakam-harf karışıklığı azalır.
 _ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-_CODE_CHARS = 30          # 30 × 5 bit = 150 bit
+_CODE_CHARS = 30  # 30 × 5 bit = 150 bit
 _GROUP = 5
 # Elle girişte sık yapılan okuma hataları (alfabede olmayan rakamlar → benzer harf).
 _CONFUSABLE = {"0": "O", "1": "I", "8": "B"}
 
-_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1   # ~16 MB, ~100 ms
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2**14, 8, 1  # ~16 MB, ~100 ms
 _ENVELOPE_VERSION = 1
 
 
 # ── Kod üretimi / normalleştirme ─────────────────────────────────────────────
 
+
 def generate_recovery_code() -> str:
     """150 bitlik kurtarma kodu: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX."""
     raw = "".join(_secrets.choice(_ALPHABET) for _ in range(_CODE_CHARS))
-    return "-".join(raw[i:i + _GROUP] for i in range(0, _CODE_CHARS, _GROUP))
+    return "-".join(raw[i : i + _GROUP] for i in range(0, _CODE_CHARS, _GROUP))
 
 
 def normalize_code(code: str) -> str:
@@ -86,13 +88,15 @@ def normalize_code(code: str) -> str:
 def format_code(code: str) -> str:
     """Normalleştirilmiş kodu okunabilir gruplara böl."""
     n = normalize_code(code)
-    return "-".join(n[i:i + _GROUP] for i in range(0, len(n), _GROUP))
+    return "-".join(n[i : i + _GROUP] for i in range(0, len(n), _GROUP))
 
 
 # ── Zarf ─────────────────────────────────────────────────────────────────────
 
-def _derive(code: str, salt: bytes, n: int = _SCRYPT_N, r: int = _SCRYPT_R,
-            p: int = _SCRYPT_P, dklen: int = 32) -> bytes:
+
+def _derive(
+    code: str, salt: bytes, n: int = _SCRYPT_N, r: int = _SCRYPT_R, p: int = _SCRYPT_P, dklen: int = 32
+) -> bytes:
     """Kurtarma kodundan Fernet anahtarı türet (scrypt).
 
     Yazma ve OKUMA yolları bu TEK fonksiyonu kullanır. Ayrı ayrı scrypt çağırsalardı
@@ -102,14 +106,14 @@ def _derive(code: str, salt: bytes, n: int = _SCRYPT_N, r: int = _SCRYPT_R,
     norm = normalize_code(code)
     if not norm:
         raise ValueError("Kurtarma kodu bos")
-    dk = hashlib.scrypt(norm.encode("ascii"), salt=salt, n=n, r=r, p=p,
-                        dklen=dklen, maxmem=64 * 1024 * 1024)
+    dk = hashlib.scrypt(norm.encode("ascii"), salt=salt, n=n, r=r, p=p, dklen=dklen, maxmem=64 * 1024 * 1024)
     return base64.urlsafe_b64encode(dk)
 
 
 def build_envelope(code: str, keys: dict) -> bytes:
     """Anahtar sözlüğünü koddan türetilen anahtarla şifreleyip zarf baytları üret."""
     from cryptography.fernet import Fernet
+
     if not keys:
         raise ValueError("Zarfa konacak anahtar yok")
     salt = os.urandom(16)
@@ -123,8 +127,10 @@ def build_envelope(code: str, keys: dict) -> bytes:
         "salt": base64.b64encode(salt).decode("ascii"),
         "ct": token.decode("ascii"),
         "olusturma": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "not": ("Bu dosya PEMF veritabani anahtarlarini KURTARMA KODU ile sifreli tutar. "
-                "Kod olmadan acilamaz. Kodu bu dizinde SAKLAMAYIN."),
+        "not": (
+            "Bu dosya PEMF veritabani anahtarlarini KURTARMA KODU ile sifreli tutar. "
+            "Kod olmadan acilamaz. Kodu bu dizinde SAKLAMAYIN."
+        ),
     }
     return json.dumps(doc, ensure_ascii=False, indent=2).encode("utf-8")
 
@@ -132,6 +138,7 @@ def build_envelope(code: str, keys: dict) -> bytes:
 def open_envelope(code: str, blob: bytes) -> dict:
     """Zarfı çöz → {anahtar_adi: deger}. Yanlış kod → ValueError."""
     from cryptography.fernet import Fernet, InvalidToken
+
     try:
         doc = json.loads(blob.decode("utf-8"))
     except Exception as e:
@@ -144,9 +151,14 @@ def open_envelope(code: str, blob: bytes) -> dict:
     salt = base64.b64decode(doc["salt"])
     # KDF parametreleri ZARFTAN okunur → ileride parametreler sertleşse bile eski zarflar
     # açılmaya devam eder (bir sürüm yükseltmesi eski yedekleri kurtarılamaz yapamaz).
-    fkey = _derive(code, salt,
-                   n=int(kdf.get("n", _SCRYPT_N)), r=int(kdf.get("r", _SCRYPT_R)),
-                   p=int(kdf.get("p", _SCRYPT_P)), dklen=int(kdf.get("dklen", 32)))
+    fkey = _derive(
+        code,
+        salt,
+        n=int(kdf.get("n", _SCRYPT_N)),
+        r=int(kdf.get("r", _SCRYPT_R)),
+        p=int(kdf.get("p", _SCRYPT_P)),
+        dklen=int(kdf.get("dklen", 32)),
+    )
     try:
         plain = Fernet(fkey).decrypt(doc["ct"].encode("ascii"))
     except InvalidToken as e:
@@ -156,21 +168,26 @@ def open_envelope(code: str, blob: bytes) -> dict:
 
 # ── Yerel kurtarma malzemesi (kod + zarf) ────────────────────────────────────
 
+
 def get_or_create_code() -> str:
     """Bu kurulumun kurtarma kodunu döndür; yoksa üretip sırlara yazar."""
     from utils import secrets_manager as sm
+
     code = sm.get_secret("backup_recovery_code", generate=False)
     if not code:
         code = generate_recovery_code()
         sm.set_secret("backup_recovery_code", code)
-        logger.warning("Yedek kurtarma kodu URETILDI. Operator bunu makine DISINDA saklamali "
-                       "(kasa / parola yoneticisi) — aksi halde donanim arizasinda yedekler acilamaz.")
+        logger.warning(
+            "Yedek kurtarma kodu URETILDI. Operator bunu makine DISINDA saklamali "
+            "(kasa / parola yoneticisi) — aksi halde donanim arizasinda yedekler acilamaz."
+        )
     return code
 
 
 def _collect_keys() -> dict:
     """Zarfa girecek anahtarları topla. ÜRETME YOK (generate=False)."""
     from utils import secrets_manager as sm
+
     out = {}
     for name in RECOVERY_SECRET_KEYS:
         try:
@@ -212,6 +229,7 @@ def write_code_file(app_data_dir: Path, code: str) -> Path | None:
     p.write_text(text, encoding="utf-8")
     try:
         from utils.file_acl import lock_down_file
+
         lock_down_file(p, keep_current_user=True)
     except Exception:
         logger.debug("kurtarma kodu dosyasi ACL kilitlenemedi", exc_info=True)
@@ -282,7 +300,9 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
             write_code_file(app_data_dir, code)
             logger.warning(
                 "KURTARMA KODU yazildi: %s — bu kodu MAKINE DISINDA saklayin. Yedekleri "
-                "baska bir makinede acmanin TEK yolu budur.", code_file)
+                "baska bir makinede acmanin TEK yolu budur.",
+                code_file,
+            )
         except Exception:
             logger.warning("kurtarma kodu dosyasi yazilamadi", exc_info=True)
 

@@ -92,9 +92,16 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     let m = pemf_launcher_core::Manifest::parse(&raw).expect("uretilen manifest AYRISTIRILAMADI");
 
     assert_eq!(m.schema, 2, "make_manifest.py sema v2 yazmali");
-    // Üç platform da tanımlı olmalı — biri eksikse o istemci kurulum yapamaz.
-    for key in [platform::WIN_X64, platform::LINUX_X64, platform::MAC_ARM64] {
-        assert!(m.runtimes.contains_key(key), "{key} runtime eksik");
+    // ⚠️ SAHİP KARARI 2026-08-09 (Tier 1): eskiden ÜÇ platform da şart koşuluyordu. `mac-arm64`
+    // ve `linux-x64` manifest'ten ÇIKARILDI — o platformlarda `layers` yoktu (rollout freni
+    // çalışmıyordu) ve client self-update'i Windows'a özel, yani kurulan cihaz eski sürümde
+    // KALICI olarak kilitleniyor ve bozuk bir yayın geri çekilemiyordu. Site zaten "Yakında"
+    // diyordu. Geri getirilecekse: CI ile paketleri üret + `layers`/`rollout` ekle, sonra bu
+    // iddiaları güncelle (bkz. manifest.rs::depodaki_gercek_manifest_ayristirilir).
+    assert!(m.runtimes.contains_key(platform::WIN_X64), "win-x64 runtime eksik");
+    for key in [platform::LINUX_X64, platform::MAC_ARM64] {
+        assert!(!m.runtimes.contains_key(key),
+            "{key} manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
     }
     for p in ["home", "vet", "research"] {
         assert!(m.models.contains_key(p), "{p} profili eksik");
@@ -106,9 +113,11 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     // #100: digest karşılaştırması, diskteki dosyayla AYNI platformun paketi üzerinden yapılmalı.
     // Önceden MEVCUT platformun paketi alınıp `base-mac.zip`e karşı doğrulanıyordu — mac dışında
     // her zaman uyumsuz çıkardı (test yalnız PEMF_MANIFEST_FILE verilmediği için sessiz kalıyordu).
+    // ⚠️ 2026-08-09: mac-arm64 manifest'ten çıkarıldığı için bu karşılaştırma ancak runtime
+    // manifest'te DE varsa anlamlıdır. Diskte bayat bir `base-mac.zip` durabilir (eski yayından);
+    // onun varlığı tek başına manifest'te mac girdisi olmasını GEREKTİRMEZ.
     let local = repo_root().join("base-mac.zip");
-    if local.exists() {
-        let mac = m.runtimes.get(platform::MAC_ARM64).expect("mac runtime eksik");
+    if let (true, Some(mac)) = (local.exists(), m.runtimes.get(platform::MAC_ARM64)) {
         assert!(mac.url.ends_with("base-mac.zip"), "beklenmeyen mac url: {}", mac.url);
         verify::verify_file(&local, &mac.sha256)
             .expect("manifest digest'i gercek base-mac.zip ile UYUSMUYOR");

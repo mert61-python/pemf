@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 PEMF Cloudflare Tunnel Manager
 ===============================
@@ -9,6 +10,7 @@ Kullanım:
     start_tunnel(port=8000)
     url = get_tunnel_url()   # Örn: "https://abcd-xyz.trycloudflare.com"
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +36,7 @@ _url_callbacks: list = []  # URL hazır olunca çağrılacak fonksiyonlar
 # ── Cloudflared Binary Konumu ──────────────────────────────────────────────────
 _BIN_DIR = Path(os.environ.get("APPDATA", Path.home())) / "PEMF_GUI" / "cloudflared"
 
+
 def _get_binary_path() -> Path:
     """OS'a göre cloudflared binary yolunu döndürür."""
     system = platform.system()
@@ -50,8 +53,11 @@ def _bundled_cloudflared() -> Path | None:
     _MEIPASS, EXE yanı ve kaynak bin/ dizinleri. Audit #18: eskiden yalnız runtime'da
     GitHub'dan iniyordu → internetsiz sahada kurulum bozuluyordu."""
     system = platform.system()
-    fname = "cloudflared.exe" if system == "Windows" else (
-        "cloudflared-darwin" if system == "Darwin" else "cloudflared-linux")
+    fname = (
+        "cloudflared.exe"
+        if system == "Windows"
+        else ("cloudflared-darwin" if system == "Darwin" else "cloudflared-linux")
+    )
     roots = []
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", "")
@@ -106,6 +112,7 @@ def _download_cloudflared() -> Path | None:
         # yazılıyordu; indirme kesilirse 0-byte/kesik dosya kalıp bir daha inmiyordu.
         import os as _os
         import tempfile as _tf
+
         _fd, _tmp = _tf.mkstemp(dir=str(_BIN_DIR), suffix=".part")
         try:
             with urllib.request.urlopen(url, timeout=60) as response, _os.fdopen(_fd, "wb") as f:
@@ -120,6 +127,7 @@ def _download_cloudflared() -> Path | None:
             # ICINDEKI gercek ikiliyi yaz.
             if system == "Darwin":
                 import tarfile as _tar
+
                 _member_path = None
                 with _tar.open(_tmp, "r:gz") as _tf_arch:
                     for _m in _tf_arch.getmembers():
@@ -129,11 +137,13 @@ def _download_cloudflared() -> Path | None:
                     if _member_path is None:
                         raise ValueError("cloudflared .tgz icinde 'cloudflared' ikilisi bulunamadi.")
                     _extracted = _tf_arch.extractfile(_member_path)
-                    with _os.fdopen(_os.open(_tmp + ".bin", _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o755), "wb") as _bf:
+                    with _os.fdopen(
+                        _os.open(_tmp + ".bin", _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o755), "wb"
+                    ) as _bf:
                         _bf.write(_extracted.read())
                 _os.replace(_tmp + ".bin", bin_path)
                 try:
-                    _os.unlink(_tmp)          # arsivi birakma
+                    _os.unlink(_tmp)  # arsivi birakma
                 except Exception:
                     pass
             else:
@@ -151,6 +161,7 @@ def _download_cloudflared() -> Path | None:
             # Eğer tgz ise çıkart
             if str(url).endswith(".tgz"):
                 import tarfile
+
                 with tarfile.open(bin_path, "r:gz") as tar:
                     tar.extractall(_BIN_DIR)
 
@@ -179,7 +190,7 @@ def _read_url_from_output(process: subprocess.Popen, port: int) -> None:
         if match:
             new_url = match.group(0)
             with _tunnel_lock:
-                changed = (new_url != _tunnel_url)
+                changed = new_url != _tunnel_url
                 _tunnel_url = new_url
             if changed:
                 logger.info("=" * 60)
@@ -233,6 +244,7 @@ def start_tunnel(port: int = 8000) -> bool:
     # TEK-DOSYA: SecretsManager (env → pemf_secrets.json operator bölümü). Boşsa QUICK tunnel.
     try:
         from utils.secrets_manager import get_secret
+
         token = get_secret("cloudflare_tunnel_token")
         hostname = get_secret("tunnel_hostname")
     except Exception:
@@ -244,14 +256,19 @@ def start_tunnel(port: int = 8000) -> bool:
     # (gerçek trycloudflare URL üretir, uzaktan erişim çalışır). Geçerli named token etkilenmez.
     token = (token or "").strip()
     if token and len(token) < 40:
-        logger.warning("cloudflare_tunnel_token geçersiz/placeholder (uzunluk %d) → YOK SAYILDI, QUICK tünele düşülüyor.", len(token))
+        logger.warning(
+            "cloudflare_tunnel_token geçersiz/placeholder (uzunluk %d) → YOK SAYILDI, QUICK tünele düşülüyor.",
+            len(token),
+        )
         token = ""
     if token:
         cmd = [str(bin_path), "tunnel", "run", "--token", token]
         logger.info("Cloudflare NAMED tunnel başlatılıyor (kalıcı hostname, üretim-grade).")
     else:
         cmd = [str(bin_path), "tunnel", "--url", f"http://localhost:{port}"]
-        logger.info("Cloudflare QUICK tunnel başlatılıyor → port %d (URL her restart DEĞİŞİR; üretimde NAMED önerilir).", port)
+        logger.info(
+            "Cloudflare QUICK tunnel başlatılıyor → port %d (URL her restart DEĞİŞİR; üretimde NAMED önerilir).", port
+        )
 
     try:
         # DEADLOCK fix: NAMED+hostname dalı (aşağıda) stderr-okuma thread'i BAŞLATMADAN döner. O durumda
@@ -375,29 +392,32 @@ def start_tunnel_watchdog(port: int = 8000, check_interval: int = 20) -> None:
         while not _watchdog_stop.is_set():
             try:
                 if not _internet_up():
-                    _watchdog_stop.wait(check_interval)   # çevrimdışı → sadece bekle (yerel etkilenmez)
+                    _watchdog_stop.wait(check_interval)  # çevrimdışı → sadece bekle (yerel etkilenmez)
                     continue
                 if _tunnel_alive():
                     # Süreç canlı; ama quick tünel edge'i ölmüş olabilir (forward yok). DIŞ URL'yi probe et;
                     # 2 ardışık ölüde yeniden başlat (audit P0: ölü-URL Supabase'e yayınlanmaya devam ediyordu).
                     if _tunnel_url_alive():
                         dead_url_strikes = 0
-                        backoff = check_interval           # sağlıklı → normal aralıkta tekrar bak
+                        backoff = check_interval  # sağlıklı → normal aralıkta tekrar bak
                         _watchdog_stop.wait(check_interval)
                         continue
                     dead_url_strikes += 1
                     if dead_url_strikes < 2:
-                        logger.info("Tünel watchdog: dış URL probe başarısız (%d/2) → bir tur daha bekleniyor.", dead_url_strikes)
+                        logger.info(
+                            "Tünel watchdog: dış URL probe başarısız (%d/2) → bir tur daha bekleniyor.",
+                            dead_url_strikes,
+                        )
                         _watchdog_stop.wait(check_interval)
                         continue
                     logger.warning("Tünel watchdog: süreç canlı ama DIŞ URL ölü → tünel yeniden başlatılıyor.")
                     dead_url_strikes = 0
                     # düş → aşağıda stop_tunnel + start_tunnel (yeni URL alınır + yayınlanır)
-                stop_tunnel()                              # yarı-ölü süreç varsa temizle (None ise zararsız)
+                stop_tunnel()  # yarı-ölü süreç varsa temizle (None ise zararsız)
                 logger.info("Tünel watchdog: internet VAR, tünel yok/ölü → (yeniden) başlatılıyor.")
                 if start_tunnel(port=port):
                     backoff = check_interval
-                    _watchdog_stop.wait(check_interval)    # QUICK tünel URL'yi yakalasın diye bekle
+                    _watchdog_stop.wait(check_interval)  # QUICK tünel URL'yi yakalasın diye bekle
                 else:
                     logger.warning("Tünel watchdog: başlatma başarısız, %ds sonra tekrar.", backoff)
                     _watchdog_stop.wait(backoff)

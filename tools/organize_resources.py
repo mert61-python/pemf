@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 import shutil
 from pathlib import Path
 
@@ -22,6 +23,7 @@ file_mapping = {
     '.xlam': target_dir / 'templates',
 }
 
+
 def copy_files(src_dir, dest_dir, extensions):
     """Copy files with given extensions from src_dir to dest_dir."""
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -37,17 +39,16 @@ def main():
     # Copy files from root directory
     for ext, target in file_mapping.items():
         copy_files(base_dir, target, [ext])
-    
+
     # Copy files from gui_images directory
     gui_images_dir = base_dir / "gui_images"
     if gui_images_dir.exists():
         copy_files(gui_images_dir, target_dir / "images", ['.png', '.jpg', '.jpeg', '.svg'])
-    
+
     # Copy test images
     test_images_dir = base_dir / "test_images"
     if test_images_dir.exists():
         copy_files(test_images_dir, target_dir / "images", ['.png', '.jpg', '.jpeg', '.svg'])
-    
 
 
 if __name__ == "__main__":

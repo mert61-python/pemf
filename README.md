@@ -1,238 +1,164 @@
-# PEMF Veteriner Cihazı — Backend (guii)
+# PEMF Veteriner Cihazı — Proje Kökü (`guii`)
 
-Bu klasör, PEMF veteriner PEMF-terapi cihazının **headless (arayüzsüz) Python backend'idir**.
-FastAPI + uvicorn ile `http://0.0.0.0:8000` üzerinde çalışır; Windows'ta **NSSM** ile
-`PemfBackend` adlı bir servis olarak kurulur. Donanımı (STM32 bobinler seri porttan,
-ESP bobinler MQTT ile) sürer, sensörleri okur, hastaları yönetir ve **yapay zeka
-teşhis modellerini** sunar. Mobil uygulama (React Native, ayrı `pf/` klasörü) bu
-backend'e bağlanır.
+Bu depo, **PEMF veteriner terapi cihazının** tüm yazılımıdır: arayüzsüz (**headless**) Python backend'i,
+React Native/Expo mobil+web uygulaması, yapay-zekâ teşhis modelleri, Tauri ince-istemci (launcher) ve
+tüm build/dağıtım zinciri — hepsi **tek klasörde**.
 
-> **Önemli:** Tüm AI modelleri artık **EXE'ye gömülüdür** (offline, self-contained).
-> **Hugging Face indirme tamamen kaldırılmıştır** — internet gerekmez.
+> **Yeni geliştiriciysen buradan başla.** Aşağıdaki **dizin haritası** her üst-klasörün kendi `README.md`'sine
+> link verir; oradan alt-sisteme inersin. Build için → [`BUILD.md`](BUILD.md). Mimari için → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+> **Önemli:** Tüm AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
 
 ---
 
-## 0) Arayüz — Ekran Görüntüleri
+## Arayüz — Ekran Görüntüleri
 
-Mobil/Web arayüzü **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'te çalışır.
-Üç kullanım profili — **Evcil Hayvan Sahibi · Veteriner Hekim · Araştırma Modu** — arayüzü kullanıcıya göre uyarlar.
+Arayüz **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'te çalışır. Üç profil —
+**Evcil Hayvan Sahibi · Veteriner Hekim · Araştırma Modu** — arayüzü kullanıcıya göre uyarlar.
 
 <p align="center">
   <img src="docs/screenshots/react_login.png" width="620" alt="Giriş / Kimlik Doğrulama" /><br/>
-  <em>Kimlik doğrulama (Giriş / Kayıt) — yalnız yetkili operatör; Supabase tabanlı e-posta doğrulama + şifre sıfırlama.</em>
+  <em>Kimlik doğrulama — Supabase tabanlı e-posta doğrulama + şifre sıfırlama.</em>
 </p>
-
 <p align="center">
   <img src="docs/screenshots/research_welcome.png" width="215" alt="Profil seçimi" />
   <img src="docs/screenshots/research_home.png" width="215" alt="Araştırma Modu — ana ekran" />
   <img src="docs/screenshots/research_aihub.png" width="215" alt="Araştırma Modu — AI Hub" />
   <img src="docs/screenshots/ai_history.png" width="215" alt="AI Analiz Geçmişi" />
 </p>
-<p align="center"><em>Soldan sağa: <b>Profil Seçimi</b> (3 profil) · <b>Araştırma Modu</b> ana ekran · <b>Akıllı Teşhis</b> (Fantom Tümör / Petri Kuyu / Böbrek RNA·CT·Patoloji·Hastalık modelleri) · <b>AI Analiz Geçmişi</b> (şifreli, operatör-kapsamlı: Benim / Tüm Klinik).</em></p>
-
-> Klinik (Veteriner) modunun ekranları — Dashboard, Tedavi Kontrol, Sensör Monitörü, KPI, Hasta Kayıtları, Tedavi Geçmişi, AI Hub — TÜBİTAK sonuç raporunda (`../tübitak/PEMF_2209B_Sonuc_Raporu.docx`, Şekil 8–16) yer alır. Ekran görüntüsü dosyaları: `docs/screenshots/`.
+<p align="center"><em>Profil Seçimi · Araştırma Modu ana ekran · Akıllı Teşhis (AI Hub) · Şifreli AI Analiz Geçmişi.</em></p>
 
 ---
 
-## 1) Hızlı Başlangıç — Ne Nerede?
+## Büyük Resim
 
-| İhtiyaç | Yer |
+```
+Mobil/Web (pf → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
+                                                                                  (FastAPI+uvicorn, NSSM servis)
+   Supabase (yalnız cihaz-registry + şifreli PII)                                   ├─ servers/  (REST+WS+router'lar)
+   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ controllers/ → STM32 (bobin 1-5, seri)
+                                                                                    ├─ services/ + bin/mosquitto → ESP (bobin 6-8, MQTT)
+                                                                                    ├─ database/ (SQLCipher yerel)
+                                                                                    └─ ai_hub/ (gömülü ONNX teşhis)
+```
+Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Sürümler — tek kaynak [`versions.json`](versions.json)
+
+| Kanal | Sürüm | Hedef dosya |
+|---|---|---|
+| Backend / installer | **1.9.5** (`VERSION`) | `PEMF_Backend_Setup.iss`, `docs/version_info.txt` |
+| Launcher (client) | **1.9.5** | `launcher/Cargo.toml`, `launcher/app/tauri.conf.json` |
+| Mobil (APK/IPA) | **2.3.3** (vc10 / iOS 5) | `pf/app.json` |
+| Frontend OTA | **1.4.1** | `frontend_version.json` |
+
+> Sürümü **elle `versions.json`'da** değiştir → `build_tools/sync_versions.ps1` hedef dosyalara yazar (build başında otomatik).
+
+---
+
+## Dizin Haritası — Neyin Ne Olduğu
+
+### Backend (Python, headless)
+| Klasör | Ne işe yarar |
 |---|---|
-| **Backend EXE (onedir)** | `dist/PEMF_Backend/PEMF_Backend.exe` (+ `_internal/`) |
-| **Backend EXE (onefile)** | `dist/PEMF_Backend_onefile.exe` (tek dosya) |
-| **Mobil uygulama (Android APK)** | `dist/PEMF_Mobil_universal.apk` |
-| **Mobil uygulama (iOS IPA)** | `dist/PEMF_Mobil_iOS.ipa` (EAS bulut build; App Store/TestFlight) |
-| **Build reçeteleri (spec/iss)** | `build_tools/` |
-| **Dağıtım profilleri (device/server)** | `deploy/device.env`, `deploy/server.env` |
-| **AI modelleri (kaynak)** | `release_assets/ai_models/` |
-| **AI model KODU** | `ai_hub/<model>/` |
-| **Backend kaynak kodu** | `servers/`, `ai/`, `controllers/`, `services/`, `database/`, `utils/` |
-| **Mobil kaynak kodu (canlı geliştirme)** | `C:\Users\merta\pf` (ayrı React Native projesi) |
-| **Mobil kaynak kodu (YEDEK kopya)** | `mobile/` (temiz snapshot — `node_modules`/build hariç, guii içinde) |
-| **Web arayüzü (React web export)** | `frontend/dist/` (backend `/` kökünden servis eder) |
+| `backend_service.py` · `headless_core.py` · `event_bus.py` | **Giriş noktası** (main), Qt-siz çekirdek (STM seri + kuyruk), pub/sub olay veri yolu |
+| [`servers/`](servers/README.md) | FastAPI uygulaması: REST + WebSocket + tüm router'lar + canlı durum + ağ (tünel/mDNS/sync) |
+| [`controllers/`](controllers/README.md) | STM32 bobin kontrol choke-point'i (keep-alive + süre-watchdog + garantili STOP) |
+| [`services/`](services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı |
+| [`database/`](database/README.md) | Yerel SQLite/**SQLCipher** kalıcılık (hasta/seans/sensör/auth) + MQTT outbox |
+| [`utils/`](utils/README.md) | STM32 seri/protokol-limit, sırlar, yollar, config, PDF, telemetri, model-çözüm (offline) |
+| [`ai/`](ai/README.md) | Kural-tabanlı **tedavi-parametre önerisi** + global AI config (teşhis DEĞİL) |
+| [`pemf_gui/`](pemf_gui/README.md) | Eski PyQt GUI kalıntısı — GUI ölü, ama `config.py`+ikon shim'i **canlı** (backend import eder) |
+| [`config/`](config/README.md) | Uygulama config'i (MQTT/timer/performans) + `credentials/` (sır) |
+| [`data/`](data/README.md) | Küçük seed/geliştirme verisi — çoğu bayat (gerçek DB app-data'da) |
 
-Build ortamı Python: `C:\Users\merta\Downloads\python-3.10.2-embed-amd64\myenv\Scripts\python.exe`
-
-> **Build ortamı (`myenv`) yedekte YOK — ama gerekmez.** `myenv`, guii'nin **dışında**
-> (`python-3.10.2-embed-amd64\myenv`, ~3 GB) bir virtualenv'dir ve `pyvenv.cfg` içinde ana
-> embeddable Python'a **mutlak yolla bağlıdır** → olduğu gibi kopyalamak kırılgandır. Bunun
-> yerine build ortamı `guii/requirements.txt`'ten **yeniden kurulur** (tek dosya, kilitli sürümler):
-> ```bat
-> :: 1) Python 3.10.2'yi kur (veya embeddable python-3.10.2-embed-amd64'ü edin)
-> python -m venv C:\pemf-build\myenv
-> :: 2) Paketleri kur (requirements.txt PyTorch CPU index'ini kendi içinde bildirir):
-> C:\pemf-build\myenv\Scripts\python.exe -m pip install -r guii\requirements.txt
-> :: 3) Artık bu python ile PyInstaller build alınır (aşağıdaki komutlar)
-> ```
-> `requirements.txt` = TEK kilitli bağımlılık dosyası (doğrudan bağımlılıklar, `==` ile
-> myenv'e sabitli; eski requirements-service/-test/.lock birleştirildi). Yani **yedek için
-> `guii` tek başına yeterli**: build ortamını, `mobile/` mobil kaynağı, `frontend/dist`
-> web'i, `release_assets/ai_models` modelleri içerir.
-
----
-
-## 2) EXE Nasıl Alınır (Backend)
-
-PyInstaller ile derlenir. **Çalışma dizini `guii` OLMALI** (spec `os.getcwd()` kullanır).
-
-### a) onedir (klasör — servis için ÖNERİLEN, hızlı başlar)
-```bat
-cd C:\Users\merta\Downloads\python-3.10.2-embed-amd64\guii
-"C:\Users\merta\Downloads\python-3.10.2-embed-amd64\myenv\Scripts\python.exe" -m PyInstaller build_tools\PEMF_Backend_onedir.spec --noconfirm
-```
-**Çıktı:** `dist/PEMF_Backend/` (≈3.3 GB — EXE + `_internal/` içinde tüm modeller gömülü).
-
-### b) onefile (tek dosya — taşıma için; ilk açılış yavaş)
-```bat
-cd C:\Users\merta\Downloads\python-3.10.2-embed-amd64\guii
-"C:\Users\merta\Downloads\python-3.10.2-embed-amd64\myenv\Scripts\python.exe" -m PyInstaller build_tools\PEMF_Backend_onefile.spec --noconfirm
-```
-**Çıktı:** `dist/PEMF_Backend_onefile.exe` (≈2.3 GB tek dosya). Çalışınca içeriği `%TEMP%`'e
-açtığı için **ilk başlangıç yavaştır**; sürekli çalışan servis için `onedir` tercih edin.
-
-> İki spec de **aynı içeriği** üretir; fark paketleme (klasör vs tek dosya). Her ikisi de
-> `release_assets/ai_models/**` ağacını `_internal/ai_models/`'e gömer → 19 ONNX + histopath
-> dahil tüm modeller EXE içinde, offline.
-
----
-
-## 3) APK Nasıl Alınır (Mobil)
-
-Mobil uygulama **ayrı bir React Native (Expo) projesidir**: `C:\Users\merta\pf`.
-APK, Android Gradle ile derlenir.
-
-> **Yedekten derleme:** `guii/mobile/` bu projenin **temiz snapshot yedeğidir** (`node_modules`
-> ve build çıktıları hariç). Yedekten sıfırdan derlemek için: `cd guii\mobile && npm install`
-> (bağımlılıkları indirir) → ardından `cd android && gradlew assembleRelease ...`. Canlı
-> geliştirme yine `C:\Users\merta\pf`'de yapılır; `mobile/` yalnızca guii yedeğinin
-> kendi-kendine yeterli olması için tutulur.
-
-### Universal APK (tüm Android'ler — ÖNERİLEN)
-```bat
-cd C:\Users\merta\pf\android
-gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
-```
-### Sadece arm64 (daha küçük ~60MB, yalnız arm64 telefonlar)
-```bat
-gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
-```
-**Ham çıktı:** `C:\Users\merta\pf\android\app\build\outputs\apk\release\app-release.apk`
-→ bu dosya, deliverable olarak `guii/dist/PEMF_Mobil_universal.apk`'ye kopyalanır.
-
-Telefona kurmak için (USB + ADB):
-```bat
-adb install -r C:\Users\merta\pf\android\app\build\outputs\apk\release\app-release.apk
-```
-
-### iOS IPA (EAS bulut — Windows'ta yerel derlenemez)
-iOS build macOS+Xcode ister → **EAS Build (Expo bulut)** ile alınır. İmzalama sertifikaları
-EAS sunucusunda önbellekli (Apple Team `TNBV9TZ4TT`, 2027'ye kadar geçerli) → Apple 2FA gerekmez.
-```bat
-cd C:\Users\merta\pf
-npx eas build --platform ios --profile production --non-interactive
-```
-Build bulutta ~5-40 dk sürer; biten `.ipa` `expo.dev` build sayfasından indirilip
-`guii/dist/PEMF_Mobil_iOS.ipa`'ye kopyalanır. **production** profili App Store/TestFlight
-dağıtımı içindir (doğrudan sideload edilmez); cihaza doğrudan kurulum için `preview` profili +
-kayıtlı cihaz UDID gerekir. Bundle: `com.pemf.vet`, owner `@mert6161`.
-
----
-
-## 4) Deploy / Kurulum (Backend)
-
-Aynı EXE hem **klinik cihazı (device)** hem **sunucu (server)** için kullanılır; fark
-`deploy/device.env` ve `deploy/server.env` profillerindedir (STM portu, mod, TLS vb.).
-
-- **Yerel servise deploy (geliştirme):** `dist/PEMF_Backend`'i durdurup `C:\Program Files\PEMF Backend`'e kopyalar, servisi yeniden başlatır (yönetici gerekir). Bkz. `deploy/README.md`.
-- **Servis kur/mod seç:** `scripts/setup_services.ps1` (device/server modu, NSSM ile `PemfBackend` servisi).
-- **Installer üret (.exe kurulum) — DOĞRUDAN ISCC (doğrulandı 2026-07-07):** onedir build'inden sonra:
-  ```bat
-  cd C:\Users\merta\Downloads\python-3.10.2-embed-amd64\guii
-  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build_tools\PEMF_Backend_Setup.iss
-  ```
-  → `build_tools/Output/PEMFBackendSetup_device_v1.5.0.exe` (~3.5 GB). Installer çalışınca eski `PemfBackend` servisini `sc stop` eder → Program Files'a kurar → ai_models'i ProgramData'ya kopyalar → `setup_services.ps1` ile servisi kurup başlatır. **Kurulum-öncesi UYARI:** eski servis durdurulsa da onun açtığı `cloudflared.exe` (tünel) çalışmaya devam edip dosyayı KİLİTLER → installer "DeleteFile kod 5" verir; yönetici PowerShell'de `taskkill /F /IM cloudflared.exe` (gerekirse `mosquitto.exe`) → "Yeniden denensin".
-  > *(Not: `build_installer.ps1` **eski** `PEMF_GUI_onedir.spec` adını referans alır — güncel spec `PEMF_Backend_onedir.spec` olduğundan o script patlar; yukarıdaki doğrudan ISCC yolu geçerlidir.)*
-
-Detaylı dağıtım: kökteki `DEPLOYMENT.md` + `deploy/README.md`.
-
----
-
-## 5) Klasör Yapısı — Tek Tek
-
-### Backend kaynak kodu
-| Klasör/Dosya | İçerik |
+### Yapay Zekâ
+| Klasör | Ne işe yarar |
 |---|---|
-| `servers/` | FastAPI uygulaması. `api_server.py` (ana app + WS + seans), `ai_router.py` (tüm AI uçları + AI Pro otonom tedavi döngüsü), `auth.py` (X-API-Key + LAN muafiyeti). |
-| `ai/` | AI yardımcı katmanı. |
-| `ai_hub/` | **AI model KODU** — her model kendi alt-klasöründe (`inference_*`, `cat_*`, `em_kedi` …) + wrapper'lar (ör. `catorgan_predictor.py`). *(Büyük `.onnx` kopyaları temizlendi; modeller `release_assets`'ten/bundle'dan çözülür.)* |
-| `controllers/` | Donanım/iş mantığı kontrolcüleri. |
-| `services/` | Servis katmanı (e-posta, bulut vb.). |
-| `database/` | Yerel şifreli SQLite (hasta/seans) erişimi. |
-| `utils/` | Yardımcılar. `model_downloader.py` (**yalnız yerel** model çözümü, HF yok), `secrets_manager.py`, `path_utils.py`, `coil_map.py`. |
-| `firmware/` | STM32/ESP firmware ile ilgili dosyalar. |
-| `config/`, `data/`, `templates/`, `web_static/`, `website/` | Konfig, veri, HTML şablon/statik + tanıtım sitesi. |
-| `backend_service.py`, `headless_core.py`, `event_bus.py`, `main.c` | Servis giriş noktası + çekirdek + olay veri yolu (+ C yardımcı). |
-| `requirements.txt` | TEK kilitli Python bağımlılık dosyası (Qt/QR/mediapipe/eğitim-libleri KALDIRILDI). |
+| [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (13+ model) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
+| [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu, opsiyonel) |
+| [`release_assets/`](release_assets/README.md) | **Model ağırlık deposu (2.1 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` |
 
-### Mobil / Web arayüzü
-| Klasör/Dosya | İçerik |
+### Frontend / Web
+| Klasör | Ne işe yarar |
 |---|---|
-| `mobile/` | **Mobil uygulamanın YEDEK kopyası** — React Native (Expo) kaynağı (`src/`, `android/`, `assets/`, `app.json`, `package.json` …). Temiz snapshot: `node_modules` ve build çıktıları HARİÇ (yeniden üretilebilir). Sıfırdan derleme: `npm install` → `android\gradlew assembleRelease`. Canlı geliştirme `C:\Users\merta\pf`'dedir; burası guii yedeğini kendi-kendine yeterli yapar. |
-| `frontend/` | **Junction (sembolik bağ) → `C:\Users\merta\pf`.** Web export bu yoldan alınır (`npx expo export --platform web`). Gerçek dosya değil — bağdır; guii yedeği için gerçek kopya `mobile/`'dadır. |
-| `frontend/dist/` | **React WEB export** (backend `/` kökünden servis eder; masaüstü kısayolu `localhost:8000` bunu açar). Mobil UI değişince yeniden export alınıp `_internal/frontend/dist`'e kopyalanmalı. |
-| `frontend_temp/`, `website/`, `web_static/` | Eski/yedek web export + tanıtım sitesi + statik kaynaklar (mount fallback). |
+| [`pf/`](pf/README.md) | **ANA KAYNAK** — mobil (APK/IPA) + web bundle üreten React Native/Expo kaynağı |
+| [`frontend/`](frontend/README.md) | **ÜRETİLEN** — `dist/` = backend'in `/` kökünden sunduğu web bundle (pf'ten aynalanır); `src/` ölü |
+| [`pemf-vet-web/`](pemf-vet-web/README.md) | **Canlı pazarlama/indirme sitesi** (Vite+React, Vercel, iyzico ödeme) |
+| [`pemf_vet_landing/`](pemf_vet_landing/NOTES.md) | Çıkarılmış Lovable landing statik kopyası (tasarım referansı) |
+| [`web_static/`](web_static/README.md) · [`website/`](website/README.md) · [`templates/`](templates/README.md) | **LEGACY** — eski vanilla UI · eski indirme sayfası · eski sunucu-render şablonu (hiçbiri kullanılmıyor) |
 
-### Build / Dağıtım
-| Klasör/Dosya | İçerik |
+### Build / Dağıtım / Launcher
+| Klasör/Dosya | Ne işe yarar |
 |---|---|
-| `build_tools/` | **Derleme reçeteleri:** `PEMF_Backend_onedir.spec`, `PEMF_Backend_onefile.spec` (PyInstaller), `*.iss` (Inno Setup installer), `build_installer.ps1`, PyInstaller hook'ları. |
-| `deploy/` | Dağıtım profilleri: `device.env`, `server.env` + `README.md`. |
-| `scripts/` | `setup_services.ps1` (servis kur/mod) vb. yardımcı scriptler. |
-| `release_assets/ai_models/` | **Tüm AI modellerinin kaynağı** (19 ONNX, ~2.1 GB). EXE build'i bunu `_internal/ai_models/`'e gömer; installer da ProgramData'ya kopyalayabilir. |
-| `dist/` | **Deliverable çıktılar:** `PEMF_Backend/` (onedir), `PEMF_Backend_onefile.exe`, `PEMF_Mobil_universal.apk`. |
-| `bin/`, `lattekurulum/` | Yardımcı ikili/kurulum dosyaları (ör. NSSM, LattePanda kurulum). |
+| [`BUILD.md`](BUILD.md) | **Ana build rehberi** (backend/base.zip/launcher/APK/installer + yayın) |
+| `bootstrap.ps1` | Sıfır-makinede tüm toolchain'i tek komutla kurar (Node/Rust/MSVC/JDK/Android/Inno/gh) |
+| [`build_tools/`](build_tools/README.md) | Derleme reçeteleri (PyInstaller spec, Inno .iss, `make_base_zip.py`, `build_apk.ps1`, sürüm-lock) |
+| [`scripts/`](scripts/README.md) | Ops: build/yayın/servis-kurulum/gateway-hotspot/teardown-uninstall |
+| [`PEMF_BUILD/`](PEMF_BUILD/README.md) | **ÜRETİLEN** — kanonik frozen-backend çıktısı (`dist/PEMF_Backend`, base.zip girdisi) |
+| `build/` · `dist/` | **ÜRETİLEN** — PyInstaller varsayılan-konum ikizleri (regenerable) |
+| [`pemf-app-packages/`](pemf-app-packages/README.md) | Güncelleme-sunucusu hazırlık: `base.zip` + `manifest.json` |
+| [`launcher/`](launcher/README.md) | **Tauri v2 ince istemci** ("PEMF Vet Client") — indirir/doğrular/backend'i başlatır, kendini günceller |
+| [`deploy/`](deploy/README.md) | `device.env` / `server.env` / `staging.env` dağıtım profilleri |
+| [`offline dağıtım/`](offline%20dağıtım/OKU-README.md) | İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
+| [`docker/`](docker/DOCKER_README.md) | Container'lar: backend/AI + frontend nginx + GPU AI (3 compose profili) |
+| [`bin/`](bin/README.md) | Gömülü ikililer: mosquitto (MQTT), cloudflared (tünel), nssm (servis) |
+| [`lattekurulum/`](lattekurulum/README.md) | LattePanda klinik mini-PC kurulum yardımcıları |
 
-### Doküman / Araştırma / Diğer
-| Klasör/Dosya | İçerik |
+### Firmware · Test · CI · Diğer
+| Klasör | Ne işe yarar |
 |---|---|
-| `docs/` | Dokümanlar + `version_info.txt` (EXE sürüm bilgisi). |
-| `DEPLOYMENT.md` | Dağıtım rehberi. |
-| `tübitak/` | Araştırma raporları/makaleleri (TÜBİTAK). Runtime ile ilgisi yok. |
-| `dema-terapi-simülatörü/`, `buildPEMF/` | Unity tabanlı simülatör (ayrı bileşen/kaynak+build). Backend ile ilgisi yok. |
-| `pemf_gui/` | Eski PyQt GUI kaynağının kalıntısı (ikonlar/resources). Headless'a geçildi; sadece ikon/versiyon için referans. |
-| `tests/` | Test dosyaları. *(Mobil/web dizinleri için yukarıdaki "Mobil / Web arayüzü" bölümüne bakın.)* |
-| `*.log`, `*.txt` (build_exe_*, backend_build*), `_p2boot.err`, `__MACOSX/` | Build/çalışma **logları** ve arşiv artığı — güvenle silinebilir (regenerable). |
-| `architecture_report.json`, `models_size.json`, `frontend_version.json`, `VERSION` | Meta/rapor dosyaları. |
+| [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
+| [`tests/`](tests/README.md) | pytest paketi (28 test; protokol-güvenlik, auth, KVKK, seans, OTA) |
+| [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
+| [`.github/`](.github/README.md) | CI (tests/lint/security/linux-mac backend/launcher/testflight) + dependabot |
+| [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
+| [`icon_master/`](icon_master/README.md) | Uygulama ikonu kaynak görselleri |
+| [`apple-mac-cert/`](apple-mac-cert/README.md) | ⚠️ Apple kod-imzalama/notarization materyali (SIR — gitignore+rotate gerekir) |
+| [`dema-terapi-simülatörü/`](dema-terapi-simülatörü/README.md) | Bağımsız demo terapi simülatörü (React+Vite; backend'e bağlı değil) |
 
 ---
 
-## 6) AI Modelleri — Nasıl Çözülür (Önemli)
+## Build & Dağıtım (özet)
 
-- **Kaynak:** `release_assets/ai_models/` (19 ONNX). EXE build'i bunları `_internal/ai_models/`'e **gömer**.
-- **Runtime çözümü:** `utils/model_downloader.download_model_sync()` şu kökleri sırayla arar:
-  `PEMF_AI_MODELS_DIR` → `C:\ProgramData\PEMF_GUI\ai_models` → AppData cache → `release_assets/ai_models` → **EXE bundle (`_internal/ai_models`)**.
-- **Hugging Face indirme YOK** — bulunamazsa hata verir, internetten indirmez. Bu yüzden modeller
-  ya EXE'ye gömülüdür ya da ProgramData'ya (installer) kopyalanır.
-- **Modeller (özet):** kedi yüz-ağrısı (FGS), segmentasyon, termal, retikülosit, hastalık; böbrek CT/RNA/CKD/histopatoloji; em_fantom/em_petri (EM alan); kedi sesi; **kedi organ 3B lokalizasyon (cat_organ)** — AI Pro otonom tedavi bunu kullanır (el-takibi kaldırıldı); em_kedi (bobin duty modeli).
+Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
+
+| Hedef | Komut | Çıktı |
+|---|---|---|
+| Backend (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\` |
+| base.zip (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` |
+| Launcher (installer) | `cd launcher\app; npx @tauri-apps/cli build` | `...\nsis\...setup.exe` |
+| Web frontend | `cd pf; npm run export:web` + mirror | `frontend\dist` |
+| Android APK | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
+
+- **Runtime taşınabilir:** frozen EXE / offline installer Python KURULU OLMADAN her makinede çalışır.
+- **Build taşınabilir değil ama otomatik:** `bootstrap.ps1` boş bir Windows'ta tüm araç zincirini kurar.
+- **Build Python'ı = gömülü** (klasör kökündeki `python.exe`; myenv + sistem Python **kaldırıldı**, gerekmez).
+- Dağıtım (device/server): [`deploy/README.md`](deploy/README.md).
+
+## Önemli Kurallar (yeni geliştirici — bunları bozma)
+
+- 🔒 **Cihaz güvenliği:** bobinler her kill/kaldırmadan **önce** E-stop'lanır (launcher + teardown). Süre-watchdog + keep-alive + firmware "Ölü Adam Devresi" katmanlı korumadır.
+- 🔒 **Backend Python-tarafı freq/duty/sıcaklık clamp'i YOK** (bilinçli) — firmware sınırda doyurur. Sınır sabitleri `utils/stm32_protocol_limits.py`.
+- 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
+- 🌐 **AI offline** — `utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
+- ✏️ Web/mobil UI'yi **`pf/`'te düzenle** — `frontend/src` bayat kopyadır.
+- 🚀 **Launcher AYRI yayınlanır** (base.zip/APK republish onu güncellemez).
 
 ---
+İlgili: [BUILD.md](BUILD.md) · [docs/ (doküman indeksi)](docs/README.md) · [ARCHITECTURE.md](docs/ARCHITECTURE.md) · [RUNBOOK.md](docs/RUNBOOK.md)
 
-## 7) Tipik Akış (Sıfırdan Deliverable)
+## Son değişiklikler — 2026-08-06
 
-```text
-1. Backend değişikliği yap  →  build_tools/PEMF_Backend_onedir.spec ile EXE al  →  dist/PEMF_Backend/
-   (self-contained onefile istenirse PEMF_Backend_onefile.spec)
-2. Mobil değişikliği yap    →  pf/android'de gradlew assembleRelease (universal)  →  app-release.apk
-                            →  dist/PEMF_Mobil_universal.apk olarak kopyala
-2b. WEB arayüzü de güncellenecekse (masaüstü kısayolu = localhost:8000):
-                            →  cd frontend && npx expo export --platform web  →  frontend/dist
-                            →  frontend/dist'i çalışan kuruluma kopyala: _internal/frontend/dist
-                               (nssm stop PemfBackend → robocopy /MIR → nssm start)  [EXE rebuild GEREKMEZ]
-3. Deploy: deploy_backend.cmd (yönetici) VEYA build_installer.ps1 ile installer üret
-4. Profil: device.env / server.env (klinik cihazı vs sunucu)
-5. Yedek: guii klasörünü zip'le — mobil kaynak `mobile/` içinde gerçek kopya olarak durur
-   (frontend/ junction'dır, yedeğe gerçek dosya olarak girmeyebilir).
-```
+| Alan | Değişiklik |
+|---|---|
+| **AI güvenliği** | Görüntü **modalite denetimi** (`utils/image_domain.py`) — yanlış türde görüntüye güvenle teşhis üretilmesi engellendi (CT → Patoloji "Grade 4 · %100" vakası). Petri için ayrıca **geometri makullik** katmanı (`ai_hub/inference_petri_dish/plausibility.py`). Kapatma: `PEMF_AI_DOMAIN_GUARD=0`. |
+| **Client girişi** | Client açılışta Supabase girişi + **Beni hatırla** (DPAPI). Oturum backend'e devredilir (`/api/auth/desktop-session` — yalnız 127.0.0.1, yalnız bellekte) → **uygulamada çift login yok**. Mobilde client olmadığı için mevcut akış aynı kalır. |
+| **Çevrimdışı açılış** | Manifest ve kimlik kapısı artık boot'u BLOKLAMIYOR — internetsiz klinikte client açılır, kurulu cihazda "Başlat" çalışır. Eskiden "Ortam algılanıyor…" ekranında kilitleniyordu. |
+| **Profiller** | Araştırma Modu'na Kontrol · Hastalar · Sensörler · Raporlar · Simülasyon eklendi; **üç profilde de** Ayarlar'dan sonra "Çıkış Yap" (bobin çalışırken teardown-guard'a bağlı). |
+| **MQTT** | `client_id` süreç/çağrı başına benzersiz — sabit kimlik, paralel yayın yapan acil-durdurmada STOP komutunu kaybettirebiliyordu. |
+| **Android imzalama** | **Release keystore üretildi** (4096-bit RSA, 2053'e kadar geçerli). APK artık release-imzalı. ⚠️ Anahtar yedeği ve uyarılar: [keys/README.md](keys/README.md) — kaybolursa uygulama bir daha güncellenemez. |
+| **Site** | İndirme öncesi kayıt/giriş kapısı. Windows client `launcher-v1.9.9`; Android **kendi etiketine** taşındı — eskiden mac/linux ile ortak etiket kullandığından site APK güncellense bile hep eski sürümü veriyordu. |
 
-**Dağıtım için gereken 3 şey `dist/` içindedir:** onedir EXE (veya onefile) + universal APK.
-```
+**Yayındaki sürümler:** Backend/App `1.9.5` · Launcher `1.9.9` · Mobil `2.3.3 (versionCode 10)`
+Sürüm tek kaynağı: `versions.json` → `build_tools/sync_versions.ps1`

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! ZIP açma — zip-slip korumalı.
 //!
 //! Paketler uzaktan iner; arşiv girdisinin adı `../../` içerirse naif bir açıcı
@@ -40,7 +41,7 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// açıldıktan sonra o ağacı yeniden doğrulayan hiçbir mekanizma yoktur. `installed_profiles.json`
 /// ve `backend.port` da aynı şekilde ezilebilir (E-stop adresi!).
 /// Katı bir `ai_models/` ÖNEK ZORUNLULUĞU meşru bir paketi kırabileceğinden, hedefli yasak-liste.
-const PROFILE_FORBIDDEN_TOP: [&str; 6] = [
+const PROFILE_FORBIDDEN_TOP: [&str; 7] = [
     "runtime",
     "cache",
     "installed_profiles.json",
@@ -51,6 +52,13 @@ const PROFILE_FORBIDDEN_TOP: [&str; 6] = [
     // "count":99}` yazarsa `selfupdate_auto_allowed` false döner ve launcher'ın SESSİZ
     // oto-güncellemesi o sürüm için KALICI durur (güvenlik yamaları da gelmez).
     "selfupdate_attempt.json",
+    // DENETİM 2026-08-06 (P3): "Beni hatırla" oturum blob'u (secret_store.rs) da kurulum KÖKÜNDE
+    // duruyor. Zehirli bir manifest'in gösterdiği profil zip'i kök seviyeye `auth_session.bin`
+    // koyarsa kullanıcının kayıtlı oturumunu EZER: DPAPI çözümü başarısız olur, `load` None döner
+    // ve kullanıcı hiçbir açıklama olmadan giriş ekranına düşer (çevrimdışı klinikte parolayı
+    // hatırlamıyorsa kurulu cihaz açılamaz). Jeton ÇALINAMAZ (blob dışarı gitmez), ama bu bir
+    // hizmet-engelidir; küme hooks.nsi'deki silme listesiyle EŞ tutulur.
+    "auth_session.bin",
 ];
 
 /// `archive` içeriğini `dest` altına açar. Girdi yolları `dest` dışına çıkamaz.
@@ -757,6 +765,10 @@ mod tests {
             "backend.port",
             "cache/base.zip",
             "pending_install.json",
+            "selfupdate_attempt.json",
+            // DENETİM 2026-08-06: "Beni hatırla" oturumu da kurulum kökünde → profil paketi
+            // kullanıcının kayıtlı oturumunu EZEMEZ (aksi halde sessiz "çıkış yaptırma").
+            "auth_session.bin",
         ] {
             let (_d, zip_path) = build_zip(&[(kotu, b"sahte" as &[u8])]);
             let out = tempfile::tempdir().unwrap();

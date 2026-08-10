@@ -191,3 +191,34 @@ offline dağıtım/
 pemf-app-packages/*.zip
 pemf-app-packages/*.bin
 pemf-app-packages/*.exe
+
+# Android release imzalama sirlari (2026-08-06) — ASLA depoya girmemeli
+keystore.properties
+*.jks
+*.keystore
+
+# Android imzalama anahtari YEDEGI (2026-08-06). guii tasinabilir olsun diye burada;
+# ASLA depoya/pakete girmemeli. Kaybolursa uygulama bir daha guncellenemez.
+keys/
+
+# Kaynak sifreleme parolasi (2026-08-06) — ASLA depoya girmemeli
+build_tools/_static_password.py
+*.pyenc
+
+# ── BUILD CIKTILARI ve AYRI DEPOLAR (2026-08-10) ───────────────────────────────────────────
+# PEMF_BUILD/: PyInstaller frozen agaci — 3,5 GB, her build'de yeniden uretilir. Kaynagi
+# `scripts/build_backend_exe.ps1`; depoda tutmanin hicbir degeri yok, klonu imkansizlastirir.
+PEMF_BUILD/
+
+# macOS base paketi (654 MB / sikistirilmis 261 MB) — GitHub Release varligi, depo degil.
+base-mac.zip
+base-mac.sha256.txt
+
+# pemf-vet-web/ KENDI GIT DEPOSUDUR (kendi .git'i + kendi Vercel projesi var). Ust depoya
+# eklemek ya bozuk bir gitlink ya da 200 MB'lik node_modules demek olurdu; iki depo AYRI
+# yonetilir ve AYRI yayinlanir (site: `npx vercel --prod`).
+pemf-vet-web/
+
+# NSIS BOM deneme kalintilari (tek seferlik hata ayiklama)
+*_bom.nsi
+ppo_bom.txt

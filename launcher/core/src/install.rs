@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! Kurulum düzeni + backend'e verilecek ortam değişkenleri.
 //!
 //! GERİYE UYUM: buradaki yollar `utils/path_utils.py::get_app_data_directory()`
@@ -41,6 +42,190 @@ pub const ENV_REQUIRE_AUTH: &str = "PEMF_REQUIRE_AUTH";
 /// Backend bu değeri `/api/health` yanıtında YALNIZ loopback'e yansıtır (bkz. system_router).
 pub const ENV_HEALTH_NONCE: &str = "PEMF_HEALTH_NONCE";
 
+/// AT-REST ŞİFRELEME (SQLCipher) — hasta verisi diske ŞİFRELİ yazılsın.
+///
+/// ⚠️ 2026-08-08 DENETİM BULGUSU: bu değişken `backend_env()`'de YOKTU. Servis kurulumu
+/// (`scripts/setup_services.ps1`) onu geçiriyordu ama LAUNCHER yolu — yani siteden indirip kuran
+/// HER klinik — geçirmiyordu. Ölçüldü (frozen backend, izole veri dizini):
+///     bayraksız → `atRestEncrypted=False`   |   `PEMF_ENCRYPT_AT_REST=1` → `atRestEncrypted=True`
+/// Yani sahadaki klinikler hasta verisini DÜZ METİN yazıyordu. PII maskeleme de sahip kararıyla
+/// varsayılan kapalı olduğundan gerçek hasta adları diskteydi. Üstelik site üç yerde
+/// "klinik verisi cihazda şifreli (SQLCipher)" diye BEYAN ediyor (config.ts + Legal.tsx).
+///
+/// GÜVENLİ Mİ: evet, ÖLÇÜLDÜ. sqlcipher3 frozen EXE'ye bundle'lı ve çalışıyor; mevcut DÜZ-METİN
+/// veritabanı açılışta otomatik göçüyor (`_migrate_to_encrypted_if_needed`) ve veri KORUNUYOR
+/// (gerçek artefaktla uçtan uca doğrulandı: bayraksız yazılan kayıt, bayrak açılınca okunabildi).
+///
+/// ⚠️ Backend bu bayrak açıkken SQLCipher'ı sağlayamazsa BİLEREK hard-fail eder (düz-metin PII
+/// yazmaktansa DB'yi açmaz). Bu yüzden bayrağı kaldırmak "güvenli tarafa düşmek" DEĞİLDİR —
+/// sessizce şifresiz çalışmaya döner. KALDIRMAYIN.
+pub const ENV_ENCRYPT_AT_REST: &str = "PEMF_ENCRYPT_AT_REST";
+
+/// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
+///
+/// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
+/// yani hasta/seans/AI verisi WINDOWS KULLANICISINA ÖZELdi. Vardiyalı bir klinikte ikinci
+/// hesapla açan veteriner "BOŞ KLİNİK" görüyor: hasta listesi yok, geçmiş yok, AI kaydı yok.
+/// Kullanıcı açısından bu VERİ KAYBINDAN ayırt edilemez. (Kurulum kökü de kullanıcı-başına
+/// olduğundan ikinci hesap ayrıca 1,3 GB'ı yeniden indiriyor — bu ayrı bir mesele.)
+///
+/// Servis-tabanlı (Inno) dağıtım bunu ZATEN doğru yapıyordu: `device.env`/`server.env`
+/// `PEMF_DATA_DIR=C:\ProgramData\PEMF_System` veriyor. Launcher yolu geride kalmıştı; AYNI
+/// yolu kullanıyoruz ki iki dağıtım aynı veriyi görsün.
+/// (Sabit `ENV_DATA_DIR` yukarıda tanımlı.)
+///
+/// Makine-geneli veri kökü adayı (Windows: `%PROGRAMDATA%\PEMF_System`).
+pub fn machine_data_dir<F>(getenv: F) -> Option<PathBuf>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if !cfg!(target_os = "windows") {
+        // Windows dışında makine-geneli yazılabilir bir yol yönetici ister; kullanıcı-başına
+        // kal (bugünkü davranış). Bu platformlarda çoklu-hesap klinik senaryosu da yok.
+        return None;
+    }
+    let pd = getenv("PROGRAMDATA").filter(|v| !v.is_empty())?;
+    Some(PathBuf::from(pd).join("PEMF_System"))
+}
+
+/// Dizin GERÇEKTEN yazılabilir mi? (yarat + sonda dosyası yaz + sil)
+///
+/// ⚠️ Bu kontrol ŞART. `C:\ProgramData` altında bir klasörü A kullanıcısı yaratırsa varsayılan
+/// ACL'de B kullanıcısı YAZAMAZ. Yazamayan bir yolu `PEMF_DATA_DIR` olarak vermek, backend'in
+/// tıbbi kayıt DB'sini açamamasına ve (2026-08-09 kapısı gereği) SEANS BAŞLATAMAMASINA yol
+/// açardı — yani bu düzeltme, düzeltmeye çalıştığı şeyden daha ağır bir arıza üretirdi.
+pub fn dizin_yazilabilir_mi(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    // ⚠️ SONDA ADI BENZERSİZ OLMALI. Sabit adla iki eşzamanlı yoklama aynı dosyayı paylaşır:
+    // biri yazarken diğeri siler → yanlış "yazılamıyor" sonucu. Bu, `PEMF_DATA_DIR`in sessizce
+    // verilmemesine ve kliniğin ikinci kullanıcıda yine "boş klinik" görmesine yol açardı.
+    // (Testlerin paralel koşusunda GERÇEKTEN yaşandı; üretimde de iki süreç aynı anda yoklayabilir.)
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SAYAC: AtomicU64 = AtomicU64::new(0);
+    let sonda = dir.join(format!(
+        ".pemf_yazma_denemesi_{}_{}",
+        std::process::id(),
+        SAYAC.fetch_add(1, Ordering::Relaxed)
+    ));
+    let ok = std::fs::write(&sonda, b"x").is_ok();
+    let _ = std::fs::remove_file(&sonda);
+    ok
+}
+
+/// Yeni yaratılan makine-geneli klasöre "Kullanıcılar: Değiştir" ACL'i ver.
+///
+/// Klasörü YARATAN kullanıcı sahibidir ve sahip, yönetici olmasa da DACL'i değiştirebilir →
+/// UAC gerekmez. Bu olmadan ikinci Windows hesabı klasörü okuyabilir ama YAZAMAZ.
+/// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
+#[cfg(windows)]
+fn acl_ver(dir: &Path) {
+    let _ = std::process::Command::new("icacls")
+        .arg(dir)
+        .args(["/grant", "*S-1-5-32-545:(OI)(CI)M", "/T", "/C", "/Q"])
+        .output();
+}
+
+#[cfg(not(windows))]
+fn acl_ver(_dir: &Path) {}
+
+/// Backend'e verilecek veri kökü: makine-geneli YAZILABİLİRSE onu, değilse `None`
+/// (kullanıcı-başına eski davranışa düş — kurulumu kırmaktansa bugünkü hâlde kal).
+pub fn cozulmus_veri_dizini<F>(getenv: F) -> Option<PathBuf>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let dir = machine_data_dir(getenv)?;
+    let yeni = !dir.exists();
+    if !dizin_yazilabilir_mi(&dir) {
+        return None;
+    }
+    if yeni {
+        acl_ver(&dir);
+        // ACL sonrası tekrar doğrula — icacls başarısızsa yol yine de kullanılabilir olmalı.
+        if !dizin_yazilabilir_mi(&dir) {
+            return None;
+        }
+    }
+    Some(dir)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// OFF-SITE YEDEK HEDEFİ (2026-08-09 denetimi, Tier 1)
+//
+// ARIZA: yedekler `<veri-dizini>/backups` altına, yani HASTA VERİSİYLE AYNI DİSKE alınıyordu.
+// Disk/anakart arızasında ya da fidye yazılımında veri VE yedek birlikte gider — yedek sistemi
+// yalnız mantıksal bozulmaya karşı koruyordu, fiziksel kayba karşı HİÇ.
+//
+// Backend `PEMF_BACKUP_DIR` desteğini ZATEN taşıyordu (`_copy_offsite`) ama hiçbir yerde
+// ayarlanmıyordu → özellik sahada hiç çalışmadı. Launcher artık operatörün seçtiği hedefi
+// saklıyor ve backend'e geçiriyor.
+//
+// ⚠️ AYNI BİRİM KABUL EDİLMEZ: hedefi C: üzerinde seçmek, düzeltmenin amacını tamamen ortadan
+// kaldırır ve operatöre yanlış güvence verir. Kontrol `yedek_hedefi_gecerli_mi`de.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+/// Backend'e verilen off-site yedek hedefi (bkz. services/headless_db_maintenance._copy_offsite).
+pub const ENV_BACKUP_DIR: &str = "PEMF_BACKUP_DIR";
+
+/// Operatörün seçtiği hedefin saklandığı dosya.
+pub fn backup_dir_kaydi(install_root: &Path) -> PathBuf {
+    install_root.join("backup_dir.txt")
+}
+
+/// Kayıtlı hedefi oku (yoksa/boşsa None).
+pub fn backup_dir_oku(install_root: &Path) -> Option<PathBuf> {
+    let s = std::fs::read_to_string(backup_dir_kaydi(install_root)).ok()?;
+    let t = s.trim();
+    (!t.is_empty()).then(|| PathBuf::from(t))
+}
+
+/// Hedefi kaydet ("" → kaydı sil).
+pub fn backup_dir_yaz(install_root: &Path, dir: &str) -> std::io::Result<()> {
+    let yol = backup_dir_kaydi(install_root);
+    if dir.trim().is_empty() {
+        let _ = std::fs::remove_file(&yol);
+        return Ok(());
+    }
+    std::fs::create_dir_all(install_root)?;
+    std::fs::write(yol, dir.trim())
+}
+
+/// İki yol AYNI birimde mi? (Windows: sürücü harfi; diğer: bilinemez → `None`)
+pub fn ayni_birim(a: &Path, b: &Path) -> Option<bool> {
+    if !cfg!(target_os = "windows") {
+        return None;
+    }
+    let harf = |p: &Path| -> Option<char> {
+        p.to_string_lossy().chars().next().map(|c| c.to_ascii_uppercase())
+    };
+    Some(harf(a)? == harf(b)?)
+}
+
+/// Seçilen hedef off-site yedek için uygun mu? `Ok(())` ya da kullanıcıya gösterilecek sebep.
+pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path) -> Result<(), String> {
+    if !dizin_yazilabilir_mi(hedef) {
+        return Err("Bu klasöre yazılamıyor. Sürücü takılı ve yazılabilir olmalı.".to_string());
+    }
+    if ayni_birim(hedef, veri_dizini) == Some(true) {
+        return Err("Yedek hedefi hasta verisiyle AYNI sürücüde. Disk arızasında ikisi de \
+                    kaybolur — harici bir disk ya da ağ paylaşımı seçin."
+            .to_string());
+    }
+    Ok(())
+}
+
+/// FİLO ENVANTERİ (2026-08-09 denetimi, Tier 2) — geri çağırma yapılabilsin diye.
+///
+/// ⚠️ Bir bobin-güvenliği hatası bulunduğunda "hangi klinik hangi sürümde?" sorusunun cevabı
+/// YOKTU. Cihaz kaydı 60 sn'de bir heartbeat gönderiyor ama içinde SÜRÜM BİLGİSİ hiç yok;
+/// `rollout: 0` yalnız YENİ kurulumları durdurur, sahadaki mevcut cihazlara dokunmaz.
+/// Backend bu değişkenleri bulut kaydına yazar (bkz. servers/sync_worker.py).
+pub const ENV_LAUNCHER_VERSION: &str = "PEMF_LAUNCHER_VERSION";
+/// Kurulu app katmanının sha'sı — hangi build'in sahada olduğunu KESİN belirler.
+pub const ENV_BASE_SHA: &str = "PEMF_BASE_SHA";
+
 /// Varsayılan backend portu (`backend_service.py` ile aynı).
 pub const DEFAULT_PORT: u16 = 8000;
 
@@ -53,6 +238,31 @@ pub fn models_dir(install_root: &Path) -> PathBuf {
 /// Base runtime paketinin açıldığı yer (`PEMF_Backend/` bu dizinin altına açılır).
 pub fn runtime_dir(install_root: &Path) -> PathBuf {
     install_root.join("runtime")
+}
+
+// ── ATOMİK KURULUM DİZİNLERİ (2026-08-08) ─────────────────────────────────────────────────────
+// Eskiden güncelleme `runtime/`'ı SİLİP yerine açıyordu: açma yarıda kalırsa (elektrik, disk
+// dolu, iptal) klinikte HİÇ runtime kalmıyordu ve 1,2 GB baştan inmesi gerekiyordu. Ayrıca yeni
+// sürüm açılıyor ama ÇALIŞMIYORSA geri dönüş yolu yoktu.
+// Yeni akış: `runtime.new`'e kur → takas → backend'i başlat (sağlık kapısı) → başarılıysa
+// `runtime.old` sil, başarısızsa geri al.
+
+/// Yeni sürümün hazırlandığı yer (takas edilene kadar çalışan kuruluma DOKUNULMAZ).
+pub fn runtime_new_dir(install_root: &Path) -> PathBuf {
+    install_root.join("runtime.new")
+}
+
+/// Takas sonrası eski sürüm burada bekler — sağlık kapısı geçilince silinir, geçilmezse geri konur.
+pub fn runtime_old_dir(install_root: &Path) -> PathBuf {
+    install_root.join("runtime.old")
+}
+
+/// Yalnız APP katmanı güncellenirken eski app dosyalarının taşındığı yer.
+///
+/// NEDEN tam kopya değil: app katmanı ~71 MB / 155 dosya; taşıma (rename) aynı birimde metadata
+/// işlemidir, 1,2 GB'lık ağacı kopyalamak ise dakikalar sürerdi. Başarısızlıkta buradan geri alınır.
+pub fn app_backup_dir(install_root: &Path) -> PathBuf {
+    runtime_dir(install_root).join("_app_yedek")
 }
 
 /// Backend çalıştırılabilirinin tam yolu.
@@ -109,10 +319,54 @@ pub fn backend_env(install_root: &Path, port: u16, health_nonce: &str) -> BTreeM
     env.insert(ENV_API_PORT.to_string(), port.to_string());
     // Güvenli varsayılan (bkz. ENV_REQUIRE_AUTH): uzak/tünel erişimi token ister; LAN muaf kalır.
     env.insert(ENV_REQUIRE_AUTH.to_string(), "1".to_string());
+    // KVKK (bkz. ENV_ENCRYPT_AT_REST): hasta verisi diske ŞİFRELİ yazılır. Bu satır olmadan
+    // launcher ile kurulan klinikler düz-metin yazıyordu.
+    env.insert(ENV_ENCRYPT_AT_REST.to_string(), "1".to_string());
+    // TIBBİ VERİ KÖKÜ (bkz. ENV_DATA_DIR): makine-geneli yazılabilirse oraya. Bu satır olmadan
+    // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
+    if let Some(d) = cozulmus_veri_dizini(|k| std::env::var(k).ok()) {
+        env.insert(ENV_DATA_DIR.to_string(), d.to_string_lossy().into_owned());
+    }
+    // OFF-SITE YEDEK (bkz. ENV_BACKUP_DIR): operatör bir hedef seçtiyse geçir. Hedef o an
+    // erişilemiyorsa (USB çıkarılmış) DEĞİŞKEN VERİLMEZ — backend'in her turda hataya düşüp
+    // günlüğü doldurmasındansa yedek sessizce yerelde kalsın; UI eksikliği zaten bildiriyor.
+    if let Some(b) = backup_dir_oku(install_root) {
+        if dizin_yazilabilir_mi(&b) {
+            env.insert(ENV_BACKUP_DIR.to_string(), b.to_string_lossy().into_owned());
+        }
+    }
+    // FİLO ENVANTERİ (bkz. ENV_LAUNCHER_VERSION): backend bunları bulut cihaz kaydına yazar →
+    // geri çağırma gerektiğinde hangi kliniğin hangi sürümde olduğu BİLİNİR.
+    env.insert(ENV_LAUNCHER_VERSION.to_string(), env!("CARGO_PKG_VERSION").to_string());
+    let paketler = read_installed_packages(install_root);
+    // Katmanlı kurulumda `app` bizim kodumuzdur (her sürümde değişir); katmansızda `base`.
+    let sha = if paketler.app.is_empty() { paketler.base } else { paketler.app };
+    if !sha.is_empty() {
+        env.insert(ENV_BASE_SHA.to_string(), sha);
+    }
     if !health_nonce.is_empty() {
         env.insert(ENV_HEALTH_NONCE.to_string(), health_nonce.to_string());
     }
     env
+}
+
+/// Kurulu backend'in sürümü (`runtime/PEMF_Backend/_internal/VERSION`).
+///
+/// GERİ ÇAĞIRMA için gerekli (bkz. `Manifest::min_supported_version`): "bu cihaz destek dışı
+/// bir sürümde mi?" sorusunun cevabı. Dosya yoksa (çok eski base.zip) `"0.0.0"` döner — yani
+/// ESKİ sayılır ve zorunlu güncellemeye girer. Bu bilinçli bir fail-safe: sürümünü söyleyemeyen
+/// bir kurulum, geri çağırma kapsamının DIŞINDA kalmamalıdır.
+pub fn kurulu_surum(install_root: &Path) -> String {
+    std::fs::read_to_string(
+        runtime_dir(install_root)
+            .join("PEMF_Backend")
+            .join("_internal")
+            .join("VERSION"),
+    )
+    .ok()
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty())
+    .unwrap_or_else(|| "0.0.0".to_string())
 }
 
 /// Kurulu backend `PEMF_HEALTH_NONCE`'u yansıtabiliyor mu?
@@ -223,6 +477,147 @@ pub fn read_installed_profiles(install_root: &Path) -> Vec<String> {
         .ok()
         .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
         .unwrap_or_default()
+}
+
+// ─────────────────────────── KURULU PAKET KAYDI (runtime oto-güncelleme) ───────────────────────
+//
+// SAHİP KARARI 2026-08-08: "Onar'a basmadan, client'ı kapatıp açınca backend dâhil TÜM
+// güncellemeler gelmeli; siteye deploy etmem yetmeli." Bunun için launcher'ın "DİSKTEKİ paket
+// hangi sürüm?" sorusuna cevap verebilmesi gerekir — eskiden bu bilgi HİÇ tutulmuyordu
+// (`installed_profiles.json` yalnız profil ADLARINI biliyordu), bu yüzden manifest ile
+// karşılaştırma yapılamıyor ve güncelleme kullanıcının "Onar" demesine bağlı kalıyordu.
+//
+// Kayıt install_root içinde durur → "Uygulamayı kaldır" ile birlikte gider (durum sıfırlanır).
+
+/// Kurulu paketlerin sha256 kaydı (base + her profil modeli).
+pub fn installed_packages_path(install_root: &Path) -> PathBuf {
+    install_root.join("installed_packages.json")
+}
+
+/// Diskteki paketlerin kimliği. Boş alan = BİLİNMİYOR (kayıt öncesi kurulum).
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct InstalledPackages {
+    /// Tek parça base.zip kimliği (eski yol / katmansız manifest).
+    #[serde(default)]
+    pub base: String,
+    /// Katmanlı kurulumda bağımlılık katmanı (2026-08-08).
+    #[serde(default)]
+    pub deps: String,
+    /// Katmanlı kurulumda uygulama katmanı (bizim kod) — her sürümde değişir.
+    #[serde(default)]
+    pub app: String,
+    #[serde(default)]
+    pub models: BTreeMap<String, String>,
+}
+
+/// KURULUM KİMLİĞİ — kademeli yayın diliminin KARARLI kaynağı.
+///
+/// İlk çağrıda üretilip diske yazılır, sonra hep aynı kalır. Rastgele bir sayı her açılışta
+/// yeniden üretilseydi cihaz dilimler arasında zıplar ve "önce %10'a aç, izle" diye bir şey
+/// mümkün olmazdı (her açılışta farklı cihazlar girip çıkardı).
+pub fn kurulum_kimligi(install_root: &Path) -> String {
+    let p = install_root.join("install_id.txt");
+    if let Ok(s) = std::fs::read_to_string(&p) {
+        let s = s.trim().to_string();
+        if !s.is_empty() {
+            return s;
+        }
+    }
+    // Kriptografik olması gerekmiyor: amaç kimlik değil, dengeli dağılım.
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let id = format!("{t:032x}");
+    let _ = std::fs::create_dir_all(install_root);
+    let _ = std::fs::write(&p, &id);
+    id
+}
+
+/// Cihazın kademeli yayın dilimi (0-99). Kurulum kimliğinden türetilir → kararlı.
+pub fn rollout_dilimi(install_root: &Path) -> u8 {
+    let id = kurulum_kimligi(install_root);
+    // FNV-1a: küçük, bağımlılıksız, bu amaç için yeterince dengeli.
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in id.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    (h % 100) as u8
+}
+
+pub fn record_layer_sha(install_root: &Path, katman: &str, sha: &str) {
+    let mut p = read_installed_packages(install_root);
+    match katman {
+        "deps" => p.deps = sha.to_ascii_lowercase(),
+        "app" => p.app = sha.to_ascii_lowercase(),
+        _ => return,
+    }
+    write_installed_packages(install_root, &p);
+}
+
+/// APP KATMANININ SINIRI — app paketi kendi köklerini `_app_roots.json` içinde taşır.
+///
+/// NEDEN dosyadan okunuyor (launcher'a gömülü sabit liste DEĞİL): app güncellenirken ESKİ sürümün
+/// dosyaları silinmeli, yoksa yeni sürümde KALDIRILAN dosyalar (eski `.pyd`, eski web bundle
+/// parçaları) diskte yaşar — PyInstaller ağacında bayat bir uzantı, sürüm numarasına bakan hiçbir
+/// teşhisle görünmeyen tanımsız davranış üretir. Sınır pakette taşınırsa, ileride sınır değişse
+/// bile launcher'ı elle güncellemek gerekmez.
+pub fn app_roots_path(install_root: &Path) -> PathBuf {
+    runtime_dir(install_root).join("PEMF_Backend").join("_app_roots.json")
+}
+
+/// Diskteki app katmanının kökleri. Dosya yoksa/bozuksa BOŞ döner — çağıran o zaman silme yapmaz
+/// (üzerine-yazma moduna düşer): bilinmeyen bir sınırla dosya silmek, bayat dosya bırakmaktan
+/// çok daha tehlikelidir.
+pub fn read_app_roots(install_root: &Path) -> Vec<String> {
+    #[derive(serde::Deserialize)]
+    struct R {
+        #[serde(default)]
+        roots: Vec<String>,
+    }
+    std::fs::read_to_string(app_roots_path(install_root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<R>(&s).ok())
+        .map(|r| r.roots)
+        .unwrap_or_default()
+        .into_iter()
+        // Yol-kaçışı olan bir kök `runtime/` DIŞINDA silme yapabilirdi; paket bizim ürettiğimiz
+        // olsa da bu dosya diskten okunuyor → kaçış içeren girdileri AT.
+        .filter(|r| !r.contains("..") && !r.starts_with('/') && !r.contains(':') && !r.contains('\\'))
+        .collect()
+}
+
+/// Kurulu paket kaydını oku. Dosya yok/bozuksa BOŞ döner — bu "bilinmiyor" demektir,
+/// "güncel" değil (bkz. `flow::pending_updates`: bilinmeyen base = güncellenmeli).
+pub fn read_installed_packages(install_root: &Path) -> InstalledPackages {
+    std::fs::read_to_string(installed_packages_path(install_root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<InstalledPackages>(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_installed_packages(install_root: &Path, p: &InstalledPackages) {
+    if let Ok(json) = serde_json::to_string_pretty(p) {
+        let _ = std::fs::write(installed_packages_path(install_root), json);
+    }
+}
+
+/// base.zip başarıyla AÇILDIKTAN sonra çağrılır.
+///
+/// ⚠️ SIRA ÖNEMLİ: kaydı yalnız açma bittikten sonra yaz. Önce yazılırsa, yarıda kesilen bir
+/// açılım "bu sürüm kurulu" diye işaretlenir ve bir daha ASLA onarılmaz.
+pub fn record_base_sha(install_root: &Path, sha: &str) {
+    let mut p = read_installed_packages(install_root);
+    p.base = sha.to_ascii_lowercase();
+    write_installed_packages(install_root, &p);
+}
+
+/// Profil model paketi açıldıktan sonra çağrılır (aynı sıra kuralı).
+pub fn record_model_sha(install_root: &Path, profile: &str, sha: &str) {
+    let mut p = read_installed_packages(install_root);
+    p.models.insert(profile.to_string(), sha.to_ascii_lowercase());
+    write_installed_packages(install_root, &p);
 }
 
 /// Aynı hedef sürüm için izin verilen OTOMATİK self-update denemesi sayısı.
@@ -453,6 +848,131 @@ mod tests {
         }
     }
 
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // MAKİNE-GENELİ VERİ KÖKÜ (2026-08-09 denetimi, Tier 1)
+    //
+    // ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyor, yani
+    // hasta/seans/AI verisi WINDOWS KULLANICISINA ÖZEL oluyordu. Vardiyalı klinikte ikinci
+    // hesapla açan veteriner "BOŞ KLİNİK" görüyor — kullanıcı açısından VERİ KAYBINDAN ayırt
+    // edilemez. Servis-tabanlı dağıtım bunu zaten doğru yapıyordu (device.env).
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn makine_veri_dizini_ProgramData_altinda() {
+        let got = machine_data_dir(env_from(&[("PROGRAMDATA", r"C:\ProgramData")]));
+        if cfg!(target_os = "windows") {
+            assert_eq!(got.unwrap(), PathBuf::from(r"C:\ProgramData").join("PEMF_System"));
+        } else {
+            assert!(got.is_none(), "windows disinda makine-geneli kok kullanilmamali");
+        }
+    }
+
+    #[test]
+    fn PROGRAMDATA_yoksa_None() {
+        assert!(machine_data_dir(env_from(&[])).is_none());
+    }
+
+    #[test]
+    fn yazilabilirlik_gercekten_olculur() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(dizin_yazilabilir_mi(&d.path().join("yeni")), "yazilabilir dizin reddedildi");
+        // Sonda dosyası ARDINDA BIRAKILMAMALI (klinik klasöründe çöp).
+        // Sonda adı benzersizdir (eşzamanlılık) → dizinde HİÇ kalıntı kalmamalı.
+        let kalinti: Vec<_> = std::fs::read_dir(d.path().join("yeni")).unwrap().flatten().collect();
+        assert!(kalinti.is_empty(), "sonda dosyasi ardinda birakildi: {kalinti:?}");
+    }
+
+    /// ⚠️ EN KRİTİK KAPI: yazılamayan bir yolu `PEMF_DATA_DIR` olarak vermek, backend'in tıbbi
+    /// kayıt DB'sini açamamasına ve (2026-08-09 kapısı gereği) SEANS BAŞLATAMAMASINA yol açar —
+    /// yani bu düzeltme, düzelttiği şeyden ağır bir arıza üretirdi.
+    #[test]
+    fn yazilamayan_yol_icin_None_doner() {
+        // Var olmayan bir sürücü/geçersiz kök → create_dir_all da write da başarısız.
+        let gecersiz = if cfg!(target_os = "windows") { r"\?\Q:\yok" } else { "/proc/olmaz/pemf" };
+        assert!(!dizin_yazilabilir_mi(Path::new(gecersiz)));
+        assert!(cozulmus_veri_dizini(env_from(&[("PROGRAMDATA", gecersiz)])).is_none(),
+            "yazilamayan yol PEMF_DATA_DIR olarak verildi — backend DB'yi acamaz, seans BASLAMAZ");
+    }
+
+    #[test]
+    fn backend_env_veri_kokunu_TASIR() {
+        let env = backend_env(Path::new("/opt/pemf"), 8000, "");
+        if cfg!(target_os = "windows") && std::env::var("PROGRAMDATA").is_ok() {
+            // Gerçek makinede ProgramData yazılabilir → değişken verilmiş OLMALI.
+            assert!(env.contains_key(ENV_DATA_DIR),
+                "PEMF_DATA_DIR verilmedi — ikinci Windows hesabi BOS KLINIK gorur");
+            assert!(env[ENV_DATA_DIR].contains("PEMF_System"));
+        }
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // OFF-SITE YEDEK HEDEFİ (2026-08-09 denetimi, Tier 1)
+    //
+    // ARIZA: yedekler hasta verisiyle AYNI DİSKE alınıyordu → disk arızası/fidye yazılımında
+    // veri VE yedek birlikte gidiyordu. Backend `PEMF_BACKUP_DIR` desteğini zaten taşıyordu
+    // ama hiçbir yerde ayarlanmadığı için özellik sahada HİÇ çalışmadı.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn yedek_hedefi_kaydedilir_ve_okunur() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(backup_dir_oku(d.path()).is_none(), "hedef yokken Some dondu");
+        backup_dir_yaz(d.path(), r"E:\PEMF_Yedek").unwrap();
+        assert_eq!(backup_dir_oku(d.path()).unwrap(), PathBuf::from(r"E:\PEMF_Yedek"));
+        backup_dir_yaz(d.path(), "").unwrap();
+        assert!(backup_dir_oku(d.path()).is_none(), "bos deger kaydi silmedi");
+    }
+
+    /// ⚠️ EN ÖNEMLİ KURAL: hedef veriyle aynı sürücüdeyse düzeltmenin AMACI ortadan kalkar ve
+    /// operatör "off-site yedeğim var" sanır. Yanlış güvence, korumasızlıktan tehlikelidir.
+    #[test]
+    fn KRITIK_ayni_surucu_REDDEDILIR() {
+        if !cfg!(target_os = "windows") { return; }
+        let d = tempfile::tempdir().unwrap();
+        let veri = d.path();
+        let r = yedek_hedefi_gecerli_mi(veri, veri);
+        assert!(r.is_err(), "ayni surucudeki hedef kabul edildi");
+        assert!(r.unwrap_err().contains("AYNI"), "sebep kullaniciya anlasilir degil");
+    }
+
+    #[test]
+    fn yazilamayan_hedef_REDDEDILIR() {
+        let gecersiz = if cfg!(target_os = "windows") { r"\?\Q:\yok" } else { "/proc/olmaz" };
+        assert!(yedek_hedefi_gecerli_mi(Path::new(gecersiz), Path::new("/tmp")).is_err());
+    }
+
+    #[test]
+    fn ayni_birim_surucu_harfine_bakar() {
+        if !cfg!(target_os = "windows") {
+            assert_eq!(ayni_birim(Path::new("/a"), Path::new("/b")), None);
+            return;
+        }
+        assert_eq!(ayni_birim(Path::new(r"C:\x"), Path::new(r"c:\y")), Some(true));
+        assert_eq!(ayni_birim(Path::new(r"C:\x"), Path::new(r"E:\y")), Some(false));
+    }
+
+    #[test]
+    fn backend_env_yedek_hedefini_TASIR() {
+        let d = tempfile::tempdir().unwrap();
+        let hedef = d.path().join("yedek");
+        std::fs::create_dir_all(&hedef).unwrap();
+        backup_dir_yaz(d.path(), &hedef.to_string_lossy()).unwrap();
+        let env = backend_env(d.path(), 8000, "");
+        assert_eq!(Path::new(&env[ENV_BACKUP_DIR]), hedef,
+            "yedek hedefi backend'e gecirilmedi — off-site kopya HIC alinmaz");
+    }
+
+    /// USB çıkarılmışsa değişken VERİLMEZ: backend her turda hataya düşüp günlüğü doldurmasın.
+    #[test]
+    fn erisilemez_hedef_backend_enve_GIRMEZ() {
+        let d = tempfile::tempdir().unwrap();
+        backup_dir_yaz(d.path(), r"\?\Q:\cikarilmis-usb").unwrap();
+        let env = backend_env(d.path(), 8000, "");
+        assert!(!env.contains_key(ENV_BACKUP_DIR), "erisilemez hedef env'e girdi");
+    }
+
     #[test]
     fn backend_env_model_kokunu_ve_portu_verir() {
         let env = backend_env(Path::new("/opt/pemf"), 8123, "");
@@ -469,6 +989,67 @@ mod tests {
     fn backend_env_auth_zorunlulugunu_acik_verir() {
         let env = backend_env(Path::new("/opt/pemf"), 8123, "");
         assert_eq!(env[ENV_REQUIRE_AUTH], "1");
+    }
+
+    /// ⚠️ KVKK SÖZLEŞMESİ (2026-08-08 denetim bulgusu) — BU TESTİ SİLMEYİN.
+    ///
+    /// `PEMF_ENCRYPT_AT_REST` bu haritada YOKTU. Servis kurulumu (`setup_services.ps1`) onu
+    /// geçiriyordu, launcher geçirmiyordu → siteden indirip kuran HER klinik hasta verisini
+    /// DÜZ METİN yazıyordu. Ölçüldü: bayraksız `atRestEncrypted=False`, bayrakla `True`.
+    /// Site ise üç yerde "cihazda şifreli (SQLCipher)" diye beyan ediyor.
+    ///
+    /// Bu ayar bir daha SESSİZCE kaybolmasın: eksikliği testi düşürür.
+    #[test]
+    fn backend_env_at_rest_sifrelemeyi_ZORUNLU_kilar() {
+        let env = backend_env(Path::new("/opt/pemf"), 8123, "");
+        assert_eq!(
+            env.get(ENV_ENCRYPT_AT_REST).map(String::as_str),
+            Some("1"),
+            "at-rest şifreleme kapalı → hasta PII'si diske DÜZ METİN yazılır (KVKK) ve \
+             sitedeki 'cihazda şifreli' beyanı yanlış olur"
+        );
+    }
+
+    /// Backend'e giden değişken kümesi BİLİNÇLİ olmalı: yeni bir değişken sessizce eklenirse
+    /// (ya da biri düşerse) bu test düşer ve karar gözden geçirilir.
+    #[test]
+    fn backend_env_kumesi_bilincli_kalir() {
+        let env = backend_env(Path::new("/opt/pemf"), 8123, "nonce123");
+        let mut anahtarlar: Vec<&str> = env.keys().map(String::as_str).collect();
+        anahtarlar.sort();
+        // ⚠️ `ENV_DATA_DIR` KOŞULLUDUR: yalnız makine-geneli kök YAZILABİLİRSE eklenir (Windows'ta
+        // ProgramData; başka platformda ya da yazılamıyorsa hiç eklenmez — bkz. cozulmus_veri_dizini).
+        // Bu yüzden beklenen küme çalışma ortamına göre değişir; koşulu AÇIKÇA modelliyoruz ki
+        // "bilinçli küme" kapısı hem Windows'ta hem CI'nın Linux koşusunda anlamlı kalsın.
+        let mut beklenen = vec![
+            ENV_MODELS_DIR,
+            ENV_API_PORT,
+            ENV_ENCRYPT_AT_REST,
+            ENV_HEALTH_NONCE,
+            ENV_REQUIRE_AUTH,
+            // FİLO ENVANTERİ (2026-08-09, Tier 2): backend bunları bulut cihaz kaydına yazar.
+            // Bir bobin-güvenliği hatası bulunduğunda "hangi klinik hangi sürümde?" sorusunun
+            // cevabı yoktu; `rollout: 0` yalnız YENİ kurulumları durdurur. KOŞULSUZ eklenir.
+            ENV_LAUNCHER_VERSION,
+        ];
+        // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
+        if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()
+            || !read_installed_packages(Path::new("/opt/pemf")).base.is_empty()
+        {
+            beklenen.push(ENV_BASE_SHA);
+        }
+        if cozulmus_veri_dizini(|k| std::env::var(k).ok()).is_some() {
+            beklenen.push(ENV_DATA_DIR);
+        }
+        assert_eq!(
+            anahtarlar,
+            beklenen
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>(),
+            "backend'e giden ortam değişkeni kümesi değişti — bilinçli mi?"
+        );
     }
 
     /// ⚠️ P2 (denetim 2026-08-04): migrasyon `install_root.exists()` ile erken donuyordu, ama

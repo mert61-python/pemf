@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """render.py — Fantom + Tumor 7-panel TR+EN overlay (adaptif font).
 
 Adaptif olcekleme:

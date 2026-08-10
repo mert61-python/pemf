@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """inference_em_fantom.py — Phantom Inference (Mert pattern + best ONNX).
 
 Best model : BiLSTM_XXL_Raw   (Combined R2 = 0.9955)

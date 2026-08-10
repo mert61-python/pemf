@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """NTFS ACL kilidi — sır dosyası/dizini GERÇEKTEN Users'a kapanıyor mu?
 
 Denetim 2026-08-04: `lock_down_file` docstring'i "Yerel `Users` grubu her iki modda da ERİŞEMEZ;
@@ -13,6 +14,7 @@ tmp penceresini kapatmanın TEK yolu dizini kilitlemektir.
 
 Gerçek ACL'lerle çalışır → yalnız Windows.
 """
+
 import subprocess
 import sys
 

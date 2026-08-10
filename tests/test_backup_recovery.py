@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """DENETİM (offsite-backup-no-key-escrow): yedek .db dosyaları SQLCipher ile şifreli ve
 anahtar DPAPI CRYPTPROTECT_LOCAL_MACHINE ile MAKİNEYE bağlıydı → anakart/disk arızasında
 veya Windows yeniden kurulduğunda HİÇBİR yedek (off-site dahil) açılamıyordu. Yedek sistemi
@@ -14,8 +15,8 @@ import pytest
 
 from utils import backup_recovery as br
 
-
 # ── Kod üretimi ve normalleştirme ────────────────────────────────────────────
+
 
 def test_kod_150_bit_ve_okunabilir():
     c = br.generate_recovery_code()
@@ -30,13 +31,16 @@ def test_kodlar_benzersiz():
     assert len(kodlar) == 200, "kod üreteci tekrar üretiyor (entropi sorunu)"
 
 
-@pytest.mark.parametrize("varyant", [
-    "abcde-fghij-klmno-pqrst-uvwxy-z2345",     # küçük harf
-    "ABCDE FGHIJ KLMNO PQRST UVWXY Z2345",     # boşluk
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ2345",          # ayraçsız
-    "ABCDE-FGHIJ-KLMN0-PQRST-UVWXY-Z2345",     # O yerine sıfır yazılmış
-    "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z2345",     # kanonik
-])
+@pytest.mark.parametrize(
+    "varyant",
+    [
+        "abcde-fghij-klmno-pqrst-uvwxy-z2345",  # küçük harf
+        "ABCDE FGHIJ KLMNO PQRST UVWXY Z2345",  # boşluk
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ2345",  # ayraçsız
+        "ABCDE-FGHIJ-KLMN0-PQRST-UVWXY-Z2345",  # O yerine sıfır yazılmış
+        "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z2345",  # kanonik
+    ],
+)
 def test_yazim_varyantlari_ayni_koda_normallesir(varyant):
     """Operatör kodu kâğıttan okurken tire/boşluk/küçük harf/0-O karıştırır; hepsi
     aynı anahtarı türetmeli — yoksa kurtarma anında 'kod yanlış' denip veri kaybedilir."""
@@ -97,18 +101,20 @@ def test_kdf_parametreleri_zarftan_okunur():
     kod = br.generate_recovery_code()
     doc = json.loads(br.build_envelope(kod, _KEYS))
     assert doc["kdf"]["n"] == br._SCRYPT_N and doc["kdf"]["dklen"] == 32
-    doc["kdf"]["n"] = 2 ** 15                       # parametreyi bozarsak açılmamalı
+    doc["kdf"]["n"] = 2**15  # parametreyi bozarsak açılmamalı
     with pytest.raises(ValueError):
         br.open_envelope(kod, json.dumps(doc).encode())
 
 
 # ── Uçtan uca: yedek dizinine yazım ──────────────────────────────────────────
 
+
 @pytest.fixture()
 def izole_sirlar(tmp_path, monkeypatch):
     """Sır deposunu tmp'ye al — testin makinenin GERÇEK pemf_secrets.json'ına
     dokunmadığından emin ol (daha önce bir ajan gerçek dosyayı ACL'le kilitlemişti)."""
     from utils import secrets_manager as sm
+
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path / "data"))
     (tmp_path / "data").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(sm, "_CACHE", None, raising=False)

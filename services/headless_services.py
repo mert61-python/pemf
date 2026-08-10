@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import platform
-import shutil
 import socket
 import subprocess
 import sys
@@ -243,6 +242,7 @@ class MosquittoSupervisor:
         # config: exe yanında (Windows bundled) yoksa bundled bin/mosquitto/mosquitto.conf'u kullan
         # (mac/Linux'ta exe = sistem /usr/sbin/mosquitto olur, yanında conf yoktur). Tek nokta.
         from utils import platform_support as _ps
+
         config_path = exe_path.parent / "mosquitto.conf"
         if not config_path.exists():
             config_path = _ps.find_bundled_file("mosquitto.conf", self._mosquitto_bundle_dirs())
@@ -315,6 +315,7 @@ class MosquittoSupervisor:
         defaults (loopback + anon-red) yerine bunu kullanır → ESP/STM bağlanabilir."""
         try:
             from utils.path_utils import get_app_data_directory
+
             conf = get_app_data_directory() / "mosquitto.conf"
             # Audit P2: bağlama arayüzü + anon-erişim + password_file ENV ile daraltılabilir. VARSAYILAN
             # 0.0.0.0 + anon (mevcut davranış, GERİYE-UYUMLU) — çünkü allow_anonymous=false ESP FIRMWARE'ine
@@ -344,14 +345,22 @@ class MosquittoSupervisor:
         # OS farkları utils.platform_support'ta (TEK NOKTA): Win → bundled mosquitto.exe önce;
         # mac/Linux → sistem mosquitto (apt/brew) önce. MOSQUITTO_EXE_PATHS yalnız Windows ek-adayı.
         from utils import platform_support as _ps
+
         if _ps.IS_WIN:
             extra = [Path(p) for p in self.MOSQUITTO_EXE_PATHS]
         else:
             # macOS/Linux sistem yolları (which PATH'i kaçırabilir; apt→/usr/sbin, brew→/opt/homebrew)
-            extra = [Path(p) for p in (
-                "/usr/sbin/mosquitto", "/usr/bin/mosquitto", "/usr/local/sbin/mosquitto",
-                "/usr/local/bin/mosquitto", "/opt/homebrew/sbin/mosquitto", "/opt/homebrew/bin/mosquitto",
-            )]
+            extra = [
+                Path(p)
+                for p in (
+                    "/usr/sbin/mosquitto",
+                    "/usr/bin/mosquitto",
+                    "/usr/local/sbin/mosquitto",
+                    "/usr/local/bin/mosquitto",
+                    "/opt/homebrew/sbin/mosquitto",
+                    "/opt/homebrew/bin/mosquitto",
+                )
+            ]
         return _ps.find_executable("mosquitto", self._mosquitto_bundle_dirs(), extra=extra)
 
     def _read_version(self, exe_path: Optional[Path]) -> str:
@@ -548,13 +557,15 @@ class NetworkStatusService:
             return info
 
         try:
-            result = _run_command([
-                "powershell",
-                "-Command",
-                "Get-NetIPAddress -AddressFamily IPv4 | "
-                "Where-Object { $_.IPAddress -like '192.168.137.*' } | "
-                "Select-Object -ExpandProperty IPAddress",
-            ])
+            result = _run_command(
+                [
+                    "powershell",
+                    "-Command",
+                    "Get-NetIPAddress -AddressFamily IPv4 | "
+                    "Where-Object { $_.IPAddress -like '192.168.137.*' } | "
+                    "Select-Object -ExpandProperty IPAddress",
+                ]
+            )
             if result.returncode == 0 and result.stdout.strip():
                 info["active"] = True
                 info["ip"] = result.stdout.strip().splitlines()[0].strip()
@@ -583,13 +594,15 @@ class NetworkStatusService:
             return ips
 
         try:
-            result = _run_command([
-                "powershell",
-                "-Command",
-                "Get-NetIPAddress -AddressFamily IPv4 | "
-                "Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | "
-                "Select-Object IPAddress, InterfaceAlias | Format-Table -HideTableHeaders",
-            ])
+            result = _run_command(
+                [
+                    "powershell",
+                    "-Command",
+                    "Get-NetIPAddress -AddressFamily IPv4 | "
+                    "Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | "
+                    "Select-Object IPAddress, InterfaceAlias | Format-Table -HideTableHeaders",
+                ]
+            )
             if result.returncode == 0:
                 for line in result.stdout.strip().splitlines():
                     parts = line.strip().split(None, 1)
@@ -706,7 +719,8 @@ class UdpDiscoveryService:
 
             import ipaddress as _ipa
             import time as _tm
-            _disc_rl = {}   # Audit P3: per-IP hız-sınırı (reflection-flood)
+
+            _disc_rl = {}  # Audit P3: per-IP hız-sınırı (reflection-flood)
             while not self._stop_event.is_set():
                 try:
                     data, addr = self._socket.recvfrom(2048)

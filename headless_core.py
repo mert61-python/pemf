@@ -17,7 +17,6 @@ from services.headless_services import MosquittoSupervisor, NetworkStatusService
 from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
 
-
 # STM_NACK sonrasi ham-paket tekrar oynatma icin AZAMI YAS (sn). Keep-alive turundan
 # (0.5 sn) biraz genis tutuldu; daha eskisi 'guncel niyet' sayilmaz.
 _RETRY_MAX_AGE_S = 0.75
@@ -133,7 +132,7 @@ class HeadlessCore:
         with self._stm_state_lock:
             if self.stm_is_connected == connected:
                 return
-            self.stm_is_connected = bool(connected)   # gecisi kilit ALTINDA muhurle
+            self.stm_is_connected = bool(connected)  # gecisi kilit ALTINDA muhurle
             self.stm_connected_signal.emit(connected)
 
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
@@ -163,7 +162,10 @@ class HeadlessCore:
         _lens = (len(d_vals), len(p_vals), len(f_vals), len(t_vals))
         if len(set(_lens)) > 1:
             import logging as _lg
-            _lg.getLogger("headless_core").warning("STM parse: alan uzunlukları uyuşmuyor %s → satır reddedildi.", _lens)
+
+            _lg.getLogger("headless_core").warning(
+                "STM parse: alan uzunlukları uyuşmuyor %s → satır reddedildi.", _lens
+            )
             return []
         updates: list[dict[str, Any]] = []
         max_items = min(self.STM_COIL_COUNT, len(d_vals), len(p_vals), len(f_vals), len(t_vals))
@@ -282,8 +284,10 @@ class HeadlessCore:
             if payload is None:
                 return
             if (time.monotonic() - ts) > _RETRY_MAX_AGE_S:
-                self.logger.info("[STM32 NACK] son paket bayat (%.2fs) → tekrar gonderilmedi; "
-                                 "keep-alive guncel durumu tazeleyecek.", time.monotonic() - ts)
+                self.logger.info(
+                    "[STM32 NACK] son paket bayat (%.2fs) → tekrar gonderilmedi; keep-alive guncel durumu tazeleyecek.",
+                    time.monotonic() - ts,
+                )
                 last_payload[0] = None
                 return
             try:
@@ -389,7 +393,7 @@ class HeadlessCore:
                         transport.close_serial(serial_conn)
                     except Exception:
                         pass
-                    last_payload[0] = None   # kopuk baglantida BAYAT paketi tekrar oynatma
+                    last_payload[0] = None  # kopuk baglantida BAYAT paketi tekrar oynatma
 
             if udp_sock and udp_pkt:
                 try:

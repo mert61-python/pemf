@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! Backend sürecini başlatma + hazır olmasını bekleme + tarayıcıyı açma.
 //!
 //! Sessiz başarısızlık YASAK: eski akışta backend açılmazsa kullanıcı boş bir
@@ -254,6 +255,117 @@ pub fn detect_running_backend(install_root: &Path) -> Option<u16> {
 
 pub fn app_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/")
+}
+
+// ── Masaüstü oturum devri (E-ÖZELLİĞİ ORTAK SÖZLEŞMESİ) ─────────────────────────────────────
+//
+// Client Supabase ile giriş yapar, oturumu backend'e DEVREDER, uygulama onu alıp kendi login
+// ekranını ATLAR. Çift giriş YOK.
+//   POST   /api/auth/desktop-session   {access_token, refresh_token, email, expires_at}
+//   DELETE /api/auth/desktop-session   → oturumu temizle (çıkış)
+// Oturum backend'de YALNIZ BELLEKTE tutulur; kalıcılık client tarafındadır (secret_store).
+
+/// Oturum devri ucu (yalnız loopback).
+pub fn desktop_session_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/api/auth/desktop-session")
+}
+
+/// Oturum devri için tek bütçe: backend yereldir, yavaşsa bile açılışı bekletmemeli.
+const SESSION_PUSH_TIMEOUT_S: u64 = 5;
+
+/// Hedef GERÇEKTEN loopback mi? (saf → birim-testlenebilir)
+///
+/// ⚠️ SÖZLEŞME: oturum jetonları YALNIZ 127.0.0.1/::1'e gönderilir. Bu kontrol savunma
+/// derinliğidir: bugün URL'yi port'tan biz üretiyoruz, ama bir gün "uzak backend" alanı
+/// eklenirse jetonlar sessizce tünelden/LAN'dan çıkardı.
+pub fn is_loopback_http_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("http://") else {
+        // https://127.0.0.1 de meşru sayılır (yerel TLS kurulumu) — başka şema ASLA.
+        let Some(rest) = url.strip_prefix("https://") else { return false };
+        return authority_is_loopback(rest);
+    };
+    authority_is_loopback(rest)
+}
+
+fn authority_is_loopback(rest: &str) -> bool {
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    // userinfo ("127.0.0.1@evil.example") ayrıştırıcılar arasında farklı yorumlanır → REDDET.
+    if authority.is_empty() || authority.contains('@') {
+        return false;
+    }
+    // IPv6 köşeli-parantez biçimi: [::1]:8000
+    let host = if let Some(k) = authority.strip_prefix('[') {
+        match k.split_once(']') {
+            Some((h, _)) => h.to_string(),
+            None => return false,
+        }
+    } else {
+        authority.split(':').next().unwrap_or("").to_string()
+    };
+    let h = host.to_ascii_lowercase();
+    // "localhost" BİLEREK YOK: hosts dosyasıyla başka bir adrese yönlendirilebilir; jeton
+    // gönderdiğimiz adres ad çözümlemesine bağlı OLMAMALI.
+    h == "127.0.0.1" || h == "::1"
+}
+
+/// Oturumu verilen URL'ye devret. Loopback DIŞI hedefte istek HİÇ gönderilmez.
+///
+/// GERİYE UYUM: backend 404/405/501 dönerse (ucu henüz taşımayan base.zip) SESSİZCE başarı
+/// sayılır — aksi halde iki hat aynı anda yayınlanmadığında client açılmaz hale gelirdi.
+/// Uygulama o durumda kendi giriş ekranını gösterir; kimse kilitlenmez.
+pub fn push_desktop_session_to(url: &str, session: &crate::auth::Session) -> Result<(), String> {
+    if !is_loopback_http_url(url) {
+        return Err("Oturum yalnız yerel backend'e (127.0.0.1) devredilebilir".to_string());
+    }
+    let body = serde_json::to_string(session).map_err(|_| "oturum serileştirilemedi".to_string())?;
+    match ureq::post(url)
+        .timeout(Duration::from_secs(SESSION_PUSH_TIMEOUT_S))
+        .set("Content-Type", "application/json")
+        .send_string(&body)
+    {
+        Ok(_) => Ok(()),
+        Err(ureq::Error::Status(404 | 405 | 501, _)) => Ok(()),
+        // ⚠️ Hata metnine ASLA gövde koyma: gövde jetonların ta kendisiydi.
+        Err(ureq::Error::Status(s, _)) => Err(format!("backend oturumu kabul etmedi (HTTP {s})")),
+        Err(_) => Err("backend'e oturum devredilemedi (bağlantı yok)".to_string()),
+    }
+}
+
+/// Oturumu çalışan backend'e devret (best-effort — çağıran hatayı yutabilir).
+pub fn push_desktop_session(port: u16, session: &crate::auth::Session) -> Result<(), String> {
+    push_desktop_session_to(&desktop_session_url(port), session)
+}
+
+/// Oturum devri için GÜVENİLİR hedef portu seç.
+///
+/// ⚠️ DENETİM 2026-08-06 (JETON SIZINTISI): `auth_login`/`auth_logout` hedefi `backend.port`
+/// dosyasından HAM okuyordu. O dosya bilinçli olarak "kesin ölü" teyidi olmadan SİLİNMEZ
+/// (bobinlerin E-stop adresidir — bkz. `clear_port_if_stopped`), yani backend çöktükten ya da
+/// makine kapandıktan sonra diskte KALIR. Bu aralıkta 127.0.0.1:<port>'u BAŞKA bir yerel süreç
+/// dinliyorsa launcher, Supabase access+refresh jetonlarını ONA POST ederdi (Windows'ta loopback
+/// portunu her kullanıcı süreci bağlayabilir). "Başlat" yolu (`start_installed`) mevcut bir
+/// backend'i sahiplenmeden ÖNCE `/api/health` imzasını ZATEN doğruluyordu; jeton yolu ondan
+/// zayıf olamaz.
+///
+/// `tracked` = BU launcher'ın başlattığı süreç; kimliği başlatırken health-nonce ile
+/// kanıtlanmıştır → yeniden yoklanmaz (yük altındaki backend'de yanlış-negatif üretip
+/// "çift giriş"e düşmeyelim).
+pub fn session_target_port(tracked: Option<u16>, install_root: &Path) -> Option<u16> {
+    if tracked.is_some() {
+        return tracked;
+    }
+    detect_running_backend(install_root)
+}
+
+/// Backend'deki oturumu temizle ("Çıkış yap"). Best-effort ve sessiz.
+pub fn clear_desktop_session(port: u16) {
+    let url = desktop_session_url(port);
+    if !is_loopback_http_url(&url) {
+        return;
+    }
+    let _ = ureq::delete(&url)
+        .timeout(Duration::from_secs(SESSION_PUSH_TIMEOUT_S))
+        .call();
 }
 
 /// Backend'i başlatır ve hazır olana kadar bekler. Hazır olmazsa süreci ÖLDÜRÜR.
@@ -784,6 +896,171 @@ mod tests {
     fn url_yardimcilari_dogru_bicimde() {
         assert_eq!(health_url(8123), "http://127.0.0.1:8123/api/health");
         assert_eq!(app_url(8123), "http://127.0.0.1:8123/");
+        assert_eq!(
+            desktop_session_url(8123),
+            "http://127.0.0.1:8123/api/auth/desktop-session"
+        );
+    }
+
+    /// ⚠️ SÖZLEŞME GÜVENLİĞİ: oturum jetonları YALNIZ loopback'e gider.
+    #[test]
+    fn oturum_hedefi_yalniz_loopback_kabul_eder() {
+        for u in [
+            "http://127.0.0.1:8000/api/auth/desktop-session",
+            "http://127.0.0.1/api/auth/desktop-session",
+            "http://[::1]:8000/api/auth/desktop-session",
+            "https://127.0.0.1:8443/api/auth/desktop-session",
+        ] {
+            assert!(is_loopback_http_url(u), "mesru loopback hedefi reddedildi: {u}");
+        }
+        for u in [
+            // LAN / tünel / uzak → jeton ASLA çıkmamalı
+            "http://192.168.1.5:8000/api/auth/desktop-session",
+            "https://klinik.example.com/api/auth/desktop-session",
+            "http://127.0.0.1@evil.example/api/auth/desktop-session",
+            "http://evil.example/127.0.0.1/api/auth/desktop-session",
+            // hosts dosyasıyla yönlendirilebilir → ad çözümlemesine bağlı adres KABUL EDİLMEZ
+            "http://localhost:8000/api/auth/desktop-session",
+            "http://127.0.0.1.evil.example/x",
+            "file:///c:/x",
+            "",
+        ] {
+            assert!(!is_loopback_http_url(u), "LOOPBACK DISI hedef kabul edildi (jeton sizar): {u}");
+        }
+    }
+
+    /// Loopback dışı hedefe istek GÖNDERİLMEMELİ — sahte sunucu hiçbir bağlantı görmemeli.
+    #[test]
+    fn loopback_disi_hedefe_oturum_gonderilmez() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        // Gerçekte loopback OLMAYAN bir adres taklidi: dinleyiciyi 127.0.0.1'de açıyoruz ama
+        // URL'de "localhost" kullanıyoruz → politika onu REDDETMELİ (ad çözümlemesine bağlı).
+        let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        let sayac = Arc::new(AtomicUsize::new(0));
+        let s2 = sayac.clone();
+        std::thread::spawn(move || {
+            for c in l.incoming() {
+                if c.is_ok() {
+                    s2.fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        });
+
+        let s = crate::auth::Session {
+            access_token: "GIZLI".into(),
+            refresh_token: "GIZLI2".into(),
+            email: "vet@klinik.com".into(),
+            expires_at: 0,
+        };
+        let r = push_desktop_session_to(&format!("http://localhost:{port}/api/auth/desktop-session"), &s);
+        assert!(r.is_err(), "loopback disi hedef kabul edildi");
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(
+            sayac.load(Ordering::SeqCst),
+            0,
+            "JETON GONDERILDI — sozlesme ihlali (yalniz 127.0.0.1)"
+        );
+    }
+
+    /// ⚠️ JETON SIZINTISI (denetim 2026-08-06): BAYAT `backend.port`, kimliği doğrulanmamış bir
+    /// yerel dinleyiciyi oturum hedefi YAPAMAZ. Dosya "kesin ölü" teyidi olmadan silinmediği için
+    /// backend çöktükten sonra diskte kalır; o portu kapan başka bir süreç Supabase jetonlarını
+    /// alırdı. Kendi başlattığımız süreç ise yoklanMAdan kabul edilir (yük altındaki backend'de
+    /// yanlış-negatif → gereksiz "çift giriş" olmasın).
+    #[test]
+    fn bayat_port_dosyasi_jeton_hedefi_olamaz() {
+        use std::io::Read;
+        let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let yabanci = l.local_addr().unwrap().port();
+        // PEMF OLMAYAN ama HTTP 200 dönen bir yerel servis taklidi.
+        std::thread::spawn(move || {
+            for stream in l.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf);
+                let govde = br#"{"status":"online","service":"BaskaServis"}"#;
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    govde.len()
+                );
+                let _ = s.write_all(govde);
+            }
+        });
+
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("backend.port"), yabanci.to_string()).unwrap();
+        assert_ne!(
+            session_target_port(None, d.path()),
+            Some(yabanci),
+            "PEMF OLMAYAN yerel servise jeton devredilirdi"
+        );
+        // Kendi sürecimiz: ağ yoklaması YAPILMADAN kabul (aynı yabancı port bile olsa — burada
+        // kimliği health-nonce ile zaten kanıtlanmıştır).
+        assert_eq!(session_target_port(Some(yabanci), d.path()), Some(yabanci));
+    }
+
+    /// Oturum devri sözleşmedeki gövdeyi POST etmeli; backend ucu YOKSA (404/405) SESSİZCE
+    /// başarı sayılmalı — eski base.zip'li kurulumlar açılmaz hale gelmesin.
+    #[test]
+    fn oturum_devri_sozlesme_govdesini_gonderir() {
+        use std::io::Read;
+        let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut ilk = true;
+            for stream in l.incoming() {
+                let Ok(mut s) = stream else { continue };
+                // ⚠️ ureq başlıkları ve gövdeyi AYRI yazabiliyor → tek `read` yalnız başlıkları
+                // görür ve test yanlışlıkla "gövde yok" der. Kısa okuma-zaman aşımıyla, gövdenin
+                // sonunu ('}') görene kadar biriktir.
+                let _ = s.set_read_timeout(Some(Duration::from_millis(500)));
+                let mut ham = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    match s.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            ham.extend_from_slice(&buf[..n]);
+                            if ham.ends_with(b"}") || ham.len() > 8192 {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if ham.is_empty() {
+                    continue;
+                }
+                let _ = tx.send(String::from_utf8_lossy(&ham).into_owned());
+                // 1. istek: 200 (yeni backend), 2. istek: 404 (ucu taşımayan eski base.zip).
+                let kod = if ilk { "200 OK" } else { "404 Not Found" };
+                ilk = false;
+                let _ = write!(s, "HTTP/1.1 {kod}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+        });
+
+        let s = crate::auth::Session {
+            access_token: "AAA".into(),
+            refresh_token: "RRR".into(),
+            email: "vet@klinik.com".into(),
+            expires_at: 1_900_000_000,
+        };
+        assert!(push_desktop_session(port, &s).is_ok());
+        let req = rx.recv_timeout(Duration::from_secs(5)).expect("oturum POST edilmedi");
+        assert!(req.starts_with("POST /api/auth/desktop-session"), "yanlis istek: {req}");
+        for alan in ["access_token", "refresh_token", "email", "expires_at", "AAA", "RRR"] {
+            assert!(req.contains(alan), "sozlesme alani govdede yok: {alan}");
+        }
+
+        // GERİYE UYUM: 404 → sessizce başarı.
+        assert!(
+            push_desktop_session(port, &s).is_ok(),
+            "ucu tasimayan backend'de client HATA verdi — eski kurulumlar acilmaz olur"
+        );
     }
 
     /// TIBBİ GÜVENLİK: safe_stop_coils, süreç öldürülmeden önce E-stop endpoint'ini POST etmeli.

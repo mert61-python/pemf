@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Shared STM32 serial transport helpers.
 
 Port seçimi:
@@ -21,8 +22,8 @@ from typing import Any, Callable, Optional
 
 # VARSAYILAN port (PEMF_STM_PORT verilmediğinde). Sahada sabit COM10; gerekirse env ile
 # değiştirin (PEMF_STM_PORT=COMx) veya oto-algılama açın (PEMF_STM_PORT=auto).
-FIXED_STM32_PORT = "COM10"       # default/legacy (ST-Link VCP, Nucleo-F429ZI USART3 @ PD8/PD9)
-ST_LINK_USB_VID = 0x0483         # STMicroelectronics
+FIXED_STM32_PORT = "COM10"  # default/legacy (ST-Link VCP, Nucleo-F429ZI USART3 @ PD8/PD9)
+ST_LINK_USB_VID = 0x0483  # STMicroelectronics
 # ST-Link VCP USB PID'leri (V1/V2/V2-1/V3). Onboard STM CDC (örn LattePanda, PID 0x5740)
 # BU SETTE YOK → oto-algılamada onboard STM'i ELER, yanlış porta (COM3) gitmez.
 ST_LINK_USB_PIDS = frozenset({0x3744, 0x3748, 0x374B, 0x374D, 0x374E, 0x374F, 0x3752, 0x3753})
@@ -36,6 +37,7 @@ VCP_SETTLE_TIME_SEC = 2.0
 # STM_READY. Listen briefly, then actively probe with a safe zero-duty packet.
 HANDSHAKE_PASSIVE_LISTEN_SEC = 1.0
 HANDSHAKE_PROBE_INTERVAL_SEC = 1.0
+
 
 @dataclass(frozen=True)
 class Stm32PortCandidate:
@@ -181,9 +183,7 @@ class Stm32SerialTransport:
         """Seçilen port cooldown'da değilse aday olarak döndür."""
         bad_until = self._bad_ports_until.get(candidate.device.upper(), 0.0)
         if bad_until > time.monotonic():
-            self._throttled_no_port_log(
-                f"[STM32] {candidate.device} cooldown dolana kadar bekleniyor."
-            )
+            self._throttled_no_port_log(f"[STM32] {candidate.device} cooldown dolana kadar bekleniyor.")
             return None
         self._log_info("[STM32] Port seçimi: %s @ %d baud", candidate.label(), self.baudrate)
         return candidate
@@ -207,17 +207,13 @@ class Stm32SerialTransport:
         for p in ports:
             vid = getattr(p, "vid", None)
             pid = getattr(p, "pid", None)
-            desc = (getattr(p, "description", "") or "")
+            desc = getattr(p, "description", "") or ""
             descu = desc.upper().replace("-", "")
             is_stlink = (
-                (vid == ST_LINK_USB_VID and pid in ST_LINK_USB_PIDS)
-                or "STLINKVIRTUALCOM" in descu
-                or "STLINK" in descu
+                (vid == ST_LINK_USB_VID and pid in ST_LINK_USB_PIDS) or "STLINKVIRTUALCOM" in descu or "STLINK" in descu
             )
             if is_stlink:
-                return Stm32PortCandidate(
-                    device=p.device, description=f"oto ST-Link: {desc}".strip()
-                )
+                return Stm32PortCandidate(device=p.device, description=f"oto ST-Link: {desc}".strip())
         return None
 
     # ── Port Açma ─────────────────────────────────────────────────────────────
@@ -230,16 +226,14 @@ class Stm32SerialTransport:
         # Gerçek COM (ST-Link VCP) → klasik Serial. Böylece SANAL-STM ile test edilebilir + sahada
         # uzak-seri desteklenir; gerçek-COM yolu ve DTR/RTS davranışı DEĞİŞMEZ (geriye uyumlu).
         if "://" in dev:
-            serial_obj = serial_lib.serial_for_url(
-                dev, baudrate=self.baudrate, timeout=0.3, write_timeout=1.0
-            )
+            serial_obj = serial_lib.serial_for_url(dev, baudrate=self.baudrate, timeout=0.3, write_timeout=1.0)
         else:
             serial_obj = serial_lib.Serial(
                 candidate.device,
                 self.baudrate,
                 timeout=0.3,
                 write_timeout=1.0,
-                dsrdtr=False,   # DTR kapalı: ST-Link VCP’de aynı anda MCU reset'ini önler
+                dsrdtr=False,  # DTR kapalı: ST-Link VCP’de aynı anda MCU reset'ini önler
                 rtscts=False,
             )
         try:

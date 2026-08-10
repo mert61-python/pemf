@@ -12,7 +12,7 @@ class PEMFWebInterface {
         this.isConnected = false;
         this.currentTreatment = null;
         this.updateInterval = null;
-        
+
         this.init();
     }
 
@@ -21,7 +21,7 @@ class PEMFWebInterface {
         this.initializeWebSocket();
         this.loadInitialData();
         this.startPeriodicUpdates();
-        
+
         // Show loading state initially
         this.showLoading();
     }
@@ -33,9 +33,9 @@ class PEMFWebInterface {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.hostname}:8081/`;
-            
+
             this.websocket = new WebSocket(wsUrl);
-            
+
             this.websocket.onopen = (event) => {
                 console.log('WebSocket bağlantısı kuruldu');
                 this.isConnected = true;
@@ -43,7 +43,7 @@ class PEMFWebInterface {
                 this.updateConnectionStatus(true);
                 this.hideLoading();
             };
-            
+
             this.websocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
@@ -52,19 +52,19 @@ class PEMFWebInterface {
                     console.error('WebSocket mesaj parse hatası:', error);
                 }
             };
-            
+
             this.websocket.onclose = (event) => {
                 console.log('WebSocket bağlantısı kapandı');
                 this.isConnected = false;
                 this.updateConnectionStatus(false);
                 this.attemptReconnect();
             };
-            
+
             this.websocket.onerror = (error) => {
                 console.error('WebSocket hatası:', error);
                 this.updateConnectionStatus(false);
             };
-            
+
         } catch (error) {
             console.error('WebSocket başlatma hatası:', error);
             this.fallbackToPolling();
@@ -75,7 +75,7 @@ class PEMFWebInterface {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             console.log(`Yeniden bağlanma denemesi ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-            
+
             setTimeout(() => {
                 this.initializeWebSocket();
             }, this.reconnectDelay * this.reconnectAttempts);
@@ -144,7 +144,7 @@ class PEMFWebInterface {
             }
 
             const response = await fetch(`/api/${endpoint}`, options);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -221,7 +221,7 @@ class PEMFWebInterface {
     updateSystemStatus(status) {
         const statusElement = document.getElementById('system-status');
         const statusIndicator = document.getElementById('status-indicator');
-        
+
         if (statusElement && statusIndicator) {
             statusElement.textContent = status.system_status === 'online' ? 'Çevrimiçi' : 'Çevrimdışı';
             statusIndicator.className = `status-indicator ${status.system_status === 'online' ? 'status-online' : 'status-offline'}`;
@@ -229,7 +229,7 @@ class PEMFWebInterface {
 
         // Update current parameters
         this.updateCurrentParameters(status.current_parameters);
-        
+
         // Update treatment status
         if (status.treatment_active !== undefined) {
             this.updateTreatmentControls(status.treatment_active);
@@ -254,7 +254,7 @@ class PEMFWebInterface {
     updateTreatmentStatus(treatmentData) {
         this.currentTreatment = treatmentData;
         this.updateTreatmentControls(treatmentData.active);
-        
+
         if (treatmentData.active) {
             this.showNotification({
                 type: 'info',
@@ -267,11 +267,11 @@ class PEMFWebInterface {
     updateTreatmentControls(isActive) {
         const startBtn = document.getElementById('start-treatment-btn');
         const stopBtn = document.getElementById('stop-treatment-btn');
-        
+
         if (startBtn && stopBtn) {
             startBtn.disabled = isActive;
             stopBtn.disabled = !isActive;
-            
+
             if (isActive) {
                 startBtn.textContent = 'Tedavi Devam Ediyor...';
                 stopBtn.textContent = 'Tedaviyi Durdur';
@@ -308,7 +308,7 @@ class PEMFWebInterface {
             }
             espInfo.className = `esp-info ${sensorData.esp_status || 'offline'}`;
         }
-        
+
         // Update chart data if chart exists (for inline script compatibility)
         if (window.updateChartData && typeof window.updateChartData === 'function') {
             window.updateChartData(sensorData);
@@ -330,7 +330,7 @@ class PEMFWebInterface {
                 }
                 return unit ? `${value} ${unit}` : value;
             };
-            
+
             row.innerHTML = `
                 <td>${this.formatDate(session.session_date)}</td>
                 <td>${formatValue(session.patient_name)}</td>
@@ -479,7 +479,7 @@ class PEMFWebInterface {
                     </div>
                     <div class="card">
                         <h4>Tedavi Parametreleri</h4>
-                        ${Object.entries(details.parameters).map(([key, param]) => 
+                        ${Object.entries(details.parameters).map(([key, param]) =>
                             `<p><strong>${param.turkish_name}:</strong> ${param.value}</p>`
                         ).join('')}
                     </div>
@@ -520,7 +520,7 @@ class PEMFWebInterface {
      */
     showNotification(notification) {
         const container = this.getNotificationContainer();
-        
+
         const notificationElement = document.createElement('div');
         notificationElement.className = `alert alert-${notification.type || 'info'} fade-in`;
         notificationElement.innerHTML = `
@@ -682,7 +682,7 @@ class PEMFWebInterface {
      */
     formatDate(dateString) {
         if (!dateString) return 'Belirtilmemiş';
-        
+
         try {
             const date = new Date(dateString);
             return date.toLocaleDateString('tr-TR', {
@@ -752,10 +752,10 @@ let pemfInterface;
 
 document.addEventListener('DOMContentLoaded', () => {
     pemfInterface = new PEMFWebInterface();
-    
+
     // Make it globally accessible for debugging
     window.pemfInterface = pemfInterface;
-    
+
     console.log('PEMF Web Interface başlatıldı');
 });
 

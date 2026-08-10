@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """catorgan_predictor.py — CatOrganPredictor: inference_cat_organ.main() sadık wrapper.
 
 Hazır predictor sınıfı olmadığı için main() (I/O-only CLI) çekirdek akışını

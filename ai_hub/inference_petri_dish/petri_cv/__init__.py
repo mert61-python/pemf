@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """petri_cv — YOLO11m-seg + Kedi-ArUco kalibrasyon ile petri kabi CV pipeline.
 
 Kedi `inference_cat_organ` paterniyle birebir uyumlu:

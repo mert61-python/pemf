@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Characterization: sistem/durum GET uçlarının RESPONSE SHAPE'i (anahtar kümesi).
 
 Route-contract PATH'i korur; bu test RESPONSE gövdesinin anahtar-kümesini dondurur →
@@ -7,6 +8,7 @@ değişirse KIRILIR. Özellikle `/api/health` kurulum-doğrulaması (`atRestEncr
 
 Baseline: 2026-07-06. Client kurulumu test_api_safety ile aynı (PEMF_SIMULATE kapalı).
 """
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -16,8 +18,16 @@ from fastapi.testclient import TestClient
 
 GOLDEN_SHAPES = {
     "/api/health": {
-        "atRestEncrypted", "core_initialized", "deviceId", "localIp", "pairingCode",
-        "service", "services", "status", "stmConnected", "tunnelUrl",
+        "atRestEncrypted",
+        "core_initialized",
+        "deviceId",
+        "localIp",
+        "pairingCode",
+        "service",
+        "services",
+        "status",
+        "stmConnected",
+        "tunnelUrl",
         # DENETIM P2 (BILINCLI sekil degisikligi): bulut cihaz-registry durumu. 'secret_mismatch'
         # KALICI bir hatadir (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve
         # eskiden yalnizca log'a dusuyordu; operator uzaktan erisimin neden sessizce
@@ -37,19 +47,52 @@ GOLDEN_SHAPES = {
         # okuyup seans varsa ERTELIYOR. launcherNonce ile ayni gerekcede YALNIZ loopback'e verilir
         # (auth-muaf + tunelden erisilebilir bir uc; "su an tedavi suruyor" disari sizmamali).
         "sessionActive",
+        # DENETIM 2026-08-09 (BILINCLI sekil degisikligi): tibbi kayit DB'si yazilabilir mi.
+        # DB acilamazken seans baslatma yolu tum DB hatalarini "best-effort" sayip yutuyordu →
+        # bobinler enerjileniyor, tedavi uygulaniyor, ama seans/coil-run/sensor kaydinin HICBIRI
+        # yazilmiyordu (hastanin aldigi doz geriye donuk BILINEMEZ). Kayitsiz tedavi artik 503 ile
+        # reddedilir; bu alan olmadan ariza ancak veteriner seans baslatmayi DENEYINCE, yani hasta
+        # masadayken gorunuyordu. Bkz. api_server._kayit_db_hazir + tests/test_db_ready_gate.py.
+        "dbReady",
+        # DENETIM 2026-08-09 Tier 3 (BILINCLI sekil degisikligi): SURUM GORUNURLUGU.
+        # `/api/health` saha teshisinin ilk duragi ama surumu HIC soylemiyordu; destek telefonda
+        # "hangi surum" diye sorup operatore menu tarif etmek zorunda kaliyordu. `buildId` ise
+        # surumun soyleyemedigini soyler: ayni "1.9.5" farkli paket icerigi calistirabilir
+        # (yeniden yayin, yarim guncelleme, elle kopyalanmis dosya) — deger, launcher'in kurdugu
+        # paketin sha256'sinin ilk 12 hanesidir (PEMF_BASE_SHA). Launcher'siz calistirmada None
+        # (uydurma kimlik URETILMEZ). Bkz. tests/test_version_visibility.py.
+        "version",
+        "buildId",
     },
     "/api/discovery": {"capabilities", "localIp", "port", "service", "tunnelUrl", "version"},
     "/api/system/info": {
-        "deviceId", "hardwareVersion", "pairingCode", "softwareVersion",
-        "stmConnected", "timestamp", "tunnelUrl",
+        "deviceId",
+        "hardwareVersion",
+        "pairingCode",
+        "softwareVersion",
+        "stmConnected",
+        "timestamp",
+        "tunnelUrl",
     },
     "/api/gateway/status": {
-        "bridgeConnected", "brokerRunning", "gatewayState", "hotspotActive", "mosquitto",
-        "mqttConnected", "network", "networkOnline", "stmConnected",
+        "bridgeConnected",
+        "brokerRunning",
+        "gatewayState",
+        "hotspotActive",
+        "mosquitto",
+        "mqttConnected",
+        "network",
+        "networkOnline",
+        "stmConnected",
     },
     "/api/kpi/summary": {
-        "avgDurationMin", "coilUsage", "completedSessions", "last7Days",
-        "modeDistribution", "stoppedSessions", "totalSessions",
+        "avgDurationMin",
+        "coilUsage",
+        "completedSessions",
+        "last7Days",
+        "modeDistribution",
+        "stoppedSessions",
+        "totalSessions",
     },
 }
 

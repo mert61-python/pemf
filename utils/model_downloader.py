@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """model_downloader.py — YEREL model çözümü (Hugging Face KALDIRILDI).
 
 NOT (2026-07, kullanıcı kararı): Hugging Face indirme tamamen kaldırıldı. Tüm AI
@@ -6,6 +7,7 @@ modelleri artık offline paketlenir — EXE'ye gömülü ya da ProgramData\\PEMF
 HF token'ı veya huggingface_hub bağımlılığı YOKTUR. Public API (download_model_sync,
 find_installed_model) korunur.
 """
+
 import hashlib
 import os
 import sys
@@ -22,6 +24,7 @@ def get_persistent_model_dir() -> Path:
     if sys.platform == "win32":
         try:
             import ctypes
+
             FILE_ATTRIBUTE_HIDDEN = 0x02
             ctypes.windll.kernel32.SetFileAttributesW(str(model_dir), FILE_ATTRIBUTE_HIDDEN)
         except Exception:

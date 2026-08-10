@@ -1,4 +1,6 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: emergency_stop her zaman çalışır + aynı anda iki seans engeli (409)."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)  # testlerde sim loop başlatma
@@ -10,6 +12,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     from servers import api_server
+
     return TestClient(api_server.app)
 
 
@@ -59,9 +62,14 @@ def test_session_start_rejects_oversized_coil_ids(client):
 def test_session_start_dedups_coil_ids(client):
     """Tekrarlı/aralık-dışı bobin id'leri normalize edilmeli (derinlemesine savunma)."""
     try:
-        r = client.post("/api/session/start", json={
-            "coil_ids": [1, 1, 2, 2], "duration_minutes": 1, "patient_name": "T",
-        })
+        r = client.post(
+            "/api/session/start",
+            json={
+                "coil_ids": [1, 1, 2, 2],
+                "duration_minutes": 1,
+                "patient_name": "T",
+            },
+        )
         # STM donanımı yoksa 503 dönebilir; o durumda normalizasyon zaten uygulanmıştır.
         if r.status_code == 200:
             assert r.json()["session"]["coil_ids"] == [1, 2]

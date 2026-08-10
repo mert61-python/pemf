@@ -1,11 +1,13 @@
+# Author: mertaygn, cglrgrkn
 """DENETIM P3: ProductionConfigManager — atomik yazım + sahte 'enc:' şifreleme guard'ı."""
 
 
 def _mgr(tmp_path, monkeypatch):
     from utils import production_config_manager as pcm
+
     m = pcm.ProductionConfigManager.__new__(pcm.ProductionConfigManager)
     m._config = {}
-    m._cipher = None                       # şifreleme KURULAMAMIŞ senaryo
+    m._cipher = None  # şifreleme KURULAMAMIŞ senaryo
     m._get_app_data_dir = lambda: tmp_path
     return pcm, m
 
@@ -26,10 +28,8 @@ def test_no_fake_enc_prefix_when_cipher_unavailable(tmp_path, monkeypatch):
 
     # Fix'in özü: tam da bu durumda 'enc:' öneki EKLENMEMELİ.
     src = inspect.getsource(pcm.ProductionConfigManager.set)
-    assert "if self._cipher and _enc != value:" in src, \
-        "'enc:' öneki yalnız GERÇEKTEN şifrelendiyse eklenmeli"
-    assert "'enc:' + self._encrypt_value(value)" not in src, \
-        "koşulsuz önek ekleme geri gelmemeli (yanlış güvence)"
+    assert "if self._cipher and _enc != value:" in src, "'enc:' öneki yalnız GERÇEKTEN şifrelendiyse eklenmeli"
+    assert "'enc:' + self._encrypt_value(value)" not in src, "koşulsuz önek ekleme geri gelmemeli (yanlış güvence)"
 
 
 def test_config_save_is_atomic(tmp_path):
@@ -42,8 +42,11 @@ def test_config_save_is_atomic(tmp_path):
 
     from utils import production_config_manager as pcm
 
-    src = inspect.getsource(pcm.ProductionConfigManager.save_config) \
-        if hasattr(pcm.ProductionConfigManager, "save_config") else ""
+    src = (
+        inspect.getsource(pcm.ProductionConfigManager.save_config)
+        if hasattr(pcm.ProductionConfigManager, "save_config")
+        else ""
+    )
     if not src:  # metod adı farklıysa modül genelinde ara
         src = inspect.getsource(pcm)
     assert "os.replace(tmp_path, user_config_path)" in src, "atomik takas kullanılmalı"

@@ -1,5 +1,7 @@
+# Author: mertaygn, cglrgrkn
 """Gözlemlenebilirlik + hata yönetimi (audit B-4.1, B-5.2): global exception handler'lar (tutarlı
 zarf, PII/str(e) sızmaz) + /metrics Prometheus endpoint + opsiyonel telemetri no-op."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -12,6 +14,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def api():
     from servers import api_server
+
     return api_server
 
 
@@ -55,6 +58,7 @@ def test_metrics_prometheus_format(client):
 def test_telemetry_noop_without_dsn(monkeypatch):
     monkeypatch.delenv("PEMF_SENTRY_DSN", raising=False)
     import utils.telemetry as t
+
     t._initialized = False
     assert t.init_telemetry() is False  # opt-in değil → kapalı
 
@@ -64,6 +68,7 @@ def test_telemetry_noop_when_sdk_missing(monkeypatch):
     import builtins
 
     import utils.telemetry as t
+
     t._initialized = False
     _real_import = builtins.__import__
 

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """PEMF felaket kurtarma aracı — yedekleri BAŞKA bir makinede açılabilir kılar.
 
 NE ZAMAN KULLANILIR
@@ -50,6 +51,7 @@ from utils.backup_recovery import (  # noqa: E402
 
 def _show_local_code() -> int:
     from utils import secrets_manager as sm
+
     try:
         code = sm.get_secret("backup_recovery_code", generate=False)
     except Exception as e:
@@ -93,6 +95,7 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
         return 0
 
     from utils import secrets_manager as sm
+
     mevcut = []
     for name in keys:
         try:
@@ -128,13 +131,14 @@ def main(argv=None) -> int:
         description="PEMF yedek kurtarma araci",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"Zarf dosyasi yedek dizininde '{ENVELOPE_NAME}', kod ise kurulum "
-               f"makinesindeki '{CODE_FILE_NAME}' dosyasindadir.")
+        f"makinesindeki '{CODE_FILE_NAME}' dosyasindadir.",
+    )
     ap.add_argument("--zarf", type=Path, help=f"Kurtarma zarfi yolu ({ENVELOPE_NAME})")
     ap.add_argument("--kod", help="Kurtarma kodu (tire/bosluk/kucuk harf farketmez)")
-    ap.add_argument("--yaz", action="store_true",
-                    help="Anahtarlari BU makinenin sir deposuna yaz (yeni kurulum)")
-    ap.add_argument("--kodu-goster", action="store_true",
-                    help="Bu makinedeki kurtarma kodunu goster (cihaz calisirken)")
+    ap.add_argument("--yaz", action="store_true", help="Anahtarlari BU makinenin sir deposuna yaz (yeni kurulum)")
+    ap.add_argument(
+        "--kodu-goster", action="store_true", help="Bu makinedeki kurtarma kodunu goster (cihaz calisirken)"
+    )
     a = ap.parse_args(argv)
 
     if a.kodu_goster:
@@ -147,6 +151,7 @@ def main(argv=None) -> int:
     if not kod:
         try:
             import getpass
+
             kod = getpass.getpass("Kurtarma kodu: ")
         except Exception:
             ap.error("--kod gerekli")

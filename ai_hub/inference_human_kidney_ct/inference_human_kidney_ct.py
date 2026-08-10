@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """inference_human_kidney_ct.py — Human Kidney CT tespit (YOLOv8s).
 
 Task: **Object detection** — 3 sinif

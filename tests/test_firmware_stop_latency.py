@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """DENETİM P0 (fw-duty-slew-stop-delay) + P1 (fw-no-iwdg-no-fault-safe) regresyonu.
 
 MUTASYON TESTİ BULGUSU: bu iki firmware düzeltmesinin HİÇ testi yoktu. P0 olanı doğrudan
@@ -44,13 +45,15 @@ def _sabit(src, ad):
 
 # ────────────────────────── Sabitler ve formül ──────────────────────────
 
+
 def test_slew_formulu_FREKANSTAN_BAGIMSIZ(src):
     """Kaynakta slew, periyoda ve frekansa göre ÖLÇEKLENMELİ — sabit kalmamalı."""
-    assert "DDS_SLEW_FULLSCALE_S" in src, (
-        "frekanstan bağımsız rampa sabiti YOK → slew yine sabit tick olabilir")
+    assert "DDS_SLEW_FULLSCALE_S" in src, "frekanstan bağımsız rampa sabiti YOK → slew yine sabit tick olabilir"
     m = re.search(r"slew_f\s*=\s*tpp_f\s*/\s*\(\s*f\s*\*\s*DDS_SLEW_FULLSCALE_S\s*\)", src)
-    assert m, ("slew hesabı `tpp / (f * DDS_SLEW_FULLSCALE_S)` biçiminde değil → "
-               "rampa süresi frekansa bağımlı hale gelmiş olabilir")
+    assert m, (
+        "slew hesabı `tpp / (f * DDS_SLEW_FULLSCALE_S)` biçiminde değil → "
+        "rampa süresi frekansa bağımlı hale gelmiş olabilir"
+    )
 
 
 def test_STOP_rampayi_ATLIYOR_kaynakta(src):
@@ -62,17 +65,17 @@ def test_STOP_rampayi_ATLIYOR_kaynakta(src):
     Parça-2 (çıkış katmanı): her ISR tick'i HEDEFE bakar → periyot sonunu beklemez.
     İkisinden biri düşerse STOP yine periyoda/rampaya takılır.
     """
-    parca1 = re.search(
-        r"if\s*\(\s*g_target_duty_ticks\[i\]\s*<=\s*0\s*\)\s*\{\s*g_duty_ticks\[i\]\s*=\s*0\s*;",
-        src)
-    assert parca1, ("rampa güncellemesinde STOP kısayolu YOK → sıfır hedef de slew'e takılır "
-                    "(1 Hz'de bobin onlarca saniye enerjili kalır)")
+    parca1 = re.search(r"if\s*\(\s*g_target_duty_ticks\[i\]\s*<=\s*0\s*\)\s*\{\s*g_duty_ticks\[i\]\s*=\s*0\s*;", src)
+    assert parca1, (
+        "rampa güncellemesinde STOP kısayolu YOK → sıfır hedef de slew'e takılır "
+        "(1 Hz'de bobin onlarca saniye enerjili kalır)"
+    )
 
-    parca2 = re.search(
-        r"duty\s*=\s*\(\s*g_target_duty_ticks\[i\]\s*<=\s*0\s*\)\s*\?\s*0\s*:\s*g_duty_ticks\[i\]",
-        src)
-    assert parca2, ("çıkış katmanı hedefe BAKMIYOR → duty yalnız periyot başında güncellendiği "
-                    "için STOP bir periyot (1 Hz'de 1 s) gecikir")
+    parca2 = re.search(r"duty\s*=\s*\(\s*g_target_duty_ticks\[i\]\s*<=\s*0\s*\)\s*\?\s*0\s*:\s*g_duty_ticks\[i\]", src)
+    assert parca2, (
+        "çıkış katmanı hedefe BAKMIYOR → duty yalnız periyot başında güncellendiği "
+        "için STOP bir periyot (1 Hz'de 1 s) gecikir"
+    )
 
 
 def test_100Hz_de_eski_sabitle_AYNI_kaliyor(src):
@@ -83,10 +86,12 @@ def test_100Hz_de_eski_sabitle_AYNI_kaliyor(src):
     isr_hz = _sabit(src, "DDS_ISR_HZ")
     tpp_100 = isr_hz / 100.0
     assert tpp_100 / (100.0 * fullscale) == pytest.approx(eski), (
-        "100 Hz'de yeni formül eski sabitten farklı çıkıyor → sahada davranış değişir")
+        "100 Hz'de yeni formül eski sabitten farklı çıkıyor → sahada davranış değişir"
+    )
 
 
 # ────────────────────────── Davranış modeli ──────────────────────────
+
 
 def _duty_modeli(src):
     """firmware'deki duty güncelleme + çıkış katmanını birebir modelle."""
@@ -102,11 +107,11 @@ def _duty_modeli(src):
         low_tick = None
         for t in range(tick_sayisi):
             if stop_tickinde is not None and t == stop_tickinde:
-                hedef = 0                       # acil durdurma / süre-bitişi / watchdog
+                hedef = 0  # acil durdurma / süre-bitişi / watchdog
             # ── periyot başında rampa güncellenir (firmware: period_reset) ──
             if t % tpp == 0:
                 if hedef <= 0:
-                    duty = 0                    # DENETİM P0 parça-1: STOP rampaya tabi değil
+                    duty = 0  # DENETİM P0 parça-1: STOP rampaya tabi değil
                 else:
                     err = max(-slew, min(slew, hedef - duty))
                     duty = max(0, duty + err)
@@ -127,15 +132,17 @@ def test_STOP_gecikmesi_TEK_ISR_TICKI_her_frekansta(src, freq):
     tpp = int(isr_hz / freq)
     # Bobin tam güçte çalışıyorken periyodun ORTASINDA durdur (en kötü an: periyot sonu uzak)
     stop_at = tpp * 3 + tpp // 2
-    low_tick, _ = kos(freq, hedef_duty_ticks=tpp // 2, baslangic=tpp // 2,
-                      tick_sayisi=stop_at + tpp * 3, stop_tickinde=stop_at)
+    low_tick, _ = kos(
+        freq, hedef_duty_ticks=tpp // 2, baslangic=tpp // 2, tick_sayisi=stop_at + tpp * 3, stop_tickinde=stop_at
+    )
 
     assert low_tick is not None, f"{freq} Hz: STOP sonrası çıkış hiç LOW olmadı"
     gecikme_tick = low_tick - stop_at
     gecikme_us = gecikme_tick * (1e6 / isr_hz)
     assert gecikme_tick <= 1, (
         f"{freq} Hz: STOP → çıkış-LOW {gecikme_tick} tick ({gecikme_us:.0f} µs) sürdü; "
-        f"en fazla 1 tick (20 µs) olmalı — bobin canlı hayvan üzerinde enerjili kalır")
+        f"en fazla 1 tick (20 µs) olmalı — bobin canlı hayvan üzerinde enerjili kalır"
+    )
 
 
 @pytest.mark.parametrize("freq", [1.0, 10.0, 100.0])
@@ -145,13 +152,14 @@ def test_rampa_SURESI_frekanstan_bagimsiz(src, freq):
     kos, isr_hz = _duty_modeli(src)
     fullscale = _sabit(src, "DDS_SLEW_FULLSCALE_S")
     tpp = int(isr_hz / freq)
-    hedef = tpp // 2                      # %50 duty
-    tam_olcek_tick = int(isr_hz * fullscale * 2)   # bolca pay
+    hedef = tpp // 2  # %50 duty
+    tam_olcek_tick = int(isr_hz * fullscale * 2)  # bolca pay
 
     _, duty = kos(freq, hedef_duty_ticks=hedef, baslangic=0, tick_sayisi=tam_olcek_tick)
     assert duty == hedef, (
         f"{freq} Hz: hedef duty {fullscale * 2:.1f} s içinde tutturulamadı "
-        f"({duty}/{hedef}) → rampa süresi frekansa bağımlı kalmış")
+        f"({duty}/{hedef}) → rampa süresi frekansa bağımlı kalmış"
+    )
 
 
 def test_rampa_hala_SINIRLI_ani_sicrama_yok(src):
@@ -166,6 +174,7 @@ def test_rampa_hala_SINIRLI_ani_sicrama_yok(src):
 
 # ────────────────────────── Fault güvenliği (P1) ──────────────────────────
 
+
 def test_hata_yolunda_bobinler_ONCE_kesiliyor(src):
     """DENETİM P1: Error_Handler bobinleri kesmeden kesmeleri kapatırsa (veya hiç kesmezse)
     bobinler son duty'de KİLİTLİ kalır — hata göstergesi hasta güvenliğinden önce gelemez."""
@@ -173,23 +182,22 @@ def test_hata_yolunda_bobinler_ONCE_kesiliyor(src):
     assert m, "Error_Handler bulunamadı"
     govde = m.group(1)
     assert "PEMF_ForceAllCoilOutputsLow" in govde, (
-        "Error_Handler bobinleri KESMİYOR → hata anında bobinler enerjili kilitlenir")
+        "Error_Handler bobinleri KESMİYOR → hata anında bobinler enerjili kilitlenir"
+    )
     kes = govde.index("PEMF_ForceAllCoilOutputsLow")
     irq = govde.find("__disable_irq")
-    assert irq == -1 or kes < irq, (
-        "Error_Handler kesmeleri bobinleri kesmeden ÖNCE kapatıyor")
+    assert irq == -1 or kes < irq, "Error_Handler kesmeleri bobinleri kesmeden ÖNCE kapatıyor"
 
 
 def test_bobin_kesme_fonksiyonu_DISA_ACIK(src):
     """Fault işleyicileri `stm32f4xx_it.c`'de (bu depoda YOK) tanımlı; oradan çağrılabilmesi
     için fonksiyon static OLMAMALI. static yapılırsa yama sessizce derlenmez hale gelir."""
-    m = re.search(r"^\s*(static\s+)?void\s+PEMF_ForceAllCoilOutputsLow\s*\(\s*void\s*\)\s*\{",
-                  src, re.M)
+    m = re.search(r"^\s*(static\s+)?void\s+PEMF_ForceAllCoilOutputsLow\s*\(\s*void\s*\)\s*\{", src, re.M)
     assert m, "PEMF_ForceAllCoilOutputsLow tanımı bulunamadı"
-    assert not m.group(1), (
-        "PEMF_ForceAllCoilOutputsLow static → stm32f4xx_it.c'deki fault yaması bağlanamaz")
+    assert not m.group(1), "PEMF_ForceAllCoilOutputsLow static → stm32f4xx_it.c'deki fault yaması bağlanamaz"
     assert re.search(r"^void\s+PEMF_ForceAllCoilOutputsLow\s*\(\s*void\s*\)\s*;", src, re.M), (
-        "dışa açık bildirim (prototip) yok")
+        "dışa açık bildirim (prototip) yok"
+    )
 
 
 def test_fault_yamasi_BELGELENMIS(src):
@@ -199,5 +207,6 @@ def test_fault_yamasi_BELGELENMIS(src):
     assert readme.exists(), "firmware/README.md yok"
     metin = readme.read_text(encoding="utf-8", errors="replace")
     assert "stm32f4xx_it.c" in metin and "PEMF_ForceAllCoilOutputsLow" in metin, (
-        "fault işleyici yama talimatı README'de yok → adım sessizce atlanır")
+        "fault işleyici yama talimatı README'de yok → adım sessizce atlanır"
+    )
     assert "stm32f4xx_it.c" in src, "main.c yamanın nereye uygulanacağını belirtmiyor"

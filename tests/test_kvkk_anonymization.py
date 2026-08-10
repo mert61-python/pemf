@@ -1,13 +1,16 @@
+# Author: mertaygn, cglrgrkn
 """Operasyonel doğrulama #8: KVKK inaktif-hasta anonimleştirme UÇTAN-UCA (local, sentetik veri).
 
 Rapor 'canlı doğrulayamadım' diyordu → burada 5-yıl-inaktif sentetik hastayla uçtan-uca kanıtlanır:
 inaktif hastanın PII'si [ANONIM] olur + `anonymized=1` + arama-indeksi temizlenir (eski adla bulunamaz);
 aktif hasta KORUNUR; işlem idempotenttir (zaten-anonim tekrar işlenmez)."""
+
 from datetime import datetime, timedelta
 
 
 def _pdb(temp_app_data):
     from database.patient_database import PatientDatabase
+
     return PatientDatabase(str(temp_app_data / "patients.db"))
 
 
@@ -20,11 +23,12 @@ def _set_last_treatment(db, pid, dt):
 
 def test_anonymize_inactive_end_to_end(temp_app_data):
     db = _pdb(temp_app_data)
-    old = db.add_patient({"name": "Eski Hasta", "owner": "Ali Veli",
-                          "owner_email": "ali@x.com", "vet_contact": "5551112233"})
+    old = db.add_patient(
+        {"name": "Eski Hasta", "owner": "Ali Veli", "owner_email": "ali@x.com", "vet_contact": "5551112233"}
+    )
     new = db.add_patient({"name": "Yeni Hasta", "owner": "Ayşe Yılmaz", "owner_email": "ayse@x.com"})
     _set_last_treatment(db, old, datetime.now() - timedelta(days=2200))  # ~6 yıl inaktif
-    _set_last_treatment(db, new, datetime.now() - timedelta(days=10))    # aktif
+    _set_last_treatment(db, new, datetime.now() - timedelta(days=10))  # aktif
 
     anon = db.anonymize_inactive_patients(inactive_days=1825)  # 5 yıl eşiği
 

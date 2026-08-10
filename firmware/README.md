@@ -112,7 +112,27 @@ taşır. Stub yalnızca *bizim kodumuzun kendi iç tutarlılığını* sınar; `
 düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırakıldı.
 
 ## ⚠️ Dikkat
-- **Termal/sıcaklık kesme mantığı bu firmware'de YOK** — termal koruma sensör/ESP tarafındadır. Sahip bunu bilerek böyle bıraktı.
+- **Termal/sıcaklık kesme mantığı bu firmware'de YOK.**
+
+  > ⚠️ **DÜZELTME 2026-08-09 (denetim, Tier 2).** Burada önceden *"termal koruma sensör/ESP
+  > tarafındadır"* yazıyordu. **Bu ifade 1-5 numaralı bobinler için DOĞRU DEĞİLDİ** ve yanlış
+  > güvence veriyordu. Ölçülen durum:
+  >
+  > | Bobin | Sürücü | Sıcaklık ölçümü | Termal kesme |
+  > |---|---|---|---|
+  > | 1-5 | STM32 (binary paket) | **YOK** — pakette sıcaklık alanı yok, STM sıcaklık yayınlamaz | **YOK** |
+  > | 6-8 | ESP32 (MQTT) | var (`pemf/coil/<id>/sensors` → `object_temp`) | yalnız arayüz eşiği |
+  >
+  > Tek kesme mantığı bir React bileşenindedir (`CoilParameterPanel.tsx`,
+  > `SAFE_TEMP_CUTOFF = 48 °C`) ve `objectTemp` üzerinden çalışır. 1-5 için bu değer **hiç
+  > gelmediğinden** (`live_state` varsayılanı `0.0`) koşul **hiçbir zaman** sağlanamaz — yani
+  > 8 bobinin 5'i hastanın üzerinde **hiçbir sıcaklık koruması olmadan** enerjilenir.
+  >
+  > Yanlış güvence, korumasızlıktan tehlikelidir: bu satıra bakan biri korumanın var olduğunu
+  > sanıp donanım tarafında önlem almayı erteler. **Gerçek çözüm donanımdadır** — 1-5 için
+  > sıcaklık sensörü + STM telemetrisi + firmware tarafında kesme. O yapılana kadar bu sınır
+  > BİLİNEREK taşınmalı ve kullanıcı arayüzü de "ölçülmüyor" demelidir (bkz.
+  > `CoilParameterPanel` sıcaklık rozeti).
 - Güvenlik-clamp'leri **hasta güvenliğidir** — zayıflatma. Python tarafı bilinçli olarak duty satüre etmez (firmware doyurur). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py`.
 
 ---

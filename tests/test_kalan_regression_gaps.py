@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """KALAN düzeltmeler için regresyon koruması (mutasyon testi 3. turu).
 
 Denetimin 86 düzeltmesinden P0/P1 ve ilk P2/P3 kümesi daha önce mutasyon testinden
@@ -24,6 +25,7 @@ def api(monkeypatch):
 
 # ───────────────────── BOBİN GÜVENLİĞİ ─────────────────────
 
+
 def test_bayat_ESP_telemetrisinde_GERCEK_stop_yayinlanir(api):
     """Bobin YALNIZCA 'durdu' işaretlenirse operatöre yanlış güvence verilir.
 
@@ -33,14 +35,17 @@ def test_bayat_ESP_telemetrisinde_GERCEK_stop_yayinlanir(api):
     yayınlamalı — ESP geri geldiğinde komutu alır.
     """
     import inspect
+
     src = inspect.getsource(api)
     assert '"reason": "telemetry_stale"' in src, (
-        "bayat ESP için STOP komutu yayınlanmıyor → bobin 'durdu' görünürken enerjili kalır")
+        "bayat ESP için STOP komutu yayınlanmıyor → bobin 'durdu' görünürken enerjili kalır"
+    )
     assert 'f"pemf/coil/{cid}/control"' in src
     # Demote eşiği gerçekten uygulanmalı (devasa yapılırsa watchdog hiç tetiklenmez)
     assert "(now - last) > ESP_STALE_SEC" in src, "bayatlık eşiği uygulanmıyor"
     assert isinstance(api.ESP_STALE_SEC, (int, float)) and 0 < api.ESP_STALE_SEC <= 300, (
-        f"ESP_STALE_SEC makul aralıkta değil: {api.ESP_STALE_SEC}")
+        f"ESP_STALE_SEC makul aralıkta değil: {api.ESP_STALE_SEC}"
+    )
 
 
 def test_acil_durdurma_auth_MUAF_kalir():
@@ -52,7 +57,8 @@ def test_acil_durdurma_auth_MUAF_kalir():
     from servers import auth
 
     assert auth.is_exempt("/api/hardware/emergency_stop"), (
-        "ACİL DURDURMA auth-muaf DEĞİL → token'sız durdurulamaz (fail-safe kayboldu)")
+        "ACİL DURDURMA auth-muaf DEĞİL → token'sız durdurulamaz (fail-safe kayboldu)"
+    )
     # /api/v1 alias'i middleware'de /api/'ye yeniden yazılır → yeniden yazılmış hâli muaf olmalı
     assert auth.is_exempt("/api/hardware/emergency_stop"), "alias yolu muaf değil"
     # Sağlık/keşif de muaf kalmalı (izleme ve eşleştirme kilitlenmesin)
@@ -70,7 +76,8 @@ def test_keep_alive_firmware_olu_adam_esiginin_ALTINDA():
     esik_s = hw.HardwareController._FIRMWARE_DEADMAN_MS / 1000.0
     assert hw.HardwareController.KEEP_ALIVE_INTERVAL_S * 2 <= esik_s, (
         f"keep-alive {hw.HardwareController.KEEP_ALIVE_INTERVAL_S}s × 2 > ölü-adam {esik_s}s → "
-        "tek paket kaybında firmware bobinleri keser")
+        "tek paket kaybında firmware bobinleri keser"
+    )
 
 
 def test_kapanis_ESP_STOP_butcesi_GERCEKTEN_uygulanir():
@@ -105,11 +112,12 @@ def test_bayat_payload_TEKRAR_gonderilmez():
     import headless_core
 
     assert 0 < headless_core._RETRY_MAX_AGE_S <= 5, (
-        f"_RETRY_MAX_AGE_S makul değil: {headless_core._RETRY_MAX_AGE_S} "
-        "(devasa değer = bayat komut replay'i serbest)")
+        f"_RETRY_MAX_AGE_S makul değil: {headless_core._RETRY_MAX_AGE_S} (devasa değer = bayat komut replay'i serbest)"
+    )
     src = inspect.getsource(headless_core)
     assert "(time.monotonic() - ts) > _RETRY_MAX_AGE_S" in src, (
-        "bayat payload yaş kontrolü YOK → yeniden bağlanmada eski sürüş komutu tekrar uygulanır")
+        "bayat payload yaş kontrolü YOK → yeniden bağlanmada eski sürüş komutu tekrar uygulanır"
+    )
 
 
 def test_sure_cevrimi_TAVANA_yuvarlar():
@@ -130,13 +138,16 @@ def test_dakika_birikimi_YENI_seansta_sifirlanir(api):
     """`_minute_acc` seanslar arası taşırsa önceki hastanın sensör örnekleri YENİ hastanın
     dakika-ortalamasına karışır → yanlış hastaya ait tıbbi kayıt."""
     import inspect
+
     src = inspect.getsource(api)
     # Hem manuel hem AI seans kurulumunda temizlenmeli
     assert src.count("_minute_acc.clear()") >= 2, (
-        "_minute_acc yeni seansta temizlenmiyor → önceki hastanın ölçümleri karışır")
+        "_minute_acc yeni seansta temizlenmiyor → önceki hastanın ölçümleri karışır"
+    )
 
 
 # ───────────────────── AI PRO ─────────────────────
+
 
 def test_landmark_auto_aktif_AI_Pro_seansini_GASP_ETMEZ():
     """AI Pro sürüyorken gelen bir landmark auto_adjust isteği (ikinci istemci / doğrudan API)
@@ -150,11 +161,13 @@ def test_landmark_auto_aktif_AI_Pro_seansini_GASP_ETMEZ():
 
     src = inspect.getsource(ai_router)
     assert 'return "skipped_session_active", {}' in src, (
-        "landmark-auto çatışma koruması YOK → AI Pro sürerken donanımı gasp eder")
+        "landmark-auto çatışma koruması YOK → AI Pro sürerken donanımı gasp eder"
+    )
     assert "if _ai_loop_active:" in src, "AI Pro aktiflik kontrolü yok"
     # Farklı modda aktif seans da korunmalı (Manuel/Otomatik)
     assert '_cur_active and _cur_mode != "AI (Auto)"' in src, (
-        "farklı moddaki aktif seans landmark-auto tarafından devralınabiliyor")
+        "farklı moddaki aktif seans landmark-auto tarafından devralınabiliyor"
+    )
 
 
 def test_ai_pro_sure_olcumu_MONOTONIC(api):
@@ -166,9 +179,9 @@ def test_ai_pro_sure_olcumu_MONOTONIC(api):
 
     src = inspect.getsource(ai_router)
     assert "_ai_started_at = time.monotonic()" in src, (
-        "AI Pro başlangıcı monotonic damgalanmıyor → NTP sıçraması süreyi bozar")
-    assert "time.monotonic() - _ai_started_at" in src, (
-        "kalan süre monotonic farkıyla hesaplanmıyor")
+        "AI Pro başlangıcı monotonic damgalanmıyor → NTP sıçraması süreyi bozar"
+    )
+    assert "time.monotonic() - _ai_started_at" in src, "kalan süre monotonic farkıyla hesaplanmıyor"
 
 
 def test_ai_pro_hedef_kaybinda_bobinler_DURDURULUR():
@@ -181,8 +194,10 @@ def test_ai_pro_hedef_kaybinda_bobinler_DURDURULUR():
     from servers import ai_router
 
     assert 1 <= ai_router._AI_LOST_STOP_STREAK <= 10, (
-        f"_AI_LOST_STOP_STREAK makul değil: {ai_router._AI_LOST_STOP_STREAK}")
+        f"_AI_LOST_STOP_STREAK makul değil: {ai_router._AI_LOST_STOP_STREAK}"
+    )
     src = inspect.getsource(ai_router)
     assert "if _lost_streak == _AI_LOST_STOP_STREAK:" in src, (
-        "hedef-kaybı STOP'u YOK → hedefsiz tedavi seans sonuna kadar sürer")
+        "hedef-kaybı STOP'u YOK → hedefsiz tedavi seans sonuna kadar sürer"
+    )
     assert "_stop_session_coils" in src

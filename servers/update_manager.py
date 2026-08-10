@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """PEMF — GitHub Release tabanlı EXE oto-güncelleme (BİLDİRİM + TEK-TIK ONAY).
 
 Akış: `pemf-update` repo'sunun **exe** branch'indeki `latest.json`'ı okur →
@@ -12,6 +13,7 @@ Kurulu sürüm = `VERSION` (backend/installer kanalı — latest.json'ın YAYINL
 bundle'lar). Geriye uyum için `frontend_version.json`'a düşülür ama o AYRI bir kanaldır
 (versions.json → `frontendOta`) ve exe sürümüyle kıyaslanmamalıdır — bkz. `_version_paths()`.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -32,20 +34,52 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # exe branch manifest'i (mobil ayrı branch'te; karışmaz). raw.githubusercontent → API rate-limit yok.
-_UPDATE_REPO = "mert61-python/pemf-update"   # host-pin bu repoya daraltilir (bkz. _validate_installer_url)
+_UPDATE_REPO = "mert61-python/pemf-update"  # host-pin bu repoya daraltilir (bkz. _validate_installer_url)
 _MANIFEST_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/exe/latest.json"
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# ⚠️ BU KANAL VARSAYILAN OLARAK KAPALIDIR (2026-08-09 denetimi, Tier 3 — "tek güncelleme kanalı")
+# ───────────────────────────────────────────────────────────────────────────────────────────
+# Güncellemeyi artık LAUNCHER yönetir: katmanlı paketler (base-app/base-deps), atomik takas,
+# sağlık kapılı geri alma, `rollout` ve `min_supported_version`. Bu modül ONDAN ÖNCEKİ
+# Inno/`exe` kanalıdır ve iki nedenle açık kalmamalı:
+#
+#   1) ÖLÜ: `exe/latest.json` bugün 404 döner (ölçüldü 2026-08-10). Denetleyici 6 saatte bir
+#      boşuna ağa çıkar, `previousStable` hiç dolmaz → `/api/update/rollback` HİÇBİR ZAMAN
+#      çalışamaz. RUNBOOK'un "kötü güncelleme" satırı tam da bu ölü komutu gösteriyordu.
+#   2) TEHLİKELİ: bir gün o dosya yeniden yayınlanırsa, Inno installer'ı LAUNCHER'IN yönettiği
+#      kurulumun YANINA ikinci bir backend + ikinci bir veri kökü kurar. Sonuç SPLIT-BRAIN
+#      HASTA VERİTABANI: seanslar iki ayrı DB'ye bölünür, ikisi de "eksiksiz" görünür.
+#
+# `is_update_in_progress()` bayrağı KAPALIYKEN DE doğru çalışır (hep False) — seans/AI Pro
+# başlatmadaki TOCTOU korumaları bozulmaz.
+#
+# Geri açmak (yalnız launcher'sız bir kurulumda): PEMF_LEGACY_EXE_UPDATE=1
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+_KANAL_KAPALI_MESAJ = (
+    "Bu cihazın güncellemelerini PEMF Vet Client (launcher) yönetiyor. Eski EXE güncelleme "
+    "kanalı kapalıdır — iki ayrı kurulum ve ikiye bölünmüş hasta veritabanı riski taşır."
+)
+
+
+def eski_kanal_acik_mi() -> bool:
+    """Eski Inno/`exe` OTA kanalı etkin mi? Varsayılan HAYIR."""
+    return os.environ.get("PEMF_LEGACY_EXE_UPDATE", "").strip() in ("1", "true", "True")
+
 
 # K2 (defense-in-depth): OTA installer URL'sini HTTPS + bilinen GitHub-release host'larına pinle.
 # Manifest ele geçse bile (repo/hesap) URL'yi keyfi bir sunucuya yönlendirip LocalSystem-EXE indirtme
 # engellenir. NOT: Çekirdek koruma installer imza-pinleme / manifest-imzalama'dır (release-süreci +
 # özel anahtar gerektirir → operatörle koordineli); bu katman URL-yönlendirme + path-traversal'i kapatır.
-_ALLOWED_UPDATE_HOSTS = frozenset({
-    "github.com",
-    "codeload.github.com",
-    "objects.githubusercontent.com",
-    "release-assets.githubusercontent.com",
-    "raw.githubusercontent.com",
-})
+_ALLOWED_UPDATE_HOSTS = frozenset(
+    {
+        "github.com",
+        "codeload.github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "raw.githubusercontent.com",
+    }
+)
 
 
 def _path_has_traversal(path: str) -> bool:
@@ -89,11 +123,14 @@ def _validate_installer_url(url: str):
     if host == "github.com":
         # P0 (2026-08-04): önce pin-atlatma yazımlarını ele — bkz. _path_has_traversal.
         if _path_has_traversal(p.path):
-            return False, ("Güncelleme URL'si nokta-segmenti/kodlanmış ayraç içeriyor "
-                           "(repo pini atlatma) — indirilmedi (güvenlik).")
+            return False, (
+                "Güncelleme URL'si nokta-segmenti/kodlanmış ayraç içeriyor "
+                "(repo pini atlatma) — indirilmedi (güvenlik)."
+            )
         if not p.path.startswith(f"/{_UPDATE_REPO}/"):
-            return False, (f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) "
-                           f"— indirilmedi (güvenlik).")
+            return False, (
+                f"Güncelleme URL'si beklenen repo dışında ({p.path.split('/releases')[0]}) — indirilmedi (güvenlik)."
+            )
     return True, ""
 
 
@@ -183,8 +220,17 @@ def _safe_ver(v) -> str:
     return s or "x"
 
 
-_status: dict = {"checked": False, "available": False, "currentVersion": "", "latestVersion": "",
-                 "notes": "", "installerUrl": "", "sha256": "", "mandatory": False, "error": ""}
+_status: dict = {
+    "checked": False,
+    "available": False,
+    "currentVersion": "",
+    "latestVersion": "",
+    "notes": "",
+    "installerUrl": "",
+    "sha256": "",
+    "mandatory": False,
+    "error": "",
+}
 _status_lock = threading.Lock()
 _apply_lock = threading.Lock()
 _applying = False
@@ -226,7 +272,7 @@ def _version_paths():
             roots.append(exe_dir / "_internal" / name)
         roots.append(Path(__file__).resolve().parent.parent / name)
 
-    _add("VERSION")                # exe/installer kanali (latest.json ile AYNI kanal)
+    _add("VERSION")  # exe/installer kanali (latest.json ile AYNI kanal)
     _add("frontend_version.json")  # geriye uyum: VERSION'i bundle etmeyen eski build'ler
     return roots
 
@@ -258,6 +304,7 @@ def _vtuple(v: str):
     '1-safety' int() ValueError → (0,0,0) → etiketli zorunlu guvenlik guncellemesi asla onerilmezdi).
     Hicbir sayisal parca yoksa None → 'bilinmiyor' (guncelleme ONERILMEZ; sonsuz-reinstall onle)."""
     import re
+
     parts = str(v).strip().lstrip("vV").split(".")
     nums = []
     for p in parts[:3]:
@@ -295,9 +342,7 @@ def check_for_update(timeout: float = 15.0) -> dict:
             # devasa bir govde donerse tibbi cihazin RAM'i tukenir. Tavan+1 oku, asimi YAKALA.
             raw = r.read(_MAX_MANIFEST_BYTES + 1)
         if len(raw) > _MAX_MANIFEST_BYTES:
-            raise ValueError(
-                f"manifest boyut tavanini asti (> {_MAX_MANIFEST_BYTES} bayt) — reddedildi"
-            )
+            raise ValueError(f"manifest boyut tavanini asti (> {_MAX_MANIFEST_BYTES} bayt) — reddedildi")
         m = json.loads(raw.decode("utf-8"))
         latest = str(m.get("version", "")).strip()
         res = {
@@ -315,9 +360,18 @@ def check_for_update(timeout: float = 15.0) -> dict:
         }
     except Exception as e:
         logger.warning("Güncelleme kontrolü hatası: %s", e)
-        res = {"checked": True, "available": False, "currentVersion": cur, "latestVersion": "",
-               "notes": "", "installerUrl": "", "sha256": "", "mandatory": False,
-               "previousStable": None, "error": "Güncelleme kontrolü başarısız"}
+        res = {
+            "checked": True,
+            "available": False,
+            "currentVersion": cur,
+            "latestVersion": "",
+            "notes": "",
+            "installerUrl": "",
+            "sha256": "",
+            "mandatory": False,
+            "previousStable": None,
+            "error": "Güncelleme kontrolü başarısız",
+        }
     with _status_lock:
         _status.clear()
         _status.update(res)
@@ -332,6 +386,30 @@ def get_status() -> dict:
         # ilk kontrol öncesi (checker henüz çalışmadı) bile kurulu sürümü ver — setdefault
         # mevcut boş "" değeri ezmediğinden DOĞRUDAN ata.
         s["currentVersion"] = get_current_version()
+    if not eski_kanal_acik_mi():
+        # Kanal kapalı → "güncelleme yok" DEĞİL, "bu kanal artık yönetmiyor" de. Sözleşme
+        # korunur (`available`/`currentVersion` alanları aynı tipte) ki eski mobil istemciler
+        # kırılmasın; `channel` alanı yeni istemcilere gerçeği söyler. `error` BOŞ bırakılır:
+        # kapalı bir kanal arıza değildir, arıza gibi göstermek yanlış teşhise yol açar.
+        s.update(
+            {
+                "checked": True,
+                "available": False,
+                "latestVersion": "",
+                "notes": "",
+                "installerUrl": "",
+                "sha256": "",
+                "mandatory": False,
+                "previousStable": None,
+                "error": "",
+                "channel": "launcher",
+                "legacyChannelEnabled": False,
+                "message": _KANAL_KAPALI_MESAJ,
+            }
+        )
+    else:
+        s["channel"] = "legacy-exe"
+        s["legacyChannelEnabled"] = True
     return s
 
 
@@ -378,6 +456,7 @@ def _has_active_treatment() -> bool:
     değiştirmesi bobinleri kontrolcüsüz bırakabilir; belirsizlikte asla güncelleme."""
     try:
         from servers import api_server as _api
+
         if not hasattr(_api, "_build_ws_snapshot"):
             logger.warning("_build_ws_snapshot yok → aktif-tedavi belirlenemedi, fail-closed (güncelleme reddedildi).")
             return True
@@ -407,7 +486,9 @@ def _verify_authenticode(path: Path) -> str:
         ps = "$s=(Get-AuthenticodeSignature -LiteralPath '%s').Status; Write-Output $s" % str(path).replace("'", "''")
         out = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True,
+            text=True,
+            timeout=20,
         )
         status = (out.stdout or "").strip()
         if status == "Valid":
@@ -425,6 +506,8 @@ def _verify_authenticode(path: Path) -> str:
 def apply_update() -> dict:
     """Operatör onayıyla: installer'ı indir → SHA256 doğrula → aktif tedavi yoksa sessiz kur."""
     global _applying, _applying_since
+    if not eski_kanal_acik_mi():
+        return {"ok": False, "error": _KANAL_KAPALI_MESAJ}
     st = get_status()
     if not st.get("available") or not st.get("installerUrl"):
         return {"ok": False, "error": "Uygulanacak güncelleme yok."}
@@ -450,7 +533,7 @@ def apply_update() -> dict:
     _installer_launched = False
     dest = None
     try:
-        dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion','x'))}.exe")
+        dest = _private_temp_path(f"PEMF_Update_{_safe_ver(st.get('latestVersion', 'x'))}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
             _download_to(r, f, _MAX_INSTALLER_BYTES, "Installer")
@@ -462,14 +545,20 @@ def apply_update() -> dict:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": "Güncelleme manifest'inde SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
+            return {
+                "ok": False,
+                "error": "Güncelleme manifest'inde SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+            }
         actual = _sha256(dest)
         if actual != expected:
             try:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": f"SHA256 uyuşmadı (beklenen {expected[:12]}… geldi {actual[:12]}…) — güncelleme İPTAL."}
+            return {
+                "ok": False,
+                "error": f"SHA256 uyuşmadı (beklenen {expected[:12]}… geldi {actual[:12]}…) — güncelleme İPTAL.",
+            }
         # EK savunma: Authenticode imzası açıkça kurcalanmışsa reddet (imzasız = SHA ile geçer).
         if _verify_authenticode(dest) == "tampered":
             try:
@@ -485,7 +574,10 @@ def apply_update() -> dict:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin)."}
+            return {
+                "ok": False,
+                "error": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin).",
+            }
         # Detached: installer servisi (bu süreci) durdursa da hayatta kalır → değiştir → yeniden başlat.
         flags = 0
         if os.name == "nt":
@@ -497,20 +589,25 @@ def apply_update() -> dict:
         )
         _installer_launched = True
         logger.info("Güncelleme kurulumu başlatıldı: %s", dest)
-        return {"ok": True, "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar."}
+        return {
+            "ok": True,
+            "message": "Güncelleme indirildi + doğrulandı, kurulum başladı. Servis birazdan yeni sürümle yeniden başlar.",
+        }
     except Exception:
         logger.exception("apply_update hatası")
         return {"ok": False, "error": "Güncelleme uygulanamadı"}
     finally:
         if not _installer_launched:
-            _applying = False   # basarisiz → normale don
+            _applying = False  # basarisiz → normale don
             # Ozel gecici dizin YALNIZ installer basladiysa yasamali; aksi halde her
             # basarisiz deneme %TEMP%'e yetim bir `pemf_upd_*` dizini birakirdi.
             _discard_temp_dir(dest)
             _applying_since = None
         else:
-            logger.info("Guncelleme guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
-                        "degistirene kadar YENI tedavi/seans baslatilamaz.")
+            logger.info(
+                "Guncelleme guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
+                "degistirene kadar YENI tedavi/seans baslatilamaz."
+            )
 
 
 def rollback() -> dict:
@@ -519,6 +616,8 @@ def rollback() -> dict:
     ile AYNI güvenlik zinciri, yön 'geri'. previousStable yoksa/manifest vermezse rollback yapılamaz.
     Kötü bir güncelleme sahada sorun çıkarırsa operatör tek-tıkla son iyi sürüme döner."""
     global _applying, _applying_since
+    if not eski_kanal_acik_mi():
+        return {"ok": False, "error": _KANAL_KAPALI_MESAJ}
     st = get_status()
     # Audit P3: previousStable dict DEĞİLSE (bozuk manifest: string/liste) `or {}` truthy-non-dict'i
     # geçirir → prev.get() AttributeError → try'dan önce olduğu için generic 500 (operatör dönemez).
@@ -529,7 +628,10 @@ def rollback() -> dict:
     expected = str(prev.get("sha256") or "").lower()
     ver = str(prev.get("version") or "prev")
     if not url:
-        return {"ok": False, "error": "Geri dönülecek önceki kararlı sürüm tanımlı değil (manifest 'previousStable' yok)."}
+        return {
+            "ok": False,
+            "error": "Geri dönülecek önceki kararlı sürüm tanımlı değil (manifest 'previousStable' yok).",
+        }
     # Öncelik: aktif-tedavi güvenlik-guard'ı URL-doğrulamasından ÖNCE (apply_update ile tutarlı).
     if _has_active_treatment():
         return {"ok": False, "error": "Aktif tedavi sürüyor — rollback seans bitince yapılabilir."}
@@ -550,7 +652,10 @@ def rollback() -> dict:
     dest = None
     try:
         if not expected:
-            return {"ok": False, "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik)."}
+            return {
+                "ok": False,
+                "error": "previousStable SHA256 yok — doğrulanamayan installer ÇALIŞTIRILMADI (güvenlik).",
+            }
         dest = _private_temp_path(f"PEMF_Rollback_{_safe_ver(ver)}.exe")
         req = urllib.request.Request(url, headers={"User-Agent": "pemf-updater"})
         with urllib.request.urlopen(req, timeout=180) as r, open(dest, "wb") as f:
@@ -574,7 +679,10 @@ def rollback() -> dict:
                 dest.unlink()
             except Exception:
                 pass
-            return {"ok": False, "error": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin)."}
+            return {
+                "ok": False,
+                "error": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin).",
+            }
         flags = 0
         if os.name == "nt":
             flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
@@ -591,17 +699,25 @@ def rollback() -> dict:
         return {"ok": False, "error": "Geri alma başarısız"}
     finally:
         if not _installer_launched:
-            _applying = False   # basarisiz → normale don
-            _discard_temp_dir(dest)   # apply_update ile AYNI desen (yetim dizin birakma)
+            _applying = False  # basarisiz → normale don
+            _discard_temp_dir(dest)  # apply_update ile AYNI desen (yetim dizin birakma)
             _applying_since = None
         else:
-            logger.info("Rollback guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
-                        "degistirene kadar YENI tedavi/seans baslatilamaz.")
+            logger.info(
+                "Rollback guard'i ACIK birakildi: installer servisi durdurup EXE'yi "
+                "degistirene kadar YENI tedavi/seans baslatilamaz."
+            )
 
 
 def start_update_checker(interval_sec: int = 6 * 3600) -> None:
     """Arka plan: açılışta + her interval'da exe/latest.json kontrol (bildirim için). Uygulamaz — onay ister."""
     global _check_thread
+    if not eski_kanal_acik_mi():
+        logger.info(
+            "Eski EXE guncelleme kanali KAPALI (guncellemeleri launcher yonetir); "
+            "denetleyici baslatilmadi. Acmak icin PEMF_LEGACY_EXE_UPDATE=1."
+        )
+        return
     if _check_thread and _check_thread.is_alive():
         return
     _stop.clear()
@@ -618,7 +734,9 @@ def start_update_checker(interval_sec: int = 6 * 3600) -> None:
             try:
                 r = check_for_update()
                 if r.get("available"):
-                    logger.info("Yeni backend sürümü mevcut: %s (kurulu %s)", r.get("latestVersion"), r.get("currentVersion"))
+                    logger.info(
+                        "Yeni backend sürümü mevcut: %s (kurulu %s)", r.get("latestVersion"), r.get("currentVersion")
+                    )
             except Exception:
                 logger.exception("update checker döngü hatası")
             _stop.wait(interval_sec)

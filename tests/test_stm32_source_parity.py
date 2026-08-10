@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Denetim 2026-08-04 (P3): STM32 protokol sabitleri ÜÇ ayrı kaynakta ELLE kopyalanmış durumda —
 firmware/main.c (otorite), utils/stm32_protocol_limits.py (backend) ve tools/stm32_simulator.py
 (E2E test cihazı) — ve hiçbir derleme-zamanı ya da test-zamanı kontrolü bunları karşılaştırmıyordu.
@@ -118,8 +119,7 @@ def test_paket_boyutu_88_uc_kaynakta_da_ayni(sim, fw_src):
     mc = re.search(r"#define\s+NUM_COILS\s+(\d+)", fw_src)
     assert mc, "NUM_COILS #define'i bulunamadi"
     sabitler = {"NUM_COILS": int(mc.group(1))}
-    boyutlar = {"uint8_t": 1, "int8_t": 1, "uint16_t": 2, "int16_t": 2,
-                "uint32_t": 4, "int32_t": 4, "float": 4}
+    boyutlar = {"uint8_t": 1, "int8_t": 1, "uint16_t": 2, "int16_t": 2, "uint32_t": 4, "int32_t": 4, "float": 4}
     toplam = 0
     alan_sayisi = 0
     for alan in re.finditer(
@@ -314,9 +314,7 @@ def test_ref_ms_valid_pending_gibi_tuketiliyor(fw_src):
     # Sıfırlama, hizalamayı KULLANAN bloktan SONRA gelmeli (önce sıfırlanırsa hiç hizalanmaz).
     kullanim = govde.index("g_dds_tick[i] = new_tick")
     sifirlama = govde.index("g_active.ref_ms_valid = 0")
-    assert sifirlama > kullanim, (
-        "ref_ms_valid, hizalama uygulanmadan ONCE sifirlaniyor — hizalama hic calismaz."
-    )
+    assert sifirlama > kullanim, "ref_ms_valid, hizalama uygulanmadan ONCE sifirlaniyor — hizalama hic calismaz."
 
 
 def test_pending_yazan_yollar_biliniyor(fw_src):

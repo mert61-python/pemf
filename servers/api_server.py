@@ -1,4 +1,6 @@
+# Author: mertaygn, cglrgrkn
 import asyncio  # P0 audit 2026-06-28: senkron MQTT publish'i event-loop'tan cikar (to_thread)
+import itertools as _itertools  # MQTT yayinci client_id sayaci (bkz. _mqtt_client_id)
 import json
 import logging
 import os
@@ -23,9 +25,10 @@ from servers import (
 from servers.ai_router import ai_router
 from servers.history_router import router as history_router
 from servers.settings_router import router as settings_router
-from utils.path_utils import get_app_version  # audit B-8.1: tek versiyon kaynağı
+from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
 _APP_VERSION = get_app_version()
+_BUILD_ID = get_build_id()  # launcher'ın kurduğu paketin sha'sı (yoksa "")
 
 # ── B-2.2: canlı-durum çekirdeği servers/live_state.py'ye taşındı ──────────────────────────────
 # Aşağıdaki alias'lar AYNI nesnelere işaret eder (dict/list/lock in-place mutasyon → api_server'ın
@@ -55,16 +58,21 @@ try:
 except ImportError:
     HeadlessCore = None
     HardwareController = None
-    def get_patient_database(app_data_dir=None): return None
+
+    def get_patient_database(app_data_dir=None):
+        return None
+
 
 def _app_data_dir():
     """Kanonik app_data dizini — history/settings router'larıyla AYNI kök (split-brain önler).
     Eskiden os.environ APPDATA boş/yokken 'C:/PEMF_GUI'ye düşüp yazıcı/okuyucu ayrışıyordu."""
     try:
         from utils.path_utils import get_app_data_directory
+
         return get_app_data_directory()
     except Exception:
         from pathlib import Path as _PP
+
         return _PP(os.environ.get("APPDATA") or (_PP.home() / "AppData" / "Roaming")) / "PEMF_GUI"
 
 
@@ -76,8 +84,8 @@ _docs_env = os.getenv("PEMF_ENABLE_DOCS", "").strip()
 if _docs_env in ("0", "1"):
     _docs_enabled = _docs_env == "1"
 else:
-    _docs_enabled = (os.getenv("PEMF_REQUIRE_AUTH", "0") != "1"
-                     and os.getenv("PEMF_ENABLE_TUNNEL", "0") != "1")
+    _docs_enabled = os.getenv("PEMF_REQUIRE_AUTH", "0") != "1" and os.getenv("PEMF_ENABLE_TUNNEL", "0") != "1"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -108,6 +116,7 @@ async def lifespan(app: FastAPI):
                 pass
         try:
             from servers.auto_discovery import stop_mdns
+
             stop_mdns()
         except Exception:
             pass
@@ -144,7 +153,7 @@ _LAN_ORIGIN_REGEX = (
 )
 _cors_env = os.getenv("PEMF_CORS_ORIGINS", "").strip()
 if _cors_env == "*":
-    _cors_kwargs = {"allow_origins": ["*"]}                      # acik opt-in (geriye uyumlu)
+    _cors_kwargs = {"allow_origins": ["*"]}  # acik opt-in (geriye uyumlu)
 elif _cors_env:
     _cors_kwargs = {"allow_origins": [o.strip() for o in _cors_env.split(",") if o.strip()]}
 else:
@@ -165,6 +174,7 @@ _allowed_hosts_env = os.getenv("PEMF_ALLOWED_HOSTS", "*").strip()
 _allowed_hosts = ["*"] if _allowed_hosts_env == "*" else [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
 if _allowed_hosts != ["*"]:
     from starlette.middleware.trustedhost import TrustedHostMiddleware
+
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 
 
@@ -200,14 +210,23 @@ async def add_security_headers(request: Request, call_next):
     """
     # O-1: request-correlation-id — istemci X-Request-ID'sini (güvenli-karakter SÜZ → header/log-injection'a
     # karşı) kullan ya da üret; JSON-log + yanıt header'ında izlenir (7/24 saha debug).
-    _rid = "".join(c for c in (request.headers.get("X-Request-ID") or "") if c.isalnum() or c in "._-")[:64] or _uuid.uuid4().hex[:12]
+    _rid = (
+        "".join(c for c in (request.headers.get("X-Request-ID") or "") if c.isalnum() or c in "._-")[:64]
+        or _uuid.uuid4().hex[:12]
+    )
     from utils.request_context import request_id_var
+
     request_id_var.set(_rid)
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
     response.headers["X-API-Version"] = _APP_VERSION  # istemci/monitoring sürüm görünürlüğü
+    # Paket kimliği: aynı sürüm numarası farklı ikiliyi çalıştırabilir (yeniden yayın, yarım
+    # güncelleme). Olay kaydında "hangi paket" sorusunu tek başına cevaplar. Launcher'sız
+    # çalıştırmada boş → header hiç eklenmez (uydurma değer basmaktansa sessiz kal).
+    if _BUILD_ID:
+        response.headers["X-Build-Id"] = _BUILD_ID
     # Klasik güvenlik header'ları (audit S-1): MIME-sniff / clickjacking / referrer-sızıntı önle.
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -254,7 +273,7 @@ async def _auth_middleware(request: Request, call_next):
     # /api/v1 alias'inda 401 veriyordu. Yeniden-yazim artik auth'tan ONCE.
     _p = request.scope.get("path", "")
     if _p.startswith("/api/v1/"):
-        request.scope["path"] = "/api/" + _p[len("/api/v1/"):]
+        request.scope["path"] = "/api/" + _p[len("/api/v1/") :]
     if request.method == "OPTIONS":
         return await call_next(request)
     # P1 audit 2026-06-28: FAIL-CLOSED. Eskiden auth yolundaki HERHANGI istisna (servers.auth
@@ -263,6 +282,7 @@ async def _auth_middleware(request: Request, call_next):
     # health/discovery/simulator) gecer, GERISI 503; token kontrolu patlarsa 401.
     try:
         from servers.auth import check_token, is_exempt, is_local_request, require_auth
+
         required = bool(require_auth())
         exempt = is_exempt(request.url.path)
         # YEREL/LAN MUAF: masaüstü kısayolu (localhost:8000) + aynı-WiFi istekleri token İSTEMEZ;
@@ -277,7 +297,9 @@ async def _auth_middleware(request: Request, call_next):
         p = request.url.path
         if any(s in p for s in ("emergency_stop", "/health", "/discovery", "/simulator")):
             return await call_next(request)
-        return Response(status_code=503, content='{"detail":"Auth katmani kullanilamiyor"}', media_type="application/json")
+        return Response(
+            status_code=503, content='{"detail":"Auth katmani kullanilamiyor"}', media_type="application/json"
+        )
     if required and not exempt:
         try:
             ok = check_token(request.headers.get("X-API-Key") or request.query_params.get("token") or "")
@@ -305,7 +327,7 @@ try:
     _RL_REMOTE_MAX = int(os.getenv("PEMF_RATELIMIT_REMOTE_PER_MIN", "600"))
 except ValueError:
     _RL_REMOTE_MAX = 600
-_rl_hits: dict = {}          # client_ip -> [window_start_epoch, count]
+_rl_hits: dict = {}  # client_ip -> [window_start_epoch, count]
 _rl_last_purge = [0.0]
 
 
@@ -331,6 +353,7 @@ def _rl_client_ip(request: Request) -> str:
             import ipaddress as _ip
 
             from servers.auth import _trusted_proxies
+
             _a = _ip.ip_address(_sock)
             if _a.is_loopback or any(_a in n for n in _trusted_proxies()):
                 return cf.split(",")[0].strip()
@@ -351,6 +374,7 @@ async def _rate_limit_middleware(request: Request, call_next):
     _via_proxy = bool(_h.get("cf-connecting-ip") or _h.get("cf-ray") or _h.get("x-forwarded-for"))
     try:
         from servers.auth import is_local_request
+
         _local = is_local_request(request.client.host if request.client else "", _via_proxy)
     except Exception:
         _local = not _via_proxy
@@ -480,16 +504,22 @@ def _esp_telemetry_watchdog():
             # zaten yapabilecegimiz bir sey yok (log'a dusulur).
             for cid, snap in changed:
                 try:
-                    _mqtt_publish(f"pemf/coil/{cid}/control", {
-                        "command": "stop",
-                        "command_id": f"stale_{cid}_{int(time.time() * 1000)}",
-                        "reason": "telemetry_stale",
-                    })
+                    _mqtt_publish(
+                        f"pemf/coil/{cid}/control",
+                        {
+                            "command": "stop",
+                            "command_id": f"stale_{cid}_{int(time.time() * 1000)}",
+                            "reason": "telemetry_stale",
+                        },
+                    )
                 except Exception:
                     logging.getLogger(__name__).warning(
-                        "esp watchdog: bobin %s STOP publish edilemedi", cid, exc_info=True)
+                        "esp watchdog: bobin %s STOP publish edilemedi", cid, exc_info=True
+                    )
                 _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
-                _push_notification(f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi", "warning")
+                _push_notification(
+                    f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi", "warning"
+                )
         except Exception:
             logging.exception("esp telemetry watchdog error")
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
@@ -537,8 +567,9 @@ def _on_mqtt_message_api(client, userdata, msg):
                     coil["magneticMt"] = round(float(payload.get("magnetic_field", 0.0)), 2)
                     coil["connected"] = True
                     snapshot = dict(coil)
-                _ws_broadcast_sync({"type": "sensor_data", "coilId": int(coil_id_str),
-                                    "data": snapshot, "timestamp": time.time()})
+                _ws_broadcast_sync(
+                    {"type": "sensor_data", "coilId": int(coil_id_str), "data": snapshot, "timestamp": time.time()}
+                )
 
             elif msg_type == "status" and not is_retained:
                 with _live_state_lock:
@@ -546,12 +577,18 @@ def _on_mqtt_message_api(client, userdata, msg):
                     status = payload.get("status", "")
                     coil["connected"] = status in ("online", "ready", "running")
                     coil["running"] = status == "running"
-                    if "frequency" in payload: coil["frequencyHz"] = payload["frequency"]
-                    if "duty_cycle" in payload: coil["dutyCycle"] = payload["duty_cycle"]
-                    if "pwm_active" in payload: coil["running"] = bool(payload["pwm_active"])
-                    if "pwm_frequency" in payload: coil["frequencyHz"] = payload["pwm_frequency"]
-                    if "object_temp" in payload: coil["objectTemp"] = round(float(payload["object_temp"]), 1)
-                    if "magnetic_field" in payload: coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
+                    if "frequency" in payload:
+                        coil["frequencyHz"] = payload["frequency"]
+                    if "duty_cycle" in payload:
+                        coil["dutyCycle"] = payload["duty_cycle"]
+                    if "pwm_active" in payload:
+                        coil["running"] = bool(payload["pwm_active"])
+                    if "pwm_frequency" in payload:
+                        coil["frequencyHz"] = payload["pwm_frequency"]
+                    if "object_temp" in payload:
+                        coil["objectTemp"] = round(float(payload["object_temp"]), 1)
+                    if "magnetic_field" in payload:
+                        coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
                     snapshot = dict(coil)
                 _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": snapshot})
 
@@ -581,11 +618,13 @@ def _on_mqtt_message_api(client, userdata, msg):
                 if is_retained:
                     logging.warning(
                         "ESP bobin %s icin RETAINED alarm alindi → acil-durdurma TETIKLENMEDI "
-                        "(broker'da kalmis eski mesaj; canli alarm retain'siz gelir).", coil_id_str)
+                        "(broker'da kalmis eski mesaj; canli alarm retain'siz gelir).",
+                        coil_id_str,
+                    )
                     return
                 atype = payload.get("type") or payload.get("alarm") or payload.get("reason") or "alarm"
                 logging.error("ESP ALARM bobin %s: %s -> tum bobinler durduruluyor", coil_id_str, atype)
-                _push_notification(f"🚨 Bobin {coil_id_str} ALARM ({atype}) — tedavi güvenlik için durduruldu", "error")
+                _push_notification(f"🚨 Bobin {coil_id_str} ALARM ({atype}) — seans güvenlik için durduruldu", "error")
                 try:
                     _emergency_stop_async(reason=f"esp_alarm_{coil_id_str}_{atype}", mode="ESP Güvenlik Alarmı")
                 except Exception:
@@ -594,16 +633,41 @@ def _on_mqtt_message_api(client, userdata, msg):
     except Exception as _e:
         # Audit #23: eskiden 'except: pass' ile sessizce yutuluyordu → bozuk/beklenmedik MQTT
         # mesajları (örn. coil status güncellenememesi) görünmezdi. Artık WARN'la (özet, traceback'siz).
-        logging.getLogger(__name__).warning(
-            "MQTT on_message islenemedi (topic=%s): %s", getattr(msg, "topic", "?"), _e
-        )
+        logging.getLogger(__name__).warning("MQTT on_message islenemedi (topic=%s): %s", getattr(msg, "topic", "?"), _e)
+
+
+# ── MQTT istemci kimligi ─────────────────────────────────────────────────────
+# MQTT sozlesmesi geregi AYNI client_id ile yeni bir baglanti gelirse broker ONCEKI oturumu
+# DUSURUR. Sabit kimlikler ("api_server_ws_listener" / "api_server_pub") iki gercek arizaya
+# yol aciyordu:
+#
+#   1) DINLEYICI — yeniden baslatma/OTA penceresinde eski surecin oturumu brokerde bir sure
+#      yasar: yeni surec baglanir → eski dusurulur → eski otomatik yeniden baglanir → yeni
+#      dusurulur... Sonuc: bitmeyen "Sistem baglantisi kesildi/kuruldu" bildirimi ve o sure
+#      boyunca ESP telemetrisinde bosluk. (E2E 2026-08-06'da iki backend ile gozlendi.)
+#
+#   2) YAYINCI — _mqtt_publish HER cagride yeni istemci acar ve _emergency_stop_all, ESP
+#      bobinlerine ThreadPoolExecutor ile PARALEL yayin yapar (bobin basina 2 publish).
+#      Ucu de ayni kimligi kullandigindan broker sonuncu disindakileri DUSURUR → acil-durdurma
+#      STOP komutu KAYBOLABILIR. Bu bir HASTA GUVENLIGI yolu: kimlik cagri basina benzersiz olmali.
+#
+# Kimlik <=23 karakterde tutulur (MQTT 3.1 doneminden kalma brokerlarin client_id siniri).
+_MQTT_PUB_SEQ = _itertools.count(1)
+
+
+def _mqtt_client_id(role: str) -> str:
+    """Surece ozgu (yayinci icin cagriya da ozgu) MQTT client_id."""
+    if role == "pub":
+        return f"pemf_pub_{os.getpid()}_{next(_MQTT_PUB_SEQ) % 100000}"
+    return f"pemf_{role}_{os.getpid()}"
 
 
 def _start_mqtt_for_api() -> None:
     global _mqtt_client_api
     try:
         import paho.mqtt.client as _mqtt
-        _mqtt_client_api = _mqtt.Client(client_id="api_server_ws_listener", clean_session=True)
+
+        _mqtt_client_api = _mqtt.Client(client_id=_mqtt_client_id("ws"), clean_session=True)
         _u, _pw = _mqtt_credentials()
         if _u:
             _mqtt_client_api.username_pw_set(_u, _pw)  # broker auth açıksa kimlik gönder
@@ -645,7 +709,7 @@ def _handle_backend_event(event) -> None:
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
         if _sess_active and any(c in STM_COIL_IDS for c in _sess_coils):
             logging.error("STM baglanti kaybi: STM kullanan aktif seans durduruluyor (guvenlik).")
-            _push_notification("⚠️ STM32 bağlantısı koptu — tedavi güvenlik için durduruldu", "error")
+            _push_notification("⚠️ STM32 bağlantısı koptu — seans güvenlik için durduruldu", "error")
             try:
                 _emergency_stop_async(reason="stm_disconnected", mode="STM Bağlantı Kaybı")
             except Exception:
@@ -665,7 +729,7 @@ def _handle_backend_event(event) -> None:
         # STM firmware watchdog'u ateşledi → STM PWM'i BİLİNMEYEN/durmuş durumda (komuta uymuyor). Bu bir
         # donanım-fault EVENT'i (backend EŞİK DAYATMAZ; donanımın kararına tepki verir) → STM kullanan aktif
         # seansı güvenli durdur + state'i eşitle. Aksi halde UI 'çalışıyor' gösterir ama STM durmuştur (desync).
-        _push_notification("⚠️ STM32 watchdog zaman aşımı — tedavi güvenlik için durduruldu", "error")
+        _push_notification("⚠️ STM32 watchdog zaman aşımı — seans güvenlik için durduruldu", "error")
         with _session_lock:
             _sess_active = bool(_active_session.get("is_active"))
             _sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
@@ -693,10 +757,12 @@ def _handle_backend_event(event) -> None:
             if data.get("mqtt_broker_reachable"):
                 _live_state["mqtt"] = "online"
             mqtt_state = _live_state["mqtt"]
-        _ws_broadcast_sync({
-            "type": "gateway_status",
-            "data": {"gateway": gateway_state, "mqtt": mqtt_state, "network": data},
-        })
+        _ws_broadcast_sync(
+            {
+                "type": "gateway_status",
+                "data": {"gateway": gateway_state, "mqtt": mqtt_state, "network": data},
+            }
+        )
         return
     if event.event_type in {"mqtt.broker.error", "discovery.error"}:
         _push_notification(str(data.get("message", event.event_type)), "warning")
@@ -723,7 +789,8 @@ class APIState:
     def __init__(self):
         self.core: HeadlessCore = None
         self.hardware: HardwareController = None
-        
+
+
 state = APIState()
 
 # NOT (audit B-2.2): startup/shutdown mantığı yukarıdaki `lifespan` context-manager'ına taşındı
@@ -735,10 +802,10 @@ def _start_mdns_service() -> None:
     """mDNS (Zeroconf) servisini ayrı thread'de başlatır."""
     try:
         from servers.auto_discovery import start_mdns
+
         start_mdns(port=8000, device_name="PEMF-Vet")
     except Exception as e:
         logging.warning("mDNS başlatılamadı: %s", e)
-
 
 
 # ── WebSocket Endpoint (/ws) ───────────────────────────────────────
@@ -749,6 +816,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # ediyordu (kimliksiz WS kabul). Artik istisnada baglanti KAPATILIR (sessiz bypass YOK).
     try:
         from servers.auth import check_token, is_local_request, require_auth
+
         required = bool(require_auth())
     except Exception:
         logging.exception("WS auth katmani yuklenemedi (FAIL-CLOSED)")
@@ -765,6 +833,7 @@ async def websocket_endpoint(websocket: WebSocket):
     if _ws_origin and not _ws_via_proxy:
         try:
             from urllib.parse import urlparse as _urlparse
+
             _o_host = (_urlparse(_ws_origin).hostname or "").lower()
             _h_host = (_wh.get("host") or "").rsplit(":", 1)[0].lower()
             if _o_host and _h_host and _o_host != _h_host:
@@ -819,7 +888,9 @@ async def websocket_endpoint(websocket: WebSocket):
             except ValueError:
                 pass
 
+
 # --- REACT NATIVE (EXPO) ENDPOINT'LERİ ---
+
 
 @app.get("/metrics")
 async def metrics():
@@ -841,7 +912,7 @@ async def metrics():
         ws_clients = len(_ws_clients)
     m = [
         ("pemf_ws_clients", "Bagli WebSocket istemci sayisi", ws_clients),
-        ("pemf_active_session", "Aktif tedavi seansi (1/0)", active),
+        ("pemf_active_session", "Aktif seans (1/0)", active),
         ("pemf_coils_connected", "Bagli bobin sayisi", connected),
         ("pemf_coils_running", "Calisan bobin sayisi", running),
         ("pemf_mqtt_up", "MQTT broker baglantisi (1/0)", mqtt_up),
@@ -854,18 +925,20 @@ async def metrics():
         lines.append(f"# HELP {name} {help_text}")
         lines.append(f"# TYPE {name} gauge")
         lines.append(f"{name} {val}")
-    return Response(content="\n".join(lines) + "\n",
-                    media_type="text/plain; version=0.0.4; charset=utf-8")
+    return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 class CommandPayload(BaseModel):
     command: str
     params: dict = {}
 
+
 # (audit B-2.2) PatientInput modeli servers/patient_router.py'ye taşındı (hasta uçlarıyla birlikte).
+
 
 class AutoPresetPayload(BaseModel):
     target_condition: str
+
 
 class SessionStartPayload(BaseModel):
     patient_id: str = ""
@@ -890,12 +963,14 @@ class SessionStartPayload(BaseModel):
     # list[int]: tip-disi eleman artik sessizce "tedavi yok"a dusmek yerine 422 verir.
     coil_ids: list[int] = Field(default_factory=list, max_length=8)  # empty = all coils
 
+
 class CoilControlPayload(BaseModel):
     freq: float = 50.0
     duty: float = 25.0
     phase: float = 0.0
     duration: int = 0  # seconds for ESP/MQTT payloads
     start: bool = True
+
 
 class BatchCoilPayload(BaseModel):
     coil_ids: list[int]  # e.g. [1,2,3]
@@ -916,6 +991,7 @@ def _duration_seconds_to_stm_minutes(duration_seconds: int) -> int:
         return 0
     return max(1, (seconds + 59) // 60)
 
+
 # ── MQTT publish helper (used by headless and GUI-less mode) ─────────────────
 import json as _json
 
@@ -925,6 +1001,7 @@ def _mqtt_credentials():
     Yapılandırılmamışsa (None, None) → anonim (geriye uyumlu). Üretimde PEMF_MQTT_USER/PASS ayarla."""
     try:
         from utils.secrets_manager import get_secret
+
         u = get_secret("mqtt_user")
         p = get_secret("mqtt_pass")
     except Exception:
@@ -941,13 +1018,17 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
     broker erişilebilir mi bak; değilse anında çık (seansı kilitleme)."""
     try:
         import socket as _socket
+
         try:
             _probe = _socket.create_connection(("127.0.0.1", 1883), timeout=0.3)
             _probe.close()
         except OSError:
             return False  # broker erişilemez → hızlı başarısız
         import paho.mqtt.client as _mqtt
-        c = _mqtt.Client(client_id="api_server_pub", clean_session=True)
+
+        # Cagri basina BENZERSIZ kimlik — acil-durdurma ESP bobinlerine paralel yayin yapar;
+        # sabit kimlikte broker es-zamanli baglantilardan yalniz birini tutar (bkz. _mqtt_client_id).
+        c = _mqtt.Client(client_id=_mqtt_client_id("pub"), clean_session=True)
         _u, _pw = _mqtt_credentials()
         if _u:
             c.username_pw_set(_u, _pw)  # broker auth açıksa (allow_anonymous false) kimlik gönder
@@ -958,11 +1039,28 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
         # gönderilmeden düşebiliyordu (bobin komutu kaybı).
         c.loop_start()
         try:
-            info.wait_for_publish(timeout=2.0)
+            # ⚠️ DENETİM 2026-08-09 (ENGEL) — SONUÇ ARTIK GERÇEKTEN OKUNUYOR.
+            # Eski hâli `wait_for_publish(timeout=2.0)` çağırıp SONUCU YOK SAYARAK koşulsuz True
+            # dönüyordu. Broker TCP'yi kabul edip QoS-1 PUBACK'i hiç göndermezse (broker asılı,
+            # disk dolu, yetki reddi) zaman aşımı dolar ve mesaj TESLİM EDİLMEMİŞTİR — ama
+            # `_estop_one` bunu "success" sayar, `_esp_ok` True olur, arayüz "bobinler durdu" der.
+            # Yani acil durdurmanın ESP ayağı sessizce başarısız olurken operatöre BAŞARILI görünür.
+            # `wait_for_publish` zaman aşımında (paho ≥2.0) WouldBlockError atar → yakala.
+            try:
+                info.wait_for_publish(timeout=2.0)
+            except (ValueError, RuntimeError, OSError):
+                pass  # aşağıdaki is_published() kesin cevabı verir
+            except Exception:
+                pass
+            yayinlandi = bool(info.is_published())
         finally:
             c.loop_stop()
         c.disconnect()
-        return True
+        if not yayinlandi:
+            logging.getLogger(__name__).error(
+                "MQTT yayin DOGRULANAMADI (PUBACK yok) — konu=%s. Bobin komutu TESLIM EDILMEMIS olabilir.", topic
+            )
+        return yayinlandi
     except Exception:
         return False
 
@@ -971,12 +1069,14 @@ def _broker_reachable(timeout: float = 0.3) -> bool:
     """MQTT broker (127.0.0.1:1883) hızlı erişilebilirlik sağlaması — ESP bobin yolunun
     broker kapalıyken sessizce 'success' dönmesini önlemek için (audit #4)."""
     import socket as _socket
+
     try:
         _c = _socket.create_connection(("127.0.0.1", 1883), timeout=timeout)
         _c.close()
         return True
     except Exception:
         return False
+
 
 # ── Active session state (in-memory, shared) ─────────────────────────────────
 import threading as _threading
@@ -1008,10 +1108,28 @@ def _get_treatment_db():
     Hata halinde None (cagiranlar try/except ile sarmali; DB hatasi seansi/donanimi DURDURMAZ)."""
     try:
         from database.treatment_history_db import get_treatment_db
+
         return get_treatment_db(_app_data_dir())
     except Exception:
         logging.getLogger(__name__).debug("Treatment DB erisilemedi", exc_info=True)
         return None
+
+
+def _kayit_db_hazir():
+    """Tıbbi kayıt DB'si yazmaya hazır mı → (hazir: bool, sebep: str). ASLA istisna atmaz.
+
+    ⚠️ DENETİM 2026-08-09 (ENGEL) — bu, `/api/health`'in `dbReady` alanının ve seans-başlatma
+    kapısının TEK KAYNAĞIDIR. İkisinin ayrı hesaplaması, "sağlık yeşil ama seans reddediliyor"
+    (ya da tersi) gibi teşhis edilemez bir tutarsızlık üretirdi.
+    """
+    try:
+        db = _get_treatment_db()
+        if db is None:
+            return False, "veritabani acilamadi"
+        return db.is_ready()
+    except Exception as e:
+        logging.getLogger(__name__).error("DB hazirlik kontrolu basarisiz: %s", e, exc_info=True)
+        return False, str(e)[:200]
 
 
 def _lookup_owner_email(patient_uuid: str) -> str:
@@ -1040,6 +1158,7 @@ coil_run_tracker.set_treatment_db_getter(lambda: _get_treatment_db())
 _begin_coil_run = coil_run_tracker._begin_coil_run
 _finish_coil_run = coil_run_tracker._finish_coil_run
 
+
 @app.post("/api/hardware/auto_preset")
 async def auto_preset(payload: AutoPresetPayload):
     """
@@ -1053,6 +1172,7 @@ async def auto_preset(payload: AutoPresetPayload):
         from pathlib import Path
 
         from ai.hybrid_recommender import get_literature_recommendation
+
         app_data = Path.home() / ".pemf_gui"
         rec = get_literature_recommendation(payload.target_condition, app_data_dir=app_data)
 
@@ -1065,12 +1185,7 @@ async def auto_preset(payload: AutoPresetPayload):
         # (Eskiden burada start_all_coils yan-etkisi vardı → chip'e dokununca bobinler ateşleniyordu.)
         return {
             "status": "success",
-            "parameters": {
-                "freq": freq,
-                "duty": duty,
-                "duration": duration,
-                "source": rec.get("source", "unknown")
-            }
+            "parameters": {"freq": freq, "duty": duty, "duration": duration, "source": rec.get("source", "unknown")},
         }
     except ImportError:
         raise HTTPException(status_code=501, detail="AI recommender bulunamadı.")
@@ -1078,6 +1193,7 @@ async def auto_preset(payload: AutoPresetPayload):
         # B3 güvenlik-fix: ham str(e) istemciye SIZMAZ (bilgi ifşası) — sunucuda logla, generic dön.
         logging.getLogger(__name__).exception("AI öneri hesaplanamadı")
         raise HTTPException(status_code=500, detail="AI öneri hatası")
+
 
 @app.post("/api/hardware/command")
 async def hardware_command(payload: CommandPayload):
@@ -1091,7 +1207,7 @@ async def hardware_command(payload: CommandPayload):
     try:
         cmd = payload.command.lower()
         p = payload.params
-        
+
         if cmd == "start_coil":
             coil_id = p.get("coil_id", 1)
             freq = p.get("freq", 100.0)
@@ -1100,16 +1216,16 @@ async def hardware_command(payload: CommandPayload):
             duration = p.get("duration", 0)
             success = state.hardware.update_coil(coil_id, freq, duty, phase, duration, start=True)
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
-            
+
         elif cmd == "stop_coil":
             coil_id = p.get("coil_id", 1)
             success = state.hardware.update_coil(coil_id, 0, 0, 0, 0, start=False)
             return {"status": "success" if success else "error", "command": cmd, "coil_id": coil_id}
-            
+
         elif cmd == "stop_all_coils":
             success = state.hardware.stop_all_coils()
             return {"status": "success" if success else "error", "command": cmd}
-            
+
         elif cmd == "start_all_coils":
             freq = p.get("freq", 100.0)
             duty = p.get("duty", 25.0)
@@ -1117,7 +1233,7 @@ async def hardware_command(payload: CommandPayload):
             duration = p.get("duration", 30)
             success = state.hardware.start_all_coils(freq, duty, phase, duration)
             return {"status": "success" if success else "error", "command": cmd}
-            
+
         else:
             return {"status": "error", "message": f"Bilinmeyen komut: {cmd}"}
 
@@ -1126,34 +1242,45 @@ async def hardware_command(payload: CommandPayload):
         logging.getLogger(__name__).exception("Donanım komutu başarısız")
         raise HTTPException(status_code=500, detail="Donanım komutu başarısız")
 
+
 @app.post("/api/hardware/selftest")
 async def trigger_hardware_selftest():
     """Tüm bobinlere SELFTEST komutu gönderir (fire-and-forget)."""
-    import time, threading
+    import threading
+    import time
+
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
+
     # 8× _mqtt_publish (her biri connect-publish-disconnect) SANİYELER sürebilir → HTTP yanıtını
     # BEKLETME (eskiden await → istemci timeout'u "gönderilemedi" gösteriyordu, HTTP 000). Arka-plan
     # daemon thread'de best-effort gönder, yanıtı hemen dön ("komut gönderildi" semantiği).
     def _selftest_all():
         for i in range(1, 9):
             try:
-                _mqtt_publish(f"pemf/esp32_{i}/command", {
-                    "command": "SELFTEST",
-                    "command_id": f"selftest_{i}_{int(time.time()*1000)}",
-                    "timestamp": time.time()
-                })
+                _mqtt_publish(
+                    f"pemf/esp32_{i}/command",
+                    {
+                        "command": "SELFTEST",
+                        "command_id": f"selftest_{i}_{int(time.time() * 1000)}",
+                        "timestamp": time.time(),
+                    },
+                )
             except Exception:
                 logging.getLogger(__name__).debug("selftest publish %d hatasi", i, exc_info=True)
+
     threading.Thread(target=_selftest_all, name="hw-selftest", daemon=True).start()
     return {"status": "success", "message": "Self-test commands sent."}
+
 
 @app.post("/api/hardware/reset_pwm")
 async def reset_all_pwms():
     """Tüm bobinleri durdurur ve duty 0 olarak reset atar (fire-and-forget)."""
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
-    import time, threading
+    import threading
+    import time
+
     # stop_all_coils (STM seri I/O; STM yoksa retry→saniyeler) + 8× _mqtt_publish (connect-publish) →
     # HTTP yanıtını BEKLETME (eskiden await → timeout / HTTP 000). Arka-plan thread'de yürüt, hemen dön.
     # Birincil güvenlik yolu /hardware/emergency_stop'tur; bu yalnız bakım-reset'idir.
@@ -1164,15 +1291,23 @@ async def reset_all_pwms():
             logging.getLogger(__name__).debug("reset_pwm stop_all_coils hatasi", exc_info=True)
         for i in range(1, 9):
             try:
-                _mqtt_publish(f"pemf/esp32_{i}/command", {
-                    "command": "start",
-                    "command_id": f"reset_{i}_{int(time.time()*1000)}",
-                    "freq": 10.0, "duty": 0.0, "phase": 0.0, "duration": 0
-                })
+                _mqtt_publish(
+                    f"pemf/esp32_{i}/command",
+                    {
+                        "command": "start",
+                        "command_id": f"reset_{i}_{int(time.time() * 1000)}",
+                        "freq": 10.0,
+                        "duty": 0.0,
+                        "phase": 0.0,
+                        "duration": 0,
+                    },
+                )
             except Exception:
                 logging.getLogger(__name__).debug("reset_pwm publish %d hatasi", i, exc_info=True)
+
     threading.Thread(target=_reset_all, name="hw-reset-pwm", daemon=True).start()
     return {"status": "success", "message": "All PWM signals reset."}
+
 
 @app.post("/api/hardware/cleanup_esp")
 async def cleanup_stale_esp():
@@ -1195,6 +1330,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
     import time
+
     if coil_id < 1 or coil_id > 8:
         raise HTTPException(status_code=400, detail="Geçersiz bobin ID (1-8)")
 
@@ -1205,7 +1341,11 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
         stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
         state.hardware.update_coil(
-            coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min,
+            coil_id,
+            payload.freq,
+            payload.duty,
+            payload.phase,
+            stm_duration_min,
             start=payload.start,
             # DENETIM P3: STM firmware suresi DAKIKA granulerliginde oldugundan saniye→dakika
             # donusumu YUKARI yuvarlanir (30 sn → 1 dk = 2x fazla tedavi). Firmware icin bu dogru
@@ -1251,6 +1391,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
     - STM32 firmware duration is minutes, converted only for HardwareController.
     """
     import time
+
     results = []
     # Audit P3: coil_ids'i max 8 BENZERSİZE sınırla — {coil_ids:[6]*5000} her ID için sıralı
     # to_thread(_mqtt_publish ~2sn) + DB yazımıyla broker/threadpool'u bombalayıp gerçek coil-kontrolünü
@@ -1270,7 +1411,11 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 continue
             stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
             state.hardware.update_coil(
-                coil_id, payload.freq, payload.duty, payload.phase, stm_duration_min,
+                coil_id,
+                payload.freq,
+                payload.duty,
+                payload.phase,
+                stm_duration_min,
                 start=payload.start,
                 # DENETIM P3: STM firmware suresi DAKIKA granulerliginde oldugundan saniye→dakika
                 # donusumu YUKARI yuvarlanir (30 sn → 1 dk = 2x fazla tedavi). Firmware icin bu dogru
@@ -1309,13 +1454,20 @@ async def control_batch_coils(payload: BatchCoilPayload):
 
 # ── Session management ────────────────────────────────────────────────────────
 @app.post("/api/session/start")
-async def start_session(payload: SessionStartPayload):
+async def start_session(payload: SessionStartPayload, request: Request):
     """Start a new treatment session."""
     import time
+
+    # ⚠️ 2026-08-09 (Tier 1): kaydın SAHİBİNE sunucu karar verir (bkz. auth.cozumlenmis_operator).
+    # Beyanı doğrudan yazmak, cihaza erişen herkesin başka bir hekim adına seans açmasına izin
+    # veriyordu; seansın denetim izi (`session_started` olayı) de o adla imzalanıyordu.
+    from servers.auth import cozumlenmis_operator
+
+    _operator_kimligi = cozumlenmis_operator(request, payload.operator_email)
     # Derinlemesine savunma (Pydantic max_length=8 sinirda zaten reddeder): tekrarlari at ve
     # gecerli bobin araligina (1-8) filtrele → /api/coil/batch'teki `_seen[:8]` deseniyle ayni.
     _seen_coils = []
-    for _c in (payload.coil_ids or []):
+    for _c in payload.coil_ids or []:
         if 1 <= _c <= 8 and _c not in _seen_coils:
             _seen_coils.append(_c)
     coil_ids = _seen_coils or list(range(1, 9))
@@ -1324,14 +1476,38 @@ async def start_session(payload: SessionStartPayload):
     if stm_coils and not state.hardware:
         raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
 
+    # ⚠️ DENETİM 2026-08-09 (ENGEL) — KAYITSIZ TEDAVİ ARTIK BAŞLAMAZ.
+    # Aşağıdaki DB yazımları bilinçli olarak "best-effort"tur (DB hatası bobinleri durdurmasın).
+    # Ama BAŞLANGIÇTA bunun sonucu şuydu: DB hiç açılamıyorken bile seans başlıyor, bobinler
+    # enerjileniyor, tedavi uygulanıyor ve db_session_id=None kaldığı için seans satırı,
+    # coil-run'lar ve sensör telemetrisinin HİÇBİRİ yazılmıyordu — operatöre tek bir uyarı
+    # bile çıkmadan. Hastanın aldığı doz geriye dönük OLARAK BİLİNEMEZ hâle geliyordu.
+    # Kapı YALNIZ BAŞLATMADADIR: /session/stop, /hardware/emergency_stop ve bobin durdurma
+    # yolları BU KONTROLDEN GEÇMEZ — DB çökükken tedaviyi durduramamak asıl tehlike olurdu.
+    # Ayrıca seans ORTASINDA DB düşerse tedavi kesilmez (eski best-effort davranışı korunur).
+    _db_ok, _db_sebep = _kayit_db_hazir()
+    if not _db_ok:
+        logging.getLogger(__name__).error("Seans REDDEDILDI — tibbi kayit DB'si hazir degil: %s", _db_sebep)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Tıbbi kayıt veritabanı açılamadı; seans başlatılamaz. Tedavi kaydı "
+                "tutulamayacağı için işlem güvenli değildir. Cihazı yeniden başlatın, "
+                "sorun sürerse teknik desteğe başvurun."
+            ),
+        )
+
     # Güncelleme uygulanıyorken YENİ seans başlatma: installer servisi durdurup EXE'yi
     # değiştirebilir → başlayan tedavi bobinleri kontrolcüsüz bırakabilir. (update_manager
     # TOCTOU guard'ının TERS yönü — apply, başlamış tedaviyi zaten _has_active_treatment ile
     # reddeder; bu da apply penceresinde yeni tedaviyi reddeder.)
     try:
         from servers import update_manager as _um
+
         if _um.is_update_in_progress():
-            raise HTTPException(status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz.")
+            raise HTTPException(
+                status_code=409, detail="Güncelleme uygulanıyor; işlem bitene kadar yeni seans başlatılamaz."
+            )
     except HTTPException:
         raise
     except Exception:
@@ -1344,30 +1520,32 @@ async def start_session(payload: SessionStartPayload):
         # B-2.2: REBIND (`_active_session = {...}`) yerine IN-PLACE (clear+update) → dict kimliği
         # sabit kalır (session_state alias'lanabilir); davranış aynı (kilit altında atomik).
         _active_session.clear()
-        _active_session.update({
-            "is_active": True,
-            "session_id": f"react_{int(time.time())}",
-            "patient_id": payload.patient_id,
-            "patient_name": payload.patient_name,
-            "operator_name": payload.operator_name,
-            "mode": payload.mode,
-            "target_condition": payload.target_condition,
-            "frequency": payload.frequency,
-            "duty": payload.duty,
-            "intensity": payload.intensity,
-            "phase": payload.phase,
-            "duration_minutes": payload.duration_minutes,
-            "start_time": time.time(),
-            # DENETIM P2: sure-watchdog DUVAR SAATI farkiyla calisiyordu. NTP duzeltmesi/DST/
-            # elle saat degisimi ILERI giderse seans ERKEN kesilir, GERI giderse planlanandan
-            # UZUN surer (maruziyet artar). start_time istemciye/gosterime gittigi icin epoch
-            # olarak KORUNDU; guvenlik karari icin AYRI monotonic isaret kullanilir.
-            "start_mono": time.monotonic(),
-            "started_epoch": time.time(),
-            "coil_ids": coil_ids,
-            "db_session_id": None,   # Asama-2: seans BASINDA olusan gercek int DB session_id
-            "db_patient_id": None,
-        })
+        _active_session.update(
+            {
+                "is_active": True,
+                "session_id": f"react_{int(time.time())}",
+                "patient_id": payload.patient_id,
+                "patient_name": payload.patient_name,
+                "operator_name": payload.operator_name,
+                "mode": payload.mode,
+                "target_condition": payload.target_condition,
+                "frequency": payload.frequency,
+                "duty": payload.duty,
+                "intensity": payload.intensity,
+                "phase": payload.phase,
+                "duration_minutes": payload.duration_minutes,
+                "start_time": time.time(),
+                # DENETIM P2: sure-watchdog DUVAR SAATI farkiyla calisiyordu. NTP duzeltmesi/DST/
+                # elle saat degisimi ILERI giderse seans ERKEN kesilir, GERI giderse planlanandan
+                # UZUN surer (maruziyet artar). start_time istemciye/gosterime gittigi icin epoch
+                # olarak KORUNDU; guvenlik karari icin AYRI monotonic isaret kullanilir.
+                "start_mono": time.monotonic(),
+                "started_epoch": time.time(),
+                "coil_ids": coil_ids,
+                "db_session_id": None,  # Asama-2: seans BASINDA olusan gercek int DB session_id
+                "db_patient_id": None,
+            }
+        )
 
     # Denetim izi (audit P1) — seansı HEMEN kalıcılaştır: kim (operatör) + ne zaman + hangi
     # parametreler. Eskiden seans yalnız SONDA DB'ye yazılıyordu → backend seans ortasında
@@ -1378,10 +1556,12 @@ async def start_session(payload: SessionStartPayload):
         # zorunlu) → TypeError → except yutuyordu → session_started AUDIT IZI HIC yazilmazdi.
         # _get_treatment_db() sarmalayicisi app_data_dir gecer (dosyadaki diger cagrilarla tutarli).
         _get_treatment_db().record_session_event(
-            None, "session_started",
+            None,
+            "session_started",
             payload={
                 "ref": _active_session["session_id"],
                 "operator_name": payload.operator_name,
+                "operator_email": _operator_kimligi,
                 "patient_id": payload.patient_id,
                 "mode": payload.mode,
                 "frequency": payload.frequency,
@@ -1422,11 +1602,13 @@ async def start_session(payload: SessionStartPayload):
         _pid = None
         if payload.patient_name:
             try:
-                _pid = db.upsert_patient({
-                    "name": payload.patient_name,
-                    "patient_uuid": (payload.patient_id or None),
-                    "owner_email": (owner_email or None),
-                })
+                _pid = db.upsert_patient(
+                    {
+                        "name": payload.patient_name,
+                        "patient_uuid": (payload.patient_id or None),
+                        "owner_email": (owner_email or None),
+                    }
+                )
             except Exception:
                 logging.getLogger(__name__).debug("upsert_patient hatasi", exc_info=True)
         _sid = db.start_session(
@@ -1434,7 +1616,9 @@ async def start_session(payload: SessionStartPayload):
             target_condition=payload.target_condition or None,
             operator_name=payload.operator_name or None,
             patient_name=payload.patient_name or None,
-            operator_email=payload.operator_email or None,
+            # ⚠️ 2026-08-09 (Tier 1): e-posta İSTEMCİ BEYANINDAN değil, doğrulanmış operatör
+            # jetonundan gelir. Beyan yalnız cihazda kayıtlı operatör YOKKEN kabul edilir.
+            operator_email=_operator_kimligi or None,
         )
         # Yeni kolonlar (start_session bunlari yazmaz): gercek baslangic epoch + patient_id FK.
         try:
@@ -1483,11 +1667,14 @@ async def start_session(payload: SessionStartPayload):
     with _session_lock:
         _still_active = bool(_active_session.get("is_active"))
     if not _still_active:
-        logging.getLogger(__name__).warning("Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı).")
+        logging.getLogger(__name__).warning(
+            "Seans başlatma İPTAL: enerjilemeden önce durdurma algılandı (bobinler açılmadı)."
+        )
         return {"status": "cancelled", "message": "Seans başlatma sırasında durduruldu (bobinler açılmadı)."}
 
     # Session API accepts minutes; ESP/MQTT duration remains seconds.
     import time as _t
+
     mqtt_duration_seconds = payload.duration_minutes * 60
     for coil_id in esp_coils:
         mqtt_payload = {
@@ -1499,7 +1686,9 @@ async def start_session(payload: SessionStartPayload):
             "duration": mqtt_duration_seconds,
         }
         # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
-        _threading.Thread(target=_mqtt_publish, args=(f"pemf/coil/{coil_id}/control", mqtt_payload), daemon=True).start()
+        _threading.Thread(
+            target=_mqtt_publish, args=(f"pemf/coil/{coil_id}/control", mqtt_payload), daemon=True
+        ).start()
         # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
         # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
         _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "esp")
@@ -1512,6 +1701,7 @@ async def start_session(payload: SessionStartPayload):
                 coil_id, payload.frequency, payload.duty, payload.phase, payload.duration_minutes, start=True
             )
             _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "stm")
+
     if stm_coils:
         await asyncio.to_thread(_start_stm_coils)
 
@@ -1569,11 +1759,15 @@ def _stop_session_coils(coil_ids):
     """Verilen bobinlere donanım STOP gönderir (ESP→MQTT, STM→update_coil start=False).
     is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur."""
     import time as _t
+
     for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
-        _mqtt_publish(f"pemf/coil/{coil_id}/control", {
-            "command": "stop",
-            "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
-        })
+        _mqtt_publish(
+            f"pemf/coil/{coil_id}/control",
+            {
+                "command": "stop",
+                "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
+            },
+        )
     if state.hardware:
         for coil_id in [cid for cid in coil_ids if cid in STM_COIL_IDS]:
             state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False)
@@ -1590,32 +1784,35 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
     CLAMP'i YOK (sadece seans takibi). Tekrarlı AI çağrılarında ilk start_time/session_id korunur."""
     import time as _t
+
     with _session_lock:
         prev = dict(_active_session)  # devralma kararı için ESKİ seansın snapshot'ı (clear'dan ÖNCE)
         cont = bool(prev.get("is_active")) and str(prev.get("mode", "")).startswith("AI")
         # B-2.2: REBIND yerine IN-PLACE (clear+update) → dict kimliği sabit; davranış aynı.
         _active_session.clear()
         _new_session_id = prev.get("session_id") if cont else f"ai_{int(_t.time())}"
-        _active_session.update({
-            "is_active": True,
-            "session_id": _new_session_id,
-            "mode": mode,
-            "frequency": freq,
-            "duty": duty,
-            "phase": 0.0,
-            "duration_minutes": int(duration_minutes),
-            "start_time": prev.get("start_time") if cont else _t.time(),
-            "start_mono": prev.get("start_mono") if cont else _t.monotonic(),
-            "coil_ids": list(coil_ids),
-            # DENETIM P1: bu iki alan HIC kurulmuyordu → _flush_sensor_buffer_if_active
-            # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
-            # tedavinin DB'de seans satiri OLUSMUYORDU (doz/sicaklik kaydi kalici kayip).
-            # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
-            # istekte cagirir) → MEVCUT satiri koru, YENI satir acma.
-            "db_session_id": prev.get("db_session_id") if cont else None,
-            "db_patient_id": prev.get("db_patient_id") if cont else None,
-            "started_epoch": prev.get("started_epoch") if cont else _t.time(),
-        })
+        _active_session.update(
+            {
+                "is_active": True,
+                "session_id": _new_session_id,
+                "mode": mode,
+                "frequency": freq,
+                "duty": duty,
+                "phase": 0.0,
+                "duration_minutes": int(duration_minutes),
+                "start_time": prev.get("start_time") if cont else _t.time(),
+                "start_mono": prev.get("start_mono") if cont else _t.monotonic(),
+                "coil_ids": list(coil_ids),
+                # DENETIM P1: bu iki alan HIC kurulmuyordu → _flush_sensor_buffer_if_active
+                # `if not _db_sid: return` ile TUM dakika-ortalamalarini atiyordu ve otonom
+                # tedavinin DB'de seans satiri OLUSMUYORDU (doz/sicaklik kaydi kalici kayip).
+                # cont=True (ayni AI seansinin tekrarli cagrisi, or. landmark auto_adjust her
+                # istekte cagirir) → MEVCUT satiri koru, YENI satir acma.
+                "db_session_id": prev.get("db_session_id") if cont else None,
+                "db_patient_id": prev.get("db_patient_id") if cont else None,
+                "started_epoch": prev.get("started_epoch") if cont else _t.time(),
+            }
+        )
         _started_epoch_ai = _active_session["started_epoch"]
         # DENETIM (2026-08-05, dogrulama turunda bulundu): yukarida `coil_ids` KOSULSUZ
         # yeniden yaziliyor (satir "coil_ids": list(coil_ids)). Yeni seans ONCEKINDEN DAR bir
@@ -1626,17 +1823,21 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
         #   ESP kendi 30 dk suresi dolana kadar CANLI HAYVAN uzerinde surer.
         # Hem cont=True (AI→AI devam) hem cont=False (devralma) yolunda gecerli → kilit
         # BLOGUNUN DISINDA, tek yerde hesapla. STOP kilit birakildiktan SONRA gonderilir.
-        _orphan_coils = [int(c) for c in (prev.get("coil_ids") or [])
-                         if prev.get("is_active") and int(c) not in set(int(x) for x in coil_ids)]
+        _orphan_coils = [
+            int(c)
+            for c in (prev.get("coil_ids") or [])
+            if prev.get("is_active") and int(c) not in set(int(x) for x in coil_ids)
+        ]
     if _orphan_coils:
         try:
             _stop_session_coils(_orphan_coils)
             logging.getLogger(__name__).warning(
                 "AI seansi daha DAR bir bobin kumesi sahiplendi → sahipsiz kalan bobinler "
-                "durduruldu %s (aksi halde enerjili kalirlardi).", _orphan_coils)
+                "durduruldu %s (aksi halde enerjili kalirlardi).",
+                _orphan_coils,
+            )
         except Exception:
-            logging.getLogger(__name__).exception(
-                "Sahipsiz bobin STOP hatasi: %s", _orphan_coils)
+            logging.getLogger(__name__).exception("Sahipsiz bobin STOP hatasi: %s", _orphan_coils)
     # P1 audit 2026-06-28: AKTIF MANUEL (non-AI) seans varken AI baslayinca _active_session KOSULSUZ
     # eziliyordu → manuel db_session_id/coil_ids kayboluyor, acik coil-run'lar kapanmiyor, DB satiri
     # kalici 'active' kaliyor (KPI/history sisiyor + STM keep-alive surer ama UI 'AI' gosterir).
@@ -1644,7 +1845,7 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
     # in-memory + ~ms DB write; AI coil komutlari start_ai_session DONDUKTEN sonra → race yok.
     if not cont and prev.get("is_active"):
         try:
-            for cid in (prev.get("coil_ids") or []):
+            for cid in prev.get("coil_ids") or []:
                 try:
                     _finish_coil_run(cid)
                 except Exception:
@@ -1656,7 +1857,9 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
                 _get_treatment_db().end_session(prev_db_id, duration_minutes=dur_min)
             logging.getLogger(__name__).warning(
                 "AI seansi (%s) aktif MANUEL seansi devraldi → eski seans (db_id=%s) duzgun kapatildi (orphan onlendi).",
-                mode, prev.get("db_session_id"))
+                mode,
+                prev.get("db_session_id"),
+            )
         except Exception:
             logging.getLogger(__name__).exception("AI gecisinde eski manuel seans kapatma hatasi")
 
@@ -1678,8 +1881,7 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
                 # db_session_id'yi YALNIZ hala AYNI seans aktifse damgala (yanlis seansa
                 # sensor satiri baglama).
                 with _session_lock:
-                    if (_active_session.get("is_active")
-                            and _active_session.get("session_id") == _new_session_id):
+                    if _active_session.get("is_active") and _active_session.get("session_id") == _new_session_id:
                         _active_session["db_session_id"] = _ai_sid
         except Exception:
             logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
@@ -1700,14 +1902,14 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
     if not db_session_id:
         return 0
     # Acik coil-run'lari kapat (watchdog yolunda _stop_session_coils zaten yapar; e-stop yapmaz).
-    for _cid in (coil_ids or []):
+    for _cid in coil_ids or []:
         try:
             _finish_coil_run(_cid)
         except Exception:
             logging.getLogger(__name__).debug("finalize: _finish_coil_run(%s) hatasi", _cid, exc_info=True)
     flushed = 0
     try:
-        _emit_minute_averages()   # birikmis KISMI dakikayi da buffer'a dok (yoksa kaybolur)
+        _emit_minute_averages()  # birikmis KISMI dakikayi da buffer'a dok (yoksa kaybolur)
     except Exception:
         logging.exception("finalize: dakika-ortalamasi hatasi")
     try:
@@ -1727,8 +1929,7 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 if not flushed:
                     with _sensor_sample_buffer_lock:
                         _sensor_sample_buffer[:0] = pending
-                    logging.warning("finalize: %d sensor ornegi yazilamadi → buffer'a geri konuldu.",
-                                    len(pending))
+                    logging.warning("finalize: %d sensor ornegi yazilamadi → buffer'a geri konuldu.", len(pending))
             try:
                 _now = time.time()
                 dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
@@ -1751,6 +1952,7 @@ def _session_duration_watchdog():
     Firmware keep-alive süreyi her sn tazelediğinden tek başına auto-stop OLMAZ; bu watchdog
     süre dolunca açık STOP üretir (planlanandan uzun PEMF maruziyetini önler)."""
     import time as _t
+
     while True:
         try:
             with _session_lock:
@@ -1758,15 +1960,17 @@ def _session_duration_watchdog():
             if sess.get("is_active"):
                 total = int(sess.get("duration_minutes", 0)) * 60
                 _sm = sess.get("start_mono")
-                _elapsed = ((_t.monotonic() - _sm) if _sm is not None
-                            else (_t.time() - sess.get("start_time", _t.time())))
+                _elapsed = (
+                    (_t.monotonic() - _sm) if _sm is not None else (_t.time() - sess.get("start_time", _t.time()))
+                )
                 if total > 0 and _elapsed >= total:
                     # Audit P2 (TOCTOU seal): fiziksel STOP'tan HEMEN önce seansın HÂLÂ aynı olduğunu
                     # doğrula — aksi halde operatör A'yı durdurup B'yi aynı bobinlerde başlattıysa bayat
                     # snapshot B'nin TAZE bobinlerini durdurur + coil-run'larını bozar (pencere ~µs'e iner).
                     with _session_lock:
-                        _still_same = (bool(_active_session.get("is_active"))
-                                       and _active_session.get("session_id") == sess.get("session_id"))
+                        _still_same = bool(_active_session.get("is_active")) and _active_session.get(
+                            "session_id"
+                        ) == sess.get("session_id")
                     if not _still_same:
                         continue  # seans devralındı/durduruldu → bayat watchdog turu dokunmasın
                     _stop_session_coils(sess.get("coil_ids", list(range(1, 9))))
@@ -1776,11 +1980,12 @@ def _session_duration_watchdog():
                     # DENETIM P2: seansi DB'de de KAPAT. Frontend timer bitiminde /stop
                     # cagirmadigindan NORMAL tam-sure bitisi buradan gecer; eskiden satir
                     # kalici 'active' kaliyor ve son dakikanin sensor verisi kayboluyordu.
-                    _finalize_session_db(sess.get("db_session_id"), sess.get("started_epoch"),
-                                         reason="sure-doldu")
+                    _finalize_session_db(sess.get("db_session_id"), sess.get("started_epoch"), reason="sure-doldu")
                     try:
                         update_live_session_state(is_active=False, mode="Sistem Hazır")
-                        _ws_broadcast_sync({"type": "session_completed", "data": {"session_id": sess.get("session_id")}})
+                        _ws_broadcast_sync(
+                            {"type": "session_completed", "data": {"session_id": sess.get("session_id")}}
+                        )
                     except Exception:
                         pass
                     logging.info("Süre doldu → seans otomatik durduruldu (watchdog): %s", sess.get("session_id"))
@@ -1799,6 +2004,7 @@ def _hardware_simulation_loop():
     import math
     import random
     import time as _t
+
     t0 = _t.time()
     while True:
         try:
@@ -1825,9 +2031,13 @@ def _hardware_simulation_loop():
                         d = sduty or 25.0
                         coil["frequencyHz"] = round(sfreq or 50.0, 1)
                         coil["dutyCycle"] = round(d, 1)
-                        coil["magneticMt"] = round(d / 25.0 * 2.0 + 0.25 * math.sin(el * 2 + idx) + random.uniform(-0.04, 0.04), 3)
+                        coil["magneticMt"] = round(
+                            d / 25.0 * 2.0 + 0.25 * math.sin(el * 2 + idx) + random.uniform(-0.04, 0.04), 3
+                        )
                         coil["currentA"] = round(0.35 + d / 100.0 * 0.6 + random.uniform(-0.02, 0.02), 3)
-                        coil["objectTemp"] = round(26.0 + min(el / 25.0, 14.0) + 0.4 * math.sin(el * 0.5 + idx) + random.uniform(-0.2, 0.2), 1)
+                        coil["objectTemp"] = round(
+                            26.0 + min(el / 25.0, 14.0) + 0.4 * math.sin(el * 0.5 + idx) + random.uniform(-0.2, 0.2), 1
+                        )
                     else:
                         coil["frequencyHz"] = 0
                         coil["dutyCycle"] = 0
@@ -1840,9 +2050,19 @@ def _hardware_simulation_loop():
             _ws_broadcast_sync({"type": "stm_status", "data": {"stm": "online"}})
             for coil in snaps:
                 _ws_broadcast_sync({"type": "coil_status", "coilId": coil["id"], "data": coil})
-                _ws_broadcast_sync({"type": "sensor_data", "coilId": coil["id"], "timestamp": now,
-                                    "data": {"magneticMt": coil["magneticMt"], "objectTemp": coil["objectTemp"],
-                                             "ambientTemp": coil["ambientTemp"], "currentA": coil["currentA"]}})
+                _ws_broadcast_sync(
+                    {
+                        "type": "sensor_data",
+                        "coilId": coil["id"],
+                        "timestamp": now,
+                        "data": {
+                            "magneticMt": coil["magneticMt"],
+                            "objectTemp": coil["objectTemp"],
+                            "ambientTemp": coil["ambientTemp"],
+                            "currentA": coil["currentA"],
+                        },
+                    }
+                )
         except Exception:
             logging.exception("hardware sim loop error")
         _t.sleep(0.5)
@@ -1865,25 +2085,29 @@ def _emit_minute_averages(now=None):
             continue
         with _active_coil_runs_lock:
             run_id = _active_coil_runs.get(coil_id)
-        _tn = acc.get("t_n", 0); _in = acc.get("i_n", 0)
-        _bn = acc.get("b_n", 0); _an = acc.get("amb_n", 0)
+        _tn = acc.get("t_n", 0)
+        _in = acc.get("i_n", 0)
+        _bn = acc.get("b_n", 0)
+        _an = acc.get("amb_n", 0)
         # Metrik o dakika HIC okunmadiysa 0.0 — ESKI davranisla birebir ayni (t_sum/n zaten
         # 0.0 verirdi); asagi-akista (grafik/rapor) yeni None/NULL riski OLUSTURMAZ.
         amb_avg = (acc["amb_sum"] / _an) if _an else 0.0
-        rows.append({
-            "coil_id": str(coil_id),
-            "sample_ts": now,
-            "temperature_c": (acc["t_sum"] / _tn) if _tn else 0.0,
-            "ambient_temp_c": amb_avg,
-            "current_a": (acc["i_sum"] / _in) if _in else 0.0,
-            "magnetic_field_mt": (acc["b_sum"] / _bn) if _bn else 0.0,
-            "pwm_frequency_hz": acc.get("freq"),
-            "pwm_duty_percent": acc.get("duty"),
-            "phase": acc.get("phase"),
-            "sample_count": n,
-            "coil_run_id": run_id,
-            "payload": {"aggregated": True, "minute": True},
-        })
+        rows.append(
+            {
+                "coil_id": str(coil_id),
+                "sample_ts": now,
+                "temperature_c": (acc["t_sum"] / _tn) if _tn else 0.0,
+                "ambient_temp_c": amb_avg,
+                "current_a": (acc["i_sum"] / _in) if _in else 0.0,
+                "magnetic_field_mt": (acc["b_sum"] / _bn) if _bn else 0.0,
+                "pwm_frequency_hz": acc.get("freq"),
+                "pwm_duty_percent": acc.get("duty"),
+                "phase": acc.get("phase"),
+                "sample_count": n,
+                "coil_run_id": run_id,
+                "payload": {"aggregated": True, "minute": True},
+            }
+        )
         # Per-RUN ozet akumulatoru: dakika-ortalamasi run istatistigine de katki saglar.
         if run_id is not None:
             with _coil_run_stats_lock:
@@ -1905,7 +2129,7 @@ def _emit_minute_averages(now=None):
         with _sensor_sample_buffer_lock:
             _sensor_sample_buffer.extend(rows)
             if len(_sensor_sample_buffer) > 20000:
-                del _sensor_sample_buffer[:len(_sensor_sample_buffer) - 20000]
+                del _sensor_sample_buffer[: len(_sensor_sample_buffer) - 20000]
 
 
 def _flush_sensor_buffer_if_active():
@@ -1936,6 +2160,7 @@ def _sensor_persistence_loop():
     Buffer /api/session/notes + /api/session/stop ile gercek db_session_id ile flush edilir.
     Boylece HAM yazma YERINE dakika-ortalamasi (20dk seans ≈ bobin basina ~20 satir)."""
     import time as _t
+
     minute_start = _t.time()
     while True:
         try:
@@ -1972,11 +2197,22 @@ def _sensor_persistence_loop():
                         amb = coil.get("ambientTemp")
                         acc = _minute_acc.get(cid)
                         if acc is None:
-                            acc = {"t_sum": 0.0, "t_min": None, "t_max": None,
-                                   "i_sum": 0.0, "b_sum": 0.0, "amb_sum": 0.0, "n": 0,
-                                   "t_n": 0, "i_n": 0, "b_n": 0, "amb_n": 0,
-                                   "freq": coil.get("frequencyHz"), "duty": coil.get("dutyCycle"),
-                                   "phase": coil.get("phase")}
+                            acc = {
+                                "t_sum": 0.0,
+                                "t_min": None,
+                                "t_max": None,
+                                "i_sum": 0.0,
+                                "b_sum": 0.0,
+                                "amb_sum": 0.0,
+                                "n": 0,
+                                "t_n": 0,
+                                "i_n": 0,
+                                "b_n": 0,
+                                "amb_n": 0,
+                                "freq": coil.get("frequencyHz"),
+                                "duty": coil.get("dutyCycle"),
+                                "phase": coil.get("phase"),
+                            }
                             _minute_acc[cid] = acc
                         if temp is not None:
                             tv = float(temp)
@@ -2023,6 +2259,7 @@ def _daily_maintenance_loop():
       app_data/backups/pemf_treatment_history_YYYYMMDD.db (shutil.copy2). Son 14 yedek tutulur.
     Hata olursa loglanir, cokmez. Ilk calisma acilistan ~60sn sonra (acilisi yavaslatmamak icin)."""
     import time as _t
+
     log = logging.getLogger(__name__)
     _t.sleep(60)  # acilisi yavaslatma
     run_count = 0
@@ -2067,7 +2304,7 @@ def _daily_maintenance_loop():
                     with _session_lock:
                         _sess_active = bool(_active_session.get("is_active"))
                 except Exception:
-                    _sess_active = True   # emin degilsek VACUUM YAPMA (fail-safe)
+                    _sess_active = True  # emin degilsek VACUUM YAPMA (fail-safe)
                 if run_count > 0 and run_count % 7 == 0 and not _sess_active:
                     try:
                         if hasattr(db, "run_maintenance"):
@@ -2119,6 +2356,18 @@ def _start_background_threads() -> None:
     # ESP sessiz-ölüm (ungraceful) tespiti: 30sn telemetri sustuysa coil'i disconnected işaretle
     # (self-heal reconnect-audit). Sim modda no-op (timestamp sözlüğü boş).
     _threading.Thread(target=_esp_telemetry_watchdog, daemon=True, name="esp-telemetry-watchdog").start()
+    # CANLI E-ALANI (2026-08-06): 2 Hz'de vekil modeli canlı B/duty ile çalıştırıp önbelleğe yazar.
+    # AYRI thread olmasının sebebi: ONNX çağrısı dashboard-snapshot/WS istek yolunda ÇALIŞMASIN.
+    # Yalnız aktif seansta + analiz bağlamı varken hesaplar (bkz. servers/efield_live.py).
+    try:
+        from servers import efield_live as _ef
+
+        _ef.start_loop(
+            read_coils=lambda: _build_ws_snapshot().get("coils", []),
+            is_session_active=lambda: bool(_active_session.get("is_active")),
+        )
+    except Exception:
+        logging.getLogger(__name__).warning("Canlı E-alanı döngüsü başlatılamadı", exc_info=True)
     if os.environ.get("PEMF_SIMULATE") == "1":
         _threading.Thread(target=_hardware_simulation_loop, daemon=True, name="hw-sim").start()
         logging.info("HARDWARE SIMULATION aktif (sanal STM+ESP+sensor) - PEMF_SIMULATE=1")
@@ -2138,7 +2387,7 @@ async def stop_session():
         coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
         db_session_id = _active_session.get("db_session_id")
         started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
-        _stopping_session_id = _active_session.get("session_id")   # TOCTOU muhru (asagi bkz.)
+        _stopping_session_id = _active_session.get("session_id")  # TOCTOU muhru (asagi bkz.)
         _active_session["is_active"] = False
 
     # (a) Bekleyen kismi dakikayi emit et — acik run-ozetine de katki saglar (finish'ten ONCE).
@@ -2157,12 +2406,14 @@ async def stop_session():
     # sanir, coil-run/sensor kayitlari bozulur). Sure-watchdog'da bu muhur (1600-1604 `_still_same`)
     # ZATEN vardi; /stop yolunda YOKTU. Donanima dokunmadan hemen once ayni seansta miyiz diye bak.
     with _session_lock:
-        _takeover = (bool(_active_session.get("is_active"))
-                     and _active_session.get("session_id") != _stopping_session_id)
+        _takeover = bool(_active_session.get("is_active")) and _active_session.get("session_id") != _stopping_session_id
     if _takeover:
         logging.getLogger(__name__).warning(
             "stop: bu seans (%s) durdurulurken YENI seans (%s) baslamis → donanim STOP'u ATLANDI "
-            "(bobinler yeni seansa ait).", _stopping_session_id, _active_session.get("session_id"))
+            "(bobinler yeni seansa ait).",
+            _stopping_session_id,
+            _active_session.get("session_id"),
+        )
     else:
         await asyncio.to_thread(_stop_session_coils, coil_ids)
         update_live_session_state(is_active=False, mode="Sistem Hazır")
@@ -2203,8 +2454,7 @@ async def stop_session():
             # (_active_session yeni dict ile degismis). db_finalized'i YENI seansa damgalama →
             # yalniz AYNI (bu) seans hala yerindeyse (is_active False + ayni db_session_id) isaretle.
             with _session_lock:
-                if (not _active_session.get("is_active")
-                        and _active_session.get("db_session_id") == db_session_id):
+                if not _active_session.get("is_active") and _active_session.get("db_session_id") == db_session_id:
                     _active_session["db_finalized"] = True
         except Exception:
             logging.exception("stop: kalici kayit genel hatasi")
@@ -2216,7 +2466,9 @@ async def stop_session():
             _lost = len(_sensor_sample_buffer)
             _sensor_sample_buffer.clear()
         if _lost:
-            logging.warning("stop: db_session_id YOK → %d sensor satiri KALICI DEGIL (kayip). Seans DB'ye baglanmamis.", _lost)
+            logging.warning(
+                "stop: db_session_id YOK → %d sensor satiri KALICI DEGIL (kayip). Seans DB'ye baglanmamis.", _lost
+            )
 
     return {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
 
@@ -2224,15 +2476,15 @@ async def stop_session():
 class AiLogPayload(BaseModel):
     # Geriye-uyumlu alanlar (eski istemci yalnız bunları gönderir):
     patient_name: str = ""
-    module: str = ""              # modül etiketi → module_label
-    summary: str = ""            # sonuç özeti → result_summary
+    module: str = ""  # modül etiketi → module_label
+    summary: str = ""  # sonuç özeti → result_summary
     # 2026-07 profesyonel DETAYLI kayıt — yeni istemci ayrıca gönderir:
-    mode: str = ""               # profil (pet_owner/veterinarian/researcher)
-    module_id: str = ""          # AiModule id (em_fantom, kidney_ct, ...)
-    input_type: str = ""         # image / clinical / audio / csv ...
-    result_detail: dict = {}     # tam sonuç JSON (heterojen)
+    mode: str = ""  # profil (pet_owner/veterinarian/researcher)
+    module_id: str = ""  # AiModule id (em_fantom, kidney_ct, ...)
+    input_type: str = ""  # image / clinical / audio / csv ...
+    result_detail: dict = {}  # tam sonuç JSON (heterojen)
     confidence: float | None = None
-    operator_email: str = ""     # klinik-içi sahiplik — analizi yapan hekim ("Benim/Tüm Klinik")
+    operator_email: str = ""  # klinik-içi sahiplik — analizi yapan hekim ("Benim/Tüm Klinik")
 
 
 _ai_migrate_lock = _threading.Lock()
@@ -2252,10 +2504,12 @@ def _migrate_ai_jsonl_once(db) -> None:
             for ln in p.read_text(encoding="utf-8").splitlines():
                 try:
                     r = _json.loads(ln)
-                    db.add_ai_analysis(module_label=r.get("module", ""),
-                                       patient_name=r.get("patient_name", ""),
-                                       result_summary=r.get("summary", ""),
-                                       result_detail={"legacy": True, "timestamp": r.get("timestamp", "")})
+                    db.add_ai_analysis(
+                        module_label=r.get("module", ""),
+                        patient_name=r.get("patient_name", ""),
+                        result_summary=r.get("summary", ""),
+                        result_detail={"legacy": True, "timestamp": r.get("timestamp", "")},
+                    )
                 except Exception:
                     pass
             p.rename(p.with_name("ai_diagnoses.jsonl.migrated"))
@@ -2264,7 +2518,7 @@ def _migrate_ai_jsonl_once(db) -> None:
 
 
 @app.post("/api/ai/log")
-async def log_ai_result(payload: AiLogPayload):
+async def log_ai_result(payload: AiLogPayload, request: Request):
     """AI analiz sonucunu ŞİFRELİ (SQLCipher) geçmişe profesyonel+detaylı kaydeder (ai_analyses tablosu).
     Eski düz-metin JSONL + isim-maskeleme KALDIRILDI — şifreli olduğundan hasta adı TAM (KVKK-güvenli)."""
     try:
@@ -2272,17 +2526,58 @@ async def log_ai_result(payload: AiLogPayload):
         if db is None:
             return {"status": "error", "detail": "Kayıt DB yok"}
         await asyncio.to_thread(_migrate_ai_jsonl_once, db)
+        from servers.auth import cozumlenmis_operator
+
         rid = await asyncio.to_thread(
             db.add_ai_analysis,
-            payload.mode, payload.module_id, payload.module,
-            str(payload.patient_name or "").strip(), payload.input_type,
-            payload.summary, payload.result_detail or {}, payload.confidence,
-            payload.operator_email or "",
+            payload.mode,
+            payload.module_id,
+            payload.module,
+            str(payload.patient_name or "").strip(),
+            payload.input_type,
+            payload.summary,
+            payload.result_detail or {},
+            payload.confidence,
+            # ⚠️ 2026-08-09 (Tier 1): AI analizinin sahibi de jetondan türetilir — aksi hâlde
+            # "bu teşhisi kim yaptı" sorusunun cevabı doğrulanmamış bir dizeydi.
+            cozumlenmis_operator(request, payload.operator_email),
         )
         return {"status": "success", "id": rid}
     except Exception:
         logging.exception("log_ai_result failed")
         return {"status": "error", "detail": "Kayıt başarısız"}
+
+
+class AiReviewPayload(BaseModel):
+    analysis_id: int
+    status: str = ""  # approved | rejected | corrected
+    note: str = ""  # red gerekçesi ya da hekimin düzeltilmiş teşhisi
+    reviewed_by: str = ""  # karar veren hekimin e-postası
+
+
+@app.post("/api/ai/log/review")
+async def review_ai_analysis(payload: AiReviewPayload):
+    """AI analizine HEKİM DEĞERLENDİRMESİ ekle (2026-08-06, sahip isteği).
+
+    AI çıktısı bir ÖNERİdir; klinik karar hekimindir. Onay/red/düzeltme kaydın YANINA yazılır —
+    AI'ın ne dediği ile hekimin ne dediği ayrı ayrı görünür kalır (sonradan "model ne demişti?"
+    sorusu cevaplanabilsin). Kayıt silinmez, AI sonucu değiştirilmez.
+    """
+    if payload.status not in ("approved", "rejected", "corrected"):
+        raise HTTPException(status_code=422, detail="status 'approved', 'rejected' veya 'corrected' olmalı.")
+    # Red ve düzeltme GEREKÇESİZ olamaz: boş bir "reddedildi" denetim izinde işe yaramaz ve
+    # modeli iyileştirmek için de veri taşımaz. Onay için not opsiyonel.
+    if payload.status in ("rejected", "corrected") and not (payload.note or "").strip():
+        raise HTTPException(status_code=422, detail="Red ve düzeltme için gerekçe/açıklama zorunludur.")
+    db = _get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Kayıt veritabanı kullanılamıyor.")
+    ok = await asyncio.to_thread(
+        db.set_ai_review, int(payload.analysis_id), payload.status, payload.note, payload.reviewed_by
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+    return {"status": "success", "analysisId": payload.analysis_id, "review": payload.status}
 
 
 @app.get("/api/ai/log")
@@ -2293,8 +2588,11 @@ async def get_ai_log(limit: int = 50, module_id: str = "", patient_name: str = "
         if db is None:
             return {"status": "success", "data": []}
         data = await asyncio.to_thread(
-            db.get_ai_analyses, int(limit),
-            module_id or None, patient_name or None, (int(before_id) or None),
+            db.get_ai_analyses,
+            int(limit),
+            module_id or None,
+            patient_name or None,
+            (int(before_id) or None),
         )
         return {"status": "success", "data": data}
     except Exception:
@@ -2302,11 +2600,334 @@ async def get_ai_log(limit: int = 50, module_id: str = "", patient_name: str = "
         return {"status": "error", "detail": "Log okunamadı", "data": []}
 
 
+def _enforce_privileged(request: Request) -> None:
+    """Yıkıcı/PII ucu kapısı — LAN muafiyeti YOK (bkz. servers/auth.enforce_privileged).
+
+    2026-08-09 denetimi (ENGEL): bu uçlar tüm hasta geçmişini dışarı verebiliyor ya da geri
+    dönülemez silebiliyordu ve `is_local_request` LAN'ı auth-muaf saydığı için klinik WiFi'sindeki
+    HERHANGİ bir cihaz kimliksiz çağırabiliyordu.
+    """
+    from servers.auth import enforce_privileged
+
+    enforce_privileged(request)
+
+
+class AiLogDeletePayload(BaseModel):
+    """Tekil silme. `operator_email` doluysa yalnız O KİŞİYE ait kayıt silinebilir."""
+
+    id: int
+    operator_email: str = ""
+
+
+class AiLogDeleteAllPayload(BaseModel):
+    """Toplu silme. `confirm` ZORUNLU (yanlış-tık/otomatik-istek koruması — hasta silmedeki kural).
+
+    `operator_email` doluysa yalnız o kişinin (ve sahipsiz) kayıtları silinir.
+
+    ⚠️ DENETİM 2026-08-09 (Tier 1) — BOŞ `operator_email` ARTIK "HEPSİNİ SİL" DEMEK DEĞİL.
+    Eski kural "boşsa TÜM klinik geçmişi gider" idi ve bu, kimliğin kaybolduğu HER durumu
+    sessizce klinik-geneli silmeye çeviriyordu: çoklu-operatör kipinde kimse seçilmemişse
+    istemcinin `operatorEmail`i bilerek "" döner → "kendi kayıtlarımı sil" isteği kliniğin
+    TÜM AI geçmişini silerdi. Kimlik yokluğu ile "hepsini sil" NİYETİ artık ayrı:
+    klinik-geneli silme `all_operators: true` ile AÇIKÇA istenmelidir.
+    """
+
+    confirm: str = ""
+    operator_email: str = ""
+    #: Klinik-geneli silme NİYETİ. Kimliksiz + bayraksız istek REDDEDİLİR (fail-closed).
+    all_operators: bool = False
+
+
+@app.post("/api/ai/log/delete")
+async def delete_ai_log_entry(payload: AiLogDeletePayload, request: Request):
+    """Tek bir AI analiz kaydını sil (KVKK silme hakkı)."""
+    _enforce_privileged(request)
+    db = _get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
+    ok = await asyncio.to_thread(db.delete_ai_analysis, int(payload.id), (payload.operator_email or "").strip() or None)
+    from servers import audit_log as _iz
+
+    if not ok:
+        # Kayıt yok VEYA başkasına ait → ikisini AYIRMA (varlık sızdırmayalım).
+        # ⚠️ BAŞARISIZ deneme de yazılır: bir hesabın başkasının kaydını silmeye çalışması,
+        # başarılı silme kadar önemli bir sinyaldir.
+        _iz.kimlikli_yaz(
+            request,
+            "ai_log.delete",
+            beyan=payload.operator_email or "",
+            scope=f"id={payload.id}",
+            item_count=0,
+            outcome="reddedildi",
+        )
+        raise HTTPException(status_code=404, detail="Kayıt bulunamadı veya silme yetkiniz yok.")
+    logging.getLogger(__name__).warning("KVKK: AI analiz kaydı silindi (id=%s).", payload.id)
+    _iz.kimlikli_yaz(
+        request, "ai_log.delete", beyan=payload.operator_email or "", scope=f"id={payload.id}", item_count=1
+    )
+    return {"status": "success", "deleted": 1}
+
+
+@app.post("/api/ai/log/delete_all")
+async def delete_ai_log_all(payload: AiLogDeleteAllPayload, request: Request):
+    """AI analiz geçmişini TOPLU sil — `{"confirm":"DELETE_ALL"}` ZORUNLU.
+
+    Hasta toplu-silmesiyle AYNI kapı (bkz. patient_router.remove_all_patients): boş bir POST'un
+    geri-dönülemez biçimde tüm geçmişi silmesini engeller.
+    """
+    _enforce_privileged(request)
+    if payload.confirm != "DELETE_ALL":
+        raise HTTPException(
+            status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
+        )
+    db = _get_treatment_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Geçmiş veritabanı hazır değil")
+    op = (payload.operator_email or "").strip() or None
+    # ⚠️ FAIL-CLOSED (2026-08-09): kimlik yok VE klinik-geneli silme AÇIKÇA istenmediyse reddet.
+    # Aksi hâlde istemcideki bir kimlik kaybı (operatör seçilmemiş, oturum düşmüş, alan boş
+    # gönderilmiş) sessizce "kliniğin tüm AI geçmişini sil"e dönüşürdü — geri dönüşü olmayan bir
+    # işlem için kabul edilemez bir varsayılan.
+    if op is None and not payload.all_operators:
+        raise HTTPException(
+            status_code=400,
+            detail="Silme kapsamı belirsiz. Kendi kayıtlarınız için operatör seçin; kliniğin "
+            "tamamını silmek için isteğe {\"all_operators\": true} ekleyin.",
+        )
+    n = await asyncio.to_thread(db.clear_ai_analyses, op)
+    from servers import audit_log as _iz
+
+    if n < 0:
+        _iz.kimlikli_yaz(
+            request,
+            "ai_log.delete_all",
+            beyan=payload.operator_email or "",
+            scope=(op or "TUM_KLINIK"),
+            item_count=0,
+            outcome="hata",
+        )
+        raise HTTPException(status_code=500, detail="Geçmiş temizlenemedi")
+    # KVKK "sildim" kanıtı: kapsam + sayı loglanır (kayıt İÇERİĞİ loglanmaz).
+    logging.getLogger(__name__).warning(
+        "KVKK: AI analiz geçmişi TOPLU silindi (kapsam=%s, %d kayıt, VACUUM uygulandı).", op or "TÜM KLİNİK", n
+    )
+    # ⚠️ Denetim izi SİLİNMEZ (ekleme-only mühür): "hepsini sil" bu satırı da silseydi, silmenin
+    # olduğunu gösteren tek kanıt kaybolurdu.
+    _iz.kimlikli_yaz(
+        request,
+        "ai_log.delete_all",
+        beyan=payload.operator_email or "",
+        scope=(op or "TUM_KLINIK"),
+        item_count=n,
+        detail={"all_operators": bool(payload.all_operators), "vacuum": True},
+    )
+    return {"status": "success", "deleted": n}
+
+
+# ─────────────────── CİHAZ TAŞIMA: şifreli dışa/içe aktarma (2026-08-08) ───────────────────
+# Kayıtlar bilerek MAKİNEDE tutuluyor (bulut senkronu YOK). Tek gerçek dezavantajı cihaz
+# değişimiydi; çözümü bulut değil, kliniğin kendi kontrolündeki şifreli dosya.
+
+
+class DataExportPayload(BaseModel):
+    passphrase: str = ""
+
+
+class DataImportPayload(BaseModel):
+    passphrase: str = ""
+    blob_b64: str = ""
+    confirm: str = ""  # hedef DOLU ise "REPLACE_ALL" ZORUNLU
+
+
+@app.post("/api/data/export")
+async def export_clinic_data(payload: DataExportPayload, request: Request):
+    """Hasta + seans + AI analiz kayıtlarını TEK şifreli dosyaya çıkarır (base64 döner)."""
+    _enforce_privileged(request)
+    import base64 as _base64
+
+    from utils.data_export import BUNDLE_VERSION, ExportError, encrypt_bundle
+
+    try:
+        thdb = _get_treatment_db()
+        pdb = get_patient_database()
+        if thdb is None or pdb is None:
+            raise HTTPException(status_code=500, detail="Veritabanı hazır değil")
+        rows = await asyncio.to_thread(thdb.export_rows)
+        # ⚠️ İKİ AYRI HASTA DEPOSU VAR ve ikisi de taşınmalı:
+        #   rows["patients"]  → tedavi DB'sindeki hasta satırları; `treatment_sessions.patient_id`
+        #                       BUNLARA bakar, dolayısıyla ilişkiyi kurmak için ŞART.
+        #   pdb.get_all_patients → ayrı hasta veritabanı (arayüzün hasta listesi).
+        # Eskiden yalnız ikincisi taşınıyor ve `rows`daki `patients` anahtarını EZİYORDU.
+        paket = {
+            "bundle_version": BUNDLE_VERSION,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            **rows,
+            "patient_db": await asyncio.to_thread(pdb.get_all_patients),
+        }
+        blob = await asyncio.to_thread(encrypt_bundle, paket, payload.passphrase)
+        # ⚠️ DENETİM 2026-08-09 (Tier 1) — ÜRETİLEN DOSYA GERÇEKTEN AÇILIYOR MU?
+        # Yedeğin bozuk olduğu, ancak KULLANILMASI gereken gün (eski makine ölmüş, geri dönüş yok)
+        # anlaşılırdı. Round-trip doğrulama, aynı parolayla çözüp kayıt sayılarını karşılaştırır;
+        # maliyeti tek bir PBKDF2 + gzip açma, karşılığı "bu dosya açılabilir" güvencesi.
+        from utils.data_export import decrypt_bundle as _coz
+
+        _geri = await asyncio.to_thread(_coz, blob, payload.passphrase)
+        for _t in ("treatment_sessions", "session_coil_runs", "ai_analyses"):
+            if len(_geri.get(_t) or []) != len(paket.get(_t) or []):
+                logging.getLogger(__name__).error(
+                    "VERİ TAŞIMA: round-trip doğrulaması BAŞARISIZ (%s: %d != %d)",
+                    _t,
+                    len(_geri.get(_t) or []),
+                    len(paket.get(_t) or []),
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Yedek dosyası doğrulanamadı; oluşturulan dosya açılamıyor. "
+                    "İşlem iptal edildi — lütfen tekrar deneyin.",
+                )
+    except ExportError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logging.exception("data export failed")
+        raise HTTPException(status_code=500, detail="Dışa aktarma başarısız")
+    logging.getLogger(__name__).warning(
+        "VERİ TAŞIMA: dışa aktarıldı (%d hasta, %d seans, %d bobin-koşusu, %d sensör, %d analiz).",
+        len(paket["patient_db"]),
+        len(paket["treatment_sessions"]),
+        len(paket["session_coil_runs"]),
+        len(paket["sensor_samples"]),
+        len(paket["ai_analyses"]),
+    )
+    # ⚠️ Dışa aktarma, at-rest şifrelemesinin dışına ÇIKAN tek meşru yoldur: klinik verisinin
+    # tamamı, çağıranın SEÇTİĞİ bir parolayla tek dosyaya iner. Kim, ne zaman, nereden ve kaç
+    # kayıt çıkardı — bu kayıt olmadan bir veri sızıntısı geriye dönük hiç görünmez.
+    from servers import audit_log as _iz
+
+    _iz.yaz(
+        request,
+        "data.export",
+        scope="klinik",
+        item_count=len(paket["treatment_sessions"]),
+        detail={
+            k: len(paket.get(k) or [])
+            for k in (
+                "patient_db",
+                "treatment_sessions",
+                "session_coil_runs",
+                "sensor_samples",
+                "session_events",
+                "ai_analyses",
+            )
+        },
+    )
+    return {
+        "status": "success",
+        "filename": f"pemf-vet-yedek-{datetime.now():%Y%m%d-%H%M}.pemfbak",
+        "data_b64": _base64.b64encode(blob).decode("ascii"),
+        # Sayımlar kullanıcıya gösterilir: "ne taşındığını" görebilmeli. Doz kaydı (bobin
+        # koşuları) ayrı kalem — eskiden hiç taşınmadığı için hiç görünmüyordu da.
+        "counts": {
+            k: len(paket.get(k) or [])
+            for k in (
+                "patient_db",
+                "treatment_sessions",
+                "session_coil_runs",
+                "sensor_samples",
+                "session_events",
+                "ai_analyses",
+            )
+        },
+    }
+
+
+@app.post("/api/data/import")
+async def import_clinic_data(payload: DataImportPayload, request: Request):
+    """Şifreli yedeği geri yükler.
+
+    ⚠️ HEDEF BOŞ DEĞİLSE `{"confirm":"REPLACE_ALL"}` ZORUNLU ve mevcut TIBBİ KAYITLARIN TAMAMI
+    SİLİNİR. Sessiz birleştirme YAPMIYORUZ: seans ve analiz append-only günlüklerdir, aynı dosyayı
+    iki kez almak kayıtları ÇOĞALTIR ve klinik geçmişini sessizce bozar.
+
+    ⚠️ 2026-08-09: silme kapsamı GENİŞLEDİ. Paket artık bağlı tabloların tamamını taşıdığı için
+    (bobin koşuları = uygulanan doz, sensör telemetrisi, seans olayları/parametreleri ve tedavi
+    DB'sinin hasta satırları) `replace` bunların HEPSİNİ siler. Yalnız seans+analiz silinip
+    çocuk satırlar bırakılsaydı, eski telemetri yeni seanslara bağlanır ve kayıtlar karışırdı.
+    """
+    import base64 as _base64
+
+    _enforce_privileged(request)
+    from utils.data_export import ExportError, decrypt_bundle
+
+    thdb = _get_treatment_db()
+    pdb = get_patient_database()
+    if thdb is None or pdb is None:
+        raise HTTPException(status_code=500, detail="Veritabanı hazır değil")
+    try:
+        blob = _base64.b64decode(payload.blob_b64 or "", validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Dosya okunamadı (geçersiz kodlama).")
+    try:
+        paket = await asyncio.to_thread(decrypt_bundle, blob, payload.passphrase)
+    except ExportError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    mevcut = await asyncio.to_thread(thdb.export_rows)
+    dolu = bool(
+        mevcut["treatment_sessions"] or mevcut["ai_analyses"] or (await asyncio.to_thread(pdb.get_all_patients))
+    )
+    if dolu and payload.confirm != "REPLACE_ALL":
+        raise HTTPException(
+            status_code=409,
+            detail="Bu cihazda zaten kayıt var. Geri yükleme bu cihazdaki TÜM tıbbi kayıtları "
+            "(seanslar, bobin koşuları, sensör verisi, AI analizleri ve hasta kayıtları) "
+            "SİLER ve yedektekilerle değiştirir. Onaylamak için "
+            "{\"confirm\":\"REPLACE_ALL\"} gönderin.",
+        )
+
+    n = await asyncio.to_thread(thdb.import_rows, paket, bool(dolu))
+    eklenen_hasta = 0
+    # v2'de ayrı hasta veritabanı `patient_db` anahtarındadır; v1 yedeklerinde `patients` idi
+    # (o sürümde tedavi DB'sinin hasta tablosu hiç taşınmıyordu, çakışma yok).
+    _hastalar = paket.get("patient_db")
+    if _hastalar is None and int(paket.get("bundle_version") or 1) < 2:
+        _hastalar = paket.get("patients")
+    for h in _hastalar or []:
+        try:
+            if await asyncio.to_thread(pdb.add_patient, h):
+                eklenen_hasta += 1
+        except Exception:
+            logging.getLogger(__name__).warning("Hasta içe aktarılamadı, atlandı.")
+    logging.getLogger(__name__).warning(
+        "VERİ TAŞIMA: içe aktarıldı (%d hasta, %d seans, %d bobin-koşusu, %d analiz; replace=%s).",
+        eklenen_hasta,
+        n["treatment_sessions"],
+        n["session_coil_runs"],
+        n["ai_analyses"],
+        dolu,
+    )
+    # ⚠️ `replace=True` ise bu işlem cihazdaki TÜM tıbbi kayıtları SİLDİ. Denetim izi (ekleme-only)
+    # silinmediği için "hangi yedek, ne zaman, kaç kaydın üzerine yazıldı" sorusu cevaplanabilir
+    # kalır — aksi hâlde yanlış yedeği geri yükleyen bir işlem geriye dönük görünmez olurdu.
+    from servers import audit_log as _iz
+
+    _iz.yaz(
+        request,
+        "data.import",
+        scope=("replace_all" if dolu else "bos_cihaz"),
+        item_count=n.get("treatment_sessions", 0),
+        detail={"replace": bool(dolu), "hasta": eklenen_hasta, "bundle_version": paket.get("bundle_version"), **n},
+    )
+    return {"status": "success", "counts": {"patient_db": eklenen_hasta, **n}}
+
+
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     """Tüm transport'lardan (STM 1-5 + ESP 6-8) DONANIM STOP + seans kapat + WS bildir.
     Manuel acil-durdurma + ESP firmware ALARM'ı + STM bağlantı kaybı ortak bunu çağırır.
     NOT: backend bir sıcaklık/parametre EŞİĞİ dayatmaz; donanımın/operatörün kararına tepki verir."""
     import time as _t
+
     with _session_lock:
         coil_ids = _active_session.get("coil_ids") or list(range(1, 9))
         _was_active = bool(_active_session.get("is_active"))
@@ -2319,15 +2940,23 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
             stm_stopped = bool(state.hardware.stop_all_coils())
         except Exception:
             logging.exception("STM emergency stop failed")
+
     # P0 audit 2026-06-28: ESP stop publish'lerini PARALEL gonder (eskiden bobin basina 2 senkron
     # publish sirayla → acil-durdurma N-bobin x ~7sn gecikiyordu). _emergency_stop_all DAIMA bir
     # thread'de calisir (async endpoint asyncio.to_thread; ESP-alarm/STM-disconnect zaten thread),
     # dolayisiyla burada ThreadPoolExecutor guvenli + event-loop'u etkilemez.
     def _estop_one(coil_id):
         command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}"
-        ok = _mqtt_publish(f"pemf/coil/{coil_id}/control", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
-        legacy_ok = _mqtt_publish(f"pemf/esp32_{coil_id}/command", {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()})
+        ok = _mqtt_publish(
+            f"pemf/coil/{coil_id}/control",
+            {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()},
+        )
+        legacy_ok = _mqtt_publish(
+            f"pemf/esp32_{coil_id}/command",
+            {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()},
+        )
         return {"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"}
+
     # DENETIM P0: kapsam `[cid for cid in coil_ids if cid in ESP_COIL_IDS]` idi → ESP STOP'lari
     # AKTIF SEANSIN bobin listesiyle sinirlaniyordu. STM tarafi ise kosulsuz stop_all_coils()
     # cagiriyor; bu asimetri hatanin kasitsiz oldugunu gosteriyor. Somut ariza: seans coil_ids=[1,2,3]
@@ -2338,6 +2967,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # sinirlandirilmaz → DAIMA tum ESP bobinleri. Calismayan bobine STOP zararsiz/idempotenttir.
     _estop_coils = sorted(ESP_COIL_IDS)
     import concurrent.futures as _cf
+
     with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:
         mqtt_results = list(_ex.map(_estop_one, _estop_coils))
     with _live_state_lock:
@@ -2357,7 +2987,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     if _was_active and _db_sid:
         try:
             _get_treatment_db().record_session_event(
-                _db_sid, "emergency_stop",
+                _db_sid,
+                "emergency_stop",
                 payload={"reason": reason, "mode": mode, "coil_ids": list(coil_ids)},
                 severity="critical",
             )
@@ -2373,10 +3004,15 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     _esp_ok = bool(mqtt_results) and all(r.get("mqtt") == "success" for r in mqtt_results)
     _stm_ok = stm_stopped or state.hardware is None  # STM yoksa STM-basarisizligi sayma
     _status = "success" if (_stm_ok and _esp_ok) else ("error" if (not _stm_ok and not _esp_ok) else "partial")
-    return {"status": _status, "confirmed": bool(_stm_ok and _esp_ok),
-            "stmStopped": stm_stopped, "mqttResults": mqtt_results, "reason": reason,
-            # Denetim izi: acil-durdurma ANINDAKI seans kapsami (STOP kapsamini ARTIK belirlemez).
-            "sessionCoilIds": list(coil_ids)}
+    return {
+        "status": _status,
+        "confirmed": bool(_stm_ok and _esp_ok),
+        "stmStopped": stm_stopped,
+        "mqttResults": mqtt_results,
+        "reason": reason,
+        # Denetim izi: acil-durdurma ANINDAKI seans kapsami (STOP kapsamini ARTIK belirlemez).
+        "sessionCoilIds": list(coil_ids),
+    }
 
 
 def _emergency_stop_async(reason: str = "manual", mode: str = "Acil Durdurma"):
@@ -2385,8 +3021,10 @@ def _emergency_stop_async(reason: str = "manual", mode: str = "Acil Durdurma"):
     takilmasin — stop bagimsizca yurur, cagiran guvenlik-kritik thread hemen doner (ag-I/O'da
     bloklanmaz; ayrica paho callback'i icinden publish deadlock'u onlenir)."""
     import threading as _th
-    _th.Thread(target=_emergency_stop_all, kwargs={"reason": reason, "mode": mode},
-               name=f"estop-{reason}"[:24], daemon=True).start()
+
+    _th.Thread(
+        target=_emergency_stop_all, kwargs={"reason": reason, "mode": mode}, name=f"estop-{reason}"[:24], daemon=True
+    ).start()
 
 
 @app.post("/api/hardware/emergency_stop")
@@ -2420,6 +3058,7 @@ if frontend_path:
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 else:
     import logging
+
     logging.getLogger(__name__).warning("Frontend derlemesi bulunamadı! Tarayıcıda boş sayfa çıkabilir.")
 
 # P2 audit 2026-06-28: start_fastapi_server() + __main__ KALDIRILDI — main.py silindi, HeadlessCore

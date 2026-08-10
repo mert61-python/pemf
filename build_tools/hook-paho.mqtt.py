@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 # PyInstaller hook for paho-mqtt
 # Ensures all paho.mqtt submodules are included
 

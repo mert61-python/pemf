@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """P2/P3 MUTASYON TESTİ BULGULARI — uygulanmış ama HİÇBİR testin korumadığı düzeltmeler.
 
 P0/P1 düzeltmeleri ayrı bir turda mutasyon testinden geçirilmişti (33/33 yakalandı). Bu tur
@@ -32,6 +33,7 @@ def api(monkeypatch):
 
 # ───────────────────────── HASTA GÜVENLİĞİ ─────────────────────────
 
+
 def test_stop_devralinan_seansin_TAZE_bobinlerini_DURDURMAZ(api, monkeypatch):
     """P2 TOCTOU mührü — kaçan mutasyon: `_takeover` kontrolü etkisizleştirilince takım yeşil kaldı.
 
@@ -45,18 +47,23 @@ def test_stop_devralinan_seansin_TAZE_bobinlerini_DURDURMAZ(api, monkeypatch):
     monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.append(list(ids)))
 
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "seans_A", "coil_ids": [1, 2],
-            "duration_minutes": 20, "start_time": 0, "started_epoch": 0,
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "seans_A",
+                "coil_ids": [1, 2],
+                "duration_minutes": 20,
+                "start_time": 0,
+                "started_epoch": 0,
+            }
+        )
 
     # Pencere `is_active=False` ile mühür kontrolü ARASIDIR; oradaki tek ara adım
     # `_emit_minute_averages`. Başka bir istemcinin tam o anda /session/start atmasını
     # birebir bu noktada taklit ediyoruz.
     def _devral(_ts):
         with api._session_lock:
-            api._active_session.update({"is_active": True, "session_id": "seans_B",
-                                        "coil_ids": [1, 2]})
+            api._active_session.update({"is_active": True, "session_id": "seans_B", "coil_ids": [1, 2]})
 
     monkeypatch.setattr(api, "_emit_minute_averages", _devral)
 
@@ -68,7 +75,8 @@ def test_stop_devralinan_seansin_TAZE_bobinlerini_DURDURMAZ(api, monkeypatch):
 
     assert durdurulan == [], (
         "eski /stop, devralan YENİ seansın taze bobinlerini durdurdu → hasta tedavisi "
-        "sessizce kesilir (TOCTOU mührü etkisiz)")
+        "sessizce kesilir (TOCTOU mührü etkisiz)"
+    )
 
 
 def test_devralma_YOKSA_bobinler_normal_durdurulur(api, monkeypatch):
@@ -78,10 +86,16 @@ def test_devralma_YOKSA_bobinler_normal_durdurulur(api, monkeypatch):
     monkeypatch.setattr(api, "_stop_session_coils", lambda ids: durdurulan.append(list(ids)))
 
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "seans_A", "coil_ids": [1, 2],
-            "duration_minutes": 20, "start_time": 0, "started_epoch": 0,
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "seans_A",
+                "coil_ids": [1, 2],
+                "duration_minutes": 20,
+                "start_time": 0,
+                "started_epoch": 0,
+            }
+        )
 
     async def _duz(fn, *a, **kw):
         return fn(*a, **kw)
@@ -101,12 +115,12 @@ def test_RETAINED_mqtt_alarmi_canli_olcum_sayilmaz(api):
     hasta üzerinde süren tedavi sebepsiz kesilir.
     """
     import inspect
-    src = inspect.getsource(api._on_mqtt_message) if hasattr(api, "_on_mqtt_message") else \
-        inspect.getsource(api)
+
+    src = inspect.getsource(api._on_mqtt_message) if hasattr(api, "_on_mqtt_message") else inspect.getsource(api)
     assert 'msg_type == "sensors" and not is_retained' in src, (
-        "retained `sensors` mesajı canlı ölçüm gibi işleniyor → bayat veri + sebepsiz E-STOP")
-    assert 'msg_type == "status" and not is_retained' in src, (
-        "retained `status` mesajı canlı durum gibi işleniyor")
+        "retained `sensors` mesajı canlı ölçüm gibi işleniyor → bayat veri + sebepsiz E-STOP"
+    )
+    assert 'msg_type == "status" and not is_retained' in src, "retained `status` mesajı canlı durum gibi işleniyor"
 
 
 def test_telemetrisiz_bobin_icin_SAHTE_sifir_sensor_yazilmaz(api, monkeypatch):
@@ -117,9 +131,11 @@ def test_telemetrisiz_bobin_icin_SAHTE_sifir_sensor_yazilmaz(api, monkeypatch):
     aşırı-ısınma analizi ve sahibine giden rapor yanlış veriyle üretilir.
     """
     import inspect
+
     src = inspect.getsource(api)
     assert "_coil_last_telemetry.get(cid - 1) is None" in src, (
-        "sensör biriktirme, telemetri KAYNAĞI olmayan bobinleri süzmüyor → geçmişe sahte 0.0 yazılır")
+        "sensör biriktirme, telemetri KAYNAĞI olmayan bobinleri süzmüyor → geçmişe sahte 0.0 yazılır"
+    )
 
 
 def test_sure_watchdogu_DUVAR_SAATI_sicramasindan_etkilenmez(api, monkeypatch):
@@ -130,15 +146,19 @@ def test_sure_watchdogu_DUVAR_SAATI_sicramasindan_etkilenmez(api, monkeypatch):
     dayanırsa seans ya erken kesilir (tedavi eksik) ya da geç biter (aşırı doz).
     """
     import inspect
+
     src = inspect.getsource(api)
     assert '"start_mono": time.monotonic()' in src or '"start_mono": _t.monotonic()' in src, (
-        "seans başlangıcı monotonic damgalanmıyor")
+        "seans başlangıcı monotonic damgalanmıyor"
+    )
     # Watchdog monotonic'i TERCİH etmeli (duvar saati yalnız damga yoksa yedek)
     assert "_t.monotonic() - _sm" in src, (
-        "süre-watchdog'u monotonic farkı kullanmıyor → NTP sıçraması seansı erken/geç bitirir")
+        "süre-watchdog'u monotonic farkı kullanmıyor → NTP sıçraması seansı erken/geç bitirir"
+    )
 
 
 # ───────────────────────── GÜVENLİK / VERİ BÜTÜNLÜĞÜ ─────────────────────────
+
 
 def test_stm_baglanti_durumu_ve_emit_AYNI_kilitte(api):
     """P3 — kaçan mutasyon: emit kilidin dışına çıkarılınca takım yeşil kaldı.
@@ -161,14 +181,18 @@ def test_stm_baglanti_durumu_ve_emit_AYNI_kilitte(api):
 
     # emit/publish çağrısı bir `with <lock>` bloğunun İÇİNDE olmalı
     def _emit_cagrilari(node):
-        return [c for c in ast.walk(node) if isinstance(c, ast.Call)
-                and getattr(c.func, "attr", "") in ("_publish_event", "emit", "publish")]
+        return [
+            c
+            for c in ast.walk(node)
+            if isinstance(c, ast.Call) and getattr(c.func, "attr", "") in ("_publish_event", "emit", "publish")
+        ]
 
     tum = _emit_cagrilari(fn)
     assert tum, "_set_stm_connected hiç bildirim yapmıyor (test kurulumu uçla eşleşmiyor)"
     kilitli = [c for w in withler for c in _emit_cagrilari(w)]
     assert len(kilitli) == len(tum), (
-        "durum bildirimi kilidin DIŞINDA yapılıyor → çift/ters-sıralı emit, kaybolan son durum")
+        "durum bildirimi kilidin DIŞINDA yapılıyor → çift/ters-sıralı emit, kaybolan son durum"
+    )
 
 
 def test_auth_db_ACL_sureci_disari_kilitlemez():
@@ -184,7 +208,8 @@ def test_auth_db_ACL_sureci_disari_kilitlemez():
 
     src = inspect.getsource(auth_db)
     assert "keep_current_user=True" in src, (
-        "auth DB ACL'i keep_current_user=True KULLANMIYOR → süreç kendi DB'sini açamaz hale gelir")
+        "auth DB ACL'i keep_current_user=True KULLANMIYOR → süreç kendi DB'sini açamaz hale gelir"
+    )
     assert "keep_current_user=False" not in src
 
 
@@ -195,11 +220,19 @@ def test_acilis_VACUUM_u_AKTIF_SEANSTA_calismaz(api):
     sırasındaki sensör/coil-run yazımları zaman aşımına düşer → o dakikanın telemetrisi KAYBOLUR.
     """
     import inspect
+
     src = inspect.getsource(api)
     assert "run_count % 7 == 0 and not _sess_active" in src, (
-        "VACUUM aktif seans kontrolü YOK → tedavi sırasında DB kilitlenir, telemetri kaybolur")
-    assert "_sess_active = True   # emin degilsek VACUUM YAPMA" in src, (
-        "seans durumu okunamazsa fail-safe VACUUM-YAPMA davranışı kalkmış")
+        "VACUUM aktif seans kontrolü YOK → tedavi sırasında DB kilitlenir, telemetri kaybolur"
+    )
+    # ⚠️ BOŞLUĞA DUYARSIZ. Eskiden satır birebir aranıyordu (`= True   # emin...`, üç boşluk);
+    # `ruff format` boşluğu ikiye indirince test kırıldı — oysa DAVRANIŞ hiç değişmemişti.
+    # Kaynak-metin iddiası ne kadar dar olursa, biçimlendiriciyle o kadar yalancı kırılır.
+    import re as _re
+
+    assert _re.search(r"_sess_active\s*=\s*True\s*#\s*emin degilsek VACUUM YAPMA", src), (
+        "seans durumu okunamazsa fail-safe VACUUM-YAPMA davranışı kalkmış"
+    )
 
 
 def test_guncelleme_guardi_installer_baslayinca_ACIK_kalir():
@@ -222,13 +255,14 @@ def test_guncelleme_guardi_installer_baslayinca_ACIK_kalir():
         tree = ast.parse(src)
         finallyler = [n for n in ast.walk(tree) if isinstance(n, ast.Try) and n.finalbody]
         assert finallyler, f"{ad}: finally bloğu yok"
-        govde = "\n".join(
-            ast.unparse(s) for f in finallyler for s in f.finalbody)
+        govde = "\n".join(ast.unparse(s) for f in finallyler for s in f.finalbody)
         assert "not _installer_launched" in govde, (
-            f"{ad}: guard KOŞULSUZ kapatılıyor → installer EXE'yi değiştirirken tedavi başlatılabilir")
+            f"{ad}: guard KOŞULSUZ kapatılıyor → installer EXE'yi değiştirirken tedavi başlatılabilir"
+        )
 
 
 # ── Doğrulama turunda BULUNAN yeni açık (2026-08-05) ─────────────────────────
+
 
 def test_seans_devralinca_SAHIPSIZ_kalan_bobinler_durdurulur(api, monkeypatch):
     """Devralma önceki seansın DB satırlarını kapatıyordu ama DONANIMA dokunmuyordu.
@@ -248,20 +282,27 @@ def test_seans_devralinca_SAHIPSIZ_kalan_bobinler_durdurulur(api, monkeypatch):
 
     # Önceki seans: AI (Auto), bobin 1-8
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "auto_1", "mode": "AI (Auto)",
-            "coil_ids": list(range(1, 9)), "db_session_id": None,
-            "start_time": 0, "started_epoch": 0, "duration_minutes": 30,
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "auto_1",
+                "mode": "AI (Auto)",
+                "coil_ids": list(range(1, 9)),
+                "db_session_id": None,
+                "start_time": 0,
+                "started_epoch": 0,
+                "duration_minutes": 30,
+            }
+        )
 
     # AI Pro devralır — YALNIZ 1-7'yi sahiplenir
     api.start_ai_session(0.0, 0.0, 20, range(1, 8), "AI Pro")
 
-    assert 8 in durdurulan, (
-        "devralmada sahipsiz kalan bobin 8 DURDURULMADI → ESP süresi dolana kadar enerjili kalır")
+    assert 8 in durdurulan, "devralmada sahipsiz kalan bobin 8 DURDURULMADI → ESP süresi dolana kadar enerjili kalır"
     # Devredilen bobinlere gereksiz kesinti uygulanmamalı (yeni seans onları sürecek)
     assert not (set(range(1, 8)) & set(durdurulan)), (
-        f"yeni seansın sahiplendiği bobinler de durduruldu {durdurulan} → gereksiz kesinti")
+        f"yeni seansın sahiplendiği bobinler de durduruldu {durdurulan} → gereksiz kesinti"
+    )
 
 
 def test_devralmada_TUM_bobinler_devredilirse_STOP_gonderilmez(api, monkeypatch):
@@ -272,11 +313,18 @@ def test_devralmada_TUM_bobinler_devredilirse_STOP_gonderilmez(api, monkeypatch)
     monkeypatch.setattr(api, "_finish_coil_run", lambda cid: None)
 
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "manuel_1", "mode": "Manuel",
-            "coil_ids": [1, 2], "db_session_id": None,
-            "start_time": 0, "started_epoch": 0, "duration_minutes": 20,
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "manuel_1",
+                "mode": "Manuel",
+                "coil_ids": [1, 2],
+                "db_session_id": None,
+                "start_time": 0,
+                "started_epoch": 0,
+                "duration_minutes": 20,
+            }
+        )
 
     api.start_ai_session(0.0, 0.0, 20, [1, 2, 3], "AI Pro")
     assert durdurulan == [], f"tüm bobinler devredildiği hâlde STOP gönderildi: {durdurulan}"

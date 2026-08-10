@@ -8,6 +8,16 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+# ŞİFRELİ KAYNAK YÜKLEYİCİ (2026-08-06) — ai_hub gibi `.pyenc`'e çevrilmiş modüller
+# import edilebilsin diye HER ŞEYDEN ÖNCE kurulur (ilk AI importundan önce olmalı).
+# Şifresiz build'de sessizce devre dışı kalır → geliştirme/test akışı ETKİLENMEZ.
+try:
+    from utils.encrypted_import import install as _install_enc_loader
+
+    _install_enc_loader()
+except Exception:  # yükleyici yoksa/başarısızsa uygulama normal (şifresiz) açılmaya devam eder
+    pass
+
 import uvicorn
 
 from controllers.hardware_controller import HardwareController
@@ -29,6 +39,7 @@ class _JsonLogFormatter(logging.Formatter):
         import json as _json
 
         from utils.request_context import get_request_id
+
         doc = {
             "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
@@ -50,6 +61,7 @@ class _PlainLogFormatter(logging.Formatter):
         if not hasattr(record, "rid"):
             try:
                 from utils.request_context import get_request_id
+
                 record.rid = get_request_id() or "-"
             except Exception:
                 record.rid = "-"
@@ -60,8 +72,7 @@ class _PlainLogFormatter(logging.Formatter):
             record.msg = record.msg.replace("\r", "\\r").replace("\n", "\\n")
         if isinstance(record.args, tuple):
             record.args = tuple(
-                (a.replace("\r", "\\r").replace("\n", "\\n") if isinstance(a, str) else a)
-                for a in record.args
+                (a.replace("\r", "\\r").replace("\n", "\\n") if isinstance(a, str) else a) for a in record.args
             )
         return super().format(record)
 
@@ -159,6 +170,7 @@ def _safe_stop_outputs(api_server_module) -> None:
             # süre bekle (audit #21). Aksi halde STOP gönderilmeden süreç kapanıp bobinler
             # firmware süre-watchdog'u dolana kadar çalışmaya devam edebilir.
             import time as _t
+
             _q = getattr(getattr(api_server_module.state, "core", None), "_hw_send_queue", None)
             if _q is not None:
                 _deadline = _t.time() + _STM_FLUSH_BUDGET_S
@@ -177,11 +189,15 @@ def _safe_stop_outputs(api_server_module) -> None:
         def _stop_esp(coil_id):
             command_id = f"service_stop_{coil_id}_{int(time.time() * 1000)}"
             payload = {
-                "command": "stop", "command_id": command_id, "emergency": True,
-                "source": "backend_service_shutdown", "timestamp": time.time(),
+                "command": "stop",
+                "command_id": command_id,
+                "emergency": True,
+                "source": "backend_service_shutdown",
+                "timestamp": time.time(),
             }
             api_server_module._mqtt_publish(f"pemf/coil/{coil_id}/control", payload)
             api_server_module._mqtt_publish(f"pemf/esp32_{coil_id}/command", payload)
+
         # DENETIM P3: eskiden `with ThreadPoolExecutor(...) as _ex:` kullaniliyordu. Context
         # manager cikisi shutdown(wait=True) cagirir → `_cf.wait(timeout=3.0)` dolsa BILE blok
         # devam eder; ayrica concurrent.futures bir atexit kancasiyla is thread'lerini join eder.
@@ -189,16 +205,19 @@ def _safe_stop_outputs(api_server_module) -> None:
         # 3 bobin x ~2 sn x 2 publish kadar uzayip Windows SCM stop-timeout'unu asabiliyordu
         # (servis "durduruldu" sayilmadan oldurulur → kapanis mutabakati yarim kalir).
         # DAEMON thread + join(timeout): butce GERCEKTEN uygulanir, kalanlar surec bitince duser.
-        _threads = [threading.Thread(target=_stop_esp, args=(c,), daemon=True,
-                                     name=f"shutdown-estop-{c}") for c in range(6, 9)]
+        _threads = [
+            threading.Thread(target=_stop_esp, args=(c,), daemon=True, name=f"shutdown-estop-{c}") for c in range(6, 9)
+        ]
         for _t in _threads:
             _t.start()
         _deadline = time.monotonic() + _ESP_STOP_BUDGET_S  # ESP durdurma bütçesi
         for _t in _threads:
             _t.join(timeout=max(0.0, _deadline - time.monotonic()))
         if any(_t.is_alive() for _t in _threads):
-            logger.warning("Kapanis ESP STOP butcesi (3 sn) doldu — kalan publish'ler birakildi "
-                           "(bobinler firmware olu-adam devresiyle de durur).")
+            logger.warning(
+                "Kapanis ESP STOP butcesi (3 sn) doldu — kalan publish'ler birakildi "
+                "(bobinler firmware olu-adam devresiyle de durur)."
+            )
     except Exception:
         logger.exception("MQTT safe stop failed")
 
@@ -208,6 +227,7 @@ def _install_crash_handler(app_data_dir: Path) -> None:
     log'a CRITICAL yaz → saha cihazında çökme/güvenlik olayı görünür olsun (audit #24: merkezi
     telemetri yok). En azından adanmış, kolay-bulunur bir çökme kaydı + (varsa) cloud outbox'a not."""
     import threading as _th
+
     logger = logging.getLogger("backend_service")
     crash_log = Path(os.environ.get("PEMF_LOG_DIR", app_data_dir / "logs")) / "crash.log"
 
@@ -215,14 +235,14 @@ def _install_crash_handler(app_data_dir: Path) -> None:
         try:
             import datetime as _dt
             import traceback as _tb
+
             crash_log.parent.mkdir(parents=True, exist_ok=True)
             with open(crash_log, "a", encoding="utf-8") as f:
                 f.write(f"\n===== CRASH [{where}] {_dt.datetime.now().isoformat()} =====\n")
                 _tb.print_exception(exc_type, exc_value, exc_tb, file=f)
         except Exception:
             pass
-        logger.critical("YAKALANMAMIS ISTISNA (%s): %s", where, exc_value,
-                        exc_info=(exc_type, exc_value, exc_tb))
+        logger.critical("YAKALANMAMIS ISTISNA (%s): %s", where, exc_value, exc_info=(exc_type, exc_value, exc_tb))
 
     def _sys_hook(exc_type, exc_value, exc_tb):
         if not issubclass(exc_type, KeyboardInterrupt):
@@ -230,8 +250,7 @@ def _install_crash_handler(app_data_dir: Path) -> None:
         sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     def _thread_hook(args):
-        _record(args.exc_type, args.exc_value, args.exc_traceback,
-                f"thread:{getattr(args.thread, 'name', '?')}")
+        _record(args.exc_type, args.exc_value, args.exc_traceback, f"thread:{getattr(args.thread, 'name', '?')}")
 
     sys.excepthook = _sys_hook
     try:
@@ -251,11 +270,13 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
     candidates = []
     try:
         from utils.secrets_manager import secrets_path
+
         candidates.append(secrets_path())
     except Exception:
         pass
     try:
         from servers.auth import _token_file
+
         candidates.append(_token_file())
     except Exception:
         pass
@@ -288,13 +309,17 @@ def _log_pairing_info(logger: logging.Logger) -> None:
     okuyup mobil uygulamaya girebilsin (TEMASSIZ/QR'sız eşleştirme)."""
     try:
         from utils.path_utils import get_pairing_code, get_unique_device_id
+
         # Audit P3: eşleştirme kodu auth-bearer SIR (kod→/api/auth/exchange→token) → kalıcı log dosyasına
         # DÜZ yazma. Maskele; tam kodu operatör /api/system/info (local-gate) veya cihaz ekranından alır.
         _pc = get_pairing_code() or ""
         _pc_masked = (_pc[:1] + "*****") if len(_pc) >= 6 else "******"
         logger.info("=" * 60)
-        logger.info("EŞLEŞTİRME KODU: %s (tam kod: /api/system/info veya cihaz ekranı — güvenlik) | Cihaz Kimliği: %s",
-                    _pc_masked, get_unique_device_id())
+        logger.info(
+            "EŞLEŞTİRME KODU: %s (tam kod: /api/system/info veya cihaz ekranı — güvenlik) | Cihaz Kimliği: %s",
+            _pc_masked,
+            get_unique_device_id(),
+        )
         logger.info("=" * 60)
     except Exception:
         logger.exception("Eşleştirme kodu loglanamadı (non-fatal).")
@@ -311,6 +336,7 @@ def _initialize_database_safe(logger: logging.Logger) -> None:
 def _wire_api_server(core: HeadlessCore):
     """api_server modülünü HeadlessCore + HardwareController ile bağla ve modülü döndür."""
     from servers import api_server
+
     api_server.state.core = core
     api_server.state.hardware = HardwareController(core)
     api_server._register_event_bus_handlers()
@@ -323,9 +349,11 @@ def _start_startup_reconcile(api_server, logger: logging.Logger) -> None:
     duration'ı bitince durur). Yeni süreç TEMİZ başlasın diye broker/STM hazır olunca bir kez
     TÜM bobinlere STOP gönder. Eşzamanlı kilit yalnız in-memory olduğundan bu, crash sonrası
     orphan/ghost donanım durumunu temizler."""
+
     def _reconcile() -> None:
         try:
             import time as _t
+
             _t.sleep(3.0)  # broker + STM bağlantısının oturması için
             with api_server._session_lock:
                 if api_server._active_session.get("is_active"):
@@ -334,12 +362,15 @@ def _start_startup_reconcile(api_server, logger: logging.Logger) -> None:
             if api_server.state.hardware:
                 api_server.state.hardware.stop_all_coils()
             for _cid in range(1, 9):
-                api_server._mqtt_publish(f"pemf/coil/{_cid}/control",
-                                         {"command": "stop", "command_id": f"startup_reconcile_{_cid}"})
+                api_server._mqtt_publish(
+                    f"pemf/coil/{_cid}/control", {"command": "stop", "command_id": f"startup_reconcile_{_cid}"}
+                )
             logger.info("Başlangıç donanım mutabakatı: tüm bobinlere STOP (orphan/ghost temizliği).")
         except Exception:
             logger.warning("Başlangıç mutabakatı başarısız (non-fatal).", exc_info=True)
+
     import threading
+
     threading.Thread(target=_reconcile, daemon=True, name="startup-reconcile").start()
 
 
@@ -348,6 +379,7 @@ def _resolve_supabase_credentials() -> tuple[str, str]:
     varsayılan (TEK-DOSYA: pemf_secrets.json embedded; varsayılan anon key dahil)."""
     try:
         from utils.secrets_manager import get_secret
+
         sb_url = get_secret("supabase_url")
         sb_key = get_secret("supabase_anon_key")
     except Exception:
@@ -356,6 +388,7 @@ def _resolve_supabase_credentials() -> tuple[str, str]:
     if not (sb_url and sb_key):
         try:
             from pemf_gui.config import get_config
+
             cfg = get_config()
             sb_url = sb_url or cfg.get("supabase_url", _DEFAULT_SUPABASE_URL)
             sb_key = sb_key or cfg.get("supabase_key", "") or _DEFAULT_SUPABASE_ANON_KEY
@@ -371,6 +404,7 @@ def _start_cloud_sync(logger: logging.Logger) -> None:
     ağdayken device_id ile QR'sız bağlanabilir."""
     try:
         from servers.sync_worker import init_cloud_sync
+
         sb_url, sb_key = _resolve_supabase_credentials()
         init_cloud_sync(supabase_url=sb_url, supabase_key=sb_key)
         logger.info("Cloud sync + device registry started.")
@@ -383,6 +417,7 @@ def _start_db_maintenance(core: HeadlessCore, logger: logging.Logger) -> None:
     çalışıyordu → headless üretimde KVKK/GDPR retention + yedek HİÇ çalışmıyordu."""
     try:
         from services.headless_db_maintenance import start_headless_db_maintenance
+
         start_headless_db_maintenance(getattr(core, "app_data_dir", None))
         logger.info("Headless DB maintenance started.")
     except Exception:
@@ -398,11 +433,14 @@ def _force_auth_for_tunnel(logger: logging.Logger) -> None:
     os.environ["PEMF_REQUIRE_AUTH"] = "1"
     try:
         from servers import auth as _auth
+
         _auth._require = True  # lazy-cache'i de güncelle (ilk isteği beklemeden)
     except Exception:
         pass
-    logger.warning("GÜVENLİK: Tünel AÇIK → PEMF_REQUIRE_AUTH=1 ZORLA etkinleştirildi "
-                   "(internete kimliksiz erişim engellendi). API token'ı istemcilere dağıtın.")
+    logger.warning(
+        "GÜVENLİK: Tünel AÇIK → PEMF_REQUIRE_AUTH=1 ZORLA etkinleştirildi "
+        "(internete kimliksiz erişim engellendi). API token'ı istemcilere dağıtın."
+    )
 
 
 def _maybe_start_tunnel(port: int, logger: logging.Logger) -> None:
@@ -414,6 +452,7 @@ def _maybe_start_tunnel(port: int, logger: logging.Logger) -> None:
     _force_auth_for_tunnel(logger)
     try:
         from servers.tunnel_manager import start_tunnel_watchdog
+
         # Tek-seferlik start yerine WATCHDOG (SIFIR-MÜDAHALE): internet gelince/giderse veya
         # cloudflared ölürse tüneli OTOMATİK (yeniden) başlatır → "WiFi sonradan bağlanınca
         # uzaktan erişim otomatik açılır", boot'ta internetsizse yerel çalışmaya devam eder.
@@ -429,6 +468,7 @@ def _start_update_checker_safe(logger: logging.Logger) -> None:
     /api/update/apply ile onaylar → indir+SHA256+aktif-tedavi-yoksa sessiz kur). Tünelden bağımsız."""
     try:
         from servers.update_manager import start_update_checker
+
         start_update_checker()
     except Exception:
         logger.exception("Update checker init failed (non-fatal).")
@@ -477,6 +517,7 @@ def _build_server(app, args: argparse.Namespace) -> uvicorn.Server:
 
 def _install_signal_handlers(server: uvicorn.Server, logger: logging.Logger) -> None:
     """SIGINT/SIGTERM/SIGBREAK'i yakala → uvicorn'a temiz kapanış (should_exit) sinyali ver."""
+
     def request_shutdown(signum=None, frame=None) -> None:
         logger.info("Shutdown requested%s", f" by signal {signum}" if signum else "")
         server.should_exit = True
@@ -506,6 +547,7 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
         logger.exception("HardwareController shutdown failed")
     try:
         from servers.sync_worker import get_cloud_sync
+
         cloud = get_cloud_sync()
         if cloud:
             cloud.stop()
@@ -513,11 +555,13 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
         logger.exception("Cloud sync shutdown failed")
     try:
         from servers.tunnel_manager import stop_tunnel
+
         stop_tunnel()
     except Exception:
         logger.exception("Tunnel shutdown failed")
     try:
         from services.headless_db_maintenance import stop_headless_db_maintenance
+
         stop_headless_db_maintenance()
     except Exception:
         logger.exception("DB maintenance shutdown failed")
@@ -527,6 +571,7 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
         logger.exception("HeadlessCore shutdown failed")
     try:
         from utils.zeroconf_singleton import close_shared_zeroconf
+
         close_shared_zeroconf()
     except Exception:
         logger.exception("Zeroconf shutdown failed")
@@ -537,7 +582,37 @@ def _shutdown(logger: logging.Logger, api_server, core: HeadlessCore, event_bus)
     logger.info("PEMF backend service stopped")
 
 
+def _kurtarma_mi(argv: list[str] | None) -> list[str] | None:
+    """`--kurtarma` verilmişse KALAN argümanları döndür, yoksa None.
+
+    ⚠️ DENETİM 2026-08-09 (ENGEL) — KURTARMA YOLU SAHADA ULAŞILAMAZDI.
+    Felaket kurtarma mekanizmasının tamamı vardı (`utils/backup_recovery.py` zarfı +
+    `tools/kurtarma.py` aracı) ama aracın çalıştırılma yolu `python tools/kurtarma.py` idi.
+    Sahadaki üründe PYTHON YOK (frozen EXE) ve `tools/` pakete girmiyordu. Yani senaryonun
+    tam olarak hedeflediği kişi — anakartı ölmüş, elinde yalnız yedek dizini, kurtarma kodu ve
+    yeni bir kurulum olan veteriner — kurtarma aracını ÇALIŞTIRAMIYORDU. Yedekler şifreli,
+    zarf açılamıyor: koruma kâğıt üzerinde vardı, pratikte yoktu.
+    ÇÖZÜM: araç, sahaya ZATEN giden tek çalıştırılabilirin (PEMF_Backend.exe) alt komutu oldu:
+        PEMF_Backend.exe --kurtarma --zarf E:\\PEMF_Yedek\\kurtarma-zarfi.enc --kod ABCDE-...
+    `argparse` KULLANILMAZ: ana ayrıştırıcı bilinmeyen argümanlarda çıkar; alt komutun kendi
+    bayrakları (`--zarf`, `--kod`, `--yaz`) ona sızmamalı.
+    """
+    av = list(sys.argv[1:] if argv is None else argv)
+    if "--kurtarma" not in av:
+        return None
+    av.remove("--kurtarma")
+    return av
+
+
 def main(argv: list[str] | None = None) -> int:
+    kurtarma_argv = _kurtarma_mi(argv)
+    if kurtarma_argv is not None:
+        # Sunucuyu BAŞLATMADAN kurtarma aracını çalıştır: kurtarma anında backend'in çalışması
+        # ne gerekli ne de istenir (donanım/port/DB'ye dokunmaz).
+        from tools.kurtarma import main as _kurtarma_main
+
+        return _kurtarma_main(kurtarma_argv)
+
     args = build_arg_parser().parse_args(argv)
     os.environ.setdefault("PEMF_HEADLESS", "1")
     publish_bind_host(args.host)
@@ -551,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
     # Opsiyonel uzaktan hata-izleme (audit B-5.1) — yalnız PEMF_SENTRY_DSN set + sentry-sdk varsa.
     try:
         from utils.telemetry import init_telemetry
+
         init_telemetry()
     except Exception:
         logger.debug("Telemetri init atlandı", exc_info=True)

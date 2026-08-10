@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Faz-1 (B-2.2 refactor-ÖNCESİ DAVRANIŞ KİLİDİ): api_server canlı-durum (live-state) çekirdeği.
 
 `_live_state`, `update_live_*`, `_build_ws_snapshot`, `_push_notification`, `_emergency_stop_all`,
@@ -7,6 +8,7 @@ davranışı kilitler → refactor sonrası AYNI testler yeşil kalmalı ("davra
 Tasarım: `_event_loop` None (TestClient yok) → `_ws_broadcast_sync` erken-return no-op; yalnız SAF
 state geçişleri sınanır. `state.hardware` None (STM yok) + `_mqtt_publish` mock (broker yok) →
 donanım/USB gerekmez. Hiç TestClient/thread yok → watchdog kurulan seansı bozamaz (deterministik)."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -21,15 +23,30 @@ def api(monkeypatch):
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
     with api_server._live_state_lock:
         for i in range(8):
-            api_server._live_state["coils"][i].update({
-                "connected": False, "running": False, "frequencyHz": 0, "dutyCycle": 0,
-                "magneticMt": 0.0, "objectTemp": 0.0, "ambientTemp": 0.0, "currentA": 0.0,
-                "stm32Driven": i < 5,
-            })
-        api_server._live_state["activeTreatment"].update({
-            "mode": "Sistem Hazır", "frequencyHz": 0, "intensityMt": 0.0,
-            "remainingMin": 0, "elapsedSec": 0, "durationSec": 0, "isActive": False,
-        })
+            api_server._live_state["coils"][i].update(
+                {
+                    "connected": False,
+                    "running": False,
+                    "frequencyHz": 0,
+                    "dutyCycle": 0,
+                    "magneticMt": 0.0,
+                    "objectTemp": 0.0,
+                    "ambientTemp": 0.0,
+                    "currentA": 0.0,
+                    "stm32Driven": i < 5,
+                }
+            )
+        api_server._live_state["activeTreatment"].update(
+            {
+                "mode": "Sistem Hazır",
+                "frequencyHz": 0,
+                "intensityMt": 0.0,
+                "remainingMin": 0,
+                "elapsedSec": 0,
+                "durationSec": 0,
+                "isActive": False,
+            }
+        )
         api_server._live_state["notifications"].clear()
         api_server._live_state["stm"] = "warning"
         api_server._live_state["mqtt"] = "warning"
@@ -53,8 +70,13 @@ def test_build_ws_snapshot_shape(api):
 # ── update_live_session_state: aktif-tedavi özeti (activeTreatment) ───────────
 def test_update_live_session_state_activates(api):
     api.update_live_session_state(
-        is_active=True, mode="AI", freq=50, intensity=2.0,
-        remaining_min=20, elapsed_sec=5, duration_sec=1200,
+        is_active=True,
+        mode="AI",
+        freq=50,
+        intensity=2.0,
+        remaining_min=20,
+        elapsed_sec=5,
+        duration_sec=1200,
     )
     at = api._live_state["activeTreatment"]
     assert at["isActive"] is True
@@ -122,11 +144,17 @@ def test_push_notification_front_insert_and_cap(api):
 # ── _emergency_stop_all: tüm bobin STOP + seans kapat + yanıt sözleşmesi ──────
 def test_emergency_stop_all_ends_session_and_stops_coils(api):
     import time
+
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "es_test", "coil_ids": [6, 7, 8],
-            "duration_minutes": 20, "start_time": time.time(),
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "es_test",
+                "coil_ids": [6, 7, 8],
+                "duration_minutes": 20,
+                "start_time": time.time(),
+            }
+        )
     # birkaç bobin "çalışıyor" görünsün → estop hepsini durdurmalı
     with api._live_state_lock:
         for idx in (0, 5, 6):
@@ -169,10 +197,15 @@ def test_emergency_stop_all_ignores_narrow_session_scope(api, monkeypatch):
     monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: published.append(topic) or True)
 
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "narrow", "coil_ids": [1, 2, 3],
-            "duration_minutes": 20, "start_time": time.time(),
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "narrow",
+                "coil_ids": [1, 2, 3],
+                "duration_minutes": 20,
+                "start_time": time.time(),
+            }
+        )
     # Bobin 7 seans DIŞINDA sürülüyor
     with api._live_state_lock:
         api._live_state["coils"][6].update({"running": True, "dutyCycle": 40.0})
@@ -207,14 +240,21 @@ def test_lifespan_wires_event_loop_into_live_state():
 def test_get_active_session_is_readonly_on_expiry(api):
     import asyncio
     import time
+
     with api._session_lock:
-        api._active_session.update({
-            "is_active": True, "session_id": "ro", "coil_ids": [6],
-            "duration_minutes": 1, "start_time": time.time() - 120,  # 1dk seans, 2dk önce → dolmuş
-        })
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "ro",
+                "coil_ids": [6],
+                "duration_minutes": 1,
+                "start_time": time.time() - 120,  # 1dk seans, 2dk önce → dolmuş
+            }
+        )
     # B-2.2: get_active_session servers/session_router.py'ye taşındı (davranış birebir; global _active_session'ı
     # lazy-import ile okur → aynı salt-okunur invariant). Test yeni konumu çağırır.
     from servers import session_router
+
     resp = session_router.get_active_session()  # P-1a: async def -> def (FastAPI threadpool); artık senkron
     # Yanıtta süre-dolmuş → is_active False GÖSTERİLİR...
     assert resp["is_active"] is False

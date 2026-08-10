@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 Hasta Veritabani Yonetim Sistemi.
 
@@ -61,7 +62,17 @@ _UNREADABLE_PLACEHOLDER = "[okunamayan kayıt]"
 class PatientDatabase:
     """Hasta veritabani yonetim sinifi."""
 
-    _ENCRYPTED_FIELDS = {"name", "owner", "vet_contact", "species", "breed", "age", "weight", "owner_email", "operator_email"}
+    _ENCRYPTED_FIELDS = {
+        "name",
+        "owner",
+        "vet_contact",
+        "species",
+        "breed",
+        "age",
+        "weight",
+        "owner_email",
+        "operator_email",
+    }
     _SEARCHABLE_FIELDS = ("name", "owner", "species", "breed", "age", "weight")
 
     def __init__(self, db_file: str = "patients.db"):
@@ -123,7 +134,7 @@ class PatientDatabase:
                 conn = sqlite3.connect(self.db_file, timeout=30.0, check_same_thread=False)  # B-6.2
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA foreign_keys=ON")   # B-7.3: patient_search_index ON DELETE CASCADE aktif
+            conn.execute("PRAGMA foreign_keys=ON")  # B-7.3: patient_search_index ON DELETE CASCADE aktif
             conn.execute("PRAGMA busy_timeout=5000")  # B-6.2: 'database is locked' yerine bekle
             self._local.conn = conn
             created_here = True
@@ -145,8 +156,11 @@ class PatientDatabase:
         finally:
             # B-6.2: kisa-omurlu WORKER thread'lerinde baglanti birikmesini onle — bu context'te
             # ACILDIYSA + ana thread DEGILSE kapat. Ana thread'de REUSE korunur (SQLCipher KDF maliyeti).
-            if (created_here and self._local.conn is not None
-                    and threading.current_thread() is not threading.main_thread()):
+            if (
+                created_here
+                and self._local.conn is not None
+                and threading.current_thread() is not threading.main_thread()
+            ):
                 try:
                     self._local.conn.close()
                 except Exception:
@@ -301,7 +315,9 @@ class PatientDatabase:
             patient[field] = self._decrypt_field(patient.get(field, ""))
         return patient
 
-    def _index_patient_search_terms(self, cursor: sqlite3.Cursor, patient_id: str, patient_info: Dict[str, str]) -> None:
+    def _index_patient_search_terms(
+        self, cursor: sqlite3.Cursor, patient_id: str, patient_info: Dict[str, str]
+    ) -> None:
         cursor.execute("DELETE FROM patient_search_index WHERE patient_id = ?", (patient_id,))
 
         index_rows = []
@@ -536,7 +552,9 @@ class PatientDatabase:
                                 self.logger.warning(
                                     "Hasta %s alani '%s' cozulemeyen yer-tutucu ile geri yazilmak "
                                     "istendi → ATLANDI (orijinal sifreli deger korundu).",
-                                    patient_id, key)
+                                    patient_id,
+                                    key,
+                                )
                                 continue
                             updates.append(f"{key} = ?")
                             values.append(self._encrypt_field(value))
@@ -565,8 +583,10 @@ class PatientDatabase:
         try:
             with self.lock:
                 with self._get_connection() as conn:
-                    conn.execute("UPDATE patients SET last_treatment_at = ? WHERE id = ?",
-                                 (datetime.now().isoformat(), patient_id))
+                    conn.execute(
+                        "UPDATE patients SET last_treatment_at = ? WHERE id = ?",
+                        (datetime.now().isoformat(), patient_id),
+                    )
                     conn.commit()
         except Exception:
             self.logger.debug("touch_last_treatment hatasi", exc_info=True)
@@ -584,7 +604,9 @@ class PatientDatabase:
                     cursor = conn.cursor()
                     cursor.execute(
                         "SELECT id FROM patients WHERE COALESCE(anonymized,0)=0 "
-                        "AND COALESCE(last_treatment_at, created_at) < ?", (cutoff,))
+                        "AND COALESCE(last_treatment_at, created_at) < ?",
+                        (cutoff,),
+                    )
                     ids = [r[0] for r in cursor.fetchall()]
                     enc_anon = self._encrypt_field("[ANONIM]")
                     enc_empty = self._encrypt_field("")
@@ -595,7 +617,8 @@ class PatientDatabase:
                             # yayılsın; aksi halde sonraki PULL orijinal PII'yi geri yazıp de-anonymize ediyordu.
                             "UPDATE patients SET name=?, owner=?, vet_contact=?, owner_email=?, "
                             "anonymized=1, sync_status=0, updated_at=? WHERE id=?",
-                            (enc_anon, enc_anon, enc_empty, enc_empty, now_iso, pid))
+                            (enc_anon, enc_anon, enc_empty, enc_empty, now_iso, pid),
+                        )
                         # Arama indeksini tazele — eski ad/sahip token'lari gitsin (artik aranmaz).
                         self._refresh_search_index_for_patient(cursor, pid)
                     conn.commit()
@@ -604,7 +627,9 @@ class PatientDatabase:
             # sanip history-DB'yi anonimlestirir (iki-DB tutarsizligi + KVKK retention ihlali).
             anonymized = list(ids)
             if anonymized:
-                self.logger.warning("KVKK: %d inaktif hasta (>%d gun) anonimlestirildi.", len(anonymized), inactive_days)
+                self.logger.warning(
+                    "KVKK: %d inaktif hasta (>%d gun) anonimlestirildi.", len(anonymized), inactive_days
+                )
         except Exception:
             self.logger.exception("anonymize_inactive_patients hatasi")
         return anonymized

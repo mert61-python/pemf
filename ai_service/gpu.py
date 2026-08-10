@@ -11,6 +11,7 @@ torch prob'unu proxy ALMA; ayrı bir gerçek ORT CUDA prob'u koş.
 Not: RTX 5090/Blackwell için CUDA 12.8 + PyTorch 2.7 (cu128) gerekir; cu128 build eski kartları
 (RTX 30/40) da kapsar. Sürüm doğruysa GPU çalışır; değilse burası otomatik CPU'ya düşer.
 """
+
 import logging
 
 _lg = logging.getLogger("pemf-ai")
@@ -33,7 +34,7 @@ def gpu_ok() -> bool:
             return _GPU_OK
         try:
             if hasattr(torch, "cuda") and torch.cuda.is_available():
-                x = torch.zeros(8, device="cuda")          # gerçek çalışma testi (kernel-mismatch'i yakalar)
+                x = torch.zeros(8, device="cuda")  # gerçek çalışma testi (kernel-mismatch'i yakalar)
                 _ = (x + 1).sum().item()
                 torch.cuda.synchronize()
                 _GPU_OK = True
@@ -43,9 +44,12 @@ def gpu_ok() -> bool:
                 _lg.info("GPU bulunamadı → CPU modunda çalışılıyor.")
         except Exception as e:
             _GPU_OK = False
-            _lg.warning("GPU tespit edildi ama torch ile çalıştırılamadı (%s: %s) → CPU'ya düşülüyor. "
-                        "Yeni kartlar (RTX 5090/Blackwell) için CUDA 12.8 + PyTorch cu128 gerekir.",
-                        type(e).__name__, e)
+            _lg.warning(
+                "GPU tespit edildi ama torch ile çalıştırılamadı (%s: %s) → CPU'ya düşülüyor. "
+                "Yeni kartlar (RTX 5090/Blackwell) için CUDA 12.8 + PyTorch cu128 gerekir.",
+                type(e).__name__,
+                e,
+            )
     return _GPU_OK
 
 
@@ -65,9 +69,11 @@ def ort_gpu_ok() -> bool:
         try:
             import numpy as np
             from onnx import TensorProto, helper
+
             node = helper.make_node("Identity", ["x"], ["y"])
             graph = helper.make_graph(
-                [node], "probe",
+                [node],
+                "probe",
                 [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 4])],
                 [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 4])],
             )
@@ -82,9 +88,12 @@ def ort_gpu_ok() -> bool:
             _ORT_GPU_OK = True
             _lg.info("onnxruntime CUDA aktif.")
         except Exception as e:
-            _lg.warning("onnxruntime CUDA doğrulanamadı (%s: %s) → ONNX CPU'da çalışacak. Resmi "
-                        "onnxruntime-gpu RTX 5090/Blackwell (sm_120) kernel'i içermeyebilir.",
-                        type(e).__name__, e)
+            _lg.warning(
+                "onnxruntime CUDA doğrulanamadı (%s: %s) → ONNX CPU'da çalışacak. Resmi "
+                "onnxruntime-gpu RTX 5090/Blackwell (sm_120) kernel'i içermeyebilir.",
+                type(e).__name__,
+                e,
+            )
     return _ORT_GPU_OK
 
 

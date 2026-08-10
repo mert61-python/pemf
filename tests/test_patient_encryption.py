@@ -1,4 +1,6 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: hasta PII alan-şifrelemesi round-trip + cross-tenant (yabancı anahtar) maskeleme."""
+
 import base64
 
 from cryptography.fernet import Fernet
@@ -15,6 +17,7 @@ def test_patient_roundtrip_encrypted_at_rest(temp_app_data, monkeypatch):
     # Whole-DB SQLCipher'ı KAPAT: aksi halde makinenin keyring anahtarı varsa DB tümden şifreli
     # açılır → plain sqlite3.connect okuyamaz ve test makine-durumuna bağlı hale gelir (kararsız).
     import database.patient_database as _pdb
+
     monkeypatch.setattr(_pdb, "import_sqlcipher", lambda: None)
     monkeypatch.setattr(_pdb, "get_sqlcipher_key", lambda *a, **k: "")
     monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
@@ -24,9 +27,12 @@ def test_patient_roundtrip_encrypted_at_rest(temp_app_data, monkeypatch):
 
     # Ham DB değeri ŞİFRELİ olmalı (düz-metin 'TestMia' DİSKTE durmamalı).
     import sqlite3
-    raw = sqlite3.connect(str(temp_app_data / "patients.db")).execute(
-        "SELECT name FROM patients WHERE id=?", (pid,)
-    ).fetchone()[0]
+
+    raw = (
+        sqlite3.connect(str(temp_app_data / "patients.db"))
+        .execute("SELECT name FROM patients WHERE id=?", (pid,))
+        .fetchone()[0]
+    )
     assert raw != "TestMia"
     assert str(raw).startswith("enc:")
 

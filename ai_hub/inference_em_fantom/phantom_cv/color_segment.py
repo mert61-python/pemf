@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """color_segment.py — Tersine Algoritma: Mavi Noktalar → Fantom.
 
 Mantik:

@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Opsiyonel uzaktan hata-izleme/telemetri (audit B-5.1).
 
 VARSAYILAN KAPALI — KVKK: hata verisi buluta OTOMATİK gitmez. Yalnız operatör `PEMF_SENTRY_DSN`
@@ -8,6 +9,7 @@ Aktifleştirme (opt-in):
     setx PEMF_SENTRY_DSN "https://<key>@<host>/<project>"   (self-hosted Sentry önerilir; KVKK)
 Kapatma: değişkeni kaldır (varsayılan).
 """
+
 import logging
 import os
 
@@ -55,10 +57,12 @@ def init_telemetry() -> bool:
     try:
         sentry_sdk.init(
             dsn=dsn,
-            traces_sample_rate=0.0,          # yalnız hata; performans izleme yok
-            send_default_pii=False,          # KVKK
+            traces_sample_rate=0.0,  # yalnız hata; performans izleme yok
+            send_default_pii=False,  # KVKK
             before_send=_scrub_event,
-            before_breadcrumb=lambda _crumb, _hint: None,  # Audit P3: breadcrumb'ları TAMAMEN düşür (log-PII buluta gitmesin)
+            before_breadcrumb=lambda _crumb, _hint: (
+                None
+            ),  # Audit P3: breadcrumb'ları TAMAMEN düşür (log-PII buluta gitmesin)
             environment=os.environ.get("PEMF_DEVICE_NAME", "pemf-device"),
             release=(os.environ.get("PEMF_VERSION", "").strip() or None),
         )

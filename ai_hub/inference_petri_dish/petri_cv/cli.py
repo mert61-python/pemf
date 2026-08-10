@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """cli.py — Petri CV komut satiri (kedi inference_cat_organ tarzi).
 
 Kullanim:

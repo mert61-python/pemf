@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! SHA256 doğrulama — akış halinde (gigabaytlık paketler belleğe alınmaz).
 
 use std::fs::File;

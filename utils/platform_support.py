@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Cross-platform destek — TEK NOKTA (backend).
 
 OS-özgü farklar (çalıştırılabilir adları, sistem/bundled ikili bulma, yollar) BURADA toplanır;
@@ -7,8 +8,9 @@ tabanından çalışır → platforma göre AYRI kaynak/AYRI build kodu GEREKMEZ
 Yeni platform veya yeni OS-farkı = yalnızca bu dosyaya bir dal ekle.
 İstemci (Tauri) tarafı ise Rust'ta `#[cfg(target_os = "...")]` ile ayrılır (ayrı katman).
 """
-import sys
+
 import shutil
+import sys
 from pathlib import Path
 from typing import Iterable, Optional
 

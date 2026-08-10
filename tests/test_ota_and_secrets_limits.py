@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """MUTASYON TESTİ BULGUSU — üç düzeltme uygulanmıştı ama HİÇBİR test onları korumuyordu:
 sınırları etkisizleştiren mutasyonlar tüm takımdan geçti.
 
@@ -17,8 +18,8 @@ import sys
 
 import pytest
 
-
 # ────────────────────────── OTA boyut tavanları ──────────────────────────
+
 
 class _SonsuzYanit:
     """Hiç bitmeyen bir HTTP gövdesi (kötü niyetli/bozuk sunucu)."""
@@ -29,7 +30,7 @@ class _SonsuzYanit:
 
     def read(self, n=-1):
         self.okunan += len(self._chunk)
-        if self.okunan > 4 * 1024 * 1024 * 1024:      # test güvenlik supabı: 4 GB
+        if self.okunan > 4 * 1024 * 1024 * 1024:  # test güvenlik supabı: 4 GB
             raise AssertionError("sınır hiç uygulanmadı — 4 GB okundu")
         return self._chunk
 
@@ -50,9 +51,11 @@ def test_installer_tavani_GERCEK_degeriyle_makul():
     from servers import update_manager as um
 
     assert 16 * 1024 * 1024 <= um._MAX_INSTALLER_BYTES <= 2 * 1024 * 1024 * 1024, (
-        f"_MAX_INSTALLER_BYTES makul aralıkta değil: {um._MAX_INSTALLER_BYTES}")
+        f"_MAX_INSTALLER_BYTES makul aralıkta değil: {um._MAX_INSTALLER_BYTES}"
+    )
     assert 4 * 1024 <= um._MAX_MANIFEST_BYTES <= 16 * 1024 * 1024, (
-        f"_MAX_MANIFEST_BYTES makul aralıkta değil: {um._MAX_MANIFEST_BYTES}")
+        f"_MAX_MANIFEST_BYTES makul aralıkta değil: {um._MAX_MANIFEST_BYTES}"
+    )
 
 
 def test_sinir_altindaki_indirme_SORUNSUZ_tamamlanir():
@@ -84,19 +87,19 @@ def test_manifest_boyut_tavani_UYGULANIR(monkeypatch):
     from servers import update_manager as um
 
     src = inspect.getsource(um)
-    assert "_MAX_MANIFEST_BYTES + 1" in src, (
-        "manifest okuması tavanla sınırlanmıyor → tüm gövde belleğe alınır")
+    assert "_MAX_MANIFEST_BYTES + 1" in src, "manifest okuması tavanla sınırlanmıyor → tüm gövde belleğe alınır"
     assert "len(raw) > _MAX_MANIFEST_BYTES" in src, (
-        "manifest boyut kontrolü YOK → tavan tanımlı ama etkisiz (2026-08-04 hatasının aynısı)")
+        "manifest boyut kontrolü YOK → tavan tanımlı ama etkisiz (2026-08-04 hatasının aynısı)"
+    )
     # Sabitler gerçekten bu adla ve modül seviyesinde mi (yeniden adlandırma sessizce
     # korumayı düşürmesin)
     tree = ast.parse(src)
-    isimler = {t.id for n in ast.walk(tree) if isinstance(n, ast.Assign)
-               for t in n.targets if isinstance(t, ast.Name)}
+    isimler = {t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
     assert {"_MAX_INSTALLER_BYTES", "_MAX_MANIFEST_BYTES"} <= isimler
 
 
 # ────────────────────────── Sır dosyası ACL kilidi ──────────────────────────
+
 
 @pytest.mark.skipif(os.name != "nt", reason="NTFS ACL yalnız Windows")
 def test_sirlar_dosyasi_yazildiktan_sonra_ACL_KILITLENIR(tmp_path, monkeypatch):
@@ -112,6 +115,7 @@ def test_sirlar_dosyasi_yazildiktan_sonra_ACL_KILITLENIR(tmp_path, monkeypatch):
 
     cagrilar = []
     import utils.file_acl as fa
+
     gercek = fa.lock_down_file
 
     def _izle(p, **kw):
@@ -126,11 +130,11 @@ def test_sirlar_dosyasi_yazildiktan_sonra_ACL_KILITLENIR(tmp_path, monkeypatch):
     assert yol.exists(), "sır dosyası yazılmadı"
     assert cagrilar, "sır dosyası yazıldı ama ACL KİLİTLENMEDİ → Users'a okunur kalır"
     kilitlenen = os.path.normcase(cagrilar[-1][0])
-    assert kilitlenen == os.path.normcase(str(yol)), (
-        f"ACL yanlış yola uygulandı: {kilitlenen}")
+    assert kilitlenen == os.path.normcase(str(yol)), f"ACL yanlış yola uygulandı: {kilitlenen}"
     assert cagrilar[-1][1].get("keep_current_user") is True, (
         "keep_current_user=False → süreç kendi sır dosyasını AÇAMAZ hale gelir "
-        "(daha önce gerçek makinede yaşandı: backend başlamıyordu)")
+        "(daha önce gerçek makinede yaşandı: backend başlamıyordu)"
+    )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="NTFS ACL yalnız Windows")
@@ -154,7 +158,8 @@ def test_sirlar_dosyasi_Users_a_ACIK_DEGIL(tmp_path, monkeypatch):
     dusuk = out.lower()
     # S-1-5-32-545 = BUILTIN\Users. Yerelleştirmeden bağımsız olması için SID de kabul edilir.
     assert "s-1-5-32-545" not in dusuk and "\\users:" not in dusuk and "\\kullanıcılar:" not in dusuk, (
-        f"sır dosyasında yerel Users ACE'si DURUYOR → tüm sırlar okunabilir:\n{out}")
+        f"sır dosyasında yerel Users ACE'si DURUYOR → tüm sırlar okunabilir:\n{out}"
+    )
 
 
 # ────────────────── OTA geçici dizin sızıntısı (kurulum sonrası bulundu) ──────────────────
@@ -163,6 +168,7 @@ def test_sirlar_dosyasi_Users_a_ACIK_DEGIL(tmp_path, monkeypatch):
 # da gerçek bir sızıntı vardı: `_private_temp_path` mkdtemp ile dizin açıyor, `apply_update`
 # / `rollback_update` ise yalnız DOSYAYI siliyordu. Installer başlatılmayan HER yolda
 # (SHA uyuşmadı / imza kurcalanmış / tedavi başladı / indirme hatası) dizin kalıyordu.
+
 
 def test_installer_baslatilmadiysa_gecici_dizin_SILINIR(tmp_path):
     """`_discard_temp_dir` yalnız kendi ürettiği `pemf_upd_*` dizinini siler."""
@@ -188,7 +194,7 @@ def test_discard_YABANCI_dizine_dokunmaz(tmp_path):
     um._discard_temp_dir(yabanci / "PEMF_Update_1.0.0.exe")
     assert (yabanci / "onemli.db").exists(), "pemf_upd_ olmayan dizin SİLİNDİ (veri kaybı riski)"
 
-    um._discard_temp_dir(None)   # None güvenli olmalı
+    um._discard_temp_dir(None)  # None güvenli olmalı
 
 
 def test_eski_yetim_dizinler_supuruluyor(monkeypatch, tmp_path):
@@ -201,9 +207,12 @@ def test_eski_yetim_dizinler_supuruluyor(monkeypatch, tmp_path):
 
     monkeypatch.setattr(um.tempfile, "gettempdir", lambda: str(tmp_path))
 
-    eski = tmp_path / "pemf_upd_eski"; eski.mkdir()
-    yeni = tmp_path / "pemf_upd_yeni"; yeni.mkdir()
-    baska = tmp_path / "baska_klasor"; baska.mkdir()
+    eski = tmp_path / "pemf_upd_eski"
+    eski.mkdir()
+    yeni = tmp_path / "pemf_upd_yeni"
+    yeni.mkdir()
+    baska = tmp_path / "baska_klasor"
+    baska.mkdir()
     # eski'yi 10 saat geriye al
     geri = _t.time() - 10 * 3600
     os.utime(eski, (geri, geri))

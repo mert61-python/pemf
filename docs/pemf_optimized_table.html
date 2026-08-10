@@ -10,14 +10,14 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             min-height: 100vh;
         }
-        
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -26,14 +26,14 @@
             padding: 30px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
-        
+
         .header {
             text-align: center;
             margin-bottom: 30px;
             padding-bottom: 20px;
             border-bottom: 3px solid #667eea;
         }
-        
+
         .header h1 {
             color: #2d3748;
             font-size: 2rem;
@@ -43,22 +43,22 @@
             justify-content: center;
             gap: 15px;
         }
-        
+
         .icon {
             font-size: 2.5rem;
         }
-        
+
         .subtitle {
             color: #718096;
             font-size: 1rem;
             margin-top: 10px;
         }
-        
+
         .table-wrapper {
             overflow-x: auto;
             margin-bottom: 30px;
         }
-        
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -67,12 +67,12 @@
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        
+
         thead {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        
+
         th {
             padding: 18px 12px;
             text-align: left;
@@ -80,47 +80,47 @@
             font-size: 0.95rem;
             letter-spacing: 0.5px;
         }
-        
+
         tbody tr {
             border-bottom: 1px solid #e2e8f0;
             transition: all 0.3s ease;
         }
-        
+
         tbody tr:hover {
             background-color: #f7fafc;
             transform: scale(1.01);
         }
-        
+
         tbody tr.updated {
             background-color: #fef5e7;
         }
-        
+
         tbody tr.updated td:first-child::before {
             content: "⚠️ ";
             margin-right: 5px;
         }
-        
+
         td {
             padding: 16px 12px;
             color: #2d3748;
             font-size: 0.9rem;
         }
-        
+
         .stars {
             color: #fbbf24;
             font-size: 1.1rem;
         }
-        
+
         .evidence-high {
             color: #10b981;
             font-weight: 600;
         }
-        
+
         .evidence-medium {
             color: #f59e0b;
             font-weight: 600;
         }
-        
+
         .notes {
             background: #eff6ff;
             border-left: 4px solid #3b82f6;
@@ -128,23 +128,23 @@
             border-radius: 8px;
             margin-top: 20px;
         }
-        
+
         .notes h3 {
             color: #1e40af;
             margin-bottom: 15px;
             font-size: 1.2rem;
         }
-        
+
         .notes ul {
             margin-left: 20px;
         }
-        
+
         .notes li {
             color: #374151;
             margin-bottom: 10px;
             line-height: 1.6;
         }
-        
+
         .contraindications {
             background: #fef2f2;
             border-left: 4px solid #ef4444;
@@ -152,13 +152,13 @@
             border-radius: 8px;
             margin-top: 20px;
         }
-        
+
         .contraindications h3 {
             color: #991b1b;
             margin-bottom: 15px;
             font-size: 1.2rem;
         }
-        
+
         .frequency-guide {
             background: #f0fdf4;
             border-left: 4px solid #10b981;
@@ -166,13 +166,13 @@
             border-radius: 8px;
             margin-top: 20px;
         }
-        
+
         .frequency-guide h3 {
             color: #065f46;
             margin-bottom: 15px;
             font-size: 1.2rem;
         }
-        
+
         .badge {
             display: inline-block;
             padding: 4px 10px;
@@ -181,30 +181,30 @@
             font-weight: 600;
             margin-left: 8px;
         }
-        
+
         .badge-new {
             background: #dcfce7;
             color: #166534;
         }
-        
+
         .badge-updated {
             background: #fef3c7;
             color: #92400e;
         }
-        
+
         @media (max-width: 768px) {
             .container {
                 padding: 15px;
             }
-            
+
             .header h1 {
                 font-size: 1.5rem;
             }
-            
+
             table {
                 font-size: 0.8rem;
             }
-            
+
             th, td {
                 padding: 10px 8px;
             }
@@ -221,7 +221,7 @@
             </h1>
             <p class="subtitle">Veteriner Uygulamaları - Literatür Tabanlı Güncel Protokoller</p>
         </div>
-        
+
         <div class="table-wrapper">
             <table>
                 <thead>
@@ -347,7 +347,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         <div class="notes">
             <h3>📋 Önemli Notlar ve Uygulama Prensipleri</h3>
             <ul>
@@ -377,7 +377,7 @@
                 <li><strong>İlk 3 Seans:</strong> Hayvanın toleransını değerlendirmek için daha düşük yoğunluk ve kısa süre ile başlanması önerilir.</li>
             </ul>
         </div>
-        
+
         <div class="contraindications">
             <h3>⚠️ Kontraendikasyonlar ve Dikkat Edilmesi Gerekenler</h3>
             <ul>
@@ -400,7 +400,7 @@
                 <li><strong>Yan Etkiler (nadir):</strong> Geçici yorgunluk, minimal rahatsızlık, nadiren uygulandığı bölgede hafif kızarıklık</li>
             </ul>
         </div>
-        
+
         <div class="frequency-guide">
             <h3>🎯 Frekans Bandı Rehberi - Fizyolojik Etkiler (50-150 Hz)</h3>
             <ul>

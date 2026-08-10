@@ -28,6 +28,7 @@ ch.setFormatter(formatter)
 if not logger.handlers:  # Avoid adding handlers multiple times
     logger.addHandler(ch)
 
+
 class ConfigManager:
     # CRITICAL FIX: Sensitive config keys to encrypt
     _ENCRYPTED_KEYS = {
@@ -40,10 +41,10 @@ class ConfigManager:
         'email.gmail_password',
         'api.key',
     }
-    
+
     def __init__(self, config_file: str = None):
         """Initialize the configuration manager.
-        
+
         Args:
             config_file: Path to the configuration file. If None, uses default location.
         """
@@ -64,12 +65,12 @@ class ConfigManager:
         else:
             self.config_file = config_file
             self.config_dir = os.path.dirname(config_file)
-        
+
         # CRITICAL FIX: Initialize encryption
         self._encryption_key = self._get_or_create_key()
         self._cipher = Fernet(self._encryption_key)
         self._legacy_cipher = self._get_legacy_cipher()  # eski MAC-türevli anahtar (yalnız decrypt fallback)
-        
+
         # Default configuration
         self.default_config = {
             'serial': {
@@ -77,13 +78,13 @@ class ConfigManager:
                 'baudrate': 115200,
                 'timeout': 1.0,
                 'emulation_mode': False,  # Run without hardware
-                'auto_connect': True,     # Try to auto-connect on startup
+                'auto_connect': True,  # Try to auto-connect on startup
             },
             'recent_files': [],
             'window_geometry': None,
             'window_state': None,
         }
-        
+
         self.config = self.default_config.copy()
         self.load()
         # At-rest güvenlik (audit P2): _ENCRYPTED_KEYS listesindeki ama config.json'da hâlâ
@@ -101,6 +102,7 @@ class ConfigManager:
             if os.path.abspath(legacy) == os.path.abspath(self.config_dir) or not os.path.isdir(legacy):
                 return
             import shutil as _sh
+
             for fn in ('config.json', '.pemf_key_v2', '.pemf_key'):
                 src = os.path.join(legacy, fn)
                 dst = os.path.join(self.config_dir, fn)
@@ -108,6 +110,7 @@ class ConfigManager:
                     _sh.copy2(src, dst)
                     try:
                         from utils.file_acl import lock_down_file
+
                         lock_down_file(dst)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
                     except Exception:
                         pass
@@ -122,6 +125,7 @@ class ConfigManager:
         # MEVCUT anahtar HER ZAMAN migrate → mevcut şifreli PII alanları (ad/sahip/iletişim) okunabilir kalır.
         try:
             from utils.secrets_manager import get_secret
+
             _k = get_secret("patient_fernet_key")
             if _k:
                 return _k.encode() if isinstance(_k, str) else _k
@@ -129,7 +133,9 @@ class ConfigManager:
             # Audit P3: SecretsManager brick-koruma (kritik anahtar VAR ama çözülemez → fail-closed
             # RuntimeError) → YUTMA. Yeni patient_fernet_key üretmek mevcut şifreli PII'yi kalıcı
             # okunamaz yapar (veri-kaybı) → fail-closed propagate et.
-            logger.error("patient_fernet_key BRICK (var ama çözülemez) → yeni anahtar ÜRETİLMİYOR (veri-kaybı önlendi).")
+            logger.error(
+                "patient_fernet_key BRICK (var ama çözülemez) → yeni anahtar ÜRETİLMİYOR (veri-kaybı önlendi)."
+            )
             raise
         except Exception as _e:
             logger.warning("SecretsManager patient_fernet_key okunamadı, eski yola düşülüyor: %s", _e)
@@ -169,6 +175,7 @@ class ConfigManager:
                     f.write(new_key)
                 try:
                     from utils.file_acl import lock_down_file
+
                     lock_down_file(key_file_v2)  # audit B-1.2: NTFS ACL (os.chmod Windows'ta no-op)
                 except Exception:
                     pass
@@ -187,19 +194,20 @@ class ConfigManager:
                     legacy_key = f.read().strip()
             if not legacy_key:
                 import uuid
+
                 machine_id = str(uuid.getnode()).encode()
                 legacy_key = base64.urlsafe_b64encode(hashlib.sha256(machine_id).digest())
             return Fernet(legacy_key)
         except Exception:
             return None
-    
+
     def _encrypt_value(self, value: str) -> str:
         """Encrypt sensitive value"""
         if not value:
             return value
         encrypted = self._cipher.encrypt(value.encode())
         return base64.urlsafe_b64encode(encrypted).decode()
-    
+
     def _decrypt_value(self, encrypted_value: str) -> str:
         """Decrypt: önce BİRİNCİL (rastgele) anahtar, sonra ESKİ MAC-türevli (geriye dönük).
         İkisi de başarısızsa ham değeri döndürür (üst katman maskeleyebilir)."""
@@ -221,7 +229,7 @@ class ConfigManager:
                 pass
         logger.error("Decryption failed (birincil + legacy anahtar)")
         return encrypted_value
-    
+
     def load(self) -> Dict[str, Any]:
         """Load configuration from file."""
         try:
@@ -234,72 +242,73 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
             self.config = self.default_config.copy()
-        
+
         return self.config
-    
+
     def save(self) -> None:
         """Save current configuration to file."""
         try:
             # Ensure config directory exists
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
-            
+
             logger.debug(f"Saving configuration to {self.config_file}")
             with open(self.config_file, 'w') as f:
                 json.dump(self.config, f, indent=4)
             logger.info("Configuration saved successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to save configuration: {e}")
             raise
-        
+
     def _merge_config(self, new_config: Dict[str, Any]) -> None:
         """Merge new configuration with existing one."""
+
         def merge(dest, source):
             for key, value in source.items():
                 if key in dest and isinstance(dest[key], dict) and isinstance(value, dict):
                     merge(dest[key], value)
                 else:
                     dest[key] = value
-        
+
         merge(self.config, new_config)
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value using dot notation (auto-decrypt if encrypted)."""
         keys = key.split('.')
         value = self.config
-        
+
         try:
             for k in keys:
                 value = value[k]
-            
+
             # CRITICAL FIX: Decrypt if sensitive key
             if key in self._ENCRYPTED_KEYS and isinstance(value, str):
                 # Check if value is encrypted (starts with encryption marker)
                 if value.startswith('enc:'):
                     return self._decrypt_value(value[4:])  # Remove 'enc:' prefix
-            
+
             return value
         except (KeyError, TypeError):
             return default
-    
+
     def set(self, key: str, value: Any, save: bool = True) -> None:
         """Set a configuration value using dot notation (auto-encrypt if sensitive)."""
         keys = key.split('.')
         config = self.config
-        
+
         # Navigate to the parent dict
         for k in keys[:-1]:
             if k not in config or not isinstance(config[k], dict):
                 config[k] = {}
             config = config[k]
-        
+
         # CRITICAL FIX: Encrypt if sensitive key
         if key in self._ENCRYPTED_KEYS and isinstance(value, str) and value:
             value = 'enc:' + self._encrypt_value(value)  # Add 'enc:' prefix
-        
+
         # Set the value
         config[keys[-1]] = value
-        
+
         if save:
             self.save()
 
@@ -332,8 +341,10 @@ class ConfigManager:
             except Exception:
                 pass
 
+
 # Global config instance
 config = ConfigManager()
+
 
 def get_config() -> ConfigManager:
     """Get the global configuration instance."""

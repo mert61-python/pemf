@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """petri_detector.py — YOLO11m-seg petri kabi detection (ana detector).
 
 Mevcut egitilmis model (ayni klasor):

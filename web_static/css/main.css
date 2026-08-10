@@ -468,25 +468,25 @@ h3 {
     .container {
         padding: 1rem;
     }
-    
+
     .header {
         padding: 1.5rem;
         margin-bottom: 1.5rem;
     }
-    
+
     .grid {
         gap: 1rem;
     }
-    
+
     .card {
         padding: 1rem;
     }
-    
+
     .btn {
         padding: 0.625rem 1.25rem;
         font-size: 0.9rem;
     }
-    
+
     .table th,
     .table td {
         padding: 0.75rem 0.5rem;
@@ -498,21 +498,21 @@ h3 {
     .container {
         padding: 0.75rem;
     }
-    
+
     .header {
         padding: 1rem;
     }
-    
+
     .card {
         padding: 0.75rem;
     }
-    
+
     .btn {
         padding: 0.5rem 1rem;
         font-size: 0.85rem;
         min-width: 100px;
     }
-    
+
     .grid-2,
     .grid-3,
     .grid-4 {
@@ -534,13 +534,13 @@ h3 {
         background: white;
         color: black;
     }
-    
+
     .card {
         background: white;
         border: 1px solid #ddd;
         box-shadow: none;
     }
-    
+
     .btn {
         display: none;
     }
@@ -920,11 +920,11 @@ h3 {
     .chart-container {
         height: 250px;
     }
-    
+
     .sensor-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .status-grid {
         grid-template-columns: 1fr;
     }

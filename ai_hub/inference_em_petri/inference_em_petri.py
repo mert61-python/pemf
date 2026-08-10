@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """inference_em_petri.py — Petri Inference (Mert pattern + best ONNX).
 
 Best model : BaggingRegressor   (Combined R2 = 0.9849)

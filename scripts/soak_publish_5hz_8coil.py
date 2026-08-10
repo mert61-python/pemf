@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """Generate synthetic 8-coil sensor MQTT load at configurable Hz for soak tests."""
 
 import argparse
@@ -9,9 +10,7 @@ import time
 try:
     import paho.mqtt.client as mqtt
 except ImportError as exc:
-    raise SystemExit(
-        "Missing dependency: paho-mqtt. Install with: pip install paho-mqtt"
-    ) from exc
+    raise SystemExit("Missing dependency: paho-mqtt. Install with: pip install paho-mqtt") from exc
 
 
 def build_payload(coil_id: int, seq: int, now_ts: float) -> str:

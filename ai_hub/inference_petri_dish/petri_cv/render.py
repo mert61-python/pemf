@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """render.py — Multi-Well 7-panel TR+EN overlay (adaptif font).
 
 Kedi (inference_cat_organ) 10 organ render paterniyle uyumlu:

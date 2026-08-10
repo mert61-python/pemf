@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! İndirme katmanı — URL pinleme + SHA256 doğrulamalı indirme.
 //!
 //! Tehdit modeli: manifest ele geçerse (repo/hesap) saldırgan `url` alanını kendi
@@ -36,6 +37,67 @@ fn build_agent() -> ureq::Agent {
         .timeout_read(Duration::from_secs(READ_TIMEOUT_S))
         .https_only(true)
         .build()
+}
+
+// ── Küçük METİN kaynakları (manifest) için AYRI ve KISA bütçe ────────────────────────────────
+//
+// ⚠️ DENETİM 2026-08-06 (P0 — OFFLINE BOOT KİLİDİ): manifest, GİGABAYTLIK paketlerle AYNI ajanı
+// kullanıyordu (connect 15 sn / read 60 sn, KÜRESEL sınır YOK). Klinik senaryosunda (PEMF-Gateway
+// hotspot'una bağlı ama upstream yok, ya da captive portal) bu, açılışı süresiz askıya alıyordu:
+// `timeout_read` ureq'te HER OKUMAYA ayrı uygulanır, toplam isteğe DEĞİL → 59 saniyede bir bayt
+// akıtan bir portal isteği hiç bitirmez. Manifest ~birkaç KB'lık bir metindir; 600 MB'lık base.zip
+// için doğru olan bütçe onun için ÇOK uzundur. Ayrı, kısa ve KÜRESEL sınırlı bir ajan kullanıyoruz.
+const TEXT_CONNECT_TIMEOUT_S: u64 = 5;
+const TEXT_READ_TIMEOUT_S: u64 = 10;
+/// ureq `AgentBuilder::timeout` = isteğin TAMAMI için küresel sınır (bugüne kadar HİÇ yoktu;
+/// slowloris'i kesen tek şey budur).
+const TEXT_TOTAL_TIMEOUT_S: u64 = 8;
+
+/// Manifest çekiminin UI'yı bekletebileceği MUTLAK süre (duvar saati).
+///
+/// Neden ureq zaman aşımları YETMİYOR: ureq DNS çözümlemesine hiçbir deadline uygulayamıyor
+/// (kütüphanenin kendi kaynağındaki `// TODO: Find a way to apply deadline to DNS lookup`,
+/// ureq-2.12.1/src/stream.rs). Upstream'i olmayan bir hotspot'ta `getaddrinfo` onlarca saniye
+/// asılabilir. Bu yüzden ikinci kemer: iş AYRI bir thread'e verilir ve bu süre dolunca çağıran
+/// "çevrimdışı" sayıp DEVAM EDER (thread arkada kendi zaman aşımıyla ölür — sızıntı değil, gecikme).
+pub const TEXT_WALL_BUDGET_S: u64 = 10;
+
+fn build_text_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(TEXT_CONNECT_TIMEOUT_S))
+        .timeout_read(Duration::from_secs(TEXT_READ_TIMEOUT_S))
+        .timeout(Duration::from_secs(TEXT_TOTAL_TIMEOUT_S))
+        .https_only(true)
+        .build()
+}
+
+/// Bloklayan bir ağ işini DUVAR SAATİ bütçesine bağla: bütçe dolarsa çağıran serbest kalır.
+///
+/// Saf karar mantığı (ağ gerektirmez → doğrudan birim-testlenebilir). İş thread'i `detach`
+/// edilir: onu güvenle iptal etmenin taşınabilir bir yolu yok, ama kendi ureq zaman aşımlarıyla
+/// en geç birkaç saniye sonra kendiliğinden biter. Kritik olan, ÇAĞIRANIN bütçe dolar dolmaz
+/// yoluna devam edebilmesidir (client açılışı ağ yüzünden kilitlenmesin).
+pub fn with_wall_budget<T, F>(budget: Duration, etiket: &str, f: F) -> Result<T, NetError>
+where
+    F: FnOnce() -> Result<T, NetError> + Send + 'static,
+    T: Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        // Alıcı bütçeyi aşıp gittiyse `send` hata verir — sessizce yut (thread yalnız sonlanır).
+        let _ = tx.send(f());
+    });
+    match rx.recv_timeout(budget) {
+        Ok(r) => r,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(NetError::PolicyLimit(format!(
+            "{etiket}: {} sn içinde yanıt gelmedi — çevrimdışı sayıldı",
+            budget.as_secs()
+        ))),
+        // Gönderen thread panikledi → kanal koptu. Bunu "geçici aktarım hatası" say.
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err(NetError::Transport(format!("{etiket}: ağ görevi beklenmedik şekilde sonlandı")))
+        }
+    }
 }
 
 /// `update_manager.py::_ALLOWED_UPDATE_HOSTS` ile birebir.
@@ -426,9 +488,12 @@ pub fn download_to_file(
 
 /// Küçük metin kaynağını (manifest) pinli + zaman-aşımlı indir. Host hem başlangıçta hem
 /// redirect-sonrası doğrulanır; `into_string` ureq'te ~10MB'a kapalı (metin-DoS sınırı hazır).
+///
+/// ⚠️ Bu çağrı YİNE bloklar (DNS'e deadline uygulanamıyor). Açılış yolundan çağırıyorsan
+/// `fetch_string_pinned_budgeted` kullan — o, duvar-saati bütçesiyle sarmalar.
 pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
     validate_download_source(url)?;
-    let resp = build_agent()
+    let resp = build_text_agent()
         .get(url)
         .call()
         .map_err(|e| match e {
@@ -440,6 +505,21 @@ pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
         })?;
     validate_url(resp.get_url())?;
     resp.into_string().map_err(NetError::from)
+}
+
+/// `fetch_string_pinned` + DUVAR SAATİ bütçesi — AÇILIŞ yolunun kullanması gereken sürüm.
+///
+/// DENETİM 2026-08-06 (P0): client açılışta manifest'i çekmeden hiçbir ekran göstermiyordu ve bu
+/// çağrının üst sınırı YOKTU → internet olmayan klinikte uygulama "Ortam algılanıyor…" ekranında
+/// SONSUZA KADAR kalıyordu. Artık en geç `TEXT_WALL_BUDGET_S` sonra bir hata döner; UI bunu
+/// "çevrimdışı" sayıp KURULU uygulamayı başlatmaya devam eder (backend zaten yereldir).
+pub fn fetch_string_pinned_budgeted(url: &str) -> Result<String, NetError> {
+    // Host pinini bütçeden ÖNCE uygula: güvenlik reddi ağ beklemeden, deterministik olsun.
+    validate_download_source(url)?;
+    let u = url.to_string();
+    with_wall_budget(Duration::from_secs(TEXT_WALL_BUDGET_S), "manifest", move || {
+        fetch_string_pinned(&u)
+    })
 }
 
 #[cfg(test)]
@@ -628,6 +708,48 @@ mod tests {
         assert!(!eski.exists(), "eski sha'li .part temizlenmedi (yetim dosya birikir)");
         assert!(yeni.exists(), "DEVAM EDILECEK .part silindi — indirme bastan baslar");
         assert!(alakasiz.exists(), "BASKA bir indirmenin .part'i silindi");
+    }
+
+    /// ⚠️ P0 (denetim 2026-08-06) — OFFLINE BOOT KİLİDİ.
+    ///
+    /// Manifest çekimi ureq zaman aşımlarına güveniyordu; ureq ise DNS çözümlemesine deadline
+    /// UYGULAYAMIYOR (kendi kaynağındaki TODO). Upstream'siz hotspot'ta `getaddrinfo` onlarca
+    /// saniye asılır ve client "Ortam algılanıyor…"da kilitlenirdi. İkinci kemer: duvar saati.
+    #[test]
+    fn duvar_saati_butcesi_asili_isi_keser() {
+        let t = Instant::now();
+        // 60 sn "asılı kalan" bir ağ işi taklidi — bütçe 1 sn.
+        let r: Result<String, NetError> = with_wall_budget(Duration::from_secs(1), "test", || {
+            std::thread::sleep(Duration::from_secs(60));
+            Ok("gec-gelen".to_string())
+        });
+        let sure = t.elapsed();
+        assert!(
+            matches!(r, Err(NetError::PolicyLimit(_))),
+            "asili is butce dolunca kesilmedi — client acilisi kilitlenir: {r:?}"
+        );
+        assert!(sure < Duration::from_secs(5), "butce uygulanmadi, {sure:?} beklendi");
+    }
+
+    /// Bütçe içinde biten iş AYNEN geçmeli (yanlış-pozitif "çevrimdışı" olmasın).
+    #[test]
+    fn duvar_saati_butcesi_hizli_isi_engellemez() {
+        let r = with_wall_budget(Duration::from_secs(5), "test", || Ok("tamam".to_string()));
+        assert_eq!(r.unwrap(), "tamam");
+        // İçerideki HATA da aynen geçmeli (bütçe hatayı maskelemez).
+        let e: Result<(), NetError> =
+            with_wall_budget(Duration::from_secs(5), "test", || Err(NetError::NotHttps("x".into())));
+        assert!(matches!(e, Err(NetError::NotHttps(_))));
+    }
+
+    /// Bütçeli sürüm de host-pinlemesini uygular ve bunu AĞ BEKLEMEDEN yapar
+    /// (güvenlik reddi deterministik kalmalı).
+    #[test]
+    fn butceli_manifest_cekimi_pini_uygular() {
+        let t = Instant::now();
+        let r = fetch_string_pinned_budgeted("https://evil.example.com/manifest.json");
+        assert!(matches!(r, Err(NetError::HostNotAllowed(_))));
+        assert!(t.elapsed() < Duration::from_secs(2), "pin reddi ag bekledi");
     }
 
     #[test]

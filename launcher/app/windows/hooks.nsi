@@ -65,7 +65,7 @@
     DetailPrint "PEMF: backend.port geçersiz ('$1') — E-stop atlandı."
     Goto pemf_estop_done
   ${EndIf}
-  DetailPrint "PEMF: aktif tedavi güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
+  DetailPrint "PEMF: aktif seans güvenliği — bobinlere E-stop gönderiliyor (port $2)…"
   ; -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7sn worst-case" diye belgeliyor;
   ; 3 sn ESP bobinleri (6-8) yayınlanmadan dolabiliyordu. /TIMEOUT: powershell.exe'nin kendisi
   ; (AV taraması / bozuk PSModulePath) asılırsa kaldırma SÜRESİZ donmasın.
@@ -133,6 +133,13 @@
     Delete "$INSTDIR\pending_install.json"
     Delete "$INSTDIR\selfupdate_attempt.json"
     Delete "$INSTDIR\backend.port"
+    ; DENETİM 2026-08-06: "Beni hatırla" oturumu (DPAPI ile şifreli Supabase access+refresh
+    ; jetonu) bu denetimde eklendi ve listeye ALINMAMIŞTI. İki sonucu vardı: (1) özyinelemesiz
+    ; `RMDir "$INSTDIR"` dolu dizinde başarısız olup kurulum kökünü artıkla geride bırakıyordu
+    ; (yukarıdaki 2026-08-04 notunun aynısı), (2) `core/src/secret_store.rs` modül başlığındaki
+    ; "blob install_root içinde tutulur → uygulama kaldırılınca oturum da gider" güvencesi
+    ; GERÇEK DEĞİLDİ: kullanıcı uygulamayı kaldırsa da jetonu diskte kalıyordu.
+    Delete "$INSTDIR\auth_session.bin"
     RMDir "$INSTDIR"
     ; Yükseltme-öncesi eski boşluksuz kurulum kökü (rename migrasyonu atlanmışsa) kalıntısı.
     RMDir /r "$LOCALAPPDATA\PEMFVetClient"
@@ -146,6 +153,17 @@
     DetailPrint "PEMF Vet Client temizliği tamamlandı."
   ${Else}
     DetailPrint "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin."
+  ${EndIf}
+  ; ── KVKK AÇIKLIĞI (2026-08-08) ────────────────────────────────────────────────────────────
+  ; "Uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız indirilen runtime/model/önbellek).
+  ; Kutuyu işaretleyen kullanıcı makul olarak "verilerim gitti" diye anlar → YANLIŞ GÜVENCE.
+  ; Denetim Masası'ndan kaldıranlar client'ın açıklayıcı diyaloğunu GÖRMEZ; burada söylemek
+  ; tek şansımız. Log'a her zaman yazılır; etkileşimli kaldırmada ayrıca gösterilir.
+  ; ⚠️ ${Silent} kontrolü ŞART: self-update `/S` ile kurar; orada MessageBox kurulumu KİLİTLERDİ.
+  DetailPrint "PEMF: Hasta kayıtları, seans geçmişi ve AI analiz geçmişi KORUNDU (tıbbi kayıt) — %APPDATA%\PEMF_GUI"
+  ${IfNot} ${Silent}
+  ${AndIf} $UpdateMode <> 1
+    MessageBox MB_OK|MB_ICONINFORMATION "PEMF Vet kaldırıldı.$\r$\n$\r$\nHASTA KAYITLARI, SEANS GEÇMİŞİ ve AI ANALİZ GEÇMİŞİ SİLİNMEDİ.$\r$\nTıbbi kayıt oldukları için kaldırma sırasında korunurlar.$\r$\n$\r$\nKonum:$\r$\n$APPDATA\PEMF_GUI$\r$\n$\r$\nKalıcı silmek isterseniz bu klasörü elle silin ya da yeniden kurup uygulama içinden silin (Hastalar → 'Tümünü Sil', AI Geçmişi → 'Geçmişi Sil')."
   ${EndIf}
   ; NOT: %APPDATA%\PEMF_GUI (hasta DB + SQLCipher/Fernet anahtarları) HER YOLDA KORUNUR (KVKK).
   ; Servisler (PemfBackend/mosquitto), C:\Program Files\PEMF Backend, C:\ProgramData\*,

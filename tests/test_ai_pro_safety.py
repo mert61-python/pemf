@@ -1,7 +1,9 @@
+# Author: mertaygn, cglrgrkn
 """Audit P1 (test-boşluğu): AI Pro OTONOM tedavi güvenlik kapakları (süre-clamp, organ-doğrulama)
 davranışsal test edilmiyordu — yalnız route-varlığı. Uçlar kasıtlı auth-muaf olduğundan bu kapaklar
 tek koruma; süre-clamp bir refactorda düşerse {duration_minutes:999999} gözetimsiz sürüş açar.
 _ai_pro_loop no-op'lanır → kamera/donanım gerekmez."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -13,14 +15,31 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     from servers import api_server
+
     return TestClient(api_server.app)
+
+
+# ⚠️ 2026-08-06 (SERT ONAY KAPISI): `/api/ai/pro/start` artık ONAYLANMIŞ bir öneri kimliği
+# ister (428 aksi halde) ve organ/süreyi İSTEMCİ GÖVDESİNDEN DEĞİL onaylanan mühürden okur.
+# Aşağıdaki üç test eski sözleşmeye göre yazılmıştı; KORUDUKLARI GÜVENLİK DAVRANIŞI (süre-clamp,
+# organ doğrulama, çift-start koruması) aynen sınanmaya devam ediyor — yalnız çağrı yolu
+# onaydan geçiyor. Kapının KENDİSİ tests/test_ai_pro_approval_gate.py'de sınanır.
+def _onayli(specs: dict) -> str:
+    """Verilen speklerle onaylanmış bir öneri üret → proposal_id."""
+    from servers import ai_approval
+
+    rec = ai_approval.create("ai_pro", specs)
+    ai_approval.approve(rec["id"], operator="test@klinik.com")
+    return rec["id"]
 
 
 def test_ai_pro_duration_capped_to_clinical_max(client, monkeypatch):
     import servers.ai_router as air
+
     monkeypatch.setattr(air, "_ai_pro_loop", lambda: None)  # loop no-op → kamera/donanım yok
     try:
-        r = client.post("/api/ai/pro/start", json={"organ_id": 0, "duration_minutes": 999999})
+        pid = _onayli({"organ_id": 0, "duration_minutes": 999999})
+        r = client.post("/api/ai/pro/start", json={"proposal_id": pid})
         assert r.status_code == 200
         # Audit P1: {duration_minutes:999999} klinik üst sınıra (120 dk) KAPANMALI
         assert r.json()["durationMin"] == air._AI_PRO_MAX_DURATION_MIN == 120
@@ -30,19 +49,24 @@ def test_ai_pro_duration_capped_to_clinical_max(client, monkeypatch):
 
 def test_ai_pro_rejects_unsupported_organ(client):
     # Audit P2: em_kedi yalnız organ 0-6 tedavi eder; 7-10 sessiz-sıfır + yanlış 'aktif' göstergesi
-    r = client.post("/api/ai/pro/start", json={"organ_id": 8, "duration_minutes": 20})
+    # ONAY MÜHRÜNDE bile geçersiz organ REDDEDİLMELİ (onay, organ doğrulamasını atlatamaz).
+    pid = _onayli({"organ_id": 8, "duration_minutes": 20})
+    r = client.post("/api/ai/pro/start", json={"proposal_id": pid})
     assert r.status_code == 422
     r2 = client.post("/api/ai/pro/organ", json={"organ_id": 9, "duration_minutes": 20})
     assert r2.status_code == 422
 
 
 def test_ai_pro_double_start_is_idempotent(client, monkeypatch):
+    """İkinci start YENİ loop açmamalı. (Onay tek-kullanımlık olduğu için ikinci çağrı AYRI
+    bir onayla yapılır — aksi halde kapı zaten 428 verir, loop guard'ı sınanmamış olurdu.)"""
     import servers.ai_router as air
+
     monkeypatch.setattr(air, "_ai_pro_loop", lambda: None)
     try:
-        r1 = client.post("/api/ai/pro/start", json={"organ_id": 0, "duration_minutes": 20})
+        r1 = client.post("/api/ai/pro/start", json={"proposal_id": _onayli({"organ_id": 0, "duration_minutes": 20})})
         assert r1.status_code == 200
-        r2 = client.post("/api/ai/pro/start", json={"organ_id": 0, "duration_minutes": 20})
+        r2 = client.post("/api/ai/pro/start", json={"proposal_id": _onayli({"organ_id": 0, "duration_minutes": 20})})
         assert r2.status_code == 200
         assert "running" in r2.json().get("message", "").lower()  # ikinci start yeni loop AÇMAZ
     finally:
@@ -68,8 +92,9 @@ def test_stop_ai_pro_stops_coil_8_too(client, monkeypatch):
             return True
 
     monkeypatch.setattr(api.state, "hardware", _HW())
-    monkeypatch.setattr(api, "_mqtt_publish",
-                        lambda topic, payload: published.append((topic, payload.get("command"))) or True)
+    monkeypatch.setattr(
+        api, "_mqtt_publish", lambda topic, payload: published.append((topic, payload.get("command"))) or True
+    )
 
     r = client.post("/api/ai/pro/stop")
     assert r.status_code == 200
@@ -80,6 +105,7 @@ def test_stop_ai_pro_stops_coil_8_too(client, monkeypatch):
 
 class _FakeCap:
     """cv2.VideoCapture yerine: her read() geçerli bir kare döndürür."""
+
     def __init__(self, *a, **kw):
         self.released = False
 
@@ -88,6 +114,7 @@ class _FakeCap:
 
     def read(self):
         import numpy as np
+
         return True, np.zeros((8, 8, 3), dtype="uint8")
 
     def release(self):
@@ -118,20 +145,20 @@ def test_external_stop_runs_teardown_and_stops_coils(client, monkeypatch):
             return True
 
     monkeypatch.setattr(api.state, "hardware", _HW())
-    monkeypatch.setattr(api, "_mqtt_publish",
-                        lambda topic, payload: stopped["esp"].append(topic) or True)
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: stopped["esp"].append(topic) or True)
 
     # Seans DIŞARIDAN durdurulmuş durumda (E-stop / watchdog bunu yapar)
     with api._session_lock:
         api._active_session["is_active"] = False
 
     air._ai_loop_active = True
-    air._ai_pro_loop()          # senkron: ilk iterasyonda dış-stop görüp çıkmalı
+    air._ai_pro_loop()  # senkron: ilk iterasyonda dış-stop görüp çıkmalı
 
     assert air._ai_loop_active is False, "dış durdurma bayrağı temizlemeli (yoksa teardown atlanır)"
     assert stopped["stm"] == 1, "teardown STM bobinlerini durdurmalıydı (guard yanlış atladı)"
-    assert any("/6/" in t or "/7/" in t or "/8/" in t for t in stopped["esp"]), \
+    assert any("/6/" in t or "/7/" in t or "/8/" in t for t in stopped["esp"]), (
         "teardown ESP 6-8'e STOP publish etmeliydi"
+    )
 
 
 def test_target_lost_stops_coils_after_streak(client, monkeypatch):
@@ -158,16 +185,24 @@ def test_target_lost_stops_coils_after_streak(client, monkeypatch):
 
     with api._session_lock:
         api._active_session.clear()
-        api._active_session.update({"is_active": True, "session_id": "lost", "mode": "AI Pro",
-                                    "coil_ids": list(range(1, 8)), "duration_minutes": 20})
-    air._ai_started_at = 0.0          # süre kontrolünü devre dışı bırak
+        api._active_session.update(
+            {
+                "is_active": True,
+                "session_id": "lost",
+                "mode": "AI Pro",
+                "coil_ids": list(range(1, 8)),
+                "duration_minutes": 20,
+            }
+        )
+    air._ai_started_at = 0.0  # süre kontrolünü devre dışı bırak
     air._ai_loop_active = True
 
     # Yalnız streak'e ulaşacak kadar iterasyon koştur, sonra döngüyü kes
     import threading
+
     t = threading.Thread(target=air._ai_pro_loop, daemon=True)
     t.start()
-    for _ in range(80):               # ~8 s üst sınır (iterasyon ~0.1 s)
+    for _ in range(80):  # ~8 s üst sınır (iterasyon ~0.1 s)
         if stopped:
             break
         __import__("time").sleep(0.1)

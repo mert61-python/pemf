@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """
 Headless import-graph checker for the PEMF backend.
 
@@ -36,6 +37,7 @@ Exit code 1 if any HARD BREAK is found, else 0. Use as a pre-build / CI guard.
 
 @author : migration tooling (Faz 0)
 """
+
 from __future__ import annotations
 
 import ast
@@ -242,7 +244,7 @@ def main(argv):
         if mod in stack:
             return False
         result = False
-        for dep in (info["fp_eager"] | info["fp_lazy"]):
+        for dep in info["fp_eager"] | info["fp_lazy"]:
             if reaches_qt(dep, stack + (mod,)):
                 result = True
                 break
@@ -288,7 +290,7 @@ def main(argv):
         info = get(mod)
         if not info:
             continue
-        for dep in (info["fp_eager"] | info["fp_eager_g"] | info["fp_lazy"] | info["fp_lazy_g"]):
+        for dep in info["fp_eager"] | info["fp_eager_g"] | info["fp_lazy"] | info["fp_lazy_g"]:
             if dep not in full:
                 full.add(dep)
                 dq.append(dep)

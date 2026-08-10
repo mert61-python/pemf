@@ -1,6 +1,8 @@
+# Author: mertaygn, cglrgrkn
 """Hasta (patient) CRUD uçları (audit B-2.2: api_server.py'den ayrıldı — modüler router).
 Yalnız `database.patient_database`'e bağlı; paylaşılan donanım/seans/live-state'i KULLANMAZ.
 Yollar birebir korunur (/api/patients...) → istemci sözleşmesi değişmez (pagination + delete_all guard dahil)."""
+
 import logging
 import os
 
@@ -85,6 +87,18 @@ def remove_patient(patient_id: str, request: Request):
     _enforce_patient_auth(request)
     db = get_patient_database()
     success = db.delete_patient(patient_id)
+    # Denetim izi (2026-08-09, Tier 3): hasta kaydı silmek geri dönüşsüzdür ve KVKK "unutulma
+    # hakkı"nın karşılığıdır — talebin yerine getirildiğinin kanıtı da gerekir. Hasta ADI
+    # YAZILMAZ; iz, sildiği verinin ikinci bir kopyası olamaz.
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(
+        request,
+        "patient.delete",
+        scope=f"id={patient_id}",
+        item_count=1 if success else 0,
+        outcome="ok" if success else "bulunamadi",
+    )
     return {"status": "success" if success else "error"}
 
 
@@ -101,8 +115,9 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     otomatik-istek koruması; frontend confirm gönderir."""
     _enforce_patient_auth(request)
     if payload.confirm != "DELETE_ALL":
-        raise HTTPException(status_code=400,
-                            detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin.")
+        raise HTTPException(
+            status_code=400, detail="Toplu silme için onay gerekli: gövdede {\"confirm\":\"DELETE_ALL\"} gönderin."
+        )
     db = get_patient_database()
     if not db:
         raise HTTPException(status_code=500, detail="Patient DB not initialized")
@@ -112,4 +127,14 @@ def remove_all_patients(request: Request, payload: DeleteAllPayload = DeleteAllP
     count = len(db.get_all_patients())
     ok = db.clear_all_patients()
     logging.getLogger(__name__).warning("TOPLU HASTA SİLME uygulandı (atomik+VACUUM, %d hasta).", count)
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(
+        request,
+        "patient.delete_all",
+        scope="TUM_HASTALAR",
+        item_count=count,
+        outcome="ok" if ok else "hata",
+        detail={"vacuum": True},
+    )
     return {"status": "success" if ok else "error", "deleted": count}

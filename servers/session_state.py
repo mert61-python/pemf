@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Session state — B-2.2 shared-state modül ayrımı (son kademe).
 
 Aktif tedavi seansının in-memory TEK gerçeklik kaynağı (`_active_session` + `_session_lock`). Eskiden
@@ -8,6 +9,7 @@ davranış birebir (bkz. tests/test_session_lifecycle.py refactor-öncesi kilit)
 
 Session LOGIC (start/stop/emergency endpoint'leri + süre-watchdog) BİLİNÇLİ olarak api_server'da kalır
 (web/orkestrasyon katmanı; donanım/MQTT/live-state'e örülü). Burada yalnız STATE + saf erişim."""
+
 import threading
 
 _session_lock = threading.Lock()

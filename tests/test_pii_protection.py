@@ -1,9 +1,11 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol (KVKK/güvenlik): at-rest şifreleme fail-closed (B-1.4) + tedavi-geçmişi PII politikası.
 
 PII maskeleme SAHİP KARARIYLA (2026-07-28) VARSAYILAN KAPALI; PEMF_MASK_HISTORY_PII=1 ile
 opt-in açılır. Testler her iki modu da kilitler: varsayılanda gerçek ad yazılır, bayrak
 açıkken maskeleme ÇALIŞIR kalır. Bu makinede keyring anahtarı olabileceğinden SQLCipher yolu
 MOCK'lanır."""
+
 import pytest
 
 
@@ -12,6 +14,7 @@ def test_patient_db_fail_closed_when_encryption_requested(temp_app_data, monkeyp
     """PEMF_ENCRYPT_AT_REST=1 ama SQLCipher yok → düz-metin yazmaktansa RuntimeError."""
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
     import database.patient_database as pdb
+
     monkeypatch.setattr(pdb, "import_sqlcipher", lambda: None)
     monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")
     with pytest.raises(RuntimeError):
@@ -22,6 +25,7 @@ def test_patient_db_plaintext_ok_when_encryption_off(temp_app_data, monkeypatch)
     """Şifreleme İSTENMEDİYSE (bayrak yok) düz-metin açılır — geriye uyumlu."""
     monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
     import database.patient_database as pdb
+
     monkeypatch.setattr(pdb, "import_sqlcipher", lambda: None)
     monkeypatch.setattr(pdb, "get_sqlcipher_key", lambda *a, **k: "")
     db = pdb.PatientDatabase(str(temp_app_data / "patients.db"))
@@ -31,10 +35,14 @@ def test_patient_db_plaintext_ok_when_encryption_off(temp_app_data, monkeypatch)
 # ── B-1.3: TreatmentHistoryDB PII maskeleme (şifresiz DB'de gerçek PII yazılmaz) ──────
 def _read_session(db, sid):
     with db._get_connection() as conn:
-        return conn.cursor().execute(
-            "SELECT operator_name, patient_name, patient_notes FROM treatment_sessions WHERE id=?",
-            (sid,),
-        ).fetchone()
+        return (
+            conn.cursor()
+            .execute(
+                "SELECT operator_name, patient_name, patient_notes FROM treatment_sessions WHERE id=?",
+                (sid,),
+            )
+            .fetchone()
+        )
 
 
 def test_treatment_pii_real_by_default_when_plaintext(temp_app_data, monkeypatch):
@@ -50,6 +58,7 @@ def test_treatment_pii_real_by_default_when_plaintext(temp_app_data, monkeypatch
     """
     monkeypatch.delenv("PEMF_MASK_HISTORY_PII", raising=False)
     from database.treatment_history_db import TreatmentHistoryDB
+
     db = TreatmentHistoryDB(temp_app_data)
     db.at_rest_encrypted = False  # şifresiz senaryo (dev/yanlış-yapılandırma)
     sid = db.start_session("Manuel", operator_name="Dr Mert", patient_name="Boncuk")
@@ -68,6 +77,7 @@ def test_treatment_pii_masked_when_opt_in(temp_app_data, monkeypatch):
     """
     monkeypatch.setenv("PEMF_MASK_HISTORY_PII", "1")
     from database.treatment_history_db import TreatmentHistoryDB
+
     db = TreatmentHistoryDB(temp_app_data)
     db.at_rest_encrypted = False
     sid = db.start_session("Manuel", operator_name="Dr Mert", patient_name="Boncuk")
@@ -80,6 +90,7 @@ def test_treatment_pii_masked_when_opt_in(temp_app_data, monkeypatch):
 
 def test_treatment_pii_intact_when_encrypted(temp_app_data):
     from database.treatment_history_db import TreatmentHistoryDB
+
     db = TreatmentHistoryDB(temp_app_data)
     db.at_rest_encrypted = True  # SQLCipher açık (üretim) → değerler AYNEN
     sid = db.start_session("Manuel", operator_name="Dr Mert", patient_name="Boncuk")
@@ -91,10 +102,11 @@ def test_treatment_pii_intact_when_encrypted(temp_app_data):
 def _read_params(db, sid):
     with db._get_connection() as conn:
         cur = conn.cursor()
-        q = ("SELECT parameter_value FROM session_parameters "
-             "WHERE session_id=? AND parameter_name=?")
-        return (cur.execute(q, (sid, "duration")).fetchone()[0],
-                cur.execute(q, (sid, "patient_owner_email")).fetchone()[0])
+        q = "SELECT parameter_value FROM session_parameters WHERE session_id=? AND parameter_name=?"
+        return (
+            cur.execute(q, (sid, "duration")).fetchone()[0],
+            cur.execute(q, (sid, "patient_owner_email")).fetchone()[0],
+        )
 
 
 def test_treatment_nonpii_param_never_masked(temp_app_data, monkeypatch):

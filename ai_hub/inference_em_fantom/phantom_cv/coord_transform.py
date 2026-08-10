@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """coord_transform.py — TEK ArUco marker tabanli cabin-frame transform.
 
 Kedi (inference_cat_organ/lib/qr.py + pose.py) paterni:

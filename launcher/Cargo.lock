@@ -2102,20 +2102,22 @@ dependencies = [
 
 [[package]]
 name = "pemf-launcher-core"
-version = "1.9.5"
+version = "1.9.15"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.19",
  "ureq",
+ "windows-sys 0.59.0",
  "zip",
 ]
 
 [[package]]
 name = "pemf-vet-client"
-version = "1.9.5"
+version = "1.9.15"
 dependencies = [
  "pemf-launcher-core",
  "serde",

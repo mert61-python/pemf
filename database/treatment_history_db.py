@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 Tedavi Geçmişi Veritabanı Modülü
 PEMF tedavi seanslarının kaydedilmesi ve yönetimi için SQLite veritabanı
@@ -14,7 +15,7 @@ import uuid
 import weakref
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     import keyring
@@ -25,6 +26,7 @@ except Exception:  # pragma: no cover - optional dependency fallback
 # YAKALAMAZ. Aşağıdaki tuple'lar ikisini de kapsar (şifreli + düz-metin yol birlikte çalışsın).
 try:
     from sqlcipher3 import dbapi2 as _sqlcipher_mod
+
     _DB_OPERATIONAL = (sqlite3.OperationalError, _sqlcipher_mod.OperationalError)
     _DB_ERROR = (sqlite3.Error, _sqlcipher_mod.Error)
     _DB_INTEGRITY = (sqlite3.IntegrityError, _sqlcipher_mod.IntegrityError)
@@ -32,6 +34,7 @@ except Exception:
     _DB_OPERATIONAL = sqlite3.OperationalError
     _DB_ERROR = sqlite3.Error
     _DB_INTEGRITY = sqlite3.IntegrityError
+
 
 class TreatmentHistoryDB:
     """PEMF tedavi geçmişi veritabanı yönetim sınıfı (Connection Pool + WAL mode)"""
@@ -53,7 +56,7 @@ class TreatmentHistoryDB:
     def __init__(self, app_data_dir):
         """
         Veritabanı bağlantısını başlat
-        
+
         Args:
             app_data_dir: Uygulama veri dizini (Path). Veritabanı dosyası bu dizinde oluşturulur.
         """
@@ -62,7 +65,7 @@ class TreatmentHistoryDB:
         self.db_path = app_data_dir / "pemf_treatment_history.db"
         self.logger = logging.getLogger(__name__)
         self._disk_usage_provider = shutil.disk_usage
-        
+
         # HIGH FIX: Thread-local connection storage (connection pool pattern)
         self._local = threading.local()
         self._lock = threading.Lock()
@@ -104,11 +107,13 @@ class TreatmentHistoryDB:
         """Pre-built sqlcipher3 (Windows wheel) veya pysqlcipher3 binding'ini dener; yoksa None."""
         try:
             from sqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+
             return sqlcipher
         except Exception:
             pass
         try:
             from pysqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+
             return sqlcipher
         except Exception:
             return None
@@ -123,6 +128,7 @@ class TreatmentHistoryDB:
         keyring/env/file'ı zaten migrate ettiğinden AYNI anahtarı döndürür → sorunsuz açılır."""
         try:
             from database.sqlcipher_util import get_sqlcipher_key
+
             return get_sqlcipher_key(self.app_data_dir, self.logger)
         except Exception as e:
             self.logger.warning(f"paylasimli sqlcipher_key alinamadi, legacy yola dusuluyor: {e}")
@@ -196,9 +202,11 @@ class TreatmentHistoryDB:
                 conn.execute(f"PRAGMA key='{escaped_key}'")
                 conn.execute('SELECT count(*) FROM sqlite_master')
                 if label == "legacy":
-                    self.logger.warning("treatment DB LEGACY anahtarla acildi (D-3 anahtar-divergence "
-                                        "tespit + KURTARILDI). Birlestirme icin ileride re-key onerilir.")
-                self._cipher_key_cache = cipher_key   # CALISAN anahtari hatirla (sir aramasini atla)
+                    self.logger.warning(
+                        "treatment DB LEGACY anahtarla acildi (D-3 anahtar-divergence "
+                        "tespit + KURTARILDI). Birlestirme icin ileride re-key onerilir."
+                    )
+                self._cipher_key_cache = cipher_key  # CALISAN anahtari hatirla (sir aramasini atla)
                 return conn
             except Exception as e:
                 last_err = e
@@ -226,6 +234,7 @@ class TreatmentHistoryDB:
         """Bir SQLCipher anahtarı varsa ve mevcut DB DÜZ-METİN ise içeriği şifreli kopyaya aktarır
         (sqlcipher_export) ve dosyayı değiştirir; eski düz-metin .plain.bak olarak kalır. Anahtar yok /
         binding yok / zaten şifreli ise no-op (geriye uyumlu, veri kaybı yok)."""
+
         def _close(cn):
             try:
                 cn.close()
@@ -313,25 +322,58 @@ class TreatmentHistoryDB:
             # baypas eden bir dosya. Escrow degerlidir ama korumasiz escrow, sifrelemenin kendisini
             # anlamsiz kilar. FAIL-CLOSED: kilitlenemiyorsa SIL (sifreli DB zaten yerinde).
             # PEMF_KEEP_PLAIN_BAK=0 ile escrow tamamen kapatilabilir (kilit basarili olsa bile silinir).
-            _locked = False
-            try:
-                from utils.file_acl import lock_down_file
-                _locked = bool(lock_down_file(backup))
-            except Exception:
-                self.logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
-            _keep = os.getenv("PEMF_KEEP_PLAIN_BAK", "1") == "1"
-            if not _locked or not _keep:
+            # ⚠️ DENETİM 2026-08-08 — VARSAYILAN TERSİNE ÇEVRİLDİ (escrow-sakla → güvenli-sil).
+            # `sqlcipher_util.py` (HASTA DB'si) bu kararı Audit P3'te zaten almıştı: ".plain.bak
+            # TÜM düz-metin PII'yi (SQLCipher-bypass) taşır → disk çalınırsa / yedek / bulut-sync
+            # okursa at-rest garantisi ÇÖKER" → orada varsayılan GÜVENLİ-SİL. Aynı düzeltme
+            # BURAYA, tedavi + AI geçmişi DB'sine hiç uygulanmamıştı: aynı hassasiyetteki veri,
+            # ZIT varsayılan. Launcher artık at-rest şifrelemeyi açtığı için bu tutarsızlık
+            # sahadaki HER klinikte tüm geçmişin düz-metin tam kopyasını diskte bırakırdı —
+            # üstelik sitede "cihazda şifreli" beyanı varken. ACL yalnız yerel kullanıcıya karşı
+            # korur; disk çalınmasına/imajlanmasına karşı HİÇBİR şey yapmaz ve at-rest
+            # şifrelemenin asıl tehdit modeli tam olarak odur.
+            # ESCROW İSTEYEN: PEMF_KEEP_PLAIN_BAK=1 (eski davranış; ACL kilitlenebilirse saklar).
+            # ⚠️ Anahtar kaybı = geçmiş kaybı. Yedek yolu artık Ayarlar → "Veri Taşıma"
+            # (parola korumalı şifreli dışa aktarma) ve SecretsManager kurtarma kodudur.
+            _keep = os.getenv("PEMF_KEEP_PLAIN_BAK", "0") == "1"
+            if _keep:
+                _locked = False
                 try:
-                    os.remove(backup)
-                    self.logger.warning(
-                        "Duz-metin yedek SILINDI (%s): %s — tum hasta PII'sini korumasiz "
-                        "birakmaktansa escrow'dan vazgecildi (sifreli DB yerinde).",
-                        "ACL uygulanamadi" if not _locked else "PEMF_KEEP_PLAIN_BAK=0", backup)
+                    from utils.file_acl import lock_down_file
+
+                    _locked = bool(lock_down_file(backup))
                 except Exception:
-                    self.logger.error("KRITIK: korumasiz duz-metin yedek SILINEMEDI → ELLE SILIN: %s",
-                                      backup, exc_info=True)
-            else:
-                self.logger.warning("Tedavi DB plaintext -> SQLCipher MIGRATE edildi (artik sifreli). Duz-metin yedek (ACL-kilitli): %s", backup)
+                    self.logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
+                if _locked:
+                    self.logger.warning(
+                        "Tedavi DB plaintext -> SQLCipher MIGRATE edildi. Duz-metin yedek ESCROW "
+                        "saklandi (ACL-kilitli): %s",
+                        backup,
+                    )
+                    return
+                # Kilitlenemedi → korumasız escrow şifrelemenin kendisini anlamsız kılar → SİL.
+                self.logger.warning("ACL uygulanamadi → escrow'dan vazgecildi, guvenli-siliniyor.")
+            # GÜVENLİ SİL: yalnız `unlink` içeriği diskte bırakır (dosya kurtarma araçlarıyla geri
+            # gelir). Üzerine rastgele veri yaz + fsync, sonra sil — hasta DB yolundaki desenin aynısı.
+            try:
+                _bsz = os.path.getsize(backup)
+                with open(backup, "r+b") as _bf:
+                    _rem = _bsz
+                    _rnd = os.urandom(1 << 20)
+                    while _rem > 0:
+                        _bf.write(_rnd if _rem >= len(_rnd) else _rnd[:_rem])
+                        _rem -= len(_rnd)
+                    _bf.flush()
+                    os.fsync(_bf.fileno())
+                os.remove(backup)
+                self.logger.warning(
+                    "Tedavi DB plaintext -> SQLCipher MIGRATE edildi; duz-metin yedek "
+                    "GUVENLI-SILINDI (at-rest PII riski kapatildi)."
+                )
+            except Exception:
+                self.logger.error(
+                    "KRITIK: korumasiz duz-metin yedek SILINEMEDI → ELLE SILIN: %s", backup, exc_info=True
+                )
         except Exception:
             self.logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
 
@@ -373,7 +415,7 @@ class TreatmentHistoryDB:
             current_mode = conn.execute('PRAGMA journal_mode').fetchone()[0]
             if current_mode.upper() != 'WAL':
                 conn.execute('PRAGMA journal_mode=WAL')
-            
+
             conn.execute('PRAGMA synchronous=NORMAL')
             conn.execute('PRAGMA wal_autocheckpoint=1000')
             conn.execute('PRAGMA journal_size_limit=33554432')
@@ -413,10 +455,8 @@ class TreatmentHistoryDB:
         """Kritik düşük disk alanında yazma işlemini engelle."""
         status = self.get_disk_space_status()
         if bool(status.get('critical', False)):
-            raise RuntimeError(
-                f"Disk free space critical: {status.get('free_mb')}MB < {status.get('threshold_mb')}MB"
-            )
-    
+            raise RuntimeError(f"Disk free space critical: {status.get('free_mb')}MB < {status.get('threshold_mb')}MB")
+
     def _prune_dead_pool_entries(self):
         """Ölmüş thread'lere ait bağlantıları defterden düşür ve kapat.
 
@@ -503,7 +543,8 @@ class TreatmentHistoryDB:
                         conn.rollback()
                         self.logger.warning(
                             "DB baglantisi commit edilmemis islemle birakildi → rollback yapildi "
-                            "(cagiran kod commit'i atliyor).")
+                            "(cagiran kod commit'i atliyor)."
+                        )
                 except Exception:
                     pass
 
@@ -530,8 +571,7 @@ class TreatmentHistoryDB:
                 pass
             self._local.conn = None
         if reason:
-            self.logger.info("DB baglanti havuzu gecersiz kilindi (%s), kusak=%d",
-                             reason, self._conn_generation)
+            self.logger.info("DB baglanti havuzu gecersiz kilindi (%s), kusak=%d", reason, self._conn_generation)
 
     def close_connections(self):
         """TÜM havuz bağlantılarını kapat (kapanışta / DB dosyası değişmeden önce).
@@ -545,6 +585,32 @@ class TreatmentHistoryDB:
             self._invalidate_connections("close_connections")
         except Exception as e:
             self.logger.error(f"Error closing connection: {e}")
+
+    def is_ready(self) -> tuple:
+        """Tıbbi kayıt yazılabilir durumda mı → (hazir: bool, sebep: str).
+
+        ⚠️ DENETİM 2026-08-09 (ENGEL) — TIBBİ KAYIT KAYBI.
+        Seans başlatma yolu DB hatalarını "best-effort" sayıp YUTUYORDU: DB açılamazsa
+        `db_session_id=None` ile devam ediliyor, bobinler enerjileniyor ve tedavi
+        UYGULANIYOR — ama hastanın aldığı doz HİÇBİR YERE yazılmıyordu. Operatör bunu
+        fark etmiyordu; sonradan "bu hayvana ne verildi?" sorusunun cevabı YOK.
+        Kayıtsız tedavi, tıbbi cihazda kabul edilemez: geriye dönük doz takibi, yan etki
+        soruşturması ve yasal saklama yükümlülüğü tamamen bu kayda dayanır.
+
+        KAPSAM (dürüstlük notu): bu sağlama "bağlantı açılıyor ve şema okunabiliyor" der.
+        Yanlış SQLCipher anahtarı, bozuk sayfa, silinmiş/erişilemez dosya BURADA yakalanır.
+        Dolu disk / salt-okunur birim gibi YAZMA-anı hatalarını yakalamaz (onlar yazarken
+        patlar ve zaten loglanır) — bu yüzden `SELECT 1` ötesine geçip sahte bir yazma
+        denemesi YAPILMAZ: gerçek kaydı kirletmeden yazılabilirliği kanıtlamanın ucuz bir
+        yolu yok ve yanlış-negatif üretmek tedaviyi gereksiz yere engellerdi.
+        """
+        try:
+            with self._get_connection() as conn:
+                conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            return True, ""
+        except Exception as e:
+            self.logger.error("Tibbi kayit DB'si HAZIR DEGIL: %s", e, exc_info=True)
+            return False, str(e)[:200]
 
     def _safe_add_column(self, cursor, table: str, column_def: str, log_msg: str = None) -> None:
         """Idempotent şema-migrasyonu: `ALTER TABLE <table> ADD COLUMN <column_def>`.
@@ -570,10 +636,11 @@ class TreatmentHistoryDB:
                 self._create_vet_tables(cursor)
                 self._migrate_vet_columns(cursor)
                 self._create_vet_indexes(cursor)
+                self._create_audit_table(cursor)
 
                 conn.commit()
                 self.logger.info(f"Veritabanı başarıyla başlatıldı: {self.db_path}")
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Veritabanı başlatma hatası: {e}")
             raise
@@ -654,6 +721,20 @@ class TreatmentHistoryDB:
         # Klinik-ici sahiplik (2026-07-12): islemi yapan hekim e-postasi (eski DB'lere idempotent).
         self._safe_add_column(cursor, "ai_analyses", "operator_email TEXT", "ai_analyses.operator_email eklendi")
 
+        # HEKİM DEĞERLENDİRMESİ (2026-08-06, sahip isteği: "veteriner red/onay/düzeltme — AI modlarında").
+        # AI çıktısı bir ÖNERİdir; klinik karar hekimindir. Bu üç kolon kararın kalıcı izini tutar:
+        #   review_status  : "" (değerlendirilmedi) | "approved" | "rejected" | "corrected"
+        #   review_note    : red gerekçesi / düzeltme metni (hekimin kendi teşhisi)
+        #   reviewed_by/at : kim, ne zaman karar verdi (klinik sorumluluk zinciri)
+        # ⚠️ Varsayılan BOŞ — geçmişteki kayıtlar "onaylanmış" GİBİ görünmemeli; değerlendirilmemiş
+        # bir AI çıktısını onaylı saymak yanlış güvence olurdu.
+        self._safe_add_column(
+            cursor, "ai_analyses", "review_status TEXT DEFAULT ''", "ai_analyses.review_status eklendi"
+        )
+        self._safe_add_column(cursor, "ai_analyses", "review_note TEXT DEFAULT ''", "ai_analyses.review_note eklendi")
+        self._safe_add_column(cursor, "ai_analyses", "reviewed_by TEXT DEFAULT ''", "ai_analyses.reviewed_by eklendi")
+        self._safe_add_column(cursor, "ai_analyses", "reviewed_at TEXT DEFAULT ''", "ai_analyses.reviewed_at eklendi")
+
         # Schema migration kayıtları
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -722,12 +803,12 @@ class TreatmentHistoryDB:
         """Çekirdek tabloların sorgu indekslerini oluştur."""
         # İndeksler oluştur
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_session_date 
+            CREATE INDEX IF NOT EXISTS idx_session_date
             ON treatment_sessions(session_date)
         ''')
 
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_treatment_mode 
+            CREATE INDEX IF NOT EXISTS idx_treatment_mode
             ON treatment_sessions(treatment_mode)
         ''')
 
@@ -844,24 +925,166 @@ class TreatmentHistoryDB:
             )
         ''')
 
+    # ═══════════════════════════════════════════════════════════════════════════════════════
+    # DENETİM İZİ (2026-08-09 denetimi, Tier 3)
+    # ───────────────────────────────────────────────────────────────────────────────────────
+    # ARIZA: geri dönüşsüz işlemlerin (toplu silme, dışa/içe aktarma, operatör ekleme-çıkarma,
+    # PII redaksiyonu) tek izi 60 MB'lık DÖNEN bir metin log'unda, kimliksiz tek bir satırdı.
+    # Yani: "hasta kayıtlarım kayboldu" denildiğinde kimin, ne zaman, nereden, kaç kaydı
+    # sildiğini gösterecek hiçbir şey yoktu — üstelik log dönünce o satır da yok oluyordu.
+    #
+    # TASARIM:
+    #  • Tablo ŞİFRELİ DB'nin içinde (SQLCipher) — ayrı bir düz-metin dosya değil.
+    #  • EKLEME-ONLY: kod yolunda UPDATE/DELETE YOK; tetikleyicilerle veritabanı seviyesinde de
+    #    engellenir (bir SQL istemcisiyle bağlanan biri geçmişi sessizce düzeltemesin).
+    #  • Saklama politikası bu tabloya DOKUNMAZ ve "hepsini sil" onu SİLMEZ: silme kaydının
+    #    kendisi silinirse denetim izinin anlamı kalmaz.
+    # ═══════════════════════════════════════════════════════════════════════════════════════
+
+    def _create_audit_table(self, cursor):
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_utc TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                operator_email TEXT,
+                client_ip TEXT,
+                scope TEXT,
+                item_count INTEGER,
+                outcome TEXT,
+                detail TEXT,
+                app_version TEXT,
+                build_id TEXT
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts_utc)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_events(event_type, ts_utc)')
+        # EKLEME-ONLY mühür: SQLite tetikleyicileri. Uygulama kodu zaten UPDATE/DELETE yapmıyor;
+        # bu, DB dosyasına doğrudan erişen birine karşı ikinci kapı.
+        cursor.execute('''
+            CREATE TRIGGER IF NOT EXISTS audit_events_no_update
+            BEFORE UPDATE ON audit_events
+            BEGIN SELECT RAISE(ABORT, 'denetim izi degistirilemez (ekleme-only)'); END
+        ''')
+        cursor.execute('''
+            CREATE TRIGGER IF NOT EXISTS audit_events_no_delete
+            BEFORE DELETE ON audit_events
+            BEGIN SELECT RAISE(ABORT, 'denetim izi silinemez (ekleme-only)'); END
+        ''')
+
+    def denetim_yaz(
+        self,
+        event_type: str,
+        *,
+        operator_email: str = "",
+        client_ip: str = "",
+        scope: str = "",
+        item_count=None,
+        outcome: str = "ok",
+        detail=None,
+    ) -> bool:
+        """Denetim olayını yaz. **ASLA istisna atmaz** ve çağıranın işlemini bozmaz.
+
+        ⚠️ Bilinçli tasarım: denetim yazımı bir silme/dışa-aktarma işlemini ENGELLEMEZ. Aksi
+        hâlde dolu bir diskte veteriner hiçbir şey yapamaz hâle gelirdi. Ama yazamama sessiz
+        de kalmaz — log'a ERROR düşer ve `outcome` alanı çağıranın sonucunu taşır.
+        """
+        import datetime as _dt
+        import json as _json
+
+        try:
+            from utils.path_utils import get_app_version, get_build_id
+
+            surum, yapi = get_app_version(), get_build_id()
+        except Exception:
+            surum, yapi = "", ""
+        try:
+            ayrinti = _json.dumps(detail, ensure_ascii=False)[:4000] if detail is not None else None
+        except Exception:
+            ayrinti = None
+        try:
+            with self._lock:
+                with self._get_connection() as conn:
+                    conn.execute(
+                        "INSERT INTO audit_events (ts_utc, event_type, operator_email, client_ip, "
+                        "scope, item_count, outcome, detail, app_version, build_id) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+                            str(event_type)[:64],
+                            (operator_email or "")[:200],
+                            (client_ip or "")[:64],
+                            (scope or "")[:200],
+                            int(item_count) if item_count is not None else None,
+                            (outcome or "")[:32],
+                            ayrinti,
+                            surum,
+                            yapi,
+                        ),
+                    )
+                    conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error("DENETIM IZI YAZILAMADI (%s): %s", event_type, e)
+            return False
+
+    def denetim_oku(self, limit: int = 200, event_type: str = "") -> list:
+        """Son denetim olayları (en yeni önce). Salt-okuma."""
+        try:
+            with self._lock:
+                with self._get_connection() as conn:
+                    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}
+                    sorgu = (
+                        "SELECT * FROM audit_events "
+                        + ("WHERE event_type = ? " if event_type else "")
+                        + "ORDER BY id DESC LIMIT ?"
+                    )
+                    par = (event_type, int(limit)) if event_type else (int(limit),)
+                    return [dict(r) for r in conn.execute(sorgu, par).fetchall()]
+        except Exception as e:
+            self.logger.error("Denetim izi okunamadi: %s", e)
+            return []
+
+    def denetim_sayisi(self) -> int:
+        try:
+            with self._lock:
+                with self._get_connection() as conn:
+                    return int(conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0])
+        except Exception:
+            return 0
+
     def _migrate_vet_columns(self, cursor):
         """Veteriner katmanı için idempotent kolon-migrasyonları (treatment_sessions/patients/sensor_samples)."""
         # treatment_sessions yeni kolonlari (idempotent, nullable).
-        self._safe_add_column(cursor, "treatment_sessions", "patient_id INTEGER", "treatment_sessions.patient_id sütunu eklendi")
-        self._safe_add_column(cursor, "treatment_sessions", "started_epoch REAL", "treatment_sessions.started_epoch sütunu eklendi")
-        self._safe_add_column(cursor, "treatment_sessions", "ended_epoch REAL", "treatment_sessions.ended_epoch sütunu eklendi")
+        self._safe_add_column(
+            cursor, "treatment_sessions", "patient_id INTEGER", "treatment_sessions.patient_id sütunu eklendi"
+        )
+        self._safe_add_column(
+            cursor, "treatment_sessions", "started_epoch REAL", "treatment_sessions.started_epoch sütunu eklendi"
+        )
+        self._safe_add_column(
+            cursor, "treatment_sessions", "ended_epoch REAL", "treatment_sessions.ended_epoch sütunu eklendi"
+        )
         # Klinik-ici sahiplik (2026-07-12): seansi baslatan hekim e-postasi ("Benim/Tum Klinik" filtresi).
-        self._safe_add_column(cursor, "treatment_sessions", "operator_email TEXT", "treatment_sessions.operator_email sütunu eklendi")
+        self._safe_add_column(
+            cursor, "treatment_sessions", "operator_email TEXT", "treatment_sessions.operator_email sütunu eklendi"
+        )
         # patients.owner_email (rapor e-postasi) — eski DB'lere idempotent ekle.
         self._safe_add_column(cursor, "patients", "owner_email TEXT", "patients.owner_email sütunu eklendi")
         # sensor_samples yeni kolonlari (idempotent, nullable).
         # SEMANTIK NOT: sensor_samples artik DAKIKA-ORTALAMASI tutabilir;
         # sample_count = ortalamaya giren ham okuma sayisi. Sema ayni kalir,
         # mevcut satirlar (ham okuma) icin bu kolonlar NULL kalir — geriye uyumlu.
-        self._safe_add_column(cursor, "sensor_samples", "coil_run_id INTEGER", "sensor_samples.coil_run_id sütunu eklendi")
-        self._safe_add_column(cursor, "sensor_samples", "ambient_temp_c REAL", "sensor_samples.ambient_temp_c sütunu eklendi")
+        self._safe_add_column(
+            cursor, "sensor_samples", "coil_run_id INTEGER", "sensor_samples.coil_run_id sütunu eklendi"
+        )
+        self._safe_add_column(
+            cursor, "sensor_samples", "ambient_temp_c REAL", "sensor_samples.ambient_temp_c sütunu eklendi"
+        )
         self._safe_add_column(cursor, "sensor_samples", "phase REAL", "sensor_samples.phase sütunu eklendi")
-        self._safe_add_column(cursor, "sensor_samples", "sample_count INTEGER", "sensor_samples.sample_count sütunu eklendi")
+        self._safe_add_column(
+            cursor, "sensor_samples", "sample_count INTEGER", "sensor_samples.sample_count sütunu eklendi"
+        )
 
     def _create_vet_indexes(self, cursor):
         """Veteriner tablo indeksleri + (migration SONRASI) treatment_sessions.patient_id indeksi."""
@@ -895,10 +1118,7 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    'SELECT setting_value FROM system_settings WHERE setting_key = ?',
-                    (key,)
-                )
+                cursor.execute('SELECT setting_value FROM system_settings WHERE setting_key = ?', (key,))
                 row = cursor.fetchone()
                 return str(row['setting_value']) if row else None
         except Exception:
@@ -908,14 +1128,17 @@ class TreatmentHistoryDB:
         """System setting değeri upsert et."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                '''
                 INSERT INTO system_settings (setting_key, setting_value, description, updated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(setting_key) DO UPDATE SET
                     setting_value = excluded.setting_value,
                     description = excluded.description,
                     updated_at = CURRENT_TIMESTAMP
-            ''', (key, value, description))
+            ''',
+                (key, value, description),
+            )
             conn.commit()
 
     def _run_startup_migrations_with_rollback(self):
@@ -947,7 +1170,9 @@ class TreatmentHistoryDB:
             _backup_ok = False
             self.logger.error(
                 "Migration oncesi yedek OLUSTURULAMADI (%s) → rollback GUVENLI DEGIL; "
-                "yarim yedek dosyasi temizleniyor ve rollback denenmeyecek.", backup_path)
+                "yarim yedek dosyasi temizleniyor ve rollback denenmeyecek.",
+                backup_path,
+            )
             try:
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
@@ -973,8 +1198,10 @@ class TreatmentHistoryDB:
             # dosya koymak, migration hatasindan cok daha kotudur (kalici veri kaybi). Yedek yoksa
             # canli DB'ye DOKUNMA ve orijinal hatayi yukselt; veri diskte saglam kalir.
             if not _backup_ok:
-                self.logger.error("Gecerli yedek YOK → rollback ATLANDI, canli DB'ye DOKUNULMADI. "
-                                  "Veri saglam; migration hatasi yukseltiliyor.")
+                self.logger.error(
+                    "Gecerli yedek YOK → rollback ATLANDI, canli DB'ye DOKUNULMADI. "
+                    "Veri saglam; migration hatasi yukseltiliyor."
+                )
                 raise
             try:
                 self.close_connections()
@@ -1007,16 +1234,12 @@ class TreatmentHistoryDB:
 
         if current_version == 0:
             # İlk kez kurulan veya eski sürümde metadata'sı olmayan DB
-            self._set_system_setting(
-                version_key,
-                str(self.TARGET_SCHEMA_VERSION),
-                'PEMF DB schema version'
-            )
+            self._set_system_setting(version_key, str(self.TARGET_SCHEMA_VERSION), 'PEMF DB schema version')
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     'INSERT OR IGNORE INTO schema_migrations (version, description) VALUES (?, ?)',
-                    (self.TARGET_SCHEMA_VERSION, 'bootstrap schema version')
+                    (self.TARGET_SCHEMA_VERSION, 'bootstrap schema version'),
                 )
                 conn.commit()
             return
@@ -1027,14 +1250,10 @@ class TreatmentHistoryDB:
                 for version in range(current_version + 1, self.TARGET_SCHEMA_VERSION + 1):
                     cursor.execute(
                         'INSERT OR IGNORE INTO schema_migrations (version, description) VALUES (?, ?)',
-                        (version, f'upgrade schema to v{version}')
+                        (version, f'upgrade schema to v{version}'),
                     )
                 conn.commit()
-            self._set_system_setting(
-                version_key,
-                str(self.TARGET_SCHEMA_VERSION),
-                'PEMF DB schema version'
-            )
+            self._set_system_setting(version_key, str(self.TARGET_SCHEMA_VERSION), 'PEMF DB schema version')
 
     def get_schema_version(self) -> int:
         """Aktif DB schema version değerini döndür."""
@@ -1066,10 +1285,7 @@ class TreatmentHistoryDB:
                     start_time = str(row['start_time'])
 
                     try:
-                        started_at = datetime.strptime(
-                            f"{session_date} {start_time}",
-                            '%Y-%m-%d %H:%M:%S'
-                        )
+                        started_at = datetime.strptime(f"{session_date} {start_time}", '%Y-%m-%d %H:%M:%S')
                     except ValueError:
                         # Parse edilemeyen kaydı da recovery et
                         started_at = now - timedelta(hours=max_age_hours + 1)
@@ -1078,20 +1294,25 @@ class TreatmentHistoryDB:
                         continue
 
                     duration_minutes = max(1, int((now - started_at).total_seconds() / 60))
-                    cursor.execute('''
+                    cursor.execute(
+                        '''
                         UPDATE treatment_sessions
                         SET end_time = ?,
                             duration_minutes = ?,
                             session_status = 'ABORTED_DUE_TO_POWER',
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                    ''', (now.strftime('%H:%M:%S'), duration_minutes, session_id))
+                    ''',
+                        (now.strftime('%H:%M:%S'), duration_minutes, session_id),
+                    )
                     recovered_count += 1
 
                 conn.commit()
 
             if recovered_count > 0:
-                self.logger.warning(f"Recovery: {recovered_count} stale active session kurtarıldı (ABORTED_DUE_TO_POWER)")
+                self.logger.warning(
+                    f"Recovery: {recovered_count} stale active session kurtarıldı (ABORTED_DUE_TO_POWER)"
+                )
         except Exception as e:
             self.logger.warning(f"Stale session recovery uyarısı: {e}")
 
@@ -1100,11 +1321,7 @@ class TreatmentHistoryDB:
     def run_integrity_check(self, quick: bool = True) -> Dict[str, object]:
         """SQLite integrity check çalıştır ve sonucu döndür."""
         pragma_name = 'quick_check' if quick else 'integrity_check'
-        result = {
-            'ok': False,
-            'check': pragma_name,
-            'details': []
-        }
+        result = {'ok': False, 'check': pragma_name, 'details': []}
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -1211,6 +1428,58 @@ class TreatmentHistoryDB:
             self.logger.error(f"DB backup hatası: {e}")
             return False
 
+    #: Operatörün "geri dönüşsüz maskelemeyi anladım" onayı (system_settings).
+    PII_ONAY_ANAHTARI = "pii_redaction_acknowledged_at"
+    #: Operatörün seçtiği saklama süresi (gün). Yoksa ortam değişkeni/varsayılan geçerli.
+    PII_SURE_ANAHTARI = "pii_retention_days"
+
+    def redaksiyon_bekleyen_sayisi(self, retain_days: int = 365) -> int:
+        """Bu ayarla KAÇ seans maskelenecek? (kuru çalışma — hiçbir şey değiştirmez)
+
+        ⚠️ DENETİM 2026-08-09 (Tier 1): maskeleme GERİ DÖNÜŞSÜZ ve tamamen SESSİZ çalışıyordu.
+        Klinik 366. günde hasta adı yerine `[REDACTED]` görüyor, sebebini hiçbir yerde bulamıyor
+        ve "veritabanım bozuldu" diye destek arıyordu. Kararı operatörün ALMASI gerekir; bu
+        fonksiyon "ne kaybedeceğini" önceden gösterebilmek için var.
+        """
+        try:
+            cutoff = (datetime.now() - timedelta(days=max(1, int(retain_days)))).strftime('%Y-%m-%d')
+            with self._get_connection() as conn:
+                r = conn.execute(
+                    "SELECT COUNT(*) FROM treatment_sessions WHERE session_date < ? AND "
+                    "patient_name IS NOT NULL AND patient_name != '' AND patient_name != '[REDACTED]'",
+                    (cutoff,),
+                ).fetchone()
+                return int(r[0] or 0)
+        except Exception:
+            self.logger.debug("redaksiyon on-sayimi basarisiz", exc_info=True)
+            return 0
+
+    def pii_onayi_var_mi(self) -> bool:
+        """Operatör geri dönüşsüz maskelemeyi onayladı mı?"""
+        return bool(self._get_system_setting(self.PII_ONAY_ANAHTARI))
+
+    def pii_onayla(self) -> None:
+        self._set_system_setting(
+            self.PII_ONAY_ANAHTARI,
+            datetime.now().isoformat(timespec="seconds"),
+            "Operator geri donussuz PII maskelemesini onayladi",
+        )
+
+    def pii_suresi_oku(self) -> Optional[int]:
+        """Operatörün seçtiği süre (gün) ya da None (ayarlanmamış)."""
+        v = self._get_system_setting(self.PII_SURE_ANAHTARI)
+        try:
+            return int(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def pii_suresi_yaz(self, gun: int) -> None:
+        """Saklama süresini ayarla. 0 → maskeleme KAPALI (tıbbi-hukuki saklama ülkeye göre
+        değişir; karar operatöründür)."""
+        self._set_system_setting(
+            self.PII_SURE_ANAHTARI, str(max(0, int(gun))), "Seans PII maskeleme suresi (gun); 0 = kapali"
+        )
+
     def redact_old_session_pii(self, retain_days: int = 365) -> Dict[str, int]:
         """Eski seans kayıtlarında PII alanlarını maskele."""
         report = {
@@ -1223,14 +1492,17 @@ class TreatmentHistoryDB:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     UPDATE treatment_sessions
                     SET patient_name = CASE WHEN patient_name IS NOT NULL AND patient_name != '' THEN '[REDACTED]' ELSE patient_name END,
                         operator_name = CASE WHEN operator_name IS NOT NULL AND operator_name != '' THEN '[REDACTED]' ELSE operator_name END,
                         patient_notes = CASE WHEN patient_notes IS NOT NULL AND patient_notes != '' THEN '[REDACTED]' ELSE patient_notes END,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE session_date < ?
-                ''', (cutoff_date,))
+                ''',
+                    (cutoff_date,),
+                )
                 report['sessions_redacted'] = int(cursor.rowcount)
 
                 # Audit P2: PII isim listesini TEK-KAYNAK self._PII_PARAM_NAMES'ten al. Gömülü liste
@@ -1238,14 +1510,17 @@ class TreatmentHistoryDB:
                 # sayıyordu → owner e-postası retention sonrası süresiz düz-metin kalıyordu (KVKK).
                 _pii_names = tuple(self._PII_PARAM_NAMES)
                 _pii_ph = ",".join("?" * len(_pii_names))
-                cursor.execute(f'''
+                cursor.execute(
+                    f'''
                     UPDATE session_parameters
                     SET parameter_value = '[REDACTED]'
                     WHERE session_id IN (
                         SELECT id FROM treatment_sessions WHERE session_date < ?
                     )
                     AND parameter_name IN ({_pii_ph})
-                ''', (cutoff_date, *_pii_names))
+                ''',
+                    (cutoff_date, *_pii_names),
+                )
                 report['parameters_redacted'] = int(cursor.rowcount)
 
                 conn.commit()
@@ -1269,7 +1544,8 @@ class TreatmentHistoryDB:
                 cursor.execute(
                     f"UPDATE patients SET name='[ANONIM]', owner_name='[ANONIM]', vet_contact='', "
                     f"owner_email='', updated_at=CURRENT_TIMESTAMP WHERE patient_uuid IN ({ph})",
-                    uuids)
+                    uuids,
+                )
                 n = int(cursor.rowcount)
                 # 2) KVKK BÜTÜNLÜK (sağ-unutulma): get_session_history patient_name'i session_parameters ve
                 #    ts.patient_name'den de okur (COALESCE). Şifreli-at-rest üretimde bu DENORMALİZE PII de
@@ -1280,13 +1556,16 @@ class TreatmentHistoryDB:
                     pph = ",".join("?" * len(pids))
                     cursor.execute(
                         f"UPDATE treatment_sessions SET patient_name='[ANONIM]', operator_name='[ANONIM]', "
-                        f"patient_notes='[ANONIM]' WHERE patient_id IN ({pph})", pids)
+                        f"patient_notes='[ANONIM]' WHERE patient_id IN ({pph})",
+                        pids,
+                    )
                     pn_ph = ",".join("?" * len(self._PII_PARAM_NAMES))
                     cursor.execute(
                         f"UPDATE session_parameters SET parameter_value='[ANONIM]' "
                         f"WHERE parameter_name IN ({pn_ph}) AND session_id IN "
                         f"(SELECT id FROM treatment_sessions WHERE patient_id IN ({pph}))",
-                        (*self._PII_PARAM_NAMES, *pids))
+                        (*self._PII_PARAM_NAMES, *pids),
+                    )
                 conn.commit()
                 return n
         except Exception as e:
@@ -1316,7 +1595,9 @@ class TreatmentHistoryDB:
                 cursor = conn.cursor()
                 cursor.execute(
                     'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
-                    '(SELECT id FROM session_coil_runs WHERE started_epoch < ?)', (cutoff_ts,))
+                    '(SELECT id FROM session_coil_runs WHERE started_epoch < ?)',
+                    (cutoff_ts,),
+                )
                 cursor.execute('DELETE FROM session_coil_runs WHERE started_epoch < ?', (cutoff_ts,))
                 removed = int(cursor.rowcount)
                 conn.commit()
@@ -1345,10 +1626,13 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     DELETE FROM outbox_messages
                     WHERE status = 'dead' AND available_at < ?
-                ''', (cutoff_ts,))
+                ''',
+                    (cutoff_ts,),
+                )
                 removed = int(cursor.rowcount)
                 conn.commit()
                 return removed
@@ -1356,11 +1640,13 @@ class TreatmentHistoryDB:
             self.logger.warning(f"Dead outbox retention temizleme uyarısı: {e}")
             return 0
 
-    def apply_data_retention_policy(self,
-                                    sensor_retain_days: int = 90,
-                                    event_retain_days: int = 365,
-                                    dead_outbox_retain_days: int = 30,
-                                    pii_retain_days: int = 365) -> Dict[str, int]:
+    def apply_data_retention_policy(
+        self,
+        sensor_retain_days: int = 90,
+        event_retain_days: int = 365,
+        dead_outbox_retain_days: int = 30,
+        pii_retain_days: int = 365,
+    ) -> Dict[str, int]:
         """Toplu retention policy uygula (ticari operasyon bakımı).
 
         DENETIM P2: her sure <= 0 ise O ADIM ATLANIR (kapali). Eskiden adimlar kosulsuzdu ve
@@ -1387,22 +1673,62 @@ class TreatmentHistoryDB:
         if dead_outbox_retain_days and dead_outbox_retain_days > 0:
             report['dead_outbox_removed'] = self.purge_old_dead_outbox(dead_outbox_retain_days)
 
+        # ── PII MASKELEME: OPERATÖR ONAYI OLMADAN ÇALIŞMAZ (2026-08-09 denetimi, Tier 1) ──────
+        # Maskeleme GERİ DÖNÜŞSÜZDÜR ve tamamen SESSİZ çalışıyordu: klinik 366. günde hasta adı
+        # yerine `[REDACTED]` görüyor, sebebini hiçbir yerde bulamıyor, "veritabanım bozuldu"
+        # diye destek arıyordu. Süre yalnız bir ortam değişkeniyle (PEMF_RETAIN_PII_DAYS)
+        # ayarlanabiliyordu — hiçbir veteriner bunu bilmez.
+        #
+        # Yeni kural: maskelenecek KAYIT VARSA ve operatör bunu ONAYLAMAMIŞSA, hiçbir şey
+        # maskelenmez; rapor `pii_pending` ile kaç kaydın beklediğini söyler ve arayüz sorar.
+        # Operatörün seçtiği süre varsa ortam değişkenini EZER (ayar arayüzden yönetilir).
+        _secilen = self.pii_suresi_oku()
+        if _secilen is not None:
+            pii_retain_days = _secilen
+        report['pii_pending'] = 0
         if pii_retain_days and pii_retain_days > 0:
-            pii_report = self.redact_old_session_pii(pii_retain_days)
-            report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
-            report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
+            if not self.pii_onayi_var_mi():
+                bekleyen = self.redaksiyon_bekleyen_sayisi(pii_retain_days)
+                report['pii_pending'] = bekleyen
+                if bekleyen:
+                    self.logger.warning(
+                        "KVKK: %d seans kaydı maskelenmeyi bekliyor ama operatör ONAYI YOK — "
+                        "maskeleme YAPILMADI (geri dönüşsüz işlem sessizce uygulanmaz).",
+                        bekleyen,
+                    )
+            else:
+                pii_report = self.redact_old_session_pii(pii_retain_days)
+                report['sessions_pii_redacted'] = int(pii_report.get('sessions_redacted', 0))
+                report['parameters_pii_redacted'] = int(pii_report.get('parameters_redacted', 0))
+                # Denetim izi (2026-08-09, Tier 3): maskeleme GERİ DÖNÜŞSÜZ ve arka planda,
+                # kimse bakmadan çalışır. Kaç kaydın hangi eşikle maskelendiği yazılmazsa,
+                # klinik 366. günde [REDACTED] görüp sebebini hiçbir yerde bulamaz.
+                if report['sessions_pii_redacted'] or report['parameters_pii_redacted']:
+                    self.denetim_yaz(
+                        "retention.pii_maskelendi",
+                        scope="otomatik",
+                        item_count=report['sessions_pii_redacted'],
+                        detail={"gun": int(pii_retain_days), "parametre": report['parameters_pii_redacted']},
+                    )
 
         return report
-    
+
     # ── B-1.3 (audit) — at-rest şifreleme YOKken PII düz-metin yazma koruması ──────────
     # Tedavi-DB PII kolonları SQL'de display için okunur (whole-DB SQLCipher üretimde ZORUNLU +
     # fail-closed → şifreli). Ama at_rest_encrypted=False iken (yalnız dev/yanlış-yapılandırma)
     # gerçek PII'yi DÜZ-METİN yazmak yerine maskele: "kazara düz-metni kes" (kullanıcı kararı).
     # session_parameters içindeki PII olan parametre ADLARI (değeri maskelenir; ad PII değil):
-    _PII_PARAM_NAMES = frozenset({
-        "patient_name", "patient_surname", "patient_owner", "patient_owner_email",
-        "patient_owner_phone", "patient_vet_contact", "patient_veteriner",
-    })
+    _PII_PARAM_NAMES = frozenset(
+        {
+            "patient_name",
+            "patient_surname",
+            "patient_owner",
+            "patient_owner_email",
+            "patient_owner_phone",
+            "patient_vet_contact",
+            "patient_veteriner",
+        }
+    )
     _PII_REDACTION = "[SIFRELENMEMIS-DB]"
 
     def _redact_pii(self, value):
@@ -1424,18 +1750,23 @@ class TreatmentHistoryDB:
             return self._PII_REDACTION
         return value
 
-    def start_session(self, treatment_mode: str, target_condition: str = None,
-                     operator_name: str = None, patient_name: str = None,
-                     operator_email: str = None) -> int:
+    def start_session(
+        self,
+        treatment_mode: str,
+        target_condition: str = None,
+        operator_name: str = None,
+        patient_name: str = None,
+        operator_email: str = None,
+    ) -> int:
         """
         Yeni tedavi seansı başlat
-        
+
         Args:
             treatment_mode: Tedavi modu (Autonomous, Manual, vb.)
             target_condition: Hedef durum (artrit, yara iyileşmesi, vb.)
             operator_name: Uygulayıcı adı
             patient_name: Hasta adı
-            
+
         Returns:
             int: Oluşturulan seans ID'si
         """
@@ -1444,36 +1775,47 @@ class TreatmentHistoryDB:
             # HIGH FIX: Use connection pool instead of new connection
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 now = datetime.now()
                 session_date = now.strftime('%Y-%m-%d')
                 start_time = now.strftime('%H:%M:%S')
                 session_uuid = str(uuid.uuid4())
-                
-                cursor.execute('''
+
+                cursor.execute(
+                    '''
                     INSERT INTO treatment_sessions
                     (session_date, start_time, treatment_mode, target_condition,
                      operator_name, operator_email, patient_name, session_status, session_uuid)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
-                ''', (session_date, start_time, treatment_mode, target_condition,
-                      self._redact_pii(operator_name), (operator_email or None),
-                      self._redact_pii(patient_name), session_uuid))
-                
+                ''',
+                    (
+                        session_date,
+                        start_time,
+                        treatment_mode,
+                        target_condition,
+                        self._redact_pii(operator_name),
+                        (operator_email or None),
+                        self._redact_pii(patient_name),
+                        session_uuid,
+                    ),
+                )
+
                 session_id = cursor.lastrowid
                 conn.commit()
-                
+
                 self.logger.info(f"Yeni tedavi seansı başlatıldı: ID {session_id}")
                 return session_id
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Seans başlatma hatası: {e}")
             raise
-    
-    def end_session(self, session_id: int, parameters: Dict = None, 
-                   patient_notes: str = None, duration_minutes: int = None):
+
+    def end_session(
+        self, session_id: int, parameters: Dict = None, patient_notes: str = None, duration_minutes: int = None
+    ):
         """
         Tedavi seansını sonlandır
-        
+
         Args:
             session_id: Seans ID'si
             parameters: Tedavi parametreleri sözlüğü
@@ -1483,19 +1825,22 @@ class TreatmentHistoryDB:
             self._ensure_write_guardrail()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 # Seans bilgilerini al
-                cursor.execute('''
-                    SELECT start_time, session_date FROM treatment_sessions 
+                cursor.execute(
+                    '''
+                    SELECT start_time, session_date FROM treatment_sessions
                     WHERE id = ?
-                ''', (session_id,))
-                
+                ''',
+                    (session_id,),
+                )
+
                 result = cursor.fetchone()
                 if not result:
                     raise ValueError(f"Seans bulunamadı: {session_id}")
-                
+
                 start_time_str, session_date = result
-                
+
                 # Süreyi hesapla (opsiyonel override varsa kullan)
                 now = datetime.now()
                 end_time = now.strftime('%H:%M:%S')
@@ -1504,21 +1849,22 @@ class TreatmentHistoryDB:
                     # Savunmali: negatif-clamp (saat kaymasi/DST/session_date tutarsizligi) + malformed
                     # tarih guard'i (strptime patlarsa end_session komple basarisiz olmasin, 0 yaz).
                     try:
-                        start_datetime = datetime.strptime(f"{session_date} {start_time_str}",
-                                                         '%Y-%m-%d %H:%M:%S')
+                        start_datetime = datetime.strptime(f"{session_date} {start_time_str}", '%Y-%m-%d %H:%M:%S')
                         duration_minutes = max(0, int((now - start_datetime).total_seconds() / 60))
                     except Exception:
-                        self.logger.warning("Sure hesaplanamadi (session_date=%s start=%s) → 0 dk.", session_date, start_time_str)
+                        self.logger.warning(
+                            "Sure hesaplanamadi (session_date=%s start=%s) → 0 dk.", session_date, start_time_str
+                        )
                         duration_minutes = 0
-                
+
                 # Seans bilgilerini güncelle
                 update_data = [end_time, duration_minutes, 'completed', session_id]
                 update_query = '''
-                    UPDATE treatment_sessions 
+                    UPDATE treatment_sessions
                     SET end_time = ?, duration_minutes = ?, session_status = ?,
                         updated_at = CURRENT_TIMESTAMP
                 '''
-                
+
                 if parameters:
                     # Ana parametreleri güncelle
                     if 'frequency_hz' in parameters:
@@ -1530,15 +1876,15 @@ class TreatmentHistoryDB:
                     if 'pulse_duration_ms' in parameters:
                         update_query += ', pulse_duration_ms = ?'
                         update_data.insert(-1, parameters['pulse_duration_ms'])
-                
+
                 if patient_notes:
                     update_query += ', patient_notes = ?'
                     update_data.insert(-1, self._redact_pii(patient_notes))
-                
+
                 update_query += ' WHERE id = ?'
-                
+
                 cursor.execute(update_query, update_data)
-                
+
                 # Detaylı parametreleri kaydet
                 if parameters:
                     for param_name, param_value in parameters.items():
@@ -1546,26 +1892,32 @@ class TreatmentHistoryDB:
                             _pv = str(param_value)
                             if param_name in self._PII_PARAM_NAMES:
                                 _pv = self._redact_pii(_pv)
-                            cursor.execute('''
+                            cursor.execute(
+                                '''
                                 INSERT INTO session_parameters
                                 (session_id, parameter_name, parameter_value)
                                 VALUES (?, ?, ?)
-                            ''', (session_id, param_name, _pv))
-                
+                            ''',
+                                (session_id, param_name, _pv),
+                            )
+
                 conn.commit()
                 self.logger.info(f"Tedavi seansı sonlandırıldı: ID {session_id}")
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Seans sonlandırma hatası: {e}")
             raise
-    
-    def get_session_history(self, limit: int = 100,
-                           start_date: str = None,
-                           end_date: str = None,
-                           treatment_mode: str = None,
-                           before_id: int = None,
-                           internal_full: bool = False,
-                           session_ids=None) -> List[Dict]:
+
+    def get_session_history(
+        self,
+        limit: int = 100,
+        start_date: str = None,
+        end_date: str = None,
+        treatment_mode: str = None,
+        before_id: int = None,
+        internal_full: bool = False,
+        session_ids=None,
+    ) -> List[Dict]:
         """
         Tedavi geçmişini getir
 
@@ -1583,7 +1935,7 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 query = '''
                     SELECT ts.id, ts.session_date, ts.start_time, ts.end_time, ts.duration_minutes,
                            ts.treatment_mode, ts.target_condition, ts.frequency_hz, ts.intensity_mt,
@@ -1615,15 +1967,15 @@ class TreatmentHistoryDB:
                     WHERE 1=1
                 '''
                 params = []
-                
+
                 if start_date:
                     query += ' AND session_date >= ?'
                     params.append(start_date)
-                
+
                 if end_date:
                     query += ' AND session_date <= ?'
                     params.append(end_date)
-                
+
                 if treatment_mode:
                     query += ' AND treatment_mode = ?'
                     params.append(treatment_mode)
@@ -1658,128 +2010,134 @@ class TreatmentHistoryDB:
                 # kırpılıyor, >500 seanslı klinikte eski medikal kayıtlar 'tümü indirildi' denip düşüyordu.
                 _cap = 100000 if internal_full else 500
                 params.append(max(1, min(int(limit), _cap)))
-                
+
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
-                
+
                 # Sonuçları sözlük formatına çevir
                 columns = [desc[0] for desc in cursor.description]
                 sessions = []
-                
+
                 for row in rows:
                     session = dict(zip(columns, row))
                     sessions.append(session)
-                
+
                 return sessions
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Geçmiş getirme hatası: {e}")
             raise
-    
+
     def get_session_details(self, session_id: int) -> Optional[Dict]:
         """
         Belirli bir seansın detaylarını getir
-        
+
         Args:
             session_id: Seans ID'si
-            
+
         Returns:
             Dict: Seans detayları ve parametreleri
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 # Ana seans bilgileri
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT * FROM treatment_sessions WHERE id = ?
-                ''', (session_id,))
-                
+                ''',
+                    (session_id,),
+                )
+
                 session_row = cursor.fetchone()
                 if not session_row:
                     return None
-                
+
                 columns = [desc[0] for desc in cursor.description]
                 session = dict(zip(columns, session_row))
-                
+
                 # Parametreler
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT parameter_name, parameter_value, parameter_unit
                     FROM session_parameters WHERE session_id = ?
-                ''', (session_id,))
-                
+                ''',
+                    (session_id,),
+                )
+
                 parameters = {}
                 for param_row in cursor.fetchall():
                     param_name, param_value, param_unit = param_row
-                    parameters[param_name] = {
-                        'value': param_value,
-                        'unit': param_unit
-                    }
-                
+                    parameters[param_name] = {'value': param_value, 'unit': param_unit}
+
                 session['parameters'] = parameters
                 return session
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Seans detayları getirme hatası: {e}")
             raise
-    
+
     def get_statistics(self) -> Dict:
         """
         Tedavi istatistiklerini getir
-        
+
         Returns:
             Dict: İstatistik bilgileri
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 stats = {}
-                
+
                 # Toplam seans sayısı
                 cursor.execute('SELECT COUNT(*) FROM treatment_sessions')
                 stats['total_sessions'] = cursor.fetchone()[0]
 
                 # Tamamlanan seans (mobil KPI fallback 'completed_sessions' okuyor)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM treatment_sessions "
-                    "WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
+                    "SELECT COUNT(*) FROM treatment_sessions WHERE LOWER(COALESCE(session_status,'')) = 'completed'"
                 )
                 stats['completed_sessions'] = cursor.fetchone()[0]
 
                 # Bu ay seans sayısı
                 current_month = datetime.now().strftime('%Y-%m')
-                cursor.execute('''
-                    SELECT COUNT(*) FROM treatment_sessions 
+                cursor.execute(
+                    '''
+                    SELECT COUNT(*) FROM treatment_sessions
                     WHERE session_date LIKE ?
-                ''', (f"{current_month}%",))
+                ''',
+                    (f"{current_month}%",),
+                )
                 stats['monthly_sessions'] = cursor.fetchone()[0]
-                
+
                 # Tedavi modlarına göre dağılım
                 cursor.execute('''
-                    SELECT treatment_mode, COUNT(*) 
-                    FROM treatment_sessions 
+                    SELECT treatment_mode, COUNT(*)
+                    FROM treatment_sessions
                     GROUP BY treatment_mode
                 ''')
                 stats['mode_distribution'] = dict(cursor.fetchall())
-                
+
                 # Ortalama seans süresi
                 cursor.execute('''
-                    SELECT AVG(duration_minutes) 
-                    FROM treatment_sessions 
+                    SELECT AVG(duration_minutes)
+                    FROM treatment_sessions
                     WHERE duration_minutes IS NOT NULL
                 ''')
                 avg_duration = cursor.fetchone()[0]
                 stats['average_duration'] = round(avg_duration, 1) if avg_duration else 0
-                
+
                 return stats
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"İstatistik getirme hatası: {e}")
             raise
-    
-    def update_session_finalized_extras(self, session_id: int, notes: str = None,
-                                        frequency_hz=None, intensity_mt=None) -> None:
+
+    def update_session_finalized_extras(
+        self, session_id: int, notes: str = None, frequency_hz=None, intensity_mt=None
+    ) -> None:
         """ZATEN kapatilmis (finalized) bir seansta YALNIZ not/parametre alanlarini gunceller.
 
         DENETIM P1: gozlem-notu akisi (POST /api/session/notes) eskiden end_session'i TEKRAR
@@ -1812,9 +2170,7 @@ class TreatmentHistoryDB:
                 cursor = conn.cursor()
                 # SET parcalari yalnizca yukaridaki SABIT literallerden gelir (kullanici girdisi
                 # DEGIL); tum degerler parametrelidir → enjeksiyon yuzeyi yok.
-                cursor.execute(
-                    'UPDATE treatment_sessions SET ' + ', '.join(sets) + ' WHERE id = ?', vals
-                )
+                cursor.execute('UPDATE treatment_sessions SET ' + ', '.join(sets) + ' WHERE id = ?', vals)
                 conn.commit()
             self.logger.info(f"Kapatilmis seansin not/parametreleri guncellendi: ID {session_id}")
         except _DB_ERROR as e:
@@ -1823,7 +2179,7 @@ class TreatmentHistoryDB:
     def update_session_notes(self, session_id: int, notes: str):
         """
         Tedavi seansının notlarını güncelle
-        
+
         Args:
             session_id: Güncellenecek seans ID'si
             notes: Yeni notlar
@@ -1831,34 +2187,36 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
-                cursor.execute('''
-                    UPDATE treatment_sessions 
+
+                cursor.execute(
+                    '''
+                    UPDATE treatment_sessions
                     SET patient_notes = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (self._redact_pii(notes), session_id))  # Audit P3: end_session ile tutarlı PII maskesi (şifresiz modda da uygula)
-                
+                ''',
+                    (self._redact_pii(notes), session_id),
+                )  # Audit P3: end_session ile tutarlı PII maskesi (şifresiz modda da uygula)
+
                 conn.commit()
                 self.logger.info(f"Seans notları güncellendi: ID {session_id}")
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Seans notları güncelleme hatası: {e}")
             raise
-    
+
     def delete_session(self, session_id: int):
         """
         Tedavi seansını sil
-        
+
         Args:
             session_id: Silinecek seans ID'si
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 # Önce parametreleri sil
-                cursor.execute('DELETE FROM session_parameters WHERE session_id = ?',
-                             (session_id,))
+                cursor.execute('DELETE FROM session_parameters WHERE session_id = ?', (session_id,))
                 # Çocuk kayıtları sil — FK ON DELETE CASCADE yok; aksi halde veri-içeren seansı
                 # silmek FOREIGN KEY hatasıyla 500 döner.
                 cursor.execute('DELETE FROM sensor_samples WHERE session_id = ?', (session_id,))
@@ -1866,44 +2224,42 @@ class TreatmentHistoryDB:
                 # P2 audit 2026-06-28: per-bobin run tablolari da silinsin (eskiden orphan kaliyordu).
                 cursor.execute(
                     'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
-                    '(SELECT id FROM session_coil_runs WHERE session_id = ?)', (session_id,))
+                    '(SELECT id FROM session_coil_runs WHERE session_id = ?)',
+                    (session_id,),
+                )
                 cursor.execute('DELETE FROM session_coil_runs WHERE session_id = ?', (session_id,))
 
                 # Sonra seansı sil
-                cursor.execute('DELETE FROM treatment_sessions WHERE id = ?',
-                             (session_id,))
-                
+                cursor.execute('DELETE FROM treatment_sessions WHERE id = ?', (session_id,))
+
                 conn.commit()
                 self.logger.info(f"Tedavi seansı silindi: ID {session_id}")
-                
+
         except _DB_ERROR as e:
             self.logger.error(f"Seans silme hatası: {e}")
             raise
-    
+
     def close(self):
         """Veritabanı bağlantısını kapat"""
         self.close_connections()
 
-    def record_session_event(self, session_id: Optional[int], event_type: str,
-                             payload: Optional[Dict] = None, severity: str = 'info') -> Optional[int]:
+    def record_session_event(
+        self, session_id: Optional[int], event_type: str, payload: Optional[Dict] = None, severity: str = 'info'
+    ) -> Optional[int]:
         """Seans olayını local event tablosuna kaydet."""
         try:
             self._ensure_write_guardrail()
             payload_json = json.dumps(payload or {}, ensure_ascii=True)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     INSERT INTO session_events
                     (event_uuid, session_id, event_type, severity, payload, created_at)
                     VALUES (?, ?, ?, ?, ?, ?)
-                ''', (
-                    str(uuid.uuid4()),
-                    session_id,
-                    event_type,
-                    severity,
-                    payload_json,
-                    datetime.now().timestamp()
-                ))
+                ''',
+                    (str(uuid.uuid4()), session_id, event_type, severity, payload_json, datetime.now().timestamp()),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except Exception as e:
@@ -1911,10 +2267,18 @@ class TreatmentHistoryDB:
             return None
 
     # ---- AI Analiz Geçmişi (profesyonel detaylı kayıt; SQLCipher-şifreli → KVKK-güvenli) ----
-    def add_ai_analysis(self, mode: str = "", module_id: str = "", module_label: str = "",
-                        patient_name: str = "", input_type: str = "", result_summary: str = "",
-                        result_detail: Optional[Dict] = None, confidence: Optional[float] = None,
-                        operator_email: str = "") -> Optional[int]:
+    def add_ai_analysis(
+        self,
+        mode: str = "",
+        module_id: str = "",
+        module_label: str = "",
+        patient_name: str = "",
+        input_type: str = "",
+        result_summary: str = "",
+        result_detail: Optional[Dict] = None,
+        confidence: Optional[float] = None,
+        operator_email: str = "",
+    ) -> Optional[int]:
         """Bir AI analiz sonucunu şifreli geçmişe ekle. Tüm profillerin tüm modelleri buraya yazar.
         operator_email = analizi yapan hekim (klinik-içi "Benim/Tüm Klinik" filtresi; yeni param SONDA → pozisyonel çağrılar bozulmaz)."""
         try:
@@ -1928,40 +2292,323 @@ class TreatmentHistoryDB:
             detail_json = json.dumps(result_detail or {}, ensure_ascii=False)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     INSERT INTO ai_analyses
                     (created_at, mode, module_id, module_label, patient_name, operator_email, input_type, result_summary, result_detail, confidence)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    datetime.now().isoformat(timespec="seconds"),
-                    mode, module_id, module_label, patient_name, operator_email, input_type,
-                    result_summary, detail_json, confidence
-                ))
+                ''',
+                    (
+                        datetime.now().isoformat(timespec="seconds"),
+                        mode,
+                        module_id,
+                        module_label,
+                        patient_name,
+                        operator_email,
+                        input_type,
+                        result_summary,
+                        detail_json,
+                        confidence,
+                    ),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except Exception as e:
             self.logger.warning(f"AI analiz kaydedilemedi: {e}")
             return None
 
-    def get_ai_analyses(self, limit: int = 50, module_id: Optional[str] = None,
-                        patient_name: Optional[str] = None, before_id: Optional[int] = None) -> List[Dict]:
+    def set_ai_review(self, analysis_id: int, status: str, note: str = "", reviewed_by: str = "") -> bool:
+        """AI analizine HEKİM DEĞERLENDİRMESİ yaz (2026-08-06, sahip isteği).
+
+        `status`: "approved" | "rejected" | "corrected".
+        ⚠️ Kayıt SİLİNMEZ, AI çıktısı DEĞİŞTİRİLMEZ — hekimin kararı YANINA yazılır. AI'ın ne
+        dediği ile hekimin ne dediği ayrı ayrı görünür kalmalı (klinik denetlenebilirlik: sonradan
+        "model ne demişti?" sorusunun cevabı kaybolmamalı).
+        """
+        if status not in ("approved", "rejected", "corrected"):
+            raise ValueError(f"Geçersiz değerlendirme durumu: {status}")
+        try:
+            with self._get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE ai_analyses SET review_status=?, review_note=?, reviewed_by=?, reviewed_at=? WHERE id=?",
+                    (
+                        status,
+                        str(note or ""),
+                        str(reviewed_by or ""),
+                        datetime.now().isoformat(timespec="seconds"),
+                        int(analysis_id),
+                    ),
+                )
+                conn.commit()
+                return cur.rowcount > 0
+        except Exception as e:
+            self.logger.warning(f"AI değerlendirmesi yazılamadı: {e}")
+            return False
+
+    # ---- CİHAZ TAŞIMA: şifreli dışa/içe aktarma (2026-08-08) ----
+    # ⚠️ DENETİM 2026-08-09 (ENGEL) — CİHAZ TAŞIMA EKSİK VERİ TAŞIYORDU.
+    # Dışa aktarma YALNIZCA `treatment_sessions` + `ai_analyses` alıyordu. Oysa tıbbi kaydın ASIL
+    # gövdesi bağlı tablolarda:
+    #     session_coil_runs   → HANGİ bobin, hangi frekans/duty ile, ne kadar süre çalıştı (= DOZ)
+    #     sensor_samples      → sıcaklık/akım/alan telemetrisi (yan etki soruşturmasının kanıtı)
+    #     session_events      → acil durdurma dahil denetim izi
+    #     session_parameters  → seansın uygulanan parametreleri
+    #     sensor_run_summary  → bobin-koşusu başına sensör özeti
+    # Yani veteriner "kliniğimin geçmişini taşıdım" diyor, gerçekte seans BAŞLIKLARI taşınıyor;
+    # uygulanan dozun kaydı eski makinede kalıyordu. Eski makine silinirse geri dönülemez kayıp.
+    #
+    # İKİNCİ ENGEL: `import_rows` `id`'yi düşürüyordu. Bağlı tabloları eklesek bile `session_id`
+    # hedefte BAŞKA bir seansı gösterirdi (sessiz kayıt karışması — hastanın verisi başka hastaya).
+    # `treatment_sessions.patient_id` de aynı sebeple kopuyordu.
+    # ÇÖZÜM: id'ler dışa aktarılır, içe aktarmada ESKİ→YENİ eşlemesi kurulur ve tüm çocuk satırlar
+    # yeniden bağlanır. Kimlikler yine AUTOINCREMENT'tir; korunan şey İLİŞKİdir.
+
+    #: Dışa aktarılan tablolar — sıra ÖNEMLİ (ebeveyn önce; içe aktarma bu sırayı izler).
+    _TASINAN_TABLOLAR = (
+        "patients",
+        "treatment_sessions",
+        "session_parameters",
+        "session_coil_runs",
+        "sensor_run_summary",
+        "sensor_samples",
+        "session_events",
+        "ai_analyses",
+    )
+
+    #: Tablo -> hedefte AYNI kaydı bulmaya yarayan UNIQUE doğal anahtar. Mükerrer bir satırda
+    #: (aynı hasta / aynı olay) INSERT patlar; bu anahtarla mevcut kaydın id'si bulunup eşlemeye
+    #: yazılır → çocuk satırlar mevcut kayda bağlanır, sessizce ATILMAZ.
+    _DOGAL_ANAHTAR = {"patients": "patient_uuid", "session_events": "event_uuid"}
+
+    #: (tablo, kolon) -> hangi tablonun id'sine bakıyor. İçe aktarmada bu kolonlar YENİDEN YAZILIR.
+    _ILISKILER = {
+        ("treatment_sessions", "patient_id"): "patients",
+        ("session_parameters", "session_id"): "treatment_sessions",
+        ("session_coil_runs", "session_id"): "treatment_sessions",
+        ("sensor_samples", "session_id"): "treatment_sessions",
+        ("session_events", "session_id"): "treatment_sessions",
+        ("sensor_run_summary", "coil_run_id"): "session_coil_runs",
+    }
+
+    def export_rows(self) -> Dict[str, List[Dict]]:
+        """Taşınabilir TÜM tabloların satırlarını ham olarak döner (dışa aktarma için).
+
+        `get_session_history`/`get_ai_analyses` limit uyguladığı için taşımada kullanılamaz —
+        sessizce kayıp veriye yol açardı.
+
+        ⚠️ `id` kolonları KORUNUR: içe aktarma ilişkileri onlarla yeniden kurar (bkz. üstteki not).
+        """
+        out: Dict[str, List[Dict]] = {t: [] for t in self._TASINAN_TABLOLAR}
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                mevcut = {r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+                for tablo in self._TASINAN_TABLOLAR:
+                    if tablo not in mevcut:  # çok eski DB — tablo henüz yok
+                        continue
+                    cursor.execute(f"SELECT * FROM {tablo} ORDER BY id ASC")
+                    cols = [c[0] for c in cursor.description]
+                    out[tablo] = [dict(zip(cols, r)) for r in cursor.fetchall()]
+        except Exception:
+            self.logger.exception("Dışa aktarma için satırlar okunamadı.")
+            raise
+        return out
+
+    def import_rows(self, data: Dict[str, List[Dict]], replace: bool = False) -> Dict[str, int]:
+        """Dışa aktarılmış satırları geri yükler — İLİŞKİLERİ KORUYARAK.
+
+        ⚠️ `id` DEĞERLERİ korunmaz (AUTOINCREMENT, hedefte çakışabilir) ama İLİŞKİLER korunur:
+        her tablo eklenirken ESKİ id → YENİ id eşlemesi tutulur ve çocuk satırların
+        `session_id`/`patient_id`/`coil_run_id` kolonları yeniden yazılır. Bu olmadan bir seansın
+        bobin-koşuları/telemetrisi hedefte BAŞKA bir seansa bağlanırdı — hastanın verisi başka
+        hastanın kaydında görünürdü (bkz. `_ILISKILER` üstündeki denetim notu).
+
+        ⚠️ `replace=True` hedefteki TÜM taşınan tabloları SİLER. Varsayılan `False` EKLER —
+        aynı dosyayı iki kez içe aktarmak KAYITLARI ÇOĞALTIR; çağıran (API) bunu boş-hedef
+        kuralıyla engeller.
+
+        GERİYE UYUM: v1 yedekleri yalnız `treatment_sessions` + `ai_analyses` içerir; eksik
+        tablolar boş geçilir, ilişki eşlemesi yine kurulur (o yedeklerde bağlı satır yoktur).
+        """
+        sonuc = {t: 0 for t in self._TASINAN_TABLOLAR}
+        # tablo -> {eski_id: yeni_id}
+        eslem: Dict[str, Dict[Any, int]] = {t: {} for t in self._TASINAN_TABLOLAR}
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if replace:
+                # Çocuktan ebeveyne doğru sil (FK ihlali olmasın).
+                for tablo in reversed(self._TASINAN_TABLOLAR):
+                    try:
+                        cursor.execute(f"DELETE FROM {tablo}")
+                    except Exception:
+                        self.logger.debug("temizlenemedi: %s", tablo, exc_info=True)
+
+            var_olan_tablolar = {
+                r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            }
+
+            for tablo in self._TASINAN_TABLOLAR:
+                satirlar = data.get(tablo) or []
+                if not satirlar or tablo not in var_olan_tablolar:
+                    continue
+                cursor.execute(f"PRAGMA table_info({tablo})")
+                gecerli = {r[1] for r in cursor.fetchall()} - {"id"}
+                # Bu tablonun hangi kolonları hangi tabloya bakıyor?
+                yeniden_bagla = {
+                    kol: hedef for (t, kol), hedef in self._ILISKILER.items() if t == tablo and kol in gecerli
+                }
+                for s in satirlar:
+                    # Hedef şemada OLMAYAN kolonları at (eski/yeni sürüm arası uyum).
+                    alan = {k: v for k, v in s.items() if k in gecerli}
+                    if not alan:
+                        continue
+                    atla = False
+                    for kol, hedef_tablo in yeniden_bagla.items():
+                        eski = alan.get(kol)
+                        if eski is None:
+                            continue  # seansa bağlı olmayan satır (NULL) — normal
+                        yeni = eslem[hedef_tablo].get(eski)
+                        if yeni is None:
+                            # Ebeveyni taşınmamış çocuk satır: SESSİZCE YANLIŞ BAĞLAMAK yerine ATLA.
+                            # Yanlış bağlamak, bir hastanın telemetrisini başka bir hastanın
+                            # kaydında gösterirdi — sessiz ve teşhis edilemez bir tıbbi hata.
+                            self.logger.warning(
+                                "İçe aktarma: %s satırı ebeveyni bulunamadığı için atlandı (%s=%r).", tablo, kol, eski
+                            )
+                            atla = True
+                            break
+                        alan[kol] = yeni
+                    if atla:
+                        continue
+                    ph = ", ".join("?" for _ in alan)
+                    try:
+                        cursor.execute(f"INSERT INTO {tablo} ({', '.join(alan)}) VALUES ({ph})", list(alan.values()))
+                    except Exception:
+                        # UNIQUE çakışması: bu satır hedefte ZATEN VAR (aynı hasta/olay).
+                        #
+                        # ⚠️ Burada "atla ve devam et" demek YETMEZ: eşlemeye giriş yazılmazsa o
+                        # ebeveyne bağlı TÜM çocuk satırlar (seanslar, bobin koşuları, telemetri)
+                        # yukarıdaki "ebeveyni bulunamadı" dalına düşüp SESSİZCE ATILIR. Yani tek
+                        # bir mükerrer hasta, o hastanın bütün geçmişini yok ederdi.
+                        # Doğrusu BİRLEŞTİRMEKtir: mevcut satırın id'sini doğal anahtarla bul ve
+                        # eşlemeye yaz → çocuklar mevcut kayda bağlanır.
+                        mevcut_id = None
+                        dogal = self._DOGAL_ANAHTAR.get(tablo)
+                        if dogal and s.get(dogal) is not None:
+                            try:
+                                r = cursor.execute(f"SELECT id FROM {tablo} WHERE {dogal} = ?", (s[dogal],)).fetchone()
+                                mevcut_id = r[0] if r else None
+                            except Exception:
+                                mevcut_id = None
+                        if mevcut_id is not None and s.get("id") is not None:
+                            eslem[tablo][s["id"]] = mevcut_id
+                            self.logger.info(
+                                "İçe aktarma: %s satırı hedefte zaten var, MEVCUT kayda bağlandı (%s=%r).",
+                                tablo,
+                                dogal,
+                                s[dogal],
+                            )
+                        else:
+                            self.logger.warning("İçe aktarma: %s satırı eklenemedi, atlandı.", tablo, exc_info=True)
+                        continue
+                    if s.get("id") is not None:
+                        eslem[tablo][s["id"]] = cursor.lastrowid
+                    sonuc[tablo] += 1
+            conn.commit()
+        return sonuc
+
+    def delete_ai_analysis(self, analysis_id: int, operator_email: Optional[str] = None) -> bool:
+        """TEK bir AI analiz kaydını siler.
+
+        `operator_email` verilirse yalnız O KİŞİYE ait (veya sahipsiz) kayıt silinir — böylece
+        klinik profili olmayan kullanıcı başkasının kaydını silemez. KVKK silme hakkı için gerekli:
+        kullanıcı kendi kaydını kaldırabilmeli, başkasınınkini kaldıramamalı.
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                if operator_email:
+                    cursor.execute(
+                        "DELETE FROM ai_analyses WHERE id = ? AND "
+                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
+                        (int(analysis_id), operator_email.strip().lower()),
+                    )
+                else:
+                    cursor.execute("DELETE FROM ai_analyses WHERE id = ?", (int(analysis_id),))
+                silindi = cursor.rowcount > 0
+                conn.commit()
+                return silindi
+        except Exception:
+            self.logger.exception("AI analiz kaydı silinemedi (id=%s).", analysis_id)
+            return False
+
+    def clear_ai_analyses(self, operator_email: Optional[str] = None) -> int:
+        """AI analiz geçmişini TOPLU siler; silinen kayıt sayısını döner.
+
+        ⚠️ VACUUM ŞART: `DELETE` satırları yalnız serbest listeye bırakır — hasta adı ve analiz
+        özeti dosyada OKUNABİLİR kalır. `clear_all_patients` ile aynı kural (audit P3).
+        VACUUM tüm dosyayı yeniden yazdığı için silinen kişisel veri gerçekten gider.
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                if operator_email:
+                    op = operator_email.strip().lower()
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM ai_analyses WHERE "
+                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
+                        (op,),
+                    )
+                    n = int(cursor.fetchone()[0] or 0)
+                    cursor.execute(
+                        "DELETE FROM ai_analyses WHERE "
+                        "(operator_email IS NULL OR operator_email = '' OR LOWER(operator_email) = ?)",
+                        (op,),
+                    )
+                else:
+                    cursor.execute("SELECT COUNT(*) FROM ai_analyses")
+                    n = int(cursor.fetchone()[0] or 0)
+                    cursor.execute("DELETE FROM ai_analyses")
+                conn.commit()
+                cursor.execute("VACUUM")
+                return n
+        except Exception:
+            self.logger.exception("AI analiz geçmişi temizlenemedi.")
+            return -1
+
+    def get_ai_analyses(
+        self,
+        limit: int = 50,
+        module_id: Optional[str] = None,
+        patient_name: Optional[str] = None,
+        before_id: Optional[int] = None,
+    ) -> List[Dict]:
         """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination."""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 clauses, params = [], []
                 if module_id:
-                    clauses.append("module_id = ?"); params.append(module_id)
+                    clauses.append("module_id = ?")
+                    params.append(module_id)
                 if patient_name:
-                    clauses.append("patient_name LIKE ?"); params.append(f"%{patient_name}%")
+                    clauses.append("patient_name LIKE ?")
+                    params.append(f"%{patient_name}%")
                 if before_id:
-                    clauses.append("id < ?"); params.append(int(before_id))
+                    clauses.append("id < ?")
+                    params.append(int(before_id))
                 where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
                 params.append(max(1, min(int(limit), 500)))
                 cursor.execute(
                     "SELECT id, created_at, mode, module_id, module_label, patient_name, operator_email, "
-                    "input_type, result_summary, result_detail, confidence "
-                    f"FROM ai_analyses{where} ORDER BY id DESC LIMIT ?", params)
+                    "input_type, result_summary, result_detail, confidence, "
+                    # Hekim değerlendirmesi (2026-08-06) — AI çıktısı öneri, karar hekimin.
+                    "COALESCE(review_status,'') AS review_status, COALESCE(review_note,'') AS review_note, "
+                    "COALESCE(reviewed_by,'') AS reviewed_by, COALESCE(reviewed_at,'') AS reviewed_at "
+                    f"FROM ai_analyses{where} ORDER BY id DESC LIMIT ?",
+                    params,
+                )
                 cols = [c[0] for c in cursor.description]
                 out = []
                 for r in cursor.fetchall():
@@ -1976,11 +2623,17 @@ class TreatmentHistoryDB:
             self.logger.warning(f"AI analiz geçmişi okunamadı: {e}")
             return []
 
-    def enqueue_outbox_message(self, topic: str, payload: str, qos: int = 0,
-                               retain: bool = False, source: str = 'gateway',
-                               correlation_id: Optional[str] = None,
-                               available_at: Optional[float] = None,
-                               idempotency_key: Optional[str] = None) -> Optional[int]:
+    def enqueue_outbox_message(
+        self,
+        topic: str,
+        payload: str,
+        qos: int = 0,
+        retain: bool = False,
+        source: str = 'gateway',
+        correlation_id: Optional[str] = None,
+        available_at: Optional[float] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Optional[int]:
         """Cloud'a gönderilecek mesajı unified outbox tablosuna ekle."""
         try:
             self._ensure_write_guardrail()
@@ -1993,23 +2646,26 @@ class TreatmentHistoryDB:
 
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     INSERT INTO outbox_messages
                     (message_uuid, idempotency_key, topic, payload, qos, retain, status, retry_count,
                      available_at, source, correlation_id, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)
-                ''', (
-                    str(uuid.uuid4()),
-                    derived_key,
-                    topic,
-                    payload,
-                    int(qos),
-                    int(bool(retain)),
-                    ready_at,
-                    source,
-                    correlation_id,
-                    now_ts
-                ))
+                ''',
+                    (
+                        str(uuid.uuid4()),
+                        derived_key,
+                        topic,
+                        payload,
+                        int(qos),
+                        int(bool(retain)),
+                        ready_at,
+                        source,
+                        correlation_id,
+                        now_ts,
+                    ),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except _DB_INTEGRITY:
@@ -2019,10 +2675,7 @@ class TreatmentHistoryDB:
             try:
                 with self._get_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute(
-                        'SELECT id FROM outbox_messages WHERE idempotency_key = ?',
-                        (derived_key,)
-                    )
+                    cursor.execute('SELECT id FROM outbox_messages WHERE idempotency_key = ?', (derived_key,))
                     row = cursor.fetchone()
                     return int(row['id']) if row else None
             except Exception:
@@ -2037,14 +2690,17 @@ class TreatmentHistoryDB:
             now_ts = datetime.now().timestamp()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT id, message_uuid, topic, payload, qos, retain, retry_count,
                            available_at, created_at, source, correlation_id
                     FROM outbox_messages
                     WHERE status = 'pending' AND available_at <= ?
                     ORDER BY created_at ASC
                     LIMIT ?
-                ''', (now_ts, limit))
+                ''',
+                    (now_ts, limit),
+                )
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
         except Exception as e:
@@ -2060,11 +2716,14 @@ class TreatmentHistoryDB:
             sent_at = datetime.now().timestamp()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.executemany('''
+                cursor.executemany(
+                    '''
                     UPDATE outbox_messages
                     SET status = 'sent', sent_at = ?, last_error = NULL
                     WHERE id = ?
-                ''', [(sent_at, int(msg_id)) for msg_id in message_ids])
+                ''',
+                    [(sent_at, int(msg_id)) for msg_id in message_ids],
+                )
                 conn.commit()
         except Exception as e:
             self.logger.error(f"Outbox sent işaretleme hatası: {e}")
@@ -2078,11 +2737,14 @@ class TreatmentHistoryDB:
             now_ts = datetime.now().timestamp()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.executemany('''
+                cursor.executemany(
+                    '''
                     UPDATE outbox_messages
                     SET status = 'in_flight', available_at = ?, last_error = NULL
                     WHERE id = ? AND status = 'pending'
-                ''', [(now_ts, int(msg_id)) for msg_id in message_ids])
+                ''',
+                    [(now_ts, int(msg_id)) for msg_id in message_ids],
+                )
                 conn.commit()
         except Exception as e:
             self.logger.error(f"Outbox in_flight işaretleme hatası: {e}")
@@ -2092,19 +2754,21 @@ class TreatmentHistoryDB:
         """Exponential backoff: 1,2,4,... max 300 saniye."""
         return min(300, max(1, 2 ** max(0, retry_count)))
 
-    def mark_outbox_failed(self, message_id: int, error_text: str, retry_count: int,
-                           max_retry_count: int = 20) -> bool:
+    def mark_outbox_failed(self, message_id: int, error_text: str, retry_count: int, max_retry_count: int = 20) -> bool:
         """Gönderim hatasında retry sayısını ve tekrar deneme zamanını güncelle."""
         try:
             next_retry_at = datetime.now().timestamp() + self._retry_backoff_seconds(retry_count)
             next_status = 'dead' if retry_count >= max_retry_count else 'pending'
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     UPDATE outbox_messages
                     SET status = ?, retry_count = ?, available_at = ?, last_error = ?
                     WHERE id = ?
-                ''', (next_status, int(retry_count), next_retry_at, str(error_text), int(message_id)))
+                ''',
+                    (next_status, int(retry_count), next_retry_at, str(error_text), int(message_id)),
+                )
                 conn.commit()
                 return next_status == 'dead'
         except Exception as e:
@@ -2117,13 +2781,16 @@ class TreatmentHistoryDB:
             cutoff_ts = datetime.now().timestamp() - max(1, int(stale_seconds))
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     UPDATE outbox_messages
                     SET status = 'pending',
                         available_at = ?,
                         last_error = COALESCE(last_error, 'requeued stale in_flight')
                     WHERE status = 'in_flight' AND available_at < ?
-                ''', (datetime.now().timestamp(), cutoff_ts))
+                ''',
+                    (datetime.now().timestamp(), cutoff_ts),
+                )
                 affected = int(cursor.rowcount)
                 conn.commit()
                 return affected
@@ -2166,10 +2833,13 @@ class TreatmentHistoryDB:
             cutoff_ts = datetime.now().timestamp() - (older_than_hours * 3600)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     DELETE FROM outbox_messages
                     WHERE status = 'sent' AND sent_at IS NOT NULL AND sent_at < ?
-                ''', (cutoff_ts,))
+                ''',
+                    (cutoff_ts,),
+                )
                 conn.commit()
         except Exception as e:
             self.logger.warning(f"Outbox temizleme uyarısı: {e}")
@@ -2201,32 +2871,37 @@ class TreatmentHistoryDB:
             rows = []
             now_ts = datetime.now().timestamp()
             for sample in samples:
-                rows.append((
-                    int(session_id),
-                    str(sample.get('coil_id', 'unknown')),
-                    float(sample.get('sample_ts', now_ts)),
-                    sample.get('temperature_c'),
-                    sample.get('magnetic_field_mt'),
-                    sample.get('current_a'),
-                    sample.get('pwm_frequency_hz'),
-                    sample.get('pwm_duty_percent'),
-                    json.dumps(sample.get('payload', {}), ensure_ascii=True),
-                    now_ts,
-                    sample.get('coil_run_id'),
-                    sample.get('ambient_temp_c'),
-                    sample.get('phase'),
-                    sample.get('sample_count')
-                ))
+                rows.append(
+                    (
+                        int(session_id),
+                        str(sample.get('coil_id', 'unknown')),
+                        float(sample.get('sample_ts', now_ts)),
+                        sample.get('temperature_c'),
+                        sample.get('magnetic_field_mt'),
+                        sample.get('current_a'),
+                        sample.get('pwm_frequency_hz'),
+                        sample.get('pwm_duty_percent'),
+                        json.dumps(sample.get('payload', {}), ensure_ascii=True),
+                        now_ts,
+                        sample.get('coil_run_id'),
+                        sample.get('ambient_temp_c'),
+                        sample.get('phase'),
+                        sample.get('sample_count'),
+                    )
+                )
 
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.executemany('''
+                cursor.executemany(
+                    '''
                     INSERT INTO sensor_samples
                     (session_id, coil_id, sample_ts, temperature_c, magnetic_field_mt,
                      current_a, pwm_frequency_hz, pwm_duty_percent, payload, created_at,
                      coil_run_id, ambient_temp_c, phase, sample_count)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', rows)
+                ''',
+                    rows,
+                )
                 conn.commit()
                 return len(rows)
         except Exception as e:
@@ -2238,7 +2913,10 @@ class TreatmentHistoryDB:
             # Kayip miktarini GORUNUR yap: sessiz kayip en kotu turden veri kaybidir.
             self.logger.error(
                 "Sensor sample batch kaydetme hatasi (session_id=%s): %s — %d ORNEK YAZILAMADI.",
-                session_id, e, len(samples or []))
+                session_id,
+                e,
+                len(samples or []),
+            )
             return 0
 
     def upsert_patient(self, patient: Dict) -> Optional[int]:
@@ -2270,10 +2948,7 @@ class TreatmentHistoryDB:
 
                 existing_id = None
                 if patient_uuid:
-                    cursor.execute(
-                        'SELECT id FROM patients WHERE patient_uuid = ?',
-                        (patient_uuid,)
-                    )
+                    cursor.execute('SELECT id FROM patients WHERE patient_uuid = ?', (patient_uuid,))
                     row = cursor.fetchone()
                     if row:
                         existing_id = int(row['id'])
@@ -2281,22 +2956,20 @@ class TreatmentHistoryDB:
                     # name (+ owner_name) ile eslestir
                     if owner_name is not None:
                         cursor.execute(
-                            'SELECT id FROM patients WHERE name = ? AND IFNULL(owner_name, "") = ? '
-                            'ORDER BY id LIMIT 1',
-                            (name, owner_name)
+                            'SELECT id FROM patients WHERE name = ? AND IFNULL(owner_name, "") = ? ORDER BY id LIMIT 1',
+                            (name, owner_name),
                         )
                     else:
                         cursor.execute(
-                            'SELECT id FROM patients WHERE name = ? AND owner_name IS NULL '
-                            'ORDER BY id LIMIT 1',
-                            (name,)
+                            'SELECT id FROM patients WHERE name = ? AND owner_name IS NULL ORDER BY id LIMIT 1', (name,)
                         )
                     row = cursor.fetchone()
                     if row:
                         existing_id = int(row['id'])
 
                 if existing_id is not None:
-                    cursor.execute('''
+                    cursor.execute(
+                        '''
                         UPDATE patients SET
                             patient_uuid = COALESCE(?, patient_uuid),
                             name = ?,
@@ -2312,7 +2985,34 @@ class TreatmentHistoryDB:
                             updated_at = ?,
                             sync_status = 0
                         WHERE id = ?
-                    ''', (
+                    ''',
+                        (
+                            patient_uuid,
+                            name,
+                            patient.get('species'),
+                            patient.get('breed'),
+                            patient.get('age'),
+                            patient.get('weight_kg'),
+                            owner_name,
+                            _owner_email,
+                            _vet_contact,
+                            _veteriner,
+                            _notes,
+                            now_iso,
+                            existing_id,
+                        ),
+                    )
+                    conn.commit()
+                    return existing_id
+
+                cursor.execute(
+                    '''
+                    INSERT INTO patients
+                    (patient_uuid, name, species, breed, age, weight_kg, owner_name,
+                     owner_email, vet_contact, veteriner, notes, updated_at, sync_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                ''',
+                    (
                         patient_uuid,
                         name,
                         patient.get('species'),
@@ -2325,43 +3025,26 @@ class TreatmentHistoryDB:
                         _veteriner,
                         _notes,
                         now_iso,
-                        existing_id
-                    ))
-                    conn.commit()
-                    return existing_id
-
-                cursor.execute('''
-                    INSERT INTO patients
-                    (patient_uuid, name, species, breed, age, weight_kg, owner_name,
-                     owner_email, vet_contact, veteriner, notes, updated_at, sync_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                ''', (
-                    patient_uuid,
-                    name,
-                    patient.get('species'),
-                    patient.get('breed'),
-                    patient.get('age'),
-                    patient.get('weight_kg'),
-                    owner_name,
-                    _owner_email,
-                    _vet_contact,
-                    _veteriner,
-                    _notes,
-                    now_iso
-                ))
+                    ),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except Exception as e:
             self.logger.error(f"Hasta upsert hatası: {e}")
             return None
 
-    def start_coil_run(self, session_id: Optional[int], coil_id: int, *,
-                       frequency_hz: Optional[float] = None,
-                       duty_percent: Optional[float] = None,
-                       phase: Optional[float] = None,
-                       intensity_mt: Optional[float] = None,
-                       hw_type: Optional[str] = None,
-                       started_epoch: float) -> Optional[int]:
+    def start_coil_run(
+        self,
+        session_id: Optional[int],
+        coil_id: int,
+        *,
+        frequency_hz: Optional[float] = None,
+        duty_percent: Optional[float] = None,
+        phase: Optional[float] = None,
+        intensity_mt: Optional[float] = None,
+        hw_type: Optional[str] = None,
+        started_epoch: float,
+    ) -> Optional[int]:
         """Bir bobinin calismaya basladigini kaydet. created_at=started_epoch.
         Geri donus: run_id (int) veya hata halinde None."""
         try:
@@ -2369,22 +3052,25 @@ class TreatmentHistoryDB:
             started = float(started_epoch)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     INSERT INTO session_coil_runs
                     (session_id, coil_id, started_epoch, ended_epoch, duration_seconds,
                      frequency_hz, duty_percent, phase, intensity_mt, hw_type, created_at)
                     VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    session_id,
-                    int(coil_id),
-                    started,
-                    frequency_hz,
-                    duty_percent,
-                    phase,
-                    intensity_mt,
-                    hw_type,
-                    started
-                ))
+                ''',
+                    (
+                        session_id,
+                        int(coil_id),
+                        started,
+                        frequency_hz,
+                        duty_percent,
+                        phase,
+                        intensity_mt,
+                        hw_type,
+                        started,
+                    ),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except Exception as e:
@@ -2399,27 +3085,35 @@ class TreatmentHistoryDB:
             ended = float(ended_epoch)
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    'SELECT started_epoch FROM session_coil_runs WHERE id = ?',
-                    (int(run_id),)
-                )
+                cursor.execute('SELECT started_epoch FROM session_coil_runs WHERE id = ?', (int(run_id),))
                 row = cursor.fetchone()
                 if not row or row['started_epoch'] is None:
                     self.logger.warning(f"end_coil_run: run_id {run_id} bulunamadi/started_epoch yok")
                     return
                 started = float(row['started_epoch'])
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     UPDATE session_coil_runs
                     SET ended_epoch = ?, duration_seconds = ?
                     WHERE id = ?
-                ''', (ended, ended - started, int(run_id)))
+                ''',
+                    (ended, ended - started, int(run_id)),
+                )
                 conn.commit()
         except Exception as e:
             self.logger.error(f"Coil run bitirme hatası: {e}")
 
-    def add_sensor_run_summary(self, coil_run_id: int, *, sample_count=None,
-                               temp_min=None, temp_max=None, temp_avg=None,
-                               current_avg=None, field_avg=None) -> None:
+    def add_sensor_run_summary(
+        self,
+        coil_run_id: int,
+        *,
+        sample_count=None,
+        temp_min=None,
+        temp_max=None,
+        temp_avg=None,
+        current_avg=None,
+        field_avg=None,
+    ) -> None:
         """Bir bobin calismasinin sensor ozet istatistigini kaydet.
         coil_run_id UNIQUE oldugu icin INSERT OR REPLACE kullanilir (yeniden hesapta uzerine yazar)."""
         try:
@@ -2427,21 +3121,15 @@ class TreatmentHistoryDB:
             now_ts = datetime.now().timestamp()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     INSERT OR REPLACE INTO sensor_run_summary
                     (coil_run_id, sample_count, temp_min, temp_max, temp_avg,
                      current_avg, field_avg, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    int(coil_run_id),
-                    sample_count,
-                    temp_min,
-                    temp_max,
-                    temp_avg,
-                    current_avg,
-                    field_avg,
-                    now_ts
-                ))
+                ''',
+                    (int(coil_run_id), sample_count, temp_min, temp_max, temp_avg, current_avg, field_avg, now_ts),
+                )
                 conn.commit()
         except Exception as e:
             self.logger.error(f"Sensor run summary kaydetme hatası: {e}")
@@ -2454,11 +3142,14 @@ class TreatmentHistoryDB:
             self._ensure_write_guardrail()
             sets, params = [], []
             if started_epoch is not None:
-                sets.append('started_epoch = ?'); params.append(float(started_epoch))
+                sets.append('started_epoch = ?')
+                params.append(float(started_epoch))
             if ended_epoch is not None:
-                sets.append('ended_epoch = ?'); params.append(float(ended_epoch))
+                sets.append('ended_epoch = ?')
+                params.append(float(ended_epoch))
             if patient_id is not None:
-                sets.append('patient_id = ?'); params.append(int(patient_id))
+                sets.append('patient_id = ?')
+                params.append(int(patient_id))
             if not sets:
                 return
             params.append(int(session_id))
@@ -2468,8 +3159,9 @@ class TreatmentHistoryDB:
         except Exception as e:
             self.logger.error(f"set_session_meta hatası: {e}")
 
-    def set_session_parameter(self, session_id, parameter_name: str,
-                              parameter_value: str, parameter_unit: str = '') -> None:
+    def set_session_parameter(
+        self, session_id, parameter_name: str, parameter_value: str, parameter_unit: str = ''
+    ) -> None:
         """Seansa tek bir parametre yaz (varsa GUNCELLE, yoksa EKLE) — idempotent.
         React seans-akisinda hasta meta-parametrelerini (orn. patient_owner_email)
         kaydetmek icin. Best-effort: hata seansi/donanimi DURDURMAZ."""
@@ -2485,14 +3177,14 @@ class TreatmentHistoryDB:
                 cursor.execute(
                     'UPDATE session_parameters SET parameter_value = ?, parameter_unit = ? '
                     'WHERE session_id = ? AND parameter_name = ?',
-                    (_pv, parameter_unit, int(session_id), parameter_name)
+                    (_pv, parameter_unit, int(session_id), parameter_name),
                 )
                 if cursor.rowcount == 0:
                     cursor.execute(
                         'INSERT INTO session_parameters '
                         '(session_id, parameter_name, parameter_value, parameter_unit) '
                         'VALUES (?, ?, ?, ?)',
-                        (int(session_id), parameter_name, _pv, parameter_unit)
+                        (int(session_id), parameter_name, _pv, parameter_unit),
                     )
                 conn.commit()
         except Exception as e:
@@ -2504,14 +3196,17 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT id, session_id, coil_id, started_epoch, ended_epoch,
                            duration_seconds, frequency_hz, duty_percent, phase,
                            intensity_mt, hw_type, created_at
                     FROM session_coil_runs
                     WHERE session_id = ?
                     ORDER BY started_epoch ASC
-                ''', (session_id,))
+                ''',
+                    (session_id,),
+                )
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
         except _DB_ERROR as e:
@@ -2528,13 +3223,16 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT s.coil_run_id, s.sample_count, s.temp_min, s.temp_max,
                            s.temp_avg, s.current_avg, s.field_avg
                     FROM sensor_run_summary s
                     JOIN session_coil_runs r ON r.id = s.coil_run_id
                     WHERE r.session_id = ?
-                ''', (session_id,))
+                ''',
+                    (session_id,),
+                )
                 rows = cursor.fetchall()
                 summaries = {}
                 for row in rows:
@@ -2560,14 +3258,17 @@ class TreatmentHistoryDB:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    '''
                     SELECT coil_id, sample_ts, temperature_c, ambient_temp_c,
                            current_a, magnetic_field_mt, pwm_frequency_hz,
                            pwm_duty_percent, coil_run_id, sample_count
                     FROM sensor_samples
                     WHERE session_id = ?
                     ORDER BY sample_ts ASC
-                ''', (session_id,))
+                ''',
+                    (session_id,),
+                )
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
         except _DB_ERROR as e:
@@ -2578,6 +3279,7 @@ class TreatmentHistoryDB:
 # Singleton instance
 _treatment_db_instance = None
 _treatment_db_lock = threading.Lock()
+
 
 def get_treatment_db(app_data_dir):
     """Tedavi geçmişi veritabanı singleton instance'ını getir"""

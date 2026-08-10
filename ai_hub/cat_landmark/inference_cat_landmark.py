@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """
 inference_cat_landmark.py — Kedi Yuz Landmark + FGS Agri Skorlamasi
 ===================================================================

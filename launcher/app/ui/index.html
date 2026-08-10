@@ -178,6 +178,40 @@
       .link.danger:hover { color: var(--err); }
       .link .icon { width: 15px; height: 15px; }
 
+      /* ---------- Giriş formu ---------- */
+      /* body'de `user-select: none` var → INPUT'larda metin seçimi/kopyala-yapıştır ÇALIŞMAZDI. */
+      .form { display: flex; flex-direction: column; gap: 11px; margin: 0 auto 18px; text-align: left; max-width: 420px; }
+      .field { display: flex; flex-direction: column; gap: 5px; }
+      .field label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+      .field input {
+        padding: 12px 14px; border-radius: 11px; font: inherit; color: var(--fg);
+        background: var(--surface); border: 1px solid var(--line); outline: none;
+        -webkit-user-select: text; user-select: text; transition: border-color 0.15s;
+      }
+      .field input:focus { border-color: var(--teal); }
+      .remember { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); cursor: pointer; }
+      .remember input { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
+      .remember.off { opacity: 0.45; cursor: default; }
+      .authbox {
+        display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 12px; border-radius: 999px;
+        border: 1px solid var(--line2); background: var(--surface); font-size: 12px; color: var(--muted);
+        max-width: 250px;
+      }
+      .authbox .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .authbox .hbtn { padding: 5px 9px; }
+      .ver.off { border-color: rgba(255, 107, 96, 0.4); color: var(--err); }
+      .ver.off .dot { background: var(--err); box-shadow: 0 0 8px var(--err); }
+      /* Çevrimdışı bilgi kutusu — hata DEĞİL (turuncu/nötr), kullanıcıyı korkutmasın. */
+      #notice {
+        margin: 16px auto 0; max-width: 460px; text-align: left;
+        padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line2);
+        background: var(--surface); color: var(--muted); font-size: 12.5px;
+      }
+      #notice .nbtn { margin-top: 10px; display: inline-flex; align-items: center; gap: 7px;
+        padding: 8px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 650;
+        color: var(--fg); border: 1px solid var(--line2); background: var(--surface2); }
+      #notice .nbtn:hover { border-color: var(--muted2); }
+
       /* progress */
       .pct { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; margin: 2px 0 12px;
         color: var(--teal-l); font-variant-numeric: tabular-nums; min-height: 50px; }
@@ -292,6 +326,27 @@
       .gtip .icon { width: 15px; height: 15px; color: var(--teal); flex: none; margin-top: 2px; }
       .gtip b { color: var(--fg); font-weight: 600; }
 
+      /* DENETİM 2026-08-06 (ÇALIŞTIRARAK bulundu — 1342px pencerede görüldü): giriş özelliğiyle
+         header'a e-posta çipi + "Çıkış" eklendi (~250px). `.brand` küçülemediği ve tek kırılma
+         noktası 680px olduğu için `.header-actions` markanın ÜSTÜNE BİNİYOR ("Web Sitesi" iki
+         satıra kırılıp alt başlığı eziyordu). Marka artık küçülebilir, aksiyonlar küçülmez,
+         e-posta kırpılır ve kırılma noktası çipin gerçek genişliğine göre yükseltildi. */
+      header { flex-wrap: nowrap; }
+      .brand { flex: 1 1 auto; overflow: hidden; }
+      .brand h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .header-actions { flex: 0 0 auto; flex-wrap: nowrap; min-width: 0; }
+      #auth-email {
+        max-width: 190px; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; display: inline-block; vertical-align: middle;
+      }
+      @media (max-width: 1180px) {
+        /* Giriş yapılmışken çip yer kapladığı için alt başlık ve buton etiketleri ÖNCE gider. */
+        .brand p { display: none; }
+      }
+      @media (max-width: 1040px) {
+        .hbtn span { display: none; }
+        #auth-email { max-width: 120px; }
+      }
       @media (max-width: 680px) {
         .brand p { display: none; }
         .hbtn span { display: none; }
@@ -312,7 +367,7 @@
         </span>
         <div>
           <h1>PEMF Vet</h1>
-          <p id="tagline">Veteriner PEMF tedavi + yapay zekâ teşhis platformu</p>
+          <p id="tagline">Veteriner PEMF seans + yapay zekâ teşhis platformu</p>
         </div>
       </div>
       <div class="header-actions">
@@ -332,6 +387,15 @@
           <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
           <span id="t-about">Hakkında</span>
         </button>
+        <!-- Giriş yapılınca: e-posta + Çıkış. Jeton ASLA gösterilmez (sözleşme). -->
+        <span class="authbox" id="auth-box" hidden>
+          <span class="who" id="auth-email">—</span>
+          <button class="hbtn" id="btn-logout">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M15 16l4-4-4-4M19 12H9M11 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+            <span id="t-logout">Çıkış</span>
+          </button>
+        </span>
+        <span class="ver off" id="offline-badge" hidden><span class="dot"></span><span id="t-offline">Çevrimdışı</span></span>
         <span class="ver"><span class="dot"></span><span id="ver">v—</span></span>
       </div>
     </header>
@@ -343,6 +407,39 @@
         <section id="s-detect">
           <div class="spinner"></div>
           <p class="lead" id="t-detect">Ortam algılanıyor…</p>
+        </section>
+
+        <!-- login (Supabase) — boot'un EN BAŞINDA gösterilir; oturum varsa hiç görünmez -->
+        <section id="s-login" hidden>
+          <h2 class="title" id="t-login-title">Giriş yapın</h2>
+          <p class="lead" id="t-login-lead">PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.</p>
+          <div class="form">
+            <div class="field">
+              <label for="login-email" id="t-login-email">E-posta</label>
+              <input id="login-email" type="email" autocomplete="username" spellcheck="false" autocapitalize="off" />
+            </div>
+            <div class="field">
+              <label for="login-pass" id="t-login-pass">Parola</label>
+              <input id="login-pass" type="password" autocomplete="current-password" />
+            </div>
+            <label class="remember" id="remember-wrap">
+              <input type="checkbox" id="login-remember" />
+              <span id="t-login-remember">Beni hatırla</span>
+            </label>
+          </div>
+          <button class="btn big" id="btn-login">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>
+            <span id="t-login-btn">Giriş yap</span>
+          </button>
+          <div class="subactions">
+            <button class="link" id="btn-forgot"><span id="t-login-forgot">Şifremi unuttum</span></button>
+            <button class="link" id="btn-signup"><span id="t-login-signup">Hesap oluştur</span></button>
+            <!-- ⚠️ TIBBİ ERİŞİLEBİLİRLİK: internet yokken KURULU cihaz açılabilmeli (bkz. JS notu). -->
+            <button class="link" id="btn-offline-start" hidden>
+              <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13l11-6.5z"/></svg>
+              <span id="t-login-offline-start">Çevrimdışı başlat</span>
+            </button>
+          </div>
         </section>
 
         <!-- profile selection (multi-select) -->
@@ -408,6 +505,7 @@
           </div>
         </section>
 
+        <div id="notice" hidden></div>
         <div id="error" hidden></div>
       </div>
     </main>
@@ -416,7 +514,7 @@
     <footer>
       <span class="brandmini">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
-        © V-PEMF Technologies
+        © İBİA Teknoloji Ltd. Şti.
       </span>
       <span class="mid">
         <a id="foot-support"><span id="t-foot-support">Destek</span></a>
@@ -473,8 +571,8 @@
       // ---------- i18n ----------
       const I18N = {
         tr: {
-          tagline: "Veteriner PEMF tedavi + yapay zekâ teşhis platformu",
-          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…",
+          tagline: "Veteriner PEMF seans + yapay zekâ teşhis platformu",
+          web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
           selTitle: "Kullanım profilinizi seçin",
           selLead: "Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.",
           install: "Kur ve Başlat", selCancel: "Geri dön",
@@ -487,12 +585,24 @@
           readyTitle: "Hazır!",
           readyLead: "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
           start: "Başlat", change: "Profilleri değiştir", repair: "Onar", uninstall: "Uygulamayı kaldır",
+          backToApp: "Uygulamaya dön", runningLead: "PEMF Vet çalışıyor. Uygulama penceresini kapatırsanız buradan yeniden başlatabilirsiniz.",
           footWeb: "Web Sitesi", footSupport: "Destek", ok: "Tamam", cancel: "Vazgeç", cont: "Devam",
           aboutTitle: "PEMF Vet hakkında",
           aboutBody: "Hafif client. Seçtiğiniz kullanım profillerini indirir, SHA-256 ile doğrular, kurar ve uygulamayı tarayıcıda açar. Cihazınızdaki aynı ağda bulunan PEMF donanımına otomatik bağlanır.",
           aboutVer: "Sürüm", aboutPlat: "Platform",
           repairTitle: "Kurulumu onar", repairBody: "Kurulu paketler yeniden doğrulanıp eksik/bozuk dosyalar onarılacak. Bu birkaç dakika sürebilir. Devam edilsin mi?",
-          uninTitle: "Uygulamayı kaldır", uninBody: "İndirilen uygulama ve AI modelleri silinecek (hasta verileriniz KORUNUR). Daha sonra tekrar kurabilirsiniz. Devam edilsin mi?",
+          // ⚠️ KVKK AÇIKLIĞI (2026-08-08): eski metin yalnız "hasta verileriniz KORUNUR" diyordu.
+          // Kullanıcı NEYİN korunduğunu, NEREDE durduğunu ve nasıl silineceğini bilmiyordu; ayrıca
+          // kurulum sihirbazındaki "uygulama verisini sil" kutusu tıbbi veriyi SİLMEZ (yalnız
+          // indirilenleri) — bu da yanlış güvence veriyordu. Artık üçü de açıkça yazıyor.
+          uninTitle: "Uygulamayı kaldır",
+          uninBody: "İndirilen uygulama ve AI modelleri silinecek.\n\n" +
+                    "KORUNAN VERİLER (tıbbi kayıt — kaldırma ile SİLİNMEZ):\n" +
+                    "• Hasta kayıtları\n• Seans geçmişi\n• AI analiz geçmişi\n" +
+                    "Konum: %APPDATA%\\PEMF_GUI\n\n" +
+                    "Bunları da silmek istiyorsanız KALDIRMADAN ÖNCE uygulama içinden silin " +
+                    "(Hastalar → \"Tümünü Sil\", AI Geçmişi → \"Geçmişi Sil\").\n\n" +
+                    "Devam edilsin mi?",
           notInstalled: "Uygulama kurulu değil.",
           dl: "indiriliyor", verifying: "bütünlük doğrulanıyor", extracting: "kuruluyor",
           reconnecting: "bağlantı koptu, yeniden deneniyor", reconnTitle: "Yeniden bağlanılıyor…",
@@ -500,10 +610,35 @@
           notSupported: (p) => `Bu platform (${p}) için uygulama paketi henüz yayınlanmadı.`,
           updatingTitle: "Client güncelleniyor…", updatingLead: "Yeni bir client sürümü bulundu — indirilip kuruluyor. Uygulama otomatik yeniden başlayacak.",
           updatingApply: "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
+          rtTitle: "Uygulama güncelleniyor…",
+          rtLead: "Yeni bir uygulama sürümü bulundu — indirilip kuruluyor. Bittiğinde başlatabilirsiniz.",
+          rtDone: "Uygulama güncellendi.",
+          rtBusy: "Seans sürerken güncelleme yapılmaz — seans bitince otomatik güncellenecek.",
+          rtBg: "Yeni sürüm arka planda indiriliyor — uygulamayı şimdi kullanabilirsiniz, güncelleme bir sonraki açılışta kurulacak.",
+          rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
+          rtRollbackFail: "Yeni sürüm açılamadı ve geri alma tamamlanamadı. Lütfen \"Onar\" ile kurulumu yenileyin.",
+          // ── Giriş (Supabase) ──
+          loginTitle: "Giriş yapın",
+          loginLead: "PEMF Vet hesabınızla giriş yapın — uygulama sizden bir daha giriş istemeyecek.",
+          loginEmail: "E-posta", loginPass: "Parola", loginRemember: "Beni hatırla",
+          loginBtn: "Giriş yap", loginWait: "Giriş yapılıyor…",
+          loginForgot: "Şifremi unuttum", loginSignup: "Hesap oluştur",
+          loginNoPersist: "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
+          loginEmpty: "E-posta ve parola gerekli.",
+          loginRequired: "Kurulum ve onarım için giriş yapmalısınız.",
+          logout: "Çıkış", logoutTitle: "Çıkış yap",
+          logoutBody: "Bu bilgisayardaki oturumunuz silinecek ve uygulamadaki giriş kapatılacak. Devam edilsin mi?",
+          offlineStart: "Çevrimdışı başlat",
+          // ── Çevrimdışı ──
+          offline: "Çevrimdışı",
+          offlineReady: "İnternet bağlantısı yok — güncelleme kontrolü ve profil listesi alınamadı. Kurulu uygulamayı yine de başlatabilirsiniz.",
+          offlineSelect: "İnternet bağlantısı yok; kurulum için bağlantı gerekli. Bağlantıyı kontrol edip tekrar deneyin.",
+          offlineLogin: "İnternet bağlantısı yok — giriş yapılamıyor. Kurulu uygulamayı çevrimdışı başlatabilirsiniz.",
+          retry: "Tekrar dene",
         },
         en: {
-          tagline: "Veterinary PEMF therapy + AI diagnostics platform",
-          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…",
+          tagline: "Veterinary PEMF session + AI diagnostics platform",
+          web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
           selTitle: "Choose your usage profile",
           selLead: "You can select multiple profiles — only the ones you pick are downloaded.",
           install: "Install & Start", selCancel: "Back",
@@ -516,12 +651,20 @@
           readyTitle: "Ready!",
           readyLead: "PEMF Vet is installed. Start the app or update your profiles.",
           start: "Start", change: "Change profiles", repair: "Repair", uninstall: "Uninstall",
+          backToApp: "Back to app", runningLead: "PEMF Vet is running. If you close the app window you can start it again from here.",
           footWeb: "Website", footSupport: "Support", ok: "OK", cancel: "Cancel", cont: "Continue",
           aboutTitle: "About PEMF Vet",
           aboutBody: "Lightweight client. It downloads your selected usage profiles, verifies them with SHA-256, installs, and opens the app in your browser. It auto-connects to PEMF hardware on the same network.",
           aboutVer: "Version", aboutPlat: "Platform",
           repairTitle: "Repair installation", repairBody: "Installed packages will be re-verified and missing/corrupt files repaired. This may take a few minutes. Continue?",
-          uninTitle: "Uninstall app", uninBody: "The downloaded app and AI models will be removed (your patient data is KEPT). You can reinstall later. Continue?",
+          uninTitle: "Uninstall app",
+          uninBody: "The downloaded app and AI models will be removed.\n\n" +
+                    "DATA THAT IS KEPT (medical records — NOT deleted by uninstall):\n" +
+                    "• Patient records\n• Session history\n• AI analysis history\n" +
+                    "Location: %APPDATA%\\PEMF_GUI\n\n" +
+                    "If you also want these deleted, delete them from inside the app BEFORE " +
+                    "uninstalling (Patients → \"Delete All\", AI History → \"Delete History\").\n\n" +
+                    "Continue?",
           notInstalled: "App is not installed.",
           dl: "downloading", verifying: "verifying integrity", extracting: "installing",
           reconnecting: "connection lost, retrying", reconnTitle: "Reconnecting…",
@@ -529,11 +672,36 @@
           notSupported: (p) => `The package for this platform (${p}) is not published yet.`,
           updatingTitle: "Updating client…", updatingLead: "A new client version was found — downloading and installing. The app will restart automatically.",
           updatingApply: "Applying update, restarting the app…",
+          rtTitle: "Updating app…",
+          rtLead: "A new app version was found — downloading and installing. You can start it when this finishes.",
+          rtDone: "App updated.",
+          rtBusy: "Updates are not applied during a session — it will update automatically once the session ends.",
+          rtBg: "A new version is downloading in the background — you can use the app now; it will be installed on the next launch.",
+          rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
+          rtRollbackFail: "The new version failed to start and the rollback could not finish. Please use \"Repair\" to reinstall.",
+          // ── Sign in (Supabase) ──
+          loginTitle: "Sign in",
+          loginLead: "Sign in with your PEMF Vet account — the app won't ask you again.",
+          loginEmail: "Email", loginPass: "Password", loginRemember: "Remember me",
+          loginBtn: "Sign in", loginWait: "Signing in…",
+          loginForgot: "Forgot password", loginSignup: "Create account",
+          loginNoPersist: "This platform can't store the session securely — sign-in applies to this launch only.",
+          loginEmpty: "Email and password are required.",
+          loginRequired: "Sign in to install or repair.",
+          logout: "Sign out", logoutTitle: "Sign out",
+          logoutBody: "Your session on this computer will be removed and the app will be signed out. Continue?",
+          offlineStart: "Start offline",
+          // ── Offline ──
+          offline: "Offline",
+          offlineReady: "No internet connection — update check and profile list unavailable. You can still start the installed app.",
+          offlineSelect: "No internet connection; installation requires one. Check your connection and try again.",
+          offlineLogin: "No internet connection — sign-in unavailable. You can start the installed app offline.",
+          retry: "Retry",
         },
       };
       const PROFILE_META = {
         home:     { tr: ["Ev Sahibi", "Kedi teşhis modelleri — hastalık, organ, görüntü, ses"], en: ["Pet Owner", "Feline diagnostic models — disease, organ, imaging, sound"], icon: "M4 11l8-7 8 7M6 10v9h12v-9" },
-        vet:      { tr: ["Veteriner Hekim", "Klinik teşhis + tedavi (em_kedi, termal)"], en: ["Veterinarian", "Clinical diagnosis + therapy (em_kedi, thermal)"], icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
+        vet:      { tr: ["Veteriner Hekim", "Klinik teşhis + seans (em_kedi, termal)"], en: ["Veterinarian", "Clinical diagnosis + session (em_kedi, thermal)"], icon: "M12 3v18M3 12h18M8 7l8 10M16 7 8 17" },
         research: { tr: ["Araştırma Modu", "Araştırma modelleri — petri, histopatoloji, böbrek, fantom"], en: ["Research Mode", "Research models — petri, histopathology, kidney, phantom"], icon: "M9 3v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M9 3h6" },
       };
       // Profil BAĞIMLILIKLARI (nested-delta paketleme): "vet" klinik AI'ı home'daki teşhis
@@ -554,7 +722,7 @@
       // ---------- Kullanım Kılavuzu içeriği (görsel, adım-adım, 3 profil) ----------
       const GUIDE = {
         tr: {
-          intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile tedavi sağlayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
+          intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
           stepsTitle: "Kurulum — 3 adım",
           steps: [
             ["Profil(ler)inizi seçin", "Aşağıdaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her birinin indirme boyutu kartının sağında yazar."],
@@ -564,10 +732,10 @@
           profTitle: "3 Profil — hangisi sizin için?",
           profiles: [
             { key: "home", who: "Evcil hayvan (kedi) sahipleri için",
-              does: "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya tedavi İÇERMEZ.",
+              does: "Kedinizin kamera görüntüsüyle yapay zekâ ön-teşhisi yapar: hastalık, organ, görüntü ve ses analizi. Cihaz veya seans İÇERMEZ.",
               use: ["Uygulama açılınca ‘Ev Sahibi’ profilini seçip hesabınızla girin.", "‘Akıllı Teşhis’ ekranına gidin.", "Kameranızı kediye doğrultun ya da bir fotoğraf/ses dosyası yükleyin.", "Sonucu ve önerileri okuyun — kesin tanı için mutlaka bir veteriner hekime danışın."] },
             { key: "vet", who: "Veteriner hekimler ve klinikler için",
-              does: "Teşhis + PEMF cihazıyla tedavi + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
+              does: "Teşhis + PEMF cihazıyla seans uygulama + hasta kaydı, seans geçmişi, sensör takibi, KPI paneli ve simülatör. Ev Sahibi teşhis modellerini de içerir (bu yüzden boyutu daha büyüktür).",
               use: ["‘Veteriner Hekim’ profilini seçip girin.", "‘Hastalar’ ekranından yeni hasta ekleyin.", "‘Kontrol’ ekranından seansı başlatın; bobinleri elle ayarlayın veya ‘AI Pro’ ile otonom sürün.", "‘Sensörler’ ve ‘Geçmiş’ ile seansı izleyin; ‘KPI’ ile klinik istatistiklerinizi görün."] },
             { key: "research", who: "Araştırmacılar ve laboratuvarlar için",
               does: "Petri, histopatoloji, böbrek ve fantom yapay zekâ modelleri; örnek/veri kaydı ve geçmiş. Cihaz İÇERMEZ.",
@@ -584,7 +752,7 @@
           ],
         },
         en: {
-          intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) therapy in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
+          intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
           stepsTitle: "Installation — 3 steps",
           steps: [
             ["Choose your profile(s)", "Tick at least one of the 3 profiles below (Pet Owner, Veterinarian, Research). You can pick several; each card shows its download size on the right."],
@@ -594,10 +762,10 @@
           profTitle: "3 Profiles — which one is for you?",
           profiles: [
             { key: "home", who: "For pet (cat) owners",
-              does: "Runs AI pre-diagnosis from your cat's camera image: disease, organ, imaging and sound analysis. Does NOT include a device or therapy.",
+              does: "Runs AI pre-diagnosis from your cat's camera image: disease, organ, imaging and sound analysis. Does NOT include a device or session.",
               use: ["When the app opens, choose ‘Pet Owner’ and sign in.", "Go to the ‘Smart Diagnosis’ screen.", "Point your camera at the cat or upload a photo/sound file.", "Read the result and suggestions — always consult a veterinarian for a definitive diagnosis."] },
             { key: "vet", who: "For veterinarians and clinics",
-              does: "Diagnosis + PEMF device therapy + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
+              does: "Diagnosis + PEMF device sessions + patient records, session history, sensor tracking, KPI panel and simulator. Also includes the Pet Owner diagnostic models (hence the larger size).",
               use: ["Choose ‘Veterinarian’ and sign in.", "Add a new patient from ‘Patients’.", "Start a session from ‘Control’; adjust coils manually or run autonomously with ‘AI Pro’.", "Track the session via ‘Sensors’ and ‘History’; see clinic stats in ‘KPI’."] },
             { key: "research", who: "For researchers and laboratories",
               does: "Petri, histopathology, kidney and phantom AI models; sample/data records and history. Does NOT include a device.",
@@ -670,6 +838,13 @@
       const selected = new Set();     // seçim (select ekranı)
       let ver = "—", platform = "—", pkgVersion = "—";
       let busy = false;
+      // ---------- giriş durumu (Supabase) ----------
+      let authed = false;      // client oturumu geçerli mi (bellek ya da "Beni hatırla")
+      let authEmail = "";
+      let netOffline = false;  // sunucuya ulaşılamıyor (rozet + bilgi kutusu)
+      // "Beni hatırla" ancak işletim sistemi korumalı depo varsa anlamlı (Windows=DPAPI).
+      // Yoksa kutucuk devre dışı bırakılıp SEBEBİ yazılır — var olmayan bir kalıcılık vaat etme.
+      let persistAvailable = true;
       let lastProfiles = [];   // duraklat→devam için son kurulum seçimi
       let resumeOp = null;     // "Devam Et" hangi işlemi sürdürecek (kurulum mu onarım mı)
 
@@ -697,14 +872,110 @@
         $("btn-pause").hidden = true; $("btn-resume").hidden = true; $("btn-cancel").hidden = true;
       }
 
+      const SCREENS = ["s-detect", "s-login", "s-select", "s-install", "s-ready"];
       function show(id) {
-        for (const s of ["s-detect", "s-select", "s-install", "s-ready"]) $(s).hidden = (s !== id);
+        for (const s of SCREENS) $(s).hidden = (s !== id);
       }
+      /** Şu an görünen ekran (arka plandaki manifest işi kullanıcının ekranını ÇALMASIN diye). */
+      function curScreen() { return SCREENS.find((s) => !$(s).hidden) || null; }
       function fail(msg) {
         $("error").textContent = String(msg);
         $("error").hidden = false;
       }
       function clearErr() { $("error").hidden = true; }
+
+      /** Çevrimdışı bilgi kutusu — HATA DEĞİL. İsteğe bağlı "Tekrar dene" düğmesi taşır. */
+      function notice(msg, onRetry) {
+        const box = $("notice"); box.textContent = "";
+        const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
+        if (onRetry) {
+          const b = document.createElement("button");
+          b.className = "nbtn"; b.textContent = t().retry;
+          b.onclick = () => { clearNotice(); onRetry(); };
+          box.appendChild(b);
+        }
+        box.hidden = false;
+      }
+      function clearNotice() { $("notice").hidden = true; $("notice").textContent = ""; }
+
+      /**
+       * GÜVENLİK DUVARI UYARISI (2026-08-09 denetimi, Tier 1).
+       *
+       * Backend 0.0.0.0:8000'i dinliyor ama launcher yolundaki kurulumda inbound kural HİÇ
+       * oluşturulmuyordu (client kurulumu `currentUser` → NSIS yükseltilmiş değil; kuralları
+       * yalnız ESKİ servis kurulumu ekliyor). Sonuç: yayınlanan mobil APK klinik WiFi'sinde
+       * cihaza HİÇ bağlanamıyor ve sebebi hiçbir yerde YAZMIYORDU — veteriner "uygulama bozuk"
+       * diyor, günlükte de hata yok çünkü paket backend'e hiç ulaşmıyor.
+       *
+       * ⚠️ Kurulumu ENGELLEMEZ: yalnız cihazın kendi ekranından kullanan klinikler için bu bir
+       * sorun değildir. Bilgilendirir ve tek tıkla (UAC istemiyle) düzeltmeyi önerir.
+       */
+      /**
+       * OFF-SITE YEDEK HATIRLATMASI (2026-08-09 denetimi, Tier 1).
+       *
+       * Yedekler hasta verisiyle AYNI DİSKE alınıyordu → disk arızasında ya da fidye
+       * yazılımında veri VE yedek birlikte gidiyordu. Backend `PEMF_BACKUP_DIR` desteğini
+       * zaten taşıyordu ama hiçbir yerde ayarlanmadığı için özellik sahada HİÇ çalışmadı.
+       *
+       * ⚠️ Kurulumu ENGELLEMEZ (harici disk o an takılı olmayabilir) ama hedef seçilene kadar
+       * hatırlatma KALICIDIR: ertelenirse maliyeti tüm klinik geçmişidir.
+       */
+      async function yedekHedefiKontrol() {
+        let d;
+        try { d = await invoke("yedek_hedefi_durumu"); } catch (_) { return; }
+        if (!d) return;
+        if (d.yol && d.erisilebilir) return;                 // yapılandırılmış ve erişilebilir
+        const box = $("notice"); box.textContent = "";
+        const p1 = document.createElement("div");
+        p1.textContent = d.yol
+          ? ("Yedek hedefi şu an erişilemiyor: " + d.yol + " — harici diski takın ya da yeni bir hedef seçin.")
+          : "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; "
+            + "harici bir disk ya da ağ paylaşımı seçin.";
+        box.appendChild(p1);
+        const b = document.createElement("button");
+        b.className = "nbtn"; b.textContent = "Yedek hedefi seç";
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const r = await invoke("yedek_hedefi_sec");
+            if (r && r.status === "ok") { clearNotice(); } else { b.disabled = false; }
+          } catch (e) { p1.textContent = String(e); b.disabled = false; }
+        };
+        box.appendChild(b);
+        box.hidden = false;
+      }
+
+      async function firewallKontrol() {
+        let d;
+        try { d = await invoke("firewall_durumu"); } catch (_) { return; }
+        if (!d || !d.engelli) return;
+        const box = $("notice"); box.textContent = "";
+        const p1 = document.createElement("div");
+        p1.textContent = "Mobil uygulama bu cihaza bağlanamayabilir: Windows güvenlik duvarında "
+          + "gelen bağlantı izni yok. Cihaz ekranından kullanım etkilenmez.";
+        box.appendChild(p1);
+        const b = document.createElement("button");
+        b.className = "nbtn"; b.textContent = "İzin ver (yönetici)";
+        b.onclick = async () => {
+          b.disabled = true;
+          try { await invoke("firewall_kurali_ekle"); clearNotice(); }
+          catch (e) { p1.textContent = String(e); b.disabled = false; }
+        };
+        box.appendChild(b);
+        box.hidden = false;
+      }
+
+
+      /** Uygulama CALISIYOR mu — client "Hazir!/Baslat" yerine durumu yansitsin.
+       *  Backend acikken "Baslat" gostermek kullaniciyi yaniltiyordu (bkz. btn-start). */
+      let appRunning = false;
+      function setRunningUi(on) {
+        appRunning = !!on;
+        const x = t();
+        $("t-start").textContent = appRunning ? x.backToApp : x.start;
+        $("t-ready-lead").textContent = appRunning ? x.runningLead : x.readyLead;
+        $("t-ready-title").textContent = appRunning ? "PEMF Vet" : x.readyTitle;
+      }
 
       // ---------- i18n apply ----------
       function applyLang() {
@@ -719,12 +990,23 @@
         $("t-install").textContent = x.install; $("t-sel-cancel").textContent = x.selCancel;
         $("t-pause").textContent = x.pause; $("t-resume").textContent = x.resume; $("t-cancel").textContent = x.cancelDl;
         $("t-ready-title").textContent = x.readyTitle; $("t-ready-lead").textContent = x.readyLead;
+        // Dil degisiminde "calisiyor" durumu KAYBOLMASIN (aksi halde TR/EN'e basinca
+        // uygulama acikken yeniden "Baslat" yaziyordu).
+        if (typeof appRunning !== "undefined" && appRunning) setRunningUi(true);
         $("t-start").textContent = x.start; $("t-change").textContent = x.change;
         $("t-repair").textContent = x.repair; $("t-uninstall").textContent = x.uninstall;
         $("t-foot-support").textContent = x.footSupport;
         $("t-about-title").textContent = x.aboutTitle; $("t-about-body").textContent = x.aboutBody;
         $("t-about-ver").textContent = x.aboutVer; $("t-about-plat").textContent = x.aboutPlat;
         $("about-close").textContent = x.ok;
+        // Giriş ekranı + çevrimdışı rozeti.
+        $("t-login-title").textContent = x.loginTitle; $("t-login-lead").textContent = x.loginLead;
+        $("t-login-email").textContent = x.loginEmail; $("t-login-pass").textContent = x.loginPass;
+        $("t-login-btn").textContent = x.loginBtn;
+        $("t-login-forgot").textContent = x.loginForgot; $("t-login-signup").textContent = x.loginSignup;
+        $("t-login-offline-start").textContent = x.offlineStart;
+        $("t-logout").textContent = x.logout; $("t-offline").textContent = x.offline;
+        applyRememberLabel(); // "Beni hatırla" mı yoksa "saklanamıyor" açıklaması mı
         $("lang-tr").classList.toggle("on", LANG === "tr");
         $("lang-en").classList.toggle("on", LANG === "en");
         renderCards(); renderChips();
@@ -877,6 +1159,17 @@
         installed = Array.isArray(env.installed_profiles) ? env.installed_profiles.slice() : [];
         baseInstalled = !!env.already_installed; // base kurulu mu — iptal/hata sonrasi "Hazir!" karari icin taze tut
         platform = env.platform || platform;
+        // Sürüm YEREL bilgidir: internetsizken de görünsün (eskiden yalnız manifest'ten geliyordu
+        // → çevrimdışı açılışta başlıkta "v—" yazıyordu).
+        if (env.launcher_version) { ver = "v" + env.launcher_version; $("ver").textContent = ver; }
+        // Kurulu bir cihazda mobil erişimin gerçekten mümkün olup olmadığını kontrol et.
+        if (env.already_installed) {
+          // Sıra ÖNEMLİ: ikisi de aynı bildirim kutusunu kullanır. Firewall (mobil erişim
+          // tamamen kopuk) daha acil; yedek hatırlatması o çıkmadıysa gösterilir.
+          firewallKontrol()
+            .then(() => { if ($("notice").hidden) return yedekHedefiKontrol(); })
+            .catch(() => {});
+        }
         return env;
       }
 
@@ -893,7 +1186,10 @@
         setInstallControls("paused");
       }
       async function doInstall(profiles) {
-        clearErr(); busy = true; lastProfiles = profiles.slice(); resumeOp = () => doInstall(lastProfiles);
+        // Kurulum GİRİŞ GEREKTİRİR (paket indirme = lisans/hak kapısı). "Başlat" ise gerektirmez —
+        // kurulu bir cihaz internetsiz de açılabilmeli (bkz. çevrimdışı notu).
+        if (!authed) { show("s-login"); fail(t().loginRequired); return; }
+        clearErr(); clearNotice(); busy = true; lastProfiles = profiles.slice(); resumeOp = () => doInstall(lastProfiles);
         show("s-install"); resetInstallUI(); setInstallControls("running"); startPolling();
         try {
           const r = await invoke("install_and_launch", { manifestRaw, profiles });
@@ -917,7 +1213,10 @@
         finally { busy = false; stopPolling(); }
       }
       async function doRepair() {
-        clearErr(); busy = true; resumeOp = doRepair;
+        if (!authed) { show("s-login"); fail(t().loginRequired); return; }
+        // Onarım MANİFEST ister → çevrimdışıyken düğmeye basmak anlamsız bir hataya düşerdi.
+        if (!manifestRaw) { fail(t().offlineSelect); return; }
+        clearErr(); clearNotice(); busy = true; resumeOp = doRepair;
         show("s-install"); resetInstallUI(); setInstallControls("running"); startPolling();
         try {
           const r = await invoke("repair", { manifestRaw });
@@ -928,6 +1227,68 @@
         } catch (e) { show("s-ready"); fail(e); }
         finally { busy = false; stopPolling(); }
       }
+      /**
+       * RUNTIME OTO-GÜNCELLEME (2026-08-08 sahip kararı: "Onar'a basmadan, client'ı kapatıp
+       * açınca backend dâhil her şey gelmeli; siteye deploy etmem yetmeli").
+       *
+       * Launcher zaten KENDİNİ güncelliyordu (`trySelfUpdate`) ama base.zip'i (backend + web
+       * arayüzü) yalnız "Onar" tazeliyordu → yayınlanan backend düzeltmeleri kullanıcıya
+       * ULAŞMIYORDU. Bu fonksiyon aynı deseni base + kurulu profillere uygular.
+       *
+       * KURALLAR:
+       *  • Yalnız DEĞİŞEN paket iner (`pending_updates` sha karşılaştırır).
+       *  • Aktif seans varsa Rust tarafı REDDEDER → burada sessiz bir not gösterilir, "Başlat"
+       *    çalışmaya devam eder (hasta güvenliği > güncellik).
+       *  • Çevrimdışıysa buraya hiç gelinmez (bootNetwork manifest alamadan döner).
+       *  • Hata olursa boot DEVAM eder — güncelleme kullanıcıyı ASLA kilitlemez.
+       */
+      async function tryRuntimeUpdate() {
+        if (busy || !manifestRaw || !baseInstalled) return false;
+        let plan;
+        try { plan = await invoke("check_runtime_update", { manifestRaw }); }
+        catch (_) { return false; }                       // eski launcher / bozuk manifest → boot sürsün
+        if (!plan || !plan.needed) return false;
+
+        // ── ARKA PLAN İNDİRME (2026-08-08 sahip kararı) ────────────────────────────────────
+        // Paketler henüz inmemişse KULLANICIYI BEKLETME: hayvanı masada bekleyen veteriner
+        // uygulamayı açtığında 45 dakikalık indirmeye takılmamalı. Sessizce indir, kurulumu
+        // BİR SONRAKİ açılışa bırak (o zaman paketler hazır → kurulum saniyeler sürer).
+        if (!plan.cached) {
+          notice(t().rtBg);
+          invoke("prefetch_runtime_update", { manifestRaw }).catch(() => {});
+          return false;                                    // ekranı ELE GEÇİRME, "Başlat" çalışsın
+        }
+
+        busy = true; resumeOp = tryRuntimeUpdate;
+        clearErr(); clearNotice();
+        show("s-install"); resetInstallUI(); setInstallControls("running"); startPolling();
+        $("inst-title").textContent = t().rtTitle; $("status").textContent = t().rtLead;
+        try {
+          const r = await invoke("apply_runtime_update", { manifestRaw });
+          const status = r && r.status;
+          if (status === "paused") { showPaused(); return true; }
+          if (status === "cancelled") { show("s-ready"); return true; }
+          // SAĞLIK KAPISI DÜŞTÜ → eski sürüme dönüldü. Kurulum ÇALIŞIR durumda; kullanıcıya
+          // kırmızı arıza değil, ne olduğunu anlatan bir not göster.
+          if (status === "rolled_back") {
+            await refreshEnv(); renderChips(); show("s-ready");
+            if (r.rollback_error) fail(t().rtRollbackFail); else notice(t().rtRollback);
+            return true;
+          }
+          await refreshEnv(); renderChips(); show("s-ready"); notice(t().rtDone);
+          // Güncelleme sonrası backend ZATEN çalışıyor (sağlık kapısı onu başlattı) →
+          // kullanıcı "Başlat"a bastığında ikinci bir süreç açılmaz (start_installed sahiplenir).
+        } catch (e) {
+          // En sık sebep: seans sürüyor (Rust kapısı). Kullanıcıyı kırmızı hatayla korkutma —
+          // kurulum SAĞLAM, yalnız güncelleme ertelendi.
+          show("s-ready");
+          const m = String(e || "");
+          if (m.includes("seans")) notice(t().rtBusy); else fail(e);
+        }
+        finally { busy = false; stopPolling(); }
+        return true;
+      }
+
       $("btn-install").onclick = () => { const eff = withDeps([...selected]); if (!busy && eff.size) doInstall([...eff]); };
       $("btn-pause").onclick = () => { $("btn-pause").disabled = true; invoke("pause_install").catch(() => {}); };
       $("btn-resume").onclick = () => { if (!busy && resumeOp) resumeOp(); };
@@ -936,10 +1297,26 @@
       $("btn-start").onclick = async () => {
         if (busy) return; clearErr(); busy = true; show("s-install"); resetInstallUI(); startPolling();
         $("inst-title").textContent = t().instStart; indet(true); $("status").textContent = t().starting;
-        try { await invoke("start_installed"); show("s-ready"); }
-        catch (e) { show("s-ready"); fail(e); }
+        try {
+          await invoke("start_installed");
+          show("s-ready");
+          // KULLANICI BILDIRIMI 2026-08-06: uygulama ACIKKEN client yine "Baslat" gosteriyordu →
+          // kullanici uygulamanin calisip calismadigini anlayamiyor, tekrar basiyordu (ve eskiden
+          // bu, acik uygulamayi YENIDEN YUKLEYIP acik ekrani kaybettiriyordu). Durumu yansit.
+          setRunningUi(true);
+        }
+        catch (e) { show("s-ready"); setRunningUi(false); fail(e); }
         finally { busy = false; stopPolling(); }
       };
+
+      // Uygulama penceresi kapatilinca odak client'a doner → durumu tazele ("Uygulamaya don"
+       // yazisi "Baslat"a geri donsun). Ilk yuklemede de bir kez calisir.
+      async function syncRunningState() {
+        try { setRunningUi(await invoke("app_window_open")); }
+        catch { /* eski launcher / komut yok → durumu oldugu gibi birak */ }
+      }
+      window.addEventListener("focus", syncRunningState);
+      syncRunningState();
 
       $("btn-change").onclick = () => {
         if (busy) return;
@@ -1021,42 +1398,219 @@
         }
       }
 
+      // ---------- giriş (Supabase) ----------
+      function setOffline(on) {
+        netOffline = !!on;
+        $("offline-badge").hidden = !netOffline;
+      }
+      function setAuthUi(st) {
+        authed = !!(st && st.logged_in);
+        authEmail = (st && st.email) || "";
+        $("auth-box").hidden = !authed;
+        $("auth-email").textContent = authEmail;
+        persistAvailable = !st || st.persist_available !== false;
+        applyRememberLabel();
+        if (st && st.offline) setOffline(true);
+      }
+      function applyRememberLabel() {
+        $("t-login-remember").textContent = persistAvailable ? t().loginRemember : t().loginNoPersist;
+        $("login-remember").disabled = !persistAvailable;
+        $("remember-wrap").classList.toggle("off", !persistAvailable);
+      }
+      async function refreshAuth() {
+        try { const st = await invoke("auth_status"); setAuthUi(st); return st; }
+        // Komut yoksa (eski launcher) girişi ZORUNLU KILMA — client açılmaz hale gelmesin.
+        catch (_) { authed = true; return { logged_in: true, email: "" }; }
+      }
+      async function doLogin() {
+        const email = $("login-email").value.trim();
+        const password = $("login-pass").value;
+        if (!email || !password) { fail(t().loginEmpty); return; }
+        if (busy) return;
+        busy = true; clearErr(); clearNotice();
+        $("btn-login").disabled = true; $("t-login-btn").textContent = t().loginWait;
+        try {
+          const st = await invoke("auth_login", { email, password, remember: $("login-remember").checked });
+          setAuthUi(st); setOffline(false);
+          $("login-pass").value = ""; // parolayı DOM'da tutma
+          busy = false;
+          await afterLogin();
+        } catch (e) {
+          busy = false;
+          fail(e);
+          // Sunucuya ulaşılamadıysa kurulu cihaz yine açılabilmeli (çevrimdışı çıkış yolu).
+          // ⚠️ Bu metin `core/auth.rs::AuthError::Offline`'ın Display'iyle SÖZLEŞMELİDİR; orada
+          // `cevrimdisi_mesaji_ui_sozlesmesini_korur` testi metni kilitliyor (yeniden
+          // yazılırsa çıkış yolu sessizce kaybolurdu).
+          const m = String(e || "");
+          if (m.includes("İnternet bağlantısı yok")) {
+            setOffline(true);
+            if (envCache && envCache.already_installed) {
+              $("btn-offline-start").hidden = false;
+              notice(t().offlineLogin);
+            }
+          }
+        } finally {
+          $("btn-login").disabled = false; $("t-login-btn").textContent = t().loginBtn;
+        }
+      }
+      $("btn-login").onclick = doLogin;
+      for (const id of ["login-email", "login-pass"]) {
+        $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+      }
+      $("btn-forgot").onclick = () => invoke("open_url", { url: WEB + "forgot" }).catch(() => openWeb());
+      $("btn-signup").onclick = () => invoke("open_url", { url: WEB + "register" }).catch(() => openWeb());
+      $("btn-logout").onclick = () => askConfirm(t().logoutTitle, t().logoutBody, async () => {
+        try { const st = await invoke("auth_logout"); setAuthUi(st); } catch (e) { fail(e); }
+        clearNotice(); $("login-email").value = ""; $("login-pass").value = "";
+        show("s-login");
+      }, { danger: true });
+
+      // ⚠️ TIBBİ ERİŞİLEBİLİRLİK (bilinçli karar): internet YOKKEN ve kayıtlı oturum da yokken,
+      // KURULU cihazın açılabilmesi gerekir — aksi halde bağlantısı kesilen bir klinikte tedavi
+      // cihazı kilitlenir; bu, (A) maddesinde düzelttiğimiz açılış kilidinin kimlik katmanında
+      // geri gelmesi olurdu. Güvenlik kaybı yok: oturum DEVREDİLMEDİĞİ için uygulama kendi giriş
+      // ekranını gösterir; burada atlanan tek şey CLIENT'in kapısıdır, uygulamanınki değil.
+      // Kurulum/onarım bu yolda da KAPALI kalır (doInstall/doRepair `authed` ister).
+      $("btn-offline-start").onclick = async () => {
+        clearErr(); clearNotice();
+        if (envCache && envCache.already_installed) { renderChips(); show("s-ready"); notice(t().offlineReady); }
+      };
+
       // ---------- boot ----------
+      let envCache = null;
+
+      /** ADIM 1 — YEREL (ağsız): ekranı HEMEN göster. Birkaç yüz ms'den fazla sürmez. */
+      async function bootLocal() {
+        const env = await refreshEnv();
+        envCache = env;
+        baseInstalled = !!env.already_installed;
+        if (env.already_installed) { renderChips(); show("s-ready"); }
+        else { renderCards(); show("s-select"); }
+        return env;
+      }
+
+      /**
+       * ADIM 2 — AĞ (arka plan): manifest + oto-güncelleme + yarım-kalan kurulum.
+       *
+       * ⚠️ DENETİM 2026-08-06 (P0): eskiden boot bu üçünü de BEKLİYORDU ve manifest gelene kadar
+       * hiçbir `show()` çağrılmıyordu → internetsiz klinikte client "Ortam algılanıyor…" ekranında
+       * SONSUZA KADAR kalıyordu; kurulum ZATEN VARKEN bile "Başlat"a hiç ulaşılamıyordu.
+       * Artık ekran ADIM 1'de yerel bilgiyle çizilir; bu adım yalnız ÜSTÜNE bilgi ekler ve
+       * başarısız olursa ekranı DEĞİŞTİRMEZ.
+       */
+      async function bootNetwork(env) {
+        let info;
+        try {
+          info = await invoke("fetch_profiles");
+        } catch (e) {
+          // ÇEVRİMDIŞI: kurulu ise "Hazır!" ekranında KAL (Başlat çalışır — backend yereldir);
+          // kurulu değilse anlaşılır mesaj + "Tekrar dene". SONSUZ "Ortam algılanıyor" YOK.
+          setOffline(true);
+          if (curScreen() === "s-ready") notice(t().offlineReady);
+          else if (curScreen() === "s-select") notice(t().offlineSelect, () => bootNetwork(env));
+          return;
+        }
+        setOffline(false);
+        manifestRaw = info.raw;
+        ver = "v" + (info.current_launcher || info.version || "");
+        pkgVersion = "v" + (info.version || "");
+        $("ver").textContent = ver;
+        clearNotice();
+
+        // Oto-güncelleme: manifest GELDİKTEN sonra (çevrimdışıyken zaten sessizce atlanır).
+        // Kullanıcı bu arada kuruluma/başlatmaya girmişse ARAYA GİRME.
+        if (info.update && !busy && (await trySelfUpdate(info.update))) return;
+
+        if (!info.platform_supported) {
+          if (!busy) { show("s-select"); $("cards").textContent = ""; fail(t().notSupported(info.platform)); }
+          return;
+        }
+
+        // manifest'ten profil sırası + boyutlar
+        profileKeys = (info.profiles || []).filter((k) => /^[A-Za-z0-9_-]{1,64}$/.test(k));
+        try {
+          const m = JSON.parse(info.raw);
+          for (const k of profileKeys) sizes[k] = m.models?.[k]?.size ?? m.profiles?.[k]?.size ?? 0;
+          baseBytes = m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0;
+        } catch {}
+        // Kartlar/boyutlar manifest gelince TAZELENİR (ADIM 1'de boyutsuz çizilmişti).
+        renderCards();
+
+        // RUNTIME OTO-GÜNCELLEME — client kendini güncelledikten SONRA, uygulamayı da güncelle.
+        // Sıra önemli: önce launcher (küçük, yeniden başlatır), sonra base/profiller. Aksi halde
+        // yeni base'i eski launcher kurar ve hemen ardından yeniden başlayıp işi tekrarlardı.
+        // Güncelleme yapıldıysa aşağıdaki "yarım kalan kurulum" sorusuna GİRME (ekran zaten değişti).
+        if (await tryRuntimeUpdate()) return;
+
+        // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?
+        // Manifest gerektirir → GEÇ de olsa burada sorulur.
+        if (!busy && Array.isArray(env.pending_profiles) && env.pending_profiles.length) {
+          const names = env.pending_profiles.map(profName).join(", ");
+          askConfirm(t().resumeTitle, `${t().resumeBody}\n\n(${names})`, () => doInstall(env.pending_profiles), {
+            yesLabel: t().resumeYes, noLabel: t().resumeNo,
+            noCb: () => invoke("discard_pending").catch(() => {}),
+          });
+        }
+      }
+
+      /** Giriş yapıldıktan SONRA mevcut akış: ortam taraması → (arka planda) manifest → Başlat. */
+      async function afterLogin() {
+        clearErr();
+        let env;
+        try { env = await bootLocal(); }
+        catch (e) { show("s-select"); fail(e); return; }
+        bootNetwork(env).catch(() => {}); // arka planda; boot'u BLOKLAMAZ
+      }
+
       async function boot() {
         applyLang();
-        try {
-          const env = await refreshEnv();
-          const info = await invoke("fetch_profiles");
-          manifestRaw = info.raw;
-          ver = "v" + (info.current_launcher || info.version || "");
-          pkgVersion = "v" + (info.version || "");
-          $("ver").textContent = ver;
-
-          // Açılış oto-güncelleme kontrolü: EN BAŞTA (yoksa/başarısızsa aşağıdan normal boot sürer).
-          if (info.update && (await trySelfUpdate(info.update))) return;
-
-          if (!info.platform_supported) { show("s-select"); $("cards").textContent = ""; fail(t().notSupported(info.platform)); return; }
-
-          // manifest'ten profil sırası + boyutlar
-          profileKeys = (info.profiles || []).filter((k) => /^[A-Za-z0-9_-]{1,64}$/.test(k));
-          try {
-            const m = JSON.parse(info.raw);
-            for (const k of profileKeys) sizes[k] = m.models?.[k]?.size ?? m.profiles?.[k]?.size ?? 0;
-            baseBytes = m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0;
-          } catch {}
-          baseInstalled = !!env.already_installed;
-
-          if (env.already_installed) { renderChips(); show("s-ready"); }
-          else { renderCards(); show("s-select"); }
-          // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?
-          if (Array.isArray(env.pending_profiles) && env.pending_profiles.length) {
-            const names = env.pending_profiles.map(profName).join(", ");
-            askConfirm(t().resumeTitle, `${t().resumeBody}\n\n(${names})`, () => doInstall(env.pending_profiles), {
-              yesLabel: t().resumeYes, noLabel: t().resumeNo,
-              noCb: () => invoke("discard_pending").catch(() => {}),
-            });
+        // 1) Giriş kapısı EN BAŞTA. `auth_status` yalnız YEREL blob'u okur; jeton tazeyse ağa
+        //    hiç çıkmaz, süresi dolmuşsa duvar-saati bütçeli sessiz yenileme dener.
+        //
+        // ⚠️ DENETİM 2026-08-06 (kapı, düzeltilen kilidi GERİ GETİRİYORDU): bu `await` boot'un ilk
+        // satırı olduğu için, "Beni hatırla" kullanıcısının access jetonu dolduğunda (~1 saat) ve
+        // upstream yokken (captive portal / kopuk hat) ekran 10-12 sn `WALL_BUDGET_S` boyunca
+        // "Ortam algılanıyor…" spinnerinde donuyordu — sahibin bildirdiği semptomun TA KENDİSİ,
+        // yalnız manifest yerine kimlik katmanından geliyor. Manifeste uygulanan "önce YEREL
+        // ekranı çiz" deseni buraya da uygulanmalı.
+        //
+        // ÇÖZÜM: kapıyı kısa bir süreyle YARIŞTIR. Zaman aşarsa yerel ekranı ÇİZ (kurulu cihazda
+        // "Başlat" hemen kullanılabilir) ve kimlik arka planda çözülmeye devam etsin. Bu GÜVENLİ:
+        // yavaş yol YALNIZ kayıtlı bir oturum varken çalışır (blob yoksa `auth_status` 2. adımda
+        // ağa çıkmadan döner) ve o yolun çevrimdışı kararı zaten "kayıtlı oturumla devam"dır —
+        // yani kullanıcı nasılsa içeri girecekti. Yenileme sonunda KESİN ret (Sil) dönerse
+        // aşağıdaki .then() giriş ekranına düşürür.
+        const KAPI_MS = 4000;
+        let kapiCozuldu = false;
+        const kapi = refreshAuth().then((r) => { kapiCozuldu = true; return r; });
+        const st = await Promise.race([
+          kapi,
+          new Promise((r) => setTimeout(() => r(null), KAPI_MS)),
+        ]);
+        if (st === null && !kapiCozuldu) {
+          // Kimlik henüz çözülmedi → ekranı BEKLETME. Kurulu cihazda "Hazır!" çizilir.
+          try { await bootLocal(); } catch (_) { }
+          notice(t().authSlow);
+          kapi.then((geç) => {
+            clearNotice();
+            if (!authed) { show("s-login"); $("login-email").focus(); }
+            else if (curScreen() !== "s-login") bootNetwork(envCache || {}).catch(() => { });
+          }).catch(() => { });
+          return;
+        }
+        if (!authed) {
+          // Kurulu bir cihazda çevrimdışıysak "Çevrimdışı başlat" çıkışını hazır tut.
+          try { envCache = await refreshEnv(); } catch (_) {}
+          if (st && st.offline && envCache && envCache.already_installed) {
+            $("btn-offline-start").hidden = false;
+            notice(t().offlineLogin);
           }
-        } catch (e) { show("s-select"); fail(e); }
+          show("s-login");
+          $("login-email").focus();
+          return;
+        }
+        await afterLogin();
       }
       boot();
     </script>

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """inference_renal_histopath_kmc.py — Renal histopatoloji grade siniflandirma.
 
 Tek model: **V22-KMC-ClassicTrio** (KMCClassicTrio ensemble)

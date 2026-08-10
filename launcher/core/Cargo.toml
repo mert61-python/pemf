@@ -13,5 +13,17 @@ zip.workspace = true
 thiserror.workspace = true
 ureq.workspace = true
 
+# "Beni hatırla" oturumu Windows'ta DPAPI ile şifrelenir (bkz. secret_store.rs).
+# `windows-sys` Tauri ağacında ZATEN var ve yerel cargo önbelleğinde mevcut → yeni ağ indirmesi
+# gerektirmez (bu makinede crates.io throttle'ı belgeli).
+[target.'cfg(windows)'.dependencies]
+# `Win32_Storage_FileSystem`: GetDiskFreeSpaceExW — kurulum ÖNCESİ boş alan kontrolü
+# (bkz. disk.rs; LattePanda eMMC'de kurulum 1,2 GB indirdikten sonra os error 112 ile ölüyordu).
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem"] }
+
+# statvfs — Windows dışında boş alan okuma (bkz. disk.rs). `libc` bagimlilik agacinda ZATEN var.
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = "3"

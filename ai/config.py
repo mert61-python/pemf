@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # ==================== DIRECTORY STRUCTURE ====================
 BASE_DIR = Path(__file__).parent
 
-# Program Files içinde yazma izni (PermissionError) hatası almamak için 
+# Program Files içinde yazma izni (PermissionError) hatası almamak için
 # çalışma zamanı (runtime) dosyaları kullanıcı dizininde (APPDATA) saklanmalıdır.
 _app_data_base = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / "PEMF_GUI" / "ai"
 
@@ -44,7 +44,7 @@ DATASETS = {
         "species": ["dog", "rabbit", "mouse"],
         "format": "wfdb",
         "local_path": DATA_DIR / "physiozoo",
-        "features": ["HRV time/freq/nonlinear", "R-peak detection", "RR filtering", "DFA", "MSE"]
+        "features": ["HRV time/freq/nonlinear", "R-peak detection", "RR filtering", "DFA", "MSE"],
     },
     "zenodo_paws": {
         "name": "Zenodo Paws in Pain",
@@ -52,7 +52,7 @@ DATASETS = {
         "description": "Dog pain assessment with ECG correlation",
         "species": ["dog"],
         "format": "csv",
-        "local_path": DATA_DIR / "zenodo_paws"
+        "local_path": DATA_DIR / "zenodo_paws",
     },
     "mitbih": {
         "name": "MIT-BIH Arrhythmia Database",
@@ -60,7 +60,7 @@ DATASETS = {
         "description": "Human ECG for transfer learning",
         "species": ["human"],
         "format": "wfdb",
-        "local_path": DATA_DIR / "mitbih"
+        "local_path": DATA_DIR / "mitbih",
     },
     "alivecor": {
         "name": "AliveCor Veterinary",
@@ -68,8 +68,8 @@ DATASETS = {
         "description": "Veterinary ECG validation dataset",
         "species": ["dog", "cat"],
         "format": "proprietary",
-        "local_path": DATA_DIR / "alivecor"
-    }
+        "local_path": DATA_DIR / "alivecor",
+    },
 }
 
 # ==================== SYNTHETIC DATA GENERATION (GAN) ====================
@@ -82,7 +82,7 @@ SYNTHETIC_DATA = {
             "description": "Generate ECG from PPG using Wasserstein GAN-GP",
             "use_case": "Data augmentation when ECG unavailable but PPG exists",
             "paper": "ACM SAC 2021",
-            "architecture": "1D CNN Generator/Discriminator with feature-based loss"
+            "architecture": "1D CNN Generator/Discriminator with feature-based loss",
         },
         "eeg_wgan": {
             "name": "EEG/ECG WGAN-GP",
@@ -90,18 +90,18 @@ SYNTHETIC_DATA = {
             "description": "Generate synthetic biosignals (EEG/ECG) with WGAN-GP",
             "use_case": "Augment limited veterinary ECG datasets",
             "paper": "https://arxiv.org/abs/2402.09453",
-            "architecture": "WGAN-GP with gradient penalty for stable training"
+            "architecture": "WGAN-GP with gradient penalty for stable training",
         },
         "neurokit2_simulation": {
             "name": "NeuroKit2 Synthetic ECG",
             "github": "https://github.com/neuropsychology/NeuroKit",
             "description": "Simulate realistic ECG signals with custom parameters",
             "use_case": "Generate species-specific synthetic ECG for testing",
-            "features": ["Adjustable HR", "Noise control", "Artifact injection"]
-        }
+            "features": ["Adjustable HR", "Noise control", "Artifact injection"],
+        },
     },
     "augmentation_ratio": 0.3,  # 30% synthetic data in training set
-    "validation_only_real": True  # Use only real data for validation
+    "validation_only_real": True,  # Use only real data for validation
 }
 
 # ==================== EXTERNAL TOOLS & LIBRARIES ====================
@@ -117,9 +117,9 @@ EXTERNAL_TOOLS = {
             "HRV frequency domain (VLF, LF, HF with Lomb/AR/Welch/FFT)",
             "HRV nonlinear (DFA alpha1/alpha2, Sample Entropy, MSE, Poincaré SD1/SD2)",
             "RR interval filtering (ectopic beat detection)",
-            "Fragmentation analysis"
+            "Fragmentation analysis",
         ],
-        "python_alternative": "Use biosppy, wfdb, neurokit2 for equivalent functionality"
+        "python_alternative": "Use biosppy, wfdb, neurokit2 for equivalent functionality",
     },
     "neurokit2": {
         "name": "NeuroKit2",
@@ -133,10 +133,10 @@ EXTERNAL_TOOLS = {
             "Event-related and interval-related analysis",
             "Signal simulation with realistic artifacts",
             "Complexity measures (entropy, fractal dimensions)",
-            "2000+ stars, actively maintained"
+            "2000+ stars, actively maintained",
         ],
-        "integration": "Use as primary biosignal processing library alongside biosppy"
-    }
+        "integration": "Use as primary biosignal processing library alongside biosppy",
+    },
 }
 
 # ==================== SIGNAL PROCESSING PARAMETERS ====================
@@ -145,37 +145,37 @@ SIGNAL_PROCESSING = {
     "bandpass_filter": {
         "lowcut": 0.5,  # Hz - Remove baseline wander
         "highcut": 50.0,  # Hz - Remove high-frequency noise
-        "order": 4  # Butterworth filter order
+        "order": 4,  # Butterworth filter order
     },
     "notch_filter": {
         "freq": 50.0,  # Hz - Remove powerline interference (50Hz EU, 60Hz US)
-        "quality_factor": 30.0
+        "quality_factor": 30.0,
     },
     "window_size": 10,  # seconds - ECG analysis window
-    "overlap": 0.5  # 50% overlap between windows
+    "overlap": 0.5,  # 50% overlap between windows
 }
 
 # ==================== HRV FEATURE EXTRACTION ====================
 HRV_FEATURES = {
     "time_domain": [
-        "SDNN",      # Standard deviation of NN intervals
-        "RMSSD",     # Root mean square of successive differences
-        "pNN50",     # Percentage of NN intervals > 50ms different
-        "mean_hr",   # Mean heart rate
-        "std_hr"     # Standard deviation of heart rate
+        "SDNN",  # Standard deviation of NN intervals
+        "RMSSD",  # Root mean square of successive differences
+        "pNN50",  # Percentage of NN intervals > 50ms different
+        "mean_hr",  # Mean heart rate
+        "std_hr",  # Standard deviation of heart rate
     ],
     "frequency_domain": [
-        "VLF",       # Very low frequency power (0.003-0.04 Hz)
-        "LF",        # Low frequency power (0.04-0.15 Hz)
-        "HF",        # High frequency power (0.15-0.4 Hz)
-        "LF_HF"      # LF/HF ratio (autonomic balance)
+        "VLF",  # Very low frequency power (0.003-0.04 Hz)
+        "LF",  # Low frequency power (0.04-0.15 Hz)
+        "HF",  # High frequency power (0.15-0.4 Hz)
+        "LF_HF",  # LF/HF ratio (autonomic balance)
     ],
     "nonlinear": [
-        "SD1",       # Poincaré plot - short-term variability
-        "SD2",       # Poincaré plot - long-term variability
+        "SD1",  # Poincaré plot - short-term variability
+        "SD2",  # Poincaré plot - long-term variability
         "sample_entropy",  # Complexity measure
-        "approximate_entropy"  # Regularity measure
-    ]
+        "approximate_entropy",  # Regularity measure
+    ],
 }
 
 # ==================== PEMF SENSOR FEATURES ====================
@@ -183,33 +183,29 @@ PEMF_FEATURES = {
     "magnetic_field": {
         "unit": "mT",  # millitesla
         "range": [0, 100],  # Expected range
-        "features": ["mean", "std", "max", "min", "trend"]
+        "features": ["mean", "std", "max", "min", "trend"],
     },
     "temperature": {
         "unit": "°C",
         "range": [20, 80],  # Safe operating range
-        "features": ["mean", "std", "max", "delta"]
+        "features": ["mean", "std", "max", "delta"],
     },
     "current": {
         "unit": "A",
         "range": [0, 30],  # Maximum current
-        "features": ["mean", "std", "max", "rms"]
+        "features": ["mean", "std", "max", "rms"],
     },
-    "pwm": {
-        "unit": "%",
-        "range": [0, 100],
-        "features": ["mean", "std", "duty_cycle"]
-    }
+    "pwm": {"unit": "%", "range": [0, 100], "features": ["mean", "std", "duty_cycle"]},
 }
 
 # ==================== TREATMENT PARAMETERS ====================
 TREATMENT_PARAMS = {
     "frequency_range": [50, 150],  # Hz - PEMF frequency range (minimum 50 Hz - cihaz kısıtı)
     "intensity_range": [0, 100],  # % - PWM duty cycle range
-    "duration_range": [5, 60],    # minutes
-    "coil_count": 8,              # Number of available coils
-    "default_frequency": 50,      # Hz - Safe default (cihaz minimumu)
-    "default_intensity": 30       # % - Conservative start
+    "duration_range": [5, 60],  # minutes
+    "coil_count": 8,  # Number of available coils
+    "default_frequency": 50,  # Hz - Safe default (cihaz minimumu)
+    "default_intensity": 30,  # % - Conservative start
 }
 
 # ==================== MODEL ARCHITECTURES ====================
@@ -220,7 +216,7 @@ MODELS = {
         "latent_dim": 32,
         "activation": "relu",
         "dropout": 0.2,
-        "batch_norm": True
+        "batch_norm": True,
     },
     "pemf_predictor": {
         "input_features": 45,  # 15 HRV + 15 PEMF sensor + 15 context
@@ -228,17 +224,17 @@ MODELS = {
         "output_size": 11,  # freq(1) + 8_intensities + duration(1) + confidence(1)
         "activation": "relu",
         "dropout": 0.3,
-        "batch_norm": True
+        "batch_norm": True,
     },
     "realtime_monitor": {
         "sequence_length": 30,  # 30 time steps
-        "input_features": 20,   # Combined ECG + PEMF features
+        "input_features": 20,  # Combined ECG + PEMF features
         "lstm_hidden": 64,
         "lstm_layers": 2,
         "output_size": 3,  # Normal, Warning, Critical
         "dropout": 0.2,
-        "bidirectional": True
-    }
+        "bidirectional": True,
+    },
 }
 
 # ==================== TRAINING CONFIGURATION ====================
@@ -247,20 +243,13 @@ TRAINING = {
     "epochs": 100,
     "learning_rate": 0.001,
     "weight_decay": 1e-5,
-    "scheduler": {
-        "type": "ReduceLROnPlateau",
-        "patience": 10,
-        "factor": 0.5,
-        "min_lr": 1e-6
-    },
-    "early_stopping": {
-        "patience": 20,
-        "min_delta": 0.001
-    },
+    "scheduler": {"type": "ReduceLROnPlateau", "patience": 10, "factor": 0.5, "min_lr": 1e-6},
+    "early_stopping": {"patience": 20, "min_delta": 0.001},
     "validation_split": 0.2,
     "test_split": 0.1,
-    "random_seed": 42
+    "random_seed": 42,
 }
+
 
 # ==================== DEVICE CONFIGURATION ====================
 def get_device():
@@ -282,6 +271,7 @@ def get_device():
         logger.info("Torch not available, using CPU (ONNX/GUI mode)")
         return 'cpu'
 
+
 DEVICE = get_device()
 
 # ==================== SPECIES-SPECIFIC PARAMETERS ====================
@@ -294,10 +284,10 @@ SPECIES_PARAMS = {
     "dog": {
         "normal_hr_range": [60, 140],  # bpm - varies by size
         "qrs_duration": [0.05, 0.08],  # seconds
-        "pr_interval": [0.06, 0.13],   # seconds
-        "qt_interval": [0.15, 0.25],   # seconds
-        "recommended_frequency": 10,   # Hz - PEMF
-        "recommended_intensity": 30    # % - Starting point
+        "pr_interval": [0.06, 0.13],  # seconds
+        "qt_interval": [0.15, 0.25],  # seconds
+        "recommended_frequency": 10,  # Hz - PEMF
+        "recommended_intensity": 30,  # % - Starting point
     },
     "cat": {
         "normal_hr_range": [120, 220],  # bpm
@@ -305,7 +295,7 @@ SPECIES_PARAMS = {
         "pr_interval": [0.05, 0.09],
         "qt_interval": [0.12, 0.18],
         "recommended_frequency": 15,
-        "recommended_intensity": 25
+        "recommended_intensity": 25,
     },
     "rabbit": {
         "normal_hr_range": [180, 250],  # bpm
@@ -313,7 +303,7 @@ SPECIES_PARAMS = {
         "pr_interval": [0.04, 0.07],
         "qt_interval": [0.10, 0.15],
         "recommended_frequency": 20,
-        "recommended_intensity": 20
+        "recommended_intensity": 20,
     },
     "mouse": {
         "normal_hr_range": [450, 750],  # bpm
@@ -321,17 +311,17 @@ SPECIES_PARAMS = {
         "pr_interval": [0.02, 0.04],
         "qt_interval": [0.05, 0.08],
         "recommended_frequency": 25,
-        "recommended_intensity": 15
-    }
+        "recommended_intensity": 15,
+    },
 }
 
 # ==================== ANOMALY DETECTION THRESHOLDS ====================
 ANOMALY_THRESHOLDS = {
     "hr_deviation": 0.3,  # 30% deviation from baseline
-    "hrv_drop": 0.5,      # 50% drop in HRV indicates stress
+    "hrv_drop": 0.5,  # 50% drop in HRV indicates stress
     "temperature_rise": 15,  # °C - Coil overheating threshold
-    "current_spike": 1.5,    # x times baseline - Protection threshold
-    "magnetic_field_drift": 0.2  # 20% drift from target
+    "current_spike": 1.5,  # x times baseline - Protection threshold
+    "magnetic_field_drift": 0.2,  # 20% drift from target
 }
 
 # ==================== REPORT GENERATION ====================
@@ -346,22 +336,18 @@ REPORT_CONFIG = {
         "realtime_monitoring",
         "post_treatment_ecg",
         "effectiveness_analysis",
-        "recommendations"
+        "recommendations",
     ],
-    "language": "tr"  # Turkish for veterinary reports
+    "language": "tr",  # Turkish for veterinary reports
 }
 
 # ==================== LOGGING CONFIGURATION ====================
 LOGGING = {
     "level": "INFO",  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    "handlers": {
-        "console": True,
-        "file": True,
-        "file_path": LOGS_DIR / "ai_system.log"
-    },
+    "handlers": {"console": True, "file": True, "file_path": LOGS_DIR / "ai_system.log"},
     "max_bytes": 10485760,  # 10 MB
-    "backup_count": 5
+    "backup_count": 5,
 }
 
 # ==================== API KEYS (if needed for cloud datasets) ====================
@@ -377,7 +363,7 @@ PERFORMANCE = {
     "prefetch_factor": 2,
     "persistent_workers": True,
     "cache_preprocessed": True,  # Cache preprocessed signals
-    "cache_dir": DATA_DIR / "cache"
+    "cache_dir": DATA_DIR / "cache",
 }
 
 if __name__ == "__main__":

@@ -28,20 +28,20 @@ logger = logging.getLogger(__name__)
 def clean_treatment_target(text: str) -> str:
     """
     Tedavi hedefi metnini temizle (emoji ve özel karakterleri kaldır).
-    
+
     Args:
         text: Ham metin (örn: '🔥 İnflamasyon')
-        
+
     Returns:
         Temizlenmiş metin (örn: 'inflamasyon')
     """
     # Türkçe karakter dönüşümü (Python lower() Türkçe İ'yi yanlış çevirir)
     tr_map = str.maketrans('İıĞğÜüŞşÖöÇç', 'iigguussoocc')
     text = text.translate(tr_map)
-    
+
     # Emoji ve özel karakterleri kaldır (sadece harf, rakam, boşluk ve tire)
     text = re.sub(r'[^\w\s-]', '', text, flags=re.ASCII)
-    
+
     # Fazla boşlukları temizle ve küçük harfe çevir
     text = ' '.join(text.split()).lower().strip()
     return text
@@ -74,7 +74,6 @@ _SPECIES_MAP = {
     'kangal': 'dog',
     'akbas': 'dog',
     'malakli': 'dog',  # FIX: eskiden 'malaklı' (ı'lı) idi → clean() 'malakli' üretince eşleşmiyordu
-
     # Kedi
     'cat': 'cat',
     'kedi': 'cat',
@@ -90,7 +89,6 @@ _SPECIES_MAP = {
     'fold': 'cat',
     'van': 'cat',
     'ankara': 'cat',
-
     # At
     'horse': 'horse',
     'at': 'horse',
@@ -100,7 +98,6 @@ _SPECIES_MAP = {
     'stallion': 'horse',
     'arap': 'horse',
     'safkan': 'horse',
-
     # Tavşan
     'rabbit': 'rabbit',
     'tavsan': 'rabbit',
@@ -168,16 +165,14 @@ CLINICAL_PROTOCOLS = {
 # Türkçe ('kırık','ödem','ağrı','kas yorgunluğu','nörolojik'...) ama clean_treatment_target girişte
 # ı/ğ/ö/ç/ş/ü'yü katlıyor → bu anahtarlar HİÇ eşleşmez, sessizce wellness dozu dönerdi (yanlış doz).
 # normalize_anahtar → (ham_anahtar, params). Çakışma yok (foldlanmış anahtarlar benzersiz).
-_CLINICAL_PROTOCOLS_NORM = {
-    clean_treatment_target(_k): (_k, _v) for _k, _v in CLINICAL_PROTOCOLS.items()
-}
+_CLINICAL_PROTOCOLS_NORM = {clean_treatment_target(_k): (_k, _v) for _k, _v in CLINICAL_PROTOCOLS.items()}
 
 
 class PatientProfileAdaptor:
     """
     Adapts treatment parameters based on patient characteristics.
     """
-    
+
     ADAPTATION_RULES = {
         # Tür bazlı faktörler
         'species': {
@@ -190,23 +185,21 @@ class PatientProfileAdaptor:
             'rabbit': {'intensity': 0.6, 'duration': 0.7},
             'tavşan': {'intensity': 0.6, 'duration': 0.7},
         },
-        
         # Yaş kategorileri
         'age_categories': {
-            'young': {'intensity': 0.85, 'duration': 0.9},   # <2 yaş
-            'adult': {'intensity': 1.0, 'duration': 1.0},    # 2-8 yaş
-            'senior': {'intensity': 0.8, 'duration': 0.85}   # >8 yaş
+            'young': {'intensity': 0.85, 'duration': 0.9},  # <2 yaş
+            'adult': {'intensity': 1.0, 'duration': 1.0},  # 2-8 yaş
+            'senior': {'intensity': 0.8, 'duration': 0.85},  # >8 yaş
         },
-        
         # Ağırlık kategorileri (kg)
         'weight_categories': {
-            'small': {'duration': 0.75},      # <10kg
-            'medium': {'duration': 1.0},      # 10-30kg
-            'large': {'duration': 1.2},       # 30-50kg
-            'giant': {'duration': 1.4}        # >50kg
-        }
+            'small': {'duration': 0.75},  # <10kg
+            'medium': {'duration': 1.0},  # 10-30kg
+            'large': {'duration': 1.2},  # 30-50kg
+            'giant': {'duration': 1.4},  # >50kg
+        },
     }
-    
+
     def categorize_age(self, age: float) -> str:
         """Yaşı kategorize et"""
         if age < 2:
@@ -215,7 +208,7 @@ class PatientProfileAdaptor:
             return 'adult'
         else:
             return 'senior'
-    
+
     def categorize_weight(self, weight: float) -> str:
         """Ağırlığı kategorize et"""
         if weight < 10:
@@ -226,19 +219,19 @@ class PatientProfileAdaptor:
             return 'large'
         else:
             return 'giant'
-    
+
     def normalize_patient_info(self, patient_info: Dict) -> Dict:
         """
         Hasta bilgilerini normalize et.
-        
+
         Args:
             patient_info: Ham hasta bilgileri
-            
+
         Returns:
             Normalize edilmiş hasta bilgileri
         """
         normalized = patient_info.copy()
-        
+
         # Tür normalizasyonu
         if 'species' in normalized:
             species_normalized = normalize_species(normalized['species'])
@@ -250,64 +243,61 @@ class PatientProfileAdaptor:
             else:
                 normalized['species'] = species_normalized
                 normalized['species_unsupported'] = False
-        
+
         # Yaş ve ağırlık varsayılanları
         if 'age' not in normalized or normalized['age'] is None:
             normalized['age'] = 5.0
         if 'weight' not in normalized or normalized['weight'] is None:
             normalized['weight'] = 20.0
-            
+
         return normalized
-    
+
     def adapt(self, base_params: Dict, patient_info: Dict) -> Dict:
         """
         Temel protokolü hasta profiline göre uyarla.
-        
+
         Args:
             base_params: Temel protokol parametreleri
             patient_info: Hasta bilgileri (species, age, weight)
-            
+
         Returns:
             Uyarlanmış parametreler
         """
         # Önce hasta bilgilerini normalize et
         patient_info = self.normalize_patient_info(patient_info)
-        
+
         adapted = base_params.copy()
-        
+
         # Tür adaptasyonu (artık normalize edilmiş)
         species = patient_info.get('species', 'dog')
-        species_factor = self.ADAPTATION_RULES['species'].get(
-            species, 
-            self.ADAPTATION_RULES['species']['dog']
-        )
+        species_factor = self.ADAPTATION_RULES['species'].get(species, self.ADAPTATION_RULES['species']['dog'])
         adapted['intensity'] = adapted.get('intensity', 1.0) * species_factor['intensity']
         adapted['duration'] = int(adapted['duration'] * species_factor['duration'])
-        
+
         # Yaş adaptasyonu
         age = patient_info.get('age', 5)
         try:
-            age = float(age)   # Audit P3: string age → categorize_age TypeError → coerce
+            age = float(age)  # Audit P3: string age → categorize_age TypeError → coerce
         except (TypeError, ValueError):
             age = 5.0
         age_category = self.categorize_age(age)
         age_factor = self.ADAPTATION_RULES['age_categories'][age_category]
         adapted['intensity'] = adapted.get('intensity', 1.0) * age_factor['intensity']
         adapted['duration'] = int(adapted['duration'] * age_factor['duration'])
-        
+
         # Ağırlık adaptasyonu
         weight = patient_info.get('weight', 15)
         try:
-            weight = float(weight)   # Audit P3: string weight → coerce
+            weight = float(weight)  # Audit P3: string weight → coerce
         except (TypeError, ValueError):
             weight = 15.0
         weight_category = self.categorize_weight(weight)
         weight_factor = self.ADAPTATION_RULES['weight_categories'][weight_category]
         adapted['duration'] = int(adapted['duration'] * weight_factor['duration'])
-        
+
         # Duty cycle'ı sınırla (10-95%)
         adapted['duty'] = max(10.0, min(95.0, adapted['duty']))
-        
+
         # Duration'ı sınırla (5-90 dk)
         adapted['duration'] = max(5, min(90, adapted['duration']))
 
@@ -328,111 +318,113 @@ class ParameterInterpolator:
     """
     Bilinmeyen durumlar için benzer protokollerden parametre tahmini.
     """
-    
+
     def calculate_similarity(self, target: str, protocol_name: str) -> float:
         """
         İki durum arasındaki benzerliği hesapla (basit kelime eşleşmesi).
-        
+
         Returns:
             0.0-1.0 arası benzerlik skoru
         """
         # Temizle ve kelimelere ayır
         target_clean = clean_treatment_target(target)
         protocol_clean = clean_treatment_target(protocol_name)
-        
+
         target_words = set(target_clean.split())
         protocol_words = set(protocol_clean.split())
-        
+
         if not target_words or not protocol_words:
             return 0.0
-        
+
         # Jaccard similarity
         intersection = target_words.intersection(protocol_words)
         union = target_words.union(protocol_words)
-        
+
         return len(intersection) / len(union) if union else 0.0
-    
-    def find_similar_protocols(self, target_condition: str, min_similarity: float = 0.2) -> List[Tuple[str, Dict, float]]:
+
+    def find_similar_protocols(
+        self, target_condition: str, min_similarity: float = 0.2
+    ) -> List[Tuple[str, Dict, float]]:
         """
         Hedef durum için benzer protokolleri bul.
-        
+
         Returns:
             List of (protocol_name, protocol_params, similarity_score)
         """
         similar = []
-        
+
         for protocol_name, params in CLINICAL_PROTOCOLS.items():
             similarity = self.calculate_similarity(target_condition, protocol_name)
             if similarity >= min_similarity:
                 similar.append((protocol_name, params, similarity))
-        
+
         # Benzerlik skoruna göre sırala (en yüksekten en düşüğe)
         similar.sort(key=lambda x: x[2], reverse=True)
-        
+
         return similar
-    
+
     def interpolate(self, target_condition: str, top_n: int = 3) -> Optional[Dict]:
         """
         Benzer protokollerden ağırlıklı ortalama ile parametre tahmini.
-        
+
         Args:
             target_condition: Hedef durum
             top_n: Kaç benzer protokol kullanılacak
-            
+
         Returns:
             Tahmin edilen parametreler veya None
         """
         similar = self.find_similar_protocols(target_condition)
-        
+
         if not similar:
             logger.warning(f"'{target_condition}' için benzer protokol bulunamadı")
             return None
-        
+
         # En benzer top_n protokolü al
         top_similar = similar[:top_n]
-        
+
         # Ağırlıkları normalize et
         total_similarity = sum(sim for _, _, sim in top_similar)
         if total_similarity == 0:
             return None
-        
+
         weights = [sim / total_similarity for _, _, sim in top_similar]
-        
+
         # Ağırlıklı ortalama hesapla
         freq = sum(params['freq'] * w for (_, params, _), w in zip(top_similar, weights))
         duty = sum(params['duty'] * w for (_, params, _), w in zip(top_similar, weights))
         duration = sum(params['duration'] * w for (_, params, _), w in zip(top_similar, weights))
         intensity = sum(params['intensity'] * w for (_, params, _), w in zip(top_similar, weights))
-        
+
         logger.info(f"'{target_condition}' için interpolasyon: {len(top_similar)} benzer protokolden tahmin")
         for name, _, sim in top_similar:
             logger.debug(f"  - {name} (benzerlik: {sim:.2f})")
-        
+
         return {
             'freq': int(freq),
             'duty': duty,
             'duration': int(duration),
             'intensity': intensity,
             'evidence': 'interpolated',
-            'source_protocols': [name for name, _, _ in top_similar]
+            'source_protocols': [name for name, _, _ in top_similar],
         }
 
 
 class HybridPEMFRecommender:
     """
     Hibrit PEMF parametre önerici.
-    
+
     Combines:
     1. Literature-based clinical protocols
     2. Patient profile adaptation
     3. Parameter interpolation
     4. Session history learning (future)
     """
-    
+
     def __init__(self, app_data_dir: Optional[Path] = None):
         """
         Initialize recommender.
-        
+
         Args:
             app_data_dir: Application data directory for session history
         """
@@ -440,24 +432,24 @@ class HybridPEMFRecommender:
         self.adaptor = PatientProfileAdaptor()
         self.interpolator = ParameterInterpolator()
         self.app_data_dir = app_data_dir
-        
+
         logger.info(f"Hybrid PEMF Recommender initialized with {len(self.clinical_db)} clinical protocols")
-    
+
     def find_exact_protocol(self, treatment_target: str) -> Optional[Dict]:
         """
         Literatürde TAM eşleşme ara.
-        
+
         Args:
             treatment_target: Tedavi hedefi (emoji içerebilir: '🔥 İnflamasyon')
-            
+
         Returns:
             Protokol parametreleri veya None
         """
         # Emoji ve özel karakterleri temizle
         target_clean = clean_treatment_target(treatment_target)
-        
+
         logger.debug(f"Searching for: '{treatment_target}' -> cleaned: '{target_clean}'")
-        
+
         # Direkt eşleşme — NORMALIZE edilmiş anahtarlar üzerinde (Audit P1: ham-Türkçe anahtarlar
         # katlanmış girdiyle eşleşmiyordu → sessiz yanlış doz).
         if target_clean in _CLINICAL_PROTOCOLS_NORM:
@@ -474,32 +466,31 @@ class HybridPEMFRecommender:
                 return _params.copy()
 
         return None
-    
-    def recommend_parameters(self, 
-                            patient_info: Dict,
-                            treatment_target: str,
-                            session_history: Optional[List[Dict]] = None) -> Dict:
+
+    def recommend_parameters(
+        self, patient_info: Dict, treatment_target: str, session_history: Optional[List[Dict]] = None
+    ) -> Dict:
         """
         Akıllı parametre önerisi (3 aşamalı).
-        
+
         Args:
             patient_info: Hasta bilgileri (species, age, weight)
             treatment_target: Tedavi hedefi
             session_history: Geçmiş seans verileri (optional)
-            
+
         Returns:
             Önerilen parametreler ve metadata
         """
         # Aşama 1: Literatürde TAM eşleşme var mı?
         exact_match = self.find_exact_protocol(treatment_target)
-        
+
         if exact_match:
             base_params = exact_match
             source = 'literature_exact'
         else:
             # Aşama 2: Benzer protokolden interpolasyon
             interpolated = self.interpolator.interpolate(treatment_target, top_n=3)
-            
+
             if interpolated:
                 base_params = interpolated
                 source = 'interpolated'
@@ -508,10 +499,10 @@ class HybridPEMFRecommender:
                 logger.warning(f"No match for '{treatment_target}', using default wellness protocol")
                 base_params = self.clinical_db['wellness'].copy()
                 source = 'default_wellness'
-        
+
         # Aşama 3: Hasta profiline göre kişiselleştirme
         adapted_params = self.adaptor.adapt(base_params, patient_info)
-        
+
         # Metadata ekle
         result = {
             'freq': adapted_params['freq'],
@@ -525,49 +516,44 @@ class HybridPEMFRecommender:
                 'age': patient_info.get('age', 0),
                 'weight': patient_info.get('weight', 0),
             },
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
         }
-        
+
         # Log
         logger.info(
             f"Recommendation generated: {result['freq']}Hz, {result['duty']}%, {result['duration']}min "
             f"(source: {source}, evidence: {result['evidence']})"
         )
-        
+
         return result
-    
+
     def get_protocol_info(self, treatment_target: str) -> Dict:
         """
         Bir tedavi hedefi hakkında detaylı bilgi al.
-        
+
         Returns:
             Protocol info including evidence level, similar protocols, etc.
         """
         exact = self.find_exact_protocol(treatment_target)
-        
+
         if exact:
-            return {
-                'found': True,
-                'type': 'exact',
-                'params': exact,
-                'similar_protocols': []
-            }
-        
+            return {'found': True, 'type': 'exact', 'params': exact, 'similar_protocols': []}
+
         # Benzer protokolleri bul
         similar = self.interpolator.find_similar_protocols(treatment_target, min_similarity=0.1)
-        
+
         return {
             'found': False,
             'type': 'none',
             'params': None,
             'similar_protocols': [
-                {'name': name, 'similarity': sim, 'params': params}
-                for name, params, sim in similar[:5]
-            ]
+                {'name': name, 'similarity': sim, 'params': params} for name, params, sim in similar[:5]
+            ],
         }
 
 
 # ==================== CONVENIENCE FUNCTIONS ====================
+
 
 def create_recommender(app_data_dir: Optional[Path] = None) -> HybridPEMFRecommender:
     """
@@ -610,7 +596,7 @@ def get_literature_recommendation(treatment_target: str, app_data_dir: Optional[
         'evidence': protocol.get('evidence', 'unknown'),
         'source': source,
         'target': target_clean,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
     }
 
 
@@ -619,35 +605,35 @@ def get_literature_recommendation(treatment_target: str, app_data_dir: Optional[
 if __name__ == '__main__':
     # Configure logging
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    
+
     # Test cases
     print("=" * 60)
     print("HYBRID PEMF RECOMMENDER - TEST CASES")
     print("=" * 60)
-    
+
     recommender = create_recommender()
-    
+
     # Test 1: Exact match
     print("\n1. EXACT MATCH TEST: Kronik Artrit")
     patient1 = {'species': 'dog', 'age': 8, 'weight': 25}
     rec1 = recommender.recommend_parameters(patient1, "Kronik Artrit")
     print(f"   Recommendation: {rec1['freq']}Hz, {rec1['duty']}%, {rec1['duration']}min")
     print(f"   Source: {rec1['source']}, Evidence: {rec1['evidence']}")
-    
+
     # Test 2: Interpolation
     print("\n2. INTERPOLATION TEST: Kas Ağrısı (unknown)")
     patient2 = {'species': 'cat', 'age': 4, 'weight': 5}
     rec2 = recommender.recommend_parameters(patient2, "Kas Ağrısı")
     print(f"   Recommendation: {rec2['freq']}Hz, {rec2['duty']}%, {rec2['duration']}min")
     print(f"   Source: {rec2['source']}, Evidence: {rec2['evidence']}")
-    
+
     # Test 3: Young horse
     print("\n3. SPECIES TEST: Young Horse - Kırık İyileşmesi")
     patient3 = {'species': 'horse', 'age': 1.5, 'weight': 180}
     rec3 = recommender.recommend_parameters(patient3, "Kırık İyileşmesi")
     print(f"   Recommendation: {rec3['freq']}Hz, {rec3['duty']}%, {rec3['duration']}min")
     print(f"   Source: {rec3['source']}, Evidence: {rec3['evidence']}")
-    
+
     # Test 4: Protocol info
     print("\n4. PROTOCOL INFO TEST: Eklem Sorunu (unknown)")
     info = recommender.get_protocol_info("Eklem Sorunu")
@@ -655,5 +641,5 @@ if __name__ == '__main__':
     print("   Similar protocols:")
     for sim in info['similar_protocols'][:3]:
         print(f"     - {sim['name']} (similarity: {sim['similarity']:.2f})")
-    
+
     print("\n" + "=" * 60)

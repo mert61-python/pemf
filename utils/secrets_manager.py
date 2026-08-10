@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Author: mertaygn, cglrgrkn
 """
 PEMF — TEK-DOSYA sır yönetimi (SecretsManager).
 
@@ -21,6 +22,7 @@ Kullanım:
     token = get_secret("api_token")
     set_secret("mqtt_pass", "...")
 """
+
 from __future__ import annotations
 
 import base64
@@ -46,6 +48,7 @@ def _data_dir() -> Path:
     """app_data dizini (PEMF_DATA_DIR'e saygı duyar → ProgramData)."""
     try:
         from utils.path_utils import get_app_data_directory
+
         return get_app_data_directory()
     except Exception:
         override = os.getenv("PEMF_DATA_DIR", "").strip()
@@ -84,13 +87,16 @@ def _ensure_dir_hardened(d: Path) -> None:
     # Bayrak artık YALNIZ BAŞARIDA set edilir → sonraki yazımlar yeniden dener.
     try:
         from utils.file_acl import lock_down_dir
+
         if lock_down_dir(d, keep_current_user=True):
             _dir_hardened = True
         else:
             logger.warning(
                 "SIR DIZINI ACL kilidi UYGULANAMADI (%s) — .tmp yazim penceresinde duz-metin "
                 "sirlar yerel Users'a okunur kalabilir ve eski-kaynak dosyalari onceden "
-                "yerlestirilebilir.", d)
+                "yerlestirilebilir.",
+                d,
+            )
     except Exception:
         logger.warning("SIR DIZINI ACL kilidi hata verdi", exc_info=True)
 
@@ -130,14 +136,18 @@ def _machine_secret() -> bytes:
     Bulunamazsa RuntimeError → çağıran düz-metin fallback + uyarıya düşer."""
     import hashlib
     import platform as _pf
+
     ident = ""
     if _pf.system() == "Darwin":
         try:
             import re
             import subprocess
+
             out = subprocess.run(
                 ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             ).stdout
             m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out)
             if m:
@@ -160,6 +170,7 @@ def _machine_secret() -> bytes:
 
 def _machine_fernet():
     from cryptography.fernet import Fernet
+
     return Fernet(base64.urlsafe_b64encode(_machine_secret()))  # 32 bytes → geçerli Fernet anahtarı
 
 
@@ -177,34 +188,43 @@ def _enc(plain: str, critical: bool = False) -> str:
             return _DPAPI_PREFIX + base64.b64encode(_dpapi(plain.encode("utf-8"), True)).decode("ascii")
         except Exception as e:
             if critical:
-                raise RuntimeError(f"Kritik anahtar DPAPI ile sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}") from e
+                raise RuntimeError(
+                    f"Kritik anahtar DPAPI ile sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}"
+                ) from e
             logger.warning("DPAPI sifreleme yapilamadi, duz saklaniyor: %s", e)
             return plain
     try:
         return _MKEY_PREFIX + _machine_fernet().encrypt(plain.encode("utf-8")).decode("ascii")
     except Exception as e:
         if critical:
-            raise RuntimeError(f"Kritik anahtar makine-bagli sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}") from e
+            raise RuntimeError(
+                f"Kritik anahtar makine-bagli sifrelenemedi → düz-metin YAZILMIYOR (fail-closed): {e}"
+            ) from e
         logger.warning("Makine-bagli sifreleme yapilamadi (machine-id yok?), duz saklaniyor: %s", e)
         return plain
 
 
 def _dec(stored: str) -> str:
     if stored.startswith(_DPAPI_PREFIX):
-        raw = base64.b64decode(stored[len(_DPAPI_PREFIX):])
+        raw = base64.b64decode(stored[len(_DPAPI_PREFIX) :])
         return _dpapi(raw, False).decode("utf-8")
     if stored.startswith(_MKEY_PREFIX):
-        return _machine_fernet().decrypt(stored[len(_MKEY_PREFIX):].encode("ascii")).decode("utf-8")
+        return _machine_fernet().decrypt(stored[len(_MKEY_PREFIX) :].encode("ascii")).decode("utf-8")
     return stored  # düz-metin (eski/fallback)
 
 
 # ───────────────────────── üreteçler ─────────────────────────
-def _gen_urlsafe24() -> str: return _secrets.token_urlsafe(24)
-def _gen_urlsafe32() -> str: return _secrets.token_urlsafe(32)
+def _gen_urlsafe24() -> str:
+    return _secrets.token_urlsafe(24)
+
+
+def _gen_urlsafe32() -> str:
+    return _secrets.token_urlsafe(32)
 
 
 def _gen_fernet() -> str:
     from cryptography.fernet import Fernet
+
     return Fernet.generate_key().decode("ascii")
 
 
@@ -221,6 +241,7 @@ def _gen_admin_code() -> str:
 
 def _gen_device_id() -> str:
     import uuid
+
     return str(uuid.getnode())
 
 
@@ -235,6 +256,7 @@ def _read_file(p: Path) -> str:
 def _keyring_get(name: str) -> str:
     try:
         import keyring
+
         return (keyring.get_password("PEMF_GUI", name) or "").strip()
     except Exception:
         return ""
@@ -262,50 +284,87 @@ def _config_dir() -> Path:
 # key -> (section, dpapi?, generator|None, legacy_reader|None)
 _REGISTRY: dict[str, tuple] = {
     # AUTO (sistem üretir)
-    "api_token":          ("auto", False, _gen_urlsafe24,
-                           lambda: os.getenv("PEMF_API_TOKEN", "").strip() or _legacy_appdata_token()),
-    "pairing_code":       ("auto", False, _gen_pairing,
-                           lambda: _read_file(_data_dir() / "pairing_code.txt")),
-    "admin_reset_code":   ("auto", False, _gen_admin_code,  # operatör şifre-sıfırlama (login 'Şifremi unuttum' + Ayarlar)
-                           lambda: _read_file(_data_dir() / "admin_reset_code.txt")),
-    "device_id":          ("auto", False, _gen_device_id,
-                           lambda: _read_file(_data_dir() / "device_id.txt")),
-    "sqlcipher_key":      ("auto", True, _gen_urlsafe32,
-                           lambda: _keyring_get("sqlcipher_key") or os.getenv("PEMF_SQLCIPHER_KEY", "").strip()
-                                   or _read_file(_data_dir() / ".sqlcipher_key")),
-    "patient_fernet_key": ("auto", True, _gen_fernet,
-                           lambda: _keyring_get("patient_fernet_key") or _read_file(_config_dir() / ".pemf_key_v2")),
+    "api_token": (
+        "auto",
+        False,
+        _gen_urlsafe24,
+        lambda: os.getenv("PEMF_API_TOKEN", "").strip() or _legacy_appdata_token(),
+    ),
+    "pairing_code": ("auto", False, _gen_pairing, lambda: _read_file(_data_dir() / "pairing_code.txt")),
+    "admin_reset_code": (
+        "auto",
+        False,
+        _gen_admin_code,  # operatör şifre-sıfırlama (login 'Şifremi unuttum' + Ayarlar)
+        lambda: _read_file(_data_dir() / "admin_reset_code.txt"),
+    ),
+    "device_id": ("auto", False, _gen_device_id, lambda: _read_file(_data_dir() / "device_id.txt")),
+    "sqlcipher_key": (
+        "auto",
+        True,
+        _gen_urlsafe32,
+        lambda: (
+            _keyring_get("sqlcipher_key")
+            or os.getenv("PEMF_SQLCIPHER_KEY", "").strip()
+            or _read_file(_data_dir() / ".sqlcipher_key")
+        ),
+    ),
+    "patient_fernet_key": (
+        "auto",
+        True,
+        _gen_fernet,
+        lambda: _keyring_get("patient_fernet_key") or _read_file(_config_dir() / ".pemf_key_v2"),
+    ),
     # DENETIM (offsite-backup-no-key-escrow): yedeklerin yanina yazilan kurtarma zarfini acan
     # 150-bit kod. Zarf olmadan yedekler BASKA makinede acilamaz (sqlcipher_key DPAPI ile bu
     # makineye bagli). ÜRETİM utils/backup_recovery.get_or_create_code icinde — burada generator
     # YOK ki get_secret(generate=True) ile kazara yeni kod uretilip mevcut zarf ORPHAN kalmasin.
-    "backup_recovery_code": ("auto", True, None,
-                             lambda: os.getenv("PEMF_BACKUP_RECOVERY_CODE", "").strip()),
+    "backup_recovery_code": ("auto", True, None, lambda: os.getenv("PEMF_BACKUP_RECOVERY_CODE", "").strip()),
     # Coverage-audit P1: bulut capability-token — Supabase RPC'lerinde device_id (gizli-değil) yerine
     # YETKİ anahtarı. dpapi=True (kritik). İlk publish'te TOFU ile bulut secret_hash'e mühürlenir; sonra
     # her RPC (upsert_device/upsert_patient/resolve_patients...) bunu p_secret olarak gönderir.
-    "device_registry_secret": ("auto", True, _gen_urlsafe32,
-                               lambda: os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip()),
-    "master_secret":      ("operator", True, None,  # Audit P3: dpapi=True — KDF kökü; set_secret ile girilirse makineye-bağlı şifrele (sqlcipher/patient_fernet ile tutarlı). operatör/env; YOKSA credential_manager uyarı+dosya yolu (oto-üretme yok)
-                           lambda: os.getenv("PEMF_MASTER_SECRET", "").strip() or _keyring_get("master_secret")),
+    "device_registry_secret": (
+        "auto",
+        True,
+        _gen_urlsafe32,
+        lambda: os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip(),
+    ),
+    "master_secret": (
+        "operator",
+        True,
+        None,  # Audit P3: dpapi=True — KDF kökü; set_secret ile girilirse makineye-bağlı şifrele (sqlcipher/patient_fernet ile tutarlı). operatör/env; YOKSA credential_manager uyarı+dosya yolu (oto-üretme yok)
+        lambda: os.getenv("PEMF_MASTER_SECRET", "").strip() or _keyring_get("master_secret"),
+    ),
     # OPERATOR (operatör girer; üreteç YOK)
-    "mqtt_user":               ("operator", False, None, lambda: os.getenv("PEMF_MQTT_USER", "").strip()),
-    "mqtt_pass":               ("operator", False, None, lambda: os.getenv("PEMF_MQTT_PASS", "").strip()),
+    "mqtt_user": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_USER", "").strip()),
+    "mqtt_pass": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_PASS", "").strip()),
     "cloudflare_tunnel_token": ("operator", False, None, lambda: os.getenv("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()),
-    "tunnel_hostname":         ("operator", False, None, lambda: os.getenv("PEMF_TUNNEL_HOSTNAME", "").strip()),
+    "tunnel_hostname": ("operator", False, None, lambda: os.getenv("PEMF_TUNNEL_HOSTNAME", "").strip()),
     # EMBEDDED (build ile gelir)
-    "supabase_url":      ("embedded", False, None,
-                          lambda: os.getenv("SUPABASE_URL", "").strip() or "https://wmsxonunkphjeregpvuj.supabase.co"),
-    "supabase_anon_key": ("embedded", False, None,
-                          lambda: os.getenv("SUPABASE_KEY", "").strip() or "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT"),
+    "supabase_url": (
+        "embedded",
+        False,
+        None,
+        lambda: os.getenv("SUPABASE_URL", "").strip() or "https://wmsxonunkphjeregpvuj.supabase.co",
+    ),
+    "supabase_anon_key": (
+        "embedded",
+        False,
+        None,
+        lambda: os.getenv("SUPABASE_KEY", "").strip() or "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT",
+    ),
 }
 
 
 # ───────────────────────── dosya yükle/yaz ─────────────────────────
 def _empty_doc() -> dict:
-    doc = {"_comment": "PEMF tüm sırları. 'operator' bölümünü doldurun; 'auto' kendiliğinden dolar; "
-                       "kritik kripto anahtarları DPAPI ile makineye-bağlı şifreli. BU DOSYAYI YEDEKLEYİN.",
-           "_version": _VERSION, "auto": {}, "operator": {}, "embedded": {}}
+    doc = {
+        "_comment": "PEMF tüm sırları. 'operator' bölümünü doldurun; 'auto' kendiliğinden dolar; "
+        "kritik kripto anahtarları DPAPI ile makineye-bağlı şifreli. BU DOSYAYI YEDEKLEYİN.",
+        "_version": _VERSION,
+        "auto": {},
+        "operator": {},
+        "embedded": {},
+    }
     for key, (section, *_rest) in _REGISTRY.items():
         doc[section].setdefault(key, "")
     return doc
@@ -389,7 +448,7 @@ def _save(doc: dict) -> None:
         os.replace(tmp, p)
     except Exception:
         try:
-            tmp.unlink()          # yetim .tmp birakma (icinde duz-metin sirlar var)
+            tmp.unlink()  # yetim .tmp birakma (icinde duz-metin sirlar var)
         except Exception:
             pass
         raise
@@ -397,8 +456,11 @@ def _save(doc: dict) -> None:
     # açık olsun. os.chmod Windows'ta no-op'tur → düz-metin operatör-sırları Users'a açık kalırdı.
     try:
         from utils.file_acl import lock_down_file
+
         if not lock_down_file(p, keep_current_user=True):
-            logger.warning("SIR dosyası ACL kilidi UYGULANAMADI — tüm sırları taşıyan dosya yerel Users'a açık kalmış olabilir (icacls/OS?).")
+            logger.warning(
+                "SIR dosyası ACL kilidi UYGULANAMADI — tüm sırları taşıyan dosya yerel Users'a açık kalmış olabilir (icacls/OS?)."
+            )
     except Exception:
         logger.warning("SIR dosyası ACL kilidi hata verdi", exc_info=True)
 
@@ -423,7 +485,9 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
                 # mevcut ciphertext'i (ör. patients.db SQLCipher anahtarı) KALICI kaybederiz → tüm şifreli
                 # hasta verisi geri-DÖNÜLEMEZ brick olur. Bu yüzden fail-closed: ÜRETME/MİGRATE ETME/EZME,
                 # HATA yükselt. Ciphertext dosyada korunur (DPAPI düzelince veya doğru makine/yedekle çözülür).
-                logger.error("Sır çözülemedi (%s): %s — mevcut şifreli değer KORUNUYOR, üretilmiyor (brick koruması).", key, e)
+                logger.error(
+                    "Sır çözülemedi (%s): %s — mevcut şifreli değer KORUNUYOR, üretilmiyor (brick koruması).", key, e
+                )
                 raise RuntimeError(
                     f"Depolanmış sır '{key}' çözülemedi (DPAPI/makine/profil değişmiş olabilir). "
                     f"Var olan şifreli veriyi korumak için yeni anahtar ÜRETİLMEDİ ve dosya EZİLMEDİ. "

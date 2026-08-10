@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Process-genelinde TEK paylaşılan Zeroconf örneği.
 
 python-zeroconf host başına TEK instance önerir. Bu backend'de İKİ ayrı yayıncı vardı:
@@ -8,6 +9,7 @@ birinin `close()`'u diğerinin soketini bozabiliyor, kayıt (record) flapping'i 
 "cihaz bulunamadı" oluşturabiliyordu. Artık ikisi de bu paylaşılan örnek üzerinde KENDİ
 ServiceInfo'sunu register/unregister eder; ortak Zeroconf yalnızca process kapanışında kapatılır.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _zc = None
-_bound_ips: list = []              # _zc'nin şu an bağlı olduğu gerçek-LAN IP'leri (arayüz-seti izlemek için)
-_reregister_cbs: list = []         # Zeroconf yeniden-yaratıldığında servislerini re-register eden yayıncı callback'leri
+_bound_ips: list = []  # _zc'nin şu an bağlı olduğu gerçek-LAN IP'leri (arayüz-seti izlemek için)
+_reregister_cbs: list = []  # Zeroconf yeniden-yaratıldığında servislerini re-register eden yayıncı callback'leri
 
 
 def add_reregister_callback(cb) -> None:
@@ -46,6 +48,7 @@ def _real_lan_ipv4s() -> list:
     ips: list = []
     try:
         import ifaddr  # python-zeroconf ile birlikte gelen bağımlılık (ekstra dep yok)
+
         for adapter in ifaddr.get_adapters():
             for ip in adapter.ips:
                 if getattr(ip, "is_IPv4", False):
@@ -73,6 +76,7 @@ def get_shared_zeroconf():
     with _lock:
         if _zc is None:
             from zeroconf import Zeroconf
+
             ips = _real_lan_ipv4s()
             if ips:
                 try:
@@ -104,6 +108,7 @@ def ensure_interfaces_current() -> bool:
         if _zc is None or not ips or set(ips) == set(_bound_ips):
             return False
         from zeroconf import Zeroconf
+
         old_ips = list(_bound_ips)
         try:
             _zc.close()
@@ -118,8 +123,12 @@ def ensure_interfaces_current() -> bool:
             _bound_ips = []
         cbs = list(_reregister_cbs)
     # Callback'ler get_shared_zeroconf() çağırır → KİLİT DIŞINDA çalıştır (yeniden-giriş/deadlock önle).
-    logger.info("LAN arayüz seti değişti %s → %s; Zeroconf yeniden bağlandı, %d servis re-register ediliyor",
-                old_ips, _bound_ips, len(cbs))
+    logger.info(
+        "LAN arayüz seti değişti %s → %s; Zeroconf yeniden bağlandı, %d servis re-register ediliyor",
+        old_ips,
+        _bound_ips,
+        len(cbs),
+    )
     for cb in cbs:
         try:
             cb()

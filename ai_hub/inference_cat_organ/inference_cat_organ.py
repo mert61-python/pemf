@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """inference_cat_organ.py — Ana giris noktasi (I/O only).
 
 Tum mantik lib/ altinda modüler. Bu dosya sadece:

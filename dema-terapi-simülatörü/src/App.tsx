@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Activity, 
-  Zap, 
-  Clock, 
-  Waves, 
-  Info, 
+import {
+  Activity,
+  Zap,
+  Clock,
+  Waves,
+  Info,
   ShieldCheck,
   ChevronRight,
   Settings2,
@@ -38,7 +38,7 @@ export default function App() {
 
   const biologicalEffects = useMemo(() => {
     let effects = [];
-    
+
     // Frequency logic
     if (params.frequency >= 1 && params.frequency <= 10) {
       effects.push({
@@ -124,15 +124,15 @@ export default function App() {
               <Settings2 className="w-4 h-4" />
               <h2 className="text-sm font-bold uppercase tracking-wider">Terapi Parametreleri</h2>
             </div>
-            
+
             {/* Animation Toggle */}
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Animasyon</span>
-              <button 
+              <button
                 onClick={() => setIsAnimating(!isAnimating)}
                 className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none ${isAnimating ? 'bg-blue-600' : 'bg-slate-200'}`}
               >
-                <motion.div 
+                <motion.div
                   animate={{ x: isAnimating ? 20 : 2 }}
                   className="absolute top-1 left-0 w-3 h-3 bg-white rounded-full shadow-sm"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -258,11 +258,11 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.9, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                  transition={{ 
+                  transition={{
                     type: "spring",
                     stiffness: 260,
                     damping: 20,
-                    delay: idx * 0.05 
+                    delay: idx * 0.05
                   }}
                   className={`relative overflow-hidden flex flex-col items-center text-center p-5 rounded-3xl border-2 ${effect.borderColor} ${effect.color} shadow-sm hover:shadow-md transition-all group`}
                 >
@@ -277,7 +277,7 @@ export default function App() {
                       {effect.description}
                     </p>
                   </div>
-                  
+
                   {/* Decorative background element */}
                   <div className={`absolute -right-4 -bottom-4 w-16 h-16 opacity-10 ${effect.textColor}`}>
                     {effect.icon}
@@ -291,7 +291,7 @@ export default function App() {
         {/* Footer Info */}
         <footer className="p-4 bg-white border-t border-slate-100">
           <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-            Bu simülatör eğitim amaçlıdır. DEMA terapisi uygulamadan önce mutlaka bir sağlık profesyoneline danışın. 
+            Bu simülatör eğitim amaçlıdır. DEMA terapisi uygulamadan önce mutlaka bir sağlık profesyoneline danışın.
             ISO 13485 standartları cihaz üretim kalitesini temsil eder.
           </p>
         </footer>
@@ -302,11 +302,11 @@ export default function App() {
 
 function DiagramVisualization({ params, isAnimating }: { params: SimulationParams, isAnimating: boolean }) {
   const { frequency, intensity, waveform } = params;
-  
+
   // Center point
   const cx = 300;
   const cy = 180;
-  
+
   // Generate field lines
   const lines = useMemo(() => {
     const lineCount = 12;
@@ -316,11 +316,11 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       const length = 250;
       const endX = cx + Math.cos(angle) * length;
       const endY = cy + Math.sin(angle) * length;
-      
+
       // Control points for curved lines
       const cp1x = cx + Math.cos(angle - 0.2) * (length * 0.5);
       const cp1y = cy + Math.sin(angle - 0.2) * (length * 0.5);
-      
+
       result.push({
         id: i,
         path: `M ${cx} ${cy} Q ${cp1x} ${cp1y} ${endX} ${endY}`,
@@ -381,7 +381,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
           <pattern id="skinTexture" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="0.5" fill="#8d5524" fillOpacity="0.1" />
           </pattern>
-          
+
           <pattern id="fatTexture" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse">
             <circle cx="6" cy="6" r="4" fill="#fdd835" fillOpacity="0.2" />
             <circle cx="2" cy="2" r="2" fill="#fff176" fillOpacity="0.1" />
@@ -450,37 +450,37 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
         {/* Tissue Layers */}
         <g>
           {/* Muscle Layer (Deepest) */}
-          <rect 
-            x="130" y={tissueTop + 40} width="340" height={tissueHeight - 40} 
-            fill="url(#muscleGradient)" stroke="#8e0000" strokeWidth="0.5" 
+          <rect
+            x="130" y={tissueTop + 40} width="340" height={tissueHeight - 40}
+            fill="url(#muscleGradient)" stroke="#8e0000" strokeWidth="0.5"
             rx="4"
           />
-          <rect 
-            x="130" y={tissueTop + 40} width="340" height={tissueHeight - 40} 
+          <rect
+            x="130" y={tissueTop + 40} width="340" height={tissueHeight - 40}
             fill="url(#muscleTexture)" className="opacity-40"
             rx="4"
           />
-          
+
           {/* Fat Layer (Middle) */}
-          <rect 
-            x="130" y={tissueTop + 15} width="340" height="25" 
-            fill="url(#fatGradient)" stroke="#f9a825" strokeWidth="0.5" 
+          <rect
+            x="130" y={tissueTop + 15} width="340" height="25"
+            fill="url(#fatGradient)" stroke="#f9a825" strokeWidth="0.5"
             rx="2"
           />
-          <rect 
-            x="130" y={tissueTop + 15} width="340" height="25" 
+          <rect
+            x="130" y={tissueTop + 15} width="340" height="25"
             fill="url(#fatTexture)" className="opacity-50"
             rx="2"
           />
-          
+
           {/* Skin Layer (Top) */}
-          <rect 
-            x="130" y={tissueTop} width="340" height="15" 
-            fill="url(#skinGradient)" stroke="#8d5524" strokeWidth="0.5" 
+          <rect
+            x="130" y={tissueTop} width="340" height="15"
+            fill="url(#skinGradient)" stroke="#8d5524" strokeWidth="0.5"
             rx="2"
           />
-          <rect 
-            x="130" y={tissueTop} width="340" height="15" 
+          <rect
+            x="130" y={tissueTop} width="340" height="15"
             fill="url(#skinTexture)" className="opacity-30"
             rx="2"
           />
@@ -493,14 +493,14 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
             cy={tissueTop + currentDepth}
             r={20 + intensity * 10}
             fill="url(#heatmapGradient)"
-            animate={{ 
+            animate={{
               scale: [1, 1.2, 1],
               opacity: [0.4, 0.8, 0.4]
             }}
-            transition={{ 
-              duration: 1 / (frequency / 20 + 0.1), 
-              repeat: Infinity, 
-              ease: "easeInOut" 
+            transition={{
+              duration: 1 / (frequency / 20 + 0.1),
+              repeat: Infinity,
+              ease: "easeInOut"
             }}
             className="pointer-events-none"
           />
@@ -514,7 +514,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
               const vy = tissueTop + 60;
               const baseRadius = 12 + (intensity * 2.5);
               const rotationDuration = Math.max(0.2, 3 / (frequency / 10 + 1));
-              
+
               return (
                 <g key={`efield-vortex-${i}`} className="pointer-events-none">
                   {/* Core Pulsating Glow */}
@@ -523,17 +523,17 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                     cy={vy}
                     r={baseRadius * 0.8}
                     fill="url(#vortexRadial)"
-                    animate={{ 
+                    animate={{
                       opacity: [0.1, 0.3, 0.1],
                       scale: [0.8, 1.2, 0.8]
                     }}
-                    transition={{ 
-                      duration: rotationDuration * 2, 
-                      repeat: Infinity, 
-                      ease: "easeInOut" 
+                    transition={{
+                      duration: rotationDuration * 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
                     }}
                   />
-                  
+
                   {/* Outer Vortex Ring (Fast) */}
                   <motion.circle
                     cx={vx}
@@ -544,13 +544,13 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                     strokeWidth="1.2"
                     strokeDasharray="4 8"
                     animate={{ rotate: 360 }}
-                    transition={{ 
-                      duration: rotationDuration, 
-                      repeat: Infinity, 
-                      ease: "linear" 
+                    transition={{
+                      duration: rotationDuration,
+                      repeat: Infinity,
+                      ease: "linear"
                     }}
                   />
-                  
+
                   {/* Inner Vortex Ring (Counter-rotating, Slower) */}
                   <motion.circle
                     cx={vx}
@@ -561,10 +561,10 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                     strokeWidth="0.8"
                     strokeDasharray="2 6"
                     animate={{ rotate: -360 }}
-                    transition={{ 
-                      duration: rotationDuration * 1.5, 
-                      repeat: Infinity, 
-                      ease: "linear" 
+                    transition={{
+                      duration: rotationDuration * 1.5,
+                      repeat: Infinity,
+                      ease: "linear"
                     }}
                   />
 
@@ -602,7 +602,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                 </g>
               );
             })}
-            
+
             <defs>
               <radialGradient id="vortexRadial">
                 <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.6" />
@@ -620,18 +620,18 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                 key={`blood-${i}`}
                 r="1.5"
                 fill="#ef4444"
-                initial={{ 
-                  x: 130 + Math.random() * 340, 
+                initial={{
+                  x: 130 + Math.random() * 340,
                   y: tissueTop + Math.random() * tissueHeight,
-                  opacity: 0 
+                  opacity: 0
                 }}
-                animate={{ 
+                animate={{
                   x: [null, 130 + Math.random() * 340],
                   opacity: [0, 0.6, 0]
                 }}
-                transition={{ 
-                  duration: 2 / (bloodFlowSpeed || 1), 
-                  repeat: Infinity, 
+                transition={{
+                  duration: 2 / (bloodFlowSpeed || 1),
+                  repeat: Infinity,
                   delay: i * 0.2,
                   ease: "linear"
                 }}
@@ -654,14 +654,14 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                 stroke="#4ade80"
                 strokeWidth="2"
                 initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ 
+                animate={{
                   scale: [0.8, 1.2],
                   opacity: [0, 0.4, 0],
                   strokeWidth: [4, 1]
                 }}
-                transition={{ 
-                  duration: Math.max(0.5, 2 / (frequency / 20)), 
-                  repeat: Infinity, 
+                transition={{
+                  duration: Math.max(0.5, 2 / (frequency / 20)),
+                  repeat: Infinity,
                   delay: i * (1 / (frequency / 20 + 0.5)),
                   ease: "easeOut"
                 }}
@@ -713,7 +713,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
             />
           </g>
         ))}
-        
+
         {/* Dielectric Field Concentration (Below Tissue) */}
         <g filter="url(#concentrationFilter)">
           <defs>
@@ -772,7 +772,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
                   const x = (i / points) * w;
                   let y = h/2;
                   const phase = (i / points) * Math.PI * 4;
-                  
+
                   if (waveform === 'Sinüs') {
                     y = h/2 + Math.sin(phase) * 12;
                   } else if (waveform === 'Kare') {
@@ -814,10 +814,10 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
               fill="none"
               stroke="#93c5fd"
               strokeWidth={lineStrokeWidth * 4}
-              animate={isAnimating ? { 
+              animate={isAnimating ? {
                 opacity: [glowOpacity * 0.3, glowOpacity, glowOpacity * 0.3],
                 strokeWidth: [lineStrokeWidth * 3, lineStrokeWidth * 6, lineStrokeWidth * 3]
-              } : { 
+              } : {
                 opacity: glowOpacity * 0.5,
                 strokeWidth: lineStrokeWidth * 4
               }}
@@ -835,10 +835,10 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
               fill="none"
               stroke="#60a5fa"
               strokeWidth={lineStrokeWidth}
-              animate={isAnimating ? { 
+              animate={isAnimating ? {
                 strokeWidth: lineStrokeWidth,
                 opacity: [0.4, 0.7, 0.4]
-              } : { 
+              } : {
                 strokeWidth: lineStrokeWidth,
                 opacity: 0.5
               }}
@@ -909,7 +909,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
             <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.15em] text-center leading-tight">E-Alan</span>
           </div>
         </div>
-        
+
         <div className="flex-1 w-full flex gap-1">
           {/* Gauge Ticks */}
           <div className="flex flex-col justify-between h-full py-1">
@@ -925,17 +925,17 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
 
           <div className="flex-1 h-full bg-slate-800/50 rounded-lg relative overflow-hidden border border-slate-700/50">
             {/* Active Bar with Segmented Look */}
-            <motion.div 
+            <motion.div
               className="absolute bottom-0 w-full bg-gradient-to-t from-blue-500 via-emerald-500 via-amber-500 to-red-500"
               initial={{ height: 0 }}
-              animate={{ 
+              animate={{
                 height: `${Math.min(100, (frequency * intensity) / 5)}%`,
               }}
               transition={{ type: "spring", stiffness: 80, damping: 15 }}
             >
               {/* Scanline Effect */}
               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:100%_4px]" />
-              
+
               {/* Top Glow */}
               <div className="absolute top-0 left-0 right-0 h-4 bg-white/20 blur-sm" />
             </motion.div>
@@ -951,7 +951,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
           </span>
           <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">V/m</span>
         </div>
-        
+
         {/* Status Indicator */}
         <div className="mt-2 flex items-center gap-1">
           <div className={`w-1 h-1 rounded-full ${isAnimating ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
@@ -974,12 +974,12 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
       </div>
 
       {/* Labels - Absolute Positioned HTML for better styling */}
-      
+
       {/* Central Node */}
-      <motion.div 
+      <motion.div
         className="absolute bg-blue-600 rounded-full p-4 shadow-lg shadow-blue-200 z-10"
         style={{ left: `50%`, top: `45%`, transform: 'translate(-50%, -50%)' }}
-        animate={isAnimating ? { 
+        animate={isAnimating ? {
           scale: [1, 1 + (frequency / 400), 1],
           boxShadow: [
             "0 10px 15px -3px rgba(59, 130, 246, 0.3)",
@@ -990,8 +990,8 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
           scale: 1,
           boxShadow: "0 10px 15px -3px rgba(59, 130, 246, 0.3)"
         }}
-        transition={{ 
-          duration: Math.max(0.1, 1 / (frequency / 10 + 1)), 
+        transition={{
+          duration: Math.max(0.1, 1 / (frequency / 10 + 1)),
           repeat: Infinity,
           ease: "easeInOut"
         }}
@@ -1099,7 +1099,7 @@ function DiagramVisualization({ params, isAnimating }: { params: SimulationParam
 function WaveformPreview({ type }: { type: Waveform }) {
   const width = 40;
   const height = 20;
-  
+
   const d = useMemo(() => {
     if (type === 'Sinüs') {
       return `M 2 ${height/2} Q ${width/4} 2, ${width/2} ${height/2} T ${width-2} ${height/2}`;
@@ -1123,12 +1123,12 @@ function AnimatedSignal({ waveform, frequency, isAnimating }: { waveform: Wavefo
   const width = 120;
   const height = 40;
   const points = 50;
-  
+
   const pathData = useMemo(() => {
     let d = `M 0 ${height / 2}`;
     const step = width / points;
     const freqFactor = frequency / 10;
-    
+
     for (let i = 0; i <= points; i++) {
       const x = i * step;
       const t = (i / points) * freqFactor * Math.PI * 2;

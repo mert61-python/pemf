@@ -1,5 +1,7 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: bobin transport yönlendirmesi (STM 1-5 → HardwareController, ESP 6-8 → MQTT) +
 geçersiz bobin reddi + toplu (batch) yönlendirme + durdurma mekanizması. Donanım/broker mock'lanır."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def api():
     from servers import api_server
+
     return api_server
 
 
@@ -28,10 +31,10 @@ def mocked_hw(api, monkeypatch):
         # İmza GERÇEK HardwareController.update_coil ile aynı olmalı; duration_seconds
         # (DENETIM P3: dakikaya yuvarlanmış süre yerine hassas saniye) kaydedilir ki
         # aşağıdaki test onun GERÇEKTEN iletildiğini doğrulayabilsin.
-        def update_coil(self, coil_id, freq, duty, phase, duration, start=True,
-                        duration_seconds=None):
-            calls["stm"].append({"coil": coil_id, "start": start,
-                                 "duration_min": duration, "duration_seconds": duration_seconds})
+        def update_coil(self, coil_id, freq, duty, phase, duration, start=True, duration_seconds=None):
+            calls["stm"].append(
+                {"coil": coil_id, "start": start, "duration_min": duration, "duration_seconds": duration_seconds}
+            )
             return True
 
         def stop_all_coils(self):
@@ -40,8 +43,7 @@ def mocked_hw(api, monkeypatch):
 
     monkeypatch.setattr(api.state, "hardware", FakeHW())
     monkeypatch.setattr(api.state, "core", object())  # /api/hardware/command core+hardware ister
-    monkeypatch.setattr(api, "_mqtt_publish",
-                        lambda topic, payload: (calls["mqtt"].append(topic) or True))
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: calls["mqtt"].append(topic) or True)
     # Aktif seans kalıntısını temizle (coil-run DB yan-etkisi olmasın).
     with api._session_lock:
         api._active_session.clear()
@@ -102,10 +104,10 @@ def test_serial_write_failure_closes_port_and_drops_stale_payload():
 
     # (1) yazım hatası dalında port kapatılmalı (dal = [STM32 SEND] logundan UDP bloğuna kadar)
     _after_send_err = src.split("[STM32 SEND]")[1].split("if udp_sock")[0]
-    assert "close_serial(serial_conn)" in _after_send_err, \
+    assert "close_serial(serial_conn)" in _after_send_err, (
         "yazım hatasında port kapatılmalı (yoksa reconnect tetiklenmez)"
-    assert "last_payload[0] = None" in _after_send_err, \
-        "kopuk bağlantıda bayat paket düşürülmeli (re-fire önlemi)"
+    )
+    assert "last_payload[0] = None" in _after_send_err, "kopuk bağlantıda bayat paket düşürülmeli (re-fire önlemi)"
 
     # (2) retry yaş sınırına tabi olmalı
     assert "_RETRY_MAX_AGE_S" in src, "NACK tekrar-oynatması yaş sınırlı olmalı"
@@ -121,8 +123,7 @@ def test_precise_duration_seconds_forwarded_to_deadline(client, mocked_hw):
     tam uygulayabilir → çağrı hassas saniyeyi de geçmeli.
     """
     mocked_hw["stm"].clear()
-    r = client.post("/api/coil/1/control",
-                    json={"freq": 50, "duty": 25, "phase": 0, "duration": 30, "start": True})
+    r = client.post("/api/coil/1/control", json={"freq": 50, "duty": 25, "phase": 0, "duration": 30, "start": True})
     assert r.status_code == 200
     rec = next(c for c in mocked_hw["stm"] if c.get("coil") == 1)
     assert rec["duration_min"] == 1, "firmware'e yukarı yuvarlanmış dakika gider (yarıda kesmesin)"

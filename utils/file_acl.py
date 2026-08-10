@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Windows NTFS ACL kilidi — sır/anahtar dosyalarını yalnız SYSTEM + Administrators okusun.
 
 SORUN: `os.chmod(path, 0o600)` Windows'ta NTFS ACL kurmaz (POSIX modu neredeyse no-op'tur).
@@ -14,6 +15,7 @@ Yerelleştirme: grup ADLARI Türkçe Windows'ta değişir ("Administrators" → 
 
 Best-effort: uygulanamazsa (izin/eski Windows) uyarı loglanır, çağıran akış DURMAZ.
 """
+
 import logging
 import os
 import subprocess
@@ -22,14 +24,14 @@ import sys
 logger = logging.getLogger(__name__)
 
 # icacls SID sözdizimi: "*S-1-5-18". F = Full control.
-_SYSTEM_SID = "*S-1-5-18"          # NT AUTHORITY\SYSTEM (servis LocalSystem)
-_ADMINS_SID = "*S-1-5-32-544"      # BUILTIN\Administrators (operatör yedek/kurtarma)
+_SYSTEM_SID = "*S-1-5-18"  # NT AUTHORITY\SYSTEM (servis LocalSystem)
+_ADMINS_SID = "*S-1-5-32-544"  # BUILTIN\Administrators (operatör yedek/kurtarma)
 # DENETİM 2026-08-04: `/inheritance:r` YALNIZ MİRAS ALINAN ACE'leri kaldırır; hedefte AÇIK
 # (explicit) bir Users / Authenticated-Users ACE'i varsa OLDUĞU GİBİ KALIR ve `/grant:r` de
 # yalnız adı geçen SID'leri değiştirir → dosya/dizin 'kilitlendi' sanılırken Users ERİŞMEYE
 # DEVAM EDER. (Davranış testiyle yakalandı.) Bu yüzden ikisi AÇIKÇA kaldırılır.
-_USERS_SID = "*S-1-5-32-545"       # BUILTIN\Users
-_AUTHUSERS_SID = "*S-1-5-11"       # NT AUTHORITY\Authenticated Users
+_USERS_SID = "*S-1-5-32-545"  # BUILTIN\Users
+_AUTHUSERS_SID = "*S-1-5-11"  # NT AUTHORITY\Authenticated Users
 
 
 def lock_down_dir(path, keep_current_user: bool = True) -> bool:
@@ -65,15 +67,23 @@ def lock_down_dir(path, keep_current_user: bool = True) -> bool:
             return False
     try:
         # (OI)(CI) = içindeki dosya/dizinlere MİRAS geçsin — asıl amaç budur.
-        _args = ["icacls", p,
-                 "/inheritance:r",
-                 # Miras DEGIL, ACIK ACE olarak duran Users/Authenticated-Users grant'larini da kaldir.
-                 "/remove:g", _USERS_SID,
-                 "/remove:g", _AUTHUSERS_SID,
-                 "/grant:r", f"{_SYSTEM_SID}:(OI)(CI)F",
-                 "/grant:r", f"{_ADMINS_SID}:(OI)(CI)F"]
+        _args = [
+            "icacls",
+            p,
+            "/inheritance:r",
+            # Miras DEGIL, ACIK ACE olarak duran Users/Authenticated-Users grant'larini da kaldir.
+            "/remove:g",
+            _USERS_SID,
+            "/remove:g",
+            _AUTHUSERS_SID,
+            "/grant:r",
+            f"{_SYSTEM_SID}:(OI)(CI)F",
+            "/grant:r",
+            f"{_ADMINS_SID}:(OI)(CI)F",
+        ]
         if keep_current_user:
             import getpass
+
             _args += ["/grant:r", f"{getpass.getuser()}:(OI)(CI)F"]
         subprocess.run(
             _args,
@@ -110,21 +120,29 @@ def lock_down_file(path, keep_current_user: bool = False) -> bool:
         except Exception:
             return False
     try:
-        _args = ["icacls", p,
-                 "/inheritance:r",          # miras alınan (Users dahil) tüm ACE'leri kaldır
-                 # ...ama ACIK ACE'ler mirasla gitmez → onlari da adiyla kaldir (bkz. SID notu).
-                 "/remove:g", _USERS_SID,
-                 "/remove:g", _AUTHUSERS_SID,
-                 "/grant:r", f"{_SYSTEM_SID}:F",
-                 "/grant:r", f"{_ADMINS_SID}:F"]
+        _args = [
+            "icacls",
+            p,
+            "/inheritance:r",  # miras alınan (Users dahil) tüm ACE'leri kaldır
+            # ...ama ACIK ACE'ler mirasla gitmez → onlari da adiyla kaldir (bkz. SID notu).
+            "/remove:g",
+            _USERS_SID,
+            "/remove:g",
+            _AUTHUSERS_SID,
+            "/grant:r",
+            f"{_SYSTEM_SID}:F",
+            "/grant:r",
+            f"{_ADMINS_SID}:F",
+        ]
         if keep_current_user:
             import getpass
+
             _args += ["/grant:r", f"{getpass.getuser()}:F"]
         subprocess.run(
             _args,
             check=True,
             capture_output=True,
-            timeout=10,                     # E-3: wedge'lenen handle başlangıçta bloklamasın (tek timeout'suz subprocess'ti)
+            timeout=10,  # E-3: wedge'lenen handle başlangıçta bloklamasın (tek timeout'suz subprocess'ti)
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return True

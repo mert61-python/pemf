@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_human_kidney_disease — UCI-CKD klinik sınıflandırıcı paketi.
 
 predict_one(features_dict): 24 klinik özellik (14 sayısal + 10 kategorik, eksikler

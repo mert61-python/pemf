@@ -1,12 +1,15 @@
+# Author: mertaygn, cglrgrkn
 """FAZ 1 güvenlik sertleştirmesi (production-readiness raporu):
 - S-1: klasik güvenlik header'ları (nosniff / frame-options / referrer) + koşullu HSTS.
 - E-1: hata yanıtlarında ham `str(e)` istemciye SIZMAZ (generic detail) — history_router.
 Bu testler regresyon guard'ıdır (header'lar veya sızıntı-fix'i geri gelirse kırılır)."""
+
 from fastapi.testclient import TestClient
 
 
 def _client():
     from servers.api_server import app
+
     return app, TestClient(app)
 
 
@@ -30,6 +33,7 @@ def test_hsts_only_behind_tls_proxy(temp_app_data):
 def test_history_500_does_not_leak_exception_text(temp_app_data):
     """E-1: history_router bir hata verirse istemciye ham exception metni (DB yolu/şema) SIZMAZ."""
     from servers import history_router
+
     app, c = _client()
 
     class _BoomDB:
@@ -52,7 +56,9 @@ def test_request_id_generated_and_echoed(temp_app_data):
     _app, c = _client()
     rid = c.get("/api/health").headers.get("X-Request-ID")
     assert rid and len(rid) >= 8, "üretilen id"
-    assert c.get("/api/health", headers={"X-Request-ID": "client-req-123"}).headers.get("X-Request-ID") == "client-req-123"
+    assert (
+        c.get("/api/health", headers={"X-Request-ID": "client-req-123"}).headers.get("X-Request-ID") == "client-req-123"
+    )
     # header/log-injection: güvensiz karakterler (boşluk/#/slash) SÜZÜLÜR
     got = c.get("/api/health", headers={"X-Request-ID": "a b#c/d"}).headers.get("X-Request-ID")
     assert got == "abcd"
@@ -81,18 +87,25 @@ def test_cors_default_blocks_internet_origin_allows_lan():
     # Modül-seviyesi yapılandırmayı doğrudan doğrula (importlib.reload kullanmıyoruz:
     # app'i yeniden kurmak test sırasına bağımlı yan etkiler üretir).
     if not os.getenv("PEMF_CORS_ORIGINS", "").strip():
-        assert api_server._cors_kwargs.get("allow_origins") != ["*"], \
-            "AYARSIZ varsayılan artık '*' olmamalı"
-        assert api_server._cors_kwargs.get("allow_origin_regex"), \
-            "varsayılan LAN/loopback regex'ine düşmeli"
+        assert api_server._cors_kwargs.get("allow_origins") != ["*"], "AYARSIZ varsayılan artık '*' olmamalı"
+        assert api_server._cors_kwargs.get("allow_origin_regex"), "varsayılan LAN/loopback regex'ine düşmeli"
 
     rx = re.compile(api_server._LAN_ORIGIN_REGEX)
-    for allowed in ("http://localhost:8000", "http://127.0.0.1:8000",
-                    "http://192.168.1.50:8000", "http://10.0.0.5:8000",
-                    "http://172.16.3.4:8000", "http://pemf.local:8000"):
+    for allowed in (
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://192.168.1.50:8000",
+        "http://10.0.0.5:8000",
+        "http://172.16.3.4:8000",
+        "http://pemf.local:8000",
+    ):
         assert rx.match(allowed), f"LAN kökeni engellenmemeli: {allowed}"
-    for blocked in ("http://evil.example.com", "https://evil.example.com:8000",
-                    "http://8.8.8.8:8000", "http://192.168.1.50.evil.com"):
+    for blocked in (
+        "http://evil.example.com",
+        "https://evil.example.com:8000",
+        "http://8.8.8.8:8000",
+        "http://192.168.1.50.evil.com",
+    ):
         assert not rx.match(blocked), f"internet kökeni yetkilendirilmemeli: {blocked}"
 
 
@@ -177,7 +190,7 @@ def test_sqlcipher_key_does_not_swallow_brick_guard(tmp_path, monkeypatch):
     import database.sqlcipher_util as scu
 
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
-    monkeypatch.setattr(scu, "keyring", None)   # gerçek keyring'e yazma
+    monkeypatch.setattr(scu, "keyring", None)  # gerçek keyring'e yazma
 
     def _brick(*a, **k):
         raise RuntimeError("Depolanmis sir cozulemedi (brick korumasi)")

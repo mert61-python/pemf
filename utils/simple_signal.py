@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Small Qt-free signal helper for headless services."""
 
 from __future__ import annotations

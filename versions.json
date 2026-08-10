@@ -1,0 +1,18 @@
+{
+  "_comment": "PEMF surum TEK KAYNAGI. Elle burayi degistir, sonra build al. build_tools/sync_versions.ps1 bu degerleri hedef dosyalara yazar; build_installer.ps1 ve build_apk.ps1 basladiginda otomatik cagirir.",
+  "_kanallar": {
+    "backend": "PEMF Backend + Inno installer. Hedef: VERSION -> PEMF_Backend_Setup.iss (MyAppVersion) + docs/version_info.txt",
+    "launcher": "PEMF Vet Client (Tauri). Hedef: launcher/Cargo.toml, launcher/app/tauri.conf.json. Kendi kendini gunceller, git etiketi: launcher-vX.Y.Z",
+    "mobile": "Android/iOS uygulamasi. Hedef: pf/app.json. androidVersionCode HER YAYINDA ARTMALI (Play Store sarti), geri alinamaz.",
+    "frontendOta": "Frontend OTA paketi (frontend_dist.zip). Hedef: frontend_version.json. servers/update_manager.py bunu karsilastirir."
+  },
+
+  "backend": "1.9.6",
+  "launcher": "1.9.16",
+  "mobile": {
+    "name": "2.3.8",
+    "androidVersionCode": 15,
+    "iosBuildNumber": "6"
+  },
+  "frontendOta": "1.4.1"
+}

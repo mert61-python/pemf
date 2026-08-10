@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class EventPriority(Enum):
     """Event öncelik seviyeleri"""
+
     LOW = 1
     NORMAL = 2
     HIGH = 3
@@ -35,6 +36,7 @@ class EventPriority(Enum):
 @dataclass
 class Event:
     """Event veri yapısı"""
+
     event_type: str
     data: Any
     timestamp: datetime = field(default_factory=datetime.now)
@@ -46,6 +48,7 @@ class Event:
 @dataclass
 class Subscription:
     """Event subscription bilgisi (weakref support)"""
+
     callback_ref: Any  # weakref.ref or WeakMethod
     strong_callback: Optional[Callable]
     event_type: str
@@ -54,7 +57,7 @@ class Subscription:
     priority: EventPriority = EventPriority.NORMAL
     filter_func: Optional[Callable[[Event], bool]] = None
     is_qt_callback: bool = False
-    
+
     def get_callback(self) -> Optional[Callable]:
         """Zayıf referanstan gerçek callback'i getirir (silinmişse None döner)"""
         if self.strong_callback is not None:
@@ -68,72 +71,71 @@ class Subscription:
 class EventBus:
     """
     Merkezi Event Bus - Mediator Pattern implementasyonu
-    
+
     Sistem bileşenleri arasında gevşek bağlılık sağlar ve
     event-driven communication'ı mümkün kılar.
     """
-    
+
     def __init__(self, max_workers: Optional[int] = None):
         """
         EventBus'ı başlatır.
-        
+
         Args:
             max_workers: Async event işleme için maksimum worker sayısı
         """
         import os
+
         self._subscribers: Dict[str, List[Subscription]] = defaultdict(list)
         self._event_history: List[Event] = []
         self._max_history_size = 100  # Memory leak fix: 1000 -> 100
         self._lock = threading.RLock()
-        
+
         # Performance Fix (4.4): Dinamik CPU count tabanlı havuz boyutu
         if max_workers is None:
             max_workers = min(32, (os.cpu_count() or 1) + 4)
-            
+
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._running = True
-        self._stats = {
-            'events_published': 0,
-            'events_processed': 0,
-            'failed_deliveries': 0
-        }
-        
+        self._stats = {'events_published': 0, 'events_processed': 0, 'failed_deliveries': 0}
+
         # Memory leak fix: Track async tasks
         self._pending_tasks = set()
         self._task_lock = threading.Lock()
-        
+
         # Memory leak fix: Periodic cleanup timer
         self._cleanup_interval = 60  # seconds
         self._last_cleanup = time.time()
-        
+
         # Headless mode keeps EventBus pure Python. These attributes remain only
         # for backward-compatible shutdown/stat paths.
         self._qt_app = None
         self._qt_main_thread = None
-        
+
         logger.info("EventBus initialized with memory leak fixes")
 
     def _is_qt_bound_callback(self, callback: Callable) -> bool:
         """Return False in the Qt-free headless EventBus."""
         return False
-    
-    def subscribe(self, 
-                  event_type: str, 
-                  callback: Callable,
-                  subscriber_id: str,
-                  priority: EventPriority = EventPriority.NORMAL,
-                  filter_func: Optional[Callable[[Event], bool]] = None,
-                  is_qt_callback: bool = False) -> bool:
+
+    def subscribe(
+        self,
+        event_type: str,
+        callback: Callable,
+        subscriber_id: str,
+        priority: EventPriority = EventPriority.NORMAL,
+        filter_func: Optional[Callable[[Event], bool]] = None,
+        is_qt_callback: bool = False,
+    ) -> bool:
         """
         Event'e abone ol.
-        
+
         Args:
             event_type: Dinlenecek event tipi (wildcard destekli: "esp.*")
             callback: Event geldiğinde çağrılacak fonksiyon
             subscriber_id: Abone kimliği (unsubscribe için gerekli)
             priority: Callback önceliği
             filter_func: Event filtreleme fonksiyonu (opsiyonel)
-            
+
         Returns:
             bool: Subscription başarılı ise True
         """
@@ -142,7 +144,7 @@ class EventBus:
                 # Async callback kontrolü
                 is_async = asyncio.iscoroutinefunction(callback)
                 effective_is_qt_callback = is_qt_callback or self._is_qt_bound_callback(callback)
-                
+
                 # CRITICAL FIX: Use weakref to prevent memory leaks
                 # For bound methods, use WeakMethod; for functions/lambdas keep strong ref
                 strong_callback = None
@@ -153,7 +155,7 @@ class EventBus:
                     # Function or lambda: weakref ile anında GC olabilir, strong ref tut
                     callback_ref = None
                     strong_callback = callback
-                
+
                 subscription = Subscription(
                     callback_ref=callback_ref,
                     strong_callback=strong_callback,
@@ -162,32 +164,29 @@ class EventBus:
                     is_async=is_async,
                     priority=priority,
                     filter_func=filter_func,
-                    is_qt_callback=effective_is_qt_callback
+                    is_qt_callback=effective_is_qt_callback,
                 )
-                
+
                 self._subscribers[event_type].append(subscription)
-                
+
                 # Önceliğe göre sırala
-                self._subscribers[event_type].sort(
-                    key=lambda s: s.priority.value, 
-                    reverse=True
-                )
-                
+                self._subscribers[event_type].sort(key=lambda s: s.priority.value, reverse=True)
+
                 logger.debug("Subscription added: %s -> %s", subscriber_id, event_type)
                 return True
-                
+
         except Exception as e:
             logger.error("Subscription failed: %s", e)
             return False
-    
+
     def unsubscribe(self, event_type: str, subscriber_id: str) -> bool:
         """
         Event aboneliğini iptal et.
-        
+
         Args:
             event_type: Event tipi
             subscriber_id: Abone kimliği
-            
+
         Returns:
             bool: Unsubscribe başarılı ise True
         """
@@ -195,121 +194,117 @@ class EventBus:
             with self._lock:
                 if event_type in self._subscribers:
                     self._subscribers[event_type] = [
-                        sub for sub in self._subscribers[event_type]
-                        if sub.subscriber_id != subscriber_id
+                        sub for sub in self._subscribers[event_type] if sub.subscriber_id != subscriber_id
                     ]
-                    
+
                     # Boş liste ise sil
                     if not self._subscribers[event_type]:
                         del self._subscribers[event_type]
-                    
+
                     logger.debug("Unsubscribed: %s from %s", subscriber_id, event_type)
                     return True
                 return False
-                
+
         except Exception as e:
             logger.error("Unsubscribe failed: %s", e)
             return False
-    
-    def publish(self, 
-                event_type: str, 
-                data: Any,
-                priority: EventPriority = EventPriority.NORMAL,
-                source: Optional[str] = None,
-                correlation_id: Optional[str] = None) -> bool:
+
+    def publish(
+        self,
+        event_type: str,
+        data: Any,
+        priority: EventPriority = EventPriority.NORMAL,
+        source: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> bool:
         """
         Event yayınla.
-        
+
         Args:
             event_type: Event tipi
             data: Event verisi
             priority: Event önceliği
             source: Event kaynağı
             correlation_id: İlişkili event'ler için ID
-            
+
         Returns:
             bool: Publish başarılı ise True
         """
         if not self._running:
             return False
-            
+
         try:
             event = Event(
-                event_type=event_type,
-                data=data,
-                priority=priority,
-                source=source,
-                correlation_id=correlation_id
+                event_type=event_type, data=data, priority=priority, source=source, correlation_id=correlation_id
             )
-            
+
             with self._lock:
                 self._stats['events_published'] += 1
-                
+
                 # Event history'ye ekle
                 self._add_to_history(event)
-                
+
                 # Matching subscribers'ı bul
                 matching_subscribers = self._find_matching_subscribers(event_type)
-                
+
             # Subscribers'ı bilgilendir (lock dışında)
             self._notify_subscribers(event, matching_subscribers)
-            
+
             logger.debug("Event published: %s to %d subscribers", event_type, len(matching_subscribers))
             return True
-            
+
         except Exception as e:
             logger.error("Event publish failed: %s", e)
             return False
-    
-    async def publish_async(self, 
-                           event_type: str, 
-                           data: Any,
-                           priority: EventPriority = EventPriority.NORMAL,
-                           source: Optional[str] = None,
-                           correlation_id: Optional[str] = None) -> bool:
+
+    async def publish_async(
+        self,
+        event_type: str,
+        data: Any,
+        priority: EventPriority = EventPriority.NORMAL,
+        source: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+    ) -> bool:
         """
         Async event yayınla. (Sadece halihazırda çalışan bir asyncio loop içinde kullanılmalıdır)
-        
+
         Returns:
             bool: Publish başarılı ise True
         """
         try:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
-                self._executor,
-                self.publish, event_type, data, priority, source, correlation_id
+                self._executor, self.publish, event_type, data, priority, source, correlation_id
             )
         except RuntimeError:
             # Çalışan bir event loop yoksa ThreadPoolExecutor'a fire-and-forget olarak atıyoruz
             # Bu durum genelde sync bir thread'den async fonksiyon çağrılmaya çalışıldığında oluşur.
             # fire-and-forget (dönüş beklenmez)
-            self._executor.submit(
-                self.publish, event_type, data, priority, source, correlation_id
-            )
+            self._executor.submit(self.publish, event_type, data, priority, source, correlation_id)
             # asenkron sonuç bekleyenler için (fakat asenkron beklenemez, loop yok) True dön.
             return True
-    
+
     def _find_matching_subscribers(self, event_type: str) -> List[Subscription]:
         """Event type'a matching olan subscribers'ı bul (wildcard destekli)"""
         matching = []
-        
+
         for subscribed_type, subscribers in self._subscribers.items():
             if self._event_matches(event_type, subscribed_type):
                 matching.extend(subscribers)
-        
+
         return matching
-    
+
     def _event_matches(self, event_type: str, subscribed_type: str) -> bool:
         """Event type matching (wildcard destekli)"""
         if subscribed_type == "*":  # Tüm event'ler
             return True
-        
+
         if subscribed_type.endswith("*"):  # Prefix matching
             prefix = subscribed_type[:-1]
             return event_type.startswith(prefix)
-        
+
         return event_type == subscribed_type
-    
+
     def _notify_subscribers(self, event: Event, subscribers: List[Subscription]):
         """Subscribers'ı bilgilendir (Memory leak fix: weakref + task tracking)"""
         for subscription in subscribers:
@@ -319,11 +314,11 @@ class EventBus:
                 if callback is None:
                     # Callback is dead (garbage collected), skip
                     continue
-                
+
                 # Filter kontrolü
                 if subscription.filter_func and not subscription.filter_func(event):
                     continue
-                
+
                 if subscription.is_async:
                     # Async callback with task tracking and event loop check
                     try:
@@ -338,18 +333,16 @@ class EventBus:
                         # Event loop yoksa executor'da çalıştır
                         logger.warning("No event loop available for async callback, using executor")
                         self._executor.submit(  # fire-and-forget
-                            self._run_async_in_executor,
-                            subscription,
-                            event
+                            self._run_async_in_executor, subscription, event
                         )
                 else:
                     # Sync callback: aynı thread'de çalıştır (beklenmedik thread-hop önlenir)
                     self._call_sync_callback(subscription, event)
-                    
+
             except Exception as e:
                 logger.error("Subscriber notification failed: %s", e)
                 self._stats['failed_deliveries'] += 1
-    
+
     def _run_async_in_executor(self, subscription: Subscription, event: Event):
         """Async callback'i executor'da çalıştır (event loop yoksa)"""
         try:
@@ -363,12 +356,12 @@ class EventBus:
         except Exception as e:
             logger.error("Async callback execution in executor failed: %s", e)
             self._stats['failed_deliveries'] += 1
-    
+
     def _remove_task(self, task):
         """Completed task'ı pending_tasks'tan kaldır (Memory leak fix)"""
         with self._task_lock:
             self._pending_tasks.discard(task)
-    
+
     async def _call_async_callback(self, subscription: Subscription, event: Event):
         """Async callback çağır (weakref safe)"""
         try:
@@ -385,7 +378,7 @@ class EventBus:
         except Exception as e:
             logger.error("Async callback failed: %s", e)
             self._stats['failed_deliveries'] += 1
-    
+
     def _call_sync_callback(self, subscription: Subscription, event: Event):
         """Sync callback çağır (weakref safe)"""
         try:
@@ -399,26 +392,30 @@ class EventBus:
             # DENETIM P3: traceback YOKTU → STM-kopma guvenlik zincirinde (hardware.stm.disconnected
             # → acil-durdurma) bir abone patlarsa hangi satirda/neden patladigi kaybolur ve olay
             # sessizce yarim kalir. exc_info ile tam iz + hangi olay/abone oldugu loglanir.
-            logger.error("Sync callback failed (event=%s, callback=%s): %s",
-                         getattr(event, "event_type", "?"),
-                         getattr(callback, "__qualname__", repr(callback)), e, exc_info=True)
+            logger.error(
+                "Sync callback failed (event=%s, callback=%s): %s",
+                getattr(event, "event_type", "?"),
+                getattr(callback, "__qualname__", repr(callback)),
+                e,
+                exc_info=True,
+            )
             self._stats['failed_deliveries'] += 1
-    
+
     def _add_to_history(self, event: Event):
         """Event'i history'ye ekle (Memory leak fix: aggressive cleanup)"""
         self._event_history.append(event)
-        
+
         # History boyutunu kontrol et (agresif cleanup)
         if len(self._event_history) > self._max_history_size:
             # Sadece son max_history_size kadar tut
-            self._event_history = self._event_history[-self._max_history_size:]
-        
+            self._event_history = self._event_history[-self._max_history_size :]
+
         # Periodic cleanup check
         current_time = time.time()
         if current_time - self._last_cleanup > self._cleanup_interval:
             self._perform_cleanup()
             self._last_cleanup = current_time
-    
+
     def _perform_cleanup(self):
         """
         Periodic cleanup: Dead subscribers ve eski event'leri temizle.
@@ -443,28 +440,33 @@ class EventBus:
                         # Callback erişilemez, kaldır
                         logger.debug("Inaccessible subscriber removed: %s - %s", sub.subscriber_id, e)
                         dead_count += 1
-                
+
                 if valid_subs:
                     self._subscribers[event_type] = valid_subs
                 else:
                     # Tüm subscriber'lar dead, event type'ı kaldır
                     del self._subscribers[event_type]
-            
+
             # Eski event'leri temizle (son 50 event dışında)
             if len(self._event_history) > 50:
                 self._event_history = self._event_history[-50:]
-            
-            logger.debug("Cleanup completed: %d dead subscribers removed, %d event types, %d events in history", dead_count, len(self._subscribers), len(self._event_history))
-    
+
+            logger.debug(
+                "Cleanup completed: %d dead subscribers removed, %d event types, %d events in history",
+                dead_count,
+                len(self._subscribers),
+                len(self._event_history),
+            )
+
     def shutdown(self):
         """EventBus'ı kapat (Memory leak fix: cleanup all resources)"""
         self._running = False
-        
+
         # Pending async tasks'ları iptal et
         with self._task_lock:
             tasks_to_cancel = list(self._pending_tasks)
             self._pending_tasks.clear()
-        
+
         # Task'ları iptal et (event loop varsa)
         for task in tasks_to_cancel:
             if not task.done():
@@ -481,7 +483,7 @@ class EventBus:
                         pass
                 except Exception as e:
                     logger.warning("Failed to cancel async task: %s", e)
-        
+
         # ThreadPoolExecutor'ı kapat
         try:
             # ThreadPoolExecutor.shutdown() 'timeout' argümanı KABUL ETMEZ → eskiden her
@@ -491,16 +493,16 @@ class EventBus:
             self._executor.shutdown(wait=True, cancel_futures=True)
         except Exception as e:
             logger.warning("Executor shutdown warning: %s", e)
-        
+
         # Tüm subscriber'ları ve history'yi temizle
         with self._lock:
             self._subscribers.clear()
             self._event_history.clear()
-        
+
         # Qt referanslarını temizle
         self._qt_app = None
         self._qt_main_thread = None
-        
+
         logger.info("EventBus shutdown completed with resource cleanup")
 
 
@@ -512,12 +514,12 @@ _instance_lock = threading.Lock()
 def get_event_bus() -> EventBus:
     """Singleton EventBus instance'ını al"""
     global _event_bus_instance
-    
+
     if _event_bus_instance is None:
         with _instance_lock:
             if _event_bus_instance is None:
                 _event_bus_instance = EventBus()
-    
+
     return _event_bus_instance
 
 

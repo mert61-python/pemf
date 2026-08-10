@@ -33,8 +33,10 @@ from typing import Dict, List, Optional
 try:
     from utils.file_acl import lock_down_file
 except Exception:  # best-effort: helper yoksa çağıran akış DURMAZ
+
     def lock_down_file(_path):
         return False
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +47,17 @@ logger = logging.getLogger(__name__)
 # dosyasından okunmalıdır. Asla kaynak kodda bırakılmamalıdır.
 _ENV_MASTER_SECRET = "PEMF_MASTER_SECRET"
 _DEFAULT_MASTER_SECRET_WARNING = (
-    "PEMF_MASTER_SECRET ortam değişkeni ayarlanmamış! "
-    "Üretim dağıtımı için lütfen güçlü bir değer atayın."
+    "PEMF_MASTER_SECRET ortam değişkeni ayarlanmamış! Üretim dağıtımı için lütfen güçlü bir değer atayın."
 )
 
 # Try to use path_utils for app data directory, fallback if not available
 try:
     from utils.path_utils import get_app_data_directory
+
     _APP_DATA_DIR = get_app_data_directory()
 except ImportError:
     import platform
+
     if platform.system() == "Windows":
         _APP_DATA_DIR = Path(os.getenv('APPDATA')) / "PEMF_GUI"
     else:
@@ -67,11 +70,12 @@ CREDENTIALS_DIR = _APP_DATA_DIR / "config" / "credentials"
 @dataclass
 class DeviceCredential:
     """Tek bir kimlik bilgisi kaydı"""
-    role: str                  # esp_coil / gui_bridge / android_app / master
+
+    role: str  # esp_coil / gui_bridge / android_app / master
     username: str
     password: str
-    coil_id: Optional[int]     # Sadece ESP kimlik bilgileri için
-    allowed_publish: List[str] # İzinli publish topic kalıpları
+    coil_id: Optional[int]  # Sadece ESP kimlik bilgileri için
+    allowed_publish: List[str]  # İzinli publish topic kalıpları
     allowed_subscribe: List[str]
     notes: str = ""
 
@@ -90,14 +94,12 @@ class CredentialManager:
         _sm_secret = None
         try:
             from utils.secrets_manager import get_secret
+
             _sm_secret = get_secret("master_secret", generate=False) or None
         except Exception:
             pass
         self._master_secret = (
-            master_secret
-            or os.environ.get(_ENV_MASTER_SECRET)
-            or _sm_secret
-            or self._warn_and_use_default()
+            master_secret or os.environ.get(_ENV_MASTER_SECRET) or _sm_secret or self._warn_and_use_default()
         )
         CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
         self._credential_file = CREDENTIALS_DIR / "credentials.json"
@@ -182,13 +184,15 @@ class CredentialManager:
         path = Path(output_path) if output_path else CREDENTIALS_DIR / "hivemq_users.json"
         hivemq_users = []
         for cred in self._credentials.values():
-            hivemq_users.append({
-                "username": cred.username,
-                "password": cred.password,
-                "role": cred.role,
-                "publish_topics": cred.allowed_publish,
-                "subscribe_topics": cred.allowed_subscribe,
-            })
+            hivemq_users.append(
+                {
+                    "username": cred.username,
+                    "password": cred.password,
+                    "role": cred.role,
+                    "publish_topics": cred.allowed_publish,
+                    "subscribe_topics": cred.allowed_subscribe,
+                }
+            )
         path.write_text(json.dumps({"users": hivemq_users}, indent=2, ensure_ascii=False), encoding="utf-8")
         lock_down_file(path)  # düz-metin şifreler → ACL kilidi (Audit P1)
         logger.info(f"HiveMQ kullanıcı listesi yazıldı: {path}")
@@ -275,7 +279,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
             password=password,
             coil_id=None,
             allowed_publish=[
-                "pemf/coil/+/control",    # Kontrol komutu gönderebilir
+                "pemf/coil/+/control",  # Kontrol komutu gönderebilir
                 "pemf/coil/all/control",  # Broadcast komutları gönderebilir
             ],
             allowed_subscribe=[
@@ -330,7 +334,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
             )
         logger.warning(_DEFAULT_MASTER_SECRET_WARNING)
         secret_file = CREDENTIALS_DIR.parent / "pemf_secret.key"
-        
+
         # Mevcut secret dosyasını oku
         if secret_file.exists():
             try:
@@ -340,7 +344,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
                     return stored
             except Exception as e:
                 logger.warning(f"Secret dosyası okunamadı: {e}")
-        
+
         # İlk çalıştırma: yeni, güçlü bir secret otomatik üret ve kaydet
         new_secret = secrets.token_hex(32)  # 256-bit kriptografik rastgelelik
         try:
@@ -356,7 +360,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
             )
         except Exception as e:
             logger.warning(f"Secret dosyası kaydedilemedi ({e}), oturum için geçici secret kullanılıyor.")
-        
+
         return new_secret
 
     def _load(self):
@@ -375,9 +379,7 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
         """Credential'ları diske kaydeder."""
         try:
             data = {key: asdict(cred) for key, cred in self._credentials.items()}
-            self._credential_file.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            self._credential_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
             lock_down_file(self._credential_file)  # cihaz cred'leri düz-metin → ACL kilidi (Audit P1)
         except Exception as e:
             logger.error(f"Credential kaydetme hatası: {e}")
@@ -385,12 +387,14 @@ static const char* DEFAULT_CLOUD_MQTT_PASS = "{cred.password}";
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
+
 def _setup_logging():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
 
 def main():
     import argparse
+
     _setup_logging()
 
     parser = argparse.ArgumentParser(description="PEMF Credential Manager")

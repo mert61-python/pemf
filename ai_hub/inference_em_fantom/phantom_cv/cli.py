@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """cli.py — Komut satiri arabirimi (kedi inference_cat_organ tarzi).
 
 Kullanim:

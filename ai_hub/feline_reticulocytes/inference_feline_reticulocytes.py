@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """
 inference_feline_reticulocytes.py — Kan Hucresi Tespiti (YOLOv8s)
 ================================================================

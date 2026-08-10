@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """audit B-8.2: history keyset (cursor) pagination — `before_id` ile sayfalar ÖRTÜŞMEZ, atlama YOK,
 tüm satırları kapsar, id DESC sırada. Keyset'in offset'e üstünlüğü: sayfalar arasında yeni kayıt
 girse bile sayfa kaymaz (offset'te tekrar/atlama olurdu)."""
@@ -5,6 +6,7 @@ girse bile sayfa kaymaz (offset'te tekrar/atlama olurdu)."""
 
 def _db(temp_app_data):
     from database.treatment_history_db import TreatmentHistoryDB
+
     return TreatmentHistoryDB(temp_app_data)
 
 

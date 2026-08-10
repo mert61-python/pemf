@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_renal_histopath_kmc — Böbrek histopatoloji grade sınıflandırıcı paketi.
 
 RenalHistopathClassifier: histoloji tile → V22-KMC-ClassicTrio ONNX (899MB, staged,

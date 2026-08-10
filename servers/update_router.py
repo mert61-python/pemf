@@ -1,6 +1,8 @@
+# Author: mertaygn, cglrgrkn
 """Sürüm / OTA güncelleme uçları (audit B-2.2: api_server.py'den ayrıldı — modüler router).
 Yalnız `update_manager`'a bağlı; paylaşılan donanım/seans/live-state'i KULLANMAZ → temiz ayrım.
 Yollar birebir korunur (/api/update/status|apply|rollback) → istemci sözleşmesi değişmez."""
+
 import asyncio
 import logging
 
@@ -16,6 +18,7 @@ async def update_status():
     """Kurulu sürüm vs GitHub 'exe' branch latest.json — UI bildirimi için (rollback hedefi dahil)."""
     try:
         from servers.update_manager import get_status
+
         return get_status()
     except Exception:
         logger.exception("update status hatasi")
@@ -27,6 +30,7 @@ async def update_apply():
     """Operatör ONAYI → installer indir + SHA256 doğrula + AKTİF TEDAVİ YOKKEN sessiz kur (blocking → thread)."""
     try:
         from servers.update_manager import apply_update
+
         return await asyncio.to_thread(apply_update)
     except Exception:
         logger.exception("update apply hatasi")
@@ -39,6 +43,7 @@ async def update_rollback():
     previousStable installer'ı indir + SHA256 doğrula + AKTİF TEDAVİ YOKKEN sessiz kur."""
     try:
         from servers.update_manager import rollback
+
         return await asyncio.to_thread(rollback)
     except Exception:
         logger.exception("update rollback hatasi")

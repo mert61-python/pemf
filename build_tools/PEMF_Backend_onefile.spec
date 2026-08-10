@@ -185,15 +185,35 @@ for dir_name in ('web_static', 'templates'):
         datas.append((d_path, dir_name))
 
 # AI HUB (inference KODU + küçük .pkl/.json). Büyük ONNX'ler aşağıda ai_models ağacıyla gömülür.
-ai_hub_dir = os.path.join(project_path, 'ai_hub')
+#
+# ⚠️ KOD KORUMASI — SIRALAMA KRİTİK (2026-08-08):
+# onedir'de `.pyd` derlemesi build SONRASI dist klasöründe yapılır. ONEFILE'da böyle bir klasör
+# OLUŞMAZ (her şey EXE'nin içinde) → o adım ÇALIŞAMAZ. Bu spec kaynaktan `.py` paketleseydi,
+# onefile arşivi `pyinstxtractor` ile açılıp DÜZ KAYNAK elde edilirdi; yani onedir+pyd'den
+# DAHA ZAYIF olurdu.
+# ÇÖZÜM: sıra ters çevrilir — önce `build_tools/compile_pyd.py` ile ai_hub AYRI BİR SAHNEYE
+# derlenir, sonra bu spec `.py` yerine O SAHNEYİ paketler. Sahne yoksa kaynağa düşer ama
+# derleme sırasında BÜYÜK BİR UYARI basar (sessizce korumasız EXE üretilmesin).
+_pyd_stage = os.path.join(project_path, 'PEMF_BUILD', 'pyd_stage', 'dist', '_internal', 'ai_hub')
+_use_pyd = os.path.isdir(_pyd_stage) and any(
+    f.endswith('.pyd') for _r, _d, _fs in os.walk(_pyd_stage) for f in _fs)
+ai_hub_dir = _pyd_stage if _use_pyd else os.path.join(project_path, 'ai_hub')
+_rel_kok = os.path.dirname(_pyd_stage) if _use_pyd else project_path  # rel yolu 'ai_hub/...' kalsın
+if _use_pyd:
+    print('[OK] ai_hub DERLENMIS sahneden paketleniyor (.pyd) — kod korumasi AKTIF')
+else:
+    print('!' * 78)
+    print('!! UYARI: ai_hub KAYNAKTAN (.py) paketleniyor — KOD KORUMASI YOK.')
+    print('!! Once calistirin:  python build_tools/compile_pyd.py --dist PEMF_BUILD/pyd_stage/dist')
+    print('!' * 78)
 if os.path.exists(ai_hub_dir):
     for root, _, files in os.walk(ai_hub_dir):
-        if 'results' in root.split(os.sep):
+        if 'results' in root.split(os.sep) or '__pycache__' in root.split(os.sep):
             continue
         for f in files:
             full = os.path.join(root, f)
-            rel = os.path.relpath(root, project_path)
-            if f.endswith(('.py', '.json', '.txt', '.yaml', '.yml')):
+            rel = os.path.relpath(root, _rel_kok)
+            if f.endswith(('.py', '.pyd', '.json', '.txt', '.yaml', '.yml')):
                 datas.append((full, rel))
             elif f.endswith(('.pkl', '.onnx', '.npy')) and os.path.getsize(full) < 5 * 1024 * 1024:
                 datas.append((full, rel))

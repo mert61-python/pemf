@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_em_fantom — Fantom (phantom_cv) EM alan çıkarım paketi.
 
 PhantomPredictor: BiLSTM_XXL_Raw ONNX (R²=0.9955), girdi(6) x,y,z,organ_id,

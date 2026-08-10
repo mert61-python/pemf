@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """ai_hub.inference_petri_dish — Petri kuyu görü pipeline paketi.
 
 petri_cv: YOLO11m-seg ile N kuyucuk tespit -> HSV kanser sınıflandırma -> 3B mm

@@ -26,7 +26,7 @@ function Write-Status($message, $color = "White") {
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  PEMF Gateway - Sistem Başlatma" -ForegroundColor Cyan  
+Write-Host "  PEMF Gateway - Sistem Başlatma" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -35,35 +35,35 @@ Write-Host ""
 # =============================================================================
 if (-not $SkipHotspot) {
     Write-Status "Mobile Hotspot yapılandırılıyor..." "Yellow"
-    
+
     try {
         # Windows Mobile Hotspot API (Windows 10/11)
         Add-Type -AssemblyName System.Runtime.WindowsRuntime
-        
+
         # IAsyncAction icin (sonuc donmeyen async — ConfigureAccessPointAsync)
-        $asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | 
+        $asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() |
             Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' })[0]
-        
+
         # IAsyncOperation<T> icin (sonuc donen async — StartTetheringAsync)
-        $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | 
+        $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() |
             Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
-        
+
         Function Await($WinRtTask) {
             $netTask = $asTaskAction.Invoke($null, @($WinRtTask))
             $netTask.Wait(-1) | Out-Null
         }
-        
+
         Function AwaitResult($WinRtTask, $ResultType) {
             $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
             $netTask = $asTask.Invoke($null, @($WinRtTask))
             $netTask.Wait(-1) | Out-Null
             $netTask.Result
         }
-        
+
         # Tethering Manager al
         [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType=WindowsRuntime] | Out-Null
         $connectionProfile = [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType=WindowsRuntime]::GetInternetConnectionProfile()
-        
+
         if ($connectionProfile) {
             $tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($connectionProfile)
         } else {
@@ -72,13 +72,13 @@ if (-not $SkipHotspot) {
             # Alternatif: netsh kullan
             $useNetsh = $true
         }
-        
+
         if (-not $useNetsh -and $tetheringManager) {
             # Yapilandirmayi ayarla
             $config = $tetheringManager.GetCurrentAccessPointConfiguration()
             $config.Ssid = $HotspotSSID
             $config.Passphrase = $HotspotPassword
-            
+
             # Band: 2.4GHz (ESP32 uyumlu)
             try {
                 # Windows 11 ile band secimi
@@ -86,19 +86,19 @@ if (-not $SkipHotspot) {
             } catch {
                 # Windows 10'da band secimi olmayabilir
             }
-            
+
             # ConfigureAccessPointAsync -> IAsyncAction (sonuc donmez)
             Await ($tetheringManager.ConfigureAccessPointAsync($config))
             Write-Status "Hotspot yapilandirmasi uygulandi." "White"
-            
+
             # Hotspot durumunu kontrol et
             $state = $tetheringManager.TetheringOperationalState
-            
+
             if ($state -ne "On") {
                 Write-Status "Hotspot baslatiliyor (SSID: $HotspotSSID)..." "Yellow"
                 # StartTetheringAsync -> IAsyncOperation<Result> (sonuc doner)
                 $startResult = AwaitResult ($tetheringManager.StartTetheringAsync()) ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
-                
+
                 if ($startResult.Status -eq "Success") {
                     Write-Status "Mobile Hotspot aktif: $HotspotSSID" "Green"
                 } else {
@@ -110,7 +110,7 @@ if (-not $SkipHotspot) {
                 Write-Status "Mobile Hotspot zaten aktif: $HotspotSSID" "Green"
             }
         }
-        
+
         # netsh fallback
         if ($useNetsh) {
             netsh wlan set hostednetwork mode=allow ssid=$HotspotSSID key=$HotspotPassword | Out-Null
@@ -141,7 +141,7 @@ if (-not $service) {
     try {
         Start-Service -Name "mosquitto"
         Start-Sleep -Seconds 2
-        
+
         $service = Get-Service -Name "mosquitto"
         if ($service.Status -eq "Running") {
             Write-Status "✓ Mosquitto broker çalışıyor (port 1883)" "Green"
@@ -162,7 +162,7 @@ Write-Status "Ağ bilgileri:" "Cyan"
 
 # Hotspot IP
 $hotspotIP = "192.168.137.1"
-$adapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | 
+$adapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -like "192.168.137.*" }
 if ($adapters) {
     $hotspotIP = $adapters[0].IPAddress
@@ -170,8 +170,8 @@ if ($adapters) {
 Write-Status "  Hotspot IP: $hotspotIP" "White"
 
 # Internet IP
-$internetIP = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | 
-    Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "192.168.137.*" -and $_.IPAddress -notlike "169.254.*" -and $_.InterfaceAlias -notlike "*Loopback*" } | 
+$internetIP = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "192.168.137.*" -and $_.IPAddress -notlike "169.254.*" -and $_.InterfaceAlias -notlike "*Loopback*" } |
     Select-Object -First 1).IPAddress
 if ($internetIP) {
     Write-Status "  Internet IP: $internetIP" "White"
@@ -194,11 +194,11 @@ try {
 # =============================================================================
 if ($StartGUI) {
     Write-Status "PEMF GUI başlatılıyor..." "Yellow"
-    
+
     $guiDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
     $pythonPath = "C:\Users\LattePanda\anaconda3\envs\gui\python.exe"
     $mainPy = Join-Path $guiDir "main.py"
-    
+
     if (Test-Path $pythonPath) {
         Start-Process -FilePath $pythonPath -ArgumentList $mainPy -WorkingDirectory $guiDir
         Write-Status "✓ GUI başlatıldı." "Green"

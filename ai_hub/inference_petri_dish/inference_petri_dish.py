@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Author: mertaygn, cglrgrkn
 """
 inference_petri_dish.py — Petri Dish Segmentasyonu (YOLO11m-seg)
 ================================================================

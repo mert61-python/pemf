@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """DENETİM (per-call-sqlcipher-connect): ana-thread-DIŞI her DB context'i yeni bağlantı
 açıp kapatıyordu. SQLCipher'da bu, her seferinde tam `PRAGMA key` PBKDF2'si demek —
 ölçüm: 86,49 ms/çağrı yeni bağlantı, 0,025 ms yeniden kullanım (maliyetin %99,5'i anahtar
@@ -54,8 +55,7 @@ def test_worker_threadinde_baglanti_yeniden_kullanilir(temp_app_data, monkeypatc
     _run_in_thread(_work)
 
     assert len(created) == 1, (
-        f"worker thread {len(created)} bağlantı açtı; havuzda 1 olmalı "
-        "(her açılış tam SQLCipher PBKDF2 maliyeti)"
+        f"worker thread {len(created)} bağlantı açtı; havuzda 1 olmalı (her açılış tam SQLCipher PBKDF2 maliyeti)"
     )
 
 

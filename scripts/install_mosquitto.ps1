@@ -44,10 +44,10 @@ if (Test-Path $mosquittoExe) {
 } else {
     if (-not $SkipDownload) {
         Write-Host "[*] Mosquitto indiriliyor (v$MosquittoVersion)..." -ForegroundColor Yellow
-        
+
         $downloadUrl = "https://mosquitto.org/files/binary/win64/mosquitto-$MosquittoVersion-install-windows-x64.exe"
         $installerPath = "$env:TEMP\mosquitto-installer.exe"
-        
+
         try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath -UseBasicParsing
@@ -57,17 +57,17 @@ if (Test-Path $mosquittoExe) {
             Write-Host "Manuel olarak indirin: https://mosquitto.org/download/" -ForegroundColor Yellow
             exit 1
         }
-        
+
         Write-Host "[*] Mosquitto kuruluyor (silent)..." -ForegroundColor Yellow
         Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-        
+
         if (Test-Path $mosquittoExe) {
             Write-Host "[✓] Mosquitto kurulumu tamamlandı." -ForegroundColor Green
         } else {
             Write-Host "[HATA] Kurulum başarısız oldu." -ForegroundColor Red
             exit 1
         }
-        
+
         Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
     } else {
         Write-Host "[HATA] Mosquitto bulunamadı ve -SkipDownload belirtildi." -ForegroundColor Red
@@ -133,10 +133,10 @@ if ($service) {
         Stop-Service -Name "mosquitto" -Force
         Start-Sleep -Seconds 2
     }
-    
+
     # Otomatik başlatma ayarla
     Set-Service -Name "mosquitto" -StartupType Automatic
-    
+
     # Servisi başlat
     Start-Service -Name "mosquitto"
     Write-Host "  [✓] Mosquitto servisi çalışıyor (Otomatik Başlatma)." -ForegroundColor Green
@@ -146,7 +146,7 @@ if ($service) {
     $configPath = Join-Path $MOSQUITTO_INSTALL_DIR "mosquitto.conf"
     & "$mosquittoExe" install --config "$configPath"
     Start-Sleep -Seconds 2
-    
+
     Set-Service -Name "mosquitto" -StartupType Automatic
     Start-Service -Name "mosquitto"
     Write-Host "  [✓] Mosquitto servisi kaydedildi ve başlatıldı." -ForegroundColor Green

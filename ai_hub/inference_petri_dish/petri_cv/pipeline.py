@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """pipeline.py — Petri Kuyucuk CV (YOLO + Kedi-ArUco kalibrasyon).
 
 Kedi `inference_cat_organ` paterniyle birebir:
@@ -37,6 +38,11 @@ from .coord_transform import (
 from .petri_detector import PetriYoloDetector, PetriDetection
 from .color_segment import segment_cancer_in_petri, Region, TUMOR, HEALTHY
 from . import render as rd
+# MAKULLIK DENETIMI (2026-08-06, sahip bildirimi): fantom fotografi bu boru hattinda sessizce
+# "2 kuyucuk, 1 kanser" uretiyordu. Denetim ROUTER'da DEGIL burada durmali; cunku
+# PEMF_AI_SERVICE_URL tanimliyken istek GPU mikroservisine gider ve servers/ai_router.py hic
+# calismaz (bkz. ..plausibility docstring).
+from .. import plausibility as _plaus
 
 
 # PetriPredictor
@@ -92,6 +98,10 @@ class PipelineResult:
     wells: list[WellPrediction] = field(default_factory=list)
     timing_ms: dict[str, float] = field(default_factory=dict)
     error: str | None = None
+    # Makullik olcumleri (dairesellik/conf/alan-orani + oy). YENI ALAN, geriye-uyumlu: mevcut
+    # JSON tuketicileri (frontend, ai_service) bilmedigi alani yok sayar. Reddedilen istekte
+    # ayrica "message" tasir → ai_router bunu 422 govdesinde kullaniciya aynen gosterir.
+    plausibility: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items() if k != "wells"}
@@ -274,6 +284,26 @@ class PetriCvPipeline:
         timings["yolo_detect"] = (time.perf_counter() - t1) * 1000
         if not dets:
             result.error = "yolo_no_well_detected"
+            result.timing_ms = timings
+            result.timing_ms["total"] = (time.perf_counter() - t0) * 1000
+            return result, ctx
+
+        # 3b) MAKULLIK DENETIMI — "tespit VAR" ile "PETRI tespiti var" ayni sey degil.
+        # YOLO fantom fotografinda da 2 nesne buluyordu; bu kod olmadan boru hatti onlar icin
+        # PetriPredictor'i calistirip E_cancer/D/P uretiyor ve success=True donuyordu. Karar
+        # RESIM DUZEYINDE (medyan + 2-of-3 oy); kuyu listesi BUDANMAZ — mesru kuyucuklarin
+        # bireysel conf'u 0.42'ye kadar dusebiliyor, tek tek eleme gercek kuyulari sessizce yutar.
+        t1 = time.perf_counter()
+        h_img, w_img = img_und.shape[:2]
+        ok_plaus, plaus_metrics = _plaus.evaluate(
+            [d.contour for d in dets], [d.conf for d in dets],
+            float(h_img) * float(w_img))
+        timings["plausibility"] = (time.perf_counter() - t1) * 1000
+        result.plausibility = plaus_metrics
+        if not ok_plaus:
+            # Mevcut erken-cikis deseni (yolo_no_well_detected gibi); ai_router bu hatayi
+            # 200/"no_detection" YERINE 422 + anlasilir Turkce mesaja cevirir.
+            result.error = _plaus.PETRI_REJECT
             result.timing_ms = timings
             result.timing_ms["total"] = (time.perf_counter() - t0) * 1000
             return result, ctx

@@ -1,4 +1,6 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: FGS skorlama — yetersiz keypoint -> -1 (tespit-yok sinyali, 0 'Ağrı Yok' DEĞİL)."""
+
 import numpy as np
 
 from ai_hub.cat_landmark.inference_cat_landmark import compute_fgs

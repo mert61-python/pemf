@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 Production-Ready Config Manager for PEMF Application
 Handles config loading with proper fallback hierarchy for PyInstaller exe distribution.
@@ -15,12 +16,11 @@ This ensures:
 
 import base64
 import copy
-import hashlib
 import json
 import logging
-import threading
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -41,32 +41,10 @@ _SAVE_LOCK = threading.Lock()
 # Gömülü varsayılan config (son çare). Kullanım öncesi copy.deepcopy'lenir — iç içe dict'ler
 # _deep_merge ile mutasyona uğradığından bu sabit ASLA doğrudan değiştirilmemeli (paylaşım yok).
 _DEFAULT_CONFIG = {
-    'mqtt': {
-        'broker_url': 'localhost',
-        'broker_port': 1883,
-        'user': '',
-        'pass': '',
-        'keepalive': 60,
-        'use_tls': False
-    },
-    'serial': {
-        'port': 'COM10',
-        'baudrate': 115200,
-        'timeout': 1.0,
-        'emulation_mode': False,
-        'auto_connect': True
-    },
-    'application': {
-        'theme': 'dark',
-        'language': 'tr',
-        'auto_save': True,
-        'log_level': 'INFO'
-    },
-    'treatment': {
-        'max_duration': 60,
-        'default_frequency': 10,
-        'default_intensity': 50
-    }
+    'mqtt': {'broker_url': 'localhost', 'broker_port': 1883, 'user': '', 'pass': '', 'keepalive': 60, 'use_tls': False},
+    'serial': {'port': 'COM10', 'baudrate': 115200, 'timeout': 1.0, 'emulation_mode': False, 'auto_connect': True},
+    'application': {'theme': 'dark', 'language': 'tr', 'auto_save': True, 'log_level': 'INFO'},
+    'treatment': {'max_duration': 60, 'default_frequency': 10, 'default_intensity': 50},
 }
 
 
@@ -75,6 +53,7 @@ class ProductionConfigManager:
     Production-grade config manager with template fallback and encryption support.
     Thread-safe singleton pattern.
     """
+
     _instance = None
     _initialized = False
     _cfg_lock = threading.Lock()  # Audit P3: singleton init yarış-koruması
@@ -85,7 +64,7 @@ class ProductionConfigManager:
         'mqtt.pass',
         'api.key',
     }
-    
+
     def __new__(cls):
         if cls._instance is None:
             with cls._cfg_lock:  # Audit P3: çift-instance yarışı önle (double-checked)
@@ -110,13 +89,13 @@ class ProductionConfigManager:
             self._setup_encryption()
             # Load config with fallback
             self._load_config()
-            self._initialized = True   # SONA: init tamamlanınca (yarım-init obje görünmesin)
-    
+            self._initialized = True  # SONA: init tamamlanınca (yarım-init obje görünmesin)
+
     def _setup_encryption(self):
         """Setup encryption for sensitive config values"""
         try:
             key_file = self._get_app_data_dir() / '.pemf_key'
-            
+
             if key_file.exists():
                 with open(key_file, 'rb') as f:
                     self._encryption_key = f.read()
@@ -126,43 +105,43 @@ class ProductionConfigManager:
                 # Kriptografik-rastgele 32-byte anahtar uret + dosyada sakla (dosya zaten ACL-kilitli).
                 # Mevcut cihazlar kayitli .pemf_key'i dosyadan yukleyip calismaya devam eder (geriye-uyumlu).
                 self._encryption_key = base64.urlsafe_b64encode(os.urandom(32))
-                
+
                 # Save key with restricted permissions
                 key_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(key_file, 'wb') as f:
                     f.write(self._encryption_key)
-                
+
                 # NTFS ACL kilidi (audit B-1.2): Fernet anahtar dosyası yalnız SYSTEM+Administrators'a
                 # açık olsun. os.chmod Windows'ta NO-OP → anahtar dosyası Users'a okunur kalır ve config
                 # şifrelemesi anlamsızlaşırdı. Önce ACL; olmazsa chmod (POSIX) yedek.
                 try:
                     from utils.file_acl import lock_down_file
+
                     lock_down_file(key_file)
                 except Exception:
                     try:
                         os.chmod(key_file, 0o600)
                     except Exception:
                         pass  # Windows chmod no-op; ACL zaten denendi
-            
+
             self._cipher = Fernet(self._encryption_key)
             logger.info("Encryption initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Encryption setup failed: {e}")
             self._cipher = None
 
-
     def _get_app_data_dir(self) -> Path:
         """Get application data directory (persistent, user-writable)"""
         return get_shared_app_data_directory()
-    
+
     def _get_bundled_resource_path(self, relative_path: str) -> Optional[Path]:
         """
         Get path to bundled resource (works in both dev and PyInstaller exe).
-        
+
         Args:
             relative_path: Relative path from project root (e.g., 'config.json.template')
-        
+
         Returns:
             Path object if resource exists, None otherwise
         """
@@ -172,16 +151,16 @@ class ProductionConfigManager:
             if bundled_path.exists():
                 logger.debug(f"Found bundled resource: {bundled_path}")
                 return bundled_path
-        
+
         # Try development environment (relative to this file)
         dev_path = Path(__file__).parent.parent / relative_path
         if dev_path.exists():
             logger.debug(f"Found dev resource: {dev_path}")
             return dev_path
-        
+
         logger.debug(f"Resource not found (fallback will be used): {relative_path}")
         return None
-    
+
     def _load_config(self):
         """Config'i öncelik sırasıyla yükle (düşükten yükseğe derin-birleştir):
         gömülü varsayılan → bundled config.json (veya template) → %APPDATA% kullanıcı config'i."""
@@ -233,7 +212,7 @@ class ProductionConfigManager:
             except Exception:
                 pass
             self._save_user_config()
-    
+
     def _deep_merge(self, base: Dict, update: Dict):
         """Deep merge update dict into base dict"""
         for key, value in update.items():
@@ -241,11 +220,11 @@ class ProductionConfigManager:
                 self._deep_merge(base[key], value)
             else:
                 base[key] = value
-    
+
     def _save_user_config(self):
         """Save current config to user's APPDATA directory"""
         user_config_path = self._get_app_data_dir() / 'config.json'
-        
+
         # DENETIM P3: truncate-then-write idi (gecici dosya + os.replace YOK, kilit YOK).
         # Guc kesintisi ya da es-zamanli iki kaydetme, config.json'i YARIM/BOS birakabiliyordu →
         # TUM kullanici ayarlari sessizce kaybolur (bir sonraki acilista varsayilanlara doner).
@@ -256,11 +235,12 @@ class ProductionConfigManager:
                 with open(tmp_path, 'w', encoding='utf-8') as f:
                     json.dump(self._config, f, indent=4, ensure_ascii=False)
                     f.flush()
-                    os.fsync(f.fileno())   # once diske indir, sonra atomik takas
+                    os.fsync(f.fileno())  # once diske indir, sonra atomik takas
                 os.replace(tmp_path, user_config_path)
             # NTFS ACL kilidi (audit B-1.2): config hassas alanlar içerebilir → Users'a kapat.
             try:
                 from utils.file_acl import lock_down_file
+
                 lock_down_file(user_config_path)
             except Exception:
                 pass
@@ -295,40 +275,40 @@ class ProductionConfigManager:
 
         # HiveMQ cloud-cred doldurma KALDIRILDI (2026-06-28): bundled hivemq_users.json zaten EXE
         # bundle'dan cikarildi + cloud bridge atil (yerel-only mimari) → blok gereksiz/olu.
-    
+
     def get(self, key_path: str, default: Any = None) -> Any:
         """
         Get config value using dot notation (e.g., 'mqtt.broker_url').
         Automatically decrypts encrypted values.
-        
+
         Args:
             key_path: Dot-separated config path
             default: Default value if key not found
-        
+
         Returns:
             Config value (decrypted if needed) or default
         """
         keys = key_path.split('.')
         value = self._config
-        
+
         try:
             for key in keys:
                 value = value[key]
-            
+
             # Decrypt if encrypted
             if key_path in self._ENCRYPTED_KEYS and isinstance(value, str):
                 if value.startswith('enc:'):
                     return self._decrypt_value(value[4:])
-            
+
             return value
         except (KeyError, TypeError):
             return default
-    
+
     def set(self, key_path: str, value: Any, save: bool = True):
         """
         Set config value using dot notation.
         Automatically encrypts sensitive values.
-        
+
         Args:
             key_path: Dot-separated config path
             value: Value to set
@@ -336,13 +316,13 @@ class ProductionConfigManager:
         """
         keys = key_path.split('.')
         config = self._config
-        
+
         # Navigate to parent dict
         for key in keys[:-1]:
             if key not in config or not isinstance(config[key], dict):
                 config[key] = {}
             config = config[key]
-        
+
         # Encrypt sensitive values
         # DENETIM P3 (yanlis guvence): 'enc:' oneki KOSULSUZ ekleniyordu. _encrypt_value ise
         # cipher kurulamamissa (anahtar yok/kripto import hatasi) degeri OLDUGU GIBI dondurur →
@@ -358,8 +338,9 @@ class ProductionConfigManager:
                 logger.warning(
                     "HASSAS AYAR SIFRELENEMEDI (%s) — DUZ METIN olarak saklaniyor. 'enc:' oneki "
                     "EKLENMEDI (yanlis guvence vermemek icin). Kripto anahtarini/kurulumunu kontrol edin.",
-                    key_path)
-        
+                    key_path,
+                )
+
         # Set only if changed
         key_name = keys[-1]
         old_value = config.get(key_name, None)
@@ -367,7 +348,7 @@ class ProductionConfigManager:
             return
 
         config[key_name] = value
-        
+
         if save:
             self._save_user_config()
             self._last_save_ts = time.monotonic()
@@ -376,24 +357,24 @@ class ProductionConfigManager:
         """Persist current config to disk explicitly."""
         self._save_user_config()
         self._last_save_ts = time.monotonic()
-    
+
     def _encrypt_value(self, value: str) -> str:
         """Encrypt sensitive value"""
         if not self._cipher or not value:
             return value
-        
+
         try:
             encrypted = self._cipher.encrypt(value.encode())
             return base64.urlsafe_b64encode(encrypted).decode()
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
             return value
-    
+
     def _decrypt_value(self, encrypted_value: str) -> str:
         """Decrypt sensitive value"""
         if not self._cipher or not encrypted_value:
             return encrypted_value
-        
+
         try:
             encrypted_bytes = base64.urlsafe_b64decode(encrypted_value.encode())
             decrypted = self._cipher.decrypt(encrypted_bytes)
@@ -401,7 +382,7 @@ class ProductionConfigManager:
         except Exception as e:
             logger.error(f"Decryption failed: {e!r}", exc_info=True)
             return encrypted_value
-    
+
 
 # Global singleton instance
 _global_config = None

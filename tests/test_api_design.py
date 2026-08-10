@@ -1,5 +1,7 @@
+# Author: mertaygn, cglrgrkn
 """API tasarımı (audit B-8.1, B-8.2): tek versiyon kaynağı + /api/v1 alias + X-API-Version header;
 /api/patients pagination (geriye-uyumlu) + delete_all kazara-silme koruması (confirm)."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def api():
     from servers import api_server
+
     return api_server
 
 
@@ -22,6 +25,7 @@ def client(api):
 # ── B-8.1: versiyon tutarlılığı + versiyonlama ────────────────────────────────
 def test_version_single_source_consistent(client, api):
     from utils.path_utils import get_app_version
+
     v = get_app_version()
     assert api.app.version == v
     assert client.get("/api/discovery").json()["version"] == v
@@ -30,6 +34,7 @@ def test_version_single_source_consistent(client, api):
 
 def test_x_api_version_header(client, api):
     from utils.path_utils import get_app_version
+
     r = client.get("/api/health")
     assert r.headers.get("X-API-Version") == get_app_version()
 
@@ -45,9 +50,9 @@ def test_patients_pagination_backward_compatible(client):
     r = client.get("/api/patients")
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "success"      # eski sözleşme korunur
+    assert body["status"] == "success"  # eski sözleşme korunur
     assert "data" in body and isinstance(body["data"], list)
-    assert "total" in body                   # yeni alan (eski istemci yok sayar)
+    assert "total" in body  # yeni alan (eski istemci yok sayar)
 
 
 def test_patients_pagination_limits(client):

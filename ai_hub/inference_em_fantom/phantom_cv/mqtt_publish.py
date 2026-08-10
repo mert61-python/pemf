@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """mqtt_publish.py — MQTT 3.1.1 publisher (paho-mqtt).
 
 ESP32-S3 broker (HiveMQ veya yerel mosquitto) -> tezde paper 8 mimarisi.

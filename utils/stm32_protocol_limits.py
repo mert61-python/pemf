@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Shared STM32 protocol limits for GUI, AI Pro, headless, and API paths."""
 
 from __future__ import annotations

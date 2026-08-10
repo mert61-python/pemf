@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Audit P1 (test-boşluğu #6): GERÇEK HardwareController güvenlik davranışları.
 
 Mevcut testler yalnız FakeHW kullanıyordu → gerçek kontrolcünün donanım-tarafı süre-limiti
@@ -6,6 +7,7 @@ engelleme ve düşen-STOP telafisi regrese olsa YAKALANMAZDI (bobin süresiz ene
 dönünce kendiliğinden yeniden ateşleme). Donanımsız: sahte core (_hw_send_queue) +
 monotonic monkeypatch ile deterministik.
 """
+
 import queue
 import struct
 import zlib
@@ -144,12 +146,77 @@ def test_update_coil_does_not_partially_apply_on_bad_param(hw):
     bobin is_running=True + YENİ freq ama ESKİ duty/faz ve deadline YOK durumda kalıyor,
     keep-alive bu karma durumu sürerken API 'başarısız' dönüyordu.
     """
-    hw.update_coil(1, 100.0, 25.0, 0.0, duration=10)          # sağlıklı başlangıç
+    hw.update_coil(1, 100.0, 25.0, 0.0, duration=10)  # sağlıklı başlangıç
     before = dict(hw.coils_state[1])
     before_deadline = hw._coil_deadline[1]
 
-    ok = hw.update_coil(1, 250.0, "bozuk-duty", 0.0, duration=10)   # duty sayısal değil
+    ok = hw.update_coil(1, 250.0, "bozuk-duty", 0.0, duration=10)  # duty sayısal değil
 
     assert ok is False, "geçersiz parametre başarısız dönmeli"
     assert hw.coils_state[1] == before, "bobin durumu HİÇ değişmemeli (kısmi uygulama yok)"
     assert hw._coil_deadline[1] == before_deadline, "deadline değişmemeli"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# STOP'UN DÖNÜŞÜ DÜRÜST OLMALI (2026-08-09 denetimi, ENGEL — HASTA GÜVENLİĞİ)
+#
+# ARIZA: `stop_all_coils()` KOŞULSUZ `True` dönüyordu. Paket kuyruğa hiç alınamamış olsa bile
+# (kuyruk dolu / core yok) True dönüyor, `_emergency_stop_all` bunu `stmStopped` olarak yayınlıyor
+# ve arayüz "çıktılar kesildi" diyordu. Yani STOP'un DÜŞTÜĞÜ durum ile başarılı durum operatöre
+# AYNI görünüyordu — acil durdurmada mümkün olan en kötü hata sınıfı.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
+
+def test_stop_all_coils_basarili_yolda_True_doner(hw):
+    hw.update_coil(1, 100.0, 25.0, 0.0, duration=5)
+    assert hw.stop_all_coils() is True
+    assert hw.coils_state[1]["is_running"] is False
+
+
+def test_KRITIK_kuyruk_DOLUYKEN_stop_all_coils_YALAN_SOYLEMEZ(hw):
+    """Kuyruk dolu ve tüketici yoksa STOP paketi GÖNDERİLEMEZ → dönüş False olmalı.
+
+    `_send_stm_manual_update` 3 kez dener, her denemede en eskiyi atıp yer açmaya çalışır; bu
+    testte kuyruğu maxsize'a kadar doldurup `get_nowait`'i devre dışı bırakarak gerçek 'yer
+    açılamadı' durumunu modelliyoruz."""
+    q = hw.core._hw_send_queue
+    while not q.full():
+        q.put_nowait(("dolgu", b"", "", 0))
+
+    def _yer_acma(*_a, **_k):
+        raise queue.Empty  # en eskiyi atma denemesi de sonuçsuz
+
+    hw.core._hw_send_queue.get_nowait = _yer_acma
+
+    assert hw.stop_all_coils() is False, "paket kuyruga alinamadi ama STOP 'basarili' bildirildi"
+
+
+def test_KRITIK_core_YOKKEN_stop_all_coils_False_doner():
+    """Core/kuyruk hiç yoksa STM'e tek bayt gitmez. Eskiden bu da True dönüyordu."""
+    c = HardwareController(None)
+    c._keep_alive_stop.set()
+    c._keep_alive_thread.join(timeout=2)
+    try:
+        assert c.stop_all_coils() is False
+    finally:
+        c.stop()
+
+
+def test_stop_all_coils_False_donse_bile_DURUMU_SIFIRLAR(hw):
+    """Gönderim başarısız olsa bile yerel durum 'çalışmıyor' olmalı: keep-alive artık
+    'çalışıyor' paketi TAZELEMESİN (yoksa bobin sonsuza dek sürülür)."""
+    q = hw.core._hw_send_queue
+    hw.update_coil(1, 100.0, 25.0, 0.0, duration=5)
+    while not q.full():
+        q.put_nowait(("dolgu", b"", "", 0))
+    hw.core._hw_send_queue.get_nowait = lambda *_a, **_k: (_ for _ in ()).throw(queue.Empty)
+
+    assert hw.stop_all_coils() is False
+    assert hw.coils_state[1]["is_running"] is False, "gonderim basarisiz diye durum acik kaldi"
+    assert hw.coils_state[1]["duty"] == 0.0
+
+
+def test_send_stm_manual_update_kuyruga_alinca_True_doner(hw):
+    """Diğer çağıranlar dönüşü yok sayar; sözleşme yine de doğru olmalı."""
+    assert hw._send_stm_manual_update() is True
+    assert not hw.core._hw_send_queue.empty()

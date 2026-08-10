@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Denetim 2026-08-04 (P3): yayınlanan `manifest.json`'ın v1/v2 tutarlılığı.
 
 Manifest AYNI paketi İKİ ŞEMADA birden anlatır:
@@ -65,9 +66,7 @@ def test_profil_paketleri_v1_ve_v2de_ayni(manifest):
     models = manifest.get("models") or {}
     profiles = manifest.get("profiles") or {}
     assert models, "manifest'te hic model/profil paketi yok"
-    assert set(models) == set(profiles), (
-        f"profil kumeleri ayrisik: v2={sorted(models)} v1={sorted(profiles)}"
-    )
+    assert set(models) == set(profiles), f"profil kumeleri ayrisik: v2={sorted(models)} v1={sorted(profiles)}"
     for k, v2 in models.items():
         assert v2 == profiles[k], f"AYRISMA profil `{k}`: v2={v2} != v1={profiles[k]}"
 
@@ -79,9 +78,9 @@ def test_her_paketin_digesti_ve_boyutu_makul(manifest):
         for key, entry in (manifest.get(section) or {}).items():
             sayac += 1
             sha = entry.get("sha256", "")
-            assert isinstance(sha, str) and len(sha) == 64 and all(
-                c in "0123456789abcdef" for c in sha.lower()
-            ), f"{section}.{key}: gecersiz sha256 {sha!r}"
+            assert isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
+                f"{section}.{key}: gecersiz sha256 {sha!r}"
+            )
             assert isinstance(entry.get("size"), int) and entry["size"] > 0, (
                 f"{section}.{key}: gecersiz size {entry.get('size')!r}"
             )
@@ -105,8 +104,7 @@ def test_launcher_blogu_da_dogrulanir(manifest):
         return  # installer_url yoksa sha256 zorunlu degil (Rust tarafi da oyle)
     sha = str(l.get("sha256", ""))
     assert len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
-        f"launcher.sha256 gecersiz ({sha!r}) — Rust tarafi TUM manifest'i reddeder, "
-        f"sahadaki her kurulum kirilir."
+        f"launcher.sha256 gecersiz ({sha!r}) — Rust tarafi TUM manifest'i reddeder, sahadaki her kurulum kirilir."
     )
     assert isinstance(l.get("size"), int) and l["size"] > 0, f"launcher.size gecersiz: {l.get('size')!r}"
     assert str(l["installer_url"]).startswith("https://"), "launcher.installer_url HTTPS degil"

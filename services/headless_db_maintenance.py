@@ -6,6 +6,7 @@ sınırsız veri büyümesi + yedek yok). Bu modül aynı DB metotlarını Qt'si
 periyodik çağırır. apply_data_retention_policy() purge (sensor/event/outbox) + PII-redaction'ı
 zaten içerir.
 """
+
 import logging
 import os
 import threading
@@ -57,18 +58,23 @@ _worker = None  # type: Optional[HeadlessDBMaintenance]
 
 
 class HeadlessDBMaintenance:
-    def __init__(self, app_data_dir=None,
-                 maintenance_interval_hours: int = 6,
-                 backup_interval_hours: int = 24,
-                 disk_check_interval_minutes: int = 30,
-                 backup_retention_keep: int = 14):
+    def __init__(
+        self,
+        app_data_dir=None,
+        maintenance_interval_hours: int = 6,
+        backup_interval_hours: int = 24,
+        disk_check_interval_minutes: int = 30,
+        backup_retention_keep: int = 14,
+    ):
         from database.treatment_history_db import get_treatment_db
         from utils.path_utils import get_app_data_directory
+
         self.app_data_dir = Path(app_data_dir) if app_data_dir else get_app_data_directory()
         self.db = get_treatment_db(self.app_data_dir)
         # audit B-7.2: PatientDB de yedeklensin (eskiden yalnız treatment yedekleniyordu).
         try:
             from database.patient_database import get_patient_database
+
             self.patient_db = get_patient_database()
         except Exception:
             self.patient_db = None
@@ -101,9 +107,11 @@ class HeadlessDBMaintenance:
             now = time.monotonic()
             try:
                 if now - last_disk >= self.disk_interval:
-                    self._check_disk(); last_disk = now
+                    self._check_disk()
+                    last_disk = now
                 if first or now - last_maint >= self.maint_interval:
-                    self._run_maintenance(); last_maint = now
+                    self._run_maintenance()
+                    last_maint = now
                 # DENETIM P2 (restart-dongusu yedek imhasi): kosul `first or ...` idi → servis HER
                 # acilista yedek aliyordu. Rotasyon yalnizca son N yedegi tuttugundan, bir crash-loop
                 # ya da operatorun art arda yeniden baslatmasi N acilista TUM YEDEK GECMISINI ayni
@@ -111,7 +119,8 @@ class HeadlessDBMaintenance:
                 # Cozum: acilista yedek al AMA yalnizca diskteki EN YENI yedek bayatsa. Boylece
                 # "servis uzun sure kapali kaldi" durumu yine yedeklenir, restart dongusu yedegi imha etmez.
                 if (first and not self._recent_backup_exists()) or now - last_backup >= self.backup_interval:
-                    self._run_backup(); last_backup = now
+                    self._run_backup()
+                    last_backup = now
                 elif first:
                     logger.info("Acilis yedegi ATLANDI: diskte taze yedek var (restart-dongusu korumasi).")
             except Exception:
@@ -170,7 +179,7 @@ class HeadlessDBMaintenance:
             return newest > 0.0 and (time.time() - newest) < self.backup_interval
         except Exception:
             logger.debug("yedek tazelik kontrolu basarisiz", exc_info=True)
-            return False   # emin degilsek yedek AL (veri kaybetmektense fazladan yedek)
+            return False  # emin degilsek yedek AL (veri kaybetmektense fazladan yedek)
 
     def _run_backup(self):
         try:
@@ -216,6 +225,7 @@ class HeadlessDBMaintenance:
         """
         try:
             from utils.backup_recovery import ENVELOPE_NAME, refresh_recovery_material
+
             if refresh_recovery_material(self.app_data_dir, [backup_dir]):
                 p = backup_dir / ENVELOPE_NAME
                 return p if p.exists() else None
@@ -229,7 +239,7 @@ class HeadlessDBMaintenance:
             try:
                 files = sorted(backup_dir.glob(pattern))
                 if len(files) > self.backup_retention_keep:
-                    for old in files[:-self.backup_retention_keep]:
+                    for old in files[: -self.backup_retention_keep]:
                         try:
                             old.unlink(missing_ok=True)
                         except Exception:
@@ -242,6 +252,7 @@ class HeadlessDBMaintenance:
         → aynı-disk yedek felaketi (disk arızası/ransomware) tek nokta olmasın. Set değilse no-op."""
         import os
         import shutil
+
         dest = os.environ.get("PEMF_BACKUP_DIR", "").strip()
         if not dest or not files:
             return
@@ -262,15 +273,25 @@ class HeadlessDBMaintenance:
             # olmadigina gore log seviyesi degisir — "kopyalandi" demek yetmez, kurtarilabilir
             # olup olmadigini soylemek gerekir.
             from utils.backup_recovery import ENVELOPE_NAME as _ENV_NAME
+
             if (dpath / _ENV_NAME).exists():
                 logger.info(
                     "Yedekler off-machine kopyalandi: %s (%d dosya). Kurtarma zarfi (%s) yerinde → "
-                    "KURTARMA KODU ile baska makinede geri yuklenebilir.", dest, len(files), _ENV_NAME)
+                    "KURTARMA KODU ile baska makinede geri yuklenebilir.",
+                    dest,
+                    len(files),
+                    _ENV_NAME,
+                )
             else:
                 logger.warning(
                     "Yedekler off-machine kopyalandi: %s (%d dosya). DIKKAT: kurtarma zarfi (%s) YOK "
                     "→ bu dosyalar SQLCipher ile sifreli ve anahtar BU MAKINEYE bagli (DPAPI); donanim "
-                    "arizasinda ACILAMAZLAR. bkz. %s", dest, len(files), _ENV_NAME, _OFFSITE_README_NAME)
+                    "arizasinda ACILAMAZLAR. bkz. %s",
+                    dest,
+                    len(files),
+                    _ENV_NAME,
+                    _OFFSITE_README_NAME,
+                )
             # Yedeklerin YANINA ne gerektigini yaz: kurtarma anindaki kisi log'lara bakamayabilir.
             try:
                 (dpath / _OFFSITE_README_NAME).write_text(_OFFSITE_README_TEXT, encoding="utf-8")

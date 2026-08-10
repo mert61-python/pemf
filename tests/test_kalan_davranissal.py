@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """KAÇAN 11 mutasyon için DAVRANIŞSAL regresyon koruması.
 
 Bu turun en önemli dersi: `assert "..." in inspect.getsource(...)` tipi kaynak-dizgesi
@@ -16,8 +17,8 @@ import time
 
 import pytest
 
-
 # ───────────────────── BOBİN GÜVENLİĞİ ─────────────────────
+
 
 def test_bayat_ESP_bobinine_GERCEK_stop_yayinlanir(monkeypatch):
     """Kaçan mutasyon: `for cid, snap in changed:` → `in []:` (publish kodu kaynakta DURUYOR
@@ -52,8 +53,9 @@ def test_bayat_ESP_bobinine_GERCEK_stop_yayinlanir(monkeypatch):
         api._esp_telemetry_watchdog()
 
     stoplar = [(t, p) for t, p in yayinlar if p.get("command") == "stop"]
-    assert stoplar, ("bayat ESP bobinine STOP YAYINLANMADI → UI 'durdu' derken bobin "
-                     "kendi duration'ı bitene kadar enerjili kalır")
+    assert stoplar, (
+        "bayat ESP bobinine STOP YAYINLANMADI → UI 'durdu' derken bobin kendi duration'ı bitene kadar enerjili kalır"
+    )
     assert any(t == "pemf/coil/6/control" for t, _ in stoplar), f"yanlış konu: {stoplar}"
     assert any(p.get("reason") == "telemetry_stale" for _, p in stoplar)
 
@@ -76,7 +78,7 @@ def test_kapanis_ESP_STOP_butcesi_thread_leri_GERCEKTEN_bekler(monkeypatch):
 
         @staticmethod
         def _mqtt_publish(topic, payload):
-            time.sleep(0.25)          # yavaş broker
+            time.sleep(0.25)  # yavaş broker
             yayinlar.append(topic)
             return True
 
@@ -85,7 +87,8 @@ def test_kapanis_ESP_STOP_butcesi_thread_leri_GERCEKTEN_bekler(monkeypatch):
     # DÖNER DÖNMEZ: 3 ESP bobini × 2 konu = 6 publish tamamlanmış olmalı (bütçe 3 sn > 0,25 sn)
     assert len(yayinlar) == 6, (
         f"kapanışta yalnız {len(yayinlar)}/6 STOP yayınlandı → bütçe thread'leri beklemiyor, "
-        "bobinler STOP almadan süreç kapanır")
+        "bobinler STOP almadan süreç kapanır"
+    )
 
 
 def test_kapanis_STM_flush_butcesi_kuyrugu_GERCEKTEN_bekler(monkeypatch):
@@ -101,7 +104,7 @@ def test_kapanis_STM_flush_butcesi_kuyrugu_GERCEKTEN_bekler(monkeypatch):
     class _Kuyruk:
         def empty(self):
             bos_cagrilari["n"] += 1
-            return bos_cagrilari["n"] > 3   # ilk 3 yoklamada DOLU
+            return bos_cagrilari["n"] > 3  # ilk 3 yoklamada DOLU
 
     class _Donanim:
         def __init__(self):
@@ -128,7 +131,8 @@ def test_kapanis_STM_flush_butcesi_kuyrugu_GERCEKTEN_bekler(monkeypatch):
     assert hw.durduruldu, "stop_all_coils çağrılmadı"
     assert bos_cagrilari["n"] >= 2, (
         f"kuyruk yalnız {bos_cagrilari['n']} kez yoklandı → flush bütçesi BEKLEMİYOR; "
-        "STM STOP seri porta yazılmadan süreç kapanır")
+        "STM STOP seri porta yazılmadan süreç kapanır"
+    )
 
 
 def test_landmark_auto_AI_Pro_aktifken_donanima_DOKUNMAZ():
@@ -144,9 +148,11 @@ def test_landmark_auto_AI_Pro_aktifken_donanima_DOKUNMAZ():
     from servers import ai_router
 
     tree = ast.parse(inspect.getsource(ai_router))
-    hedef = [n for n in ast.walk(tree)
-             if isinstance(n, ast.If) and isinstance(n.test, ast.Name)
-             and n.test.id == "_ai_loop_active"]
+    hedef = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "_ai_loop_active"
+    ]
     assert hedef, "`if _ai_loop_active:` koruması KAYBOLMUŞ"
 
     korumali = False
@@ -157,10 +163,12 @@ def test_landmark_auto_AI_Pro_aktifken_donanima_DOKUNMAZ():
     assert korumali, (
         "AI Pro aktifken landmark-auto ERKEN DÖNMÜYOR → iki otonom sürücü aynı donanımda "
         "çatışır, AI Pro'nun per-bobin duty/fazı tek-tip değerlerle ezilir, sürmediği bobin 8 "
-        "enerjilenir ve seans meta-verisi sessizce devralınır")
+        "enerjilenir ve seans meta-verisi sessizce devralınır"
+    )
 
 
 # ───────────────────── VERİ BÜTÜNLÜĞÜ ─────────────────────
+
 
 def test_gecersiz_yedekle_rollback_CANLI_DByi_yok_etmez(temp_app_data, monkeypatch):
     """Kaçan mutasyon: `if not _backup_ok:` → `if False:`.
@@ -179,12 +187,15 @@ def test_gecersiz_yedekle_rollback_CANLI_DByi_yok_etmez(temp_app_data, monkeypat
 
     # Yedek 0-BAYT (disk dolu taklidi) + migration PATLASIN
     def _bos_yedek(path):
-        open(path, "wb").close()      # 0 bayt → geçersiz
+        open(path, "wb").close()  # 0 bayt → geçersiz
         return True
 
     monkeypatch.setattr(TreatmentHistoryDB, "create_backup", lambda self, p: _bos_yedek(p))
-    monkeypatch.setattr(TreatmentHistoryDB, "_ensure_schema_version",
-                        lambda self: (_ for _ in ()).throw(RuntimeError("migration patladi")))
+    monkeypatch.setattr(
+        TreatmentHistoryDB,
+        "_ensure_schema_version",
+        lambda self: (_ for _ in ()).throw(RuntimeError("migration patladi")),
+    )
 
     # Metot `current_version >= TARGET_SCHEMA_VERSION` ise ERKEN DÖNER; taze DB zaten
     # hedef sürümde olduğundan migration yolunu zorlamak için sürümü 0 gösteriyoruz.
@@ -195,6 +206,7 @@ def test_gecersiz_yedekle_rollback_CANLI_DByi_yok_etmez(temp_app_data, monkeypat
     db2.db_path = temp_app_data / "pemf_treatment_history.db"
     import logging
     import threading as _th
+
     db2.logger = logging.getLogger("t")
     db2._local = _th.local()
     db2._lock = _th.Lock()
@@ -211,7 +223,8 @@ def test_gecersiz_yedekle_rollback_CANLI_DByi_yok_etmez(temp_app_data, monkeypat
     # KRİTİK: canlı DB hâlâ yerinde ve okunabilir olmalı
     db3 = TreatmentHistoryDB(temp_app_data)
     assert len(db3.get_session_history(limit=10)) == 1, (
-        "geçersiz yedekle rollback canlı DB'yi EZDİ → tüm tedavi geçmişi kalıcı kayıp")
+        "geçersiz yedekle rollback canlı DB'yi EZDİ → tüm tedavi geçmişi kalıcı kayıp"
+    )
     assert sid
 
 
@@ -220,10 +233,9 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     baypas eder. ACL uygulanamıyorsa korumasız escrow şifrelemenin kendisini anlamsız kılar
     → dosya SİLİNMELİ (fail-closed)."""
     import inspect
+    import re
 
     from database import treatment_history_db as thdb
-
-    import re
 
     src = inspect.getsource(thdb.TreatmentHistoryDB._migrate_to_encrypted_if_needed)
 
@@ -232,23 +244,63 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     # tuzağa `if not _backup_ok` ve `skipped_session_active` testlerinde de düşülmüştü).
     # Tam-kelime + gerçek okuma biçimi aranır.
     assert re.search(r'os\.getenv\(\s*["\']PEMF_KEEP_PLAIN_BAK["\']', src), (
-        "PEMF_KEEP_PLAIN_BAK bayrağı okunmuyor → escrow'u kapatma yolu kayıp")
+        "PEMF_KEEP_PLAIN_BAK bayrağı okunmuyor → escrow'u kapatma yolu kayıp"
+    )
 
-    # Fail-closed sözleşmesi: ACL denenir → başarısızsa VEYA bayrak kapalıysa dosya SİLİNİR
+    # Fail-closed sözleşmesi: escrow İSTENSE bile ACL uygulanamıyorsa dosya SİLİNİR.
     assert re.search(r'_locked\s*=\s*bool\(\s*lock_down_file\(', src), "ACL sonucu okunmuyor"
-    assert re.search(r'if\s+not\s+_locked\s+or\s+not\s+_keep\s*:', src), (
-        "fail-closed koşulu YOK → ACL uygulanamayınca düz-metin PII korumasız diskte kalır")
+
+    # ⚠️ 2026-08-08: VARSAYILAN TERSİNE ÇEVRİLDİ (escrow-sakla → güvenli-sil), çünkü hasta DB'si
+    # (`sqlcipher_util`) bu kararı Audit P3'te zaten almıştı ve tedavi DB'si geride kalmıştı.
+    # Eski yapı `if not _locked or not _keep:` idi; artık `if _keep:` bloğu içinde ACL denenir,
+    # kilitlenemezse (ve varsayılanda hep) güvenli-silmeye düşülür.
+    assert re.search(r'os\.getenv\(\s*["\']PEMF_KEEP_PLAIN_BAK["\']\s*,\s*["\']0["\']', src), (
+        "escrow VARSAYILAN AÇIK kalmış → at-rest şifreleme açılınca her klinikte tüm geçmişin "
+        "düz-metin tam kopyası diskte kalır (site 'cihazda şifreli' diye beyan ederken)"
+    )
+
+    # Silmenin GÜVENLİ olması: yalnız `os.remove` içeriği diskte bırakır (kurtarılabilir).
+    assert "os.urandom" in src and "fsync" in src, (
+        "yedek silinmeden ÖNCE üzerine yazılmıyor → düz-metin PII disk kurtarma araçlarıyla geri gelir"
+    )
+
+    # DAVRANIŞ (metin değil): varsayılanda göç sonrası düz-metin yedek diskte KALMAMALI.
+    # (Ayrıntılı senaryolar: tests/test_at_rest_encryption_rollout.py)
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_import_sqlcipher", lambda self: None)
+    db = thdb.TreatmentHistoryDB(temp_app_data)
+    db.start_session("Manuel", patient_name="ArtikHasta")
+    db.close_connections()
+    monkeypatch.undo()
+    monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
+    thdb.TreatmentHistoryDB(temp_app_data)  # göç
+    assert not (temp_app_data / "pemf_treatment_history.db.plain.bak").exists(), (
+        "goc sonrasi duz-metin yedek diskte kaldi"
+    )
 
     # Silme, o koşulun İÇİNDE olmalı (sırayla değil, yapısal)
     import ast
     import textwrap
+
     fn = ast.parse(textwrap.dedent(src)).body[0]
-    kosullu_silme = False
+    # ⚠️ 2026-08-08 yapı değişti: silme artık BİR KOŞULUN İÇİNDE değil, VARSAYILAN YOL.
+    # Escrow yalnız `if _keep:` bloğunda ve ACL başarılıysa `return` ile korunur; diğer TÜM
+    # yollar güvenli-silmeye düşer. Kilitlenecek sözleşme: escrow bloğundan ACL BAŞARILIYKEN
+    # erken çıkılır, aksi halde silme kaçınılmazdır.
+    escrow_erken_cikis = False
     for n in ast.walk(fn):
-        if isinstance(n, ast.If) and "not _locked or not _keep" in ast.unparse(n.test):
-            if "os.remove(backup)" in ast.unparse(n.body):
-                kosullu_silme = True
-    assert kosullu_silme, "os.remove(backup) fail-closed koşulunun İÇİNDE değil"
+        if isinstance(n, ast.If) and ast.unparse(n.test).strip() == "_keep":
+            govde = ast.unparse(n.body)
+            if "_locked" in govde and "return" in govde:
+                escrow_erken_cikis = True
+    assert escrow_erken_cikis, (
+        "escrow bloğu ACL başarılıyken erken çıkmıyor → ya escrow hiç saklanmıyor "
+        "ya da korumasız escrow silinmeden bırakılıyor"
+    )
+
+    # Silme yolu koşulsuz erişilebilir olmalı: fonksiyonun sonunda (escrow return'ü dışında)
+    # `os.remove(backup)` bulunmalı.
+    assert "os.remove(backup)" in ast.unparse(fn), "düz-metin yedeği silen yol kayıp"
 
 
 def test_config_kaydi_ATOMIK(tmp_path, monkeypatch):
@@ -258,8 +310,11 @@ def test_config_kaydi_ATOMIK(tmp_path, monkeypatch):
 
     from utils import production_config_manager as pcm
 
-    src = inspect.getsource(pcm.ProductionConfigManager.save_user_config) \
-        if hasattr(pcm.ProductionConfigManager, "save_user_config") else inspect.getsource(pcm)
+    src = (
+        inspect.getsource(pcm.ProductionConfigManager.save_user_config)
+        if hasattr(pcm.ProductionConfigManager, "save_user_config")
+        else inspect.getsource(pcm)
+    )
     assert "os.replace(" in src, "config yazımı atomik DEĞİL (os.replace yok)"
     assert "os.fsync(" in src, "fsync yok → replace öncesi veri diske inmemiş olabilir"
     # tmp dosyaya yaz → replace sırası
@@ -269,6 +324,7 @@ def test_config_kaydi_ATOMIK(tmp_path, monkeypatch):
 
 
 # ───────────────────── AĞ / BULUT ─────────────────────
+
 
 def test_system_info_UZAK_istemciye_tunel_ve_eslestirme_SIZDIRMAZ(monkeypatch):
     """`tunnelUrl`/`pairingCode`/`deviceId` uzak (tünel) istemciye verilirse, tüneli bilen
@@ -281,9 +337,8 @@ def test_system_info_UZAK_istemciye_tunel_ve_eslestirme_SIZDIRMAZ(monkeypatch):
     for alan in ('"tunnelUrl"', '"pairingCode"', '"deviceId"'):
         i = src.find(alan)
         assert i > 0, f"{alan} kaybolmuş"
-        satir = src[i:src.find("\n", i)]
-        assert "_local" in satir, (
-            f"{alan} YEREL kontrolü olmadan dönüyor → uzak istemciye sızar: {satir.strip()}")
+        satir = src[i : src.find("\n", i)]
+        assert "_local" in satir, f"{alan} YEREL kontrolü olmadan dönüyor → uzak istemciye sızar: {satir.strip()}"
 
 
 def test_pahali_yoklamalar_ONBELLEKLENIR():
@@ -310,6 +365,7 @@ def test_pahali_yoklamalar_ONBELLEKLENIR():
     def _patla():
         raise RuntimeError("netsh timeout")
 
-    m._poll_cache["test"] = (0.0, {"v": 42})   # TTL'i geçmiş yap
+    m._poll_cache["test"] = (0.0, {"v": 42})  # TTL'i geçmiş yap
     assert m._cached_poll("test", _patla) == {"v": 42}, (
-        "üretici hata verince son iyi değer korunmuyor → health boş/yanlış döner")
+        "üretici hata verince son iyi değer korunmuyor → health boş/yanlış döner"
+    )

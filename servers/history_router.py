@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 import csv
 import io
 import logging
@@ -21,10 +22,12 @@ logger = logging.getLogger("HistoryRouter")
 class HistoryDeletePayload(BaseModel):
     session_id: int
 
+
 # Canonical veri klasörü — api_server (gözlem-notu/KPI/AI-log) ile AYNI olmalı,
 # yoksa yazıcı/okuyucu farklı DB dosyalarına düşer (split-brain → geçmiş boş görünür).
 _app_data_dir = get_app_data_directory()
 _REPORTS_DIR = _app_data_dir / "temp_reports"
+
 
 def _safe_unlink(path):
     """P1 audit 2026-06-28: rapor PDF'i (tam hasta PII) gonderildikten SONRA sil — at-rest
@@ -33,6 +36,7 @@ def _safe_unlink(path):
         os.remove(path)
     except Exception:
         pass
+
 
 def _purge_old_reports(max_age_sec: int = 3600):
     """temp_reports/ icindeki >1 saatlik orphan PDF'leri sil (crash/eski surum kalintilari).
@@ -50,14 +54,17 @@ def _purge_old_reports(max_age_sec: int = 3600):
     except Exception:
         pass
 
+
 _purge_old_reports()  # import-zamani orphan temizligi
 
 
 def get_db():
     return get_treatment_db(_app_data_dir)
 
+
 def get_pdf_gen():
     return get_pdf_generator(_app_data_dir)
+
 
 @router.get("/")
 def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
@@ -74,9 +81,10 @@ def get_history(limit: int = 100, cursor: int = None, db=Depends(get_db)):
         logger.error(f"Error fetching history: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
+
 @router.get("/statistics")
 def get_statistics(db=Depends(get_db)):
-    """Klinik tedavi istatistiklerini getir"""
+    """Klinik seans istatistiklerini getir"""
     try:
         stats = db.get_statistics()
         return stats
@@ -84,9 +92,12 @@ def get_statistics(db=Depends(get_db)):
         logger.error(f"Error fetching statistics: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
+
 @router.get("/export_pdf")
-def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış session id listesi. Örn: 1,2,3"), 
-               pdf_gen=Depends(get_pdf_gen)):
+def export_pdf(
+    session_ids: str = Query(..., description="Virgülle ayrılmış session id listesi. Örn: 1,2,3"),
+    pdf_gen=Depends(get_pdf_gen),
+):
     """Seçili seanslar için PDF raporu oluşturup indir"""
     try:
         id_list = [int(sid.strip()) for sid in session_ids.split(",")]
@@ -94,13 +105,13 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
         tmp_dir = _app_data_dir / "temp_reports"
         tmp_dir.mkdir(exist_ok=True)
         _purge_old_reports()
-        out_path = str(tmp_dir / f"report_{id_list[0]}_{int(time.time()*1000)}.pdf")
-        
+        out_path = str(tmp_dir / f"report_{id_list[0]}_{int(time.time() * 1000)}.pdf")
+
         pdf_path = pdf_gen.generate_session_report(session_ids=id_list, output_path=out_path)
-        
+
         return FileResponse(
-            path=pdf_path, 
-            media_type='application/pdf', 
+            path=pdf_path,
+            media_type='application/pdf',
             filename="PEMF_Report.pdf",
             background=BackgroundTask(_safe_unlink, pdf_path),  # P1 audit: gonderim sonrasi PII PDF'i sil
         )
@@ -108,9 +119,13 @@ def export_pdf(session_ids: str = Query(..., description="Virgülle ayrılmış 
         logger.error(f"Error generating PDF: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
 
+
 @router.get("/export_csv")
 def export_csv(
-    session_ids: str = Query("", description="Opsiyonel: virgülle ayrılmış id listesiyle SINIRLA (aktif operatör-kapsam/arama). Boş = tümü (geriye uyumlu)."),
+    session_ids: str = Query(
+        "",
+        description="Opsiyonel: virgülle ayrılmış id listesiyle SINIRLA (aktif operatör-kapsam/arama). Boş = tümü (geriye uyumlu).",
+    ),
     db=Depends(get_db),
 ):
     """Seans geçmişini CSV indir. session_ids verilirse YALNIZ o kayıtlar (ekranda görünen
@@ -125,11 +140,12 @@ def export_csv(
                 _idset = [int(x.strip()) for x in _sid.split(",") if x.strip()]
             except ValueError:
                 return Response(content="Geçersiz session_ids", media_type="text/plain", status_code=400)
-        sessions = db.get_session_history(limit=10000, internal_full=True,
-                                          session_ids=_idset)  # Audit P2: tam-export, 500'e kırpma
+        sessions = db.get_session_history(
+            limit=10000, internal_full=True, session_ids=_idset
+        )  # Audit P2: tam-export, 500'e kırpma
         if not sessions:
             return Response(content="Veri bulunamadi", media_type="text/plain")
-            
+
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -140,24 +156,38 @@ def export_csv(
             return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
         # Headers
-        headers = ["ID", "Hasta", "Hedef", "Mod", "Sure(dk)", "Frekans(Hz)", "Siddet(mT)", "Tarih", "Baslangic", "Durum", "Notlar"]
+        headers = [
+            "ID",
+            "Hasta",
+            "Hedef",
+            "Mod",
+            "Sure(dk)",
+            "Frekans(Hz)",
+            "Ayarlanan(mT)",
+            "Tarih",
+            "Baslangic",
+            "Durum",
+            "Notlar",
+        ]
         writer.writerow(headers)
-        
+
         for s in sessions:
-            writer.writerow([
-                s.get("id", ""),
-                _csv_safe(s.get("patient_name", "")),
-                _csv_safe(s.get("target_condition", "")),
-                _csv_safe(s.get("treatment_mode", "")),
-                s.get("duration_minutes", ""),
-                s.get("frequency_hz", ""),
-                s.get("intensity_mt", ""),
-                s.get("session_date", ""),
-                s.get("start_time", ""),
-                _csv_safe(s.get("session_status", "")),
-                _csv_safe(s.get("patient_notes", ""))
-            ])
-            
+            writer.writerow(
+                [
+                    s.get("id", ""),
+                    _csv_safe(s.get("patient_name", "")),
+                    _csv_safe(s.get("target_condition", "")),
+                    _csv_safe(s.get("treatment_mode", "")),
+                    s.get("duration_minutes", ""),
+                    s.get("frequency_hz", ""),
+                    s.get("intensity_mt", ""),
+                    s.get("session_date", ""),
+                    s.get("start_time", ""),
+                    _csv_safe(s.get("session_status", "")),
+                    _csv_safe(s.get("patient_notes", "")),
+                ]
+            )
+
         csv_data = output.getvalue()
         output.close()
 
@@ -168,7 +198,7 @@ def export_csv(
         return Response(
             content=csv_bytes,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=PEMF_History.csv"}
+            headers={"Content-Disposition": "attachment; filename=PEMF_History.csv"},
         )
     except Exception as e:
         logger.error(f"Error generating CSV: {e}")
@@ -181,13 +211,13 @@ def export_patient_pdf(patient_name: str, pdf_gen=Depends(get_pdf_gen)):
     try:
         tmp_dir = _app_data_dir / "temp_reports"
         tmp_dir.mkdir(exist_ok=True)
-        out_path = str(tmp_dir / f"patient_report_{int(time.time()*1000)}.pdf")
-        
+        out_path = str(tmp_dir / f"patient_report_{int(time.time() * 1000)}.pdf")
+
         pdf_path = pdf_gen.generate_patient_report(patient_name=patient_name, output_path=out_path)
-        
+
         return FileResponse(
-            path=pdf_path, 
-            media_type='application/pdf', 
+            path=pdf_path,
+            media_type='application/pdf',
             filename=f"{patient_name}_PEMF_Report.pdf",
             background=BackgroundTask(_safe_unlink, pdf_path),  # P1 audit: gonderim sonrasi PII PDF'i sil
         )
@@ -262,31 +292,35 @@ def get_session_full_details(session_id: int, db=Depends(get_db)):
         runs = db.get_session_coil_runs(session_id)
         coil_runs = []
         for r in runs:
-            coil_runs.append({
-                "coil_id": r.get("coil_id"),
-                "hw_type": r.get("hw_type"),
-                "started_epoch": r.get("started_epoch"),
-                "ended_epoch": r.get("ended_epoch"),
-                "duration_seconds": r.get("duration_seconds"),
-                "frequency_hz": r.get("frequency_hz"),
-                "duty_percent": r.get("duty_percent"),
-                "phase": r.get("phase"),
-                "intensity_mt": r.get("intensity_mt"),
-                "summary": summaries.get(r.get("id")),
-            })
+            coil_runs.append(
+                {
+                    "coil_id": r.get("coil_id"),
+                    "hw_type": r.get("hw_type"),
+                    "started_epoch": r.get("started_epoch"),
+                    "ended_epoch": r.get("ended_epoch"),
+                    "duration_seconds": r.get("duration_seconds"),
+                    "frequency_hz": r.get("frequency_hz"),
+                    "duty_percent": r.get("duty_percent"),
+                    "phase": r.get("phase"),
+                    "intensity_mt": r.get("intensity_mt"),
+                    "summary": summaries.get(r.get("id")),
+                }
+            )
 
         sensor_samples = []
         for s in db.get_sensor_samples(session_id):
-            sensor_samples.append({
-                "coil_id": s.get("coil_id"),
-                "sample_ts": s.get("sample_ts"),
-                "temperature_c": s.get("temperature_c"),
-                "ambient_temp_c": s.get("ambient_temp_c"),
-                "current_a": s.get("current_a"),
-                "magnetic_field_mt": s.get("magnetic_field_mt"),
-                "coil_run_id": s.get("coil_run_id"),
-                "sample_count": s.get("sample_count"),
-            })
+            sensor_samples.append(
+                {
+                    "coil_id": s.get("coil_id"),
+                    "sample_ts": s.get("sample_ts"),
+                    "temperature_c": s.get("temperature_c"),
+                    "ambient_temp_c": s.get("ambient_temp_c"),
+                    "current_a": s.get("current_a"),
+                    "magnetic_field_mt": s.get("magnetic_field_mt"),
+                    "coil_run_id": s.get("coil_run_id"),
+                    "sample_count": s.get("sample_count"),
+                }
+            )
 
         return {
             "session": session,
@@ -311,31 +345,43 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         writer = csv.writer(output)
 
         headers = [
-            "Bobin", "Donanim", "Baslangic", "Bitis", "Sure(sn)",
-            "Frekans(Hz)", "Duty(%)", "Faz", "Siddet(mT)",
-            "Ort.Sicaklik(C)", "Maks.Sicaklik(C)", "Ort.Akim(A)",
-            "Ort.Alan(mT)", "Ornek",
+            "Bobin",
+            "Donanim",
+            "Baslangic",
+            "Bitis",
+            "Sure(sn)",
+            "Frekans(Hz)",
+            "Duty(%)",
+            "Faz",
+            "Ayarlanan(mT)",
+            "Ort.Sicaklik(C)",
+            "Maks.Sicaklik(C)",
+            "Ort.Akim(A)",
+            "Ort.Alan(mT)",
+            "Ornek",
         ]
         writer.writerow(headers)
 
         for r in runs:
             summ = summaries.get(r.get("id")) or {}
-            writer.writerow([
-                r.get("coil_id", ""),
-                r.get("hw_type", ""),
-                _epoch_to_hms(r.get("started_epoch")),
-                _epoch_to_hms(r.get("ended_epoch")),
-                r.get("duration_seconds", ""),
-                r.get("frequency_hz", ""),
-                r.get("duty_percent", ""),
-                r.get("phase", ""),
-                r.get("intensity_mt", ""),
-                summ.get("temp_avg", ""),
-                summ.get("temp_max", ""),
-                summ.get("current_avg", ""),
-                summ.get("field_avg", ""),
-                summ.get("sample_count", ""),
-            ])
+            writer.writerow(
+                [
+                    r.get("coil_id", ""),
+                    r.get("hw_type", ""),
+                    _epoch_to_hms(r.get("started_epoch")),
+                    _epoch_to_hms(r.get("ended_epoch")),
+                    r.get("duration_seconds", ""),
+                    r.get("frequency_hz", ""),
+                    r.get("duty_percent", ""),
+                    r.get("phase", ""),
+                    r.get("intensity_mt", ""),
+                    summ.get("temp_avg", ""),
+                    summ.get("temp_max", ""),
+                    summ.get("current_avg", ""),
+                    summ.get("field_avg", ""),
+                    summ.get("sample_count", ""),
+                ]
+            )
 
         csv_data = output.getvalue()
         output.close()
@@ -347,7 +393,7 @@ def export_coil_runs_csv(session_id: int, db=Depends(get_db)):
         return Response(
             content=csv_bytes,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f"attachment; filename=PEMF_Session_{session_id}_Coils.csv"}
+            headers={"Content-Disposition": f"attachment; filename=PEMF_Session_{session_id}_Coils.csv"},
         )
     except Exception as e:
         logger.error(f"Error generating coil runs CSV for session {session_id}: {e}")
@@ -370,6 +416,7 @@ def get_session_detail(session_id: int, db=Depends(get_db)):
     except Exception as e:
         logger.error(f"Error fetching session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="İşlem başarısız")
+
 
 @router.delete("/{session_id}")
 def delete_session(session_id: int, db=Depends(get_db)):

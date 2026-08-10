@@ -1,13 +1,21 @@
 name: critical-path-tests
 
-# PEMF backend kritik-yol testleri (32): emergency_stop, çift-session 409, coil transport
-# STM/ESP yönlendirme, PII maskeleme + fail-closed şifreleme, rate-limit, seans/DB kalıcılık,
-# auth zorlama/muafiyet. Bağımlılıklar TEK dosyada: requirements-test.txt (ağır AI'lar lazy →
-# kurulmaz; sqlcipher3 hariç → kod düz-metine graceful düşer). Temiz venv'de yeşil doğrulandı.
+# PEMF kritik-yol testleri — backend (pytest) + launcher (cargo) + arayüz (tsc/jest).
+#
+# ⚠️ DENETİM 2026-08-09 (Tier 1) — CI GERÇEKTEN AÇILDI. Önceki hâlinde:
+#   • tetikleyici yalnız `main, master` idi; geliştirme AKTİF DALDA (production-hardening)
+#     yapıldığı için iş akışı sahadaki hiçbir değişiklikte KOŞMUYORDU,
+#   • yalnız `ubuntu-latest` vardı; oysa ÜRÜN WINDOWS'ta çalışıyor ve launcher/ProgramData/
+#     DPAPI/güvenlik-duvarı yollarının tamamı Windows'a özgü — hiç test edilmiyordu,
+#   • `cargo test` yalnız `launcher-v*` TAG'inde koşuyordu (yani yayından SONRA),
+#   • arayüz için `tsc --noEmit` ve `jest` HİÇ koşmuyordu.
+# Sonuç: 700+ testin hiçbiri değişiklik anında çalışmıyordu; regresyonlar ancak elle
+# çalıştırıldığında görülüyordu.
 
 on:
   push:
-    branches: [ main, master ]
+    # Aktif dallar dahil: kısa ömürlü konu dalları da kapsansın diye desen kullanılır.
+    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
   pull_request:
   workflow_dispatch:
 
@@ -18,10 +26,20 @@ on:
 permissions:
   contents: read
 
+# Aynı dalda üst üste gelen push'larda eskisini iptal et (runner dakikası + hızlı geri bildirim).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  backend:
+    name: backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false          # bir platformun düşmesi diğerinin sonucunu gizlemesin
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +48,114 @@ jobs:
           python-version: "3.10"
           cache: pip
 
-      - name: Install test deps
+      # SQLCipher: at-rest şifreleme testleri gerçek kütüphaneyle koşsun. Kurulmazsa kod
+      # düz-metne graceful düşer ve şifreleme yolları SESSİZCE test edilmemiş olur.
+      # (Windows'ta sqlcipher3 wheel'i yok → orada düz-metin yoluyla koşulur; iki platformun
+      # farkı bilinçlidir ve `test_at_rest_encryption` bunu zaten iki durumda da sınar.)
+      - name: SQLCipher kur (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev
+          python -m pip install --upgrade pip
+          pip install sqlcipher3-binary || pip install sqlcipher3 || echo "sqlcipher3 kurulamadi — duz-metin yoluyla kosulacak"
+
+      - name: Test bağımlılıkları
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-test.txt
 
-      - name: Run critical-path tests
+      - name: Kritik-yol testleri
+        if: runner.os != 'Windows'
         env:
           PEMF_SIMULATE: ""
-        run: pytest tests -v --no-header --cov --cov-report=term-missing
+        run: pytest tests -v --no-header
+
+      # ⚠️ KAPSAM RATCHET'İ YALNIZ WINDOWS'TA (2026-08-09 denetimi, Tier 3).
+      # İki sebep: (a) ürün Windows'ta çalışır, (b) `fail_under` eşiği Windows'ta ölçüldü
+      # (%54,24). Linux'ta DPAPI/ACL/serial gibi platforma özgü yollar hiç koşmadığı için aynı
+      # eşik orada yanlış-kırmızı üretirdi. Eşik `pyproject.toml → [tool.coverage.report]`.
+      # NOT: eşik ayarlıydı ama CI kapsamı HİÇ ÖLÇMÜYORDU — yani ratchet boş bir güvenceydi.
+      - name: Kritik-yol testleri + kapsam ratcheti
+        if: runner.os == 'Windows'
+        env:
+          PEMF_SIMULATE: ""
+        run: pytest tests -v --no-header --cov --cov-report=term
+
+  sir-taramasi:
+    name: sır taraması (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # ⚠️ DENETİM 2026-08-09 (Tier 3): `.pre-commit-config.yaml` gitleaks hook'u TANIMLIYDU ama
+    # `pre-commit install` HİÇ ÇALIŞTIRILMAMIŞTI (`.git/hooks` boştu) — yani kapı bir kez bile
+    # açılmamıştı. Depo PUBLIC ve geçmişinde canlı sır bulunmuş bir depo (`config/credentials/*`,
+    # `esp` dalı). Hook yalnız onu kuran kişiyi korur; CI işi HERKESİ korur — commit'i kimin
+    # yaptığından bağımsız. Bu yüzden her ikisi de var.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # gitleaks GEÇMİŞİ de tarasın; yalnız son commit yetmez
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  launcher:
+    name: launcher (cargo)
+    runs-on: windows-latest      # üretim platformu; Windows'a özgü yollar burada derlenir
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+      # ⚠️ `--all-targets`: entegrasyon testleri (core/tests/real_artifacts.rs) da koşsun.
+      # Onlar üretim manifest'ini okuyup şema/URL/platform değişmezlerini doğrular — yayın
+      # hatalarını yakalayan asıl kapı orasıdır.
+      - name: cargo test
+        working-directory: launcher
+        run: cargo test --workspace --all-targets --locked
+
+  frontend:
+    name: arayüz (tsc + jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pf/package-lock.json
+      - name: Bağımlılıklar
+        working-directory: pf
+        run: npm ci --legacy-peer-deps
+      # Tip kontrolü ile test AYRI adımlar: biri düşünce diğerinin sonucu yine görünsün.
+      - name: Tip kontrolü
+        working-directory: pf
+        run: npx tsc --noEmit
+      - name: Jest
+        working-directory: pf
+        run: npx jest --ci
+
+  site:
+    name: site (build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pemf-vet-web/package-lock.json
+      - name: Bağımlılıklar
+        working-directory: pemf-vet-web
+        run: npm ci
+      - name: Tip kontrolü
+        working-directory: pemf-vet-web
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: pemf-vet-web
+        run: npm run build

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! manifest.json ayrıştırma — v1 (sahadaki) ve v2 (hedef) formatlarının İKİSİ de okunur.
 //!
 //! v1 (bugün yayında, `client-app-v1.8.0`): platform anahtarları ad-hoc —
@@ -65,6 +66,46 @@ pub struct LauncherInfo {
     /// Setup exe boyutu (bayt) — opsiyonel, indirme ilerlemesi/ön-tahsis için.
     #[serde(default)]
     pub size: Option<u64>,
+    /// KADEMELİ DAĞITIM / GERİ ÇEKME ANAHTARI (2026-08-09 denetimi, Tier 1).
+    ///
+    /// ⚠️ Runtime katmanlarında bu fren VARDI ama GÜNCELLEMEYİ YÖNETEN BİLEŞENİN KENDİSİNDE
+    /// YOKTU: launcher self-update'i sürüm yeniyse KOŞULSUZ, sessizce ve %100'e uyguluyordu.
+    /// Bozuk bir launcher yayını bir sonraki açılışta SAHADAKİ HER cihaza gider ve — runtime'ın
+    /// aksine — geri çekmenin hiçbir yolu kalmaz (yeni launcher artık eskisini çalıştırmıyor).
+    /// v1.9.5 sınıfı bir hata (backend'i tümüyle donduran) bu yolla tekrarlarsa saha kilitlenir.
+    /// `0` yazmak yayını ANINDA durdurur; `10` ile önce küçük bir dilime açıp izleyebilirsiniz.
+    /// Dilim kurulum kimliğinden türer → KARARLIDIR (aynı cihaz hep aynı dilimde).
+    #[serde(default = "yuzde_yuz")]
+    pub rollout: u8,
+}
+
+/// Bir platformun KATMANLI runtime paketleri (2026-08-08).
+///
+/// NEDEN: tek parça `base.zip` ~1,25 GB'dı ve tek satırlık bir yazı değişikliği bile her kliniğe
+/// o boyutu indiriyordu. Ölçüldü: ~1,19 GB'ı hiç değişmeyen bağımlılıklar (torch/cv2/xgboost…),
+/// yalnız ~71 MB'ı bizim kodumuz. Ayrılınca sıradan bir sürüm 71 MB iner.
+///
+/// GERİYE UYUM: alan OPSİYONEL. Yoksa (eski manifest) tek parça `runtimes` yolu aynen çalışır.
+/// Eski launcher'lar bu alanı görmez, `runtimes`'ı okumaya devam eder → kırılmaz.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct RuntimeLayers {
+    /// Bağımlılıklar (Python + torch/cv2 + mosquitto/cloudflared) — seyrek değişir.
+    pub deps: Package,
+    /// Bizim kodumuz (exe + ai_hub .pyd + web arayüzü + scriptler) — her sürümde değişir.
+    pub app: Package,
+    /// KADEMELİ YAYIN / GERİ ÇEKME ANAHTARI (0-100, varsayılan 100 = herkese).
+    ///
+    /// Güncelleme artık OTOMATİK ve kullanıcı onayı olmadan uygulanıyor → bozuk bir yayın, bir
+    /// sonraki açılışta SAHADAKİ HER cihaza gider. Eskiden "Onar" kazara fren görevi görüyordu.
+    /// `0` yazmak yayını ANINDA durdurur (henüz güncellememişler güncellenmez); `10` ile önce
+    /// küçük bir dilime açıp izleyebilirsiniz. Cihaz dilimi kurulum kimliğinden türetilir →
+    /// **kararlıdır**: aynı cihaz her açılışta aynı dilimde kalır, yüzde artınca sıra ona gelir.
+    #[serde(default = "yuzde_yuz")]
+    pub rollout: u8,
+}
+
+fn yuzde_yuz() -> u8 {
+    100
 }
 
 /// Formatı ne olursa olsun normalize edilmiş manifest.
@@ -72,14 +113,23 @@ pub struct LauncherInfo {
 pub struct Manifest {
     pub version: String,
     pub tag: Option<String>,
-    /// platform anahtarı -> base runtime paketi
+    /// platform anahtarı -> base runtime paketi (tek parça — eski yol / yedek)
     pub runtimes: HashMap<String, Package>,
+    /// platform anahtarı -> katmanlı runtime paketleri (varsa TERCİH EDİLİR)
+    pub layers: HashMap<String, RuntimeLayers>,
     /// profil adı -> model paketi
     pub models: HashMap<String, Package>,
     /// Yayındaki en son launcher sürümü (opsiyonel; açılışta self-update bildirimi için).
     pub launcher: Option<LauncherInfo>,
     /// Kaynak şema sürümü (1 veya 2) — teşhis/log için.
     pub schema: u8,
+    /// GERİ ÇAĞIRMA (2026-08-09 denetimi, Tier 2) — bu sürümden ESKİ kurulumlar DESTEKLENMİYOR.
+    ///
+    /// ⚠️ `rollout` ile KARIŞTIRMA: `rollout: 0` yalnız YENİ dağıtımı durdurur, sahadaki cihaza
+    /// dokunmaz. Bir bobin-güvenliği hatası bulunduğunda asıl gereken, MEVCUT kurulumları
+    /// güncellemeye ZORLAMAKTIR. Bu alan doluysa ve kurulu sürüm ondan eskiyse güncelleme
+    /// `rollout` dilimine BAKILMAKSIZIN uygulanır.
+    pub min_supported_version: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -90,9 +140,13 @@ struct RawV2 {
     #[serde(default)]
     runtimes: HashMap<String, Package>,
     #[serde(default)]
+    layers: HashMap<String, RuntimeLayers>,
+    #[serde(default)]
     models: HashMap<String, Package>,
     #[serde(default)]
     launcher: Option<LauncherInfo>,
+    #[serde(default)]
+    min_supported_version: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -123,9 +177,11 @@ impl Manifest {
                 version: v2.version,
                 tag: v2.tag,
                 runtimes: v2.runtimes,
+                layers: v2.layers,
                 models: v2.models,
                 launcher: v2.launcher,
                 schema: 2,
+                min_supported_version: v2.min_supported_version,
             }
         } else {
             let v1: RawV1 = serde_json::from_str(raw)?;
@@ -144,9 +200,12 @@ impl Manifest {
                 version: v1.version,
                 tag: v1.tag,
                 runtimes,
+                layers: HashMap::new(),   // v1'de katman kavramı yok
                 models: v1.profiles,
                 launcher: v1.launcher,
                 schema: 1,
+                // v1'de geri çağırma kavramı yok — o manifest'ler zaten çok eski.
+                min_supported_version: None,
             }
         };
 
@@ -166,6 +225,18 @@ impl Manifest {
                     key: key.clone(),
                     got: pkg.sha256.clone(),
                 });
+            }
+        }
+        // Katmanlar (2026-08-08) da AYNI kapıdan geçer: bozuk digest'i indirmeden önce yakala.
+        // Kapsam dışı bırakılsaydı, gigabaytlık deps katmanı inip sonunda doğrulama hatası verirdi.
+        for (key, l) in self.layers.iter() {
+            for (ad, pkg) in [("deps", &l.deps), ("app", &l.app)] {
+                if !is_hex64(&pkg.sha256) {
+                    return Err(ManifestError::BadDigest {
+                        key: format!("{key}.{ad}"),
+                        got: pkg.sha256.clone(),
+                    });
+                }
             }
         }
         // DENETİM 2026-08-04: doğrulama YALNIZ runtimes+models üzerinde dönüyordu; `launcher.sha256`
@@ -194,6 +265,11 @@ impl Manifest {
                 platform: key.to_string(),
                 available: sorted_keys(&self.runtimes),
             })
+    }
+
+    /// Bu platformun KATMANLI paketleri (yoksa `None` → tek parça `runtimes` yoluna düşülür).
+    pub fn layers_for_current_platform(&self) -> Option<&RuntimeLayers> {
+        self.layers.get(platform::current())
     }
 
     pub fn model_package(&self, profile: &str) -> Result<&Package, ManifestError> {
@@ -337,9 +413,21 @@ mod tests {
         assert_eq!(m.schema, 2);
         assert_eq!(m.version, "1.8.0");
         assert!(m.runtimes.contains_key(platform::WIN_X64), "base -> win-x64");
-        assert!(m.runtimes.contains_key(platform::LINUX_X64), "base_linux -> linux-x64");
-        // base_mac artık YAYINDA (2026-07-26 notarize'li) → mac-arm64 runtime bulunmalı.
-        assert!(m.runtimes.contains_key(platform::MAC_ARM64), "base_mac yayinlandi -> mac-arm64");
+        // ⚠️ SAHİP KARARI 2026-08-09 (Tier 1): `mac-arm64` ve `linux-x64` manifest'ten ÇIKARILDI.
+        // Gerekçe (ölçüldü): o platformlarda `layers` yoktu → rollout freni çalışmıyordu, ve
+        // client self-update'i Windows'a özel (`"Bu platformda oto-güncelleme desteklenmiyor"`)
+        // → kurulan cihaz ESKİ sürümde KALICI olarak kilitleniyor ve bozuk bir yayın geri
+        // çekilemiyordu. Site zaten "Yakında" diyordu (donanım desteği Windows-özel), yani
+        // manifest'in paket sunması tutarsızdı. Client artık "bu platform için paket yok" deyip
+        // DURUR — sessizce kilitli bir cihaz kurmaktansa açık hata.
+        //
+        // GERİ ALMAK İÇİN: paketleri CI ile üret (`linux-backend.yml` / `mac-backend.yml`),
+        // `layers` + `rollout` ekle ve bu iddiaları geri getir. Şu hâlde YOKLUĞU kilitliyoruz ki
+        // yanlışlıkla geri sızmasın.
+        assert!(!m.runtimes.contains_key(platform::LINUX_X64),
+            "linux-x64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+        assert!(!m.runtimes.contains_key(platform::MAC_ARM64),
+            "mac-arm64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
         for p in ["home", "vet", "research"] {
             assert!(m.models.contains_key(p), "{p} profili eksik");
         }
@@ -435,6 +523,57 @@ mod tests {
     }
 
     /// OTO-GÜNCELLEME: launcher.installer_url + sha256 + size varsa ayrıştırılır (apply_self_update besler).
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // LAUNCHER SELF-UPDATE ROLLOUT (2026-08-09 denetimi, Tier 1)
+    //
+    // ARIZA: runtime katmanlarında kademeli dağıtım/geri çekme freni VARDI ama GÜNCELLEMEYİ
+    // YÖNETEN BİLEŞENİN KENDİSİNDE YOKTU. Launcher self-update'i, sürüm yeniyse KOŞULSUZ,
+    // sessizce ve %100'e uyguluyordu. Bozuk bir launcher yayını bir sonraki açılışta sahadaki
+    // HER cihaza gider ve — runtime'ın aksine — geri çekmenin yolu kalmaz: yeni launcher artık
+    // eskisini çalıştırmıyor. v1.9.5 sınıfı bir hata (backend'i tümüyle donduran) bu yolla
+    // tekrarlarsa saha kilitlenir.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn launcher_rollout_ayristirilir() {
+        let raw = format!(
+            r#"{{ "schema":2, "version":"1.9.1",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{}},
+                 "launcher": {{ "version":"1.9.3", "rollout": 10 }} }}"#
+        );
+        let l = Manifest::parse(&raw).unwrap().launcher.unwrap();
+        assert_eq!(l.rollout, 10);
+    }
+
+    /// GERİYE UYUM: alanı olmayan MEVCUT üretim manifesti %100 sayılmalı. Aksi hâlde yeni
+    /// launcher yayınlandığı anda sahadaki hiç kimse güncelleme almazdı (sessiz durma).
+    #[test]
+    fn launcher_rollout_YOKSA_yuzde_yuz() {
+        let raw = format!(
+            r#"{{ "schema":2, "version":"1.9.1",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{}},
+                 "launcher": {{ "version":"1.9.3" }} }}"#
+        );
+        assert_eq!(Manifest::parse(&raw).unwrap().launcher.unwrap().rollout, 100,
+            "rollout alani olmayan manifest sahayi durdurdu");
+    }
+
+    /// GERİ ÇEKME: `0` yazmak yayını ANINDA durdurur. Bu, bozuk bir launcher yayınından
+    /// dönmenin TEK yoludur (yeni launcher kurulduktan sonra eskisi çalıştırılamaz).
+    #[test]
+    fn launcher_rollout_SIFIR_ayristirilir() {
+        let raw = format!(
+            r#"{{ "schema":2, "version":"1.9.1",
+                 "runtimes": {{ "win-x64": {{"url":"https://x/b.zip","sha256":"{D1}","size":1}} }},
+                 "models": {{}},
+                 "launcher": {{ "version":"1.9.9", "rollout": 0 }} }}"#
+        );
+        assert_eq!(Manifest::parse(&raw).unwrap().launcher.unwrap().rollout, 0);
+    }
+
     #[test]
     fn launcher_installer_alanlari_ayristirilir() {
         let raw = format!(

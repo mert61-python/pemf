@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Characterization: session/notes + session/active — extraction ÖNCESİ davranış dondurma.
 
 `session/notes` mevcut testlerde KAPSANMIYOR → burada karakterize edilir (fallback yolu:
@@ -7,6 +8,7 @@ read-only GÜVENLİK sözleşmesi: yanıtta süre-dolumu göstersе bile GLOBAL 
 
 Baseline: 2026-07-06 (refactor ÖNCESİ). Client kurulumu test_api_safety ile aynı.
 """
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -40,8 +42,12 @@ def test_session_notes_fallback_response_shape(client):
     """POST /api/session/notes (aktif seans YOK → fallback): 200 + {status, session_id, sensor_samples}."""
     client.post("/api/session/stop")  # aktif seans olmasın → fallback yolu
     payload = {
-        "mode": "Manuel", "frequency": 50.0, "intensity": 10.0,
-        "notes": "characterization-note", "duration_minutes": 5, "patient_name": "CharTest",
+        "mode": "Manuel",
+        "frequency": 50.0,
+        "intensity": 10.0,
+        "notes": "characterization-note",
+        "duration_minutes": 5,
+        "patient_name": "CharTest",
     }
     r = client.post("/api/session/notes", json=payload)
     assert r.status_code == 200, f"beklenmeyen: {r.status_code} {r.text[:120]}"

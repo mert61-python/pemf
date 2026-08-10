@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """
 Tedavi Seansı Yöneticisi
 PEMF tedavi seanslarının otomatik kaydedilmesi ve yönetimi
@@ -27,7 +28,7 @@ class SessionManager:
         self.app_data_dir = Path(app_data_dir)
         self.db = get_treatment_db(app_data_dir)
         self.logger = logging.getLogger(__name__)
-        
+
         # Aktif seans bilgileri
         self.current_session_id = None
         self.session_start_time = None
@@ -36,7 +37,7 @@ class SessionManager:
         self.target_condition = None
         self.operator_name = None
         self.patient_name = None
-        
+
         # HIGH FIX: Parameter batching (100 params = 1 transaction)
         self._parameter_batch = []
         self._batch_size = 100
@@ -50,7 +51,7 @@ class SessionManager:
         self._sensor_batch_lock = threading.Lock()
 
         self._apply_performance_config()
-        
+
         self.logger.info("SessionManager başlatıldı (transaction batching enabled)")
 
     def _apply_performance_config(self):
@@ -92,24 +93,29 @@ class SessionManager:
                 "SessionManager sensor batch config loaded from %s: size=%d, flush_interval=%.2fs",
                 selected_path,
                 self._sensor_batch_size,
-                self._sensor_flush_interval_seconds
+                self._sensor_flush_interval_seconds,
             )
         except Exception as e:
             self.logger.warning(f"SessionManager performance config yüklenemedi, default kullanılıyor: {e}")
-    
-    def start_session(self, treatment_mode: str, target_condition: str = None, 
-                     operator_name: str = None, patient_name: str = None, 
-                     initial_parameters: Optional[Dict] = None) -> Optional[int]:
+
+    def start_session(
+        self,
+        treatment_mode: str,
+        target_condition: str = None,
+        operator_name: str = None,
+        patient_name: str = None,
+        initial_parameters: Optional[Dict] = None,
+    ) -> Optional[int]:
         """
         Yeni tedavi seansı başlat
-        
+
         Args:
             treatment_mode: Tedavi modu (Autonomous, Manual, Custom)
             target_condition: Hedef durum (artrit, yara iyileşmesi, vb.)
             operator_name: Uygulayıcı adı
             patient_name: Hasta adı
             initial_parameters: Başlangıç parametreleri
-            
+
         Returns:
             Optional[int]: Başarılı ise session_id, hata durumunda None
         """
@@ -118,15 +124,15 @@ class SessionManager:
             if self.current_session_id is not None:
                 self.logger.warning("Aktif seans var, önce sonlandırılıyor")
                 self.end_session()
-            
+
             # Yeni seans başlat
             session_id = self.db.start_session(
                 treatment_mode=treatment_mode,
                 target_condition=target_condition,
                 operator_name=operator_name,
-                patient_name=patient_name
+                patient_name=patient_name,
             )
-            
+
             # Seans bilgilerini sakla
             self.current_session_id = session_id
             self.session_start_time = datetime.now()
@@ -144,7 +150,7 @@ class SessionManager:
                 'target_condition': target_condition,
                 'operator_name': operator_name,
                 'patient_name': patient_name,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
             }
             self.db.record_session_event(session_id, 'session_started', lifecycle_payload, severity='info')
             self.db.enqueue_outbox_message(
@@ -154,42 +160,42 @@ class SessionManager:
                 retain=False,
                 source='session_manager',
                 correlation_id=str(session_id),
-                idempotency_key=f"session-start-{session_id}"
+                idempotency_key=f"session-start-{session_id}",
             )
-            
+
             self.logger.info(f"Tedavi seansı başlatıldı: ID {session_id}, Mod: {treatment_mode}")
-            
+
             # Sinyal gönder
             self.session_started.emit(session_id)
-            
+
             return session_id
-            
+
         except Exception as e:
             error_msg = f"Seans başlatma hatası: {str(e)}"
             self.logger.error(error_msg)
             self.session_error.emit(error_msg)
             return None
-    
+
     def update_parameters(self, parameters: Dict[str, Any]):
         """
         Seans parametrelerini güncelle
-        
+
         Args:
             parameters: Güncellenecek parametreler
         """
         if self.current_session_id is None:
             self.logger.warning("Aktif seans yok, parametreler güncellenemedi")
             return
-        
+
         # Parametreleri birleştir
         self.session_parameters.update(parameters)
-        
+
         self.logger.debug(f"Seans parametreleri güncellendi: {parameters}")
-    
+
     def add_parameter(self, name: str, value: Any, unit: str = None):
         """
         Tek parametre ekle
-        
+
         Args:
             name: Parametre adı
             value: Parametre değeri
@@ -198,24 +204,24 @@ class SessionManager:
         if self.current_session_id is None:
             self.logger.warning("Aktif seans yok, parametre eklenemedi")
             return
-        
+
         if unit:
             self.session_parameters[name] = {'value': value, 'unit': unit}
             param_value_to_save = value
         else:
             self.session_parameters[name] = value
             param_value_to_save = value
-        
+
         # HIGH FIX: Add to batch instead of immediate INSERT
         with self._batch_lock:
             self._parameter_batch.append((self.current_session_id, name, str(param_value_to_save)))
-            
+
             # Flush batch if size limit reached
             if len(self._parameter_batch) >= self._batch_size:
                 self._flush_parameter_batch()
-        
+
         self.logger.debug(f"Parametre eklendi (batched): {name} = {value} {unit or ''}")
-    
+
     def _flush_parameter_batch(self):
         """
         HIGH FIX: Flush parameter batch to database (executemany for efficiency).
@@ -223,24 +229,27 @@ class SessionManager:
         """
         if not self._parameter_batch:
             return
-        
+
         try:
             # Use connection pool from treatment_history_db
             with self.db._get_connection() as conn:
                 cursor = conn.cursor()
-                
+
                 # HIGH FIX: executemany() - single transaction for all params
-                cursor.executemany('''
-                    INSERT INTO session_parameters 
+                cursor.executemany(
+                    '''
+                    INSERT INTO session_parameters
                     (session_id, parameter_name, parameter_value)
                     VALUES (?, ?, ?)
-                ''', self._parameter_batch)
-                
+                ''',
+                    self._parameter_batch,
+                )
+
                 conn.commit()
-                
+
                 self.logger.debug(f"Parameter batch flushed: {len(self._parameter_batch)} parameters")
                 self._parameter_batch.clear()
-        
+
         except Exception as e:
             self.logger.error(f"Failed to flush parameter batch: {e}")
             self._parameter_batch.clear()  # Clear to avoid retry loop
@@ -264,14 +273,16 @@ class SessionManager:
                 'temp_sensor_ok': sensor_data.get('temp_sensor_ok'),
                 'magnetic_sensor_ok': sensor_data.get('magnetic_sensor_ok'),
                 'current_sensor_ok': sensor_data.get('current_sensor_ok'),
-                'timestamp': sensor_data.get('timestamp')
-            }
+                'timestamp': sensor_data.get('timestamp'),
+            },
         }
 
         with self._sensor_batch_lock:
             self._sensor_sample_batch.append(sample_record)
             should_flush_by_size = len(self._sensor_sample_batch) >= self._sensor_batch_size
-            should_flush_by_time = (time.monotonic() - self._last_sensor_flush_ts) >= self._sensor_flush_interval_seconds
+            should_flush_by_time = (
+                time.monotonic() - self._last_sensor_flush_ts
+            ) >= self._sensor_flush_interval_seconds
             if should_flush_by_size or should_flush_by_time:
                 self._flush_sensor_sample_batch()
 
@@ -287,23 +298,23 @@ class SessionManager:
         saved = self.db.add_sensor_samples_batch(self.current_session_id, pending_samples)
         if saved <= 0:
             self.logger.warning("Sensor sample batch kaydedilemedi")
-    
+
     def add_note(self, note: str):
         """Seans notunu ekle/güncelle"""
         if self.current_session_id is None:
             self.logger.warning("Aktif seans yok, not eklenemedi")
             return
-        
+
         # Mevcut notu al ve yenisini ekle
         current_note = self.session_parameters.get('patient_notes', '')
         if current_note:
             updated_note = f"{current_note}\n{note}"
         else:
             updated_note = note
-        
+
         self.session_parameters['patient_notes'] = updated_note
         self.logger.debug(f"Seans notu eklendi: {note}")
-    
+
     def end_session(self, final_notes: str = None, session_id: int = None, actual_duration: float = None) -> bool:
         """
         Aktif seansı sonlandır
@@ -324,7 +335,7 @@ class SessionManager:
             if session_id is None:
                 self.logger.warning("Sonlandırılacak aktif seans yok")
                 return False
-        
+
         try:
             # HIGH FIX: Flush any remaining batched parameters
             with self._batch_lock:
@@ -334,7 +345,7 @@ class SessionManager:
             with self._sensor_batch_lock:
                 if self._sensor_sample_batch:
                     self._flush_sensor_sample_batch()
-            
+
             # Final notları ekle
             if final_notes:
                 self.add_note(final_notes)
@@ -347,14 +358,14 @@ class SessionManager:
             with self._sensor_batch_lock:
                 if self._sensor_sample_batch:
                     self._flush_sensor_sample_batch()
-            
+
             # Hasta notlarını ayrı olarak al
             patient_notes = self.session_parameters.pop('patient_notes', None)
-            
+
             # Parametreleri düzenle - sadece tedavi parametrelerini al (hasta parametreleri zaten kaydedildi)
             processed_parameters = {}
             treatment_params = ['frequency_hz', 'intensity_mt', 'pulse_duration_ms', 'duration']
-            
+
             for key, value in self.session_parameters.items():
                 # Sadece tedavi parametrelerini işle, hasta parametreleri zaten gerçek zamanlı kaydedildi
                 if key in treatment_params:
@@ -364,7 +375,7 @@ class SessionManager:
                     else:
                         # Normal parametre
                         processed_parameters[key] = value
-            
+
             # Hangi session_id ile sonlandıracağımızı belirle
             session_to_end = session_id if session_id is not None else self.current_session_id
 
@@ -381,7 +392,7 @@ class SessionManager:
                 session_id=session_to_end,
                 parameters=processed_parameters,
                 patient_notes=patient_notes,
-                duration_minutes=duration_override
+                duration_minutes=duration_override,
             )
 
             lifecycle_payload = {
@@ -390,7 +401,7 @@ class SessionManager:
                 'duration_minutes': duration_override,
                 'treatment_mode': self.treatment_mode,
                 'target_condition': self.target_condition,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
             }
             self.db.record_session_event(session_to_end, 'session_ended', lifecycle_payload, severity='info')
             self.db.enqueue_outbox_message(
@@ -400,13 +411,13 @@ class SessionManager:
                 retain=False,
                 source='session_manager',
                 correlation_id=str(session_to_end),
-                idempotency_key=f"session-end-{session_to_end}"
+                idempotency_key=f"session-end-{session_to_end}",
             )
 
             session_id = session_to_end
-            
+
             self.logger.info(f"Tedavi seansı sonlandırıldı: ID {session_id}")
-            
+
             # Seans bilgilerini temizle
             self.current_session_id = None
             self.session_start_time = None
@@ -414,31 +425,31 @@ class SessionManager:
             self.treatment_mode = None
             self.target_condition = None
             self.operator_name = None
-            
+
             # Sinyal gönder
             self.session_ended.emit(session_id)
-            
+
             return True
-            
+
         except Exception as e:
             error_msg = f"Seans sonlandırma hatası: {str(e)}"
             self.logger.error(error_msg)
             self.session_error.emit(error_msg)
             return False
-    
+
     def get_session_duration(self) -> int:
         """Aktif seansın süresini dakika olarak getir"""
         if self.session_start_time is None:
             return 0
-        
+
         duration = datetime.now() - self.session_start_time
         return int(duration.total_seconds() / 60)
-    
+
     def get_session_info(self) -> Dict:
         """Aktif seans bilgilerini getir"""
         if self.current_session_id is None:
             return {}
-        
+
         return {
             'session_id': self.current_session_id,
             'start_time': self.session_start_time,
@@ -446,14 +457,14 @@ class SessionManager:
             'treatment_mode': self.treatment_mode,
             'target_condition': self.target_condition,
             'operator_name': self.operator_name,
-            'parameters': self.session_parameters.copy()
+            'parameters': self.session_parameters.copy(),
         }
-    
+
     def force_end_session(self):
         """Seansı zorla sonlandır (hata durumunda)"""
         if self.current_session_id is not None:
             self.logger.warning(f"Seans zorla sonlandırılıyor: ID {self.current_session_id}")
-            
+
             try:
                 # Hata notu ekle
                 self.add_note("Seans zorla sonlandırıldı")
@@ -472,6 +483,7 @@ class SessionManager:
 # Singleton instances
 _session_manager_instance = None
 _session_manager_lock = threading.Lock()
+
 
 def get_session_manager(app_data_dir):
     """Session manager singleton instance'ını getir"""

@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """pipeline.py — Sentetik bobrek fantom CV (FANTOM-MERKEZLI).
 
 Direkt FANTOM tespit edip ona odaklan. Bobin/kalibrasyon opsiyonel.

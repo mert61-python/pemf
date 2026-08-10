@@ -1,4 +1,6 @@
+# Author: mertaygn, cglrgrkn
 """Kritik yol: PEMF_REQUIRE_AUTH=1 iken token zorunlu; emergency_stop/health MUAF (fail-safe)."""
+
 import os
 
 from fastapi.testclient import TestClient
@@ -6,6 +8,7 @@ from fastapi.testclient import TestClient
 
 def _reset_auth_cache():
     import servers.auth as auth
+
     auth._require = None
     auth._token = None
     auth._warned = False
@@ -18,6 +21,7 @@ def test_auth_enforced(monkeypatch):
     monkeypatch.setenv("PEMF_API_TOKEN", "secret-test-token")
     _reset_auth_cache()
     from servers import api_server
+
     client = TestClient(api_server.app)
     try:
         # MUAF (fail-safe / keşif) — token'sız erişilebilir
@@ -38,6 +42,7 @@ def test_auth_disabled_by_default(monkeypatch):
     monkeypatch.delenv("PEMF_REQUIRE_AUTH", raising=False)
     _reset_auth_cache()
     from servers import api_server
+
     client = TestClient(api_server.app)
     try:
         # Auth kapalı → korumalı endpoint token'sız erişilebilir (geriye uyumlu)
@@ -88,9 +93,10 @@ def test_trusted_proxies_default_empty_keeps_lan_exemption(monkeypatch):
 # auth'tan MUAF olurdu. Docker'daki eşdeğeri PEMF_TRUSTED_PROXIES ile kapatılmıştı; bu yol
 # operatörün kendi proxy yapılandırmasına bağlı olduğundan env'e güvenilemez.
 
+
 def _server_profili(monkeypatch, token="server-token"):
-    monkeypatch.setenv("PEMF_API_HOST", "127.0.0.1")   # server.env
-    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")       # server.env
+    monkeypatch.setenv("PEMF_API_HOST", "127.0.0.1")  # server.env
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")  # server.env
     monkeypatch.setenv("PEMF_API_TOKEN", token)
     monkeypatch.delenv("PEMF_TRUSTED_PROXIES", raising=False)  # operatör beyan ETMEMİŞ (en kötü hal)
     _reset_auth_cache()
@@ -100,6 +106,7 @@ def test_loopback_bagliyken_loopback_YEREL_SAYILMAZ(monkeypatch):
     """Backend yalnız loopback'e bağlıysa dışarıdan doğrudan bağlanmak imkânsızdır →
     127.0.0.1'den gelen her istek zorunlu olarak ters-proxy'dendir → 'yerel' çıkarımı geçersiz."""
     from servers import auth
+
     _server_profili(monkeypatch)
     try:
         assert auth.is_local_request("127.0.0.1", via_proxy=False) is False
@@ -112,6 +119,7 @@ def test_klinik_profili_ETKILENMEZ(monkeypatch):
     """device.env PEMF_API_HOST=0.0.0.0 → masaüstü kısayolu ve LAN muafiyeti aynen sürer.
     Bu kural yalnız loopback'e bağlı kurulumu hedefler; klinikte regresyon OLMAMALI."""
     from servers import auth
+
     monkeypatch.setenv("PEMF_API_HOST", "0.0.0.0")
     monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")
     monkeypatch.delenv("PEMF_TRUSTED_PROXIES", raising=False)
@@ -127,6 +135,7 @@ def test_auth_KAPALIYKEN_loopback_yerel_kalir(monkeypatch):
     """Kural auth ZORUNLU değilken devreye girmez → geliştirme/e2e akışları bozulmaz
     (tools/e2e_smoke.py 127.0.0.1'e bağlanır ama PEMF_REQUIRE_AUTH'u siler)."""
     from servers import auth
+
     monkeypatch.setenv("PEMF_API_HOST", "127.0.0.1")
     monkeypatch.delenv("PEMF_REQUIRE_AUTH", raising=False)
     _reset_auth_cache()
@@ -141,14 +150,13 @@ def test_server_profilinde_basliksiz_proxy_istegi_401(monkeypatch):
     (kaynak 127.0.0.1, X-Forwarded-For YOK). Düzeltmeden önce 200 dönüyordu."""
     _server_profili(monkeypatch)
     from servers import api_server
+
     # TestClient varsayılan istemci host'u 'testclient' (IP değil) → zaten uzak sayılır;
     # açığı görebilmek için proxy'nin gerçek soket adresini veriyoruz.
     client = TestClient(api_server.app, client=("127.0.0.1", 54321))
     try:
-        assert client.get("/api/patients").status_code == 401, (
-            "başlıksız ters-proxy arkasında kimliksiz erişim AÇIK")
-        assert client.get("/api/patients",
-                          headers={"X-API-Key": "server-token"}).status_code != 401
+        assert client.get("/api/patients").status_code == 401, "başlıksız ters-proxy arkasında kimliksiz erişim AÇIK"
+        assert client.get("/api/patients", headers={"X-API-Key": "server-token"}).status_code != 401
         # Fail-safe uçlar muafiyetini korumalı (acil durdurma asla token'a takılmaz)
         assert client.get("/api/health").status_code == 200
         assert client.post("/api/hardware/emergency_stop").status_code == 200
@@ -177,7 +185,8 @@ def test_baglanilan_host_env_e_YAYINLANIR(monkeypatch):
     try:
         assert auth._loopback_only_bind() is True
         assert auth.is_local_request("127.0.0.1", via_proxy=False) is False, (
-            "gerçek bağlama loopback iken karar hâlâ 'yerel' diyor")
+            "gerçek bağlama loopback iken karar hâlâ 'yerel' diyor"
+        )
     finally:
         _reset_auth_cache()
 
@@ -197,20 +206,19 @@ def test_main_baglanilan_hostu_YAYINLAR():
     import inspect
 
     import backend_service
+
     tree = ast.parse(inspect.getsource(backend_service.main))
-    cagrilar = {n.func.id for n in ast.walk(tree)
-                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-    assert "publish_bind_host" in cagrilar, (
-        "main() publish_bind_host'u çağırmıyor → env gerçek bağlamayla ayrışır")
+    cagrilar = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "publish_bind_host" in cagrilar, "main() publish_bind_host'u çağırmıyor → env gerçek bağlamayla ayrışır"
 
 
 def test_server_env_profili_TRUSTED_PROXIES_beyan_eder():
     """İkinci savunma katmanı: kod kuralından bağımsız olarak deploy/server.env loopback'i
     açıkça ters-proxy ilan etmeli. Biri kaldırılsa diğeri açığı kapatmaya devam eder."""
     from pathlib import Path
+
     env = (Path(__file__).resolve().parent.parent / "deploy" / "server.env").read_text(encoding="utf-8")
-    satir = [s.strip() for s in env.splitlines()
-             if s.strip().startswith("PEMF_TRUSTED_PROXIES=")]
+    satir = [s.strip() for s in env.splitlines() if s.strip().startswith("PEMF_TRUSTED_PROXIES=")]
     assert satir, "server.env PEMF_TRUSTED_PROXIES beyan etmiyor (ters-proxy fail-closed değil)"
     assert "127.0.0.1" in satir[0]
 
@@ -248,8 +256,7 @@ def test_auth_endpoints_do_not_block_event_loop(temp_app_data):
         for outer in ast.walk(fn_node):
             if not isinstance(outer, ast.Call) or outer is hedef:
                 continue
-            ad = outer.func.attr if isinstance(outer.func, ast.Attribute) else \
-                getattr(outer.func, "id", "")
+            ad = outer.func.attr if isinstance(outer.func, ast.Attribute) else getattr(outer.func, "id", "")
             if ad in OFFLOAD and hedef in ast.walk(outer):
                 return True
         return False
@@ -271,7 +278,8 @@ def test_auth_endpoints_do_not_block_event_loop(temp_app_data):
             )
     assert len(bulunan) >= 3, (
         f"bloklayan auth_db çağrısı bulunamadı (yalnız {bulunan}) — desen kaymış olabilir; "
-        "test hiçbir şeyi korumuyor demektir")
+        "test hiçbir şeyi korumuyor demektir"
+    )
 
 
 def test_pbkdf2_gercekten_baska_THREADDE_calisiyor(temp_app_data, monkeypatch):
@@ -313,23 +321,23 @@ def test_pbkdf2_gercekten_baska_THREADDE_calisiyor(temp_app_data, monkeypatch):
     # _register_user, get_auth_db'yi FONKSİYON İÇİNDE `database.auth_db`'den import eder →
     # auth_router üzerinde yamalamak ETKİSİZDİR (ilk denemede sahte DB hiç çağrılmadı).
     import database.auth_db as _adb
+
     monkeypatch.setattr(_adb, "get_auth_db", lambda: _SahteDB())
 
     async def _kos():
         loop_thread_id["id"] = threading.get_ident()
         try:
-            await auth_router._register_user(
-                auth_router._AuthCredentials(email="a@b.com", password="Abcdef12"))
+            await auth_router._register_user(auth_router._AuthCredentials(email="a@b.com", password="Abcdef12"))
         except Exception:
-            pass   # iş mantığı hatası önemsiz; ölçtüğümüz şey HANGİ THREAD
+            pass  # iş mantığı hatası önemsiz; ölçtüğümüz şey HANGİ THREAD
 
     asyncio.run(_kos())
 
-    assert "register" in kosan_threadler, (
-        "auth_db.register hiç çağrılmadı — test kurulumu uçla eşleşmiyor, koruma YOK")
+    assert "register" in kosan_threadler, "auth_db.register hiç çağrılmadı — test kurulumu uçla eşleşmiyor, koruma YOK"
     assert kosan_threadler["register"] != loop_thread_id["id"], (
         "PBKDF2 (auth_db.register) EVENT-LOOP thread'inde çalıştı → kimliksiz istemci "
-        "arka arkaya /register atarak tüm API'yi yanıt veremez hale getirebilir")
+        "arka arkaya /register atarak tüm API'yi yanıt veremez hale getirebilir"
+    )
 
 
 def test_non_ascii_code_does_not_500_and_counts_against_throttle():

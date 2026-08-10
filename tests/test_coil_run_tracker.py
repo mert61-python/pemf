@@ -1,3 +1,4 @@
+# Author: mertaygn, cglrgrkn
 """Faz-1 (B-2.2 coil-run tracker ayrımı — refactor-ÖNCESİ DAVRANIŞ KİLİDİ).
 
 `_begin_coil_run` / `_finish_coil_run` + `_active_coil_runs` / `_coil_run_stats` — seans sırasında
@@ -9,6 +10,7 @@ extraction'dan önce ve sonra AYNI çalışır.
 
 En kritik kilit: `_finish_coil_run`'ın per-metrik ortalaması — her metrik KENDİ dolu-örnek sayısına
 bölünür (eksik sensör okuması ortalamayı aşağı çekmesin; klinik doğruluk düzeltmesi)."""
+
 import os
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -19,8 +21,8 @@ class _FakeTreatmentDB:
     """Coil-run çağrılarını kaydeden sahte treatment DB (gerçek SQLite'a dokunmaz)."""
 
     def __init__(self):
-        self.started = []    # (session_id, coil_id, kwargs)
-        self.ended = []      # (run_id, epoch)
+        self.started = []  # (session_id, coil_id, kwargs)
+        self.ended = []  # (run_id, epoch)
         self.summaries = []  # (run_id, kwargs)
         self._next_run_id = 100
 
@@ -81,8 +83,8 @@ def test_begin_coil_run_closes_previous_open_run_for_same_coil(api):
     api_server, fake = api
     with api_server._session_lock:
         api_server._active_session["db_session_id"] = 7
-    api_server._begin_coil_run(6, 40, 30, 0, 1.5, "esp")   # run 100 açılır
-    api_server._begin_coil_run(6, 55, 20, 0, 2.0, "esp")   # aynı bobin → önce 100 kapanmalı
+    api_server._begin_coil_run(6, 40, 30, 0, 1.5, "esp")  # run 100 açılır
+    api_server._begin_coil_run(6, 55, 20, 0, 2.0, "esp")  # aynı bobin → önce 100 kapanmalı
     # İlk run (100) end_coil_run ile kapatıldı; ikinci run (101) şimdi açık
     assert 100 in [r for r, _ in fake.ended], "aynı bobin yeniden açılınca eski run kapatılmadı (çift-açık)"
     assert api_server._active_coil_runs[6] == 101
@@ -97,13 +99,19 @@ def test_finish_coil_run_writes_per_metric_averages(api):
     run_id = api_server._active_coil_runs[3]
     # Akümülatörü elle doldur: her metriğin FARKLI dolu-örnek sayısı var (eksik okuma senaryosu)
     with api_server._coil_run_stats_lock:
-        api_server._coil_run_stats[run_id].update({
-            "n": 5,
-            "t_sum": 100.0, "t_n": 4,   # sıcaklık 4 okumada → avg 25.0
-            "i_sum": 20.0, "i_n": 5,    # akım 5 okumada → avg 4.0
-            "b_sum": 10.0, "b_n": 2,    # alan 2 okumada → avg 5.0
-            "t_min": 20.0, "t_max": 30.0,
-        })
+        api_server._coil_run_stats[run_id].update(
+            {
+                "n": 5,
+                "t_sum": 100.0,
+                "t_n": 4,  # sıcaklık 4 okumada → avg 25.0
+                "i_sum": 20.0,
+                "i_n": 5,  # akım 5 okumada → avg 4.0
+                "b_sum": 10.0,
+                "b_n": 2,  # alan 2 okumada → avg 5.0
+                "t_min": 20.0,
+                "t_max": 30.0,
+            }
+        )
 
     api_server._finish_coil_run(3)
 
@@ -115,9 +123,9 @@ def test_finish_coil_run_writes_per_metric_averages(api):
     rid, kw = fake.summaries[0]
     assert rid == run_id
     assert kw["sample_count"] == 5
-    assert kw["temp_avg"] == pytest.approx(25.0)      # 100/4, n=5 değil
-    assert kw["current_avg"] == pytest.approx(4.0)    # 20/5
-    assert kw["field_avg"] == pytest.approx(5.0)      # 10/2
+    assert kw["temp_avg"] == pytest.approx(25.0)  # 100/4, n=5 değil
+    assert kw["current_avg"] == pytest.approx(4.0)  # 20/5
+    assert kw["field_avg"] == pytest.approx(5.0)  # 10/2
     assert kw["temp_min"] == 20.0 and kw["temp_max"] == 30.0
 
 
@@ -129,13 +137,20 @@ def test_finish_coil_run_zero_fill_count_is_safe(api):
     api_server._begin_coil_run(4, 50, 25, 0, 2.0, "stm")
     run_id = api_server._active_coil_runs[4]
     with api_server._coil_run_stats_lock:
-        api_server._coil_run_stats[run_id].update({
-            "n": 3, "t_sum": 0.0, "t_n": 0,   # sıcaklık HİÇ okunmadı
-            "i_sum": 9.0, "i_n": 3, "b_sum": 0.0, "b_n": 0,
-        })
+        api_server._coil_run_stats[run_id].update(
+            {
+                "n": 3,
+                "t_sum": 0.0,
+                "t_n": 0,  # sıcaklık HİÇ okunmadı
+                "i_sum": 9.0,
+                "i_n": 3,
+                "b_sum": 0.0,
+                "b_n": 0,
+            }
+        )
     api_server._finish_coil_run(4)
     rid, kw = fake.summaries[0]
-    assert kw["temp_avg"] == 0.0     # 0-bölme değil
+    assert kw["temp_avg"] == 0.0  # 0-bölme değil
     assert kw["field_avg"] == 0.0
     assert kw["current_avg"] == pytest.approx(3.0)
 

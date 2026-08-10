@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 //! Platform anahtarı — manifest'teki runtime kaydını seçen TEK kaynak.
 //!
 //! Sessiz fallback YOK. Eski launcher'da Linux istemcisi manifest'te `base_linux`
