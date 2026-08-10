@@ -107,20 +107,29 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) | rollout |
 |---|---|---|---|---|---|
-| 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | **10** |
+| 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | 100 |
 | 1.8.0 | `client-app-v1.8.0` | 2026-07-13 | `90cf004f9fa1` | `42b88557fe00` / `69cf344d0fc6` | 100 |
 
 > ⚠️ **1.9.6'da bağımlılık katmanı da değişti.** `_internal/VERSION` app katmanına taşındığı için
-> `base-deps.zip` yenilendi → bu sürümde her klinik ~1,19 GB indirir. Sonraki sıradan yayınlar
-> yine ~71 MB olacaktır.
+> `base-deps.zip` yenilendi → bu sürümü **güncelleyen** bir kurulum ~1,19 GB indirir. Sonraki
+> sıradan yayınlar yine ~71 MB olacaktır. (Sahada henüz kurulum olmadığı için bu sürümde kimse
+> bu bedeli ödemedi; yeni kurulumlar zaten tüm paketi indirir.)
+>
+> ⚠️ **`rollout` BİR SONRAKİ YAYINA TAŞINIR.** `make_manifest.py`'ye `--rollout` verilmezse
+> manifest'teki mevcut değer korunur. Yani düşürülmüş bir rollout unutulursa, sonraki sürüm de
+> sessizce o oranda dağıtılır. Kademeyi düşürdükten sonra **açmayı unutmayın** — ya da her
+> yayında `--rollout`'u AÇIKÇA verin.
 >
 > ⚠️ **Manifest'in adresi sabittir:** istemciler onu daima
 > `releases/download/client-app-v1.8.0/manifest.json` adresinden okur (launcher'da derlenmiş
 > sabit). Yeni paketler yeni bir etikete yüklenir; **manifest her zaman o eski etikete**
 > `--clobber` ile yazılır. Yeni etikete koymak yayını görünmez kılar.
 >
-> Kademeli açma: `--rollout 10` → izle → `--rollout 50` → `--rollout 100` (her adımda manifest'i
-> aynı adrese yeniden yükleyin).
+> Kademeli açma (**sahada kurulum varken** anlamlıdır): `--rollout 10` → izle → `--rollout 50` →
+> `--rollout 100`, her adımda manifest'i aynı adrese yeniden yükleyerek. `rollout` yalnız
+> **mevcut** kurulumların güncellenmesini kısar; **yeni kurulum** her hâlükârda en son paketi alır
+> (`install_profiles` rollout'a bakmaz). Dolayısıyla henüz dağıtım yapılmamışken kademelendirmenin
+> koruduğu kimse yoktur.
 
 ### launcher (PEMF Vet Client)
 
