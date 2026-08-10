@@ -35,14 +35,27 @@ describe('downloadStats.aggregate', () => {
     expect(v.total).toBe(5)
   })
 
-  it('macOS/Linux paketleri ayrı kovada', () => {
+  // ⚠️ 2026-08-10 (sahip kararı): macOS/Linux HİÇ SAYILMAZ. O paketler yayında ama site
+  // onları "Yakında" gösteriyor (donanım yolu Windows'a özel), yani kullanıcı oradan indiremiyor.
+  // İndirilemeyen platformu toplama katmak sayacı şişirir ve "kaç kişi kullanıyor" izlenimini bozar.
+  it('KRİTİK: macOS/Linux paketleri SAYILMAZ (toplamı şişirmez)', () => {
     const v = aggregate([
       rel([['PEMFVetClient.dmg', 1], ['PEMFVetClient.deb', 2],
            ['PEMFVetClient.AppImage', 3], ['PEMFVetClient.rpm', 4]]),
     ])
-    expect(v.other).toBe(10)
     expect(v.windows).toBe(0)
-    expect(v.total).toBe(10)
+    expect(v.android).toBe(0)
+    expect(v.total).toBe(0)
+  })
+
+  it('KRİTİK: toplam YALNIZ windows + android', () => {
+    const v = aggregate([
+      rel([['PEMFVetClient-Setup-1.9.19.exe', 7], ['PEMF_Vet_Mobil-2.3.6.apk', 5],
+           ['PEMFVetClient.dmg', 100], ['base-deps.zip', 999]]),
+    ])
+    expect(v.windows).toBe(7)
+    expect(v.android).toBe(5)
+    expect(v.total).toBe(12)
   })
 
   it('bozuk/eksik sayıları yok sayar (NaN, negatif, yok)', () => {

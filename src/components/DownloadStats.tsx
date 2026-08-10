@@ -26,9 +26,11 @@ export function DownloadStats() {
       <h2 className="text-lg font-semibold text-white">Toplam indirme</h2>
       <p className="mt-1 text-4xl font-bold text-teal-300">{s.total.toLocaleString('tr-TR')}</p>
       <div className="mt-4 flex flex-wrap justify-center gap-6 text-sm text-white/70">
+        {/* macOS/Linux GOSTERILMEZ ve toplama KATILMAZ (2026-08-10): o platformlar sitede
+            "Yakinda" — donanim destegi Windows'a ozel, cihaz surulemez. Indirilemeyen bir
+            platformun sayisi toplami sisirir ve yaniltir. */}
         <Stat label="Windows" value={s.windows} />
         <Stat label="Android" value={s.android} />
-        {s.other > 0 && <Stat label="macOS / Linux" value={s.other} />}
       </div>
       <p className="mt-4 text-xs text-white/40">
         Kaynak: GitHub Releases. Otomatik güncellemeler de bu sayıya dahildir; benzersiz

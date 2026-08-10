@@ -29,13 +29,16 @@ const API = `https://api.github.com/repos/${DOWNLOAD_HOST.githubOwner}/${DOWNLOA
 // yeni (`...-Setup-<sürüm>.exe`) adları yakalar, böylece geçmiş sayı da korunur.
 const WINDOWS_RE = /^PEMFVetClient-Setup(-\d+\.\d+\.\d+)?\.exe$/i
 const ANDROID_RE = /^PEMF_Vet_Mobil(-\d+\.\d+\.\d+)?\.apk$/i
-// macOS/Linux: site "Yakında" diyor (donanım desteği Windows'a özel) → ayrı gösterilmez.
-const OTHER_RE = /^PEMFVetClient(-\d+\.\d+\.\d+)?\.(dmg|deb|AppImage|rpm)$/i
+
+// ⚠️ macOS/Linux SAYILMAZ (2026-08-10, sahip kararı). O paketler yayında AMA site onları
+// "Yakında" gösteriyor: donanım (STM seri + ESP MQTT + hotspot) Windows'a özel, o platformlarda
+// cihaz sürülemez. İndirilemeyen bir platformun indirmesini toplama katmak sayıyı şişirir ve
+// "kaç kişi kullanıyor" izlenimini bozar — o dosyalar çoğunlukla bizim kendi doğrulamalarımız.
+// Toplam artık YALNIZ Windows + Android.
 
 export interface DownloadStats {
   windows: number
   android: number
-  other: number
   total: number
   /** Veri ne zaman çekildi (epoch ms) */
   fetchedAt: number
@@ -67,7 +70,7 @@ interface GhRelease { assets?: GhAsset[] }
 
 /** API yanıtını topla. Saf fonksiyon → test edilebilir. */
 export function aggregate(releases: GhRelease[]): Omit<DownloadStats, 'fetchedAt'> {
-  let windows = 0, android = 0, other = 0
+  let windows = 0, android = 0
   for (const r of releases || []) {
     for (const a of r?.assets || []) {
       const n = a?.name || ''
@@ -75,10 +78,9 @@ export function aggregate(releases: GhRelease[]): Omit<DownloadStats, 'fetchedAt
       if (!Number.isFinite(c) || c < 0) continue
       if (WINDOWS_RE.test(n)) windows += c
       else if (ANDROID_RE.test(n)) android += c
-      else if (OTHER_RE.test(n)) other += c
     }
   }
-  return { windows, android, other, total: windows + android + other }
+  return { windows, android, total: windows + android }
 }
 
 /**
