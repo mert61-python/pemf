@@ -1,0 +1,31 @@
+# gitleaks yapılandırması — PEMF Vet
+#
+# ⚠️ BU DOSYA BİR "SUSTURMA LİSTESİ" DEĞİLDİR. Depo PUBLIC ve geçmişinde gerçek sır bulunmuş
+# bir depodur (`config/credentials/*`, `esp` dalı). Buraya YALNIZ, tek tek okunup sahte olduğu
+# DOĞRULANMIŞ bulgular girer ve her biri NEDEN sahte olduğuyla birlikte yazılır. Genel bir
+# "tests/ klasörünü tara-ma" kuralı BİLİNÇLİ OLARAK YOKTUR: testler de sır sızdırabilir.
+#
+# Muafiyet PARMAK İZİ ile verilir (dosya+kural+satır). Dosya değişirse muafiyet düşer ve bulgu
+# yeniden görünür — yani muafiyet zamanla sessizce genişlemez.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Tek tek doğrulanmış SAHTE test sabitleri (2026-08-10)"
+
+# ── Kurtarma zarfı testleri ────────────────────────────────────────────────────────────────
+# `utils/backup_recovery` zarfı, SQLCipher ve Fernet anahtarlarını 150-bit kurtarma kodundan
+# türetilen bir anahtarla şifreler. Testin bu anahtarlara İHTİYACI var — ama makinenin GERÇEK
+# sırlarına dokunmamak için sabit, apaçık sahte değerler kullanılır:
+#   test-sqlcipher-anahtari-0123456789abcdef
+#   s3cr3t-sqlcipher-anahtari-xyz / p4t13nt-fernet-key
+# Değerler okunup doğrulandı: hiçbiri gerçek bir anahtar formatında değil, hiçbiri üretimde
+# kullanılmıyor, ikisi de zaten depo geçmişinde (3f97c8c4).
+commits = []
+paths = []
+regexes = [
+  '''test-sqlcipher-anahtari-0123456789abcdef''',
+  '''s3cr3t-sqlcipher-anahtari-xyz''',
+  '''p4t13nt-fernet-key''',
+]
