@@ -170,6 +170,52 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.7 · launcher 1.9.18 — 2026-08-10 (hotspot + profiller)
+
+### PEMF-Gateway hotspot'u artık KENDİLİĞİNDEN açılıyor
+
+**Saha hatası.** Siteden indirip kuran kullanıcıda `PEMF-Gateway` WiFi'si hiç oluşmuyordu →
+**8 bobinin 3'ü (ESP 6-8) bağlanamıyordu** ve arayüzde bunun hiçbir göstergesi yoktu.
+
+**Kök neden (ölçüldü).** Hotspot'u kuran tek yol `setup_services.ps1 -Mode device`in kaydettiği
+logon-task'tı. Ama PEMF Vet Client — yani siteden indirip kuran yol — `setup_services.ps1`i
+**hiç çalıştırmıyor** (launcher kaynağında ne `setup_services` ne `schtasks` geçiyor). Backend de
+hotspot'u yalnız *okuyordu*, hiç başlatmıyordu.
+
+- **Backend açılışta hotspot'u kendisi başlatır.** Windows Mobile Hotspot API'si kullanıcı oturumu
+  ister; launcher backend'i kendi oturumunda çocuk süreç olarak başlattığı için bu mümkündür.
+  Servis kurulumunda (session 0) yol kendini devre dışı bırakır — logon-task orada zaten işi
+  yapıyor, iki başlatıcı çakışmasın.
+- **SSID/parola tek kaynak**: `start_hotspot.ps1` (PEMF-Gateway / pemf1234). Backend parametre
+  geçmez — ESP firmware'i değerleri kendi içinde taşır, ikinci bir gerçek üretilemez.
+- Açılışı **bloklamaz** (ayrı thread) ve hata hâlinde servisi **düşürmez**: hotspot yoksa STM
+  bobinleri (1-5) ve tüm arayüz çalışmaya devam eder. Kapatmak için `PEMF_HOTSPOT=0`.
+- Arayüzde **"Kablosuz Bağlantı"** durum satırı. `hotspotActive` zaten çekiliyordu ama **hiç
+  gösterilmiyordu** — arıza görünmezdi.
+
+### Profiller bağımsız seçilir (client 1.9.18)
+
+"Veteriner Hekim" seçilince "Ev Sahibi" **zorla** ekleniyordu; yalnız Veteriner + Araştırma
+kurulamıyor, gereksiz ~503 MB iniyordu. Zorunlu olan tek şey **çekirdek**.
+
+⚠️ Bağımlılık uydurma değildi (paket içerikleri doğrulandı): `home.zip` →
+`inference_cat_organ/models/*.onnx`, AI Pro'nun organ lokalizasyonu bunları kullanır. Zorlama
+yerine **engellemeyen** bir bilgi notu + tek tıkla ekleme kondu. Kalıcı çözüm ortak modeli
+çekirdeğe almaktır.
+
+### Giriş ekranı (client 1.9.17)
+
+Doğru parola "hatalı" deniyordu; alan silinip aynı şey yazılınca giriş yapılıyordu → parolayı
+göster/gizle, hatalı girişte alan temizleme, görünmez karakter uyarısı.
+
+### İndirme sayacı
+
+Sitedeki sayaç sabit dosya adına bakıyordu; kurulum dosyası sürüm taşımaya başlayınca yeni
+sürümlerin indirmeleri **hiç sayılmayacaktı**. Desenli eşleşmeye geçildi — geçmiş sayı korunur
+(gerçek veriyle ölçüldü: 46 -> 51).
+
+---
+
 ## launcher 1.9.17 — 2026-08-10 (giriş ekranı düzeltmesi)
 
 **Saha hatası.** Doğru parola yazıldığında *"E-posta veya parola hatalı"* deniyor; parola alanı

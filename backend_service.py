@@ -474,6 +474,125 @@ def _start_update_checker_safe(logger: logging.Logger) -> None:
         logger.exception("Update checker init failed (non-fatal).")
 
 
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# PEMF-Gateway HOTSPOT — BACKEND BAŞLARKEN OTOMATİK (2026-08-10, sahip kararı)
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# ⚠️ NEDEN BURADA: ESP bobinleri (6-8) `PEMF-Gateway` WiFi'sine bağlanıp yerel mosquitto'ya MQTT
+# yapar. Hotspot'u kuran tek yol `setup_services.ps1 -Mode device`in kaydettiği logon-task'tı —
+# ama SİTEDEN İNDİRİP KURAN yol (PEMF Vet Client) `setup_services.ps1`i HİÇ ÇALIŞTIRMIYOR
+# (2026-08-10'da ölçüldü: launcher kaynağında ne `setup_services` ne `schtasks` geçiyor).
+# Sonuç: launcher ile kuran HER kullanıcıda hotspot hiç açılmıyor ve 8 bobinin 3'ü bağlanamıyordu.
+#
+# ⚠️ NEDEN ÇALIŞIR: Windows Mobile Hotspot API'si KULLANICI OTURUMU ister; LocalSystem servisi
+# (session 0) başlatamaz. Launcher backend'i KENDİ oturumunda çocuk süreç olarak başlatır
+# (`launcher/core/src/backend.rs` → `Command::spawn`), yani bu kısıt burada GEÇERLİ DEĞİLDİR.
+# Eski servis kurulumunda ise `_oturum_var_mi()` False döner ve bu yol kendini devre dışı bırakır
+# — logon-task orada zaten işi yapıyor, iki başlatıcı çakışmasın.
+#
+# SSID/parola: `scripts/start_hotspot.ps1` içindeki TEK KAYNAKtan gelir (PEMF-Gateway/pemf1234).
+# ESP firmware'i bunları kendi içinde taşıdığı için DEĞİŞTİRİLEMEZ — burada parametre GEÇİLMEZ.
+#
+# Kapatmak için: PEMF_HOTSPOT=0
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+
+
+def _oturum_var_mi() -> bool:
+    """Etkileşimli bir kullanıcı oturumunda mıyız? (session 0 = servis → Mobile Hotspot açamaz)"""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        pid = ctypes.windll.kernel32.GetCurrentProcessId()
+        oturum = ctypes.c_ulong()
+        if not ctypes.windll.kernel32.ProcessIdToSessionId(pid, ctypes.byref(oturum)):
+            return False
+        return oturum.value != 0
+    except Exception:
+        return False
+
+
+def _hotspot_betigi():
+    """Paketlenmiş `start_hotspot.ps1`in yolu (frozen: exe yanı; kaynak: scripts/)."""
+    from pathlib import Path
+
+    adaylar = []
+    try:
+        from utils.path_utils import packaged_resource_path
+
+        adaylar.append(Path(packaged_resource_path("start_hotspot.ps1")))
+    except Exception:
+        pass
+    try:
+        adaylar.append(Path(sys.executable).resolve().parent / "start_hotspot.ps1")
+    except Exception:
+        pass
+    adaylar.append(Path(__file__).resolve().parent / "scripts" / "start_hotspot.ps1")
+    for p in adaylar:
+        try:
+            if p.is_file():
+                return p
+        except Exception:
+            continue
+    return None
+
+
+def _start_hotspot_safe(logger: logging.Logger) -> None:
+    """PEMF-Gateway hotspot'unu ARKA PLANDA başlat. Açılışı ASLA bloklamaz, ASLA düşürmez."""
+    if os.environ.get("PEMF_HOTSPOT", "1").strip() in ("0", "false", "False"):
+        logger.info("Hotspot otomatik başlatma KAPALI (PEMF_HOTSPOT=0).")
+        return
+    if os.name != "nt":
+        return
+    if not _oturum_var_mi():
+        # Servis (session 0) → Mobile Hotspot API çalışmaz; logon-task'ın işi.
+        logger.info("Hotspot: servis oturumunda (session 0) — başlatma ATLANDI (logon-task'ın işi).")
+        return
+    betik = _hotspot_betigi()
+    if betik is None:
+        logger.warning("Hotspot: start_hotspot.ps1 bulunamadı → PEMF-Gateway açılmayacak (ESP'ler bağlanamaz).")
+        return
+
+    # ⚠️ `threading` bu modülde FONKSİYON İÇİNDE import ediliyor (mevcut desen) — modül düzeyinde
+    # yok; buraya da öyle alınır, yoksa NameError.
+    import threading
+
+    def _calistir() -> None:
+        try:
+            import subprocess
+
+            # PowerShell 5.1 yeter; `-WindowStyle Hidden` + CREATE_NO_WINDOW → pencere YOK.
+            bayrak = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            r = subprocess.run(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-File",
+                    str(betik),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=bayrak,
+            )
+            if r.returncode == 0:
+                logger.info("Hotspot: PEMF-Gateway hazır (ESP bobinleri bağlanabilir).")
+            else:
+                # ÇÖKERTME YOK: hotspot yoksa STM bobinleri (1-5) ve tüm arayüz çalışmaya devam eder.
+                logger.warning(
+                    "Hotspot başlatılamadı (rc=%s): %s", r.returncode, (r.stdout or r.stderr or "").strip()[-300:]
+                )
+        except Exception:
+            logger.exception("Hotspot başlatma hatası (non-fatal).")
+
+    threading.Thread(target=_calistir, name="PemfHotspot", daemon=True).start()
+
+
 # ⚠️ TIBBİ GÜVENLİK — uvicorn graceful-shutdown TAVANI (denetim 2026-08-04, P2).
 #
 # Bu değer VERİLMEZSE uvicorn.Config varsayılanı `None`'dır ve kapanış
@@ -650,6 +769,8 @@ def main(argv: list[str] | None = None) -> int:
     _start_db_maintenance(core, logger)
     _maybe_start_tunnel(args.port, logger)
     _start_update_checker_safe(logger)
+    # ESP bobinleri (6-8) PEMF-Gateway WiFi'sine bağlanır → backend ile BİRLİKTE açılmalı.
+    _start_hotspot_safe(logger)
 
     server = _build_server(api_server.app, args)
     _install_signal_handlers(server, logger)
