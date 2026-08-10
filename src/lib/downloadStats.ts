@@ -23,9 +23,14 @@ const API = `https://api.github.com/repos/${DOWNLOAD_HOST.githubOwner}/${DOWNLOA
 
 /** Sayılacak kurulum dosyaları. Paketler (base.zip / model zip'leri) HARİÇ — onlar
  *  client'ın kendi çektiği runtime bileşenleridir, "indirme" sayılırsa sayaç anlamsızca şişer. */
-const WINDOWS = ['PEMFVetClient-Setup.exe']
-const ANDROID = ['PEMF_Vet_Mobil.apk']
-const OTHER = ['PEMFVetClient.dmg', 'PEMFVetClient.deb', 'PEMFVetClient.AppImage', 'PEMFVetClient.rpm']
+// ⚠️ AD DESENİ, SABİT AD DEĞİL (2026-08-10). Kurulum dosyası artık sürüm taşıyor
+// (`PEMFVetClient-Setup-1.9.18.exe`). Sabit ada bakan eski liste, yeni sürümlerin indirmelerini
+// HİÇ SAYMIYORDU → Windows sayacı sessizce 0'a düşerdi. Desen hem eski (`...-Setup.exe`) hem
+// yeni (`...-Setup-<sürüm>.exe`) adları yakalar, böylece geçmiş sayı da korunur.
+const WINDOWS_RE = /^PEMFVetClient-Setup(-\d+\.\d+\.\d+)?\.exe$/i
+const ANDROID_RE = /^PEMF_Vet_Mobil(-\d+\.\d+\.\d+)?\.apk$/i
+// macOS/Linux: site "Yakında" diyor (donanım desteği Windows'a özel) → ayrı gösterilmez.
+const OTHER_RE = /^PEMFVetClient(-\d+\.\d+\.\d+)?\.(dmg|deb|AppImage|rpm)$/i
 
 export interface DownloadStats {
   windows: number
@@ -68,9 +73,9 @@ export function aggregate(releases: GhRelease[]): Omit<DownloadStats, 'fetchedAt
       const n = a?.name || ''
       const c = Number(a?.download_count)
       if (!Number.isFinite(c) || c < 0) continue
-      if (WINDOWS.includes(n)) windows += c
-      else if (ANDROID.includes(n)) android += c
-      else if (OTHER.includes(n)) other += c
+      if (WINDOWS_RE.test(n)) windows += c
+      else if (ANDROID_RE.test(n)) android += c
+      else if (OTHER_RE.test(n)) other += c
     }
   }
   return { windows, android, other, total: windows + android + other }
