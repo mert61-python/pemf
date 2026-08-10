@@ -58,6 +58,12 @@ pub enum AuthError {
     Offline,
     #[error("E-posta veya parola hatalı")]
     BadCredentials,
+    /// ⚠️ 2026-08-10: BOŞ girdi eskiden `BadCredentials` dönüyordu — yani arayüzde bir hata
+    /// (alan okunamadı, otomatik doldurma state'i kaçtı, yanlış id) kullanıcıya "parolanız
+    /// yanlış" diye görünüyordu ve HİÇBİR yerde ayırt edilemiyordu. İki durum farklı: biri
+    /// kullanıcının, diğeri bizim hatamız. Ayrı tutulunca saha kaydında da ayrışır.
+    #[error("E-posta ve parola boş bırakılamaz")]
+    MissingInput,
     #[error("E-posta adresiniz doğrulanmamış — gelen kutunuzu kontrol edin")]
     EmailNotConfirmed,
     #[error("Çok fazla deneme yapıldı — birkaç dakika sonra tekrar deneyin")]
@@ -279,7 +285,7 @@ pub fn refresh_budgeted(refresh_token: &str, bilinen_eposta: &str) -> Result<Ses
 pub fn login(email: &str, password: &str) -> Result<Session, AuthError> {
     let email = email.trim();
     if email.is_empty() || password.is_empty() {
-        return Err(AuthError::BadCredentials);
+        return Err(AuthError::MissingInput);
     }
     let url = format!("{}/token?grant_type=password", auth_base());
     let body = serde_json::json!({ "email": email, "password": password }).to_string();
@@ -316,6 +322,55 @@ pub fn logout(access_token: &str) -> Result<(), AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════
+    // BOŞ GİRDİ ≠ YANLIŞ PAROLA (2026-08-10 saha hatası)
+    //
+    // Kullanıcı doğru parolayı yazdı, "E-posta veya parola hatalı" aldı; parola alanını silip
+    // AYNI şeyi tekrar yazınca giriş yaptı. Yani ilk istekte gönderilen parola, yazdığı şey
+    // değildi. Bu ihtimali kovalarken görüldü ki BOŞ girdi de aynı mesajı üretiyordu — yani
+    // arayüz tarafındaki bir hata (alan okunamadı / otomatik doldurma state'i kaçtı) tam olarak
+    // "parolanız yanlış" gibi görünüyor ve HİÇBİR kayıtta ayırt edilemiyordu.
+    // ═══════════════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn KRITIK_bos_girdi_YANLIS_PAROLA_gibi_raporlanmaz() {
+        for (e, p) in [("", "sifre"), ("a@b.com", ""), ("", ""), ("   ", "sifre")] {
+            match login(e, p) {
+                Err(AuthError::MissingInput) => {}
+                other => panic!(
+                    "bos girdi ({e:?},{p:?}) icin MissingInput bekleniyordu, gelen: {other:?} — \
+                     arayuz hatasi kullaniciya 'parolaniz yanlis' diye gorunur"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn bos_girdi_ag_a_CIKMAZ() {
+        // Doğrulama isteği HİÇ gönderilmemeli: aksi hâlde boş parolayla Supabase'in oran
+        // sınırlayıcısı tüketilir ve gerçek deneme "çok fazla deneme" ile reddedilir.
+        // (Ağ yoksa bile hızlı dönmesi bunun kanıtı: `Offline` değil `MissingInput` geliyor.)
+        assert!(matches!(login("a@b.com", ""), Err(AuthError::MissingInput)));
+    }
+
+    #[test]
+    fn bos_girdi_mesaji_yanlis_parola_mesajindan_FARKLI() {
+        let bos = AuthError::MissingInput.to_string();
+        let yanlis = AuthError::BadCredentials.to_string();
+        assert_ne!(bos, yanlis, "iki durum ayni metni veriyorsa ayirmanin anlami yok");
+        // UI `doLogin` yalnız "parola hatalı" gördüğünde alanı temizler; boş-girdi mesajı o
+        // dizeyi İÇERMEMELİ, yoksa kullanıcının yazdığı e-posta da boşuna silinir.
+        assert!(!bos.contains("parola hatalı"), "bos-girdi mesaji UI temizleme kosuluna takiliyor");
+    }
+
+    #[test]
+    fn gercek_kimlik_hatasi_HALA_BadCredentials() {
+        // Regresyon: ayrım yaparken sunucunun 400/401/403'ü yanlışlıkla MissingInput'a kaymamalı.
+        for s in [400u16, 401, 403] {
+            assert!(matches!(classify_error(s, "{}"), AuthError::BadCredentials), "HTTP {s}");
+        }
+    }
 
     /// GÜVENLİK: Supabase pini yalnız DERLEME-ZAMANI proje referansını kabul etmeli.
     /// Kaçırılırsa: kimlik avı — veteriner e-posta+parolası saldırgana gider.
@@ -427,6 +482,63 @@ mod tests {
             AuthError::Offline.to_string().contains("İnternet bağlantısı yok"),
             "UI'nin aradigi metin degisti — 'Cevrimdisi baslat' cikis yolu kaybolur: {}",
             AuthError::Offline
+        );
+    }
+
+    /// ⚠️ UI SÖZLEŞMESİ #2 (2026-08-10 saha hatası): `index.html::doLogin` kimlik hatasında
+    /// parola alanını temizleyip odaklamak için BU MESAJIN İÇERİĞİNE ("parola hatalı") bakıyor.
+    /// Mesaj yeniden yazılırsa temizleme sessizce kaybolur ve hata yeniden ortaya çıkar:
+    /// kullanıcı görünmeyen bir kalıntının üstüne yazmaya devam eder.
+    #[test]
+    fn KRITIK_kimlik_hatasi_mesaji_UI_temizleme_sozlesmesini_korur() {
+        let m = AuthError::BadCredentials.to_string();
+        assert!(
+            m.contains("parola hatalı"),
+            "UI'nin aradigi metin degisti — hatali giriste parola alani TEMIZLENMEZ olur: {m}"
+        );
+    }
+
+    /// UI dosyası gerçekten bu davranışları taşıyor mu? (kaynak-metin kapısı — düzeltme
+    /// silinirse burada patlar; UI'nin kendi test koşucusu yok.)
+    #[test]
+    fn ui_giris_ekrani_duzeltmeleri_YERINDE() {
+        let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/ui/index.html");
+        let s = std::fs::read_to_string(p).expect("index.html okunamadi");
+        for (parca, neden) in [
+            // ⚠️ ID'yi ATTRIBUTE olarak ara. İlk yazımda yalnız `"btn-pw-toggle"` dizesi
+            // aranıyordu; JS tarafındaki `$("btn-pw-toggle")` çağrısı bunu tek başına
+            // karşılıyordu → HTML'den düğme SİLİNSE bile kapı yeşil kalıyordu (mutasyon
+            // turunda ölçüldü). Düğmenin GERÇEKTEN var olduğunu id niteliği kanıtlar.
+            (r#"id="btn-pw-toggle""#, "parola goster/gizle DUGMESI yok — maskeli alanda hata gorunmez kalir"),
+            ("function parolaUyarisi", "gorunmez karakter/bosluk uyarisi fonksiyonu YOK"),
+            ("loginPwSpace:", "bosluk uyari metni (sozlukte) YOK"),
+            ("loginPwInvisible:", "gorunmez-karakter uyari metni (sozlukte) YOK"),
+        ] {
+            assert!(s.contains(parca), "{neden} ({parca})");
+        }
+        // Düğmenin bir İŞİ de olmalı: tıklanınca alanın tipini değiştirmeli.
+        assert!(
+            s.contains(r#"$("btn-pw-toggle").onclick"#) && s.contains(r#"$("login-pass").type"#),
+            "goster/gizle dugmesi var ama parola alaninin tipini DEGISTIRMIYOR (olu dugme)"
+        );
+        // Hatalı girişte alan TEMİZLENMELİ.
+        //
+        // ⚠️ İlk yazımda dosyadaki İLK `} catch (e) {` aranıyordu — o BAŞKA bir fonksiyonun
+        // catch'i çıktı ve test yanlış sebeple kırıldı. Kaynak-metin iddiası neyi incelediğini
+        // kesin bilmeli: `doLogin`in GÖVDESİNE sabitle, sonra onun catch'ine bak.
+        let bas = s.find("async function doLogin()").expect("doLogin bulunamadi");
+        let govde = &s[bas..];
+        let son = govde.find("\n      }\n").map(|i| bas + i).unwrap_or(s.len());
+        let dologin = &s[bas..son];
+        let catch_ = dologin.find("} catch (e) {").expect("doLogin icinde catch yok");
+        let hata_dali = &dologin[catch_..];
+        assert!(
+            hata_dali.contains(r#"$("login-pass").value = """#),
+            "hatali giriste parola alani TEMIZLENMIYOR — kullanici gorunmeyen kalintinin ustune yazar"
+        );
+        assert!(
+            hata_dali.contains("parolaUyarisi("),
+            "hata dalinda gorunmez-karakter uyarisi cagrilmiyor"
         );
     }
 

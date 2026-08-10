@@ -167,3 +167,32 @@ geçmiyorsa test kırılır.
 |---|---|
 | 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
+
+---
+
+## launcher 1.9.17 — 2026-08-10 (giriş ekranı düzeltmesi)
+
+**Saha hatası.** Doğru parola yazıldığında *"E-posta veya parola hatalı"* deniyor; parola alanı
+**silinip aynı şey tekrar yazılınca** giriş yapılıyordu.
+
+**Kök neden.** İlk istekte gönderilen parola, kullanıcının yazdığı şey değildi. Alan `type="password"`
+olduğu için içinde ne olduğunu **ne kullanıcı ne uygulama** görebiliyordu (otomatik doldurma
+kalıntısı, kopyala-yapıştırdan gelen görünmez karakter, yutulan ilk tuş…). Üstelik alan **yalnız
+başarıda** temizleniyordu — hatalı denemeden sonra kalıntı duruyor, kullanıcı üstüne yazdıkça hata
+birikiyordu.
+
+- **Parolayı göster/gizle** düğmesi — bu hata sınıfını kendi kendine teşhis edilir kılar. Her giriş
+  denemesinden sonra otomatik gizlenir (ekranda unutulmaz).
+- **Hatalı girişte alan temizlenir** ve odak ona döner → her deneme temiz başlar.
+- Parolada **baştaki/sondaki boşluk** ya da **görünmez karakter** (ZWSP, yön işaretleyici) varsa
+  açıkça söylenir. ⚠️ Sessizce kırpılmaz: bir parola gerçekten boşluk içerebilir.
+- **Boş girdi artık `MissingInput`** — eskiden `BadCredentials` dönüyordu, yani arayüz tarafındaki
+  bir hata kullanıcıya "parolanız yanlış" diye görünüyor ve hiçbir kayıtta ayırt edilemiyordu.
+
+| Sürüm | Etiket | Tarih | Installer sha (12) |
+|---|---|---|---|
+| 1.9.17 | `launcher-v1.9.17` | 2026-08-10 | `8070971e5180` |
+
+> ⚠️ **İndirilen dosya adı artık sürüm taşır** (`PEMFVetClient-Setup-1.9.17.exe`). Ad site
+> tarafında `windowsTag`ten **türetilir**, elle yazılmaz — etiket yükseltilip ad unutulduğunda
+> indirme butonu sessizce 404 verirdi.

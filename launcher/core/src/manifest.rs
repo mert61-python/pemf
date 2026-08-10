@@ -411,7 +411,26 @@ mod tests {
         });
         let m = Manifest::parse(&raw).expect("gercek manifest ayristirilamadi");
         assert_eq!(m.schema, 2);
-        assert_eq!(m.version, "1.8.0");
+        // ⚠️ 2026-08-10: burada `assert_eq!(m.version, "1.8.0")` vardı — yani DEĞİŞMESİ NORMAL
+        // olan bir değeri donduruyordu ve her yayında kırılıyordu (1.9.6 yayınında kırıldı).
+        // Her yayında güncellenmesi gereken bir iddia, zamanla düşünülmeden güncellenir ve
+        // koruma değeri sıfıra iner. Asıl DEĞİŞMEZ şu: sürüm semver biçiminde olmalı ve
+        // `tag` ile AYNI sürümü göstermeli — ikisinin ayrışması gerçek bir yayın hatasıdır
+        // (paketler bir etikette, manifest başka bir sürüm der).
+        let s: Vec<&str> = m.version.split('.').collect();
+        assert!(
+            s.len() == 3 && s.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())),
+            "manifest surumu semver degil: {:?}",
+            m.version
+        );
+        if let Some(tag) = m.tag.as_deref() {
+            let etiket_surum = tag.rsplit('v').next().unwrap_or("");
+            assert_eq!(
+                etiket_surum, m.version,
+                "tag ({tag}) ile version ({}) AYRISMIS — paketler bir etikette, manifest baska surum diyor",
+                m.version
+            );
+        }
         assert!(m.runtimes.contains_key(platform::WIN_X64), "base -> win-x64");
         // ⚠️ SAHİP KARARI 2026-08-09 (Tier 1): `mac-arm64` ve `linux-x64` manifest'ten ÇIKARILDI.
         // Gerekçe (ölçüldü): o platformlarda `layers` yoktu → rollout freni çalışmıyordu, ve

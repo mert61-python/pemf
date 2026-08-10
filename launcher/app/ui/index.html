@@ -189,6 +189,17 @@
         -webkit-user-select: text; user-select: text; transition: border-color 0.15s;
       }
       .field input:focus { border-color: var(--teal); }
+      /* Parola göster/gizle — düğme alanın İÇİNDE durur, alanın genişliğini bozmaz. */
+      .pw-wrap { position: relative; display: flex; }
+      .pw-wrap input { flex: 1; padding-right: 76px; }
+      .pw-toggle {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+        background: transparent; color: var(--muted); font: inherit; font-size: 12.5px;
+        cursor: pointer; transition: color 0.15s, border-color 0.15s;
+      }
+      .pw-toggle:hover { color: var(--fg); border-color: var(--teal); }
+      .pw-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
       .remember { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); cursor: pointer; }
       .remember input { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
       .remember.off { opacity: 0.45; cursor: default; }
@@ -420,7 +431,18 @@
             </div>
             <div class="field">
               <label for="login-pass" id="t-login-pass">Parola</label>
-              <input id="login-pass" type="password" autocomplete="current-password" />
+              <!-- ⚠️ GÖSTER/GİZLE (2026-08-10, saha hatası). Belirti: kullanıcı doğru parolayı
+                   yazdı → "E-posta veya parola hatalı"; parola alanını SİLİP aynı şeyi tekrar
+                   yazınca giriş yaptı. Alan maskeli olduğu için ne kullanıcı ne uygulama içinde
+                   ne olduğunu görebiliyordu (otomatik doldurma kalıntısı, görünmez boşluk,
+                   yutulan ilk tuş...). Görünürlük bu hata sınıfını KENDİ KENDİNE teşhis edilir
+                   kılar — parolayı tahmin etmeye çalışmaktan çok daha güvenilir. -->
+              <div class="pw-wrap">
+                <input id="login-pass" type="password" autocomplete="current-password" />
+                <button type="button" class="pw-toggle" id="btn-pw-toggle"
+                        aria-controls="login-pass" aria-pressed="false"
+                        title="Parolayı göster"><span id="t-pw-toggle">Göster</span></button>
+              </div>
             </div>
             <label class="remember" id="remember-wrap">
               <input type="checkbox" id="login-remember" />
@@ -625,6 +647,12 @@
           loginForgot: "Şifremi unuttum", loginSignup: "Hesap oluştur",
           loginNoPersist: "Bu platformda oturum güvenli biçimde saklanamıyor — giriş yalnız bu açılış için geçerli.",
           loginEmpty: "E-posta ve parola gerekli.",
+    // ── 2026-08-10 saha hatasi: dogru parola "hatali" dendi, alan silinip tekrar yazilinca gecti.
+    // Maskeli alanda icerigi kimse goremiyordu. Gorunurluk + gorunmez karakter uyarilari.
+    pwShow: "Göster", pwHide: "Gizle",
+    pwShowTitle: "Parolayı göster", pwHideTitle: "Parolayı gizle",
+    loginPwSpace: "Parolanızın başında veya sonunda boşluk var — genelde yapıştırmadan gelir. “Göster” ile kontrol edin.",
+    loginPwInvisible: "Parolada görünmeyen bir karakter var (kopyala-yapıştırdan gelmiş olabilir). Silip elle yazmayı deneyin.",
           loginRequired: "Kurulum ve onarım için giriş yapmalısınız.",
           logout: "Çıkış", logoutTitle: "Çıkış yap",
           logoutBody: "Bu bilgisayardaki oturumunuz silinecek ve uygulamadaki giriş kapatılacak. Devam edilsin mi?",
@@ -687,6 +715,10 @@
           loginForgot: "Forgot password", loginSignup: "Create account",
           loginNoPersist: "This platform can't store the session securely — sign-in applies to this launch only.",
           loginEmpty: "Email and password are required.",
+    pwShow: "Show", pwHide: "Hide",
+    pwShowTitle: "Show password", pwHideTitle: "Hide password",
+    loginPwSpace: "Your password starts or ends with a space — usually from pasting. Use “Show” to check.",
+    loginPwInvisible: "The password contains an invisible character (likely from copy-paste). Clear it and type it manually.",
           loginRequired: "Sign in to install or repair.",
           logout: "Sign out", logoutTitle: "Sign out",
           logoutBody: "Your session on this computer will be removed and the app will be signed out. Continue?",
@@ -1003,6 +1035,12 @@
         $("t-login-title").textContent = x.loginTitle; $("t-login-lead").textContent = x.loginLead;
         $("t-login-email").textContent = x.loginEmail; $("t-login-pass").textContent = x.loginPass;
         $("t-login-btn").textContent = x.loginBtn;
+        // Göster/gizle düğmesi: mevcut DURUMA göre etiketlenir (dil değişince de doğru kalsın).
+        {
+          const acik = $("login-pass").type === "text";
+          $("t-pw-toggle").textContent = acik ? x.pwHide : x.pwShow;
+          $("btn-pw-toggle").title = acik ? x.pwHideTitle : x.pwShowTitle;
+        }
         $("t-login-forgot").textContent = x.loginForgot; $("t-login-signup").textContent = x.loginSignup;
         $("t-login-offline-start").textContent = x.offlineStart;
         $("t-logout").textContent = x.logout; $("t-offline").textContent = x.offline;
@@ -1422,6 +1460,15 @@
         // Komut yoksa (eski launcher) girişi ZORUNLU KILMA — client açılmaz hale gelmesin.
         catch (_) { authed = true; return { logged_in: true, email: "" }; }
       }
+      /** Parolada GÖRÜNMEYEN bir sorun var mı? Maskeli alanda gözle ayırt edilemez. */
+      function parolaUyarisi(pw) {
+        if (pw !== pw.trim()) return t().loginPwSpace;
+        // Sıfır-genişlikli / yön işaretleyici karakterler kopyala-yapıştırla gelir, HİÇBİR yerde
+        // görünmez ve `trim()` bunları TEMİZLEMEZ (spec'te WhiteSpace sayılmazlar).
+        if (/[​-‍⁠﻿‎‏]/.test(pw)) return t().loginPwInvisible;
+        return "";
+      }
+
       async function doLogin() {
         const email = $("login-email").value.trim();
         const password = $("login-pass").value;
@@ -1438,11 +1485,25 @@
         } catch (e) {
           busy = false;
           fail(e);
+          const m = String(e || "");
+          // ── KİMLİK HATASINDA ALANI TEMİZLE (2026-08-10, saha hatası) ──────────────────────
+          // Belirti: doğru parola yazıldı → "hatalı" dendi; alan SİLİNİP aynı şey yazılınca
+          // giriş yapıldı. Yani ilk denemede alanın içinde başka bir şey vardı (otomatik
+          // doldurma kalıntısı / görünmez karakter / yutulan tuş) ve maskeli olduğu için
+          // kimse göremiyordu. Eskiden alan yalnız BAŞARIDA temizleniyordu → kullanıcı üstüne
+          // yazmaya devam ediyor, hata birikiyordu. Artık her kimlik hatasında sıfırlanır ve
+          // odak parolaya döner: her deneme TEMİZ başlar.
+          if (m.includes("parola hatalı") || m.includes("parola hatali")) {
+            const uyari = parolaUyarisi(password);
+            $("login-pass").value = "";
+            pwGoster(false);                // parola ekranda unutulmasın
+            $("login-pass").focus();
+            if (uyari) notice(uyari);       // görünmez sorunu SÖYLE (sessizce düzeltme)
+          }
           // Sunucuya ulaşılamadıysa kurulu cihaz yine açılabilmeli (çevrimdışı çıkış yolu).
           // ⚠️ Bu metin `core/auth.rs::AuthError::Offline`'ın Display'iyle SÖZLEŞMELİDİR; orada
           // `cevrimdisi_mesaji_ui_sozlesmesini_korur` testi metni kilitliyor (yeniden
           // yazılırsa çıkış yolu sessizce kaybolurdu).
-          const m = String(e || "");
           if (m.includes("İnternet bağlantısı yok")) {
             setOffline(true);
             if (envCache && envCache.already_installed) {
@@ -1458,6 +1519,22 @@
       for (const id of ["login-email", "login-pass"]) {
         $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
       }
+
+      // ── PAROLAYI GÖSTER/GİZLE ───────────────────────────────────────────────────────────
+      // Maskeli alanda "yazdığım şey gerçekten bu mu?" sorusu cevapsızdı; 2026-08-10'daki saha
+      // hatasının kök sebebi tam olarak buydu. Görünürlük, tahmin etmekten iyidir.
+      // ⚠️ Ekran paylaşımı/omuz riski: varsayılan GİZLİ, her giriş denemesinden sonra otomatik
+      // GİZLİYE döner (aşağıda), yani parola ekranda unutulmaz.
+      function pwGoster(ac) {
+        $("login-pass").type = ac ? "text" : "password";
+        $("btn-pw-toggle").setAttribute("aria-pressed", ac ? "true" : "false");
+        $("btn-pw-toggle").title = ac ? t().pwHideTitle : t().pwShowTitle;
+        $("t-pw-toggle").textContent = ac ? t().pwHide : t().pwShow;
+      }
+      $("btn-pw-toggle").onclick = () => {
+        pwGoster($("login-pass").type === "password");
+        $("login-pass").focus();
+      };
       $("btn-forgot").onclick = () => invoke("open_url", { url: WEB + "forgot" }).catch(() => openWeb());
       $("btn-signup").onclick = () => invoke("open_url", { url: WEB + "register" }).catch(() => openWeb());
       $("btn-logout").onclick = () => askConfirm(t().logoutTitle, t().logoutBody, async () => {
