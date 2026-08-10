@@ -105,14 +105,28 @@ geçmiyorsa test kırılır.
 
 ### app paketi
 
-| Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) |
-|---|---|---|---|---|
-| 1.8.0 | `client-app-v1.8.0` | 2026-07-13 | `90cf004f9fa1` | `42b88557fe00` / `69cf344d0fc6` |
+| Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) | rollout |
+|---|---|---|---|---|---|
+| 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | **10** |
+| 1.8.0 | `client-app-v1.8.0` | 2026-07-13 | `90cf004f9fa1` | `42b88557fe00` / `69cf344d0fc6` | 100 |
+
+> ⚠️ **1.9.6'da bağımlılık katmanı da değişti.** `_internal/VERSION` app katmanına taşındığı için
+> `base-deps.zip` yenilendi → bu sürümde her klinik ~1,19 GB indirir. Sonraki sıradan yayınlar
+> yine ~71 MB olacaktır.
+>
+> ⚠️ **Manifest'in adresi sabittir:** istemciler onu daima
+> `releases/download/client-app-v1.8.0/manifest.json` adresinden okur (launcher'da derlenmiş
+> sabit). Yeni paketler yeni bir etikete yüklenir; **manifest her zaman o eski etikete**
+> `--clobber` ile yazılır. Yeni etikete koymak yayını görünmez kılar.
+>
+> Kademeli açma: `--rollout 10` → izle → `--rollout 50` → `--rollout 100` (her adımda manifest'i
+> aynı adrese yeniden yükleyin).
 
 ### launcher (PEMF Vet Client)
 
 | Sürüm | Etiket | Tarih | Installer sha (12) |
 |---|---|---|---|
+| 1.9.16 | `launcher-v1.9.16` | 2026-08-10 | `04a39ee87701` |
 | 1.9.15 | `launcher-v1.9.15` | 2026-08-08 | `cca09c179fa0` |
 | 1.9.14 | `launcher-v1.9.14` | 2026-08-08 | — |
 | 1.9.13 | `launcher-v1.9.13` | 2026-08-08 | — |
@@ -135,10 +149,12 @@ geçmiyorsa test kırılır.
 
 | Sürüm | versionCode | Yayın | APK sha (12) |
 |---|---|---|---|
+| 2.3.8 | 15 | `launcher-v1.9.16` | `d6be2a3166fc` |
 | 2.3.7 | 14 | `launcher-v1.9.15` | `7078cf6b36a3` |
 
 ### backend (`VERSION`)
 
 | Sürüm | Not |
 |---|---|
+| 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
