@@ -49,9 +49,27 @@ describe('Windows kurulum dosya adı', () => {
     expect(CLIENT.version).toBe(surum())
   })
 
-  it('APK adı sürüm taşımaz — bu BİLİNÇLİ', () => {
-    // Android tarafında dosya adı sürüm taşımaz: APK doğrudan kurulur, İndirilenler'de
-    // biriktirilip karşılaştırılmaz ve `versionCode` zaten sistem tarafından gösterilir.
-    expect(DOWNLOAD_HOST.androidAsset).toBe('PEMF_Vet_Mobil.apk')
+  // ⚠️ KARAR DEĞİŞTİ (2026-08-11, sahip isteği). Eskiden "APK adı sürüm TAŞIMAZ" bilinçli bir
+  // karardı; Windows sürümü dosya adına alınca aynı gerekçe (İndirilenler'de hangisi hangisi +
+  // "hangi sürümü kurdunuz?" sorusu) Android için de geçerli oldu.
+  it('KRİTİK: APK adı sürüm taşır', () => {
+    expect(DOWNLOAD_HOST.androidAsset).toBe(`PEMF_Vet_Mobil-${DOWNLOAD_HOST.androidVersion}.apk`)
+    expect(DOWNLOAD_HOST.androidAsset).toMatch(/^PEMF_Vet_Mobil-\d+\.\d+\.\d+\.apk$/)
+  })
+
+  it('KRİTİK: androidAsset TÜRETİLİR (sabit dize değil)', () => {
+    // Windows'takiyle aynı tuzak: adı elle yazmak, sürüm yükseltilip ad unutulduğunda 404
+    // üretir ve indirme butonu SESSİZCE ölür.
+    const turetilen = Object.getOwnPropertyDescriptor(DOWNLOAD_HOST, 'androidAsset')?.get
+    expect(turetilen, 'androidAsset bir GETTER olmalı (türetilmiş) — sabit dize DEĞİL').toBeTypeOf(
+      'function',
+    )
+    expect(turetilen!.call({ androidVersion: '9.9.9' })).toBe('PEMF_Vet_Mobil-9.9.9.apk')
+  })
+
+  it('APK indirme URL’i androidTag + türetilmiş adı kullanır', () => {
+    const url = CLIENT.downloads.android.url
+    expect(url).toContain(`/releases/download/${DOWNLOAD_HOST.androidTag}/`)
+    expect(url.endsWith(DOWNLOAD_HOST.androidAsset)).toBe(true)
   })
 })

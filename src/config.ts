@@ -74,7 +74,7 @@ export const DOWNLOAD_HOST = {
   githubOwner: 'mert61-python',
   githubRepo: 'pemf-update', // launcher, paketlerle aynı user-named repo'da
   launcherTag: 'launcher-v1.9.2', // mac/linux/android ORTAK etiketi (1.9.2; macOS notarize'li 2026-07-26). Windows AYRI (windowsTag).
-  windowsTag: 'launcher-v1.9.19', // 1.9.19 = PROFIL BAGIMLILIGI KAYNAGINDAN KALKTI: AI Pro organ lokalizasyonu modelleri (inference_cat_organ, ~209 MB) yalniz home.zip'te idi → cekirdege (base-deps) alindi; profiller arasi artik NE zorunlu NE islevsel bag var, home.zip 528→318 MB. 1.9.18 = PROFILLER BAGIMSIZ: 'Veteriner' secilince 'Ev Sahibi' artik ZORLA eklenmiyor (yalniz Vet+Arastirma kurulabilir). 1.9.17 = GIRIS EKRANI: parola goster/gizle + hatali giriste alan temizlenir + gorunmez karakter/bosluk uyarisi (dogru parola 'hatali' deniyordu, alan silinip tekrar yazilinca geciyordu). 1.9.16 = URETIME-HAZIRLIK DENETIMI (Tier 0-3): geri cagirma (min_supported_version), kurulum oncesi disk-alani kontrolu + olu onbellek temizligi, guvenlik-duvari kurali, filo envanteri (surum alanlari heartbeat'te), surum dosyasi app katmaninda (siradan yayinda artik tazelenir). 1.9.13 = KATMANLI GUNCELLEME: paket app(~71MB)+deps(~1,19GB) olarak ayrildi → siradan surum 1,3 GB yerine ~71 MB iner. 1.9.12 = UYGULAMA OTO-GUNCELLEME: client acilista base.zip + model paketlerini de manifest sha'siyla karsilastirip yeniler ("Onar" gerekmez; seans sirasinda ertelenir). 1.9.11 = arayuz metinlerinde "tedavi" -> "seans" (client + kurulum + guncelleme uyarilari). 1.9.9 = client GIRISI (Supabase + Beni hatirla) + oturum devri (uygulamada cift login yok) + cevrimdisi acilis kilidi fix + header tasmasi fix. 1.9.8 = yarım-kalan çoklu-kurulumda tamamlanan profil korunur (iptal→Hazır!) + 1.9.7 Başlat ayrı-pencere (client açık kalır) + 1.9.6 uninstall (os error 5) fix → kayıtlı NSIS uninstaller'ı başlatır. 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
+  windowsTag: 'launcher-v1.9.20', // 1.9.20 = SAHA ARIZASI: kurulum sonrasi cihaz acilmiyordu (at-rest anahtar uyusmazliginda karantina + veri-gocu sonsuz dongusu + launcher yanlis gunluk yolu + baglanti sizintisi). Ayrica URETICI KIMLIGI duzeltildi: UAC/Yayimci artik IBIA Teknoloji Ltd. Sti. 1.9.19 = PROFIL BAGIMLILIGI KAYNAGINDAN KALKTI: AI Pro organ lokalizasyonu modelleri (inference_cat_organ, ~209 MB) yalniz home.zip'te idi → cekirdege (base-deps) alindi; profiller arasi artik NE zorunlu NE islevsel bag var, home.zip 528→318 MB. 1.9.18 = PROFILLER BAGIMSIZ: 'Veteriner' secilince 'Ev Sahibi' artik ZORLA eklenmiyor (yalniz Vet+Arastirma kurulabilir). 1.9.17 = GIRIS EKRANI: parola goster/gizle + hatali giriste alan temizlenir + gorunmez karakter/bosluk uyarisi (dogru parola 'hatali' deniyordu, alan silinip tekrar yazilinca geciyordu). 1.9.16 = URETIME-HAZIRLIK DENETIMI (Tier 0-3): geri cagirma (min_supported_version), kurulum oncesi disk-alani kontrolu + olu onbellek temizligi, guvenlik-duvari kurali, filo envanteri (surum alanlari heartbeat'te), surum dosyasi app katmaninda (siradan yayinda artik tazelenir). 1.9.13 = KATMANLI GUNCELLEME: paket app(~71MB)+deps(~1,19GB) olarak ayrildi → siradan surum 1,3 GB yerine ~71 MB iner. 1.9.12 = UYGULAMA OTO-GUNCELLEME: client acilista base.zip + model paketlerini de manifest sha'siyla karsilastirip yeniler ("Onar" gerekmez; seans sirasinda ertelenir). 1.9.11 = arayuz metinlerinde "tedavi" -> "seans" (client + kurulum + guncelleme uyarilari). 1.9.9 = client GIRISI (Supabase + Beni hatirla) + oturum devri (uygulamada cift login yok) + cevrimdisi acilis kilidi fix + header tasmasi fix. 1.9.8 = yarım-kalan çoklu-kurulumda tamamlanan profil korunur (iptal→Hazır!) + 1.9.7 Başlat ayrı-pencere (client açık kalır) + 1.9.6 uninstall (os error 5) fix → kayıtlı NSIS uninstaller'ı başlatır. 1.9.5 = KRİTİK backend-deadlock fix (stdout→NUL) + 1.9.4 self-update/uninstaller-fix. Windows-only → mac/linux 1.9.2'de. // Windows'a AYRI etiket: 1.9.4 = self-update + uninstaller-fix (işaretsiz kaldırmada profiller korunur). Windows-only → mac/linux 1.9.2'de kalır (404 olmasın).
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-10, sahip isteği). İndirilen dosya `PEMFVetClient-Setup.exe`
   // diye kaydediliyordu; İndirilenler klasöründe üç sürüm yan yana durunca hangisinin hangisi
   // olduğu anlaşılmıyordu ve destek çağrısında "hangi setup'ı kurdunuz?" sorusu cevapsız
@@ -100,7 +100,17 @@ export const DOWNLOAD_HOST = {
   // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
   // bağımsız olduğu için kendi etiketi olmalı.
   androidTag: 'launcher-v1.9.18',
-  androidAsset: 'PEMF_Vet_Mobil.apk',
+  // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-11) — Windows ile AYNI gerekçe: İndirilenler klasöründe üç
+  // sürüm yan yana durunca hangisinin hangisi olduğu anlaşılmıyor ve destek çağrısında "hangi
+  // APK'yı kurdunuz?" cevapsız kalıyordu. Windows `windowsTag`ten türetilebiliyor (etiket sürümü
+  // taşır); Android'in etiketi `launcher-v*` olduğu için MOBİL sürümü ayrıca tutmak ZORUNLU.
+  //
+  // ⚠️ TEK KAYNAK guii/versions.json → mobile.name. Burası ELLE eşlenir; APK yayınlarken ikisini
+  // birlikte güncelleyin (`scripts/check-legal-config.mjs` tutarlılığı ayrıca kilitler).
+  androidVersion: '2.3.8',
+  get androidAsset(): string {
+    return `PEMF_Vet_Mobil-${this.androidVersion}.apk`
+  },
   androidReady: true, // Android standalone APK yayinda (v2.3.8 / versionCode 15)
 }
 
@@ -111,10 +121,13 @@ const WIN_REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST
 const AND_REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.androidTag}`
 
 export const CLIENT = {
-  version: '1.9.18',
+  // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
+  // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
+  // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
+  version: '1.9.20',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner)
-  releaseDate: '10 Ağu 2026',
+  releaseDate: '11 Ağu 2026',
   ready: DOWNLOAD_HOST.ready,
   downloads: {
     windows: {
