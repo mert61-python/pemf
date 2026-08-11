@@ -131,14 +131,93 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
 
 
 def open_encrypted_conn(db_path, key, sqlcipher_mod, row_factory=None, timeout=10.0, check_same_thread=False):
-    """Onceden cozulmus anahtar + binding ile SQLCipher baglantisi ac (PRAGMA key)."""
+    """Onceden cozulmus anahtar + binding ile SQLCipher baglantisi ac (PRAGMA key).
+
+    ⚠️ HATA YOLUNDA BAGLANTI SIZDIRILMAZ. Yanlis anahtarda `SELECT ... sqlite_master` patlar;
+    eskiden acik `conn` oylece birakiliyordu. Windows'ta o tutamak DOSYAYI KILITLER → sonraki
+    karantina `shutil.move`u PermissionError ile duser ve cihaz yine acilmaz (yani tuglalasma
+    korumasi tam da ihtiyac duyulan anda calismaz). Bu yuzden hata halinde KAPAT ve yeniden firlat.
+    """
     conn = sqlcipher_mod.connect(str(db_path), check_same_thread=check_same_thread, timeout=timeout)
-    if row_factory is not None:
-        conn.row_factory = row_factory
-    escaped = key.replace("'", "''")
-    conn.execute(f"PRAGMA key='{escaped}'")
-    conn.execute("SELECT count(*) FROM sqlite_master")  # yanlis anahtar/migrate gerekli ise burada patlar
-    return conn
+    try:
+        if row_factory is not None:
+            conn.row_factory = row_factory
+        escaped = key.replace("'", "''")
+        conn.execute(f"PRAGMA key='{escaped}'")
+        conn.execute("SELECT count(*) FROM sqlite_master")  # yanlis anahtar/migrate gerekli ise burada patlar
+        return conn
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        raise
+
+
+# ── ANAHTAR UYUSMAZLIGI: CIHAZI TUGLALASTIRMA ────────────────────────────────────────────────
+# SAHA HATASI (2026-08-11). Kullanici PEMF'i kaldirip yeniden kurdu. `patients.db` KVKK geregi
+# KORUNUR, ama `pemf_secrets.json` yeniden uretilince at-rest anahtari degisti → SQLCipher
+# "file is not a database" atti → `_init_database` RuntimeError → **backend cikis kodu 1 ile oldu.**
+# Launcher'da gorulen tek sey 59 SAAT once yazilmis bayat bir gunluktu; kullanici cihazi bir daha
+# hic acamadi ve sebebini gormesinin YOLU YOKTU (backend stderr'i launcher'da Stdio::null'a gider —
+# bu, 1.9.5'teki deadlock duzeltmesidir, geri alinamaz).
+#
+# TASARIM KARARI — neden otomatik karantina:
+#   Anahtar GITTIYSE veri zaten KALICI OKUNAMAZ. Cihazi calismaz halde tutmak veriyi kurtarmaz,
+#   yalnizca klinigi cihazsiz birakir. Bu yuzden dosya KENARA ALINIR (yeniden adlandirilir) ve
+#   temiz bir DB olusur. **ASLA SILINMEZ** — anahtar sonradan bulunursa (yedekten) geri donulebilir.
+#
+# ⚠️ KARANTINA YALNIZ ANAHTAR *OKUNABILDI AMA UYMUYOR* ISE. Anahtar hic okunamadiysa (DPAPI/keyring
+# gecici hatasi, profil bozulmasi) hata GECICI olabilir ve dosyayi kenara almak KURTARILABILIR
+# hasta verisini yetim birakir. O durumda hata yukari firlar — cagiran tugla kalir ama VERI DURUR.
+_QUARANTINE_SUFFIX = "acilamadi"
+
+
+def anahtar_uyusmazligi_mi(exc: BaseException) -> bool:
+    """Istisna 'bu dosya bu anahtarla acilmiyor' anlamina mi geliyor?
+
+    SQLCipher yanlis anahtarda sifre cozemedigi icin dosyayi SQLite gibi bile goremez ve
+    `DatabaseError: file is not a database` atar. Disk bozulmasi da ayni mesaji verebilir;
+    ikisinde de tek guvenli davranis ayni (kenara al, yeni DB ac), o yuzden ayirmiyoruz."""
+    return "file is not a database" in str(exc).lower()
+
+
+def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
+    """Acilamayan DB'yi (ve -wal/-shm yoldaslarini) KENARA AL. Silme YOK.
+
+    Doner: yeniden adlandirilan ana dosyanin yolu (str) ya da None (dosya yoksa/tasinamadiysa).
+    """
+    import datetime
+
+    db = str(db_path)
+    if not os.path.exists(db):
+        return None
+    ts = zaman_damgasi or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    tasinan = None
+    # WAL/SHM de tasinmali: geride kalan -wal, YENI ve bos DB'ye uygulanmaya calisilir → bozulma.
+    for suffix in ("", "-wal", "-shm"):
+        src = db + suffix
+        if not os.path.exists(src):
+            continue
+        dst = f"{src}.{_QUARANTINE_SUFFIX}-{ts}"
+        try:
+            shutil.move(src, dst)
+            if suffix == "":
+                tasinan = dst
+        except Exception as e:  # dosya kilitli → karantina basarisiz; cagiran hatayi gormeli
+            if logger:
+                logger.error("KARANTINA BASARISIZ (%s): %s", src, e)
+            return None
+    if logger:
+        logger.error(
+            "VERITABANI ACILAMADI — at-rest anahtari bu dosyaya UYMUYOR. Dosya KENARA ALINDI "
+            "(SILINMEDI): %s . Temiz bir veritabani olusturuluyor, cihaz calismaya devam eder. "
+            "SEBEP: kaldirma/yeniden kurulum sirasinda sir dosyasi (pemf_secrets.json) yenilenmis "
+            "olabilir. ESKI ANAHTARINIZ VARSA bu dosyayi geri adlandirip anahtari yerine koyun; "
+            "yoksa icerigi KALICI OKUNAMAZ.",
+            tasinan,
+        )
+    return tasinan
 
 
 def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):

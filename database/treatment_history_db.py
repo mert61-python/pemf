@@ -35,6 +35,13 @@ except Exception:
     _DB_ERROR = sqlite3.Error
     _DB_INTEGRITY = sqlite3.IntegrityError
 
+# Anahtar-uyusmazliginda karantina (tuglalasma korumasi) — hasta DB'siyle TEK KAYNAK.
+from database.sqlcipher_util import anahtar_uyusmazligi_mi, karantinaya_al  # noqa: E402
+
+# `_DB_ERROR` ZATEN bir demet olabilir; `except (_DB_ERROR, RuntimeError)` ic-ice demet uretir ve
+# Python "catching classes that do not inherit from BaseException" der. Duzlestirilmis hali:
+_DB_VEYA_RUNTIME = (*_DB_ERROR, RuntimeError) if isinstance(_DB_ERROR, tuple) else (_DB_ERROR, RuntimeError)
+
 
 class TreatmentHistoryDB:
     """PEMF tedavi geçmişi veritabanı yönetim sınıfı (Connection Pool + WAL mode)"""
@@ -228,6 +235,10 @@ class TreatmentHistoryDB:
                         pass
                 continue
         self.logger.warning(f"SQLCipher hicbir aday anahtarla acilamadi (yanlis anahtar/migrate?): {last_err}")
+        # TUGLALASMA KORUMASI (2026-08-11): "anahtar VARDI ama dosyayi ACMADI"yi, "anahtar/binding
+        # HIC YOKTU"dan ayirt edilebilir kil. Karantina YALNIZ birincisinde yapilir — ikincisinde
+        # sorun gecici olabilir ve dosyayi kenara almak KURTARILABILIR hasta verisini yetim birakir.
+        self._anahtar_vardi_ama_acmadi = bool(last_err) and anahtar_uyusmazligi_mi(last_err)
         return None
 
     def _migrate_to_encrypted_if_needed(self):
@@ -623,27 +634,66 @@ class TreatmentHistoryDB:
         except _DB_OPERATIONAL:
             pass
 
+    def _semayi_kur(self, conn):
+        cursor = conn.cursor()
+        self._create_core_tables(cursor)
+        self._create_core_indexes(cursor)
+        self._migrate_and_index_core(cursor)
+        self._create_vet_tables(cursor)
+        self._migrate_vet_columns(cursor)
+        self._create_vet_indexes(cursor)
+        self._create_audit_table(cursor)
+        conn.commit()
+
     def _init_database(self):
-        """Veritabanı tablolarını oluştur (HIGH FIX: WAL mode enabled)"""
+        """Veritabanı tablolarını oluştur (HIGH FIX: WAL mode enabled).
+
+        ⚠️ ANAHTAR UYUŞMAZLIĞINDA CİHAZ TUĞLALAŞMAZ (saha hatası 2026-08-11) — hasta DB'siyle
+        AYNI gerekçe ve AYNI kural: kaldır-yeniden-kur sonrası at-rest anahtarı yenilenmişse
+        dosya kenara alınır (SİLİNMEZ) ve temiz bir DB açılır. Bkz. sqlcipher_util.karantinaya_al
+        ve database/patient_database._init_database."""
+        self._anahtar_vardi_ama_acmadi = False
         try:
-            # HIGH FIX: Use connection pool
             with self._get_connection() as conn:
-                cursor = conn.cursor()
-
-                self._create_core_tables(cursor)
-                self._create_core_indexes(cursor)
-                self._migrate_and_index_core(cursor)
-                self._create_vet_tables(cursor)
-                self._migrate_vet_columns(cursor)
-                self._create_vet_indexes(cursor)
-                self._create_audit_table(cursor)
-
-                conn.commit()
+                self._semayi_kur(conn)
                 self.logger.info(f"Veritabanı başarıyla başlatıldı: {self.db_path}")
+            return
+        except _DB_VEYA_RUNTIME as e:
+            # ⚠️ İSTİSNA TİPİ İKİ TÜRLÜ GELİR — ikisini de karşılamak ZORUNLU:
+            #   (a) `_DB_ERROR`  — bağlantı açıldı, sonraki bir sorgu patladı;
+            #   (b) `RuntimeError` — `_create_connection`, aday anahtarların HİÇBİRİ açmayınca
+            #       "PEMF_ENCRYPT_AT_REST=1 ama SQLCipher sağlanamadı" diye fırlatır. SAHADA GELEN
+            #       BUDUR (2026-08-11); yalnız (a) yakalansaydı bu düzeltme hiç çalışmazdı.
+            uyusmazlik = getattr(self, "_anahtar_vardi_ama_acmadi", False) or (
+                getattr(self, "_cipher_key_cache", None) and anahtar_uyusmazligi_mi(e)
+            )
+            if not uyusmazlik:
+                self.logger.error(f"Veritabanı başlatma hatası: {e}")
+                raise
+            self.logger.error("Tedavi gecmisi DB'si at-rest anahtariyla ACILAMADI (%s) → karantina.", e)
 
-        except _DB_ERROR as e:
-            self.logger.error(f"Veritabanı başlatma hatası: {e}")
-            raise
+        self._baglantiyi_birak()
+        if karantinaya_al(self.db_path, self.logger) is None:
+            raise RuntimeError("Tedavi gecmisi veritabani acilamadi ve karantinaya ALINAMADI (dosya kilitli olabilir).")
+        with self._get_connection() as conn:
+            self._semayi_kur(conn)
+            self.logger.info(f"Veritabanı karantina sonrasi yeniden olusturuldu: {self.db_path}")
+
+    def _baglantiyi_birak(self) -> None:
+        """Bu thread'in bağlantısını kapat + HAVUZDAN da düşür — karantina öncesi dosya kilidi
+        kalmasın (Windows'ta açık SQLCipher tutamacı `shutil.move`'u PermissionError'a düşürür).
+
+        ⚠️ `self._local.conn`i sıfırlamak YETMEZ: `_live_conns` havuzu aynı bağlantıya ayrı bir
+        referans tutar ve o referans dosyayı açık tutmaya devam eder."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self._local.conn = None
+        with self._pool_lock:
+            self._live_conns.pop(threading.get_ident(), None)
 
     def _create_core_tables(self, cursor):
         """Çekirdek tabloları oluştur (seans + parametreler + ayarlar + migration-kaydı + outbox + sensör örnekleri + event'ler)."""

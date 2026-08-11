@@ -107,6 +107,8 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) | rollout |
 |---|---|---|---|---|---|
+| 1.9.10 | `client-app-v1.9.10` | 2026-08-11 | `0756286b6ce7` | `db362caeb65a` / `fc25abb00531` | 100 |
+| 1.9.9 | `client-app-v1.9.9` | 2026-08-11 | `81e977ccad9d` | `048d4aabb6bb` / `b789896c2aa4` | 100 |
 | 1.9.8 | `client-app-v1.9.8` | 2026-08-10 | `3fd701051e7c` | `38446e281313` / `82986dfd7215` | 100 |
 | 1.9.7 | `client-app-v1.9.7` | 2026-08-10 | `4c580cfc0489` | — | 100 |
 | 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | 100 |
@@ -141,6 +143,10 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | Installer sha (12) |
 |---|---|---|---|
+| 1.9.23 | `launcher-v1.9.23` | 2026-08-11 | `f0fa6ef4f81b` |
+| 1.9.22 | `launcher-v1.9.22` | 2026-08-11 | `57d20065fe0a` (yayinda; manifest 1.9.23'e isaret eder) |
+| 1.9.21 | `launcher-v1.9.21` | 2026-08-11 | `07a89b8ab57a` |
+| 1.9.20 | `launcher-v1.9.20` | 2026-08-11 | `625d896fad51` |
 | 1.9.19 | `launcher-v1.9.19` | 2026-08-10 | `65093583277a` |
 | 1.9.18 | `launcher-v1.9.18` | 2026-08-10 | `8bdc6252b235` |
 | 1.9.17 | `launcher-v1.9.17` | 2026-08-10 | `8070971e5180` |
@@ -176,6 +182,167 @@ geçmiyorsa test kırılır.
 |---|---|
 | 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
+
+---
+
+## app 1.9.10 · launcher 1.9.22 — 2026-08-11 (kesinti/eşzamanlılık denetimi)
+
+Sahip isteğiyle **kullanıcı gözünden** yaşam-döngüsü denetimi: "kurulum esnasında kapanma,
+güncelleme esnasında kapanma — hepsi olabilir". Üç gerçek kusur çıktı. Kesintiler süreç
+öldürülerek değil, **öldürülmüş olsaydı diskte ne kalırdı** durumu birebir kurulup bir sonraki
+AÇILIŞIN toparlayıp toparlamadığı ölçülerek test edildi.
+
+### 1. Güncellemenin ortasında kapanma → cihaz "kurulu değil" oluyordu
+
+Takas iki `rename` yapar (`runtime`→`runtime.old`, `runtime.new`→`runtime`). **İkisinin
+arasında** kapanma olursa diskte `runtime` HİÇ YOKTUR; çalışan sürüm `runtime.old`da sağlamdır.
+Ama `detect_environment` kurulumu `runtime/PEMF_Backend/…` ile anlar → client "kurulu değil"
+der, kullanıcı sıfırdan kurulum ekranı görür ve sağlam yedek sessizce yetim kalır.
+
+Açılışta `flow::yarim_takasi_kurtar` eklendi. **Sıra: önce `runtime.old`** — o, sağlık kapısını
+geçmiş, çalıştığı KANITLANMIŞ sürümdür; `runtime.new` hiç doğrulanmadı. Yarıda kalanı
+"tamamlamak" doğrulanmamış bir sürümü sessizce canlıya almak olurdu. Güncelleme sonraki
+açılışta yeniden denenir (paketler önbellekte).
+
+### 2. İki client aynı anda kurulum yapabiliyordu
+
+Tek-örnek koruması yok; kullanıcı simgeye iki kez tıklayabilir. İki client aynı `runtime.new`e
+açar, birbirinin dosyalarını ezer, takası yarış hâlinde yapar ve kurulum öncesi `taskkill` ile
+**diğerinin backend'ini — muhtemelen SÜREN BİR SEANSI** öldürür.
+
+Kilit, işletim sisteminin dosya kilidine dayanır (süreç ölürse Windows tutamağı kendi kapatır →
+**bayat kilit imkânsız**; PID+canlılık sorgusu, çöken kurulumdan sonra kliniği kalıcı kilitli
+bırakabilirdi). Kurulum/onarım/kaldırmaya bağlandı.
+⚠️ Kilit dosyası kurulum kökünün **DIŞINDA** (geçici dizin): kökün içinde olsaydı `remove_install`
+açık tutamak yüzünden kökü silemez, kaldırma yarım kalırdı.
+
+### 3. Bozuk indirmede kendini toparlamıyordu
+
+`ensure_package`'in 6-denemeli retry'ı yalnız AĞ hatalarını kapsıyordu; "indi ama sha tutmadı"
+hâli döngünün dışındaydı → kullanıcı elle tekrar denemek zorundaydı ve mesaj ("değiştirilmiş")
+gereksiz yere güvenlik olayı ima ediyordu. Artık sha uyuşmazlığında **sıfırdan bir kez daha**
+inilir (`.part` de silinir); ikinci kez de tutmazsa hata gerçektir ve yükselir — doğrulama
+ZAYIFLATILMADI.
+⚠️ `.part` adı artık TEK KAYNAK (`net::part_path`): `flow` kendi kopyasını tutuyordu ve kısa-sha
+kolunda FARKLI ad üretiyordu → temiz deneme yanlış dosyayı siler, düzeltme hiçbir şey yapmazdı.
+
+### Konsol penceresi (backend tarafı)
+
+1.9.21 launcher yardımcı komutlarını kapatmıştı; backend tarafında da bayraksız spawn'lar vardı
+(güncelleme sırasında çalışan imza denetimi + kurulum başlatma + ffmpeg). Ortak yardımcı
+`utils/gizli_surec.py` + `tests/test_konsol_penceresi.py` yapısal kapısı eklendi.
+
+### Yarım kalmış kurulum "Hazır!" görünüyordu (launcher 1.9.23)
+
+`install_profiles` ATOMİK DEĞİLDİR — canlı `runtime`ı silip yerine açar; `runtime.new` + takas
+yalnız GÜNCELLEME yolunda var. Açma sırasında kapanma olursa exe yazılmış ama
+`_internal/frontend` yarım kalmış olabilir. `detect_environment` kurulumu YALNIZ exe'nin
+varlığıyla anlıyordu → client "Hazır!" der, kullanıcı Başlat'a basar, backend anlaşılmaz bir
+hatayla düşerdi.
+
+Artık yapısal kontrol (`flow::kurulum_saglam_mi`: exe + `_internal` + web arayüzü). "Kurulu
+değil" demek "kurulu ama açılmıyor"dan İYİDİR: kurulum ekranı çıkar, kullanıcı tek tıkla
+toparlar (paketler önbellekte). Karşı-kanıt testi de var: kontrol fazla katı olup çalışan
+kurulumu "kurulu değil" göstermemeli.
+**Doğrulama:** 14+ yeni test; mutasyonlar 6/6 + 3/3 + 3/3 yakalandı (kurtarmayı devre dışı
+bırakma, doğrulanmamış sürümü öne alma, yapısal kapıyı kaldırma, kilidi kaldırma, kilidi kökün
+içine koyma, `.part` adını ayrıştırma).
+
+---
+
+## launcher 1.9.21 — 2026-08-11 (siyah konsol penceresi)
+
+**Saha şikâyeti.** "Client güncellemesi için uygulamayı kapatıp geri açtığımda **2 kez siyah
+konsol penceresi** çıktı."
+
+**Kök neden.** Launcher pencereli (konsolsuz) çalışır. Konsol-altsistem bir program
+(`powershell`, `icacls`, `taskkill`…) böyle bir süreçten başlatılınca Windows ona **yeni bir
+konsol açar** ve kullanıcı ekranda siyah pencerenin yanıp söndüğünü görür. Backend spawn'ında
+`CREATE_NO_WINDOW` zaten vardı; **yardımcı komutlarda unutulmuştu** — güvenlik-duvarı denetimi
+(açılışta) ve kurulum dizinine ACL (güncellemede). Tam olarak iki pencere.
+
+- Ortak yardımcı: `platform::gizli_komut` — Windows'ta süreç başlatan **tek** yol.
+- Dört çağrı yeri buna çevrildi (güvenlik duvarı denetimi, ACL, yükseltme kabuğu, klasör seçici);
+  backend spawn'ı ve tarayıcı açma da aynı yola alındı (bayrak iki kez verilmesin: `creation_flags`
+  değeri **ezer**, OR'lamaz — ikinci çağrı ilkini sessizce iptal ederdi).
+- **Yapısal kapı** (`core/tests/konsol_penceresi.rs`): kaynakta konsol açabilecek çıplak
+  `Command::new` kalmadığını denetler. Tek tek düzeltmek yetmezdi; bir sonraki yardımcı komut
+  yine unutulurdu. Mutasyonla doğrulandı (3/3).
+---
+
+## app 1.9.9 · launcher 1.9.20 — 2026-08-11 (SAHA ARIZASI: kurulum sonrası cihaz açılmıyordu)
+
+**Hasta güvenliği / kullanılabilirlik — ACİL.** Kaldırıp yeniden kuran bir kurulumda backend
+açılışta ölüyor, cihaz **bir daha hiç açılmıyordu**. Operatörün yapabileceği hiçbir şey yoktu:
+yeniden kurmak da çözmez, çünkü tıbbi veri (doğru olarak) korunur. Tek bir arızanın altından
+**dört ayrı kusur** çıktı; dördü de düzeltildi.
+
+### 1. At-rest anahtarı uymayınca backend TUĞLALAŞIYORDU
+
+Yeniden kurulumda `pemf_secrets.json` yenilenince SQLCipher anahtarı değişir; korunan DB
+çözülemez (`file is not a database`) ve `_init_database` hatayı yukarı fırlatıp süreci **çıkış
+kodu 1** ile öldürürdü. Artık dosya **kenara alınır** (yeniden adlandırılır, `*.acilamadi-<ts>`;
+**asla silinmez**) ve temiz bir DB açılır — anahtar gittiyse veri zaten kalıcı okunamaz, cihazı
+çalışmaz tutmak veriyi kurtarmaz.
+
+⚠️ Karantina **yalnız** "anahtar okunabildi ama uymuyor" hâlinde yapılır. Anahtar hiç
+çözülemediyse (geçici DPAPI/keyring arızası) hata yukarı fırlar — orada dosyayı kenara almak
+KURTARILABİLİR hasta verisini yetim bırakırdı. Bu sınır testle kilitlidir.
+
+### 2. Veri göçü, açılamayacak DB'yi kopyalayıp SONSUZ DÖNGÜ yaratıyordu
+
+`%APPDATA%` → makine-geneli kök göçü (1.9.6, vardiyalı klinikte "boş klinik" düzeltmesi) şifreli
+DB'leri kopyalıyor ama onları açan anahtarı **taşımıyordu** — `pemf_secrets.json` cihaz kimliği
+içerdiği için haklı olarak göç etmez. Kodun kendi yorumu "tıbbi kayıt + onu açan anahtar" diyordu;
+liste bunu yapmıyordu. En kötüsü: dosya kenara alınsa bile hedefte "yok" sayılır ve **aynı bozuk
+dosya tekrar kopyalanırdı** — karantina hiçbir şey çözmez, elle müdahale bile kurtarmazdı.
+Şifreli DB artık ancak hedefin anahtarıyla **gerçekten açılabiliyorsa** kopyalanır; açılmıyorsa
+kaynak eski konumunda durur ve durum loglanır.
+
+### 3. Launcher YANLIŞ günlüğü okuyordu — arıza teşhis edilemiyordu
+
+Backend `PEMF_DATA_DIR` ile `C:\ProgramData\PEMF_System`e yazar; bu değişkeni çocuğa **yalnız
+launcher** verir, kendi ortamında yoktur. `read_tail` yolu kendi ortamından çözdüğü için
+`%APPDATA%\PEMF_GUI\logs`a bakıyordu → kullanıcıya **günler öncesine ait** bayat günlük
+gösterildi. Gerçek sebep doğru dosyaya yazılmıştı ama kimse oraya bakmıyordu. Günlük yolu artık
+çocuğun gördüğü ortamla çözülür.
+
+### 4. Başarısız SQLCipher açışı bağlantı sızdırıyordu
+
+`open_encrypted_conn` yanlış anahtarda bağlantıyı kapatmadan fırlatıyordu. Windows'ta o tutamak
+dosyayı **kilitler** → karantina `shutil.move`'u PermissionError'a düşerdi, yani (1)'deki koruma
+tam ihtiyaç duyulan anda çalışmazdı. (Bu kusuru, karantina testinin geçici dizini temizlenemeyince
+fark ettik.)
+
+**Doğrulama:** 10 yeni test; **7 mutasyonun 7'si** yakalandı (karantina kapatma, silmeye çevirme,
+`-wal/-shm` bırakma, bağlantı sızdırma, göç kapısını kaldırma, göç doğrulamasını sahte-True yapma).
+Ayrıca **gerçek frozen build** üzerinde uçtan uca: başka anahtarla şifreli DB → karantinaya alındı,
+temiz DB oluştu, `/api/health` 200.
+
+### Üretici kimliği düzeltildi
+
+Kurulumdaki Windows UAC penceresi yayıncıyı **"PEMF Medical Technologies"** gösteriyordu; tescilli
+ünvan **İBİA Teknoloji Ltd. Şti.**dir. Ünvan sitede ve client arayüzünde güncellenmişti ama Windows
+sürüm-kaynaklarında eski ad kalmıştı — yani kullanıcıya gösterilen tek yerde yanlış duruyordu.
+Kaynak `LegalCopyright` alanıydı (`CompanyName` boştu, Tauri NSIS şablonu onu hiç yazmıyor).
+
+- `tauri.conf.json`: `publisher` alanı **eklendi** + `copyright` düzeltildi. Artık Programlar
+  listesindeki **Yayımcı** da doğru ad.
+- Backend sürüm kaynağı (`docs/version_info.txt` + onu üreten `build_installer.ps1`) ve Inno
+  yayıncısı düzeltildi.
+- ⚠️ **Uygulama kimliği (`com.pemfmedical.vetclient`) BİLEREK DEĞİŞMEDİ** — o ünvan değil kurulum
+  kimliğidir; değiştirmek kurulum yollarını, kaldırma kaydını ve oto-güncellemenin mevcut kurulumu
+  tanımasını bozar. Testle kilitli.
+- ⚠️ Client'ın üretici registry yolu (`Software\<üretici>`) `pemfmedical`den yeni ünvana kaydı.
+  Kaldırma kaydı **ürün adına** bağlı olduğu için yerinde güncelleme bozulmaz; ama eski anahtar
+  yetim kalır → kaldırma aracı artık **ikisini de** tarar.
+
+### Android indirmesi de sürüm taşıyor
+
+Windows kurulum dosyası sürüm taşıyordu (`PEMFVetClient-Setup-1.9.19.exe`), APK taşımıyordu.
+Artık `PEMF_Vet_Mobil-2.3.8.apk`. Eski ad **korundu** (manifest'teki uygulama-içi güncelleme ve
+eski bağlantılar kırılmasın); ikisi de yayında ve 200 dönüyor. Windows sürümü etiketten türetilir,
+Android'in etiketi `launcher-v*` olduğu için mobil sürüm site yapılandırmasında ayrıca tutulur.
 
 ---
 

@@ -5,6 +5,7 @@
 //! tarayıcı sekmesiyle kalıyordu. Burada `/api/health` 200 dönene kadar beklenir;
 //! zaman aşımında süreç öldürülür ve stderr çağırana verilir.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::Path;
@@ -379,7 +380,9 @@ pub fn start_and_wait(
         return Err(BackendError::NotFound(exe.display().to_string()));
     }
 
-    let mut cmd = Command::new(&exe);
+    // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut) — backend KONSOL-altsistem bir
+    // exe'dir; pencereli launcher'dan başlatılınca Windows ona yeni konsol açardı.
+    let mut cmd = crate::platform::gizli_komut(&exe);
     cmd.arg("--port").arg(port.to_string());
     // Çalışma dizini paketin kendi kökü olmalı: PyInstaller onedir yanındaki
     // _internal/ kaynaklarını göreli çözer.
@@ -392,7 +395,10 @@ pub fn start_and_wait(
     // KENDİLİĞİNDEN katılaşır (bkz. install::backend_supports_health_nonce).
     let nonce = generate_health_nonce();
     let verify_nonce = install::backend_supports_health_nonce(install_root);
-    for (k, v) in install::backend_env(install_root, port, &nonce) {
+    // Aynı harita hem çocuğa verilir HEM DE `read_tail`e — günlük yolu çocuğun gördüğü
+    // `PEMF_DATA_DIR`/`PEMF_LOG_DIR` ile çözülsün (bkz. read_tail'deki arıza notu).
+    let cocuk_env = install::backend_env(install_root, port, &nonce);
+    for (k, v) in &cocuk_env {
         cmd.env(k, v);
     }
     // ⚠️ DEADLOCK FIX: backend'in stdout/stderr'ini pipe'layıp DRENAJLAMAMAK (eski hal) tüm servisi
@@ -405,15 +411,8 @@ pub fn start_and_wait(
     // read_tail → backend_service.log'a bakar.)
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
 
-    // Windows: launcher windowed (konsolsuz) olduğundan, KONSOL-altsistem backend exe'si spawn
-    // edilince Windows ona YENİ KONSOL açar → kullanıcıya siyah cmd penceresi görünür. CREATE_NO_WINDOW
-    // konsolu hiç açtırmaz (stdout/stderr NUL'e gittiği için ekstra pencere/pipe sorunu da olmaz).
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    // (Konsol gizleme yukarıda `platform::gizli_komut` ile uygulanır — bayrak burada TEKRAR
+    // verilmez; `creation_flags` değeri EZER, yani ikinci bir çağrı ilkini sessizce iptal ederdi.)
 
     let mut child = cmd.spawn().map_err(BackendError::Spawn)?;
 
@@ -423,7 +422,7 @@ pub fn start_and_wait(
 
     // Hazır olmadı: süreç kendi kendine mi öldü, yoksa asılı mı kaldı?
     let exited = child.try_wait().ok().flatten();
-    let tail = read_tail(&mut child);
+    let tail = read_tail(&mut child, &cocuk_env);
     let _ = child.kill();
     let _ = child.wait();
 
@@ -449,14 +448,24 @@ pub fn start_and_wait(
 /// Klinikte bu, cihazın neden açılmadığını kimsenin söyleyemediği bir durum demek. Artık
 /// backend'in GERÇEK günlüğünün son satırları hataya konur (port çakışması, eksik model, bozuk
 /// yapılandırma doğrudan görünür).
-fn read_tail(_child: &mut Child) -> String {
+fn read_tail(_child: &mut Child, backend_env: &BTreeMap<String, String>) -> String {
     let home = std::env::var_os(if cfg!(target_os = "windows") { "USERPROFILE" } else { "HOME" })
         .or_else(|| {
             std::env::var_os(if cfg!(target_os = "windows") { "HOME" } else { "USERPROFILE" })
         })
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    let log = install::backend_log_path_with(|k| std::env::var(k).ok(), &home);
+    // ⚠️ ARIZA (2026-08-11): günlük yolu launcher'ın KENDİ ortamından çözülüyordu. Ama
+    // `PEMF_DATA_DIR` yalnız ÇOCUK sürece verilir (backend_env) — launcher'ın kendi ortamında
+    // YOKTUR. Sonuç: backend `C:\ProgramData\PEMF_System\...\logs`a yazarken launcher
+    // `%APPDATA%\PEMF_GUI\logs`u okuyordu ve kullanıcıya GÜNLER ÖNCESİNE ait bayat bir günlük
+    // gösteriliyordu. Sahada bir kurulum bu yüzden teşhis edilemedi: gerçek sebep (at-rest
+    // anahtarı DB'yi açmıyor) doğru dosyaya YAZILMIŞTI ama kimse o dosyaya bakmıyordu.
+    // Çözüm: çocuğa verilen ortamı ÖNCE sor, sonra sürecin kendi ortamına düş.
+    let log = install::backend_log_path_with(
+        |k| backend_env.get(k).cloned().or_else(|| std::env::var(k).ok()),
+        &home,
+    );
     read_log_tail(&log, 20)
 }
 
@@ -624,7 +633,7 @@ pub fn open_browser(url: &str) -> io::Result<()> {
         // GÜVENLİK: `cmd /C start "" <url>` URL'yi KABUK'a verir → manifest-türevi (zehirli/MITM)
         // bir URL'deki cmd metakarakterleri (&, |, ^) ikinci komut zincirleyip RCE olur.
         // rundll32 FileProtocolHandler URL'yi TEK argüman olarak alır; hiçbir kabuk ayrıştırmaz.
-        let mut c = Command::new("rundll32.exe");
+        let mut c = crate::platform::gizli_komut("rundll32.exe");
         c.args(["url.dll,FileProtocolHandler", url]);
         c
     };
@@ -718,6 +727,43 @@ mod tests {
     fn seans_yokken_false_doner() {
         let p = saglik_sunucusu(r#"{"service":"PEMF-Vet","sessionActive":false}"#);
         assert_eq!(session_active(p), Some(false));
+    }
+
+    /// SAHA ARIZASI 2026-08-11 — TEŞHİS EDİLEMEZ BAŞLATMA HATASI.
+    ///
+    /// Backend `PEMF_DATA_DIR` ile makine-geneli köke (`C:\ProgramData\PEMF_System`) yazar; bu
+    /// değişkeni ÇOCUĞA yalnız launcher verir, launcher'ın KENDİ ortamında yoktur. `read_tail`
+    /// yolu kendi ortamından çözdüğü için `%APPDATA%\PEMF_GUI\logs`a bakıyordu → kullanıcıya
+    /// GÜNLER ÖNCESİNE ait bayat günlük gösterildi; gerçek sebep doğru dosyaya yazılmıştı ama
+    /// kimse oraya bakmıyordu. Günlük yolu, çocuğun GÖRDÜĞÜ ortamla çözülmeli.
+    #[test]
+    fn KRITIK_gunluk_yolu_COCUGUN_ortamiyla_cozulur() {
+        let cocuk = tempfile::tempdir().unwrap();
+        let launcher_ev = tempfile::tempdir().unwrap();
+
+        // Çocuğa verilen kök: backend GERÇEKTEN buraya yazar.
+        let mut env = BTreeMap::new();
+        env.insert(
+            install::ENV_DATA_DIR.to_string(),
+            cocuk.path().to_string_lossy().into_owned(),
+        );
+
+        let dogru = install::backend_log_path_with(
+            |k| env.get(k).cloned().or_else(|| std::env::var(k).ok()),
+            launcher_ev.path(),
+        );
+        // Launcher'ın kendi ortamı (PEMF_DATA_DIR YOK) ile çözülen — eski, YANLIŞ yol.
+        let yanlis = install::backend_log_path_with(|_| None, launcher_ev.path());
+
+        assert!(
+            dogru.starts_with(cocuk.path()),
+            "gunluk yolu cocugun PEMF_DATA_DIR'ini ONURLANDIRMIYOR: {dogru:?}"
+        );
+        assert_ne!(
+            dogru, yanlis,
+            "cocuk-ortami ile launcher-ortami AYNI yolu verdi → arıza yeniden uretilemiyor, \
+             test gercegi olcmuyor"
+        );
     }
 
     /// DENETİM 2026-08-04: `read_tail` `child.stderr`'i okuyordu ama stderr `Stdio::null()`

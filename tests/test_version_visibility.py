@@ -17,6 +17,7 @@ geçirir; kısaltılmışı "hangi ikili" sorusunu tek başına cevaplar.
 
 import json
 import os
+import re
 from pathlib import Path
 
 os.environ.pop("PEMF_SIMULATE", None)
@@ -158,6 +159,29 @@ def test_KRITIK_CHANGELOG_guncel_surumleri_ICERIR():
     assert not eksik, (
         f"versions.json'daki surum(ler) CHANGELOG'da gecmiyor: {eksik} — "
         "surum yukseltildiyse degisiklik kaydi da yazilmali."
+    )
+
+
+def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
+    """Sitedeki APK indirme adı (`PEMF_Vet_Mobil-<sürüm>.apk`) gerçek mobil sürümle eşleşmeli.
+
+    ⚠️ ANDROID'DE ÇIPA YOK. Windows kurulum dosyasının adı `windowsTag`ten TÜRETİLİR, yani
+    etiket yükselince ad kendiliğinden doğrudur. Android'in yayın etiketi `launcher-v*` olduğu
+    için mobil sürüm site yapılandırmasında AYRICA tutulur — ve elle tutulan her değer ayrışır:
+    APK yükseltilip `androidVersion` unutulursa site var olmayan bir dosyaya link verir ve
+    indirme butonu **sessizce 404** olur.
+
+    (Bu boşluk mutasyon testiyle bulundu: `androidVersion`ı uydurma bir sürüme çevirmek site
+    testlerinin HİÇBİRİNİ kırmıyordu.)"""
+    cfg = KOK / "pemf-vet-web" / "src" / "config.ts"
+    if not cfg.exists():
+        pytest.skip("site kaynağı yok")
+    beklenen = json.loads((KOK / "versions.json").read_text(encoding="utf-8"))["mobile"]["name"]
+    m = re.search(r"androidVersion:\s*'([^']+)'", cfg.read_text(encoding="utf-8"))
+    assert m, "site config'inde androidVersion bulunamadı"
+    assert m.group(1) == beklenen, (
+        f"site APK sürümü ({m.group(1)}) versions.json ile ayrışmış ({beklenen}) → "
+        f"indirme bağlantısı var olmayan PEMF_Vet_Mobil-{m.group(1)}.apk dosyasına gider (404)"
     )
 
 

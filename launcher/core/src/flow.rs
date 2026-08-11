@@ -175,10 +175,45 @@ pub fn ensure_package(
         // Bozuk dosyayı BIRAKMA: kalırsa sonraki kurulum onu "önbellek" sanıp
         // aynı hataya tekrar düşer.
         let _ = fs::remove_file(&dest);
+
+        // ⚠️ SAHA ŞİKÂYETİ 2026-08-11: kullanıcı güncellemede
+        //   "SHA256 UYUŞMADI — dosya bozuk ya da değiştirilmiş"
+        // gördü; oysa hem yayındaki paket hem sonradan inen kopya DOĞRUYDU (ikisi de
+        // manifest sha'sıyla birebir). Yani bozulma İNDİRME sırasında oluşan geçici bir
+        // durumdu — ama yukarıdaki 6-denemeli retry YALNIZ ağ hatalarını kapsıyor;
+        // "indi ama sha tutmadı" hâli döngünün DIŞINDA olduğu için kullanıcıya hemen
+        // hata olarak çıkıyor ve elle tekrar denemesi gerekiyordu.
+        //
+        // Mesaj ayrıca gereksiz korkutucu: metin "değiştirilmiş" diyerek bir güvenlik
+        // olayı ima ediyor, oysa en olası sebep yarım/bayat indirmedir.
+        //
+        // ÇÖZÜM: sha uyuşmazlığında SIFIRDAN bir kez daha indir (`.part` da silinir, yani
+        // Range ile devam DEĞİL, tam yeniden indirme). İkinci kez de tutmazsa hata gerçektir
+        // ve yukarı çıkar — güvenlik doğrulaması ZAYIFLATILMAZ, yalnız bir kez telafi edilir.
+        if temiz_yeniden_indirilebilir(control) {
+            on(Progress::Reconnecting { what: label.to_string(), attempt: 1, max: 1 });
+            let _ = fs::remove_file(net::part_path(&dest, &pkg.sha256));
+            let mut cb = |done, total| {
+                on(Progress::Downloading { what: label.to_string(), done, total });
+            };
+            net::download_to_file(&pkg.url, &dest, pkg.size, &pkg.sha256, &mut cb, control)?;
+            on(Progress::Verifying { what: label.to_string() });
+            if let Err(e2) = verify::verify_file(&dest, &pkg.sha256) {
+                let _ = fs::remove_file(&dest);
+                return Err(e2.into());
+            }
+            return Ok(dest);
+        }
         return Err(e.into());
     }
     Ok(dest)
 }
+
+/// Kullanıcı duraklatmadı/iptal etmediyse temiz yeniden-indirme yapılabilir.
+fn temiz_yeniden_indirilebilir(control: &dyn Fn() -> net::Control) -> bool {
+    matches!(control(), net::Control::Continue)
+}
+
 
 /// manifest → base + SEÇİLEN PROFİLLER → kurulum (backend BAŞLATMAZ). Kurulan profiller kaydedilir.
 ///
@@ -462,6 +497,20 @@ impl GeriAlmaBilgisi {
 ///
 /// Sağlık kapısından (backend'i başlatma) ÖNCE gelir — bozuk bir ağacı çalıştırmaya kalkmadan,
 /// ucuz bir kontrolle yakalar. Zip açımı "başarılı" dönse bile eksik/yanlış katman burada patlar.
+/// Kurulum GERÇEKTEN çalıştırılabilir mi? (exe + `_internal` + web arayüzü)
+///
+/// ⚠️ ARIZA (2026-08-11, kesinti incelemesi): `detect_environment` kurulumu YALNIZ backend
+/// exe'sinin varlığıyla anlıyordu. Ama `install_profiles` ATOMİK DEĞİLDİR — canlı `runtime`'ı
+/// silip yerine açar (güncelleme yolundaki `runtime.new` + takas yalnız GÜNCELLEMEDE var).
+/// Açma sırasında kapanma olursa exe yazılmış ama `_internal/frontend` yarım kalmış olabilir;
+/// client "Hazır!" der, kullanıcı Başlat'a basar ve backend anlaşılmaz bir hatayla düşer.
+///
+/// Yapısal kontrolle "kurulu değil" demek, "kurulu ama açılmıyor"dan İYİDİR: kurulum ekranı
+/// çıkar ve kullanıcı tek tıkla toparlar (paketler önbellekte, yeniden indirme yok).
+pub fn kurulum_saglam_mi(install_root: &Path) -> bool {
+    agac_yapisal_gecerli_mi(&install::runtime_dir(install_root))
+}
+
 fn agac_yapisal_gecerli_mi(rt: &Path) -> bool {
     let kok = rt.join("PEMF_Backend");
     kok.join(crate::platform::backend_exe_name()).is_file()
@@ -486,6 +535,43 @@ fn atomik_takas(install_root: &Path) -> Result<(), FlowError> {
         return Err(e.into());
     }
     Ok(())
+}
+
+/// YARIM KALAN TAKASI KURTAR — açılışta, her şeyden önce çağrılır.
+///
+/// ⚠️ ARIZA (2026-08-11, "kurulum/güncelleme esnasında kapanma" incelemesi):
+/// `atomik_takas` iki `rename` yapar — `runtime`→`runtime.old`, sonra `runtime.new`→`runtime`.
+/// İKİSİNİN ARASINDA süreç ölürse (kullanıcı pencereyi kapattı, elektrik gitti, görev
+/// yöneticisinden sonlandırıldı) diskte `runtime` **HİÇ YOKTUR**; çalışan eski sürüm
+/// `runtime.old`'da sapasağlam durur.
+///
+/// Ama `detect_environment` kurulumu `runtime/PEMF_Backend/…` var mı diye anlar → client
+/// **"kurulu değil"** der. Kullanıcı çalışan bir kurulumu olduğu hâlde sıfırdan kurulum
+/// ekranıyla karşılaşır ve sağlam `runtime.old` sessizce yetim kalır.
+///
+/// KURTARMA SIRASI — `runtime.old` ÖNCE:
+///   `runtime.old` sağlık kapısını GEÇMİŞ, çalıştığı KANITLANMIŞ sürümdür. `runtime.new` ise
+///   hiç doğrulanmadı. Yarıda kalan güncellemeyi "tamamlamak" doğrulanmamış bir sürümü sessizce
+///   canlıya almak olurdu. Eskiye dönülür; güncelleme bir sonraki açılışta yeniden denenir
+///   (paketler önbellekte, yeniden indirme YOK).
+///
+/// Döner: kurtarma yapıldıysa `true`.
+pub fn yarim_takasi_kurtar(install_root: &Path) -> bool {
+    let rt = install::runtime_dir(install_root);
+    if rt.exists() {
+        return false; // takas ya hiç başlamadı ya da tamamlandı
+    }
+    let eski = install::runtime_old_dir(install_root);
+    if eski.is_dir() && agac_yapisal_gecerli_mi(&eski) && fs::rename(&eski, &rt).is_ok() {
+        return true;
+    }
+    // Son çare: eski yok/bozuk ama yeni hazır ve YAPISAL olarak geçerli → onu al. Doğrulanmamış
+    // olması, kliniği runtime'sız bırakmaktan iyidir (alternatif: 1,4 GB yeniden kurulum).
+    let yeni = install::runtime_new_dir(install_root);
+    if yeni.is_dir() && agac_yapisal_gecerli_mi(&yeni) && fs::rename(&yeni, &rt).is_ok() {
+        return true;
+    }
+    false
 }
 
 /// Sağlık kapısı GEÇİLDİ → yedekleri sil ve paket kimliklerini kaydet.

@@ -10,7 +10,7 @@
 
 use std::fs;
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// Bağlantı/okuma zaman aşımları: slowloris/asılı-uç indirmeyi süresiz askıya alamasın.
@@ -283,6 +283,20 @@ pub fn validate_url(url: &str) -> Result<String, NetError> {
     Ok(host)
 }
 
+/// Yarım indirmenin (`.part`) yolu — ad BEKLENEN SHA'ya bağlıdır (bkz. `download_to_file`).
+///
+/// ⚠️ TEK KAYNAK. Bu hesap `flow.rs`te de gerekiyor (sha uyuşmazlığından sonra temiz yeniden
+/// indirme yaparken `.part` SİLİNMELİ; kalırsa "temiz" deneme yine Range ile aynı bozuk
+/// baytların üzerine ekler ve kaçınılmaz olarak yine başarısız olur). İki yerde ayrı ayrı
+/// hesaplanırsa sessizce ayrışır: kısa sha kolunda adlar farklı çıkar ve YANLIŞ dosya silinir.
+pub fn part_path(dest: &Path, expected_sha: &str) -> PathBuf {
+    if expected_sha.len() >= 12 {
+        dest.with_extension(format!("{}.part", expected_sha[..12].to_ascii_lowercase()))
+    } else {
+        dest.with_extension("part")
+    }
+}
+
 /// `Content-Range: bytes <start>-<end>/<total>` değerindeki BAŞLANGIÇ ofsetini çıkar.
 /// Biçim tanınmazsa `None` — çağıran bunu "doğrulanamadı" sayıp devam ettirmez (fail-closed).
 /// (Saf fonksiyon: `ureq::Response` kurmadan birim-test edilebilsin diye ayrıldı.)
@@ -351,11 +365,7 @@ pub fn download_to_file(
             }
         }
     }
-    let part = if expected_sha.len() >= 12 {
-        dest.with_extension(format!("{}.part", expected_sha[..12].to_ascii_lowercase()))
-    } else {
-        dest.with_extension("part")
-    };
+    let part = part_path(dest, expected_sha);
 
     // Baştan Cancel istenmişse: yarım .part'ı temizle, hemen dön.
     if control() == Control::Cancel {

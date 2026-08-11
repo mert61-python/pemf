@@ -291,10 +291,20 @@ fn home_dir() -> std::path::PathBuf {
 #[tauri::command]
 fn detect_environment() -> Environment {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ HER ŞEYDEN ÖNCE: yarım kalan çalışma-zamanı takasını kurtar. Güncellemenin iki `rename`i
+    // arasında kapanma olduysa `runtime` diskte YOKTUR ve aşağıdaki `already_installed` kontrolü
+    // "kurulu değil" der — kullanıcı, çalışan bir kurulumu olduğu hâlde sıfırdan kurulum ekranı
+    // görür. (bkz. flow::yarim_takasi_kurtar)
+    if pemf_launcher_core::flow::yarim_takasi_kurtar(&root) {
+        eprintln!("[kurtarma] yarim kalan calisma-zamani takasi onarildi");
+    }
     Environment {
         platform: platform::current().to_string(),
         launcher_version: env!("CARGO_PKG_VERSION").to_string(),
-        already_installed: install::backend_path(&root).exists(),
+        // ⚠️ YALNIZ exe'ye BAKMA (bkz. flow::kurulum_saglam_mi): `install_profiles` atomik
+        // değildir; açma sırasında kapanma olursa exe yazılmış ama `_internal/frontend` yarım
+        // kalmış olabilir → client "Hazır!" der, Başlat anlaşılmaz hatayla düşer.
+        already_installed: pemf_launcher_core::flow::kurulum_saglam_mi(&root),
         installed_profiles: install::read_installed_profiles(&root),
         pending_profiles: install::read_pending(&root),
         install_root: root.to_string_lossy().into_owned(),
@@ -415,6 +425,11 @@ async fn install_and_launch(
     profiles: Vec<String>,
 ) -> Result<serde_json::Value, String> {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ EŞZAMANLI CLIENT KAPISI — `stop_tracked_backend`ten ÖNCE. İkinci bir client penceresi
+    // açıksa ve kurulum yapıyorsa, buradan devam etmek onun `runtime.new`ini ezer VE aşağıdaki
+    // durdurma onun backend'ini (muhtemelen SÜREN SEANSI) öldürür. Kilit alınamıyorsa hiçbir
+    // şeye dokunmadan dönülür. (bkz. install::kurulum_kilidi_al)
+    let _kilit = install::kurulum_kilidi_al(&root)?;
     // Yeniden-kurulum: çalışan backend varsa ÖNCE güvenle durdur (exe kilidi + port çakışması).
     stop_tracked_backend(&state, &root);
     // ⚠️ SIRA ÖNEMLİ (denetim 2026-08-04): migrasyon `write_pending`'DEN ÖNCE olmalı.
@@ -545,6 +560,9 @@ async fn repair(
     manifest_raw: String,
 ) -> Result<serde_json::Value, String> {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ EŞZAMANLI CLIENT KAPISI (bkz. install_and_launch'taki not): onarım da backend'i öldürüp
+    // dosyaları değiştirir; ikinci bir pencere kurulum yaparken buna girmek ikisini de bozar.
+    let _kilit = install::kurulum_kilidi_al(&root)?;
     // ⚠️ DENETİM 2026-08-09 (ENGEL) — ONAR'IN AKTİF SEANS KAPISI YOKTU (hiçbir platformda).
     // `repair` de tıpkı `apply_runtime_update` gibi backend'i öldürüp dosyalarını değiştirir; yani
     // hastanın üzerinde süren bir tedaviyi kesebilirdi. Üstelik "Onar" düğmesi kullanıcıya her
@@ -796,6 +814,9 @@ enum GuncellemeSonucu {
 #[tauri::command]
 async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ EŞZAMANLI CLIENT KAPISI: diğer pencere kurulum yaparken kaldırmaya başlamak, yarı
+    // kurulmuş bir ağacı silmeye çalışmak demektir (dosya kilitleri + yarım kalan artıklar).
+    let _kilit = install::kurulum_kilidi_al(&root)?;
     // Süreç + port'u kilitten ATOMİK al (state.proc `Send` değil → spawn_blocking'e taşınamaz;
     // durdurma işini burada kendi thread'imizde yapıp SONUCU bekliyoruz).
     let tracked = state.proc.lock().unwrap().take();
@@ -1360,7 +1381,9 @@ fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
         };
         let arg = format!(
             "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden              -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}'");
-        let cikti = std::process::Command::new("powershell")
+        // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut). Yükseltilen süreç zaten
+        // `-WindowStyle Hidden`; gizlenmesi gereken BAŞLATAN kabuktur.
+        let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
             .output()
             .map_err(|e| format!("Yükseltme başlatılamadı: {e}"))?;
@@ -1401,7 +1424,9 @@ fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
             $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
             $d.Description = 'Yedeklerin kopyalanacagi harici disk / ag paylasimi'; \
             if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }";
-        let o = std::process::Command::new("powershell")
+        // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut). Açılan klasör-seçici bir
+        // WinForms diyaloğudur; onu başlatan kabuğun görünmesi gerekmez.
+        let o = pemf_launcher_core::platform::gizli_komut("powershell")
             .args(["-NoProfile", "-STA", "-Command", betik])
             .output()
             .map_err(|e| format!("Klasör seçici açılamadı: {e}"))?;

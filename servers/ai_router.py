@@ -1922,7 +1922,6 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
     delta²) → EfficientNet_Lite0 ONNX → 10 sınıf (Angry..Warning) + top-3. Foto/CSV/form
     DEĞİL — SES. `/api/ai/sound` prefix'iyle auth-muaf.
     """
-    import subprocess
     import tempfile
 
     tmp_in = None
@@ -1970,7 +1969,7 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
         # Audit P2: ffmpeg sertleştir — -protocol_whitelist file (HLS/concat SSRF engelle), -nostdin,
         # -t 30 (girdi okuma süresi cap), -fs (çıktı WAV boyut cap) → uzun/kötücül medya disk-dolumu+SSRF keser.
         proc = await asyncio.to_thread(
-            lambda: subprocess.run(
+            lambda: __import__('utils.gizli_surec', fromlist=['calistir']).calistir(
                 [
                     ff,
                     "-nostdin",

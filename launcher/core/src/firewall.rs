@@ -75,13 +75,14 @@ pub fn ekleme_betigi(backend_exe: &Path) -> String {
 /// Kurallar var mı? Okunamazsa `Acik` (fail-open — bkz. modül notu).
 #[cfg(windows)]
 pub fn durum() -> Durum {
-    use std::process::Command;
     let betik = format!(
         "$a = Get-NetFirewallRule -DisplayName '{api}' -ErrorAction SilentlyContinue; \
          $b = Get-NetFirewallRule -DisplayName '{kesif}' -ErrorAction SilentlyContinue; \
          if ($a -and $b) {{ 'VAR' }} else {{ 'YOK' }}",
         api = KURAL_API, kesif = KURAL_KESIF);
-    let cikti = Command::new("powershell")
+    // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): bu denetim launcher AÇILIŞINDA
+    // koşar; çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
+    let cikti = crate::platform::gizli_komut("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &betik])
         .output();
     match cikti {

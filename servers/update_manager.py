@@ -484,7 +484,11 @@ def _verify_authenticode(path: Path) -> str:
         return "unknown"
     try:
         ps = "$s=(Get-AuthenticodeSignature -LiteralPath '%s').Status; Write-Output $s" % str(path).replace("'", "''")
-        out = subprocess.run(
+        # Konsol penceresi AÇMADAN (bkz. utils.gizli_surec): bu imza denetimi GÜNCELLEME
+        # sırasında koşar; bayraksız `subprocess.run` kullanıcıya siyah pencere gösteriyordu.
+        from utils.gizli_surec import calistir as _calistir
+
+        out = _calistir(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
             capture_output=True,
             text=True,
@@ -579,9 +583,11 @@ def apply_update() -> dict:
                 "error": "İndirme sırasında tedavi başladı — güncelleme iptal edildi (seans bitince tekrar deneyin).",
             }
         # Detached: installer servisi (bu süreci) durdursa da hayatta kalır → değiştir → yeniden başlat.
-        flags = 0
-        if os.name == "nt":
-            flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        # Konsol penceresi AÇMADAN + AYRIK (bkz. utils.gizli_surec.bayraklar): installer bu
+        # süreci durdursa da yaşamalı. Eskiden CREATE_NO_WINDOW verilmiyordu.
+        from utils.gizli_surec import bayraklar as _bayraklar
+
+        flags = _bayraklar(ayrik=True)
         subprocess.Popen(
             [str(dest), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"],
             creationflags=flags,
@@ -683,9 +689,11 @@ def rollback() -> dict:
                 "ok": False,
                 "error": "İndirme sırasında tedavi başladı — rollback iptal edildi (seans bitince tekrar deneyin).",
             }
-        flags = 0
-        if os.name == "nt":
-            flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        # Konsol penceresi AÇMADAN + AYRIK (bkz. utils.gizli_surec.bayraklar): installer bu
+        # süreci durdursa da yaşamalı. Eskiden CREATE_NO_WINDOW verilmiyordu.
+        from utils.gizli_surec import bayraklar as _bayraklar
+
+        flags = _bayraklar(ayrik=True)
         subprocess.Popen(
             [str(dest), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL"],
             creationflags=flags,

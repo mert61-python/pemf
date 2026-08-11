@@ -73,7 +73,18 @@ function Get-PemfFootprint {
         FirewallRx  = 'pemf|mosquitto|cloudflared'    # eski adlar (pemf_gui/PEMF_Service_Port_*/cloudflared) dahil
         EnvRx       = '^PEMF_'                          # HKLM Session Manager Environment (Makine kapsamı)
         Registry    = @(
-            @{ Path = 'HKLM:\SOFTWARE\PEMF Medical Technologies'; Owner = 'shared' }  # üretici (backend+gui)
+            # ⚠️ İKİ ÜRETİCİ ADI DA TARANIR. Inno kurulumu `[Registry]`ye YAYINCI ADIYLA yazar
+            # (SOFTWARE\<MyAppPublisher>\PEMF Backend). Ünvan 2026-08-11'de "PEMF Medical
+            # Technologies" -> "İBİA Teknoloji Ltd. Şti." olarak düzeltildi; ESKİ ad LİSTEDE
+            # KALMALI, yoksa o adla kurulmuş makinelerde kaldırma anahtarı geride kalır.
+            @{ Path = 'HKLM:\SOFTWARE\İBİA Teknoloji Ltd. Şti.';  Owner = 'shared' }  # üretici (güncel)
+            @{ Path = 'HKLM:\SOFTWARE\PEMF Medical Technologies'; Owner = 'shared' }  # üretici (ESKİ ad — silme)
+            # Client (NSIS) üretici anahtarı: `Software\<MANUFACTURER>\<ürün>` → kurulum yolu.
+            # ⚠️ 2026-08-11 öncesi `bundle.publisher` TANIMSIZDI; Tauri kimliğin ikinci parçasına
+            # düşüp `pemfmedical` yazıyordu. Ünvan tanımlanınca yol DEĞİŞTİ; eski anahtar kaldırma
+            # sırasında artık eşleşmez ve GERİDE KALIR — bu yüzden ikisi de taranır.
+            @{ Path = 'HKCU:\Software\İBİA Teknoloji Ltd. Şti.';  Owner = 'client' }  # client üretici (güncel)
+            @{ Path = 'HKCU:\Software\pemfmedical';               Owner = 'client' }  # client üretici (ESKİ — yetim)
             @{ Path = 'HKCU:\Software\vpemf';                     Owner = 'client' }  # eski client kalıntısı
         )
         Credentials = @('fernet_key@PEMF_GUI', 'sqlcipher_key@PEMF_GUI', 'PEMF_GUI', 'api_token@PEMF_GUI')  # KVKK

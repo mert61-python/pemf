@@ -121,7 +121,9 @@ pub fn dizin_yazilabilir_mi(dir: &Path) -> bool {
 /// Başarısız olursa sessizce geçilir: `dizin_yazilabilir_mi` kapısı zaten koruyor.
 #[cfg(windows)]
 fn acl_ver(dir: &Path) {
-    let _ = std::process::Command::new("icacls")
+    // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): kurulum/güncelleme akışında koşar;
+    // çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
+    let _ = crate::platform::gizli_komut("icacls")
         .arg(dir)
         .args(["/grant", "*S-1-5-32-545:(OI)(CI)M", "/T", "/C", "/Q"])
         .output();
@@ -246,6 +248,64 @@ pub fn runtime_dir(install_root: &Path) -> PathBuf {
 // sürüm açılıyor ama ÇALIŞMIYORSA geri dönüş yolu yoktu.
 // Yeni akış: `runtime.new`'e kur → takas → backend'i başlat (sağlık kapısı) → başarılıysa
 // `runtime.old` sil, başarısızsa geri al.
+
+// ── KURULUM KİLİDİ (eşzamanlı client) ────────────────────────────────────────────────────────
+//
+// ⚠️ ARIZA (2026-08-11, "kurulum/güncelleme esnasında kapanma" incelemesi): client'ın TEK-ÖRNEK
+// koruması YOK. Kullanıcı simgeye iki kez tıklarsa (ya da biri açıkken kısayoldan tekrar açarsa)
+// İKİ client aynı anda çalışır ve ikisi de:
+//   * AYNI `runtime.new` dizinine paket açar → birbirinin dosyalarını ezer, ağaç bozulur;
+//   * kurulum öncesi `taskkill /IM PEMF_Backend.exe` çalıştırır → DİĞERİNİN backend'ini,
+//     yani muhtemelen SÜREN BİR SEANSI öldürür (bobinler E-stop ile güvenle durur ama seans gider);
+//   * takası aynı anda yapar → `runtime`/`runtime.old` yarış hâlinde.
+//
+// ÇÖZÜM: işletim sisteminin DOSYA KİLİDİ. Kilit dosyası süreç boyunca AÇIK tutulur ve
+// paylaşımsız (`share_mode(0)`) açılır; ikinci süreç açamaz. Süreç ölürse Windows tutamağı
+// KENDİ kapatır → **bayat kilit imkânsız**. (PID yazıp canlılık sorgulamak, çöken kurulumdan
+// sonra kliniği kalıcı kilitli bırakırdı.)
+
+/// Tutulduğu sürece başka bir client kurulum/onarım/kaldırma yapamaz. `Drop` ile bırakılır.
+#[derive(Debug)]
+pub struct KurulumKilidi {
+    _dosya: std::fs::File,
+}
+
+/// Kilit dosyasının yolu — kurulum kökünün **DIŞINDA**, geçici dizinde.
+///
+/// ⚠️ KÖKÜN İÇİNDE OLAMAZ. `remove_install` bütün kökü `remove_dir_all` ile siler; Windows
+/// AÇIK tutamağı olan bir dosyayı silmeye izin vermez → kaldırma başarısız olur ve kullanıcıya
+/// yarım silinmiş bir kurulum kalır. (İlk yazımda kilit kökün içindeydi; bu kusur kaldırma
+/// akışı gözden geçirilirken yakalandı.)
+///
+/// Ad, kurulum kökünden TÜRETİLİR: farklı kökler (ör. taşınabilir kurulum) birbirini kilitlemez.
+fn kilit_yolu(install_root: &Path) -> PathBuf {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a
+    for b in install_root.to_string_lossy().to_lowercase().bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x1000_0000_01b3);
+    }
+    std::env::temp_dir().join(format!("pemf-kurulum-{h:016x}.lock"))
+}
+
+/// Kurulum kilidini AL. Başkası tutuyorsa `Err(mesaj)` — çağıran kullanıcıya göstermeli.
+pub fn kurulum_kilidi_al(install_root: &Path) -> Result<KurulumKilidi, String> {
+    let _ = std::fs::create_dir_all(install_root);
+    let yol = kilit_yolu(install_root);
+    let mut secenek = std::fs::OpenOptions::new();
+    secenek.create(true).write(true).truncate(false);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        secenek.share_mode(0); // hiç paylaşma → ikinci açış "sharing violation"
+    }
+    match secenek.open(&yol) {
+        Ok(f) => Ok(KurulumKilidi { _dosya: f }),
+        Err(e) => Err(format!(
+            "Başka bir PEMF Vet Client penceresi kurulum/güncelleme yapıyor. \
+             Onun bitmesini bekleyin ya da diğer pencereyi kapatın. ({e})"
+        )),
+    }
+}
 
 /// Yeni sürümün hazırlandığı yer (takas edilene kadar çalışan kuruluma DOKUNULMAZ).
 pub fn runtime_new_dir(install_root: &Path) -> PathBuf {

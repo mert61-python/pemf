@@ -34,13 +34,57 @@ def get_icon_path(icon_name):
 
 #: Kullanıcı-başına eski konumdan makine-geneline taşınacak dosyalar.
 #
-# ⚠️ YALNIZ tıbbi kayıt + onu açan anahtar. Cihaz kimliği/eşleştirme dosyaları BİLEREK dışarıda:
-# onlar makineye özgüdür ve kopyalanırsa iki kayıt aynı device_id'yi paylaşır.
+# ⚠️ YALNIZ tıbbi kayıt. Cihaz kimliği/eşleştirme dosyaları BİLEREK dışarıda: onlar makineye
+# özgüdür ve kopyalanırsa iki kayıt aynı device_id'yi paylaşır. Sır dosyası (`pemf_secrets.json`)
+# da AYNI sebeple dışarıdadır — içinde `device_id`/`pairing_code`/`device_registry_secret` var.
 _GOC_DOSYALARI = (
     "pemf_treatment_history.db",
     "pemf_patients.db",
     "auth_users.db",
 )
+
+#: Göç listesinden SQLCipher ile şifreli olanlar — kopyalanmadan ÖNCE hedefin anahtarıyla
+#: açılabildikleri DOĞRULANIR (bkz. `_hedef_anahtariyla_acilir_mi`).
+_GOC_SIFRELI = frozenset({"pemf_treatment_history.db", "pemf_patients.db"})
+
+
+def _hedef_anahtariyla_acilir_mi(dosya: Path, hedef: Path) -> bool:
+    """`dosya`, HEDEF kökün at-rest anahtarıyla açılabiliyor mu?
+
+    ⚠️ SAHA ARIZASI 2026-08-11 — SONSUZ TUĞLA DÖNGÜSÜ. Bu göç, SQLCipher ile şifreli DB'leri
+    kopyalıyordu ama onları açan anahtar `pemf_secrets.json`da durur ve o dosya (haklı olarak,
+    cihaz kimliği içerdiği için) GÖÇMEZ. Hedef kökün KENDİ sır dosyası varsa anahtarlar farklıdır
+    → kopyalanan DB KALICI OKUNAMAZ → backend açılışta ölür. Dosya kenara alınsa bile bir sonraki
+    açılışta `varis.exists()` yine False olur ve AYNI bozuk dosya TEKRAR kopyalanır: cihaz bir
+    daha hiç açılmaz.
+
+    Bu yüzden şifreli dosya, ancak hedefin anahtarıyla GERÇEKTEN açılıyorsa kopyalanır.
+    Açılmıyorsa kaynak eski konumunda DURUR (veri kaybı yok) ve durum loglanır.
+    """
+    try:
+        from database.sqlcipher_util import get_sqlcipher_key, import_sqlcipher
+
+        sqlcipher = import_sqlcipher()
+        if sqlcipher is None:
+            return True  # şifreleme yok → düz-metin DB; göç zaten anlamlı
+        with open(dosya, "rb") as fh:
+            if fh.read(16).startswith(b"SQLite format 3"):
+                return True  # düz-metin: anahtara bağlı değil
+        anahtar = get_sqlcipher_key(hedef)
+        if not anahtar:
+            return False  # şifreli ama hedefte anahtar YOK → asla açılamaz
+        conn = sqlcipher.connect(str(dosya))
+        try:
+            conn.execute("PRAGMA key='{}'".format(anahtar.replace("'", "''")))
+            conn.execute("SELECT count(*) FROM sqlite_master")
+            return True
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception:
+        return False
 
 
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
@@ -72,6 +116,18 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
         for ad in _GOC_DOSYALARI:
             kaynak, varis = eski / ad, hedef / ad
             if not kaynak.is_file() or varis.exists():
+                continue
+            # ⚠️ Şifreli DB'yi HEDEFİN anahtarıyla açamıyorsak KOPYALAMA (bkz.
+            # `_hedef_anahtariyla_acilir_mi`): kopyalamak cihazı sonsuz açılış-hatası
+            # döngüsüne sokar ve kenara alma bile kurtarmaz.
+            if ad in _GOC_SIFRELI and not _hedef_anahtariyla_acilir_mi(kaynak, hedef):
+                logging.getLogger(__name__).error(
+                    "VERİ GÖÇÜ ATLANDI: %s hedef kökün at-rest anahtarıyla AÇILAMIYOR "
+                    "(sır dosyası göçmez, anahtarlar farklı). Kopyalansaydı cihaz her açılışta "
+                    "kırılırdı. Kaynak eski konumda DURUYOR: %s",
+                    ad,
+                    kaynak,
+                )
                 continue
             try:
                 shutil.copy2(kaynak, varis)

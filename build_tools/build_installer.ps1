@@ -72,11 +72,11 @@ VSVersionInfo(
       [
       StringTable(
         u'040904B0',
-        [StringStruct(u'CompanyName', u'PEMF Medical Technologies'),
+        [StringStruct(u'CompanyName', u'İBİA Teknoloji Ltd. Şti.'),
         StringStruct(u'FileDescription', u'PEMF Therapeutic Device Control Software'),
         StringStruct(u'FileVersion', u'$fileVersion'),
         StringStruct(u'InternalName', u'PEMF_Backend'),
-        StringStruct(u'LegalCopyright', u'Copyright (C) 2026 PEMF Medical Technologies. All rights reserved.'),
+        StringStruct(u'LegalCopyright', u'Copyright (C) 2026 İBİA Teknoloji Ltd. Şti. All rights reserved.'),
         StringStruct(u'OriginalFilename', u'PEMF_Backend.exe'),
         StringStruct(u'ProductName', u'PEMF Control Suite'),
         StringStruct(u'ProductVersion', u'$fileVersion')])

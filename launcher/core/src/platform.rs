@@ -6,6 +6,35 @@
 //! (bkz. pemf-app-packages/publish.ps1 içindeki uyarı). Burada eşleşme bulunamazsa
 //! HATA döner; yanlış paketi kurmaktansa kurulum durur.
 
+// ── SİYAH KONSOL PENCERESİ ───────────────────────────────────────────────────────────────────
+//
+// SAHA ŞİKÂYETİ (2026-08-11): "client güncellemesi için uygulamayı kapatıp geri açtığımda
+// 2 kez siyah konsol penceresi çıktı."
+//
+// SEBEP: launcher pencereli (konsolsuz) bir uygulamadır. Konsol-altsistem bir program
+// (powershell, icacls, taskkill, cmd…) böyle bir süreçten başlatılınca Windows ona **YENİ BİR
+// KONSOL** açar ve kullanıcı ekranda siyah pencerenin yanıp söndüğünü görür. `CREATE_NO_WINDOW`
+// bunu tamamen engeller.
+//
+// Backend spawn'ında bu bayrak zaten vardı ama YARDIMCI KOMUTLARDA unutulmuştu (güvenlik duvarı
+// denetimi + kurulum dizinine ACL). İkisi de "kapat-aç" akışında çalışır → tam olarak 2 pencere.
+//
+// ⚠️ Windows'ta süreç başlatan HER yer bunu kullanmalı; `Command::new` doğrudan çağrılmamalı.
+// `tests/konsol_penceresi.rs` kaynakta çıplak `Command::new` kalmadığını denetler.
+
+/// Konsol penceresi AÇMADAN çalışan bir komut. Windows dışında düz `Command`.
+pub fn gizli_komut<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    let mut c = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        /// `CREATE_NO_WINDOW` — süreç konsol penceresi almaz.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        c.creation_flags(CREATE_NO_WINDOW);
+    }
+    c
+}
+
 /// Manifest v2 `runtimes` anahtarları.
 pub const WIN_X64: &str = "win-x64";
 pub const LINUX_X64: &str = "linux-x64";

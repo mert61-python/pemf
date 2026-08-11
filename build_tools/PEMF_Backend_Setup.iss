@@ -15,9 +15,9 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.8"
-#define MyAppPublisher "PEMF Medical Technologies"
-#define MyAppURL       "https://pemf-medical.com"
+#define MyAppVersion   "1.9.9"
+#define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
+#define MyAppURL       "https://pemfvet.com"
 #define ProjectRoot    ".."
 ; BuildOutput ve ModeName komut satirindan /D ile override edilebilir:
 ;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" PEMF_Backend_Setup.iss            (device)

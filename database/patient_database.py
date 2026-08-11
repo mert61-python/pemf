@@ -33,8 +33,10 @@ except ModuleNotFoundError:
 
 # P0 audit 2026-06-28: hasta PII whole-DB SQLCipher sifrelemesi (paylasilan yardimci modul).
 from database.sqlcipher_util import (
+    anahtar_uyusmazligi_mi,
     get_sqlcipher_key,
     import_sqlcipher,
+    karantinaya_al,
     migrate_to_encrypted_if_needed,
     open_encrypted_conn,
 )
@@ -167,6 +169,17 @@ class PatientDatabase:
                     pass
                 self._local.conn = None
 
+    def _reset_thread_conn(self) -> None:
+        """Bu thread'in bağlantısını kapat + unut. Karantina ÖNCESİ zorunlu: açık bir SQLCipher
+        tutamacı dosyayı Windows'ta kilitler ve `shutil.move` PermissionError verir."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self._local.conn = None
+
     def create_backup(self, backup_path: str) -> bool:
         """Çalışan hasta DB'sinden dosya yedeği (online backup API). DB ŞİFRELİYSE yedek de AYNI
         anahtarla ŞİFRELİ olur (düz hedefe yedek PII sızdırır). audit B-7.2: PatientDB'nin yedeği yoktu."""
@@ -199,7 +212,36 @@ class PatientDatabase:
             pass
 
     def _init_database(self) -> None:
-        """SQLite şemasını oluştur + HMAC arama indeksini garanti et."""
+        """SQLite şemasını oluştur + HMAC arama indeksini garanti et.
+
+        ⚠️ ANAHTAR UYUŞMAZLIĞINDA CİHAZ TUĞLALAŞMAZ (saha hatası 2026-08-11). Kaldır-yeniden-kur
+        sonrası `patients.db` korunur ama at-rest anahtarı yenilenmişse SQLCipher dosyayı
+        açamaz; eskiden buradan fırlayan RuntimeError backend'i **çıkış kodu 1** ile öldürüyor,
+        launcher'da yalnızca günler öncesine ait bayat bir günlük görünüyordu. Artık dosya
+        kenara alınır (SİLİNMEZ) ve temiz bir DB açılır.
+
+        Karantina YALNIZ anahtar okunabildiği hâlde uymuyorsa yapılır — bkz. sqlcipher_util.
+        Anahtar hiç yoksa hata yukarı fırlar: o durumda sorun geçici olabilir ve dosyayı kenara
+        almak KURTARILABİLİR hasta verisini yetim bırakır."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                self._create_patient_schema(cursor)
+                self._ensure_search_index(cursor)
+                conn.commit()
+            return
+        except _DB_ERROR as e:
+            if not (self._cipher_key and anahtar_uyusmazligi_mi(e)):
+                raise RuntimeError(f"Database initialization failed: {e}") from e
+            self.logger.error("Hasta veritabani mevcut at-rest anahtariyla ACILAMADI (%s) → karantina denenecek.", e)
+
+        # Bozuk bağlantıyı bırak, dosyayı kenara al, sıfırdan aç.
+        self._reset_thread_conn()
+        if karantinaya_al(self.db_file, self.logger) is None:
+            raise RuntimeError(
+                "Hasta veritabani acilamadi ve karantinaya ALINAMADI (dosya kilitli olabilir). "
+                "Baska bir PEMF surecinin calismadigindan emin olup yeniden deneyin."
+            )
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -207,7 +249,7 @@ class PatientDatabase:
                 self._ensure_search_index(cursor)
                 conn.commit()
         except _DB_ERROR as e:
-            raise RuntimeError(f"Database initialization failed: {e}") from e
+            raise RuntimeError(f"Database initialization failed (karantina sonrasi): {e}") from e
 
     def _create_patient_schema(self, cursor) -> None:
         """patients + patient_search_index tabloları/indeksleri + idempotent kolon-migrasyonları."""
