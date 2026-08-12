@@ -7,11 +7,11 @@
     "frontendOta": "Frontend OTA paketi (frontend_dist.zip). Hedef: frontend_version.json. servers/update_manager.py bunu karsilastirir."
   },
 
-  "backend": "1.9.12",
-  "launcher": "1.9.25",
+  "backend": "1.9.13",
+  "launcher": "1.9.26",
   "mobile": {
-    "name": "2.3.9",
-    "androidVersionCode": 16,
+    "name": "2.3.11",
+    "androidVersionCode": 18,
     "iosBuildNumber": "6"
   },
   "frontendOta": "1.4.1"

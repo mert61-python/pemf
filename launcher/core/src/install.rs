@@ -61,6 +61,29 @@ pub const ENV_HEALTH_NONCE: &str = "PEMF_HEALTH_NONCE";
 /// sessizce şifresiz çalışmaya döner. KALDIRMAYIN.
 pub const ENV_ENCRYPT_AT_REST: &str = "PEMF_ENCRYPT_AT_REST";
 
+/// UZAKTAN ERİŞİM (Cloudflare tüneli) — farklı ağdan bağlanma.
+///
+/// ⚠️ 2026-08-12 SAHA BULGUSU — `ENV_ENCRYPT_AT_REST` ile AYNI SINIF HATA. Bu değişken
+/// `backend_env()`'de YOKTU. Servis kurulumu (`deploy/device.env` → `PEMF_ENABLE_TUNNEL=1`)
+/// onu geçiriyordu ama LAUNCHER yolu — yani siteden indirip kuran HER klinik — geçirmiyordu.
+/// Backend'de varsayılan KAPALI (`backend_service::_maybe_start_tunnel`), dolayısıyla:
+///   • tünel hiç başlamıyor → cihazın `tunnel_url`i boş,
+///   • cihaz buluta yine de kaydoluyor (`cloudRegistry: ok`, `pairingCode` dolu),
+///   • mobil, adresi olmayan kaydı eleyip **"kod/kimlikle eşleşen cihaz bulunamadı"** diyor.
+/// Kullanıcı doğru kodu defalarca giriyor ve sebebi anlayamıyordu (ölçüldü: `/api/health` →
+/// `pairingCode: MVPDDN`, `cloudRegistry: ok`, `tunnelUrl: None`).
+///
+/// Oysa mobil arayüz bunu AÇIKÇA vaat ediyor: "Farklı ağ → bir kez eşleştikten sonra cihazın
+/// buluttaki güncel adresinden otomatik bağlanır." Vaat ile davranış ayrışmıştı.
+///
+/// GÜVENLİ Mİ: tünel cihazı internete açar, evet — ama backend tüneli açarken
+/// `_force_auth_for_tunnel` ile `PEMF_REQUIRE_AUTH=1`i ZORLA etkinleştirir (fail-closed);
+/// kimliksiz donanım/hasta erişimi mümkün değildir. `cloudflared` pakete zaten bundle'lı.
+///
+/// ÇIKIŞ KAPISI: ortamda bu değişken ZATEN tanımlıysa ona dokunulmaz — internete açılmaması
+/// gereken bir kurulum `PEMF_ENABLE_TUNNEL=0` ile kapatabilir, kod değişikliği gerekmez.
+pub const ENV_ENABLE_TUNNEL: &str = "PEMF_ENABLE_TUNNEL";
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -451,6 +474,24 @@ where
 
 /// Backend süreci için ortam değişkenleri. `health_nonce` boşsa değişken hiç verilmez.
 pub fn backend_env(install_root: &Path, port: u16, health_nonce: &str) -> BTreeMap<String, String> {
+    backend_env_with(|k| std::env::var(k).ok(), install_root, port, health_nonce)
+}
+
+/// `backend_env`in test edilebilir hâli — ortam okuması ENJEKTE edilir.
+///
+/// ⚠️ Neden: tünel tercihi süreç-geneli `PEMF_ENABLE_TUNNEL`den okunuyor. Testler PARALEL
+/// koşar; biri `set_var` yapınca diğeri onu görüyor ve yanlış-kırmızı veriyordu (ilk yazımda
+/// tam olarak bu oldu). Enjeksiyonla test global duruma HİÇ dokunmaz — depoda
+/// `backend_log_path_with`/`app_data_dir_with` ile aynı desen.
+pub fn backend_env_with<F>(
+    getenv: F,
+    install_root: &Path,
+    port: u16,
+    health_nonce: &str,
+) -> BTreeMap<String, String>
+where
+    F: Fn(&str) -> Option<String> + Copy,
+{
     let mut env = BTreeMap::new();
     env.insert(
         ENV_MODELS_DIR.to_string(),
@@ -462,9 +503,18 @@ pub fn backend_env(install_root: &Path, port: u16, health_nonce: &str) -> BTreeM
     // KVKK (bkz. ENV_ENCRYPT_AT_REST): hasta verisi diske ŞİFRELİ yazılır. Bu satır olmadan
     // launcher ile kurulan klinikler düz-metin yazıyordu.
     env.insert(ENV_ENCRYPT_AT_REST.to_string(), "1".to_string());
+    // UZAKTAN ERİŞİM (bkz. ENV_ENABLE_TUNNEL): bu satır olmadan launcher ile kuran hiçbir klinik
+    // farklı ağdan bağlanamıyordu — arayüz bunu vaat ettiği hâlde. Ortamda zaten tanımlıysa
+    // DOKUNMA (çıkış kapısı: `PEMF_ENABLE_TUNNEL=0` ile kapatılabilir).
+    env.insert(
+        ENV_ENABLE_TUNNEL.to_string(),
+        getenv(ENV_ENABLE_TUNNEL)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "1".to_string()),
+    );
     // TIBBİ VERİ KÖKÜ (bkz. ENV_DATA_DIR): makine-geneli yazılabilirse oraya. Bu satır olmadan
     // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
-    if let Some(d) = cozulmus_veri_dizini(|k| std::env::var(k).ok()) {
+    if let Some(d) = cozulmus_veri_dizini(getenv) {
         env.insert(ENV_DATA_DIR.to_string(), d.to_string_lossy().into_owned());
     }
     // OFF-SITE YEDEK (bkz. ENV_BACKUP_DIR): operatör bir hedef seçtiyse geçir. Hedef o an
@@ -1150,6 +1200,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn backend_env_UZAKTAN_ERISIMI_acar() {
+        // ⚠️ SAHA BULGUSU 2026-08-12: bu satır olmadan tünel hiç başlamıyor, cihazın
+        // `tunnel_url`i boş kalıyor ve mobil "kod/kimlikle eşleşen cihaz bulunamadı" diyor —
+        // kod DOĞRU olduğu hâlde. Arayüz farklı-ağdan bağlanmayı açıkça vaat ediyor.
+        // Güvenlik: backend tüneli açarken PEMF_REQUIRE_AUTH'u ZORLA açar (fail-closed).
+        let env = backend_env_with(|_| None, Path::new("/opt/pemf"), 8123, "");
+        assert_eq!(
+            env.get(ENV_ENABLE_TUNNEL).map(String::as_str),
+            Some("1"),
+            "uzaktan erişim kapalı → farklı ağdan bağlanma ÇALIŞMAZ ve mobil kullanıcıya              yanlışlıkla 'kod hatalı' dedirtir"
+        );
+    }
+
+    #[test]
+    fn backend_env_ORTAMDAKI_tunel_tercihine_dokunmaz() {
+        // Çıkış kapısı: internete açılmaması gereken kurulum `PEMF_ENABLE_TUNNEL=0` diyebilmeli.
+        // Ortam ENJEKTE edilir → global duruma dokunulmaz, paralel testler birbirini ezmez.
+        let env = backend_env_with(
+            |k| (k == ENV_ENABLE_TUNNEL).then(|| "0".to_string()),
+            Path::new("/opt/pemf"),
+            8123,
+            "",
+        );
+        assert_eq!(
+            env.get(ENV_ENABLE_TUNNEL).map(String::as_str),
+            Some("0"),
+            "operatörün açık tercihi EZİLDİ — kapatma yolu kalmadı"
+        );
+    }
+
     /// Backend'e giden değişken kümesi BİLİNÇLİ olmalı: yeni bir değişken sessizce eklenirse
     /// (ya da biri düşerse) bu test düşer ve karar gözden geçirilir.
     #[test]
@@ -1165,6 +1246,9 @@ mod tests {
             ENV_MODELS_DIR,
             ENV_API_PORT,
             ENV_ENCRYPT_AT_REST,
+            // UZAKTAN ERİŞİM (2026-08-12): launcher bunu geçirmediği için siteden kuran hiçbir
+            // klinik farklı ağdan bağlanamıyordu; arayüz bunu vaat ediyordu. KOŞULSUZ eklenir.
+            ENV_ENABLE_TUNNEL,
             ENV_HEALTH_NONCE,
             ENV_REQUIRE_AUTH,
             // FİLO ENVANTERİ (2026-08-09, Tier 2): backend bunları bulut cihaz kaydına yazar.

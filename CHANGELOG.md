@@ -30,6 +30,80 @@ geçmiyorsa test kırılır.
 
 ---
 
+## launcher 1.9.26 · mobile 2.3.11 — 2026-08-12 (uzaktan erişim artık çalışıyor)
+
+**Etiket:** `launcher-v1.9.26` → `PEMFVetClient-Setup-1.9.26.exe` (sha `dfc96f8b1ac9`) ·
+`PEMF_Vet_Mobil-2.3.11.apk` (versionCode 18).
+
+### Farklı ağdan uzaktan bağlanma hiç çalışmıyordu
+
+**Siteden indirip kuran hiçbir klinikte** uzaktan erişim açılmıyordu. Backend'de Cloudflare
+tüneli varsayılan kapalıdır (`PEMF_ENABLE_TUNNEL`) ve **launcher onu geçirmiyordu**; servis
+kurulumu (`deploy/device.env`) geçiriyordu. Bu, hasta verisi şifrelemesinde (2026-08-08,
+`PEMF_ENCRYPT_AT_REST`) yaşanan hatanın **birebir aynısı**: bayrak servis yolunda var,
+launcher yolunda yok.
+
+Sonuç zinciri: tünel hiç başlamıyor → cihazın `tunnel_url`i boş → cihaz buluta yine de
+kaydoluyor (eşleştirme kodu görünüyor) → mobil, adresi olmayan kaydı eleyip
+**"Bu kod/kimlikle eşleşen kayıtlı cihaz bulunamadı. Kodu kontrol edin."** diyor. Kullanıcı
+doğru kodu defalarca giriyor ve sebebi anlayamıyor. Sahada ölçüldü: `/api/health` →
+`pairingCode: MVPDDN`, `cloudRegistry: ok`, `tunnelUrl: None`.
+
+Oysa mobil arayüz bunu açıkça vaat ediyordu: *"Farklı ağ → bir kez eşleştikten sonra cihazın
+buluttaki güncel adresinden otomatik bağlanır."*
+
+**Güvenlik:** tünel cihazı internete açar; backend tüneli açarken `PEMF_REQUIRE_AUTH`u
+**zorla** etkinleştirir (fail-closed) → kimliksiz donanım/hasta erişimi mümkün değildir.
+`cloudflared` pakete zaten bundle'lı. Kapatmak için `PEMF_ENABLE_TUNNEL=0` yeter (kod
+değişikliği gerekmez).
+
+### Hata mesajları artık ne yapılacağını söylüyor (mobil)
+
+Çözümleme "kayıt yok" ile "kayıt var ama adresi yok"u aynı `null`a indiriyordu. Dört durum
+ayrıldı: *kod yanlış* · *cihazda uzaktan erişim kapalı (kod doğru)* · *cihaz çevrimdışı* ·
+*buluta ulaşılamadı*. Ayrıca iki paralel çözümleme yolundan biri kaldırıldı — keşif ile
+elle-bağlanmanın farklı karar vermesi mümkündü.
+
+---
+
+## app 1.9.13 · mobile 2.3.10 — 2026-08-12 (ses analizi anında; çoklu modül)
+
+**Etiketler:** `client-app-v1.9.13` (base-app `d300d38e008b`, base `ad4fc3d69cce`,
+**base-deps `d43942b3e78b` — bu sürümde DEĞİŞTİ**, frozen backend yeniden derlendi) ·
+APK `launcher-v1.9.25` → `PEMF_Vet_Mobil-2.3.10.apk` (`519dabb298ec`, versionCode 17).
+
+### Ses analizi artık anında sonuç veriyor
+
+Kedi-sesi modeli, diğerlerinden belirgin şekilde geç sonuç veriyordu. Ölçüldü: maliyet
+**modelde değil**, ses hattının numba-JIT ön-işlemesinde (`librosa`). Ses, JIT kullanan tek
+model; diğerleri saf ONNX.
+
+    librosa.load (ilk)   36,7 sn   ← baskın maliyet
+    trim (ilk)            6,5 sn
+    ONNX yükle+çalıştır   0,17 sn
+
+Kıyas (aynı koşullar): böbrek CT **0,6 sn** — modeli 3 kat BÜYÜK (42,7 MB) olduğu hâlde.
+
+Maliyet artık **açılışta, arka planda** ödeniyor (`PEMF_AI_WARMUP=0` ile kapatılabilir).
+Kullanıcının gördüğü ilk analiz süresi:
+
+| | önce | sonra |
+|---|---|---|
+| yeni kurulum | 38,2 sn | **0,28 sn** |
+| sonraki açılışlar | 4,7 sn | **0,27 sn** |
+
+Model çıktısına etkisi yoktur — yalnız aynı kod yolu bir kez ısıtılır. Teşhis için
+`AI ısıtma tamam (ses ön-işleme): X sn` loglanır.
+
+### AI Hub'da birden fazla modül aynı anda açık
+
+Veteriner ve Araştırma modlarında ikinci bir modüle dokunulduğunda **birincinin ayrıntısı
+kapanıyordu**, geriye yalnız başlığı kalıyordu. Akış karşılaştırmalı olduğu için bu, hekimi
+sürekli ileri-geri dokunmaya zorluyordu. Artık istenen kadar modül açık kalır ve sayfa aşağı
+doğru uzar; açık bir modüle dokunmak yalnız onu kapatır. Hasta/profil değişince hepsi kapanır.
+
+---
+
 ## app 1.9.12 · mobile 2.3.9 — 2026-08-12 (AI analizinde zaman aşımı düzeltmesi)
 
 **Etiketler:** `client-app-v1.9.12` (base-app sha `564d8e9c4cd1`, base sha `729234cef212`) ·
