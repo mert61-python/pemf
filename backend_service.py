@@ -537,6 +537,79 @@ def _hotspot_betigi():
     return None
 
 
+def _start_ai_warmup_safe(logger: logging.Logger) -> None:
+    """Ses hattının numba/JIT maliyetini AÇILIŞTA, arka planda öde (ölçüm 2026-08-12).
+
+    ARIZA: Kedi-sesi analizi diğer modellerden belirgin şekilde geç sonuç veriyordu ve
+    peş peşe analiz başlatıldığında istemci zaman aşımına düşüyordu.
+
+    ÖLÇÜM (bu makine, temiz süreç, adım adım):
+        librosa.load (ilk)                 36,7 sn   ← baskın maliyet
+        librosa.effects.trim (ilk)          6,5 sn
+        imageio_ffmpeg yol çözümü           3,0 sn
+        ffmpeg dönüştürme                   0,09 sn
+        mel + delta + power_to_db           0,03 sn
+        ONNX yükle + çalıştır               0,17 sn
+        ────────────────────────────────  46,9 sn (numba önbelleği BOŞken = yeni kurulum)
+    Numba derlediğini `librosa/*/__pycache__/*.nbi|nbc` içine yazdığı için sonraki
+    SÜREÇLERDE maliyet ~4,5 sn'ye iner; aynı süreçte sonraki çağrılar ~0,08 sn.
+
+    NEDEN YALNIZ BU MODEL: ses, numba-JIT ön-işleme (librosa) kullanan TEK model. Diğerleri
+    saf ONNX — runtime grafiği açar, biter. Kıyas (aynı koşullar): böbrek CT 0,6 sn (model
+    42,7 MB), böbrek hastalığı 1,7 sn, ses 4,5 sn (model 14,1 MB). Yani maliyet MODELDE
+    DEĞİL, librosa katmanında: CT'nin modeli 3 kat büyük ama 7 kat hızlı yükleniyor.
+
+    ÇÖZÜM: maliyeti kullanıcı profil seçerken/giriş yaparken arka planda öde. Model
+    çıktısına etkisi YOKTUR — yalnız aynı kod yolu bir kez ısıtılır. Sentetik ses üretilir
+    (ffmpeg/dosya bağımlılığı yok) ve modelin KENDİ ön-işleme fonksiyonu çağrılır ki
+    ısıtılan yol ile çıkarımda kullanılan yol AYRIŞAMASIN.
+
+    ⚠️ Alternatifler ölçülüp ELENDİ: (a) derlenmiş önbelleği pakete gömmek — numba önbelleği
+    CPU hedefine göre anahtarlanır, farklı donanımda ıskalar; (b) librosa'yı bırakmak —
+    sayısal çıktı değişir, altın değerlerin yeniden doğrulanmasını gerektirir.
+    """
+    if os.environ.get("PEMF_AI_WARMUP", "1").strip() in ("0", "false", "False"):
+        logger.info("AI ısıtma KAPALI (PEMF_AI_WARMUP=0).")
+        return
+
+    import threading
+
+    def _calistir() -> None:
+        import tempfile
+        import time
+        import wave
+
+        yol = None
+        t0 = time.perf_counter()
+        try:
+            # Sentetik 0,5 sn sessizlik (22050 Hz mono 16-bit). Gerçek ses dosyası GEREKMEZ;
+            # ısıtılan şey librosa'nın derlenmiş kod yolları, içeriğin kendisi değil.
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                yol = tf.name
+            with wave.open(yol, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(22050)
+                w.writeframes(b"\x00\x00" * 11025)
+
+            # Modelin KENDİ ön-işlemesi — ısıtma ile çıkarım yolu ayrışmasın diye.
+            from ai_hub.inference_cat_sound.inference_cat_sound import audio_to_mel_image
+
+            audio_to_mel_image(yol)
+            logger.info("AI ısıtma tamam (ses ön-işleme): %.1f sn", time.perf_counter() - t0)
+        except Exception as e:  # noqa: BLE001 — ısıtma ASLA servisi düşürmez
+            logger.info("AI ısıtma atlandı (%s: %s)", type(e).__name__, str(e)[:120])
+        finally:
+            if yol:
+                try:
+                    os.remove(yol)
+                except OSError:
+                    pass
+
+    # daemon: kapanışı GECİKTİRMEZ (ısıtma yarıda kalsa da sorun değil, sonraki açılış tamamlar).
+    threading.Thread(target=_calistir, name="ai-warmup", daemon=True).start()
+
+
 def _start_hotspot_safe(logger: logging.Logger) -> None:
     """PEMF-Gateway hotspot'unu ARKA PLANDA başlat. Açılışı ASLA bloklamaz, ASLA düşürmez."""
     if os.environ.get("PEMF_HOTSPOT", "1").strip() in ("0", "false", "False"):
@@ -771,6 +844,8 @@ def main(argv: list[str] | None = None) -> int:
     _start_update_checker_safe(logger)
     # ESP bobinleri (6-8) PEMF-Gateway WiFi'sine bağlanır → backend ile BİRLİKTE açılmalı.
     _start_hotspot_safe(logger)
+    # Ses hattının JIT maliyetini kullanıcı profil seçerken öde (bkz. fonksiyon notu).
+    _start_ai_warmup_safe(logger)
 
     server = _build_server(api_server.app, args)
     _install_signal_handlers(server, logger)
