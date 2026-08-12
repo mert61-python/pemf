@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+// Author: mertaygn, cglrgrkn
+import { useState, useEffect, useRef, useCallback } from "react";
 import { StyleSheet, Text, View, Image, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Platform, Linking } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
-import { apiPost, authHeaders, platformAlert } from "@/services/apiClient";
+import { apiGet, apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
 import { useUserMode, UserMode } from "@/context/UserModeContext";
@@ -20,9 +21,11 @@ import { cleanDetail, trValue } from "@/utils/aiDetail";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
+import { useOperator } from "@/context/OperatorContext";
 import { useEntitlement } from "@/context/EntitlementContext";
 import { UpgradeModal, type UpgradeFeature } from "@/components/UpgradeModal";
 import { useResponsive } from "@/hooks/useResponsive";
+import { PatientGate } from "@/components/domain/PatientGate";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ";
 
@@ -91,6 +94,34 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** SAHA HATASI 2026-08-12 — "signal is aborted" kullanıcıya GÖSTERİLİYORDU.
+ *
+ * Ev kullanıcısı fps + hastalık + ses analizlerini PEŞ PEŞE başlattı; ilk ikisi döndü, ses
+ * `AbortError: signal is aborted without reason` verdi. Hemen ardından tek başına denediğinde
+ * ANINDA sonuçlandı. Sebep: `cat_sound` ilk çağrıda numba/librosa JIT derler (ölçüm: tek
+ * başına 28 sn) ve üç analizin CPU çekişmesinde o elle yazılmış 60 sn'lik sınırı aşıyordu.
+ *
+ * İki ayrı kusur vardı ve ikisi de burada kapanıyor:
+ *   • Sınır tek kaynaktan gelmiyordu → 10 çağrı `AI_TIMEOUT_MS`e bağlandı. (Aynı arıza
+ *     2026-08-06'da `/ai/disease` için düzeltilmişti ama YALNIZ `apiPost` yolunda; ham
+ *     `fetch` kullanan modüller atlanmıştı — bu yüzden aynı hata ses modülünde tekrarladı.)
+ *   • İptal mesajı ham DOM metniydi. Zaman aşımı ile ağ hatası AYRI şeylerdir: ilkinde
+ *     tekrar denemek İŞE YARAR (model artık bellekte), ikincisinde yaramaz. Kullanıcı bunu
+ *     ayırt edebilmeli, yoksa "bozuk" sanıp vazgeçer.
+ */
+const AI_ZAMAN_ASIMI_MESAJI =
+  "Analiz zaman aşımına uğradı. Bir modelin İLK çalıştırılması ~30 saniye sürebilir; " +
+  "aynı anda başka analizler çalışıyorsa daha da uzar. Tekrar deneyin — model artık " +
+  "hazır olduğu için bu kez hızlı sonuçlanır.";
+
+function aiHataMesaji(e: unknown, varsayilan = "Ağ veya sunucu hatası."): string {
+  // `AbortController.abort()` → DOMException(name: "AbortError"). `instanceof DOMException`
+  // React Native'de güvenilir DEĞİL (DOM yok) → ada bakılır; tarayıcı ve RN'de de aynı.
+  const ad = (e as { name?: string } | null)?.name;
+  if (ad === "AbortError" || ad === "TimeoutError") return AI_ZAMAN_ASIMI_MESAJI;
+  return varsayilan;
+}
+
 // audit B-2.4: AI-sonuç eleman şekilleri — .map/.filter/.reduce callback'lerini tiplemek için
 // (display render; tsc-doğrulanabilir). Sonuç CONTAINER state'i (useState) heterojen per-model
 // backend yanıtı olduğundan permissive bırakıldı (tam tipleme backend response-sözleşmesi ister).
@@ -149,7 +180,8 @@ export function AiHubScreen() {
   // logAiResult (hook değil) aktif profili bilsin diye modül-değişkenine yaz (analiz kaydına mode gitsin).
   useEffect(() => { currentAiMode = userMode; }, [userMode]);
   // Aynı desen: giriş yapan hekim e-postasını modül-değişkenine yaz (AI analiz sahipliği).
-  useEffect(() => { currentOperatorEmail = session?.email || ""; }, [session]);
+  const { operatorEmail } = useOperator();
+  useEffect(() => { currentOperatorEmail = operatorEmail; }, [operatorEmail]);
 
   // KRİTİK fix (bkz. resetAiCachesForOwner): profil/hasta değişince AI cache'lerini TEMİZLE + açık modülü
   // kapat → önceki hastanın görüntüsü/sonucu yeni hastada görünmesin ve yanlış hastaya analiz yazılmasın.
@@ -159,14 +191,23 @@ export function AiHubScreen() {
   }, [aiCacheOwnerKey]);
 
   // pet_owner → basit ekran; veterinarian/researcher → modüler AI Hub (modüller profile göre filtreli).
+  // HASTA KAPISI (2026-08-07): analiz sonucu `ai_analyses`'e hasta adıyla yazılır → hasta
+  // seçilmeden analiz, geçmişte SAHİPSİZ kayıt üretir. Üç profilde de kapı var; ev sahibi
+  // profilinde "Hastalar" ekranı olmadığı için hasta ekleme de bu kapının içinde yapılır.
   if (!hasAiHub) {
-    return <PetOwnerAiScreen />;
+    return (
+      <PatientGate>
+        <PetOwnerAiScreen />
+      </PatientGate>
+    );
   }
 
   const patientName = selectedPatient?.name || "";
 
   // Modüller profile göre filtrelenir: veterinarian → 7 kedi modeli; researcher → 6 araştırma modeli
   // (fantom/petri/böbrek). Yeni model eklenince yalnız modes'unu ayarla. (pet_owner yukarıda ayrılır.)
+  // 2026-08-06 sahip kararı araştırma profiline CİHAZ ROTALARINI açtı (config/access.ts); AI Hub'ın
+  // bu bölüşümü BİLİNÇLİ olarak DEĞİŞMEDİ — kedi modelleri klinik, araştırma modelleri laboratuvar işi.
   const ALL_MODULES: { id: AiModule; label: string; desc: string; icon: any; modes: UserMode[] }[] = [
     { id: "landmark", label: "Yüz Ağrısı (FGS)", desc: "YOLO-pose ile yüz ağrı skoru", icon: Scan, modes: ["veterinarian"] },
     { id: "disease", label: "Hastalık", desc: "XGBoost ile hastalık tahmini", icon: Stethoscope, modes: ["veterinarian"] },
@@ -207,6 +248,10 @@ export function AiHubScreen() {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
+        {/* HASTA KAPISI (2026-08-07): hasta seçilmeden modüller GÖSTERİLMEZ. AI Hub'da
+            güvenlik-kritik bir kontrol (ACİL DURDUR vb.) yok → sert kapı güvenli.
+            Kontrol ekranında ise `soft` kip kullanılır, bkz. PatientGate prop açıklaması. */}
+        <PatientGate>
         <Text style={styles.selectorHeading}>Tanı Modülleri</Text>
         <View style={styles.aiWelcome}>
           <Text style={styles.aiWelcomeTitle}>👋 Nasıl çalışır?</Text>
@@ -226,10 +271,16 @@ export function AiHubScreen() {
             const gated = m.modes.includes("researcher") && !research;
             return (
               <View key={m.id}>
+                {/* a11y: akordeon kartında rol/durum yoktu → ekran okuyucu başlığı okuyor ama
+                    bunun AÇILIP KAPANAN bir kontrol olduğunu ve o an açık mı olduğunu bildirmiyordu. */}
                 <TouchableOpacity
                   style={[styles.moduleCard, active && styles.moduleCardActive]}
                   onPress={() => setActiveModule(active ? null : m.id)}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: active }}
+                  accessibilityLabel={`${m.label}${gated ? " — araştırma eklentisi gerekli" : ""}`}
+                  accessibilityHint={active ? "Kapatmak için dokunun" : "Açmak için dokunun"}
                 >
                   <View style={[styles.moduleIconWrap, active && styles.moduleIconWrapActive]}>
                     <Icon size={22} color={active ? colors.white : colors.primary} />
@@ -256,6 +307,7 @@ export function AiHubScreen() {
             );
           })}
         </View>
+        </PatientGate>
       </ScrollView>
       <UpgradeModal visible={!!upgradeFor} onClose={() => setUpgradeFor(null)} feature={upgradeFor ?? "tier"} />
     </View>
@@ -290,6 +342,10 @@ function PetOwnerAiScreen() {
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
+          // `pickImage` bunu yapıyordu, `takePhoto` YAPMIYORDU: her yeni fotoğrafta önceki blob
+          // URL'si serbest bırakılmadan yenisi oluşturuluyor, tam boyutlu görüntüler bellekte
+          // birikiyordu (web istemcisi klinikte gün boyu açık kalır).
+          if (imageUri && imageUri.startsWith("blob:")) URL.revokeObjectURL(imageUri);
           setImageFile(file);
           setImageUri(URL.createObjectURL(file));
           setResult(null); setTreatmentStatus("");
@@ -372,11 +428,21 @@ function PetOwnerAiScreen() {
           formData.append("file", { uri: imageUri, name: "camera_capture.jpg", type: "image/jpeg" } as any);
         }
       }
-      const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/landmark", {
-        method: "POST",
-        body: formData,
-        headers: { "Accept": "application/json", ...authHeaders() }
-      });
+      // Zaman aşımı YOKTU: yarı-açık bağlantıda (tünel takılı / captive portal) fetch ne çözülür
+      // ne reddedilir → `finally` hiç çalışmaz, buton sonsuza dek "Analiz Ediliyor…"da kilitlenirdi.
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk kullanımda model yüklemesi uzun sürebilir
+      let response: Response;
+      try {
+        response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/landmark", {
+          method: "POST",
+          body: formData,
+          headers: { "Accept": "application/json", ...authHeaders() },
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(to);
+      }
       const data = await response.json();
       if (response.ok && data.status === "success") {
         setResult(data);
@@ -386,7 +452,10 @@ function PetOwnerAiScreen() {
         showToast(data?.detail || "Teşhis sırasında hata oluştu.", "error");
       }
     } catch (error) {
-      showToast("Bağlantı hatası.", "error");
+      // Satır-içi AbortError ayrımı `aiHataMesaji`ye devredildi (2026-08-12): mesaj tek
+      // kaynaktan gelsin. Eski metin "bağlantıyı kontrol edin" diyordu — zaman aşımında
+      // bağlantı SAĞLAMDIR, yanıltıcıydı.
+      showToast(aiHataMesaji(error, "Bağlantı hatası."), "error");
     } finally {
       setLoading(false);
     }
@@ -592,7 +661,7 @@ function PetOwnerSoundCard() {
         formData.append("audio_base64", b64);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -605,7 +674,7 @@ function PetOwnerSoundCard() {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Hata: " + errorMessage(e).slice(0, 120), "error");
+      showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
     } finally {
       setLoading(false);
     }
@@ -755,7 +824,12 @@ function DiseaseModule({ patientName }: { patientName: string }) {
       temp: parseFloat(form.temp) || 38.5,   // normal kedi vücut sıcaklığı ~38.5 °C
       duration: parseFloat(form.duration) || 3,
       symptom_indices: selectedSymptoms.map(i => i + 1)
-    }, { status: "error" });
+      // AI_TIMEOUT_MS: apiPost'un varsayılan 8sn'si AI ÇIKARIMI için çok kısa. Modeller gecikmeli
+      // yüklenir; ölçüm (soğuk backend): /ai/disease ilk çağrı 3.2sn, /ai/sound/cat ilk çağrı 28sn.
+      // Eşzamanlı ikinci bir analizle CPU çekişmesinde 8sn rahatça aşılıyor → istek SESSİZCE iptal
+      // ediliyor ve sonuç boş görünüyordu; ikinci denemede model artık bellekte olduğu için anında
+      // çalışıyordu (kullanıcı bildirimi 2026-08-06).
+    }, { status: "error" }, { timeoutMs: AI_TIMEOUT_MS });
     setLoading(false);
     if (res.status === "success") {
       setResult(res.results);
@@ -851,8 +925,15 @@ const moduleCache: Record<string, any> = {};
 let aiCacheOwner: string | null = null;
 function resetAiCachesForOwner(owner: string | null): boolean {
   if (aiCacheOwner === owner) return false;
-  for (const k of Object.keys(visionCache)) delete visionCache[k];
-  for (const k of Object.keys(moduleCache)) delete moduleCache[k];
+  // Web'de `imageUri` bir blob: URL'si olabilir. Cache girdisini silmek blob'u serbest BIRAKMAZ →
+  // her hasta/profil değişiminde tam boyutlu tıbbi görüntüler bellekte kalıcı olarak birikiyordu.
+  const revoke = (u: unknown) => {
+    if (typeof u === "string" && u.startsWith("blob:")) {
+      try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+    }
+  };
+  for (const k of Object.keys(visionCache)) { revoke(visionCache[k]?.imageUri); delete visionCache[k]; }
+  for (const k of Object.keys(moduleCache)) { revoke(moduleCache[k]?.imageUri); delete moduleCache[k]; }
   aiCacheOwner = owner;
   return true;
 }
@@ -877,7 +958,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
   // BUG #2 FIX: loading state'ini useRef ile takip et, setInterval closure'u her zaman güncel değeri okur
   const loadingRef = useRef(false);
   const autoAdjustRef = useRef(autoAdjust);
-  const { aiVisionData } = useLiveData();
+  const { aiVisionData, aiVisionFresh } = useLiveData();
   const { isCompact } = useResponsive();
 
   useEffect(() => {
@@ -888,9 +969,12 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
   // setState (stale sonuç/yanlış-loglama) önlenir. mountedRef await-sonrası setState'leri de kapılar.
   const mountedRef = useRef(true);
   const analyzeAbortRef = useRef<AbortController | null>(null);
+  /** Canlı kamera döngüsündeki uçuştaki kare analizi (unmount'ta iptal edilir). */
+  const liveAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => {
     mountedRef.current = false;
     analyzeAbortRef.current?.abort();
+    try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
   }, []);
 
   // Foto/sonuç'u cache'e yaz → tab değişip geri dönünce korunur (tekrar yükleme gerekmez).
@@ -898,33 +982,82 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
     visionCache[endpoint] = { imageUri, imageBase64, result };
   }, [endpoint, imageUri, imageBase64, result]);
 
+  // ── P0 (hasta güvenliği): otonom mod yaşam döngüsü ────────────────────────────────────────────
+  // ESKİDEN: bu effect mount'ta (isLive=false, autoAdjust=false) ELSE dalına düşüp KOŞULSUZ
+  // POST /ai/pro/stop atıyordu. Backend'deki stop_ai_pro (servers/ai_router.py) AI Pro çalışıyor mu
+  // diye BAKMADAN `_stop_session_coils(range(1,9))` çağırır → 8 bobine donanım STOP. VisionModule
+  // FGS/Segmentasyon/Termal/Retikülosit modüllerinin HEPSİNDE mount olduğundan, süren bir
+  // Manuel/Otomatik tedavi sırasında "Akıllı Teşhis"te herhangi bir modülü açmak tedaviyi KESİYORDU.
+  // Üstelik backend `_active_session`'ı yalnız mode "AI" ile başlıyorsa kapattığı için sunucu seansı
+  // "aktif" kalıyor, useSessionControl reconcile'ı bunu okuyup UI'da geri saymaya devam ediyordu
+  // (bobinler ölüyken "tedavi sürüyor" görüntüsü) — mümkün olan en kötü kombinasyon.
+  // ARTIK: yalnız BU bileşenin BAŞLATTIĞI otonom mod durdurulur (startedByUsRef).
+  const startedByUsRef = useRef(false);
+  // Toggle hızlı açılıp kapanınca cleanup-stop ile yeni start'ın sunucuya TERS SIRADA ulaşması
+  // (stop, start'tan sonra işlenip yeni başlayan döngüyü öldürmesi) mümkündü → komutları seri kuyruğa al.
+  const aiProQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueAiPro = useCallback((fn: () => Promise<unknown>): Promise<unknown> => {
+    const next = aiProQueueRef.current.then(fn, fn);
+    aiProQueueRef.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
+  const stopAiPro = useCallback((notify: boolean) => {
+    if (!startedByUsRef.current) return;      // biz başlatmadıysak donanıma DOKUNMA
+    startedByUsRef.current = false;
+    enqueueAiPro(() =>
+      apiPost<{ status: string }>("/ai/pro/stop", {}, { status: "error" }).then((res) => {
+        if (notify && res?.status === "error") {
+          showToast("Otonom Biofeedback durdurulamadı — bağlantıyı kontrol edin, gerekirse ACİL DURDUR.", "error");
+        }
+      })
+    ).catch(() => { /* en iyi çaba */ });
+  // showToast BİLİNÇLİ hariç (aşağıdaki not) — ToastProvider referansı stabil olsa da bu ref'i
+  // deps'e almamak otonom döngünün yeniden kurulmasını yapısal olarak imkânsız kılar.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enqueueAiPro]);
+
   useEffect(() => {
     let active = true;
     if (isLive && autoAdjust) {
       // Otonom (Kapalı Döngü) Modu - Backend'i Başlat
-      apiPost<{status: string}>("/ai/pro/start", {}, {status: "error"}).then((res) => {
-        if (!active) return;
-        if (res?.status === "success") showToast("Otonom Biofeedback başladı", "success");
-        else showToast("Otonom Biofeedback başlatılamadı (kamera/model erişilemedi).", "error");
-      });
+      enqueueAiPro(() =>
+        apiPost<{ status: string }>("/ai/pro/start", {}, { status: "error" }).then((res) => {
+          if (res?.status === "success") startedByUsRef.current = true;  // stop yetkisi ancak şimdi doğar
+          if (!active) return;
+          if (res?.status === "success") showToast("Otonom Biofeedback başladı", "success");
+          else showToast("Otonom Biofeedback başlatılamadı (kamera/model erişilemedi).", "error");
+        })
+      ).catch(() => { /* en iyi çaba */ });
     } else {
-      // Backend'i durdur (Kamerayı serbest bırakır). Başarısızlığı SESSİZ geçme → otonom
-      // tedavi sürerken UI "kapalı" göstermesin diye kullanıcıyı uyar (fallback status:error).
-      apiPost<{status: string}>("/ai/pro/stop", {}, {status: "error"}).then((res) => {
-        if (!active) return;
-        if (res?.status === "error") {
-          showToast("Otonom Biofeedback durdurulamadı — bağlantıyı kontrol edin, gerekirse ACİL DURDUR.", "error");
-        }
-      });
+      // Kapatma: YALNIZ biz başlattıysak durdur (mount'ta hiçbir şey gönderilmez).
+      stopAiPro(true);
     }
 
     return () => {
       active = false;
-      // Unmount/dep-değişimi temizliği: en iyi çaba (artık toast gösterilemez).
-      apiPost<{status: string}>("/ai/pro/stop", {}, {status: "error"}).catch(() => {});
+      stopAiPro(false); // unmount/dep-değişimi: toast gösterilemez
     };
     // showToast BİLİNÇLİ hariç: bu effect otonom AI-Pro tedavi döngüsü; showToast KARARSIZ (ToastProvider
     // her render yeni referans üretir) → deps'e eklemek her toast render'ında tedaviyi YENİDEN BAŞLATIR.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive, autoAdjust, enqueueAiPro, stopAiPro]);
+
+  // Backend otonom döngüsü KENDİ KENDİNE bitebilir (süre dolumu, E-stop, süre-watchdog, kamera
+  // açılamaması). Eskiden UI bunu HİÇ öğrenmiyordu → "OTONOM BİOFEEDBACK AKTİF" rozeti ve donmuş
+  // son kare sonsuza dek kalıyor, hekim tedavi sürüyor sanıp hayvanı bekletiyordu. AiProPanel'deki
+  // gibi durumu poll'la; bittiyse toggle'ı kapat + bildir.
+  useEffect(() => {
+    if (!(isLive && autoAdjust) || !startedByUsRef.current) return;
+    const id = setInterval(async () => {
+      const st = await apiGet<{ active?: boolean } | null>("/ai/pro/status", null, { silent: true });
+      if (st && st.active === false && startedByUsRef.current) {
+        startedByUsRef.current = false;   // backend zaten durdu → tekrar STOP gönderme
+        setAutoAdjust(false);
+        showToast("Otonom seans sona erdi.", "info");
+      }
+    }, 4000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, autoAdjust]);
 
@@ -942,12 +1075,18 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
           fd.append("image_base64", shrunk.base64);
           fd.append("auto_adjust", "false");
           const ctrl = new AbortController();
+          // Uçuştaki istek unmount'ta İPTAL EDİLMİYORDU: ekran değişince model çıkarımı boşuna
+          // sürüyor, dönen sonuç sökülmüş bileşende setResult çağırıyordu. Controller'ı ref'e koy
+          // (cleanup abort eder) ve setState öncesi mountedRef'i kontrol et.
+          // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
           const t = setTimeout(() => ctrl.abort(), 15000);
+          liveAbortRef.current = ctrl;
           const r = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
             method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
           });
           clearTimeout(t);
           const data = await r.json();
+          if (!mountedRef.current) return;
           if (r.ok && data?.status === "success") setResult(data); // overlay result.image_base64 ile güncellenir
         }
       } catch {
@@ -962,6 +1101,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
         clearInterval(liveIntervalRef.current);
         liveIntervalRef.current = null;
       }
+      // Uçuştaki kare analizini de iptal et (boşa çıkarım + unmount sonrası setState).
+      try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
+      liveAbortRef.current = null;
     };
   }, [isLive, autoAdjust, endpoint]);
 
@@ -1104,10 +1246,31 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
           formData.append("file", { uri: uriToAnalyze, name: "upload.jpg", type: "image/jpeg" } as any);
         }
       }
-      formData.append("auto_adjust", autoAdjustRef.current ? "true" : "false");
+      // HASTA GÜVENLİĞİ: `auto_adjust=true` backend'de _drive_landmark_auto()'yu tetikler →
+      // start_ai_session(..., 30dk, bobin 1-8) + ESP 6/7/8'e duration=1800 publish. Yani TEK KARE
+      // analizinden 30 DAKİKALIK 8 BOBİNLİ otonom tedavi başlar. Eskiden bu, "Otonom Biofeedback"
+      // rozeti açıkken galeriden seçilen bir fotoğrafta da (canlı kamera hiç açılmadan) SESSİZCE
+      // oluyordu: onay yok, hasta kontrolü yok, süre girişi yok, geri sayım yok — üstelik sonuç
+      // kartı `!autoAdjust` ile gizlendiğinden EKRANDA HİÇBİR geri bildirim de çıkmıyordu.
+      // ARTIK: canlı otonom döngü dışındaki her sürüş için AÇIK ONAY şart.
+      let driveHw = false;
+      if (autoAdjustRef.current) {
+        if (isLive) {
+          driveHw = true;                       // canlı kapalı-döngü: zaten bilinçli başlatıldı
+        } else {
+          driveHw = await platformConfirm(
+            "Cihaz otonom sürülsün mü?",
+            `Bu analizin sonucuna göre 8 bobin ${patientName ? `"${patientName}" hastasında ` : ""}30 dakika boyunca otomatik sürülecek. ` +
+            "Hayvanın kabinde ve gözetim altında olduğundan emin olun.",
+            "Evet, seansı başlat"
+          );
+          if (!mountedRef.current) return;
+        }
+      }
+      formData.append("auto_adjust", driveHw ? "true" : "false");
       const ctrl = new AbortController();
       analyzeAbortRef.current = ctrl; // unmount iptali için sakla
-      const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş timeout
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş timeout
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai" + endpoint, {
         method: "POST",
         body: formData,
@@ -1124,7 +1287,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
       }
       else if (!isLive) showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
     } catch (error) {
-      if (mountedRef.current && !isLive) showToast("Ağ veya sunucu hatası.", "error");
+      if (mountedRef.current && !isLive) showToast(aiHataMesaji(error), "error");
     } finally {
       if (mountedRef.current) setLoading(false);
       loadingRef.current = false;
@@ -1140,9 +1303,14 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
         </View>
         {endpoint === "/vision/landmark" && (
           <View style={{ alignItems: "flex-end", gap: 6 }}>
+            {/* a11y: DONANIM SÜREN bir anahtarda rol/durum yoktu. */}
             <TouchableOpacity
               style={[styles.autoAdjustBtn, autoAdjust ? styles.autoAdjustActive : null]}
               onPress={() => setAutoAdjust(!autoAdjust)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: autoAdjust }}
+              accessibilityLabel="Otonom biofeedback"
+              accessibilityHint="Açıkken analiz sonucuna göre bobinler otomatik sürülür"
             >
               <Activity color={autoAdjust ? colors.white : colors.primary} size={16} />
               <Text style={[styles.autoAdjustText, autoAdjust ? {color: colors.white} : null]}>
@@ -1190,9 +1358,12 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
             {aiVisionData?.imageBase64 ? (
               <>
                 <Image source={{ uri: `data:image/jpeg;base64,${aiVisionData.imageBase64}` }} style={styles.cameraView} resizeMode="contain" />
-                <View style={styles.liveIndicator}>
+                {/* Rozet ARTIK tazeliğe bağlı: aiVisionData son kareyi kalıcı tuttuğundan, backend
+                    döngüsü bittiğinde (süre dolumu / E-stop / kamera hatası) "AKTİF" yazısı donmuş
+                    kareyle sonsuza dek açık kalıyordu. */}
+                <View style={[styles.liveIndicator, !aiVisionFresh && { backgroundColor: colors.warning }]}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>OTONOM BİOFEEDBACK AKTİF</Text>
+                  <Text style={styles.liveText}>{aiVisionFresh ? "OTONOM BİOFEEDBACK AKTİF" : "YAYIN DURDU — GÜNCEL DEĞİL"}</Text>
                 </View>
               </>
             ) : (
@@ -1201,7 +1372,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
                 <Text style={styles.placeholderText}>Sunucu kamerası bekleniyor…</Text>
               </View>
             )}
-            <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası tedaviyi sürüyor — telefon kamerası kullanılmıyor</Text>
+            <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası seansı sürüyor — telefon kamerası kullanılmıyor</Text>
           </View>
         ) : isLive ? (
           <View style={styles.cameraContainer}>
@@ -1338,24 +1509,70 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
               <Text style={styles.resultText}>Agrege Retikülosit: {result.counts["aggregate reticulocyte"]}</Text>
             </>
           )}
-          {result.hw_status === "updated" && (
-            <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
-              <Text style={[styles.resultText, {fontWeight: 'bold', color: colors.success}]}>Cihaz Otonom Olarak Güncellendi!</Text>
-              <Text style={styles.resultText}>Yeni Frekans: {result.hw_params?.freq?.toFixed(1)} Hz</Text>
-              <Text style={styles.resultText}>Yeni Şiddet: {result.hw_params?.duty?.toFixed(1)} %</Text>
-            </View>
-          )}
           <MedicalDisclaimer />
         </View>
       )}
 
+      {/* DONANIM SONUCU — sonuç kartından AYRI ve `autoAdjust`'tan BAĞIMSIZ.
+          Eskiden bu blok `result && !autoAdjust` kapısının içindeydi: donanımı sürebilen TEK durum
+          (autoAdjust açık) tam da bu kapının kapalı olduğu durumdu → kullanıcı bobinlerin sürülüp
+          sürülmediğini HİÇ göremiyordu. Ayrıca yalnız "updated" gösteriliyordu; backend'in
+          "skipped_*" yanıtları (aktif farklı-mod seansı, kimliksiz uzak istek, döngü zaten açık)
+          sessizce yutuluyordu → kullanıcı seansın başladığını sanabiliyordu. */}
+      {result?.hw_status ? (
+        result.hw_status === "updated" ? (
+          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
+            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>⚡ Cihaz otonom olarak sürülüyor</Text>
+            <Text style={styles.resultText}>Frekans: {Number(result.hw_params?.freq ?? 0).toFixed(1)} Hz · Şiddet: {Number(result.hw_params?.duty ?? 0).toFixed(1)} %</Text>
+            <Text style={styles.resultText}>Durdurmak için Kontrol ekranındaki ACİL DURDUR&apos;u kullanın.</Text>
+          </View>
+        ) : (
+          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
+            <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>⚠️ Cihaz SÜRÜLMEDİ</Text>
+            <Text style={styles.resultText}>
+              {result.hw_status === "skipped_session_active"
+                ? "Başka bir seans zaten aktif — otonom sürüş atlandı."
+                : result.hw_status === "skipped_unauthenticated"
+                  ? "Uzaktan kimliksiz istekte otonom sürüş yapılmaz (güvenlik)."
+                  : `Otonom sürüş atlandı (${String(result.hw_status)}).`}
+            </Text>
+          </View>
+        )
+      ) : null}
+
       {isLive && autoAdjust && aiVisionData && (
         <View style={styles.resultBox}>
           <Text style={styles.resultTitle}>Otonom Canlı Sonuç:</Text>
-          <Text style={styles.resultText}>Anlık FGS Skoru: <Text style={{fontWeight:'bold'}}>{aiVisionData.fgs_total} / 10</Text></Text>
-          <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
-             <Text style={[styles.resultText, {fontWeight: 'bold', color: colors.success}]}>Cihaz Otonom Olarak Güncelleniyor (Saniyede 1)</Text>
-          </View>
+          {/* Eskiden burada `Anlık FGS Skoru: {aiVisionData.fgs_total} / 10` yazıyordu; backend'in
+              ai_vision yayınında fgs_total alanı YOK (cat_organ pipeline'ına geçilince kaldırıldı) →
+              satır her zaman "Anlık FGS Skoru:  / 10" olarak BOŞ basılıyordu. Yayının gerçekten
+              içerdiği alanları göster. */}
+          <Text style={styles.resultText}>
+            Hedef organ: <Text style={{ fontWeight: "bold" }}>{aiVisionData.organName || "—"}</Text>
+            {aiVisionData.detected === false ? " (konumlandırılamadı)" : ""}
+          </Text>
+          {typeof aiVisionData.reliability === "number" && (
+            <Text style={styles.resultText}>Lokalizasyon güveni: <Text style={{ fontWeight: "bold" }}>%{(aiVisionData.reliability * 100).toFixed(0)}</Text></Text>
+          )}
+          {typeof aiVisionData.eField === "number" && (
+            <Text style={styles.resultText}>E-alan: <Text style={{ fontWeight: "bold" }}>{aiVisionData.eField.toFixed(2)}</Text></Text>
+          )}
+          {typeof aiVisionData.remainingSec === "number" && (
+            <Text style={styles.resultText}>Kalan süre: <Text style={{ fontWeight: "bold" }}>{Math.max(0, Math.round(aiVisionData.remainingSec / 60))} dk</Text></Text>
+          )}
+          {/* Tazelik kapısı: yayın durduysa "güncelleniyor" DEME (donmuş kareyi canlı gösterme).
+              Bu, kaldırılan GLOBAL 3-durumlu göstergeyi geri getirmez — yalnız aktif otonom
+              seansa özgü, yerel bir doğrulama. */}
+          {aiVisionFresh ? (
+            <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>Cihaz otonom olarak güncelleniyor (saniyede 1)</Text>
+            </View>
+          ) : (
+            <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>⚠️ Canlı yayın durdu — gösterilen kare GÜNCEL DEĞİL</Text>
+              <Text style={styles.resultText}>Seansın sürdüğü doğrulanamıyor. Kontrol ekranından durumu teyit edin.</Text>
+            </View>
+          )}
         </View>
       )}
     </Card>
@@ -1459,7 +1676,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
       if (!isNaN(plen) && plen > 0) formData.append("phantom_length_cm", String(plen));
 
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_fantom", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -1475,7 +1692,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }
@@ -1680,7 +1897,7 @@ function PetriModule({ patientName }: { patientName: string }) {
       if (!isNaN(dia) && dia > 0) formData.append("petri_diameter_cm", String(dia));
 
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000); // ilk-kullanım model indirme için geniş
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_petri", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -1695,7 +1912,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }
@@ -1867,7 +2084,7 @@ function RnaModule({ patientName }: { patientName: string }) {
         formData.append("csv_base64", b64);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/rna/kidney", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -1880,7 +2097,11 @@ function RnaModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Hata: " + errorMessage(e).slice(0, 140), "error");
+      // Ham istisna metni kullanıcıya basılıyordu; dosya seçici yolunda bu metin DOSYA YOLU/ADI
+      // (hasta adı içerebilir) taşıyabiliyor. Ayrıntı konsola, kullanıcıya sade mesaj.
+      console.error("RNA analizi hatası:", e);
+      // Satır-içi AbortError ayrımı `aiHataMesaji`ye devredildi (2026-08-12).
+      showToast(aiHataMesaji(e, "Analiz başarısız. Dosyayı ve bağlantıyı kontrol edip tekrar deneyin."), "error");
     } finally {
       setLoading(false);
     }
@@ -1925,8 +2146,12 @@ function RnaModule({ patientName }: { patientName: string }) {
             const isKirc = p.prediction === "KIRC";
             return (
               <View key={i} style={styles.tumorRow}>
+                {/* Model etiketleri ham İngilizce basılıyordu ("KIRC" / "other") — uygulamanın
+                    geri kalanı Türkçe. KIRC klinik bir kısaltma olduğundan korunur, açıklaması eklenir. */}
                 <Text style={styles.tumorHeader}>
-                  {p.patient_id}   ·   <Text style={{ color: isKirc ? colors.danger : colors.success }}>{p.prediction}</Text>
+                  {p.patient_id}   ·   <Text style={{ color: isKirc ? colors.danger : colors.success }}>
+                    {isKirc ? "KIRC işareti" : "KIRC değil"}
+                  </Text>
                 </Text>
                 <Text style={[styles.resultText, { fontSize: typography.small }]}>
                   Güven: <Text style={{ fontWeight: "bold" }}>%{(Number(p.confidence) * 100).toFixed(1)}</Text>
@@ -1989,7 +2214,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         if (!isNaN(v)) payload[k] = v;
       });
       CKD_CATEGORICAL.forEach(({ k }) => { if (cat[k]) payload[k] = cat[k]; });
-      const res = await apiPost<any>("/ai/disease/kidney", payload, null);
+      const res = await apiPost<any>("/ai/disease/kidney", payload, null, { timeoutMs: AI_TIMEOUT_MS });
       if (res && res.status === "success") {
         setResult(res);
         logAiResult(patientName, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
@@ -1997,7 +2222,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         showToast("Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }
@@ -2158,7 +2383,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         formData.append("audio_base64", b64);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -2171,7 +2396,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Hata: " + errorMessage(e).slice(0, 120), "error");
+      showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
     } finally {
       setLoading(false);
     }
@@ -2332,7 +2557,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         else formData.append("file", { uri: imageUri, name: "ct.jpg", type: "image/jpeg" } as any);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
@@ -2344,7 +2569,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }
@@ -2524,7 +2749,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         else formData.append("file", { uri: imageUri, name: "histo.jpg", type: "image/jpeg" } as any);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 60000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
@@ -2535,7 +2760,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }
@@ -2651,6 +2876,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           const fd = new FormData();
           fd.append("image_base64", shrunk.base64);
           const ctrl = new AbortController();
+          // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
           const t = setTimeout(() => ctrl.abort(), 25000);
           const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
           clearTimeout(t);
@@ -2726,7 +2952,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         else formData.append("file", { uri: imageUri, name: "cat.jpg", type: "image/jpeg" } as any);
       }
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 90000);
+      const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
@@ -2737,7 +2963,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
       }
     } catch (e) {
-      showToast("Ağ veya sunucu hatası.", "error");
+      showToast(aiHataMesaji(e), "error");
     } finally {
       setLoading(false);
     }

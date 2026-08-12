@@ -92,8 +92,8 @@ android {
         applicationId 'com.pemf.vet'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "2.3.2"
+        versionCode 16
+        versionName "2.3.9"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +104,47 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // TEDARİK ZİNCİRİ GÜVENLİĞİ: release APK, repoda commit'li `debug.keystore` ile ve
+        // Android'in EVRENSEL varsayılan parolasıyla ('android'/'androiddebugkey') imzalanıyordu.
+        // Android'in "aynı imza = aynı uygulama" kuralı gereği, bu anahtar herkeste bulunduğundan
+        // üçüncü bir taraf kendi hazırladığı zararlı bir APK'yı kurulu uygulamanın ÜZERİNE
+        // (in-place update) kurdurabilir; uygulama verisi — SecureStore'daki cihaz X-API-Key'i ve
+        // Supabase oturumu — yeni pakete DEVROLUR. Dağıtım kanalı sideload olduğu için bu gerçekçi
+        // bir senaryodur.
+        //
+        // Artık release, repo DIŞINDAKİ özel bir keystore ile imzalanır. Değerler
+        // `android/keystore.properties` (gitignore'lu) ya da ortam değişkenlerinden okunur:
+        //   PEMF_KEYSTORE_FILE / PEMF_KEYSTORE_PASSWORD / PEMF_KEY_ALIAS / PEMF_KEY_PASSWORD
+        // Anahtar üretimi (bir kez, GÜVENLİ SAKLA — kaybolursa Play güncellemesi imkânsız olur):
+        //   keytool -genkeypair -v -storetype PKCS12 -keystore pemf-release.p12 \
+        //     -alias pemf -keyalg RSA -keysize 4096 -validity 10000
+        release {
+            def props = new Properties()
+            def propFile = rootProject.file('keystore.properties')
+            if (propFile.exists()) { propFile.withInputStream { props.load(it) } }
+            def ksPath = props['storeFile'] ?: System.getenv('PEMF_KEYSTORE_FILE')
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword props['storePassword'] ?: System.getenv('PEMF_KEYSTORE_PASSWORD')
+                keyAlias props['keyAlias'] ?: System.getenv('PEMF_KEY_ALIAS')
+                keyPassword props['keyPassword'] ?: System.getenv('PEMF_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Release keystore YAPILANDIRILMIŞSA onu kullan. Yoksa debug'a düşer ama build
+            // GÖRÜNÜR biçimde uyarır — sessizce herkese açık anahtarla yayınlanmasın.
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn('*** UYARI: release APK DEBUG keystore ile imzalanıyor. ' +
+                            'Yayına ÇIKARMAYIN — android/keystore.properties oluşturun. ***')
+                signingConfig signingConfigs.debug
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
