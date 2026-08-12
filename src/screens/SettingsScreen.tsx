@@ -1,26 +1,136 @@
-import { useEffect, useState } from "react";
+// Author: mertaygn, cglrgrkn
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
-import { apiGet, apiPost, platformAlert } from "@/services/apiClient";
-import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy } from "lucide-react-native";
+import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
+import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy, Building2 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, loadStoredApiToken, setStoredDeviceId } from "@/services/config";
-import { getDeviceByPairingCode, getRemoteUrlForDevice } from "@/services/deviceRegistry";
+import { uzakCihaziKimlikleCoz, uzakCihaziKodlaCoz } from "@/services/deviceRegistry";
 import { checkHealth, exchangeCodeForToken, discoverBackend } from "@/services/discovery";
 import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
 import { updateProfile } from "@/services/supabaseAuth";
 import { useToast } from "@/components/ui/ToastProvider";
+import { BackupPassphraseDialog, type ParolaKipi } from "@/components/domain/BackupPassphraseDialog";
 import { useLiveData } from "@/context/LiveDataContext";
+import { useTeardownGuard } from "@/hooks/useTeardownGuard";
+import { FIRMA } from "@/config/firma";
 
 
 export function SettingsScreen() {
   const { setUserMode, isExpert, isResearcher } = useUserMode();
   const { reconnect: liveReconnect } = useLiveData();
+  const guardTeardown = useTeardownGuard();
+  // "Ayarlar kaydedildi" mesajını 3sn sonra silen zamanlayıcı — unmount'ta temizlenmesi için ref'te.
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current); }, []);
   const { session } = useAuth();
   const prof = session?.profile || {};
   const { showToast } = useToast();
+
+  // ── CİHAZ TAŞIMA (2026-08-08) — şifreli dışa/içe aktarma ────────────────────────────────
+  // Yalnız web (masaüstü client) yolu: veritabanı O makinede durur, taşıma orada yapılır.
+  // Mobilde bölüm hiç gösterilmez → yeni bir yerel-dosya bağımlılığı (picker/fs) EKLENMEZ.
+  const [tasimaMesgul, setTasimaMesgul] = useState<"" | "export" | "import">("");
+
+  // ── VERİ SAKLAMA / PII MASKELEME (2026-08-09 denetimi, Tier 1) ────────────────────────
+  // Seans kayıtlarındaki hasta/operatör adı ve notlar, süre dolunca `[REDACTED]` ile GERİ
+  // DÖNÜŞSÜZ maskeleniyordu ve bu tamamen SESSİZ oluyordu. Süre yalnız `PEMF_RETAIN_PII_DAYS`
+  // ortam değişkeniyle ayarlanabiliyordu — hiçbir veteriner bunu bilmez. Klinik 366. günde
+  // hasta adı yerine `[REDACTED]` görüyor ve sebebini hiçbir yerde bulamıyordu.
+  interface RetentionDurum {
+    days: number; configured: boolean; acknowledged: boolean; pending: number; default: number;
+  }
+  const [retention, setRetention] = useState<RetentionDurum | null>(null);
+  const [retMesgul, setRetMesgul] = useState(false);
+
+  const retentionYukle = useCallback(async () => {
+    const r = await apiGet<RetentionDurum | null>("/settings/retention", null, { silent: true });
+    if (r) setRetention(r);
+  }, []);
+  useEffect(() => { void retentionYukle(); }, [retentionYukle]);
+
+  const retentionKaydet = useCallback(async (govde: { days?: number; acknowledge?: boolean }) => {
+    setRetMesgul(true);
+    const r = await apiPost<{ status?: string } | null>("/settings/retention", govde, null);
+    setRetMesgul(false);
+    if (r?.status === "success") await retentionYukle();
+  }, [retentionYukle]);
+
+  // ⚠️ DENETİM 2026-08-09 (Tier 1): `window.prompt` KALDIRILDI. Parolayı düz metin gösteriyor,
+  // TEK KEZ soruyor (yazım hatası yedeği kalıcı olarak açılamaz kılar — ve bu ancak yedeğe
+  // ihtiyaç duyulan gün anlaşılır) ve native'de hiç çalışmıyordu. Yerine iki-kez-soran,
+  // asgari uzunluğu gösteren bir diyalog: `BackupPassphraseDialog`.
+  const [parolaKipi, setParolaKipi] = useState<ParolaKipi | null>(null);
+  const parolaCozucu = useRef<((p: string | null) => void) | null>(null);
+
+  /** Diyaloğu aç ve parolayı bekle. Vazgeçilirse null. */
+  const parolaSor = useCallback((kip: ParolaKipi): Promise<string | null> => {
+    setParolaKipi(kip);
+    return new Promise<string | null>((resolve) => { parolaCozucu.current = resolve; });
+  }, []);
+
+  const parolaKapat = useCallback((deger: string | null) => {
+    setParolaKipi(null);
+    const c = parolaCozucu.current;
+    parolaCozucu.current = null;
+    c?.(deger);
+  }, []);
+
+  const disaAktar = useCallback(async () => {
+    const parola = await parolaSor("olustur");
+    if (!parola) return;
+    setTasimaMesgul("export");
+    const res = await apiPost<{ status?: string; filename?: string; data_b64?: string;
+                               counts?: Record<string, number> } | null>(
+      "/data/export", { passphrase: parola }, null);
+    setTasimaMesgul("");
+    if (!res?.data_b64) return;                       // hata mesajını apiPost gösterdi
+    try {
+      // base64 → Blob → indir. Dosya diske YALNIZ kullanıcının seçtiği yere gider.
+      const ham = atob(res.data_b64);
+      const buf = new Uint8Array(ham.length);
+      for (let i = 0; i < ham.length; i++) buf[i] = ham.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([buf], { type: "application/octet-stream" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = res.filename || "pemf-vet-yedek.pemfbak";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      const c = res.counts || {};
+      showToast(`Yedek oluşturuldu: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`, "success");
+    } catch {
+      showToast("Yedek dosyası kaydedilemedi.", "error");
+    }
+  }, [showToast, parolaSor]);
+
+  const iceAktar = useCallback(async () => {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".pemfbak,application/octet-stream";
+    inp.onchange = async () => {
+      const f = inp.files?.[0];
+      if (!f) return;
+      const parola = await parolaSor("gir");
+      if (!parola) return;
+      if (!(await platformConfirm(
+        "Yedekten geri yükle",
+        "Bu cihazda kayıt varsa mevcut SEANS ve AI ANALİZ geçmişi SİLİNİP yedektekiyle değiştirilecek.\n\nDevam edilsin mi?",
+        "Geri yükle"))) return;
+      setTasimaMesgul("import");
+      const buf = new Uint8Array(await f.arrayBuffer());
+      let s = "";
+      for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+      const res = await apiPost<{ status?: string; counts?: Record<string, number> } | null>(
+        "/data/import", { passphrase: parola, blob_b64: btoa(s), confirm: "REPLACE_ALL" }, null);
+      setTasimaMesgul("");
+      if (!res?.counts) return;
+      const c = res.counts;
+      showToast(`Geri yüklendi: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`, "success");
+    };
+    inp.click();
+  }, [showToast, parolaSor]);
   // Klinik/profil bilgisi artık KAYIT (login) formunda toplanır (Supabase user_metadata) → burada salt-okunur gösterilir.
   const [settings, setSettings] = useState({
     ble_gateway_mac: "",
@@ -46,14 +156,20 @@ export function SettingsScreen() {
   const [savingP, setSavingP] = useState(false);
   const [pForm, setPForm] = useState({
     first_name: "", last_name: "", title: "", phone: "",
-    clinic_name: "", clinic_phone: "", city: "", district: "", address: ""
+    clinic_name: "", clinic_phone: "", city: "", district: "", address: "",
+    institution: "", department: "", academic_title: ""
   });
   const startEditProfile = () => {
+    // ⚠️ TÜM alanlar yüklenir (yalnız aktif profile ait olanlar GÖSTERİLİR). Yüklenmezse
+    // kaydederken diğer profilin bilgileri BOŞ gider ve silinir — profil her açılışta
+    // değiştiği için bu, veteriner bilgisini araştırma modunda kaydedince kaybettirirdi.
     setPForm({
       first_name: prof.first_name || "", last_name: prof.last_name || "",
       title: prof.title || "", phone: prof.phone || "",
       clinic_name: prof.clinic_name || "", clinic_phone: prof.clinic_phone || "",
-      city: prof.city || "", district: prof.district || "", address: prof.address || ""
+      city: prof.city || "", district: prof.district || "", address: prof.address || "",
+      institution: prof.institution || "", department: prof.department || "",
+      academic_title: prof.academic_title || ""
     });
     setEditP(true);
   };
@@ -128,18 +244,29 @@ export function SettingsScreen() {
         showToast(res.ok ? "✅ Sunucuya bağlısınız." : "❌ Sunucuya ulaşılamadı.", res.ok ? "success" : "error");
       } else {
         const addr = settings.server_ip;
-        const base = addr.startsWith("http") ? addr.replace(/\/$/, "") : `http://${addr}:8000`;
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(`${base}/api/health`, { signal: controller.signal });
-        if (res.ok) {
-          updateServiceConfig(addr);
+        // GÜVENLİK (#24): eskiden yalnız `res.ok` kontrol ediliyordu → /api/health'e 200 dönen
+        // HERHANGİ bir host (router paneli, NAS, saldırganın sunucusu) kabul ediliyor, ardından
+        // updateServiceConfig ile taban oraya çevriliyordu; sonraki her istek cihaz X-API-Key'ini
+        // (https ise Supabase JWT'sini de) o host'a yolluyordu. discovery.checkHealth zaten
+        // `service === "PEMF-Vet"` + device_id kontrolü yapıyor — aynı kapıyı burada da kullan.
+        const ok = await checkHealth(addr, null);
+        if (ok) {
+          if (!updateServiceConfig(addr)) {   // #63 doğrulaması: geçersiz biçimde ayarı BOZMA
+            setConnectionStatus("fail");
+            showToast("❌ Geçersiz adres biçimi.", "error");
+            return;
+          }
           await AsyncStorage.setItem("@pemf_server_address", addr).catch(() => {});
+          // #5: REST tabanı değişti ama WS eski cihaza bağlı kalıyordu → komutlar YENİ cihaza,
+          // telemetri/"CANLI" rozeti ESKİ cihazdan geliyordu (iki cihazlı klinikte yanlış hasta
+          // verisi okuma riski). Diğer iki yol (otomatik arama, uzaktan bağlan) zaten reconnect
+          // ediyordu; bu yol atlanmıştı.
+          liveReconnect();
           setConnectionStatus("ok");
           showToast("✅ Bağlantı başarılı! Adres kaydedildi.", "success");
         } else {
           setConnectionStatus("fail");
-          showToast("❌ Sunucuya ulaşılamadı.", "error");
+          showToast("❌ Bu adreste bir PEMF cihazı bulunamadı.", "error");
         }
       }
     } catch {
@@ -202,22 +329,28 @@ export function SettingsScreen() {
       let tunnelUrl: string | null = null;
       let resolvedDeviceId = input;
 
-      if (input.length <= 8) {
-        // EŞLEŞTİRME KODU → cihazı bul
-        const device = await getDeviceByPairingCode(input);
-        if (device && device.tunnel_url) {
-          tunnelUrl = device.tunnel_url;
-          resolvedDeviceId = device.device_id;
-        }
-      } else {
-        // CİHAZ KİMLİĞİ → güncel tunnel_url'i bul
-        tunnelUrl = await getRemoteUrlForDevice(input);
-      }
+      // ⚠️ 2026-08-12 saha bildirimi: DOĞRU kod girildiği hâlde "kodu kontrol edin" deniyordu.
+      // Cihaz kayıtlıydı ve kod doğruydu; yalnız `tunnel_url` boştu (cihazda uzaktan erişim
+      // kapalı). Eski akış "kayıt yok" ile "adres yok"u aynı `null`a indirdiği için kullanıcıyı
+      // yanlış yere bakmaya yönlendiriyordu. Artık sebep AYRI ve mesaj NE YAPILACAĞINI söylüyor.
+      const c = input.length <= 8
+        ? await uzakCihaziKodlaCoz(input)
+        : await uzakCihaziKimlikleCoz(input);
 
-      // 1) Kayıt bulunamadı → kod/kimlik yanlış olabilir (çevrimdışıdan AYIR).
-      if (!tunnelUrl) {
+      if (c.durum === "bulundu") {
+        tunnelUrl = c.url;
+        resolvedDeviceId = c.device.device_id;
+      } else {
         setConnectionStatus("fail");
-        showToast("Bu kod/kimlikle eşleşen kayıtlı cihaz bulunamadı. Kodu kontrol edin.", "error");
+        const mesaj =
+          c.durum === "adres_yok"
+            ? "Cihaz bulundu ama uzaktan erişim adresi yok. Cihazın kendi ekranından uzaktan erişimi açın; kod doğru."
+            : c.durum === "bayat"
+              ? "Cihaz kayıtlı ama şu an çevrimdışı görünüyor. Cihazın açık ve internete bağlı olduğundan emin olun."
+              : c.durum === "hata"
+                ? "Buluta ulaşılamadı (bağlantı/zaman aşımı). İnternetinizi kontrol edip tekrar deneyin."
+                : "Bu kod/kimlikle eşleşen kayıtlı cihaz bulunamadı. Kodu kontrol edin.";
+        showToast(mesaj, "error");
         return;
       }
 
@@ -240,15 +373,24 @@ export function SettingsScreen() {
       }
       // Kod-yolu (hiç LAN'a girmemiş telefon): 6-haneli kodu cihaz token'ıyla takas et →
       // uzaktan HTTP + WS auth çalışsın. Yoksa "bağlandı ✓" ama tüm veri 401 olurdu (audit P0).
-      if (input.length <= 8) { await exchangeCodeForToken(tunnelUrl, input); }
+      // #25: takas SONUCU yok sayılıyordu → kod yanlış/throttle'lıysa bile aşağıda "eşleştirildi ✓"
+      // deniyor, ama sonraki tüm istekler 401 alıyordu (kullanıcı "bağlandım ama veri gelmiyor"
+      // durumunda kalıyordu). Sonucu doğrula ve dürüst mesaj ver.
+      let tokenOk = true;
+      if (input.length <= 8) { tokenOk = await exchangeCodeForToken(tunnelUrl, input); }
       await setStoredDeviceId(resolvedDeviceId);
       await AsyncStorage.setItem("@pemf_server_address", tunnelUrl).catch(() => {});
       setSettings(prev => ({ ...prev, server_ip: tunnelUrl as string }));
       // #87: yeni serviceConfig ile WS'i HEMEN yeniden bağla → önceki cihazın telemetrisi
       // gösterilmeye devam etmesin (yanlış-cihaz görüntüsü). reconnect() connectionEpoch bump eder.
       liveReconnect();
-      setConnectionStatus("ok");
-      showToast("Cihaz eşleştirildi ve bağlanıldı ✓", "success");
+      if (tokenOk) {
+        setConnectionStatus("ok");
+        showToast("Cihaz eşleştirildi ve bağlanıldı ✓", "success");
+      } else {
+        setConnectionStatus("fail");
+        showToast("Cihaz bulundu ama eşleştirme kodu kabul edilmedi — kodu kontrol edip tekrar deneyin.", "error");
+      }
     } catch {
       setConnectionStatus("fail");
       showToast("Eşleştirme sunucusuna ulaşılamadı. İnternet bağlantınızı kontrol edin.", "error");
@@ -279,18 +421,33 @@ export function SettingsScreen() {
     setLoading(true);
     setSaveStatus("Kaydediliyor...");
     try {
-      // Canonical anahtar @pemf_server_address (discovery + ilk-yükleme bunu okur) + geri-uyum için ip.
-      await AsyncStorage.setItem("@pemf_server_address", settings.server_ip);
-      await AsyncStorage.setItem("@pemf_server_ip", settings.server_ip);
-      // KRİTİK: web'de app KENDİ origin'ine bağlıdır → base'i repoint ETME. Aksi halde bir sonraki
-      // apiPost("/settings/") yanlış/boş adrese gider → "Kaydetme hatası" + tüm bağlantı kopar (yeşil kalır).
-      if (Platform.OS !== "web") updateServiceConfig(settings.server_ip);
+      // #72: adres eskiden DOĞRULANMADAN kaydediliyor ve updateServiceConfig'in `false` dönüşü
+      // yok sayılıyordu → boş/bozuk bir server_ip kalıcı hâle gelip sonraki açılışta keşfi
+      // bozabiliyordu. Yalnız GEÇERLİ bir adres kalıcılaştırılır; geçersizse mevcut ayar korunur.
+      const addr = (settings.server_ip || "").trim();
+      if (addr) {
+        // KRİTİK: web'de app KENDİ origin'ine bağlıdır → base'i repoint ETME. Aksi halde bir sonraki
+        // apiPost("/settings/") yanlış/boş adrese gider → "Kaydetme hatası" + tüm bağlantı kopar (yeşil kalır).
+        const applied = Platform.OS === "web" ? true : updateServiceConfig(addr);
+        if (!applied) {
+          setLoading(false);
+          setSaveStatus("Geçersiz sunucu adresi — kaydedilmedi.");
+          return;
+        }
+        // Canonical anahtar @pemf_server_address (discovery + ilk-yükleme bunu okur) + geri-uyum için ip.
+        await AsyncStorage.setItem("@pemf_server_address", addr);
+        await AsyncStorage.setItem("@pemf_server_ip", addr);
+        if (Platform.OS !== "web") liveReconnect(); // #5 ile aynı sebep: WS de yeni adrese geçsin
+      }
     } catch(e) {}
     const result = await apiPost<any>("/settings/", settings, { status: "error" });
     setLoading(false);
     if (result.status === "success") {
       setSaveStatus("Ayarlar başarıyla kaydedildi.");
-      setTimeout(() => setSaveStatus(""), 3000);
+      // #124: bu zamanlayıcı takip edilmiyordu → ekran 3sn dolmadan kapatılırsa unmount sonrası
+      // setState (React uyarısı + boşa iş). Ref'te tut, unmount'ta temizle.
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+      saveStatusTimerRef.current = setTimeout(() => setSaveStatus(""), 3000);
     } else {
       setSaveStatus("Kaydetme hatası.");
     }
@@ -307,7 +464,13 @@ export function SettingsScreen() {
           <Text style={styles.cardTitle}>Profil Ayarları</Text>
         </View>
         <Text style={styles.label}>Şu anki mod: {isExpert ? 'Veteriner Hekim' : isResearcher ? 'Araştırma Modu' : 'Evcil Hayvan Sahibi'}</Text>
-        <TouchableOpacity style={[styles.btnOutline, { marginTop: spacing.md }]} onPress={() => setUserMode(null)}>
+        {/* HASTA GÜVENLİĞİ: profil sıfırlama MainRouter'ı söküp WelcomeScreen'e düşürür →
+            ACİL DURDUR ve çevrimdışı uyarısı ekrandan kaybolur. Seans sürerken önce durdur. */}
+        <TouchableOpacity
+          style={[styles.btnOutline, { marginTop: spacing.md }]}
+          onPress={async () => { if (await guardTeardown("Profil değiştirmek")) setUserMode(null); }}
+          accessibilityRole="button"
+        >
           <Text style={styles.btnOutlineText}>Farklı Bir Profile Geçiş Yap</Text>
         </TouchableOpacity>
       </Card>
@@ -342,8 +505,25 @@ export function SettingsScreen() {
             <TextInput style={styles.input} value={pForm.title} onChangeText={t => setPForm({ ...pForm, title: t })} placeholder="Örn. Vet. Hekim" />
             <Text style={styles.label}>Telefon</Text>
             <TextInput style={styles.input} value={pForm.phone} onChangeText={t => setPForm({ ...pForm, phone: t })} placeholder="Cep telefonu" keyboardType="phone-pad" />
-            <Text style={styles.label}>Klinik / Muayenehane</Text>
-            <TextInput style={styles.input} value={pForm.clinic_name} onChangeText={t => setPForm({ ...pForm, clinic_name: t })} placeholder="Klinik adı" />
+            {/* PROFİLE ÖZEL ALANLAR (2026-08-07): klinik bilgisi yalnız veterinerde, kurum
+                bilgisi yalnız araştırmada sorulur. Ev sahibinde ikisi de sorulmaz — evcil
+                hayvan sahibinden klinik adı istemek anlamsızdı. */}
+            {isExpert && (
+              <>
+                <Text style={styles.label}>Klinik / Muayenehane</Text>
+                <TextInput style={styles.input} value={pForm.clinic_name} onChangeText={t => setPForm({ ...pForm, clinic_name: t })} placeholder="Klinik adı" />
+              </>
+            )}
+            {isResearcher && (
+              <>
+                <Text style={styles.label}>Üniversite / Kurum</Text>
+                <TextInput style={styles.input} value={pForm.institution} onChangeText={t => setPForm({ ...pForm, institution: t })} placeholder="Üniversite / enstitü / kurum" />
+                <Text style={styles.label}>Bölüm / Anabilim Dalı</Text>
+                <TextInput style={styles.input} value={pForm.department} onChangeText={t => setPForm({ ...pForm, department: t })} placeholder="Bölüm" />
+                <Text style={styles.label}>Akademik Ünvan</Text>
+                <TextInput style={styles.input} value={pForm.academic_title} onChangeText={t => setPForm({ ...pForm, academic_title: t })} placeholder="Örn. Dr. Öğr. Üyesi (opsiyonel)" />
+              </>
+            )}
             <View style={styles.row2}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Şehir (İl)</Text>
@@ -356,8 +536,12 @@ export function SettingsScreen() {
             </View>
             <Text style={styles.label}>Adres</Text>
             <TextInput style={styles.input} value={pForm.address} onChangeText={t => setPForm({ ...pForm, address: t })} placeholder="Açık adres" />
-            <Text style={styles.label}>Klinik Acil Telefon</Text>
-            <TextInput style={styles.input} value={pForm.clinic_phone} onChangeText={t => setPForm({ ...pForm, clinic_phone: t })} placeholder="Klinik acil telefon" keyboardType="phone-pad" />
+            {isExpert && (
+              <>
+                <Text style={styles.label}>Klinik Acil Telefon</Text>
+                <TextInput style={styles.input} value={pForm.clinic_phone} onChangeText={t => setPForm({ ...pForm, clinic_phone: t })} placeholder="Klinik acil telefon" keyboardType="phone-pad" />
+              </>
+            )}
             <View style={styles.actions}>
               <TouchableOpacity style={styles.btnPrimary} onPress={saveProfile} disabled={savingP}>
                 <Save color="#fff" size={16} />
@@ -373,11 +557,16 @@ export function SettingsScreen() {
             <Info label="Ad Soyad" value={prof.full_name || [prof.first_name, prof.last_name].filter(Boolean).join(" ")} />
             {prof.title ? <Info label="Ünvan" value={prof.title} /> : null}
             <Info label="E-posta" value={session?.email} />
-            {prof.clinic_name ? <Info label="Klinik / Muayenehane" value={prof.clinic_name} /> : null}
+            {/* PROFİLE ÖZEL (2026-08-07): ev sahibine klinik/kurum bilgisi GÖSTERİLMEZ.
+                Veri silinmez, yalnız o profille ilgisi olmadığı için gizlenir. */}
+            {isExpert && prof.clinic_name ? <Info label="Klinik / Muayenehane" value={prof.clinic_name} /> : null}
+            {isResearcher && prof.institution ? <Info label="Üniversite / Kurum" value={prof.institution} /> : null}
+            {isResearcher && prof.department ? <Info label="Bölüm / Anabilim Dalı" value={prof.department} /> : null}
+            {isResearcher && prof.academic_title ? <Info label="Akademik Ünvan" value={prof.academic_title} /> : null}
             {(prof.city || prof.district) ? <Info label="Şehir / İlçe" value={[prof.city, prof.district].filter(Boolean).join(" / ")} /> : null}
             {prof.address ? <Info label="Adres" value={prof.address} /> : null}
             {prof.phone ? <Info label="Telefon" value={prof.phone} /> : null}
-            {prof.clinic_phone ? <Info label="Klinik Acil Telefon" value={prof.clinic_phone} /> : null}
+            {isExpert && prof.clinic_phone ? <Info label="Klinik Acil Telefon" value={prof.clinic_phone} /> : null}
             <Text style={styles.mutedNote}>{'E-posta hesap kimliğidir, değiştirilemez. Diğer bilgileri "Düzenle" ile güncelleyebilirsin.'}</Text>
           </>
         )}
@@ -493,7 +682,10 @@ export function SettingsScreen() {
             )}
 
             {/* Manuel IP yedeği YALNIZ Veteriner (uzman) modunda — otomatik+eşleştirme çoğu durumu kapsar;
-                normal kullanıcıyı karmaşadan uzak tut, kısıtlı-ağ yedeği uzmanda dursun. */}
+                normal kullanıcıyı karmaşadan uzak tut, kısıtlı-ağ yedeği uzmanda dursun.
+                NOT (2026-08-06): sahip kararıyla araştırma profiline cihaz ROTALARI açıldı
+                (config/access.ts) ama SERVİS araçları bilinçli olarak veterinerde bırakıldı —
+                bunlar bağlantıyı/donanımı bozabilecek bakım işlemleri, araştırma iş akışının parçası değil. */}
             {isExpert && (
               <>
                 <Text style={styles.label}>Manuel Sunucu Adresi</Text>
@@ -539,6 +731,14 @@ export function SettingsScreen() {
               <TouchableOpacity 
                 style={[styles.btnOutline, { borderColor: colors.warning }]} 
                 onPress={async () => {
+                  // HASTA GÜVENLİĞİ: self-test bobinleri sürebilir. Tedavi sürerken çalıştırmak
+                  // devam eden protokolü bozar → tek dokunuşla değil, onaylı ve seans-kontrollü.
+                  if (!(await guardTeardown("Donanım self-test çalıştırmak"))) return;
+                  if (!(await platformConfirm(
+                    "Donanım Self-Test",
+                    "Cihaz kendi kendini test edecek; bu sırada bobinler kısa süre enerjilenebilir. Hayvanın kabinde OLMADIĞINDAN emin olun.",
+                    "Testi başlat"
+                  ))) return;
                   const res = await apiPost<any>("/hardware/selftest", {}, {status: "error"});
                   if (res.status === "success") showToast("Self-Test komutu donanıma gönderildi.", "success");
                   else showToast("Self-Test gönderilemedi.", "error");
@@ -551,6 +751,13 @@ export function SettingsScreen() {
               <TouchableOpacity
                 style={[styles.btnOutline, { borderColor: colors.danger }]}
                 onPress={async () => {
+                  // Yön olarak GÜVENLİ (çıkışı sıfırlar) ama süren bir tedaviyi habersiz keser →
+                  // onay iste. Not: burada guardTeardown KULLANILMAZ; bu eylemin kendisi durdurmadır.
+                  if (!(await platformConfirm(
+                    "Tüm PWM sinyallerini sıfırla",
+                    "Tüm bobinlerin çıkışı sıfırlanacak. Devam eden bir seans varsa KESİLİR.",
+                    "Sıfırla"
+                  ))) return;
                   const res = await apiPost<any>("/hardware/reset_pwm", {}, {status: "error"});
                   if (res.status === "success") showToast("Tüm bobin PWM sinyalleri sıfırlandı.", "success");
                   else showToast("PWM sıfırlama başarısız.", "error");
@@ -564,6 +771,110 @@ export function SettingsScreen() {
         </View>
       )}
 
+      {/* ── CİHAZ TAŞIMA (2026-08-08) ────────────────────────────────────────────────────
+          Kayıtlar bilerek MAKİNEDE tutuluyor (bulut senkronu YOK: kişisel veri yurt dışına
+          çıkmasın, kayıt kliniğin olsun). Bunun tek gerçek dezavantajı cihaz değişimiydi —
+          çözümü bulut değil, kliniğin KENDİ kontrolündeki şifreli dosya.
+          Yalnız VETERİNER: klinik verisinin tamamını dışarı çıkarır. */}
+      {isExpert && Platform.OS === "web" && (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Veri Taşıma (Cihaz Değişimi)</Text>
+          <Text style={styles.intro}>
+            Hasta kayıtları, seans geçmişi ve AI analiz geçmişi tek bir ŞİFRELİ dosyaya aktarılır.
+            Yeni bilgisayara aynı parolayla geri yüklenir. Dosya parolasız açılamaz —
+            parolayı kaybederseniz yedek kurtarılamaz.
+          </Text>
+
+          <TouchableOpacity style={styles.btnOutline} disabled={!!tasimaMesgul} onPress={disaAktar}
+            accessibilityRole="button" accessibilityLabel="Klinik verilerini şifreli dosyaya aktar">
+            <Text style={styles.btnOutlineText}>
+              {tasimaMesgul === "export" ? "Hazırlanıyor…" : "Şifreli Yedek Oluştur"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning }]}
+            disabled={!!tasimaMesgul} onPress={iceAktar}
+            accessibilityRole="button" accessibilityLabel="Şifreli yedekten geri yükle">
+            <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
+              {tasimaMesgul === "import" ? "Yükleniyor…" : "Yedekten Geri Yükle"}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.intro, { color: colors.warning }]}>
+            Geri yükleme, bu cihazda kayıt varsa mevcut seans ve analiz geçmişini SİLER.
+          </Text>
+        </Card>
+      )}
+
+      {/* VERİ SAKLAMA — geri dönüşsüz maskeleme operatör kararıdır (2026-08-09 denetimi).
+          Tıbbi-hukuki saklama süresi ülkeye/kliniğe göre değişir: KVKK silmeyi ister, açılmış
+          bir dava dosyası saklamayı. Yazılım bu kararı sessizce almaz. */}
+      {isExpert && retention && (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Veri Saklama Süresi</Text>
+          <Text style={styles.intro}>
+            {retention.days > 0
+              ? `Seans kayıtlarındaki hasta ve operatör adları ${retention.days} gün sonra kalıcı olarak maskelenir ([REDACTED]). Tedavi verileri (doz, süre, sensör) KALIR.`
+              : "Maskeleme KAPALI — hasta ve operatör adları süresiz saklanır."}
+          </Text>
+
+          {retention.pending > 0 ? (
+            <>
+              <Text style={[styles.intro, { color: colors.warning }]}>
+                {retention.pending} seans kaydı maskelenmeyi bekliyor. Bu işlem GERİ ALINAMAZ:
+                hasta adları kalıcı olarak silinir. Onaylayana kadar hiçbir kayda dokunulmaz.
+              </Text>
+              <TouchableOpacity style={[styles.btnOutline, { borderColor: colors.warning }]}
+                disabled={retMesgul} onPress={() => retentionKaydet({ acknowledge: true })}
+                accessibilityRole="button"
+                accessibilityLabel="Geri dönüşsüz maskelemeyi onayla ve başlat">
+                <Text style={[styles.btnOutlineText, { color: colors.warning }]}>
+                  {retMesgul ? "…" : "Anladım, maskelemeyi başlat"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+
+          <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
+            {[0, 365, 730, 1825].map((g) => (
+              <TouchableOpacity key={g} style={[styles.btnOutline, { flex: 0, paddingHorizontal: spacing.md },
+                                                retention.days === g && { borderColor: colors.primary }]}
+                disabled={retMesgul} onPress={() => retentionKaydet({ days: g })}
+                accessibilityRole="button"
+                accessibilityLabel={g === 0 ? "Maskelemeyi kapat" : `Saklama süresi ${g} gün`}>
+                <Text style={[styles.btnOutlineText, retention.days === g && { color: colors.primary }]}>
+                  {g === 0 ? "Kapalı" : g === 365 ? "1 yıl" : g === 730 ? "2 yıl" : "5 yıl"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Card>
+      )}
+
+      {/* KÜNYE (2026-08-07): üretici/satıcı kimliği uygulamada da görünür olmalı — tıbbi
+          cihaz yazılımında kullanıcı hangi tüzel kişiye ulaşacağını bilmeli (site künyesiyle
+          AYNI bilgiler; tek kaynak `FIRMA` sabiti). */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Building2 color={colors.primary} size={20} />
+          <Text style={styles.cardTitle}>Hakkında</Text>
+        </View>
+        <Text style={styles.label}>{FIRMA.urun}</Text>
+        <Text style={styles.kunyeSatir}>{FIRMA.unvan}</Text>
+        <Text style={styles.kunyeSatir}>{FIRMA.adres}</Text>
+        <Text style={styles.kunyeSatir}>Tel: {FIRMA.tel}  ·  {FIRMA.eposta}</Text>
+        <Text style={styles.kunyeSatir}>MERSİS: {FIRMA.mersis}  ·  VKN: {FIRMA.vkn}</Text>
+        <Text style={styles.kunyeSatir}>© {FIRMA.yil} {FIRMA.kisaUnvan}</Text>
+      </Card>
+
+      {/* Yedek parolası — `window.prompt` yerine (2026-08-09 denetimi): iki kez sorar, asgari
+          uzunluğu gösterir, parolayı düz metin sızdırmaz ve native'de de çalışır. */}
+      <BackupPassphraseDialog
+        visible={parolaKipi !== null}
+        kip={parolaKipi ?? "gir"}
+        onCancel={() => parolaKapat(null)}
+        onSubmit={(p) => parolaKapat(p)}
+      />
     </ScrollView>
   );
 }
@@ -596,6 +907,8 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     marginBottom: spacing.lg
   },
+  // Künye satırları (2026-08-07): küçük, sönük, okunur.
+  kunyeSatir: { color: colors.textMuted, fontSize: rf(11), lineHeight: rf(17) },
   card: {
     marginBottom: spacing.md,
     gap: spacing.sm
