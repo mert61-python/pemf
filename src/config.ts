@@ -99,7 +99,7 @@ export const DOWNLOAD_HOST = {
   // 2026-08-06: Android AYRI etiket. Eskiden mac/linux ile ORTAK launcherTag'i (1.9.2) kullanıyordu
   // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
   // bağımsız olduğu için kendi etiketi olmalı.
-  androidTag: 'launcher-v1.9.18',
+  androidTag: 'launcher-v1.9.25',
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-11) — Windows ile AYNI gerekçe: İndirilenler klasöründe üç
   // sürüm yan yana durunca hangisinin hangisi olduğu anlaşılmıyor ve destek çağrısında "hangi
   // APK'yı kurdunuz?" cevapsız kalıyordu. Windows `windowsTag`ten türetilebiliyor (etiket sürümü
@@ -107,11 +107,11 @@ export const DOWNLOAD_HOST = {
   //
   // ⚠️ TEK KAYNAK guii/versions.json → mobile.name. Burası ELLE eşlenir; APK yayınlarken ikisini
   // birlikte güncelleyin (`scripts/check-legal-config.mjs` tutarlılığı ayrıca kilitler).
-  androidVersion: '2.3.8',
+  androidVersion: '2.3.9',
   get androidAsset(): string {
     return `PEMF_Vet_Mobil-${this.androidVersion}.apk`
   },
-  androidReady: true, // Android standalone APK yayinda (v2.3.8 / versionCode 15)
+  androidReady: true, // Android standalone APK yayinda (v2.3.9 / versionCode 16)
 }
 
 const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`

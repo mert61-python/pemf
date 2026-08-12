@@ -1,65 +1,113 @@
 // Author: mertaygn, cglrgrkn
-import { CLIENT } from '../config'
-import { Bolt } from './Icons'
+import { BRAND, CLIENT } from '../config'
+import { Check, Logo, Refresh } from './Icons'
 
-/* PEMF Vet launcher/dashboard önizlemesi — saf CSS pencere mockup'ı. */
+/* PEMF Vet Client önizlemesi — saf CSS pencere mockup'ı (ekran görüntüsü DEĞİL).
+ *
+ * ⚠️ 2026-08-12 — GERÇEK CLIENT'A GÖRE YENİDEN ÇİZİLDİ. Önceki hâli client'ın ARTIK OLMAYAN
+ * bir sürümünü gösteriyordu: macOS trafik-ışığı noktaları, "PEMF Vet Dashboard", "Cihaz Durumu"
+ * satırı ve Frekans/Yoğunluk/Süre metrik kutuları. Client bunların hiçbirini göstermiyor;
+ * kurulum sonrası ekranı "Hazır!" + profil rozetleri + Başlat'tır. Sitede ürünün yanlış bir
+ * resmini göstermek, indirmeden önce beklenti oluşturur ve ilk açılışta kafa karıştırır.
+ *
+ * ⚠️ NEDEN EKRAN GÖRÜNTÜSÜ DEĞİL: gerçek client başlığında OTURUM AÇMIŞ KULLANICININ
+ * E-POSTASI yazar. Halka açık pazarlama sayfasına konacak bir ekran görüntüsü o adresi de
+ * yayınlar. Mockup'ta kimlik alanı hiç yok; ayrıca sürüm/ünvan tek kaynaktan gelir
+ * (`CLIENT.version`, `BRAND.company`) — ekran görüntüsü ise her yayında bayatlar.
+ *
+ * "Yoğunluk 0 mT" metriği de bu vesileyle kalktı: girilen mT değeri cihaza HİÇ ulaşmıyor
+ * (ne STM paketinde ne ESP komutunda alan var) ve bu iddia raporlardan zaten kaldırılmıştı.
+ */
 const chrome = { background: 'oklch(14% 0.015 260)' }
-const bg = { background: 'oklch(20% 0.02 260)' }
-const panel = { background: 'oklch(24% 0.02 260)' }
+const bg = { background: 'oklch(17% 0.025 230)' }
+const kutu = { background: 'oklch(22% 0.03 200)' }
 
-function Metric({ label, value, tint }: { label: string; value: string; tint: string }) {
+/** Kurulu profil rozeti — client'ta olduğu gibi onay işaretli. */
+function Profil({ ad }: { ad: string }) {
   return (
-    <div className="rounded-lg border border-white/8 p-3" style={panel}>
-      <div className="mb-2 h-1 w-10 rounded-full" style={{ background: tint }} />
-      <div className="text-[11px] uppercase tracking-wide text-white/45">{label}</div>
-      <div className="mt-0.5 text-lg font-bold text-white/90">{value}</div>
-    </div>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 px-3 py-1.5 text-[11px] font-semibold text-primary/90"
+      style={kutu}
+    >
+      <Check className="h-3 w-3" /> {ad}
+    </span>
   )
 }
 
 export default function LauncherMock() {
   return (
     <div className="glow-ring overflow-hidden rounded-xl border border-white/10" style={bg}>
-      {/* Başlık çubuğu */}
-      <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3" style={chrome}>
-        <span className="h-3 w-3 rounded-full" style={{ background: 'oklch(65% 0.2 25)' }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: 'oklch(80% 0.15 85)' }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: 'oklch(72% 0.17 152)' }} />
-        <span className="ml-2 text-xs text-white/45">PEMF Vet Client v{CLIENT.version}</span>
-        <span className="ml-auto text-xs text-white/30">Launcher</span>
+      {/* Başlık çubuğu — logo + ürün adı solda, sürüm rozeti sağda (client ile aynı düzen) */}
+      <div className="flex items-center gap-2.5 border-b border-white/8 px-4 py-3" style={chrome}>
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+          style={{ background: 'oklch(30% 0.07 190)' }}
+        >
+          <Logo className="h-4 w-4 text-primary" />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-xs font-bold text-white/90">PEMF Vet</span>
+          <span className="block truncate text-[10px] text-white/40">
+            Veteriner PEMF seans + yapay zekâ teşhis platformu
+          </span>
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="hidden items-center rounded-md border border-white/10 text-[10px] font-semibold sm:inline-flex">
+            <span className="rounded-l-md bg-primary px-1.5 py-0.5 text-[oklch(17%_0.03_200)]">TR</span>
+            <span className="px-1.5 py-0.5 text-white/40">EN</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/55">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'oklch(72% 0.17 152)' }} />
+            v{CLIENT.version}
+          </span>
+        </span>
       </div>
 
-      {/* Gövde */}
-      <div className="p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-white/90">PEMF Vet Dashboard</div>
-            <div className="text-xs text-white/40">Cihaz Durumu: Bağlı Değil</div>
-          </div>
-          <button className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-[oklch(17%_0.03_200)]"
-            style={{ background: 'linear-gradient(180deg, oklch(72% 0.14 190), oklch(66% 0.13 184))' }}>
-            <Bolt className="h-4 w-4" /> Başlat
-          </button>
+      {/* Gövde — client'ın kurulum-sonrası "Hazır!" ekranı */}
+      <div className="px-5 py-8 text-center">
+        <span
+          className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-primary/20"
+          style={kutu}
+        >
+          <Check className="h-7 w-7 text-primary" />
+        </span>
+
+        <div className="mt-4 text-xl font-bold text-white/95">Hazır!</div>
+        <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-white/45">
+          PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Profil ad="Ev Sahibi" />
+          <Profil ad="Araştırma Modu" />
+          <Profil ad="Veteriner Hekim" />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <Metric label="Frekans" value="0 Hz" tint="oklch(66% 0.13 184)" />
-          <Metric label="Yoğunluk" value="0 mT" tint="oklch(78% 0.15 80)" />
-          <Metric label="Süre" value="0 dk" tint="oklch(72% 0.17 152)" />
-        </div>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="mt-6 inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-bold text-[oklch(17%_0.03_200)]"
+          style={{ background: 'linear-gradient(180deg, oklch(76% 0.15 178), oklch(68% 0.14 182))' }}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          Başlat
+        </button>
 
-        {/* Yama notları mini panel */}
-        <div className="mt-3 rounded-lg border border-white/8 p-3" style={panel}>
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs font-semibold text-white/70">Yama Notları · v{CLIENT.version}</span>
-            <span className="text-[11px] text-white/35">{CLIENT.releaseDate}</span>
-          </div>
-          <div className="space-y-1.5">
-            {[70, 52, 84].map((w, i) => (
-              <div key={i} className="h-1.5 rounded-full bg-white/10" style={{ width: `${w}%` }} />
-            ))}
-          </div>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-white/40">
+          <span className="inline-flex items-center gap-1.5">
+            <Refresh className="h-3 w-3" /> Profilleri değiştir
+          </span>
+          <span>Onar</span>
+          <span>Uygulamayı kaldır</span>
         </div>
+      </div>
+
+      {/* Alt bilgi — ünvan TEK KAYNAK (`BRAND.company`) */}
+      <div className="border-t border-white/8 px-4 py-2.5 text-center text-[10px] text-white/30" style={chrome}>
+        © {BRAND.company}
       </div>
     </div>
   )
