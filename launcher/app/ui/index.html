@@ -1005,14 +1005,37 @@
         box.hidden = false;
       }
 
-      async function firewallKontrol() {
+      /**
+       * Güvenlik duvarı uyarısı — ÖNCE WINDOWS'A ŞANS VER.
+       *
+       * ⚠️ Eskiden bu kontrol HER AÇILIŞTA, kurulum biter bitmez koşuyordu ve "kural yok"u
+       * hata sayıyordu. Ama Windows, bir program İLK KEZ dinlemeye başladığında kendi
+       * "erişime izin ver" penceresini gösterir; kullanıcı onaylayınca iş biter. Yeni
+       * kurulumda kural olmaması NORMALDİR — hata değil. Sonuç: kullanıcı, işletim
+       * sisteminin zaten halledeceği bir şey için gereksiz yönetici istemine itiliyordu.
+       *
+       * Yeni davranış:
+       *   * AÇIKÇA ENGELLENMİŞSE (Block kuralı) → her zaman uyar. Bu kalıcıdır (kullanıcı
+       *     Windows penceresinde "İptal" demiş) ve yalnız yükseltilmiş düzeltme açar.
+       *   * Kural YOKSA → açılışta SUS. Yalnız backend çalıştıktan SONRA uyar (Windows
+       *     penceresini gösterme fırsatı bulmuştur; hâlâ yoksa mobil gerçekten bağlanamaz).
+       *
+       * @param {boolean} backendCalisti Backend bu oturumda başlatıldı mı?
+       */
+      async function firewallKontrol(backendCalisti) {
         let d;
         try { d = await invoke("firewall_durumu"); } catch (_) { return; }
-        if (!d || !d.engelli) return;
+        if (!d || d.gereksiz) return;
+        const engel = !!d.engelli;
+        const kuralYok = !!d.kural_yok && backendCalisti === true;
+        if (!engel && !kuralYok) return;
         const box = $("notice"); box.textContent = "";
         const p1 = document.createElement("div");
-        p1.textContent = "Mobil uygulama bu cihaza bağlanamayabilir: Windows güvenlik duvarında "
-          + "gelen bağlantı izni yok. Cihaz ekranından kullanım etkilenmez.";
+        p1.textContent = engel
+          ? "Windows güvenlik duvarı bu uygulamanın ağdan bağlantı almasını ENGELLİYOR — "
+            + "mobil uygulama cihazı bulamaz. Cihaz ekranından kullanım etkilenmez."
+          : "Mobil uygulama bu cihaza bağlanamayabilir: Windows güvenlik duvarında gelen "
+            + "bağlantı izni yok. Cihaz ekranından kullanım etkilenmez.";
         box.appendChild(p1);
         const b = document.createElement("button");
         b.className = "nbtn"; b.textContent = "İzin ver (yönetici)";
@@ -1267,7 +1290,8 @@
         if (env.already_installed) {
           // Sıra ÖNEMLİ: ikisi de aynı bildirim kutusunu kullanır. Firewall (mobil erişim
           // tamamen kopuk) daha acil; yedek hatırlatması o çıkmadıysa gösterilir.
-          firewallKontrol()
+          // Açılışta YALNIZ açıkça engellenmiş hâli bildir (backendCalisti=false).
+          firewallKontrol(false)
             .then(() => { if ($("notice").hidden) return yedekHedefiKontrol(); })
             .catch(() => {});
         }
@@ -1405,6 +1429,12 @@
           // kullanici uygulamanin calisip calismadigini anlayamiyor, tekrar basiyordu (ve eskiden
           // bu, acik uygulamayi YENIDEN YUKLEYIP acik ekrani kaybettiriyordu). Durumu yansit.
           setRunningUi(true);
+          // ⚠️ GÜVENLİK DUVARI KONTROLÜ BURADA — açılışta DEĞİL. Backend artık dinlemeye
+          // başladı, yani Windows kendi "erişime izin ver" penceresini gösterme fırsatı
+          // buldu. Hâlâ izin yoksa mobil uygulama GERÇEKTEN bağlanamaz; ancak o zaman
+          // kullanıcıyı yönetici istemine yönlendirmek doğrudur. (Açılışta yapılınca yeni
+          // kurulumda daima yanlış alarm veriyordu.)
+          firewallKontrol(true).catch(() => {});
         }
         catch (e) { show("s-ready"); setRunningUi(false); fail(e); }
         finally { busy = false; stopPolling(); }

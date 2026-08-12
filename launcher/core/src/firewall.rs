@@ -36,11 +36,22 @@ pub const KURAL_API: &str = "PEMF Backend API";
 pub const KURAL_KESIF: &str = "PEMF UDP Discovery";
 
 /// Güvenlik duvarı durumu.
+///
+/// ⚠️ ÜÇ DURUM, İKİ DEĞİL (2026-08-11). Eskiden "kural yok" ile "açıkça engellenmiş" AYNI
+/// sayılıyordu ve uyarı her açılışta, backend daha bir kez bile dinlemeden gösteriliyordu.
+/// Oysa Windows, program ilk kez dinlediğinde KENDİ izin penceresini gösterir ve kullanıcı
+/// "İzin ver" derse iş biter. Yeni kurulumda "kural yok" NORMALDİR — hata değil.
+/// İkisini ayırmak, kullanıcıyı işletim sisteminin zaten halledeceği bir şey için yönetici
+/// istemine itmeyi bitirir.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Durum {
-    /// Kural var (ya da okunamadı → fail-open).
+    /// İzin var (bizim kuralımız ya da Windows'un kendi izni) — ya da okunamadı (fail-open).
     Acik,
-    /// Kural YOK → mobil uygulama bağlanamaz.
+    /// Henüz kural YOK. Backend hiç dinlemediyse bu NORMALDİR; Windows kendi penceresini
+    /// gösterecektir. Ancak backend çalıştıktan SONRA hâlâ yoksa mobil bağlantı kurulamaz.
+    KuralYok,
+    /// Açıkça ENGELLENMİŞ (etkin Block kuralı). Kullanıcı Windows penceresinde "İptal" demiş
+    /// ya da politika engelliyor. Bu engel KALICIdır ve yalnız yükseltilmiş düzeltmeyle açılır.
     Engelli,
     /// Bu platformda kontrol anlamsız (Windows dışı).
     Gereksiz,
@@ -72,14 +83,58 @@ pub fn ekleme_betigi(backend_exe: &Path) -> String {
     )
 }
 
-/// Kurallar var mı? Okunamazsa `Acik` (fail-open — bkz. modül notu).
-#[cfg(windows)]
-pub fn durum() -> Durum {
-    let betik = format!(
+/// Durum denetimi betiği — `backend_exe` biliniyorsa Windows'un KENDİ izni de sayılır.
+///
+/// ⚠️ YANLIŞ ALARM DÜZELTMESİ (2026-08-11, sahip bildirimi: "eskiden buna gerek olmadan
+/// buluyordu"). Denetim YALNIZ kendi adlandırılmış kurallarımıza bakıyordu. Oysa Windows,
+/// bir program ilk kez dinlemeye başladığında "erişime izin ver" penceresi gösterir ve
+/// kullanıcı onaylarsa **program kapsamlı bir Allow kuralı** oluşturur — bağlantı o kuralla
+/// zaten çalışır. Bizim kurallarımız olmadığı için "engelli" deyip kullanıcıyı GEREKSİZ bir
+/// UAC istemine itiyorduk (ve gereksiz uyarı, uyarı körlüğü yaratır).
+///
+/// Yeni kural: şu üçünden biri yeterlidir →
+///   1. adlandırılmış kurallarımız (API + keşif),
+///   2. backend exe'si için ETKİN, Inbound, **Allow** bir kural (Windows'un kendi izni).
+/// ⚠️ Ama exe için ETKİN bir **Block** kuralı varsa durum ENGELLİdir — kullanıcı Windows
+/// penceresinde "İptal" demiştir ve o engel KALICIDIR; asıl düzeltmeye ihtiyaç duyulan hâl budur.
+fn durum_betigi(backend_exe: Option<&Path>) -> String {
+    let adli = format!(
         "$a = Get-NetFirewallRule -DisplayName '{api}' -ErrorAction SilentlyContinue; \
          $b = Get-NetFirewallRule -DisplayName '{kesif}' -ErrorAction SilentlyContinue; \
-         if ($a -and $b) {{ 'VAR' }} else {{ 'YOK' }}",
-        api = KURAL_API, kesif = KURAL_KESIF);
+         $adli = [bool]($a -and $b); ",
+        api = KURAL_API,
+        kesif = KURAL_KESIF
+    );
+    match backend_exe {
+        None => format!("{adli} if ($adli) {{ 'VAR' }} else {{ 'YOKSA' }}"),
+        Some(p) => {
+            let p = ps_kacis(&p.to_string_lossy());
+            format!(
+                "{adli} \
+                 $exe='{p}'; $izin=$false; $engel=$false; \
+                 try {{ \
+                   $f = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | \
+                        Where-Object {{ $_.Program -and ($_.Program -ieq $exe) }}; \
+                   foreach ($x in $f) {{ \
+                     $r = $x | Get-NetFirewallRule -ErrorAction SilentlyContinue; \
+                     foreach ($rr in $r) {{ \
+                       if ($rr.Direction -eq 'Inbound' -and $rr.Enabled -eq 'True') {{ \
+                         if ($rr.Action -eq 'Block') {{ $engel = $true }} \
+                         elseif ($rr.Action -eq 'Allow') {{ $izin = $true }} \
+                       }} }} }} \
+                 }} catch {{ }} \
+                 if ($engel) {{ 'ENGEL' }} elseif ($adli -or $izin) {{ 'VAR' }} else {{ 'YOKSA' }}"
+            )
+        }
+    }
+}
+
+/// Kurallar var mı? Okunamazsa `Acik` (fail-open — bkz. modül notu).
+///
+/// `backend_exe` verilirse Windows'un kendi otomatik izni de sayılır (bkz. `durum_betigi`).
+#[cfg(windows)]
+pub fn durum_icin(backend_exe: Option<&Path>) -> Durum {
+    let betik = durum_betigi(backend_exe);
     // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut): bu denetim launcher AÇILIŞINDA
     // koşar; çıplak `Command` kullanıcıya siyah pencere gösteriyordu.
     let cikti = crate::platform::gizli_komut("powershell")
@@ -88,7 +143,13 @@ pub fn durum() -> Durum {
     match cikti {
         Ok(o) if o.status.success() => {
             let s = String::from_utf8_lossy(&o.stdout);
-            if s.contains("YOK") { Durum::Engelli } else { Durum::Acik }
+            if s.contains("ENGEL") {
+                Durum::Engelli
+            } else if s.contains("YOKSA") {
+                Durum::KuralYok
+            } else {
+                Durum::Acik
+            }
         }
         // Okunamadı → ENGELLEME. Yanlış uyarı, uyarı körlüğü yaratır.
         _ => Durum::Acik,
@@ -96,14 +157,74 @@ pub fn durum() -> Durum {
 }
 
 #[cfg(not(windows))]
-pub fn durum() -> Durum {
+pub fn durum_icin(_backend_exe: Option<&Path>) -> Durum {
     Durum::Gereksiz
+}
+
+/// Geriye uyum: exe yolu bilinmeden denetim (yalnız adlandırılmış kurallara bakar).
+pub fn durum() -> Durum {
+    durum_icin(None)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn KRITIK_windows_kendi_izni_de_SAYILIR() {
+        // Sahip bildirimi 2026-08-11: "eskiden buna gerek olmadan buluyordu". Windows, program
+        // ilk dinlemede kullanıcı onaylarsa KENDİ Allow kuralını oluşturur ve bağlantı çalışır.
+        // Denetim yalnız bizim adlandırılmış kurallarımıza bakarsa YANLIŞ ALARM verir ve
+        // kullanıcıyı gereksiz UAC istemine iter.
+        let s = durum_betigi(Some(&PathBuf::from(r"C:\PEMF\PEMF_Backend.exe")));
+        assert!(
+            s.contains("Get-NetFirewallApplicationFilter"),
+            "exe kapsamli kurallar (Windows'un kendi izni) HIC sorgulanmiyor"
+        );
+        assert!(s.contains("'Allow'"), "Allow kurali dikkate alinmiyor");
+        assert!(s.contains("$adli -or $izin"), "adli VEYA windows-izni kabul edilmiyor");
+    }
+
+    #[test]
+    fn KRITIK_kural_YOK_ile_ENGELLI_AYRI_raporlanir() {
+        // ⚠️ EN ÖNEMLİ UX DEĞİŞMEZİ. İkisi aynı sayılırsa, YENİ KURULUMDA (henüz hiç kural
+        // yokken, backend hiç dinlemeden) uyarı çıkar ve kullanıcı Windows'un zaten
+        // halledeceği bir şey için yönetici istemine itilir.
+        let s = durum_betigi(Some(&PathBuf::from(r"C:\PEMF\PEMF_Backend.exe")));
+        assert!(s.contains("'ENGEL'"), "acikca engellenmis hal ayri raporlanmiyor");
+        assert!(s.contains("'YOKSA'"), "'kural yok' hali ayri raporlanmiyor");
+        assert!(
+            !s.contains("{{ 'YOK' }}"),
+            "eski TEK 'YOK' cikti hali duruyor → iki durum ayirt edilemez"
+        );
+    }
+
+    #[test]
+    fn KRITIK_ETKIN_BLOCK_kurali_ENGELLI_sayilir() {
+        // Kullanıcı Windows penceresinde "İptal" derse Windows BLOCK kuralı yazar ve engel
+        // KALICIdır. Asıl düzeltmeye ihtiyaç duyulan hâl budur; "Allow var" diye geçilemez.
+        let s = durum_betigi(Some(&PathBuf::from(r"C:\PEMF\PEMF_Backend.exe")));
+        assert!(s.contains("'Block'"), "Block kurali tespit edilmiyor");
+        assert!(
+            s.contains("if ($engel) { 'ENGEL' }"),
+            "Block, Allow'dan ONCE degerlendirilmiyor → engelli kurulum 'acik' gorunur"
+        );
+    }
+
+    #[test]
+    fn exe_YOKKEN_eski_davranis_korunur() {
+        let s = durum_betigi(None);
+        assert!(s.contains(KURAL_API) && s.contains(KURAL_KESIF));
+        assert!(!s.contains("Get-NetFirewallApplicationFilter"));
+    }
+
+    #[test]
+    fn durum_betigi_yol_KACISI_yapar() {
+        // Kurulum dizini kullanıcı-etkili; tek tırnak kapatılıp komut enjekte edilmemeli.
+        let s = durum_betigi(Some(&PathBuf::from(r"C:\a'b\PEMF_Backend.exe")));
+        assert!(s.contains(r"C:\a''b\PEMF_Backend.exe"), "tek tirnak kacisi yapilmadi");
+    }
 
     #[test]
     fn betik_iki_kurali_da_ekler() {

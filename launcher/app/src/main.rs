@@ -1338,10 +1338,19 @@ fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), Strin
 /// APK klinik WiFi'sinde cihaza HİÇ bağlanamıyor ve sebebi hiçbir yerde yazmıyor.
 #[tauri::command]
 fn firewall_durumu() -> serde_json::Value {
-    use pemf_launcher_core::firewall::{durum, Durum};
-    let d = durum();
+    use pemf_launcher_core::firewall::{durum_icin, Durum};
+    // ⚠️ backend exe YOLUNU ver: Windows'un KENDİ otomatik izni de sayılsın. Yol verilmezse
+    // denetim yalnız bizim adlandırılmış kurallarımıza bakar ve Windows zaten izin vermiş
+    // olsa bile "engelli" der → kullanıcı GEREKSİZ bir UAC istemine itilir (sahip bildirimi
+    // 2026-08-11: "eskiden buna gerek olmadan buluyordu").
+    let exe = install::backend_path(&install::default_install_root(&home_dir()));
+    let d = durum_icin(Some(&exe));
     serde_json::json!({
+        // AÇIKÇA engellenmiş (Block kuralı) — her zaman uyar, kalıcı engel.
         "engelli": d == Durum::Engelli,
+        // Henüz kural yok — backend HİÇ dinlemediyse NORMAL. Arayüz bunu yalnız backend
+        // çalıştıktan SONRA uyarıya çevirir (bkz. index.html::firewallKontrol).
+        "kural_yok": d == Durum::KuralYok,
         "gereksiz": d == Durum::Gereksiz,
     })
 }

@@ -48,43 +48,118 @@ _GOC_DOSYALARI = (
 _GOC_SIFRELI = frozenset({"pemf_treatment_history.db", "pemf_patients.db"})
 
 
-def _hedef_anahtariyla_acilir_mi(dosya: Path, hedef: Path) -> bool:
-    """`dosya`, HEDEF kökün at-rest anahtarıyla açılabiliyor mu?
+#: Sır dosyasının adı (utils.secrets_manager ile AYNI).
+_SIR_DOSYASI = "pemf_secrets.json"
 
-    ⚠️ SAHA ARIZASI 2026-08-11 — SONSUZ TUĞLA DÖNGÜSÜ. Bu göç, SQLCipher ile şifreli DB'leri
-    kopyalıyordu ama onları açan anahtar `pemf_secrets.json`da durur ve o dosya (haklı olarak,
-    cihaz kimliği içerdiği için) GÖÇMEZ. Hedef kökün KENDİ sır dosyası varsa anahtarlar farklıdır
-    → kopyalanan DB KALICI OKUNAMAZ → backend açılışta ölür. Dosya kenara alınsa bile bir sonraki
-    açılışta `varis.exists()` yine False olur ve AYNI bozuk dosya TEKRAR kopyalanır: cihaz bir
-    daha hiç açılmaz.
 
-    Bu yüzden şifreli dosya, ancak hedefin anahtarıyla GERÇEKTEN açılıyorsa kopyalanır.
-    Açılmıyorsa kaynak eski konumunda DURUR (veri kaybı yok) ve durum loglanır.
+def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
+    """Eski kökteki at-rest anahtarını YENİ köke taşı — YALNIZ `sqlcipher_key`.
+
+    NEDEN GEREKLİ. Tıbbi kayıt göçü şifreli DB'leri taşıyamıyordu: anahtar
+    `pemf_secrets.json`dadır ve o dosya BÜTÜN olarak göçemez (içinde `device_id`,
+    `pairing_code`, `device_registry_secret` var — kopyalanırsa iki kurulum aynı cihaz
+    kimliğini paylaşır). Sonuç: şifreli kurulumlarda eski veri eski konumda kalıyor ve
+    vardiyalı klinikte ikinci hesapla açan veteriner hâlâ "BOŞ KLİNİK" görüyordu.
+
+    Bu fonksiyon SADECE `auto.sqlcipher_key` alanını taşır; cihaz kimliği DOKUNULMAZ.
+
+    ⚠️ Değer DPAPI ile `CRYPTPROTECT_LOCAL_MACHINE` kapsamında sarılıdır — yani MAKİNEYE
+    bağlıdır, kullanıcıya değil. Bu yüzden şifreli değeri OLDUĞU GİBİ kopyalamak aynı
+    makinede geçerlidir; çözüp yeniden sarmaya gerek yok (ve gerekmemeli: göç, backend
+    AÇILIŞINDA çalışır, orada kripto katmanına dokunmak gereksiz risktir).
+
+    ⚠️ HEDEFTE ANAHTAR VARSA ASLA EZİLMEZ. Hedefin kendi verisi o anahtarla şifreli olabilir;
+    üzerine yazmak ÇALIŞAN bir kurulumu okunamaz hâle getirir — düzeltmeye çalıştığımız
+    hatanın ta kendisi.
+
+    Döner: anahtar taşındıysa `True`.
     """
-    try:
-        from database.sqlcipher_util import get_sqlcipher_key, import_sqlcipher
+    import json
+    import logging
 
-        sqlcipher = import_sqlcipher()
-        if sqlcipher is None:
-            return True  # şifreleme yok → düz-metin DB; göç zaten anlamlı
-        with open(dosya, "rb") as fh:
-            if fh.read(16).startswith(b"SQLite format 3"):
-                return True  # düz-metin: anahtara bağlı değil
-        anahtar = get_sqlcipher_key(hedef)
+    try:
+        kaynak_j, hedef_j = eski / _SIR_DOSYASI, hedef / _SIR_DOSYASI
+        if not kaynak_j.is_file():
+            return False
+        src = json.loads(kaynak_j.read_text(encoding="utf-8"))
+        anahtar = (src.get("auto") or {}).get("sqlcipher_key")
         if not anahtar:
-            return False  # şifreli ama hedefte anahtar YOK → asla açılamaz
-        conn = sqlcipher.connect(str(dosya))
-        try:
-            conn.execute("PRAGMA key='{}'".format(anahtar.replace("'", "''")))
-            conn.execute("SELECT count(*) FROM sqlite_master")
-            return True
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            return False
+
+        dst = {}
+        if hedef_j.is_file():
+            dst = json.loads(hedef_j.read_text(encoding="utf-8"))
+        if (dst.get("auto") or {}).get("sqlcipher_key"):
+            return False  # ⚠️ EZME: hedefin kendi verisi bu anahtarla şifreli olabilir
+
+        dst.setdefault("auto", {})["sqlcipher_key"] = anahtar
+        dst.setdefault("_comment", src.get("_comment", ""))
+        dst.setdefault("_version", src.get("_version", 1))
+        # Atomik yaz: yarım kalan bir sır dosyası TÜM kurulumu açılamaz hâle getirir.
+        gecici = hedef_j.with_suffix(".json.goc-tmp")
+        gecici.write_text(json.dumps(dst, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(gecici, hedef_j)
+        logging.getLogger(__name__).warning(
+            "VERİ GÖÇÜ: at-rest anahtarı yeni köke taşındı (YALNIZ sqlcipher_key; cihaz "
+            "kimliği taşınmadı) → eski şifreli tıbbi kayıt yeni kökte okunabilir."
+        )
+        return True
     except Exception:
+        logging.getLogger(__name__).warning("VERİ GÖÇÜ: at-rest anahtarı taşınamadı.", exc_info=True)
         return False
+
+
+def _sifreli_mi(dosya: Path) -> bool:
+    """Dosya SQLCipher ile şifreli mi? (düz-metin SQLite başlığı YOKSA şifreli sayılır)"""
+    try:
+        with open(dosya, "rb") as fh:
+            return not fh.read(16).startswith(b"SQLite format 3")
+    except Exception:
+        return True  # okunamıyorsa güvenli taraf: şifreli varsay → kopyalama
+
+
+def _tasinabilir_mi(dosya: Path, eski: Path, hedef: Path) -> bool:
+    """`dosya` yeni köke KOPYALANABİLİR mi?
+
+    ⚠️⚠️ BU FONKSİYON SIR/KRİPTO KATMANINA **ASLA** DOKUNMAMALI — SONSUZ ÖZYİNELEME.
+    İlk yazımı `get_sqlcipher_key()` çağırıyordu ve şu döngüyü kuruyordu:
+
+        get_app_data_directory → _kullanicidan_makineye_gocur → (bu fonksiyon)
+          → get_sqlcipher_key → secrets_manager.get_secret → _load → _data_dir
+          → get_app_data_directory → ...
+
+    Sonuç: backend AÇILIŞTA sonsuz özyinelemeye girip belleği tüketiyordu. Geliştirme
+    makinesinde bu, commit limitini doldurup Windows'u BSOD'a (0x10E) götürdü; klinikte
+    cihazın hiç açılmaması demekti. (Bu kusur app 1.9.9 ve 1.9.10'a YAYINLANDI ve
+    1.9.11 ile düzeltildi.)
+
+    Bu yüzden karar YALNIZ SAF DOSYA OKUMASIYLA verilir:
+      * düz-metin SQLite → taşınır (hedefte şifreleme açıksa backend ilk açılışta şifreler);
+      * şifreli → ancak kaynak ile hedefin at-rest anahtarı AYNIYSA taşınır. Anahtarı
+        `_sqlcipher_anahtarini_gocur` zaten taşımış olur; ham (DPAPI-sarılı) değerler
+        JSON'dan okunup KARŞILAŞTIRILIR — çözülmez, türetilmez.
+    """
+    if not _sifreli_mi(dosya):
+        return True
+    k_eski = _ham_sqlcipher_anahtari(eski)
+    k_hedef = _ham_sqlcipher_anahtari(hedef)
+    return bool(k_eski) and k_eski == k_hedef
+
+
+def _ham_sqlcipher_anahtari(kok: Path) -> str:
+    """`pemf_secrets.json` içindeki HAM (DPAPI-sarılı) `sqlcipher_key` — çözmeden.
+
+    SecretsManager KULLANILMAZ: o `get_app_data_directory`ye geri döner ve özyineleme kurar
+    (bkz. `_tasinabilir_mi`). Karşılaştırma için ham değer zaten yeterli."""
+    import json
+
+    try:
+        p = kok / _SIR_DOSYASI
+        if not p.is_file():
+            return ""
+        return str((json.loads(p.read_text(encoding="utf-8")).get("auto") or {}).get("sqlcipher_key") or "")
+    except Exception:
+        return ""
 
 
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
@@ -113,6 +188,12 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             return
         import logging
 
+        # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_hedef_anahtariyla_acilir_mi`
+        # kontrolü şifreli DB'leri reddeder ve şifreli kurulumlarda göç HİÇ çalışmaz
+        # (vardiyalı klinikte "boş klinik" devam ederdi). Anahtar yalnız hedefte HİÇ yoksa
+        # taşınır; varsa dokunulmaz.
+        _sqlcipher_anahtarini_gocur(eski, hedef)
+
         for ad in _GOC_DOSYALARI:
             kaynak, varis = eski / ad, hedef / ad
             if not kaynak.is_file() or varis.exists():
@@ -120,11 +201,11 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             # ⚠️ Şifreli DB'yi HEDEFİN anahtarıyla açamıyorsak KOPYALAMA (bkz.
             # `_hedef_anahtariyla_acilir_mi`): kopyalamak cihazı sonsuz açılış-hatası
             # döngüsüne sokar ve kenara alma bile kurtarmaz.
-            if ad in _GOC_SIFRELI and not _hedef_anahtariyla_acilir_mi(kaynak, hedef):
+            if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
                 logging.getLogger(__name__).error(
-                    "VERİ GÖÇÜ ATLANDI: %s hedef kökün at-rest anahtarıyla AÇILAMIYOR "
-                    "(sır dosyası göçmez, anahtarlar farklı). Kopyalansaydı cihaz her açılışta "
-                    "kırılırdı. Kaynak eski konumda DURUYOR: %s",
+                    "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest anahtarı FARKLI "
+                    "(hedefin kendi anahtarı var, ezilmedi). Kopyalansaydı hedefte okunamaz "
+                    "olur ve cihaz her açılışta kırılırdı. Kaynak eski konumda DURUYOR: %s",
                     ad,
                     kaynak,
                 )

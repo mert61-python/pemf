@@ -107,8 +107,9 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | base.zip sha (12) | app / deps sha (12) | rollout |
 |---|---|---|---|---|---|
-| 1.9.10 | `client-app-v1.9.10` | 2026-08-11 | `0756286b6ce7` | `db362caeb65a` / `fc25abb00531` | 100 |
-| 1.9.9 | `client-app-v1.9.9` | 2026-08-11 | `81e977ccad9d` | `048d4aabb6bb` / `b789896c2aa4` | 100 |
+| 1.9.11 | `client-app-v1.9.11` | 2026-08-11 | `809756decce4` | `c58ae59968dd` / `dea13abcc80b` | 100 |
+| 1.9.10 | `client-app-v1.9.10` | 2026-08-11 | `0756286b6ce7` | `db362caeb65a` / `fc25abb00531` | ⚠️ ÖZYİNELEME — KULLANMAYIN |
+| 1.9.9 | `client-app-v1.9.9` | 2026-08-11 | `81e977ccad9d` | `048d4aabb6bb` / `b789896c2aa4` | ⚠️ ÖZYİNELEME — KULLANMAYIN |
 | 1.9.8 | `client-app-v1.9.8` | 2026-08-10 | `3fd701051e7c` | `38446e281313` / `82986dfd7215` | 100 |
 | 1.9.7 | `client-app-v1.9.7` | 2026-08-10 | `4c580cfc0489` | — | 100 |
 | 1.9.6 | `client-app-v1.9.6` | 2026-08-10 | `194a3a07fd54` | `0a9f209a704b` / `fdc0b02b73aa` | 100 |
@@ -143,6 +144,7 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | Installer sha (12) |
 |---|---|---|---|
+| 1.9.24 | `launcher-v1.9.24` | 2026-08-11 | `d1b3ca26efa4` |
 | 1.9.23 | `launcher-v1.9.23` | 2026-08-11 | `f0fa6ef4f81b` |
 | 1.9.22 | `launcher-v1.9.22` | 2026-08-11 | `57d20065fe0a` (yayinda; manifest 1.9.23'e isaret eder) |
 | 1.9.21 | `launcher-v1.9.21` | 2026-08-11 | `07a89b8ab57a` |
@@ -182,6 +184,85 @@ geçmiyorsa test kırılır.
 |---|---|
 | 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
+
+---
+
+## launcher 1.9.24 — 2026-08-11 (güvenlik duvarı uyarısı: yanlış alarm bitti)
+
+**Sahip bildirimi:** *"eskiden buna gerek olmadan buluyordu, şart mı bu?"*
+
+Şart değildi. Uyarı **yanlış alarmdı** ve kullanıcıyı gereksiz yönetici istemine itiyordu.
+İki ayrı kusur vardı:
+
+1. **Windows'un KENDİ izni sayılmıyordu.** Bir program ilk kez dinlemeye başlayınca Windows
+   "erişime izin ver" penceresi gösterir; kullanıcı onaylarsa **program kapsamlı bir Allow
+   kuralı** oluşur ve bağlantı onunla çalışır. Denetim yalnız kendi adlandırılmış kurallarımıza
+   baktığı için, izin zaten varken "engelli" diyordu. (Sahibin makinesinde ölçüldü: Windows'un
+   kuralı vardı ve doğru kurulum yolunu gösteriyordu.)
+2. **"Kural yok" ile "açıkça engellenmiş" AYNI sayılıyordu** ve kontrol HER AÇILIŞTA, backend
+   daha bir kez bile dinlemeden koşuyordu. Yeni kurulumda kural olmaması NORMALDİR — Windows
+   henüz penceresini göstermemiştir. Kullanıcı, işletim sisteminin on saniye sonra zaten
+   halledeceği bir şey için UAC istemine itiliyordu.
+
+**Yeni davranış — önce Windows'a şans ver:**
+
+| Durum | Uyarı |
+|---|---|
+| Açıkça engellenmiş (etkin **Block** kuralı) | Her zaman — engel kalıcıdır, yükseltilmiş düzeltme tek çözüm |
+| Kural yok | Açılışta **susar**; yalnız **Başlat'tan sonra** uyarır (Windows fırsatını kullandı) |
+| İzin var (bizimki **veya Windows'unki**) | Hiç uyarmaz |
+
+Mesaj da duruma göre ayrışır ("Windows engelliyor" ↔ "izin yok").
+
+⚠️ Tam sessiz otomatik YAPILAMAZ: kural eklemek yönetici ister; launcher bilerek yükseltilmemiş
+çalışır (sessiz oto-güncelleme UAC'siz olsun diye) ve kurulum `currentUser` kipindedir. Açılışta
+otomatik UAC çıkarmak daha kötü olurdu — çoğu kullanıcıda hiç gerekmiyor.
+
+**Doğrulama:** 3 mutasyon yakalandı (Windows iznini yok sayma, iki durumu birleştirme, Block
+tespitini kaldırma); cargo 234 ✓.
+---
+
+## app 1.9.11 — 2026-08-11 (⚠️ ACİL: veri göçünde SONSUZ ÖZYİNELEME)
+
+**1.9.9 ve 1.9.10 bu kusuru TAŞIYOR. Bu sürüme geçin.**
+
+### Kusur
+
+Veri göçü (`%APPDATA%` → makine-geneli kök) `get_app_data_directory()` İÇİNDEN çağrılır.
+1.9.9'da eklenen "hedefin anahtarıyla açılıyor mu?" kontrolü oradan sır katmanına gidiyordu:
+
+```
+get_app_data_directory → _kullanicidan_makineye_gocur → (kontrol)
+  → get_sqlcipher_key → secrets_manager.get_secret → _load → _data_dir
+  → get_app_data_directory → …
+```
+
+Eski `%APPDATA%\PEMF_GUI` verisi olan bir kurulumda backend **açılışta sonsuz özyinelemeye**
+girip belleği tüketiyordu. Geliştirme makinesinde bu, commit limitini doldurup Windows'u
+**BSOD**'a (`0x10E`) götürdü; klinikte karşılığı cihazın hiç açılmamasıdır. Yığın izi
+`faulthandler` ile kanıtlandı.
+
+**Düzeltme:** göç yolu artık sır/kripto katmanına **hiç dokunmuyor**. Karar saf dosya
+okumasıyla verilir: düz-metin SQLite mi, değilse kaynak ile hedefin **ham** (DPAPI-sarılı)
+anahtar değerleri eşit mi. Çözme/türetme yok. `tests/test_anahtar_uyusmazligi_karantina.py`
+bu değişmezi kilitler — göç yolu sır katmanına dokunursa test patlar.
+
+### At-rest anahtarı artık tıbbi kayıtla BİRLİKTE taşınıyor
+
+Şifreli kurulumlarda göç hiç çalışmıyordu: anahtar `pemf_secrets.json`da durur, o dosya ise
+`device_id`/`pairing_code` taşıdığı için bütün olarak göçemez. Sonuç, vardiyalı klinikte
+ikinci hesapla açan veterinerin hâlâ **"boş klinik"** görmesiydi.
+
+Artık **yalnız `auto.sqlcipher_key`** taşınıyor; cihaz kimliğine dokunulmuyor. Değer DPAPI
+`LOCAL_MACHINE` kapsamında sarılı olduğu için ham hâliyle kopyalanır (aynı makinede geçerli).
+
+⚠️ **Hedefte anahtar VARSA asla ezilmez** — hedefin kendi verisi onunla şifreli olabilir;
+üzerine yazmak çalışan bir kurulumu okunamaz hâle getirirdi. Mutasyonla doğrulandı.
+
+**Doğrulama:** pytest 926 ✓; 3 mutasyon (anahtarı ezme / cihaz kimliğini taşıma / şifreli
+DB'yi koşulsuz taşıma) yakalandı. **Gerçek frozen build** üzerinde uçtan uca: eski kökte
+DPAPI-sarılı anahtar + gerçek şifreli DB → anahtar taşındı, DB kopyalandı ve hedefte
+**çözülebildi** (backend şema göçüne kadar ilerledi).
 
 ---
 
