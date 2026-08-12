@@ -175,7 +175,22 @@ export function AiHubScreen() {
   // null = hepsi kapalı (akordeon). Karta tıkla → altında açılır; tekrar tıkla → kapanır.
   const { research } = useEntitlement();
   const [upgradeFor, setUpgradeFor] = useState<UpgradeFeature | null>(null);
-  const [activeModule, setActiveModule] = useState<AiModule | null>(null);
+  // ⚠️ ÇOKLU AÇIK MODÜL (saha bildirimi 2026-08-12). Eskiden `activeModule` TEK bir modül
+  // tutuyordu: ikinci modüle dokunulduğunda birincinin gövdesi KAPANIYOR, geriye yalnız başlığı
+  // kalıyordu. Oysa akış karşılaştırmalı: hekim FGS skorunu görürken ses analizini de açıp iki
+  // sonuca BİRLİKTE bakmak istiyor (araştırma modunda da aynısı). Küme → istenen kadar modül
+  // açık kalır ve sayfa aşağı doğru uzar. Kapatma yine aynı: açık bir modüle dokunmak kapatır.
+  const [acikModuller, setAcikModuller] = useState<Set<AiModule>>(() => new Set());
+
+  /** Modülü aç/kapat — küme KOPYALANARAK değişir (React referans eşitliğiyle render'ı tetikler). */
+  const moduluDegistir = useCallback((id: AiModule) => {
+    setAcikModuller((onceki) => {
+      const yeni = new Set(onceki);
+      if (yeni.has(id)) yeni.delete(id);
+      else yeni.add(id);
+      return yeni;
+    });
+  }, []);
 
   // logAiResult (hook değil) aktif profili bilsin diye modül-değişkenine yaz (analiz kaydına mode gitsin).
   useEffect(() => { currentAiMode = userMode; }, [userMode]);
@@ -187,7 +202,7 @@ export function AiHubScreen() {
   // kapat → önceki hastanın görüntüsü/sonucu yeni hastada görünmesin ve yanlış hastaya analiz yazılmasın.
   const aiCacheOwnerKey = `${userMode ?? ""}:${selectedPatient?.id ?? selectedPatient?.name ?? ""}`;
   useEffect(() => {
-    if (resetAiCachesForOwner(aiCacheOwnerKey)) setActiveModule(null);
+    if (resetAiCachesForOwner(aiCacheOwnerKey)) setAcikModuller(new Set());
   }, [aiCacheOwnerKey]);
 
   // pet_owner → basit ekran; veterinarian/researcher → modüler AI Hub (modüller profile göre filtreli).
@@ -256,7 +271,7 @@ export function AiHubScreen() {
         <View style={styles.aiWelcome}>
           <Text style={styles.aiWelcomeTitle}>👋 Nasıl çalışır?</Text>
           <Text style={styles.aiWelcomeText}>
-            Bir modüle <Text style={styles.aiWelcomeBold}>dokunun</Text> → hemen altında açılır. İhtiyaca göre
+            Bir modüle <Text style={styles.aiWelcomeBold}>dokunun</Text> → hemen altında açılır; <Text style={styles.aiWelcomeBold}>birden fazlasını aynı anda açık tutabilirsiniz</Text>. İhtiyaca göre
             <Text style={styles.aiWelcomeBold}> fotoğraf/canlı kamera</Text>, <Text style={styles.aiWelcomeBold}>ses</Text> ya da
             <Text style={styles.aiWelcomeBold}> klinik değer</Text> girip analizi başlatın. Her modülün başında kısa bir kullanım ipucu var.
           </Text>
@@ -267,7 +282,7 @@ export function AiHubScreen() {
         <View style={styles.moduleGrid}>
           {MODULES.map((m) => {
             const Icon = m.icon;
-            const active = activeModule === m.id;
+            const active = acikModuller.has(m.id);
             const gated = m.modes.includes("researcher") && !research;
             return (
               <View key={m.id}>
@@ -275,7 +290,7 @@ export function AiHubScreen() {
                     bunun AÇILIP KAPANAN bir kontrol olduğunu ve o an açık mı olduğunu bildirmiyordu. */}
                 <TouchableOpacity
                   style={[styles.moduleCard, active && styles.moduleCardActive]}
-                  onPress={() => setActiveModule(active ? null : m.id)}
+                  onPress={() => moduluDegistir(m.id)}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: active }}
