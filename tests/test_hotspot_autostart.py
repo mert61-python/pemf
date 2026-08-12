@@ -35,6 +35,24 @@ KOK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
 import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımcısı
 
+# ⚠️ HOTSPOT WINDOWS'A ÖZGÜDÜR (2026-08-12). `_start_hotspot_safe` daha ikinci koşulda
+# `if os.name != "nt": return` ile ERKEN DÖNER (backend_service.py:545) — Mobile Hotspot API
+# ve `powershell.exe` yalnız orada vardır. Linux'ta o satırdan SONRAKİ hiçbir davranış oluşmaz.
+#
+# Bu, CI'da iki ayrı biçimde sorun çıkarıyordu:
+#   • `test_KRITIK_acilisi_BLOKLAMAZ` "arka plan thread'i başlatıldı" diyordu → Linux'ta hiç
+#     başlatılmaz, test DÜŞÜYORDU (uvicorn düzeltilene kadar bu gizliydi: setup hatası veriyordu).
+#   • `..._betik_yoksa_ACILIS_DUSMEZ` ve `..._servis_oturumunda_ATLANIR` ise Linux'ta BOŞUNA
+#     GEÇİYORDU: iddia ettikleri dallara hiç girilmediği için "istisna atmadı" / "betik
+#     çağrılmadı" kendiliğinden doğruydu. Yanlış yeşil, kırmızıdan daha tehlikelidir —
+#     kapının çalıştığı sanılır. İşaretlenerek atlanması dürüst olanı.
+# `PEMF_HOTSPOT=0` bayrağı `os.name` kontrolünden ÖNCE okunduğu için o test her platformda
+# gerçekten koşar ve işaretlenmemiştir.
+SADECE_WINDOWS = pytest.mark.skipif(
+    os.name != "nt",
+    reason="hotspot yalnız Windows'ta çalışır (_start_hotspot_safe `os.name != 'nt'` ile erken döner)",
+)
+
 
 @pytest.fixture(scope="module")
 def bs():
@@ -56,6 +74,7 @@ def test_KRITIK_acilista_CAGRILIYOR(bs):
     )
 
 
+@SADECE_WINDOWS
 def test_KRITIK_acilisi_BLOKLAMAZ(bs, monkeypatch, caplog):
     """PowerShell çağrısı saniyeler sürebilir; `main()` bunu beklerse backend geç açılır."""
     import threading as _t
@@ -86,6 +105,7 @@ def test_KRITIK_acilisi_BLOKLAMAZ(bs, monkeypatch, caplog):
 # ── fail-safe ───────────────────────────────────────────────────────────────
 
 
+@SADECE_WINDOWS
 def test_KRITIK_betik_yoksa_ACILIS_DUSMEZ(bs, monkeypatch):
     monkeypatch.setattr(bs, "_oturum_var_mi", lambda: True)
     monkeypatch.setattr(bs, "_hotspot_betigi", lambda: None)
@@ -94,6 +114,7 @@ def test_KRITIK_betik_yoksa_ACILIS_DUSMEZ(bs, monkeypatch):
     bs._start_hotspot_safe(logging.getLogger("t"))  # istisna ATMAMALI
 
 
+@SADECE_WINDOWS
 def test_KRITIK_servis_oturumunda_ATLANIR(bs, monkeypatch):
     """Session 0'da Mobile Hotspot API çalışmaz; ayrıca logon-task zaten var → çakışmasın."""
     cagrildi = {}
