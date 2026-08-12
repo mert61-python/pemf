@@ -60,7 +60,14 @@ const TEXT_TOTAL_TIMEOUT_S: u64 = 8;
 /// ureq-2.12.1/src/stream.rs). Upstream'i olmayan bir hotspot'ta `getaddrinfo` onlarca saniye
 /// asılabilir. Bu yüzden ikinci kemer: iş AYRI bir thread'e verilir ve bu süre dolunca çağıran
 /// "çevrimdışı" sayıp DEVAM EDER (thread arkada kendi zaman aşımıyla ölür — sızıntı değil, gecikme).
-pub const TEXT_WALL_BUDGET_S: u64 = 10;
+/// Manifest çekiminin duvar-saati tavanı.
+///
+/// ⚠️ 2026-08-12'de 10 → 20 sn. Sebep: çekim artık geçici kopmada 3 kez deneniyor
+/// (bkz. `MANIFEST_DENEME`) ve YAVAŞ ama ÇALIŞAN bir hatta (ölçüm: 2,6 sn/istek) üç deneme
+/// 10 sn'ye sığmıyordu — bütçe, düzelmekte olan bağlantıyı keserdi.
+/// Çevrimdışı makineyi GECİKTİRMEZ: rota/DNS yokken bağlantı <1 sn'de düşer, üç deneme
+/// toplamı ~2 sn'dir. Tavanın koruduğu asıl durum ASILI kalan bağlantıdır; o hâlâ bağlı.
+pub const TEXT_WALL_BUDGET_S: u64 = 20;
 
 fn build_text_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
@@ -523,17 +530,145 @@ pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
 /// çağrının üst sınırı YOKTU → internet olmayan klinikte uygulama "Ortam algılanıyor…" ekranında
 /// SONSUZA KADAR kalıyordu. Artık en geç `TEXT_WALL_BUDGET_S` sonra bir hata döner; UI bunu
 /// "çevrimdışı" sayıp KURULU uygulamayı başlatmaya devam eder (backend zaten yereldir).
+/// Manifest çekiminde GEÇİCİ aktarım hatası için deneme sayısı (ilk deneme dahil).
+///
+/// ⚠️ SAHA BULGUSU 2026-08-12: kullanıcı "internet var" derken client "İnternet bağlantısı yok;
+/// kurulum için bağlantı gerekli" gösteriyordu. Ölçüldü (aynı makine, aynı an, 6 deneme):
+///     HTTP 200 · 200 · **000** · **000** · 200 · 200      → ~%33 anlık kopma
+/// Kopmalar 0,46-0,57 sn'de oluyordu; yani zaman aşımı DEĞİL, TCP sıfırlaması — zayıf WiFi /
+/// hotspot / ISP dalgalanmasında olağan, tam da klinik ortamı. Çekim TEK denemeydi: bir kopma
+/// tüm açılışı "internetsiz" ilan ediyordu. Klinik, çalışan bir hatta kurulum yapamıyordu.
+const MANIFEST_DENEME: u32 = 3;
+/// Denemeler arası kısa bekleme (ms). Toplam ek yük ≤ 1 sn — duvar bütçesine rahat sığar.
+const MANIFEST_BEKLEME_MS: [u64; 2] = [250, 750];
+
+/// Hata YENİDEN DENEMEYE değer mi? Yalnız GEÇİCİ aktarım hataları.
+///
+/// ⚠️ Deterministik olanlar (HTTP 404, host pini reddi, HTTPS değil, politika sınırı) tekrarda
+/// AYNI sonucu verir; denemek yalnız kullanıcıyı bekletir ve hatayı gizler. `PolicyLimit`
+/// ayrımının neden var olduğu için bkz. `NetError::PolicyLimit` notu (2026-08-04 P2).
+fn gecici_hata_mi(e: &NetError) -> bool {
+    matches!(e, NetError::Transport(_) | NetError::Io(_))
+}
+
+/// Yeniden deneme DÖNGÜSÜ — çekim işi ENJEKTE edilir (ağsız birim-testlenebilir).
+///
+/// `bekle`: denemeler arası uyku; testte no-op verilir ki süit yavaşlamasın.
+pub fn denemeli_cek<F, B>(mut cek: F, mut bekle: B) -> Result<String, NetError>
+where
+    F: FnMut() -> Result<String, NetError>,
+    B: FnMut(u64),
+{
+    let mut son: Option<NetError> = None;
+    for deneme in 0..MANIFEST_DENEME {
+        match cek() {
+            Ok(s) => return Ok(s),
+            Err(e) if !gecici_hata_mi(&e) => return Err(e), // kalıcı → HEMEN dön
+            Err(e) => {
+                son = Some(e);
+                // Son denemeden sonra bekleme yok (boşuna gecikme).
+                if let Some(ms) = MANIFEST_BEKLEME_MS.get(deneme as usize) {
+                    bekle(*ms);
+                }
+            }
+        }
+    }
+    Err(son.unwrap_or_else(|| NetError::Transport("manifest alınamadı".into())))
+}
+
 pub fn fetch_string_pinned_budgeted(url: &str) -> Result<String, NetError> {
     // Host pinini bütçeden ÖNCE uygula: güvenlik reddi ağ beklemeden, deterministik olsun.
     validate_download_source(url)?;
     let u = url.to_string();
     with_wall_budget(Duration::from_secs(TEXT_WALL_BUDGET_S), "manifest", move || {
-        fetch_string_pinned(&u)
+        denemeli_cek(
+            || fetch_string_pinned(&u),
+            |ms| std::thread::sleep(Duration::from_millis(ms)),
+        )
     })
 }
 
 #[cfg(test)]
 mod tests {
+    // ── MANİFEST YENİDEN DENEME (saha bulgusu 2026-08-12) ────────────────────────────────
+    // Kullanıcı "internet var" derken client "İnternet bağlantısı yok" diyordu. Aynı makinede
+    // aynı anda ölçüldü: 6 istekten 2'si 0,5 sn'de KOPTU (TCP reset), 4'ü 200 döndü. Çekim tek
+    // denemeydi → bir kopma tüm açılışı "internetsiz" ilan ediyor, klinik kurulum yapamıyordu.
+
+    fn gecici() -> NetError {
+        NetError::Transport("connection reset".into())
+    }
+
+    #[test]
+    fn gecici_kopmada_YENIDEN_DENER_ve_basarir() {
+        let mut kalan_hata = 2; // ilk iki deneme kopsun, üçüncüsü tutsun
+        let mut uykular = vec![];
+        let r = denemeli_cek(
+            || {
+                if kalan_hata > 0 {
+                    kalan_hata -= 1;
+                    Err(gecici())
+                } else {
+                    Ok("{\"schema\":2}".to_string())
+                }
+            },
+            |ms| uykular.push(ms),
+        );
+        assert!(r.is_ok(), "geçici kopmada pes edildi → kullanıcıya yanlışlıkla 'internet yok' denir");
+        assert_eq!(uykular, vec![250, 750], "denemeler arası bekleme beklenenden farklı");
+    }
+
+    #[test]
+    fn KALICI_hata_TEKRARLANMAZ() {
+        // HTTP 404 / pin reddi tekrarda AYNI sonucu verir; denemek kullanıcıyı bekletir.
+        let mut sayac = 0;
+        let r = denemeli_cek(
+            || {
+                sayac += 1;
+                Err(NetError::HttpStatus { status: 404, url: "https://x/y".into() })
+            },
+            |_| panic!("kalıcı hatada BEKLENMEMELİ"),
+        );
+        assert!(r.is_err());
+        assert_eq!(sayac, 1, "kalıcı hata {sayac} kez denendi — 1 olmalı");
+    }
+
+    #[test]
+    fn politika_siniri_TEKRARLANMAZ() {
+        // Deterministik politika iptali (bkz. NetError::PolicyLimit, 2026-08-04 P2).
+        let mut sayac = 0;
+        let r = denemeli_cek(
+            || {
+                sayac += 1;
+                Err(NetError::PolicyLimit("boyut tavanı".into()))
+            },
+            |_| panic!("politika sınırında BEKLENMEMELİ"),
+        );
+        assert!(r.is_err());
+        assert_eq!(sayac, 1);
+    }
+
+    #[test]
+    fn hepsi_koparsa_SON_hata_doner() {
+        let mut sayac = 0;
+        let mut uykular = vec![];
+        let r = denemeli_cek(
+            || {
+                sayac += 1;
+                Err(gecici())
+            },
+            |ms| uykular.push(ms),
+        );
+        assert!(matches!(r, Err(NetError::Transport(_))), "gerçek kopmada yine de hata dönmeli");
+        assert_eq!(sayac, MANIFEST_DENEME, "deneme sayısı sözleşmesi değişti");
+        assert_eq!(uykular.len(), 2, "SON denemeden sonra boşuna beklenmiş");
+    }
+
+    #[test]
+    fn ilk_deneme_tutarsa_HIC_beklemez() {
+        let r = denemeli_cek(|| Ok("ok".to_string()), |_| panic!("başarıda beklenmemeli"));
+        assert_eq!(r.unwrap(), "ok");
+    }
     use super::*;
 
     #[test]

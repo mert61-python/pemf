@@ -2102,7 +2102,7 @@ dependencies = [
 
 [[package]]
 name = "pemf-launcher-core"
-version = "1.9.26"
+version = "1.9.27"
 dependencies = [
  "libc",
  "serde",
@@ -2117,7 +2117,7 @@ dependencies = [
 
 [[package]]
 name = "pemf-vet-client"
-version = "1.9.26"
+version = "1.9.27"
 dependencies = [
  "pemf-launcher-core",
  "serde",

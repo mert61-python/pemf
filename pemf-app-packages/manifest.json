@@ -77,17 +77,17 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.26",
+    "version": "1.9.27",
     "url": "https://pemf-vet-web.vercel.app/",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.26/PEMFVetClient-Setup-1.9.26.exe",
-    "sha256": "dfc96f8b1ac9161aae4c54f3879b045112e51d1ac76ac6fafe3f7e784ad42eb6",
-    "size": 2953007
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMFVetClient-Setup-1.9.27.exe",
+    "sha256": "d46914fe85c5eb3575d17c9d6f234216377b41c3584cf77c7fcc602bf93e1149",
+    "size": 2952047
   },
   "mobile": {
     "android": {
       "version": "2.3.11",
       "versionCode": 18,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.26/PEMF_Vet_Mobil-2.3.11.apk",
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.11.apk",
       "sha256": "cb167eb740114bc2597a6b3fc4ed45de856fe5e598259c9106ae649e35c2705a",
       "size": 128384615,
       "notes": "Uzaktan erisim artik calisiyor (farkli agdan baglanma); hata mesajlari 'kod yanlis' ile 'cihazda uzaktan erisim kapali'/'cevrimdisi'/'buluta ulasilamadi' durumlarini AYIRIYOR. Ayrica ses analizi aninda sonuc veriyor ve AI Hub'da birden fazla modul acik kalabiliyor."

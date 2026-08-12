@@ -30,6 +30,26 @@ geçmiyorsa test kırılır.
 
 ---
 
+## launcher 1.9.27 — 2026-08-12 (kararsız bağlantıda yanlış "internet yok")
+
+**Etiket:** `launcher-v1.9.27` → `PEMFVetClient-Setup-1.9.27.exe` (sha `d46914fe85c5`).
+
+Makinede internet **varken** client *"İnternet bağlantısı yok; kurulum için bağlantı gerekli"*
+diyordu. Sebep: manifest çekimi **tek denemeydi**; anlık bir TCP kopması tüm açılışı
+"internetsiz" ilan ediyordu.
+
+Aynı makinede aynı anda ölçüldü (6 istek): `200 · 200 · KOPTU · KOPTU · 200 · 200` → **~%33**
+anlık kopma. Kopmalar 0,5 sn'de oluyordu — zaman aşımı değil, **TCP sıfırlaması**; zayıf WiFi,
+hotspot ya da ISP dalgalanmasında olağan, tam da klinik ortamı. Çalışan bir hatta kurulum
+3'te 1 ihtimalle engelleniyordu.
+
+Manifest çekimi artık geçici kopmada **3 kez** deneniyor (250 ms / 750 ms bekleme). **Kalıcı**
+hatalar (HTTP 404, host pini reddi, politika sınırı) tekrarlanmaz — tekrarda aynı sonucu
+verirler ve yalnızca kullanıcıyı bekletirlerdi. Duvar-saati tavanı 10 → 20 sn (çevrimdışı
+makineyi geciktirmez: rota/DNS yokken bağlantı <1 sn'de düşer).
+
+---
+
 ## launcher 1.9.26 · mobile 2.3.11 — 2026-08-12 (uzaktan erişim artık çalışıyor)
 
 **Etiket:** `launcher-v1.9.26` → `PEMFVetClient-Setup-1.9.26.exe` (sha `dfc96f8b1ac9`) ·
