@@ -30,6 +30,47 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.12 · mobile 2.3.9 — 2026-08-12 (AI analizinde zaman aşımı düzeltmesi)
+
+**Etiketler:** `client-app-v1.9.12` (base-app sha `564d8e9c4cd1`, base sha `729234cef212`) ·
+APK `launcher-v1.9.25` → `PEMF_Vet_Mobil-2.3.9.apk` (sha `0e22d81b1133`, versionCode 16).
+`base-deps.zip` **değişmedi** (sha `dea13abcc80b`) → manifest onu 1.9.11 sürümünden kullanmaya
+devam eder; sıradan güncellemede yalnız 71 MB'lık uygulama katmanı iner.
+
+### Düzeltilen
+
+- **Peş peşe başlatılan analizlerde ses analizi düşüyordu.** Saha bildirimi: ev kullanıcısı
+  profilinde fps + hastalık + ses analizleri arka arkaya başlatıldı; ilk ikisi sonuç döndürdü,
+  ses analizi `AbortError: signal is aborted without reason` verdi — üstelik bu ham tarayıcı
+  metni kullanıcıya olduğu gibi gösterildi. Hemen ardından ses analizi **tek başına** denendiğinde
+  anında sonuçlandı.
+
+  Sebep: kedi-sesi modeli ilk çağrıda numba/librosa JIT derlemesi yapıyor (ölçüm: tek başına
+  **28,0 sn**, sonraki çağrı **0,06 sn**). Üç analiz aynı anda koşunca CPU çekişmesi bu süreyi,
+  arayüzde **çağrı yerine elle yazılmış** 60 saniyelik sınırın üstüne çıkarıyordu. Sunucu kuyruğu
+  suçlu değildi: `ai_queue_gate` yalnız `PEMF_TIER_ENFORCED` açıkken çalışır, varsayılan kapalıdır.
+
+  ⚠️ Aynı arıza 2026-08-06'da `/ai/disease` için bildirilmiş ve düzeltilmişti — ama yalnız
+  `apiPost` yolunda; ham `fetch` kullanan 10 modül atlanmıştı. Bu yüzden hata ses modülünde
+  aynen tekrarladı. **Kısmi düzeltme, düzeltilmemiş demektir**: sınır artık tüm AI çağrılarında
+  tek kaynaktan (120 sn) geliyor ve yapısal bir test elle yazılmış sınırı yasaklıyor.
+
+- **İptal mesajı anlaşılır oldu.** Zaman aşımı ile ağ hatası ayrı şeylerdir: ilkinde tekrar
+  denemek işe yarar (model artık bellekte), ikincisinde yaramaz. Kullanıcı artık ne olduğunu ve
+  ne yapacağını okuyor. `landmark` ve `RNA` modüllerindeki satır-içi kontroller de tek kaynağa
+  devredildi — eski metinleri "bağlantıyı kontrol edin" diyordu, oysa zaman aşımında bağlantı
+  sağlamdır.
+
+- **Canlı kamera döngülerine dokunulmadı** (15/25 sn). Oraya uzun bir sınır koymak görüntü
+  akışını kilitlerdi; istisna artık kodda açıkça işaretli ve test onu da sınırlıyor.
+
+### Not
+
+Sürüm numarası 2.3.8 değil **2.3.9**: 2.3.8 zaten yayındaydı, aynı numarayla farklı içerik
+dağıtmamak için yükseltildi (Android aynı `versionCode` ile güncellemeyi kabul etmez).
+
+---
+
 ## app 1.9.6 · launcher 1.9.16 · mobile 2.3.8 — 2026-08-10
 
 2026-08-09 üretime-hazırlık denetiminin **Tier 0-3** düzeltmeleri. Tek bir sürümde toplandı;

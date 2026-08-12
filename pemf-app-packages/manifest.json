@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.11",
-  "tag": "client-app-v1.9.11",
+  "version": "1.9.12",
+  "tag": "client-app-v1.9.12",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.11/base.zip",
-      "sha256": "809756decce4e424a1c72ceacbd5d1575bf678e27fd6ed1805f038be6f7dc94f",
-      "size": 1526723375,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.12/base.zip",
+      "sha256": "729234cef2127cb28515521937be2b6e005d709595db2476b88bfaa3c3b4f1fe",
+      "size": 1526723125,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.11/base-app.zip",
-        "sha256": "c58ae59968dd849f273f9313963aa77da7620e572f25c37de6ddc07758d4921d",
-        "size": 71158064,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.12/base-app.zip",
+        "sha256": "564d8e9c4cd12a144f0c05e99e8cd60978d32f54ba11b7788205fc3416842d36",
+        "size": 71157814,
         "kind": "zip"
       },
       "deps": {
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.11/base.zip",
-    "sha256": "809756decce4e424a1c72ceacbd5d1575bf678e27fd6ed1805f038be6f7dc94f",
-    "size": 1526723375,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.12/base.zip",
+    "sha256": "729234cef2127cb28515521937be2b6e005d709595db2476b88bfaa3c3b4f1fe",
+    "size": 1526723125,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",
@@ -85,12 +85,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.8",
-      "versionCode": 15,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.18/PEMF_Vet_Mobil.apk",
-      "sha256": "d6be2a3166fcdc200333bf95636758347e46a21fc2b67282c569e8510cfd1488",
-      "size": 128382639,
-      "notes": "Cihaz yazilimi guncelleme dugmesi kaldirildi (guncellemeyi yalniz Client yonetir); olcumu olmayan bobinlerde 'olcum yok'; acil durdurma teyidi."
+      "version": "2.3.9",
+      "versionCode": 16,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.25/PEMF_Vet_Mobil-2.3.9.apk",
+      "sha256": "0e22d81b113309a866e244970500d8abd358244a8a5da1fe21eabd40b303b0cb",
+      "size": 128383319,
+      "notes": "AI analizlerinde zaman asimi duzeltmesi: pes pese analiz baslatildiginda ses analizi 'signal is aborted' veriyordu. Sinir tum AI cagrilarinda tek kaynaga baglandi ve iptal mesaji anlasilir hale getirildi."
     }
   }
 }
