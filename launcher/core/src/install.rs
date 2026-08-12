@@ -307,6 +307,86 @@ pub fn kurulum_kilidi_al(install_root: &Path) -> Result<KurulumKilidi, String> {
     }
 }
 
+// ── DENETİM MASASI BOYUTU ────────────────────────────────────────────────────────────────────
+//
+// ⚠️ ARIZA (2026-08-11, sahip bildirimi): "Denetim Masası'nda uygulamanın boyutu hep 11 MB
+// görünüyor, profil kurulumlarından sonra bile."
+//
+// SEBEP: NSIS `EstimatedSize`i KURULUM ANINDA `$INSTDIR`den hesaplar. O anda dizinde yalnız
+// launcher vardır (~11 MB); çalışma zamanı (~2 GB) ve profil modelleri (0,3-1,6 GB) SONRADAN
+// client tarafından indirilir. Kayıt bir daha hiç güncellenmez → kullanıcı diskte yer ararken
+// gigabaytlık bir uygulamayı 11 MB sanır ve yanlış karar verir.
+//
+// ÇÖZÜM: kurulum/onarım/güncelleme bitince gerçek boyutu yaz. Kayıt per-user kurulumda
+// HKCU'dadır → YÖNETİCİ GEREKMEZ.
+
+/// Kaldırma kaydının yolu (NSIS `UNINSTKEY` ile AYNI: ürün ADIna göre).
+const KALDIRMA_ANAHTARI: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\PEMF Vet Client";
+
+/// Kurulum kökünün diskte kapladığı toplam boyut (bayt).
+///
+/// Önbellek de DAHİLDİR: indirilen paketler gerçekten yer kaplar ve kaldırma onları da siler,
+/// yani "bu uygulamayı kaldırırsam ne kadar yer açılır" sorusunun doğru cevabı budur.
+pub fn kurulum_boyutu(install_root: &Path) -> u64 {
+    fn yur(d: &Path, toplam: &mut u64, derinlik: u32) {
+        if derinlik > 24 {
+            return; // savunma: döngüsel junction'da sonsuza gitme
+        }
+        let Ok(girdiler) = std::fs::read_dir(d) else { return };
+        for e in girdiler.flatten() {
+            let Ok(t) = e.file_type() else { continue };
+            if t.is_symlink() {
+                continue; // junction/symlink İZLEME — başka bir birimi saymayalım
+            }
+            if t.is_dir() {
+                yur(&e.path(), toplam, derinlik + 1);
+            } else if let Ok(m) = e.metadata() {
+                *toplam = toplam.saturating_add(m.len());
+            }
+        }
+    }
+    let mut t = 0u64;
+    yur(install_root, &mut t, 0);
+    t
+}
+
+/// Denetim Masası'ndaki boyutu GERÇEK kullanımla güncelle. Best-effort: başarısızlık sessizdir
+/// (kozmetik bir alandır; kurulumu düşürmemeli).
+///
+/// Döner: kayıt yazmaya GİRİŞİLDİ mi. (Yazmanın kendisi best-effort'tur; dönüş değeri
+/// "boş kökte dokunulmadı" değişmezini TEST EDİLEBİLİR kılmak için var — dönüş olmadan
+/// test yalnız çökmediğini görebiliyordu, bu da yanlış güvenceydi.)
+#[cfg(windows)]
+pub fn boyut_kaydini_guncelle(install_root: &Path) -> bool {
+    let kb = kurulum_boyutu(install_root) / 1024;
+    if kb == 0 {
+        return false; // kök boş/okunamadı → yanlış "0 MB" yazmaktansa dokunma
+    }
+    // `reg.exe` kullanılır: yeni bağımlılık yok. Kayıt per-user kurulumda HKCU'dadır; makine
+    // geneli kurulum (HKLM) yönetici ister ve sessizce başarısız olur — kabul.
+    let _ = crate::platform::gizli_komut("reg")
+        .args([
+            "add",
+            &format!(r"HKCU\{KALDIRMA_ANAHTARI}"),
+            "/v",
+            "EstimatedSize",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            &kb.min(u64::from(u32::MAX)).to_string(),
+            "/f",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    true
+}
+
+#[cfg(not(windows))]
+pub fn boyut_kaydini_guncelle(_install_root: &Path) -> bool {
+    false
+}
+
 /// Yeni sürümün hazırlandığı yer (takas edilene kadar çalışan kuruluma DOKUNULMAZ).
 pub fn runtime_new_dir(install_root: &Path) -> PathBuf {
     install_root.join("runtime.new")

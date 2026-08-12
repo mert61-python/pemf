@@ -144,6 +144,7 @@ geçmiyorsa test kırılır.
 
 | Sürüm | Etiket | Tarih | Installer sha (12) |
 |---|---|---|---|
+| 1.9.25 | `launcher-v1.9.25` | 2026-08-11 | `92467b5483ee` |
 | 1.9.24 | `launcher-v1.9.24` | 2026-08-11 | `d1b3ca26efa4` |
 | 1.9.23 | `launcher-v1.9.23` | 2026-08-11 | `f0fa6ef4f81b` |
 | 1.9.22 | `launcher-v1.9.22` | 2026-08-11 | `57d20065fe0a` (yayinda; manifest 1.9.23'e isaret eder) |
@@ -185,6 +186,30 @@ geçmiyorsa test kırılır.
 | 1.9.6 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 | 1.9.5 | app paketi içinde dağıtılır; ayrı bir yayın etiketi yoktur |
 
+---
+
+## launcher 1.9.25 — 2026-08-11 (Denetim Masası boyutu gerçeği yansıtıyor)
+
+**Sahip bildirimi:** *"Denetim Masası'nda uygulamanın boyutu hep 11 MB görünüyor, profil
+kurulumlarından sonra bile."*
+
+**Sebep.** NSIS `EstimatedSize`i **kurulum anında** `$INSTDIR`den hesaplar. O anda dizinde yalnız
+launcher vardır (~11 MB); çalışma zamanı (~2 GB) ve profil modelleri (0,3-1,6 GB) **sonradan**
+client tarafından indirilir ve kayıt bir daha güncellenmez. Kullanıcı diskte yer ararken
+gigabaytlık bir uygulamayı 11 MB sanıyor — yanlış karar verdiren bir sayı.
+
+**Düzeltme.** Kurulum / onarım / güncelleme bitince gerçek boyut yazılır. Kayıt per-user
+kurulumda HKCU'dadır → **yönetici gerekmez**. Önbellek de sayılır: indirilen paketler gerçekten
+yer kaplar ve kaldırma onları da siler, yani "kaldırırsam ne kadar yer açılır"ın doğru cevabı budur.
+
+⚠️ Boş/okunamayan kökte kayda **DOKUNULMAZ** — "0 MB" yazmak, eski 11 MB'ı bırakmaktan daha
+kötü olurdu.
+
+**Doğrulama:** 7 test; gerçek kayıt üzerinde uçtan uca ölçüldü (11 MB → 500 MB). Mutasyon:
+boyut toplamayı kaldırma ve boş kökte yazma yakalandı.
+⚠️ Kapsam notu: "junction izlenmesin" mutasyonu yakalanmadı — sebebi test zayıflığı DEĞİL,
+Rust'ta `is_dir()` ile `is_symlink()`in birbirini dışlaması (mutasyon davranışı değiştirmiyor).
+Koruma savunma amaçlı bırakıldı.
 ---
 
 ## launcher 1.9.24 — 2026-08-11 (güvenlik duvarı uyarısı: yanlış alarm bitti)

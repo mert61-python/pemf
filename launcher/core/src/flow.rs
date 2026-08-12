@@ -384,6 +384,10 @@ pub fn install_profiles(
         install::add_installed_profiles(install_root, std::slice::from_ref(*name));
         install::record_model_sha(install_root, name, &pkg.sha256);
     }
+    // Denetim Masası boyutunu GERÇEK kullanımla güncelle: NSIS onu kurulum anında hesaplar ve
+    // o an dizinde yalnız launcher vardır (~11 MB); runtime + profil modelleri SONRA iner.
+    // (bkz. install::boyut_kaydini_guncelle)
+    install::boyut_kaydini_guncelle(install_root);
     Ok(())
 }
 
@@ -590,6 +594,8 @@ pub fn guncellemeyi_onayla(install_root: &Path, b: &GeriAlmaBilgisi) {
     if !b.base_sha.is_empty() {
         install::record_base_sha(install_root, &b.base_sha);
     }
+    // Güncelleme ağacı değiştirdi → Denetim Masası boyutu da tazelensin.
+    install::boyut_kaydini_guncelle(install_root);
 }
 
 /// Sağlık kapısı GEÇİLEMEDİ → çalışan eski sürüme dön.
