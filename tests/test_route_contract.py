@@ -153,11 +153,36 @@ def _current_routes():
     return out
 
 
+# ⚠️ KOŞULLU MOUNT (2026-08-12). `/simulator` üretimde ŞARTLI bağlanır — `api_server.py`:
+#     sim_path = packaged_resource_path("dema-terapi-simülatörü", "dist")
+#     if os.path.exists(sim_path): app.mount("/simulator", ...)
+# `dist` bir DERLEME ÇIKTISIDIR ve depoda izlenmez (`git ls-files` → 0), dolayısıyla CI'da
+# YOKTUR. Sözleşme bunu yansıtmadığı için test CI'da "Route KAYBOLDU: [('/simulator','')]"
+# diye düşüyordu — gerçekte hiçbir rota kaybolmamıştı, sadece varlık ortama bağlıydı.
+# Koşul üretimin KENDİ yardımcısıyla hesaplanır; api_server'daki şart değişirse burası da
+# birlikte değişsin, iki taraf ayrı ayrı eskimesin diye.
+def _simulator_mountlu() -> bool:
+    from utils.path_utils import packaged_resource_path
+
+    return os.path.exists(str(packaged_resource_path("dema-terapi-simülatörü", "dist")))
+
+
+_KOSULLU_ROTALAR = {("/simulator", "")}
+
+
+def _beklenen_rotalar() -> set:
+    """Golden sözleşme, bu ortamda gerçekten bağlanabilecek rotalara indirgenmiş hâli."""
+    if _simulator_mountlu():
+        return GOLDEN_ROUTES
+    return GOLDEN_ROUTES - _KOSULLU_ROTALAR
+
+
 def test_route_contract_unchanged():
     """HTTP route envanteri refactor öncesi golden ile BİREBİR aynı olmalı."""
     current = _current_routes()
-    missing = GOLDEN_ROUTES - current  # route düştü / path-method değişti
-    added = current - GOLDEN_ROUTES  # beklenmeyen route eklendi / path değişti
+    beklenen = _beklenen_rotalar()
+    missing = beklenen - current  # route düştü / path-method değişti
+    added = current - beklenen  # beklenmeyen route eklendi / path değişti
     assert not missing, f"Route KAYBOLDU veya path/method değişti: {sorted(missing)}"
     assert not added, f"Beklenmeyen/değişmiş route: {sorted(added)}"
     # 72 → 75 (+3 masaüstü oturum devri) → 78 (+3 hekim onay kapısı: propose/approve/reject), 2026-08-06
@@ -166,4 +191,6 @@ def test_route_contract_unchanged():
     # → 92 (+2 veri saklama ayarı: settings/retention GET+POST), 2026-08-09 Tier 1
     # → 93 (+1 denetim izi okuma: audit/events GET), 2026-08-09 Tier 3
     # → 94 (+1 destek paketi: support/bundle POST), 2026-08-09 Tier 3
-    assert len(current) == len(GOLDEN_ROUTES) == 94
+    # Sayı da koşula göre daralır: simülatör derlemesi yoksa 94 değil 93 beklenir. Toplamın
+    # KENDİSİ hâlâ sabitlenir (yeni rota sessizce eklenemez) — yalnız koşullu olan düşülür.
+    assert len(current) == len(beklenen) == 94 - (0 if _simulator_mountlu() else 1)

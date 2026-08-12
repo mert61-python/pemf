@@ -1,6 +1,7 @@
 name: critical-path-tests
 
-# PEMF kritik-yol testleri — backend (pytest) + launcher (cargo) + arayüz (tsc/jest).
+# PEMF kritik-yol testleri — backend (pytest, Linux+Windows) + launcher (cargo) + sır taraması.
+# (Arayüz/site işleri için dosyanın SONUNDAKİ "KALDIRILDI (2026-08-12)" notuna bakınız.)
 #
 # ⚠️ DENETİM 2026-08-09 (Tier 1) — CI GERÇEKTEN AÇILDI. Önceki hâlinde:
 #   • tetikleyici yalnız `main, master` idi; geliştirme AKTİF DALDA (production-hardening)
@@ -117,45 +118,21 @@ jobs:
         working-directory: launcher
         run: cargo test --workspace --all-targets --locked
 
-  frontend:
-    name: arayüz (tsc + jest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: pf/package-lock.json
-      - name: Bağımlılıklar
-        working-directory: pf
-        run: npm ci --legacy-peer-deps
-      # Tip kontrolü ile test AYRI adımlar: biri düşünce diğerinin sonucu yine görünsün.
-      - name: Tip kontrolü
-        working-directory: pf
-        run: npx tsc --noEmit
-      - name: Jest
-        working-directory: pf
-        run: npx jest --ci
-
-  site:
-    name: site (build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: pemf-vet-web/package-lock.json
-      - name: Bağımlılıklar
-        working-directory: pemf-vet-web
-        run: npm ci
-      - name: Tip kontrolü
-        working-directory: pemf-vet-web
-        run: npx tsc --noEmit
-      - name: Build
-        working-directory: pemf-vet-web
-        run: npm run build
+  # ⚠️ KALDIRILDI (2026-08-12): `arayüz (tsc + jest)` ve `site (build)` işleri.
+  #
+  # Bu iki iş BU DEPODA HİÇBİR ZAMAN ÇALIŞAMAZDI ve hattın 16 çalışmasının 16'sının da
+  # kırmızı olmasının sebeplerindendi:
+  #   * `pf/` (Expo mobil) ve `pemf-vet-web/` (kendi git deposu + kendi Vercel projesi)
+  #     `.gitignore` ile BİLEREK dışlanmıştır — `git ls-files` ikisinde de **0 dosya** döner.
+  #   * Dolayısıyla `checkout` sonrası o dizinler YOKTUR; `setup-node` daha `cache-dependency-path`
+  #     çözemeden ("Some specified paths were not resolved") iş düşerdi.
+  #
+  # Sürekli kırmızı bir hat SİNYAL DEĞERİNİ KAYBEDER: gerçekten bir şey bozulduğunda kimse
+  # fark etmez ve her push'ta gereksiz "Run failed" postası gider. Çalışamayacak bir işi
+  # tutmaktansa kaldırmak dürüsttür.
+  #
+  # Bu kontroller KAYBOLMADI, yeri değişti:
+  #   * `pemf-vet-web` → kendi deposunda (`npx tsc --noEmit` + `npm run build` + vitest;
+  #     yayın zaten `npx vercel --prod` ile oradan yapılıyor).
+  #   * `pf` (mobil)   → kendi Expo projesinde; APK yayını `build_tools/build_apk.ps1` ile.
+  # İkisine CI kurulacaksa AYRI depolarında kurulmalı, burada değil.

@@ -16,10 +16,12 @@ uygulanmamış bir doz, uygulanmış gibi üçüncü kişiye beyan ediliyordu. K
 doğrula). Yaptıkları, yazılımın uygulamadığı bir şeyi İDDİA ETMEMESİNİ kilitlemektir.
 """
 
+import sys
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parent.parent
-
+sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
+import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımcısı
 
 # ── dayanak: mT gerçekten taşınmıyor ─────────────────────────────────────────
 
@@ -86,8 +88,14 @@ def test_CSV_basliklari_AYARLANAN_der():
 
 def test_KRITIK_UI_alani_YALNIZ_KAYIT_oldugunu_soyler():
     """Etiket bunu söylemezse operatör yoğunluğu ayarladığını sanır ve gerçek doz
-    beklediğinden farklı olur."""
-    cs = (KOK / "pf" / "src" / "screens" / "ControlScreen.tsx").read_text(encoding="utf-8")
+    beklediğinden farklı olur.
+
+    ⚠️ `pf/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
+    `FileNotFoundError` ile düşerdi (2026-08-12). Atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
+    ile atlama yasaklanabilir. Bu dosyadaki DİĞER testler (STM paketi / ESP komutu / PDF /
+    history_router) depo içi kaynakları okur ve CI'da tam koşmaya devam eder.
+    """
+    cs = capraz.oku("pf/src/screens/ControlScreen.tsx")
     assert 'label="Yoğunluk (mT, yalnız kayıt)"' in cs, "UI etiketi hala cihaza gidiyormus gibi gosteriyor"
 
 

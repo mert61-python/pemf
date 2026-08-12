@@ -152,14 +152,34 @@ def test_olen_thread_baglantisi_defterden_budanir(temp_app_data):
     db = _db(temp_app_data)
 
     _, th = _run_in_thread(lambda: db.start_session("Manuel", patient_name="gecici"))
-    assert th.ident in db._live_conns, "test kurulumu: worker bağlantısı deftere girmeliydi"
+    girdi = db._live_conns.get(th.ident)
+    assert girdi is not None, "test kurulumu: worker bağlantısı deftere girmeliydi"
+    olu_conn = girdi[1]  # O worker'ın GERÇEK bağlantı nesnesi — kimliği ident'ten sağlam.
 
     # Arka arkaya 5 kısa-ömürlü worker: defter BÜYÜMEMELİ (her yaratımda ölüler budanır).
     # Ana thread'in kendi bağlantısı defterde kalır → tavan = 1 (ana) + 1 (o anki worker).
     for i in range(5):
         _run_in_thread(lambda i=i: db.start_session("Manuel", patient_name=f"w{i}"), name=f"worker{i}")
 
-    assert th.ident not in db._live_conns, "ölmüş thread'in bağlantısı defterde kaldı (tanıtıcı sızıntısı)"
+    # ⚠️ 2026-08-12: burada eskiden `th.ident not in db._live_conns` denirdi ve test CI'da
+    # YALNIZ LINUX'ta düşerdi. Sebep sızıntı DEĞİL, `threading.get_ident()`in İŞLETİM SİSTEMİ
+    # TARAFINDAN GERİ DÖNÜŞTÜRÜLMESİ: glibc ölen thread'in yığınını yeniden kullanır, sonraki
+    # worker AYNI ident'i alır ve deftere yeniden yazılır. (Windows'ta ident'ler pratikte
+    # benzersiz kaldığı için orada geçiyordu — platforma bağlı yanlış-kırmızı.)
+    # Budamanın çalıştığı kayıttan kesindi: 6 worker'a rağmen defter 2'de kalmıştı ve budama
+    # tavan kontrolünden ÖNCE koşar — yani girdi ancak SONRADAN yeniden eklenmiş olabilir.
+    # Bu yüzden kimlik artık NESNE üzerinden izlenir; üstelik asıl değişmez (dosya tanıtıcısı
+    # gerçekten bırakıldı mı) doğrudan sınanır — sözlükten anahtar silinmesi bunu KANITLAMAZDI.
+    assert not any(c is olu_conn for _, c in db._live_conns.values()), (
+        "ölmüş thread'in bağlantısı defterde kaldı (tanıtıcı sızıntısı)"
+    )
+    try:
+        olu_conn.execute("SELECT 1")
+        kapandi = False
+    except Exception:  # sqlite3/sqlcipher3 farkı olmasın diye tür değil DAVRANIŞ sınanır
+        kapandi = True
+    assert kapandi, "bağlantı defterden düştü ama KAPATILMADI → dosya tanıtıcısı hâlâ açık"
+
     assert len(db._live_conns) <= 2, (
         f"defter kısa-ömürlü thread'lerle büyüyor ({len(db._live_conns)}) → tanıtıcı sızıntısı"
     )

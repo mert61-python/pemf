@@ -27,9 +27,13 @@ from pathlib import Path
 
 os.environ.pop("PEMF_SIMULATE", None)
 
+import sys
+
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
+import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımcısı
 
 
 @pytest.fixture(scope="module")
@@ -171,8 +175,10 @@ def test_betik_SSID_i_hala_tasiyor():
 def test_KRITIK_arayuzde_KABLOSUZ_BAGLANTI_satiri_VAR():
     """Hotspot kapalıyken 6-8 bobinleri sessizce bağlanamıyordu; `hotspotActive` çekiliyor ama
     HİÇ GÖSTERİLMİYORDU. Arıza görünür olmalı."""
-    p = KOK / "pf" / "src" / "components" / "domain" / "GatewayStatusPanel.tsx"
-    s = p.read_text(encoding="utf-8")
+    # ⚠️ `pf/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
+    # `FileNotFoundError` ile düşerdi (2026-08-12). Atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
+    # ile atlama yasaklanabilir. Bu dosyanın hotspot davranış testleri depo içidir, koşar.
+    s = capraz.oku("pf/src/components/domain/GatewayStatusPanel.tsx")
     assert "Kablosuz Bağlantı" in s, "durum panelinde 'Kablosuz Bağlantı' satiri YOK"
     assert "gwInfo.hotspotActive" in s, "satir hotspotActive'e BAGLI degil (olu gosterge)"
     # Bağlantı yokken bayat "Aktif" göstermemeli (panelin genel kuralı).

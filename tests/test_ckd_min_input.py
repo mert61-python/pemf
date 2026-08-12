@@ -10,6 +10,7 @@ Aynı sınıf hata `/api/ai/disease` (kedi) ucunda daha önce kapatılmıştı; 
 """
 
 import os
+from pathlib import Path
 
 os.environ.pop("PEMF_SIMULATE", None)
 
@@ -22,6 +23,44 @@ def client():
     from servers import api_server
 
     return TestClient(api_server.app)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ÇIKARIM GEREKTİREN TESTLER (2026-08-12)
+# ─────────────────────────────────────────────────────────────────────────────
+# Bu dosyanın ASIL kapısı — yetersiz girdiyi 422 ile reddetmek — modelden ÖNCE, doğrulama
+# katmanında çalışır ve her ortamda koşar. Ama "meşru kullanım engellenmemeli" testleri
+# gerçekten çıkarım yapar; onlar için İKİ şey gerekir ve ikisi de CI'da YOKTUR:
+#   • `onnxruntime` — `requirements-test.txt`e bilerek alınmadı (ağır AI bağımlılığı),
+#   • `.onnx` ağırlıkları — `ai_hub/inference_human_kidney_disease/` altında yalnız KOD ve
+#     metadata izlenir; ağırlıklar tek-kaynak `release_assets/ai_models`tedir (`.gitignore`).
+# Bu yüzden CI'da uç 500 dönüyor ve 3 test düşüyordu (2026-08-12 teşhisi). Yalnız
+# `onnxruntime` eklemek ÇÖZMEZDİ — ağırlık yine olmazdı; o yüzden bağımlılık eklenmedi.
+#
+# Konvansiyon `test_ai_golden_values.py` ile aynı: eser yoksa ATLA, ama `PEMF_GOLDEN_REQUIRED=1`
+# ayarlıysa atlamak YASAK (yayın makinesi sessiz atlamayı imkânsız kılar).
+_MODEL_DIZINI = Path(__file__).resolve().parents[1] / "ai_hub" / "inference_human_kidney_disease"
+
+
+def _cikarim_neden_olmaz() -> str:
+    try:
+        import onnxruntime  # noqa: F401
+    except Exception as e:
+        return f"onnxruntime yok ({type(e).__name__})"
+    if not any(_MODEL_DIZINI.glob("*.onnx")):
+        return f"model ağırlıkları yok: {_MODEL_DIZINI.name}/*.onnx (release_assets tek-kaynak)"
+    return ""
+
+
+@pytest.fixture()
+def cikarim_gerekir():
+    """Gerçek çıkarım yapılamıyorsa testi atlar (yayın makinesinde düşürür)."""
+    sebep = _cikarim_neden_olmaz()
+    if not sebep:
+        return
+    if os.environ.get("PEMF_GOLDEN_REQUIRED") == "1":
+        pytest.fail(f"PEMF_GOLDEN_REQUIRED=1 ama CKD çıkarımı koşulamıyor: {sebep}")
+    pytest.skip(f"CKD çıkarımı koşulamıyor: {sebep}")
 
 
 TAM = {
@@ -80,7 +119,7 @@ def test_cekirdek_belirtec_YOKSA_reddedilir(client):
 
 
 # ── MEŞRU KULLANIM ENGELLENMEMELİ ───────────────────────────────────────────
-def test_TAM_form_calisir(client):
+def test_TAM_form_calisir(client, cikarim_gerekir):
     r = client.post("/api/ai/disease/kidney", json=TAM)
     assert r.status_code == 200, r.text[:200]
     d = r.json()
@@ -89,7 +128,7 @@ def test_TAM_form_calisir(client):
     assert d["low_evidence"] is False
 
 
-def test_asgari_gecerli_form_calisir(client):
+def test_asgari_gecerli_form_calisir(client, cikarim_gerekir):
     """6 alan + çekirdek belirteç → geçmeli (model eksikleri zaten impute etmek üzere tasarlı)."""
     r = client.post("/api/ai/disease/kidney", json={"age": 60, "bp": 90, "sc": 3.1, "bu": 90, "hemo": 9.8, "al": 3})
     assert r.status_code == 200, r.text[:200]
@@ -97,7 +136,7 @@ def test_asgari_gecerli_form_calisir(client):
 
 
 # ── ŞEFFAFLIK ───────────────────────────────────────────────────────────────
-def test_AZ_veriyle_uretilen_sonuc_ISARETLENIR(client):
+def test_AZ_veriyle_uretilen_sonuc_ISARETLENIR(client, cikarim_gerekir):
     """6/24 alanla üretilen tahmin, 24/24 ile aynı güvenle sunulmamalı."""
     r = client.post("/api/ai/disease/kidney", json={"age": 60, "bp": 90, "sc": 3.1, "bu": 90, "hemo": 9.8, "al": 3})
     d = r.json()

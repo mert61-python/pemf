@@ -267,8 +267,15 @@ mod tests {
     #[test]
     fn durum_asla_PANIKLEMEZ() {
         // Fail-open sözleşmesi: powershell yoksa/yavaşsa bile çağrı bir değer döndürmeli.
+        //
+        // ⚠️ 2026-08-11: `Durum`a DÖRDÜNCÜ varyant (`KuralYok`) eklendi ve bu liste
+        // güncellenmedi → CI'da (kuralları olmayan temiz runner) kırıldı. Yeni varyant
+        // eklenirse burası da güncellenmeli; `matches!` sessizce eskimez, patlar.
         let d = durum();
-        assert!(matches!(d, Durum::Acik | Durum::Engelli | Durum::Gereksiz));
+        assert!(matches!(
+            d,
+            Durum::Acik | Durum::KuralYok | Durum::Engelli | Durum::Gereksiz
+        ));
     }
 
     #[cfg(not(windows))]

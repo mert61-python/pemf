@@ -23,6 +23,11 @@ fastapi==0.136.3
 starlette==1.3.1
 pydantic==2.13.4
 python-multipart==0.0.31
+# ⚠️ `backend_service.py` MODÜL DÜZEYİNDE `import uvicorn` yapar (satır 21). Eksik olduğu için
+# onu import eden 24 test CI'da `ModuleNotFoundError` ile düşüyordu ve hat bir kez bile yeşile
+# dönmemişti (2026-08-12'de teşhis edildi). Ağır AI paketleri gibi lazy DEĞİL — import zamanında
+# gerekir. `[standard]` ekstraları CI'da gereksiz; sade paket yeterli, sürüm shipped ile eşit.
+uvicorn==0.48.0
 
 # ── Import-zamanı runtime bağımlılıkları (introspeksiyonla saptandı) ──
 numpy==1.26.4

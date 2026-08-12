@@ -15,6 +15,7 @@ Sonuç: 700+ test değişiklik anında çalışmıyordu; regresyonlar ancak elle
 düşerse (ör. biri `matrix`i kaldırır ya da jest adımını siler) burası kırılır.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -53,10 +54,23 @@ def test_pull_request_de_tetikler(dosya):
 # ── kapsam: hangi işler var ──────────────────────────────────────────────────
 
 
-def test_KRITIK_dort_is_de_TANIMLI():
-    """Backend/launcher/arayüz/site — dördü de kritik yol. Biri düşerse o katman test edilmez."""
+#: `tests.yml`in kapsaması BEKLENEN işler — TAM küme (alt-küme değil).
+#: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu. Ama `pf/`
+#: (Expo mobil) ve `pemf-vet-web/` (kendi git deposu) BU DEPODA İZLENMEZ — `git ls-files`
+#: ikisinde de 0 döner. O işler checkout sonrası var olmayan dizinlerde `npm ci` çalıştırdığı
+#: için HİÇBİR ZAMAN geçemezdi ve hattı 16/16 kırmızı tutan sebeplerdendi; kaldırıldılar.
+#: Kapsam sorusu ölmedi, `test_arayuz_ve_site_BU_DEPODA_DEGIL` ile canlı tutuluyor.
+BEKLENEN_ISLER = {"backend", "launcher", "sir-taramasi"}
+
+
+def test_KRITIK_tum_isler_TANIMLI():
+    """Kritik yol işleri; biri düşerse o katman test edilmez. TAM eşitlik aranır: hem sessiz
+    KAYBOLMA hem de belgelenmemiş EKLEME burada görünür."""
     isler = set(_yukle("tests.yml")["jobs"])
-    assert {"backend", "launcher", "frontend", "site"} <= isler, f"eksik is: {isler}"
+    assert isler == BEKLENEN_ISLER, (
+        f"tests.yml is kumesi degisti — beklenen {sorted(BEKLENEN_ISLER)}, bulunan {sorted(isler)}. "
+        "Bilerek degistiyse BEKLENEN_ISLER'i gerekcesiyle guncelle."
+    )
 
 
 def test_KRITIK_backend_WINDOWSTA_da_kosar():
@@ -89,17 +103,28 @@ def test_KRITIK_launcher_ENTEGRASYON_testlerini_de_kosar():
     assert "--all-targets" in _adimlar("launcher")
 
 
-def test_KRITIK_arayuz_tip_kontrolu_ve_jest():
-    # ⚠️ ÇAĞRININ KENDİSİ aranır, adı geçen bir dize değil. İlk hâli `"jest" in a` idi ve
-    # mutasyon turunda `echo "jest atlandi"` bunu GEÇTİ — yani kapı boş güvence veriyordu.
-    a = _adimlar("frontend")
-    assert "npx tsc --noEmit" in a, "tip kontrolu calistirilmiyor"
-    assert "npx jest" in a, "jest calistirilmiyor"
+@pytest.mark.parametrize("dizin", ["pf", "pemf-vet-web"])
+def test_arayuz_ve_site_BU_DEPODA_DEGIL(dizin):
+    """Arayüz (`pf`) ve site (`pemf-vet-web`) CI işleri 2026-08-12'de KALDIRILDI; gerekçe:
+    ikisi de bu depoda izlenmez, dolayısıyla o işler temiz checkout'ta asla koşamazdı.
 
-
-def test_site_build_edilir():
-    a = _adimlar("site")
-    assert "npx tsc --noEmit" in a and "npm run build" in a
+    ⚠️ Bu test kaldırılan kapının YERİNE geçer ve gerekçeyi CANLI tutar: dizinlerden biri bir
+    gün gerçekten depoya alınırsa varsayım çöker ve burası kırılır — o an `tests.yml`ye
+    `tsc --noEmit` + `jest` / `npm run build` işleri GERİ EKLENMELİDİR. Aksi hâlde kapsam
+    kaybı sessiz olurdu: kimse kaldırılmış bir işin geri gelmesi gerektiğini hatırlamaz.
+    (Kaldırma kapsamı yok etmedi; kontroller kendi depolarında yapılır.)
+    """
+    kok = Path(__file__).resolve().parent.parent
+    try:
+        r = subprocess.run(["git", "ls-files", dizin], cwd=str(kok), capture_output=True, text=True, timeout=30)
+    except Exception as e:  # git yoksa varsayım doğrulanamaz
+        pytest.skip(f"git calistirilamadi: {type(e).__name__}: {e}")
+    if r.returncode != 0:
+        pytest.skip(f"git ls-files basarisiz (rc={r.returncode})")
+    assert not r.stdout.strip(), (
+        f"'{dizin}/' ARTIK DEPODA IZLENIYOR → tests.yml'den kaldirilan CI isi GERI EKLENMELI "
+        "(tip kontrolu + test/build). Bkz. tests.yml sonundaki 'KALDIRILDI (2026-08-12)' notu."
+    )
 
 
 def test_backend_pytest_kosar():

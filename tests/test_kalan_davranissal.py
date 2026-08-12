@@ -264,20 +264,6 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
         "yedek silinmeden ÖNCE üzerine yazılmıyor → düz-metin PII disk kurtarma araçlarıyla geri gelir"
     )
 
-    # DAVRANIŞ (metin değil): varsayılanda göç sonrası düz-metin yedek diskte KALMAMALI.
-    # (Ayrıntılı senaryolar: tests/test_at_rest_encryption_rollout.py)
-    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
-    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_import_sqlcipher", lambda self: None)
-    db = thdb.TreatmentHistoryDB(temp_app_data)
-    db.start_session("Manuel", patient_name="ArtikHasta")
-    db.close_connections()
-    monkeypatch.undo()
-    monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
-    thdb.TreatmentHistoryDB(temp_app_data)  # göç
-    assert not (temp_app_data / "pemf_treatment_history.db.plain.bak").exists(), (
-        "goc sonrasi duz-metin yedek diskte kaldi"
-    )
-
     # Silme, o koşulun İÇİNDE olmalı (sırayla değil, yapısal)
     import ast
     import textwrap
@@ -301,6 +287,35 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     # Silme yolu koşulsuz erişilebilir olmalı: fonksiyonun sonunda (escrow return'ü dışında)
     # `os.remove(backup)` bulunmalı.
     assert "os.remove(backup)" in ast.unparse(fn), "düz-metin yedeği silen yol kayıp"
+
+
+def test_plain_bak_goc_sonrasi_DISKTE_KALMAZ(temp_app_data, monkeypatch):
+    """DAVRANIŞ (metin değil): varsayılanda göç sonrası düz-metin yedek diskte KALMAMALI.
+    (Ayrıntılı senaryolar: tests/test_at_rest_encryption_rollout.py)
+
+    ⚠️ 2026-08-12: bu blok eskiden `test_plain_bak_ACL_basarisizsa_SILINIR` içindeydi ve
+    WINDOWS CI'da düşüyordu: `PEMF_ENCRYPT_AT_REST=1` göç yolu GERÇEK SQLCipher ister, ama
+    sqlcipher3'ün Windows wheel'i yoktur (CI iş akışı bunu zaten belgeliyor) → ürün doğru
+    davranıp `RuntimeError` ile fail-closed oluyordu, test ise bunu arıza sanıyordu.
+    Ayrıldı ki binding'siz ortamda YALNIZ bu davranış atlansın; aynı testteki statik/AST
+    sözleşmeleri (escrow varsayılanı, güvenli-silme, ACL erken-çıkışı) HER ortamda koşmaya
+    devam etsin — kapının asıl gövdesi orasıdır ve platformdan bağımsızdır.
+    """
+    pytest.importorskip("sqlcipher3", reason="at-rest göç davranışı sqlcipher3 ister")
+
+    from database import treatment_history_db as thdb
+
+    monkeypatch.delenv("PEMF_ENCRYPT_AT_REST", raising=False)
+    monkeypatch.setattr(thdb.TreatmentHistoryDB, "_import_sqlcipher", lambda self: None)
+    db = thdb.TreatmentHistoryDB(temp_app_data)
+    db.start_session("Manuel", patient_name="ArtikHasta")
+    db.close_connections()
+    monkeypatch.undo()
+    monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
+    thdb.TreatmentHistoryDB(temp_app_data)  # göç
+    assert not (temp_app_data / "pemf_treatment_history.db.plain.bak").exists(), (
+        "goc sonrasi duz-metin yedek diskte kaldi"
+    )
 
 
 def test_config_kaydi_ATOMIK(tmp_path, monkeypatch):

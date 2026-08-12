@@ -26,6 +26,7 @@ Bu test AĞIR bağımlılık İSTEMEZ — pickle baytlarını okur, sklearn'i im
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -111,11 +112,49 @@ def test_bilinen_eserin_surumu_DEGISMEZ(olculen):
     )
 
 
+def _izlenen_eserler():
+    """`ai_hub` altında git'te İZLENEN .pkl eserleri. Temiz bir checkout'ta bunlar MUTLAKA
+    bulunur; yoksa gerçekten kaybolmuşlardır. git yoksa/çalışmazsa None."""
+    try:
+        r = subprocess.run(
+            ["git", "ls-files", "ai_hub/**/*.pkl"],
+            cwd=str(KOK),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    on = "ai_hub/"
+    return {s[len(on) :] for s in r.stdout.split() if s.startswith(on) and s.endswith(".pkl")}
+
+
 def test_baselinedaki_eser_KAYBOLMAZ(olculen):
-    """Eser silinirse ya da yeniden adlandırılırsa çıkarım çalışma anında patlar; burada yakala."""
-    kayip = sorted(set(BASELINE) - set(olculen))
-    # release_assets tek-kaynak olduğu için geliştirici ağacında bazıları bulunmayabilir;
-    # yalnız ai_hub/ ağacı hiç yoksa skip edilir (fixture). Buradaki kayıp gerçek kayıptır.
+    """Eser silinirse ya da yeniden adlandırılırsa çıkarım çalışma anında patlar; burada yakala.
+
+    ⚠️ 2026-08-12: bu test CI'da düşüyordu. Sebep eser kaybı DEĞİL — BASELINE'ın 14 eserinden
+    yalnız 9'u depoda izlenir; kalanlar tek-kaynak `release_assets/ai_models`tedir (2,1 GB,
+    `.gitignore`). Temiz checkout'ta o 5'i hiç var olmaz, dolayısıyla "kayıp" sanılıyordu.
+    Fixture yalnız `ai_hub/` ağacının TAMAMEN yokluğunu atlıyor, bu ara durumu görmüyordu.
+
+    Doğru çizgi: İZLENEN eser her ortamda bulunmak ZORUNDA (kaybı her zaman hata). İzlenmeyen
+    eser ise ancak model seti kuruluyken beklenir — kurulu olup olmadığı, izlenmeyenlerden
+    HERHANGİ birinin diskte bulunmasıyla anlaşılır. Böylece kısmi kayıp (biri var, öteki
+    silinmiş) geliştirici/yayın makinesinde hâlâ yakalanır; CI ise izlenen 9 eseri korumaya
+    devam eder — koruma kalkmaz, yalnız ortamda var olamayacak dosyalar beklenmez.
+    """
+    mevcut = set(olculen)
+    izlenen = _izlenen_eserler()
+    if izlenen is None:
+        beklenen = set(BASELINE)  # git yok → eski (tam) davranışa dön
+    else:
+        izlenmeyen = set(BASELINE) - izlenen
+        model_seti_kurulu = bool(izlenmeyen & mevcut)
+        beklenen = set(BASELINE) if model_seti_kurulu else (set(BASELINE) & izlenen)
+
+    kayip = sorted(beklenen - mevcut)
     assert not kayip, f"BASELINE'da olup diskte olmayan eser: {kayip}"
 
 
