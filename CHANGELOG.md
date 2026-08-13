@@ -30,6 +30,31 @@ geçmiyorsa test kırılır.
 
 ---
 
+## mobile 2.3.12 — 2026-08-13 (farklı ağdaki ilk açılış için eşleştirme rehberi)
+
+**Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.12.apk` (sha `0cd353b58632`, versionCode 19).
+
+Telefon ile cihaz **aynı ağda değilken** ilk açılışta bağlantı kurulamıyordu — bu beklenen bir
+durum — ama kullanıcı ne olduğunu ve **ne yapacağını** öğrenemiyordu. Ekranda tek bir şerit
+vardı ("Cihaza bağlanılamıyor — dokunup yeniden bağlan") ve dokunmak **her zaman** aynı keşfi
+tekrarlıyordu. Oysa keşif merdiveninin uzaktan adımı **kayıtlı bir cihaz kimliği** ister ve ilk
+açılışta o kimlik yoktur: o düğme sonsuza kadar başarısız olacak bir işi tekrarlıyordu.
+Eşleştirme alanı vardı ama Ayarlar'ın içine gömülüydü.
+
+Artık şerit iki durumu ayırır:
+
+- **Hiç eşleşilmemişse** → *"Bağlanmak için DOKUNUN"* → rehber açılır: neden bağlanılamadığı,
+  kodun cihazda **tam olarak nerede** yazdığı (Daha Fazla → Uzaktan Erişim Bağlantısı) ve giriş
+  alanı aynı ekranda. Ayrıca "aynı Wi-Fi'ye bağlanırsanız kod **gerekmez**" ve "bir kez eşleşince
+  bu ekran bir daha çıkmaz" bilgileri.
+- **Daha önce eşleşilmişse** → eski davranış (yeniden dene); geçici kopmada kod istemek gereksiz.
+
+Bağlanma kararı `services/pairing`e çıkarıldı ve **Ayarlar ekranı da onu kullanıyor** — güvenlik
+değişmezleri (health + kimlik doğrulama, token takası) tek yerde. Web arayüzü **muaf**: onu
+cihazın kendisi sunar, orada eşleştirme anlamsızdır.
+
+---
+
 ## launcher 1.9.27 — 2026-08-12 (kararsız bağlantıda yanlış "internet yok")
 
 **Etiket:** `launcher-v1.9.27` → `PEMFVetClient-Setup-1.9.27.exe` (sha `d46914fe85c5`).

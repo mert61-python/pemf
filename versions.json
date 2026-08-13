@@ -10,8 +10,8 @@
   "backend": "1.9.13",
   "launcher": "1.9.27",
   "mobile": {
-    "name": "2.3.11",
-    "androidVersionCode": 18,
+    "name": "2.3.12",
+    "androidVersionCode": 19,
     "iosBuildNumber": "6"
   },
   "frontendOta": "1.4.1"

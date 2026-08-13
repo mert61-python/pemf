@@ -85,12 +85,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.11",
-      "versionCode": 18,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.11.apk",
-      "sha256": "cb167eb740114bc2597a6b3fc4ed45de856fe5e598259c9106ae649e35c2705a",
-      "size": 128384615,
-      "notes": "Uzaktan erisim artik calisiyor (farkli agdan baglanma); hata mesajlari 'kod yanlis' ile 'cihazda uzaktan erisim kapali'/'cevrimdisi'/'buluta ulasilamadi' durumlarini AYIRIYOR. Ayrica ses analizi aninda sonuc veriyor ve AI Hub'da birden fazla modul acik kalabiliyor."
+      "version": "2.3.12",
+      "versionCode": 19,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.12.apk",
+      "sha256": "0cd353b58632adbd253bb0c5fc9de7e49c963bc007eff901b9429f2445c2711c",
+      "size": 128392307,
+      "notes": "Farkli agdaki ilk acilis icin yonlendirilmis eslestirme akisi: cihaz bulunamayinca serit rehberi acar, kodun cihazda nerede yazdigini gosterir ve girisi ayni ekranda verir."
     }
   }
 }
