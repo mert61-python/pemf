@@ -7,8 +7,8 @@ import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiC
 import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy, Building2 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, loadStoredApiToken, setStoredDeviceId } from "@/services/config";
-import { uzakCihaziKimlikleCoz, uzakCihaziKodlaCoz } from "@/services/deviceRegistry";
-import { checkHealth, exchangeCodeForToken, discoverBackend } from "@/services/discovery";
+import { checkHealth, discoverBackend } from "@/services/discovery";
+import { cihazaBaglan, eslesmeMesaji } from "@/services/pairing";
 import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
 import { updateProfile } from "@/services/supabaseAuth";
@@ -326,74 +326,22 @@ export function SettingsScreen() {
     if (!input) return;
     setConnecting(true);
     try {
-      let tunnelUrl: string | null = null;
-      let resolvedDeviceId = input;
-
-      // ⚠️ 2026-08-12 saha bildirimi: DOĞRU kod girildiği hâlde "kodu kontrol edin" deniyordu.
-      // Cihaz kayıtlıydı ve kod doğruydu; yalnız `tunnel_url` boştu (cihazda uzaktan erişim
-      // kapalı). Eski akış "kayıt yok" ile "adres yok"u aynı `null`a indirdiği için kullanıcıyı
-      // yanlış yere bakmaya yönlendiriyordu. Artık sebep AYRI ve mesaj NE YAPILACAĞINI söylüyor.
-      const c = input.length <= 8
-        ? await uzakCihaziKodlaCoz(input)
-        : await uzakCihaziKimlikleCoz(input);
-
-      if (c.durum === "bulundu") {
-        tunnelUrl = c.url;
-        resolvedDeviceId = c.device.device_id;
-      } else {
-        setConnectionStatus("fail");
-        const mesaj =
-          c.durum === "adres_yok"
-            ? "Cihaz bulundu ama uzaktan erişim adresi yok. Cihazın kendi ekranından uzaktan erişimi açın; kod doğru."
-            : c.durum === "bayat"
-              ? "Cihaz kayıtlı ama şu an çevrimdışı görünüyor. Cihazın açık ve internete bağlı olduğundan emin olun."
-              : c.durum === "hata"
-                ? "Buluta ulaşılamadı (bağlantı/zaman aşımı). İnternetinizi kontrol edip tekrar deneyin."
-                : "Bu kod/kimlikle eşleşen kayıtlı cihaz bulunamadı. Kodu kontrol edin.";
-        showToast(mesaj, "error");
-        return;
-      }
-
-      // 2) Kayıt var ama cihaz şu an erişilemez → KAYDETMEDEN ÖNCE health doğrula.
-      // GÜVENLİK: resolvedDeviceId'yi de geç (auto-yolla AYNI): Cloudflare tünel-URL'i başka bir
-      // kliniğin cihazına yeniden atanmış / Supabase satırı zehirlenmişse /api/health deviceId
-      // uyuşmazlığında BAĞLANMA — yanlış hastaya/cihaza komut gönderme riski.
-      const alive = await checkHealth(tunnelUrl, resolvedDeviceId);
-      if (!alive) {
-        setConnectionStatus("fail");
-        showToast("Cihaz bulundu ama şu an çevrimdışı ya da kimlik doğrulanamadı.", "error");
-        return;
-      }
-
-      // 3) Canlı → kaydet + bağlan.
-      if (!updateServiceConfig(tunnelUrl)) {  // #63: geçersiz adres → ayarı bozma
-        setConnectionStatus("fail");
-        showToast("Geçersiz cihaz adresi biçimi.", "error");
-        return;
-      }
-      // Kod-yolu (hiç LAN'a girmemiş telefon): 6-haneli kodu cihaz token'ıyla takas et →
-      // uzaktan HTTP + WS auth çalışsın. Yoksa "bağlandı ✓" ama tüm veri 401 olurdu (audit P0).
-      // #25: takas SONUCU yok sayılıyordu → kod yanlış/throttle'lıysa bile aşağıda "eşleştirildi ✓"
-      // deniyor, ama sonraki tüm istekler 401 alıyordu (kullanıcı "bağlandım ama veri gelmiyor"
-      // durumunda kalıyordu). Sonucu doğrula ve dürüst mesaj ver.
-      let tokenOk = true;
-      if (input.length <= 8) { tokenOk = await exchangeCodeForToken(tunnelUrl, input); }
-      await setStoredDeviceId(resolvedDeviceId);
-      await AsyncStorage.setItem("@pemf_server_address", tunnelUrl).catch(() => {});
-      setSettings(prev => ({ ...prev, server_ip: tunnelUrl as string }));
-      // #87: yeni serviceConfig ile WS'i HEMEN yeniden bağla → önceki cihazın telemetrisi
-      // gösterilmeye devam etmesin (yanlış-cihaz görüntüsü). reconnect() connectionEpoch bump eder.
-      liveReconnect();
-      if (tokenOk) {
+      // ⚠️ Bağlantı kararı `services/pairing` içinde, TEK YERDE verilir (çözümleme sebebi →
+      // health + kimlik doğrulama → token takası → kalıcı yazma). Buradaki iş yalnız arayüz.
+      // Karşılama akışı (`DevicePairingGuide`) da AYNI servisi çağırır; iki kopya tutulsaydı
+      // güvenlik değişmezlerinden biri sessizce eskiyebilirdi.
+      const sonuc = await cihazaBaglan(input);
+      if (sonuc.durum === "ok") {
+        setSettings(prev => ({ ...prev, server_ip: sonuc.url }));
+        // Yeni serviceConfig ile WS'i HEMEN yeniden bağla → önceki cihazın telemetrisi
+        // gösterilmeye devam etmesin (yanlış-cihaz görüntüsü).
+        liveReconnect();
         setConnectionStatus("ok");
-        showToast("Cihaz eşleştirildi ve bağlanıldı ✓", "success");
+        showToast(eslesmeMesaji(sonuc), "success");
       } else {
         setConnectionStatus("fail");
-        showToast("Cihaz bulundu ama eşleştirme kodu kabul edilmedi — kodu kontrol edip tekrar deneyin.", "error");
+        showToast(eslesmeMesaji(sonuc), "error");
       }
-    } catch {
-      setConnectionStatus("fail");
-      showToast("Eşleştirme sunucusuna ulaşılamadı. İnternet bağlantınızı kontrol edin.", "error");
     } finally {
       setConnecting(false);
     }
