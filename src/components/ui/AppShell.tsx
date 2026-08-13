@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { ReactNode, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
 import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -97,6 +97,14 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const [rehberAcik, setRehberAcik] = useState(false);
   useEffect(() => {
     let iptal = false;
+    // ⚠️ WEB'DE REHBER YOK: web arayüzünü CİHAZIN KENDİSİ sunar (localhost) ve keşif zaten
+    // origin'i kullanır (`discovery`: `Platform.OS === "web"` erken dönüşü). Orada "cihazla
+    // eşleş" demek, cihazı KENDİSİYLE eşleştirmeye çağırmak olurdu. Web'de doğru olan eski
+    // davranıştır: backend geçici düşmüştür, yeniden denemek anlamlıdır.
+    if (Platform.OS === "web") {
+      setEslesmeVar(true);
+      return () => { iptal = true; };
+    }
     getStoredDeviceId()
       .then((id) => { if (!iptal) setEslesmeVar(Boolean(id)); })
       .catch(() => { if (!iptal) setEslesmeVar(null); });

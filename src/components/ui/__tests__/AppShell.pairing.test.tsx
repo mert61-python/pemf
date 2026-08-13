@@ -132,4 +132,24 @@ describe("çevrimdışı şeridi", () => {
     const u = setup();
     expect(await waitFor(() => u.getByTestId("conn-banner"))).toBeTruthy();
   });
+
+  it("KRITIK: WEB'de rehber ÖNERİLMEZ (cihaz kendisiyle eşleşemez)", async () => {
+    // Web arayüzünü cihazın KENDİSİ sunar (localhost) ve keşif origin'i kullanır. Orada
+    // "cihazla eşleş" demek anlamsız; doğru olan yeniden denemektir.
+    const RN = require("react-native");
+    const eski = RN.Platform.OS;
+    RN.Platform.OS = "web";
+    try {
+      mockDeviceId = null; // mobilde REHBER açardı — web'de açmamalı
+      mockQuality = "offline";
+      const u = setup();
+      const serit = await waitFor(() => u.getByTestId("conn-banner"));
+      expect(serit.props.accessibilityLabel).toBe("Bağlantıyı yeniden dene");
+      fireEvent.press(serit);
+      expect(mockReconnect).toHaveBeenCalled();
+      expect(u.queryByText("REHBER-ACIK")).toBeNull();
+    } finally {
+      RN.Platform.OS = eski;
+    }
+  });
 });
