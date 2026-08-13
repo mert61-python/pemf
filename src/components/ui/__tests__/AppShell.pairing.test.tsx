@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 /**
- * ÇEVRİMDIŞI ŞERİDİ — "hiç eşleşmemiş" ile "bağlantı koptu" AYRI DURUMLARDIR (2026-08-13).
+ * ÇEVRİMDIŞI ŞERİDİ — her zaman EYLEMLİ bir kapı açar (2026-08-13).
  *
  * SAHA BİLDİRİMİ: telefon ve cihaz aynı ağda değilken ilk açılışta bağlantı kurulamıyordu (bu
  * beklenen) ama kullanıcı NE YAPACAĞINI öğrenemiyordu. Şerit tek metindi ve dokunmak her zaman
@@ -8,9 +8,15 @@
  * ister (`discovery` adım 3); ilk açılışta o kimlik yoktur → o düğme SONSUZA KADAR başarısız
  * olacak bir işi tekrarlıyordu. Eşleştirme alanı vardı ama Ayarlar'ın içine gömülüydü.
  *
- * Kilitlenen davranış:
- *   • Kayıtlı kimlik YOK  → metin "Bağlanmak için DOKUNUN", dokunuş REHBERİ açar (reconnect ÇAĞIRMAZ).
- *   • Kayıtlı kimlik VAR  → eski davranış: dokunuş `reconnect()` (geçici kopma; kod istemek gereksiz).
+ * ⚠️ İLK TASARIM YANLIŞTI (aynı gün, ikinci saha bildirimi): şerit "daha önce eşleşilmiş mi"
+ * diye `getStoredDeviceId()`e bakıyor, yalnız kimlik YOKSA rehberi açıyordu. Ama `checkHealth`
+ * HER başarılı bağlantıda kimliği saklar (`discovery.ts:100`) — aynı ağda bir kez bağlanmış
+ * HERKESTE kimlik vardır. Sonuç: güncel APK'da bile rehber hiç açılmadı; kullanıcı eski
+ * "yeniden bağlan" metnini görmeye devam etti (ekran görüntüsüyle bildirildi).
+ *
+ * Kilitlenen davranış — TAHMİN YOK:
+ *   • Çevrimdışıyken dokunuş HER ZAMAN rehberi açar (kayıtlı kimlik olsun ya da olmasın).
+ *   • Rehber iki yolu da sunar: "Yeniden Dene" (aynı ağ) + kod girişi (farklı ağ).
  *   • Bağlantı canlıyken şerit HİÇ çıkmaz.
  */
 jest.mock("@/services/apiClient", () => ({
@@ -89,41 +95,32 @@ beforeEach(() => {
 });
 
 describe("çevrimdışı şeridi", () => {
-  it("KRITIK: hiç eşleşmemişken REHBER açar (boşuna yeniden denemez)", async () => {
+  it("KRITIK: kayıtlı kimlik YOKKEN rehberi açar", async () => {
     mockDeviceId = null;
     const u = setup();
-    const serit = await waitFor(() => u.getByLabelText("Cihaza bağlanma rehberini aç"));
-    fireEvent.press(serit);
+    fireEvent.press(await waitFor(() => u.getByTestId("conn-banner")));
     expect(u.getByText("REHBER-ACIK")).toBeTruthy();
-    // ⚠️ ASIL ARIZA: eskiden burada reconnect çağrılıyordu ve HİÇBİR ZAMAN başaramazdı
-    // (uzaktan adım kayıtlı device_id ister; ilk açılışta yok).
-    expect(mockReconnect).not.toHaveBeenCalled();
   });
 
-  it("hiç eşleşmemişken metin NE YAPILACAĞINI söyler", async () => {
-    mockDeviceId = null;
-    const u = setup();
-    const serit = await waitFor(() => u.getByLabelText("Cihaza bağlanma rehberini aç"));
-    expect(String(serit.props.accessibilityLabel)).toContain("rehber");
-  });
-
-  it("daha önce eşleşmişse YENİDEN DENER (kod istemez)", async () => {
+  it("KRITIK: kayıtlı kimlik VARKEN DE rehberi açar (asıl regresyon)", async () => {
+    // ⚠️ Eski tasarımda burada `reconnect()` çağrılıyor ve rehber HİÇ açılmıyordu. Aynı ağda
+    // bir kez bağlanmış her kullanıcıda kimlik olduğu için sahada rehber görünmedi.
     mockDeviceId = "140936350360443";
     const u = setup();
-    const serit = await waitFor(() => u.getByLabelText("Bağlantıyı yeniden dene"));
-    fireEvent.press(serit);
-    expect(mockReconnect).toHaveBeenCalled();
-    expect(u.queryByText("REHBER-ACIK")).toBeNull();
+    fireEvent.press(await waitFor(() => u.getByTestId("conn-banner")));
+    expect(u.getByText("REHBER-ACIK")).toBeTruthy();
+  });
+
+  it("şerit metni NE YAPILACAĞINI söyler", async () => {
+    const u = setup();
+    const serit = await waitFor(() => u.getByTestId("conn-banner"));
+    expect(String(serit.props.accessibilityLabel)).toContain("bağlanma seçenekleri");
   });
 
   it("bağlantı canlıyken şerit HİÇ çıkmaz", async () => {
-    // ⚠️ Etiketle sınamak YETMEZ: `eslesmeVar` başlangıçta `null` olduğu için etiket ilk
-    // render'da diğerine düşüyor ve mutasyon turunda "şerit her zaman çizilsin" KAÇTI.
-    // Şeridin VARLIĞI kararlı bir testID ile sınanır — metin/etiket değişse de geçerli kalır.
     mockQuality = "live";
     const u = setup();
     await waitFor(() => expect(u.queryByTestId("conn-banner")).toBeNull());
-    // Durum çözüldükten sonra da çıkmamalı (geç gelen state güncellemesi şeridi doğurmasın).
     await waitFor(() => expect(u.queryByTestId("conn-banner")).toBeNull());
   });
 
@@ -131,25 +128,5 @@ describe("çevrimdışı şeridi", () => {
     mockQuality = "offline";
     const u = setup();
     expect(await waitFor(() => u.getByTestId("conn-banner"))).toBeTruthy();
-  });
-
-  it("KRITIK: WEB'de rehber ÖNERİLMEZ (cihaz kendisiyle eşleşemez)", async () => {
-    // Web arayüzünü cihazın KENDİSİ sunar (localhost) ve keşif origin'i kullanır. Orada
-    // "cihazla eşleş" demek anlamsız; doğru olan yeniden denemektir.
-    const RN = require("react-native");
-    const eski = RN.Platform.OS;
-    RN.Platform.OS = "web";
-    try {
-      mockDeviceId = null; // mobilde REHBER açardı — web'de açmamalı
-      mockQuality = "offline";
-      const u = setup();
-      const serit = await waitFor(() => u.getByTestId("conn-banner"));
-      expect(serit.props.accessibilityLabel).toBe("Bağlantıyı yeniden dene");
-      fireEvent.press(serit);
-      expect(mockReconnect).toHaveBeenCalled();
-      expect(u.queryByText("REHBER-ACIK")).toBeNull();
-    } finally {
-      RN.Platform.OS = eski;
-    }
   });
 });

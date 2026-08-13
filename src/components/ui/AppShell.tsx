@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { ReactNode, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
 import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { installedModes } from "@/services/installedProfiles";
-import { getStoredDeviceId } from "@/services/config";
 import { DevicePairingGuide } from "@/components/domain/DevicePairingGuide";
 import { colors, radius, spacing, typography, rf, rs, gradients, elevation } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
@@ -91,26 +90,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const { logout } = useAuth();
   const { unreadCount, connectionQuality, reconnect } = useLiveData();
 
-  // Daha önce eşleşme yapılmış mı? (kayıtlı device_id) — şeridin davranışını belirler.
-  // `null` = henüz bilinmiyor; o sırada eski (yeniden dene) davranışı korunur.
-  const [eslesmeVar, setEslesmeVar] = useState<boolean | null>(null);
   const [rehberAcik, setRehberAcik] = useState(false);
-  useEffect(() => {
-    let iptal = false;
-    // ⚠️ WEB'DE REHBER YOK: web arayüzünü CİHAZIN KENDİSİ sunar (localhost) ve keşif zaten
-    // origin'i kullanır (`discovery`: `Platform.OS === "web"` erken dönüşü). Orada "cihazla
-    // eşleş" demek, cihazı KENDİSİYLE eşleştirmeye çağırmak olurdu. Web'de doğru olan eski
-    // davranıştır: backend geçici düşmüştür, yeniden denemek anlamlıdır.
-    if (Platform.OS === "web") {
-      setEslesmeVar(true);
-      return () => { iptal = true; };
-    }
-    getStoredDeviceId()
-      .then((id) => { if (!iptal) setEslesmeVar(Boolean(id)); })
-      .catch(() => { if (!iptal) setEslesmeVar(null); });
-    return () => { iptal = true; };
-    // Bağlantı durumu değişince yeniden bak: eşleştikten sonra şerit "yeniden dene"ye dönsün.
-  }, [connectionQuality]);
   const { showToast } = useToast();
   const guardTeardown = useTeardownGuard();
   // Masaüstü client'ın kurduğu profiller (WelcomeScreen ile AYNI kaynak). null → kısıt yok (mobil).
@@ -366,28 +346,25 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           </Pressable>
         </Modal>
 
-        {/* ⚠️ ŞERİT İKİ FARKLI DURUMU AYIRIR (2026-08-13, sahip bildirimi).
-            Eskiden tek metin vardı ve dokunmak HER ZAMAN `reconnect()` çağırıyordu. Ama telefon
-            cihazla farklı ağdayken ve HENÜZ HİÇ EŞLEŞMEMİŞKEN o düğme sonsuza kadar başarısız
-            olacak bir işi tekrarlıyordu: keşif merdiveninin uzaktan adımı KAYITLI bir device_id
-            ister (discovery adım 3) ve ilk açılışta o kimlik yoktur. Kullanıcı ne olduğunu ve ne
-            yapacağını öğrenemiyordu.
-              • Hiç eşleşmemiş → REHBER aç (kodu nereden alacağını göster + girdiği yeri ver).
-              • Daha önce eşleşmiş → yeniden dene (geçici kopma olabilir; kod istemek gereksiz). */}
+        {/* ⚠️ 2026-08-13 — İKİNCİ TUR. İlk denemede şerit "daha önce eşleşilmiş mi" diye
+            `getStoredDeviceId()`e bakıyordu ve eşleşme yoksa rehberi açıyordu. YANLIŞ SİNYALDİ:
+            `checkHealth` HER başarılı bağlantıda kimliği saklıyor (discovery.ts) — yani aynı
+            ağda bir kez bağlanmış HERKESTE kayıtlı kimlik var. Sonuç: sahada rehber hiç
+            açılmadı, kullanıcı yine eski "yeniden bağlan" metnini gördü (kullanıcı bildirimi).
+
+            Doğrusu: çevrimdışıyken TEK ve HER ZAMAN eylemli bir kapı. Rehber içinde İKİ yol da
+            var — "yeniden dene" (aynı ağda geçici kopma) ve kod girişi (farklı ağ). Hangi
+            durumda olduğunu TAHMİN ETMEYE çalışmıyoruz; kullanıcıya ikisini de veriyoruz. */}
         {connectionQuality === "offline" && (
           <Pressable
-            onPress={eslesmeVar === false ? () => setRehberAcik(true) : reconnect}
+            onPress={() => setRehberAcik(true)}
             style={[styles.connBanner, styles.connBannerOffline]}
             testID="conn-banner"
             accessibilityRole="button"
-            accessibilityLabel={
-              eslesmeVar === false ? "Cihaza bağlanma rehberini aç" : "Bağlantıyı yeniden dene"
-            }
+            accessibilityLabel="Cihaza bağlanma seçeneklerini aç"
           >
             <Text style={styles.connBannerText}>
-              {eslesmeVar === false
-                ? "⚠ Cihaz bulunamadı — gösterilen değerler GERÇEK DEĞİL. Bağlanmak için DOKUNUN."
-                : "⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Dokunup yeniden bağlan."}
+              ⚠ Cihaza bağlanılamıyor — gösterilen değerler GERÇEK DEĞİL. Bağlanmak için DOKUNUN.
             </Text>
           </Pressable>
         )}

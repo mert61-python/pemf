@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Link2, MonitorSmartphone, Wifi, X } from "lucide-react-native";
+import { Link2, MonitorSmartphone, RefreshCcw, Wifi, X } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -12,20 +12,22 @@ import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 /**
  * CİHAZA BAĞLANMA REHBERİ (2026-08-13, sahip bildirimi).
  *
- * ARIZA: telefon ve cihaz AYNI AĞDA DEĞİLKEN ilk açılışta bağlantı kurulamıyordu — bu
- * beklenen bir durum — ama kullanıcı ne olduğunu ve NE YAPACAĞINI öğrenemiyordu. Ekranda
- * yalnız "Cihaza bağlanılamıyor — dokunup yeniden bağlan" şeridi vardı ve dokunmak AYNI
- * keşfi tekrarlıyordu. Oysa keşif merdiveninin uzaktan adımı KAYITLI bir `device_id` ister
- * (`discovery._discoverBackendImpl` adım 3); ilk açılışta o kimlik henüz yoktur. Yani farklı
- * ağdaki yeni kullanıcı için o düğme SONSUZA KADAR başarısız olacak bir işi tekrarlıyordu.
+ * ARIZA: telefon ve cihaz AYNI AĞDA DEĞİLKEN bağlantı kurulamıyordu — bu beklenen bir
+ * durum — ama kullanıcı ne olduğunu ve NE YAPACAĞINI öğrenemiyordu. Ekranda yalnız
+ * "Cihaza bağlanılamıyor — dokunup yeniden bağlan" şeridi vardı ve dokunmak AYNI keşfi
+ * tekrarlıyordu; farklı ağda o keşif cihazı bulamaz. Eşleştirme alanı vardı ama Ayarlar →
+ * "Uzaktan Erişim Bağlantısı" içinde gömülüydü; bağlantı kuramamış bir kullanıcının oraya
+ * kendiliğinden gitmesi beklenemez.
  *
- * Eşleştirme alanı vardı ama Ayarlar → "Uzaktan Erişim Bağlantısı" içinde gömülüydü; bağlantı
- * kuramamış bir kullanıcının oraya kendiliğinden gitmesi beklenemez.
+ * ⚠️ İLK TASARIM YANLIŞTI ve saha bunu gösterdi (2026-08-13, ikinci bildirim). Şerit
+ * "daha önce eşleşilmiş mi" diye `getStoredDeviceId()`e bakıyor, yalnız kimlik YOKSA rehberi
+ * açıyordu. Ama `checkHealth` HER başarılı bağlantıda kimliği saklar (`discovery.ts`) — yani
+ * aynı ağda bir kez bağlanmış HERKESTE kimlik vardır. Sonuç: güncel APK'da bile rehber hiç
+ * açılmadı, kullanıcı eski metni görmeye devam etti.
  *
- * ÇÖZÜM: bağlanamama anında, olduğu yerde bir rehber. Kullanıcıya (a) neden bağlanamadığını,
- * (b) kodu cihazda TAM OLARAK nerede bulacağını, (c) girdiği yeri aynı ekranda verir.
- * Bir kez eşleşince kimlik saklanır → sonraki açılışlar merdivenin uzaktan adımıyla KENDİ
- * KENDİNE bağlanır; bu rehber bir daha çıkmaz.
+ * ÇÖZÜM: kullanıcının hangi durumda olduğunu TAHMİN ETME. Çevrimdışıyken tek bir kapı açılır
+ * ve İKİ yolu da sunar: (a) "Yeniden Dene" — aynı ağdaki geçici kopma için, (b) kodun cihazda
+ * nerede yazdığı + giriş alanı — farklı ağ için. Hangisinin geçerli olduğunu kullanıcı bilir.
  *
  * ⚠️ Bağlanma kararını KENDİ İÇİNDE vermez: `services/pairing.cihazaBaglan` çağrılır — Ayarlar
  * ekranıyla AYNI yol. Güvenlik değişmezleri (health + kimlik doğrulama, token takası) tek
@@ -76,9 +78,35 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={styles.lead}>
-              Cihaz bu ağda bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi&apos;de değilse</Text>{" "}
-              (mobil veri ya da başka bir ağ) bu normaldir — aşağıdaki kodla bağlanabilirsiniz.
+              Cihaz bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi&apos;de değilse</Text>{" "}
+              (mobil veri ya da başka bir ağ) bu normaldir.
             </Text>
+
+            {/* ⚠️ İKİ YOL DA BURADA. Şerit artık kullanıcının hangi durumda olduğunu TAHMİN
+                ETMİYOR (ilk tasarım "daha önce eşleşilmiş mi" diye bakıyordu ve o sinyal
+                yanlıştı — bkz. AppShell notu). Aynı ağdaki geçici kopma için "yeniden dene",
+                farklı ağ için kod girişi; kullanıcı hangisinin geçerli olduğunu kendisi bilir. */}
+            <View style={styles.hizli}>
+              <Text style={styles.hizliBaslik}>Aynı Wi-Fi&apos;de misiniz?</Text>
+              <Text style={styles.hizliMetin}>
+                Bağlantı geçici koptuysa yeniden aramak yeterlidir — kod gerekmez.
+              </Text>
+              <Button
+                label="Yeniden Dene"
+                variant="secondary"
+                onPress={() => {
+                  reconnect();
+                  onClose();
+                }}
+                icon={<RefreshCcw size={16} color={colors.primary} />}
+              />
+            </View>
+
+            <View style={styles.ayirac}>
+              <View style={styles.ayiracCizgi} />
+              <Text style={styles.ayiracMetin}>farklı ağdaysanız</Text>
+              <View style={styles.ayiracCizgi} />
+            </View>
 
             <View style={styles.adim}>
               <View style={styles.adimNo}>
@@ -125,11 +153,10 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
               icon={baglaniyor ? <ActivityIndicator size="small" color={colors.white} /> : <Link2 size={16} color={colors.white} />}
             />
 
-            {/* Aynı ağdaysa kod GEREKMEZ: bunu söylemek, gereksiz yere kod aramasını önler. */}
             <View style={styles.altBilgi}>
               <Wifi size={14} color={colors.textMuted} />
               <Text style={styles.altBilgiText}>
-                Cihazla aynı Wi-Fi&apos;ye bağlanırsanız kod gerekmez; uygulama cihazı kendi bulur.
+                Cihazla aynı Wi-Fi&apos;ye bağlanırsanız kod hiç gerekmez; uygulama cihazı kendi bulur.
               </Text>
             </View>
             <View style={styles.altBilgi}>
@@ -196,6 +223,19 @@ const styles = StyleSheet.create({
     letterSpacing: rs(2),
   },
   ipucu: { color: colors.textMuted, fontSize: rf(11) },
+  hizli: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  hizliBaslik: { color: colors.text, fontSize: rf(14), fontWeight: "700" },
+  hizliMetin: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
+  ayirac: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  ayiracCizgi: { flex: 1, height: 1, backgroundColor: colors.border },
+  ayiracMetin: { color: colors.textSubtle, fontSize: rf(11) },
   altBilgi: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
   altBilgiText: { flex: 1, color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
 });
