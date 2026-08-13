@@ -107,11 +107,11 @@ export const DOWNLOAD_HOST = {
   //
   // ⚠️ TEK KAYNAK guii/versions.json → mobile.name. Burası ELLE eşlenir; APK yayınlarken ikisini
   // birlikte güncelleyin (`scripts/check-legal-config.mjs` tutarlılığı ayrıca kilitler).
-  androidVersion: '2.3.11',
+  androidVersion: '2.3.12',
   get androidAsset(): string {
     return `PEMF_Vet_Mobil-${this.androidVersion}.apk`
   },
-  androidReady: true, // Android standalone APK yayinda (v2.3.11 / versionCode 18)
+  androidReady: true, // Android standalone APK yayinda (v2.3.12 / versionCode 19)
 }
 
 const REL = `https://github.com/${DOWNLOAD_HOST.githubOwner}/${DOWNLOAD_HOST.githubRepo}/releases/download/${DOWNLOAD_HOST.launcherTag}`
