@@ -1,7 +1,9 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { radius, spacing, typography, rs } from "@/theme/tokens";
 import { ConnectionState } from "@/types/domain";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface StatusPillProps {
   label: string;
@@ -21,14 +23,21 @@ export function StatusPill({ label, state }: StatusPillProps) {
   const palette = STATE_COLORS[state] ?? STATE_COLORS.offline;
   const pulse = useRef(new Animated.Value(0)).current;
 
+  // #118 "hareketi azalt" tercihi diğer primitiflere (Button vb.) uygulanmıştı, buraya değil:
+  // StatusPill her ekranın üstünde 3-4 adet bulunduğundan sonsuz nabız, vestibüler duyarlılığı
+  // olan kullanıcılar için en rahatsız edici animasyondu.
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
-    if (state !== "online") return;
+    if (state !== "online" || reduceMotion) {
+      pulse.setValue(0);
+      return;
+    }
     const loop = Animated.loop(
       Animated.timing(pulse, { toValue: 1, duration: 1900, useNativeDriver: true }),
     );
     loop.start();
     return () => loop.stop();
-  }, [state, pulse]);
+  }, [state, pulse, reduceMotion]);
 
   const ringStyle = {
     opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),

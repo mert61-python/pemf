@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Activity, RadioTower, Thermometer, Zap } from "lucide-react-native";
@@ -5,6 +6,12 @@ import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { CoilStatus } from "@/types/domain";
+
+/** Güvenli sayı biçimlendirme: sayı değilse (undefined / "44.5" / NaN) çökmek yerine "—". */
+function num(v: unknown, digits = 0): string {
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n.toFixed(digits) : "—";
+}
 
 export function CoilCard({ coil }: { coil: CoilStatus }) {
   const isStmCoil = coil.stm32Driven || coil.id <= 5;
@@ -23,10 +30,15 @@ export function CoilCard({ coil }: { coil: CoilStatus }) {
       </View>
 
       <View style={styles.metrics}>
-        <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label="Frekans" value={`${coil.frequencyHz} Hz`} />
-        <MiniMetric icon={<Zap color={colors.warning} size={16} />} label="Duty" value={`${coil.dutyCycle}%`} />
-        <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={`${coil.magneticMt.toFixed(2)} mT`} />
-        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={`${coil.objectTemp.toFixed(1)} C`} />
+        {/* SAVUNMA DERİNLİĞİ: `.toFixed()` sayı OLMAYAN değerde TypeError atar. Normalde
+            LiveDataContext.normalizeStmCoils tüm alanları `_num` ile sayıya zorluyor — ama bu
+            kart, ACİL DURDUR'un yaşadığı Ana Ekran'da render ediliyor. Tek bir normalize-edilmemiş
+            çağrı yeri (ya da ileride eklenecek yeni bir kaynak) bu ekranı çökertirse operatör
+            donanım çalışırken durdurma kontrolünü kaybeder. Bileşen kendi girdisini de doğrular. */}
+        <MiniMetric icon={<RadioTower color={colors.primary} size={16} />} label="Frekans" value={`${num(coil.frequencyHz)} Hz`} />
+        <MiniMetric icon={<Zap color={colors.warning} size={16} />} label="Duty" value={`${num(coil.dutyCycle)}%`} />
+        <MiniMetric icon={<Activity color={colors.cyan} size={16} />} label="Alan" value={`${num(coil.magneticMt, 2)} mT`} />
+        <MiniMetric icon={<Thermometer color={colors.danger} size={16} />} label="Sıcaklık" value={`${num(coil.objectTemp, 1)} C`} />
       </View>
     </Card>
   );

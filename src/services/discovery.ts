@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * PEMF bağlantı KEŞİF MERDİVENİ — temassız, sıfır-konfig.
  * =======================================================
@@ -14,6 +15,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateServiceConfig, serviceConfig, setStoredDeviceId, getStoredDeviceId, setStoredApiToken } from "@/services/config";
 import { getRemoteUrlForDevice } from "@/services/deviceRegistry";
+import { isPrivateHost } from "@/services/apiClient";
 
 const ADDR_KEY = "@pemf_server_address";
 const HEALTH_TIMEOUT_MS = 2500;
@@ -27,6 +29,15 @@ export interface DiscoveryResult {
 
 function toBase(addr: string): string {
   return addr.startsWith("http") ? addr.replace(/\/$/, "") : `http://${addr}:8000`;
+}
+
+/** Adresin host kısmı (şema/port/yol olmadan). */
+function hostOf(addr: string): string {
+  return String(addr || "")
+    .replace(/^https?:\/\//i, "")
+    .split("/")[0]
+    .split(":")[0]
+    .toLowerCase();
 }
 
 /** TEMASSIZ UZAKTAN AUTH: YERELken (LAN) cihazın api_token'ını çekip saklar. Backend bu endpoint'i
@@ -94,9 +105,16 @@ export async function checkHealth(addr: string, requireDeviceId?: string | null)
   }
 }
 
-async function apply(addr: string): Promise<void> {
-  updateServiceConfig(addr);
+/** Adresi uygula + kalıcılaştır. `updateServiceConfig` GEÇERSİZ adreste false döner; eskiden bu
+ *  sonuç yok sayılıp adres yine de kaydediliyordu → "cihaz bulundu" denip trafik ESKİ adrese
+ *  gitmeye devam ediyor, üstelik bozuk adres bir sonraki açılışa kalıyordu. */
+async function apply(addr: string): Promise<boolean> {
+  if (!updateServiceConfig(addr)) {
+    console.warn("Keşif: geçersiz adres biçimi, uygulanmadı:", addr);
+    return false;
+  }
   await AsyncStorage.setItem(ADDR_KEY, addr).catch(() => {});
+  return true;
 }
 
 // ── 2. mDNS (aynı WiFi, sıfır-konfig) ───────────────────────────────────────
@@ -115,10 +133,11 @@ async function discoverMdns(): Promise<string | null> {
     const finish = (val: string | null) => {
       if (done) return;
       done = true;
-      try {
-        zc?.stop?.();
-        zc?.removeDeviceListeners?.();
-      } catch {}
+      // AYRI try: eskiden ikisi aynı bloktaydı → `stop()` atarsa `removeDeviceListeners()` HİÇ
+      // çalışmıyor ve 8 native dinleyici kalıcı olarak sızıyordu (7/24 açık kalan tıbbi cihazda
+      // her keşif turunda birikir).
+      try { zc?.stop?.(); } catch { /* ignore */ }
+      try { zc?.removeDeviceListeners?.(); } catch { /* ignore */ }
       resolve(val);
     };
     try {
@@ -175,20 +194,26 @@ async function _isOnWifi(): Promise<boolean> {
   }
 }
 
-async function probeHost(ip: string, timeoutMs: number, _requireDeviceId?: string | null): Promise<boolean> {
+/** Tarama sırasında bulunan aday — YAN ETKİSİZ. Kimlik/token yazımı KAZANAN adaya uygulanır. */
+interface ProbeHit { ip: string; deviceId: string | null }
+
+// YARIŞ (yan etkili paralel probe): `probeHost` eskiden yanıt veren HER host için setStoredDeviceId
+// + provisionToken çağırıyordu ve tarama 40 host'u AYNI ANDA yokluyordu. İki PEMF cihazı olan bir
+// klinikte ikisi de aynı parçada cevap verirse device_id ve api_token bir cihazdan, `Promise.
+// allSettled` sonucundan seçilen bağlantı adresi ise DİĞERİNDEN olabiliyordu → uygulama A cihazına
+// bağlanıp B cihazının token/kimliğini saklıyordu. Artık probe SALT-OKUR; yazma tek kazananda yapılır.
+async function probeHost(ip: string, timeoutMs: number): Promise<ProbeHit | null> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(`http://${ip}:8000/api/health`, { signal: ctrl.signal });
     clearTimeout(t);
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const d = await res.json();
-    if (d?.service !== "PEMF-Vet") return false; // KESİN PEMF (rastgele :8000 sunucusuna bağlanma)
-    if (d?.deviceId) await setStoredDeviceId(String(d.deviceId)).catch(() => {}); // bulunan GERÇEK id'yi sakla
-    await provisionToken(`http://${ip}:8000`); // yerel bulundu → token sakla (uzaktan için)
-    return true;
+    if (d?.service !== "PEMF-Vet") return null; // KESİN PEMF (rastgele :8000 sunucusuna bağlanma)
+    return { ip, deviceId: d?.deviceId ? String(d.deviceId) : null };
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -206,14 +231,22 @@ async function discoverSubnet(requireDeviceId?: string | null): Promise<string |
   for (const sub of subs) {
     for (let i = 0; i < order.length; i += 40) {
       const chunk = order.slice(i, i + 40);
-      const results = await Promise.allSettled(
-        chunk.map(async (h) => {
-          const ip = `${sub}.${h}`;
-          if (await probeHost(ip, 1200, requireDeviceId)) return ip;
-          throw new Error("nf");
-        })
-      );
-      for (const r of results) if (r.status === "fulfilled" && r.value) return `http://${r.value}:8000`;
+      const results = await Promise.allSettled(chunk.map((h) => probeHost(`${sub}.${h}`, 1200)));
+      const hits: ProbeHit[] = results
+        .filter((r): r is PromiseFulfilledResult<ProbeHit | null> => r.status === "fulfilled")
+        .map((r) => r.value)
+        .filter((v): v is ProbeHit => v !== null);
+      if (hits.length === 0) continue;
+      // Kayıtlı cihaz varsa ONU tercih et (çok cihazlı klinikte yanlış makineyi sürmemek için);
+      // yoksa ilk bulunanı al. Yan etkiler (device_id + token) YALNIZ kazanana uygulanır.
+      const winner = (requireDeviceId && hits.find((h) => h.deviceId === requireDeviceId)) || hits[0];
+      if (hits.length > 1) {
+        console.warn(`Keşif: ${hits.length} PEMF cihazı bulundu, ${winner.ip} seçildi.`);
+      }
+      const base = `http://${winner.ip}:8000`;
+      if (winner.deviceId) await setStoredDeviceId(winner.deviceId).catch(() => {});
+      await provisionToken(base); // yerel bulundu → token sakla (uzaktan erişim için)
+      return base;
     }
   }
   return null;
@@ -245,8 +278,7 @@ async function discoverRemote(): Promise<string | null> {
 async function preferLanIfReachable(result: DiscoveryResult | null): Promise<DiscoveryResult | null> {
   if (!result) return result;
   if (Platform.OS === "web") return result; // web origin zaten doğru
-  const isLan = /\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|localhost)/i.test(result.address);
-  if (isLan) return result; // zaten LAN → yükseltme gereksiz
+  if (isPrivateHost(hostOf(result.address))) return result; // zaten LAN → yükseltme gereksiz
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
@@ -259,8 +291,7 @@ async function preferLanIfReachable(result: DiscoveryResult | null): Promise<Dis
       const lanAddr = `http://${lan}:8000`;
       // Telefon aynı-WiFi'de mi? checkHealth GERÇEK LAN erişimini dener + (yerelse) güncel token'ı saklar.
       if (await checkHealth(lanAddr)) {
-        await apply(lanAddr);
-        return { address: lanAddr, source: "subnet" };
+        if (await apply(lanAddr)) return { address: lanAddr, source: "subnet" };
       }
     }
   } catch {
@@ -303,27 +334,28 @@ async function _discoverBackendImpl(): Promise<DiscoveryResult | null> {
       // YÜKSEK fix: LAN IP'de device_id GEVŞEK kalsın (yukarıdaki regresyon: bayat id gerçek LAN cihazını
       // reddediyordu). Ama TÜNEL/https adreste device_id ŞART: bayat trycloudflare URL'si BAŞKA kiracıya
       // atanabilir → yanlışlıkla başka kliniğin cihazına + BAŞKA HASTANIN verisine bağlanma riski.
-      const isLan = /\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|localhost)/i.test(saved);
+      // Ankor/tip hatası: bu regex hostname'lere de uyuyordu → `https://10.evil.com` "LAN" sayılıp
+      // TÜNEL için ZORUNLU olan device_id kontrolünü atlatabiliyordu. Gerçek IP kontrolü kullan.
+      const isLan = isPrivateHost(hostOf(saved));
       const requireId = isLan ? null : await getStoredDeviceId();
       if (await checkHealth(saved, requireId)) {
-        await apply(saved);
-        return { address: saved, source: "saved" };
+        if (await apply(saved)) return { address: saved, source: "saved" };
       }
     }
   } catch {}
 
   // 2) mDNS (aynı WiFi, sıfır-konfig — varsa anında bulur)
   const m = await discoverMdns();
-  if (m && (await checkHealth(m))) { await apply(m); return { address: m, source: "mdns" }; }
+  if (m && (await checkHealth(m)) && (await apply(m))) return { address: m, source: "mdns" };
 
   // 3) UZAKTAN (farklı WiFi): kayıtlı device_id ile Supabase tünel URL → subnet'ten ÖNCE
   //    (farklı ağda tam /24 subnet ~sn boşa harcıyordu; remote orada hızlı bağlar).
   const r = await discoverRemote();
-  if (r) { await apply(r); return { address: r, source: "remote" }; }
+  if (r && (await apply(r))) return { address: r, source: "remote" };
 
   // 4) Subnet tarama — HER ZAMAN son çare. Aynı WiFi'de mDNS başarısızsa cihazı bulan KANITLI yol.
   const s = await discoverSubnet();
-  if (s) { await apply(s); return { address: s, source: "subnet" }; }
+  if (s && (await apply(s))) return { address: s, source: "subnet" };
 
   return null;
 }

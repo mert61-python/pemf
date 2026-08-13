@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * ObservationNotesModal — seans-sonrası gözlem notu (PyQt observation_notes_dialog).
  * ==================================================================================

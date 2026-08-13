@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import React from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +11,7 @@ import { Heart, Stethoscope, FlaskConical, LogOut, Sparkles, Zap } from "lucide-
 import { useEntitlement } from "@/context/EntitlementContext";
 import { TIER_LABEL } from "@/config/entitlement";
 import { installedModes } from "@/services/installedProfiles";
+import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 
 export function WelcomeScreen() {
   const { setUserMode } = useUserMode();
@@ -18,6 +20,7 @@ export function WelcomeScreen() {
   const { session, logout } = useAuth();
   const { tier, trialing, trialDaysLeft, realtime, research } = useEntitlement();
   const { width } = useWindowDimensions();
+  const guardTeardown = useTeardownGuard();
   const isMobile = width < 768;
   // Masaüstü client'ın kurduğu profiller (?profiles). null → tüm modlar (mobil / bilgi yok).
   const installed = installedModes();
@@ -29,7 +32,15 @@ export function WelcomeScreen() {
       <ScrollView contentContainerStyle={styles.container} bounces={false}>
         <View style={styles.topBar}>
           <Text style={styles.topEmail} numberOfLines={1}>{session?.email ?? ""}</Text>
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout} accessibilityRole="button" accessibilityLabel="Çıkış yap">
+          {/* HASTA GÜVENLİĞİ: bu ekrana seans sürerken de gelinebilir (Ayarlar → "Farklı Bir
+              Profile Geçiş Yap"). Çıkış, geriye kalan tek yolu (yeniden profil seçip Kontrol'e
+              dönmek) da kapatır → önce onay + durdurma. */}
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={async () => { if (await guardTeardown("Çıkış yapmak")) logout(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Çıkış yap"
+          >
             <LogOut size={16} color={colors.textMuted} />
             <Text style={styles.logoutText}>Çıkış</Text>
           </TouchableOpacity>
@@ -60,13 +71,13 @@ export function WelcomeScreen() {
               onPress={() => setUserMode('pet_owner')}
               accessibilityRole="button"
               accessibilityLabel="Evcil Hayvan Sahibi profili"
-              accessibilityHint="Kamerayla akıllı teşhis ve tek-tuş güvenli tedavi modu"
+              accessibilityHint="Kamerayla akıllı teşhis ve tek-tuş güvenli seans modu"
             >
               <Card variant="glass" style={styles.card}>
                 <View style={[styles.iconRing, styles.ownerRing]}><Heart size={40} color={colors.primary} /></View>
                 <Text style={styles.cardTitle}>Evcil Hayvan Sahibi</Text>
                 <Text style={styles.cardDesc}>
-                  Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli tedavi başlatın. Karmaşık ayarlarla uğraşmayın.
+                  Kamerayı kullanarak akıllı teşhis yapın ve tek tuşla güvenli seans başlatın. Karmaşık ayarlarla uğraşmayın.
                 </Text>
               </Card>
             </TouchableOpacity>
@@ -85,7 +96,7 @@ export function WelcomeScreen() {
                 <View style={[styles.iconRing, styles.vetRing]}><Stethoscope size={40} color={colors.warning} /></View>
                 <Text style={styles.cardTitle}>Veteriner Hekim</Text>
                 <Text style={styles.cardDesc}>
-                  Manuel frekans kontrolü, sensör takibi, geçmiş tedavi analizleri ve klinik ayarlarına tam erişim sağlayın.
+                  Manuel frekans kontrolü, sensör takibi, geçmiş seans analizleri ve klinik ayarlarına tam erişim sağlayın.
                 </Text>
               </Card>
             </TouchableOpacity>

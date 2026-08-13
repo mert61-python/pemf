@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * RealtimeChart — Canvas tabanlı yüksek performanslı gerçek zamanlı grafik.
  *
@@ -103,11 +104,39 @@ export function RealtimeChart({
       return;
     }
 
-    // Normalize ranges with padding
+    // Normalize ranges with padding.
+    // CRASH-GUARD: seri KAPALIYSA (showMagnetic/showTemp false) min/max hiç güncellenmez ve
+    // Infinity/-Infinity kalır → magRange = -Infinity, eksen etiketleri "NaN" basılırdı.
+    // Seri kapalıyken de eksen etiketleri çiziliyor, bu yüzden burada güvenli aralığa çek.
+    if (!Number.isFinite(magMin) || !Number.isFinite(magMax)) { magMin = 0; magMax = 1; }
+    if (!Number.isFinite(tempMin) || !Number.isFinite(tempMax)) { tempMin = 0; tempMax = 1; }
     if (magMin === magMax) { magMin -= 0.1; magMax += 0.1; }
     if (tempMin === tempMax) { tempMin -= 1; tempMax += 1; }
-    const magRange = magMax - magMin || 1;
-    const tempRange = tempMax - tempMin || 1;
+    const magRange = (magMax - magMin) || 1;
+    const tempRange = (tempMax - tempMin) || 1;
+
+    // ZAMAN EKSENİ: eğriler eskiden SERİ-BAŞINA indeksle (`i / (pts.length - 1)`) normalize
+    // ediliyordu. Yani 20 noktalı (kopmuş, donmuş) bir bobinin eğrisi de, 2000 noktalı canlı bir
+    // bobininki de grafiğin TAM GENİŞLİĞİNE yayılıyor ve son noktası sağ uçta "canlı" parlak
+    // noktayla işaretleniyordu → veri akışı durmuş bir bobin, akan bobinle aynı anda ölçülmüş gibi
+    // görünüyordu (tıbbi grafikte yanıltıcı). Artık ORTAK zaman penceresi kullanılır: veri gelmeyi
+    // bırakan seri sağ uca ULAŞMAZ, eğrisi geldiği yerde biter.
+    let tMin = Infinity, tMax = -Infinity;
+    for (const coilId of visibleCoils) {
+      for (const p of (history[coilId] ?? [])) {
+        const t = Number(p.timestamp);
+        if (!Number.isFinite(t)) continue;
+        if (t < tMin) tMin = t;
+        if (t > tMax) tMax = t;
+      }
+    }
+    const timeAxisOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMax > tMin;
+    const tRange = timeAxisOk ? tMax - tMin : 1;
+    /** Nokta → x koordinatı. Zaman damgaları kullanılamıyorsa (eski backend) indekse düşer. */
+    const xOf = (p: { timestamp?: number }, i: number, len: number) =>
+      timeAxisOk && Number.isFinite(Number(p.timestamp))
+        ? PAD.left + ((Number(p.timestamp) - tMin) / tRange) * plotW
+        : PAD.left + (len > 1 ? i / (len - 1) : 1) * plotW;
 
     // Draw curves for each visible coil
     for (const coilId of visibleCoils) {
@@ -122,14 +151,16 @@ export function RealtimeChart({
         ctx.setLineDash([]);
         ctx.beginPath();
         for (let i = 0; i < pts.length; i++) {
-          const x = PAD.left + (i / (pts.length - 1)) * plotW;
+          const x = xOf(pts[i], i, pts.length);
           const y = PAD.top + plotH - ((pts[i].magneticMt - magMin) / magRange) * plotH;
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
-        // Canlı-değer ucu (premium): son noktada parlak nokta + hâle
-        const lx = PAD.left + plotW;
-        const ly = PAD.top + plotH - ((pts[pts.length - 1].magneticMt - magMin) / magRange) * plotH;
+        // Son-değer ucu: artık SABİT sağ uçta değil, serinin GERÇEK son zamanında. Böylece veri
+        // akışı durmuş bobinin ucu geride kalır ve "canlı" gibi görünmez.
+        const last = pts[pts.length - 1];
+        const lx = xOf(last, pts.length - 1, pts.length);
+        const ly = PAD.top + plotH - ((last.magneticMt - magMin) / magRange) * plotH;
         ctx.fillStyle = color + "40";
         ctx.beginPath(); ctx.arc(lx, ly, 6, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = color;
@@ -143,7 +174,7 @@ export function RealtimeChart({
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         for (let i = 0; i < pts.length; i++) {
-          const x = PAD.left + (i / (pts.length - 1)) * plotW;
+          const x = xOf(pts[i], i, pts.length);
           const y = PAD.top + plotH - ((pts[i].objectTemp - tempMin) / tempRange) * plotH;
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
@@ -252,12 +283,31 @@ function NativeRealtimeChart({
     );
   }
 
+  // Kapalı seride min/max Infinity kalır → eksen etiketleri "NaN" basardı (web canvas ile aynı hata).
+  if (!Number.isFinite(magMin) || !Number.isFinite(magMax)) { magMin = 0; magMax = 1; }
+  if (!Number.isFinite(tempMin) || !Number.isFinite(tempMax)) { tempMin = 0; tempMax = 1; }
   if (magMin === magMax) { magMin -= 0.1; magMax += 0.1; }
   if (tempMin === tempMax) { tempMin -= 1; tempMax += 1; }
   const magRange = magMax - magMin || 1;
   const tempRange = tempMax - tempMin || 1;
 
-  const xAt = (i: number, n: number) => PAD.left + (n > 1 ? i / (n - 1) : 0) * plotW;
+  // ORTAK zaman penceresi (web canvas ile aynı gerekçe): veri akışı durmuş bobinin eğrisi
+  // grafiğin tamamına yayılıp sağ uçta "canlı" görünmesin.
+  let tMin = Infinity, tMax = -Infinity;
+  for (const s of series) {
+    for (const p of s.pts) {
+      const t = Number(p.timestamp);
+      if (!Number.isFinite(t)) continue;
+      if (t < tMin) tMin = t;
+      if (t > tMax) tMax = t;
+    }
+  }
+  const timeAxisOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMax > tMin;
+  const tRange = timeAxisOk ? tMax - tMin : 1;
+  const xAt = (i: number, n: number, p?: SensorDataPoint) =>
+    timeAxisOk && p && Number.isFinite(Number(p.timestamp))
+      ? PAD.left + ((Number(p.timestamp) - tMin) / tRange) * plotW
+      : PAD.left + (n > 1 ? i / (n - 1) : 0) * plotW;
   const yMag = (v: number) => PAD.top + plotH - ((v - magMin) / magRange) * plotH;
   const yTemp = (v: number) => PAD.top + plotH - ((v - tempMin) / tempRange) * plotH;
 
@@ -277,15 +327,15 @@ function NativeRealtimeChart({
           if (pts.length < 2) return null;
           const color = COIL_COLORS[(id - 1) % 8];
           const n = pts.length;
-          const magStr = pts.map((p, i) => `${xAt(i, n)},${yMag(p.magneticMt)}`).join(" ");
-          const tempStr = pts.map((p, i) => `${xAt(i, n)},${yTemp(p.objectTemp)}`).join(" ");
+          const magStr = pts.map((p, i) => `${xAt(i, n, p)},${yMag(p.magneticMt)}`).join(" ");
+          const tempStr = pts.map((p, i) => `${xAt(i, n, p)},${yTemp(p.objectTemp)}`).join(" ");
           const lastMag = pts[pts.length - 1];
           return (
             <G key={id}>
               {showMagnetic ? <Polyline points={magStr} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" /> : null}
               {showTemp ? <Polyline points={tempStr} fill="none" stroke={color} strokeWidth={1} strokeDasharray="4,4" strokeLinecap="round" strokeLinejoin="round" /> : null}
-              {showMagnetic ? <Circle cx={xAt(n - 1, n)} cy={yMag(lastMag.magneticMt)} r={5.5} fill={color} opacity={0.25} /> : null}
-              {showMagnetic ? <Circle cx={xAt(n - 1, n)} cy={yMag(lastMag.magneticMt)} r={3} fill={color} /> : null}
+              {showMagnetic ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={5.5} fill={color} opacity={0.25} /> : null}
+              {showMagnetic ? <Circle cx={xAt(n - 1, n, lastMag)} cy={yMag(lastMag.magneticMt)} r={3} fill={color} /> : null}
             </G>
           );
         })}

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * Uptime formatlama — backend snapshot'taki `startTime` (process başlangıç ISO'su) ile
  * şimdiki zaman arasındaki farkı "HH:MM:SS" olarak verir.
@@ -15,7 +16,13 @@ export function formatUptime(startTimeIso: string | undefined | null, nowMs: num
   if (!startTimeIso) return "00:00:00";
   const startMs = new Date(startTimeIso).getTime();
   if (!Number.isFinite(startMs)) return "00:00:00";
-  const totalSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+  const deltaMs = nowMs - startMs;
+  // SAAT DİLİMİ: backend `datetime.now().isoformat()` (TZ'siz) üretir; JS bunu İSTEMCİNİN yerel
+  // saatiyle yorumlar. Tünel üzerinden farklı bir TZ'den bağlanıldığında fark saatlerce kayar:
+  // telefon geride ise sonuç NEGATİF çıkıp 0'a kırpılıyor ve panel "00:00:00"da TAKILI kalıyordu.
+  // Negatif/absürt farkı sessizce 0 göstermek yerine "bilinmiyor" de (yanlış güvence verme).
+  if (deltaMs < -60_000) return "—";
+  const totalSec = Math.max(0, Math.floor(deltaMs / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;

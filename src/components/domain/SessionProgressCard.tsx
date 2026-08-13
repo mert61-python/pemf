@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * SessionProgressCard — Aktif seans ilerleme kartı.
  *
@@ -18,6 +19,8 @@ interface Props {
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
+  /** Acil durdurma komutu uçuşta mı (buton metnini değiştirir; buton DEVRE DIŞI KALMAZ). */
+  stopping?: boolean;
   /** Bağlantı bayat/çevrimdışı: gösterilen süre/değerler GERÇEK ZAMANLI DOĞRULANAMIYOR → görsel işaretle. */
   stale?: boolean;
 }
@@ -41,6 +44,7 @@ export function SessionProgressCard({
   onStop,
   onEmergencyStop,
   loading = false,
+  stopping = false,
   stale = false,
 }: Props) {
   const progress = durationSec > 0 ? Math.min(1, elapsedSec / durationSec) : 0;
@@ -67,7 +71,7 @@ export function SessionProgressCard({
     return (
       <View style={styles.idleCard}>
         <Text style={styles.idleIcon}>⚡</Text>
-        <Text style={styles.idleTitle}>Tedavi Bekleniyor</Text>
+        <Text style={styles.idleTitle}>Seans Bekleniyor</Text>
         <Text style={styles.idleSubtitle}>Parametreleri ayarlayıp &quot;Seans Başlat&quot; butonuna basın.</Text>
       </View>
     );
@@ -123,13 +127,22 @@ export function SessionProgressCard({
 
       {/* Buttons */}
       <View style={styles.btnRow}>
-        <TouchableOpacity style={styles.btnStop} onPress={onStop} disabled={loading}
-          accessibilityRole="button" accessibilityLabel="Tedavi seansını durdur">
-          <Text style={styles.btnStopText} numberOfLines={1} adjustsFontSizeToFit>⏹ Durdur</Text>
+        {/* Buton `loading` iken disabled'dı ama GÖRSEL OLARAK aynıydı → dokunuş sessizce yutuluyor,
+            operatör "çalışmıyor" sanıp tekrar tekrar basıyordu. Durumu görünür kıl. */}
+        <TouchableOpacity style={[styles.btnStop, loading && styles.btnBusy]} onPress={onStop} disabled={loading}
+          accessibilityRole="button" accessibilityState={{ disabled: loading, busy: loading }}
+          accessibilityLabel="Seansı durdur">
+          <Text style={styles.btnStopText} numberOfLines={1} adjustsFontSizeToFit>
+            {loading ? "⏳ Durduruluyor…" : "⏹ Durdur"}
+          </Text>
         </TouchableOpacity>
+        {/* ACİL DURDUR asla disabled DEĞİL (panik anında dokunuş yutulmamalı); yalnız durum yazısı değişir. */}
         <TouchableOpacity style={styles.btnEmergency} onPress={onEmergencyStop}
-          accessibilityRole="button" accessibilityLabel="Acil durdurma — tüm bobinleri anında durdur">
-          <Text style={styles.btnEmergencyText} numberOfLines={1} adjustsFontSizeToFit>🚨 ACİL DURDUR</Text>
+          accessibilityRole="button" accessibilityState={{ busy: stopping }}
+          accessibilityLabel="Acil durdurma — tüm bobinleri anında durdur">
+          <Text style={styles.btnEmergencyText} numberOfLines={1} adjustsFontSizeToFit>
+            {stopping ? "🚨 DURDURULUYOR…" : "🚨 ACİL DURDUR"}
+          </Text>
         </TouchableOpacity>
       </View>
     </RNAnimated.View>
@@ -249,6 +262,7 @@ const styles = StyleSheet.create({
     borderColor: "#475569",
   },
   btnStopText: { color: colors.text, fontWeight: "700" },
+  btnBusy: { opacity: 0.55 },
   btnEmergency: {
     flex: 1,
     backgroundColor: "#ef4444",

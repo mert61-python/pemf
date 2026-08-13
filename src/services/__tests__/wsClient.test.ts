@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * wsClient dayanıklılık testleri (prod-readiness F-2/T-2): en karmaşık stateful modül testsizdi.
  * Mock WebSocket + fake-timer ile: açılış/state, mesaj/pong-yutma, half-open(25sn)→close,
@@ -15,6 +16,8 @@ class MockWS {
   onclose: ((e: { code: number }) => void) | null = null;
   sent: string[] = [];
   closed = false;
+  /** Gerçek WebSocket.readyState (0=CONNECTING, 1=OPEN). Kurulum-zaman-aşımı testi bunu okur. */
+  readyState = 0;
   constructor(url: string) {
     this.url = url;
     MockWS.instances.push(this);
@@ -81,6 +84,98 @@ describe("connectPemfWebSocket", () => {
     jest.advanceTimersByTime(15000); // toplam 30sn, mesaj yok → 2. tick stale → close
     expect(ws.closed).toBe(true);
     disconnect();
+  });
+
+  // Yukarıdaki test YALNIZ ws.closed'ı doğruluyordu: PROAKTİF reconnect kaldırılıp yerine sadece
+  // socket.close() bırakılsa bile geçerdi. Oysa half-open sokette onclose HİÇ tetiklenmeyebilir →
+  // kalıcı SESSİZ kopukluk (UI "CANLI" kalır, veri donuk). Durum bildirimi + yeni soket ŞART.
+  it("KRİTİK: half-open tespitinde onState(false) + PROAKTİF yeni soket kurulur", () => {
+    const onState = jest.fn();
+    const disconnect = connectPemfWebSocket(jest.fn(), onState);
+    MockWS.last().onopen!();
+    onState.mockClear();
+
+    jest.advanceTimersByTime(30000); // half-open eşiği aşıldı
+    expect(onState).toHaveBeenCalledWith(false); // kullanıcıya "çevrimdışı" bildirildi
+
+    // onclose HİÇ tetiklenmese bile backoff sonrası yeni soket açılmalı.
+    const before = MockWS.instances.length;
+    jest.advanceTimersByTime(1000);
+    expect(MockWS.instances.length).toBe(before + 1);
+    disconnect();
+  });
+
+  // CONNECTING aşamasında zaman aşımı YOKTU: half-open denetimi yalnız soket AÇILDIKTAN SONRA
+  // (heartbeat ile) devreye giriyordu. TCP el sıkışması asılırsa ne onopen ne onclose tetiklenir →
+  // reconnect zinciri HİÇ başlamaz, uygulama sessizce sonsuza dek "bağlanıyor"da kalırdı.
+  it("KRİTİK: soket AÇILMAZSA (CONNECTING asılı) 10sn sonra kapatılıp yeniden denenir", () => {
+    const onState = jest.fn();
+    const disconnect = connectPemfWebSocket(jest.fn(), onState);
+    const ws = MockWS.last();
+    ws.readyState = 0;            // CONNECTING — onopen/onclose HİÇ gelmiyor
+    onState.mockClear();
+
+    jest.advanceTimersByTime(10_000);
+    expect(ws.closed).toBe(true);
+    expect(onState).toHaveBeenCalledWith(false);
+
+    jest.advanceTimersByTime(1000); // backoff
+    expect(MockWS.instances.length).toBe(2);
+    disconnect();
+  });
+
+  it("soket zamanında açılırsa kurulum zamanlayıcısı bağlantıyı KAPATMAZ", () => {
+    const disconnect = connectPemfWebSocket(jest.fn());
+    const ws = MockWS.last();
+    ws.readyState = 1;
+    ws.onopen!();
+    jest.advanceTimersByTime(11_000); // timeout süresi geçti ama soket AÇIK
+    expect(ws.closed).toBe(false);
+    disconnect();
+  });
+
+  // JSON ayrıştırma hatası ile İŞLEYİCİ hatası aynı catch'te yutuluyordu: bir reducer hatası
+  // "geçersiz JSON" sayılıp sessizce düşüyor, soket canlı olduğu için UI "CANLI" kalıyordu.
+  it("KRİTİK: mesaj işleyicisi hata atarsa bağlantı ÖLMEZ ve hata sessizce yutulmaz", () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    // İlk çağrıda atar, sonrasında sessizleşir → "tek hata akışı kilitlemez" iddiası test edilir.
+    const boom = jest.fn((_m: unknown): void => { throw new Error("reducer patladı"); });
+    const disconnect = connectPemfWebSocket(boom);
+    const ws = MockWS.last();
+    ws.onopen!();
+
+    expect(() => ws.onmessage!({ data: JSON.stringify({ type: "snapshot", data: {} }) } as any)).not.toThrow();
+    expect(spy).toHaveBeenCalled();          // iz bırakıldı
+    expect(ws.closed).toBe(false);           // soket ayakta
+
+    // Sonraki mesajlar işlenmeye devam eder (tek hata akışı kilitlemez).
+    boom.mockImplementationOnce(() => undefined);
+    ws.onmessage!({ data: JSON.stringify({ type: "stm_status", data: { stm: "online" } }) } as any);
+    expect(boom).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+    disconnect();
+  });
+
+  it("gerçekten JSON OLMAYAN mesaj sessizce yutulur (captive portal metni) — işleyici çağrılmaz", () => {
+    const onMessage = jest.fn();
+    const disconnect = connectPemfWebSocket(onMessage);
+    MockWS.last().onopen!();
+    MockWS.last().onmessage!({ data: "<html>giriş yapın</html>" } as any);
+    expect(onMessage).not.toHaveBeenCalled();
+    disconnect();
+  });
+
+  // Epoch değişiminde eski soketin GEÇ gelen onclose'u, yeni CANLI bağlantıyı "çevrimdışı"
+  // işaretliyordu (banner yanıp sönüyor, kullanıcı boşuna yeniden bağlan'a basıyordu).
+  it("KRİTİK: disconnect() sonrası gelen onclose onState(false) ÇAĞIRMAZ", () => {
+    const onState = jest.fn();
+    const disconnect = connectPemfWebSocket(jest.fn(), onState);
+    const ws = MockWS.last();
+    ws.onopen!();
+    disconnect();
+    onState.mockClear();
+    ws.onclose?.({ code: 1006 }); // soket kapanışı çağrandan SONRA rapor edildi
+    expect(onState).not.toHaveBeenCalled();
   });
 
   it("beklenmedik kapanışta backoff'lu reconnect (yeni socket)", () => {

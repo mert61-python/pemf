@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * useNetworkReachability (audit B-2.4): LiveDataContext'ten çıkarılan ağ-tespit hook'u.
  * NetInfo mock'lanır; ağ yeniden bağlanınca DEBOUNCE'lu (1.5sn) onReconnect tetiklenmeli,

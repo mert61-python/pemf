@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { memo, useId } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";

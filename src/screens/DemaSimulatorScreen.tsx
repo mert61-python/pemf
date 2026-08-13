@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import React, { useState } from "react";
 import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
@@ -5,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { RefreshCcw } from "lucide-react-native";
+import { EFieldBar } from "@/components/domain/EFieldBar";
 
 export function DemaSimulatorScreen() {
   const [key, setKey] = useState(0); // WebView'ı yeniden yüklemek için
@@ -42,7 +44,11 @@ export function DemaSimulatorScreen() {
         </View>
         <Text style={styles.urlText}>{simulatorUrl}</Text>
       </Card>
-      
+
+      {/* CANLI E-ALANI (2026-08-06): simülatörün yanında gerçek cihazın ürettiği alan.
+          Analiz bağlamı + aktif seans yoksa kendini render ETMEZ (bkz. EFieldBar). */}
+      <EFieldBar />
+
       <View style={[styles.simulatorContainer, { height: webHeight }]}>
         {Platform.OS === "web" ? (
           <iframe

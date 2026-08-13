@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
@@ -84,8 +85,11 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
         <View style={styles.container}>
           <Text style={styles.icon}>⚠️</Text>
           <Text style={styles.title}>Beklenmeyen bir hata oluştu</Text>
+          {/* #93 maskelemesi yalnız BACKEND'e giden kopyaya uygulanıyordu; ekrandaki metin hamdı.
+              Hata mesajı hasta adı/e-posta/telefon içerebilir ve bu ekran ekran-görüntüsü alınıp
+              destek kanallarına gönderiliyor. Aynı maskeyi görünen metne de uygula. */}
           <ScrollView style={styles.msgBox} contentContainerStyle={{ padding: spacing.sm }}>
-            <Text style={styles.msg}>{this.state.error?.message || "Bilinmeyen hata."}</Text>
+            <Text style={styles.msg}>{_redactPII(String(this.state.error?.message || "")) || "Bilinmeyen hata."}</Text>
           </ScrollView>
           <TouchableOpacity style={styles.btn} onPress={this.reset} accessibilityRole="button">
             <Text style={styles.btnText}>Tekrar Dene</Text>

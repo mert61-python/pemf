@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { DashboardSnapshot } from "@/types/domain";
 
 /**

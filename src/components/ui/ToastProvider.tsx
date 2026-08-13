@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
 import { StyleSheet, Text, View, Animated, AccessibilityInfo } from "react-native";
 import { CheckCircle, AlertCircle, Info } from "lucide-react-native";
@@ -86,7 +87,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={contextValue}>
       {children}
       {toast && (
-        <Animated.View style={[styles.toastContainer, { opacity, transform: [{ translateY }] }]}>
+        // pointerEvents="box-none": konteyner tam genişlikte ve absolute konumlu; ayarlanmadığında
+        // 3+ saniye boyunca altındaki AppShell başlık kontrollerini (profil çipi, bildirimler,
+        // yeniden bağlan) dokunulmaz yapıyordu. Artık dokunuşlar konteynerin BOŞ alanından geçer.
+        <Animated.View pointerEvents="box-none" style={[styles.toastContainer, { opacity, transform: [{ translateY }] }]}>
           <View
             style={[styles.toast, styles[toast.type]]}
             accessibilityRole="alert"

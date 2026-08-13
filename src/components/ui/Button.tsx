@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { ReactNode, useRef } from "react";
 import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -39,6 +40,8 @@ export function Button({
   // DÜŞÜK fix: çift-tık koruması — tıbbi "Başlat/Uygula/Sil" hızlı çift-dokunuşta iki kez tetiklenmesin.
   const lastPressRef = useRef(0);
   const lastFnRef = useRef<typeof onPress>(undefined);
+  // Satır-içi ok fonksiyonlarında kimlik her render değiştiğinden, eylem kimliği için etiket de tutulur.
+  const lastLabelRef = useRef<string | undefined>(undefined);
   const scale = useRef(new Animated.Value(1)).current;
   const reduceMotion = useReducedMotion();
 
@@ -63,9 +66,18 @@ export function Button({
     const now = Date.now();
     // #120: çift-tık guard'ı YALNIZ AYNI eylem için (idempotent submit). onPress KİMLİĞİ değiştiyse
     // (toggle-stili buton: Başlat↔Durdur aynı instance'ta) ikinci dokunuşu YUTMA.
-    if (onPress === lastFnRef.current && now - lastPressRef.current < 400) return;
+    //
+    // DÜZELTME: kimlik testi tek başına, guard'ı çağrı yerlerinin ÇOĞUNDA tamamen etkisiz
+    // bırakıyordu — `onPress={() => analyzeImage()}` gibi satır-içi ok fonksiyonları her render'da
+    // YENİ referans üretir, dolayısıyla `onPress === lastFnRef.current` asla doğru olmaz ve
+    // koruma hiç devreye girmezdi. Artık ETİKET de karşılaştırılır: aynı etiketli buton (yani
+    // kullanıcı için aynı eylem) 400ms içinde iki kez ateşlenmez; toggle butonlarda etiket
+    // değiştiğinden (Başlat↔Durdur) ikinci dokunuş yine YUTULMAZ.
+    const sameAction = onPress === lastFnRef.current || label === lastLabelRef.current;
+    if (sameAction && now - lastPressRef.current < 400) return;
     lastPressRef.current = now;
     lastFnRef.current = onPress;
+    lastLabelRef.current = label;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onPress?.();
   };

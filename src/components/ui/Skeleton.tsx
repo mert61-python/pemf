@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useRef, useState } from "react";
 import { Animated, LayoutChangeEvent, StyleSheet, View, StyleProp, ViewStyle, DimensionValue } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";

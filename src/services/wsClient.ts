@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { serviceConfig } from "@/services/config";
 
 // ─── Message types from the bridge ───────────────────────────────────────────
@@ -32,6 +33,7 @@ export type WsMessageHandler = (message: WsMessage) => void;
 const PING_INTERVAL_MS = 15000; // her 15sn ping
 const STALE_TIMEOUT_MS = 25000; // bu süre mesaj gelmezse half-open say → kapat
 const REDISCOVER_AFTER_FAILS = 4; // bu kadar başarısız denemeden sonra yeniden keşif iste
+const CONNECT_TIMEOUT_MS = 10000; // CONNECTING aşaması bu sürede açılmazsa soket ölü sayılır
 
 // ─── Connection ──────────────────────────────────────────────────────────────
 export function connectPemfWebSocket(
@@ -93,12 +95,21 @@ export function connectPemfWebSocket(
 
   const handleMessage = (event: MessageEvent) => {
     lastMessageTs = Date.now();
+    // AYRIM: JSON ayrıştırma hatası ile İŞLEYİCİ hatası aynı catch'te yutuluyordu. Bir reducer
+    // hatası (ör. beklenmedik alan) "geçersiz JSON" sayılıp sessizce düşüyor, telemetri hiç
+    // uygulanmıyor ama soket canlı olduğu için UI "CANLI" kalıyordu — donmuş değerler canlı gibi.
+    let msg: WsMessage;
     try {
-      const msg: WsMessage = JSON.parse(event.data);
-      if (msg.type === "pong") return; // heartbeat yanıtı — yut
-      onMessage(msg);
+      msg = JSON.parse(event.data);
     } catch {
-      // non-JSON message — ignore
+      return; // gerçekten JSON değil (captive portal / ping metni) — yut
+    }
+    if (msg?.type === "pong") return; // heartbeat yanıtı — yut
+    try {
+      onMessage(msg);
+    } catch (err) {
+      // İşleyici hatası YUTULMAZ: en azından iz bırak (client_errors'a global handler taşır).
+      console.error("WS mesaj işleyicisi hata verdi:", msg?.type, err);
     }
   };
 
@@ -130,7 +141,27 @@ export function connectPemfWebSocket(
         ? wsBase + (wsBase.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(serviceConfig.apiToken)
         : wsBase;
       socket = new WebSocket(wsUrl);
+      // KURULUM (CONNECTING) ZAMAN AŞIMI: half-open denetimi yalnız soket AÇILDIKTAN SONRA
+      // (startHeartbeat) devreye giriyordu. TCP el sıkışması asılı kalırsa (captive portal, düşen
+      // tünel, filtreleyen ağ) ne `onopen` ne `onclose` tetiklenir → reconnect ZİNCİRİ HİÇ
+      // başlamaz ve uygulama sessizce sonsuza dek "bağlanıyor" durumunda kalırdı.
+      const connecting = socket;
+      const openTimer = setTimeout(() => {
+        if (closedByCaller || connecting !== socket) return;
+        if (connecting.readyState === 0 /* CONNECTING */) {
+          try {
+            connecting.onclose = null as any;
+            connecting.onmessage = null as any;
+            connecting.onerror = null as any;
+            connecting.close();
+          } catch { /* ignore */ }
+          socket = null;
+          onState?.(false);
+          scheduleReconnect();
+        }
+      }, CONNECT_TIMEOUT_MS);
       socket.onopen = () => {
+        clearTimeout(openTimer);
         // DÜŞÜK fix: CONNECTING sokette unmount olduysa (closedByCaller) heartbeat başlatma → kapat + çık
         // (aksi halde temizlenmemiş interval + kapanmış-context setState).
         if (closedByCaller) { try { socket?.close(); } catch { /* ignore */ } return; }
@@ -142,7 +173,13 @@ export function connectPemfWebSocket(
       socket.onerror = () => onState?.(false);
       socket.onmessage = handleMessage;
       socket.onclose = (event) => {
+        clearTimeout(openTimer);
         stopHeartbeat();
+        // YARIŞ: epoch değişiminde (keşif yeni adres bulunca) önce disconnect() çağrılır, hemen
+        // ardından YENİ soket kurulur. Eski soketin onclose'u SONRA tetiklendiğinde aynı setter'ı
+        // `false` ile çağırıp CANLI olan yeni bağlantıyı "Çevrimdışı" işaretliyordu (banner yanıp
+        // sönüyor, kullanıcı gereksiz "yeniden bağlan"a basıyordu). Çağıran kapattıysa sus.
+        if (closedByCaller) return;
         onState?.(false);
         // 1008 = policy violation (auth/token). Token ASLA SİLİNMEZ (kullanıcı bir kez bağlandıysa
         // tekrar uğraştırılmaz). HOT-LOOP YAPMA: uzun backoff + yeniden keşif iste. Yanlış/eski

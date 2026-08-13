@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * CoilParameterPanel — Tekil bobin için parametre ayar paneli.
  *
@@ -150,11 +151,24 @@ export function CoilParameterPanel({
           )}
         </View>
         <View style={styles.headerRight}>
-          {objectTemp > 0 && (
+          {objectTemp > 0 ? (
             <View style={[styles.tempBadge, objectTemp > 45 && styles.tempWarning]}
               accessibilityLabel={`Sıcaklık ${objectTemp.toFixed(1)} derece${objectTemp > 45 ? ", yüksek" : ""}`}>
               {/* #121: >45°C uyarısı yalnız-RENK değil — ⚠ ikonu + metin (renk-körü operatör görsün). */}
               <Text style={styles.tempText}>{objectTemp > 45 ? "⚠ " : ""}{objectTemp.toFixed(1)}°C</Text>
+            </View>
+          ) : (
+            /* ⚠️ DENETİM 2026-08-09 (Tier 2) — "ÖLÇÜLMÜYOR" İLE "SERİN" AYIRT EDİLEBİLMELİ.
+               Eskiden sıcaklık yoksa rozet HİÇ çizilmiyordu; operatör bunu "sorun yok" diye
+               okuyabiliyordu. Oysa 1-5 numaralı bobinler STM üzerinden sürülür ve STM protokolünde
+               SICAKLIK ALANI YOKTUR — o bobinlerden hiçbir zaman ölçüm gelmez. Aşağıdaki termal
+               interlock (`objectTemp > SAFE_TEMP_CUTOFF`) bu yüzden 8 bobinin 5'i için HİÇBİR
+               ZAMAN tetiklenemez. Koruma donanım tarafında yapılana kadar bu sınır GÖRÜNÜR olmalı;
+               sessiz bir boşluk, operatörün var olmayan bir korumaya güvenmesine yol açar.
+               (Gerçek çözüm: 1-5 için sıcaklık sensörü + STM telemetrisi + firmware kesmesi.) */
+            <View style={styles.tempBadge}
+              accessibilityLabel="Bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma uygulanmaz">
+              <Text style={[styles.tempText, { color: colors.textMuted }]}>ölçüm yok</Text>
             </View>
           )}
           {/* A11y (#67): durum YALNIZ-RENK değil — nokta + kısa metin (renk-körü operatör AKTİF ile
@@ -234,10 +248,15 @@ export function CoilParameterPanel({
         >
           <Text style={styles.btnStartText}>▶ Başlat</Text>
         </TouchableOpacity>
+        {/* DURDURMA ASLA KİLİTLENMEZ: buton `running`'e bağlıydı ve `running` telemetriden gelir.
+            STM çevrimdışı raporlandığında LiveDataContext bu bobinleri `running:false`'a
+            normalize ettiğinden (bağlantı yokken "çalışıyor" gösterme kuralı), bobin gerçekte
+            sürülüyor olsa bile Durdur butonu DEVRE DIŞI kalıyordu — yani telemetri kaybı, durdurma
+            yeteneğini de götürüyordu. Durdurma komutu idempotenttir; her zaman gönderilebilmeli. */}
         <TouchableOpacity
-          style={[styles.btnStop, (!running || loading) && styles.btnDisabled]}
+          style={[styles.btnStop, loading && styles.btnDisabled]}
           onPress={() => sendCommand(false)}
-          disabled={!running || loading}
+          disabled={loading}
           accessibilityRole="button"
           accessibilityLabel="Bobini durdur"
         >

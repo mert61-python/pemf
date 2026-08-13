@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * AiProPanel — AI Pro kapalı-döngü kontrol yüzeyi (Kontrol sekmesi).
  * ================================================================
@@ -14,12 +15,15 @@
  * Kontrol: /api/ai/pro/start | stop | organ | calibrate(=yeniden-konumla) | status
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useOperator } from "@/context/OperatorContext";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
-import { apiGet, apiPost, platformAlert } from "@/services/apiClient";
+import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { serviceConfig } from "@/services/config";
+import { useAuth } from "@/context/AuthContext";
+import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
 
 const ORGANS = [
   { id: 0, name: "Tüm Vücut" }, { id: 1, name: "Mide" }, { id: 2, name: "Böbrek" },
@@ -49,8 +53,16 @@ function fmtSec(sec: number): string {
 // Backend yanıt sözleşmeleri (audit B-10.1) — AI-Pro otonom tedavi uçları.
 interface AiProStatus { active?: boolean; localized?: boolean; organId?: number; remainingSec?: number }
 interface AiProAction { status?: string }
+/** `/api/ai/pro/propose` yanıtı — hekime gösterilecek ve onaylanınca uygulanacak parametreler. */
+interface AiProposeResponse {
+  proposalId?: string;
+  specs?: AiProposalSpecs;
+  meta?: AiProposalMeta;
+  expiresAt?: number;
+}
 
-export function AiProPanel() {
+/** @param patientName Aktif hasta adı — seansın kime uygulandığının denetim izi için backend'e taşınır. */
+export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const { aiVisionData: v } = useLiveData();
 
   const [organId, setOrganId] = useState(0);
@@ -58,6 +70,13 @@ export function AiProPanel() {
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);
   const [busy, setBusy] = useState(false);
+  // SERT ONAY KAPISI (2026-08-06): bekleyen AI önerisi + onay/red işlemi sürüyor mu.
+  const [proposal, setProposal] = useState<AiProposeResponse | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  // Onay/red denetim izinde HANGİ HEKİM karar verdi — oturumdaki e-posta taşınır.
+  const { session } = useAuth();
+  // ⭐ Aktif operatör (tek makine, çoklu veteriner) — oturum e-postası DEĞİL.
+  const { operatorEmail } = useOperator();
 
   // ── Mobil kamera state'i (web'de kullanılmaz) ──
   const [permission, requestPermission] = useCameraPermissions();
@@ -90,6 +109,18 @@ export function AiProPanel() {
   }, []);
 
   const start = useCallback(async () => {
+    // DENETİM İZİ: AI Pro otonom tedavisi hiçbir hastaya BAĞLANMADAN başlatılabiliyordu —
+    // seans kaydı sahipsiz kalıyor, tedavi geçmişinde hangi hayvana uygulandığı bilinmiyordu
+    // (klinik izlenebilirlik). ControlScreen'deki `requirePatient` ile aynı yaklaşım: bloklamıyoruz,
+    // ama BİLİNÇLİ karar hâline getiriyoruz ve hasta bilgisini backend'e taşıyoruz.
+    if (!patientName?.trim()) {
+      const go = await platformConfirm(
+        "Hasta seçilmedi",
+        "Otonom seans hiçbir hastaya bağlanmadan kaydedilecek; seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
+        "Hastasız başlat"
+      );
+      if (!go) return;
+    }
     setBusy(true);
     // Mobilde önce kamera izni iste (web'de gerek yok — sunucu kamerası).
     if (!IS_WEB) {
@@ -98,10 +129,51 @@ export function AiProPanel() {
         if (!p?.granted) { setBusy(false); return; }
       }
     }
-    const res = await apiPost<AiProAction | null>("/ai/pro/start", { organ_id: organId, duration_minutes: parseInt(duration) || 20 }, null);
-    if (res?.status === "success") setRunning(true);
+    // SERT ONAY KAPISI (2026-08-06): artık doğrudan başlatMIYORUZ. Önce backend'den öneri
+    // alınır (donanıma dokunmaz), hekim modalda görüp onaylar, ancak sonra /start çağrılır.
+    const prop = await apiPost<AiProposeResponse | null>(
+      "/ai/pro/propose",
+      { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+      null
+    );
     setBusy(false);
+    if (!prop?.proposalId) return;   // apiPost hata mesajını zaten gösterdi (409/422 dahil)
+    setProposal(prop);
   }, [organId, duration, permission, requestPermission]);
+
+  /** Hekim ONAYLADI → onayı işaretle, sonra mühürlenmiş parametrelerle tedaviyi başlat. */
+  const approveAndStart = useCallback(async () => {
+    if (!proposal?.proposalId) return;
+    setApprovalBusy(true);
+    const ok = await apiPost<{ status?: string } | null>(
+      "/ai/pro/approve",
+      { proposal_id: proposal.proposalId, operator_email: operatorEmail || "" },
+      null
+    );
+    if (!ok) { setApprovalBusy(false); return; }   // onay geçmediyse BAŞLATMA
+    const res = await apiPost<AiProAction | null>(
+      "/ai/pro/start",
+      { proposal_id: proposal.proposalId, patient_name: patientName || "" },
+      null
+    );
+    setApprovalBusy(false);
+    if (res?.status === "success") {
+      setRunning(true);
+      setProposal(null);
+    }
+    // Başlatma başarısızsa modal AÇIK kalır: onay tüketilmiş olabilir, hekim yeni öneri alır.
+  }, [proposal, operatorEmail, patientName]);
+
+  /** Hekim REDDETTİ → gerekçeyle kaydet; tedavi BAŞLAMAZ. */
+  const rejectProposal = useCallback(async (reason: string) => {
+    if (!proposal?.proposalId) return;
+    setApprovalBusy(true);
+    await apiPost("/ai/pro/reject",
+      { proposal_id: proposal.proposalId, operator_email: operatorEmail || "", reason },
+      null);
+    setApprovalBusy(false);
+    setProposal(null);
+  }, [proposal, operatorEmail]);
 
   const stop = useCallback(async () => {
     setBusy(true);
@@ -115,7 +187,7 @@ export function AiProPanel() {
     } else {
       platformAlert(
         "Durdurulamadı",
-        "Otonom tedavi durdurma komutu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin; sorun sürerse ACİL DURDUR kullanın."
+        "Otonom seans durdurma komutu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin; sorun sürerse ACİL DURDUR kullanın."
       );
     }
     setBusy(false);
@@ -194,9 +266,21 @@ export function AiProPanel() {
 
   return (
     <View style={styles.wrap}>
+      {/* SERT ONAY KAPISI (2026-08-06): AI önerisi hekime gösterilir; onaylanmadan seans
+          BAŞLAMAZ. Kapatmak reddetmek DEĞİLdir — öneri süresi dolunca kendiliğinden düşer. */}
+      <AiSpecApprovalModal
+        visible={!!proposal}
+        specs={proposal?.specs ?? null}
+        meta={proposal?.meta ?? null}
+        organName={ORGANS.find((o) => o.id === (proposal?.specs?.organ_id ?? organId))?.name}
+        busy={approvalBusy}
+        onApprove={approveAndStart}
+        onReject={rejectProposal}
+        onDismiss={() => setProposal(null)}
+      />
       <Text style={styles.note}>
         {IS_WEB
-          ? "📷 Sunucu kamerasından canlı otonom tedavi: kedi organ lokalizasyonu → em_kedi → 7 bobin."
+          ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
           : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
       </Text>
 
@@ -263,17 +347,28 @@ export function AiProPanel() {
           <Text style={styles.countdown}>{running ? fmtSec(remaining) : "—"}</Text>
         </View>
         <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <TouchableOpacity style={[styles.calBtn, localized && styles.calBtnDone]} onPress={relocalize}>
+          <TouchableOpacity
+          style={[styles.calBtn, localized && styles.calBtnDone]}
+          onPress={relocalize}
+          accessibilityRole="button"
+          accessibilityLabel={localized ? "Hedef organ konumlandırıldı, yeniden konumla" : "Hedef organı yeniden konumla"}
+        >
             <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? "✓ Konumlandı" : "🎯 Yeniden Konumla"}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Start / Stop */}
+      {/* a11y: otonom TEDAVİ başlatan/durduran düğmede rol ve etiket yoktu → ekran okuyucu
+          kullanan operatör butonu ayırt edemiyordu. Durum da `accessibilityState` ile bildirilir. */}
       <TouchableOpacity
         style={[styles.toggle, running ? styles.toggleStop : styles.toggleStart, busy && { opacity: 0.5 }]}
         onPress={running ? stop : start}
         disabled={busy}
+        accessibilityRole="button"
+        accessibilityState={{ busy, selected: running }}
+        accessibilityLabel={running ? "AI Pro otonom seansı durdur" : "AI Pro otonom seansı başlat"}
+        accessibilityHint={running ? "Bobinleri durdurur" : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"}
       >
         <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
       </TouchableOpacity>

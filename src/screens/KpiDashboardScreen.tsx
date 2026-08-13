@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * KpiDashboardScreen — Python kpi_dashboard_window.py'nin React karşılığı.
  * Gerçek veriye dayalı KPI kartları — API'den ve canlı sensör verisinden.
@@ -41,7 +42,17 @@ export function KpiDashboardScreen() {
     apiGet<KpiSummary | null>("/kpi/summary", null, { silent: true }).then((data) => {
       if (!mounted) return;
       if (data && typeof data.totalSessions === "number") {
-        setKpi(data);
+        // ŞEKİL DOĞRULAMASI: eskiden `setKpi(data)` state'i TÜMÜYLE sunucu gövdesiyle değiştiriyordu
+        // (yedek dal `...prev` kullandığı hâlde). Sunucu `last7Days` veya `modeDistribution`
+        // alanlarını göndermezse bunlar undefined kalıp `.map` / `Object.entries` çağrılarında
+        // Raporlar ekranını çökertiyordu. Varsayılanlarla birleştir + dizi/nesne tipini doğrula.
+        setKpi((prev) => ({
+          ...prev,
+          ...data,
+          modeDistribution:
+            data.modeDistribution && typeof data.modeDistribution === "object" ? data.modeDistribution : {},
+          last7Days: Array.isArray(data.last7Days) ? data.last7Days : [],
+        }));
         setLoading(false);
         return;
       }
@@ -153,7 +164,7 @@ export function KpiDashboardScreen() {
           </View>
         </Card>
         <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Tedavi Modu Dağılımı</Text>
+          <Text style={styles.chartTitle}>Seans Modu Dağılımı</Text>
           <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
             {chartW > 0 && (
               <PieChart

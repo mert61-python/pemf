@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 export type LayoutKind = "compact" | "phone" | "tablet" | "desktop" | "wide";
 
 export const breakpoints = {

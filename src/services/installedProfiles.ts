@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Platform } from "react-native";
 import type { UserMode } from "@/context/UserModeContext";
 

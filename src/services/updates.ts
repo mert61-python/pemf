@@ -1,12 +1,17 @@
+// Author: mertaygn, cglrgrkn
 /**
  * Uzaktan güncelleme kontrolü — GitHub 'pemf-update' repo'su (branch başına manifest).
  * =================================================================================
- * • EXE (backend/cihaz yazılımı): bağlı backend'in /api/update/status'ü → yeni sürüm varsa
- *   operatör /api/update/apply ile ONAYLAR (backend kendini günceller). Bildirim + tek-tık.
  * • MOBİL (APK): mobil branch latest.json → yeni sürüm varsa APK indirme linki açılır (sideload).
+ *
+ * ⚠️ EXE / cihaz yazılımı KALDIRILDI (2026-08-09 denetimi, Tier 3 — "tek güncelleme kanalı").
+ * Cihaz yazılımını artık PEMF Vet Client (launcher) günceller: katmanlı paket, atomik takas,
+ * sağlık kapılı geri alma. Buradaki eski yol backend'in `/api/update/apply` ucunu çağırıyordu;
+ * o uç bir Inno installer'ı çalıştırıp launcher'ın yönettiği kurulumun YANINA ikinci bir backend
+ * + ikinci veri kökü kurardı → SPLIT-BRAIN HASTA VERİTABANI. Uç zaten kapalı; düğmeyi de
+ * bırakmak "dokun ve güncelle" diyen ama hata veren bir buton demekti.
  */
 import { Platform } from "react-native";
-import { apiGet, apiPost } from "@/services/apiClient";
 
 const MOBILE_MANIFEST = "https://raw.githubusercontent.com/mert61-python/pemf-update/mobil/latest.json";
 
@@ -33,30 +38,6 @@ function isNewer(latest: string, current: string): boolean {
     if ((A[i] || 0) < (B[i] || 0)) return false;
   }
   return false;
-}
-
-// ── EXE / backend (cihaz yazılımı) ──────────────────────────────────────────
-export interface BackendUpdate {
-  available: boolean;
-  currentVersion?: string;
-  latestVersion?: string;
-  notes?: string;
-  applying?: boolean;
-}
-export async function checkBackendUpdate(): Promise<BackendUpdate> {
-  const s = await apiGet<any>("/update/status", { available: false }, { silent: true });
-  return {
-    available: !!s?.available,
-    currentVersion: s?.currentVersion,
-    latestVersion: s?.latestVersion,
-    notes: s?.notes,
-    applying: !!s?.applying,
-  };
-}
-export async function applyBackendUpdate(): Promise<{ ok: boolean; message?: string; error?: string }> {
-  return apiPost<{ ok: boolean; message?: string; error?: string }>(
-    "/update/apply", {}, { ok: false, error: "İstek başarısız" }, { silent: true }
-  );
 }
 
 // ── MOBİL / APK ─────────────────────────────────────────────────────────────

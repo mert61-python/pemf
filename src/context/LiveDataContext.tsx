@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * LiveDataContext — uygulama genelinde canlı MQTT verisi.
  *
@@ -131,6 +132,9 @@ export interface LiveDataContextValue {
   reconnect: () => void;
   /** Live AI Vision data for Closed-Loop mode */
   aiVisionData?: AiVisionData;
+  /** AI Pro kare yayını GERÇEKTEN akıyor mu (son kare <6sn). aiVisionData tek başına yeterli DEĞİL:
+   *  son kare kalıcıdır → yayın dursa bile "canlı" görünürdü. Yalnız otonom panelde kullanılır. */
+  aiVisionFresh: boolean;
 }
 
 const LiveDataContext = createContext<LiveDataContextValue>({
@@ -145,6 +149,7 @@ const LiveDataContext = createContext<LiveDataContextValue>({
   telemetryStale: false,
   haveRealData: false,
   reconnect: () => {},
+  aiVisionFresh: false,
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────
@@ -162,7 +167,19 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // ORTA fix (E-stop sticky): acil-durdurma sonrası kısa pencere — soket-tamponundaki GEÇ gelen tick/coil-update
   // acil-durdurmayı görsel GERİ ALMASIN (donanım durmuşken UI "tedavi sürüyor/bobin çalışıyor" göstermesin).
   const emergencyStopTsRef = useRef(0);
+  // AI Pro kare yayınının SON geliş zamanı — aiVisionData kalıcı olduğundan tazelik ayrı izlenir.
+  const aiVisionTsRef = useRef(0);
   const [, setTick] = useState(0); // WS düşükken connectionQuality'yi zamanla tazelemek için hafif re-render
+  // Backend'de "okundu" ucu YOK (yalnız /notifications/clear var) → okundu işareti İSTEMCİ-YEREL.
+  // Bu yüzden yeniden bağlanmada gelen snapshot okunmamış rozetini geri diriltiyordu. Yerel olarak
+  // okunmuş id'leri hatırla ve her snapshot'ta yeniden uygula (oturum boyu; kalıcılık gerekmiyor).
+  const readIdsRef = useRef<Set<string>>(new Set());
+  const applyLocalReads = useCallback((list: AppNotification[] | undefined): AppNotification[] => {
+    const arr = list ?? [];
+    if (readIdsRef.current.size === 0) return arr;
+    return arr.map((n) => (readIdsRef.current.has(String((n as any)?.id)) ? { ...n, read: true } : n));
+  }, []);
+
   const markRealData = useCallback(() => {
     lastDataTsRef.current = Date.now();
     setHaveRealData(true); // React aynı değerde bail eder → ilk seferden sonra ekstra render yok
@@ -198,13 +215,22 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // GÜVENLİK (#53): ping/pong KONTROL mesajları GERÇEK TELEMETRİ SAYILMAZ. Aksi halde backend'in
     // telemetri yayıncısı (MQTT köprüsü/session-tick) ölse bile yalnız pong dönerken lastDataTsRef
     // taze kalır → connectionQuality yanlışça 'live' der ve donmuş sıcaklık/bobin canlı gösterilir.
-    if ((msg.type as string) !== "pong" && (msg.type as string) !== "ping") {
-      markRealData(); // GERÇEK veri akıyor → 'canlı' say (mock/donmuş veri ayrımı için)
+    // GÜVENLİK (#12): "taze veri" sayılacak mesajlar SENSÖR/BOBİN telemetrisiyle SINIRLI. Eskiden
+    // ping/pong dışındaki HER mesaj tazelik damgası atıyordu; oysa `notification`, `gateway_status`,
+    // `ai_vision` ve `session_tick` telemetri yayıncısından BAĞIMSIZ üretilir. MQTT köprüsü/sensör
+    // akışı ölse bile bunlar akmaya devam ettiğinden lastDataTs taze kalıyor → aktif tedavide DONMUŞ
+    // sıcaklık/akım değerleri `telemetryStale` ile YAKALANAMIYOR, SessionProgressCard "VERİ
+    // DOĞRULANMADI" uyarısını hiç göstermiyordu. Artık yalnız gerçek telemetri sayılır.
+    const TELEMETRY_TYPES = ["snapshot", "sensor_data", "coil_status", "stm_coil_update", "stm_status"];
+    if (TELEMETRY_TYPES.includes(msg.type as string)) {
+      markRealData(); // GERÇEK telemetri akıyor → 'canlı' say (mock/donmuş veri ayrımı için)
     }
     switch (msg.type) {
       // Full snapshot on connect
       case "snapshot": {
-        const data = normalizeStmCoils(msg.data as DashboardSnapshot);
+        const raw = normalizeStmCoils(msg.data as DashboardSnapshot);
+        // Yerel "okundu" işaretlerini koru → yeniden bağlanmada rozet geri dirilmesin.
+        const data = { ...raw, notifications: applyLocalReads(raw.notifications) };
         snapshotRef.current = data;
         setSnapshot(data);
         const unread = (data.notifications ?? []).filter((n) => !n.read).length;
@@ -283,6 +309,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
       // -- AI Vision Data --
       case "ai_vision": {
+        aiVisionTsRef.current = Date.now();
         setAiVisionData(msg.data);
         break;
       }
@@ -321,6 +348,10 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       // Acil durdurma sinyali
       case "emergency_stop": {
         emergencyStopTsRef.current = Date.now();
+        // AI Pro kapalı-döngüsü de durdu → son kareyi ve tazelik damgasını TEMİZLE. Aksi halde
+        // AI Hub'daki "OTONOM BİOFEEDBACK AKTİF" rozeti donmuş kareyle açık kalıyordu.
+        aiVisionTsRef.current = 0;
+        setAiVisionData(undefined);
         setSnapshot((prev) => {
           const coils = prev.coils.map((c) => ({ ...c, running: false }));
           const activeTreatment = {
@@ -364,6 +395,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const discoveringRef = useRef(false);
   const pendingDiscoverRef = useRef(false);
 
+  // Bir keşif turu BAŞARISIZ bittiğinde bir sonrakine kadar beklenecek en kısa süre.
+  // NEDEN: `pendingDiscoverRef` döngüsü + WS'in her 4 başarısız denemede `onNeedRediscovery`
+  // çağırması birleşince, cihaz erişilemezken uygulama kesintisiz tam /24 subnet taraması
+  // döngüsüne giriyordu (her tur ~35sn, sub-ağ başına 40 eşzamanlı fetch). Klinikte gün boyu
+  // açık kalan tablette bu, pil ve CPU'yu boşuna tüketiyordu. Başarılı turdan sonra bekleme YOK.
+  const DISCOVERY_COOLDOWN_MS = 20000;
+  const lastFailedDiscoveryRef = useRef(0);
+
   const runDiscovery = useCallback(async (forceReconnect: boolean) => {
     // Keşif sürüyorsa AT-MA, BEKLET → mevcut bitince bir kez daha çalışır. (Audit P1: WiFi↔mobil-veri
     // geçişinde, devam eden uzun keşif yüzünden NetInfo tetiği düşüp uzun süre kopuk kalıyordu.)
@@ -372,14 +411,22 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     try {
       do {
         pendingDiscoverRef.current = false;
+        const sinceFail = Date.now() - lastFailedDiscoveryRef.current;
+        if (sinceFail < DISCOVERY_COOLDOWN_MS) break; // soğuma: art arda tam tarama yapma
         const prevWs = serviceConfig.websocketUrl; // adres GERÇEKTEN değişti mi?
         try {
           const res = await discoverBackend();
-          // SADECE adres değişince WS'i yeniden kur (sağlıklı WS'i boşuna yıkıp telemetri boşluğu yaratma).
-          if (res && forceReconnect && serviceConfig.websocketUrl !== prevWs) {
-            setConnectionEpoch((e) => e + 1);
+          if (res) {
+            lastFailedDiscoveryRef.current = 0; // bulundu → soğutmayı sıfırla
+            // SADECE adres değişince WS'i yeniden kur (sağlıklı WS'i boşuna yıkıp telemetri boşluğu yaratma).
+            if (forceReconnect && serviceConfig.websocketUrl !== prevWs) {
+              setConnectionEpoch((e) => e + 1);
+            }
+          } else {
+            lastFailedDiscoveryRef.current = Date.now();
           }
         } catch {
+          lastFailedDiscoveryRef.current = Date.now();
           /* keşif hatası — mevcut bağlantıyla devam */
         }
       } while (pendingDiscoverRef.current); // keşif sırasında yeni istek geldiyse (ağ değişti) tekrarla
@@ -391,17 +438,27 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // 1) Açılışta: ÖNCE saklı api_token'ı serviceConfig'e yükle (uzaktan auth için ZORUNLU —
   //    yoksa cold-start'ta WS/REST 401), SONRA keşif. Keşif yeni adresi uygulayıp connectionEpoch'u
   //    bump'layınca WS token'la (yeniden) açılır. (Audit P0: loadStoredApiToken yalnız Ayarlar'da idi.)
+  // WS efekti bu bayrak true olmadan soket AÇMAZ (aşağıdaki nedene bak).
+  const [tokenLoaded, setTokenLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       await loadStoredApiToken();
-      if (!cancelled) runDiscovery(true);
+      if (cancelled) return;
+      setTokenLoaded(true);
+      runDiscovery(true);
     })();
     return () => { cancelled = true; };
   }, [runDiscovery]);
 
   // 2) WebSocket — connectionEpoch değişince güncel URL ile yeniden bağlanır.
+  //    YARIŞ: bu efekt mount'ta ÇALIŞIYOR, `loadStoredApiToken()` ise henüz çözülmemiş oluyordu →
+  //    ilk soket TOKENSİZ açılıyordu. Uzaktan (tünel) soğuk açılışta backend 1008 (policy violation)
+  //    ile kapatıyor, wsClient bunu görüp backoff'u 30 saniyeye çıkarıyordu; saklı adres değişmediği
+  //    için keşif de epoch bump'lamıyordu → uygulama açılışta ~30sn boyunca canlı telemetrisiz
+  //    kalıyordu. Artık token belleğe alınmadan soket açılmaz.
   useEffect(() => {
+    if (!tokenLoaded) return;
     const disconnect = connectPemfWebSocket(
       handleWsMessage,
       (connected) => setWsConnected(connected),
@@ -410,8 +467,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
     refresh();
 
+    // Yedek HTTP poll'ü. apiGet 8sn timeout'lu, poll aralığı 5sn → çevrimdışıyken (her istek
+    // timeout'a kadar asılı kalır) istekler ÜST ÜSTE biniyordu; her yeni tur bir öncekiler
+    // bitmeden ekleniyor, mobilde soket havuzu ve pil boşuna tükeniyordu. Uçuşta istek varken atla.
+    let pollInFlight = false;
     const pollId = setInterval(() => {
-      if (!wsConnectedRef.current) refresh();
+      if (wsConnectedRef.current || pollInFlight) return;
+      pollInFlight = true;
+      refresh().finally(() => { pollInFlight = false; });
     }, 5000);
 
     return () => {
@@ -419,7 +482,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       clearInterval(pollId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionEpoch]);
+  }, [connectionEpoch, tokenLoaded]);
 
   // 3+4) Ağ değişimi (WiFi geçişi) + ön-plana dönüş → keşfi/yeniden-bağlanmayı tetikle.
   //      (audit B-2.4: NetInfo + AppState mantığı tiplenmiş, test-edilebilir hook'lara çıkarıldı →
@@ -459,12 +522,20 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // (izlenecek canlı değer yok) DAİMA false → global durum temiz kalır.
   const telemetryStale =
     _expectLiveTelemetry && (!wsConnected || !haveRealData || _dataAge >= 20000);
+  // AI Pro kare yayını canlı mı (yayın ~1 Hz → 6sn cömert bir eşik). Yalnız AI Hub otonom panelinde
+  // kullanılır; GLOBAL bağlantı durumunu KİRLETMEZ (kaldırılan 3-durumlu gösterge geri gelmez).
+  // Üstteki 4sn'lik ticker bu değerin zamanla tazelenmesini sağlar.
+  const aiVisionFresh = !!aiVisionData && wsConnected && Date.now() - aiVisionTsRef.current < 6000;
 
   const markAllRead = useCallback(() => {
     setUnreadCount(0);
     setSnapshot((prev) => {
+      // Okunan id'leri hatırla → sonraki snapshot bunları "okunmamış"a geri döndürmesin.
+      for (const n of prev.notifications ?? []) readIdsRef.current.add(String((n as any)?.id));
       const notifications = (prev.notifications ?? []).map((n) => ({ ...n, read: true }));
-      return { ...prev, notifications };
+      const updated = { ...prev, notifications };
+      snapshotRef.current = updated;
+      return updated;
     });
   }, []);
 
@@ -493,9 +564,11 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       haveRealData,
       reconnect,
       aiVisionData,
+      aiVisionFresh,
     }),
     [snapshot, sensorHistory, wsConnected, unreadCount, markAllRead,
-     clearNotifications, refresh, connectionQuality, telemetryStale, haveRealData, reconnect, aiVisionData]
+     clearNotifications, refresh, connectionQuality, telemetryStale, haveRealData, reconnect,
+     aiVisionData, aiVisionFresh]
   );
 
   return <LiveDataContext.Provider value={value}>{children}</LiveDataContext.Provider>;

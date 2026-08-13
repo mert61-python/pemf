@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { PropsWithChildren, useEffect, useRef } from "react";
 import { Animated, StyleProp, ViewStyle } from "react-native";
 import { motion } from "@/theme/tokens";

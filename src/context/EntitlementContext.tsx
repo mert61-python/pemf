@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * EntitlementContext — kullanıcının abonelik hakkını (tier/eklenti/deneme) Supabase'den okur
  * ve uygulamaya sağlar (A1: mobil satmaz, yalnız okur). `subscriptions` tablosu/satırı yoksa
@@ -10,6 +11,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   ReactNode,
 } from "react";
 import { supabaseAuth } from "@/services/supabaseAuth";
@@ -37,7 +39,11 @@ type Ctx = {
 
 const EntitlementContext = createContext<Ctx | undefined>(undefined);
 
-async function fetchEntitlement(): Promise<Entitlement> {
+/** Ağ/altyapı hatasında entitlement'i SIFIRLAMA sinyali (bkz. fetchEntitlement dönüşü). */
+const UNKNOWN: unique symbol = Symbol("entitlement-unknown");
+type FetchResult = Entitlement | typeof UNKNOWN;
+
+async function fetchEntitlement(): Promise<FetchResult> {
   try {
     const {
       data: { user },
@@ -68,8 +74,11 @@ async function fetchEntitlement(): Promise<Entitlement> {
       currentPeriodEnd: data.current_period_end ?? null,
     };
   } catch {
-    // Tablo yok / ağ hatası → deneme varsayılanı (app'i bloke etme).
-    return defaultEntitlement();
+    // Ağ/altyapı hatası → BİLİNMİYOR. Eskiden burada `defaultEntitlement()` dönülüyordu: internetsiz
+    // klinikte (cihaz LAN'ında, Supabase erişilemezken) ücretli kullanıcının hakkı her açılışta
+    // "Başlangıç · 14 gün deneme"ye düşüyor, üstelik deneme SIFIRDAN başladığı için rozet sürekli
+    // "14 gün kaldı" gösteriyordu. Artık bilinen SON durum korunur.
+    return UNKNOWN;
   }
 }
 
@@ -78,16 +87,29 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   const [entitlement, setEntitlement] = useState<Entitlement>(defaultEntitlement());
   const [loading, setLoading] = useState(true);
 
+  // NESİL SAYACI: uçuştaki bir refresh, kullanıcı ÇIKIŞ yaptıktan (veya hesap değiştirdikten) sonra
+  // çözülürse önceki kullanıcının tier'ını ve X-PEMF-Tier header'ını GERİ YÜKLÜYORDU — yani B
+  // kullanıcısı, A'nın abonelik hakkıyla istek atabiliyordu. Her etki bir nesil alır; nesil
+  // değiştiyse sonuç YOK SAYILIR.
+  const genRef = useRef(0);
+
   const refresh = useCallback(async () => {
+    const gen = ++genRef.current;
     setLoading(true);
     const e = await fetchEntitlement();
-    setEntitlement(e);
-    setEntitlementHeaders(e.tier, [...e.addons]); // apiClient AI isteklerinde X-PEMF-Tier/Addons yollasın
+    if (gen !== genRef.current) return; // bayat sonuç — oturum değişti
+    const eff = e === UNKNOWN ? null : e;
+    if (eff) {
+      setEntitlement(eff);
+      setEntitlementHeaders(eff.tier, [...eff.addons]); // apiClient AI isteklerinde X-PEMF-Tier/Addons yollasın
+    }
     // Backend Supabase-doğrulaması için erişim JWT'si (spoof-proof tier). Enforce kapalıyken zararsız.
     try {
       const { data } = await supabaseAuth.auth.getSession();
+      if (gen !== genRef.current) return;
       setAuthBearer(data.session?.access_token ?? null);
     } catch {
+      if (gen !== genRef.current) return;
       setAuthBearer(null);
     }
     setLoading(false);
@@ -97,6 +119,7 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     if (session) {
       refresh();
     } else {
+      genRef.current++; // uçuştaki refresh'i geçersiz kıl (önceki kullanıcının hakkı geri gelmesin)
       setEntitlement(defaultEntitlement());
       setEntitlementHeaders(null);
       setAuthBearer(null);

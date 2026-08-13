@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * AuthScreen — operatör giriş/kayıt ekranı (web + mobil, tek kod).
  * Koyu-premium tasarım: aurora-glow arka plan, logo, sekmeli giriş/kayıt, canlı şifre-kural göstergesi.
@@ -13,7 +14,7 @@ import { Mail, Lock, Eye, EyeOff, Check, X, ArrowRight, GraduationCap, User, Pho
 import type { ComponentType } from "react";
 import { colors, spacing, radius, typography, rf, rs } from "@/theme/tokens";
 import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "@/services/authApi";
-import { signUpUser, signInUser, sendPasswordReset, resendVerification } from "@/services/supabaseAuth";
+import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
 
 const LOGO = require("../../assets/icon.png");
 
@@ -37,9 +38,10 @@ export function AuthScreen() {
   const [address, setAddress] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Klavye "Git/Bitti" tuşu devre-dışı butonu ATLAYIP submit'i çağırabildiği için senkron kilit.
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   const [suggestRegister, setSuggestRegister] = useState(false); // (Supabase jenerik hata → nadir)
-  const [showResend, setShowResend] = useState(false);           // doğrulanmamış → "tekrar gönder"
   const [notice, setNotice] = useState("");                      // olumlu mesaj (yeşil)
   const pwRef = useRef<TextInput>(null);       // klavye "İleri" → şifreye odak
   const confirmRef = useRef<TextInput>(null);  // klavye "İleri" → şifre-tekrara odak
@@ -77,7 +79,6 @@ export function AuthScreen() {
     setError("");
     setConfirm("");
     setSuggestRegister(false);
-    setShowResend(false);
     // Mod değişince kayıt profil alanlarını temizle (giriş↔kayıt geçişinde eski değerler kalmasın).
     setFirstName(""); setLastName(""); setTitle(""); setPhone("");
     setClinicName(""); setClinicPhone(""); setCity(""); setDistrict(""); setAddress("");
@@ -85,6 +86,20 @@ export function AuthScreen() {
   };
 
   const submit = async () => {
+    // YENİDEN-GİRİŞ KİLİDİ: buton `loading` iken devre dışı, AMA klavyedeki "Git/Bitti" tuşu
+    // (`onSubmitEditing`) submit'i DOĞRUDAN çağırdığından butonu atlıyordu → arka arkaya iki
+    // kayıt/giriş isteği (Supabase rate-limit hatası, çift hesap denemesi). Ref ile kapıla:
+    // state güncellemesi asenkron olduğundan `loading` tek başına yeterli değil.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      await doSubmit();
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+
+  const doSubmit = async () => {
     setError(""); setNotice("");
     if (!emailOk) { setError("Geçerli bir e-posta adresi girin."); return; }
     if (isRegister && !pwOk) { setError("Şifre kurallarını karşılamıyor."); return; }
@@ -107,7 +122,8 @@ export function AuthScreen() {
       return;
     }
 
-    // Kayıt — Supabase doğrulama e-postası gönderir; giriş için önce e-posta doğrulanmalı.
+    // Kayıt — Supabase autoconfirm AÇIK olduğundan oturum ANINDA kurulur; doğrulama e-postası YOK.
+    // (2026-08-06 sahip kararı: doğrulama akışı tümüyle kaldırıldı — bkz. services/supabaseAuth.ts)
     if (isRegister) {
       const r = await signUpUser(email, password, {
         first_name: firstName.trim(),
@@ -122,28 +138,16 @@ export function AuthScreen() {
         address: address.trim(),
       });
       setLoading(false);
-      if (r.ok) {
-        setMode("login"); setPassword(""); setConfirm(""); setShowResend(true);
-        setNotice("Doğrulama e-postası gönderildi! Gelen kutunu aç, linke tıkla, sonra giriş yap.");
-      } else setError(r.error || "Kayıt başarısız.");
+      // Kayıt başarılıysa oturum zaten açıldı → AuthContext.onAuthStateChange uygulamayı
+      // OTOMATİK açar. Kullanıcıyı login formuna geri atıp e-posta beklettirmiyoruz.
+      if (!r.ok) setError(r.error || "Kayıt başarısız.");
       return;
     }
 
     // Giriş — başarıda AuthContext (onAuthStateChange) uygulamayı OTOMATİK açar.
     const r = await signInUser(email, password);
     setLoading(false);
-    if (!r.ok) {
-      setError(r.error || "Giriş başarısız.");
-      setShowResend(!!r.needsVerification); // doğrulanmamışsa "tekrar gönder" görünür
-    }
-  };
-
-  const doResend = async () => {
-    if (!emailOk) { setError("Önce e-posta adresini gir."); return; }
-    setError(""); setNotice("");
-    const r = await resendVerification(email);
-    if (r.ok) setNotice("Doğrulama e-postası tekrar gönderildi.");
-    else setError(r.error || "Gönderilemedi.");
+    if (!r.ok) setError(r.error || "Giriş başarısız.");
   };
 
   const showResearchHint = isRegister && email.length > 3 && isResearchEmail(email);
@@ -185,7 +189,7 @@ export function AuthScreen() {
                 <Image source={LOGO} style={styles.logo} resizeMode="contain" />
               </View>
               <Text style={styles.brandTitle}>PEMF Vet</Text>
-              <Text style={styles.brandSub}>Manyetik Alan Tedavi Sistemi</Text>
+              <Text style={styles.brandSub}>Manyetik Alan Seans Sistemi</Text>
             </View>
 
             {/* Sekmeler (giriş/kayıt) veya sıfırlama başlığı */}
@@ -254,7 +258,14 @@ export function AuthScreen() {
                   ref={pwRef}
                   style={[styles.input, { paddingRight: rs(40) }]}
                   value={password}
-                  onChangeText={(t) => { setPassword(t); setError(""); }}
+                  // SESSİZ GİRİŞ HATASI: şifre alanı boşluğu kırpmıyordu. Mobil klavye, panodan
+                  // yapıştırma ve şifre yöneticileri şifrenin SONUNA sıklıkla boşluk ekler; Supabase
+                  // bunu farklı bir şifre sayıp reddeder ve kullanıcı "E-posta veya şifre hatalı"
+                  // görür — alanda hiçbir görünür fark olmadığı için sebebi anlaşılamaz.
+                  // (Canlı doğrulandı: "Mert190361" 200, "Mert190361 " 400.)
+                  // Baştaki/sondaki boşluğu GİRİŞTE at → kullanıcının GÖRDÜĞÜ ile GÖNDERİLEN aynı olur.
+                  // İç boşluklara dokunulmaz (gerçek bir parola karakteri olabilir).
+                  onChangeText={(t) => { setPassword(t.replace(/^\s+|\s+$/g, "")); setError(""); }}
                   placeholder="Şifre"
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPw}
@@ -287,7 +298,9 @@ export function AuthScreen() {
                   ref={confirmRef}
                   style={styles.input}
                   value={confirm}
-                  onChangeText={(t) => { setConfirm(t); setError(""); }}
+                  // Şifre alanıyla AYNI kural — yoksa "Şifreler eşleşmiyor" hatası, iki alan
+                  // ekranda birebir aynı görünürken ortaya çıkardı.
+                  onChangeText={(t) => { setConfirm(t.replace(/^\s+|\s+$/g, "")); setError(""); }}
                   placeholder={isReset ? "Yeni şifre tekrar" : "Şifre tekrar"}
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPw}
@@ -343,12 +356,10 @@ export function AuthScreen() {
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {/* E-posta doğrulanmamış → doğrulama e-postasını tekrar gönder */}
-            {showResend && mode === "login" ? (
-              <TouchableOpacity style={styles.suggestBtn} onPress={doResend} accessibilityRole="button">
-                <Text style={styles.suggestText}>Doğrulama e-postasını <Text style={styles.suggestLink}>tekrar gönder</Text></Text>
-              </TouchableOpacity>
-            ) : null}
+            {/* "Doğrulama e-postasını tekrar gönder" düğmesi KALDIRILDI (2026-08-06):
+                Supabase autoconfirm açık → gönderilecek doğrulama e-postası YOK. Düğme
+                "gönderildi" deyip hiçbir şey yapmıyor, kullanıcıyı gelmeyen bir e-postayı
+                beklemeye itiyordu. Şifre unutulduysa "Şifremi unuttum" akışı zaten var. */}
 
             {/* Kayıtsız e-posta → tek dokunuşla Kayıt Ol'a geç (e-posta/şifre korunur) */}
             {suggestRegister && !isRegister ? (

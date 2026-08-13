@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * SensorMonitorScreen — Gerçek Zamanlı Sensör Grafikleri
  *

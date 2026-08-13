@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { StyleSheet, Text, TextInput } from "react-native";
 import {
   useFonts,

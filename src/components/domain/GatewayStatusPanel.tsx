@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * GatewayStatusPanel — Python gateway_status_widget.py'nin React karşılığı.
  * Mosquitto broker, MQTT, Network, Bridge durumunu gösterir.
@@ -17,6 +18,9 @@ interface GatewayInfo {
   hotspotActive: boolean;
   gatewayState?: ConnectionState;
 }
+
+/** Satır durumu: bağlantı yokken bayat değeri yeşil göstermemek için "unknown" eklendi. */
+type RowState = ConnectionState | "unknown";
 
 export function GatewayStatusPanel() {
   const { snapshot, wsConnected } = useLiveData();
@@ -41,29 +45,49 @@ export function GatewayStatusPanel() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  const mqttState: ConnectionState = snapshot.mqtt ?? "offline";
-  const gatewayState: ConnectionState = snapshot.gateway ?? "offline";
+  // YANLIŞ GÜVENCE: aşağıdaki satırların hepsi BAYAT snapshot'tan/son başarılı poll'den okunuyor.
+  // WS koptuğunda bunlar son bilinen (genelde yeşil "Aktif") değerde donuyordu → operatör sistemi
+  // sağlıklı sanıyordu. SystemInfoPanel'de bu koruma (#69) vardı, burada YOKTU. Bağlantı yokken
+  // hiçbir alt-bileşen durumu "online" gösterilmez, "Bilinmiyor"a düşer.
+  const stale = !wsConnected;
+  const gated = (s: ConnectionState | undefined, dflt: ConnectionState): RowState =>
+    stale ? "unknown" : (s ?? dflt);
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>🌐 Sistem Durumu</Text>
-        <TouchableOpacity onPress={refresh} style={styles.refreshBtn}>
+        <TouchableOpacity
+          onPress={refresh}
+          style={styles.refreshBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Sistem durumunu yenile"
+        >
           <Text style={styles.refreshText}>↻</Text>
         </TouchableOpacity>
       </View>
 
       <GatewayRow label="Uygulama Bağlantısı" state={wsConnected ? "online" : "offline"} />
-      <GatewayRow label="Sistem Bağlantısı" state={mqttState} />
-      <GatewayRow label="Cihaz Köprüsü" state={gatewayState} />
-      <GatewayRow label="Donanım Sürücüsü" state={snapshot.stm ?? "warning"} />
-      <GatewayRow label="İnternet Bağlantısı" state={gwInfo.networkOnline ? "online" : "offline"} />
+      <GatewayRow label="Sistem Bağlantısı" state={gated(snapshot.mqtt, "offline")} />
+      <GatewayRow label="Cihaz Köprüsü" state={gated(snapshot.gateway, "offline")} />
+      <GatewayRow label="Donanım Sürücüsü" state={gated(snapshot.stm, "warning")} />
+      {/* gwInfo ayrı bir poll'den gelir; başarısız poll SON İYİ değeri korur (bilinçli) → bağlantı
+          yokken o değeri de "Bilinmiyor" olarak göster, yeşil "Aktif" bırakma. */}
+      <GatewayRow label="İnternet Bağlantısı" state={stale ? "unknown" : gwInfo.networkOnline ? "online" : "offline"} />
+      {/* ⚠️ KABLOSUZ BAĞLANTI (2026-08-10). `hotspotActive` zaten çekiliyordu ama HİÇ
+          GÖSTERİLMİYORDU — yani PEMF-Gateway kapalıyken 6-8 numaralı bobinler sessizce
+          bağlanamıyor, operatör sebebini hiçbir yerden göremiyordu. Backend hotspot'u açılışta
+          otomatik başlatır (backend_service._start_hotspot_safe); bu satır sonucu görünür kılar. */}
+      <GatewayRow
+        label="Kablosuz Bağlantı"
+        state={stale ? "unknown" : gwInfo.hotspotActive ? "online" : "offline"}
+      />
     </View>
   );
 }
 
-function GatewayRow({ label, state }: { label: string; state: ConnectionState | boolean }) {
-  let resolvedState: ConnectionState;
+function GatewayRow({ label, state }: { label: string; state: RowState | boolean }) {
+  let resolvedState: RowState;
   if (typeof state === "boolean") {
     resolvedState = state ? "online" : "offline";
   } else {
@@ -71,10 +95,11 @@ function GatewayRow({ label, state }: { label: string; state: ConnectionState | 
   }
 
   const cfg = {
-    online:  { color: "#22c55e", text: "Aktif",     dot: "#22c55e" },
-    warning: { color: "#f59e0b", text: "Uyarı",     dot: "#f59e0b" },
-    offline: { color: "#ef4444", text: "Kapalı",    dot: "#ef4444" },
-    error:   { color: "#ef4444", text: "Hata",      dot: "#ef4444" },
+    online:  { color: "#22c55e", text: "Aktif",      dot: "#22c55e" },
+    warning: { color: "#f59e0b", text: "Uyarı",      dot: "#f59e0b" },
+    offline: { color: "#ef4444", text: "Kapalı",     dot: "#ef4444" },
+    error:   { color: "#ef4444", text: "Hata",       dot: "#ef4444" },
+    unknown: { color: "#94a3b8", text: "Bilinmiyor", dot: "#94a3b8" },
   }[resolvedState] ?? { color: "#475569", text: "Bilinmiyor", dot: "#475569" };
 
   return (

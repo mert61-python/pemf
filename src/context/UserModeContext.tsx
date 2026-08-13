@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 export type UserMode = 'pet_owner' | 'veterinarian' | 'researcher' | null;
@@ -5,8 +6,11 @@ export type UserMode = 'pet_owner' | 'veterinarian' | 'researcher' | null;
 interface UserModeContextType {
   userMode: UserMode;
   setUserMode: (mode: UserMode) => void;
-  isExpert: boolean;       // Veteriner Hekim (klinik + tedavi + kedi modelleri)
-  isResearcher: boolean;   // Araştırma Modu (klinik kanser araştırma analizleri — cihaz YOK)
+  isExpert: boolean;       // Veteriner Hekim (klinik + seans + kedi modelleri)
+  // Araştırma Modu (klinik kanser araştırma analizleri). 2026-08-06 sahip kararı: bu profil ARTIK
+  // cihaz ekranlarına da erişir (kontrol/sensör/rapor/simülasyon) — eski "cihaz YOK" notu geçersiz.
+  // Rota erişiminin TEK KAYNAĞI config/access.ts'tir; bu bayrak yalnız AI Hub bölüşümü/etiket içindir.
+  isResearcher: boolean;
   hasAiHub: boolean;       // modüler AI Hub erişimi (vet ‖ researcher); pet_owner basit ekran görür
 }
 

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Edit3, Trash2, Share2 } from "lucide-react-native";
@@ -12,6 +13,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
+import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 
 // GÜVENLİK (YÜKSEK fix): Raporu X-API-Key HEADER'ı ile indir → cihaz MASTER token'ı URL'de
@@ -82,7 +84,11 @@ function statusLabelTr(status?: string): string {
 export function TreatmentHistoryScreen() {
   const { selectedPatient } = useAppNav();
   const { session } = useAuth();
-  const myEmail = (session?.email || "").toLowerCase();
+  // ⚠️ DENETİM 2026-08-09 (Tier 1): "Benim Seanslarım" filtresi AKTİF OPERATÖRE göre olmalı.
+  // Giriş e-postası kullanılınca paylaşılan hesaplı klinikte filtre ya hiçbir şey ya her şeyi
+  // gösteriyordu — hekim kendi seansını bulamıyor, başkasınınkini kendi sanıyordu.
+  const op = useOperatorOptional();
+  const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
   // Klinik-içi görünüm: "mine" = benim başlattığım seanslar (+ sahipsiz eski), "all" = tüm klinik.
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const { showToast } = useToast();
@@ -102,7 +108,10 @@ export function TreatmentHistoryScreen() {
     setLoading(true);
     setLoadError(false);
     const data = await apiGet<any[] | null>(`/history/?limit=${PAGE_SIZE}`, null);
-    if (data === null) {
+    // ŞEKİL DOĞRULAMASI: `null` kontrolü tek başına yetmez — backend/proxy dizi OLMAYAN bir 2xx
+    // gövdesi (ör. `{detail: ...}`, captive-portal yanıtı) dönerse `sessions.filter` TypeError
+    // atıp ekranı beyaza düşürüyordu. Diziden başkasını "veri yok" say.
+    if (!Array.isArray(data)) {
       setLoadError(true);
       setSessions([]);
       setHasMore(false);
@@ -116,11 +125,13 @@ export function TreatmentHistoryScreen() {
   // audit B-8.2: sonraki sayfa — cursor = yüklü SON seansın id'si (keyset). Büyük geçmişte yalnız
   // en yeni sayfayla sınırlı kalmadan tüm kayıtlara sayfalayarak eriş (offset yavaşlığı/kayması yok).
   const loadMore = async () => {
-    if (loadingMore || !hasMore || sessions.length === 0) return;
+    // `loading` de kapıya dahil: tam yenileme uçarken sayfalama basılırsa, eski listenin son
+    // id'siyle istenen sayfa yenileme bittikten SONRA eklenir → kopuk/yinelenen kayıtlar.
+    if (loading || loadingMore || !hasMore || sessions.length === 0) return;
     setLoadingMore(true);
     const lastId = sessions[sessions.length - 1]?.id;
     const data = await apiGet<any[] | null>(`/history/?limit=${PAGE_SIZE}&cursor=${lastId}`, null);
-    if (data && data.length > 0) {
+    if (Array.isArray(data) && data.length > 0) {
       setSessions((prev) => [...prev, ...data]);
       setHasMore(data.length === PAGE_SIZE);
     } else {
@@ -149,9 +160,22 @@ export function TreatmentHistoryScreen() {
   // "Tümünü PDF İndir" EKRANDA GÖRÜNEN (aktif filtre) kayıtları verir — eskiden filtreyi yok
   // sayıp tüm seansları alıyordu. Ayrıca çok kayıtta uzun URL 414 vermesin diye üst sınır.
   const PDF_MAX = 200;
-  const downloadAllPdf = () => {
+  const downloadAllPdf = async () => {
     const list = filteredSessions;
     if (list.length === 0) return;
+    // KAPSAM UYARISI: "Tümünü PDF İndir" adına rağmen YALNIZ o an EKRANA YÜKLENMİŞ sayfaları
+    // aktarıyor (geçmiş sayfalanarak gelir, ilk sayfa 50 kayıt). Kullanıcı 500 seansı olan bir
+    // klinikte "tümü" sanıp 50 kayıtlık rapor alıyor ve bunu fark etmiyordu. Daha yüklenmemiş
+    // kayıt varsa AÇIKÇA söyle ve onay iste.
+    if (hasMore) {
+      const go = await platformConfirm(
+        "Yalnızca yüklenen kayıtlar",
+        `Şu ana kadar ${sessions.length} seans yüklendi ve daha fazlası var. Rapor YALNIZ yüklenmiş ` +
+        `${list.length} kaydı içerecek.\n\nTümünü almak için önce "Daha Fazla Yükle" ile listeyi tamamlayın.`,
+        "Yüklenenleri aktar"
+      );
+      if (!go) return;
+    }
     if (list.length > PDF_MAX) {
       platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${PDF_MAX} tanesi PDF'e aktarılacak. Aramayı daraltın.`);
     }
@@ -163,12 +187,23 @@ export function TreatmentHistoryScreen() {
   // kliniğin PII'sini döküyordu). "Benim Seanslarım" veya arama aktifse yalnız GÖRÜNEN kayıtları
   // gönder; "Tüm Klinik" + aramasız ise operatör bilinçli tam-export istemiştir (parametresiz).
   const CSV_MAX = 1000; // URL 414 olmasın; aşımda uyar + kırp (PDF deseniyle tutarlı).
-  const downloadCsv = () => {
+  const downloadCsv = async () => {
     const filtered = scope === "mine" || searchQuery.trim().length > 0;
     let url = `${serviceConfig.apiBaseUrl}/history/export_csv`;
     if (filtered) {
       const list = filteredSessions;
       if (list.length === 0) { showToast("Dışa aktarılacak kayıt yok.", "error"); return; }
+      // Filtreli CSV, id listesiyle gider → yalnız YÜKLENMİŞ kayıtları kapsar (aynı kapsam
+      // sorunu PDF'te olduğu gibi). Filtresiz dal sunucu-tarafı tam export yaptığı için etkilenmez.
+      if (hasMore) {
+        const go = await platformConfirm(
+          "Yalnızca yüklenen kayıtlar",
+          `Filtre aktif olduğu için dışa aktarım YALNIZ yüklenmiş ${list.length} kaydı içerecek; ` +
+          `listede daha fazlası var.\n\nTümü için önce "Daha Fazla Yükle" ile listeyi tamamlayın.`,
+          "Yüklenenleri aktar"
+        );
+        if (!go) return;
+      }
       if (list.length > CSV_MAX) {
         platformAlert("Çok fazla kayıt", `${list.length} seans var; ilk ${CSV_MAX} tanesi CSV'ye aktarılacak. Aramayı daraltın.`);
       }
@@ -182,7 +217,7 @@ export function TreatmentHistoryScreen() {
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1100), alignSelf: "center" }}>
       <View style={styles.headerRow}>
-        <Text style={styles.intro}>Hastalarınıza ait geçmiş tedavi kayıtları ve raporlamalar.</Text>
+        <Text style={styles.intro}>Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.</Text>
         <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
           <TouchableOpacity style={styles.btnOutline} onPress={downloadCsv}>
             <Text style={styles.btnOutlineText}>Excel/CSV İndir</Text>
@@ -229,7 +264,7 @@ export function TreatmentHistoryScreen() {
             ? (hasMore
                 ? "Yüklü sayfalarda eşleşme yok — daha eski kayıtlarda olabilir, aşağıdan “Daha Fazla Yükle”."
                 : "Aramayla eşleşen kayıt yok.")
-            : "Geçmiş tedavi kaydı bulunamadı."}
+            : "Geçmiş seans kaydı bulunamadı."}
         </Text>
       ) : (
         <ResponsiveGrid minItemWidth={360}>
@@ -248,7 +283,7 @@ export function TreatmentHistoryScreen() {
         <TouchableOpacity
           style={styles.loadMoreBtn}
           onPress={loadMore}
-          disabled={loadingMore}
+          disabled={loading || loadingMore}
           accessibilityRole="button"
           accessibilityLabel="Daha fazla geçmiş yükle"
         >
@@ -271,6 +306,15 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
   const { showToast } = useToast();
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notes, setNotes] = useState(session.patient_notes || "");
+  // VERİ KAYBI: `notes` yalnız İLK render'da başlatılıyordu. Liste yenilendiğinde (aynı `key`,
+  // güncellenmiş `patient_notes`) yerel değer BAYAT kalıyor; kullanıcı kaydettiğinde başka bir
+  // operatörün aynı seansa yazdığı notu sessizce EZİYORDU. Sunucu değeri değişince (ve kullanıcı
+  // o an düzenlemiyorsa) yerel state'i tazele.
+  useEffect(() => {
+    if (!isEditingNotes) setNotes(session.patient_notes || "");
+    // isEditingNotes BİLEREK hariç: düzenleme sırasında gelen yenileme kullanıcının yazdığını silmesin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.patient_notes]);
   const s = session.session_status?.toLowerCase();
   let state: "online" | "warning" | "offline" = "offline";
   if (s === "completed") state = "online";
@@ -368,7 +412,7 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
             value={notes}
             onChangeText={setNotes}
             multiline
-            placeholder="Tedavi notu..."
+            placeholder="Seans notu..."
             placeholderTextColor={colors.textMuted}
           />
         ) : (

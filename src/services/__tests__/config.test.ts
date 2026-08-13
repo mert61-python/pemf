@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * config kritik davranışları (audit B-3.2): sunucu adresi → API/WS URL çözümü (LAN IP vs
  * Cloudflare tünel) + API token kalıcılığı (AsyncStorage). Bağlantının belkemiği.
@@ -32,6 +33,22 @@ describe("updateServiceConfig — URL çözümü", () => {
     config.serviceConfig.apiToken = "keep-me";
     config.updateServiceConfig("192.168.1.1");
     expect(config.serviceConfig.apiToken).toBe("keep-me");
+  });
+
+  // #63 path-injection düzeltmesi TESTSİZDİ → sessizce geri gelebilirdi.
+  it("KRİTİK: geçersiz adres REDDEDİLİR (false) ve mevcut ayarı BOZMAZ", () => {
+    config.updateServiceConfig("192.168.1.147");
+    const before = { ...config.serviceConfig };
+    for (const bad of ["192.168.1.1/evil", "", "   ", "10.0.0.1 evil", "host\\path", "a<b>c"]) {
+      expect(config.updateServiceConfig(bad)).toBe(false);
+      expect(config.serviceConfig.apiBaseUrl).toBe(before.apiBaseUrl);
+      expect(config.serviceConfig.websocketUrl).toBe(before.websocketUrl);
+    }
+  });
+
+  it("geçerli adres true döner", () => {
+    expect(config.updateServiceConfig("192.168.1.40")).toBe(true);
+    expect(config.updateServiceConfig("https://x-y.trycloudflare.com")).toBe(true);
   });
 });
 

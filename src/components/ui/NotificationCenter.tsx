@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * NotificationCenter — Python notification_panel.py'nin React karşılığı.
  * WebSocket üzerinden gelen bildirimleri listeler.

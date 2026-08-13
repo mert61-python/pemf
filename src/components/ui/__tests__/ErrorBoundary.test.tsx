@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * ErrorBoundary (audit B-3.2): bir ekran çökse bile BEYAZ EKRAN yerine kurtarılabilir kart
  * gösterilmeli (tıbbi cihazda donup kalma önlenir). Component-render testi (RNTL).

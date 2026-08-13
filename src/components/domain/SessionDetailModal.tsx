@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * SessionDetailModal — Geçmiş seans BOBİN-DETAYI görünümü (Aşama-3).
  * ==================================================================================

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { PropsWithChildren } from "react";
 import { StyleSheet, View, ViewStyle, StyleProp } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";

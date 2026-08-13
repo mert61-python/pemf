@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 // AI analiz sonuç-detayı için PAYLAŞILAN yardımcılar — TEK KAYNAK (config/access.ts prensibi).
 // Yazma tarafı (cleanDetail) ile okuma/gösterim tarafı (detailRows) aynı gizli-anahtar + Türkçe
 // etiket + değer-çeviri setini kullanır → iki dosyada kopyalanmaz, drift olmaz.

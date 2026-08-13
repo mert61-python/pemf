@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * SystemInfoPanel — Python'daki "Sistem Bilgileri" panelinin React karşılığı.
  * Yazılım sürümü, donanım sürümü, cihaz ID, uptime, toplam seans.
@@ -9,7 +10,7 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { formatUptime } from "@/utils/uptime";
 
 export function SystemInfoPanel() {
-  const { snapshot, connectionQuality } = useLiveData();
+  const { snapshot, connectionQuality, haveRealData } = useLiveData();
   const sysInfo = snapshot.system;
   const [uptime, setUptime] = useState("00:00:00");
   // ORTA fix: STM32 durumunu mount'ta BİR KEZ REST yerine CANLI snapshot.stm'den türet → seans sırasında
@@ -22,12 +23,18 @@ export function SystemInfoPanel() {
   // Çalışma süresi: WS snapshot'taki startTime'dan (process başlangıcı) her saniye hesaplanır.
   // (/api/system/info `uptime` DÖNDÜRMÜYOR → eski `d.uptime` hep undefined idi, panel "00:00:00"
   //  takılıydı. bkz. utils/uptime.ts + guii/REFACTOR_BUGS.md Faz F.)
+  // YANLIŞ GÜVENCE: mockData'daki başlangıç snapshot'ında `system.startTime = new Date()` (modül
+  // yükleme anı = UYGULAMANIN açılışı) var. Cihaza HİÇ bağlanılmamışken bile sayaç işliyor, panel
+  // "Çalışma Süresi 00:03:21" diyordu — operatör cihazın ayakta olduğunu sanıyordu. Gerçek veri
+  // gelmeden (haveRealData) ya da bağlantı yokken süre GÖSTERME.
+  const uptimeKnown = haveRealData && !stale && !!sysInfo?.startTime;
   useEffect(() => {
+    if (!uptimeKnown) { setUptime("—"); return; }
     const tick = () => setUptime(formatUptime(sysInfo?.startTime, Date.now()));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [sysInfo?.startTime]);
+  }, [sysInfo?.startTime, uptimeKnown]);
 
   return (
     <View style={styles.card}>

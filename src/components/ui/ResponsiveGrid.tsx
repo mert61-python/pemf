@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Children, PropsWithChildren } from "react";
 import { StyleSheet, View } from "react-native";
 import { useResponsive } from "@/hooks/useResponsive";

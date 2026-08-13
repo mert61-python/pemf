@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
 import { Clock, HeartPulse, RadioTower, Wifi } from "lucide-react-native";
 import { CoilCard } from "@/components/domain/CoilCard";
@@ -16,7 +17,12 @@ export function DashboardScreen() {
   const { snapshot, wsConnected } = useLiveData();
   const { emergencyStop } = useSessionControl();
 
-  const at = snapshot.activeTreatment;
+  // CRASH-GUARD: `snapshot` bir WS `snapshot` mesajı ya da HTTP fallback ile TÜMÜYLE değiştirilir
+  // (merge değil). Gövde `activeTreatment` içermezse `at.isActive` TypeError atıyor, ErrorBoundary
+  // devreye girip Ana Ekran'ı hata kartına çeviriyordu — ve ACİL DURDUR butonu o ekranda olduğu için
+  // donanım çalışırken durdurma kontrolü EKRANDAN KAYBOLUYORDU. Aynı dosyanın `coils` erişimi zaten
+  // `?? []` kullanıyordu; asimetri kapatıldı.
+  const at = snapshot.activeTreatment ?? { isActive: false, mode: "", frequencyHz: 0, intensityMt: 0, remainingMin: 0, elapsedSec: 0, durationSec: 0 };
   const coils = snapshot.coils ?? [];
   const connectedCount = coils.filter((c) => c.connected).length;
   const runningCount = coils.filter((c) => c.running).length;
@@ -107,7 +113,7 @@ export function DashboardScreen() {
                 onPress={emergencyStop}
                 accessibilityRole="button"
                 accessibilityLabel="Acil durdur"
-                accessibilityHint="Tüm bobinleri anında durdurur ve aktif tedaviyi sonlandırır"
+                accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
               >
                 <Text style={styles.emergencyBtnText}>🚨 ACİL DURDUR</Text>
               </TouchableOpacity>

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * ControlScreen — Tam Tedavi Kontrol Ekranı
  *
@@ -5,6 +6,7 @@
  * 3 sekme: Otomatik Mod | Manuel Mod | AI Modu
  */
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useOperator } from "@/context/OperatorContext";
 import {
   Text,
   View,
@@ -18,11 +20,13 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { SessionProgressCard } from "@/components/domain/SessionProgressCard";
 import { CoilParameterPanel } from "@/components/domain/CoilParameterPanel";
-import { apiPost, platformAlert } from "@/services/apiClient";
+import { apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
 import { AiProPanel } from "@/components/domain/AiProPanel";
+import { EFieldBar } from "@/components/domain/EFieldBar";
+import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 
@@ -48,9 +52,13 @@ export function ControlScreen() {
   const { snapshot, telemetryStale } = useLiveData();
   const { selectedPatient } = useAppNav();
   const { session } = useAuth();
+  const { operatorEmail } = useOperator();
   const {
     isActive, treatment, elapsedSec, remainingSec,
-    loading, error, startSession, stopSession, emergencyStop,
+    // `error` state'i YERİNE `lastError()`: state, onu tetikleyen `await startSession(...)`
+    // satırının hemen ardından bu render'ın closure'ında HENÜZ güncel değildi → uyarı kutusu
+    // bir ÖNCEKİ hatayı (ilk denemede de null) gösteriyordu.
+    loading, stopping, lastError, startSession, stopSession, emergencyStop,
   } = useSessionControl();
 
   const [activeTab, setActiveTab] = useState<TabKey>("manual");
@@ -138,7 +146,9 @@ export function ControlScreen() {
       return null;
     }
     const requested = Array.from(selectedCoils);
-    const coilsById = new Map(snapshot.coils.map((c) => [c.id, c]));
+    // `?? []` — aynı dosyanın render'ı zaten bunu kullanıyordu; başlatma yolu guard'sızdı ve
+    // `coils` alanı olmayan bir snapshot geldiğinde "Seans Başlat" ekranı çökertiyordu.
+    const coilsById = new Map((snapshot.coils ?? []).map((c) => [c.id, c]));
     const effective = requested.filter((id) => isCoilConnected(coilsById.get(id) ?? { id }));
     if (effective.length === 0) {
       platformAlert("Bağlantı yok", "Seçili bobinler için aktif bağlantı yok (STM32/WiFi çevrimdışı).");
@@ -150,13 +160,62 @@ export function ControlScreen() {
     return effective;
   };
 
+  /** Hasta seçili değilse onay iste. Eskiden hiç kontrol yoktu: seans ve seans-sonrası gözlem
+   *  notu BOŞ hasta kimliğiyle kaydediliyor, tedavi geçmişinde hiçbir hayvana bağlanamayan
+   *  kayıtlar oluşuyordu (klinik izlenebilirlik + KVKK açısından da sorunlu). Akışı bloklamıyoruz
+   *  (acil/demo kullanım olabilir) ama artık BİLİNÇLİ bir karar. */
+  // ⚠️ 2026-08-07 (SAHİP KARARI — SERT KAPI): eskiden onay sorup "Hastasız başlat"a izin
+  // veriyordu. Artık VERMİYOR: hasta seçilmeden tedavi başlamaz. Gerekçe, aşağıdaki eski
+  // notun kendi tespiti — sahipsiz seans "bu tedavi hangi hayvana uygulandı?" sorusunu
+  // sonradan cevaplanamaz kılıyor. Ekran zaten PatientGate ile sarılı olduğundan buraya
+  // normalde HİÇ düşülmez; bu SON SAVUNMA hattıdır (ör. seçim oturum ortasında düşerse).
+  const requirePatient = async (): Promise<boolean> => {
+    if (selectedPatient?.id || (patientName ?? "").trim()) return true;
+    platformAlert(
+      "Hasta seçilmedi",
+      "Seansı başlatmadan önce yukarıdan hasta seçin. Seans, geçmişe hasta bilgisiyle birlikte kaydedilir."
+    );
+    return false;
+  };
+
+  /** Sayısal alan okuma. `parseFloat(x) || varsayılan` deseni kullanıcının yazdığı **0**'ı (geçerli
+   *  bir değer: "duty 0", "faz 0") sessizce varsayılana çeviriyordu; geçersiz metin de fark
+   *  edilmeden varsayılana dönüşüyor, operatör başka bir parametreyle tedavi başlattığını
+   *  bilmiyordu. Boş alan → varsayılan (kasıtlı), geçersiz metin → `null` (çağıran uyarır). */
+  const readNum = (raw: string, fallback: number): number | null => {
+    const s = (raw ?? "").trim().replace(",", ".");   // TR klavye ondalık virgülü
+    if (s === "") return fallback;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  /** Birden çok alanı oku; herhangi biri geçersizse uyar ve null dön. */
+  const readParams = (
+    fields: Record<string, [string, number]>
+  ): Record<string, number> | null => {
+    const out: Record<string, number> = {};
+    for (const [key, [raw, dflt]] of Object.entries(fields)) {
+      const v = readNum(raw, dflt);
+      if (v === null) {
+        platformAlert("Geçersiz değer", `"${raw}" sayı olarak okunamadı. Lütfen ${key} alanını kontrol edin.`);
+        return null;
+      }
+      out[key] = v;
+    }
+    return out;
+  };
+
   const handleStartAuto = async () => {
+    if (!(await requirePatient())) return;
     const effective = resolveEffectiveCoils();
     if (!effective) return;
+    const raw = readParams({
+      freq: [autoFreq, 50], duty: [autoDuty, 25], intensity: [autoIntensity, 1.0],
+    });
+    if (!raw) return;
     const p = clampWithAlert({
-      freq: parseFloat(autoFreq) || 50,
-      duty: parseFloat(autoDuty) || 25,
-      intensity: parseFloat(autoIntensity) || 1.0,
+      freq: raw.freq,
+      duty: raw.duty,
+      intensity: raw.intensity,
       duration: parseDurationMin(autoDuration),
     });
     const ok = await startSession({
@@ -169,20 +228,25 @@ export function ControlScreen() {
       intensity: p.intensity,  // Yoğunluk (mT) — ayrı alan
       durationMinutes: p.duration,
       coilIds: effective,
-      operatorEmail: session?.email,
+      operatorEmail: operatorEmail,
     });
-    if (!ok) platformAlert("Hata", error ?? "Seans başlatılamadı.");
+    if (!ok) platformAlert("Hata", lastError() ?? "Seans başlatılamadı.");
   };
 
   // Manuel "Toplu Uygulama" → SEANS olarak başlat (ilerleme/timer/gözlem-notu/history +
   // 409 interlock kazanır). /session/start STM+ESP'yi faz dahil sürer.
   const handleStartManual = async () => {
+    if (!(await requirePatient())) return;
     const effective = resolveEffectiveCoils();
     if (!effective) return;
+    const raw = readParams({
+      freq: [masterFreq, 100], duty: [masterDuty, 25], phase: [masterPhase, 0],
+    });
+    if (!raw) return;
     const p = clampWithAlert({
-      freq: parseFloat(masterFreq) || 100,
-      duty: parseFloat(masterDuty) || 25,
-      phase: parseFloat(masterPhase) || 0,
+      freq: raw.freq,
+      duty: raw.duty,
+      phase: raw.phase,
       duration: parseDurationMin(masterDuration),
     });
     const ok = await startSession({
@@ -195,16 +259,22 @@ export function ControlScreen() {
       phase: p.phase,
       durationMinutes: p.duration,
       coilIds: effective,
-      operatorEmail: session?.email,
+      operatorEmail: operatorEmail,
     });
-    if (!ok) platformAlert("Hata", error ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
+    if (!ok) platformAlert("Hata", lastError() ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
   };
 
   // Manuel "Durdur": aktif seansı durdur (timer/not/history) + seçili bobinleri sıfırla.
   const handleStopManual = async () => {
     if (isActive) await stopSession().catch(() => {});
-    const stmCoils = Array.from(selectedCoils).filter((id) => id <= 5);
-    const espCoils = Array.from(selectedCoils).filter((id) => id >= 6);
+    // DURDURULACAK KÜME: "o an SEÇİLİ olanlar" DEĞİL, "gerçekten ÇALIŞANLAR + seçili olanlar".
+    // Kullanıcı bir bobini başlattıktan sonra seçimden çıkarırsa (ör. başka bobinlere geçmek için),
+    // "Durdur" o bobine hiç komut göndermiyordu → hayvanın üzerinde sessizce enerjili kalıyordu.
+    // Çalışmayan bobine STOP göndermek idempotent ve zararsızdır; eksik göndermek değildir.
+    const runningIds = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
+    const targets = Array.from(new Set<number>([...Array.from(selectedCoils), ...runningIds]));
+    const stmCoils = targets.filter((id) => id <= 5);
+    const espCoils = targets.filter((id) => id >= 6);
     // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
     // yanıt yutuluyordu → STOP düşse bile kullanıcı bobinin durduğunu sanıyordu (per-coil panelle tutarsız).
     let allOk = true;
@@ -243,10 +313,11 @@ export function ControlScreen() {
         { silent: true },
       );
       if (rec?.parameters) {
+        // AI sekmesindeki analiz, GÖRÜNMEYEN "Otomatik" sekmesinin frekans/duty/süre alanlarını
+        // SESSİZCE üzerine yazıyordu: kullanıcı Otomatik sekmesine elle girdiği değerleri kaybediyor,
+        // sonra oradan "Seans Başlat"a bastığında beklemediği parametrelerle tedavi başlıyordu.
+        // AI sonucu artık YALNIZ kendi kartında durur; Otomatik alanlarına dokunulmaz.
         setAiResult(rec);
-        setAutoFreq(String(rec.parameters.freq ?? 50));
-        setAutoDuty(String(rec.parameters.duty ?? 25));
-        setAutoDuration(String(Math.round(rec.parameters.duration ?? 20)));
       } else {
         // Boş/parametresiz yanıt da sessiz kalmasın → net uyarı göster.
         setAiResult(rec?.error ? rec : { error: "AI analizi sonuç döndürmedi. Lütfen tekrar deneyin." });
@@ -263,6 +334,7 @@ export function ControlScreen() {
       platformAlert("Uyarı", "Önce AI analizi yapın.");
       return;
     }
+    if (!(await requirePatient())) return;
     const effective = resolveEffectiveCoils();
     if (!effective) return;
     const src = aiResult.parameters;
@@ -284,9 +356,9 @@ export function ControlScreen() {
       intensity: p.intensity,
       durationMinutes: p.duration,
       coilIds: effective,
-      operatorEmail: session?.email,
+      operatorEmail: operatorEmail,
     });
-    if (!ok) platformAlert("Hata", error ?? "Seans başlatılamadı.");
+    if (!ok) platformAlert("Hata", lastError() ?? "Seans başlatılamadı.");
   };
 
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
@@ -316,10 +388,30 @@ export function ControlScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   const coils = snapshot.coils ?? [];
+  const runningCount = coils.filter((c) => c?.running).length;
+  /** Seans bayrağından BAĞIMSIZ donanım durumu (bkz. yukarıdaki uyarı bandı). */
+  const hardwareRunningOutOfSession = runningCount > 0;
 
   return (
     <View style={styles.container}>
+      {/* HASTA KAPISI — `soft` (2026-08-07): seçim kartı üstte durur ama EKRAN GİZLENMEZ.
+          ⚠️ Sert kapı burada TEHLİKELİ olurdu: hasta seçili değilken ACİL DURDUR butonu da
+          gizlenir, bobinler çalışırken operatör onlara ULAŞAMAZDI. Seansı asıl engelleyen
+          şey başlatma yolundaki `requirePatient` sert kontrolüdür. */}
+      <PatientGate soft>
       {/* ── Active Session Progress ────────────────────────────── */}
+      {/* DONANIM UYARISI: kart yalnız KENDİ seans state'ine (useSessionControl) bakıyordu. AI Pro,
+          AI-Auto, fiziksel kontrol veya başka bir istemci bobinleri enerjileyebilir ama session_*
+          yayınlamaz → `isActive` false kalır ve ekran "Seans Bekleniyor" derken hayvanın üzerinde
+          bobinler çalışıyor olabilir. DashboardScreen'de bu koruma vardı, burada yoktu. */}
+      {!isActive && hardwareRunningOutOfSession && (
+        <View style={styles.hwWarnBanner}>
+          <Text style={styles.hwWarnText}>
+            ⚠️ DONANIM ÇALIŞIYOR — {runningCount} bobin enerjili, seans bağlamı dışında.
+            Aşağıdaki ACİL DURDUR ile durdurabilirsiniz.
+          </Text>
+        </View>
+      )}
       <SessionProgressCard
         isActive={isActive}
         mode={treatment?.mode ?? "Sistem Hazır"}
@@ -331,8 +423,13 @@ export function ControlScreen() {
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={loading}
+        stopping={stopping}
         stale={isActive && telemetryStale}
       />
+
+      {/* CANLI E-ALANI (2026-08-06): yalnız analiz bağlamı + aktif seans varken görünür;
+          aksi halde bileşen kendini render ETMEZ (bkz. EFieldBar). */}
+      <EFieldBar />
 
       {/* ── Tab bar ───────────────────────────────────────────── */}
       <View style={styles.tabBar}>
@@ -361,7 +458,7 @@ export function ControlScreen() {
             Hedef durumu seçin, sistem literatür tabanlı parametreleri otomatik ayarlar.
           </Text>
 
-          <FormLabel text="Tedavi Hedefi" />
+          <FormLabel text="Seans Hedefi" />
           <View style={styles.targetGrid}>
             {AUTO_TARGETS.map((t) => (
               <TouchableOpacity
@@ -379,7 +476,13 @@ export function ControlScreen() {
           <View style={styles.paramRow}>
             <ParamField label="Frekans (Hz)" value={autoFreq} onChangeText={setAutoFreq} />
             <ParamField label="Duty (%)" value={autoDuty} onChangeText={setAutoDuty} />
-            <ParamField label="Yoğunluk (mT)" value={autoIntensity} onChangeText={setAutoIntensity} />
+            {/* ⚠️ DENETİM 2026-08-09 (Tier 2): bu değer CİHAZA GÖNDERİLMEZ. STM binary paketi
+                (duty/phase/freq/duration) ve ESP MQTT komutu (freq/duty/phase/duration) mT alanı
+                TAŞIMAZ — girilen sayı yalnız kayda yazılır. Etiket bunu söylemezse operatör
+                yoğunluğu ayarladığını sanır ve gerçek doz beklediğinden farklı olur.
+                Gerçek çözüm firmware'dedir (paketi genişlet + osiloskopla doğrula). */}
+            <ParamField label="Yoğunluk (mT, yalnız kayıt)" value={autoIntensity}
+              onChangeText={setAutoIntensity} />
             <ParamField label="Süre (dk)" value={autoDuration} onChangeText={setAutoDuration} />
           </View>
           {autoLoading && <Text style={styles.hint}>Literatür önerisi alınıyor…</Text>}
@@ -483,7 +586,7 @@ export function ControlScreen() {
       {/* ── TAB: AI ───────────────────────────────────────────── */}
       {activeTab === "ai" && (
         <View style={styles.section}>
-          <SectionTitle text="AI Modu — Yapay Zeka Destekli Tedavi" />
+          <SectionTitle text="AI Modu — Yapay Zeka Destekli Seans" />
           <Text style={styles.hint}>
             AI, hasta durumuna göre optimal frekans, duty ve süre parametrelerini önerir.
           </Text>
@@ -548,7 +651,7 @@ export function ControlScreen() {
       {activeTab === "aipro" && (
         <View style={styles.section}>
           <SectionTitle text="AI Pro — Kamera Kapalı-Döngü" />
-          <AiProPanel />
+          <AiProPanel patientName={patientName} />
         </View>
       )}
 
@@ -556,15 +659,19 @@ export function ControlScreen() {
       <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
         accessibilityRole="button"
         accessibilityLabel="Tüm bobinleri acil durdur"
-        accessibilityHint="Tüm bobinleri anında durdurur ve aktif tedaviyi sonlandırır">
+        accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır">
         <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
       </TouchableOpacity>
 
+      {/* Gözlem notu modalı seans BİTİNCE otomatik açılır ve tam ekranı kaplar → o sırada donanım
+          hâlâ enerjiliyse (yerel sayaç bitti ama backend/bobin durmadıysa) ACİL DURDUR'a erişimi
+          kapatıyordu. Bobin çalışırken modalı AÇMA; önce durdurma erişimi kalsın, not sonra alınır. */}
       <ObservationNotesModal
-        visible={obsSession !== null}
+        visible={obsSession !== null && !hardwareRunningOutOfSession}
         session={obsSession}
         onClose={() => setObsSession(null)}
       />
+      </PatientGate>
     </View>
   );
 }
@@ -586,11 +693,15 @@ function ParamField({
   return (
     <View style={styles.paramField}>
       <Text style={styles.paramFieldLabel}>{label}</Text>
+      {/* TR klavyede ondalık ayırıcı VİRGÜLDÜR. `parseFloat("1,5")` → 1 döndüğü için "1,5 mT"
+          yazan operatör sessizce 1 mT ile seans başlatıyordu. Girişte virgülü noktaya çevir
+          (ekranda da düzeltilmiş görünür → operatör ne gönderdiğini görür).
+          `keyboardType="decimal-pad"`: iOS'ta "numeric" ondalık tuşu göstermiyordu. */}
       <TextInput
         style={styles.paramFieldInput}
         value={value}
-        onChangeText={onChangeText}
-        keyboardType="numeric"
+        onChangeText={(t) => onChangeText(t.replace(",", "."))}
+        keyboardType="decimal-pad"
         selectTextOnFocus
         accessibilityLabel={label}
       />
@@ -828,4 +939,14 @@ const styles = StyleSheet.create({
     borderColor: "#ef4444",
   },
   emergencyBtnText: { color: "#fff", fontWeight: "800", fontSize: typography.body, letterSpacing: 0.3, textAlign: "center", alignSelf: "stretch" },
+  // Seans bağlamı DIŞINDA donanım çalışıyor uyarısı (bkz. hardwareRunningOutOfSession).
+  hwWarnBanner: {
+    backgroundColor: "#7f1d1d",
+    borderColor: "#ef4444",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  hwWarnText: { color: "#fecaca", fontWeight: "700", fontSize: typography.small, textAlign: "center" },
 });

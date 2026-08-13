@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Platform, useWindowDimensions } from "react-native";
 import { getLayoutKind } from "@/theme/breakpoints";
 

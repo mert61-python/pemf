@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect } from "react";
 import { AppState } from "react-native";
 

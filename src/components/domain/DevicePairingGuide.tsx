@@ -76,7 +76,7 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={styles.lead}>
-              Cihaz bu ağda bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi'de değilse</Text>{" "}
+              Cihaz bu ağda bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi&apos;de değilse</Text>{" "}
               (mobil veri ya da başka bir ağ) bu normaldir — aşağıdaki kodla bağlanabilirsiniz.
             </Text>
 
@@ -129,7 +129,7 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
             <View style={styles.altBilgi}>
               <Wifi size={14} color={colors.textMuted} />
               <Text style={styles.altBilgiText}>
-                Cihazla aynı Wi-Fi'ye bağlanırsanız kod gerekmez; uygulama cihazı kendi bulur.
+                Cihazla aynı Wi-Fi&apos;ye bağlanırsanız kod gerekmez; uygulama cihazı kendi bulur.
               </Text>
             </View>
             <View style={styles.altBilgi}>

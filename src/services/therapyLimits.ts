@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * therapyLimits — PEMF tedavi parametreleri için güvenlik sınırları (tek kaynak).
  * ============================================================================

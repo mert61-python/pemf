@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 // ─── Route ───────────────────────────────────────────────────────────────────
 export type RouteKey =
   | "dashboard"
@@ -89,6 +90,25 @@ export interface SystemInfo {
   totalSessions: number;
 }
 
+/** CANLI E-ALANI (2026-08-06) — tedavi sürerken vekil modelin canlı B/duty'den türettiği
+ *  elektrik alanı. AI panelindeki E_cancer/E_healthy ile AYNI modelden gelir (tutarlılık).
+ *  `null` = analiz bağlamı yok ya da seans pasif → UI bar'ı HİÇ göstermez (uydurma değer yok). */
+export interface EFieldLive {
+  /** Sağlıklı dokuda öngörülen alan */
+  healthy: number;
+  /** Tümör/hedef dokuda öngörülen alan */
+  cancer: number;
+  /** Ortalama */
+  avg: number;
+  /** Hesaba giren ÇALIŞAN bobin sayısı (0 → bobinler durdu, değerler sıfır) */
+  activeCoils: number;
+  /** Modele verilen canlı girdiler — şeffaflık/teşhis için */
+  achievedB_T: number;
+  dutySum: number;
+  /** Hesap zamanı (epoch sn) — tazelik denetimi için */
+  ts: number;
+}
+
 // ─── Dashboard Snapshot ──────────────────────────────────────────────────────
 export interface DashboardSnapshot {
   gateway: ConnectionState;
@@ -100,6 +120,8 @@ export interface DashboardSnapshot {
   sessions: TreatmentSession[];
   notifications: AppNotification[];
   system: SystemInfo;
+  /** Canlı E-alanı (yoksa null — bkz. EFieldLive) */
+  eField?: EFieldLive | null;
 }
 
 // ─── WebSocket live data ──────────────────────────────────────────────────────

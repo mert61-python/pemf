@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "lucide-react-native";
@@ -10,15 +11,21 @@ import type { Patient } from "@/types/domain";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
 import { useUserMode } from "@/context/UserModeContext";
+import { useOperatorOptional } from "@/context/OperatorContext";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
+import { canChooseScope, effectiveScope, inScope } from "@/utils/patientScope";
 
 export function PatientScreen() {
   const { showToast } = useToast();
   const { navigateTo, setSelectedPatient } = useAppNav();
-  const { userMode, isExpert } = useUserMode();
+  const { userMode, isExpert, isResearcher } = useUserMode();
   const { session } = useAuth();
-  const myEmail = (session?.email || "").toLowerCase();
+  // ⚠️ DENETİM 2026-08-09 (Tier 1): kimlik AKTİF OPERATÖRDÜR, giriş e-postası değil.
+  // Klinik tek Supabase hesabını paylaşıyor → her hasta aynı hesaba damgalanıyor ve
+  // "Benim Hastalarım / Tüm Klinik" ayrımı (çoklu-operatör özelliğinin tüm amacı) anlamsız kalıyordu.
+  const op = useOperatorOptional();
+  const myEmail = (op ? op.operatorEmail : (session?.email || "")).toLowerCase();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,7 +44,8 @@ export function PatientScreen() {
     setLoading(true);
     setLoadError(false);
     const res = await apiGet<{ status: string, data: Patient[] }>("/patients", { status: "error", data: [] });
-    if (res.status === "success") {
+    // ŞEKİL DOĞRULAMASI: `data` dizi gelmezse aşağıdaki `.filter`/`.map` çöker.
+    if (res.status === "success" && Array.isArray(res.data)) {
       setPatients(res.data);
     } else {
       setLoadError(true);
@@ -78,7 +86,7 @@ export function PatientScreen() {
     // Yeni kayitta operator_email = giris yapan hekim (klinik-ici sahiplik). Duzenlemede DEGISMEZ (backend de yok sayar).
     const payload = editingId
       ? { ...normalized, id: editingId }
-      : { ...normalized, operator_email: session?.email || "" };
+      : { ...normalized, operator_email: myEmail };
     setSaving(true);
     const res = await apiPost<{ status: string }>("/patients", payload, { status: "error" });
     setSaving(false);
@@ -145,17 +153,26 @@ export function PatientScreen() {
 
   // "Benim Hastalarım" = operator_email eşleşen VEYA sahipsiz (eski/migrasyon) kayıtlar → hiçbir hasta kaybolmaz.
   // "Tüm Klinik" = filtresiz. Oturum yoksa (myEmail boş) filtreleme yapılmaz (hepsi).
-  const scopedPatients = patients.filter(p => {
-    if (scope === "all" || !myEmail) return true;
-    const op = (p.operator_email || "").toLowerCase();
-    return !op || op === myEmail;
-  });
+  // KVKK: ev sahibi profili "all" kapsamına ASLA çıkamaz (sekme de gizli — bu ikinci kapı,
+  // ileride başka bir yerden setScope("all") çağrılırsa diye). Mantık utils/patientScope.ts'te.
+  const etkinScope = effectiveScope(scope, { isExpert, isResearcher });
+  const scopedPatients = patients.filter(p => inScope(p, etkinScope, myEmail));
   const mineCount = patients.filter(p => {
     if (!myEmail) return false;
     const op = (p.operator_email || "").toLowerCase();
     return !op || op === myEmail;
   }).length;
-  const filteredPatients = scopedPatients.filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.owner || "").toLowerCase().includes(search.toLowerCase()));
+  const matchedPatients = scopedPatients.filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.owner || "").toLowerCase().includes(search.toLowerCase()));
+  // PERFORMANS: liste sunucudan SAYFALANMADAN tümüyle geliyor ve ScrollView içinde `.map` ile
+  // (sanallaştırma olmadan) render ediliyordu → birkaç yüz hastası olan klinikte her arama
+  // tuşunda tüm kartlar yeniden render ediliyor, kaydırma takılıyordu. Backend'de sayfalama ucu
+  // olmadığından (TreatmentHistory'deki `?limit&cursor` burada YOK) istemci tarafında artımlı
+  // gösterim yapılır: kullanıcı "Daha fazla göster" ile açar. Arama kapsamı TÜM listede kalır.
+  const PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => { setVisibleCount(PAGE); }, [search, scope]);
+  const filteredPatients = matchedPatients.slice(0, visibleCount);
+  const hiddenCount = matchedPatients.length - filteredPatients.length;
 
   return (
     <View style={styles.container}>
@@ -206,8 +223,12 @@ export function PatientScreen() {
         </Card>
       )}
 
-      {/* Klinik-içi görünüm: hekim varsayılan kendi hastalarını görür, isterse tüm kliniğe geçer. */}
-      {myEmail ? (
+      {/* Klinik-içi görünüm: hekim varsayılan kendi hastalarını görür, isterse tüm kliniğe geçer.
+          ⚠️ KVKK 2026-08-08: "Tüm Klinik" EV SAHİBİNE KAPALI. Bu ekran pet_owner'a yeni açıldı
+          (AI hasta seçimi için); hasta DB'si aynı makinede profiller arasında PAYLAŞILDIĞINDAN
+          ev sahibi sekmeye basıp kliniğin tüm hasta listesini (sahip adı/iletişim = kişisel veri)
+          görebilirdi. Ev sahibi YALNIZ kendi kayıtlarını görür — `scope` "mine"da kilitli. */}
+      {canChooseScope(myEmail, { isExpert, isResearcher }) ? (
         <View style={styles.segment}>
           <TouchableOpacity
             style={[styles.segmentBtn, scope === "mine" && styles.segmentBtnActive]}
@@ -271,11 +292,23 @@ export function PatientScreen() {
                   <View style={styles.actions}>
                     {/* Seans Başlat yalnız control erişimi olan profillere (vet) — araştırma modu control'e
                         giremez, buton effectiveRoute kapısında dashboard'a düşen çıkmaz-sokaktı (UX + tutarlılık). */}
+                    {/* a11y: ikon-only butonlarda etiket/rol YOKTU → ekran okuyucu yalnız "buton"
+                        diyordu; hangi hastaya ait olduğu da belirsizdi. Dokunma hedefi de 44pt'nin
+                        altındaydı (actionBtnIcon minWidth/minHeight ile büyütüldü). */}
                     {canAccess(userMode, "control") && (
-                      <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}><Activity color={colors.success} size={20} /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleStartSession(p)} style={styles.actionBtnIcon}
+                        accessibilityRole="button" accessibilityLabel={`${p.name} için seans başlat`}>
+                        <Activity color={colors.success} size={20} />
+                      </TouchableOpacity>
                     )}
-                    <TouchableOpacity onPress={() => handleEdit(p)} style={styles.actionBtnIcon}><Edit color={colors.primary} size={20} /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(p.id!)} style={styles.actionBtnIcon}><Trash2 color={colors.danger} size={20} /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleEdit(p)} style={styles.actionBtnIcon}
+                      accessibilityRole="button" accessibilityLabel={`${p.name} kaydını düzenle`}>
+                      <Edit color={colors.primary} size={20} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(p.id!)} style={styles.actionBtnIcon}
+                      accessibilityRole="button" accessibilityLabel={`${p.name} kaydını sil`}>
+                      <Trash2 color={colors.danger} size={20} />
+                    </TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.detailsRow}>
@@ -283,13 +316,24 @@ export function PatientScreen() {
                   <Text style={styles.detailText}>Kilo: {p.weight || "-"} kg</Text>
                   <Text style={styles.detailText}>Yaş: {p.age || "-"}</Text>
                   {/* Tüm Klinik görünümünde kaydı hangi hekimin oluşturduğunu göster. */}
-                  {scope === "all" && p.operator_email ? (
+                  {etkinScope === "all" && p.operator_email ? (
                     <Text style={styles.detailText} numberOfLines={1}>Kaydeden: {p.operator_email}</Text>
                   ) : null}
                 </View>
               </Card>
             ))}
           </ResponsiveGrid>
+        )}
+
+        {hiddenCount > 0 && (
+          <TouchableOpacity
+            style={styles.loadMoreBtn}
+            onPress={() => setVisibleCount((n) => n + PAGE)}
+            accessibilityRole="button"
+            accessibilityLabel={`${hiddenCount} hasta daha göster`}
+          >
+            <Text style={styles.loadMoreText}>Daha fazla göster ({hiddenCount} kayıt)</Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
@@ -298,6 +342,11 @@ export function PatientScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: rs(1100), alignSelf: "center" },
+  loadMoreBtn: {
+    marginTop: spacing.md, paddingVertical: spacing.md, alignItems: "center",
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgAlt,
+  },
+  loadMoreText: { color: colors.primary, fontWeight: "700", fontSize: typography.small },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: spacing.md },
   title: { color: colors.text, fontSize: typography.title, fontWeight: "800", marginBottom: spacing.xs },
   formCard: { gap: spacing.md, backgroundColor: colors.bgAlt, borderColor: colors.primarySoft, borderWidth: 1 },
@@ -323,5 +372,7 @@ const styles = StyleSheet.create({
   emptyText: { color: colors.textMuted, textAlign: "center", marginTop: spacing.xl },
   stateBox: { alignItems: "center", justifyContent: "center", gap: spacing.md, marginTop: spacing.xl },
   actions: { flexDirection: "row", gap: spacing.sm },
-  actionBtnIcon: { padding: spacing.xs }
+  // WCAG 2.5.5 / platform kılavuzu: minimum 44pt dokunma hedefi. `padding: xs` ile ~28px kalıyordu
+  // ve üç yıkıcı-yakın buton (sil / düzenle / seans başlat) yan yana duruyordu → yanlış dokunuş.
+  actionBtnIcon: { padding: spacing.xs, minWidth: rs(44), minHeight: rs(44), alignItems: "center", justifyContent: "center" }
 });

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * useForegroundReconnect (audit B-3.2): uygulama ön plana (active) gelince onReconnect tetiklenmeli
  * (arka planda donmuş WS'i tazele); background/inactive'de tetiklenmemeli; unmount'ta abonelik kalkmalı.

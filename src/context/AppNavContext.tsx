@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * AppNavContext — hafif uygulama-içi navigasyon + seçili hasta paylaşımı.
  * ====================================================================

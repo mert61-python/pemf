@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useState, lazy, Suspense } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { AppShell } from "@/components/ui/AppShell";
@@ -8,9 +9,10 @@ import { RouteKey } from "@/types/domain";
 import { UserModeProvider, useUserMode } from "@/context/UserModeContext";
 import { canAccess } from "@/config/access";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
-import { LiveDataProvider } from "@/context/LiveDataContext";
+import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { AppNavProvider } from "@/context/AppNavContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { OperatorProvider } from "@/context/OperatorContext";
 import { EntitlementProvider } from "@/context/EntitlementContext";
 import { AuthScreen } from "@/screens/AuthScreen";
 
@@ -27,14 +29,14 @@ const SettingsScreen = lazy(() => import("@/screens/SettingsScreen").then((m) =>
 const AiHistoryScreen = lazy(() => import("@/screens/AiHistoryScreen").then((m) => ({ default: m.AiHistoryScreen })));
 
 const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
-  dashboard: { title: "Hoş Geldiniz", subtitle: "Bugün Hangi Dostumuzu Tedavi Ediyoruz?" },
-  control: { title: "Tedavi Kontrol Merkezi", subtitle: "Akıllı Reçeteler ve Cihaz Yönetimi" },
+  dashboard: { title: "Hoş Geldiniz", subtitle: "Bugün Hangi Dostumuza Seans Yapıyoruz?" },
+  control: { title: "Seans Kontrol Merkezi", subtitle: "Akıllı Reçeteler ve Cihaz Yönetimi" },
   sensors: { title: "Cihaz Durumu", subtitle: "Gerçek Zamanlı Sensör İzleme" },
-  history: { title: "Tedavi Geçmişi", subtitle: "Geçmiş seansları incele ve rapor al." },
+  history: { title: "Seans Geçmişi", subtitle: "Geçmiş seansları incele ve rapor al." },
   patients: { title: "Hasta Kayıtları", subtitle: "Dostlarımızın bilgileri." },
   kpi: { title: "Performans Raporu", subtitle: "Cihaz ve klinik göstergeleri." },
   simulator: { title: "Etki Simülasyonu", subtitle: "Manyetik alanın dostumuza etkisini görselleştirin." },
-  ai: { title: "Akıllı Teşhis", subtitle: "Kamera üzerinden otonom ağrı analizi ve tedavi." },
+  ai: { title: "Akıllı Teşhis", subtitle: "Kamera üzerinden otonom ağrı analizi ve seans." },
   ai_history: { title: "AI Analiz Geçmişi", subtitle: "Tüm modellerin analiz sonuçları — şifreli, detaylı kayıt." },
   settings: { title: "Ayarlar", subtitle: "Cihaz tercihleri ve gelişmiş mod." },
 };
@@ -48,7 +50,8 @@ function MainRouter() {
   }
 
   // Profil bu rotaya erişemiyorsa dashboard'a düş. TEK KAYNAK: config/access (PemfApp + AppShell tutarlı) →
-  // yanlış profile cihaz/tedavi ekranı sızmaz (ör. researcher control/sensors/kpi göremez).
+  // yanlış profile cihaz/tedavi ekranı sızmaz (ör. pet_owner control/sensors/kpi göremez).
+  // (2026-08-06: örnek "researcher" idi; sahip kararıyla araştırma profiline cihaz rotaları açıldı.)
   const effectiveRoute = canAccess(userMode, activeRoute) ? activeRoute : "dashboard";
 
   return (
@@ -94,9 +97,22 @@ function AuthGate() {
   // Giriş yapıldı → profil seçimi + uygulama.
   return (
     <UserModeProvider>
-      <MainRouter />
+      {/* AKTİF OPERATÖR (2026-08-08): tek makineyi paylaşan veterinerler kendi kimlikleriyle
+          çalışsın. `sessionActive` → seans sürerken hareketsizlik kilidi ERTELENİR (hasta
+          güvenliği: bobinler çalışırken operatörü PIN ekranına sokma). */}
+      <OperatorKapsayici>
+        <MainRouter />
+      </OperatorKapsayici>
     </UserModeProvider>
   );
+}
+
+
+/** `OperatorProvider`'a canlı seans durumunu geçirir (kilit ertelemesi için). */
+function OperatorKapsayici({ children }: { children: React.ReactNode }) {
+  const { snapshot } = useLiveData();
+  const seansAktif = !!snapshot?.activeTreatment?.isActive;
+  return <OperatorProvider sessionActive={seansAktif}>{children}</OperatorProvider>;
 }
 
 export function PemfApp() {

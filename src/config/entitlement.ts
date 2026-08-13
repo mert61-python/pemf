@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * Entitlement (abonelik hakkı) — A1 modeli: abonelik WEB'de satılır (Stripe), mobil yalnız
  * hakkı OKUR ve özellik açar (reader model, IAP YOK). Tek-kaynak Supabase `subscriptions`.

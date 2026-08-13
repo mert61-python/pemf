@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 // F-6 (prod-readiness): service katmanının (apiClient — React hook'u KULLANAMAZ) non-blocking
 // toast göndermesi için köprü. ToastProvider mount'ta `setToastHandler(showToast)` kaydeder;
 // kayıtlı değilse `emitToast` false döner → çağıran bloklayan `platformAlert`'e fallback yapar.

@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * UpgradeModal — gated bir özelliğe (real-time / research / üst-plan) dokununca gösterilen
  * BİLGİLENDİRİCİ modal. A1 + Apple 3.1.1: uygulama İÇİNDE satın-alma linki/CTA YOK — yalnız
@@ -15,7 +16,7 @@ export type UpgradeFeature = "realtime" | "research" | "tier";
 const COPY: Record<UpgradeFeature, { title: string; desc: string; Icon: typeof Zap }> = {
   realtime: {
     title: "Gerçek-zamanlı işlem",
-    desc: "Anlık, kuyruksuz AI Pro kapalı-döngü tedavi Pro+ planında sunulur. Pro planında istekler paylaşımlı kuyruğa girer.",
+    desc: "Anlık, kuyruksuz AI Pro kapalı-döngü seans Pro+ planında sunulur. Pro planında istekler paylaşımlı kuyruğa girer.",
     Icon: Zap,
   },
   research: {

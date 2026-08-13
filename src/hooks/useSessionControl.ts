@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 /**
  * useSessionControl — Seans başlatma/durdurma/izleme iş mantığı.
  *
@@ -6,6 +7,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiPost, apiGet, platformAlert } from "@/services/apiClient";
+import { emitToast } from "@/services/toastBridge";
+import {
+  performEmergencyStop,
+  EMERGENCY_STOP_UNCONFIRMED_TITLE,
+  EMERGENCY_STOP_UNCONFIRMED_BODY,
+} from "@/services/emergencyStop";
 import type { ActiveTreatment } from "@/types/domain";
 
 export interface SessionStartParams {
@@ -29,6 +36,12 @@ export interface SessionControlResult {
   remainingSec: number;
   loading: boolean;
   error: string | null;
+  /** Acil durdurma komutu uçuşta mı — buton "Durduruluyor…" gösterebilsin (~21sn sürebilir). */
+  stopping: boolean;
+  /** SON hatayı SENKRON okur. `error` state'i, onu tetikleyen `await startSession(...)` satırının
+   *  hemen ardından HENÜZ güncellenmemiş olur (aynı render'ın closure'ı okunur) → çağıranlar
+   *  bir ÖNCEKİ hatayı, ilk denemede de `null` görüyordu. Ref her zaman günceldir. */
+  lastError: () => string | null;
   startSession: (params: SessionStartParams) => Promise<boolean>;
   stopSession: () => Promise<boolean>;
   emergencyStop: () => Promise<void>;
@@ -51,11 +64,6 @@ interface SessionActionResponse {
   session?: unknown;
   warning?: string;
 }
-/** POST /api/hardware/emergency_stop (bridge) yanıtı — donanım durdurma teyidi. */
-interface EmergencyStopResponse {
-  stmStopped?: boolean;
-  mqttResults?: { mqtt?: string }[];
-}
 
 export function useSessionControl(): SessionControlResult {
   const [isActive, setIsActive] = useState(false);
@@ -63,7 +71,14 @@ export function useSessionControl(): SessionControlResult {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `error` state'inin SENKRON ikizi (stale-closure okumaları için — bkz. lastError).
+  const lastErrorRef = useRef<string | null>(null);
+  const setErrorBoth = useCallback((e: string | null) => {
+    lastErrorRef.current = e;
+    setError(e);
+  }, []);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationSecRef = useRef(0);
@@ -173,7 +188,11 @@ export function useSessionControl(): SessionControlResult {
 
   const startSession = useCallback(async (params: SessionStartParams): Promise<boolean> => {
     setLoading(true);
-    setError(null);
+    setErrorBoth(null);
+    // ⚠️ 2026-08-09: sunucunun REDDETME GEREKÇESİ. En kritik hâli, tıbbi kayıt DB'si açılamadığında
+    // dönen 503'tür: eskiden ekranda yalnız "Seans başlatılamadı." yazıyordu ve veteriner, hasta
+    // masadayken sebebi anlayamıyordu. Gerekçe varsa AYNEN gösterilir.
+    let sunucuGerekce = "";
     try {
       const result = await apiPost<SessionActionResponse | null>("/session/start", {
         patient_id: params.patientId ?? "",
@@ -187,7 +206,7 @@ export function useSessionControl(): SessionControlResult {
         duration_minutes: params.durationMinutes,
         coil_ids: params.coilIds ?? [],
         operator_email: params.operatorEmail ?? "",
-      }, null);
+      }, null, { onHttpError: (_s, detail) => { sunucuGerekce = detail || ""; } });
 
       if (result?.status === "success" || result?.session) {
         const totalSec = params.durationMinutes * 60;
@@ -204,15 +223,15 @@ export function useSessionControl(): SessionControlResult {
         startTimer(totalSec);
         return true;
       }
-      setError("Seans başlatılamadı.");
+      setErrorBoth(sunucuGerekce || "Seans başlatılamadı.");
       return false;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Hata oluştu.");
+      setErrorBoth(e instanceof Error ? e.message : "Hata oluştu.");
       return false;
     } finally {
       setLoading(false);
     }
-  }, [startTimer]);
+  }, [startTimer, setErrorBoth]);
 
   const stopSession = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -242,51 +261,25 @@ export function useSessionControl(): SessionControlResult {
   }, [stopTimer]);
 
   const emergencyStop = useCallback(async (): Promise<void> => {
-    let confirmed = false;
-    try {
-      // Backend emergency stop hem STM32'ye hem MQTT/ESP'ye stop gönderir.
-      const { serviceConfig } = require("@/services/config");
-      // GÜVENLİK: ham fetch TIMEOUT'suzdu → yarı-açık tünelde (cihaz erişilir ama soket takılı)
-      // ne resolve ne reject eder; catch fallback'i (/session/stop + stop_all_coils) ve
-      // "DOĞRULANAMADI → fiziksel güç düğmesi" uyarısı HİÇ çalışmaz, buton sessizce asılır.
-      // AbortController ile ~5sn sonra abort → deterministik olarak catch'e düşer.
-      const _esCtrl = new AbortController();
-      const _esTimer = setTimeout(() => _esCtrl.abort(), 5000);
-      let response: Response;
-      try {
-        response = await fetch(`${serviceConfig.bridgeBaseUrl}/hardware/emergency_stop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: _esCtrl.signal,
-        });
-      } finally {
-        clearTimeout(_esTimer);
-      }
-      if (!response.ok) throw new Error(`Emergency stop failed: ${response.status}`);
-      const data = (await response.json().catch(() => null)) as EmergencyStopResponse | null;
-      if (data) {
-        const mqttOk = Array.isArray(data.mqttResults) && data.mqttResults.some((r) => r?.mqtt === "success");
-        confirmed = Boolean(data.stmStopped) || mqttOk;
-      }
-    } catch {
-      // Bridge'e erişilemezse API server üzerinden dene
-      try {
-        await apiPost<SessionActionResponse | null>("/session/stop", {}, null);
-        const r = await apiPost<SessionActionResponse | null>("/hardware/command", { command: "stop_all_coils", params: {} }, null);
-        confirmed = r?.status === "success";
-      } catch { /* best effort */ }
-    }
+    // GERİ BİLDİRİM (#17): en kötü durumda bridge 5sn + iki yedek istek 8+8sn = ~21sn sürebilir.
+    // Eskiden bu sürenin TAMAMI boyunca ekranda HİÇBİR şey olmuyordu → operatör butonun çalışmadığını
+    // sanıp tekrar tekrar basıyordu. Komut gider gitmez durumu bildir.
+    setStopping(true);
+    emitToast("Acil durdurma gönderiliyor…", "info");
+    // Durdurma mantığı services/emergencyStop.ts'te (tek kaynak) — çıkış/profil-değiştirme kapıları
+    // da aynı fonksiyonu çağırır, böylece davranış hiçbir yerde ayrışmaz.
+    const { confirmed } = await performEmergencyStop();
     stopTimer();
     setIsActive(false);
     setTreatment((prev) => prev ? { ...prev, isActive: false } : null);
     setElapsedSec(0);
     setRemainingSec(0);
+    setStopping(false);
     if (!confirmed) {
       // Güvenlik: donanımın durduğu teyit edilemedi — web dahil HER platformda göster (Alert.alert web'de no-op).
-      platformAlert(
-        "⚠️ ACİL DURDURMA DOĞRULANAMADI",
-        "Donanımın durduğu teyit edilemedi. Bobinler hâlâ çalışıyor olabilir — cihazı fiziksel güç düğmesinden kapatın."
-      );
+      platformAlert(EMERGENCY_STOP_UNCONFIRMED_TITLE, EMERGENCY_STOP_UNCONFIRMED_BODY);
+    } else {
+      emitToast("Tüm bobinler durduruldu ✓", "success");
     }
   }, [stopTimer]);
 
@@ -296,7 +289,9 @@ export function useSessionControl(): SessionControlResult {
     elapsedSec,
     remainingSec,
     loading,
+    stopping,
     error,
+    lastError: () => lastErrorRef.current,
     startSession,
     stopSession,
     emergencyStop,

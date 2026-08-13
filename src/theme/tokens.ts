@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { Dimensions, Platform } from "react-native";
 import type { ViewStyle } from "react-native";
 

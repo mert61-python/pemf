@@ -1,3 +1,4 @@
+// Author: mertaygn, cglrgrkn
 import { useEffect } from "react";
 import type { NetInfoState } from "@react-native-community/netinfo";
 

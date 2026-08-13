@@ -1,15 +1,20 @@
+// Author: mertaygn, cglrgrkn
 /**
- * supabaseAuth — operatör hesabı artık SUPABASE AUTH ile (e-posta/şifre + GERÇEK e-posta doğrulama
- * + e-posta ile şifre-sıfırlama; endüstri standardı, ücretsiz). Yerel auth_db devralındı.
+ * supabaseAuth — operatör hesabı SUPABASE AUTH ile (e-posta/şifre). Yerel auth_db devralındı.
  *
- * Akış: signUp → Supabase doğrulama e-postası gönderir → kullanıcı linke tıklar → AUTH_VERIFY_URL
- * (GitHub Pages "onaylandı" sayfası) açılır → uygulamaya dönüp giriş yapar. Oturum supabase-js ile
- * KALICI ve GÜVENLİ: native'de SecureStore (Keychain/Keystore, parçalı), web'de AsyncStorage.
- * Cihaz-token (X-API-Key) katmanı AYRI ve DEĞİŞMEDİ.
+ * ⚠️ E-POSTA DOĞRULAMA KALDIRILDI (2026-08-06, sahip kararı).
+ *   Supabase projesinde `mailer_autoconfirm = true` → kayıt ANINDA oturum açılır, doğrulama
+ *   e-postası HİÇ gönderilmez. Uygulama tarafındaki doğrulama akışı (bekleme ekranı, "tekrar
+ *   gönder" düğmesi, "önce e-postanı doğrula" mesajları) bu yüzden SÖKÜLDÜ: var olmayan bir
+ *   e-postayı bekleten arayüz, operatörü giremediği bir hesapta kilitli sanmasına yol açıyordu.
+ *   Supabase yalnız KAYIT + GİRİŞ için kullanılır.
+ *   → Doğrulamayı geri istersen: Supabase panosunda "Confirm email" AÇ, sonra bu akışı geri ekle.
+ *      Yalnız birini yapmak (panoda açıp uygulamada kapalı bırakmak) hesapları kilitler.
  *
- * ⚠️ Supabase panosunda YAPILMASI GEREKENLER (kodla yapılamaz):
- *   1) Authentication → Providers → Email AÇIK + "Confirm email" AÇIK
- *   2) Authentication → URL Configuration → Site URL + Redirect URLs = aşağıdaki AUTH_VERIFY_URL & AUTH_RESET_URL
+ * Oturum supabase-js ile KALICI ve GÜVENLİ: native'de SecureStore (Keychain/Keystore, parçalı),
+ * web'de AsyncStorage. Cihaz-token (X-API-Key) katmanı AYRI ve DEĞİŞMEDİ.
+ *
+ * Şifre SIFIRLAMA duruyor (doğrulamadan bağımsız bir özellik) — AUTH_RESET_URL üzerinden.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
@@ -21,9 +26,9 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT";
 
-// E-posta linklerinin döneceği GitHub Pages sayfaları. Supabase "Redirect URLs" + "Site URL"
+// Şifre-sıfırlama linkinin döneceği GitHub Pages sayfası. Supabase "Redirect URLs" + "Site URL"
 // ile BİREBİR eşleşmeli. Farklı repo/kullanıcı kullanırsan burayı değiştir.
-export const AUTH_VERIFY_URL = "https://mert61-python.github.io/pemf-update/auth/verified.html";
+// (AUTH_VERIFY_URL kaldırıldı — e-posta doğrulama akışı yok; bkz. dosya başı.)
 export const AUTH_RESET_URL = "https://mert61-python.github.io/pemf-update/auth/reset.html";
 
 // ── Güvenli oturum saklama (SecureStore) ─────────────────────────────────────────────────────
@@ -105,18 +110,23 @@ export const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_KEY, {
 export interface AuthResult {
   ok: boolean;
   error?: string;
-  needsVerification?: boolean; // kayıt sonrası doğrulama e-postası bekleniyor / giriş öncesi doğrula
 }
 
 /** Supabase hata mesajını kullanıcı-dostu Türkçe'ye çevir. */
 function mapError(msg: string): string {
   const m = (msg || "").toLowerCase();
+  // HESAP SAYIMI (enumeration): "Bu e-posta ile zaten bir hesap var" cevabı, kayıt formuna
+  // e-posta girerek o adresin sistemde KAYITLI olup olmadığını kesin öğrenmeye yarıyordu —
+  // klinik/veteriner hesaplarının hedeflenmesini kolaylaştırır. Supabase'in giriş tarafı bunu
+  // zaten sızdırmıyor (doğrulanmamış hesaba da jenerik hata döner); kayıt tarafını da hizala.
+  // Kullanıcı yönü kaybolmasın diye "giriş yapmayı deneyin" yönlendirmesi KORUNUR.
   if (m.includes("already registered") || m.includes("already been registered") || m.includes("user already"))
-    return "Bu e-posta ile zaten bir hesap var. Giriş yapın.";
+    return "Kayıt tamamlanamadı. Bu adresi zaten kullanıyorsanız giriş yapmayı ya da şifrenizi sıfırlamayı deneyin.";
+  // Doğrulama akışı kaldırıldığı için mesaj artık SADE: hesap doğrulanmamış olamaz
+  // (Supabase autoconfirm açık). Kullanıcıyı olmayan bir e-postayı beklemeye yönlendirme.
+  // Boşluk ipucu bilinçli: şifrenin sonundaki görünmez boşluk gerçek bir giriş hatası sebebiydi.
   if (m.includes("invalid login") || m.includes("invalid credentials"))
-    return "E-posta veya şifre hatalı.";
-  if (m.includes("email not confirmed") || m.includes("not confirmed"))
-    return "Önce e-postanı doğrula (gelen kutunu kontrol et).";
+    return "E-posta veya şifre hatalı. Şifrede istemsiz boşluk olabilir; büyük/küçük harfe de dikkat edin.";
   if (m.includes("rate") || m.includes("too many") || m.includes("29 seconds") || m.includes("security purposes"))
     return "Çok fazla deneme. Biraz bekleyip tekrar dene.";
   if (m.includes("network") || m.includes("fetch") || m.includes("failed to"))
@@ -128,7 +138,8 @@ function mapError(msg: string): string {
   return msg || "İşlem başarısız.";
 }
 
-/** Yeni hesap — Supabase doğrulama e-postası gönderir. Confirm-email açıkken session NULL döner → doğrula. */
+/** Yeni hesap. Supabase autoconfirm AÇIK → oturum ANINDA kurulur; doğrulama e-postası YOK.
+ *  `emailRedirectTo` de kaldırıldı (gönderilecek bir e-posta olmadığı için işlevsizdi). */
 export async function signUpUser(
   email: string,
   password: string,
@@ -137,30 +148,41 @@ export async function signUpUser(
   try {
     const { data, error } = await supabaseAuth.auth.signUp({
       email: (email || "").trim(),
-      password,
+      // Kayıt ve giriş AYNI kuralı uygulamalı; aksi halde boşlukla kaydolan hesap
+      // boşluksuz giremez (ya da tersi) → kalıcı kilitlenme.
+      password: trimPw(password),
       // options.data → Supabase user_metadata (veteriner/klinik profili; hesapla birlikte taşınır).
-      options: { emailRedirectTo: AUTH_VERIFY_URL, data: meta || {} },
+      options: { data: meta || {} },
     });
     if (error) return { ok: false, error: mapError(error.message) };
-    // Confirm-email AÇIK → user oluşur, session yok → doğrulama gerekli.
-    if (!data.session) return { ok: true, needsVerification: true };
-    return { ok: true }; // (confirm-email kapalıysa doğrudan giriş — onAuthStateChange yakalar)
+    // Oturum normalde HEMEN gelir (autoconfirm). Gelmediyse panoda "Confirm email" tekrar
+    // AÇILMIŞ demektir — bu durumda kullanıcı giremez ve sebebini bilemez; açıkça söyle.
+    if (!data.session) {
+      return {
+        ok: false,
+        error: "Hesap oluşturuldu ama oturum açılamadı. Sunucuda e-posta onayı açık olabilir — yöneticinize bildirin.",
+      };
+    }
+    return { ok: true };
   } catch (e: any) {
     return { ok: false, error: mapError(String(e?.message || e)) };
   }
 }
 
-/** Giriş. E-posta doğrulanmamışsa net mesaj + needsVerification. Başarıda oturumu supabase-js kurar (onAuthStateChange). */
+/** Şifrenin BAŞINDAKİ/SONUNDAKİ boşluğu at (iç boşluk korunur — gerçek parola karakteri olabilir).
+ *  E-posta zaten trim ediliyordu ama ŞİFRE edilmiyordu: mobil klavye/pano/şifre yöneticisi sona
+ *  boşluk eklediğinde Supabase bunu farklı bir şifre sayıp reddediyor, kullanıcı ise ekranda
+ *  hiçbir fark göremediği için "E-posta veya şifre hatalı" mesajını çözemiyordu. */
+const trimPw = (p: string): string => (p || "").replace(/^\s+|\s+$/g, "");
+
+/** Giriş. Başarıda oturumu supabase-js kurar (onAuthStateChange yakalar). */
 export async function signInUser(email: string, password: string): Promise<AuthResult> {
   try {
     const { error } = await supabaseAuth.auth.signInWithPassword({
       email: (email || "").trim(),
-      password,
+      password: trimPw(password),
     });
-    if (error) {
-      const needsVerify = /not confirmed|confirm your email/i.test(error.message);
-      return { ok: false, error: mapError(error.message), needsVerification: needsVerify };
-    }
+    if (error) return { ok: false, error: mapError(error.message) };
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: mapError(String(e?.message || e)) };
@@ -180,20 +202,9 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
   }
 }
 
-/** Doğrulama e-postasını yeniden gönder (kullanıcı ilkini bulamazsa). */
-export async function resendVerification(email: string): Promise<AuthResult> {
-  try {
-    const { error } = await supabaseAuth.auth.resend({
-      type: "signup",
-      email: (email || "").trim(),
-      options: { emailRedirectTo: AUTH_VERIFY_URL },
-    });
-    if (error) return { ok: false, error: mapError(error.message) };
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: mapError(String(e?.message || e)) };
-  }
-}
+// `resendVerification` KALDIRILDI (2026-08-06): Supabase autoconfirm açıkken `auth.resend({type:
+// "signup"})` gönderecek bir doğrulama e-postası bulamaz; düğme kullanıcıya "gönderildi" deyip
+// hiçbir şey yapmıyordu. Doğrulama geri açılırsa bu fonksiyon da geri gelmeli.
 
 export async function signOutUser(): Promise<void> {
   try {

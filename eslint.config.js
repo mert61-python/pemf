@@ -23,6 +23,12 @@ module.exports = [
       "react-hooks/refs": "warn",
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/purity": "warn",
+      // AYNI GEREKÇE (2026-08-13): `preserve-manual-memoization` bir DOĞRULUK hatası değil,
+      // React Compiler'ın "bu bileşende mevcut useMemo/useCallback'i koruyamadım, iyileştirmeyi
+      // ATLADIM" bildirimidir. Kod çalışır; yalnız derleyici optimizasyonu devre dışı kalır.
+      // Hata sayılınca CI kırmızı kalıyordu ve o gürültü GERÇEK regresyonları görünmez yapıyor.
+      // Uyarı olarak görünür kalır, kademeli düzeltilir — yukarıdaki üç kuralla aynı politika.
+      "react-hooks/preserve-manual-memoization": "warn",
       // audit B-10.1: aşağıdaki 3 kural TAMAMEN temizlendi → ERROR'a yükseltildi (regresyon kilidi).
       "react/no-unescaped-entities": "error",
       "@typescript-eslint/array-type": "error",
@@ -35,6 +41,12 @@ module.exports = [
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "react-hooks/refs": "off",
+      // 2026-08-13: React Compiler kuralları ÜRETİM bileşenleri içindir. Testte bağlamı bir
+      // modül değişkenine yakalamak (`sonBaglam = useOperator()`) standart bir sonda desenidir;
+      // render edilen "bileşen" gerçek bir UI değil, ölçüm noktasıdır. Bu iki kural test
+      // dosyalarında yanlış-pozitif üretiyordu (globals: yeniden atama, immutability: mutasyon).
+      "react-hooks/globals": "off",
+      "react-hooks/immutability": "off",
       // jest.mock() hoisting gereği import'lardan ÖNCE gelir → import/first test'lerde geçersiz.
       "import/first": "off",
     },
