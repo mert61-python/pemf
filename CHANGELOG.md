@@ -30,6 +30,22 @@ geçmiyorsa test kırılır.
 
 ---
 
+## mobile 2.3.13 — 2026-08-13 (rehber artık gerçekten açılıyor)
+
+**Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.13.apk` (sha `9d9463e64fdf`, versionCode 20).
+
+2.3.12'de eklenen eşleştirme rehberi **sahada hiç açılmadı**. Şerit "daha önce eşleşilmiş mi"
+diye kayıtlı cihaz kimliğine bakıyor, yalnız kimlik **yoksa** rehberi açıyordu. Ama
+`checkHealth` **her başarılı bağlantıda** kimliği saklar — LAN keşfi dahil. Yani aynı ağda bir
+kez bağlanmış her kullanıcıda kimlik vardır ve koşul hiçbir zaman sağlanmaz. "Hiç eşleşilmemiş"
+sanılan sinyal aslında "hiç bağlanmamış"tı.
+
+Artık **tahmin yok**: çevrimdışıyken şerit her zaman tek bir eylemli kapı açar ve rehber iki
+yolu da sunar — *"Yeniden Dene"* (aynı ağdaki geçici kopma, kod gerekmez) ve *kod girişi*
+(farklı ağ). Hangisinin geçerli olduğunu kullanıcı bilir.
+
+---
+
 ## mobile 2.3.12 — 2026-08-13 (farklı ağdaki ilk açılış için eşleştirme rehberi)
 
 **Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.12.apk` (sha `0cd353b58632`, versionCode 19).

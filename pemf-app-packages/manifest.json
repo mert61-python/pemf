@@ -85,12 +85,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.12",
-      "versionCode": 19,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.12.apk",
-      "sha256": "0cd353b58632adbd253bb0c5fc9de7e49c963bc007eff901b9429f2445c2711c",
-      "size": 128392307,
-      "notes": "Farkli agdaki ilk acilis icin yonlendirilmis eslestirme akisi: cihaz bulunamayinca serit rehberi acar, kodun cihazda nerede yazdigini gosterir ve girisi ayni ekranda verir."
+      "version": "2.3.13",
+      "versionCode": 20,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.13.apk",
+      "sha256": "9d9463e64fdff53be688f9d2272b81ce92ebabf8c966f1de6138bdb3fc700c6b",
+      "size": 128392259,
+      "notes": "Cihaz bulunamayinca serit artik REHBER aciyor: ayni agdaysaniz 'Yeniden Dene', farkli agdaysaniz cihaz ekranindaki eslestirme kodunu girin. 2.3.12'de rehber yanlis kosul yuzunden hic acilmiyordu."
     }
   }
 }
