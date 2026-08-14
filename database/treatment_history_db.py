@@ -95,7 +95,10 @@ class TreatmentHistoryDB:
         # Veritabanını başlat
         self._init_database()
         self._run_startup_migrations_with_rollback()
-        self.recover_stale_active_sessions(max_age_hours=12)
+        # ⚠️ 0 = YAŞ FİLTRESİ YOK. Burası AÇILIŞ yoludur; açılışta bu cihazın hiçbir seansı
+        # canlı olamaz. Eski 12 saatlik eşik yüzünden çökmeden kalan seanslar `active` kalıyor
+        # ve uygulanan doz hiç yazılmıyordu (kampanya bulgusu S01).
+        self.recover_stale_active_sessions(max_age_hours=0)
         # Açılışta otomatik bütünlük kontrolü (bozulmayı erken yakala — eskiden hiç çağrılmıyordu).
         try:
             _ic = self.run_integrity_check(quick=True)
@@ -1313,8 +1316,46 @@ class TreatmentHistoryDB:
         except (TypeError, ValueError):
             return 0
 
+    def _seansin_son_kaniti(self, cursor, session_id: int, baslangic_epoch: float):
+        """Seansın DİSKTE İZ BIRAKAN son anı (epoch) — yoksa None.
+
+        ⚠️ Bitişi `datetime.now()` yazmak YANLIŞ TIBBİ KAYIT üretir: cihaz günlerce kapalı
+        kalmış olabilir ve kayıt "3 gün süren tedavi" der. Yanlış kayıt, eksik kayıttan daha
+        kötüdür — denetimde gerçek sanılır. Bu yüzden bitiş KANITTAN türetilir: son bobin
+        çalışması ve son sensör örneği (ikisinin en büyüğü).
+        """
+        en_son = None
+        for sorgu, parametre in (
+            (
+                "SELECT MAX(COALESCE(ended_epoch, started_epoch)) FROM session_coil_runs WHERE session_id = ?",
+                (session_id,),
+            ),
+            ("SELECT MAX(sample_ts) FROM sensor_samples WHERE session_id = ?", (session_id,)),
+        ):
+            try:
+                deger = cursor.execute(sorgu, parametre).fetchone()[0]
+            except Exception:
+                deger = None  # tablo/sütun yoksa (eski şema) kanıt aramayı BOZMA
+            if deger is not None and (en_son is None or float(deger) > en_son):
+                en_son = float(deger)
+        # Kanıt seans başlangıcından ÖNCEYSE güvenilmez (saat değişimi / bozuk satır).
+        if en_son is not None and en_son < baslangic_epoch:
+            return None
+        return en_son
+
     def recover_stale_active_sessions(self, max_age_hours: int = 12) -> int:
-        """Açık kalmış eski active seansları güvenli şekilde kapat (recovery)."""
+        """Açık kalmış `active` seansları güvenli şekilde kapat (recovery).
+
+        `max_age_hours <= 0` → YAŞ FİLTRESİ YOK, tüm `active` seanslar kapatılır.
+
+        ⚠️ AÇILIŞTA YAŞ FİLTRESİ UYGULANMAZ (kampanya bulgusu S01, 2026-08-14). Bu metodun
+        TEK çağrıldığı yer `__init__`, yani BACKEND AÇILIŞIDIR; açılışta bu cihazın hiçbir
+        seansı canlı olamaz — süreç yeni başlamıştır. Eski 12 saatlik eşik, çalıştığı tek
+        bağlamda hiçbir şey korumuyor, yalnızca kaydı belirsiz bırakıyordu: seans sürerken
+        çöken bir cihaz yeniden açıldığında kayıt `active` / `end_time=NULL` /
+        `duration_minutes=NULL` kalıyor, üstelik bobin çalışmaları da kapanmıyordu →
+        **hastaya uygulanan doz hiç yazılmıyordu.**
+        """
         recovered_count = 0
         try:
             with self._get_connection() as conn:
@@ -1327,7 +1368,8 @@ class TreatmentHistoryDB:
                 rows = cursor.fetchall()
 
                 now = datetime.now()
-                threshold = now - timedelta(hours=max(1, int(max_age_hours)))
+                yas_filtresi = int(max_age_hours) > 0
+                threshold = now - timedelta(hours=max(1, int(max_age_hours))) if yas_filtresi else None
 
                 for row in rows:
                     session_id = int(row['id'])
@@ -1338,12 +1380,34 @@ class TreatmentHistoryDB:
                         started_at = datetime.strptime(f"{session_date} {start_time}", '%Y-%m-%d %H:%M:%S')
                     except ValueError:
                         # Parse edilemeyen kaydı da recovery et
-                        started_at = now - timedelta(hours=max_age_hours + 1)
+                        started_at = now - timedelta(hours=abs(int(max_age_hours)) + 1)
 
-                    if started_at > threshold:
+                    if yas_filtresi and started_at > threshold:
                         continue
 
-                    duration_minutes = max(1, int((now - started_at).total_seconds() / 60))
+                    # Bitiş: KANITTAN (bkz. `_seansin_son_kaniti`); kanıt yoksa başlangıç.
+                    baslangic_epoch = started_at.timestamp()
+                    son_kanit = self._seansin_son_kaniti(cursor, session_id, baslangic_epoch)
+                    bitis_epoch = son_kanit if son_kanit is not None else baslangic_epoch
+                    bitis_dt = datetime.fromtimestamp(bitis_epoch)
+                    duration_minutes = max(0, int((bitis_epoch - baslangic_epoch) / 60))
+
+                    # ⚠️ DOZ KAYDI seans satırında DEĞİL, bobin çalışmalarında durur. Seansı
+                    # kapatıp bunları açık bırakmak "hangi bobin ne kadar sürdü"yü cevapsız
+                    # bırakır — kaydın tıbbi değeri kalmaz.
+                    try:
+                        cursor.execute(
+                            '''
+                            UPDATE session_coil_runs
+                            SET ended_epoch = ?,
+                                duration_seconds = MAX(0, ? - started_epoch)
+                            WHERE session_id = ? AND ended_epoch IS NULL
+                        ''',
+                            (bitis_epoch, bitis_epoch, session_id),
+                        )
+                    except Exception:
+                        self.logger.warning("Kurtarma: bobin calismalari kapatilamadi (seans %s)", session_id)
+
                     cursor.execute(
                         '''
                         UPDATE treatment_sessions
@@ -1353,7 +1417,7 @@ class TreatmentHistoryDB:
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     ''',
-                        (now.strftime('%H:%M:%S'), duration_minutes, session_id),
+                        (bitis_dt.strftime('%H:%M:%S'), duration_minutes, session_id),
                     )
                     recovered_count += 1
 
