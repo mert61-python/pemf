@@ -43,10 +43,12 @@ türetilir ve indirme `Range` başlığıyla oradan sürer. Bu, kaydedilmiş bir
 bağlanmaktan daha sağlamdır: uygulama çökerse ya da işletim sistemi onu öldürürse — devam etmenin
 asıl gerekli olduğu an — jetonu diske yazma fırsatı zaten olmaz, ama dosya oradadır.
 
-**Arka planda durmuyor.** İndirme uygulamanın kendi iş parçacığında değil, sistemin arka plan
-kuyruğunda yürür ve Android'de siz başka bir uygulamaya geçtiğinizde ya da ekran kilitlendiğinde
-koşmaya devam eder; indirme kendiliğinden tamamlanır. (Bu sürümün ilk denemesinde arka plana
-geçişte indirme *duraklatılıyordu* — tamamlanacak bir işi durdurmak olduğu için kaldırıldı.)
+**Arka planda durmuyor.** İndirme arayüzden ayrı bir iş parçacığında yürür ve Android'de siz
+başka bir uygulamaya geçtiğinizde ya da ekran kilitlendiğinde koşmaya devam eder; indirme
+kendiliğinden tamamlanır. (Bu sürümün ilk denemesinde arka plana geçişte indirme
+*duraklatılıyordu* — tamamlanacak bir işi durdurmak olduğu için kaldırıldı.) Sistem, belleğe
+ihtiyaç duyup uygulamayı yine de kapatırsa indirme durur; o durumda yukarıdaki devam mekanizması
+devreye girer ve sonraki açılışta kaldığı yerden sürer.
 
 Kenar durumlar da kapatıldı: paket tam inmiş ama kurulum onayı verilmeden çıkılmışsa yeniden
 indirilmez; başka bir sürümün yarım dosyası çöp sayılıp silinir; sunucunun devam isteğini yok
