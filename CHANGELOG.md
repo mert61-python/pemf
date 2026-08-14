@@ -30,6 +30,35 @@ geçmiyorsa test kırılır.
 
 ---
 
+## mobile 2.3.14 — 2026-08-14 (güncelleme indirmesi kaldığı yerden devam eder)
+
+**Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.14.apk` (sha `fee5e8817441`, versionCode 21).
+
+Güncelleme indirmesi **%10'dayken uygulamayı kapatıp açınca sıfırdan başlıyordu** ve **başka bir
+uygulamaya geçildiğinde ya da ekran kilitlendiğinde tamamlanıp tamamlanmadığı belirsizdi**. 128
+MB'lık paketi mobil veriyle baştan indirmek hem zaman hem kota kaybıdır.
+
+**Artık kaldığı yerden devam ediyor.** Devam noktası, diskteki yarım dosyanın kendi boyutundan
+türetilir ve indirme `Range` başlığıyla oradan sürer. Bu, kaydedilmiş bir "devam jetonuna"
+bağlanmaktan daha sağlamdır: uygulama çökerse ya da işletim sistemi onu öldürürse — devam etmenin
+asıl gerekli olduğu an — jetonu diske yazma fırsatı zaten olmaz, ama dosya oradadır.
+
+**Arka planda durmuyor.** İndirme uygulamanın kendi iş parçacığında değil, sistemin arka plan
+kuyruğunda yürür ve Android'de siz başka bir uygulamaya geçtiğinizde ya da ekran kilitlendiğinde
+koşmaya devam eder; indirme kendiliğinden tamamlanır. (Bu sürümün ilk denemesinde arka plana
+geçişte indirme *duraklatılıyordu* — tamamlanacak bir işi durdurmak olduğu için kaldırıldı.)
+
+Kenar durumlar da kapatıldı: paket tam inmiş ama kurulum onayı verilmeden çıkılmışsa yeniden
+indirilmez; başka bir sürümün yarım dosyası çöp sayılıp silinir; sunucunun devam isteğini yok
+sayması hâlinde bozulan dosya boyut denetiminde yakalanır ve sonraki deneme temiz başlar; ağ
+koparsa yarım dosya **bilerek korunur** ki tekrar denendiğinde baştan inmesin.
+
+**Hasta güvenliği ve veri:** etkilenmez. Değişiklik yalnız güncelleme paketinin indirilmesini
+kapsar; kurulumun güven çıpası değişmedi (Android, kurulu uygulamayla aynı anahtarla
+imzalanmamış bir APK'yı kabul etmez).
+
+---
+
 ## mobile 2.3.13 — 2026-08-13 (rehber artık gerçekten açılıyor)
 
 **Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.13.apk` (sha `9d9463e64fdf`, versionCode 20).
