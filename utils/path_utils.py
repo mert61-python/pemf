@@ -162,6 +162,20 @@ def _ham_sqlcipher_anahtari(kok: Path) -> str:
         return ""
 
 
+#: Göçün SÜREÇ BAŞINA bir kez çalıştığı hedef kökler.
+#
+# ⚠️ SAHA (2026-08-14) — CİHAZ HİÇ AÇILMIYORDU, kurtarma zarfı GERİ ALINIYORDU. `get_app_data_directory`
+# göçü HER çağrıda tetikliyordu ve o fonksiyon sıcak yolda (device_id, pairing_code, SecretsManager…)
+# defalarca çağrılıyor. Zincir şuydu:
+#   at-rest anahtarı DB'ye uymuyor → kurtarma DB'yi karantinaya alıyor (doğru davranış)
+#   → temiz DB açmak için anahtar isteniyor → SecretsManager → get_app_data_directory
+#   → GÖÇ YENİDEN ÇALIŞIYOR → az önce kenara alınan BOZUK DB eski kökten GERİ KOPYALANIYOR
+#   → yeni bağlantı yine bozuk dosyayı açıyor → "file is not a database" → backend ÖLÜYOR.
+# Yani tuğlalaşmayı önlemek için yazılmış zarfın işini, göçün kendisi geri alıyordu.
+# Göç zaten TASARIM GEREĞİ tek seferliktir (bkz. fonksiyon başlığı: "bir kez").
+_GOC_YAPILDI: set = set()
+
+
 def _kullanicidan_makineye_gocur(hedef: Path) -> None:
     """Tıbbi kaydı `%APPDATA%\\PEMF_GUI`den makine-geneli köke TAŞI (bir kez).
 
@@ -180,6 +194,12 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
     try:
         if platform.system() != "Windows":
             return
+        # ⚠️ SÜREÇ BAŞINA BİR KEZ (bkz. `_GOC_YAPILDI`): tekrar çalışması, karantinaya alınmış
+        # bozuk bir DB'yi geri getirip cihazı açılamaz hâle sokuyordu.
+        anahtar = str(hedef.resolve()) if hedef.exists() else str(hedef)
+        if anahtar in _GOC_YAPILDI:
+            return
+        _GOC_YAPILDI.add(anahtar)
         eski_kok = os.getenv("APPDATA")
         if not eski_kok:
             return

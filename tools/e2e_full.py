@@ -34,6 +34,30 @@ _results = []
 _section = ""
 
 
+# ⚠️ TEK NOKTADAN ÇÖZÜM (2026-08-14): Windows konsolu cp1254 ve bu betik "→", "───" gibi
+# karakterler basıyor. Her `print` ayrı ayrı yamanınca köstebek oyununa dönüyordu (üç ayrı
+# yerde patladı). Akışı bir kez "yazamadığını ? ile değiştir" moduna al: hiçbir `print` artık
+# UnicodeEncodeError atamaz, dolayısıyla teşhis çıktısı bir daha ASIL HATANIN yerine geçemez.
+try:
+    sys.stdout.reconfigure(errors="replace")
+    sys.stderr.reconfigure(errors="replace")
+except Exception:
+    pass
+
+
+def _konsola_guvenli(metin: str) -> str:
+    """Konsolun kaldıramadığı karakterleri ayıkla.
+
+    ⚠️ Windows konsolu cp1254; backend logunda "→" gibi karakterler var. `print` bunları
+    yazamayıp UnicodeEncodeError atıyordu ve bu istisna, BASILMAK ÜZERE OLAN GERÇEK HATANIN
+    yerine geçiyordu: ekranda "backend açılmadı" yerine kodlama hatası görünüyor, asıl sebep
+    (SQLCipher anahtar uyuşmazlığı) HİÇ görünmüyordu. Teşhis aracının kendisi teşhisi
+    gizliyorsa arıza iki kat pahalıya gelir.
+    """
+    kodlama = getattr(sys.stdout, "encoding", None) or "ascii"
+    return metin.encode(kodlama, "replace").decode(kodlama, "replace")
+
+
 def section(title):
     global _section
     _section = title
@@ -42,7 +66,7 @@ def section(title):
 
 def check(name, cond, detail=""):
     _results.append((bool(cond), f"[{_section}] {name}", detail))
-    print(f"  [{'GECTI' if cond else 'KALDI'}] {name}" + (f"  → {detail}" if detail else ""))
+    print(_konsola_guvenli(f"  [{'GECTI' if cond else 'KALDI'}] {name}" + (f"  -> {detail}" if detail else "")))
     return bool(cond)
 
 
@@ -114,6 +138,12 @@ def main():
             "PEMF_SIMULATE": "1",
             "PEMF_STM_PORT": "SIM",
             "PEMF_DATA_DIR": str(data_dir),
+            # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
+            # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
+            # göçünü çalıştırıyor (utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
+            # makinesindeki BAYAT, BAŞKA ANAHTARLA şifreli tedavi DB'sini test dizinine
+            # kopyalıyordu → `hmac check failed for pgno=1` → backend HİÇ açılmıyordu.
+            "APPDATA": str(data_dir / "_appdata"),
             "PEMF_API_HOST": "127.0.0.1",
             "PEMF_API_PORT": str(PORT),
             "PEMF_HEADLESS": "1",
@@ -154,7 +184,7 @@ def main():
             time.sleep(1)
         if not ready:
             print("BACKEND ACILMADI — log kuyrugu:")
-            print((data_dir / "backend.out").read_text("utf-8", "replace")[-4000:])
+            print(_konsola_guvenli((data_dir / "backend.out").read_text("utf-8", "replace")[-4000:]))
             return 1
         print("Backend hazir.")
         run_all()

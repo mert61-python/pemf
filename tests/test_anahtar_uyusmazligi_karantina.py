@@ -362,5 +362,88 @@ def test_KRITIK_anahtar_gocunce_SIFRELI_DB_de_tasinir(tmp_path, monkeypatch):
     assert path_utils._ham_sqlcipher_anahtari(hedef) == "MAKINE-ANAHTARI"
 
 
+def test_KRITIK_karantina_YETIM_TUTAMAC_varken_de_calisir(tmp_path):
+    """⚠️ SAHA 2026-08-14 — KURTARMA ZARFININ KENDİSİ CİHAZI TUĞLALAŞTIRIYORDU.
+
+    Anahtar uymadığında kurtarma DB'yi karantinaya alır ve temiz bir DB ile devam eder. Ama
+    karantina `[WinError 32] dosya başka bir işlem tarafından kullanılıyor` ile düşüyor,
+    çağıran bunu "karantina ALINAMADI" sayıp `RuntimeError` fırlatıyordu → **backend hiç
+    açılmıyordu.**
+
+    Kilidi tutan başka bir süreç DEĞİL, bu süreçteki başarısız SQLCipher bağlantısıdır:
+    `_connect_sqlcipher_if_configured` hatayı `last_err = e` ile saklıyor, istisnanın
+    traceback'i frame'i, frame de bağlantı nesnesini CANLI tutuyor → `close()` çağrılmış olsa
+    bile alttaki dosya tutamacı nesne toplanana kadar serbest kalmıyor. Bu test o durumu
+    birebir kurar: istisna nesnesi bilerek canlı tutulur.
+    """
+    db = tmp_path / "pemf_treatment_history.db"
+    _sifreli_db_yaz(db, "DOGRU-ANAHTAR")
+
+    def _yanlis_anahtarla_dene() -> bool:
+        """`_connect_sqlcipher_if_configured`ın BİREBİR deseni: hata `last_err`e alınır ve
+        fonksiyon döner. Frame yok olunca istisna→traceback→frame→bağlantı zinciri YETİM bir
+        REFERANS DÖNGÜSÜ olur: refcount onu toplayamaz, yalnız `gc` toplar. Tutamaç o ana
+        kadar açık kalır — karantinayı düşüren şey buydu."""
+        last_err = None
+        try:
+            c = sqlcipher.connect(str(db))
+            c.execute("PRAGMA key='YANLIS-ANAHTAR'")
+            c.execute("SELECT count(*) FROM sqlite_master")
+        except Exception as e:
+            last_err = e
+        return last_err is not None
+
+    assert _yanlis_anahtarla_dene(), "yanlis anahtar hata vermedi — test kurulumu gecersiz"
+
+    yeni = su.karantinaya_al(db)
+
+    assert yeni is not None, (
+        "yetim tutamac yuzunden karantina basarisiz → cagiran RuntimeError firlatir → CIHAZ ACILMAZ"
+    )
+    assert not db.exists(), "dosya kenara alinmadi"
+    assert Path(yeni).exists(), "karantina dosyasi yok — veri KAYBOLDU (silme YASAK)"
+
+
+def test_KRITIK_GOC_SUREC_BASINA_BIR_KEZ_calisir(tmp_path, monkeypatch):
+    """⚠️ SAHA 2026-08-14 — GÖÇ, KARANTİNAYI GERİ ALIYORDU (cihaz açılmıyordu).
+
+    `get_app_data_directory` göçü HER çağrıda tetikliyordu ve o fonksiyon sıcak yolda
+    (device_id, pairing_code, SecretsManager…) defalarca çağrılır. Zincir:
+
+        anahtar uymuyor → bozuk DB karantinaya alınır (doğru)
+        → temiz DB açmak için anahtar istenir → SecretsManager → get_app_data_directory
+        → GÖÇ YENİDEN ÇALIŞIR → az önce kenara alınan BOZUK DB geri kopyalanır
+        → yeni bağlantı yine bozuk dosyayı açar → "file is not a database" → backend ÖLÜR
+
+    Göç tasarım gereği tek seferliktir (bkz. fonksiyon başlığı: "bir kez"). Bu test, ikinci
+    çağrının kenara alınmış dosyayı GERİ GETİRMEDİĞİNİ kilitler.
+    """
+    from utils import path_utils
+
+    eski = tmp_path / "APPDATA" / "PEMF_GUI"
+    hedef = tmp_path / "ProgramData" / "PEMF_GUI"
+    eski.mkdir(parents=True)
+    hedef.mkdir(parents=True)
+    (eski / "pemf_treatment_history.db").write_bytes(b"SQLite format 3\x00" + b"veri" * 32)
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "APPDATA"))
+    monkeypatch.setattr(path_utils.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(path_utils, "_GOC_YAPILDI", set())  # süreç durumunu bu teste izole et
+
+    path_utils._kullanicidan_makineye_gocur(hedef)
+    tasinan = hedef / "pemf_treatment_history.db"
+    assert tasinan.exists(), "ilk goc calismadi — test kurulumu gecersiz"
+
+    # Kurtarma zarfı dosyayı karantinaya aldı:
+    tasinan.rename(hedef / "pemf_treatment_history.db.acilamadi-TEST")
+
+    # ...ve backend anahtar için get_app_data_directory'yi yeniden çağırdı:
+    path_utils._kullanicidan_makineye_gocur(hedef)
+
+    assert not tasinan.exists(), (
+        "GOC KARANTINAYI GERI ALDI: bozuk DB yeniden kopyalandi → cihaz sonsuz acilis hatasina girer"
+    )
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([os.path.abspath(__file__), "-v"]))

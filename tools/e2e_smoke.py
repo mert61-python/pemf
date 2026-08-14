@@ -39,9 +39,32 @@ BASE = f"http://127.0.0.1:{PORT}"
 _results = []
 
 
+# ⚠️ TEK NOKTADAN ÇÖZÜM (2026-08-14): Windows konsolu cp1254 ve bu betik "→" gibi karakterler
+# basıyor. Her `print` ayrı ayrı yamanınca köstebek oyununa dönüyor. Akışı bir kez "yazamadığını
+# ? ile değiştir" moduna al: hiçbir `print` artık UnicodeEncodeError atamaz, dolayısıyla teşhis
+# çıktısı bir daha ASIL HATANIN yerine geçemez.
+try:
+    sys.stdout.reconfigure(errors="replace")
+    sys.stderr.reconfigure(errors="replace")
+except Exception:
+    pass
+
+
+def _konsola_guvenli(metin: str) -> str:
+    """Konsolun kaldıramadığı karakterleri ayıkla.
+
+    ⚠️ Windows konsolu cp1254; backend logunda "→" gibi karakterler var. `print` bunları
+    yazamayıp UnicodeEncodeError atıyordu ve bu istisna, BASILMAK ÜZERE OLAN GERÇEK HATANIN
+    yerine geçiyordu: ekranda "backend açılmadı" yerine kodlama hatası görünüyor, asıl sebep
+    (SQLCipher anahtar uyuşmazlığı) HİÇ görünmüyordu.
+    """
+    kodlama = getattr(sys.stdout, "encoding", None) or "ascii"
+    return metin.encode(kodlama, "replace").decode(kodlama, "replace")
+
+
 def check(name, cond, detail=""):
     _results.append((bool(cond), name, detail))
-    print(f"  [{'GECTI' if cond else 'KALDI'}] {name}" + (f"  → {detail}" if detail else ""))
+    print(_konsola_guvenli(f"  [{'GECTI' if cond else 'KALDI'}] {name}" + (f"  -> {detail}" if detail else "")))
     return bool(cond)
 
 
@@ -70,6 +93,13 @@ def main():
         {
             "PEMF_SIMULATE": "1",  # sanal STM+ESP+8 bobin + sensör
             "PEMF_DATA_DIR": str(data_dir),  # İZOLE veri dizini
+            # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
+            # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
+            # göçünü çalıştırıyor (utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
+            # makinesindeki BAYAT, BAŞKA ANAHTARLA şifreli tedavi DB'sini test dizinine
+            # kopyalıyordu → `hmac check failed for pgno=1` → backend HİÇ açılmıyordu.
+            # (Testin gördüğü hata da yanıltıcıydı; bkz. aşağıdaki log yazdırma notu.)
+            "APPDATA": str(data_dir / "_appdata"),
             "PEMF_API_HOST": "127.0.0.1",
             "PEMF_API_PORT": str(PORT),
             "PEMF_HEADLESS": "1",
@@ -117,7 +147,7 @@ def main():
             time.sleep(1)
         if not ready:
             print("BACKEND ACILMADI — son 40 satir log:")
-            print((data_dir / "backend.out").read_text("utf-8", "replace")[-4000:])
+            print(_konsola_guvenli((data_dir / "backend.out").read_text("utf-8", "replace")[-4000:]))
             return 1
         print("Backend hazir.\n")
         run_scenarios()
@@ -260,14 +290,29 @@ def run_scenarios():
     n2 = {x.get("name") for x in p2.get("data", [])}
     check("patients: sayfalar ortusmuyor", n1.isdisjoint(n2), f"{n1} vs {n2}")
 
-    # ── 10) AI Pro baslat/durdur (kamera yok → zarifce reddetmeli) ────────────
-    s, ai, _ = req("POST", "/api/ai/pro/start", {"organ_id": 2, "duration_minutes": 5})
-    check("ai/pro/start yanit veriyor (cokme yok)", s in (200, 409, 422, 503), f"HTTP {s}")
+    # ── 10) AI Pro: ONAYSIZ OTONOM TEDAVI BASLAMAZ (sahip karari 2026-08-06) ──
+    # ⚠️ BU TEST 2026-08-14'te DUZELTILDI. Eskiden `start`in "cokmeden yanit vermesini"
+    # bekliyordu ve 428'i BASARISIZLIK sayiyordu — oysa 428 KAPININ CALISTIGININ kanitidir:
+    # `ai_router` onayi TUKETIR (tek kullanimlik + sureli) ve onay yoksa 428 doner. Test, sahip
+    # karariyla eklenen guvenlik kapisindan ONCE yazilmisti; kapiyi "ariza" diye raporluyordu.
+    # Artik kapinin KENDISI kilitleniyor: onaysiz istek KABUL EDILMEMELI.
+    s, _b, _ = req("POST", "/api/ai/pro/start", {"organ_id": 2, "duration_minutes": 5})
+    check(
+        "KRITIK: ai/pro/start ONAYSIZ basLATMAZ (otonom tedavi kapisi)",
+        s == 428,
+        f"HTTP {s} (200 = kapi ACIK KALMIS, hasta guvenligi P0)",
+    )
     s, _b, _ = req("POST", "/api/ai/pro/stop")
     check("ai/pro/stop 200 (bobin 1-8 STOP kapsami P1)", s == 200, f"HTTP {s}")
 
+    # Gecersiz organ da AYNI kapiya takilir (onay once tuketilir) → kapi organ dogrulamasindan
+    # ONCE gelmeli: onaysiz cagri, girdi hatasi bile olsa tedaviye yaklasmamali.
     s, _b, _ = req("POST", "/api/ai/pro/start", {"organ_id": 9, "duration_minutes": 5})
-    check("ai/pro: desteklenmeyen organ 422", s == 422, f"HTTP {s}")
+    check(
+        "ai/pro: onay kapisi organ dogrulamasindan ONCE gelir",
+        s == 428,
+        f"HTTP {s}",
+    )
 
     # ── 11) KPI + metrics + istatistik uclari ayakta ──────────────────────────
     for path, ad in (

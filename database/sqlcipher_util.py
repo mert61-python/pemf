@@ -182,6 +182,41 @@ def anahtar_uyusmazligi_mi(exc: BaseException) -> bool:
     return "file is not a database" in str(exc).lower()
 
 
+def _kilit_direncli_tasi(src, dst, logger=None, deneme=4, bekleme_s=0.25) -> bool:
+    """Dosyayi kenara al; Windows'ta ORPHAN tutamac yuzunden kilitliyse GC ile serbest birakip yeniden dene.
+
+    ⚠️ NEDEN (saha, 2026-08-14 — CIHAZ HIC ACILMIYORDU): at-rest anahtari DB'ye uymadiginda
+    kurtarma zarfi dosyayi karantinaya alip TEMIZ bir DB ile acilmayi surduruyor. Ama karantina
+    `[WinError 32] dosya baska bir islem tarafindan kullaniliyor` ile dusuyordu ve cagiran bunu
+    "karantina ALINAMADI" sayip RuntimeError firlatiyordu → backend ACILMIYORDU. Yani tuglalasmayi
+    ONLEMEK icin yazilmis zarfin kendisi tuglalasmaya sebep oluyordu.
+
+    Kilidi tutan BASKA bir surec DEGIL, bu surecteki basarisiz SQLCipher baglanti nesneleridir:
+    aday-anahtar dongusu `close()` cagiriyor, fakat acilamayan bir SQLCipher baglantisinda alttaki
+    dosya tutamaci nesne TOPLANANA kadar serbest kalmiyor. Bu yuzden yeniden denemeden once
+    `gc.collect()` cagirmak gerekiyor — bekleme tek basina yetmez.
+
+    Doner: tasindiysa True.
+    """
+    import gc
+    import time
+
+    son_hata = None
+    for i in range(deneme):
+        try:
+            shutil.move(src, dst)
+            if i and logger:
+                logger.warning("KARANTINA: %s ancak %d. denemede tasinabildi (tutamac gec birakildi).", src, i + 1)
+            return True
+        except Exception as e:
+            son_hata = e
+            gc.collect()  # yetim baglanti nesnelerini kapat → tutamac serbest kalsin
+            time.sleep(bekleme_s)
+    if logger:
+        logger.error("KARANTINA BASARISIZ (%s), %d deneme: %s", src, deneme, son_hata)
+    return False
+
+
 def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     """Acilamayan DB'yi (ve -wal/-shm yoldaslarini) KENARA AL. Silme YOK.
 
@@ -200,14 +235,10 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
         if not os.path.exists(src):
             continue
         dst = f"{src}.{_QUARANTINE_SUFFIX}-{ts}"
-        try:
-            shutil.move(src, dst)
-            if suffix == "":
-                tasinan = dst
-        except Exception as e:  # dosya kilitli → karantina basarisiz; cagiran hatayi gormeli
-            if logger:
-                logger.error("KARANTINA BASARISIZ (%s): %s", src, e)
-            return None
+        if not _kilit_direncli_tasi(src, dst, logger):
+            return None  # gercekten tasinamadi → cagiran hatayi gormeli
+        if suffix == "":
+            tasinan = dst
     if logger:
         logger.error(
             "VERITABANI ACILAMADI — at-rest anahtari bu dosyaya UYMUYOR. Dosya KENARA ALINDI "
