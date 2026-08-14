@@ -21,9 +21,10 @@
  * Boyut kontrolü ayrıca yapılır — yarım/bozuk inen dosyayı kurmaya çalışmayı önler.
  * (manifest'teki `sha256` masaüstü ile eşitlik ve ileride yerel doğrulama için KORUNUR.)
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
-import { Platform } from "react-native";
+import { AppState, Platform, type AppStateStatus } from "react-native";
 
 /** Yayın manifest'i — masaüstü client ile AYNI dosya (tek kaynak, ayrı servis yok). */
 export const MANIFEST_URL =
@@ -81,11 +82,55 @@ export interface IndirmeSonucu {
   hata?: "indirme" | "boyut";
 }
 
+/** Yarım kalan indirmenin devam bilgisi (AsyncStorage). */
+const DEVAM_ANAHTARI = "@pemf_apk_indirme";
+
+/** `DownloadResumable.savable()` çıktısı + hangi sürüme ait olduğu. */
+interface DevamKaydi {
+  versionCode: number;
+  url: string;
+  fileUri: string;
+  options?: object;
+  resumeData?: string;
+}
+
+async function devamOku(): Promise<DevamKaydi | null> {
+  try {
+    const ham = await AsyncStorage.getItem(DEVAM_ANAHTARI);
+    return ham ? (JSON.parse(ham) as DevamKaydi) : null;
+  } catch {
+    return null;
+  }
+}
+async function devamYaz(k: DevamKaydi): Promise<void> {
+  try { await AsyncStorage.setItem(DEVAM_ANAHTARI, JSON.stringify(k)); } catch { /* yut */ }
+}
+async function devamSil(): Promise<void> {
+  try { await AsyncStorage.removeItem(DEVAM_ANAHTARI); } catch { /* yut */ }
+}
+
 /**
  * APK'yı indir + BOYUT doğrula. Boyut tutmazsa dosyayı SİLER (yarım paket kurulmaya çalışılmaz).
  *
  * Dosya adı sürüm koduna bağlanır: bir önceki denemeden kalan bayat APK yeni sürüm sanılmaz
  * (launcher self-update'inde alınan dersin aynısı).
+ *
+ * ⚠️ KALDIĞI YERDEN DEVAM (2026-08-13, saha bildirimi). Eskiden indirme %10'dayken uygulama
+ * kapatılıp yeniden açıldığında SIFIRDAN başlıyordu: `createDownloadResumable` kullanılıyordu
+ * ama devam bilgisi (`savable()`) HİÇ SAKLANMIYORDU — oysa expo-file-system'in kendi belgesi
+ * tam olarak bunu öneriyor. 122 MB'lık bir paketi mobil veriyle baştan indirmek hem zaman hem
+ * kota kaybıdır.
+ *
+ * ⚠️ ARKA PLAN GÜVENLİĞİ: uygulama arka plana alındığında ya da EKRAN KİLİTLENDİĞİNDE JS
+ * yürütmesi işletim sistemi tarafından kısılır; indirme sessizce ASILI kalabilir. Bu yüzden
+ * `AppState` dinlenir: arka plana geçişte indirme DURAKLATILIR ve devam bilgisi diske yazılır
+ * (kayıp yok, bozuk dosya yok), öne dönüşte KALDIĞI YERDEN sürer.
+ *
+ * ⚠️ DÜRÜST SINIR: uygulama arka plandayken indirme SÜRMEZ. Gerçek arka plan indirmesi bir
+ * NATIVE arka-plan görevi modülü ister (WorkManager tabanlı). Bu projede SDK sürümü uyuşan
+ * böyle bir modül YOK ve sürümü uyuşmayan native modülü tıbbi cihaz APK'sına koymak, aynı
+ * gerekçeyle (bkz. `kurulumuBaslat` notu) kabul edilmiyor. Duraklat-devam et, ulaşılabilir ve
+ * VERİ KAYBETMEYEN davranıştır.
  */
 export async function apkIndir(
   surum: MobilSurum,
@@ -94,30 +139,89 @@ export async function apkIndir(
     createDownloadResumable?: typeof FileSystem.createDownloadResumable;
     getInfoAsync?: typeof FileSystem.getInfoAsync;
     deleteAsync?: typeof FileSystem.deleteAsync;
+    devamOku?: typeof devamOku;
+    devamYaz?: typeof devamYaz;
+    devamSil?: typeof devamSil;
+    appState?: Pick<typeof AppState, "addEventListener">;
   } = {},
 ): Promise<IndirmeSonucu> {
   const hedef = `${FileSystem.cacheDirectory || ""}pemf-vet-${surum.versionCode}.apk`;
   const olustur = deps.createDownloadResumable ?? FileSystem.createDownloadResumable;
   const bilgiAl = deps.getInfoAsync ?? FileSystem.getInfoAsync;
   const sil = deps.deleteAsync ?? FileSystem.deleteAsync;
+  const oku = deps.devamOku ?? devamOku;
+  const yaz = deps.devamYaz ?? devamYaz;
+  const kayitSil = deps.devamSil ?? devamSil;
+  const durum = deps.appState ?? AppState;
+
+  // Kayıt yalnız AYNI sürüm + AYNI adres için geçerlidir; sürüm değiştiyse yarım dosya çöptür.
+  const kayit = await oku();
+  const devamEdilebilir =
+    !!kayit && kayit.versionCode === surum.versionCode && kayit.url === surum.url && !!kayit.resumeData;
+  if (kayit && !devamEdilebilir) {
+    await kayitSil();
+    try { await sil(kayit.fileUri, { idempotent: true }); } catch { /* yut */ }
+  }
+
+  let duraklatildi = false;
+  let dl: FileSystem.DownloadResumable | null = null;
 
   try {
-    const dl = olustur(surum.url, hedef, {}, (p) => {
-      if (p.totalBytesExpectedToWrite > 0) {
-        onIlerleme?.(p.totalBytesWritten / p.totalBytesExpectedToWrite);
-      }
-    });
-    const sonuc = await dl.downloadAsync();
-    if (!sonuc?.uri) return { ok: false, hata: "indirme" };
+    dl = olustur(
+      surum.url,
+      hedef,
+      {},
+      (p) => {
+        if (p.totalBytesExpectedToWrite > 0) {
+          onIlerleme?.(p.totalBytesWritten / p.totalBytesExpectedToWrite);
+        }
+      },
+      devamEdilebilir ? kayit?.resumeData : undefined,
+    );
 
-    const bilgi = (await bilgiAl(sonuc.uri)) as { exists?: boolean; size?: number };
-    if (!bilgi?.exists || Number(bilgi.size) !== Number(surum.size)) {
-      // Yarım/bozuk inen paketi kurmaya ÇALIŞMA → sil (kullanıcı anlaşılmaz bir kurulum
-      // hatasıyla karşılaşmasın; sonraki denemede baştan iner).
-      try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
-      return { ok: false, hata: "boyut" };
+    // Arka plana/kilit ekranına geçişte DURAKLAT + diske yaz; öne dönüşte döngü devam ettirir.
+    let oneDon: (() => void) | null = null;
+    const abone = durum.addEventListener("change", (s: AppStateStatus) => {
+      if (s === "active") {
+        oneDon?.();
+        oneDon = null;
+        return;
+      }
+      if (duraklatildi || !dl) return;
+      duraklatildi = true;
+      void (async () => {
+        try {
+          const kaydedilebilir = await dl!.pauseAsync();
+          await yaz({ ...kaydedilebilir, versionCode: surum.versionCode } as DevamKaydi);
+        } catch { /* duraklatılamadıysa indirme kendi hatasıyla düşer */ }
+      })();
+    });
+
+    try {
+      let sonuc = devamEdilebilir ? await dl.resumeAsync() : await dl.downloadAsync();
+
+      // Duraklatıldıysa `resumeAsync/downloadAsync` sonuçsuz döner → ÖNE DÖNÜNCE devam et.
+      while (!sonuc?.uri && duraklatildi) {
+        await new Promise<void>((cozumle) => { oneDon = cozumle; });
+        duraklatildi = false;
+        sonuc = await dl.resumeAsync();
+      }
+
+      if (!sonuc?.uri) return { ok: false, hata: "indirme" };
+
+      const bilgi = (await bilgiAl(sonuc.uri)) as { exists?: boolean; size?: number };
+      if (!bilgi?.exists || Number(bilgi.size) !== Number(surum.size)) {
+        // Yarım/bozuk inen paketi kurmaya ÇALIŞMA → sil (kullanıcı anlaşılmaz bir kurulum
+        // hatasıyla karşılaşmasın; sonraki denemede baştan iner).
+        try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
+        await kayitSil();
+        return { ok: false, hata: "boyut" };
+      }
+      await kayitSil(); // tamamlandı → yarım-indirme kaydı kalmasın
+      return { ok: true, dosyaUri: sonuc.uri };
+    } finally {
+      abone.remove();
     }
-    return { ok: true, dosyaUri: sonuc.uri };
   } catch {
     return { ok: false, hata: "indirme" };
   }

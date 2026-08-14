@@ -36,7 +36,10 @@ ios/.xcode.env.local
 # === Keystore — RELEASE keystore'lar git'e GİRMEZ; debug.keystore güvenli + tutulur ===
 *.keystore
 *.jks
+*.p12
 !android/app/debug.keystore
+# Release imza parolaları (build.gradle signingConfigs.release buradan okur) — ASLA commit'lenmez.
+android/keystore.properties
 
 # === Ortam sırları (EXPO_PUBLIC_* zaten public; gerçek .env commit'lenmez) ===
 .env

@@ -77,7 +77,13 @@
 
     document.getElementById("go").onclick = async () => {
       const pw = document.getElementById("pw").value, pw2 = document.getElementById("pw2").value;
-      if (pw.length < 6) return setMsg("Şifre en az 6 karakter olmalı.", false);
+      // Politika, uygulamanın KAYIT ekranıyla AYNI olmalı (services/authApi.ts isPasswordValid:
+      // >=8 karakter + büyük + küçük + rakam). Burada yalnız "en az 6" aranıyordu → sıfırlama,
+      // kayıt politikasını atlatan bir arka kapıydı: mevcut bir hesap 6 haneli zayıf bir şifreye
+      // DÜŞÜRÜLEBİLİYORDU.
+      if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/\d/.test(pw)) {
+        return setMsg("Şifre en az 8 karakter olmalı; büyük harf, küçük harf ve rakam içermeli.", false);
+      }
       if (pw !== pw2) return setMsg("Şifreler eşleşmiyor.", false);
       setMsg("Güncelleniyor…", true);
       const { error } = await sb.auth.updateUser({ password: pw });
