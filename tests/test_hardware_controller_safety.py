@@ -15,7 +15,7 @@ import zlib
 import pytest
 
 from controllers import hardware_controller
-from controllers.hardware_controller import HardwareController
+from controllers.hardware_controller import GOZETIMSIZ_VARSAYILAN_DAKIKA, HardwareController
 from utils.stm32_protocol_limits import DURATION_MAX_MINUTES
 
 
@@ -60,23 +60,35 @@ def test_deadline_auto_stop(hw, monkeypatch):
 
 
 def test_duration_zero_is_capped_not_unlimited(hw, monkeypatch):
+    """duration<=0 → SINIRSIZ DEĞİL.
+
+    ⚠️ KAPAK DEĞERİ DEĞİŞTİ (kampanya bulgusu S03, 2026-08-14) — testin NİYETİ aynı, hedefi
+    düzeltildi. Kapak eskiden `DURATION_MAX_MINUTES` (9999) idi; o değer bir klinik sınır değil,
+    STM32 firmware PROTOKOL sınırıdır. Üst-kapak olarak kullanılınca süre verilmeyen bobin
+    ölçülen ~6,9 GÜN enerjili kalabiliyordu — "kapaklı" ama pratikte kapaksız. Artık klinik
+    varsayılan (`GOZETIMSIZ_VARSAYILAN_DAKIKA`) kullanılıyor; protokol sabiti DOKUNULMADAN duruyor.
+    """
     clk = [500.0]
     _fake_clock(monkeypatch, clk)
-    hw.update_coil(2, 100.0, 25.0, 0.0, duration=0)  # duration<=0 → SINIRSIZ DEĞİL
+    hw.update_coil(2, 100.0, 25.0, 0.0, duration=0)
     assert hw._coil_deadline[2] is not None
-    assert hw._coil_deadline[2] == pytest.approx(500.0 + DURATION_MAX_MINUTES * 60)
-    # DURATION_MAX dolunca yine durur (keep-alive'a rağmen)
-    clk[0] = 500.0 + DURATION_MAX_MINUTES * 60 + 1
+    assert hw._coil_deadline[2] == pytest.approx(500.0 + GOZETIMSIZ_VARSAYILAN_DAKIKA * 60)
+    assert GOZETIMSIZ_VARSAYILAN_DAKIKA < DURATION_MAX_MINUTES, (
+        "gozetimsiz varsayilan protokol tavanina esitlenmis → asil kusur geri gelmis"
+    )
+    # Süre dolunca yine durur (keep-alive'a rağmen)
+    clk[0] = 500.0 + GOZETIMSIZ_VARSAYILAN_DAKIKA * 60 + 1
     hw._tick()
     assert hw.coils_state[2]["is_running"] is False
 
 
 def test_start_all_duration_zero_capped(hw, monkeypatch):
+    """Aynı gerekçe (bkz. yukarıdaki test) — TÜM bobinler için."""
     clk = [0.0]
     _fake_clock(monkeypatch, clk)
     hw.start_all_coils(duration=0)
     for i in range(1, 6):
-        assert hw._coil_deadline[i] == pytest.approx(DURATION_MAX_MINUTES * 60)
+        assert hw._coil_deadline[i] == pytest.approx(GOZETIMSIZ_VARSAYILAN_DAKIKA * 60)
         assert hw.coils_state[i]["is_running"] is True
 
 

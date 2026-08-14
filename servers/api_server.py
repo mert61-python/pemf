@@ -964,11 +964,17 @@ class SessionStartPayload(BaseModel):
     coil_ids: list[int] = Field(default_factory=list, max_length=8)  # empty = all coils
 
 
+# ⚠️ `duration` NEGATIF OLAMAZ (kampanya bulgusu S03, 2026-08-14). Eskiden dogrulama YOKTU:
+# `duration=-60` sessizce kabul ediliyor, `_duration_seconds_to_stm_minutes(-60)` 0 donduruyor ve
+# komut "sure verilmemis" gibi davraniyordu → bir YAZIM HATASI bobini gozetimsiz varsayilan sure
+# boyunca enerjili birakiyordu. `0` GECERLIDIR ("sure belirtme") ve reddedilmez; negatif deger
+# anlamsizdir ve 422 ile geri cevrilir. (Seans modeli zaten `Field(ge=1)` ile dogruluyordu; bobin
+# yolu bu korumadan yoksundu.)
 class CoilControlPayload(BaseModel):
     freq: float = 50.0
     duty: float = 25.0
     phase: float = 0.0
-    duration: int = 0  # seconds for ESP/MQTT payloads
+    duration: int = Field(default=0, ge=0)  # seconds for ESP/MQTT payloads
     start: bool = True
 
 
@@ -977,7 +983,7 @@ class BatchCoilPayload(BaseModel):
     freq: float = 50.0
     duty: float = 25.0
     phase: float = 0.0
-    duration: int = 0  # seconds for ESP/MQTT payloads
+    duration: int = Field(default=0, ge=0)  # seconds for ESP/MQTT payloads
     start: bool = True
 
 

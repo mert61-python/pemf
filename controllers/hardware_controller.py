@@ -14,6 +14,23 @@ from utils.stm32_protocol_limits import (
     normalize_phase_deg,
 )
 
+#: Süre VERİLMEDEN başlatılan bir bobinin yazılım deadline'ı (dakika).
+#
+# ⚠️ NEDEN AYRI BİR SABİT (kampanya bulgusu S03, 2026-08-14): burada eskiden
+# `DURATION_MAX_MINUTES` (9999) kullanılıyordu. O değer bir KLİNİK sınır değil, **STM32 firmware
+# protokol sınırıdır** (`utils/stm32_protocol_limits`; `test_stm32_source_parity` onu firmware
+# kaynağıyla birebir eşler). Üst-kapak olarak kullanılınca `duration=0` ile başlatılan bobin
+# ölçülen ~6,9 GÜN boyunca enerjili kalabiliyordu — pratikte kapaksız. "Protokol maksimumu" ile
+# "güvenli gözetimsiz varsayılan" farklı şeylerdir; protokol sabiti DEĞİŞTİRİLMEZ (parite).
+#
+# Değer, ürünün KENDİ emsalinden alındı: `ai_router._AI_PRO_MAX_DURATION_MIN = 120` — gerekçesi
+# aynı ("günlerce/gözetimsiz PEMF sürüşünü engeller"). Böylece otonom ve elle sürüş yolları aynı
+# klinik sınırı paylaşır.
+#
+# ⚠️ freq/duty/48°C safety-limit'leriyle İLGİSİ YOKTUR; onlar sahip kararıyla kaldırıldı ve
+# GERİ EKLENMEZ. Buradaki sınır yalnız SÜREdir.
+GOZETIMSIZ_VARSAYILAN_DAKIKA = 120
+
 
 class HardwareController:
     """
@@ -160,9 +177,13 @@ class HardwareController:
                 self.coils_state[coil_id]["phase"] = _phase
                 self.coils_state[coil_id]["duration"] = dur_min
                 # Audit P2: dur_min<=0'da deadline=None → keep-alive firmware timer'ini SINIRSIZ tazeler
-                # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme. Sinirsiz birakmak
-                # yerine DURATION_MAX_MINUTES ust-kapak (geriye-uyumlu; keep-alive'a ragmen eninde durur).
-                _dl_min = dur_min if dur_min > 0 else DURATION_MAX_MINUTES
+                # + _active_session yoksa sure-watchdog da yok → KAPAKSIZ enerjileme.
+                # ⚠️ KAPAK ARTIK PROTOKOL TAVANI DEGIL (kampanya bulgusu S03, 2026-08-14):
+                # DURATION_MAX_MINUTES=9999 bir KLINIK sinir degil, STM32 firmware PROTOKOL
+                # sinriridir (test_stm32_source_parity onu firmware kaynagiyla esler). Ust-kapak
+                # olarak kullanilinca sure verilmeyen bobin ~6,9 GUN sürebiliyordu — olculdu.
+                # "Protokol maksimumu" ile "guvenli gozetimsiz varsayilan" ayri seylerdir.
+                _dl_min = dur_min if dur_min > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA
                 # DENETIM P3 (fazla-tedavi): STM firmware suresi DAKIKA granulerliginde oldugundan
                 # saniye→dakika donusumu YUKARI yuvarlanir (30 sn → 1 dk). Firmware icin bu dogru
                 # (tedaviyi yarida kesmez), ama YAZILIM deadline'i monotonik SANIYE tutar → gercek
@@ -190,8 +211,10 @@ class HardwareController:
         """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
         with self._state_lock:
             dur_min = normalize_duration_minutes(duration)
-            # Audit P2: dur_min<=0'da kapaksiz kalmasin → DURATION_MAX_MINUTES ust-kapak (bkz. update_coil).
-            _dl_min = dur_min if dur_min > 0 else DURATION_MAX_MINUTES
+            # Audit P2: dur_min<=0'da kapaksiz kalmasin. ⚠️ Kapak PROTOKOL TAVANI DEGIL, klinik
+            # varsayilan (bkz. GOZETIMSIZ_VARSAYILAN_DAKIKA ve update_coil'deki gerekce). TUM
+            # bobinleri ayni anda surdugu icin burada kapaksizlik daha da agir sonuc dogururdu.
+            _dl_min = dur_min if dur_min > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA
             deadline = time.monotonic() + _dl_min * 60
             for i in range(1, 6):
                 self.coils_state[i]["is_running"] = True
