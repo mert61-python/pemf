@@ -24,7 +24,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
-import { AppState, Platform, type AppStateStatus } from "react-native";
+import { Platform } from "react-native";
 
 /** Yayın manifest'i — masaüstü client ile AYNI dosya (tek kaynak, ayrı servis yok). */
 export const MANIFEST_URL =
@@ -82,16 +82,18 @@ export interface IndirmeSonucu {
   hata?: "indirme" | "boyut";
 }
 
-/** Yarım kalan indirmenin devam bilgisi (AsyncStorage). */
+/** Yarım kalan indirmenin izi (AsyncStorage). İndirme BAŞLAMADAN yazılır. */
 const DEVAM_ANAHTARI = "@pemf_apk_indirme";
 
-/** `DownloadResumable.savable()` çıktısı + hangi sürüme ait olduğu. */
+/**
+ * Süreç öldürüldüğünde geriye kalan TEK iz. `resumeData` BURADA TUTULMAZ — kasıtlı:
+ * uygulama çökerse/öldürülürse onu diske yazma fırsatı zaten olmaz. Devam noktası her
+ * açılışta KISMİ DOSYANIN KENDİ BOYUTUNDAN türetilir (bkz. `apkIndir`).
+ */
 interface DevamKaydi {
   versionCode: number;
   url: string;
   fileUri: string;
-  options?: object;
-  resumeData?: string;
 }
 
 async function devamOku(): Promise<DevamKaydi | null> {
@@ -115,22 +117,29 @@ async function devamSil(): Promise<void> {
  * Dosya adı sürüm koduna bağlanır: bir önceki denemeden kalan bayat APK yeni sürüm sanılmaz
  * (launcher self-update'inde alınan dersin aynısı).
  *
- * ⚠️ KALDIĞI YERDEN DEVAM (2026-08-13, saha bildirimi). Eskiden indirme %10'dayken uygulama
- * kapatılıp yeniden açıldığında SIFIRDAN başlıyordu: `createDownloadResumable` kullanılıyordu
- * ama devam bilgisi (`savable()`) HİÇ SAKLANMIYORDU — oysa expo-file-system'in kendi belgesi
- * tam olarak bunu öneriyor. 122 MB'lık bir paketi mobil veriyle baştan indirmek hem zaman hem
- * kota kaybıdır.
+ * ⚠️ KALDIĞI YERDEN DEVAM (2026-08-13, saha bildirimi: "%10'dayken kapatıp açınca 0'dan
+ * başlıyor"). `createDownloadResumable` kullanılıyordu ama devam noktası HİÇ VERİLMİYORDU →
+ * her açılış sıfırdan. 128 MB'lık paketi mobil veriyle baştan indirmek zaman ve kota kaybıdır.
  *
- * ⚠️ ARKA PLAN GÜVENLİĞİ: uygulama arka plana alındığında ya da EKRAN KİLİTLENDİĞİNDE JS
- * yürütmesi işletim sistemi tarafından kısılır; indirme sessizce ASILI kalabilir. Bu yüzden
- * `AppState` dinlenir: arka plana geçişte indirme DURAKLATILIR ve devam bilgisi diske yazılır
- * (kayıp yok, bozuk dosya yok), öne dönüşte KALDIĞI YERDEN sürer.
+ * ⚠️ DEVAM NOKTASI `savable()`DEN DEĞİL, DİSKTEN TÜRETİLİR — bu KASITLI ve daha sağlamdır.
+ * Android'de `resumeData` opak bir jeton değil, KISMİ DOSYANIN BAYT SAYISIDIR: yerel modül onu
+ * `file.length().toString()` ile üretir ve devam ederken `Range: bytes=N-` başlığı olarak
+ * gönderir (expo-file-system `FileSystemLegacyModule.kt`). Yani aynı değer diskteki dosyanın
+ * boyutundan okunabilir. `pauseAsync()`e bağlanmak, uygulama ÇÖKERSE ya da sistem tarafından
+ * ÖLDÜRÜLÜRSE — yani devam etmenin asıl gerekli olduğu durumda — kaydı yazma fırsatı bırakmazdı.
+ * Diskteki dosya ise her koşulda oradadır. (Bu yol Android'e özgüdür; akışın tamamı zaten
+ * Android'e kapılıdır — bkz. `guncellemeVarMi` ve `kurulumuBaslat`.)
  *
- * ⚠️ DÜRÜST SINIR: uygulama arka plandayken indirme SÜRMEZ. Gerçek arka plan indirmesi bir
- * NATIVE arka-plan görevi modülü ister (WorkManager tabanlı). Bu projede SDK sürümü uyuşan
- * böyle bir modül YOK ve sürümü uyuşmayan native modülü tıbbi cihaz APK'sına koymak, aynı
- * gerekçeyle (bkz. `kurulumuBaslat` notu) kabul edilmiyor. Duraklat-devam et, ulaşılabilir ve
- * VERİ KAYBETMEYEN davranıştır.
+ * ⚠️ ARKA PLANDA DURAKLATILMAZ — sahip isteği: "başka uygulama açtığımda / ekran kilitlendiğinde
+ * indirme güvenli şekilde TAMAMLANMALI". Yerel modül indirmeyi `Dispatchers.IO` üzerinde bir
+ * coroutine'de yürütür (JS iş parçacığında DEĞİL) ve Android'de her ikisi de arka planda koşmaya
+ * devam eder → indirme kendiliğinden tamamlanır. `AppState` ile duraklatmak, tamamlanacak bir
+ * indirmeyi DURDURMAK olurdu; istenenin tam tersi. Sistem uygulamayı yine de öldürürse kısmi
+ * dosya diskte kalır ve bir sonraki açılışta oradan sürer.
+ *
+ * ⚠️ Sunucu `Range`i yok sayarsa (200 döner) yerel modül gövdeyi mevcut dosyaya YİNE DE ekler
+ * (`FileOutputStream(file, isResume)` — 206 denetimi yoktur). O durumda boyut tutmaz; aşağıdaki
+ * boyut kapısı dosyayı SİLER ve kaydı temizler → sonraki deneme sıfırdan, temiz başlar.
  */
 export async function apkIndir(
   surum: MobilSurum,
@@ -142,7 +151,6 @@ export async function apkIndir(
     devamOku?: typeof devamOku;
     devamYaz?: typeof devamYaz;
     devamSil?: typeof devamSil;
-    appState?: Pick<typeof AppState, "addEventListener">;
   } = {},
 ): Promise<IndirmeSonucu> {
   const hedef = `${FileSystem.cacheDirectory || ""}pemf-vet-${surum.versionCode}.apk`;
@@ -152,77 +160,71 @@ export async function apkIndir(
   const oku = deps.devamOku ?? devamOku;
   const yaz = deps.devamYaz ?? devamYaz;
   const kayitSil = deps.devamSil ?? devamSil;
-  const durum = deps.appState ?? AppState;
 
-  // Kayıt yalnız AYNI sürüm + AYNI adres için geçerlidir; sürüm değiştiyse yarım dosya çöptür.
+  const beklenen = Number(surum.size);
+
+  // Kayıt yalnız AYNI sürüm + AYNI adres için geçerli; sürüm/adres değiştiyse yarım dosya çöptür.
   const kayit = await oku();
-  const devamEdilebilir =
-    !!kayit && kayit.versionCode === surum.versionCode && kayit.url === surum.url && !!kayit.resumeData;
-  if (kayit && !devamEdilebilir) {
+  const ayniIs = !!kayit && kayit.versionCode === surum.versionCode && kayit.url === surum.url;
+  if (kayit && !ayniIs) {
     await kayitSil();
     try { await sil(kayit.fileUri, { idempotent: true }); } catch { /* yut */ }
   }
 
-  let duraklatildi = false;
-  let dl: FileSystem.DownloadResumable | null = null;
-
   try {
-    dl = olustur(
+    // Diskteki kısmi dosya → devam noktası.
+    let devamBaytlari: string | undefined;
+    if (ayniIs) {
+      const kismi = (await bilgiAl(hedef)) as { exists?: boolean; size?: number };
+      const boyut = Number(kismi?.size ?? 0);
+      if (kismi?.exists && boyut === beklenen) {
+        // Uygulama indirme BİTTİKTEN sonra, kurulum onayı verilmeden kapanmış → yeniden indirme.
+        await kayitSil();
+        return { ok: true, dosyaUri: hedef };
+      }
+      if (kismi?.exists && boyut > 0 && boyut < beklenen) {
+        devamBaytlari = String(boyut);
+      } else if (kismi?.exists) {
+        // 0 bayt ya da beklenenden BÜYÜK (önceki başarısız ekleme) → çöp; sıfırdan.
+        try { await sil(hedef, { idempotent: true }); } catch { /* yut */ }
+      }
+    }
+
+    // ⚠️ Kayıt indirme BAŞLAMADAN yazılır: süreç öldürülürse yazma fırsatı bir daha gelmez.
+    await yaz({ versionCode: surum.versionCode, url: surum.url, fileUri: hedef });
+
+    const baslangic = Number(devamBaytlari ?? 0);
+    const dl = olustur(
       surum.url,
       hedef,
       {},
       (p) => {
-        if (p.totalBytesExpectedToWrite > 0) {
-          onIlerleme?.(p.totalBytesWritten / p.totalBytesExpectedToWrite);
-        }
+        // ⚠️ İlerleme, devam edilen indirmede de 0'dan değil KALDIĞI YERDEN gösterilmeli
+        // (kullanıcının gördüğü yüzde geri gitmesin). Yerel modül `resumeData`yı sayaçlarına
+        // zaten ekliyor; toplam beklenen bilinmiyorsa manifest boyutuna düşülür.
+        const toplam = p.totalBytesExpectedToWrite > 0 ? p.totalBytesExpectedToWrite : beklenen;
+        const yazilan = p.totalBytesWritten > 0 ? p.totalBytesWritten : baslangic;
+        if (toplam > 0) onIlerleme?.(Math.min(1, yazilan / toplam));
       },
-      devamEdilebilir ? kayit?.resumeData : undefined,
+      devamBaytlari,
     );
 
-    // Arka plana/kilit ekranına geçişte DURAKLAT + diske yaz; öne dönüşte döngü devam ettirir.
-    let oneDon: (() => void) | null = null;
-    const abone = durum.addEventListener("change", (s: AppStateStatus) => {
-      if (s === "active") {
-        oneDon?.();
-        oneDon = null;
-        return;
-      }
-      if (duraklatildi || !dl) return;
-      duraklatildi = true;
-      void (async () => {
-        try {
-          const kaydedilebilir = await dl!.pauseAsync();
-          await yaz({ ...kaydedilebilir, versionCode: surum.versionCode } as DevamKaydi);
-        } catch { /* duraklatılamadıysa indirme kendi hatasıyla düşer */ }
-      })();
-    });
+    const sonuc = await dl.downloadAsync();
+    if (!sonuc?.uri) return { ok: false, hata: "indirme" };
 
-    try {
-      let sonuc = devamEdilebilir ? await dl.resumeAsync() : await dl.downloadAsync();
-
-      // Duraklatıldıysa `resumeAsync/downloadAsync` sonuçsuz döner → ÖNE DÖNÜNCE devam et.
-      while (!sonuc?.uri && duraklatildi) {
-        await new Promise<void>((cozumle) => { oneDon = cozumle; });
-        duraklatildi = false;
-        sonuc = await dl.resumeAsync();
-      }
-
-      if (!sonuc?.uri) return { ok: false, hata: "indirme" };
-
-      const bilgi = (await bilgiAl(sonuc.uri)) as { exists?: boolean; size?: number };
-      if (!bilgi?.exists || Number(bilgi.size) !== Number(surum.size)) {
-        // Yarım/bozuk inen paketi kurmaya ÇALIŞMA → sil (kullanıcı anlaşılmaz bir kurulum
-        // hatasıyla karşılaşmasın; sonraki denemede baştan iner).
-        try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
-        await kayitSil();
-        return { ok: false, hata: "boyut" };
-      }
-      await kayitSil(); // tamamlandı → yarım-indirme kaydı kalmasın
-      return { ok: true, dosyaUri: sonuc.uri };
-    } finally {
-      abone.remove();
+    const bilgi = (await bilgiAl(sonuc.uri)) as { exists?: boolean; size?: number };
+    if (!bilgi?.exists || Number(bilgi.size) !== beklenen) {
+      // Yarım/bozuk inen paketi kurmaya ÇALIŞMA → sil (kullanıcı anlaşılmaz bir kurulum
+      // hatasıyla karşılaşmasın; sonraki denemede baştan, temiz iner).
+      try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
+      await kayitSil();
+      return { ok: false, hata: "boyut" };
     }
+    await kayitSil(); // tamamlandı → yarım-indirme izi kalmasın
+    return { ok: true, dosyaUri: sonuc.uri };
   } catch {
+    // ⚠️ Kayıt ve kısmi dosya BİLEREK bırakılır: ağ koptuğunda bir sonraki deneme kaldığı
+    // yerden sürebilsin (asıl istenen davranış). Bozuk dosyayı boyut kapısı zaten eliyor.
     return { ok: false, hata: "indirme" };
   }
 }
