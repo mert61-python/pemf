@@ -43,6 +43,20 @@ from database.sqlcipher_util import anahtar_uyusmazligi_mi, karantinaya_al  # no
 _DB_VEYA_RUNTIME = (*_DB_ERROR, RuntimeError) if isinstance(_DB_ERROR, tuple) else (_DB_ERROR, RuntimeError)
 
 
+#: ACİL DURDURMA ile biten seansın `session_status` değeri.
+#
+# ⚠️ KAMPANYA BULGUSU S09 (2026-08-14): e-stop ile biten seans geçmişte normal bitenden AYIRT
+# EDİLEMİYORDU — üçü de `'completed'`. Bir denetimde "bu hastada acil durdurma yaşandı mı?"
+# sorusu cevapsız kalıyordu; kesintiyle biten tedavi sorunsuz görünüyordu. Bilgi zaten vardı
+# (`_emergency_stop_all` → `_finalize_session_db(reason="acil-durdurma:…")`) ama yalnız
+# LOGLANIYOR, kayda yazılmıyordu.
+#
+# ⚠️ Bu sabiti değiştirirsen KPI sorgusunu da güncelle (`servers/system_router.py`): yazan ile
+# okuyan ayrı yerlerde ve ayrışırsa `stoppedSessions` SESSİZCE 0 kalır.
+# `tests/test_acil_durdurma_gecmiste_gorunur.py` bu ayrışmayı kilitler.
+SEANS_DURUMU_ACIL_DURDURMA = "EMERGENCY_STOPPED"
+
+
 class TreatmentHistoryDB:
     """PEMF tedavi geçmişi veritabanı yönetim sınıfı (Connection Pool + WAL mode)"""
 
@@ -1925,7 +1939,12 @@ class TreatmentHistoryDB:
             raise
 
     def end_session(
-        self, session_id: int, parameters: Dict = None, patient_notes: str = None, duration_minutes: int = None
+        self,
+        session_id: int,
+        parameters: Dict = None,
+        patient_notes: str = None,
+        duration_minutes: int = None,
+        session_status: str = "completed",
     ):
         """
         Tedavi seansını sonlandır
@@ -1971,8 +1990,11 @@ class TreatmentHistoryDB:
                         )
                         duration_minutes = 0
 
-                # Seans bilgilerini güncelle
-                update_data = [end_time, duration_minutes, 'completed', session_id]
+                # Seans bilgilerini güncelle.
+                # ⚠️ Durum artık SABİT DEĞİL: acil durdurma ile biten seans normal bitenden ayırt
+                # edilebilmeli (bkz. SEANS_DURUMU_ACIL_DURDURMA). Varsayılan 'completed' kalır →
+                # normal akış değişmez.
+                update_data = [end_time, duration_minutes, session_status or 'completed', session_id]
                 update_query = '''
                     UPDATE treatment_sessions
                     SET end_time = ?, duration_minutes = ?, session_status = ?,

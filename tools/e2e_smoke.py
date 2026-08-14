@@ -244,10 +244,26 @@ def run_scenarios():
     row = next((r for r in rows if r.get("id") == db_sid), None)
     check("history: E-STOP sonrasi seans DB'de bulunuyor", row is not None, f"db_sid={db_sid} n={len(rows)}")
     if row:
+        # ⚠️ BU KONTROL 2026-08-14'te DUZELTILDI — eskiden `== "completed"` bekliyordu ve boylece
+        # ARIZAYI KILITLIYORDU: acil durdurma ile biten seans gecmiste normal bitenden ayirt
+        # edilemiyordu ("bu hastada e-stop yasandi mi?" cevapsiz). Niyet (P2 finalize: 'active'
+        # KALMASIN) korundu, uzerine AYIRT EDILEBILIRLIK eklendi.
         check(
             "history: seans 'active' KALMADI (P2 finalize)",
-            row.get("session_status") == "completed",
+            row.get("session_status") != "active",
             str(row.get("session_status")),
+        )
+        check(
+            "KRITIK: E-STOP ile biten seans gecmiste AYIRT EDILEBILIR",
+            str(row.get("session_status")) == "EMERGENCY_STOPPED",
+            f"{row.get('session_status')} ('completed' = olay gizleniyor)",
+        )
+        s, kpi, _ = req("GET", "/api/kpi/summary")
+        _durdurulan = (kpi or {}).get("stoppedSessions")
+        check(
+            "KRITIK: KPI acil durdurmayi SAYIYOR",
+            isinstance(_durdurulan, int) and _durdurulan >= 1,
+            f"stoppedSessions={_durdurulan} (0 = gosterge tablosu 'her sey yolunda' der)",
         )
         check(
             "history: PII maskelenmedi (sahip karari — varsayilan KAPALI)",

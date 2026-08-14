@@ -361,10 +361,17 @@ def get_kpi_summary():
             )
             completed = int(cur.fetchone()[0] or 0)
 
+            # ⚠️ ACİL DURDURMA da "durdurulan" sayılır (kampanya bulgusu S09, 2026-08-14).
+            # Eskiden e-stop `'completed'` yazıyordu → gösterge tablosu `stoppedSessions=0` deyip
+            # "her şey yolunda" gösteriyordu. Durum sabiti TEK KAYNAKTAN gelir; burada elle string
+            # yazmak, yazan ile okuyanın ayrışıp sayacın SESSİZCE sıfırlanması demekti.
+            from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
+
             cur.execute(
                 "SELECT COUNT(*) FROM treatment_sessions "
-                "WHERE LOWER(COALESCE(session_status,'')) IN ('stopped','error','interrupted') "
-                "   OR LOWER(COALESCE(session_status,'')) LIKE '%abort%'"
+                "WHERE LOWER(COALESCE(session_status,'')) IN ('stopped','error','interrupted',?) "
+                "   OR LOWER(COALESCE(session_status,'')) LIKE '%abort%'",
+                (SEANS_DURUMU_ACIL_DURDURMA.lower(),),
             )
             stopped = int(cur.fetchone()[0] or 0)
 

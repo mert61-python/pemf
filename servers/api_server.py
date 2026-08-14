@@ -1939,7 +1939,13 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
             try:
                 _now = time.time()
                 dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
-                db.end_session(db_session_id, duration_minutes=dur_min)
+                # ⚠️ SEBEP ARTIK KAYDA DA GECER (kampanya bulgusu S09). `reason` buraya zaten
+                # tasiniyordu ama YALNIZ loglaniyordu → acil durdurma ile biten seans gecmiste
+                # normal bitenden ayirt EDILEMIYORDU ("bu hastada e-stop yasandi mi?" cevapsiz).
+                from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
+
+                _durum = SEANS_DURUMU_ACIL_DURDURMA if str(reason or "").startswith("acil-durdurma") else "completed"
+                db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
                 db.set_session_meta(db_session_id, ended_epoch=_now)
             except Exception:
                 logging.exception("finalize: end_session hatasi")
