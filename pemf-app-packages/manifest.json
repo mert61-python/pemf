@@ -85,12 +85,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.13",
-      "versionCode": 20,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.13.apk",
-      "sha256": "9d9463e64fdff53be688f9d2272b81ce92ebabf8c966f1de6138bdb3fc700c6b",
-      "size": 128392259,
-      "notes": "Cihaz bulunamayinca serit artik REHBER aciyor: ayni agdaysaniz 'Yeniden Dene', farkli agdaysaniz cihaz ekranindaki eslestirme kodunu girin. 2.3.12'de rehber yanlis kosul yuzunden hic acilmiyordu."
+      "version": "2.3.14",
+      "versionCode": 21,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.14.apk",
+      "sha256": "fee5e881744188983117f4c6a01ead4a348fb6f35838e44718d7aaf1251ec2ec",
+      "size": 128396315,
+      "notes": "Guncelleme indirmesi artik KALDIGI YERDEN devam eder: uygulamayi %10'dayken kapatip actiginizda sifirdan baslamaz. Baska uygulamaya gectiginizde ya da ekran kilitlendiginde indirme durmaz, arka planda tamamlanir."
     }
   }
 }
