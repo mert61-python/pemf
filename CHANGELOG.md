@@ -30,6 +30,31 @@ geçmiyorsa test kırılır.
 
 ---
 
+## mobile 2.3.15 — 2026-08-14 ("cihaz bulunamadı" artık sebebini söylüyor)
+
+**Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.15.apk` (sha `f7951bd6978d`, versionCode 22).
+
+Telefon ve cihaz aynı Wi-Fi'deyken, cihaz çalışırken, hiçbir ayar bozuk değilken uygulama
+bağlanamıyordu. Sebep **modemde açık olan istemci izolasyonu** (AP Isolation) idi: bu ayar
+cihazların internete çıkmasına izin verir ama **birbirlerini görmelerini engeller**. Ekranda
+yalnızca "cihaz bulunamadı" yazıyordu; kullanıcının bunu ayarlardan bulmasının hiçbir yolu yoktu.
+
+Artık uygulama **sebebi araştırıyor ve söylüyor.** Cihaza internet üzerinden ulaşılıyor, cihazın
+bildirdiği yerel adres telefonla aynı ağda, ama o adrese doğrudan ulaşılamıyorsa — başka açıklaması
+yoktur: paketler modemde durduruluyordur. Bu durumda rehber ne yapılacağını yazar (ayarı kapatın,
+telefonu ana ağa alın ya da eşleştirme koduyla internet üzerinden bağlanın).
+
+Aynı yöntemle ayırt edilen diğer durumlar: telefon **gerçekten başka bir ağda** (eşleştirme kodu
+zaten doğru cevap) ve **cihaz çevrimdışı** (cihazın kendisine bakılmalı).
+
+**Emin olunamıyorsa hiçbir şey söylenmez.** Üç kanıttan biri eksikse ekran susar. Yanlış teşhis
+teşhissizlikten kötüdür: kullanıcıyı düzeltecek bir şeyi olmayan modem ayarlarında dolaştırır.
+
+**Hasta güvenliği ve veri:** etkilenmez. Değişiklik yalnız bağlanamama durumundaki bilgilendirme
+ekranını kapsar; bağlanma ve kimlik doğrulama yolları değişmedi.
+
+---
+
 ## mobile 2.3.14 — 2026-08-14 (güncelleme indirmesi kaldığı yerden devam eder)
 
 **Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.14.apk` (sha `fee5e8817441`, versionCode 21).

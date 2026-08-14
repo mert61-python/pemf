@@ -85,12 +85,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.14",
-      "versionCode": 21,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.14.apk",
-      "sha256": "fee5e881744188983117f4c6a01ead4a348fb6f35838e44718d7aaf1251ec2ec",
-      "size": 128396315,
-      "notes": "Guncelleme indirmesi artik KALDIGI YERDEN devam eder: uygulamayi %10'dayken kapatip actiginizda sifirdan baslamaz. Baska uygulamaya gectiginizde ya da ekran kilitlendiginde indirme durmaz, arka planda tamamlanir."
+      "version": "2.3.15",
+      "versionCode": 22,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.27/PEMF_Vet_Mobil-2.3.15.apk",
+      "sha256": "f7951bd6978d40d97e892b1179206a07e253c3e6012efa83ea6c1e9ac796ec61",
+      "size": 128403899,
+      "notes": "Cihaza baglanilamadiginda uygulama artik SEBEBINI soyluyor. Modeminizde istemci izolasyonu (AP Isolation) acikken cihazlar internete cikar ama birbirini goremez; ekran bunu tespit edip ne yapilacagini yazar. Emin olunamiyorsa hicbir sey soylenmez."
     }
   }
 }
