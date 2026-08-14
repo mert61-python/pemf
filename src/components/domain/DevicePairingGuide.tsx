@@ -1,11 +1,12 @@
 // Author: mertaygn, cglrgrkn
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Link2, MonitorSmartphone, RefreshCcw, Wifi, X } from "lucide-react-native";
+import { Link2, MonitorSmartphone, RefreshCcw, ShieldAlert, Wifi, X } from "lucide-react-native";
 
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useLiveData } from "@/context/LiveDataContext";
+import { agTanisiYap, taniMesaji, type AgTanisi } from "@/services/agTanisi";
 import { cihazaBaglan, eslesmeMesaji, KOD_MAX_UZUNLUK } from "@/services/pairing";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 
@@ -38,6 +39,23 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
   const { reconnect } = useLiveData();
   const [kod, setKod] = useState("");
   const [baglaniyor, setBaglaniyor] = useState(false);
+  const [tani, setTani] = useState<AgTanisi | null>(null);
+
+  // ⚠️ Rehber AÇILDIĞINDA sebebi araştır (2026-08-14 saha bildirimi: modemde istemci izolasyonu
+  // açıktı; ekran yalnız "cihaz bulunamadı" diyordu ve kullanıcının bunu bulma şansı yoktu).
+  // Tanı ağ isteği yapar → yalnız görünürken ve bir kez; sonuç yoksa hiçbir şey gösterilmez.
+  useEffect(() => {
+    if (!visible) return;
+    let iptal = false;
+    agTanisiYap()
+      .then((t) => { if (!iptal) setTani(t); })
+      .catch(() => { /* tanı BAŞARISIZ olsa da rehber çalışır — sessiz geç */ });
+    // ⚠️ Sıfırlama TEMİZLEMEDE: kapanışta eski teşhis silinmezse kullanıcı modemi düzeltip
+    // rehberi yeniden açtığında BAYAT teşhisi görür (yeni tanı gelene kadar yanlış yönlendirme).
+    return () => { iptal = true; setTani(null); };
+  }, [visible]);
+
+  const taniKutusu = tani ? taniMesaji(tani) : null;
 
   const bagla = async () => {
     const girdi = kod.trim();
@@ -81,6 +99,18 @@ export function DevicePairingGuide({ visible, onClose }: { visible: boolean; onC
               Cihaz bulunamadı. Telefonunuz cihazla <Text style={styles.bold}>aynı Wi-Fi&apos;de değilse</Text>{" "}
               (mobil veri ya da başka bir ağ) bu normaldir.
             </Text>
+
+            {/* SEBEP KUTUSU — yalnız KANIT varken çıkar (bkz. services/agTanisi). Tanı
+                "bilinmiyor" ise hiçbir şey gösterilmez: yanlış teşhis, teşhissizlikten kötüdür. */}
+            {taniKutusu && (
+              <View style={styles.tani} testID="tani-kutusu">
+                <ShieldAlert size={16} color={colors.warning} />
+                <View style={styles.taniIcerik}>
+                  <Text style={styles.taniBaslik}>{taniKutusu.baslik}</Text>
+                  <Text style={styles.taniMetin}>{taniKutusu.metin}</Text>
+                </View>
+              </View>
+            )}
 
             {/* ⚠️ İKİ YOL DA BURADA. Şerit artık kullanıcının hangi durumda olduğunu TAHMİN
                 ETMİYOR (ilk tasarım "daha önce eşleşilmiş mi" diye bakıyordu ve o sinyal
@@ -223,6 +253,19 @@ const styles = StyleSheet.create({
     letterSpacing: rs(2),
   },
   ipucu: { color: colors.textMuted, fontSize: rf(11) },
+  tani: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  taniIcerik: { flex: 1, gap: spacing.xs },
+  taniBaslik: { color: colors.text, fontSize: rf(14), fontWeight: "800" },
+  taniMetin: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
   hizli: {
     backgroundColor: colors.bg,
     borderWidth: 1,
