@@ -111,3 +111,81 @@ def test_SIRADAN_uclar_LAN_muafiyetini_KORUR(app):
     for yol in ("/api/health", "/api/ai/log?limit=1", "/api/patients", "/api/operators"):
         r = _lan(app).get(yol)
         assert r.status_code != 403, f"{yol} yanlislikla kapatildi — mesru kullanim kirilir"
+
+
+# ── UZAKTAN PII OKUMA — kampanya S18'in doğruladığı özelliğin KİLİDİ (2026-08-15) ──────────
+#
+# Kampanya "araştırmacı profilinin görmemesi gereken bir PII, kimlik doğrulaması olmadan
+# UZAKTAN alınabiliyor mu?" diye sordu; ölçülen cevap HAYIR. Ama bu özelliği kilitleyen bir
+# test YOKTU — yani doğru davranış, kazara doğruydu ve sessizce kaybolabilirdi.
+#
+# ⚠️ BU TESTLER LAN MUAFİYETİNE DOKUNMAZ. LAN'ın token'sız okuyabilmesi BİLİNÇLİ bir karardır
+# (`test_SIRADAN_uclar_LAN_muafiyetini_KORUR` onu mühürler: mobil app + web arayüzü LAN'da
+# token'sız çalışır). Burada kilitlenen şey yalnız UZAK/TÜNEL istemcisidir.
+
+# ⚠️ YALNIZ `/api/patients`. `/api/history/` BİLEREK DIŞARIDA: bu dosyanın DB fixture'ı yok ve
+# geçmiş ucu gerçek veri dizinindeki tedavi DB'sini açmaya çalışıyor → bu makinede (çözülemeyen
+# öksüz DB yüzünden) 500 veriyor ve testin ÖLÇTÜĞÜ ŞEY auth olmaktan çıkıyor. Kilitlenmek istenen
+# değişmez "uzak istemci PII okuyamaz"dır; bunu tek bir PII taşıyan uç KANITLAR. Ucu eklemek
+# isteyen ÖNCE izole bir DB fixture'ı yazmalı — aksi halde test, auth'u değil DB durumunu ölçer.
+PII_TASIYAN_OKUMA_UCLARI = [
+    "/api/patients",
+]
+
+
+@pytest.mark.parametrize("yol", PII_TASIYAN_OKUMA_UCLARI)
+def test_KRITIK_UZAK_istemci_PII_okuyamaz(app, yol, monkeypatch):
+    """Tünelden gelen (uzak) bir istemci, token'sız hasta PII'sini OKUYAMAMALI.
+
+    Tünel `127.0.0.1`den bağlanır; uzaklık `CF-Connecting-IP` ile anlaşılır (bkz.
+    `test_KRITIK_tunel_istegi_loopback_SAYILMAZ`). Bu test o ayrımın PII OKUMA yollarında da
+    geçerli olduğunu kilitler.
+
+    ⚠️ `PEMF_REQUIRE_AUTH=1` ÜRETİM YAPILANDIRMASIDIR — launcher backend'i her zaman böyle
+    başlatır (`launcher/core/src/install.rs::backend_env_with`, ENV_REQUIRE_AUTH="1"). Ölçüldü:
+    bu değişken YOKKEN (geliştirme varsayılanı) uzak istemci de 200 alır, yani hasta verisi
+    tünel üzerinden token'sız okunabilir. Backend'i ELLE, auth'suz ve tünel açık çalıştırmak
+    bu korumayı devre dışı bırakır — bu bir dağıtım notudur, koddaki kusur değil.
+    """
+    # ⚠️ `require_auth()` degeri MODUL DUZEYINDE onbellege alinir (`auth._require`), ilk
+    # cagrida okunur. Yalniz `setenv` etkisizdir — onbellek sifirlanmali ki GERCEK kod
+    # yolu (env okuma) calissin.
+    from servers import auth as _auth
+
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")
+    monkeypatch.setattr(_auth, "_require", None)
+    r = _loopback(app).get(yol, headers={"CF-Connecting-IP": "8.8.8.8"})
+    assert r.status_code in (401, 403), (
+        f"{yol}: UZAK istemci token'siz PII okuyabildi (HTTP {r.status_code}) — "
+        "tunel acikken internetten hasta verisi cekilebilir"
+    )
+
+
+def test_LAN_okumasi_KORUNUR_karsit_kanit(app, monkeypatch):
+    """Karşı-kanıt: yukarıdaki kilit LAN'ı kapatarak da geçemez — kapatırsa mobil uygulama ve
+    web arayüzü kırılır (bkz. `test_SIRADAN_uclar_LAN_muafiyetini_KORUR`). Auth AÇIKKEN bile
+    LAN okuması serbest kalmalı; bu bilinçli bir karardır."""
+    # ⚠️ `require_auth()` degeri MODUL DUZEYINDE onbellege alinir (`auth._require`), ilk
+    # cagrida okunur. Yalniz `setenv` etkisizdir — onbellek sifirlanmali ki GERCEK kod
+    # yolu (env okuma) calissin.
+    from servers import auth as _auth
+
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")
+    monkeypatch.setattr(_auth, "_require", None)
+    for yol in PII_TASIYAN_OKUMA_UCLARI:
+        r = _lan(app).get(yol)
+        assert r.status_code not in (401, 403), f"{yol}: LAN okumasi kapatilmis — mobil app kirilir"
+
+
+def test_LOOPBACK_okumasi_KORUNUR_karsit_kanit(app, monkeypatch):
+    """Karşı-kanıt: cihazın KENDİSİ (web arayüzü backend'den servis edilir) okuyabilmeli."""
+    # ⚠️ `require_auth()` degeri MODUL DUZEYINDE onbellege alinir (`auth._require`), ilk
+    # cagrida okunur. Yalniz `setenv` etkisizdir — onbellek sifirlanmali ki GERCEK kod
+    # yolu (env okuma) calissin.
+    from servers import auth as _auth
+
+    monkeypatch.setenv("PEMF_REQUIRE_AUTH", "1")
+    monkeypatch.setattr(_auth, "_require", None)
+    for yol in PII_TASIYAN_OKUMA_UCLARI:
+        r = _loopback(app).get(yol)
+        assert r.status_code not in (401, 403), f"{yol}: cihazin kendi arayuzu kapatilmis"
