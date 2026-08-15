@@ -116,6 +116,16 @@ _p2boot.*
 *.db-shm
 *.db-journal
 
+# ⚠️ DEPO KOKUNDE olusan CALISMA-ZAMANI veritabanlari (2026-08-15). Bir test `app_data_dir`
+# olarak depo kokunu verince uretici koke `pemf_treatment_history.db` + `migration_backups/`
+# yaratti ve bunlar COMMIT'E GIRDI. Yollar koke SABITLENDI (bas taraftaki `/`): `database/`
+# altindaki SABLON DB'ler (patients_template.db, pemf_treatment_history_template.db) izlenmeye
+# devam etmeli — topyekun `*.db` yok saymak onlari da dusururdu.
+/pemf_treatment_history.db
+/patients.db
+/auth_users.db
+/migration_backups/
+
 # SIRLAR — ASLA commit etme (Gmail App Password / Supabase key / şifreleme anahtarları)
 config/config.json
 data/config.json

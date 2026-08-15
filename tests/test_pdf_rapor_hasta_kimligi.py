@@ -62,7 +62,7 @@ def test_parameters_yolu_DA_calisir():
     assert _satir(rows, "Hasta Adı") == "Parametre Adi"
 
 
-def test_KRITIK_HASTA_RAPORU_basligi_ile_tablosu_CELISMEZ():
+def test_KRITIK_HASTA_RAPORU_basligi_ile_tablosu_CELISMEZ(tmp_path):
     """`/api/history/export_patient_pdf` yolundaki `_add_patient_header`.
 
     ⚠️ Belge KENDİ İÇİNDE çelişiyordu: başlıkta "HASTA RAPORU: PAMUK" (ad sorgu parametresinden
@@ -73,7 +73,9 @@ def test_KRITIK_HASTA_RAPORU_basligi_ile_tablosu_CELISMEZ():
     # mutasyon yakalamıştı.)
     from utils.pdf_report_generator import PDFReportGenerator
 
-    g = PDFReportGenerator(app_data_dir=Path(__file__).resolve().parent.parent)
+    # ⚠️ `tmp_path` ŞART: buraya depo kökünü vermiştim ve üretici köke `pemf_treatment_history.db`
+    # + `migration_backups/` yaratıp bunları commit'e sokmuştu. Test, koştuğu ağaca YAZMAMALI.
+    g = PDFReportGenerator(app_data_dir=tmp_path)
 
     class _DB:
         def get_session_details(self, _sid):
