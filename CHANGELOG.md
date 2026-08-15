@@ -127,6 +127,30 @@ cihazın kendisi sunar, orada eşleştirme anlamsızdır.
 
 ---
 
+## launcher 1.9.28 — 2026-08-15 (kaldır → yeniden kur artık temiz)
+
+**Etiket:** `launcher-v1.9.28` → `PEMFVetClient-Setup-1.9.28.exe` (sha `78209912de66`).
+
+**Hasta güvenliğini etkileyen sonuç — önce bu.** Client'ı **Windows Ayarlar ▸ Uygulamalar**'dan
+kaldırıp aynı makineye yeniden kurmak, MQTT broker'ını sessizce çalışamaz hale getirebiliyordu.
+Broker olmadan **6, 7 ve 8 numaralı bobinler ulaşılamaz** (onlar komutu MQTT ile alır); 1-5
+numaralı bobinler seri porttan çalışmaya devam ettiği için cihaz **çalışıyor gibi görünür**.
+Arızanın en kötü yanı buydu: yarısı çalışan bir cihaz, sebebi ekranda yazmayan bir sorun.
+
+Sebep: kaldırma sırasında yalnızca ana servis süreci durduruluyordu. O süreç daha önce
+beklenmedik şekilde kapanmışsa broker **sahipsiz** kalıyor ve durdurulamıyordu. Sahipsiz broker
+1883 numaralı portu tuttuğu için yeni kurulum kendi broker'ını başlatamıyor, ayrıca kendi
+dosyasını kilitlediği için kurulum dosyaları da tam silinemiyordu.
+
+Kaldırma artık broker'ı ve tünel yardımcısını **adlarıyla** durduruyor — sahipsiz kalmış olsalar
+bile. Sıra korunuyor: önce servis, sonra broker (ters sırada servis broker'ı yeniden başlatır).
+Bobinlere acil durdurma komutu, eskisi gibi her şeyden **önce** gönderiliyor.
+
+Uygulama içindeki "Kaldır" düğmesi bu temizliği zaten yapıyordu; sorun yalnızca Windows'un
+kendi kaldırma yolundaydı. İki yol artık aynı.
+
+---
+
 ## launcher 1.9.27 — 2026-08-12 (kararsız bağlantıda yanlış "internet yok")
 
 **Etiket:** `launcher-v1.9.27` → `PEMFVetClient-Setup-1.9.27.exe` (sha `d46914fe85c5`).

@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.9"
+#define MyAppVersion   "1.9.14"
 #define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
 #define MyAppURL       "https://pemfvet.com"
 #define ProjectRoot    ".."

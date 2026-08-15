@@ -81,6 +81,27 @@
   DetailPrint "PEMF: artık backend süreçleri durduruluyor…"
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe /T'
   Pop $0  ; taskkill nsExec dönüş-kodunu da AT
+  ; ⚠️ DENETİM 2026-08-15 (kur→kaldır→yeniden-kur BOZULMASI): burada YALNIZ PEMF_Backend.exe
+  ; öldürülüyordu. `/T` süreç-AĞACINI öldürür, yani backend HÂLÂ AYAKTAYSA çocukları olan
+  ; mosquitto/cloudflared de gider. Ama backend daha ÖNCE çöktüyse/zorla kapatıldıysa (ya da
+  ; launcher'ın `child.kill()`i — TerminateProcess ÇOCUK-AĞACINI öldürmez) mosquitto YETİM kalır:
+  ; ebeveyn PID'i ölüdür → HİÇBİR ağaçta değildir → bu satır onu BULAMAZ. Üç sonucu vardı:
+  ;   1) `runtime\...\mosquitto.exe` dosya-KİLİTLİ → POSTUNINSTALL'daki `RMDir /r "$INSTDIR\runtime"`
+  ;      SESSİZCE başarısız (NSIS RMDir hata vermez) → kurulum kökü artıkla geride kalır,
+  ;   2) yeniden kurulumda base re-extract o kilitli dosyaya çarpar → "os error 32",
+  ;   3) yetim broker 1883'ü TUTAR → yeni backend kendi broker'ını bağlayamaz → MQTT ölü →
+  ;      **ESP bobinleri 6-8 ULAŞILAMAZ** (STM 1-5 seri porttan çalışmaya devam eder, yani arıza
+  ;      "yarı çalışan cihaz" gibi görünür ve teşhisi zordur).
+  ; Launcher içi "Kaldır" düğmesi bu üçlüyü zaten `kill_stray_backends()` ile temizliyordu
+  ; (core/src/backend.rs) — AMA kullanıcı Ayarlar ▸ Uygulamalar'dan kaldırdığında launcher HİÇ
+  ; çalışmaz, yalnız bu kanca koşar. İki yol AYNI olmalı; isim listesi orayla birebir aynı tutulur.
+  ; SIRA ÖNEMLİ: backend ÖNCE ölmeli — MosquittoSupervisor._monitor_loop (services/
+  ; headless_services.py) broker'ı ölü görürse YENİDEN BAŞLATIR; önce mosquitto'yu öldürmek
+  ; supervisor'ın onu geri getirmesine yarar. Backend zaten yukarıda öldürüldü.
+  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM mosquitto.exe /T'
+  Pop $0
+  nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'
+  Pop $0
   Sleep 800
   Pop $2  ; orijinal $2 geri yüklenir
   Pop $1  ; orijinal $1 geri yüklenir
