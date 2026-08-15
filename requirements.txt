@@ -51,6 +51,19 @@ ultralytics==8.4.47             # YOLO (landmark/segmentasyon/CT/retikülosit/pe
 pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3                    # torch/sklearn/librosa çekirdeği
 scikit-learn==1.7.2             # CKD modeli PICKLE'dan yüklenir (statik import DEĞİL)
+# ⚠️ BİLİNEN SÜRÜM UYUŞMAZLIĞI (2026-08-15, SAHİP KARARIYLA BÖYLE KALIYOR).
+# Pickle'lanmış CKD bileşenleri (SimpleImputer/StandardScaler/OneHotEncoder/ColumnTransformer/
+# Pipeline) scikit-learn **1.8.0** ile kaydedilmiş; çalışma zamanı 1.7.2. sklearn her yüklemede
+# `InconsistentVersionWarning: ... might lead to breaking code or invalid results` basar.
+# Modeli daha ESKİ bir kütüphaneyle çalıştırmak riskli yöndür (ileri uyumluluk garanti değil).
+#
+# NEDEN KAPATILMADI: modelleri yeniden eğitme imkânı yok (eğitim ortamı/veri elde değil), ve
+# çalışma zamanını 1.8.0'a çekmek numpy<2 kaskadını tetikliyor (bkz. yukarıdaki torch notu).
+#
+# RİSK NEYLE KONTROL ALTINDA: `tests/test_ai_golden_values.py` modelin çıktısını SAKLI ALTIN
+# DEĞERLERLE karşılaştırır (CKD hasta/sağlıklı/eksik + EM/RNA). Sürüm farkı çıktıları
+# kaydırsaydı o testler KIRILIRDI; 14/14 geçiyor. Yani risk şansa değil ÖLÇÜME dayanıyor.
+# ⚠️ scikit-learn sürümünü değiştiren, altın değer testlerini MUTLAKA koşturmalı.
 xgboost==3.2.0                   # cat_disease XGBoost.pkl PICKLE (statik import DEĞİL)
 
 # ── AI/ML — ses (kedi sesi sınıflandırma) ──

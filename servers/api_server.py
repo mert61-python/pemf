@@ -667,7 +667,19 @@ def _start_mqtt_for_api() -> None:
     try:
         import paho.mqtt.client as _mqtt
 
-        _mqtt_client_api = _mqtt.Client(client_id=_mqtt_client_id("ws"), clean_session=True)
+        # ⚠️ BİLEREK VERSION1 (2026-08-15) — yayıncı istemci V2'ye geçti, bu GEÇMEDİ.
+        # Sebep: bu istemcinin ÜÇ geri çağrısı var (`on_connect`/`on_disconnect`/`on_message`) ve
+        # V2 imzaları değiştirir (`rc` → `reason_code` + `properties`). Bu geri çağrılar ESP
+        # telemetrisi ve ACİL DURDURMA yolundadır ve HİÇBİR TESTLE KAPSANMIYOR. Test kapsamı
+        # olmayan bir güvenlik yolunda imza değiştirmek, doğrulanmamış risktir; sessizce
+        # bozulursa bunu ancak sahada fark ederiz.
+        # Sürümü AÇIKÇA vermek uyarıyı susturur ve davranışı DEĞİŞTİRMEZ.
+        # ⚠️ KALICI ÇÖZÜM DEĞİLDİR: paho V1'i eninde sonunda kaldıracak. Geçiş için önce bu üç
+        # geri çağrıya test yazılmalı (özellikle `_on_mqtt_message_api` → bobin telemetrisi),
+        # sonra imzalar V2'ye çevrilmeli.
+        _mqtt_client_api = _mqtt.Client(
+            _mqtt.CallbackAPIVersion.VERSION1, client_id=_mqtt_client_id("ws"), clean_session=True
+        )
         _u, _pw = _mqtt_credentials()
         if _u:
             _mqtt_client_api.username_pw_set(_u, _pw)  # broker auth açıksa kimlik gönder
@@ -1034,7 +1046,13 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
 
         # Cagri basina BENZERSIZ kimlik — acil-durdurma ESP bobinlerine paralel yayin yapar;
         # sabit kimlikte broker es-zamanli baglantilardan yalniz birini tutar (bkz. _mqtt_client_id).
-        c = _mqtt.Client(client_id=_mqtt_client_id("pub"), clean_session=True)
+        # ⚠️ CALLBACK API SÜRÜMÜ AÇIKÇA VERİLİR (2026-08-15). paho 2.x, sürüm verilmeyen her
+        # istemci için "Callback API version 1 is deprecated" uyarısı basıyordu ve bu tek satır
+        # test çıktısında ~156 uyarı üretiyordu. Gürültü zararsız değildir: bugün tam bu yüzden
+        # sklearn'ün "geçersiz sonuç üretebilir" uyarısı 171 satırlık tekrarın içinde
+        # kayboluyordu. Bu istemcinin HİÇ geri çağrısı yok (yalnız connect/publish) → V2'ye
+        # geçmek davranışı değiştirmez.
+        c = _mqtt.Client(_mqtt.CallbackAPIVersion.VERSION2, client_id=_mqtt_client_id("pub"), clean_session=True)
         _u, _pw = _mqtt_credentials()
         if _u:
             c.username_pw_set(_u, _pw)  # broker auth açıksa (allow_anonymous false) kimlik gönder
