@@ -523,8 +523,18 @@ class PDFReportGenerator:
             ],
         ]
         if include_patient_info:
-            patient_name = parameters.get('patient_name', {}).get('value', '') or ''
-            patient_surname = parameters.get('patient_surname', {}).get('value', '') or ''
+            # ⚠️ SEANS SATIRINA DÜŞ (kampanya bulgusu S18-EK, 2026-08-14). Eskiden ad YALNIZCA
+            # `parameters`tan okunuyordu; oysa `patient_name` seans satırında ÜST DÜZEYDE durur
+            # (CSV/JSON oradan okuduğu için DOĞRUydu) ve `parameters` çoğu kayıtta adı içermez →
+            # PDF her seans için "Hasta Adı: Bilinmiyor" yazıyordu. Bu bir TIBBİ RAPORDUR ve
+            # hasta sahibine/başka kliniğe gider; kime ait olduğu belirsiz bir tedavi kaydı
+            # hukuken ve tıbben kullanılamaz. `patient_vet_contact` satırı bu deseni zaten
+            # kullanıyordu — hasta adına uygulanmamıştı.
+            # ⚠️ SIRA: `parameters` ÖNCELİKLİ (seansa özel girilmiş ad ezilmez), seans satırı YEDEK.
+            patient_name = parameters.get('patient_name', {}).get('value', '') or session.get('patient_name') or ''
+            patient_surname = (
+                parameters.get('patient_surname', {}).get('value', '') or session.get('patient_surname') or ''
+            )
             patient_full_name = f"{patient_name} {patient_surname}".strip()
             rows.insert(4, ["Hasta Adı", patient_full_name or 'Bilinmiyor'])
             rows.insert(5, ["Hasta Yaşı", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')])
