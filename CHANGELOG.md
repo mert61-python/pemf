@@ -207,6 +207,35 @@ elle-bağlanmanın farklı karar vermesi mümkündü.
 
 ---
 
+## app 1.9.15 — 2026-08-15 (ses analizi: boş kayıt artık sonuç uydurmuyor)
+
+**Etiket:** `client-app-v1.9.15` (base-app `SHA_APP`, base `SHA_BASE`,
+base-deps `eee622a23be9` — değişmedi, yeniden inmez).
+
+**Ev sahibi modunda bildirilen iki sorun.**
+
+**1. Sessiz/boş kayıt artık analiz edilmiyor.** Mikrofon ses almamışken bile ekranda bir ruh
+hali sonucu çıkıyordu. Sebep şu: ses modelinin tanıdığı **on sınıfın hepsi bir kedi duygusu** —
+"kedi sesi yok" diye bir cevabı yok. Bu yüzden sessizliğe bile mutlaka bir duygu atıyordu.
+Ölçüldü: tam sessizlikte model %16,7 güven veriyor (rastgele tahmin %10), yani aslında hiçbir
+şey söylemiyor; ekran bunu kesin bir bulgu gibi gösteriyordu. Artık kayıt seviyesi ölçülüyor ve
+sessizse analiz yapılmıyor — "mikrofonu yaklaştırıp tekrar kaydedin" deniyor.
+
+**2. Zayıf kayıtlarda sonucun güvenilmez olduğu yazıyor.** Kayıtta net bir kedi sesi
+ayırt edilemediğinde sonuç yine gösteriliyor ama üstünde uyarı çıkıyor.
+
+⚠️ **Neden "kedi sesi yok" denip tamamen reddedilmiyor:** eşik gerçek kayıtlarla ölçüldü ve
+**gerçek bir ağrı kaydı da düşük güvendeydi** (%56), oda gürültüsü ise %60. Yani düz bir güven
+eşiği gerçek ağrıyı eler, gürültüyü geçirirdi — ev sahibi kedisi gerçekten ağrıdayken "ses
+algılanamadı" görürdü. Bu, düzeltilen sorundan daha kötü olurdu. Sessizlik kapısı sinyal
+seviyesine bakar; gerçek kayıtların en sessizi bile eşiğin 19 dB üstündedir.
+
+**3. Bilgisayarda ses kaydı çökmesi.** Tarayıcıda kayıt yapıp "Analiz Et" denince
+"expo-file-system web'de yok" hatası veriyordu — masaüstünde canlı kayıt hiç analiz
+edilemiyordu. Kayıt dosyası artık tarayıcıda da doğru okunuyor.
+
+---
+
 ## app 1.9.14 — 2026-08-15 (cihaz artık açılıyor; kayıp doz kaydı; gözetimsiz bobin)
 
 **Etiket:** `client-app-v1.9.14` (base-app `61389a6ac434`, base `a2becde42f04`,

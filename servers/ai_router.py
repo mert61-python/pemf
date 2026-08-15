@@ -26,6 +26,10 @@ import threading
 import time
 
 from utils.model_downloader import download_model_sync
+from utils.ses_kalitesi import guvenilir_mi as ses_guvenilir_mi
+from utils.ses_kalitesi import normalize_entropi as ses_normalize_entropi
+from utils.ses_kalitesi import sessiz_mi as ses_sessiz_mi
+from utils.ses_kalitesi import wav_rms_dbfs as ses_wav_rms_dbfs
 from utils.stm32_protocol_limits import (
     normalize_ai_pro_duty_ratio,
     normalize_phase_deg,
@@ -1995,13 +1999,45 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
         if proc.returncode != 0 or not os.path.exists(tmp_wav):
             raise ValueError("Ses çözümlenemedi (desteklenmeyen format?).")
 
+        # ⚠️ SESSİZLİK KAPISI (saha bildirimi 2026-08-15): modelin 10 sınıfının HEPSİ kedi
+        # duygusu; "kedi değil" sınıfı YOK → softmax sessizliğe bile mutlaka bir duygu atar.
+        # Sahip boş bir kayıt analiz edince "Resting" sonucu alıyordu (ölçüldü: %16,7 — şans
+        # %10, yani model aslında hiçbir şey söylemiyor). Sessiz kaydı ANALİZ ETME.
+        # Eşik gerçek kayıtlarla kalibre edildi (utils/ses_kalitesi başlığındaki tablo).
+        try:
+            _rms = await asyncio.to_thread(ses_wav_rms_dbfs, tmp_wav)
+        except Exception as _se:  # ölçüm başarısızsa kapıyı ZORLAMA (analiz engellenmesin)
+            logger.warning("cat_sound RMS ölçülemedi, sessizlik kapısı atlandı: %s", _se)
+            _rms = None
+        if _rms is not None and ses_sessiz_mi(_rms):
+            # ⚠️ `ValueError` DEĞİL, `HTTPException(422)`: `_ai_fail` ham hataları bilerek
+            # yutup istemciye yalnız "Ses analiz hatası" döndürür (bilgi ifşası koruması) —
+            # kullanıcı NEDENİNİ öğrenemezdi. `_ai_fail` HTTPException'ı AYNEN geçirir; bu,
+            # görüntü uçlarında zaten kurulmuş kalıp (bkz. `_decode_image` / petri reddi).
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Kayıt sessiz ya da çok zayıf — ses alınamamış olabilir. "
+                    "Mikrofonu yaklaştırıp sessiz bir ortamda ~5 saniye tekrar kaydedin."
+                ),
+            )
+
         result = await asyncio.to_thread(lambda: clf.predict(tmp_wav, top_k=3))
+        # BELİRSİZLİK sonuçla BİRLİKTE taşınır: istemci düşük güvende sonucu kesin bir bulgu
+        # gibi sunmaz. ⚠️ `guvenilir=False` "kedi sesi yok" DEMEK DEĞİLDİR — bu model bunu
+        # söyleyemez; aralıklar örtüşüyor (gerçek ağrı kaydı 0,563 · oda gürültüsü 0,595).
+        # Bu yüzden düşük güven REDDEDİLMEZ, yalnız işaretlenir (sahip kararı 2026-08-15).
+        _probs = list((result.get("probabilities") or {}).values())
+        _entropi = ses_normalize_entropi(_probs)
         return {
             "status": "success",
             "top_1_class": result["top_1_class"],
             "top_1_prob": result["top_1_prob"],
             "top_k": result["top_k"],
             "probabilities": result["probabilities"],
+            "guvenilir": ses_guvenilir_mi(_probs),
+            "belirsizlik": round(_entropi, 3),
+            "rms_dbfs": None if _rms is None else round(_rms, 1),
         }
     except Exception as e:
         logger.error(f"cat_sound inference error: {e}", exc_info=True)

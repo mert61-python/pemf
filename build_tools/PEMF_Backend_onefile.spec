@@ -154,7 +154,13 @@ if os.path.exists(nssm_dir):
     datas.append((nssm_dir, 'bin/nssm'))
 
 # React frontend (FastAPI '/' kökünden serve eder)
-frontend_dir = os.path.join(project_path, 'frontend', 'dist')
+# ⚠️ KAYNAK DİZİN = 'pf' (2026-08-15). Eskiden 'frontend' okunuyordu ve `guii/` altında AYNI
+# deponun İKİ klonu vardı (`pf/` geliştirilen, `frontend/` build'in okuduğu). İkisi de
+# .gitignore'da olduğu için ayrışma görünmüyordu; ölçüldü: `frontend/` 15 commit GERİDE →
+# arayüz düzeltmeleri masaüstü paketine HİÇ ulaşmıyordu. İkinci klon kaldırıldı,
+# tests/test_frontend_tek_kaynak.py tekrarını kilitliyor. (Paket İÇİ yol 'frontend/dist'
+# olarak KALIR — backend ve launcher orayı arar; değişen yalnız KAYNAK dizin.)
+frontend_dir = os.path.join(project_path, 'pf', 'dist')
 if os.path.exists(frontend_dir):
     datas.append((frontend_dir, os.path.join('frontend', 'dist')))
 

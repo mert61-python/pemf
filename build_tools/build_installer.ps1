@@ -241,7 +241,14 @@ if (Test-Path $BuildDir) {
 # --- Adim 4.5: React Web Export ---
 Write-Step "React Frontend Web Export"
 
-$FrontendDir = Join-Path $ProjectRoot "frontend"
+# ⚠️ TEK KAYNAK = `pf/` (2026-08-15). Eskiden burada "frontend" yaziyordu ve `guii/` altinda
+# AYNI deponun (pemf-frontend.git) IKI ayri klonu duruyordu: `pf/` (gelistirilen) ve
+# `frontend/` (build'in okudugu). Ikisi de .gitignore'da oldugu icin ayrisma GORUNMUYORDU.
+# Olculdu: `frontend/` 15 commit GERIDE idi -> arayuz degisiklikleri masaustu paketine HIC
+# ULASMIYORDU (dogrulanan ornek: web'de canli ses kaydi coken hata `pf/`de duzeltildi ama
+# paket eski agactan uretiliyordu). Ikinci klon kaldirildi; tekrar olusmasi
+# tests/test_frontend_tek_kaynak.py ile kilitlendi.
+$FrontendDir = Join-Path $ProjectRoot "pf"
 
 if ($env:PEMF_SKIP_FRONTEND -eq '1') {
     # Web UI (pf/) DEGISMEDIGINDE re-export'u ATLA: onceden saglanan frontend\dist KULLANILIR.
