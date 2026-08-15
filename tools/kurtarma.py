@@ -28,7 +28,7 @@ GERİ YÜKLEME SIRASI
     2) Bu aracı --yaz ile çalıştırın.
     3) Yedek dizinindeki EN YENİ dosyaları veri dizinine kopyalayın:
          pemf_treatment_history_<tarih>.db  ->  pemf_treatment_history.db
-         pemf_patients_<tarih>.db           ->  pemf_patients.db
+         pemf_patients_<tarih>.db           ->  patients.db
     4) Servisi başlatın.
 """
 
@@ -122,7 +122,11 @@ def _restore(zarf: Path, kod: str, yaz: bool) -> int:
     print("Anahtarlar bu makinenin sir deposuna yazildi.")
     print("Simdi yedek .db dosyalarini veri dizinine kopyalayip servisi baslatin:")
     print("    pemf_treatment_history_<tarih>.db  ->  pemf_treatment_history.db")
-    print("    pemf_patients_<tarih>.db           ->  pemf_patients.db")
+    # ⚠️ HEDEF AD `patients.db` (2026-08-15 duzeltmesi). Burada `pemf_patients.db` yaziyordu;
+    # uygulama O ADI HIC ACMAZ → yonergeyi izleyen klinik hasta kayitlarini "geri yukledigini"
+    # sanip bos bir hasta listesiyle calisirdi. YEDEK dosya on-eki (`pemf_patients_<tarih>.db`)
+    # DEGISMEDI — onu `headless_db_maintenance` uretir ve rotasyona sokar.
+    print("    pemf_patients_<tarih>.db           ->  patients.db")
     return 0
 
 

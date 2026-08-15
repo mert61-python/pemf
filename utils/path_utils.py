@@ -37,15 +37,31 @@ def get_icon_path(icon_name):
 # ⚠️ YALNIZ tıbbi kayıt. Cihaz kimliği/eşleştirme dosyaları BİLEREK dışarıda: onlar makineye
 # özgüdür ve kopyalanırsa iki kayıt aynı device_id'yi paylaşır. Sır dosyası (`pemf_secrets.json`)
 # da AYNI sebeple dışarıdadır — içinde `device_id`/`pairing_code`/`device_registry_secret` var.
+# ⚠️ ADLAR ÜRETİMDEKİ GERÇEK DOSYA ADLARIDIR (2026-08-15 düzeltmesi). Burada hasta DB'si
+# "pemf_patients.db" yazıyordu; o ad hiçbir sürümde üretim DB adı OLMADI — yalnız YEDEK dosya
+# ön-ekidir (`headless_db_maintenance` `pemf_patients_<tarih>.db` üretir). Üretimdeki ad
+# `patients.db`dir (`database/patient_database.PatientDatabase.db_file` varsayılanı). Sonuç:
+# "vardiyalı klinikte boş klinik" düzeltmesi seans geçmişini taşıyor, HASTA KAYITLARINI HİÇ
+# taşımıyordu — ve testi de aynı yanlış adı kullandığı için yeşil kalıyordu.
 _GOC_DOSYALARI = (
     "pemf_treatment_history.db",
-    "pemf_patients.db",
+    "patients.db",
     "auth_users.db",
 )
 
-#: Göç listesinden SQLCipher ile şifreli olanlar — kopyalanmadan ÖNCE hedefin anahtarıyla
-#: açılabildikleri DOĞRULANIR (bkz. `_hedef_anahtariyla_acilir_mi`).
-_GOC_SIFRELI = frozenset({"pemf_treatment_history.db", "pemf_patients.db"})
+#: Göç listesinden SQLCipher ile şifreli olanlar.
+#
+# ⚠️ BU KÜME `_GOC_DOSYALARI` İLE BİRLİKTE GÜNCELLENİR. Yalnız yukarıdaki liste düzeltilip
+# burası unutulursa `ad in _GOC_SIFRELI` TUTMAZ ve şifreli hasta DB'si, hedefin anahtarıyla
+# açılıp açılmayacağı KONTROL EDİLMEDEN körlemesine kopyalanır — düzeltme, düzelttiğinden daha
+# kötü bir hâl yaratır.
+#
+# ⚠️ YORUM DÜZELTMESİ: burada eskiden "kopyalanmadan ÖNCE hedefin anahtarıyla açılabildikleri
+# DOĞRULANIR (bkz. `_hedef_anahtariyla_acilir_mi`)" yazıyordu. O FONKSİYON HİÇ YOK — 1.9.11'de
+# özyineleme (BSOD) yüzünden KALDIRILDI ve atıf yorumda kaldı. Karar SAF DOSYA OKUMASIYLA
+# verilir (`_tasinabilir_mi`: ham anahtar karşılaştırması). "Gerçekten açılıyor mu" sorusunu
+# göç DEĞİL, DB açılışındaki karantina zarfı cevaplar (`database/sqlcipher_util.karantinaya_al`).
+_GOC_SIFRELI = frozenset({"pemf_treatment_history.db", "patients.db"})
 
 
 #: Sır dosyasının adı (utils.secrets_manager ile AYNI).
@@ -91,6 +107,31 @@ def _sqlcipher_anahtarini_gocur(eski: Path, hedef: Path) -> bool:
             dst = json.loads(hedef_j.read_text(encoding="utf-8"))
         if (dst.get("auto") or {}).get("sqlcipher_key"):
             return False  # ⚠️ EZME: hedefin kendi verisi bu anahtarla şifreli olabilir
+
+        # ⚠️ ÇÖZÜLEBİLİRLİK KAPISI (2026-08-15). Ham değer BU makinede çözülemiyorsa (blob başka
+        # bir makine/kullanıcı bağlamında sarılmış) hedefte "saklanmış ama çözülemeyen" bir sır
+        # kalır → `get_secret` fail-closed RuntimeError atar → BACKEND BİR DAHA HİÇ AÇILMAZ.
+        # Ölçüldü: göç, çalışan bir kurulumu açılamaz hâle getirebiliyordu.
+        #
+        # ⚠️ YERİ ÖNEMLİ: yukarıdaki "hedefte anahtar VARSA dokunma" dalından SONRA, yazımdan
+        # hemen ÖNCE. Daha erken konursa hiçbir şey yazılmayacak durumlarda da operatöre
+        # korkutucu bir ERROR loglanır (gereksiz destek çağrısı).
+        #
+        # ⚠️ `_tasinabilir_mi`nin "SIR/KRİPTO KATMANINA DOKUNMA" kuralına AYKIRI DEĞİLDİR:
+        # o kural, YOL katmanına (`get_app_data_directory`) dönen çağrıyı yasaklar — 1.9.9/1.9.10
+        # BSOD özyinelemesi oradan geliyordu. Buradaki kontrol saf çözümlemedir ve yol katmanına
+        # DOKUNMAZ; test çağrı sayısını 0 olarak ölçüp kilitler.
+        from utils.secrets_manager import bu_makinede_cozulebilir_mi
+
+        if not bu_makinede_cozulebilir_mi(anahtar):
+            logging.getLogger(__name__).error(
+                "VERİ GÖÇÜ ATLANDI: eski kökteki at-rest anahtarı BU MAKİNEDE ÇÖZÜLEMİYOR "
+                "(başka makine/kullanıcı bağlamında sarılmış olabilir). Kopyalansaydı hedefte "
+                "'saklanmış ama çözülemeyen' bir sır kalır ve backend BİR DAHA HİÇ AÇILMAZDI. "
+                "Eski veri kaynağında DURUYOR: %s",
+                kaynak_j,
+            )
+            return False
 
         dst.setdefault("auto", {})["sqlcipher_key"] = anahtar
         dst.setdefault("_comment", src.get("_comment", ""))
@@ -208,7 +249,7 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             return
         import logging
 
-        # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_hedef_anahtariyla_acilir_mi`
+        # ⚠️ SIRA: anahtar ÖNCE taşınır. Aksi hâlde aşağıdaki `_tasinabilir_mi`
         # kontrolü şifreli DB'leri reddeder ve şifreli kurulumlarda göç HİÇ çalışmaz
         # (vardiyalı klinikte "boş klinik" devam ederdi). Anahtar yalnız hedefte HİÇ yoksa
         # taşınır; varsa dokunulmaz.
@@ -218,9 +259,11 @@ def _kullanicidan_makineye_gocur(hedef: Path) -> None:
             kaynak, varis = eski / ad, hedef / ad
             if not kaynak.is_file() or varis.exists():
                 continue
-            # ⚠️ Şifreli DB'yi HEDEFİN anahtarıyla açamıyorsak KOPYALAMA (bkz.
-            # `_hedef_anahtariyla_acilir_mi`): kopyalamak cihazı sonsuz açılış-hatası
-            # döngüsüne sokar ve kenara alma bile kurtarmaz.
+            # ⚠️ Ham anahtarlar UYUŞMUYORSA KOPYALAMA (bkz. `_tasinabilir_mi`). Kopyalanan DB
+            # hedefte okunamaz olur; DB açılışındaki karantina zarfı onu kenara alır ve cihaz
+            # temiz bir DB ile çalışmaya devam eder — ama ESKİ KAYIT ERİŞİLEMEZ kalır.
+            # (Eski yorum "kenara alma bile kurtarmaz" diyordu; 2026-08-14'te kurtarma zarfı
+            # düzeltildikten sonra bu artık DOĞRU DEĞİL.)
             if ad in _GOC_SIFRELI and not _tasinabilir_mi(kaynak, eski, hedef):
                 logging.getLogger(__name__).error(
                     "VERİ GÖÇÜ ATLANDI: %s ŞİFRELİ ve hedefin at-rest anahtarı FARKLI "

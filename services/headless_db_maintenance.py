@@ -42,8 +42,11 @@ NASIL GERI YUKLENIR
   2) Anahtarlari zarftan cikarip yerlestirin:
        python tools/kurtarma.py --zarf kurtarma-zarfi.enc --kod <KOD> --yaz
   3) Bu dizindeki  pemf_treatment_history_*.db / pemf_patients_*.db  dosyalarindan
-     en yenisini veri dizinine  pemf_treatment_history.db / pemf_patients.db
+     en yenisini veri dizinine  pemf_treatment_history.db / patients.db
      adiyla kopyalayin.
+     (⚠️ 2026-08-15: hedef ad `pemf_patients.db` yaziliyordu; uygulama O ADI HIC ACMAZ →
+      yonergeyi izleyen klinik hasta kayitlarini geri yukledigini sanip bos liste gorurdu.
+      YEDEK dosya on-eki `pemf_patients_<tarih>.db` DEGISMEDI — rotasyon onu kullanir.)
   4) Servisi baslatin.
 
 ZARF YOKSA

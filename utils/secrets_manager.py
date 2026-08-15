@@ -213,6 +213,33 @@ def _dec(stored: str) -> str:
     return stored  # düz-metin (eski/fallback)
 
 
+def bu_makinede_cozulebilir_mi(stored: str) -> bool:
+    """Saklanmış bir sır değeri BU makinede çözülebiliyor mu?
+
+    ⚠️ NİÇİN VAR (2026-08-15): veri göçü, eski kökteki HAM `sqlcipher_key` değerini hedefe
+    OLDUĞU GİBİ kopyalıyordu. Değer başka bir makine/kullanıcı bağlamında sarılmışsa hedefte
+    "saklanmış ama ÇÖZÜLEMEYEN" bir sır oluşuyor; `get_secret` fail-closed `RuntimeError`
+    atıyor ve **backend bir daha hiç açılmıyor**. Yani göç, çalışan bir kurulumu açılamaz hâle
+    getirebiliyordu. Göç artık kopyalamadan ÖNCE burayı sorar.
+
+    ⚠️ NEDEN BURADA, `path_utils`te DEĞİL: önek (`DPAPI:`/`MKEY:`) ve DPAPI bayrakları TEK
+    KAYNAKTA kalsın. `path_utils` kendi ctypes kopyasını yazsaydı `MKEY:` (Linux/macOS yolu)
+    kapsam dışı kalır ve aynı tuğla açık kalırdı.
+
+    ⚠️ ÖZYİNELEME SINIRI: `_dec` yol/dosya katmanına DOKUNMAZ (`_data_dir` yalnız `_load`
+    içinde çağrılır). `get_sqlcipher_key`/`get_app_data_directory` üzerinden geçen çağrı
+    1.9.9/1.9.10'da açılışta sonsuz özyineleme + BSOD üretmişti; bu fonksiyon o yola GİRMEZ.
+    `tests/test_goc_anahtar_kapisi.py` çağrı sayısını ölçerek kilitler.
+
+    Düz-metin (bilinen önek yok) → `True`: makineye bağlı değildir, taşınması güvenlidir.
+    """
+    try:
+        _dec(stored)
+        return True
+    except Exception:
+        return False
+
+
 # ───────────────────────── üreteçler ─────────────────────────
 def _gen_urlsafe24() -> str:
     return _secrets.token_urlsafe(24)

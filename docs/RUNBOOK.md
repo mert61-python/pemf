@@ -121,7 +121,8 @@ yedek dizinine kopyalanmaz; regresyon testiyle kilitlidir.
    Makinede zaten anahtar varsa araç **durur** (üzerine yazmak mevcut şifreli veriyi kalıcı kaybettirir);
    gerçekten taze kurulumsa `PEMF_KURTARMA_USTUNE_YAZ=1` ile zorla.
 3. En yeni yedeği kopyala: `pemf_treatment_history_<tarih>.db` → `pemf_treatment_history.db`,
-   `pemf_patients_<tarih>.db` → `pemf_patients.db`
+   `pemf_patients_<tarih>.db` → `patients.db`  ← ⚠️ hedef ad `patients.db`; uygulama
+   `pemf_patients.db` adını **hiç açmaz** (yedek dosya ön-eki ile karıştırmayın)
 4. Servisi başlat.
 
 **Kod kaybolursa** yedekler yalnız orijinal makinede açılır. Kod, kaybı geri alınamaz tek şeydir.

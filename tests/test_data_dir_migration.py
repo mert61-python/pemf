@@ -14,6 +14,12 @@ mevcut kliniklerin eski verisinin O GEÇİŞTE kaybolmadığını kilitler.
   * hedefte aynı adlı dosya VARSA DOKUNULMAZ — üzerine yazmak yeni kliniğin kaydını siler,
   * KOPYALANIR, kaynak SİLİNMEZ,
   * göç başarısız olursa backend yine de açılır (göç bir kolaylıktır, kapı değil).
+
+⚠️ DOSYA ADLARI ÜRETİMDEN GELİR — ELLE YAZMAYIN (2026-08-15). Bu dosya hasta DB'sini
+`pemf_patients.db` diye yazıyordu; göç listesi de aynı yanlış adı kullandığı için test
+YEŞİL kalıyor ve "hasta kayıtları taşınıyor" diye YANLIŞ GÜVENCE veriyordu. Gerçekte üretim
+adı `patients.db`dir ve hasta kayıtları göçte HİÇ taşınmıyordu. Aşağıdaki
+`test_goc_listesi_URETIM_adlarini_kullanir` bu ayrışmayı kalıcı olarak kilitler.
 """
 
 import platform
@@ -54,14 +60,14 @@ def ortam(tmp_path):
 def test_KRITIK_eski_tibbi_kayit_TASINIR(ortam, monkeypatch):
     eski_kok, eski, hedef = ortam
     (eski / "pemf_treatment_history.db").write_bytes(_duz_db(b"SEANS-GECMISI"))
-    (eski / "pemf_patients.db").write_bytes(_duz_db(b"HASTALAR"))
+    (eski / "patients.db").write_bytes(_duz_db(b"HASTALAR"))
 
     _goc(monkeypatch, eski_kok, hedef)
 
     assert (hedef / "pemf_treatment_history.db").read_bytes() == _duz_db(b"SEANS-GECMISI"), (
         "seans gecmisi tasinmadi — klinik BOS gorunurdu"
     )
-    assert (hedef / "pemf_patients.db").read_bytes() == _duz_db(b"HASTALAR")
+    assert (hedef / "patients.db").read_bytes() == _duz_db(b"HASTALAR")
 
 
 def test_KRITIK_kaynak_SILINMEZ(ortam, monkeypatch):
@@ -107,9 +113,9 @@ def test_ayni_dizin_ise_hicbir_sey_yapmaz(tmp_path, monkeypatch):
     kok = tmp_path / "ayni"
     d = kok / "PEMF_GUI"
     d.mkdir(parents=True)
-    (d / "pemf_patients.db").write_bytes(_duz_db(b"A"))
+    (d / "patients.db").write_bytes(_duz_db(b"A"))
     _goc(monkeypatch, kok, d)
-    assert (d / "pemf_patients.db").read_bytes() == _duz_db(b"A")
+    assert (d / "patients.db").read_bytes() == _duz_db(b"A")
 
 
 def test_KRITIK_goc_hatasi_BACKENDI_DUSURMEZ(ortam, monkeypatch):
@@ -118,7 +124,7 @@ def test_KRITIK_goc_hatasi_BACKENDI_DUSURMEZ(ortam, monkeypatch):
     import shutil
 
     eski_kok, eski, hedef = ortam
-    (eski / "pemf_patients.db").write_bytes(_duz_db(b"X"))
+    (eski / "patients.db").write_bytes(_duz_db(b"X"))
     monkeypatch.setattr(shutil, "copy2", lambda *a, **k: (_ for _ in ()).throw(OSError("izin yok")))
     _goc(monkeypatch, eski_kok, hedef)  # istisna SIZMAMALI
 
@@ -129,10 +135,36 @@ def test_get_app_data_directory_override_ile_goc_TETIKLER(tmp_path, monkeypatch)
 
     eski_kok = tmp_path / "kullanici"
     (eski_kok / "PEMF_GUI").mkdir(parents=True)
-    (eski_kok / "PEMF_GUI" / "pemf_patients.db").write_bytes(_duz_db(b"HASTALAR"))
+    (eski_kok / "PEMF_GUI" / "patients.db").write_bytes(_duz_db(b"HASTALAR"))
     monkeypatch.setenv("APPDATA", str(eski_kok))
     monkeypatch.setenv("PEMF_DATA_DIR", str(tmp_path / "makine"))
 
     d = get_app_data_directory()
     assert d == tmp_path / "makine" / "PEMF_GUI"
-    assert (d / "pemf_patients.db").read_bytes() == _duz_db(b"HASTALAR")
+    assert (d / "patients.db").read_bytes() == _duz_db(b"HASTALAR")
+
+
+def test_goc_listesi_URETIM_adlarini_kullanir():
+    """⚠️ AD SÜRÜKLENMESİ KİLİDİ (2026-08-15).
+
+    Göç listesindeki adlar ELLE YAZILMIŞ metinlerdir; üretimdeki gerçek dosya adları başka
+    yerlerde tanımlanır. İkisi ayrışırsa göç sessizce HİÇBİR ŞEY taşımaz ve bunu fark etmek
+    imkânsızdır — testler de aynı yanlış adı kullanırsa yeşil kalır (tam olarak böyle oldu:
+    `pemf_patients.db` hiçbir sürümde üretim adı olmadı, yalnız YEDEK ön-ekidir).
+
+    Bu test adları ÜRETİM KAYNAĞINDAN türetir; kopya bir metinle karşılaştırmaz.
+    """
+    import inspect
+
+    from database.patient_database import PatientDatabase
+    from utils import path_utils
+
+    uretim_hasta_db = inspect.signature(PatientDatabase.__init__).parameters["db_file"].default
+    assert uretim_hasta_db in path_utils._GOC_DOSYALARI, (
+        f"goc listesi uretim adini ('{uretim_hasta_db}') aramiyor → hasta kayitlari TASINMAZ"
+    )
+    assert uretim_hasta_db in path_utils._GOC_SIFRELI, (
+        f"'{uretim_hasta_db}' sifreli kumesinde YOK → anahtar kontrolu ATLANIR, korlemesine kopyalanir"
+    )
+    # Yedek dosya ON-EKI ile karistirilmasin: o ad rotasyon icindir, uygulama onu ACMAZ.
+    assert "pemf_patients.db" not in path_utils._GOC_DOSYALARI
