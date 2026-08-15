@@ -530,7 +530,15 @@ class PDFReportGenerator:
             # hasta sahibine/başka kliniğe gider; kime ait olduğu belirsiz bir tedavi kaydı
             # hukuken ve tıbben kullanılamaz. `patient_vet_contact` satırı bu deseni zaten
             # kullanıyordu — hasta adına uygulanmamıştı.
-            # ⚠️ SIRA: `parameters` ÖNCELİKLİ (seansa özel girilmiş ad ezilmez), seans satırı YEDEK.
+            # ⚠️ SIRALAMA HAKKINDA DÜZELTME (ilk yazımım yanlıştı): "parameters öncelikli, seans
+            # satırı yedek" gerekçesi ÜRETİMDE GEÇERSİZDİR — `_fetch_sessions` satırları
+            # `get_session_history`ten gelir ve o SQL zaten `COALESCE(sp_name.parameter_value,
+            # ts.patient_name)` yapar (treatment_history_db.py:2079). Yani `session['patient_name']`
+            # parametre değerini ZATEN içerir; iki kaynağın çelişmesi imkânsızdır ve tek başına
+            # `session.get('patient_name')` eşdeğer olurdu. Zincir yine de KORUNDU: bu fonksiyon
+            # elle kurulmuş sözlüklerle de (testler, olası başka çağıranlar) doğru çalışsın.
+            # ⚠️ `session['patient_surname']` üretimde HEP None'dır (`sp_surname` COALESCE'siz ve
+            # oraya yazan yok) — savunma amaçlı duruyor, çalıştığı iddia EDİLMİYOR.
             patient_name = parameters.get('patient_name', {}).get('value', '') or session.get('patient_name') or ''
             patient_surname = (
                 parameters.get('patient_surname', {}).get('value', '') or session.get('patient_surname') or ''
@@ -615,9 +623,20 @@ class PDFReportGenerator:
         session_details = self.db.get_session_details(session.get('id'))
         parameters = session_details.get('parameters', {}) if session_details else {}
 
+        # ⚠️ BELGE KENDİ İÇİNDE ÇELİŞMESİN (2026-08-14). Başlık satırı adı sorgu parametresinden
+        # taşıdığı için "HASTA RAPORU: PAMUK" yazarken, tablo "Hasta Adı: Belirtilmemiş" diyordu:
+        # aynı sayfada iki farklı beyan. Sebep `_session_info_rows`takiyle AYNI — ad yalnızca
+        # `session_parameters`tan okunuyordu, oysa hiçbir üretim yolu oraya `patient_name` yazmaz
+        # (tek yazılan seans-parametresi `patient_owner_email`). Ad, seans satırında durur.
         patient_info = [
-            ["Hasta Adı:", parameters.get('patient_name', {}).get('value', 'Belirtilmemiş')],
-            ["Hasta Soyadı:", parameters.get('patient_surname', {}).get('value', 'Belirtilmemiş')],
+            [
+                "Hasta Adı:",
+                parameters.get('patient_name', {}).get('value') or session.get('patient_name') or 'Belirtilmemiş',
+            ],
+            [
+                "Hasta Soyadı:",
+                parameters.get('patient_surname', {}).get('value') or session.get('patient_surname') or 'Belirtilmemiş',
+            ],
             ["Yaş:", parameters.get('patient_age', {}).get('value', 'Belirtilmemiş')],
             ["Tür:", parameters.get('patient_species', {}).get('value', 'Belirtilmemiş')],
             ["Irk:", parameters.get('patient_breed', {}).get('value', 'Belirtilmemiş')],

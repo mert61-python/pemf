@@ -46,14 +46,50 @@ def test_KRITIK_hasta_adi_SEANS_SATIRINDAN_okunur():
     )
 
 
-def test_parameters_ONCELIKLIDIR_karsit_kanit():
-    """Karşı-kanıt: düzeltme, `parameters`taki değeri EZMEMELİ. Seansa özel olarak girilmiş bir
-    ad varsa o kullanılır; seans satırı yalnız YEDEKtir."""
+def test_parameters_yolu_DA_calisir():
+    """`parameters` yolu da desteklenir (savunma amaçlı zincir).
+
+    ⚠️ DÜZELTME (2026-08-15): bu test önce "parameters ÖNCELİKLİDİR, seans satırı yedektir"
+    diye yazılmıştı — ÜRETİMDE GEÇERSİZ bir değişmez. `_fetch_sessions` satırları
+    `get_session_history`ten gelir ve o SQL zaten `COALESCE(sp_name.parameter_value,
+    ts.patient_name)` yapar (treatment_history_db.py:2079); yani iki kaynağın ÇELİŞMESİ üretimde
+    imkânsızdır ve testin kurduğu durum hiçbir zaman oluşamaz. Uydurma bir değişmezi kilitlemek,
+    ileride onu "koruma" adına yanlış kararlar aldırır. Test artık yalnız gerçek olanı söylüyor:
+    ad `parameters`tan geliyorsa da okunur."""
     g = _uretici()
-    session = {"patient_name": "SeansSatiri", "patient_surname": ""}
     parameters = {"patient_name": {"value": "Parametre"}, "patient_surname": {"value": "Adi"}}
-    rows = g._session_info_rows(session, parameters=parameters, include_patient_info=True)
+    rows = g._session_info_rows({}, parameters=parameters, include_patient_info=True)
     assert _satir(rows, "Hasta Adı") == "Parametre Adi"
+
+
+def test_KRITIK_HASTA_RAPORU_basligi_ile_tablosu_CELISMEZ():
+    """`/api/history/export_patient_pdf` yolundaki `_add_patient_header`.
+
+    ⚠️ Belge KENDİ İÇİNDE çelişiyordu: başlıkta "HASTA RAPORU: PAMUK" (ad sorgu parametresinden
+    gelir), tablosunda "Hasta Adı: Belirtilmemiş". Aynı sayfada iki farklı beyan taşıyan bir
+    tıbbi rapor, hangisinin doğru olduğu bilinmediği için kullanılamaz."""
+    # ⚠️ MANTIĞI KOPYALAMA — GERÇEK fonksiyonu çağır. (İlk yazımda tabloyu teste yeniden
+    # hesaplamıştım; o desen, üretim kodu bozulsa bile yeşil kalır — aynı hatayı KPI testinde
+    # mutasyon yakalamıştı.)
+    from utils.pdf_report_generator import PDFReportGenerator
+
+    g = PDFReportGenerator(app_data_dir=Path(__file__).resolve().parent.parent)
+
+    class _DB:
+        def get_session_details(self, _sid):
+            return {"parameters": {}}  # ÜRETİMDE ad `session_parameters`ta YOKTUR
+
+    g.db = _DB()
+    story = []
+    g._add_patient_header(story, {"id": 1, "patient_name": "Pamuk", "session_date": "2026-08-14"}, "Pamuk")
+
+    tablolar = [x for x in story if hasattr(x, "_cellvalues")]
+    assert tablolar, "hasta bilgisi tablosu uretilmedi"
+    hucreler = {str(r[0]): r[1] for r in tablolar[0]._cellvalues if r and len(r) > 1}
+    assert hucreler.get("Hasta Adı:") == "Pamuk", (
+        f"tablo adi kaybetti: {hucreler.get('Hasta Adı:')!r} — baslik 'HASTA RAPORU: PAMUK' derken "
+        "tablo 'Belirtilmemis' diyor; belge KENDI ICINDE celisiyor"
+    )
 
 
 def test_hicbir_kaynak_YOKSA_Bilinmiyor_kalir():
