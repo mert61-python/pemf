@@ -18,6 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
 import { useUserMode, UserMode } from "@/context/UserModeContext";
 import { cleanDetail, trValue } from "@/utils/aiDetail";
+import { sesFormDataHazirla } from "@/utils/sesYukleme";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
@@ -155,6 +156,11 @@ interface AiResult {
   label?: string; prob_pct?: number; model?: string;
   // top-k sınıflandırma (cat_sound / histopath / reticulocytes)
   top_1_class?: string; top_1_prob?: number; top_k?: AiTopK[];
+  // cat_sound BELİRSİZLİK (sunucu ölçer — utils/ses_kalitesi). Model "kedi sesi yok" DİYEMEZ
+  // (10 sınıfın hepsi kedi duygusu), bu yüzden sunucu dağılımın entropisini gönderir ve
+  // `guvenilir === false` iken sonuç kesin bir bulgu gibi GÖSTERİLMEZ. Sessiz kayıt zaten
+  // sunucuda reddedilir; bu alan yalnız "analiz edildi ama zayıf" durumu içindir.
+  guvenilir?: boolean; belirsizlik?: number; rms_dbfs?: number | null;
   // kidney_ct / cat_organ
   class_counts?: Record<string, number>; detections?: AiDetection[];
   n_organs?: number; organs?: AiOrgan[]; pose_type?: string; pnp_residual_px?: number;
@@ -668,13 +674,14 @@ function PetOwnerSoundCard() {
     if (!audioUri) return;
     setLoading(true);
     try {
-      const formData = new FormData();
-      if (Platform.OS === 'web' && webFile) {
-        formData.append("file", webFile, fileName || "sound.mp3");
-      } else {
-        const b64 = await FileSystemLegacy.readAsStringAsync(audioUri, { encoding: "base64" as any });
-        formData.append("audio_base64", b64);
-      }
+      // ⚠️ Web'de CANLI KAYIT `webFile` üretmez (yalnız `blob:` URI) — eskiden burada
+      // native dalına düşülüp `expo-file-system` çağrılıyor ve web'de çöküyordu. Yükleme
+      // artık platform+veri'ye göre tek yerde kuruluyor (utils/sesYukleme).
+      const formData = await sesFormDataHazirla(
+        { webFile, uri: audioUri, fileName: fileName || "sound.mp3" },
+        Platform.OS === "web",
+        (uri) => FileSystemLegacy.readAsStringAsync(uri, { encoding: "base64" as any }),
+      );
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
@@ -735,6 +742,19 @@ function PetOwnerSoundCard() {
       {advice && (
         <View style={styles.petOwnerResult}>
           <Text style={styles.petOwnerResultTitle}>Yapay Zeka Yorumu</Text>
+          {/* ⚠️ Model "kedi sesi yok" DİYEMEZ: 10 sınıfın hepsi kedi duygusu, softmax her
+              girdiye mutlaka bir duygu atar. Sunucu belirsizliği ölçüp `guvenilir` alanıyla
+              gönderiyor; emin olmadığında sonucu kesin bir bulgu gibi göstermiyoruz.
+              (Reddetmiyoruz: ölçümde gerçek bir AĞRI kaydı da düşük güvendeydi — reddetmek
+              ev sahibinin gerçek ağrıyı kaçırmasına yol açardı.) */}
+          {result?.guvenilir === false && (
+            <View style={styles.sesGuvenUyari}>
+              <Text style={styles.sesGuvenUyariText}>
+                ⚠️ Bu sonuç güvenilir değil — kayıtta net bir kedi sesi ayırt edilemedi.
+                Sessiz bir ortamda, mikrofonu yaklaştırıp tekrar kaydedin.
+              </Text>
+            </View>
+          )}
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm }}>
             <Text style={{ fontSize: rf(32) }}>{advice.emoji}</Text>
             <Text style={[styles.title, { color: toneColor, flex: 1 }]}>{advice.title}</Text>
@@ -2389,14 +2409,14 @@ function CatSoundModule({ patientName }: { patientName: string }) {
     if (!audioUri) return;
     setLoading(true);
     try {
-      const formData = new FormData();
-      if (Platform.OS === 'web' && webFile) {
-        formData.append("file", webFile, fileName || "sound.mp3");
-      } else {
-        // Native: sesi base64 oku → audio_base64 (file:// multipart sorununu atlar; ses <1MB).
-        const b64 = await FileSystemLegacy.readAsStringAsync(audioUri, { encoding: "base64" as any });
-        formData.append("audio_base64", b64);
-      }
+      // ⚠️ Web'de CANLI KAYIT `webFile` üretmez (yalnız `blob:` URI) — eskiden burada native
+      // dalına düşülüp `expo-file-system` çağrılıyor ve web'de çöküyordu. (Native: base64 →
+      // `audio_base64`; RN multipart `file://` URI'sini doğrudan okuyamıyor.)
+      const formData = await sesFormDataHazirla(
+        { webFile, uri: audioUri, fileName: fileName || "sound.mp3" },
+        Platform.OS === "web",
+        (uri) => FileSystemLegacy.readAsStringAsync(uri, { encoding: "base64" as any }),
+      );
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
@@ -3192,6 +3212,12 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: rs(300), borderRadius: radius.md, backgroundColor: colors.bg },
   petOwnerResult: { marginTop: spacing.lg, padding: spacing.md, backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   petOwnerResultTitle: { fontSize: typography.subtitle, color: colors.text, fontWeight: '800', marginBottom: spacing.sm },
+  // Düşük güven uyarısı: sonuç GÖSTERİLİR ama kesin bulgu gibi okunmasın diye üstünde durur.
+  sesGuvenUyari: {
+    backgroundColor: colors.warning + "22", borderColor: colors.warning, borderWidth: 1,
+    borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm,
+  },
+  sesGuvenUyariText: { color: colors.warning, fontSize: typography.small, fontWeight: '700' },
   body: { color: colors.text, fontSize: typography.body, marginBottom: 4 },
   recommendationBox: { backgroundColor: colors.warning + "22", padding: spacing.md, borderRadius: radius.md, marginTop: spacing.md, borderWidth: 1, borderColor: colors.warning },
   recommendationText: { color: colors.text, fontSize: typography.small, marginBottom: spacing.md },
