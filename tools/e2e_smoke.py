@@ -212,6 +212,22 @@ def run_scenarios():
     check("start: start_mono (monotonic watchdog, P2) kuruldu", sess.get("start_mono") is not None)
     db_sid = sess.get("db_session_id")
 
+    # ⚠️ DENETIM IZI SEANSA BAGLANABILIYOR MU (kampanya bulgusu S11, 2026-08-15).
+    # `session_started` olayinda `session_events.session_id` NULL'dur (kasitli: once-iz-sonra-satir).
+    # Baglanti TERS yonde kurulur: API muhru (`ref`) seans satirina `audit_ref` parametresi olarak
+    # yazilir. Bunu API YOLUNDAN dogrulamak SART — birim testi kendi yazdigi degeri okursa
+    # api_server'in gercekten yazdigini KANITLAMAZ.
+    _muhur = sess.get("session_id")
+    check("start: API muhru CAKISMAYA dayanikli bicimde", bool(_muhur) and _muhur.count("_") >= 2, str(_muhur))
+    s, _det, _ = req("GET", f"/api/history/{db_sid}")
+    _params = (_det or {}).get("parameters") or {}
+    _audit = (_params.get("audit_ref") or {}).get("value") if isinstance(_params.get("audit_ref"), dict) else None
+    check(
+        "KRITIK: denetim izi seansa BAGLANABILIR (audit_ref yazildi)",
+        _audit == _muhur,
+        f"audit_ref={_audit} muhur={_muhur}",
+    )
+
     # ── 5) Simule telemetri birikimi ──────────────────────────────────────────
     time.sleep(6)
     s, snap, _ = req("GET", "/api/dashboard-snapshot")

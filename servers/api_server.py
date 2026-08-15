@@ -999,6 +999,29 @@ class BatchCoilPayload(BaseModel):
     start: bool = True
 
 
+_seans_muhru_kilit = threading.Lock()
+_seans_muhru_sayac = 0
+
+
+def _yeni_seans_muhru() -> str:
+    """API seans mührü — `react_<epoch_ms>_<sayac>`.
+
+    ⚠️ ESKİDEN `react_<epoch SANİYE>` idi ve AYNI SANİYEDE başlatılan iki farklı seans AYNI
+    mührü alıyordu (kampanya bulgusu S11, ölçüldü). `session_events` kayıtlarındaki
+    `payload.ref` bu mühürdür; çakışınca "bu denetim kaydı hangi seansa ait?" sorusu CEVAPSIZ
+    kalır — bir istismar incelemesinde atfedilebilirlik yoksa iz işe yaramaz.
+
+    Milisaniye TEK BAŞINA yetmez (hızlı durdur/başlat aynı ms'e düşebilir) → süreç-içi artan
+    sayaç eklenir. Mühür artandır: denetimde olaylar kronolojik sıralanabilir.
+
+    ⚠️ `react_` ÖN-EKİ KORUNUR — mevcut testler ve tüketiciler `startswith` ile bakar.
+    """
+    global _seans_muhru_sayac
+    with _seans_muhru_kilit:
+        _seans_muhru_sayac += 1
+        return f"react_{int(time.time() * 1000)}_{_seans_muhru_sayac}"
+
+
 def _duration_seconds_to_stm_minutes(duration_seconds: int) -> int:
     """Convert web/API ESP duration seconds to STM firmware duration minutes."""
     try:
@@ -1547,7 +1570,7 @@ async def start_session(payload: SessionStartPayload, request: Request):
         _active_session.update(
             {
                 "is_active": True,
-                "session_id": f"react_{int(time.time())}",
+                "session_id": _yeni_seans_muhru(),
                 "patient_id": payload.patient_id,
                 "patient_name": payload.patient_name,
                 "operator_name": payload.operator_name,
@@ -1655,6 +1678,26 @@ async def start_session(payload: SessionStartPayload, request: Request):
                 db.set_session_parameter(_sid, "patient_owner_email", owner_email, "")
             except Exception:
                 logging.getLogger(__name__).debug("set_session_parameter(owner_email) hatasi", exc_info=True)
+        # ⚠️ DENETİM İZİNİ SEANSA BAĞLA (kampanya bulgusu S11, 2026-08-15).
+        # `session_started` olaylarında `session_events.session_id` NULL'dur ve bu KASITLIDIR:
+        # olay, DB seans satırı OLUŞMADAN ÖNCE yazılır (önce-iz-sonra-satır). Ama bağlantı
+        # hiçbir yerde kurulmuyordu → "bu denetim kaydı hangi seansa ait?" cevapsız kalıyordu.
+        #
+        # ⚠️ BAĞLANTI TERS YÖNDE KURULUR: `session_events`e SONRADAN UPDATE ATILMAZ — o tablo
+        # append-only'dir ve sıralama bilinçlidir. Bunun yerine mühür seans satırına yazılır.
+        # Böylece yeni DB metodu, denetim tablosuna UPDATE ve `delete_session` semantiğinde
+        # değişiklik GEREKMEZ. Join: session_parameters.parameter_value ==
+        # json_extract(session_events.payload,'$.ref').
+        #
+        # ⚠️ DÜRÜST SINIR: bu, silinen bir seansın `session_events` payload'unda kalan
+        # patient_id/operator_email artığını (KVKK) ÇÖZMEZ — "iz seansla birlikte silinsin mi?"
+        # ayrı bir sahip kararıdır ve bu düzeltme onu cevaplamadan uygulanabilir.
+        try:
+            _ref = (_active_session or {}).get("session_id")
+            if _ref:
+                db.set_session_parameter(_sid, "audit_ref", str(_ref), "")
+        except Exception:
+            logging.getLogger(__name__).debug("set_session_parameter(audit_ref) hatasi", exc_info=True)
         return _sid, _pid
 
     try:
