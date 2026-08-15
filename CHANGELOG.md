@@ -183,6 +183,65 @@ elle-bağlanmanın farklı karar vermesi mümkündü.
 
 ---
 
+## app 1.9.14 — 2026-08-15 (cihaz artık açılıyor; kayıp doz kaydı; gözetimsiz bobin)
+
+**Etiket:** `client-app-v1.9.14` (base-app `61389a6ac434`, base `a2becde42f04`,
+base-deps `eee622a23be9`).
+
+⚠️ **Bağımlılık güncellemesi YOK.** `base-deps` arşivi yeniden üretildiği için karması değişti
+(boyut baytı baytına aynı: 1 462 119 667), ama içerdiği kütüphane kümesi aynıdır. Yine de
+yayınlandı: "içerik herhalde aynıdır" varsayımıyla eski paketi göstermek yerine, sürümün
+her katmanı TEK bir yapımdan gelsin diye. Alan kurulumu olmadığı için kimseye ek indirme
+maliyeti çıkarmaz.
+
+Katmanlı kurulumda cihazın bildirdiği `buildId` **base-app** karmasıdır; tek parça kurulumda
+**base**. İkisi de yukarıda yazılıdır — sahadan gelen kimlik bu kayıtla eşleşebilsin.
+
+Bu sürüm, 26 ajanlı bir senaryo kampanyasının bulduğu ve bağımsız doğrulamadan geçen
+kusurları kapatır. Hepsi tıbbi kayıt ya da cihaz kullanılabilirliğiyle ilgilidir.
+
+**⚠️ CİHAZ AÇILMAMA (en ağır).** At-rest anahtarı veritabanına uymadığında cihaz **hiç
+açılmıyordu**. Üç ayrı halka birlikte kilitleniyordu: (1) bozuk dosyayı kenara alan kurtarma,
+dosya kilidi yüzünden başarısız oluyor ve "kurtarılamadı" deyip açılışı durduruyordu;
+(2) kurtarma dosyayı kenara alsa bile veri göçü onu geri kopyalıyordu; (3) göç, bu makinede
+çözülemeyen bir anahtarı hedefe yazarak çalışan bir kurulumu açılamaz hâle getirebiliyordu.
+Üçü de kapatıldı; cihaz artık temiz bir veritabanıyla açılır ve okunamayan dosya
+**silinmeden** kenarda durur.
+
+**⚠️ UYGULANAN DOZ KAYDI KAYBOLUYORDU.** Seans sürerken elektrik kesilir ya da servis
+kapanırsa, yeniden açılışta kayıt "tedavi sürüyor" hâlinde kalıyor; bitiş, süre ve hangi
+bobinin ne kadar çalıştığı **hiç yazılmıyordu**. Artık açılışta kapatılıyor ve süre "şimdi"den
+değil son telemetri kanıtından türetiliyor — cihaz üç gün kapalı kaldıysa kayıt "üç günlük
+tedavi" demez.
+
+**⚠️ SÜRE VERİLMEYEN BOBİN GÜNLERCE SÜRÜYORDU.** Kontrol panelinden süre belirtmeden
+başlatılan bir bobinin yazılım sınırı ~6,9 güne düşüyordu (ölçüldü). Artık klinik sınıra
+(120 dk) düşer — AI Pro'nun zaten kullandığı sınırın aynısı. Negatif süre de sessizce kabul
+ediliyordu; artık reddediliyor.
+
+**Acil durdurma geçmişte görünüyor.** Acil durdurmayla biten seans, normal tamamlanan bir
+seanstan ayırt edilemiyordu (üçü de "tamamlandı" yazıyordu) ve gösterge tablosu bunları
+saymıyordu. Artık ayrı işaretleniyor ve KPI'da görünüyor — "bu hastada acil durdurma yaşandı
+mı?" sorusu cevaplanabilir.
+
+**PDF raporda hasta adı kayboluyordu.** Aynı seans CSV ve JSON'da doğru adı verirken PDF
+"Bilinmiyor" yazıyordu; hasta raporunda ise başlıkta ad varken tabloda "Belirtilmemiş" —
+belge kendi içinde çelişiyordu. İkisi de düzeltildi.
+
+**Hasta kayıtları göçte taşınmıyordu.** Eski kullanıcı klasöründen makine geneline geçişte
+seans geçmişi taşınıyor, hasta kayıtları taşınmıyordu (yanlış dosya adı aranıyordu). Ayrıca
+felaket kurtarma yönergesi, yedeği uygulamanın hiç açmadığı bir adla geri yüklemeyi
+söylüyordu — yönergeyi izleyen klinik "geri yükledim" sanıp boş liste görürdü.
+
+**Denetim izi seansa bağlanabiliyor.** Seans mührü aynı saniyede başlayan iki seansta
+çakışabiliyordu ve denetim kaydı hangi seansa ait belli olmuyordu.
+
+**Hasta güvenliği ve veri:** bu sürümde bobin sürme, frekans/doluluk sınırları ve acil
+durdurmanın çalışma biçimi DEĞİŞMEDİ. Değişenler kayıt bütünlüğü, kurtarma ve gözetimsiz
+çalışma süresidir.
+
+---
+
 ## app 1.9.13 · mobile 2.3.10 — 2026-08-12 (ses analizi anında; çoklu modül)
 
 **Etiketler:** `client-app-v1.9.13` (base-app `d300d38e008b`, base `ad4fc3d69cce`,
