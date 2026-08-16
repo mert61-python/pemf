@@ -661,6 +661,7 @@
           rtBgDone: "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
           rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
           rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
+          startChecking: "Güncelleme kontrol ediliyor…",
           rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
           rtBgPrep: "Hazırlanıyor…",
           rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
@@ -734,6 +735,7 @@
           rtBgDone: "New version downloaded — it will be installed on the next launch.",
           rtBgFail: "Background download did not finish — it will resume on the next launch.",
           rtReady: "Update ready — it will be installed when you close and reopen the app.",
+          startChecking: "Checking for updates…",
           rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
           rtBgPrep: "Preparing…",
           rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
@@ -957,6 +959,11 @@
       const SCREENS = ["s-detect", "s-login", "s-select", "s-install", "s-ready"];
       function show(id) {
         for (const s of SCREENS) $(s).hidden = (s !== id);
+        // "Hazır!" ekranına dönüldüyse güncelleme işi BİTMİŞTİR (kurulum/onarım/güncelleme hepsi
+        // burada biter) → "Başlat" kapısını aç. Burada olması KASITLI: kapıyı açmayı tek tek
+        // çıkış yollarına serpiştirmek, biri unutulduğunda düğmeyi KALICI kilitlerdi.
+        // Kapı zaten açıksa `startKapisiAc` erken döner (bkz. dataset.kapi).
+        if (id === "s-ready" && typeof startKapisiAc === "function") startKapisiAc();
       }
       /** Şu an görünen ekran (arka plandaki manifest işi kullanıcının ekranını ÇALMASIN diye). */
       function curScreen() { return SCREENS.find((s) => !$(s).hidden) || null; }
@@ -1200,6 +1207,43 @@
       /** Uygulama CALISIYOR mu — client "Hazir!/Baslat" yerine durumu yansitsin.
        *  Backend acikken "Baslat" gostermek kullaniciyi yaniltiyordu (bkz. btn-start). */
       let appRunning = false;
+
+      // ── "BAŞLAT" KAPISI (sahip bildirimi 2026-08-16) ─────────────────────────────────────
+      // ARIZA: kurulu cihazda ekran ADIM 1'de (yerel bilgiyle) çiziliyor ve "Başlat" HEMEN
+      // tıklanabilir oluyordu. Güncelleme kontrolü ADIM 2'de (ağ) tamamlanıyor; kullanıcı tam
+      // "Başlat"a basacakken ekran güncellemeye geçiyordu — tıklama boşa gidiyor, veteriner ne
+      // olduğunu anlamıyor.
+      //
+      // ⚠️ ÇÖZÜM EKRANI DONDURMAK DEĞİL. Ekranı ağ bitene kadar bekletmek, 2026-08-06'da
+      // düzeltilen P0'ı geri getirirdi: internetsiz klinikte client "Ortam algılanıyor…"da
+      // SONSUZA KADAR kalıyor ve kurulum ZATEN VARKEN "Başlat"a hiç ulaşılamıyordu.
+      // Bu yüzden ekran ANINDA çizilir; yalnız DÜĞME beklemeye alınır ve sebebi yazılır.
+      //
+      // 🔴 DÜĞME KALICI KİLİTLENEMEZ: çevrimdışı, manifest hatası ve zaman aşımı dahil HER
+      // çıkışta açılır (bkz. `startKapisiAc` çağrıları + `KAPI_ZAMAN_ASIMI_MS`).
+      const KAPI_ZAMAN_ASIMI_MS = 25000;   // ağ adımı asılırsa düğme yine de açılır
+      let startKapiTimer = null;
+
+      function startKapisiKapat() {
+        const b = $("btn-start");
+        if (!b || b.dataset.kapi === "1") return;
+        b.dataset.kapi = "1";
+        b.disabled = true;
+        $("t-start").textContent = t().startChecking;
+        clearTimeout(startKapiTimer);
+        startKapiTimer = setTimeout(startKapisiAc, KAPI_ZAMAN_ASIMI_MS);
+      }
+
+      function startKapisiAc() {
+        clearTimeout(startKapiTimer);
+        startKapiTimer = null;
+        const b = $("btn-start");
+        if (!b || b.dataset.kapi !== "1") return;
+        delete b.dataset.kapi;
+        b.disabled = false;
+        $("t-start").textContent = appRunning ? t().backToApp : t().start;
+      }
+
       function setRunningUi(on) {
         appRunning = !!on;
         const x = t();
@@ -1829,6 +1873,9 @@
        * başarısız olursa ekranı DEĞİŞTİRMEZ.
        */
       async function bootNetwork(env) {
+        // Güncelleme kontrolü BİTENE kadar "Başlat" beklemede (bkz. startKapisiKapat).
+        // Ekran zaten çizili; yalnız düğme kilitli — kullanıcının tıklaması boşa gitmesin.
+        startKapisiKapat();
         let info;
         try {
           info = await invoke("fetch_profiles");
@@ -1836,6 +1883,9 @@
           // ÇEVRİMDIŞI: kurulu ise "Hazır!" ekranında KAL (Başlat çalışır — backend yereldir);
           // kurulu değilse anlaşılır mesaj + "Tekrar dene". SONSUZ "Ortam algılanıyor" YOK.
           setOffline(true);
+          // ÇEVRİMDIŞI: güncelleme kontrolü YAPILAMAZ → beklemeye gerek yok, Başlat AÇILIR
+          // (backend yereldir, internet gerektirmez).
+          startKapisiAc();
           if (curScreen() === "s-ready") notice(t().offlineReady);
           else if (curScreen() === "s-select") notice(t().offlineSelect, () => bootNetwork(env));
           return;
@@ -1852,6 +1902,7 @@
         if (info.update && !busy && (await trySelfUpdate(info.update))) return;
 
         if (!info.platform_supported) {
+          startKapisiAc();
           if (!busy) { show("s-select"); $("cards").textContent = ""; fail(t().notSupported(info.platform)); }
           return;
         }
@@ -1871,7 +1922,11 @@
         // yeni base'i eski launcher kurar ve hemen ardından yeniden başlayıp işi tekrarlardı.
         // Güncelleme yapıldıysa aşağıdaki "yarım kalan kurulum" sorusuna GİRME (ekran zaten değişti).
         startUpdateWatch();   // hep-açık makine de güncelleme alsın (bkz. recheckUpdates)
+        // Güncelleme kararı BURADA veriliyor. `true` dönerse kurulum ekranı devraldı; iş bitince
+        // `s-ready` yeniden gösterilecek ve kapı orada açılacak (aşağıdaki `show` sarmalayıcısı).
+        // `false` = kurulacak bir şey yok ya da arka planda iniyor → Başlat artık GÜVENLE açılır.
         if (await tryRuntimeUpdate()) return;
+        startKapisiAc();
 
         // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?
         // Manifest gerektirir → GEÇ de olsa burada sorulur.

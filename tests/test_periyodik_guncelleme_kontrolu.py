@@ -66,12 +66,16 @@ def test_KRITIK_periyodik_kontrol_VAR(ui):
 
 
 def test_periyodik_tur_ACILISTA_baslatilir(ui):
-    """Tanımlanıp hiç çağrılmazsa özellik ölüdür."""
+    """Tanımlanıp hiç çağrılmazsa özellik ölüdür.
+
+    ⚠️ Bu test önce `startUpdateWatch()` ile `tryRuntimeUpdate` satırlarının BİTİŞİK olmasını
+    şart koşuyordu ve araya bir yorum eklenince kırıldı (Başlat kapısı eklenirken oldu).
+    Bitişiklik bir değişmez DEĞİL; asıl kural "boot'un ağ adımında çağrılıyor olması".
+    """
     assert "startUpdateWatch()" in ui, "izleme başlatılmıyor"
-    # boot akışında çağrılmalı (tryRuntimeUpdate'in yanında).
-    assert re.search(r"startUpdateWatch\(\);\s*//.*\n\s*if \(await tryRuntimeUpdate", ui), (
-        "izleme boot akışına bağlanmamış"
-    )
+    m = re.search(r"async function bootNetwork\(env\) \{(.*?)\n      \}", ui, re.S)
+    assert m, "bootNetwork bulunamadı"
+    assert "startUpdateWatch()" in m.group(1), "izleme boot'un ağ adımına bağlanmamış"
 
 
 def test_aralik_makul(ui):
