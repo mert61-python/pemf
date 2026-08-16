@@ -229,6 +229,18 @@
         padding: 8px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 650;
         color: var(--fg); border: 1px solid var(--line2); background: var(--surface2); }
       #notice .nbtn:hover { border-color: var(--muted2); }
+      /* ARKA PLAN indirme gostergesi (2026-08-16): kurulum ekranindaki .progress ile ayni dil,
+         ama notun icine sigacak kadar kucuk. Ekrani ELE GECIRMEZ — kullanici uygulamayi kullanir. */
+      #notice .bgline { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+      #notice .bgbar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface2);
+        overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+      #notice .bgbar > i { display: block; height: 100%; width: 0%; border-radius: 999px;
+        background: linear-gradient(90deg, var(--teal-d), var(--teal-l)); transition: width 0.3s ease; }
+      #notice .bgbar.indet > i { width: 34%; animation: indet 1.15s ease-in-out infinite; }
+      #notice .bgpct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--teal);
+        min-width: 46px; text-align: right; }
+      #notice .bgsub { margin-top: 6px; font-size: 12px; color: var(--muted);
+        font-variant-numeric: tabular-nums; }
 
       /* progress */
       .pct { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; margin: 2px 0 12px;
@@ -646,6 +658,11 @@
           rtDone: "Uygulama güncellendi.",
           rtBusy: "Seans sürerken güncelleme yapılmaz — seans bitince otomatik güncellenecek.",
           rtBg: "Yeni sürüm arka planda indiriliyor — uygulamayı şimdi kullanabilirsiniz, güncelleme bir sonraki açılışta kurulacak.",
+          rtBgDone: "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
+          rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
+          rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
+          rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
+          rtBgPrep: "Hazırlanıyor…",
           rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
           rtRollbackFail: "Yeni sürüm açılamadı ve geri alma tamamlanamadı. Lütfen \"Onar\" ile kurulumu yenileyin.",
           // ── Giriş (Supabase) ──
@@ -714,6 +731,11 @@
           rtDone: "App updated.",
           rtBusy: "Updates are not applied during a session — it will update automatically once the session ends.",
           rtBg: "A new version is downloading in the background — you can use the app now; it will be installed on the next launch.",
+          rtBgDone: "New version downloaded — it will be installed on the next launch.",
+          rtBgFail: "Background download did not finish — it will resume on the next launch.",
+          rtReady: "Update ready — it will be installed when you close and reopen the app.",
+          rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
+          rtBgPrep: "Preparing…",
           rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
           rtRollbackFail: "The new version failed to start and the rollback could not finish. Please use \"Repair\" to reinstall.",
           // ── Sign in (Supabase) ──
@@ -956,7 +978,133 @@
         }
         box.hidden = false;
       }
-      function clearNotice() { $("notice").hidden = true; $("notice").textContent = ""; }
+      function clearNotice() { $("notice").hidden = true; $("notice").textContent = ""; stopPrefetchPoll(); }
+
+      // ── ARKA PLAN İNDİRME GÖSTERGESİ (2026-08-16, sahip isteği: "yüzdelik real-time bar") ──
+      // Ön-indirme SESSİZ tasarlanmıştı (kullanıcıyı bekletmemek için ekran ele geçirilmiyor),
+      // ama kullanıcı ne kadar kaldığını da göremiyordu. Artık bilgi notunun içinde yüzde +
+      // ince bir bar akıyor. Kurulum ekranı AÇILMAZ; "Başlat" çalışmaya devam eder.
+      // Rust tarafı ayrı bir kanala yazar (`get_prefetch_progress`) → sürmekte olan bir
+      // kurulum/onarım ile karışmaz.
+      let prefetchTimer = null, prefetchSeen = false, prefetchDl = { what: "", done: 0, t: 0, speed: 0 };
+
+      function stopPrefetchPoll() {
+        if (prefetchTimer) { clearInterval(prefetchTimer); prefetchTimer = null; }
+      }
+
+      function renderPrefetch(p) {
+        const box = $("notice");
+        let line = box.querySelector(".bgline");
+        if (!line) {
+          line = document.createElement("div"); line.className = "bgline";
+          const bar = document.createElement("div"); bar.className = "bgbar"; bar.appendChild(document.createElement("i"));
+          const pct = document.createElement("div"); pct.className = "bgpct";
+          line.appendChild(bar); line.appendChild(pct); box.appendChild(line);
+          const sub = document.createElement("div"); sub.className = "bgsub"; box.appendChild(sub);
+        }
+        const bar = box.querySelector(".bgbar"), fill = bar.querySelector("i");
+        const pctEl = box.querySelector(".bgpct"), sub = box.querySelector(".bgsub");
+
+        if (p.step === "downloading") {
+          const now = performance.now();
+          if (prefetchDl.what !== p.what) prefetchDl = { what: p.what, done: p.done, t: now, speed: 0 };
+          else if (now - prefetchDl.t > 350) {
+            const inst = (p.done - prefetchDl.done) / ((now - prefetchDl.t) / 1000);
+            prefetchDl.speed = prefetchDl.speed > 0 ? prefetchDl.speed * 0.6 + inst * 0.4 : inst;
+            prefetchDl.done = p.done; prefetchDl.t = now;
+          }
+          const has = p.total > 0;                    // sunucu Content-Length vermezse belirsiz
+          bar.classList.toggle("indet", !has);
+          fill.style.width = has ? ((p.done / p.total) * 100).toFixed(1) + "%" : "";
+          pctEl.textContent = has ? "%" + ((p.done / p.total) * 100).toFixed(0) : "";
+          const parcalar = [pkgLabel(p.what)];
+          parcalar.push(has ? `${fmtBytes(p.done)} / ${fmtBytes(p.total)}` : fmtBytes(p.done));
+          if (prefetchDl.speed > 0) parcalar.push(fmtSpeed(prefetchDl.speed));
+          sub.textContent = parcalar.join(" · ");
+        } else {
+          // manifest/verify/extract/cached: yüzde anlamlı değil → belirsiz bar + faz etiketi.
+          bar.classList.add("indet"); fill.style.width = ""; pctEl.textContent = "";
+          const x = t();
+          const etiket = p.step === "verifying" ? x.verifying
+                       : p.step === "cached" ? x.cached
+                       : p.step === "reconnecting" ? x.reconnecting
+                       : x.rtBgPrep;
+          sub.textContent = p.what ? `${pkgLabel(p.what)} ${etiket}` : etiket;
+        }
+      }
+
+      // ── PERİYODİK GÜNCELLEME KONTROLÜ (denetim 2026-08-16, Bulgu 1) ──────────────────────
+      // `boot()` sayfa yüklenirken BİR KEZ çalışıyordu; periyodik kontrol hiçbir yerde yoktu.
+      // Launcher penceresi uygulama kullanılırken AÇIK KALDIĞI için, haftalarca açık duran bir
+      // klinik makinesi manifesti HİÇ yeniden çekmiyordu. En kötü sonucu: `min_supported_version`
+      // (GERİ ÇAĞIRMA) — kodun kendi yorumuyla "bobin-güvenliği hatasında mevcut kurulumları
+      // güncellemeye ZORLAMAK" için var ve `rollout`u ezer — hep-açık cihaza ULAŞAMIYORDU.
+      //
+      // 🔴 TASARIM SINIRI: burada güncelleme UYGULANMAZ. Uygulamak backend'i durdurur; süren bir
+      // seansı kesmek hasta güvenliği kararına aykırıdır (`aktif_seans_kapisi` zaten engeller).
+      // Bu yüzden periyodik tur YALNIZ (a) paketleri arka planda indirir, (b) durumu BİLDİRİR.
+      // Kurulum, kullanıcı uygulamayı kapatıp açtığında — yani zaten güvenli olan anda — yapılır.
+      const GUNCELLEME_KONTROL_MS = 6 * 60 * 60 * 1000;   // 6 saat
+      let guncellemeTimer = null, sonBildirim = "";
+
+      async function recheckUpdates() {
+        // Kurulum/onarım sürerken ARAYA GİRME; ekran zaten güncellemenin kendisinde.
+        if (busy || !baseInstalled) return;
+        let info;
+        try { info = await invoke("fetch_profiles"); }        // çevrimdışıysa sessizce geç
+        catch (_) { return; }
+        if (!info || !info.raw) return;
+        manifestRaw = info.raw;
+
+        let plan;
+        try { plan = await invoke("check_runtime_update", { manifestRaw }); }
+        catch (_) { return; }
+        if (!plan || !plan.needed) return;
+
+        if (!plan.cached) {
+          // Paketler eksik → arka planda indir (kuruluma DOKUNMAZ, seansı etkilemez).
+          if (sonBildirim !== "indiriyor") {
+            sonBildirim = "indiriyor";
+            notice(plan.recall ? t().rtRecall : t().rtBg);
+            startPrefetchPoll();
+            invoke("prefetch_runtime_update", { manifestRaw })
+              .then((r) => {
+                stopPrefetchPoll();
+                sonBildirim = "";
+                notice(r && r.status === "prefetched" ? t().rtBgDone : t().rtBgFail);
+              })
+              .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); });
+          }
+          return;
+        }
+        // Paketler HAZIR → kurulum bir sonraki açılışta saniyeler sürer. Kullanıcıya söyle.
+        const mesaj = plan.recall ? "recall" : "hazir";
+        if (sonBildirim !== mesaj) {
+          sonBildirim = mesaj;
+          notice(plan.recall ? t().rtRecall : t().rtReady);
+        }
+      }
+
+      function startUpdateWatch() {
+        if (guncellemeTimer) return;
+        guncellemeTimer = setInterval(() => { recheckUpdates().catch(() => {}); }, GUNCELLEME_KONTROL_MS);
+      }
+
+      function startPrefetchPoll() {
+        stopPrefetchPoll();
+        prefetchSeen = false; prefetchDl = { what: "", done: 0, t: 0, speed: 0 };
+        const basladi = Date.now();
+        prefetchTimer = setInterval(async () => {
+          let p = null;
+          try { p = await invoke("get_prefetch_progress"); } catch (_) { stopPrefetchPoll(); return; }
+          if (p) { prefetchSeen = true; renderPrefetch(p); return; }
+          // `null` = indirme yok ya da BİTTİ. ⚠️ Başlangıçta da null gelir (Rust henüz ilk
+          // snapshot'ı yazmadı) → hemen durursak bar hiç görünmez. En az bir ilerleme görene
+          // kadar bekle; hiç gelmezse 90 sn sonra sessizce bırak (ör. her şey önbellekteydi).
+          if (prefetchSeen) { stopPrefetchPoll(); notice(t().rtBgDone); }
+          else if (Date.now() - basladi > 90000) stopPrefetchPoll();
+        }, 500);
+      }
 
       /**
        * GÜVENLİK DUVARI UYARISI (2026-08-09 denetimi, Tier 1).
@@ -1380,7 +1528,18 @@
         // BİR SONRAKİ açılışa bırak (o zaman paketler hazır → kurulum saniyeler sürer).
         if (!plan.cached) {
           notice(t().rtBg);
-          invoke("prefetch_runtime_update", { manifestRaw }).catch(() => {});
+          startPrefetchPoll();                             // yüzde + bar notun içinde akar
+          // ⚠️ Komut HATA durumunda da `Ok({status:"failed"})` döner (ön-indirme isteğe
+          // bağlıdır, reject etmez) → `.then()` HER İKİ durumda da çalışır. Sonucu
+          // OKUMADAN "indirildi" demek kullanıcıya YALAN söyler: indirme başarısızken
+          // "bir sonraki açılışta kurulacak" yazar, açılışta hiçbir şey olmaz ve sebep
+          // hiçbir yerde görünmez. Durumu açıkça ayır.
+          invoke("prefetch_runtime_update", { manifestRaw })
+            .then((r) => {
+              stopPrefetchPoll();
+              notice(r && r.status === "prefetched" ? t().rtBgDone : t().rtBgFail);
+            })
+            .catch(() => { stopPrefetchPoll(); notice(t().rtBgFail); })
           return false;                                    // ekranı ELE GEÇİRME, "Başlat" çalışsın
         }
 
@@ -1711,6 +1870,7 @@
         // Sıra önemli: önce launcher (küçük, yeniden başlatır), sonra base/profiller. Aksi halde
         // yeni base'i eski launcher kurar ve hemen ardından yeniden başlayıp işi tekrarlardı.
         // Güncelleme yapıldıysa aşağıdaki "yarım kalan kurulum" sorusuna GİRME (ekran zaten değişti).
+        startUpdateWatch();   // hep-açık makine de güncelleme alsın (bkz. recheckUpdates)
         if (await tryRuntimeUpdate()) return;
 
         // Yarım kalan kurulum (internet kesildi / laptop kapandı) → kaldığın yerden devam et?

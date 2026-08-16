@@ -39,6 +39,12 @@ struct AppState {
     /// Tauri `emit` spawn_blocking thread'inden webview `listen`'e güvenilir ULAŞMIYOR (indirme
     /// boyunca UI donuk kaldı); invoke/polling kesin çalışıyor.
     progress: Arc<Mutex<Option<serde_json::Value>>>,
+    /// ARKA PLAN ön-indirmenin ilerlemesi — `progress`ten AYRI tutulur (2026-08-16, sahip
+    /// isteği: "yüzdelik real-time bar"). Neden ayrı: `progress`i kurulum ekranı yokluyor;
+    /// sessiz ön-indirme oraya yazsaydı bir kurulum/onarım sürerken iki akış birbirine
+    /// karışır ve ekran ele geçirilirdi — oysa ön-indirmenin tek amacı kullanıcıyı
+    /// BEKLETMEMEK. Ayrı kanal: aynı anda ikisi de akabilir, UI ikisini ayrı çizer.
+    prefetch: Arc<Mutex<Option<serde_json::Value>>>,
     /// İndirme akış-kontrolü: CTL_RUN/PAUSE/CANCEL. pause/cancel komutları set eder.
     control: Arc<AtomicU8>,
     /// "app" penceresi kapanınca ARKA PLANDA çalışan backend-kapatma işi (E-stop + kill).
@@ -55,6 +61,7 @@ impl Default for AppState {
         Self {
             proc: Mutex::new(None),
             progress: Arc::new(Mutex::new(None)),
+            prefetch: Arc::new(Mutex::new(None)),
             control: Arc::new(AtomicU8::new(CTL_RUN)),
             teardown: Mutex::new(None),
             session: Mutex::new(None),
@@ -149,16 +156,25 @@ fn clear_port_if_stopped(root: &std::path::Path, port: Option<u16>) {
 /// olayları ~80ms'e throttle'lı (net.rs 256KB-başı çağırır → her seferinde JSON+kilit gereksiz);
 /// faz-değişimi (manifest/verify/extract/start/ready) + her indirmenin SON parçası HER ZAMAN yazılır.
 /// (emit de yapılır — bazı ortamlarda çalışır, zararsız — ama UI polling'e dayanır.)
-fn progress_reporter(
-    app: tauri::AppHandle,
+/// İlerleme snapshot'larını paylaşılan bir store'a yazan THROTTLE'lı yazıcı.
+///
+/// `progress_reporter` (kurulum) ve `prefetch_runtime_update` (arka plan) AYNI mantığı
+/// kullanır; buraya çıkarıldı çünkü iki kural da sessizce bozulabiliyordu ve ikisi de
+/// kullanıcıya doğrudan yansıyor:
+///   • throttle YOKSA: indirme 256 KB başına olay üretir → her seferinde JSON+kilit israfı.
+///   • SON PARÇA istisnası yoksa: son olay throttle'a takılır ve bar %99'da ASILI kalır.
+/// (Mutasyon turu 2026-08-16: kaynak-regex testleri bu iki kuralı ayırt EDEMİYORDU; artık
+/// `reporter_testleri` davranışsal olarak kilitliyor.)
+fn snapshot_yazici(
     store: std::sync::Arc<Mutex<Option<serde_json::Value>>>,
+    throttle_ms: u64,
 ) -> impl FnMut(flow::Progress) {
     let mut last = std::time::Instant::now();
     let mut any = false;
     move |p: flow::Progress| {
         if let flow::Progress::Downloading { done, total, .. } = &p {
-            let final_chunk = *total > 0 && *done >= *total;
-            if any && !final_chunk && last.elapsed() < std::time::Duration::from_millis(80) {
+            let son_parca = *total > 0 && *done >= *total;
+            if any && !son_parca && last.elapsed() < std::time::Duration::from_millis(throttle_ms) {
                 return;
             }
         }
@@ -167,6 +183,18 @@ fn progress_reporter(
         if let Ok(v) = serde_json::to_value(&p) {
             *store.lock().unwrap() = Some(v);
         }
+    }
+}
+
+fn progress_reporter(
+    app: tauri::AppHandle,
+    store: std::sync::Arc<Mutex<Option<serde_json::Value>>>,
+) -> impl FnMut(flow::Progress) {
+    // Throttle + son-parça kuralı ORTAK yazıcıda (tek kaynak) — ön-indirme ile ayrışmasın.
+    // Buradaki tek fark `emit`: bazı ortamlarda çalışır, zararsız; UI polling'e dayanır.
+    let mut yaz = snapshot_yazici(store, 80);
+    move |p: flow::Progress| {
+        yaz(p.clone());
         let _ = app.emit("install://progress", &p);
     }
 }
@@ -671,6 +699,9 @@ fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, Strin
         // false → önce ARKA PLANDA inecek, kurulum SONRAKİ açılışta.
         "cached": plan.cached,
         "rolloutPending": plan.rollout_bekliyor,
+        // GERİ ÇAĞIRMA: kurulu sürüm asgarinin altında → rollout ezildi, güncelleme zorunlu.
+        // UI bunu AYRICA gösterir; sessizce beklemek geri çağırmanın amacını boşa çıkarır.
+        "recall": plan.zorunlu,
     }))
 }
 
@@ -679,16 +710,47 @@ fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, Strin
 /// SAHİP KARARI 2026-08-08: "güncelleme açılışta kimseyi bekletmesin". Kullanıcı uygulamayı
 /// normal kullanırken paketler iner; kurulum bir sonraki açılışta, paketler hazırken yapılır.
 #[tauri::command]
-async fn prefetch_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
+async fn prefetch_runtime_update(
+    state: tauri::State<'_, AppState>,
+    manifest_raw: String,
+) -> Result<serde_json::Value, String> {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ DENETİM 2026-08-16 (Bulgu 3) — DENE-VE-VAZGEÇ, tam kilit DEĞİL.
+    // Ön-indirme 45 dakika sürebilir; kilidi o süre boyunca TUTSAYDI kullanıcı "Onar"/profil
+    // kurulumu yapamaz ve "başka pencere güncelleme yapıyor" hatası alırdı — oysa bu akışın
+    // TEK amacı kullanıcıyı bekletmemek. Bu yüzden kilit yalnız YOKLANIR: bir kurulum/onarım
+    // sürüyorsa ön-indirme bu turu ATLAR (isteğe bağlıdır, sonra tekrar denenir). Kilit
+    // hemen bırakılır; indirme onsuz sürer.
+    // Kalan risk BİLİNÇLİ: ön-indirme başladıktan SONRA kurulum başlarsa ikisi aynı önbellek
+    // `.part` dosyasına yazabilir. Bu AĞACI bozmaz (ön-indirme kuruluma hiç dokunmaz) ve
+    // `ensure_package` sha doğruladığı için bozuk indirme kabul edilmez, yalnız tekrarlanır.
+    match install::kurulum_kilidi_al(&root) {
+        Ok(k) => drop(k),
+        Err(_) => {
+            return Ok(serde_json::json!({
+                "status": "skipped",
+                "reason": "kurulum/onarım sürüyor — ön-indirme ertelendi"
+            }))
+        }
+    }
+    // İlerleme AYRI kanala yazılır (`prefetch`), kurulum ekranını ele geçirmez — ama artık
+    // sessiz de değil: kullanıcı "arka planda iniyor" notunun yanında yüzdeyi görür.
+    // ⚠️ `tauri::State` Send değil → Arc'ı spawn_blocking'e taşımadan ÖNCE klonla (install
+    // yolundaki desenin aynısı).
+    let store = state.prefetch.clone();
+    *store.lock().unwrap() = None;
+    let store_is = store.clone();
     let sonuc = tauri::async_runtime::spawn_blocking(move || {
-        // İlerleme YAYINLANMAZ: bu indirme sessizdir, kurulum ekranını ele geçirmemeli.
-        let mut on = |_: flow::Progress| {};
+        // Kurulum yolundakiyle AYNI yazıcı (throttle + son-parça istisnası) — tek kaynak.
+        let mut on = snapshot_yazici(store_is, 150);
         flow::prefetch_updates(&manifest_raw, &root, &mut on, &|| net::Control::Continue)
             .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("arka plan indirme çöktü: {e}"))?;
+    // Bittiğinde kanalı KAPAT: UI bunu "indirme tamamlandı" olarak okur ve yoklamayı durdurur.
+    // Aksi halde son snapshot ekranda donmuş bir yüzde olarak kalırdı.
+    *store.lock().unwrap() = None;
     match sonuc {
         Ok(()) => Ok(serde_json::json!({ "status": "prefetched" })),
         // Ağ hatası sessizce yutulur: bu isteğe bağlı bir ön-indirmedir, kullanıcıyı ilgilendirmez.
@@ -708,6 +770,13 @@ async fn apply_runtime_update(
     manifest_raw: String,
 ) -> Result<serde_json::Value, String> {
     let root = install::default_install_root(&home_dir());
+    // ⚠️ DENETİM 2026-08-16 (Bulgu 3): KURULUM KİLİDİ YOKTU.
+    // `install_and_launch`, `repair` ve `uninstall` bu kilidi alıyordu; AYNI runtime ağacını
+    // değiştiren OTO-GÜNCELLEME almıyordu. Tek-instance koruması da yok → ikinci bir client
+    // penceresi ya da kullanıcının "Onar"a basması ile iki akış `runtime.new`'e birlikte yazıp
+    // takas edebiliyordu. Kilit ELDE EDİLEMEZSE güncelleme yapılmaz: sonraki açılışta tekrar
+    // denenir (paketler önbellekte, maliyeti yok).
+    let _kilit = install::kurulum_kilidi_al(&root)?;
     // ⚠️ 2026-08-09: `#[cfg(windows)]` kaldırıldı — bu akış mac/Linux'ta da backend'i öldürür.
     aktif_seans_kapisi(&root)?;
 
@@ -1081,6 +1150,13 @@ fn app_window_open(app: tauri::AppHandle) -> bool {
 #[tauri::command]
 fn get_progress(state: tauri::State<'_, AppState>) -> Option<serde_json::Value> {
     state.progress.lock().unwrap().clone()
+}
+
+/// ARKA PLAN ön-indirmenin son ilerleme snapshot'ı. `None` = indirme yok ya da BİTTİ.
+/// UI bunu yoklar; kurulum ekranını AÇMAZ, yalnız bilgi notundaki yüzdeyi/barı günceller.
+#[tauri::command]
+fn get_prefetch_progress(state: tauri::State<'_, AppState>) -> Option<serde_json::Value> {
+    state.prefetch.lock().unwrap().clone()
 }
 
 /// İndirmeyi DURAKLAT — indirme döngüsü `.part`'ı koruyup durur; kurulum komutu {status:"paused"}
@@ -1471,6 +1547,7 @@ fn main() {
             prefetch_runtime_update,
             uninstall,
             get_progress,
+            get_prefetch_progress,
             app_window_open,
             pause_install,
             cancel_install,
@@ -1878,6 +1955,70 @@ Connection: close
 
         drop(h);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // ── ARKA PLAN İNDİRME İLERLEMESİ (2026-08-16, sahip isteği: yüzdelik real-time bar) ──
+    // Bu iki kural kaynak-regex testiyle AYIRT EDİLEMİYORDU (mutasyon turu gösterdi); burada
+    // davranışsal olarak kilitleniyor. İkisi de doğrudan kullanıcıya yansır.
+
+    fn ilerleme(done: u64, total: u64) -> flow::Progress {
+        flow::Progress::Downloading { what: "app".into(), done, total }
+    }
+
+    fn okunan(store: &Arc<Mutex<Option<serde_json::Value>>>) -> Option<(u64, u64)> {
+        store.lock().unwrap().as_ref().map(|v| {
+            (v["done"].as_u64().unwrap_or(0), v["total"].as_u64().unwrap_or(0))
+        })
+    }
+
+    /// 🔴 SON PARÇA HER ZAMAN yazılmalı — yoksa bar %99'da ASILI kalır ve kullanıcı
+    /// indirmenin bittiğini göremez.
+    #[test]
+    fn son_parca_throttle_a_TAKILMAZ() {
+        let store: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+        // Throttle'ı çok uzun tut: son parça dışındaki her şey elenmeli.
+        let mut yaz = snapshot_yazici(store.clone(), 60_000);
+
+        yaz(ilerleme(10, 100)); // ilk olay her zaman yazılır
+        assert_eq!(okunan(&store), Some((10, 100)));
+
+        yaz(ilerleme(50, 100)); // throttle → YAZILMAMALI
+        assert_eq!(okunan(&store), Some((10, 100)), "throttle calismiyor");
+
+        yaz(ilerleme(100, 100)); // SON PARÇA → throttle'a RAĞMEN yazılmalı
+        assert_eq!(
+            okunan(&store),
+            Some((100, 100)),
+            "son parca throttle'a takildi -> bar %99'da asili kalir"
+        );
+    }
+
+    /// İlerleme gerçekten store'a AKMALI (yazıcı sessizce hiçbir şey yapmamalı).
+    #[test]
+    fn ilerleme_store_a_gercekten_yazilir() {
+        let store: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+        let mut yaz = snapshot_yazici(store.clone(), 0);
+        assert!(store.lock().unwrap().is_none(), "baslangicta bos olmali");
+
+        yaz(flow::Progress::Verifying { what: "deps".into() });
+        let v = store.lock().unwrap().clone().expect("faz olayi yazilmadi");
+        assert_eq!(v["step"], "verifying");
+        assert_eq!(v["what"], "deps");
+
+        yaz(ilerleme(7, 9));
+        assert_eq!(okunan(&store), Some((7, 9)), "indirme olayi yazilmadi");
+    }
+
+    /// `total = 0` (Content-Length yok): son-parça kuralı yanlışlıkla tetiklenmemeli,
+    /// ama olaylar yine de akmalı — UI orada belirsiz bar gösterir.
+    #[test]
+    fn toplam_bilinmiyorken_de_akar() {
+        let store: Arc<Mutex<Option<serde_json::Value>>> = Arc::new(Mutex::new(None));
+        let mut yaz = snapshot_yazici(store.clone(), 0);
+        yaz(ilerleme(0, 0));
+        assert_eq!(okunan(&store), Some((0, 0)));
+        yaz(ilerleme(4096, 0));
+        assert_eq!(okunan(&store), Some((4096, 0)));
     }
 
     /// Backend hiç çalışmıyorsa kapı engel OLMAMALI (ilk kurulum / temiz makine).

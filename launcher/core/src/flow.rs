@@ -219,6 +219,95 @@ fn temiz_yeniden_indirilebilir(control: &dyn Fn() -> net::Control) -> bool {
 ///
 /// Çoklu-profil: kullanıcı birden çok profil (Ev Sahibi + Veteriner + Araştırma) seçebilir;
 /// base BİR KEZ, her profil model-zip'i sırayla kurulur. Boş liste = yalnız base (onarım/temel).
+/// DİSK KAPISI + ÖLÜ ÖNBELLEK TEMİZLİĞİ — indirmeye başlamadan ÖNCE.
+///
+/// 2026-08-09 denetimi bunu ÖLÇEREK ekledi (LattePanda eMMC: ~4,8 GB kalıcı önbellek birikiyor,
+/// kurulum 1,2 GB indirdikten SONRA `os error 112` ile ölüyor; klinik 20 dk bekleyip anlaşılmaz
+/// bir hata alıyor). AMA kapı yalnız `install_profiles`e kondu — yani KULLANICININ İZLEDİĞİ ilk
+/// kurulum yoluna. GÖZETİMSİZ koşan oto-güncelleme (`update_installed`) ve arka plan indirme
+/// (`prefetch_updates`) korumasız kaldı (denetim 2026-08-16, Bulgu 2). Burada tek kaynağa alındı.
+///
+/// `kurulum_da_yapilacak`:
+///   • `true`  — indirilen zip AÇILACAK da → yer 2× (zip + ağaç) + zaten önbellektekilerin açılımı.
+///   • `false` — yalnız ÖN-İNDİRME (prefetch): sadece zip'in yeri gerekir, açma yok.
+///
+/// Sıra ÖNEMLİ: önce ölü önbelleği temizle (yer aç), SONRA karar ver — aksi hâlde eski
+/// sürümlerin kalıntısı yüzünden gereksiz yere "yer yok" derdik.
+pub(crate) fn disk_kapisi(
+    gerekli: &[(&crate::Package, String)],
+    install_root: &Path,
+    cache: &Path,
+    on: &mut dyn FnMut(Progress),
+    kurulum_da_yapilacak: bool,
+) -> Result<(), FlowError> {
+    let korunacak: Vec<String> = gerekli
+        .iter()
+        .filter_map(|(pkg, etiket)| {
+            cache_path_for(pkg, cache, etiket)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+        })
+        .collect();
+    let silinen = crate::disk::olu_onbellek_temizle(cache, &korunacak);
+    if silinen > 0 {
+        on(Progress::Extracting {
+            what: format!("eski paketler temizlendi ({})", crate::disk::insan_okur(silinen)),
+        });
+    }
+
+    let (mut inecek, mut acilacak) = (Vec::new(), Vec::new());
+    for (pkg, etiket) in gerekli {
+        if paket_onbellekte_hazir(pkg, cache, etiket) {
+            if kurulum_da_yapilacak {
+                acilacak.push(pkg.size);
+            }
+        } else {
+            inecek.push(pkg.size);
+        }
+    }
+    let gereken = if kurulum_da_yapilacak {
+        crate::disk::gereken_alan(&inecek, &acilacak)
+    } else {
+        // Yalnız indirme: zip kadar yer + aynı emniyet payı.
+        crate::disk::gereken_alan(&[], &inecek)
+    };
+    if let Err((gerek, bos)) = crate::disk::yeterli_alan_var_mi(install_root, gereken) {
+        return Err(FlowError::Io(std::io::Error::other(format!(
+            "Yetersiz disk alanı: {} gerekiyor, bu diskte {} boş. Yer açıp tekrar deneyin.",
+            crate::disk::insan_okur(gerek),
+            crate::disk::insan_okur(bos)
+        ))));
+    }
+    Ok(())
+}
+
+/// Bir güncelleme planının dokunacağı TÜM paketleri topla (disk kapısı için).
+fn plan_paketleri<'a>(
+    manifest: &'a Manifest,
+    plan: &UpdatePlan,
+) -> Vec<(&'a crate::Package, String)> {
+    let mut v: Vec<(&crate::Package, String)> = Vec::new();
+    if let Some(l) = manifest.layers_for_current_platform() {
+        if plan.deps {
+            v.push((&l.deps, "deps".to_string()));
+        }
+        if plan.app {
+            v.push((&l.app, "app".to_string()));
+        }
+    } else if plan.base {
+        if let Ok(p) = manifest.runtime_for_current_platform() {
+            v.push((p, "base".to_string()));
+        }
+    }
+    for ad in &plan.profiles {
+        if let Ok(pkg) = manifest.model_package(ad) {
+            v.push((pkg, ad.clone()));
+        }
+    }
+    v
+}
+
 pub fn install_profiles(
     manifest_raw: &str,
     profiles: &[String],
@@ -252,55 +341,24 @@ pub fn install_profiles(
 
     let cache = install::cache_dir(install_root);
 
-    // ── DİSK ALANI ÖN KONTROLÜ (2026-08-09 denetimi, Tier 1) ────────────────────────────────
-    // Kurulum yolunda hiçbir yerde boş alan kontrolü YOKTU ve önbellekteki TAMAMLANMIŞ paketler
-    // hiç temizlenmiyordu. LattePanda eMMC'sinde ölçüldü: ~4,8 GB kalıcı önbellek birikiyor,
-    // kurulum 1,2 GB İNDİRDİKTEN SONRA `os error 112` ile ölüyor. En kötü yanı zamanlaması:
-    // klinik 20 dakika bekliyor, sonra anlaşılmayan bir hata alıyor ve tekrar deniyor — her
-    // denemede önbellek biraz daha şişiyor.
-    //
-    // Sıra ÖNEMLİ: önce ölü önbelleği temizle (yer aç), SONRA karar ver. Aksi hâlde eski
-    // sürümlerin kalıntısı yüzünden gereksiz yere "yer yok" derdik.
+    // DISK ALANI ON KONTROLU (2026-08-09 denetimi, Tier 1)
+    // Mantik `disk_kapisi`ya CIKARILDI (denetim 2026-08-16, Bulgu 2): ayni koruma gozetimsiz
+    // kosan `update_installed` ve `prefetch_updates` yollarinda da gerekliydi ve orada YOKTU.
+    // Olculmus gerekce icin `disk_kapisi` basligina bak. Tek kaynak -> biri duzeltilip
+    // digeri unutulamaz.
     {
-        let mut korunacak: Vec<String> = Vec::new();
-        let mut ekle = |pkg: &crate::Package, etiket: &str| {
-            if let Some(ad) = cache_path_for(pkg, &cache, etiket).file_name()
-                .and_then(|s| s.to_str()) { korunacak.push(ad.to_string()); }
-        };
+        let mut gerekli: Vec<(&crate::Package, String)> = Vec::new();
         if let Some(l) = manifest.layers_for_current_platform() {
-            ekle(&l.deps, "deps");
-            ekle(&l.app, "app");
+            gerekli.push((&l.deps, "deps".to_string()));
+            gerekli.push((&l.app, "app".to_string()));
         }
-        if let Some(p) = runtime_pkg { ekle(p, "base"); }
-        for (ad, pkg) in &model_pkgs { ekle(pkg, ad); }
-
-        let silinen = crate::disk::olu_onbellek_temizle(&cache, &korunacak);
-        if silinen > 0 {
-            on(Progress::Extracting {
-                what: format!("eski paketler temizlendi ({})", crate::disk::insan_okur(silinen)),
-            });
+        if let Some(pp) = runtime_pkg {
+            gerekli.push((pp, "base".to_string()));
         }
-
-        // İndirilecek (2× yer: önce zip, sonra açılmış ağaç) ve yalnız açılacak paketleri ayır.
-        let (mut inecek, mut acilacak) = (Vec::new(), Vec::new());
-        let mut hesapla = |pkg: &crate::Package, etiket: &str| {
-            if paket_onbellekte_hazir(pkg, &cache, etiket) { acilacak.push(pkg.size); }
-            else { inecek.push(pkg.size); }
-        };
-        if let Some(l) = manifest.layers_for_current_platform() {
-            hesapla(&l.deps, "deps");
-            hesapla(&l.app, "app");
+        for (ad, pkg) in &model_pkgs {
+            gerekli.push((pkg, ad.to_string()));
         }
-        if let Some(p) = runtime_pkg { hesapla(p, "base"); }
-        for (ad, pkg) in &model_pkgs { hesapla(pkg, ad); }
-
-        let gereken = crate::disk::gereken_alan(&inecek, &acilacak);
-        if let Err((gerek, bos)) = crate::disk::yeterli_alan_var_mi(install_root, gereken) {
-            return Err(FlowError::Io(std::io::Error::other(format!(
-                "Yetersiz disk alanı: kurulum için {} gerekiyor, bu diskte {} boş. \
-                 Yer açıp tekrar deneyin.",
-                crate::disk::insan_okur(gerek), crate::disk::insan_okur(bos)))));
-        }
+        disk_kapisi(&gerekli, install_root, &cache, on, true)?;
     }
 
     // #110: açılım bütçesi TÜM kurulum boyunca PAYLAŞILIR (base + profiller).
@@ -682,6 +740,12 @@ pub struct UpdatePlan {
     /// Yeni sürüm VAR ama bu cihaz henüz kademeli yayın diliminde değil (`rollout`).
     /// `needed()` false döner — yani hiçbir şey indirilmez/kurulmaz; teşhis için işaretlenir.
     pub rollout_bekliyor: bool,
+    /// GERİ ÇAĞIRMA: kurulu sürüm `min_supported_version`'ın altında → güncelleme ZORUNLU.
+    ///
+    /// Bu bayrak `rollout`u ezer (bkz. `pending_updates`) ve UI'ya AYRICA bildirilir: geri
+    /// çağırma bir bobin-güvenliği düzeltmesi taşıyabilir ve cihaz güncellenene kadar kullanıcı
+    /// bunu BİLMELİ. Sessizce beklemek, geri çağırmanın amacını boşa çıkarır.
+    pub zorunlu: bool,
     /// Gereken TÜM paketler zaten önbellekte mi?
     ///
     /// SAHİP KARARI 2026-08-08: güncelleme açılışta kimseyi bekletmemeli. `true` ise kurulum
@@ -732,6 +796,7 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
             .min_supported_version
             .as_deref()
             .is_some_and(|asgari| crate::is_newer(asgari, &install::kurulu_surum(install_root)));
+        plan.zorunlu = zorunlu;
         if !zorunlu && l.rollout < 100 && install::rollout_dilimi(install_root) >= l.rollout {
             plan.rollout_bekliyor = true;
             return Ok(plan);   // güncelleme VAR ama bu cihazın sırası değil
@@ -816,6 +881,10 @@ pub fn prefetch_updates(
     }
     let manifest = Manifest::parse(manifest_raw)?;
     let cache = install::cache_dir(install_root);
+    // Bulgu 2 (denetim 2026-08-16): ARKA PLAN indirmesi korumasızdı — 1,5 GB'ı gözetimsiz
+    // indirip diski doldurabiliyordu ve hata kullanıcıya HİÇ görünmüyordu. Yalnız indirme
+    // yapıldığı için `kurulum_da_yapilacak = false` (zip kadar yer yeter, açma yok).
+    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, false)?;
     if let Some(l) = manifest.layers_for_current_platform() {
         if plan.deps {
             ensure_package(&l.deps, &cache, "deps", on, control)?;
@@ -876,6 +945,11 @@ pub fn update_installed(
         schema: manifest.schema,
     });
     let cache = install::cache_dir(install_root);
+    // Bulgu 2 (denetim 2026-08-16): OTO-GÜNCELLEME yolunda disk kapısı YOKTU — kapı yalnız
+    // kullanıcının izlediği ilk kuruluma konmuştu. Burası gözetimsiz koşar; alan yetmezse
+    // güncelleme sessizce başarısız olur ve ölü önbellek hiç geri kazanılmaz.
+    // Burada AÇMA da yapılacak → 2× yer + zaten önbellektekilerin açılımı hesaplanır.
+    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, true)?;
     let mut extract_budget: u64 = 0;
 
     // ── KATMANLI YOL ────────────────────────────────────────────────────────────────────────
@@ -1285,6 +1359,116 @@ mod tests {
             "hata disk alanini soylemiyor, kullanici sebebi anlayamaz: {mesaj}");
         assert!(olaylar.is_empty(),
             "kontrol INDIRMEDEN SONRA yapilmis — 1,2 GB bosa inerdi");
+    }
+
+    /// Kurulu bir cihaz kur (guncelleme testlerinin ortak on kosulu).
+    fn kurulu_cihaz(root: &Path, base_sha: &str) {
+        let rt = install::runtime_dir(root);
+        std::fs::create_dir_all(rt.join("PEMF_Backend")).unwrap();
+        std::fs::write(install::backend_path(root), b"exe").unwrap();
+        install::record_base_sha(root, base_sha);
+    }
+
+    /// 🔴 DENETIM 2026-08-16 (Bulgu 2): OTO-GUNCELLEME yolunda disk kapisi YOKTU.
+    ///
+    /// 2026-08-09 denetimi kapiyi OLCEREK ekledi ama yalniz `install_profiles`e (kullanicinin
+    /// IZLEDIGI ilk kurulum). `update_installed` GOZETIMSIZ kosar: alan yetmezse guncelleme
+    /// sessizce basarisiz olur, olu onbellek de hic geri kazanilmaz.
+    #[test]
+    fn guncellemede_yetersiz_disk_INDIRMEDEN_once_durdurur() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        kurulu_cihaz(root, &"b".repeat(64));
+
+        let sha = "a".repeat(64);
+        let man = format!(
+            concat!(r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":"#,
+                    r#"{{"url":"https://example.invalid/base.zip","sha256":"{sha}","#,
+                    r#""size":9000000000000,"kind":"zip"}}}},"models":{{}}}}"#),
+            plat = crate::platform::current(), sha = sha);
+
+        let mut olaylar: Vec<String> = Vec::new();
+        let mut on = |p: Progress| {
+            if let Progress::Downloading { .. } = p { olaylar.push("indirme".into()); }
+        };
+        let r = update_installed(&man, root, &mut on, &|| net::Control::Continue);
+
+        let e = r.expect_err("imkansiz boyutta guncelleme 'basarili' dondu");
+        let mesaj = e.to_string();
+        assert!(mesaj.contains("disk") || mesaj.contains("Disk"),
+            "hata disk alanini soylemiyor: {mesaj}");
+        assert!(olaylar.is_empty(),
+            "kontrol INDIRMEDEN SONRA yapilmis — guncelleme bosuna GB indirirdi");
+    }
+
+    /// 🔴 ARKA PLAN indirmesi de korumasizdi: gozetimsiz 1,5 GB indirip diski doldurabiliyordu
+    /// ve hata kullaniciya HIC gorunmuyordu (`.catch` sessiz).
+    #[test]
+    fn on_indirmede_yetersiz_disk_INDIRMEDEN_once_durdurur() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        kurulu_cihaz(root, &"b".repeat(64));
+
+        let sha = "a".repeat(64);
+        let man = format!(
+            concat!(r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":"#,
+                    r#"{{"url":"https://example.invalid/base.zip","sha256":"{sha}","#,
+                    r#""size":9000000000000,"kind":"zip"}}}},"models":{{}}}}"#),
+            plat = crate::platform::current(), sha = sha);
+
+        let mut olaylar: Vec<String> = Vec::new();
+        let mut on = |p: Progress| {
+            if let Progress::Downloading { .. } = p { olaylar.push("indirme".into()); }
+        };
+        let r = prefetch_updates(&man, root, &mut on, &|| net::Control::Continue);
+
+        // ⚠️ Yalnız `is_err()` YETMEZ: kapi kaldirilsa bile `ensure_package` erisilemez host'a
+        // gidip HATA doner — test ikisini ayirt edemez (mutasyon turu 2026-08-16 bunu gosterdi).
+        // Hatanin DISK hatasi oldugunu dogrula.
+        let e = r.expect_err("imkansiz boyutta on-indirme 'basarili' dondu");
+        let mesaj = e.to_string();
+        assert!(mesaj.contains("disk") || mesaj.contains("Disk"),
+            "on-indirme disk kapisina TAKILMADI (ag hatasina dustu): {mesaj}");
+        assert!(olaylar.is_empty(), "on-indirme kontrolden ONCE aga cikti");
+    }
+
+    /// ON-INDIRME yalniz ZIP'i indirir (acma YOK) -> 2x yer istemek YANLIS olurdu.
+    ///
+    /// Kurulum yolu 2x ister (zip + acilmis agac); on-indirme 1x. Ikisi ayni hesabi kullanirsa
+    /// prefetch gereksiz yere "yer yok" der ve arka plan indirmesi HIC calismaz.
+    ///
+    /// ⚠️ Bu test iki kez duzeltildi (mutasyon turu 2026-08-16):
+    ///   1) once GERCEK diski olcup bol-yerli makinede erken donuyordu -> hicbir sey kanitlamiyordu;
+    ///   2) sonra `gereken_alan`i DOGRUDAN cagiriyordu -> `disk_kapisi`nin hangi bicimi kullandigini
+    ///      hic sinamiyordu (cagri yeri bozulsa test yine yesil kalirdi).
+    /// Artik `disk_kapisi`nin KENDISI cagriliyor ve boyut, olculen bos alandan turetiliyor:
+    /// 1x sigar, 2x sigmaz. Disk durumundan bagimsiz olarak ayrimi zorlar.
+    #[test]
+    fn on_indirme_kurulumdan_DAHA_AZ_yer_ister() {
+        let d = tempfile::tempdir().unwrap();
+        let cache = d.path().join("cache");
+        std::fs::create_dir_all(&cache).unwrap();
+        let Some(bos) = crate::disk::bos_alan(d.path()) else {
+            return; // olculemiyorsa kapi zaten DAIMA Ok doner; ayrim sinanamaz
+        };
+        // bos/2: 1x + %10 pay  ~ %55 -> SIGAR | 2x + %10 pay ~ %110 -> SIGMAZ
+        let pkg = crate::Package {
+            url: "https://example.invalid/x.zip".into(),
+            sha256: "a".repeat(64),
+            size: bos / 2,
+            kind: "zip".into(),
+        };
+        let gerekli = vec![(&pkg, "base".to_string())];
+        let mut on = |_: Progress| {};
+
+        assert!(
+            disk_kapisi(&gerekli, d.path(), &cache, &mut on, false).is_ok(),
+            "on-indirme (1x) sigmasi gerekirken reddedildi -> arka plan indirmesi hic calismaz"
+        );
+        assert!(
+            disk_kapisi(&gerekli, d.path(), &cache, &mut on, true).is_err(),
+            "kurulum (2x) sigmamasi gerekirken kabul edildi -> acilirken disk dolar"
+        );
     }
 
     /// Ölü önbellek temizliği kurulum akışında GERÇEKTEN çalışıyor mu (yer açmanın en ucuz yolu).

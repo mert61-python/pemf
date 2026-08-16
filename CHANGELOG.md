@@ -127,6 +127,36 @@ cihazın kendisi sunar, orada eşleştirme anlamsızdır.
 
 ---
 
+## launcher 1.9.29 — 2026-08-16 (güncelleme: yüzde göstergesi + üç denetim düzeltmesi)
+
+**Etiket:** `launcher-v1.9.29` → `PEMFVetClient-Setup-1.9.29.exe` (sha `eac5685204a3`).
+
+**1. Arka planda inen güncellemenin yüzdesi artık görünüyor.** Yeni sürüm indirilirken yalnız
+"arka planda indiriliyor" yazıyordu; ne kadar kaldığı hiçbir yerde yoktu. Artık bilgi notunun
+içinde yüzde, ince bir ilerleme çubuğu, inen/toplam boyut ve hız akıyor. Kurulum ekranı
+**açılmıyor** — uygulamayı kullanmaya devam edebilirsiniz.
+
+**2. Sürekli açık kalan cihazlar da güncelleme alıyor.** Güncelleme kontrolü yalnız uygulama
+açılırken yapılıyordu. Launcher penceresi siz çalışırken açık kaldığı için, günlerce kapatılmayan
+bir klinik bilgisayarı yeni sürümü **hiç görmüyordu**. Artık altı saatte bir kontrol ediliyor.
+
+⚠️ Bunun en önemli sonucu: **önemli bir güvenlik güncellemesi** yayınlandığında (üretici
+tarafından zorunlu işaretlenen sürüm) sürekli açık cihazlara ulaşamıyordu. Artık ulaşıyor ve
+ekranda ayrıca uyarı çıkıyor.
+
+🔴 **Süren seans ASLA kesilmez.** Periyodik kontrol yalnız indirir ve bildirir; kurulum, siz
+uygulamayı kapatıp açtığınızda yapılır. Seans sürüyorsa hiçbir şey yapılmaz.
+
+**3. Disk dolmadan uyarı.** Güncelleme indirmeleri, yer yetmeyeceğini önceden söylemeden
+başlıyordu; disk dolunca anlaşılmayan bir hatayla duruyordu. Artık indirmeden önce yer kontrol
+ediliyor ve eski sürümlerden kalan kullanılmayan paketler temizleniyor.
+
+**4. İki pencere aynı anda güncelleme yapamaz.** Uygulamanın ikinci bir penceresi açıksa ya da
+siz "Onar" derken otomatik güncelleme başlarsa, ikisi aynı dosyalara yazabiliyordu. Artık
+yalnızca biri çalışır; diğeri bekler.
+
+---
+
 ## launcher 1.9.28 — 2026-08-15 (kaldır → yeniden kur artık temiz)
 
 **Etiket:** `launcher-v1.9.28` → `PEMFVetClient-Setup-1.9.28.exe` (sha `78209912de66`).
