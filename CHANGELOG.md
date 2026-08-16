@@ -127,6 +127,24 @@ cihazın kendisi sunar, orada eşleştirme anlamsızdır.
 
 ---
 
+## launcher 1.9.30 — 2026-08-16 ("Başlat" güncelleme kontrolü bitmeden çıkmıyor)
+
+**Etiket:** `launcher-v1.9.30` → `PEMFVetClient-Setup-1.9.30.exe` (sha `07daf9f51f5a`).
+
+Uygulamayı açtığınızda "Başlat" düğmesi hemen çıkıyordu, ama güncelleme kontrolü arka planda
+hâlâ sürüyordu. Tam "Başlat"a basacakken ekran güncellemeye geçebiliyordu — tıklamanız boşa
+gidiyor, ne olduğu anlaşılmıyordu.
+
+Artık "Başlat" kontrol bitene kadar **beklemede** kalıyor ve üstünde *"Güncelleme kontrol
+ediliyor…"* yazıyor. Kontrol bitince açılıyor; güncelleme varsa kurulum yapılıp "Hazır!"a
+dönüldüğünde açılıyor.
+
+**Ekran donmuyor.** Kurulu cihazda "Hazır!" ekranı eskisi gibi anında çiziliyor; bekleyen
+yalnızca düğme. İnternet yoksa ya da kontrol yapılamıyorsa düğme hemen açılıyor — cihaz
+internetsiz de çalışır, bunun için beklemeye gerek yok.
+
+---
+
 ## launcher 1.9.29 — 2026-08-16 (güncelleme: yüzde göstergesi + üç denetim düzeltmesi)
 
 **Etiket:** `launcher-v1.9.29` → `PEMFVetClient-Setup-1.9.29.exe` (sha `eac5685204a3`).
