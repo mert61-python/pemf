@@ -1957,8 +1957,12 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             # device="cpu" ŞART (headless); runtime onnx (torch YOK).
             return CatSoundClassifier(model_path=onnx, runtime="onnx", device="cpu")
 
-        clf = await asyncio.to_thread(_get_or_load_model, "cat_sound", _load_cat_sound)
-
+        # ⚠️ MODEL YUKLEMESI KAPIDAN SONRAYA ALINDI (2026-08-16, CI kirmizisi).
+        # Eskiden model burada yukleniyordu; sessizlik kapisi ise ffmpeg'den SONRA calisiyordu.
+        # Iki sorunu vardi: (a) sessiz bir kaydi REDDETMEK icin 15 MB'lik ONNX bosuna yukleniyordu,
+        # (b) modelin bulunmadigi ortamda (CI, model indirilmemis kurulum) istek kapiya HIC
+        # varamadan 500 "Ses analiz hatasi" ile dusuyordu -> kullanici sessiz kayit yaptiginda
+        # sebebini ogrenemiyordu. Sinyal seviyesi modelden BAGIMSIZ olcculur; once o.
         # Ham sesi temp'e yaz → ffmpeg ile 22050Hz mono WAV'a çevir (herhangi format:
         # mp3/wav/m4a/aac/ogg... — kayıt Android m4a olabilir; librosa/soundfile m4a decode
         # etmez, ffmpeg üniversal). Sonra classifier librosa ile WAV'ı işler.
@@ -2022,6 +2026,8 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
                 ),
             )
 
+        # Kayit analiz edilebilir -> ANCAK SIMDI modeli yukle.
+        clf = await asyncio.to_thread(_get_or_load_model, "cat_sound", _load_cat_sound)
         result = await asyncio.to_thread(lambda: clf.predict(tmp_wav, top_k=3))
         # BELİRSİZLİK sonuçla BİRLİKTE taşınır: istemci düşük güvende sonucu kesin bir bulgu
         # gibi sunmaz. ⚠️ `guvenilir=False` "kedi sesi yok" DEMEK DEĞİLDİR — bu model bunu

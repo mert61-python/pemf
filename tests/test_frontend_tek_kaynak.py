@@ -41,6 +41,15 @@ def _kaynak_agaci_mi(dizin: Path) -> bool:
 
 
 def test_arayuz_kaynagi_var():
+    """⚠️ `pf/` ana depoda GITIGNORE'LUDUR (ayrı bir depo: pemf-frontend.git).
+
+    Temiz checkout'ta / CI'da o dizin YOKTUR — orada "kaynak yok" bir arıza değildir.
+    (Bu test önce koşulsuz assert ediyordu ve CI'ı kırdı.) Asıl değişmez olan
+    `test_KRITIK_ikinci_arayuz_kaynagi_YOK` koşulsuz kalır: ikinci bir kopya HER ortamda
+    yasaktır, çünkü zararı checkout'a bağlı değildir.
+    """
+    if not _KAYNAK.exists():
+        pytest.skip("pf/ yok (temiz checkout / CI) — ayrı depo, gitignore'lu")
     assert _kaynak_agaci_mi(_KAYNAK), f"arayüz kaynağı bulunamadı: {_KAYNAK}"
 
 
