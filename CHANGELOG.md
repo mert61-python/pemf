@@ -209,8 +209,8 @@ elle-bağlanmanın farklı karar vermesi mümkündü.
 
 ## app 1.9.15 — 2026-08-15 (ses analizi: boş kayıt artık sonuç uydurmuyor)
 
-**Etiket:** `client-app-v1.9.15` (base-app `SHA_APP`, base `SHA_BASE`,
-base-deps `eee622a23be9` — değişmedi, yeniden inmez).
+**Etiket:** `client-app-v1.9.15` (base-app `782014a7ca14`, base `d7a392d99c4e`,
+base-deps `2b29c7f806f9`).
 
 **Ev sahibi modunda bildirilen iki sorun.**
 

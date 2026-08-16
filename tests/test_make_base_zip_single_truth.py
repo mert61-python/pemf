@@ -54,8 +54,17 @@ def _sahte_dist(kok: Path) -> Path:
     return d
 
 
-def _calistir(dist: Path, *ek):
+def _calistir(dist: Path, *ek, cikti: Path = None):
+    """⚠️ 2026-08-15: çıktı `PEMF_PKG_OUT` ile tmp'ye yönlendirilir.
+
+    Eskiden betik GERÇEK `pemf-app-packages/` üzerinde koşuyor, aşağıdaki fixture da yayın
+    ziplerini yedekleyip geri yazıyordu. Bu, yayın/yükleme ile aynı anda test koşulursa BOZUK
+    asset yayınlanmasına yol açabilirdi — bu tur gerçekten yakalandı: 1,4 GB'lık `base-deps.zip`
+    GitHub'a yüklenirken bu test koşacaktı. Artık gerçek klasöre HİÇ dokunulmuyor.
+    """
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    if cikti is not None:
+        env["PEMF_PKG_OUT"] = str(cikti)
     return subprocess.run(
         [sys.executable, str(BETIK), str(dist), *ek],
         capture_output=True,
@@ -67,22 +76,16 @@ def _calistir(dist: Path, *ek):
 
 
 @pytest.fixture
-def ortam(tmp_path, monkeypatch):
-    """Betik çıktıyı guii/pemf-app-packages'a yazar → GERÇEK klasörü kirletme."""
+def ortam(tmp_path):
+    """Çıktı tmp'ye yönlendirilir — GERÇEK yayın ziplerine dokunulmaz (yedek/geri-yükleme YOK).
+
+    Eski hâli 3 GB'lık yayın zipini okuyup geri yazıyordu; hem yavaştı hem de yayın sırasında
+    koşulursa asset'i bozabiliyordu. `PEMF_PKG_OUT` bunu kökten kaldırdı.
+    """
     dist = _sahte_dist(tmp_path)
-    cikti = GUII / "pemf-app-packages"
-    yedek = {}
-    for ad in ("base.zip", "base-app.zip", "base-deps.zip"):
-        p = cikti / ad
-        if p.exists():
-            yedek[ad] = p.read_bytes()
+    cikti = tmp_path / "paket_cikti"
+    cikti.mkdir()
     yield dist, cikti
-    for ad in ("base.zip", "base-app.zip", "base-deps.zip"):
-        p = cikti / ad
-        if ad in yedek:
-            p.write_bytes(yedek[ad])
-        elif p.exists():
-            p.unlink()
 
 
 def _crc(z: Path):
@@ -96,14 +99,14 @@ def _crc(z: Path):
 def test_KRITIK_base_zip_bayrak_OLMADAN_uretilir(ortam):
     """Eskiden `--monolith` gerekiyordu; unutulunca yayındaki base.zip bayat kalıyordu."""
     dist, cikti = ortam
-    r = _calistir(dist)
+    r = _calistir(dist, cikti=cikti)
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-800:]
     assert (cikti / "base.zip").exists(), "base.zip bayraksiz uretilmedi — bayat kalirdi"
 
 
 def test_KRITIK_base_zip_katmanlarla_BIREBIR_ayni(ortam):
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     katman = _crc(cikti / "base-app.zip")
     katman.update(_crc(cikti / "base-deps.zip"))
     assert _crc(cikti / "base.zip") == katman, "base.zip katmanlardan FARKLI icerik tasiyor"
@@ -111,7 +114,7 @@ def test_KRITIK_base_zip_katmanlarla_BIREBIR_ayni(ortam):
 
 def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
     dist, cikti = ortam
-    r = _calistir(dist)
+    r = _calistir(dist, cikti=cikti)
     assert "[OK] base.zip == app+deps" in r.stdout, r.stdout[-1500:]
 
 
@@ -121,7 +124,7 @@ def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
 def test_KRITIK_BAYAT_base_zip_dogrulamayi_DUSURUR(ortam):
     """Asıl senaryonun modeli: base.zip eski bir build'den kalmış (exe farklı)."""
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
 
     # base.zip'i "eski build" hâline getir: exe'nin içeriğini değiştir.
     bayat = cikti / "base.zip"
@@ -155,10 +158,10 @@ def test_no_monolith_BAYAT_dosyayi_SILER(ortam):
     """`--no-monolith` seçilirse diskte bayat base.zip KALMAMALI — yayın adımında yanlışlıkla
     yüklenirse eski client'lara bayat backend giderdi."""
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     assert (cikti / "base.zip").exists()
 
-    r = _calistir(dist, "--no-monolith")
+    r = _calistir(dist, "--no-monolith", cikti=cikti)
     assert r.returncode == 0, r.stdout[-1500:]
     assert not (cikti / "base.zip").exists(), "bayat base.zip diskte birakildi"
 
@@ -171,7 +174,7 @@ def test_ai_models_HARIC_kalir(ortam):
     kalan ~2,1 GB'lık model ağacı hâlâ HARİÇ — profil zip'lerinde gelir. İstisnanın genişlemediği
     ayrıca `test_DIGER_ai_models_HALA_HARIC` ile kilitli."""
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     hepsi = set(_crc(cikti / "base.zip"))
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models pakete girdi: {sizan[:5]}"
@@ -179,14 +182,14 @@ def test_ai_models_HARIC_kalir(ortam):
 
 def test_katmanlar_KESISMIYOR(ortam):
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     ortak = set(_crc(cikti / "base-app.zip")) & set(_crc(cikti / "base-deps.zip"))
     assert ortak <= {"PEMF_Backend/_app_roots.json"}, f"katmanlar kesisiyor: {ortak}"
 
 
 def test_exe_APP_katmaninda_torch_DEPSte(ortam):
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     app = set(_crc(cikti / "base-app.zip"))
     deps = set(_crc(cikti / "base-deps.zip"))
     assert "PEMF_Backend/PEMF_Backend.exe" in app
@@ -205,7 +208,7 @@ def test_KRITIK_VERSION_dosyasi_APP_katmaninda(ortam):
     """
     dist, cikti = ortam
     (dist / "_internal" / "VERSION").write_text("1.9.5", encoding="utf-8")
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     app = set(_crc(cikti / "base-app.zip"))
     deps = set(_crc(cikti / "base-deps.zip"))
     assert "PEMF_Backend/_internal/VERSION" in app, (
@@ -218,7 +221,7 @@ def test_KRITIK_korumasiz_py_PAKETLEMEYI_DURDURUR(ortam):
     """⚠️ Kod koruması kapısı — kaldırılmamalı (sahip ilkesi: ai_hub daima .pyd)."""
     dist, cikti = ortam
     (dist / "_internal" / "ai_hub" / "gizli_model.py").write_text("# duz kaynak")
-    r = _calistir(dist)
+    r = _calistir(dist, cikti=cikti)
     assert r.returncode == 1, "korumasiz .py ile paketleme gecti"
     assert "KORUMASIZ" in r.stdout
 
@@ -226,9 +229,9 @@ def test_KRITIK_korumasiz_py_PAKETLEMEYI_DURDURUR(ortam):
 def test_belirlenimci_zip_ayni_sha(ortam):
     """İki ardışık koşu BİREBİR aynı sha üretmeli (katmanlı paketin kazancı buna bağlı)."""
     dist, cikti = ortam
-    r1 = _calistir(dist)
+    r1 = _calistir(dist, cikti=cikti)
     ilk = (cikti / "base-deps.zip").read_bytes()
-    r2 = _calistir(dist)
+    r2 = _calistir(dist, cikti=cikti)
     assert r1.returncode == r2.returncode == 0
     assert (cikti / "base-deps.zip").read_bytes() == ilk, "zip belirlenimci degil"
 
@@ -242,7 +245,7 @@ def test_belirlenimci_zip_ayni_sha(ortam):
 
 def test_KRITIK_cekirdek_model_cat_organ_PAKETTE(ortam):
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     hepsi = set(_crc(cikti / "base.zip"))
     assert any("inference_cat_organ" in n for n in hepsi), (
         "cekirdek ortak model pakete GIRMEDI — vet-only kurulumda AI Pro organ lokalizasyonu "
@@ -254,7 +257,7 @@ def test_KRITIK_cekirdek_model_DEPS_katmaninda(ortam):
     """App katmanı HER sürümde iner (~71 MB). 200 MB'lık modeli oraya koymak sıradan bir yayını
     271 MB'a çıkarırdı — katmanlı paketin bütün kazancı giderdi. Modeller seyrek değişir."""
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     app = set(_crc(cikti / "base-app.zip"))
     deps = set(_crc(cikti / "base-deps.zip"))
     assert not any("inference_cat_organ" in n for n in app), (
@@ -266,7 +269,7 @@ def test_KRITIK_cekirdek_model_DEPS_katmaninda(ortam):
 def test_DIGER_ai_models_HALA_HARIC(ortam):
     """İstisna YALNIZ ortak modeldir. Genişlerse 2,1 GB'lık model ağacı çekirdeğe sızar."""
     dist, cikti = ortam
-    assert _calistir(dist).returncode == 0
+    assert _calistir(dist, cikti=cikti).returncode == 0
     hepsi = set(_crc(cikti / "base.zip"))
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"

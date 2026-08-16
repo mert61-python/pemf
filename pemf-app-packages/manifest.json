@@ -1,26 +1,26 @@
 {
   "schema": 2,
-  "version": "1.9.14",
-  "tag": "client-app-v1.9.14",
+  "version": "1.9.15",
+  "tag": "client-app-v1.9.15",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.14/base.zip",
-      "sha256": "a2becde42f04f2c83f859f3626ff9f0cd474745791539560145da354ca8e2c22",
-      "size": 1533298050,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.15/base.zip",
+      "sha256": "d7a392d99c4ed6e4d1bb858268f8b3fde1b04cb72673e5f75fa4235e29b7344c",
+      "size": 1533303165,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.14/base-app.zip",
-        "sha256": "61389a6ac4344659ca19701c92f14a0a16975b1314cd33026959803f3b23ffb2",
-        "size": 71178405,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.15/base-app.zip",
+        "sha256": "782014a7ca14271b2244272b2691df1f24e4ad326847a978bdfc85ddfa2df71c",
+        "size": 71183520,
         "kind": "zip"
       },
       "deps": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.14/base-deps.zip",
-        "sha256": "eee622a23be9d013f62e7b5df8247778c3261df523d822b1d27f12c95ea17592",
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.15/base-deps.zip",
+        "sha256": "2b29c7f806f9f011f028f4d513af46a64fd994c0af7914c779acbdfb446e288c",
         "size": 1462119667,
         "kind": "zip"
       },
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.14/base.zip",
-    "sha256": "a2becde42f04f2c83f859f3626ff9f0cd474745791539560145da354ca8e2c22",
-    "size": 1533298050,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.15/base.zip",
+    "sha256": "d7a392d99c4ed6e4d1bb858268f8b3fde1b04cb72673e5f75fa4235e29b7344c",
+    "size": 1533303165,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",

@@ -33,6 +33,7 @@
 # (ornegin yalniz katman denemesi) atlamak icindir ve o zaman DISKTEKI bayat base.zip SILINIR —
 # yanlislikla eski dosyayi yayinlamak mumkun olmasin.
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -47,7 +48,14 @@ _args = [a for a in sys.argv[1:] if not a.startswith('--')]
 MONOLITH = '--no-monolith' not in sys.argv
 DIST = _args[0] if _args else os.environ.get('PEMF_DIST') or os.path.join(GUII, 'PEMF_BUILD', 'dist', 'PEMF_Backend')
 PARENT = os.path.dirname(DIST)  # arcname'e PEMF_Backend/ oneki gelsin
-OUTDIR = os.path.join(GUII, 'pemf-app-packages')
+# ⚠️ DENETIM 2026-08-15: cikti dizini SABITTI ve testler betigi gercek `pemf-app-packages/`
+# uzerinde kosuyordu; test fixture'i YAYIN ZIPLERINI gecici olarak EZIP sonra geri yaziyordu.
+# Bu, yukleme/yayin ile AYNI ANDA test kosulursa bozuk asset yayinlanmasina yol acabilir
+# (bu turda gercekten yakalandi: 1,4 GB'lik base-deps yuklenirken test kosulacakti).
+# `PEMF_PKG_OUT` ile cikti yonlendirilebilir -> testler tmp_path'e yazar, yayin dosyalarina
+# HIC dokunmaz. Varsayilan davranis degismedi.
+OUTDIR = os.environ.get('PEMF_PKG_OUT') or os.path.join(GUII, 'pemf-app-packages')
+os.makedirs(OUTDIR, exist_ok=True)
 OUT_APP = os.path.join(OUTDIR, 'base-app.zip')
 OUT_DEPS = os.path.join(OUTDIR, 'base-deps.zip')
 OUT_MONO = os.path.join(OUTDIR, 'base.zip')
@@ -154,6 +162,35 @@ if _toplam != _beklenen:
 # icerige bagli olur. (Zaman damgasi kurulumda kullanilmiyor; acilan dosyalarin tarihi onemsiz.)
 SABIT_TARIH = (1980, 1, 1, 0, 0, 0)  # zip formatinin taban tarihi
 
+# ⚠️ DENETIM 2026-08-15 — KATMANLI PAKETIN AMACINI BOSA CIKARAN BELIRLENIMSIZLIK.
+# Bu paketleyici DIS katmanda zaten belirlenimciydi (sirali girdi + SABIT_TARIH), AMA
+# PyInstaller'in URETTIGI `_internal/base_library.zip` bir IC ZIP'tir ve ICERIGI kosudan
+# kosuya degisiyordu. Olculdu (ayni kaynaktan iki build, 6303 ortak dosya):
+#     FARKLI olan yalnizca 2 dosya -> PEMF_Backend.exe (kod korumasi; APP katmani)
+#                                  -> _internal/base_library.zip (AYNI BOYUT, farkli icerik)
+# base_library.zip DEPS katmanindadir; icerigi degisince deps sha'si da degisir ve
+# `layers.deps` her yayinda yenilenir -> HER KLINIK HER SURUMDE ~1,4 GB indirir. Oysa
+# katmanli paketin tek amaci "deps yalniz requirements degisince insin" idi.
+#
+# Sebep zaman damgasi DEGIL (PyInstaller onlari zaten 1980'e sabitliyor): GIRDI SIRASI.
+# Iki kosuda ilk girdi sirasiyla `abc.pyc` ve `functools.pyc` cikti — dosya sistemi
+# siralamasi. Fark ISLEVSEL DEGILDIR (zipimport girdi sirasina bakmaz), bu yuzden ic zip'i
+# sirali + sabit-tarihli yeniden yazmak icerigi degistirmeden sha'yi SABITLER.
+_IC_ZIPLER = ('base_library.zip',)
+
+
+def _ic_zip_belirlenimci(yol):
+    """PyInstaller'in urettigi ic zip'i belirlenimci bicimde yeniden yaz (icerik AYNI)."""
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(yol) as kaynak, zipfile.ZipFile(tampon, 'w', allowZip64=True) as hedef:
+        for ad in sorted(kaynak.namelist()):
+            gi = kaynak.getinfo(ad)
+            zi = zipfile.ZipInfo(ad, date_time=SABIT_TARIH)
+            zi.compress_type = gi.compress_type  # sikistirma bicimi KORUNUR
+            zi.external_attr = 0o644 << 16  # izinler normalize (zipimport umursamaz)
+            hedef.writestr(zi, kaynak.read(ad))
+    return tampon.getvalue()
+
 
 def _yaz(out, items, extra=None):
     with zipfile.ZipFile(out, 'w', zipfile.ZIP_STORED, allowZip64=True) as z:
@@ -161,6 +198,9 @@ def _yaz(out, items, extra=None):
             zi = zipfile.ZipInfo(arc, date_time=SABIT_TARIH)
             zi.compress_type = zipfile.ZIP_STORED
             zi.external_attr = 0o644 << 16
+            if os.path.basename(arc) in _IC_ZIPLER:
+                z.writestr(zi, _ic_zip_belirlenimci(full))
+                continue
             with open(full, 'rb') as src, z.open(zi, 'w', force_zip64=True) as dst:
                 shutil.copyfileobj(src, dst, 1 << 20)
         if extra:
