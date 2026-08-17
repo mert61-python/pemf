@@ -58,7 +58,16 @@ export function eslesmeMesaji(s: EslesmeSonuc): string {
     case "kod_reddedildi":
       return "Cihaz bulundu ama eşleştirme kodu kabul edilmedi — kodu kontrol edip tekrar deneyin.";
     default:
-      return "Bu kod/kimlikle eşleşen kayıtlı cihaz bulunamadı. Kodu kontrol edin.";
+      // ⚠️ DÜRÜST MESAJ (denetim 2026-08-17): bu dal YALNIZ "kod yanlış" demek DEĞİL. Sunucudaki
+      // `resolve_device` tazelik penceresi dışında kalan (uzun süredir kapalı) cihaz da buraya
+      // düşer. Eskiden yalnız "Kodu kontrol edin" deniyordu ve kullanıcı yanlış yöne bakıp kodu
+      // defalarca kontrol ediyordu — 2026-08-12 saha bildiriminin aynısı. Cümle pencere
+      // genişletilmeden ÖNCE de SONRA da doğru: 30 günden eski cihaz hâlâ buraya düşer.
+      return (
+        "Bu kod/kimlikle eşleşen çevrimiçi cihaz bulunamadı. Cihaz uzun süredir kapalı/çevrimdışıysa "
+        + "da bu mesajı alırsınız: önce cihazın açık ve internete bağlı olduğundan emin olun, sonra "
+        + "kodu kontrol edin."
+      );
   }
 }
 

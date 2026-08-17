@@ -164,3 +164,32 @@ it("takas düşse de OTURUM İÇİ config güncellenmiş kalır (kullanıcı hem
 
   expect(mockUpdateCfg).toHaveBeenCalledWith(URL_);
 });
+
+// ── "yok" mesajı DÜRÜST olmalı (denetim 2026-08-17) ──────────────────────────
+// Sunucudaki `resolve_device` tazelik penceresi istemcinin `STALE_MS`i ile EŞİTTİ (ikisi de 5 dk),
+// yani uzun süredir kapalı bir cihaz `bayat` DEĞİL `yok` olarak dönüyordu. Ekranda "Kodu kontrol
+// edin" yazıyordu ve kullanıcı — kod doğru olduğu hâlde — kodu defalarca kontrol ediyordu
+// (2026-08-12 saha bildiriminin aynısı). Pencere genişletildi; bu dal artık YALNIZ "kod yanlış"
+// demediği için mesaj da iki sebebi birlikte söylemeli.
+
+describe("eşleşme mesajı dürüstlüğü", () => {
+  it("KRİTİK: 'yok' mesajı cihazın KAPALI/ÇEVRİMDIŞI olabileceğini de söyler", () => {
+    const m = eslesmeMesaji({ durum: "yok" });
+    expect(m).toMatch(/çevrimdışı|kapalı/i);
+  });
+
+  it("KRİTİK: 'yok' mesajı kod ihtimalini de söylemeye DEVAM eder", () => {
+    // Karşı yöne savrulma koruması: yalnız "cihaz kapalı" demek, gerçekten yanlış kod giren
+    // kullanıcıyı bu kez öbür yanlış yöne bakmaya iter.
+    expect(eslesmeMesaji({ durum: "yok" })).toMatch(/kod/i);
+  });
+
+  it("KARŞIT-KANIT: 'bayat' AYRI ve DAHA KESİN mesajını korur", () => {
+    // Mesajları birleştirmek bir düzeltme değil, bilgi KAYBI olur: `bayat` demek "kayıt bulundu,
+    // kod DOĞRU" demektir — orada kod ihtimalinden hiç söz edilmemeli.
+    const bayat = eslesmeMesaji({ durum: "bayat" });
+    expect(bayat).not.toBe(eslesmeMesaji({ durum: "yok" }));
+    expect(bayat).toMatch(/kayıtlı/i);
+    expect(bayat).not.toMatch(/kodu kontrol/i);
+  });
+});
