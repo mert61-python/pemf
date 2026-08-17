@@ -14,6 +14,7 @@ Kullanım:
 from __future__ import annotations
 
 import logging
+import os
 import socket
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,25 @@ _mdns_device_name = "PEMF-Vet"
 # değişimi KASITLI OLARAK KALDIRILMIŞ servisi DİRİLTİR — kardeş dosya bunu açıkça yasaklıyor
 # (`mdns_service.py:222-223`, "Audit P3: stop() sonrası callback re-publish etmesin").
 _mdns_started = False
+
+
+def get_api_port(default: int = 8000) -> int:
+    """Backend'in GERÇEKTEN dinlediği API portu.
+
+    ⚠️ DENETİM 2026-08-17: keşif kanallarının üçü de portu `8000` olarak SABİT yayınlıyordu, oysa
+    gerçek port dinamik. 8000 meşgulken telefon yanlış porta bağlanıyor ve `checkHealth` onu
+    eleyince keşif merdiveni bir sonraki basamağa düşüyor (ilk bağlanma saniyelerden ~70 sn'ye).
+    Tek gerçek kaynak `PEMF_API_PORT`: `backend_service.publish_bind_port` yazar, launcher da
+    kurulum env'inde verir.
+    ⚠️ FONKSİYON, modül SABİTİ DEĞİL: sabit olsa import anında donardı ve env sonradan yazıldığı
+    için 8000'de kalırdı.
+    ⚠️ Bilinmiyor/bozuksa `8000` döner — launcher `DEFAULT_PORT` ve Supabase RPC'sinin
+    `coalesce(p_api_port, 8000)` sözleşmesi KORUNUR."""
+    try:
+        p = int(str(os.environ.get("PEMF_API_PORT", "")).strip())
+    except Exception:
+        return default
+    return p if 1 <= p <= 65535 else default
 
 
 def _build_info(local_ip: str, port: int, device_name: str):

@@ -813,9 +813,11 @@ state = APIState()
 def _start_mdns_service() -> None:
     """mDNS (Zeroconf) servisini ayrı thread'de başlatır."""
     try:
-        from servers.auto_discovery import start_mdns
+        from servers.auto_discovery import get_api_port, start_mdns
 
-        start_mdns(port=8000, device_name="PEMF-Vet")
+        # ⚠️ SABİT 8000 DEĞİL (denetim 2026-08-17): launcher boş port arıyor, staging 8010
+        # kullanıyor. 8000 meşgulken mDNS yanlış portu yayınlıyor ve telefon oraya bağlanıyor.
+        start_mdns(port=get_api_port(), device_name="PEMF-Vet")
     except Exception as e:
         logging.warning("mDNS başlatılamadı: %s", e)
 

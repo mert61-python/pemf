@@ -124,10 +124,21 @@ def _ps_kodu(ham: str) -> str:
             if "#>" in s:
                 blok = False
             continue
-        if "<#" in s:
-            blok = "#>" not in s[s.index("<#") + 2 :]
-            s = s[: s.index("<#")]
-            d = s.strip()
+        # ⚠️ KÖR NOKTA KAPATILDI (denetim 2026-08-17): eskiden satırın HERHANGİ bir yerindeki
+        # `<#` blok başlatıyordu, dolayısıyla bir STRING içinde geçen `<#`
+        # (ör. `Write-Host "ornek <# metin"`) soyucuyu yanıltıp ondan sonraki GERÇEK kodu
+        # yutuyordu. Fazla yutma bir NEGATİF iddiayı (ör. `"--distpath" not in kod`) SAHTE olarak
+        # geçirebilirdi — yani kapı yanlış-YEŞİL olurdu.
+        # BASİTLEŞTİRME (dürüstçe): blok başlangıcı yalnız satır BAŞINDA kabul edilir. Tam bir
+        # PowerShell tırnak/kaçış ayrıştırıcısı YAZILMIYOR. Kaçırdığı şey: gerçek kodun ardından
+        # AYNI satırda başlayan bir blok yorumu (`$x = 1 <#` ...). O durumda soyucu bloğu hiç
+        # görmez ve blok içindeki satırlar `kod`da kalır — yani hata YÖNÜ güvenli tarafa döner
+        # (fazla yutmak yerine az yutmak: negatif iddia sahte geçmez, pozitif iddia zaten kod
+        # satırına bakar).
+        if d.startswith("<#"):
+            blok = "#>" not in d[2:]
+            s = ""
+            d = ""
         if d.endswith('@"') or d.endswith("@'"):
             here = '"@' if d.endswith('@"') else "'@"
             cikti.append(s.split("#")[0])
@@ -319,6 +330,55 @@ def test_KRITIK_installer_kendi_PyInstallerini_KOSMAZ(tmp_path):
     assert os.path.normcase(os.path.realpath(yol)) == os.path.normcase(
         os.path.realpath(str(tmp_path / "PEMF_BUILD" / "dist" / "PEMF_Backend"))
     ), f"sevk agaci DELEGE EDILEN agac degil: {yol}"
+
+
+# ── Soyucunun KENDİ birim testleri (denetim 2026-08-17) ──────────────────────
+
+
+@pytest.mark.parametrize(
+    "kaynak, olmali, olmamali",
+    [
+        # (1) Satır yorumu
+        ("# gizli\nWrite-Host 'kod'", "kod", "gizli"),
+        # (2) Satır SONU yorumu
+        ("Write-Host 'kod'  # aciklama", "kod", "aciklama"),
+        # (3) Blok yorumu — içindeki kod YUTULMALI
+        ("<#\n& $Iscc /DBuildOutput=X\n#>\nWrite-Host 'kod'", "kod", "DBuildOutput"),
+        # (4) Here-string — içeriği YUTULMALI
+        ("$m = @'\n--distpath yasak\n'@\nWrite-Host 'kod'", "kod", "--distpath"),
+    ],
+    ids=["satir_yorumu", "satir_sonu", "blok_yorumu", "here_string"],
+)
+def test_ps_soyucu_dogru_yutar(kaynak, olmali, olmamali):
+    """⚠️ (5) ASIL DÜZELTME: eskiden string içindeki `<#` bloğu başlatıyor ve ondan SONRAKİ gerçek
+    kod yutuluyordu. Fazla yutma, `"--distpath" not in kod` gibi NEGATİF iddiaları SAHTE olarak
+    geçirir — kapı yanlış-YEŞİL olur."""
+    kod = _ps_kodu(kaynak)
+    assert olmali in kod, f"gercek kod YUTULDU: {kod!r}"
+    assert olmamali not in kod, f"yorum/here-string icerigi SIZDI: {kod!r}"
+
+
+def test_KRITIK_STRING_icindeki_blok_isareti_SONRAKI_kodu_YUTMAZ():
+    """⚠️ ASIL DÜZELTME (denetim 2026-08-17): bir STRING içinde geçen `<#` blok BAŞLATMAMALI.
+
+    Eskiden satırın herhangi bir yerindeki `<#` bloğu açıyordu, dolayısıyla
+    `Write-Host "ornek <# metin"` gibi masum bir satır soyucuyu yanıltıp ondan SONRAKİ gerçek kodu
+    yutuyordu. Fazla yutma, `"--distpath" not in kod` gibi NEGATİF iddiaları SAHTE olarak geçirir —
+    yani kapı yanlış-YEŞİL olur.
+    ⚠️ Yalnız VARLIK iddia edilir: `ornek` gerçek kod içeriğidir (yorum değil), silinmesi
+    beklenmez."""
+    kod = _ps_kodu('Write-Host "ornek <# metin"\n& $Iscc /DBuildOutput=$OutputDir')
+    assert "/DBuildOutput" in kod, f"STRING icindeki `<#` blok sandi ve SONRAKI GERCEK KODU yuttu: {kod!r}"
+
+
+def test_ps_soyucu_KOR_NOKTASI_kayda_gecti():
+    """⚠️ Bilinen sınır: gerçek kodun ARDINDAN aynı satırda başlayan blok yorumu görülmez.
+
+    Hata yönü GÜVENLİ tarafta (az yutmak): blok içindeki satırlar `kod`da kalır, yani negatif
+    iddia sahte geçmez. Bu test o sınırı DAVRANIŞ olarak kayda geçiriyor ki ileride biri onu
+    "düzeltilmiş" sanmasın."""
+    kod = _ps_kodu("$x = 1 <#\n--distpath burada\n#>")
+    assert "--distpath" in kod, "sinir DEGISTI: artik satir-ici blok da yutuluyor (kayit guncellenmeli)"
 
 
 if __name__ == "__main__":

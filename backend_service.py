@@ -141,6 +141,18 @@ def publish_bind_host(host: str) -> str:
     return os.environ["PEMF_API_HOST"]
 
 
+def publish_bind_port(port: int) -> int:
+    """GERÇEKTEN dinlenen portu `PEMF_API_PORT`a yaz (`publish_bind_host`un kardeşi).
+
+    ⚠️ DENETİM 2026-08-17: keşif kanalları (mDNS, `/api/discovery`, bulut cihaz-kaydı) portu
+    `8000` olarak SABİT yayınlıyordu, oysa gerçek port dinamik (launcher `find_free_port` ile
+    boş port arıyor; `deploy/staging.env` 8010 veriyor). 8000 meşgulken telefon YANLIŞ porta
+    bağlanıyordu. Aynı gerekçe `publish_bind_host`taki gibi: `--port` CLI'da verilebildiği için
+    env ile GERÇEK ayrışabilir; tek gerçek kaynak burada yazılır."""
+    os.environ["PEMF_API_PORT"] = str(int(port))
+    return int(port)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PEMF headless backend service")
     parser.add_argument("--host", default=os.environ.get("PEMF_API_HOST", "0.0.0.0"))
@@ -808,6 +820,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     os.environ.setdefault("PEMF_HEADLESS", "1")
     publish_bind_host(args.host)
+    publish_bind_port(args.port)
 
     app_data_dir = get_app_data_directory()
     _configure_logging(app_data_dir, args.log_level)

@@ -304,7 +304,7 @@ async def discovery_info(request: Request):
     """Otomatik keşf endpoint'i. Telefon uygulaması bu endpoint'i sorgular."""
     from servers import api_server as _api
     from servers.auth import is_local_request
-    from servers.auto_discovery import _get_local_ip
+    from servers.auto_discovery import _get_local_ip, get_api_port
     from servers.tunnel_manager import get_tunnel_url
 
     # DENETIM P3: bu uc auth-MUAF (kesif icin) ve tunnelUrl'yi KOSULSUZ veriyordu; oysa
@@ -318,7 +318,7 @@ async def discovery_info(request: Request):
         "service": "PEMF-Vet",
         "version": _api._APP_VERSION,
         "localIp": _get_local_ip(),
-        "port": 8000,
+        "port": get_api_port(),  # ⚠️ GERÇEK port (denetim 2026-08-17); env yoksa 8000
         "tunnelUrl": ((get_tunnel_url() or None) if _local else None),
         "capabilities": ["rest", "websocket", "mqtt", "ai", "database"],
     }

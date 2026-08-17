@@ -424,7 +424,7 @@ class CloudSyncWorker:
         try:
             from datetime import datetime, timezone
 
-            from servers.auto_discovery import _get_local_ip
+            from servers.auto_discovery import _get_local_ip, get_api_port
             from servers.tunnel_manager import get_tunnel_url
             from utils.path_utils import get_pairing_code, get_unique_device_id
 
@@ -452,7 +452,7 @@ class CloudSyncWorker:
                 "name": os.environ.get("PEMF_DEVICE_NAME", "PEMF-Vet"),
                 "tunnel_url": cur_url or getattr(self, "_last_tunnel_url", None),
                 "local_ip": _get_local_ip(),
-                "api_port": 8000,
+                "api_port": get_api_port(),  # ⚠️ GERÇEK port (denetim 2026-08-17); env yoksa 8000
                 "pairing_code": get_pairing_code(),
                 "last_seen": datetime.now(timezone.utc).isoformat(),
                 # ── FİLO ENVANTERİ (2026-08-09 denetimi, Tier 2) ──────────────────────────

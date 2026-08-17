@@ -179,61 +179,104 @@ class MDNSService:
             server=f"{MDNS_HOST_NAME}.local.",
         )
 
-    def _ip_monitor_loop(self):
-        """IP adresi değişirse mDNS kaydını günceller. İlk kaydı da burada yapar."""
+    def _ip_monitor_kurulum(self) -> None:
+        """Zeroconf'u al, `_mqtt` ilk kaydını yap, re-register callback'ini kaydet.
+
+        ⚠️ AYRI METOT (denetim 2026-08-17): eskiden bu gövde `_ip_monitor_loop`un içindeydi ve
+        patladığında `self._running = False; return` ile döngüyü ÖLDÜRÜYORDU. Bu İKİ yayıncıyı
+        birden bitiriyordu:
+          · `utils/zeroconf_singleton.ensure_interfaces_current`ın TEK çağrıcısı o döngüdür
+            (depo geneli ölçüldü) → arayüz izleme tamamen durur;
+          · `servers/auto_discovery._reregister` YALNIZCA o callback listesinden çağrılıyor,
+            yani `_pemfvet`in toparlanma yolu da SESSİZCE ölüyordu — üstelik o yol bu denetimin
+            kendi eklediği düzeltmeydi. İki yayıncı arasında belgelenmemiş bağımlılık.
+        Kurulum gerçek bir yarışta patlıyor: `Zeroconf(interfaces=ips)` adaptörleri YENİDEN
+        sayıyor (arada Wi-Fi düşerse/hotspot kapanırsa fırlar) ve `register_service`
+        `NotRunningException`/`EventLoopBlocked`/`ServiceNameAlreadyRegistered` atabiliyor —
+        buradaki eleme yalnız `NonUniqueNameException`ı tanıyor.
+        Artık istisna ÇAĞIRANA gider; döngü 30 sn'lik turda yeniden dener."""
         try:
+            from zeroconf._exceptions import NonUniqueNameException
+        except ImportError:
+
+            class NonUniqueNameException(Exception):
+                pass
+
+        local_ip = self._ip_override or _get_local_ip()
+        self._last_ip = local_ip
+        from utils.zeroconf_singleton import get_shared_zeroconf
+
+        self._zeroconf = get_shared_zeroconf()  # paylasilan TEK Zeroconf (cift-instance 5353 cakismasi yok)
+
+        # #32: loopback (127.*) IP'yi mDNS'e YAYINLAMA — ESP/telefon pemf-gateway.local'i 127.0.0.1'e
+        # çözüp KENDİ loopback'ine gider (broker'a bağlanamaz). Gerçek LAN IP yoksa İLK kaydı ATLA;
+        # arayüz gelince ensure_interfaces_current → _reregister_mqtt (aynı guard'lı) kaydeder.
+        if local_ip and not str(local_ip).startswith("127."):
+            self._service_info = self._build_service_info(local_ip)
             try:
-                from zeroconf._exceptions import NonUniqueNameException
-            except ImportError:
+                self._zeroconf.register_service(self._service_info)
+            except Exception as e:
+                if 'NonUniqueNameException' in str(type(e)):
+                    logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
+                    import random
+                    import string
 
-                class NonUniqueNameException(Exception):
-                    pass
-
-            local_ip = self._ip_override or _get_local_ip()
-            self._last_ip = local_ip
-            from utils.zeroconf_singleton import get_shared_zeroconf
-
-            self._zeroconf = get_shared_zeroconf()  # paylasilan TEK Zeroconf (cift-instance 5353 cakismasi yok)
-
-            # #32: loopback (127.*) IP'yi mDNS'e YAYINLAMA — ESP/telefon pemf-gateway.local'i 127.0.0.1'e
-            # çözüp KENDİ loopback'ine gider (broker'a bağlanamaz). Gerçek LAN IP yoksa İLK kaydı ATLA;
-            # arayüz gelince ensure_interfaces_current → _reregister_mqtt (aynı guard'lı) kaydeder.
-            if local_ip and not str(local_ip).startswith("127."):
-                self._service_info = self._build_service_info(local_ip)
-                try:
+                    suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
+                    self._service_name = f"{self._service_name}-{suffix}"
+                    self._service_info = self._build_service_info(local_ip)
                     self._zeroconf.register_service(self._service_info)
-                except Exception as e:
-                    if 'NonUniqueNameException' in str(type(e)):
-                        logger.warning("mDNS adı çakıştı, random suffix ekleniyor...")
-                        import random
-                        import string
+                else:
+                    raise e
+            logger.info(f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local → {local_ip}:{self._mqtt_port}")
+        else:
+            logger.info(
+                "mDNS (_mqtt) ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip
+            )
+        # Arayüz/IP değişiminde bu servisi yeni Zeroconf instance'ına re-register et
+        # (0.149'da update_interfaces yok → recreate; bkz. zeroconf_singleton.ensure_interfaces_current).
+        from utils.zeroconf_singleton import add_reregister_callback
 
-                        suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
-                        self._service_name = f"{self._service_name}-{suffix}"
-                        self._service_info = self._build_service_info(local_ip)
-                        self._zeroconf.register_service(self._service_info)
-                    else:
-                        raise e
-                logger.info(f"✓ mDNS yayını başlatıldı: {MDNS_HOST_NAME}.local → {local_ip}:{self._mqtt_port}")
-            else:
-                logger.info(
-                    "mDNS (_mqtt) ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip
-                )
-            # Arayüz/IP değişiminde bu servisi yeni Zeroconf instance'ına re-register et
-            # (0.149'da update_interfaces yok → recreate; bkz. zeroconf_singleton.ensure_interfaces_current).
-            from utils.zeroconf_singleton import add_reregister_callback
+        add_reregister_callback(self._reregister_mqtt)
 
-            add_reregister_callback(self._reregister_mqtt)
-        except Exception:
-            logger.exception("mDNS arka plan başlatma hatası detayı:")
-            self._running = False
-            return
+    def _ip_monitor_loop(self):
+        """IP adresi değişirse mDNS kaydını günceller. İlk kaydı da burada yapar.
+
+        ⚠️ Kurulum hatası bu döngüyü ÖLDÜRMEZ (bkz. `_ip_monitor_kurulum` gerekçesi).
+        ⚠️ BACKOFF LOG'A uygulanır, UYKUYA değil: retry zaten mevcut 30 sn'lik tura biniyor,
+        yani sıkı döngü/CPU yakma imkânsız; ama 30 sn × 24 saat = 2880 traceback riski var.
+        ⚠️ `stop()` sonrası re-publish ETMEME kararı (Audit P3) korunuyor: döngü `_running`e
+        bakıyor ve `_reregister_mqtt` kendi guard'ını sürdürüyor."""
+        kurulum_ok = False
+        hata_sayisi = 0
 
         while self._running:
+            if not kurulum_ok:
+                try:
+                    self._ip_monitor_kurulum()
+                    kurulum_ok = True
+                    hata_sayisi = 0
+                except Exception:
+                    hata_sayisi += 1
+                    if hata_sayisi == 1:
+                        logger.exception("mDNS arka plan kurulum hatasi (30 sn'de bir yeniden denenecek):")
+                    elif hata_sayisi % 10 == 0:
+                        logger.warning(
+                            "mDNS kurulumu hala basarisiz (%d. deneme) - arayuz monitoru CALISIYOR.",
+                            hata_sayisi,
+                        )
+
             try:
                 time.sleep(30)  # 30 saniyede bir kontrol
                 if not self._running:
                     break
+                # ⚠️ KENDİ KURULUMUMUZ BAŞARISIZ OLSA DA DEVAM EDİYORUZ. Bu, bulgunun kalbi:
+                # `ensure_interfaces_current` yalnız `_mqtt`i değil, KAYITLI TÜM yayıncıları
+                # (özellikle `servers/auto_discovery`nin `_pemfvet` callback'ini) yeni Zeroconf
+                # instance'ına re-register ediyor. `continue` ile atlamak, `_mqtt` kurulumu
+                # patladığında `_pemfvet`in de toparlanamamasına yol açardı — yani düzeltmek
+                # istediğimiz belgelenmemiş bağımlılığı AYNEN korurdu.
+                # Zeroconf hâlâ erişilemezse aşağıdaki çağrı da patlar ve döngünün kendi
+                # `except`i onu yakalar (döngü ölmez).
 
                 # Gerçek-LAN arayüz seti (WiFi/hotspot/Ethernet IP'leri) değiştiyse paylaşılan Zeroconf'u
                 # yeni arayüzlere YENİDEN bağla + tüm yayıncıları (mqtt + pemfvet) yeni instance'a re-register et.
