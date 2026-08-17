@@ -74,6 +74,31 @@ export async function guncellemeVarMi(fetchFn: typeof fetch = fetch): Promise<Gu
   }
 }
 
+/**
+ * AÇILIŞ KAPISINDA "şimdilik devam et" denen sürüm (2026-08-16).
+ *
+ * ⚠️ KASITEN YALNIZ BELLEKTE — diske YAZILMAZ. Kullanıcı bir açılışta ertelediğinde uygulama
+ * içindeki bant aynı güncellemeyi hemen yeniden dayatmasın diye vardır; ama SONRAKİ soğuk
+ * açılışta kapı yeniden sorar. Kalıcı yazsaydık kullanıcı bir kez "sonra" deyip güncellemeyi
+ * SONSUZA DEK kapatabilirdi — tıbbi cihazda düzeltme taşıyan bir yayının ulaşamaması demek.
+ */
+let _atlananVersionCode = 0;
+
+/** Kapıda ertelenen sürümü işaretle (yalnız bu açılış için). */
+export function guncellemeyiAtla(versionCode: number): void {
+  _atlananVersionCode = Number(versionCode) || 0;
+}
+
+/** Bu açılışta bu sürüm ertelendi mi? */
+export function atlandiMi(versionCode: number): boolean {
+  return _atlananVersionCode > 0 && Number(versionCode) === _atlananVersionCode;
+}
+
+/** Yalnız testler için — modül durumunu sıfırlar. */
+export function _atlamayiSifirla(): void {
+  _atlananVersionCode = 0;
+}
+
 export type IlerlemeCb = (oran: number) => void;
 
 export interface IndirmeSonucu {

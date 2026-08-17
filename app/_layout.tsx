@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ToastProvider } from "@/components/ui/ToastProvider";
+import { MobileUpdateGate } from "@/components/domain/MobileUpdateGate";
 import { colors } from "@/theme/tokens";
 import { useFonts, INTER_FONTS, applyGlobalInter } from "@/theme/fonts";
 // NOT (P0 audit 2026-06-28): offlineDb.ts kaldirildi — hasta PII'sini DUZ-METIN Supabase
@@ -32,7 +33,13 @@ export default function RootLayout() {
       <ToastProvider>
         <StatusBar style="light" />
         {ready ? (
-          <Stack screenOptions={{ headerShown: false }} />
+          // AÇILIŞ KAPISI (2026-08-16 sahip isteği): Android'de önce güncelleme kontrolü, SONRA
+          // açılış ve kullanım. Kapı `<Stack/>`in ÜSTÜNDE durur → hiçbir rota (login dahil)
+          // kontrol bitmeden çizilmez. Web/iOS'ta hiç kapanmaz. Ayrıntı + güvenlik sınırları:
+          // MobileUpdateGate başlığı.
+          <MobileUpdateGate>
+            <Stack screenOptions={{ headerShown: false }} />
+          </MobileUpdateGate>
         ) : (
           <View style={{ flex: 1, backgroundColor: colors.bg }} />
         )}

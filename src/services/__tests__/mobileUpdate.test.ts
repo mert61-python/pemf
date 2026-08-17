@@ -44,7 +44,15 @@ jest.mock("expo-constants", () => ({
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { apkIndir, guncellemeVarMi, mevcutVersionCode, type MobilSurum } from "../mobileUpdate";
+import {
+  apkIndir,
+  atlandiMi,
+  guncellemeVarMi,
+  guncellemeyiAtla,
+  mevcutVersionCode,
+  _atlamayiSifirla,
+  type MobilSurum,
+} from "../mobileUpdate";
 
 const SURUM = (over: Partial<MobilSurum> = {}): MobilSurum => ({
   version: "2.3.7", versionCode: 14,
@@ -357,5 +365,43 @@ describe("apkIndir", () => {
       devamSil: jest.fn() as never,
     });
     expect(oranlar).toEqual([0.6]);
+  });
+});
+
+describe("erteleme kaydı (açılış kapısı ↔ uygulama içi bant)", () => {
+  beforeEach(() => { _atlamayiSifirla(); });
+
+  it("ertelenen sürüm işaretlenir, başkası işaretlenmez", () => {
+    expect(atlandiMi(30)).toBe(false);
+    guncellemeyiAtla(30);
+    expect(atlandiMi(30)).toBe(true);
+    expect(atlandiMi(31)).toBe(false);
+    expect(atlandiMi(29)).toBe(false);
+  });
+
+  it("KRİTİK: erteleme DİSKE YAZILMAZ — sonraki soğuk açılışta kapı yeniden sorar", async () => {
+    guncellemeyiAtla(30);
+    // Kalıcı yazsaydık kullanıcı bir kez \"sonra\" deyip düzeltme taşıyan bir yayını SONSUZA DEK
+    // kapatabilirdi. Tüm AsyncStorage anahtarları taranır: hiçbirinde bu iz olmamalı.
+    const anahtarlar = await AsyncStorage.getAllKeys();
+    for (const a of anahtarlar) {
+      const v = await AsyncStorage.getItem(a);
+      expect(String(v ?? "")).not.toContain("atlan");
+    }
+    expect(anahtarlar.some((a) => a.toLowerCase().includes("atla"))).toBe(false);
+  });
+
+  it("0 / geçersiz sürüm kodu hiçbir şeyi ertelemiş SAYMAZ", () => {
+    guncellemeyiAtla(0);
+    expect(atlandiMi(0)).toBe(false);
+    guncellemeyiAtla(Number.NaN);
+    expect(atlandiMi(Number.NaN)).toBe(false);
+  });
+
+  it("son çağrı geçerlidir (kullanıcı yeni sürümü ertelediğinde eskisi takılı kalmaz)", () => {
+    guncellemeyiAtla(30);
+    guncellemeyiAtla(31);
+    expect(atlandiMi(31)).toBe(true);
+    expect(atlandiMi(30)).toBe(false);
   });
 });

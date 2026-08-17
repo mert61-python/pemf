@@ -9,12 +9,13 @@
  * ⚠️ HASTA GÜVENLİĞİ: seans sürerken gösterilmez — kurulum uygulamayı yeniden başlatır ve
  * bobinler hastanın üzerindeyken operatörün ekranını elinden almak kabul edilemez.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Download, X } from "lucide-react-native";
 
 import { useLiveData } from "@/context/LiveDataContext";
-import { apkIndir, guncellemeVarMi, kurulumuBaslat, type MobilSurum } from "@/services/mobileUpdate";
+import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
+import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 
 export function MobileUpdateBanner() {
@@ -22,8 +23,9 @@ export function MobileUpdateBanner() {
   const seansAktif = !!snapshot?.activeTreatment?.isActive;
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const [gizli, setGizli] = useState(false);
-  const [oran, setOran] = useState<number | null>(null);
-  const [hata, setHata] = useState("");
+
+  // İndirme/kurulum akışı açılış kapısıyla ORTAK (tek kaynak) — bkz. useApkGuncelleme.
+  const { oran, hata, guncelle } = useApkGuncelleme(surum);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -35,22 +37,11 @@ export function MobileUpdateBanner() {
     return () => { iptal = true; };
   }, []);
 
-  const guncelle = useCallback(async () => {
-    if (!surum) return;
-    setHata(""); setOran(0);
-    const ind = await apkIndir(surum, setOran);
-    setOran(null);
-    if (!ind.ok || !ind.dosyaUri) {
-      setHata(ind.hata === "boyut"
-        ? "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin."
-        : "Güncelleme indirilemedi.");
-      return;
-    }
-    const acildi = await kurulumuBaslat(ind.dosyaUri);
-    if (!acildi) setHata("Kurulum açılamadı. Ayarlar'dan bu uygulamaya 'bilinmeyen kaynak' izni verin.");
-  }, [surum]);
-
-  if (Platform.OS !== "android" || !surum || gizli || seansAktif) return null;
+  // ⚠️ Açılış kapısında "şimdilik devam et" denen sürüm bu açılışta yeniden DAYATILMAZ: kullanıcı
+  // az önce erteledi, bir saniye sonra aynı şeyi göstermek erteleme düğmesini bozuk gösterir.
+  // Erteleme diske yazılmaz → sonraki soğuk açılışta kapı yeniden sorar.
+  if (Platform.OS !== "android" || !surum || gizli || seansAktif || atlandiMi(surum.versionCode))
+    return null;
 
   return (
     <View style={styles.bant}>
