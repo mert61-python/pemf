@@ -34,6 +34,8 @@ jest.mock("@/services/config", () => ({
   setStoredDeviceId: (...a: unknown[]) => mockSetDeviceId(...a),
 }));
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { cihazaBaglan, eslesmeMesaji } from "@/services/pairing";
 
 const URL_ = "https://ornek.trycloudflare.com";
@@ -44,6 +46,9 @@ beforeEach(() => {
   for (const m of [mockCozKod, mockCozKimlik, mockHealth, mockExchange, mockUpdateCfg, mockSetDeviceId]) {
     m.mockReset();
   }
+  // ⚠️ ZORUNLU: `AsyncStorage.setItem` çağrıları dosya boyunca BİRİKİYOR. Sıfırlanmazsa aşağıdaki
+  // "adres yazılmadı" iddiası bayat bir satırı görüp yanlış-kırmızı verir.
+  (AsyncStorage.setItem as jest.Mock).mockClear();
   mockHealth.mockResolvedValue(true);
   mockExchange.mockResolvedValue(true);
   mockUpdateCfg.mockReturnValue(true);
@@ -113,4 +118,49 @@ describe("cihazaBaglan", () => {
       expect(m.length).toBeGreaterThan(10)
     }
   })
+});
+
+
+// ── token takası düşerse KALICI YAZIM olmamalı (denetim 2026-08-17) ───────────
+
+const adresYazildiMi = () =>
+  (AsyncStorage.setItem as jest.Mock).mock.calls.map((c) => c[0]).includes("@pemf_server_address");
+
+it("KRİTİK: token takası DÜŞERSE adres/device_id diske YAZILMAZ", async () => {
+  // İKİ CİHAZLI klinikte gerçek zarar: telefon A cihazıyla LAN'da çalışırken B'nin kodu girilir,
+  // health + device_id geçer ama takas 429/404 ile düşer. Eskiden adres B-TÜNELİNE yazılıyor ve
+  // A'nın LAN adresi diskten SİLİNMİŞ oluyordu → token yok → REST 401 / WS 1008; kullanıcı
+  // Ayarlar'dan kodu tekrar girmeden düzelmiyordu.
+  mockCozKod.mockResolvedValue(bulundu);
+  mockExchange.mockResolvedValue(false);
+
+  const s = await cihazaBaglan("MVPDDN");
+
+  expect(s.durum).toBe("kod_reddedildi");
+  expect(mockExchange).toHaveBeenCalledTimes(1);
+  expect(mockSetDeviceId).not.toHaveBeenCalled();
+  expect(adresYazildiMi()).toBe(false);
+});
+
+it("POZİTİF KAPI: takas BAŞARILIYSA adres kalıcı yazılmaya devam eder", async () => {
+  // "Hiç yazma" biçiminde bir mutasyonun bu düzeltme sanılmasını engeller.
+  mockCozKod.mockResolvedValue(bulundu);
+  mockExchange.mockResolvedValue(true);
+
+  const s = await cihazaBaglan("MVPDDN");
+
+  expect(s).toMatchObject({ durum: "ok", url: URL_, deviceId: ID_ });
+  expect(mockSetDeviceId).toHaveBeenCalledWith(ID_);
+  expect(adresYazildiMi()).toBe(true);
+});
+
+it("takas düşse de OTURUM İÇİ config güncellenmiş kalır (kullanıcı hemen tekrar deneyebilir)", async () => {
+  // ⚠️ Erken dönüş `updateServiceConfig`ten SONRA olmalı: oturum içi bağlantı korunur, yalnız
+  // KALICI yazım atlanır. Erken dönüşü yukarı taşıyan bir yama bu testi kırar.
+  mockCozKod.mockResolvedValue(bulundu);
+  mockExchange.mockResolvedValue(false);
+
+  await cihazaBaglan("MVPDDN");
+
+  expect(mockUpdateCfg).toHaveBeenCalledWith(URL_);
 });

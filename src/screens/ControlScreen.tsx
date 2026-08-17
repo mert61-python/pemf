@@ -266,6 +266,19 @@ export function ControlScreen() {
 
   // Manuel "Durdur": aktif seansı durdur (timer/not/history) + seçili bobinleri sıfırla.
   const handleStopManual = async () => {
+    // ⚠️ IN-FLIGHT KAPISI (denetim 2026-08-17): AYNI durdurma turu iki kez BAŞLAMAZ.
+    // Ağ kopukken tur 5 × 8 sn = ~40 sn sürüyordu ve buton `loading` yalnız `stopSession`
+    // süresince true olduğu için ~8 sn'de yeniden basılabiliyordu → her basış 5 zaman aşımı daha
+    // ekliyor, istemci ~48 sn meşgul kalıyordu.
+    // ⚠️ REF, STATE DEĞİL: iki hızlı basış aynı React batch'inde state'i hâlâ `false` görür.
+    // ⚠️ YENİ BASIŞ ATLANIR, uçuştaki tur İPTAL EDİLMEZ: abort komutu geri almaz, yalnız #74
+    // teyidini yok eder ve durdurmayı sıfırdan başlatıp GECİKTİRİR.
+    // ⚠️ BUTON DEVRE DIŞI BIRAKILMIYOR (sahip kararı): bir durdurma kontrolü kilitlenmez ve
+    // ACİL DURDUR her zaman erişilebilir kalır.
+    if (stopRoundRef.current) return;
+    stopRoundRef.current = true;
+    setStopRound(true);
+    try {
     if (isActive) await stopSession().catch(() => {});
     // DURDURULACAK KÜME: "o an SEÇİLİ olanlar" DEĞİL, "gerçekten ÇALIŞANLAR + seçili olanlar".
     // Kullanıcı bir bobini başlattıktan sonra seçimden çıkarırsa (ör. başka bobinlere geçmek için),
@@ -277,24 +290,40 @@ export function ControlScreen() {
     const espCoils = targets.filter((id) => id >= 6);
     // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
     // yanıt yutuluyordu → STOP düşse bile kullanıcı bobinin durduğunu sanıyordu (per-coil panelle tutarsız).
-    let allOk = true;
+    // ⚠️ PARALEL (denetim 2026-08-17): batch + ESP istekleri ESKİDEN seri `await` idi, yani
+    // 4 istek 4 × 8 sn = 32 sn sürüyordu. Artık TOPLAM 8 sn.
+    // Backend tarafı güvenli: `_mqtt_publish` çağrı başına benzersiz `client_id` kullanıyor
+    // (sabit client_id KASITLI OLARAK yasak) ve `_emergency_stop_all` zaten aynı konulara
+    // eşzamanlı publish yapıyor. `/session/stop` BİLEREK SERİ kaldı: donanıma dokunmadan önce
+    // dakika-ortalamalarını yazıyor; bobin koşuları eşzamanlı kapatılırsa o kısmi dakika
+    // sensör-özetinden düşer.
+    // `Promise.all` reject ETMEZ: `apiPost` throw etmiyor, hata/timeout'ta null dönüyor.
+    const istekler: Promise<{ status?: string } | null>[] = [];
     if (stmCoils.length > 0) {
-      const r = await apiPost<{ status?: string } | null>("/coil/batch", {
-        coil_ids: stmCoils, freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-      }, null);
-      if (!r || r.status === "error") allOk = false;
+      istekler.push(
+        apiPost<{ status?: string } | null>("/coil/batch", {
+          coil_ids: stmCoils, freq: 0, duty: 0, phase: 0, duration: 0, start: false,
+        }, null),
+      );
     }
     for (const coilId of espCoils) {
-      const r = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
-        freq: 0, duty: 0, phase: 0, duration: 0, start: false,
-      }, null);
-      if (!r || r.status === "error") allOk = false;
+      istekler.push(
+        apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
+          freq: 0, duty: 0, phase: 0, duration: 0, start: false,
+        }, null),
+      );
     }
-    if (!allOk && (stmCoils.length > 0 || espCoils.length > 0)) {
+    const sonuclar = await Promise.all(istekler);
+    const allOk = sonuclar.every((r) => r && r.status !== "error");
+    if (!allOk && istekler.length > 0) {
       platformAlert(
         "Durdurma onaylanamadı",
         "Bir veya daha fazla bobinin durduğu teyit edilemedi — bobinler HÂLÂ ÇALIŞIYOR olabilir. ACİL DURDUR'a basın.",
       );
+    }
+    } finally {
+      stopRoundRef.current = false;
+      setStopRound(false);
     }
   };
 
@@ -364,6 +393,11 @@ export function ControlScreen() {
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
   type ObsSess = { patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number };
   const [obsSession, setObsSession] = useState<ObsSess | null>(null);
+  // Durdurma turu KAPISI. Ref senkron (iki hızlı basış aynı batch'te state'i görmez); state
+  // YALNIZ etiket için. ⚠️ Butonun `disabled`ına EKLENMEZ (sahip kararı: durdurma kontrolü
+  // kilitlenmez) — kullanıcı sessizce yutulan bir dokunuş yerine "⏳ Durduruluyor…" görür.
+  const stopRoundRef = useRef(false);
+  const [stopRound, setStopRound] = useState(false);
   const lastSessionRef = useRef<ObsSess | null>(null);
   const prevActiveRef = useRef(isActive);
 
@@ -521,8 +555,11 @@ export function ControlScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
+                {/* ⚠️ `disabled` DEĞİŞMEDİ: durdurma kontrolü kilitlenmez (sahip kararı).
+                    Etiket, sessizce yutulan dokunuş yerine geri bildirim verir —
+                    `SessionProgressCard`'daki emsalin aynısı. */}
                 <StartButton
-                  label="⏹ Durdur"
+                  label={stopRound ? "⏳ Durduruluyor…" : "⏹ Durdur"}
                   onPress={handleStopManual}
                   disabled={loading}
                   color="#ef4444"

@@ -49,10 +49,22 @@ export function ObservationNotesModal({
   // GÜVENLİK (#48): hedef seans/hasta DEĞİŞİNCE veya sayfa (yeniden) AÇILINCA not+tepkileri SIFIRLA.
   // Aksi halde A hastası için yazılıp kaydedilmemiş not, uzaktan/AI-Pro ile B hastası (farklı hasta)
   // seansı başlayınca modalda kalır → B'nin kaydına YANLIŞ-HASTA notu kontaminasyonu.
+  // ⚠️ `visible` DEP DEĞİL (denetim 2026-08-17). Modal, ACİL DURDUR'un üstünü kapatmasın diye
+  // herhangi bir bobin `running` raporladığında GİZLENİYOR (`ControlScreen`, koşulsuz render →
+  // `visible:false`'da unmount OLMUYOR). Gizlenme "yeni hasta / yeni açılış" DEĞİLDİR; `visible`
+  // dep'te olduğu için hekimin yazdığı gözlem notu + seçili tepki chip'leri UYARISIZ siliniyordu.
+  // Tetikleyici DIŞSAL: STOP'u kaçırmış bir ESP bobini yeniden bağlanınca `running` yayınlıyor ya
+  // da masaüstü istemcisi/ikinci hekim seans başlatıyor. Not hiçbir yere kaydedilmiyordu; donanım
+  // durunca modal doğru hasta adıyla ama BOŞ açılıyordu → hekim silindiğini fark etmeyebilir.
+  // Modal'ı gizlemek KASITLI ve DOĞRU; kusur gizlenmede de SIFIRLAMA yapılmasıydı. #48'in amacı
+  // (A hastasının notu B'ye bulaşmasın) yalnız hasta değişimi + açılış geçişini gerektiriyor:
+  //   · gizle→göster: `patientName` değişmez → effect ateşlemez → not KORUNUR,
+  //   · açılış: modal kapalıyken `session === null` → dep `undefined→"Rex"` → SIFIRLAR,
+  //   · hasta değişimi: dep'te `session?.patientName` DURUYOR → SIFIRLAR.
   useEffect(() => {
     setSelected(new Set());
     setNotes("");
-  }, [session?.patientName, visible]);
+  }, [session?.patientName]);
 
   const save = async () => {
     setSaving(true);

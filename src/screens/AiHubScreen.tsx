@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
-import { apiGet, apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
+import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
 import { useUserMode, UserMode } from "@/context/UserModeContext";
@@ -1026,75 +1026,37 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
   // Üstelik backend `_active_session`'ı yalnız mode "AI" ile başlıyorsa kapattığı için sunucu seansı
   // "aktif" kalıyor, useSessionControl reconcile'ı bunu okuyup UI'da geri saymaya devam ediyordu
   // (bobinler ölüyken "tedavi sürüyor" görüntüsü) — mümkün olan en kötü kombinasyon.
-  // ARTIK: yalnız BU bileşenin BAŞLATTIĞI otonom mod durdurulur (startedByUsRef).
-  const startedByUsRef = useRef(false);
-  // Toggle hızlı açılıp kapanınca cleanup-stop ile yeni start'ın sunucuya TERS SIRADA ulaşması
-  // (stop, start'tan sonra işlenip yeni başlayan döngüyü öldürmesi) mümkündü → komutları seri kuyruğa al.
-  const aiProQueueRef = useRef<Promise<unknown>>(Promise.resolve());
-  const enqueueAiPro = useCallback((fn: () => Promise<unknown>): Promise<unknown> => {
-    const next = aiProQueueRef.current.then(fn, fn);
-    aiProQueueRef.current = next.catch(() => undefined);
-    return next;
-  }, []);
-
-  const stopAiPro = useCallback((notify: boolean) => {
-    if (!startedByUsRef.current) return;      // biz başlatmadıysak donanıma DOKUNMA
-    startedByUsRef.current = false;
-    enqueueAiPro(() =>
-      apiPost<{ status: string }>("/ai/pro/stop", {}, { status: "error" }).then((res) => {
-        if (notify && res?.status === "error") {
-          showToast("Otonom Biofeedback durdurulamadı — bağlantıyı kontrol edin, gerekirse ACİL DURDUR.", "error");
-        }
-      })
-    ).catch(() => { /* en iyi çaba */ });
-  // showToast BİLİNÇLİ hariç (aşağıdaki not) — ToastProvider referansı stabil olsa da bu ref'i
-  // deps'e almamak otonom döngünün yeniden kurulmasını yapısal olarak imkânsız kılar.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enqueueAiPro]);
-
+  // ⚠️ OTONOM BİOFEEDBACK BU EKRANDAN BAŞLATILAMAZ (denetim 2026-08-17, bulgu 21).
+  //
+  // 2026-08-06'da eklenen SERT ONAY KAPISI `/ai/pro/start`'ı onaylanmış bir `proposal_id` ile
+  // ZORUNLU kıldı (`servers/ai_router.py` → `ai_approval.consume` → 428). Bu ekran gövdeyi `{}`
+  // ile gönderiyordu, yani istek HER ZAMAN 428 dönüyordu: otonom seans HİÇ başlamıyor, ama
+  // ekrandaki toggle AÇIK kalıyor ve ekranın kendi toast'ı YANLIŞ sebebi söylüyordu
+  // ("kamera/model erişilemedi" — gerçek sebep: hekim onayı yok). Üstüne, aynı bloktaki
+  // watchdog `setInterval`'ı HİÇ kurulmuyordu (`startedByUsRef` yalnız `.then()` içinde
+  // atanıyor, ref ataması re-render tetiklemez ve dep dizisi değişmez) → ölü koruma.
+  //
+  // ⚠️ SÜRÜM KAYMASI RİSKİ, DÜZELTMENİN ASIL GEREKÇESİ: onay kapısından ÖNCEKİ bir backend
+  // EXE'sine bağlanan yeni bir mobil sürümde bu start BAŞARILI olur ve ONAYSIZ otonom tedavi
+  // başlatır — yani kapı istemci tarafından atlatılır. Bu yüzden çağrı KALDIRILDI, "düzeltilmedi".
+  //
+  // ⚠️ Onay akışı (propose → approve → start) YALNIZ Kontrol → AI Pro panelinde var; kullanıcı
+  // oraya YÖNLENDİRİLİR. Toggle açık BIRAKILMAZ ve mesaj DOĞRU sebebi söyler.
+  // ⚠️ `autoAdjustRef` KALDI: manuel-analiz sürüş yolu onu ayrıca okuyor.
   useEffect(() => {
-    let active = true;
-    if (isLive && autoAdjust) {
-      // Otonom (Kapalı Döngü) Modu - Backend'i Başlat
-      enqueueAiPro(() =>
-        apiPost<{ status: string }>("/ai/pro/start", {}, { status: "error" }).then((res) => {
-          if (res?.status === "success") startedByUsRef.current = true;  // stop yetkisi ancak şimdi doğar
-          if (!active) return;
-          if (res?.status === "success") showToast("Otonom Biofeedback başladı", "success");
-          else showToast("Otonom Biofeedback başlatılamadı (kamera/model erişilemedi).", "error");
-        })
-      ).catch(() => { /* en iyi çaba */ });
-    } else {
-      // Kapatma: YALNIZ biz başlattıysak durdur (mount'ta hiçbir şey gönderilmez).
-      stopAiPro(true);
-    }
-
-    return () => {
-      active = false;
-      stopAiPro(false); // unmount/dep-değişimi: toast gösterilemez
-    };
-    // showToast BİLİNÇLİ hariç: bu effect otonom AI-Pro tedavi döngüsü; showToast KARARSIZ (ToastProvider
-    // her render yeni referans üretir) → deps'e eklemek her toast render'ında tedaviyi YENİDEN BAŞLATIR.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive, autoAdjust, enqueueAiPro, stopAiPro]);
-
-  // Backend otonom döngüsü KENDİ KENDİNE bitebilir (süre dolumu, E-stop, süre-watchdog, kamera
-  // açılamaması). Eskiden UI bunu HİÇ öğrenmiyordu → "OTONOM BİOFEEDBACK AKTİF" rozeti ve donmuş
-  // son kare sonsuza dek kalıyor, hekim tedavi sürüyor sanıp hayvanı bekletiyordu. AiProPanel'deki
-  // gibi durumu poll'la; bittiyse toggle'ı kapat + bildir.
-  useEffect(() => {
-    if (!(isLive && autoAdjust) || !startedByUsRef.current) return;
-    const id = setInterval(async () => {
-      const st = await apiGet<{ active?: boolean } | null>("/ai/pro/status", null, { silent: true });
-      if (st && st.active === false && startedByUsRef.current) {
-        startedByUsRef.current = false;   // backend zaten durdu → tekrar STOP gönderme
-        setAutoAdjust(false);
-        showToast("Otonom seans sona erdi.", "info");
-      }
-    }, 4000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive, autoAdjust]);
+    if (!(isLive && autoAdjust)) return;
+    // ⚠️ Effect gövdesinde setState KASITLI: toggle'ın AÇIK kalmaması gereken tek yer burası.
+    // `isLive`, kullanıcının basışından BAĞIMSIZ olarak da true olabiliyor (kamera hazır olunca),
+    // dolayısıyla kapatma yalnız onPress'te yapılamaz. Tek ek render, yanlış "aktif" izleniminin
+    // ekranda kalmasından yeğdir.
+    setAutoAdjust(false);
+    showToast(
+      "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
+      "info",
+    );
+    // `showToast` deps'te GÜVENLE durabilir: ToastProvider onu `useCallback(..., [])` ile stabil
+    // veriyor (eski "KARARSIZ referans" notu bayattı).
+  }, [isLive, autoAdjust, showToast]);
 
   // Canlı kamera (otonom-OLMAYAN mod): telefon kamerasından periyodik kare yakala → analiz et.
   useEffect(() => {

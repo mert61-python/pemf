@@ -89,6 +89,15 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
     // (3) Kod yolunda token takası — sonucu DENETLE.
     const tokenOk = kodMu ? await exchangeCodeForToken(url, input) : true;
 
+    // ⚠️ TOKEN YOKSA KALICI YAZIM YOK (denetim 2026-08-17). Eskiden takas düşse de adres+device_id
+    // diske yazılıyor, fonksiyon yalnızca `kod_reddedildi` dönüyordu. İKİ CİHAZLI klinikte sonuç:
+    // telefon A cihazıyla LAN'da çalışırken B'nin kodu girilir, health+device_id geçer ama takas
+    // 429/404 ile düşer → adres B-TÜNELİNE yazılır, A'nın LAN adresi diskten SİLİNMİŞ olur,
+    // token yoktur → REST 401 / WS 1008. Kullanıcı Ayarlar'dan kodu tekrar girmeden düzelmez.
+    // Oturum içi config (`updateServiceConfig`, yukarıda) DEĞİŞMEZ → kullanıcı hemen tekrar
+    // deneyebilir; tek cihazlı klinikte keşif merdiveni bir sonraki turda kendini onarır.
+    if (!tokenOk) return { durum: "kod_reddedildi" };
+
     await setStoredDeviceId(deviceId);
     try {
       await AsyncStorage.setItem("@pemf_server_address", url);
@@ -96,7 +105,7 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
       // Adres kalıcı yazılamadıysa oturum içi bağlantı yine çalışır; sonraki açılışta keşif devreye girer.
     }
 
-    return tokenOk ? { durum: "ok", url, deviceId } : { durum: "kod_reddedildi" };
+    return { durum: "ok", url, deviceId };
   } catch {
     return { durum: "hata" };
   }

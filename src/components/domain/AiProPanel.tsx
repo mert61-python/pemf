@@ -21,7 +21,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
-import { serviceConfig } from "@/services/config";
+import { getClientInstanceId, serviceConfig } from "@/services/config";
 import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
 
@@ -51,7 +51,14 @@ function fmtSec(sec: number): string {
 }
 
 // Backend yanıt sözleşmeleri (audit B-10.1) — AI-Pro otonom tedavi uçları.
-interface AiProStatus { active?: boolean; localized?: boolean; organId?: number; remainingSec?: number }
+interface AiProStatus {
+  active?: boolean;
+  localized?: boolean;
+  organId?: number;
+  remainingSec?: number;
+  /** Seansı BAŞLATAN istemcinin kimliği. ALAN YOKSA = onay/sahiplik öncesi backend (bkz. sync). */
+  ownerClientId?: string;
+}
 interface AiProAction { status?: string }
 /** `/api/ai/pro/propose` yanıtı — hekime gösterilecek ve onaylanınca uygulanacak parametreler. */
 interface AiProposeResponse {
@@ -89,6 +96,19 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const runningRef = useRef(false);
   useEffect(() => { runningRef.current = running; }, [running]);
 
+  // ⚠️ ÇOK-İSTEMCİ SAHİPLİĞİ (denetim 2026-08-17). Panel `st.active`'i sahiplik sormadan benimsiyor
+  // ve unmount cleanup'ında `/ai/pro/stop` gönderiyordu → AI Pro sekmesini yalnızca AÇIP kapatan
+  // ikinci istemci (klinik PC'si + telefon, ya da iki veteriner) BAŞKASININ süren otonom seansını
+  // kesiyordu: `_stop_session_coils(range(1,9))` koşulsuz → 7 bobin + seans iptal, iki operatöre de
+  // gerekçe gösterilmeden.
+  // ⚠️ AYNI CİHAZDA sekme değişiminde durdurmak KASITLI ve KORUNUYOR ("panel kapanınca backend
+  // bobinleri BAŞSIZ sürmeye devam ediyordu") — bastırma YALNIZ seansı biz başlatmadıysak.
+  const ownedRef = useRef(false);
+  const clientIdRef = useRef("");
+  useEffect(() => {
+    getClientInstanceId().then((id) => { clientIdRef.current = id; }).catch(() => {});
+  }, []);
+
   // Backend durumunu senkronla (özellikle süre dolup auto-stop olduğunda).
   useEffect(() => {
     let alive = true;
@@ -96,6 +116,12 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       const st = await apiGet<AiProStatus | null>("/ai/pro/status", null, { silent: true });
       if (!alive || !st) return;
       const active = Boolean(st.active);
+      // ⚠️ `undefined` = alan YOK = sahiplik öncesi backend → ESKİ davranışı koru (sürüm kayması:
+      // yeni istemci + eski backend'de bobinin başsız kalmasını engelle).
+      ownedRef.current =
+        st.ownerClientId === undefined
+          ? active
+          : active && !!st.ownerClientId && st.ownerClientId === clientIdRef.current;
       setRunning(active);
       setLocalized(Boolean(st.localized));
       // ORTA fix: organId'yi YALNIZ aktif seansta backend'den senkronla. Seans yokken kullanıcının seçtiği
@@ -153,11 +179,12 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     if (!ok) { setApprovalBusy(false); return; }   // onay geçmediyse BAŞLATMA
     const res = await apiPost<AiProAction | null>(
       "/ai/pro/start",
-      { proposal_id: proposal.proposalId, patient_name: patientName || "" },
+      { proposal_id: proposal.proposalId, patient_name: patientName || "", client_id: clientIdRef.current },
       null
     );
     setApprovalBusy(false);
     if (res?.status === "success") {
+      ownedRef.current = true;   // seansı BİZ başlattık → unmount'ta durdurma yetkisi doğar
       setRunning(true);
       setProposal(null);
     }
@@ -249,7 +276,10 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   // stale 'running' yakalamasın). Best-effort fire-and-forget stop (unmount'ta await edilemez).
   useEffect(() => () => {
     if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
-    if (runningRef.current) {
+    // ⚠️ `ownedRef` ŞART: seansı biz başlatmadıysak BAŞKASININ tedavisini kesmeyiz.
+    // Operatörün AÇIK "Durdur" dokunuşu (`stop()`) bu koşuldan ETKİLENMEZ — her istemcinin
+    // operatörü tedaviyi durdurabilmeli.
+    if (runningRef.current && ownedRef.current) {
       apiPost<AiProAction | null>("/ai/pro/stop", {}, null).catch(() => {});
     }
   }, []);

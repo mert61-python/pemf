@@ -153,3 +153,29 @@ export const updateServiceConfig = (serverAddress: string): boolean => {
   };
   return true;
 };
+
+// ⚠️ KALICI İSTEMCİ KİMLİĞİ (denetim 2026-08-17). AI Pro otonom seansının SAHİBİNİ ayırt etmek
+// için gerekiyor: panelini yalnızca GÖRÜNTÜLEYEN ikinci istemci, sekmeden çıkınca başkasının
+// süren tedavisini durduruyordu. Kimlik sayfa yenilemesinde ve uygulama yeniden başlatmasında
+// AYNI kalır; aynı istemcinin iki sekmesi AYNI kimliği paylaşır (istenen: kendi seansını durdurabilir).
+// ⚠️ Bu bir YETKİ belirteci DEĞİL — yalnız "durdurmayı BASTIR" kararında kullanılır.
+const CLIENT_ID_KEY = "@pemf_client_instance_id";
+let _clientId: string | null = null;
+
+export async function getClientInstanceId(): Promise<string> {
+  if (_clientId) return _clientId;
+  try {
+    let v = await AsyncStorage.getItem(CLIENT_ID_KEY);
+    if (!v) {
+      v = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+      await AsyncStorage.setItem(CLIENT_ID_KEY, v);
+    }
+    _clientId = v;
+  } catch {
+    // Depo erişilemezse oturum-ömürlü kimlik: en kötü sonuç, sayfa yenilemesinden sonra kendi
+    // seansını "başkasının" sanıp unmount'ta durdurmaması — güvenli yön (bobin başsız kalmaz,
+    // çünkü operatör açık "Durdur"a basabilir ve ACİL DURDUR her zaman erişilebilir).
+    _clientId = `c${Math.random().toString(36).slice(2, 10)}`;
+  }
+  return _clientId;
+}

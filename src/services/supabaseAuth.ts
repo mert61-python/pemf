@@ -52,15 +52,43 @@ async function _secClearChunks(key: string): Promise<void> {
   } catch { /* ignore */ }
 }
 
+/// Tek yeniden denemeli SecureStore yazımı.
+///
+/// ⚠️ DENETİM 2026-08-17: `_secSet` parçalı yolda ÖNCE eski parçaları siliyor, sonra yeni parçaları
+/// yazıyor, meta'yı EN SON güncelliyor ve hiç `try/catch` içermiyordu (kardeşleri `_secGet`/
+/// `_secRemove`'da var). GEÇİCİ bir Keystore/Keychain hatası (cihaz kilitli, keystore meşgul) ya da
+/// birkaç ms'lik pencerede OS'un süreci öldürmesi hâlinde meta artık VAR OLMAYAN parçalara işaret
+/// ediyordu → `_secGet` kalıcı `null` → veteriner bir sonraki açılışta e-posta+şifre ile TEKRAR
+/// GİRİŞ yapmak zorunda kalıyordu. Ölçüldü: gerçekçi bir GoTrue oturumu 2735 karakter (profilsiz
+/// bile 2074) → parçalı yol İSTİSNA DEĞİL, NORMAL yoldur; 1800 sınırının altına hiç inmiyor.
+/// `@supabase/auth-js`in `_saveSession`ı `setItemAsync` etrafında try/catch içermiyor (kaynak
+/// okundu) ve alternatif bir token kaynağı yok — yani telafi eden bir katman da yok.
+///
+/// ⚠️ YAZIM SIRASI BİLEREK DEĞİŞTİRİLMEDİ. "Önce yeni parçaları yaz, sonra meta, en son eski
+/// artıkları sil" tutarlı ama BAYAT bir oturum bırakır; GoTrue o bayat/iptal edilmiş
+/// `refresh_token` ile tazeleme deneyip 400 alır → `_removeSession` → `SIGNED_OUT` → tedavi
+/// ORTASINDA AppShell (ve üzerindeki ACİL DURDUR) ekrandan kalkar. Bir yeniden giriş, tedavi
+/// ortasında oturum düşmesinden iyidir. Bu yüzden düzeltme "sırayı çevirmek" değil, yazımı
+/// GEÇİCİ hataya DAYANIKLI yapmaktır. İkinci deneme de patlarsa hata çağırana AYNEN gider
+/// (bugünkü davranış korunur — sessizce bozuk durum bırakılmaz).
+async function _secWrite(key: string, value: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    await new Promise((r) => setTimeout(r, 150));
+    await SecureStore.setItemAsync(key, value);
+  }
+}
+
 async function _secSet(key: string, value: string): Promise<void> {
   if (Platform.OS === "web") { await AsyncStorage.setItem(key, value); return; }
   await _secClearChunks(key);
-  if (value.length <= _SEC_CHUNK) { await SecureStore.setItemAsync(key, value); return; }
+  if (value.length <= _SEC_CHUNK) { await _secWrite(key, value); return; }
   const n = Math.ceil(value.length / _SEC_CHUNK);
   for (let i = 0; i < n; i++) {
-    await SecureStore.setItemAsync(`${key}.${i}`, value.slice(i * _SEC_CHUNK, (i + 1) * _SEC_CHUNK));
+    await _secWrite(`${key}.${i}`, value.slice(i * _SEC_CHUNK, (i + 1) * _SEC_CHUNK));
   }
-  await SecureStore.setItemAsync(key, `${_SEC_MARK}${n}`);
+  await _secWrite(key, `${_SEC_MARK}${n}`);
 }
 
 async function _secGet(key: string): Promise<string | null> {

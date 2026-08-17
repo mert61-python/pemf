@@ -132,3 +132,84 @@ it("KRİTİK: hiçbir koşulda THROW ETMEZ (acil durdurma akışı kırılmamal�
   mockApiPost.mockImplementation(() => { throw new Error("boom2"); });
   await expect(performEmergencyStop()).resolves.toEqual({ confirmed: false });
 });
+
+
+// ── zaman aşımı GÖVDE OKUMASINI da kapsamalı (denetim 2026-08-17) ─────────────
+
+it("KRİTİK: gövde okuması zaman aşımının İÇİNDE — clearTimeout json'dan SONRA çağrılır", async () => {
+  // `clearTimeout` eskiden yalnız `fetch`i saran iç `finally`deydi; `response.json()` o noktadan
+  // sonra çalıştığı için AbortController'a BAĞLI DEĞİLDİ. Gövde asılırsa `performEmergencyStop`
+  // 1500 ms içinde dönmüyordu (ölçüldü: 1501 ms). Doğru desen `apiClient.ts`te zaten kurulmuş.
+  const sira: string[] = [];
+  const gercek = global.clearTimeout;
+  const casus = jest.spyOn(global, "clearTimeout").mockImplementation(((id: never) => {
+    sira.push("clear");
+    return gercek(id);
+  }) as never);
+  try {
+    fetchMock().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        sira.push("json");
+        return { status: "success", confirmed: true };
+      },
+    });
+
+    const res = await performEmergencyStop();
+
+    expect(res.confirmed).toBe(true);
+    expect(sira).toEqual(["json", "clear"]);
+  } finally {
+    casus.mockRestore();
+  }
+});
+
+it("zaman aşımı sızmaz: HTTP hata dalında da clearTimeout çağrılır", async () => {
+  // Düzeltmenin `finally` biçiminde olmasını ZORLAR: `clearTimeout`u `json()`dan sonra düz satır
+  // olarak yazan bir yama `!response.ok` dalında zamanlayıcıyı hiç temizlemez (sızıntı).
+  const casus = jest.spyOn(global, "clearTimeout");
+  try {
+    bridge({}, false, 500);
+    mockApiPost.mockResolvedValue(null);
+
+    const res = await performEmergencyStop();
+
+    expect(res.confirmed).toBe(false);
+    expect(casus).toHaveBeenCalled();
+  } finally {
+    casus.mockRestore();
+  }
+});
+
+it("KRİTİK: ASILAN gövde zaman aşımıyla kesilir (fonksiyon sonsuza kadar beklemez)", async () => {
+  // Asıl arıza kanıtı: `json()` yalnız abort olunca reddediyor. Zaman aşımı gövdeyi de kapsamıyorsa
+  // promise HİÇ çözülmez ve acil durdurma yedek yollarına ASLA geçilmez.
+  jest.useFakeTimers();
+  try {
+    fetchMock().mockImplementation((_u: string, init: { signal: AbortSignal }) => ({
+      ok: true,
+      status: 200,
+      json: () =>
+        new Promise((_res, rej) => {
+          init.signal.addEventListener("abort", () => rej(new Error("aborted")));
+        }),
+    }));
+    mockApiPost.mockResolvedValue(null);
+
+    let bitti = false;
+    const p = performEmergencyStop().then((r) => {
+      bitti = true;
+      return r;
+    });
+    await Promise.resolve();
+    expect(bitti).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(6000);
+    await p;
+
+    expect(bitti).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});

@@ -43,9 +43,8 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), BRIDGE_TIMEOUT_MS);
-    let response: Response;
     try {
-      response = await fetch(`${serviceConfig.bridgeBaseUrl}/hardware/emergency_stop`, {
+      const response = await fetch(`${serviceConfig.bridgeBaseUrl}/hardware/emergency_stop`, {
         method: "POST",
         // GÜVENLİK/GECİKME: eskiden yalnız Content-Type gönderiliyordu. Uzaktan (tünel) erişimde
         // backend auth'u ZORUNLU kıldığından bu istek HER SEFERİNDE 401 alıyor, birincil yol
@@ -53,11 +52,14 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         signal: ctrl.signal,
       });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!response.ok) throw new Error(`emergency_stop HTTP ${response.status}`);
-    const data = (await response.json().catch(() => null)) as EmergencyStopResponse | null;
+      if (!response.ok) throw new Error(`emergency_stop HTTP ${response.status}`);
+      // ⚠️ GÖVDE OKUMASI DA ZAMAN AŞIMININ İÇİNDE (denetim 2026-08-17). `clearTimeout` eskiden
+      // yalnız `fetch`i saran iç `finally`deydi; `response.json()` o noktadan sonra çalıştığı için
+      // AbortController'a BAĞLI DEĞİLDİ ve gövde asılırsa `performEmergencyStop` 1500 ms içinde
+      // dönmüyordu (ölçüldü: 1501 ms). Doğru desen `apiClient.ts`te zaten kurulmuş.
+      // Davranış eşdeğerliği: abort'ta `json()` reddeder, mevcut `.catch(() => null)` yutar →
+      // `data = null` → bugünkü "2xx ama teyit yok" yoluyla AYNI şekilde yedek yola düşülür.
+      const data = (await response.json().catch(() => null)) as EmergencyStopResponse | null;
     // ⚠️ DENETİM 2026-08-09 (ENGEL) — HASTA GÜVENLİĞİ: teyit ARTIK backend'den okunuyor.
     // Eski hâli `stmStopped VEYA herhangi-bir-bobin-success` idi. Bu bir VEYA olduğu için:
     // STM durup 3 ESP bobininin ÜÇÜ birden başarısız olsa bile — ya da 8 bobinden yalnız 1'i
@@ -65,8 +67,11 @@ export async function performEmergencyStop(): Promise<{ confirmed: boolean }> {
     // (`confirmed` = tüm transport'lar) zaten gönderiyordu; istemci onu yok sayıp kendi
     // gevşek kuralını uyguluyordu. Bir bobin hastanın üzerinde çalışmaya devam ederken
     // operatöre "kesildi" demek, bu ekrandaki en ağır hata sınıfıdır.
-    if (data?.confirmed === true) return { confirmed: true };
-    // 2xx ama teyit YOK (kısmi/başarısız) → yedek yolu da dene (aşağı düş).
+      if (data?.confirmed === true) return { confirmed: true };
+      // 2xx ama teyit YOK (kısmi/başarısız) → yedek yolu da dene (aşağı düş).
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     /* bridge erişilemedi → yedek yol */
   }
