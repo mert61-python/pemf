@@ -24,6 +24,7 @@ import { useAppNav } from "@/context/AppNavContext";
 import { useUserMode } from "@/context/UserModeContext";
 import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { aramaEslesir } from "@/utils/aramaNormalize";
 
 interface Hasta { id: string; name: string; species?: string }
 
@@ -77,8 +78,10 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
    *  Hasta yönetimi tek yerde toplanır ve orada sahip/yaş/kilo gibi alanlar da doldurulabilir. */
   const hastalaraGit = () => { setAcik(false); navigateTo("patients"); };
 
-  const suzulmus = (liste ?? []).filter(
-    (h) => !ara.trim() || h.name.toLowerCase().includes(ara.trim().toLowerCase()));
+  // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek" kaydı
+  // "ipek" ile aranınca "Eşleşme yok." veriyordu. (Arama BOŞKEN tam liste gösterilip seçtirildiği
+  // için hasta ULAŞILAMAZ değildi — kırık olan arama kısayoluydu.) Tek kaynak: aramaEslesir.
+  const suzulmus = (liste ?? []).filter((h) => aramaEslesir(h.name, ara));
 
   const secici = (
     <View style={{ gap: spacing.sm }}>

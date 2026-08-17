@@ -15,6 +15,7 @@ import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
+import { aramaEslesir } from "@/utils/aramaNormalize";
 
 // GÜVENLİK (YÜKSEK fix): Raporu X-API-Key HEADER'ı ile indir → cihaz MASTER token'ı URL'de
 // (tarayıcı geçmişi / sunucu & Cloudflare tünel erişim-logları / PDF disk-cache) SIZMASIN. Eski
@@ -150,11 +151,15 @@ export function TreatmentHistoryScreen() {
       const op = (s.operator_email || "").toLowerCase();
       if (op && op !== myEmail) return false;
     }
-    const q = searchQuery.toLowerCase();
-    const patientName = (s.patient_name || "").toLowerCase();
-    const notes = (s.patient_notes || "").toLowerCase();
-    const date = (s.session_date || "").toLowerCase();
-    return patientName.includes(q) || notes.includes(q) || date.includes(q);
+    // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek"
+    // kaydı "ipek" ile aranınca bulunamıyordu. BURADAKİ ETKİ EN AĞIRI: süzme yalnız YÜKLENMİŞ
+    // sayfalar üzerinde çalışır, dolayısıyla hekim "bu hastanın geçmişi yok" sonucuna varıyor ve
+    // PDF/CSV dışa aktarımı `filteredSessions` üzerinden gittiği için BOŞ/EKSİK rapor üretiliyordu.
+    return (
+      aramaEslesir(s.patient_name, searchQuery) ||
+      aramaEslesir(s.patient_notes, searchQuery) ||
+      aramaEslesir(s.session_date, searchQuery)
+    );
   });
 
   // "Tümünü PDF İndir" EKRANDA GÖRÜNEN (aktif filtre) kayıtları verir — eskiden filtreyi yok

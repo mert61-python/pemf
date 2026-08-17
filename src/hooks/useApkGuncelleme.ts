@@ -11,7 +11,46 @@
  */
 import { useCallback, useState } from "react";
 
+import { apiGet } from "@/services/apiClient";
 import { apkIndir, kurulumuBaslat, type MobilSurum } from "@/services/mobileUpdate";
+
+/**
+ * Kurulum ekranını AÇMAK şu an güvenli mi? (cihazda tedavi sürüyor mu?)
+ *
+ * 🔴 TIBBİ GÜVENLİK — DENETİM BULGUSU 2026-08-17. `MobileUpdateBanner` süren seansta `return null`
+ * ediyordu, ama `return null` bileşeni UNMOUNT ETMEZ: uçuştaki `guncelle()` promise'i sürüyor ve
+ * indirme bitince `kurulumuBaslat` çalışıyordu → Android paket yükleyicisi **bobinler hastanın
+ * üzerindeyken** operatörün seans ekranının üstüne tam ekran açılıyordu. Onaylanırsa uygulama
+ * öldürülüp yeniden kurulur ve telefon kumandası seansın ORTASINDA kaybolur. Bandın kendi başlığı
+ * bunu "kabul edilemez" diye tanımlıyordu; eksik olan uçuştaki işin durdurulmasıydı.
+ *
+ * ⚠️ NEDEN BANDIN `seansAktif` PROP'U YETMEZ: `MobileUpdateGate` `<Stack/>`in ve dolayısıyla
+ * `LiveDataProvider`ın ÜSTÜNDE durur → context'e yapısal olarak erişemez. Kapı cihazın KENDİSİNE
+ * sorulur, böylece AÇILIŞ KAPISI ve BANT aynı korumayı paylaşır (tek kaynak). Bandın görünürlük
+ * kapısı KALDIRILMAZ; bu ondan bağımsız ikinci katmandır.
+ *
+ * ⚠️ BİLİNÇLİ FAIL-OPEN: seans durumu ÖĞRENİLEMEZSE kurulum ENGELLENMEZ. Fail-closed olsaydı
+ * farklı ağdaki (ya da cihaza ulaşamayan) bir telefon bir daha ASLA güncellenemezdi — tıbbi bir
+ * cihazın uzaktan kumandasını KALICI kilitlemek, sahibin açıkça yasakladığı sonuçtur (mobil 2.3.16:
+ * "güncelleme ZORUNLU KILINAMAZ"). Yalnız POZİTİF kanıt (`is_active === true`) kurulumu erteler.
+ *
+ * ⚠️ Kısa `timeoutMs`: bu sorgu 128 MB'lık indirmeden SONRA yapılır; varsayılan 8 sn + GET
+ * yeniden-denemesi en kötü ~16 sn sessiz bekleme demek olurdu. 2,5 sn ile en kötü ~5,4 sn.
+ * Cihaz gerçekten erişilemezse rota/DNS yokluğunda bağlantı 1 sn'nin altında düşer.
+ *
+ * Kilit: `__tests__/useApkGuncelleme.seansKapisi.test.ts` (karşı-kanıt testleri dahil).
+ */
+async function seansSuruyorMu(): Promise<boolean> {
+  try {
+    const s = await apiGet<{ is_active?: boolean } | null>("/session/active", null, {
+      silent: true,
+      timeoutMs: 2500,
+    });
+    return s?.is_active === true;
+  } catch {
+    return false; // fail-open (yukarıdaki gerekçe)
+  }
+}
 
 export interface ApkGuncelleme {
   /** 0..1 indirme oranı; `null` = indirme yürümüyor. */
@@ -49,6 +88,18 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
         ind.hata === "boyut"
           ? "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin."
           : "Güncelleme indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+      );
+      return;
+    }
+
+    // 🔴 TIBBİ GÜVENLİK KAPISI — kurulumdan HEMEN ÖNCE sorulur (bkz. seansSuruyorMu).
+    // ⚠️ SIRA KRİTİK: indirme başlarken seans yoktu ama BİTERKEN olabilir (128 MB, dakikalar).
+    // Başlangıçtaki duruma güvenmek bulgunun kendisiydi. İndirme ENGELLENMEZ — paket diskte hazır
+    // bekler ve seans bitince hazır-dosya hızlı yolu tek bayt bile yeniden indirmez.
+    if (await seansSuruyorMu()) {
+      setBilgi(
+        "Güncelleme indirildi ama cihazda tedavi sürüyor — kurulum ekranı açılmadı. " +
+          "Seans bittikten sonra 'Güncelle'ye dokunun; paket hazır, yeniden indirilmeyecek.",
       );
       return;
     }

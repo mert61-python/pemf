@@ -81,9 +81,17 @@ export function CoilParameterPanel({
         const c = clampTherapyParams({ freq: f, duty: d, phase: ph, duration: durMin });
         f = c.values.freq; d = c.values.duty; ph = c.values.phase; durMin = c.values.duration;
         const warns = [...c.warnings];
-        // Süre 0/süresiz: donanım watchdog'u DURATION_MAX'a kaplar (kontrolsüz kalmaz) ama operatör
-        // süre girmediğini BİLMELİ — sessiz süresiz-seans olmasın.
-        if (durMin <= 0) warns.push("Süre girilmedi — bobin donanım üst-sınırına kadar çalışır; süre belirtmeniz önerilir.");
+        // Süre 0/süresiz: operatör süre girmediğini BİLMELİ — sessiz süresiz-seans olmasın.
+        // ⚠️ DENETİM 2026-08-17 — ESKİ METİN DAYANAKSIZDI. Burada "donanım watchdog'u DURATION_MAX'a
+        // kaplar (kontrolsüz kalmaz)" yazıyordu ve kullanıcıya "bobin donanım üst-sınırına kadar
+        // çalışır" deniyordu. İki açıdan yanlıştı: (1) `DURATION_MAX_MINUTES` (9999 dk ≈ 6,9 gün)
+        // klinik bir sınır değil, STM32 PROTOKOL sabitidir — gerçek klinik kapak 120 dk;
+        // (2) bu panel ESP bobinlerini (6-8) de sürüyor ve o taraftaki "donanım üst-sınırı"
+        // iddiasının dayanağı bu depoda YOK (ESP firmware'i burada değil, bkz. firmware/README).
+        // Gerçek kapağı SUNUCU uygular: `_esp_duration_seconds` (ESP) + `HardwareController` (STM).
+        // Yanlış güvence, korumasızlıktan tehlikelidir → metin artık nereye dayandığını söylüyor.
+        // Kilit: `__tests__/CoilDurationHonesty.test.tsx`.
+        if (durMin <= 0) warns.push("Süre girilmedi — bobin klinik gözetimsiz sınıra kadar çalışır (sunucu tarafında uygulanır); süre belirtmeniz önerilir.");
         if (warns.length) setError(warns.join(" "));
       }
       // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.

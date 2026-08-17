@@ -76,15 +76,14 @@ export function KpiDashboardScreen() {
   const coils = snapshot.coils ?? [];
   const connectedCoils = coils.filter((c) => c.connected);
   const runningCoils = coils.filter((c) => c.running);
+  // Bkz. `hesaplaOrtSicaklik` (dosya sonunda) — ortalama, ÖLÇÜM YAPAN bobinler üzerinden alınır.
   // #85: bobin-sayısı denominator'ını literal 8 yerine gerçek yapılandırmadan türet (8-olmayan
   // cihazlarda oran yanlış raporlanmasın). Veri yokken güvenli varsayılan 8.
   const coilCount = coils.length || 8;
 
   const COIL_R = 0.5;
   const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
-  const avgTemp = connectedCoils.length > 0
-    ? connectedCoils.reduce((s, c) => s + c.objectTemp, 0) / connectedCoils.length
-    : 0;
+  const sicaklik = hesaplaOrtSicaklik(connectedCoils);
   const avgMag = runningCoils.length > 0
     ? runningCoils.reduce((s, c) => s + c.magneticMt, 0) / runningCoils.length
     : 0;
@@ -223,7 +222,16 @@ export function KpiDashboardScreen() {
           <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
           <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
           <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
-          <MetricCard label="Ort. Sıcaklık" value={`${avgTemp.toFixed(1)} °C`} tone={colors.warning} />
+          {/* ⚠️ DENETİM 2026-08-17: ortalama `connectedCoils.length`'e bölünüyordu ve STM bobinleri
+              (1-5) sıcaklık ÖLÇMEDİĞİ için `objectTemp: 0` ile ortalamayı seyreltiyordu — 3 bobin
+              50 °C iken kart 18,8 °C, yalnız-STM kabinde 0,0 °C ("serin" diye okunur) gösteriyordu.
+              Bu, `CoilThermalHonesty.test.tsx` ile kilitli dürüstlük değişmezinin ihlaliydi:
+              "ölçüm yokken SAHTE bir sıcaklık değeri gösterilmez". */}
+          <MetricCard
+            label={sicaklik.olcumVar ? `Ort. Sıcaklık (${sicaklik.olcenSayisi} bobin)` : "Ort. Sıcaklık"}
+            value={sicaklik.olcumVar ? `${sicaklik.deger.toFixed(1)} °C` : "ölçüm yok"}
+            tone={colors.warning}
+          />
           <MetricCard label="Ort. Manyetik" value={`${avgMag.toFixed(2)} mT`} tone={colors.cyan} />
         </ResponsiveGrid>
       </View>
@@ -310,3 +318,38 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"] as any,
   },
 });
+
+/**
+ * "Ort. Sıcaklık" — ölçüm YAPAN bobinler üzerinden ortalama.
+ *
+ * ⚠️ DENETİM 2026-08-17. Ortalama `connectedCoils.length`'e bölünüyordu. Ama STM bobinlerinde
+ * (1-5) SICAKLIK TELEMETRİSİ YOKTUR: seri protokol yalnız duty/phase/freq/duration döndürür ve
+ * backend `objectTemp`i BİLEREK `0.0` bırakır (`api_server` notu: "0.0-yerine-NULL yolu BILEREK
+ * secilmedi; asagi-akis (PDF/KPI/grafik) 0.0 bekliyor"). Ölçülen sonuç:
+ *     5 STM (ölçüm yok) + 3 ESP @ 50 °C  →  kart 18,8 °C
+ *     yalnız-STM kabin                    →  kart  0,0 °C  ("serin" diye okunur)
+ * Üç bobin yanık eşiğine (48 °C) dayanmışken kart 18,8 °C diyordu.
+ *
+ * ⚠️ Bu, TESTLE KİLİTLİ bir dürüstlük değişmezinin ihlaliydi (2026-08-09 Tier-2 sahip kararı,
+ * `CoilThermalHonesty.test.tsx`): "'ÖLÇÜLMÜYOR' İLE 'SERİN' AYIRT EDİLEBİLMELİ … ölçüm yokken
+ * SAHTE bir sıcaklık değeri gösterilmez". Karar bu ekrana taşınmamıştı.
+ *
+ * ⚠️ `0` NÖBETÇİSİ: ölçümü olmayan bobin `0` gönderir, dolayısıyla "ölçüm var" ayrımı sıfır-olmayan
+ * POZİTİF değerdir. Negatif değer fiziksel olarak anlamsızdır (sensör arızası) ve ölçüm sayılmaz.
+ * Bu ayrımı ortadan kaldırmak `0 °C`yi yeniden "serin" gibi göstermek olurdu.
+ *
+ * ⚠️ Gerçek termal koruma bu fonksiyondan BAĞIMSIZDIR (bobin başına interlock,
+ * `CoilParameterPanel`); burada düzeltilen şey GÖSTERİMİN dürüstlüğüdür.
+ *
+ * Kilit: `__tests__/kpiSicaklikDurustlugu.test.tsx`.
+ */
+export function hesaplaOrtSicaklik(
+  bagliBobinler: { connected?: boolean; objectTemp?: number }[],
+): { olcumVar: boolean; deger: number; olcenSayisi: number } {
+  const olcenler = (bagliBobinler || []).filter(
+    (c) => c && c.connected !== false && typeof c.objectTemp === "number" && c.objectTemp > 0,
+  );
+  if (olcenler.length === 0) return { olcumVar: false, deger: 0, olcenSayisi: 0 };
+  const toplam = olcenler.reduce((s, c) => s + (c.objectTemp as number), 0);
+  return { olcumVar: true, deger: toplam / olcenler.length, olcenSayisi: olcenler.length };
+}

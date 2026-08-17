@@ -15,6 +15,7 @@ import { useOperatorOptional } from "@/context/OperatorContext";
 import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
 import { canChooseScope, effectiveScope, inScope } from "@/utils/patientScope";
+import { aramaEslesir } from "@/utils/aramaNormalize";
 
 export function PatientScreen() {
   const { showToast } = useToast();
@@ -162,7 +163,11 @@ export function PatientScreen() {
     const op = (p.operator_email || "").toLowerCase();
     return !op || op === myEmail;
   }).length;
-  const matchedPatients = scopedPatients.filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.owner || "").toLowerCase().includes(search.toLowerCase()));
+  // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek" kaydı
+  // "ipek" ile ARANDIĞINDA bulunamıyordu (I→i de 'ı' vermiyordu). Tek kaynak: aramaEslesir.
+  const matchedPatients = scopedPatients.filter(
+    (p) => aramaEslesir(p.name, search) || aramaEslesir(p.owner, search),
+  );
   // PERFORMANS: liste sunucudan SAYFALANMADAN tümüyle geliyor ve ScrollView içinde `.map` ile
   // (sanallaştırma olmadan) render ediliyordu → birkaç yüz hastası olan klinikte her arama
   // tuşunda tüm kartlar yeniden render ediliyor, kaydırma takılıyordu. Backend'de sayfalama ucu
