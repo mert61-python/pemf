@@ -11,6 +11,7 @@ ai_hub predictor'ları GERÇEK inference; ağırlıklar /models mount. torch YOK
 import asyncio
 import base64
 import glob
+import math
 import os
 import shutil
 import subprocess
@@ -27,6 +28,22 @@ from ai_service import predictors
 from ai_service.gpu import gpu_ok as _gpu_ok
 from ai_service.gpu import onnx_providers as _providers
 from ai_service.gpu import yolo_device as _yolo_device
+
+# ⚠️ MODALİTE + SESSİZLİK KAPILARI — TEK KAYNAK `utils/`, KOPYA DEĞİL.
+# Deponun kendi kuralı (`ai_hub/inference_petri_dish/plausibility.py`): "denetim ROUTER'da DEĞİL
+# burada durmalı, çünkü PEMF_AI_SERVICE_URL tanımlıyken servers/ai_router.py HİÇ çalışmaz."
+# Bu uçlar auth-muaftır ve backend'i atlayan bir istemci doğrudan çağırabilir; kapı yalnız
+# router'da kalırsa o yolda hiç çalışmaz — ölçüldü: CT kesiti → /infer/histopath → 200
+# {"top_1_class":"Grade 4","top_1_prob":1.0} (kapının var olma sebebi olan 2026-08-06 saha vakası).
+# ⚠️ IMPORT ÜST DÜZEY ve try/except İÇİNDE DEĞİL: fail-open bir kapı kapı değildir. Modüller
+# imajda yoksa (docker/Dockerfile.ai'deki COPY satırı silinirse) uvicorn açılışta ImportError ile
+# GÜRÜLTÜLÜ düşer — kapının sessizce kaybolması imkânsız.
+from utils.image_domain import DomainMismatch as _DomainMismatch
+from utils.image_domain import check as _domain_check
+from utils.ses_kalitesi import guvenilir_mi as _ses_guvenilir_mi
+from utils.ses_kalitesi import normalize_entropi as _ses_entropi
+from utils.ses_kalitesi import sessiz_mi as _ses_sessiz_mi
+from utils.ses_kalitesi import wav_rms_dbfs as _ses_wav_rms
 
 MODELS_DIR = os.environ.get("PEMF_AI_MODELS_DIR", "/models")
 app = FastAPI(title="PEMF AI Service (GPU)", version="0.3.0")
@@ -73,6 +90,24 @@ def _read_bgr(data: bytes):
     if img is None:
         raise ValueError("görüntü çözülemedi")
     return img
+
+
+def _kapi(data: bytes, label: str):
+    """Modalite kapısı: uyuşmazlıkta 422 `JSONResponse`, aksi hâlde `None`.
+
+    `utils.image_domain.check` ile AYNI nesneyi çağırır — kapının ikinci bir kopyası YOK
+    (bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı).
+    ⚠️ Decode edilemeyen girdide kapı ZORLANMAZ: o yolun mevcut hata davranışı (uç kendi
+    `except`iyle 500 döner) korunur; kapı yeni bir başarısızlık modu getirmez.
+    ⚠️ Ret 422 ile AYRI yoldan döner, `_err500`in jenerik mesajına karışmaz — istemci reddin
+    SEBEBİNİ görür (router tarafındaki kalıbın aynısı)."""
+    try:
+        _domain_check(_read_bgr(data), label)
+    except _DomainMismatch as dm:
+        return JSONResponse({"error": dm.user_message(), "domain_mismatch": True}, status_code=422)
+    except Exception:
+        return None
+    return None
 
 
 def _jpg_b64(bgr) -> str:
@@ -212,6 +247,9 @@ def infer_histopath(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "histopath")
+        if _red:
+            return _red
         clf = predictors.get("histopath")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
@@ -240,7 +278,7 @@ def infer_sound(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "ses boş/çok küçük"}, status_code=400)
-        clf = predictors.get("sound")
+        # ⚠️ `predictors.get("sound")` BURADAN sessizlik kapısının ARDINA taşındı (aşağıya bkz.).
         tmp_in = _save_temp(data, ".bin")
         tmp_wav = tmp_in + ".wav"
         ff = shutil.which("ffmpeg") or "ffmpeg"
@@ -269,8 +307,44 @@ def infer_sound(file: UploadFile = File(...)):
         )
         if proc.returncode != 0 or not os.path.exists(tmp_wav):
             return JSONResponse({"error": "ses çözümlenemedi (ffmpeg)"}, status_code=400)
+
+        # ⚠️ SESSİZLİK KAPISI (saha bildirimi 2026-08-15) — router'daki kapının AYNI modülü.
+        # Modelin 10 sınıfının HEPSİ kedi duygusu; "kedi değil" sınıfı YOK → softmax sessizliğe
+        # bile mutlaka bir duygu atar. Bu uç kapısız olduğu için boş kayıt :8100'e doğrudan
+        # gittiğinde yine "duygu" dönüyordu.
+        # ⚠️ RMS ölçülemezse kapı ZORLANMAZ (router'daki fail-open ile birebir aynı davranış).
+        try:
+            _rms = _ses_wav_rms(tmp_wav)
+        except Exception:
+            _rms = None
+        # ⚠️ `-inf`/`nan` JSON'a YAZILAMAZ. Tam sessiz bir kayıtta RMS `-inf` olur ve ham
+        # `round(_rms, 1)` `ValueError: Out of range float values are not JSON compliant` atar →
+        # istek 422 yerine jenerik 500'e düşer ve kullanıcı reddin SEBEBİNİ göremez (ölçüldü:
+        # bu yamanın ilk hâlinde tam olarak böyle oldu, test yakaladı).
+        _rms_json = None if _rms is None or not math.isfinite(_rms) else round(_rms, 1)
+        if _rms is not None and _ses_sessiz_mi(_rms):
+            return JSONResponse(
+                {
+                    "error": "Kayıt sessiz ya da çok zayıf — ses alınamamış olabilir.",
+                    "rms_dbfs": _rms_json,
+                },
+                status_code=422,
+            )
+
+        # ⚠️ MODEL YÜKLEMESİ KAPIDAN SONRA (2026-08-16 dersi, router'da da böyle): sessiz bir
+        # kaydı REDDETMEK için 15 MB'lik ONNX boşuna yüklenmesin ve modelin bulunmadığı ortamda
+        # istek kapıya HİÇ varamadan 500 ile düşmesin.
+        clf = predictors.get("sound")
         t0 = time.time()
         result = clf.predict(tmp_wav, top_k=3)
+        # BELİRSİZLİK sonuçla BİRLİKTE taşınır (router yanıtıyla alan-uyumu): devredilen yanıt bu
+        # alanları TAŞIDIĞI için backend tarafında ayrıca üretilmesi gerekmez — tek kaynak.
+        # ⚠️ `len(_p) >= 2` ZORUNLU: `normalize_entropi` len<2'de 0.0 döner → `guvenilir_mi` True
+        # olur ve olasılık DÖNMEYEN bir yanıt SAHTE "güvenilir" işaretlenirdi.
+        _p = list((result.get("probabilities") or {}).values())
+        _ek = {}
+        if len(_p) >= 2:
+            _ek = {"guvenilir": _ses_guvenilir_mi(_p), "belirsizlik": round(_ses_entropi(_p), 3)}
         return {
             "status": "success",
             "device": getattr(clf, "device", "?"),
@@ -279,6 +353,8 @@ def infer_sound(file: UploadFile = File(...)):
             "top_1_prob": result["top_1_prob"],
             "top_k": result["top_k"],
             "probabilities": result.get("probabilities"),
+            "rms_dbfs": _rms_json,
+            **_ek,
         }
     except Exception as e:
         return _err500(e)
@@ -297,6 +373,9 @@ def infer_kidney_ct(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "kidney_ct")
+        if _red:
+            return _red
         det = predictors.get("kidney_ct")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
@@ -328,6 +407,9 @@ def infer_segmentation(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "segmentation")
+        if _red:
+            return _red
         img = _read_bgr(data)
         model = predictors.get("segmentation")
         tmp = _save_temp(data, ".jpg")
@@ -370,6 +452,9 @@ def infer_landmark(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "landmark")
+        if _red:
+            return _red
         img = _read_bgr(data)
         model = predictors.get("landmark")
         tmp = _save_temp(data, ".jpg")
@@ -431,6 +516,9 @@ def infer_thermal(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "thermal")
+        if _red:
+            return _red
         clf = predictors.get("thermal")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
@@ -455,6 +543,9 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "cat_organ")
+        if _red:
+            return _red
         clf = predictors.get("cat_organ")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
@@ -589,6 +680,9 @@ def infer_reticulocytes(file: UploadFile = File(...)):
         data = file.file.read()
         if len(data) < 200:
             return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        _red = _kapi(data, "reticulocytes")
+        if _red:
+            return _red
         model = predictors.get("reticulocytes")
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
@@ -626,6 +720,9 @@ def infer_em_fantom(
     """Fantom tümör: klasik CV + BiLSTM (D/P/E). phantom_length_cm ile gerçek-mm ölçek."""
     try:
         data = file.file.read()
+        _red = _kapi(data, "em_fantom")
+        if _red:
+            return _red
         img = _read_bgr(data)
         c = predictors.get("em_fantom")
         pl = c["cls"](c["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
@@ -666,6 +763,9 @@ def infer_em_petri(
 
     try:
         data = file.file.read()
+        _red = _kapi(data, "em_petri")
+        if _red:
+            return _red
         img = _read_bgr(data)
         c = predictors.get("em_petri")
         pl = c["cls"](

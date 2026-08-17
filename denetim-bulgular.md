@@ -1159,6 +1159,102 @@ içeriği iki hâlde de aynıydı). İlgili 6 test yeniden koşuldu: 24/24 ✓.
 
 ---
 
+## İKİNCİ TUR — KALAN 17 KALEM KAPATILDI (2026-08-17)
+
+İlk turda 16 bulgu düzeltilmişti; kalan **15 bulgu + fix-12'den sarkan 2 kalem** bu turda kapandı.
+Yöntem aynı: her düzeltme için ayrı test, düzeltmeden ÖNCE kırmızı, sonra yeşil, ardından
+**mutasyonla** doğrulama. Kalemler kapatılmadan önce HEPSİ `b86cb11`'in şu anki hâline karşı
+YENİDEN DOĞRULANDI (9 salt-okunur analiz ajanı) — ilk turun 16 düzeltmesi bazı çapaları kaydırmış
+olabilirdi ve gerçekten iki çapa kaymıştı.
+
+| # | Kalem | Cid. | Dosya(lar) | Test | Mutasyon |
+|---|---|---|---|---|---|
+| 19 | `start_all_coils` atomik yazım yok | 5 | `controllers/hardware_controller.py` | `test_hardware_controller_safety.py` (+3) | 2/2 ✓ (ham kusur + "istisnayı yut" yalancı düzeltmesi) |
+| C1 | Ses ucunda sessizlik kapısı devretmenin ARKASINDA | 3 | `servers/ai_router.py` | `test_ai_mikroservis_modalite_kapisi.py` (+4) | 1/1 ✓ |
+| C2 | `:8100`e doğrudan çağrılar KAPISIZ | 3 | `ai_service/app.py`, `docker/Dockerfile.ai` | `test_ai_servis_8100_kapisi.py` (9, yeni) | 4/4 ✓ (COPY silme · kapı silme · **kapı KOPYALAMA** · sessizlik) |
+| 8 | `_pemfvet` mDNS bir daha kaydolmuyor | 2 | `servers/auto_discovery.py` | `test_pemfvet_mdns_yeniden_kayit.py` (4, yeni) | 3/3 ✓ — üç yön AYRI testlerle |
+| 15y | `make_base_zip` çıktıya doğrudan yazıyor | 3 | `build_tools/make_base_zip.py` | `test_make_base_zip_single_truth.py` (+2) | 3/3 ✓ |
+| 29 | "Başlat" kapısı kapalıyken etiket eziliyor | 5 | `launcher/app/ui/index.html` | `test_baslat_kapisi_etiket.py` (7, yeni) | 4/4 ✓ |
+| 31 | "Devam Et" ekranı geri getirmiyor + her basış yeni indirme | 5 | `launcher/app/ui/index.html` | `test_devam_et_duraklatilmis_guncelleme.py` (5, yeni) | 3/3 ✓ |
+| 30 | Inno installer KORUMASIZ `ai_hub` sevk ediyor | 5 | `build_installer.ps1`, `PEMF_Backend_Setup.iss` | `test_installer_korumali_ai_hub_sevk_eder.py` (9, yeni) | 7/7 ✓ |
+| G1 | Takas sonrası iptalde `guncellemeyi_geri_al` çağrılmıyor | 5 | `launcher/core/src/flow.rs` | `upgrade_drill.rs` (+1) | 2/2 ✓ |
+| G2 | Kurulum iptali YABANCI `.part` siliyor | 5 | `install.rs`, `flow.rs`, `main.rs`, `index.html` | `iptal_temizligi.rs` (3, yeni) | 2/2 ✓ |
+| F1 | Supabase parçalı yazımı geçici hatada oturumu kaybettiriyor | 5 | `pf/src/services/supabaseAuth.ts` | `supabaseAuthStorage.test.ts` (5, yeni) | 2/2 ✓ (**reddedilen sıra-değiştirme çözümü de yakalanıyor**) |
+| F2 | ACİL DURDUR'da gövde okuması zaman aşımının DIŞINDA | 5 | `pf/src/services/emergencyStop.ts` | `emergencyStop.test.ts` (+3) | 1/1 ✓ |
+| F3 | Takas düşerken tünel adresi kalıcı yazılıyor | 5 | `pf/src/services/pairing.ts` | `pairing.test.ts` (+3) | 2/2 ✓ |
+| 20 | Gözlem notu bobin `running` deyince siliniyor | 5 | `pf/.../ObservationNotesModal.tsx` | `gozlemNotuKorunmasi.test.tsx` (4, yeni) | 3/3 ✓ (**yorum-kandırması vektörü dahil**) |
+| 25 | Manuel "Durdur" SERİ (~40 sn) + paralel tur yığılması | 5 | `pf/src/screens/ControlScreen.tsx` | `durdurmaTuruParalel.test.tsx` (5, yeni) | 5/5 ✓ |
+| 21a | AI Hub otonom modu YAPISAL olarak hiç çalışmıyor | 5 | `pf/src/screens/AiHubScreen.tsx` | `aiHubOtonomOnayKapisi.test.tsx` (3, yeni) | 3/3 ✓ |
+| 21b | AI Pro panelini GÖRÜNTÜLEYEN istemci başkasının seansını durduruyor | 5 | `servers/ai_router.py`, `pf/.../AiProPanel.tsx`, `pf/src/services/config.ts` | `AiProPanelSahiplik.test.tsx` (5, yeni) + `test_ai_pro_approval_gate.py` (+4) | 6/6 ✓ |
+
+**Regresyon (son ölçüm):** backend `1187 passed, 1 failed` · `cargo test` **246 passed, 0 hata** ·
+`pf` **491 passed** (49 süit), `tsc --noEmit` temiz. Düşen tek test hâlâ süren 2.3.17 yayınının
+disiplin testi (`test_KRITIK_site_APK_surumu_versions_json_ile_AYNI`) — bu değişikliklerle ilgisiz.
+
+### Analizin RAPORU DÜZELTTİĞİ yerler (dürüstlük kaydı)
+
+1. **Bulgu 8 için önerdiğim tek-satırlık düzeltme YETERSİZDİ.** İki senaryo var: (S1) açılışta hiç
+   adres yok → arayüz gelince `ensure_interfaces_current` callback'i çağırır, guard düzeltilince
+   toparlanır; (S2) adres VAR ama default route YOK (offline klinik / hotspot-only) → `_get_local_ip`
+   UDP `connect`'e dayandığı için kalıcı `127.0.0.1` döner ve arayüz KÜMESİ değişmediği için callback
+   HİÇ çağrılmaz. Guard'ı düzeltmek S2'de hiçbir şeyi düzeltmezdi. Ayrıca guard'ı **tamamen silmek**
+   bir REGRESYON olurdu: `stop_mdns` callback'i listeden silmiyor, yani kasıtlı olarak kaldırılmış
+   servis diriltilirdi. Düzeltme iki parçalı oldu ve süit iki hatalı yönü **birbirinden ayırt ediyor**.
+2. **Bulgu 19'da raporum bir çağrı yerini atlamış.** "UI'dan erişilemez, 0 eşleşme" ifadesi
+   `.ts/.tsx/.rs/.kt` için doğru ama `servers/ai_router.py:450` UI'dan (`auto_adjust` form alanı)
+   erişilebilen bir Python çağrı yeri. Bug'lı dal oradan tetiklenemiyor (duty her zaman float) →
+   ciddiyet 5 duruyor; düzeltmenin uç yerine KONTROLCÜ seviyesinde olmasının bağımsız gerekçesi bu.
+3. **Bulgu 19'un "kapaksız kalır YANLIŞ" çürütmem yarım doğruydu.** ÇALIŞAN bobin için doğru
+   (deadline değişmiyor), ama BOŞTA bobin için yanlış: `_coil_deadline[1] is None` + `is_running=True`
+   ölçüldü ve `_tick`'in `is not None` koşulu yüzünden o bobin ASLA süre-aşımına düşmüyor.
+4. **C1 için yazdığım gerekçe YANLIŞTI.** "Ses hattını yeniden kurgulamak gerekiyor ve bu ortamda
+   ffmpeg davranışı doğrulanamıyor" demiştim; ikisi de yanlış çıktı. Blok zaten doğru sıradaydı
+   (oku → ffmpeg → RMS), tek yapılacak devretme satırını kapının ALTINA indirmekti; ffmpeg de
+   `imageio_ffmpeg` üzerinden bu makinede VAR (PATH'te değil). Ölçüldü: ffmpeg 27-31 ms, RMS 2-9 ms.
+5. **C2'de kapıları `ai_hub/`e TAŞIMA önerim reddedildi** — `pyproject.toml` coverage
+   `omit */ai_hub/*` + mypy `exclude` yüzünden iki güvenlik kapısı KALICI KÖR NOKTAYA girerdi
+   (2026-08-09 ratchet kararının tersi). Yerine `utils/` imaja alındı ve kapı **nesne kimliği**
+   testiyle kopyalanamaz hâle getirildi.
+6. **İki çapa bayatlamıştı** (ilk turun commit'i yüzünden): `clear_partials` `install.rs:967` →
+   `1006`; `discard_pending` çağrısı `index.html:1937` → `1975`. Bulguları geçersiz kılmıyor.
+
+### Bu turda KENDİ düzeltmelerimde/testlerimde bulduğum 6 kusur
+
+| Kusur | Nasıl yakalandı | Düzeltme |
+|---|---|---|
+| Yapısal AI kapımda **iç içe `def`** fonksiyon sonu sanılıyordu → pencere erken kapanıyor, mutasyon SESSİZCE geçiyordu | Bağımsız karşıt-kanıt testi | Sınır artık MODÜL DÜZEYİNDE aranıyor (`lstrip` yok) |
+| `:8100` sessizlik reddinde RMS `-inf` **JSON'a yazılamıyor** → 422 yerine jenerik 500, kullanıcı sebebi göremiyor | Yeni testim ilk koşuda | `math.isfinite` koruması İKİ transporta da |
+| `make_base_zip` testimdeki "geçici dosya tarayıcıya görünmez" kilidi **BOŞTU** (`finally` dosyayı her hâlde siliyor) | Mutasyon geçti | AST ile adlandırma ifadesi bulunup GERÇEKTEN değerlendiriliyor |
+| İlk `start_all_coils` mutasyonum **etkisizdi** (ön-hesaplama bloğu istisnayı zaten yakalıyordu) | Mutasyon kırmızıya dönmedi | Mutasyon `git show HEAD:` ile özgün fonksiyondan alındı |
+| E2 paralellik mutasyonum **yanlış şeyi** değiştiriyordu (düzeltme promise'leri istekli oluşturuyor) | Mutasyon geçti | Gerçek kusur biçimi (istek döngü İÇİNDE oluşturulup beklenir) uygulandı → 3 test kırmızı |
+| E2'de guard'ın **ref mi state mi** olduğunu test ayırt edemiyordu | `ref → state` mutasyonu geçti | İki basışı TEK `act` içine alan yeni test eklendi |
+
+Ayrıca bir **kaçış dizisi taşıma hatası** yaşandı: `build_installer.ps1`e yazdığım
+`"scripts\build_backend_exe.ps1"` yolundaki `\b` **backspace karakterine** dönüştü (aynı şekilde
+`_internal\ai_hub`'daki `\a` → BEL). Testler anında yakaladı; açık bayt değerleriyle onarıldı.
+
+### KAPSAM DIŞI bırakılanlar (bilerek, gerekçeli)
+
+- `scripts/make_manifest.py`'deki geniş `except` **DOKUNULMADI**: kasıtlı ve taşıyıcı
+  (`test_make_manifest.py` paketleri zip-olmayan bayt olarak yazıyor) + betiğin kendi yorumu
+  "acil çıkış paketlerin yeniden üretilmesini bekleyemez" diyor. Kapanan şey YAN bulguydu (atomiklik).
+- `services/mdns_service.py`'deki `_mqtt` yayıncısının AYNI kör noktası: offline klinikte `_pemfvet`
+  toparlanır, `pemf-gateway.local` HÂLÂ yayınlanmaz. İkinci dosya = daha büyük yama → **ayrı kalem**.
+- `build_tools/make_model_zip.py` aynı atomiklik kusurunu taşıyor ve `PEMF_PKG_OUT` yönlendirmesi
+  YOK (gerçek `pemf-app-packages/home.zip` üzerine yazar) → test etmesi riskli, **ayrı kalem**.
+- `:8100`deki `disease`/`kidney_disease` uçlarının ASGARİ GİRDİ kapısı yok (router'da var) →
+  **ayrı kalem**; bu turun konusu modalite/sessizlik kapılarıydı.
+- Üretilmiş installer `.exe`'yi açıp içindeki `ai_hub`'ı doğrulayan uçtan-uca test YOK (3,7 GB +
+  DiskSpanning). Kapı, ISCC'ye VERİLEN dizini ve o dizinin korumalılığını ölçüyor.
+- `tests/test_kalan_regression_gaps.py`'deki iki kapı `inspect.getsource` + metin araması yapıyor →
+  yorum içindeki bir örnek desenle yanlış-yeşil olabilirler. **Ayrı test-kalitesi bulgusu.**
+- `AiHubScreen`'deki otonom akış ÇALIŞTIRILMADI, KALDIRILDI. Analiz daha derin bir kilit buldu:
+  `propose` de TAVUK-YUMURTA kilidinde (öneri üretmek için taze lokalizasyon şart, cache'i yazan
+  yol ise ancak `/start` başarılı olunca çalışıyor). Otonom AI Pro'nun AI Hub'dan başlatılabilir
+  hâle getirilmesi bir ÜRÜN kararıdır, bug düzeltmesi değil.
+
+---
+
 ## KAPSAM DIŞI — bulgu saymadım (triyajın elediği)
 
 Bunlar gerçek gözlemler ama **kırık davranış değil**; tamlık için buradalar.

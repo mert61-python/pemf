@@ -1249,10 +1249,26 @@
         $("t-start").textContent = appRunning ? t().backToApp : t().start;
       }
 
+      // ⚠️ ETİKETİ YAZAN HER YOL BU İKİSİNDEN GEÇMEK ZORUNDA (denetim 2026-08-17).
+      // `applyLang` (dil değişimi) ve `setRunningUi` (her pencere odağında `syncRunningState`
+      // üzerinden) `t-start`'ı `dataset.kapi`'ye BAKMADAN eziyordu. Ölçülen sonuç: kapı kapalı
+      // (`disabled:true`) ama etiket "Başlat"/"Start" → `.btn:disabled{opacity:.4}` yüzünden
+      // veteriner SİLİK bir "Başlat" görüyor ve bekleme sebebi ekranın HİÇBİR yerinde yazmıyor.
+      // Bu, 1.9.30 kapısının yazılma amacının yarısını geri getiriyordu.
+      function startKapisiKapaliMi() {
+        const b = $("btn-start");
+        return !!b && b.dataset.kapi === "1";
+      }
+      // Kapı kapalıysa BEKLEME SEBEBİ (dile göre çevrilmiş), aksi hâlde normal durum etiketi.
+      // ⚠️ Etiketi bir değişkende saklayıp geri yazmak YETMEZ: metin tek dilde donardı.
+      function startEtiketi(x) {
+        return startKapisiKapaliMi() ? x.startChecking : appRunning ? x.backToApp : x.start;
+      }
+
       function setRunningUi(on) {
         appRunning = !!on;
         const x = t();
-        $("t-start").textContent = appRunning ? x.backToApp : x.start;
+        $("t-start").textContent = startEtiketi(x);
         $("t-ready-lead").textContent = appRunning ? x.runningLead : x.readyLead;
         $("t-ready-title").textContent = appRunning ? "PEMF Vet" : x.readyTitle;
       }
@@ -1273,7 +1289,10 @@
         // Dil degisiminde "calisiyor" durumu KAYBOLMASIN (aksi halde TR/EN'e basinca
         // uygulama acikken yeniden "Baslat" yaziyordu).
         if (typeof appRunning !== "undefined" && appRunning) setRunningUi(true);
-        $("t-start").textContent = x.start; $("t-change").textContent = x.change;
+        // ⚠️ `x.start` DEĞİL `startEtiketi(x)`: kapı kapalıysa bekleme sebebi korunur.
+        // Not: bu satır bir üstteki `if (appRunning) setRunningUi(true)` düzeltmesini de eziyordu
+        // (2026-08-06'da `t-start` için yazılan o düzeltme fiilen ÖLÜYDÜ; ölçüldü).
+        $("t-start").textContent = startEtiketi(x); $("t-change").textContent = x.change;
         $("t-repair").textContent = x.repair; $("t-uninstall").textContent = x.uninstall;
         $("t-foot-support").textContent = x.footSupport;
         $("t-about-title").textContent = x.aboutTitle; $("t-about-body").textContent = x.aboutBody;
@@ -1576,6 +1595,20 @@
         // uygulamayı açtığında 45 dakikalık indirmeye takılmamalı. Sessizce indir, kurulumu
         // BİR SONRAKİ açılışa bırak (o zaman paketler hazır → kurulum saniyeler sürer).
         if (!plan.cached) {
+          // ⚠️ (A) EKRANI GERİ AL (denetim 2026-08-17). Buraya "Devam Et" ile de gelinir
+          // (`resumeOp = tryRuntimeUpdate`): duraklatılmış kurulum ekranı açıkken 6 saatlik
+          // periyodik tur `manifestRaw`'ı YENİ bir sürümle değiştirirse plan artık `cached`
+          // DEĞİLDİR ve bu dal `false` dönüp ekranı "Duraklatıldı"da bırakıyordu. Başlat/Onar/
+          // Kaldır hepsi gizli `s-ready` içinde olduğu için cihaz ancak kapat-aç ile kurtuluyordu.
+          // ⚠️ KOŞUL ZORUNLU: yalnız `s-install`dayken geri al. Açılış yolunda ekran zaten
+          // `s-ready`dir ve `show` çağırmak `startKapisiAc` yan etkisiyle "Başlat" kapısını ERKEN
+          // açar — 1.9.30'un düzelttiği belirtiyi birebir geri getirir (ölçüldü).
+          if (curScreen() === "s-install") show("s-ready");
+          // ⚠️ (B) Her basış YENİ bir ≤1,4 GB indirme başlatmasın. `recheckUpdates`teki `sonBildirim`
+          // guard'ının aynısı; değişken modül düzeyinde PAYLAŞILDIĞI için periyodik turun başlattığı
+          // indirme sürerken "Devam Et" ikinci bir indirme AÇMAZ (ölçüldü: 1 → 2 → 3 → 4).
+          if (sonBildirim === "indiriyor") return false;
+          sonBildirim = "indiriyor";
           notice(t().rtBg);
           startPrefetchPoll();                             // yüzde + bar notun içinde akar
           // ⚠️ Komut HATA durumunda da `Ok({status:"failed"})` döner (ön-indirme isteğe
@@ -1586,9 +1619,10 @@
           invoke("prefetch_runtime_update", { manifestRaw })
             .then((r) => {
               stopPrefetchPoll();
+              sonBildirim = "";                            // indirme bitti → yeni tur yine bildirebilsin
               notice(r && r.status === "prefetched" ? t().rtBgDone : t().rtBgFail);
             })
-            .catch(() => { stopPrefetchPoll(); notice(t().rtBgFail); })
+            .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); })
           return false;                                    // ekranı ELE GEÇİRME, "Başlat" çalışsın
         }
 
@@ -1972,7 +2006,10 @@
           const names = env.pending_profiles.map(profName).join(", ");
           askConfirm(t().resumeTitle, `${t().resumeBody}\n\n(${names})`, () => doInstall(env.pending_profiles), {
             yesLabel: t().resumeYes, noLabel: t().resumeNo,
-            noCb: () => invoke("discard_pending").catch(() => {}),
+            // ⚠️ `manifestRaw` GEÇİLİR: Rust tarafı GÜNCEL PLANIN `.part` dosyalarını korur.
+            // Manifest gitmezse (offline/erken açılış) temizlik hiç yapılmaz — o an inen ≤1,4 GB'lık
+            // arka plan güncellemesini çöpe atmaktansa yer kazanmamak yeğdir (fail-safe).
+            noCb: () => invoke("discard_pending", { manifestRaw }).catch(() => {}),
           });
         }
       }

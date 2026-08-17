@@ -273,3 +273,84 @@ def test_DIGER_ai_models_HALA_HARIC(ortam):
     hepsi = set(_crc(cikti / "base.zip"))
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"
+
+
+def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
+    """DENETİM 2026-08-17 (bulgu 15'in yan bulgusu): yarım kalan yazım ÖNCEKİ geçerli zip'i bozmamalı.
+
+    Hedef eskiden doğrudan `'w'` ile açılıp KIRPILIYORDU. Yazım ortasında bir hata olursa
+    `zipfile`ın `__exit__`i merkezi dizini YAZDIĞI için diskte "GEÇERLİ ama EKSİK" bir arşiv
+    kalıyordu (ölçüldü: `testzip()` → None). `scripts/make_manifest.py` böyle bir dosyayı yalnızca
+    `[UYARI]` ile geçip **sha'sını mühürler ve EXIT=0** verir → taze kurulum açılma aşamasında düşer.
+    Daha ağır varyantı: kırpılan dosya `base-app.zip` olursa zarar ölü `base` kanalında değil
+    **canlı `layers` kanalındadır**.
+
+    ⚠️ SERT-KİLL TAKLİDİ YOK (bu ortamda güvenilir değil). Bunun yerine DETERMİNİST bir patlama:
+    `_ic_zip_belirlenimci` bozuk bir iç-zip'te `BadZipFile` atar ve `base_library.zip` adı
+    `_IC_ZIPLER` kümesinde olduğu için hata tam **deps** yazımının ortasında oluşur.
+    """
+    dist, cikti = ortam
+    assert _calistir(dist, cikti=cikti).returncode == 0, "on-kosul: ilk kosu basarili olmali"
+    saglam = {ad: (cikti / ad).read_bytes() for ad in ("base-app.zip", "base-deps.zip", "base.zip")}
+
+    # PyInstaller iç-zip'i taklidi ama BOZUK → `_ic_zip_belirlenimci` `BadZipFile` atar.
+    # ⚠️ ÖLÇÜLDÜ: bu dosya `_internal/` kökünde olduğu için **APP** katmanına düşüyor, yani kaza
+    # `base-app.zip` yazımının ortasında oluyor. Bu, bulgunun raporda "daha ağır varyant" denen
+    # yüzüdür: zarar ölü `base` kanalında değil, **canlı `layers` kanalındadır**.
+    (dist / "_internal" / "base_library.zip").write_bytes(b"NOT-A-ZIP")
+
+    r = _calistir(dist, cikti=cikti)
+
+    assert r.returncode != 0, "bozuk ic-zip ile kosu BASARILI dondu (patlama beklenmisti)"
+    assert "BadZipFile" in r.stdout + r.stderr, (
+        f"beklenen determinist patlama olusmadi (kaza baska bir nedenle): {(r.stdout + r.stderr)[-400:]}"
+    )
+    assert "base-app.zip  :" not in r.stdout, (
+        f"app yazimi TAMAMLANMIS → kaza yazim ortasinda degil, test anlamsiz: {r.stdout[-400:]}"
+    )
+
+    for ad, beklenen in saglam.items():
+        assert (cikti / ad).read_bytes() == beklenen, (
+            f"onceki GECERLI {ad} EZILDI → make_manifest bu eksik arsivin sha'sini MUHURLER ve "
+            "EXIT=0 verir; taze kurulum acilma asamasinda duser (yeniden indirme telafi etmez, "
+            "cunku paket onbellekte ve sha UYUSUR)"
+        )
+        with zipfile.ZipFile(cikti / ad) as z:
+            assert z.testzip() is None, f"{ad} bozuk"
+
+    # Başarısız koşudan HİÇBİR artık kalmamalı (`finally` temizliği).
+    assert sorted(x.name for x in cikti.iterdir()) == [
+        "base-app.zip",
+        "base-deps.zip",
+        "base.zip",
+    ], f"cikti dizininde artik dosya kaldi: {sorted(x.name for x in cikti.iterdir())}"
+
+
+def test_gecici_ad_YAYIN_JOKERINE_gorunmez():
+    """Geçici dosya adı `.zip` ile BİTMEMELİ — `gh release upload ... *.zip` onu YAYINA sokardı.
+
+    ⚠️ BU KİLİT NEDEN AYRI BİR TESTTE: yukarıdaki testte geçici adı gözlemlemek İMKÂNSIZ, çünkü
+    `_yaz`ın `finally`si dosyayı her hâlükârda siliyor. İlk yazımda oradaki "tarayıcıya görünmez"
+    assert'i BOŞTU — geçici adı `.new.zip` yapan bir mutasyon o testten SESSİZCE geçti (ölçüldü).
+    Artık kalmış bir geçici dosya YALNIZ süreç SERT ÖLDÜRÜLÜRSE oluşur — yani bulgu 15'in bizzat
+    tarif ettiği senaryoda. O yüzden kilit gerekli, ama davranışı doğru yerden ölçmek şart.
+
+    ⚠️ METİN ARAMASI DEĞİL: adlandırma ifadesi `ast` ile BULUNUP GERÇEKTEN DEĞERLENDİRİLİYOR.
+    Yorum/docstring `ast`te düğüm olarak görünmediği için "doğru deseni anlatan bir yorum yazarak"
+    geçilemez (bu depoda yorumla kandırılan kapı hatası dört kez oldu)."""
+    import ast
+
+    agac = ast.parse(BETIK.read_text(encoding="utf-8"))
+    fn = next(n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == "_yaz")
+    atama = next(n for n in fn.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "gecici")
+    ad = eval(  # noqa: S307 — ifade `_yaz` gövdesinden AST ile alındı, dış girdi değil
+        compile(ast.Expression(atama.value), "<gecici>", "eval"),
+        {"str": str, "os": os},
+        {"out": os.path.join("C:", "paket", "base-app.zip")},
+    )
+
+    assert not str(ad).endswith(".zip"), (
+        f"gecici dosya adi '.zip' ile bitiyor ({ad!r}) → sert-kill sonrasi kalan YARIM dosya "
+        "`gh release upload ... *.zip` joker'iyle YAYINA girer"
+    )
+    assert "base-app.zip" != os.path.basename(str(ad)), "gecici ad hedefle AYNI (atomiklik yok)"

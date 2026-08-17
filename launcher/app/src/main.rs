@@ -516,7 +516,10 @@ async fn install_and_launch(
         // İptal: yarım .part + pending SİLİNİR → seçim ekranına dön.
         Ok(InstallOutcome::Cancelled) => {
             install::clear_pending(&root);
-            install::clear_partials(&root);
+            // `&[]` = davranis BUGUNKUYLE AYNI: bu iptal, indirdigi paketlerin SAHIBIDIR
+            // (net.rs aktif `.part`i zaten kendisi siler). Yabanci `.part` sorunu
+            // `discard_pending` yolundaydi (bkz. asagi).
+            install::clear_partials(&root, &[]);
             Ok(serde_json::json!({ "status": "cancelled" }))
         }
         Err(e) => Err(e),
@@ -1174,11 +1177,20 @@ fn cancel_install(state: tauri::State<'_, AppState>) {
 
 /// Açılıştaki "yarım kalan kurulum" bildirimini AT: pending kaydı + `.part` dosyalarını sil
 /// (çalışan kurulum yokken kullanıcı "devam etme, iptal" derse).
+///
+/// ⚠️ DENETİM 2026-08-17: burası cache'teki TÜM `*.part`ları siliyordu ve bu soru ekrana tam olarak
+/// arka plan ön-indirmesi BAŞLADIKTAN SONRA çıkıyor (ölçülen sıra: `check_runtime_update` →
+/// `prefetch_runtime_update` → `discard_pending`). "İptal et" diyen kullanıcı, farkında olmadan
+/// o an inen ≤1,4 GB'lık güncellemeyi çöpe atıyordu. Artık GÜNCEL PLANIN `.part`ları korunuyor.
+/// ⚠️ Manifest YOKSA hiç silme yapılmaz: hangi `.part`ın aktif indirmeye ait olduğu bilinemez ve
+/// yer kazanmak, süren bir güncellemeyi çöpe atmaktan daha az önemlidir (fail-safe).
 #[tauri::command]
-fn discard_pending() -> Result<(), String> {
+fn discard_pending(manifest_raw: Option<String>) -> Result<(), String> {
     let root = install::default_install_root(&home_dir());
     install::clear_pending(&root);
-    install::clear_partials(&root);
+    if let Some(m) = manifest_raw {
+        install::clear_partials(&root, &flow::plan_part_paths(&m, &root));
+    }
     Ok(())
 }
 

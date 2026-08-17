@@ -1004,12 +1004,26 @@ pub fn clear_pending(install_root: &Path) {
 }
 
 /// Cache'teki yarım `.part` dosyalarını sil (İPTAL'de çağrılır → disk boşalt).
-pub fn clear_partials(install_root: &Path) {
+///
+/// ⚠️ `koru`: silinMEYECEK `.part` dosyaları (DENETİM 2026-08-17). Cache PAYLAŞIMLIDIR — arka
+/// plandaki ön-indirme AYNI dizine yazar. Sahipliği okumadan hepsini silmek, o an inen ≤1,4 GB'lık
+/// güncellemeyi çöpe atıyordu ve kurtarılamıyordu (`disk::olu_onbellek_temizle` `.part`a dokunmaz;
+/// Windows'ta `FILE_SHARE_DELETE` ile açıldığı için silme BAŞARILI olur, sonraki `rename` düşer).
+/// Ölçülen sıra: `check_runtime_update` → `prefetch_runtime_update` → `discard_pending`, yani
+/// "Kurulum yarım kaldı" sorusu ön-indirme BAŞLADIKTAN HEMEN SONRA çıkıyor.
+/// Kural: "GÜNCEL PLANIN ihtiyaç duyduğu `.part` silinmez; gerisi silinir." Bu, sahipliği tahmin
+/// etmeden doğru ayrımı yapar — ön-indirme tam olarak plan paketlerini indirir ve kurulu OLMAYAN
+/// cihazda plan boştur, yani yarım kalan İLK kurulumun temizliği (asıl gerekçe) aynen korunur.
+pub fn clear_partials(install_root: &Path, koru: &[std::path::PathBuf]) {
     let cache = cache_dir(install_root);
     if let Ok(entries) = std::fs::read_dir(&cache) {
         for e in entries.flatten() {
-            if e.path().extension().is_some_and(|x| x == "part") {
-                let _ = std::fs::remove_file(e.path());
+            let yol = e.path();
+            // Yol biçimi farklarına (ayırıcı, UNC, kısa-ad) düşmemek için DOSYA ADI karşılaştırılır.
+            if yol.extension().is_some_and(|x| x == "part")
+                && !koru.iter().any(|k| k.file_name() == yol.file_name())
+            {
+                let _ = std::fs::remove_file(yol);
             }
         }
     }

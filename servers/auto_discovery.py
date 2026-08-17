@@ -23,6 +23,21 @@ _zeroconf_instance = None
 _mdns_service_info = None
 _mdns_port = 8000
 _mdns_device_name = "PEMF-Vet"
+#: `start_mdns` çağrıldı mı (`stop_mdns` sonrası False).
+#
+# ⚠️ NEDEN AYRI BİR BAYRAK (denetim 2026-08-17): `_reregister` eskiden `_mdns_service_info is None`
+# ise erken dönüyordu. O koşul İKİ ayrı durumu birbirine karıştırıyordu:
+#   (a) `start_mdns` hiç çağrılmadı / `stop_mdns` çağrıldı  → re-register YAPILMAMALI
+#   (b) `start_mdns` çağrıldı ama LAN IP yoktu, İLK kayıt ATLANDI → re-register TAM DA BURADA GEREKLİ
+# (b) durumunda `_pemfvet` süreç ömrü boyunca HİÇ yayınlanmıyordu; log ise "arayüz gelince
+# kaydolacak" diyordu (ölçüldü: `get_shared_zeroconf` hiç çağrılmadı). Kardeş yayıncı doğru
+# yapıyor: `services/mdns_service.py:219-236` ServiceInfo'yu SIFIRDAN kuruyor.
+#
+# ⚠️ Guard'ı TAMAMEN SİLMEK YANLIŞ OLURDU: `stop_mdns()` `_reregister_cbs`'ten callback'i SİLMİYOR
+# (`utils/zeroconf_singleton` kaldırma API'si sunmuyor), dolayısıyla guard kalkarsa bir arayüz
+# değişimi KASITLI OLARAK KALDIRILMIŞ servisi DİRİLTİR — kardeş dosya bunu açıkça yasaklıyor
+# (`mdns_service.py:222-223`, "Audit P3: stop() sonrası callback re-publish etmesin").
+_mdns_started = False
 
 
 def _build_info(local_ip: str, port: int, device_name: str):
@@ -47,7 +62,8 @@ def _reregister() -> None:
     auto_discovery'nin eskiden HİÇ olmayan IP-değişim yeniden-kaydını da kapatır. start_mdns
     çağrılmadıysa no-op."""
     global _zeroconf_instance, _mdns_service_info
-    if _mdns_service_info is None:
+    if not _mdns_started:
+        # `start_mdns` çağrılmadı ya da `stop_mdns` sonrası: kasıtlı-kaldırılan servisi CANLANDIRMA.
         return
     try:
         from utils.zeroconf_singleton import get_shared_zeroconf
@@ -69,13 +85,34 @@ def _reregister() -> None:
 
 
 def _get_local_ip() -> str:
-    """Makinenin yerel ağ IP adresini tespit eder."""
+    """Makinenin yerel ağ IP adresini tespit eder.
+
+    ⚠️ İKİ AŞAMALI (denetim 2026-08-17): UDP `connect` DEFAULT ROUTE gerektirir. Offline klinikte
+    ya da hotspot-only kurulumda (bkz. `scripts/start_hotspot.ps1`, `HOTSPOT_SUBNET`) default route
+    YOKTUR; eskiden burada kalıcı olarak `127.0.0.1` dönülüyor ve `_pemfvet` HİÇ yayınlanmıyordu.
+    Üstelik `zeroconf_singleton.ensure_interfaces_current` arayüz KÜMESİ değişmediği için
+    callback'leri hiç çağırmıyordu → re-register de kurtarmıyordu.
+    İkinci aşama, alt sistemin ZATEN kullandığı yolu kullanır: `ifaddr` gerçek arayüz adresini
+    ROTA OLMADAN da görür (`_bound_ips` böyle kuruluyor). Loopback'i YAYINLAMAMA kararı korunur —
+    aday bulunamazsa yine `127.0.0.1` dönülür ve çağıranların 127.* guard'ı kaydı atlar."""
+    ip = ""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+            ip = s.getsockname()[0]
     except Exception:
-        return "127.0.0.1"
+        ip = ""
+    if ip and not ip.startswith("127."):
+        return ip
+    try:
+        from utils.zeroconf_singleton import _real_lan_ipv4s
+
+        adaylar = _real_lan_ipv4s()
+        if adaylar:
+            return adaylar[0]
+    except Exception:
+        pass
+    return "127.0.0.1"
 
 
 def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
@@ -84,7 +121,7 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
     LattePanda'yı otomatik keşfedebilir.
     Servis tipi: _pemfvet._tcp.local.
     """
-    global _zeroconf_instance, _mdns_service_info, _mdns_port, _mdns_device_name
+    global _zeroconf_instance, _mdns_service_info, _mdns_port, _mdns_device_name, _mdns_started
     try:
         from utils.zeroconf_singleton import add_reregister_callback, get_shared_zeroconf
 
@@ -103,6 +140,7 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
         else:
             _zeroconf_instance = zc
             logger.info("mDNS ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip)
+        _mdns_started = True  # ⚠️ callback KAYDINDAN ÖNCE: kayıt anında tetiklenirse guard geçmeli
         add_reregister_callback(_reregister)  # arayüz/IP değişiminde yeni instance'a otomatik re-register
 
         logger.info("mDNS servisi başlatıldı: %s:%d (%s)", local_ip, port, device_name)
@@ -114,7 +152,8 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
 
 def stop_mdns() -> None:
     """mDNS servisini durdurur."""
-    global _zeroconf_instance, _mdns_service_info
+    global _zeroconf_instance, _mdns_service_info, _mdns_started
+    _mdns_started = False  # bundan sonra bir arayüz değişimi servisi DİRİLTMEZ
     if _zeroconf_instance and _mdns_service_info:
         try:
             _zeroconf_instance.unregister_service(

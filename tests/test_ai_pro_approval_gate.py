@@ -126,3 +126,62 @@ def test_red_gerekcesi_kayda_gecer(client):
     assert kayit["status"] == ap.REJECTED
     assert kayit["reason"] == "Lokalizasyon güvenilirliği düşük"
     assert kayit["operator"] == "dr@k.com"
+
+
+# ── SAHİPLİK: seansı BAŞLATAN istemci kimliği (denetim 2026-08-17) ────────────
+
+
+def _onayli_baslat(client, client_id: str = ""):
+    rec = ap.create("ai_pro", {"organ_id": 2, "duration_minutes": 20})
+    client.post("/api/ai/pro/approve", json={"proposal_id": rec["id"], "operator_email": "dr@k.com"})
+    govde = {"proposal_id": rec["id"]}
+    if client_id:
+        govde["client_id"] = client_id
+    return client.post("/api/ai/pro/start", json=govde)
+
+
+def test_KRITIK_status_seansi_BASLATAN_istemciyi_bildirir(client):
+    """`ownerClientId` olmadan istemci "bu seans benim mi" sorusunu yanıtlayamıyordu.
+
+    Kusur: AI Pro panelini yalnızca GÖRÜNTÜLEYEN ikinci istemci, sekmeden çıkınca unmount
+    cleanup'ında `/ai/pro/stop` gönderip BAŞKASININ süren otonom seansını (7 bobin) sebep
+    söylemeden kesiyordu."""
+    assert _onayli_baslat(client, "c1").status_code == 200
+
+    st = client.get("/api/ai/pro/status").json()
+    assert st.get("active") is True, st
+    assert st.get("ownerClientId") == "c1", f"sahiplik bildirilmiyor: {st}"
+
+
+def test_stop_SAHIPLIGI_temizler(client):
+    assert _onayli_baslat(client, "c1").status_code == 200
+    client.post("/api/ai/pro/stop")
+
+    st = client.get("/api/ai/pro/status").json()
+    assert st.get("active") is False
+    assert st.get("ownerClientId") == "", f"stop sonrasi sahiplik kaldi: {st}"
+
+
+def test_client_id_GONDERILMEZSE_alan_BOS_ama_VAR(client):
+    """⚠️ Alanın VARLIĞI istemci için anlamlı: yoksa (eski backend) panel ESKİ davranışı sürdürür.
+
+    Bu yüzden `client_id` göndermeyen eski bir istemcide alan BOŞ dönmeli ama SİLİNMEMELİ."""
+    assert _onayli_baslat(client).status_code == 200
+
+    st = client.get("/api/ai/pro/status").json()
+    assert "ownerClientId" in st, f"alan yanittan KAYBOLMUS: {st}"
+    assert st["ownerClientId"] == ""
+
+
+def test_client_id_KIRPILIR_ve_stop_HERKESE_ACIK_kalir(client):
+    """⚠️ `client_id` bir YETKİ belirteci DEĞİL: uydurulması kimseye yeni yetki vermez.
+
+    `/ai/pro/stop` gövdesiz ve herkese açık kalmalı — her istemcinin operatörü tedaviyi
+    durdurabilmeli. Ayrıca sınırsız uzunlukta bir kimlik saklanmaz (64 karakter kırpma)."""
+    assert _onayli_baslat(client, "x" * 200).status_code == 200
+    st = client.get("/api/ai/pro/status").json()
+    assert len(st["ownerClientId"]) == 64, f"kirpma yok: {len(st['ownerClientId'])}"
+
+    # BAŞKA bir istemci (kimlik göndermeden) durdurabilir.
+    assert client.post("/api/ai/pro/stop").status_code == 200
+    assert client.get("/api/ai/pro/status").json().get("active") is False

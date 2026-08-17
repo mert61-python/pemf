@@ -45,6 +45,18 @@ RUN groupadd -r pemfai && useradd -r -g pemfai -d /home/pemfai -m pemfai
 COPY --chown=pemfai:pemfai ai_hub/ ./ai_hub/
 COPY --chown=pemfai:pemfai ai_service/ ./ai_service/
 
+# ⚠️ MODALİTE + SESSİZLİK KAPILARI (DENETİM 2026-08-17). Bu uçlar auth-muaftır ve backend'i
+# atlayan bir istemci doğrudan çağırabilir. Kapı YALNIZ `servers/ai_router.py`de kalırsa bu
+# transportta HİÇ çalışmaz — ölçüldü: CT kesiti → /infer/histopath → 200 "Grade 4 %100".
+# Deponun kendi kuralı bunu yazıyor (`ai_hub/inference_petri_dish/plausibility.py`).
+# Bu satır SİLİNİRSE `ai_service/app.py`nin ÜST-DÜZEY import'u ImportError verir ve servis
+# AÇILMAZ → kapının sessizce kaybolması imkânsız (tests/test_ai_servis_8100_kapisi.py kilitliyor).
+# ⚠️ `utils/`ün TAMAMI DEĞİL, yalnız iki yaprak modül + paket başlatıcı: `secrets_manager`,
+# `backup_recovery`, `source_crypto` gibi sır/kripto kaynağı auth-muaf imaja GİRMESİN
+# (aşağıdaki saldırı-yüzeyi gerekçesiyle aynı çizgi). Üçüncü bir kapı modülü eklenirse bu satır
+# güncellenmeli — unutulursa açılışta ImportError, sessiz kayıp değil.
+COPY --chown=pemfai:pemfai utils/__init__.py utils/image_domain.py utils/ses_kalitesi.py ./utils/
+
 # ⚠️ DENETİM 2026-08-04: bu imaj ROOT olarak koşuyordu — kardeşi Dockerfile.backend'de
 # `USER pemf` varken burada hiç USER yoktu. Servis `/infer/...` uçlarında AUTH'suz olarak
 # kullanıcı yüklemesi (görüntü/ses) işler; bu yol ffmpeg, libsndfile, opencv, pillow ve

@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import logging
+import math as _math
 import os
 import sys
 
@@ -496,6 +497,16 @@ async def analyze_landmark(
 
 # ── AI Pro durumu (modül seviyesi) ──
 _ai_loop_active = False
+#: Otonom seansı BAŞLATAN istemcinin kimliği.
+#
+# ⚠️ DENETİM 2026-08-17: yalnız "durdurma yetkisini BASTIRMAK" için var, ASLA yetkilendirmek için
+# DEĞİL. `/ai/pro/stop` gövdesiz ve herkese açık kalmaya devam ediyor (her istemcinin operatörü
+# tedaviyi durdurabilmeli); uydurma bir `client_id` kimseye YENİ yetki vermez. Sorun tersiydi:
+# AI Pro panelini yalnızca GÖRÜNTÜLEYEN ikinci istemci, sekmeden çıkınca unmount cleanup'ında
+# `/ai/pro/stop` gönderip BAŞKASININ süren otonom seansını (7 bobin) sebep söylemeden kesiyordu.
+# ⚠️ MÜHÜR İHLALİ DEĞİL: `client_id` bir TEDAVİ PARAMETRESİ değil; onaylanan D/P/organ/süre yine
+# mühürlü kopyadan okunuyor.
+_ai_owner_client = ""
 import threading as _ai_threading
 
 # TOCTOU koruma: start/stop check-and-set atomik olsun → iki es-zamanli /ai/pro/start ikinci bir
@@ -1028,6 +1039,9 @@ class AiProStartPayload(BaseModel):
     # SERT KAPI (2026-08-06 sahip kararı): onaylanmış öneri kimliği ZORUNLU.
     # Boş bırakılırsa istek 428 ile reddedilir — otonom tedavi hekim onayı olmadan başlamaz.
     proposal_id: str = ""
+    #: Bu isteği yapan istemcinin kalıcı kimliği (bkz. `_ai_owner_client`). Boş bırakılabilir:
+    #: eski istemcilerde davranış DEĞİŞMEZ (sahiplik bilinmez → panel eski kuralı uygular).
+    client_id: str = ""
 
 
 class AiProProposePayload(BaseModel):
@@ -1161,6 +1175,7 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
 @ai_router.post("/api/ai/pro/start")
 def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize
+    global _ai_owner_client
     # Güncelleme uygulanıyorken otonom AI Pro tedavisi BAŞLATMA: installer servisi durdurup
     # EXE'yi değiştirebilir → bobinler kontrolcüsüz kalır (update TOCTOU guard'ının ters yönü).
     try:
@@ -1191,6 +1206,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         if _ai_loop_active:
             return {"status": "success", "message": "Already running"}
         _ai_loop_active = True
+        # Sahiplik kilidin İÇİNDE yazılır: iki eş-zamanlı start'ta kazanan ile sahip AYNI olur.
+        _ai_owner_client = str(payload.client_id or "")[:64]
 
     # Audit P2: em_kedi yalnız organ 0-6'yı TEDAVİ eder; 7-10 (Kalp/Dalak/Akciğer) cat_organ ile
     # lokalize olur ama _build_input ValueError→D=P=0 (sessiz sıfır-tedavi) YİNE 'aktif+lokalize·Kalp'
@@ -1240,9 +1257,10 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
 
 @ai_router.post("/api/ai/pro/stop")
 def stop_ai_pro():
-    global _ai_loop_active
+    global _ai_loop_active, _ai_owner_client
     with _ai_loop_lock:
         _ai_loop_active = False
+        _ai_owner_client = ""
 
     # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-8 (Audit P1 #3). Eskiden yalnız
     # stop_all_coils (STM) çağrılıyordu; kamerasız/mobil yolda loop-cleanup çalışmadığı için
@@ -1304,6 +1322,8 @@ def ai_pro_status():
         "remainingSec": remaining,
         "localized": bool(_ai_organ_cache.get("localized")),
         "reliability": round(float(_ai_organ_cache.get("reliability", 0.0)), 3),
+        # ⚠️ Alanın VARLIĞI istemci için anlamlı: yoksa (eski backend) panel ESKİ davranışı sürdürür.
+        "ownerClientId": _ai_owner_client,
     }
 
 
@@ -1976,8 +1996,6 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
     tmp_in = None
     tmp_wav = None
     try:
-        if ai_service_enabled():
-            return await delegate_infer("sound", file=file, audio_base64=audio_base64)
         if audio_base64:
             content = base64.b64decode(audio_base64)
         elif file:
@@ -2071,6 +2089,19 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
                 ),
             )
 
+        # ⚠️ KAPI-SONRA-DEVRET — görüntü uçlarındaki `_kapili_devret` ile AYNI düzen.
+        # Bu satırlar ESKİDEN fonksiyonun İLK satırıydı; `PEMF_AI_SERVICE_URL` tanımlıyken sessizlik
+        # kapısına HİÇ varılmıyordu → sessiz/boş bir kayıt için :8100'den gelen "duygu" sonucu aynen
+        # istemciye dönüyordu (kapının var olma sebebi olan 2026-08-15 saha vakası).
+        # Kapı ZORUNLU olarak transcode'dan sonra: `utils/ses_kalitesi.wav_rms_dbfs` WAV'ı `wave`
+        # ile okur, mp3/m4a'da RIFF hatası verir. Bu yüzden devretme de kapıdan SONRA olmak zorunda.
+        # ⚠️ `file` tükendi (yukarıda okundu) → baytlar ELDE, base64 ile geçilir; `file=file`
+        # bırakmak BOŞ gövde gönderirdi (bu yamanın en olası hatası, testle kilitli).
+        # ÖLÇÜLDÜ: ffmpeg 27-31 ms + RMS 2-9 ms. WAV göndermek 2. transcode'dan ~0-3 ms kazandırır
+        # ama yükü ~3,5× şişirir → HAM bayt gönderilir, tel formatı DEĞİŞMEZ.
+        if ai_service_enabled():
+            return await delegate_infer("sound", audio_base64=base64.b64encode(content).decode("ascii"))
+
         # Kayit analiz edilebilir -> ANCAK SIMDI modeli yukle.
         clf = await asyncio.to_thread(_get_or_load_model, "cat_sound", _load_cat_sound)
         result = await asyncio.to_thread(lambda: clf.predict(tmp_wav, top_k=3))
@@ -2088,7 +2119,10 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             "probabilities": result["probabilities"],
             "guvenilir": ses_guvenilir_mi(_probs),
             "belirsizlik": round(_entropi, 3),
-            "rms_dbfs": None if _rms is None else round(_rms, 1),
+            # ⚠️ `-inf`/`nan` JSON'a yazılamaz (`round` onları AYNEN geçirir) → yanıt 500'e
+            # düşerdi. `-inf` sessizlik kapısında zaten elenir ama `nan` eşik karşılaştırmasını
+            # False geçer; burada sonluluk kontrolü son savunmadır.
+            "rms_dbfs": None if _rms is None or not _math.isfinite(_rms) else round(_rms, 1),
         }
     except Exception as e:
         logger.error(f"cat_sound inference error: {e}", exc_info=True)

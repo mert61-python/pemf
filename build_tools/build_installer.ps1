@@ -333,6 +333,18 @@ $FrontendVersionJson = @{
 Set-Content -Path (Join-Path $FrontendDir "dist\version.json") -Value $FrontendVersionJson -Encoding UTF8
 Write-OK "React web export basariyla tamamlandi ve dogrulandi."
 
+# ⚠️ DELEGE ONKOSULU (DENETIM 2026-08-17): build_backend_exe.ps1 -SkipWeb kanonik
+# frontend\dist\index.html'e bakiyor. Kanonik kaynak `pf` oldugu icin aynalama "kaynak == hedef"
+# ise ATLANIR (bulgu 14 duzeltmesi) -> o dosya olmayabilir. Delegeden ONCE garanti et.
+# Bu, build_backend_exe.ps1'in her web export'ta zaten yaptigi aynalamanin AYNISI; `frontend\`
+# yalniz dist AYNASI kalir, IKINCI BIR KAYNAK (package.json vb.) YARATILMAZ.
+$KanonikDist = Join-Path $ProjectRoot "frontend\dist"
+if (-not (Test-Path (Join-Path $KanonikDist "index.html"))) {
+    Write-Host "  frontend\dist yok -> pf\dist'ten aynalaniyor (delege onkosulu)" -ForegroundColor DarkGray
+    New-Item -ItemType Directory -Path (Split-Path $KanonikDist -Parent) -Force | Out-Null
+    Copy-Item (Join-Path $ProjectRoot "pf\dist") $KanonikDist -Recurse -Force
+}
+
 # --- Adim 4.6: DEMA Terapi Simulatoru Build ---
 Write-Step "DEMA Terapi Simulatoru Build"
 
@@ -367,42 +379,44 @@ if (-not (Test-Path $DemaIndex)) {
 }
 Write-OK "DEMA Terapi Simulatoru build edildi ve dogrulandi."
 
-# --- Adim 5: PyInstaller OneDir Build ---
-Write-Step "PyInstaller OneDir Build Baslatiliyor"
-Write-Host "  Bu islem 5-15 dakika surebilir..." -ForegroundColor DarkGray
+# --- Adim 5: KORUMALI Backend Build (delege) ---
+# === PEMF-BACKEND-BUILD-BASI ===
+# ⚠️ DENETIM 2026-08-17: burada eskiden BU BETIK KENDI PyInstaller'ini kosuyor ve
+# `build_backend_exe.ps1:193-216`'daki KOD KORUMA adimini (compile_pyd.py / encrypt_sources.py)
+# HIC calistirmiyordu. Olculdu, ikisi de VERSION=1.9.15:
+#     dist/PEMF_Backend/_internal/ai_hub        -> 62 .py / 0 .pyd   <- Inno bunu paketliyordu
+#     PEMF_BUILD/dist/PEMF_Backend/.../ai_hub   -> 49 .pyd / 13 .py  <- base.zip kaynagi
+# Yani ayni surum numarasi altinda IKI FARKLI yazilim dagitiliyordu ve installer kanali
+# KORUMASIZ kaynak sevk ediyordu. Deponun kendi ilkesi: "onefile da olsa onedir de olsa client
+# de olsa pyd olmali; koruma prosedurel degil YAPISAL olur" (make_base_zip.py + build_backend_exe.ps1).
+# ⚠️ ONEFILE'A GECILMEDI (olculup REDDEDILDI) — delege ayni onedir spec'ini kullanir.
+# ⚠️ `-SkipProtect` ASLA gecilmez. `-SkipWeb` gecilir cunku web export Adim 4'te ZATEN yapildi.
+# Yan kazanc: installer yolu artik `check_headless_imports.py` Qt-sizinti guard'indan da geciyor.
+Write-Step "KORUMALI Backend Build (build_backend_exe.ps1'e delege)"
+Write-Host "  Bu islem 5-15 dakika surebilir (+ ~2 dk kod korumasi)..." -ForegroundColor DarkGray
 
-$SpecFile = Join-Path $ScriptDir "PEMF_Backend_onedir.spec"
-if (-not (Test-Path $SpecFile)) {
-    Write-Fail "Spec dosyasi bulunamadi: $SpecFile"
+$BackendScript    = Join-Path $ProjectRoot "scripts\build_backend_exe.ps1"
+$BackendBuildRoot = Join-Path $ProjectRoot "PEMF_BUILD"
+if (-not (Test-Path $BackendScript)) {
+    Write-Fail "build_backend_exe.ps1 bulunamadi: $BackendScript"
 }
 
 $startTime = Get-Date
-
-# KRITIK: spec project_path'i os.getcwd()'den turetir (basename 'build_tools' ise parent=guii, degilse cwd).
-# build_installer artik herhangi bir dizinden calisabildigi icin CWD'yi $ProjectRoot (guii) yap ->
-# spec her zaman project_path=guii cozer (yoksa backend_service.py 'not found' + Surum 0.0.0 olur).
-Push-Location $ProjectRoot
-try {
-    & $PythonExe -m PyInstaller `
-        --distpath (Join-Path $ProjectRoot "dist") `
-        --workpath (Join-Path $ProjectRoot "build") `
-        --noconfirm `
-        $SpecFile
-} finally {
-    Pop-Location
-}
-
+& $BackendScript -Python $PythonExe -BuildRoot $BackendBuildRoot -SkipWeb
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "PyInstaller build basarisiz! (Exit code: $LASTEXITCODE)"
+    Write-Fail "Backend build basarisiz (build_backend_exe.ps1). (Exit code: $LASTEXITCODE)"
 }
-
 $elapsed = (Get-Date) - $startTime
-Write-OK "PyInstaller tamamlandi ($([int]$elapsed.TotalSeconds) saniye)"
+Write-OK "Korumali backend build tamamlandi ($([int]$elapsed.TotalSeconds) saniye)"
+
+# ⚠️ Sevk agaci ARTIK korumali agac. Adim 6.5 sizinti kapilari da ($OutputDir'i tarayanlar)
+# bu agaca bakar -> guvenlik kapilari SEVK EDILEN agac uzerinde calismaya devam eder.
+$OutputDir = Join-Path $BackendBuildRoot "dist\PEMF_Backend"
+# === PEMF-BACKEND-BUILD-SONU ===
 
 # --- Adim 6: Build Ciktisini Dogrula ---
-Write-Step "Build Ciktisi Dogrulanıyor"
+Write-Step "Build Ciktisi Dogrulaniyor"
 
-$OutputDir = Join-Path $ProjectRoot "dist\PEMF_Backend"
 $OutputExe = Join-Path $OutputDir "PEMF_Backend.exe"
 
 if (-not (Test-Path $OutputDir)) {
@@ -552,8 +566,31 @@ if (-not $SkipInnoSetup) {
     }
 
     $startTime2 = Get-Date
-    Write-Host "  ISCC modu: $Mode (ModeName=$Mode)" -ForegroundColor DarkGray
-    & $IsccExe "/DModeName=$Mode" $IssFile
+    # === PEMF-KORUMA-KAPISI-BASI ===
+    # ⚠️ 4. KORUMA KAPISI (DENETIM 2026-08-17). Olcut `make_base_zip.py`nin kapisiyla AYNI:
+    # `__init__.py` DISINDA duz .py kalmissa DUR. Kapi ZORUNLU cunku
+    # `build_backend_exe.ps1:198-200` MSVC yoksa yalnizca UYARIR ve korumasiz agac birakir;
+    # Inno yolunda `make_base_zip` gibi bir downstream kapi YOKTUR.
+    # ⚠️ `.pyenc` (sifreleme yedek katmani) MESRUDUR -> olcut ".pyd VAR mi" DEGIL, "duz .py YOK mu".
+    $AiHubDir = Join-Path $OutputDir "_internal\ai_hub"
+    if (-not (Test-Path $AiHubDir)) {
+        Write-Fail "ai_hub sevk agacinda YOK: $AiHubDir (duz .py yok cunku ai_hub yok -> sessiz gecmez)"
+    }
+    $KorumasizPy = @(Get-ChildItem $AiHubDir -Recurse -File -Filter *.py -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -ne "__init__.py" })
+    if ($KorumasizPy.Count -gt 0) {
+        foreach ($f in ($KorumasizPy | Select-Object -First 10)) {
+            Write-Host "  KORUMASIZ: $($f.FullName)" -ForegroundColor Red
+        }
+        Write-Fail "$($KorumasizPy.Count) korumasiz ai_hub .py -> installer URETILMEDI (compile_pyd.py / encrypt_sources.py kosmali)."
+    }
+    Write-OK "ai_hub KORUMALI (duz .py yok)."
+
+    # ⚠️ `/DBuildOutput` ZORUNLU: verilmezse `.iss` kendi varsayilanini kullanir ve BASKA bir agac
+    # paketlenir (bulgunun kendisi buydu).
+    Write-Host "  ISCC modu: $Mode (ModeName=$Mode), BuildOutput=$OutputDir" -ForegroundColor DarkGray
+    & $IsccExe "/DModeName=$Mode" "/DBuildOutput=$OutputDir" $IssFile
+    # === PEMF-KORUMA-KAPISI-SONU ===
 
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Inno Setup basarisiz! (Exit code: $LASTEXITCODE)"

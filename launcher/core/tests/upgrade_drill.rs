@@ -495,3 +495,111 @@ fn onbellek_yolu_AGA_CIKMADAN_calisiyor() {
 /// Yardımcı: derleyici uyarısını sustur (PathBuf yalnız imzalarda kullanılıyor).
 #[allow(dead_code)]
 fn _tip_kullanimi(_p: PathBuf) {}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+// TATBİKAT 4 — takastan SONRA profil adımında İPTAL → geri alma ÇAĞRILMALI
+// (denetim 2026-08-17, bulgu 19). Bu dal HİÇBİR testte koşmuyordu: yukarıdaki
+// `manifest()` `"models": {}` kullanıyor, yani plana profil HİÇ girmiyordu.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// `manifest()`in profil TAŞIYAN sürümü.
+///
+/// ⚠️ Mevcut `manifest()`in `"models": {}` olması bu bulgunun KÖR NOKTASIYDI: profil adımı
+/// planda hiç yer almadığı için takas-sonrası erken çıkış dalı hiçbir tatbikatta yürütülmedi.
+fn manifest_modelli(deps: &Paket, app: &Paket, profil: (&str, &Paket)) -> String {
+    format!(
+        r#"{{ "schema": 2, "version": "9.9.9",
+              "layers": {{ "{}": {{ "deps": {}, "app": {} }} }},
+              "models": {{ "{}": {} }} }}"#,
+        platform::current(),
+        deps.json(),
+        app.json(),
+        profil.0,
+        profil.1.json()
+    )
+}
+
+#[test]
+#[allow(non_snake_case)]
+fn KRITIK_profil_adiminda_IPTAL_v1e_GERI_DONER() {
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    v1_kur(kok);
+    let v1_izi = agac_parmak_izi(&install::runtime_dir(kok));
+
+    // v2 katmanları + bir profil paketi.
+    let deps2 = Paket::yeni(zip_uret(&deps_agaci("v2")), "base-deps.zip");
+    let app2 = Paket::yeni(zip_uret(&app_agaci("v2", 8, true)), "base-app.zip");
+    let mut model = std::collections::BTreeMap::new();
+    model.insert(
+        "ai_models/ai_hub/em_kedi/x.onnx".to_string(),
+        b"ONNX-v2".to_vec(),
+    );
+    let vet = Paket::yeni(zip_uret(&model), "vet.zip");
+    deps2.onbellege_koy(kok, "deps");
+    app2.onbellege_koy(kok, "app");
+    vet.onbellege_koy(kok, "vet");
+
+    // Profilin PLANA girmesi için iki ön koşul: kurulu olmalı VE bir sha kaydı olmalı.
+    install::add_installed_profiles(kok, &["vet".to_string()]);
+    install::record_model_sha(kok, "vet", &"0".repeat(64));
+
+    let m2 = manifest_modelli(&deps2, &app2, ("vet", &vet));
+
+    // ⚠️ ÖN KOŞUL KAPISI: plan boşsa test hiçbir şeyi ölçmemiş olur (yanlış-yeşil).
+    let plan = flow::pending_updates(&m2, kok).unwrap();
+    assert!(plan.deps && plan.app, "katman guncellemesi planlanmadi: {plan:?}");
+    assert_eq!(plan.profiles, vec!["vet".to_string()], "profil plana girmedi: {plan:?}");
+
+    // İptali TAM profil adımında tetikle + o anda canlı ağacın sürümünü OKU.
+    let iptal = std::sync::atomic::AtomicBool::new(false);
+    let gorulen = std::sync::Mutex::new(None::<String>);
+    let mut on = |p: flow::Progress| {
+        if let flow::Progress::Extracting { what } = &p {
+            if what == "vet" {
+                // ⚠️ YANLIŞ-YEŞİL KAPISI: testin GERÇEKTEN takas sonrası dala girdiğini kanıtlar.
+                // Disk kapısı / ensure_package / app extract'ında düşen bir koşuda bu None kalır.
+                let v = install::runtime_dir(kok)
+                    .join("PEMF_Backend/_internal/VERSION");
+                *gorulen.lock().unwrap() = fs::read_to_string(v).ok();
+                iptal.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    };
+    let control = || {
+        if iptal.load(std::sync::atomic::Ordering::SeqCst) {
+            pemf_launcher_core::net::Control::Cancel
+        } else {
+            pemf_launcher_core::net::Control::Continue
+        }
+    };
+
+    let sonuc = flow::update_installed(&m2, kok, &mut on, &control);
+
+    assert!(sonuc.is_err(), "iptal edilmis guncelleme BASARILI dondu: {sonuc:?}");
+    assert_eq!(
+        gorulen.lock().unwrap().as_deref().map(str::trim),
+        Some("v2"),
+        "profil adimina TAKAS SONRASI girilmedi → test yanlis dali olcuyor"
+    );
+
+    assert_eq!(
+        agac_parmak_izi(&install::runtime_dir(kok)),
+        v1_izi,
+        "profil adiminda iptal sonrasi canli agac v1'e DONMEDI → dogrulanmamis surum saglik kapisi \
+         ATLANARAK canlida kaldi (start_backend hic kosmadi) ve runtime.old bir sonraki turda \
+         atomik_takas tarafindan TUKETILIR"
+    );
+    assert!(
+        !install::runtime_old_dir(kok).exists(),
+        "runtime.old temizlenmedi (~1,5 GB diskte kaldi)"
+    );
+
+    // ⚠️ KASITLI FAIL-SAFE: geri alınan güncelleme KAYIT BIRAKMAZ.
+    assert_ne!(
+        install::read_installed_packages(kok).deps,
+        deps2.sha,
+        "geri alinan guncelleme kayit YAZDI (kasitli fail-safe bozuldu)"
+    );
+}

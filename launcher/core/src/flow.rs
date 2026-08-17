@@ -115,6 +115,25 @@ pub fn paket_onbellekte_hazir(pkg: &crate::Package, cache: &Path, label: &str) -
     pkg.size > 0 && fs::metadata(&p).map(|m| m.len() == pkg.size).unwrap_or(false)
 }
 
+/// Bekleyen güncelleme planının `.part` yolları = İPTAL temizliğinin KORUMA listesi.
+///
+/// `prefetch_updates` TAM OLARAK bu paketleri indirir, dolayısıyla bu liste "o an inen dosyalar"a
+/// eşittir. Manifest/plan okunamazsa BOŞ döner (fail-safe: hiçbir şey korunmaz DEĞİL — çağıran
+/// manifest yokken temizliği hiç yapmaz).
+pub fn plan_part_paths(manifest_raw: &str, install_root: &Path) -> Vec<PathBuf> {
+    let (Ok(plan), Ok(manifest)) = (
+        pending_updates(manifest_raw, install_root),
+        Manifest::parse(manifest_raw),
+    ) else {
+        return Vec::new();
+    };
+    let cache = install::cache_dir(install_root);
+    plan_paketleri(&manifest, &plan)
+        .into_iter()
+        .map(|(p, etiket)| net::part_path(&cache_path_for(p, &cache, &etiket), &p.sha256))
+        .collect()
+}
+
 pub fn ensure_package(
     pkg: &crate::Package,
     cache: &Path,
@@ -1033,17 +1052,52 @@ pub fn update_installed(
         };
     }
 
+    // ⚠️ TAKAS ZATEN YAPILDI (yukarıda). `GeriAlmaBilgisi` sözleşmesi uyarınca bu noktadan `?` ile
+    // ÇIKMAK YASAK: çağıran (`launcher/app/src/main.rs`, İptal/Err kolları) `geri`yi HİÇ görmez →
+    //   1. doğrulanmamış sürüm sağlık kapısı (`start_backend`) KOŞMADAN canlıda kalır; UI
+    //      `s-ready` der, kullanıcı "Başlat"a basar,
+    //   2. `runtime.old` bir SONRAKİ turda `atomik_takas` tarafından TÜKETİLİR (ilk iş olarak
+    //      `remove_dir_all` ediyor) → son-bilinen-çalışan sürüm yok olur.
+    // Tetikleyici: kurulu cihaz + `plan.cached` + planda HEM katman HEM en az bir profil + profil
+    // adımında iptal/IO hatası (kilitli model dosyası, AV karantinası). Tasarım "indirmeler
+    // takastan önce biter" varsayıyordu; aynı turda PROFİL paketi olabileceği hesaplanmamıştı.
+    // ⚠️ KAYIT YAZILMAZ — `installed_packages.json`ın "bilinmiyor"da kalması KASITLI fail-safe
+    // (bkz. BUILD.md ve `upgrade_drill.rs::geri_alinan_guncelleme_KAYIT_birakmaz`). Eksik olan
+    // şey kayıt değil, `guncellemeyi_geri_al` ÇAĞRISIydı.
+    if let Err(e) = profilleri_yenile(&manifest, &plan, install_root, &cache, &mut extract_budget, on, control) {
+        if geri.bir_sey_yapildi() {
+            let _ = guncellemeyi_geri_al(install_root, &geri);
+        }
+        return Err(e);
+    }
+    Ok(geri)
+}
+
+/// Profil (model) paketlerini yenile.
+///
+/// ⚠️ AYRI FONKSİYON OLMASI KASITLI: `?` ile erken çıkışın çağıran taraftaki GERİ ALMA'yı
+/// atlamasını yapısal olarak engeller (çağırana `Result` döner, o da geri alır).
+#[allow(clippy::too_many_arguments)]
+fn profilleri_yenile(
+    manifest: &Manifest,
+    plan: &UpdatePlan,
+    install_root: &Path,
+    cache: &Path,
+    butce: &mut u64,
+    on: &mut dyn FnMut(Progress),
+    control: &dyn Fn() -> net::Control,
+) -> Result<(), FlowError> {
     for name in &plan.profiles {
         let pkg = manifest.model_package(name)?;
-        let model_zip = ensure_package(pkg, &cache, name, on, control)?;
+        let model_zip = ensure_package(pkg, cache, name, on, control)?;
         on(Progress::Extracting { what: name.clone() });
         install::record_model_sha(install_root, name, "");
-        extract::extract_zip_cancellable(&model_zip, install_root, &mut extract_budget, true, &|| {
+        extract::extract_zip_cancellable(&model_zip, install_root, butce, true, &|| {
             control() == net::Control::Cancel
         })?;
         install::record_model_sha(install_root, name, &pkg.sha256);
     }
-    Ok(geri)
+    Ok(())
 }
 
 /// Kurulu backend'i başlat (İNDİRME YOK). Hem ilk kurulum sonrası hem "Başlat" bunu kullanır.

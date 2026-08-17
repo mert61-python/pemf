@@ -193,22 +193,41 @@ def _ic_zip_belirlenimci(yol):
 
 
 def _yaz(out, items, extra=None):
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_STORED, allowZip64=True) as z:
-        for full, arc in sorted(items, key=lambda x: x[1]):  # sira da belirlenimci olmali
-            zi = zipfile.ZipInfo(arc, date_time=SABIT_TARIH)
-            zi.compress_type = zipfile.ZIP_STORED
-            zi.external_attr = 0o644 << 16
-            if os.path.basename(arc) in _IC_ZIPLER:
-                z.writestr(zi, _ic_zip_belirlenimci(full))
-                continue
-            with open(full, 'rb') as src, z.open(zi, 'w', force_zip64=True) as dst:
-                shutil.copyfileobj(src, dst, 1 << 20)
-        if extra:
-            for arc in sorted(extra):
-                zi = zipfile.ZipInfo(arc, date_time=SABIT_TARIH)
-                zi.compress_type = zipfile.ZIP_STORED
-                zi.external_attr = 0o644 << 16
-                z.writestr(zi, extra[arc])
+    # ⚠️ ATOMIK YAZIM (DENETIM 2026-08-17, bulgu 15'in yan bulgusu): yarim kalan bir kosu ONCEKI
+    # GECERLI zip'i BOZMAMALI. Eskiden hedef dogrudan 'w' ile acilip KIRPILIYORDU; yazim ortasinda
+    # bir hata olusursa (bozuk ic-zip, disk dolmasi, Ctrl-C) zipfile'in __exit__'i merkezi dizini
+    # YAZDIGI icin diskte "GECERLI ama EKSIK" bir arsiv kaliyordu — olculdu: testzip() -> None.
+    # scripts/make_manifest.py o dosyayi yalnizca [UYARI] ile gecip sha'sini MUHURLER ve EXIT=0
+    # verir, yani taze bir kurulum acilma asamasinda duser.
+    # Cozum: .tmp'ye yaz + fsync + os.replace (ayni dizin/birim -> atomik yer degistirme).
+    # ⚠️ '.tmp' UZANTISI BILEREK: make_manifest.py sabit ad tablosu kullanir ve
+    # `gh release upload ... *.zip` joker'i bu adi GORMEZ. Uzantiyi '.new.zip' gibi bir seye
+    # cevirmek yarim dosyayi yayina sokabilirdi (testle kilitli).
+    gecici = str(out) + '.tmp'
+    try:
+        with open(gecici, 'wb') as fh:
+            with zipfile.ZipFile(fh, 'w', zipfile.ZIP_STORED, allowZip64=True) as z:
+                for full, arc in sorted(items, key=lambda x: x[1]):  # sira da belirlenimci olmali
+                    zi = zipfile.ZipInfo(arc, date_time=SABIT_TARIH)
+                    zi.compress_type = zipfile.ZIP_STORED
+                    zi.external_attr = 0o644 << 16
+                    if os.path.basename(arc) in _IC_ZIPLER:
+                        z.writestr(zi, _ic_zip_belirlenimci(full))
+                        continue
+                    with open(full, 'rb') as src, z.open(zi, 'w', force_zip64=True) as dst:
+                        shutil.copyfileobj(src, dst, 1 << 20)
+                if extra:
+                    for arc in sorted(extra):
+                        zi = zipfile.ZipInfo(arc, date_time=SABIT_TARIH)
+                        zi.compress_type = zipfile.ZIP_STORED
+                        zi.external_attr = 0o644 << 16
+                        z.writestr(zi, extra[arc])
+            fh.flush()
+            os.fsync(fh.fileno())  # elektrik kesintisinde rename'den ONCE veri diskte olsun
+        os.replace(gecici, out)
+    finally:
+        if os.path.exists(gecici):
+            os.remove(gecici)  # basarisiz kosudan artik birakma (git status temiz kalir)
     size = os.path.getsize(out)
     h = hashlib.sha256()
     with open(out, 'rb') as fp:

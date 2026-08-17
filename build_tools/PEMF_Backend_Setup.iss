@@ -23,7 +23,12 @@
 ;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" PEMF_Backend_Setup.iss            (device)
 ;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" "/DModeName=server" ...           (server)
 #ifndef BuildOutput
-  #define BuildOutput  "..\dist\PEMF_Backend"
+  ; ⚠️ DENETIM 2026-08-17: varsayilan ESKIDEN "..\dist\PEMF_Backend" idi — yani KORUMASIZ
+  ; PyInstaller cikti agaci (olculdu: 62 duz .py / 0 .pyd). `build_installer.ps1` ISCC'yi
+  ; /DBuildOutput VERMEDEN cagirdigi icin installer o agaci paketliyordu: ayni surum numarasi
+  ; altinda IKI FARKLI yazilim. Varsayilan artik KORUMALI agac; boylece ciplak `iscc` ve
+  ; Inno IDE Build yollari da dogru agaci hedefler. /D ile override YETENEGI korunuyor.
+  #define BuildOutput  "..\PEMF_BUILD\dist\PEMF_Backend"
 #endif
 #ifndef ModeName
   #define ModeName     "device"

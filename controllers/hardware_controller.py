@@ -209,8 +209,37 @@ class HardwareController:
 
     def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30):
         """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
+        # DENETIM P2 (kismi uygulama) — update_coil:144-169'daki AYNI desen, gerekcesi orada.
+        # Buraya TASINMAMISTI (git kaniti: 1413235 tek hunk, yalniz update_coil bolgesi).
+        # normalize_* cagrilari dongu icinde, state'e YAZARKEN calisiyordu. duty TEK skalerdir
+        # ve 5 bobinde paylasilir → duty_percent_to_ratio'nun float(percent)'i (clamp_float'in
+        # try'i DISINDA, stm32_protocol_limits.py:45) sayisal-olmayan girdide HER ZAMAN i=1'de
+        # patlar: bobin 1 is_running=True + YENI freq alir, bobin 2-5 dokunulmaz, HICBIR bobinin
+        # deadline'i yazilmaz. Bobin 1 BOSTA ise _coil_deadline[1] None kalir → _tick onu ASLA
+        # sure-asimina dusuremez (bkz. :103 `is not None` kosulu) → SURESIZ "calisiyor" gostergesi
+        # + sonsuz keep-alive (olculdu: 50 tick → 50 paket, is_running hala True).
+        # ⚠️ Bu bir freq/duty GUVENLIK-LIMITI DEGIL — onlar sahip karariyla kaldirildi ve GERI
+        # EKLENMEZ (bkz. :30-31 ve stm32_protocol_limits.py:12-14). Burada YALNIZ yazma
+        # ATOMIKLIGI saglanir: BASARILI cagri 5 bobini de istenen freq/duty'ye almaya devam eder.
+        try:
+            _dur_min = normalize_duration_minutes(duration)
+            _freq = normalize_frequency_hz(freq)
+            # duty birimi her zaman yüzde kabul edilir; ust limit firmware/timer tarafinda saturate olur.
+            _duty = duty_percent_to_ratio(duty)
+            _phase = normalize_phase_deg(phase)
+        except Exception:
+            self.logger.exception(
+                "start_all_coils parametre normalizasyonu basarisiz (freq=%r duty=%r phase=%r dur=%r) "
+                "→ HICBIR bobin durumu DEGISTIRILMEDI.",
+                freq,
+                duty,
+                phase,
+                duration,
+            )
+            return False
+
         with self._state_lock:
-            dur_min = normalize_duration_minutes(duration)
+            dur_min = _dur_min
             # Audit P2: dur_min<=0'da kapaksiz kalmasin. ⚠️ Kapak PROTOKOL TAVANI DEGIL, klinik
             # varsayilan (bkz. GOZETIMSIZ_VARSAYILAN_DAKIKA ve update_coil'deki gerekce). TUM
             # bobinleri ayni anda surdugu icin burada kapaksizlik daha da agir sonuc dogururdu.
@@ -218,9 +247,9 @@ class HardwareController:
             deadline = time.monotonic() + _dl_min * 60
             for i in range(1, 6):
                 self.coils_state[i]["is_running"] = True
-                self.coils_state[i]["freq"] = normalize_frequency_hz(freq)
-                self.coils_state[i]["duty"] = duty_percent_to_ratio(duty)
-                self.coils_state[i]["phase"] = normalize_phase_deg(phase)
+                self.coils_state[i]["freq"] = _freq
+                self.coils_state[i]["duty"] = _duty
+                self.coils_state[i]["phase"] = _phase
                 self.coils_state[i]["duration"] = dur_min
                 self._coil_deadline[i] = deadline
 
