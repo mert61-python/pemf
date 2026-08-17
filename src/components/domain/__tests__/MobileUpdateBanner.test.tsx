@@ -43,6 +43,7 @@ import {
   guncellemeyiAtla,
   kurulumuBaslat,
   _atlamayiSifirla,
+  _indirmeyiSifirla,
   type MobilSurum,
 } from "@/services/mobileUpdate";
 
@@ -61,11 +62,12 @@ const SURUM: MobilSurum = {
 beforeEach(() => {
   jest.clearAllMocks();
   _atlamayiSifirla();
+  _indirmeyiSifirla();
   delete mockSnapshot.activeTreatment;
   (Platform as { OS: string }).OS = "android";
   mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
   mockIndir.mockResolvedValue({ ok: true, dosyaUri: "file:///cache/x.apk" });
-  mockKur.mockResolvedValue(true);
+  mockKur.mockResolvedValue("acildi");
 });
 
 it("güncelleme varsa bant ÇİZİLİR (kapı bandı öldürmedi)", async () => {

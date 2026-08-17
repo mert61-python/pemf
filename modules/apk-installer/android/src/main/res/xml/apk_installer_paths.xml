@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- APK FileSystem.cacheDirectory'ye iner (= getCacheDir()). Yalniz onbellek acilir;
+         uygulama verisinin geri kalani paylasilmaz. -->
+    <cache-path name="apk_cache" path="." />
+    <files-path name="apk_files" path="." />
+</paths>

@@ -51,6 +51,7 @@ import {
   guncellemeVarMi,
   kurulumuBaslat,
   _atlamayiSifirla,
+  _indirmeyiSifirla,
   type MobilSurum,
 } from "@/services/mobileUpdate";
 
@@ -84,10 +85,11 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   _atlamayiSifirla();
+  _indirmeyiSifirla();
   (Platform as { OS: string }).OS = "android";
   mockVarMi.mockResolvedValue({ varMi: false, sebep: "guncel" });
   mockIndir.mockResolvedValue({ ok: true, dosyaUri: "file:///cache/x.apk" });
-  mockKur.mockResolvedValue(true);
+  mockKur.mockResolvedValue("acildi");
 });
 
 afterEach(() => {
@@ -276,7 +278,7 @@ it("eksik inen paket için AYRI ve eylem söyleyen mesaj çıkar", async () => {
 
 it("kurulum açılamazsa 'bilinmeyen kaynak' izni SÖYLENİR", async () => {
   mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
-  mockKur.mockResolvedValue(false);
+  mockKur.mockResolvedValue("hata");
   const { getByTestId, getByText } = ciz();
   await bekle();
   await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
@@ -333,4 +335,58 @@ it("kontrol aşamasında 'Atla' HİÇBİR sürümü ertelemiş saymaz", async ()
   await ilerlet(ATLA_GORUNME_MS);
   await act(async () => { fireEvent.press(getByTestId("kapi-atla")); });
   expect(atlandiMi(SURUM.versionCode)).toBe(false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 SAHA BİLDİRİMİ 2026-08-17 — kurulum akışının kullanıcıya söyledikleri
+// ─────────────────────────────────────────────────────────────────────────────
+
+it("🔴 kurulum açılınca kullanıcı NE OLDUĞUNU görür (sessiz kalmaz)", async () => {
+  // Eskiden başarıda hiçbir şey yazılmıyordu: paylaşım sayfası kapanınca ekran hiç değişmemiş
+  // gibi duruyordu ve kullanıcı işlemin olup olmadığını bilmiyordu.
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(getByText(/onayını bekleyin/)).toBeTruthy());
+});
+
+it("🔴 kurulum açıldıktan sonra düğme TEKRAR AÇMA işlevine döner", async () => {
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  expect(getByText("Güncelle ve kur")).toBeTruthy();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(getByText("Kurulumu tekrar aç")).toBeTruthy());
+});
+
+it("🔴 'bilinmeyen kaynak' izni yoksa NE YAPILACAĞI yazılır", async () => {
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  mockKur.mockResolvedValue("izin_gerekli");
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(getByText(/izin verip tekrar deneyin/)).toBeTruthy());
+});
+
+it("paylaşım yedeğine düşülürse kullanıcı SEBEBİNİ öğrenir", async () => {
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  mockKur.mockResolvedValue("paylasim");
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(getByText(/elle kurabilirsiniz/)).toBeTruthy());
+});
+
+it("indirme ilerlemesi MB olarak da yazılır (mobil kota görünsün)", async () => {
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  mockIndir.mockImplementation(async (_s: MobilSurum, cb: (o: number) => void) => {
+    cb(0.5);
+    return new Promise(() => {});
+  });
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  // 128.000.000 B * 0,5 = 64 MB / 128 MB
+  await waitFor(() => expect(getByText(/%50 · 64 MB \/ 128 MB/)).toBeTruthy());
 });

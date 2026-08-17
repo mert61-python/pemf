@@ -1,0 +1,7 @@
+{
+  "name": "apk-installer",
+  "version": "1.0.0",
+  "description": "PEMF Vet — APK'yi DOGRUDAN Android paket yukleyicisine teslim eder (paylasim sayfasi DEGIL).",
+  "main": "index.ts",
+  "private": true
+}

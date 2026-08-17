@@ -63,6 +63,11 @@ export const ATLA_GORUNME_MS = 2500;
 
 type Durum = "kontrol" | "guncelleme" | "acik";
 
+/** Bayt → "54 MB" (mobil kota görünür olsun). */
+function mb(bayt: number): string {
+  return `${Math.round(bayt / 1_000_000)} MB`;
+}
+
 export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   // Android DIŞI (web + iOS): kapı hiç kurulmaz. Web'i masaüstü client güncelliyor, iOS'ta
   // doğrudan APK kurulumu yok → beklemenin karşılığı sıfır olurdu.
@@ -73,7 +78,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const bittiRef = useRef(false);
 
-  const { oran, hata, guncelle } = useApkGuncelleme(surum);
+  const { oran, hata, bilgi, kurulumAcildi, guncelle } = useApkGuncelleme(surum);
 
   /** Kapıyı aç ve BİR DAHA kapanmayacağını işaretle (geç gelen sonuç ekranı geri almasın). */
   const kapiyiAc = useCallback(() => {
@@ -147,10 +152,13 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
             <Download color={colors.cyan} size={rs(18)} />
             <Text style={styles.baslik}>Yeni sürüm hazır: {surum?.version}</Text>
           </View>
-          <Text style={styles.alt}>
+          <Text style={[styles.alt, hata ? styles.altHata : null]}>
             {hata ||
+              bilgi ||
               (indiriliyor
-                ? `İndiriliyor… %${Math.round((oran ?? 0) * 100)}`
+                ? // ⚠️ Yalnız yüzde YETMEZ: 128 MB'lık bir paketde kullanıcı ne kadar veri
+                  // harcadığını da görmeli (mobil kota). MB'ler manifest boyutundan türetilir.
+                  `İndiriliyor… %${Math.round((oran ?? 0) * 100)} · ${mb((oran ?? 0) * (surum?.size ?? 0))} / ${mb(surum?.size ?? 0)}`
                 : surum?.notes || "Kullanmadan önce güncellemeniz önerilir.")}
           </Text>
 
@@ -166,7 +174,10 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
               accessibilityRole="button"
               accessibilityLabel={`Sürüm ${surum?.version} güncellemesini indir ve kur`}
             >
-              <Text style={styles.btnText}>Güncelle ve kur</Text>
+              {/* Kurulum bir kez açıldıysa düğme "tekrar dene" işlevindedir; aynı metni bırakmak
+                  kullanıcıya hiçbir şey olmamış gibi görünürdü. İkinci dokunuş İNDİRMEZ:
+                  dosya diskte tamdır, doğrudan yükleyici açılır. */}
+              <Text style={styles.btnText}>{kurulumAcildi ? "Kurulumu tekrar aç" : "Güncelle ve kur"}</Text>
             </TouchableOpacity>
           )}
 
@@ -214,6 +225,7 @@ const styles = StyleSheet.create({
   baslikSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(14), fontWeight: "800", flex: 1 },
   alt: { color: colors.textMuted, fontSize: rf(12), marginTop: spacing.sm, lineHeight: rf(17) },
+  altHata: { color: colors.warning },
   btn: {
     backgroundColor: colors.cyan,
     borderRadius: radius.btn,

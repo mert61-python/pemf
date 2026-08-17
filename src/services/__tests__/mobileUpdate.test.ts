@@ -10,6 +10,28 @@
  *   * yarım/bozuk inen APK SİLİNİR ve kurulum AÇILMAZ,
  *   * iOS'ta hiç denenmez.
  */
+// ⚠️ 2026-08-17: kurulum artık YEREL native modülden geçiyor (paylaşım sayfası DEĞİL).
+// Mock, modülün gerçekten çağrıldığını ve paylaşımın YEDEK olduğunu sınamayı sağlar.
+const mockApkKur = jest.fn();
+const mockIzinVarMi = jest.fn();
+const mockIzinEkrani = jest.fn();
+jest.mock("../../../modules/apk-installer", () => ({
+  apkKur: (...a: unknown[]) => mockApkKur(...(a as [])),
+  kurulumIzniVarMi: () => mockIzinVarMi(),
+  izinEkraniniAc: () => mockIzinEkrani(),
+  apkKuruculVarMi: () => true,
+}));
+
+const mockPaylas = jest.fn();
+jest.mock("expo-sharing", () => ({
+  // ⚠️ `__esModule: true` ŞART: `kurulumuBaslat` içinde DİNAMİK `await import("expo-sharing")`
+  // var; bayrak olmadan namespace `{ default: {...} }` olarak sarılıyor ve alanlar undefined
+  // görünüyor → yedek yol testte sessizce "hata"ya düşüyordu.
+  __esModule: true,
+  isAvailableAsync: async () => true,
+  shareAsync: (...a: unknown[]) => mockPaylas(...(a as [])),
+}));
+
 jest.mock("expo-file-system/legacy", () => ({
   cacheDirectory: "file:///cache/",
   createDownloadResumable: jest.fn(),
@@ -51,6 +73,8 @@ import {
   guncellemeyiAtla,
   mevcutVersionCode,
   _atlamayiSifirla,
+  _indirmeyiSifirla,
+  kurulumuBaslat,
   type MobilSurum,
 } from "../mobileUpdate";
 
@@ -60,11 +84,27 @@ const SURUM = (over: Partial<MobilSurum> = {}): MobilSurum => ({
   sha256: "a".repeat(64), size: 1000, ...over,
 });
 
+/** ⚠️ `apkIndir` indirmeyi başlatmadan ÖNCE birkaç await geçer (kayıt oku → dosya bilgisi →
+ *  kayıt yaz). Tek `await Promise.resolve()` yetmez; sıra tam boşalsın. */
+const bosalt = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+
+/** İndirme ÖNCESİ dosya YOK, sonraki çağrılarda gerçek bilgi.
+ *  (2026-08-17: hazır-dosya hızlı yolu artık indirmeden ÖNCE de bakıyor; tek-değerli mock
+ *  bütün testleri "dosya zaten tam" dalına düşürüyordu — YANLIŞ NEDENLE yeşil/kırmızı.) */
+const bilgiSirasi = (sonrasi: unknown) =>
+  jest.fn().mockResolvedValueOnce({ exists: false }).mockResolvedValue(sonrasi) as never;
+
 const yanit = (body: unknown, ok = true) =>
   jest.fn().mockResolvedValue({ ok, json: async () => body }) as unknown as typeof fetch;
 
 beforeEach(async () => {
   mockOS = "android";
+  _indirmeyiSifirla();  // ⚠️ süren-indirme kaydı modül düzeyinde; testler arası sızarsa
+                        // sonraki test indirmeyi hiç yapmadan aynı söze abone olur.
+  mockApkKur.mockResolvedValue(true);
+  mockIzinVarMi.mockReturnValue(true);
+  mockIzinEkrani.mockResolvedValue(true);
+  mockPaylas.mockResolvedValue(undefined);
   mockCfg.android.versionCode = 13;
   jest.clearAllMocks();
   // ⚠️ ŞART: yarım-indirme izi AsyncStorage'da tutuluyor ve resmî jest mock'u BELLEKTE kalıcı.
@@ -133,7 +173,7 @@ describe("apkIndir", () => {
   it("boyut tutarsa başarılı", async () => {
     const r = await apkIndir(SURUM(), undefined, {
       createDownloadResumable: indirmeKur("file:///cache/x.apk") as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
     });
     expect(r).toEqual({ ok: true, dosyaUri: "file:///cache/x.apk" });
   });
@@ -177,7 +217,7 @@ describe("apkIndir", () => {
     });
     await apkIndir(SURUM(), (o) => oranlar.push(o), {
       createDownloadResumable: olustur as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
     });
     expect(oranlar).toEqual([0.5]);
   });
@@ -188,7 +228,7 @@ describe("apkIndir", () => {
     });
     await apkIndir(SURUM({ versionCode: 14 }), undefined, {
       createDownloadResumable: olustur as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
     });
     expect(olustur.mock.calls[0][1]).toBe("file:///cache/pemf-vet-14.apk");
   });
@@ -240,7 +280,7 @@ describe("apkIndir", () => {
         downloadAsync: jest.fn().mockResolvedValue({ uri: "file:///cache/pemf-vet-20.apk" }),
         pauseAsync,
       }) as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
       devamOku: jest.fn().mockResolvedValue(null) as never,
       devamYaz: jest.fn() as never,
       devamSil: jest.fn() as never,
@@ -259,7 +299,7 @@ describe("apkIndir", () => {
     });
     await apkIndir(S20(), undefined, {
       createDownloadResumable: olustur as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
       devamOku: jest.fn().mockResolvedValue(null) as never,
       devamYaz: yaz as never,
       devamSil: jest.fn() as never,
@@ -275,6 +315,8 @@ describe("apkIndir", () => {
     const kayitSil = jest.fn();
     const r = await apkIndir(S20(), undefined, {
       createDownloadResumable: olustur as never,
+      // ⚠️ Bu testin AMACI hızlı yolun kendisi: dosya İLK bakışta tam olmalı
+      // (`bilgiSirasi` kullanmayın, o indirme-öncesi "yok" döndürür).
       getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
       devamOku: jest.fn().mockResolvedValue(KAYIT()) as never,
       devamYaz: jest.fn() as never,
@@ -309,7 +351,7 @@ describe("apkIndir", () => {
     const sil = jest.fn(); const kayitSil = jest.fn();
     await apkIndir(S20({ versionCode: 21, url: "https://x/YENI.apk" }), undefined, {
       createDownloadResumable: olustur as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
       deleteAsync: sil as never,
       devamOku: jest.fn().mockResolvedValue(KAYIT()) as never,   // ESKİ sürümün kaydı
       devamYaz: jest.fn() as never,
@@ -326,7 +368,7 @@ describe("apkIndir", () => {
       createDownloadResumable: jest.fn().mockReturnValue({
         downloadAsync: jest.fn().mockResolvedValue({ uri: "file:///cache/pemf-vet-20.apk" }),
       }) as never,
-      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      getInfoAsync: bilgiSirasi({ exists: true, size: 1000 }),
       devamOku: jest.fn().mockResolvedValue(null) as never,
       devamYaz: jest.fn() as never,
       devamSil: kayitSil as never,
@@ -403,5 +445,124 @@ describe("erteleme kaydı (açılış kapısı ↔ uygulama içi bant)", () => {
     guncellemeyiAtla(31);
     expect(atlandiMi(31)).toBe(true);
     expect(atlandiMi(30)).toBe(false);
+  });
+});
+
+describe("🔴 SAHA BİLDİRİMİ 2026-08-17 — kurulum ve yeniden indirme", () => {
+  it("🔴 TAM inmiş dosya KAYIT OLMADAN tanınır — 'yüzde 0'dan başladı' arızası", async () => {
+    // Sahip: "geri çıkma tuşuna bastım, tekrar yüzde 0'dan başladı."
+    // Kök neden: indirme bitince `kayitSil()` izi siler; hızlı yol ise `ayniIs` (yani KAYIT)
+    // kapısının içindeydi → hazır 128 MB yeniden iniyordu. Kayıt YOKKEN de tanınmalı.
+    const s = SURUM();
+    const olustur = jest.fn();
+    const r = await apkIndir(s, undefined, {
+      createDownloadResumable: olustur as never,
+      getInfoAsync: (jest.fn().mockResolvedValue({ exists: true, size: s.size })) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: (async () => null) as never, // ← KAYIT YOK
+      devamYaz: (async () => {}) as never,
+      devamSil: (async () => {}) as never,
+    });
+    expect(r).toEqual({ ok: true, dosyaUri: expect.stringContaining(`pemf-vet-${s.versionCode}.apk`) });
+    expect(olustur).not.toHaveBeenCalled(); // tek bayt bile inmedi
+  });
+
+  it("🔴 aynı sürüm için İKİNCİ çağrı yeni indirme BAŞLATMAZ (tek yazıcı)", async () => {
+    // Kapıda indirmeye başlayıp "şimdilik devam et" diyen kullanıcı bantta yine "Güncelle"ye
+    // basabilir. İki yazıcı aynı dosyayı bozar → boyut tutmaz → sebepsiz "eksik kaldı".
+    const s = SURUM();
+    const olustur = jest.fn(() => ({ downloadAsync: () => new Promise(() => {}) }));
+    const ortak = {
+      createDownloadResumable: olustur as never,
+      getInfoAsync: (jest.fn().mockResolvedValue({ exists: false })) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: (async () => null) as never,
+      devamYaz: (async () => {}) as never,
+      devamSil: (async () => {}) as never,
+    };
+    void apkIndir(s, undefined, ortak);
+    await bosalt();
+    void apkIndir(s, undefined, ortak);
+    await bosalt();
+    expect(olustur).toHaveBeenCalledTimes(1);
+  });
+
+  it("ikinci abone MEVCUT yüzdeyi görür — bant 0'dan başlamaz", async () => {
+    const s = SURUM();
+    let bildir: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void = () => {};
+    const ortak = {
+      createDownloadResumable: ((_u: string, _h: string, _o: unknown, cb: typeof bildir) => {
+        bildir = cb;
+        return { downloadAsync: () => new Promise(() => {}) };
+      }) as never,
+      getInfoAsync: (jest.fn().mockResolvedValue({ exists: false })) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: (async () => null) as never,
+      devamYaz: (async () => {}) as never,
+      devamSil: (async () => {}) as never,
+    };
+    void apkIndir(s, undefined, ortak);
+    await bosalt();
+    bildir({ totalBytesWritten: 600, totalBytesExpectedToWrite: 1000 });
+
+    const gorulen: number[] = [];
+    void apkIndir(s, (o) => gorulen.push(o), ortak);
+    await bosalt();
+    expect(gorulen[0]).toBeCloseTo(0.6, 5); // 0 DEĞİL
+  });
+
+  it("FARKLI sürüm süren indirmeye abone OLMAZ (kendi indirmesini başlatır)", async () => {
+    const olustur = jest.fn(() => ({ downloadAsync: () => new Promise(() => {}) }));
+    const ortak = {
+      createDownloadResumable: olustur as never,
+      getInfoAsync: (jest.fn().mockResolvedValue({ exists: false })) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: (async () => null) as never,
+      devamYaz: (async () => {}) as never,
+      devamSil: (async () => {}) as never,
+    };
+    void apkIndir(SURUM({ versionCode: 14 }), undefined, ortak);
+    await bosalt();
+    void apkIndir(SURUM({ versionCode: 15 }), undefined, ortak);
+    await bosalt();
+    expect(olustur).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("🔴 kurulumuBaslat — paylaşım sayfası DEĞİL, paket yükleyici", () => {
+  it("🔴 SAHİP BİLDİRİMİ: doğrudan yükleyici açılır, PAYLAŞIM AÇILMAZ", async () => {
+    // "indirme bitince paylaşma ekranı geliyor... paylaşıp napcak kullanıcı apk'yı"
+    const sonuc = await kurulumuBaslat("file:///cache/pemf-vet-23.apk");
+    expect(sonuc).toBe("acildi");
+    expect(mockApkKur).toHaveBeenCalledWith("file:///cache/pemf-vet-23.apk");
+    expect(mockPaylas).not.toHaveBeenCalled(); // ← asıl arıza buydu
+  });
+
+  it("🔴 'bilinmeyen kaynak' izni yoksa İZİN EKRANI açılır (sessiz ret yok)", async () => {
+    mockIzinVarMi.mockReturnValue(false);
+    const sonuc = await kurulumuBaslat("file:///cache/x.apk");
+    expect(sonuc).toBe("izin_gerekli");
+    expect(mockIzinEkrani).toHaveBeenCalled();
+    expect(mockApkKur).not.toHaveBeenCalled(); // anlaşılmaz bir ret gösterme
+  });
+
+  it("yerel modül kaydolmamışsa PAYLAŞIM yedeğine düşer (akış ölmez)", async () => {
+    mockApkKur.mockResolvedValue(false);
+    const sonuc = await kurulumuBaslat("file:///cache/x.apk");
+    expect(sonuc).toBe("paylasim");
+    expect(mockPaylas).toHaveBeenCalled();
+  });
+
+  it("hiçbir yol açılamazsa 'hata' döner", async () => {
+    mockApkKur.mockResolvedValue(false);
+    mockPaylas.mockRejectedValue(new Error("yok"));
+    expect(await kurulumuBaslat("file:///cache/x.apk")).toBe("hata");
+  });
+
+  it("KRİTİK: iOS'ta hiç denenmez", async () => {
+    mockOS = "ios";
+    expect(await kurulumuBaslat("file:///cache/x.apk")).toBe("hata");
+    expect(mockApkKur).not.toHaveBeenCalled();
+    expect(mockPaylas).not.toHaveBeenCalled();
   });
 });

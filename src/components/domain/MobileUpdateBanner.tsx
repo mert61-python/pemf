@@ -25,7 +25,7 @@ export function MobileUpdateBanner() {
   const [gizli, setGizli] = useState(false);
 
   // İndirme/kurulum akışı açılış kapısıyla ORTAK (tek kaynak) — bkz. useApkGuncelleme.
-  const { oran, hata, guncelle } = useApkGuncelleme(surum);
+  const { oran, hata, bilgi, kurulumAcildi, guncelle } = useApkGuncelleme(surum);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -48,15 +48,21 @@ export function MobileUpdateBanner() {
       <Download color={colors.primary} size={rs(16)} />
       <View style={{ flex: 1 }}>
         <Text style={styles.baslik}>Yeni sürüm hazır: {surum.version}</Text>
-        <Text style={styles.alt} numberOfLines={2}>
-          {hata || (oran !== null ? `İndiriliyor… %${Math.round(oran * 100)}` : (surum.notes || "Güncellemek için dokunun."))}
+        <Text style={[styles.alt, hata ? styles.altHata : null]} numberOfLines={3}>
+          {hata || bilgi ||
+            (oran !== null
+              // Yüzdenin yanında MB: 128 MB'lık paketde kullanıcı kotasını görsün.
+              ? `İndiriliyor… %${Math.round(oran * 100)} · ${Math.round((oran * surum.size) / 1_000_000)} / ${Math.round(surum.size / 1_000_000)} MB`
+              : surum.notes || "Güncellemek için dokunun.")}
         </Text>
       </View>
       {oran === null ? (
         <>
           <TouchableOpacity style={styles.btn} onPress={guncelle}
             accessibilityRole="button" accessibilityLabel={`Sürüm ${surum.version} güncellemesini indir ve kur`}>
-            <Text style={styles.btnText}>Güncelle</Text>
+            {/* Kurulum bir kez açıldıysa ikinci dokunuş İNDİRMEZ (dosya diskte tam),
+                doğrudan yükleyiciyi tekrar açar. */}
+            <Text style={styles.btnText}>{kurulumAcildi ? "Kur" : "Güncelle"}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setGizli(true)}
             accessibilityRole="button" accessibilityLabel="Güncelleme bildirimini kapat">
@@ -74,6 +80,7 @@ const styles = StyleSheet.create({
           borderRadius: radius.md, padding: spacing.sm, margin: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(13), fontWeight: "800" },
   alt: { color: colors.textMuted, fontSize: rf(11), marginTop: rs(2) },
+  altHata: { color: colors.warning },
   btn: { backgroundColor: colors.cyan, borderRadius: radius.md,
          paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: rs(44), justifyContent: "center" },
   btnText: { color: "#04121F", fontWeight: "800", fontSize: rf(12) },
