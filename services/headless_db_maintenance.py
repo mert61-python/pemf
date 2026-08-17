@@ -158,6 +158,9 @@ class HeadlessDBMaintenance:
             # 0 = o adim KAPALI (hicbir sey silinmez/maskelenmez).
             r = self.db.apply_data_retention_policy(
                 sensor_retain_days=self._retain_days("PEMF_RETAIN_SENSOR_DAYS", 90),
+                # ⚠️ DOZ kaydı AYRI ayar (denetim 2026-08-17): uygulanan doz telemetri
+                # saklama süresiyle silinemez. `0` = adım kapalı.
+                dose_retain_days=self._retain_days("PEMF_RETAIN_DOSE_DAYS", 3650),
                 event_retain_days=self._retain_days("PEMF_RETAIN_EVENT_DAYS", 365),
                 dead_outbox_retain_days=self._retain_days("PEMF_RETAIN_OUTBOX_DAYS", 30),
                 pii_retain_days=self._retain_days("PEMF_RETAIN_PII_DAYS", 365),

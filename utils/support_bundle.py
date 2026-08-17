@@ -43,7 +43,14 @@ YASAK_ADLAR = {
     "server.env",
     "device.env",
     ".env",
+    # ⚠️ DENETİM 2026-08-17 — LİSTEDE OLMAYAN GERÇEK SIR DOSYALARI. Üçü de `utils/file_acl` ve
+    # `backend_service`in ZATEN sır kabul edip ACL ile kilitlediği adlar; burada eksiktiler.
+    "api_token.txt",  # ÇIPLAK jeton: maske kalıbı bunu ASLA yakalayamaz (anahtar=değer yok)
+    ".pemf_key_v2",  # hasta Fernet anahtarı
+    ".pemf_key",  # aynı anahtarın eski adı
 }
+#: NTFS büyük/küçük harf DUYARSIZ — `PEMF_SECRETS.JSON` de engellenmeli.
+_YASAK_ADLAR_LOWER = {a.lower() for a in YASAK_ADLAR}
 YASAK_UZANTILAR = {".db", ".db-wal", ".db-shm", ".sqlite", ".pem", ".p12", ".p8", ".jks", ".keystore"}
 
 # Jenerik sır/PII kalıpları.
@@ -57,9 +64,17 @@ _KALIPLAR = [
     (re.compile(r'(?i)\bauthorization\s*[:=].*'), 'Authorization: [MASKELENDI]'),
     (re.compile(r'(?i)\b(?:Bearer|Basic|Token)\s+[A-Za-z0-9._\-=+/]{8,}'), '[MASKELENDI]'),
     (
+        # ⚠️ DENETİM 2026-08-17 — İKİ EKSİK:
+        # (1) Kripto anahtar adları (`sqlcipher_key`, `fernet_key`, `mqtt_pass`, `reset_code`,
+        #     `recovery_code`) alternasyonda YOKTU. DAR seçim bilinçli: `sqlcipher_key` yazılıyor,
+        #     `sqlcipher` DEĞİL → sürüm/durum teşhisi (ör. "sqlcipher: yok") maskelenmiyor.
+        # (2) ASIL KİLİT: anahtar adından SONRA kapanış TIRNAĞINA izin yoktu. Sızan dosya JSON'dur
+        #     (`"sqlcipher_key": "..."`) ve tırnaklı biçim SIFIR eşleşme veriyordu — yani (1) tek
+        #     başına hiçbir işe yaramazdı.
         re.compile(
-            r'(?i)\b([\w.-]*(?:password|passphrase|secret|token|api[_-]?key)[\w.-]*)'
-            r'\s*[:=]\s*["\']?([^\s"\',;}]{4,})'
+            r'(?i)\b([\w.-]*(?:password|passphrase|secret|token|api[_-]?key'
+            r'|sqlcipher_key|fernet_key|mqtt_pass|reset_code|recovery_code)[\w.-]*)'
+            r'["\']?\s*[:=]\s*["\']?([^\s"\',;}]{4,})'
         ),
         r'\1=[MASKELENDI]',
     ),
@@ -124,7 +139,27 @@ def _log_dizini(app_data_dir) -> Path:
 
 
 def _guvenli_mi(p: Path) -> bool:
-    return p.name not in YASAK_ADLAR and p.suffix.lower() not in YASAK_UZANTILAR
+    """Dosya destek paketine girebilir mi?
+
+    ⚠️ DENETİM 2026-08-17 — ESKİDEN TAM AD eşliyordu ve `secrets_manager`ın ÜRETTİĞİ gerçek türev
+    adlar kaçıyordu: `pemf_secrets.json.<pid>.tmp` (atomik yazım) ve
+    `pemf_secrets.json.corrupt.<zaman>` (karantina — bu turda eklenen mekanizmanın ta kendisi).
+    Ayrıca `p.suffix` yalnız SON uzantıyı verdiği için `patients.db.plain.bak` gibi düz-metin
+    yedekleri de geçiyordu.
+
+    ⚠️ GLOB/PREFIX KULLANILMIYOR: tek bir `pemf_secrets*` kuralı ileride `pemf_secrets_rehberi.log`
+    gibi MASUM bir teşhis dosyasını da yerdi. Kural "yasak kök ad + NOKTA", yani yalnız gerçek
+    türevler kapanır.
+    ⚠️ `.tmp` YASAK_UZANTILAR'a EKLENMEDİ: aşırı geniş olurdu (her teşhis artığını yer) ve gereksiz —
+    sır dosyasının `.tmp` türevi zaten kök-ad kuralıyla kapanıyor."""
+    ad = p.name.lower()
+    if ad in _YASAK_ADLAR_LOWER:
+        return False
+    if any(ad.startswith(y + ".") for y in _YASAK_ADLAR_LOWER):
+        return False
+    if any(uz.lower() in YASAK_UZANTILAR for uz in p.suffixes):
+        return False
+    return True
 
 
 def _kuyruk(p: Path, tavan: int = KUYRUK_BAYT) -> str:

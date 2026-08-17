@@ -2388,8 +2388,17 @@ def _daily_maintenance_loop():
                 try:
                     removed_s = db.purge_old_sensor_samples(retain_days)
                     removed_e = db.purge_old_session_events(365)
-                    removed_c = db.purge_old_coil_runs(retain_days)  # P2 audit: per-bobin run retention
-                    log.info("Retention: %s sensor + %s event + %s coil_run silindi.", removed_s, removed_e, removed_c)
+                    # ⚠️ DOZ SİLME BU DÖNGÜDEN KALDIRILDI (denetim 2026-08-17). Burası
+                    # `PEMF_SENSOR_RETAIN_DAYS` okuyordu — headless bakımın kullandığı
+                    # `PEMF_RETAIN_SENSOR_DAYS`ten FARKLI, hiçbir yerde belgelenmemiş bir ad.
+                    # Sonuç: operatör `PEMF_RETAIN_SENSOR_DAYS=0` yazıp "silme kapalı" sansa bile
+                    # uygulanan doz 90 günde BURADAN silinmeye devam ediyordu. Üstelik bu yolda
+                    # `0` = kapalı DEĞİLDİ: `purge_old_coil_runs` içindeki `max(1, ...)` yüzünden
+                    # `0` → 1 GÜNLÜK saklama, yani neredeyse tüm doz geçmişi.
+                    # Silme yeteneği kaybolmuyor: `services/headless_db_maintenance` üretimde her
+                    # zaman koşuyor ve aynı işi `apply_data_retention_policy` üzerinden
+                    # YAPILANDIRILABİLİR biçimde (`PEMF_RETAIN_DOSE_DAYS`) yapıyor.
+                    log.info("Retention: %s sensor + %s event silindi.", removed_s, removed_e)
                     # KVKK retention (2026-06-28): 5 YIL inaktif hastalari ANONIMLESTIR (canonical
                     # patient_database + treatment-history kopyasi). Muafiyet yok.
                     try:

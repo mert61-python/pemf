@@ -84,6 +84,8 @@ class ProductionConfigManager:
             self._config = {}
             self._encryption_key = None
             self._cipher = None
+            #: Kullanıcı config'i diskte VAR ama okunamadıysa hata metni (fail-closed kapısı).
+            self._user_config_unreadable = None
             self._last_save_ts = 0.0
             # Initialize encryption
             self._setup_encryption()
@@ -204,7 +206,21 @@ class ProductionConfigManager:
                 except Exception:
                     pass
             except Exception as e:
-                logger.error(f"Failed to load user config: {e}")
+                # ⚠️ FAIL-CLOSED (denetim 2026-08-17): dosya VAR ama OKUNAMIYOR (izin reddi, bozuk
+                # JSON, disk hatası). Eskiden yalnız log basılıp VARSAYILANLARLA devam ediliyordu;
+                # sonraki İLK `save()` kullanıcının override'larını SESSİZCE siliyordu.
+                # Gerçek senaryo: `backend_service` `config.json`u SYSTEM+Admin ACL'ine kilitliyor;
+                # süreç sonradan yetkisiz bir kullanıcıyla koşarsa okuma düşer, ilk kayıt klinik
+                # ayarlarını siler → `mqtt.broker_url` `localhost`a döner → ESP bobinleri (6-8)
+                # broker'ı BULAMAZ. Ölçüldü (bu makinede, kaza eseri): dosya varsayılanlarla ezildi.
+                # Bu, bozuk `pemf_secrets.json` bulgusunun (yeni SQLCipher anahtarı) AYNI sınıfı.
+                self._user_config_unreadable = str(e)
+                logger.error(
+                    "Failed to load user config: %s -- KAYDETME KAPATILDI (mevcut dosya EZILMEYECEK). "
+                    "Cozum: dosyayi okunabilir yapin (ACL) ya da bozuksa yedekten geri yukleyin: %s",
+                    e,
+                    user_config_path,
+                )
         else:
             logger.info(f"Creating initial user config at: {user_config_path}")
             try:
@@ -222,7 +238,19 @@ class ProductionConfigManager:
                 base[key] = value
 
     def _save_user_config(self):
-        """Save current config to user's APPDATA directory"""
+        """Save current config to user's APPDATA directory.
+
+        ⚠️ FAIL-CLOSED KAPISI (denetim 2026-08-17): kullanıcı config'i diskte VAR ama YÜKLENEMEDİYSE
+        bellekteki `self._config` yalnızca bundled+template VARSAYILANLARIDIR. Onu diske yazmak,
+        okunamayan dosyadaki gerçek klinik ayarlarını (MQTT broker/port gibi) SESSİZCE SİLER.
+        Yazma reddedilir; operatöre ne yapacağı söylenir."""
+        if getattr(self, "_user_config_unreadable", None):
+            logger.error(
+                "config.json YUKLENEMEDIGI icin KAYDETME REDDEDILDI (%s). Mevcut dosya korunuyor; "
+                "varsayilanlarla UZERINE YAZILMASI kullanici ayarlarini yok ederdi.",
+                self._user_config_unreadable,
+            )
+            return
         user_config_path = self._get_app_data_dir() / 'config.json'
 
         # DENETIM P3: truncate-then-write idi (gecici dosya + os.replace YOK, kilit YOK).

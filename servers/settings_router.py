@@ -91,6 +91,18 @@ def get_settings():
 
 @router.post("/")
 def update_settings(payload: SettingsModel):
-    data = payload.dict()
+    # ⚠️ KISMİ GÜNCELLEME (denetim 2026-08-17): yalnız GÖNDERİLEN alanlar değişir; gönderilmeyen
+    # alan mevcut değerini KORUR. `payload.dict()` model varsayılanları yüzünden DAİMA 4 anahtar
+    # taşıyordu ve iki sonucu vardı:
+    #   (a) CANLI KAYIP: `clinic_name`i hiç göndermeyen arayüz (pf `SettingsScreen`in "Kaydet"i)
+    #       onu HER kayıtta `system_settings.json`dan siliyordu;
+    #   (b) yalnız `clinic_name` gönderen bir istemci MQTT broker ayarını sessizce
+    #       `localhost:1883`e döndürüyordu.
+    # `save_settings` ZATEN kısmi sözlüğe göre yazılmış (`if "mqtt_broker" in data` gibi kapılar
+    # var); eksik olan tek şey ona kısmi sözlüğü VERMEKTİ.
+    # ⚠️ Depoda `Optional[X] = None` + sentinel deseni de var ama burada 4 alan tipini değiştirmek
+    # ve OpenAPI varsayılanlarını kaybetmek gerekirdi; `exclude_unset` sıfır model değişikliğiyle
+    # aynı semantiği veriyor.
+    data = {**load_settings(), **payload.dict(exclude_unset=True)}
     save_settings(data)
     return {"status": "success"}

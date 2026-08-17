@@ -70,7 +70,7 @@ def test_retention_steps_can_be_disabled(temp_app_data):
 
     # Hepsi kapalı → hiçbir şey silinmemeli/maskelenmemeli
     rep = db.apply_data_retention_policy(
-        sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0
+        sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0, dose_retain_days=0
     )
     assert all(v == 0 for v in rep.values()), f"tüm adımlar kapalıyken hiçbir şey silinmemeli: {rep}"
 

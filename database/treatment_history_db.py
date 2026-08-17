@@ -1728,10 +1728,27 @@ class TreatmentHistoryDB:
             self.logger.warning(f"Sensor retention temizleme uyarısı: {e}")
             return 0
 
-    def purge_old_coil_runs(self, retain_days: int = 90) -> int:
+    def purge_old_coil_runs(self, retain_days: int = 3650) -> int:
         """P2 audit 2026-06-28: retention suresini asan per-bobin run kayitlarini (session_coil_runs
-        + sensor_run_summary) temizle — eskiden HIC temizlenmiyordu (sinirsiz buyume)."""
+        + sensor_run_summary) temizle — eskiden HIC temizlenmiyordu (sinirsiz buyume).
+
+        ⚠️ DENETİM 2026-08-17 — BU TABLO UYGULANAN DOZDUR, TELEMETRİ DEĞİL. Şeması "hangi bobin,
+        hangi frekans/duty/faz ile, kaç saniye çalıştı" tutuyor; büyümeyi sürükleyen telemetri
+        AYRI tabloda (`sensor_samples`). Buna rağmen bu adım SENSÖR saklama süresine (90 gün)
+        bağlanmıştı ve iki sonucu vardı:
+          · `treatment_sessions` HİÇ silinmiyor → 90. günden sonra seans başlığı duruyor ama
+            "hangi bobin, hangi duty" cevabı yok oluyor. Yan etki soruşturmasında 4 ay önceki
+            seansın PDF'inde "Bobin Çalışmaları" tablosu SESSİZCE kayboluyor (`if not runs: return`).
+          · KVKK açısından ters takas: kimliği taşıyan taraf (`patients`/`treatment_sessions`)
+            kalıyor, tıbbi kanıt gidiyor — veri minimizasyonuna sıfır katkı.
+        Varsayılan 3650 (10 yıl): hasta anonimleştirme eşiği zaten 1825 gün ve ayar ucu 0-36500
+        aralığını kabul ediyor. Sahibin GERÇEK kararı ("sınırsız büyüme olmasın") korunuyor —
+        değişen tek şey SAAT.
+
+        ⚠️ `0 = adım kapalı` sözleşmesi çağıran tarafta; buraya 0 gelmez.
+        """
         cutoff_ts = datetime.now().timestamp() - (max(1, int(retain_days)) * 86400)
+        removed = 0
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -1743,10 +1760,22 @@ class TreatmentHistoryDB:
                 cursor.execute('DELETE FROM session_coil_runs WHERE started_epoch < ?', (cutoff_ts,))
                 removed = int(cursor.rowcount)
                 conn.commit()
-                return removed
         except Exception as e:
             self.logger.warning(f"Coil-run retention temizleme uyarisi: {e}")
             return 0
+        # ⚠️ İZ, `with` BLOĞUNUN DIŞINDA yazılır: `self._lock` re-entrant DEĞİL ve `denetim_yaz` onu
+        # alıyor; ayrıca aynı thread'in açık bağlantı context'i içinde ikinci bir commit açılmaz.
+        # ⚠️ Geri dönüşsüz PII maskelemesi denetim izine yazılıyordu, geri dönüşsüz DOZ silmesi
+        # yazılmıyordu — asimetri buradan kapanıyor. `denetim_yaz` istisna ATMAZ, günlük bakım
+        # bu yüzden kilitlenmez.
+        if removed:
+            self.denetim_yaz(
+                "retention.doz_silindi",
+                scope="otomatik",
+                item_count=removed,
+                detail={"gun": int(retain_days)},
+            )
+        return removed
 
     def purge_old_session_events(self, retain_days: int = 365) -> int:
         """Retention süresini aşan session event kayıtlarını temizle."""
@@ -1788,6 +1817,9 @@ class TreatmentHistoryDB:
         event_retain_days: int = 365,
         dead_outbox_retain_days: int = 30,
         pii_retain_days: int = 365,
+        #: ⚠️ DOZ kaydı AYRI saat (denetim 2026-08-17). Eskiden `sensor_retain_days`e bağlıydı;
+        #: uygulanan doz 90 günde siliniyordu. `0 = adım kapalı` sözleşmesi burada da geçerli.
+        dose_retain_days: int = 3650,
     ) -> Dict[str, int]:
         """Toplu retention policy uygula (ticari operasyon bakımı).
 
@@ -1809,7 +1841,10 @@ class TreatmentHistoryDB:
 
         if sensor_retain_days and sensor_retain_days > 0:
             report['sensor_samples_removed'] = self.purge_old_sensor_samples(sensor_retain_days)
-            report['coil_runs_removed'] = self.purge_old_coil_runs(sensor_retain_days)  # P2 audit 2026-06-28
+        # ⚠️ DOZ adımı SENSÖR bloğundan ÇIKARILDI (denetim 2026-08-17): uygulanan doz, telemetri
+        # saklama süresiyle silinemez. Rapor anahtarı `coil_runs_removed` DEĞİŞMEDİ.
+        if dose_retain_days and dose_retain_days > 0:
+            report['coil_runs_removed'] = self.purge_old_coil_runs(dose_retain_days)
         if event_retain_days and event_retain_days > 0:
             report['session_events_removed'] = self.purge_old_session_events(event_retain_days)
         if dead_outbox_retain_days and dead_outbox_retain_days > 0:

@@ -60,7 +60,7 @@ def test_KRITIK_saklama_politikasi_denetim_izine_DOKUNMAZ(db):
     db.denetim_yaz("test.olay")
     once = db.denetim_sayisi()
     db.apply_data_retention_policy(
-        sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0
+        sensor_retain_days=0, event_retain_days=0, dead_outbox_retain_days=0, pii_retain_days=0, dose_retain_days=0
     )
     assert db.denetim_sayisi() == once, "saklama politikasi denetim izini sildi"
 

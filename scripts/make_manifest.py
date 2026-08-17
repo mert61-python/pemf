@@ -390,6 +390,32 @@ def main() -> int:
             print("  Bilerek siliyorsanız --drop-missing (ya da --allow-missing-mobile) verin.", file=sys.stderr)
             return 1
 
+    # ── YARIM KATMAN SETI: app VAR, deps YOK (ya da tersi) ─────────────────────────────────
+    # Karisik set (yeni app + ESKI deps) URETMEME karari DEGISMEDI; burada yalnizca SONUCU
+    # gorunur kiliyoruz. Yarim set SESSIZ bir eksiklik degil: launcher tarafinda RuntimeLayers'in
+    # `app`/`deps` alanlari ZORUNLU (Option da default da yok) ve ayristirma hatasi yukari tasiniyor
+    # -> client TUM manifest'i "missing field" ile reddeder. Kayip o platformla da sinirli degil:
+    # `layers` bir harita oldugu icin mac icin yazilmis yarim set WINDOWS istemcisini de kirar.
+    # Sonuc: kurulum, guncelleme ve min_supported_version geri cagirmasi TOPYEKUN durur.
+    # Bu yuzden UYARI YETMEZ -> cikis kodu 1 ve manifest YAZILMAZ.
+    yarim = [
+        (plat, [k for k in ("app", "deps") if k not in katmanlar]) for plat, katmanlar in manifest["layers"].items()
+    ]
+    yarim = [(plat, eksik) for plat, eksik in yarim if eksik]
+    if yarim:
+        print("[HATA] YARIM KATMAN SETI - manifest YAZILMADI:", file=sys.stderr)
+        for plat, eksik in yarim:
+            print(f"  - layers.{plat}: {', '.join(eksik)} EKSIK", file=sys.stderr)
+        print(
+            "  Karisik set (yeni app + eski deps) BILEREK uretilmez; ama yarim set de YAYINLANAMAZ:\n"
+            "  client ZORUNLU 'deps'/'app' alanini bulamayinca TUM manifest'i reddeder\n"
+            "  (her platformda kurulum, guncelleme ve geri cagirma durur).\n"
+            "  Cozum: eksik katmani da uretip pakete koyun ya da --drop-platform ile o platformu\n"
+            "  manifestten tamamen cikarin.",
+            file=sys.stderr,
+        )
+        return 1
+
     # ── ⚠️ DENETİM 2026-08-09 (ENGEL): TEK SÜRÜM, TEK YAZILIM ───────────────────────────────
     # Katmanlar bu yayında YENİ üretilmiş ama tek-parça `runtimes` ÖNCEKİ manifest'ten taşınmışsa,
     # ikisi FARKLI build'lerdendir. Sahada ölçüldü: 53 dosya farklı, `PEMF_Backend.exe` dahil →

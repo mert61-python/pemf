@@ -128,14 +128,25 @@ def test_yereldeki_katman_paketlerinden_URETIR(dizin):
 
 def test_KRITIK_karisik_katman_seti_URETILMEZ(dizin):
     """Yeni `app` + ESKİ `deps` tutarsız bir kurulum demektir (app yeni koda, deps eski
-    kütüphanelere bakar). Yalnız biri yerelde varsa diğeri ÖNCEKİNDEN TAŞINMAMALI."""
+    kütüphanelere bakar). Yalnız biri yerelde varsa diğeri ÖNCEKİNDEN TAŞINMAMALI.
+
+    ⚠️ GÜNCELLENDİ (denetim 2026-08-17): koruduğu değişmez AYNEN duruyor — ESKİ `deps` yeni `app`
+    ile karıştırılmıyor. DEĞİŞEN: eskiden bu durumda manifest SESSİZCE yazılıyor ve çıkış 0
+    veriliyordu. Yarım set YAYINLANAMAZ: launcher tarafında `deps`/`app` ZORUNLU alan, eksikse
+    client TÜM manifesti reddeder ve kayıp o platformla sınırlı kalmaz (kurulum, güncelleme ve
+    geri çağırma her platformda durur). Artık manifest YAZILMIYOR ve çıkış 1."""
     (dizin / "base-app.zip").write_bytes(b"APP" * 100)
     (dizin / "base.zip").write_bytes(b"APP" * 100)  # tek-sürüm kapısı gereği
     r = _calistir(dizin)
-    assert r.returncode == 0, r.stderr[-800:]
-    L = _oku(dizin)["layers"]["win-x64"]
-    assert L["app"]["size"] == 300, "yeni app uretilmedi"
-    assert "deps" not in L, "ESKI deps yeni app ile karistirildi"
+    assert r.returncode == 1, f"yarim katman seti SESSIZCE yayina gitti: {r.stdout[-400:]}"
+    assert "YARIM KATMAN SETI" in r.stderr, f"sebep soylenmedi: {r.stderr[-400:]}"
+    assert "deps EKSIK" in r.stderr, f"hangi katmanin eksik oldugu soylenmedi: {r.stderr[-400:]}"
+    # ⚠️ ASIL DEĞİŞMEZ hâlâ kilitli: manifest HİÇ YAZILMADIĞI için karışık set üretilmesi
+    # zaten imkânsız. (Fixture ÖNCEKİ manifesti bırakıyor — o dosyanın DOKUNULMAMIŞ olduğunu
+    # doğruluyoruz: yeni `app` boyutu 300 ise dosya bu koşuda yazılmış demektir.)
+    assert _oku(dizin)["layers"]["win-x64"]["app"]["size"] != 300, (
+        "manifest YAZILDI: yeni app onceki manifest'e islenmis, yani yarim set yayina gitti"
+    )
 
 
 # ── rollout (yayın kararı, dosyadan türetilemez) ─────────────────────────────
