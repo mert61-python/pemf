@@ -283,12 +283,34 @@ if ($env:PEMF_SKIP_FRONTEND -eq '1') {
         Pop-Location
     }
 
+    # === PEMF-AYNALAMA-BASI === (test cipasi: tests/test_installer_frontend_aynalama.py)
     # pf\dist -> frontend\dist (PyInstaller'in bekledigi kanonik konum)
+    #
+    # DENETIM 2026-08-17: 2026-08-15 "tek kaynak" degisikliginden beri $FrontendDir ve $PfDir
+    # AYNI dizini (pf) gosteriyor. Asagidaki Remove-Item TAZE export edilen pf\dist'i SILIYOR,
+    # ardindan Copy-Item kaynagi bulamiyor ("Cannot find path ...\pf\dist") ve
+    # $ErrorActionPreference='Stop' yuzunden Inno installer build'i VARSAYILAN yolda COKUYORDU
+    # (yalniz PEMF_SKIP_FRONTEND=1 ile derlenebiliyordu). Ustelik pf\dist silinmis kaldigi icin
+    # sonraki backend build'i de etkileniyordu.
+    #
+    # Aynalama bu haliyle GEREKSIZDIR: PEMF_Backend_onedir.spec web arayuzunu DOGRUDAN pf/dist'ten
+    # paketliyor (yayinlanan base-app.zip ile dogrulandi: frontend\dist\version.json diskte VAR ama
+    # zip'te YOK). Yine de kod KALDIRILMIYOR — $FrontendDir bir gun yeniden ayri bir dizine donerse
+    # (baska bir paketleyici kanonik frontend\dist beklerse) yol calismaya devam etsin.
+    #
+    # Kilit: tests/test_installer_frontend_aynalama.py — blogu GERCEKTEN kosturur (grep DEGIL).
     $FrontendDistDir = Join-Path $FrontendDir "dist"
-    if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
-    if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
-    Copy-Item (Join-Path $PfDir "dist") $FrontendDistDir -Recurse -Force
-    Write-OK "pf web export -> frontend\dist kopyalandi."
+    $PfDistDir       = Join-Path $PfDir "dist"
+    $AyniYer = ([IO.Path]::GetFullPath($PfDistDir).TrimEnd('\')) -ieq ([IO.Path]::GetFullPath($FrontendDistDir).TrimEnd('\'))
+    if ($AyniYer) {
+        Write-OK "Web export ZATEN kanonik konumda ($PfDistDir) - aynalama gerekmiyor."
+    } else {
+        if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
+        if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
+        Copy-Item $PfDistDir $FrontendDistDir -Recurse -Force
+        Write-OK "pf web export -> $FrontendDistDir kopyalandi."
+    }
+    # === PEMF-AYNALAMA-SONU ===
 }
 
 $FrontendIndex = Join-Path $FrontendDir "dist\index.html"

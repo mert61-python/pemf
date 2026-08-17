@@ -430,6 +430,49 @@ def _load() -> dict:
                 "(bozuk kopya .corrupt.<zaman> olarak saklandi)."
             ) from e
     else:
+        # ══════════════════════════════════════════════════════════════════════════════════════
+        # KARANTINA KANITI KAPISI (DENETIM 2026-08-17) — fail-closed YALNIZ ILK CAGRIYI kapsiyordu.
+        #
+        # Yukaridaki blok bozuk dosyayi `.corrupt.<zaman>` olarak KENARA ALIR ve hata yukseltir
+        # (kasitli, testle kilitli). Ama dosya artik YOLDAN KALDIRILMIS oldugu icin BIR SONRAKI
+        # `_load()` cagrisi `p.exists()` -> False gorup bu dala dusuyor, `_empty_doc()` donuyor ve
+        # hata YOK. Ardindan `get_secret("sqlcipher_key")` YENI bir anahtar URETIP `_save()` ile
+        # temiz bir dosya yaziyordu. Olculen zincir:
+        #   ADIM1 get_sqlcipher_key -> RuntimeError (brick korumasi CALISTI)
+        #         ...ama backend_service._initialize_database_safe 'except Exception' ile YUTAR
+        #   ADIM2 _resolve_supabase_credentials sessizce gecti; dosya YENIDEN YAZILDI
+        #   ADIM3 yeni anahtar uretildi -> ESKISIYLE AYNI DEGIL
+        # Sonuc: patients.db + pemf_treatment_history.db karantinaya alinir, cihaz BOS gecmisle
+        # acilir; `backup_recovery_code` da sifirlanir -> operatorun kasadaki kurtarma kodu
+        # gecersiz olur, `_fingerprint` degistigi icin zarf yeniden yazilir ve `_copy_offsite`
+        # OFF-SITE zarfi EZER. ~14 yedek turu sonra eski sifreli yedekler rotasyonla duser ->
+        # TIBBI KAYIT KALICI OKUNAMAZ.
+        #
+        # NEDEN BELLEKTE BIR KILIT YETMEZ: backend sik yeniden baslar; yeni surecte dosya yine YOK
+        # olur ve ayni yere dusulur. Bu yuzden kapi DISKTE kalan kanita bakar.
+        #
+        # TAZE KURULUM BOZULMAZ: dosya yok VE karantina kaniti yok -> eskisi gibi `_empty_doc()`.
+        # OPERATORUN CIKIS YOLU ACIK: karantina dosyalarini kaldirmak ("durumu ele aldim") makineyi
+        # normal calismaya dondurur — aksi halde cihazi KALICI acilamaz yapardik, yani duzeltmeye
+        # calistigimiz seyden daha kotusunu uretirdik.
+        #
+        # Kilit: tests/test_bozuk_sir_dosyasi_kalici_fail_closed.py (karsit-kanit testleri dahil).
+        # ══════════════════════════════════════════════════════════════════════════════════════
+        _karantina = sorted(p.parent.glob(p.name + ".corrupt.*"))
+        if _karantina:
+            _adlar = ", ".join(q.name for q in _karantina[-3:])
+            logger.error(
+                "pemf_secrets.json YOK ama karantina kaniti VAR (%s) — YENI ANAHTAR URETILMEDI. "
+                "Bu makine taze bir kurulum DEGIL; sirlari karantinaya alinmis bir kurulumdur.",
+                _adlar,
+            )
+            raise RuntimeError(
+                "pemf_secrets.json yok, ama yaninda karantinaya alinmis bozuk kopya(lar) var "
+                f"({_adlar}). Mevcut sifreli hasta verisini korumak icin yeni anahtar URETILMEDI. "
+                "Yapilacak: (1) pemf_secrets.json'i yedekten geri yukleyin — tercih edilen yol; "
+                "ya da (2) sifreli verinin kalici kaybini KABUL ediyorsaniz karantina dosyalarini "
+                "(*.corrupt.*) kaldirin; cihaz o zaman temiz anahtarlarla acilir."
+            )
         doc = _empty_doc()
     _cache = doc
     return doc

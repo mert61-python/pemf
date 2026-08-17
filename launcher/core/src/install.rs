@@ -84,6 +84,36 @@ pub const ENV_ENCRYPT_AT_REST: &str = "PEMF_ENCRYPT_AT_REST";
 /// gereken bir kurulum `PEMF_ENABLE_TUNNEL=0` ile kapatabilir, kod değişikliği gerekmez.
 pub const ENV_ENABLE_TUNNEL: &str = "PEMF_ENABLE_TUNNEL";
 
+/// STM32 PORT OTO-ALGILAMASI — bobin 1-5'in seri bağlantısı.
+///
+/// ⚠️ 2026-08-17 DENETİM BULGUSU — `ENV_ENCRYPT_AT_REST` ve `ENV_ENABLE_TUNNEL` ile AYNI SINIFIN
+/// ÜÇÜNCÜ ÖRNEĞİ. Bu değişken `backend_env()`'de YOKTU. Servis kurulumu (`deploy/device.env`) onu
+/// `auto` olarak AÇIKÇA veriyor — hem de yanındaki uyarıyla: *"boş bırakılırsa kod oto-algılama
+/// YAPMAZ → sabit COM10'a düşer (yanlış port riski)"*. Ama LAUNCHER yolu — yani siteden indirip
+/// kuran HER klinik, BUILD.md'nin "ANA dağıtım" dediği yol — geçirmiyordu.
+///
+/// Sonuç zinciri (`utils/stm32_transport.py`): değişken boşsa `configured = FIXED_STM32_PORT`
+/// (= `COM10`) ve oto-algılama YALNIZ `auto` ile açılır. ST-Link VCP'nin COM numarası Windows'un
+/// USB numaralandırmasına göre değişir (COM3/COM4/COM5…), dolayısıyla klinik PC'sinde COM10
+/// olmadığında backend sonsuza dek COM10'u dener (`_mark_bad` + 3 sn cooldown) →
+/// **bobin 1-5 hiç bağlanmaz.** ESP bobinleri 6-8 MQTT'den çalışmaya devam ettiği için cihaz
+/// "çalışıyor gibi görünür" — 1.9.28'de aynı sınıf için kaydedilen "yarısı çalışan cihaz" tablosu.
+/// Bu ayar ne arayüzde ne launcher'da açığa çıkarılmıştır (`servers/settings_router.py` yalnız
+/// MQTT alanlarını yönetir), yani operatörün yapabileceği bir şey yoktur.
+///
+/// GÜVENLİ Mİ: evet. `auto`, ST-Link'e ÖZGÜ USB PID setiyle (V1/V2/V2-1/V3) eşleşir ve LattePanda
+/// gibi kartlardaki onboard STM CDC'yi ELER (`_autodetect_stlink`); bulamazsa eski davranışa,
+/// yani `COM10`a düşer. Dolayısıyla COM10'un doğru olduğu makinelerde davranış DEĞİŞMEZ.
+///
+/// ÇIKIŞ KAPISI: ortamda bu değişken ZATEN tanımlıysa ona DOKUNULMAZ — sahada portu sabitlemek
+/// gereken kurulum `PEMF_STM_PORT=COM7` ile ezebilir (kod değişikliği gerekmez). `socket://`
+/// (STM simülatörü) yolu da böyle korunur.
+///
+/// Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR` — o kapı bu sınıfın DÖRDÜNCÜSÜNÜ
+/// engellemek için yazıldı (`backend_env_kumesi_bilincli_kalir` yalnız EKLEME tespit eder, EKSİKLİK
+/// tespit etmez; bu bulgu tam o kör noktada yaşadı).
+pub const ENV_STM_PORT: &str = "PEMF_STM_PORT";
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -511,6 +541,16 @@ where
         getenv(ENV_ENABLE_TUNNEL)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "1".to_string()),
+    );
+    // STM32 PORT OTO-ALGILAMASI (bkz. ENV_STM_PORT): bu satır olmadan launcher ile kuran her
+    // klinikte backend sabit COM10'u deniyor ve ST-Link başka bir COM'daysa bobin 1-5 HİÇ
+    // bağlanmıyordu (ESP 6-8 çalıştığı için cihaz "yarı çalışıyor" görünüyordu).
+    // Ortamda zaten tanımlıysa DOKUNMA (çıkış kapısı: `PEMF_STM_PORT=COM7` ya da `socket://…`).
+    env.insert(
+        ENV_STM_PORT.to_string(),
+        getenv(ENV_STM_PORT)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "auto".to_string()),
     );
     // TIBBİ VERİ KÖKÜ (bkz. ENV_DATA_DIR): makine-geneli yazılabilirse oraya. Bu satır olmadan
     // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
@@ -1215,6 +1255,38 @@ mod tests {
     }
 
     #[test]
+    fn backend_env_STM_PORT_OTO_ALGILAMAYI_acar() {
+        // ⚠️ DENETİM 2026-08-17: bu satır olmadan backend sabit `COM10`a düşüyordu
+        // (`utils/stm32_transport.py`: oto-algılama YALNIZ `auto` ile açılır). ST-Link'in COM
+        // numarası Windows USB numaralandırmasına göre değişir → klinikte COM10 değilse
+        // **bobin 1-5 hiç bağlanmıyordu**, ESP 6-8 çalıştığı için cihaz "yarı çalışıyor" görünüyordu.
+        let env = backend_env_with(|_| None, Path::new("/opt/pemf"), 8123, "");
+        assert_eq!(
+            env.get(ENV_STM_PORT).map(String::as_str),
+            Some("auto"),
+            "STM portu oto-algılaması kapalı → ST-Link COM10 değilse bobin 1-5 HİÇ bağlanmaz \
+             (cihaz yarı çalışır ve sebebi arayüzde yazmaz)"
+        );
+    }
+
+    #[test]
+    fn backend_env_ORTAMDAKI_STM_PORT_tercihine_dokunmaz() {
+        // Çıkış kapısı: sahada portu sabitlemek gerekebilir (`PEMF_STM_PORT=COM7`) ya da STM
+        // simülatörü kullanılabilir (`socket://127.0.0.1:5100`). Ortam ENJEKTE edilir.
+        let env = backend_env_with(
+            |k| (k == ENV_STM_PORT).then(|| "COM7".to_string()),
+            Path::new("/opt/pemf"),
+            8123,
+            "",
+        );
+        assert_eq!(
+            env.get(ENV_STM_PORT).map(String::as_str),
+            Some("COM7"),
+            "operatörün sabitlediği port EZİLDİ — çıkış kapısı çalışmıyor"
+        );
+    }
+
+    #[test]
     fn backend_env_ORTAMDAKI_tunel_tercihine_dokunmaz() {
         // Çıkış kapısı: internete açılmaması gereken kurulum `PEMF_ENABLE_TUNNEL=0` diyebilmeli.
         // Ortam ENJEKTE edilir → global duruma dokunulmaz, paralel testler birbirini ezmez.
@@ -1255,6 +1327,10 @@ mod tests {
             // Bir bobin-güvenliği hatası bulunduğunda "hangi klinik hangi sürümde?" sorusunun
             // cevabı yoktu; `rollout: 0` yalnız YENİ kurulumları durdurur. KOŞULSUZ eklenir.
             ENV_LAUNCHER_VERSION,
+            // STM32 PORT OTO-ALGILAMASI (2026-08-17 denetimi): bu satır olmadan launcher ile kuran
+            // her klinikte backend sabit COM10'u deniyor ve ST-Link başka COM'daysa bobin 1-5 HİÇ
+            // bağlanmıyordu. KOŞULSUZ eklenir; ortamdaki değer korunur (bkz. ENV_STM_PORT).
+            ENV_STM_PORT,
         ];
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()
@@ -1273,6 +1349,100 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>(),
             "backend'e giden ortam değişkeni kümesi değişti — bilinçli mi?"
+        );
+    }
+
+    /// ⚠️ EKSİKLİK KAPISI (denetim 2026-08-17) — yukarıdaki testin YAPAMADIĞI şey.
+    ///
+    /// `backend_env_kumesi_bilincli_kalir` kümeyi kilitler ama **DEĞİŞİKLİK** tespiti yapar: bir
+    /// değişken *eklenirse* kırılır, *eksikse* sessiz kalır. Bu sınıf ÜÇ KEZ yaşandı ve üçünde de
+    /// arıza yalnız SAHADA görüldü:
+    ///   * `ENV_ENCRYPT_AT_REST` (2026-08-08) → klinikler hasta verisini DÜZ METİN yazıyordu,
+    ///   * `ENV_ENABLE_TUNNEL`   (2026-08-12) → hiçbir klinik farklı ağdan bağlanamıyordu,
+    ///   * `ENV_STM_PORT`        (2026-08-17) → ST-Link COM10 değilse **bobin 1-5 hiç bağlanmıyordu**
+    ///     (ESP 6-8 MQTT'den çalıştığı için cihaz "yarı çalışıyor" görünüyordu).
+    ///
+    /// Ortak kök neden: `deploy/device.env` bir davranışı ayarlıyor, backend `.env` dosyalarını
+    /// OTOMATİK YÜKLEMEZ (`load_dotenv` yok → `servers/api_server.py`'nin kendi notu), launcher da
+    /// o değişkeni geçirmiyor. Servis yolu doğru, launcher yolu geride kalıyor.
+    ///
+    /// KAPI: `deploy/device.env`'deki HER etkin anahtar ya launcher tarafından GEÇİRİLMELİ ya da
+    /// aşağıda GEREKÇESİYLE muaf tutulmalı. Yeni bir anahtar eklendiğinde bu test kırılır ve karar
+    /// vermek ZORUNLU olur — "unutmak" artık sessiz bir seçenek değil.
+    #[test]
+    fn device_env_anahtarlari_launcherda_KARSILIGINI_BULUR() {
+        let env_dosyasi = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("deploy")
+            .join("device.env");
+        let icerik = std::fs::read_to_string(&env_dosyasi)
+            .unwrap_or_else(|e| panic!("deploy/device.env okunamadi ({:?}): {e}", env_dosyasi));
+
+        // Etkin (yorumlanmamış) anahtarlar.
+        let anahtarlar: Vec<String> = icerik
+            .lines()
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && !s.starts_with('#') && s.contains('='))
+            .map(|s| s.split('=').next().unwrap().trim().to_string())
+            .collect();
+        assert!(
+            anahtarlar.len() >= 10,
+            "device.env ayristirilamadi (yalniz {} anahtar) — kapi anlamsiz kalir",
+            anahtarlar.len()
+        );
+
+        let env = backend_env(Path::new("/opt/pemf"), 8123, "nonce123");
+
+        // ── MUAF: backend VARSAYILANI device.env ile AYNI sonucu veriyor ya da launcher yolunda
+        //    kavram olarak karşılığı yok. Her satırın gerekçesi ZORUNLU.
+        let muaf: &[(&str, &str)] = &[
+            ("PEMF_HEADLESS", "frozen build ZATEN headless; GUI kaynagi silindi (pemf_gui olu)"),
+            ("PEMF_API_HOST", "backend varsayilani 0.0.0.0 (backend_service.py) → launcher ETKILENMEZ"),
+            (
+                "PEMF_CORS_ORIGINS",
+                "DENETIM P0 sonrasi backend varsayilani loopback+RFC1918+*.local ile SINIRLI \
+                 (api_server.py) — cozum tam olarak 'launcher gecirmiyor' oldugu icin VARSAYILANI \
+                 degistirmekti; ayrica test_security_hardening kilitliyor",
+            ),
+            ("PEMF_RATELIMIT_REMOTE_PER_MIN", "backend varsayilani 600 = device.env degeri"),
+            (
+                "PEMF_CLOUD_PATIENT_SYNC",
+                "backend varsayilani '0' (KAPALI) = device.env degeri; \
+                 test_kvkk_transfer_claims varsayilani kaynak duzeyinde kilitliyor",
+            ),
+            ("PEMF_DEVICE_NAME", "klinige ozgu etiket; launcher yolunda karsiligi yok (bulut kaydi ayri)"),
+            (
+                "PEMF_LOG_DIR",
+                "backend gunluk yolunu PEMF_DATA_DIR'den turetir; launcher'in read_tail'i de AYNI \
+                 ortamla cozer (2026-08-11 'yanlis gunluk' arizasinin duzeltmesi)",
+            ),
+        ];
+
+        // ── KOŞULLU: gerçekten geçirilir ama ortama bağlı (Windows / operatör seçimi). CI'nin
+        //    Linux koşusunda haritada bulunmazlar; yokluğu bir eksiklik DEĞİLDİR.
+        let kosullu = [ENV_DATA_DIR, ENV_BACKUP_DIR];
+
+        let mut eksik: Vec<String> = Vec::new();
+        for a in &anahtarlar {
+            if env.contains_key(a) {
+                continue;
+            }
+            if muaf.iter().any(|(k, _)| k == a) {
+                continue;
+            }
+            if kosullu.contains(&a.as_str()) {
+                continue;
+            }
+            eksik.push(a.clone());
+        }
+
+        assert!(
+            eksik.is_empty(),
+            "deploy/device.env bu anahtarlari ayarliyor ama launcher backend'e GECIRMIYOR ve \
+             muafiyet listesinde de yoklar: {eksik:?}\n\
+             Bu, sahada UC KEZ yasanan hata sinifinin ta kendisi (bkz. testin docstring'i). \
+             Ya `backend_env_with`e ekleyin ya da yukaridaki `muaf` listesine GEREKCESIYLE yazin."
         );
     }
 

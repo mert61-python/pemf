@@ -13,6 +13,7 @@ import time as _t
 from typing import Optional
 
 from database.patient_database import get_patient_database
+from database.sqlcipher_util import dict_satir_fabrikasi
 from database.treatment_history_db import get_treatment_db
 
 logger = logging.getLogger(__name__)
@@ -202,12 +203,14 @@ class CloudSyncWorker:
             # add/get/search + KVKK unutulma-hakkı silme dahil TÜM hasta-DB işlemleri bloklanırdı.
             with patient_db.lock:
                 with patient_db._get_connection() as conn:
-                    conn.row_factory = lambda c, r: {
-                        d[0]: r[i] for i, d in enumerate(c.description)
-                    }  # SQLCipher-uyumlu
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM patients WHERE sync_status = 0")
-                    unsynced_patients = [dict(row) for row in cursor.fetchall()]
+                    # ⚠️ DENETİM 2026-08-17: `row_factory` burada atanıp GERİ YÜKLENMİYORDU ve
+                    # bağlantı havuzdan gelip thread-başına yeniden kullanıldığı için kirlenme
+                    # süreç ömrü boyunca sürüyordu. Bkz. `dict_satir_fabrikasi` docstring'i +
+                    # `tests/test_row_factory_havuz_kirlenmesi.py`. (SQLCipher-uyumlu dict.)
+                    with dict_satir_fabrikasi(conn):
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT * FROM patients WHERE sync_status = 0")
+                        unsynced_patients = [dict(row) for row in cursor.fetchall()]
 
             for patient_data in unsynced_patients:
                 # SQLite row'u supabase formatina donustur
@@ -313,13 +316,16 @@ class CloudSyncWorker:
         # PUSH: Lokalden Supabase'e gönder
         try:
             with session_db._get_connection() as conn:
-                conn.row_factory = (
-                    lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}
-                )  # SQLCipher-uyumlu (sqlite3.Row, sqlcipher3 cursor'ı SARMAZ → at-rest-şifreli DB'de PUSH TypeError'la patlıyordu)
-                cursor = conn.cursor()
-
-                cursor.execute("SELECT * FROM treatment_sessions WHERE sync_status = 0")
-                unsynced_sessions = cursor.fetchall()
+                # SQLCipher-uyumlu dict (sqlite3.Row, sqlcipher3 cursor'ı SARMAZ → at-rest-şifreli
+                # DB'de PUSH TypeError'la patlıyordu).
+                # ⚠️ DENETİM 2026-08-17: fabrika GERİ YÜKLENMİYORDU ve bağlantı havuzdan gelip
+                # thread-başına yeniden kullanıldığı için kirlenme süreç ömrü boyunca sürüyordu.
+                # Yalnız OKUMA sarılır; satırlar burada dict olarak materyalize edilir, aşağıdaki
+                # döngü ağ RPC'leri boyunca fabrikayı TUTMAZ. Bkz. `dict_satir_fabrikasi`.
+                with dict_satir_fabrikasi(conn):
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM treatment_sessions WHERE sync_status = 0")
+                    unsynced_sessions = cursor.fetchall()
 
                 for row in unsynced_sessions:
                     session_data = dict(row)

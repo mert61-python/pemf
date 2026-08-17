@@ -194,6 +194,51 @@ async def _decode_image(file, image_base64, *, label: str) -> np.ndarray:
     return img
 
 
+async def _kapili_devret(name: str, label: str = None, *, file=None, image_base64: str = None, data: dict = None):
+    """MODALİTE KAPISINI UYGULA, sonra GPU mikroservisine devret.
+
+    ⚠️ DENETİM 2026-08-17 — KAPI, DEVRETMENİN ARKASINDA KALIYORDU. Her görüntü ucunda
+    `if ai_service_enabled(): return await delegate_infer(...)` satırı, kapıyı çalıştıran
+    `_decode_image(...)` satırından ÖNCE dönüyordu. `ai_service/app.py` ne modalite denetimi ne
+    sessizlik kapısı içeriyor ve `docker/Dockerfile.ai` imaja `utils/`i HİÇ kopyalamıyor →
+    mikroservis profilinde kapı TAMAMEN yoktu. Deneysel olarak ölçüldü (gerçek CT fixture'ı →
+    Böbrek Patoloji ucu):
+        GÖMÜLÜ mod      -> HTTP 422 "boyalı patoloji preparatı (H&E) bekliyor"
+        MİKROSERVİS mod -> HTTP 200 {"top_1_class": "Grade 4", "top_1_prob": 1.0}
+    Yani kapının var olma sebebi olan 2026-08-06 saha vakası ("CT → Grade 4 · %100") birebir
+    geri gelmişti. Kapsam 8 uç: landmark, segmentation, thermal, reticulocytes, em_fantom,
+    kidney_ct, histopath, cat_organ.
+
+    ⚠️ GİRDİ TEK KEZ OKUNUR: `UploadFile.read()` ikinci çağrıda BOŞ döner, dolayısıyla "önce kapı,
+    sonra devret" için baytları elde tutup mikroservise `image_base64` olarak vermek ZORUNLU.
+    Böylece GPU servisi kapıdan geçen AYNI baytları alır (yeniden kodlama/kayıp yok).
+
+    ⚠️ KAPSAM DIŞI (bilerek): (a) ses ucundaki sessizlik kapısı — ffmpeg transcode + RMS ölçümüne
+    bağlı, devretmenin önüne almak ses hattını yeniden kurgulamak demek; (b) `:8100`e DOĞRUDAN
+    yapılan çağrılar — deponun kendi kuralına göre (bkz. `ai_hub/inference_petri_dish/
+    plausibility.py`) kalıcı çözüm kapıları `ai_hub/`e taşımaktır.
+
+    Kilit: `tests/test_ai_mikroservis_modalite_kapisi.py` (karşıt-kanıt testleri dahil).
+    """
+    # ⚠️ `label` VARSAYILAN OLARAK `name`: sekiz çağrı yerinin hepsi aynı dizeyi İKİ KEZ
+    # veriyordu ve bu, ileride `("histopath", "kidney_ct")` gibi bir yazım hatasının bobini değil
+    # ama TEŞHİSİ yanlış modalite kapısından geçirmesine davetiyeydi (sessiz klinik hata).
+    # Artık tek dize yeterli; farklı bir etiket ancak AÇIKÇA istenirse verilir.
+    label = label or name
+    if image_base64:
+        b64 = image_base64
+    else:
+        if file is None:
+            raise ValueError("Görüntü verisi bulunamadı.")
+        content = await file.read(_MAX_IMAGE_BYTES + 1)
+        if len(content) > _MAX_IMAGE_BYTES:
+            raise ValueError(f"Görüntü çok büyük (> {_MAX_IMAGE_BYTES // (1024 * 1024)} MB sınırı).")
+        b64 = base64.b64encode(content).decode("ascii")
+    # Boyut/piksel sınırları + modalite denetimi KAPISI (uyuşmazlıkta HTTPException(422)).
+    await _decode_image(None, b64, label=label)
+    return await delegate_infer(name, image_base64=b64, data=data)
+
+
 def _encode_jpg_b64(img: np.ndarray, quality: int | None = None) -> str:
     """BGR görüntüyü JPEG'e kodla → base64 string (opsiyonel kalite 0-100)."""
     params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)] if quality is not None else []
@@ -271,7 +316,7 @@ async def analyze_landmark(
         if ai_service_enabled():
             # NOT: auto_adjust (donanım biofeedback) mikroservis modunda çekirdekte kalır;
             # AI servisi yalnız analiz döner. Sunucu/donanımsız profilde auto_adjust yok.
-            return await delegate_infer("landmark", file=file, image_base64=image_base64)
+            return await _kapili_devret("landmark", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="landmark")
 
         def _load_landmark():
@@ -1391,7 +1436,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
     """YOLO Seg Kedi Segmentasyonu"""
     try:
         if ai_service_enabled():
-            return await delegate_infer("segmentation", file=file, image_base64=image_base64)
+            return await _kapili_devret("segmentation", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="segmentation")
 
         def _load_seg():
@@ -1444,7 +1489,7 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
     """GhostNetV2 Termal Analiz"""
     try:
         if ai_service_enabled():
-            return await delegate_infer("thermal", file=file, image_base64=image_base64)
+            return await _kapili_devret("thermal", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="thermal")
 
         def _load_thermal():
@@ -1483,7 +1528,7 @@ async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str
     tmp = None  # finally'de temizlenecek temp görüntü (hata olsa da sızmasın)
     try:
         if ai_service_enabled():
-            return await delegate_infer("reticulocytes", file=file, image_base64=image_base64)
+            return await _kapili_devret("reticulocytes", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="reticulocytes")
 
         def _load_retic():
@@ -1572,7 +1617,7 @@ async def analyze_em_fantom(
     """
     try:
         if ai_service_enabled():
-            return await delegate_infer(
+            return await _kapili_devret(
                 "em_fantom",
                 file=file,
                 image_base64=image_base64,
@@ -1659,7 +1704,7 @@ async def analyze_em_petri(
     """
     try:
         if ai_service_enabled():
-            _remote = await delegate_infer(
+            _remote = await _kapili_devret(
                 "em_petri",
                 file=file,
                 image_base64=image_base64,
@@ -2067,7 +2112,7 @@ async def analyze_kidney_ct(
     """
     try:
         if ai_service_enabled():
-            return await delegate_infer("kidney_ct", file=file, image_base64=image_base64)
+            return await _kapili_devret("kidney_ct", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="kidney_ct")
 
         def _load_kidney_ct():
@@ -2120,7 +2165,7 @@ async def analyze_histopath(
     """
     try:
         if ai_service_enabled():
-            return await delegate_infer("histopath", file=file, image_base64=image_base64)
+            return await _kapili_devret("histopath", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="histopath")
 
         def _load_histopath():
@@ -2171,7 +2216,7 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
     """
     try:
         if ai_service_enabled():
-            return await delegate_infer("cat_organ", file=file, image_base64=image_base64)
+            return await _kapili_devret("cat_organ", file=file, image_base64=image_base64)
         img = await _decode_image(file, image_base64, label="cat_organ")
 
         def _load_cat_organ():

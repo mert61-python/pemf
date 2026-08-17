@@ -867,7 +867,45 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         f = FREQ_MIN;
       if (f > FREQ_MAX)
         f = FREQ_MAX;
+      /* [FIX-1c] ⚠️ DENETİM 2026-08-17 — BAYAT DUTY TICK'İ (frekans ARTIŞI).
+       *
+       * `g_duty_ticks[i]` bir TICK SAYISIdır ve yalnız `g_tpp[i]`ye göre anlam taşır. Eskiden
+       * `g_tpp[i]` burada güncellenirken fiili duty tick'i ESKİ periyodun ölçeğinde bırakılıyor,
+       * `tpp-1` güvenlik klempi ise YALNIZ aşağıdaki `if (period_reset)` bloğunda uygulanıyordu.
+       * Frekans ARTTIĞINDA (tpp küçülür) iki sonuç doğuyordu:
+       *   (a) bayat `g_duty_ticks >= yeni tpp` → `state = (adj < duty)` her tick'te 1 → IN_A
+       *       sürekli HIGH: 1 Hz %50 → 2 Hz geçişinde ~1000 ms KESİNTİSİZ tek-polarite sürüş
+       *       (meşru zarf 250-500 ms). ESP'lere giden `ref_ms` hizalaması tick'i periyot
+       *       ORTASINDAN başlattığı için klemp bir sonraki periyot başına kadar devreye girmiyordu.
+       *   (b) ilk `period_reset`'te klemp duty'yi `tpp-1` (=%99,8) yapıyor → bobin, operatörün
+       *       İSTEMEDİĞİ bir duty ile sürülüyor ve aşağı-slew ile 15-19 periyotta iniyor.
+       * Yani hekimin girdiği parametreye SADAKAT kayboluyordu.
+       *
+       * Düzeltme, bu dosyanın [FIX-1b] notundaki ilkeyle aynı: tpp, duty-tick, faz-tick ve
+       * dds-tick'in HEPSİ aynı parametre setinden, TEK kritik bölgede türetilir — ayrışma
+       * imkânsız. `g_duty_ticks` o ailenin yeniden ölçeklenmeyen tek üyesiydi.
+       *
+       * ⚠️ Enerjiyi ARTIRAN yönün slew ile sınırlanması (inrush/EMI) DEĞİŞMEDİ: burada yalnız
+       * mevcut ORAN korunur, hedefe yaklaşma yine `period_reset` içindeki slew ile olur.
+       * ⚠️ TEZGÂHTA DOĞRULANMADI (denetim ortamında donanım yok). Kilit:
+       * `tests/test_firmware_frekans_artisi_duty.py` (ISR modeli + yapısal kapı). */
+      const uint32_t eski_tpp = g_tpp[i];
       g_tpp[i] = (uint32_t)(50000.0f / f);
+      if ((eski_tpp > 0U) && (g_tpp[i] != eski_tpp) && (g_duty_ticks[i] > 0)) {
+        /* Oranı koru: duty_ticks / tpp sabit kalsın. */
+        g_duty_ticks[i] =
+            (int32_t)(((float)g_duty_ticks[i] / (float)eski_tpp) * (float)g_tpp[i]);
+      }
+      /* Güvenlik klempini ANINDA uygula — `period_reset`'i BEKLEMEDEN (etki (a) tam buradaydı). */
+      {
+        int32_t max_d_now = (int32_t)(g_tpp[i] - 1U) - (int32_t)DDS_DEAD_TIME_TICKS;
+        if (max_d_now < 0)
+          max_d_now = 0;
+        if (g_duty_ticks[i] > max_d_now)
+          g_duty_ticks[i] = max_d_now;
+        if (g_duty_ticks[i] < 0)
+          g_duty_ticks[i] = 0;
+      }
 
       float tpp_f = (float)g_tpp[i];
 

@@ -662,6 +662,10 @@
           rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
           rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
           startChecking: "Güncelleme kontrol ediliyor…",
+          // DENETİM 2026-08-17: başarısız self-update ekranı "Client güncelleniyor…"da hapsediyordu
+          // ve başarı ile başarısızlık ayırt edilemiyordu. Nötr BİLGİ notu (kırmızı hata değil):
+          // uygulama normal açılıyor, kullanıcının yapacağı bir şey yok.
+          selfUpdateFailed: "Client güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
           rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
           rtBgPrep: "Hazırlanıyor…",
           rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
@@ -736,6 +740,7 @@
           rtBgFail: "Background download did not finish — it will resume on the next launch.",
           rtReady: "Update ready — it will be installed when you close and reopen the app.",
           startChecking: "Checking for updates…",
+          selfUpdateFailed: "Client update could not be completed — the app is opening normally. It will be retried on the next launch.",
           rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
           rtBgPrep: "Preparing…",
           rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
@@ -1710,6 +1715,21 @@
         // sürüm değişmez → her açılışta yeniden denenirdi. auto=false → SESSİZ kurulumu ATLA,
         // normal boot sürsün (bildirim ekranda kalır, kullanıcı elle indirebilir).
         if (u.auto === false) return false;
+        // ⚠️ DENETİM 2026-08-17 — EKRAN DEVRALINIYOR AMA GERİ ALINMIYORDU.
+        // Aşağıdaki `catch` yalnız `stopPolling(); return false;` yapıyordu; `bootNetwork`'ün de
+        // hiçbir dalı telafi etmiyordu. Sonuç: pencere `s-install`de, "indirilip kuruluyor —
+        // otomatik yeniden başlayacak" METNİYLE kalıyordu (yalan) ve Başlat/Onar/Kaldır/Profil
+        // hepsi gizli `s-ready` içinde olduğu için **cihaz açılamıyordu**. Başarı ile başarısızlık
+        // kullanıcı için AYIRT EDİLEMEZ hâle geliyordu. Kurulu OLMAYAN cihazda kaçış yolu HİÇ
+        // yoktu (`tryRuntimeUpdate` `!baseInstalled` ile hemen döner, `pending_profiles` boş) →
+        // yeni kullanıcı hiç kuramıyordu. Seans sürerken kapı reddettiğinde ise veteriner TEDAVİ
+        // sırasında "otomatik yeniden başlayacak" okuyordu.
+        // Belirlenimci ret sebepleri her açılışta tekrarlar: asset 404 (`--clobber` kesme tuzağı),
+        // manifest sha'sı ↔ yayınlanan exe uyuşmazlığı, `/api/health` yanıt vermeyen bir süreç
+        // yüzünden `session_active === None`.
+        // Bu satır, dosyanın kendi `curScreen()` yardımcısıyla ("arka plandaki manifest işi
+        // kullanıcının ekranını ÇALMASIN diye") aynı ilkeyi self-update'e uygular.
+        const oncekiEkran = curScreen();
         try {
           show("s-install"); resetInstallUI();
           // DENETİM 2026-08-04 (P2): burada ÜÇ kontrol düğmesi de gizleniyordu ve hemen ardından
@@ -1728,6 +1748,24 @@
           return true;
         } catch (e) {
           stopPolling();
+          // EKRANI GERİ AL (bkz. yukarıdaki `oncekiEkran` notu): "normal boot sürer" niyeti ancak
+          // kullanıcının ekranı geri gelirse gerçekleşir. İptal de buraya düşer ve iptalin ekranı
+          // geri alması, 2026-08-04'te eklenen İptal düğmesinin yarım kalan yarısıdır.
+          if (oncekiEkran) {
+            show(oncekiEkran);
+            // ⚠️ KAPIYI YENİDEN KAPAT. `show("s-ready")` yan etki olarak `startKapisiAc()` çağırır
+            // (bilerek: kapıyı tek tek çıkış yollarına serpiştirmemek için). Ama burada ağ adımı
+            // HENÜZ BİTMEDİ — `tryRuntimeUpdate()` sonra koşacak ve ekranı devralabilir. Düğmeyi
+            // şimdi açmak, 1.9.30'un ortadan kaldırmak için yazıldığı belirtiyi geri getirirdi:
+            // veteriner "Başlat"a basacakken ekran güncellemeye geçer ve tıklama boşa gider.
+            // Kalıcı kilit riski YOK: `startKapisiKapat` 25 sn'lik zaman aşımını yeniden kurar
+            // (bkz. tests/test_baslat_kapisi.py::test_DAVRANIS_zaman_asimi_kapiyi_ACAR).
+            startKapisiKapat();
+          }
+          // Başarı ile başarısızlık AYIRT EDİLEBİLİR olmalı; kullanıcı ne olduğunu okumalı.
+          // Hata kutusu (`fail`) DEĞİL nötr bilgi notu: uygulama normal açılıyor, yapılacak bir şey
+          // yok ve kırmızı hata gereksiz telaş yaratırdı.
+          try { notice(t().selfUpdateFailed); } catch (_) {}
           return false; // güncelleme başarısız → normal boot (uygulama yine açılır)
         }
       }

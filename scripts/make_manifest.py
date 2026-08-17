@@ -162,15 +162,48 @@ def main() -> int:
             print(f"[HATA] mevcut manifest okunamadı ({prev_path}): {e}", file=sys.stderr)
             return 1
 
-    found, missing = [], []
+    found, missing, url_korundu = [], [], []
     for name, (section, key, v1_key) in ASSETS.items():
         path = args.dir / name
         if not path.exists():
             missing.append(name)
             continue
+        _sha = sha256(path)
+        _url = f"{base_url}/{name}"
+        # ══════════════════════════════════════════════════════════════════════════════════════
+        # ICERIK DEGISMEDIYSE URL'yi TASIMA (DENETIM 2026-08-17) — SESSIZ 404.
+        #
+        # Burada URL kosulsuz `--tag`ten yeniden kuruluyordu. Ama BUILD.md bolum 6'nin yukleme
+        # listesi yalniz base-app.zip / base-deps.zip / manifest.json iceriyor: `home.zip` paket
+        # klasorunde DURUYOR ve yayindakiyle BIREBIR AYNI. Siradan bir app yayininda
+        # `--tag client-app-v1.9.16` verilince `models.home`/`profiles.home` URL'si o etikete
+        # tasiniyor, o etikete home.zip YUKLENMIYOR → 404. Sonuc: "Ev Sahibi" profilini secen her
+        # YENI kurulum ve her "Onar" hata ile duser (net.rs 404'u deterministik sayar, tekrar
+        # denemez). vet.zip/research.zip yerelde olmadigi icin TASINIR ve URL'leri korunur →
+        # uc profilden TAM OLARAK BIRI kirilir.
+        #
+        # HICBIR MEVCUT KAPI GOREMEZ: `sha256` DEGISMEDIGI icin test_manifest_consistency,
+        # manifest.rs::depodaki_gercek_manifest_ayristirilir ve URL-pin kontrolu yesil kalir.
+        # `--drop-missing` de ise yaramaz — dosya *var*.
+        #
+        # DOGRU DAVRANIS: sha onceki manifest'tekiyle AYNIYSA URL KORUNUR (asset o eski etikette
+        # zaten yayinda ve bayt-bayt ayni). sha DEGISTIYSE URL yeni etikete tasinir.
+        # Kilit: tests/test_manifest_degismeyen_paket_url.py
+        # ══════════════════════════════════════════════════════════════════════════════════════
+        _onceki = (prev.get(section) or {}).get(key) or {}
+        _onceki_url = str(_onceki.get("url") or "")
+        if _onceki_url and str(_onceki.get("sha256") or "") == _sha and _onceki_url != _url:
+            _url = _onceki_url
+            # ⚠️ ASCII: bu betigin cikisi cp1254 konsola yaziliyor; ok karakteri (→)
+            # UnicodeEncodeError ile SUREC COKMESINE yol acar (olculdu).
+            # ⚠️ Etiket cikarimi SAVUNMALI: elle duzenlenmis/bozuk bir URL'de `rsplit('/', 2)[-2]`
+            # IndexError verir ve manifest uretimini COKERTIRDI — oysa bu yalnizca bir LOG etiketi.
+            _parca = _onceki_url.rsplit("/", 2)
+            _etiket = _parca[-2] if len(_parca) >= 2 else "?"
+            url_korundu.append(f"{name} (sha ayni, etiket: {_etiket})")
         entry = {
-            "url": f"{base_url}/{name}",
-            "sha256": sha256(path),
+            "url": _url,
+            "sha256": _sha,
             "size": path.stat().st_size,
             "kind": "zip",
         }
@@ -427,6 +460,10 @@ def main() -> int:
         print(f"  + {line}")
     for line in carried:
         print(f"  = {line}")
+    # SESSİZ OLMAZ: yayıncı, hangi paketin URL'sinin ESKİ etikette bırakıldığını görmeli — aksi
+    # halde diff'te "neden bu URL değişmedi?" sorusu cevapsız kalır (bkz. URL taşıma notu).
+    for line in url_korundu:
+        print(f"  ~ URL KORUNDU: {line} - bu etikete yeniden YUKLEMEK GEREKMEZ")
     for plat in dusurulen:
         print(f"  - {plat} MANIFEST'TEN CIKARILDI (--drop-platform)")
     if missing:

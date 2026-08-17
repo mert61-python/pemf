@@ -273,16 +273,63 @@ def refresh_recovery_material(app_data_dir, dest_dirs) -> bool:
     except Exception:
         unchanged = False
 
-    missing = [d for d in dests if not (d / ENVELOPE_NAME).exists()]
+    # ══════════════════════════════════════════════════════════════════════════════════════════
+    # SAGLAMLIK "VAR MI?" ILE OLCULEMEZ (DENETIM 2026-08-17).
+    #
+    # Burada kapi `not (d / ENVELOPE_NAME).exists()` idi. `_fingerprint` yalniz `code` + `keys`'in
+    # fonksiyonu (yedek icerigi ETKILEMEZ) ve anahtarlar sabit oldugu icin `unchanged` sonsuza dek
+    # True. Dolayisiyla zarf bir kez BOZULURSA (yazim sirasinda guc kesintisi / kisa dosya) dosya
+    # VAR oldugu icin `missing` bos kalir ve zarf BIR DAHA ASLA yeniden yazilmaz. Olculdu: bozuk
+    # zarf 5 tur boyunca onarilmadi ve fonksiyon her turda True dondu.
+    #
+    # Sonuc: anakart/disk arizasindan sonra `open_envelope` "Zarf okunamadi (bozuk dosya?)" der ve
+    # sifreli yedeklerin TEK off-machine anahtar escrow'u okunamaz (RUNBOOK: pemf_secrets.json
+    # DPAPI ile makineye bagli, support_bundle zarfi bilerek disliyor). Asil sivri uc kaybin
+    # kendisi degil SESSIZLIGI: `_copy_offsite` kararini yalniz `.exists()`'ten verip operatore
+    # "KURTARMA KODU ile baska makinede geri yuklenebilir" diye YANLIS GUVENCE logluyordu.
+    #
+    # "Degismediyse yeniden yazma" davranisi KASITLI ve testle kilitli (test_backup_recovery:
+    # "Operatorun dogruladigi zarf her gun degisip suphe uyandirmasin") → KORUNUR. Degisen tek sey:
+    # "var mi?" yerine "GERCEKTEN ACILIYOR MU?" sorulmasi.
+    # Kilit: tests/test_kurtarma_zarfi_saglamlik.py
+    # ══════════════════════════════════════════════════════════════════════════════════════════
+    def _zarf_saglam_mi(yol) -> bool:
+        try:
+            return bool(open_envelope(code, yol.read_bytes()))
+        except Exception:
+            return False
+
+    missing = [d for d in dests if not _zarf_saglam_mi(d / ENVELOPE_NAME)]
     if unchanged and not missing:
         return True
+    if missing:
+        logger.warning(
+            "kurtarma zarfi eksik/BOZUK (%s) — yeniden yaziliyor.",
+            ", ".join(str(d) for d in missing),
+        )
 
     blob = build_envelope(code, keys)
     written = 0
     for d in dests:
         try:
             d.mkdir(parents=True, exist_ok=True)
-            (d / ENVELOPE_NAME).write_bytes(blob)
+            # ATOMIK YAZIM: tmp + fsync + os.replace. `write_bytes` yarim dosya birakabilir ve
+            # yukaridaki kapi (eskiden `.exists()`) onu "saglam" sayardi. Ayni desen ve gerekcesi:
+            # utils/secrets_manager._save ("yarim kalan bir sir dosyasi TUM kurulumu acilamaz kilar").
+            # Surece-ozel tmp adi: yarida kalan bir tmp sonraki yazimlari kalici engellemesin.
+            _tmp = d / f"{ENVELOPE_NAME}.{os.getpid()}.tmp"
+            try:
+                with open(_tmp, "wb") as _f:
+                    _f.write(blob)
+                    _f.flush()
+                    os.fsync(_f.fileno())
+                os.replace(_tmp, d / ENVELOPE_NAME)
+            finally:
+                try:
+                    if _tmp.exists():
+                        _tmp.unlink()
+                except Exception:
+                    pass
             written += 1
         except Exception:
             logger.warning("kurtarma zarfi yazilamadi: %s", d, exc_info=True)

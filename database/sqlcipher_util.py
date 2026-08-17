@@ -12,6 +12,7 @@ NOT: treatment_history_db.py kendi (calisan, test-edilmis) inline kopyasini koru
 yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni anahtar paylasilir.
 """
 
+import contextlib
 import os
 import shutil
 import sqlite3
@@ -23,6 +24,40 @@ except Exception:  # keyring opsiyonel
 
 _SERVICE = "PEMF_GUI"
 _KEY_NAME = "sqlcipher_key"
+
+
+@contextlib.contextmanager
+def dict_satir_fabrikasi(conn):
+    """`conn.row_factory`'yi GEÇİCİ olarak dict üreten fabrikaya çevirir; ÇIKIŞTA GERİ YÜKLER.
+
+    ⚠️ DENETİM BULGUSU 2026-08-17 — HAVUZ BAĞLANTISI KİRLENMESİ. Üç ayrı yer (`denetim_oku`,
+    `sync_worker._sync_patients`, `sync_worker._sync_sessions`) `conn.row_factory`'yi dict
+    lambda'sına çevirip **geri yüklemiyordu**. Bağlantı HAVUZDAN gelir ve thread-başına YENİDEN
+    KULLANILIR (kuşak yalnız migration/restore/close'da artar) → kirlenme **süreç ömrü boyunca**
+    sürer ve kendini onarmaz.
+
+    Ölçülen sonuçlar (uçtan uca):
+      * `GET /api/audit/events` bir kez → `GET /api/settings/retention` sonsuza dek `pending: 0`
+        → arayüzdeki KVKK onay bloğu (`pending > 0`) bir daha çizilmez → operatör geri dönüşsüz
+        maskelemeyi ONAYLAYAMAZ (veri FAZLA-SAKLAMA).
+      * `POST /api/support/bundle` bir kez → `POST /api/data/export` **ve** `/api/data/import`
+        süreç boyunca **500** ("sorun yaşayınca destek paketi üret" → "yedekten dön" BLOKE).
+      * `run_integrity_check` sağlam DB'yi `{'ok': False, 'details': ['0']}` raporlar.
+    Sebep: dict fabrikası POZİSYONEL erişimi (`row[0]`) `KeyError: 0`'a çevirir.
+
+    ⚠️ RESTORE DEĞERİ SABİTLENEMEZ: havuz bağlantıyı düz SQLite'ta `sqlite3.Row`, at-rest şifreli
+    kurulumda `sqlcipher.Row` ile kurar. Bu yüzden ÖNCEKİ değer saklanıp aynen geri konur —
+    `None`a sıfırlamak şifreli kurulumda `row["kolon"]` erişimlerini kırardı. (Depoda bunun
+    geçici çözümü TESTTE vardı: `tests/test_prod_readiness_fixes.py` → `c.row_factory = None`.)
+
+    Kilit: `tests/test_row_factory_havuz_kirlenmesi.py`.
+    """
+    onceki = conn.row_factory
+    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}
+    try:
+        yield conn
+    finally:
+        conn.row_factory = onceki
 
 
 def import_sqlcipher():

@@ -1033,6 +1033,42 @@ def _duration_seconds_to_stm_minutes(duration_seconds: int) -> int:
     return max(1, (seconds + 59) // 60)
 
 
+def _esp_duration_seconds(duration_seconds: int) -> int:
+    """ESP (bobin 6-8) MQTT `duration` alanini SANIYE olarak cozer; gozetimsiz kapagi uygular.
+
+    ⚠️ DENETIM BULGUSU 2026-08-17 — KISMI DUZELTME TAMAMLANDI. `duration = 0` bu projenin KENDI
+    protokol sozlesmesinde **SURESIZ** demektir (`firmware/main.c`: "Süre (dakika): 0 = süresiz";
+    `controllers/hardware_controller` ayni notu tasir). STM yolu bu nobetciyi 1.9.14'ten beri
+    `GOZETIMSIZ_VARSAYILAN_DAKIKA`ya cevirir — ama ESP yolu onu HAM iletiyordu. Sonuc: 1.9.14'te
+    BILINCLI eklenen klinik kapak 8 bobinin yalniz 5'ini kapsiyordu.
+
+    ESP tarafinda sunucu-yanli hicbir son-tarih YOKTUR: `_coil_deadline` yalniz `range(1, 6)`,
+    seans acilmadigi icin `_session_duration_watchdog` kapsam disi, `_esp_telemetry_watchdog`
+    (bkz. asagi) yalniz telemetri SUSARSA devreye girer — saglikli yayin yapan bir ESP bobini
+    kapaksiz kalirdi. Ustelik arayuz operatore "bobin donanim ust-sinirina kadar calisir" diye
+    guvence veriyordu; ESP firmware'i (`CoilController.cpp`) bu depoda DEGIL, yani o guvencenin
+    dayanagi yoktu.
+
+    ⚠️ Sabit BURADA TANIMLANMAZ. Klinik sinir TEK KAYNAKTAN (`hardware_controller`) okunur ki iki
+    transport bir gun ayrisamasin — bu bulgunun kok nedeni tam olarak o ayrisma idi.
+    ⚠️ Yeni bir UST-SINIR DEGILDIR: acikca verilen sureye DOKUNULMAZ. `duration=0` de REDDEDILMEZ
+    (Kontrol Paneli'ni bozardi); yalnizca sonsuz surmez.
+    ⚠️ freq/duty/48°C safety-limit'leriyle ILGISI YOKTUR; onlar sahip karariyla kaldirildi ve GERI
+    EKLENMEZ. Buradaki sinir yalniz SUREdir.
+
+    Kilit: `tests/test_esp_gozetimsiz_sure_kapagi.py` (karsit-kanit testleri dahil).
+    """
+    from controllers.hardware_controller import GOZETIMSIZ_VARSAYILAN_DAKIKA
+
+    try:
+        seconds = int(duration_seconds)
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds > 0:
+        return seconds
+    return GOZETIMSIZ_VARSAYILAN_DAKIKA * 60
+
+
 # ── MQTT publish helper (used by headless and GUI-less mode) ─────────────────
 import json as _json
 
@@ -1414,7 +1450,9 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             "freq": payload.freq,
             "duty": payload.duty,
             "phase": payload.phase,
-            "duration": payload.duration,
+            # Gozetimsiz kapak (bkz. _esp_duration_seconds): `0` = "sure belirtilmedi" nobetcisi
+            # SURESIZ demektir ve ESP tarafinda hicbir sunucu-yanli watchdog yok.
+            "duration": _esp_duration_seconds(payload.duration),
         }
     else:
         mqtt_payload = {"command": "stop", "command_id": command_id}
@@ -1484,7 +1522,9 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 "freq": payload.freq,
                 "duty": payload.duty,
                 "phase": payload.phase,
-                "duration": payload.duration,
+                # Tek-bobin yoluyla AYNI kapak (bkz. _esp_duration_seconds). Batch'i atlamak, bu
+                # deponun bir kez yandigi "kismi duzeltme" desenini tekrarlamak olurdu.
+                "duration": _esp_duration_seconds(payload.duration),
             }
         else:
             mqtt_payload = {"command": "stop", "command_id": command_id}
@@ -2966,15 +3006,36 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     _hastalar = paket.get("patient_db")
     if _hastalar is None and int(paket.get("bundle_version") or 1) < 2:
         _hastalar = paket.get("patients")
+    # ⚠️ ÜÇ SONUÇ AYRI SAYILIR — "zaten vardı" ile "İÇE AKTARILAMADI" AYNI KOVAYA KONMAZ.
+    # İlk yazımda her istisna tek bir "zaten vardı/atlandı" sayacını artırıyordu; o hâlde
+    # operatör "0 hasta [+50 zaten vardı]" görüp "sorun yok" diye okuyabilirdi — oysa 50 satır da
+    # GERÇEKTEN başarısız olmuş olabilirdi. Tıbbi kayıt taşımada bu kabul edilemez bir belirsizlik.
+    # Ayrım hata METNİNDEN değil, ÖNCE varlık sorgusundan türetilir (metin kırılgan olurdu).
+    _zaten_var, _basarisiz = 0, 0
     for h in _hastalar or []:
+        _hid = h.get("id") if isinstance(h, dict) else None
         try:
-            if await asyncio.to_thread(pdb.add_patient, h):
+            # ⚠️ DENETİM 2026-08-17 — UUID ZİNCİRİ: paketteki `id` AYNEN korunmalı. Eskiden
+            # `add_patient` gelen id'yi yok sayıp yeni uuid4 üretiyordu ve `patients.db` ↔ tedavi-DB
+            # (`patients.patient_uuid`) bağı HER içe aktarımda kopuyordu → 5 yıl inaktif hastada
+            # tedavi geçmişindeki ad kopyası `[REDACTED]` olmuyordu (sessiz KVKK boşluğu).
+            # Bkz. `patient_database.add_patient` docstring'i + tests/test_ice_aktarma_hasta_uuid_zinciri.py
+            if _hid and await asyncio.to_thread(pdb.get_patient, _hid):
+                # Aynı paketin ikinci kez alınması: `id` korunduğu için satır ZATEN burada.
+                # Sessiz çoğaltma YOK — bu İSTENEN sonuç, hata değil.
+                _zaten_var += 1
+                continue
+            if await asyncio.to_thread(pdb.add_patient, h, _hid):
                 eklenen_hasta += 1
-        except Exception:
-            logging.getLogger(__name__).warning("Hasta içe aktarılamadı, atlandı.")
+        except Exception as _e:
+            _basarisiz += 1
+            logging.getLogger(__name__).warning("Hasta İÇE AKTARILAMADI (id=%s): %s", _hid, _e)
     logging.getLogger(__name__).warning(
-        "VERİ TAŞIMA: içe aktarıldı (%d hasta, %d seans, %d bobin-koşusu, %d analiz; replace=%s).",
+        "VERİ TAŞIMA: içe aktarıldı (%d hasta eklendi, %d zaten vardı, %d BAŞARISIZ, %d seans, "
+        "%d bobin-koşusu, %d analiz; replace=%s).",
         eklenen_hasta,
+        _zaten_var,
+        _basarisiz,
         n["treatment_sessions"],
         n["session_coil_runs"],
         n["ai_analyses"],
@@ -2992,7 +3053,20 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
         item_count=n.get("treatment_sessions", 0),
         detail={"replace": bool(dolu), "hasta": eklenen_hasta, "bundle_version": paket.get("bundle_version"), **n},
     )
-    return {"status": "success", "counts": {"patient_db": eklenen_hasta, **n}}
+    # ⚠️ ÜÇ SONUÇ YANITTA DA RAPORLANIR (yalnız logda değil). Operatör geri yüklemenin gerçekten
+    # ne yaptığını görmeli: "0 hasta" tek başına "hepsi zaten vardı" mı yoksa "hepsi BAŞARISIZ" mı
+    # olduğunu söylemez — tıbbi kayıt taşımada bu ayrım kritiktir. EKLEMELİ alanlar: mevcut
+    # istemciler (`SettingsScreen` yalnız `patients`/`treatment_sessions`/`ai_analyses` okur)
+    # etkilenmez.
+    return {
+        "status": "success",
+        "counts": {
+            "patient_db": eklenen_hasta,
+            "patient_db_zaten_vardi": _zaten_var,
+            "patient_db_basarisiz": _basarisiz,
+            **n,
+        },
+    }
 
 
 def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):

@@ -1098,16 +1098,22 @@ class TreatmentHistoryDB:
     def denetim_oku(self, limit: int = 200, event_type: str = "") -> list:
         """Son denetim olayları (en yeni önce). Salt-okuma."""
         try:
+            from database.sqlcipher_util import dict_satir_fabrikasi
+
             with self._lock:
                 with self._get_connection() as conn:
-                    conn.row_factory = lambda c, r: {d[0]: r[i] for i, d in enumerate(c.description)}
-                    sorgu = (
-                        "SELECT * FROM audit_events "
-                        + ("WHERE event_type = ? " if event_type else "")
-                        + "ORDER BY id DESC LIMIT ?"
-                    )
-                    par = (event_type, int(limit)) if event_type else (int(limit),)
-                    return [dict(r) for r in conn.execute(sorgu, par).fetchall()]
+                    # ⚠️ DENETİM 2026-08-17: `row_factory` burada atanıp GERİ YÜKLENMİYORDU ve
+                    # bağlantı HAVUZDAN gelip thread-başına yeniden kullanıldığı için kirlenme
+                    # süreç ömrü boyunca sürüyordu (bütünlük kontrolü "bozuk", KVKK onay bloğu
+                    # görünmez, export/import 500). Ayrıntı: dict_satir_fabrikasi docstring'i.
+                    with dict_satir_fabrikasi(conn):
+                        sorgu = (
+                            "SELECT * FROM audit_events "
+                            + ("WHERE event_type = ? " if event_type else "")
+                            + "ORDER BY id DESC LIMIT ?"
+                        )
+                        par = (event_type, int(limit)) if event_type else (int(limit),)
+                        return [dict(r) for r in conn.execute(sorgu, par).fetchall()]
         except Exception as e:
             self.logger.error("Denetim izi okunamadi: %s", e)
             return []
@@ -1281,7 +1287,15 @@ class TreatmentHistoryDB:
                 # (sqlcipher_util'daki dogrulanmis desenin aynisi).
                 for _sfx in ("-wal", "-shm"):
                     try:
-                        _side = self.db_path + _sfx
+                        # ⚠️ DENETİM 2026-08-17: burada `self.db_path + _sfx` yazıyordu ve
+                        # `self.db_path` bir `Path` → `TypeError: unsupported operand type(s) for
+                        # +: 'WindowsPath' and 'str'`. İfade `os.remove`a HİÇ ulaşmıyor, aşağıdaki
+                        # `except` yalnız "temizlenemedi" uyarısı basıyordu → **koruma ölü koddu.**
+                        # Doğru kardeş desen: `database/auth_db.py` → `Path(str(...) + _sfx)`.
+                        # Kilit: `tests/test_rollback_wal_temizligi.py` (bileşik arızayı modelleyip
+                        # temizliği DAVRANIŞSAL ölçer; eski "koruma" bir kaynak-metin grep'iydi ve
+                        # TypeError'lı kodu geçiriyordu).
+                        _side = str(self.db_path) + _sfx
                         if os.path.exists(_side):
                             os.remove(_side)
                     except Exception:

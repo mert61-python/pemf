@@ -468,10 +468,43 @@ class PatientDatabase:
                 pass
             return value
 
-    def add_patient(self, patient_info: Dict[str, str]) -> str:
-        """Yeni hasta ekler ve olusan patient_id degerini dondurur."""
+    def add_patient(self, patient_info: Dict[str, str], patient_id: Optional[str] = None) -> str:
+        """Yeni hasta ekler ve olusan patient_id degerini dondurur.
+
+        `patient_id` YALNIZ ICE AKTARMA icindir (cihaz tasima / yedekten geri yukleme).
+
+        ⚠️ DENETIM 2026-08-17 — KOPUK UUID ZINCIRI. Bu fonksiyon gelen `id`'yi YOK SAYIP her
+        cagrida `uuid.uuid4()` uretiyordu. `/api/data/import` hasta satirlarini dogrudan buraya
+        verdigi icin `patients.db` ↔ tedavi-DB bagi **HER ice aktarimda** kopuyordu (`REPLACE_ALL`
+        sarti YOK; bos bir hedefe normal tasimada da):
+            KAYNAK patients.db id        : 1295eb8f-...
+            HEDEF  patients.db id        : ec1ced28-...   <- yeni uuid4
+            HEDEF  treatment patient_uuid: 1295eb8f-...   <- paketle DOGRU tasindi
+        Somut sonuc (sessiz): `api_server` gunluk bakiminda
+        `_pdb.anonymize_inactive_patients(1825)` -> `db.anonymize_patients_by_uuid(...)` zinciri
+        tasinmis hastalarin **tedavi gecmisindeki ad kopyalarina ULASAMAZ** -> 5 yil inaktif
+        hastada `patients.db` anonimlesir ama tedavi gecmisindeki ad `[REDACTED]` OLMAZ (KVKK).
+
+        ⚠️ Gecersiz/bos `id` ICE AKTARMAYI DUSURMEZ: yeni bir uuid uretilir ve satir yine yazilir.
+        Eski/elle duzenlenmis paketlerde bozuk `id` olabilir; tek bozuk satirin tum klinik
+        gecmisinin tasinmasini engellemesi daha kotu olurdu.
+
+        Kilit: `tests/test_ice_aktarma_hasta_uuid_zinciri.py` (karsit-kanit testleri dahil).
+        """
         with self.lock:
-            patient_id = str(uuid.uuid4())
+            # Verilen id yalnizca GERCEK bir UUID ise onurlandirilir; aksi halde uretilir.
+            _verilen = (str(patient_id) if patient_id else "").strip()
+            if _verilen:
+                try:
+                    uuid.UUID(_verilen)
+                except (ValueError, AttributeError, TypeError):
+                    self.logger.warning(
+                        "Ice aktarma: gecersiz hasta id'si (%r) — yeni id uretiliyor; bu satir icin "
+                        "patients.db ↔ tedavi-DB zinciri kurulamaz.",
+                        _verilen[:64],
+                    )
+                    _verilen = ""
+            patient_id = _verilen or str(uuid.uuid4())
             now = datetime.now().isoformat()
 
             try:

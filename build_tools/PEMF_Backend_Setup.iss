@@ -208,12 +208,57 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  i: Integer;
 begin
   if CurStep = ssInstall then
   begin
-    // [Files] kopyalamadan ONCE calisan backend'i durdur/kill -> kilitli-EXE kopyalama hatasini onler (re-install).
+    // [Files] kopyalamadan ONCE calisan backend'i durdur -> kilitli-EXE kopyalama hatasini onler (re-install).
+    //
+    // ==========================================================================================
+    // TIBBI GUVENLIK - SIRA DEGISMEZI: GRACEFUL DUR + BEKLE, SONRA force-kill.
+    //
+    // DENETIM 2026-08-17: burada `taskkill /F` ONCE, `sc stop` SONRA calisiyordu.
+    // `taskkill /F` = TerminateProcess ve SINYALSIZDIR -> backend_service.py'nin sinyal isleyicisi
+    // hic kosmaz -> `_safe_stop_outputs` calismaz -> STM kuyruk-flush ve ESP bobinlerine MQTT STOP
+    // YAYINLANMAZ. Bobin 1-5 firmware'in olu-adam devresiyle <=1500 ms'de duser; bobin 6-8'in link
+    // watchdog'u YOKTUR (bkz. scripts/pemf_teardown.ps1) -> kalan seans suresince (varsayilan
+    // 20 dk, AI Pro yolunda 120 dk'ya kadar) HASTANIN UZERINDE enerjili kalir.
+    //
+    // Tetikleyici gercek ve belgeli: kurulu bir cihazda offline installer'in ELLE yeniden
+    // calistirilmasi ("offline dagitim/OKU-README.md" yukseltme yolu).
+    //
+    // ASIMETRI KASITSIZDI: KALDIRMA yolu sirayi ZATEN dogru kuruyor (scripts/setup_services.ps1:
+    // "Force-kill'i ONCE yaparsak bu graceful bobin-STOP ATLANIR"). NSIS yolu da dogru ve testle
+    // kilitli. Bu blok o degismezi kurulum yoluna tasir.
+    // Kilit: tests/test_inno_kurulum_bobin_guvenligi.py
+    // ==========================================================================================
+    //
+    // 1) Servis KURULU mu? (sc query -> 1060 = "belirtilen servis yok" => taze kurulum, bekleme yok)
+    Exec('sc.exe', 'query PemfBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode <> 1060 then
+    begin
+      // 2) GRACEFUL: NSSM Ctrl+C (AppStopMethodConsole 15000) -> backend signal-handler ->
+      //    bobin STOP + STM kuyruk-flush.
+      Exec('sc.exe', 'stop PemfBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      // 3) `sc stop` ASENKRONDUR: surec GERCEKTEN olene kadar bekle, yoksa (4) graceful kapanisi
+      //    YARIDA KESER ve bobin STOP'u yine kaybedilir. Tavan ~17 sn = 15 sn console-stop +
+      //    1,5 sn STM kuyruk-flush payi; setup_services.ps1'in kaldirma yolundaki 40x500 ms
+      //    beklemesiyle ayni mantik. Ust-sinirli: asili bir servis kurulumu SONSUZ bekletmez.
+      for i := 1 to 34 do
+      begin
+        Exec(ExpandConstant('{cmd}'),
+             '/C tasklist /FI "IMAGENAME eq PEMF_Backend.exe" /NH | find /I "PEMF_Backend.exe" >nul',
+             '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        if ResultCode <> 0 then
+          Break;   // surec listede yok -> graceful kapanis tamamlandi
+        Sleep(500);
+      end;
+    end;
+    // 4) FALLBACK - KALDIRILAMAZ: graceful basarisiz/asili olabilir ya da backend servis DISINDA
+    //    baslatilmis olabilir. Ayrica setup_services.ps1 servisi `AppExit Default Restart` ile
+    //    kuruyor ve cloudflared/mosquitto {app}'i kilitler -> [Files] kopyalamasi "kilitli EXE"
+    //    hatasina duser. Dogru duzeltme "kill'i sil" DEGIL, "kill'i graceful'un ARKASINA al".
     Exec('taskkill.exe', '/F /IM PEMF_Backend.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec('sc.exe', 'stop PemfBackend', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end
   else if CurStep = ssPostInstall then
   begin
