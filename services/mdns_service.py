@@ -36,15 +36,45 @@ MDNS_HOST_NAME = "pemf-gateway"  # pemf-gateway.local olarak çözünür
 
 
 def _get_local_ip() -> str:
-    """Aktif ağ arayüzünün IP adresini döndürür."""
+    """Aktif ağ arayüzünün IP adresini döndürür.
+
+    ⚠️ İKİ AŞAMALI (denetim 2026-08-17; kardeşi `servers/auto_discovery._get_local_ip`). UDP
+    `connect` DEFAULT ROUTE ister. Offline klinikte ya da hotspot-only kurulumda (bkz.
+    `scripts/start_hotspot.ps1`: *"özellikle offline klinikte GetInternetConnectionProfile null"*)
+    default route YOKTUR → burada kalıcı olarak `127.0.0.1` dönülüyordu ve çağıranların 127.*
+    guard'ı yüzünden `_mqtt` (`pemf-gateway.local`) SÜREÇ ÖMRÜ BOYUNCA hiç yayınlanmıyordu.
+    Log ise "arayüz gelince kaydolacak" diyordu; o söz TUTULAMIYORDU çünkü tek kurtarma yolu
+    `ensure_interfaces_current` ve o da arayüz KÜMESİ değişmediği için callback'leri hiç çağırmıyor
+    (hotspot IP'si zaten baştan var). `_pemfvet` tarafı b30d7bd ile toparlandı, bu taraf kalmıştı.
+
+    Aynı fonksiyonun dört satır ötesinde `get_shared_zeroconf()` AYNI süreçte `ifaddr` ile doğru
+    IP'yi bulup Zeroconf'u ona bağlıyordu — yani doğru adres zaten eldeydi, yalnız ServiceInfo'ya
+    konmuyordu. İkinci aşama o yolu kullanır.
+
+    ⚠️ Loopback YAYINLAMAMA kararı (Audit P3 / #32) KORUNUR: aday bulunamazsa yine `127.0.0.1`
+    dönülür ve çağıranların 127.* guard'ı kaydı atlar.
+
+    ⚠️ Sonda MODÜL-YEREL `socket` adıyla yapılır (ortak bir yardımcıya TAŞINMAZ): testler rota
+    yokluğunu bu adı gölgeleyerek taklit ediyor."""
+    ip = ""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
-        return ip
     except Exception:
-        return "127.0.0.1"
+        ip = ""
+    if ip and not ip.startswith("127."):
+        return ip
+    try:
+        from utils.zeroconf_singleton import _real_lan_ipv4s
+
+        adaylar = _real_lan_ipv4s()
+        if adaylar:
+            return adaylar[0]
+    except Exception:
+        pass
+    return "127.0.0.1"
 
 
 class MDNSService:

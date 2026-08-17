@@ -55,7 +55,7 @@ COPY --chown=pemfai:pemfai ai_service/ ./ai_service/
 # `backup_recovery`, `source_crypto` gibi sır/kripto kaynağı auth-muaf imaja GİRMESİN
 # (aşağıdaki saldırı-yüzeyi gerekçesiyle aynı çizgi). Üçüncü bir kapı modülü eklenirse bu satır
 # güncellenmeli — unutulursa açılışta ImportError, sessiz kayıp değil.
-COPY --chown=pemfai:pemfai utils/__init__.py utils/image_domain.py utils/ses_kalitesi.py ./utils/
+COPY --chown=pemfai:pemfai utils/__init__.py utils/image_domain.py utils/ses_kalitesi.py utils/klinik_asgari.py ./utils/
 
 # ⚠️ DENETİM 2026-08-04: bu imaj ROOT olarak koşuyordu — kardeşi Dockerfile.backend'de
 # `USER pemf` varken burada hiç USER yoktu. Servis `/infer/...` uçlarında AUTH'suz olarak

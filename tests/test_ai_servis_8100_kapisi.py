@@ -269,13 +269,22 @@ def test_DOCKERFILE_kapi_modullerini_KOPYALIYOR():
 def test_HICBIR_gorsel_uc_kapisiz_KALMAMALI():
     """Yapısal kapı: her görüntü ucunda `_kapi(data, "<uç adı>")` çağrısı bulunmalı.
 
-    ⚠️ Yorumlar (satır başı VE satır sonu) soyulur; kapı yalnız gerçekten yürütülen satırlara bakar.
-    ⚠️ `thermal` BİLEREK listede: etiketi `utils/image_domain.EXPECTED`de olmadığı için çağrı
-    fiilen no-op'tur, ama simetri korunur ki ileride bir termal beklentisi eklendiğinde uç
-    kendiliğinden kapsanır. `rna` (CSV) ve JSON uçları (disease/kidney_disease/em_kedi) kapsam
-    dışı: modalite kavramı yok."""
-    kaynak = (KOK / "ai_service" / "app.py").read_text(encoding="utf-8")
-    kod = "\n".join(s.split("#")[0] for s in kaynak.splitlines() if not s.strip().startswith("#"))
+    ⚠️ AST TABANLI (denetim 2026-08-17). İlk yazımda ham metin araması yapıyordu; bir uç
+    docstring'ine `_kapi(data, "histopath")` yazan biri kapıyı GEÇEBİLİYORDU — `ast` yorumları ve
+    docstring'i düğüm olarak GÖRMEZ. Ayrıca metin araması biçimlendirmeye bağlıydı: `_kapi(\n
+    data, "x")` ya da `_kapi(data=data, label="x")` yazımı YANLIŞ-KIRMIZI verirdi.
+    ⚠️ `thermal` BİLEREK listede: etiketi `EXPECTED`de olmadığı için çağrı fiilen no-op'tur, ama
+    simetri korunur ki ileride bir termal beklentisi eklendiğinde uç kendiliğinden kapsansın.
+    `rna` (CSV) ve JSON uçları kapsam dışı: modalite kavramı yok (onların kapısı ASGARİ GİRDİ).
+    """
+    agac = ast.parse((KOK / "ai_service" / "app.py").read_text(encoding="utf-8"))
+
+    kapili = set()
+    for d in ast.walk(agac):
+        if not (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "_kapi"):
+            continue
+        if len(d.args) == 2 and isinstance(d.args[1], ast.Constant) and isinstance(d.args[1].value, str):
+            kapili.add(d.args[1].value)
 
     beklenen = [
         "histopath",
@@ -288,14 +297,219 @@ def test_HICBIR_gorsel_uc_kapisiz_KALMAMALI():
         "em_fantom",
         "em_petri",
     ]
-    eksik = [u for u in beklenen if f'_kapi(data, "{u}")' not in kod]
+    eksik = [u for u in beklenen if u not in kapili]
     assert not eksik, f"bu :8100 uclari modalite kapisi CAGIRMIYOR: {eksik}"
 
-    # Ses ucunun kapısı ayrı (RMS), o da kaynakta bulunmalı ve modelden ÖNCE gelmeli.
-    assert "_ses_sessiz_mi(" in kod, "sessizlik kapisi :8100'de YOK"
-    assert kod.index("_ses_sessiz_mi(") < kod.index('predictors.get("sound")'), (
-        "sessizlik kapisi model yuklemesinden SONRA geliyor (2026-08-16 dersi)"
+    # Ses ucunun kapısı ayrı (RMS) ve MODEL YÜKLEMESİNDEN ÖNCE gelmeli (2026-08-16 dersi).
+    # ⚠️ Sıra da AST'den ölçülür: satır numaraları DÜĞÜMLERDEN gelir, yorumdan DEĞİL.
+    ses = [
+        d.lineno
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "_ses_sessiz_mi"
+    ]
+    model = [
+        d.lineno
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Call)
+        and isinstance(d.func, ast.Attribute)
+        and d.func.attr == "get"
+        and isinstance(d.func.value, ast.Name)
+        and d.func.value.id == "predictors"
+        and d.args
+        and isinstance(d.args[0], ast.Constant)
+        and d.args[0].value == "sound"
+    ]
+    assert ses, "sessizlik kapisi :8100'de YOK"
+    assert model, "predictors.get('sound') bulunamadi -> kapi BAYAT"
+    assert min(ses) < min(model), "sessizlik kapisi model yuklemesinden SONRA geliyor (2026-08-16 dersi)"
+
+
+# ── 4) ASGARİ GİRDİ kapısı :8100'de de çalışmalı (denetim 2026-08-17) ────────
+#
+# Ölçüldü — AYNI boş gövde iki transportta farklı davranıyordu:
+#     backend /api/ai/disease        {}  ->  422 "geçerli vital veriler gerekli"
+#     :8100   /infer/disease         {}  ->  200 "Conjunctivitis %53", low_confidence: FALSE
+#     backend /api/ai/disease/kidney {}  ->  422 "yeterli klinik veri yok"
+#     :8100   /infer/kidney_disease  {}  ->  200 prob_pct 78.0, label "ckd"
+# %78 hastanın verisinden DEĞİL eğitim setinin ön-olasılığından geliyor (sahip bildirimi
+# 2026-08-07); `predict_one({"sc": 1.2})` de aynı 0.78 dönüyor.
+
+
+@pytest.fixture()
+def hastalik_client(app_modulu, monkeypatch):
+    """`/infer/disease` için LİSTE-OF-TUPLE döndüren sahte predictor.
+
+    ⚠️ Yukarıdaki `client` fixture'ı BU UÇTA KULLANILAMAZ: `_SahteModel.predict` dict döndürüyor,
+    uç ise `for d, p in results` yapıyor → `ValueError` → `_err500` → 500. O hâlde `!= 200` yazan
+    bir test bugün de yeşil olurdu, yani bulguyu HİÇ ölçmezdi."""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
+
+    class _Sahte:
+        cagrildi = False
+
+        def predict(self, age, weight, hr, temp, duration, symptoms):
+            _Sahte.cagrildi = True
+            return [("Conjunctivitis", 0.53), ("Gastroenteritis", 0.41)]
+
+    _Sahte.cagrildi = False
+    _Sahte.yuklendi = False
+
+    def _get(ad):
+        # ⚠️ MODEL YÜKLEME de işaretlenir: kapı YALNIZ `predict`ten önce olsaydı, reddedilecek
+        # istek için 15 MB ONNX yine boşuna yüklenirdi (2026-08-16 dersi). İlk yazımda bayrak
+        # yalnız `predict` içindeydi ve kapıyı `predictors.get`ten SONRAYA taşıyan mutasyon
+        # SESSİZCE geçti (ölçüldü).
+        _Sahte.yuklendi = True
+        return _Sahte()
+
+    monkeypatch.setattr(app_modulu.predictors, "get", _get)
+    return TestClient(app_modulu.app), _Sahte
+
+
+@pytest.fixture()
+def ckd_client(app_modulu, monkeypatch):
+    """`/infer/kidney_disease` için sahte `predict_one`.
+
+    ⚠️ PAKET yamalanır, ALT-MODÜL değil: uç `from ai_hub.inference_human_kidney_disease import
+    predict_one` yapıyor, yani PAKET attribute'unu okuyor. Alt-modülü yamalamak İŞE YARAMIYOR
+    (ölçüldü: gerçek ONNX modeli koştu, 737 ms). Yanlış hedefte test sessizce gerçek modeli
+    çalıştırır ve ağırlık bulunmayan bir ortamda YANLIŞ-KIRMIZI olur."""
+    from fastapi.testclient import TestClient
+
+    import ai_hub.inference_human_kidney_disease as KD
+
+    monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
+    durum = {"cagrildi": False}
+
+    def _sahte_predict_one(features):
+        durum["cagrildi"] = True
+        return {"prob_ckd": 0.99, "label": "ckd", "model": "SAHTE"}
+
+    monkeypatch.setattr(KD, "predict_one", _sahte_predict_one)
+    return TestClient(app_modulu.app), durum
+
+
+def test_KRITIK_8100_disease_BOS_GOVDE_REDDEDILIR(hastalik_client):
+    """Boş gövde → 422. Bugün 200 + "Conjunctivitis %53" + `low_confidence: false` dönüyordu."""
+    c, sahte = hastalik_client
+    r = c.post("/infer/disease", json={})
+
+    # ⚠️ TAM 422 (`!= 200` YASAK): `_err500`in 500'ü de `!= 200`'dür ve kapıyı hiç çalıştırmadan
+    # testi yanlış-yeşile çevirirdi.
+    assert r.status_code == 422, f":8100 asgari-girdi kapisi ATLANIYOR (HTTP {r.status_code}): {r.text[:200]}"
+    assert r.json().get("insufficient_input") is True, f"ret sebebi isaretlenmedi: {r.text[:200]}"
+    assert "vital" in r.text.lower(), f"mesaj router'inkiyle ayni kaynaktan gelmiyor: {r.text[:200]}"
+    assert sahte.yuklendi is False, "kapi MODEL YUKLEMESINDEN SONRA calisiyor (15 MB ONNX bosuna yuklendi)"
+    assert sahte.cagrildi is False, "kapi tahminden SONRA calisiyor"
+
+
+def test_KRITIK_8100_kidney_disease_BOS_GOVDE_REDDEDILIR(ckd_client):
+    """Boş gövde → 422. Bugün 200 + `prob_pct 78.0` + `label "ckd"` dönüyordu."""
+    c, durum = ckd_client
+    r = c.post("/infer/kidney_disease", json={})
+
+    assert r.status_code == 422, f":8100 CKD kapisi ATLANIYOR (HTTP {r.status_code}): {r.text[:200]}"
+    assert "prob_ckd" not in r.text and "prob_pct" not in r.text, (
+        f"kullaniciya olasilik SIZDI - bos formda '%78 ckd' gosterilemez: {r.text[:200]}"
     )
+    assert "yeterli klinik veri yok" in r.text and "yanıltıcı" in r.text
+    assert durum["cagrildi"] is False, "kapi MODELDEN SONRA calisiyor"
+
+
+def test_KRITIK_8100_ckd_CEKIRDEK_belirtec_YOKSA_reddedilir(ckd_client):
+    """6 alan DOLU ama renal belirteç YOK → yine 422.
+
+    Yalnızca alan SAYAN eksik bir yamayı yakalar: renal sinyal yoksa sayı demografiden türer."""
+    c, durum = ckd_client
+    r = c.post(
+        "/infer/kidney_disease",
+        json={"age": 48, "bp": 80, "su": 0, "sod": 137, "pot": 4.4, "wc": 7800},
+    )
+
+    assert r.status_code == 422, f"cekirdek belirtec olmadan tahmin URETILDI: {r.text[:200]}"
+    assert "böbrek işlevine dair" in r.text
+    assert durum["cagrildi"] is False
+
+
+def test_KARSIT_KANIT_8100_GECERLI_vital_GECER(hastalik_client):
+    """Karşıt-kanıt: kapı "her şeyi reddet"e dönüşmemeli."""
+    c, sahte = hastalik_client
+    r = c.post(
+        "/infer/disease",
+        json={"age": 3, "weight": 4.2, "hr": 180, "temp": 38.5, "duration": 10, "symptom_indices": [1]},
+    )
+
+    assert r.status_code == 200, f"gecerli vital REDDEDILDI: {r.text[:200]}"
+    assert r.json()["results"][0]["disease"] == "Conjunctivitis"
+    assert sahte.cagrildi is True, "boru hatti kosmadi"
+
+
+def test_KARSIT_KANIT_8100_METIN_vital_500_URETMEZ(hastalik_client):
+    """⚠️ `:8100` gövdesi Pydantic'ten GEÇMİYOR: `"4.2"` gibi metin gelebilir.
+
+    Kapıda sayıya çevirme olmasaydı `0 < "4.2"` TypeError verir ve kapı YENİ bir 500 arıza modu
+    getirirdi. Metin vital geçerli aralıktaysa istek GEÇMELİ."""
+    c, sahte = hastalik_client
+    r = c.post(
+        "/infer/disease",
+        json={"age": "3", "weight": "4.2", "hr": "180", "temp": "38.5", "duration": 10, "symptom_indices": []},
+    )
+
+    assert r.status_code == 200, f"metin vital YENI bir ariza modu dogurdu: {r.text[:200]}"
+    assert sahte.cagrildi is True
+
+
+def test_KARSIT_KANIT_8100_GECERLI_ckd_formu_GECER(ckd_client):
+    """Karşıt-kanıt: 6 alan + çekirdek belirteç → geçmeli."""
+    c, durum = ckd_client
+    r = c.post("/infer/kidney_disease", json={"sc": 1.2, "bu": 40, "sg": 1.02, "al": 1, "hemo": 12, "age": 55})
+
+    assert r.status_code == 200, f"gecerli CKD formu REDDEDILDI: {r.text[:200]}"
+    # "SAHTE" → yamanın GERÇEKTEN bağlandığının kanıtı (gerçek model "ExtraTrees" derdi).
+    assert r.json()["model"] == "SAHTE", f"sahte predict_one baglanmadi, GERCEK model kostu: {r.text[:200]}"
+    assert durum["cagrildi"] is True
+
+
+def test_8100_bos_metin_DOLU_SAYILMAZ(ckd_client):
+    """Boşluklu metinler alan SAYILMAMALI (router kuralının birebir taşındığının kanıtı)."""
+    c, _ = ckd_client
+    r = c.post(
+        "/infer/kidney_disease",
+        json={"rbc": "  ", "pc": "  ", "pcc": " ", "ba": " ", "htn": " ", "dm": " "},
+    )
+    assert r.status_code == 422, f"bos metinler DOLU sayildi: {r.text[:200]}"
+
+
+def test_ASGARI_GIRDI_TEK_KAYNAK_nesne_kimligi():
+    """İki transport AYNI fonksiyon/sınıf NESNESİNİ kullanmalı — kapının kopyası YASAK.
+
+    ⚠️ METİN değil NESNE KİMLİĞİ: yorumla kandırılamaz. Biri kapıyı `ai_service/app.py`ye ikinci
+    kopya olarak gömerse ya da import'u try/except'e alıp fail-open bir taklit tanımlarsa KIRILIR.
+    Bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı."""
+    import ai_service.app as A
+    import servers.ai_router as R
+
+    assert A._AsgariGirdiYok is R._AsgariGirdiYok, "iki transport AYRI istisna sinifi kullaniyor"
+    assert A._ckd_kapisi is R._ckd_kapisi, "CKD kapisi KOPYALANMIS"
+    assert A._vital_kapisi is R._vital_kapisi, "vital kapisi KOPYALANMIS"
+    assert A._ckd_kapisi.__module__ == "utils.klinik_asgari", (
+        f"kapi utils/klinik_asgari'den GELMIYOR (modul: {A._ckd_kapisi.__module__})"
+    )
+
+
+def test_ASGARI_esikler_TASINDI_ve_ARDA_KOPYA_KALMADI():
+    """Eşikler taşınırken gevşetilmemiş/sertleştirilmemiş olmalı VE router'da kopya kalmamalı.
+
+    İki kaynak kalırsa biri sessizce kayar — bu bulgunun kök neden sınıfı."""
+    import servers.ai_router as R
+    from utils.klinik_asgari import CKD_CEKIRDEK, CKD_MIN_ALAN
+
+    assert CKD_MIN_ALAN == 6, "asgari alan esigi DEGISTIRILMIS (tasima, sertlestirme degil)"
+    assert CKD_CEKIRDEK == ("sc", "bu", "sg", "al", "hemo")
+    for ad in ("_CKD_MIN_ALAN", "_CKD_CEKIRDEK", "_CKD_ETIKET"):
+        assert not hasattr(R, ad), f"router'da ARDA KALAN kopya sabit: {ad}"
 
 
 if __name__ == "__main__":

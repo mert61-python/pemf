@@ -1255,6 +1255,92 @@ Ayrıca bir **kaçış dizisi taşıma hatası** yaşandı: `build_installer.ps1
 
 ---
 
+## ÜÇÜNCÜ TUR — AÇIK KALAN KALEMLER KAPATILDI (2026-08-17)
+
+İkinci turun sonunda "ayrı kalem" diye bırakılan **dört** iş de kapatıldı. Yöntem aynı: kapatmadan
+önce dördü de HEAD'e (`b30d7bd`) karşı yeniden doğrulandı; her düzeltme için ayrı test, düzeltmeden
+ÖNCE kırmızı, sonra mutasyonla doğrulama.
+
+| # | Kalem | Cid. | Dosya(lar) | Test | Mutasyon |
+|---|---|---|---|---|---|
+| 1 | `_mqtt` mDNS: rota yokken `pemf-gateway.local` HİÇ yayınlanmıyor | 2 | `services/mdns_service.py` | `test_mqtt_mdns_rota_yok.py` (5, yeni) | 2/2 ✓ |
+| 2A | `make_model_zip` atomik olmayan yazım | 3 | `build_tools/make_model_zip.py` | `test_make_model_zip_atomik.py` (5, yeni) | 5/5 ✓ |
+| 2B | `PEMF_PKG_OUT` yok → test gerçek 318 MB yayın varlığını ezerdi | 3 | aynı | aynı dosya | 2/2 ✓ |
+| 3 | `:8100`de ASGARİ GİRDİ kapısı yok (boş formda "%78 ckd") | 4 | `utils/klinik_asgari.py` (yeni), `servers/ai_router.py`, `ai_service/app.py`, `docker/Dockerfile.ai` | `test_ai_servis_8100_kapisi.py` (+9) | 11/11 ✓ |
+| 4 | Yorumla kandırılabilir kapılar | 5 | `tests/test_kalan_regression_gaps.py` + bu turda yazdığım 3 test dosyası | aynı dosyalar | 8/8 ✓ |
+| — | firmware `[FIX-1c]` tezgâh prosedürü | — | `docs/VERIFICATION.md` | `test_firmware_frekans_artisi_duty.py` (+1) | 2/2 ✓ |
+
+**Regresyon (son ölçüm):** backend `1207 passed, 1 failed` · `cargo test` 0 hata · `pf` `491 passed`
++ `tsc` temiz. Düşen tek test hâlâ süren 2.3.17 yayınının disiplin testi — bu değişikliklerle ilgisiz.
+
+### Kalem 3 — klinik olarak en ağırı (ciddiyet 4)
+
+Ölçüldü, AYNI boş gövde iki transportta:
+
+    backend /api/ai/disease         {}  →  422 "geçerli vital veriler gerekli"
+    :8100   /infer/disease          {}  →  200 "Conjunctivitis %53", low_confidence: **false**
+    backend /api/ai/disease/kidney  {}  →  422 "yeterli klinik veri yok"
+    :8100   /infer/kidney_disease   {}  →  200 prob_pct **78.0**, label **"ckd"**
+
+O %78 hastanın verisinden DEĞİL eğitim setinin ön-olasılığından geliyor — sahibin 2026-08-07
+bildiriminin (*"hiçbir veri girmeden analiz yaptığımda %78 çıkıyor"*) birebir kaynağı;
+`predict_one({"sc": 1.2})` de aynı 0.78 dönüyor. Kapı `utils/klinik_asgari.py`ye taşındı ve iki
+transport **aynı nesneyi** çağırıyor (nesne-kimliği testiyle kilitli); eşikler ve mesaj dizeleri
+bit-aynı — bu bir TAŞIMA, sertleştirme değil.
+
+### Kalem 4 — iddiam KÜÇÜKTÜ, gerçek daha büyük çıktı
+
+"İki kapı metin araması yapıyor" demiştim; analiz **yedi** buldu ve ikisini deneysel olarak
+kandırdı. Üstelik bu turda YAZDIĞIM kapılarda da altı zaaf çıktı. Kapatılanlar:
+
+- `_safe_stop_outputs` bütçe kapısı ve bayat-payload yaş kapısı **DAVRANIŞSALA** çevrildi
+  (fonksiyon/closure gerçekten koşturuluyor). Bütçe testine **bekçi** kondu: `join` timeout'suz
+  hâle dönerse test asılmaz, 6 sn'de KIRMIZI biter (`pytest-timeout` bu ortamda kurulu değil).
+- Kalan beş kapı yorum+docstring **soyulmuş** kaynak üzerinde çalışıyor. Soyucu `tokenize` tabanlı
+  ve yerleşimi BOZMUYOR — `ast.unparse` (normalleştirir) ve token'ları boşlukla birleştirmek
+  (`_minute_acc.clear()` → `_minute_acc . clear ( )`) denendi, ikisi de beş kapıyı birden
+  YANLIŞ-KIRMIZI yaptı (ölçüldü).
+- `:8100` görsel-uç kapısı ve ses karşıt-kanıt kapısı **AST'ye** çevrildi. Ses kapısına ek olarak
+  "çağrı bir `if` KOŞULUNDA mı" iddiası kondu: kardeş SIRA kapısı ters mantıklı olduğu için kapının
+  TAM SİLİNMESİNİ yakalayamıyordu.
+- `.iss` kapısı prefix yerine **tam sembol** eşleşmesine çevrildi + "tek tanım" iddiası eklendi
+  (Inno preprocessor `#define`ı yeniden tanımlayabilir, ikinci tanım ilkini EZER) + `#ifndef`
+  sarmalayıcısı kilitlendi.
+- PowerShell soyucusuna **blok yorumu** (`<# .. #>`) ve **here-string** soyması eklendi: `<#` ile
+  başlayan satır `#` ile başlamadığı için eski soyucudan geçiyordu, yani gerçek kodu yorum içine
+  almak onu yürütülmez yapıp pozitif metin iddialarını GEÇİRİYORDU.
+
+### Bu turda KENDİ testlerimde bulduğum 4 kusur
+
+| Kusur | Nasıl yakalandı | Düzeltme |
+|---|---|---|
+| `make_model_zip` bayt kapım **tautolojikti**: referans üretim koduyla AYNI `SABIT_TARIH`i okuyordu, sabitin DEĞERİNİ değiştiren mutasyon iki tarafı birlikte kaydırıp sessizce geçti | Mutasyon geçti | Beklenen tarih testte LİTERAL sabitlendi |
+| `:8100` asgari-girdi testinde bayrak `predict`teydi; kapıyı `predictors.get`ten (model YÜKLEME) sonraya taşıyan mutasyon sessizce geçti | Mutasyon geçti | Bayrak yükleme noktasına taşındı |
+| Modül-kimlik kapım kendi test modülümü sayıyordu (`test_make_model_zip_atomik` alt-dizeyi içeriyor) | Kurulum düştü | Ölçüt alt-dize yerine TAM ad |
+| Yorum soyucumun ilk hâli token'ları boşlukla birleştiriyordu → beş mevcut kapı yanlış-kırmızı | Testler düştü | Yerleşimi koruyan soyucu (aralıkları boşlukla doldur) |
+
+Ayrıca ikinci turdaki **kaçış dizisi taşıma hatası** bu turda tekrarlandı (`\n` literal olarak
+yazıldı, dosya sözdizimi bozuldu) — testler anında yakaladı, açık bayt/karakter değerleriyle onarıldı.
+
+### `SABIT_TARIH` hakkında dürüst bir not
+
+`zipfile.ZipInfo`un kendi varsayılan `date_time`ı da `(1980,1,1,0,0,0)`'dır. Yani
+`date_time=SABIT_TARIH` argümanını SİLMEK bayt-özdeş çıktı verir ve haklı olarak yakalanmaz;
+yakalanması gereken şey sabitin DEĞERİNİN değişmesidir ve o artık yakalanıyor.
+
+### Bu turdan çıkan YENİ açık kalemler (dürüstlük)
+
+- `services/mdns_service.py`nin `_ip_monitor_loop`u patlarsa `ensure_interfaces_current`ın TEK
+  çağrıcısı ölür → `_pemfvet`in toparlanması da sessizce durur. İki yayıncı arasında belgelenmemiş
+  bir bağımlılık; bu turun kapsamı dışında.
+- `tests/test_kalan_regression_gaps.py`deki beş kapı hâlâ METİN araması yapıyor (artık yorum-soyulu,
+  yani kandırılamıyor) — davranışsala çevirmek FastAPI TestClient + MQTT sahtesi gerektiriyor,
+  ayrı kalem.
+- PowerShell soyucusunun kör noktası: bir STRING içinde geçen `<#` de blok başlatır. Bugün dosyada
+  yok; kayda geçirildi.
+
+---
+
 ## KAPSAM DIŞI — bulgu saymadım (triyajın elediği)
 
 Bunlar gerçek gözlemler ama **kırık davranış değil**; tamlık için buradalar.

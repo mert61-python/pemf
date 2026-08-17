@@ -283,17 +283,51 @@ def test_HICBIR_uc_kapidan_ONCE_devretmez_yapisal():
 def test_yapisal_kapi_SES_ucunu_GERCEKTEN_denetliyor_karsit_kanit():
     """Karşıt-kanıt: yukarıdaki kapının ses ucunu görmezden GELMEDİĞİNİN kanıtı.
 
-    Kapı bir haritaya dayandığı için sessizce kapsam dışı kalabilir (ör. uç adı `"sound"` yerine
-    başka bir dizeyle çağrılırsa `_decode_image` varsayılanına düşer ve ses ucu HİÇ denetlenmez —
-    yanlış-yeşil). Bu test hem haritanın kullanıldığını hem de ses kapısının kaynakta gerçekten
-    var olduğunu bağımsız olarak doğrular."""
-    src = (KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
-    assert 'delegate_infer("sound"' in src, "ses ucu artik 'sound' adiyla devretmiyor → kapi haritasi BAYAT"
-    assert "ses_sessiz_mi(" in src, "sessizlik kapisi kaynaktan KAYBOLMUS"
-    # Sıra iddiası: `ses_sessiz_mi` çağrısı `delegate_infer("sound"` satırından ÖNCE gelmeli.
-    assert src.index("ses_sessiz_mi(") < src.index('delegate_infer("sound"'), (
-        "kaynakta sessizlik kapisi devretmeden SONRA geliyor"
+    Kapı bir haritaya dayandığı için sessizce kapsam dışı kalabilir (uç adı değişirse
+    `_decode_image` varsayılanına düşer ve ses ucu HİÇ denetlenmez). Bu test hem haritanın
+    kullanıldığını hem de ses kapısının kaynakta gerçekten var olduğunu bağımsız doğrular.
+
+    ⚠️ AST TABANLI (denetim 2026-08-17). İlk yazımda HAM metin üzerinde `in`/`index` kullanıyordu:
+    kusuru açıklayan (ya da doğru deseni anlatan) bir yorum/docstring kapıyı geçirebiliyordu.
+    ⚠️ EK İDDİA: çağrı bir `if` KOŞULUNDA olmalı. Kardeş SIRA kapısı ters mantıklıdır (devretme
+    satırından sonra kapı ARANIR), dolayısıyla kapının TAM SİLİNMESİNİ o yakalayamaz — burada
+    `assert ses` ve `assert kosulda` tam o boşluğu kapatıyor.
+    """
+    import ast
+
+    agac = ast.parse((KOK / "servers" / "ai_router.py").read_text(encoding="utf-8"))
+
+    ses = [
+        d.lineno
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "ses_sessiz_mi"
+    ]
+    devret = [
+        d.lineno
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Call)
+        and isinstance(d.func, ast.Name)
+        and d.func.id == "delegate_infer"
+        and d.args
+        and isinstance(d.args[0], ast.Constant)
+        and d.args[0].value == "sound"
+    ]
+
+    assert ses, "sessizlik kapisi (ses_sessiz_mi cagrisi) KAYNAKTAN KAYBOLMUS -> ses ucu kapisiz"
+    assert devret, "ses ucu artik 'sound' adiyla devretmiyor -> kapi haritasi BAYAT"
+    assert min(ses) < min(devret), (
+        "kaynakta sessizlik kapisi devretmeden SONRA geliyor -> mikroservis modunda HIC calismaz"
     )
+
+    kosulda = any(
+        isinstance(d, ast.If)
+        and any(
+            isinstance(x, ast.Call) and isinstance(x.func, ast.Name) and x.func.id == "ses_sessiz_mi"
+            for x in ast.walk(d.test)
+        )
+        for d in ast.walk(agac)
+    )
+    assert kosulda, "ses_sessiz_mi cagrisi bir kosulda DEGIL -> olcum yapiliyor ama KARAR verilmiyor"
 
 
 if __name__ == "__main__":

@@ -56,6 +56,13 @@ ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_que
 
 from utils.image_domain import DomainMismatch as _ImgDomainMismatch
 
+# ⚠️ ASGARİ GİRDİ KAPILARI — TEK KAYNAK `utils/klinik_asgari.py` (denetim 2026-08-17).
+# Bu kapılar eskiden BURADA GÖMÜLÜ koddu, dolayısıyla `:8100` (auth-muaf, backend'i atlayan
+# istemci) tarafında HİÇ çalışmıyordu: boş gövdeyle "Conjunctivitis %53" ve "ckd %78" dönüyordu.
+from utils.klinik_asgari import AsgariGirdiYok as _AsgariGirdiYok
+from utils.klinik_asgari import ckd_kapisi as _ckd_kapisi
+from utils.klinik_asgari import vital_kapisi as _vital_kapisi
+
 
 def _ai_fail(label: str, e: Exception) -> HTTPException:
     """AI uç hatası (audit B-4.1): gerçek nedeni SUNUCU-TARAFI logla; istemciye ham str(e)/traceback
@@ -262,20 +269,12 @@ async def analyze_disease(data: DiseaseInput):
     # ── Girdi validasyonu — sıfır/boş vital ile anlamsız tahmin üretilmesin (audit P1).
     # Canlı bir kedide kilo/nabız/sıcaklık 0 olamaz; eksikse SESSİZ yanlış tahmin yerine
     # 422 dönüp kullanıcıdan geçerli vital iste.
-    problems = []
-    if not (0 < data.weight <= 30):
-        problems.append("kilo (kg) 0-30 aralığında girilmeli")
-    if not (0 < data.hr <= 400):
-        problems.append("nabız (bpm) girilmeli (makul: ~120-220)")
-    if not (0 < data.temp <= 50):
-        problems.append("vücut sıcaklığı (°C) girilmeli (makul: ~37-39.5)")
-    if data.age < 0:
-        problems.append("yaş negatif olamaz")
-    if problems:
-        raise HTTPException(
-            status_code=422,
-            detail="Güvenilir hastalık tahmini için geçerli vital veriler gerekli: " + "; ".join(problems),
-        )
+    # ⚠️ Kapı `ai_service_enabled()` kontrolünden ÖNCE kalmalı: aksi hâlde mikroservis profilinde
+    # router'daki koruma yine kaybolur. Gövde `utils/klinik_asgari`ye TAŞINDI (tek kaynak).
+    try:
+        _vital_kapisi(data.model_dump())
+    except _AsgariGirdiYok as ag:
+        raise HTTPException(status_code=422, detail=ag.user_message()) from None
 
     try:
         if ai_service_enabled():
@@ -1913,25 +1912,10 @@ class KidneyDiseaseInput(BaseModel):
     ane: str | None = None
 
 
-# CKD için ASGARİ girdi kuralı (2026-08-07, sahip bildirimi: "hiçbir veri girmeden analiz
-# yaptığımda %78 çıkıyor"). Tüm alanlar opsiyonel olduğundan BOŞ istek de preprocessor'ün
-# impute ettiği değerlerle modele gidiyor ve model eğitim setinin ÖN-OLASILIĞINI döndürüyor.
-# Kullanıcı bunu "%78 hasta" diye okuyor — hastalık analizi ucunda (`/api/ai/disease`) aynı
-# hata daha önce kapatılmıştı, bu uç atlanmıştı.
-#
-# KURAL (muhafazakâr, uydurma klinik eşik YOK):
-#   1) En az `_CKD_MIN_ALAN` alan DOLU olmalı → "hiç veri girmeden sonuç" imkânsız.
-#   2) Böbrek işleviyle DOĞRUDAN ilgili en az bir belirteç olmalı → aksi halde tahminde
-#      renal sinyal yoktur, sayı yalnız demografiden türer.
-_CKD_MIN_ALAN = 6
-_CKD_CEKIRDEK = ("sc", "bu", "sg", "al", "hemo")  # kreatinin, üre, dansite, albümin, hemoglobin
-_CKD_ETIKET = {
-    "sc": "serum kreatinin",
-    "bu": "kan üresi",
-    "sg": "idrar dansitesi",
-    "al": "albümin",
-    "hemo": "hemoglobin",
-}
+# ⚠️ CKD ASGARİ GİRDİ KURALI `utils/klinik_asgari.py`ye TAŞINDI (denetim 2026-08-17): sabitler
+# (`CKD_MIN_ALAN`, `CKD_CEKIRDEK`, `CKD_ETIKET`) ve kapı gövdesi artık orada, çünkü `:8100`
+# transportu da AYNI nesneyi çağırmak zorunda. Burada İKİNCİ bir kopya BIRAKILMADI — iki kaynak
+# kalırsa biri sessizce kayar (bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı).
 
 
 @ai_router.post("/api/ai/disease/kidney")
@@ -1942,23 +1926,14 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
     ONNX → {prob_ckd, label(ckd/notckd)}. `/api/ai/disease` prefix'iyle auth-muaf.
     Model EXE'ye gömülü (<5MB); CPU. Foto/CSV DEĞİL — form girişi.
 
-    ⚠️ ASGARİ GİRDİ ZORUNLU (2026-08-07): boş/yetersiz istek 422 ile reddedilir; bkz. _CKD_MIN_ALAN.
+    ⚠️ ASGARİ GİRDİ ZORUNLU (2026-08-07): boş/yetersiz istek 422 ile reddedilir;
+    bkz. `utils.klinik_asgari.CKD_MIN_ALAN`.
     """
     features = data.model_dump() if hasattr(data, "model_dump") else data.dict()
-    dolu = [k for k, v in features.items() if v is not None and not (isinstance(v, str) and not v.strip())]
-    cekirdek_dolu = [k for k in _CKD_CEKIRDEK if k in dolu]
-    if len(dolu) < _CKD_MIN_ALAN or not cekirdek_dolu:
-        eksik = ", ".join(_CKD_ETIKET[k] for k in _CKD_CEKIRDEK if k not in dolu)
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Güvenilir bir tahmin için yeterli klinik veri yok "
-                f"({len(dolu)}/{len(features)} alan dolu; en az {_CKD_MIN_ALAN} gerekli). "
-                f"Ayrıca böbrek işlevine dair en az bir değer girilmeli — eksik olanlar: {eksik}. "
-                f"Boş formla üretilen sonuç, hastanın verisini değil modelin genel "
-                f"ortalamasını yansıtır ve yanıltıcıdır."
-            ),
-        )
+    try:
+        dolu = _ckd_kapisi(features)
+    except _AsgariGirdiYok as ag:
+        raise HTTPException(status_code=422, detail=ag.user_message()) from None
     try:
         if ai_service_enabled():
             return await delegate_json("kidney_disease", features)

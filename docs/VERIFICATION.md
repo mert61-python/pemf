@@ -14,6 +14,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 6 | AI model bütünlüğü/lisansı | ⏳ maintainer | SHA256 + lisans envanteri |
 | 7 | Yük/soak | ⏳ cihaz | `scripts/soak_publish_5hz_8coil.py` + izleme |
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
+| 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
 
 ---
 
@@ -121,3 +122,59 @@ Backend'de freq/duty/sıcaklık **clamp'i bilinçli yok** (B-1.5); güvenlik fir
   fiziksel olarak satüre mi ediyor, aşırı-ısınmada kesiyor mu? Osiloskop + termal kamera ile ölç.
 - **Tıbbi cihaz için:** bu, yazılı **güvenlik-dosyası (safety case)** ile kanıtlanmalı — kod okuması
   bu iddiayı test etmez. Bu, B-1.5 "yazılı risk-kabulü"nün donanım tarafı.
+
+## ⏳ 9 — firmware `[FIX-1c]` duty geçişi (DONANIM BENCH · **YAYIN ÖNCESİ ZORUNLU**)
+
+**Neyi doğrulayacağız.** Denetim (2026-08-17) enerjili bir bobinin frekansı **ARTIRILDIĞINDA**
+duty tick'inin bayat kaldığını buldu: `g_tpp` yeni (küçük) periyoda göre yazılıyor ama
+`g_duty_ticks` eski (büyük) periyottan kalıyor → ~1 sn tek-polarite ve istenen dozun 4,78×'ine
+kadar on-time. Düzeltme `firmware/main.c` içindeki `[FIX-1c]` bloğu: duty tick'i eski/yeni periyot
+ORANIYLA yeniden ölçekliyor ve `g_tpp - 1 - DDS_DEAD_TIME_TICKS` ile klempliyor.
+
+⚠️ **BU DÜZELTME TEZGÂHTA ÖLÇÜLMEDİ.** Koşan şey C kodu değil, ISR'ın Python modelidir
+(`tests/test_firmware_frekans_artisi_duty.py`) — deponun kendi `test_firmware_stop_latency.py`
+yaklaşımıyla aynı sınır. C kaynağındaki düzeltmenin VARLIĞINI ayrı bir yapısal kapı denetliyor ve
+mutasyonla doğrulandı, ama **hiçbiri tezgâh doğrulaması değildir**. Gerçek donanımda ölçülmeden
+yayınlanmasını önermiyorum.
+
+### Kurulum
+
+- STM32 kartı + **tek** bobin (bobin 1 yeter), akım probu ya da bobine seri düşük-değerli şönt.
+- Osiloskop: 2 kanal — CH1 = sürücü çıkışı (H-köprü faz A), CH2 = faz B. Zaman tabanı 200 ms/div
+  (geçiş yakalama), sonra 5 ms/div (duty ölçümü). Tetik: **tek-atış (single)**, CH1 yükselen kenar.
+- Backend'i simülatörsüz (`PEMF_SIMULATE` YOK) çalıştır; komutlar `POST /api/coil/1/control` ile.
+
+### Ölçüm 1 — 1 Hz → 2 Hz (küçük artış)
+
+1. `{"freq":1,"duty":50,"phase":0,"duration":5,"start":true}` gönder, dalga oturana kadar bekle.
+2. Osiloskobu tek-atışa al, `{"freq":2,"duty":50,"phase":0,"duration":5,"start":true}` gönder.
+3. **KABUL ÖLÇÜTÜ:** geçiş anında tek-polarite (yalnız CH1 ya da yalnız CH2 aktif) süresi
+   **≤ 250 ms**. Model bu değeri bekliyor; ölçülen değeri yaz.
+4. Geçişten sonra kararlı durumda duty oranını ölç: **%50 ± %2** olmalı (ölçeklenmiş, bayat değil).
+
+### Ölçüm 2 — 1 Hz → 100 Hz (büyük artış, asıl vaka)
+
+1. `{"freq":1,"duty":50,...}` → oturt.
+2. Tek-atış tetikle, `{"freq":100,"duty":50,...}` gönder.
+3. **KABUL ÖLÇÜTÜ (ikisi birlikte):**
+   - tek-polarite süresi **≤ 250 ms**;
+   - geçiş penceresindeki on-time oranı, **iki uç noktanın (eski %50, yeni hedef %50) HİÇBİRİNİ
+     AŞMAMALI**. ⚠️ Bu ölçüt bilerek böyle: aşağı-slew (inrush/EMI) **KASITLIDIR** ve %50→%5 geçişi
+     enerjiyi AZALTIR, yani "ilk 500 ms'de dozun 4,78×'i" yanlış bir değişmezdir. Doğru soru
+     "oran iki uçtan birini aştı mı".
+4. **Karşıt-kanıt (regresyon kapısı):** 100 Hz → 1 Hz (frekans AZALIŞI) ölç. Bu yönde düzeltme
+   ÖNCESİNDE de sorun yoktu; ölçüm sonrası duty **%50 ± %2** kalmalı ve tek-polarite penceresi
+   olmamalı. Düzeltme bu yönü BOZMAMALI.
+
+### Ölçüm 3 — klemp sınırı
+
+1. `{"freq":1,"duty":95,...}` → oturt, sonra `{"freq":25000,"duty":95,...}`.
+2. **KABUL ÖLÇÜTÜ:** ölü-zaman ihlali YOK (iki faz aynı anda AKTİF OLMAMALI, tek örnek bile).
+   `DDS_DEAD_TIME_TICKS` şu an 0 olduğu için klemp `g_tpp - 1`'e dayanıyor; donanımda ölü-zaman
+   sürücü tarafından sağlanıyorsa bunu da yaz.
+
+### Kayıt
+
+Her ölçüm için: ekran görüntüsü + ölçülen tek-polarite süresi (ms) + kararlı duty (%) +
+firmware sürümü/commit'i. Sonuçları bu bölümün altına ekle. ⚠️ Tıbbi cihaz için bu, yazılı
+**güvenlik-dosyasının** parçasıdır — kod okuması bu iddiayı test etmez.

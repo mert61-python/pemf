@@ -103,6 +103,41 @@ def _ai_hub_kur(kok: Path, dosyalar: dict) -> Path:
     return kok / "dist" / "PEMF_Backend"
 
 
+def _ps_kodu(ham: str) -> str:
+    """PowerShell kaynağından SATIR yorumu (`#`), BLOK yorumu (`<# .. #>`) ve HERE-STRING
+    (`@" .. "@` / `@' .. '@`) içeriklerini SOY.
+
+    ⚠️ NEDEN (denetim 2026-08-17): eski soyucu yalnız `#` ile BAŞLAYAN satırı atıyordu. `<#` ile
+    başlayan bir satır `#` ile başlamadığı için GEÇİYOR ve blok içindeki GERÇEK kod satırları
+    `kod`da kalıyordu → bir kod bloğunu yorum içine almak onu YÜRÜTÜLMEZ yapar ama POZİTİF metin
+    iddialarını GEÇİRİRDİ. Aynısı here-string içine yazılan kod için de geçerli.
+    ⚠️ KÖR NOKTA (dürüstlük): bir STRING içinde geçen `<#` de blok başlatır. Bugün dosyada yok.
+    """
+    cikti, blok, here = [], False, None
+    for s in ham.splitlines():
+        d = s.strip()
+        if here is not None:
+            if d == here:
+                here = None
+            continue
+        if blok:
+            if "#>" in s:
+                blok = False
+            continue
+        if "<#" in s:
+            blok = "#>" not in s[s.index("<#") + 2 :]
+            s = s[: s.index("<#")]
+            d = s.strip()
+        if d.endswith('@"') or d.endswith("@'"):
+            here = '"@' if d.endswith('@"') else "'@"
+            cikti.append(s.split("#")[0])
+            continue
+        if d.startswith("#"):
+            continue
+        cikti.append(s.split("#")[0])
+    return chr(10).join(cikti)
+
+
 # ── T4: çıpa/metin emniyet ağı — PowerShell'siz ortamda da koşar ──────────────
 
 
@@ -120,7 +155,7 @@ def test_cipalar_ve_kapi_metni_yerinde():
     ):
         assert cipa in ham, f"cipa YOK: {cipa}"
 
-    kod = "\n".join(s.split("#")[0] for s in ham.splitlines() if not s.strip().startswith("#"))
+    kod = _ps_kodu(ham)
     assert "/DBuildOutput=$OutputDir" in kod, "ISCC'ye /DBuildOutput GECILMIYOR"
     assert "-SkipProtect" not in kod, "delegeye -SkipProtect gecilmis (koruma atlanir)"
     assert "build_backend_exe.ps1" in kod, "korumali build'e delege EDILMIYOR"
@@ -133,11 +168,25 @@ def test_cipalar_ve_kapi_metni_yerinde():
 
 
 def test_iss_varsayilani_KORUMALI_agaci_gosterir():
-    """`.iss` varsayılanı da korumalı ağaç olmalı: çıplak `iscc` / Inno IDE Build yolları için."""
+    """`.iss` varsayılanı da korumalı ağaç olmalı: çıplak `iscc` / Inno IDE Build yolları için.
+
+    ⚠️ SERTLEŞTİRİLDİ (denetim 2026-08-17): eski hâli `"#define BuildOutput" in s` ile PREFIX
+    eşleşmesi yapıyordu (`#define BuildOutputEski` de eşleşirdi) ve YALNIZ İLK eşleşmeye bakıyordu.
+    Inno preprocessor `#define`ı YENİDEN TANIMLAYABİLİR; ikinci tanım ilkini EZER ve yalnız ilkine
+    bakan bir kapı YANLIŞ-YEŞİL olur."""
+    import re
+
     iss = (KOK / "build_tools" / "PEMF_Backend_Setup.iss").read_text(encoding="utf-8")
     kod = [s for s in iss.splitlines() if not s.strip().startswith(";")]
-    tanim = next(s for s in kod if "#define BuildOutput" in s)
-    assert "PEMF_BUILD" in tanim, f".iss varsayilani hala korumasiz agaci gosteriyor: {tanim.strip()}"
+
+    tanimlar = [s for s in kod if re.match(r"\s*#\s*define\s+BuildOutput\b", s)]
+    assert tanimlar, "`.iss`de #define BuildOutput YOK -> ciplak iscc yolunda varsayilan belirsiz"
+    assert len(tanimlar) == 1, f"BuildOutput birden fazla tanimlanmis, ETKIN olan belirsiz: {tanimlar}"
+    assert "PEMF_BUILD" in tanimlar[0], f".iss varsayilani hala korumasiz agaci gosteriyor: {tanimlar[0].strip()}"
+    # `/DBuildOutput` override'i bozulmasın.
+    assert any(re.match(r"\s*#\s*ifndef\s+BuildOutput\b", s) for s in kod), (
+        "#ifndef BuildOutput kalkmis -> /DBuildOutput override'i ETKISIZ kalabilir"
+    )
 
 
 # ── T1-T3: gerçek PowerShell blokları, stub'larla ────────────────────────────

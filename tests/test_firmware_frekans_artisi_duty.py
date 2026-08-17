@@ -230,3 +230,43 @@ if __name__ == "__main__":
     import os
 
     raise SystemExit(pytest.main([os.path.abspath(__file__), "-v"]))
+
+
+def test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ():
+    """⚠️ `[FIX-1c]` C kodunda VARSA, tezgâh doğrulama prosedürü de belgede DURMAK ZORUNDA.
+
+    Bu düzeltme gerçek donanımda ÖLÇÜLMEDİ: koşan şey C kodu değil, ISR'ın Python modelidir.
+    Böyle bir kaydın en tehlikeli yanı SESSİZCE KAYBOLMASIDIR — bir sonraki geliştirici yeşil bir
+    süit görüp "doğrulanmış" sanır ve tıbbi cihazı tezgâh ölçümü olmadan yayınlar. Bu kapı, uyarının
+    ve ölçüm prosedürünün `docs/VERIFICATION.md`de kalmasını zorunlu kılar.
+
+    ⚠️ Ölçüt METİN ARAMASI ama kandırılamaz biçimde kurulu: burada aranan şey bir KOD DESENİ değil,
+    bir BELGE BÖLÜMÜNÜN VARLIĞI. "Doğru deseni anlatan bir yorum yazarak" geçmek anlamsızdır —
+    geçmenin tek yolu prosedürü gerçekten belgede tutmaktır.
+    ⚠️ Kapı, düzeltme C kaynağından KALDIRILIRSA kendiliğinden susar (o zaman uyarının konusu da
+    kalmaz) — yani belgeyi gereksiz yere kilitlemez.
+    """
+    fw = FW.read_text(encoding="utf-8", errors="replace")
+    if "[FIX-1c]" not in fw:
+        pytest.skip("firmware duzeltmesi kaldirilmis → tezgah uyarisinin konusu kalmadi")
+
+    belge = FW.parent.parent / "docs" / "VERIFICATION.md"
+    assert belge.exists(), "docs/VERIFICATION.md YOK"
+    metin = belge.read_text(encoding="utf-8", errors="replace")
+
+    eksik = [
+        p
+        for p in (
+            "[FIX-1c]",  # hangi düzeltmeden söz ettiği
+            "TEZGÂHTA ÖLÇÜLMEDİ",  # açık uyarı
+            "1 Hz → 100 Hz",  # asıl ölçüm vakası
+            "250 ms",  # kabul ölçütü
+            "IKI UC" if "IKI UC" in metin else "HİÇBİRİNİ",  # doğru değişmez (oran ölçütü)
+        )
+        if p not in metin
+    ]
+    assert not eksik, (
+        f"docs/VERIFICATION.md'de tezgah dogrulama prosedurunun parcalari EKSIK: {eksik}. "
+        "Bu uyari sessizce kaybolursa bir sonraki gelistirici yesil suiti 'dogrulanmis' sanip "
+        "tibbi cihazi tezgah olcumu olmadan yayinlar."
+    )

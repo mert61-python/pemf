@@ -40,6 +40,14 @@ from ai_service.gpu import yolo_device as _yolo_device
 # GÜRÜLTÜLÜ düşer — kapının sessizce kaybolması imkânsız.
 from utils.image_domain import DomainMismatch as _DomainMismatch
 from utils.image_domain import check as _domain_check
+
+# ⚠️ ASGARİ GİRDİ KAPILARI (denetim 2026-08-17) — router ile AYNI nesne, KOPYA DEĞİL.
+# Ölçüldü: bu iki uç boş gövdeyle 200 dönüyordu — `/infer/disease` → "Conjunctivitis %53" ve
+# `low_confidence: false`; `/infer/kidney_disease` → `prob_pct 78.0, label "ckd"`. O %78 hastanın
+# verisinden değil eğitim setinin ön-olasılığından gelir (sahip bildirimi 2026-08-07).
+from utils.klinik_asgari import AsgariGirdiYok as _AsgariGirdiYok
+from utils.klinik_asgari import ckd_kapisi as _ckd_kapisi
+from utils.klinik_asgari import vital_kapisi as _vital_kapisi
 from utils.ses_kalitesi import guvenilir_mi as _ses_guvenilir_mi
 from utils.ses_kalitesi import normalize_entropi as _ses_entropi
 from utils.ses_kalitesi import sessiz_mi as _ses_sessiz_mi
@@ -592,6 +600,9 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
 def infer_disease(payload: dict = Body(...)):
     """Kedi hastalık (XGBoost) — JSON: age,weight,hr,temp,duration,symptom_indices."""
     try:
+        # ⚠️ ASGARİ GİRDİ KAPISI — MODEL YÜKLEMESİNDEN ÖNCE (2026-08-16 dersinin aynısı:
+        # reddedilecek istek için ağırlık yüklenmesin) ve router ile AYNI nesneden.
+        _vital_kapisi(payload)
         clf = predictors.get("disease")
         t0 = time.time()
         results = clf.predict(
@@ -612,6 +623,10 @@ def infer_disease(payload: dict = Body(...)):
             "top_probability": round(top_p, 3),
             "low_confidence": top_p < 0.40,
         }
+    # ⚠️ SIRA KRİTİK: bu kol `except Exception`dan ÖNCE gelmeli, yoksa `_err500` onu yutup 500
+    # döner ve kullanıcı reddin SEBEBİNİ göremez (aynı sınıf hata bu turda bir kez yaşandı).
+    except _AsgariGirdiYok as ag:
+        return JSONResponse({"error": ag.user_message(), "insufficient_input": True}, status_code=422)
     except Exception as e:
         return _err500(e)
 
@@ -620,6 +635,9 @@ def infer_disease(payload: dict = Body(...)):
 def infer_kidney_disease(payload: dict = Body(...)):
     """İnsan KBH (ExtraTrees ONNX) — JSON: 24 klinik özellik."""
     try:
+        # ⚠️ ASGARİ GİRDİ KAPISI — MODEL YÜKLEMESİNDEN ÖNCE (2026-08-16 dersinin aynısı:
+        # reddedilecek istek için ağırlık yüklenmesin) ve router ile AYNI nesneden.
+        _ckd_kapisi(payload)
         from ai_hub.inference_human_kidney_disease import predict_one
 
         t0 = time.time()
@@ -633,6 +651,8 @@ def infer_kidney_disease(payload: dict = Body(...)):
             "label": r["label"],
             "model": r.get("model"),
         }
+    except _AsgariGirdiYok as ag:  # ⚠️ `except Exception`dan ÖNCE (yukarıdaki gerekçe)
+        return JSONResponse({"error": ag.user_message(), "insufficient_input": True}, status_code=422)
     except Exception as e:
         return _err500(e)
 
