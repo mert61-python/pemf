@@ -1328,16 +1328,140 @@ yazıldı, dosya sözdizimi bozuldu) — testler anında yakaladı, açık bayt/
 `date_time=SABIT_TARIH` argümanını SİLMEK bayt-özdeş çıktı verir ve haklı olarak yakalanmaz;
 yakalanması gereken şey sabitin DEĞERİNİN değişmesidir ve o artık yakalanıyor.
 
-### Bu turdan çıkan YENİ açık kalemler (dürüstlük)
+### Bu turdan çıkan YENİ açık kalemler (**üçü de 4. turda KAPANDI**)
 
 - `services/mdns_service.py`nin `_ip_monitor_loop`u patlarsa `ensure_interfaces_current`ın TEK
   çağrıcısı ölür → `_pemfvet`in toparlanması da sessizce durur. İki yayıncı arasında belgelenmemiş
-  bir bağımlılık; bu turun kapsamı dışında.
+  bir bağımlılık; bu turun kapsamı dışında. → **4. tur kalem A'da kapatıldı.**
 - `tests/test_kalan_regression_gaps.py`deki beş kapı hâlâ METİN araması yapıyor (artık yorum-soyulu,
   yani kandırılamıyor) — davranışsala çevirmek FastAPI TestClient + MQTT sahtesi gerektiriyor,
-  ayrı kalem.
+  ayrı kalem. → **4. tur kalem B'de kapatıldı; biri YANLIŞ-YEŞİL çıktı ve gerçek bir bulgu ortaya döktü.**
 - PowerShell soyucusunun kör noktası: bir STRING içinde geçen `<#` de blok başlatır. Bugün dosyada
-  yok; kayda geçirildi.
+  yok; kayda geçirildi. → **4. tur kalem C'de kapatıldı** (blok başlangıcı yalnız satır BAŞINDA).
+
+## DÖRDÜNCÜ TUR — "KASITLI GÖRÜNÜYOR" KALEMLERİ + TURLARDAN DOĞANLAR (2026-08-17)
+
+Sahip *"2. maddede bilerek düzeltmediklerini düzelt"* dedi: yukarıdaki **KASITLI GÖRÜNÜYOR — TEYİT
+İSTER** başlığında bıraktığım kalemler ile üçüncü turdan doğan üç açık kalem kapatıldı. Yöntem aynı:
+kapatmadan önce her biri HEAD'e karşı yeniden doğrulandı, ayrı test yazıldı, düzeltmeden **önce
+kırmızı** olduğu görüldü, sonra mutasyonla doğrulandı.
+
+| # | Kalem | Cid. | Dosya(lar) | Test | Mutasyon |
+|---|---|---|---|---|---|
+| 1 | Doz kaydı (`session_coil_runs`) **sensör** saklama süresiyle siliniyordu | 2 | `database/treatment_history_db.py`, `servers/api_server.py`, `services/headless_db_maintenance.py` | `test_doz_kaydi_saklama.py` (yeni) | ✓ |
+| 2 | Destek paketi sır dosyası **türevlerini** engellemiyordu | 2 | `utils/support_bundle.py` | `test_destek_paketi_sir_turevleri.py` (yeni) | ✓ |
+| 3 | Yarım katman seti sessizce yazılıyordu (client TÜM manifesti reddeder) | 3 | `scripts/make_manifest.py` | `test_make_manifest.py` (güncellendi) | ✓ |
+| 4 | Kısmi ayar POST'u gönderilmeyen alanları **siliyordu** (`clinic_name`) | 2 | `servers/settings_router.py` | `test_ayar_kismi_guncelleme.py` (yeni) | ✓ |
+| 5 | Keşif kanalları portu **8000 sabit** yayınlıyordu (gerçek port dinamik) | 5 | `backend_service.py`, `servers/auto_discovery.py`, `servers/api_server.py`, `servers/system_router.py`, `servers/sync_worker.py` | `test_kesif_gercek_port.py` (yeni) | ✓ |
+| 6 | `resolve_device` tazelik penceresi "cihaz kapalı" teşhisini **ölü kod** yapıyordu | 4 | `database/supabase_devices.sql`, `supabase/resolve_device_bayat_gorunur.sql` (yeni), `pf/src/services/pairing.ts` | `test_bayat_cihaz_gorunur.py` (yeni), `pairing.test.ts` (+3) | 10 + 3 ✓ |
+| A | mDNS kurulum hatası **iki yayıncıyı birden** öldürüyordu | 3 | `services/mdns_service.py` | `test_mdns_monitor_olmez.py` (yeni) | ✓ |
+| B | Beş kapı hâlâ **metin** araması yapıyordu | 5 | `tests/test_kalan_regression_gaps.py` | aynı dosya (17 test) | 17/17 ✓ |
+| C | PowerShell yorum soyucusunun kör noktası (string içindeki `<#`) | 5 | `tests/test_installer_korumali_ai_hub_sevk_eder.py` | aynı dosya | ✓ |
+| + | **YENİ BULGU:** `start_ai_session` önceki seansın telemetrisini YENİ seansa yazıyordu | 2 | `servers/api_server.py` | `test_kalan_regression_gaps.py` (3 test) | 3/3 ✓ |
+| + | **BONUS:** okunamayan `config.json` varsayılanlarla EZİLİYORDU (kazadan çıktı) | 2 | `utils/production_config_manager.py` | `test_config_okunamayinca_EZILMEZ.py` (yeni) | ✓ |
+
+Commit'ler: `5035c53` (1-4 + config), `0391b12` (5, A, C), bu tur (6, B, yeni bulgu).
+
+### Kalem 1 — analiz raporumdan BÜYÜK bir şey buldu
+
+Doz kaydını silen **iki bağımsız yol** vardı ve **farklı iki env adı** kullanıyorlardı: headless
+`PEMF_RETAIN_SENSOR_DAYS`, `api_server` `PEMF_SENSOR_RETAIN_DAYS` (hiçbir yerde belgeli değil).
+Operatör birincisini `0` yapsa bile ikincisi silmeye devam ediyordu; üstelik orada `0` "kapalı"
+değil **1 günlük saklama** demekti. İkinci yol kaldırıldı; ayrı `dose_retain_days` (varsayılan
+**3650**) + `PEMF_RETAIN_DOSE_DAYS` + silmenin `denetim_yaz` izine geçmesi geldi.
+
+⚠️ Onay kapısı **bilerek eklenmedi**: arayüz yüzeyi olmadığı için ölü bir adım olurdu. Sahibin
+gerçek kararı ("sınırsız büyüme olmasın") korundu.
+
+### Kalem 6 — doğru düzeltme yeri istemci DEĞİL, SQL
+
+`resolve_device` satırı **sunucuda** `last_seen > now() - interval '5 minutes'` ile eliyordu;
+istemcinin `deviceRegistry.STALE_MS`i de **5 dakika**. İki pencere EŞİT olduğu için bayat satır
+istemciye hiç ulaşmıyordu → `_cozumle`nin `durum:"bayat"` dalı ve `agTanisi`nin `cihaz_kapali`
+teşhisi **ölü koddu**; kullanıcı doğru kodda bile *"Kodu kontrol edin"* görüyordu (2026-08-12 saha
+bildiriminin aynısı).
+
+Pencere 30 güne çıkarıldı — **tazelik kararı istemcide** kalıyor. Bağlanma kararı DEĞİŞMEZ: istemci
+5 dk'yı sürdürüyor ve `pairing.cihazaBaglan` ile `getRemoteUrlForDevice` yalnız `durum === "bulundu"`e
+bakıyor, yani bayat/zehirlenmiş `tunnel_url` hiçbir zaman kullanılamaz. Kilitlenen değişmez tek
+cümle: **sunucu penceresi istemci `STALE_MS`inden geniş olmalı** (10 mutasyonla doğrulandı; istemci
+penceresini genişleten mutasyon da kırmızı veriyor).
+
+⚠️ **SAHİBİN ELLE YAPACAĞI ADIM VAR.** Canlı Supabase'e DDL çalıştırmadım. Yayında olan projede
+kurulum betiği tekrar çalıştırılamadığı için (`database/README.md`: sırsız v1 aşırı-yükleri geri
+gelir) dar kapsamlı bir dosya bırakıldı: `supabase/resolve_device_bayat_gorunur.sql` → SQL Editor →
+Run. Kabul ölçütü ve karşıt-kanıt adımları `docs/VERIFICATION.md` §10'da. **APK/web yayını
+gerekmez**: sahadaki uygulamada `bayat` dalı zaten yazılı.
+
+### Kalem B — beş metin kapısı davranışsala çevrildi, biri YANLIŞ-YEŞİLDİ
+
+Üçüncü turda bu kapılar yorum-soyulu hâle getirilmişti (kandırılamıyorlardı) ama hâlâ yalnız
+**metnin varlığını** ölçüyorlardı. Beşi de gerçek kodu koşturan testlere çevrildi:
+
+- **ESP bayat-telemetri STOP'u** → `_esp_telemetry_watchdog` tek tur gerçekten koşuyor (`sleep`
+  yakalanarak), yayınlanan MQTT gövdesi okunuyor, bobinin UI'da düştüğü doğrulanıyor.
+- **`_minute_acc` / sensör artığı** → `/api/session/start` **ve** `start_ai_session` gerçekten
+  çağrılıyor.
+- **landmark-auto çatışması** → iç içe `_drive_landmark_auto` kapanışının **kod nesnesi**
+  `co_consts`tan alınıp `types.FunctionType` ile kurularak koşturuluyor (uç noktanın kendisi gerçek
+  YOLO çıkarımı isterdi).
+- **AI Pro monotonic süre** → gerçek uçlar sürülüp **duvar saati** ±1-2 saat oynatılıyor; hangi saatin
+  kullanıldığı VARSAYILMIYOR, ölçülüyor.
+- **AI Pro hedef-kaybı STOP'u** → `_ai_pro_loop` sahte kamerayla gerçekten dönüyor, eşik davranışı
+  (eşikte durdur / eşiğin altında durdurma) ölçülüyor.
+
+Her birinin yanına **karşıt-kanıt** testi kondu: "her turda durdur" / "her zaman atla" biçimindeki
+ters mutasyonlar düzeltme sanılmasın — taze bobine STOP göndermek de, süren seansın telemetrisini
+silmek de klinik olarak gerçek zararlar. Metin araması kalmadığı için yorum-soyucu **silindi**.
+
+**Bir kapı yanlış-yeşildi:** `src.count("_minute_acc.clear()") >= 2` iddiası "hem manuel hem AI
+yolunda temizlenir" demek istiyordu; oysa iki eşleşmeden biri `_emit_minute_averages`in KENDİ
+temizliğiydi. Yani AI yolunda temizlik **hiç olmasa da** kapı geçiyordu — ve gerçekten yoktu:
+
+### YENİ BULGU (ciddiyet 2) — devralınan seansın telemetrisi YENİ seansa yazılıyordu
+
+`/api/session/start` yeni seansta `_minute_acc` + `_sensor_sample_buffer`ı temizliyor;
+`start_ai_session` **hiçbirini** temizlemiyordu. Somut yol: manuel seans sürerken operatör AI Pro
+başlatır (devralma) → önceki seansın birikmiş **kısmi dakikası** `_minute_acc`te kalır, bir sonraki
+dakika-loop turunda `_flush_sensor_buffer_if_active` **güncel** `db_session_id`yi kullandığı için o
+örnekler **YENİ AI seansının** satırına yazılır. Devralma yolu ayrıca `_emit_minute_averages()`
+çağırmadığı ve `ended_epoch` yazmadığı için eski seansın son dakikası kendi satırına da hiç
+gitmiyordu.
+
+Düzeltme: devralma artık `_finalize_session_db(...)` kullanıyor (kısmi dakikayı **doğru** satıra
+döker, buffer'ı flush eder, `end_session` + `ended_epoch` yazar) ve `cont=False` yolunda akümülatör
++ buffer temizliği manuel yolla **simetrik** hâle geldi. `cont=True` (landmark auto_adjust her
+istekte çağırır) yolunda temizlenmiyor — aksi halde süren seansın kendi telemetrisi saniyeler içinde
+silinirdi; bu da karşıt-kanıt testiyle kilitli.
+
+### Bu turda KENDİ testlerimde/iddialarımda bulduğum kusurlar
+
+| Kusur | Nasıl yakalandı | Düzeltme |
+|---|---|---|
+| Kalem 4'te *"çağıran bulunamadı"* demiştim — çağıran VAR (`pf SettingsScreen` "Kaydet"); `apiClient` `/api` önekini kendisi eklediği için grep kaçırmıştı | Analiz düzeltti | Bulgu ciddiyeti yükseltildi, canlı kayıp (`clinic_name`) ölçüldü |
+| Analizin mDNS için önerdiği `if not kurulum_ok: continue` **bulgunun kendisini kaçırıyordu** (o çağrı kayıtlı TÜM yayıncıları re-register ediyor) | Bulgu izi tekrar okundu | `continue` kaldırıldı; `ensure_interfaces_current` kurulum patlasa da koşuyor |
+| `test_config_okunamayinca_EZILMEZ` tek başına yeşil, `-k` koşusunda kırmızı | Tam süit | `ProductionConfigManager` **singleton**'ı (`_instance`) testte sıfırlanıyor |
+| Mutasyon çapalarım CRLF dosyalarda hiç eşleşmiyordu (sessizce "0 kez bulundu") | Mutasyon turunun kendi çıktısı | Çapa metinleri dosyanın satır sonuna çevriliyor |
+
+### Kaza ve düzeltilmiş öz-beyan (dürüstlük)
+
+Denetim sırasında pytest **dışında** çalıştırdığım bir tanı komutu bu makinenin gerçek
+`%APPDATA%\PEMF_GUI\config.json` dosyasını ezdi. İlk anlatımım *"testim ezdi"* biçimindeydi;
+**ölçtüm ve düzelttim**: `tests/conftest.py` `PEMF_DATA_DIR`i çift katmanlı izole ediyor, tam süit
+koşusundan sonra gerçek dosyaların mtime'ı değişmiyor — **süit güvenli**. Kalan gerçekler:
+`config.json` 22:44:34'te (2737 bayt) ezildi, `.pemf_key` 22:43:58'de yeniden yazıldı; dosya
+ACL-kilitli olduğu için okuyup geri koyamıyorum. **Sahip, yönetici olarak MQTT broker/port
+override'larını doğrulamalı.** Kaza gerçek bir ürün bug'ını ortaya çıkardı (okunamayan config →
+varsayılanlar → ilk kayıt override'ları siler) ve fail-closed yapıldı.
+
+### Hâlâ AÇIK olan (bu turdan sonra da)
+
+- **Firmware `[FIX-1c]` tezgâhta ÖLÇÜLMEDİ.** Prosedür `docs/VERIFICATION.md` §9'da; yayın öncesi
+  zorunlu. Koşan şey C kodu değil, ISR'ın Python modeli.
+- **`supabase/resolve_device_bayat_gorunur.sql` canlı projede uygulanmadı** (sahibin adımı, §10).
+- **`pemf-vet-web`** hiç denetlenmedi.
+- PowerShell soyucusunun string-içi `<#` sınırı: hata yönü güvenli tarafta (az yutmak), davranış
+  olarak kayda geçti.
 
 ---
 
@@ -1541,6 +1665,14 @@ yerden denenecek"* atlanan turun gerçek sonucudur.
 ---
 
 ## KASITLI GÖRÜNÜYOR — TEYİT İSTER
+
+> **DURUM (4. tur):** sahip *"bilerek düzeltmediklerini düzelt"* dedi ve bu listedeki **dördü**
+> kapatıldı: doz-kaydı saklama (**kalem 1**), destek paketi (**2**), yarım katman seti (**3**),
+> `deviceRegistry` bayat dalı (**6** — SQL tarafı sahibin elle uygulayacağı adım olarak bırakıldı).
+> **20 baytlık paket sapması** düzeltilecek bir şey değil (beklenen, tek seferlik) —
+> yerinde duruyor. **`CHANGELOG.md:18` bayat referansı** kasten dokunulmadı: sahibin 2.3.17
+> yayını o dosyada AÇIK, çakışma çıkarmamak için ona bırakıldı. Aşağıdaki metinler
+> **düzeltme öncesi** tespitlerdir, kayıt için olduğu gibi bırakıldı.
 
 - **`session_coil_runs` (uygulanan DOZ kaydı) sensör saklama süresiyle siliniyor** —
   `database/treatment_history_db.py:1796-1798` `purge_old_coil_runs(sensor_retain_days)`;

@@ -83,14 +83,21 @@ drop policy if exists devices_anon_update on public.devices;
 -- ── Güvenli okuma RPC'si (SECURITY DEFINER) ─────────────────────────────────
 -- Anon tabloyu döküremediği için cihazı yalnız bu fonksiyonla çözer.
 -- Yalnız TAM device_id VEYA TAM 6-haneli pairing_code (büyük/küçük harf duyarsız)
--- ile eşleşen, TAZE (last_seen > now()-5dk) TEK satırı döner. Parça/önek/joker yok.
+-- ile eşleşen, SON 30 GÜNDE görülmüş TEK satırı döner. Parça/önek/joker yok.
+-- ⚠️ TAZELİK KARARI İSTEMCİDE (denetim 2026-08-17): pencere eskiden 5 DAKİKAYDI ve istemcinin
+-- `deviceRegistry.STALE_MS`i de 5 dakika. İki pencere EŞİT olduğu için bayat satır istemciye
+-- HİÇ ulaşamıyordu: `_cozumle`nin `durum:'bayat'` dalı ve `agTanisi`nin `cihaz_kapali` teşhisi
+-- ÖLÜ KODDU; kullanıcı `yok` alıp ekranda "Kodu kontrol edin" görüyordu — oysa kod DOĞRU,
+-- cihaz KAPALI. Sunucu artık yalnız kaba bir üst sınır koyar; "çevrimdışı" ile "kod yanlış"
+-- ayrımını istemci yapar. Bağlanma kararı DEĞİŞMEZ: istemci 5 dk'yı sürdürdüğü için bayat
+-- `tunnel_url` hiçbir zaman kullanılmaz (yalnız `durum==='bulundu'` bağlanır).
 -- SECURITY DEFINER + sabit search_path: RLS'i baypas eder ama yalnız bu dar sorguyla.
 create or replace function public.resolve_device(p_code text default null, p_device_id text default null)
 returns table (device_id text, name text, tunnel_url text, local_ip text, last_seen timestamptz)
 language sql security definer set search_path = public as $$
     select d.device_id, d.name, d.tunnel_url, d.local_ip, d.last_seen
     from public.devices d
-    where d.last_seen > now() - interval '5 minutes'
+    where d.last_seen > now() - interval '30 days'
       and ( (p_device_id is not null and d.device_id = p_device_id)
             or (p_code is not null and length(p_code)=6 and upper(d.pairing_code)=upper(p_code)) )
     order by d.last_seen desc limit 1;

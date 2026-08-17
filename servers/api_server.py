@@ -1954,16 +1954,29 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
     # in-memory + ~ms DB write; AI coil komutlari start_ai_session DONDUKTEN sonra → race yok.
     if not cont and prev.get("is_active"):
         try:
-            for cid in prev.get("coil_ids") or []:
+            # DENETIM 2026-08-17: burada coil-run kapatma + end_session ELLE yapiliyordu; iki eksigi
+            # vardi. (1) `_emit_minute_averages()` CAGRILMIYORDU → devralinan seansin birikmis KISMI
+            # dakikasi `_minute_acc`te KALIYOR ve bir sonraki dakika-loop turunda YENI (AI) seansin
+            # db_session_id'si ile yaziliyordu: onceki hastanin sicaklik/akim ornekleri BASKA bir
+            # seansin tibbi kaydina karisiyordu. (2) `ended_epoch` yazilmiyordu. Ikisi de
+            # `_finalize_session_db`de zaten dogru: coil-run'lari kapatir, kismi dakikayi DOGRU
+            # (eski) db_session_id'ye doker, buffer'i flush eder, end_session + ended_epoch yazar.
+            # ⚠️ SENKRON DB isi: `start_ai_session`in iki cagricisi da event-loop DISINDA
+            # (`asyncio.to_thread(_drive_landmark_auto)` ve senkron `def start_ai_pro` → FastAPI
+            # threadpool'u) → `_finalize_session_db`in "yalniz thread'lerden" sozlesmesi korunur.
+            # ⚠️ Coil-run kapatma BURADA kalir, `_finalize_session_db`e devredilmez: finalize
+            # `if not db_session_id: return 0` ile ilk satirda doner, yani DB satiri hic acilmamis
+            # bir seansta acik coil-run'lar kapatilmadan kalirdi (eski davranis kapatiyordu).
+            for _cid in prev.get("coil_ids") or []:
                 try:
-                    _finish_coil_run(cid)
+                    _finish_coil_run(_cid)
                 except Exception:
                     pass
-            prev_db_id = prev.get("db_session_id")
-            if prev_db_id:
-                st = prev.get("start_time")
-                dur_min = max(1, round((_t.time() - st) / 60.0)) if st else None
-                _get_treatment_db().end_session(prev_db_id, duration_minutes=dur_min)
+            _finalize_session_db(
+                prev.get("db_session_id"),
+                prev.get("started_epoch") or prev.get("start_time"),
+                reason="ai-devralma",
+            )
             logging.getLogger(__name__).warning(
                 "AI seansi (%s) aktif MANUEL seansi devraldi → eski seans (db_id=%s) duzgun kapatildi (orphan onlendi).",
                 mode,
@@ -1971,6 +1984,23 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             )
         except Exception:
             logging.getLogger(__name__).exception("AI gecisinde eski manuel seans kapatma hatasi")
+
+    # DENETIM 2026-08-17 (hasta-verisi karismasi, `/api/session/start` ile SIMETRI): manuel yol
+    # yeni seansta `_minute_acc` + `_sensor_sample_buffer`i temizliyordu (bkz. `start_session`),
+    # AI yolu TEMIZLEMIYORDU. Sonuc: onceki seanstan kalan kismi-dakika ve flush edilmemis sensor
+    # ornekleri, `_flush_sensor_buffer_if_active` GUNCEL `db_session_id`yi kullandigi icin YENI AI
+    # seansinin satirina yaziliyordu → yanlis seansa/hastaya ait tibbi kayit.
+    # ⚠️ Yukaridaki finalize onceki seansin verisini KENDI satirina zaten dokuyor; buradaki temizlik
+    # (a) DB satiri hic acilmamis seans (finalize ilk satirda doner) ve (b) hic aktif seans olmayan
+    # ama buffer'da artik kalan durum icin. Finalize yazimi basarisiz olup ornekleri buffer'a GERI
+    # koyduysa da temizlenirler: veri kaybi, YANLIS HASTAYA yazmaktan iyidir (manuel yolun karari).
+    # ⚠️ `cont=True` (ayni AI seansinin tekrarli cagrisi — landmark auto_adjust her istekte cagirir)
+    # yolunda TEMIZLENMEZ; aksi halde suren seansin kendi telemetrisi her istekte silinirdi.
+    if not cont:
+        with _minute_acc_lock:
+            _minute_acc.clear()
+        with _sensor_sample_buffer_lock:
+            _sensor_sample_buffer.clear()
 
     # DENETIM P1: otonom (AI Pro / AI Auto) tedavinin DB seans satirini AC. Eskiden hic
     # acilmadigi icin canli hayvana uygulanan dozun, dakika-ortalamali sensor/sicaklik

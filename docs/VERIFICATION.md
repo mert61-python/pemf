@@ -178,3 +178,39 @@ yayınlanmasını önermiyorum.
 Her ölçüm için: ekran görüntüsü + ölçülen tek-polarite süresi (ms) + kararlı duty (%) +
 firmware sürümü/commit'i. Sonuçları bu bölümün altına ekle. ⚠️ Tıbbi cihaz için bu, yazılı
 **güvenlik-dosyasının** parçasıdır — kod okuması bu iddiayı test etmez.
+
+## ⏳ 10 — `resolve_device` tazelik penceresi (CANLI SUPABASE · **SAHİBİN ELLE YAPACAĞI ADIM**)
+
+**Bulgu (denetim 2026-08-17).** `resolve_device` RPC'si satırı **sunucuda**
+`last_seen > now() - interval '5 minutes'` ile eliyordu; mobil uygulamanın `deviceRegistry.STALE_MS`i
+de 5 dakika. İki pencere **eşit** olduğu için bayat satır istemciye hiç ulaşmıyordu:
+`_cozumle`nin `durum:"bayat"` dalı ve `agTanisi`nin `bayat → cihaz_kapali` teşhisi **ölü koddu**.
+Sonuç: cihaz 5 dakikadan uzun süredir kapalıysa kullanıcı `{durum:"yok"}` alıyor ve ekranda
+**"Kodu kontrol edin"** yazıyordu — oysa kod DOĞRU, cihaz KAPALI. (2026-08-12 saha bildiriminin
+aynısı: kullanıcı defalarca kodu kontrol ediyor.)
+
+**Depoda yapılanlar.** `database/supabase_devices.sql` penceresi 30 güne çıkarıldı (yalnız YENİ
+kurulumları etkiler) ve `pf/src/services/pairing.ts`in `default` mesajı iki sebebi birlikte
+söyleyecek şekilde dürüstleştirildi. Kapı: `tests/test_bayat_cihaz_gorunur.py` (10 mutasyonla
+doğrulandı) — değişmez "**sunucu penceresi istemci `STALE_MS`inden GENİŞ olmalı**".
+
+**⚠️ ELLE YAPILACAK.** Yayında olan projede kurulum betiği **tekrar çalıştırılamaz**
+(`database/README.md`: sırsız v1 aşırı-yükleri geri gelir). Bu yüzden dar kapsamlı bir dosya var:
+
+1. Supabase Dashboard → **SQL Editor** → `supabase/resolve_device_bayat_gorunur.sql` içeriğini
+   yapıştır → **Run**. (Tek transaction; yalnız `resolve_device`i değiştirir, `upsert_device`e
+   dokunmaz.)
+2. **KABUL ÖLÇÜTÜ:** cihazı kapat, **10 dakika** bekle, telefonda eşleştirme kodunu gir. Görülmesi
+   gereken: *"Cihaz kayıtlı ama şu an çevrimdışı görünüyor…"*. Hâlâ *"…çevrimiçi cihaz
+   bulunamadı…"* çıkıyorsa SQL uygulanmamıştır.
+3. **Karşıt-kanıt:** cihaz AÇIKKEN aynı kodu gir → normal bağlanmalı (*"Cihaz eşleştirildi ✓"*);
+   ve **rastgele/yanlış** bir kod gir → *"…çevrimiçi cihaz bulunamadı…"* gelmeli.
+
+**APK/web yayını GEREKMEZ:** sahadaki uygulamada `bayat` dalı zaten yazılı; SQL uygulandığı an
+doğru mesaj görünmeye başlar. (Yeni `default` metni bir sonraki yayında gelir.)
+
+**Güvenlik notu — bu genişletme bağlanma kararını DEĞİŞTİRMEZ.** İstemci `STALE_MS`i 5 dakikada
+kalıyor ve `pairing.cihazaBaglan` ile `getRemoteUrlForDevice` yalnız `durum === "bulundu"`e bakıyor
+→ bayat/zehirlenmiş `tunnel_url` hiçbir zaman kullanılmaz. Genişletme yalnızca **sebebi** istemciye
+taşır. Ayrıca RPC hâlâ tam `device_id` VEYA tam 6-haneli `pairing_code` istiyor (parça/joker yok) ve
+tablo dökümü kapalı.

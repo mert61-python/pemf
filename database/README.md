@@ -30,6 +30,17 @@ dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hi�
 > çalışmayı `raise exception` ile **durduran** bir kapı eklendi (`_pemf_verify_device` varlığına bakar).
 > Kapıyı kaldırmayın.
 
+### Kurulumdan SONRA elle uygulanan yamalar (`../supabase/`)
+
+Yukarıdaki üç dosya v2'den sonra tekrar çalıştırılamadığı için, yayına çıkmış bir projede tek bir
+RPC'yi güncellemek gerektiğinde **ayrı, dar kapsamlı** bir dosya yazılır. Bunlar `supabase/`
+dizinindedir ve **sahibi tarafından elle** (SQL Editor → yapıştır → Run) uygulanır:
+
+| Dosya | Ne yapar | Zorunlu mu |
+|---|---|---|
+| `resolve_device_bayat_gorunur.sql` | `resolve_device` tazelik penceresini 5 dk → **30 gün** yapar. Pencere istemcinin `STALE_MS`i ile eşit olduğu için bayat satır istemciye hiç ulaşmıyor, "cihaz kapalı" teşhisi ölü kod kalıyordu; kullanıcı doğru kodda bile **"Kodu kontrol edin"** görüyordu (denetim 2026-08-17) | **Evet** — uygulanmazsa saha teşhisi yanlış yöne bakmaya devam eder. APK/web yayını gerekmez. |
+| `upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
+
 ## Şifreleme modeli (iki katman)
 1. **Tüm-DB SQLCipher** — `PEMF_ENCRYPT_AT_REST=1` ile; anahtar OS keyring'de (`sqlcipher_util.py`).
 2. **Alan-başı Fernet** — hasta PII'si (`patient_database.py`), DB şifreli olsa da ekstra.
