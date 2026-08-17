@@ -127,6 +127,27 @@ cihazın kendisi sunar, orada eşleştirme anlamsızdır.
 
 ---
 
+## mobil 2.3.16 — 2026-08-16 (uygulama güncelleme kontrolü bitmeden açılmıyor)
+
+**Etiket:** `launcher-v1.9.30` → `PEMF_Vet_Mobil-2.3.16.apk` (sürüm kodu 23, sha `f99cc9966589`).
+
+Masaüstü client'ta "Başlat" düğmesi artık güncelleme kontrolü bitmeden çıkmıyor (1.9.30).
+Telefonda karşılığı yoktu: uygulama anında açılıyor, yeni sürüm ancak içerideki bant fark
+edilirse görülüyordu.
+
+Artık uygulama açılırken **önce güncelleme kontrol ediliyor**, sonra açılıyor. Yeni sürüm varsa
+karşınıza güncelleme ekranı geliyor; indirme ve kurulum orada tek dokunuşla yapılıyor.
+
+**Bekleme kısa ve her zaman kaçış yolu var.** Kontrol en fazla 7 saniye sürer; 2,5 saniye sonra
+"Atla" çıkar. İnternet yoksa ya da kontrol yapılamıyorsa uygulama hemen açılır — cihaz
+internetsiz de çalışır.
+
+**Güncelleme zorunlu değil.** Android'de kurulumu telefonun kendisi sorar ve
+reddedebilirsiniz; bu yüzden güncelleme ekranında her zaman "Şimdilik devam et" var — indirme
+sürerken bile. Ertelerseniz uygulamayı bir dahaki açışınızda yeniden sorulur.
+
+---
+
 ## launcher 1.9.30 — 2026-08-16 ("Başlat" güncelleme kontrolü bitmeden çıkmıyor)
 
 **Etiket:** `launcher-v1.9.30` → `PEMFVetClient-Setup-1.9.30.exe` (sha `07daf9f51f5a`).
