@@ -236,7 +236,14 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
 
 export async function signOutUser(): Promise<void> {
   try {
-    await supabaseAuth.auth.signOut();
+    // ⚠️ KAPSAM 'local' (denetim 2026-08-18): supabase-js v2'de `signOut()` varsayılanı
+    // `scope: 'global'`dir → `POST /auth/v1/logout?scope=global` kullanıcının TÜM refresh
+    // token'larını sunucuda iptal eder. Üç istemci de AYNI Supabase projesini kullanıyor
+    // (mobil burası, web `pemf-vet-web`, masaüstü `launcher/core/src/auth.rs`), dolayısıyla
+    // telefondan çıkmak KLİNİKTEKİ launcher'ın oturumunu da düşürüyordu: launcher bir sonraki
+    // jeton tazelemesinde `invalid_grant` alıp açılış kapısında e-posta+parola istiyor.
+    // Yerel çıkış yeterli — jeton zaten bu cihazın SecureStore'undan siliniyor.
+    await supabaseAuth.auth.signOut({ scope: "local" });
   } catch {
     /* yok say — yerelde de temizlenecek */
   }
