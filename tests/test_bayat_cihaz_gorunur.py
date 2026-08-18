@@ -89,11 +89,14 @@ def _pencere_sn(govde: str) -> int:
 def _istemci_pencere_sn() -> int:
     """`deviceRegistry.ts` içindeki `STALE_MS` çarpımını hesapla.
 
-    ⚠️ ÇAPRAZ-DEPO: `pf/` AYRI bir depodur (`pemf-frontend`) ve bu deponun CI checkout'unda
-    BULUNMAZ. CI'da kırmızı verdi (2026-08-18) — ürün hatası değil, testin taşınabilirlik
-    hatasıydı. Depo yoksa ATLANIR; deponun yanında çalışıldığında (geliştirici makinesi,
-    tek klasör) değişmez tam olarak ölçülür. Bu, `test_version_visibility.py` ve
-    `test_site_paket_boyutlari.py` ile aynı yerleşik desen."""
+    ⚠️ ESKİ GEREKÇE GEÇERSİZ (tek depo, 2026-08-18): burada "`pf/` AYRI bir depodur
+    (`pemf-frontend`) ve bu deponun CI checkout'unda BULUNMAZ" yazıyordu. `pemf-frontend`
+    tek depoya taşındı; `pf/` artık checkout'ta VAR ve bu kapı CI'da GERÇEKTEN ÖLÇÜYOR
+    (doğrulandı: atlanmıyor, PASSED). Atlama yolu yalnızca parçalı bir çalışma kopyası
+    için duruyor — sessizce ölü kalmasın diye durumu böyle bıraktım, çünkü bu kapı
+    hasta-görünür bir değişmezi kilitler: sunucu tazelik penceresi istemcinin `STALE_MS`inden
+    GENİŞ olmalı, aksi halde uzun süredir kapalı cihaz `bayat` yerine `yok` döner ve
+    kullanıcıya "kodu kontrol edin" denir."""
     if not _ISTEMCI_TS.is_file():
         pytest.skip(f"istemci kaynağı bu çalışma kopyasında yok (ayrı depo): {_ISTEMCI_TS}")
     ts = _ISTEMCI_TS.read_text(encoding="utf-8")

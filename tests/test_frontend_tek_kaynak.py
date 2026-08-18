@@ -41,15 +41,18 @@ def _kaynak_agaci_mi(dizin: Path) -> bool:
 
 
 def test_arayuz_kaynagi_var():
-    """⚠️ `pf/` ana depoda GITIGNORE'LUDUR (ayrı bir depo: pemf-frontend.git).
+    """`pf/` artık BU deponun içinde (tek depo, 2026-08-18) — temiz checkout'ta da vardır.
 
-    Temiz checkout'ta / CI'da o dizin YOKTUR — orada "kaynak yok" bir arıza değildir.
-    (Bu test önce koşulsuz assert ediyordu ve CI'ı kırdı.) Asıl değişmez olan
+    ⚠️ ESKİ GEREKÇE GEÇERSİZ: burada "`pf/` GITIGNORE'LUDUR (ayrı bir depo: pemf-frontend.git),
+    CI'da YOKTUR" yazıyordu ve test bu yüzden atlanıyordu. `pemf-frontend` tek depoya taşındı
+    ve arşivlendi; `git ls-files pf` artık 218 dosya döndürüyor, `.gitignore` de dışlamıyor.
+    Atlama yolu yine de DURUYOR: dizin gerçekten yoksa (parçalı bir sparse-checkout, ya da
+    yalnız backend'in çıkarıldığı bir kopya) bu bir arıza değildir. Asıl değişmez olan
     `test_KRITIK_ikinci_arayuz_kaynagi_YOK` koşulsuz kalır: ikinci bir kopya HER ortamda
     yasaktır, çünkü zararı checkout'a bağlı değildir.
     """
     if not _KAYNAK.exists():
-        pytest.skip("pf/ yok (temiz checkout / CI) — ayrı depo, gitignore'lu")
+        pytest.skip("pf/ bu çalışma kopyasında yok (parçalı checkout)")
     assert _kaynak_agaci_mi(_KAYNAK), f"arayüz kaynağı bulunamadı: {_KAYNAK}"
 
 
