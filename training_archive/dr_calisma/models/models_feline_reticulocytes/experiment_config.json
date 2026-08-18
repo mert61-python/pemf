@@ -1,0 +1,20 @@
+{
+  "task": "instance_segmentation",
+  "dataset": "/home/user02/dr/dataset/feline_reticulocytes_yolo/data.yaml",
+  "models": [
+    "yolov8n",
+    "yolov8s",
+    "yolov8m",
+    "yolo11n",
+    "yolo11s",
+    "yolo11m",
+    "yolo26n",
+    "yolo26s",
+    "yolo26m"
+  ],
+  "device": "cuda:0",
+  "imgsz": 640,
+  "seed": 42,
+  "framework": "ultralytics",
+  "results_csv": "/home/user02/dr/models/models_feline_reticulocytes/model_feline_ret_karsilastirma.csv"
+}

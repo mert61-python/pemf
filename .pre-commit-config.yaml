@@ -8,15 +8,25 @@ repos:
     hooks:
       - id: ruff            # lint (F + E9) — --fix ile otomatik düzeltilebilirleri uygular
         args: [--fix]
+        # ⚠️ `training_archive/` DONMUS ARSIV — lint ETME, DUZELTME. Bu agac, yayinlanmis
+        # doktora/TUBITAK sonuclarini ureten kodun BIREBIR hali. Olculdu (2026-08-18): ruff
+        # ilk gecisinde 316 otomatik duzeltme uygulayip 49 dosyayi yeniden bicimlendirdi —
+        # arsivin tek degeri SADAKATI oldugu icin bu bir iyilestirme degil, KAYIPTIR.
+        # (Ornek: analysis.py'deki `import torch; torch.cuda.empty_cache()` satiri kasitli.)
+        exclude: '^training_archive/'
       - id: ruff-format     # format (black-uyumlu) — yalnız değişen dosyalar
+        exclude: '^training_archive/'
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: '^training_archive/'
       - id: end-of-file-fixer
         # ⚠️ Model artefaktlarina DOKUNMA: `.onnx`/`.pkl` ikili, `best_model.txt` ise uretici
         # betigin yazdigi tek satirlik cikti. Sonuna newline eklemek zararsiz ama gereksiz gurultu.
-        exclude: '^release_assets/ai_models/'
+        # `training_archive/` de ayni sebeple muaf: egitim veri setleri (.csv/.npy/.npz) ve
+        # model artefaktlari — icerikleri bilerek DEGISTIRILMEMELI (yeniden fit edilemezler).
+        exclude: '^(release_assets/ai_models|training_archive)/'
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=2048]
@@ -25,7 +35,13 @@ repos:
         # (en buyugu 3,2 MB). Genel 2 MB esigi DEGISMEDI; yalniz bu yol muaf.
         # Gercek tavan (GitHub'in 100 MiB sert siniri) `tests/test_yedek_kapsami.py` ile kilitli:
         # o dizine 100 MiB ustu bir dosya girerse test KIRILIR.
-        exclude: '^release_assets/ai_models/'
+        #
+        # ⚠️ IKINCI ISTISNA (2026-08-18): `training_archive/` — silinen `esp` dalindan kurtarilan
+        # doktora/TUBITAK egitim arsivi (434 dosya, 296 MB; en buyugu 70 MB). Kaynak veri seti
+        # DIS bir makinede (`/home/user02/dr/`) ve depoda YOK; `models_em_kedi/scaler_{X,y}.pkl`
+        # uretimdekinden FARKLI ozellik uzayina (10 vs 5) ait, yeniden fit EDILEMEZ. Tek kopyasi
+        # versiyonlanmayan yerel bir klasordeydi. Ayni 100 MiB tavani burada da test ile kilitli.
+        exclude: '^(release_assets/ai_models|training_archive)/'
       - id: detect-private-key   # *.p8/*.p12/PEM özel anahtarı commit'e girerse DURDUR
 
   # ── SIR TARAMASI (denetim 2026-08-04, P0) ──────────────────────────────────

@@ -1,0 +1,47 @@
+{
+  "task": "audio_classification",
+  "dataset": "/home/user02/dr/dataset/cat_sound/NAYA_DATA_AUG1X",
+  "classes": [
+    "Angry",
+    "Defence",
+    "Fighting",
+    "Happy",
+    "HuntingMind",
+    "Mating",
+    "MotherCall",
+    "Paining",
+    "Resting",
+    "Warning"
+  ],
+  "n_classes": 10,
+  "mel_params": {
+    "sr": 22050,
+    "n_mels": 256,
+    "n_fft": 2048,
+    "hop_length": 256,
+    "duration": 5.0
+  },
+  "imgsz": 224,
+  "backbones": [
+    "YOLO26n",
+    "YOLO26s",
+    "EfficientViT_B0",
+    "RepViT_M1",
+    "FastViT_T8",
+    "StarNet_S2",
+    "ConvNeXtV2_Atto",
+    "EdgeNeXt_Small",
+    "MobileOne_S1",
+    "GhostNetV2",
+    "HGNetV2_B0",
+    "MobileViTV2",
+    "XCiT_Nano",
+    "EfficientFormerV2_S0",
+    "TinyNet_E",
+    "MobileNetV4_Small",
+    "EfficientNet_Lite0",
+    "RegNetY_002",
+    "LCNet",
+    "MobileNetV3_Small"
+  ]
+}

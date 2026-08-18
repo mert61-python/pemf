@@ -1,0 +1,29 @@
+{
+  "approach": "thermal-only + BCE + CutOut + oversampling",
+  "split": "image-based stratified (70/15/15)",
+  "threshold": 0.5,
+  "backbones": [
+    "YOLO26n",
+    "YOLO26s",
+    "EfficientViT_B0",
+    "RepViT_M1",
+    "FastViT_T8",
+    "StarNet_S2",
+    "ConvNeXtV2_Atto",
+    "EdgeNeXt_Small",
+    "MobileOne_S1",
+    "GhostNetV2",
+    "HGNetV2_B0",
+    "MobileViTV2",
+    "XCiT_Nano",
+    "EfficientFormerV2_S0",
+    "TinyNet_E",
+    "MobileNetV4_Small",
+    "EfficientNet_Lite0",
+    "RegNetY_002",
+    "LCNet",
+    "MobileNetV3_Small"
+  ],
+  "loss": "BCE only",
+  "augmentation": "HFlip, VFlip, Rotate15, RandomCrop, CutOut (no color)"
+}

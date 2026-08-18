@@ -257,3 +257,12 @@ ppo_bom.txt
 !release_assets/ai_models/ai_hub/inference_human_kidney_rna/*.onnx
 !release_assets/ai_models/ai_hub/inference_human_kidney_rna/*.pkl
 !release_assets/ai_models/ai_hub/inference_em_petri/scaler_*.pkl
+
+# ── training_archive/ — silinen `esp` dalindan kurtarilan egitim arsivi (2026-08-18) ──────────
+# Bu agacin TAMAMI bilerek depoda: tek kopyasi versiyonlanmayan yerel bir klasordeydi ve
+# `esp` ile ana dalin ORTAK ATASI YOKTU -> dal silinince git tarafinda geri getirilemezdi.
+# ⚠️ Negasyon EN SONDA olmak ZORUNDA: git SON eslesen kurali uygular; yukaridaki `*.pkl` (186)
+# ve `*.pdf` kurallari 434 dosyanin 65'ini gizliyordu. `git checkout <dal> -- <yol>` gitignore'u
+# atladigi icin bu SESSIZ kalmisti — dosyalar index'e girmisti ama sonraki bir `git add`
+# onlari atlardi. Kapisi: tests/test_yedek_kapsami.py.
+!training_archive/**

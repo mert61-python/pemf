@@ -1,0 +1,16 @@
+\begin{table}[htbp]
+\centering
+\caption{Model development journey showing incremental improvements.}
+\label{tab:improvement}
+\begin{tabular}{llcc}
+\toprule
+Stage & Configuration & Accuracy (\%) & $\Delta$ (pp) \\
+\midrule
+v1 — Baseline & 14 features, 10K samples & 58.0 & — \\
+v2 — Feature Engineering & 14 features, 10K samples & 80.0 & +22.0 \\
+v2 Improved — Hypertuning & 14 features, 10K samples & 87.0 & +7.0 \\
++ Duration feature & 19 features, 10K samples & 91.0 & +4.0 \\
++ 100K samples (Final) & 19 features, 100K samples & 93.1 & +2.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
