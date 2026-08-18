@@ -24,7 +24,7 @@
         "size": 1462119647,
         "kind": "zip"
       },
-      "rollout": 10
+      "rollout": 100
     }
   },
   "models": {
@@ -82,7 +82,7 @@
     "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.31/PEMFVetClient-Setup-1.9.31.exe",
     "sha256": "58fc57034f3325239de4b185c558293e39b428928ab6bc487bc3ce2af1293288",
     "size": 2961158,
-    "rollout": 10
+    "rollout": 100
   },
   "mobile": {
     "android": {
