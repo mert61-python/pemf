@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="canonical" href="https://pemf-vet-web.vercel.app/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>PEMF Vet — Veteriner PEMF Kontrol İstemcisi</title>
+    <meta
+      name="description"
+      content="PEMF Vet Client: veteriner klinikleri için elektromanyetik alan terapisini masaüstünden yöneten profesyonel istemci. 52 MB'lık launcher'ı indirin; uygulamayı client içinden kurun ve güncelleyin."
+    />
+    <meta name="author" content="V-PEMF Technologies" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="PEMF Vet — Veteriner PEMF Kontrol İstemcisi" />
+    <meta
+      property="og:description"
+      content="52 MB'lık launcher'ı indirin; PEMF Vet uygulamasını client içinden kurun ve tek merkezden güncelleyin."
+    />
+    <meta property="og:url" content="https://pemf-vet-web.vercel.app/" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta
+      property="og:image"
+      content="https://pemf-vet-web.vercel.app/launcher-banner.jpg"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:image"
+      content="https://pemf-vet-web.vercel.app/launcher-banner.jpg"
+    />
+    <meta
+      name="twitter:title"
+      content="PEMF Vet — Veteriner PEMF Kontrol İstemcisi"
+    />
+    <meta
+      name="twitter:description"
+      content="52 MB'lık launcher'ı indirin; PEMF Vet uygulamasını client içinden kurun ve tek merkezden güncelleyin."
+    />
+    <!--
+      KVKK/gizlilik: burada Google Fonts'a (fonts.googleapis.com + fonts.gstatic.com) dış istek
+      yapılıyordu. Bu istek ziyaretçinin IP adresini ve tarayıcı bilgisini Google'a taşır — oysa
+      yayınlanan Gizlilik Politikası üçüncü taraf olarak YALNIZ iyzico ve Supabase'i sayıyor.
+      Metni değiştirmek yerine isteği KALDIRDIK: Inter, `--font-sans` içinde zaten sistem
+      yazı tipi zinciriyle (ui-sans-serif / Segoe UI / -apple-system) yedekleniyor; modern
+      Windows/macOS/Android sistemlerinde görsel fark ihmal edilebilir ve hiçbir dış istek yok.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
