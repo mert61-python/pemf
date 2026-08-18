@@ -100,7 +100,21 @@ node_modules/
 buildPEMF/
 builds/
 mobile_builds/
-release_assets/
+# ⚠️ YEDEK BOSLUGU KAPATILDI (denetim 2026-08-18). `release_assets/` toptan dislaniyordu.
+# Icindeki 51 AI model dosyasindan 40'i yayinlanmis paketlerde (home/vet/research.zip + base-deps)
+# YEDEKLI; 11'i HICBIR YERDE yoktu -> bu makine olsa geri getirilemezlerdi. Onbiri de kucuk
+# (toplam 6 MB), git'in 100 MiB sert sinirinin cok altinda -> depoya alindi.
+# Buyuk agirliklar (857 MB'lik v22_kmc dahil) git'e ALINMAZ; Releases'te dururlar.
+# ⚠️ Git kurali: ust dizin dislanmissa icindeki dosya geri ALINAMAZ -> her seviye tek tek acilir.
+release_assets/*
+!release_assets/ai_models/
+release_assets/ai_models/*
+!release_assets/ai_models/ai_hub/
+release_assets/ai_models/ai_hub/*
+!release_assets/ai_models/ai_hub/inference_human_kidney_disease/
+!release_assets/ai_models/ai_hub/inference_human_kidney_rna/
+!release_assets/ai_models/ai_hub/inference_em_petri/
+release_assets/ai_models/ai_hub/inference_em_petri/*
 lattekurulum/
 ai_hub/PEMF_AI_Test_Girdileri/
 # training_archive/ -> guii disina tasindi: ../ml_training_archive (ML egitim arsivi)
@@ -232,3 +246,16 @@ pemf-vet-web/
 # NSIS BOM deneme kalintilari (tek seferlik hata ayiklama)
 *_bom.nsi
 ppo_bom.txt
+
+# ══════════════════════════════════════════════════════════════════════════════
+# YETIM AI MODELLERI — DOSYA-DUZEYI ISTISNALAR (denetim 2026-08-18)
+# ⚠️ EN SONDA OLMALARI SART: git SON eslesen kurali uygular. `*.onnx` (:54) ve `*.pkl` (:194)
+# genel kurallari yukarida oldugu icin, istisnalar onlardan SONRA gelmezse ETKISIZ kalir
+# (olculdu: once 110. satira konuldu, 11 dosyadan yalniz 1'i gorundu).
+# Bu 11 dosya yayinlanmis HICBIR pakette yok; toplam 6 MB, git sinirlarinin cok altinda.
+!release_assets/ai_models/ai_hub/inference_human_kidney_disease/*.onnx
+!release_assets/ai_models/ai_hub/inference_human_kidney_disease/*.pkl
+!release_assets/ai_models/ai_hub/inference_human_kidney_disease/*.txt
+!release_assets/ai_models/ai_hub/inference_human_kidney_rna/*.onnx
+!release_assets/ai_models/ai_hub/inference_human_kidney_rna/*.pkl
+!release_assets/ai_models/ai_hub/inference_em_petri/scaler_*.pkl

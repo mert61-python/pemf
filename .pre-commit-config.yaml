@@ -14,9 +14,18 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        # ⚠️ Model artefaktlarina DOKUNMA: `.onnx`/`.pkl` ikili, `best_model.txt` ise uretici
+        # betigin yazdigi tek satirlik cikti. Sonuna newline eklemek zararsiz ama gereksiz gurultu.
+        exclude: '^release_assets/ai_models/'
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=2048]
+        # ⚠️ ISTISNA (denetim 2026-08-18): `release_assets/ai_models/` altindaki 11 dosya BILEREK
+        # depoda — yayinlanmis hicbir pakette kopyalari yok, makine kaybinda geri getirilemezlerdi
+        # (en buyugu 3,2 MB). Genel 2 MB esigi DEGISMEDI; yalniz bu yol muaf.
+        # Gercek tavan (GitHub'in 100 MiB sert siniri) `tests/test_yedek_kapsami.py` ile kilitli:
+        # o dizine 100 MiB ustu bir dosya girerse test KIRILIR.
+        exclude: '^release_assets/ai_models/'
       - id: detect-private-key   # *.p8/*.p12/PEM özel anahtarı commit'e girerse DURDUR
 
   # ── SIR TARAMASI (denetim 2026-08-04, P0) ──────────────────────────────────
