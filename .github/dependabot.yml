@@ -56,15 +56,46 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
 
-  # ⚠️ npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER:
-  #   `pf/`            → .gitignore:94 (mobil/web UI kaynağı)
-  #   `pemf-vet-web/`  → depoya hiç eklenmemiş (iyzico ÖDEME sitesi + serverless api/)
-  # `git ls-files` ile doğrulandı: ikisinin de package.json'ı izlenmiyor. Dependabot yalnız
-  # depodaki dosyaları tarar → bu iki ağaç hiçbir otomatik CVE taramasında değil ve bağımlılık
-  # kapanışları tek bir iş istasyonunda yaşıyor. (Denetimde bulunan somut örnek: pemf-vet-web
-  # lock'unda undici 5.28.4 / CVE-2025-22150 ve path-to-regexp 6.1.0 / CVE-2024-45296.)
+  # ── MONOREPO (2026-08-18): yukarıdaki blokta yazılı ÖN KOŞUL SAĞLANDI ─────────────────
+  # O not şöyle diyordu: "npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER …
   # ÇÖZÜM kod değil SÜREÇ: bu iki projeyi (node_modules hariç, lock DAHİL) depoya alın; sonra
-  # buraya `npm` ekosistemi olarak `/pf` ve `/pemf-vet-web` girdilerini ekleyin.
+  # buraya `npm` ekosistemi olarak `/pf` ve `/pemf-vet-web` girdilerini ekleyin."
+  # `pf/` ve `pemf-vet-web/` artık subtree ile depoda ve lock dosyaları izleniyor → talimat
+  # uygulanıyor. Denetimde bulunan somut açıklar bu iki ağaçtaydı: pemf-vet-web lock'unda
+  # undici 5.28.4 (CVE-2025-22150) ve path-to-regexp 6.1.0 (CVE-2024-45296).
+
+  # Mobil/web arayüz (Expo SDK 56 / React 19 / RN 0.85 — bleeding-edge).
+  - package-ecosystem: "npm"
+    directory: "/pf"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      security-patches:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # ⚠️ Major bump'lar KOORDINELI olmalı: Expo SDK / RN / React üçlüsü birlikte yükselir,
+      # tek başına bump APK build'ini kırar (pf/.github/dependabot.yml'den taşındı).
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-native"
+        update-types: ["version-update:semver-major"]
+
+  # ÖDEME sitesi (iyzico + Supabase + Vercel serverless `api/`). Bugüne kadar HİÇBİR otomatik
+  # CVE taramasında değildi ve deponun CI'ı da yoktu — para yolu taşıyan tek yüzey.
+  - package-ecosystem: "npm"
+    directory: "/pemf-vet-web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      security-patches:
+        applies-to: security-updates
+        patterns: ["*"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
