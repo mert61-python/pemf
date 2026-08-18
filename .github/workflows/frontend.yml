@@ -1,0 +1,51 @@
+name: frontend-ci
+
+# PEMF mobil/web frontend — tip-denetimi (tsc) + testler (jest-expo).
+# ⚠️ MONOREPO (2026-08-18): kaynak `pf/` alt dizinine tasindi. Bu dosya KOK
+# `.github/workflows/` altinda DURMAK ZORUNDA — GitHub yalnizca kokteki workflow'lari
+# calistirir; `pf/.github/workflows/` altinda kalsaydi CI SESSIZCE hic kosmazdi.
+# NOT: React 19 / RN 0.85 bleeding-edge → bazı test araçları peer-dep çakışması verir;
+# kurulum --legacy-peer-deps ile yapılır (yerelde de böyle kuruldu).
+
+on:
+  push:
+    branches: [ main, master, production-hardening ]
+    # ⚠️ YOL FILTRESI (monorepo): backend/launcher/firmware degisikligi Expo+jest hattini
+    # tetiklemesin. Filtre YOKKEN tek satirlik bir Python degisikligi bu isi de kosturuyordu.
+    paths: [ "pf/**", ".github/workflows/frontend.yml" ]
+  pull_request:
+    paths: [ "pf/**", ".github/workflows/frontend.yml" ]
+  workflow_dispatch:
+
+# Ayni dal icin eski kosuyu iptal et (tests.yml'de zaten vardi, burada YOKTU).
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: pf
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install deps
+        run: npm install --legacy-peer-deps
+
+      - name: Lint (ESLint — audit B-10.1)
+        run: npm run lint
+
+      - name: Typecheck (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Unit tests (jest)
+        run: npm test

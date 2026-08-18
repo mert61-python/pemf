@@ -17,6 +17,15 @@ on:
   push:
     # Aktif dallar dahil: kısa ömürlü konu dalları da kapsansın diye desen kullanılır.
     branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
+    # ⚠️ YOL FILTRESI BILEREK YOK (monorepo 2026-08-18). Once `paths-ignore: [pf/**,
+    # pemf-vet-web/**]` eklendi, sonra GERI ALINDI: bu suit CAPRAZ-KATMAN kapilari iceriyor ve
+    # onlar tam da OTEKI tarafin dosyalarini okuyor —
+    #   · test_bayat_cihaz_gorunur.py  -> pf/src/services/deviceRegistry.ts (STALE_MS)
+    #   · test_site_paket_boyutlari.py -> pemf-vet-web/src/config.ts (indirme boyutlari)
+    #   · test_version_visibility.py   -> pemf-vet-web/src/config.ts (APK surumu)
+    # Filtre konulsaydi, YALNIZCA pf/ ya da site degistiginde bu kapilar KOSMAZDI — yani
+    # birlestirmenin asil kazanci (capraz-depo kapilarinin gercekten olcmesi) iptal olurdu.
+    # Kritik-yol suiti ~3 dk ve public depoda UCRETSIZ; her degisiklikte kosmasi dogru takas.
   pull_request:
   workflow_dispatch:
 
