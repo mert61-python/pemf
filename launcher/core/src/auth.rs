@@ -311,17 +311,47 @@ pub fn refresh(refresh_token: &str, bilinen_eposta: &str) -> Result<Session, Aut
 
 /// Sunucu tarafında oturumu kapat. BEST-EFFORT: ağ yoksa yerel temizlik yine yapılır
 /// (çağıran hatayı yutabilir) — kullanıcı çevrimdışıyken "çıkış yapamıyorum" durumuna düşmemeli.
+///
+/// ⚠️ KAPSAM `local` (denetim 2026-08-18): GoTrue `/logout` çağrısında kapsam VERİLMEZSE
+/// varsayılan `global`dir ve kullanıcının TÜM refresh token'larını iptal eder. Üç istemci de AYNI
+/// Supabase projesini kullanıyor (masaüstü burası, mobil `pf/src/services/supabaseAuth.ts`, web
+/// `pemf-vet-web/src/lib/supabase.ts`), dolayısıyla klinikte "Çıkış"a basmak veteriner hekimin
+/// TELEFONUNDAKİ oturumu da düşürüyordu — ve tersi. Yerel çıkış yeterli: bu cihazın jetonu zaten
+/// `secret_store`dan siliniyor. (Cihaz devri/kaldırma gibi "her yerden at" senaryosu AYRI bir
+/// akıştır; oraya karışmaz.)
+pub const LOGOUT_SCOPE: &str = "local";
+
+/// `logout`un GERÇEKTEN çağırdığı URL. AYRI fonksiyon çünkü test edilebilir olması gerekiyor:
+/// URL'i testte yeniden kurmak TOTOLOJİK bir kapı olurdu (kapsamı `logout` gövdesinden silen bir
+/// mutasyon sessizce geçerdi — ölçüldü).
+fn logout_url() -> String {
+    format!("{}/logout?scope={}", auth_base(), LOGOUT_SCOPE)
+}
+
 pub fn logout(access_token: &str) -> Result<(), AuthError> {
     if access_token.trim().is_empty() {
         return Ok(());
     }
-    let url = format!("{}/logout", auth_base());
-    post_json(&url, "{}", Some(access_token)).map(|_| ())
+    post_json(&logout_url(), "{}", Some(access_token)).map(|_| ())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ÇIKIŞ KAPSAMI: `/logout` kapsamsız çağrılırsa GoTrue varsayılanı `global`dir ve aynı
+    /// hesabın MOBİL + WEB oturumlarını da iptal eder (üçü aynı Supabase projesi). Klinikteki
+    /// çıkış, hekimin telefonunu düşürmemeli.
+    #[test]
+    fn cikis_yalniz_bu_cihazi_kapatir() {
+        // ⚠️ `logout_url()` ÇAĞRILIR — URL testte yeniden KURULMAZ. Yeniden kurmak, kapsamı
+        // `logout` gövdesinden silen mutasyonu kaçıran totolojik bir kapı olurdu.
+        let url = logout_url();
+        assert!(url.contains("scope=local"), "cikis kapsami 'local' degil -> mobil/web oturumu duser: {url}");
+        // KARŞIT-KANIT: yol hâlâ /logout olmalı (kapsamı daraltmak, çıkışı kaldırmak değildir).
+        assert!(url.contains("/logout?"), "logout yolu bozuldu: {url}");
+        assert!(url.starts_with(&auth_base()), "logout baska bir host'a gidiyor: {url}");
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════
     // BOŞ GİRDİ ≠ YANLIŞ PAROLA (2026-08-10 saha hatası)

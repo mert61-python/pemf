@@ -14,14 +14,21 @@ bulut (Supabase) yalnız cihaz-registry + opsiyonel şifreli PII içindir (bkz. 
 
 ## Supabase şeması — ⚠️ ÇALIŞTIRMA SIRASI ÖNEMLİ
 
-Bu üç `.sql` dosyası Supabase Dashboard → SQL Editor'de **bu sırayla** çalıştırılır. Üçü de bu
+Bu `.sql` dosyaları Supabase Dashboard → SQL Editor'de **bu sırayla** çalıştırılır. Hepsi bu
 dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hiçbir yerde yazılı değildi).
 
-| # | Dosya | Ne yapar |
-|---|---|---|
-| 1 | `supabase_devices.sql` | `devices` tablosu + RLS + **v1** RPC'ler (`upsert_device`/`resolve_device`) |
-| 2 | `supabase_patients.sql` | `patients` + `treatment_sessions` + RLS + **v1** RPC'ler |
-| 3 | `supabase_secure_v2.sql` | v1 imzalarını **düşürür**, yerine `p_secret` (bcrypt capability-token) isteyen **v2** sürümleri kurar |
+| # | Dosya | Ne yapar | Zorunlu mu |
+|---|---|---|---|
+| 1 | `supabase_devices.sql` | `devices` tablosu + RLS + **v1** RPC'ler (`upsert_device`/`resolve_device`) | Evet |
+| 2 | `supabase_patients.sql` | `patients` + `treatment_sessions` + RLS + **v1** RPC'ler | Evet |
+| 3 | `supabase_secure_v2.sql` | v1 imzalarını **düşürür**, yerine `p_secret` (bcrypt capability-token) isteyen **v2** sürümleri kurar | Evet |
+| 4 | `supabase_kullanim_sayaci.sql` | `usage_counts()` RPC — sitedeki sayaç "indirme" değil BENZERSİZ KULLANIM göstersin (yalnız üç tamsayı döner, satır/kimlik dökmez) | Hayır |
+
+> **4. dosya listede YOKTU (denetim 2026-08-18).** Sıra-güvenliği açısından zararsız (kendi
+> başına idempotent, v2'ye dokunmaz) ama uygulanmazsa `usage_counts` RPC'si bulunmaz →
+> `pemf-vet-web` indirme sayfasındaki kullanım bölümü **sessizce hiç görünmez**
+> (`src/lib/usageStats.ts` bilerek `null` döner: "uydurma sayı göstermektense hiç gösterme").
+> Yani belirti "hata" değil, **eksik bölüm**tür — bu yüzden fark edilmeden kalabilir.
 
 > **v2'den SONRA 1. ya da 2. dosyayı tekrar çalıştırmayın.** `create or replace` +
 > `grant execute … to anon` içerdikleri için **sırsız aşırı-yükler geri gelir ve anon rolüne

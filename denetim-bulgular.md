@@ -1463,6 +1463,113 @@ varsayılanlar → ilk kayıt override'ları siler) ve fail-closed yapıldı.
 - PowerShell soyucusunun string-içi `<#` sınırı: hata yönü güvenli tarafta (az yutmak), davranış
   olarak kayda geçti.
 
+## BEŞİNCİ TUR — `pemf-vet-web` DENETİMİ (2026-08-18)
+
+Bu depo denetimin başından beri **hiç bakılmamış** tek katmandı ("HİÇ BAKILAMAYAN" listesinde
+öyle yazıyordu). Sahip *"açıkları kapatarak devam, pemf-vet-web denetle"* dedi. Yöntem: önce tek
+başıma yönelim (ödeme uçlarını ve çapraz-depo izlerini kendim sürdüm), sonra altı katman
+tarayıcısı, sonra **her şüpheli iki bağımsız çürütücüye** (ulaşılabilirlik + karşıt-okuma).
+
+⚠️ **BAĞLAM — bulguların çoğu bugün UYKUDA.** `src/config.ts:64` `FREE_MODE = true` (satış
+kapalı: `/odeme` sayfanın kendisinde kesiliyor, `/pricing` "Seç" indirmeye gidiyor) ve hakkı
+uygulayan iki bayrak da kapalı (`PEMF_TIER_ENFORCED=0`, `ENTITLEMENT_ENFORCED=false`). Yani ödeme
+yolu **üretimde hiç koşmadı**; aşağıdaki kalemlerin bir kısmı ilk gerçek müşteride görünür hâle
+gelecek. Bu, onları "sorun değil" yapmaz — tam tersine kimsenin bakmadığı anda patlayacaklar.
+
+### Düzeltilenler (kırmızı-önce test + mutasyon)
+
+| # | Bulgu | Cid. | Dosya | Test | Mutasyon |
+|---|---|---|---|---|---|
+| S1 | **İptal eden kullanıcı BİR DAHA abone olamıyor** — iptal `stripe_subscription_id`i satırda bırakıyor, `getSubscriptionRefByUser` durum FİLTRESİZ sorguluyordu → `checkout.ts` sonsuza dek 409 | 4 | `api/_lib/util.ts` | `abonelik-yenileme.test.ts` (yeni) | 4/4 ✓ |
+| S2 | **Çift-abonelik kapısı FAIL-OPEN** — Supabase 5xx'te "aboneliği yok" sayılıyor → aynı kullanıcıya İKİNCİ abonelik açılır (çift tahsilat + yetim kayıt) | 2 | `api/_lib/util.ts` | aynı dosya (+3) | 1/1 ✓ |
+| S3 | **`.gitignore`'da `.env` kuralı YOK** — `IYZICO_SETUP.md` sırları `.env`e yazdırıyor, `README.md` `git add -A && git push` diyor | 2 | `.gitignore` | — (önleyici) | — |
+| S4 | **"Tahmini indirme" 2,5 kat EKSİK** — `CLIENT_BASE_MB=52` yalnız uygulamaydı; zorunlu `app+deps` katmanı 1,43 GB. Profil boyutları da eskimişti (home 0.6→0,30 · vet 0.9→0,12 · research 1.9→1,46) | 4 | `pemf-vet-web/src/config.ts` | `guii/tests/test_site_paket_boyutlari.py` (yeni, çapraz-depo) | 6/6 ✓ |
+| S5 | **Android indirme kartı Windows sürümünü gösteriyordu** — dört kart da `CLIENT.version` basıyordu: "Sürüm 1.9.30" yazıp `PEMF_Vet_Mobil-2.3.16.apk` indiriyordu | 4 | `src/config.ts`, `src/pages/Download.tsx` | `downloadNames.test.ts` (+4) | 2/2 ✓ |
+| S6 | **Sitedeki "Çıkış" TÜM cihazları düşürüyordu** — supabase-js v2'de `signOut()` varsayılanı `scope:'global'`; mobil uygulamanın ve klinikteki launcher'ın oturumu da iptal ediliyordu | 3 | `src/context/AuthContext.tsx` | `cikis-kapsami.test.ts` (yeni) | 3/3 ✓ |
+| S7 | **Yıllık + Araştırma tutarı ₺780 FAZLA gösteriliyordu** — eklentiye "2 ay bedava" uygulanmıyordu (`monthly`×12); iyzico planı ₺13.800, ekran ₺14.580 | 4 | `src/config.ts`, `src/pages/Odeme.tsx` | `download.test.ts` (+5), `odeme-donem-bedeli.test.ts` (yeni) | 5/5 ✓ |
+| S8 | Kodla AYRIŞAN üç iddia düzeltildi (davranış değişmedi): `cancel.ts` "erişim dönem sonuna kadar sürer", `util.ts` "erişim korunur", `payment.test.ts` #107 başlığı | 5 | 3 dosya | mevcut süit | — |
+| S9 | `database/supabase_kullanim_sayaci.sql` README'nin çalıştırma listesinde YOKTU → uygulanmazsa sitedeki kullanım bölümü sessizce hiç görünmez | 5 | `guii/database/README.md` | — (belge) | — |
+
+**S1 nasıl çıkışsız bir döngüydü:** kullanıcı iptal eder → yeniden abone olmak ister → 409
+*"Hesabınızda zaten aktif bir abonelik var. Plan değiştirmek için önce mevcut aboneliğinizi iptal
+edin."* → tekrar "iptal et"e basar → iyzico zaten iptal edilmiş aboneliği reddeder → 502 *"İptal
+edilemedi"*. Mesajın kendisi kullanıcıya **zaten yaptığı şeyi** söylüyordu. Aynı sebeple **plan
+değiştirmek** de imkânsızdı.
+
+**S2 neden fail-CLOSED oldu:** iki çağıranın ihtiyacı zıt. `checkout.ts` için `null` = "aboneliği
+yok" → para hareketi. `cancel.ts` için `null` = 404 → zararsız. Belirsizlik artık **hata**;
+iki uç da onu zaten yakalayıp dürüst "sonra tekrar deneyin" diyor.
+
+**S4 rakamları `pemf-app-packages/manifest.json`tan ölçüldü** (site iddiası → gerçek):
+taban 52 MB → **1462 MB**, home 0,6 → **0,30 GB**, vet 0,9 → **0,12 GB**, research 1,9 → **1,46 GB**.
+Yalnız "Ev Sahibi" seçen kullanıcıya **0,65 GB** gösteriliyordu; gerçek indirme **1,72 GB**.
+Kırsal/kotalı bağlantıdaki klinik için bu, yanlış karara götüren bir sayıdır — üstelik depo
+"uydurma sayı göstermektense hiç gösterme" ilkesini başka üç yerde zaten uyguluyor.
+
+### Raporlandı, DÜZELTİLMEDİ (sahip kararı ya da doğrulanamayan yol)
+
+- **[4] "İptalde dönem sonuna kadar erişim" sözü hiçbir katmanda uygulanmıyor.** Yayınlanan
+  Mesafeli Satış / İptal-İade metni (`Legal.tsx:266-268`) ve kullanıcının okuduğu onay diyaloğu
+  (`AccountButton.tsx:34`) bunu vaat ediyor; hakkı okuyan iki katman da `status='canceled'` görür
+  görmez kesiyor (`guii/servers/entitlement.py:70-76,155-158` ve `pf/src/config/entitlement.ts:73-77`).
+  `current_period_end` sütununa **hiçbir yol değer yazmıyor** (`pf/supabase/subscriptions.sql:14`
+  NULL kalıyor; backend onu SELECT edip hiç kullanmıyor). Üstelik metin *"iptal sonrası dönem için
+  geri ödeme yapılmaz"* diyor — yani ödeme alınıp erişim hemen kesiliyor.
+  ⚠️ Önceki turda `cancel.ts`e yazılan "tier KORUNUR" düzeltmesi **gözlenebilir davranışı
+  değiştirmiyor**; iddia metni düzeltildi (S8) ama karar sahibinde: **(a)** `current_period_end`
+  yazılsın + iki tüketici de okusun, ya da **(b)** yayınlanan sözleşme "iptalde erişim biter" desin.
+  Kod tek başına bu kararı veremez; üç depoya birden dokunur ve tıbbi cihaz hak-kapılarını değiştirir.
+- **[4] `mapIyzicoStatus` bilinmeyen→`past_due` "koruması" ETKİSİZ.** `past_due` de
+  `_INACTIVE_STATUS` içinde; mobil `isActive` yalnız `active`/`trialing` kabul ediyor. Kazanç
+  gerçek ama daha küçük (satır CANLI sayıldığı için iptal edilebilir kalıyor, ikinci abonelik
+  açılmıyor). Aynı (a)/(b) kararına bağlı.
+- **[3] `ResetPassword` HERHANGİ bir oturumu "kurtarma oturumu" sayıyor**
+  (`src/pages/ResetPassword.tsx:28-35`): `getSession()` normal girişten kalan oturumu da döndürüyor
+  → geçersiz/süresi dolmuş linkte form AÇIK kalıyor ve `updateUser` **o an giriş yapmış hesabın**
+  parolasını değiştiriyor. Ortak klinik bilgisayarında: B'nin linki A'nın oturumundayken açılırsa
+  A'nın parolası sessizce değişir. **Düzeltmedim:** doğru kapı ("yalnız `PASSWORD_RECOVERY`" ya da
+  URL'de `type=recovery`) canlı Supabase e-posta akışı olmadan doğrulanamıyor ve yanlış bir yama
+  parola kurtarmayı TAMAMEN kilitleyebilir — bu, hatadan daha kötü olurdu.
+- **[4] KDV çelişkisi.** `config.ts:291` "Fiyatlar ₺ (KDV hariç)" ve `Odeme.tsx:146` "Fiyatlara KDV
+  dâhil değildir" derken, `IYZICO_SETUP.md:23` planları "KDV dahil TRY" diye kurduruyor ve aynı
+  ekranda zorunlu onaylatılan Ön Bilgilendirme/Mesafeli Satış metni "gösterilen tutar tüm vergiler
+  dâhildir" diyor. Hangisinin doğru olduğu ticari bir karardır.
+- **[4] Hero macOS ve Linux'u ✓ ile "destekleniyor" gösteriyor** (`Home.tsx:35-36`) — oysa
+  `config.ts:90,94` "donanım Windows-özel → Mac/Linux'ta **cihaz sürülemez**" diyor (bu kısım
+  BİLİNÇLİ) ve indirme butonları "Yakında". Mac kullanıcısı ürünün kendi makinesinde çalıştığını
+  sanıyor. Metnin ne diyeceğine sahip karar verir.
+- **[4] "Launcher üzerinden donanım yazılımlarınızı tek tıkla güncelleyin"** (`config.ts:431`) —
+  ölçüldü: launcher'da firmware güncelleme/flash mekanizması **YOK** (`launcher/core/src`,
+  `launcher/app/src` ve `servers/update_manager.py` tarandı; yalnız firmware'in kendi
+  watchdog'undan bahseden yorumlar var).
+- **[4] `/odeme` fatura formu kullanıcı değişiminde temizlenmiyor** (`Odeme.tsx:22`) → A'nın
+  TC Kimlik No/adresi B'nin aboneliğiyle iyzico'ya gidebilir.
+- **[5] `/api/webhook` iç hata mesajını kimliksiz çağırana döndürüyor** (`webhook.ts:86`) — env
+  değişkeni ADI ve ham PostgREST gövdesi sızabilir. `checkout.ts` aynı hatayı bilerek yutuyor.
+
+### Sürüm senkronu — kapı testi HAKLI, site DOĞRU
+
+`guii/versions.json` `mobile.name = 2.3.17` iken site `2.3.16` diyor ve
+`test_KRITIK_site_APK_surumu_versions_json_ile_AYNI` bu yüzden **kırmızı**. Yayındaki varlıklar
+kontrol edildi (`gh release view launcher-v1.9.30`): sürümde **yalnız**
+`PEMFVetClient-Setup-1.9.30.exe` ve `PEMF_Vet_Mobil-2.3.16.apk` var.
+
+⚠️ Yani **siteyi 2.3.17'ye çekmek bugün indirme düğmesini 404 yapardı.** Doğru sıra: önce APK
+yayınla, sonra `pemf-vet-web/src/config.ts` içindeki `androidVersion` (:110) ve yanındaki
+`androidReady` yorumunu (:114) güncelle. Test o ana kadar kırmızı KALMALI — işini yapıyor.
+(Bir önceki turda bu düşen testi "ilgisiz" diye geçmiştim; ilgisiz değil, **yarım kalmış bir
+yayının uyarısı**.)
+
+### Çürütülenler / kapsam dışı
+
+Tarayıcıların ürettiği şüphelilerin bir kısmı çürütme turunda elendi ya da bilinçli sahip kararı
+çıktı: `macosReady/linuxReady=false` (yazılı gerekçe: donanım Windows-özel), Supabase anon
+anahtarının istemciye gömülü olması (tasarımı gereği public), indirme kapısının erişim kontrolü
+olmaması (dosyanın kendi yorumu bunu zaten "kapı değil, kayıt adımı" diye ilan ediyor),
+`.vercel/` içindeki prebuilt çıktının kaynakla ayrışması (yerel yapı artığı, yayına gitmiyor).
+"Aboneliği iptal et" düğmesinin aboneliği olmayan herkese gösterilmesi **doğrulandı ama bulgu
+sayılmadı**: akış dürüst hata veriyor (404 → "Aktif abonelik bulunamadı"), bu bir arayüz tercihi.
+
 ---
 
 ## KAPSAM DIŞI — bulgu saymadım (triyajın elediği)
@@ -1723,8 +1830,13 @@ korunması, e-posta normalizasyonunda İ/ı katman uyuşmazlığı (yok).
 - **iOS yolu** — EAS bulut build; bu makinede doğrulanamaz.
 - **Supabase SQL/RLS politikaları** — `supabase/*.sql` yalnızca dosya olarak okundu; canlı projede
   RLS'in gerçekten uygulandığı doğrulanmadı.
-- **`pemf-vet-web`** (pazarlama sitesi + iyzico ödeme) — beş katman ajanından hiçbiri ona atanmadı;
-  yalnız `config.ts` sürüm/etiket alanları çapraz kontrol edildi.
+  (5. tur: `database/supabase_kullanim_sayaci.sql` README'nin çalıştırma listesine eklendi;
+  canlıda uygulanıp uygulanmadığı hâlâ doğrulanmadı — uygulanmazsa sitedeki kullanım bölümü
+  sessizce hiç görünmez.)
+- ~~**`pemf-vet-web`** (pazarlama sitesi + iyzico ödeme)~~ → **5. TURDA DENETLENDİ**
+  (altı katman tarayıcısı + iki-lensli çürütme). 7 düzeltme + 8 sahip kararına bırakılan kalem;
+  bkz. "BEŞİNCİ TUR" bölümü. Kalan boşluk: canlı Supabase e-posta akışı (parola sıfırlama)
+  ve canlı iyzico sandbox'ı denenmedi — ödeme yolu üretimde HİÇ koşmadı (`FREE_MODE=true`).
 - **`ai_hub` model doğruluğu** — altın-değer testleri var ama modellerin klinik geçerliliği bu
   denetimin konusu değil.
 - **Gerçek donanım** — hiçbir bulgu tezgâhta ölçülmedi; firmware bulguları ISR modellemesi + aritmetik.
