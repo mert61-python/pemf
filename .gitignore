@@ -92,7 +92,6 @@ myenv/
 # Frontend/mobil AYRI Expo projeleri (C:\Users\merta\pf junction + guii kopyalari) — backend repo'da izlenmez
 frontend/
 frontend_temp/
-pf/
 mobile/
 node_modules/
 
@@ -241,7 +240,6 @@ base-mac.sha256.txt
 # pemf-vet-web/ KENDI GIT DEPOSUDUR (kendi .git'i + kendi Vercel projesi var). Ust depoya
 # eklemek ya bozuk bir gitlink ya da 200 MB'lik node_modules demek olurdu; iki depo AYRI
 # yonetilir ve AYRI yayinlanir (site: `npx vercel --prod`).
-pemf-vet-web/
 
 # NSIS BOM deneme kalintilari (tek seferlik hata ayiklama)
 *_bom.nsi
