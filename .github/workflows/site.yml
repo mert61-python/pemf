@@ -1,0 +1,64 @@
+name: site-ci
+
+# PEMF satis/pazarlama sitesi (Vite + Vercel serverless `api/` — iyzico odeme uclari).
+#
+# ⚠️ BU IS AKISI 2026-08-18'DE ILK KEZ EKLENDI. O tarihe kadar `pemf-vet-web` AYRI bir depoydu
+# ve o depoda HIC workflow yoktu: odeme uclari (checkout/callback/webhook/cancel) test, lint ve
+# tip kontrolu kapisi OLMADAN deploy ediliyordu. Monorepo birlestirmesi bu bosluğu kapatiyor —
+# `tests/test_ci_workflow_gate.py` de tam bunu istedi ("dizin depoya alinirsa CI isi GERI
+# EKLENMELI").
+
+on:
+  push:
+    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
+    # Yol filtresi: backend/firmware degisikligi bu hatti tetiklemesin.
+    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml" ]
+  pull_request:
+    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml" ]
+  workflow_dispatch:
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: pemf-vet-web
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          # ⚠️ `defaults.working-directory` YALNIZ `run:` adimlarini etkiler, `uses:` action'larini
+          # DEGIL. Bu yol verilmezse setup-node kokteki (bos, artik) package-lock.json'a gore
+          # onbellekler — yanlis anahtar, ise yaramaz onbellek.
+          cache-dependency-path: pemf-vet-web/package-lock.json
+
+      - name: Bagimliliklar
+        run: npm ci
+
+      - name: Yasal yapilandirma kapisi
+        # Sirket kimligi/KVKK alanlarinda placeholder kalmissa yayini DURDURUR.
+        run: npm run check:legal
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Tip kontrolu (tsc -b)
+        run: npx tsc -b
+
+      - name: Testler (vitest)
+        run: npm test
+
+      - name: Uretim derlemesi
+        run: npx vite build

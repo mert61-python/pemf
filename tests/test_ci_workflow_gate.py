@@ -55,11 +55,13 @@ def test_pull_request_de_tetikler(dosya):
 
 
 #: `tests.yml`in kapsaması BEKLENEN işler — TAM küme (alt-küme değil).
-#: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu. Ama `pf/`
-#: (Expo mobil) ve `pemf-vet-web/` (kendi git deposu) BU DEPODA İZLENMEZ — `git ls-files`
-#: ikisinde de 0 döner. O işler checkout sonrası var olmayan dizinlerde `npm ci` çalıştırdığı
-#: için HİÇBİR ZAMAN geçemezdi ve hattı 16/16 kırmızı tutan sebeplerdendi; kaldırıldılar.
-#: Kapsam sorusu ölmedi, `test_arayuz_ve_site_BU_DEPODA_DEGIL` ile canlı tutuluyor.
+#: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu; `pf/` ve
+#: `pemf-vet-web/` o tarihte AYRI depolardaydi ve buradaki isler var olmayan dizinlerde `npm ci`
+#: kosturdugu icin asla gecemezdi -> kaldirildilar.
+#: ⚠️ 2026-08-18 MONOREPO: ikisi de artik depoda, ama isler `tests.yml`ye GERI EKLENMEDI —
+#: KENDI yol-filtreli is akislarina konuldular (`frontend.yml`, `site.yml`). Sebep: `tests.yml`
+#: filtresiz kosmali (capraz-katman kapilari icin), ama Expo/Vite hatlarinin her backend
+#: degisikliginde kosmasi gereksiz. Kapsam `test_KRITIK_arayuz_ve_site_CI_KAPSAMINDA` ile kilitli.
 BEKLENEN_ISLER = {"backend", "launcher", "sir-taramasi"}
 
 
@@ -103,27 +105,70 @@ def test_KRITIK_launcher_ENTEGRASYON_testlerini_de_kosar():
     assert "--all-targets" in _adimlar("launcher")
 
 
-@pytest.mark.parametrize("dizin", ["pf", "pemf-vet-web"])
-def test_arayuz_ve_site_BU_DEPODA_DEGIL(dizin):
-    """Arayüz (`pf`) ve site (`pemf-vet-web`) CI işleri 2026-08-12'de KALDIRILDI; gerekçe:
-    ikisi de bu depoda izlenmez, dolayısıyla o işler temiz checkout'ta asla koşamazdı.
+#: Dizin -> o katmani kapsayan is akisi ve icinde BULUNMASI gereken adim parcalari.
+#: ⚠️ 2026-08-18 MONOREPO: onceki kapi (`test_arayuz_ve_site_BU_DEPODA_DEGIL`) "bu dizinler
+#: depoda IZLENMIYOR, o yuzden CI isleri kaldirildi" varsayimini kilitliyordu ve dizinler
+#: subtree ile depoya alininca DOGRU sekilde KIRILDI — tam da tasarlandigi gibi. Varsayim
+#: coktugu icin kapi da degisti: artik "izlenmiyor" degil, "CI KAPSAMINDA" olduklarini zorluyor.
+#: Kapsam `tests.yml`de DEGIL ayri is akislarinda: ikisi de yol-filtreli (`paths:`) olmali ki
+#: backend degisikligi Expo/Vite hatlarini bosuna tetiklemesin. `tests.yml`in kendisi bilerek
+#: filtresizdir (capraz-katman kapilari her degisiklikte kosmali).
+CI_KAPSAMI = {
+    "pf": ("frontend.yml", ("tsc --noEmit", "npm test")),
+    "pemf-vet-web": ("site.yml", ("tsc -b", "npm test", "check:legal")),
+}
 
-    ⚠️ Bu test kaldırılan kapının YERİNE geçer ve gerekçeyi CANLI tutar: dizinlerden biri bir
-    gün gerçekten depoya alınırsa varsayım çöker ve burası kırılır — o an `tests.yml`ye
-    `tsc --noEmit` + `jest` / `npm run build` işleri GERİ EKLENMELİDİR. Aksi hâlde kapsam
-    kaybı sessiz olurdu: kimse kaldırılmış bir işin geri gelmesi gerektiğini hatırlamaz.
-    (Kaldırma kapsamı yok etmedi; kontroller kendi depolarında yapılır.)
+
+@pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
+def test_KRITIK_arayuz_ve_site_CI_KAPSAMINDA(dizin):
+    """Arayuz (`pf`) ve site (`pemf-vet-web`) monorepo'ya alindi -> CI kapisi ZORUNLU.
+
+    ⚠️ SITE 2026-08-18'e kadar HIC test edilmiyordu: kendi deposunda tek bir workflow yoktu ve
+    iyzico odeme uclari (checkout/callback/webhook/cancel) tip kontrolu bile gormeden deploy
+    oluyordu. Bu, birlestirmenin en somut kazanci — geri kaymasin diye kilitleniyor.
     """
-    kok = Path(__file__).resolve().parent.parent
-    try:
-        r = subprocess.run(["git", "ls-files", dizin], cwd=str(kok), capture_output=True, text=True, timeout=30)
-    except Exception as e:  # git yoksa varsayım doğrulanamaz
-        pytest.skip(f"git calistirilamadi: {type(e).__name__}: {e}")
-    if r.returncode != 0:
-        pytest.skip(f"git ls-files basarisiz (rc={r.returncode})")
-    assert not r.stdout.strip(), (
-        f"'{dizin}/' ARTIK DEPODA IZLENIYOR → tests.yml'den kaldirilan CI isi GERI EKLENMELI "
-        "(tip kontrolu + test/build). Bkz. tests.yml sonundaki 'KALDIRILDI (2026-08-12)' notu."
+    dosya, beklenen_adimlar = CI_KAPSAMI[dizin]
+    yol = W / dosya
+    assert yol.is_file(), f"{dizin}/ depoda ama CI is akisi YOK: .github/workflows/{dosya}"
+
+    d = _yukle(dosya)
+    isler = d["jobs"]
+    hepsi = " ".join(_adimlar(i, dosya) for i in isler)
+    for parca in beklenen_adimlar:
+        assert parca in hepsi, f"{dosya}: '{parca}' adimi YOK — {dizin}/ icin kapsam eksik"
+
+    # Calisma dizini gercekten o alt dizin olmali; yoksa adimlar kokte kosar ve YANLIS agaci test eder.
+    calisma = ((d.get("defaults") or {}).get("run") or {}).get("working-directory")
+    assert calisma == dizin, f"{dosya}: working-directory '{calisma}' — '{dizin}' olmali"
+
+
+@pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
+def test_arayuz_ve_site_is_akislari_YOL_FILTRELI(dizin):
+    """Bu iki hat yol-filtreli olmali: backend/firmware degisikligi Expo/Vite'i tetiklemesin.
+
+    (`tests.yml` bilerek filtresizdir — capraz-katman kapilari OTEKI tarafin dosyalarini okur.)"""
+    dosya = CI_KAPSAMI[dizin][0]
+    tetik = _tetikleyici(_yukle(dosya))
+    yollar = tetik["push"].get("paths")
+    assert yollar, f"{dosya}: push tetikleyicisinde `paths` YOK — her degisiklikte bosuna kosar"
+    assert any(dizin in y for y in yollar), f"{dosya}: paths '{dizin}' icermiyor: {yollar}"
+
+
+@pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
+def test_KRITIK_alt_dizinde_KOK_DISI_github_yapilandirmasi_KALMAZ(dizin):
+    """`pf/.github/` ya da `pemf-vet-web/.github/` altinda workflow/dependabot KALMAMALI.
+
+    ⚠️ SESSIZ KIRILMA (2026-08-18'de ikisi de yakalandi): GitHub bu dosyalari YALNIZCA kok
+    `.github/` altindan okur. subtree sonrasi `pf/.github/workflows/frontend.yml` ve
+    `pf/.github/dependabot.yml` alt dizinde kaldi -> ikisi de SESSIZCE etkisizdi (hata yok,
+    sadece yokluk). Koke tasindilar; bu kapi geri kaymayi engeller."""
+    alt = W.parent.parent / dizin / ".github"
+    if not alt.exists():
+        return
+    artik = [p.name for p in alt.rglob("*") if p.is_file() and p.suffix in (".yml", ".yaml")]
+    assert not artik, (
+        f"{dizin}/.github altinda kok-disi yapilandirma var: {artik} — GitHub bunlari OKUMAZ, "
+        f"sessizce etkisiz kalirlar. Kok `.github/` altina tasiyin."
     )
 
 

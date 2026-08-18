@@ -39,6 +39,10 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+          # ⚠️ `defaults.working-directory` YALNIZ `run:` adimlarini etkiler, `uses:` action'larini
+          # DEGIL. Bu yol verilmezse setup-node kokteki (bos, artik) package-lock.json'a gore
+          # onbellekler — yanlis anahtar, ise yaramaz onbellek.
+          cache-dependency-path: pf/package-lock.json
 
       - name: Install deps
         run: npm install --legacy-peer-deps
