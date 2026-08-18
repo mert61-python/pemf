@@ -1,0 +1,10 @@
+{
+  "coil_id": 1,
+  "wifi_ssid": "",
+  "wifi_pass": "",
+  "mqtt_server": "",
+  "mqtt_port": 8883,
+  "mqtt_user": "",
+  "mqtt_pass": "",
+  "pwm_freq": 1000
+}
