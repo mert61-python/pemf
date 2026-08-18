@@ -49,6 +49,40 @@ Bu embeddable-python klasörünü kopyala, sonra **guii kökünden**:
 > **(a) Runtime** — frozen EXE / offline installer Python KURULU OLMADAN her makinede çalışır (✅ zaten öyle; klinik laptopuna kurulan bu).
 > **(b) Build** — bu klasör *kaynağı + AI modelini + Python env'i + npm cache'i* taşır, ama derleme **araçlarını** (Node/Rust/MSVC/JDK/Android/Inno/gh) taşımaz. `bootstrap.ps1` o boşluğu doldurur → **klasör + bootstrap + internet = herhangi bir laptopta build+publish.**
 
+### 0b. `git clone`'dan gelen makinede — `scriptsestore_assets.ps1`
+
+Yukarıdaki (b) maddesi **klasörü kopyalayarak** taşımayı anlatır. **Git'ten** gelindiğinde bir
+parça eksiktir: AI model ağırlıkları.
+
+⚠️ **Neden git'te yoklar (ölçüldü 2026-08-18):** `release_assets/ai_models` 2.130 MB ve içinde
+100 MiB'ı aşan dört dosya var (`v22_kmc_classictrio_kmc.onnx` tek başına 857 MB). GitHub tek
+dosyada 100 MiB'ı **sert** reddediyor; Git LFS ise **ücretli** (public depo muafiyeti LFS'e
+geçmiyor). Bu yüzden bölünme şöyle:
+
+| Nerede | Ne |
+|---|---|
+| **git** | kaynak kod + yayınlanmış hiçbir pakette kopyası **olmayan** 11 küçük model (6 MB) |
+| **Releases** | büyük ağırlıklar (2,1 GB) — `home.zip` / `vet.zip` / `research.zip` içinde |
+
+`tests/test_yedek_kapsami.py` bu ayrımı kilitler: yedeği olmayan bir dosya `.gitignore`'a düşerse
+ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
+
+**Boş makinede sıra:**
+
+```powershell
+git clone https://github.com/mert61-python/pemf.git guii
+cd guii
+.ootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
+.\scriptsestore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı)
+.\scriptsuild_backend_exe.ps1  # artık derlenebilir
+```
+
+- Betik indirme adresini **manifest'ten okur**, etiketi tahmin etmez: `home.zip` bugün
+  `client-app-v1.9.11`de, `vet`/`research` ise `client-app-v1.8.0`de (sha değişmeyince
+  `make_manifest` eski URL'yi korur — bkz. "değişmeyen paket URL'i" kuralı).
+- **SHA256 doğrulaması zorunludur ve atlanamaz:** yarım/bozuk indirme sessizce yanlış ağırlık
+  kurar; bu bir tıbbi cihaz, yanlış ağırlıkla çalışan model yanlış klinik çıktı üretir.
+
 ---
 
 ## Ön koşullar (toolchain)

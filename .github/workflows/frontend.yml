@@ -9,7 +9,9 @@ name: frontend-ci
 
 on:
   push:
-    branches: [ main, master, production-hardening ]
+    # ⚠️ Dal listesi DIGER workflow'larla AYNI olmali: `feature/**` ve `fix/**` eksikti,
+    # yani konu dalinda frontend kapisi HIC kosmuyordu (feature/monorepo'da olculdu).
+    branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
     # ⚠️ YOL FILTRESI (monorepo): backend/launcher/firmware degisikligi Expo+jest hattini
     # tetiklemesin. Filtre YOKKEN tek satirlik bir Python degisikligi bu isi de kosturuyordu.
     paths: [ "pf/**", ".github/workflows/frontend.yml" ]
