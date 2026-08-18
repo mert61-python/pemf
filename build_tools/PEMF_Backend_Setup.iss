@@ -17,7 +17,10 @@
 #define MyAppName      "PEMF Medical Backend"
 #define MyAppVersion   "1.9.14"
 #define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
-#define MyAppURL       "https://pemfvet.com"
+; ⚠️ pemfvet.com KULLANILMIYOR (2026-08-18): alan adı Vercel'e hiç bağlanmadı, kayıt
+; firmasının park sayfasını gösteriyor. "Program Ekle/Kaldır"daki yayımcı linki oraya
+; gitmesin diye canlı site adresi yazıldı. Alan adı ileride bağlanırsa burayı geri çevir.
+#define MyAppURL       "https://pemf-vet-web.vercel.app"
 #define ProjectRoot    ".."
 ; BuildOutput ve ModeName komut satirindan /D ile override edilebilir:
 ;   ISCC "/DBuildOutput=C:\PEMF_BUILD\dist\PEMF_Backend" PEMF_Backend_Setup.iss            (device)
