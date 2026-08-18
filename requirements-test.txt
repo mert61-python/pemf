@@ -40,3 +40,8 @@ cryptography==50.0.0               # DO-1: shipped ile esit (2026-08-04: 46.0.7-
 keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
 paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)
 zeroconf==0.149.16                 # DO-1: ağ-açık mDNS (LAN keşif) — testler import etmese de pip-audit KAPSAMINA al (CVE geçmişi; shipped ile eşit)
+imageio-ffmpeg==0.6.0              # ses cozme zinciri (ai_router cat_sound): HASTA-GORUNUR sessizlik
+                                   # kapisi (test_ses_sessiz_kayit_reddi, 3 test) bu paket yokken CI'da
+                                   # ATLANIYORDU ve uc bir kez 500 dondu (kosu 31938268657, 2026-08-16).
+                                   # "Agir AI" listesinde DEGIL (~30 MB, model kosturmaz); surum shipped
+                                   # requirements.txt:71 ile birebir.

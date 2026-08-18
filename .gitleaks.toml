@@ -28,4 +28,12 @@ regexes = [
   '''test-sqlcipher-anahtari-0123456789abcdef''',
   '''s3cr3t-sqlcipher-anahtari-xyz''',
   '''p4t13nt-fernet-key''',
+  # ── Supabase PUBLISHABLE anahtari (2026-08-18, kosu 32144281513'te tetiklendi) ──
+  # `backend_service.py:31` `_DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_..."`.
+  # `sb_publishable_*` TASARIMI GEREGI HERKESE ACIK anahtar sinifidir (eski `anon` JWT'nin
+  # yeni bicimi): mobil uygulamanin ve masaustu istemcinin icinde ZATEN gomulu dagitilir,
+  # yetki sinirini RLS cizer. Sizamayacak bir deger "sizinti" sayilinca her dokunusta
+  # kirmizi e-posta uretiyordu. Muafiyet BILEREK yalniz `sb_publishable_` onekine dar:
+  # `sb_secret_*` (service-role sinifi) YAKALANMAYA DEVAM EDER.
+  '''sb_publishable_[A-Za-z0-9_-]+''',
 ]

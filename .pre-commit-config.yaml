@@ -54,3 +54,19 @@ repos:
     rev: v8.24.0
     hooks:
       - id: gitleaks
+
+  # ── CHANGELOG KAPISI (2026-08-18) ──────────────────────────────────────────
+  # NEDEN: kapi CI'da zaten var (test_version_visibility) ama ilk yakalayisi
+  # push'tan SONRAYDI — 2026-08-14'te mobile=2.3.14 CHANGELOG'suz push edildi ve
+  # kirmizi "Run failed" e-postasi uretti (kosu 31809975681). Bu kanca ayni
+  # denetimi commit ANINA tasir; yalniz versions.json degisince kosar.
+  # `../python.exe` = depo yaninda duran embedded Python (bootstrap.ps1 duzeni);
+  # yoksa PATH'teki python'a duser (gelistirici makinesi disinda da calissin).
+  - repo: local
+    hooks:
+      - id: changelog-surum-kapisi
+        name: CHANGELOG surum kapisi (versions.json)
+        entry: bash -c 'P=../python.exe; [ -x "$P" ] || P=python; "$P" scripts/check_changelog_surum.py'
+        language: system
+        files: ^versions\.json$
+        pass_filenames: false
