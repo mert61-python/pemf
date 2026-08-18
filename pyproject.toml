@@ -13,11 +13,20 @@
 target-version = "py310"
 line-length = 120
 # Vendored / üretilmiş / build çıktısı DENETLENMEZ (bizim kaynağımız değil).
+# ⚠️ TEK KAYNAK: CI `ruff check .` ile burayı okur; pre-commit'in ruff hook'u da
+# `--force-exclude` ile aynı listeye uyar. Muafiyeti YALNIZ .pre-commit-config.yaml'a
+# yazmak YETMEZ — 2026-08-18'de tam bunu yaptım ve CI `lint` işi kırmızı döndü (ca280ea):
+# yerelde commit geçti, CI'da 10 hata. Yeni bir muafiyet gerekiyorsa ÖNCE buraya.
 extend-exclude = [
     "ai_hub", "dist", "build", "builds", "buildPEMF", "release_assets",
     "dema-terapi-simülatörü", "web_static", "website", "templates",
     "frontend", "mobile", "bin", "data", "firmware", "lattekurulum",
     "__pycache__", ".pytest_cache",
+    # DONMUŞ ARŞİV — silinen `esp` dalından kurtarılan doktora/TÜBİTAK eğitim kodu.
+    # Değeri SADAKATİ: yayınlanmış sonuçları üreten kodun birebir hâli. Lint/format
+    # düzeltmesi burada iyileştirme değil KAYIPTIR (ilk geçişte 316 düzeltme + 49 dosya
+    # yeniden biçimlendirme ölçüldü).
+    "training_archive",
 ]
 
 [tool.ruff.lint]
