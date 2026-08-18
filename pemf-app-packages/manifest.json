@@ -77,21 +77,21 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.31",
+    "version": "1.9.32",
     "url": "https://pemf-vet-web.vercel.app/",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.31/PEMFVetClient-Setup-1.9.31.exe",
-    "sha256": "58fc57034f3325239de4b185c558293e39b428928ab6bc487bc3ce2af1293288",
-    "size": 2961158,
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMFVetClient-Setup-1.9.32.exe",
+    "sha256": "64fd12eb2e8cce1ba5bad421338eb98f9e280aa932fc21f3ceaff24666836302",
+    "size": 2962318,
     "rollout": 100
   },
   "mobile": {
     "android": {
-      "version": "2.3.17",
-      "versionCode": 24,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.31/PEMF_Vet_Mobil-2.3.17.apk",
-      "sha256": "da65615f19d7dd2c186e224402489b89db3e8ff042f3b156f0c06208c4b4644f",
-      "size": 128417235,
-      "notes": "Guncelleme artik dogrudan kuruluyor: indirme bitince paylasim sayfasi yerine kurulum ekrani aciliyor. Inen paket bir daha indirilmiyor - kurulumu onaylamadan cikarsaniz dosya diskte kalir ve kurulum aninda acilir. Ayni paket iki kez indirilmiyor. Indirme ekrani yuzdenin yaninda kac MB indigini de yaziyor. Ayrica 'Cikis' artik yalniz o cihazi kapatiyor; klinikteki bilgisayarin oturumu dusmuyor."
+      "version": "2.3.18",
+      "versionCode": 25,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMF_Vet_Mobil-2.3.18.apk",
+      "sha256": "9593a194e13536afa84901b32a918421434bd9e34ec6b6490311cd8c039b458b",
+      "size": 128417239,
+      "notes": "Bakim surumu: uygulama ici guncelleme akisi dogrulandi; islevsel degisiklik yok."
     }
   }
 }

@@ -74,6 +74,27 @@ inmesi gerekiyor. Sonraki sürümler yine ~71 MB olacak.
 
 ---
 
+## launcher 1.9.32 — 2026-08-18 (bakım: güncelleme akışı uçtan uca doğrulama)
+
+**Etiket:** `launcher-v1.9.32` → `PEMFVetClient-Setup-1.9.32.exe` (sha `64fd12eb2e8c`).
+
+- **İşlevsel değişiklik yok.** Bu sürüm, web sitesinden yapılan temiz kurulum sonrası otomatik
+  güncelleme zincirinin (manifest → sessiz self-update → yeniden başlatmada yeni sürüm) sahada
+  kırılmadan çalıştığını uçtan uca doğrulamak için yayınlandı. 1.9.31'deki tüm düzeltmeler
+  aynen geçerli.
+
+---
+
+## mobile 2.3.18 — 2026-08-18 (bakım: uygulama içi güncelleme doğrulama)
+
+**Etiket:** `launcher-v1.9.32` → `PEMF_Vet_Mobil-2.3.18.apk` (sha `9593a194e135`, versionCode 25).
+
+- **İşlevsel değişiklik yok.** Kurulu 2.3.17'nin uygulama içi güncelleme akışını (manifest
+  `versionCode` karşılaştırması → indirme → boyut/sha doğrulaması → kurulum ekranı) canlı
+  doğrulamak için yayınlandı. Güncelleme zorunlu değildir; "Atla" davranışı korunur.
+
+---
+
 ## launcher 1.9.31 — 2026-08-18 (çıkış artık telefonunuzu düşürmüyor)
 
 **Etiket:** `launcher-v1.9.31` → `PEMFVetClient-Setup-1.9.31.exe` (sha `58fc57034f33`).

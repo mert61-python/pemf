@@ -2,7 +2,7 @@
   "expo": {
     "name": "PEMF Vet Mobil",
     "slug": "pemf-vet-responsive",
-    "version": "2.3.17",
+    "version": "2.3.18",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "pemfvet",
@@ -31,7 +31,7 @@
         "backgroundColor": "#121827"
       },
       "package": "com.pemf.vet",
-      "versionCode": 24,
+      "versionCode": 25,
       "allowBackup": false,
       "usesCleartextTraffic": true,
       "blockedPermissions": [
