@@ -4,11 +4,18 @@ Tüm build zinciri **`guii` içinde tek yerde**: kaynaklar + scriptler + build �
 `guii` klasörünü taşırsan/zip'lersen her şey birlikte gelir. (Tek istisna: APK için geçici kısa-dizin
 scratch — aşağıda "MAX_PATH" bölümü.)
 
-Sürümler (2026-08-06): **Backend/App `1.9.5`** (`VERSION`), **Mobil `2.3.3` (versionCode 10)** (`pf/app.json`),
-**Launcher `1.9.9`** (`launcher/app/tauri.conf.json`).
+> **TEK KAYNAK `versions.json`** — güncel sürümler için **oraya** bakın; bu belgeye sürüm yazmayın.
+> (Buraya elle yazılan anlık görüntü 2026-08-06'da donmuştu: `1.9.5 / 2.3.3 / 1.9.9` yazarken gerçek
+> sürümler `1.9.16 / 2.3.17 / 1.9.31`ti. Belge okuyanı yanılttığı için kaldırıldı.)
+> Sürüm değiştirmek için `versions.json`u düzenleyip `.\build_tools\sync_versions.ps1` çalıştırın;
+> hedef dosyaları (`VERSION`, `pf/app.json`, `launcher/app/tauri.conf.json`) o yazar — build
+> scriptleri de başlarken otomatik çağırır.
 
-> **TEK KAYNAK `versions.json`** — elle bu dosyaları düzenlemeyin. `versions.json`u değiştirip
-> `.uild_toolssync_versions.ps1` çalıştırın; hedef dosyaları o yazar (build scriptleri de otomatik çağırır).
+**Depo yerleşimi (2026-08-18, tek depo):** mobil/web istemci `pf/`, ödeme sitesi `pemf-vet-web/`
+artık **bu deponun içinde**; ayrı `pemf-frontend` / `pemf-vet-web` depoları arşivlendi.
+CI yapılandırması **yalnız kök `.github/`** altında durur — GitHub alt dizindeki workflow'ları
+okumaz, orada bırakılan bir dosya sessizce hiç koşmaz (`tests/test_ci_workflow_gate.py` bunu kilitler).
+Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derlenmiş sabitler orayı gösterir).
 
 ---
 
@@ -49,7 +56,7 @@ Bu embeddable-python klasörünü kopyala, sonra **guii kökünden**:
 > **(a) Runtime** — frozen EXE / offline installer Python KURULU OLMADAN her makinede çalışır (✅ zaten öyle; klinik laptopuna kurulan bu).
 > **(b) Build** — bu klasör *kaynağı + AI modelini + Python env'i + npm cache'i* taşır, ama derleme **araçlarını** (Node/Rust/MSVC/JDK/Android/Inno/gh) taşımaz. `bootstrap.ps1` o boşluğu doldurur → **klasör + bootstrap + internet = herhangi bir laptopta build+publish.**
 
-### 0b. `git clone`'dan gelen makinede — `scriptsestore_assets.ps1`
+### 0b. `git clone`'dan gelen makinede — `scripts\restore_assets.ps1`
 
 Yukarıdaki (b) maddesi **klasörü kopyalayarak** taşımayı anlatır. **Git'ten** gelindiğinde bir
 parça eksiktir: AI model ağırlıkları.
@@ -72,9 +79,9 @@ ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
 ```powershell
 git clone https://github.com/mert61-python/pemf.git guii
 cd guii
-.ootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
-.\scriptsestore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı)
-.\scriptsuild_backend_exe.ps1  # artık derlenebilir
+.\bootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
+.\scripts\restore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı)
+.\scripts\build_backend_exe.ps1  # artık derlenebilir
 ```
 
 - Betik indirme adresini **manifest'ten okur**, etiketi tahmin etmez: `home.zip` bugün
