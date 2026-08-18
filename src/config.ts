@@ -136,6 +136,11 @@ export const CLIENT = {
       url: `${WIN_REL}/${DOWNLOAD_HOST.windowsAsset}`,
       os: 'Windows 10 / 11 (64-bit)',
       ready: true,
+      // ⚠️ SÜRÜM HEDEF BAŞINA (denetim 2026-08-18): indirme kartı sürümü tek bir
+      // `CLIENT.version`dan basıyordu, yani ANDROID kartı da Windows launcher sürümünü
+      // ("Sürüm 1.9.30") yazarken 2.3.x APK indiriyordu. Aynı yanılgıyı `windowsTag`
+      // için config yorumu zaten "kullanıcıyı yanıltır" diye tarif ediyor.
+      version: `${DOWNLOAD_HOST.windowsTag.replace(/^launcher-v/, '')}`,
     },
     macos: {
       key: 'macos' as const,
@@ -143,6 +148,7 @@ export const CLIENT = {
       url: `${REL}/${DOWNLOAD_HOST.macosAsset}`,
       os: 'macOS 12 Monterey+',
       ready: DOWNLOAD_HOST.macosReady,
+      version: `${DOWNLOAD_HOST.launcherTag.replace(/^launcher-v/, '')}`,
     },
     linux: {
       key: 'linux' as const,
@@ -154,6 +160,7 @@ export const CLIENT = {
       rpmReady: DOWNLOAD_HOST.linuxRpmReady, // rpm butonu yalnız bu true iken
       os: 'Ubuntu/Debian · Fedora/RHEL · universal (64-bit)',
       ready: DOWNLOAD_HOST.linuxReady,
+      version: `${DOWNLOAD_HOST.launcherTag.replace(/^launcher-v/, '')}`,
     },
     android: {
       key: 'android' as const,
@@ -161,6 +168,7 @@ export const CLIENT = {
       url: `${AND_REL}/${DOWNLOAD_HOST.androidAsset}`,
       os: 'Android 8.0+ · APK (bilinmeyen kaynağa izin verin)',
       ready: DOWNLOAD_HOST.androidReady,
+      version: DOWNLOAD_HOST.androidVersion,
     },
   },
 }
@@ -186,15 +194,26 @@ export type Module = {
   recommended?: boolean
 }
 
-/** Client'ın kendisi (küçük launcher) — modüllerden bağımsız, her zaman iner. */
-export const CLIENT_BASE_MB = 52
+/** Profil seçiminden BAĞIMSIZ olarak her kurulumda inen ZORUNLU çalışma zamanı (MB).
+ *
+ *  ⚠️ DENETİM 2026-08-18: burada 52 yazıyordu ve bu sayı yalnızca client uygulamasının kendisiydi;
+ *  oysa launcher kurulumdan sonra ZORUNLU olarak `app` + `deps` katmanlarını indiriyor
+ *  (`pemf-app-packages/manifest.json` → layers.win-x64: app 0,07 GB + deps 1,36 GB = 1,43 GB).
+ *  `PackageBuilder` "Tahmini indirme"yi bu sabit + profil boyutlarından hesapladığı için yalnız
+ *  "Ev Sahibi" seçen bir kullanıcıya ≈0,7 GB gösteriliyordu; gerçek indirme ≈1,7 GB'dır (2,5 kat).
+ *  Kırsal/kotalı bağlantıda bu, kullanıcıyı yanlış karara götüren bir sayıdır.
+ *  ⚠️ TEK KAYNAK manifest'tir; `guii/tests/test_site_paket_boyutlari.py` bu üç sayıyı manifest'e
+ *  karşı kilitler. Paketler yeniden üretilince buradaki değerler de güncellenmeli. */
+export const CLIENT_BASE_MB = 1462
 
 export const MODULES: Module[] = [
   {
     id: 'home',
     name: 'Ev Sahibi',
     tagline: 'Kamera destekli akıllı teşhis + tek-tuş güvenli seans.',
-    sizeGB: 0.6,
+    // manifest profiles.home = 0,30 GB (eskiden 0.6 yazıyordu; `cat_organ` modelleri
+    // çekirdeğe taşınınca home.zip 528 → 318 MB'a düştü, site güncellenmemişti).
+    sizeGB: 0.3,
     included: true,
     addonMonthly: 0,
     includes: [
@@ -209,7 +228,8 @@ export const MODULES: Module[] = [
     id: 'vet',
     name: 'Veteriner Hekim',
     tagline: 'Tam klinik kontrol: manuel frekans, sensör, hasta veritabanı.',
-    sizeGB: 0.9,
+    // manifest profiles.vet = 0,12 GB (eskiden 0.9 yazıyordu — 7 kat fazla).
+    sizeGB: 0.1,
     included: true,
     addonMonthly: 0,
     includes: [
@@ -227,7 +247,8 @@ export const MODULES: Module[] = [
     tagline: FREE_MODE
       ? 'Kanser-araştırma modelleri — test aşamasında ücretsiz.'
       : 'Kanser-araştırma modelleri — ağır indirme; ücretli eklenti.',
-    sizeGB: 1.9,
+    // manifest profiles.research = 1,46 GB.
+    sizeGB: 1.5,
     included: FREE_MODE,
     addonMonthly: FREE_MODE ? 0 : 390,
     includes: [
@@ -263,7 +284,16 @@ export type Plan = {
 }
 
 /** Araştırma eklentisi — Pro/Pro+ üzerine eklenebilir (Supabase addons:["research"]). */
-export const RESEARCH_ADDON = { monthly: 390, label: 'Araştırma modülü' } as const
+/** Araştırma eklentisi tarifesi.
+ *
+ *  ⚠️ `yearly` EKSİKTİ (denetim 2026-08-18) ve `Odeme.tsx` yıllık toplamı `monthly * 12` ile
+ *  hesaplıyordu. Oysa yıllık politika "2 ay bedava"dır: `PLANS`ta yearly = monthly × 10
+ *  (990→9.900, 1.990→19.900) ve `IYZICO_SETUP.md`deki plan tablosu eklentiyi de aynı kuralla
+ *  katıyor (Pro + Araştırma yıllık **₺13.800** = 9.900 + 390×10). Ekranda ₺14.580 yazarken
+ *  iyzico ₺13.800 tahsil edecekti — ₺780 fark. Yön "fazla gösterme" olduğu için müşteri fazla
+ *  ödemez, ama Ön Bilgilendirme "tahsil edilecek KESİN tutarı" göstermeyi şart koşuyor
+ *  (sayfanın kendi yorumu da aynı sebeple daha önce düzeltilmişti). */
+export const RESEARCH_ADDON = { monthly: 390, yearly: 3900, label: 'Araştırma modülü' } as const
 
 /** Üyelik katmanları — fiyat politikası İŞLEM ÖNCELİĞİNE bağlı:
  *  Pro paylaşımlı KUYRUKTA bekler, Pro+ GERÇEK-ZAMANLI (kuyruksuz) öncelik alır.

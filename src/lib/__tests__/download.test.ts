@@ -19,7 +19,7 @@ import {
   type DownloadTarget,
   type GateAuth,
 } from '../download'
-import { CLIENT } from '../../config'
+import { CLIENT, PLANS, RESEARCH_ADDON } from '../../config'
 import { AUTH_OPTIONS, supabase } from '../supabase'
 
 const ANON: GateAuth = { loading: false, authed: false }
@@ -181,5 +181,53 @@ describe('oturum kalıcılığı — her indirmede yeniden giriş istenmez', () 
     expect(auth.persistSession).toBe(true)
     expect(auth.autoRefreshToken).toBe(true)
     expect(auth.detectSessionInUrl).toBe(true)
+  })
+})
+
+/**
+ * YILLIK + ARAŞTIRMA TUTARI, iyzico'DAN TAHSİL EDİLECEK TUTARLA UYUŞMUYORDU
+ * (denetim 2026-08-18).
+ *
+ * `Odeme.tsx` "Bugün tahsil edilecek" tutarını `plan.yearly + RESEARCH_ADDON.monthly * 12` ile
+ * hesaplıyordu. Oysa yıllık fiyat politikası "2 ay bedava"dır: `PLANS`ta yearly = monthly × 10
+ * (990→9.900, 1.990→19.900) ve `IYZICO_SETUP.md`deki plan tablosu da eklentiyi aynı kuralla
+ * katıyor (Pro + Araştırma yıllık ₺13.800 = 9.900 + 390×10).
+ *
+ * Sonuç: ekranda ₺14.580 yazarken iyzico ₺13.800 tahsil ediyordu — ₺780 fark. Yön "fazla
+ * gösterme" olduğu için müşteri fazladan ödemiyor, ama Mesafeli Satış/Ön Bilgilendirme
+ * yükümlülüğü "tahsil edilecek KESİN tutarı" göstermeyi şart koşuyor ve sayfanın kendi yorumu
+ * (Odeme.tsx:46-50) daha önce tam bu sebeple düzeltilmiş: "gerçek dönem tutarı sayfanın hiçbir
+ * yerinde görünmüyordu; bu bir ön bilgilendirme ihlalidir."
+ *
+ * ⚠️ Bugün FREE_MODE=true olduğu için /odeme hiç açılmıyor → canlıda kayıp YOK; satış açılınca
+ * ilk müşteride görünür.
+ */
+describe('yıllık fiyat politikası — "2 ay bedava" TEK KURAL', () => {
+  it('KRİTİK: Araştırma eklentisinin yıllık fiyatı da 10 aydır (12 DEĞİL)', () => {
+    expect(RESEARCH_ADDON.yearly).toBe(RESEARCH_ADDON.monthly * 10)
+  })
+
+  it('ücretli planların yıllık fiyatı aylığın 10 katıdır (kuralın kaynağı)', () => {
+    for (const p of PLANS.filter((x) => x.paid && x.monthly && x.yearly)) {
+      expect(`${p.tier}: ${p.yearly}`).toBe(`${p.tier}: ${(p.monthly ?? 0) * 10}`)
+    }
+  })
+
+  it('KRİTİK: Pro + Araştırma yıllık toplamı IYZICO_SETUP.md plan tablosuyla aynıdır (₺13.800)', () => {
+    const pro = PLANS.find((p) => p.tier === 'pro')
+    expect((pro?.yearly ?? 0) + RESEARCH_ADDON.yearly).toBe(13800)
+  })
+
+  it('KRİTİK: Pro+ + Araştırma yıllık toplamı ₺23.800', () => {
+    const proPlus = PLANS.find((p) => p.tier === 'pro_plus')
+    expect((proPlus?.yearly ?? 0) + RESEARCH_ADDON.yearly).toBe(23800)
+  })
+
+  it('KARŞIT-KANIT: AYLIK toplamlar değişmedi (₺1.380 / ₺2.380)', () => {
+    // "Eklentiyi ucuzlat" biçiminde bir yama düzeltme değildir: aylık tarife aynı kalmalı.
+    const pro = PLANS.find((p) => p.tier === 'pro')
+    const proPlus = PLANS.find((p) => p.tier === 'pro_plus')
+    expect((pro?.monthly ?? 0) + RESEARCH_ADDON.monthly).toBe(1380)
+    expect((proPlus?.monthly ?? 0) + RESEARCH_ADDON.monthly).toBe(2380)
   })
 })

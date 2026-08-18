@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# ⚠️ SIR SIZINTISI KAPISI (denetim 2026-08-18): burada .env kuralı YOKTU. `*.local` yalnız
+# `.env.local`ı yakalıyor; `IYZICO_SETUP.md` ise sırları (IYZICO_SECRET_KEY,
+# SUPABASE_SERVICE_ROLE_KEY) düz `.env`e yazmayı, README de `git add -A && git push` demeyi
+# söylüyor → tek komutta canlı ödeme sırları herkese açık depoya girerdi. (Kontrol edildi:
+# bugüne kadar hiçbir `.env` commit'lenmemiş; bu kural sızıntıyı ÖNLEMEK içindir, temizlemek için değil.)
+.env
+.env.*
+!.env.example

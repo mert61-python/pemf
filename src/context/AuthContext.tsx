@@ -67,7 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error?.message }
     },
     signOut: async () => {
-      await supabase.auth.signOut()
+      // ⚠️ KAPSAM 'local' (denetim 2026-08-18): supabase-js v2'de `signOut()` varsayılanı
+      // `scope: 'global'`dir ve kullanıcının TÜM yenileme jetonlarını iptal eder. Yani
+      // pazarlama sitesindeki "Çıkış" düğmesi, aynı hesapla açık olan MOBİL uygulamanın ve
+      // klinikteki masaüstü launcher'ın (1.9.9'dan beri Supabase girişi var) oturumlarını da
+      // düşürüyordu — kullanıcı bunu istemiyor ve sebebini de göremiyor. Site oturumu yalnız
+      // bu tarayıcıda kapanmalı.
+      await supabase.auth.signOut({ scope: 'local' })
     },
   }
 

@@ -20,11 +20,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'iyzico', message: result.errorMessage || 'İptal edilemedi.' })
     }
 
-    // SÖZLEŞMEYE UYUM: yayınlanan Mesafeli Satış / İptal-İade metinleri "iptal, içinde bulunulan
-    // (bedeli tahsil edilmiş) dönemin SONUNDA geçerli olur; bu dönem sonuna kadar erişim devam
-    // eder" diyor. Kod ise tier'ı ANINDA 'baslangic'e düşürüp hakkı hemen kesiyordu → ödenmiş
-    // dönemin ortasında erişim kaybı, yayınlanan sözleşmeye açık aykırılık. Tier KORUNUR; yalnız
-    // yenileme durdurulur (status='canceled'), erişim `current_period_end`e kadar sürer.
+    // SÖZLEŞMEYE UYUM (KISMİ — bkz. uyarı): yayınlanan Mesafeli Satış / İptal-İade metinleri
+    // "iptal, içinde bulunulan (bedeli tahsil edilmiş) dönemin SONUNDA geçerli olur; bu dönem
+    // sonuna kadar erişim devam eder" diyor (Legal.tsx). Kod ise tier'ı ANINDA 'baslangic'e
+    // düşürüp satıra yazıyordu; artık tier KORUNUR, yalnız yenileme durdurulur (status='canceled').
+    //
+    // ⚠️ DÜZELTİLMİŞ İDDİA (denetim 2026-08-18): bu yorumun eski hâli "erişim
+    // `current_period_end`e kadar sürer" diyordu. ÖLÇÜLDÜ — SÜRMÜYOR, ve `current_period_end`
+    // sütununa BU DEPODA HİÇBİR YOL değer YAZMIYOR (callback/webhook/cancel: hiçbiri;
+    // `pf/supabase/subscriptions.sql`teki sütun NULL kalıyor). Hakkı okuyan iki katman da yalnız
+    // `status`e bakıyor ve `canceled`ı pasif sayıyor: `guii/servers/entitlement.py`
+    // (_INACTIVE_STATUS → tier 'baslangic', eklentiler boş) ve `pf/src/config/entitlement.ts`
+    // (`isActive` yalnız active/trialing). Yani tier'ı satırda korumak GÖZLENEBİLİR davranışı
+    // DEĞİŞTİRMİYOR; ödenmiş dönemin ortasında erişim yine kesilir.
+    // Bugün canlıda zarar YOK: `FREE_MODE=true` (satış kapalı) ve iki tarafta da enforcement
+    // kapalı (`PEMF_TIER_ENFORCED=0`, `ENTITLEMENT_ENFORCED=false`). Satış açılmadan ÖNCE iki
+    // seçenekten biri seçilmeli — ikisi de SAHİP KARARIDIR, kod tek başına veremez:
+    //   (a) sözleşmeye uy: `current_period_end` yazılsın + iki tüketici de onu okusun, ya da
+    //   (b) metni koda uydur: yayınlanan sözleşme "iptal anında erişim biter" desin.
     try {
       await upsertSubscription({
         user_id: user.id,

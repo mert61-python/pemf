@@ -5,7 +5,11 @@
  *   #31/#37 `origin` İSTEMCİDEN geliyordu ve doğrulanmadan iyzico callbackUrl'ine yazılıyordu
  *           (açık yönlendirme / ödeme geri-dönüş kaçırma). Artık izin listesi.
  *   #107    Bilinmeyen iyzico durumu KOŞULSUZ 'canceled'a düşüyordu → beklenmedik/geçici bir
- *           statüde ÖDEYEN kullanıcının hakkı sessizce iptal ediliyordu.
+ *           statüde abonelik sessizce "iptal edilmiş" kaydediliyordu.
+ *           ⚠️ 2026-08-18: bu maddenin eski metni "hakkı sessizce iptal ediliyordu" diyordu;
+ *           ölçüldü, hak açısından FARK YOK — hakkı okuyan iki katman da `past_due`yu `canceled`
+ *           gibi PASİF sayıyor (bkz. util.ts'teki gerekçe). Kazanç: `past_due` satırı CANLI
+ *           sayıldığı için abonelik iptal edilebilir kalır ve ikinci abonelik açılmaz.
  *   #104    IYZICO_URI yoksa sessizce SANDBOX'a düşülüyordu → üretimde tahsilat YAPILMADAN
  *           abonelik aktifleşir. Artık fail-closed.
  */

@@ -49,10 +49,14 @@ export default function Odeme() {
   // Gerçek dönem tutarı sayfanın hiçbir yerinde görünmüyordu; bu bir ön bilgilendirme ihlalidir.
   const monthly = yearly ? Math.round((plan?.yearly ?? 0) / 12) : plan?.monthly ?? 0
   const total = monthly + (research ? RESEARCH_ADDON.monthly : 0)
-  /** Bu siparişte HEMEN tahsil edilecek tutar (dönem bedeli). */
-  const chargeNow = yearly
-    ? (plan?.yearly ?? 0) + (research ? RESEARCH_ADDON.monthly * 12 : 0)
-    : total
+  /** Bu siparişte HEMEN tahsil edilecek tutar (dönem bedeli).
+   *
+   *  ⚠️ EKLENTİYE DE "2 AY BEDAVA" UYGULANIR (denetim 2026-08-18): burada `monthly * 12` vardı ve
+   *  yıllık+Araştırma seçiminde ekranda ₺14.580 yazarken iyzico planı ₺13.800 tahsil edecekti
+   *  (₺780 fark). Yıllık tarife tek kuraldır: `PLANS`ta yearly = monthly × 10 ve
+   *  `IYZICO_SETUP.md` plan tablosu eklentiyi de öyle katıyor. Sayı artık `RESEARCH_ADDON.yearly`
+   *  tek kaynağından gelir; `download.test.ts` üçünü birden kilitliyor. */
+  const chargeNow = yearly ? (plan?.yearly ?? 0) + (research ? RESEARCH_ADDON.yearly : 0) : total
   const periodLabel = yearly ? 'yıllık' : 'aylık'
 
   function set<K extends keyof CheckoutCustomer>(k: K, v: string) {

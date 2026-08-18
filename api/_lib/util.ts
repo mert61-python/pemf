@@ -64,14 +64,39 @@ export async function upsertSubscription(row: Record<string, unknown>): Promise<
   if (!r.ok) throw new Error(`subscriptions upsert ${r.status}: ${await r.text()}`)
 }
 
-/** user_id → iyzico subscriptionReferenceCode (iptal için). */
+/** iyzico'da HÂLÂ CANLI sayılan abonelik durumları.
+ *  `canceled` KASTEN yok: iptal edilmiş abonelik yeni satın almayı engellememeli. */
+const CANLI_DURUMLAR = ['active', 'trialing', 'past_due'] as const
+
+/** user_id → CANLI aboneliğin iyzico subscriptionReferenceCode'u (iptal + çift-abonelik kapısı).
+ *
+ *  ⚠️ DURUM FİLTRESİ ŞART (denetim 2026-08-18): filtre YOKTU ve `api/cancel.ts` iptalde
+ *  `stripe_subscription_id`i satırda BIRAKIYOR (bilerek — `getUserBySubscriptionRef` webhook'ta
+ *  o referansla kullanıcıyı buluyor). Sonuç: iptal eden kullanıcıya `api/checkout.ts` sonsuza dek
+ *  409 "Hesabınızda zaten aktif bir abonelik var … önce mevcut aboneliğinizi iptal edin" diyordu →
+ *  bir daha abone OLAMIYOR, plan da DEĞİŞTİREMİYOR ve mesaj ona zaten yaptığı şeyi söylüyordu.
+ *  Tekrar "iptal et"e basınca iyzico zaten iptal edilmiş aboneliği reddediyor (502) → çıkışsız döngü.
+ *  ⚠️ `past_due` CANLI sayılır: ödeme aksamış ama abonelik iyzico'da duruyor; onu ikizlemek
+ *  kullanıcıyı iki kez tahsilata açardı (checkout.ts'teki yetim-kayıt gerekçesi).
+ *  ⚠️ Filtre SUNUCUDA: iptal edilmiş aboneliğin referansı ağa hiç çıkmasın. */
 export async function getSubscriptionRefByUser(userId: string): Promise<string | null> {
   if (!userId) return null
+  const durumlar = `in.(${CANLI_DURUMLAR.join(',')})`
   const r = await fetch(
-    `${SB_URL()}/rest/v1/subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=stripe_subscription_id`,
+    `${SB_URL()}/rest/v1/subscriptions?user_id=eq.${encodeURIComponent(userId)}` +
+      `&status=${encodeURIComponent(durumlar)}&select=stripe_subscription_id`,
     { headers: { apikey: SB_SERVICE(), Authorization: `Bearer ${SB_SERVICE()}` } },
   )
-  if (!r.ok) return null
+  // ⚠️ FAIL-CLOSED (denetim 2026-08-18): burada `if (!r.ok) return null` vardı ve iki çağıranın
+  // ihtiyacı ZITTIR. `api/checkout.ts` için `null` = "aboneliği yok" demektir → Supabase 5xx /
+  // anahtar / RLS hatası anında, zaten abonesi olan kullanıcıya İKİNCİ abonelik açılırdı: iki
+  // iyzico aboneliğinden de tahsilat yapılır ve `subscriptions.user_id` PRIMARY KEY olduğundan
+  // callback satırı EZER → eski referans kaybolur, `/api/cancel` onu bir daha BULAMAZ. Kapı tam
+  // da bu "yetim kayıt"ı önlemek için yazılmıştı (checkout.ts:23-27) ama hata anında kendisi
+  // açılıyordu. `api/cancel.ts` için `null` yalnız 404 "abonelik bulunamadı" demek — para
+  // hareketi yok. Para hareketi olan yön belirleyicidir: BELİRSİZLİK HATA'dır.
+  // İki uç da bu istisnayı zaten yakalıyor ve dürüst "sonra tekrar deneyin" mesajı dönüyor.
+  if (!r.ok) throw new Error(`subscriptions okunamadı ${r.status}`)
   const rows = (await r.json()) as Array<{ stripe_subscription_id?: string }>
   return rows?.[0]?.stripe_subscription_id ?? null
 }
@@ -97,8 +122,17 @@ export function mapIyzicoStatus(s: string): 'trialing' | 'active' | 'past_due' |
   if (v === 'CANCELED' || v === 'EXPIRED' || v === 'UPGRADED') return 'canceled'
   // BİLİNMEYEN durum eskiden koşulsuz 'canceled'a düşüyordu: iyzico yeni/beklenmedik bir statü
   // (ör. 'RETRY', boş gövde, geçici sağlayıcı hatası) döndüğünde ÖDEYEN kullanıcının hakkı
-  // sessizce iptal ediliyordu. Bilinmeyeni "askıda" say (erişim korunur, tahsilat takibi sürer)
-  // ve elle inceleme için iz bırak.
+  // sessizce iptal ediliyordu. Bilinmeyeni "askıda" say ve elle inceleme için iz bırak.
+  //
+  // ⚠️ DÜZELTİLMİŞ İDDİA (denetim 2026-08-18): buradaki eski yorum "erişim korunur" diyordu —
+  // ÖLÇÜLDÜ, DOĞRU DEĞİL. Hakkı okuyan iki katman da `past_due`yu tıpkı `canceled` gibi PASİF
+  // sayıyor: `guii/servers/entitlement.py` `_INACTIVE_STATUS` kümesinde `past_due` VAR (tier
+  // 'baslangic'e düşer, eklentiler boşalır) ve `pf/src/config/entitlement.ts` `isActive` yalnız
+  // `active`/`trialing` kabul ediyor. Yani bu eşleme YALNIZCA kaydedilen dizeyi değiştiriyor,
+  // kullanıcının hakkını `canceled`dan farklı kılmıyor. Kazanç gerçek ama daha küçük: `past_due`
+  // satırı `getSubscriptionRefByUser`ta CANLI sayıldığı için abonelik iptal edilebilir ve
+  // yanlışlıkla ikinci bir abonelik açılmaz. Gerçekten "erişim korunsun" isteniyorsa karar
+  // TÜKETİCİLERDE verilmeli (sahip kararı) — burada tek başına yapılamaz.
   console.warn('iyzico: bilinmeyen subscriptionStatus, past_due sayıldı', { status: s })
   return 'past_due'
 }
