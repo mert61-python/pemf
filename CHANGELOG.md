@@ -30,6 +30,67 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.16 — 2026-08-18 (denetim turu: hasta kaydı, doz saklama, bağlanma)
+
+**Etiket:** `client-app-v1.9.16` → `base-app.zip` (sha `00de04c75ac9`) + `base-deps.zip` (sha `d22c35a91d05`).
+Paket kimliği (`buildId`, `/api/health`): `42cbc0c11a0e`.
+
+⚠️ **Bu sürümde bağımlılık katmanı da yenileniyor (~1,4 GB, bir kereliğine).** Paketlerin baytları
+artık her derlemede birebir aynı üretiliyor; bu düzeltme 1.9.15'ten sonra girdiği için bir kez daha
+inmesi gerekiyor. Sonraki sürümler yine ~71 MB olacak.
+
+### Hasta kaydı ve doz (önce bunlar)
+
+- **Seans devri, önceki seansın telemetrisini yeni seansa yazıyordu.** Manuel seans sürerken AI Pro
+  başlatıldığında (devralma), önceki seanstan kalan **kısmi dakikanın** sıcaklık/akım örnekleri yeni
+  seansın kaydına düşüyordu. Artık eski seans kendi satırına düzgün kapatılıyor (son dakikası dahil)
+  ve yeni seans temiz başlıyor.
+- **Uygulanan doz kaydı artık 90 günde silinmiyor.** "Hangi bobin, hangi frekans/duty ile kaç saniye"
+  bilgisi sensör telemetrisiyle aynı saklama süresine bağlanmıştı; 90 gün sonra seans başlığı kalıp
+  doz cevabı yok oluyordu. Doz kaydı ayrıldı (varsayılan 10 yıl) ve silinmesi denetim izine yazılıyor.
+- **Kayıt tutulamıyorsa seans başlamıyor** kuralı korunuyor; buna ek olarak yapılandırma dosyası
+  okunamadığında artık **varsayılanlarla ezilmiyor** — eskiden MQTT broker adresi gibi ayarlarınız
+  ilk kayıtta sessizce sıfırlanabiliyordu.
+
+### Bağlanma ve keşif
+
+- **Telefon cihazı daha hızlı buluyor.** Keşif kanalları portu sabit 8000 duyuruyordu; gerçek port
+  farklıysa (8000 meşgulse launcher başka port seçer) telefon yanlış porta gidip alt-ağ taramasına
+  düşüyordu — ilk bağlanma saniyelerden ~70 saniyeye çıkıyordu.
+- **mDNS kendi kendini toparlıyor.** Açılışta ağ hazır değilse yayın kurulumu bir kez patlayıp
+  tamamen susuyordu; artık 30 saniyede bir yeniden deneniyor. (Aynı hata `pemf-gateway.local`
+  yayınını da öldürüyordu.)
+- **Sessizleşen ESP bobinine gerçek STOP gönderiliyor.** Telemetrisi kesilen bobin arayüzde "durdu"
+  gösterilirken kendi süresi dolana kadar enerjili kalabiliyordu.
+
+### Diğer
+
+- Ayarlar ekranından kayıt yapıldığında **gönderilmeyen alanlar artık silinmiyor** (klinik adı her
+  kayıtta kayboluyordu).
+- Destek paketi, sır dosyalarının **türevlerini** de (geçici/bozuk kopyalar, anahtar dosyaları) dışarı
+  çıkarmıyor.
+- AI mikroservis profili kullanılıyorsa: boş/eksik formda **"%78 böbrek hastalığı" gibi uydurma sonuç
+  üretilmiyor** — asgari klinik girdi kapısı iki taşımada da aynı.
+
+---
+
+## launcher 1.9.31 — 2026-08-18 (çıkış artık telefonunuzu düşürmüyor)
+
+**Etiket:** `launcher-v1.9.31` → `PEMFVetClient-Setup-1.9.31.exe` (sha `58fc57034f33`).
+
+- **"Çıkış" yalnız bu bilgisayarı kapatıyor.** Aynı hesabın telefondaki uygulaması ve varsa diğer
+  bilgisayarlardaki oturumları da düşüyordu; klinikte çıkış yapmak hekimin telefonunu giriş ekranına
+  atıyordu. (Aynı düzeltme telefon uygulamasına 2.3.17 ile geliyor.)
+- **Yarıda kesilen güncelleme artık doğru geri alınıyor.** Dosya takasından sonra iptal/hata olursa
+  eski sürüme dönülmüyordu — doğrulanmamış bir sürüm sağlık kapısı atlanarak yerinde kalabiliyordu.
+- **Kurulum iptali, arka planda inen güncellemenin dosyasını silmiyor.** İptal, o an inmekte olan
+  yabancı `.part` dosyasını da siliyordu; indirme baştan başlıyordu.
+- **"Başlat" etiketi ve "Devam Et" düzeldi.** Kapı kapalıyken etiket pencere odağı/dil değişiminde
+  eziliyordu; duraklatılmış güncellemede "Devam Et" ekranı geri getirmiyor ve her basış yeni bir
+  indirme başlatıyordu.
+
+---
+
 ## mobile 2.3.15 — 2026-08-14 ("cihaz bulunamadı" artık sebebini söylüyor)
 
 **Etiket:** `launcher-v1.9.27` → `PEMF_Vet_Mobil-2.3.15.apk` (sha `f7951bd6978d`, versionCode 22).
@@ -124,6 +185,31 @@ Artık şerit iki durumu ayırır:
 Bağlanma kararı `services/pairing`e çıkarıldı ve **Ayarlar ekranı da onu kullanıyor** — güvenlik
 değişmezleri (health + kimlik doğrulama, token takası) tek yerde. Web arayüzü **muaf**: onu
 cihazın kendisi sunar, orada eşleştirme anlamsızdır.
+
+---
+
+## mobil 2.3.17 — 2026-08-17 (güncelleme artık doğrudan kuruluyor)
+
+**Etiket:** `launcher-v1.9.31` → `PEMF_Vet_Mobil-2.3.17.apk` (sürüm kodu 24, sha `da65615f19d7`).
+
+2.3.16'da indirme bittiğinde **paylaşım sayfası** açılıyordu — WhatsApp, Telegram, Drive… Oysa
+kullanıcının APK'yı paylaşmaya değil kurmaya ihtiyacı var. Bu ekran hiçbir zaman kurulum
+sunamazdı: Android'in paket yükleyicisi paylaşım listesinde yer almaz.
+
+Artık **doğrudan kurulum ekranı** açılıyor. "Bilinmeyen kaynak" izni verilmemişse uygulama sizi
+tek dokunuşla doğru ayar ekranına götürüyor ve ne yapmanız gerektiğini yazıyor.
+
+**İndirilen paket bir daha indirilmiyor.** Kurulumu onaylamadan geri çıkarsanız, "Güncelle"ye
+tekrar dokunduğunuzda 128 MB sıfırdan inmiyordu artık — dosya diskte hazırsa kurulum ekranı
+anında açılıyor. (Önceki sürümde indirme bitince devam kaydı silindiği için hazır dosya
+tanınmıyor ve paket baştan iniyordu.)
+
+**Aynı paket iki kez indirilmiyor.** Açılış ekranında indirmeye başlayıp "Şimdilik devam et"
+derseniz, uygulama içindeki bant aynı indirmeyi kaldığı yerden gösteriyor; ikinci bir indirme
+başlatmıyor.
+
+Ayrıca indirme ekranı artık yüzdenin yanında **kaç MB indiğini** de yazıyor ve kurulum
+başlatıldığında ne beklendiğini söylüyor.
 
 ---
 

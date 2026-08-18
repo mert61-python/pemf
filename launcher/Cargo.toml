@@ -3,7 +3,7 @@ members = ["core", "app"]
 resolver = "2"
 
 [workspace.package]
-version = "1.9.30"
+version = "1.9.31"
 edition = "2021"
 rust-version = "1.77"
 
