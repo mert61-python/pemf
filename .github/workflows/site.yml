@@ -37,7 +37,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # ⚠️ NODE 22+ SART (CI'da olculdu 2026-08-18): Node 20'de YERLESIK WebSocket YOK ve
+          # `@supabase/supabase-js` v2'nin RealtimeClient'i onu istiyor. Node 20 ile
+          # `src/lib/supabase.ts` import edilir edilmez su hatayla PATLIYOR:
+          #   "Node.js 20 detected without native WebSocket support"
+          # Belirti sinsi: 54 test GECIYOR, yalnizca supabase'i import eden test DOSYASI
+          # yuklenemiyor -> ilk bakista "yesile yakin" gorunuyor. Gelistirici makinesinde Node 26
+          # oldugu icin yerelde hic gorunmedi (76 test geciyordu).
+          # `@types/node: ^24` ve Vite 8 de zaten 20'nin ustunu hedefliyor.
+          node-version: "22"
           cache: npm
           # ⚠️ `defaults.working-directory` YALNIZ `run:` adimlarini etkiler, `uses:` action'larini
           # DEGIL. Bu yol verilmezse setup-node kokteki (bos, artik) package-lock.json'a gore
