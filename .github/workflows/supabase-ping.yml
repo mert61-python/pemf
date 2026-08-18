@@ -1,0 +1,58 @@
+name: supabase-ping
+# ── SUPABASE HAREKETSİZLİK KORUMASI (2026-08-18) ─────────────────────────────
+# NEDEN: Supabase Free planı, ~7 gün düşük aktivite gören projeyi DURDURUR
+# (https://supabase.com/docs/guides/platform/free-project-pausing). Durdurulan proje
+# HTTP 540 döner ve YALNIZ elle açılır → web sitesi + mobil uygulama + masaüstü client'ın
+# ÜÇÜNDE birden giriş çöker. Klinik makinesi bir hafta kapalı kalsa (tatil) dönüşte
+# kimse giriş yapamaz. Supabase'in kendi rehberi: "günde birkaç veritabanı isteği yeterli".
+#
+# NE YAPIYOR: `resolve_device` RPC'sini boş parametreyle çağırır — fonksiyon `devices`
+# tablosuna gerçek bir SELECT atar (WHERE koşulu boş parametreyle 0 satır döndürür ama
+# sorgu ÇALIŞIR = gerçek DB aktivitesi). Cihaz eşleştirme akışının kullandığı fonksiyonun
+# aynısı; anon'a execute hakkı zaten verili (supabase/resolve_device_bayat_gorunur.sql).
+#
+# ⚠️ ANAHTAR SIR DEĞİL: `sb_publishable_*` Supabase'in TASARIMI GEREĞİ herkese açık anahtar
+# sınıfıdır (istemcilere gömülü dağıtılır; sınırı RLS çizer). Aynı değer zaten public
+# depoda `backend_service.py:31`de duruyor. Gizli sınıf (`sb_secret_*`) BURADA KULLANILMAZ.
+#
+# BAŞARISIZLIK = GERÇEK ALARM: 3 deneme sonrası hâlâ 5xx/540 ise iş KIRMIZI olur ve
+# e-posta düşer — bu gürültü değil, "girişler çökmek üzere" erken uyarısıdır.
+# (Cron yalnız VARSAYILAN dalda koşar — production-hardening varsayılan ✓.)
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # her gün 03:17 UTC (06:17 TR) — tam-saat yoğunluğundan kaçınmak için
+  workflow_dispatch: {}
+
+permissions:
+  contents: none
+
+concurrency:
+  group: supabase-ping
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: supabase-ping
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: resolve_device RPC (gerçek DB aktivitesi)
+        run: |
+          URL="https://wmsxonunkphjeregpvuj.supabase.co/rest/v1/rpc/resolve_device"
+          KEY="sb_publishable_D2SaRML_PIhRtr3kqlXxaw_1cS75GKT"
+          for deneme in 1 2 3; do
+            kod=$(curl -sS -o cevap.json -w '%{http_code}' \
+              -X POST "$URL" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+              -H "Content-Type: application/json" -d '{}' \
+              --max-time 30) && [ "$kod" -ge 200 ] && [ "$kod" -lt 300 ] && {
+                echo "OK (HTTP $kod) — DB aktif, proje uyanik: $(cat cevap.json | head -c 120)"
+                exit 0
+              }
+            echo "deneme $deneme: HTTP ${kod:-yok} — $(cat cevap.json 2>/dev/null | head -c 200)"
+            sleep 20
+          done
+          echo "::error::Supabase 3 denemede de cevap vermedi (son HTTP: ${kod:-yok})."
+          echo "::error::540 = proje DURDURULMUS olabilir -> dashboard'dan elle ac; aksi halde girisler CALISMAZ."
+          exit 1
