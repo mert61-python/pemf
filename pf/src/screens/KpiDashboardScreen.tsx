@@ -1,0 +1,355 @@
+// Author: mertaygn, cglrgrkn
+/**
+ * KpiDashboardScreen — Python kpi_dashboard_window.py'nin React karşılığı.
+ * Gerçek veriye dayalı KPI kartları — API'den ve canlı sensör verisinden.
+ */
+import { useEffect, useState, useMemo } from "react";
+import { ScrollView, Text, View, StyleSheet } from "react-native";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { Card } from "@/components/ui/Card";
+import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { useLiveData } from "@/context/LiveDataContext";
+import { apiGet } from "@/services/apiClient";
+import { BarChart, PieChart } from "react-native-chart-kit";
+
+interface KpiSummary {
+  totalSessions: number;
+  completedSessions: number;
+  stoppedSessions: number;
+  avgDurationMin: number;
+  modeDistribution: Record<string, number>;
+  last7Days: { date: string; count: number }[];
+}
+
+export function KpiDashboardScreen() {
+  const { snapshot, sensorHistory, connectionQuality } = useLiveData();
+  const instantStale = connectionQuality !== "live";
+  const [kpi, setKpi] = useState<KpiSummary>({
+    totalSessions: 0,
+    completedSessions: 0,
+    stoppedSessions: 0,
+    avgDurationMin: 0,
+    modeDistribution: {},
+    last7Days: [],
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    // KPI özetini auth'lu (X-API-Key) + timeout'lu apiGet ile çek — uzaktan (tünel,
+    // PEMF_REQUIRE_AUTH=1) ham fetch 401 alıp bozuluyordu. apiGet hata/401'de null döner.
+    apiGet<KpiSummary | null>("/kpi/summary", null, { silent: true }).then((data) => {
+      if (!mounted) return;
+      if (data && typeof data.totalSessions === "number") {
+        // ŞEKİL DOĞRULAMASI: eskiden `setKpi(data)` state'i TÜMÜYLE sunucu gövdesiyle değiştiriyordu
+        // (yedek dal `...prev` kullandığı hâlde). Sunucu `last7Days` veya `modeDistribution`
+        // alanlarını göndermezse bunlar undefined kalıp `.map` / `Object.entries` çağrılarında
+        // Raporlar ekranını çökertiyordu. Varsayılanlarla birleştir + dizi/nesne tipini doğrula.
+        setKpi((prev) => ({
+          ...prev,
+          ...data,
+          modeDistribution:
+            data.modeDistribution && typeof data.modeDistribution === "object" ? data.modeDistribution : {},
+          last7Days: Array.isArray(data.last7Days) ? data.last7Days : [],
+        }));
+        setLoading(false);
+        return;
+      }
+      // Fallback: /history/statistics (alan adları farklı → hepsini dene)
+      apiGet<any>("/history/statistics", null, { silent: true }).then((s) => {
+        if (!mounted) return;
+        if (s) {
+          setKpi(prev => ({
+            ...prev,
+            totalSessions: s.total_sessions ?? 0,
+            completedSessions: s.completed_sessions ?? 0,
+            avgDurationMin: s.avg_duration_minutes ?? s.average_duration ?? 0,
+          }));
+        }
+        setLoading(false);
+      });
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const coils = snapshot.coils ?? [];
+  const connectedCoils = coils.filter((c) => c.connected);
+  const runningCoils = coils.filter((c) => c.running);
+  // Bkz. `hesaplaOrtSicaklik` (dosya sonunda) — ortalama, ÖLÇÜM YAPAN bobinler üzerinden alınır.
+  // #85: bobin-sayısı denominator'ını literal 8 yerine gerçek yapılandırmadan türet (8-olmayan
+  // cihazlarda oran yanlış raporlanmasın). Veri yokken güvenli varsayılan 8.
+  const coilCount = coils.length || 8;
+
+  const COIL_R = 0.5;
+  const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
+  const sicaklik = hesaplaOrtSicaklik(connectedCoils);
+  const avgMag = runningCoils.length > 0
+    ? runningCoils.reduce((s, c) => s + c.magneticMt, 0) / runningCoils.length
+    : 0;
+
+  const completionRate = kpi.totalSessions > 0
+    ? Math.round((kpi.completedSessions / kpi.totalSessions) * 100)
+    : null;
+
+  const uptimePct = connectedCoils.length > 0
+    ? Math.round((connectedCoils.length / coilCount) * 100)
+    : 0;
+
+  // Grafik genişliği kartın GERÇEK iç genişliğinden (onLayout) ölçülür → her telefon/
+  // yoğunluk/yön ve tek/çift-kolon gridde kart sınırına TAM oturur. Sabit Dimensions
+  // hesabı kartın kendi padding'ini kaçırıp grafiğin kutudan taşmasına yol açıyordu.
+  const [chartW, setChartW] = useState(0);
+
+  // F-3: grafik bölümünü useMemo'la → WS her tick'te ekran re-render OLSA da (anlık-durum kartları +
+  // bobin tablosu canlı-veri ister) BarChart/PieChart yalnız kpi/genişlik değişince yeniden hesaplanıp
+  // render olur (chart-kit render'ı pahalı). Aynı girdi → aynı element referansı = davranış-nötr.
+  const chartsSection = useMemo(() => {
+    const chartConfig = {
+      backgroundGradientFrom: "#1e293b",
+      backgroundGradientTo: "#0f172a",
+      color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+      strokeWidth: 2,
+      barPercentage: 0.5,
+      useShadowColorFromDataset: false
+    };
+    // Son 7 gün bar chart verisi
+    const last7 = kpi.last7Days.slice().reverse();
+    const barData = {
+      labels: last7.length > 0
+        ? last7.map(d => {
+            // Güvenli MM-DD: backend string 'YYYY-MM-DD' bekleniyor ama sayı/epoch/ISO gelirse
+            // ham .slice(5) ya yanlış etiket ya da (sayıda) TypeError → KPI beyaz ekran veriyordu.
+            const raw: any = (d as any)?.date;
+            if (typeof raw === "number") {
+              const dt = new Date(raw < 1e12 ? raw * 1000 : raw);
+              return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+            }
+            const s = String(raw ?? "");
+            const m = s.match(/\d{4}-(\d{2}-\d{2})/);
+            return m ? m[1] : (s.length >= 5 ? s.slice(5) : (s || "—"));
+          })
+        : ["—", "—", "—", "—", "—", "—", "—"],
+      // ORTA fix: ham d.count null/NaN olursa chart-kit Math.max/ölçekleme NaN → bar grafik bozulur. Sanitize.
+      datasets: [{ data: last7.length > 0 ? last7.map(d => Number(d.count) || 0) : [0, 0, 0, 0, 0, 0, 0] }]
+    };
+    // Mod dağılımı pie verisi
+    const PIE_COLORS = ["#7c3aed", "#ec4899", "#0ea5e9", "#f59e0b", "#22c55e"];
+    const modeEntries = Object.entries(kpi.modeDistribution);
+    const pieData = modeEntries.length > 0
+      ? modeEntries.map(([name, count], i) => ({
+          name, population: Number(count) || 0,
+          color: PIE_COLORS[i % PIE_COLORS.length],
+          legendFontColor: "#94a3b8", legendFontSize: rf(12)
+        }))
+      : [{ name: "Veri Yok", population: 1, color: "#334155", legendFontColor: "#94a3b8", legendFontSize: rf(12) }];
+    return (
+      <ResponsiveGrid minItemWidth={300}>
+        <Card style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <BarChart
+                data={barData}
+                width={chartW}
+                height={rs(220)}
+                chartConfig={chartConfig}
+                style={styles.chart}
+                yAxisLabel=""
+                yAxisSuffix=""
+              />
+            )}
+          </View>
+        </Card>
+        <Card style={styles.chartCard}>
+          <Text style={styles.chartTitle}>Seans Modu Dağılımı</Text>
+          <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
+            {chartW > 0 && (
+              <PieChart
+                data={pieData}
+                width={chartW}
+                height={rs(220)}
+                chartConfig={chartConfig}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"15"}
+                center={[10, 0]}
+                absolute
+              />
+            )}
+          </View>
+        </Card>
+      </ResponsiveGrid>
+    );
+  }, [kpi.last7Days, kpi.modeDistribution, chartW]);
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.sectionTitle}>📊 Klinik Göstergeler & Analitik</Text>
+      <ResponsiveGrid>
+        <MetricCard
+          label="Toplam Seans"
+          value={loading ? "…" : String(kpi.totalSessions)}
+          tone={colors.primary}
+        />
+        <MetricCard
+          label="Tamamlanma Oranı"
+          value={loading ? "…" : completionRate !== null ? `${completionRate}%` : "—"}
+          tone={colors.success}
+        />
+        <MetricCard
+          label="Ort. Süre"
+          value={loading ? "…" : `${Math.round(kpi.avgDurationMin)} dk`}
+          tone={colors.violet}
+        />
+        <MetricCard
+          label="Dur. / Hata"
+          value={loading ? "…" : String(kpi.stoppedSessions)}
+          tone={colors.magenta}
+        />
+      </ResponsiveGrid>
+
+      <Text style={styles.sectionTitle}>⚡ Anlık Cihaz Durumu</Text>
+      {instantStale && (
+        <Text style={styles.staleBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          ⚠️ Bağlantı bayat/çevrimdışı — aşağıdaki anlık değerler son bilinen veriden olabilir, GERÇEK ZAMANLI DEĞİL.
+        </Text>
+      )}
+      <View style={instantStale ? { opacity: 0.55 } : undefined}>
+        <ResponsiveGrid>
+          <MetricCard label="Anlık Güç" value={`${instantPowerW.toFixed(1)} W`} tone={colors.cyan} />
+          <MetricCard label="Bağlı Bobin" value={`${connectedCoils.length} / ${coilCount}`} tone={colors.primary} />
+          <MetricCard label="Çalışan Bobin" value={`${runningCoils.length} / ${coilCount}`} tone={colors.success} />
+          <MetricCard label="Cihaz Oranı" value={`${uptimePct}%`} tone={colors.violet} />
+          {/* ⚠️ DENETİM 2026-08-17: ortalama `connectedCoils.length`'e bölünüyordu ve STM bobinleri
+              (1-5) sıcaklık ÖLÇMEDİĞİ için `objectTemp: 0` ile ortalamayı seyreltiyordu — 3 bobin
+              50 °C iken kart 18,8 °C, yalnız-STM kabinde 0,0 °C ("serin" diye okunur) gösteriyordu.
+              Bu, `CoilThermalHonesty.test.tsx` ile kilitli dürüstlük değişmezinin ihlaliydi:
+              "ölçüm yokken SAHTE bir sıcaklık değeri gösterilmez". */}
+          <MetricCard
+            label={sicaklik.olcumVar ? `Ort. Sıcaklık (${sicaklik.olcenSayisi} bobin)` : "Ort. Sıcaklık"}
+            value={sicaklik.olcumVar ? `${sicaklik.deger.toFixed(1)} °C` : "ölçüm yok"}
+            tone={colors.warning}
+          />
+          <MetricCard label="Ort. Manyetik" value={`${avgMag.toFixed(2)} mT`} tone={colors.cyan} />
+        </ResponsiveGrid>
+      </View>
+
+      <Text style={styles.sectionTitle}>📈 Performans Grafikleri</Text>
+      {chartsSection}
+
+      {/* Per-coil instant table */}
+      {connectedCoils.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>🔬 Bobin Detayları</Text>
+          <Card style={styles.tableCard}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Bobin</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>mT</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>°C</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>A</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>W</Text>
+              <Text style={[styles.tableCell, styles.tableHead]} numberOfLines={1} adjustsFontSizeToFit>Hz</Text>
+            </View>
+            {coils.map((c) => {
+              const pts = sensorHistory[c.id] ?? [];
+              const latest = pts[pts.length - 1];
+              const mag = latest?.magneticMt ?? c.magneticMt;
+              const temp = latest?.objectTemp ?? c.objectTemp;
+              const cur = latest?.currentA ?? c.currentA;
+              const power = cur * cur * COIL_R;
+              return (
+                <View key={c.id} style={[styles.tableRow, !c.connected && styles.tableRowOff]}>
+                  <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.id}</Text>
+                  <Text style={[styles.tableCell, { color: "#22c55e" }]} numberOfLines={1} adjustsFontSizeToFit>{mag.toFixed(2)}</Text>
+                  <Text style={[styles.tableCell, { color: temp > 45 ? "#ef4444" : "#fb923c" }]} numberOfLines={1} adjustsFontSizeToFit>{temp.toFixed(1)}</Text>
+                  <Text style={[styles.tableCell, { color: "#60a5fa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur.toFixed(3)}</Text>
+                  <Text style={[styles.tableCell, { color: "#a78bfa" }]} numberOfLines={1} adjustsFontSizeToFit>{cur > 0 ? power.toFixed(2) : "—"}</Text>
+                  <Text style={styles.tableCell} numberOfLines={1} adjustsFontSizeToFit>{c.frequencyHz > 0 ? c.frequencyHz : "—"}</Text>
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
+  sectionTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "700", marginTop: spacing.md },
+  staleBanner: {
+    color: "#f59e0b",
+    fontSize: typography.small,
+    fontWeight: "600",
+    backgroundColor: "#f59e0b18",
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  chartCard: { padding: spacing.sm, alignItems: 'center', overflow: "hidden" },
+  chartInner: { width: "100%", alignItems: "center" },
+  chart: { marginVertical: spacing.sm, borderRadius: 8 },
+  chartTitle: { color: colors.text, fontSize: typography.body, fontWeight: "700", marginBottom: spacing.sm, alignSelf: 'flex-start', paddingLeft: spacing.sm },
+  tableCard: { padding: 0, overflow: "hidden" },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#0f172a",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderTopWidth: 1,
+    borderColor: "#1e293b",
+  },
+  tableRowOff: { opacity: 0.35 },
+  tableHead: { color: colors.textMuted, fontWeight: "700", fontSize: rf(11) },
+  tableCell: {
+    flex: 1,
+    minWidth: rs(34),
+    color: colors.text,
+    fontSize: rf(13),
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"] as any,
+  },
+});
+
+/**
+ * "Ort. Sıcaklık" — ölçüm YAPAN bobinler üzerinden ortalama.
+ *
+ * ⚠️ DENETİM 2026-08-17. Ortalama `connectedCoils.length`'e bölünüyordu. Ama STM bobinlerinde
+ * (1-5) SICAKLIK TELEMETRİSİ YOKTUR: seri protokol yalnız duty/phase/freq/duration döndürür ve
+ * backend `objectTemp`i BİLEREK `0.0` bırakır (`api_server` notu: "0.0-yerine-NULL yolu BILEREK
+ * secilmedi; asagi-akis (PDF/KPI/grafik) 0.0 bekliyor"). Ölçülen sonuç:
+ *     5 STM (ölçüm yok) + 3 ESP @ 50 °C  →  kart 18,8 °C
+ *     yalnız-STM kabin                    →  kart  0,0 °C  ("serin" diye okunur)
+ * Üç bobin yanık eşiğine (48 °C) dayanmışken kart 18,8 °C diyordu.
+ *
+ * ⚠️ Bu, TESTLE KİLİTLİ bir dürüstlük değişmezinin ihlaliydi (2026-08-09 Tier-2 sahip kararı,
+ * `CoilThermalHonesty.test.tsx`): "'ÖLÇÜLMÜYOR' İLE 'SERİN' AYIRT EDİLEBİLMELİ … ölçüm yokken
+ * SAHTE bir sıcaklık değeri gösterilmez". Karar bu ekrana taşınmamıştı.
+ *
+ * ⚠️ `0` NÖBETÇİSİ: ölçümü olmayan bobin `0` gönderir, dolayısıyla "ölçüm var" ayrımı sıfır-olmayan
+ * POZİTİF değerdir. Negatif değer fiziksel olarak anlamsızdır (sensör arızası) ve ölçüm sayılmaz.
+ * Bu ayrımı ortadan kaldırmak `0 °C`yi yeniden "serin" gibi göstermek olurdu.
+ *
+ * ⚠️ Gerçek termal koruma bu fonksiyondan BAĞIMSIZDIR (bobin başına interlock,
+ * `CoilParameterPanel`); burada düzeltilen şey GÖSTERİMİN dürüstlüğüdür.
+ *
+ * Kilit: `__tests__/kpiSicaklikDurustlugu.test.tsx`.
+ */
+export function hesaplaOrtSicaklik(
+  bagliBobinler: { connected?: boolean; objectTemp?: number }[],
+): { olcumVar: boolean; deger: number; olcenSayisi: number } {
+  const olcenler = (bagliBobinler || []).filter(
+    (c) => c && c.connected !== false && typeof c.objectTemp === "number" && c.objectTemp > 0,
+  );
+  if (olcenler.length === 0) return { olcumVar: false, deger: 0, olcenSayisi: 0 };
+  const toplam = olcenler.reduce((s, c) => s + (c.objectTemp as number), 0);
+  return { olcumVar: true, deger: toplam / olcenler.length, olcenSayisi: olcenler.length };
+}

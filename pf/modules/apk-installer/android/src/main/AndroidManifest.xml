@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 7'den beri intent'e file:// koymak FileUriExposedException firlatir; APK'yi
+         paket yukleyicisine content:// olarak vermek ZORUNLU. KENDI provider'imizi taniyoruz
+         (expo-file-system'inkini odunc almak, o paketin ic ayrintisina bagimlilik olurdu). -->
+    <application>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.apkinstaller.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/apk_installer_paths" />
+        </provider>
+    </application>
+</manifest>

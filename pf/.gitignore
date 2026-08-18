@@ -1,0 +1,56 @@
+# === Dependencies / paket ===
+node_modules/
+
+# === Expo ===
+.expo/
+expo-env.d.ts
+
+# === Build çıktıları (üretilir, kaynak değil) ===
+dist/
+web-build/
+*.apk
+*.aab
+*.hprof
+
+# === Build logları / clutter ===
+build_log*.txt
+build_apk_final*.txt
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Native — Android (proje commit'li; yalnız build çıktıları ignore) ===
+android/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+android/.kotlin/
+android/local.properties
+
+# === Native — iOS ===
+ios/build/
+ios/Pods/
+ios/.xcode.env.local
+
+# === Keystore — RELEASE keystore'lar git'e GİRMEZ; debug.keystore güvenli + tutulur ===
+*.keystore
+*.jks
+*.p12
+!android/app/debug.keystore
+# Release imza parolaları (build.gradle signingConfigs.release buradan okur) — ASLA commit'lenmez.
+android/keystore.properties
+
+# === Ortam sırları (EXPO_PUBLIC_* zaten public; gerçek .env commit'lenmez) ===
+.env
+.env.local
+.env*.local
+
+# === OS / editör ===
+.DS_Store
+*.orig
+*.tmp
+
+# App Store Connect API key (SIR — commit etme)
+*.p8
+asc_api_key*

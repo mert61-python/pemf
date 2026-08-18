@@ -1,0 +1,132 @@
+// Author: mertaygn, cglrgrkn
+import { Dimensions, Platform } from "react-native";
+import type { ViewStyle } from "react-native";
+
+// ── RESPONSIVE ÖLÇEK ─────────────────────────────────────────────────────────
+// Tüm boyutlandırma (spacing/typography/radius + bileşenlerdeki ham sayılar) bu
+// fabrikadan geçer → her telefon boyutunda orantılı görünür. Referans genişlik 375px
+// (yaygın telefon). Çok küçük (~320) ve çok büyük (tablet) ekranlarda aşırıya kaçmasın
+// diye clamp'lenir. Uygulama açılışında cihaz genişliğinden bir kez hesaplanır (portre).
+const BASE_WIDTH = 375;
+const _screenW = Math.min(Dimensions.get("window").width, Dimensions.get("window").height); // kısa kenar (portre genişliği)
+const _rawScale = (_screenW || BASE_WIDTH) / BASE_WIDTH;
+// 0.85 (küçük telefon) … 1.30 (büyük telefon/küçük tablet) arası
+const SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);
+
+/** responsive size — ham pikseli cihaza göre ölçekle (yuvarlanmış). Hard-coded boyut yerine kullan. */
+export function rs(size: number): number {
+  return Math.round(size * SCALE);
+}
+
+/** responsive font — metinler için biraz daha yumuşak ölçek (aşırı büyümesin). */
+export function rf(size: number): number {
+  const softScale = 1 + (SCALE - 1) * 0.7;
+  return Math.round(size * softScale);
+}
+
+export const colors = {
+  bg: "#121827",
+  bgAlt: "#182033",
+  panel: "#202A42",
+  panelSoft: "#26324F",
+  border: "#34415F",
+  text: "#F7FAFC",
+  textMuted: "#AAB6CE",
+  textSubtle: "#75829B",
+  primary: "#4F8CFF",
+  primarySoft: "#213A68",
+  success: "#22C55E",
+  successSoft: "#183B2A",
+  warning: "#F59E0B",
+  warningSoft: "#493414",
+  danger: "#EF4444",
+  dangerSoft: "#481F28",
+  cyan: "#22D3EE",
+  violet: "#8B5CF6",
+  magenta: "#EC4899",
+  white: "#FFFFFF"
+};
+
+export const spacing = {
+  xs: rs(4),
+  sm: rs(8),
+  md: rs(12),
+  lg: rs(16),
+  xl: rs(24),
+  xxl: rs(32)
+};
+
+export const radius = {
+  sm: rs(6),
+  md: rs(8),
+  lg: rs(12),
+  xl: rs(20),
+  full: 9999,
+  card: rs(16), // PREMIUM: yumuşak kart yarıçapı
+  btn: rs(13),  // PREMIUM: buton yarıçapı
+};
+
+export const typography = {
+  title: rf(24),
+  subtitle: rf(16),
+  body: rf(14),
+  caption: rf(12),
+  small: rf(11)
+};
+
+export const shadows = {
+  panel: { shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
+  // PREMIUM: elevation ölçeği
+  sm: { shadowColor: "#000", shadowOpacity: 0.30, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  md: { shadowColor: "#000", shadowOpacity: 0.40, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  lg: { shadowColor: "#000", shadowOpacity: 0.50, shadowRadius: 26, shadowOffset: { width: 0, height: 16 }, elevation: 14 },
+  // PREMIUM: renkli ışıltılar (CTA/aktif öğeler öne çıksın)
+  glowPrimary: { shadowColor: colors.primary, shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  glowDanger: { shadowColor: colors.danger, shadowOpacity: 0.50, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  glowSuccess: { shadowColor: colors.success, shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 9 },
+};
+
+// Web'de RN shadow* prop'ları yerine boxShadow — renkli glow web'de de görünür.
+const webShadow: Record<keyof typeof shadows, string> = {
+  panel: "0 10px 18px rgba(0,0,0,0.24)",
+  sm: "0 1px 2px rgba(0,0,0,0.35)",
+  md: "0 6px 16px rgba(0,0,0,0.40), 0 2px 5px rgba(0,0,0,0.30)",
+  lg: "0 18px 40px rgba(0,0,0,0.50), 0 6px 14px rgba(0,0,0,0.32)",
+  glowPrimary: "0 8px 26px rgba(79,140,255,0.50)",
+  glowDanger: "0 8px 26px rgba(239,68,68,0.42)",
+  glowSuccess: "0 8px 24px rgba(34,197,94,0.36)",
+};
+
+/** Platforma uygun gölge/ışıltı: native shadow* prop'ları, web'de boxShadow. */
+export function elevation(key: keyof typeof shadows): ViewStyle {
+  return Platform.OS === "web" ? ({ boxShadow: webShadow[key] } as ViewStyle) : (shadows[key] as ViewStyle);
+}
+
+// ── PREMIUM: gradyanlar (expo-linear-gradient `colors` prop'u — [başlangıç, bitiş]) ──
+export const gradients = {
+  primary: ["#6EA0FF", "#3466D6"] as [string, string],
+  primaryDeep: ["#4F8CFF", "#2F63D6"] as [string, string],
+  danger: ["#F98A84", "#DC2626"] as [string, string],
+  success: ["#5BE38B", "#16A34A"] as [string, string],
+  violet: ["#A78BFA", "#7C3AED"] as [string, string],
+  cyan: ["#67E8F9", "#0891B2"] as [string, string],
+  surface: ["#1E273F", "#161D30"] as [string, string],
+  sheen: ["rgba(255,255,255,0.16)", "rgba(255,255,255,0)"] as [string, string],
+};
+
+// ── PREMIUM: cam yüzey (yarı-saydam + üst-kenar iç ışık) ──
+export const glass = {
+  bg: "rgba(24,32,52,0.55)",
+  bgStrong: "rgba(24,32,52,0.72)",
+  border: "rgba(255,255,255,0.09)",
+  highlight: "rgba(255,255,255,0.10)",
+};
+
+// ── PREMIUM: hareket token'ları (built-in Animated; ileride reanimated) ──
+export const motion = {
+  fast: 140,
+  base: 220,
+  slow: 380,
+  pressScale: 0.97,
+  spring: { damping: 15, stiffness: 210, mass: 0.7 },
+};

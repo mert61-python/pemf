@@ -1,0 +1,81 @@
+{
+  "expo": {
+    "name": "PEMF Vet Mobil",
+    "slug": "pemf-vet-responsive",
+    "version": "2.3.17",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "pemfvet",
+    "userInterfaceStyle": "dark",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pemf.vet",
+      "buildNumber": "6",
+      "infoPlist": {
+        "NSCameraUsageDescription": "QR kod tarama ve AI fotoğraf analizi için kamera gereklidir.",
+        "NSPhotoLibraryUsageDescription": "AI analizi için fotoğraf seçmek amacıyla galeri erişimi gereklidir.",
+        "NSLocalNetworkUsageDescription": "Aynı Wi-Fi'deki PEMF cihazını otomatik bulmak için yerel ağ erişimi gereklidir.",
+        "NSBonjourServices": [
+          "_pemfvet._tcp"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#121827"
+      },
+      "package": "com.pemf.vet",
+      "versionCode": 24,
+      "allowBackup": false,
+      "usesCleartextTraffic": true,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CHANGE_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QR kod tarama ve AI hayvan analizi için kamera erişimi gereklidir."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-sharing",
+      "expo-audio",
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a1fe28b8-1f92-48eb-aa2c-8ff1ceed9465"
+      }
+    },
+    "owner": "mert6161"
+  }
+}

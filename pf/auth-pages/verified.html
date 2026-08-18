@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PEMF Vet — E-posta Onaylandı</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#0E1320;--card:rgba(24,32,52,.7);--brd:rgba(255,255,255,.09);--text:#F5F8FF;--muted:#A7B3CC;}
+  *{box-sizing:border-box;margin:0;}
+  body{min-height:100vh;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;padding:24px;overflow:hidden;}
+  .aurora{position:fixed;inset:0;z-index:0;}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;}
+  .b1{width:52vw;height:52vw;left:-12vw;top:-14vw;background:radial-gradient(circle,#7C3AED,transparent 62%);}
+  .b2{width:54vw;height:54vw;right:-16vw;bottom:-18vw;background:radial-gradient(circle,#4F8CFF,transparent 60%);opacity:.42;}
+  .card{position:relative;z-index:1;max-width:440px;width:100%;background:var(--card);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);border:1px solid var(--brd);border-radius:24px;padding:44px 32px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);}
+  .check{width:84px;height:84px;margin:0 auto 24px;border-radius:26px;display:grid;place-items:center;background:linear-gradient(135deg,#5BE38B,#16A34A);box-shadow:0 10px 30px rgba(34,197,94,.45);}
+  .check svg{width:44px;height:44px;}
+  h1{font-size:26px;font-weight:800;letter-spacing:-.02em;}
+  p{color:var(--muted);font-size:16px;line-height:1.6;margin-top:14px;}
+  .btn{display:inline-block;margin-top:28px;background:linear-gradient(135deg,#6EA0FF,#3466D6);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:15px 30px;border-radius:14px;box-shadow:0 8px 26px rgba(79,140,255,.5);}
+  .foot{color:#727F9B;font-size:13px;margin-top:22px;}
+</style>
+</head>
+<body>
+  <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div></div>
+  <div class="card">
+    <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#053b1a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></div>
+    <h1>E-postan onaylandı!</h1>
+    <p>Hesabın başarıyla doğrulandı. Artık <b>PEMF Vet</b> uygulamasına geri dönüp e-posta ve şifrenle giriş yapabilirsin.</p>
+    <a class="btn" href="pemfvet://">Uygulamaya Dön</a>
+    <div class="foot">Bu sekmeyi güvenle kapatabilirsin.</div>
+  </div>
+</body>
+</html>
