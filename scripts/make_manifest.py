@@ -26,6 +26,19 @@ import json
 import sys
 from pathlib import Path
 
+# ⚠️ CIKTI KODLAMASI SABITLENIR (denetim 2026-08-18): betigin Turkce mesajlari (`Yazıldı:` vb.)
+# konsol kod sayfasi `ı`yi kodlayamayan bir Windows makinesinde `UnicodeEncodeError` firlatiyordu.
+# Manifest DOSYASI yazildiktan SONRA, yalnizca yazdirma sirasinda cokuyordu → dosya diskte dogru
+# ama cikis kodu 1: yayin otomasyonu adimi "basarisiz" sanip durur. Sahibin makinesinde kod sayfasi
+# cp1254 oldugu icin hic gorunmedi; GitHub Windows runner'inda (cp1252) `test_manifest_degismeyen_
+# paket_url.py` bunu yakaladi. `bootstrap.ps1`in vaadi "herhangi bir laptopta build+publish" oldugu
+# icin bu tasinabilirlik hatasidir.
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except Exception:  # noqa: BLE001 — eski/yonlendirilmis akisda reconfigure yoksa sessizce gec
+        pass
+
 # dosya adı -> (v2 bölümü, v2 anahtarı, v1 anahtarı)
 ASSETS = {
     "base.zip": ("runtimes", "win-x64", "base"),

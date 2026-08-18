@@ -233,6 +233,8 @@ def test_KAPI_TEK_KAYNAK_nesne_kimligi():
     Biri kapıyı `ai_service/app.py`ye ikinci bir kopya olarak gömerek "düzeltirse" ya da import'u
     try/except'e alıp except'te no-op bir kapı tanımlarsa bu test KIRILIR. Bu bulgunun kök nedeni
     tam olarak iki transportun ayrışmasıydı; ikinci bir kopya aynı hatayı yeniden üretir."""
+    # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
+    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
     import ai_service.app as A
     import servers.ai_router as R
 
@@ -494,6 +496,8 @@ def test_ASGARI_GIRDI_TEK_KAYNAK_nesne_kimligi():
     ⚠️ METİN değil NESNE KİMLİĞİ: yorumla kandırılamaz. Biri kapıyı `ai_service/app.py`ye ikinci
     kopya olarak gömerse ya da import'u try/except'e alıp fail-open bir taklit tanımlarsa KIRILIR.
     Bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı."""
+    # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
+    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
     import ai_service.app as A
     import servers.ai_router as R
 
