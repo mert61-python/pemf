@@ -1570,7 +1570,66 @@ olmaması (dosyanın kendi yorumu bunu zaten "kapı değil, kayıt adımı" diye
 "Aboneliği iptal et" düğmesinin aboneliği olmayan herkese gösterilmesi **doğrulandı ama bulgu
 sayılmadı**: akış dürüst hata veriyor (404 → "Aktif abonelik bulunamadı"), bu bir arayüz tercihi.
 
+## YAYIN TURU — CI'NIN ORTAYA ÇIKARDIĞI KALEMLER (2026-08-18)
+
+Beş turun düzeltmeleri `app 1.9.16 · launcher 1.9.31 · mobil 2.3.17` olarak yayınlandı. Push
+edilince **CI kırmızıya döndü** (77dd85d'de yeşildi, yani bozan bu denetim çalışmasıydı). Dört
+sebep çıktı; **üçü test taşınabilirliği, biri GERÇEK araç hatası**.
+
+⚠️ Yayın sırası bu yüzden önemliydi: paketler yüklenmiş ama **manifest bilerek beklemede**
+tutulmuştu. Manifest yüklenmediği sürece sahadaki hiçbir client yeni sürümü görmez — CI çözülene
+kadar fren elde kaldı.
+
+| # | Kalem | Sınıf | Neden yerelde görünmedi |
+|---|---|---|---|
+| C1 | `make_manifest.py` Windows'ta `UnicodeEncodeError` ile çöküyor | **gerçek araç hatası** | sahibin makinesinde kod sayfası cp1254 (`ı` kodlanabiliyor); GitHub runner'ı cp1252 |
+| C2 | `test_ai_pro_approval_gate` kamera yarışı | test | Windows'ta `VideoCapture(0)` denemesi uzun sürüyor, testi kurtarıyordu; başsız Linux'ta anında düşüyor |
+| C3 | `test_bayat_cihaz_gorunur` çapraz-depo | test | `pf/` geliştirici makinesinde yanında duruyor, CI checkout'unda YOK |
+| C4 | `test_ai_servis_8100_kapisi` eksik `onnxruntime` | test | CI ağır AI paketlerini bilerek kurmuyor (`requirements-test.txt` bunu yazıyor) |
+
+### C1 — asıl bulgu (ve benim önceki turda kaçırdığım kök neden)
+
+`make_manifest.py`'nin Türkçe mesajları (`Yazıldı:` …) `ı` (U+0131) kodlayamayan bir konsolda
+`UnicodeEncodeError` fırlatıyor. **Kritik ayrıntı:** çökme manifest dosyası YAZILDIKTAN SONRA,
+yalnızca yazdırma sırasında oluyor → dosya diskte doğru ama **çıkış kodu 1**. Yayın otomasyonu bu
+adımı "başarısız" sanıp durur; daha kötüsü, yarım devam eden bir akışta manifest yayınlanmış
+sanılabilir. `bootstrap.ps1`in vaadi *"klasör + bootstrap + internet = herhangi bir laptopta
+build+publish"* olduğu için bu bir **taşınabilirlik hatasıdır**.
+
+⚠️ Dördüncü turda `make_manifest`e kendi eklediğim yarım-katman kapısında "ASCII only, cp1254"
+diye **semptomu dolanmıştım** — kök nedene dokunmamıştım. Şimdi `sys.stdout/stderr` başta UTF-8'e
+sabitleniyor. **Mutasyon:** satır silinince `PYTHONIOENCODING=cp1252` altında 5 test de kırmızı,
+geri konunca 5'i de yeşil.
+
+Bulguyu ortaya çıkaran şey birinci turda yazdığım `test_manifest_degismeyen_paket_url.py` oldu —
+yani denetimin kendi kapısı, denetimin kaçırdığı bir hatayı yakaladı.
+
+### Kendi testlerimde çıkan kusurlar (dürüstlük)
+
+- **C3 asimetriktir:** aynı turda yazdığım `test_site_paket_boyutlari.py` çapraz-depo kapısını
+  DOĞRU kurmuştu (CI'da atladı), `test_bayat_cihaz_gorunur.py`de aynı şeyi yapmayı unutmuşum.
+- **C4'ü ilk denemede eksik kapattım:** `importorskip`i yalnız fixture'a koydum; iki test
+  `ai_service`i doğrudan import ediyordu, ikinci turda eklendi.
+- Yamalayan betiğimin `while` döngüsü çapayı yeniden eklediği için aynı satırı **6 kez** yazdı;
+  fark edilip tekilleştirildi.
+- Manifest yayınlandıktan sonra "uzak ≠ yerel" alarmı verdim; **ölçüm hatamdı** (PowerShell string
+  dönüşümü + imzalı URL'ye eklediğim cache-buster). Bayt bayt karşılaştırma aynı çıktı.
+
+### Yayın doğrulamaları
+
+- Yüklenen `base-app.zip` GitHub'dan geri indirilip **sha256'sı manifest'le karşılaştırıldı** →
+  eşleşiyor (client'ın sha kapısından geçecek).
+- Manifest'in ilan ettiği **11 varlığın tamamı** HTTP 200 + boyut eşleşmesi.
+- Yayınlanan manifest yerel dosyayla **bayt bayt aynı**.
+- APK: `com.pemf.vet` 2.3.17 / versionCode 24, release keystore imzalı (aapt2).
+- CI `8a36530`de **yeşil**; yerel tam süit 1289 passed / 0 failed / 1 skipped.
+
+⚠️ **Rollout %10** (hem runtime hem launcher). `50` → `100` adımları yalnız 4 KB'lık manifest'in
+yeniden yüklenmesiyle yapılır; bozuk çıkarsa `rollout 0` tek geri dönüş yoludur (launcher'da
+otomatik geri alma YOK — kendini değiştiriyor).
+
 ---
+
 
 ## KAPSAM DIŞI — bulgu saymadım (triyajın elediği)
 
