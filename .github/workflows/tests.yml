@@ -145,3 +145,13 @@ jobs:
   #     yayın zaten `npx vercel --prod` ile oradan yapılıyor).
   #   * `pf` (mobil)   → kendi Expo projesinde; APK yayını `build_tools/build_apk.ps1` ile.
   # İkisine CI kurulacaksa AYRI depolarında kurulmalı, burada değil.
+  #
+  # ── GEÇERSİZ (2026-08-18, tek depoya geçildi) ────────────────────────────────
+  # Yukarıdaki gerekçenin DAYANAĞI ortadan kalktı: `pf/` ve `pemf-vet-web/` artık .gitignore'da
+  # DEĞİL, bu deponun içinde izleniyor (`git ls-files pf` → 218, `pemf-vet-web` → 83 dosya).
+  # Dolayısıyla "checkout sonrası o dizinler YOKTUR" cümlesi ARTIK DOĞRU DEĞİL.
+  # Son cümle de ("AYRI depolarında kurulmalı, burada değil") tersine döndü — iki iş de bu
+  # depoda, KÖK `.github/workflows/` altında kuruldu ve yeşil koşuyor:
+  #   * `.github/workflows/frontend.yml` → pf (tsc + jest-expo)
+  #   * `.github/workflows/site.yml`     → pemf-vet-web (check:legal + oxlint + tsc + vitest + build)
+  # Blok, kaldırma kararının NEDENİNİ kayıtta tutmak için duruyor; talimat olarak okumayın.
