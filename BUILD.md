@@ -251,7 +251,7 @@ Client v1.9.3'ten itibaren **açılışta kendini otomatik günceller** (kullan�
    ```
    sha256/size = yayınlanan setup exe'nin değerleri (`Get-FileHash`, `(Get-Item).Length`).
 5. Manifest'i yayınla (`gh release upload client-app-v1.8.0 --clobber ... manifest.json`).
-6. **Web sitesi (yeni kullanıcılar da alsın):** `pemf-vet-web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra `cd pemf-vet-web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
+6. **Web sitesi (yeni kullanıcılar da alsın):** `pemf-vet-web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra **push yeter** — Vercel projesi GitHub deposuna BAĞLI, `master`'a push üretim deploy'unu kendisi tetikliyor (2026-08-18'de ölçüldü: push → 17 sn'de Ready). CLI yalnız bağlantı kopmuşsa gerekir: `cd pemf-vet-web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
 > ⚠️ **Bootstrapping:** oto-güncelleme kodu OLMAYAN eski client'lar (≤1.9.2) kendini güncelleyemez → bir kez ELLE 1.9.3+'a geçmeli (site indirmesi). 1.9.3'ten sonra tüm güncellemeler otomatik.
 > ⚠️ `installer_url` YOKSA (yalnız version/url) client sadece "yeni sürüm var" bildirir (otomatik kurmaz) — geriye uyumlu.
 
@@ -308,7 +308,10 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 # 3) launcher setup + APK                 → launcher-v<surum>
 gh release create launcher-v1.9.13 -R mert61-python/pemf-update --title "PEMF Vet Client 1.9.13" --notes "..." PEMFVetClient-Setup.exe release_assets\PEMF_Vet_Mobil.apk
 # 4) web sitesi (indirme sayfasi)
-cd pemf-vet-web; npx vercel --prod --yes         # git-remote YOK → CLI şart
+cd pemf-vet-web; git push                        # Vercel GitHub'a BAGLI -> push = uretim deploy
+#   (dogrulama: npx vercel ls  ->  en ustteki Production kaydi 'Ready' olmali)
+#   ⚠️ ESKI NOT DUZELTILDI (2026-08-18): burada 'git-remote YOK -> CLI sart' yaziyordu.
+#      Remote eklendi ve Vercel'e baglandi; CLI ile ikinci bir deploy acmak gereksiz.
 ```
 
 > ⚠️ **SIRA: paketler ÖNCE, manifest SONRA.** Manifest yeni sha'yı ilan ettiği anda tüm client'lar

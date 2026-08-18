@@ -44,6 +44,12 @@ SES = FIXTURE / "10a_KediSesi_mutlu.mp3"
 
 @pytest.fixture(scope="module")
 def app_modulu():
+    # ⚠️ CI'DA HATA VERDİ (2026-08-18): `ai_service/app.py` modül düzeyinde `onnxruntime` import
+    # ediyor; GitHub runner'ında o paket YOK → fixture `ModuleNotFoundError` ile ERROR veriyordu.
+    # Bu dosyadaki eski testler yalnız fixture dosyaları yoksa atladıkları için hatayı görmüyordu.
+    # `importorskip` DAR tutulur: yalnız eksik ÇALIŞMA ZAMANI paketinde atlanır; `ai_service`in
+    # kendi kodundaki bir bozulma yine HATA verir (aksi halde kapı sessizce atlanırdı).
+    pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
     from ai_service import app as _app
 
     return _app

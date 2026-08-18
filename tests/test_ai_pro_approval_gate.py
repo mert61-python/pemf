@@ -25,6 +25,21 @@ def client():
 
 
 @pytest.fixture(autouse=True)
+def _kamerasiz(monkeypatch):
+    """`_ai_pro_loop`u NO-OP yap — bu dosya ONAY/SAHİPLİK kapısını ölçüyor, kapalı-döngüyü değil.
+
+    ⚠️ CI'DA KIRMIZI OLDU (2026-08-18): gerçek loop `cv2.VideoCapture(0)` açamayınca (başsız
+    Linux runner'da kamera YOK) `_ai_loop_active = False` yapıp hemen dönüyor. `/ai/pro/status`
+    okumasıyla o thread arasında YARIŞ vardı: Windows'ta kamera açma denemesi yeterince uzun
+    sürdüğü için testler geçiyor, Ubuntu'da anında düşüyordu. Yani kırmızılık ÜRÜN HATASI DEĞİL,
+    testin ortama bağımlılığıydı — kamerasız makinede loop'un durması DOĞRU davranış.
+    Loop'un kendisi `test_kalan_regression_gaps.py`de sahte kamerayla davranışsal olarak sürülüyor."""
+    from servers import ai_router
+
+    monkeypatch.setattr(ai_router, "_ai_pro_loop", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _temiz(client):
     ap.clear()
     client.post("/api/ai/pro/stop")
