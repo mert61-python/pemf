@@ -482,7 +482,9 @@ bool PemfNetworkManager::_connectToLocalBroker() {
 
   _switchMqttClient(BROKER_LOCAL);
 
-  String clientId = "PEMF-Coil-" + String(_coilId);
+  // 2026-08-19: SABIT client_id yasak (sahip degismezi: ayni id iki baglantiyi
+  // birbirine dusurur, kopma penceresinde E-stop STOP kaybolur). Acilis-basina ek.
+  String clientId = "PEMF-Coil-" + String(_coilId) + "-" + String((uint32_t)esp_random(), HEX);
   String lwtTopic = "pemf/coil/" + String(_coilId) + "/events";
   String lwtMsg =
       "{\"event_type\":\"offline\",\"coil_id\":" + String(_coilId) + "}";
@@ -520,7 +522,9 @@ bool PemfNetworkManager::_connectToCloudBroker() {
 
   _switchMqttClient(BROKER_CLOUD);
 
-  String clientId = "PEMF-Coil-" + String(_coilId);
+  // 2026-08-19: SABIT client_id yasak (sahip degismezi: ayni id iki baglantiyi
+  // birbirine dusurur, kopma penceresinde E-stop STOP kaybolur). Acilis-basina ek.
+  String clientId = "PEMF-Coil-" + String(_coilId) + "-" + String((uint32_t)esp_random(), HEX);
   String lwtTopic = "pemf/coil/" + String(_coilId) + "/events";
   String lwtMsg =
       "{\"event_type\":\"offline\",\"coil_id\":" + String(_coilId) + "}";
@@ -644,7 +648,9 @@ void PemfNetworkManager::publishStatus(const SystemStatusMsg &msg) {
   doc["pwm_frequency"] = msg.pwm.frequency;
   doc["pwm_duty"] = msg.pwm.dutyCycle;
   doc["pwm_remaining_time"] = msg.pwm.remainingTimeSec;
-  doc["pwm_duration"] = msg.pwm.durationMinutes;
+  doc["pwm_duration"] = msg.pwm.durationSec;   // SANIYE (2026-08-19; eskiden dakika)
+  doc["thermal_lock"] = msg.thermalLock;        // yerel termal kilit (start reddediliyor)
+  doc["sync_ignored"] = msg.syncIgnored;        // buyuyorsa STM ile frekans uyusmazligi
   doc["pwm_start_timestamp"] = (unsigned long long)msg.pwm.startTimestamp;
 
   // Sensör Verileri (Flat ve Key İsimleri GUI ile uyumlu)
@@ -819,6 +825,7 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
   }
 
   ControlCommand cmd;
+  memset(&cmd, 0, sizeof(cmd));  // 2026-08-19: dal bazli doldurulmayan alanlar COP kalmasin
   String cmdStr = doc["command"];
   cmdStr.toUpperCase(); // Case-insensitive compare (GUI sends 'start', we
                         // expect 'START')
@@ -828,7 +835,7 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
     cmd.frequency = doc["freq"];
     cmd.dutyCycle = (int)(doc["duty"].as<float>() + 0.5f);
     cmd.phase     = doc.containsKey("phase") ? (int)(doc["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
-    cmd.durationMinutes = doc["duration"];
+    cmd.durationSec = doc["duration"] | 0;   // SANIYE (backend sozlesmesi)
     if (doc.containsKey("start_at")) {
       unsigned long long raw_ts = doc["start_at"];
       // UYUMSUZ-1: Otomatik ms/sn tespiti
@@ -859,7 +866,8 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
     cmd.frequency = doc["freq"];
     cmd.dutyCycle = (int)(doc["duty"].as<float>() + 0.5f);
     cmd.phase     = doc.containsKey("phase") ? (int)(doc["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
-    cmd.durationMinutes = doc["duration"] | 0;  } else if (cmdStr == "SYNC_ALL") {
+    cmd.durationSec = doc["duration"] | 0;   // SANIYE
+  } else if (cmdStr == "SYNC_ALL") {
     // Toplu komut (Broadcast üzerinden gelir)
     if (doc.containsKey("coils")) {
       String myCoilIdStr = String(_coilId);
@@ -872,7 +880,7 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
         cmd.frequency = myCoil["freq"] | 100;
         cmd.dutyCycle = (int)(myCoil["duty"].as<float>() + 0.5f);
         cmd.phase     = myCoil.containsKey("phase") ? (int)(myCoil["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
-        cmd.durationMinutes = myCoil["duration"] | 0;
+        cmd.durationSec = myCoil["duration"] | 0;   // SANIYE
 
         if (myCoil.containsKey("start_at")) {
           unsigned long long raw_ts = myCoil["start_at"];

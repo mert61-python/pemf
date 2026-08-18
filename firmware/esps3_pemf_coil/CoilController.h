@@ -8,6 +8,13 @@
 // Forward declaration
 class SensorManager;
 
+/* ⚠️ 2026-08-19: .cpp KAYIPTI (8266 kopyasıyla ezilmişti) ve bu başlığa karşı
+ * YENİDEN YAZILDI — ayrıntı CoilController.cpp baş yorumunda. Bu turda eklenenler:
+ *   · handleCommand artık bool döner (RED = ACK'ta success=false; eski .ino her
+ *     komuta koşulsuz success basıyordu)
+ *   · yerel termal koruma API'si (enforceThermalLimit/isThermalLocked/…)
+ *   · süre birimi SANİYE (backend sözleşmesi), alan adları buna göre
+ *   · senkron tanılaması (syncIgnoredCount — frekans uyuşmazlığı görünür olsun) */
 class CoilController {
 public:
     CoilController(SensorManager* sensors);
@@ -16,8 +23,13 @@ public:
     // Core 1 Task Loop içinde çağrılır
     void process();
 
-    // Command Queue işleme
-    void handleCommand(const ControlCommand& cmd);
+    // Komut işleme — false = reddedildi (termal kilit / geçersiz durum)
+    bool handleCommand(const ControlCommand& cmd);
+
+    // Yerel termal koruma (Core 1 döngüsü readAll sonucunu geçirir; çift I2C olmasın)
+    void enforceThermalLimit(const SensorReadings& r);
+    bool isThermalLocked();
+    bool consumeThermalStopEvent();
 
     // Durum getirme
     PWMState getState();
@@ -31,22 +43,27 @@ public:
     bool consumeSyncFallbackEvent();
     bool consumeSelfTestEvent(bool &passed);
 
+    // Senkron tanılama: periyot sınırı dışında gelip YOK SAYILAN darbe sayısı.
+    // Büyüyorsa STM ile frekans uyuşmazlığı var demektir (status ile yayınlanır).
+    uint32_t syncIgnoredCount();
+
 private:
     SensorManager* _sensors;
 
     // PWM Parametreleri
     bool _active;
     int _frequency;
-    int _dutyCycle;
-    int _phase;              // [YENİ — Sorun 3/4] 0-359 derece
-    unsigned long _startTime;
-    unsigned long _duration;
-    unsigned long _endTime;
+    int _dutyCycle;              // İSTENEN duty (%1..MAX_DUTY_CYCLE)
+    int _phase;                  // 0-359 derece (STM senkron t=0'ına göre)
+    unsigned long _startTime;    // millis
+    unsigned long _duration;     // ms (0 = süresiz)
+    unsigned long _endTime;      // millis
     bool _hasDuration;
-    int _durationMinutes;
-    unsigned long long _startTimestamp;
+    int _durationSec;            // SANİYE — backend sözleşmesi (0 = süresiz)
+    unsigned long long _startTimestamp;  // epoch ms (NTP)
+    int _effectiveDutyPct;       // ölü-zaman + tick yuvarlaması sonrası GERÇEK çıkış
 
-    // Sync Başlangıç
+    // Sync Başlangıç (backend bugün start_at göndermiyor — ileriye dönük)
     unsigned long long _syncTargetTime;
     bool _waitingForSync;
 
@@ -62,15 +79,16 @@ private:
     bool _selfTestPassed;
     bool _selfTestCompletedPendingEvent;
 
+    // Yerel termal koruma
+    bool _thermalLock;
+    bool _thermalStopPendingEvent;
+
     // Hardware Functions
     void _setupTimerISR();
-
-    // [Sorun 4 FIX] phase_deg parametresi eklendi (varsayılan 0)
-    // _updatePWM çağrıldığında target_phase_ticks de güncellenir.
     void _updatePWM(int freq, int duty, int phase_deg = 0);
-
     void _stopPWM();
-    void _writeStateToNvs();
+    void _beginOutput(unsigned long long epochMs);
+    void _writeStateToNvs(const void* data);
 };
 
 #endif

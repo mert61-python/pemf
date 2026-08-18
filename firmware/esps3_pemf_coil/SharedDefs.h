@@ -6,7 +6,7 @@
 // ============================================================================
 // VERSION INFO
 // ============================================================================
-#define FIRMWARE_VERSION "1.2.2"  // Full Bridge Bipolar — HW Phase Sync
+#define FIRMWARE_VERSION "1.3.0"  // Full Bridge Bipolar — toleransli HW sync + SANIYE sozlesmesi + yerel termal (2026-08-19)
 
 // ============================================================================
 // DONANIM VE PIN TANIMLAMALARI (ESP32-S3 DevKit)
@@ -35,7 +35,10 @@
  * Sinyal: Her 100Hz PWM döngüsünün başında STM32 tarafından 100µs genişliğinde
  *         RISING pulse üretilir (PB1 → HIGH, 5 tick × 20µs sonra LOW).
  *
- * ISR:    syncPulseISR() → s_tick_counter = 0 → DDS faz sıfırlama.
+ * ISR:    syncPulseISR() → TOLERANSLI kilit (2026-08-19): darbe yalnız periyot
+ *         sınırının ±%2'sindeyken sayacı sıfırlar; frekans uyuşmazlığında yok
+ *         sayılır ve sayılır (syncIgnoredCount) — koşulsuz sıfırlama, STM ile
+ *         frekans farklıyken çıkışı DC'ye yapıştırabiliyordu.
  *
  * Sonuç:  Tüm STM32 (Bobin 1-5) ve ESP32-S3 (Bobin 6-8) bobinleri
  *         mikrosaniye hassasiyetinde faz kilitli çalışır.
@@ -121,6 +124,11 @@
 
 #define DEAD_TIME_TICKS    2
 
+/* YEREL TERMAL KORUMA (2026-08-19) — backend 48°C değişmeziyle birebir; ağ
+ * koptuğunda bobini durduracak tek şey cihazın kendisi. Histerezisli. */
+#define TERMAL_KESME_C   48.0f
+#define TERMAL_DONUS_C   45.0f
+
 // ============================================================================
 // KOMUT TİPLERİ
 // ============================================================================
@@ -141,7 +149,9 @@ struct ControlCommand {
     int frequency;
     int dutyCycle;
     int phase;              // 0-359 derece; varsayılan 0
-    int durationMinutes;
+    // ⚠️ BİRİM: SANİYE (2026-08-19) — backend sözleşmesi (_esp_duration_seconds).
+    // Eski ad durationMinutes idi; dakika okumak süre-bekçisini 60× uzatıyordu.
+    int durationSec;
     unsigned long long timestamp;
 };
 
@@ -166,9 +176,9 @@ struct SensorReadings {
 struct PWMState {
     bool active;
     int frequency;
-    int dutyCycle;
+    int dutyCycle;               // EFEKTİF duty (aktifken) — dürüst rapor, 2026-08-19
     unsigned long remainingTimeSec;
-    int durationMinutes;
+    int durationSec;             // SANİYE (backend sözleşmesi)
     unsigned long long startTimestamp;
 };
 
@@ -187,6 +197,10 @@ struct SystemStatusMsg {
     bool has_cmd_ack;
     bool cmd_ack_success;
     char ack_cmd_id[36];
+    // Yerel termal koruma + senkron tanılaması (2026-08-19)
+    bool thermalLock;            // start'lar reddediliyor (soğuma bekleniyor)
+    bool thermalStopEvent;       // bu turda termal kesme oldu (Network olay yayınlar)
+    uint32_t syncIgnored;        // frekans uyuşmazlığında yok sayılan sync darbesi
 };
 
 // ============================================================================

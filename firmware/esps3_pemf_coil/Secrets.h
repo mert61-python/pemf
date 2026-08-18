@@ -12,7 +12,10 @@
 // ============================================================================
 
 // --- CIHAZ AYARLARI ---
-#define FACTORY_COIL_ID       5           // Cihaz ID'si (1-8 arasi)
+#define FACTORY_COIL_ID       6           // Cihaz ID'si (1-8 arasi)
+// 2026-08-19: 5 -> 6. Bobin 1-5 STM32'nin slotlari; 5 fabrika varsayilani S3'u
+// STM bobin 5 ile CAKISTIRIYORDU. Backend AI Pro tam olarak 6-7'yi suruyor
+// (servers/ai_router.py:762), 8266 = bobin 8. BLE provizyonla NVS'ten degisir.
 #define FACTORY_PWM_FREQ      100         // Varsayılan PWM Frekansi (Hz)
 
 // --- CONFIG VERSION ---

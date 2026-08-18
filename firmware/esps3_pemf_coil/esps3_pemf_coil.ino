@@ -76,6 +76,10 @@ void TaskNetwork(void *pvParameters) {
             if (statusMsg.syncFallbackEvent) {
                 sysNetManager.publishEvent("sync_fallback", "NTP yok, zamanlanmis baslangic fallback ile hemen baslatildi");
             }
+            if (statusMsg.thermalStopEvent) {
+                sysNetManager.publishEvent("thermal_stop",
+                    "Yerel termal kesme: bobin 48C esigini asti, PWM durduruldu (45C altinda kilit acilir)");
+            }
             // UYUMSUZ-6: publishSensorData kaldırıldı - tüm sensör verisi /status içinde mevcut.
             // Çift yayın GUI'de çift deque append'e yol açıyordu.
             sysNetManager.publishStatus(statusMsg);
@@ -164,14 +168,16 @@ void TaskControl(void *pvParameters) {
 
         // 2. Queue'dan Tum Bekleyen Komutlari Oku (Non-blocking)
         while (xQueueReceive(commandQueue, &cmd, 0) == pdTRUE) {
-            sysCoil.handleCommand(cmd);
+            // 2026-08-19: handleCommand artik bool doner — RED (ornegin termal kilit)
+            // ACK'ta success=false olarak gitsin. Eski kod KOSULSUZ true basiyordu;
+            // backend reddedilen komutu basarili saniyordu.
+            bool kabulEdildi = sysCoil.handleCommand(cmd);
 
-            // Komut gerçekten işlendi (veya kabul edildi), ACK gönder
             if (strlen(cmd.command_id) > 0) {
                 SystemStatusMsg ackMsg;
                 memset(&ackMsg, 0, sizeof(ackMsg));
                 ackMsg.has_cmd_ack = true;
-                ackMsg.cmd_ack_success = true;
+                ackMsg.cmd_ack_success = kabulEdildi;
                 strncpy(ackMsg.ack_cmd_id, cmd.command_id, 35);
                 // Kuyruk doluysa bile overwrite yapmayı deneriz (loglamak daha güvenli, bu status olduğu için atlanabilir)
                 if(xQueueSend(statusQueue, &ackMsg, 0) != pdTRUE) {
@@ -182,6 +188,9 @@ void TaskControl(void *pvParameters) {
 
         // 3. Sensorleri Oku ve Durumu Raporla
         SensorReadings readings = sysSensors.readAll();
+        // 2026-08-19: YEREL TERMAL KORUMA — ag koptugunda bobini durduracak tek sey
+        // cihazin kendisi (48C kesme / 45C histerezis; sensor arizaliysa dokunmaz).
+        sysCoil.enforceThermalLimit(readings);
         PWMState pwmSelect = sysCoil.getState();
 
         // Bellek istatistiklerini hesapla
@@ -212,6 +221,9 @@ void TaskControl(void *pvParameters) {
         status.fragmentation = fragmentation;
         status.coil_id = FACTORY_COIL_ID; // HATA-5 DUZELTME: coil_id eksik set ediliyordu
         status.syncFallbackEvent = sysCoil.consumeSyncFallbackEvent();
+        status.thermalLock = sysCoil.isThermalLocked();
+        status.thermalStopEvent = sysCoil.consumeThermalStopEvent();
+        status.syncIgnored = sysCoil.syncIgnoredCount();
 
         bool stPassed = false;
         if (sysCoil.consumeSelfTestEvent(stPassed)) {
