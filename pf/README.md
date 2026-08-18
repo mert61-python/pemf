@@ -7,7 +7,11 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 > `package.json` adı: **`pemf-responsive-frontend`**. Expo `~56`, React Native `^0.85.3`, React `19`, expo-router.
 > Tek kod tabanı → **Web + Android + iOS**. Üç profil (Evcil Hayvan Sahibi · Veteriner · Araştırma) UI'yi role göre uyarlar.
 
-> ⚠️ **Burayı düzenle — `../frontend/` değil.** `guii/frontend/` bu reponun **bayat 2. kopyasıdır**; yalnız onun `dist/`'i canlıdır (buradan aynalanır). Detay: [`../frontend/README.md`](../frontend/README.md).
+> ⚠️ **Burayı düzenle — `../frontend/` değil.** `guii/frontend/`, `pf/`'in **bayat 2. kopyasıdır**; yalnız onun `dist/`'i canlıdır (buradan aynalanır). Detay: [`../frontend/README.md`](../frontend/README.md).
+>
+> **Tek depo (2026-08-18):** `pf/` artık `mert61-python/pemf` içinde izleniyor (eski ayrı
+> `pemf-frontend` deposu silindi; tam aynası `../../pemf-frontend-arsiv-2026-08-18.bundle`).
+> CI: kök [`.github/workflows/frontend.yml`](../.github/workflows/frontend.yml) (yol filtreli).
 
 ---
 

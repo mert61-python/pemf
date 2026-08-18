@@ -2,7 +2,9 @@
 
 Kullanıcının indirdiği **ince istemci**: manifest'i okur, `base.zip` + profil/model zip'lerini internetten
 çeker, SHA doğrular, açar, frozen backend'i başlatır ve tarayıcı UI'sini açar. Kendini de günceller.
-Cargo **workspace** (üye: `core` + `app`), sürüm **1.9.5**.
+Cargo **workspace** (üye: `core` + `app`). Sürüm: **[`versions.json`](../versions.json)** →
+`build_tools/sync_versions.ps1` `Cargo.toml` + `tauri.conf.json`'a yazar (buraya sürüm yazma —
+eski "1.9.5" notu gerçek sürüm 1.9.31'ken hâlâ burada duruyordu, 2026-08-18'de kaldırıldı).
 
 > Tam build+yayın: [`../BUILD.md`](../BUILD.md) §3. Sözleşme: [`../docs/LAUNCHER_SPEC.md`](../docs/LAUNCHER_SPEC.md).
 
@@ -30,8 +32,8 @@ Cargo **workspace** (üye: `core` + `app`), sürüm **1.9.5**.
 ```powershell
 cd launcher\app
 npx @tauri-apps/cli build         # cargo + NSIS
-# → launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.5_x64-setup.exe
-# yayın için: PEMFVetClient-Setup.exe adına kopyala → gh release launcher-v1.9.5
+# → launcher\target\release\bundle\nsis\PEMF Vet Client_<sürüm>_x64-setup.exe
+# yayın için: PEMFVetClient-Setup.exe adına kopyala → gh release launcher-v<sürüm>
 ```
 
 ## ⚠️ Dikkat

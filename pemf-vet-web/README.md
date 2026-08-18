@@ -55,17 +55,24 @@ npm run preview    # dist/ önizleme
 
 ## Site güncelleme / Deploy
 
-**Git bağlı (2026-08-01’den beri):** bu repo (`mert61-python/pemf-vet-web`, dal **`master`**) Vercel projesine bağlıdır → **`master`’a her push = otomatik production deploy** (canlı: https://pemf-vet-web.vercel.app). Vercel, Vite’ı otomatik algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirmesini halleder.
+**Git bağlı — TEK DEPO (2026-08-18'den beri):** bu klasör `mert61-python/pemf` deposunun
+**`pemf-vet-web/` alt dizinidir** (eski ayrı `pemf-vet-web` deposu silindi; tam aynası
+`../../pemf-vet-web-arsiv-2026-08-18.bundle`). Vercel projesi tek depoya bağlı:
+**Root Directory = `pemf-vet-web`**, üretim dalı **`production-hardening`** → her push'ta
+otomatik production deploy (canlı: https://pemf-vet-web.vercel.app). Vercel Vite'ı otomatik
+algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirmesini halleder.
+**Ignored Build Step** ayarlı: siteye dokunmayan commit'ler build tetiklemez (ölçüldü: son 40
+commit'in 39'u site dışıydı). CI: kök `.github/workflows/site.yml` (**Node 22 şart** —
+Node 20'de supabase-js "yerleşik WebSocket yok" ile düşer).
 
 ### İş akışı — siteyi güncellemek
 ```bash
-cd pemf-vet-web
-# içeriği düzenle (genellikle src/config.ts: sürüm, fiyat, link…)
-git add -A
+# guii kökünden — içerik genellikle pemf-vet-web/src/config.ts (sürüm, fiyat, link…)
+git add -A pemf-vet-web
 git commit -m "açıklama"
-git push                 # → Vercel otomatik deploy eder (~1-2 dk)
+git push                 # → site-ci koşar + Vercel otomatik deploy eder (~1-2 dk)
 ```
-Hepsi bu. Deploy’u izlemek: Vercel panosu → pemf-vet-web → Deployments.
+Hepsi bu. Deploy'u izlemek: Vercel panosu → pemf-vet-web → Deployments.
 
 > ⚠️ **ALTIN KURAL — değişikliği HER ZAMAN commit + push et.** Sadece `vercel --prod` (CLI) ile deploy edip commit’lemezsen repo geride kalır → bir sonraki push canlı siteyi **ESKİ koda döndürür**. (Sürüm-etiketi “mayını” tam bu yüzden oluşmuştu: CLI-deploy’lar commit’siz kalınca repo 1.9.5’te takıldı.)
 

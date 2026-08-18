@@ -9,7 +9,10 @@ pytest tests -v --cov            # guii kökünden (embedded python ile)
 - `conftest.py`: `guii` kökünü `sys.path`'e ekler; **`temp_app_data`** fixture'ı `%APPDATA%`'yı izole eder (gerçek veriye dokunmaz).
 - Özel marker yok; düz fonksiyon testleri (`pytest.ini` yok).
 
-## Kapsam (28 `test_*.py` + conftest)
+## Kapsam (138 `test_*.py` · ~1300 test + conftest)
+
+> Sayı 2026-08-18'de güncellendi (eski "28" donmuş kalmıştı). Aşağıdaki tablo TAM LİSTE değil,
+> alan başına **seçkidir**; güncel sayım: `ls tests/test_*.py | wc -l`.
 | Alan | Örnek dosyalar |
 |---|---|
 | Firmware/protokol güvenliği | `test_stm32_protocol_limits.py` (NaN/inf clamp, `FREQ_MAX`, `AI_PRO_DUTY_MAX`), `test_hardware_controller_safety.py` (deadline auto-stop, watchdog, reconnect re-fire), `test_coil_transport.py`, `test_session_watchdog.py` |

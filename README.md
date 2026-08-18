@@ -45,14 +45,34 @@ Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHI
 
 ## Sürümler — tek kaynak [`versions.json`](versions.json)
 
-| Kanal | Sürüm | Hedef dosya |
-|---|---|---|
-| Backend / installer | **1.9.5** (`VERSION`) | `PEMF_Backend_Setup.iss`, `docs/version_info.txt` |
-| Launcher (client) | **1.9.5** | `launcher/Cargo.toml`, `launcher/app/tauri.conf.json` |
-| Mobil (APK/IPA) | **2.3.3** (vc10 / iOS 5) | `pf/app.json` |
-| Frontend OTA | **1.4.1** | `frontend_version.json` |
+Güncel sürümler için **`versions.json`'a bak** — bu belgeye sürüm yazılmaz. (Buraya elle yazılan
+tablo 2026-08-06'da donmuştu: `1.9.5 / 2.3.3` yazarken gerçek sürümler `1.9.16 / 2.3.17`ydi;
+BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 
-> Sürümü **elle `versions.json`'da** değiştir → `build_tools/sync_versions.ps1` hedef dosyalara yazar (build başında otomatik).
+| Kanal | Hedef dosya |
+|---|---|
+| Backend / installer (`VERSION`) | `PEMF_Backend_Setup.iss`, `docs/version_info.txt` |
+| Launcher (client) | `launcher/Cargo.toml`, `launcher/app/tauri.conf.json` |
+| Mobil (APK/IPA) | `pf/app.json` |
+| Frontend OTA (kanal **KULLANIM DIŞI**) | `frontend_version.json` |
+
+> Sürümü **elle `versions.json`'da** değiştir → `build_tools/sync_versions.ps1` hedef dosyalara yazar
+> (build başında otomatik). CHANGELOG'suz sürüm yükseltmeyi hem pre-commit kancası
+> (`scripts/check_changelog_surum.py`) hem CI (`tests/test_version_visibility.py`) durdurur.
+
+## Depo düzeni (2026-08-18'den beri: TEK depo · TEK dal)
+
+- **`mert61-python/pemf`** = bu depo. Eskiden ayrı depolarda duran **`pf/`** (mobil/web istemci)
+  ve **`pemf-vet-web/`** (ödeme/indirme sitesi) artık **burada izleniyor**; eski `pemf-frontend`
+  ve `pemf-vet-web` depoları **silindi** (tam aynaları `../*-arsiv-2026-08-18.bundle` paketlerinde).
+- Tek dal: **`production-hardening`** (varsayılan). Eski `main`/`vet-client`/`upload-testflight`
+  uçları `arsiv/*-2026-08-18` etiketlerinde; `esp` dalı silindi — içindeki eğitim arşivi önce
+  [`training_archive/`](training_archive/)'e kurtarıldı.
+- **Yayın varlıkları hâlâ [`pemf-update`](https://github.com/mert61-python/pemf-update)**
+  deposuna yüklenir: istemcilere **derlenmiş** sabitler orayı gösterir (`launcher/core/src/net.rs`),
+  değiştirilemez. O depoya dokunma.
+- Site (Vercel) bu deponun `pemf-vet-web/` alt dizininden, `production-hardening` push'uyla
+  otomatik deploy edilir (Root Directory ayarlı).
 
 ---
 
@@ -78,6 +98,7 @@ Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHI
 | [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (13+ model) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
 | [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu, opsiyonel) |
 | [`release_assets/`](release_assets/README.md) | **Model ağırlık deposu (2.1 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` |
+| [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı, 434 dosya/296 MB). Lint/format **muaf** — değeri sadakati; elleme |
 
 ### Frontend / Web
 | Klasör | Ne işe yarar |
@@ -109,9 +130,9 @@ Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHI
 | Klasör | Ne işe yarar |
 |---|---|
 | [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
-| [`tests/`](tests/README.md) | pytest paketi (28 test; protokol-güvenlik, auth, KVKK, seans, OTA) |
+| [`tests/`](tests/README.md) | pytest paketi (138 dosya / ~1300 test; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
 | [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
-| [`.github/`](.github/README.md) | CI (tests/lint/security/linux-mac backend/launcher/testflight) + dependabot |
+| [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher/testflight) + dependabot — **yalnız KÖK `.github/` geçerli** |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
 | [`icon_master/`](icon_master/README.md) | Uygulama ikonu kaynak görselleri |
 | [`apple-mac-cert/`](apple-mac-cert/README.md) | ⚠️ Apple kod-imzalama/notarization materyali (SIR — gitignore+rotate gerekir) |
