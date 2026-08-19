@@ -452,6 +452,7 @@ def _on_mqtt_connect_api(client, userdata, flags, rc):
         client.subscribe("pemf/coil/+/status")
         client.subscribe("pemf/coil/+/events")
         client.subscribe("pemf/coil/+/alarm")
+        client.subscribe("pemf/coil/+/ack")  # HG-4 (2026-08-19): ESP komut onayı — E-stop teslimi doğrulanabilsin
         client.subscribe("pemf/gateway/status")
         client.subscribe("pemf/bridge/status")
         _push_notification("Sistem bağlantısı kuruldu", "success")
@@ -556,7 +557,13 @@ def _on_mqtt_message_api(client, userdata, msg):
                 return
             # ESP watchdog: bu bobinden HERHANGİ gerçek mesaj = canlı → staleness timestamp'ını tazele.
             # (Explicit wifi_disconnected/offline zaten connected=False yapar → watchdog onu atlar.)
-            _coil_last_telemetry[coil_index] = time.monotonic()
+            # ⚠️ `not is_retained` ŞART (2026-08-19, HG-4 denetimi): firmware bazı konuları retain=true
+            # yayınlıyor (8266 status:235 + iki ESP'nin ack'i). Broker'da kalmış RETAINED bir mesaj,
+            # backend her reconnect'inde teslim edilir; onu "canlı telemetri" sayıp damgayı tazelemek,
+            # OFFLINE bir bobinin stale-STOP tespitini ESP_STALE_SEC (30 sn) geciktirir. Yalnız CANLI
+            # (retain=0) mesaj bobinin gerçekten yayın yaptığını kanıtlar.
+            if not is_retained:
+                _coil_last_telemetry[coil_index] = time.monotonic()
 
             if msg_type == "sensors" and not is_retained:
                 with _live_state_lock:
@@ -591,6 +598,19 @@ def _on_mqtt_message_api(client, userdata, msg):
                         coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
                     snapshot = dict(coil)
                 _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": snapshot})
+
+            elif msg_type == "ack":
+                # HG-4 (2026-08-19): ESP komut onayı → command_id ile bekleyen E-stop'u çöz.
+                # ⚠️ RETAINED FİLTRESİ YOK — bilerek. Firmware ack'i retain=true yayınlar (8266:767 /
+                # S3:782). MQTT-3.3.1-9: broker, KURULU bir aboneliğe canlı teslimde retain'i 0'lar →
+                # yani canlı ack backend'e retain=0 gelir; retain=1 yalnız reconnect'te broker'ın
+                # sakladığı BAYAT ack'te görülür. Bayat ack'e karşı koruma is_retained DEĞİL,
+                # command_id BENZERSİZLİĞİdir: her E-stop yeni `estop_{coil}_{ms}` üretir; bayat ack
+                # eski id taşır → _resolve_ack onu pending'de BULAMAZ → no-op. (Bu dal telemetri
+                # damgasını tazelemez — o koruma yukarıda; ack yalnız pending çözer.)
+                _cid = payload.get("command_id")
+                if _cid:
+                    _resolve_ack(str(_cid), bool(payload.get("success", False)))
 
             elif msg_type == "events":
                 event_type = payload.get("type") or payload.get("event_type", "unknown")
@@ -1148,6 +1168,69 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
         return yayinlandi
     except Exception:
         return False
+
+
+# ── ESP KOMUT ONAYI (ACK ROUND-TRIP) — donanım-uyum denetimi HG-4 (2026-08-19) ────────────────
+# SORUN: ESP bobinleri (6-8) her komuta `pemf/coil/{id}/ack` konusuna {command_id, success}
+# yayınlar (firmware sendCommandAck), ama backend bu konuyu HİÇ dinlemiyordu. `_mqtt_publish`
+# yalnız broker QoS-1 PUBACK'ini okur → "broker mesajı kabul etti" demek, "ESP mesajı ALDI"
+# demek DEĞİL. WiFi'siz bir ESP'ye E-stop yayınlanınca broker PUBACK döner, çağıran "success"
+# sayar, operatöre "durduruldu" gösterir — ama ESP mesajı hiç almaz (STOP retain=False). Bobin
+# fiziksel enerjili kalırken UI "durdu" der.
+#
+# ÇÖZÜM: kalıcı dinleyici client `.../ack`e abone olur; komut ONAYINI command_id ile eşler.
+# ⚠️ E-stop'u BLOKLAMAZ: publish hemen gider (hız kritik), onay ARKA PLANDA izlenir; gelmezse
+# operatöre AÇIK uyarı gider. Onay yokluğu artık SESSİZ değil.
+_pending_acks: dict = {}
+_pending_acks_lock = threading.Lock()
+
+
+def _register_ack(command_id: str) -> None:
+    """Publish'ten ÖNCE çağrılır (ack yarışı kaybolmasın): command_id için bekleme kaydı aç."""
+    with _pending_acks_lock:
+        _pending_acks[command_id] = {"success": None, "event": threading.Event()}
+
+
+def _resolve_ack(command_id: str, success: bool) -> None:
+    """ESP ack'i gelince: kayıtlıysa sonucu yaz + bekleyeni uyandır. Bilinmeyen id → no-op
+    (retained/bayat ack veya STM seri yolu; zararsız)."""
+    with _pending_acks_lock:
+        entry = _pending_acks.get(command_id)
+    if entry is not None:
+        entry["success"] = bool(success)
+        entry["event"].set()
+
+
+def _wait_ack(command_id: str, timeout: float):
+    """True=ESP onayladı, False=ESP başarısız bildirdi, None=onay GELMEDİ (timeout)."""
+    with _pending_acks_lock:
+        entry = _pending_acks.get(command_id)
+    if entry is None:
+        return None
+    got = entry["event"].wait(timeout)
+    with _pending_acks_lock:
+        _pending_acks.pop(command_id, None)
+    return entry["success"] if got else None
+
+
+def _estop_ack_watch(coil_id: int, command_id: str) -> None:
+    """E-stop onayını ARKA PLANDA izle (publish'i bloklamadan). Onay 2 sn'de gelmezse operatörü
+    AÇIKÇA uyar — bobin fiziksel durmamış olabilir (WiFi partition / cloud-failover senaryosu)."""
+    confirmed = _wait_ack(command_id, timeout=2.0)
+    if confirmed is True:
+        logging.getLogger(__name__).info("E-stop bobin %s: ESP ONAYLADI (ack)", coil_id)
+        return
+    logging.getLogger(__name__).error(
+        "E-stop bobin %s: ESP ONAYI GELMEDI (2s) — bobin fiziksel DURMAMIS olabilir, MANUEL KONTROL et.",
+        coil_id,
+    )
+    try:
+        _push_notification(
+            f"⚠️ Bobin {coil_id}: acil durdurma ESP onayı GELMEDİ — bobini elle kontrol edin",
+            "error",
+        )
+    except Exception:
+        pass
 
 
 def _broker_reachable(timeout: float = 0.3) -> bool:
@@ -3135,6 +3218,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # dolayisiyla burada ThreadPoolExecutor guvenli + event-loop'u etkilemez.
     def _estop_one(coil_id):
         command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}"
+        # HG-4 (2026-08-19): onay kaydını publish'ten ÖNCE aç (hızlı ESP ack yarışı kaybolmasın).
+        _register_ack(command_id)
         ok = _mqtt_publish(
             f"pemf/coil/{coil_id}/control",
             {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()},
@@ -3143,6 +3228,31 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
             f"pemf/esp32_{coil_id}/command",
             {"command": "stop", "command_id": command_id, "emergency": True, "timestamp": _t.time()},
         )
+        # ⚠️ E-stop'u BLOKLAMA: publish gitti, onayı ARKA PLANDA izle. Gelmezse operatör uyarılır.
+        # PUBACK bile yoksa bekleme anlamsız → pending kaydını temizle (bekçi thread açma).
+        if ok or legacy_ok:
+            # ⚠️ Thread start'ı try/except'te (2026-08-19 denetimi): thread tükenirse
+            # (`RuntimeError: can't start new thread`) istisna _ex.map üzerinden yayılıp E-stop'un
+            # POST-güvenlik işini (live_state sıfırlama, WS yayını, DB finalize) atlardı — oysa
+            # fiziksel STOP publish'i ZATEN gitti (yukarıda). Ack izlemenin açılmaması yalnız onay
+            # gözlemini kaçırır; E-stop'u düşürmemeli.
+            try:
+                threading.Thread(
+                    target=_estop_ack_watch,
+                    args=(int(coil_id), command_id),
+                    name=f"estop-ack-{coil_id}",
+                    daemon=True,
+                ).start()
+            except RuntimeError:
+                with _pending_acks_lock:
+                    _pending_acks.pop(command_id, None)
+                logging.getLogger(__name__).error(
+                    "E-stop bobin %s: ack-izleme thread'i açılamadı (STOP publish'i gitti, onay izlenmeyecek).",
+                    coil_id,
+                )
+        else:
+            with _pending_acks_lock:
+                _pending_acks.pop(command_id, None)
         return {"coilId": coil_id, "mqtt": "success" if ok or legacy_ok else "mqtt_unavailable"}
 
     # DENETIM P0: kapsam `[cid for cid in coil_ids if cid in ESP_COIL_IDS]` idi → ESP STOP'lari
