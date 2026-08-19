@@ -99,6 +99,11 @@ APP_ROOTS = [
     # bir cihaz "destek disi" sanilip zorla guncellenir ya da tersi. Surum, tanimi geregi APP'e
     # aittir. Bkz. launcher/core/tests/upgrade_drill.rs::surum_dosyasi_APP_katmaninda.
     'PEMF_Backend/_internal/VERSION',
+    # E-stop bulut-aynasi provizyonu (sahip karari 2026-08-19): bizim yayin icerigimizdir ve
+    # surumle degisebilir -> VERSION emsaliyle APP katmanina aittir. DEPS'e duserse (ilk
+    # paketlemede tam bu oldu, +530 bayt) her provizyon degisikligi kliniklere 1,4 GB indirtir
+    # ve deps-sha sabitligi (paket-belirlenimciligi) bozulur.
+    'PEMF_Backend/_internal/data/cloud_mqtt_provision.json',
     # Sinir dosyasi KENDISI de app katmanina aittir. Listede olmazsa launcher onu yedege almaz
     # ve geri alma sinirini okuyamaz -> basarisiz guncelleme geri alinamaz (2026-08-08'de test
     # yakaladi). Launcher ayrica savunma amacli marker'i yedege KOPYALAR; bu satir tutarlilik icin.
