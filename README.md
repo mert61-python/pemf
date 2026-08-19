@@ -142,6 +142,10 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 
 ## Build & Dağıtım (özet)
 
+> **Sıfırdan bir makinede mi başlıyorsunuz?** → **[`docs/TEMIZ-MAKINE.md`](docs/TEMIZ-MAKINE.md)**:
+> klinikte kurup-kullanma (Yol A) ile build/yayın (Yol B, sır geri-yükleme dahil) akışını
+> temiz ve sıralı anlatır. Aşağısı ve `BUILD.md` başvuru derinliğidir.
+
 Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 
 | Hedef | Komut | Çıktı |

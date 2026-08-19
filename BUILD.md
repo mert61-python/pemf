@@ -35,6 +35,10 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 
 ---
 
+> **Akış mı arıyorsunuz (ne, hangi sırayla)?** → **[`docs/TEMIZ-MAKINE.md`](docs/TEMIZ-MAKINE.md)**
+> temiz makinede klinik-kurulum (Yol A) ve build/yayın (Yol B) adımlarını sıralı verir.
+> Bu dosya (BUILD.md) başvurudur: her adımın nedeni + tuzakları.
+
 ## 0. Sıfır Makine Kurulumu — `bootstrap.ps1`
 
 **Boş bir Windows laptopta** (hiçbir toolchain yokken) tüm build+publish araç zincirini tek komutla kurar.
