@@ -5,9 +5,19 @@
 > 21 ajan, yüksek effort. Kaynak: çalışma kopyası @ commit `7e87cf9`.
 
 > ⚠️ **Bu bir DENETİM RAPORUDUR, otomatik düzeltme DEĞİL.** HG-* maddeleri tasarım/mimari
-> kararı gerektirir — sahip onayı olmadan kod değişikliği YAPILMADI. Tek istisna: D-2'nin
-> yakaladığı 8266 `_effectiveDutyPct` regresyonu (bu oturumda eklenen kodun eksiği)
-> `7e87cf9`'de düzeltildi.
+> kararı gerektirir — sahip onayı olmadan kod değişikliği YAPILMADI.
+>
+> ## ÇÖZÜM DURUMU (2026-08-19 akşamı — koddan-kesin tur)
+> | Kalem | Durum | Commit |
+> |---|---|---|
+> | D-2 (8266 `_effectiveDutyPct`) | ✅ düzeltildi (benim regresyonum) | `7e87cf9` |
+> | HG-4 (backend ACK round-trip) | ✅ düzeltildi (+2 alt-bug) | `405d547` |
+> | D-1 (ölü topik selftest/reset) | ✅ düzeltildi | `ffd4406` |
+> | D-3 (ESP freq tavanı, 8266'ya göre) | ✅ düzeltildi | `ffd4406` |
+> | D-4 (8266 LWT + backend retained-events) | ✅ düzeltildi — ⚠️ 8266 REFLASH gerekir | `ffd4406` |
+> | HG-1/HG-2 (STM termal + DC-bias dalga) | ⏳ donanım gerekir (NTC+ADC) — sahip kararı |  |
+> | HG-3 (faz kilidi DC-yapışma) | ⏳ tezgah + firmware — sahip kararı |  |
+> | HG-5 (broker failover E-stop) / HG-6 (reboot) | ⏳ deadman sahip değişmeziyle çatışıyor — karar bekliyor |  |
 
 # PEMF HİBRİT BOBİN KOMUT UYUM RAPORU
 **Kapsam:** 8 bobin / 3 işlemci ailesi (STM32 1-5, ESP32-S3 6-7, ESP8266 8) + Python backend · Kaynak: çalışma kopyası (guii)
