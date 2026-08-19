@@ -325,8 +325,10 @@ def test_pending_yazan_yollar_biliniyor(fw_src):
     DÜŞÜNÜLMELİDİR — yukarıdaki regresyon tam olarak bu gözden kaçtığı için oluştu.
     """
     n = len(re.findall(r"g_shadow\.pending\s*=\s*1", fw_src))
-    assert n == 3, (
-        f"`g_shadow.pending = 1` yazan yol sayisi {n} (beklenen 3: paket, sure-auto-stop, "
-        f"watchdog). Yeni bir yol eklendiyse ref_ms tek-atislik semantigini dogrula ve bu "
-        f"sayiyi guncelle."
+    assert n == 5, (
+        f"`g_shadow.pending = 1` yazan yol sayisi {n} (beklenen 5: paket, sure-auto-stop, "
+        f"watchdog + HG-1 NTC kilit-uygulama ve NTC kesme [2026-08-19; ikisi de sure-auto-stop "
+        f"kalibinin birebiri — yalniz duty=0 yazar, ref_ms'e dokunmaz -> bayat faz-hizalama "
+        f"riski yok; ustelik PEMF_NTC_TERMAL_ENABLED=0 iken derlenmezler]). Yeni bir yol "
+        f"eklendiyse ref_ms tek-atislik semantigini dogrula ve bu sayiyi guncelle."
     )

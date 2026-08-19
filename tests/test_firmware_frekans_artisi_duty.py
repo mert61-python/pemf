@@ -55,7 +55,7 @@ def _sabit(src: str, ad: str) -> float:
 # ── ISR modeli ────────────────────────────────────────────────────────────────
 
 
-def _kosu(isr_hz, fullscale, dead, f0, d0, f1, d1, tick_sayisi, olcekle: bool, ref_orani=0.37):
+def _kosu(isr_hz, fullscale, gap, f0, d0, f1, d1, tick_sayisi, olcekle: bool, ref_orani=0.37):
     """ISR'ı modelle; `olcekle=False` = düzeltme ÖNCESİ (bayat tick), `True` = SONRASI.
 
     Döner: (en uzun kesintisiz A-ON tick, toplam A-ON tick, gözlenen EN YÜKSEK duty ORANI).
@@ -86,9 +86,11 @@ def _kosu(isr_hz, fullscale, dead, f0, d0, f1, d1, tick_sayisi, olcekle: bool, r
     slew = slew_of(f1, tpp)
     if olcekle:
         # DÜZELTME: tick sayısını YENİ periyoda ölçekle (oran korunur) + ANINDA klemple.
+        # HG-2 (2026-08-19): klemp artık YARIM-periyot tabanlı (simetrik bipolar) —
+        # C'deki formül: tpp/2 − DDS_BIPOLAR_GAP_TICKS, taban 1.
         if eski_tpp > 0 and tpp != eski_tpp and duty_t > 0:
             duty_t = int((duty_t / eski_tpp) * tpp)
-        max_d = max(0, tpp - 1 - int(dead))
+        max_d = max(1, tpp // 2 - int(gap))
         duty_t = min(duty_t, max_d)
     # `ref_ms` hizalaması (sahada her paket taşır) — periyot ORTASI, sıfır DEĞİL.
     tick = int(tpp * ref_orani) % tpp
@@ -105,11 +107,13 @@ def _kosu(isr_hz, fullscale, dead, f0, d0, f1, d1, tick_sayisi, olcekle: bool, r
             else:
                 err = max(-slew, min(slew, target - duty_t))
                 duty_t = max(0, duty_t + err)
-            max_d = max(0, tpp - 1 - int(dead))
+            max_d = max(1, tpp // 2 - int(gap))  # HG-2: yarım-tabanlı klemp (C ile aynı)
             duty_t = min(duty_t, max_d)
 
         en_yuksek_oran = max(en_yuksek_oran, duty_t / tpp if tpp else 0.0)
 
+        # HG-2 simetrik bipolarda A penceresi hâlâ [0, duty) — A-ON metriği aynı kalır
+        # (B artık [yarım, yarım+duty)'de ayna darbe; burada izlenen tek-polarite A'dır).
         state = 1 if tick < duty_t else 0
         if state:
             a_on += 1
@@ -131,10 +135,10 @@ def test_KRITIK_frekans_artisinda_UZUN_tek_polarite_OLMAZ(src):
     """1 Hz %50 → 2 Hz %50 geçişinde kesintisiz A-ON, meşru zarfı AŞMAMALI."""
     isr = _sabit(src, "DDS_ISR_HZ")
     fs = _sabit(src, "DDS_SLEW_FULLSCALE_S")
-    dead = _sabit(src, "DDS_DEAD_TIME_TICKS")
+    gap = _sabit(src, "DDS_BIPOLAR_GAP_TICKS")  # HG-2: yarim-tabanli klemp sabiti
 
     mesru = int(isr / 2.0 * 0.5)  # 2 Hz %50 → periyot başına 12 500 tick = 250 ms
-    en_uzun, _, _ = _kosu(isr, fs, dead, 1.0, 0.5, 2.0, 0.5, int(isr * 2), olcekle=True)
+    en_uzun, _, _ = _kosu(isr, fs, gap, 1.0, 0.5, 2.0, 0.5, int(isr * 2), olcekle=True)
 
     assert en_uzun <= mesru + 1, (
         f"kesintisiz A-ON {en_uzun} tick ({en_uzun / isr * 1000:.0f} ms) — mesru zarf {mesru} tick "
@@ -146,10 +150,10 @@ def test_duzeltme_ONCESI_model_uzun_tek_polarite_URETIR_capa(src):
     """Çıpa: modelin kusuru GERÇEKTEN üretebildiğini gösterir (yoksa yukarıdaki test boş olurdu)."""
     isr = _sabit(src, "DDS_ISR_HZ")
     fs = _sabit(src, "DDS_SLEW_FULLSCALE_S")
-    dead = _sabit(src, "DDS_DEAD_TIME_TICKS")
+    gap = _sabit(src, "DDS_BIPOLAR_GAP_TICKS")  # HG-2: yarim-tabanli klemp sabiti
 
     mesru = int(isr / 2.0 * 0.5)
-    en_uzun, _, _ = _kosu(isr, fs, dead, 1.0, 0.5, 2.0, 0.5, int(isr * 2), olcekle=False)
+    en_uzun, _, _ = _kosu(isr, fs, gap, 1.0, 0.5, 2.0, 0.5, int(isr * 2), olcekle=False)
 
     assert en_uzun > mesru, (
         "model, duzeltme kapatilinca da uzun tek-polarite uretmiyor → yukaridaki test ANLAMSIZ. "
@@ -171,10 +175,10 @@ def test_KRITIK_gecis_duty_orani_IKI_UCTAN_da_YUKSEGE_cikmaz(src, f1, d1):
     çıkarıyordu — yani bobin, hiç istenmemiş bir duty ile sürülüyordu."""
     isr = _sabit(src, "DDS_ISR_HZ")
     fs = _sabit(src, "DDS_SLEW_FULLSCALE_S")
-    dead = _sabit(src, "DDS_DEAD_TIME_TICKS")
+    gap = _sabit(src, "DDS_BIPOLAR_GAP_TICKS")  # HG-2: yarim-tabanli klemp sabiti
 
     tavan = max(0.5, d1)  # eski oran %50, yeni hedef d1
-    _, _, en_yuksek = _kosu(isr, fs, dead, 1.0, 0.5, f1, d1, int(isr * 1), olcekle=True)
+    _, _, en_yuksek = _kosu(isr, fs, gap, 1.0, 0.5, f1, d1, int(isr * 1), olcekle=True)
 
     assert en_yuksek <= tavan + 0.01, (
         f"gecis sirasinda duty %{en_yuksek * 100:.1f}'e cikti; iki uc nokta %{0.5 * 100:.0f} ve "
@@ -186,9 +190,9 @@ def test_duzeltme_ONCESI_model_duty_asimi_URETIR_capa(src):
     """Çıpa: klempin duty'yi ~%99,8'e çıkardığını modelde gösterir."""
     isr = _sabit(src, "DDS_ISR_HZ")
     fs = _sabit(src, "DDS_SLEW_FULLSCALE_S")
-    dead = _sabit(src, "DDS_DEAD_TIME_TICKS")
+    gap = _sabit(src, "DDS_BIPOLAR_GAP_TICKS")  # HG-2: yarim-tabanli klemp sabiti
 
-    _, _, en_yuksek = _kosu(isr, fs, dead, 1.0, 0.5, 100.0, 0.05, int(isr * 1), olcekle=False)
+    _, _, en_yuksek = _kosu(isr, fs, gap, 1.0, 0.5, 100.0, 0.05, int(isr * 1), olcekle=False)
 
     assert en_yuksek > 0.9, (
         f"model duzeltme kapaliyken duty'yi ~%99,8'e cikarmiyor (olculen %{en_yuksek * 100:.1f}) "

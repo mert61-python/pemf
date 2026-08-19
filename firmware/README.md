@@ -144,6 +144,20 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
   > sıcaklık sensörü + STM telemetrisi + firmware tarafında kesme. O yapılana kadar bu sınır
   > BİLİNEREK taşınmalı ve kullanıcı arayüzü de "ölçülmüyor" demelidir (bkz.
   > `CoilParameterPanel` sıcaklık rozeti).
+  >
+  > ⚠️ **GÜNCELLEME 2026-08-19 (HG-1):** `main.c` içine **tam bir NTC termal kesme** eklendi ama
+  > **derleme-kapılı** (`PEMF_NTC_TERMAL_ENABLED 0` — NTC donanımı bağlı değilken kod derlenmez,
+  > davranış birebir eski). NTC'ler (bobin başına 10k NTC + 10k bölücü; ADC pinleri PA0/PA3/PA4/
+  > PC0/PC3) fiziksel bağlandıktan sonra 1 yapın: 48/45 °C histerezisli kesme + kilitliyken
+  > re-enerji reddi + `STM_EVT: TERMAL` seri satırı. Kablolamaya göre `g_ntc_kanal` tablosunu
+  > güncelleyin ve Beta/R25'i NTC veri sayfasıyla doğrulayın. **Yukarıdaki tablo, define 0
+  > olduğu sürece hâlâ geçerlidir.**
+- **DALGA SÖZLEŞMESİ DEĞİŞTİ (HG-2, 2026-08-19):** STM DDS artık **simetrik bipolar** —
+  A darbesi `[0,duty)`, B darbesi `[yarım, yarım+duty)`, aralarda **ikisi de LOW** → her duty'de
+  net DC = 0 (ESP S3/8266 ile aynı anlam; duty = yarım-periyot doluluk oranı, tavan ~%50).
+  Eski sözleşme (bir bacak hep enerjili) duty≠%50'de `V·(2·duty−1)` DC-bias üretiyordu →
+  denetim HG-2. ⚠️ **Aynı sayısal duty'de teslim edilen enerji/alan ESKİ dalgadan FARKLIDIR** —
+  tezgahta doz yeniden kalibre edilmeli (skop + alan probu). Kilit: `tests/test_stm_dalga_sozlesmesi.py`.
 - Güvenlik-clamp'leri **hasta güvenliğidir** — zayıflatma. Python tarafı bilinçli olarak duty satüre etmez (firmware doyurur). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py`.
 
 ---

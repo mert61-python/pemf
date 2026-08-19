@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file    main.c
  * @brief   STM32F4 — 5-Kanal Yazılımsal DDS Bipolar Full Bridge PWM Kontrolörü
- * @version 2.2.0 (Software DDS — Bipolar Full Bridge + ref_ms Senkron Desteği)
+ * @version 2.3.0 (Software DDS — SYM-BIPOLAR Full Bridge + ref_ms Senkron Desteği)
  *
  * ============================================================================
  * MİMARİ ÖZET
@@ -24,6 +24,9 @@
  *  │                                                                     │
  *  │  Her bobin BAĞIMSIZ faz kaydırmasına sahiptir!                      │
  *  │  Dead Time: A/B geçişinde NOP döngüsü (DDS_DEADTIME_NOP_ITERS) — ÖLÇÜLMEMİŞ  │
+ *  │  DALGA (HG-2, 2026-08-19): SİMETRİK BİPOLAR — A=[0,duty), B=[½,½+duty),      │
+ *  │  arada İKİSİ DE LOW → her duty'de net DC=0 (ESP S3/8266 ile AYNI sözleşme).  │
+ *  │  Eski "bir bacak hep enerjili" sözleşmesi duty≠%50'de DC-bias üretiyordu.    │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -130,8 +133,9 @@
 #define DDS_MIN_TICKS_PER_PERIOD                                               \
   2.0f /**< Nyquist/teknik alt sinir: periyot basina en az 2 tick */
 #define DDS_DEAD_TIME_TICKS                                                    \
-  0U /**< TICK bazli yazilimsal dead-time KULLANILMIYOR (0). Gercek dead-time A/B
-      *   gecisinde NOP dongusuyle uygulanir → DDS_DEADTIME_NOP_ITERS. */
+  0U /**< KULLANIM DISI (HG-2, 2026-08-19): duty klempi artik DDS_BIPOLAR_GAP_TICKS
+      *   ile yarim-periyot tabanli. NOP dead-time (DDS_DEADTIME_NOP_ITERS) suruyor.
+      *   Tanim tarihsel referans icin birakildi. */
 /**
  * A/B tam-kopru gecisinde uygulanan dead-time NOP dongusu iterasyon sayisi.
  *
@@ -150,6 +154,15 @@
  * sure, kullanilan MOSFET/surucunun veri sayfasindaki turn-off gecikmesinden BUYUK olmalidir.
  */
 #define DDS_DEADTIME_NOP_ITERS 21U
+/**
+ * HG-2 (2026-08-19): Simetrik bipolar dalgada A darbesi ile B darbesi arasında GARANTİLİ
+ * her-iki-bacak-LOW boşluğu (tick). ESP S3'ün DEAD_TIME_TICKS=2 değeriyle birebir (aynı 50 kHz
+ * tick tabanı → 2 tick = 40 µs). duty klempi = (tpp/2 − bu değer); böylece A=[0,duty) ve
+ * B=[yarım, yarım+duty) pencereleri YAPISAL olarak çakışamaz. Uç frekansta (tpp<6) klemp tabanı
+ * 1 tick'e düşer ve boşluk kaybolabilir — o rejimde koruma NOP tabanlı break-before-make'tir
+ * (DDS_DEADTIME_NOP_ITERS, her geçişte zaten uygulanır). Tipik PEMF (≤100 Hz, tpp≥500) bol boşluklu.
+ */
+#define DDS_BIPOLAR_GAP_TICKS 2
 #define DDS_MAX_DUTY_SLEW                                                      \
   25 /**< Periyot başı max duty değişimi (tick) — 100 Hz referans değeri */
 #define DDS_SLEW_FULLSCALE_S                                                   \
@@ -364,7 +377,8 @@ static int32_t g_slew_ticks[NUM_COILS] = {DDS_MAX_DUTY_SLEW, DDS_MAX_DUTY_SLEW,
 /** Faz offset tick değerleri */
 static int32_t g_phase_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
 
-/** Önceki bipolar durumları (0: A=0/B=1, 1: A=1/B=0) */
+/** Önceki çıkış durumları (1: A darbesi, 0: B darbesi, 2: IDLE/kapalı,
+ *  3: GAP her-iki-LOW [HG-2 simetrik bipolar], 255: init/bilinmiyor) */
 static uint8_t g_prev_state[NUM_COILS] = {255, 255, 255, 255, 255};
 
 /* ============================================================================
@@ -551,6 +565,117 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
 }
 
 /* ============================================================================
+ * HG-1: BOBİN NTC TERMAL KESME — DERLEME-KAPILI (2026-08-19)
+ * ----------------------------------------------------------------------------
+ * Donanım-uyum denetimi HG-1: bobin 1-5'in HİÇBİR katmanda termal koruması yoktu
+ * (ESP bobinleri 6-8 kendi 48/45 kesmesine sahip; backend 48°C limiti sahip
+ * kararıyla kaldırıldı ve GERİ EKLENMEYECEK — koruma cihaz-yerel olmalı).
+ *
+ * Bu blok TAM bir NTC termal kesme uygular ama ⚠️ DONANIM HENÜZ BAĞLI DEĞİL:
+ * PEMF_NTC_TERMAL_ENABLED=0 iken hiçbir kod derlenmez (davranış birebir eski).
+ * NTC'ler bağlanınca 1 yapıp tezgahta doğrulayın.
+ *
+ * Devre (bobin başına): 3V3 ── NTC(10k, B=3950) ──●── R(10k) ── GND, ● → ADC pini.
+ * Pinler (bobin 1..5): PA0=IN0, PA3=IN3, PA4=IN4, PC0=IN10, PC3=IN13 (ADC1).
+ * ⚠️ Pin seçimi ÇAKIŞMASIZ dorulandı (bobin GPIO/PB1/USART3 dışı) ama fiziksel
+ * kablolamaya göre g_ntc_kanal tablosu + MODER satırları güncellenmelidir.
+ *
+ * Davranış: 500 ms'de bir oku; T ≥ 48°C → o bobinin duty'si süre-bitimi kalıbıyla
+ * (g_shadow + pending, IRQ-korumalı) SIFIRLANIR ve kilit konur; kilitliyken gelen
+ * paketler bobini YENİDEN ENERJİLENDİREMEZ; T ≤ 45°C → kilit açılır ama bobin
+ * otomatik BAŞLAMAZ (host komutu gerekir). Kopuk/kısa NTC (uç ADC değeri) karar
+ * ÜRETMEZ — yanlış-pozitif kesme yerine mevcut durumu korur (bkz. tezgah listesi).
+ * Registre-seviyesi ADC (HAL_ADC_MODULE kapalı kalır → kapalıyken ikili birebir).
+ * ============================================================================
+ */
+#define PEMF_NTC_TERMAL_ENABLED 0 /* ⚠️ NTC'ler fiziksel bağlanmadan 1 YAPMAYIN */
+
+#if PEMF_NTC_TERMAL_ENABLED
+#define NTC_KESME_C 48.0f  /* kesme eşiği — ESP firmware'iyle aynı (TERMAL_KESME_C) */
+#define NTC_DONUS_C 45.0f  /* histerezis dönüş — ESP ile aynı */
+#define NTC_BETA 3950.0f   /* 10k NTC tipik Beta; NTC veri sayfasına göre güncelle */
+#define NTC_R25_OHM 10000.0f
+#define NTC_RDIV_OHM 10000.0f
+#define NTC_POLL_MS 500U
+
+/* Bobin i → ADC1 kanalı (PA0,PA3,PA4,PC0,PC3) — kablolamaya göre güncelle */
+static const uint8_t g_ntc_kanal[NUM_COILS] = {0U, 3U, 4U, 10U, 13U};
+static volatile uint8_t g_ntc_kilit[NUM_COILS] = {0U, 0U, 0U, 0U, 0U};
+
+static void Coil_NtcAdcInit(void) {
+  /* GPIO analog mod: PA0/PA3/PA4 + PC0/PC3 (GPIOA/GPIOC saatleri Coil_GpioInit'te açık) */
+  GPIOA->MODER |= (3U << (0U * 2U)) | (3U << (3U * 2U)) | (3U << (4U * 2U));
+  GPIOC->MODER |= (3U << (0U * 2U)) | (3U << (3U * 2U));
+  RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
+  ADC->CCR = (ADC->CCR & ~ADC_CCR_ADCPRE) | ADC_CCR_ADCPRE_0; /* PCLK2/4 ≤ 36 MHz */
+  ADC1->CR1 = 0U;           /* 12-bit, tek dönüşüm */
+  ADC1->SMPR1 = 0x07FFFFFFU; /* tüm kanallara en yavaş örnekleme (480 çevrim) */
+  ADC1->SMPR2 = 0x3FFFFFFFU;
+  ADC1->CR2 = ADC_CR2_ADON;
+}
+
+/** Tek NTC oku → °C. Zaman aşımı / kopuk / kısa devre → -273 (karar üretme sinyali). */
+static float Coil_NtcOku(uint8_t kanal) {
+  ADC1->SQR3 = kanal;
+  ADC1->CR2 |= ADC_CR2_SWSTART;
+  uint32_t bekle = 100000U;
+  while (((ADC1->SR & ADC_SR_EOC) == 0U) && (bekle > 0U)) {
+    bekle--;
+  }
+  if (bekle == 0U) {
+    return -273.0f;
+  }
+  float ham = (float)(ADC1->DR & 0x0FFFU);
+  if ((ham < 8.0f) || (ham > 4088.0f)) {
+    return -273.0f; /* uç değer = NTC kopuk/kısa — güvenilmez */
+  }
+  float rntc = NTC_RDIV_OHM * (4095.0f - ham) / ham;
+  float invT = (1.0f / 298.15f) + (logf(rntc / NTC_R25_OHM) / NTC_BETA);
+  return (1.0f / invT) - 273.15f;
+}
+
+static void Coil_NtcTermalPoll(uint32_t simdi_ms) {
+  static uint32_t sonraki_ms = 0U;
+  /* Kilit UYGULAMASI her döngüde: kilitliyken yeni paket bobini yeniden enerjilendiremez
+   * (paket g_active'e ISR'da düşer; burada görülüp süre-bitimi kalıbıyla geri sıfırlanır). */
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    if ((g_ntc_kilit[i] != 0U) && (g_active.coil[i].duty > 0.0f)) {
+      __disable_irq();
+      g_shadow.coil[i].duty = 0.0f;
+      g_shadow.pending = 1;
+      __enable_irq();
+    }
+  }
+  if (simdi_ms < sonraki_ms) {
+    return;
+  }
+  sonraki_ms = simdi_ms + NTC_POLL_MS;
+  uint8_t tetik = 0U;
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    float t = Coil_NtcOku(g_ntc_kanal[i]);
+    if (t <= -200.0f) {
+      continue; /* sensör güvenilmez → karar verme */
+    }
+    if ((g_ntc_kilit[i] == 0U) && (t >= NTC_KESME_C)) {
+      g_ntc_kilit[i] = 1U;
+      tetik = 1U;
+      __disable_irq();
+      g_shadow.coil[i].duty = 0.0f;
+      g_shadow.pending = 1;
+      __enable_irq();
+    } else if ((g_ntc_kilit[i] != 0U) && (t <= NTC_DONUS_C)) {
+      g_ntc_kilit[i] = 0U; /* kilit açık ama otomatik yeniden BAŞLATMA yok */
+    }
+  }
+  if (tetik != 0U) {
+    static char termal_msg[] =
+        "-> STM_EVT: TERMAL kesme (>=48C) — bobin(ler) durduruldu, sogumada kilitli.\r\n";
+    (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)termal_msg, strlen(termal_msg));
+  }
+}
+#endif /* PEMF_NTC_TERMAL_ENABLED */
+
+/* ============================================================================
  * MAIN
  * ============================================================================
  */
@@ -573,12 +698,16 @@ int main(void) {
   /* UART alımı başlat */
   Coil_UartStartReceive();
 
+#if PEMF_NTC_TERMAL_ENABLED
+  Coil_NtcAdcInit(); /* HG-1: NTC termal kesme (yalnız donanım bağlıyken derlenir) */
+#endif
+
   /* Başlangıçta terminale hazır olduğumuzu basalım.
    * static: HAL_UART_Transmit_IT non-blocking olduğu için lokal buffer race
    * condition'ını önler. Blocking Transmit kullanılarak gönderimin tamamlandığı
    * garanti edilir. */
   static const char init_msg[] =
-      "-> STM_READY: DDS v2.2 (5-ch + HW_SYNC@PB1) Waiting for commands...\r\n";
+      "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR + HW_SYNC@PB1) Waiting for commands...\r\n";
   HAL_UART_Transmit(&huart3, (uint8_t *)init_msg, strlen(init_msg), 200U);
 
   uint32_t last_communication_ms = HAL_GetTick();
@@ -592,6 +721,10 @@ int main(void) {
    * =================================================================== */
   while (1) {
     uint32_t current_time = HAL_GetTick();
+
+#if PEMF_NTC_TERMAL_ENABLED
+    Coil_NtcTermalPoll(current_time); /* HG-1: 48/45 histerezisli bobin termal kesme */
+#endif
 
     /* Python (GUI/Backend) henüz bağlantı kurmadıysa veya
      * paket gelmediyse her 2 saniyede bir ping at (Handshake Time-out önlemi)
@@ -765,7 +898,7 @@ int main(void) {
  *   - TIM8 tamamen kaldırıldı
  *   - Her bobin için bağımsız yazılımsal DDS sayacı kullanılır
  *   - GPIO pinleri doğrudan BSRR ile sürülür
- *   - Dead time yazılımsal olarak uygulanır (DDS_DEAD_TIME_TICKS)
+ *   - Dead time: yapısal boşluk (DDS_BIPOLAR_GAP_TICKS) + NOP break-before-make
  *
  * Timer hesabı:
  *   168 MHz / (167+1) / (19+1) = 50 kHz (20 µs periyot)
@@ -831,14 +964,16 @@ static void Coil_StartPwmOutputs(void) {
  *      a. 5 bobinin faz-ofsetli bipolar dalga durumunu hesapla
  *      b. GPIO BSRR ile çıkışı atomik güncelle
  *
- * Tam bipolar dalga formu, geçişlerde NOP gecikmesi ile:
+ * Simetrik bipolar dalga formu (HG-2, 2026-08-19), geçişlerde NOP gecikmesi ile:
  *
  *   adj = (tick - phase_offset) mod TICKS_PER_PERIOD
  *
- *   [0, duty)          → A=HIGH, B=LOW   (pozitif yön)
- *   [duty, period)     → A=LOW,  B=HIGH  (negatif yön)
+ *   [0, duty)               → A=HIGH, B=LOW   (pozitif darbe)
+ *   [yarım, yarım+duty)     → A=LOW,  B=HIGH  (negatif darbe — ayna)
+ *   diğer tüm tick'ler      → A=LOW,  B=LOW   (GAP; net DC = 0)
  *
- * Not: dead-time A/B geçiş anında NOP döngüsüyle uygulanır (süre ÖLÇÜLMEMİŞ).
+ * Not: dead-time iki katman — yapısal GAP (DDS_BIPOLAR_GAP_TICKS klempi) + açılış
+ * geçişlerinde NOP break-before-make (süre ÖLÇÜLMEMİŞ).
  *
  * CPU yükü: ~120 cycle / 3360 available = ~%3.6
  *   ⚠️ Bu rakam KARARLI-DURUM (her tick koşan) yolu içindir: tick/slew/BSRR bloğu.
@@ -896,11 +1031,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         g_duty_ticks[i] =
             (int32_t)(((float)g_duty_ticks[i] / (float)eski_tpp) * (float)g_tpp[i]);
       }
-      /* Güvenlik klempini ANINDA uygula — `period_reset`'i BEKLEMEDEN (etki (a) tam buradaydı). */
+      /* Güvenlik klempini ANINDA uygula — `period_reset`'i BEKLEMEDEN (etki (a) tam buradaydı).
+       * HG-2: tavan artık YARIM-periyot − boşluk (simetrik bipolar: A ve B pencereleri yarıma
+       * sığmalı, aralarında DDS_BIPOLAR_GAP_TICKS LOW kalmalı). Eski tavan (tpp−1) tam-periyoda
+       * izin veriyordu — o sözleşme kalktı. */
       {
-        int32_t max_d_now = (int32_t)(g_tpp[i] - 1U) - (int32_t)DDS_DEAD_TIME_TICKS;
-        if (max_d_now < 0)
-          max_d_now = 0;
+        int32_t max_d_now = (int32_t)(g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS;
+        if (max_d_now < 1)
+          max_d_now = 1; /* uç frekans (tpp<6): boşluk NOP dead-time'a düşer, bkz. sabitin notu */
         if (g_duty_ticks[i] > max_d_now)
           g_duty_ticks[i] = max_d_now;
         if (g_duty_ticks[i] < 0)
@@ -1054,8 +1192,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
           g_duty_ticks[i] = 0;
       }
 
-      /* Duty güvenlik klempi (max tpp-1, dead time dahil) */
-      int32_t max_d = (int32_t)(tpp - 1U) - (int32_t)DDS_DEAD_TIME_TICKS;
+      /* Duty güvenlik klempi — HG-2: tavan = yarım-periyot − boşluk (simetrik bipolar) */
+      int32_t max_d = (int32_t)(tpp / 2U) - DDS_BIPOLAR_GAP_TICKS;
+      if (max_d < 1)
+        max_d = 1; /* uç frekans: NOP dead-time devrede (bkz. DDS_BIPOLAR_GAP_TICKS notu) */
       if (g_duty_ticks[i] > max_d)
         g_duty_ticks[i] = max_d;
     }
@@ -1074,10 +1214,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     }
   }
 
-  /* ---- 5 bobin için tek yönlü GPIO çıkışı üret (IN_A = IN_B, dead-time
-   * korumalı) ---- */
-  /* DDS_DEAD_TIME_TICKS = 0: dead time yazılım değil donanım tarafında
-   * uygulanıyor. */
+  /* ---- 5 bobin için SİMETRİK BİPOLAR GPIO çıkışı üret (HG-2, 2026-08-19) ----
+   * A darbesi [0,duty) · B darbesi [yarım, yarım+duty) · aralarda İKİSİ DE LOW.
+   * Dead-time iki katman: yapısal boşluk (DDS_BIPOLAR_GAP_TICKS klempi) + her
+   * açılış geçişinde NOP break-before-make (DDS_DEADTIME_NOP_ITERS). */
 
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
     /* DENETİM P0 — STOP PERİYOT SONUNU BEKLEMEZ: g_duty_ticks yalnızca periyot başında
@@ -1104,24 +1244,44 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (adj < 0)
       adj += tpp;
 
-    /* Bipolar dalga durumu (A=1, B=0 ile A=0, B=1 arası sürekli geçiş) */
-    uint8_t state = (adj < duty) ? 1U : 0U;
+    /* ⚠️ HG-2 DALGA SÖZLEŞMESİ (2026-08-19): SİMETRİK BİPOLAR — ESP S3/8266 ile AYNI anlam.
+     * ESKİ sözleşme `state = (adj < duty) ? A : B` idi: bir bacak HEP enerjili → net ortalama
+     * V·(2·duty−1); duty≠%50'de bobinden sürekli tek yönlü DC akıyordu (denetim HG-2: aynı duty
+     * üç bobin ailesinde FARKLI dalga + STM'de sınırsız DC ısınması, termal kesme de yok).
+     * YENİ sözleşme: A=[0,duty) · B=[yarım, yarım+duty) · diğer tüm tick'lerde İKİSİ DE LOW
+     * → her duty'de net DC = 0; duty artık S3/8266'daki gibi yarım-periyot doluluk oranıdır.
+     * duty ≤ yarım − DDS_BIPOLAR_GAP_TICKS klempi yukarıda → pencereler yapısal olarak çakışmaz.
+     * ⚠️ TEZGÂH ZORUNLU: aynı sayısal duty'de teslim edilen enerji/alan ESKİ dalgadan FARKLIDIR
+     * (doz yeniden kalibre edilmeli — skop + alan probu; bkz. DONANIM-UYUM-ANALIZI-2026-08-19). */
+    const int32_t yarim = tpp / 2;
+    uint8_t state;
+    if (adj < duty) {
+      state = 1U; /* A darbesi (pozitif yarım) */
+    } else if ((adj >= yarim) && (adj < (yarim + duty))) {
+      state = 0U; /* B darbesi (negatif yarım — ayna) */
+    } else {
+      state = 3U; /* boşluk: İKİSİ DE LOW (3 = GAP; 2 = IDLE ile karışmasın) */
+    }
 
     if (state != g_prev_state[i]) {
-      if (state) {
-        /* A=1, B=0'a geçiş: ÖNCE B'yi kapat, dead-time bekle, SONRA A'yı aç */
+      if (state == 1U) {
+        /* A açılıyor: ÖNCE B'yi kapat (savunma), dead-time bekle, SONRA A'yı aç */
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
         for (volatile uint32_t d = 0; d < DDS_DEADTIME_NOP_ITERS; d++) {
           __asm volatile("nop");
         } /* süre ÖLÇÜLMEMİŞ — bkz. DDS_DEADTIME_NOP_ITERS */
         coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA;
-      } else {
-        /* A=0, B=1'e geçiş: ÖNCE A'yı kapat, dead-time bekle, SONRA B'yi aç */
+      } else if (state == 0U) {
+        /* B açılıyor: ÖNCE A'yı kapat (savunma), dead-time bekle, SONRA B'yi aç */
         coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA << 16U;
         for (volatile uint32_t d = 0; d < DDS_DEADTIME_NOP_ITERS; d++) {
           __asm volatile("nop");
         } /* süre ÖLÇÜLMEMİŞ — bkz. DDS_DEADTIME_NOP_ITERS */
         coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB;
+      } else {
+        /* Boşluğa geçiş: iki bacağı da kapat — kapatma yönü, dead-time gerektirmez */
+        coil_gpio[i].portA->BSRR = (uint32_t)coil_gpio[i].pinA << 16U;
+        coil_gpio[i].portB->BSRR = (uint32_t)coil_gpio[i].pinB << 16U;
       }
       g_prev_state[i] = state;
     }
