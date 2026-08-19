@@ -65,6 +65,14 @@ algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirm
 commit'in 39'u site dışıydı). CI: kök `.github/workflows/site.yml` (**Node 22 şart** —
 Node 20'de supabase-js "yerleşik WebSocket yok" ile düşer).
 
+> ⚠️ **Ignored Build Step SIĞ-KLONA DAYANIKLI olmalı** (2026-08-19'da öğrenildi): Vercel
+> repo'yu `--depth=10` ile klonlar. Firmware'e arka arkaya çok commit atınca Vercel'in
+> "önceki deploy" olarak hatırladığı sha bu 10-commit penceresinin dışına düştü; komut
+> `git diff <sha>` yapınca **`fatal: bad object`** verip deploy'u "Error"a düşürdü (canlı
+> site etkilenmedi — Error yayınlanmaz, ama her push'ta hata maili geldi). Komut artık
+> önce `git cat-file -e <sha>` ile objeyi test ediyor; yoksa (sığ klon) DERLE tarafına
+> düşüyor. Tam komut Vercel projesi ayarlarında (`commandForIgnoringBuildStep`).
+
 ### İş akışı — siteyi güncellemek
 ```bash
 # guii kökünden — içerik genellikle pemf-vet-web/src/config.ts (sürüm, fiyat, link…)
