@@ -37,7 +37,9 @@
 #include "CoilController.h"
 #include "SensorManager.h"
 #include "SharedDefs.h"
+#include "Secrets.h"            /* PREF_KEY_PWM_STATE (NVS anahtar adı) */
 #include <sys/time.h>
+#include "soc/gpio_struct.h"    /* GPIO.out_w1ts/w1tc — core 3.x'te Arduino.h artık dolaylı getirmiyor */
 
 /* ---- DDS zamanlama sabitleri (8266 ile aynı taban: 50 kHz / 20 µs tick) ---- */
 #define DDS_TIMER_FREQ_HZ   50000U
@@ -167,11 +169,17 @@ void CoilController::begin() {
 }
 
 void CoilController::_setupTimerISR() {
-    /* 80 MHz / 80 = 1 MHz; alarm 20 → 50 kHz, oto-tekrar. */
-    s_timer = timerBegin(0, 80, true);
-    timerAttachInterrupt(s_timer, &ddsTimerISR, true);
-    timerAlarmWrite(s_timer, 20, true);
-    timerAlarmEnable(s_timer);
+    /* ⚠️ Arduino ESP32 core 3.x API'si (2026-08-19, 3.3.11'de derlendi): eski
+     * timerBegin(num, prescaler, countUp) imzası KALKTI. Yeni model:
+     *   timerBegin(frekans)          → 1 MHz sayaç
+     *   timerAlarm(t, 20, true, 0)   → her 20 tick'te (20 µs) sonsuz oto-tekrar = 50 kHz */
+    s_timer = timerBegin(1000000);
+    if (s_timer == nullptr) {
+        LOG_PRINTLN("[DDS][HATA] timerBegin basarisiz — DDS calismayacak!");
+        return;
+    }
+    timerAttachInterrupt(s_timer, &ddsTimerISR);
+    timerAlarm(s_timer, 20, true, 0);
     LOG_PRINTLN("[DDS] S3: 50kHz timer basladi (full-bridge bipolar + olu-zaman)");
 }
 

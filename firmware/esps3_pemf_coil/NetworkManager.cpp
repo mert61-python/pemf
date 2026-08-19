@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include <esp_random.h>  /* core 3.x/IDF5: esp_random() ayri basliga tasindi (2026-08-19) */
 #include <HTTPUpdate.h>   // ✅ Add OTA Support
 #include <esp_task_wdt.h> // WDT FIX: reconnect öncesi WDT reset için
 // üzerinden transitif gelmektedir; açık include core 3.x'de derleme hatasına
