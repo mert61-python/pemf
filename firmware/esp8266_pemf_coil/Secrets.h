@@ -20,8 +20,11 @@
 
 // --- WI-FI AYARLARI ---
 // Eger bos birakilirsa WiFiManager AP moduna duser
-const char* WIFI_SSID_CONST = "";
-const char* WIFI_PASS_CONST = "";
+/* 2026-08-19: `static` eklendi — bu ikisi dosyadaki diğer tanımların aksine static
+ * DEĞİLDİ (işaretçi dış bağlantılı olur); Secrets.h ikinci bir .cpp'ye include
+ * edilince linker "multiple definition" verdi. */
+static const char* WIFI_SSID_CONST = "";
+static const char* WIFI_PASS_CONST = "";
 
 // --- MQTT AYARLARI ---
 // LOCAL MQTT (LattePanda Mosquitto) — öncelikli
