@@ -1,13 +1,15 @@
 # Author: mertaygn, cglrgrkn
 """MAKİNE-ÖZEL SIR YEDEĞİ — build_tools/secrets_backup.py yuvarlak-tur + güvenlik kapıları.
 
-"Her makinede build" için sırlar git'e girmeden taşınabilir olmalı. Bu araç scrypt+Fernet ile
-şifreli tek arşiv üretir. Kapılar: (a) backup→restore içerik BİREBİR korunur, (b) yanlış parola
-ÇÖZEMEZ, (c) list/hata çıktısı DEĞER SIZDIRMAZ, (d) .pemfsec git'e giremez.
+"Her makinede build" için sırlar git'e girmeden taşınabilir olmalı. Bu araç (parolasız, sahip
+kararı 2026-08-19) sırları TEK base64 arşive toplar. Kapılar: (a) backup→restore içerik BİREBİR
+korunur, (b) `.pemfsec` git'e giremez, (c) çıktı değer sızdırmaz, (d) eski parola-korumalı arşiv
+(PEMFSEC1) açıkça REDDEDİLİR (sessiz veri kaybı olmasın).
 """
 
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 from pathlib import Path
@@ -18,23 +20,9 @@ KOK = Path(__file__).resolve().parents[1]
 BETIK = KOK / "build_tools" / "secrets_backup.py"
 
 
-def _kos(args, parola=None, extra_env=None):
-    import os
-
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    if parola is not None:
-        env["PEMF_SECBAK_PASSPHRASE"] = parola
-    if extra_env:
-        env.update(extra_env)
-    return subprocess.run([sys.executable, str(BETIK), *args], capture_output=True, text=True, env=env, timeout=120)
-
-
 @pytest.fixture()
 def sahte_repo(tmp_path, monkeypatch):
     """secrets_backup'ı izole yollarla koşmak için GUII/HOME'u geçici dizine bağla."""
-    # betiği alt-süreç yerine IN-PROCESS koştur ki GUII/HOME'u monkeypatch edebilelim
-    import importlib
-
     monkeypatch.syspath_prepend(str(KOK / "build_tools"))
     mod = importlib.import_module("secrets_backup")
     importlib.reload(mod)
@@ -45,7 +33,6 @@ def sahte_repo(tmp_path, monkeypatch):
     (gui / "data").mkdir(parents=True)
     (gui / "pf/android").mkdir(parents=True)
     (home / ".pemf-keys").mkdir(parents=True)
-    # sahte sır içerikleri (gerçek sır DEĞİL)
     icerik = {
         "firmware/esp8266_pemf_coil/Secrets.h": b'#define WIFI_PASS "sahte-8266-parola-123"\n',
         "firmware/esps3_pemf_coil/Secrets.h": b'#define WIFI_PASS "sahte-s3-parola-456"\n',
@@ -59,7 +46,6 @@ def sahte_repo(tmp_path, monkeypatch):
     (home / ".pemf-keys/pemf-release.jks").write_bytes(b"SAHTE-JKS-BINARY-ICERIK")
     monkeypatch.setattr(mod, "GUII", gui)
     monkeypatch.setattr(mod, "HOME", home)
-    # _KALEMLER GUII/HOME'a bağlı olduğundan yeniden kur
     mod._KALEMLER = [
         ("esp8266/Secrets.h", gui / "firmware/esp8266_pemf_coil/Secrets.h", True),
         ("esps3/Secrets.h", gui / "firmware/esps3_pemf_coil/Secrets.h", True),
@@ -72,66 +58,63 @@ def sahte_repo(tmp_path, monkeypatch):
     return mod, gui, home, tmp_path, icerik
 
 
-def test_KRITIK_backup_restore_YUVARLAK_TUR_bire_bir(sahte_repo, monkeypatch):
+class _Out:
+    def __init__(self, out):
+        self.out = out
+
+
+class _Restore:
+    def __init__(self, inp, force=True):
+        self.inp = inp
+        self.force = force
+
+
+def test_KRITIK_backup_restore_YUVARLAK_TUR_bire_bir(sahte_repo):
     mod, gui, home, tmp_path, icerik = sahte_repo
     ark = tmp_path / "yedek.pemfsec"
-    monkeypatch.setenv("PEMF_SECBAK_PASSPHRASE", "dogru-parola-99")
-
-    class _A:
-        out = str(ark)
-
-    assert mod.cmd_backup(_A()) == 0
+    assert mod.cmd_backup(_Out(str(ark))) == 0
     assert ark.exists()
-
-    # tüm sır dosyalarını SİL → restore geri getirmeli
     for rel in icerik:
         (gui / rel).unlink()
     (home / ".pemf-keys/pemf-release.jks").unlink()
-
-    class _R:
-        inp = str(ark)
-        force = True
-
-    assert mod.cmd_restore(_R()) == 0
+    assert mod.cmd_restore(_Restore(str(ark))) == 0
     for rel, beklenen in icerik.items():
         assert (gui / rel).read_bytes() == beklenen, f"{rel} birebir gelmedi"
     assert (home / ".pemf-keys/pemf-release.jks").read_bytes() == b"SAHTE-JKS-BINARY-ICERIK"
 
 
-def test_KRITIK_YANLIS_parola_COZEMEZ(sahte_repo, monkeypatch):
+def test_backup_PAROLASIZ_calisir_env_gerekmez(sahte_repo, monkeypatch):
+    """Sahip kararı: parola kaldırıldı — hiçbir parola/env olmadan backup+list çalışır."""
     mod, gui, home, tmp_path, icerik = sahte_repo
+    monkeypatch.delenv("PEMF_SECBAK_PASSPHRASE", raising=False)
     ark = tmp_path / "y.pemfsec"
-    monkeypatch.setenv("PEMF_SECBAK_PASSPHRASE", "dogru-parola-99")
+    assert mod.cmd_backup(_Out(str(ark))) == 0
 
-    class _A:
-        out = str(ark)
-
-    mod.cmd_backup(_A())
-    (gui / "data/cloud_mqtt_provision.json").unlink()
-    monkeypatch.setenv("PEMF_SECBAK_PASSPHRASE", "YANLIS-parola-00")
-
-    class _R:
+    class _L:
         inp = str(ark)
-        force = True
+
+    assert mod.cmd_list(_L()) == 0
+
+
+def test_KRITIK_ESKI_sifreli_arsiv_ACIKCA_REDDEDILIR(sahte_repo, tmp_path):
+    """PEMFSEC1 (eski parola-korumalı) arşiv parolasız sürümde SESSİZCE bozulmamalı — açık hata."""
+    import json
+
+    mod, *_ = sahte_repo
+    eski = tmp_path / "eski.pemfsec"
+    eski.write_text(json.dumps({"_magic": "PEMFSEC1", "kdf": {}, "kalemler": []}), encoding="utf-8")
+
+    class _L:
+        inp = str(eski)
 
     with pytest.raises(SystemExit):
-        mod.cmd_restore(_R())
+        mod.cmd_list(_L())
 
 
-def test_KRITIK_arsiv_ve_list_DEGER_SIZDIRMAZ(sahte_repo, monkeypatch, capsys):
+def test_KRITIK_cikti_DEGER_SIZDIRMAZ(sahte_repo, capsys):
     mod, gui, home, tmp_path, icerik = sahte_repo
     ark = tmp_path / "y.pemfsec"
-    monkeypatch.setenv("PEMF_SECBAK_PASSPHRASE", "dogru-parola-99")
-
-    class _A:
-        out = str(ark)
-
-    mod.cmd_backup(_A())
-    # arşivin HAM içeriğinde hiçbir sahte-sır DÜZ METİN geçmemeli (Fernet şifreli)
-    ham = ark.read_text(encoding="utf-8")
-    for gizli in ("sahte-8266-parola", "sahte-bulut", "sahte-keystore-pw", "SAHTE-JKS"):
-        assert gizli not in ham, f"sır arşivde DÜZ METİN: {gizli}"
-    # list de değer basmaz
+    mod.cmd_backup(_Out(str(ark)))
     capsys.readouterr()
 
     class _L:
@@ -139,7 +122,8 @@ def test_KRITIK_arsiv_ve_list_DEGER_SIZDIRMAZ(sahte_repo, monkeypatch, capsys):
 
     mod.cmd_list(_L())
     cikti = capsys.readouterr().out
-    for gizli in ("sahte-8266-parola", "sahte-bulut", "sahte-keystore-pw"):
+    # base64 olsa da list KOMUTU düz değerleri BASMAMALI (yalnız ad + boyut)
+    for gizli in ("sahte-8266-parola", "sahte-bulut", "sahte-keystore-pw", "SAHTE-JKS"):
         assert gizli not in cikti
 
 
@@ -147,7 +131,19 @@ def test_KRITIK_pemfsec_GITE_GIREMEZ():
     r = subprocess.run(["git", "check-ignore", "ornek.pemfsec"], cwd=KOK, capture_output=True, text=True, timeout=60)
     if r.returncode not in (0, 1):
         pytest.skip("git deposu değil")
-    assert r.returncode == 0, "*.pemfsec .gitignore'da DEĞİL — şifreli sır yedeği repoya sızabilir"
-    # betiğin kendisi de sır DEĞERİ içermez (kaynak public repoda)
+    assert r.returncode == 0, "*.pemfsec .gitignore'da DEĞİL — sır yedeği repoya sızabilir"
     src = BETIK.read_text(encoding="utf-8", errors="replace")
     assert "hivemq" not in src.lower() and ".cloud" not in src, "betikte gerçek sır izi"
+
+
+def test_restore_mevcut_dosyayi_FORCE_olmadan_KORUR(sahte_repo):
+    mod, gui, home, tmp_path, icerik = sahte_repo
+    ark = tmp_path / "y.pemfsec"
+    mod.cmd_backup(_Out(str(ark)))
+    # bir dosyayı DEĞİŞTİR; force'suz restore üzerine YAZMAMALI
+    hedef = gui / "data/cloud_mqtt_provision.json"
+    hedef.write_bytes(b"YENI-YEREL-ICERIK-DOKUNMA")
+    assert mod.cmd_restore(_Restore(str(ark), force=False)) == 0
+    assert hedef.read_bytes() == b"YENI-YEREL-ICERIK-DOKUNMA", "force'suz restore mevcut dosyayı ezdi"
+    # sys import gerektirmiyor; alt-süreç yok
+    assert sys.executable  # noop, lint için

@@ -1,30 +1,30 @@
 # Author: mertaygn, cglrgrkn
-"""MAKİNE-ÖZEL SIRLARIN TAŞINABİLİR ŞİFRELİ YEDEĞİ — "her makinede build" içindir.
+"""MAKİNE-ÖZEL SIRLARIN TAŞINABİLİR YEDEĞİ — "her makinede build" içindir.
 
 PEMF'in git'e GİRMEYEN (public repo + gitleaks) sırları bu makinede yaşıyor; tek-nokta-arızası.
-Bu araç hepsini TEK parola-korumalı `.pemfsec` arşivine toplar. Yeni bir makinede: repoyu klonla,
-`restore` ile arşivi aç → dosyalar yerine oturur → `scripts/build_backend_exe.ps1` çalışır.
+Bu araç hepsini TEK `.pemfsec` arşivine toplar. Yeni bir makinede: repoyu klonla, `restore` ile
+arşivi aç → dosyalar yerine oturur → `scripts/build_backend_exe.ps1` çalışır.
 
-⚠️ GÜVENLİK:
-  * Arşivi git'e KOYMA, e-postayla YOLLAMA. Şifre-yöneticisi + çevrimdışı USB gibi TAŞI.
-  * Parolayı .pemfsec ile AYNI kanaldan gönderme.
-  * Bu betik hiçbir sır DEĞERİNİ ekrana yazmaz (yalnız dosya adı + bayt uzunluğu).
+⚠️ GÜVENLİK — PAROLA YOK (sahip kararı 2026-08-19): arşiv ŞİFRELİ DEĞİL, yalnız base64 ile
+TOPLANMIŞtır. Dosyayı eline geçiren herkes içindeki sırları (ESP Secrets.h, release keystore,
+bulut MQTT parolası) OKUYABİLİR. Maruziyet sınıfı yeni değil (aynı sırlar ESP flash'larında +
+public `esp` dalında). Yine de:
+  * `.pemfsec`'i git'e KOYMA (gitignore korur), e-postayla/genel buluta YOLLAMA.
+  * USB + şifre-yöneticisi eki gibi ERİŞİMİ SINIRLI ortamda taşı.
+Bu betik yalnızca dosya adı + bayt uzunluğunu yazdırır (değerleri değil).
 
-Şifreleme: scrypt(parola, tuz, N=2**15) → Fernet anahtarı → her dosya ayrı Fernet token.
-Bağımlılık: `cryptography` (repoda zaten var).
+Bağımlılık YOK (yalnız stdlib).
 
 Kullanım:
-  python build_tools/secrets_backup.py backup  [--out yol.pemfsec]   # sırları topla+şifrele
+  python build_tools/secrets_backup.py backup  [--out yol.pemfsec]   # sırları topla
   python build_tools/secrets_backup.py restore --in yol.pemfsec       # yeni makinede geri yükle
   python build_tools/secrets_backup.py list    --in yol.pemfsec       # içindekileri göster (değer YOK)
-Parola: PEMF_SECBAK_PASSPHRASE ortam değişkeninden (yoksa gizli getpass ile sorulur).
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
-import getpass
 import json
 import os
 import sys
@@ -33,8 +33,7 @@ from pathlib import Path
 GUII = Path(__file__).resolve().parent.parent
 HOME = Path(os.path.expanduser("~"))
 
-# (mantıksal-ad, mutlak-yol, geri-yükleme-hedefi, skip_worktree_gerekir_mi)
-# Yol repo-göreli ya da ev-göreli olabilir; restore ederken dizin yoksa oluşturulur.
+# (mantıksal-ad, mutlak-yol, skip_worktree_gerekir_mi)
 _KALEMLER: list[tuple[str, Path, bool]] = [
     ("esp8266/Secrets.h", GUII / "firmware/esp8266_pemf_coil/Secrets.h", True),
     ("esps3/Secrets.h", GUII / "firmware/esps3_pemf_coil/Secrets.h", True),
@@ -46,7 +45,7 @@ _KALEMLER: list[tuple[str, Path, bool]] = [
     ("release-keystore/pemf-release.jks", HOME / ".pemf-keys/pemf-release.jks", False),
 ]
 
-_MAGIC = "PEMFSEC1"
+_MAGIC = "PEMFSEC2"  # v2 = parolasız (düz base64). v1 = scrypt+Fernet (artık üretilmiyor).
 _SW_DOSYALAR = [  # restore sonrası tekrar skip-worktree yapılacaklar (git add -A koruması)
     "firmware/esp8266_pemf_coil/Secrets.h",
     "firmware/esps3_pemf_coil/Secrets.h",
@@ -55,92 +54,58 @@ _SW_DOSYALAR = [  # restore sonrası tekrar skip-worktree yapılacaklar (git add
 ]
 
 
-def _parola(dogrula: bool) -> bytes:
-    p = os.environ.get("PEMF_SECBAK_PASSPHRASE")
-    if p:
-        return p.encode("utf-8")
-    p1 = getpass.getpass("Yedek parolasi: ")
-    if dogrula:
-        p2 = getpass.getpass("Parola (tekrar): ")
-        if p1 != p2:
-            sys.exit("[HATA] parolalar uyusmuyor.")
-    if len(p1) < 8:
-        sys.exit("[HATA] parola en az 8 karakter olmali.")
-    return p1.encode("utf-8")
-
-
-def _anahtar(parola: bytes, tuz: bytes):
-    from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-
-    ham = Scrypt(salt=tuz, length=32, n=2**15, r=8, p=1).derive(parola)
-    return base64.urlsafe_b64encode(ham)
-
-
 def cmd_backup(args) -> int:
-    from cryptography.fernet import Fernet
-
-    parola = _parola(dogrula=True)
-    tuz = os.urandom(16)
-    f = Fernet(_anahtar(parola, tuz))
-
     kalemler = []
     for ad, yol, _sw in _KALEMLER:
         if not yol.exists():
             print(f"  [ATLA] {ad}: dosya yok ({yol})")
             continue
         veri = yol.read_bytes()
-        token = f.encrypt(veri).decode("ascii")
-        kalemler.append({"ad": ad, "token": token, "boyut": len(veri)})
+        kalemler.append({"ad": ad, "b64": base64.b64encode(veri).decode("ascii"), "boyut": len(veri)})
         print(f"  [+] {ad} (<{len(veri)} B>)")
     if not kalemler:
         sys.exit("[HATA] yedeklenecek dosya bulunamadi.")
 
-    arsiv = {
-        "_magic": _MAGIC,
-        "kdf": {"algo": "scrypt", "n": 2**15, "r": 8, "p": 1, "tuz": base64.b64encode(tuz).decode()},
-        "kalemler": kalemler,
-    }
+    arsiv = {"_magic": _MAGIC, "sifreli": False, "kalemler": kalemler}
     out = Path(args.out) if args.out else (HOME / "pemf-sirlar.pemfsec")
     out.write_text(json.dumps(arsiv, indent=2), encoding="utf-8")
     try:
         os.chmod(out, 0o600)
     except Exception:
         pass
-    print(f"\n[OK] {len(kalemler)} sir sifrelendi -> {out}")
-    print("⚠️ Bu dosyayi git'e KOYMA; parolayla AYNI kanaldan gonderme. Sifre-yoneticisi + cevrimdisi USB.")
+    print(f"\n[OK] {len(kalemler)} sir toplandi -> {out}")
+    print("⚠️ ŞİFRESİZ arsiv (parola YOK). Git'e KOYMA; genel bulut/e-postayla YOLLAMA;")
+    print("   USB + sifre-yoneticisi gibi ERISIMI SINIRLI ortamda tasi.")
     return 0
 
 
 def _yukle_arsiv(yol: Path) -> dict:
     d = json.loads(Path(yol).read_text(encoding="utf-8"))
-    if d.get("_magic") != _MAGIC:
+    m = d.get("_magic")
+    if m == "PEMFSEC1":
+        sys.exit(
+            "[HATA] bu arsiv ESKI parola-korumali surumle (PEMFSEC1) uretilmis. Parolasiz surum "
+            "onu acamaz — eski surumle restore edip yeniden 'backup' alin."
+        )
+    if m != _MAGIC:
         sys.exit("[HATA] gecersiz .pemfsec dosyasi (magic uyusmuyor).")
     return d
 
 
 def cmd_restore(args) -> int:
-    from cryptography.fernet import Fernet, InvalidToken
-
     d = _yukle_arsiv(Path(args.inp))
-    tuz = base64.b64decode(d["kdf"]["tuz"])
-    parola = _parola(dogrula=False)
-    f = Fernet(_anahtar(parola, tuz))
-
-    ad2yol = {ad: (yol, sw) for ad, yol, sw in _KALEMLER}
+    ad2yol = {ad: yol for ad, yol, _sw in _KALEMLER}
     yazilan = 0
     for k in d["kalemler"]:
         ad = k["ad"]
         if ad not in ad2yol:
             print(f"  [ATLA] tanimsiz kalem: {ad}")
             continue
-        yol, _sw = ad2yol[ad]
-        try:
-            veri = f.decrypt(k["token"].encode("ascii"))
-        except InvalidToken:
-            sys.exit("[HATA] parola yanlis (cozulemedi).")
+        yol = ad2yol[ad]
         if yol.exists() and not args.force:
             print(f"  [VAR] {ad}: mevcut, atlandi (uzerine yazmak icin --force)")
             continue
+        veri = base64.b64decode(k["b64"])
         yol.parent.mkdir(parents=True, exist_ok=True)
         yol.write_bytes(veri)
         try:
@@ -164,10 +129,10 @@ def cmd_restore(args) -> int:
 
 def cmd_list(args) -> int:
     d = _yukle_arsiv(Path(args.inp))
-    print(f"Arsiv: {args.inp}  (kdf: scrypt N={d['kdf']['n']})")
+    print(f"Arsiv: {args.inp}  (sifreli: {d.get('sifreli')})")
     for k in d["kalemler"]:
-        print(f"  - {k['ad']}  (<{k['boyut']} B sifreli>)")
-    print(f"Toplam {len(d['kalemler'])} sir. (Icerik parolasiz GORULEMEZ.)")
+        print(f"  - {k['ad']}  (<{k['boyut']} B>)")
+    print(f"Toplam {len(d['kalemler'])} sir.")
     return 0
 
 
@@ -176,9 +141,9 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
-    ap = argparse.ArgumentParser(description="PEMF makine-ozel sir yedegi (sifreli, tasinabilir)")
+    ap = argparse.ArgumentParser(description="PEMF makine-ozel sir yedegi (parolasiz, tasinabilir)")
     sub = ap.add_subparsers(dest="komut", required=True)
-    b = sub.add_parser("backup", help="sirlari topla + sifrele")
+    b = sub.add_parser("backup", help="sirlari topla")
     b.add_argument("--out", default=None, help="cikti .pemfsec (varsayilan ~/pemf-sirlar.pemfsec)")
     b.set_defaults(fn=cmd_backup)
     r = sub.add_parser("restore", help="yeni makinede geri yukle")
