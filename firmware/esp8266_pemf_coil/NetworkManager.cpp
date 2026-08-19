@@ -698,8 +698,7 @@ void NetworkManager::_tryResolveMdnsGateway() {
     if (gw != IPAddress((uint32_t)0)) {
         _resolvedGatewayIp = gw.toString();
         _localMqttHost = _resolvedGatewayIp;
-        LOG_PRINTF("[MQTT] Yerel broker = ag gecidi: %s
-", _resolvedGatewayIp.c_str());
+        LOG_PRINTF("[MQTT] Yerel broker = ag gecidi: %s\n", _resolvedGatewayIp.c_str());
     } else {
         _localMqttHost = DEFAULT_LOCAL_MQTT_HOST;
     }
