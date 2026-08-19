@@ -15,7 +15,8 @@
 > | D-1 (ölü topik selftest/reset) | ✅ düzeltildi | `ffd4406` |
 > | D-3 (ESP freq tavanı, 8266'ya göre) | ✅ düzeltildi | `ffd4406` |
 > | D-4 (8266 LWT + backend retained-events) | ✅ düzeltildi — ⚠️ 8266 REFLASH gerekir | `ffd4406` |
-> | HG-1/HG-2 (STM termal + DC-bias dalga) | ⏳ donanım gerekir (NTC+ADC) — sahip kararı |  |
+> | HG-2 (STM DC-bias dalga) | ✅ düzeltildi — STM DDS simetrik bipolar (S3 sözleşmesi, net DC=0) — ⚠️ STM REFLASH + doz yeniden kalibrasyonu ZORUNLU | `356d576` |
+> | HG-1 (STM termal) | ✅ kod hazır, DERLEME-KAPILI (`PEMF_NTC_TERMAL_ENABLED=0`) — NTC bağlanınca 1 yapılıp tezgahta doğrulanacak; HG-2 ile en kötü ısınma sürücüsü (DC-bias) zaten kalktı | `356d576` |
 > | HG-3 (faz kilidi DC-yapışma) | ✅ kod yarısı düzeltildi — ⚠️ S3 REFLASH + tezgah skop zorunlu | `09bf8eb` |
 > | HG-5 (broker failover E-stop) / HG-6 (reboot) | ⏳ deadman sahip değişmeziyle çatışıyor — karar bekliyor |  |
 
