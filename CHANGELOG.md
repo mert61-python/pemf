@@ -32,7 +32,7 @@ geçmiyorsa test kırılır.
 
 ## app 1.9.17 — 2026-08-19 (donanım-uyum turu: hibrit bobin güvenliği uçtan uca)
 
-**Etiket:** `client-app-v1.9.17` → `base-app.zip` + `base-deps.zip` (sha'lar yayında bu satıra işlenir).
+**Etiket:** `client-app-v1.9.17` → `base-app.zip` (sha `7a0de0cdcf38`) + `base-deps.zip` (sha `d22c35a91d05` — **1.9.16 ile BAYT-BAYT AYNI**, paket-belirlenimciliği çalıştı: kurulu istemciler yalnız ~71 MB app katmanını indirir).
 
 Bugünkü çok-ajanlı donanım-uyum denetiminin (12 gerçek uyumsuzluk, `docs/DONANIM-UYUM-ANALIZI-2026-08-19.md`)
 backend ayağı. Firmware ayağı cihazlara ayrıca flash'landı; bu paket backend/sunucu düzeltmelerini taşır.

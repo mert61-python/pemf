@@ -130,6 +130,29 @@ def test_KRITIK_sha_DEGISTIYSE_URL_yeni_etikete_TASINIR_karsit_kanit(kum):
     )
 
 
+def test_KRITIK_DEPS_katmani_sha_AYNIYSA_URLsi_KORUNUR(kum):
+    """LAYERS bölümü de aynı kurala tabi (2026-08-19 yayınında yakalandı): deps sha'sı
+    paket-belirlenimciliği sayesinde yayınlar arası SABİT; URL koşulsuz yeni etikete taşınınca
+    ya taze kurulum 404 alır (deps yeni etikete yüklenmediyse) ya da her yayında 1,4 GB gereksiz
+    yüklenir. İlk düzeltme yalnız ASSETS döngüsündeydi — LAYER_ASSETS döngüsü atlanmıştı."""
+    assert _kos(kum, "client-app-v1.9.15", "1.9.15").returncode == 0
+    m1 = _manifest(kum)
+    deps_url_1 = m1["layers"]["win-x64"]["deps"]["url"]
+    assert "client-app-v1.9.15" in deps_url_1
+
+    # sıradan app yayını: app+base değişir, deps BAYT-BAYT AYNI
+    _paket_yaz(kum, "base-app.zip", b"APP-v2-DEGISTI")
+    _paket_yaz(kum, "base.zip", b"BASE-v2-DEGISTI")
+    r = _kos(kum, "client-app-v1.9.16", "1.9.16")
+    assert r.returncode == 0
+    m2 = _manifest(kum)
+    assert m2["layers"]["win-x64"]["deps"]["url"] == deps_url_1, (
+        "değişmemiş deps katmanının URL'si yeni etikete TAŞINDI — taze kurulum 404 alır "
+        "ya da her yayında 1,4 GB gereksiz yüklenir"
+    )
+    assert "base-deps.zip" in r.stdout and "URL KORUNDU" in r.stdout, "koruma ekranda bildirilmedi"
+
+
 def test_app_katmani_her_yayinda_YENI_etikete_gider_karsit_kanit(kum):
     """Karşı-kanıt: her sürümde değişen `base-app.zip` normal akışını sürdürmeli."""
     assert _kos(kum, "client-app-v1.9.15", "1.9.15").returncode == 0

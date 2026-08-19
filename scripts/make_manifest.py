@@ -257,9 +257,24 @@ def main() -> int:
         path = args.dir / name
         if not path.exists():
             continue
+        _sha = sha256(path)
+        _url = f"{base_url}/{name}"
+        # ICERIK DEGISMEDIYSE URL'yi TASIMA — yukaridaki ASSETS kuralinin KATMANLARA uyarlanmasi
+        # (2026-08-19 yayininda yakalandi): deps sha'si paket-belirlenimciligi sayesinde yayinlar
+        # arasi SABIT kaliyor; URL kosulsuz yeni etikete tasininca iki kotu secenek doguyordu:
+        # deps yeni etikete YUKLENMEZSE her taze kurulum 404 alir; YUKLENIRSE her yayinda 1,4 GB
+        # gereksiz yukleme. sha onceki manifest'tekiyle AYNIYSA asset eski etikette bayt-bayt
+        # ayni yayindadir -> URL korunur. Kilit: tests/test_manifest_degismeyen_paket_url.py
+        _onceki = ((prev.get("layers") or {}).get(plat) or {}).get(katman) or {}
+        _onceki_url = str(_onceki.get("url") or "")
+        if _onceki_url and str(_onceki.get("sha256") or "") == _sha and _onceki_url != _url:
+            _url = _onceki_url
+            _parca = _onceki_url.rsplit("/", 2)
+            _etiket = _parca[-2] if len(_parca) >= 2 else "?"
+            url_korundu.append(f"{name} (sha ayni, etiket: {_etiket})")
         manifest["layers"].setdefault(plat, {})[katman] = {
-            "url": f"{base_url}/{name}",
-            "sha256": sha256(path),
+            "url": _url,
+            "sha256": _sha,
             "size": path.stat().st_size,
             "kind": "zip",
         }
