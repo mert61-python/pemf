@@ -201,6 +201,7 @@ struct SystemStatusMsg {
     bool thermalLock;            // start'lar reddediliyor (soğuma bekleniyor)
     bool thermalStopEvent;       // bu turda termal kesme oldu (Network olay yayınlar)
     uint32_t syncIgnored;        // frekans uyuşmazlığında yok sayılan sync darbesi
+    bool syncDisabled;           // HG-3: DC-yapışma koruması → faz senkronu KAPALI (frekans uyumsuz)
 };
 
 // ============================================================================

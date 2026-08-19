@@ -59,6 +59,18 @@ static volatile uint8_t  s_pin_b       = PIN_COIL_PWM_B;
 static volatile uint32_t s_sync_locked  = 0;
 static volatile uint32_t s_sync_ignored = 0;
 
+/* ── DC-YAPIŞMA KORUMASI (donanım-uyum denetimi HG-3, 2026-08-19) ──────────────────────────────
+ * STM master frekansı ESP'den çok yüksekse (örn STM 100 Hz, ESP 1 Hz → oran 100×), PB1 darbesi
+ * ESP'nin her periyot BAŞINDA gelir ve s_tick'i sürekli sıfırlar → ESP sayacı yarım-periyoda HİÇ
+ * ulaşamaz → çıkış tek polaritede DC'ye YAPIŞIR (bobin sürekli tek-yön alan + ısınma; STM'de
+ * termal kesme yok). 8266 bu tehlikeyi sync'i tümden kaldırarak çözdü; S3'te KOŞULLU çözüyoruz:
+ * ESP doğal periyodunu (natural wrap) tamamlayamadan ardışık MISMATCH_STREAK kez sync kilidi
+ * gelirse = frekans uyumsuzluğu → sync DEVRE DIŞI (8266 gibi tek faz). ⚠️ TEZGÂHTA SKOPLA DOĞRULA. */
+static volatile bool     s_natural_wrap  = false;  /* ddsTimerISR bir tam periyot tamamladı mı */
+static volatile uint32_t s_early_streak  = 0;      /* ardışık "erken kilit" (wrap'sız) sayısı */
+static volatile bool     s_sync_disabled = false;  /* uyumsuzluk saptandı → sync artık çıkışı bozmaz */
+#define SYNC_MISMATCH_STREAK 8U   /* ~8 periyot başı erken kilit → uyumsuzluk kesin (jitter'ı tolere eder) */
+
 static hw_timer_t*  s_timer = nullptr;
 static portMUX_TYPE s_mux   = portMUX_INITIALIZER_UNLOCKED;
 
@@ -70,14 +82,36 @@ static portMUX_TYPE s_mux   = portMUX_INITIALIZER_UNLOCKED;
  * ============================================================================ */
 static void IRAM_ATTR syncPulseISR() {
     portENTER_CRITICAL_ISR(&s_mux);
+    if (s_sync_disabled) {          /* HG-3: uyumsuzluk saptandı → 8266 gibi tek faz, sync yok */
+        portEXIT_CRITICAL_ISR(&s_mux);
+        return;
+    }
     uint32_t t   = s_tick;
     uint32_t tpp = s_tpp;
+    /* tol=tpp/50 (%2) → ÖRTÜK EŞİK: DC-yapışma latch'i ancak STM freq ≳50× ESP freq iken devreye
+     * girer (darbe aralığı < tol). Ilımlı uyumsuzluk (2-10×) darbeleri periyot ORTASINA düşürür →
+     * ignored dalı → ESP serbest koşar (bipolar, DC yok). tol'ü değiştirirsen bu eşik de kayar. */
     uint32_t tol = tpp / 50U + 2U;
-    if (t <= tol || t >= (tpp - tol)) {
+
+    if (t <= tol) {
+        /* Periyot BAŞINDA kilit — sağlıklıysa ESP az önce doğal periyodunu tamamlamış (natural wrap)
+         * olmalı. Wrap OLMADAN sürekli buraya düşüyorsak STM bizden hızlı → DC-yapışma riski. */
+        if (s_natural_wrap) {
+            s_early_streak = 0;
+            s_natural_wrap = false;
+        } else if (++s_early_streak >= SYNC_MISMATCH_STREAK) {
+            s_sync_disabled = true;  /* frekans uyumsuzluğu kesin → sync'i bırak (DC-yapışmayı önle) */
+        }
+        s_tick = 0;
+        s_sync_locked++;
+    } else if (t >= (tpp - tol)) {
+        /* Periyot SONUNDA kilit — sağlıklı hizalama (sync ESP'yi periyot sonunda sıfırlıyor). */
+        s_early_streak = 0;
+        s_natural_wrap = false;
         s_tick = 0;
         s_sync_locked++;
     } else {
-        s_sync_ignored++;
+        s_sync_ignored++;            /* periyot ortasında darbe — yok say (mevcut davranış) */
     }
     portEXIT_CRITICAL_ISR(&s_mux);
 }
@@ -90,7 +124,10 @@ static void IRAM_ATTR ddsTimerISR() {
 
     portENTER_CRITICAL_ISR(&s_mux);
     uint32_t tick = s_tick + 1U;
-    if (tick >= s_tpp) tick = 0U;
+    if (tick >= s_tpp) {
+        tick = 0U;
+        s_natural_wrap = true;  /* HG-3: ESP bir tam periyot tamamladı (sync onu sıfırlamadan) */
+    }
     s_tick = tick;
     uint32_t tpp   = s_tpp;
     uint32_t duty  = s_duty_ticks;
@@ -375,10 +412,23 @@ void CoilController::_updatePWM(int freq, int duty, int phase_deg) {
     uint32_t faz_t = (uint32_t)(((float)(((phase_deg % 360) + 360) % 360) / 360.0f) * (float)tpp) % tpp;
 
     portENTER_CRITICAL(&s_mux);
+    /* HG-3 (adversaryal review düzeltmesi, 2026-08-19): koruma latch'i YALNIZ gerçek frekans
+     * değişiminde sıfırlanır. Eski hâli koşulsuz sıfırlıyordu → aktifken gelen HER set_params /
+     * faz-only / keepalive komutu s_early_streak'i 0'a çekip DC-yapışma latch'inin OLUŞMASINI
+     * engelleyebilirdi (latch penceresi ~8 STM periyodu; sık re-komut onu sürekli bölerdi).
+     * freq değişimi = faz kilidini yeniden dene (uyumluysa tekrar kilitlensin); freq aynıysa
+     * latch durumu KORUNUR. Not: STM freq'i değişip ESP'ninki aynı kalırsa devre-dışı sürer —
+     * fail-safe yön (tek faz, DC yok), regresyon değil. */
+    bool freqChanged = (tpp != s_tpp);  /* eski s_tpp'yi YAZMADAN önce oku */
     s_tpp = tpp;
     s_duty_ticks = duty_t;
     s_phase_ticks = faz_t;
     s_active = true;
+    if (freqChanged) {
+        s_sync_disabled = false;
+        s_early_streak = 0;
+        s_natural_wrap = false;
+    }
     portEXIT_CRITICAL(&s_mux);
 
     _effectiveDutyPct = (int)(((float)duty_t * 100.0f) / (float)tpp + 0.5f);
@@ -432,6 +482,8 @@ bool CoilController::consumeSelfTestEvent(bool &passed) {
 }
 
 uint32_t CoilController::syncIgnoredCount() { return s_sync_ignored; }
+
+bool CoilController::syncDisabled() { return s_sync_disabled; }
 
 /* ---- NVS kalıcılık (yeniden başlatmada devam — bilinçli tasarım) ---- */
 struct NvsPwmState {

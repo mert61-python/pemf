@@ -224,6 +224,7 @@ void TaskControl(void *pvParameters) {
         status.thermalLock = sysCoil.isThermalLocked();
         status.thermalStopEvent = sysCoil.consumeThermalStopEvent();
         status.syncIgnored = sysCoil.syncIgnoredCount();
+        status.syncDisabled = sysCoil.syncDisabled();
 
         bool stPassed = false;
         if (sysCoil.consumeSelfTestEvent(stPassed)) {

@@ -652,6 +652,7 @@ void PemfNetworkManager::publishStatus(const SystemStatusMsg &msg) {
   doc["pwm_duration"] = msg.pwm.durationSec;   // SANIYE (2026-08-19; eskiden dakika)
   doc["thermal_lock"] = msg.thermalLock;        // yerel termal kilit (start reddediliyor)
   doc["sync_ignored"] = msg.syncIgnored;        // buyuyorsa STM ile frekans uyusmazligi
+  doc["sync_disabled"] = msg.syncDisabled;      // HG-3: faz senkronu KAPALI (frekans uyumsuz → tek faz)
   doc["pwm_start_timestamp"] = (unsigned long long)msg.pwm.startTimestamp;
 
   // Sensör Verileri (Flat ve Key İsimleri GUI ile uyumlu)

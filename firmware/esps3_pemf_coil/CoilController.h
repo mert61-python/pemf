@@ -47,6 +47,11 @@ public:
     // Büyüyorsa STM ile frekans uyuşmazlığı var demektir (status ile yayınlanır).
     uint32_t syncIgnoredCount();
 
+    // HG-3 (2026-08-19): DC-yapışma koruması tetiklendi mi — STM freq ESP'den çok yüksek olunca
+    // sync DEVRE DIŞI bırakıldı (8266 gibi tek faz). true = faz senkronu frekans uyumsuzluğu
+    // yüzünden kapalı; operatöre "faz kilidi yok" bildirilmeli (status ile yayınlanır).
+    bool syncDisabled();
+
 private:
     SensorManager* _sensors;
 
