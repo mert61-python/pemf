@@ -613,6 +613,13 @@ def _on_mqtt_message_api(client, userdata, msg):
                     _resolve_ack(str(_cid), bool(payload.get("success", False)))
 
             elif msg_type == "events":
+                # D-4 (2026-08-19): RETAINED events YOK SAY. ESP LWT'si (last-will) retain=true
+                # yayınlanıyor (S3 + artık 8266). Bobin ANİ koparsa broker LWT'yi CANLI (retain=0,
+                # MQTT-3.3.1-9) yayınlar → işlenir; ama backend RECONNECT'inde broker'ın sakladığı
+                # BAYAT offline/online retained gelir ve o an online olan bobini "koptu" sanabilir.
+                # Canlı durum yalnız retain=0 events'tir (sensor/status telemetrisi zaten connected=True yapar).
+                if is_retained:
+                    return
                 event_type = payload.get("type") or payload.get("event_type", "unknown")
                 if event_type in ("wifi_disconnected", "offline"):
                     with _live_state_lock:
@@ -1213,6 +1220,24 @@ def _wait_ack(command_id: str, timeout: float):
     return entry["success"] if got else None
 
 
+def _esp_control_broadcast(command: str, id_prefix: str, extra: dict | None = None) -> None:
+    """ESP bobinlerine (6-8) `pemf/coil/{id}/control`'e komut yayınlar.
+
+    ⚠️ D-1 (donanım-uyum denetimi, 2026-08-19): selftest + reset_pwm eskiden ÖLÜ bir topiğe
+    (`pemf/esp32_{id}/command`) yayınlıyordu — S3/8266 firmware'i `pemf/coil/{id}/control`'e abone,
+    o topiğe DEĞİL. Sonuç: selftest ESP 6-8'de HİÇ çalışmıyor (arızalı ESP sessizce geçer = yanlış
+    tanısal güvence); reset sonrası seans-dışı ESP bobini enerjili kalıyordu. STM (1-5) MQTT
+    dinlemez (seri protokol) → kapsam yalnız ESP_COIL_IDS. E-stop yolu ayrıdır (kendi çift-yayını)."""
+    for i in sorted(ESP_COIL_IDS):
+        payload = {"command": command, "command_id": f"{id_prefix}_{i}_{int(time.time() * 1000)}"}
+        if extra:
+            payload.update(extra)
+        try:
+            _mqtt_publish(f"pemf/coil/{i}/control", payload)
+        except Exception:
+            logging.getLogger(__name__).debug("%s publish %d hatasi", id_prefix, i, exc_info=True)
+
+
 def _estop_ack_watch(coil_id: int, command_id: str) -> None:
     """E-stop onayını ARKA PLANDA izle (publish'i bloklamadan). Onay 2 sn'de gelmezse operatörü
     AÇIKÇA uyar — bobin fiziksel durmamış olabilir (WiFi partition / cloud-failover senaryosu)."""
@@ -1415,7 +1440,6 @@ async def hardware_command(payload: CommandPayload):
 async def trigger_hardware_selftest():
     """Tüm bobinlere SELFTEST komutu gönderir (fire-and-forget)."""
     import threading
-    import time
 
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
@@ -1423,21 +1447,14 @@ async def trigger_hardware_selftest():
     # 8× _mqtt_publish (her biri connect-publish-disconnect) SANİYELER sürebilir → HTTP yanıtını
     # BEKLETME (eskiden await → istemci timeout'u "gönderilemedi" gösteriyordu, HTTP 000). Arka-plan
     # daemon thread'de best-effort gönder, yanıtı hemen dön ("komut gönderildi" semantiği).
-    def _selftest_all():
-        for i in range(1, 9):
-            try:
-                _mqtt_publish(
-                    f"pemf/esp32_{i}/command",
-                    {
-                        "command": "SELFTEST",
-                        "command_id": f"selftest_{i}_{int(time.time() * 1000)}",
-                        "timestamp": time.time(),
-                    },
-                )
-            except Exception:
-                logging.getLogger(__name__).debug("selftest publish %d hatasi", i, exc_info=True)
-
-    threading.Thread(target=_selftest_all, name="hw-selftest", daemon=True).start()
+    # D-1 (2026-08-19): ESP'nin GERÇEKTEN dinlediği topiğe (`pemf/coil/{id}/control`) yayınla.
+    # STM (1-5) MQTT selftest'i dinlemez → kapsam ESP_COIL_IDS. (8266'da SELFTEST handler'ı ayrı
+    # bir eksik — tezgah maddesi; backend artık en azından doğru kapıya çalıyor.)
+    threading.Thread(
+        target=lambda: _esp_control_broadcast("SELFTEST", "selftest"),
+        name="hw-selftest",
+        daemon=True,
+    ).start()
     return {"status": "success", "message": "Self-test commands sent."}
 
 
@@ -1447,31 +1464,18 @@ async def reset_all_pwms():
     if not state.hardware:
         raise HTTPException(status_code=503, detail="Donanım hazır değil.")
     import threading
-    import time
 
     # stop_all_coils (STM seri I/O; STM yoksa retry→saniyeler) + 8× _mqtt_publish (connect-publish) →
     # HTTP yanıtını BEKLETME (eskiden await → timeout / HTTP 000). Arka-plan thread'de yürüt, hemen dön.
     # Birincil güvenlik yolu /hardware/emergency_stop'tur; bu yalnız bakım-reset'idir.
     def _reset_all():
         try:
-            state.hardware.stop_all_coils()
+            state.hardware.stop_all_coils()  # STM 1-5 (seri)
         except Exception:
             logging.getLogger(__name__).debug("reset_pwm stop_all_coils hatasi", exc_info=True)
-        for i in range(1, 9):
-            try:
-                _mqtt_publish(
-                    f"pemf/esp32_{i}/command",
-                    {
-                        "command": "start",
-                        "command_id": f"reset_{i}_{int(time.time() * 1000)}",
-                        "freq": 10.0,
-                        "duty": 0.0,
-                        "phase": 0.0,
-                        "duration": 0,
-                    },
-                )
-            except Exception:
-                logging.getLogger(__name__).debug("reset_pwm publish %d hatasi", i, exc_info=True)
+        # D-1 (2026-08-19): ESP 6-8'e ESP'nin dinlediği topiğe AÇIK "stop" (eskiden ölü esp32_
+        # topiğine "start duty:0" gidiyordu → seans-dışı ESP bobini enerjili kalıyordu).
+        _esp_control_broadcast("stop", "reset")
 
     threading.Thread(target=_reset_all, name="hw-reset-pwm", daemon=True).start()
     return {"status": "success", "message": "All PWM signals reset."}
@@ -1529,10 +1533,16 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         return {"status": "success", "command_id": command_id, "transport": "stm32"}
 
     if payload.start:
+        # D-3 (2026-08-19): ESP DDS 1000 Hz üstünü süremez (firmware constrain) → önden normalize.
+        # STM yolu (yukarıda) update_coil içinde normalize_frequency_hz uygular; ESP yolu HAM
+        # gönderiyordu → >1000 komut ESP'de SESSİZCE kırpılıp komut≠telemetri sapması yaratıyordu.
+        from utils.stm32_protocol_limits import normalize_esp_frequency_hz
+
+        esp_freq = normalize_esp_frequency_hz(payload.freq)
         mqtt_payload = {
             "command": "start",
             "command_id": command_id,
-            "freq": payload.freq,
+            "freq": esp_freq,
             "duty": payload.duty,
             "phase": payload.phase,
             # Gozetimsiz kapak (bkz. _esp_duration_seconds): `0` = "sure belirtilmedi" nobetcisi
@@ -1540,13 +1550,14 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             "duration": _esp_duration_seconds(payload.duration),
         }
     else:
+        esp_freq = payload.freq
         mqtt_payload = {"command": "stop", "command_id": command_id}
 
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
     ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
-    # Asama-2: per-bobin run logging (ESP/MQTT dali).
+    # Asama-2: per-bobin run logging (ESP/MQTT dali). Loglanan freq = ESP'ye GİDEN (normalize) değer.
     if payload.start:
-        _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
+        _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
     else:
         _finish_coil_run(coil_id)
     return {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}

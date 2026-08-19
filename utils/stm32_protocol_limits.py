@@ -23,6 +23,17 @@ DDS_ISR_HZ = 50000.0
 DDS_MIN_TICKS_PER_PERIOD = 2.0
 FREQ_MAX_HZ = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD
 
+# ⚠️ ESP (bobin 6-8) FREKANS TAVANI = EN KISITLI ESP olan 8266'ya göre (donanım-uyum denetimi
+# D-3, 2026-08-19; sahip talebi: "8266'ya göre ayarla"). Doğrulandı — İKİ ESP de 1000 Hz sınırlı:
+#   · 8266: `constrain(freq,1,1000)` (CoilController.cpp:215/278/353) VE dogrulama `f > 1000.0f`
+#     komutu TAMAMEN REDDEDER (esp8266_pemf_coil.ino:512,615 → NACK, bobin BAŞLAMAZ). En katı uç.
+#   · S3  : `constrain(cmd.frequency,1,1000)` (CoilController.cpp:279) — sessizce 1000'e KIRPAR.
+# STM (1-5) tavanı çok daha yüksek (FREQ_MAX_HZ=25000). Backend ESP yoluna 1000 tavanını ÖNDEN
+# uygularsa: hem 8266'nın reddini (bobin hiç çalışmaz) hem S3'ün sessiz kırpmasını (komut≠telemetri)
+# önler → tüm ESP dizisi tutarlı davranır. Değer 8266 firmware sınırıyla birebir; değişirse
+# firmware constrain'leri de güncellenmeli (test_stm32_source_parity mantığı).
+ESP_FREQ_MAX_HZ = 1000.0
+
 DURATION_MIN_MINUTES = 0
 DURATION_MAX_MINUTES = 9999
 
@@ -59,6 +70,13 @@ def normalize_phase_deg(phase) -> float:
 
 def normalize_frequency_hz(freq) -> float:
     return clamp_float(freq, FREQ_MIN_HZ, FREQ_MAX_HZ, default=100.0)
+
+
+def normalize_esp_frequency_hz(freq) -> float:
+    """ESP (bobin 6-8) frekans normalize — firmware `constrain(freq, 1, 1000)` sınırı (D-3).
+    STM yolu için `normalize_frequency_hz` (25000 tavanı); ESP için AYRI çünkü ESP DDS 1000 Hz
+    üstünü süremez ve backend sessiz kırpma yerine önden clamp etmeli (komut=telemetri tutarlılığı)."""
+    return clamp_float(freq, FREQ_MIN_HZ, ESP_FREQ_MAX_HZ, default=100.0)
 
 
 def normalize_duration_minutes(duration) -> int:

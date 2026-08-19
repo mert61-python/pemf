@@ -661,8 +661,16 @@ bool NetworkManager::_connectToLocalBroker() {
     char clientId[64];
     snprintf(clientId, sizeof(clientId), "PEMF-Coil-%d-%lX", _coilId, millis());
 
+    // D-4 (2026-08-19): LWT (last-will) — S3 ile birebir. Cihaz ANİ koparsa broker bu mesajı
+    // pemf/coil/{id}/events'e yayınlar → backend bobini ~keepalive'da "koptu" işaretler (eskiden
+    // yalnız 30 sn staleness ile geç fark ediliyordu). Format S3'ün offline event'iyle aynı.
+    char lwtTopic[32];
+    snprintf(lwtTopic, sizeof(lwtTopic), "pemf/coil/%d/events", _coilId);
+    static char lwtMsg[48];
+    snprintf(lwtMsg, sizeof(lwtMsg), "{\"event_type\":\"offline\",\"coil_id\":%d}", _coilId);
+
     LOG_PRINTF("[MQTT] Local Broker (%s:%d) deneniyor...\n", _localMqttHost.c_str(), _localMqttPort);
-    if (_mqttClient.connect(clientId)) {
+    if (_mqttClient.connect(clientId, lwtTopic, 1, true, lwtMsg)) {
         LOG_PRINTLN("[MQTT] Local Broker'a baglanildi.");
         return true;
     }
@@ -677,8 +685,15 @@ bool NetworkManager::_connectToCloudBroker() {
     char clientId[64];
     snprintf(clientId, sizeof(clientId), "PEMF-Coil-%d-%lX", _coilId, millis());
 
+    // D-4 (2026-08-19): LWT — local ile aynı (S3 birebir). Cloud broker'da da koptuğunda
+    // backend'in bobini "offline" görmesi için will şart.
+    char lwtTopic[32];
+    snprintf(lwtTopic, sizeof(lwtTopic), "pemf/coil/%d/events", _coilId);
+    static char lwtMsg[48];
+    snprintf(lwtMsg, sizeof(lwtMsg), "{\"event_type\":\"offline\",\"coil_id\":%d}", _coilId);
+
     LOG_PRINTF("[MQTT] Cloud Broker (%s:%d) deneniyor...\n", _cloudMqttHost.c_str(), _cloudMqttPort);
-    if (_mqttClient.connect(clientId, _mqttUser, _mqttPass)) {
+    if (_mqttClient.connect(clientId, _mqttUser, _mqttPass, lwtTopic, 1, true, lwtMsg)) {
         LOG_PRINTLN("[MQTT] Cloud Broker'a baglanildi.");
         return true;
     }
