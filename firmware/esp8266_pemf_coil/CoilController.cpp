@@ -114,6 +114,7 @@ CoilController::CoilController(int pwmPin, int coilId, TimeManager* timeManager)
     _pwmStartTime = millis();
     _pwmStartTimestamp = 0;
     _pwmDurationSec = 0;
+    _suresizGecenMs = 0;
     _effectiveDutyPct = 0;
     _timeManager = timeManager;
     _startState = PWM_START_IDLE;
@@ -236,6 +237,9 @@ void CoilController::start(int freq, int duty, int durationSec, unsigned long lo
     _pwmActive = true;
     // - Sadece PWM gercekten basladiginda _pwmStartTime set edilir
     _pwmStartTime = millis();
+    /* Taze START = kümülatif süresiz-tavan penceresi sıfırlanır (operatör eylemi).
+     * EEPROM RESUME bunu restorePWMState'te geri yükler. */
+    _suresizGecenMs = 0;
 
     // TimeManager'dan şu anki timestamp'i al
     if (_timeManager) {
@@ -396,7 +400,7 @@ void CoilController::_checkPWMDuration() {
      * Zamana bağlı, ağa DEĞİL → "PWM ağ-bağımsız" değişmezini ihlal etmez; süreli seanslar
      * etkilenmez. STOP kaybı/failover senaryosunda sonsuz çalışmayı keser (2 saat). */
     else if (_pwmActive && _pwmDuration == 0 &&
-             safeMillisDiff(millis(), _pwmStartTime) >= (SURESIZ_TAVAN_SEC * 1000UL)) {
+             (_suresizGecenMs + safeMillisDiff(millis(), _pwmStartTime)) >= (SURESIZ_TAVAN_SEC * 1000UL)) {
         LOG_PRINTLN(F("[PWM] SURESIZ-mod mutlak tavani doldu, PWM durduruldu (guvenlik)"));
         stop();
     }
@@ -474,9 +478,11 @@ void CoilController::savePWMState() {
     state.dutyCycle = _pwmDutyCycle;
     state.duration = _pwmDuration;
 
-    // Geçen süreyi hesapla
+    // Geçen süreyi hesapla — SÜRESİZ modda KÜMÜLATİF (crash-loop tavanı delemesin)
     if (_pwmActive && _pwmDuration > 0) {
         state.elapsed = safeMillisDiff(millis(), _pwmStartTime);
+    } else if (_pwmActive) {
+        state.elapsed = _suresizGecenMs + safeMillisDiff(millis(), _pwmStartTime);
     } else {
         state.elapsed = 0;
     }
@@ -542,6 +548,9 @@ bool CoilController::restorePWMState() {
     _applyPWM(_pwmFrequency, _pwmDutyCycle);
     _pwmActive = true;
     _pwmStartTime = millis();  // Yeni başlangıç zamanı
+    /* KÜMÜLATİF TAVAN (review, crash-loop): süresiz modda geçen süre devralınır —
+     * <2 saatte bir çöküp dirilen cihaz 7200 sn penceresini tazeleyemez. */
+    _suresizGecenMs = (state.duration == 0) ? state.elapsed : 0;
 
     if (remaining > 0) {
         LOG_PRINTF("[PWM] EEPROM'dan yuklendi ve kaldigi yerden devam ediyor: %dHz, %d%%, %lums kaldi\n",

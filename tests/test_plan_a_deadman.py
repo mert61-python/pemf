@@ -68,14 +68,77 @@ def test_A1_tavan_backend_STM_deadline_ile_AYNI():
     )
 
 
-def test_A1_sureli_seans_yolu_DEGISMEDI():
-    """Değişmez korunuyor: süreli dal (duration>0) her iki firmware'de aynen duruyor."""
+def test_A1_sureli_seans_yolu_wrap_GUVENLI():
+    """Süreli dal (duration>0) duruyor VE wrap-güvenli (review: millis ~49,7 günde sarar;
+    eski `millis() >= _endTime` hep-açık klinik makinede seansı anında kesebilirdi)."""
     s3 = (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
     e8 = (KOK / "firmware" / "esp8266_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
-    assert "_active && _hasDuration && millis() >= _endTime" in s3
+    # S3: fark tabanlı karşılaştırma; eski mutlak-zaman formu GERİ GELMEMELİ
+    assert "_active && _hasDuration && (millis() - _startTime) >= _duration" in s3
+    assert "millis() >= _endTime" not in s3.replace("`millis() >= _endTime`", ""), (
+        "S3 süreli dal mutlak-zaman karşılaştırmasına dönmüş (wrap'ta seans kesilir)"
+    )
+    # getState kalan-süre de fark tabanlı
+    assert "(_duration > gecen) ? (_duration - gecen)" in s3, "S3 kalan-süre hesabı wrap-güvenli değil"
     assert "_pwmActive && _pwmDuration > 0" in e8
     # 8266'nın değişmez yorumu yerinde (ağ PWM'i etkilemez)
     assert "PWM'i ASLA ETK" in e8, "8266 ağ-bağımsızlık değişmez yorumu kaybolmuş"
+
+
+def test_KRITIK_A1_tavan_KUMULATIF_crash_loop_delemez():
+    """Review: <2 saatte bir çöküp dirilen cihaz (crash-loop) + otomatik resume, tavanı
+    fiilen sınırsız yapıyordu. Artık geçen süre NVS/EEPROM'a kümülatif yazılır ve resume
+    devralır; yalnız YENİ START komutu (operatör eylemi) pencereyi sıfırlar."""
+    s3 = (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    e8 = (KOK / "firmware" / "esp8266_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    for ad, src in (("S3", s3), ("8266", e8)):
+        assert "_suresizGecenMs" in src, f"{ad}: kümülatif sayaç yok"
+    # tavan kontrolü kümülatif toplamla
+    assert "(_suresizGecenMs + (millis() - _startTime))" in s3, "S3 tavanı kümülatif değil"
+    assert "(_suresizGecenMs + safeMillisDiff(millis(), _pwmStartTime))" in e8, "8266 tavanı kümülatif değil"
+    # persist: süresiz modda elapsed kümülatif yazılır
+    assert "_suresizGecenMs + (millis() - _startTime))" in s3
+    assert "_suresizGecenMs + safeMillisDiff(millis(), _pwmStartTime);" in e8, "8266 savePWMState kümülatif yazmıyor"
+    # resume devralır (S3 loadState / 8266 restorePWMState)
+    assert "_suresizGecenMs = s.elapsedMs" in s3, "S3 resume kümülatifi devralmıyor"
+    assert "_suresizGecenMs = (state.duration == 0) ? state.elapsed : 0" in e8, "8266 resume devralmıyor"
+    # taze START pencereyi sıfırlar (operatör eylemi)
+    assert s3.count("_suresizGecenMs = 0") >= 2, "S3 taze-start sıfırlaması yok (ctor+_beginOutput)"
+    assert e8.count("_suresizGecenMs = 0") >= 2, "8266 taze-start sıfırlaması yok (ctor+start)"
+
+
+def test_A1_kumulatif_tavan_MODEL():
+    """Python modeli: crash-loop'ta (90dk çalış → çök → resume) tavan 2. boot'ta dolar;
+    taze START ise pencereyi meşru sıfırlar."""
+    TAVAN = 7200_000
+
+    class _Cihaz:
+        def __init__(self):
+            self.gecen_devir = 0  # _suresizGecenMs
+            self.boot_ms = 0
+
+        def calis(self, ms):
+            self.boot_ms += ms
+            return (self.gecen_devir + self.boot_ms) >= TAVAN  # tavan doldu mu
+
+        def kaydet(self):
+            return self.gecen_devir + self.boot_ms  # NVS elapsedMs
+
+        def resume(self, nvs_elapsed):
+            self.gecen_devir = nvs_elapsed
+            self.boot_ms = 0
+
+        def taze_start(self):
+            self.gecen_devir = 0
+            self.boot_ms = 0
+
+    c = _Cihaz()
+    assert not c.calis(90 * 60_000)  # 90 dk — tavan dolmadı
+    nvs = c.kaydet()
+    c.resume(nvs)  # çöktü, dirildi
+    assert c.calis(31 * 60_000), "crash-loop: 90+31=121 dk kümülatifte tavan DOLMALIYDI"
+    c.taze_start()  # operatör yeni start verdi
+    assert not c.calis(119 * 60_000), "taze start sonrası pencere sıfırlanmadı"
 
 
 # ── A-3: niyet kaydı (tek boğaz noktası) ───────────────────────────────────────

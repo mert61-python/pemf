@@ -67,6 +67,7 @@ private:
     int _pwmDutyCycle;
     unsigned long _pwmStartTime;
     unsigned long _pwmDuration;  // ms (0 = suresiz)
+    unsigned long _suresizGecenMs;  // süresiz modda önceki boot'lardan devreden geçen ms (kümülatif tavan)
     unsigned long long _pwmStartTimestamp;  // PWM başlangıç zamanı (ms, NTP sync) - TimeManager'dan alınır
     int _pwmDurationSec;      // PWM süresi (SANİYE — backend sözleşmesi, 0 = süresiz)
     // Dürüst raporlama (2026-08-19): %50 donanım tavanı isteneni sessizce kırpıyor ama status

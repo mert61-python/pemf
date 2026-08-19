@@ -62,7 +62,7 @@ private:
     int _phase;                  // 0-359 derece (STM senkron t=0'ına göre)
     unsigned long _startTime;    // millis
     unsigned long _duration;     // ms (0 = süresiz)
-    unsigned long _endTime;      // millis
+    unsigned long _suresizGecenMs; // süresiz modda önceki boot'lardan devreden geçen ms (kümülatif tavan)
     bool _hasDuration;
     int _durationSec;            // SANİYE — backend sözleşmesi (0 = süresiz)
     unsigned long long _startTimestamp;  // epoch ms (NTP)

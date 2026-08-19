@@ -169,7 +169,7 @@ CoilController::CoilController(SensorManager* sensors) {
     _phase = 0;
     _startTime = 0;
     _duration = 0;
-    _endTime = 0;
+    _suresizGecenMs = 0;
     _hasDuration = false;
     _durationSec = 0;
     _startTimestamp = 0;
@@ -247,8 +247,11 @@ void CoilController::process() {
         return;  /* beklerken süre/termal işlemez — çıkış zaten kapalı */
     }
 
-    /* Süre bekçisi (SANİYE sözleşmesi; 0 = süresiz). */
-    if (_active && _hasDuration && millis() >= _endTime) {
+    /* Süre bekçisi (SANİYE sözleşmesi; 0 = süresiz).
+     * ⚠️ WRAP-GÜVENLİ karşılaştırma (review, 2026-08-19): eski `millis() >= _endTime`,
+     * millis() ~49,7 günde sardığında hep-açık klinik makinede seansı ANINDA kesebilirdi.
+     * Fark tabanlı unsigned aritmetik (8266 safeMillisDiff deseni) sarmada da doğrudur. */
+    if (_active && _hasDuration && (millis() - _startTime) >= _duration) {
         LOG_PRINTLN("[PWM] Sure doldu, durduruluyor");
         _stopPWM();
         forceSaveState();
@@ -259,11 +262,13 @@ void CoilController::process() {
      * enerjili kalabiliyordu. Artık süresiz mod da SURESIZ_TAVAN_SEC'te (2 saat —
      * backend'in STM _coil_deadline'ı ile aynı) cihazda durur. ⚠️ Bu, "PWM ağ-bağımsız"
      * değişmezini İHLAL ETMEZ: tavan zamana bağlı, ağ durumuna DEĞİL — süreli seanslar
-     * ve kısa ağ kesintileri etkilenmez. NVS resume sonrası tavan yeni açılıştan sayar
-     * (bilinçli: reboot'ta pencere tazelenir ama sonsuzluk yine imkânsız). */
+     * ve kısa ağ kesintileri etkilenmez. Tavan KÜMÜLATİFTİR (review, crash-loop düzeltmesi):
+     * NVS her 30 sn'de geçen süreyi yazar, resume _suresizGecenMs ile devralır — <2 saatte
+     * bir çöküp dirilen cihaz pencereyi TAZELEYEMEZ. Yeni START komutu pencereyi sıfırlar
+     * (operatör eylemi = gözetimli). */
     else if (_active && !_hasDuration &&
-             (millis() - _startTime) >= (unsigned long)SURESIZ_TAVAN_SEC * 1000UL) {
-        LOG_PRINTLN("[PWM] SURESIZ-mod mutlak tavani doldu, durduruluyor (guvenlik)");
+             (_suresizGecenMs + (millis() - _startTime)) >= (unsigned long)SURESIZ_TAVAN_SEC * 1000UL) {
+        LOG_PRINTLN("[PWM] SURESIZ-mod mutlak tavani doldu (kumulatif), durduruluyor (guvenlik)");
         _stopPWM();
         forceSaveState();
     }
@@ -359,7 +364,6 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
                 if (_active) {
                     _duration = (unsigned long)_durationSec * 1000UL;
                     _hasDuration = (_duration > 0);
-                    _endTime = _startTime + _duration;
                 }
             }
             if (_active) {
@@ -404,7 +408,9 @@ void CoilController::_beginOutput(unsigned long long epochMs) {
     _startTime = millis();
     _duration = (unsigned long)_durationSec * 1000UL;
     _hasDuration = (_duration > 0);
-    _endTime = _startTime + _duration;
+    /* Taze başlangıç = kümülatif süresiz-tavan penceresi sıfırlanır (operatör eylemi).
+     * NVS RESUME bunu loadState'te, _beginOutput'tan SONRA geri yükler. */
+    _suresizGecenMs = 0;
     _startTimestamp = epochMs;
     if (_sensors) _sensors->setPWMActive(true);   /* akım okuma AC-RMS moduna geçsin */
     forceSaveState();
@@ -473,8 +479,10 @@ PWMState CoilController::getState() {
     st.durationSec = _durationSec;
     st.startTimestamp = _startTimestamp;
     if (_active && _hasDuration) {
-        unsigned long simdi = millis();
-        st.remainingTimeSec = (_endTime > simdi) ? (_endTime - simdi) / 1000UL : 0UL;
+        /* WRAP-GÜVENLİ (review 2026-08-19): fark tabanlı — eski `_endTime > simdi` millis
+         * sarmasında (49,7 gün) kalan süreyi bozuyordu. */
+        unsigned long gecen = millis() - _startTime;
+        st.remainingTimeSec = (_duration > gecen) ? (_duration - gecen) / 1000UL : 0UL;
     } else {
         st.remainingTimeSec = 0UL;
     }
@@ -525,7 +533,11 @@ void CoilController::saveState() {
     s.dutyCycle = _dutyCycle;
     s.phase = _phase;
     s.durationSec = _durationSec;
-    s.elapsedMs = (_active && _hasDuration) ? (millis() - _startTime) : 0U;
+    /* elapsedMs: süreli modda boot-içi geçen (kalan süre hesabı için); SÜRESİZ modda
+     * KÜMÜLATİF geçen (önceki boot'lar + bu boot) — crash-loop tavanı delemesin. */
+    s.elapsedMs = !_active ? 0U
+                : _hasDuration ? (millis() - _startTime)
+                               : (_suresizGecenMs + (millis() - _startTime));
     s.checksum = _nvsChecksum(s);
     _writeStateToNvs(&s);
     _lastSaveTimeMs = millis();
@@ -567,6 +579,11 @@ void CoilController::loadState() {
 
     struct timeval tv; gettimeofday(&tv, NULL);
     _beginOutput((unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL);
+    if (s.durationSec == 0) {
+        /* KÜMÜLATİF TAVAN (review, crash-loop): süresiz modda geçen süre devralınır —
+         * <2 saatte bir çöküp dirilen cihaz 7200 sn penceresini tazeleyemez. */
+        _suresizGecenMs = s.elapsedMs;
+    }
     LOG_PRINTF("[PWM] NVS'den devam: %dHz duty%%%d faz%d kalan=%dsn\n",
                _frequency, _dutyCycle, _phase, _durationSec);
 }
