@@ -358,6 +358,12 @@ void CoilController::_applyPWM(int freq, int duty) {
     uint32_t duty_t = (uint32_t)(((float)duty / 100.0f) * (float)tpp);
     if (duty_t >= (tpp / 2U)) duty_t = (tpp / 2U) - 1U;  /* Maks %50 */
 
+    /* ⚠️ EFEKTİF DUTY (2026-08-19 düzeltme): %50 tavanı + tick yuvarlaması sonrası GERÇEK
+     * çıkış oranı. Bu satır ÖNCE S3'e eklenmiş, 8266'ya EKLENMEMİŞTİ (regresyon) —
+     * populateStatus aktifken _effectiveDutyPct'i raporluyor, hiç güncellenmeyince duty=0
+     * gidiyor ve backend gerçek çıkışı sıfır sanıyordu (donanım-uyum analizi D-2 yakaladı). */
+    _effectiveDutyPct = (int)(((float)duty_t * 100.0f) / (float)tpp + 0.5f);
+
     /* ISR ile çakışmayı önlemek için atomik güncelleme */
 #ifdef ESP32
     portENTER_CRITICAL(&s_timer_mux);
