@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-FW = Path(__file__).resolve().parent.parent / "firmware" / "main.c"
+FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 
 
 @pytest.fixture(scope="module")
@@ -203,7 +203,7 @@ def test_bobin_kesme_fonksiyonu_DISA_ACIK(src):
 def test_fault_yamasi_BELGELENMIS(src):
     """Yama elle uygulanmak zorunda (depo stm32f4xx_it.c tutmuyor) → talimatın varlığı
     testle korunmalı; yoksa kurulum sırasında sessizce atlanır."""
-    readme = FW.parent / "README.md"
+    readme = Path(__file__).resolve().parent.parent / "firmware" / "README.md"
     assert readme.exists(), "firmware/README.md yok"
     metin = readme.read_text(encoding="utf-8", errors="replace")
     assert "stm32f4xx_it.c" in metin and "PEMF_ForceAllCoilOutputsLow" in metin, (

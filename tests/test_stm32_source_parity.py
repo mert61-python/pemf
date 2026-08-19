@@ -17,7 +17,7 @@ import pytest
 
 from utils import stm32_protocol_limits as lim
 
-_FW = Path(__file__).resolve().parent.parent / "firmware" / "main.c"
+_FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 
 
 @pytest.fixture(scope="module")

@@ -13,7 +13,7 @@ kök `.env.example`'daki `PEMF_*` değişkenlerindedir.)
 | `mosquitto/mosquitto.conf` | Yerel broker: `listener 1883 0.0.0.0`, `allow_anonymous true` (bilinçli — ESP anon bağlanır, hotspot-subnet firewall + WPA2 ile savunulur), persistence kapalı |
 
 ## Notlar
-- **Bobin GPIO haritası yalnız firmware'dedir** (`../firmware/main.c`), config'te değil.
+- **Bobin GPIO haritası yalnız firmware'dedir** (`../firmware/stm32_pemf/Core/Src/main.c`), config'te değil.
 - `credentials/` dosyaları [`../services/credential_manager.py`](../services/README.md) tarafından üretilir/tüketilir.
 - ⚠️ `credentials/` sır içerir → repoya girmemeli / ACL-kilitli olmalı (bkz. [`../utils/file_acl.py`](../utils/README.md)).
 

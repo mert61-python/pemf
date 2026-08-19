@@ -24,7 +24,7 @@
  *   servers/ai_router.py:770 "phase": normalize_phase_deg). Faz, tüm desenin
  *   STM32 senkron darbesine (t=0) göre kaydırılmasıdır: phase_ticks = deg/360·tpp.
  *
- * SENKRON: STM32 PB1 → GPIO7 RISING, her STM periyot başında (firmware/main.c
+ * SENKRON: STM32 PB1 → GPIO7 RISING, her STM periyot başında (firmware/stm32_pemf/Core/Src/main.c
  *   DDS_SYNC_PULSE_TICKS=5×20µs=100µs). ⚠️ TOLERANSLI: darbe yalnız periyot
  *   sınırının ±%2'sindeyken kilitler; frekans uyuşmazlığında (STM ≠ ESP frekansı)
  *   periyot ortasında sıfırlamak düşük frekanslı çıkışı DC'ye yapıştırıyordu —

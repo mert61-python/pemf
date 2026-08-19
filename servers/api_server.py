@@ -1039,7 +1039,7 @@ def _esp_duration_seconds(duration_seconds: int) -> int:
     """ESP (bobin 6-8) MQTT `duration` alanini SANIYE olarak cozer; gozetimsiz kapagi uygular.
 
     ⚠️ DENETIM BULGUSU 2026-08-17 — KISMI DUZELTME TAMAMLANDI. `duration = 0` bu projenin KENDI
-    protokol sozlesmesinde **SURESIZ** demektir (`firmware/main.c`: "Süre (dakika): 0 = süresiz";
+    protokol sozlesmesinde **SURESIZ** demektir (`firmware/stm32_pemf/Core/Src/main.c`: "Süre (dakika): 0 = süresiz";
     `controllers/hardware_controller` ayni notu tasir). STM yolu bu nobetciyi 1.9.14'ten beri
     `GOZETIMSIZ_VARSAYILAN_DAKIKA`ya cevirir — ama ESP yolu onu HAM iletiyordu. Sonuc: 1.9.14'te
     BILINCLI eklenen klinik kapak 8 bobinin yalniz 5'ini kapsiyordu.

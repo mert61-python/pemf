@@ -128,7 +128,7 @@ Backend'de freq/duty/sıcaklık **clamp'i bilinçli yok** (B-1.5); güvenlik fir
 **Neyi doğrulayacağız.** Denetim (2026-08-17) enerjili bir bobinin frekansı **ARTIRILDIĞINDA**
 duty tick'inin bayat kaldığını buldu: `g_tpp` yeni (küçük) periyoda göre yazılıyor ama
 `g_duty_ticks` eski (büyük) periyottan kalıyor → ~1 sn tek-polarite ve istenen dozun 4,78×'ine
-kadar on-time. Düzeltme `firmware/main.c` içindeki `[FIX-1c]` bloğu: duty tick'i eski/yeni periyot
+kadar on-time. Düzeltme `firmware/stm32_pemf/Core/Src/main.c` içindeki `[FIX-1c]` bloğu: duty tick'i eski/yeni periyot
 ORANIYLA yeniden ölçekliyor ve `g_tpp - 1 - DDS_DEAD_TIME_TICKS` ile klempliyor.
 
 ⚠️ **BU DÜZELTME TEZGÂHTA ÖLÇÜLMEDİ.** Koşan şey C kodu değil, ISR'ın Python modelidir

@@ -37,7 +37,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-FW = Path(__file__).resolve().parent.parent / "firmware" / "main.c"
+FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 
 
 @pytest.fixture(scope="module")
@@ -250,7 +250,7 @@ def test_TEZGAH_DOGRULAMASI_UYARISI_sessizce_KAYBOLAMAZ():
     if "[FIX-1c]" not in fw:
         pytest.skip("firmware duzeltmesi kaldirilmis → tezgah uyarisinin konusu kalmadi")
 
-    belge = FW.parent.parent / "docs" / "VERIFICATION.md"
+    belge = Path(__file__).resolve().parent.parent / "docs" / "VERIFICATION.md"
     assert belge.exists(), "docs/VERIFICATION.md YOK"
     metin = belge.read_text(encoding="utf-8", errors="replace")
 

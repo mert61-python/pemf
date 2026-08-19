@@ -1,16 +1,25 @@
-# firmware/ — STM32 Bobin-Sürücü Firmware'i
+# firmware/ — Bobin-Sürücü Firmware'leri (STM32 + ESP)
 
-Klinik cihazının 5 STM32 bobinini süren gömülü firmware. Backend seri porttan bu firmware'e komut yollar.
+Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan beri **hepsi burada, tek çatı**:
 
-## Dosya
-| Dosya | İçerik |
-|---|---|
-| `main.c` | **v2.2.0 (~1240 satır)** — tek dosya firmware |
+| Alt klasör | Ne | Bobin |
+|---|---|---|
+| [`stm32_pemf/`](stm32_pemf/README.md) | STM32F429 CubeIDE projesi — **TEK KAYNAK, main.c dahil** | 1-5 (seri) |
+| [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) | ESP32-S3 (tam-köprü + BLE) | 6-7 (MQTT) |
+| [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) | ESP8266 (yarım-köprü, tek faz) | 8 (MQTT) |
+
+Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
+`stm32_pemf/Core/Src/main.c` (**~1509 satır**, elle yazılmış).
+⚠️ Eski `firmware/main.c` kök kopyası 2026-08-19'da SİLİNDİ — iki kopya sessiz ayrışma üretiyordu
+(`tests/test_stm_main_saglik.py` geri gelmesini engeller). Derleme: CubeIDE'de `stm32_pemf/` aç → Build.
 
 - **MCU:** STM32F429ZI (STM32F4, Nucleo-144), SYSCLK 168 MHz.
 - **Ne sürer:** 5-kanal **yazılım DDS** bipolar tam-köprü bobin PWM. TIM1 @50 kHz ISR, BSRR ile 10 GPIO'yu (bobin-başı IN_A/IN_B) yazılımla sürer; 100 Hz PWM, bobin-başı bağımsız faz.
 - **Protokol:** USART3 @115200 (ST-Link VCP) ikili protokol — 88-byte `BinaryCmdPacket_t` (`0xAA 0x55` + duty/phase/freq/duration[5] + `ref_ms` + CRC32), yanıt `STM_OK`/`STM_NACK`/`STM_READY`. Backend tarafı: [`../utils/stm32_transport.py`](../utils/README.md) + [`../controllers/hardware_controller.py`](../controllers/README.md).
-- **ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki master sync-pulse ile senkron. ⚠️ ESP firmware'i (`CoilController.cpp`) **bu repoda değil**.
+- **ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki master sync-pulse ile senkron.
+  Firmware artık BURADA: [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) (6-7, tam-köprü, faz
+  senkron GPIO7'de) + [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) (8, tek faz — 8266'da
+  GPIO7 flash hattı olduğu için sync KULLANILMAZ).
 
 ## Güvenlik mantığı (firmware içinde)
 - Aralık clamp'leri: `DUTY_MIN` / `FREQ_MIN..FREQ_MAX` / faz `0..360` / `DURATION_MAX_MINUTES 9999` + CRC + NACK.
@@ -23,13 +32,14 @@ Klinik cihazının 5 STM32 bobinini süren gömülü firmware. Backend seri port
   donanımsal dead-time üreteci yoktur. Değiştirmeden önce **osiloskopla ölçün**: IN_A düşen
   kenarı ↔ IN_B yükselen kenarı arası, MOSFET/sürücünün turn-off gecikmesinden büyük olmalı.
 
-## Fault işleyici yaması (`stm32f4xx_it.c`) — ELLE UYGULANMALI
+## Fault işleyici yaması (`stm32f4xx_it.c`) — ELLE UYGULANMALI (HENÜZ YAPILMADI)
 
-Bu depo **yalnız `main.c`** tutar; CubeMX projesinin `Core/Src/stm32f4xx_it.c` dosyası burada
-değildir. Fault işleyicileri (`HardFault` / `MemManage` / `BusFault` / `UsageFault`) o dosyada
-tanımlıdır ve **boş `while(1)` döngüsüne girer** → main() durur, 1500 ms'lik ölü-adam kontrolü
-bir daha çalışmaz, bobinler enerjili kalır. `main.c` bunları **tanımlayamaz** (çift-sembol link
-hatası; `arm-none-eabi-ld` ile doğrulandı).
+`stm32f4xx_it.c` artık depoda (`stm32_pemf/Core/Src/stm32f4xx_it.c`) ama **yama içine hâlâ
+uygulanmadı** (2026-08-19'da doğrulandı — dosyada `PEMF_ForceAllCoilOutputsLow` geçmiyor).
+Fault işleyicileri (`HardFault` / `MemManage` / `BusFault` / `UsageFault`) o dosyada tanımlı ve
+**boş `while(1)` döngüsüne girer** → main() durur, 1500 ms'lik ölü-adam kontrolü bir daha
+çalışmaz, bobinler enerjili kalır. `main.c` bunları **tanımlayamaz** (çift-sembol link hatası;
+`arm-none-eabi-ld` ile doğrulandı) — yama it.c'ye elle girer. Bu tezgâh turunun işidir.
 
 Çözüm: `main.c` `PEMF_ForceAllCoilOutputsLow()` fonksiyonunu **dışa açar**; aşağıdaki yamayı
 `stm32f4xx_it.c` içindeki **USER CODE bloklarına** ekleyin (CubeMX yeniden-üretimde korur).
@@ -57,15 +67,16 @@ kendiliğinden yeniden ateşleme olmaz.
 
 ## Derleme doğrulaması
 
-`main.c` tek başına derlenmez (HAL + CMSIS başlıkları CubeMX projesindedir). Sözdizimi/tip
-kontrolü için:
+Artık HAL + CMSIS başlıkları **projede** (`stm32_pemf/Drivers/`) — tam derleme için CubeIDE'de
+`stm32_pemf/` aç → Build (ölçüldü 2026-08-19: **0 hata / 0 uyarı**, `-Wall`). CubeIDE olmadan
+komut satırından sözdizimi/tip kontrolü de mümkün:
 
 ```powershell
 arm-none-eabi-gcc -c -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard `
   -DUSE_HAL_DRIVER -DSTM32F429xx -Wall -Wextra -O2 `
-  -I<proje>\Core\Inc -I<proje>\Drivers\STM32F4xx_HAL_Driver\Inc `
-  -I<proje>\Drivers\CMSIS\Include -I<proje>\Drivers\CMSIS\Device\ST\STM32F4xx\Include `
-  firmware\main.c -o main.o
+  -Istm32_pemf\Core\Inc -Istm32_pemf\Drivers\STM32F4xx_HAL_Driver\Inc `
+  -Istm32_pemf\Drivers\CMSIS\Include -Istm32_pemf\Drivers\CMSIS\Device\ST\STM32F4xx\Include `
+  stm32_pemf\Core\Src\main.c -o main.o
 ```
 
 **Beklenen sonuç: SIFIR uyarı.** (Daha önce 4 adet `-Wsign-compare` "bilinen uyarı" olarak

@@ -83,7 +83,7 @@ class HardwareController:
     # Dusen STOP telafisi TICK cinsindendir → kadans degisirse WALL-CLOCK kapsama
     # sabit kalsin diye sureden turetilir (~3 sn, eski 3 tick x 1.0 sn ile ayni).
     STOP_RESEND_TICKS = 6
-    _FIRMWARE_DEADMAN_MS = 1500  # firmware/main.c ile AYNI olmali (bkz. main.c watchdog blogu)
+    _FIRMWARE_DEADMAN_MS = 1500  # firmware/stm32_pemf/Core/Src/main.c ile AYNI olmali (bkz. main.c watchdog blogu)
 
     def _keep_alive_loop(self):
         while not self._keep_alive_stop.is_set():
