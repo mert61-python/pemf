@@ -6,22 +6,27 @@
 
 ## CubeIDE'de açma / derleme
 
-1. Workspace'i **deponun DIŞINDA** seç (örn. `C:\CubeWS`) — workspace `.metadata` üretir,
-   depoya çöp girmesin (yanlışlıkla içeri seçilirse `.gitignore` yakalar).
-2. **File → Open Projects from File System… → Directory** → bu klasör → Finish.
+1. Workspace'i **deponun DIŞINDA** seç (kullanılan: `C:\Users\merta\STM32CubeIDE\workspace_1.17.0`) —
+   workspace `.metadata` üretir, depoya çöp girmesin (yanlışlıkla içeri seçilirse `.gitignore` yakalar).
+2. **File → Import → General → Existing Projects into Workspace** → root = bu klasör →
+   ⚠️ **"Copy projects into workspace" İŞARETSİZ** (kopya = ikinci kaynak = yasak) → Finish.
+   (Workspace'te aynı adlı eski/askıda "PEMF" kaydı varsa import kutusu seçilemez —
+   önce Project Explorer'da o girdiyi Delete edin, "contents on disk" İŞARETSİZ.)
 3. **Project → Build Project** (Ctrl+B). Başarı: `Build Finished. 0 errors` +
    `Debug/PEMF.elf` (Debug/ gitignore'lu — build çıktısı depoya girmez).
-4. Ölçülen referans (2026-08-19): 0 hata 0 uyarı (`-Wall`), text 21.5 KB / bss 2.9 KB.
+4. Ölçülen referans (2026-08-19 akşam, v2.3.0 SYM-BIPOLAR): **0 hata 0 uyarı** (`-Wall`);
+   `STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR + HW_SYNC@PB1)` dizesi binary'de.
 
 ## ⚠️ İKİ KURAL
 
 1. **CubeMX "Generate Code" YASAK** — `PEMF.ioc`'u Device Configuration ekranında açıp
    kod üretmek `Core/Src/main.c`'yi iskeletle EZER (dosya elle yazılmış, USER CODE
-   işaretçisi yok). `.ioc` değişecekse: üret → main.c'yi `firmware/main.c`'den geri kopyala.
-2. **main.c İKİ KOPYADA BAYT-BAYT AYNI tutulur** — kanonik `firmware/main.c` ↔ buradaki
-   `Core/Src/main.c`. Ayrışma `tests/test_stm_main_tek_kaynak.py` kapısıyla kilitli:
-   main.c değişecekse İKİSİ BİRDEN güncellenir (bu ayrışma bir kez gerçekten yaşandı;
-   masaüstü kopya 2 ay geride kalmıştı).
+   işaretçisi yok). `.ioc` değişecekse: üret → main.c'yi `git checkout`la geri al
+   (`git checkout -- firmware/stm32_pemf/Core/Src/main.c`). Kapı: `tests/test_stm_main_saglik.py`.
+2. **main.c TEK dosyadır** — kanonik: `Core/Src/main.c` (BU proje). Eski kök kopya
+   `firmware/main.c` 2026-08-19'da SİLİNDİ (iki kopya bir kez gerçekten ayrışmıştı —
+   masaüstü 2 ay geride kalmıştı); `test_stm_main_saglik.py` geri gelmesini de engeller.
+   Başka yere KOPYALAMAYIN — derleme dahil her şey bu dosyayı okur.
 
 ## Tezgâh
 

@@ -29,8 +29,15 @@ PAKET FORMATI (88 byte, main.c ile identik):
   ─────────────────────────────
   Toplam: 88 byte
 
+NOT (2026-08-19): Firmware v2.3'e gecti — dalga sozlesmesi SIMETRIK BIPOLAR
+(A=[0,duty), B=[yarim,yarim+duty), arada LOW; net DC=0; duty tavani ~%50) ve
+derleme-kapili NTC termal kesme eklendi. BU SIM PROTOKOL-SEVIYESIDIR: paket
+cozme/CRC/ACK/watchdog'u taklit eder, DALGA BICIMINI MODELLEMEZ — dalga fizigi
+kilitleri tests/test_stm_dalga_sozlesmesi.py'dedir. READY dizesi firmware ile
+hizali tutulur (backend 'STM_READY' alt-dizesini esler; surum eki serbesttir).
+
 YANIT FORMATI (ASCII, \r\n ile biten):
-  -> STM_READY: DDS v2.2 (5-ch SIM) Waiting for commands...\r\n
+  -> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n
   -> STM_OK: D=%d,%d,%d,%d,%d P=%d,%d,%d,%d,%d F=%d,%d,%d,%d,%d T=%lu,...\r\n
   -> STM_NACK: <sebep>\r\n
   -> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n
@@ -154,7 +161,7 @@ class Stm32SimClient:
 
     def _send_ready(self):
         time.sleep(READY_DELAY_S)  # USB enumerate simülasyonu
-        msg = "-> STM_READY: DDS v2.2 (5-ch SIM) Waiting for commands...\r\n"
+        msg = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n"
         self._send(msg)
         log.info("✅ STM_READY gönderildi → %s", self.addr)
 

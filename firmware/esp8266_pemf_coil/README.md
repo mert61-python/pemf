@@ -21,6 +21,15 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
 - **Yerel termal kesme**: 48 °C durdur / 45 °C histerezisli kilit (`thermal_stop`/`thermal_lock` olayları).
 - **Backend sözleşmesi**: `duration` SANİYE · `freq` float kabul · aktifken `start` = güncelle ·
   `duty<1` = STOP · status **efektif** duty raporlar (%50 donanım tavanı sonrası gerçek çıkış).
+- **LWT (D-4, 2026-08-19 akşam)**: iki broker bağlantısı da last-will'li — ani kopuşta broker
+  `pemf/coil/8/events`e `offline` yayınlar (S3 ile birebir; eskiden yalnız ~30 sn staleness
+  ile geç fark ediliyordu).
+- **Süresiz-mod mutlak tavanı (Plan A-1)**: `duration=0` modda 7200 sn cihaz-yerel son-tarih;
+  KÜMÜLATİF (EEPROM 30 sn'de bir geçeni yazar, resume devralır — crash-loop pencereyi
+  tazeleyemez); yalnız YENİ start sıfırlar. Süreli seans + "ağ koparsa PWM durmaz" değişmezi
+  etkilenmez.
+- ⚠️ **IRAM %94 dolu** — yeni `IRAM_ATTR`/`ICACHE_RAM_ATTR` kod eklerken taşma riski var;
+  önce ✓ Verify ile ölçün.
 
 ## Flash öncesi
 
@@ -36,3 +45,7 @@ portalı devreye girer (normal akış).
 4. Üst üste 8-10 STOP → hepsi işler.
 5. Sensörü 48 °C üstüne ısıt → kesme + kilit + `thermal_stop`; soğuyunca start serbest.
 6. Reboot ortası seans → EEPROM'dan kalan süreyle devam.
+7. WiFi'yi ANİDEN kes (fişten çek) → backend ~keepalive süresinde `pemf/coil/8/events`
+   üzerinden `offline` görmeli (LWT; eskiden ~30 sn staleness beklenirdi).
+8. `duration: 0` (süresiz) başlat → 7200 sn'de kendiliğinden durur; ortada reboot →
+   resume sonrası tavan kaldığı yerden sayar (kümülatif).

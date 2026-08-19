@@ -9,13 +9,14 @@ pytest tests -v --cov            # guii kökünden (embedded python ile)
 - `conftest.py`: `guii` kökünü `sys.path`'e ekler; **`temp_app_data`** fixture'ı `%APPDATA%`'yı izole eder (gerçek veriye dokunmaz).
 - Özel marker yok; düz fonksiyon testleri (`pytest.ini` yok).
 
-## Kapsam (138 `test_*.py` · ~1300 test + conftest)
+## Kapsam (146 `test_*.py` · ~1406 test + conftest)
 
-> Sayı 2026-08-18'de güncellendi (eski "28" donmuş kalmıştı). Aşağıdaki tablo TAM LİSTE değil,
+> Sayı 2026-08-19'da güncellendi (donanım-uyum turu +8 dosya). Aşağıdaki tablo TAM LİSTE değil,
 > alan başına **seçkidir**; güncel sayım: `ls tests/test_*.py | wc -l`.
 | Alan | Örnek dosyalar |
 |---|---|
 | Firmware/protokol güvenliği | `test_stm32_protocol_limits.py` (NaN/inf clamp, `FREQ_MAX`, `AI_PRO_DUTY_MAX`), `test_hardware_controller_safety.py` (deadline auto-stop, watchdog, reconnect re-fire), `test_coil_transport.py`, `test_session_watchdog.py` |
+| Donanım-uyum turu (2026-08-19, `docs/DONANIM-UYUM-ANALIZI-2026-08-19.md`) | `test_stm_dalga_sozlesmesi.py` (HG-2 simetrik bipolar: net DC=0, asla-ikisi-HIGH, NTC-kapılı kapısı), `test_s3_sync_dc_yapisma.py` (HG-3 ISR modeli), `test_esp_ack_roundtrip.py` (HG-4 E-stop onayı), `test_plan_a_deadman.py` (süresiz-tavan/bulut-ayna/reconcile), `test_esp_control_topic.py` (D-1), `test_esp_freq_clamp.py` (D-3), `test_esp_lwt.py` (D-4), `test_stm_main_saglik.py` (tek-kaynak kapısı) |
 | Auth / rate-limit | token, 429 throttle |
 | KVKK / PII | şifreleme + anonimleştirme |
 | Seans yaşam-döngüsü | başlat/bitir, kalıcılık |

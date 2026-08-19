@@ -9,7 +9,7 @@ Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan ber
 | [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) | ESP8266 (yarım-köprü, tek faz) | 8 (MQTT) |
 
 Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
-`stm32_pemf/Core/Src/main.c` (**~1509 satır**, elle yazılmış).
+`stm32_pemf/Core/Src/main.c` (**~1670 satır**, elle yazılmış; v2.3.0 SYM-BIPOLAR + derleme-kapılı NTC).
 ⚠️ Eski `firmware/main.c` kök kopyası 2026-08-19'da SİLİNDİ — iki kopya sessiz ayrışma üretiyordu
 (`tests/test_stm_main_saglik.py` geri gelmesini engeller). Derleme: CubeIDE'de `stm32_pemf/` aç → Build.
 
@@ -24,7 +24,7 @@ Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
 ## Güvenlik mantığı (firmware içinde)
 - Aralık clamp'leri: `DUTY_MIN` / `FREQ_MIN..FREQ_MAX` / faz `0..360` / `DURATION_MAX_MINUTES 9999` + CRC + NACK.
 - **Watchdog "Ölü Adam Devresi":** herhangi bobin aktif + seri >1500 ms yoksa → tüm duty 0.
-- Bobin-başı **süre auto-stop**; A/B geçişlerinde **dead-time** (shoot-through koruması); duty **slew-rate** sınırlayıcı + `tpp-1` clamp.
+- Bobin-başı **süre auto-stop**; A/B geçişlerinde **dead-time** (yapısal GAP + NOP break-before-make); duty **slew-rate** sınırlayıcı + **yarım-periyot − `DDS_BIPOLAR_GAP_TICKS` klempi** (HG-2 simetrik bipolar; eski `tpp-1` tavanı kalktı).
 - ⚠️ **Dead-time süresi ÖLÇÜLMEMİŞTİR.** `DDS_DEADTIME_NOP_ITERS` (=21) `volatile` bir NOP
   döngüsüdür; gerçek süre `-O` seviyesine, FLASH bekleme durumlarına ve ART hızlandırıcıya
   bağlıdır (kaba tahmin ~0.75–1.25 µs). Daha önce belgelerde **üç farklı ve yanlış** değer

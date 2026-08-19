@@ -9,7 +9,7 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 | `stm32_protocol_limits.py` | **Güvenlik-limit sabitleri + normalizer'lar** — 5 STM / 8 ESP bobin, freq 1 Hz–25 kHz (`DDS_ISR_HZ/2`), faz 0–360°, süre 0–9999 dk (0=sınırsız), AI-Pro duty tavanı 0.50. Python-tarafı STM duty-max **yok** (firmware doyurur) |
 | `simple_signal.py` | **`SimpleSignal`** — minimal Qt-siz signal/slot (STM-bağlandı bildirimleri için) |
 | `path_utils.py` | App-data dizini, benzersiz cihaz-id, pairing-code, PyInstaller resource-path çözümü, `initialize_database()`, `get_app_version()` |
-| `secrets_manager.py` | Şifreli sır deposu — Windows DPAPI + makine-bağlı Fernet + keyring; token/pairing/admin-code/device-id üreteçleri. **TÜM sırlar tek dosyada** (`pemf_secrets.json`) |
+| `secrets_manager.py` | Şifreli sır deposu — Windows DPAPI + makine-bağlı Fernet + keyring; token/pairing/admin-code/device-id üreteçleri. **TÜM sırlar tek dosyada** (`pemf_secrets.json`). 2026-08-19: `mqtt_cloud_host/port/user/pass` eklendi (operator bölümü; E-stop **bulut aynası** — tanımsızsa ayna sessiz devre dışı; env fallback `PEMF_MQTT_CLOUD_*`) |
 | `file_acl.py` | `lock_down_file()` — bir dosyanın ACL'ini yalnız mevcut kullanıcıya kısıtla (sır dosyalarını sertleştirir) |
 | `production_config_manager.py` | **`ProductionConfigManager`** singleton — bundled+kullanıcı JSON config birleştir (şifreli değerler, noktalı-anahtar get/set) |
 | `pdf_report_generator.py` | **`PDFReportGenerator`** — ReportLab ile seans/hasta tedavi PDF raporu (istatistik+coil-run tabloları, DejaVu font) |

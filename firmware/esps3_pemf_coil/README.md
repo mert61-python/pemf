@@ -39,9 +39,16 @@ dalga biçimi **rekonstrüksiyon**, skopla doğrulanmadan kliniğe güvenilmez:
 2. `phase: 90` komutu → desen çeyrek periyot kaymalı.
 3. STM bağlı + aynı frekans → status'ta `sync_ignored` sabit; kasıtlı farklı frekans →
    `sync_ignored` artar AMA çıkış bozulmaz (toleranslı kilit).
-4. Termal: sensör 48 °C üstü → PWM durur + `thermal_stop`; 45 °C altına inmeden start reddedilir.
-5. STOP seli (üst üste 8-10 adet) → hepsi işler; süre (saniye!) dolunca kendiliğinden durur.
-6. Reboot ortası seans → NVS'ten kalan süreyle devam eder.
+4. **DC-yapışma latch'i (HG-3, 2026-08-19):** STM freq'i ESP'nin ≳50 katına çıkar (örn. STM
+   100 Hz + ESP 1 Hz) → latch öncesi ~8 darbelik DC penceresini SKOPLA ölç, sonra status'ta
+   `sync_disabled: true` görülmeli ve çıkış kendi frekansında bipolar sürmeli. Yeni freq
+   komutu latch'i sıfırlar; aynı-freq keepalive sıfırlaMAZ.
+5. Termal: sensör 48 °C üstü → PWM durur + `thermal_stop`; 45 °C altına inmeden start reddedilir.
+6. STOP seli (üst üste 8-10 adet) → hepsi işler; süre (saniye!) dolunca kendiliğinden durur.
+7. **Süresiz-mod tavanı (Plan A-1):** `duration: 0` ile başlat → 7200 sn'de (2 saat) cihaz
+   kendiliğinden durur; tavan KÜMÜLATİF — çalışırken reboot edip resume ettir, pencere
+   kaldığı yerden sayar (yalnız YENİ start komutu sıfırlar). Süreli seans etkilenmez.
+8. Reboot ortası seans → NVS'ten kalan süreyle devam eder.
 
 Değişikliklerin tam gerekçeleri: bu klasördeki dosyaların baş yorumları + commit geçmişi
 (`git log -- firmware/esps3_pemf_coil`).
