@@ -46,7 +46,12 @@
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+/* HASTA GUVENLIGI YAMASI (2026-08-19, firmware/README.md 'Fault isleyici yamasi'):
+ * fault'ta main() durur -> 1500 ms olu-adam bir daha kosamaz -> bobinler enerjili
+ * kalirdi. Once TUM bobin cikislarini LOW'a cek (main.c disa acar), sonra MCU'yu
+ * resetle. Reset sonrasi g_pwm_started=0 + Coil_GpioInit pinleri LOW baslatir ->
+ * kendiliginden yeniden ateslenme olmaz. USER CODE blogu: CubeMX yeniden-uretimde korur. */
+extern void PEMF_ForceAllCoilOutputsLow(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -69,7 +74,10 @@ extern UART_HandleTypeDef huart3;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
-
+  /* Savunma-derinligi (2026-08-19): NMI bugun erisilmez (CSS acik degil) ama tetiklenirse
+   * asagidaki sonsuz donguye girilir -> fault yamasiyla ayni gerekce: once bobinleri kes. */
+  PEMF_ForceAllCoilOutputsLow();
+  NVIC_SystemReset();
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
    while (1)
@@ -84,6 +92,8 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+  PEMF_ForceAllCoilOutputsLow(); /* HASTA GUVENLIGI: once bobinleri kes */
+  NVIC_SystemReset();            /* sonra MCU'yu resetle (donmus while(1) yerine) */
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
@@ -99,6 +109,8 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+  PEMF_ForceAllCoilOutputsLow(); /* HASTA GUVENLIGI: once bobinleri kes */
+  NVIC_SystemReset();            /* sonra MCU'yu resetle (donmus while(1) yerine) */
 
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
@@ -114,6 +126,8 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
+  PEMF_ForceAllCoilOutputsLow(); /* HASTA GUVENLIGI: once bobinleri kes */
+  NVIC_SystemReset();            /* sonra MCU'yu resetle (donmus while(1) yerine) */
 
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
@@ -129,6 +143,8 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
+  PEMF_ForceAllCoilOutputsLow(); /* HASTA GUVENLIGI: once bobinleri kes */
+  NVIC_SystemReset();            /* sonra MCU'yu resetle (donmus while(1) yerine) */
 
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)

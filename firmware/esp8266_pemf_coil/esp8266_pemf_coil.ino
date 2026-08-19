@@ -670,6 +670,27 @@ void processControlCommand(JsonDocument& doc) {
             success = true;
         }
 
+    } else if (strcmp(command, "SELFTEST") == 0) {
+        /* D-1 tamamlayıcısı (2026-08-19): backend artık selftest'i doğru topiğe yayınlıyor
+         * ama 8266'da işleyici yoktu → "Unknown command" + success=false dönüyordu (arızalı
+         * cihaz ile işleyicisiz cihaz ayırt edilemiyordu). S3 İLE AYNI GÜVENLİK SEMANTİĞİ:
+         * self-test ASLA kendi kendini enerjilendirmez — yalnız PWM ZATEN AKTİFKEN alan ölçer
+         * (mag ≥ 0.10 mT = geçti). Pasifken "ölçüm yapılamadı" olayı döner, bobin başlatılmaz. */
+        SensorData st = sensors.getData();
+        static char stMsg[96];
+        if (coil && coil->isActive()) {
+            bool gecti = st.magnetic_sensor_ok && (st.magneticField >= 0.10f);
+            snprintf(stMsg, sizeof(stMsg), "coil8 self-test: mag=%.3fmT sensor_ok=%d",
+                     (double)st.magneticField, st.magnetic_sensor_ok ? 1 : 0);
+            if (network) network->publishEvent(gecti ? "selftest_ok" : "selftest_fail", stMsg);
+            success = gecti;
+        } else {
+            /* Pasif: guvenli-red — S3 de pasifken olcum yapmaz (kendini enerjilendirmek yasak) */
+            snprintf(stMsg, sizeof(stMsg), "coil8 self-test atlandi: PWM pasif (guvenlik)");
+            if (network) network->publishEvent("selftest_skipped", stMsg);
+            success = true; /* islendi (arizali degil); sonuc event'te */
+        }
+
     } else if (strcmp(command, "status") == 0) {
         success = true; // Status düzenli gidiyor
 

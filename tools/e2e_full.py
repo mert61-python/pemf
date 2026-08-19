@@ -217,6 +217,7 @@ def run_all():
     d_session_esp()
     e_session_guards()
     f_coil_control()
+    f2_donanim_uyum()
     g_profile_pet_owner()
     h_profile_researcher()
     i_profile_vet_kpi()
@@ -601,6 +602,108 @@ def f_coil_control():
     s, ap, _ = req("POST", "/api/hardware/auto_preset", {"condition": "Artrit"})
     check("otomatik preset ucu yanit veriyor", s in (200, 422), f"HTTP {s}")
     req("POST", "/api/hardware/emergency_stop")
+    sn = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
+    check("bolum sonu: tum bobinler kapali", running_ids(sn) == [], str(running_ids(sn)))
+
+
+# ── F2) DONANIM-UYUM TURU (2026-08-19) — HTTP sinirinda test edilebilir davranislar ──
+def f2_donanim_uyum():
+    """docs/DONANIM-UYUM-ANALIZI-2026-08-19.md fix'lerinin backend-HTTP izdusumu.
+
+    NOT (durustluk): analiz fix'lerinin cogu MQTT/firmware katmaninda yasar ve BURADAN
+    gorunmez (ack round-trip, reconcile, LWT, firmware tavan/dalga — kilitleri pytest'te:
+    test_esp_ack_roundtrip / test_plan_a_deadman / test_stm_dalga_sozlesmesi vb.).
+    Burada yalniz HTTP sinirina cikan davranislar sinanir."""
+    section("F2. Donanim-uyum (HTTP siniri)")
+
+    # D-3: ESP freq tavani — asiri deger 500'e degil sessiz 200'e (iceride 1000'e normalize;
+    # 8266 REDDETMEZ cunku backend onden clampler). Robustluk: negatif de kabul (1'e clamp).
+    s, b, _ = req("POST", "/api/coil/7/control", {"freq": 5000.0, "duty": 20.0, "duration": 30, "start": True})
+    check("D-3: ESP bobine freq=5000 komutu 200 (iceride 1000'e normalize)", s == 200, f"HTTP {s} {str(b)[:100]}")
+    s, b, _ = req("POST", "/api/coil/7/control", {"freq": -3.0, "duty": 20.0, "duration": 30, "start": True})
+    check("D-3: negatif freq 200 (1'e clamp, 500 yok)", s == 200, f"HTTP {s}")
+    req("POST", "/api/coil/7/control", {"start": False})
+
+    # E-stop kapsami: yanit TUM ESP bobinlerini (6,7,8) icermeli (P0 kapsam fix'i — eskiden
+    # seans coil_ids'iyle sinirlaniyordu ve bos kalabiliyordu).
+    s, es, _ = req("POST", "/api/hardware/emergency_stop")
+    check("E-stop 200", s == 200, f"HTTP {s}")
+    mr = es.get("mqttResults") or es.get("mqtt_results") or []
+    ids = sorted(int(r.get("coilId") or r.get("coil_id") or 0) for r in mr if isinstance(r, dict))
+    check("E-stop yaniti ESP 6-7-8'in UCUNU de kapsiyor", ids == [6, 7, 8], str(ids))
+    check(
+        "E-stop yanitinda teslim durumu alani var (sahte-guvence yok)",
+        all(("mqtt" in r) for r in mr if isinstance(r, dict)),
+        str(mr)[:120],
+    )
+
+    # HG-3 ucuncu katman: STM seansi yuksek frekansta calisirken ESP bobine cok dusuk frekans
+    # istenirse yanit 'sync_warning' tasimali (reddetmez). Sim dongusu coil1'i seans freq'iyle
+    # 'calisiyor' gosterir → kosul saglanir.
+    _s, pb, _ = req(
+        "POST",
+        "/api/patients",
+        {"name": "SyncTest", "species": "Kedi", "owner": "E2E", "owner_email": "e2e@ornek.com"},
+    )
+    s, sb, _ = req(
+        "POST",
+        "/api/session/start",
+        {
+            "patient_id": pb.get("patient_id"),
+            "patient_name": "SyncTest",
+            "operator_name": "Dr. Test",
+            "mode": "Manuel",
+            "target_condition": "Artrit",
+            "frequency": 100.0,
+            "duty": 25.0,
+            "intensity": 10.0,
+            "duration_minutes": 5,
+            "coil_ids": [1, 2],
+        },
+    )
+    check("sync-uyari kurgusu: STM seansi (100 Hz) basladi", s == 200, f"HTTP {s} {str(sb)[:100]}")
+    wait_until(lambda: coil_of(snap(), 1).get("running") or None, timeout=10)
+    s, b7, _ = req("POST", "/api/coil/7/control", {"freq": 1.0, "duty": 20.0, "duration": 30, "start": True})
+    check("HG-3: >=50x ayrisan ESP istegi REDDEDILMEDI (200)", s == 200, f"HTTP {s}")
+    check(
+        "HG-3: yanit 'sync_warning' tasiyor (operatore acik uyari)",
+        bool(b7.get("sync_warning")),
+        str(b7)[:160],
+    )
+    # NEGATIF (yanlis-yesil kilidi): YAKIN frekansta uyari OLMAMALI — kosulsuz-uyaran bir
+    # regresyon yukaridaki pozitif kontrolu de gecerdi (alarm yorgunlugu ilkesi).
+    s, b7y, _ = req("POST", "/api/coil/7/control", {"freq": 60.0, "duty": 20.0, "duration": 30, "start": True})
+    check(
+        "HG-3: yakin frekansta (100 vs 60 Hz) sync_warning YOK",
+        s == 200 and not b7y.get("sync_warning"),
+        str(b7y)[:120],
+    )
+    # Batch yolu da ayni normalize+uyari (review: batch bypass kapandi)
+    s, bb, _ = req(
+        "POST", "/api/coil/batch", {"coil_ids": [7], "freq": 1.0, "duty": 20.0, "duration": 30, "start": True}
+    )
+    _bsatir = (bb.get("results") or [{}])[0]
+    check(
+        "HG-3/D-3: BATCH yolunda da sync_warning var",
+        s == 200 and bool(_bsatir.get("sync_warning")),
+        str(_bsatir)[:140],
+    )
+    req("POST", "/api/coil/7/control", {"start": False})
+    req("POST", "/api/session/stop")
+    req("POST", "/api/hardware/emergency_stop")
+
+    # D-1: selftest/reset artik olu topige degil dogru kapiya caliyor — HTTP'de hizli 200 +
+    # arka-plan semantigi (istek ~aninda donmeli; 8x connect-publish beklenmez).
+    t0 = time.time()
+    s, _b, _ = req("POST", "/api/hardware/selftest")
+    check(
+        "D-1: selftest 200 + hizli donus (arka-plan yayin)",
+        s == 200 and (time.time() - t0) < 5.0,
+        f"{time.time() - t0:.1f}sn",
+    )
+    s, _b, _ = req("POST", "/api/hardware/reset_pwm")
+    check("D-1: reset_pwm 200", s == 200, f"HTTP {s}")
+
     sn = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
     check("bolum sonu: tum bobinler kapali", running_ids(sn) == [], str(running_ids(sn)))
 

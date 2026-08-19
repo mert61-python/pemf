@@ -39,6 +39,8 @@ def test_KRITIK_esp_tavani_8266_firmware_ile_BIREBIR():
         (0, 1.0),  # alt sınır altı → FREQ_MIN
         (1000, 1000.0),  # tam tavan — geçer
         (1001, 1000.0),  # tavanın 1 üstü — 8266 reddederdi, clamp'lenir
+        (-3, 1.0),  # negatif → alt sınıra (review yanlış-yeşil paketi)
+        (None, 100.0),  # sayısal-olmayan → güvenli default
     ],
 )
 def test_KRITIK_esp_normalize_1000e_clampler(girdi, beklenen):

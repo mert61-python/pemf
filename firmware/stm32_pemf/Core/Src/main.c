@@ -1166,7 +1166,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
        * ARDINDA yer aliyor. Sonuc: acilistan ILK UART komutuna kadar PB1 KALICI HIGH kaliyor
        * (ESP slave'leri RISING kenar goremez) ve ilk paket geldiginde bayat sayac rastgele bir
        * tick'te esi olmayan bir DUSEN kenar uretiyordu. PWM baslamadan darbe URETME. */
-      if (i == 0 && g_pwm_started) {
+      /* HG-3 tamamlayıcısı (2026-08-19): PB1 yalnız Bobin 1 GERÇEKTEN sürülürken darbelenir.
+       * Eskiden g_pwm_started yeterliydi → boştaki referans bobin (duty=0, varsayılan 100 Hz)
+       * ESP'lere ANLAMSIZ 100 Hz senkron darbesi basıyordu; düşük frekanslı bir ESP bobini bu
+       * darbelere kilitlenip DC-yapışma rejimine (S3 latch'i tetiklenene dek ~8 darbe DC) girebilirdi.
+       * duty=0'da darbe YOK → S3 serbest koşar (toleranslı kilit zaten darbesizliği tolere eder).
+       * Kapı HEDEF değeri okur (review düzeltmesi): g_duty_ticks slew'li/bayat olabilir —
+       * hedefle kapılamak ilk-darbe gecikmesini, stop'taki kuyruk darbesini ve rescale-sıfır
+       * köşesini birden kapatır (STOP-anında-kes yolu da aynı kaynağa güvenir). */
+      if (i == 0 && g_pwm_started && (g_target_duty_ticks[0] > 0)) {
         GPIOB->BSRR = (uint32_t)GPIO_PIN_1; /* PB1 = HIGH */
         g_sync_pulse_countdown = DDS_SYNC_PULSE_TICKS;
       }

@@ -32,17 +32,15 @@ Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
   donanımsal dead-time üreteci yoktur. Değiştirmeden önce **osiloskopla ölçün**: IN_A düşen
   kenarı ↔ IN_B yükselen kenarı arası, MOSFET/sürücünün turn-off gecikmesinden büyük olmalı.
 
-## Fault işleyici yaması (`stm32f4xx_it.c`) — ELLE UYGULANMALI (HENÜZ YAPILMADI)
+## Fault işleyici yaması (`stm32f4xx_it.c`) — ✅ UYGULANDI (2026-08-19 akşam)
 
-`stm32f4xx_it.c` artık depoda (`stm32_pemf/Core/Src/stm32f4xx_it.c`) ama **yama içine hâlâ
-uygulanmadı** (2026-08-19'da doğrulandı — dosyada `PEMF_ForceAllCoilOutputsLow` geçmiyor).
-Fault işleyicileri (`HardFault` / `MemManage` / `BusFault` / `UsageFault`) o dosyada tanımlı ve
-**boş `while(1)` döngüsüne girer** → main() durur, 1500 ms'lik ölü-adam kontrolü bir daha
-çalışmaz, bobinler enerjili kalır. `main.c` bunları **tanımlayamaz** (çift-sembol link hatası;
-`arm-none-eabi-ld` ile doğrulandı) — yama it.c'ye elle girer. Bu tezgâh turunun işidir.
-
-Çözüm: `main.c` `PEMF_ForceAllCoilOutputsLow()` fonksiyonunu **dışa açar**; aşağıdaki yamayı
-`stm32f4xx_it.c` içindeki **USER CODE bloklarına** ekleyin (CubeMX yeniden-üretimde korur).
+Yama `stm32_pemf/Core/Src/stm32f4xx_it.c` **USER CODE bloklarına işlendi** (CubeMX
+yeniden-üretimde korur): dört fault işleyicisi (`HardFault`/`MemManage`/`BusFault`/`UsageFault`)
+artık boş `while(1)`e girmeden ÖNCE `PEMF_ForceAllCoilOutputsLow()` + `NVIC_SystemReset()`
+çağırır. Gerekçe: fault'ta main() durur → 1500 ms ölü-adam bir daha koşamaz → bobinler
+enerjili kalırdı. ⚠️ CubeIDE'de **yeniden Build alın** (yamadan sonra derlenmedi; 0/0 beklenir)
+ve tezgahta bir fault enjeksiyonuyla (örn. geçici `*(volatile int*)0 = 0;`) reset+LOW davranışını
+doğrulayın. Aşağıdaki talimat REFERANS olarak durur (yamanın içeriği budur):
 
 ```c
 /* USER CODE BEGIN PFP */

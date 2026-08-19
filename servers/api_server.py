@@ -627,6 +627,30 @@ def _on_mqtt_message_api(client, userdata, msg):
                 if is_retained:
                     return
                 event_type = payload.get("type") or payload.get("event_type", "unknown")
+                # D-1 tamamlayıcısı (review, 2026-08-19 akşam): firmware selftest_ok/fail/skipped
+                # event'leri yayınlıyor ama backend İŞLEMİYORDU → selftest endpoint'i koşulsuz
+                # "success" döndüğünden ARIZALI bobin operatöre YEŞİL görünüyordu (yanlış tanısal
+                # güvence — D-1'in düzelttiği şeyin zincirin öbür ucunda devamı).
+                if event_type in ("selftest_ok", "selftest_fail", "selftest_skipped"):
+                    _st_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
+                    if event_type == "selftest_fail":
+                        logging.error("SELFTEST BAŞARISIZ bobin %s: %s", coil_id_str, _st_msg)
+                        _push_notification(f"🚨 Bobin {coil_id_str} self-test BAŞARISIZ — {_st_msg}", "error")
+                    else:
+                        logging.info("selftest bobin %s: %s (%s)", coil_id_str, event_type, _st_msg)
+                        _push_notification(
+                            f"Bobin {coil_id_str} self-test: "
+                            + ("geçti" if event_type == "selftest_ok" else "atlandı (PWM pasif)"),
+                            "success" if event_type == "selftest_ok" else "info",
+                        )
+                    _ws_broadcast_sync(
+                        {
+                            "type": "selftest_result",
+                            "coilId": int(coil_id_str),
+                            "data": {"result": event_type, "message": _st_msg},
+                        }
+                    )
+                    return
                 if event_type in ("wifi_disconnected", "offline"):
                     with _live_state_lock:
                         _live_state["coils"][coil_index]["connected"] = False
@@ -1288,6 +1312,7 @@ def _estop_ack_watch(coil_id: int, command_id: str) -> None:
 _esp_commanded_running: dict = {}
 _esp_intent_lock = threading.Lock()
 _reconcile_last_stop: dict = {}
+_reconcile_last_notify: dict = {}  # coil_id -> monotonic (bildirim katlama: 5 dk'da bir)
 _esp_stop_zamani: dict = {}  # coil_id -> monotonic (son STOP niyeti anı; F5 grace penceresi)
 _RECONCILE_MIN_ARALIK_SN = 30.0
 _RECONCILE_STOP_GRACE_SN = 10.0  # STOP sonrası uçuştaki 'running' status'ları sahte tetik sayma
@@ -1364,13 +1389,21 @@ def _reconcile_esp_calisiyor(coil_id: int, snapshot: dict) -> None:
             coil_id,
             "gonderildi" if ok else "GONDERILEMEDI (broker?)",
         )
-        try:
-            _push_notification(
-                f"⚠️ Bobin {coil_id} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
-                "warning",
-            )
-        except Exception:
-            pass
+        # Bildirim katlama (review 'sonraya' maddesi — alarm yorgunluğu): STOP'a rağmen ısrarla
+        # "çalışıyor" diyen kalıcı hayalet 30 sn'de bir DEĞİL, 5 dk'da bir bildirilir (log hep yazar).
+        simdi_n = time.monotonic()
+        with _esp_intent_lock:
+            bildir = simdi_n - _reconcile_last_notify.get(coil_id, -1e9) >= 300.0
+            if bildir:
+                _reconcile_last_notify[coil_id] = simdi_n
+        if bildir:
+            try:
+                _push_notification(
+                    f"⚠️ Bobin {coil_id} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
+                    "warning",
+                )
+            except Exception:
+                pass
 
     threading.Thread(target=_stop_gonder, name=f"reconcile-stop-{coil_id}", daemon=True).start()
 
@@ -1420,16 +1453,21 @@ def _estop_cloud_mirror(coil_ids, reason: str) -> None:
                             qos=1,
                         )
                     )
+            # Toplam süre bütçesi (review 'sonraya' maddesi): 6 yayın × 3sn ayrı ayrı beklemek
+            # ~20sn'e uzayabilirdi. Tek 8sn'lik bütçe — dolunca kalanlar beklenmeden sayılır.
             teslim = 0
+            son_tarih = time.monotonic() + 8.0
             for info in infolar:
-                try:
-                    info.wait_for_publish(timeout=3.0)
-                except Exception:
-                    pass
+                kalan = son_tarih - time.monotonic()
+                if kalan > 0:
+                    try:
+                        info.wait_for_publish(timeout=min(3.0, kalan))
+                    except Exception:
+                        pass
                 if info.is_published():
                     teslim += 1
             logging.getLogger(__name__).warning(
-                "E-stop BULUT aynasi (%s): %d/%d yayin teslim edildi.", reason, teslim, len(infolar)
+                "E-stop BULUT aynasi (%s): %d/%d yayin teslim edildi (butce 8sn).", reason, teslim, len(infolar)
             )
         finally:
             c.loop_stop()
@@ -1719,6 +1757,24 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         from utils.stm32_protocol_limits import normalize_esp_frequency_hz
 
         esp_freq = normalize_esp_frequency_hz(payload.freq)
+        # HG-3 üçüncü katman (2026-08-19): STM referans bobini (1) çalışırken frekansı, istenen
+        # ESP frekansının ≳50 katıysa PB1 senkron darbeleri ESP periyot-başı penceresine düşer →
+        # DC-yapışma rejimi (S3 latch'i ~8 darbede keser ama o pencerede DC akar; firmware PB1
+        # artık duty=0'da susturuldu — bu uyarı ÇALIŞAN coil1 senaryosunu kapatır). REDDETMEZ
+        # (operatör bilinçli olabilir), operatörü AÇIKÇA uyarır + yanıtında taşır.
+        _sync_uyari = None
+        try:
+            with _live_state_lock:
+                _c1 = dict(_live_state["coils"][0])
+            if _c1.get("running") and float(_c1.get("frequencyHz") or 0) >= 50.0 * max(esp_freq, 1.0):
+                _sync_uyari = (
+                    f"STM bobin-1 {_c1.get('frequencyHz')} Hz çalışırken bobin {coil_id} için "
+                    f"{esp_freq} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez, S3 DC-koruma "
+                    f"latch'i devreye girebilir. Faz gerekmiyorsa sorun değil; gerekiyorsa frekansları yaklaştırın."
+                )
+                _push_notification(f"⚠️ {_sync_uyari}", "warning")
+        except Exception:
+            _sync_uyari = None
         mqtt_payload = {
             "command": "start",
             "command_id": command_id,
@@ -1731,6 +1787,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         }
     else:
         esp_freq = payload.freq
+        _sync_uyari = None
         mqtt_payload = {"command": "stop", "command_id": command_id}
 
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
@@ -1740,7 +1797,10 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
     else:
         _finish_coil_run(coil_id)
-    return {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
+    _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
+    if _sync_uyari:
+        _yanit["sync_warning"] = _sync_uyari
+    return _yanit
 
 
 @app.post("/api/coil/batch")
@@ -1792,10 +1852,28 @@ async def control_batch_coils(payload: BatchCoilPayload):
             results.append({"coilId": coil_id, "status": "success", "transport": "stm32"})
             continue
         if payload.start:
+            # D-3 batch tamamlayıcısı (review, 2026-08-19 akşam): tek-bobin yolu normalize
+            # ederken batch HAM freq gönderiyordu — "kısmi düzeltme" deseninin ta kendisi.
+            # Tek-bobin yoluyla AYNI normalize + AYNI ≳50× sync uyarısı.
+            from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _nesp
+
+            _b_esp_freq = _nesp(payload.freq)
+            _b_uyari = None
+            try:
+                with _live_state_lock:
+                    _bc1 = dict(_live_state["coils"][0])
+                if _bc1.get("running") and float(_bc1.get("frequencyHz") or 0) >= 50.0 * max(_b_esp_freq, 1.0):
+                    _b_uyari = (
+                        f"STM bobin-1 {_bc1.get('frequencyHz')} Hz çalışırken bobin {coil_id} için "
+                        f"{_b_esp_freq} Hz istendi (≥50× ayrışma) — faz senkronu kilitlenmez."
+                    )
+                    _push_notification(f"⚠️ {_b_uyari}", "warning")
+            except Exception:
+                _b_uyari = None
             mqtt_payload = {
                 "command": "start",
                 "command_id": command_id,
-                "freq": payload.freq,
+                "freq": _b_esp_freq,
                 "duty": payload.duty,
                 "phase": payload.phase,
                 # Tek-bobin yoluyla AYNI kapak (bkz. _esp_duration_seconds). Batch'i atlamak, bu
@@ -1803,15 +1881,20 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 "duration": _esp_duration_seconds(payload.duration),
             }
         else:
+            _b_esp_freq = payload.freq
+            _b_uyari = None
             mqtt_payload = {"command": "stop", "command_id": command_id}
         # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
         ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
-        # Asama-2: per-bobin run logging (ESP/MQTT dali).
+        # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
         if payload.start:
-            _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "esp")
+            _begin_coil_run(coil_id, _b_esp_freq, payload.duty, payload.phase, None, "esp")
         else:
             _finish_coil_run(coil_id)
-        results.append({"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"})
+        _satir = {"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"}
+        if _b_uyari:
+            _satir["sync_warning"] = _b_uyari
+        results.append(_satir)
     return {"status": "success", "results": results}
 
 
