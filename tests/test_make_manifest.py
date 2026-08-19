@@ -162,6 +162,21 @@ def test_KRITIK_geri_cekilmis_rollout_SIFIRLANMAZ(tmp_path):
     assert _oku(tmp_path)["layers"]["win-x64"]["rollout"] == 0, "geri cekme sifirlandi"
 
 
+def test_KRITIK_bayraksiz_uretimde_rollout_HER_ZAMAN_100(tmp_path):
+    """SAHİP KARARI (2026-08-19): kademeli dağıtım kaldırıldı — önceki manifest %10/%50'de
+    kalmış olsa bile bayraksız yeniden üretim 100'e çeker (unutulmuş kademeli yayın kalmasın;
+    2026-08-18'de tam bu oldu: rollout %10'da açık kaldı). Geri-çekme (0) İSTİSNADIR ve ayrı
+    testte kilitli (test_KRITIK_geri_cekilmis_rollout_SIFIRLANMAZ)."""
+    onceki = json.loads(json.dumps(ONCEKI))
+    onceki["layers"]["win-x64"]["rollout"] = 10
+    onceki["launcher"]["rollout"] = 10
+    (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
+    assert _calistir(tmp_path).returncode == 0
+    m = _oku(tmp_path)
+    assert m["layers"]["win-x64"]["rollout"] == 100, "unutulmus %10 kademe 100'e cekilmedi"
+    assert m["launcher"]["rollout"] == 100, "launcher %10 kademesi 100'e cekilmedi"
+
+
 def test_rollout_bayragiyla_degistirilebilir(dizin):
     assert _calistir(dizin, "--rollout", "25").returncode == 0
     assert _oku(dizin)["layers"]["win-x64"]["rollout"] == 25
@@ -313,10 +328,14 @@ def test_launcher_rollout_diger_alanlari_KORUR(dizin):
     assert L["sha256"] == ONCEKI["launcher"]["sha256"], "sha kayboldu"
 
 
-def test_launcher_rollout_VERILMEZSE_dokunmaz(dizin):
-    """Sıradan bir yayında launcher bloğu AYNEN taşınmalı."""
+def test_launcher_rollout_VERILMEZSE_100_olur(dizin):
+    """SAHİP KARARI (2026-08-19): kademeli dağıtım kaldırıldı — bayraksız üretimde launcher
+    bloğu taşınır ama rollout 100'e çekilir (sürüm/url/sha AYNEN korunur)."""
     _calistir(dizin)
-    assert _oku(dizin)["launcher"] == ONCEKI["launcher"]
+    m = _oku(dizin)["launcher"]
+    assert m["rollout"] == 100
+    beklenen = {**ONCEKI["launcher"], "rollout": 100}
+    assert m == beklenen, "launcher bloğunun rollout dışı alanları değişti"
 
 
 def test_gecersiz_launcher_rollout_REDDEDILIR(dizin):
@@ -391,7 +410,8 @@ def test_cikarma_launcher_ve_mobile_bloklarini_KORUR(tmp_path):
     d = _mac_linuxlu(tmp_path)
     _calistir(d, "--drop-platform", "mac-arm64", "--drop-platform", "linux-x64")
     m = _oku(d)
-    assert m["launcher"] == ONCEKI["launcher"]
+    # sahip kararı 2026-08-19: bayraksız üretim launcher.rollout'u 100'e çeker; kalanı AYNEN
+    assert m["launcher"] == {**ONCEKI["launcher"], "rollout": 100}
     assert m["mobile"] == ONCEKI["mobile"]
 
 

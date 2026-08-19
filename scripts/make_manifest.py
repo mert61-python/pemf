@@ -107,8 +107,9 @@ def main() -> int:
         type=int,
         default=None,
         metavar="0-100",
-        help="Bu yayinin kademeli dagitim yuzdesi (layers.<platform>.rollout). Verilmezse "
-        "onceki manifest'teki deger korunur, o da yoksa 100 (herkes).",
+        help="Dagitim yuzdesi (layers.<platform>.rollout). SAHIP KARARI 2026-08-19: kademeli "
+        "dagitim KALDIRILDI — verilmezse 100. Istisna: onceki manifest 0 (geri cekme) ise "
+        "SESSIZCE 100'e donmez, acikca --rollout 100 gerekir. 0 = acil fren (hala gecerli).",
     )
     ap.add_argument(
         "--min-supported-version",
@@ -301,14 +302,27 @@ def main() -> int:
         if not yeni:
             manifest["layers"].pop(plat, None)
 
-    # rollout: dosyalardan TÜRETİLEMEZ, bir YAYIN KARARIDIR. --rollout verilmezse önceki değer
-    # korunur (kasten 0'a çekilmiş bir geri-çekme, yeniden üretimde sessizce 100'e dönmesin).
+    # rollout: dosyalardan TÜRETİLEMEZ, bir YAYIN KARARIDIR.
+    # SAHİP KARARI (2026-08-19 gece): KADEMELİ DAĞITIM KALDIRILDI — bayrak verilmezse VARSAYILAN
+    # ARTIK 100 (eskiden önceki değer korunuyordu; %10'da unutulmuş yayınlar oluyordu, bkz.
+    # pemf-yayin-2026-08-18 "ROLLOUT %10'DA AÇIK KALDI").
+    # ⚠️ TEK İSTİSNA — GERİ ÇEKME FRENİ KORUNUR: önceki manifest'te rollout=0 (bilinçli geri
+    # çekme; bozuk yayından dönüşün TEK yolu) ise bayraksız yeniden-üretim onu SESSİZCE 100'e
+    # DÖNDÜREMEZ — 0 korunur ve yüksek sesle uyarılır. %100'e dönüş ancak açıkça `--rollout 100`
+    # ile olur. Kilit: tests/test_make_manifest.py::test_KRITIK_geri_cekilmis_rollout_SIFIRLANMAZ.
     for plat, katmanlar in manifest["layers"].items():
         if args.rollout is not None:
             katmanlar["rollout"] = args.rollout
         else:
             onceki_r = ((prev.get("layers") or {}).get(plat) or {}).get("rollout")
-            katmanlar["rollout"] = 100 if onceki_r is None else onceki_r
+            if onceki_r == 0:
+                katmanlar["rollout"] = 0
+                print(
+                    f"[UYARI] layers.{plat}.rollout=0 KORUNDU (geri cekilmis yayin) — "
+                    "%100'e donmek icin acikca --rollout 100 verin."
+                )
+            else:
+                katmanlar["rollout"] = 100
 
     # ── AÇIKÇA ÇIKARILAN PLATFORMLAR ────────────────────────────────────────────────────────
     # ⚠️ 2026-08-09 (Tier 1): bayat/desteklenmeyen bir platformu manifest'te tutmak, o platformda
@@ -357,8 +371,21 @@ def main() -> int:
             # ⚠️ 2026-08-09 (Tier 1): launcher self-update'inin geri-çekme anahtarı. Runtime'da
             # bu fren vardı ama güncellemeyi YÖNETEN bileşende yoktu; bozuk bir client yayını
             # sahadaki her cihaza gidiyor ve dönüş yolu kalmıyordu.
-            if _blok == "launcher" and args.launcher_rollout is not None:
-                manifest[_blok] = {**_deger, "rollout": args.launcher_rollout}
+            if _blok == "launcher":
+                if args.launcher_rollout is not None:
+                    manifest[_blok] = {**_deger, "rollout": args.launcher_rollout}
+                else:
+                    # SAHİP KARARI (2026-08-19): kademeli dağıtım yok — bayraksız üretimde
+                    # launcher.rollout da 100'e çekilir; TEK istisna bilinçli geri çekme (0),
+                    # o SESSİZCE dirilmez (uyarıyla korunur; dönüş ancak --launcher-rollout 100).
+                    _onceki_lr = _deger.get("rollout")
+                    if _onceki_lr == 0:
+                        print(
+                            "[UYARI] launcher.rollout=0 KORUNDU (geri cekilmis yayin) — "
+                            "%100'e donmek icin acikca --launcher-rollout 100 verin."
+                        )
+                    else:
+                        manifest[_blok] = {**_deger, "rollout": 100}
             _s = _deger.get("version") or (_deger.get("android") or {}).get("version") or "?"
             carried.append(f"{_blok} v{_s} (mevcut manifest'ten)")
         elif prev_path.exists():
