@@ -308,6 +308,31 @@ def _config_dir() -> Path:
     return _data_dir()
 
 
+def _bundled_cloud(key: str) -> str:
+    """PAKETE GÖMÜLÜ bulut-MQTT provizyonunu oku (E-stop bulut aynası — sahip kararı 2026-08-19).
+
+    Konum: frozen'da `sys._MEIPASS/data/cloud_mqtt_provision.json` (PyInstaller datas);
+    geliştirmede repo `data/` (git'e girmez). Test override: PEMF_CLOUD_PROVISION_PATH.
+    Dosya yok/bozuk → "" (ayna sessizce devre dışı — asla exception sızdırmaz)."""
+    try:
+        import json as _json
+        import sys as _sys
+
+        yol = os.getenv("PEMF_CLOUD_PROVISION_PATH", "").strip()
+        if yol:
+            aday = Path(yol)
+        elif getattr(_sys, "frozen", False):
+            kok = getattr(_sys, "_MEIPASS", None) or str(Path(_sys.executable).parent / "_internal")
+            aday = Path(kok) / "data" / "cloud_mqtt_provision.json"
+        else:
+            aday = Path(__file__).resolve().parent.parent / "data" / "cloud_mqtt_provision.json"
+        if not aday.exists():
+            return ""
+        return str(_json.loads(aday.read_text(encoding="utf-8")).get(key) or "").strip()
+    except Exception:
+        return ""
+
+
 # key -> (section, dpapi?, generator|None, legacy_reader|None)
 _REGISTRY: dict[str, tuple] = {
     # AUTO (sistem üretir)
@@ -367,13 +392,37 @@ _REGISTRY: dict[str, tuple] = {
     "cloudflare_tunnel_token": ("operator", False, None, lambda: os.getenv("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()),
     "tunnel_hostname": ("operator", False, None, lambda: os.getenv("PEMF_TUNNEL_HOSTNAME", "").strip()),
     # Plan A-2 (2026-08-19): E-STOP BULUT AYNASI kimlik bilgileri — buluta failover etmiş ESP'ye
-    # acil durdurmayı ulaştırır (api_server._estop_cloud_mirror). Operatör girer; üreteç YOK
-    # (rastgele host/parola üretmek anlamsız ve tehlikeli). Tanımsızsa ayna SESSİZCE devre dışı
-    # kalır (get_secret default döner — KeyError DEĞİL; adversaryal review F1). Parola dpapi=True.
-    "mqtt_cloud_host": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_HOST", "").strip()),
-    "mqtt_cloud_port": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_PORT", "").strip()),
-    "mqtt_cloud_user": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_USER", "").strip()),
-    "mqtt_cloud_pass": ("operator", True, None, lambda: os.getenv("PEMF_MQTT_CLOUD_PASS", "").strip()),
+    # acil durdurmayı ulaştırır (api_server._estop_cloud_mirror). Üreteç YOK (rastgele host/parola
+    # anlamsız ve tehlikeli). Tanımsızsa ayna SESSİZCE devre dışı (get_secret default döner —
+    # KeyError DEĞİL; adversaryal review F1). Parola dpapi=True.
+    # Okuma zinciri: env (PEMF_MQTT_CLOUD_*) → PAKETE GÖMÜLÜ provizyon dosyası (sahip kararı
+    # 2026-08-19 gece, "indir-kur yeterli olsun": data/cloud_mqtt_provision.json — git'e girmez,
+    # build-time üretilir, bkz. build_tools/make_cloud_provision.py; ilk okumada buraya —
+    # pemf_secrets.json'a — taşınır, parola DPAPI'lenir).
+    "mqtt_cloud_host": (
+        "operator",
+        False,
+        None,
+        lambda: os.getenv("PEMF_MQTT_CLOUD_HOST", "").strip() or _bundled_cloud("mqtt_cloud_host"),
+    ),
+    "mqtt_cloud_port": (
+        "operator",
+        False,
+        None,
+        lambda: os.getenv("PEMF_MQTT_CLOUD_PORT", "").strip() or _bundled_cloud("mqtt_cloud_port"),
+    ),
+    "mqtt_cloud_user": (
+        "operator",
+        False,
+        None,
+        lambda: os.getenv("PEMF_MQTT_CLOUD_USER", "").strip() or _bundled_cloud("mqtt_cloud_user"),
+    ),
+    "mqtt_cloud_pass": (
+        "operator",
+        True,
+        None,
+        lambda: os.getenv("PEMF_MQTT_CLOUD_PASS", "").strip() or _bundled_cloud("mqtt_cloud_pass"),
+    ),
     # EMBEDDED (build ile gelir)
     "supabase_url": (
         "embedded",

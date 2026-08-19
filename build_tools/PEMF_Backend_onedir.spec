@@ -127,6 +127,20 @@ if os.path.exists(config_dir):
 # GÖMME. (Eskiden datas.append ile her klinik PC'sine _internal/data/config.json olarak
 # düz-metin kopyalanıyordu — P0 disk sızıntısı.)
 
+# ⚠️ İSTİSNA — SAHİP KARARI (2026-08-19 gece): E-stop BULUT AYNASI provizyonu
+# (data/cloud_mqtt_provision.json; YALNIZ mqtt_cloud_host/port/user/pass — wifi_pass DEĞİL)
+# pakete GÖMÜLÜR ki klinik "web sitesinden indir-kur" ile bulut E-stop'una otomatik kavuşsun.
+# Yukarıdaki P0 kararının bu 4 alan için bilinçli tersine çevrilmesidir; maruziyet sınıfı yeni
+# değil (aynı HiveMQ kimliği sahadaki her ESP flash'ında + public repo `esp` dalında; rotasyon
+# sahiplikçe reddedildi, kayıtta). Dosya git'e GİRMEZ (build-time üretilir:
+# build_tools/make_cloud_provision.py); ilk çalışmada pemf_secrets.json'a taşınır (parola DPAPI).
+_cloud_prov = os.path.join(project_path, 'data', 'cloud_mqtt_provision.json')
+if os.path.exists(_cloud_prov):
+    datas.append((_cloud_prov, 'data'))
+    print('[spec] cloud_mqtt_provision.json PAKETE GOMULDU (sahip karari 2026-08-19)')
+else:
+    print('[spec] UYARI: cloud_mqtt_provision.json YOK -> bulut E-stop aynasi paketde devre disi')
+
 for tmpl in ('pemf_treatment_history_template.db', 'patients_template.db'):
     p = os.path.join(project_path, 'database', tmpl)
     if os.path.exists(p):

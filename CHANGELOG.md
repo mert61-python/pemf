@@ -30,6 +30,38 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.17 — 2026-08-19 (donanım-uyum turu: hibrit bobin güvenliği uçtan uca)
+
+**Etiket:** `client-app-v1.9.17` → `base-app.zip` + `base-deps.zip` (sha'lar yayında bu satıra işlenir).
+
+Bugünkü çok-ajanlı donanım-uyum denetiminin (12 gerçek uyumsuzluk, `docs/DONANIM-UYUM-ANALIZI-2026-08-19.md`)
+backend ayağı. Firmware ayağı cihazlara ayrıca flash'landı; bu paket backend/sunucu düzeltmelerini taşır.
+
+### Acil durdurma artık uçtan uca doğrulanıyor
+- **ESP komut onayı (ack round-trip):** E-stop'un bobine GERÇEKTEN ulaştığı `command_id` ile doğrulanır;
+  onay 2 sn'de gelmezse operatöre açık uyarı (eskiden broker'ın "aldım"ı bobin "durdu" sanılıyordu).
+- **E-stop bulut aynası:** yerel broker çöküp ESP buluta göçtüyse acil durdurma HiveMQ üzerinden de
+  yayınlanır. Kimlik bilgileri pakete gömülü provizyonla gelir (sahip kararı: indir-kur yeterli);
+  ilk çalışmada makineye-bağlı şifreyle `pemf_secrets.json`'a taşınır.
+- **Hedefli reconcile:** yeniden bağlanan bir bobin "çalışıyorum" derse ama backend'in niyeti/aktif
+  seans bunu kapsamıyorsa (reboot-sonrası hayalet), o bobine otomatik hedefli STOP gider.
+
+### Komut tutarlılığı (3 bobin ailesi tek dil)
+- selftest/reset artık ESP'lerin gerçekten dinlediği kanala gider (eski ölü kanal kaldırıldı);
+  bobin self-test sonuçları (geçti/kaldı/atlandı) operatöre bildirim olarak düşer.
+- ESP frekans komutları 1000 Hz donanım tavanına önden sabitlenir (8266 reddi/S3 sessiz kırpması yerine).
+- STM referans bobini boştayken anlamsız senkron darbesi basmaz; ≥50× frekans ayrışmasında yanıt
+  `sync_warning` taşır (reddetmez, uyarır).
+- Bobin 8 (8266) ani kopuşu saniyeler içinde görünür (last-will); bayat/retained MQTT mesajları
+  artık canlı durum sanılmaz.
+
+### Sağlamlaştırma
+- Süresiz moda cihaz+sunucu uyumlu 120 dk mutlak tavan (kümülatif — cihaz çök-diril döngüsüyle uzatılamaz).
+- Acil-durdurma bulut aynasına 8 sn toplam süre bütçesi; tekrar eden hayalet-bobin bildirimleri 5 dk'da bire katlanır.
+- E2E süiti donanım-uyum bölümüyle genişledi (canlı 119/119); pytest 1436.
+
+---
+
 ## app 1.9.16 — 2026-08-18 (denetim turu: hasta kaydı, doz saklama, bağlanma)
 
 **Etiket:** `client-app-v1.9.16` → `base-app.zip` (sha `00de04c75ac9`) + `base-deps.zip` (sha `d22c35a91d05`).

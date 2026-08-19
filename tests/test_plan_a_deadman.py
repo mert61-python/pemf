@@ -320,6 +320,11 @@ def test_KRITIK_A2_F6_GERCEK_get_secret_ATLANDI_yolunu_izler(monkeypatch, caplog
     # env fallback'leri temizle (makinede tanımlıysa testi kirletmesin)
     for ev in ("PEMF_MQTT_CLOUD_HOST", "PEMF_MQTT_CLOUD_PORT", "PEMF_MQTT_CLOUD_USER", "PEMF_MQTT_CLOUD_PASS"):
         monkeypatch.delenv(ev, raising=False)
+    # 2026-08-19 gece: sahip kararıyla PAKETE GÖMÜLÜ provizyon dosyası eklendi (bkz.
+    # test_cloud_provision.py) — build makinesinde GERÇEK değerler yerelde durur. Bu test
+    # "sır TANIMSIZ" yolunu sınar → gömülü dosyayı da izole et (yoksa gerçek get_secret
+    # gerçek kimliği bulur ve ayna testte GERÇEK buluta bağlanmaya kalkar!).
+    monkeypatch.setenv("PEMF_CLOUD_PROVISION_PATH", r"C:\yok\boyle\bir\dosya.json")
     with caplog.at_level(_logging.INFO, logger="servers.api_server"):
         api._estop_cloud_mirror([6], "f6-test")  # GERÇEK get_secret — KeyError atmamalı
     assert any("ATLANDI" in r.message for r in caplog.records), (

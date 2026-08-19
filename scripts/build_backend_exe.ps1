@@ -174,6 +174,12 @@ if ($SkipWeb) {
     Info "Web export tamamlandı ve doğrulandı → frontend\dist (sürüm $AppVersion)."
 }
 
+# --- 4.5 E-stop bulut aynasi provizyonu (sahip karari 2026-08-19; git'e girmez, pakete gomulur)
+# Yerel ESP Secrets.h'tan uretir; kaynak placeholder ise UYARIR ama build'i DURDURMAZ
+# (CI/temiz-klon ortaminda paket sirsiz cikar, ayna sessizce devre disi kalir — guvenli).
+& $PY "build_tools\make_cloud_provision.py"
+if ($LASTEXITCODE -ne 0) { Warn "cloud_mqtt_provision uretilemedi -> paket BULUT-AYNASIZ cikacak (yerel E-stop etkilenmez)." }
+
 # --- 5. Build — KISA yola (260-karakter sınırı) ---
 $dist = Join-Path $BuildRoot "dist"
 $work = Join-Path $BuildRoot "build"

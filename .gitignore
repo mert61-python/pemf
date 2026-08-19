@@ -273,3 +273,6 @@ firmware/stm32_pemf/Debug/
 # CubeIDE calisma alani proje icine secilirse uretilen metadata (kaynak degil)
 firmware/stm32_pemf/.metadata/
 firmware/stm32_pemf/RemoteSystemsTempFiles/
+
+# E-stop bulut aynasi provizyonu (build-time uretilir, PAKETE gomulur, GIT'E GIRMEZ)
+data/cloud_mqtt_provision.json
