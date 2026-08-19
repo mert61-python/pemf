@@ -20,13 +20,15 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: '^training_archive/'
+        # firmware/stm32_pemf: vendored ST HAL + CubeIDE uretimi — masaustu derleme
+        # ortamiyla BAYT-BAYT karsilastirilabilir kalmali; beyazbosluk 'duzeltmesi' ayristirir.
+        exclude: '^(training_archive|firmware/stm32_pemf)/'
       - id: end-of-file-fixer
         # ⚠️ Model artefaktlarina DOKUNMA: `.onnx`/`.pkl` ikili, `best_model.txt` ise uretici
         # betigin yazdigi tek satirlik cikti. Sonuna newline eklemek zararsiz ama gereksiz gurultu.
         # `training_archive/` de ayni sebeple muaf: egitim veri setleri (.csv/.npy/.npz) ve
         # model artefaktlari — icerikleri bilerek DEGISTIRILMEMELI (yeniden fit edilemezler).
-        exclude: '^(release_assets/ai_models|training_archive)/'
+        exclude: '^(release_assets/ai_models|training_archive|firmware/stm32_pemf)/'
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=2048]
@@ -41,7 +43,7 @@ repos:
         # DIS bir makinede (`/home/user02/dr/`) ve depoda YOK; `models_em_kedi/scaler_{X,y}.pkl`
         # uretimdekinden FARKLI ozellik uzayina (10 vs 5) ait, yeniden fit EDILEMEZ. Tek kopyasi
         # versiyonlanmayan yerel bir klasordeydi. Ayni 100 MiB tavani burada da test ile kilitli.
-        exclude: '^(release_assets/ai_models|training_archive)/'
+        exclude: '^(release_assets/ai_models|training_archive|firmware/stm32_pemf)/'
       - id: detect-private-key   # *.p8/*.p12/PEM özel anahtarı commit'e girerse DURDUR
 
   # ── SIR TARAMASI (denetim 2026-08-04, P0) ──────────────────────────────────

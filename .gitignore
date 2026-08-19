@@ -266,3 +266,6 @@ ppo_bom.txt
 # atladigi icin bu SESSIZ kalmisti — dosyalar index'e girmisti ama sonraki bir `git add`
 # onlari atlardi. Kapisi: tests/test_yedek_kapsami.py.
 !training_archive/**
+
+# CubeIDE proje kopyasinin build ciktisi (kaynak degil; masaustu ortami da Debug/ uretir)
+firmware/stm32_pemf/Debug/
