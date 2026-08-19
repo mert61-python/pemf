@@ -70,6 +70,11 @@ const char PROGMEM_INFO_STR[] PROGMEM = "[INFO]";
  * Kesme eşiği backend güvenlik değişmeziyle BİREBİR (48°C — regresyon yapma listesi);
  * dönüş eşiği histerezisli ki sınırda aç-kapa titremesin. Kullanım: .ino ana döngüsü.
  * ============================================================================ */
+/* HG-5/6 (2026-08-19, Plan A-1): SURESIZ-MOD (duration=0) MUTLAK TAVANI, saniye.
+ * Backend'in STM _coil_deadline'i (120 dk) ile ayni. Sureli seanslari ETKILEMEZ;
+ * yalniz duration=0 modda cihaz-yerel son-tarih saglar (STOP kaybi/failover sigortasi). */
+#define SURESIZ_TAVAN_SEC 7200UL
+
 #define TERMAL_KESME_C   48.0f  /**< MLX90614 nesne sıcaklığı bu değeri aşarsa PWM DURUR */
 #define TERMAL_DONUS_C   45.0f  /**< Kilit ancak bu değerin altında açılır (histerezis)  */
 

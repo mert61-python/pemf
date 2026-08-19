@@ -55,9 +55,12 @@ def test_KRITIK_selftest_reset_endpointleri_broadcast_KULLANIR():
     assert src.count("_esp_control_broadcast(") >= 3, (
         "selftest/reset _esp_control_broadcast kullanmıyor (tanım + 2 çağrı beklenir)"
     )
-    # ölü esp32_ topiği selftest/reset'te YOK — yalnız E-stop legacy (bilinçli) + docstring
+    # ölü esp32_ topiği selftest/reset'te YOK — yalnız E-STOP yolları kullanır (bilinçli):
+    # (1) yerel E-stop legacy çift-yayını (_estop_one), (2) E-stop BULUT aynası (Plan A-2,
+    # 2026-08-19 — yereldekiyle aynı çift-yayın kalıbı). İkisi de acil durdurma; selftest/reset
+    # değil. Sayı artarsa esp32_ ölü topiği E-stop DIŞI bir yola geri sızmış demektir.
     esp32_satirlar = [ln for ln in src.splitlines() if 'f"pemf/esp32_' in ln]
-    assert len(esp32_satirlar) == 1, (
-        f"pemf/esp32_ yayını beklenenden fazla ({len(esp32_satirlar)}) — selftest/reset'te geri gelmiş olabilir; "
-        "yalnız E-stop legacy çift-yayını kalmalı"
+    assert len(esp32_satirlar) == 2, (
+        f"pemf/esp32_ yayını beklenen 2 değil ({len(esp32_satirlar)}) — E-stop dışı bir yola "
+        "geri sızmış (veya E-stop/bulut-ayna yollarından biri düşmüş) olabilir"
     )

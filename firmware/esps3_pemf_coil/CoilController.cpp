@@ -253,6 +253,20 @@ void CoilController::process() {
         _stopPWM();
         forceSaveState();
     }
+    /* HG-5/6 (2026-08-19, sahip kararı — Plan A-1): SÜRESİZ-MOD MUTLAK TAVANI.
+     * duration=0 "süresiz" modda hiçbir cihaz-yerel son-tarih yoktu; broker failover /
+     * backend çökmesi / STOP kaybı senaryolarında bobin yalnız termal kesmeye kadar
+     * enerjili kalabiliyordu. Artık süresiz mod da SURESIZ_TAVAN_SEC'te (2 saat —
+     * backend'in STM _coil_deadline'ı ile aynı) cihazda durur. ⚠️ Bu, "PWM ağ-bağımsız"
+     * değişmezini İHLAL ETMEZ: tavan zamana bağlı, ağ durumuna DEĞİL — süreli seanslar
+     * ve kısa ağ kesintileri etkilenmez. NVS resume sonrası tavan yeni açılıştan sayar
+     * (bilinçli: reboot'ta pencere tazelenir ama sonsuzluk yine imkânsız). */
+    else if (_active && !_hasDuration &&
+             (millis() - _startTime) >= (unsigned long)SURESIZ_TAVAN_SEC * 1000UL) {
+        LOG_PRINTLN("[PWM] SURESIZ-mod mutlak tavani doldu, durduruluyor (guvenlik)");
+        _stopPWM();
+        forceSaveState();
+    }
 
     /* Self-test penceresi: 1 sn ölçüm, PWM zaten AKTİFKEN. */
     if (_isSelfTesting && (millis() - _selfTestStartTime) >= 1000UL) {

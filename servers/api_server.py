@@ -598,6 +598,12 @@ def _on_mqtt_message_api(client, userdata, msg):
                         coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
                     snapshot = dict(coil)
                 _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": snapshot})
+                # HG-6 (Plan A-3): hedefli reconcile — ESP "çalışıyor" diyor ama backend niyeti/
+                # aktif seans kapsamıyor ise arka planda hedefli STOP (NVS/EEPROM resume + kayıp
+                # offline-STOP senaryosu). RETAINED status'a asla tepki verme (8266 status'u
+                # retain=true yayınlar; bayat "running" sahte reconcile tetiklemesin).
+                if not is_retained:
+                    _reconcile_esp_calisiyor(int(coil_id_str), snapshot)
 
             elif msg_type == "ack":
                 # HG-4 (2026-08-19): ESP komut onayı → command_id ile bekleyen E-stop'u çöz.
@@ -1122,6 +1128,12 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
     Broker kapalıyken paho.connect Windows'ta ~2sn bloke oluyordu (3 ESP bobin →
     seans başlatma ~8sn kilitleniyordu). Önce 0.3sn'lik hızlı socket probe ile
     broker erişilebilir mi bak; değilse anında çık (seansı kilitleme)."""
+    # HG-6 (Plan A-3): backend'in ESP'ye komutladığı NİYET tek boğaz noktasında kaydedilir.
+    # ASİMETRİK (review F4): STOP burada HEMEN (başarısız STOP'ta bile niyet False olmalı ki
+    # ESP görününce reconcile denesin); START ise yalnız publish DOĞRULANINCA (aşağıda) —
+    # başarısız start niyeti True bıraksaydı NVS-resume hayaleti reconcile'dan süresiz muaf
+    # kalırdı. Tüm çağıranlar (manuel, AI, seans, E-stop, reset) buradan geçer.
+    _kaydet_esp_komut_niyeti(topic, payload, basarili=False)
     try:
         import socket as _socket
 
@@ -1172,6 +1184,9 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
             logging.getLogger(__name__).error(
                 "MQTT yayin DOGRULANAMADI (PUBACK yok) — konu=%s. Bobin komutu TESLIM EDILMEMIS olabilir.", topic
             )
+        else:
+            # F4: START niyeti yalnız DOĞRULANMIŞ publish'te kaydedilir (yukarıdaki asimetri notu).
+            _kaydet_esp_komut_niyeti(topic, payload, basarili=True)
         return yayinlandi
     except Exception:
         return False
@@ -1256,6 +1271,168 @@ def _estop_ack_watch(coil_id: int, command_id: str) -> None:
         )
     except Exception:
         pass
+
+
+# ── ESP KOMUT NİYETİ + HEDEFLİ RECONCILE (HG-6, Plan A-3, 2026-08-19) ─────────────────────────
+# SORUN: ESP reboot'ta NVS/EEPROM'dan OTONOM devam eder; backend'in offline pencerede yayınladığı
+# STOP retained olmadığından KAYBOLUR ve backend yalnız "bağlandı" der → bobin, backend'in haberi
+# olmadan enerjili. ÇÖZÜM: backend'in her ESP'ye KOMUTLADIĞI son durum tek boğaz noktasında
+# (_mqtt_publish) kaydedilir; ESP status'unda "çalışıyor" görülüp backend niyeti "çalışmıyor" ise
+# (ve aktif seans o bobini kapsamıyorsa) HEDEFLİ STOP gönderilir. Retained-STOP YERİNE bu tercih
+# edildi: retained STOP, yeniden bağlanan ESP'nin MEŞRU seansını da öldürürdü.
+# Backend restart'ında kayıt boş (=hiçbirine start komutlanmadı) → NVS'den devam eden bobin
+# yakalanır; backend_service açılış-reconcile'ı ile çift katman.
+_esp_commanded_running: dict = {}
+_esp_intent_lock = threading.Lock()
+_reconcile_last_stop: dict = {}
+_esp_stop_zamani: dict = {}  # coil_id -> monotonic (son STOP niyeti anı; F5 grace penceresi)
+_RECONCILE_MIN_ARALIK_SN = 30.0
+_RECONCILE_STOP_GRACE_SN = 10.0  # STOP sonrası uçuştaki 'running' status'ları sahte tetik sayma
+
+
+def _kaydet_esp_komut_niyeti(topic: str, payload: dict, basarili: bool = False) -> None:
+    """`pemf/coil/{id}/control`e giden start/stop = backend NİYETİ. ASİMETRİK kayıt (review F4):
+    · STOP: publish SONUCUNDAN BAĞIMSIZ, HEMEN kaydedilir (basarili=False çağrısında) — başarısız
+      STOP'ta niyet False kalmalı ki ESP yeniden görününce reconcile DENESİN. Anı damgalanır
+      (F5 grace penceresi: stop'tan hemen sonra gelen uçuştaki 'running' status sahte tetiklemesin).
+    · START: yalnız publish DOĞRULANINCA (basarili=True çağrısında) kaydedilir — başarısız start
+      niyeti True bırakırsa, o bobinin NVS-resume hayaleti reconcile'dan süresiz muaf kalırdı
+      (güvenlik ağının kendisini delen delik)."""
+    try:
+        parts = topic.split("/")
+        if len(parts) != 4 or parts[0] != "pemf" or parts[1] != "coil" or parts[3] != "control":
+            return
+        cmd = str(payload.get("command", "")).lower()
+        cid = int(parts[2])
+        if cmd == "stop" and not basarili:
+            with _esp_intent_lock:
+                _esp_commanded_running[cid] = False
+                _esp_stop_zamani[cid] = time.monotonic()
+        elif cmd == "start" and basarili:
+            with _esp_intent_lock:
+                _esp_commanded_running[cid] = True
+    except Exception:
+        pass
+
+
+def _reconcile_esp_calisiyor(coil_id: int, snapshot: dict) -> None:
+    """ESP status'u 'çalışıyor' dedi; backend niyeti/seansı bunu KAPSAMIYORSA hedefli STOP.
+    MQTT callback'inden çağrılır → publish ARKA PLANDA (callback'i ~7sn bloklamasın)."""
+    if coil_id not in ESP_COIL_IDS or not snapshot.get("running"):
+        return
+    simdi = time.monotonic()
+    with _esp_intent_lock:
+        if _esp_commanded_running.get(coil_id, False):
+            return  # backend zaten start komutladı — meşru çalışma
+        # F5 (review): normal STOP'tan hemen sonra broker sırasında bekleyen 'running' status'lar
+        # işlenir — bunlar hayalet değil, uçuştaki bayat rapor. Grace penceresinde tetikleme
+        # (sahte "güvenlik durdurması" bildirimi = tıbbi cihazda alarm yorgunluğu).
+        if simdi - _esp_stop_zamani.get(coil_id, -1e9) < _RECONCILE_STOP_GRACE_SN:
+            return
+    with _session_lock:
+        sess_aktif = bool(_active_session.get("is_active"))
+        sess_coils = _active_session.get("coil_ids") or list(range(1, 9))
+    if sess_aktif and coil_id in sess_coils:
+        return  # aktif seans kapsıyor (niyet kaydı seans yolunda da dolar ama çifte emniyet)
+    with _esp_intent_lock:
+        if simdi - _reconcile_last_stop.get(coil_id, 0.0) < _RECONCILE_MIN_ARALIK_SN:
+            return  # hız sınırı: aynı bobine 30 sn'de en çok bir reconcile-STOP
+        _reconcile_last_stop[coil_id] = simdi
+
+    def _stop_gonder():
+        # F3 (review): karar ile publish arası pencerede meşru bir start gelmiş olabilir —
+        # publish'ten HEMEN önce niyeti ve seans kapsamını YENİDEN doğrula; yoksa reconcile-STOP
+        # yeni başlamış meşru tedaviyi sessizce durdururdu (üstelik stop niyeti start'ı ezerdi).
+        with _esp_intent_lock:
+            if _esp_commanded_running.get(coil_id, False):
+                return
+        with _session_lock:
+            s_aktif = bool(_active_session.get("is_active"))
+            s_coils = _active_session.get("coil_ids") or list(range(1, 9))
+        if s_aktif and coil_id in s_coils:
+            return
+        cid = f"reconcile_{coil_id}_{int(time.time() * 1000)}"
+        ok = _mqtt_publish(
+            f"pemf/coil/{coil_id}/control",
+            {"command": "stop", "command_id": cid, "timestamp": time.time()},
+        )
+        logging.getLogger(__name__).warning(
+            "RECONCILE: bobin %s beklenmedik 'calisiyor' raporladi (backend niyeti: durmus) -> hedefli STOP %s.",
+            coil_id,
+            "gonderildi" if ok else "GONDERILEMEDI (broker?)",
+        )
+        try:
+            _push_notification(
+                f"⚠️ Bobin {coil_id} beklenmedik şekilde çalışıyordu — güvenlik durdurması gönderildi",
+                "warning",
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_stop_gonder, name=f"reconcile-stop-{coil_id}", daemon=True).start()
+
+
+def _estop_cloud_mirror(coil_ids, reason: str) -> None:
+    """HG-5 (Plan A-2, 2026-08-19): E-stop'u BULUT broker'ına AYNALA — best-effort, arka plan.
+
+    ESP'ler yerel broker 3 kez başarısız olunca HiveMQ cloud'a failover eder; backend ise yalnız
+    127.0.0.1'e yayınlıyordu → buluta göçmüş ESP'ye E-stop HİÇ ulaşmıyordu. Bu ayna, aynı STOP'u
+    buluta da yayınlar. Kimlik bilgileri SecretsManager'dan (mqtt_cloud_host/port/user/pass;
+    generate=False — yoksa dosyaya rastgele değer YAZILMAZ, ayna sessizce devre dışı kalır ve
+    bir kez loglanır). ESP davranışına dokunmaz; yerel E-stop yolunu BLOKLAMAZ (ayrı thread)."""
+    try:
+        from utils.secrets_manager import get_secret
+
+        host = (get_secret("mqtt_cloud_host", default="", generate=False) or "").strip()
+        user = (get_secret("mqtt_cloud_user", default="", generate=False) or "").strip()
+        parola = get_secret("mqtt_cloud_pass", default="", generate=False)
+        port_s = (get_secret("mqtt_cloud_port", default="8883", generate=False) or "8883").strip()
+        if not host or not user or not parola:
+            logging.getLogger(__name__).info(
+                "E-stop bulut aynasi ATLANDI: mqtt_cloud_* sirlari tanimli degil (yalniz yerel yol)."
+            )
+            return
+        import paho.mqtt.client as _pm
+
+        c = _pm.Client(
+            _pm.CallbackAPIVersion.VERSION2,
+            client_id=_mqtt_client_id("estop-cloud"),
+            clean_session=True,
+        )
+        c.username_pw_set(user, parola)
+        c.tls_set()  # sistem CA deposu (HiveMQ cloud sertifikası genel CA'lıdır)
+        c.connect(host, int(port_s), keepalive=10)
+        c.loop_start()
+        try:
+            infolar = []
+            for cid in coil_ids:
+                komut_id = f"estopcloud_{cid}_{int(time.time() * 1000)}"
+                for topic in (f"pemf/coil/{cid}/control", f"pemf/esp32_{cid}/command"):
+                    infolar.append(
+                        c.publish(
+                            topic,
+                            _json.dumps(
+                                {"command": "stop", "command_id": komut_id, "emergency": True, "timestamp": time.time()}
+                            ),
+                            qos=1,
+                        )
+                    )
+            teslim = 0
+            for info in infolar:
+                try:
+                    info.wait_for_publish(timeout=3.0)
+                except Exception:
+                    pass
+                if info.is_published():
+                    teslim += 1
+            logging.getLogger(__name__).warning(
+                "E-stop BULUT aynasi (%s): %d/%d yayin teslim edildi.", reason, teslim, len(infolar)
+            )
+        finally:
+            c.loop_stop()
+            c.disconnect()
+    except Exception as e:
+        logging.getLogger(__name__).warning("E-stop bulut aynasi basarisiz (yerel yol etkilenmez): %s", e)
 
 
 def _broker_reachable(timeout: float = 0.3) -> bool:
@@ -3275,6 +3452,20 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # "durdu" gosteriyor: operatore YANLIS guvence. Acil durdurma ASLA seans kapsamiyla
     # sinirlandirilmaz → DAIMA tum ESP bobinleri. Calismayan bobine STOP zararsiz/idempotenttir.
     _estop_coils = sorted(ESP_COIL_IDS)
+    # HG-5 (Plan A-2): E-stop'u BULUT broker'ına da aynala — buluta failover etmiş ESP'ye
+    # yerel yayın ulaşmaz. Ayrı daemon thread: yerel yolu (aşağıda, öncelikli) BLOKLAMAZ.
+    # ⚠️ try/except ŞART (review F2): thread tükenmesinde istisna buradan yükselirse aşağıdaki
+    # YEREL ESP STOP havuzu + live_state sıfırlama + DB finalize ATLANIR — ayna best-effort,
+    # E-stop'un esas yolunu asla düşüremez (_estop_ack_watch spawn'ındaki korumanın simetriği).
+    try:
+        threading.Thread(
+            target=_estop_cloud_mirror,
+            args=(list(_estop_coils), reason),
+            name="estop-cloud-mirror",
+            daemon=True,
+        ).start()
+    except Exception:
+        logging.getLogger(__name__).error("E-stop bulut-ayna thread'i açılamadı (yerel yol sürüyor).")
     import concurrent.futures as _cf
 
     with _cf.ThreadPoolExecutor(max_workers=max(1, len(_estop_coils))) as _ex:

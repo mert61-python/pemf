@@ -366,6 +366,14 @@ _REGISTRY: dict[str, tuple] = {
     "mqtt_pass": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_PASS", "").strip()),
     "cloudflare_tunnel_token": ("operator", False, None, lambda: os.getenv("PEMF_CLOUDFLARE_TUNNEL_TOKEN", "").strip()),
     "tunnel_hostname": ("operator", False, None, lambda: os.getenv("PEMF_TUNNEL_HOSTNAME", "").strip()),
+    # Plan A-2 (2026-08-19): E-STOP BULUT AYNASI kimlik bilgileri — buluta failover etmiş ESP'ye
+    # acil durdurmayı ulaştırır (api_server._estop_cloud_mirror). Operatör girer; üreteç YOK
+    # (rastgele host/parola üretmek anlamsız ve tehlikeli). Tanımsızsa ayna SESSİZCE devre dışı
+    # kalır (get_secret default döner — KeyError DEĞİL; adversaryal review F1). Parola dpapi=True.
+    "mqtt_cloud_host": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_HOST", "").strip()),
+    "mqtt_cloud_port": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_PORT", "").strip()),
+    "mqtt_cloud_user": ("operator", False, None, lambda: os.getenv("PEMF_MQTT_CLOUD_USER", "").strip()),
+    "mqtt_cloud_pass": ("operator", True, None, lambda: os.getenv("PEMF_MQTT_CLOUD_PASS", "").strip()),
     # EMBEDDED (build ile gelir)
     "supabase_url": (
         "embedded",

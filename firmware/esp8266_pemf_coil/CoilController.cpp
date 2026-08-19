@@ -392,6 +392,14 @@ void CoilController::_checkPWMDuration() {
             stop();  // stop() içinde EEPROM'a kaydedilir
         }
     }
+    /* HG-5/6 (2026-08-19, Plan A-1): SÜRESİZ-MOD (duration=0) MUTLAK TAVANI — S3 ile aynı.
+     * Zamana bağlı, ağa DEĞİL → "PWM ağ-bağımsız" değişmezini ihlal etmez; süreli seanslar
+     * etkilenmez. STOP kaybı/failover senaryosunda sonsuz çalışmayı keser (2 saat). */
+    else if (_pwmActive && _pwmDuration == 0 &&
+             safeMillisDiff(millis(), _pwmStartTime) >= (SURESIZ_TAVAN_SEC * 1000UL)) {
+        LOG_PRINTLN(F("[PWM] SURESIZ-mod mutlak tavani doldu, PWM durduruldu (guvenlik)"));
+        stop();
+    }
 }
 
 void CoilController::checkSyncWait(unsigned long long currentTimeMs) {
