@@ -1,5 +1,5 @@
 #include "NetworkManager.h"
-#include <ESP8266mDNS.h>
+#include "Secrets.h"  // 2026-08-19: DEFAULT_LOCAL_MQTT_* + MQTT_LOCAL_MAX_RETRIES burada tanimli - include eksikti, dosya derlenmiyordu
 #include <limits.h>  // ULONG_MAX iÃ§in gerekli
 
 // Diagnostics sistemi kaldırıldı
@@ -687,16 +687,19 @@ bool NetworkManager::_connectToCloudBroker() {
 }
 
 void NetworkManager::_tryResolveMdnsGateway() {
-    if (safeMillisDiff(millis(), _lastMdnsResolve) < 60000) return; // 1 min cache
+    if (safeMillisDiff(millis(), _lastMdnsResolve) < 60000) return; // 1 dk onbellek
     _lastMdnsResolve = millis();
 
-    if (!MDNS.begin("pemf-coil")) return;
-
-    IPAddress ip = MDNS.queryHost("pemf-gateway");
-    if (ip != INADDR_NONE) {
-        _resolvedGatewayIp = ip.toString();
+    /* 2026-08-19: eski kod MDNS.queryHost("pemf-gateway") cagiriyordu - o API ESP32nin,
+     * ESP8266 cekirdeginde HIC OLMADI (S3 varyantindan kopyalanmis; dosya bu haliyle
+     * derlenmiyordu). Mimarinin gercegi daha basit ve saglam: yerel broker, PEMF-Gateway
+     * hotspotunu acan makinede kosar - yani AG GECIDININ KENDISI. mDNSe gerek yok. */
+    IPAddress gw = WiFi.gatewayIP();
+    if (gw != IPAddress((uint32_t)0)) {
+        _resolvedGatewayIp = gw.toString();
         _localMqttHost = _resolvedGatewayIp;
-        LOG_PRINTF("[mDNS] Gateway IP bulundu: %s\n", _resolvedGatewayIp.c_str());
+        LOG_PRINTF("[MQTT] Yerel broker = ag gecidi: %s
+", _resolvedGatewayIp.c_str());
     } else {
         _localMqttHost = DEFAULT_LOCAL_MQTT_HOST;
     }
@@ -736,8 +739,7 @@ void NetworkManager::_reconnectMQTT() {
         publishEvent("mqtt_connected", "HiveMQ Cloud'a baÄŸlandÄ±");
         return;
     }
-
-    }
+    // 2026-08-19: buradaki FAZLA "}" kaldirildi (175/176 dengesizligi - dosya hic derlenmemisti)
 }
 
 void NetworkManager::sendCommandAck(const char* command_id, bool success) {

@@ -42,6 +42,11 @@ private:
     Adafruit_MLX90614 _mlxTemp;
     Adafruit_MLX90393 _mlxMag;
     SensorData _data;
+
+    // 2026-08-19: cpp bu diziyi kullanıyordu ama başlıkta TANIMLI DEĞİLDİ (h/cpp farklı
+    // anlık görüntülerden — dosya bu hâliyle hiç derlenmemişti). Geçici okuma arızasında
+    // son sağlıklı değer döner: [0]=tempObj [1]=tempAmb [2..4]=magXYZ [5]=akım
+    float _lastGoodValues[6] = {0};
     bool _pwmActive = false;
 
     // ACS712 kalibrasyon
