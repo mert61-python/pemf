@@ -269,3 +269,7 @@ ppo_bom.txt
 
 # CubeIDE proje kopyasinin build ciktisi (kaynak degil; masaustu ortami da Debug/ uretir)
 firmware/stm32_pemf/Debug/
+
+# CubeIDE calisma alani proje icine secilirse uretilen metadata (kaynak degil)
+firmware/stm32_pemf/.metadata/
+firmware/stm32_pemf/RemoteSystemsTempFiles/
