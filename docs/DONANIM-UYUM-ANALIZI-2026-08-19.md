@@ -18,7 +18,7 @@
 > | HG-2 (STM DC-bias dalga) | ✅ düzeltildi — STM DDS simetrik bipolar (S3 sözleşmesi, net DC=0) — ⚠️ STM REFLASH + doz yeniden kalibrasyonu ZORUNLU | `356d576` |
 > | HG-1 (STM termal) | ✅ kod hazır, DERLEME-KAPILI (`PEMF_NTC_TERMAL_ENABLED=0`) — NTC bağlanınca 1 yapılıp tezgahta doğrulanacak; HG-2 ile en kötü ısınma sürücüsü (DC-bias) zaten kalktı | `356d576` |
 > | HG-3 (faz kilidi DC-yapışma) | ✅ kod yarısı düzeltildi — ⚠️ S3 REFLASH + tezgah skop zorunlu | `09bf8eb` |
-> | HG-5 (broker failover E-stop) / HG-6 (reboot) | ⏳ deadman sahip değişmeziyle çatışıyor — karar bekliyor |  |
+> | HG-5/HG-6 (failover E-stop + reboot) | ✅ Plan A (sahip kararı): süresiz-mod 7200 sn cihaz tavanı + E-stop bulut aynası (`mqtt_cloud_*` sırları tanımlanınca aktif) + hedefli reconcile — "PWM ağ-bağımsız" değişmezi KORUNDU; ⚠️ S3+8266 REFLASH | `63493ea` |
 
 # PEMF HİBRİT BOBİN KOMUT UYUM RAPORU
 **Kapsam:** 8 bobin / 3 işlemci ailesi (STM32 1-5, ESP32-S3 6-7, ESP8266 8) + Python backend · Kaynak: çalışma kopyası (guii)
