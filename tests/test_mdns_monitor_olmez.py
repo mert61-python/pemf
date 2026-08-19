@@ -54,10 +54,20 @@ def md(monkeypatch):
 def _tek_tur_kos(mdns_service, svc, monkeypatch, tur: int = 1):
     """`_ip_monitor_loop`u THREAD AÇMADAN, sayılı tur koştur.
 
-    ⚠️ `time.sleep` yamalanır: gerçek 30 sn beklemek yerine sayaç düşer ve `_running` kapanır."""
+    ⚠️ `time.sleep` yamalanır: gerçek 30 sn beklemek yerine sayaç düşer ve `_running` kapanır.
+    ⚠️ YALNIZ BU THREAD sayılır (CI flake düzeltmesi, 2026-08-19): yama `time` MODÜLÜNE gider =
+    GLOBALdir; süitte önceki testlerden kalan herhangi bir daemon thread o sırada uyursa sayaç
+    ONDAN da düşüyor ve döngü `ensure_interfaces_current`e varamadan kapanıyordu. Yerelde hızlı
+    makinede hiç denk gelmedi; yavaş ubuntu runner'da e3b95da'da tam bu yüzden kızardı
+    (30 koşuda tek failure — kod değil, test-izolasyon açığı)."""
+    import threading
+
     kalan = {"n": tur}
+    test_thread = threading.current_thread()
 
     def _uyku(sn):
+        if threading.current_thread() is not test_thread:
+            return  # yabancı daemon thread'in uykusu turu TÜKETMESİN (no-op yeterli: test süreci)
         kalan["n"] -= 1
         if kalan["n"] <= 0:
             svc._running = False
