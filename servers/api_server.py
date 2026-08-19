@@ -1081,8 +1081,11 @@ def _esp_duration_seconds(duration_seconds: int) -> int:
     seans acilmadigi icin `_session_duration_watchdog` kapsam disi, `_esp_telemetry_watchdog`
     (bkz. asagi) yalniz telemetri SUSARSA devreye girer — saglikli yayin yapan bir ESP bobini
     kapaksiz kalirdi. Ustelik arayuz operatore "bobin donanim ust-sinirina kadar calisir" diye
-    guvence veriyordu; ESP firmware'i (`CoilController.cpp`) bu depoda DEGIL, yani o guvencenin
-    dayanagi yoktu.
+    guvence veriyordu; ESP firmware'i o tarihte bu depoda DEGILDI, yani o guvencenin dayanagi
+    yoktu. GUNCELLEME 2026-08-19: firmware artik depoda (firmware/esps3_pemf_coil +
+    esp8266_pemf_coil) VE Plan A-1 ile cihazin KENDISI de suresiz modda 7200 sn KUMULATIF
+    tavan uygular (SURESIZ_TAVAN_SEC — ayni 120 dk'dan turer). Bu fonksiyon backend-yanli
+    ILK katman olarak DURUR (derinlemesine savunma; kaldirma).
 
     ⚠️ Sabit BURADA TANIMLANMAZ. Klinik sinir TEK KAYNAKTAN (`hardware_controller`) okunur ki iki
     transport bir gun ayrisamasin — bu bulgunun kok nedeni tam olarak o ayrisma idi.

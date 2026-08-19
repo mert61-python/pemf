@@ -14,7 +14,10 @@ Neden bu bir kusur:
     `range(1, 6)`, seans açılmadığı için `_session_duration_watchdog` kapsam dışı,
     `_esp_telemetry_watchdog` yalnız telemetri SUSARSA devreye girer.
   * Arayüz operatöre "bobin donanım üst-sınırına kadar çalışır" diye güvence veriyordu; ESP
-    firmware'i (`CoilController.cpp`) bu depoda DEĞİL, yani o güvencenin dayanağı yoktu.
+    firmware'i o tarihte bu depoda DEĞİLDİ, yani o güvencenin dayanağı yoktu.
+    GÜNCELLEME 2026-08-19: firmware artık depoda VE Plan A-1 ile cihazın KENDİSİ de süresiz
+    modda 7200 sn KÜMÜLATİF tavan uygular (`SURESIZ_TAVAN_SEC`, aynı 120 dk'dan türer;
+    kilit: `test_plan_a_deadman.py`). Buradaki backend katmanı İLK savunma olarak durur.
 
 ⚠️ Bu sınır yalnız SÜREdir. freq/duty/48°C safety-limit'leri sahip kararıyla kaldırıldı ve GERİ
 EKLENMEZ (bkz. `tests/test_gozetimsiz_enerjilendirme.py` başlığı).
