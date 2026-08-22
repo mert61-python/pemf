@@ -104,6 +104,12 @@ APP_ROOTS = [
     # paketlemede tam bu oldu, +530 bayt) her provizyon degisikligi kliniklere 1,4 GB indirtir
     # ve deps-sha sabitligi (paket-belirlenimciligi) bozulur.
     'PEMF_Backend/_internal/data/cloud_mqtt_provision.json',
+    # Dagitim profilleri (2026-08-22, olculerek bulundu): PEMF_ALLOWED_HOSTS eklenince deps
+    # sha'si degisti — Range-merkezi-dizin kiyasi 6154 dosyadan yalniz 3 deploy/*.env'in
+    # farkli oldugunu gosterdi. Bu dosyalar BIZIM yapilandirmamizdir ve surumle degisir →
+    # VERSION/provision emsaliyle APP katmanina aittir. DEPS'te kalsalardi her profil
+    # degisikligi kliniklere 1,4 GB indirtirdi (katmanli paketin varlik sebebi bozulur).
+    'PEMF_Backend/_internal/deploy',
     # Sinir dosyasi KENDISI de app katmanina aittir. Listede olmazsa launcher onu yedege almaz
     # ve geri alma sinirini okuyamaz -> basarisiz guncelleme geri alinamaz (2026-08-08'de test
     # yakaladi). Launcher ayrica savunma amacli marker'i yedege KOPYALAR; bu satir tutarlilik icin.

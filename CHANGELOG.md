@@ -32,6 +32,69 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.19 — 2026-08-22 (eksik-taraması düzeltmeleri: NACK görünürlüğü, jeton kapısı, rebinding koruması)
+
+**Etiket:** `client-app-v1.9.19` → `base-app.zip` (sha `9506287592a7`) + `base-deps.zip` (sha `2189cdd4970e`).
+Paket kimliği (`buildId`, `/api/health`): `9506287592a7` — katmanlı kurulumda cihaz **app
+katmanının** sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.zip` sha'sı `cb0b825e64f6` raporlar.
+
+⚠️ **Bağımlılık katmanı bir kez daha iniyor (~1,4 GB, bir kereliğine).** Bağımlılıklar değişmedi;
+dağıtım profilleri (`deploy/*.env`) yanlış katmandaydı ve sınır düzeltildi — profiller artık
+app katmanında, yani bundan sonraki profil değişiklikleri kliniklere yalnız ~71 MB indirtecek.
+
+12-ajanlı eksik-taramasının P1/P2 kod kapanışları (denetim-bulgular-2.md 18. parti + p2 turu).
+
+### Hasta kaydı ve güvenlik (önce bunlar)
+
+- **Bobinin açık reddi (NACK) artık görünür ve kayda işlenir.** Bobin bir komutu reddederse
+  (hız sınırı / geçersiz parametre) operatör bunu SEBEBİYLE görür; reddedilen start, tedavi
+  geçmişine "koştu" olarak giremez — koşu kaydı otomatik düzeltilir. Onay zaman aşımında kayıt
+  bilerek KORUNUR (kayıp onay, gerçek koşunun dozunu silmemeli). [4.5]'in kalan yarısı.
+- **Acil durdurmanın bulut yedeği sağlamlaştırıldı:** çifte tetikte iki ayna oturumu artık
+  birbirini düşürmüyor; kimlik her koşulda broker sınırına sığıyor. [3.3]
+- **Kapanan seans kaydı buluttan bozulamaz:** bulut kopyası bayat-"açık" ise kapanış saati ve
+  süre artık ezilmiyor (doz belgesi korunur); başka cihazda kapatılan seans yerelde de kapanır.
+- **KVKK:** eski hastaların anonimleştirilmesi yaş ve kiloyu da kapsıyor; anonim bir kayda
+  gerçek bilgi geri yazılırsa kayıt saklama düzenine yeniden girer.
+
+### Ücretlendirme altyapısı (satış hâlâ KAPALI)
+
+- **Jeton kapısı AI uçlarına bağlandı** ve ödeme geri-çağrıları jeton yüklüyor — ancak bayrak
+  kapalı: bugün hiçbir analiz ücretlendirilmiyor, hiçbir davranış değişmedi. ⚠️ Seans durdurma,
+  acil durdurma ve tedavi uçları jeton kapısının ARKASINDA DEĞİL (yapısal testle kilitli).
+
+### Ağ güvenliği
+
+- **DNS-rebinding koruması fiilen devrede** (`PEMF_ALLOWED_HOSTS=auto`): telefon/tarayıcının
+  IP, localhost, *.local, makine adı ve tünel erişimleri aynen çalışır; yabancı alan adıyla
+  gelen istekler reddedilir. Kurumsal ağ adı gereken klinik `auto,ad` ile ekleyebilir.
+
+### Doğrulama
+
+Backend 1625 · mobil 532 · site 171 · launcher 222 test; 35 mutasyon doğrulaması.
+
+---
+
+## launcher 1.9.34 — 2026-08-22 (Host koruması launcher kurulumlarında da açık)
+
+**Etiket:** `launcher-v1.9.34` → `PEMFVetClient-Setup-1.9.34.exe` (sha `9bce6a7dcf32`).
+
+- Launcher artık backend'e `PEMF_ALLOWED_HOSTS=auto` geçiriyor — DNS-rebinding koruması siteden
+  kurulan kliniklerde de devrede (deploy profilleriyle aynı davranış; ortamda tanımlıysa dokunmaz).
+- Başka işlevsel değişiklik yok.
+
+---
+
+## mobile 2.3.21 — 2026-08-22 (jeton bildirimi altyapısı)
+
+**Etiket:** `launcher-v1.9.32` → `PEMF_Vet_Mobil-2.3.21.apk` (versionCode 28).
+
+- Jeton sistemi ileride açıldığında telefon, "jeton bitti" durumunu genel sunucu hatasıyla
+  karıştırmadan ayrı ve anlaşılır gösterecek (bugün görünür bir değişiklik yok — satış kapalı).
+- 2.3.20'deki tüm düzeltmeler geçerli.
+
+---
+
 ## app 1.9.18 — 2026-08-21 (2. tur denetimi + ücretlendirme altyapısı + bulut sertleştirme)
 
 **Etiket:** `client-app-v1.9.18` → `base-app.zip` (sha `c780ef1130bf`) + `base-deps.zip` (sha `69dc57a16dab`).
