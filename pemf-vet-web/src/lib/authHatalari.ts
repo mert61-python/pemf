@@ -1,3 +1,4 @@
+import { COMPANY } from '../config'
 // Author: mertaygn, cglrgrkn
 /**
  * GİRİŞ/KAYIT HATALARININ TÜRKÇESİ + TEK ŞİFRE KURALI (metin denetimi 1. parti, 2026-08-20).
@@ -91,7 +92,7 @@ export function authHatasiTurkce(ham?: string | null): string {
   const m = (ham ?? '').trim()
   if (!m) return 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.'
   for (const [desen, karsilik] of ESLESMELER) if (desen.test(m)) return karsilik
-  return 'İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse destek@v-pemf.com adresine yazın.'
+  return `İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse ${COMPANY.email} adresine yazın.`
 }
 
 /**
@@ -112,7 +113,7 @@ export function odemeHatasiTurkce(ham?: string | null): string {
     return 'Bankanız işlemi doğrulayamadı. Kart bilgilerinizi kontrol edip tekrar deneyin.'
   }
   if (/not found|no_subscription|bulunamadı/i.test(m)) {
-    return 'Hesabınızda aktif bir abonelik görünmüyor. Sorun sürerse destek@v-pemf.com adresine yazın.'
+    return `Hesabınızda aktif bir abonelik görünmüyor. Sorun sürerse ${COMPANY.email} adresine yazın.`
   }
-  return 'İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse destek@v-pemf.com adresine yazın.'
+  return `İşlem tamamlanamadı. Lütfen tekrar deneyin; sorun sürerse ${COMPANY.email} adresine yazın.`
 }

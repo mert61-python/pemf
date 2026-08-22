@@ -5,6 +5,7 @@ import {
 import { useAuth } from './AuthContext'
 import { Close } from '../components/Icons'
 import { SIFRE_KURALI, sifreGecerliMi } from '../lib/authHatalari'
+import { COMPANY } from '../config'
 
 /** Modalın hangi akış için açıldığı — yalnız alt başlık metnini değiştirir.
  *  Opsiyonel: mevcut `requireAuth(cb)` çağrıları (ödeme, hesap düğmesi) aynen çalışır. */
@@ -262,7 +263,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
         {!ready && (
           <p className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
             Giriş servisine şu anda ulaşılamıyor. Kısa süre sonra tekrar deneyin; sürerse
-            destek@v-pemf.com adresine yazın.
+            {COMPANY.email} adresine yazın.
           </p>
         )}
 

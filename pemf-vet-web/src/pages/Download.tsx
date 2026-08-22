@@ -72,7 +72,7 @@ function PlatformCard({
               YASAKLAR — indirme kapısını atlayan bir bağlantı böyle sızabilir. Platform adını
               konuya gömmek yerine sabit konu kullanıyoruz (kapı korunur, kullanıcı yine yazar). */}
           <a
-            href="mailto:destek@v-pemf.com?subject=Yeni%20platform%20s%C3%BCr%C3%BCm%C3%BC%20haber%20ver"
+            href="mailto:ibiatechnology@gmail.com?subject=Yeni%20platform%20s%C3%BCr%C3%BCm%C3%BC%20haber%20ver"
             className="mt-2 text-center text-xs text-primary hover:underline"
           >
             Çıkınca haber ver

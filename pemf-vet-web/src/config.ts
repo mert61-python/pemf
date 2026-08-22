@@ -31,8 +31,12 @@ export const COMPANY = {
   city: 'Eskişehir',
   country: 'Türkiye',
   phone: '+90 531 388 04 13',
-  email: 'destek@v-pemf.com',
-  kvkkEmail: 'destek@v-pemf.com',   // ayrı KVKK adresi açılınca burayı değiştirin
+  // ⚠️ TEK KAYNAK — sitedeki HER destek bağlantısı buradan okur. Elle adres yazmayın;
+  // `tests/test_destek_adresi_tek_kaynak.py` bunu kilitliyor.
+  // 2026-08-22: `destek@v-pemf.com` idi; o alan adı KAYITLI DEĞİL (A ve MX için NXDOMAIN
+  // ölçüldü) → sitedeki tüm iletişim yolları ve yasal zorunlu iletişim bilgisi ÖLÜYDÜ.
+  email: 'ibiatechnology@gmail.com',
+  kvkkEmail: 'ibiatechnology@gmail.com',   // ayrı KVKK adresi açılınca burayı değiştirin
   taxOffice: 'Eskişehir Vergi Dairesi Başkanlığı',
   taxNo: '4690841423',
   mersis: '0469084142300001',
@@ -616,7 +620,7 @@ export const FAQ = [
   },
   {
     q: 'Aboneliğimi nasıl iptal ederim? Param iade edilir mi?',
-    a: '“Hesabım” menüsündeki “Aboneliği iptal et” ile iptal edersiniz; kısa bir onay adımından sonra otomatik yenileme durur ve bir daha ücret alınmaz. İade koşulları Mesafeli Satış Sözleşmesi ve Ön Bilgilendirme Formu’nda yazılıdır; sorunuz olursa destek@v-pemf.com adresine yazın.',
+    a: `“Hesabım” menüsündeki “Aboneliği iptal et” ile iptal edersiniz; kısa bir onay adımından sonra otomatik yenileme durur ve bir daha ücret alınmaz. İade koşulları Mesafeli Satış Sözleşmesi ve Ön Bilgilendirme Formu’nda yazılıdır; sorunuz olursa ${COMPANY.email} adresine yazın.`,
   },
   {
     q: 'Araştırma profili kime gerekli?',

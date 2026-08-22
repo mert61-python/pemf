@@ -15,7 +15,7 @@ export const FIRMA = {
   kisaUnvan: "İBİA Teknoloji Ltd. Şti.",
   adres: "Yeşiltepe Mah. İsmet İnönü 2 Cad. No: 2-57, Tepebaşı / Eskişehir",
   tel: "+90 531 388 04 13",
-  eposta: "destek@v-pemf.com",
+  eposta: "ibiatechnology@gmail.com",
   mersis: "0469084142300001",
   vkn: "4690841423",
   ticaretSicil: "45277",

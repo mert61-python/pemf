@@ -1,5 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { Component, type ReactNode } from 'react'
+import { COMPANY } from '../config'
 
 /* Kök hata sınırı. Sitede hiç ErrorBoundary yoktu: herhangi bir sayfadaki tek bir render hatası
    (ör. config'te eksik alan, beklenmedik veri şekli) TÜM siteyi beyaz ekrana düşürüyordu — üstelik
@@ -28,8 +29,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
             hata anında kullanıcının iletişim yolu kapalıydı. */}
         <p className="text-muted">
           Sayfa yüklenirken beklenmeyen bir hata oluştu. Sayfayı yenilemeyi deneyin; sorun sürerse{' '}
-          <a className="text-primary hover:underline" href="mailto:destek@v-pemf.com?subject=Site%20hatas%C4%B1">
-            destek@v-pemf.com
+          <a className="text-primary hover:underline" href={`mailto:${COMPANY.email}?subject=${encodeURIComponent('Site hatası')}`}>
+            {COMPANY.email}
           </a>{' '}
           adresine yazın.
         </p>

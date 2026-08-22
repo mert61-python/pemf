@@ -33,7 +33,12 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
         </span>
         <span className="text-sm text-muted">
           Çıkınca haber vermemiz için{' '}
-          <a href="mailto:destek@v-pemf.com?subject=PEMF%20Vet%20s%C3%BCr%C3%BCm%20bildirimi" className="text-primary hover:underline">
+          {/* ⚠️ ADRES BURADA STATİK — üstteki kapı kuralı yüzünden. `download-gate-wiring`
+              testi bu dosyada dinamik `href={...}` YASAKLAR; `COMPANY.email`i şablona
+              koymak o kapıyı gevşetirdi. Adres değişirse `config.ts::COMPANY.email` ile
+              BİRLİKTE güncellenir — `tests/test_destek_adresi_tek_kaynak.py` ikisinin
+              ayrışmasını yakalar. */}
+          <a href="mailto:ibiatechnology@gmail.com?subject=PEMF%20Vet%20s%C3%BCr%C3%BCm%20bildirimi" className="text-primary hover:underline">
             bize yazın
           </a>
           .
