@@ -49,7 +49,7 @@ export interface ApiOpts {
    *  veteriner hasta masadayken sebebi ANLAYAMIYORDU. Argüman EKLEMELİ: mevcut çağıranlar
    *  (tek parametreli lambda'lar) etkilenmez.
    */
-  onHttpError?: (status: number, detail?: string) => void;
+  onHttpError?: (status: number, detail?: string, govde?: unknown) => void;
   /** Bu istek için zaman aşımı (ms). Verilmezse REQUEST_TIMEOUT_MS (8sn).
    *
    *  NEDEN GEREKLİ: 8sn, kontrol/telemetri uçları için doğru ama AI ÇIKARIMI için çok kısa.
@@ -293,13 +293,19 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
       // Sunucunun gerekçesi (FastAPI `detail`). Gövde okunamazsa akış BOZULMAZ — hata yolunda
       // ikinci bir hata üretmek, asıl hatayı gizlerdi.
       let detail: string | undefined;
+      // ⚠️ GÖVDE de taşınır (2026-08-22): bazı hata yanıtları YAPISAL bilgi içerir ve o bilgi
+      // güvenlikle ilgilidir. Somut olay: `/session/stop` donanım STOP'u doğrulanamayan bobin
+      // varsa 409 döner ve `hardware_stop_unconfirmed` listesini gövdede taşır. Yalnız `detail`
+      // dizesini geçirmek, çağıranı o listeyi metinden AYRIŞTIRMAYA zorlardı.
+      let govdeHam: unknown;
       try {
-        const govde = (await response.json()) as { detail?: unknown };
+        govdeHam = await response.json();
+        const govde = govdeHam as { detail?: unknown };
         if (typeof govde?.detail === "string" && govde.detail.trim()) detail = govde.detail.trim();
       } catch {
         /* JSON değil ya da boş gövde → detail yok */
       }
-      opts?.onHttpError?.(response.status, detail);   // çağıran koda göre farklı davranabilsin (bkz. ApiOpts)
+      opts?.onHttpError?.(response.status, detail, govdeHam);   // çağıran koda göre farklı davranabilsin (bkz. ApiOpts)
       // Gerekçe varsa ONU göster: "veritabanı açılamadı, seans başlatılamaz" ile "bir hata oluştu"
       // arasındaki fark, veterinerin sorunu çözebilmesi ile çözememesi arasındaki farktır.
       if (!opts?.silent) showError("Sunucu Hatası", detail || "Sunucuya veri gönderilirken bir hata oluştu.");

@@ -86,11 +86,11 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.19",
-      "versionCode": 26,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.33/PEMF_Vet_Mobil.apk",
-      "sha256": "5668bf144098e42a642cb95a09b089671143830dfe8e1a808aed8ef0196856e2",
-      "size": 128424251,
+      "version": "2.3.20",
+      "versionCode": 27,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMF_Vet_Mobil.apk",
+      "sha256": "5989752fd3ce391dab8844ef4f60d023f9fafdd84a705472ea7d277656c7067b",
+      "size": 128426823,
       "notes": "Bakim surumu: uygulama ici guncelleme akisi dogrulandi; islevsel degisiklik yok."
     }
   }

@@ -242,8 +242,26 @@ export function useSessionControl(): SessionControlResult {
       // P1 audit 2026-06-28: apiPost ağ-hatası/non-2xx'te THROW ETMEZ → fallback(null) döner.
       // Eskiden yanıt kontrol edilmeden 'durduruldu' deniyordu → backend erişilemezken UI seansı
       // bitmiş gösterir ama STM'ye STOP ULAŞMAMIŞ olabilir (donanım çalışmaya devam). Yanıtı DOĞRULA.
-      const res = await apiPost<SessionActionResponse | null>("/session/stop", {}, null);
-      if (!res || res.status === "error") {
+      // ⚠️ GÜVENLİK SİNYALİ SÖZLEŞMESİ (2026-08-22): backend, donanım STOP'u doğrulanamayan
+      // bobin varsa artık **409** döndürür — 2xx DIŞI olması KASITLIDIR. Sebebi sürüm kayması:
+      // telefon eski sürümde kalabilir (Android'de kurulumu işletim sistemi sorar) ve eski
+      // istemci tanımadığı bir yanıt ALANINI sessizce yutar, ama 2xx-dışı yanıtı YUTAMAZ.
+      // Bu istemci 409'u AYIRT EDER: seans kaydı gerçekten kapandığı için UI'da seansı kapatır,
+      // sonra spesifik bobin listesini gösterir. `silent: true` → apiClient'ın genel "Sunucu
+      // Hatası" kutusu çıkmaz; aşağıdaki NET uyarı onun yerine geçer.
+      let teyitsizHttp: number[] | null = null;
+      const res = await apiPost<SessionActionResponse | null>("/session/stop", {}, null, {
+        silent: true,
+        onHttpError: (kod, _detail, govde) => {
+          if (kod === 409) {
+            const g = govde as { hardware_stop_unconfirmed?: unknown } | undefined;
+            teyitsizHttp = Array.isArray(g?.hardware_stop_unconfirmed)
+              ? (g!.hardware_stop_unconfirmed as number[])
+              : [];
+          }
+        },
+      });
+      if (teyitsizHttp === null && (!res || res.status === "error")) {
         platformAlert(
           "Durdurma onaylanamadı",
           "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
@@ -255,7 +273,10 @@ export function useSessionControl(): SessionControlResult {
       // koşulsuz "success" döndüğü için yukarıdaki uyarı bu senaryoda HİÇ tetiklenemiyordu.
       // Seans UI'da kapanır (kayıt gerçekten kapandı — null/error'dan farkı bu) ama operatör
       // hangi bobinlerin teyitsiz kaldığını AÇIKÇA görür.
-      const teyitsiz = Array.isArray(res.hardware_stop_unconfirmed) ? res.hardware_stop_unconfirmed : [];
+      // 409 yolundan geldiyse `res` null'dır — liste HTTP hata gövdesinden gelir. 200 yolunda
+      // (eski backend ile konuşuluyorsa) eski alan hâlâ okunur → iki yön de çalışır.
+      const teyitsiz: number[] =
+        teyitsizHttp ?? (Array.isArray(res?.hardware_stop_unconfirmed) ? res.hardware_stop_unconfirmed : []);
       if (teyitsiz.length > 0) {
         platformAlert(
           "Durdurma onaylanamadı",

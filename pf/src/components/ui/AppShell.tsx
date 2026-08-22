@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
 import { MobileUpdateBanner } from "@/components/domain/MobileUpdateBanner";
 import { RecoveryCodeBanner } from "@/components/domain/RecoveryCodeBanner";
+import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
 
@@ -378,6 +379,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             anahtarla şifreli. Kurtarma kodu makine dışına kopyalanmazsa disk arızasında
             off-site yedekler bile SONSUZA DEK açılamaz. Operatör onaylayana kadar kalıcı. */}
         <RecoveryCodeBanner />
+        {/* Sürüm farkı BİLGİSİ (bloklamaz, kapatılabilir, seansta gizli) — sahip kararı 2026-08-22 */}
+        <SurumFarkiBanner />
 
         <ScrollView
           contentContainerStyle={[

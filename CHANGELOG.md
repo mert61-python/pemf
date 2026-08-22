@@ -213,6 +213,40 @@ inmesi gerekiyor. Sonraki sürümler yine ~71 MB olacak.
 
 ---
 
+## mobile 2.3.20 — 2026-08-22 (sürüm farkı artık sessiz değil)
+
+**Etiket:** `launcher-v1.9.32` → `PEMF_Vet_Mobil-2.3.20.apk` (versionCode 27).
+
+### Durdurma uyarısı artık ESKİ telefonlara da ulaşıyor (önce bu)
+
+Telefon uygulaması cihazdan farklı bir sürümde kalabilir ve bu **kasıtlıdır**: Android'de
+kurulumu işletim sistemi sorar, güncelleme zorunlu kılınamaz — bir tıbbi cihazın uzaktan acil
+durdurmasını sürüm eşleşmesine bağlamak kabul edilemez.
+
+Ama ölçüldü ki bu, güvenlik uyarılarının **sessizce kaybolmasına** yol açıyordu: 1.9.18'de
+eklenen "donanım STOP'u doğrulanamadı" uyarısı yanıtta yeni bir **alan** olarak taşınıyordu ve
+eski telefon o alanı tanımadığı için yutuyordu — bobinler hâlâ çalışırken ekranda düz "seans
+durduruldu" yazıyordu. Yani düzeltme, en çok ihtiyacı olan kullanıcıya hiç ulaşmıyordu.
+
+- **Uyarı artık yutulamayacak kanaldan gider.** Doğrulanamayan bobin varsa cihaz `409` döner;
+  eski telefon 2xx dışı bir yanıtı yok sayamaz ve "donanım hâlâ çalışıyor olabilir — ACİL
+  DURDUR'a basın" uyarısını gösterir. Yeni telefon ayrıca hangi bobinlerin teyitsiz kaldığını
+  listeler. Mutlu yolda hiçbir şey değişmedi (yanlış alarm üretilmez).
+- **Uyarı kaybolmayacak bir yere de düşer:** klinik bilgisayarının bildirim akışına ve günlüğe.
+  Telefon eskiyse ya da ekranı kimse görmüyorsa bile uyarı birine ulaşır.
+
+### Sürüm farkı görünür oldu
+
+- Telefon ile cihaz sürümü farklıysa kapatılabilir bir bilgi bandı çıkar: *"Telefon 2.3.20 ·
+  cihaz 1.9.18 — bağlantı ve acil durdurma normal çalışır; bazı düzeltmeler eksik olabilir."*
+  **Bloklamaz**, girişi engellemez, seans sürerken gösterilmez.
+
+### Diğer
+
+- Şirket künyesindeki destek adresi güncellendi (eski adresin alan adı kayıtlı değildi).
+
+---
+
 ## launcher 1.9.33 — 2026-08-21 (onarım artık 1,4 GB'ı yeniden indirmiyor)
 
 **Etiket:** `launcher-v1.9.33` → `PEMFVetClient-Setup-1.9.33.exe` (sha `09728768a9f8`).

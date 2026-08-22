@@ -80,13 +80,32 @@ def test_KRITIK_broker_ulasilmazken_yanit_teyitsiz_bobinleri_soyler(api, client,
     monkeypatch.setattr(api.state, "hardware", None)
 
     r = client.post("/api/session/stop", json={})
-    assert r.status_code == 200
-    gövde = r.json()
-    assert gövde["status"] == "success", "üst-seviye status DEĞİŞMEMELİ (seans kaydı kapandı; sözleşme korunur)"
-    assert gövde.get("hardware_stop_unconfirmed") == [6, 7], (
-        f"STOP hiçbir bobine ulaşmadı ama yanıt bunu söylemiyor: {gövde!r} — istemcinin "
-        "'Durdurma onaylanamadı' uyarısı bu senaryoda ASLA tetiklenemez (bulgu [1.1])"
+
+    # ⚠️ SÖZLEŞME DEĞİŞTİ (2026-08-22) — GEVŞETME DEĞİL, SIKILAŞTIRMA.
+    # Bu satır eskiden `status_code == 200` ve `status == "success"` bekliyordu; gerekçe
+    # "seans kaydı kapandı, mevcut çağıranların sözleşmesi bozulmasın" idi. Sürüm kayması
+    # senaryosu ÖLÇÜLDÜ ve o gerekçeyi çürüttü: telefon eski sürümde kalabilir (Android'de
+    # kurulumu işletim sistemi sorar → güncelleme zorunlu kılınamaz) ve ESKİ istemci
+    # `hardware_stop_unconfirmed` alanını TANIMAZ; kontrolü `res.status === "error"` olduğu
+    # için 2xx'i koşulsuz BAŞARI sayar. Sonuç: bobinler hâlâ çalışırken operatöre düz
+    # "seans durduruldu" gösteriliyordu — yani [1.1] düzeltmesi, ona en çok ihtiyacı olan
+    # istemciye HİÇ ulaşmıyordu.
+    # Uyarı artık eski istemcinin de YUTAMAYACAĞI kanaldan gider: 2xx DIŞI yanıt.
+    # (207 Multi-Status DA 2xx'tir → `response.ok` true → kullanılamaz.)
+    assert r.status_code == 409, (
+        f"teyitsiz durdurma {r.status_code} döndü — 2xx ise eski istemci sessizce başarı sayar "
+        "ve bobinler çalışırken 'durduruldu' gösterir (bulgu [1.1]'in nüksü)"
     )
+    gövde = r.json()
+    assert gövde.get("hardware_stop_unconfirmed") == [6, 7], (
+        f"STOP hiçbir bobine ulaşmadı ama yanıt bunu söylemiyor: {gövde!r}"
+    )
+    # Eski istemcinin ekrana basabildiği TEK alan (apiClient: showError('Sunucu Hatası', detail)).
+    assert "ACİL DURDUR" in (gövde.get("detail") or ""), (
+        f"`detail` operatöre ne yapacağını söylemiyor: {gövde.get('detail')!r}"
+    )
+    # Seans KAYDI gerçekten kapandı — yeni istemci UI'da seansı yeniden 'açık' göstermemeli.
+    assert gövde.get("session_closed") is True, "seans kaydının kapandığı yanıtta belirtilmiyor"
 
 
 def test_KRITIK_stm_donanimi_yokken_stm_bobinleri_de_teyitsiz(api, client, aktif_seans, monkeypatch):

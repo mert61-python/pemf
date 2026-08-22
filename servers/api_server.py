@@ -3196,13 +3196,57 @@ async def stop_session():
     # (STOP hicbir bobine ulasmamisken UI seansi "durdu" gosterir). Alan yalniz teyitsizlik
     # VARSA eklenir — mutlu yolda yanit sekli birebir ayni (alarm yorgunlugu uretme).
     _yanit = {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
-    if _stop_teyitsiz:
-        _yanit["hardware_stop_unconfirmed"] = _stop_teyitsiz
-        _yanit["message"] = (
-            "Seans kaydı kapatıldı — ancak bazı bobinlerin donanım STOP'u DOĞRULANAMADI: "
-            f"{_stop_teyitsiz}. Bobinler hâlâ çalışıyor olabilir."
-        )
-    return _yanit
+    if not _stop_teyitsiz:
+        return _yanit
+
+    # ─────────────────────────────────────────────────────────────────────────────────────────
+    # ⚠️ GÜVENLİK SİNYALİ SÖZLEŞMESİ — "BİLİNMİYORSA KÖTÜMSER" (sahip kararı 2026-08-22)
+    #
+    # [1.1]'in ilk hâli üst-seviye `status`u "success" bırakıp uyarıyı YENİ bir alana koyuyordu
+    # (`hardware_stop_unconfirmed`). Sürüm kayması senaryosu ölçüldü: telefon eski sürümde
+    # kalabilir (Android'de kurulumu İŞLETİM SİSTEMİ sorar; güncelleme zorunlu kılınamaz — bkz.
+    # MobileUpdateGate). Eski istemcide o alanı okuyan kod YOKTUR ve kontrolü
+    # `res.status === "error"` biçimindedir → tanımadığı her değeri BAŞARI sayar. Sonuç:
+    # bobinler hâlâ çalışıyorken operatör düz "seans durduruldu" görüyordu. Yani düzeltme,
+    # düzeltmeyi en çok gereken istemciye HİÇ ulaşmıyordu.
+    #
+    # ÇÖZÜM: uyarıyı yeni bir alana DEĞİL, eski istemcinin de anladığı KANALA koy → 2xx DIŞI
+    # yanıt. Ölçülen davranış (pf/src/services/apiClient.ts):
+    #   · `!response.ok` → gövde `detail` alanı okunur ve `showError("Sunucu Hatası", detail)`
+    #     ile EKRANA BASILIR → eski istemci uyarının METNİNİ görür,
+    #   · çağrıya `null` döner → `useSessionControl` "Durdurma onaylanamadı … ACİL DURDUR'a
+    #     basın" uyarısını gösterir → eylem TAVSİYESİ de doğru olur.
+    # Yeni istemci `onHttpError` ile 409'u ayırt eder, seansı kapatır ve SPESİFİK bobin
+    # listesini gösterir (aşağıdaki alanlar korunur).
+    #
+    # ⚠️ 2xx SEÇİLEMEZ: 207 Multi-Status da `response.ok`tur → eski istemci yine sessizce
+    # başarı sayardı. Fail-safe olması için yanıt 2xx DIŞI olmalıdır. 409 Conflict seçildi:
+    # istek işlendi (seans kaydı GERÇEKTEN kapandı) ama donanım durumu çelişkili.
+    #
+    # ⚠️ SEANS KAYDI KAPANDI — bu bir "işlem başarısız" durumu DEĞİLDİR. `session_closed: true`
+    # alanı bunu açıkça söyler ki yeni istemci UI'da seansı yeniden "açık" göstermesin.
+    # ─────────────────────────────────────────────────────────────────────────────────────────
+    _uyari = (
+        f"Bobin {', '.join(str(c) for c in _stop_teyitsiz)} için donanım STOP'u DOĞRULANAMADI — "
+        "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+    )
+
+    # ⚠️ UYARI KAYBOLMAYACAK BİR YERE DE DÜŞER (sahip kararı 2026-08-22, 3. madde): telefon eski
+    # sürümdeyse ya da ekranı kimse görmüyorsa uyarı yok olmasın. Bildirim akışı klinik
+    # bilgisayarındaki arayüzde görünür (masaüstü arayüzü paketle birlikte GÜNCELDİR) ve günlüğe
+    # yazılır — böylece uyarı en azından BİRİNE ulaşır ve destek sonradan izini sürebilir.
+    try:
+        _push_notification(f"🚨 {_uyari}", "error")
+    except Exception:  # noqa: BLE001 — bildirim yolu çökse bile yanıt DÖNMELİ
+        logging.exception("stop: teyitsiz-durdurma bildirimi gonderilemedi")
+    logging.error("stop: donanim STOP DOGRULANAMADI — bobinler=%s", _stop_teyitsiz)
+
+    _yanit["status"] = "hardware_stop_unconfirmed"
+    _yanit["message"] = _uyari
+    _yanit["detail"] = _uyari  # eski istemci YALNIZ bunu görebiliyor (apiClient showError)
+    _yanit["hardware_stop_unconfirmed"] = _stop_teyitsiz
+    _yanit["session_closed"] = True
+    return JSONResponse(status_code=409, content=_yanit)
 
 
 class AiLogPayload(BaseModel):
