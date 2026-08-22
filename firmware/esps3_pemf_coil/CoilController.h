@@ -40,8 +40,12 @@ public:
     void forceSaveState();
 
     // One-shot event flag for Network task
-    bool consumeSyncFallbackEvent();
     bool consumeSelfTestEvent(bool &passed);
+    /* [5.12] (sahip onayi 2026-08-20): statusQueue doluyken tuketilmis tek-atimlik olaylar
+     * KAYBOLMASIN — gonderim basarisizsa cagiran geri kurar, sonraki 200 ms turunda yeniden
+     * denenir. YALNIZ basarisizlik dalinda cagrilir (normal yolda cift yayin uretmez). */
+    void restoreThermalStopEvent();
+    void restoreSelfTestEvent(bool passed);
 
     // Senkron tanılama: periyot sınırı dışında gelip YOK SAYILAN darbe sayısı.
     // Büyüyorsa STM ile frekans uyuşmazlığı var demektir (status ile yayınlanır).
@@ -68,15 +72,9 @@ private:
     unsigned long long _startTimestamp;  // epoch ms (NTP)
     int _effectiveDutyPct;       // ölü-zaman + tick yuvarlaması sonrası GERÇEK çıkış
 
-    // Sync Başlangıç (backend bugün start_at göndermiyor — ileriye dönük)
-    unsigned long long _syncTargetTime;
-    bool _waitingForSync;
-
     // Preferences (NVS)
     Preferences _prefs;
     unsigned long _lastSaveTimeMs;
-
-    bool _syncFallbackPendingEvent;
 
     // Self-test
     bool _isSelfTesting;
@@ -92,7 +90,12 @@ private:
     void _setupTimerISR();
     void _updatePWM(int freq, int duty, int phase_deg = 0);
     void _stopPWM();
-    void _beginOutput(unsigned long long epochMs);
+    /* devralinanSuresizMs (2. tur denetimi [1.3], 2026-08-20): NVS RESUME'un devrettiği
+     * kümülatif süresiz-mod birikimi. PARAMETRE olmak ZORUNDA — _beginOutput içindeki
+     * forceSaveState sayaç yazıldıktan SONRA koşsun; eski "çağrıdan sonra RAM'e geri yükle"
+     * düzeni NVS'e elapsedMs≈0 yazıyor, resume+30 sn içindeki ikinci çökme birikimi siliyordu.
+     * Varsayılan 0 = taze/zamanlanmış START pencereyi sıfırlar (operatör eylemi). */
+    void _beginOutput(unsigned long long epochMs, unsigned long devralinanSuresizMs = 0);
     void _writeStateToNvs(const void* data);
 };
 

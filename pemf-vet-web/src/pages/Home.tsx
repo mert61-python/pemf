@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
-import { BRAND, CLIENT, FEATURES, LAUNCHER_STEPS, MODULES } from '../config'
+import { BRAND, CLIENT, FEATURES, FREE_MODE, LAUNCHER_STEPS, MODULES, PLANS } from '../config'
+import { planKisaFiyat } from '../lib/planFiyat'
 import { ICONS } from '../components/Icons'
 import { Sparkle, ArrowRight, Check, Bolt } from '../components/Icons'
 import DownloadButtons from '../components/DownloadButtons'
@@ -14,28 +15,36 @@ export default function Home() {
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:py-28">
           <div>
+            {/* Metin denetimi 2026-08-20: burada `CLIENT.channel` ("Sürüm 2026.1") yazıyordu ve
+                aynı ekranın altında "v1.9.32" görünüyordu — iki ayrı sürüm şeması yan yana,
+                hangisinin ne olduğu belirsiz. Rozet artık sürüm SÖYLEMİYOR; tek sürüm bilgisi
+                aşağıdaki satırda (ve İndir sayfasında) durur. */}
             <span className="chip">
               <Sparkle className="h-3.5 w-3.5" />
-              {CLIENT.channel} · Yayında
+              Veteriner klinikleri için · Yayında
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[3.4rem]">
               <span className="text-gradient">{BRAND.tagline}</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-              Klinik hassasiyetinde elektromanyetik alan terapisi artık masaüstünüzde.
+              Veteriner kliniğiniz için elektromanyetik alan terapisini tek ekrandan yönetin.
               {' '}
-              <span className="text-fg/90 font-medium">Hafif PEMF Vet Client’ı</span>{' '}
-              indirin; uygulamayı, donanım yazılımını ve AI modellerini client içinden kurun ve tek merkezden güncelleyin.
+              <span className="text-fg/90 font-medium">PEMF Vet’i indirin</span>{' '}
+              — uygulama, cihaz yazılımı ve yapay zekâ modelleri sizin için kurulur, güncellemeler kendiliğinden gelir.
             </p>
 
             <div className="mt-8">
               <DownloadButtons size="lg" />
             </div>
             <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+              {/* Adversaryal inceleme 2026-08-20: burada macOS ve Linux ONAY İŞARETİYLE
+                  listeleniyordu ama ikisi de `ready:false` — İndir sayfasında "Yakında". Yani
+                  ana sayfa, indirilemeyen iki platformu destekleniyor gibi gösteriyordu.
+                  Rozetler artık gerçekten indirilebilen platformları söyler. */}
               <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.windows.os}</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.macos.os}</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Linux (Ubuntu / Debian)</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> v{CLIENT.version} · hafif client</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> {CLIENT.downloads.android.os}</span>
+              <span className="inline-flex items-center gap-1.5 text-muted/70">macOS · Linux yakında</span>
+              <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Sürüm {CLIENT.version} · {CLIENT.sizeMB} MB kurulum</span>
             </p>
           </div>
 
@@ -50,9 +59,9 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-5 py-20 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
             <span className="chip">Nasıl çalışır</span>
-            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Tek client, tüm kurulum</h2>
+            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Tek indirme, gerisi otomatik</h2>
             <p className="mt-3 text-muted">
-              Bir oyun istemcisinin oyunu kurup güncellemesi gibi — küçük client’ı indirir, gerisini o halleder.
+              Küçük bir kurulum dosyası indirirsiniz; uygulamayı, modelleri ve güncellemeleri o getirir.
             </p>
           </div>
 
@@ -79,7 +88,7 @@ export default function Home() {
             <div className="max-w-xl">
               <span className="chip">Özellikler</span>
               <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Klinik için tasarlandı</h2>
-              <p className="mt-3 text-muted">Bağlantıdan yapay zekâya, tek istemciden yönetilen uçtan uca terapi kontrolü.</p>
+              <p className="mt-3 text-muted">Cihaz bağlantısından yapay zekâ teşhisine kadar her şey tek uygulamada.</p>
             </div>
             <Link to="/features" className="btn-ghost self-start text-sm md:self-auto">
               Tümünü gör <ArrowRight className="h-4 w-4" />
@@ -113,11 +122,12 @@ export default function Home() {
       <section className="border-b border-border/60 bg-bg-soft/60">
         <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:items-center">
           <div>
-            <span className="chip">Kullanım profilleri</span>
-            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Herkese göre tek uygulama</h2>
+            <span className="chip">Kurulum profilleri</span>
+            <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Herkes kendi ihtiyacını kurar</h2>
             <p className="mt-3 text-muted">
-              Ev Sahibi, Veteriner ve Araştırma — client içinde seçtiğiniz profile göre uyarlanır ve
-              yalnız seçtiğiniz modeller iner. Ev kullanıcısı ağır araştırma modellerini indirmez.
+              Evcil Hayvan Sahibi, Veteriner ve Araştırma — kurulumda seçtiğiniz profile göre yalnız
+              işinize yarayan yapay zekâ modelleri iner. Evcil hayvan sahibi, ağır araştırma
+              modellerini indirmez.
             </p>
             <div className="mt-6 space-y-3">
               {MODULES.map((m) => (
@@ -139,25 +149,36 @@ export default function Home() {
 
           <div className="card p-8">
             <span className="chip">Üyelik</span>
-            <h3 className="mt-4 text-2xl font-bold">İşlem önceliğinize göre plan</h3>
-            <p className="mt-2 text-sm text-muted">AI’nın ne kadar hızlı çalışacağını seviye belirler.</p>
+            <h3 className="mt-4 text-2xl font-bold">İhtiyacınıza göre plan</h3>
+            <p className="mt-2 text-sm text-muted">Planınız, ayda kaç yapay zekâ analizi yapabileceğinizi belirler. Her analiz 1 jeton harcar.</p>
+            {/* FİYAT TEK KAYNAK + FREE_MODE (metin denetimi 2026-08-20): burada ₺990 / ₺1.990
+                KODA GÖMÜLÜYDÜ. Fiyat sayfası "test aşaması: tüm planlar şu an ücretsiz" derken bu
+                kutu fiyat gösteriyordu — iki sayfa birbirini yalanlıyordu. Sayılar artık
+                `config.PLANS`ten gelir ve ücretsiz dönemde fiyat yerine durum yazılır. */}
             <div className="mt-5 space-y-3">
-              <div className="flex items-center gap-3 rounded-lg border border-border px-4 py-3">
-                <span className="h-2 w-2 rounded-full bg-muted" />
-                <div className="flex-1">
-                  <div className="font-semibold">Pro</div>
-                  <div className="text-xs text-muted">Standart kuyruk · yoğunlukta kısa bekleme</div>
+              {PLANS.filter((p) => p.paid).map((p) => (
+                <div
+                  key={p.tier}
+                  className={
+                    p.highlight
+                      ? 'flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3'
+                      : 'flex items-center gap-3 rounded-lg border border-border px-4 py-3'
+                  }
+                >
+                  {p.highlight ? <Bolt className="h-4 w-4 text-primary" /> : <span className="h-2 w-2 rounded-full bg-muted" />}
+                  <div className="flex-1">
+                    <div className="font-semibold">{p.name}</div>
+                    <div className="text-xs text-muted">{p.jetonHakki}</div>
+                  </div>
+                  <div className="text-sm font-bold">
+                    {/* Fiyat metni TEK KAYNAKTAN (src/lib/planFiyat.ts) — burada ayrıca
+                        hesaplanınca kullandıkça-öde planı "₺0/ay" görünüyordu. */}
+                    <span className={p.priceLabel || FREE_MODE ? 'text-primary' : undefined}>
+                      {planKisaFiyat(p)}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-sm font-bold">₺990<span className="text-xs font-medium text-muted">/ay</span></div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
-                <Bolt className="h-4 w-4 text-primary" />
-                <div className="flex-1">
-                  <div className="font-semibold">Pro+ <span className="text-xs font-bold text-primary">Real-time</span></div>
-                  <div className="text-xs text-muted">Kuyruk yok · anlık AI Pro kapalı-döngü</div>
-                </div>
-                <div className="text-sm font-bold">₺1.990<span className="text-xs font-medium text-muted">/ay</span></div>
-              </div>
+              ))}
             </div>
             <Link to="/pricing" className="btn-primary mt-6 w-full">
               Planları karşılaştır <ArrowRight className="h-4 w-4" />

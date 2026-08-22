@@ -280,18 +280,9 @@ void loop() {
     sensors.update();
     network->update();
 
-    if (coil && network) {
-        if (coil->consumeSyncFallbackEvent()) {
-             network->publishEvent("fallback_log", "NTP yok, sync_all atlaniyor");
-        }
-    }
-
-    // CoilController sync wait kontrolü
-    if (coil->isWaiting() && timeManager.isSynced()) {
-        unsigned long long currentTime = timeManager.getCurrentTimeMs();
-        coil->checkSyncWait(currentTime);
-    }
-
+    /* 15. parti (sahip karari 2026-08-20): zamanlanmis-baslangic (start_at/sync_all) makinesi
+     * KALDIRILDI — depoda hicbir uretici yoktu (silinmis PyQt GUI kalintisi) ve [4.6]'nin latent
+     * kusurlarini tasiyordu. start artik her zaman HEMEN baslar. */
     coil->update();
     timeManager.update();
 
@@ -542,45 +533,15 @@ void processControlCommand(JsonDocument& doc) {
         int duty = (int)round(dutyOn);
         int duration = (int)doc["duration"].as<long>();   // SANIYE
 
-        unsigned long long target_timestamp = 0;
-        if (doc.containsKey("start_at")) {
-            if (doc["start_at"].is<unsigned long long>()) {
-                target_timestamp = doc["start_at"].as<unsigned long long>();
-            } else {
-                const char* str = doc["start_at"];
-                target_timestamp = strtoull(str, nullptr, 10);
-            }
-
-            if (target_timestamp > 0) {
-                if (timeManager.isSynced()) {
-                    unsigned long long currentTime = timeManager.getCurrentTimeMs();
-                    long waitMs = (long)(target_timestamp - currentTime);
-
-                    if (waitMs > 0 && waitMs < 10000) {
-                        LOG_PRINTF("[SYNC] Beklenecek Sure: %ld ms (Non-blocking)\n", waitMs);
-                    } else if (waitMs < 0) {
-                        LOG_PRINTLN("[SYNC] HATA: Hedef zaman gecmiste kaldi! Hemen baslatiliyor.");
-                        target_timestamp = 0;
-                    } else {
-                        LOG_PRINTLN("[SYNC] UYARI: Bekleme süresi çok uzun (>10s), hemen başlatılıyor.");
-                        target_timestamp = 0;
-                    }
-                } else {
-                    LOG_PRINTLN("[SYNC] UYARI: Zaman senkronize edilmemiş, hemen başlatılıyor.");
-                    target_timestamp = 0;
-                }
-            }
-        }
-
+        /* 15. parti: start_at ayristirmasi KALDIRILDI (ureticisiz yuzey) — start HEMEN baslar. */
         if (coil) {
             ControlCommand cmd;
             cmd.type = CMD_START;
             cmd.frequency = freq;
             cmd.dutyCycle = duty;
             cmd.durationSec = duration;
-            cmd.timestamp = target_timestamp;
             coil->handleCommand(cmd);
-            success = coil->isActive() || coil->isWaiting();
+            success = coil->isActive();
 
             if (success) {
                 LOG_PRINTF("[CMD] ✓ PWM başlatıldı: %dHz, %d%%, %dsn\n", freq, duty, duration);
@@ -596,80 +557,10 @@ void processControlCommand(JsonDocument& doc) {
             LOG_PRINTLN("[CMD] ✓ PWM durduruldu");
         }
 
-    } else if (strcmp(command, "set_params") == 0) {
-        // [INLINED VALIDATION FOR SET_PARAMS]
-        bool isValid = true;
-        static char errorMsg[96];
-        errorMsg[0] = '\0';
-
-        if (!doc.containsKey("freq") && !doc.containsKey("duty") && !doc.containsKey("duration")) {
-            isValid = false;
-            strlcpy(errorMsg, "At least one parameter required (freq/duty/duration)", sizeof(errorMsg));
-        } else {
-            if (doc.containsKey("freq")) {
-                if (!doc["freq"].is<float>() && !doc["freq"].is<int>()) {
-                    isValid = false;
-                    strlcpy(errorMsg, "freq must be numeric", sizeof(errorMsg));
-                } else {
-                    float f = doc["freq"].as<float>();   // start ile ayni: float kabul
-                    if (f < 1.0f || f > 1000.0f) { isValid = false; strlcpy(errorMsg, "freq out of range", sizeof(errorMsg)); }
-                }
-            }
-            if (isValid && doc.containsKey("duty")) {
-                float d = doc["duty"].as<float>();
-                if (d < 1.0 || d > 99.0) { isValid = false; strlcpy(errorMsg, "duty out of range", sizeof(errorMsg)); }
-            }
-            if (isValid && doc.containsKey("duration")) {
-                if (!doc["duration"].is<int>()) {
-                    isValid = false;
-                    strlcpy(errorMsg, "duration must be integer", sizeof(errorMsg));
-                } else {
-                    // SANIYE (backend sozlesmesi) — start ile ayni tavan (24 saat).
-                    long dur = doc["duration"].as<long>();
-                    if (dur < 0 || dur > 86400) { isValid = false; strlcpy(errorMsg, "duration out of range (sec)", sizeof(errorMsg)); }
-                }
-            }
-        }
-
-        if (!isValid) {
-            LOG_PRINTF("[CMD] ✗ Validation failed: %s\n", errorMsg);
-            if (strlen(command_id) > 0 && network) {
-                network->sendCommandAck(command_id, false);
-                static char errorEvent[128];
-                snprintf(errorEvent, sizeof(errorEvent), "Command validation failed: %s", errorMsg);
-                network->publishEvent("command_error", errorEvent);
-            }
-            return;
-        }
-
-        // Mevcut değerleri al veya yenileriyle güncelle
-        int freq = doc["freq"] | (coil ? coil->getStatus().frequency : 1000);
-        float dutyFloat = doc["duty"] | (coil ? coil->getStatus().dutyCycle : 50.0);
-        int duty = (int)round(dutyFloat);
-        // SANIYE: kalan sure ms -> sn (eski kod /60000 ile dakikaya ceviriyordu).
-        int duration = doc["duration"] | (coil ? (int)(coil->getStatus().remainingTime / 1000) : 0);
-
-        if (coil) {
-            ControlCommand cmd;
-            cmd.type = CMD_UPDATE_PARAMS;
-            cmd.frequency = freq;
-            cmd.dutyCycle = duty;
-            cmd.durationSec = duration;
-            coil->handleCommand(cmd);
-            success = true;
-            LOG_PRINTF("[CMD] ✓ Parametreler güncellendi: %dHz, %d%%, %dsn\n", freq, duty, duration);
-        }
-
-    } else if (strcmp(command, "sync_all") == 0) {
-        unsigned long long target_timestamp = doc["start_at"] | 0ULL;
-        if (coil && coil->isActive()) {
-            ControlCommand cmd;
-            cmd.type = CMD_SYNC_ALL;
-            cmd.timestamp = target_timestamp;
-            coil->handleCommand(cmd);
-            success = true;
-        }
-
+    /* 15. parti (sahip karari 2026-08-20): set_params + sync_all dallari KALDIRILDI —
+     * depoda uretici yoktu (backend canli ayarlamayi zaten "start" ile yapar; sync_all silinmis
+     * PyQt GUI kalintisiydi ve aktif seansta stop+start ile suresiz-tavani sifirlayabiliyordu,
+     * bkz. denetim [4.6]). Bilinmeyen komutlar asagidaki genel "Unknown command" yoluna duser. */
     } else if (strcmp(command, "SELFTEST") == 0) {
         /* D-1 tamamlayıcısı (2026-08-19): backend artık selftest'i doğru topiğe yayınlıyor
          * ama 8266'da işleyici yoktu → "Unknown command" + success=false dönüyordu (arızalı

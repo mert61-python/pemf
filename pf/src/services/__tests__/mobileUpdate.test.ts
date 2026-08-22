@@ -565,4 +565,27 @@ describe("🔴 kurulumuBaslat — paylaşım sayfası DEĞİL, paket yükleyici"
     expect(mockApkKur).not.toHaveBeenCalled();
     expect(mockPaylas).not.toHaveBeenCalled();
   });
+
+  it("KRİTİK [17. parti]: AYNI URI için EŞZAMANLI iki çağrı TEK yükleyici niyetine düşer", async () => {
+    // Adversaryal inceleme RISK'i: kapı indirme uçuştayken "Şimdilik devam et" + banttan
+    // "Güncelle" dokunuşu, aynı indirme sözüne abone İKİ kanca örneğini (kapının ölü örneği +
+    // bandınki) aynı anda kurulum kapısından geçirebiliyordu → iki ACTION_VIEW niyeti (izin
+    // yoksa izin ekranı İKİ KEZ). Uçuştaki açılış sözü URI başına paylaşılmalı.
+    let coz: (v: boolean) => void = () => {};
+    mockApkKur.mockImplementation(() => new Promise<boolean>((r) => { coz = r; }));
+
+    const s1 = kurulumuBaslat("file:///cache/ayni.apk");
+    const s2 = kurulumuBaslat("file:///cache/ayni.apk"); // uçuşta — aynı söze abone olmalı
+    coz(true);
+    expect(await s1).toBe("acildi");
+    expect(await s2).toBe("acildi");
+    expect(mockApkKur).toHaveBeenCalledTimes(1);
+  });
+
+  it("KARŞIT-KANIT [17. parti]: söz ÇÖZÜLDÜKTEN sonra yeni çağrı yükleyiciyi YİNE açar", async () => {
+    // Tekilleştirme yalnız UÇUŞTAKİ çağrıyı kapsar — "Kurulumu tekrar aç" düğmesi çalışmalı.
+    expect(await kurulumuBaslat("file:///cache/ayni.apk")).toBe("acildi");
+    expect(await kurulumuBaslat("file:///cache/ayni.apk")).toBe("acildi");
+    expect(mockApkKur).toHaveBeenCalledTimes(2);
+  });
 });

@@ -98,7 +98,6 @@ private:
     String _topicStatus;
     String _topicControl;
     String _topicEvents;
-    String _topicBroadcast; // Yeni eklendi: CMD_SYNC_ALL için yayın topiği
 
     // Async WiFi Scan for Hotspot Upgrade
     unsigned long _lastScanTime = 0;

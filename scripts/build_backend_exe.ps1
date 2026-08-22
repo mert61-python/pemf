@@ -37,6 +37,18 @@ $EmbRoot   = Split-Path -Parent $GuiRoot     # embeddable python kökü (guii'ni
 if (-not $BuildRoot) { $BuildRoot = Join-Path $GuiRoot "PEMF_BUILD" }
 Info "Build kökü: $BuildRoot"
 
+# --- 0) Sürüm senkronu (2. tur denetimi [5.4], 2026-08-20): versions.json → VERSION +
+#     docs/version_info.txt. Bu çağrı OLMADAN spec'in EXE'ye gömdüğü dosya-özellikleri sürümü
+#     DONUYORDU (üç yayın boyunca 1.9.14 kaldı — yalnız kapalı Inno kanalı yeniliyordu).
+#     build_installer.ps1:104 / build_apk.ps1:33 ile aynı desen. ---
+$SyncScript = Join-Path $GuiRoot "build_tools\sync_versions.ps1"
+if (Test-Path $SyncScript) {
+    & $SyncScript
+    if ($LASTEXITCODE -ne 0) { Die "Surum senkronizasyonu basarisiz (versions.json)." }
+} else {
+    Warn "sync_versions.ps1 yok; VERSION/version_info.txt oldugu gibi kullanilacak."
+}
+
 # --- 1. Yorumlayıcı seç: -Python > myenv (guii veya üst) > embeddable ---
 $cands = @()
 if ($Python) { $cands += $Python }
@@ -51,6 +63,15 @@ Info "Yorumlayıcı: $PY"
 # --- 2. İzolasyon (build_onedir_exe.ps1 ile aynı) ---
 $env:PYTHONNOUSERSITE = "1"
 $env:PYTHONPATH       = ""
+# ⚠️ PAKET BELİRLENİMCİLİĞİ (2026-08-21, ölçülerek bulundu). PyInstaller `base_library.zip`
+# içindeki stdlib .pyc'lerini bu süreçte derler. Marshal, `frozenset` sabitlerini KÜMENİN
+# YİNELEME SIRASINA göre yazar; o sıra da string hash'lerine, yani `PYTHONHASHSEED`e bağlıdır.
+# Sonuç: her build'de `_collections_abc.pyc` AYNI BOYUTTA ama FARKLI baytlarda çıkıyordu →
+# `base-deps.zip` sha'sı değişiyor → yayında hiçbir bağımlılık değişmediği hâlde
+# HER KLİNİK 1,4 GB'ı yeniden indiriyordu (katmanlı paketin varlık sebebini yok eder).
+# Ölçüm: aynı kaynağı rastgele tohumla 5 kez derlemek 5 farklı marshal çıktısı verdi;
+# PYTHONHASHSEED=0 ile 3/3 birebir aynı. Kilit: tests/test_paket_belirlenimciligi_tohum.py
+$env:PYTHONHASHSEED   = "0"
 
 Set-Location $GuiRoot
 

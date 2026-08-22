@@ -30,7 +30,7 @@ export function DownloadStats() {
 
   return (
     <section className="mx-auto mt-10 max-w-3xl rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-      <h2 className="text-lg font-semibold text-white">Benzersiz kullanıcı</h2>
+      <h2 className="text-lg font-semibold text-white">Kayıtlı kullanıcı</h2>
       <p className="mt-1 text-4xl font-bold text-teal-300">{s.accounts.toLocaleString('tr-TR')}</p>
       {/* ⚠️ "Kurulu cihaz TOPLAMI" BİLEREK GÖSTERİLMİYOR (2026-08-13, ölçümle):
           `get_unique_device_id()` kimliği veri kökündeki `device_id.txt`te saklar; kök silinince
@@ -45,8 +45,7 @@ export function DownloadStats() {
         </div>
       )}
       <p className="mt-4 text-xs text-white/40">
-        “Kullanıcı” e-postası doğrulanmış hesap sayısıdır. “Aktif cihaz” son 30 günde bağlanan
-        ayrı makinedir — bir kullanıcının birden fazla cihazı olabilir, bu yüzden toplanmazlar.
+        E-posta adresi doğrulanmış hesap sayısı ile son 30 günde bağlanan cihaz sayısıdır.
       </p>
     </section>
   )

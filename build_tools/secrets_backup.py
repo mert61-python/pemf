@@ -27,6 +27,7 @@ import argparse
 import base64
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -92,6 +93,48 @@ def _yukle_arsiv(yol: Path) -> dict:
     return d
 
 
+def _git_sir_korumasi() -> None:
+    """Restore SONRASI: izlenen sır dosyalarını git'in gözünden düşür (skip-worktree).
+
+    2. tur denetimi [2.2] (2026-08-20): eski restore bu adımı KULLANICIYA bırakıyordu ve bastığı
+    komut PowerShell'de ÇALIŞMAYAN bash-tarzı satır-devamlarıydı (` \\`). Adım atlanınca
+    `git add -A` GERÇEK sırları PUBLIC repoya stage'liyordu — üstelik gitleaks'in varsayılan
+    kuralları bu düşük-entropili WiFi/MQTT sınıfını yakalamıyor (ölçüldü; `.gitleaks.toml`a
+    özel kurallar da eklendi, ikinci kemer). Artık araç korumayı KENDİSİ uygular:
+      · dosya bu kökte İZLENMİYORSA (git yok / untracked) staging riski yoktur → sessiz geç;
+      · git ÇALIŞTIRILAMAZSA ya da update-index DÜŞERSE → YÜKSEK SESLE uyar + tek satırlık,
+        kabuk-bağımsız elle-komutu bas (restore'u DÜŞÜRMEZ — dosyalar yazıldı, iş bitmeli)."""
+    izlenenler = []
+    try:
+        for rel in _SW_DOSYALAR:
+            if not (GUII / rel).exists():
+                continue
+            r = subprocess.run(
+                ["git", "-C", str(GUII), "ls-files", "--error-unmatch", "--", rel],
+                capture_output=True,
+                text=True,
+            )
+            if r.returncode == 0:
+                izlenenler.append(rel)
+        if not izlenenler:
+            return
+        r = subprocess.run(
+            ["git", "-C", str(GUII), "update-index", "--skip-worktree", "--", *izlenenler],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode == 0:
+            for rel in izlenenler:
+                print(f"  [GIT] skip-worktree uygulandı: {rel}")
+            return
+    except FileNotFoundError:
+        # git PATH'te yok — kökün gerçek repo olduğu makinede EN riskli durum: aşağıda bağır.
+        izlenenler = izlenenler or list(_SW_DOSYALAR)
+    print("  [!!] GIT KORUMASI UYGULANAMADI — `git add -A` GERÇEK SIRLARI stage'leyebilir (repo PUBLIC)!")
+    print("       Aşağıdaki komutu elle çalıştırın (TEK satır, PowerShell/bash fark etmez):")
+    print("       git update-index --skip-worktree " + " ".join(izlenenler))
+
+
 def cmd_restore(args) -> int:
     d = _yukle_arsiv(Path(args.inp))
     ad2yol = {ad: yol for ad, yol, _sw in _KALEMLER}
@@ -116,14 +159,13 @@ def cmd_restore(args) -> int:
         yazilan += 1
 
     print(f"\n[OK] {yazilan} sir geri yuklendi.")
+    # 2. tur [2.2]: git korumasi artik OTOMATIK (eskiden kullaniciya birakilan adim + PowerShell'de
+    # calismayan bash-tarzi komut, atlanınca `git add -A`nin gercek sirlari stage'lemesi demekti).
+    _git_sir_korumasi()
     print("SIRADAKI ADIMLAR (yeni makinede):")
-    print("  1) Tracked sir dosyalarini git-korumasina al (add -A onlari stage'lemesin):")
-    print("     git update-index --skip-worktree \\")
-    for p in _SW_DOSYALAR:
-        print(f"       {p} \\")
-    print("  2) keystore.properties'teki storeFile yolu bu makinede DOGRU mu kontrol et")
+    print("  1) keystore.properties'teki storeFile yolu bu makinede DOGRU mu kontrol et")
     print("     (release-keystore geri yuklendiyse ~/.pemf-keys/ altina koy ya da yolu guncelle).")
-    print("  3) scripts/build_backend_exe.ps1 -SkipWeb  (paket bulut-provizyonu icerecek)")
+    print("  2) scripts/build_backend_exe.ps1 -SkipWeb  (paket bulut-provizyonu icerecek)")
     return 0
 
 

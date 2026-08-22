@@ -19,6 +19,10 @@ export interface ObsSession {
   frequency?: number;
   intensity?: number;
   durationMinutes?: number;
+  /** Denetim 2. tur [4.1]: SEANS kimliği (ControlScreen her seans başında artırır). Sıfırlama
+   *  anahtarı yalnız hasta ADI olunca aynı isimli iki hastada ("Boncuk" klinikte gerçekçi)
+   *  A'nın kaydedilmemiş notu B'nin modalında duruyor ve B'nin TIBBİ KAYDINA gidebiliyordu. */
+  obsKey?: number;
 }
 
 export function ObservationNotesModal({
@@ -61,10 +65,15 @@ export function ObservationNotesModal({
   //   · gizle→göster: `patientName` değişmez → effect ateşlemez → not KORUNUR,
   //   · açılış: modal kapalıyken `session === null` → dep `undefined→"Rex"` → SIFIRLAR,
   //   · hasta değişimi: dep'te `session?.patientName` DURUYOR → SIFIRLAR.
+  // Denetim 2. tur [4.1] (2026-08-20): dep'e SEANS kimliği (obsKey) eklendi. Yalnız isim,
+  // AYNI İSİMLİ iki hastada ayırt edemiyordu: modal `running` yüzünden gizliyken (obsSession
+  // null'a düşmeden) B'nin seansı bitince setObsSession aynı isimle YENİ nesne atar → isim-dep'i
+  // ateşlemez → A'nın notu B'nin modalında kalır ve B'nin tıbbi kaydına gidebilirdi.
+  // Aynı seansın gizle→göster'i her iki dep'i de değiştirmez → bulgu-20 koruması aynen sürer.
   useEffect(() => {
     setSelected(new Set());
     setNotes("");
-  }, [session?.patientName]);
+  }, [session?.obsKey, session?.patientName]);
 
   const save = async () => {
     setSaving(true);

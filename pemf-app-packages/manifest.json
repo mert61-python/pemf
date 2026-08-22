@@ -1,26 +1,26 @@
 {
   "schema": 2,
-  "version": "1.9.17",
-  "tag": "client-app-v1.9.17",
+  "version": "1.9.18",
+  "tag": "client-app-v1.9.18",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.17/base.zip",
-      "sha256": "5cdb86380a55797984460cb628e5b4c0069e2ebf08093c61bd48923112fb98b8",
-      "size": 1533331753,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.18/base.zip",
+      "sha256": "f4113b3ef753c8634ae983357955959df9fbffa437d7d11d12a91bf1a28f14a4",
+      "size": 1533340912,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.17/base-app.zip",
-        "sha256": "7a0de0cdcf38c3eaf1594d91d5a5ffe2dac96df1a11a13ca7747ad896a8f143b",
-        "size": 71212128,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.18/base-app.zip",
+        "sha256": "c780ef1130bf4da01cc61ec609f1a9b0e3e9d3ac36743283eb101c33036a43e8",
+        "size": 71221287,
         "kind": "zip"
       },
       "deps": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.16/base-deps.zip",
-        "sha256": "d22c35a91d055eb60cdd47b320b401397663875e0caca560a57997de322ad7c6",
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.18/base-deps.zip",
+        "sha256": "69dc57a16dabc199eeb2a9bfc2dea848c5c2f15053d5b7d47701b9d858abc210",
         "size": 1462119647,
         "kind": "zip"
       },
@@ -68,29 +68,29 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.17/base.zip",
-    "sha256": "5cdb86380a55797984460cb628e5b4c0069e2ebf08093c61bd48923112fb98b8",
-    "size": 1533331753,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.18/base.zip",
+    "sha256": "f4113b3ef753c8634ae983357955959df9fbffa437d7d11d12a91bf1a28f14a4",
+    "size": 1533340912,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.32",
-    "url": "https://pemf-vet-web.vercel.app/",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMFVetClient-Setup-1.9.32.exe",
-    "sha256": "64fd12eb2e8cce1ba5bad421338eb98f9e280aa932fc21f3ceaff24666836302",
-    "size": 2962318,
+    "version": "1.9.33",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.33/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.33/PEMFVetClient-Setup.exe",
+    "sha256": "09728768a9f8bdf18b5e92f8fe92e9a3edc6ea6385e8a5214cc139f9877b0186",
+    "size": 2965165,
     "rollout": 100
   },
   "mobile": {
     "android": {
-      "version": "2.3.18",
-      "versionCode": 25,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMF_Vet_Mobil-2.3.18.apk",
-      "sha256": "9593a194e13536afa84901b32a918421434bd9e34ec6b6490311cd8c039b458b",
-      "size": 128417239,
+      "version": "2.3.19",
+      "versionCode": 26,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.33/PEMF_Vet_Mobil.apk",
+      "sha256": "5668bf144098e42a642cb95a09b089671143830dfe8e1a808aed8ef0196856e2",
+      "size": 128424251,
       "notes": "Bakim surumu: uygulama ici guncelleme akisi dogrulandi; islevsel degisiklik yok."
     }
   }

@@ -82,6 +82,18 @@ static portMUX_TYPE s_mux   = portMUX_INITIALIZER_UNLOCKED;
  * ============================================================================ */
 static void IRAM_ATTR syncPulseISR() {
     portENTER_CRITICAL_ISR(&s_mux);
+    /* 2. tur denetimi [4.3] (2026-08-20): PWM PASİFKEN darbe SAYILMAZ ve LATCH BİRİKMEZ.
+     * ddsTimerISR pasifken tick'i İLERLETMEZ (s_natural_wrap üretilemez) → s_tick donmuş değeri
+     * kilit penceresindeyse (örn. seans hizalı bittiği için ≈0) boşta gelen HER PB1 darbesi
+     * "erken kilit" sayılıp SYNC_MISMATCH_STREAK darbede sync'i kapatıyordu; AYNI frekanslı
+     * sonraki seans (AI Pro hep 1 Hz → freqChanged=false → latch BİLİNÇLİ korunur) faz
+     * senkronsuz koşuyordu — sessiz derece kaybı. Boşta hizalamanın anlamı da yok (çıkış
+     * kapalı) ve sayaçlara dokunmamak tezgâh tanılamasını boşta-darbe kirliliğinden korur.
+     * Kilit: tests/test_s3_sync_dc_yapisma.py ([4.3] bölümü — model + yapısal kapı). */
+    if (!s_active) {
+        portEXIT_CRITICAL_ISR(&s_mux);
+        return;
+    }
     if (s_sync_disabled) {          /* HG-3: uyumsuzluk saptandı → 8266 gibi tek faz, sync yok */
         portEXIT_CRITICAL_ISR(&s_mux);
         return;
@@ -173,10 +185,7 @@ CoilController::CoilController(SensorManager* sensors) {
     _hasDuration = false;
     _durationSec = 0;
     _startTimestamp = 0;
-    _syncTargetTime = 0;
-    _waitingForSync = false;
     _lastSaveTimeMs = 0;
-    _syncFallbackPendingEvent = false;
     _isSelfTesting = false;
     _selfTestStartTime = 0;
     _selfTestPassed = false;
@@ -222,30 +231,8 @@ void CoilController::_setupTimerISR() {
 
 /* ---- Ana döngü (Core 1, 5 Hz) ---- */
 void CoilController::process() {
-    /* start_at bekleme: backend BUGÜN start_at GÖNDERMİYOR (ölçüldü — servers/
-     * altında anahtar hiç yok); alan ileriye dönük. NTP hazırsa hedefe kadar
-     * bekle, değilse fallback olayıyla hemen başlat. */
-    if (_waitingForSync) {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        unsigned long long simdiMs =
-            (unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
-        bool ntpVar = (tv.tv_sec > 1600000000L);  /* ~2020 sonrası = senkron */
-
-        if (!ntpVar) {
-            _waitingForSync = false;
-            _syncFallbackPendingEvent = true;
-            _beginOutput(simdiMs);
-        } else if (simdiMs >= _syncTargetTime || (_syncTargetTime - simdiMs) > 10000ULL) {
-            /* geçmişte kaldı VEYA >10 sn ileride (şüpheli) → hemen başlat */
-            if ((_syncTargetTime > simdiMs) && (_syncTargetTime - simdiMs) > 10000ULL) {
-                _syncFallbackPendingEvent = true;
-            }
-            _waitingForSync = false;
-            _beginOutput(simdiMs);
-        }
-        return;  /* beklerken süre/termal işlemez — çıkış zaten kapalı */
-    }
+    /* 15. parti (sahip karari 2026-08-20): start_at bekleme blogu KALDIRILDI — depoda uretici
+     * yoktu (silinmis PyQt kalintisi); START her zaman HEMEN baslar (_beginOutput). */
 
     /* Süre bekçisi (SANİYE sözleşmesi; 0 = süresiz).
      * ⚠️ WRAP-GÜVENLİ karşılaştırma (review, 2026-08-19): eski `millis() >= _endTime`,
@@ -281,8 +268,9 @@ void CoilController::process() {
         _selfTestCompletedPendingEvent = true;
     }
 
-    /* Periyodik NVS yedeği (kalan süre doğru sürsün diye) — 30 sn'de bir. */
-    if (_active && (millis() - _lastSaveTimeMs) >= 30000UL) {
+    /* Periyodik NVS yedeği (kalan süre doğru sürsün diye) — NVS_KAYIT_ARALIGI_MS'te bir.
+     * Sabit, resume TABANI ile TEK KAYNAK (SharedDefs.h): aralık değişirse taban da değişir. */
+    if (_active && (millis() - _lastSaveTimeMs) >= NVS_KAYIT_ARALIGI_MS) {
         saveState();
     }
 }
@@ -337,11 +325,8 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
             _phase     = ((cmd.phase % 360) + 360) % 360;
             _durationSec = constrain(cmd.durationSec, 0, 86400);
 
-            if (cmd.timestamp > 0) {
-                _syncTargetTime = cmd.timestamp;
-                _waitingForSync = true;
-                LOG_PRINTLN("[PWM] start_at bekleniyor (process() baslatacak)");
-            } else {
+            /* 15. parti: start_at bekleme dali kaldirildi — START her zaman HEMEN baslar. */
+            {
                 struct timeval tv; gettimeofday(&tv, NULL);
                 _beginOutput((unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL);
             }
@@ -349,7 +334,6 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
         }
 
         case CMD_STOP:
-            _waitingForSync = false;
             _stopPWM();
             forceSaveState();
             return true;
@@ -358,7 +342,12 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
             if (_thermalLock) return false;
             if (cmd.frequency > 0) _frequency = constrain(cmd.frequency, 1, 1000);
             if (cmd.dutyCycle > 0) _dutyCycle = constrain(cmd.dutyCycle, 1, MAX_DUTY_CYCLE);
-            _phase = ((cmd.phase % 360) + 360) % 360;
+            /* 2. tur [5.3] (2026-08-20): faz da freq/duty gibi "BELIRTILDIYSE degistir" —
+             * parse katmani anahtar yokken PHASE_BELIRTILMEDI doldurur; eski kosulsuz atama,
+             * fazsiz set_params'in cok-bobinli faz desenini sessizce sifirlamasi demekti
+             * (status faz raporlamadigi icin gorunmezdi). Parse acik degerleri 0..359'a
+             * zaten sarar; buradaki sarma savunma-derinligi. */
+            if (cmd.phase != PHASE_BELIRTILMEDI) _phase = ((cmd.phase % 360) + 360) % 360;
             if (cmd.durationSec > 0) {
                 _durationSec = constrain(cmd.durationSec, 0, 86400);
                 if (_active) {
@@ -395,22 +384,26 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
             return true;
 
         case CMD_SYNC_TIME:
-        case CMD_SYNC_ALL:
         default:
             return true;  /* zaman senkronu Network görevinin işi; sessiz kabul */
     }
 }
 
 /* ---- Çıkışı gerçekten başlat ---- */
-void CoilController::_beginOutput(unsigned long long epochMs) {
+void CoilController::_beginOutput(unsigned long long epochMs, unsigned long devralinanSuresizMs) {
     _updatePWM(_frequency, _dutyCycle, _phase);
     _active = true;
     _startTime = millis();
     _duration = (unsigned long)_durationSec * 1000UL;
     _hasDuration = (_duration > 0);
-    /* Taze başlangıç = kümülatif süresiz-tavan penceresi sıfırlanır (operatör eylemi).
-     * NVS RESUME bunu loadState'te, _beginOutput'tan SONRA geri yükler. */
-    _suresizGecenMs = 0;
+    /* 2. tur denetimi [1.3] (2026-08-20): taze başlangıçta (devralinanSuresizMs=0) kümülatif
+     * süresiz-tavan penceresi sıfırlanır (operatör eylemi); NVS RESUME birikimi PARAMETREYLE
+     * geçirir. Bu atama aşağıdaki forceSaveState'ten ÖNCE olmak ZORUNDA: eski düzen (loadState
+     * çağrıdan SONRA geri yüklüyordu) içerideki kaydın NVS'e elapsedMs≈0 yazmasına yol açıyor,
+     * resume'dan sonraki 30 sn içindeki ikinci bir çökme birikimi SİLİYORDU — <30 sn periyotlu
+     * crash-loop 7200 sn tavanını deliyordu (b7b842c'nin kapatmayı amaçladığı deliğin kendisi).
+     * Kilit: tests/test_plan_a_deadman.py (yorum-soyulmuş kaynakta sıra denetlenir). */
+    _suresizGecenMs = devralinanSuresizMs;
     _startTimestamp = epochMs;
     if (_sensors) _sensors->setPWMActive(true);   /* akım okuma AC-RMS moduna geçsin */
     forceSaveState();
@@ -465,7 +458,6 @@ void CoilController::_stopPWM() {
     digitalWrite(PIN_COIL_PWM_A, LOW);
     digitalWrite(PIN_COIL_PWM_B, LOW);
     _active = false;
-    _waitingForSync = false;
     if (_sensors) _sensors->setPWMActive(false);
 }
 
@@ -489,11 +481,6 @@ PWMState CoilController::getState() {
     return st;
 }
 
-bool CoilController::consumeSyncFallbackEvent() {
-    if (_syncFallbackPendingEvent) { _syncFallbackPendingEvent = false; return true; }
-    return false;
-}
-
 bool CoilController::consumeSelfTestEvent(bool &passed) {
     if (_selfTestCompletedPendingEvent) {
         _selfTestCompletedPendingEvent = false;
@@ -501,6 +488,13 @@ bool CoilController::consumeSelfTestEvent(bool &passed) {
         return true;
     }
     return false;
+}
+
+/* [5.12]: statusQueue dolu → tuketilmis olaylari geri kur (bkz. CoilController.h). */
+void CoilController::restoreThermalStopEvent() { _thermalStopPendingEvent = true; }
+void CoilController::restoreSelfTestEvent(bool passed) {
+    _selfTestPassed = passed;
+    _selfTestCompletedPendingEvent = true;
 }
 
 uint32_t CoilController::syncIgnoredCount() { return s_sync_ignored; }
@@ -569,8 +563,15 @@ void CoilController::loadState() {
     _phase = ((s.phase % 360) + 360) % 360;
 
     if (s.durationSec > 0) {
-        long kalanMs = (long)s.durationSec * 1000L - (long)s.elapsedMs;
-        if (kalanMs <= 0) { LOG_PRINTLN("[PWM] NVS: sure zaten dolmus"); return; }
+        /* SURELI crash-loop IKIZI (sahip onayi 2026-08-20): suresiz taban ([1.3]) SURELI dala da
+         * uygulanir — devralinan elapsedMs'e BIR KAYIT ARALIGI eklenir. <aralik periyotlu cok-diril
+         * dongusunde periyodik kayit hic kosamaz; taban olmadan kalan sure HIC azalmaz ve 20 dk'lik
+         * seans dongude SURESIZ surerdi. Asagidaki _beginOutput→forceSaveState kalan sureyi
+         * (durationSec=KALAN, elapsedMs≈0) HEMEN kalicilastirdigindan taban cevrim basina birikir.
+         * Yon FAIL-SAFE: resume basina en fazla bir aralik ERKEN bitis; taban dahil sure dolmussa
+         * resume HIC yapilmaz. Kilit: tests/test_sureli_crashloop_ikizi.py */
+        long kalanMs = (long)s.durationSec * 1000L - (long)(s.elapsedMs + NVS_KAYIT_ARALIGI_MS);
+        if (kalanMs <= 0) { LOG_PRINTLN("[PWM] NVS: sure dolmus (resume tabani dahil)"); return; }
         _durationSec = (int)(kalanMs / 1000L);
         if (_durationSec < 1) _durationSec = 1;
     } else {
@@ -578,12 +579,19 @@ void CoilController::loadState() {
     }
 
     struct timeval tv; gettimeofday(&tv, NULL);
-    _beginOutput((unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL);
-    if (s.durationSec == 0) {
-        /* KÜMÜLATİF TAVAN (review, crash-loop): süresiz modda geçen süre devralınır —
-         * <2 saatte bir çöküp dirilen cihaz 7200 sn penceresini tazeleyemez. */
-        _suresizGecenMs = s.elapsedMs;
-    }
+    /* KÜMÜLATİF TAVAN (2. tur denetimi [1.3], 2026-08-20): süresiz modda devralınan birikim
+     * + BİR KAYIT ARALIĞI tabanı _beginOutput'a PARAMETRE olarak girer:
+     *   (a) içerideki forceSaveState NVS'e 0 değil DOĞRU kümülatifi yazar — eski düzen
+     *       (atama çağrıdan SONRAydı) resume+30 sn içindeki ikinci çökmede birikimi siliyordu;
+     *   (b) TABAN (NVS_KAYIT_ARALIGI_MS), <aralık periyotlu çök-diril döngüsünde (periyodik
+     *       kayıt hiç koşamaz) kümülatifin her çevrimde en az bir aralık büyümesini garanti
+     *       eder → 7200 sn tavan sıfırdan başlayan hızlı crash-loop'ta da delinemez.
+     * Yön FAIL-SAFE: resume başına en fazla bir aralık ERKEN durma; süreli (durationSec>0)
+     * resume'a taban UYGULANMAZ (kalan-süre hesabı değişmedi). */
+    _beginOutput(
+        (unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL,
+        (s.durationSec == 0) ? (s.elapsedMs + NVS_KAYIT_ARALIGI_MS) : 0UL
+    );
     LOG_PRINTF("[PWM] NVS'den devam: %dHz duty%%%d faz%d kalan=%dsn\n",
                _frequency, _dutyCycle, _phase, _durationSec);
 }

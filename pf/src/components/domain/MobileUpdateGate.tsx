@@ -40,7 +40,7 @@ import {
 import { Download } from "lucide-react-native";
 
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
-import { guncellemeVarMi, guncellemeyiAtla, type MobilSurum } from "@/services/mobileUpdate";
+import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 
 /** Uygulama ikonu — AuthScreen/AppShell ile AYNI kaynak (tek görsel kimlik). */
@@ -78,7 +78,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const bittiRef = useRef(false);
 
-  const { oran, hata, bilgi, kurulumAcildi, guncelle } = useApkGuncelleme(surum);
+  const { oran, hata, bilgi, kurulumAcildi, paketHazir, guncelle } = useApkGuncelleme(surum);
 
   /** Kapıyı aç ve BİR DAHA kapanmayacağını işaretle (geç gelen sonuç ekranı geri almasın). */
   const kapiyiAc = useCallback(() => {
@@ -114,12 +114,17 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   }, [kapiyiAc]);
 
   const simdilikDevam = useCallback(() => {
-    // ⚠️ Erteleme yalnız İNDİRME BAŞLAMADIYSA işaretlenir. Kullanıcı indirmeyi başlatıp
-    // "devam et" derse bandı susturmak, yarım inen paketi kurmanın tek yolunu da kapatırdı;
-    // bant orada duracak ki tek dokunuşla kaldığı yerden sürsün.
-    if (surum && oran === null) guncellemeyiAtla(surum.versionCode);
+    // ⚠️ Bant-susturma yalnız HİÇBİR ŞEY BAŞLAMADIYSA işaretlenir. İndirme sürüyor ya da paket
+    // tam inmişse ([5.7c]: oran===null "hiç başlamadı"yı "tamamlandı"dan ayıramazdı) bandı
+    // susturmak, paketi kurmanın tek yolunu da kapatırdı; bant durur ki tek dokunuşla sürsün.
+    // [5.7a] O iki durumda ise KURULUM-ERTELEMESİ konur: uçuşta kalan guncelle() indirme
+    // bitince yükleyiciyi kullanıcının o anki işinin üstüne SORMADAN açamaz.
+    if (surum) {
+      if (oran === null && !paketHazir) guncellemeyiAtla(surum.versionCode);
+      else kurulumunuErtele(surum.versionCode);
+    }
     kapiyiAc();
-  }, [surum, oran, kapiyiAc]);
+  }, [surum, oran, paketHazir, kapiyiAc]);
 
   if (durum === "acik") return <>{children}</>;
 

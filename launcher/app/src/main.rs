@@ -478,6 +478,8 @@ async fn install_and_launch(
     let root2 = root.clone();
     let store = state.progress.clone();
     let ctrl = state.control.clone();
+    // [5.10] İptal dalı, arka plan ön-indirmesinin .part'ını koruyabilsin diye (aşağıda).
+    let manifest_raw_iptal = manifest_raw.clone();
     let result: Result<InstallOutcome, String> = tauri::async_runtime::spawn_blocking(move || {
         let mut on = progress_reporter(app2, store);
         let control = || match ctrl.load(Ordering::Relaxed) {
@@ -516,10 +518,15 @@ async fn install_and_launch(
         // İptal: yarım .part + pending SİLİNİR → seçim ekranına dön.
         Ok(InstallOutcome::Cancelled) => {
             install::clear_pending(&root);
-            // `&[]` = davranis BUGUNKUYLE AYNI: bu iptal, indirdigi paketlerin SAHIBIDIR
-            // (net.rs aktif `.part`i zaten kendisi siler). Yabanci `.part` sorunu
-            // `discard_pending` yolundaydi (bkz. asagi).
-            install::clear_partials(&root, &[]);
+            // [5.10] (sahip onayı 2026-08-20): eski `&[]` yorumu "yabancı .part sorunu
+            // discard_pending yolundaydı" diyordu — EŞZAMANLILIKTA yanlış: ön-indirme kilidi
+            // yalnız yoklayıp BIRAKIR ve kilitsiz indirir; kurulumdan ÖNCE başlamış bir arka
+            // plan ön-indirmesi bu iptal sırasında hâlâ yazıyor olabilir. `&[]` onun ≤1,4 GB
+            // .part'ını da siliyordu (FILE_SHARE_DELETE silmeyi kabul eder, sonraki rename
+            // düşer) — discard_pending'in 2026-08-17'de kapattığı sınıfın aynısı. Aynı koruma:
+            // güncel PLANIN .part'ları korunur; bu iptalin kendi aktif .part'ını net.rs zaten
+            // siler, kurulu-olmayan cihazda plan boş → tümü silinir (ilk-kurulum sözleşmesi).
+            install::clear_partials(&root, &flow::plan_part_paths(&manifest_raw_iptal, &root));
             Ok(serde_json::json!({ "status": "cancelled" }))
         }
         Err(e) => Err(e),

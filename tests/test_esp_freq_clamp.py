@@ -56,6 +56,75 @@ def test_KRITIK_esp_ve_stm_normalize_AYRISIR():
     assert normalize_esp_frequency_hz(float("inf")) == 100.0
 
 
+# ── 2. TUR DENETİMİ [4.4] (2026-08-20): SEANS YOLU DA CLAMP'LENİR ────────────────────────────
+# D-3 düzeltmesi (ffd4406) üç ham yayın sitesinden yalnız İKİSİNİ (tek-bobin + batch) kapatmıştı;
+# `/api/session/start`ın ESP dalı ham `payload.frequency` göndermeye devam ediyordu ve doküman
+# yine de D-3'ü "✅ düzeltildi" işaretliyordu — bu deponun bir kez yandığı "kısmi düzeltme"
+# deseninin ta kendisi. Aşağıdaki testler DAVRANIŞSAL: gerçek endpoint koşar, ESP'ye GİDEN
+# MQTT payload'u ölçülür (eski KARSIT_KANIT yalnız kaynakta substring arıyordu — üç siteden
+# HERHANGİ biri normalize kullansa geçiyordu; bu boşluğu yapısal olarak göremezdi).
+
+
+def _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency: float):
+    import time as _t
+
+    from fastapi.testclient import TestClient
+
+    import servers.api_server as api
+
+    yayinlar: list = []
+    monkeypatch.setattr(api, "_mqtt_publish", lambda t, p=None, *a, **k: yayinlar.append((t, dict(p or {}))) or True)
+    monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
+    monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
+    monkeypatch.setattr(api.state, "hardware", None)
+
+    with api._session_lock:
+        eski_sess = dict(api._active_session)
+    try:
+        r = TestClient(api.app).post(
+            "/api/session/start",
+            json={
+                "mode": "Manuel",
+                "frequency": frequency,
+                "duty": 25,
+                "intensity": 0,
+                "duration_minutes": 5,
+                "coil_ids": [6],
+            },
+        )
+        assert r.status_code == 200, f"seans başlatılamadı: {r.status_code} {r.text}"
+        # ESP publish'leri ARKA PLAN thread'inde gider (bilinçli: broker yavaşsa start bekletilmez)
+        # → yayını kısa bir pencerede bekle.
+        for _ in range(100):
+            eslesen = [p for t, p in yayinlar if t == "pemf/coil/6/control" and p.get("command") == "start"]
+            if eslesen:
+                return eslesen[0]
+            _t.sleep(0.02)
+        raise AssertionError(f"seans ESP start yayını görülmedi: {yayinlar!r}")
+    finally:
+        with api._session_lock:
+            api._active_session.clear()
+            api._active_session.update(eski_sess)
+        # start'ın açtığı per-bobin run kaydını kapat (modül durumu sonraki testlere sızmasın)
+        try:
+            api._finish_coil_run(6)
+        except Exception:
+            pass
+
+
+def test_KRITIK_seans_yolu_esp_freqini_1000e_clampler(monkeypatch):
+    payload = _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency=5000)
+    assert payload.get("freq") == 1000.0, (
+        f"seans yolu ESP'ye HAM freq gönderdi: {payload!r} — STM bobinleri 5000 Hz'de, ESP'ler "
+        "sessizce 1000'de → karma dizide tutarsız doz (D-3'ün üçüncü yolu, bulgu [4.4])"
+    )
+
+
+def test_KARSIT_KANIT_seans_yolu_tipik_frekansa_DOKUNMAZ(monkeypatch):
+    payload = _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency=100)
+    assert payload.get("freq") == 100.0, f"tipik 100 Hz değişti: {payload!r}"
+
+
 def test_KARSIT_KANIT_manuel_esp_yolu_normalize_KULLANIR():
     """Regresyon: manuel /api/coil control ESP dalı normalize_esp_frequency_hz çağırıyor mu."""
     import inspect

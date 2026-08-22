@@ -252,14 +252,52 @@ fn temiz_yeniden_indirilebilir(control: &dyn Fn() -> net::Control) -> bool {
 ///
 /// Sıra ÖNEMLİ: önce ölü önbelleği temizle (yer aç), SONRA karar ver — aksi hâlde eski
 /// sürümlerin kalıntısı yüzünden gereksiz yere "yer yok" derdik.
+/// [Onar/önbellek çelişkisi — sahip onayı 2026-08-20] Bu cihazla İLGİLİ güncel-manifest paket
+/// adları: platformun katmanları (deps+app) ya da base runtime'ı + KURULU profillerin modelleri.
+/// Ölü-önbellek temizliği bunları da korur. Üretim URL'leri paket başına SABİTTİR (assetler aynı
+/// etikete --clobber ile yüklenir) → bu adlar eski ve yeni sürümün AYNI önbellek adıdır; temizlik
+/// böylece yalnız GERÇEKTEN ölü (manifestten düşmüş / yeniden adlanmış) girdileri siler. Eski
+/// koruma listesi yalnız o işlemin paket kümesiydi: app-only bir oto-güncelleme geçerli deps.zip'i
+/// "ölü" diye siliyor, "Onar" 20+ dk indirmeye dönüyor ve UI'ın "indirilenler önbellekten gelir,
+/// yeniden İNMEZ" vaadi (ProfileRecordUnreadable metni dahil) boşa çıkıyordu. eMMC disk-kazanım
+/// özelliği DURUYOR — yalnız canlı paketler kapsam dışına çıktı.
+pub(crate) fn cihazin_guncel_paket_adlari(
+    manifest: &Manifest,
+    install_root: &Path,
+    cache: &Path,
+) -> Vec<String> {
+    let mut paketler: Vec<(&crate::Package, String)> = Vec::new();
+    if let Some(l) = manifest.layers_for_current_platform() {
+        paketler.push((&l.deps, "deps".to_string()));
+        paketler.push((&l.app, "app".to_string()));
+    } else if let Ok(p) = manifest.runtime_for_current_platform() {
+        paketler.push((p, "base".to_string()));
+    }
+    for ad in install::read_installed_profiles(install_root) {
+        if let Ok(pkg) = manifest.model_package(&ad) {
+            paketler.push((pkg, ad.clone()));
+        }
+    }
+    paketler
+        .into_iter()
+        .filter_map(|(pkg, etiket)| {
+            cache_path_for(pkg, cache, &etiket)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(String::from)
+        })
+        .collect()
+}
+
 pub(crate) fn disk_kapisi(
     gerekli: &[(&crate::Package, String)],
     install_root: &Path,
     cache: &Path,
     on: &mut dyn FnMut(Progress),
     kurulum_da_yapilacak: bool,
+    ayrica_koru: &[String],
 ) -> Result<(), FlowError> {
-    let korunacak: Vec<String> = gerekli
+    let mut korunacak: Vec<String> = gerekli
         .iter()
         .filter_map(|(pkg, etiket)| {
             cache_path_for(pkg, cache, etiket)
@@ -268,6 +306,8 @@ pub(crate) fn disk_kapisi(
                 .map(|s| s.to_string())
         })
         .collect();
+    // [Onar/önbellek çelişkisi]: cihazın güncel paketleri de korunur — bkz. cihazin_guncel_paket_adlari.
+    korunacak.extend(ayrica_koru.iter().cloned());
     let silinen = crate::disk::olu_onbellek_temizle(cache, &korunacak);
     if silinen > 0 {
         on(Progress::Extracting {
@@ -377,7 +417,8 @@ pub fn install_profiles(
         for (ad, pkg) in &model_pkgs {
             gerekli.push((pkg, ad.to_string()));
         }
-        disk_kapisi(&gerekli, install_root, &cache, on, true)?;
+        let koru = cihazin_guncel_paket_adlari(&manifest, install_root, &cache);
+        disk_kapisi(&gerekli, install_root, &cache, on, true, &koru)?;
     }
 
     // #110: açılım bütçesi TÜM kurulum boyunca PAYLAŞILIR (base + profiller).
@@ -690,7 +731,18 @@ pub fn guncellemeyi_geri_al(install_root: &Path, b: &GeriAlmaBilgisi) -> Result<
             if rt.exists() {
                 let _ = fs::rename(&rt, &bozuk);
             }
-            fs::rename(&eski, &rt)?;
+            if let Err(hata) = fs::rename(&eski, &rt) {
+                // 2. tur denetimi [3.1] alt-durumu (2026-08-20): eski→rt DÜŞTÜ (kilitli dosya /
+                // AV taraması runtime.old içinde tutamaç tutuyor) ve canlı ağaç az önce
+                // runtime.bozuk'a alındı → kurulum o oturum boyunca HİÇ runtime dizinsiz kalırdı
+                // (cihaz açılamaz; yarim_takasi_kurtar ancak SONRAKİ açılışta ve koşullu).
+                // Doğrulanmamış-yeni'yi geri koy: çalışan-bilinmeyen > hiç yok. Hata çağırana
+                // AYNEN çıkar; çağıran (aşağıdaki yükseltme) operatörü açıkça uyarır.
+                if !rt.exists() && bozuk.is_dir() {
+                    let _ = fs::rename(&bozuk, &rt);
+                }
+                return Err(hata.into());
+            }
             let _ = fs::remove_dir_all(&bozuk);
         }
     } else if b.app_yedegi {
@@ -903,7 +955,8 @@ pub fn prefetch_updates(
     // Bulgu 2 (denetim 2026-08-16): ARKA PLAN indirmesi korumasızdı — 1,5 GB'ı gözetimsiz
     // indirip diski doldurabiliyordu ve hata kullanıcıya HİÇ görünmüyordu. Yalnız indirme
     // yapıldığı için `kurulum_da_yapilacak = false` (zip kadar yer yeter, açma yok).
-    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, false)?;
+    let koru = cihazin_guncel_paket_adlari(&manifest, install_root, &cache);
+    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, false, &koru)?;
     if let Some(l) = manifest.layers_for_current_platform() {
         if plan.deps {
             ensure_package(&l.deps, &cache, "deps", on, control)?;
@@ -968,7 +1021,8 @@ pub fn update_installed(
     // kullanıcının izlediği ilk kuruluma konmuştu. Burası gözetimsiz koşar; alan yetmezse
     // güncelleme sessizce başarısız olur ve ölü önbellek hiç geri kazanılmaz.
     // Burada AÇMA da yapılacak → 2× yer + zaten önbellektekilerin açılımı hesaplanır.
-    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, true)?;
+    let koru = cihazin_guncel_paket_adlari(&manifest, install_root, &cache);
+    disk_kapisi(&plan_paketleri(&manifest, &plan), install_root, &cache, on, true, &koru)?;
     let mut extract_budget: u64 = 0;
 
     // ── KATMANLI YOL ────────────────────────────────────────────────────────────────────────
@@ -1066,7 +1120,22 @@ pub fn update_installed(
     // şey kayıt değil, `guncellemeyi_geri_al` ÇAĞRISIydı.
     if let Err(e) = profilleri_yenile(&manifest, &plan, install_root, &cache, &mut extract_budget, on, control) {
         if geri.bir_sey_yapildi() {
-            let _ = guncellemeyi_geri_al(install_root, &geri);
+            // 2. tur denetimi [3.1] (2026-08-20): geri almanın SONUCU artık YUTULMAZ. Eski hâli
+            // `let _ =` idi — geri alma düşerse (kilitli dosya/AV/zehirli artık) çağırana yalnız
+            // profil hatası/iptal gidiyordu: UI "iptal edildi" derken cihaz DOĞRULANMAMIŞ yeni
+            // sürümde kalıyor ve runtime.old bir SONRAKİ turda atomik_takas tarafından tüketilip
+            // son-bilinen-çalışan yok oluyordu. İptal bile olsa geri alma düştüyse sonuç nötr
+            // DEĞİLDİR → açık, yükseltilmiş hata dön (main.rs bunu kırmızı hata olarak gösterir;
+            // "cancelled" maskesi takılmaz). Kilit: upgrade_drill.rs TATBİKAT 5.
+            if let Err(g) = guncellemeyi_geri_al(install_root, &geri) {
+                return Err(FlowError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "guncelleme GERI ALINAMADI ({g}) — cihaz DOGRULANMAMIS yeni surumde \
+                         olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {e})"
+                    ),
+                )));
+            }
         }
         return Err(e);
     }
@@ -1516,11 +1585,11 @@ mod tests {
         let mut on = |_: Progress| {};
 
         assert!(
-            disk_kapisi(&gerekli, d.path(), &cache, &mut on, false).is_ok(),
+            disk_kapisi(&gerekli, d.path(), &cache, &mut on, false, &[]).is_ok(),
             "on-indirme (1x) sigmasi gerekirken reddedildi -> arka plan indirmesi hic calismaz"
         );
         assert!(
-            disk_kapisi(&gerekli, d.path(), &cache, &mut on, true).is_err(),
+            disk_kapisi(&gerekli, d.path(), &cache, &mut on, true, &[]).is_err(),
             "kurulum (2x) sigmamasi gerekirken kabul edildi -> acilirken disk dolar"
         );
     }
@@ -1546,6 +1615,117 @@ mod tests {
         // Kurulum disk hatasıyla düşecek — ama temizlik ONDAN ÖNCE yapılmış olmalı.
         let _ = install_profiles(&man, &[], root, &mut on, &|| net::Control::Continue);
         assert!(!eski.exists(), "olu onbellek temizlenmedi — LattePanda'da disk dolar");
+    }
+
+    /// 🔴 [Onar/önbellek çelişkisi — sahip onayı 2026-08-20]: temizlik yalnız O İŞLEMİN paket
+    /// kümesini koruyordu; KURULU ama bu işlemde seçilmemiş profilin geçerli zip'i "ölü" sayılıp
+    /// siliniyordu → "Onar" 20+ dk indirmeye dönüyor, UI'ın "indirilenler önbellekten gelir,
+    /// yeniden İNMEZ" vaadi (ProfileRecordUnreadable metni dahil) boşa çıkıyordu.
+    #[test]
+    fn KRITIK_onar_celiskisi_kurulu_profil_paketi_onbellekte_KORUNUR() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let cache = install::cache_dir(root);
+        std::fs::create_dir_all(&cache).unwrap();
+        // Kurulu profil kaydı: "vet" kurulu — ama bu işlem yalnız base kuruyor (selected=[]).
+        std::fs::write(root.join("installed_profiles.json"), r#"["vet"]"#).unwrap();
+        // vet.zip önbellekte GEÇERLİ duruyor (adı güncel manifestin model URL'sinden).
+        let vet = cache.join("vet.zip");
+        std::fs::write(&vet, vec![1u8; 128]).unwrap();
+        // Manifestten DÜŞMÜŞ gerçek ölü girdi — özellik korunuyor mu (karşıt-kanıt)?
+        let olu = cache.join("ESKI-SURUM-base.zip");
+        std::fs::write(&olu, vec![0u8; 4096]).unwrap();
+
+        let man = format!(
+            concat!(r#"{{"schema":2,"version":"9.9.9","runtimes":{{"{plat}":"#,
+                    r#"{{"url":"https://example.invalid/base.zip","sha256":"{sha}","#,
+                    r#""size":9000000000000,"kind":"zip"}}}},"models":{{"vet":"#,
+                    r#"{{"url":"https://example.invalid/vet.zip","sha256":"{sha}","#,
+                    r#""size":1,"kind":"zip"}}}}}}"#),
+            plat = crate::platform::current(), sha = "a".repeat(64));
+
+        let mut on = |_: Progress| {};
+        // İmkânsız boyut → akış disk kapısında durur; temizlik ondan ÖNCE koşmuştur.
+        let _ = install_profiles(&man, &[], root, &mut on, &|| net::Control::Continue);
+
+        assert!(vet.exists(),
+            "KURULU profilin (vet) geçerli zip'i 'ölü önbellek' diye SİLİNDİ → Onar yeniden indirir, \
+             'önbellekten gelir' vaadi yalan olur (Onar/önbellek çelişkisi)");
+        assert!(!olu.exists(),
+            "gerçekten ölü girdi SİLİNMEDİ → eMMC disk-kazanım özelliği bozuldu (aşırı-düzeltme)");
+    }
+
+    /// 🔴 Aynı çelişkinin OTO-GÜNCELLEME yüzü: app-only bir plan, sha'sı GÜNCEL deps.zip'i
+    /// (planın dışında diye) siliyordu — bir sonraki deps güncellemesi/Onar yeniden indirir.
+    #[test]
+    fn KRITIK_onar_celiskisi_guncel_katman_paketi_guncellemede_KORUNUR() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        kurulu_cihaz(root, &"b".repeat(64));
+        let cache = install::cache_dir(root);
+        std::fs::create_dir_all(&cache).unwrap();
+
+        let deps_sha = "c".repeat(64);
+        let app_sha = "d".repeat(64);
+        // Kurulu kayıt: deps GÜNCEL (sha eşit), app BAYAT → plan yalnız app'i içerir.
+        std::fs::write(
+            install::installed_packages_path(root),
+            format!(r#"{{"base":"","deps":"{deps_sha}","app":"ESKI","models":{{}}}}"#),
+        )
+        .unwrap();
+        let deps = cache.join("deps.zip");
+        std::fs::write(&deps, vec![2u8; 64]).unwrap();
+
+        let man = format!(
+            concat!(r#"{{"schema":2,"version":"9.9.9","runtimes":{{}},"layers":{{"{plat}":"#,
+                    r#"{{"deps":{{"url":"https://example.invalid/deps.zip","sha256":"{d_sha}","size":1,"kind":"zip"}},"#,
+                    r#""app":{{"url":"https://example.invalid/app.zip","sha256":"{a_sha}","size":1,"kind":"zip"}}}}}},"#,
+                    r#""models":{{}}}}"#),
+            plat = crate::platform::current(), d_sha = deps_sha, a_sha = app_sha);
+
+        let mut on = |_: Progress| {};
+        // İndirme pinlenmemiş host'ta düşer — temizlik ondan ÖNCE koşmuştur.
+        let _ = update_installed(&man, root, &mut on, &|| net::Control::Continue);
+
+        assert!(deps.exists(),
+            "sha'sı GÜNCEL deps.zip app-only güncellemede 'ölü' diye SİLİNDİ → Onar/sonraki tur \
+             1+ GB'ı yeniden indirir (Onar/önbellek çelişkisi, oto-güncelleme yüzü)");
+    }
+
+    /// 17. parti (adversaryal test-gaming bulgusu): üç disk_kapisi çağrı yerinden yalnız ikisi
+    /// pinliydi — prefetch_updates'teki `&koru` sessizce `&[]`e döndürülebiliyordu (gözetimsiz
+    /// arka plan yolunda kurulu-güncel deps.zip'in silinmesi: düzeltilen sınıfın kendisi).
+    #[test]
+    fn KRITIK_onar_celiskisi_on_indirme_yolunda_da_KORUR() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        kurulu_cihaz(root, &"b".repeat(64));
+        let cache = install::cache_dir(root);
+        std::fs::create_dir_all(&cache).unwrap();
+
+        let deps_sha = "c".repeat(64);
+        let app_sha = "d".repeat(64);
+        std::fs::write(
+            install::installed_packages_path(root),
+            format!(r#"{{"base":"","deps":"{deps_sha}","app":"ESKI","models":{{}}}}"#),
+        )
+        .unwrap();
+        let deps = cache.join("deps.zip");
+        std::fs::write(&deps, vec![2u8; 64]).unwrap();
+
+        let man = format!(
+            concat!(r#"{{"schema":2,"version":"9.9.9","runtimes":{{}},"layers":{{"{plat}":"#,
+                    r#"{{"deps":{{"url":"https://example.invalid/deps.zip","sha256":"{d_sha}","size":1,"kind":"zip"}},"#,
+                    r#""app":{{"url":"https://example.invalid/app.zip","sha256":"{a_sha}","size":1,"kind":"zip"}}}}}},"#,
+                    r#""models":{{}}}}"#),
+            plat = crate::platform::current(), d_sha = deps_sha, a_sha = app_sha);
+
+        let mut on = |_: Progress| {};
+        let _ = prefetch_updates(&man, root, &mut on, &|| net::Control::Continue);
+
+        assert!(deps.exists(),
+            "ON-INDIRME yolunda sha'sı GÜNCEL deps.zip 'ölü' diye SİLİNDİ — gözetimsiz arka plan \
+             turu önbelleği boşaltır (Onar/önbellek çelişkisinin prefetch yüzü)");
     }
 
     /// ⚠️ REGRESYON KAPISI: kontrol, MAKUL bir kurulumu engellememeli. Fail-open sözleşmesi

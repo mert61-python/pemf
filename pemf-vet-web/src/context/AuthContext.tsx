@@ -2,6 +2,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseReady } from '../lib/supabase'
+// Metin denetimi 2026-08-20: Supabase'in HAM INGILIZCE mesajlari ('Invalid login credentials')
+// dogrudan ekrana basiliyordu; hata mesajinin isi kullaniciya NE YAPACAGINI soylemektir.
+import { authHatasiTurkce } from '../lib/authHatalari'
 
 type AuthCtx = {
   session: Session | null
@@ -47,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: session?.user?.email ?? null,
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      return { error: error?.message }
+      return { error: error ? authHatasiTurkce(error.message) : undefined }
     },
     signUp: async (email, password, meta) => {
       // Rol + profil bilgileri Supabase user_metadata'ya (raw_user_meta_data) yazılır.
@@ -56,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: meta ? { data: meta } : undefined,
       })
-      return { error: error?.message, needConfirm: !data.session }
+      return { error: error ? authHatasiTurkce(error.message) : undefined, needConfirm: !data.session }
     },
     resetPassword: async (email) => {
       // `redirectTo` ZORUNLU: verilmezse Supabase Site URL'ine (mobil uygulamanın GitHub Pages
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/sifre-sifirla`,
       })
-      return { error: error?.message }
+      return { error: error ? authHatasiTurkce(error.message) : undefined }
     },
     signOut: async () => {
       // ⚠️ KAPSAM 'local' (denetim 2026-08-18): supabase-js v2'de `signOut()` varsayılanı

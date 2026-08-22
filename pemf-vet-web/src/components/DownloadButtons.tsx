@@ -32,8 +32,8 @@ export default function DownloadButtons({ size = 'md' }: { size?: 'md' | 'lg' })
           Yakında · v{CLIENT.version}
         </span>
         <span className="text-sm text-muted">
-          Çıkışında haberdar olmak için{' '}
-          <a href="mailto:destek@v-pemf.com?subject=PEMF%20Vet%20Client%20bildirim" className="text-primary hover:underline">
+          Çıkınca haber vermemiz için{' '}
+          <a href="mailto:destek@v-pemf.com?subject=PEMF%20Vet%20s%C3%BCr%C3%BCm%20bildirimi" className="text-primary hover:underline">
             bize yazın
           </a>
           .

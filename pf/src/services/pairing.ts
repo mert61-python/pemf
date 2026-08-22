@@ -89,8 +89,11 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
     const url = c.url;
     const deviceId = c.device.device_id;
 
-    // (2) Kaydetmeden ÖNCE canlılık + KİMLİK doğrulaması.
-    if (!(await checkHealth(url, deviceId))) return { durum: "ulasilamiyor" };
+    // (2) Kaydetmeden ÖNCE canlılık + KİMLİK doğrulaması. [5.9]: kimligiKaydet:false —
+    // checkHealth'in "başarılı yanıtta deviceId'yi sakla" yan etkisi token takasından ÖNCE
+    // koştuğu için, takas düşse de kayıtlı kimlik B cihazına dönüyordu (F3 delinmesi).
+    // Kalıcı kimlik yazımı yalnız takas başarılıysa aşağıdaki setStoredDeviceId'de.
+    if (!(await checkHealth(url, deviceId, { kimligiKaydet: false }))) return { durum: "ulasilamiyor" };
 
     // Geçersiz adres mevcut ayarı BOZMASIN.
     if (!updateServiceConfig(url)) return { durum: "gecersiz_adres" };

@@ -12,7 +12,9 @@
 
 - kanal (`app` paketi / `launcher` / `mobile`) ve sürüm,
 - yayın etiketi ve **paket sha256'sının ilk 12 hanesi** — aynı sürüm numarası farklı ikili
-  içerebilir; `buildId` (`/api/health`, `X-Build-Id`) tam bu değeri raporlar,
+  içerebilir; `buildId` (`/api/health`, `X-Build-Id`) tam bu değeri raporlar
+  *(katmanlı kurulumda "paket" = **app katmanı** — cihaz `layers.app` sha'sını raporlar;
+  `base.zip` sha'sı yalnız eski ≤1.9.12 tek-parça istemcilerde görülür)*,
 - hasta güvenliğini veya veriyi etkileyen değişiklikler **ayrı ve önce**.
 
 `tests/test_changelog_gate.py` bunu kilitler: `versions.json`daki güncel sürümler burada
@@ -30,10 +32,112 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.18 — 2026-08-21 (2. tur denetimi + ücretlendirme altyapısı + bulut sertleştirme)
+
+**Etiket:** `client-app-v1.9.18` → `base-app.zip` (sha `c780ef1130bf`) + `base-deps.zip` (sha `69dc57a16dab`).
+Paket kimliği (`buildId`, `/api/health`): `c780ef1130bf` — katmanlı kurulumda cihaz **app katmanının**
+sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.zip` sha'sı `f4113b3ef753` raporlar.
+
+⚠️ **Bu sürümde bağımlılık katmanı da yenileniyor (~1,4 GB, bir kereliğine).** Hiçbir bağımlılık
+değişmedi; paketin baytları bir **derleme belirlenimciliği hatası** yüzünden ayrışıyordu ve bu
+sürümde kaynağında düzeltildi (aşağıya bakın). Sonraki sürümler yine ~71 MB olacak.
+
+İkinci tur çok-ajanlı denetimin (23 bulgu, `denetim-bulgular-2.md`) tamamı ile bu turda alınan
+sahip kararları. Beraberinde: site metni elden geçti, jeton ücretlendirme **altyapısı** kuruldu
+(satış **kapalı**) ve canlı Supabase şeması sertleştirildi.
+
+### Hasta kaydı ve güvenlik (önce bunlar)
+
+- **Gözlem notu artık hasta KİMLİĞİNE bağlı.** Sıfırlama anahtarı yalnız hasta *adıydı*; aynı
+  isimli iki hastada A'nın notu B'nin tıbbi kaydına yazılabiliyordu. [4.1]
+- **Broker erişilemezken "durduruldu" onayı verilmiyor.** Durdurma turu `mqtt_unavailable`'ı
+  başarı sayıyordu — operatör bobin durmadığı hâlde "durduruldu" görüyordu. [1.1]
+- **Acil durdurmada sahte alarm giderildi.** Onay takibindeki `command_id` çakışması, E-stop
+  anında "ESP onayı gelmedi" kırmızı uyarısı üretiyordu. [3.2]
+- **ESP'nin yerel termal kesmesi backend'de işleniyor** — operatör bobinin *neden* durduğunu
+  görüyor (eskiden olay hiç işlenmiyordu). [4.2]
+- **Frekans tavanı seans yolunu da kapsıyor**; doğrudan API'de karma-dizi doz tutarsızlığı bitti. [4.4]
+- **Doz geçmişine hiç koşmamış bobin koşuları yazılmıyor** (teslim/kabul ayrımı). [4.5]
+- **Süreli seans <30 sn crash-loop'u kapandı**: NVS resume, kümülatif süresiz-tavan sayacını
+  geri yüklemeden sıfırlıyordu; 120 dk tavan böylece delinebiliyordu. [1.3]
+
+### ⚠️ Firmware — S3 ve 8266 yeniden flash'lanmalıdır
+
+Bu sürümdeki bobin düzeltmeleri **cihaz yazılımındadır**; paket güncellemesi onları taşımaz.
+
+- Süreli seans devralma tabanı (yukarıdaki [1.3]) — her iki firmware.
+- HG-3 DC-yapışma latch'i PWM pasifken birikmiyor; faz senkronu sessizce kapanmıyor. [4.3]
+- Ölü komut yüzeyleri kaldırıldı (`SET_PARAMS`, `start_at`, `SYNC_ALL`) — kusurlu kümülatif-tavan
+  makinesi de yüzeyle birlikte gitti. [4.6]
+- Son-vasiyet (LWT) mesajları artık `retain=false` — bayat kopuş bildirimi canlı sanılmıyor.
+
+### Kurulum, güncelleme ve yayın
+
+- **"Onar" ile önbellek çelişkisi giderildi:** onarım, cihazın kurulu paketlerini disk kapısında
+  koruyor; gereksiz 1,4 GB yeniden indirme olmuyor.
+- **İptal edilen kurulum yarım dosya bırakmıyor.**
+- **Takas sonrası geri-alma hatası yutulmuyor** — doğrulanmamış sürüm "iptal edildi" mesajıyla
+  canlıda kalamaz. [3.1]
+- **Yayın runbook'u düzeltildi**: paketler artık kendi etiketlerine yükleniyor; harfiyen izlenen
+  eski yol saha geneli 404 üretebilirdi. [3.4]
+- `restore_assets.ps1` "klon = çalışan sistem" vaadini tutuyor (`cat_organ` çekirdek modeli). [3.5]
+
+### Mobil (2.3.19)
+
+- **Güncelleme kapısı seansı olmayan çalışan bobinleri de görüyor**; yükleyici bobin çalışırken
+  ekranı almıyor. [2.1]
+
+### Site, ücretlendirme ve hesap
+
+- **Site metni baştan sona elden geçti**: anlaşılmayan/karşılığı olmayan ifadeler ayıklandı,
+  kısaltmalar açıklandı, indirme ve hesap akışları sadeleşti (`pemf-vet-web/METIN-KILAVUZU.md`).
+- **"İşlem önceliği / kuyrukta bekleme / anında analiz" vaadi kaldırıldı.** Mekanizma var ama
+  kapalı (`PEMF_TIER_ENFORCED=0`) ve kliniğin kendi makinesinde — kapalı bir mekanizma satılamaz.
+- **Jeton ücretlendirme altyapısı kuruldu — SATIŞ KAPALI.** 1 jeton = 1 yapay zekâ analizi;
+  şema, uç ve cihaz kapısı hazır ve testli, ancak `FREE_MODE` açık ve `PEMF_JETON_ENFORCED`
+  kapalı: **bugün hiçbir analiz ücretlendirilmiyor.** ⚠️ Jeton bir *ticari* kapıdır; seans
+  başlatma/durdurma, **acil durdurma** ve sensör izleme hiçbir koşulda engellenmez.
+- **"Kullandıkça Öde" üyeliği eklendi** (aylık ücret ve önden alım yok; jeton başına ücret,
+  faturalanmamış kullanım tavanı ile). Yine satış kapalı olduğu için tahsilat yolu uyumaya devam ediyor.
+
+### Bulut (Supabase) sertleştirme
+
+- **Tablolarda `anon`/`authenticated` rollerine bırakılmış doğrudan yetkiler kaldırıldı** (bunlar
+  Supabase'in varsayılanıydı; RLS onları zaten reddediyordu, ama tek bir yanlış politika ekiyle
+  yazma yetkisine dönüşebilirlerdi). Kullanıcı okumaları SECURITY DEFINER RPC'lere taşındı.
+- **Kurulum sırasında bulunan iki açık kapatıldı:** jeton dönem-yenileme fonksiyonu `anon`a
+  açıktı (sınırsız jeton yazma) ve cihaz sırrı doğrulayıcısı bir *orakül* olarak çağrılabiliyordu.
+- Canlı şema artık `scripts/supabase_sql.py --denetim` ile denetleniyor.
+
+### Paket belirlenimciliği (bu sürümde bulundu ve düzeltildi)
+
+- **Her yayın, hiçbir bağımlılık değişmese bile her kliniğe 1,4 GB indiriyordu.** Bağımlılık
+  paketinin sha'sı her derlemede değişiyordu; boyut baytı baytına aynı olduğu için de fark
+  edilmiyordu. Yayındaki paketle karşılaştırıldı: 6154 dosyanın 6153'ü birebir aynı, tek fark
+  `base_library.zip`; onun da içinde tek bir dosya (`_collections_abc.pyc`) — aynı boyut,
+  farklı bayt. Kök neden: `marshal`, `frozenset` sabitlerini kümenin yineleme sırasına göre
+  yazar; o sıra `PYTHONHASHSEED`e bağlıdır. Build artık tohumu sabitliyor.
+  *(Ölçüm: rastgele tohumla 5 derleme → 5 farklı çıktı; sabit tohumla 3/3 birebir aynı.)*
+
+### Güvenlik ve araçlar
+
+- `secrets_backup.py restore` sonrası `git add -A` gerçek sırları public depoya taşıyabiliyordu;
+  koruma eklendi ve gitleaks bu sır sınıfını görüyor. [2.2]
+
+### Doğrulama
+
+Backend 1568 · mobil 525 · launcher 267 · site 164 test yeşil; denetim düzeltmeleri mutasyonla
+doğrulandı.
+
+---
+
 ## app 1.9.17 — 2026-08-19 (donanım-uyum turu: hibrit bobin güvenliği uçtan uca)
 
 **Etiket:** `client-app-v1.9.17` → `base-app.zip` (sha `7a0de0cdcf38`) + `base-deps.zip` (sha `d22c35a91d05` — **1.9.16 ile BAYT-BAYT AYNI**, paket-belirlenimciliği çalıştı: kurulu istemciler yalnız ~71 MB app katmanını indirir).
-Paket kimliği (`buildId`, `/api/health`): `5cdb86380a55`.
+Paket kimliği (`buildId`, `/api/health`): `7a0de0cdcf38` — katmanlı kurulumda cihaz **app
+katmanının** sha'sını raporlar (launcher `PEMF_BASE_SHA`e onu geçirir). Eski ≤1.9.12 tek-parça
+istemciler `base.zip` sha'sı `5cdb86380a55` raporlardı. *(2. tur denetimi [5.5]: bu satır
+eskiden base sha'sını "buildId" diye etiketliyordu — sahadan gelen kimlikle eşleşmiyordu.)*
 
 Bugünkü çok-ajanlı donanım-uyum denetiminin (12 gerçek uyumsuzluk, `docs/DONANIM-UYUM-ANALIZI-2026-08-19.md`)
 backend ayağı. Firmware ayağı cihazlara ayrıca flash'landı; bu paket backend/sunucu düzeltmelerini taşır.
@@ -66,7 +170,9 @@ backend ayağı. Firmware ayağı cihazlara ayrıca flash'landı; bu paket backe
 ## app 1.9.16 — 2026-08-18 (denetim turu: hasta kaydı, doz saklama, bağlanma)
 
 **Etiket:** `client-app-v1.9.16` → `base-app.zip` (sha `00de04c75ac9`) + `base-deps.zip` (sha `d22c35a91d05`).
-Paket kimliği (`buildId`, `/api/health`): `42cbc0c11a0e`.
+Paket kimliği (`buildId`, `/api/health`): `00de04c75ac9` — katmanlı kurulumda app-katmanı
+sha'sı raporlanır; `42cbc0c11a0e` bu yayının `base.zip` (tek-parça) sha'sıydı. *(2. tur [5.5]
+düzeltmesi — yanlış etiket 1.9.16'dan beri sistematikti.)*
 
 ⚠️ **Bu sürümde bağımlılık katmanı da yenileniyor (~1,4 GB, bir kereliğine).** Paketlerin baytları
 artık her derlemede birebir aynı üretiliyor; bu düzeltme 1.9.15'ten sonra girdiği için bir kez daha
@@ -104,6 +210,29 @@ inmesi gerekiyor. Sonraki sürümler yine ~71 MB olacak.
   çıkarmıyor.
 - AI mikroservis profili kullanılıyorsa: boş/eksik formda **"%78 böbrek hastalığı" gibi uydurma sonuç
   üretilmiyor** — asgari klinik girdi kapısı iki taşımada da aynı.
+
+---
+
+## launcher 1.9.33 — 2026-08-21 (onarım artık 1,4 GB'ı yeniden indirmiyor)
+
+**Etiket:** `launcher-v1.9.33` → `PEMFVetClient-Setup-1.9.33.exe` (sha `09728768a9f8`).
+
+- **"Onarım" ile önbellek çelişkisi giderildi.** Kurulumu onarırken disk kapısı, cihazın
+  **kurulu** paketlerini de korunacaklar listesine alıyor; onarım artık bağımlılık katmanını
+  gereksiz yere silip 1,4 GB'ı yeniden indirtmiyor.
+- **İptal edilen kurulum yarım dosya bırakmıyor** — iptalde o kurulumun parça dosyaları temizlenir.
+- **Sade dil.** Arayüzdeki "client / launcher / core" gibi teknik adlar kaldırıldı; TR ve EN
+  metinleri aynı anlamı veriyor ("Kurulumu onar", "Uygulama dosyaları", "Başlatıcı güncelleniyor…").
+
+---
+
+## mobile 2.3.19 — 2026-08-21 (yükleyici çalışan bobini görüyor)
+
+**Etiket:** `mobil-v2.3.19` → `PEMF_Vet_Mobil-2.3.19.apk` (versionCode 26).
+
+- **Güncelleme kapısı yalnız "açık seans" varlığına bakıyordu.** Seansı olmayan ama **çalışan**
+  bobinlerde yükleyici ekranı alabiliyordu; artık bobin durumu da kapsanıyor.
+- Gözlem notu düzeltmesi (hasta kimliğine bağlama) telefon arayüzünde de geçerli.
 
 ---
 

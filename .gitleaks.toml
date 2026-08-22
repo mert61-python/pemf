@@ -23,7 +23,17 @@ description = "Tek tek doğrulanmış SAHTE test sabitleri (2026-08-10)"
 # Değerler okunup doğrulandı: hiçbiri gerçek bir anahtar formatında değil, hiçbiri üretimde
 # kullanılmıyor, ikisi de zaten depo geçmişinde (3f97c8c4).
 commits = []
-paths = []
+# ── Kapının KENDİ test fikstürleri (2026-08-22) ────────────────────────────────────────────
+# `tests/test_secrets_backup_git_korumasi.py`, [2.2] kapısının gerçekten yakaladığını KANITLAMAK
+# için bilerek gerçek-görünümlü sahte değerler yazar (ör. bir WiFi parolası). Kapı çalışmaya
+# başlayınca kendi fikstürünü "sızıntı" saydı — testin varlık sebebi tam da bu değerleri
+# içermesi olduğu için doğru çözüm muafiyettir.
+# ⚠️ MUAFİYET TEK DOSYAYA DAR: `firmware/**/Secrets.h` ve `data/config.json` KAPSAM DIŞINDA
+# DEĞİLDİR — gerçek sır sınıfı yakalanmaya devam eder. Muafiyeti dosya adıyla değil DİZİN
+# deseniyle genişletmeyin; `tests/` altında gerçek bir sır da durabilir.
+paths = [
+  '''tests/test_secrets_backup_git_korumasi\.py''',
+]
 regexes = [
   '''test-sqlcipher-anahtari-0123456789abcdef''',
   '''s3cr3t-sqlcipher-anahtari-xyz''',
@@ -37,3 +47,39 @@ regexes = [
   # `sb_secret_*` (service-role sinifi) YAKALANMAYA DEVAM EDER.
   '''sb_publishable_[A-Za-z0-9_-]+''',
 ]
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# ÖZEL KURALLAR — 2. tur denetimi [2.2] (2026-08-20)
+#
+# NEDEN: varsayılan kurallar DÜŞÜK-ENTROPİLİ WiFi/MQTT parolalarını YAKALAMAZ (ölçüldü: bu
+# makinedeki gerçek Secrets.h içeriğinde sıfır bulgu). Bu dosyalar depoda İZLENEN placeholder'lar
+# olarak durur; gerçek değerler skip-worktree ile yereldedir. skip-worktree bir makinede
+# uygulanmamışsa/kalkmışsa `git add -A` tam bu sınıfı PUBLIC repoya taşır — o an tek kapı bu
+# kurallardır (pre-commit hook + CI'daki gitleaks işi aynı config'i okur).
+#
+# Kurallar İZLENEN placeholder biçimlerini YEŞİL bırakacak şekilde dar yazıldı:
+#   Secrets.h  → boş "" ya da `<<...-GIR>>` (regex `[^"<]+` ikisini de eler)
+#   config.json → boş "" (yalnız firmware'in data/config.json yolunda geçerli)
+# Kilit: tests/test_secrets_backup_git_korumasi.py (izlenen içerik yeşil + gerçek-görünümlü
+# kırmızı; mutasyonla doğrulandı).
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
+[[rules]]
+id = "pemf-firmware-secrets-h-gercek-deger"
+description = "firmware Secrets.h icinde placeholder olmayan WiFi/bulut-MQTT degeri (dusuk-entropili sinif)"
+regex = '''(WIFI_SSID_CONST|WIFI_PASS_CONST|DEFAULT_CLOUD_MQTT_HOST|DEFAULT_CLOUD_MQTT_USER|DEFAULT_CLOUD_MQTT_PASS)\s*=\s*"[^"<]+"'''
+keywords = ["WIFI_SSID_CONST", "WIFI_PASS_CONST", "DEFAULT_CLOUD_MQTT_HOST", "DEFAULT_CLOUD_MQTT_USER", "DEFAULT_CLOUD_MQTT_PASS"]
+
+[[rules]]
+id = "pemf-firmware-config-json-gercek-deger"
+description = "firmware data/config.json icinde bos olmayan wifi/mqtt degeri"
+# path ile DAR kapsam: genel `"mqtt_pass"` anahtari baska yerlerde (test sahteleri) mesru olabilir.
+# ⚠️ AYRAC SINIFINDA IKI TERS-BOLUK OLMALI. Ilk yazimda tek ters-boluk kullanilmisti; TOML
+# literal dizesi ('''...''') kacis islemez, bu yuzden Go'ya kapanis parantezi KACIRILMIS bir
+# karakter sinifi ulasiyor -> sinif hic kapanmiyor -> regexp.MustCompile PANIK ediyor.
+# Sonuc: gitleaks HER calismada cokuyordu, yani [2.2] icin eklenen bu kapi eklendigi gunden
+# beri HIC TARAMADI (pre-commit hook ve CI ayni config'i okur; ikisi de sessizce olmustu).
+# 2026-08-22 yayininda commit dusunce yakalandi. Kilit: tests/test_gitleaks_config_derlenir.py
+path = '''firmware[/\\].*[/\\]data[/\\]config\.json'''
+regex = '''"(wifi_ssid|wifi_pass|mqtt_server|mqtt_user|mqtt_pass)"\s*:\s*"[^"]+"'''
+keywords = ["wifi_pass", "mqtt_pass", "wifi_ssid", "mqtt_user", "mqtt_server"]

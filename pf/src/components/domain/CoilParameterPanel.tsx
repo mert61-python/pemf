@@ -104,7 +104,12 @@ export function CoilParameterPanel({
         duration: durMin * 60,
         start,
       }, null);
-      const ok = !!res && res.status !== "error";
+      // Denetim 2. tur [1.1] (2026-08-20): teyit yalnız AÇIK "success". Backend broker'a
+      // ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner; eski yüklem (`!== "error"`)
+      // onu teyit sayıyordu → aşırı-ısınma interlock'u komut hiç ulaşmamışken "bobin otomatik
+      // durduruldu" diyordu (sahte güvence, korumasızlıktan tehlikeli). Kilit:
+      // __tests__/coilDurdurmaOnayi.test.tsx.
+      const ok = !!res && res.status === "success";
       if (!ok) {
         setError(start
           ? "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin."

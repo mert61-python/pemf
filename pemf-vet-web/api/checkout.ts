@@ -34,10 +34,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const c = customer ?? {}
-    const required = ['name', 'surname', 'identityNumber', 'gsmNumber', 'city', 'address']
-    for (const f of required) {
-      if (!String(c[f] ?? '').trim()) {
-        return res.status(400).json({ error: 'customer', message: `Zorunlu alan eksik: ${f}` })
+    // Metin denetimi 2026-08-20: eksik alan mesajı KOD ANAHTARINI basıyordu ("Zorunlu alan
+    // eksik: identityNumber") — kullanıcı formda o adı göremediği için hangi kutuyu dolduracağını
+    // bilmiyordu. Ekrandaki etiketin AYNISI gösterilir.
+    const ZORUNLU: ReadonlyArray<readonly [string, string]> = [
+      ['name', 'Ad'],
+      ['surname', 'Soyad'],
+      ['identityNumber', 'TC Kimlik No'],
+      ['gsmNumber', 'Telefon'],
+      ['city', 'Şehir'],
+      ['address', 'Adres'],
+    ]
+    for (const [alan, etiket] of ZORUNLU) {
+      if (!String(c[alan] ?? '').trim()) {
+        return res.status(400).json({ error: 'customer', message: `Lütfen "${etiket}" alanını doldurun.` })
       }
     }
     // BİÇİM DOĞRULAMASI: alanlar eskiden yalnız "boş değil" diye kontrol ediliyordu → hatalı TC/GSM

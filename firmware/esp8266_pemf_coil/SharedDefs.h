@@ -5,12 +5,13 @@
 // ============================================================================
 // Core Enums
 // ============================================================================
+/* 15. parti (sahip karari 2026-08-20): olu girdiler kaldirildi — 2 (param-guncelleme; tek
+ * ureticisi silinen set_params daliydi) ve 5 (sync_all). Degerler ACIK ve YENIDEN KULLANILMAZ
+ * (eski degerlerle karisiklik olmasin diye bosluk birakildi). */
 enum CommandType {
     CMD_STOP = 0,
     CMD_START = 1,
-    CMD_UPDATE_PARAMS = 2,
-    CMD_SYNC_TIME = 3,
-    CMD_SYNC_ALL = 5
+    CMD_SYNC_TIME = 3
 };
 
 enum BrokerType {
@@ -74,6 +75,13 @@ const char PROGMEM_INFO_STR[] PROGMEM = "[INFO]";
  * Backend'in STM _coil_deadline'i (120 dk) ile ayni. Sureli seanslari ETKILEMEZ;
  * yalniz duration=0 modda cihaz-yerel son-tarih saglar (STOP kaybi/failover sigortasi). */
 #define SURESIZ_TAVAN_SEC 7200UL
+
+/* EEPROM periyodik kayit araligi + resume TABANI (2. tur denetimi [1.3], 2026-08-20) — TEK KAYNAK.
+ * <bu araliktan kisa periyotlu cok-diril dongusunde HICBIR periyodik kayit kosamaz; her resume
+ * bu kadar sure TABAN sayilip HEMEN kalicilastirilir ki kumulatif suresiz-tavan (SURESIZ_TAVAN_SEC)
+ * sifirdan baslayan hizli crash-loop'ta da delinemesin. Yon FAIL-SAFE: resume basina en fazla
+ * bir aralik erken durma; sureli seanslarin kalan-sure hesabina taban UYGULANMAZ. */
+#define NVS_KAYIT_ARALIGI_MS 30000UL
 
 #define TERMAL_KESME_C   48.0f  /**< MLX90614 nesne sıcaklığı bu değeri aşarsa PWM DURUR */
 #define TERMAL_DONUS_C   45.0f  /**< Kilit ancak bu değerin altında açılır (histerezis)  */

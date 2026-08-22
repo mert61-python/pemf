@@ -932,7 +932,11 @@ def _ai_pro_loop():
                     try:
                         import servers.api_server as _apx2
 
-                        _apx2._stop_session_coils(range(1, 8))
+                        # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir
+                        # (broker oluyken hedef-kaybi durdurmasi sessizce dusuyordu).
+                        _apx2._bildir_teyitsiz_stop(
+                            _apx2._stop_session_coils(range(1, 8)), "AI Pro hedef-kaybı durdurması"
+                        )
                         logger.warning(
                             "AI Pro: hedef %d ardisik iterasyondur bulunamadi → bobinler DURDURULDU "
                             "(hedef yeniden bulunursa surus devam eder).",
@@ -1273,7 +1277,9 @@ def stop_ai_pro():
     import servers.api_server as _api
 
     try:
-        _api._stop_session_coils(range(1, 9))
+        # Denetim 2. tur [1.1]: teyitsiz STOP'lar operatore bildirilir — broker oluyken
+        # bu uc "success" donerken bobinlerin durmadigi sessiz kaliyordu.
+        _api._bildir_teyitsiz_stop(_api._stop_session_coils(range(1, 9)), "AI Pro durdurma")
     except Exception:
         logger.exception("stop_ai_pro: _stop_session_coils hatası")
     # AI seansını da kapat → süre-watchdog ve frame-geçidi 'seans aktif değil' görsün.

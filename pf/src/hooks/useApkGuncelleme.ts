@@ -12,7 +12,13 @@
 import { useCallback, useState } from "react";
 
 import { apiGet } from "@/services/apiClient";
-import { apkIndir, kurulumuBaslat, type MobilSurum } from "@/services/mobileUpdate";
+import {
+  apkIndir,
+  kurulumuBaslat,
+  kurulumErtelendiMi,
+  kurulumErtelemesiniKaldir,
+  type MobilSurum,
+} from "@/services/mobileUpdate";
 
 /**
  * Kurulum ekranını AÇMAK şu an güvenli mi? (cihazda tedavi sürüyor mu?)
@@ -42,11 +48,17 @@ import { apkIndir, kurulumuBaslat, type MobilSurum } from "@/services/mobileUpda
  */
 async function seansSuruyorMu(): Promise<boolean> {
   try {
-    const s = await apiGet<{ is_active?: boolean } | null>("/session/active", null, {
+    // Denetim 2. tur [2.1] (2026-08-20): bobinler SEANSSIZ da çalışır (bobin panelinden
+    // başlatılan sürüş `is_active`i değiştirmez; ControlScreen bunu `hardwareRunningOutOfSession`
+    // banner'ıyla ayrı durum sayar). Yalnız `is_active`e bakmak, bobinler hayvanın üzerindeyken
+    // yükleyicinin yine açılması demekti. Backend artık canlı-durumdan `hardware_running` taşıyor;
+    // ikisi de POZİTİF-kanıt ilkesine tabi (eski backend alanı taşımaz → undefined → fail-open,
+    // "güncelleme ZORUNLU KILINAMAZ" sahip kararı bozulmaz).
+    const s = await apiGet<{ is_active?: boolean; hardware_running?: boolean } | null>("/session/active", null, {
       silent: true,
       timeoutMs: 2500,
     });
-    return s?.is_active === true;
+    return s?.is_active === true || s?.hardware_running === true;
   } catch {
     return false; // fail-open (yukarıdaki gerekçe)
   }
@@ -61,6 +73,9 @@ export interface ApkGuncelleme {
   bilgi: string;
   /** Kurulum ekranı en az bir kez açıldı mı? (Arayüz "Tekrar dene" diyebilsin.) */
   kurulumAcildi: boolean;
+  /** [5.7c] Paket TAM indi mi? (oran===null "hiç başlamadı"yı "tamamlandı"dan ayıramaz —
+   *  kapı erteleme kararını buna göre verir: hazır paketin bandı SUSTURULMAZ.) */
+  paketHazir: boolean;
   /** İndir + kurulumu aç. */
   guncelle: () => Promise<void>;
 }
@@ -70,9 +85,13 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
   const [hata, setHata] = useState("");
   const [bilgi, setBilgi] = useState("");
   const [kurulumAcildi, setKurulumAcildi] = useState(false);
+  const [paketHazir, setPaketHazir] = useState(false);
 
   const guncelle = useCallback(async () => {
     if (!surum) return;
+    // [5.7a] Açık kullanıcı niyeti: 'Güncelle'ye (yeniden) dokunmak ertelemeyi KALDIRIR —
+    // erteleme yalnız kapı kapatılırken uçuşta kalan işi bağlar, kalıcı kilit değildir.
+    kurulumErtelemesiniKaldir(surum.versionCode);
     setHata("");
     setBilgi("");
     setOran(0);
@@ -91,6 +110,7 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
       );
       return;
     }
+    setPaketHazir(true);
 
     // 🔴 TIBBİ GÜVENLİK KAPISI — kurulumdan HEMEN ÖNCE sorulur (bkz. seansSuruyorMu).
     // ⚠️ SIRA KRİTİK: indirme başlarken seans yoktu ama BİTERKEN olabilir (128 MB, dakikalar).
@@ -98,8 +118,20 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     // bekler ve seans bitince hazır-dosya hızlı yolu tek bayt bile yeniden indirmez.
     if (await seansSuruyorMu()) {
       setBilgi(
-        "Güncelleme indirildi ama cihazda tedavi sürüyor — kurulum ekranı açılmadı. " +
-          "Seans bittikten sonra 'Güncelle'ye dokunun; paket hazır, yeniden indirilmeyecek.",
+        "Güncelleme indirildi ama cihazda tedavi sürüyor (seans ya da çalışan bobin) — kurulum " +
+          "ekranı açılmadı. Bobinler durduktan sonra 'Güncelle'ye dokunun; paket hazır, yeniden indirilmeyecek.",
+      );
+      return;
+    }
+
+    // [5.7a] ERTELEME KAPISI — seans kapısından SONRA (tıbbi metin öncelikli), kurulumdan ÖNCE.
+    // Kapı "Şimdilik devam et" ile kapatıldıysa UÇUŞTAKİ bu iş yükleyiciyi kullanıcının o anki
+    // işinin üstüne SORMADAN açamaz; paket diskte hazır bekler, bant susturulmadığı için
+    // kullanıcı hazır olduğunda tek dokunuşla (yeniden indirmeden) kurar.
+    if (kurulumErtelendiMi(surum.versionCode)) {
+      setBilgi(
+        "Güncelleme indirildi ve hazır — güncellemeyi ertelediğiniz için kurulum ekranı açılmadı. " +
+          "Hazır olduğunuzda 'Güncelle'ye dokunun; paket yeniden indirilmeyecek.",
       );
       return;
     }
@@ -124,5 +156,5 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     }
   }, [surum]);
 
-  return { oran, hata, bilgi, kurulumAcildi, guncelle };
+  return { oran, hata, bilgi, kurulumAcildi, paketHazir, guncelle };
 }

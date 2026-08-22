@@ -22,9 +22,14 @@ STREAK = 8  # SYNC_MISMATCH_STREAK — C ile aynı
 
 
 class _SyncModel:
-    """firmware syncPulseISR + ddsTimerISR kilit mantığının birebir Python modeli."""
+    """firmware syncPulseISR + ddsTimerISR kilit mantığının birebir Python modeli.
 
-    def __init__(self, tpp: int):
+    2. tur [4.3] (2026-08-20): modele `active` eklendi — GERÇEK C'de ddsTimerISR `!s_active`
+    iken tick'i İLERLETMEZ (natural_wrap üretilemez) ve düzeltmeyle syncPulseISR pasifken
+    darbeyi tamamen YOK SAYAR (ne sayar ne latch'ler). `pasif_darbe_latchler=True` ESKİ
+    (kusurlu) C semantiğini modeller — ayrıştırıcı test modelin gerçekten fark ölçtüğünü kanıtlar."""
+
+    def __init__(self, tpp: int, pasif_darbe_latchler: bool = False):
         self.tpp = tpp
         self.tick = 0
         self.natural_wrap = False
@@ -32,16 +37,32 @@ class _SyncModel:
         self.sync_disabled = False
         self.locked = 0
         self.ignored = 0
+        self.active = True  # mevcut testler aktif seansı modeller — davranışları değişmez
+        self._pasif_darbe_latchler = pasif_darbe_latchler
 
     def timer_tick(self):
-        """ddsTimerISR: 50 kHz sayaç; tpp'ye ulaşınca doğal wrap."""
+        """ddsTimerISR: 50 kHz sayaç; tpp'ye ulaşınca doğal wrap. PASİFKEN İLERLEMEZ (gerçek C)."""
+        if not self.active:
+            return
         self.tick += 1
         if self.tick >= self.tpp:
             self.tick = 0
             self.natural_wrap = True
 
+    def stop(self):
+        """_stopPWM eşdeğeri: çıkış kapanır; s_tick/streak/latch DURUMU KALIR (gerçek C)."""
+        self.active = False
+
+    def start(self, tpp: int):
+        """_beginOutput→_updatePWM eşdeğeri: parametre uygula + aktif et.
+        Latch reset yalnız GERÇEK freq değişiminde (update_pwm kuralı aynen)."""
+        self.update_pwm(tpp)
+        self.active = True
+
     def sync_pulse(self):
         """syncPulseISR: STM PB1 darbesi geldi."""
+        if not self.active and not self._pasif_darbe_latchler:
+            return  # [4.3] düzeltmesi: pasifken darbe SAYILMAZ ve LATCH BİRİKMEZ
         if self.sync_disabled:
             return
         tol = self.tpp // 50 + 2
@@ -157,6 +178,93 @@ def test_KRITIK_farkli_freq_komutu_latch_sifirlar_AMA_yeniden_birikir():
             m.timer_tick()
         m.sync_pulse()
     assert m.sync_disabled, "uyumsuzluk sürerken latch yeniden oluşmadı"
+
+
+# ── 2. TUR DENETİMİ [4.3] (2026-08-20): LATCH PWM PASİFKEN BİRİKMEZ ─────────────────────────
+# Deterministik tetikleyici (çürütme ajanının izlediği dizi): S3, STM bobin-1 çalışırken seansı
+# bitirir (_stopPWM: s_active=false, s_tick DONAR — ddsTimerISR pasifken tick'i ilerletmez,
+# natural_wrap üretilemez) → boşta gelen HER PB1 darbesi "erken kilit" sayılır → 8 darbede
+# s_sync_disabled=true. Aynı frekanslı SONRAKİ seans (AI Pro hep 1 Hz → freqChanged=false →
+# latch bilinçli KORUNUR) faz senkronsuz koşar; sync_disabled status'ta raporlansa da backend o
+# alanı işlemiyor → sessiz derece kaybı. Yön fail-safe (tek faz, DC yok) ama çok-bobinli faz
+# deseni sessizce bozulur. Ek kirlilik: boşta darbeler locked/ignored sayaçlarını da şişiriyordu
+# (tezgâh tanılaması yanılır).
+
+
+def test_KRITIK_PWM_pasifken_darbeler_LATCHI_biriktirmez():
+    """Seans biter → STM darbeleri sürer → AYNI frekansla yeni seans: sync AKTİF kalmalı."""
+    m = _SyncModel(tpp=50000)  # AI Pro 1 Hz
+    # Sağlıklı bir tam periyot + hizalı darbe (seans içi normal akış).
+    for _ in range(50000):
+        m.timer_tick()
+    m.sync_pulse()
+    assert not m.sync_disabled
+
+    m.stop()  # seans bitti; STM bobin-1 hâlâ 100 Hz'de PB1 basıyor
+    for _ in range(STREAK + 5):
+        m.sync_pulse()  # pasifken timer İLERLEMEZ — darbeler tick donmuşken geliyor
+    m.start(tpp=50000)  # 2. AI Pro seansı — AYNI freq → freqChanged=false → latch resetlenmez
+
+    assert not m.sync_disabled, (
+        "PWM pasifken biriken darbeler latch'i doldurdu — aynı frekanslı sonraki seans faz "
+        "senkronsuz koşar (bulgu [4.3]); pasif darbeler HİÇ sayılmamalı"
+    )
+    # ve seans içinde senkron gerçekten çalışıyor
+    for _ in range(50000):
+        m.timer_tick()
+    m.sync_pulse()
+    assert m.locked >= 2 and not m.sync_disabled
+
+
+def test_KRITIK_pasif_darbeler_TELEMETRIYI_kirletmez():
+    """locked/ignored sayaçları tezgâh tanılamasıdır — boşta geçen STM darbeleri onları şişirmemeli."""
+    m = _SyncModel(tpp=500)
+    m.stop()
+    for _ in range(1000):
+        m.sync_pulse()
+    assert m.locked == 0 and m.ignored == 0, (
+        f"pasif darbeler sayaçlara yazıldı (locked={m.locked}, ignored={m.ignored}) — "
+        "tezgâhta frekans-uyuşmazlığı tanısı yanılır"
+    )
+
+
+def test_MODEL_AYIRT_EDIYOR_eski_semantik_bosta_latchlerdi():
+    """Ayrıştırıcı: ESKİ C semantiği (pasif darbe sayılır) aynı diziyle latch'i DOLDURUR —
+    model gerçek farkı ölçüyor, kapı kendi varsayımını doğrulamıyor."""
+    m = _SyncModel(tpp=50000, pasif_darbe_latchler=True)
+    for _ in range(50000):
+        m.timer_tick()
+    m.sync_pulse()
+    m.stop()
+    for _ in range(STREAK + 5):
+        m.sync_pulse()
+    m.start(tpp=50000)
+    assert m.sync_disabled, (
+        "model ayrıştırmıyor: eski semantik de latch'lemedi — [4.3] kapısı yanlış şeyi ölçüyor olabilir"
+    )
+
+
+def _c_soy(src: str) -> str:
+    import re as _re
+
+    src = _re.sub(r"/\*.*?\*/", " ", src, flags=_re.S)
+    src = _re.sub(r"//[^\n]*", " ", src)
+    return src
+
+
+def test_KRITIK_C_syncPulseISR_pasifken_ERKEN_doner():
+    """Yapısal kapı (yorum-soyulmuş kaynak): syncPulseISR, streak/latch mantığından ÖNCE
+    `!s_active` erken dönüşü içermeli — model bu semantiği varsayıyor."""
+    cpp = _c_soy((S3 / "CoilController.cpp").read_text(encoding="utf-8", errors="replace"))
+    i = cpp.index("static void IRAM_ATTR syncPulseISR()")
+    j = cpp.index("static void", i + 10)
+    govde = cpp[i:j]
+    k = govde.find("!s_active")
+    assert k >= 0, (
+        "syncPulseISR'da s_active kapısı YOK — PWM pasifken PB1 darbeleri latch'i doldurur, "
+        "aynı frekanslı sonraki seans faz senkronsuz koşar (bulgu [4.3])"
+    )
+    assert k < govde.index("s_early_streak"), "s_active kapısı streak mantığından SONRA — pasif darbeler yine sayılır"
 
 
 def test_KARSIT_KANIT_C_kaynagi_algoritma_ve_telemetri_ICERIR():

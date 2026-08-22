@@ -1,0 +1,482 @@
+<title>PEMF Vet Saha Testi</title>
+
+<style>
+  /* ── PEMF Vet tasarım dizgesi (pf/src/theme/tokens.ts) — ürünle aynı kimlik.
+     Koyu birincil; açık tema aynı tonlardan türetildi (klinikte gün ışığı). ── */
+  :root {
+    --ground:   #121827;
+    --surface:  #1B2336;
+    --raised:   #26324F;
+    --hairline: #34415F;
+    --ink:      #F7FAFC;
+    --muted:    #AAB6CE;
+    --subtle:   #75829B;
+    --accent:   #22D3EE;
+    --accent-ink: #04121F;
+    --pass:     #22C55E;
+    --pass-bg:  #16301F;
+    --fail:     #EF4444;
+    --fail-bg:  #38191D;
+    --block:    #F59E0B;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.22);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground:   #EEF1F8;
+      --surface:  #FFFFFF;
+      --raised:   #F4F6FB;
+      --hairline: #D2DAEA;
+      --ink:      #101728;
+      --muted:    #4C5872;
+      --subtle:   #6E7A94;
+      --accent:   #0E7490;
+      --accent-ink: #FFFFFF;
+      --pass:     #15803D;
+      --pass-bg:  #E4F6EA;
+      --fail:     #C2262B;
+      --fail-bg:  #FBE7E7;
+      --block:    #A65B06;
+      --shadow:   0 1px 2px rgba(16,23,40,.06), 0 8px 24px rgba(16,23,40,.07);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:   #EEF1F8;
+    --surface:  #FFFFFF;
+    --raised:   #F4F6FB;
+    --hairline: #D2DAEA;
+    --ink:      #101728;
+    --muted:    #4C5872;
+    --subtle:   #6E7A94;
+    --accent:   #0E7490;
+    --accent-ink: #FFFFFF;
+    --pass:     #15803D;
+    --pass-bg:  #E4F6EA;
+    --fail:     #C2262B;
+    --fail-bg:  #FBE7E7;
+    --block:    #A65B06;
+    --shadow:   0 1px 2px rgba(16,23,40,.06), 0 8px 24px rgba(16,23,40,.07);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .kabuk { max-width: 60rem; margin: 0 auto; padding: 0 1rem 5rem; }
+
+  /* ── Başlık ── */
+  header.tepe { padding: 2.25rem 0 1.25rem; }
+  .etiket {
+    font-size: .69rem; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin: 0 0 .5rem;
+  }
+  h1 {
+    margin: 0 0 .6rem; font-size: clamp(1.6rem, 5vw, 2.15rem);
+    line-height: 1.15; font-weight: 800; letter-spacing: -.02em; text-wrap: balance;
+  }
+  .giris { margin: 0; color: var(--muted); max-width: 62ch; font-size: .95rem; }
+
+  .kanit {
+    margin: 1.25rem 0 0; padding: .85rem 1rem;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--block); border-radius: 0 10px 10px 0;
+    color: var(--muted); font-size: .85rem; max-width: 64ch;
+  }
+  .kanit b { color: var(--ink); font-weight: 650; }
+
+  /* ── Yapışkan ilerleme çubuğu ── */
+  .panel {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--ground);
+    border-bottom: 1px solid var(--hairline);
+    padding: .7rem 0 .65rem; margin-bottom: 1.5rem;
+  }
+  .sayaclar { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1.1rem; }
+  .sayac { font-size: .82rem; color: var(--subtle); }
+  .sayac b {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .sayac.gecti b { color: var(--pass); }
+  .sayac.kaldi b { color: var(--fail); }
+  .cubuk {
+    height: 6px; border-radius: 999px; background: var(--raised);
+    overflow: hidden; display: flex; margin: .6rem 0 .65rem;
+  }
+  .cubuk i { display: block; height: 100%; transition: width .25s ease; }
+  .cubuk .c-gecti { background: var(--pass); }
+  .cubuk .c-kaldi { background: var(--fail); }
+
+  .suzgecler { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .suzgec {
+    font: inherit; font-size: .78rem; font-weight: 650;
+    padding: .42rem .8rem; min-height: 34px;
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px;
+    cursor: pointer;
+  }
+  .suzgec[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .suzgec.sifirla { margin-left: auto; }
+  .suzgec:focus-visible, .satir:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── Kademeler ── */
+  section.kademe { margin-bottom: 2.5rem; }
+  .kademe-bas { display: flex; align-items: baseline; flex-wrap: wrap; gap: .55rem; margin-bottom: .3rem; }
+  .kademe-no {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: .8rem; font-weight: 700; color: var(--accent);
+    border: 1px solid var(--hairline); border-radius: 6px; padding: .1rem .42rem;
+  }
+  h2 { margin: 0; font-size: 1.12rem; font-weight: 750; letter-spacing: -.01em; }
+  .rozet {
+    font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; font-weight: 800;
+    padding: .18rem .5rem; border-radius: 5px;
+    background: color-mix(in srgb, var(--block) 18%, transparent);
+    color: var(--block); border: 1px solid color-mix(in srgb, var(--block) 40%, transparent);
+  }
+  .kademe-not { margin: 0 0 .9rem; color: var(--subtle); font-size: .85rem; max-width: 60ch; }
+  h3.altbas {
+    margin: 1.5rem 0 .6rem; font-size: .74rem; letter-spacing: .11em;
+    text-transform: uppercase; color: var(--subtle); font-weight: 700;
+  }
+
+  /* ── Satırlar ── */
+  .liste { display: flex; flex-direction: column; gap: .4rem; }
+  .satir {
+    display: grid; grid-template-columns: 30px 3.1rem 1fr; gap: .1rem .7rem;
+    align-items: start; width: 100%; text-align: left;
+    padding: .8rem .9rem; min-height: 48px;
+    background: var(--surface); color: inherit;
+    border: 1px solid var(--hairline); border-left: 3px solid var(--hairline);
+    border-radius: 9px; box-shadow: var(--shadow);
+    font: inherit; cursor: pointer;
+  }
+  .satir[data-durum="gecti"] { background: var(--pass-bg); border-color: color-mix(in srgb, var(--pass) 45%, var(--hairline)); border-left-color: var(--pass); }
+  .satir[data-durum="kaldi"] { background: var(--fail-bg); border-color: color-mix(in srgb, var(--fail) 50%, var(--hairline)); border-left-color: var(--fail); }
+
+  .kutu {
+    grid-row: 1 / span 2; align-self: start; margin-top: .1rem;
+    width: 26px; height: 26px; border-radius: 7px;
+    border: 2px solid var(--subtle); background: transparent;
+    display: grid; place-items: center;
+    font-size: .95rem; font-weight: 800; line-height: 1; color: transparent;
+  }
+  .satir[data-durum="gecti"] .kutu { border-color: var(--pass); background: var(--pass); color: #06210F; }
+  .satir[data-durum="kaldi"] .kutu { border-color: var(--fail); background: var(--fail); color: #2B0A0C; }
+
+  .no {
+    grid-row: 1 / span 2;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--subtle); padding-top: .18rem;
+  }
+  .satir[data-durum="kaldi"] .no { color: var(--fail); }
+  .senaryo { margin: 0; font-size: .93rem; font-weight: 600; line-height: 1.4; }
+  .beklenen { margin: .3rem 0 0; font-size: .85rem; color: var(--muted); line-height: 1.45; }
+  .beklenen::before {
+    content: "Beklenen"; display: inline-block; margin-right: .45rem;
+    font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+    font-weight: 800; color: var(--subtle); vertical-align: .09em;
+  }
+  .satir.gizli { display: none; }
+
+  code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: .88em; background: var(--raised); padding: .08em .34em; border-radius: 4px;
+  }
+
+  /* ── Bulgu kaydı ── */
+  .kayit {
+    margin-top: 2.5rem; padding: 1.3rem 1.35rem;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+  }
+  .kayit h2 { margin-bottom: .35rem; }
+  .kayit p { margin: 0 0 .9rem; color: var(--muted); font-size: .88rem; max-width: 60ch; }
+  .kayit ul { margin: 0; padding-left: 1.15rem; color: var(--muted); font-size: .9rem; }
+  .kayit li { margin-bottom: .35rem; }
+  .kayit li b { color: var(--ink); font-weight: 650; }
+
+  .bos { padding: 1.6rem; text-align: center; color: var(--subtle); font-size: .9rem; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 30rem) {
+    .satir { grid-template-columns: 26px 2.6rem 1fr; padding: .72rem .7rem; gap: .1rem .55rem; }
+    .kabuk { padding: 0 .75rem 4rem; }
+  }
+</style>
+
+<div class="kabuk">
+  <header class="tepe">
+    <p class="etiket">PEMF Vet · sürüm öncesi denetim</p>
+    <h1>Saha Testi</h1>
+    <p class="giris">
+      Otomatik süitler (pytest ~1080 · jest 431 · vitest 52 · cargo) mutlu yolu ve kod
+      düzeyindeki değişmezleri koruyor. Bu liste onların yapısal olarak göremediği sınıfı
+      hedefler: gerçek donanım, gerçek işletim sistemi, gerçek kullanıcı davranışı.
+    </p>
+    <p class="kanit">
+      <b>Neden gerekli:</b> 2026-08-17'de sahada yakalanan “indirme bitince paylaşım ekranı
+      açılıyor” hatası. Kod okununca kurulum açılıyormuş gibi duruyordu; kullanılan API'nin
+      o ekranı <b>hiçbir zaman</b> sunamayacağı ancak cihazda görülünce anlaşıldı. Hiçbir
+      statik denetim bunu bulamazdı.
+    </p>
+  </header>
+
+  <div class="panel">
+    <div class="sayaclar">
+      <span class="sayac"><b id="s-ilerleme">0/0</b> tamamlandı</span>
+      <span class="sayac gecti"><b id="s-gecti">0</b> geçti</span>
+      <span class="sayac kaldi"><b id="s-kaldi">0</b> kaldı</span>
+      <span class="sayac" id="s-blok"></span>
+    </div>
+    <div class="cubuk" aria-hidden="true">
+      <i class="c-gecti" id="c-gecti" style="width:0%"></i>
+      <i class="c-kaldi" id="c-kaldi" style="width:0%"></i>
+    </div>
+    <div class="suzgecler">
+      <button class="suzgec" data-suzgec="tumu" aria-pressed="true" type="button">Tümü</button>
+      <button class="suzgec" data-suzgec="kalanlar" aria-pressed="false" type="button">Denenmemişler</button>
+      <button class="suzgec" data-suzgec="kaldi" aria-pressed="false" type="button">Başarısızlar</button>
+      <button class="suzgec sifirla" id="sifirla" type="button">Sıfırla</button>
+    </div>
+  </div>
+
+  <main id="govde"></main>
+
+  <section class="kayit">
+    <h2>Bir senaryo saparsa ne yazılmalı</h2>
+    <p>Düzeltme bunlar olmadan tahmine dönüşür — özellikle mobilde, çünkü ekran görüntüsü
+      olmadan “yanlış ekran açıldı” türü hatalar kodda görünmüyor.</p>
+    <ul>
+      <li><b>Senaryo no</b> ve tam adımlar — kaçıncı denemede oldu, her seferinde mi?</li>
+      <li><b>Ne bekliyordun / ne oldu</b> — ikisi de yazılı olsun</li>
+      <li><b>Ekran görüntüsü veya video</b> — 2026-08-17 hatası tek ekran görüntüsüyle çözüldü</li>
+      <li><b>Sürümler</b> — client, mobil (Ayarlar → sürüm), backend</li>
+      <li><b>Ortam</b> — hangi ağ, hangi telefon/Android sürümü, donanım bağlı mıydı</li>
+      <li><b>Log</b> — client log dosyası, <code>adb logcat</code> (mobil), backend konsolu</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+  const VERI = [
+    {
+      no: "1", ad: "Hasta güvenliği", blok: true,
+      not: "Her yayında, istisnasız. Bu bölümdeki her başarısızlık yayını durdurur.",
+      gruplar: [{ items: [
+        ["1.1", "Seans sürerken uygulamayı normal yoldan kapat", "Bobinler <b>kapanmadan önce</b> durur; kayıt tutarlı kapanır"],
+        ["1.2", "Seans sürerken client'ı Görev Yöneticisi'nden <b>öldür</b>", "Bobinler yine durur — kill öncesi durdurma yolu çalışır"],
+        ["1.3", "Seans sürerken makinenin <b>fişini çek</b>, tekrar aç", "Açılışta bobinler kapalı başlar; yarım seans “kesildi” olarak görünür, geçmişi bozmaz"],
+        ["1.4", "Seans sürerken STM/USB kablosunu çek", "Arayüz bağlantı kaybını <b>söyler</b>; sahte “çalışıyor” göstergesi kalmaz"],
+        ["1.5", "Seans sürerken makineyi uyku moduna al, uyandır", "Ya seans güvenli durdurulmuş ya tutarlı sürüyor; “hayalet seans” olmaz"],
+        ["1.6", "Mobilden ACİL DURDUR — cihazla aynı Wi-Fi'da", "Bobinler durur, telefon onayı görür"],
+        ["1.7", "Mobilden ACİL DURDUR — telefon <b>uçak modunda</b>", "Komutun gönderilemediği <b>açıkça</b> yazılır; “durduruldu” yalanı YOK"],
+        ["1.8", "ACİL DURDUR sonrası yeni seans başlat", "Temiz başlar; önceki seansın parametreleri sızmaz"],
+        ["1.9", "Seans sürerken mobilde güncelleme çıksın", "Güncelleme bandı <b>gösterilmez</b>; operatörün ekranı bölünmez"],
+        ["1.10", "Seans sürerken profil değiştirmeyi / çıkış yapmayı dene", "Önce onay + durdurma istenir; sessizce kesilmez"],
+      ]}]
+    },
+    {
+      no: "2", ad: "Güncelleme ve kurulum", blok: false,
+      not: "En taze kod, en yüksek risk. Güncelleme/kurulum kodu her değiştiğinde koşulur.",
+      gruplar: [
+        { alt: "Mobil açılış kapısı ve APK kurulumu", items: [
+          ["2.1", "Uygulamayı <b>uçak modunda</b> aç", "Kapı beklemez; uygulama hemen açılır"],
+          ["2.2", "Yeni sürüm varken aç", "Uygulama yerine güncelleme ekranı gelir"],
+          ["2.3", "Güncelleme ekranında “Şimdilik devam et”", "Uygulama açılır; içerideki bant aynı sürümü <b>hemen yeniden dayatmaz</b>"],
+          ["2.4", "2.3'ten sonra uygulamayı tamamen kapat, tekrar aç", "Kapı <b>yeniden sorar</b> — erteleme kalıcı değil"],
+          ["2.5", "Kontrol takılsın (çok yavaş ağ)", "2,5 sn'de “Atla” çıkar, en geç 7 sn'de kapı kendiliğinden açılır"],
+          ["2.6", "İndirmeyi başlat, <b>%40'ta uygulamayı kapat</b>, tekrar aç ve devam et", "Kaldığı yerden sürer, <b>%0'a dönmez</b>"],
+          ["2.7", "İndirme bitince", "<b>Doğrudan kurulum ekranı</b> açılır — paylaşım sayfası DEĞİL"],
+          ["2.8", "Kurulumu reddet, geri dön, düğmeye tekrar bas", "Yeniden <b>indirmez</b>; kurulum anında açılır"],
+          ["2.9", "“Bilinmeyen kaynak” iznini <b>kapat</b>, güncelle", "İzin ekranına götürür ve ne yapılacağını yazar; anlaşılmaz ret vermez"],
+          ["2.10", "Kapıda indirmeye başla → “Şimdilik devam et” → banttan “Güncelle”", "Bant <b>kaldığı yüzdeden</b> devam eder; ikinci indirme başlamaz"],
+          ["2.11", "İndirme sırasında mobil veri ↔ Wi-Fi geçişi yap", "İndirme sürer ya da toparlar; bozuk paket kurulmaya çalışılmaz"],
+          ["2.12", "İndirme sırasında telefonu kilitle, 5 dk bekle, aç", "İndirme durmaz — arka planda tamamlanır"],
+          ["2.13", "Telefonun deposunu neredeyse doldur, güncelle", "Anlaşılır hata; yarım paket kurulmaya çalışılmaz"],
+          ["2.14", "Kurulum bitince uygulamayı aç", "Yeni sürüm numarası görünür; oturum ve ayarlar korunur"],
+        ]},
+        { alt: "Windows client", items: [
+          ["2.15", "İnternetsiz makinede client'ı aç", "“Hazır!” ekranı <b>anında</b> çizilir, “Başlat” hemen açılır"],
+          ["2.16", "Güncelleme varken aç", "“Başlat” beklemede kalır (“Güncelleme kontrol ediliyor…”); kurulum bitince açılır"],
+          ["2.17", "Client'ı <b>24 saatten uzun</b> açık bırak", "Periyodik tur yeni sürümü fark eder ve bildirir; seansı kesmez"],
+          ["2.18", "Güncelleme kurulurken <b>elektriği kes</b>, tekrar aç", "Eski sürüm sağlam açılır — atomik takas + geri alma; tuğlalaşma yok"],
+          ["2.19", "Client açıkken ikinci kopyasını başlat", "İkinci pencere aynı ağaca yazmaya çalışmaz"],
+          ["2.20", "Diski neredeyse doldur, güncelleme al", "Disk kapısı uyarır; yarım indirme ağacı bozmaz"],
+          ["2.21", "<b>Kur → kaldır → tekrar kur</b> (aynı makine)", "Kalıntı süreç kalmaz (mosquitto/cloudflared); ikinci kurulum sorunsuz"],
+          ["2.22", "Kaldırma sonrası hasta verisi", "<b>Duruyor</b> — kaldırma tıbbi veriyi silmez (kasıtlı)"],
+        ]},
+      ]
+    },
+    {
+      no: "3", ad: "Ağ ve bağlantı", blok: false,
+      not: "Klinik gerçeği: hat kopar, modem yeniden başlar, izolasyon açıktır.",
+      gruplar: [{ items: [
+        ["3.1", "Wi-Fi'yi kapat, 30 sn bekle, aç", "Bağlantı kendiliğinden toparlar; elle yeniden başlatma gerekmez"],
+        ["3.2", "Modemi yeniden başlat", "Cihaz bulma (mDNS) tekrar çalışır"],
+        ["3.3", "Modemde <b>istemci izolasyonu (AP Isolation)</b> açık", "Mobil bunu tespit edip <b>sebebini</b> yazar; genel “bağlanamadı” demez"],
+        ["3.4", "Telefonu farklı bir ağa al, <b>eşleştirme kodu</b> ile bağlan", "Bağlanır; kod süresi dolmuşsa açıkça söyler"],
+        ["3.5", "Uzaktan erişim tüneli koparken kullan", "Durum “çevrimdışı” olur; sahte canlı değer gösterilmez"],
+        ["3.6", "<b>İki telefon</b> aynı anda bağlan", "İkisi de canlı veri görür; komutlar çakışmaz"],
+        ["3.7", "Bilgisayarda Ethernet + Wi-Fi + hotspot aynı anda açıkken", "Cihaz yine bulunur (çok-homed multicast)"],
+        ["3.8", "Backend'i kapat, mobili kullanmayı dene", "Anlaşılır hata; sonsuz dönen çark yok"],
+        ["3.9", "Çok yavaş ağda liste/geçmiş aç", "Zaman aşımı mesajı gelir; ekran donmaz"],
+      ]}]
+    },
+    {
+      no: "4", ad: "Veri, AI ve yetki", blok: false,
+      not: "Yanlış klinik çıktı ve veri bozulması — sessiz kalırsa en geç fark edilen sınıf.",
+      gruplar: [
+        { alt: "Hasta verisi", items: [
+          ["4.1", "Hasta adında Türkçe karakter (<code>İhsan</code>, <code>Işık</code>, <code>Çağla</code>) ara/kaydet/raporla", "Arama ve sıralama doğru; kayıt bozulmaz"],
+          ["4.2", "Çok uzun ad / not (500+ karakter), emoji", "Kesilirse <b>belirtilir</b>; kayıt bozulmaz"],
+          ["4.3", "Aynı hastayı iki cihazdan aynı anda düzenle", "Son yazan kazanır ama diğer alanlar <b>kaybolmaz</b>"],
+          ["4.4", "Saati 1 gün geri al, seans yap, saati düzelt", "Geçmiş sıralaması tutarlı kalır; kayıt kaybolmaz"],
+          ["4.5", "Yaz saati geçişi civarında süre hesabı", "Seans süresi doğru; negatif/atlamalı süre yok"],
+          ["4.6", "Kurtarma kodu ile yedeği başka makinede aç", "Açılır; kod yanlışsa anlaşılır hata"],
+        ]},
+        { alt: "AI", items: [
+          ["4.7", "<b>Boş/sessiz</b> ses kaydı analiz et", "Reddedilir ve sebebi yazılır — sonuç uydurmaz"],
+          ["4.8", "Kedi olmayan ses (müzik, insan konuşması, gürültü)", "Ya reddeder ya <b>düşük güven</b> uyarısı verir"],
+          ["4.9", "Çok kısa (1 sn) kayıt", "Anlaşılır ret"],
+          ["4.10", "Kamera izni reddedilmişken analiz", "İzin isteğine yönlendirir; çökmez"],
+          ["4.11", "Karanlık / çok bulanık fotoğraf", "Düşük güven ya da ret; kesin sonuç iddiası yok"],
+          ["4.12", "AI servisi kapalıyken analiz", "Zaman aşımı mesajı; sonsuz bekleme yok"],
+          ["4.13", "Analiz sürerken ekrandan çık, geri gel", "Ya sonuç durur ya temiz sıfırlanır; yarım sonuç gösterilmez"],
+        ]},
+        { alt: "Profiller", items: [
+          ["4.14", "Üç profille de aç, kapalı rotalara gitmeye çalış", "Erişilemeyen rota panoya düşer"],
+          ["4.15", "Ev sahibi profiliyle tedavi başlatmayı dene", "Mümkün olmaz — yalnız analiz"],
+          ["4.16", "Operatör değiştir, hareketsiz bekle (kilit süresi)", "Seans sürerken kilit <b>ertelenir</b>; seans yokken kilitlenir"],
+        ]},
+      ]
+    },
+    {
+      no: "5", ad: "Dayanıklılık", blok: false,
+      not: "Sürüm turlarında. Uzun süre açık kalan klinik makinesinde ortaya çıkan sınıf.",
+      gruplar: [{ items: [
+        ["5.1", "Arka arkaya 10 seans, mola vermeden", "Bellek/handle sızıntısı yok; 10. seans 1. kadar hızlı"],
+        ["5.2", "Azami süreli tek seans, sonuna kadar", "Otomatik kapanır, kayıt tam"],
+        ["5.3", "Client 72 saat açık", "Bellek şişmez, bağlantı canlı, güncelleme kontrolü çalışıyor"],
+        ["5.4", "Mobil uygulamayı 24 saat arka planda bırak, geri dön", "Yeniden bağlanır; bayat veriyi canlı gibi göstermez"],
+        ["5.5", "Bobinlerin bir kısmını fiziksel olarak çıkar, seans dene", "Eksik bobin <b>söylenir</b>; sessizce eksik tedavi verilmez"],
+      ]}]
+    },
+  ];
+
+  const ANAHTAR = "pemf-saha-test-v1";
+  const SIRA = { yok: "gecti", gecti: "kaldi", kaldi: "yok" };
+  const ISARET = { yok: "", gecti: "✓", kaldi: "✕" };
+  let durumlar = {};
+  let suzgec = "tumu";
+
+  try { durumlar = JSON.parse(localStorage.getItem(ANAHTAR) || "{}"); } catch (_) { durumlar = {}; }
+  const kaydet = () => { try { localStorage.setItem(ANAHTAR, JSON.stringify(durumlar)); } catch (_) {} };
+
+  const govde = document.getElementById("govde");
+  const parcalar = [];
+
+  for (const kademe of VERI) {
+    const sec = document.createElement("section");
+    sec.className = "kademe";
+    const bas = document.createElement("div");
+    bas.className = "kademe-bas";
+    bas.innerHTML = '<span class="kademe-no">Kademe ' + kademe.no + '</span><h2>' + kademe.ad + '</h2>' +
+      (kademe.blok ? '<span class="rozet">Yayını durdurur</span>' : '');
+    sec.appendChild(bas);
+    const not = document.createElement("p");
+    not.className = "kademe-not";
+    not.textContent = kademe.not;
+    sec.appendChild(not);
+
+    for (const grup of kademe.gruplar) {
+      if (grup.alt) {
+        const h3 = document.createElement("h3");
+        h3.className = "altbas";
+        h3.textContent = grup.alt;
+        sec.appendChild(h3);
+      }
+      const liste = document.createElement("div");
+      liste.className = "liste";
+      for (const [no, senaryo, beklenen] of grup.items) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "satir";
+        b.dataset.no = no;
+        b.dataset.durum = durumlar[no] || "yok";
+        b.innerHTML =
+          '<span class="kutu" aria-hidden="true"></span>' +
+          '<span class="no">' + no + '</span>' +
+          '<p class="senaryo">' + senaryo + '</p>' +
+          '<p class="beklenen">' + beklenen + '</p>';
+        b.addEventListener("click", () => {
+          const yeni = SIRA[b.dataset.durum];
+          b.dataset.durum = yeni;
+          if (yeni === "yok") delete durumlar[no]; else durumlar[no] = yeni;
+          kaydet(); tazele();
+        });
+        liste.appendChild(b);
+        parcalar.push({ dugme: b, no, blok: kademe.blok });
+      }
+      sec.appendChild(liste);
+    }
+    const bos = document.createElement("p");
+    bos.className = "bos";
+    bos.hidden = true;
+    bos.textContent = "Bu kademede bu süzgece uyan senaryo yok.";
+    sec.appendChild(bos);
+    sec.__bos = bos;
+    govde.appendChild(sec);
+  }
+
+  function tazele() {
+    const n = parcalar.length;
+    let gecti = 0, kaldi = 0, blokKaldi = 0;
+    for (const p of parcalar) {
+      const d = p.dugme.dataset.durum;
+      if (d === "gecti") gecti++;
+      if (d === "kaldi") { kaldi++; if (p.blok) blokKaldi++; }
+      const gizle = (suzgec === "kalanlar" && d !== "yok") || (suzgec === "kaldi" && d !== "kaldi");
+      p.dugme.classList.toggle("gizli", gizle);
+      p.dugme.setAttribute("aria-pressed", d !== "yok");
+      const kutu = p.dugme.querySelector(".kutu");
+      kutu.textContent = ISARET[d];
+    }
+    document.getElementById("s-ilerleme").textContent = (gecti + kaldi) + "/" + n;
+    document.getElementById("s-gecti").textContent = gecti;
+    document.getElementById("s-kaldi").textContent = kaldi;
+    document.getElementById("c-gecti").style.width = (gecti / n * 100) + "%";
+    document.getElementById("c-kaldi").style.width = (kaldi / n * 100) + "%";
+    const blok = document.getElementById("s-blok");
+    blok.innerHTML = blokKaldi
+      ? '<b style="color:var(--fail)">' + blokKaldi + '</b> hasta güvenliği — yayını durdurur'
+      : "";
+    for (const sec of govde.children) {
+      const gorunen = sec.querySelectorAll(".satir:not(.gizli)").length;
+      sec.__bos.hidden = gorunen > 0;
+    }
+  }
+
+  for (const d of document.querySelectorAll("[data-suzgec]")) {
+    d.addEventListener("click", () => {
+      suzgec = d.dataset.suzgec;
+      for (const o of document.querySelectorAll("[data-suzgec]"))
+        o.setAttribute("aria-pressed", o === d);
+      tazele();
+    });
+  }
+  document.getElementById("sifirla").addEventListener("click", () => {
+    durumlar = {}; kaydet();
+    for (const p of parcalar) p.dugme.dataset.durum = "yok";
+    tazele();
+  });
+
+  tazele();
+</script>

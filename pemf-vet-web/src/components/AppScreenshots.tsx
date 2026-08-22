@@ -4,14 +4,14 @@ import { ArrowRight } from './Icons'
 
 /** Uygulama ekran görüntüleri — telefon çerçeveli, yatay kaydırmalı galeri. */
 const SHOTS = [
-  { src: '/screenshots/01-profil.jpg',    title: 'Profil Seçimi',        desc: 'Ev Sahibi · Veteriner · Araştırma' },
+  { src: '/screenshots/01-profil.jpg',    title: 'Profil Seçimi',        desc: 'Evcil Hayvan Sahibi · Veteriner · Araştırma' },
   { src: '/screenshots/02-teshis.jpg',    title: 'Akıllı Teşhis',        desc: 'Kameradan anlık ağrı analizi' },
-  { src: '/screenshots/03-modeller.jpg',  title: 'AI Tanı Modülleri',    desc: 'Görüntü, ses ve sinyal modelleri' },
-  { src: '/screenshots/04-aipro.jpg',     title: 'AI Pro · Otonom Seans', desc: 'Kapalı-döngü otomatik terapi' },
+  { src: '/screenshots/03-modeller.jpg',  title: 'Yapay Zekâ Merkezi',    desc: 'Görüntü, ses ve sinyal modelleri' },
+  { src: '/screenshots/04-aipro.jpg',     title: 'AI Pro · Otomatik Seans', desc: 'Ölçümlere göre kendini ayarlayan seans' },
   { src: '/screenshots/05-kontrol.jpg',   title: 'Cihaz Kontrolü',       desc: '8 bobin, frekans ve süre ayarı' },
-  { src: '/screenshots/06-dashboard.jpg', title: 'Canlı Dashboard',      desc: 'Seans ve sensör telemetrisi' },
+  { src: '/screenshots/06-dashboard.jpg', title: 'Canlı İzleme Paneli',      desc: 'Seans ve sensör ölçümleri' },
   { src: '/screenshots/07-hastalar.jpg',  title: 'Hasta Veritabanı',     desc: 'Klinik içi hasta ve seans kaydı' },
-  { src: '/screenshots/08-gecmis.jpg',    title: 'AI Analiz Geçmişi',    desc: 'Şifreli, aranabilir analiz arşivi' },
+  { src: '/screenshots/08-gecmis.jpg',    title: 'Yapay zekâ analiz geçmişi',    desc: 'Şifreli, aranabilir analiz arşivi' },
 ]
 
 export default function AppScreenshots() {
@@ -31,8 +31,8 @@ export default function AppScreenshots() {
             <span className="chip">Uygulama</span>
             <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Ekranlarla tanıyın</h2>
             <p className="mt-3 text-muted">
-              Profil seçiminden yapay zekâ teşhisine, otonom seanstan hasta arşivine —
-              mobil ve masaüstünde aynı arayüz.
+              Profil seçiminden yapay zekâ teşhisine, otomatik seanstan hasta arşivine — telefon
+              uygulamasından ekran görüntüleri.
             </p>
           </div>
           <div className="hidden shrink-0 gap-2 md:flex">

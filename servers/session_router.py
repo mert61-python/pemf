@@ -50,6 +50,18 @@ def get_active_session():
         # durdurma _session_duration_watchdog'un işi).
         if remaining == 0 and total > 0:
             sess["is_active"] = False
+    # DENETIM 2. TUR [2.1] (2026-08-20): bobinler SEANSSIZ da calisir (CoilParameterPanel →
+    # /api/coil/{id}/control _active_session'a dokunmaz). APK kurulumunun tibbi-guvenlik kapisi
+    # (useApkGuncelleme) cihaza yalniz is_active'i soruyordu → seanssiz calisan bobinlerde Android
+    # yukleyicisi kontrol ekraninin ustune ACILIYORDU. Canli-durumdan turetilen iki alan HER yanitta
+    # tasinir; istemci `is_active || hardware_running`a bakar. SALT-OKUNUR (yukaridaki kural aynen):
+    # yalniz snapshot okunur, ne canli-durum ne seans MUTATE edilir. Eski istemci alanlari yok sayar.
+    with _api._live_state_lock:
+        # ⚠️ `coils` LISTE DEGIL, 0..7 anahtarli SOZLUK (live_state.py:129) → indeksle erisilir.
+        _coils = _api._live_state["coils"]
+        _calisanlar = [int(_coils[i].get("id", i + 1)) for i in range(8) if _coils[i].get("running")]
+    sess["hardware_running"] = bool(_calisanlar)
+    sess["running_coil_ids"] = _calisanlar
     return sess
 
 

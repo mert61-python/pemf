@@ -59,7 +59,7 @@ export default function PackageBuilder() {
                 <span className="font-semibold text-fg">≈ {m.sizeGB.toFixed(1)} GB</span>
                 <span className="text-muted">·</span>
                 {m.included ? (
-                  <span className="font-semibold text-success">Seviyeye dahil</span>
+                  <span className="font-semibold text-success">Planınıza dahil</span>
                 ) : (
                   <span className="font-semibold text-primary">+{tl(m.addonMonthly)}/ay eklenti</span>
                 )}
@@ -97,16 +97,16 @@ export default function PackageBuilder() {
           </div>
         </div>
         <Link to="/download" className="btn-primary shrink-0">
-          Client’ı indir
+          PEMF Vet’i İndir
         </Link>
       </div>
 
       <p className="mt-3 text-center text-xs text-muted">
-        Seçimi <span className="font-medium text-fg/80">client içinde</span> yaparsınız — yalnız
-        seçtiğiniz profillerin modelleri iner.{' '}
+        Profil seçimini <span className="font-medium text-fg/80">kurulum sırasında</span> yaparsınız — yalnız
+        seçtiğiniz modeller iner.{' '}
         {FREE_MODE
           ? 'Test aşamasında tüm profiller (Araştırma dahil) ücretsizdir.'
-          : 'Ev Sahibi ve Veteriner seviyenize dahildir; Araştırma ücretli eklentidir.'}
+          : 'Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma ücretli eklentidir.'}
       </p>
     </div>
   )

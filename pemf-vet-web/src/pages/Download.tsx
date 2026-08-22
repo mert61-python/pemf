@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import type { FC } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CLIENT, LAUNCHER_STEPS, MODULES, FREE_MODE } from '../config'
+import { CLIENT, DOWNLOAD_HOST, LAUNCHER_STEPS, MODULES, FREE_MODE } from '../config'
 import { Windows, Apple, Linux, Android, Check, Download } from '../components/Icons'
 import { useDownloadGate, DownloadGateNote } from '../components/DownloadGate'
 import { DownloadStats } from '../components/DownloadStats'
@@ -60,10 +60,24 @@ function PlatformCard({
           {gated ? 'Giriş yap ve indir' : `${label} için indir`}
         </button>
       ) : (
-        <span className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-not-allowed opacity-60`} aria-disabled>
-          <Download className="h-4 w-4" />
-          Yakında
-        </span>
+        /* Metin denetimi 2026-08-20: devre dışı buton hiçbir ÇIKIŞ sunmuyordu (tarih yok, haber
+           verme yok) — oysa ana sayfadaki aynı durum e-posta bağlantısı veriyor. İki yüzey artık
+           aynı davranıyor. */
+        <>
+          <span className={`mt-6 ${primary ? 'btn-primary' : 'btn-ghost'} cursor-not-allowed opacity-60`} aria-disabled>
+            <Download className="h-4 w-4" />
+            Yakında
+          </span>
+          {/* ⚠️ href STATİK: `download-gate-wiring.test.ts` bu dosyada dinamik `href={...}`
+              YASAKLAR — indirme kapısını atlayan bir bağlantı böyle sızabilir. Platform adını
+              konuya gömmek yerine sabit konu kullanıyoruz (kapı korunur, kullanıcı yine yazar). */}
+          <a
+            href="mailto:destek@v-pemf.com?subject=Yeni%20platform%20s%C3%BCr%C3%BCm%C3%BC%20haber%20ver"
+            className="mt-2 text-center text-xs text-primary hover:underline"
+          >
+            Çıkınca haber ver
+          </a>
+        </>
       )}
       {altTarget && altLabel && (
         /* #20-followup: alt-link (AppImage) kendi appImageReady kapısına sahip → ana `ready` (.deb)
@@ -90,10 +104,28 @@ function PlatformCard({
       )}
       <div className="mt-4 space-y-1.5 text-xs text-muted">
         <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Sürüm {version} · {CLIENT.releaseDate}</div>
+        {/* İNDİRME BOYUTU (metin denetimi 2026-08-20): dört kartın hiçbirinde boyut yoktu;
+            kullanıcı ne indireceğini bilmiyordu. Masaüstünde inen dosya KÜÇÜKTÜR (kurulum
+            dosyası); asıl uygulama sonra iner — ikisi ayrı ayrı söylenir ki ne 3 MB'lık dosya
+            "her şey bu" sanılsın ne de kullanıcı gereksiz yere ~5 GB'tan korksun. */}
+        <div className="inline-flex items-center gap-1.5">
+          <Check className="h-3.5 w-3.5 text-primary" />
+          {target === 'android'
+            ? 'Telefona tek dosya olarak iner'
+            : `İndirilen kurulum dosyası ≈ ${CLIENT.sizeMB} MB · uygulama kurulum sırasında iner`}
+        </div>
+        {/* İki kart iki farklı sürüm gösteriyordu (1.9.32 ↔ 2.3.18) ve sebebi yazmıyordu;
+            ayrıca telefon uygulamasının masaüstünün yanında mı çalıştığı hiç yazmıyordu. */}
+        {target === 'android' && (
+          <>
+            <div className="text-[11px] leading-snug text-muted">{DOWNLOAD_HOST.androidRolNotu}</div>
+            <div className="text-[11px] leading-snug text-muted">{DOWNLOAD_HOST.androidVersionNote}</div>
+          </>
+        )}
         {/* Eskiden düz "SHA-256 doğrulanır" yazıyordu; sitede yayımlanan bir hash yok, bu yüzden
             ziyaretçi indirdiği kurulum dosyasını KENDİSİ doğrulayamıyordu. İfadeyi gerçekte olan
             şeye bağla: bütünlük doğrulaması client'ın indirdiği uygulama paketi için yapılıyor. */}
-        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> Uygulama paketi kurulumda SHA-256 ile doğrulanır</div>
+        <div className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary" /> İnen dosyaların bütünlüğü kurulumda otomatik doğrulanır</div>
       </div>
     </div>
   )
@@ -107,16 +139,16 @@ export default function DownloadPage() {
       {success && (
         <div className="mx-auto max-w-5xl px-5 pt-6 sm:px-6">
           <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400">
-            ✓ Aboneliğiniz aktifleştirildi. Aşağıdan client’ı indirip aynı hesapla giriş yapın — planınız otomatik tanınır.
+            ✓ Aboneliğiniz başladı. Aşağıdan PEMF Vet’i indirip aynı hesapla giriş yapın; planınız otomatik tanınır, ayrıca kod girmeniz gerekmez.
           </div>
         </div>
       )}
       <section className="bg-hero border-b border-border/60">
         <div className="mx-auto max-w-5xl px-5 py-16 text-center sm:px-6 sm:py-20">
           <span className="chip">İndir · v{CLIENT.version}</span>
-          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">PEMF Vet Client’ı indirin</h1>
+          <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">PEMF Vet’i indirin</h1>
           <p className="mx-auto mt-4 max-w-xl text-muted">
-            Hafif client. Kurun; asıl uygulama client içinden inip “Başlat” ile açılır.
+            İndirdiğiniz küçük başlatıcıyı kurun; asıl uygulamayı o indirip kurar ve “Başlat” ile açılır.
           </p>
           {/* Kapı yalnız İNDİRME DÜĞMELERİNE uygulanır; sayfanın kalanı (gereksinimler, kurulum
               adımları, profiller) herkese açık kalır — aksi halde arama motoru boş sayfa görür. */}
@@ -130,7 +162,7 @@ export default function DownloadPage() {
           <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <PlatformCard Icon={Windows} label="Windows" os={CLIENT.downloads.windows.os} target="windows" ready={CLIENT.downloads.windows.ready} version={CLIENT.downloads.windows.version} primary />
             <PlatformCard Icon={Android} label="Android" os={CLIENT.downloads.android.os} target="android" ready={CLIENT.downloads.android.ready} version={CLIENT.downloads.android.version} />
-            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel=".AppImage (universal)" alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" version={CLIENT.downloads.linux.version} />
+            <PlatformCard Icon={Linux} label="Linux" os={CLIENT.downloads.linux.os} target="linux" ready={CLIENT.downloads.linux.ready} altTarget={CLIENT.downloads.linux.appImageReady ? 'linux-appimage' : undefined} altLabel=".AppImage (tüm dağıtımlar)" alt2Target={CLIENT.downloads.linux.rpmReady ? 'linux-rpm' : undefined} alt2Label=".rpm (Fedora / RHEL)" version={CLIENT.downloads.linux.version} />
             <PlatformCard Icon={Apple} label="macOS" os={CLIENT.downloads.macos.os} target="macos" ready={CLIENT.downloads.macos.ready} version={CLIENT.downloads.macos.version} />
           </div>
         </div>
@@ -142,8 +174,8 @@ export default function DownloadPage() {
           <div className="max-w-2xl">
             <h2 className="text-2xl font-bold sm:text-3xl">Kurulumda profilinizi seçin</h2>
             <p className="mt-3 text-muted">
-              Client açılınca kullanım profil(ler)inizi seçersiniz; yalnız seçtiğiniz modeller iner.
-              Çoklu seçim yapılabilir, dilediğiniz zaman değiştirebilirsiniz.
+              Kurulum sırasında kullanım profilinizi seçersiniz; yalnız seçtiğiniz yapay zekâ modelleri iner.
+              Birden fazla profil seçebilir, dilediğiniz zaman değiştirebilirsiniz.
             </p>
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-3">
@@ -166,8 +198,9 @@ export default function DownloadPage() {
             {FREE_MODE ? (
               <>Test aşamasında <span className="font-medium text-fg/80">tüm profiller (Araştırma dahil) ücretsizdir</span> — dilediğinizi indirin.</>
             ) : (
-              <>Fiyatlandırma seviyeye (Pro / Pro+) bağlıdır; Araştırma modülü ücretli eklentidir. Bkz.{' '}
-              <a href="/pricing" className="text-primary hover:underline">Fiyatlandırma</a>.</>
+              <>Evcil Hayvan Sahibi ve Veteriner profilleri planınıza dahildir; Araştırma profili ücretli
+              eklentidir. Ayrıntılar{' '}
+              <a href="/pricing" className="text-primary hover:underline">Fiyatlandırma</a> sayfasında.</>
             )}
           </p>
         </div>
@@ -202,8 +235,8 @@ export default function DownloadPage() {
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Windows className="h-5 w-5" /> Windows</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.windows.os}</li>
-                <li>• 8 GB RAM (AI modelleri için 16 GB önerilir)</li>
-                <li>• ~5 GB boş disk (uygulama + AI modelleri client’la iner)</li>
+                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
+                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
                 <li>• İlk kurulum için internet bağlantısı</li>
               </ul>
             </div>
@@ -211,8 +244,8 @@ export default function DownloadPage() {
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Linux className="h-5 w-5" /> Linux</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.linux.os}</li>
-                <li>• 8 GB RAM (AI modelleri için 16 GB önerilir)</li>
-                <li>• ~5 GB boş disk (uygulama + AI modelleri client’la iner)</li>
+                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
+                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
                 <li>• İlk kurulum için internet bağlantısı</li>
               </ul>
             </div>
@@ -220,8 +253,8 @@ export default function DownloadPage() {
               <div className="mb-3 inline-flex items-center gap-2 font-semibold"><Apple className="h-5 w-5" /> macOS</div>
               <ul className="space-y-2 text-sm text-muted">
                 <li>• {CLIENT.downloads.macos.os} · Apple Silicon / Intel</li>
-                <li>• 8 GB RAM (AI modelleri için 16 GB önerilir)</li>
-                <li>• ~5 GB boş disk (uygulama + AI modelleri client’la iner)</li>
+                <li>• 8 GB RAM (yapay zekâ modelleri için 16 GB önerilir)</li>
+                <li>• 3–5 GB boş disk — kesin boyut seçtiğiniz profil sayısına göre değişir</li>
                 <li>• İlk kurulum için internet bağlantısı</li>
               </ul>
             </div>

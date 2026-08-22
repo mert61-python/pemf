@@ -82,8 +82,15 @@ export async function exchangeCodeForToken(base: string, code: string): Promise<
 }
 
 /** /api/health doğrular; başarılıysa deviceId + (yerelse) api_token'ı saklar (uzaktan erişim için).
- *  requireDeviceId verilirse SADECE o cihaza bağlan (yanlış-cihaz koruması; oto-keşifte kullanılır). */
-export async function checkHealth(addr: string, requireDeviceId?: string | null): Promise<boolean> {
+ *  requireDeviceId verilirse SADECE o cihaza bağlan (yanlış-cihaz koruması; oto-keşifte kullanılır).
+ *  [5.9] kimligiKaydet:false → deviceId DİSKE YAZILMAZ: eşleştirme ön-probu token takasından
+ *  ÖNCE koşar; yan etki takas düşse de kayıtlı kimliği B cihazına çeviriyordu (F3 delinmesi).
+ *  Varsayılan true — keşif merdiveni basamakları kimliği yazmaya devam eder (kendini onarma). */
+export async function checkHealth(
+  addr: string,
+  requireDeviceId?: string | null,
+  secenekler?: { kimligiKaydet?: boolean },
+): Promise<boolean> {
   try {
     const base = toBase(addr);
     const ctrl = new AbortController();
@@ -97,8 +104,13 @@ export async function checkHealth(addr: string, requireDeviceId?: string | null)
     // YANLIŞ-CİHAZ KORUMASI: kayıtlı device_id varsa SADECE o cihaza bağlan (2-cihazlı klinikte
     // yanlış makineyi sürmek = tıbbi risk). requireDeviceId yoksa (ilk eşleşme / manuel) serbest.
     if (requireDeviceId && data?.deviceId && String(data.deviceId) !== requireDeviceId) return false;
-    if (data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(() => {});
-    await provisionToken(base); // yerelse token sakla; uzaksa backend 403 → no-op
+    if (secenekler?.kimligiKaydet !== false) {
+      if (data?.deviceId) await setStoredDeviceId(String(data.deviceId)).catch(() => {});
+      await provisionToken(base); // yerelse token sakla; uzaksa backend 403 → no-op
+    }
+    // [17. parti] kimligiKaydet:false = ön-prob TAMAMEN yan-etkisiz: kimlikle birlikte TOKEN da
+    // yazılmaz (registry LAN adresi döndürürse takas düşse bile B'nin token'ı saklanırdı — F3
+    // deliğinin token kardeşi; adversaryal inceleme bulgusu).
     return true;
   } catch {
     return false;

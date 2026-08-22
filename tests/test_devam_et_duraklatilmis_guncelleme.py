@@ -75,6 +75,7 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
     js = f"""
 let busy = false, baseInstalled = true, manifestRaw = "manifest-v1", authed = true, appRunning = false;
 let resumeOp = null;
+let pausedOp = false; // [5.6] sonrası setInstallControls/showPaused bu bayrağı kullanıyor
 let PLAN = {{ needed: true, cached: true }};
 let RAW = "manifest-v1";
 let prefetch = 0;

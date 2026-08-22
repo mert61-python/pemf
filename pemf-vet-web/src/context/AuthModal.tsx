@@ -4,6 +4,7 @@ import {
 } from 'react'
 import { useAuth } from './AuthContext'
 import { Close } from '../components/Icons'
+import { SIFRE_KURALI, sifreGecerliMi } from '../lib/authHatalari'
 
 /** Modalın hangi akış için açıldığı — yalnız alt başlık metnini değiştirir.
  *  Opsiyonel: mevcut `requireAuth(cb)` çağrıları (ödeme, hesap düğmesi) aynen çalışır. */
@@ -93,6 +94,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [kapatmaOnayi, setKapatmaOnayi] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -101,6 +103,10 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
       if (mode === 'login') {
         const { error } = await signIn(email.trim(), pw)
         if (error) setMsg(error)
+      } else if (!sifreGecerliMi(pw)) {
+        // Kuralı SUNUCUYA bırakmak, kullanıcıya İngilizce "Password should be at least…" mesajı
+        // döndürüyordu; burada Türkçe ve tam kuralı söyleyerek erken uyar.
+        setMsg(`Şifre yeterince güçlü değil. ${SIFRE_KURALI.aciklama}`)
       } else {
         // Rol + profil bilgilerini Supabase user_metadata'ya yaz (abonelik e-postaya bağlanır).
         const meta: Record<string, unknown> = {
@@ -146,11 +152,15 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
     }
   }
 
-  /** Formda veri varsa kazara kapanmayı önle (uzun kayıt formu tek tıkla siliniyordu). */
+  /** Formda veri varsa kazara kapanmayı önle (uzun kayıt formu tek tıkla siliniyordu).
+   *
+   *  Metin denetimi 2026-08-20: burada tarayıcının `window.confirm` kutusu kullanılıyordu —
+   *  kayıt formunun ortasında sitenin dili ve görsel kimliği tamamen kayboluyordu (aynı kural
+   *  hesap menüsünde uygulanmıştı, burada atlanmıştı). Onay artık modalın İÇİNDE. */
   const requestClose = useCallback(() => {
     const dirty = [email, pw, fullName, clinicName, city, phone, vetLicense, institution, department, academicTitle]
       .some((v) => (v ?? '').trim().length > 0)
-    if (dirty && !window.confirm('Girdiğiniz bilgiler kaybolacak. Kapatılsın mı?')) return
+    if (dirty) { setKapatmaOnayi(true); return }
     onClose()
   }, [email, pw, fullName, clinicName, city, phone, vetLicense, institution, department, academicTitle, onClose])
 
@@ -229,9 +239,30 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
           </button>
         </div>
 
+        {/* Kapatma onayı MODAL İÇİNDE (eski hâli tarayıcının `confirm` kutusuydu). */}
+        {kapatmaOnayi && (
+          <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Girdiğiniz bilgiler kaybolacak. Pencere kapatılsın mı?
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={onClose} className="btn-ghost flex-1 py-1.5 text-xs">
+                Kapat
+              </button>
+              <button type="button" onClick={() => setKapatmaOnayi(false)} className="btn-primary flex-1 py-1.5 text-xs">
+                Vazgeç, formda kal
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Metin denetimi 2026-08-20: burada ortam değişkeni adları (VITE_SUPABASE_*) son
+            kullanıcıya gösteriliyordu — klinik sahibi için hiçbir anlamı yok ve yapabileceği bir
+            şey de yok. Kullanıcıya DURUMU ve ÇIKIŞ YOLUNU söyle; teknik ayrıntı konsola gider. */}
         {!ready && (
           <p className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
-            Giriş yapılandırması eksik (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Yönetici env değişkenlerini eklemeli.
+            Giriş servisine şu anda ulaşılamıyor. Kısa süre sonra tekrar deneyin; sürerse
+            destek@v-pemf.com adresine yazın.
           </p>
         )}
 
@@ -281,9 +312,17 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
             type="email" required autoFocus={!isSignup} value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder={isResearch ? 'E-posta (kurumsal olması gerekmez)' : 'E-posta'} autoComplete="email" className={FIELD}
           />
+          {/* ŞİFRE KURALI TEK KAYNAK (metin denetimi 2026-08-20): kayıt `minLength={6}` iken şifre
+              yenileme ekranı "en az 8 + büyük/küçük/rakam" istiyordu → kayıtta kabul edilen şifre
+              yenilemede reddediliyordu. ⚠️ Kural yalnız KAYITTA dayatılır: aynı alan girişte de
+              kullanılıyor ve sahadaki eski hesaplar 6 haneli olabilir — girişte dayatmak
+              kullanıcıyı kendi hesabından kilitlerdi. */}
           <input
-            type="password" required minLength={6} value={pw} onChange={(e) => setPw(e.target.value)}
-            placeholder="Parola (en az 6 karakter)" autoComplete={isSignup ? 'new-password' : 'current-password'} className={FIELD}
+            type="password" required
+            minLength={isSignup ? SIFRE_KURALI.minUzunluk : undefined}
+            value={pw} onChange={(e) => setPw(e.target.value)}
+            placeholder={isSignup ? `Şifre (${SIFRE_KURALI.aciklama.toLocaleLowerCase('tr')})` : 'Şifre'}
+            autoComplete={isSignup ? 'new-password' : 'current-password'} className={FIELD}
           />
 
           {!isSignup && (
@@ -303,7 +342,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
                 <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} placeholder="Şehir" autoComplete="address-level2" className={FIELD} />
                 <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefon" autoComplete="tel" className={FIELD} />
               </div>
-              <input type="text" value={vetLicense} onChange={(e) => setVetLicense(e.target.value)} placeholder="Veteriner oda / diploma no (opsiyonel)" className={FIELD} />
+              <input type="text" value={vetLicense} onChange={(e) => setVetLicense(e.target.value)} placeholder="Veteriner oda / diploma no (isteğe bağlı)" className={FIELD} />
             </div>
           )}
 
@@ -313,7 +352,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
               <p className="text-xs font-medium uppercase tracking-wide text-muted">Kurum bilgileri</p>
               <input type="text" required value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="Üniversite / kurum / enstitü" autoComplete="organization" className={FIELD} />
               <input type="text" required value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Bölüm / anabilim dalı" className={FIELD} />
-              <input type="text" value={academicTitle} onChange={(e) => setAcademicTitle(e.target.value)} placeholder="Akademik ünvan (opsiyonel)" className={FIELD} />
+              <input type="text" value={academicTitle} onChange={(e) => setAcademicTitle(e.target.value)} placeholder="Akademik unvan (isteğe bağlı)" className={FIELD} />
             </div>
           )}
 

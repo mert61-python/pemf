@@ -131,19 +131,34 @@
  * yalniz duration=0 modda cihaz-yerel son-tarih saglar (STOP kaybi/failover sigortasi). */
 #define SURESIZ_TAVAN_SEC 7200UL
 
+/* NVS periyodik kayit araligi + resume TABANI (2. tur denetimi [1.3], 2026-08-20) — TEK KAYNAK.
+ * <bu araliktan kisa periyotlu cok-diril dongusunde HICBIR periyodik kayit kosamaz; her resume
+ * bu kadar sure TABAN sayilip HEMEN kalicilastirilir ki kumulatif suresiz-tavan (SURESIZ_TAVAN_SEC)
+ * sifirdan baslayan hizli crash-loop'ta da delinemesin. Yon FAIL-SAFE: resume basina en fazla
+ * bir aralik erken durma; sureli seanslarin kalan-sure hesabina taban UYGULANMAZ. */
+#define NVS_KAYIT_ARALIGI_MS 30000UL
+
+/* 2. tur denetimi [5.3] (2026-08-20): UPDATE'te `phase` anahtari YOKKEN parse 0 dolduruyordu ve
+ * CMD_UPDATE_PARAMS fazi KOSULSUZ uyguluyordu → fazsiz bir guncelleme cok-bobinli faz desenini
+ * SESSIZCE sifirlardi (0 mesru faz degeridir; "yok" ile karistirilamaz). Parse artik yoklukta bu
+ * nobetciyi doldurur; controller yalniz belirtilmisse degistirir. START'ta varsayilan 0 KALIR
+ * (taze seansin dogal baslangici — bilinçli). (SET_PARAMS/SYNC_ALL dallari 15. partide kaldirildi.) */
+#define PHASE_BELIRTILMEDI (-1)
+
 #define TERMAL_KESME_C   48.0f
 #define TERMAL_DONUS_C   45.0f
 
 // ============================================================================
 // KOMUT TİPLERİ
 // ============================================================================
+/* 15. parti (sahip karari 2026-08-20): CMD_SYNC_ALL (=5) kaldirildi — tek ureticisi silinen
+ * sync_all MQTT daliydi. Degerler ACIK; 5 YENIDEN KULLANILMAZ. */
 enum CommandType {
     CMD_STOP = 0,
     CMD_START = 1,
     CMD_UPDATE_PARAMS = 2,
     CMD_SYNC_TIME = 3,
     CMD_SELF_TEST = 4,
-    CMD_SYNC_ALL = 5,
     CMD_CALIBRATE = 6
 };
 

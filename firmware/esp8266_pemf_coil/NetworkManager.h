@@ -99,7 +99,6 @@ private:
     char _controlTopic[32];
     char _statusTopic[32];
     char _eventTopic[32];
-    const char* _globalControlTopic;
 
     // WiFi credential yÃ¶netimi
     WiFiCredential _savedWiFiList[MAX_WIFI_CREDENTIALS];

@@ -80,10 +80,26 @@ Write-Host "=== Surum senkronizasyonu (versions.json) ===" -ForegroundColor Cyan
 if ($Check) { Write-Host "  MOD: yalnizca kontrol, dosya yazilmayacak" -ForegroundColor DarkGray }
 
 # --- backend: VERSION dosyasi ---
-#     .iss (MyAppVersion) ve docs/version_info.txt'yi build_installer.ps1 icindeki
-#     Sync-ReleaseVersion zaten VERSION'dan uretiyor; burada tekrarlamiyoruz.
+#     .iss (MyAppVersion) build_installer.ps1 icindeki Sync-ReleaseVersion'da kalir (Inno'ya ozgu).
 Set-Value -Path "VERSION" -Label "backend (VERSION)" -New $v.backend `
           -Pattern '(\A\s*)(\d+\.\d+\.\d+)(\s*\z)'
+
+# --- backend: docs/version_info.txt (EXE dosya-ozellikleri metadata'si) ---
+#     2. TUR DENETIMI [5.4] (2026-08-20): bu dosyayi YALNIZ kapali Inno kanalinin
+#     build_installer.ps1'i yeniliyordu; CANLI yayin yolu (build_backend_exe.ps1 → make_base_zip)
+#     hic dokunmadigindan 1.9.14'te DONMUSTU — uc yayin boyunca sahadaki PEMF_Backend.exe yanlis
+#     surum metadata'si tasidi ve hicbir kapi gormedi. versions.json._kanallar hedef olarak
+#     zaten burayi sayiyordu; senkron artik iddiaya uygun. (build_installer'in kendi uretimi
+#     idempotent cift-yazim olarak kalir.) Kilit: tests/test_version_info_senkronu.py
+$vTuple = ($v.backend -split '\.') -join ', '
+Set-Value -Path "docs\version_info.txt" -Label "backend version_info (filevers)" -New $vTuple `
+          -Pattern '(filevers=\()(\d+, \d+, \d+)(, 0\))'
+Set-Value -Path "docs\version_info.txt" -Label "backend version_info (prodvers)" -New $vTuple `
+          -Pattern '(prodvers=\()(\d+, \d+, \d+)(, 0\))'
+Set-Value -Path "docs\version_info.txt" -Label "backend version_info (FileVersion)" -New $v.backend `
+          -Pattern "(u'FileVersion', u')(\d+\.\d+\.\d+)(\.0')"
+Set-Value -Path "docs\version_info.txt" -Label "backend version_info (ProductVersion)" -New $v.backend `
+          -Pattern "(u'ProductVersion', u')(\d+\.\d+\.\d+)(\.0')"
 
 # --- launcher: Cargo.toml [workspace.package] + tauri.conf.json ---
 Set-Value -Path "launcher\Cargo.toml" -Label "launcher (Cargo.toml)" -New $v.launcher `

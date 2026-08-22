@@ -501,26 +501,42 @@ def _esp_telemetry_watchdog():
             # kendisi hala son `start` komutuyla SURUYOR olabilir (kendi duration'i bitene dek).
             # Bu durumda UI "durdu" gosterirken bobin fiziksel olarak enerjili kalirdi — tam da
             # operatore yanlis guvence veren desen. Broker'a ulasilabiliyorsa STOP yayinla:
-            # ESP geri geldiginde retained/yeniden-baglanma ile komutu alir; ulasilamiyorsa
-            # zaten yapabilecegimiz bir sey yok (log'a dusulur).
+            # ESP geri geldiginde retained/yeniden-baglanma ile komutu alir.
+            # 2. tur [5.8] (sahip onayi 2026-08-20): publish SONUCU okunur — probe False doner,
+            # istisna ATMAZ; eski bildirim broker cokukken de "STOP gonderildi" diyordu (yanlis
+            # guvence, 1. turun sahte-"durduruldu" sinifi) ve "log'a dusulur" vaadi bos kaliyordu.
             for cid, snap in changed:
+                stop_gitti = False
                 try:
-                    _mqtt_publish(
-                        f"pemf/coil/{cid}/control",
-                        {
-                            "command": "stop",
-                            "command_id": f"stale_{cid}_{int(time.time() * 1000)}",
-                            "reason": "telemetry_stale",
-                        },
+                    stop_gitti = bool(
+                        _mqtt_publish(
+                            f"pemf/coil/{cid}/control",
+                            {
+                                "command": "stop",
+                                "command_id": f"stale_{cid}_{int(time.time() * 1000)}",
+                                "reason": "telemetry_stale",
+                            },
+                        )
                     )
                 except Exception:
                     logging.getLogger(__name__).warning(
                         "esp watchdog: bobin %s STOP publish edilemedi", cid, exc_info=True
                     )
                 _ws_broadcast_sync({"type": "coil_status", "coilId": cid, "data": snap})
-                _push_notification(
-                    f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi", "warning"
-                )
+                if stop_gitti:
+                    _push_notification(
+                        f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı, STOP gönderildi",
+                        "warning",
+                    )
+                else:
+                    logging.getLogger(__name__).warning(
+                        "esp watchdog: bobin %s STOP publish DOĞRULANAMADI (broker erişilemez olabilir)", cid
+                    )
+                    _push_notification(
+                        f"⚠️ Bobin {cid} telemetrisi yanıt vermiyor — bağlantı kesildi sayıldı; "
+                        "STOP GÖNDERİLEMEDİ (broker erişilemiyor) — bobin HÂLÂ ENERJİLİ olabilir, elle kontrol edin",
+                        "error",
+                    )
         except Exception:
             logging.exception("esp telemetry watchdog error")
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
@@ -581,21 +597,70 @@ def _on_mqtt_message_api(client, userdata, msg):
             elif msg_type == "status" and not is_retained:
                 with _live_state_lock:
                     coil = _live_state["coils"][coil_index]
-                    status = payload.get("status", "")
-                    coil["connected"] = status in ("online", "ready", "running")
-                    coil["running"] = status == "running"
+                    # DENETIM 2. TUR [1.2] (2026-08-20): `connected` ESKIDEN yalniz
+                    # `payload["status"]` DIZESINDEN turetiliyordu — ama depodaki iki firmware'in
+                    # publishStatus'u da `status` alani YAYINLAMAZ (S3 NetworkManager.cpp:604-672,
+                    # 8266 :210-226; parite kapisi tests/test_esp_status_sozlesmesi.py bunu
+                    # kaynakta kilitler). Sonuc: her CANLI status mesaji connected=False yaziyordu;
+                    # S3 hic `sensors` yayinlamadigi icin (UYUMSUZ-6) bobin 6-7 KALICI "baglanti
+                    # yok" gorunuyor, panel kontrolleri kilitleniyor ve asagidaki
+                    # `_esp_telemetry_watchdog` (yalniz connected=True bobini stale-STOP'lar)
+                    # S3 icin HIC calismiyordu. CANLI (retain=0; dal kosulu yukarida) status
+                    # mesajinin kendisi cihazin yasadiginin kanitidir → varsayilan connected=True.
+                    # ESKI firmware'in ACIK dize sinyali ise korunur ve varsayilani EZER
+                    # ("offline" diyen cihaza inat canli denmez — karsit-kanit testiyle kilitli).
+                    status = payload.get("status")
+                    if status is not None:
+                        coil["connected"] = status in ("online", "ready", "running")
+                        coil["running"] = status == "running"
+                    else:
+                        coil["connected"] = True
                     if "frequency" in payload:
                         coil["frequencyHz"] = payload["frequency"]
-                    if "duty_cycle" in payload:
-                        coil["dutyCycle"] = payload["duty_cycle"]
+                    # DENETIM 2. TUR [1.2]: duty uc ayri anahtarla geliyor — eski firmware
+                    # `duty_cycle`, 8266 `pwm_duty_cycle`, S3 `pwm_duty`. Yalniz ilki okunuyordu →
+                    # firmware'in DURUST efektif duty raporu (D-2) live-state'e ve oradan
+                    # dakika-akumulatoru uzerinden DOZ KAYDINA (`pwm_duty_percent`) hic ulasmiyor,
+                    # ESP bobinlerinin doz satirlarina duty=0 yaziliyordu.
+                    # Oncelik EFEKTIF degerlerde (adversaryal review, 2026-08-20): pwm_* anahtarlari
+                    # firmware'in D-2 "durust rapor"udur (kirpma/yuvarlama SONRASI gercek cikis);
+                    # `duty_cycle` eski filonun/komutlananin adi. Ikisi birden gelirse efektif kazanir.
+                    for _duty_anahtari in ("pwm_duty", "pwm_duty_cycle", "duty_cycle"):
+                        if _duty_anahtari in payload:
+                            coil["dutyCycle"] = payload[_duty_anahtari]
+                            break
                     if "pwm_active" in payload:
                         coil["running"] = bool(payload["pwm_active"])
                     if "pwm_frequency" in payload:
                         coil["frequencyHz"] = payload["pwm_frequency"]
-                    if "object_temp" in payload:
-                        coil["objectTemp"] = round(float(payload["object_temp"]), 1)
-                    if "magnetic_field" in payload:
-                        coil["magneticMt"] = round(float(payload["magnetic_field"]), 2)
+
+                    # TOLERANSLI sayi donusumu (adversaryal review #3): S3 sicaklik sensoru
+                    # arizasinda readObjectTempC NaN doner ve ArduinoJson NaN'i `null` yazar —
+                    # dogrudan float(None) TypeError'i TUM mesaj islemeyi yarida kesiyordu
+                    # (connected/duty uygulanmis, current/ambient + WS + reconcile ATLANMIS).
+                    # Bozuk tek alan yalniz KENDINI dusurur; 0-nobetcisi yazilmaz (bkz.
+                    # CoilThermalHonesty: 0 "serin" okunur, null bir olcum DEGILDIR).
+                    def _sayi(anahtar):
+                        try:
+                            return float(payload[anahtar])
+                        except (KeyError, TypeError, ValueError):
+                            return None
+
+                    _ot = _sayi("object_temp")
+                    if _ot is not None:
+                        coil["objectTemp"] = round(_ot, 1)
+                    _mf = _sayi("magnetic_field")
+                    if _mf is not None:
+                        coil["magneticMt"] = round(_mf, 2)
+                    # DENETIM 2. TUR [1.2](c): S3 sensors mesajini kaldirdi ("UYUMSUZ-6") —
+                    # current/ambient S3'te YALNIZ status icinde gelir; okunmazsa doz/KPI 0 gorur.
+                    # (sensors dalindaki yuvarlama hassasiyetleriyle birebir ayni.)
+                    _cur = _sayi("current")
+                    if _cur is not None:
+                        coil["currentA"] = round(_cur, 3)
+                    _amb = _sayi("ambient_temp")
+                    if _amb is not None:
+                        coil["ambientTemp"] = round(_amb, 1)
                     snapshot = dict(coil)
                 _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": snapshot})
                 # HG-6 (Plan A-3): hedefli reconcile — ESP "çalışıyor" diyor ama backend niyeti/
@@ -648,6 +713,39 @@ def _on_mqtt_message_api(client, userdata, msg):
                             "type": "selftest_result",
                             "coilId": int(coil_id_str),
                             "data": {"result": event_type, "message": _st_msg},
+                        }
+                    )
+                    return
+                # DENETIM 2. TUR [4.2] (2026-08-20): iki firmware de yerel TERMAL korumada event
+                # yayinliyor (S3 .ino:80 thermal_stop; 8266 .ino:361/368/493 stop+unlock+lock) ama
+                # backend bunlari ISLEMIYORDU → cihazin en onemli yerel guvenlik eylemi operatore
+                # gorunmuyordu: bobin "sebepsiz durdu" sanilir, termal kilit surerken start redleri
+                # aciklamasiz kalirdi (D-1 selftest duzeltmesinin zincirin obur ucundaki ikizi).
+                # RETAINED filtresi yukarida (bayat termal olay reconnect'te alarm uretmez).
+                # Ad paritesi firmware kaynagiyla kilitli: tests/test_termal_olay_gorunurlugu.py
+                if event_type in ("thermal_stop", "thermal_lock", "thermal_unlock"):
+                    _termal_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
+                    if event_type == "thermal_stop":
+                        logging.error("YEREL TERMAL KESME bobin %s: %s", coil_id_str, _termal_msg)
+                        _push_notification(
+                            f"🔥 Bobin {coil_id_str} YEREL TERMAL KESME — PWM cihaz tarafından durduruldu"
+                            + (f" ({_termal_msg})" if _termal_msg else "")
+                            + "; 45°C altına soğuyunca start serbest",
+                            "error",
+                        )
+                    elif event_type == "thermal_lock":
+                        _push_notification(
+                            f"⚠️ Bobin {coil_id_str} sıcak: start reddedildi — soğuması bekleniyor"
+                            + (f" ({_termal_msg})" if _termal_msg else ""),
+                            "warning",
+                        )
+                    else:
+                        _push_notification(f"✅ Bobin {coil_id_str} soğudu — start yeniden serbest", "success")
+                    _ws_broadcast_sync(
+                        {
+                            "type": "thermal_event",
+                            "coilId": int(coil_id_str),
+                            "data": {"event": event_type, "message": _termal_msg},
                         }
                     )
                     return
@@ -1233,6 +1331,20 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
 _pending_acks: dict = {}
 _pending_acks_lock = threading.Lock()
 
+# DENETIM 2. TUR [3.2] (2026-08-20): command_id YALNIZ ms çözünürlüklüydü — aynı bobine aynı
+# milisaniyede iki E-stop tetiği (manuel buton + ESP alarmı; alarm dalında debounce yok) AYNI
+# id'yi üretiyordu. _register_ack üzerine yazar + _wait_ack pop'lar → ikinci bekçi ack GELMİŞKEN
+# timeout görüp acil-durdurma anında SAHTE "ONAYI GELMEDİ" kırmızı alarmı basıyordu (ölçüldü,
+# iki advers interleaving). Süreç-ömürlü sıra numarası aynı ms'de bile benzersizlik verir.
+# (itertools.count C-uygulamalıdır; next() GIL altında atomiktir — ayrıca kilit gerekmez.)
+# ⚠️ id UZUNLUĞU (17. parti düzeltmesi — adversaryal inceleme): S3 firmware ≥36 karakterlik
+# command_id'yi KIRPMAZ, TÜMDEN REDDEDER (esps3 NetworkManager.cpp: strlen<36 değilse id boş
+# bırakılır → HİÇ ACK GİTMEZ). Yani id biçimi büyürse arıza modu "kırpılmış eşleşme" değil
+# "onay hiç gelmez" olur. Biçim `estop_{coil}_{13 haneli ms}_{sıra}` ~25 karakterdir ve testle kilitlidir.
+import itertools as _itertools
+
+_estop_sira = _itertools.count(1)
+
 
 def _register_ack(command_id: str) -> None:
     """Publish'ten ÖNCE çağrılır (ack yarışı kaybolmasın): command_id için bekleme kaydı aç."""
@@ -1286,6 +1398,22 @@ def _estop_ack_watch(coil_id: int, command_id: str) -> None:
     confirmed = _wait_ack(command_id, timeout=2.0)
     if confirmed is True:
         logging.getLogger(__name__).info("E-stop bobin %s: ESP ONAYLADI (ack)", coil_id)
+        return
+    if confirmed is False:
+        # [3.2]: ESP komutu AÇIKÇA REDDETTİ (success=false NACK) — eskiden bu dal da "(2s) ONAYI
+        # GELMEDİ" diyordu: hem teşhis hem süre ibaresi yanlıştı (NACK anında döner). Operatör
+        # doğru şeye bakmalı: sorun ağ/teslim değil, cihazın reddi.
+        logging.getLogger(__name__).error(
+            "E-stop bobin %s: ESP komutu REDDETTİ (NACK) — bobin fiziksel DURMAMIS olabilir, MANUEL KONTROL et.",
+            coil_id,
+        )
+        try:
+            _push_notification(
+                f"⚠️ Bobin {coil_id}: acil durdurma komutu ESP tarafından REDDEDİLDİ — bobini elle kontrol edin",
+                "error",
+            )
+        except Exception:
+            pass
         return
     logging.getLogger(__name__).error(
         "E-stop bobin %s: ESP ONAYI GELMEDI (2s) — bobin fiziksel DURMAMIS olabilir, MANUEL KONTROL et.",
@@ -1730,7 +1858,7 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         if not state.hardware:
             raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
         stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
-        state.hardware.update_coil(
+        _stm_sonuc = state.hardware.update_coil(
             coil_id,
             payload.freq,
             payload.duty,
@@ -1743,12 +1871,21 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
             # tam uygulayabilir → hassas saniyeyi de gecir. Firmware 1 dk'lik yedek kapak kalir.
             duration_seconds=payload.duration,
         )
-        # Asama-2: per-bobin run logging (best-effort, seansi bozmaz).
+        # DENETIM 2. TUR [4.5] (2026-08-20): update_coil'in donusu ESKIDEN yok sayiliyordu —
+        # parametre reddinde (state DEGISMEDI, bobin surulmedi) hem tedavi gecmisine "kostu"
+        # yaziliyor hem istemciye "success" donuyordu. Kosu kaydi yalniz KABUL edilen start'ta;
+        # STOP'ta finish HER halde calisir (acik kaydi kapatmak guvenli taraftir).
+        _stm_kabul = bool(_stm_sonuc)
         if payload.start:
-            _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+            if _stm_kabul:
+                _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
         else:
             _finish_coil_run(coil_id)
-        return {"status": "success", "command_id": command_id, "transport": "stm32"}
+        return {
+            "status": "success" if _stm_kabul else "error",
+            "command_id": command_id,
+            "transport": "stm32",
+        }
 
     if payload.start:
         # D-3 (2026-08-19): ESP DDS 1000 Hz üstünü süremez (firmware constrain) → önden normalize.
@@ -1793,8 +1930,11 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
     ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
     # Asama-2: per-bobin run logging (ESP/MQTT dali). Loglanan freq = ESP'ye GİDEN (normalize) değer.
+    # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te — broker oluyken komut KESIN gitmedi;
+    # "kostu" yazmak hic kosmamis bobini tedavi gecmisine sokar. STOP'ta finish her halde.
     if payload.start:
-        _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
+        if ok:
+            _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
     else:
         _finish_coil_run(coil_id)
     _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
@@ -1831,7 +1971,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 results.append({"coilId": coil_id, "status": "stm_unavailable"})
                 continue
             stm_duration_min = _duration_seconds_to_stm_minutes(payload.duration)
-            state.hardware.update_coil(
+            _b_stm_sonuc = state.hardware.update_coil(
                 coil_id,
                 payload.freq,
                 payload.duty,
@@ -1845,11 +1985,17 @@ async def control_batch_coils(payload: BatchCoilPayload):
                 duration_seconds=payload.duration,
             )
             # Asama-2: per-bobin run logging.
+            # [4.5]: kosu kaydi + satir durumu update_coil'in donusune bagli (tekil yolla ayni) —
+            # reddedilen start batch satirinda "success" gorunmesin, gecmise "kostu" yazilmasin.
+            _b_stm_kabul = bool(_b_stm_sonuc)
             if payload.start:
-                _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
+                if _b_stm_kabul:
+                    _begin_coil_run(coil_id, payload.freq, payload.duty, payload.phase, None, "stm")
             else:
                 _finish_coil_run(coil_id)
-            results.append({"coilId": coil_id, "status": "success", "transport": "stm32"})
+            results.append(
+                {"coilId": coil_id, "status": "success" if _b_stm_kabul else "invalid", "transport": "stm32"}
+            )
             continue
         if payload.start:
             # D-3 batch tamamlayıcısı (review, 2026-08-19 akşam): tek-bobin yolu normalize
@@ -1887,8 +2033,10 @@ async def control_batch_coils(payload: BatchCoilPayload):
         # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
         ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
         # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
+        # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te (tekil yolla ayni gerekce).
         if payload.start:
-            _begin_coil_run(coil_id, _b_esp_freq, payload.duty, payload.phase, None, "esp")
+            if ok:
+                _begin_coil_run(coil_id, _b_esp_freq, payload.duty, payload.phase, None, "esp")
         else:
             _finish_coil_run(coil_id)
         _satir = {"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"}
@@ -2141,12 +2289,20 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # Session API accepts minutes; ESP/MQTT duration remains seconds.
     import time as _t
 
+    # DENETIM 2. TUR [4.4] (2026-08-20): D-3 duzeltmesi (ffd4406) uc ham yayin sitesinden yalniz
+    # IKISINI (tek-bobin + batch) kapatmisti; SEANS yolu ESP'ye HAM freq gondermeye devam ediyordu
+    # → >1000 Hz'lik seansta STM bobinleri istenen frekansta, ESP'ler sessizce 1000'de: karma
+    # dizide tutarsiz doz ("kismi duzeltme, duzeltilmemis demektir"). Tek-bobin/batch ile AYNI
+    # normalize; run-log da ESP'ye GIDEN degeri yazar (o iki yolun kuraliyla birebir).
+    from utils.stm32_protocol_limits import normalize_esp_frequency_hz as _sess_nesp
+
+    _esp_sess_freq = _sess_nesp(payload.frequency)
     mqtt_duration_seconds = payload.duration_minutes * 60
     for coil_id in esp_coils:
         mqtt_payload = {
             "command": "start",
             "command_id": f"sess_{coil_id}_{int(_t.time() * 1000)}",
-            "freq": payload.frequency,
+            "freq": _esp_sess_freq,
             "duty": payload.duty,
             "phase": payload.phase,
             "duration": mqtt_duration_seconds,
@@ -2157,7 +2313,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
         ).start()
         # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
         # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
-        _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "esp")
+        # [4.4]: loglanan freq = ESP'ye GIDEN (normalize) deger — tek-bobin/batch kuraliyla ayni.
+        _begin_coil_run(coil_id, _esp_sess_freq, payload.duty, payload.phase, payload.intensity, "esp")
 
     # event-loop-blok fix: update_coil = STM32'ye SENKRON seri-port yazımı (bobin başına ~onlarca ms) →
     # async-uçta doğrudan çalışınca event-loop'u bloklar; STM bobin döngüsünü thread'e offload et.
@@ -2223,26 +2380,72 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
 def _stop_session_coils(coil_ids):
     """Verilen bobinlere donanım STOP gönderir (ESP→MQTT, STM→update_coil start=False).
-    is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur."""
+    is_running=False yapar → HWKeepAlive tazelemeyi keser → bobinler fiziksel olarak durur.
+
+    DENETIM 2. TUR [1.1] (2026-08-20): DOĞRULANAMAYAN bobinlerin listesini DÖNER.
+    Eskiden publish/update_coil sonuçları YOK SAYILIYORDU → broker ölüyken /api/session/stop
+    koşulsuz "success" dönüyor, istemcinin "Durdurma onaylanamadı — ACİL DURDUR'a basın"
+    uyarısı hiç tetiklenmiyordu (STOP hiçbir bobine ulaşmamışken UI "durdu" der).
+    "Teyitsiz" üç durumu kapsar: ESP publish PUBACK'siz düştü · STM update_coil False döndü ·
+    STM kontrolcüsü hiç yok (STOP denen(e)medi — sessiz atlama da teyitsizliktir).
+    Dönüş listesi bilgidir; durdurma denemeleri her hâlükârda yapılır (best-effort korunur)."""
     import time as _t
 
+    teyitsiz: list = []
     for coil_id in [cid for cid in coil_ids if cid in ESP_COIL_IDS]:
-        _mqtt_publish(
+        ok = _mqtt_publish(
             f"pemf/coil/{coil_id}/control",
             {
                 "command": "stop",
                 "command_id": f"stop_{coil_id}_{int(_t.time() * 1000)}",
             },
         )
+        if not ok:
+            teyitsiz.append(coil_id)
+    _stm_hedef = [cid for cid in coil_ids if cid in STM_COIL_IDS]
     if state.hardware:
-        for coil_id in [cid for cid in coil_ids if cid in STM_COIL_IDS]:
-            state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False)
+        for coil_id in _stm_hedef:
+            try:
+                ok = bool(state.hardware.update_coil(coil_id, 0.0, 0.0, 0.0, 0, start=False))
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "_stop_session_coils: STM stop hatasi (bobin %s)", coil_id, exc_info=True
+                )
+                ok = False
+            if not ok:
+                teyitsiz.append(coil_id)
+    else:
+        teyitsiz.extend(_stm_hedef)
     # Asama-2: durdurulan tum bobinlerin acik run'larini kapat (acik kalmasin).
     for coil_id in coil_ids:
         try:
             _finish_coil_run(coil_id)
         except Exception:
             logging.getLogger(__name__).debug("_stop_session_coils _finish_coil_run hatasi", exc_info=True)
+    if teyitsiz:
+        logging.getLogger(__name__).warning(
+            "_stop_session_coils: donanim STOP'u DOGRULANAMAYAN bobinler: %s (broker/STM erisilemez olabilir)",
+            sorted(teyitsiz),
+        )
+    return sorted(teyitsiz)
+
+
+def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
+    """DENETIM 2. TUR [1.1] tamamlamasi (adversaryal review #2): /session/stop yaniti teyitsizligi
+    tasirken sure-watchdog / AI durdurma / sahipsiz-bobin yollari onu YUTUYORDU — broker oluyken
+    seans "sure doldu" ile bitince operatore hicbir uyari gitmiyordu (bobinler ESP'de kendi suresi
+    bitene dek enerjili kalabilir). Bu yardimci, HTTP yaniti OLMAYAN durdurma yollarinin ortak
+    uyari kanali. Bos listede SESSIZ (alarm yorgunlugu uretme); bildirim hatasi durdurmayi bozmaz."""
+    if not teyitsiz:
+        return
+    try:
+        _push_notification(
+            f"⚠️ {kaynak}: bobin(ler) {sorted(teyitsiz)} için donanım STOP'u DOĞRULANAMADI — "
+            "HÂLÂ ÇALIŞIYOR olabilirler. ACİL DURDUR'a basın ya da bobinleri elle kontrol edin.",
+            "error",
+        )
+    except Exception:
+        logging.getLogger(__name__).warning("teyitsiz-stop bildirimi gonderilemedi (%s)", kaynak, exc_info=True)
 
 
 def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
@@ -2296,7 +2499,7 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
         ]
     if _orphan_coils:
         try:
-            _stop_session_coils(_orphan_coils)
+            _bildir_teyitsiz_stop(_stop_session_coils(_orphan_coils), "Sahipsiz bobin durdurması")
             logging.getLogger(__name__).warning(
                 "AI seansi daha DAR bir bobin kumesi sahiplendi → sahipsiz kalan bobinler "
                 "durduruldu %s (aksi halde enerjili kalirlardi).",
@@ -2475,7 +2678,10 @@ def _session_duration_watchdog():
                         ) == sess.get("session_id")
                     if not _still_same:
                         continue  # seans devralındı/durduruldu → bayat watchdog turu dokunmasın
-                    _stop_session_coils(sess.get("coil_ids", list(range(1, 9))))
+                    _bildir_teyitsiz_stop(
+                        _stop_session_coils(sess.get("coil_ids", list(range(1, 9)))),
+                        "Süre doldu — otomatik durdurma",
+                    )
                     with _session_lock:
                         if _active_session.get("session_id") == sess.get("session_id"):
                             _active_session["is_active"] = False
@@ -2918,6 +3124,8 @@ async def stop_session():
     # ZATEN vardi; /stop yolunda YOKTU. Donanima dokunmadan hemen once ayni seansta miyiz diye bak.
     with _session_lock:
         _takeover = bool(_active_session.get("is_active")) and _active_session.get("session_id") != _stopping_session_id
+    # DENETIM 2. TUR [1.1]: donanim STOP'u dogrulanamayan bobinler yanita tasinir (asagida).
+    _stop_teyitsiz: list = []
     if _takeover:
         logging.getLogger(__name__).warning(
             "stop: bu seans (%s) durdurulurken YENI seans (%s) baslamis → donanim STOP'u ATLANDI "
@@ -2926,7 +3134,7 @@ async def stop_session():
             _active_session.get("session_id"),
         )
     else:
-        await asyncio.to_thread(_stop_session_coils, coil_ids)
+        _stop_teyitsiz = await asyncio.to_thread(_stop_session_coils, coil_ids) or []
         update_live_session_state(is_active=False, mode="Sistem Hazır")
 
     # (b) Sensor buffer'i gercek db_session_id ile FLUSH et + (c) end_session (gercek wall-clock sure).
@@ -2981,7 +3189,20 @@ async def stop_session():
                 "stop: db_session_id YOK → %d sensor satiri KALICI DEGIL (kayip). Seans DB'ye baglanmamis.", _lost
             )
 
-    return {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
+    # DENETIM 2. TUR [1.1] (2026-08-20): ust-seviye status "success" KALIR (seans kaydi gercekten
+    # kapatildi; mevcut cagiranlarin sozlesmesi bozulmaz) ama donanim STOP'u DOGRULANAMAYAN
+    # bobinler ACIKCA listelenir. Eskiden broker oluyken bile kosulsuz "success" donuyordu →
+    # istemcinin "Durdurma onaylanamadi — ACIL DURDUR'a basin" uyarisi HIC tetiklenmiyordu
+    # (STOP hicbir bobine ulasmamisken UI seansi "durdu" gosterir). Alan yalniz teyitsizlik
+    # VARSA eklenir — mutlu yolda yanit sekli birebir ayni (alarm yorgunlugu uretme).
+    _yanit = {"status": "success", "message": "Seans durduruldu.", "sensor_samples": flushed}
+    if _stop_teyitsiz:
+        _yanit["hardware_stop_unconfirmed"] = _stop_teyitsiz
+        _yanit["message"] = (
+            "Seans kaydı kapatıldı — ancak bazı bobinlerin donanım STOP'u DOĞRULANAMADI: "
+            f"{_stop_teyitsiz}. Bobinler hâlâ çalışıyor olabilir."
+        )
+    return _yanit
 
 
 class AiLogPayload(BaseModel):
@@ -3491,7 +3712,8 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
     # thread'de calisir (async endpoint asyncio.to_thread; ESP-alarm/STM-disconnect zaten thread),
     # dolayisiyla burada ThreadPoolExecutor guvenli + event-loop'u etkilemez.
     def _estop_one(coil_id):
-        command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}"
+        # [3.2]: `_{next(_estop_sira)}` eki ŞART — ms tek başına çakışabilir (üstteki blok yorumu).
+        command_id = f"estop_{coil_id}_{int(_t.time() * 1000)}_{next(_estop_sira)}"
         # HG-4 (2026-08-19): onay kaydını publish'ten ÖNCE aç (hızlı ESP ack yarışı kaybolmasın).
         _register_ack(command_id)
         ok = _mqtt_publish(

@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { Link } from 'react-router-dom'
-import { FAQ } from '../config'
+import { COMPANY, FAQ } from '../config'
 import { ArrowRight } from '../components/Icons'
 
 export default function Support() {
@@ -11,7 +11,7 @@ export default function Support() {
           <span className="chip">Destek</span>
           <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">Sık sorulan sorular</h1>
           <p className="mx-auto mt-4 max-w-xl text-muted">
-            Client, kurulum ve uygulama hakkında en çok merak edilenler.
+            Kurulum, kullanım ve abonelik hakkında en çok merak edilenler.
           </p>
         </div>
       </section>
@@ -39,14 +39,20 @@ export default function Support() {
           <div className="card p-8 text-center sm:p-10">
             <h2 className="text-2xl font-bold">Hâlâ yardıma mı ihtiyacınız var?</h2>
             <p className="mx-auto mt-3 max-w-md text-muted">
-              Kurulum, lisans veya klinik entegrasyon için ekibimizle iletişime geçin.
+              Kurulum, abonelik ya da kliniğinize özel çözümler için bize yazın; en geç bir iş günü içinde dönüş yapıyoruz.
             </p>
+            {/* Metin denetimi 2026-08-20: destek sayfasında TELEFON yoktu (config'te var, yalnız
+                alt bilgide görünüyordu) ve yanıt süresi yazmıyordu — tek çıkış e-postaydı. */}
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a href="mailto:destek@v-pemf.com" className="btn-primary">destek@v-pemf.com</a>
+              <a href={`mailto:${COMPANY.email}`} className="btn-primary">{COMPANY.email}</a>
+              <a href={`tel:${COMPANY.phone.replace(/\s/g, '')}`} className="btn-ghost">{COMPANY.phone}</a>
               <Link to="/download" className="btn-ghost">
-                İstemciyi İndir <ArrowRight className="h-4 w-4" />
+                PEMF Vet’i İndir <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+            <p className="mt-4 text-xs text-muted">
+              Hafta içi 09:00–18:00 arası ulaşabilirsiniz; e-postalara en geç bir iş günü içinde dönüyoruz.
+            </p>
           </div>
         </div>
       </section>

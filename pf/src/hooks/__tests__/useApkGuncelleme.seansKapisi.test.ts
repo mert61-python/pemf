@@ -31,6 +31,9 @@ jest.mock("@/services/apiClient", () => ({ apiGet: jest.fn() }));
 jest.mock("@/services/mobileUpdate", () => ({
   apkIndir: jest.fn(),
   kurulumuBaslat: jest.fn(),
+  // [5.7a] kancanın erteleme kapısı — bu dosyanın konusu değil, nötr stub (erteleme yok):
+  kurulumErtelendiMi: () => false,
+  kurulumErtelemesiniKaldir: () => {},
 }));
 
 import { renderHook, act } from "@testing-library/react-native";
@@ -67,6 +70,35 @@ it("KRİTİK: seans SÜRÜYORSA kurulum ekranı AÇILMAZ", async () => {
   expect(mockIndir).toHaveBeenCalledTimes(1); // indirme YAPILIR (paket hazır beklesin)
   expect(mockKur).not.toHaveBeenCalled();     // ama yükleyici AÇILMAZ
   expect(h.result.current.kurulumAcildi).toBe(false);
+});
+
+it("KRİTİK [2.tur 2.1]: SEANSSIZ çalışan bobin varken de kurulum ekranı AÇILMAZ", async () => {
+  // Bobinler seans olmadan da sürülür (CoilParameterPanel → /coil/{id}/control, is_active'e
+  // dokunmaz; ControlScreen bunu 'hardwareRunningOutOfSession' banner'ıyla ayrı durum sayar).
+  // Kapı yalnız is_active'e bakarsa, bobinler hayvanın üzerindeyken yükleyici yine açılır —
+  // 1. tur düzeltmesinin 'seanssız bobin' varyantı. Backend artık hardware_running alanı taşıyor.
+  mockApiGet.mockResolvedValue({ is_active: false, hardware_running: true });
+  const h = await guncelle();
+
+  expect(mockIndir).toHaveBeenCalledTimes(1); // indirme yine YAPILIR (paket hazır beklesin)
+  expect(mockKur).not.toHaveBeenCalled();
+  expect(h.result.current.kurulumAcildi).toBe(false);
+});
+
+it("KARŞIT-KANIT [2.tur 2.1]: seans yok + bobin yok → kurulum AÇILIR", async () => {
+  mockApiGet.mockResolvedValue({ is_active: false, hardware_running: false });
+  await guncelle();
+
+  expect(mockKur).toHaveBeenCalledTimes(1);
+});
+
+it("KARŞIT-KANIT [2.tur 2.1]: ESKİ backend (alan yok) → fail-open korunur, kurulum AÇILIR", async () => {
+  // Geriye uyum: sahadaki eski backend hardware_running taşımaz; yalnız POZİTİF kanıt erteler
+  // (bilinçli fail-open — 'güncelleme ZORUNLU KILINAMAZ' sahip kararı bozulmamalı).
+  mockApiGet.mockResolvedValue({ is_active: false });
+  await guncelle();
+
+  expect(mockKur).toHaveBeenCalledTimes(1);
 });
 
 it("KRİTİK: ertelendiğinde operatöre SEBEP söylenir (sessiz hiçbir şey olmaması yok)", async () => {

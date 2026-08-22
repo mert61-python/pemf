@@ -38,7 +38,7 @@ export default function Header() {
           <AccountButton />
           <Link to="/download" className="btn-primary text-sm">
             <Download className="h-4 w-4" />
-            İstemciyi İndir
+            PEMF Vet’i İndir
           </Link>
         </div>
 
@@ -73,7 +73,7 @@ export default function Header() {
             </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />
-              İstemciyi İndir
+              PEMF Vet’i İndir
             </Link>
           </nav>
         </div>

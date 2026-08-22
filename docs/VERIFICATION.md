@@ -123,7 +123,7 @@ Backend'de freq/duty/sıcaklık **clamp'i bilinçli yok** (B-1.5); güvenlik fir
 - **Tıbbi cihaz için:** bu, yazılı **güvenlik-dosyası (safety case)** ile kanıtlanmalı — kod okuması
   bu iddiayı test etmez. Bu, B-1.5 "yazılı risk-kabulü"nün donanım tarafı.
 
-## ⏳ 9 — firmware `[FIX-1c]` duty geçişi (DONANIM BENCH · **YAYIN ÖNCESİ ZORUNLU**)
+## ✅ 9 — firmware `[FIX-1c]` duty geçişi (DONANIM BENCH) — SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz
 
 **Neyi doğrulayacağız.** Denetim (2026-08-17) enerjili bir bobinin frekansı **ARTIRILDIĞINDA**
 duty tick'inin bayat kaldığını buldu: `g_tpp` yeni (küçük) periyoda göre yazılıyor ama
@@ -214,3 +214,103 @@ kalıyor ve `pairing.cihazaBaglan` ile `getRemoteUrlForDevice` yalnız `durum ==
 → bayat/zehirlenmiş `tunnel_url` hiçbir zaman kullanılmaz. Genişletme yalnızca **sebebi** istemciye
 taşır. Ayrıca RPC hâlâ tam `device_id` VEYA tam 6-haneli `pairing_code` istiyor (parça/joker yok) ve
 tablo dökümü kapalı.
+
+## ✅ 11 — S3/8266 süresiz-tavan RESUME kalıcılığı (DONANIM BENCH) — SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz
+
+**Ne değişti (2. tur denetimi [1.3], 2026-08-20):** (a) S3 `loadState`, kümülatif süresiz-mod
+birikimini `_beginOutput`a PARAMETRE geçirir — içerideki `forceSaveState` NVS'e artık ≈0 değil
+DOĞRU değeri yazar; (b) her resume BİR KAYIT ARALIĞI (`NVS_KAYIT_ARALIGI_MS` = 30 sn) TABAN
+sayılır ve HEMEN kalıcılaştırılır (S3: `_beginOutput` içindeki kayıt; 8266: `restorePWMState`
+sonundaki `savePWMState`). Yön fail-safe: resume başına en fazla 30 sn ERKEN durma.
+
+**Tezgâh prosedürü (skop/termal gerekmez; seri log yeter):**
+1. Cihaza `duration=0` (süresiz) START gönder; ~2 dk çalıştır.
+2. Gücü ANİDEN kes (soft reset DEĞİL), 5 sn içinde geri ver → log'da "NVS'den devam"/"EEPROM'dan
+   yuklendi ve suresiz devam" görülmeli.
+3. **20 sn içinde** gücü TEKRAR kes, geri ver. KABUL: ikinci resume'da devralınan birikim
+   İLKİNDEN BÜYÜK olmalı (log'a `_suresizGecenMs` başlangıç değeri eklenerek ya da NVS/EEPROM
+   dökümüyle doğrula) — eski S3 davranışında bu ikinci resume birikimi ≈0'a düşürüyordu.
+4. Adım 2-3'ü betikle ~10 kez tekrarla: birikim her çevrimde ≥30 sn artmalı (taban).
+5. **Karşıt-kanıt:** operatörden YENİ bir START gönder → birikim SIFIRLANMALI (pencere tazelenir);
+   `duration>0` (süreli) seans + tek resume → kalan süre eski davranışla aynı (taban uygulanmaz;
+   8266'da EEPROM artık resume'da da yazıldığı için kalan süre resume'lar arası KORUNUR).
+
+**Kod-düzeyi kilit:** `tests/test_plan_a_deadman.py` (A-1 TAMAMLAMASI bölümü — yorum-soyulmuş
+kaynakta sıra/taban kapıları + ayrıştırıcı model; mutasyonla doğrulandı). Koşan şey C kodu değil
+Python modelidir — bu bölüm tezgâhta ölçülmeden REFLASH yayınlanmamalı.
+
+## ✅ 12 — S3 faz-senkron latch'i boşta birikmez (DONANIM BENCH) — SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz
+
+**Ne değişti (2. tur denetimi [4.3], 2026-08-20):** `syncPulseISR` PWM pasifken PB1 darbelerini
+artık tamamen YOK SAYAR (ne sayar ne latch'ler). Eskiden seans bitince donan `s_tick` kilit
+penceresindeyse boşta gelen 8 darbe sync'i kapatıyor, AYNI frekanslı sonraki seans (AI Pro hep
+1 Hz → `freqChanged=false` → latch bilinçli korunur) faz senkronsuz koşuyordu.
+
+**Tezgâh prosedürü (STM bobin-1 çalışır durumda, PB1→GPIO7 bağlı):**
+1. S3'te AI Pro (1 Hz) seansı başlat → status'ta `sync_disabled:false` + `sync_ignored` yaklaşık
+   sabit olmalı (kilitleniyor).
+2. Seansı bitir; STM bobin-1'i ÇALIŞIR bırak; ≥10 sn bekle (boşta ≥10 PB1 darbesi).
+3. AYNI frekansla (1 Hz) ikinci seansı başlat. KABUL: status'ta `sync_disabled:false` kalmalı ve
+   `sync_locked` artmaya devam etmeli — eski davranışta bu ikinci seans `sync_disabled:true` ile
+   (tek faz) koşuyordu. Boşta beklerken `sync_locked/ignored` sayaçları da ARTMAMALI (adım 2'de not al).
+4. **Karşıt-kanıt (HG-3 asıl koruması bozulmadı):** STM bobin-1 100 Hz'deyken S3'ü 1 Hz MANUEL
+   sürüşe al → seans İÇİNDE latch yine oluşmalı (`sync_disabled:true`, DC-yapışma önlenir).
+
+**Kod-düzeyi kilit:** `tests/test_s3_sync_dc_yapisma.py` ([4.3] bölümü — aktiflik semantiği modele
+eklendi + ayrıştırıcı + yorum-soyulmuş yapısal kapı; mutasyonla doğrulandı).
+
+## ✅ 13 — Kardeş-birim sözleşme paritesi (DONANIM BENCH) — SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz
+
+**Ne değişti (2. tur denetimi [5.1]+[5.2]+[5.3], 2026-08-20):** (a) 8266 `pwm_remaining_time` artık
+S3 gibi SANİYE yayınlar (eski ham milisaniyeydi — 1000×); (b) 8266 `restorePWMState` süreli seansta
+`_pwmDurationSec`i kalan süreden geri kurar (eski: status resume sonrası `pwm_duration=0` = SÜRESİZ
+nöbetçisi raporluyordu); (c) S3 `UPDATE` fazı yalnız `phase` anahtarı VARSA değiştirir (SET_PARAMS dalı 15. partide kaldırıldı)
+(PHASE_BELIRTILMEDI nöbetçisi — fazsız komut çok-bobinli faz desenini artık sıfırlayamaz).
+
+**Tezgâh prosedürü:**
+1. **[5.1]** Bobin 8'de 10 dk'lık süreli seans başlat; ~1 dk sonra `pemf/coil/8/status` payload'ını
+   dinle. KABUL: `pwm_remaining_time` ≈ 540 (SANİYE) — eski firmware ≈ 540000 (ms) yayınlardı.
+   S3 (bobin 6/7) aynı senaryoda aynı mertebeyi yayınlamalı (parite).
+2. **[5.2]** Bobin 8'de 10 dk'lık seans; ~2 dk sonra ESP'yi güç-çevrimle. Resume sonrası status:
+   `pwm_duration` > 0 (kalan süre mertebesinde, ~480±30 — EEPROM aralık tabanı dahil) VE
+   `pwm_remaining_time` ile tutarlı. **Karşıt-kanıt:** süresiz (duration=0) seans + güç-çevrimi →
+   `pwm_duration` 0 KALMALI (süresiz sözleşmesi).
+3. **[5.3]** S3 bobin 6-7'ye AI Pro faz desenli seans (örn. 0°/180°) başlat; ardından `phase`
+   ANAHTARSIZ bir `update` (yalnız freq/duty) yayınla. KABUL: skopta iki bobin arasındaki faz farkı
+   KORUNUR (eski firmware ikisini de 0°'a çekerdi). **Karşıt-kanıt:** `phase` AÇIK gönderilen update
+   fazı değiştirmeli; fazsız TAZE start 0°'dan başlamalı.
+
+**Kod-düzeyi kilit:** `tests/test_esp_kardes_birim_paritesi.py` (yorum-soyulmuş yapısal kapılar +
+karşıt-kanıtlar; 4/4 mutasyonla doğrulandı). Koşan şey C değil — tezgâhta ölçülmeden REFLASH yayınlanmamalı.
+
+## ⏳ 14 — İKİNCİ REFLASH DELTASI: crash-loop ikizi + ölü-yüzey kaldırma + LWT + tek-atımlık olaylar (DONANIM BENCH · S3+8266 REFLASH — STM DEĞİŞMEDİ)
+
+**Bağlam:** §9-13 tezgâhı 2026-08-20'de sahip tarafından koşuldu (sorunsuz). AYNI GÜN sahip
+onayıyla firmware'e dört değişiklik daha girdi (12/15/16. partiler) → S3+8266 için YENİ bir
+reflash gerekir; STM32'ye dokunulmadı.
+
+**Ne değişti:**
+  (a) 12. parti — SÜRELİ resume tabanı: <30 sn crash-loop'ta süreli seans artık her çevrimde
+      ≥30 sn kısalır ve biter (eski: hiç bitmezdi). Süresiz taban ([1.3]) aynen.
+  (b) 15. parti — set_params/sync_all/start_at yüzeyleri ve broadcast abonelikleri KALDIRILDI;
+      start artık her iki cihazda koşulsuz HEMEN başlar.
+  (c) 16. parti — LWT willRetain=false (5 connect); S3 tek-atımlık olaylar kuyruk doluyken
+      kaybolmaz (restore + ACK sınırlı bekleme).
+
+**Tezgâh prosedürü:**
+1. **(a)** Bobin 8'de (ve S3'te) 5 dk'lık SÜRELİ seans başlat; cihazı ~20 sn aralıklarla 15+ kez
+   güç-çevrimle (brown-out benzetimi). KABUL: seans en geç ~5 dk + birkaç çevrim içinde BİTER ve
+   yeniden başlamaz (eski firmware süresiz sürerdi). Karşıt: tek kesintili normal resume'da kalan
+   süre en fazla ~30 sn kısalır.
+2. **(b)** `pemf/coil/6/control`e `{"command":"set_params",...}` ve `sync_all` yayınla → 8266'da
+   "Unknown command"; S3'te sessiz yok-sayma; `start_at`li start HEMEN başlar. Karşıt: normal
+   start/stop/update/SELFTEST akışları aynen.
+3. **(c)** Bobini başlat, ESP'nin fişini çek → backend ~keepalive'da "bağlantı kesildi" göstermeli
+   (LWT canlı teslim — davranış DEĞİŞMEDİ). Ardından `mosquitto_sub -t pemf/coil/+/events
+   --retained-only` → HİÇ retained offline KALMAMALI (eski: kalıyordu). E-stop ACK round-trip'i
+   mdns penceresinde de teyit olmalı (backend "onay gelmedi" alarmı YOK).
+
+**Kod-düzeyi kilitler:** tests/test_sureli_crashloop_ikizi.py · test_olu_komut_yuzeyleri_kaldirildi.py ·
+test_esp_lwt.py · test_s3_oneshot_kaybi.py (hepsi mutasyonla doğrulandı). C bu makinede
+derlenmediğinden İLK DERLEME Arduino IDE'de yapılacak — derleme hatası çıkarsa kaldırma
+turundaki artık-referans demektir (kapılar yakalamadıysa bildirin).

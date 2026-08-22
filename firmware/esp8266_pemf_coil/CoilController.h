@@ -16,14 +16,10 @@ struct ControlCommand {
     // (`servers/api_server.py::_esp_duration_seconds`, ai_router `int(dk*60)`). Eski kod bunu
     // DAKİKA okuyordu → 10 dk'lık seansın süre-bekçisi bobinde 10 SAAT oluyordu (60×).
     int durationSec = 0;
+    /* 15. parti (sahip karari 2026-08-20): zamanlanmis-baslangic (start_at/sync_all) makinesi
+     * KALDIRILDI (ureticisiz PyQt kalintisi; [4.6] latent kusurlari). timestamp alani struct
+     * uyumu icin durur, hicbir yol doldurmaz/okumaz. */
     unsigned long long timestamp = 0;
-};
-
-// PWM başlatma durum makinesi (Non-blocking sync wait için)
-enum PWMStartState {
-    PWM_START_IDLE,
-    PWM_START_WAITING,  // start_at zamanı bekleniyor
-    PWM_START_READY     // Bekleme tamamlandı, PWM başlatılacak
 };
 
 class CoilController {
@@ -35,26 +31,20 @@ public:
     // PWM kontrolü
     // ÖNEMLİ: PWM sadece stop() komutu veya duration timeout ile durur
     // WiFi/MQTT bağlantı durumu PWM'i ETKİLEMEZ!
-    void start(int freq, int duty, int durationSec, unsigned long long targetTimestampMs = 0);
+    void start(int freq, int duty, int durationSec);
     void stop();
-    void setParams(int freq, int duty, int durationSec);
 
     // Command handler API
     void handleCommand(const ControlCommand& cmd);
-    bool consumeSyncFallbackEvent();
 
     // Durum sorgulama
     PWMStatus getStatus();
     bool isActive();
     int getRemainingTime();  // saniye
-    bool isWaiting();  // start_at bekleniyor mu?
 
     // EEPROM state persistence (restart sonrası devam için)
     void savePWMState();      // PWM durumunu EEPROM'a kaydet
     bool restorePWMState();   // EEPROM'dan PWM durumunu yükle (true = yüklendi)
-
-    // Non-blocking sync wait kontrolü (TimeManager'dan çağrılmalı)
-    void checkSyncWait(unsigned long long currentTimeMs);
 
     // populateStatus pattern için
     void populateStatus(StatusData& data);
@@ -72,14 +62,9 @@ private:
     int _pwmDurationSec;      // PWM süresi (SANİYE — backend sözleşmesi, 0 = süresiz)
     // Dürüst raporlama (2026-08-19): %50 donanım tavanı isteneni sessizce kırpıyor ama status
     // İSTENEN değeri yayınlıyordu → backend gerçek çıkışı hiç göremiyordu. populateStatus artık
-    // BUNU (efektif duty'yi) yayınlar; getStatus() istenen değeri korur (set_params temeli).
+    // BUNU (efektif duty'yi) yayınlar; getStatus() istenen değeri korur.
     int _effectiveDutyPct = 0;
     TimeManager* _timeManager;  // TimeManager referansı
-
-    // Non-blocking sync wait için
-    PWMStartState _startState;
-    unsigned long long _targetTimestampMs;
-    bool _syncFallbackEvent = false;
 
     // Utility fonksiyonlar
     unsigned long safeMillisDiff(unsigned long current, unsigned long previous);

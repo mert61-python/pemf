@@ -43,7 +43,15 @@ def _flag(name: str, default: bool = False) -> bool:
 # Enforcement ana anahtarı — Supabase + Stripe hazır olana kadar KAPALI.
 TIER_ENFORCED: bool = _flag("PEMF_TIER_ENFORCED", False)
 
-VALID_TIERS = {"baslangic", "pro", "pro_plus"}
+# ⚠️ SİTEDEKİ PLANLARLA AYNI KÜME OLMALI (`pemf-vet-web/src/config.ts::PLANS`). Ayrışırsa
+# `_supabase_entitlement` tanımadığı tier'ı SESSİZCE "baslangic"e düşürür → ödeme yapan
+# kullanıcı en düşük katman muamelesi görür ve hiçbir yerde hata görünmez.
+# `kullandikca` (8. parti, ön ödemesiz üyelik) bu yüzden buraya eklendi.
+# Kilit: tests/test_tier_kullandikca_tanimi.py
+VALID_TIERS = {"baslangic", "kullandikca", "pro", "pro_plus"}
+# Kuyruk bypass'ı YALNIZ Pro+'ta. Kullandıkça-öde bilerek DIŞARIDA: yeni bir ayrıcalık icat
+# etmiyoruz, yalnız sessiz düşürmeyi kapatıyoruz. Kuyruk gerçekten açılacaksa (bugün
+# `PEMF_TIER_ENFORCED` KAPALI) kullandıkça-öde abonesinin nereye düşeceği SAHİP KARARIDIR.
 REALTIME_TIERS = {"pro_plus"}
 
 # Doğrulanmış kaynak yoksa varsayılan tier (fail-open). Geçersiz env değeri → pro_plus'a düzelt
@@ -134,10 +142,20 @@ def _supabase_entitlement(token: str) -> "Entitlement | None":
             return None  # Supabase yapılandırılmamış → header fallback
         import requests
 
-        r = requests.get(
-            f"{base}/rest/v1/subscriptions",
-            params={"select": "tier,addons,status,trial_ends_at,current_period_end"},
-            headers={"apikey": anon, "Authorization": f"Bearer {token}"},
+        # ⚠️ RPC ÜZERİNDEN (sahip kararı 2026-08-21): eskiden `/rest/v1/subscriptions` tablosu
+        # doğrudan okunuyordu; bu, `authenticated` rolüne tabloda SELECT yetkisi BIRAKILMASINI
+        # zorunlu kılıyordu (RLS politikası tek başına yetmez) ve Supabase'in yeni tabloya verdiği
+        # varsayılan yetkileri kaynağında kapatmayı engelliyordu.
+        # `abonelik_getir()` SECURITY DEFINER'dır, kimliği `auth.uid()`ten alır (parametre YOK) ve
+        # yalnız gereken 5 alanı döndürür — `stripe_*` sütunları artık hiç gelmiyor.
+        r = requests.post(
+            f"{base}/rest/v1/rpc/abonelik_getir",
+            json={},
+            headers={
+                "apikey": anon,
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
             timeout=_SUPABASE_TIMEOUT,
         )
         if r.status_code in (401, 403):

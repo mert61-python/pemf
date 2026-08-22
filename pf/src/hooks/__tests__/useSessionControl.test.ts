@@ -122,6 +122,45 @@ it("KRİTİK: stopSession backend-erişilemez (null) → UYARI + false + seans A
   expect(result.current.isActive).toBe(true);
 });
 
+it("KRİTİK [2.tur 1.1]: status success ama hardware_stop_unconfirmed dolu → UYARI + seans yine kapanır", async () => {
+  // Backend artık (denetim 2. tur) seans kaydını kapatıp donanım STOP'u DOĞRULANAMAYAN bobinleri
+  // ayrı alanda bildiriyor: eskiden /session/stop koşulsuz "success" döndüğü için buradaki
+  // "Durdurma onaylanamadı" uyarısı broker-ölü senaryosunda HİÇ tetiklenemiyordu.
+  mockApiPost.mockResolvedValueOnce({ status: "success", session: {} }); // start
+  mockApiPost.mockResolvedValueOnce({ status: "success", hardware_stop_unconfirmed: [6, 7] }); // stop
+  const { result } = renderHook(() => useSessionControl());
+  await act(async () => {
+    await result.current.startSession(START);
+  });
+
+  let ret: boolean | undefined;
+  await act(async () => {
+    ret = await result.current.stopSession();
+  });
+
+  expect(mockAlert).toHaveBeenCalled();
+  const [baslik, govde] = mockAlert.mock.calls[0] as [string, string];
+  expect(baslik).toContain("Durdurma onaylanamadı");
+  expect(govde).toContain("6, 7"); // hangi bobinler olduğu operatöre AÇIKÇA söylenir
+  // Seans kaydı backend'de GERÇEKTEN kapandı → UI aktif göstermeye devam ETMEZ (null'dan farkı bu).
+  expect(ret).toBe(true);
+  expect(result.current.isActive).toBe(false);
+});
+
+it("KARŞIT-KANIT [2.tur 1.1]: teyitli success'te (alan yok) uyarı ÇIKMAZ", async () => {
+  mockApiPost.mockResolvedValueOnce({ status: "success", session: {} }); // start
+  mockApiPost.mockResolvedValueOnce({ status: "success" }); // stop — mutlu yol
+  const { result } = renderHook(() => useSessionControl());
+  await act(async () => {
+    await result.current.startSession(START);
+  });
+  await act(async () => {
+    await result.current.stopSession();
+  });
+
+  expect(mockAlert).not.toHaveBeenCalled();
+});
+
 // ── emergencyStop ────────────────────────────────────────────────────────────
 it("emergencyStop backend'ce TEYİT edildi → uyarı YOK, state reset", async () => {
   // ⚠️ 2026-08-09: eski hâli `{ stmStopped: true, mqttResults: [] }` gönderiyordu ve bunu teyit

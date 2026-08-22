@@ -199,6 +199,78 @@ it("SAHİP KARARI: guard KALICI kilit değil — tur bitince yeniden basılabili
 });
 
 
+// ── DENETİM 2. TUR [1.1] (2026-08-20): "hata değil" ≠ "teyit" ────────────────────────────────
+// Backend, publish broker'a ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner (tek bobin)
+// ve /coil/batch ÜST-SEVİYEDE HEP "success" deyip satır-başı sonuçları results[] içinde taşır.
+// Eski yüklem (`r.status !== "error"`) ikisini de teyit sayıyordu → broker ölüyken STOP hiçbir
+// bobine ulaşmamışken "Durdurma onaylanamadı" uyarısı HİÇ çıkmıyordu (bobinler hayvanın üzerinde
+// enerjili kalırken operatör durdurduğunu sanır — bulgunun ciddiyeti 1).
+
+const alertMock = () =>
+  jest.requireMock("@/services/apiClient").platformAlert as jest.Mock;
+
+async function turuKostur(u: Awaited<ReturnType<typeof ekran>>, cozumle: (yol: string) => unknown) {
+  fireEvent.press(u.getByText("⏹ Durdur"));
+  await act(async () => {
+    mockSalStop!({ status: "success" });
+  });
+  await act(async () => {
+    for (const c of mockCagrilar) c.res(cozumle(c.yol));
+  });
+}
+
+it("KRİTİK: tek-bobin STOP yanıtı mqtt_unavailable → 'Durdurma onaylanamadı' uyarısı ÇIKAR", async () => {
+  alertMock().mockClear();
+  const u = await ekran();
+
+  await turuKostur(u, (yol) =>
+    yol === "/coil/6/control"
+      ? { status: "mqtt_unavailable", transport: "mqtt" } // backend'in GERÇEK broker-ölü yanıtı
+      : yol === "/coil/batch"
+        ? { status: "success", results: [{ coilId: 1, status: "success" }] }
+        : { status: "success" },
+  );
+
+  expect(alertMock()).toHaveBeenCalled();
+  const [baslik] = alertMock().mock.calls[0];
+  expect(String(baslik)).toContain("Durdurma onaylanamadı");
+});
+
+it("KRİTİK: batch SATIRINDAKİ stm_unavailable teyit SAYILMAZ (üst-seviye 'success' aldatıcı)", async () => {
+  alertMock().mockClear();
+  const u = await ekran();
+
+  await turuKostur(u, (yol) =>
+    yol === "/coil/batch"
+      ? {
+          status: "success", // backend batch'i KOŞULSUZ böyle döner — teyit satırlardadır
+          results: [
+            { coilId: 1, status: "success" },
+            { coilId: 2, status: "stm_unavailable" },
+          ],
+        }
+      : { status: "success" },
+  );
+
+  expect(alertMock()).toHaveBeenCalled();
+});
+
+it("KARŞIT-KANIT: tüm satırlar 'success' → uyarı YOK (yanlış alarm üretme)", async () => {
+  alertMock().mockClear();
+  const u = await ekran();
+
+  await turuKostur(u, (yol) =>
+    yol === "/coil/batch"
+      ? {
+          status: "success",
+          results: Array.from({ length: 5 }, (_, i) => ({ coilId: i + 1, status: "success" })),
+        }
+      : { status: "success" },
+  );
+
+  expect(alertMock()).not.toHaveBeenCalled();
+});
+
 it("guard AYNI RENDER BATCH'indeki iki basışta da tutar (ref, state DEĞİL)", async () => {
   // ⚠️ Bu test `useState` tabanlı bir guard'ı REDDEDER: iki basış aynı React batch'inde işlenirse
   // state hâlâ `false` görünür ve ikinci tur başlar. `fireEvent.press` normalde kendi `act`ini

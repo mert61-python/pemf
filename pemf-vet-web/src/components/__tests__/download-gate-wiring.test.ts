@@ -17,11 +17,17 @@ import { describe, it, expect } from 'vitest'
 import downloadButtonsSrc from '../DownloadButtons.tsx?raw'
 import downloadPageSrc from '../../pages/Download.tsx?raw'
 import downloadGateSrc from '../DownloadGate.tsx?raw'
+import { kaynakSoy } from '../../__tests__/_soyucu'
 
-/** İndirme düğmesi barındıran TÜM yüzeyler. Yeni bir yüzey eklenirse buraya da eklenmeli. */
+/** İndirme düğmesi barındıran TÜM yüzeyler. Yeni bir yüzey eklenirse buraya da eklenmeli.
+ *
+ *  ⚠️ YORUMLAR SOYULUR (2026-08-20): kapı ham metinde arıyordu ve bu deseni ANLATAN bir yorum
+ *  (`href={...} yasaktır` açıklaması) yanlış-KIRMIZI veriyordu — ölçüldü. Soyucu string
+ *  literallerini korur, yani gerçek bir `href="…"` hâlâ görünür; yalnız yorumlar elenir.
+ *  Kapının GÜCÜ AZALMAZ: aşağıdaki iddialar soyulmuş kaynakta koşar. */
 const YUZEYLER: [string, string][] = [
-  ['components/DownloadButtons.tsx', downloadButtonsSrc],
-  ['pages/Download.tsx', downloadPageSrc],
+  ['components/DownloadButtons.tsx', kaynakSoy(downloadButtonsSrc)],
+  ['pages/Download.tsx', kaynakSoy(downloadPageSrc)],
 ]
 
 describe('indirme yüzeyleri kapıya bağlı kalır', () => {

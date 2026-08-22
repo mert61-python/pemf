@@ -603,3 +603,145 @@ fn KRITIK_profil_adiminda_IPTAL_v1e_GERI_DONER() {
         "geri alinan guncelleme kayit YAZDI (kasitli fail-safe bozuldu)"
     );
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// TATBİKAT 5 — GERİ ALMANIN KENDİSİ DÜŞERSE (2. tur denetimi [3.1], 2026-08-20).
+// Tatbikat 4'ün düzeltmesi `let _ = guncellemeyi_geri_al(...)` ile hatayı YUTUYORDU:
+// geri alma düşerse (kilitli dosya / AV / zehirli artık) çağırana yalnız profil
+// hatası/iptal gider — UI "iptal edildi" derken cihaz DOĞRULANMAMIŞ yeni sürümde
+// kalır ve runtime.old bir sonraki turda TÜKETİLİR (son-bilinen-çalışan yok olur).
+// Alt-durum: tam_takas geri almasında rt→runtime.bozuk BAŞARILI olup eski→rt
+// DÜŞERSE kurulum o oturum boyunca HİÇ runtime dizinsiz kalıyordu.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Tatbikat 4'ün kurulumunu paylaşan yardımcı: v1 kur, v2 katman + vet profili
+/// önbelleğe koy, iptali TAM `vet` çıkarımında tetikleyen hook'ları döndür.
+fn takas_sonrasi_iptal_kurulumu(
+    kok: &Path,
+) -> (
+    String,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+    std::sync::Arc<std::sync::Mutex<Option<fs::File>>>,
+) {
+    v1_kur(kok);
+    let deps2 = Paket::yeni(zip_uret(&deps_agaci("v2")), "base-deps.zip");
+    let app2 = Paket::yeni(zip_uret(&app_agaci("v2", 8, true)), "base-app.zip");
+    let mut model = BTreeMap::new();
+    model.insert("ai_models/ai_hub/em_kedi/x.onnx".to_string(), b"ONNX-v2".to_vec());
+    let vet = Paket::yeni(zip_uret(&model), "vet.zip");
+    deps2.onbellege_koy(kok, "deps");
+    app2.onbellege_koy(kok, "app");
+    vet.onbellege_koy(kok, "vet");
+    install::add_installed_profiles(kok, &["vet".to_string()]);
+    install::record_model_sha(kok, "vet", &"0".repeat(64));
+
+    let m2 = manifest_modelli(&deps2, &app2, ("vet", &vet));
+    let plan = flow::pending_updates(&m2, kok).unwrap();
+    assert!(plan.deps && plan.app, "katman guncellemesi planlanmadi: {plan:?}");
+    assert_eq!(plan.profiles, vec!["vet".to_string()], "profil plana girmedi: {plan:?}");
+
+    (
+        m2,
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        std::sync::Arc::new(std::sync::Mutex::new(None)),
+    )
+}
+
+#[test]
+#[cfg(windows)]
+#[allow(non_snake_case)]
+fn KRITIK_geri_alma_DUSERSE_hata_yutulmaz_iptal_maskesi_takilmaz() {
+    // Geri almayı DETERMİNİSTİK düşürme: runtime.old içinden bir dosyayı AÇIK tut (Windows,
+    // içinde açık handle olan dizinin taşınmasını reddeder; üretimde karşılığı AV taraması /
+    // kilitli model dosyası). rename(eski→rt) düşer → geri alma Err döner; eski davranış bu
+    // Err'i YUTUP çağırana yalnız "açma iptal edildi" gösteriyordu.
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    let (m2, iptal, tutamac) = takas_sonrasi_iptal_kurulumu(kok);
+
+    let iptal_c = iptal.clone();
+    let tutamac_c = tutamac.clone();
+    let kok_yol = kok.to_path_buf();
+    let mut on = move |p: flow::Progress| {
+        if let flow::Progress::Extracting { what } = &p {
+            if what == "vet" {
+                let f = fs::File::open(
+                    install::runtime_old_dir(&kok_yol).join("PEMF_Backend/_internal/VERSION"),
+                )
+                .expect("runtime.old bekleniyordu (takas sonrasi dala girilmedi mi?)");
+                *tutamac_c.lock().unwrap() = Some(f);
+                iptal_c.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    };
+    let control = || {
+        if iptal.load(std::sync::atomic::Ordering::SeqCst) {
+            pemf_launcher_core::net::Control::Cancel
+        } else {
+            pemf_launcher_core::net::Control::Continue
+        }
+    };
+
+    let sonuc = flow::update_installed(&m2, kok, &mut on, &control);
+    let hata = format!("{}", sonuc.err().expect("iptal edilen guncelleme basarili dondu"));
+    assert!(
+        hata.contains("GERI ALINAMADI"),
+        "geri alma DUSTU ama hata yutuldu — cagiran 'iptal edildi' sanir, cihaz dogrulanmamis \
+         surumde kalir ve runtime.old sonraki turda tuketilir (bulgu [3.1]). Donen hata: {hata}"
+    );
+    // Gerçeklik: runtime.old duruyor (rename düştü, tüketilmedi) — 'Onar'/sonraki tur için dönüş
+    // yolu yerinde. Canlı ağaç doğrulanmamış-yeni olarak geri kondu (alt-durum testi aşağıda).
+    assert!(install::runtime_old_dir(kok).is_dir(), "runtime.old kaybolmus — 'Onar' icin donus yolu yok");
+    drop(tutamac.lock().unwrap().take());
+    let v = fs::read_to_string(install::runtime_dir(kok).join("PEMF_Backend/_internal/VERSION")).unwrap();
+    assert_eq!(v.trim(), "v2");
+}
+
+#[test]
+#[cfg(windows)]
+#[allow(non_snake_case)]
+fn KRITIK_geri_alma_duserken_canli_agac_DIZINSIZ_birakilmaz() {
+    // Alt-durum: rt→runtime.bozuk BAŞARILI, eski→rt DÜŞTÜ (runtime.old içinde açık dosya
+    // tutamacı — Windows, içinde açık handle olan dizinin taşınmasını reddeder; std zaten
+    // FILE_SHARE_DELETE ile açar ama ATA dizin rename'i yine düşer). Eski davranış kurulumu
+    // o oturum boyunca HİÇ runtime'sız bırakıyordu; doğru davranış doğrulanmamış-yeni'yi geri
+    // koymak (çalışan-bilinmeyen > hiç yok) + hatayı yükseltmek.
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    let (m2, iptal, tutamac) = takas_sonrasi_iptal_kurulumu(kok);
+
+    let iptal_c = iptal.clone();
+    let tutamac_c = tutamac.clone();
+    let kok_yol = kok.to_path_buf();
+    let mut on = move |p: flow::Progress| {
+        if let flow::Progress::Extracting { what } = &p {
+            if what == "vet" {
+                // TAKAS SONRASI an: runtime.old artık v1'i tutuyor — içinden bir dosyayı AÇIK tut.
+                let f = fs::File::open(
+                    install::runtime_old_dir(&kok_yol).join("PEMF_Backend/_internal/VERSION"),
+                )
+                .expect("runtime.old bekleniyordu (takas sonrasi dala girilmedi mi?)");
+                *tutamac_c.lock().unwrap() = Some(f);
+                iptal_c.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    };
+    let control = || {
+        if iptal.load(std::sync::atomic::Ordering::SeqCst) {
+            pemf_launcher_core::net::Control::Cancel
+        } else {
+            pemf_launcher_core::net::Control::Continue
+        }
+    };
+
+    let sonuc = flow::update_installed(&m2, kok, &mut on, &control);
+    assert!(sonuc.is_err());
+    assert!(
+        install::runtime_dir(kok).is_dir(),
+        "geri alma duserken canli agac DIZINSIZ birakildi — cihaz o oturumda hic acilamaz \
+         (dogrulanmamis-yeni'yi geri koymak, hic agac birakmamaktan guvenlidir)"
+    );
+    drop(tutamac.lock().unwrap().take()); // tutamaci birak → dosya sistemi serbest
+    let v = fs::read_to_string(install::runtime_dir(kok).join("PEMF_Backend/_internal/VERSION")).unwrap();
+    assert_eq!(v.trim(), "v2", "geri konan agac beklenen (dogrulanmamis-yeni) icerik degil");
+}

@@ -11,7 +11,11 @@ Launcher / güncelleme-sunucusunun tükettiği **manifest + runtime paketi**. Bu
 
 ## Yayın (özet — tam akış [`../BUILD.md`](../BUILD.md) §6)
 ```powershell
-gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber base.zip manifest.json
+# PAKETLER surum-basina etikete (⚠️ v1.8.0 DEGIL — 2. tur denetimi [3.4]: 1.9.16'dan beri
+# manifest URL'leri surum-basina etikete yazilir; v1.8.0'a yuklenen paket 404 uretir).
+gh release upload client-app-v<sürüm> -R mert61-python/pemf-update base-app.zip
+# YALNIZ manifest.json SABIT adrese (launcher hep buradan okur):
+gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber manifest.json
 ```
 
 ## ⚠️ Dikkat

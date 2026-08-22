@@ -345,10 +345,24 @@ Sonra `pf\dist`'i iki yere **mirror**'la (robocopy /MIR):
 ## 6. Yayınlama (GitHub Releases + Vercel)
 
 ```powershell
-# 1) ONCE paketler → client-app-v1.8.0   (siradan surumde YALNIZ base-app.zip degisir)
-gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\base-app.zip
-#    (bagimliliklar degistiyse ayrica:)  ... --clobber pemf-app-packages\base-deps.zip
-# 2) paketler YUKLENDIKTEN SONRA manifest  ← SIRA ONEMLI (asagi bak)
+# 0) manifest'i URET (surum-basina etiketle): sha DEGISMEYEN paketlerin URL'si korunur ve
+#    "URL KORUNDU" satiriyla bildirilir → onlar YENIDEN YUKLENMEZ (eski etiketlerinde durur).
+python scripts\make_manifest.py --dir pemf-app-packages --tag client-app-v<sürüm> ...
+# 1) ONCE paketler → client-app-v<sürüm> ETIKETI  (siradan surumde YALNIZ base-app.zip degisir)
+#    ⚠️ 2. TUR DENETIMI [3.4] (2026-08-20): burasi eskiden SABIT client-app-v1.8.0 diyordu —
+#    1.9.16'dan beri paket URL'leri SURUM-BASINA etikete yazilir; v1.8.0'a yuklenen paket
+#    manifest'in isaret ettigi adreste OLMAZ → sahadaki her guncelleme + taze kurulum 404 alir
+#    (net.rs 404'u deterministik sayar, TEKRAR DENEMEZ). Sabit olan YALNIZ manifest'in adresi
+#    (asagida adim 2). Kilit: tests/test_yayin_runbook_etiketi.py
+gh release create client-app-v<sürüm> -R mert61-python/pemf-update --title "PEMF app <sürüm>" --notes "..."
+gh release upload client-app-v<sürüm> -R mert61-python/pemf-update pemf-app-packages\base-app.zip
+#    (bagimliliklar degistiyse ayrica:)  ... pemf-app-packages\base-deps.zip
+#    (eski ≤1.9.12 istemciler icin:)     ... pemf-app-packages\base.zip
+#    make_manifest ciktisiyla KARSILASTIR: hangi paketin URL'si hangi etiketi gosteriyorsa dosya
+#    ORADA olmali; "URL KORUNDU" denenler zaten eski etiketinde duruyor, dokunma.
+#    dogrulama: gh release view client-app-v<sürüm> -R mert61-python/pemf-update --json assets
+# 2) paketler YUKLENDIKTEN ve DOGRULANDIKTAN SONRA manifest → SABIT adres client-app-v1.8.0
+#    (launcher manifesti HEP buradan okur; sabit olan budur, paketler DEGIL) ← SIRA ONEMLI (asagi bak)
 gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\manifest.json
 # 3) launcher setup + APK                 → launcher-v<surum>
 gh release create launcher-v1.9.13 -R mert61-python/pemf-update --title "PEMF Vet Client 1.9.13" --notes "..." PEMFVetClient-Setup.exe release_assets\PEMF_Vet_Mobil.apk

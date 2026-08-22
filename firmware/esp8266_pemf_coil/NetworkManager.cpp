@@ -15,7 +15,6 @@ NetworkManager::NetworkManager(int coilId) {
     // MQTT broker bilgileri artık begin() içinde config'den alınacak
     _mqttBrokerHost[0] = '\0';
     _mqttBrokerPort = 8883;
-    _globalControlTopic = "pemf/control/all";
     _msgCallback = nullptr;
     _portalActive = false;
     _portalStartTime = 0;
@@ -670,7 +669,8 @@ bool NetworkManager::_connectToLocalBroker() {
     snprintf(lwtMsg, sizeof(lwtMsg), "{\"event_type\":\"offline\",\"coil_id\":%d}", _coilId);
 
     LOG_PRINTF("[MQTT] Local Broker (%s:%d) deneniyor...\n", _localMqttHost.c_str(), _localMqttPort);
-    if (_mqttClient.connect(clientId, lwtTopic, 1, true, lwtMsg)) {
+    /* 16. parti (sahip onayi 2026-08-20): willRetain=FALSE — tek abone (backend) HER retained girdiyi eler; retain yalniz bayat-offline riski uretiyordu (canli LWT teslimi MQTT-3.3.1-9 geregi bayraktan bagimsiz). */
+    if (_mqttClient.connect(clientId, lwtTopic, 1, false, lwtMsg)) {
         LOG_PRINTLN("[MQTT] Local Broker'a baglanildi.");
         return true;
     }
@@ -693,7 +693,7 @@ bool NetworkManager::_connectToCloudBroker() {
     snprintf(lwtMsg, sizeof(lwtMsg), "{\"event_type\":\"offline\",\"coil_id\":%d}", _coilId);
 
     LOG_PRINTF("[MQTT] Cloud Broker (%s:%d) deneniyor...\n", _cloudMqttHost.c_str(), _cloudMqttPort);
-    if (_mqttClient.connect(clientId, _mqttUser, _mqttPass, lwtTopic, 1, true, lwtMsg)) {
+    if (_mqttClient.connect(clientId, _mqttUser, _mqttPass, lwtTopic, 1, false, lwtMsg)) {
         LOG_PRINTLN("[MQTT] Cloud Broker'a baglanildi.");
         return true;
     }
@@ -738,7 +738,6 @@ void NetworkManager::_reconnectMQTT() {
             _activeBroker = BROKER_LOCAL;
             _localRetryCount = 0;
             _mqttClient.subscribe(_controlTopic);
-            _mqttClient.subscribe(_globalControlTopic);
             publishEvent("mqtt_connected", "Local MQTT'ye bağlandı");
             return;
         }
@@ -749,7 +748,6 @@ void NetworkManager::_reconnectMQTT() {
     if (_connectToCloudBroker()) {
         _activeBroker = BROKER_CLOUD;
         _mqttClient.subscribe(_controlTopic);
-        _mqttClient.subscribe(_globalControlTopic);
         publishEvent("mqtt_connected", "HiveMQ Cloud'a baÄŸlandÄ±");
         return;
     }

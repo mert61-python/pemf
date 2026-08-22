@@ -50,8 +50,10 @@ import {
   atlandiMi,
   guncellemeVarMi,
   kurulumuBaslat,
+  kurulumErtelendiMi,
   _atlamayiSifirla,
   _indirmeyiSifirla,
+  _kurulumErtelemesiniSifirla,
   type MobilSurum,
 } from "@/services/mobileUpdate";
 
@@ -86,6 +88,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   _atlamayiSifirla();
   _indirmeyiSifirla();
+  _kurulumErtelemesiniSifirla();
   (Platform as { OS: string }).OS = "android";
   mockVarMi.mockResolvedValue({ varMi: false, sebep: "guncel" });
   mockIndir.mockResolvedValue({ ok: true, dosyaUri: "file:///cache/x.apk" });
@@ -312,6 +315,8 @@ it("'Şimdilik devam et' sürümü ERTELENMİŞ işaretler (bant hemen aynı şe
   await act(async () => { fireEvent.press(getByTestId("kapi-devam")); });
   expect(atlandiMi(SURUM.versionCode)).toBe(true);
   expect(atlandiMi(SURUM.versionCode + 1)).toBe(false); // yalnız O sürüm ertelenir
+  // [5.7a] hiç indirme başlamadıysa kurulum-ertelemesi de İŞARETLENMEZ (uçuşta iş yok)
+  expect(kurulumErtelendiMi(SURUM.versionCode)).toBe(false);
 });
 
 it("⚠️ indirme BAŞLADIYSA erteleme İŞARETLENMEZ — bant kaldığı yerden sürdürsün", async () => {
@@ -326,6 +331,38 @@ it("⚠️ indirme BAŞLADIYSA erteleme İŞARETLENMEZ — bant kaldığı yerde
   await waitFor(() => expect(queryByText(/İndiriliyor…/)).toBeTruthy());
   await act(async () => { fireEvent.press(getByTestId("kapi-devam")); });
   expect(atlandiMi(SURUM.versionCode)).toBe(false);
+});
+
+it("KRİTİK [5.7a]: indirme SÜRERKEN 'Şimdilik devam et' KURULUM-ERTELEMESİ işaretler — uçuştaki iş yükleyiciyi sormadan açamaz", async () => {
+  // Ölçülen kusur: kapı kapanıyor, kullanıcı uygulamada; indirme bitince uçuştaki guncelle()
+  // Android yükleyicisini o anki işin ÜSTÜNE açıyordu (seans kapısı ayrı katman; seanssız
+  // kullanım korumasızdı). Bayrağı kancanın kurulum-öncesi kapısı okur.
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  mockIndir.mockImplementation(async (_s: MobilSurum, cb: (o: number) => void) => {
+    cb(0.3);
+    return new Promise(() => {});
+  });
+  const { getByTestId, queryByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(queryByText(/İndiriliyor…/)).toBeTruthy());
+  expect(kurulumErtelendiMi(SURUM.versionCode)).toBe(false);
+  await act(async () => { fireEvent.press(getByTestId("kapi-devam")); });
+  expect(kurulumErtelendiMi(SURUM.versionCode)).toBe(true);
+});
+
+it("KRİTİK [5.7c]: paket TAM İNDİKTEN sonra 'Şimdilik devam et' bandı SUSTURMAZ (hazır paket banttan sunulmaya devam eder)", async () => {
+  // Ölçülen kusur: oran===null yordamı "hiç başlamadı" ile "tamamlandı"yı ayırt edemiyordu —
+  // tam inmiş (ör. yükleyicisi açılıp vazgeçilmiş) paketten sonra erteleme bandı da susturuyor,
+  // hazır paketi tek dokunuşla kurma yolunu soğuk açılışa erteliyordu.
+  mockVarMi.mockResolvedValue({ varMi: true, surum: SURUM });
+  const { getByTestId, getByText } = ciz();
+  await bekle();
+  await act(async () => { fireEvent.press(getByTestId("kapi-guncelle")); });
+  await waitFor(() => expect(getByText(/onayını bekleyin/)).toBeTruthy()); // indirme bitti, yükleyici açıldı
+  await act(async () => { fireEvent.press(getByTestId("kapi-devam")); });
+  expect(atlandiMi(SURUM.versionCode)).toBe(false);           // bant SUSTURULMADI
+  expect(kurulumErtelendiMi(SURUM.versionCode)).toBe(true);   // ama oto-açılış kesildi
 });
 
 it("kontrol aşamasında 'Atla' HİÇBİR sürümü ertelemiş saymaz", async () => {

@@ -24,9 +24,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     return (
       <section className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-4 px-5 text-center">
         <h1 className="text-2xl font-bold">Bir şeyler ters gitti</h1>
+        {/* Metin denetimi 2026-08-20: "bize yazın" tıklanabilir değildi ve adres yazmıyordu —
+            hata anında kullanıcının iletişim yolu kapalıydı. */}
         <p className="text-muted">
-          Sayfa yüklenirken beklenmeyen bir hata oluştu. Sayfayı yenilemeyi deneyin; sorun sürerse
-          bize yazın.
+          Sayfa yüklenirken beklenmeyen bir hata oluştu. Sayfayı yenilemeyi deneyin; sorun sürerse{' '}
+          <a className="text-primary hover:underline" href="mailto:destek@v-pemf.com?subject=Site%20hatas%C4%B1">
+            destek@v-pemf.com
+          </a>{' '}
+          adresine yazın.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button className="btn-primary" onClick={() => window.location.reload()}>

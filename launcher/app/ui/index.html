@@ -620,18 +620,18 @@
           selLead: "Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.",
           install: "Kur ve Başlat", selCancel: "Geri dön",
           instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
-          appCore: "Uygulama çekirdeği", calc: "hesaplanıyor",
+          appCore: "Uygulama dosyaları", calc: "hesaplanıyor",
           pause: "Duraklat", resume: "Devam Et", cancelDl: "İptal",
-          pausedTitle: "Duraklatıldı", pausedLead: "İndirme duraklatıldı — indirilen kısım cache'te korundu. Kaldığınız yerden devam edebilirsiniz.",
+          pausedTitle: "Duraklatıldı", pausedLead: "İndirme duraklatıldı — inen kısım bilgisayarınızda korundu. Kaldığınız yerden devam edebilirsiniz.",
           resumeTitle: "Kurulum yarım kaldı", resumeBody: "Önceki kurulum tamamlanmadı (internet kesilmiş veya kapatılmış olabilir). İndirilen kısım korundu — kaldığınız yerden devam edilsin mi?",
           resumeYes: "Devam Et", resumeNo: "İptal et",
           readyTitle: "Hazır!",
           readyLead: "PEMF Vet kuruldu. Uygulamayı başlatın veya profillerinizi güncelleyin.",
-          start: "Başlat", change: "Profilleri değiştir", repair: "Onar", uninstall: "Uygulamayı kaldır",
+          start: "Başlat", change: "Profilleri değiştir", repair: "Kurulumu onar", uninstall: "Uygulamayı kaldır",
           backToApp: "Uygulamaya dön", runningLead: "PEMF Vet çalışıyor. Uygulama penceresini kapatırsanız buradan yeniden başlatabilirsiniz.",
           footWeb: "Web Sitesi", footSupport: "Destek", ok: "Tamam", cancel: "Vazgeç", cont: "Devam",
           aboutTitle: "PEMF Vet hakkında",
-          aboutBody: "Hafif client. Seçtiğiniz kullanım profillerini indirir, SHA-256 ile doğrular, kurar ve uygulamayı tarayıcıda açar. Cihazınızdaki aynı ağda bulunan PEMF donanımına otomatik bağlanır.",
+          aboutBody: "PEMF Vet başlatıcısı. Seçtiğiniz kullanım profillerini indirir, inen dosyaların bütünlüğünü doğrular, kurar ve uygulamayı açar. Aynı ağdaki PEMF cihazınıza otomatik bağlanır.",
           aboutVer: "Sürüm", aboutPlat: "Platform",
           repairTitle: "Kurulumu onar", repairBody: "Kurulu paketler yeniden doğrulanıp eksik/bozuk dosyalar onarılacak. Bu birkaç dakika sürebilir. Devam edilsin mi?",
           // ⚠️ KVKK AÇIKLIĞI (2026-08-08): eski metin yalnız "hasta verileriniz KORUNUR" diyordu.
@@ -651,7 +651,7 @@
           reconnecting: "bağlantı koptu, yeniden deneniyor", reconnTitle: "Yeniden bağlanılıyor…",
           cached: "zaten indirilmiş", starting: "başlatılıyor", ready: "hazır — tarayıcıda açıldı",
           notSupported: (p) => `Bu platform (${p}) için uygulama paketi henüz yayınlanmadı.`,
-          updatingTitle: "Client güncelleniyor…", updatingLead: "Yeni bir client sürümü bulundu — indirilip kuruluyor. Uygulama otomatik yeniden başlayacak.",
+          updatingTitle: "Başlatıcı güncelleniyor…", updatingLead: "Yeni bir başlatıcı sürümü bulundu — indirilip kuruluyor. Uygulama kendiliğinden yeniden açılacak.",
           updatingApply: "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
           rtTitle: "Uygulama güncelleniyor…",
           rtLead: "Yeni bir uygulama sürümü bulundu — indirilip kuruluyor. Bittiğinde başlatabilirsiniz.",
@@ -665,7 +665,7 @@
           // DENETİM 2026-08-17: başarısız self-update ekranı "Client güncelleniyor…"da hapsediyordu
           // ve başarı ile başarısızlık ayırt edilemiyordu. Nötr BİLGİ notu (kırmızı hata değil):
           // uygulama normal açılıyor, kullanıcının yapacağı bir şey yok.
-          selfUpdateFailed: "Client güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
+          selfUpdateFailed: "Başlatıcı güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
           rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
           rtBgPrep: "Hazırlanıyor…",
           rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
@@ -702,18 +702,18 @@
           selLead: "You can select multiple profiles — only the ones you pick are downloaded.",
           install: "Install & Start", selCancel: "Back",
           instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
-          appCore: "App core", calc: "calculating",
+          appCore: "App files", calc: "calculating",
           pause: "Pause", resume: "Resume", cancelDl: "Cancel",
-          pausedTitle: "Paused", pausedLead: "Download paused — the downloaded part is kept in cache. You can resume where you left off.",
+          pausedTitle: "Paused", pausedLead: "Download paused — the downloaded part is kept on your computer. You can resume where you left off.",
           resumeTitle: "Installation unfinished", resumeBody: "The previous installation didn't complete (internet may have dropped or the device was closed). The downloaded part is kept — resume where you left off?",
           resumeYes: "Resume", resumeNo: "Discard",
           readyTitle: "Ready!",
           readyLead: "PEMF Vet is installed. Start the app or update your profiles.",
-          start: "Start", change: "Change profiles", repair: "Repair", uninstall: "Uninstall",
+          start: "Start", change: "Change profiles", repair: "Repair installation", uninstall: "Uninstall",
           backToApp: "Back to app", runningLead: "PEMF Vet is running. If you close the app window you can start it again from here.",
           footWeb: "Website", footSupport: "Support", ok: "OK", cancel: "Cancel", cont: "Continue",
           aboutTitle: "About PEMF Vet",
-          aboutBody: "Lightweight client. It downloads your selected usage profiles, verifies them with SHA-256, installs, and opens the app in your browser. It auto-connects to PEMF hardware on the same network.",
+          aboutBody: "PEMF Vet launcher. It downloads your selected usage profiles, verifies the downloaded files, installs them and opens the app. It connects automatically to the PEMF device on your network.",
           aboutVer: "Version", aboutPlat: "Platform",
           repairTitle: "Repair installation", repairBody: "Installed packages will be re-verified and missing/corrupt files repaired. This may take a few minutes. Continue?",
           uninTitle: "Uninstall app",
@@ -729,7 +729,7 @@
           reconnecting: "connection lost, retrying", reconnTitle: "Reconnecting…",
           cached: "already downloaded", starting: "starting", ready: "ready — opened in browser",
           notSupported: (p) => `The package for this platform (${p}) is not published yet.`,
-          updatingTitle: "Updating client…", updatingLead: "A new client version was found — downloading and installing. The app will restart automatically.",
+          updatingTitle: "Updating launcher…", updatingLead: "A new launcher version was found — downloading and installing. The app will restart automatically.",
           updatingApply: "Applying update, restarting the app…",
           rtTitle: "Updating app…",
           rtLead: "A new app version was found — downloading and installing. You can start it when this finishes.",
@@ -740,7 +740,7 @@
           rtBgFail: "Background download did not finish — it will resume on the next launch.",
           rtReady: "Update ready — it will be installed when you close and reopen the app.",
           startChecking: "Checking for updates…",
-          selfUpdateFailed: "Client update could not be completed — the app is opening normally. It will be retried on the next launch.",
+          selfUpdateFailed: "Launcher update could not be completed — the app is opening normally. It will be retried on the next launch.",
           rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
           rtBgPrep: "Preparing…",
           rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
@@ -936,6 +936,7 @@
       let persistAvailable = true;
       let lastProfiles = [];   // duraklat→devam için son kurulum seçimi
       let resumeOp = null;     // "Devam Et" hangi işlemi sürdürecek (kurulum mu onarım mı)
+      let pausedOp = false;    // [5.6] duraklatılmış ekranda mıyız? (İptal'in görevsiz yolu için)
 
       const mb = (n) => (n / 1048576).toFixed(0);
       const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 ? 1 : 2);
@@ -1517,14 +1518,38 @@
       // Kurulum kontrol düğmeleri: running=Duraklat+İptal, paused=Devam Et+İptal.
       function setInstallControls(mode) {
         const running = mode === "running";
+        if (running) pausedOp = false; // [5.6] koşan görev var → İptal yine bayrak yoluyla çalışır
         $("btn-cancel").hidden = false;
         $("btn-pause").hidden = !running; $("btn-resume").hidden = running;
         $("btn-pause").disabled = false; $("btn-resume").disabled = false; $("btn-cancel").disabled = false;
       }
       function showPaused() {
         stopPolling();
+        pausedOp = true; // [5.6] komut "paused" ile DÖNDÜ — artık bayrağı okuyacak görev yok
         $("inst-title").textContent = t().pausedTitle; $("status").textContent = t().pausedLead;
         setInstallControls("paused");
+      }
+      /**
+       * [5.6] (sahip onayı 2026-08-20): İPTAL — duraklatılmışken de ÇALIŞIR.
+       * Ölçülen kusur: pause'da komut {status:"paused"} ile çoktan dönmüş, `CTL_CANCEL` bayrağını
+       * okuyacak görev kalmamıştı; üstelik her komut girişi bayrağı CTL_RUN ile eziyordu → İptal
+       * grileşiyor, ekran süresiz "Duraklatıldı"da kalıyordu (tek çıkış Devam Et / pencereyi
+       * kapatmak). Çözüm: duraklatılmışken temizlik GÖREVSİZ yapılır — açılıştaki "kurulum yarım
+       * kaldı → İptal et" yolunun aynısı (`discard_pending`: bekleyen kayıt düşer, güncel planın
+       * .part'ları KORUNUR — sonraki tur kaldığı yerden sürebilir) ve ekran hazır/seçim'e döner.
+       * Koşan görev varken davranış DEĞİŞMEZ: bayrak yolu (cancel_install) aynen.
+       */
+      function iptalTiklandi() {
+        $("btn-cancel").disabled = true;
+        if (pausedOp) {
+          pausedOp = false; resumeOp = null;
+          invoke("discard_pending", { manifestRaw }).catch(() => {});
+          refreshEnv()
+            .then(() => { renderChips(); show(baseInstalled && installed.length ? "s-ready" : "s-select"); })
+            .catch(() => { show(baseInstalled ? "s-ready" : "s-select"); });
+          return;
+        }
+        invoke("cancel_install").catch(() => {});
       }
       async function doInstall(profiles) {
         // Kurulum GİRİŞ GEREKTİRİR (paket indirme = lisans/hak kapısı). "Başlat" ise gerektirmez —
@@ -1659,7 +1684,7 @@
       $("btn-install").onclick = () => { const eff = withDeps([...selected]); if (!busy && eff.size) doInstall([...eff]); };
       $("btn-pause").onclick = () => { $("btn-pause").disabled = true; invoke("pause_install").catch(() => {}); };
       $("btn-resume").onclick = () => { if (!busy && resumeOp) resumeOp(); };
-      $("btn-cancel").onclick = () => { $("btn-cancel").disabled = true; invoke("cancel_install").catch(() => {}); };
+      $("btn-cancel").onclick = iptalTiklandi; // [5.6] duraklatılmışken de çalışan İptal
 
       $("btn-start").onclick = async () => {
         if (busy) return; clearErr(); busy = true; show("s-install"); resetInstallUI(); startPolling();

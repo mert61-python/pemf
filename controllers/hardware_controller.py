@@ -204,7 +204,20 @@ class HardwareController:
             self.logger.info(
                 f"Coil {coil_id} durumu güncellendi: Start={start}, Freq={freq}, Duty={duty}, Phase={phase}, Dur={duration}"
             )
-            self._send_stm_manual_update()
+            _kuyruga_verildi = self._send_stm_manual_update()
+        # DENETIM 2. TUR [1.1] tamamlamasi (adversaryal review #1, 2026-08-20): STOP donusu artik
+        # `stop_all_coils` (:268-279, E-stop yolu, 2026-08-09 denetimi) ile AYNI sozlesmeyi tasir —
+        # "STOP paketi donanim kuyruguna VERILDI" (fiziksel teyit degil). False ise STOP su an
+        # KESINLIKLE gonderilmemistir; STOP_RESEND_TICKS sonraki keep-alive turlarinda telafi
+        # etmeyi DENER ama cagiran fail-safe davranmalidir (_stop_session_coils bunu
+        # `hardware_stop_unconfirmed` olarak operatore tasir). Eski hali kosulsuz True donuyordu →
+        # kuyruga hic girmemis STOP "teyitli" sayiliyordu.
+        # ⚠️ START yolunda donus BILEREK degismedi (True): state atomik uygulandi ve keep-alive
+        # her turda tam durumu zaten tazeler; False donmek yukaridaki normalize dalinin
+        # "parametre reddedildi, state DEGISMEDI" anlamiyla "gecici kuyruk dolulugu"nu
+        # karistirirdi. Kilit: tests/test_session_stop_dogrulama.py (karsit-kanit dahil).
+        if not start:
+            return bool(_kuyruga_verildi)
         return True
 
     def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30):

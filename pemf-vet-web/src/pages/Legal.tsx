@@ -33,7 +33,7 @@ function UL({ children }: { children: ReactNode }) {
 function SellerIdentity() {
   return (
     <UL>
-      <li>Ünvan: {COMPANY.legalName}</li>
+      <li>Unvan: {COMPANY.legalName}</li>
       <li>İşletme türü: {COMPANY.entityType}</li>
       <li>
         Adres: {COMPANY.address}, {COMPANY.city}, {COMPANY.country}
@@ -145,7 +145,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
           teşhis ve tedavisinin yerine geçmez.
         </li>
         <li>
-          Satıcı; mücbir sebep hâllerinde, hizmet sağlayıcıların kaynaklanan aksaklıklarında veya ALICI'nın
+          Satıcı; mücbir sebep hâllerinde, hizmet sağlayıcılarından kaynaklanan aksaklıklarda veya ALICI'nın
           koşulları sağlamamasından doğan durumlarda ifadan sorumlu tutulamaz.
         </li>
         <li>
@@ -341,7 +341,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       {/* ⚠️ 2026-08-09 denetimi (Tier 3): metinde YURT DIŞINA AKTARIM başlığı hiç yoktu; oysa
           hesap ve cihaz verileri fiilen yurt dışındaki bir işleyiciye (Supabase) gidiyor ve site
           yurt dışında barındırılıyor (Vercel). Aşağıdaki kalemler koddan ÖLÇÜLEREK yazıldı:
-            • Supabase Auth  → e-posta, parola özeti, oturum jetonları, kayıt profil alanları
+            • Supabase Auth  → e-posta, şifrenin geri döndürülemez özeti, oturum jetonları, kayıt profil alanları
             • devices tablosu (60 sn'de bir heartbeat, servers/sync_worker._publish_device_registry):
               device_id, cihaz adı, tunnel_url, yerel IP, port, eşleştirme kodu, last_seen,
               app_version, launcher_version, base_sha, at_rest_encrypted
@@ -358,7 +358,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       </P>
       <UL>
         <li>
-          <strong>Hesap ve kimlik doğrulama verileri</strong> — e-posta adresi, parola özeti, oturum
+          <strong>Hesap ve kimlik doğrulama verileri</strong> — e-posta adresi, şifrenin geri döndürülemez özeti, oturum
           jetonları, kayıt sırasında verilen ad-soyad/klinik/kurum bilgileri. Alıcı:{' '}
           <strong>Supabase</strong> (kimlik doğrulama ve veritabanı hizmeti).
         </li>
@@ -403,8 +403,9 @@ const DOCS: Record<LegalSlug, ReactNode> = {
       <P>
         <strong>Klinik cihazındaki tedavi kayıtları için uygulanan somut süre:</strong> seans kayıtlarındaki
         hasta ve operatör adları ile serbest metin notlar, <strong>varsayılan olarak 365 gün</strong> sonra
-        geri dönüşsüz biçimde maskelenir (<code>[REDACTED]</code>). Tedavi verileri (uygulanan doz, süre,
-        frekans, sensör ölçümleri) maskelenmez ve klinik geçmişinde kalır.
+        geri dönüşsüz biçimde maskelenir: kayıtta adın yerinde <code>[REDACTED]</code> ibaresi görünür.
+        Tedavi verileri (uygulanan doz, süre, frekans, sensör ölçümleri) maskelenmez ve klinik
+        geçmişinde kalır.
       </P>
       <P>
         Bu süre klinik tarafından uygulama içinden değiştirilebilir (Ayarlar → Veri Saklama Süresi) veya
@@ -552,7 +553,7 @@ const DOCS: Record<LegalSlug, ReactNode> = {
   'kullanim-sartlari': (
     <>
       <P>
-        İşbu Kullanım Şartları (Üyelik Sözleşmesi), {COMPANY.brandName} internet sitesi, istemcisi ve
+        İşbu Kullanım Şartları (Üyelik Sözleşmesi), {COMPANY.brandName} internet sitesi, masaüstü uygulaması ve
         yazılım hizmetlerinin kullanımına ilişkin koşulları düzenler. Hizmeti kullanarak bu şartları kabul
         etmiş sayılırsınız.
       </P>
@@ -668,16 +669,12 @@ export function LegalPage() {
 
       <h1 className="mt-4 text-3xl font-extrabold sm:text-4xl">{doc.title}</h1>
 
-      {/* Şablon uyarısı — her belgenin başında gösterilir. */}
-      <div
-        role="note"
-        className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-relaxed text-amber-200"
-      >
-        Bu metin bir şablondur; yayına almadan önce şirket bilgileri doldurulmalı ve bir hukuk
-        danışmanınca gözden geçirilmelidir.
-      </div>
+      {/* İÇ NOT KALDIRILDI (metin denetimi, 2026-08-20): burada "bu metin bir şablondur; yayına
+          almadan önce hukuk danışmanınca gözden geçirilmelidir" uyarısı MÜŞTERİYE gösteriliyordu.
+          Satın alma öncesi sözleşme sayfasında belgeyi taslak ilan etmek güveni doğrudan zedeler;
+          hazırlık notu yayına değil, geliştirme akışına aittir. Kilit: src/__tests__/metin-guveni.test.ts */}
 
-      <p className="mt-4 text-xs text-muted">Son güncelleme: {COMPANY.updated}</p>
+      <p className="mt-5 text-xs text-muted">Son güncelleme: {COMPANY.updated}</p>
 
       <div className="mt-6">{DOCS[doc.slug]}</div>
 

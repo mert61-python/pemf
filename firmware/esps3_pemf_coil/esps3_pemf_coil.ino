@@ -73,9 +73,6 @@ void TaskNetwork(void *pvParameters) {
                 continue; // Bu boş yapıyı sensör/durum olarak publish etme
             }
 
-            if (statusMsg.syncFallbackEvent) {
-                sysNetManager.publishEvent("sync_fallback", "NTP yok, zamanlanmis baslangic fallback ile hemen baslatildi");
-            }
             if (statusMsg.thermalStopEvent) {
                 sysNetManager.publishEvent("thermal_stop",
                     "Yerel termal kesme: bobin 48C esigini asti, PWM durduruldu (45C altinda kilit acilir)");
@@ -179,8 +176,12 @@ void TaskControl(void *pvParameters) {
                 ackMsg.has_cmd_ack = true;
                 ackMsg.cmd_ack_success = kabulEdildi;
                 strncpy(ackMsg.ack_cmd_id, cmd.command_id, 35);
-                // Kuyruk doluysa bile overwrite yapmayı deneriz (loglamak daha güvenli, bu status olduğu için atlanabilir)
-                if(xQueueSend(statusQueue, &ackMsg, 0) != pdTRUE) {
+                /* [5.12] (sahip onayi 2026-08-20): eski 0-timeout, kuyruk dolu penceresinde
+                 * (mdns 2000 ms blogu) E-stop ACK'ini DUSURUYORDU → backend sahte "onay gelmedi"
+                 * alarmi. SINIRLI bekleme: kontrol dongusu 200 ms periyotlu, 50 ms blok guvenli;
+                 * tuketici 10 ms'de bir bosalttigindan yer acilir. (Eski yorumdaki "overwrite
+                 * deneriz" vaadi hic gerceklenmemisti.) */
+                if(xQueueSend(statusQueue, &ackMsg, pdMS_TO_TICKS(50)) != pdTRUE) {
                     LOG_PRINTLN("[Warn] statusQueue dolu! ACK mesaji gonderilemedi.");
                 }
             }
@@ -220,7 +221,7 @@ void TaskControl(void *pvParameters) {
         status.maxAllocHeap = maxAllocHeap;
         status.fragmentation = fragmentation;
         status.coil_id = FACTORY_COIL_ID; // HATA-5 DUZELTME: coil_id eksik set ediliyordu
-        status.syncFallbackEvent = sysCoil.consumeSyncFallbackEvent();
+        status.syncFallbackEvent = false;  /* 15. parti: zamanlanmis-baslangic kalkti — alan tel-uyumu icin durur */
         status.thermalLock = sysCoil.isThermalLocked();
         status.thermalStopEvent = sysCoil.consumeThermalStopEvent();
         status.syncIgnored = sysCoil.syncIgnoredCount();
@@ -246,10 +247,14 @@ void TaskControl(void *pvParameters) {
             lastStackLogMs = millis();
         }
 
-        // Core 0'a gonder. Kuyruk doluysa overwrite mantığı uygulanmaz ancak
-        // kritik değilse uyarı basarız.
+        // Core 0'a gonder. Periyodik durum atlanabilir (200 ms sonra yenisi gelir) ama
+        // [5.12] (sahip onayi 2026-08-20): icindeki TEK-ATIMLIK olaylar atlanamaz — tuketilmis
+        // olay bir daha uretilmez; termal-kesme olayi operatore HIC ulasmayabilirdi. Gonderim
+        // duserse olaylari geri kur, sonraki tur yeniden dener.
         if (xQueueSend(statusQueue, &status, 0) != pdTRUE) {
             LOG_PRINTLN("[Warn] statusQueue dolu! Guncel durum datasi atlandi.");
+            if (status.thermalStopEvent) sysCoil.restoreThermalStopEvent();
+            if (status.selfTestCompleted) sysCoil.restoreSelfTestEvent(status.selfTestPassed);
         }
     }
 }

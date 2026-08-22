@@ -279,3 +279,17 @@ data/cloud_mqtt_provision.json
 
 # Sifreli sir yedegi (build_tools/secrets_backup.py) — ASLA git'e girmez
 *.pemfsec
+
+# ── Tek-depoya birleştirmeden kalan ARŞİV .git dizinleri (2026-08-18) ────────────────────────
+# `pemf-vet-web/` ve `pf/` daha önce ayrı depolardı; birleştirmede eski `.git` dizinleri
+# `.git.arsiv-<tarih>` adıyla saklandı (geçmişe erişim gerekirse diye).
+# ⚠️ NEDEN YOKSAYILIYOR: `git add -A` bunları süpürüyor ve tek commit'te ~850 dosya / 8 MB
+# iç git nesnesi ekliyordu (2026-08-22 yayınında yakalandı). Bunlar KAYNAK DEĞİL, arşivdir;
+# depoya girerlerse her `git status` gürültülü olur ve gerçek değişiklikler gözden kaçar.
+*/.git.arsiv-*/
+.git.arsiv-*/
+
+# ── Gradle build önbelleği (yerel modüller) ─────────────────────────────────────────────────
+# `pf/modules/*/android/.gradle/` altındaki kilit/gc dosyaları build ÇIKTISIDIR; makineye
+# özeldir ve her build'de değişir. 2026-08-22 yayınında `git add -A` ile commit'e sızdılar.
+pf/modules/*/android/.gradle/

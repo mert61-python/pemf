@@ -114,7 +114,6 @@ void PemfNetworkManager::begin() {
   _topicStatus = "pemf/coil/" + String(_coilId) + "/status";
   _topicControl = "pemf/coil/" + String(_coilId) + "/control";
   _topicEvents = "pemf/coil/" + String(_coilId) + "/events";
-  _topicBroadcast = "pemf/coil/all/control"; // Broadcast topiği eklendi
 }
 
 void PemfNetworkManager::_loadConfig() {
@@ -156,6 +155,11 @@ void PemfNetworkManager::_loadConfig() {
   _mqttPort = _localMqttPort;
 
   // FIX: Force usage of FACTORY_COIL_ID from Secrets.h
+  // ⚠️ [5.11] URETIM-SURECI (2026-08-20): coil id KOSULSUZ Secrets.h'tan gelir — BLE provizyon
+  // coil_id YAZAMAZ ve PREF_KEY_COIL_ID OLU tanimdir (Secrets.h'taki eski "BLE provizyonla
+  // NVS'ten degisir" iddiasi YANLISTI). Bobin 7 karti uretmek icin flash ONCESI Secrets.h'ta
+  // FACTORY_COIL_ID=7 yapilmali; iki kart ayni Secrets.h ile flash'lanirsa IKISI DE bobin 6 olur
+  // (ayni topic'e cift yayin — sahada tanisi zor).
   _coilId = FACTORY_COIL_ID;
 
   _prefs.end();
@@ -486,6 +490,7 @@ bool PemfNetworkManager::_connectToLocalBroker() {
   // 2026-08-19: SABIT client_id yasak (sahip degismezi: ayni id iki baglantiyi
   // birbirine dusurur, kopma penceresinde E-stop STOP kaybolur). Acilis-basina ek.
   String clientId = "PEMF-Coil-" + String(_coilId) + "-" + String((uint32_t)esp_random(), HEX);
+  /* 16. parti (sahip onayi 2026-08-20): willRetain=FALSE — tek abone (backend) HER retained girdiyi eler; retain yalniz bayat-offline riski uretiyordu (canli LWT teslimi MQTT-3.3.1-9 geregi bayraktan bagimsiz). */
   String lwtTopic = "pemf/coil/" + String(_coilId) + "/events";
   String lwtMsg =
       "{\"event_type\":\"offline\",\"coil_id\":" + String(_coilId) + "}";
@@ -496,10 +501,10 @@ bool PemfNetworkManager::_connectToLocalBroker() {
   bool result;
   if (strlen(DEFAULT_LOCAL_MQTT_USER) > 0) {
     result = _mqtt->connect(clientId.c_str(), DEFAULT_LOCAL_MQTT_USER,
-                            DEFAULT_LOCAL_MQTT_PASS, lwtTopic.c_str(), 1, true,
+                            DEFAULT_LOCAL_MQTT_PASS, lwtTopic.c_str(), 1, false,
                             lwtMsg.c_str());
   } else {
-    result = _mqtt->connect(clientId.c_str(), lwtTopic.c_str(), 1, true,
+    result = _mqtt->connect(clientId.c_str(), lwtTopic.c_str(), 1, false,
                             lwtMsg.c_str());
   }
 
@@ -507,7 +512,6 @@ bool PemfNetworkManager::_connectToLocalBroker() {
     _activeBroker = BROKER_LOCAL;
     _localRetryCount = 0;
     _mqtt->subscribe(_topicControl.c_str());
-    _mqtt->subscribe(_topicBroadcast.c_str()); // Broadcast'e de üye ol
     LOG_PRINTLN("[MQTT] ✓ Yerel broker'a bağlandı!");
     publishEvent("mqtt_connected", "Yerel MQTT broker'a bağlandı (Mosquitto)");
     return true;
@@ -534,13 +538,12 @@ bool PemfNetworkManager::_connectToCloudBroker() {
 
   bool result = _mqtt->connect(clientId.c_str(), DEFAULT_CLOUD_MQTT_USER,
                                DEFAULT_CLOUD_MQTT_PASS, lwtTopic.c_str(), 1,
-                               true, lwtMsg.c_str());
+                               false, lwtMsg.c_str());
 
   if (result) {
     _activeBroker = BROKER_CLOUD;
     _localRetryCount = 0;
     _mqtt->subscribe(_topicControl.c_str());
-    _mqtt->subscribe(_topicBroadcast.c_str()); // Broadcast'e de üye ol
     LOG_PRINTLN("[MQTT] ✓ Cloud broker'a bağlandı (HiveMQ)!");
     publishEvent("mqtt_connected", "Cloud MQTT broker'a bağlandı (HiveMQ)");
     return true;
@@ -838,77 +841,28 @@ void PemfNetworkManager::_processIncomingCommand(char *topic, byte *payload,
     cmd.dutyCycle = (int)(doc["duty"].as<float>() + 0.5f);
     cmd.phase     = doc.containsKey("phase") ? (int)(doc["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
     cmd.durationSec = doc["duration"] | 0;   // SANIYE (backend sozlesmesi)
-    if (doc.containsKey("start_at")) {
-      unsigned long long raw_ts = doc["start_at"];
-      // UYUMSUZ-1: Otomatik ms/sn tespiti
-      // 13 haneden küçükse saniye cinsinden gelmiştir, ms'e çevir
-      if (raw_ts > 0 && raw_ts < 1000000000000ULL) {
-        cmd.timestamp = raw_ts * 1000ULL; // sn → ms
-        LOG_PRINTLN("[CMD] start_at: saniye formatı algılandı, ms'e çevrildi");
-      } else {
-        cmd.timestamp = raw_ts; // Zaten ms
-      }
-    } else {
-      cmd.timestamp = 0;
-    }
+    /* 15. parti (sahip karari 2026-08-20): start_at ayristirmasi KALDIRILDI — depoda uretici
+     * yoktu (silinmis PyQt kalintisi); start HEMEN baslar (timestamp memset ile zaten 0). */
   } else if (cmdStr == "STOP") {
     cmd.type = CMD_STOP;
   } else if (cmdStr == "UPDATE") {
     cmd.type = CMD_UPDATE_PARAMS;
     cmd.frequency = doc["freq"];
     cmd.dutyCycle = (int)(doc["duty"].as<float>() + 0.5f);
-    cmd.phase     = doc.containsKey("phase") ? (int)(doc["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
+    /* [5.3]: anahtar YOK = "degistirme" (PHASE_BELIRTILMEDI) — 0 mesru faz degeri oldugundan
+     * eski [FIX-3] dolgusu fazsiz update'te fazi sessizce sifirliyordu. Acik negatif fazlar
+     * burada 0..359'a sarilir (controller'in eski sarma davranisi korunur). */
+    cmd.phase     = doc.containsKey("phase")
+                        ? ((((int)(doc["phase"].as<float>() + 0.5f)) % 360 + 360) % 360)
+                        : PHASE_BELIRTILMEDI;
   } else if (cmdStr == "SELFTEST") {
     cmd.type = CMD_SELF_TEST;
   }
-  // HATA-1 FIX: SET_PARAMS komutu eklendi (Python GUI apply_to_all_coils
-  // gönderir)
-  else if (cmdStr == "SET_PARAMS") {
-    cmd.type = CMD_UPDATE_PARAMS;
-    cmd.frequency = doc["freq"];
-    cmd.dutyCycle = (int)(doc["duty"].as<float>() + 0.5f);
-    cmd.phase     = doc.containsKey("phase") ? (int)(doc["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
-    cmd.durationSec = doc["duration"] | 0;   // SANIYE
-  } else if (cmdStr == "SYNC_ALL") {
-    // Toplu komut (Broadcast üzerinden gelir)
-    if (doc.containsKey("coils")) {
-      String myCoilIdStr = String(_coilId);
-      if (doc["coils"].containsKey(myCoilIdStr.c_str())) {
-        JsonObject myCoil = doc["coils"][myCoilIdStr.c_str()];
-
-        // Kendi bobinimize ait parametreleri START komutu gibi işleyelim
-        // Eğer cihaz zaten çalışıyorsa UPDATE gibi davranır (CoilController halleder)
-        cmd.type = CMD_START;
-        cmd.frequency = myCoil["freq"] | 100;
-        cmd.dutyCycle = (int)(myCoil["duty"].as<float>() + 0.5f);
-        cmd.phase     = myCoil.containsKey("phase") ? (int)(myCoil["phase"].as<float>() + 0.5f) : 0;  // [FIX-3]
-        cmd.durationSec = myCoil["duration"] | 0;   // SANIYE
-
-        if (myCoil.containsKey("start_at")) {
-          unsigned long long raw_ts = myCoil["start_at"];
-          if (raw_ts > 0 && raw_ts < 1000000000000ULL) {
-            cmd.timestamp = raw_ts * 1000ULL;
-          } else {
-            cmd.timestamp = raw_ts;
-          }
-        } else if (doc.containsKey("start_at")) {
-          // Global start_at fallback
-          unsigned long long raw_ts = doc["start_at"];
-          if (raw_ts > 0 && raw_ts < 1000000000000ULL) {
-            cmd.timestamp = raw_ts * 1000ULL;
-          } else {
-            cmd.timestamp = raw_ts;
-          }
-        } else {
-          cmd.timestamp = 0;
-        }
-      } else {
-        // Broadcast geldi ama bu bobin için veri yok, komutu yoksay
-        return;
-      }
-    } else {
-      return;
-    }  } else if (cmdStr == "UPDATE_FIRMWARE") {
+  /* 15. parti (sahip karari 2026-08-20): SET_PARAMS + SYNC_ALL dallari KALDIRILDI — depoda
+   * uretici yoktu (silinmis PyQt GUI'nin apply_to_all_coils kalintisi); backend canli
+   * ayarlamayi "start"/"update" ile yapar. SYNC_ALL'un start_at yolu [4.6] latent kusurlarini
+   * tasiyordu; broadcast konusu da (tek yuku buydu) kaldirildi. */
+  else if (cmdStr == "UPDATE_FIRMWARE") {
     String url = doc["url"];
     LOG_PRINTF("[OTA] Firmware update requested from: %s\n", url.c_str());
 

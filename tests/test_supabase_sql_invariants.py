@@ -233,3 +233,61 @@ def test_envanter_SQL_i_bcrypt_modelini_KORUR(sql_bodies):
     assert "grant execute on function public.upsert_device" in low, (
         "yeni imza icin `grant execute ... to anon` YOK — cihaz fonksiyonu cagiramaz"
     )
+
+
+def test_KRITIK_jeton_defterindeki_tur_kisiti_CIHAZIN_gonderdiklerini_KAPSAR(sql_bodies):
+    """8. parti: kullandikca-ode eklendiginde `servers/jeton.py` tuketimi `tur="kullandikca"`
+    ile gonderiyordu ama `token_ledger.tur` CHECK kisiti bu degeri TANIMIYORDU. Sonuc: RPC
+    check-ihlaliyle patlar ve TUKETIM KAYBOLUR (kullanici bedava analiz yapar; ya da daha
+    kotusu, cevrimdisi uzlastirma sonsuza dek basarisiz doner).
+
+    Bu, deponun 1 numaralı hata deseninin sema yuzeyi: ayni sozluk iki yerde, biri guncellenir.
+    Kapi: cihazin gonderebilecegi HER `tur` degeri kisit listesinde olmalidir.
+    """
+    govde = sql_bodies.get("supabase_jetonlar.sql")
+    if not govde:
+        pytest.skip("jeton SQL'i yok")
+
+    m = re.search(r"tur\s+text\s+not\s+null\s+check\s*\(\s*tur\s+in\s*\(([^)]*)\)", govde, re.S)
+    assert m, "token_ledger.tur CHECK kisiti bulunamadi"
+    izinli = set(re.findall(r"'([^']+)'", m.group(1)))
+
+    # Cihaz tarafinin GERCEKTEN gonderdigi turler — kaynaktan okunur, elle yazilmaz.
+    jeton_py = (_KOK / "servers" / "jeton.py").read_text(encoding="utf-8", errors="replace")
+    gonderilen = set(re.findall(r'tur\s*=\s*"([a-z_]+)"', jeton_py))
+    assert gonderilen, "servers/jeton.py icinde tur= gonderimi bulunamadi (test kor kalmis)"
+
+    eksik = gonderilen - izinli
+    assert not eksik, (
+        f"CIHAZ su turleri gonderiyor ama SQL kisiti kabul ETMIYOR: {sorted(eksik)}. "
+        f"Kisit listesi: {sorted(izinli)}. RPC check-ihlaliyle patlar, tuketim kaybolur."
+    )
+
+
+def test_KRITIK_jeton_tuket_KULLANDIKCA_dali_yetersiz_kapisindan_ONCE_gelir(sql_bodies):
+    """8. parti mutasyonu M17 KACMISTI: `jeton_tuket` icindeki kullandikca-ode dali silinse
+    hicbir test kirmizi olmuyordu. Oysa dal kalkarsa PAYG uyeler `sebep='yetersiz'` alir —
+    yani "onden odeme yok" diye satilan uyelik, bakiyesi 0 oldugu icin HIC calismaz.
+
+    Sira da onemli: dal, yetersiz-bakiye kapisindan ONCE gelmeli. Sonra gelirse kapi once
+    reddeder ve dala hic ulasilmaz (sessiz olu kod).
+    """
+    govde = sql_bodies.get("supabase_jetonlar.sql")
+    if not govde:
+        pytest.skip("jeton SQL'i yok")
+
+    dal = govde.find("odeme_modeli = 'kullandikca'")
+    assert dal > -1, (
+        "jeton_tuket icinde kullandikca-ode dali YOK — onden odemesiz uyelik bakiye 0 oldugu "
+        "icin 'yetersiz' alir ve hic calismaz"
+    )
+    kapi = govde.find("'sebep', 'yetersiz'")
+    assert kapi > -1, "yetersiz-bakiye kapisi kayboldu (on-odemeli plan artik sinirsiz)"
+    assert dal < kapi, (
+        "kullandikca dali yetersiz-bakiye kapisindan SONRA geliyor → kapi once reddeder, dal olu kod olur"
+    )
+    # Dal, tuketimi borca YAZMALI; yalnizca 'ok' donup kaydi dusurmek bedava kullanim demektir.
+    kesit = govde[dal : dal + 800]
+    assert "kullandikca_borc" in kesit and "insert into public.token_ledger" in kesit, (
+        "kullandikca dali borcu artirmiyor ya da deftere yazmiyor → tuketim FATURALANAMAZ"
+    )

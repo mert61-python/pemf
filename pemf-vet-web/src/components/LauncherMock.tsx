@@ -78,7 +78,7 @@ export default function LauncherMock() {
         </p>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <Profil ad="Ev Sahibi" />
+          <Profil ad="Evcil Hayvan Sahibi" />
           <Profil ad="Araştırma Modu" />
           <Profil ad="Veteriner Hekim" />
         </div>
@@ -100,7 +100,8 @@ export default function LauncherMock() {
           <span className="inline-flex items-center gap-1.5">
             <Refresh className="h-3 w-3" /> Profilleri değiştir
           </span>
-          <span>Onar</span>
+          {/* Maket, uygulamanın GERÇEK düğme metnini göstermeli (launcher I18N `repair`). */}
+          <span>Kurulumu onar</span>
           <span>Uygulamayı kaldır</span>
         </div>
       </div>

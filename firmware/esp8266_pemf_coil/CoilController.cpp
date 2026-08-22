@@ -117,8 +117,6 @@ CoilController::CoilController(int pwmPin, int coilId, TimeManager* timeManager)
     _suresizGecenMs = 0;
     _effectiveDutyPct = 0;
     _timeManager = timeManager;
-    _startState = PWM_START_IDLE;
-    _targetTimestampMs = 0;
 }
 
 void CoilController::begin() {
@@ -164,16 +162,14 @@ void CoilController::begin() {
 }
 
 void CoilController::update() {
-    // Not: Sync wait kontrolu Main.ino'dan checkSyncWait() ile yapiliyor
-    // Burada sadece PWM sure kontrolu yapiliyor
-
     _checkPWMDuration();
 
-    // Periyodik EEPROM guncellemesi (her 30 saniyede bir)
-    // Restart olursa kalan süreyi doğru yükleyebilmek için
+    // Periyodik EEPROM guncellemesi (NVS_KAYIT_ARALIGI_MS'te bir)
+    // Restart olursa kalan süreyi doğru yükleyebilmek için.
+    // Sabit, resume TABANI ile TEK KAYNAK (SharedDefs.h): aralık değişirse taban da değişir.
     if (_pwmActive) {
         static unsigned long lastEEPROMSave = 0;
-        if (safeMillisDiff(millis(), lastEEPROMSave) >= 30000) {  // 30 saniye
+        if (safeMillisDiff(millis(), lastEEPROMSave) >= NVS_KAYIT_ARALIGI_MS) {
             savePWMState();
             lastEEPROMSave = millis();
         }
@@ -181,58 +177,30 @@ void CoilController::update() {
 }
 
 void CoilController::handleCommand(const ControlCommand& cmd) {
+    /* 15. parti (sahip karari 2026-08-20): CMD_UPDATE_PARAMS + CMD_SYNC_ALL kaldirildi —
+     * 8266'da tek ureticileri silinen set_params/sync_all MQTT dallariydi (backend canli
+     * ayarlamayi "start" ile yapar). SYNC_ALL'un stop()+start() yolu suresiz-tavani
+     * sifirlayabiliyordu ([4.6]) — yuzeyle birlikte kusur da gitti. */
     switch (cmd.type) {
         case CMD_START:
-            start(cmd.frequency, cmd.dutyCycle, cmd.durationSec, cmd.timestamp);
+            start(cmd.frequency, cmd.dutyCycle, cmd.durationSec);
             break;
         case CMD_STOP:
             stop();
-            break;
-        case CMD_UPDATE_PARAMS:
-            setParams(cmd.frequency, cmd.dutyCycle, cmd.durationSec);
-            break;
-        case CMD_SYNC_ALL:
-            if (_pwmActive) {
-                stop();
-                start(_pwmFrequency, _pwmDutyCycle, _pwmDurationSec, cmd.timestamp);
-            } else {
-                _syncFallbackEvent = true;
-            }
             break;
         default:
             break;
     }
 }
 
-bool CoilController::consumeSyncFallbackEvent() {
-    if (_syncFallbackEvent) {
-        _syncFallbackEvent = false;
-        return true;
-    }
-    return false;
-}
-
-void CoilController::start(int freq, int duty, int durationSec, unsigned long long targetTimestampMs) {
+void CoilController::start(int freq, int duty, int durationSec) {
     _pwmFrequency = constrain(freq, 1, 1000);  // 1Hz - 1kHz
-    _pwmDutyCycle = constrain(duty, 1, 99);     // 1% - 99% (tutarlilik icin setParams() ile ayni)
+    _pwmDutyCycle = constrain(duty, 1, 99);     // 1% - 99%
     /* SANIYE -> ms (backend sozlesmesi: _esp_duration_seconds; 0 = suresiz nobetcisi) */
     _pwmDuration = (unsigned long)durationSec * 1000UL;
     _pwmDurationSec = durationSec;
 
-    // EÄŸer targetTimestampMs verilmiÅŸse, non-blocking bekleme state'ine geÃ§
-    if (targetTimestampMs > 0) {
-        _targetTimestampMs = targetTimestampMs;
-        _startState = PWM_START_WAITING;
-        LOG_PRINT(F("[PWM] start_at bekleniyor: "));
-        LOG_PRINTLN((unsigned long)(targetTimestampMs / 1000));
-        // âœ… Ã–NEMLÄ°: _pwmStartTime burada set edilmez!
-        // PWM henÃ¼z baÅŸlamadÄ±, duration hesaplamasÄ± iÃ§in gerÃ§ek baÅŸlangÄ±Ã§ zamanÄ± gerekli.
-        // _pwmStartTime sadece PWM gerÃ§ekten baÅŸladÄ±ÄŸÄ±nda (checkSyncWait() iÃ§inde) set edilecek.
-        return;  // PWM henÃ¼z baÅŸlatÄ±lmadÄ±, checkSyncWait() iÃ§inde baÅŸlatÄ±lacak
-    }
-
-    // Hemen baÅŸlat (targetTimestampMs yok)
-    _startState = PWM_START_IDLE;
+    /* 15. parti: start_at bekleme dali kaldirildi — start HEMEN baslar. */
     _applyPWM(_pwmFrequency, _pwmDutyCycle);
     _pwmActive = true;
     // - Sadece PWM gercekten basladiginda _pwmStartTime set edilir
@@ -271,23 +239,9 @@ void CoilController::stop() {
 #endif
 
     _pwmActive = false;
-    _startState = PWM_START_IDLE;
-    _targetTimestampMs = 0;
 
     /* PWM durduruldu, EEPROM'u temizle */
     savePWMState();
-}
-
-void CoilController::setParams(int freq, int duty, int durationSec) {
-    _pwmFrequency = constrain(freq, 1, 1000);
-    _pwmDutyCycle = constrain(duty, 1, 99);
-    _pwmDuration = (unsigned long)durationSec * 1000UL;  /* SANIYE (backend sozlesmesi) */
-    _pwmDurationSec = durationSec;
-
-    // EÄŸer PWM aktifse, yeni parametrelerle gÃ¼ncelle
-    if (_pwmActive) {
-        _applyPWM(_pwmFrequency, _pwmDutyCycle);
-    }
 }
 
 PWMStatus CoilController::getStatus() {
@@ -310,10 +264,6 @@ bool CoilController::isActive() {
     return _pwmActive;
 }
 
-bool CoilController::isWaiting() {
-    return _startState == PWM_START_WAITING;
-}
-
 int CoilController::getRemainingTime() {
     if (_pwmActive && _pwmDuration > 0) {
         unsigned long elapsed = safeMillisDiff(millis(), _pwmStartTime);
@@ -327,14 +277,17 @@ void CoilController::populateStatus(StatusData& data) {
     data.pwm_active = _pwmActive;
     data.pwm_frequency = _pwmFrequency;
     /* DURUST RAPOR (2026-08-19): %50 donanim tavani isteneni kirpar; backend'e GERCEK cikis
-     * gitsin. Istenen deger getStatus()'ta durur (set_params'in temeli). */
+     * gitsin. Istenen deger getStatus()'ta durur. */
     data.pwm_duty_cycle = _pwmActive ? _effectiveDutyPct : _pwmDutyCycle;
     data.pwm_start_timestamp = _pwmStartTimestamp;
     data.pwm_duration = _pwmDurationSec;  /* SANIYE (backend sozlesmesi) */
 
     if (_pwmActive && _pwmDuration > 0) {
         unsigned long elapsed = safeMillisDiff(millis(), _pwmStartTime);
-        data.pwm_remaining_time = (_pwmDuration > elapsed) ? (_pwmDuration - elapsed) : 0;
+        /* 2. tur [5.1] (2026-08-20): SANIYE — S3 getState ayni anahtari saniye yayinlar;
+         * eski ham-ms yayin, alani okuyacak ilk tuketiciye bobin 8 icin 1000x yanlis
+         * kalan-sure gosterirdi (kardes-birim sozlesme paritesi). */
+        data.pwm_remaining_time = (_pwmDuration > elapsed) ? (_pwmDuration - elapsed) / 1000UL : 0;
     } else {
         data.pwm_remaining_time = 0;
     }
@@ -406,65 +359,6 @@ void CoilController::_checkPWMDuration() {
     }
 }
 
-void CoilController::checkSyncWait(unsigned long long currentTimeMs) {
-    if (_startState != PWM_START_WAITING) {
-        return;  // Bekleme state'inde deÄŸil
-    }
-
-    if (currentTimeMs == 0) {
-        return;  // Zaman senkronize edilmemiÅŸ
-    }
-
-    long waitMs = (long)(_targetTimestampMs - currentTimeMs);
-
-    if (waitMs <= 0) {
-        // Bekleme sÃ¼resi doldu veya geÃ§miÅŸte kaldÄ±, PWM'i baÅŸlat
-        if (waitMs < -1000) {  // 1 saniyeden fazla geÃ§miÅŸte
-            LOG_PRINTLN(F("[PWM][SYNC] HATA: Hedef zaman gecmiste kaldi! Hemen baslatiliyor."));
-        } else {
-            LOG_PRINTLN(F("[PWM][SYNC] Bekleme tamamlandi, PWM baslatiliyor"));
-        }
-
-        _startState = PWM_START_IDLE;  // âœ… State'i IDLE'a dÃ¶ndÃ¼r (READY yerine)
-        _applyPWM(_pwmFrequency, _pwmDutyCycle);
-        _pwmActive = true;
-        // - ONEMLI: _pwmStartTime sadece burada set edilir (PWM gercekten basladiginda)
-        // Bu sayede duration hesaplamalari dogru calisir.
-        _pwmStartTime = millis();
-        _pwmStartTimestamp = currentTimeMs;  // Timestamp'i kaydet
-        _targetTimestampMs = 0;  // Temizle
-
-        // PWM başlatıldı, EEPROM'a kaydet
-        savePWMState();
-    } else if (waitMs > 10000) {
-        // Bekleme sÃ¼resi Ã§ok uzun (>10s), hemen baÅŸlat
-        LOG_PRINTLN(F("[PWM][SYNC] UYARI: Bekleme suresi cok uzun (>10s), hemen baslatiliyor."));
-
-        // ✅ PWM zaten aktifse başlatma
-        if (!_pwmActive) {
-            _startState = PWM_START_IDLE;  // ✅ State'i IDLE'a döndür
-            _applyPWM(_pwmFrequency, _pwmDutyCycle);
-            _pwmActive = true;
-            // - ONEMLI: _pwmStartTime sadece burada set edilir (PWM gercekten basladiginda)
-            _pwmStartTime = millis();
-            _pwmStartTimestamp = currentTimeMs;  // Timestamp'i kaydet
-            _targetTimestampMs = 0;
-
-            // PWM başlatıldı, EEPROM'a kaydet
-            savePWMState();
-        } else {
-            // PWM zaten aktif, sadece state'i temizle
-            _startState = PWM_START_IDLE;
-            _targetTimestampMs = 0;
-        };
-    } else {
-        // Hala bekleniyor, her ÅŸey normal
-        // LOG_PRINT(F("[PWM][SYNC] Bekleniyor: "));
-        // LOG_PRINT(waitMs);
-        // LOG_PRINTLN(F(" ms kaldÄ±"));
-    }
-}
-
 // ============================================================================
 // EEPROM State Persistence (Restart sonrası PWM devam için)
 // ============================================================================
@@ -530,11 +424,20 @@ bool CoilController::restorePWMState() {
     // Kalan süreyi hesapla
     unsigned long remaining = 0;
     if (state.duration > 0) {
-        if (state.elapsed < state.duration) {
-            remaining = state.duration - state.elapsed;
+        /* SURELI crash-loop IKIZI (sahip onayi 2026-08-20): suresiz taban ([1.3]) SURELI dala da
+         * uygulanir — devralinan elapsed'e BIR KAYIT ARALIGI eklenir. <aralik periyotlu cok-diril
+         * dongusunde periyodik kayit hic kosamaz; taban olmadan remaining HIC azalmaz ve sureli
+         * seans dongude SURESIZ surerdi. Asagidaki savePWMState (resume-ani) kalan sureyi
+         * (duration=KALAN, elapsed≈0) HEMEN kalicilastirdigindan taban cevrim basina birikir;
+         * boot-ani EEPROM.commit tekrari da artik sure/aralik cevrimiyle SINIRLI (asinma yolu).
+         * Yon FAIL-SAFE: resume basina en fazla bir aralik ERKEN bitis; taban dahil sure dolmussa
+         * resume HIC yapilmaz. Kilit: tests/test_sureli_crashloop_ikizi.py */
+        unsigned long devralinan = state.elapsed + NVS_KAYIT_ARALIGI_MS;
+        if (devralinan < state.duration) {
+            remaining = state.duration - devralinan;
         } else {
-            // Süre dolmuş
-            LOG_PRINTLN(F("[PWM] EEPROM'daki PWM suresi dolmus"));
+            // Süre dolmuş (taban dahil)
+            LOG_PRINTLN(F("[PWM] EEPROM'daki PWM suresi dolmus (resume tabani dahil)"));
             return false;
         }
     }
@@ -543,14 +446,26 @@ bool CoilController::restorePWMState() {
     _pwmFrequency = state.frequency;
     _pwmDutyCycle = state.dutyCycle;
     _pwmDuration = remaining;  // Kalan süreyi kullan
+    /* 2. tur [5.2] (2026-08-20): _pwmDurationSec de KALAN sureden geri kurulur (S3 loadState
+     * paritesi: _durationSec = kalan). Eskiden ctor'daki 0'da kaliyordu → resume sonrasi SURELI
+     * seans status'ta pwm_duration=0 (= SURESIZ nobetcisi!) raporluyor, pwm_remaining_time ile
+     * celisiyordu. Suresiz resume'da (state.duration==0) 0 KALIR — suresiz sozlesmesi. */
+    _pwmDurationSec = (state.duration > 0) ? (int)(remaining / 1000UL) : 0;
+    if (state.duration > 0 && _pwmDurationSec < 1) _pwmDurationSec = 1;
 
     // PWM'i başlat
     _applyPWM(_pwmFrequency, _pwmDutyCycle);
     _pwmActive = true;
     _pwmStartTime = millis();  // Yeni başlangıç zamanı
-    /* KÜMÜLATİF TAVAN (review, crash-loop): süresiz modda geçen süre devralınır —
-     * <2 saatte bir çöküp dirilen cihaz 7200 sn penceresini tazeleyemez. */
-    _suresizGecenMs = (state.duration == 0) ? state.elapsed : 0;
+    /* KÜMÜLATİF TAVAN (2. tur denetimi [1.3], 2026-08-20): süresiz modda devralınan birikim
+     * + BİR KAYIT ARALIĞI tabanı. <aralık periyotlu çök-diril döngüsünde periyodik kayıt hiç
+     * koşamaz; taban olmadan kümülatif hiç büyümez ve 7200 sn tavan sıfırdan başlayan hızlı
+     * crash-loop'ta asla dolmazdı. Aşağıdaki savePWMState tabanı HEMEN kalıcılaştırır — yalnız
+     * RAM'de kalsa EEPROM'daki değer büyümez, delik sürerdi (S3 bunu _beginOutput içindeki
+     * forceSaveState ile yapar; iki kardeş aynı sözleşmede). Yön FAIL-SAFE: resume başına en
+     * fazla bir aralık erken durma; süreli resume'a taban UYGULANMAZ. */
+    _suresizGecenMs = (state.duration == 0) ? (state.elapsed + NVS_KAYIT_ARALIGI_MS) : 0;
+    savePWMState();
 
     if (remaining > 0) {
         LOG_PRINTF("[PWM] EEPROM'dan yuklendi ve kaldigi yerden devam ediyor: %dHz, %d%%, %lums kaldi\n",

@@ -74,7 +74,16 @@ describe("cihazaBaglan", () => {
   it("KRITIK: health çağrısına device_id GEÇİLİR (yanlış cihaza bağlanma)", async () => {
     mockCozKod.mockResolvedValue(bulundu);
     await cihazaBaglan("MVPDDN");
-    expect(mockHealth).toHaveBeenCalledWith(URL_, ID_);
+    expect(mockHealth).toHaveBeenCalledWith(URL_, ID_, expect.anything());
+  });
+
+  it("KRİTİK [5.9]: ön-prob checkHealth'e kimligiKaydet:false GEÇİLİR — takas düşerse kimlik B'ye dönemez", async () => {
+    // checkHealth başarılı her yanıtta deviceId'yi diske yazar; takas ÖNCESİ prob bu yan
+    // etkiyle F3 değişmezini ("token yoksa kalıcı yazım yok") device_id için deliyordu.
+    // Kalıcı yazım, takas başarılıysa aşağıdaki setStoredDeviceId'de zaten yapılır.
+    mockCozKod.mockResolvedValue(bulundu);
+    await cihazaBaglan("MVPDDN");
+    expect(mockHealth).toHaveBeenCalledWith(URL_, ID_, { kimligiKaydet: false });
   });
 
   it("KRITIK: token takası başarısızsa 'bağlandı' DEMEZ", async () => {

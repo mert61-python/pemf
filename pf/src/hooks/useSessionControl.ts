@@ -63,6 +63,9 @@ interface SessionActionResponse {
   status?: string;
   session?: unknown;
   warning?: string;
+  /** Denetim 2. tur [1.1]: /session/stop, donanım STOP'u DOĞRULANAMAYAN bobinleri listeler
+   *  (broker ölü / STM erişilemez). Üst-seviye status "success" kalır — seans kaydı kapandı. */
+  hardware_stop_unconfirmed?: number[];
 }
 
 export function useSessionControl(): SessionControlResult {
@@ -246,6 +249,19 @@ export function useSessionControl(): SessionControlResult {
           "Sunucuya ulaşılamadı — donanım HÂLÂ ÇALIŞIYOR olabilir. Lütfen ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
         );
         return false;
+      }
+      // Denetim 2. tur [1.1] (2026-08-20): backend seans KAYDINI kapattı ama bazı bobinlerin
+      // donanım STOP'u doğrulanamadı (broker ölü/yetim, STM erişilemez). Eskiden /session/stop
+      // koşulsuz "success" döndüğü için yukarıdaki uyarı bu senaryoda HİÇ tetiklenemiyordu.
+      // Seans UI'da kapanır (kayıt gerçekten kapandı — null/error'dan farkı bu) ama operatör
+      // hangi bobinlerin teyitsiz kaldığını AÇIKÇA görür.
+      const teyitsiz = Array.isArray(res.hardware_stop_unconfirmed) ? res.hardware_stop_unconfirmed : [];
+      if (teyitsiz.length > 0) {
+        platformAlert(
+          "Durdurma onaylanamadı",
+          `Bobin(ler) ${teyitsiz.join(", ")} için donanım STOP'u DOĞRULANAMADI — HÂLÂ ÇALIŞIYOR ` +
+            "olabilirler. ACİL DURDUR'a basın ya da cihazın fiziksel güç düğmesini kullanın."
+        );
       }
       stopTimer();
       setIsActive(false);

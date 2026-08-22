@@ -298,7 +298,7 @@ export function ControlScreen() {
     // dakika-ortalamalarını yazıyor; bobin koşuları eşzamanlı kapatılırsa o kısmi dakika
     // sensör-özetinden düşer.
     // `Promise.all` reject ETMEZ: `apiPost` throw etmiyor, hata/timeout'ta null dönüyor.
-    const istekler: Promise<{ status?: string } | null>[] = [];
+    const istekler: Promise<{ status?: string; results?: Array<{ status?: string } | null> } | null>[] = [];
     if (stmCoils.length > 0) {
       istekler.push(
         apiPost<{ status?: string } | null>("/coil/batch", {
@@ -314,7 +314,19 @@ export function ControlScreen() {
       );
     }
     const sonuclar = await Promise.all(istekler);
-    const allOk = sonuclar.every((r) => r && r.status !== "error");
+    // Denetim 2. tur [1.1] (2026-08-20): "hata değil" ≠ "teyit". Backend, publish broker'a
+    // ulaşamayınca HTTP 200 + {status:"mqtt_unavailable"} döner (tek bobin) ve /coil/batch
+    // ÜST-SEVİYEDE HEP "success" deyip satır-başı sonuçları results[] içinde taşır
+    // (stm_unavailable/mqtt_unavailable/invalid). Eski yüklem (`status !== "error"`) ikisini de
+    // teyit sayıyordu → broker ölüyken STOP hiçbir bobine ulaşmamışken aşağıdaki uyarı HİÇ
+    // çıkmıyordu. Teyit yalnız AÇIK "success"tir; batch'te satırlar da tek tek sayılır.
+    const satirOnaylandi = (r: { status?: string } | null | undefined): boolean =>
+      !!r && r.status === "success";
+    const allOk = sonuclar.every((r) => {
+      if (!satirOnaylandi(r)) return false;
+      const satirlar = r?.results;
+      return !Array.isArray(satirlar) || satirlar.every(satirOnaylandi);
+    });
     if (!allOk && istekler.length > 0) {
       platformAlert(
         "Durdurma onaylanamadı",
@@ -391,7 +403,7 @@ export function ControlScreen() {
   };
 
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
-  type ObsSess = { patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number };
+  type ObsSess = { patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number; obsKey?: number };
   const [obsSession, setObsSession] = useState<ObsSess | null>(null);
   // Durdurma turu KAPISI. Ref senkron (iki hızlı basış aynı batch'te state'i görmez); state
   // YALNIZ etiket için. ⚠️ Butonun `disabled`ına EKLENMEZ (sahip kararı: durdurma kontrolü
@@ -401,9 +413,17 @@ export function ControlScreen() {
   const lastSessionRef = useRef<ObsSess | null>(null);
   const prevActiveRef = useRef(isActive);
 
+  // Denetim 2. tur [4.1]: her seansa (isActive YÜKSELEN kenarı) benzersiz obsKey — modal'ın
+  // sıfırlama anahtarı; aynı isimli iki hastada A'nın notu B'ye bulaşmasın (modal sözleşmesi
+  // ObservationNotesModal'da). Sayaç ref'te: aynı seansın treatment tick'leri anahtarı DEĞİŞTİRMEZ.
+  const seansSayacRef = useRef(0);
+  const sayacOncekiAktifRef = useRef(false);
   useEffect(() => {
+    if (isActive && !sayacOncekiAktifRef.current) seansSayacRef.current += 1;
+    sayacOncekiAktifRef.current = isActive;
     if (isActive && treatment) {
       lastSessionRef.current = {
+        obsKey: seansSayacRef.current,
         patientName,
         mode: treatment.mode,
         frequency: treatment.frequencyHz,

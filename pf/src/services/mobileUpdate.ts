@@ -106,6 +106,38 @@ export function _atlamayiSifirla(): void {
   _atlananVersionCode = 0;
 }
 
+/**
+ * [5.7a] KURULUM ERTELEMESİ (2. tur denetimi, sahip onayı 2026-08-20) — `atlandiMi`den AYRI bayrak.
+ *
+ * Kapı "Şimdilik devam et" ile kapatıldığında UÇUŞTA kalan `guncelle()` bundan habersizdi:
+ * indirme bitince Android yükleyicisi kullanıcının o anki işinin ÜSTÜNE sormadan açılıyordu.
+ * Bu bayrak yalnız OTOMATİK yükleyici açılışını keser; bandı SUSTURMAZ (paket hazır — kullanıcı
+ * banttan "Güncelle"ye dokununca kurulur). `guncelle()` girişte bayrağı TEMİZLER: açık kullanıcı
+ * niyeti ertelemeyi kaldırır — erteleme kalıcı kilide dönemez ("güncelleme ZORUNLU KILINAMAZ"ın
+ * ayna kuralı). ⚠️ KASITEN yalnız bellekte — atlandiMi ile aynı gerekçe.
+ */
+let _kurulumErtelenenVC = 0;
+
+/** Uçuştaki/hazır paketin kurulumunu bu açılışta OTOMATİK açma. */
+export function kurulumunuErtele(versionCode: number): void {
+  _kurulumErtelenenVC = Number(versionCode) || 0;
+}
+
+/** Bu sürümün otomatik kurulum açılışı ertelendi mi? */
+export function kurulumErtelendiMi(versionCode: number): boolean {
+  return _kurulumErtelenenVC > 0 && Number(versionCode) === _kurulumErtelenenVC;
+}
+
+/** Açık kullanıcı niyeti (yeni "Güncelle" dokunuşu) ertelemeyi kaldırır. */
+export function kurulumErtelemesiniKaldir(versionCode: number): void {
+  if (kurulumErtelendiMi(versionCode)) _kurulumErtelenenVC = 0;
+}
+
+/** Yalnız testler için — modül durumunu sıfırlar. */
+export function _kurulumErtelemesiniSifirla(): void {
+  _kurulumErtelenenVC = 0;
+}
+
 export type IlerlemeCb = (oran: number) => void;
 
 export interface IndirmeSonucu {
@@ -367,7 +399,24 @@ export type KurulumSonucu =
  * ⚠️ Asıl güvenlik kapısı değişmedi: Android, kurulu uygulamayla AYNI anahtarla imzalanmamış bir
  * APK'yı güncelleme olarak KABUL ETMEZ (bkz. modül başlığı). Sessiz kurulum YOKTUR.
  */
+/* [17. parti — adversaryal inceleme] ÇİFT-YÜKLEYİCİ YARIŞI: kapı indirme uçuştayken "Şimdilik
+ * devam et" + banttan "Güncelle" dokunuşu, aynı indirme sözüne abone İKİ kanca örneğini (kapının
+ * ölü örneği + bandınki) aynı anda kurulum kapısından geçirebilir — iki ACTION_VIEW niyeti (izin
+ * yoksa izin ekranı iki kez). Aynı URI için UÇUŞTAKİ açılış sözü paylaşılır: iki çağrı tek
+ * yükleyici niyetine düşer; söz çözülünce yeni çağrı yine açar ("Kurulumu tekrar aç" bozulmaz). */
+let _acilisSozu: { uri: string; sozu: Promise<KurulumSonucu> } | null = null;
+
 export async function kurulumuBaslat(dosyaUri: string): Promise<KurulumSonucu> {
+  if (_acilisSozu && _acilisSozu.uri === dosyaUri) return _acilisSozu.sozu;
+
+  const sozu = _kurulumuBaslatIc(dosyaUri).finally(() => {
+    _acilisSozu = null;
+  });
+  _acilisSozu = { uri: dosyaUri, sozu };
+  return sozu;
+}
+
+async function _kurulumuBaslatIc(dosyaUri: string): Promise<KurulumSonucu> {
   if (Platform.OS !== "android") return "hata";
 
   // 1) İzin kapısı — "bilinmeyen kaynak" kapalıyken yükleyiciyi açmak kullanıcıya anlaşılmaz bir

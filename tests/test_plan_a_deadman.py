@@ -99,11 +99,18 @@ def test_KRITIK_A1_tavan_KUMULATIF_crash_loop_delemez():
     # persist: süresiz modda elapsed kümülatif yazılır
     assert "_suresizGecenMs + (millis() - _startTime))" in s3
     assert "_suresizGecenMs + safeMillisDiff(millis(), _pwmStartTime);" in e8, "8266 savePWMState kümülatif yazmıyor"
-    # resume devralır (S3 loadState / 8266 restorePWMState)
-    assert "_suresizGecenMs = s.elapsedMs" in s3, "S3 resume kümülatifi devralmıyor"
-    assert "_suresizGecenMs = (state.duration == 0) ? state.elapsed : 0" in e8, "8266 resume devralmıyor"
-    # taze START pencereyi sıfırlar (operatör eylemi)
-    assert s3.count("_suresizGecenMs = 0") >= 2, "S3 taze-start sıfırlaması yok (ctor+_beginOutput)"
+    # resume devralır (S3 loadState / 8266 restorePWMState) — 2. tur [1.3]: devralma artık
+    # KAYIT ARALIĞI tabanıyla ve S3'te _beginOutput PARAMETRESİYLE (kayıttan ÖNCE) yapılır;
+    # ayrıntılı sıra/taban kapıları aşağıdaki A-1 TAMAMLAMASI bölümünde.
+    assert "s.elapsedMs + NVS_KAYIT_ARALIGI_MS" in s3, "S3 resume kümülatifi (taban dahil) devralmıyor"
+    assert "_suresizGecenMs = (state.duration == 0) ? (state.elapsed + NVS_KAYIT_ARALIGI_MS) : 0" in e8, (
+        "8266 resume devralmıyor (taban dahil)"
+    )
+    # taze START pencereyi sıfırlar (operatör eylemi): ctor sıfırlar; _beginOutput'un devralma
+    # parametresi taze çağrılarda VERİLMEZ → varsayılan 0 (başlıktaki default'u ve loadState
+    # dışındaki çağrıların argümansızlığını A-1 TAMAMLAMASI kapıları kilitler).
+    assert "_suresizGecenMs = 0" in s3, "S3 ctor sıfırlaması yok"
+    assert "_suresizGecenMs = devralinanSuresizMs" in s3, "S3 _beginOutput sayaç ataması yok"
     assert e8.count("_suresizGecenMs = 0") >= 2, "8266 taze-start sıfırlaması yok (ctor+start)"
 
 
@@ -139,6 +146,172 @@ def test_A1_kumulatif_tavan_MODEL():
     assert c.calis(31 * 60_000), "crash-loop: 90+31=121 dk kümülatifte tavan DOLMALIYDI"
     c.taze_start()  # operatör yeni start verdi
     assert not c.calis(119 * 60_000), "taze start sonrası pencere sıfırlanmadı"
+
+
+# ── A-1 TAMAMLAMASI: resume kaydı birikimi SİLMEZ + kayıt-aralığı tabanı ────────
+# DENETIM 2. TUR [1.3] (2026-08-20). İki kusur:
+#   (a) S3 loadState → _beginOutput içindeki forceSaveState, kümülatif sayaç RAM'e geri
+#       yüklenmeden ÖNCE koşuyor ve NVS'e elapsedMs≈0 yazıyordu → resume'dan sonraki 30 sn
+#       içinde ikinci bir çökme BİRİKİMİ SİLİYORDU (8266 kardeşi etkilenmiyordu — restore
+#       EEPROM'a yazmaz). b7b842c'nin kapattığını iddia ettiği crash-loop deliğinin kendisi.
+#   (b) Periyodik kayıt 30 sn'de bir: <30 sn periyotlu çök-diril döngüsünde HİÇBİR boot
+#       birikim kaydedemez → tavan sıfırdan başlayan hızlı döngüde HİÇ dolmaz (iki cihazda da).
+#       Çözüm: her resume, bir kayıt-aralığı (NVS_KAYIT_ARALIGI_MS) TABAN sayılır ve HEMEN
+#       kalıcılaştırılır → kümülatif her çevrimde en az bir aralık büyür; yön FAIL-SAFE
+#       (tavan asla geç dolmaz, en fazla resume başına ≤30 sn erken dolar).
+#
+# ⚠️ Kapılar YORUM-SOYULMUŞ C kaynağında çalışır (bu deponun bilinen dersi: kusuru anlatan
+# yorum düzeltme sanılmasın / doğru deseni anlatan yorumla kapı geçilmesin).
+
+import re as _re
+
+
+def _c_soy(src: str) -> str:
+    """C yorumlarını söker (/* */ + //). String içi '//' bu dosyalarda yok — LOG metinleri Türkçe."""
+    src = _re.sub(r"/\*.*?\*/", " ", src, flags=_re.S)
+    src = _re.sub(r"//[^\n]*", " ", src)
+    return src
+
+
+def _c_govde(soyulmus: str, imza: str) -> str:
+    """`imza` ile başlayan fonksiyon gövdesi — bir SONRAKİ üst-düzey tanıma (veya dosya sonuna) kadar."""
+    i = soyulmus.index(imza)
+    adaylar = [soyulmus.find(p, i + len(imza)) for p in ("\nvoid ", "\nbool ", "\nuint32_t ", "\nstruct ", "\nstatic ")]
+    adaylar = [a for a in adaylar if a > 0]
+    return soyulmus[i : min(adaylar)] if adaylar else soyulmus[i:]
+
+
+def test_KRITIK_A1_S3_resume_kaydi_birikimi_SILMEZ():
+    """(a) kusurunun kapısı: devralınan birikim _beginOutput'a PARAMETRE olarak girer ki içindeki
+    forceSaveState NVS'e 0 değil DOĞRU değeri yazsın; eski 'çağrıdan SONRA RAM'e geri yükle'
+    deseni kaynaktan tamamen çıkmış olmalı."""
+    s3 = _c_soy(
+        (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    )
+    h = _c_soy(
+        (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.h").read_text(encoding="utf-8", errors="replace")
+    )
+
+    # imza: varsayılanı 0 olan devralma parametresi (taze START'lar pencereyi sıfırlamaya devam eder)
+    assert _re.search(r"_beginOutput\s*\(\s*unsigned long long \w+\s*,\s*unsigned long \w+\s*=\s*0\s*\)", h), (
+        "S3 başlığında _beginOutput devralma parametresi (varsayılan 0) yok — resume birikimi "
+        "kayıttan önce devralamaz / taze START sıfırlaması garantisiz"
+    )
+
+    bo = _c_govde(s3, "void CoilController::_beginOutput")
+    i_atama = bo.find("_suresizGecenMs = devralinanSuresizMs")
+    i_kayit = bo.find("forceSaveState()")
+    assert i_atama >= 0, "_beginOutput devralınan birikimi sayaca yazmıyor"
+    assert 0 <= i_atama < i_kayit, (
+        "_beginOutput birikimi kayıttan SONRA yazıyor — forceSaveState NVS'e yine ≈0 yazar, "
+        "resume+30sn içindeki ikinci çökme birikimi siler (bulgunun kendisi)"
+    )
+
+    ls = _c_govde(s3, "void CoilController::loadState")
+    assert _re.search(r"_beginOutput\s*\([^;]*elapsedMs", ls), (
+        "loadState devralınan birikimi _beginOutput çağrısına GEÇİRMİYOR"
+    )
+    assert "_suresizGecenMs = s.elapsedMs" not in ls, (
+        "eski desen geri gelmiş: birikim çağrıdan SONRA RAM'e yükleniyor — içerideki kayıt onu NVS'te siler"
+    )
+
+
+def test_KRITIK_A1_resume_TABANI_iki_cihazda_da_kalicilastirilir():
+    """(b) kusurunun kapısı: <30 sn periyotlu döngüde hiçbir periyodik kayıt koşamaz → her resume
+    bir kayıt-aralığı TABAN sayılıp HEMEN kalıcılaştırılmalı (S3: _beginOutput içindeki
+    forceSaveState; 8266: restore sonrası açık savePWMState). Taban sabiti kayıt aralığıyla
+    TEK KAYNAK (aralık değişirse taban da değişsin)."""
+    for klasor in ("esps3_pemf_coil", "esp8266_pemf_coil"):
+        sd = (KOK / "firmware" / klasor / "SharedDefs.h").read_text(encoding="utf-8", errors="replace")
+        assert "#define NVS_KAYIT_ARALIGI_MS 30000UL" in sd, f"{klasor}: NVS_KAYIT_ARALIGI_MS sabiti yok"
+
+    s3 = _c_soy(
+        (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    )
+    e8 = _c_soy(
+        (KOK / "firmware" / "esp8266_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    )
+
+    # S3: periyodik kayıt + resume tabanı aynı sabitten
+    assert _re.search(r"_lastSaveTimeMs\)\s*>=\s*NVS_KAYIT_ARALIGI_MS", s3), (
+        "S3 periyodik kayıt sabiti tek-kaynak değil"
+    )
+    s3_ls = _c_govde(s3, "void CoilController::loadState")
+    assert _re.search(r"elapsedMs\s*\+\s*NVS_KAYIT_ARALIGI_MS", s3_ls), (
+        "S3 resume tabanı yok — <30 sn periyotlu crash-loop'ta birikim hiç büyümez, tavan dolmaz"
+    )
+
+    # 8266: periyodik kayıt + resume tabanı + restore'da KALICILAŞTIRMA (sırası: önce sayaç, sonra kayıt)
+    assert _re.search(r"lastEEPROMSave\)\s*>=\s*NVS_KAYIT_ARALIGI_MS", e8), (
+        "8266 periyodik kayıt sabiti tek-kaynak değil"
+    )
+    e8_rs = _c_govde(e8, "bool CoilController::restorePWMState")
+    assert _re.search(r"state\.elapsed\s*\+\s*NVS_KAYIT_ARALIGI_MS", e8_rs), "8266 resume tabanı yok"
+    i_sayac = e8_rs.find("_suresizGecenMs = ")
+    i_kayit = e8_rs.find("savePWMState()")
+    assert i_kayit > 0, (
+        "8266 restore tabanı KALICILAŞTIRMIYOR (savePWMState yok) — taban yalnız RAM'de kalır, "
+        "EEPROM'daki değer büyümez, <30 sn döngüde tavan yine delinir"
+    )
+    assert 0 <= i_sayac < i_kayit, "8266 restore kaydı sayaç atamasından ÖNCE — 0/bayat değer kalıcılaşır"
+
+
+def test_KRITIK_A1_resume_kaydi_ve_taban_MODEL_30sn_alti_crash_loop():
+    """Ayrıştırıcı model: 20 sn periyotlu çök-diril (periyodik kayıt HİÇ koşamaz).
+    ESKİ S3 semantiği (resume kaydı 0 yazar, RAM'e geri yükleme sonra) → birikim her çevrimde
+    SİLİNİR, tavan asla dolmaz. YENİ semantik (devralınan + taban, kayıttan önce) → kümülatif
+    her çevrimde bir kayıt-aralığı büyür, tavan sınırlı sayıda çevrimde dolar."""
+    TAVAN = 7200_000
+    ARALIK = 30_000
+    CALISMA = 20_000  # < ARALIK → periyodik kayıt hiç koşamaz
+
+    def dongu(resume_semantigi):
+        nvs = 0
+        for cevrim in range(1, 400):
+            # resume: (yeni) devralınan+taban kayıttan önce → NVS büyür; (eski) kayıt 0 yazar
+            if resume_semantigi == "yeni":
+                devir = nvs + ARALIK
+                nvs = devir  # _beginOutput/savePWMState kalıcılaştırdı
+            else:  # eski S3
+                devir = nvs  # RAM'e sonradan yüklenen değer
+                nvs = 0  # _beginOutput içindeki forceSaveState ≈0 yazdı
+            if devir + CALISMA >= TAVAN:
+                return cevrim  # tavan bu boot'ta doldu → bobin durdu
+            # CALISMA ms sonra çökme: bu boot'un süresi hiçbir kayda girmedi
+        return None
+
+    yeni = dongu("yeni")
+    assert yeni is not None and yeni <= (TAVAN // ARALIK) + 1, (
+        f"YENİ semantikte tavan sınırlı çevrimde dolmalıydı (sonuç: {yeni!r})"
+    )
+    assert dongu("eski") is None, (
+        "model ayrıştırmıyor: ESKİ semantik de tavana ulaştı — kapı yanlış şeyi ölçüyor olabilir"
+    )
+
+
+def test_KARSIT_KANIT_A1_taze_start_ve_sureli_resume_DEGISMEDI():
+    """Taban yalnız SÜRESİZ resume'a uygulanır; taze START pencereyi sıfırlamaya devam eder
+    (operatör eylemi = gözetimli) ve süreli resume'un kalan-süre hesabı büyümez."""
+    s3 = _c_soy(
+        (KOK / "firmware" / "esps3_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    )
+    e8 = _c_soy(
+        (KOK / "firmware" / "esp8266_pemf_coil" / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    )
+
+    # S3 ctor sıfırlar; loadState DIŞINDA hiçbir _beginOutput çağrısı devralma argümanı geçirmez
+    assert "_suresizGecenMs = 0" in s3, "S3 ctor sıfırlaması kaybolmuş"
+    for govde_imza in ("bool CoilController::handleCommand", "void CoilController::process"):
+        govde = _c_govde(s3, govde_imza)
+        for cagri in _re.findall(r"_beginOutput\s*\(([^;]*)\)\s*;", govde):
+            assert "elapsedMs" not in cagri and "NVS_KAYIT_ARALIGI" not in cagri, (
+                f"{govde_imza}: taze/zamanlanmış START devralma argümanı geçiriyor — operatör start'ı pencereyi sıfırlamalı"
+            )
+    # 8266: süresiz-dışı resume'da sayaç 0 kalır (taban yalnız duration==0 dalında)
+    e8_rs = _c_govde(e8, "bool CoilController::restorePWMState")
+    assert _re.search(
+        r"state\.duration\s*==\s*0\s*\)\s*\?\s*\(?state\.elapsed\s*\+\s*NVS_KAYIT_ARALIGI_MS\)?\s*:\s*0", e8_rs
+    ), "8266 tabanı süresiz-dışı resume'a da sızmış ya da hiç yok"
 
 
 # ── A-3: niyet kaydı (tek boğaz noktası) ───────────────────────────────────────

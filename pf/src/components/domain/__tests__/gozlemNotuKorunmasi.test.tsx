@@ -93,6 +93,37 @@ it("#48 KORUMASI: HASTA DEĞİŞİMİNDE not SİLİNİR (yamadan önce de yeşil
   expect(notAlani(u).props.value).toBe("");
 });
 
+it("KRİTİK [2.tur 4.1]: AYNI İSİMLİ farklı seans (obsKey değişti) → A'nın notu B'ye BULAŞMAZ", () => {
+  // Sıfırlama anahtarı yalnız hasta ADI olunca, aynı isimli iki hasta ("Boncuk"/"Paşa" klinikte
+  // gerçekçi) arasında A'nın kaydedilmemiş notu B'nin seans-sonu modalında aynen duruyordu —
+  // hekim fark etmezse A'nın gözlemi B'nin TIBBİ KAYDINA gider. Yol: modal `running` yüzünden
+  // gizlenir (obsSession null'a düşmez), B'nin seansı biter, setObsSession AYNI İSİMLE yeni nesne
+  // atar → isim-dep'i ateşlemez. Kimlik artık seans-başına `obsKey` ile ayrışır.
+  const boncukA = { patientName: "Boncuk", mode: "Manuel", obsKey: 1 } as never;
+  const boncukB = { patientName: "Boncuk", mode: "Manuel", obsKey: 2 } as never;
+  const u = render(<ObservationNotesModal visible session={boncukA} onClose={() => {}} />);
+  fireEvent.press(u.getByText("Uyudu"));
+  fireEvent.changeText(notAlani(u), NOT);
+  expect(notAlani(u).props.value).toBe(NOT);
+
+  u.rerender(<ObservationNotesModal visible={false} session={boncukA} onClose={() => {}} />);
+  u.rerender(<ObservationNotesModal visible session={boncukB} onClose={() => {}} />);
+
+  expect(notAlani(u).props.value).toBe("");
+});
+
+it("KARŞIT-KANIT [2.tur 4.1]: AYNI seans (obsKey aynı) gizle→göster → not KORUNUR", () => {
+  // obsKey, bulgu-20 düzeltmesinin özünü (gizlenmede sıfırlama YOK) geri getirmemeli.
+  const boncuk = { patientName: "Boncuk", mode: "Manuel", obsKey: 7 } as never;
+  const u = render(<ObservationNotesModal visible session={boncuk} onClose={() => {}} />);
+  fireEvent.changeText(notAlani(u), NOT);
+
+  u.rerender(<ObservationNotesModal visible={false} session={boncuk} onClose={() => {}} />);
+  u.rerender(<ObservationNotesModal visible session={boncuk} onClose={() => {}} />);
+
+  expect(notAlani(u).props.value).toBe(NOT);
+});
+
 it("AÇILIŞTA sıfırlama korunuyor (session null → yeni hasta)", () => {
   const u = render(<ObservationNotesModal visible session={REX} onClose={() => {}} />);
   fireEvent.changeText(notAlani(u), NOT);
