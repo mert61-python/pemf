@@ -166,16 +166,120 @@ app.add_middleware(
     **_cors_kwargs,
 )
 
-# Audit P2: TrustedHostMiddleware — DNS-rebinding'e karşı Host allowlist. Kötücül bir sayfa,
-# kurban tarayıcısını "clinic.local"e rebind edip LAN-muaf API'yi same-origin gibi çağırabiliyordu.
-# PEMF_ALLOWED_HOSTS="clinic.local,192.168.1.50,*.trycloudflare.com" ile daraltılır; AYARSIZ = ["*"]
-# (tüm host'lar = mevcut davranış, GERİYE-UYUMLU). Deployment kendi host listesini verince rebinding kapanır.
-_allowed_hosts_env = os.getenv("PEMF_ALLOWED_HOSTS", "*").strip()
-_allowed_hosts = ["*"] if _allowed_hosts_env == "*" else [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
-if _allowed_hosts != ["*"]:
+# Audit P2 + eksik-taraması P2 (2026-08-22): DNS-rebinding'e karşı Host koruması.
+#
+# TARİHÇE: TrustedHost altyapısı 2026-08-04'ten beri vardı ama varsayılan "*" ve HİÇBİR dağıtım
+# profili/launcher ayarlamadığı için koruma hiçbir kurulumda AKTİF DEĞİLDİ. Statik liste de
+# çözüm olamıyordu: meşru istemciler kliniğin O ANKİ LAN IP'siyle bağlanır (telefon →
+# http://192.168.1.35:8000) ve TrustedHost joker-IP bilmez — liste ya mobili kırar ya "*" kalır.
+#
+# "auto" MODU: rebinding saldırısının Host başlığı HER ZAMAN saldırganın ALAN ADIdır (tarayıcı
+# Host'a çözdüğü adı yazar). Meşru Host'lar sayılabilir bir sınıftır: IP-literal (v4/v6),
+# localhost, *.local (mDNS), makinenin kendi adı, tünel alanları. "auto" bu sınıfı serbest
+# bırakır, YABANCI DNS ADLARINI 400 ile reddeder. "auto,klinik.sirket.com" ek ad tanımlar
+# (kurumsal intranet FQDN'li klinik için çıkış kapısı).
+#
+# Değer sözlüğü:  "*" (VARSAYILAN) = koruma kapalı (dev/test — sessiz davranış değişikliği yok;
+# korumayı deploy/*.env + launcher backend_env "auto" ile açar) · "auto[,ek...]" = yukarıdaki
+# sınıflandırma · açık liste = eski TrustedHost davranışı aynen.
+# Kilit: tests/test_allowed_hosts_rebinding.py
+import ipaddress as _ipaddress
+import socket as _socket
+
+
+def _allowed_hosts_secimi(deger: str):
+    """Env değerini (mod, ekstra/liste) çiftine çözer — test edilebilir saf fonksiyon."""
+    d = (deger or "*").strip()
+    if d == "*" or not d:
+        return ("kapali", ())
+    parcalar = [p.strip() for p in d.split(",") if p.strip()]
+    if parcalar and parcalar[0].lower() == "auto":
+        return ("auto", tuple(p.lower() for p in parcalar[1:]))
+    return ("liste", tuple(parcalar))
+
+
+def _host_izinli(host: str, ekstra: tuple) -> bool:
+    """'auto' modunun sınıflandırması. Boş Host = izinli (HTTP/1.0 fail-open; rebinding boş
+    Host ile YAPILAMAZ — tarayıcı her zaman Host yazar)."""
+    h = (host or "").strip().lower()
+    if not h:
+        return True
+    if h.startswith("[") and h.endswith("]"):
+        h = h[1:-1]  # IPv6 literal köşeli parantezi
+    try:
+        _ipaddress.ip_address(h)
+        return True  # IP-literal: telefonun LAN erişimi, hotspot, loopback...
+    except ValueError:
+        pass
+    if h == "localhost" or h.endswith(".localhost"):
+        return True
+    if h.endswith(".local"):
+        return True  # mDNS (pemf.local)
+    if h == _socket.gethostname().strip().lower():
+        return True  # tarayıcıda makine adıyla erişim (http://KLINIK-PC:8000)
+    if h.endswith(".trycloudflare.com"):
+        return True  # quick tunnel
+    if h in ekstra:
+        return True
+    # Named tunnel hostname'i sırlardan (best-effort; sır altyapısı yoksa sessizce geç).
+    try:
+        from utils.secrets_manager import get_secret
+
+        tunel = (get_secret("tunnel_hostname", default="", generate=False) or "").strip().lower()
+        if tunel and h == tunel:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+class _RebindKorumaMiddleware:
+    """Saf ASGI: http+websocket kapsamında Host'u sınıflandırır; yabancı DNS adı → 400.
+    Reddedilen host'lar tekrar-log seli üretmesin diye süreç başına bir kez loglanır."""
+
+    def __init__(self, app, ekstra: tuple = ()):
+        self.app = app
+        self.ekstra = tuple(ekstra)
+        self._loglanan: set = set()
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+        host = ""
+        for ad, deger in scope.get("headers") or []:
+            if ad == b"host":
+                host = deger.decode("latin-1")
+                break
+        # Port'u at ([::1]:8000 dahil): son ':' yalnız rakam taşıyorsa porttur.
+        if ":" in host:
+            govde, _, kuyruk = host.rpartition(":")
+            if kuyruk.isdigit():
+                host = govde
+        if _host_izinli(host, self.ekstra):
+            return await self.app(scope, receive, send)
+        if host not in self._loglanan:
+            self._loglanan.add(host)
+            logging.getLogger(__name__).warning(
+                "Host reddedildi (DNS-rebinding korumasi): %r — mesru bir adsa PEMF_ALLOWED_HOSTS='auto,%s' ekleyin",
+                host,
+                host,
+            )
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 4400})
+            return
+        await send(
+            {"type": "http.response.start", "status": 400, "headers": [(b"content-type", b"text/plain; charset=utf-8")]}
+        )
+        await send({"type": "http.response.body", "body": "Gecersiz Host basligi.".encode("utf-8")})
+
+
+_ah_mod, _ah_liste = _allowed_hosts_secimi(os.getenv("PEMF_ALLOWED_HOSTS", "*"))
+if _ah_mod == "auto":
+    app.add_middleware(_RebindKorumaMiddleware, ekstra=_ah_liste)
+elif _ah_mod == "liste":
     from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(_ah_liste))
 
 
 # ── Global exception handler'ları (audit B-4.1) ────────────────────────────────

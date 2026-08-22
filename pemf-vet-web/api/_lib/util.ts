@@ -64,6 +64,30 @@ export async function upsertSubscription(row: Record<string, unknown>): Promise<
   if (!r.ok) throw new Error(`subscriptions upsert ${r.status}: ${await r.text()}`)
 }
 
+/** Plan → aylık jeton hakkı — JETON-SISTEMI Adım 3 (2026-08-22).
+ *  ⚠️ TEK KAYNAK `src/config.ts::JETON.planHaklari`dır; api/ katmanı src/'den import ETMEZ
+ *  (Vercel işlev paketi sınırı) → değer burada ELLE eşlenir ve ayrışması testle kilitlidir
+ *  (`jeton-yenileme.test.ts` — borç tavanının web↔cihaz paritesiyle aynı desen).
+ *  `kullandikca` BİLEREK YOK: o üyeliğin aylık hakkı yoktur (harcadıkça faturalanır). */
+export const JETON_HAKLARI: Record<string, number> = { baslangic: 50, pro: 500, pro_plus: 2000 }
+
+/** Plan dönemi yenilendiğinde jeton hakkını yazar (service_role — RPC'yi kullanıcı çağıramaz;
+ *  canlıda anon+authenticated execute'ları bilerek geri alındı, bkz. supabase_jetonlar.sql).
+ *  ⚠️ İdempotan-ımsı: RPC aylık hakkı SET eder (toplamaz) → aynı dönemde iki kez çağrılması
+ *  bakiyeyi şişirmez. Başarısızlıkta FIRLATIR — çağıran loglayıp yutar (sessiz kayıp olmasın). */
+export async function jetonDonemYenile(userId: string, aylikHak: number): Promise<void> {
+  const r = await fetch(`${SB_URL()}/rest/v1/rpc/jeton_donem_yenile`, {
+    method: 'POST',
+    headers: {
+      apikey: SB_SERVICE(),
+      Authorization: `Bearer ${SB_SERVICE()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_user: userId, p_aylik_hak: aylikHak }),
+  })
+  if (!r.ok) throw new Error(`jeton_donem_yenile ${r.status}: ${await r.text()}`)
+}
+
 /** iyzico'da HÂLÂ CANLI sayılan abonelik durumları.
  *  `canceled` KASTEN yok: iptal edilmiş abonelik yeni satın almayı engellememeli. */
 const CANLI_DURUMLAR = ['active', 'trialing', 'past_due'] as const

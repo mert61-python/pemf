@@ -100,8 +100,7 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 "ücretsiz sistem şu an aktifte devam etmeli, henüz aktif etme; jeton kalsın, altyapı hazır
 şekilde." `FREE_MODE=true` ve `PEMF_JETON_ENFORCED` kapalı; ikisi de **testle kilitli**
 (`kullandikca-ode.test.ts` §6). Devreye alınacağı gün eksik olanlar (2026-08-22 güncellemesi): ~~(a) SQL Supabase'de
-çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); (b) ödeme geri-çağrısı jeton yüklemiyor
-(Adım 3 — hâlâ açık); ~~(c) `servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
+çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); ~~(b) ödeme geri-çağrısı jeton yüklemiyor~~ ✅ Adım 3 yapıldı (2026-08-22); ~~(c) `servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
 (2026-08-22, `jeton_gate` → `ai_router`).
 
 > Sıra önemlidir: her adım kendinden öncekine dayanır ve her adımın sonunda **doğrulama** vardır.
@@ -176,7 +175,17 @@ ortam değişkenlerini kullanır: `SUPABASE_URL`, `SUPABASE_ANON_KEY` — **yeni
 
 ---
 
-### Adım 3 — Ödeme yenilemesini jetona bağla *(KOD YAZILACAK, ~1 saat)*
+### Adım 3 — Ödeme yenilemesini jetona bağla — ✅ **YAPILDI (2026-08-22)**
+
+`api/_lib/util.ts::jetonDonemYenile` (service_role RPC) eklendi; `callback.ts` başarı dalı ve
+`webhook.ts` yenileme olayı çağırıyor. ⚠️ Webhook yalnız CANLI durumlarda (active/trialing)
+yükler — iptal olayına hak yazmak ödenmemiş hak dağıtmaktır. Yükleme patlarsa abonelik yazımı
+GERİ ALINMAZ (kullanıcı parasını ödedi; loglanır, destek elle yükler). Tier→hak eşlemesi
+`JETON_HAKLARI` sabitinde ve `src/config.ts::JETON.planHaklari` ile paritesi testle kilitli.
+Kilit: `api/_lib/__tests__/jeton-yenileme.test.ts` (7 test, 5 mutasyon).
+İyzico SANDBOX uçtan-uca doğrulaması hâlâ sahibindir (satış açılmadan önce bir kez).
+
+Orijinal talimat (tarihçe):
 
 Bugün `api/callback.ts` yalnız `upsertSubscription(...)` çağırıyor; jeton yüklenmiyor. Yani
 ödeme alınsa bile kullanıcının bakiyesi 0 kalır.

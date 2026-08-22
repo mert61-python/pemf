@@ -3,7 +3,7 @@
    AUTHORITATIVE çeker → Supabase subscriptions'a yazar → kullanıcıyı sonuç sayfasına redirect eder.
    user_id: retrieve.conversationId (initialize'da set edildi) veya ?uid fallback. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { upsertSubscription, mapIyzicoStatus } from './_lib/util.js'
+import { upsertSubscription, mapIyzicoStatus, jetonDonemYenile, JETON_HAKLARI } from './_lib/util.js'
 import { subRetrieveByToken, planMeta } from './_lib/iyzico.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -41,6 +41,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         stripe_customer_id: custRef, // iyzico customerReferenceCode
         updated_at: new Date().toISOString(),
       })
+      // JETON-SISTEMI Adım 3 (2026-08-22): jeton hakkı plandan gelir. ⚠️ Yükleme PATLARSA
+      // ABONELİK YAZIMI GERİ ALINMAZ ve kullanıcı yine success görür: parasını ödemiştir;
+      // hakkı olmadan bırakmak yerine hata loglanır, destek elle yükler. `kullandikca` gibi
+      // aylık hakkı olmayan planlarda çağrı hiç yapılmaz (JETON_HAKLARI'nda yoktur).
+      try {
+        const hak = JETON_HAKLARI[meta.tier]
+        if (hak) await jetonDonemYenile(userId, hak)
+      } catch (e) {
+        console.error('callback: jeton yüklenemedi (abonelik YAZILDI — elle yükleme gerekir)', {
+          userId,
+          tier: meta.tier,
+          e,
+        })
+      }
       return res.redirect(302, '/download?checkout=success')
     }
     // GÖZLEMLENEBİLİRLİK: ödeme alınmış ama alan eşlemesi tutmamış olabilir (plan referans kodu

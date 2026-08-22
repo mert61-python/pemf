@@ -114,6 +114,14 @@ pub const ENV_ENABLE_TUNNEL: &str = "PEMF_ENABLE_TUNNEL";
 /// tespit etmez; bu bulgu tam o kör noktada yaşadı).
 pub const ENV_STM_PORT: &str = "PEMF_STM_PORT";
 
+/// DNS-REBINDING KORUMASI (eksik-taramasi P2, 2026-08-22) — bu sinifin BESINCI ornegi olmasin:
+/// `PEMF_ALLOWED_HOSTS` altyapisi backend'de 2026-08-04'ten beri vardi ama launcher gecirmedigi
+/// icin siteden kurulan HICBIR klinikte aktif degildi (ENABLE_TUNNEL/STM_PORT/DATA_DIR ile
+/// birebir ayni kacis yolu). "auto": IP-literal/localhost/*.local/makine-adi/tunel alanlari
+/// serbest, YABANCI alan adlari 400 (rebinding vektoru). Ortamda tanimliysa DOKUNULMAZ
+/// (cikis kapisi: `PEMF_ALLOWED_HOSTS=*` korumayi kapatir, `auto,klinik.sirket.com` ek ad verir).
+pub const ENV_ALLOWED_HOSTS: &str = "PEMF_ALLOWED_HOSTS";
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -549,6 +557,14 @@ where
     env.insert(
         ENV_STM_PORT.to_string(),
         getenv(ENV_STM_PORT)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "auto".to_string()),
+    );
+    // DNS-REBINDING KORUMASI (bkz. ENV_ALLOWED_HOSTS): bu satir olmadan launcher ile kuran
+    // hicbir klinikte Host korumasi calismiyordu. Ortamda tanimliysa DOKUNMA.
+    env.insert(
+        ENV_ALLOWED_HOSTS.to_string(),
+        getenv(ENV_ALLOWED_HOSTS)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "auto".to_string()),
     );
@@ -1284,6 +1300,28 @@ mod tests {
     }
 
     #[test]
+    fn backend_env_REBIND_KORUMASINI_ACAR() {
+        // Varsayilan "auto" — koruma launcher kurulumlarinda fiilen devrede.
+        let env = backend_env_with(|_| None, Path::new("/opt/pemf"), 8123, "n");
+        assert_eq!(env.get(ENV_ALLOWED_HOSTS).map(String::as_str), Some("auto"));
+    }
+
+    #[test]
+    fn backend_env_ORTAMDAKI_ALLOWED_HOSTS_tercihine_dokunmaz() {
+        // Cikis kapisi: operator "*" ile kapatabilir ya da ek ad verebilir.
+        let env = backend_env_with(
+            |k| (k == ENV_ALLOWED_HOSTS).then(|| "auto,klinik.sirket.com".to_string()),
+            Path::new("/opt/pemf"),
+            8123,
+            "n",
+        );
+        assert_eq!(
+            env.get(ENV_ALLOWED_HOSTS).map(String::as_str),
+            Some("auto,klinik.sirket.com")
+        );
+    }
+
+    #[test]
     fn backend_env_ORTAMDAKI_STM_PORT_tercihine_dokunmaz() {
         // Çıkış kapısı: sahada portu sabitlemek gerekebilir (`PEMF_STM_PORT=COM7`) ya da STM
         // simülatörü kullanılabilir (`socket://127.0.0.1:5100`). Ortam ENJEKTE edilir.
@@ -1345,6 +1383,9 @@ mod tests {
             // her klinikte backend sabit COM10'u deniyor ve ST-Link başka COM'daysa bobin 1-5 HİÇ
             // bağlanmıyordu. KOŞULSUZ eklenir; ortamdaki değer korunur (bkz. ENV_STM_PORT).
             ENV_STM_PORT,
+            // DNS-REBINDING KORUMASI (2026-08-22): bu satır olmadan Host koruması launcher
+            // kurulumlarında ÖLÜydü. KOŞULSUZ eklenir; ortamdaki değer korunur.
+            ENV_ALLOWED_HOSTS,
         ];
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()

@@ -384,10 +384,24 @@ class CloudSyncWorker:
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                             ON CONFLICT(id) DO UPDATE SET
                                 session_date=excluded.session_date, start_time=excluded.start_time,
-                                end_time=excluded.end_time, duration_minutes=excluded.duration_minutes,
+                                -- MONOTONIK KAPANIS (eksik-taramasi P2, 2026-08-22): kapanis GERI ALINAMAZ.
+                                -- Eski hali kosulsuz `end_time=excluded.end_time` idi → bulut kopyasi bayat
+                                -- "active" ise (PUSH'tan once kosulan PULL / baska cihazin gec PUSH'u) YEREL
+                                -- olarak KAPANMIS seansin end_time/duration'i NULL'a eziliyor, status yeniden
+                                -- "active" oluyordu = doz belgesi bozulmasi ("ne zaman bitti, kac dk surdu"
+                                -- kaybolur, seans raporda yeniden acik gorunur). Kural: yerel end_time DOLU +
+                                -- buluttan NULL geliyorsa kapanis uclusunu KORU; bulut GERCEK kapanis
+                                -- tasiyorsa (end_time dolu) o kazanir — baska cihazda kapatilan seans yerelde
+                                -- de kapanmali. Kilit: tests/test_sync_pull_bayat_active.py
+                                end_time=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
+                                              THEN treatment_sessions.end_time ELSE excluded.end_time END,
+                                duration_minutes=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
+                                              THEN treatment_sessions.duration_minutes ELSE excluded.duration_minutes END,
                                 treatment_mode=excluded.treatment_mode, target_condition=excluded.target_condition,
                                 frequency_hz=excluded.frequency_hz, intensity_mt=excluded.intensity_mt,
-                                pulse_duration_ms=excluded.pulse_duration_ms, session_status=excluded.session_status,
+                                pulse_duration_ms=excluded.pulse_duration_ms,
+                                session_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
+                                              THEN treatment_sessions.session_status ELSE excluded.session_status END,
                                 sync_status=1
                             """,
                             (

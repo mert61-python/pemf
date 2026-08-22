@@ -637,6 +637,20 @@ class PatientDatabase:
                     if not updates:
                         return False
 
+                    # Eksik-taraması P2 (2026-08-22): anonim kayda GERÇEK PII geri yazılırsa bayrak
+                    # SIFIRLANIR — yoksa kayıt retention döngüsünden SONSUZA DEK muaf kalıyordu
+                    # (COALESCE(anonymized,0)=0 filtresi onu bir daha görmez; sessiz KVKK boşluğu).
+                    # Reddetmek yerine sıfırlama seçildi: meşru senaryo var (hasta geri geldi).
+                    # Tür/ırk PII-DIŞI sayılır (anonimleştirme de onları korur) — yalnız kimlik
+                    # kuran alanlar bayrağı düşürür; boş/yer-tutucu değer kimlik KURMAZ.
+                    _PII_ALANLAR = {"name", "owner", "vet_contact", "owner_email", "age", "weight"}
+                    _pii_geri_yazildi = any(
+                        k in _PII_ALANLAR and isinstance(v, str) and v.strip() and v.strip() != _UNREADABLE_PLACEHOLDER
+                        for k, v in patient_info.items()
+                    )
+                    if _pii_geri_yazildi:
+                        updates.append("anonymized = 0")
+
                     updates.append("updated_at = ?")
                     values.append(datetime.now().isoformat())
                     values.append(patient_id)
@@ -690,9 +704,14 @@ class PatientDatabase:
                         cursor.execute(
                             # Audit P2: sync_status=0 → anonimleştirme (redaction) bulut PUSH ile
                             # yayılsın; aksi halde sonraki PULL orijinal PII'yi geri yazıp de-anonymize ediyordu.
+                            # Eksik-taraması P2 (2026-08-22): YAŞ+KİLO da silinir — küçük klinikte
+                            # (tür, ırk, yaş, kilo) dörtlüsü tek hastayı işaret eder (re-identification).
+                            # Tür/ırk BİLEREK kalır: klinik istatistikleri anonimleştirmenin amacı
+                            # gereği korunur; en ayırt edici ikili olan yaş+kilo yeterli kırpmadır.
                             "UPDATE patients SET name=?, owner=?, vet_contact=?, owner_email=?, "
+                            "age=?, weight=?, "
                             "anonymized=1, sync_status=0, updated_at=? WHERE id=?",
-                            (enc_anon, enc_anon, enc_empty, enc_empty, now_iso, pid),
+                            (enc_anon, enc_anon, enc_empty, enc_empty, enc_empty, enc_empty, now_iso, pid),
                         )
                         # Arama indeksini tazele — eski ad/sahip token'lari gitsin (artik aranmaz).
                         self._refresh_search_index_for_patient(cursor, pid)

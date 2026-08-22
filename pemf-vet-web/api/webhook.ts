@@ -6,7 +6,7 @@
    sürümlenebildiğinden varsayılan STRICT DEĞİL (tutmazsa uyarır ama re-fetch ile işler);
    IYZICO_WEBHOOK_STRICT=1 → imza tutmazsa 401. */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { upsertSubscription, mapIyzicoStatus, getUserBySubscriptionRef } from './_lib/util.js'
+import { upsertSubscription, mapIyzicoStatus, getUserBySubscriptionRef, jetonDonemYenile, JETON_HAKLARI } from './_lib/util.js'
 import { subRetrieveByRef, planMeta, verifyWebhookSignature } from './_lib/iyzico.js'
 
 // HIZ SINIRI (kabaca): uç kimliksizdir ve her istek DIŞ bir iyzico API çağrısı + service_role
@@ -60,15 +60,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (await getUserBySubscriptionRef(subRef)) || String((sub as { conversationId?: string }).conversationId ?? '')
     const meta = planMeta(String(sub.pricingPlanReferenceCode ?? ''))
     if (userId && meta) {
+      const durum = mapIyzicoStatus(String(sub.subscriptionStatus ?? ''))
       await upsertSubscription({
         user_id: userId,
         tier: meta.tier,
-        status: mapIyzicoStatus(String(sub.subscriptionStatus ?? '')),
+        status: durum,
         addons: meta.research ? ['research'] : [],
         stripe_subscription_id: subRef,
         stripe_customer_id: String(sub.customerReferenceCode ?? ''),
         updated_at: new Date().toISOString(),
       })
+      // JETON-SISTEMI Adım 3.3 (2026-08-22): yenileme olayında da jeton yüklenir — aksi hâlde
+      // ilk ay (callback) jeton gelir, ikinci ay gelmezdi. ⚠️ YALNIZ CANLI durumlarda:
+      // iptal/past_due olayına hak yazmak, ödenmemiş hak dağıtmaktır. RPC hakkı SET eder
+      // (toplamaz) → webhook'un aynı dönemde tekrar tetiklenmesi bakiyeyi şişirmez.
+      if (durum === 'active' || durum === 'trialing') {
+        try {
+          const hak = JETON_HAKLARI[meta.tier]
+          if (hak) await jetonDonemYenile(userId, hak)
+        } catch (e) {
+          console.error('webhook: jeton yüklenemedi (abonelik YAZILDI — elle yükleme gerekir)', {
+            userId,
+            tier: meta.tier,
+            e,
+          })
+        }
+      }
       return res.status(200).json({ received: true })
     }
     // Hâlâ eşleşmediyse SESSİZCE 200 DÖNME: 500 dönerek iyzico'nun tekrar denemesini sağla ve

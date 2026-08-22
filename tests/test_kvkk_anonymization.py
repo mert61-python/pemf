@@ -72,3 +72,65 @@ def test_recent_patient_never_anonymized(temp_app_data):
     anon = db.anonymize_inactive_patients(1825)
     assert pid not in anon
     assert db.get_patient(pid)["name"] == "Taze"
+
+
+# ── Eksik-taramasi P2 (2026-08-22): iki KVKK boslugu ─────────────────────────────────────────
+# 1) Anonimlestirme yalniz ad/sahip/iletisim/e-postayi siliyordu; YAS ve KILO kaliyordu.
+#    Kucuk klinikte (tur, irk, yas, kilo) dortlusu tek hastayi isaret eder — re-identification.
+#    Tur/irk istatistik degeri icin BILEREK kalir (klinik istatistikleri anonimlestirmenin
+#    amaci geregi korunur); en ayirt edici ikili olan yas+kilo silinir.
+# 2) update_patient'ta anonymized guard'i yoktu: anonim kayit PII ile geri doldurulunca bayrak
+#    1 kaldigi icin kayit retention dongusunden SONSUZA DEK muaf kaliyordu (sessiz KVKK boslugu).
+#    Karar: PII geri yazilirsa bayrak SIFIRLANIR (kayit yeniden retention'a girer) — reddetmek
+#    yerine; cunku mesru senaryo var (hasta geri geldi, kayit yeniden aktif).
+
+
+def test_KRITIK_anonimlestirme_yas_ve_kiloyu_da_siler(temp_app_data):
+    db = _pdb(temp_app_data)
+    pid = db.add_patient(
+        {"name": "Eski", "owner": "X", "species": "kedi", "breed": "van", "age": "12", "weight": "6.5"}
+    )
+    _set_last_treatment(db, pid, datetime.now() - timedelta(days=2200))
+
+    db.anonymize_inactive_patients(inactive_days=1825)
+
+    p = db.get_patient(pid)
+    assert (p.get("age") or "") == "", f"yas anonimlestirilmedi: {p.get('age')!r} (re-identification)"
+    assert (p.get("weight") or "") == "", f"kilo anonimlestirilmedi: {p.get('weight')!r}"
+    # KARSIT-KANIT: tur/irk BILEREK kalir (istatistik) — asiri-silme klinik istatistigini bozar.
+    assert p.get("species") == "kedi", "tur silinmis — istatistik amaci bozuldu (bilincli sinir asildi)"
+    assert p.get("breed") == "van", "irk silinmis — istatistik amaci bozuldu"
+
+
+def test_KRITIK_anonim_kayda_PII_geri_yazilirsa_bayrak_SIFIRLANIR(temp_app_data):
+    db = _pdb(temp_app_data)
+    pid = db.add_patient({"name": "Eski", "owner": "X"})
+    _set_last_treatment(db, pid, datetime.now() - timedelta(days=2200))
+    db.anonymize_inactive_patients(inactive_days=1825)
+    assert db.get_patient(pid).get("anonymized") in (1, True)
+
+    # Hasta geri geldi: operator kaydi gercek PII ile yeniden doldurdu.
+    ok = db.update_patient(pid, {"name": "Geri Gelen Hasta", "owner": "Yeni Sahip"})
+    assert ok
+
+    p = db.get_patient(pid)
+    assert p["name"] == "Geri Gelen Hasta"
+    assert p.get("anonymized") in (0, None, False), (
+        "PII geri yazildi ama anonymized=1 kaldi — kayit retention dongusunden SONSUZA DEK muaf "
+        "(bir daha asla anonimlestirilmez; sessiz KVKK boslugu)"
+    )
+
+
+def test_KARSIT_KANIT_PII_DISI_guncelleme_bayragi_SIFIRLAMAZ(temp_app_data):
+    """Asiri-duzeltme korumasi: yalniz tur/irk gibi PII-disi alan guncellemesi kaydi yeniden
+    kimliklendirmez — bayrak durmali (aksi halde her dokunus anonim kaydi retention'a sokar)."""
+    db = _pdb(temp_app_data)
+    pid = db.add_patient({"name": "Eski", "owner": "X", "species": "kedi"})
+    _set_last_treatment(db, pid, datetime.now() - timedelta(days=2200))
+    db.anonymize_inactive_patients(inactive_days=1825)
+
+    db.update_patient(pid, {"species": "kopek"})
+
+    assert db.get_patient(pid).get("anonymized") in (1, True), (
+        "PII-disi guncelleme bayragi sifirladi — anonim kayit gereksiz yere retention'a girdi"
+    )

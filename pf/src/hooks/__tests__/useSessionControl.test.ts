@@ -331,3 +331,56 @@ it("gerekçe yoksa genel mesaja düşer (davranış korunur)", async () => {
   await act(async () => { await result.current.startSession(START); });
   expect(result.current.error).toBe("Seans başlatılamadı.");
 });
+
+// ── 409 SOZLESMESI (surum-kaymasi guvenlik sinyali, 2026-08-22) ──────────────
+// Backend, donanim STOP'u dogrulanamayan bobin varsa artik 2xx DEGIL 409 doner (eski istemci
+// yeni bir ALANI yutabilir ama 2xx-disini yutamaz). Bu istemci 409'u AYIRT ETMELI:
+// seans kaydi GERCEKTEN kapandi (session_closed) -> UI seansi kapatir + bobin listesi uyarisi.
+
+it("stopSession 409: seans kapanir + teyitsiz bobin listesi uyarisi cikar", async () => {
+  mockApiPost.mockResolvedValue({ status: "success", session: {} });
+  const { result } = renderHook(() => useSessionControl());
+  await act(async () => {
+    await result.current.startSession(START);
+  });
+
+  // 409 yolu: apiPost null doner + onHttpError(409, detail, govde) cagirir.
+  mockApiPost.mockImplementation(async (_p: string, _b: unknown, fallback: unknown, opts?: {
+    onHttpError?: (k: number, d?: string, g?: unknown) => void;
+  }) => {
+    opts?.onHttpError?.(409, "ACIL DURDUR'a basin", {
+      hardware_stop_unconfirmed: [6, 7],
+      session_closed: true,
+    });
+    return fallback;
+  });
+
+  let ret: boolean | undefined;
+  await act(async () => {
+    ret = await result.current.stopSession();
+  });
+
+  expect(ret).toBe(true); // seans kaydi kapandi -> UI kapanmali (genel-hata sanilmamali)
+  expect(result.current.isActive).toBe(false);
+  const uyarilar = mockAlert.mock.calls.map((c) => String(c[1]));
+  expect(uyarilar.some((m) => m.includes("6") && m.includes("7"))).toBe(true);
+  expect(uyarilar.some((m) => m.toUpperCase().includes("ACİL DURDUR"))).toBe(true);
+});
+
+it("KARSIT-KANIT stopSession null (ag yok): seans ACIK kalir + genel uyari (409'dan farkli)", async () => {
+  mockApiPost.mockResolvedValue({ status: "success", session: {} });
+  const { result } = renderHook(() => useSessionControl());
+  await act(async () => {
+    await result.current.startSession(START);
+  });
+
+  mockApiPost.mockImplementation(async (_p: string, _b: unknown, fallback: unknown) => fallback);
+
+  let ret: boolean | undefined;
+  await act(async () => {
+    ret = await result.current.stopSession();
+  });
+
+  expect(ret).toBe(false); // sunucuya ULASILAMADI: kayit kapanmadi, seans acik kalmali
+  expect(result.current.isActive).toBe(true);
+});
