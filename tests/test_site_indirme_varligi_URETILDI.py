@@ -45,7 +45,22 @@ def _site_apk_adi() -> str:
     return sablon.replace("${this.androidVersion}", surum)
 
 
+def _yayin_makinesi_mi() -> bool:
+    """⚠️ Bu kapi YAYIN MAKINESINDE anlamlidir, CI'da degil.
+
+    `release_assets/*.apk` gitignore'ludur (her biri ~128 MB ikili) — taze klonda ve CI
+    runner'inda HIC APK yoktur. Ilk yazimda bu dusunulmemisti ve kapi CI'da kosulsuz KIRMIZI
+    verdi (kosu 32571564448). Dogru olcum: "hic APK yoksa burasi yayin makinesi degildir, atla".
+
+    ⚠️ ATLAMA BIR ARKA KAPI DEGIL: en az bir APK varsa (yani burada APK URETILIYORSA) kapi
+    CALISIR. Yakalamak istedigimiz ariza zaten "derledim ama surumlu kopyayi koymadim"dir.
+    """
+    return any((_KOK / "release_assets").glob("*.apk"))
+
+
 def test_KRITIK_sitenin_isaret_ettigi_APK_URETILMIS():
+    if not _yayin_makinesi_mi():
+        pytest.skip("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
     ad = _site_apk_adi()
     yol = _KOK / "release_assets" / ad
     assert yol.exists(), (
@@ -61,6 +76,8 @@ def test_KRITIK_sitenin_isaret_ettigi_APK_URETILMIS():
 
 def test_KRITIK_surumsuz_APK_da_URETILMIS():
     """Manifest/OTA yolu surumsuz adi kullanir; ikisi de gerekir."""
+    if not _yayin_makinesi_mi():
+        pytest.skip("release_assets/ altinda hic APK yok — yayin makinesi degil (CI/taze klon)")
     yol = _KOK / "release_assets" / "PEMF_Vet_Mobil.apk"
     assert yol.exists(), "PEMF_Vet_Mobil.apk yok — OTA (manifest) yolu bu adi kullanir"
 
