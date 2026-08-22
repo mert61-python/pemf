@@ -78,3 +78,41 @@ def test_emergency_stop_still_reaches_every_esp_coil(monkeypatch):
     cids = [c for _, c in seen]
     assert len(set(cids)) == len(cids), "acil-durdurma yayinlarinda kimlik tekrari var"
     assert res is not None
+
+
+# ── [3.3] E-STOP BULUT AYNASI (2. tur denetimi; duzeltme 2026-08-22) ─────────────────────────
+# estop-cloud rolu surec-sabit kimlik aliyordu (pemf_estop-cloud_{pid}). Iki gercek sorun:
+#   1) CIFTE TETIK: E-stop iki kez pesipese tetiklenirse (panik aninda gercekci) iki ayna
+#      oturumu HiveMQ'ya AYNI kimlikle baglanir → broker ilkini DUSURUR → ucustaki STOP
+#      publish'leri kaybolabilir. Yayinci ('pub') icin cozulen arizanin birebir aynisi,
+#      yalniz BULUT yolunda — ve bu rol test kapsami DISINDAYDI.
+#   2) UZUNLUK: "pemf_estop-cloud_" 17 karakter; Linux pid_max=4194304 (7 hane) ile kimlik
+#      24 karaktere tasar → MQTT 3.1 donemi brokerlarin 23 sinirini asar, baglanti REDDEDILIR
+#      → ayna sessizce hic calismaz.
+
+
+def test_KRITIK_estop_cloud_id_cagri_basina_benzersiz():
+    """Cifte tetikte iki ayna oturumu birbirini dusurmemeli → kimlik cagriya ozgu olmali."""
+    ids = [_cid("estop-cloud") for _ in range(50)]
+    assert len(set(ids)) == 50, (
+        "estop-cloud kimlikleri tekrar ediyor — cifte E-stop tetiginde broker onceki ayna "
+        "oturumunu dusurur, ucustaki STOP kaybolabilir (denetim [3.3])"
+    )
+
+
+def test_KRITIK_estop_cloud_id_es_zamanli_carpismaz():
+    """Gercek desen: iki tetik AYRI thread'lerden gelir (asyncio.to_thread)."""
+    with cf.ThreadPoolExecutor(max_workers=8) as ex:
+        ids = list(ex.map(lambda _: _cid("estop-cloud"), range(64)))
+    assert len(set(ids)) == 64, "es-zamanli estop-cloud kimlikleri carpisiyor"
+
+
+def test_KRITIK_estop_cloud_id_7_haneli_PID_de_broker_sinirinda(monkeypatch):
+    """Linux pid_max=4194304: kimlik EN KOTU pid'de de <=23 kalmali, yoksa ayna hic baglanamaz."""
+    import servers.api_server as api
+
+    monkeypatch.setattr(api.os, "getpid", lambda: 4194304)
+    for role in ("ws", "pub", "estop-cloud"):
+        cid = api._mqtt_client_id(role)
+        assert len(cid) <= 23, f"{role}: 7-haneli PID'de kimlik {len(cid)} karakter: {cid}"
+        assert re.fullmatch(r"[A-Za-z0-9_-]+", cid), f"{role}: gecersiz karakter: {cid}"

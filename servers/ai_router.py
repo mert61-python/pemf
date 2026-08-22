@@ -51,7 +51,13 @@ async def _allow_large_upload(request: Request) -> None:
         await request.form(max_part_size=_RNA_MAX_PART)
 
 
-ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_queue_gate)])
+# JETON-SISTEMI Adım 4 (2026-08-22): jeton kapısı router-seviyesinde — entitlement/ai_queue_gate
+# ile aynı desen. `PEMF_JETON_ENFORCED` KAPALIYKEN tam no-op (bugünkü canlı; satış açılmadı).
+# ⚠️ Tedavi/kontrol uçları bu router'da DEĞİL ve jeton onları ASLA kapılamaz — yapısal kilit:
+# tests/test_jeton_gate.py::test_KRITIK_GUVENLIK_tedavi_uclari_jeton_kapisinin_ARKASINDA_DEGIL
+from servers.jeton import jeton_gate  # noqa: E402
+
+ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_queue_gate), Depends(jeton_gate)])
 
 
 from utils.image_domain import DomainMismatch as _ImgDomainMismatch

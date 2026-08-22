@@ -480,7 +480,7 @@ ESP'nin açık `success=false` NACK'inde de yanlış "(2s) ONAYI GELMEDİ" metni
 **Nasıl doğrulandı:** Çürütme ajanı embedded python ile birebir repro etti (`estop_7_...` aynı id ×2;
 iki advers interleaving'de sahte timeout ölçüldü). Yön fail-safe (STOP'lar gidiyor) — sonuç yalnız sahte alarm.
 
-### [3.3] E-stop bulut aynası süreç-sabit `client_id` kullanıyor — çifte tetikte iki ayna oturumu HiveMQ'da birbirini düşürüyor
+### [3.3] E-stop bulut aynası süreç-sabit `client_id` kullanıyor — çifte tetikte iki ayna oturumu HiveMQ'da birbirini düşürüyor — ✅ DÜZELTİLDİ (2026-08-22, bkz. DÜZELTME KAYDI 18. parti)
 **Yer:** `servers/api_server.py:1435` — `_mqtt_client_id("estop-cloud")` yalnız `pub` rolünü
 çağrı-benzersiz yapar (ölçüldü: iki çağrı aynı `pemf_estop-cloud_{pid}`); MQTT sözleşmesi gereği
 ikinci bağlantı ilkini düşürür — deponun KENDİ E-stop kimlik değişmezinin (api_server.py:696-711,
@@ -561,7 +561,7 @@ kaynakta substring arıyor — bu boşluğu yapısal olarak göremez.
 **Nasıl doğrulandı:** Ben + çürütme ajanı bağımsız bulduk; `git show ffd4406~1` ile fix-öncesi üç ham
 siteden yalnız ikisinin düzeltildiği arkeolojiyle teyit.
 
-### [4.5] Doz/tedavi geçmişine HİÇ KOŞMAMIŞ bobin koşuları yazılıyor — duty>99'da diziler ayrışıyor, NACK görünmüyor — ✅ KISMEN DÜZELTİLDİ (2026-08-20, teslim/kabul yarısı; NACK-görünürlüğü ack-mimarisi işi olarak açık — bkz. DÜZELTME KAYDI 8. parti)
+### [4.5] Doz/tedavi geçmişine HİÇ KOŞMAMIŞ bobin koşuları yazılıyor — duty>99'da diziler ayrışıyor, NACK görünmüyor — ✅ DÜZELTİLDİ (teslim/kabul: 8. parti 2026-08-20; NACK-görünürlüğü + ack-bekçisi: 18. parti 2026-08-22)
 **Yer:** `servers/api_server.py:1796-1797` — `_begin_coil_run` MQTT publish sonucundan ve ESP ack'inden
 BAĞIMSIZ koşu kaydı açar; `:1744-1803` duty ham gider; 8266 `d>99` → NACK + start yok
 (`esp8266_pemf_coil.ino:515`), S3 50'ye kırpıp çalışır; `command_error` event'i backend'de işlenmiyor,
@@ -681,6 +681,32 @@ GUI/gelecek tüketici yolları.
   (yorum + keşif merdiveni kendini onarıyor) — yalnız [5.9]'daki device_id yan etkisi ayakta.
 
 ---
+
+
+### 18. parti — Eksik-taraması P1 kod işleri: [3.3] + [4.5] NACK yarısı + JETON Adım 4 (sahip onayı 2026-08-22)
+
+Sahip: "p1 senin yapabileceğin kod işlerini yap … p0 kalsın not al sadece." Üç iş, aynı disiplin
+(kırmızı-önce → düzeltme → mutasyon → tam süit):
+
+| # | İş | Dosya(lar) | Test | Önce → Sonra | Mutasyon |
+|---|---|---|---|---|---|
+| [3.3] | estop-cloud client_id süreç-sabit + 7-haneli PID'de 24 karakter (broker 23 sınırı → ayna HİÇ bağlanamaz) | `servers/api_server.py` (`_mqtt_client_id`: `pemf_esc_{pid%1e5}_{seq}`) | `test_mqtt_client_id.py` (+3) | 3 kırmızı → 8/8 ✓ | 2/2 ✓ |
+| [4.5]-NACK | `command_error` eventi işlenmiyordu + manuel ESP start ack-bekçisiz → NACK'lenen start tedavi geçmişinde "koştu" kalıyordu | `servers/api_server.py` (events dalı + `_start_ack_watch` — tekil VE batch yolu) | `test_nack_gorunurlugu.py` (7, yeni) | 5 kırmızı → 7/7 ✓ | 6/6 ✓ (batch'i unutma mutasyonu dâhil) |
+| Adım 4 | `servers/jeton.py` hiçbir üretim kodundan çağrılmıyordu (bayrak açılsa bile çift yönlü no-op) | `servers/jeton.py` (`jeton_gate` + Supabase RPC taşıma) · `servers/ai_router.py:59` · `pf/apiClient.ts` (402 ayrımı) | `test_jeton_gate.py` (9, yeni) · `apiClient.jeton402.test.ts` (2, yeni) | 8+1 kırmızı → 9/9 + 35/35 ✓ | 7/7 ✓ (pro/stop kapılanır + bayrak-atlanır mutasyonları dâhil) |
+
+**Bilinçli kararlar (18. parti):**
+- **[4.5] asimetri:** NACK (kesin red) koşu kaydını KAPATIR; ack TIMEOUT'u kapatMAZ (ack QoS-0 —
+  kayıp ack'te kapatmak, gerçekten çalışan bobinin dozunu kayıttan silerdi). Uyarı [1.1]'in işi.
+- **Adım 4 taşıma katmanı:** belge "/api/tokens ucuna bağla" diyordu; entitlement deseniyle
+  Supabase RPC'ye (`jeton_bakiyem`/`jeton_tuket`) doğrudan bağlandı — kimlik `auth.uid()`ten,
+  idempotans RPC içinde; siteye fazladan sıçrama tek yeni arıza noktası eklerdi.
+- **Uç eşlemesi:** `pro/stop|status|approve|reject|frame|organ|calibrate` KAPILANMAZ (stop
+  güvenlik sınıfı; frame seans-içi akış — ücret seans-başına `pro/start`=5). `pro/propose`=sensor(1).
+- **Bayrak durumu DEĞİŞMEDİ:** `PEMF_JETON_ENFORCED` kapalı; kapı bağlı ama uykuda. Satış açılmadı.
+
+**P0 NOT (sahip: "kalsın, not al" — 2026-08-22):** STM 1-5 NTC termal kesme DERLEME-KAPILI
+(koruma hiçbir katmanda yok — sahibin tezgâh işi) + `esp` dalı canlı sırlar. Kayıt: bellek
+`pemf-acik-p0`.
 
 **Özet:** 23 kesin bulgu (3'ü ciddiyet-1: broker-ölüyken sahte "durduruldu" onayı, firmware↔backend
 status sözleşmesinin bayat-STOP güvenlik ağını öldürmesi, S3 kümülatif-tavan resume deliği; çoğu

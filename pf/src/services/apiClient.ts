@@ -306,6 +306,14 @@ export async function apiPost<T>(path: string, body: unknown, fallback: T, opts?
         /* JSON değil ya da boş gövde → detail yok */
       }
       opts?.onHttpError?.(response.status, detail, govdeHam);   // çağıran koda göre farklı davranabilsin (bkz. ApiOpts)
+      // JETON-SISTEMI Adım 4.4 (2026-08-22): 402 = TİCARİ red (jeton kapısı) — genel "Sunucu
+      // Hatası" kutusuna KARIŞTIRILMAZ. Karışırsa kullanıcı "cihaz bozuldu" sanır; oysa durum
+      // "jeton bitti, tedavi çalışıyor" ve kapının `detail` mesajı bunu zaten Türkçe söylüyor.
+      // Bayrak (PEMF_JETON_ENFORCED) kapalıyken bu dal HİÇ tetiklenmez — bugünkü canlı davranış.
+      if (response.status === 402) {
+        if (!opts?.silent) showError("Jeton hakkı", detail || "Jeton hakkınız yetersiz. Seans ve acil durdurma etkilenmez.");
+        return fallback;
+      }
       // Gerekçe varsa ONU göster: "veritabanı açılamadı, seans başlatılamaz" ile "bir hata oluştu"
       // arasındaki fark, veterinerin sorunu çözebilmesi ile çözememesi arasındaki farktır.
       if (!opts?.silent) showError("Sunucu Hatası", detail || "Sunucuya veri gönderilirken bir hata oluştu.");

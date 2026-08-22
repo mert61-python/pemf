@@ -749,6 +749,27 @@ def _on_mqtt_message_api(client, userdata, msg):
                         }
                     )
                     return
+                # [4.5] NACK YARISI (2026-08-22): iki firmware de komut reddinde `command_error`
+                # eventi yayinliyor (8266 .ino:458 rate-limit / :527 validation / :605 unknown;
+                # her red ayrica ack success=false gonderir) ama backend bu tipi HIC islemiyordu →
+                # ESP'nin acik reddi ve SEBEBI operatore gorunmuyordu. Kosu-kaydi duzeltmesi ack
+                # bekcisinde ( _start_ack_watch ) — bu dal yalniz GORUNURLUK: bildirim + WS.
+                # RETAINED filtresi yukarida (bayat red reconnect'te alarm uretmez).
+                if event_type == "command_error":
+                    _ce_msg = str(payload.get("message") or payload.get("detail") or "")[:160]
+                    logging.error("Bobin %s KOMUTU REDDETTI (NACK): %s", coil_id_str, _ce_msg)
+                    _push_notification(
+                        f"⚠️ Bobin {coil_id_str} komutu REDDETTİ — {_ce_msg or 'sebep bildirilmedi'}",
+                        "error",
+                    )
+                    _ws_broadcast_sync(
+                        {
+                            "type": "command_error",
+                            "coilId": int(coil_id_str),
+                            "data": {"message": _ce_msg},
+                        }
+                    )
+                    return
                 if event_type in ("wifi_disconnected", "offline"):
                     with _live_state_lock:
                         _live_state["coils"][coil_index]["connected"] = False
@@ -811,9 +832,23 @@ _MQTT_PUB_SEQ = _itertools.count(1)
 
 
 def _mqtt_client_id(role: str) -> str:
-    """Surece ozgu (yayinci icin cagriya da ozgu) MQTT client_id."""
+    """Surece ozgu (yayinci ve bulut-aynasi icin cagriya da ozgu) MQTT client_id."""
     if role == "pub":
         return f"pemf_pub_{os.getpid()}_{next(_MQTT_PUB_SEQ) % 100000}"
+    if role == "estop-cloud":
+        # ── [3.3] 2. tur denetimi (duzeltme 2026-08-22) ──────────────────────────────
+        # Bu rol eskiden asagidaki genel `pemf_{role}_{pid}` kalibina dusuyordu. Iki ariza:
+        #   1) SUREC-SABIT: E-stop cifte tetiginde (panik aninda gercekci) iki ayna oturumu
+        #      HiveMQ'ya AYNI kimlikle baglanir → broker ILKINI DUSURUR → ucustaki STOP
+        #      publish'leri kaybolabilir. 'pub' rolunde cozulen arizanin birebir aynisi,
+        #      yalniz BULUT yolunda.
+        #   2) UZUNLUK: "pemf_estop-cloud_" = 17 karakter; Linux pid_max=4194304 (7 hane)
+        #      ile kimlik 24'e tasar → eski brokerlarin 23-karakter siniri asilir,
+        #      baglanti REDDEDILIR ve ayna SESSIZCE hic calismaz.
+        # Kisa rol adi ("esc") + pid%100000 + cagri sayaci: en kotu durumda
+        # 9 + 5 + 1 + 5 = 20 <= 23. Sayac 'pub' ile paylasilir — amac benzersizlik,
+        # kaynak farki degil. Kilit: tests/test_mqtt_client_id.py [3.3] bolumu.
+        return f"pemf_esc_{os.getpid() % 100000}_{next(_MQTT_PUB_SEQ) % 100000}"
     return f"pemf_{role}_{os.getpid()}"
 
 
@@ -1374,6 +1409,79 @@ def _wait_ack(command_id: str, timeout: float):
     return entry["success"] if got else None
 
 
+# ── [4.5] NACK yarisi (2026-08-22): manuel ESP start'i da ack-mimarisine baglanir ────────────
+# "Dogrulanmis publish" yalniz BROKER kabuludur; ESP komutu ayrica REDDEDEBILIR (rate-limit /
+# validation / unknown → sendCommandAck(id, false)). Eskiden bu NACK yalniz E-stop bekcisinde
+# okunuyordu → manuel start reddedilse bile tedavi gecmisindeki kosu kaydi "kostu" olarak acik
+# kaliyordu (hayalet kayit). Bekci E-stop deseninin aynisi: publish BLOKLANMAZ, onay arka planda.
+#
+# ⚠️ ASIMETRI KASITLI:
+#   · NACK (success=false) → kosu kaydi KAPANIR (bobin hic baslamadi — kesin bilgi) + error.
+#   · TIMEOUT (onay yok)   → kayit KALIR + yalniz uyari. Ack QoS-0'dir ve kaybolabilir;
+#     onaysizlikta kaydi kapatmak, GERCEKTEN calisan bobinin dozunu kayittan silmek olurdu
+#     (yanlis yonde hata). Fiziksel-calismiyor-olabilir uyarisi [1.1]'in isidir.
+# ⚠️ Bu is GUVENLIK LIMITI isi DEGILDIR: backend'e freq/duty clamp'i EKLENMEZ (sahip karari,
+# pemf-production-readiness). Kilit: tests/test_nack_gorunurlugu.py
+_START_ACK_TIMEOUT = 2.0  # sn — E-stop bekcisiyle ayni sozlesme (testle kilitli)
+
+
+def _start_ack_watch(coil_id: int, command_id: str) -> None:
+    """Manuel ESP start onayini ARKA PLANDA izle (bkz. ustteki blok yorumu)."""
+    confirmed = _wait_ack(command_id, timeout=_START_ACK_TIMEOUT)
+    if confirmed is True:
+        logging.getLogger(__name__).debug("start bobin %s: ESP onayladi (ack)", coil_id)
+        return
+    if confirmed is False:
+        # Kesin red: kosu kaydi hayalet — kapat. Sebep metni command_error eventiyle ayrica gelir.
+        logging.getLogger(__name__).error(
+            "start bobin %s: ESP komutu REDDETTI (NACK) — kosu kaydi kapatiliyor (hic kosmamis bobin)",
+            coil_id,
+        )
+        try:
+            _finish_coil_run(coil_id)
+        except Exception:
+            logging.getLogger(__name__).debug("NACK sonrasi run kapatma hatasi", exc_info=True)
+        try:
+            _push_notification(
+                f"⚠️ Bobin {coil_id}: start komutu cihaz tarafından REDDEDİLDİ — bobin ÇALIŞMIYOR; "
+                "koşu kaydı düzeltildi",
+                "error",
+            )
+        except Exception:
+            pass
+        return
+    logging.getLogger(__name__).warning(
+        "start bobin %s: ESP onayi %.1f sn'de GELMEDI — bobin komutu almamis olabilir (kayit korunuyor)",
+        coil_id,
+        _START_ACK_TIMEOUT,
+    )
+    try:
+        _push_notification(
+            f"⚠️ Bobin {coil_id}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",
+            "warning",
+        )
+    except Exception:
+        pass
+
+
+def _start_ack_izle_arka_planda(coil_id: int, command_id: str, publish_ok: bool) -> None:
+    """Publish sonucu belliyken bekciyi baglar. Kayit publish'ten ONCE acilmis olmali (hizli ESP
+    ack yarisi kaybolmasin — HG-4 deseni); publish dusmusse bekleyecek sey yok → kaydi temizle."""
+    if not publish_ok:
+        with _pending_acks_lock:
+            _pending_acks.pop(command_id, None)
+        return
+    try:
+        threading.Thread(
+            target=_start_ack_watch, args=(coil_id, command_id), daemon=True, name=f"start-ack-{coil_id}"
+        ).start()
+    except Exception:
+        # Thread acilamazsa (kaynak tukenmesi) start akisi BOZULMAZ — yalniz izleme kaybolur.
+        logging.getLogger(__name__).warning("start-ack bekcisi baslatilamadi (bobin %s)", coil_id, exc_info=True)
+        with _pending_acks_lock:
+            _pending_acks.pop(command_id, None)
+
+
 def _esp_control_broadcast(command: str, id_prefix: str, extra: dict | None = None) -> None:
     """ESP bobinlerine (6-8) `pemf/coil/{id}/control`'e komut yayınlar.
 
@@ -1927,6 +2035,10 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
         _sync_uyari = None
         mqtt_payload = {"command": "stop", "command_id": command_id}
 
+    # [4.5] NACK yarisi (2026-08-22): onay kaydi publish'ten ONCE acilir (hizli ESP ack yarisi
+    # kaybolmasin — HG-4 deseni). Bekci publish sonucuna gore asagida baglanir.
+    if payload.start:
+        _register_ack(command_id)
     # P0 audit 2026-06-28: senkron _mqtt_publish (~7sn worst-case) event-loop'u bloklamasin → to_thread.
     ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
     # Asama-2: per-bobin run logging (ESP/MQTT dali). Loglanan freq = ESP'ye GİDEN (normalize) değer.
@@ -1935,6 +2047,8 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     if payload.start:
         if ok:
             _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
+        # NACK gelirse bekci bu kaydi kapatir; timeout'ta kayit korunur (bkz. _start_ack_watch).
+        _start_ack_izle_arka_planda(coil_id, command_id, ok)
     else:
         _finish_coil_run(coil_id)
     _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
@@ -2030,6 +2144,10 @@ async def control_batch_coils(payload: BatchCoilPayload):
             _b_esp_freq = payload.freq
             _b_uyari = None
             mqtt_payload = {"command": "stop", "command_id": command_id}
+        # [4.5] NACK yarisi: tekil yolla AYNI bekci — batch'i atlamak deponun bir kez yandigi
+        # "kismi duzeltme" desenini tekrarlamak olurdu.
+        if payload.start:
+            _register_ack(command_id)
         # P0 audit 2026-06-28: senkron _mqtt_publish event-loop'u bloklamasin → to_thread.
         ok = await asyncio.to_thread(_mqtt_publish, f"pemf/coil/{coil_id}/control", mqtt_payload)
         # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
@@ -2037,6 +2155,7 @@ async def control_batch_coils(payload: BatchCoilPayload):
         if payload.start:
             if ok:
                 _begin_coil_run(coil_id, _b_esp_freq, payload.duty, payload.phase, None, "esp")
+            _start_ack_izle_arka_planda(coil_id, command_id, ok)
         else:
             _finish_coil_run(coil_id)
         _satir = {"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"}

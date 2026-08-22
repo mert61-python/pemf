@@ -248,3 +248,186 @@ class JetonYoneticisi:
         with self._kilit:
             self._defteri_yaz(kalan)
         return gonderilen
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# FastAPI KAPISI — JETON-SISTEMI Adım 4 (2026-08-22)
+#
+# Bu bölüm yazılana kadar modül HİÇBİR üretim kodundan çağrılmıyordu: `PEMF_JETON_ENFORCED`
+# açılsa bile davranış değişmezdi (sessiz no-op tuzağı — eksik-taramasının P1 bulgusu).
+# Bağlantı entitlement.py deseniyle aynı: router-seviyesi bağımlılık (`ai_router`).
+#
+# ⚠️ TAŞIMA KATMANI KARARI: belge "tüketimi /api/tokens ucuna bağla" diyordu; Supabase RPC'ye
+# DOĞRUDAN bağlandı (`rpc/jeton_bakiyem` + `rpc/jeton_tuket`, kullanıcının kendi JWT'siyle).
+# Neden: (a) entitlement.py abonelik için AYNI deseni kullanıyor — cihaz Supabase'le zaten
+# konuşuyor, siteye fazladan bir sıçrama tek yeni arıza noktası eklerdi; (b) canlı şema
+# sertleştirmesinden (2026-08-21) beri bu RPC'ler tam bu amaç için var: kimlik PARAMETREDEN
+# değil auth.uid()'ten gelir (spoof edilemez), idempotans `istek_id` UNIQUE'iyle RPC içinde.
+# `api/tokens.ts` sitenin (Hesabım) yüzeyi olarak kalır.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+
+from fastapi import HTTPException, Request  # noqa: E402  (bölüm-yerel import, üst blok dokunulmadı)
+
+_SUPABASE_TIMEOUT: float = max(1.0, float(os.getenv("PEMF_JETON_TIMEOUT", "4") or "4"))
+
+
+def _bearer_token(request: Request) -> str:
+    h = request.headers.get("authorization") or ""
+    return h[7:].strip() if h.lower().startswith("bearer ") else ""
+
+
+# ── Uç → işlem eşlemesi ──────────────────────────────────────────────────────────
+# TAM YOL pinlenir (bu deponun dersi: parça-eşleme kapıları string hileleriyle deliniyor).
+# Kapılanmayan ai_router uçları (analiz DEĞİL):
+#   pro/stop            → seans DURDURMA: güvenlik sınıfı, hiçbir koşulda kapılanmaz
+#   pro/status          → durum okuma
+#   pro/approve|reject  → operatör onay kararı (analiz zaten propose aşamasında yapıldı)
+#   pro/frame           → seans İÇİ kare akışı — ücret seans-başına (pro/start = 5) alınır;
+#                         kare başına almak 5 jetonluk seansı yüzlerce jetona çevirirdi
+#   pro/organ|calibrate → kalibrasyon/kurulum
+_SERBEST_AI_UCLARI: frozenset = frozenset(
+    {
+        "/api/ai/pro/stop",
+        "/api/ai/pro/status",
+        "/api/ai/pro/approve",
+        "/api/ai/pro/reject",
+        "/api/ai/pro/frame",
+        "/api/ai/pro/organ",
+        "/api/ai/pro/calibrate",
+    }
+)
+# Ağır araştırma (belge: patoloji, RNA, tomografi = 3 jeton):
+_AGIR_UCLAR: frozenset = frozenset({"/api/ai/vision/kidney_ct", "/api/ai/vision/histopath"})
+
+
+def _islem_turu(path: str) -> "str | None":
+    """Uçtan MALIYET anahtarına eşleme; None = bu kapının işi değil (serbest)."""
+    p = (path or "").rstrip("/")
+    if not p.startswith("/api/ai/"):
+        return None  # tedavi/kontrol uçları başka router'larda — jeton onların işine karışmaz
+    if p in _SERBEST_AI_UCLARI:
+        return None
+    if p == "/api/ai/pro/start":
+        return "ai_pro_seans"
+    if p == "/api/ai/pro/propose":
+        # Öneri, sensör verisi üzerinde gerçek bir analizdir (seans HENÜZ başlamadı) → sensor=1.
+        return "sensor"
+    if p.startswith("/api/ai/rna/") or p in _AGIR_UCLAR:
+        return "agir_arastirma"
+    if p.startswith("/api/ai/sound/"):
+        return "ses"
+    return "goruntu"
+
+
+# ── Supabase taşıma katmanı (entitlement deseni; testler bu iki fonksiyonu yamalar) ──
+def _bakiye_satiri_oku(token: str) -> dict:
+    """rpc/jeton_bakiyem — kullanıcının kendi satırı (auth.uid()). Hata → raise (çevrimdışı yolu)."""
+    from utils.secrets_manager import get_secret
+
+    base = (get_secret("supabase_url", default="", generate=False) or "").rstrip("/")
+    anon = (get_secret("supabase_anon_key", default="", generate=False) or "").strip()
+    if not base or not anon or not token:
+        raise ConnectionError("jeton: supabase yapilandirmasi/token yok")
+    import requests
+
+    r = requests.post(
+        base + "/rest/v1/rpc/jeton_bakiyem",
+        json={},
+        headers={"apikey": anon, "Authorization": "Bearer " + token, "Content-Type": "application/json"},
+        timeout=_SUPABASE_TIMEOUT,
+    )
+    r.raise_for_status()
+    rows = r.json() if r.content else []
+    if not isinstance(rows, list) or not rows:
+        # Satırı olmayan kullanıcı = henüz jeton yüklenmemiş → sıfır bakiye (kapı için doğru okuma).
+        return {"aylik_hak": 0, "satin_alinan": 0, "odeme_modeli": "on_odemeli", "kullandikca_borc": 0}
+    return rows[0]
+
+
+def _tuketim_gonder_canli(token: str, **k) -> bool:
+    """rpc/jeton_tuket — atomik düşüm (satır kilidi + istek_id idempotansı RPC içinde)."""
+    from utils.secrets_manager import get_secret
+
+    base = (get_secret("supabase_url", default="", generate=False) or "").rstrip("/")
+    anon = (get_secret("supabase_anon_key", default="", generate=False) or "").strip()
+    if not base or not anon or not token:
+        return False
+    import requests
+
+    try:
+        r = requests.post(
+            base + "/rest/v1/rpc/jeton_tuket",
+            json={
+                "p_miktar": int(k.get("miktar") or 0),
+                "p_tur": str(k.get("tur") or "analiz"),
+                "p_detay": k.get("detay"),
+                "p_istek_id": str(k.get("istek_id") or ""),
+                "p_cihaz_id": k.get("cihaz_id"),
+            },
+            headers={"apikey": anon, "Authorization": "Bearer " + token, "Content-Type": "application/json"},
+            timeout=_SUPABASE_TIMEOUT,
+        )
+        if not r.ok:
+            return False
+        sonuc = r.json() if r.content else {}
+        return bool(isinstance(sonuc, dict) and sonuc.get("ok"))
+    except Exception:
+        return False
+
+
+# Çevrimdışı defter yazımları per-istek yönetici örneklerinden gelir; dosya yarışını tek
+# modül-kilidiyle serileştir (örnek başına kilit dosyayı KORUMAZDI).
+_GATE_DEFTER_KILIT = threading.Lock()
+
+
+def _jeton_kapisi_karari(request: Request) -> None:
+    """Senkron karar gövdesi (test yüzeyi). İzin yoksa HTTPException(402) fırlatır."""
+    # ⚠️ SIRA: serbest-uç ve bayrak kontrolü HER ŞEYDEN ÖNCE — pro/stop için ağ çağrısı bile
+    # yapılmaz (ağ gecikmesi seans durdurmayı geciktiremez; testle kilitli).
+    islem = _islem_turu(getattr(getattr(request, "url", None), "path", "") or "")
+    if islem is None:
+        return
+    if not JETON_ENFORCED:
+        return  # sahip kararı: satış kapalı — kapı bağlı ama uykuda (bayrak tek anahtar)
+
+    token = _bearer_token(request)
+    try:
+        satir = _bakiye_satiri_oku(token)
+    except Exception:
+        satir = None  # çevrimdışı/tokensız → JetonYoneticisi fail-open yolu (yerel defter)
+
+    if satir is None:
+
+        def _okuyucu() -> int:
+            raise ConnectionError("jeton: bakiye okunamadi (cevrimdisi)")
+
+        model, borc = "on_odemeli", 0
+    else:
+        _kalan = int(satir.get("aylik_hak") or 0) + int(satir.get("satin_alinan") or 0)
+
+        def _okuyucu(_kalan=_kalan) -> int:
+            return _kalan
+
+        model = str(satir.get("odeme_modeli") or "on_odemeli")
+        borc = int(satir.get("kullandikca_borc") or 0)
+
+    yonetici = JetonYoneticisi(
+        bakiye_okuyucu=_okuyucu,
+        tuketim_gonderici=lambda **k: _tuketim_gonder_canli(token, **k),
+        odeme_modeli=model,
+        borc_okuyucu=lambda borc=borc: borc,
+    )
+    yonetici._kilit = _GATE_DEFTER_KILIT  # defter dosyası paylaşımlı → kilit de paylaşımlı
+
+    karar = yonetici.izin(islem)
+    if not karar.izinli:
+        # 402: ticari red. Mesaj TEDAVİNİN ETKİLENMEDİĞİNİ açıkça söyler (hasta güvenliği algısı).
+        raise HTTPException(status_code=402, detail=karar.mesaj or _YETERSIZ_MESAJ)
+
+
+async def jeton_gate(request: Request) -> None:
+    """Router-seviyesi bağımlılık. Bloklayan Supabase çağrısı threadpool'a atılır (belge 4.1;
+    ai_queue_gate ile aynı gerekçe — event loop bloklanmasın)."""
+    import asyncio
+
+    await asyncio.to_thread(_jeton_kapisi_karari, request)

@@ -99,9 +99,10 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 **hiçbir yerde devrede değil** — ve sahip kararıyla (2026-08-20) **şimdilik öyle kalacak**:
 "ücretsiz sistem şu an aktifte devam etmeli, henüz aktif etme; jeton kalsın, altyapı hazır
 şekilde." `FREE_MODE=true` ve `PEMF_JETON_ENFORCED` kapalı; ikisi de **testle kilitli**
-(`kullandikca-ode.test.ts` §6). Devreye alınacağı gün eksik olan üç şey: (a) SQL Supabase'de çalıştırılmadı, (b) ödeme
-geri-çağrısı jeton yüklemiyor, (c) **`servers/jeton.py`'yi çağıran kimse yok** — modül yazıldı,
-AI uçlarına bağlanmadı. Aşağıdaki sıra bu üçünü kapatır.
+(`kullandikca-ode.test.ts` §6). Devreye alınacağı gün eksik olanlar (2026-08-22 güncellemesi): ~~(a) SQL Supabase'de
+çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); (b) ödeme geri-çağrısı jeton yüklemiyor
+(Adım 3 — hâlâ açık); ~~(c) `servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
+(2026-08-22, `jeton_gate` → `ai_router`).
 
 > Sıra önemlidir: her adım kendinden öncekine dayanır ve her adımın sonunda **doğrulama** vardır.
 > Adım 1 ve 5 dışındakiler kod işidir; kod yazılırken deponun kuralı geçerli: **kırmızı-önce test →
@@ -224,7 +225,20 @@ test yaz (yenileme çağrısı yapılıyor mu, hata yutuluyor mu, tier→hak eş
 
 ---
 
-### Adım 4 — Jeton kapısını AI uçlarına bağla *(KOD YAZILACAK, ~2 saat — EN KRİTİK ADIM)*
+### Adım 4 — Jeton kapısını AI uçlarına bağla — ✅ **YAPILDI (2026-08-22, 18. parti)**
+
+`jeton_gate` yazıldı ve `ai_router`a bağlandı; mobil 402'yi ayrı ele alıyor (`apiClient.ts`).
+Taşıma katmanı belgedekinden bilinçli saptı: site ucu yerine **Supabase RPC**
+(`jeton_bakiyem`/`jeton_tuket`, entitlement deseni — gerekçe `servers/jeton.py` kapı bloğu
+yorumunda: cihaz Supabase'le zaten konuşuyor, siteye sıçrama tek yeni arıza noktası eklerdi;
+kimlik `auth.uid()`ten, idempotans RPC içinde). Uç eşlemesi: `pro/stop|status|approve|reject|
+frame|organ|calibrate` KAPILANMAZ (stop güvenlik sınıfı; frame seans-içi akış — ücret
+seans-başına `pro/start`=5); `pro/propose`=sensor(1); rna/kidney_ct/histopath=3; sound=1;
+kalan görüntü uçları=1. **Bayrak HÂLÂ KAPALI** — kapı bağlı ama uykuda; satış açılmadı.
+Kilit: `tests/test_jeton_gate.py` (9 test, 7 mutasyon — "pro/stop kapılanır" ve "tedavi ucu
+kapılanır" mutasyonları dâhil) + `apiClient.jeton402.test.ts`.
+
+Orijinal talimat (tarihçe):
 
 `servers/jeton.py` yazıldı ve 10 testle kilitli, **ama hiçbir yerden çağrılmıyor**
 (`grep -rn "JetonYoneticisi" --include=*.py` yalnız modülün kendisini ve testlerini buluyor).
