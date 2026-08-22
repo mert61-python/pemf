@@ -177,7 +177,7 @@ export const CLIENT = {
   // ⚠️ `windowsTag` ile AYNI sürüm olmalı — sayfada "1.9.18" okuyup adında 1.9.20 yazan dosya
   // indirmek kullanıcıyı yanıltır ve destek çağrısını çözümsüz bırakır. Etiket yükseltilirken
   // burası UNUTULDU (2026-08-10 → 1.9.19 yayınında); `downloadNames.test.ts` yakaladı.
-  version: '1.9.32',
+  version: '1.9.33',
   channel: 'Sürüm 2026.1',
   sizeMB: 3, // NSIS launcher setup ~2.9 MB (asıl uygulama+modeller client içinden iner)
   releaseDate: '18 Ağu 2026',

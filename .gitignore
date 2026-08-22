@@ -12,8 +12,15 @@ dist/
 *.egg-info/
 .eggs/
 eggs/
-lib/
-lib64/
+# ⚠️ KOKE SABITLENDI (2026-08-22). Bu satir eskiden `lib/` idi ve gitignore'da eğik çizgi
+# İÇERMEYEN bir desen HER DİZİN DERİNLİĞİNDE eşleşir → `pemf-vet-web/src/lib/` de yutuluyordu.
+# Sonuç: o klasöre eklenen her YENİ kaynak dosya (authHatalari.ts, jeton.ts, planFiyat.ts)
+# sessizce commit'e GİRMİYORDU. Yerelde her şey çalışıyor, CI "Cannot find module" diyor —
+# 2026-08-22 yayınında tam böyle yakalandı. Eski dosyalar kural eklenmeden önce izlendiği
+# için sorun görünmüyordu; yalnız YENİLER kayboluyordu.
+# `/lib/` yalnız DEPO KÖKÜNDEKİ Python build çıktısını hedefler.
+/lib/
+/lib64/
 parts/
 sdist/
 var/

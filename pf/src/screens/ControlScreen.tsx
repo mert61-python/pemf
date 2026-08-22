@@ -298,7 +298,7 @@ export function ControlScreen() {
     // dakika-ortalamalarını yazıyor; bobin koşuları eşzamanlı kapatılırsa o kısmi dakika
     // sensör-özetinden düşer.
     // `Promise.all` reject ETMEZ: `apiPost` throw etmiyor, hata/timeout'ta null dönüyor.
-    const istekler: Promise<{ status?: string; results?: Array<{ status?: string } | null> } | null>[] = [];
+    const istekler: Promise<{ status?: string; results?: ({ status?: string } | null)[] } | null>[] = [];
     if (stmCoils.length > 0) {
       istekler.push(
         apiPost<{ status?: string } | null>("/coil/batch", {
