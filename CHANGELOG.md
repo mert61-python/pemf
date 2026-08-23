@@ -32,6 +32,24 @@ geçmiyorsa test kırılır.
 
 ---
 
+## launcher 1.9.36 — 2026-08-23 (bozuk bir yayın artık sessizce onaylanmıyor)
+
+**Etiket:** `launcher-v1.9.36`.
+
+**Cihaz "açıldı" demek "kullanılabilir" demek değildi.** Güncelleme sonrası sağlık kontrolü yalnız
+"yazılım ayakta mı" diye bakıyordu. Tıbbi kayıt veritabanını bozan bir yayında cihaz açılıyor,
+sağlıklı sayılıyor, güncelleme **onaylanıyor** ve geri dönülecek eski sürüm **siliniyordu** —
+ama klinik hiçbir seans başlatamıyordu (kayıt yazılamadığı için seans reddedilir). Otomatik geri
+dönüş yolu da kalmadığı için tek çare elle "Onar"dı, o da aynı bozuk paketi yeniden kuruyordu.
+
+Artık güncelleme onaylanmadan önce "kayıt veritabanı hazır mı" ayrıca soruluyor; hazır değilse
+yayın başarısız sayılıp eski sürüme dönülüyor ve sebebi yazılıyor.
+
+⚠️ Bu kontrol sağlık ölçümünün kendisine **eklenmedi**: veritabanı bozuk olsa bile acil durdurma
+çalışmalıdır ve cihazı "sağlıksız" saymak o yolu da düşürürdü. Ayrıca eski sürümler bu bilgiyi
+bildirmediği için, bilgi **yoksa** güncelleme normal onaylanır — bilinmeyeni "bozuk" saymak
+sahadaki eski kurulumları güncellenemez hâle getirirdi.
+
 ## app 1.9.20 — 2026-08-23 (güncelleme uçlarına yetki kapısı)
 
 **Etiket:** `client-app-v1.9.20` → `base-app.zip` (sha `7e63ec096932`).

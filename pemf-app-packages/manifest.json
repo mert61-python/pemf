@@ -77,11 +77,11 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.35",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.35/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.35/PEMFVetClient-Setup.exe",
-    "sha256": "8d4abaa1f2f60788a463fe2389073125e1584b28be408c9e61e248514e6a4254",
-    "size": 2967970,
+    "version": "1.9.36",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.36/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.36/PEMFVetClient-Setup.exe",
+    "sha256": "a7fb83aa9e5852c31fcea8ae141aba38fe81fe53d7456c36b50831d289617682",
+    "size": 2969393,
     "rollout": 100
   },
   "mobile": {

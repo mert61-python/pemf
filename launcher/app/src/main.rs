@@ -824,6 +824,34 @@ async fn apply_runtime_update(
         }
         match flow::start_backend(&root2, &mut on) {
             Ok((child, url, port)) => {
+                // ⚠️ DENETİM 2026-08-23 (C5): "AYAKTA" ≠ "KULLANILABİLİR".
+                // `wait_for_health` HTTP 200 + nonce ölçer; backend AYNI yanıtta `dbReady` alanını
+                // da yayınlar ve `/api/session/start` tam ona bakıp 503 döner. DB tarafını bozan
+                // bir yayında cihaz "sağlıklı" görünür, güncelleme ONAYLANIR ve `runtime.old`
+                // SİLİNİR → klinik hiçbir seans açamaz ve otomatik geri dönüş yolu kalmaz.
+                //
+                // ⚠️ Bu kontrol `wait_for_health`E EKLENMEZ (backend'in belgeli kararı): DB
+                // bozukken bile ACİL DURDURMA çalışmalıdır; sağlığı düşürmek onu da düşürürdü.
+                // Bu yüzden ölçüm burada, YALNIZ onaylama kararında yapılır.
+                //
+                // ⚠️ Yalnız `Some(false)` geri alır. `None` = BİLİNMİYOR (eski backend alanı
+                // yansıtmaz) → normal onaylanır; bilinmeyeni "bozuk" saymak sahadaki eski
+                // sürümleri güncellenemez yapardı.
+                if backend::db_hazir_mi(port) == Some(false) {
+                    // ⚠️ TIBBİ GÜVENLİK: yeni sürümü durdururken de sıra E-stop → kill.
+                    // `stop_backend_for_teardown` bu değişmezi tek yerde tutuyor; burada
+                    // `child.kill()` çağırmak bobinleri enerjili bırakabilirdi.
+                    stop_backend_for_teardown(Some((child, port)), &root2);
+                    flow::geri_almayi_kaydet(&root2, &manifest_raw);
+                    let geri_hata =
+                        flow::guncellemeyi_geri_al(&root2, &geri).err().map(|x| x.to_string());
+                    return Ok(GuncellemeSonucu::GeriAlindi {
+                        sebep: "yeni sürüm açıldı ama tıbbi kayıt veritabanı hazır değil — \
+                                cihaz hiçbir seans başlatamazdı; eski sürüme dönüldü"
+                            .to_string(),
+                        geri_alma_hatasi: geri_hata,
+                    });
+                }
                 flow::guncellemeyi_onayla(&root2, &geri);
                 // C2: gerçekten çalıştı → döngü-kırıcı sayacı sıfırla (bir sonraki gerçek
                 // güncelleme eski başarısızlıkların kalıntısına takılmasın).

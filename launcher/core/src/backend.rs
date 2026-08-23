@@ -140,6 +140,40 @@ pub fn health_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/api/health")
 }
 
+/// `/api/health` gövdesinden "tıbbi kayıt DB'si hazır mı" — `None` = BİLİNMİYOR.
+///
+/// ⚠️ DENETİM 2026-08-23 (C5). `wait_for_health` yalnız HTTP 200 + nonce ölçer; backend AYNI
+/// yanıtta `dbReady` alanını da yayınlar ve `/api/session/start` tam ona bakıp 503 döner
+/// (`api_server::_kayit_db_hazir`). DB tarafını bozan bir yayında cihaz "sağlıklı" görünür,
+/// güncelleme ONAYLANIR ve `runtime.old` SİLİNİR → klinik hiçbir seans açamaz ve otomatik geri
+/// dönüş yolu kalmaz.
+///
+/// ⚠️ BU ALAN `wait_for_health`E KAPI OLARAK EKLENMEZ. Backend'in kendi gerekçesi bunu açıkça
+/// reddediyor: "Sağlığın kendisini DÜŞÜRMEZ: backend ayakta ve acil durdurma yolu çalışıyor."
+/// DB bozukken bile E-stop çalışmalıdır. Bu yüzden ölçüm ayrı bir fonksiyondadır ve YALNIZ
+/// güncellemeyi onaylama kararında kullanılır.
+///
+/// `None` (alan yok / gövde bozuk / beklenmedik tip) → çağıran güncellemeyi normal onaylar:
+/// eski backend'ler bu alanı yansıtmaz ve bilinmeyeni "bozuk" saymak onları güncellenemez yapardı
+/// (nonce'taki geriye-uyum kuralının aynısı).
+pub fn db_hazir_govdeden(govde: &str) -> Option<bool> {
+    serde_json::from_str::<serde_json::Value>(govde)
+        .ok()?
+        .get("dbReady")?
+        .as_bool()
+}
+
+/// Çalışan backend'e TEK istek atıp `dbReady` durumunu okur. Ulaşılamazsa `None` (bilinmiyor).
+pub fn db_hazir_mi(port: u16) -> Option<bool> {
+    ureq::get(&health_url(port))
+        .timeout(Duration::from_secs(3))
+        .call()
+        .ok()
+        .filter(|r| r.status() == 200)
+        .and_then(|r| r.into_string().ok())
+        .and_then(|b| db_hazir_govdeden(&b))
+}
+
 /// `<install_root>/backend.port` içeriğini GÜVENLE oku. Rakam-dışı / aralık-dışı → `None`.
 pub fn read_backend_port(install_root: &Path) -> Option<u16> {
     let txt = std::fs::read_to_string(install_root.join("backend.port")).ok()?;
