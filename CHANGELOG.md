@@ -32,6 +32,157 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.20 — 2026-08-23 (güncelleme uçlarına yetki kapısı)
+
+**Etiket:** `client-app-v1.9.20` → `base-app.zip` (sha `7e63ec096932`).
+Paket kimliği (`buildId`, `/api/health`): `7e63ec096932` — katmanlı kurulumda cihaz **app
+katmanının** sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.zip` sha'sı `20aac12fa705`
+raporlar.
+
+⚠️ **Bağımlılık katmanı DEĞİŞMEDİ** (`base-deps.zip` sha `2189cdd4970e`, 1.9.19'daki ile birebir):
+kliniklere yalnız ~71 MB'lık app katmanı iner, 1,4 GB'lık bağımlılık paketi yeniden indirilmez.
+Manifest o katmanın URL'sini eski etiketinde korur.
+
+- **Kurulum ve geri-alma uçları artık yetki istiyor.** Eski (PEMF Vet Client'sız) kurulum kanalı
+  açıkken klinik ağındaki herhangi bir cihaz kimlik doğrulamadan cihazda kurulum başlatabiliyor
+  ya da yayınlanmış bir düzeltmeyi geri alabiliyordu. Yerel ağ kimlik denetiminden muaf sayıldığı
+  için hotspot'a bağlanan bir telefon bile yeterliydi. Durum sorgusu (salt-okunur) kasten açık
+  kaldı — arayüzün güncelleme rozeti kimliksiz cihazlarda da çalışmalı.
+
+⚠️ Bu sürümde uygulamanın kendisinde başka değişiklik yok; bağımlılık katmanı **değişmedi**
+(kliniklere yalnız ~71 MB'lık uygulama katmanı iner).
+
+## offline kurulum (Inno) — 2026-08-23 (🔴 hasta güvenliği)
+
+**Kurulum artık bobinleri durdurmadan cihaz yazılımını kapatmıyor.**
+
+Offline kurulum dosyası, çalışan arka servisi kapatırken bobinlere durdurma komutu gönderiyordu —
+ama yalnız cihaz **servis olarak** kurulmuşsa. PEMF Vet Client ile kurulmuş bir cihazda servis
+yoktur; o durumda durdurma adımı tamamen atlanıyor ve süreç doğrudan sonlandırılıyordu. Sonlandırma
+sinyalsizdir: yazılımın kendi güvenli kapanışı çalışmaz, **bobin 6-8'e durdurma yayını gitmez** ve
+bu bobinlerin firmware'inde bağlantı-kesildi koruması YOKTUR → seans süresi boyunca (20-120 dk)
+hastanın üzerinde enerjili kalabilirdi.
+
+Kurulum artık **her koşulda** önce donanım acil durdurmasını gönderiyor, bobinlerin gerçekten
+durması için bekliyor, ancak sonra süreci kapatıyor. Kaldırma yolu bu değişmezi zaten uyguluyordu;
+kurulum yolu geride kalmıştı.
+
+⚠️ **Sahadaki cihazlar için:** bu düzeltme yalnız **yeni** offline kurulum dosyasında vardır.
+Elinizdeki eski kurulum dosyasını çalışan bir cihazda çalıştırmayın; önce seansı bitirin.
+
+## launcher 1.9.35 — 2026-08-23 (güncelleme altyapısı denetimi: kesinti kurtarma, kilit, boşuna indirme)
+
+**Etiket:** `launcher-v1.9.35`.
+
+Güncelleme altyapısının uçtan uca denetiminde bulunan ve doğrulanan arızalar. Hiçbiri günlük
+kullanımda görünür değildi; hepsi **kesinti, çakışma ya da hata anında** ortaya çıkıyordu.
+
+### Kesintiden sonra kurtarma
+
+- **Uygulama katmanı güncellemesi yarıda kesilirse cihaz artık kendini toparlıyor.** Elektrik
+  kesintisi / pencerenin kapatılması gibi bir durumda cihaz "kurulu değil" görünüyor ve kullanıcı
+  ~1,46 GB'ı yeniden indirmek zorunda kalıyordu — oysa çalışan sürüm diskte duruyordu.
+- **Yarım kalan güncelleme artık diski kilitlemiyor.** Kesintiden kalan geçici klasör (GB'lara
+  varabilir) siliniyordu ama bu, disk kontrolünden **sonra** oluyordu: kontrol o alanı dolu
+  görüp güncellemeyi "Yetersiz disk alanı" ile reddediyordu — ve artığı silecek olan şey tam da
+  reddedilen güncellemenin kendisiydi. Kilitlenme kalıcı olabiliyordu.
+  ⚠️ Geri dönüş kopyası (`runtime.old`) temizlikte **korunuyor**; sağlam bir kuruluma dokunulmuyor.
+
+### Çakışma ve boşuna indirme
+
+- **İki pencere artık birbirinin kurulumunu bozamıyor.** Başlatıcının kendi kendini güncellemesi,
+  diğer akışların aldığı kurulum kilidini almıyordu; ikinci bir pencere kurulum/onarım yaparken
+  bu akış onun arka servisini kapatabiliyordu. (Aynı sınıf 2026-08-16'da bir kez düzeltilmişti;
+  geride kalan tek akış buydu — artık beş akışın hepsi testle denetleniyor.)
+- **Tek bir disk hatası 7 GB'lık boşuna indirme başlatmıyor.** Yerel dosya hataları (antivirüs
+  kilidi, dolu disk, izin) "geçici ağ hatası" sayılıyordu: indirme **tamamlandıktan sonra** dosya
+  taşınamazsa 6 kez tam yeniden indirme tetikleniyordu. Gerçek ağ kopmalarında yeniden deneme
+  aynen sürüyor.
+
+### Bozuk bir yayın artık cihazı kilitlemiyor
+
+- **Başlayamayan bir sürüm sonsuza kadar yeniden denenmiyor.** Yeni sürüm kurulup cihazda
+  başlayamazsa güvenlik için eskisine dönülüyordu — ama bu her açılışta baştan tekrarlanıyordu:
+  arka servis kapatılıyor, paket yeniden açılıyor, üç dakika bekleniyor, yine geri alınıyordu.
+  Klinik her açılışta dakikalarca bekliyordu ve durumdan çıkmanın tek yolu yeni bir yayın
+  beklemekti. Artık iki başarısız denemeden sonra **otomatik** kurulum duruyor; ekranda sebebi ve
+  ne yapılacağı yazıyor ("Onar" ile elle denenebilir), yeni bir sürüm çıkınca da normal akış
+  kendiliğinden geri geliyor. Elle "Onar" hiçbir koşulda engellenmiyor.
+- **Model paketleri artık kurulumun kritik dosyalarını ezemiyor.** Profil paketleri kurulum
+  klasörüne açılıyor ve korunan girdi listesi güncel değildi: paket kaydı, kademeli-yayın kimliği,
+  yedek hedefi ve geri dönüş kopyası açıktaydı. Paket kaydının ezilmesi en ağırıydı — cihaz
+  sonsuza dek "güncel" görünür ve **zorunlu geri çağırma dahil** hiçbir yama ulaşmazdı. Liste
+  artık kaynaktan türetiliyor; yeni bir durum dosyası eklenip listeye işlenmezse testler kırılıyor.
+
+### Geri alma artık doğruyu söylüyor
+
+- **"Eski sürüme dönüldü" mesajı gerçeği yansıtıyor.** Sınır dosyası kayıp/bozuk olan bir
+  kurulumda yedek hiç alınamıyordu ama sistem yedek varmış gibi davranıyordu: sağlık kapısı
+  düştüğünde geri alma hiçbir şey yapmadan "başarılı" diyordu ve cihaz doğrulanmamış sürümde
+  kalıyordu. Artık ya gerçekten geri alınıyor ya da alınamadığı **söyleniyor**.
+- **Yarıda kesilen "Onar" bozuk model bırakmıyor.** Model paketi açılırken kesinti olursa kayıt
+  hâlâ "güncel" görünüyordu; o profil bir daha yenilenmiyor ve AI analizi anlaşılmaz bir hatayla
+  düşüyordu. Kayıt artık açılımdan önce geçersiz kılınıyor.
+
+### Yönetimsel uçlar
+
+- Kurulum ve geri-alma uçları artık yetki istiyor. Eski (launcher'sız) kurulum kanalı açıkken
+  klinik ağındaki herhangi bir cihaz kimlik doğrulamadan kurulum başlatabiliyor ya da yayınlanmış
+  bir düzeltmeyi geri alabiliyordu. Durum sorgusu (salt-okunur) kasten açık kaldı.
+
+### Kaldırma
+
+- Kaldırmada geride kalan kurulum artıkları (üç durum dosyası + kesintiden kalan GB'lık geçici
+  klasörler) artık siliniyor; "Uygulama verisini sil" işaretliyken kurulum kökü gerçekten gidiyor.
+
+## mobile 2.3.22 — 2026-08-23 (sürüm uyarısı yanlış alarm veriyordu)
+
+**Etiket:** `launcher-v1.9.34` → `PEMF_Vet_Mobil.apk` · versionCode **29**.
+
+**Düzeltilen (sahadan bildirildi).** Telefon tam güncelken bile "Sürümler farklı" uyarısı
+çıkıyordu. Sebep: bant telefonun sürümünü (2.3.x) **cihazın** sürümüyle (1.9.x) karşılaştırıyordu —
+bunlar ayrı numaralandırma şemalarıdır, hiçbir zaman eşit olamazlar. Sürekli yanlış alarm, gerçek
+uyarının değerini sıfırlar.
+
+Uyarı artık güncelleme altyapısıyla **aynı ölçüyü** kullanıyor (yayınlanmış en son mobil sürüm):
+
+- telefon güncelse bant **hiç çıkmaz**;
+- telefon gerçekten eskiyse ve güncelleme açılışta ertelendiyse hatırlatır (`2.3.21 → 2.3.22`);
+- erteleme yoksa susar — indirme düğmeli güncelleme bandı zaten sahnededir (çift bant yok).
+
+Korunanlar: seans sürerken gösterilmez; ağ/manifest yokken sahte uyarı üretmez; bağlantı ve acil
+durdurma sürüm farkından **hiçbir koşulda** etkilenmez. Kaldırılan yanlış yönlendirme: "Ayarlar'dan
+güncelleyebilirsiniz" (uygulamada öyle bir giriş yok).
+
+Kilit: `pf/src/components/domain/__tests__/SurumFarkiBanner.test.tsx` (6 test; ilk test tam da
+sahadaki durumu — güncel telefonda bant çıkmamasını — ölçer).
+
+### Hasta güvenliği (önce bunlar)
+
+- **Güncelleme bantları artık ÇALIŞAN BOBİNİ görüyor.** İki bandın da gizlenme kapısı yalnız
+  "seans kaydı açık mı"ya bakıyordu; oysa bobinler seanssız da sürülebilir (AI Pro, bobin paneli,
+  başka istemci). O durumda bobin hastanın üzerinde **enerjiliyken** güncelleme bandı ve "Güncelle"
+  düğmesi çiziliyordu. Ölçü, uygulamanın geri kalanıyla (acil durdurma düğmesi, kaldırma koruması)
+  aynı tek kaynağa bağlandı: `useDonanimCalisiyor()`.
+
+### Güncelleme güvenliği
+
+- **İndirilen paket artık kurulumdan önce doğrulanıyor (SHA256).** Bugüne kadar tek kontrol dosya
+  BOYUTUYDU; yayın bilgisi "doğrulanır" dediği hâlde kod bunu yapmıyordu. Aynı boyutta bozuk ya da
+  karışık inen bir paket kurulmaya çalışılabiliyordu. Hesaplama telefonu yormaz (paket parça parça
+  okunur); hesaplanamadığı durumda güncelleme yine de sürer.
+- **APK indirme adresi artık pinli.** Manifest'ten gelen adres doğrulanmadan indiriliyordu; şema
+  ve host denetimi yoktu, uygulamada düz HTTP açık olduğu için `http://` bir adres de gerçekten
+  inerdi. Masaüstü istemcide 2026-08-04'te konan koruma (yalnız yayın deposunun kendi yolu ya da
+  GitHub nesne depoları) mobil tarafa da geldi. Şüpheli adres "güncelleme yok" sayılır.
+- **Sunucu hatası artık doğru anlatılıyor.** Paket adresi bozuksa telefon hata sayfasını APK
+  sanıp indiriyordu ve kullanıcıya "bağlantınızı kontrol edip tekrar deneyin" diyordu — oysa
+  tekrar denemek durumu değiştirmiyordu. Artık ayrı ve doğru mesaj gösteriliyor.
+- **Eski paketler siliniyor.** Kurulan APK telefonun önbelleğinde kalıyordu (her yayında ~128 MB);
+  yeterince biriktiğinde bir sonraki güncellemenin inmesini engelleyebilirdi.
+- **Güncelleme mesajları kırpılmıyor.** Bantta üç satırdan uzun metin kesiliyordu ve kesilen kısım
+  tam da ne yapılacağını söyleyen cümleydi.
+
 ## app 1.9.19 — 2026-08-22 (eksik-taraması düzeltmeleri: NACK görünürlüğü, jeton kapısı, rebinding koruması)
 
 **Etiket:** `client-app-v1.9.19` → `base-app.zip` (sha `9506287592a7`) + `base-deps.zip` (sha `2189cdd4970e`).

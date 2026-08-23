@@ -599,7 +599,18 @@ if (-not $SkipInnoSetup) {
     $elapsed2 = (Get-Date) - $startTime2
     Write-OK "Inno Setup tamamlandi ($([int]$elapsed2.TotalSeconds) saniye)"
 
-    $SetupExe = Get-ChildItem $InnoOutputDir -Filter "*.exe" | Select-Object -First 1
+    # ⚠️ DENETİM 2026-08-23: burada `Select-Object -First 1` vardı ve dosyalar ALFABETİK geldiği
+    # için Output/ içindeki EN ESKİ kurulum seçiliyordu. Ölçülen sonuç: 1.9.20 derlendikten sonra
+    # betik operatöre "Kurulum dosyasi: PEMFBackendSetup_device_v1.9.14.exe" diyordu — yani
+    # "kliniğe bunu gönderin" mesajı, o gün eklenen bobin E-stop düzeltmesinden ÖNCEKİ bir
+    # kurulumu işaret ediyordu. Bu bir mesaj hatası değil, YANLIŞ DOSYA DAĞITMA riskidir.
+    # Doğru seçim: bu koşuda derlenen SÜRÜM. (Ad kalıbı Sync-ReleaseVersion ile aynı kaynaktan.)
+    $BeklenenAd = "PEMFBackendSetup_${Mode}_v$AppVersion.exe"
+    $SetupExe = Get-ChildItem $InnoOutputDir -Filter $BeklenenAd -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+    if (-not $SetupExe) {
+        Write-Fail "Beklenen kurulum dosyasi uretilmedi: $BeklenenAd (Output/ icinde yok)"
+    }
     if ($SetupExe) {
         $SetupSizeMB = [math]::Round($SetupExe.Length / 1MB, 1)
         Write-OK "Kurulum dosyasi: $($SetupExe.Name) ($SetupSizeMB MB)"

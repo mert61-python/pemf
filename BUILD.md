@@ -265,7 +265,10 @@ npx @tauri-apps/cli build          # cargo + NSIS, ~60sn (incremental)
 > (Bu makinede 2026-07-31'deki ağ kesintisinde oluşmuştu; 2026-08-05'te temizlendi.)
 
 - **Çıktı:** `launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.9_x64-setup.exe`.
-- **Yayın için ada kopyala:** `PEMFVetClient-Setup.exe` (site bu adı bekler) → `gh release upload launcher-v<sürüm> ... --clobber`.
+- **Yayın için İKİ ada kopyala:** `PEMFVetClient-Setup.exe` (**self-update** bu adı okur —
+  `manifest.launcher.installer_url`) **ve** `PEMFVetClient-Setup-<sürüm>.exe` (**site** bu adı
+  bekler — `config.ts::windowsAsset` adı `windowsTag`ten türetir). İkisi de aynı ikili olmalı.
+  ⚠️ Yalnız birini yüklemek karşı tarafı sessizce 404 yapar (2026-08-22'de yaşandı).
 - ⚠️ **`withGlobalTauri: true` ŞART** (`tauri.conf.json` app bloğu). Tauri v2'de varsayılan `false` → `window.__TAURI__` enjekte edilmez → UI "Ortam algılanıyor…"da DONAR.
 - ⚠️ **Launcher AYRI yayınlanır:** base.zip/APK republish launcher binary'yi GÜNCELLEMEZ. Launcher kaynağı (net.rs / index.html / main.rs) değişince EXE'yi ayrıca rebuild+reupload et.
 - **Doğrulama:** binary'yi çalıştır + screencap → profil-UI (home/vet/research) geliyor mu? (Runtime-test edilmezse bug kullanıcıya ulaşır.)
@@ -283,7 +286,9 @@ Client v1.9.3'ten itibaren **açılışta kendini otomatik günceller** (kullan�
 **Yeni launcher sürümü yayınlama (versiyon-bump disiplini):**
 1. `launcher/Cargo.toml` (`[workspace.package] version`) **ve** `launcher/app/tauri.conf.json` (`version`) → yeni sürüm (örn. `1.9.4`). İKİSİ AYNI olmalı.
 2. Launcher'ı derle (yukarıdaki `npx @tauri-apps/cli build`) → `PEMF Vet Client_<sürüm>_x64-setup.exe`.
-3. `PEMFVetClient-Setup.exe` adına kopyala + `gh release upload launcher-v<sürüm> --clobber` (yeni tag).
+3. `PEMFVetClient-Setup.exe` **ve** `PEMFVetClient-Setup-<sürüm>.exe` adlarına kopyala +
+   `gh release upload launcher-v<sürüm>` (yeni tag). ⚠️ İkisi de gerekir: ilkini self-update,
+   ikincisini site indirir.
 4. **`pemf-app-packages/manifest.json` → `launcher` alanını güncelle:**
    ```json
    "launcher": {
@@ -365,12 +370,32 @@ gh release upload client-app-v<sürüm> -R mert61-python/pemf-update pemf-app-pa
 #    (launcher manifesti HEP buradan okur; sabit olan budur, paketler DEGIL) ← SIRA ONEMLI (asagi bak)
 gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\manifest.json
 # 3) launcher setup + APK                 → launcher-v<surum>
+#    ⚠️ HER VARLIK IKI ADLA YUKLENIR — ikisi FARKLI tuketici icindir:
+#      · SURUMSUZ ad  -> makine okur:   manifest.launcher.installer_url (self-update) + mobile.android.url (OTA)
+#      · SURUMLU  ad  -> SITE okur:     config.ts adi ETIKETTEN/SURUMDEN turetir (windowsAsset/androidAsset)
+#    Yalniz surumsuzu yuklemek indirme butonunu SESSIZCE 404 yapar. 2026-08-22'de once APK'da,
+#    sonra EXE'de (1.9.34) TAM BU OLDU. Kilit: tests/test_site_indirme_varligi_URETILDI.py (uretim)
+#    + adim 5 (yukleme). Silme YOK, yalniz ek ad -> --clobber GEREKMEZ.
 gh release create launcher-v1.9.13 -R mert61-python/pemf-update --title "PEMF Vet Client 1.9.13" --notes "..." PEMFVetClient-Setup.exe release_assets\PEMF_Vet_Mobil.apk
+gh release upload launcher-v1.9.13 -R mert61-python/pemf-update release_assets\PEMFVetClient-Setup-1.9.13.exe release_assets\PEMF_Vet_Mobil-2.3.22.apk
+# 3b) APK YUKLENDIKTEN SONRA manifest'in mobil blogunu tazele ve manifest'i YENIDEN yukle.
+#    ⚠️ make_manifest `mobile` blogunu URETMEZ, onceki manifest'ten TASIR (CARRY_ONLY) — yani
+#    elle guncellenmezse OTA sessizce ONCEKI versionCode'da DONAR. Manifest'in kendi notu da
+#    sirayi sart kosuyor: "APK'yi yukledikten SONRA burayi guncelleyin; ters sirada 404".
+#    Alanlar: mobile.android.version / versionCode / url / sha256 / size  (versionCode pf/app.json
+#    ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir).
+gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\manifest.json
 # 4) web sitesi (indirme sayfasi)
+#    ⚠️ SIRA: site EN SON. config.ts surumleri (windowsTag/androidVersion) yayindaki dosya
+#    adlarini belirler; varliklar yuklenmeden deploy edilirse butonlar 404 verir.
 cd pemf-vet-web; git push                        # Vercel GitHub'a BAGLI -> push = uretim deploy
 #   (dogrulama: npx vercel ls  ->  en ustteki Production kaydi 'Ready' olmali)
 #   ⚠️ ESKI NOT DUZELTILDI (2026-08-18): burada 'git-remote YOK -> CLI sart' yaziyordu.
 #      Remote eklendi ve Vercel'e baglandi; CLI ile ikinci bir deploy acmak gereksiz.
+# 5) INDIRME DOGRULAMASI — yayin BU ADIM YESIL OLMADAN bitmis SAYILMAZ.
+#    Sitenin URETTIGI her indirme adresine gercekten bakar (yerel testler yalniz "uretildi mi"
+#    diye sorar; 1.9.34 arizasinda dosya URETILMIS ama YUKLENMEMISTI).
+..\python.exe scripts\site_indirme_dogrula.py    # cikis 0 = tum butonlar canli
 ```
 
 > ⚠️ **SIRA: paketler ÖNCE, manifest SONRA.** Manifest yeni sha'yı ilan ettiği anda tüm client'lar

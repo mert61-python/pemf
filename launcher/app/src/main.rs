@@ -825,11 +825,18 @@ async fn apply_runtime_update(
         match flow::start_backend(&root2, &mut on) {
             Ok((child, url, port)) => {
                 flow::guncellemeyi_onayla(&root2, &geri);
+                // C2: gerçekten çalıştı → döngü-kırıcı sayacı sıfırla (bir sonraki gerçek
+                // güncelleme eski başarısızlıkların kalıntısına takılmasın).
+                install::clear_runtime_attempt(&root2);
                 Ok(GuncellemeSonucu::Hazir(child, url, port))
             }
             Err(e) => {
-                // SAĞLIK KAPISI DÜŞTÜ → eski sürüme dön. Kayıtlar yazılmadığı için disk
-                // "bilinmiyor"da kalır; sonraki açılış yeniden dener (paketler önbellekte).
+                // SAĞLIK KAPISI DÜŞTÜ → eski sürüme dön.
+                // ⚠️ DENETİM 2026-08-23 (C2): eskiden burada HİÇBİR iz bırakılmıyordu ("disk
+                // bilinmiyorda kalır, sonraki açılış yeniden dener") → bozuk bir yayın her
+                // açılışta aynı pahalı döngüyü tekrarlıyordu. Artık deneme sayılıyor; sınır
+                // dolunca yalnız OTOMATİK kurulum durur, bildirim ve elle "Onar" açık kalır.
+                flow::geri_almayi_kaydet(&root2, &manifest_raw);
                 let geri_hata = flow::guncellemeyi_geri_al(&root2, &geri).err().map(|x| x.to_string());
                 Ok(GuncellemeSonucu::GeriAlindi {
                     sebep: e.to_string(),
@@ -1237,7 +1244,19 @@ async fn apply_self_update(
         // tedavi yarım kalır ve veteriner sebebini göremez. Seans bitince güncelleme yapılır.
         // P1: `None` = BİLİNMİYOR. Seans durumunu öğrenemiyorsak seansı kesme riskini ALMAYIZ →
         // ertele. Kapı `aktif_seans_kapisi`'nda TEK yerde; `apply_runtime_update` de onu kullanır.
-        aktif_seans_kapisi(&install::default_install_root(&home_dir()))?;
+        let kurulum_koku = install::default_install_root(&home_dir());
+        // ⚠️ DENETİM 2026-08-23 (C6): KURULUM KİLİDİ BURADA DA ALINIR.
+        // 2026-08-16'da (Bulgu 3) kilit `apply_runtime_update`e eklenmişti; `install_and_launch`,
+        // `repair` ve `uninstall` da alıyor — ağacı değiştiren akışlar arasında kilitsiz kalan
+        // TEK akış self-update'ti. Oysa bu akış da en sonunda NSIS'i `/S` ile çalıştırıyor ve
+        // kurulum kancası `taskkill /F /IM PEMF_Backend.exe /T` yapıyor: ikinci bir pencere o
+        // sırada kurulum/onarım/runtime-güncellemesi yapıyorsa ONUN backend'i ölür, sağlık kapısı
+        // düşer ve SAĞLAM bir güncelleme boşuna geri alınır (ya da ağaç yarım kalır).
+        // ⚠️ `let _ =` DEĞİL `let _kilit =`: `let _` bağlaması değeri ANINDA düşürür, koruma olmaz.
+        // Kilit elde edilemezse güncelleme yapılmaz — sonraki açılışta yeniden denenir
+        // (installer önbellekte, maliyeti yok). Bu, `apply_runtime_update` ile aynı sözleşmedir.
+        let _kilit = install::kurulum_kilidi_al(&kurulum_koku)?;
+        aktif_seans_kapisi(&kurulum_koku)?;
         *state.progress.lock().unwrap() = None;
         state.control.store(CTL_RUN, Ordering::Relaxed);
 

@@ -919,6 +919,70 @@ pub fn selfupdate_auto_allowed(install_root: &Path, target_version: &str) -> boo
     }
 }
 
+// ── RUNTIME GÜNCELLEMESİ: geri alma döngüsü kırıcı (denetim 2026-08-23, C2) ──────────────────
+//
+// ⚠️ SORUN: sağlık kapısı düşünce güncelleme geri alınıyordu ama HİÇBİR deneme sayacı
+// tutulmuyordu — kodun kendi yorumu bunu kabul ediyordu ("kayıtlar yazılmadığı için disk
+// 'bilinmiyor'da kalır; sonraki açılış yeniden dener"). Yapısal doğrulamayı geçen ama backend'i
+// başlatamayan bir yayında bu, HER açılışta: backend öldür → ~1,19 GB deps aç → 180 sn boşuna
+// bekle → geri al demekti. Klinik her açılışta dakikalarca bloklanıyor ve tek çıkış yolu
+// yayıncının manifest'e `rollout: 0` yazması oluyordu.
+//
+// Launcher'ın KENDİ self-update'inde bu koruma 2026-08-04'te eklendi (`MAX_SELFUPDATE_ATTEMPTS`);
+// runtime yolunda karşılığı yoktu. Desen birebir aynı, hedef kimliği farklı: sürüm numarası değil
+// paket sha'ları (aynı sürüm numarası altında farklı ikili yayınlanabilir).
+
+/// Aynı hedef için izin verilen OTOMATİK runtime kurulumu denemesi.
+///
+/// 2: ilk düşüş geçici olabilir (o anda çalışan başka bir süreç, anlık disk/AV olayı); ikincisi
+/// artık kalıcı bir arıza sayılır. Sınır aşılınca YALNIZ otomatik kurulum durur — bildirim ve
+/// kullanıcının elle "Onar" demesi ETKİLENMEZ.
+pub const MAX_RUNTIME_ATTEMPTS: u32 = 2;
+
+fn runtime_attempt_path(install_root: &Path) -> PathBuf {
+    install_root.join("runtime_attempt.json")
+}
+
+/// Son denenen runtime hedefi ve deneme sayısı: `(hedef, sayı)`.
+///
+/// ⚠️ FAIL-OPEN: dosya yok/bozuksa `None` → güncelleme akmaya devam eder. Tek bir bozuk bayt
+/// cihazı eski sürümde dondurmamalı; bu sayaç bir kolaylıktır, bir kapı değil.
+pub fn read_runtime_attempt(install_root: &Path) -> Option<(String, u32)> {
+    let s = std::fs::read_to_string(runtime_attempt_path(install_root)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&s).ok()?;
+    let hedef = v.get("hedef")?.as_str()?.to_string();
+    let n = v.get("count").and_then(|c| c.as_u64()).unwrap_or(0) as u32;
+    Some((hedef, n))
+}
+
+/// Bu hedef için sayacı artır (aynı hedefse +1, FARKLI hedefse 1'den başlar).
+///
+/// Geri alma anında çağrılır. Farklı hedefte sıfırlanması kritik: düzeltme yayını (yeni sha)
+/// eski hedefin sayacına takılıp cihaza ulaşamazsa koruma, korumaya çalıştığı şeyi bozar.
+pub fn record_runtime_attempt(install_root: &Path, hedef: &str) {
+    let n = match read_runtime_attempt(install_root) {
+        Some((h, c)) if h == hedef => c.saturating_add(1),
+        _ => 1,
+    };
+    let _ = std::fs::create_dir_all(install_root);
+    if let Ok(json) = serde_json::to_string(&serde_json::json!({ "hedef": hedef, "count": n })) {
+        let _ = std::fs::write(runtime_attempt_path(install_root), json);
+    }
+}
+
+/// Güncelleme GERÇEKTEN başarılı olduğunda sayacı sıfırla.
+pub fn clear_runtime_attempt(install_root: &Path) {
+    let _ = std::fs::remove_file(runtime_attempt_path(install_root));
+}
+
+/// Bu hedef için OTOMATİK (sessiz) runtime kurulumu hâlâ denenmeli mi?
+pub fn runtime_otomatik_izinli(install_root: &Path, hedef: &str) -> bool {
+    match read_runtime_attempt(install_root) {
+        Some((h, c)) if h == hedef => c < MAX_RUNTIME_ATTEMPTS,
+        _ => true,
+    }
+}
+
 /// `installed_profiles.json` kaydının DURUMU.
 ///
 /// DENETİM 2026-08-04 (P2): `read_installed_profiles` FAIL-SAFE tasarlanmıştı — dosya yoksa VEYA

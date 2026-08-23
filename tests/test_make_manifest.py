@@ -46,7 +46,7 @@ ONCEKI = {
 }
 
 
-def _calistir(dizin: Path, *ek):
+def _calistir(dizin: Path, *ek, betik: Path | None = None):
     # PYTHONIOENCODING: Windows'ta alt süreç stderr'i konsol kod sayfasıyla yazar ve Türkçe
     # karakterler bozulur → hata mesajı hem burada hem CI günlüğünde okunamaz hâle gelirdi.
     import os
@@ -55,7 +55,7 @@ def _calistir(dizin: Path, *ek):
     return subprocess.run(
         [
             sys.executable,
-            str(BETIK),
+            str(betik or BETIK),
             "--dir",
             str(dizin),
             "--version",
@@ -233,15 +233,57 @@ def test_drop_missing_ile_bilerek_silinebilir(dizin):
     assert not _oku(dizin)["layers"], "acik --drop-missing'e ragmen layers tasindi"
 
 
-def test_allow_missing_mobile_ile_bilerek_silinebilir(tmp_path):
+def test_onceki_manifestte_mobile_YOKSA_kapi_sessiz(tmp_path):
+    """`prev`te mobile hiç yoksa kayıp da yoktur — kapı bu durumda susmalı.
+
+    ⚠️ ESKİ ADI `test_allow_missing_mobile_ile_bilerek_silinebilir`'di ve bayrağı HİÇ
+    geçirmiyordu (denetim 2026-08-23, Y5): yani testin kendisi bayrağın gereksiz olduğunu
+    kanıtlıyor, adı ise tersini iddia ediyordu. Ad gerçeğe çekildi; bayrağın asıl davranışı
+    aşağıdaki testte ölçülüyor.
+    """
     onceki = json.loads(json.dumps(ONCEKI))
-    (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
-    # mobile'ı taşınamaz kıl: önceki manifest'ten çıkar → uyarı yolu
     onceki.pop("mobile")
     (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
     r = _calistir(tmp_path)
     assert r.returncode == 0, r.stderr[-800:]
     assert "mobile" not in _oku(tmp_path)
+
+
+def test_KRITIK_mobile_TASINAMAZSA_kapi_HATA_verir(tmp_path, monkeypatch):
+    """🔴 Y5 — kapı ULAŞILAMAZDI, şimdi gerçekten ölçülüyor.
+
+    `prev`te mobile VARDI ama çıktıya GEÇMEDİYSE bu sessiz bir felakettir: sahadaki tüm APK'lar
+    oto-güncellemeyi kaybeder. Eski koşul (`not manifest.get("mobile")`) CARRY_ONLY taşıması
+    yüzünden hiçbir zaman doğru olamıyordu — yani koruma yoktu, yalnız görüntüsü vardı.
+    Taşıma kodunu devre dışı bırakarak kapının GERÇEKTEN kapandığını ölçüyoruz.
+    """
+    (tmp_path / "manifest.json").write_text(json.dumps(ONCEKI), encoding="utf-8")
+    betik = (Path(__file__).resolve().parents[1] / "scripts" / "make_manifest.py").read_text(encoding="utf-8")
+    assert 'CARRY_ONLY = ("launcher", "mobile")' in betik, "CARRY_ONLY biçimi değişti — test güncellensin"
+    bozuk = tmp_path / "make_manifest_bozuk.py"
+    bozuk.write_text(
+        betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'), encoding="utf-8"
+    )
+
+    r = _calistir(tmp_path, betik=bozuk)
+    assert r.returncode != 0, (
+        "taşıma bozulduğu hâlde manifest YAZILDI — 'mobile kayboluyor' kapısı hâlâ ölü "
+        "(sahadaki tüm APK'lar oto-güncellemeyi sessizce kaybederdi)"
+    )
+    assert "mobile" in (r.stderr + r.stdout), "hata mesajı hangi bloğun kaybolduğunu söylemiyor"
+
+
+def test_KARSIT_KANIT_allow_missing_mobile_kapiyi_ACAR(tmp_path):
+    """Bayrak artık gerçek bir işe yarıyor: bilerek düşürmeye izin verir (çıkış 0)."""
+    (tmp_path / "manifest.json").write_text(json.dumps(ONCEKI), encoding="utf-8")
+    betik = (Path(__file__).resolve().parents[1] / "scripts" / "make_manifest.py").read_text(encoding="utf-8")
+    bozuk = tmp_path / "make_manifest_bozuk.py"
+    bozuk.write_text(
+        betik.replace('CARRY_ONLY = ("launcher", "mobile")', 'CARRY_ONLY = ("launcher",)'), encoding="utf-8"
+    )
+
+    r = _calistir(tmp_path, "--allow-missing-mobile", betik=bozuk)
+    assert r.returncode == 0, f"bayrak kapıyı açmadı: {r.stderr[-800:]}"
 
 
 # ── mevcut davranış korunuyor mu (regresyon) ─────────────────────────────────

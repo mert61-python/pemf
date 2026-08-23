@@ -9,17 +9,19 @@
  * AKIŞ: manifest'i çek → `versionCode` karşılaştır → APK'yı indir → BOYUT doğrula → kurulum
  * niyetini (intent) aç. Kullanıcı onaylar, Android kurar.
  *
- * ⚠️ GÜVENLİK MODELİ — NEDEN SHA256 DEĞİL, İMZA:
- * Masaüstü tarafında güven çıpası manifest'teki SHA256'dır. Mobilde 128 MB'lık bir APK'nın
- * SHA256'sını hesaplamak pratik DEĞİL: `expo-file-system` dosya-digest API'si sunmuyor ve dosyayı
- * belleğe alıp JS'te hash'lemek düşük bellekli telefonlarda çöker. Bu yüzden BURADA GÜVEN ÇIPASI
- * ANDROID'İN KENDİ APK İMZA DOĞRULAMASIDIR: Android, kurulu uygulamayla AYNI anahtarla
- * imzalanmamış bir APK'yı güncelleme olarak KABUL ETMEZ. Yayın anahtarı geliştiricinin
- * makinesindedir (%USERPROFILE%\.pemf-keys) → araya giren biri APK'yı değiştirse bile yeniden
- * imzalayamaz ve kurulum İŞLETİM SİSTEMİ tarafından reddedilir. Bu, sha256'dan zayıf değil:
- * anahtar-tabanlı ve merkezî bir doğrulama.
+ * ⚠️ GÜVENLİK MODELİ — ÜÇ KATMAN (güncellendi 2026-08-23):
+ *   1. KAYNAK PİNİ (`kaynakGuvenli`): adres yalnız yayın deposunun kendi yolu ya da GitHub nesne
+ *      depoları olabilir. Masaüstündeki `net.rs::validate_download_source` ikizi.
+ *   2. SHA256 (yerel modül): indirilen paket kurulumdan ÖNCE doğrulanır. Eskiden bu YOKTU ve
+ *      "128 MB'ın hash'i mobilde pratik değil" diye gerekçelendirilmişti — doğru gerekçe ama
+ *      yanlış sonuç: hash JS'te değil, YEREL modülde 1 MB'lık tamponla AKITILARAK alınır (sabit
+ *      bellek). Yayındaki manifest'in kendi notu zaten "SHA256 doğrular" diye söz veriyordu;
+ *      artık kod o sözü gerçekten tutuyor. Hash hesaplanamıyorsa (eski APK'da modül yok) akış
+ *      SÜRER — doğrulanamıyor diye engellemek sahadaki eski sürümleri kilitlerdi.
+ *   3. ANDROID İMZA DOĞRULAMASI: Android, kurulu uygulamayla AYNI anahtarla imzalanmamış bir
+ *      APK'yı güncelleme olarak KABUL ETMEZ. Yayın anahtarı geliştiricinin makinesindedir
+ *      (%USERPROFILE%\.pemf-keys) → araya giren biri paketi değiştirse bile yeniden imzalayamaz.
  * Boyut kontrolü ayrıca yapılır — yarım/bozuk inen dosyayı kurmaya çalışmayı önler.
- * (manifest'teki `sha256` masaüstü ile eşitlik ve ileride yerel doğrulama için KORUNUR.)
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
@@ -31,11 +33,61 @@ import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { apkKur, izinEkraniniAc, kurulumIzniVarMi } from "../../modules/apk-installer";
+import { apkKur, dosyaSha256, izinEkraniniAc, kurulumIzniVarMi } from "../../modules/apk-installer";
 
 /** Yayın manifest'i — masaüstü client ile AYNI dosya (tek kaynak, ayrı servis yok). */
 export const MANIFEST_URL =
   "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.8.0/manifest.json";
+
+/**
+ * İNDİRME KAYNAĞI PİNİ — masaüstü `launcher/core/src/net.rs::validate_download_source` ikizi.
+ *
+ * ⚠️ Bu kapı olmadan manifest'in `mobile.android.url` alanını etkileyebilen herkes sahadaki tüm
+ * telefonlara istediği adresten — `usesCleartextTraffic` açık olduğu için düz `http://` dahil —
+ * 128 MB'lık keyfi içerik indirtebilirdi. Masaüstü tarafında bu pin 2026-08-04 denetiminde
+ * konmuştu; mobil taraf o gün atlanmıştı (denetim 2026-08-23, bulgu M1).
+ *
+ * Kabul edilen: repo-yolu pinli `github.com` **veya** açıkça sayılmış GitHub nesne depoları.
+ * ⚠️ `.githubusercontent.com` JOKERİ KABUL EDİLMEZ — oraya ücretsiz bir hesap keyfi bayt koyabilir
+ * (masaüstünde joker yalnız *yönlendirme hedefleri* için geçerli, kaynak URL'ler için değil).
+ */
+const IZINLI_NESNE_DEPOLARI = ["objects.githubusercontent.com", "release-assets.githubusercontent.com"];
+const YAYIN_REPO_YOLU = "/mert61-python/pemf-update/";
+
+/**
+ * Yol, istemci-tarafı normalizasyonuyla bizim gördüğümüzden BAŞKA bir yere çözülebilir mi?
+ *
+ * ⚠️ HAM METİN üzerinde çalışır, `new URL(...).pathname` üzerinde DEĞİL — ölçülerek öyle yazıldı:
+ * WHATWG ayrıştırıcısı `\` karakterini sessizce `/`'a çeviriyor, yani ayrıştırılmış yolu denetlemek
+ * o vakayı hiç göremez. İndiriciye giden şey zaten HAM dizedir; onu bizim ayrıştırıcımızın değil,
+ * indiricinin ayrıştırıcısı çözecek. İki ayrıştırıcının aynı kararı vereceğine güvenmek yerine
+ * şüpheli yazımı baştan reddediyoruz (masaüstü `net.rs::path_has_traversal` ile aynı yaklaşım).
+ */
+function yolKacisiVar(hamYol: string): boolean {
+  const s = hamYol.split(/[?#]/)[0];
+  const k = s.toLowerCase();
+  if (k.includes("%2e") || k.includes("%2f") || k.includes("%5c") || s.includes("\\")) return true;
+  // Baştaki '/' yüzünden ilk parça daima boştur; onu atla.
+  return s.split("/").slice(1).some((p) => p === "." || p === ".." || p === "");
+}
+
+export function kaynakGuvenli(url: string): boolean {
+  if (typeof url !== "string" || !url) return false;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:") return false;
+  // Ham yol: şemadan sonraki ilk '/'den itibaren (authority hariç).
+  const semasiz = url.slice(url.indexOf("://") + 3);
+  const kesme = semasiz.search(/[/?#]/);
+  if (yolKacisiVar(kesme < 0 ? "" : semasiz.slice(kesme))) return false;
+  if (IZINLI_NESNE_DEPOLARI.includes(u.hostname)) return true;
+  // `github.com` yalnız BİZİM repo yolumuzla; "GitHub'da bir yer" yetmez.
+  return u.hostname === "github.com" && u.pathname.startsWith(YAYIN_REPO_YOLU);
+}
 
 export interface MobilSurum {
   version: string;
@@ -74,8 +126,31 @@ export async function guncellemeVarMi(fetchFn: typeof fetch = fetch): Promise<Gu
     const m = (await r.json()) as { mobile?: { android?: Partial<MobilSurum> } };
     const a = m?.mobile?.android;
     if (!a?.url || !a?.versionCode || !a?.size) return { varMi: false, sebep: "eksik_alan" };
-    if (Number(a.versionCode) <= mevcutVersionCode()) return { varMi: false, sebep: "guncel" };
-    return { varMi: true, surum: a as MobilSurum };
+    // ⚠️ FAIL-CLOSED: pinsiz/şüpheli adres "güncelleme YOK" sayılır. Güncellemeyi kaybetmek,
+    // yanlış kaynaktan 128 MB indirmekten iyidir (masaüstü paritesi — bkz. kaynakGuvenli).
+    if (!kaynakGuvenli(String(a.url))) return { varMi: false, sebep: "eksik_alan" };
+
+    // ⚠️ TİP DOĞRULAMASI (denetim 2026-08-23, M8). Eskiden `Number(a.versionCode) <= mevcut`
+    // karşılaştırması yapılıyordu; sayısal olmayan ama truthy bir değerde (`"v29"`, `{}`)
+    // `Number()` NaN olur ve NaN ile yapılan HER karşılaştırma false döner → "güncel" kontrolü
+    // ATLANIR ve güncelleme VAR denir (fail-open). Manifest'in `mobile` bloğu üretilmiyor, elle
+    // düzenleniyor (`CARRY_ONLY`) — yani bu gerçekçi bir yayın kazası. Sonuç: her soğuk açılışta
+    // 128 MB indirilir, Android reddeder ve döngü tekrarlar; üstelik erteleme bayrağı da tutmaz
+    // (`atlandiMi` içinde `Number(...) || 0` → hep 0), yani bandı susturmanın yolu kalmaz.
+    // ⚠️ `Number(true) === 1`: boolean tip kapısını sessizce geçerdi. Manifest sayısal alanları
+    // yalnız sayı ya da sayı-metni olabilir; başka her tip biçim hatasıdır.
+    const sayisalTip = (v: unknown) => typeof v === "number" || typeof v === "string";
+    if (!sayisalTip(a.versionCode) || !sayisalTip(a.size)) return { varMi: false, sebep: "eksik_alan" };
+    const vc = Number(a.versionCode);
+    const boyut = Number(a.size);
+    if (!Number.isInteger(vc) || vc <= 0) return { varMi: false, sebep: "eksik_alan" };
+    if (!Number.isFinite(boyut) || boyut <= 0) return { varMi: false, sebep: "eksik_alan" };
+    if (typeof a.version !== "string" || !a.version) return { varMi: false, sebep: "eksik_alan" };
+
+    if (vc <= mevcutVersionCode()) return { varMi: false, sebep: "guncel" };
+    // ⚠️ NORMALİZE EDİLMİŞ değer döner: ham `versionCode` dosya adına (`pemf-vet-<vc>.apk`) ve
+    // erteleme anahtarına giriyor; metin kalırsa erteleme hiçbir zaman eşleşmez.
+    return { varMi: true, surum: { ...(a as MobilSurum), versionCode: vc, size: boyut } };
   } catch {
     return { varMi: false, sebep: "manifest" };
   }
@@ -143,7 +218,7 @@ export type IlerlemeCb = (oran: number) => void;
 export interface IndirmeSonucu {
   ok: boolean;
   dosyaUri?: string;
-  hata?: "indirme" | "boyut";
+  hata?: "indirme" | "boyut" | "sunucu" | "butunluk";
 }
 
 /** Yarım kalan indirmenin izi (AsyncStorage). İndirme BAŞLAMADAN yazılır. */
@@ -283,6 +358,8 @@ async function _apkIndirGercek(
     devamOku?: typeof devamOku;
     devamYaz?: typeof devamYaz;
     devamSil?: typeof devamSil;
+    readDirectoryAsync?: typeof FileSystem.readDirectoryAsync;
+    sha256Hesapla?: typeof dosyaSha256;
   } = {},
 ): Promise<IndirmeSonucu> {
   const hedef = `${FileSystem.cacheDirectory || ""}pemf-vet-${surum.versionCode}.apk`;
@@ -294,6 +371,29 @@ async function _apkIndirGercek(
   const kayitSil = deps.devamSil ?? devamSil;
 
   const beklenen = Number(surum.size);
+
+  // ⚠️ ESKİ PAKETLERİ TEMİZLE (denetim 2026-08-23, M7). Başarı yolunda yalnız AsyncStorage izi
+  // siliniyor, ~128 MB'lık APK bırakılıyordu; eski dosyayı silen tek yol (`kayit && !ayniIs`) bir
+  // sonraki sürümde `kayit === null` olduğu için HİÇ çalışmıyordu. Kurulum başarılı olunca
+  // uygulamanın versionCode'u dosyanınkine eşitlenir → `guncellemeVarMi` "güncel" der → `apkIndir`
+  // o sürüm için bir daha çağrılmaz, yani temizlik penceresi kapanır. Her yayında bir dosya
+  // birikiyordu; depolaması dolu bir telefonda bu, bir sonraki güncellemenin İNEMEMESİNE varır.
+  //
+  // ⚠️ Yalnız BİZİM ürettiğimiz ad kalıbı ve YALNIZ bu indirmenin hedefi DIŞINDAKİLER silinir.
+  // Hata yutulur: temizlik bir kolaylıktır, güncellemeyi düşürmesi kabul edilemez.
+  {
+    const dizinOku = deps.readDirectoryAsync ?? FileSystem.readDirectoryAsync;
+    const kokDizin = FileSystem.cacheDirectory || "";
+    try {
+      const adlar = await dizinOku(kokDizin);
+      const bizim = /^pemf-vet-\d+\.apk$/;
+      await Promise.all(
+        (adlar || [])
+          .filter((ad) => bizim.test(ad) && `${kokDizin}${ad}` !== hedef)
+          .map((ad) => sil(`${kokDizin}${ad}`, { idempotent: true }).catch(() => {})),
+      );
+    } catch { /* dizin okunamadı → temizlik atlanır, indirme sürer */ }
+  }
 
   // Kayıt yalnız AYNI sürüm + AYNI adres için geçerli; sürüm/adres değiştiyse yarım dosya çöptür.
   const kayit = await oku();
@@ -350,6 +450,20 @@ async function _apkIndirGercek(
     const sonuc = await dl.downloadAsync();
     if (!sonuc?.uri) return { ok: false, hata: "indirme" };
 
+    // ⚠️ HTTP DURUMU DENETLENİR (denetim 2026-08-23). Yerel katman gövdeyi durumdan BAĞIMSIZ
+    // olarak dosyaya yazar: manifest'teki varlık silinmiş/yanlış etikete taşınmışsa (yayında
+    // yaşanmış bir durum) 404 HTML'i APK olarak diske iner. Eskiden bu yalnız boyut kapısına
+    // takılıyor ve kullanıcıya "bağlantınızı kontrol edip tekrar deneyin" deniyordu — tekrar
+    // denemek ASLA işe yaramaz. Ayrı sonuç kodu, arayüzün doğru şeyi söylemesini sağlar.
+    // 416 özellikle önemlidir: devam edilen indirmede gövde kısmi dosyanın SONUNA eklenir.
+    // ⚠️ Durum BİLİNMİYORSA (alan yok) akış değişmez — arkada boyut kapısı zaten duruyor.
+    const durum = (sonuc as { status?: number }).status;
+    if (typeof durum === "number" && (durum < 200 || durum >= 300)) {
+      try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
+      await kayitSil();
+      return { ok: false, hata: "sunucu" };
+    }
+
     const bilgi = (await bilgiAl(sonuc.uri)) as { exists?: boolean; size?: number };
     if (!bilgi?.exists || Number(bilgi.size) !== beklenen) {
       // Yarım/bozuk inen paketi kurmaya ÇALIŞMA → sil (kullanıcı anlaşılmaz bir kurulum
@@ -357,6 +471,24 @@ async function _apkIndirGercek(
       try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
       await kayitSil();
       return { ok: false, hata: "boyut" };
+    }
+    // ⚠️ BÜTÜNLÜK DOĞRULAMASI (denetim 2026-08-23, M11). Boyut kapısı yeterli DEĞİL: aynı boyutta
+    // farklı içerik (yarım-devam karışımı, bozuk aktarım) kolayca oluşur. Yayındaki manifest'in
+    // kendi notu zaten "SHA256 doğrular" diye söz veriyordu; kod o sözü tutmuyordu ve APK,
+    // güncelleme zincirindeki TEK doğrulanmayan varlıktı (launcher paketleri doğrulanıyor).
+    //
+    // ⚠️ Hash HESAPLANAMIYORSA (eski APK'da yerel modül yok → boş dize) ya da manifest sha
+    // taşımıyorsa akış SÜRER: doğrulanamıyor diye engellemek, sahadaki eski sürümleri kalıcı
+    // olarak güncellenemez yapardı. Yani bu kapı yalnız AÇIKÇA yanlış olanı eler.
+    const sha = deps.sha256Hesapla ?? dosyaSha256;
+    const beklenenSha = String(surum.sha256 || "").toLowerCase();
+    if (beklenenSha) {
+      const gercek = (await sha(sonuc.uri)).toLowerCase();
+      if (gercek && gercek !== beklenenSha) {
+        try { await sil(sonuc.uri, { idempotent: true }); } catch { /* yut */ }
+        await kayitSil();
+        return { ok: false, hata: "butunluk" };
+      }
     }
     await kayitSil(); // tamamlandı → yarım-indirme izi kalmasın
     return { ok: true, dosyaUri: sonuc.uri };

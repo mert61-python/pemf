@@ -13,14 +13,15 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Download, X } from "lucide-react-native";
 
-import { useLiveData } from "@/context/LiveDataContext";
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
+import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 
 export function MobileUpdateBanner() {
-  const { snapshot } = useLiveData();
-  const seansAktif = !!snapshot?.activeTreatment?.isActive;
+  // ⚠️ Ölçü `useDonanimCalisiyor`: seans kaydı açık olmasa da çalışan bobin bandı susturur
+  // (bobinler seanssız da sürülebilir — denetim bulgusu M4, 2026-08-23).
+  const seansAktif = useDonanimCalisiyor();
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const [gizli, setGizli] = useState(false);
 
@@ -48,7 +49,13 @@ export function MobileUpdateBanner() {
       <Download color={colors.primary} size={rs(16)} />
       <View style={{ flex: 1 }}>
         <Text style={styles.baslik}>Yeni sürüm hazır: {surum.version}</Text>
-        <Text style={[styles.alt, hata ? styles.altHata : null]} numberOfLines={3}>
+        {/* ⚠️ KIRPMA YOK (denetim 2026-08-23, M12): `numberOfLines={3}` kancanın ~180-200
+            karakterlik mesajlarını kesiyordu ve kesilen kısım tam da kullanıcıya NE YAPACAĞINI
+            söyleyen cümleydi ("Bobinler durduktan sonra 'Güncelle'ye dokunun; paket hazır,
+            yeniden indirilmeyecek"). Aynı metin kapıda (MobileUpdateGate) kırpılmadan
+            gösteriliyordu — iki yüzey aynı durumda farklı şey söylüyordu. Bant kendi
+            yüksekliğini alsın; bilgi kaybı, birkaç piksel yükseklikten pahalıdır. */}
+        <Text style={[styles.alt, hata ? styles.altHata : null]}>
           {hata || bilgi ||
             (oran !== null
               // Yüzdenin yanında MB: 128 MB'lık paketde kullanıcı kotasını görsün.

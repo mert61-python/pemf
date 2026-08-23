@@ -16,6 +16,10 @@ const mockApiGet = jest.fn(async () => ({}));
 const mockApiPost = jest.fn(async () => ({ ok: true }));
 jest.mock("@/services/apiClient", () => ({ apiGet: mockApiGet, apiPost: mockApiPost }));
 
+// Donanim kapisi (M5) — kanca testte dogrudan surulur.
+let mockDonanimCalisiyor = false;
+jest.mock("@/hooks/useDonanimCalisiyor", () => ({ useDonanimCalisiyor: () => mockDonanimCalisiyor }));
+
 import { render, waitFor } from "@testing-library/react-native";
 import { Platform } from "react-native";
 import { UpdateBanner } from "@/components/ui/UpdateBanner";
@@ -79,4 +83,42 @@ it("services/updates backend güncelleme fonksiyonu İHRAÇ ETMEZ", () => {
   const m = require("@/services/updates");
   expect(m.applyBackendUpdate).toBeUndefined();
   expect(m.checkBackendUpdate).toBeUndefined();
+});
+
+/**
+ * DONANIM KAPISI (denetim 2026-08-23, bulgu M5).
+ *
+ * OLCULEN DURUM: bu bant HICBIR seans/bobin kapisi tanimiyordu. Digerlerinde (MobileUpdateBanner,
+ * SurumFarkiBanner) kapi VAR ve 2026-08-23'te ortak `useDonanimCalisiyor()` kancasina baglandi —
+ * bu ucuncu yuzey geride kaldi. Yani bobin hastanin uzerinde ENERJILIYKEN bant cizilebiliyor ve
+ * uzerine DOKUNMAK operatoru ACIL DURDUR'un bulundugu uygulamadan TARAYICIYA cikariyordu.
+ *
+ * ⚠️ Bugun kanal uykuda (`mobil` dalindaki latest.json'da apkUrl BOS → bant hic gorunmuyor), ama
+ * `publish_release.ps1 -Branch mobil` onu her an silahlandirabilir. Uyuyan bir tuzagin
+ * dusuk-olasilikli olmasi, tibbi cihazda kapisiz kalmasini mesru kilmaz.
+ *
+ * ⚠️ KANAL KALDIRILMADI: 2026-08-09 denetimi "APK (sideload) bildirimi kalir — o ayri ve mesru
+ * bir kanaldir" diye ACIKCA karar vermis. O karar sahibindir; burada yalniz GUVENLIK KAPISI
+ * ekleniyor.
+ */
+it("KRITIK: donanim CALISIRKEN bant cizilmez (bobin hastanin uzerinde)", async () => {
+  mockDonanimCalisiyor = true;
+  manifestVer({
+    version: "99.0.0",
+    apkUrl: "https://github.com/mert61-python/pemf-update/releases/download/x/app.apk",
+  });
+  const u = render(<UpdateBanner />);
+  await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+  expect(u.toJSON()).toBeNull();
+  mockDonanimCalisiyor = false;
+});
+
+it("KARSIT-KANIT: donanim BOSTAYKEN bant normal calisir (kapi asiri genislemesin)", async () => {
+  mockDonanimCalisiyor = false;
+  manifestVer({
+    version: "99.0.0",
+    apkUrl: "https://github.com/mert61-python/pemf-update/releases/download/x/app.apk",
+  });
+  const u = render(<UpdateBanner />);
+  await waitFor(() => expect(u.getByText(/Uygulama güncellemesi var/)).toBeTruthy());
 });

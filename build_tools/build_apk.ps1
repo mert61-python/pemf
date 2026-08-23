@@ -104,11 +104,26 @@ $destDir = Join-Path $GuiRoot "release_assets"
 if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
 $dest = Join-Path $destDir "PEMF_Vet_Mobil.apk"
 Copy-Item $apk $dest -Force
+
+# --- 3b. SÜRÜMLÜ KOPYA (site bu adı bekler) ---------------------------------
+# ⚠️ DENETİM 2026-08-23 (Y1): betik YALNIZ sürümsüz adı üretiyordu. Sürümsüz ad OTA/manifest
+# içindir; SİTE adı sürümden TÜRETİR (`config.ts::androidAsset` → PEMF_Vet_Mobil-<sürüm>.apk).
+# Sürümlü kopyayı "yayınlarken elle yap" adımına bırakmak iki kez 404'e yol açtı (2026-08-22'de
+# APK, aynı gün EXE). Kopya artık DERLEMENİN parçası: elle atlanacak bir adım kalmıyor.
+# Sürüm versions.json'dan okunur (tek kaynak; APK'nın kendi manifestiyle aynı olduğu
+# `tests/test_site_indirme_varligi_URETILDI.py` tarafından ayrıca doğrulanır).
+$surumler = Get-Content (Join-Path $GuiRoot "versions.json") -Raw | ConvertFrom-Json
+$mobilSurum = $surumler.mobile.name
+if (-not $mobilSurum) { Die "versions.json icinde mobile.name yok — surumlu kopya uretilemez" }
+$destSurumlu = Join-Path $destDir "PEMF_Vet_Mobil-$mobilSurum.apk"
+Copy-Item $apk $destSurumlu -Force
+
 $mb = [math]::Round((Get-Item $dest).Length/1MB,1)
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  APK HAZIR ($mb MB)" -ForegroundColor Green
 Write-Host "  $dest" -ForegroundColor White
+Write-Host "  $destSurumlu  (site bu adi indirir)" -ForegroundColor White
 Write-Host "============================================" -ForegroundColor Green
 
 # --- 4. İMZA DENETİMİ (tedarik zinciri) -------------------------------------

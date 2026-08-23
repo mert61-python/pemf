@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.19",
-  "tag": "client-app-v1.9.19",
+  "version": "1.9.20",
+  "tag": "client-app-v1.9.20",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.19/base.zip",
-      "sha256": "cb0b825e64f6b95e54f14e867d55c4b9f7e6d8097c379f8079a4279db04aa911",
-      "size": 1533349860,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.20/base.zip",
+      "sha256": "20aac12fa70514a6bc339d374b0ecfd92b4086d592fa17d15ce6eb55c841c6c1",
+      "size": 1533352527,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.19/base-app.zip",
-        "sha256": "9506287592a75555e8be9d4f100be16e183d7a06a734a64452e9cf8995d5ccbd",
-        "size": 71246943,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.20/base-app.zip",
+        "sha256": "7e63ec096932626a3c23863f78c3860fab77188e40c763a5f26727742ccd5969",
+        "size": 71249610,
         "kind": "zip"
       },
       "deps": {
@@ -68,30 +68,30 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.19/base.zip",
-    "sha256": "cb0b825e64f6b95e54f14e867d55c4b9f7e6d8097c379f8079a4279db04aa911",
-    "size": 1533349860,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.20/base.zip",
+    "sha256": "20aac12fa70514a6bc339d374b0ecfd92b4086d592fa17d15ce6eb55c841c6c1",
+    "size": 1533352527,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.34",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.34/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.34/PEMFVetClient-Setup.exe",
-    "sha256": "9bce6a7dcf324105ab0e8b52c46896e23d245cc9288b6c67c8fb79e58fa29817",
-    "size": 2965445,
+    "version": "1.9.35",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.35/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.35/PEMFVetClient-Setup.exe",
+    "sha256": "8d4abaa1f2f60788a463fe2389073125e1584b28be408c9e61e248514e6a4254",
+    "size": 2967970,
     "rollout": 100
   },
   "mobile": {
     "android": {
-      "version": "2.3.21",
-      "versionCode": 28,
+      "version": "2.3.22",
+      "versionCode": 29,
       "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMF_Vet_Mobil.apk",
-      "sha256": "f530a8c3626290275ca758db771d6ca330bfb348a29f450a029bf3f01967e248",
-      "size": 128427015,
-      "notes": "Bakim surumu: uygulama ici guncelleme akisi dogrulandi; islevsel degisiklik yok."
+      "sha256": "07c245457b0352a9f35073662228f3f28b0693b651a7e9ab17a2245e03a33813",
+      "size": 128428567,
+      "notes": "Surum uyarisi yanlis alarm veriyordu (duzeltildi); indirilen paket artik SHA256 ile dogrulaniyor; indirme adresi pinlendi."
     }
   }
 }

@@ -81,6 +81,11 @@ fn is_retriable(e: &net::NetError) -> bool {
         // varyant ve AÇIKÇA kalıcı. (Alttaki `_` zaten false döndürüyor; bu kol niyeti
         // belgeliyor ve varyant eklendiğinde sessizce yanlış tarafa düşmesini engelliyor.)
         net::NetError::PolicyLimit(_) => false,
+        // ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya hatası — ağ sorunu DEĞİL, yeniden denemeyle
+        // DÜZELMEZ (disk dolu dolu kalır, kilitli dosya kilitli kalır, izin yoksa yok). En kötü
+        // hâli tamamlanmış indirmenin `rename`inde düşmesiydi: 6 deneme × 1,19 GB = ~7 GB boşuna
+        // trafik, sonunda yine aynı hata. `PolicyLimit` ile aynı sınıf, bir katman aşağıda.
+        net::NetError::LocalIo(_) => false,
         // Malformed / NotHttps / HostNotAllowed → GÜVENLİK reddi, ASLA yeniden deneme.
         // Paused / Cancelled → kullanıcı kararı, yeniden deneme YANLIŞ olur.
         _ => false,
@@ -437,7 +442,8 @@ pub fn install_profiles(
         temizle_ve_ac(&deps_zip, &rt, &mut extract_budget, on, control)?;
         install::record_layer_sha(install_root, "deps", &l.deps.sha256);
         // İlk kurulumda disk boş → silinecek eski kök yok; aynı fonksiyon ikisini de doğru işler.
-        app_katmanini_degistir(&app_zip, install_root, &mut extract_budget, on, control)?;
+        // İlk kurulumda yedek YOKTUR (disk boş) — dönüş bilinçli olarak yok sayılır.
+        let _ = app_katmanini_degistir(&app_zip, install_root, &mut extract_budget, on, control)?;
         install::record_layer_sha(install_root, "app", &l.app.sha256);
     } else {
     let runtime_pkg = runtime_pkg.expect("katmansız yolda runtime paketi zorunlu");
@@ -488,6 +494,14 @@ pub fn install_profiles(
     for (name, pkg) in &model_pkgs {
         let model_zip = ensure_package(pkg, &cache, name, on, control)?;
         on(Progress::Extracting { what: (*name).clone() });
+        // ⚠️ DENETİM 2026-08-23 (C12): SHA KAYDI AÇILIMDAN ÖNCE GEÇERSİZ KILINIR.
+        // `repair()` doğrudan buraya düşer ve onarım senaryosunda kayıt ZATEN doğru sha'yı taşır.
+        // Açılım yarıda kesilirse (elektrik/iptal) diskte YARIM bir model ağacı kalır ama kayıt
+        // manifest sha'sıyla EŞLEŞMEYE devam eder → `pending_updates` o profili "güncel" sayar ve
+        // bir daha ASLA yenilemez; `kurulum_saglam_mi` yalnız runtime ağacına baktığı için client
+        // "Hazır!" der. Sonuç: AI analizi anlaşılmaz bir hatayla düşer ve kullanıcı sebebini
+        // hiçbir yerde göremez. Kardeş yol (`profilleri_yenile`) bunu zaten doğru yapıyordu.
+        install::record_model_sha(install_root, name, "");
         // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum
         // dosyalarını EZEMEZ (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
         extract::extract_zip_cancellable(&model_zip, install_root, &mut extract_budget, true, &|| {
@@ -540,13 +554,20 @@ fn temizle_ve_ac(
 /// (eski `.pyd`, eski web bundle parçaları) yaşamaya devam ederdi. Sınır diskteki
 /// `_app_roots.json`'dan okunur; okunamıyorsa SİLME YAPILMAZ (üzerine yaz) — bilinmeyen sınırla
 /// silmek, bayat dosya bırakmaktan tehlikelidir.
+/// Döner: **yedek GERÇEKTEN alındı mı**.
+///
+/// ⚠️ DENETİM 2026-08-23 (C10): eskiden `Result<(), _>` dönüyordu ve çağıran `app_yedegi`yi
+/// KOŞULSUZ `true` yapıyordu. Oysa yedek yalnız kök listesi doluyken alınır; `read_app_roots`
+/// dosya yok/bozuksa BOŞ döner (kasıtlı — bilinmeyen sınırla silmek tehlikelidir) ve fonksiyon
+/// yine `Ok` dönerdi. Kayıt gerçeği yansıtmayınca geri alma "başarılı" diyerek hiçbir şey
+/// yapmıyordu. Artık gerçek dönülür; çağıran yalan bir söz veremez.
 fn app_katmanini_degistir(
     zip: &Path,
     install_root: &Path,
     butce: &mut u64,
     on: &mut dyn FnMut(Progress),
     control: &dyn Fn() -> net::Control,
-) -> Result<(), FlowError> {
+) -> Result<bool, FlowError> {
     let rt = install::runtime_dir(install_root);
     let yedek = install::app_backup_dir(install_root);
     let roots = install::read_app_roots(install_root);
@@ -583,16 +604,20 @@ fn app_katmanini_degistir(
             fs::rename(&src, &dst)?;
         }
     }
+    let yedek_alindi = !roots.is_empty() && yedek.is_dir();
     on(Progress::Extracting { what: "app".into() });
     if let Err(e) = extract::extract_zip_cancellable(zip, &rt, butce, false, &|| {
         control() == net::Control::Cancel
     }) {
         // Açılım başarısız → eski app'i HEMEN geri koy (kurulum çalışır kalsın).
-        let b = GeriAlmaBilgisi { app_yedegi: true, ..Default::default() };
-        let _ = guncellemeyi_geri_al(install_root, &b);
+        // Yedek alınamadıysa geri konacak bir şey de yok; hata zaten yukarı taşınıyor.
+        if yedek_alindi {
+            let b = GeriAlmaBilgisi { app_yedegi: true, ..Default::default() };
+            let _ = guncellemeyi_geri_al(install_root, &b);
+        }
         return Err(e.into());
     }
-    Ok(())
+    Ok(yedek_alindi)
 }
 
 /// Bir güncellemenin GERİ ALINABİLİR durumu. `update_installed` döner; çağıran sağlık kapısından
@@ -601,8 +626,18 @@ fn app_katmanini_degistir(
 pub struct GeriAlmaBilgisi {
     /// deps yenilendi → tam ağaç takası yapıldı (`runtime.old` bekliyor).
     pub tam_takas: bool,
-    /// yalnız app yenilendi → eski app dosyaları `_app_yedek`te bekliyor.
+    /// yalnız app yenilendi → eski app dosyaları `_app_yedek`te bekliyor **ve geri konabilir**.
+    ///
+    /// ⚠️ C10: bu alan "app değişti" DEĞİL "geri alınabilir bir yedek VAR" demektir. İkisi eskiden
+    /// karıştırılıyordu: yedek alınamasa bile `true` yazılıyor ve geri alma hiçbir şey yapmadan
+    /// "başarılı" dönüyordu. "App değişti mi" sorusu `app_degisti` alanındadır.
     pub app_yedegi: bool,
+    /// App katmanı GERÇEKTEN değiştirildi mi (yedek alınabilmiş olsun ya da olmasın).
+    ///
+    /// `bir_sey_yapildi()` bunu kullanır: yedeksiz de olsa disk DEĞİŞMİŞTİR ve sağlık kapısı
+    /// koşmalıdır. Yalnız `app_yedegi`ye bakmak, yedeksiz güncellemeyi "hiçbir şey yapılmadı"
+    /// sayıp doğrulanmamış sürümü sessizce onaylardı.
+    pub app_degisti: bool,
     /// Onaylanınca kaydedilecek sha'lar (sağlık kapısı geçmeden kayıt yazılmaz).
     pub deps_sha: String,
     pub app_sha: String,
@@ -611,7 +646,10 @@ pub struct GeriAlmaBilgisi {
 
 impl GeriAlmaBilgisi {
     pub fn bir_sey_yapildi(&self) -> bool {
-        self.tam_takas || self.app_yedegi
+        // ⚠️ C10: `app_degisti` de sayılır. Yalnız `app_yedegi`ye bakmak, yedek alınamayan bir
+        // app güncellemesini "hiçbir şey yapılmadı" sayardı → sağlık kapısı hiç koşmaz ve
+        // doğrulanmamış sürüm sessizce onaylanırdı.
+        self.tam_takas || self.app_yedegi || self.app_degisti
     }
 }
 
@@ -677,11 +715,45 @@ fn atomik_takas(install_root: &Path) -> Result<(), FlowError> {
 ///   canlıya almak olurdu. Eskiye dönülür; güncelleme bir sonraki açılışta yeniden denenir
 ///   (paketler önbellekte, yeniden indirme YOK).
 ///
+/// Kesinti/geri-almadan kalan SAHNELEME ağaçlarını sil (denetim 2026-08-23, C9).
+///
+/// ⚠️ `runtime.old`'a ASLA DOKUNMAZ: o, sağlık kapısını geçmiş, çalıştığı KANITLANMIŞ sürümdür —
+/// yani geri dönüş yolunun kendisi. Burada silinenler yalnız doğrulanmamış sahne (`runtime.new`)
+/// ve teşhis kopyasıdır (`runtime.bozuk`); ikisi de bir sonraki güncellemede zaten silinecekti,
+/// sorun o silmenin disk kapısından SONRA gelmesiydi.
+fn olu_sahne_agaclarini_temizle(install_root: &Path) {
+    let _ = fs::remove_dir_all(install::runtime_new_dir(install_root));
+    let _ = fs::remove_dir_all(install_root.join("runtime.bozuk"));
+}
+
 /// Döner: kurtarma yapıldıysa `true`.
 pub fn yarim_takasi_kurtar(install_root: &Path) -> bool {
     let rt = install::runtime_dir(install_root);
     if rt.exists() {
-        return false; // takas ya hiç başlamadı ya da tamamlandı
+        // ⚠️ `runtime` VAR — ama bu "her şey yolunda" demek DEĞİL (denetim 2026-08-23):
+        //
+        // (C11) APP KATMANI takası app köklerini canlı ağaçtan `_app_yedek`e TAŞIYIP yeni app'i
+        // açıyor; arada kesinti olursa `runtime/` yerinde kalır ama İÇİ EKSİKTİR. Eski erken-dönüş
+        // bu hâli hiç görmüyordu: cihaz "kurulu değil" görünüyor, sağlam yedek yetim kalıyor ve
+        // kullanıcı ~1,46 GB deps'i yeniden indirmek zorunda kalıyordu — oysa çalışan sürüm
+        // diskte, bir `rename` uzaklıkta duruyor.
+        if !agac_yapisal_gecerli_mi(&rt) {
+            let yedek = install::app_backup_dir(install_root);
+            if yedek.is_dir() {
+                let b = GeriAlmaBilgisi { app_yedegi: true, ..Default::default() };
+                if guncellemeyi_geri_al(install_root, &b).is_ok() && agac_yapisal_gecerli_mi(&rt) {
+                    olu_sahne_agaclarini_temizle(install_root);
+                    return true;
+                }
+            }
+        }
+        // (C9) Sağlam kurulumda kurtarma YAPILMAZ (sözleşme korunur) — ama kesintiden kalan ölü
+        // sahne ağaçları burada toplanır. Aksi hâlde `update_installed` sırası yüzünden
+        // (önce `disk_kapisi`, sonra `temizle_ve_ac`) yetim `runtime.new` kapının istediği alanı
+        // işgal eder ve güncelleme KALICI olarak "Yetersiz disk alanı" ile reddedilebilir:
+        // artığı silecek olan şey güncellemenin kendisidir.
+        olu_sahne_agaclarini_temizle(install_root);
+        return false;
     }
     let eski = install::runtime_old_dir(install_root);
     if eski.is_dir() && agac_yapisal_gecerli_mi(&eski) && fs::rename(&eski, &rt).is_ok() {
@@ -747,7 +819,20 @@ pub fn guncellemeyi_geri_al(install_root: &Path, b: &GeriAlmaBilgisi) -> Result<
         }
     } else if b.app_yedegi {
         let yedek = install::app_backup_dir(install_root);
-        if yedek.is_dir() {
+        // ⚠️ DENETİM 2026-08-23 (C10): YEDEK YOKSA SESSİZCE BAŞARILI DÖNMEZ.
+        // `app_yedegi: true` eskiden koşulsuz set ediliyordu; `app_katmanini_degistir` ise yedeği
+        // yalnız kök listesi doluyken alır (`read_app_roots` dosya yok/bozuksa BOŞ döner — kasıtlı).
+        // Bu ikisi ayrışınca geri alma hiçbir şey yapmadan `Ok(())` dönüyordu ve kullanıcıya
+        // "eski sürüme dönüldü" deniyordu — oysa cihaz DOĞRULANMAMIŞ yeni sürümde kalıyordu.
+        // Artık kayıt de düzeltildi (yedek gerçekten alındıysa `true`), ama bu kapı ikinci kemer:
+        // yedek dizini yoksa çağıran GERÇEĞİ öğrenir ve operatöre söyleyebilir.
+        if !yedek.is_dir() {
+            return Err(FlowError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "app yedeği bulunamadı — geri alma YAPILAMADI (cihaz doğrulanmamış sürümde)",
+            )));
+        }
+        {
             // ⚠️ Geri koyma KÖK LİSTESİ üzerinden yürür, yedek dizininin üst seviyesi üzerinden
             // DEĞİL: kökler `PEMF_Backend/_internal/ai_hub` gibi İÇ İÇE yollardır ve üst seviye
             // girdisi (`PEMF_Backend`) taşınırsa tüm ağaç — deps dâhil — EZİLİRDİ.
@@ -823,11 +908,37 @@ pub struct UpdatePlan {
     /// ANINDA yapılabilir (yalnız açma); `false` ise paketler ARKA PLANDA indirilir ve kurulum
     /// bir SONRAKİ açılışa bırakılır — hayvanı masada bekleyen veteriner 45 dk indirmeye takılmaz.
     pub cached: bool,
+    /// Bu hedef daha önce kurulup SAĞLIK KAPISINDAN geçemedi ve deneme sınırı doldu (C2).
+    ///
+    /// `needed()` bundan ETKİLENMEZ: güncelleme hâlâ "gerekli"dir ve kullanıcıya bildirilir —
+    /// yalnız SESSİZ/otomatik kurulum durur. Elle "Onar" yolu açık kalır. Yeni bir sürüm
+    /// yayınlanınca (farklı sha → farklı hedef kimliği) sayaç sıfırlanır ve bayrak kendiliğinden
+    /// düşer, yani düzeltme yayını hemen uygulanır.
+    pub otomatik_durduruldu: bool,
+    /// Bu güncellemenin HEDEF KİMLİĞİ — deneme sayacının anahtarı (C2).
+    ///
+    /// ⚠️ Sürüm NUMARASI değil paket SHA'ları: aynı sürüm numarası altında farklı ikili
+    /// yayınlanabilir (`--clobber`) ve numaraya bağlanan bir sayaç düzeltme yayınını da bloklardı.
+    /// Sha değişince kimlik değişir → sayaç kendiliğinden sıfırlanır.
+    pub hedef: String,
 }
 
 impl UpdatePlan {
     pub fn needed(&self) -> bool {
         self.base || self.deps || self.app || !self.profiles.is_empty()
+    }
+}
+
+/// Geri alma anında çağrılır: bu hedefin deneme sayacını artırır (C2).
+///
+/// Ayrı bir yardımcı olmasının sebebi, `install::record_runtime_attempt`ın hedef kimliğini
+/// çağıranın hesaplamasını gerektirmesi — kimlik `pending_updates` ile AYNI kaynaktan gelmeli,
+/// yoksa sayaç hiçbir zaman eşleşmez ve koruma sessizce ölür.
+pub fn geri_almayi_kaydet(install_root: &Path, manifest_raw: &str) {
+    if let Ok(plan) = pending_updates(manifest_raw, install_root) {
+        if !plan.hedef.is_empty() {
+            install::record_runtime_attempt(install_root, &plan.hedef);
+        }
     }
 }
 
@@ -931,6 +1042,28 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
         }
     }
     plan.cached = hepsi;
+
+    // ⚠️ DENETİM 2026-08-23 (C2): GERİ ALMA DÖNGÜSÜ KIRICI. Bu hedef daha önce kurulup sağlık
+    // kapısından geçemediyse (ve sınır dolduysa) OTOMATİK kurulum durur. Aksi hâlde bozuk bir
+    // yayın her açılışta backend'i öldürüp ~1,19 GB açıp 180 sn bekletip geri alınıyordu ve tek
+    // çıkış yolu yayıncının `rollout: 0` yazmasıydı.
+    //
+    // ⚠️ NE DURMAZ: bildirim, geri çağırma uyarısı ve kullanıcının elle "Onar" demesi. Bayrak
+    // yalnız `otomatik_durduruldu` olarak taşınır; `needed()` DEĞİŞMEZ — bunu `needed()`e
+    // bağlamak arızayı görünmez kılardı, oysa kullanıcı cihazının eski sürümde takılı kaldığını
+    // BİLMELİ (`selfupdate_auto_allowed` ile birebir aynı sözleşme).
+    plan.hedef = if let Some(l) = manifest.layers_for_current_platform() {
+        format!("app:{}|deps:{}", l.app.sha256, l.deps.sha256)
+    } else if let Ok(p) = manifest.runtime_for_current_platform() {
+        format!("base:{}", p.sha256)
+    } else {
+        String::new()
+    };
+    // Kimlik çıkarılamadıysa (bilinmeyen platform) kapı UYGULANMAZ — bilinmeyeni engellemek,
+    // güncellemeyi hiç alamayan bir cihaz üretirdi.
+    plan.otomatik_durduruldu =
+        plan.needed() && !plan.hedef.is_empty() && !install::runtime_otomatik_izinli(install_root, &plan.hedef);
+
     Ok(plan)
 }
 
@@ -1068,17 +1201,25 @@ pub fn update_installed(
             };
         } else if let Some(az) = app_zip {
             // Yalnız app: eski app dosyalarını YEDEĞE TAŞI (silme!), sonra yenisini aç.
-            app_katmanini_degistir(&az, install_root, &mut extract_budget, on, control)?;
+            // ⚠️ C10: `app_yedegi` GERÇEĞİ yansıtır (koşulsuz `true` DEĞİL). `_app_roots.json`
+            // kayıp/bozuksa yedek alınamaz; o durumda geri alma sözü VERİLMEZ.
+            let yedek_alindi = app_katmanini_degistir(&az, install_root, &mut extract_budget, on, control)?;
             if !agac_yapisal_gecerli_mi(&install::runtime_dir(install_root)) {
-                let b = GeriAlmaBilgisi { app_yedegi: true, ..Default::default() };
-                let _ = guncellemeyi_geri_al(install_root, &b);
+                let b = GeriAlmaBilgisi { app_yedegi: yedek_alindi, ..Default::default() };
+                let geri_hata = guncellemeyi_geri_al(install_root, &b).err();
                 return Err(FlowError::Io(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "yeni uygulama katmanı eksik — eski sürüme dönüldü",
+                    match geri_hata {
+                        // Geri alma da yapılamadıysa operatöre BUNU söyle: cihaz doğrulanmamış
+                        // sürümde kaldı ve "Onar" gerekiyor. Sessizce "dönüldü" demek yalandır.
+                        Some(_) => "yeni uygulama katmanı eksik ve GERİ ALINAMADI (yedek yok) — cihaz doğrulanmamış sürümde; 'Onar' ile yeniden kurun",
+                        None => "yeni uygulama katmanı eksik — eski sürüme dönüldü",
+                    },
                 )));
             }
             geri = GeriAlmaBilgisi {
-                app_yedegi: true,
+                app_yedegi: yedek_alindi,
+                app_degisti: true,
                 app_sha: l.app.sha256.clone(),
                 ..Default::default()
             };
@@ -1330,6 +1471,56 @@ mod tests {
 
     /// DENETİM 2026-08-04: 4xx KALICIDIR — yeniden denemek kullanıcıyı ~22 sn boşuna bekletiyordu.
     /// Güvenlik reddi ve kullanıcı iptali de ASLA yeniden denenmemeli.
+    /// C10 — `_app_roots.json` YOKSA yedek alinamaz ve bu DURUM BILDIRILMELI.
+    ///
+    /// Kok neden buydu: fonksiyon `Ok(())` donuyordu ve cagiran `app_yedegi: true` yaziyordu.
+    /// Kayit gercegi yansitmayinca `guncellemeyi_geri_al` hicbir sey yapmadan "basarili" donuyor,
+    /// kullaniciya "eski surume donuldu" deniyor ama cihaz DOGRULANMAMIS surumde kaliyordu.
+    /// (Mutasyon turunda `Ok(true)` sabitine donmek HIC yakalanmadi — bu test o bosluk icin.)
+    #[test]
+    fn C10_kok_listesi_YOKKEN_yedek_alinmadigi_RAPOR_EDILIR() {
+        use std::io::Write as _;
+
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let rt = install::runtime_dir(root);
+        let kok = rt.join("PEMF_Backend");
+        fs::create_dir_all(kok.join("_internal").join("frontend").join("dist")).unwrap();
+        fs::write(kok.join(crate::platform::backend_exe_name()), b"ESKI-EXE").unwrap();
+        fs::write(kok.join("_internal").join("frontend").join("dist").join("index.html"), b"ESKI-WEB").unwrap();
+        // ⚠️ `_app_roots.json` BILEREK YOK (AV karantinasi / yarim onceki acilim / disk hatasi).
+
+        let zip_yolu = root.join("app.zip");
+        {
+            let f = fs::File::create(&zip_yolu).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let o: zip::write::FileOptions<'_, ()> =
+                zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            for (ad, icerik) in [
+                ("PEMF_Backend/PEMF_Backend.exe", &b"YENI-EXE"[..]),
+                ("PEMF_Backend/_internal/frontend/dist/index.html", &b"YENI-WEB"[..]),
+            ] {
+                z.start_file(ad, o).unwrap();
+                z.write_all(icerik).unwrap();
+            }
+            z.finish().unwrap();
+        }
+
+        let mut butce = 0u64;
+        let mut on = |_: Progress| {};
+        let yedek_alindi =
+            app_katmanini_degistir(&zip_yolu, root, &mut butce, &mut on, &|| net::Control::Continue).unwrap();
+
+        assert!(
+            !yedek_alindi,
+            "kok listesi YOKKEN 'yedek alindi' RAPOR EDILDI — cagiran geri alma sozu verir,              geri alma hicbir sey yapmaz ve kullaniciya 'eski surume donuldu' denir (yanlis guvence)"
+        );
+        assert!(
+            !install::app_backup_dir(root).is_dir(),
+            "onkosul: yedek dizini olusmamali (kok listesi bos)"
+        );
+    }
+
     #[test]
     fn yalniz_gercekten_gecici_hatalar_yeniden_denenir() {
         let st = |s: u16| net::NetError::HttpStatus { status: s, url: "https://x/y.zip".into() };
@@ -1357,6 +1548,23 @@ mod tests {
         assert!(!is_retriable(&net::NetError::Cancelled));
         // P2: politika iptalleri DETERMINISTIK — yeniden denemek 6x tam indirme demek.
         assert!(!is_retriable(&net::NetError::PolicyLimit("boyut".into())));
+        // ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya hatası da deterministiktir. En kötü hâli
+        // TAMAMLANMIŞ indirmenin `rename`inde düşmesiydi (AV / os error 32): 6 deneme boyunca
+        // her seferinde tam `.part` silinip 1,19 GB sıfırdan iniyordu.
+        assert!(
+            !is_retriable(&net::NetError::LocalIo("dosya taşınamadı".into())),
+            "yerel dosya hatasi GECICI sayildi — tek bir rename hatasi ~7 GB bosuna trafik uretir"
+        );
+        // KARŞI-KANIT: `Io` hâlâ GEÇİCİ olmalı — o kol gerçek AĞ okuma hatalarını taşıyor
+        // (`reader.read(...)?`). İkisini birden kalıcı yapmak, kopan bağlantıda yeniden denemeyi
+        // öldürür ve kararsız hatta kurulumu imkânsızlaştırırdı.
+        assert!(
+            is_retriable(&net::NetError::Io(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "baglanti sifirlandi"
+            ))),
+            "ag okuma hatasi KALICI sayildi — kararsiz hatta yeniden deneme olur"
+        );
     }
 
     /// DENETİM 2026-08-04: profil kaydı okunamaz + diskte MODEL VARSA onarım SESSİZCE yalnız
@@ -2252,7 +2460,9 @@ mod tests {
         // ── app katmanını değiştir (yedekle + aç) ────────────────────────────────────────────
         let mut butce = 0u64;
         let mut on = |_: Progress| {};
-        app_katmanini_degistir(&zip_yolu, root, &mut butce, &mut on, &|| net::Control::Continue).unwrap();
+        let yedek_alindi =
+            app_katmanini_degistir(&zip_yolu, root, &mut butce, &mut on, &|| net::Control::Continue).unwrap();
+        assert!(yedek_alindi, "kok listesi DOLUYKEN yedek alinmadi — geri alma yolu olur");
         assert_eq!(fs::read(kok.join(crate::platform::backend_exe_name())).unwrap(), b"YENI-EXE");
         assert!(kok.join("_internal").join("ai_hub").join("yeni.pyd").exists());
         assert!(

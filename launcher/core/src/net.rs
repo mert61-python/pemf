@@ -241,6 +241,19 @@ pub enum NetError {
     /// gigabaytlarca boşuna trafik ve dakikalarca donma). Bunlar yeniden denemeyle DÜZELMEZ.
     #[error("indirme politika sınırı: {0}")]
     PolicyLimit(String),
+    /// ⚠️ DENETİM 2026-08-23 (C8): YEREL dosya-sistemi hatası — `Io`dan AYRI tutulur.
+    ///
+    /// `download_to_file` içindeki yerel işlemler (`create_dir_all`, `File::create`, `write_all`,
+    /// ve özellikle son adımdaki `fs::rename`) `io::Error` üretiyor ve hepsi `Io`ya düşüyordu;
+    /// `flow::is_retriable` ise `Io`yu koşulsuz GEÇİCİ sayıyor. Sonuç: AV taraması ya da
+    /// "sharing violation" (os error 32) yüzünden düşen tek bir `rename`, `ensure_package`'ı 6
+    /// denemeye sokuyordu — ve her denemede TAMAMLANMIŞ `.part` silinip 1,19 GB'lık katman
+    /// SIFIRDAN iniyordu (klinik hattında ~7 GB boşuna trafik, dakikalarca donma, sonunda yine
+    /// aynı hata). Bunlar yeniden denemeyle DÜZELMEZ: disk dolu dolu kalır, kilit kilitli kalır.
+    ///
+    /// 2026-08-04'te `PolicyLimit` için kapatılan sınıfın aynısı, bir katman aşağıda.
+    #[error("yerel dosya hatası: {0}")]
+    LocalIo(String),
 }
 
 /// İndirme akış-kontrolü: her yığında kontrol edilir. `Continue` sürdürür, `Pause` `.part`'ı
@@ -340,7 +353,8 @@ pub fn download_to_file(
     // daha gevşek `validate_url` ile doğrulanır — GitHub kendi CDN'ine yönlendirir.
     validate_download_source(url)?;
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)
+            .map_err(|e| NetError::LocalIo(format!("{} oluşturulamadı: {e}", parent.display())))?;
     }
     // ⚠️ DENETİM 2026-08-04 (#95): `.part`'ın HANGİ İÇERİĞE ait olduğu hiçbir yerde kayıtlı
     // değildi ve adı yalnız URL'nin son parçasından türüyordu — bu projede SABİTTİR: manifest
@@ -452,10 +466,16 @@ pub fn download_to_file(
         .min(MAX_DOWNLOAD_BYTES);
 
     // resuming → APPEND (mevcut baytları koru); değilse create (truncate = baştan).
+    // ⚠️ YEREL hatalar `LocalIo` (denetim 2026-08-23, C8): dosyayı açamamak ağ sorunu DEĞİLDİR;
+    // `Io` olarak dönerse `flow::is_retriable` onu geçici sayar ve GB'lar boşuna yeniden iner.
     let mut out = if resuming {
-        fs::OpenOptions::new().append(true).open(&part)?
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&part)
+            .map_err(|e| NetError::LocalIo(format!("{} açılamadı: {e}", part.display())))?
     } else {
-        fs::File::create(&part)?
+        fs::File::create(&part)
+            .map_err(|e| NetError::LocalIo(format!("{} oluşturulamadı: {e}", part.display())))?
     };
     let mut reader = resp.into_reader();
     let mut buf = vec![0u8; 256 * 1024];
@@ -494,12 +514,20 @@ pub fn download_to_file(
                 "indirme boyut sınırını aştı ({done} > {ceiling} bayt) — iptal edildi"
             )));
         }
-        out.write_all(&buf[..n])?;
+        // ⚠️ Diske yazamamak (disk dolu / izin / AV) yeniden denemeyle DÜZELMEZ → LocalIo.
+        out.write_all(&buf[..n])
+            .map_err(|e| NetError::LocalIo(format!("diske yazılamadı: {e}")))?;
         progress(done, total);
     }
-    out.flush()?;
+    out.flush()
+        .map_err(|e| NetError::LocalIo(format!("diske yazılamadı (flush): {e}")))?;
     drop(out);
-    fs::rename(&part, dest)?;
+    // ⚠️ EN KRİTİK NOKTA: buraya gelindiğinde indirme TAMAMLANMIŞTIR. `rename` düşerse (AV
+    // taraması, os error 32 sharing violation) eskiden `Io` dönüyordu → 6 yeniden deneme → her
+    // denemede tamamlanmış `.part` SİLİNİP 1,19 GB sıfırdan iniyordu. Artık kalıcı hata:
+    // tamamlanmış baytlar korunur ve kullanıcı gerçek sebebi görür.
+    fs::rename(&part, dest)
+        .map_err(|e| NetError::LocalIo(format!("{} taşınamadı: {e}", dest.display())))?;
     Ok(done)
 }
 

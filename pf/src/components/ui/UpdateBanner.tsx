@@ -15,10 +15,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
 import { colors, spacing, rf, rs } from "@/theme/tokens";
+import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { checkMobileUpdate, type MobileUpdate } from "@/services/updates";
 
 export function UpdateBanner() {
   const [mobile, setMobile] = useState<MobileUpdate>({ available: false });
+  // ⚠️ HASTA GÜVENLİĞİ (denetim 2026-08-23, M5): bu bant hiçbir seans/bobin kapısı tanımıyordu.
+  // Kardeş bantlarda kapı VARDI ve aynı gün ortak kancaya bağlandı; bu üçüncü yüzey geride
+  // kalmıştı — bobin hastanın üzerinde ENERJİLİYKEN çizilebiliyor ve dokunmak operatörü ACİL
+  // DURDUR'un bulunduğu uygulamadan TARAYICIYA çıkarıyordu.
+  const donanimCalisiyor = useDonanimCalisiyor();
 
   const refresh = useCallback(async () => {
     try { setMobile(await checkMobileUpdate()); } catch { /* ignore */ }
@@ -34,7 +40,7 @@ export function UpdateBanner() {
     if (mobile.apkUrl) Linking.openURL(mobile.apkUrl).catch(() => {});
   }, [mobile.apkUrl]);
 
-  if (!mobile.available) return null;
+  if (!mobile.available || donanimCalisiyor) return null;
 
   return (
     <View style={styles.wrap}>

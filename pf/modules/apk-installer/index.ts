@@ -14,6 +14,7 @@ interface ApkInstallerNative {
   kurulumIzniVarMi(): boolean;
   izinEkraniniAc(): Promise<boolean>;
   apkKur(yol: string): Promise<boolean>;
+  sha256(yol: string): Promise<string>;
 }
 
 const yerli =
@@ -51,5 +52,20 @@ export async function apkKur(dosyaUri: string): Promise<boolean> {
     return yerli ? await yerli.apkKur(dosyaUri) : false;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Dosyanın SHA-256 özeti (küçük harf hex). Modül yoksa ya da hata olursa BOŞ dize döner.
+ *
+ * ⚠️ Boş dönüş "doğrulama YAPILAMADI" demektir, "doğrulandı" DEĞİL. Çağıran bunu ayırt etmeli:
+ * hash alınamıyorsa (eski APK'da modül yok) eski davranış sürer — güncellemeyi hash alınamadı
+ * diye engellemek, sahadaki eski sürümleri kalıcı olarak güncellenemez yapardı.
+ */
+export async function dosyaSha256(dosyaUri: string): Promise<string> {
+  try {
+    return yerli ? await yerli.sha256(dosyaUri) : "";
+  } catch {
+    return "";
   }
 }

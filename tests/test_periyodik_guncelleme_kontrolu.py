@@ -174,3 +174,117 @@ def test_ayni_bildirim_TEKRAR_TEKRAR_basilmaz(ui):
     )
     # Her `notice(` çağrısı ya bir durum kapısının içinde ya da indirme sonucu geri-çağrısında olmalı.
     assert "if (true)" not in g, "durum kapısı sabit `true` ile devre dışı bırakılmış"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ÇEVRİMDIŞI AÇILIŞ — turun HİÇ başlamadığı yol (denetim 2026-08-23, bulgu C3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _bootnetwork(ui: str) -> str:
+    m = re.search(r"async function bootNetwork\(env\) \{(.*?)\n      \}", ui, re.S)
+    assert m, "bootNetwork bulunamadı"
+    return m.group(1)
+
+
+def test_KRITIK_CEVRIMDISI_acilista_da_periyodik_tur_BASLAR(ui):
+    """🔴 2026-08-16 düzeltmesinin AÇIK KALAN YARISI.
+
+    `startUpdateWatch()` yalnız `bootNetwork`'ün BAŞARILI dalında (manifest geldikten sonra)
+    çağrılıyordu. Çevrimdışı dal ise ondan ÖNCE `return` ediyor. Yani klinik PC'si açılış anında
+    internetsizse (router dalgalanması yeterli) `guncellemeTimer` HİÇ kurulmuyor ve **ağ geri
+    gelse bile** makine açık kaldığı sürece manifest bir daha çekilmiyordu: ne arka plan
+    ön-indirmesi, ne bildirim, ne de `min_supported_version` GERİ ÇAĞIRMASI o cihaza ulaşıyordu.
+
+    Hep-açık + açılışta-çevrimdışı, klinik makinesinin EN OLASI hâlidir — 2026-08-16'da kapatılan
+    boşluğun tam olarak aynısı, bir dal ötede.
+
+    ⚠️ Turu çevrimdışı dalda başlatmak güvenlidir: `recheckUpdates` ağ hatasını zaten sessizce
+    yutuyor (`catch (_) { return; }`) ve `busy || !baseInstalled` kapısı duruyor.
+    """
+    g = _bootnetwork(ui)
+    kesme = g.find("startKapisiAc();")
+    assert kesme > 0, "çevrimdışı dal bulunamadı (startKapisiAc yok)"
+    cevrimdisi_dal = g[: g.find("setOffline(false)")]
+    assert "startUpdateWatch()" in cevrimdisi_dal, (
+        "çevrimdışı açılışta periyodik güncelleme turu HİÇ başlatılmıyor → ağ geri gelse bile "
+        "hep-açık makine manifesti bir daha çekmez (geri çağırma dahil ulaşmaz)"
+    )
+
+
+def test_cevrimdisi_dal_yine_de_ERKEN_DONER(ui):
+    """Karşı-kanıt: turu eklemek çevrimdışı dalın akışını DEĞİŞTİRMEMELİ.
+
+    Çevrimdışıyken manifest yoktur; dal `return` etmeye devam etmeli, yoksa aşağıdaki
+    `manifestRaw = info.raw` tanımsız `info` üzerinde patlar.
+    """
+    g = _bootnetwork(ui)
+    cevrimdisi_dal = g[: g.find("setOffline(false)")]
+    assert "return;" in cevrimdisi_dal, "çevrimdışı dal erken dönüşü kaybetmiş"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAUNCHER GÜNCELLEMESİ de duyurulur (denetim 2026-08-23, bulgular C7 + C4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _tryselfupdate(ui: str) -> str:
+    m = re.search(r"async function trySelfUpdate\(u\)\s*\{(.*?)\n      \}", ui, re.S)
+    assert m, "trySelfUpdate bulunamadı"
+    return m.group(1)
+
+
+def test_KRITIK_periyodik_tur_LAUNCHER_guncellemesini_de_gorur(ui):
+    """🔴 C7 — 6 saatlik tur YALNIZ runtime planına bakıyordu.
+
+    `fetch_profiles` `update` alanını da döndürüyor (ve o alan YALNIZ gerçekten yeni bir launcher
+    sürümü varsa dolar) ama `recheckUpdates` onu HİÇ okumuyordu. `trySelfUpdate` ise yalnız
+    `bootNetwork` içinde, sayfa yüklenirken BİR KEZ koşuyor. Sonuç: haftalarca kapatılmayan klinik
+    makinesinde yeni launcher yayını (rollout %100 olsa bile) ne uygulanır ne de BİLDİRİLİR —
+    runtime için 2026-08-16'da kapatılan boşluğun launcher katmanındaki aynısı.
+
+    ⚠️ ÇÖZÜM KURULUM DEĞİL BİLDİRİM: turun kendi sözleşmesi "güncelleme UYGULANMAZ; yalnız indirir
+    ve bildirir" diyor (kurulum backend'i durdurur ve süren seansı keserdi). Bu yüzden burada
+    aranan `trySelfUpdate` çağrısı DEĞİL, kullanıcıya bir bildirimdir.
+    """
+    g = _recheck(ui)
+    assert "info.update" in g, (
+        "periyodik tur launcher güncellemesini HİÇ değerlendirmiyor — hep-açık klinik makinesi "
+        "yeni launcher yayınını ne alır ne duyar (bulgu C7)"
+    )
+    # ⚠️ Pencereyle değil DOĞRUDAN çağrıyla ölç: uzun açıklama yorumları ilk `info.update`
+    # geçişini kaplıyor ve sabit genişlikli bir pencere yorumun içinde kalıyordu (ilk yazımda
+    # doğru kodu yanlış-KIRMIZI gösterdi).
+    assert "luReady" in g, "launcher güncellemesi görülüyor ama kullanıcıya SÖYLENMİYOR (bildirim metni çağrılmıyor)"
+    assert re.search(r"if\s*\(info\.update", g), "bildirim gerçek bir koşula bağlı değil"
+    # ⚠️ Kurulum YAPILMAMALI: tur sırasında yeniden başlatmak süren seansı keserdi.
+    # ⚠️ ÇAĞRI biçimini ara, kelimeyi değil: açıklama yorumunda fonksiyonun ADI geçebilir
+    # (ve geçiyor — ilk yazımda kendi yorumuma takıldı).
+    assert "trySelfUpdate(" not in g, (
+        "periyodik tur launcher KURULUMUNU tetikliyor — uygulama seans ortasında yeniden başlar "
+        "(turun kendi sözleşmesi bunu yasaklıyor)"
+    )
+
+
+def test_KRITIK_otomatik_kurulum_kapaliyken_SESSIZ_kalinmaz(ui):
+    """C4 — `auto === false` dalı hiçbir bildirim üretmeden `return false` yapıyordu.
+
+    Oysa Rust tarafının yorumları bunun aksini iddia ediyor (`main.rs`: "`false` ise UI SESSİZ
+    kurulumu ATLAR ama bildirimi gösterir"; `install.rs`: "bildirim kalır ama sessiz kurulum
+    DURUR"). Gerçekte hiçbir yerde bildirim yoktu: deneme sınırı dolduğunda ya da rollout dilimi
+    açılmamışken cihaz launcher güncellemesini bir daha ASLA otomatik almıyor ve kullanıcı bunu
+    hiçbir yerden öğrenemiyordu — üstelik güncelleme zincirini YÖNETEN bileşen o.
+    """
+    g = _tryselfupdate(ui)
+    i = g.find("u.auto === false")
+    assert i > 0, "auto=false dalı bulunamadı"
+    # Aynı gerekçe: pencere yerine dalın SONUNA kadar bak (yorumlar pencereyi yutuyordu).
+    dal = g[i : i + 900]
+    assert "luReady" in dal, (
+        "otomatik kurulum kapalıyken kullanıcıya HİÇBİR ŞEY söylenmiyor — klinik, güncelleme "
+        "zincirini yöneten bileşenin eski sürümde çakılı kaldığını öğrenemez (bulgu C4)"
+    )
+
+
+def test_launcher_bildirim_metni_IKI_DILDE(ui):
+    assert ui.count("luReady:") == 2, "launcher güncelleme bildirimi iki dilde tanımlı değil"

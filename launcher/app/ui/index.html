@@ -661,6 +661,8 @@
           rtBgDone: "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
           rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
           rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
+          luReady: (v) => `PEMF Vet Client ${v} yayınlandı — uygulamayı kapatıp açtığınızda kurulacak.`,
+          rtBlocked: "Yeni sürüm kurulmayı denedi ama cihazda başlayamadı; güvenlik için eski sürüme dönüldü. Otomatik deneme durduruldu — \"Onar\" ile yeniden deneyebilir ya da bir sonraki sürümü bekleyebilirsiniz.",
           startChecking: "Güncelleme kontrol ediliyor…",
           // DENETİM 2026-08-17: başarısız self-update ekranı "Client güncelleniyor…"da hapsediyordu
           // ve başarı ile başarısızlık ayırt edilemiyordu. Nötr BİLGİ notu (kırmızı hata değil):
@@ -739,6 +741,8 @@
           rtBgDone: "New version downloaded — it will be installed on the next launch.",
           rtBgFail: "Background download did not finish — it will resume on the next launch.",
           rtReady: "Update ready — it will be installed when you close and reopen the app.",
+          luReady: (v) => `PEMF Vet Client ${v} is available — it will be installed when you close and reopen the app.`,
+          rtBlocked: "The new version failed to start on this device, so the previous one was restored. Automatic retries are paused — use \"Repair\" to try again, or wait for the next release.",
           startChecking: "Checking for updates…",
           selfUpdateFailed: "Launcher update could not be completed — the app is opening normally. It will be retried on the next launch.",
           rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
@@ -1068,6 +1072,21 @@
         catch (_) { return; }
         if (!info || !info.raw) return;
         manifestRaw = info.raw;
+
+        // ── LAUNCHER GÜNCELLEMESİ (denetim 2026-08-23, C7) ────────────────────────────────
+        // `info.update` YALNIZ gerçekten yeni bir launcher sürümü varsa dolar (Rust tarafı
+        // `is_newer` ile karar verir). Bu tur eskiden yalnız runtime planına bakıyordu;
+        // `trySelfUpdate` ise yalnız `bootNetwork` içinde, sayfa yüklenirken BİR KEZ koşuyor.
+        // Sonuç: haftalarca kapatılmayan klinik makinesi yeni launcher yayınını ne alıyor ne de
+        // duyuyordu — runtime için 2026-08-16'da kapatılan boşluğun launcher katmanındaki ikizi.
+        //
+        // ⚠️ BURADA KURULUM YAPILMAZ: kurulum uygulamayı yeniden başlatır ve süren bir seansı
+        // keserdi (turun kendi sözleşmesi). Yalnız haber verilir; kurulum kullanıcı uygulamayı
+        // kapatıp açtığında — zaten güvenli olan anda — yapılır.
+        if (info.update && info.update.version && sonBildirim !== "launcher") {
+          sonBildirim = "launcher";
+          notice(t().luReady(info.update.version));
+        }
 
         let plan;
         try { plan = await invoke("check_runtime_update", { manifestRaw }); }
@@ -1615,6 +1634,19 @@
         catch (_) { return false; }                       // eski launcher / bozuk manifest → boot sürsün
         if (!plan || !plan.needed) return false;
 
+        // ── DÖNGÜ KIRICI (denetim 2026-08-23, C2) ─────────────────────────────────────────
+        // Bu sürüm daha önce kuruldu ve backend BAŞLAYAMADI (sağlık kapısı düştü) → geri alındı.
+        // Sınır dolduysa otomatik kurulumu TEKRARLAMA: aksi hâlde her açılışta backend öldürülür,
+        // ~1,19 GB açılır, 180 sn boşuna beklenir ve yine geri alınır — klinik her açılışta
+        // dakikalarca bloklanırdı.
+        // ⚠️ SUSMUYORUZ: kullanıcı cihazının eski sürümde takılı kaldığını BİLMELİ ve "Onar" ile
+        // kendisi zorlayabilmeli. Yeni bir sürüm yayınlanınca (farklı sha) bayrak kendiliğinden
+        // düşer ve düzeltme normal yoldan uygulanır.
+        if (plan.otomatik_durduruldu) {
+          notice(t().rtBlocked);
+          return false;
+        }
+
         // ── ARKA PLAN İNDİRME (2026-08-08 sahip kararı) ────────────────────────────────────
         // Paketler henüz inmemişse KULLANICIYI BEKLETME: hayvanı masada bekleyen veteriner
         // uygulamayı açtığında 45 dakikalık indirmeye takılmamalı. Sessizce indir, kurulumu
@@ -1773,7 +1805,15 @@
         // tutar. Manifest sürümü ile paketin gerçek sürümü ayrışırsa kurulum "başarılı" olur ama
         // sürüm değişmez → her açılışta yeniden denenirdi. auto=false → SESSİZ kurulumu ATLA,
         // normal boot sürsün (bildirim ekranda kalır, kullanıcı elle indirebilir).
-        if (u.auto === false) return false;
+        if (u.auto === false) {
+          // ⚠️ DENETİM 2026-08-23 (C4): burada SESSİZCE dönülüyordu. Rust tarafının yorumları
+          // ("bildirim kalır ama sessiz kurulum DURUR") gerçeği yansıtmıyordu: hiçbir yerde
+          // bildirim yoktu. Deneme sınırı dolduğunda ya da rollout dilimi henüz açılmamışken
+          // cihaz launcher güncellemesini bir daha otomatik almaz ve kullanıcı bunu HİÇBİR
+          // yerden öğrenemezdi — üstelik güncelleme zincirini YÖNETEN bileşen odur.
+          if (u.version) notice(t().luReady(u.version));
+          return false;
+        }
         // ⚠️ DENETİM 2026-08-17 — EKRAN DEVRALINIYOR AMA GERİ ALINMIYORDU.
         // Aşağıdaki `catch` yalnız `stopPolling(); return false;` yapıyordu; `bootNetwork`'ün de
         // hiçbir dalı telafi etmiyordu. Sonuç: pencere `s-install`de, "indirilip kuruluyor —
@@ -1983,6 +2023,12 @@
           // ÇEVRİMDIŞI: güncelleme kontrolü YAPILAMAZ → beklemeye gerek yok, Başlat AÇILIR
           // (backend yereldir, internet gerektirmez).
           startKapisiAc();
+          // ⚠️ TUR BURADA DA BAŞLAR (denetim 2026-08-23): aksi hâlde açılış anında internetsiz
+          // olan makine, ağ geri gelse bile açık kaldığı sürece manifesti BİR DAHA çekmezdi —
+          // ne ön-indirme, ne bildirim, ne de `min_supported_version` GERİ ÇAĞIRMASI ulaşırdı.
+          // (2026-08-16'da kapatılan "hep-açık makine güncelleme almıyor" boşluğunun ikiz dalı.)
+          // Güvenli: `recheckUpdates` ağ hatasını sessizce yutar ve `busy || !baseInstalled` kapılı.
+          startUpdateWatch();
           if (curScreen() === "s-ready") notice(t().offlineReady);
           else if (curScreen() === "s-select") notice(t().offlineSelect, () => bootNetwork(env));
           return;

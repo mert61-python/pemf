@@ -147,3 +147,116 @@ fn hicbir_sey_YOKKEN_sessizce_gecer() {
     let d = tempfile::tempdir().unwrap();
     assert!(!flow::yarim_takasi_kurtar(d.path()));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// DENETİM 2026-08-23 — kurtarmanın GÖRMEDİĞİ iki kesinti (C9, C11)
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// C9 — Kesintiden kalan `runtime.new`, DİSK KAPISININ istediği alanı işgal ediyor.
+///
+/// `update_installed` sırası: önce `disk_kapisi`, SONRA `temizle_ve_ac` (o da `runtime.new`i
+/// siler). Kapı `?` ile erken döndüğü için o silme HİÇ çalışmaz. `yarim_takasi_kurtar` ise
+/// `runtime` sağlam olduğu için ilk satırda `false` döner ve ölü ağaca DOKUNMAZ; ölü-önbellek
+/// temizliği yalnız `cache/` içine bakar. Sonuç: ~1,19 GB'lık yetim ağaç diskte kalır ve
+/// güncelleme "Yetersiz disk alanı" ile KALICI olarak reddedilebilir — artığı silecek olan şey
+/// güncellemenin kendisidir.
+#[test]
+fn KRITIK_kesintiden_kalan_runtime_new_ACILISTA_temizlenir() {
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    runtime_kur(&install::runtime_dir(kok), "CALISAN");
+    runtime_kur(&install::runtime_new_dir(kok), "YARIM-KALAN");
+    fs::create_dir_all(kok.join("runtime.bozuk").join("PEMF_Backend")).unwrap();
+
+    let kurtarildi = flow::yarim_takasi_kurtar(kok);
+
+    assert!(!kurtarildi, "calisan kurulum VARKEN kurtarma yapilmamali (mevcut sozlesme)");
+    assert_eq!(imza_oku(&install::runtime_dir(kok)), "CALISAN", "calisan surum bozuldu");
+    assert!(
+        !install::runtime_new_dir(kok).exists(),
+        "kesintiden kalan runtime.new diskte BIRAKILDI — bir sonraki guncelleme disk kapisinda \
+         kalici olarak reddedilebilir (artigi silecek olan sey guncellemenin kendisi)"
+    );
+    assert!(
+        !kok.join("runtime.bozuk").exists(),
+        "runtime.bozuk teshis kopyasi diskte birakildi (geri donus yolu DEGIL)"
+    );
+}
+
+/// KARŞI-KANIT (C9): temizlik `runtime.old`a ASLA dokunmaz — o son bilinen ÇALIŞAN sürümdür.
+#[test]
+fn KARSIT_KANIT_runtime_old_temizlikte_KORUNUR() {
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    runtime_kur(&install::runtime_dir(kok), "CALISAN");
+    runtime_kur(&install::runtime_old_dir(kok), "GERI-DONUS-YOLU");
+
+    flow::yarim_takasi_kurtar(kok);
+
+    assert_eq!(
+        imza_oku(&install::runtime_old_dir(kok)),
+        "GERI-DONUS-YOLU",
+        "runtime.old SILINDI — saglik kapisi duserse geri donulecek surum yok olur"
+    );
+}
+
+/// C11 — APP KATMANI takasının ortasında kapanma kurtarılmıyor.
+///
+/// `app_katmanini_degistir` app köklerini (exe + `_internal/frontend`) canlı ağaçtan `_app_yedek`e
+/// TAŞIR, sonra yeni app'i açar. Arada kesinti olursa `runtime/` YERİNDE kalır ama içi eksiktir →
+/// `yarim_takasi_kurtar` `rt.exists()` yüzünden hemen `false` döner ve sağlam yedek YETİM kalır.
+/// Kullanıcı "kurulu değil" ekranı görür ve ~1,46 GB deps'i yeniden indirmek zorunda kalır.
+#[test]
+fn KRITIK_APP_katmani_takasinin_ortasinda_kapanma_KURTARILIR() {
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    let rt = install::runtime_dir(kok);
+    let yedek = install::app_backup_dir(kok);
+
+    // Kesinti anı: app kökleri yedeğe TAŞINDI, yeni app HENÜZ açılmadı.
+    //  · runtime/ var ama YAPISAL OLARAK GEÇERSİZ (exe + frontend yok, deps yerinde)
+    //  · _app_yedek/ sağlam app'i ve sınır dosyasını taşıyor
+    fs::create_dir_all(rt.join("PEMF_Backend").join("_internal").join("ai_hub")).unwrap();
+    runtime_kur(&yedek, "CALISAN-APP");
+    fs::write(
+        yedek.join("PEMF_Backend").join("_app_roots.json"),
+        format!(
+            r#"{{"roots":["PEMF_Backend/{}","PEMF_Backend/_internal/frontend"]}}"#,
+            exe_adi()
+        ),
+    )
+    .unwrap();
+    // Yapisal gecerlilik = exe + frontend/dist/index.html varligi (flow::agac_yapisal_gecerli_mi
+    // ozel bir yardimci; test onu cagirmak icin gorunurlugunu DEGISTIRMEZ, ayni sarti olcer).
+    assert!(!rt.join("PEMF_Backend").join(exe_adi()).exists(), "senaryo kurulumu hatali: exe var");
+
+    let kurtarildi = flow::yarim_takasi_kurtar(kok);
+
+    assert!(
+        kurtarildi,
+        "app katmani takasinin ortasinda kesilen kurulum KURTARILMADI — cihaz 'kurulu degil' \
+         gorunur ve saglam _app_yedek yetim kalir (~1,46 GB yeniden indirme)"
+    );
+    assert!(rt.join("PEMF_Backend").join(exe_adi()).exists(), "kurtarma sonrasi exe yok");
+    assert!(
+        rt.join("PEMF_Backend").join("_internal").join("frontend").join("dist").join("index.html").exists(),
+        "kurtarma sonrasi frontend yok"
+    );
+    assert_eq!(imza_oku(&rt), "CALISAN-APP", "eski calisan app geri konmadi");
+    assert!(!yedek.exists(), "kurtarma sonrasi _app_yedek temizlenmedi");
+}
+
+/// KARŞI-KANIT (C11): SAĞLAM bir kuruluma dokunulmaz — kurtarma aşırı genişlemesin.
+#[test]
+fn KARSIT_KANIT_saglam_kurulum_APP_kurtarmasindan_ETKILENMEZ() {
+    let d = tempfile::tempdir().unwrap();
+    let kok = d.path();
+    runtime_kur(&install::runtime_dir(kok), "SAGLAM");
+    // Eski bir yedek artığı dursa bile sağlam ağaç geri alınmamalı:
+    runtime_kur(&install::app_backup_dir(kok), "ESKI-YEDEK");
+
+    let kurtarildi = flow::yarim_takasi_kurtar(kok);
+
+    assert!(!kurtarildi, "saglam kurulumda kurtarma calisti — calisan surum eskiye DONDURULDU");
+    assert_eq!(imza_oku(&install::runtime_dir(kok)), "SAGLAM", "saglam agac degistirildi");
+}

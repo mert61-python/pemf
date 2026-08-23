@@ -142,23 +142,39 @@ def test_buildId_yokken_header_EKLENMEZ(client):
 
 def test_KRITIK_CHANGELOG_guncel_surumleri_ICERIR():
     """Sessiz otomatik güncellenen bir cihazda "ne değişti" cevapsız kalmamalı: sürüm
-    yükseltmek CHANGELOG'a dokunmayı ZORUNLU kılar."""
+    yükseltmek CHANGELOG'a dokunmayı ZORUNLU kılar.
+
+    ⚠️ SAĞLAMLAŞTIRILDI (2026-08-23): kapı eskiden ham `s not in metin` yapıyordu, yani sürüm
+    dizesinin dosyanın HERHANGİ bir yerinde geçmesi yeterliydi. Bu YANLIŞ-YEŞİL üretiyor ve
+    ölçülerek yakalandı: backend 1.9.20'ye çıkarıldığında kapı GEÇTİ — çünkü "1.9.20" CHANGELOG'da
+    2026-08-11 tarihli bir **launcher** sürümü olarak zaten geçiyordu. Yani app 1.9.20'nin kaydı
+    hiç yazılmasa da kapı yeşil kalırdı; koruma tam da korumayı bıraktığı anda görünmez oluyordu.
+    Sürüm numaraları kanallar arasında tekrar ettiği için (app 1.9.x ve launcher 1.9.x aynı
+    aralıkta) bu kaçınılmazdı.
+
+    Doğru ölçü: sürüm KENDİ KANALININ başlığında geçmeli — `## app 1.9.20 — …`,
+    `## launcher 1.9.35 — …`, `## mobile 2.3.22 — …`. Birleşik başlıklar da geçerlidir
+    (`## app 1.9.9 · launcher 1.9.20 — …`).
+    """
     ch = KOK / "CHANGELOG.md"
     assert ch.exists(), "CHANGELOG.md yok"
     metin = ch.read_text(encoding="utf-8")
     v = json.loads((KOK / "versions.json").read_text(encoding="utf-8"))
+    # versions.json anahtarı → CHANGELOG başlığındaki kanal adı.
+    kanallar = (
+        ("launcher", "launcher", v["launcher"]),
+        ("mobile", "mobile", v["mobile"]["name"]),
+        ("backend", "app", v["backend"]),
+    )
     eksik = [
-        f"{ad}={s}"
-        for ad, s in (
-            ("launcher", v["launcher"]),
-            ("mobile", v["mobile"]["name"]),
-            ("backend", v["backend"]),
-        )
-        if s not in metin
+        f"{ad}={surum} (aranan: '## … {kanal} {surum}')"
+        for ad, kanal, surum in kanallar
+        if not re.search(rf"^##[^\n]*\b{kanal}\s+{re.escape(surum)}\b", metin, re.M)
     ]
     assert not eksik, (
-        f"versions.json'daki surum(ler) CHANGELOG'da gecmiyor: {eksik} — "
-        "surum yukseltildiyse degisiklik kaydi da yazilmali."
+        f"versions.json'daki surum(ler) CHANGELOG'da KENDI KANALININ basligiyla gecmiyor: {eksik}. "
+        "Surum yukseltildiyse degisiklik kaydi da yazilmali. (Dosyanin baska bir yerinde ayni "
+        "sayinin gecmesi YETMEZ — surum numaralari kanallar arasinda tekrar ediyor.)"
     )
 
 

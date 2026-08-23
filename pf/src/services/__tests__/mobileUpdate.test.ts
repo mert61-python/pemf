@@ -20,6 +20,9 @@ jest.mock("../../../modules/apk-installer", () => ({
   kurulumIzniVarMi: () => mockIzinVarMi(),
   izinEkraniniAc: () => mockIzinEkrani(),
   apkKuruculVarMi: () => true,
+  // ⚠️ Yerel modul YOKMUS gibi bos dize doner (eski APK davranisi): akis SURMELI.
+  // Gercek dogrulama vakalari `sha256Hesapla` enjeksiyonuyla ayri testlerde olculuyor.
+  dosyaSha256: jest.fn(async () => ""),
 }));
 
 const mockPaylas = jest.fn();
@@ -78,9 +81,12 @@ import {
   type MobilSurum,
 } from "../mobileUpdate";
 
+// ⚠️ URL GERÇEK YAYIN YOLUNU taşımalı (2026-08-23): `guncellemeVarMi` artık kaynağı pinliyor
+// (`kaynakGuvenli` — masaüstü `net.rs` paritesi) ve uydurma bir depo yolu HAKLI OLARAK elenir.
+// Pinin kendi vakaları ayrı dosyada: `mobileUpdate.kaynakPin.test.ts`.
 const SURUM = (over: Partial<MobilSurum> = {}): MobilSurum => ({
   version: "2.3.7", versionCode: 14,
-  url: "https://github.com/o/r/releases/download/t/PEMF_Vet_Mobil.apk",
+  url: "https://github.com/mert61-python/pemf-update/releases/download/t/PEMF_Vet_Mobil.apk",
   sha256: "a".repeat(64), size: 1000, ...over,
 });
 

@@ -161,6 +161,20 @@
     ; "blob install_root içinde tutulur → uygulama kaldırılınca oturum da gider" güvencesi
     ; GERÇEK DEĞİLDİ: kullanıcı uygulamayı kaldırsa da jetonu diskte kalıyordu.
     Delete "$INSTDIR\auth_session.bin"
+    ; DENETİM 2026-08-23 (C14): liste ÜÇÜNCÜ kez geride kalmıştı. 2026-08-08/09'da eklenen üç kök
+    ; durum dosyası buraya işlenmemişti; aynı yorumun (yukarıda) koyduğu kural fiilen bozuktu.
+    ; `installed_packages.json` = kurulu paket kaydı, `install_id.txt` = kademeli-yayın dilimi
+    ; (kaldır-yeniden kur sonrası cihaz aynı dilimde sıkışıyordu), `backup_dir.txt` = yedek hedefi.
+    Delete "$INSTDIR\installed_packages.json"
+    Delete "$INSTDIR\install_id.txt"
+    Delete "$INSTDIR\backup_dir.txt"
+    Delete "$INSTDIR\runtime_attempt.json"
+    ; ⚠️ SAHNELEME DİZİNLERİ: yalnız `runtime` siliniyordu. Kesintiye uğramış bir güncellemeden
+    ; kalan bu kardeşler (her biri ≤1,19 GB) HİÇBİR yolla silinmiyordu → kaldırma "başarılı"
+    ; görünürken diskte gigabaytlar kalıyordu.
+    RMDir /r "$INSTDIR\runtime.new"
+    RMDir /r "$INSTDIR\runtime.old"
+    RMDir /r "$INSTDIR\runtime.bozuk"
     RMDir "$INSTDIR"
     ; Yükseltme-öncesi eski boşluksuz kurulum kökü (rename migrasyonu atlanmışsa) kalıntısı.
     RMDir /r "$LOCALAPPDATA\PEMFVetClient"

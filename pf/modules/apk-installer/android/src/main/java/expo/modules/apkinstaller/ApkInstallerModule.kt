@@ -10,6 +10,7 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * APK'yi DOGRUDAN Android paket yukleyicisine teslim eder.
@@ -63,6 +64,35 @@ class ApkInstallerModule : Module() {
       ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       baslat(intent)
       true
+    }
+
+    /**
+     * Dosyanin SHA-256 ozetini (kucuk harf hex) hesaplar; dosya yoksa bos dize doner.
+     *
+     * DENETIM 2026-08-23 (M11): indirilen APK kurulumdan once HIC dogrulanmiyordu — tek kapi
+     * BOYUT esitligiydi ve `MobilSurum.sha256` kod tabaninda hicbir yerde okunmuyordu. Oysa
+     * yayindaki manifest'in kendi notu "SHA256 dogrular" diye SOZ VERIYOR ve yayin runbook'u o
+     * soze guveniyordu: sha yanlis yazilsa kimse fark etmezdi. Launcher paketleri
+     * (`verify::verify_file`) dogrulaniyor; APK guncelleme zincirindeki TEK dogrulanmayan
+     * varliktı.
+     *
+     * ⚠️ NEDEN YEREL: paket ~128 MB. JS tarafinda hash almak dosyayi bellege okumayi gerektirir;
+     * burada 1 MB'lik tamponla AKITILARAK hesaplanir (sabit bellek). `expo-crypto` bagimliligi
+     * da eklenmez.
+     */
+    AsyncFunction("sha256") { yol: String ->
+      val dosya = dosyayaCevir(yol)
+      if (!dosya.exists()) return@AsyncFunction ""
+      val ozet = MessageDigest.getInstance("SHA-256")
+      dosya.inputStream().use { akis ->
+        val tampon = ByteArray(1024 * 1024)
+        while (true) {
+          val n = akis.read(tampon)
+          if (n <= 0) break
+          ozet.update(tampon, 0, n)
+        }
+      }
+      ozet.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**

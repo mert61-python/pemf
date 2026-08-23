@@ -432,8 +432,16 @@ def main() -> int:
             and not any(p in (args.drop_platform or []) for p in (prev.get("layers") or {}))
         ):
             kayip.append("layers (client >=1.9.13 tek-parça base.zip'e düşer: ~71 MB yerine 1,25 GB)")
-        if prev.get("mobile") and not manifest.get("mobile") and not args.allow_missing_mobile:
-            kayip.append("mobile (sahadaki tüm APK'lar oto-güncellemeyi kaybeder)")
+        # ⚠️ DENETİM 2026-08-23 (Y5): bu kapı ULAŞILAMAZDI. Yukarıdaki CARRY_ONLY taşıması
+        # `manifest["mobile"]`ı `prev`ten zaten dolduruyor → `not manifest.get("mobile")` hiçbir
+        # zaman doğru olamıyordu; `--allow-missing-mobile` bayrağı da fiilen işlevsizdi (testi
+        # bile bayrağı hiç geçirmeden EXIT=0 bekliyordu). Yayıncı çalışan bir koruma sandı.
+        # Doğru ölçüm: `prev`te VARDI ama çıktıya GEÇMEDİYSE — taşıma kodu bozulursa yakalanır.
+        if prev.get("mobile") and not manifest.get("mobile"):
+            if args.allow_missing_mobile:
+                print("[manifest] UYARI: mobile bloğu bilerek düşürüldü (--allow-missing-mobile)")
+            else:
+                kayip.append("mobile (sahadaki tüm APK'lar oto-güncellemeyi kaybeder)")
         for plat in prev.get("layers") or {}:
             if plat in manifest["layers"] or plat in (args.drop_platform or []):
                 continue

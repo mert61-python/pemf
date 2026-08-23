@@ -41,8 +41,34 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// açıldıktan sonra o ağacı yeniden doğrulayan hiçbir mekanizma yoktur. `installed_profiles.json`
 /// ve `backend.port` da aynı şekilde ezilebilir (E-stop adresi!).
 /// Katı bir `ai_models/` ÖNEK ZORUNLULUĞU meşru bir paketi kırabileceğinden, hedefli yasak-liste.
-const PROFILE_FORBIDDEN_TOP: [&str; 7] = [
+///
+/// ⚠️ DENETİM 2026-08-23 (C1): LİSTE ÜÇÜNCÜ KEZ ESKİMİŞTİ. 2026-08-08/09'da eklenen üç durum
+/// dosyası ve üç sahneleme dizini hiç işlenmemişti. En ağırı `installed_packages.json`:
+/// `pending_updates` "bayat mı güncel mi" kararını TAM ondan okur, yani kök seviyeye manifest
+/// sha'larını içeren bir kopya koyan profil zip'i cihazı sonsuza dek "güncel" gösterir —
+/// **`min_supported_version` GERİ ÇAĞIRMASI dahil** hiçbir runtime yaması bir daha uygulanmaz
+/// (`zorunlu` bayrağı yalnız rollout erken-dönüşünü ezer, sha kıyasını DEĞİL). Bobin-güvenliği
+/// düzeltmesi taşıyan bir yayın o cihaza hiç ulaşmaz ve kullanıcıya hiçbir belirti yansımaz.
+/// `runtime.old` ise geri dönüş yoludur: ezilirse sağlık kapısı düştüğünde dönülecek sürüm kalmaz.
+///
+/// Listenin bir daha eskimemesi `tests/test_profil_paketi_kok_dosyalari.py` ile sağlanır: kapı
+/// adları değil KAYNAĞI ölçer — `install_root.join("...")` ile üretilen her kök girdisi ya bu
+/// listede olmalı ya da açıkça meşru sayılmalı (tek istisna `ai_models`, profillerin hedefi).
+const PROFILE_FORBIDDEN_TOP: [&str; 14] = [
     "runtime",
+    // Sahneleme/geri-dönüş kardeşleri: `runtime` korunup bunların açıkta kalması korumayı
+    // anlamsız kılıyordu — özellikle `runtime.old`, sağlık kapısı düştüğünde dönülecek sürüm.
+    "runtime.new",
+    "runtime.old",
+    "runtime.bozuk",
+    // Güncelleme kararının TEK kaynağı (bkz. yukarıdaki not) ve kademeli-yayın dilimi kimliği.
+    "installed_packages.json",
+    "install_id.txt",
+    // Geri alma döngüsü kırıcının sayacı (C2). Ezilirse iki yönde de zarar: sıfırlanırsa döngü
+    // geri gelir, şişirilirse GERÇEK bir güncelleme kalıcı olarak bloklanır.
+    "runtime_attempt.json",
+    // Off-site yedek hedefi — değiştirilirse yedekler başka bir yere yazılır.
+    "backup_dir.txt",
     "cache",
     "installed_profiles.json",
     "pending_install.json",

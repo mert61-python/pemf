@@ -119,3 +119,96 @@ def test_KARSIT_KANIT_APK_icindeki_surum_versions_json_ile_AYNI():
         f"APK manifestinde '{surum}' surumu bulunamadi — dosya ADI guncel ama ICERIGI eski "
         "olabilir (yeniden derlemeden kopyalanmis)"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WINDOWS IKIZI (2026-08-23) — ayni ariza EXE tarafinda GERCEKTEN oldu
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 2026-08-22 yayininda `launcher-v1.9.34` etiketine YALNIZ surumsuz `PEMFVetClient-Setup.exe`
+# yuklendi. Site adi etiketten turetiyor (`PEMFVetClient-Setup-1.9.34.exe`) → "Windows icin
+# indir" **404** verdi ve bir gun boyunca fark edilmedi. APK tarafi bu kapiyla korunuyordu,
+# EXE tarafinda HICBIR kapi yoktu.
+#
+# ⚠️ BU KAPI TEK BASINA YETMEZ ve bunu bilerek soyluyoruz: o yayinda surumlu EXE
+# `release_assets/` altinda ZATEN URETILMISTI — eksik olan YUKLEME idi. Yukleme yalniz agla
+# olculebilir: `scripts/site_indirme_dogrula.py` (yayin akisinin son adimi).
+
+
+def _site_exe_adi() -> str:
+    """Sitenin URETTIGI Windows kurulum adi — sablon + etiket config.ts'ten okunur."""
+    src = (_KOK / "pemf-vet-web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"get windowsAsset\(\):\s*string\s*\{\s*return\s*`([^`]+)`", src)
+    assert m, "config.ts icinde windowsAsset sablonu bulunamadi — bicim degismis olabilir"
+    t = re.search(r"windowsTag:\s*'([^']+)'", src)
+    assert t, "config.ts icinde windowsTag bulunamadi"
+    return m.group(1).replace("${this.windowsTag.replace(/^launcher-v/, '')}", t.group(1).replace("launcher-v", ""))
+
+
+def _exe_yayin_makinesi_mi() -> bool:
+    """APK ikizindeki ayni olcu: hic setup EXE yoksa burasi yayin makinesi degildir."""
+    return any((_KOK / "release_assets").glob("PEMFVetClient-Setup*.exe"))
+
+
+def test_KRITIK_sitenin_isaret_ettigi_WINDOWS_kurulumu_URETILMIS():
+    if not _exe_yayin_makinesi_mi():
+        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil (CI/taze klon)")
+    ad = _site_exe_adi()
+    yol = _KOK / "release_assets" / ad
+    assert yol.exists(), (
+        f"Site '{ad}' dosyasini indirtiyor ama o dosya URETILMEMIS (release_assets/ altinda yok). "
+        "Yayinlanirsa 'Windows icin indir' 404 verir — 2026-08-22'de tam bu oldu."
+    )
+    assert yol.stat().st_size > 1024 * 1024, (
+        f"{ad} beklenenden kucuk ({yol.stat().st_size} bayt) — yarim/bozuk kopya olabilir"
+    )
+
+
+def test_KRITIK_surumsuz_EXE_de_URETILMIS():
+    """Self-update yolu (manifest.launcher.installer_url) surumsuz adi kullanir; ikisi de gerekir."""
+    if not _exe_yayin_makinesi_mi():
+        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
+    yol = _KOK / "release_assets" / "PEMFVetClient-Setup.exe"
+    assert yol.exists(), "PEMFVetClient-Setup.exe yok — launcher self-update bu adi kullanir"
+
+
+def test_KRITIK_iki_EXE_AYNI_ikili():
+    """APK ikizindeki ayni degismez: ayni surum altinda iki farkli ikili dagitilamaz.
+
+    Site surumlu adi, self-update surumsuz adi indirir; ayrisirlarsa klinige elle kurulan
+    yazilim ile oto-guncellemenin getirdigi yazilim FARKLI olur.
+    """
+    import hashlib
+
+    if not _exe_yayin_makinesi_mi():
+        pytest.skip("release_assets/ altinda hic setup EXE yok — yayin makinesi degil")
+    a = _KOK / "release_assets" / _site_exe_adi()
+    b = _KOK / "release_assets" / "PEMFVetClient-Setup.exe"
+    if not (a.exists() and b.exists()):
+        pytest.skip("EXE'lerden biri yok (yukaridaki testler zaten kirmizi)")
+    sa = hashlib.sha256(a.read_bytes()).hexdigest()
+    sb = hashlib.sha256(b.read_bytes()).hexdigest()
+    assert sa == sb, (
+        f"site kopyasi ({sa[:12]}) ile self-update kopyasi ({sb[:12]}) FARKLI ikili — "
+        "ayni surum numarasi altinda iki farkli yazilim dagitilir"
+    )
+
+
+def test_YUKLEME_dogrulamasi_YAYIN_AKISINDA_zorunlu():
+    """⚠️ Bu dosyanin SINIRINI belgeler ve o siniri kapatan adimin varligini kilitler.
+
+    Yerel kapilar "uretildi mi"yi olcer. 2026-08-22 arizasinda dosya URETILMISTI ama
+    YUKLENMEMISTI — yani bu dosyadaki hicbir test o arizayi yakalayamazdi. Yukleme yalniz agla
+    olculur; o olcum `scripts/site_indirme_dogrula.py`de ve yayin runbook'unun SON adimidir.
+    Betik ya da runbook adimi silinirse bu bosluk sessizce geri gelir.
+    """
+    betik = _KOK / "scripts" / "site_indirme_dogrula.py"
+    assert betik.exists(), (
+        "scripts/site_indirme_dogrula.py YOK — 'yuklendi mi?' sorusunu soran tek kapi bu; "
+        "yerel testler yalnizca 'uretildi mi?'yi olcer"
+    )
+    build = (_KOK / "BUILD.md").read_text(encoding="utf-8", errors="replace")
+    assert "site_indirme_dogrula.py" in build, (
+        "yayin runbook'u (BUILD.md) indirme dogrulamasini CAGIRMIYOR — betik var ama akista "
+        "kosulmuyorsa 404 yine fark edilmez"
+    )

@@ -119,9 +119,29 @@ def test_KRITIK_surum_farki_bandi_BLOKLAMAZ():
     src = yol.read_text(encoding="utf-8", errors="replace")
     # Kapatilabilir olmali (kalici bir engel degil).
     assert "setKapatilan" in src, "bant kapatilamiyor — kalici engele donusur"
-    # Seans surerken gosterilmemeli (operatorun ekranini bolmez).
-    assert "seansSuruyor" in src and "if (seansSuruyor) return null;" in src, (
-        "bant seans sirasinda gizlenmiyor — bobinler hastanin uzerindeyken ekrani boler"
+    # ⚠️ DONANIM CALISIRKEN gosterilmemeli (operatorun ekranini bolmez).
+    #
+    # GUNCELLENDI (denetim 2026-08-23, bulgu M4): eskiden burada `seansSuruyor` degiskeninin ADI
+    # araniyordu ve olcu `activeTreatment.isActive`ti. O olcu EKSIKTI — bobinler SEANSSIZ da
+    # calisir (AI Pro, bobin paneli, baska istemci) ve o durumda bant hastanin uzerinde ENERJILI
+    # bobin varken ciziliyordu. Olcu artik deponun geri kalaniyla ayni: `useDonanimCalisiyor`
+    # (= isActive || coils.some(running)); GlobalEmergencyStop / useTeardownGuard / useApkGuncelleme
+    # zaten bu genis olcuyu kullaniyordu.
+    #
+    # ⚠️ Test artik DEGISKEN ADI degil KULLANILAN OLCU uzerinden kilitliyor: dar olcuye donus
+    # (yalniz activeTreatment) kirmizi verir.
+    assert "useDonanimCalisiyor" in src, (
+        "bant dar olcuye (yalniz activeTreatment.isActive) donmus — bobinler SEANSSIZ da calisir "
+        "ve bant hastanin uzerinde enerjili bobin varken cizilir (bulgu M4)"
+    )
+    assert "if (donanimCalisiyor) return null;" in src, "bant donanim calisirken gizlenmiyor"
+    assert "snapshot.activeTreatment" not in src, (
+        "bant kendi dar olcusunu yeniden kurmus — tek kaynak useDonanimCalisiyor olmali"
+    )
+    # Kancanin kendisi gercekten GENIS olcuyu uygulamali (kanca bosaltilirsa bant da bosalir):
+    kanca = (_KOK / "pf" / "src" / "hooks" / "useDonanimCalisiyor.ts").read_text(encoding="utf-8", errors="replace")
+    assert "activeTreatment" in kanca and "running" in kanca, (
+        "useDonanimCalisiyor iki sinyalden birini kaybetmis (seans VEYA calisan bobin)"
     )
     # Bir yerlere yerlestirilmis olmali, yoksa hic gorunmez.
     shell = (_KOK / "pf" / "src" / "components" / "ui" / "AppShell.tsx").read_text(encoding="utf-8", errors="replace")

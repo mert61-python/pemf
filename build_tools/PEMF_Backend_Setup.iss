@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.18"
+#define MyAppVersion   "1.9.20"
 #define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
 ; ⚠️ pemfvet.com KULLANILMIYOR (2026-08-18): alan adı Vercel'e hiç bağlanmadı, kayıt
 ; firmasının park sayfasını gösteriyor. "Program Ekle/Kaldır"daki yayımcı linki oraya
@@ -213,6 +213,104 @@ begin
   ) or (Installed = 0);
 end;
 
+// ============================================================================================
+// 🔴 TIBBI GUVENLIK - BOBIN E-STOP (denetim 2026-08-23, P0)
+//
+// 2026-08-17'de force-kill graceful'un ARKASINA alindi ve bu dogruydu. AMA graceful yol
+// `if ResultCode <> 1060` ("servis KURULU mu?") blogunun ICINDE; force-kill blok DISINDA ve
+// KOSULSUZ. LAUNCHER dagitimi olan bir makinede `PemfBackend` servisi YOKTUR -> `sc query`
+// 1060 doner -> graceful blok TAMAMEN atlanir -> geriye yalnizca SINYALSIZ `taskkill /F` kalir.
+//
+// `taskkill /F` = TerminateProcess: backend'in sinyal isleyicisi HIC kosmaz, `_safe_stop_outputs`
+// calismaz, STM kuyruk-flush ve ESP bobinlerine MQTT STOP YAYINLANMAZ. Bobin 1-5 firmware'in
+// olu-adam devresiyle ~1500 ms'de duser; BOBIN 6-8'IN LINK-WATCHDOG'U YOKTUR
+// (scripts/pemf_teardown.ps1) -> seans suresince (20-120 dk) HASTANIN UZERINDE ENERJILI KALIR.
+//
+// Kardes NSIS yolu bunu dogru yapiyor (launcher/app/windows/hooks.nsi): port oku -> dogrula ->
+// POST /api/hardware/emergency_stop -> ~1800 ms bekle -> taskkill. Bu yordam onun Pascal ikizi.
+//
+// ⚠️ NEDEN TUM KULLANICI PROFILLERI TARANIYOR: kurulum `PrivilegesRequired=admin` ile YUKSELIR;
+// `{localappdata}` YUKSELTEN hesabi gosterir. Kliniği kullanan operator baska bir hesapsa
+// (ya da UAC baska bir admin hesabiyla onaylandiysa) dosya orada BULUNMAZ, E-stop sessizce
+// atlanir ve hemen ardindan taskkill kosar. NSIS ikizi tam bu tuzaga dusmustu (`SetShellVarContext
+// all` -> $LOCALAPPDATA = ProgramData) ve ayri bir denetimde duzeltildi. Burada varsayim yerine
+// OLCUM: once hizli yol ({localappdata}), sonra C:\Users\*\AppData\Local taramasi (admin
+// yetkisiyle okunabilir).
+//
+// ⚠️ SESSIZ BASARISIZLIK KABUL: backend calismiyorsa POST zaten duser; amac "durduramadiysak
+// kurulumu blokla" DEGIL, "oldurmeden ONCE durdurmayi DENE"dir. Kurulum hicbir kosulda
+// bloklanmaz (E-stop yolu tibbi cihazi calismaz hale getirmemeli).
+// ============================================================================================
+procedure PemfEstopPortaGonder(Port: Integer);
+var
+  Komut: String;
+  ResultCode: Integer;
+begin
+  // -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7 sn worst-case" diye belgeliyor;
+  // daha kisa deger ESP bobinleri (6-8) yayinlanmadan dolabiliyordu (NSIS ikizinde olculdu).
+  Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod' +
+           ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/emergency_stop' +
+           ' -Method POST -TimeoutSec 10 | Out-Null } catch {}"';
+  Exec('powershell.exe', Komut, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+// Verilen backend.port dosyasini oku, DOGRULA ve E-stop gonder. Gonderildiyse True doner.
+function PemfEstopDosyadan(Yol: String): Boolean;
+var
+  Icerik: AnsiString;
+  Port: Integer;
+begin
+  Result := False;
+  if not FileExists(Yol) then
+    Exit;
+  if not LoadStringFromFile(Yol, Icerik) then
+    Exit;
+  // ⚠️ PORT SAYIYA CEVRILIR VE ARALIK DENETLENIR. `backend.port` KULLANICI-YAZILABILIR bir
+  // dizindedir: ham icerigi komut dizesine gomek (a) tirnak/`;` sokan birine keyfi komut
+  // calistirtir, (b) satir sonu (CR/LF) URL'yi bozar -> E-stop SESSIZCE duser ama taskkill YINE
+  // kosar. NSIS ikizi ayni denetimi `IntOp` ile yapiyor.
+  Port := StrToIntDef(Trim(String(Icerik)), 0);
+  if (Port < 1) or (Port > 65535) then
+    Exit;
+  PemfEstopPortaGonder(Port);
+  Result := True;
+end;
+
+procedure PemfBobinleriGuveneAl();
+var
+  FindRec: TFindRec;
+  Kok: String;
+  Gonderildi: Boolean;
+begin
+  Gonderildi := False;
+
+  // 1) HIZLI YOL: yukselten hesabin profili (tipik durum - operator kendi hesabinda onaylar).
+  if PemfEstopDosyadan(ExpandConstant('{localappdata}\PEMF Vet Client\backend.port')) then
+    Gonderildi := True;
+
+  // 2) OLCUM: tum kullanici profilleri. Yukseltme baska bir admin hesabiyla yapildiysa (1) bos
+  //    doner; o durumda E-stop'u atlamak, bobinleri hastanin uzerinde enerjili birakmak demektir.
+  Kok := ExpandConstant('{sd}\Users\');
+  if FindFirst(Kok + '*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+            if PemfEstopDosyadan(Kok + FindRec.Name + '\AppData\Local\PEMF Vet Client\backend.port') then
+              Gonderildi := True;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+
+  // STM STOP'unun async seri-kuyruktan porta yazilmasi icin bekle (backend flush deadline 1,5 sn;
+  // NSIS ikizi 1800 ms bekliyor). Hicbir E-stop gonderilmediyse beklemenin anlami yok.
+  if Gonderildi then
+    Sleep(1800);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -220,6 +318,11 @@ var
 begin
   if CurStep = ssInstall then
   begin
+    // 🔴 EN BASTA VE KOSULSUZ: bobinleri guvene al. Asagidaki graceful blok servis varligina
+    // KOSULLUDUR (`sc query` 1060 = servis yok) ve launcher dagitimlarinda HIC kosmaz; force-kill
+    // ise kosulsuzdur. Yani bobin-STOP'a giden tek yol servise bagliydi. Bkz. PemfBobinleriGuveneAl.
+    PemfBobinleriGuveneAl();
+
     // [Files] kopyalamadan ONCE calisan backend'i durdur -> kilitli-EXE kopyalama hatasini onler (re-install).
     //
     // ==========================================================================================

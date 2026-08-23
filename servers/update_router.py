@@ -6,11 +6,29 @@ Yollar birebir korunur (/api/update/status|apply|rollback) → istemci sözleşm
 import asyncio
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["update"])
 logger = logging.getLogger("update_router")
+
+
+def _yetki_kapisi(request: Request) -> None:
+    """Yıkıcı güncelleme uçlarının yetki kapısı — LAN muafiyeti YOK.
+
+    ⚠️ DENETİM 2026-08-23 (O2): bu iki uç `Request` bile almıyordu ve hiçbir kapı taşımıyordu.
+    Global middleware LAN'ı auth-MUAF sayar (`api_server::is_local_request`), yani
+    `PEMF_LEGACY_EXE_UPDATE=1` ile kurulan bir dağıtımda klinik hotspot'undaki HERHANGİ bir cihaz
+    — hotspot parolası pakette dağıtılıyor — token'sız bir POST ile tıbbi cihazda sessiz installer
+    koşturabilir ya da `rollback` ile yayınlanmış bir düzeltmeyi geri alabilirdi.
+
+    Kod arbitrari değil (SHA256 + Authenticode doğrulanıyor, aktif tedavide reddediliyor) — ama
+    deponun kendi standardı (`api_server::_enforce_privileged`, 2026-08-09) yıkıcı uçlar için bu
+    kapıyı zaten şart koşuyor; bu ikisi listeye alınmamıştı.
+    """
+    from servers.auth import enforce_privileged
+
+    enforce_privileged(request)
 
 
 @router.get("/api/update/status")
@@ -26,8 +44,9 @@ async def update_status():
 
 
 @router.post("/api/update/apply")
-async def update_apply():
+async def update_apply(request: Request):
     """Operatör ONAYI → installer indir + SHA256 doğrula + AKTİF TEDAVİ YOKKEN sessiz kur (blocking → thread)."""
+    _yetki_kapisi(request)
     try:
         from servers.update_manager import apply_update
 
@@ -38,9 +57,10 @@ async def update_apply():
 
 
 @router.post("/api/update/rollback")
-async def update_rollback():
+async def update_rollback(request: Request):
     """Operatör: önceki KARARLI sürüme geri dön (audit B-9.2) — kötü güncelleme sahada sorun çıkarırsa.
     previousStable installer'ı indir + SHA256 doğrula + AKTİF TEDAVİ YOKKEN sessiz kur."""
+    _yetki_kapisi(request)
     try:
         from servers.update_manager import rollback
 

@@ -104,9 +104,14 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
       // (tekrar denemek işe yarar), ikincisinde bağlantı hiç kurulamadı. Tek bir "hata oldu"
       // mesajı kullanıcıya ne yapacağını söylemez.
       setHata(
-        ind.hata === "boyut"
-          ? "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin."
-          : "Güncelleme indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+        ind.hata === "sunucu"
+          // ⚠️ AYRI METİN (denetim 2026-08-23): sunucu 2xx dışı yanıt verdi — varlık silinmiş ya
+          // da yanlış etikete taşınmış olabilir. Burada "bağlantınızı kontrol edin" demek
+          // kullanıcıyı işe yaramayacak bir döngüye sokar: tekrar denemek DURUMU DEĞİŞTİRMEZ.
+          ? "Güncelleme paketine şu an ulaşılamıyor (sunucu hatası). Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin."
+          : ind.hata === "boyut"
+            ? "İndirme eksik kaldı. Bağlantınızı kontrol edip tekrar deneyin."
+            : "Güncelleme indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
       );
       return;
     }
