@@ -59,6 +59,14 @@ hesaplanıp onay ekranına geliyor.
 - Hayvan bulunamazsa 45 saniyede somut yönlendirme (ışık, mesafe, kadraj), iki dakikada kamera
   otomatik duruyor (pil koruması). Her aşamada "Vazgeç" var.
 
+Paket kimliği (`buildId`, `/api/health`): `acca5ded1547` — katmanlı kurulumda cihaz **app
+katmanının** sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.zip` sha'sı `296161f2f4a1`
+raporlar. Mobil APK: `2.3.23` (versionCode `30`).
+
+⚠️ **Bağımlılık katmanı DEĞIŞMEDI** (`2189cdd4970e`, dördüncü ardışık yayın): kliniklere
+yalnız ~71 MB'lık uygulama katmanı iner, 1,53 GB'lık bağımlılık paketi yeniden indirilmez.
+Launcher `1.9.37`'de kaldı — bu turda değişmedi.
+
 ⚠️ **Değişmeyenler:** hekim onayı olmadan tedavi başlamıyor ve hazırlık karesi **hiçbir bobini
 sürmüyor** — sürüş yalnız onaylanmış, süre denetimli seansta yapılıyor.
 
