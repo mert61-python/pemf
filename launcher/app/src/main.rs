@@ -213,8 +213,47 @@ fn on_backend_ready(
         install::default_install_root(&home_dir()).join("backend.port"),
         port.to_string(),
     );
+    // 🔴 OTURUM ROTASYON SENKRONU (saha arızası 2026-08-24) — "Beni hatırla" bozuluyordu.
+    // Uygulama penceresi supabase-js ile jetonu arka planda yeniler ve Supabase refresh token'ı
+    // DÖNDÜRÜR. Döndürülen jeton yalnız pencerenin deposunda kalıyordu; buradaki DPAPI kopyası
+    // bayatlıyor, bir sonraki açılışta bayat jetonla yenileme deneniyor, GoTrue reddediyor ve
+    // kayıtlı oturum SİLİNİYORDU. Pencere artık yeni oturumu backend'e geri yazıyor; burada
+    // periyodik olarak okuyup diske işliyoruz.
+    //
+    // ⚠️ Yazma kararı `secret_store::rotasyonu_isle`de (kayıtlı oturum yoksa / boş jeton /
+    // başka e-posta → YAZMAZ). Burada yalnız OKUMA ve tetikleme var.
+    // ⚠️ Backend ölünce görev kendiliğinden biter (okuma başarısız → sayaç → çık); sızıntı yok.
+    oturum_rotasyon_senkronu_baslat(port);
+
     // Uygulamayı AYRI pencerede aç → client/profil penceresi ("main") AÇIK KALIR.
     open_app_window(app, url);
+}
+
+/// Backend'teki devir oturumunu periyodik okuyup DÖNDÜRÜLEN jetonu diske işler.
+///
+/// Aralık 60 sn: Supabase erişim jetonu ~1 saat yaşar, yani rotasyon seyrektir; 60 sn hem
+/// "kapatmadan önce yakala" için fazlasıyla sık hem de loopback'te maliyetsizdir.
+fn oturum_rotasyon_senkronu_baslat(port: u16) {
+    std::thread::spawn(move || {
+        let root = install::default_install_root(&home_dir());
+        let mut ardisik_hata = 0u32;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            match backend::pull_desktop_session(port) {
+                Some(s) => {
+                    ardisik_hata = 0;
+                    let _ = secret_store::rotasyonu_isle(&root, &s);
+                }
+                None => {
+                    // Backend kapandı / oturum yok → birkaç denemeden sonra görevi bitir.
+                    ardisik_hata += 1;
+                    if ardisik_hata >= 5 {
+                        return;
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// OTURUM DEVRİ (E-ÖZELLİĞİ ORTAK SÖZLEŞMESİ): client'ın Supabase oturumunu, backend ayağa

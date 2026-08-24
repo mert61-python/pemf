@@ -13,6 +13,7 @@
 jest.mock("@/services/apiClient", () => ({
   apiGet: jest.fn(async () => null),
   apiDelete: jest.fn(async () => null),
+  apiPost: jest.fn(async () => null),
 }));
 jest.mock("@/services/supabaseAuth", () => ({
   supabaseAuth: { auth: { setSession: jest.fn(async () => ({ error: null })) } },
@@ -186,5 +187,64 @@ describe("clearDesktopSession — çıkış", () => {
   it("backend kapalıysa hata YUTULUR (çıkış yine tamamlanmalı)", async () => {
     mockDelete.mockRejectedValue(new Error("bağlantı yok"));
     await expect(clearDesktopSession()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * DONDURULEN JETON LAUNCHER'A GERI YAZILIR (saha arizasi 2026-08-24: "beni hatirla" bozuluyordu).
+ *
+ * OLCULEN ZINCIR: launcher oturumu DPAPI ile diske yazar VE ayni jetonlari uygulama penceresine
+ * devreder. Pencere `setSession` ile alir; supabase-js `autoRefreshToken:true` ile calisir
+ * (yayindaki masaustu paketinde dogrulandi) ve arka planda yeniler. Supabase yenilemede refresh
+ * token'i DONDURUR (rotation): yeni jeton TARAYICI deposunda kalir, launcher'in diskteki kopyasi
+ * BAYATLAR. Sonraki launcher acilisinda bayat jetonla yenileme denenir, GoTrue reddeder, bu
+ * `SessionRevoked`a eslenir ve blob SILINIR -> kullanicidan tekrar e-posta+parola istenir.
+ *
+ * SOZLESME: pencere jetonu her dondurdugunde YENI oturumu backend'e geri yazar; launcher onu
+ * diske isler (Rust tarafi ayri testte). Boylece tek bir refresh-token ailesi iki yerde
+ * ayrismaz.
+ *
+ * ⚠️ SESSIZ ve ZORUNLU DEGIL: geri yazma basarisiz olursa kullanici HICBIR sey gormez ve akis
+ * degismez — bu bir kolayliktir, kapi degil.
+ */
+describe("oturum geri-yazma (token rotation)", () => {
+  const mockPost = jest.requireMock("@/services/apiClient").apiPost as jest.Mock;
+
+  beforeEach(() => { mockPost?.mockClear?.(); });
+
+  it("KRITIK: TOKEN_REFRESHED olayinda yeni oturum backend'e geri yazilir", async () => {
+    setEnv("web", "127.0.0.1");
+    const { pushDesktopSession } = require("@/services/desktopSession");
+    await pushDesktopSession({
+      access_token: "YENI-ACCESS", refresh_token: "YENI-REFRESH", email: "a@b.c", expires_at: 123,
+    });
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [yol, govde] = mockPost.mock.calls[0];
+    expect(yol).toBe("/auth/desktop-session");
+    expect(govde).toMatchObject({ access_token: "YENI-ACCESS", refresh_token: "YENI-REFRESH" });
+  });
+
+  it("KRITIK: MOBILDE geri yazma YAPILMAZ (masaustu client yok)", async () => {
+    setEnv("android");
+    const { pushDesktopSession } = require("@/services/desktopSession");
+    await pushDesktopSession({ access_token: "a", refresh_token: "r" });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it("KRITIK: eksik jeton geri YAZILMAZ (bos oturum devri bozar)", async () => {
+    setEnv("web", "127.0.0.1");
+    const { pushDesktopSession } = require("@/services/desktopSession");
+    await pushDesktopSession({ access_token: "a", refresh_token: "" });
+    await pushDesktopSession({ access_token: "", refresh_token: "r" });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it("KARSIT-KANIT: geri yazma patlarsa SESSIZ kalir (akis degismez)", async () => {
+    setEnv("web", "127.0.0.1");
+    mockPost.mockRejectedValueOnce(new Error("ag yok"));
+    const { pushDesktopSession } = require("@/services/desktopSession");
+    await expect(
+      pushDesktopSession({ access_token: "a", refresh_token: "r" }),
+    ).resolves.toBeUndefined();
   });
 });

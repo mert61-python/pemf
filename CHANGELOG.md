@@ -32,6 +32,36 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.21 · launcher 1.9.37 — 2026-08-24 (🔴 "Beni hatırla" düzeltildi)
+
+**Etiketler:** `client-app-v1.9.21` → `base-app.zip` (sha `58167771f6d5`) · `launcher-v1.9.37`.
+Paket kimliği (`buildId`, `/api/health`): `58167771f6d5`. Eski ≤1.9.12 tek-parça istemciler
+`base.zip` sha'sı `655859570f86` raporlar.
+
+⚠️ **Bağımlılık katmanı DEĞİŞMEDİ** (`2189cdd4970e`): kliniklere yalnız ~71 MB'lık uygulama
+katmanı iner.
+
+**Saha bildirimi:** *"Client'taki beni hatırla düzgün çalışmıyor; güncelleme geldi, tekrar mail
+ve şifre istedi."*
+
+**Neydi.** Oturum iki yerde birden yaşıyordu. Bilgisayar uygulaması girişi yapıp oturumu güvenli
+biçimde diske yazıyor, aynı oturumu tedavi penceresine de devrediyordu. Pencere ise oturumu
+arka planda kendi başına tazeliyor — ve tazelemede sunucu **yeni bir anahtar verip eskisini
+geçersiz kılıyor**. Yeni anahtar yalnız pencerede kalıyor, diskteki kopya eskiyordu. Bir sonraki
+açılışta uygulama o eski anahtarla giriş yapmayı deniyor, sunucu haklı olarak reddediyor ve
+uygulama kayıtlı oturumu **siliyordu** → e-posta ve şifre yeniden soruluyordu.
+
+Güncelleme bunu güvenilir biçimde tetikliyordu: pencere bir süre açık kalıp anahtarı tazeliyor,
+hemen ardından güncelleme uygulamayı yeniden başlatıyordu. Bu yüzden "her güncellemede tekrar
+soruyor" gibi görünüyordu.
+
+**Ne yapıldı.** Pencere anahtarı her tazelediğinde yeni oturum bilgisayar uygulamasına geri
+bildiriliyor ve diske işleniyor. Böylece tek bir oturum iki yerde ayrışmıyor.
+
+⚠️ Kalıcılık **yalnız** "Beni hatırla" işaretliyse sürer; işaretlenmediyse hiçbir şey diske
+yazılmaz. Farklı bir hesapla giriş yapılırsa önceki kayıt değiştirilmez, ve eksik/boş bir oturum
+sağlam kaydın üzerine yazılamaz.
+
 ## launcher 1.9.36 — 2026-08-23 (bozuk bir yayın artık sessizce onaylanmıyor)
 
 **Etiket:** `launcher-v1.9.36`.

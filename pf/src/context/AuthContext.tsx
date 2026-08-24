@@ -13,7 +13,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { Session } from "@supabase/supabase-js";
 import { AuthSession, isResearchEmail } from "@/services/authApi";
 import { supabaseAuth, getCurrentSession, signOutUser } from "@/services/supabaseAuth";
-import { isDesktopHost, hydrateFromDesktopSession, clearDesktopSession } from "@/services/desktopSession";
+import {
+  isDesktopHost,
+  hydrateFromDesktopSession,
+  clearDesktopSession,
+  pushDesktopSession,
+} from "@/services/desktopSession";
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -84,6 +89,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabaseAuth.auth.onAuthStateChange((_event, s) => {
       setSession(toAuthSession(s));
       setLoading(false);
+      // 🔴 SAHA ARIZASI (2026-08-24) — "Beni hatırla" bozuluyordu.
+      // supabase-js jetonu arka planda yeniler (`autoRefreshToken: true`) ve Supabase yenilemede
+      // refresh token'ı DÖNDÜRÜR. Döndürülen jeton YALNIZ tarayıcı deposunda kalıyordu; masaüstü
+      // client'ın DPAPI ile diske yazdığı kopya bayatlıyor, bir sonraki açılışta o bayat jetonla
+      // yenileme deneniyor, GoTrue açıkça reddediyor ve client kayıtlı oturumu SİLİYORDU →
+      // kullanıcıdan yeniden e-posta+parola isteniyordu.
+      // Döngüyü burada kapatıyoruz: her döndürmede yeni oturumu client'a geri yaz.
+      // ⚠️ Yalnız masaüstünde ve SESSİZ (mobilde `pushDesktopSession` zaten erken döner).
+      if (_event === "TOKEN_REFRESHED" && s?.access_token && s?.refresh_token) {
+        void pushDesktopSession({
+          access_token: s.access_token,
+          refresh_token: s.refresh_token,
+          email: s.user?.email ?? "",
+          expires_at: typeof s.expires_at === "number" ? s.expires_at : 0,
+        });
+      }
     });
     (async () => {
       // Masaüstü devri (yalnız client'ın açtığı loopback sayfada). Uç yoksa / boş dönerse /

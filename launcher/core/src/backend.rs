@@ -366,6 +366,43 @@ pub fn push_desktop_session_to(url: &str, session: &crate::auth::Session) -> Res
     }
 }
 
+/// Backend'in BELLEĞİNDEKİ devir oturumunu OKU (uygulama penceresi jetonu döndürmüş olabilir).
+///
+/// 🔴 Rotasyon senkronu (saha arızası 2026-08-24): pencere `autoRefreshToken` ile jetonu yeniler,
+/// Supabase onu DÖNDÜRÜR ve pencere yeni oturumu buraya geri yazar. Launcher bunu okuyup diske
+/// işlemezse kendi kopyası bayatlar ve "Beni hatırla" bir sonraki açılışta SİLİNİR.
+///
+/// Boş gövde / eksik alan / ulaşılamama → `None` (sessiz; senkron bir kolaylıktır).
+pub fn pull_desktop_session(port: u16) -> Option<crate::auth::Session> {
+    let url = desktop_session_url(port);
+    if !is_loopback_http_url(&url) {
+        return None;
+    }
+    let govde = ureq::get(&url)
+        .timeout(Duration::from_secs(SESSION_PUSH_TIMEOUT_S))
+        .call()
+        .ok()
+        .filter(|r| r.status() == 200)
+        .and_then(|r| r.into_string().ok())?;
+    let v: serde_json::Value = serde_json::from_str(&govde).ok()?;
+    let al = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let refresh = al("refresh_token");
+    let access = al("access_token");
+    if refresh.is_empty() || access.is_empty() {
+        return None; // oturum yok ({}) → senkronlanacak bir şey de yok
+    }
+    Some(crate::auth::Session {
+        access_token: access,
+        refresh_token: refresh,
+        email: al("email"),
+        // Backend `expires_at`i sayı ya da metin tutabilir (auth_router elle zorluyor).
+        expires_at: v
+            .get("expires_at")
+            .and_then(|x| x.as_i64().or_else(|| x.as_str().and_then(|t| t.parse().ok())))
+            .unwrap_or(0),
+    })
+}
+
 /// Oturumu çalışan backend'e devret (best-effort — çağıran hatayı yutabilir).
 pub fn push_desktop_session(port: u16, session: &crate::auth::Session) -> Result<(), String> {
     push_desktop_session_to(&desktop_session_url(port), session)

@@ -48,6 +48,41 @@ pub fn load(install_root: &Path) -> Option<Session> {
     serde_json::from_slice::<Session>(&acik).ok()
 }
 
+/// DÖNDÜRÜLEN jetonu diske işle. İşlendiyse `true`.
+///
+/// 🔴 SAHA ARIZASI (2026-08-24) — "Beni hatırla" bozuluyordu. Tek bir refresh-token ailesi İKİ
+/// yerde yaşıyordu: burada (DPAPI blob'u) ve uygulama penceresindeki supabase-js istemcisinde.
+/// Pencere `autoRefreshToken: true` ile arka planda yeniliyor ve Supabase yenilemede refresh
+/// token'ı **DÖNDÜRÜYOR**; döndürülen jeton yalnız tarayıcı deposunda kalıyor, buradaki kopya
+/// BAYATLIYORDU. Bir sonraki açılışta bayat jetonla yenileme deneniyor, GoTrue açıkça reddediyor,
+/// bu `SessionRevoked`a eşleniyor ve blob SİLİNİYORDU → kullanıcıdan yeniden parola isteniyordu.
+///
+/// Pencere artık döndürdüğü oturumu backend'e geri yazıyor; bu fonksiyon onu diske işler.
+///
+/// ⚠️ ÜÇ KAPI (hepsi kasıtlı):
+///   1. **Kayıtlı oturum YOKSA yazma.** Kullanıcı "Beni hatırla"yı seçmediyse blob yoktur;
+///      devir oturumunu diske yazmak, açıkça istemediği kalıcılığı arkasından kurmak olurdu.
+///   2. **Boş refresh jetonu yazma.** Backend `{}` ya da eksik alan dönebilir; boş jetonu
+///      işlemek sağlam kaydı YOK EDERDİ.
+///   3. **Başka e-posta yazma.** Farklı kullanıcı = rotasyon değil, BAŞKA bir giriş; sessizce
+///      yazmak A'nın kaydını B ile değiştirirdi.
+/// Ayrıca jeton AYNIYSA yazılmaz — periyodik senkron diski boşuna yormasın.
+pub fn rotasyonu_isle(install_root: &Path, yeni: &Session) -> bool {
+    if yeni.refresh_token.trim().is_empty() {
+        return false;
+    }
+    let Some(mevcut) = load(install_root) else {
+        return false; // "Beni hatırla" kapalı → kalıcılık kurma
+    };
+    if !mevcut.email.eq_ignore_ascii_case(&yeni.email) {
+        return false; // başka kullanıcı
+    }
+    if mevcut.refresh_token == yeni.refresh_token {
+        return false; // değişmemiş → boşuna yazma
+    }
+    save(install_root, yeni)
+}
+
 /// Saklanan oturumu sil ("Çıkış yap" ve iptal edilmiş jeton yolları).
 pub fn clear(install_root: &Path) {
     let _ = std::fs::remove_file(blob_path(install_root));

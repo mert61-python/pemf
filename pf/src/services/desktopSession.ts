@@ -21,7 +21,7 @@
  *    console çağrısı bulunmamalı.
  */
 import { Platform } from "react-native";
-import { apiDelete, apiGet } from "@/services/apiClient";
+import { apiDelete, apiGet, apiPost } from "@/services/apiClient";
 import { supabaseAuth } from "@/services/supabaseAuth";
 
 /** Tek devir isteği için SERT zaman aşımı: backend takılırsa splash'te sonsuza dek beklenmesin. */
@@ -109,6 +109,41 @@ async function _hydrate(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * DÖNDÜRÜLEN oturumu backend'e GERİ YAZ — masaüstü client'ın diskteki kopyası bayatlamasın.
+ *
+ * 🔴 SAHA ARIZASI (2026-08-24): "Beni hatırla" bozuluyordu ve sebebi tek bir refresh-token
+ * ailesinin İKİ yerde yaşamasıydı. Client oturumu DPAPI ile diske yazar VE aynı jetonları buraya
+ * devreder; supabase-js `autoRefreshToken: true` ile arka planda yeniler. Supabase yenilemede
+ * refresh token'ı **DÖNDÜRÜR** (rotation) — yeni jeton tarayıcı deposunda kalır, client'ın
+ * diskteki kopyası BAYATLAR. Client bir sonraki açılışta bayat jetonla yenilemeyi dener, GoTrue
+ * onu açıkça reddeder, bu `SessionRevoked`a eşlenir ve kayıtlı oturum SİLİNİR → kullanıcıdan
+ * yeniden e-posta+parola istenir. Güncelleme bunu güvenilir biçimde tetikler: pencere bir süre
+ * açık kalıp jetonu döndürür, sonra zorunlu yeniden başlatma gelir.
+ *
+ * Bu fonksiyon döngüyü kapatır: her döndürmede yeni oturum backend'e yazılır, client oradan
+ * okuyup diske işler (Rust tarafı: `auth_sync_from_backend`).
+ *
+ * ⚠️ SESSİZ ve ZORUNLU DEĞİL: başarısızlıkta kullanıcı hiçbir şey görmez ve akış değişmez —
+ * bu bir kolaylıktır, kapı değil. ⚠️ TOKEN HİÇBİR LOG SEVİYESİNDE yazılmaz.
+ */
+export async function pushDesktopSession(s: DesktopSession): Promise<void> {
+  if (!isDesktopHost()) return;
+  // Eksik jeton devri BOZAR (backend boş refresh_token'ı kabul eder ve client onu diske yazardı).
+  if (!s || typeof s.access_token !== "string" || !s.access_token) return;
+  if (typeof s.refresh_token !== "string" || !s.refresh_token) return;
+  try {
+    await apiPost<null>(
+      "/auth/desktop-session",
+      { access_token: s.access_token, refresh_token: s.refresh_token, email: s.email ?? "", expires_at: s.expires_at ?? 0 },
+      null,
+      { silent: true, timeoutMs: DESKTOP_SESSION_TIMEOUT_MS },
+    );
+  } catch {
+    /* yok say — geri yazma bir kolaylıktır */
   }
 }
 
