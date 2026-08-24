@@ -115,7 +115,12 @@ def test_propose_lokalizasyon_YOKKEN_409_ve_ANLASILIR_mesaj(client):
     """Lokalizasyon olmadan öneri üretmek = uydurma parametre. Net mesajla reddedilmeli."""
     r = client.post("/api/ai/pro/propose", json={"organ_id": 2})
     assert r.status_code == 409
-    assert "lokalize" in r.json().get("detail", "").lower()
+    # ⚠️ JARGON DEGIL EYLEM olculur (2026-08-24): mesaj "lokalize" kelimesini iceriyor diye
+    # ANLASILIR olmaz. Testin adi zaten "ANLASILIR mesaj" — olcu de oyle olmali: operatore
+    # NE YAPACAGI soylenmeli. Eski metin ustelik ise yaramayan bir dugmeye yonlendiriyordu.
+    _detay = r.json().get("detail", "").lower()
+    assert "kamera" in _detay, f"mesaj operatore ne yapacagini soylemiyor: {_detay!r}"
+    assert ("konumland" in _detay) or ("lokaliz" in _detay), f"mesaj sorunu tarif etmiyor: {_detay!r}"
 
 
 # ── karar uçları ────────────────────────────────────────────────────────────

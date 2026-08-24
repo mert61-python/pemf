@@ -51,10 +51,22 @@ jest.mock("@/context/LiveDataContext", () => ({
 }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "v@x.com" } }) }));
 jest.mock("@/context/OperatorContext", () => ({ useOperator: () => ({ operatorEmail: "v@x.com" }) }));
-jest.mock("expo-camera", () => ({
-  CameraView: () => null,
-  useCameraPermissions: () => [{ granted: true }, jest.fn()],
-}));
+// ⚠️ KAMERA MOCK'U REF TAŞIR (2026-08-24): AI Pro mobilde artık ÖNCE hazırlık aşamasına girer
+// (kedi → organ → öneri). Hazırlık kare akışına dayanır; ref taşımayan bir mock'ta
+// `cameraRef.current` null kalır, kare hiç çekilmez ve akış ilerlemez. Gerçek akışı sınamak için
+// mock `takePictureAsync` sunar; `global.fetch` de LOKALİZE bir kare yanıtı döndürür.
+jest.mock("expo-camera", () => {
+  const React2 = require("react");
+  return {
+    CameraView: React2.forwardRef((_p: unknown, ref: unknown) => {
+      React2.useImperativeHandle(ref, () => ({
+        takePictureAsync: async () => ({ base64: "AAAA" }),
+      }));
+      return null;
+    }),
+    useCameraPermissions: () => [{ granted: true }, jest.fn()],
+  };
+});
 
 import { act, fireEvent, render } from "@testing-library/react-native";
 import React from "react";
@@ -66,10 +78,31 @@ import { AiProPanel } from "../AiProPanel";
 const stopCagrilari = () =>
   (apiPost as jest.Mock).mock.calls.filter((c) => c[0] === "/ai/pro/stop");
 
+// Hazırlık karesi: organ LOKALİZE döner → panel öneriyi otomatik ister.
+const gercekFetch = global.fetch;
+beforeAll(() => {
+  // Hazirlik kare akisi 400 ms'lik interval — sahte zamanlayici olmadan ilerletilemez.
+  jest.useFakeTimers();
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    json: async () => ({ status: "success", detected: true, catDetected: true, reliability: 0.9 }),
+  })) as unknown as typeof fetch;
+});
+afterAll(() => { global.fetch = gercekFetch; jest.useRealTimers(); });
+
 beforeEach(() => {
   (apiPost as jest.Mock).mockClear();
   mockDurum = { active: false };
 });
+
+/** Hazırlık aşamasını ilerlet: kare yakalama 400 ms'lik interval'de → zamanlayıcıyı akıt. */
+async function hazirligiIlerlet() {
+  // ⚠️ Hazirlik kare araligi 1500 ms VE oneri icin ARDISIK_ONAY (2) dogrulanmis olcum gerekir
+  // (tek sansli kare tedavi parametresi uretmesin). Yeterli tur at.
+  for (let i = 0; i < 30; i++) {
+    await act(async () => { jest.advanceTimersByTime(1000); await Promise.resolve(); });
+  }
+}
 
 /** Paneli mount et, `sync` çözülsün. */
 async function panel() {
@@ -142,6 +175,10 @@ it("KRİTİK: BİZ başlatınca ilk poll'dan ÖNCE çıkmak bile DURDURUR (başs
   await act(async () => {
     fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat"));
   });
+  // 🔴 2026-08-24: mobilde "Başlat" artık doğrudan öneri üretmez; ÖNCE hazırlık (kedi → organ)
+  // koşar, lokalizasyon oluşunca öneri OTOMATİK istenir. Bu ara adım olmadan propose taze
+  // lokalizasyon bulamıyor ve akış "Organ henüz lokalize edilmedi" hatasında kilitleniyordu.
+  await hazirligiIlerlet();
   await act(async () => {
     fireEvent.press(u.getByLabelText("Öneriyi onayla ve seansı başlat"));
   });

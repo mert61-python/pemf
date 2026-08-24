@@ -558,6 +558,9 @@ _ai_organ_cache = {
     "overlay_bgr": None,
     "at": 0.0,
     "organ_id": -1,
+    # Karede kedi var mı (organ lokalizasyonundan AYRI) — hazırlık ekranı operatöre doğru
+    # yönlendirmeyi verebilsin: "kediyi kadraja alın" mı, "açıyı değiştirin" mi?
+    "kedi_var": False,
 }
 # Audit P2: _ai_organ_cache arkaplan loop (_ai_pro_loop) VE mobil frame ucu (ai_pro_frame) arasinda
 # paylasilir. Cok-alanli okuma/.update() kilitsiz interleave olursa yirtik-okuma (bir organin
@@ -597,23 +600,30 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     """cat_organ sonucundan (CPU dict VEYA GPU-JSON'dan kurulmuş dict) seçili organ hedefini çıkar.
     organs_by_id: {id: {coord_cabin_cm|coord_3d_cm, reliability}}. organ_id 0 (Tüm Vücut) → max-reliability
     güven-geçidi + koordinat (0,0,0). NOT: estimate_organs_pnp INT-anahtarlı ama JSON'da str → ikisi denenir.
-    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr)."""
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var).
+
+    ⚠️ `kedi_var` NEDEN AYRI (sahip isteği 2026-08-24): "kedi yok" ile "kedi var ama hedef organ
+    bulunamadı" tek bir `detected: false` altında birleşiyordu ve operatöre NE YAPACAĞI
+    söylenemiyordu — kamerayı hayvana mı doğrultsun, açıyı mı değiştirsin? cat_organ hiçbir organ
+    döndürmediyse karede kedi yoktur; organ döndürüp hedef seçilemiyorsa kedi vardır ama o organ
+    (okluzyon/açı) görünmüyordur. İki durum farklı eylem gerektirir."""
+    kedi_var = bool(organs_by_id)
     if int(organ_id) == 0:
         # Tüm Vücut: EN AZ BİR organ güvenle lokalize değilse "bulunamadı" → coil SÜRÜLMEZ (max güven-geçidi;
         # eski zorla-1.0 baypası KALDIRILDI — okluzyonlu organlara rağmen gerçek kediyi reddetmez, çöpte sürmez).
         rels = [float(v.get("reliability") or 0.0) for v in organs_by_id.values() if isinstance(v, dict)]
         conf = max(rels) if rels else 0.0
-        return (conf >= _MIN_RELIABILITY), 0.0, 0.0, 0.0, conf, overlay
+        return (conf >= _MIN_RELIABILITY), 0.0, 0.0, 0.0, conf, overlay, kedi_var
     o = organs_by_id.get(int(organ_id)) or organs_by_id.get(str(int(organ_id)))
     if not o:
-        return False, 0.0, 0.0, 0.0, 0.0, overlay
+        return False, 0.0, 0.0, 0.0, 0.0, overlay, kedi_var
     coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
     rel = float(o.get("reliability") or 0.0)
 
     def _mm(v):
         return max(-300.0, min(300.0, float(v) * 10.0))  # cm→mm + em_kedi aralığı
 
-    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay
+    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay, kedi_var
 
 
 def _localize_organ_cpu(frame, organ_id):
@@ -667,7 +677,7 @@ def _localize_organ(frame, organ_id):
     cat_organ pipeline (YOLOseg + DLC + RTMPose + PnP, ~1-4sn) → 10 organ 3B. Hedefin
     coord_cabin_cm(ArUco)/coord_3d_cm → cm→mm [-300,300] clamp; organ_id 0 (Tüm Vücut) → (0,0,0).
     ai_service_enabled() ise inference GPU servisine DEVREDİLİR (hata → CPU-yerel fallback, davranış korunur).
-    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr)."""
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var)."""
     if ai_service_enabled():
         try:
             return _localize_organ_gpu(frame, organ_id)
@@ -878,7 +888,7 @@ def _ai_pro_loop():
                     # iterasyonda yeniden lokalize edilir — istek YUTULMAZ. (Sonradan kosulsuz
                     # temizlemek, ayirt edilemedigi icin taze istegi siliyordu.)
                     _ai_relocalize = False
-                    lz, lx, ly, lzz, lrel, lov = _localize_organ(frame, _oid)
+                    lz, lx, ly, lzz, lrel, lov, lkedi = _localize_organ(frame, _oid)
                     with _ai_cache_lock:
                         _ai_organ_cache.update(
                             {
@@ -906,6 +916,7 @@ def _ai_pro_loop():
                 y_mm = _ai_organ_cache["y_mm"]
                 z_mm = _ai_organ_cache["z_mm"]
                 rel = _ai_organ_cache["reliability"]
+            kedi_var = bool(_ai_organ_cache.get("kedi_var"))
 
             # ── em_kedi → per-coil → sür (YALNIZCA organ bulunduysa; el yerine organ-tespiti koşulu) ──
             if localized:
@@ -986,6 +997,9 @@ def _ai_pro_loop():
             ws_data = {
                 "imageBase64": b64_image,
                 "detected": localized,
+                # AŞAMA (sahip isteği 2026-08-24): "kedi yok" ile "kedi var, organ bulunamadı"
+                # ayrı bilgiler — hazırlık ekranı operatöre doğru yönlendirmeyi verir.
+                "catDetected": kedi_var,
                 "reliability": round(rel, 3),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
@@ -1082,10 +1096,23 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         and (time.time() - float(c.get("at") or 0)) < 120.0
     )
     if not taze:
+        # ⚠️ MESAJ GERÇEĞE ÇEKİLDİ (saha bildirimi 2026-08-24): eski metin kullanıcıya
+        # "'Yeniden konumla' ile lokalizasyonu tamamlayın" diyordu. Mobilde o düğme yalnız
+        # sunucuda bir bayrak set ediyor ve kare akmadığı için HİÇBİR ŞEY olmuyordu — kullanıcı
+        # aynı hataya kilitleniyordu. Akış düzeltildi (panel artık hazırlık aşamasında kare
+        # akıtıyor); mesaj da ne olduğunu ve kimin ne yapacağını dürüstçe söylüyor.
+        with _ai_cache_lock:
+            _kedi = bool(_ai_organ_cache.get("kedi_var"))
+        _ad = _ORGAN_NAMES.get(oid, "hedef organ")
+        _ipucu = (
+            f"Hayvan görünüyor ama {_ad} seçilemedi — kamerayı biraz çevirip açıyı değiştirin."
+            if _kedi
+            else "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
+        )
         raise HTTPException(
             status_code=409,
-            detail="Organ henüz lokalize edilmedi. Kamerayı hedefe doğrultup 'Yeniden konumla' "
-            "ile lokalizasyonu tamamlayın, sonra öneri alın.",
+            detail=f"{_ad} henüz konumlandırılmadı. {_ipucu} Kamera görüntüsü akarken konumlandırma "
+            "kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
         )
     D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
     if not any(float(d) > 0 for d in D):
@@ -1332,6 +1359,7 @@ def ai_pro_status():
         "durationMin": _ai_duration_min,
         "remainingSec": remaining,
         "localized": bool(_ai_organ_cache.get("localized")),
+        "catDetected": bool(_ai_organ_cache.get("kedi_var")),
         "reliability": round(float(_ai_organ_cache.get("reliability", 0.0)), 3),
         # ⚠️ Alanın VARLIĞI istemci için anlamlı: yoksa (eski backend) panel ESKİ davranışı sürdürür.
         "ownerClientId": _ai_owner_client,
@@ -1368,7 +1396,7 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             # bayragini ONCE tuket (islem sirasinda gelen yeni istek yutulmasin).
             _oid = _ai_organ_id
             _ai_relocalize = False
-            lz, lx, ly, lzz, lrel, lov = await asyncio.to_thread(_localize_organ, img, _oid)
+            lz, lx, ly, lzz, lrel, lov, lkedi = await asyncio.to_thread(_localize_organ, img, _oid)
             with _ai_cache_lock:
                 _ai_organ_cache.update(
                     {
@@ -1380,6 +1408,7 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
                         "overlay_bgr": lov,
                         "at": now,
                         "organ_id": _oid,
+                        "kedi_var": lkedi,
                     }
                 )
 

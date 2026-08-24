@@ -32,6 +32,36 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.22 · mobile 2.3.23 — 2026-08-24 (🔴 AI Pro telefonda hiç başlamıyordu)
+
+**Saha bildirimi:** *"Bu hatayı verip çalışmıyor AI Pro."* — ekranda "Organ henüz lokalize
+edilmedi. Kamerayı hedefe doğrultup 'Yeniden konumla' ile lokalizasyonu tamamlayın" yazıyordu.
+
+**Neydi.** Kapalı bir döngü vardı ve **telefonda AI Pro hiç başlatılamıyordu.** Öneri
+hesaplanması için organın konumlandırılmış olması gerekiyor; konumlandırma ancak kamera karesi
+işlenince oluşuyor; kareler ise yalnız seans **başladıktan sonra** gönderiliyordu — seans da öneri
+olmadan başlamıyordu. Üstelik hata metni tam olarak "Yeniden konumla"ya basmayı söylüyordu, ama o
+düğme yalnızca sunucuya bir işaret bırakıyor ve işleyecek kare gelmediği için hiçbir şey
+olmuyordu. Kullanıcı aynı hataya kilitleniyordu; yanlış kullanım değildi.
+
+**Yeni akış — istenen sırayla.** "Başlat"a basınca önce hazırlık çalışıyor ve ne olduğu ekranda
+yazıyor: *hayvan aranıyor → hayvan görünüyor, organ aranıyor → organ konumlandı*. Bunun için
+"hayvan var mı" bilgisi organ tespitinden ayrıldı; önceden ikisi tek bir "bulunamadı" altında
+birleşiyordu ve operatöre kamerayı mı çevirmesi yoksa açıyı mı değiştirmesi gerektiği
+söylenemiyordu. Organ konumlanınca seçilen organın konumuna göre faz ve duty **kendiliğinden**
+hesaplanıp onay ekranına geliyor.
+
+**Tıbbi güvenlik sertleştirmeleri:**
+- Konumlandırma artık **üst üste iki tutarlı ölçüm** istiyor — tek bir şanslı kare tedavi
+  parametrelerini tetikleyemez.
+- Ekranda **güven yüzdesi** görünüyor ve düşükse ayrıca işaretleniyor. (Eşik değiştirilmedi;
+  yükseltmek gerçek hastaları reddederdi. Amaç kararı engellemek değil, bilgilendirmek.)
+- Hayvan bulunamazsa 45 saniyede somut yönlendirme (ışık, mesafe, kadraj), iki dakikada kamera
+  otomatik duruyor (pil koruması). Her aşamada "Vazgeç" var.
+
+⚠️ **Değişmeyenler:** hekim onayı olmadan tedavi başlamıyor ve hazırlık karesi **hiçbir bobini
+sürmüyor** — sürüş yalnız onaylanmış, süre denetimli seansta yapılıyor.
+
 ## app 1.9.21 · launcher 1.9.37 — 2026-08-24 (🔴 "Beni hatırla" düzeltildi)
 
 **Etiketler:** `client-app-v1.9.21` → `base-app.zip` (sha `58167771f6d5`) · `launcher-v1.9.37`.

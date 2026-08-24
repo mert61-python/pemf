@@ -32,10 +32,42 @@ const ORGANS = [
 
 const IS_WEB = Platform.OS === "web";
 
+/** Kapalı döngü SEANSINDA kare aralığı — hayvan hareket ettikçe duty/faz güncellenmeli. */
+const KARE_ARALIK_SEANS_MS = 400;
+/**
+ * HAZIRLIKTA kare aralığı. Sunucu organ lokalizasyonunu EN FAZLA 10 sn'de bir çalıştırır
+ * (`ai_router::_ORGAN_LOCALIZE_INTERVAL_S`); hazırlıkta 400 ms'de bir kare yüklemek her işe
+ * yarayan lokalizasyon başına ~25 boşa yükleme demekti (pil, ısınma, mobil veri). Seans hızı
+ * DÜŞÜRÜLMEZ — tasarruf yalnız hazırlıkta.
+ */
+const KARE_ARALIK_HAZIRLIK_MS = 1500;
+/** Öneri başarısız olduğunda en erken yeniden deneme aralığı (retry fırtınası koruması). */
+const ONERI_BEKLEME_MS = 5000;
+/**
+ * Öneri istenmeden önce gereken ARDIŞIK doğrulanmış ölçüm.
+ *
+ * ⚠️ NEDEN: tek bir şanslı kare tedavi parametrelerini tetikliyordu. Konumlandırma tıbbi bir
+ * karar girdisidir (faz/duty o koordinattan hesaplanır); üst üste tutarlı ölçüm istemek
+ * savunulabilir ve maliyeti yalnız birkaç saniye. `_MIN_RELIABILITY` eşiği DEĞİŞTİRİLMEDİ —
+ * yükseltmek yanlış-negatifleri artırır ve gerçek hastayı reddederdi.
+ */
+const ARDISIK_ONAY = 2;
+/** Bu süre sonunda hâlâ bulunamadıysa SOMUT yönlendirme göster (ışık/mesafe/kadraj). */
+const HAZIRLIK_UYARI_MS = 45000;
+/** Hazırlığın ÜST SINIRI — kare akışı sonsuza kadar pil/veri yakmasın. ⚠️ YALNIZ hazırlık:
+ *  süren bir seansı KESMEZ (onun kendi süre-watchdog'u var). */
+const HAZIRLIK_TAVAN_MS = 120000;
+/** Bu değerin altındaki güven "sınırda" sayılır ve operatöre ayrıca işaretlenir. */
+const DUSUK_GUVEN = 0.5;
+
 type Coil = { id: number; freq: number; duty: number; phase: number };
 type FrameResult = {
   image_base64?: string;
   detected?: boolean;
+  /** Karede hayvan var mı — organ lokalizasyonundan AYRI (bkz. ai_router::_extract_organ_target).
+   *  ⚠️ Opsiyonel: eski backend bu alanı göndermez → hazırlık metni "hayvan aranıyor"da kalır,
+   *  akış BOZULMAZ (alan yokluğu "kedi yok" gibi davranır ve kullanıcı yine yönlendirilir). */
+  catDetected?: boolean;
   perCoil?: Coil[];
   target?: { x: number; y: number; z: number };
   eField?: number;
@@ -77,6 +109,43 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);
   const [busy, setBusy] = useState(false);
+  /**
+   * 🔴 HAZIRLIK AŞAMASI (saha bildirimi 2026-08-24) — AI Pro mobilde HİÇ BAŞLAMIYORDU.
+   *
+   * ÖLÇÜLEN KİLİTLENME: `/ai/pro/propose` TAZE organ lokalizasyonu ister; lokalizasyon ancak bir
+   * kare işlenince oluşur; kareler ise YALNIZ `running` iken akıyordu; `running` ise propose'suz
+   * başlamıyordu. Döngüsel kilit. Kullanıcıya "Kamerayı hedefe doğrultup 'Yeniden konumla' ile
+   * lokalizasyonu tamamlayın" deniyordu — ama o düğme yalnızca sunucuda bir bayrak set ediyor ve
+   * kare akmadığı için HİÇBİR ŞEY olmuyordu. Ekran aynı hatayı tekrar tekrar gösteriyordu.
+   *
+   * ÇÖZÜM: seans başlamadan ÖNCE de kare akıtan bir hazırlık aşaması. Sıra sahip isteğiyle aynı:
+   * kedi tespiti → organ tespiti → seçili organ için konuma göre faz/duty önerisi → onay.
+   *
+   * ⚠️ TIBBİ GÜVENLİK: hazırlık karesi BOBİN SÜRMEZ. Backend sürüşü yalnız onaylanmış ve
+   * süre-watchdog'u olan AKTİF seansta yapar (`ai_router::ai_pro_frame` → `session_active`).
+   * Hazırlık o kapıyı GEVŞETMEZ; yalnız lokalizasyonun oluşmasını sağlar.
+   */
+  const [hazirlik, setHazirlik] = useState(false);
+  const hazirlikRef = useRef(false);
+  useEffect(() => { hazirlikRef.current = hazirlik; }, [hazirlik]);
+  /** Hazırlık sırasında öneri BİR KEZ istenir (kareler periyodik geliyor). */
+  const oneriIstendiRef = useRef(false);
+  /**
+   * Öneri BAŞARISIZ olursa bir sonraki denemenin en erken zamanı (ms).
+   *
+   * ⚠️ NEDEN GEREKLİ: efekt her yeni kareye bağlı. Başarısızlıkta bayrağı hemen sıfırlamak
+   * ~kare hızında yeniden deneme (retry fırtınası) ve her denemede bir hata bildirimi demekti —
+   * yani düzeltilen arızanın daha hızlı tekrarlayan hâli. Deneme aralıklı, istek SESSİZ, sebep
+   * hazırlık şeridinde.
+   */
+  const oneriBeklemeRef = useRef(0);
+  const [oneriHatasi, setOneriHatasi] = useState("");
+  /** Ardışık doğrulanmış ölçüm sayacı (bkz. ARDISIK_ONAY). */
+  const ardisikRef = useRef(0);
+  const [ardisik, setArdisik] = useState(0);
+  /** Hazırlığın başladığı an — gecikmede yönlendirme ve üst sınır için. */
+  const hazirlikBasRef = useRef(0);
+  const [hazirlikGecen, setHazirlikGecen] = useState(0);
   // SERT ONAY KAPISI (2026-08-06): bekleyen AI önerisi + onay/red işlemi sürüyor mu.
   const [proposal, setProposal] = useState<AiProposeResponse | null>(null);
   const [approvalBusy, setApprovalBusy] = useState(false);
@@ -155,8 +224,24 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         if (!p?.granted) { setBusy(false); return; }
       }
     }
-    // SERT ONAY KAPISI (2026-08-06): artık doğrudan başlatMIYORUZ. Önce backend'den öneri
-    // alınır (donanıma dokunmaz), hekim modalda görüp onaylar, ancak sonra /start çağrılır.
+    // SERT ONAY KAPISI (2026-08-06): doğrudan başlatMIYORUZ. Önce backend'den öneri alınır
+    // (donanıma dokunmaz), hekim modalda görüp onaylar, ancak sonra /start çağrılır.
+    //
+    // 🔴 SIRA DEĞİŞTİ (2026-08-24): mobilde ÖNCE hazırlık. Öneri taze lokalizasyon ister ve
+    // lokalizasyon ancak kare akınca oluşur; doğrudan propose çağırmak "Organ henüz lokalize
+    // edilmedi" hatasıyla dönüyordu ve kullanıcı o hatadan ÇIKAMIYORDU (bkz. `hazirlik`).
+    // Web'de sunucu kamerası zaten sürekli kare üretir → eski davranış korunur.
+    if (!IS_WEB) {
+      setBusy(false);
+      oneriIstendiRef.current = false;
+      oneriBeklemeRef.current = 0;
+      ardisikRef.current = 0;
+      setArdisik(0);
+      setOneriHatasi("");
+      await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null);  // taze lokalizasyon iste
+      setHazirlik(true);   // kareler akmaya başlar → kedi → organ → öneri (otomatik)
+      return;
+    }
     const prop = await apiPost<AiProposeResponse | null>(
       "/ai/pro/propose",
       { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
@@ -166,6 +251,83 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     if (!prop?.proposalId) return;   // apiPost hata mesajını zaten gösterdi (409/422 dahil)
     setProposal(prop);
   }, [organId, duration, permission, requestPermission]);
+
+  /**
+   * HAZIRLIK: organ lokalize edilir edilmez öneriyi OTOMATİK iste.
+   *
+   * Kullanıcı hazırlığı izler ("kedi aranıyor → organ aranıyor → konumlandı") ve ayrıca bir
+   * düğmeye daha basmak zorunda kalmaz. ⚠️ Öneri BİR KEZ istenir: kareler 400 ms'de bir geliyor,
+   * her karede propose çağırmak sunucuyu ve onay kaydını çöpe boğardı.
+   */
+  useEffect(() => {
+    if (IS_WEB || !hazirlik || oneriIstendiRef.current) return;
+    if (!mobileResult?.detected) {
+      ardisikRef.current = 0;      // ölçüm koptu → sayaç sıfırlanır (ARDIŞIK olmalı)
+      setArdisik(0);
+      return;
+    }
+    // ⚠️ ARDIŞIK DOĞRULAMA: tek bir şanslı kare tedavi parametrelerini tetiklemesin.
+    ardisikRef.current += 1;
+    setArdisik(ardisikRef.current);
+    if (ardisikRef.current < ARDISIK_ONAY) return;
+    if (Date.now() < oneriBeklemeRef.current) return;   // bekleme sürüyor → sessizce geç
+    oneriIstendiRef.current = true;
+    (async () => {
+      // ⚠️ SESSİZ: hata metnini biz hazırlık şeridinde gösteriyoruz. Sessiz olmasaydı her
+      // başarısız denemede ekrana bir "Sunucu Hatası" bildirimi düşerdi.
+      const prop = await apiPost<AiProposeResponse | null>(
+        "/ai/pro/propose",
+        { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+        null,
+        { silent: true }
+      );
+      if (prop?.proposalId) {
+        setOneriHatasi("");
+        setProposal(prop);
+        setHazirlik(false);   // öneri hazır → hazırlık biter; kareler seans başlayınca sürer
+      } else {
+        // Öneri alınamadı (ör. model bu konum için sürülebilir parametre üretmedi): hazırlıkta
+        // KAL ve tekrar denenebilsin — ama ARALIKLI (bkz. oneriBeklemeRef).
+        setOneriHatasi("Öneri alınamadı — konumlandırma sürüyor, tekrar denenecek.");
+        oneriBeklemeRef.current = Date.now() + ONERI_BEKLEME_MS;
+        oneriIstendiRef.current = false;
+      }
+    })();
+    // ⚠️ BAĞIMLILIK `mobileResult` NESNESİDİR, `.detected` DEĞİL (ölçülerek bulundu):
+    // `.detected` bir boolean; `true` olduktan sonra DEĞİŞMEZ, dolayısıyla efekt bir daha
+    // koşmaz, ardışık sayaç 1'de takılır ve öneri HİÇ istenmezdi — yani sertleştirme akışı
+    // tamamen durdururdu. Her kare yeni bir nesne döndürdüğü için kimlik değişir ve sayaç işler.
+  }, [hazirlik, mobileResult, organId, duration]);
+
+  /**
+   * HAZIRLIK SAATİ — gecikmede somut yönlendirme, üst sınırda otomatik durma.
+   *
+   * ⚠️ Üst sınır YALNIZ hazırlığa aittir: süren bir otonom seansı KESMEZ (onun kendi
+   * süre-watchdog'u var). Amaç, hayvan hiç bulunamazken kare akışının sonsuza kadar pil/ısı/veri
+   * yakmasını engellemek ve operatörü çıkışsız bırakmamak.
+   */
+  useEffect(() => {
+    if (!hazirlik) { setHazirlikGecen(0); hazirlikBasRef.current = 0; return; }
+    hazirlikBasRef.current = Date.now();
+    setHazirlikGecen(0);
+    const id = setInterval(() => {
+      const gecen = Date.now() - hazirlikBasRef.current;
+      setHazirlikGecen(gecen);
+      if (gecen >= HAZIRLIK_TAVAN_MS) {
+        setHazirlik(false);
+        oneriIstendiRef.current = false;
+        ardisikRef.current = 0;
+        setOneriHatasi("");
+        platformAlert(
+          "Konumlandırma tamamlanamadı",
+          "Hayvan iki dakikadır kadrajda bulunamadı; kamera durduruldu (pil koruması). " +
+            "Ortamın ışığını artırın, telefonu 1-2 metre mesafeye getirin ve hayvanı kadraja tam alın, " +
+            "sonra tekrar başlatın."
+        );
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [hazirlik]);
 
   /** Hekim ONAYLADI → onayı işaretle, sonra mühürlenmiş parametrelerle tedaviyi başlat. */
   const approveAndStart = useCallback(async () => {
@@ -230,14 +392,28 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const relocalize = useCallback(async () => {
     // Bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele (avuç-Z kalibrasyonu KALKTI).
     const res = await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null);
-    if (!res) platformAlert("Yeniden konumlandırılamadı", "Komut sunucuya ulaşmadı — tekrar deneyin.");
-  }, []);
+    if (!res) {
+      platformAlert("Yeniden konumlandırılamadı", "Komut sunucuya ulaşmadı — tekrar deneyin.");
+      return;
+    }
+    // 🔴 2026-08-24: bu düğme YALNIZ sunucuda bayrak set ediyordu. Mobilde kareler seans
+    // başlamadan akmadığı için bayrağı işleyecek kare HİÇ gelmiyordu → düğme görsel olarak
+    // çalışıyor ama lokalizasyon hiç olmuyordu. Üstelik kullanıcıya hata mesajında tam da bu
+    // düğmeye basması söyleniyordu. Artık kare akışını da başlatır.
+    if (!IS_WEB && !running) {
+      oneriIstendiRef.current = false;
+      setHazirlik(true);
+    }
+  }, [running]);
 
   // ── Mobil: telefon kamerasından periyodik kare yakala → /ai/ai_pro/frame ──
   useEffect(() => {
-    if (IS_WEB || !running) return;
+    // ⚠️ `hazirlik` ŞART: yalnız `running` iken akıtmak, propose→lokalizasyon→kare→seans
+    // döngüsel kilidini yaratıyordu (bkz. `hazirlik` açıklaması).
+    if (IS_WEB || (!running && !hazirlik)) return;
     const capture = async () => {
-      if (inFlightRef.current || !cameraRef.current || !runningRef.current) return;
+      if (inFlightRef.current || !cameraRef.current) return;
+      if (!runningRef.current && !hazirlikRef.current) return;
       inFlightRef.current = true;
       try {
         const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
@@ -261,14 +437,14 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         inFlightRef.current = false;
       }
     };
-    captureIntervalRef.current = setInterval(capture, 400);
+    captureIntervalRef.current = setInterval(capture, running ? KARE_ARALIK_SEANS_MS : KARE_ARALIK_HAZIRLIK_MS);
     return () => {
       if (captureIntervalRef.current) {
         clearInterval(captureIntervalRef.current);
         captureIntervalRef.current = null;
       }
     };
-  }, [running]);
+  }, [running, hazirlik]);
 
   // Unmount'ta: interval'i temizle + ÇALIŞAN otonom tedaviyi DURDUR.
   // YÜKSEK fix: panel kapanınca (tab/modül değişimi) backend bobinleri BAŞSIZ sürmeye devam ediyordu
@@ -293,6 +469,35 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const overlayB64 = IS_WEB ? v?.imageBase64 : mobileResult?.image_base64;
   const perCoil: Coil[] = (IS_WEB ? v?.perCoil : mobileResult?.perCoil) ?? [];
   const remaining = IS_WEB ? (v?.remainingSec ?? 0) : remainingSec;
+
+  /**
+   * HAZIRLIK AŞAMA METNİ (sahip isteği 2026-08-24: "önce kedi tespiti ardından organ tespiti").
+   *
+   * Üç durum AYRI şey söyler; hepsi "bulunamadı" altında birleştiğinde operatör NE YAPACAĞINI
+   * bilemiyordu:
+   *   · kedi yok        → kadrajda hayvan yok, kamerayı ona doğrult
+   *   · kedi var, organ yok → hayvan görünüyor ama o organ (açı/okluzyon) seçilemiyor → açıyı değiştir
+   *   · konumlandı      → parametreler hesaplanıyor
+   */
+  const catDetected = IS_WEB ? Boolean((v as any)?.catDetected) : Boolean(mobileResult?.catDetected);
+  const organAdi = ORGANS.find((o) => o.id === organId)?.name ?? "";
+  /** Güven yüzdesi — ⚠️ eşik 0,3 olduğu için "konumlandı" %30 da olabilir; operatör SAYIYI görmeli. */
+  const guvenYuzde = Math.round((Number(reliability) || 0) * 100);
+  const dusukGuven = detected && (Number(reliability) || 0) < DUSUK_GUVEN;
+  /** Gecikmede SOMUT yönlendirme (yalnız "tekrar deneyin" demek işe yaramaz). */
+  const gecikmeIpucu =
+    hazirlik && hazirlikGecen >= HAZIRLIK_UYARI_MS
+      ? " · Bulunamıyor: ortamın ışığını artırın, 1-2 metre mesafeye gelin, hayvanı kadraja tam alın."
+      : "";
+  const asamaMetni = !hazirlik
+    ? ""
+    : detected
+      ? ardisik < ARDISIK_ONAY
+        ? `✓ ${organAdi} görüldü — doğrulanıyor (${ardisik}/${ARDISIK_ONAY}) · ikinci ölçüm bekleniyor…`
+        : `✓ ${organAdi} konumlandı — güven %${guvenYuzde}${dusukGuven ? " ⚠️ sınırda" : ""} · öneri hesaplanıyor…`
+      : catDetected
+        ? `🔎 Hayvan görünüyor, ${organAdi} aranıyor… (kamerayı biraz çevirin)${gecikmeIpucu}`
+        : `🐾 Hayvan aranıyor… kamerayı hastaya doğrultun${gecikmeIpucu}`;
 
   return (
     <View style={styles.wrap}>
@@ -322,7 +527,11 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           ) : (
             <Text style={styles.camPlaceholder}>{running ? "Görüntü bekleniyor…" : "AI Pro durdu."}</Text>
           )
-        ) : running && permission?.granted ? (
+        ) : (running || hazirlik) && permission?.granted ? (
+          // ⚠️ `hazirlik` ŞART (2026-08-24): kamera YALNIZ `running` iken monte ediliyordu →
+          // hazırlık aşamasında `cameraRef.current` null kalıyor ve kare HİÇ çekilemiyordu.
+          // Kare akışı düzeltilse bile bu tek başına lokalizasyonu imkânsız kılardı (aynı
+          // kilitlenmenin ikinci halkası).
           <View style={styles.cam}>
             <CameraView ref={cameraRef} style={styles.cam} facing={facing} />
             {overlayB64 ? (
@@ -335,7 +544,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           </View>
         ) : (
           <Text style={styles.camPlaceholder}>
-            {running ? "Kamera izni bekleniyor…" : "AI Pro durdu. Başlat → kamera açılır."}
+            {running || hazirlik ? "Kamera izni bekleniyor…" : "AI Pro durdu. Başlat → kamera açılır."}
           </Text>
         )}
       </View>
@@ -348,6 +557,21 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
         <Metric label="Z (mm)" value={`${targetZ ?? "—"}`} />
       </View>
+
+      {/* HAZIRLIK ŞERİDİ — aşamayı ve çıkış yolunu gösterir (2026-08-24). */}
+      {hazirlik ? (
+        <View style={[styles.hazirlikKutu, dusukGuven && styles.hazirlikKutuUyari]}>
+          <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || asamaMetni}</Text>
+          <TouchableOpacity
+            style={styles.hazirlikIptal}
+            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; setArdisik(0); setOneriHatasi(""); }}
+            accessibilityRole="button"
+            accessibilityLabel="Hazırlığı iptal et"
+          >
+            <Text style={styles.hazirlikIptalMetin}>Vazgeç</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Organ seçimi */}
       <Text style={styles.label}>🧠 Hedef Organ</Text>
@@ -400,7 +624,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         accessibilityLabel={running ? "AI Pro otonom seansı durdur" : "AI Pro otonom seansı başlat"}
         accessibilityHint={running ? "Bobinleri durdurur" : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"}
       >
-        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
+        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
       </TouchableOpacity>
 
       {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
@@ -469,6 +693,14 @@ const styles = StyleSheet.create({
     fontWeight: "700", borderWidth: 1, borderColor: "#334155", textAlign: "center",
   },
   countdown: { color: colors.primary, fontSize: typography.subtitle, fontWeight: "800", textAlign: "center", paddingVertical: spacing.xs },
+  hazirlikKutu: {
+    backgroundColor: "#1e3a5f", borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm,
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+  },
+  hazirlikKutuUyari: { backgroundColor: "#78350f" },   // sınırda güven → görsel uyarı
+  hazirlikMetin: { color: "#dbeafe", fontWeight: "700", fontSize: typography.small, flex: 1 },
+  hazirlikIptal: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 6, backgroundColor: "#334155" },
+  hazirlikIptalMetin: { color: "#e2e8f0", fontWeight: "700", fontSize: typography.small },
   calBtn: { backgroundColor: "#334155", borderRadius: 8, padding: spacing.sm, alignItems: "center" },
   calBtnDone: { backgroundColor: "#15803d" },
   calBtnText: { color: "#fff", fontWeight: "700", fontSize: typography.small },

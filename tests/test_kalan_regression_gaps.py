@@ -683,7 +683,10 @@ def ai_pro_loop_ortami(api, monkeypatch):
         monkeypatch.setattr(
             ai_router,
             "_localize_organ",
-            lambda *a, **k: (hedef_var, 10.0, 20.0, 30.0, 0.9 if hedef_var else 0.0, None),
+            # ⚠️ 7. eleman `kedi_var` (2026-08-24): "kedi yok" ile "kedi var ama organ yok"
+            # ayrildi (hazirlik ekrani operatore dogru yonlendirmeyi verebilsin). Hedef
+            # varsa karede kedi de vardir; hedef yokken bu senaryo "kedi hic yok"u temsil eder.
+            lambda *a, **k: (hedef_var, 10.0, 20.0, 30.0, 0.9 if hedef_var else 0.0, None, hedef_var),
         )
         if hedef_var:
             monkeypatch.setattr(ai_router, "_predict_and_drive", lambda *a, **k: ([0.5] * 7, [0.0] * 7, 1.0))
