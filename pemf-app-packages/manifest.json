@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.21",
-  "tag": "client-app-v1.9.21",
+  "version": "1.9.22",
+  "tag": "client-app-v1.9.22",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.21/base.zip",
-      "sha256": "655859570f86fc4e8722fd78a73cda9054a7d667ee252450818b4df8a1377a96",
-      "size": 1533353120,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.22/base.zip",
+      "sha256": "296161f2f4a11b0eccf8149e7b7536c4d2d92478150db56f3027ad8dca62c504",
+      "size": 1533356266,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.21/base-app.zip",
-        "sha256": "58167771f6d5be251920c83195f1e72755edcdbf1d2e4a334550d95eae58247a",
-        "size": 71250203,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.22/base-app.zip",
+        "sha256": "acca5ded1547aacdbb73783fc2e953e2dca6ab97d5ccc425b329826f12a7396d",
+        "size": 71253349,
         "kind": "zip"
       },
       "deps": {
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.21/base.zip",
-    "sha256": "655859570f86fc4e8722fd78a73cda9054a7d667ee252450818b4df8a1377a96",
-    "size": 1533353120,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.22/base.zip",
+    "sha256": "296161f2f4a11b0eccf8149e7b7536c4d2d92478150db56f3027ad8dca62c504",
+    "size": 1533356266,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",
@@ -86,11 +86,11 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.22",
-      "versionCode": 29,
+      "version": "2.3.23",
+      "versionCode": 30,
       "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.32/PEMF_Vet_Mobil.apk",
-      "sha256": "07c245457b0352a9f35073662228f3f28b0693b651a7e9ab17a2245e03a33813",
-      "size": 128428567,
+      "sha256": "3874cf1951c848d643ea62c156e46392d1309a3d6dd4190d741b8985451956d3",
+      "size": 128437839,
       "notes": "Surum uyarisi yanlis alarm veriyordu (duzeltildi); indirilen paket artik SHA256 ile dogrulaniyor; indirme adresi pinlendi."
     }
   }
