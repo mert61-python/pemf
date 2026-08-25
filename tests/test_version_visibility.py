@@ -178,6 +178,39 @@ def test_KRITIK_CHANGELOG_guncel_surumleri_ICERIR():
     )
 
 
+def test_KRITIK_F7_pre_commit_kancasi_CI_ile_BIREBIR_kanal_basligi():
+    """🔴 F7/BLD-3 (denetim 2026-08-24): pre-commit `scripts/check_changelog_surum.py` ham
+    `s not in metin` (substring) yapıyordu; CI (yukarıdaki `test_KRITIK_CHANGELOG_guncel_surumleri`)
+    2026-08-23'te kanal-başlıklı regex'e sertleştirildi. Betiğin KENDİ docstring'i 'mantık test ile
+    BİREBİR aynı tutulur' der — ama ayrışmıştı. Sonuç: cross-kanal bir sürüm (ör. backend, mevcut
+    launcher sürümüyle AYNI numaraya çekilince) pre-commit YANLIŞ-YEŞİL verir, eksik CHANGELOG
+    push'tan SONRA CI'da kırmızı döner ('Run failed e-postasından önce yakala' — kancanın var oluş
+    sebebi — kaybolur). Betik, CI ile AYNI kanal-başlıklı kontrolü yapmalı."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(KOK / "scripts"))
+    import importlib
+
+    mod = importlib.import_module("check_changelog_surum")
+    assert hasattr(mod, "_eksik_kanallar"), (
+        "check_changelog_surum saf `_eksik_kanallar` (kanal-başlıklı regex) fonksiyonu SUNMUYOR — "
+        "hâlâ ham substring; CI ile ayrışık (F7)"
+    )
+    # Cross-kanal senaryo: backend sürümü CHANGELOG'da SADECE bir 'launcher' başlığında geçiyor.
+    changelog = "## launcher 1.9.37 — 2026-08-24\ndegisiklik\n\n## mobile 2.3.23 — 2026-08-24\ndegisiklik\n"
+    v = {"launcher": "1.9.37", "mobile": {"name": "2.3.23"}, "backend": "1.9.37"}  # backend = launcher numarası
+    eksik = mod._eksik_kanallar(changelog, v)
+    assert "backend=1.9.37" in eksik, (
+        "pre-commit backend 1.9.37'yi (yalnız launcher başlığında geçen numara) 'var' saydı — ham "
+        "substring; CI kanal-başlıklı regex ('## app 1.9.37') ile ayrışık (F7 yanlış-yeşil)"
+    )
+    # Karşıt-kanıt: KENDİ kanal (app) başlığında geçen backend sürümü EKSİK sayılmamalı.
+    changelog2 = changelog + "## app 1.9.37 — 2026-08-24 backend kaydi\n"
+    assert "backend=1.9.37" not in mod._eksik_kanallar(changelog2, v), (
+        "app başlığındaki backend sürümü yanlışlıkla eksik sayıldı (kapı fazla katı)"
+    )
+
+
 def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
     """Sitedeki APK indirme adı (`PEMF_Vet_Mobil-<sürüm>.apk`) gerçek mobil sürümle eşleşmeli.
 

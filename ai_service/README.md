@@ -20,8 +20,9 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 
 ## Uçlar (port 8100)
 - Keşif/sağlık: `GET /health`, `/models`, `/infer/models`, `/benchmark`.
-- **13 `POST /infer/*`**: `histopath`, `sound`, `kidney_ct`, `segmentation`, `landmark`, `thermal`,
+- **14 `POST /infer/*`**: `histopath`, `sound`, `kidney_ct`, `segmentation`, `landmark`, `thermal`,
   `cat_organ`, `disease`, `kidney_disease`, `rna`, `reticulocytes`, `em_fantom`, `em_petri`, `em_kedi`.
+  (`kidney_disease` ucu `REGISTRY` dışıdır: gömülü ONNX'i `predict_one` ile doğrudan çağırır → `predictors.py` 13 predictor + bu 1 uç = 14.)
 
 ## ⚠️ Dikkat
 - **GPU = RTX 5090 (Blackwell)** → CUDA **12.8 + PyTorch cu128 ŞART**; eski sürüm Docker AI'yı çökertir.

@@ -6,7 +6,7 @@ bulut (Supabase) yalnız cihaz-registry + opsiyonel şifreli PII içindir (bkz. 
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `treatment_history_db.py` | **`TreatmentHistoryDB`** (ana tedavi DB'si) — seanslar, coil-run'lar, sensör örnekleri (batch insert), seans olayları, AI analizleri, dayanıklı **MQTT outbox** (enqueue/inflight/retry-backoff), şema migrasyonları (rollback'li), bütünlük kontrolü, veri-saklama/PII-redaksiyon temizliği. SQLCipher-veya-düz-metin farkında |
+| `treatment_history_db.py` | **`TreatmentHistoryDB`** (ana tedavi DB'si) — seanslar, coil-run'lar, sensör örnekleri (batch insert), seans olayları, AI analizleri, **denetim izi** (`audit_events` — salt-ekle; UPDATE/DELETE trigger'la engelli; `denetim_yaz`), dayanıklı **MQTT outbox** (enqueue/inflight/retry-backoff), şema migrasyonları (rollback'li), bütünlük kontrolü, veri-saklama/PII-redaksiyon temizliği. SQLCipher-veya-düz-metin farkında |
 | `patient_database.py` | **`PatientDatabase`** — hasta CRUD; **alan-başı Fernet şifreleme**, HMAC tokenize arama indeksi, pasif hastaların anonimleştirilmesi, yedek |
 | `session_manager.py` | **`SessionManager`** — canlı seans kaydedici: seans başlat/bitir, batch parametre + sensör yazımı, notlar, bayatlamış-seansı zorla-bitir |
 | `auth_db.py` | **`AuthDB`** — yerel kullanıcı kimlik deposu (kayıt/doğrula/sıfırla), tuzlanmış parola hash'i |
@@ -47,6 +47,17 @@ dizinindedir ve **sahibi tarafından elle** (SQL Editor → yapıştır → Run)
 |---|---|---|
 | `resolve_device_bayat_gorunur.sql` | `resolve_device` tazelik penceresini 5 dk → **30 gün** yapar. Pencere istemcinin `STALE_MS`i ile eşit olduğu için bayat satır istemciye hiç ulaşmıyor, "cihaz kapalı" teşhisi ölü kod kalıyordu; kullanıcı doğru kodda bile **"Kodu kontrol edin"** görüyordu (denetim 2026-08-17) | **Evet** — uygulanmazsa saha teşhisi yanlış yöne bakmaya devam eder. APK/web yayını gerekmez. |
 | `upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
+
+### Jeton ücretlendirme + canlı-şema sertleştirme
+
+Bu `.sql` dosyaları da bu dizindedir ama yukarıdaki v1→v2 sırasından **bağımsızdır**; canlıya
+`python scripts/supabase_sql.py --dosya database/<dosya>.sql --yaz` (ya da SQL Editor) ile uygulanır.
+
+| Dosya | Ne yapar | Zorunlu mu |
+|---|---|---|
+| `supabase_jetonlar.sql` | JETON ücretlendirme altyapısı — `token_balances` (iki-cepli: **aylik_hak** devretmez + **satin_alinan** süresiz/devreder) + `token_ledger` (UNIQUE `istek_id` → çift-düşme yok) + atomik `jeton_tuket` RPC. Yazma yalnız `service_role`; kullanıcı yalnız kendi bakiyesini okur. ⚠️ TİCARİ kapı, güvenlik DEĞİL — tedavi yolunu engellemez (bkz. [`../servers/jeton.py`](../servers/README.md)) | Jeton satışı açılacaksa |
+| `supabase_sertlestirme.sql` | Canlı-şema sertleştirme — `public` tablolarındaki `anon`/`authenticated` **doğrudan tablo yetkilerini** (Supabase varsayılanı) geri alır. Bugün RLS sızıntıyı önlüyor; bu, "gizli mayını" (ileride izin-verici politika ya da göç sırasında RLS kapanması) kapatır | Evet (savunma-derinliği) |
+| `supabase_okuma_rpc.sql` | Kullanıcı okumalarını **SECURITY DEFINER** RPC'lere taşır — tablolarda HİÇBİR role yetki kalmaz; her fonksiyon `auth.uid()` kullanır (kimliği parametre olarak ALMAZ), `anon`a grant verilmez, dönen alan kümesi imzada sabitlenir | Evet (sertleştirme ile birlikte) |
 
 ## Şifreleme modeli (iki katman)
 1. **Tüm-DB SQLCipher** — `PEMF_ENCRYPT_AT_REST=1` ile; anahtar OS keyring'de (`sqlcipher_util.py`).

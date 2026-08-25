@@ -402,7 +402,14 @@ class CloudSyncWorker:
                                 pulse_duration_ms=excluded.pulse_duration_ms,
                                 session_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
                                               THEN treatment_sessions.session_status ELSE excluded.session_status END,
-                                sync_status=1
+                                -- D1 (denetim 2026-08-24): korunan yerel kapanisin bekleyen PUSH bayragini
+                                -- KORU. Kosulsuz sync_status=1, monotonik-kapanis CASE'i yerel kapanisi
+                                -- KORUSA BILE onun sync_status=0'ini (PUSH bekliyor) siliyordu → kapanis
+                                -- buluta HIC gitmez, bayat-active kalicilasirdi. Kapanis korunuyorsa
+                                -- (yerel end_time dolu + bulut NULL) yerel sync_status'u koru; aksi halde
+                                -- normal PULL sonrasi (yerel = bulutla ayni) senkron sayilir (1).
+                                sync_status=CASE WHEN treatment_sessions.end_time IS NOT NULL AND excluded.end_time IS NULL
+                                              THEN treatment_sessions.sync_status ELSE 1 END
                             """,
                             (
                                 rs.get("id"),

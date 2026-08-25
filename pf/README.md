@@ -21,9 +21,9 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 |---|---|
 | `src/PemfApp.tsx` | Kök uygulama bileşeni |
 | `src/screens/` | 12 ekran: Auth, Welcome, Dashboard, Control, Patient, SensorMonitor, TreatmentHistory, KpiDashboard, Settings, AiHub, AiHistory, DemaSimulator |
-| `src/services/` | Backend/bulut istemcileri: `apiClient.ts`, `authApi.ts`, `supabaseAuth.ts`, `wsClient.ts`, `discovery.ts` (mDNS), `deviceRegistry.ts`, `installedProfiles.ts`, `therapyLimits.ts`, `updates.ts`, `config.ts` |
+| `src/services/` | Backend/bulut istemcileri: `apiClient.ts`, `authApi.ts`, `supabaseAuth.ts`, `desktopSession.ts` (masaüstü client→app oturum devri; çift giriş yok), `wsClient.ts`, `discovery.ts` (mDNS), `deviceRegistry.ts`, `installedProfiles.ts`, `therapyLimits.ts`, `updates.ts`, `config.ts` |
 | `src/components/` | `ui/` · `domain/` · `visual/` + `UpgradeModal.tsx` |
-| `src/context/` | React context'leri: AppNav · Auth · Entitlement · LiveData · UserMode *(tekil `context/`, `contexts/` değil)* |
+| `src/context/` | React context'leri: AppNav · Auth · Entitlement · LiveData · Operator · UserMode *(tekil `context/`, `contexts/` değil)* |
 | `src/hooks/`, `src/config/`, `src/theme/`, `src/types/`, `src/utils/` | Hook'lar, yapılandırma, tema (premium tasarım token'ları), tipler, yardımcılar |
 | `app/` | expo-router girişi (`_layout.tsx`, `index.tsx`) |
 | `android/` | **Tam native Android projesi** — APK build kökü (`build.gradle`, `gradlew`, `app/`) |

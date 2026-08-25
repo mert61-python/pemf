@@ -70,8 +70,11 @@ def test_KRITIK_2_launcher_backendten_OKUR():
     """Halka 2: okuma yoksa geri yazilan jeton backend belleginde olur."""
     s = _oku(_BACKEND)
     assert "pub fn pull_desktop_session" in s, "launcher devir oturumunu OKUMUYOR"
-    m = re.search(r"pub fn pull_desktop_session\(.*?\n\}", s, re.S)
-    assert "is_loopback_http_url" in m.group(0), (
+    # 3. tur F5: okuma gövdesi timeout-parametrized `pull_desktop_session_kisa`e çıkarıldı (60 sn
+    # döngüsü 5 sn, teardown son-yakalama KISA bütçeyle çağırır). Loopback doğrulaması O gövdede →
+    # gerçek okuma+loopback-kontrolü taşıyan fonksiyona pinle (thin wrapper'a değil).
+    m = re.search(r"pub fn pull_desktop_session_kisa\(.*?\n\}", s, re.S)
+    assert m and "is_loopback_http_url" in m.group(0), (
         "okuma loopback dogrulamasi yapmiyor — oturum yalniz 127.0.0.1'den alinmali"
     )
 
@@ -80,13 +83,54 @@ def test_KRITIK_3_launcher_diske_ISLER():
     """Halka 3: okunan jeton diske islenmezse bir sonraki acilista yine bayat kopya kullanilir."""
     s = _oku(_MAIN)
     assert "pull_desktop_session" in s, "senkron gorevi backend'ten OKUMUYOR"
-    i = s.find("pull_desktop_session")
+    # 3. tur F4: doc-comment'ler artik `pull_desktop_session` adini metinde daha once aniyor →
+    # cipla ilk-gecise degil GERCEK CAGRI YERINE (`pull_desktop_session(port)`) pinle.
+    i = s.find("pull_desktop_session(port)")
+    assert i > 0, "gercek pull_desktop_session(port) cagrisi bulunamadi"
     assert "rotasyonu_isle" in s[i : i + 600], "okunan oturum diske ISLENMIYOR"
     assert "oturum_rotasyon_senkronu_baslat" in s, "senkron gorevi HIC baslatilmiyor"
     # Gorev backend hazir olunca baslamali (port o an bilinir).
     j = s.find("fn on_backend_ready")
     assert "oturum_rotasyon_senkronu_baslat" in s[j : j + 1500], (
         "senkron backend hazir oldugunda baslatilmiyor — pencere acikken hic calismaz"
+    )
+
+
+def test_KRITIK_4_SAHIPLENILEN_backend_de_senkronlar():
+    """🔴 C3 (denetim 2026-08-24): crash-sonrasi ORPHAN backend'i sahiplenen yolda da rotasyon
+    senkronu baslamali.
+
+    `start_installed`, calisan bir backend bulursa (`detect_running_backend`) yenisini baslatmaz,
+    mevcut olani SAHIPLENIR — `on_backend_ready` CAGRILMAZ (child yok, sureci biz baslatmadik,
+    oldurme hakkimiz da yok). `test_KRITIK_3` senkronu YALNIZ on_backend_ready'de kilitliyor; bu
+    sahiplenme dali onun disinda kaliyordu. Senkron burada baslamazsa: pencere jetonu dondurup
+    backend'e push eder, launcher pull etmez, diskteki kopya bayatlar, sonraki acilista
+    SessionRevoked -> "Beni hatirla" SILINIR (saha arizasinin sahiplenme yolunda acik kalan kolu).
+    """
+    s = _oku(_MAIN)
+    # start_installed sahiplenme dalinin GOVDESINI yakala (`Some(port) = detect_running_backend`
+    # blogu, kapanan `}`e kadar). repair'daki dal `Some(p)` oldugundan bu regex onu secmez.
+    m = re.search(r"if let Some\(port\) = backend::detect_running_backend\(&root\) \{(.*?)\n    \}", s, re.S)
+    assert m, "start_installed sahiplenme dali bulunamadi — main.rs bicimi degismis"
+    assert "oturum_rotasyon_senkronu_baslat" in m.group(1), (
+        "sahiplenilen backend'in rotasyon senkronu BASLATILMIYOR — o oturumun jeton donmeleri diske "
+        "islenmez ve sonraki acilista 'Beni hatirla' silinir (C3)"
+    )
+
+
+def test_KARSIT_KANIT_senkron_CIFT_thread_baslatmaz():
+    """⚠️ Sahiplenme dali her Baslat'ta kosabilir (state.proc'a KOYULMAZ) → guard olmadan her cagri
+    yeni bir thread biriktirirdi (L7 cift-thread). Senkron baslatma bir kez-guard ile korunmali
+    (baslatici guard'i CAGIRMALI + guard'in kendisi atomik compare_exchange olmali)."""
+    s = _oku(_MAIN)
+    m = re.search(r"fn oturum_rotasyon_senkronu_baslat\(.*?\n\}\n", s, re.S)
+    assert m, "senkron gorevi bulunamadi"
+    assert "senkron_baslamali" in m.group(0), (
+        "senkron baslatma guard'i CAGIRMIYOR — sahiplenme dali her Baslat'ta thread biriktirir (L7)"
+    )
+    g = re.search(r"fn senkron_baslamali\(.*?\n\}\n", s, re.S)
+    assert g and "compare_exchange" in g.group(0), (
+        "guard atomik degil (compare_exchange yok) — yaris altinda iki thread birden acilabilir"
     )
 
 

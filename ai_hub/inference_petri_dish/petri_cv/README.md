@@ -314,8 +314,9 @@ cv2.imwrite("combined_tr.jpg", panels_tr["07_combined"])
 
 ```
 inference_petri_dish/
-├── yolo11m-seg.pt              ← YOLO11m-seg model (22.3M, mAP50-95=0.961)
+├── yolo11m-seg.pt              ← YOLO11m-seg model (22.3M, mAP50-95=0.961; büyük ağırlık → /models mount)
 ├── inference_petri_dish.py     ← YOLO standalone (mevcut)
+├── plausibility.py             ← makullik denetimi: yanlış modül fotoğrafını (fantom/kedi) sessizce işlemeyi engeller
 ├── results/                    ← YOLO standalone çıktı
 └── petri_cv/                   ← YOLO + ArUco + Predictor pipeline
     ├── __init__.py

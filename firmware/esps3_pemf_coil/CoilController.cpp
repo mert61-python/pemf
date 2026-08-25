@@ -69,6 +69,14 @@ static volatile uint32_t s_sync_ignored = 0;
 static volatile bool     s_natural_wrap  = false;  /* ddsTimerISR bir tam periyot tamamladı mı */
 static volatile uint32_t s_early_streak  = 0;      /* ardışık "erken kilit" (wrap'sız) sayısı */
 static volatile bool     s_sync_disabled = false;  /* uyumsuzluk saptandı → sync artık çıkışı bozmaz */
+/* 3. tur denetimi [E4] (2026-08-24): İLK-DARBE FAZ EDİNİMİ. s_tick yalnız iki ISR'da yazılır ve
+ * START'ta hiçbir ortak epoch'a hizalanmaz. STM main.c ref_ms epoch-hizasını ESP'de taklit
+ * edemeyiz (ortak saat yok) → ESP fazını YALNIZ PB1 darbesinden öğrenir. Tolerans dalı yalnız
+ * periyot SINIRINA yakın darbeyi kilitler; AYNI frekanslı ama SABİT faz-ofsetli çift (darbe
+ * periyot ortasında) tolerans penceresine hiç giremez → 'ignored' → faz kilidi ASLA kurulmaz →
+ * komut edilen çok-bobin faz deseni yanlış. Seans başı / freq değişiminde bu bayrak armlanır;
+ * ilk darbe nerede gelirse gelsin s_tick=0 ile edinim yapılır, sonra tolerans dalı sürdürür. */
+static volatile bool     s_awaiting_acquire = false; /* seans başı / freq değişimi → ilk PB1 darbesi faz kilidini EDİNİR */
 #define SYNC_MISMATCH_STREAK 8U   /* ~8 periyot başı erken kilit → uyumsuzluk kesin (jitter'ı tolere eder) */
 
 static hw_timer_t*  s_timer = nullptr;
@@ -95,6 +103,22 @@ static void IRAM_ATTR syncPulseISR() {
         return;
     }
     if (s_sync_disabled) {          /* HG-3: uyumsuzluk saptandı → 8266 gibi tek faz, sync yok */
+        portEXIT_CRITICAL_ISR(&s_mux);
+        return;
+    }
+    /* [E4] İLK-DARBE FAZ EDİNİMİ: bu kapı !s_active + s_sync_disabled kapılarından SONRA (pasif ya
+     * da uyumsuz seansta EDİNMEYİZ → HG-3 DC-yapışma latch'i ve [4.3] pasif-darbe koruması korunur),
+     * AMA tolerans mantığından ÖNCE gelir. Darbe periyot ORTASINDA gelse de s_tick=0 ile kilidi
+     * edinir; edinimsizken orta-darbe 'ignored'a düşer ve faz HİÇ kilitlenmezdi. Edinim natural_wrap
+     * ve early_streak'i sıfırlar (edinim erken-kilit olarak sayılmasın → yanlış DC-yapışma disable'ı
+     * yok). Sonrasında darbe tolerans penceresine oturur ve normal kilit sürdürür.
+     * ⚠️ TEZGÂHTA SKOPLA DOĞRULA: 2 bobin aynı freq + komut edilen faz farkı → skopla ölç. */
+    if (s_awaiting_acquire) {
+        s_awaiting_acquire = false;
+        s_natural_wrap = false;
+        s_early_streak = 0;
+        s_tick = 0;
+        s_sync_locked++;
         portEXIT_CRITICAL_ISR(&s_mux);
         return;
     }
@@ -392,6 +416,14 @@ bool CoilController::handleCommand(const ControlCommand& cmd) {
 /* ---- Çıkışı gerçekten başlat ---- */
 void CoilController::_beginOutput(unsigned long long epochMs, unsigned long devralinanSuresizMs) {
     _updatePWM(_frequency, _dutyCycle, _phase);
+    /* [E4] (2026-08-24): seans başında faz edinimini KOŞULSUZ armla. AI Pro hep 1 Hz → aynı-freq
+     * yeniden başlatmada _updatePWM'de freqChanged=false olur ve orada armlanmaz; ama STM epoch'u
+     * yeniden başladı, faz ofseti YENİ → ilk PB1 darbesinde yeniden edinmeliyiz. ISR !s_active iken
+     * zaten edinmez, o yüzden bu atamanın s_active=true'dan önce/sonra olması güvenlik açısından fark
+     * etmez ([4.3] pasif-darbe koruması korunur). */
+    portENTER_CRITICAL(&s_mux);
+    s_awaiting_acquire = true;
+    portEXIT_CRITICAL(&s_mux);
     _active = true;
     _startTime = millis();
     _duration = (unsigned long)_durationSec * 1000UL;
@@ -441,6 +473,7 @@ void CoilController::_updatePWM(int freq, int duty, int phase_deg) {
         s_sync_disabled = false;
         s_early_streak = 0;
         s_natural_wrap = false;
+        s_awaiting_acquire = true;  /* [E4] yeni frekans → faz kilidini yeniden EDİN */
     }
     portEXIT_CRITICAL(&s_mux);
 

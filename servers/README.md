@@ -23,6 +23,8 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `live_state.py` | Canlı cihaz durumunun tek kaynağı; WS istemci kaydı + serileştirilmiş broadcast; STM/bobin/seans/hasta canlı-güncelleme fonksiyonları |
 | `session_state.py` | Aktif-seans anlık görüntüsüne küçük paylaşımlı erişim (`snapshot()`, `is_active()`) |
 | `coil_run_tracker.py` | Her bobinin "coil run" yaşam döngüsü + dakika-ortalaması → run özeti (treatment DB'ye) |
+| `efield_live.py` | Canlı E-alanı türetici — konum+organ seans boyunca SABİT, değişen `achieved_B`/`duty_sum` ile em_fantom ONNX **vekilini** AYRI düşük-frekanslı döngüde çağırıp önbelleğe yazar (istek yolunda çalışmaz → snapshot/WS gecikmesini artırmaz); AI paneli ile bar aynı kaynaktan okur |
+| `ai_approval.py` | **Hekim onay kapısı** — AI Pro'nun önerdiği per-bobin duty/faz/organ hekim onaylamadan UYGULANMAZ; onay tek-kullanımlık (`consume()`), süreli (`TTL_S`), parametre-mühürlü ve YALNIZ bellekte (süreç yeniden başlarsa yeniden onay istenir — bilinçli) |
 
 ### Kimlik & yetki
 | Dosya | Görev |
@@ -30,6 +32,9 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `auth.py` | API-token üret/sakla/doğrula; auth-gerekli/muaf yol mantığı; güvenilir-ağ (LAN) tespiti |
 | `auth_router.py` | Kayıt / giriş / şifre-sıfırlama / OAuth-kod / admin-kod uçları (e-posta+IP throttle, HTTP 429) |
 | `entitlement.py` | Abonelik/araştırma-eklentisi geçidi — **flag-kapılı + FAIL-OPEN** (tedaviyi ASLA bloklamaz; güvenlik-limitlerinden bağımsız) |
+| `operator_tokens.py` | Operatör kimlik jetonları — PIN doğrulanınca kısa-ömürlü jeton verilir; yazma yollarında `operator_email` gövdeden DEĞİL JETONDAN türetilir (kayıt doğru hekime atfedilir). YALNIZ bellekte, kayan-TTL, hiçbir seviyede loglanmaz |
+| `jeton.py` | **Jeton (token) tüketim kapısı** — 1 jeton = 1 AI analizi; `jeton_gate` yalnız YENİ AI analizi isteğini kapılar. TİCARİ kapı, güvenlik DEĞİL: süren seansı / acil-durdurmayı / kontrolü ASLA engellemez. `PEMF_JETON_ENFORCED` KAPALIYKEN no-op; çevrimdışı yerel defter + bağlantı gelince uzlaşma (çift-düşme yok) |
+| `audit_log.py` | Denetim izi (HTTP) — geri-dönüşsüz işlemleri (toplu silme, dışa/içe aktarma, operatör/PII) IP + kanıtlanmış operatörle şifreli `audit_events`'e bağlar (`treatment_history_db.denetim_yaz`). Yazım tedaviyi ENGELLEMEZ; İÇERİK yazmaz (yalnız kapsam/adet/sonuç) |
 
 ### REST router'ları
 | Dosya | Görev |
@@ -39,7 +44,7 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `history_router.py` | Tedavi geçmişi (`/api/history`) — seans liste/detay, sil, not, coil-run CSV export, PDF rapor |
 | `settings_router.py` | Uygulama ayarları — yükle/kaydet/güncelle |
 | `system_router.py` | Sistem bilgisi, gateway durumu, dashboard, health, keşif, KPI özeti, istemci-hata log |
-| `ai_router.py` | AI-inference REST + **AI-Pro kapalı-döngü bobin sürme** (`_ai_pro_loop`); `analyze_*` model uçları, lazy model cache |
+| `ai_router.py` | AI-inference REST + **AI-Pro kapalı-döngü bobin sürme** (`_ai_pro_loop`); `analyze_*` model uçları, lazy model cache. **Sert onay kapısı** (öner → hekim onaylar → ancak sonra `/api/ai/pro/start`) ve **kare sahipliği** (`_ai_owner_client`: AKTİF sahipli seansta YABANCI istemci kareyi lokalize edip organ/bobin süremez). Router `jeton_gate` + `ai_queue_gate` bağımlılıklarını taşır |
 | `ai_client.py` | Inference'ı harici AI mikroservisine devreden ince istemci ([`../ai_service/`](../ai_service/README.md)); `ai_service_enabled()` ise |
 | `update_router.py` | OTA — `/api/update/status\|apply\|rollback` (→ `update_manager`) |
 
@@ -54,7 +59,8 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 ## ⚠️ Güvenlik mekanizmaları (bu klasörde)
 - `api_server._session_duration_watchdog` — süre dolunca **donanım-STOP** (firmware keep-alive tek başına durdurmaz).
 - ESP telemetri watchdog + `emergency_stop` → tüm transport'lara STOP.
-- `entitlement.py` **fail-open** ve güvenlik-limitlerinden **bağımsızdır** (bilinçli).
+- `ai_approval.py` + `ai_router` **kare sahipliği** — otonom AI tedavisi hekim onayı olmadan başlamaz; başka bir istemci sahibin AI-Pro karesini ezip organ/parametre değiştiremez.
+- `entitlement.py` ve `jeton.py` **fail-open / ticari kapı**, güvenlik-limitlerinden **bağımsız** (bilinçli) — süren seansı / acil-durdurmayı / kontrolü ASLA kapılamaz.
 
 ---
 İlgili: [proje geneli](../README.md) · [mimari](../docs/ARCHITECTURE.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md)

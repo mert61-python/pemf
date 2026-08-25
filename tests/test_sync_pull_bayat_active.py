@@ -110,6 +110,84 @@ def test_KRITIK_bayat_active_kapanisi_GERI_ACAMAZ(temp_app_data, monkeypatch):
     assert f == 42.0, "koruma asiri genis: kapanis-disi kolonlar da guncellenmez oldu"
 
 
+def _sync_status_oku(db, sid):
+    with db._get_connection() as c:
+        c.row_factory = None
+        return c.execute("SELECT sync_status FROM treatment_sessions WHERE id=?", (sid,)).fetchone()[0]
+
+
+def test_KRITIK_D1_kapanis_sync_status_SIFIRLAR(temp_app_data):
+    """🔴 D1 (denetim 2026-08-24): seans AKTİFKEN buluta push edilmiş olabilir (worker 60 sn
+    interval → 1 dk'dan uzun HER seans; yerel sync_status=1). Kapanış `sync_status`'u 0'a
+    ÇEKMEZSE bir sonraki PUSH ('WHERE sync_status=0') kapanışı HİÇ görmez → bulut kopyası SONSUZA
+    DEK 'active' kalır (diğer cihazlarda/raporlarda seans hep açık, end_time/duration bulutta hiç
+    oluşmaz). Kapanış senkronlanmayı İŞARETLEMELİ."""
+    from database.treatment_history_db import get_treatment_db
+
+    db = get_treatment_db(temp_app_data)
+    sid = db.start_session("Manual", operator_name="Vet", patient_name="Boncuk")
+    # Seans aktifken buluta push edildi → sync_status=1 (worker'ın yaptığı).
+    with db._get_connection() as c:
+        c.execute("UPDATE treatment_sessions SET sync_status=1 WHERE id=?", (sid,))
+        c.commit()
+    db.end_session(sid, duration_minutes=30, session_status="completed")
+    assert _sync_status_oku(db, sid) == 0, (
+        "kapanış sync_status'u 0'a çekmedi — bir sonraki PUSH ('WHERE sync_status=0') kapanışı "
+        "görmez, bulut kopyası sonsuza dek 'active' kalır (D1 kök nedeni)"
+    )
+
+
+class _PushHatali(_FakeSupabase):
+    """PUSH (upsert_session) AĞ HATASIYLA düşer; PULL (resolve_sessions) çalışır. Gerçekçi: bulut
+    push'u ağ hatasıyla başarısız olur (sık), o döngüde PULL yine de bayat-active getirir."""
+
+    def rpc(self, name, params=None):
+        if name == "upsert_session":
+            raise RuntimeError("bulut push agi hatasi (test)")
+        return _FakeRpc(self._resolve if name == "resolve_sessions" else [])
+
+
+def test_KRITIK_D1_bayat_active_PULL_PUSH_bayragini_SILMEZ(temp_app_data, monkeypatch):
+    """🔴 D1 (denetim 2026-08-24): PUSH başarısızken (sync_status=0 KALIR) gelen bayat-active PULL,
+    korunan kapanışın bekleyen PUSH bayrağını KOŞULSUZ `sync_status=1` ile silmemeli — yoksa
+    kapanış CASE ile korunsa bile bir daha ASLA PUSH edilmez ve bulut sonsuza dek 'active' kalır.
+    Kapanış korunuyorsa sync_status da korunur (aynı CASE koşulu)."""
+    from servers.sync_worker import CloudSyncWorker
+
+    db, sid = _kapali_seans_kur(temp_app_data)
+    assert _sync_status_oku(db, sid) == 0, "önkoşul: kapanış PUSH bekliyor (sync_status=0)"
+
+    bayat = {
+        "id": sid,
+        "session_date": "2026-08-22",
+        "start_time": "2026-08-22T10:00:00",
+        "end_time": None,  # bayat-açık bulut kopyası
+        "duration_minutes": None,
+        "treatment_mode": "Manual",
+        "target_condition": None,
+        "frequency_hz": 42.0,
+        "intensity_mt": None,
+        "pulse_duration_ms": None,
+        "session_status": "active",
+        "created_at": "2026-08-22T10:00:00",
+    }
+    # PUSH ağ hatasıyla düşer → kapanış sync_status=0 KALIR; aynı döngüde PULL bayat-active gelir.
+    monkeypatch.setenv("PEMF_CLOUD_PATIENT_SYNC", "1")
+    w = CloudSyncWorker("", "")
+    w.client = _PushHatali([bayat])
+    w.patient_sync_enabled = True
+    w.device_id = "test-device"
+    w._sync_sessions(db)
+
+    assert _sync_status_oku(db, sid) == 0, (
+        "PUSH başarısızken bayat-active PULL, korunan kapanışın PUSH bayrağını (sync_status 0→1) "
+        "SİLDİ → kapanış bir daha ASLA PUSH edilmez, bulut kopyası sonsuza dek 'active' (D1)"
+    )
+    # Kapanış üçlüsü de korunmalı (mevcut monotonik-kapanış koruması bozulmasın):
+    sonra = _seans_oku(db, sid)
+    assert sonra["end_time"] and sonra["session_status"] != "active", "kapanış PULL'da bayat-active ile ezildi"
+
+
 def test_KARSIT_KANIT_gercek_kapanis_bulutttan_UYGULANIR(temp_app_data, monkeypatch):
     """Baska cihazda kapatilan seansin kapanisi yerelde de gorunmeli — koruma yalniz
     'dolu → NULL' yonunu keser, 'NULL/eski → dolu' yonunu DEGIL."""

@@ -512,6 +512,47 @@ _ai_loop_active = False
 # ⚠️ MÜHÜR İHLALİ DEĞİL: `client_id` bir TEDAVİ PARAMETRESİ değil; onaylanan D/P/organ/süre yine
 # mühürlü kopyadan okunuyor.
 _ai_owner_client = ""
+
+
+def _ai_kare_yabanci(client_id) -> bool:
+    """3. tur denetimi [B1] (2026-08-24): bu kare/istek AKTİF seansın SAHİBİ DIŞINDAN mı geliyor?
+
+    YABANCI = sahip BİLİNİYOR (modern istemci start'ta client_id yolladı → `_ai_owner_client` dolu)
+    AND gelen kimlik ONDAN FARKLI. Sahip boşsa (eski/anonim başlatım) → False (hiç bastırma yok;
+    tek-eski-istemci sürüşü + geriye-uyum korunur).
+
+    ⚠️ `bool(frame_client)` şartı KASITEN YOK (adversaryal tasarım-vetting Hole 1): kimliksiz kare
+    de yabancı sayılmalı — yoksa alanı atlayan bir izleyici/saldırgan bastırmayı baypaslardı. Modern
+    sahip kendi karesinde HER ZAMAN id taşıdığından (start'taki kimlikle aynı) yanlış-bastırma olmaz.
+
+    ⚠️ KAYITLI SAHİP-KARARI KORUNUR: bu YENİ YETKİ VERMEZ (deny-only) — yabancı yalnız SÜRÜŞTEN /
+    organ-değişiminden / relocalize'den men edilir; `/ai/pro/stop` GÖVDESİZ ve HERKESE AÇIK kalır,
+    onaylanan D/P/organ/süre mührü değişmez. En fazla best-effort: aynı-klinik istemcisi sahibin
+    id'sini /status'tan okuyup taklit ederse bastırma aşılır (client_id yetki belirteci değil) —
+    ama B1'in KAZA senaryosu (iki hekim, ayrı telefon, rastgele id) kapanır.
+
+    ⚠️ AKTİF-SEANS KAPISI (adversaryal kod-inceleme MAJOR bulgusu, 2026-08-25): _ai_owner_client YALNIZ
+    /ai/pro/stop tarafından sıfırlanır; süre-dolumu / acil-durdur / dış /session/stop ile biten seansta
+    STALE kalır. Aktif-seans kontrolü olmadan bu, BAŞKA bir modern istemciyi AI Pro'dan KALICI kilitlerdi
+    (yabancı sayılır → kare localize etmez → propose 409 → owner'ı ezecek tek yol olan /start'a asla
+    ulaşamaz). Bastırma bu yüzden YALNIZ gerçekten AKTİF sahipli seansta uygulanır; seans bitince
+    (is_active=False) owner stale kalsa da bastırma YOK."""
+    if not _ai_owner_client:
+        return False
+    try:
+        import servers.api_server as _api
+
+        with _api._session_lock:
+            _s = _api._active_session
+            _aktif = bool(_s.get("is_active")) and str(_s.get("mode", "")).startswith("AI")
+    except Exception:
+        _aktif = False
+    if not _aktif:
+        return False
+    frame_client = str(client_id or "")[:64]
+    return frame_client != _ai_owner_client
+
+
 import threading as _ai_threading
 
 # TOCTOU koruma: start/stop check-and-set atomik olsun → iki es-zamanli /ai/pro/start ikinci bir
@@ -626,6 +667,18 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay, kedi_var
 
 
+# E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
+# catorgan_predictor RuntimeError("segmentasyon: ...") atar. Bu, "kedi yok" durumudur; pose/PnP
+# hatası (kedi VAR ama organ okluzyon/açı) FARKLI bir şeydir. ⚠️ Mesaj-prefix'e bağlı — kaynak
+# tek yer (catorgan_predictor.py:80 sabit "segmentasyon:"); firmware kadar kırılgan değil ama
+# değişirse test_ai_pro_kedi_yok_mandal kırmızı verir.
+_CAT_ABSENT_ERR_PREFIX = "segmentasyon:"
+
+
+def _is_cat_absent_error(exc) -> bool:
+    return isinstance(exc, RuntimeError) and str(exc).startswith(_CAT_ABSENT_ERR_PREFIX)
+
+
 def _localize_organ_cpu(frame, organ_id):
     """cat_organ'ı YEREL (in-process, CPU) çalıştır → hedef organ. (tek-EXE klinik + GPU-fallback yolu)."""
     import tempfile
@@ -636,6 +689,14 @@ def _localize_organ_cpu(frame, organ_id):
     try:
         clf = _get_or_load_catorgan()
         result = clf.predict(tmp.name, render=True, target_oid=(int(organ_id) or None))
+    except Exception as e:
+        # E3-b: kedi-yok (segmentasyon hatası) İSTİSNA yerine temiz "kedi yok" tuple'ı dön
+        # (localized=False, kedi_var=False) → loop/frame'in MEVCUT başarılı cache.update'i kedi_var=False
+        # yazar → tek-yönlü mandal hata dallarına DOKUNMADAN kırılır. pose/PnP/model-yükleme hatası
+        # YUKARI fırlar (kedi_var son değerde KORUNUR; frame yolu 500 döner — mevcut davranış).
+        if _is_cat_absent_error(e):
+            return _extract_organ_target({}, organ_id, None)
+        raise
     finally:
         try:
             os.unlink(tmp.name)
@@ -900,6 +961,11 @@ def _ai_pro_loop():
                                 "overlay_bgr": lov,
                                 "at": now,
                                 "organ_id": _oid,  # SNAPSHOT: global yeniden okunmaz
+                                # E3 (denetim 2026-08-24): loop `lkedi`yi çözüp ATIYORDU — cache'i
+                                # yalnız mobil /frame yolu (:1411) güncelliyordu. Web/sunucu-kameralı
+                                # seansta ws `catDetected` bu yüzden bayat kalıyordu (aşama şeridi +
+                                # 409 ipucu yanlış yönlendirme). Frame yolu paritesi.
+                                "kedi_var": lkedi,
                             }
                         )
                 except Exception as le:
@@ -1240,7 +1306,9 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # ATOMIK check-and-set: iki es-zamanli start ikinci loop'u ACMASIN (TOCTOU).
     with _ai_loop_lock:
         if _ai_loop_active:
-            return {"status": "success", "message": "Already running"}
+            # [B1]: MEVCUT sahibi döndür (çağıranı DEĞİL) → çağıran ownedRef'i yanlışça true yapıp
+            # panelini kapatınca başkasının seansına /stop göndermesin (ownedRef <3sn drift kapanır).
+            return {"status": "success", "message": "Already running", "ownerClientId": _ai_owner_client}
         _ai_loop_active = True
         # Sahiplik kilidin İÇİNDE yazılır: iki eş-zamanlı start'ta kazanan ile sahip AYNI olur.
         _ai_owner_client = str(payload.client_id or "")[:64]
@@ -1288,6 +1356,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         "message": "AI Pro Closed-Loop Started",
         "organId": _ai_organ_id,
         "durationMin": _ai_duration_min,
+        # [B1]: sahiplik kimliği → panel ownedRef'i YALNIZ ownerClientId===benimId ise true yapar.
+        "ownerClientId": _ai_owner_client,
     }
 
 
@@ -1330,6 +1400,10 @@ def stop_ai_pro():
 def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     """Hedef organı değiştir (loop çalışırken de geçerli) + hemen yeniden-lokalize et."""
     global _ai_organ_id, _ai_relocalize
+    # 3. tur denetimi [B1]: mid-seans organ değişimi ONAYLANMAMIŞ organa enerji verebilir; YABANCI
+    # (sahip dışı) istemci onaylı seansın organını değiştiremez (deny-only, yeni yetki vermez).
+    if _ai_kare_yabanci(payload.client_id):
+        raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz; organ değiştirilemez.")
     _organ_req = int(payload.organ_id)
     if _organ_req not in (0, 1, 2, 3, 4, 5, 6):  # Audit P2: em_kedi yalnız 0-6 TEDAVİ eder (7-10 sessiz-sıfır)
         raise HTTPException(status_code=422, detail=f"organ_id {_organ_req} desteklenmiyor (geçerli 0-6).")
@@ -1339,10 +1413,13 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
 
 
 @ai_router.post("/api/ai/pro/calibrate")
-def calibrate_ai_pro():
+def calibrate_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     """Yeniden konumla: bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele.
     (Eski avuç-tabanlı Z kalibrasyonu KALDIRILDI — el takibi söküldü.)"""
     global _ai_relocalize
+    # [B1]: YABANCI istemci sahibin lokalizasyonunu zorla tazeleyemez (deny-only).
+    if _ai_kare_yabanci(payload.client_id):
+        raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz.")
     _ai_relocalize = True
     return {"status": "success", "relocalize": True}
 
@@ -1367,7 +1444,11 @@ def ai_pro_status():
 
 
 @ai_router.post("/api/ai/ai_pro/frame")
-async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(None)):
+async def ai_pro_frame(
+    file: UploadFile = File(None),
+    image_base64: str = Form(None),
+    client_id: str = Form(""),
+):
     """
     MOBİL AI Pro karesi: telefon kamerasından gelen TEK kareyi işler.
     cat_organ organ-lokalizasyon + em_kedi KediPredictor → bobin 1-7 PER-COIL sürüş
@@ -1380,11 +1461,16 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
     try:
         img = await _decode_image(file, image_base64, label="ai_pro_frame")
 
+        # 3. tur denetimi [B1]: YABANCI (sahip dışı) istemcinin karesi paylaşılan cache'i localize
+        # edip KİRLETMEZ ve bobin SÜRMEZ (aşağıda). Yabancıysa lokalizasyon HİÇ koşmaz → sahibin
+        # cat_organ koordinatları izleyicinin kamerasıyla ezilmez.
+        is_foreign = _ai_kare_yabanci(client_id)
+
         # cat_organ organ-lokalizasyon (el takibi söküldü). Ağır (~1-4sn) → periyodik + cache;
         # inference'i thread'e AL → event-loop'u (WS telemetri + diğer istekler) bloklamasın.
         global _ai_relocalize
         now = time.time()
-        need_localize = (
+        need_localize = (not is_foreign) and (
             _ai_relocalize
             or _ai_organ_cache["organ_id"] != _ai_organ_id
             or (now - _ai_organ_cache["at"]) >= _ORGAN_LOCALIZE_INTERVAL_S
@@ -1418,6 +1504,12 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             y_mm = _ai_organ_cache["y_mm"]
             z_mm = _ai_organ_cache["z_mm"]
             rel = _ai_organ_cache["reliability"]
+            kedi_var = bool(_ai_organ_cache.get("kedi_var"))
+            # F2 (denetim 2026-08-24): bir LOKALİZASYONUN kimliği (cache 'at'; istek-başı `now` DEĞİL).
+            # Kareler 1,5 sn'de, lokalizasyon en fazla 10 sn'de bir → eko karelerde update bloğuna
+            # girilmez, `at` önceki ölçümün damgasını korur. Panel ARDISIK_ONAY sayacını yalnız YENİ
+            # damgada artırır (eko-kare değil) → "iki tutarlı ölçüm" gerçekten iki AYRI lokalizasyon.
+            localized_at = _ai_organ_cache.get("at") or 0.0
 
         # GÜVENLİK (Audit P0): bobin YALNIZCA süre-watchdog kapsamındaki AKTİF AI Pro seansı
         # varken sürülür. /start çağrılmadan (veya süre dolduktan / durdurulduktan sonra) gelen
@@ -1436,8 +1528,10 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             session_active = False
 
         D, P, e_field = [0.0] * 7, [0.0] * 7, 0.0
-        # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa. Bobin 1-7.
-        if localized and session_active:
+        # GERÇEK donanımı sür (loop ile aynı yol) — organ bulundu VE aktif AI Pro seansı varsa VE
+        # kare seansın SAHİBİNDEN geliyorsa. Bobin 1-7. [B1]: yabancı kare ASLA sürmez (yanlış
+        # kameradan hesaplanan hedefe onaylı seansta enerji verilmesini önler).
+        if localized and session_active and not is_foreign:
             D, P, e_field = await asyncio.to_thread(_predict_and_drive, x_mm, y_mm, z_mm, _ai_organ_id)
             # Audit P2: _drive_coils_ai_pro senkron MQTT publish yapar (ESP probe/connect/wait ~sn) →
             # event-loop'u bloklardi (es-zamanli /emergency_stop yaniti gecikir). to_thread'e al.
@@ -1460,8 +1554,9 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             except Exception:
                 logger.exception("AI Pro frame: live state update hatası")
 
-        # Organ overlay (yoksa ham kare) — mobil için küçült
-        overlay = _ai_organ_cache.get("overlay_bgr")
+        # Organ overlay (yoksa ham kare) — mobil için küçült. [B1]: yabancı izleyiciye SAHİBİN
+        # overlay'ini gösterme (kendi ham karesini görür, "yalnız görüntüleme" bandı paneldedir).
+        overlay = None if is_foreign else _ai_organ_cache.get("overlay_bgr")
         img_out = overlay if overlay is not None else img
         oh, ow = img_out.shape[:2]
         sc = min(1.0, 960.0 / max(oh, ow))
@@ -1473,8 +1568,19 @@ async def ai_pro_frame(file: UploadFile = File(None), image_base64: str = Form(N
             content={
                 "status": "success",
                 "image_base64": b64_image,
-                "detected": localized,
-                "driven": bool(localized and session_active),
+                # [B1]: yabancı izleyici için detected/catDetected bastırılır (kendi kamerasını
+                # localize etmedik → dürüst değer False) + foreignViewer bayrağı + sahip kimliği.
+                "detected": bool(localized) and not is_foreign,
+                "foreignViewer": is_foreign,
+                "ownerClientId": _ai_owner_client,
+                # AŞAMA (E2, denetim 2026-08-24): "kedi yok" ile "kedi var, organ bulunamadı" AYRI
+                # bilgiler — mobil hazırlık ekranı doğru yönlendirmeyi bundan seçer. Mobil panel
+                # catDetected'i YALNIZ bu /frame yanıtından okur (AiProStatus tipi taşımaz); alan
+                # olmadan hazırlık şeridi "hayvan görünüyor, organ aranıyor" aşamasını hiç gösteremezdi.
+                "catDetected": kedi_var and not is_foreign,
+                # F2: lokalizasyon damgası — panel ardisik sayacını eko-karelerden AYIRIR.
+                "localizedAt": localized_at,
+                "driven": bool(localized and session_active and not is_foreign),
                 "sessionActive": session_active,
                 "reliability": round(rel, 3),
                 "perCoil": _build_ai_pro_percoil(D, P),

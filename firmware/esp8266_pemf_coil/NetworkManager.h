@@ -145,6 +145,7 @@ private:
     void _checkWiFiConnection();
     void _reconnectWiFi();
     bool _tryConnectToSavedWiFi();
+    bool _hasSavedCredentials();  // 3. tur B2: kayıtlı ağ var mı (portal erteleme/timeout kapısı)
     void _startWiFiPortal();
     void _setupMQTT();
     void _reconnectMQTT();

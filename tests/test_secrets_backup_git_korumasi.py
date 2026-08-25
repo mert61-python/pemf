@@ -145,6 +145,57 @@ def test_KRITIK_git_calismazsa_YUKSEK_SESLE_uyarir_ve_dogru_komutu_basar(sahte_g
     assert "GERCEK-GIBI" in (gui / SIR_DOSYALARI[0]).read_text(encoding="utf-8")
 
 
+def test_KRITIK_D3_git_128_dubious_ownership_YUKSEK_SESLE_uyarir(sahte_git_repo, capsys, monkeypatch):
+    """🔴 D3 (denetim 2026-08-24): git VAR ama komutlar exit 128 veriyorsa (dubious ownership /
+    bozuk GIT_DIR — taze klonda YAYGIN: repo farklı kullanıcı/yükseltilmiş oturumla klonlanır)
+    `ls-files` HER dosyada 128 döner. Eski kod bunu 'izlenmiyor' (returncode != 0) sayıp
+    `if not izlenenler: return` ile SESSİZ geçiyordu; sonra kullanıcı safe.directory'yi düzeltip
+    `git add -A` yapınca GERÇEK sırlar PUBLIC repoya stage'lenir. 128 (git DÜŞTÜ) ile 1 (gerçekten
+    izlenmiyor) AYRI ele alınmalı: 128 → YÜKSEK SESLE uyar (FileNotFoundError ile aynı sözleşme)."""
+    mod, gui, arsiv = sahte_git_repo
+    gercek_run = subprocess.run
+
+    def _git_128(cmd, *a, **k):
+        # git ls-files / update-index → dubious-ownership taklidi: exit 128 (git VAR, komut düştü).
+        if cmd and cmd[0] == "git" and any(x in cmd for x in ("ls-files", "update-index")):
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="", stderr="fatal: detected dubious ownership in repository"
+            )
+        return gercek_run(cmd, *a, **k)
+
+    monkeypatch.setattr(mod.subprocess, "run", _git_128)
+    assert mod.cmd_restore(Namespace(inp=str(arsiv), force=True)) == 0
+    cikti = capsys.readouterr().out
+    assert "GIT KORUMASI UYGULANAMADI" in cikti, (
+        f"git 128 (dubious ownership) SESSİZ geçti — skip-worktree uygulanmadı ve uyarı da yok; "
+        f"safe.directory düzeltilip `git add -A` yapılınca gerçek sırlar stage'lenir (D3): {cikti!r}"
+    )
+    tek_satir = [s for s in cikti.splitlines() if "git update-index --skip-worktree" in s]
+    assert tek_satir and all(rel in tek_satir[0] for rel in SIR_DOSYALARI), (
+        f"elle-koruma komutu dört izlenen dosyayı TEK satırda saymıyor: {tek_satir!r}"
+    )
+
+
+def test_KARSIT_KANIT_D3_gercek_untracked_SESSIZ(sahte_git_repo, capsys, monkeypatch):
+    """git ÇALIŞIYOR ama dosya GERÇEKTEN izlenmiyorsa (`ls-files --error-unmatch` returncode 1)
+    staging riski yoktur → yanlış alarm ÜRETME. 128 (git düştü) ↔ 1 (gerçek untracked) ayrımının
+    karşıt-kanıtı: kör 'nonzero = bağır' düzeltmesi bu sessizliği bozardı."""
+    mod, gui, arsiv = sahte_git_repo
+    gercek_run = subprocess.run
+
+    def _ls_1(cmd, *a, **k):
+        if cmd and cmd[0] == "git" and "ls-files" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        return gercek_run(cmd, *a, **k)
+
+    monkeypatch.setattr(mod.subprocess, "run", _ls_1)
+    assert mod.cmd_restore(Namespace(inp=str(arsiv), force=True)) == 0
+    cikti = capsys.readouterr().out
+    assert "GIT KORUMASI UYGULANAMADI" not in cikti, (
+        f"gerçekten izlenmeyen (returncode 1) dosyada gereksiz kırmızı uyarı — 128 ile karıştırılmış: {cikti!r}"
+    )
+
+
 def _rmtree_rw(p: Path) -> None:
     """Windows: .git/objects salt-okunur → önce yazılabilir yap, sonra sil."""
     import os

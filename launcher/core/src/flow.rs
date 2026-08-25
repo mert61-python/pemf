@@ -92,6 +92,30 @@ fn is_retriable(e: &net::NetError) -> bool {
     }
 }
 
+/// C2 (denetim 2026-08-24): `update_installed` hatası DENEME sayacına (geri-alma döngü kırıcısı)
+/// yazılmalı mı?
+///
+/// DETERMİNİSTİK hatalar (kilitli model / AV karantinası / eksik-exe / bozuk manifest / güvenlik
+/// reddi) HER açılışta tekrarlanır — sağlık kapısı geri alması sayaç yazıyordu ama `update_installed`
+/// İÇİNDEKİ açılım/profil/yapısal hataları YAZMIYORDU → o sınıf döngü kırıcısına (`otomatik_durduruldu`)
+/// HİÇ takılmadan her açılışta backend'i öldürüp deps açıp geri alıyordu. Bu sınıfı `true` işaretler.
+///
+/// ⚠️ Kullanıcı iptali/duraklatması (Cancel/Pause) ve GEÇİCİ ağ hataları (yeniden denenir) `false`:
+/// kör sayım iki kullanıcı iptalini döngü-kırıcıya saydırır ya da geçici bir ağ hatası düzeltme
+/// yayınını kalıcı bloklardı. (`apply_runtime_update` Cancel/Pause'u zaten önce ayırır; burada
+/// savunma-derinliği + saf-fonksiyon tamlığı.)
+pub fn hata_deterministik_mi(e: &FlowError) -> bool {
+    match e {
+        FlowError::Net(net::NetError::Paused | net::NetError::Cancelled) => false,
+        FlowError::Extract(extract::ExtractError::Cancelled) => false,
+        // Geçici ağ/IO → yeniden denenir, deneme sayma.
+        FlowError::Net(ne) => !is_retriable(ne),
+        // Extract(non-Cancel) / Manifest / Verify / Backend / Io / ProfileRecordUnreadable →
+        // deterministik başarısızlık, say.
+        _ => true,
+    }
+}
+
 /// Bir paketi hazır et: önbellekte geçerli kopya varsa indirme, yoksa indir + doğrula.
 ///
 /// Doğrulama İKİ yolda da yapılır — önbellekteki dosya bozulmuş olabilir (disk hatası,
@@ -613,7 +637,21 @@ fn app_katmanini_degistir(
         // Yedek alınamadıysa geri konacak bir şey de yok; hata zaten yukarı taşınıyor.
         if yedek_alindi {
             let b = GeriAlmaBilgisi { app_yedegi: true, ..Default::default() };
-            let _ = guncellemeyi_geri_al(install_root, &b);
+            // 2. tur [3.1] deseni (denetim 2026-08-24, C4): geri almanın SONUCU YUTULMAZ. Eski hâli
+            // `let _ =` idi — geri koyma düşerse (kilitli dosya / AV / zehirli artık) çağırana YALNIZ
+            // açılım hatası/iptal gidiyordu: UI "iptal edildi" derken cihaz DOĞRULANMAMIŞ/yarım app
+            // ağacıyla kalıyordu. İptal bile olsa geri alma düştüyse sonuç NÖTR DEĞİLDİR → açık,
+            // yükseltilmiş hata dön (dış yol `profilleri_yenile` ile SİMETRİK; main.rs bunu kırmızı
+            // hata gösterir, "cancelled" maskesi takılmaz). Kilit: C4_app_ic_yol_geri_alma_DUSERSE...
+            if let Err(g) = guncellemeyi_geri_al(install_root, &b) {
+                return Err(FlowError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "app guncellemesi GERI ALINAMADI ({g}) — cihaz DOGRULANMAMIS/yarim app \
+                         agaciyla kalmis olabilir; 'Onar' calistirin. (geri almayi tetikleyen adim: {e})"
+                    ),
+                )));
+            }
         }
         return Err(e.into());
     }
@@ -1519,6 +1557,125 @@ mod tests {
             !install::app_backup_dir(root).is_dir(),
             "onkosul: yedek dizini olusmamali (kok listesi bos)"
         );
+    }
+
+    /// C2 (denetim 2026-08-24): `hata_deterministik_mi` — hangi update_installed hatası deneme
+    /// sayacına yazılır. Deterministik (kilitli model/AV/eksik-exe/güvenlik reddi) → SAY;
+    /// kullanıcı iptali/duraklatma + GEÇİCİ ağ hataları → SAYMA.
+    #[test]
+    fn hata_deterministik_mi_dogru_siniflar() {
+        use crate::net::NetError;
+        // Kullanıcı kararı → DENEME DEĞİL.
+        assert!(!hata_deterministik_mi(&FlowError::Net(NetError::Paused)));
+        assert!(!hata_deterministik_mi(&FlowError::Net(NetError::Cancelled)));
+        assert!(!hata_deterministik_mi(&FlowError::Extract(extract::ExtractError::Cancelled)));
+        // GEÇİCİ ağ → yeniden denenir, DENEME DEĞİL (aksi halde tek ağ hatası düzeltme yayınını bloklardı).
+        assert!(!hata_deterministik_mi(&FlowError::Net(NetError::HttpStatus {
+            status: 503,
+            url: "https://x/y.zip".into()
+        })));
+        assert!(!hata_deterministik_mi(&FlowError::Net(NetError::Transport("koptu".into()))));
+        assert!(!hata_deterministik_mi(&FlowError::Net(NetError::Io(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "t"
+        )))));
+        // DETERMİNİSTİK → SAY (döngü kırıcı devreye girmeli).
+        assert!(hata_deterministik_mi(&FlowError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "yeni kurulum eksik (exe/web bulunamadı)"
+        )))); // app yapısal-geçersiz
+        assert!(hata_deterministik_mi(&FlowError::Net(NetError::LocalIo("kilitli model".into())))); // C8: AV/kilit
+        assert!(hata_deterministik_mi(&FlowError::Net(NetError::PolicyLimit("boyut".into()))));
+        assert!(hata_deterministik_mi(&FlowError::Net(NetError::HttpStatus {
+            status: 404,
+            url: "https://x/y.zip".into()
+        }))); // kalıcı 4xx
+        assert!(hata_deterministik_mi(&FlowError::Extract(extract::ExtractError::PathEscape("x".into()))));
+        assert!(hata_deterministik_mi(&FlowError::ProfileRecordUnreadable));
+    }
+
+    /// C4 (denetim 2026-08-24): app-katmanı İÇ YOLUNDA geri alma DÜŞERSE hata YUTULMAZ.
+    ///
+    /// `app_katmanini_degistir` açılım hatasında eski app'i HEMEN geri koyar (kurulum çalışır
+    /// kalsın); geri koyma da düşerse (kilitli dosya / AV) eski hâli `let _ =` ile hatayı YUTUYORDU
+    /// → çağırana yalnız açılım hatası/iptal gidiyordu: UI "iptal edildi" derken cihaz
+    /// DOĞRULANMAMIŞ/YARIM app ağacıyla kalıyordu. Dış yol (`profilleri_yenile`, 2. tur [3.1])
+    /// bu simetriyi zaten kuruyor; bu test iç yolu ona hizalar. Kilit desen: upgrade_drill TATBİKAT 5.
+    ///
+    /// Geri almayı DETERMİNİSTİK düşürme: yedekteki bir dosyayı AÇIK tut (Windows, içinde açık
+    /// handle olan dizinin taşınmasını reddeder → `rename(yedek→rt)` Err) + açılımı iptal et.
+    #[test]
+    #[cfg(windows)]
+    #[allow(non_snake_case)]
+    fn C4_app_ic_yol_geri_alma_DUSERSE_hata_yutulmaz() {
+        use std::io::Write as _;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let rt = install::runtime_dir(root);
+        let kok = rt.join("PEMF_Backend");
+        fs::create_dir_all(kok.join("_internal").join("frontend").join("dist")).unwrap();
+        fs::write(kok.join(crate::platform::backend_exe_name()), b"ESKI-EXE").unwrap();
+        fs::write(kok.join("_internal").join("frontend").join("dist").join("index.html"), b"ESKI-WEB").unwrap();
+        // Yedek ALINABİLSİN diye kök listesi VAR (dizin-kök: içinde açık handle geri-almayı düşürür).
+        fs::write(
+            install::app_roots_path(root),
+            br#"{"roots":["PEMF_Backend/_internal/frontend/dist"]}"#,
+        )
+        .unwrap();
+
+        // Geçerli app zip — açılım İPTALLE düşecek (içerik önemsiz).
+        let zip_yolu = root.join("app.zip");
+        {
+            let f = fs::File::create(&zip_yolu).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let o: zip::write::FileOptions<'_, ()> =
+                zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            z.start_file("PEMF_Backend/_internal/frontend/dist/index.html", o).unwrap();
+            z.write_all(b"YENI-WEB").unwrap();
+            z.finish().unwrap();
+        }
+
+        // "app" açılımı BAŞLARKEN (yedek alma bitmiş olur): yedekteki dosyayı AÇIK tut + iptal et.
+        let iptal = Arc::new(AtomicBool::new(false));
+        let tutamac: Arc<Mutex<Option<fs::File>>> = Arc::new(Mutex::new(None));
+        let iptal_c = iptal.clone();
+        let tutamac_c = tutamac.clone();
+        let yedek_dist_idx = install::app_backup_dir(root)
+            .join("PEMF_Backend")
+            .join("_internal")
+            .join("frontend")
+            .join("dist")
+            .join("index.html");
+        let mut on = move |p: Progress| {
+            if let Progress::Extracting { what } = &p {
+                if what == "app" {
+                    let f = fs::File::open(&yedek_dist_idx)
+                        .expect("yedek dosyasi bekleniyordu (yedek alma dalina girilmedi mi?)");
+                    *tutamac_c.lock().unwrap() = Some(f);
+                    iptal_c.store(true, Ordering::SeqCst);
+                }
+            }
+        };
+        let control = || {
+            if iptal.load(Ordering::SeqCst) {
+                net::Control::Cancel
+            } else {
+                net::Control::Continue
+            }
+        };
+
+        let mut butce = 0u64;
+        let sonuc = app_katmanini_degistir(&zip_yolu, root, &mut butce, &mut on, &control);
+        let hata = format!("{}", sonuc.err().expect("iptal + geri-alma-dusmesi basarili dondu"));
+        assert!(
+            hata.contains("GERI ALINAMADI"),
+            "app ic yolunda geri alma DUSTU ama hata YUTULDU — cagiran 'iptal edildi' sanir, cihaz \
+             dogrulanmamis/yarim app agaciyla kalir (bulgu C4; dis yol [3.1] ile simetri). Donen hata: {hata}"
+        );
+        drop(tutamac.lock().unwrap().take());
     }
 
     #[test]

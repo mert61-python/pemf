@@ -15,6 +15,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 | `workflows/mac-backend.yml` | `build_mac.sh` (`macos-14`, arm64) → `base-mac.zip` + Rust E2E artifact testi |
 | `workflows/launcher.yml` | Tauri launcher (mac/Win/Linux); macOS **kod-imzala + notarize/staple** (`APPLE_*` secrets) |
 | `workflows/upload-testflight.yml` | `xcrun altool` ile IPA → TestFlight (branch `upload-testflight`) |
+| `workflows/supabase-ping.yml` | **Supabase hareketsizlik koruması**: günlük cron (`03:17 UTC`) `resolve_device` RPC'siyle Free-plan projeyi uyanık tutar (~7-gün otomatik durdurmayı önler). 3 denemede de 5xx/540 → iş KIRMIZI = "girişler çökmek üzere" erken uyarısı. Yalnız varsayılan dalda koşar |
 
 ## Not
 - ⚠️ **Workflow'lar YALNIZ kök `.github/` altından okunur** (tek-depo, 2026-08-18): alt dizine

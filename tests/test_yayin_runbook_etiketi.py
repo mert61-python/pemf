@@ -78,3 +78,21 @@ def test_GERCEKLIK_CIPASI_manifest_layers_app_surum_etiketinde():
         f"layers.app URL'si artık sürüm-başına etikette değil ({url!r}) — tek-etiket düzenine "
         "dönüldüyse runbook kuralı ve bu test birlikte, BİLİNÇLİ güncellenmeli"
     )
+
+
+def test_KRITIK_C7_runbook_surumsuz_EXE_release_assets_ten_alinir():
+    """🔴 C7 (denetim 2026-08-24): §6 launcher `gh release create` satırı sürümsüz
+    PEMFVetClient-Setup.exe'yi DEPO KÖKÜNDEN alıyordu (APK ise `release_assets\` önekli — asimetri).
+    Kökte 2026-08-08 tarihli BAYAT bir kopya duruyor (gitignore'lu, hiçbir build tazelemiyor) →
+    harfiyen izlenirse aynı etikete BAYAT launcher yüklenir; manifest sha taze kopyadan alınırsa
+    saha self-update'i fail-closed düşer. Y1 (Setup dosyası iki adla yüklenir) EXE'nin SÜRÜMSÜZ
+    kopyasını da release_assets'ten (taze) almalı — APK ile simetrik."""
+    metin = _oku("BUILD.md")
+    m = re.search(r"gh release create launcher-v\S+[^\n]*", metin)
+    assert m, "launcher `gh release create` satırı bulunamadı — BUILD.md §6 biçimi değişmiş"
+    satir = m.group(0)
+    assert "PEMFVetClient-Setup.exe" in satir, "önkoşul: satır sürümsüz Setup.exe yüklüyor"
+    assert re.search(r"release_assets[\\/]PEMFVetClient-Setup\.exe", satir), (
+        "sürümsüz PEMFVetClient-Setup.exe DEPO KÖKÜNDEN alınıyor (release_assets öneki yok) — kök "
+        "bayat kopya tuzağı; APK gibi release_assets'ten (taze) alınmalı (C7)"
+    )

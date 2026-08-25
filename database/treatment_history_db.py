@@ -2044,9 +2044,15 @@ class TreatmentHistoryDB:
                 # edilebilmeli (bkz. SEANS_DURUMU_ACIL_DURDURMA). Varsayılan 'completed' kalır →
                 # normal akış değişmez.
                 update_data = [end_time, duration_minutes, session_status or 'completed', session_id]
+                # D1 (denetim 2026-08-24): KAPANIŞ senkronlanmayı İŞARETLER (sync_status=0). Seans
+                # AKTİFKEN buluta push edilmiş olabilir (worker 60 sn interval → 1 dk'dan uzun her
+                # seansta sync_status=1 olur); kapanış bayrağı 0'a çekmezse bir sonraki PUSH
+                # ('WHERE sync_status=0') kapanışı HİÇ görmez → bulut kopyası sonsuza dek 'active'
+                # kalır (end_time/duration bulutta hiç oluşmaz). Kilit: test_sync_pull_bayat_active.
                 update_query = '''
                     UPDATE treatment_sessions
                     SET end_time = ?, duration_minutes = ?, session_status = ?,
+                        sync_status = 0,
                         updated_at = CURRENT_TIMESTAMP
                 '''
 

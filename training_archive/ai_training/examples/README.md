@@ -1,6 +1,9 @@
 # Training Examples
 
-Complete training scripts for all model architectures.
+End-to-end training example for the ECG Autoencoder. Only `train_autoencoder.py`
+ships as a standalone example script in this folder. The PEMF Predictor and Realtime
+Monitor are trained through the shared pipeline in the parent `ai_training/` module
+(`trainer.py` + `datasets.py`).
 
 ## Quick Start
 
@@ -10,16 +13,16 @@ Complete training scripts for all model architectures.
 python train_autoencoder.py --data_dir data/physioZoo --epochs 100 --batch_size 32
 ```
 
-### 2. Train PEMF Predictor
+### 2. Train PEMF Predictor / Realtime Monitor
 
-```bash
-python train_predictor.py --features features.csv --labels labels.csv --epochs 150
-```
+No standalone example scripts ship for these. Train them with the shared `Trainer`
+and their datasets from the parent module:
 
-### 3. Train Realtime Monitor
-
-```bash
-python train_monitor.py --sequences_dir data/sequences --epochs 100
+```python
+from ai.training import (
+    Trainer, get_default_config, create_data_loaders,
+    PEMFPredictorDataset, MonitoringDataset,
+)
 ```
 
 ## Training Options
@@ -48,10 +51,10 @@ python train_monitor.py --sequences_dir data/sequences --epochs 100
 
 ## Hyperparameter Optimization
 
-Run hyperparameter search with Optuna:
+Run hyperparameter search with Optuna (script lives in the parent `ai_training/`):
 
 ```bash
-python hyperparameter_search.py --model autoencoder --n_trials 50
+python ../hyperparameter_search.py --model autoencoder --trials 50
 ```
 
 ## TensorBoard Visualization

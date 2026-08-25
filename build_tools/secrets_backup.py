@@ -104,7 +104,12 @@ def _git_sir_korumasi() -> None:
       · dosya bu kökte İZLENMİYORSA (git yok / untracked) staging riski yoktur → sessiz geç;
       · git ÇALIŞTIRILAMAZSA ya da update-index DÜŞERSE → YÜKSEK SESLE uyar + tek satırlık,
         kabuk-bağımsız elle-komutu bas (restore'u DÜŞÜRMEZ — dosyalar yazıldı, iş bitmeli)."""
+    # Kök gerçek bir git reposu DEĞİLSE staging riski yoktur (`git add -A` repo dışında no-op) →
+    # sessiz geç, yanlış alarm üretme.
+    if not (GUII / ".git").exists():
+        return
     izlenenler = []
+    git_dustu = False
     try:
         for rel in _SW_DOSYALAR:
             if not (GUII / rel).exists():
@@ -116,20 +121,32 @@ def _git_sir_korumasi() -> None:
             )
             if r.returncode == 0:
                 izlenenler.append(rel)
-        if not izlenenler:
-            return
-        r = subprocess.run(
-            ["git", "-C", str(GUII), "update-index", "--skip-worktree", "--", *izlenenler],
-            capture_output=True,
-            text=True,
-        )
-        if r.returncode == 0:
-            for rel in izlenenler:
-                print(f"  [GIT] skip-worktree uygulandı: {rel}")
+            elif r.returncode != 1:
+                # ⚠️ [2.2] DELİĞİ (denetim 2026-08-24, D3): `ls-files --error-unmatch` returncode 1 =
+                # git ÇALIŞTI, dosya GERÇEKTEN izlenmiyor → staging riski yok, atla. Ama 128 (ve
+                # diğer) = git DÜŞTÜ (dubious ownership / bozuk GIT_DIR — taze klonda yaygın), "izlenmiyor"
+                # DEĞİL. Eski kod ikisini ayırt etmiyor, 128'i de sessiz geçiyordu; sonra safe.directory
+                # düzeltilip `git add -A` yapılınca gerçek sırlar stage'leniyordu. Bunu yüksek sesle bildir.
+                git_dustu = True
+        if izlenenler:
+            r = subprocess.run(
+                ["git", "-C", str(GUII), "update-index", "--skip-worktree", "--", *izlenenler],
+                capture_output=True,
+                text=True,
+            )
+            if r.returncode == 0:
+                for rel in izlenenler:
+                    print(f"  [GIT] skip-worktree uygulandı: {rel}")
+                return
+            git_dustu = True  # update-index düştü (izlenen dosyalar KORUNAMADI)
+        elif not git_dustu:
+            # Repo var, hiçbir sır dosyası izlenmiyor VE her ls-files çalıştı → gerçek untracked, risk yok.
             return
     except FileNotFoundError:
         # git PATH'te yok — kökün gerçek repo olduğu makinede EN riskli durum: aşağıda bağır.
-        izlenenler = izlenenler or list(_SW_DOSYALAR)
+        git_dustu = True
+    # Buraya gelindi = git düştü (128/PATH-yok) VEYA update-index düştü → izlenenler EKSİK olabilir.
+    izlenenler = izlenenler or list(_SW_DOSYALAR)
     print("  [!!] GIT KORUMASI UYGULANAMADI — `git add -A` GERÇEK SIRLARI stage'leyebilir (repo PUBLIC)!")
     print("       Aşağıdaki komutu elle çalıştırın (TEK satır, PowerShell/bash fark etmez):")
     print("       git update-index --skip-worktree " + " ".join(izlenenler))

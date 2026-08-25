@@ -152,9 +152,16 @@ struct PWMStateEEPROM {
 };
 
 // EEPROM Memory Map
-#define EEPROM_PWM_STATE_ADDR     256  // WiFi credentials'tan sonra (0-255 WiFi için)
-#define EEPROM_BROKER_STATE_ADDR  300  // Yeni — son aktif broker tipi
-#define EEPROM_CONFIG_VER_ADDR    304  // Yeni — CONFIG_VERSION
+// 3. tur denetimi [D4] (2026-08-24): WiFi kimlik bölgesi = MAX_WIFI_CREDENTIALS(5) × manuel-stride
+// (sizeof(bool)1 + ssid[33] + password[65] = 99 bayt) = [0, 495). Eski adresler (256/300/304) bu
+// bölgenin İÇİNDEydi: PWM(256) slot2 parolasını, BROKER/CONFIG_VER(300/304) slot3 SSID'sini örtüyordu
+// → 30 sn'lik savePWMState kayıtlı WiFi'yi bozuyor, portal WiFi yazımı CONFIG_VER'i ezip her boot'ta
+// yanlış sürüm-uyuşmazlığı/wipe tetikliyordu (eski "0-255 WiFi için" yorumu YANLIŞTI). Non-WiFi blok
+// WiFi bölgesinin GERÇEK sonrasına taşındı; 5-slot kapasitesi KORUNDU (slot daraltma DEĞİL).
+#define EEPROM_WIFI_REGION_END    495  // 5 slot × 99 bayt; non-WiFi adresler bunun ÜSTÜNDE olmalı
+#define EEPROM_PWM_STATE_ADDR     512  // WiFi bölgesinden (0-494) sonra; sizeof(PWMStateEEPROM)=24 → [512,536)
+#define EEPROM_BROKER_STATE_ADDR  536  // son aktif broker tipi
+#define EEPROM_CONFIG_VER_ADDR    540  // CONFIG_VERSION
 
 // Sistem durum yapÄ±sÄ±
 struct StatusData {

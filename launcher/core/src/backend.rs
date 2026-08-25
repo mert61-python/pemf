@@ -308,6 +308,11 @@ pub fn desktop_session_url(port: u16) -> String {
 /// Oturum devri için tek bütçe: backend yereldir, yavaşsa bile açılışı bekletmemeli.
 const SESSION_PUSH_TIMEOUT_S: u64 = 5;
 
+/// F5 (denetim 2026-08-24): kapanış-öncesi SON pull bütçesi. Teardown yolunda backend meşgulse
+/// (örn. AI yükü) kapanışı 5 sn bekletmemeli — bu YALNIZ son-yakalamaya özgü KISA bütçe, 60 sn
+/// rotasyon döngüsünün `SESSION_PUSH_TIMEOUT_S`=5'ini DEĞİŞTİRMEZ.
+pub const PULL_TEARDOWN_TIMEOUT_S: u64 = 2;
+
 /// Hedef GERÇEKTEN loopback mi? (saf → birim-testlenebilir)
 ///
 /// ⚠️ SÖZLEŞME: oturum jetonları YALNIZ 127.0.0.1/::1'e gönderilir. Bu kontrol savunma
@@ -374,12 +379,19 @@ pub fn push_desktop_session_to(url: &str, session: &crate::auth::Session) -> Res
 ///
 /// Boş gövde / eksik alan / ulaşılamama → `None` (sessiz; senkron bir kolaylıktır).
 pub fn pull_desktop_session(port: u16) -> Option<crate::auth::Session> {
+    pull_desktop_session_kisa(port, SESSION_PUSH_TIMEOUT_S)
+}
+
+/// [F5] `pull_desktop_session`'ın timeout-parametrized varyantı. Teardown son-yakalaması KISA
+/// bütçeyle (`PULL_TEARDOWN_TIMEOUT_S`) çağırır; 60 sn döngüsü 5 sn ile çağırmaya devam eder.
+/// Loopback sözleşmesi + boş-oturum (`{}`) → `None` semantiği DEĞİŞMEZ (aynı gövde).
+pub fn pull_desktop_session_kisa(port: u16, timeout_s: u64) -> Option<crate::auth::Session> {
     let url = desktop_session_url(port);
     if !is_loopback_http_url(&url) {
         return None;
     }
     let govde = ureq::get(&url)
-        .timeout(Duration::from_secs(SESSION_PUSH_TIMEOUT_S))
+        .timeout(Duration::from_secs(timeout_s))
         .call()
         .ok()
         .filter(|r| r.status() == 200)
@@ -1177,6 +1189,56 @@ mod tests {
         assert!(
             push_desktop_session(port, &s).is_ok(),
             "ucu tasimayan backend'de client HATA verdi — eski kurulumlar acilmaz olur"
+        );
+    }
+
+    /// [F5] `pull_desktop_session_kisa` geçerli oturumu döndürür VE yanıt YAZMAYAN backend'de
+    /// verilen KISA bütçe kadar (≈1 sn) bekler — 5 sn DEĞİL → kapanış son-yakalaması teardown'ı
+    /// bloklamaz. (`timeout_s` parametresi hardcode `SESSION_PUSH_TIMEOUT_S`e sabitlenirse stall
+    /// dalı ~5 sn'ye çıkar → assert kırmızı: mutasyon kapısı.)
+    #[test]
+    fn pull_teardown_kisa_timeout_gecerli_oturum_ve_STALL_da_hizli_None() {
+        use std::io::{Read, Write};
+        // (1) Geçerli oturum sunan backend → Some(doğru jeton)
+        let l = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in l.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let _ = s.set_read_timeout(Some(Duration::from_millis(300)));
+                let mut buf = [0u8; 2048];
+                let _ = s.read(&mut buf);
+                let body = r#"{"access_token":"AT","refresh_token":"RRR","email":"vet@klinik.tr","expires_at":5000}"#;
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+            }
+        });
+        let sess =
+            pull_desktop_session_kisa(port, PULL_TEARDOWN_TIMEOUT_S).expect("gecerli oturum None dondu");
+        assert_eq!(sess.refresh_token, "RRR");
+        assert_eq!(sess.expires_at, 5000);
+
+        // (2) STALL: accept eder ama HİÇ yanıt yazmaz → kısa bütçeyle None + HIZLI dön (5 sn değil).
+        let stall = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let sport = stall.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in stall.incoming() {
+                let Ok(s) = stream else { continue };
+                std::thread::sleep(Duration::from_secs(30)); // tut, hiç yazma
+                drop(s);
+            }
+        });
+        let t0 = std::time::Instant::now();
+        let r = pull_desktop_session_kisa(sport, 1);
+        let dt = t0.elapsed();
+        assert!(r.is_none(), "yanit yazmayan backend Some dondu");
+        assert!(
+            dt < Duration::from_secs(3),
+            "kisa timeout'a uyulmadi ({dt:?} >= 3s) — teardown son-yakalamasi 5 sn bloklanir"
         );
     }
 

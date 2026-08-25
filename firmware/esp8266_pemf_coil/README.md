@@ -31,6 +31,17 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
 - ⚠️ **IRAM %94 dolu** — yeni `IRAM_ATTR`/`ICACHE_RAM_ATTR` kod eklerken taşma riski var;
   önce ✓ Verify ile ölçün.
 
+## 3. tur denetimi öz-iyileşme (2026-08-24)
+
+- **WiFi portal öz-iyileşme ([B2])**: çalışırken hotspot düşerse cihaz ÖNCE kayıtlı ağları
+  yeniden dener; portal yalnız kayıtlı kredi YOKKEN (gerçek provizyon ihtiyacı) süresiz açık
+  kalır, kayıtlı kredi VARKEN süreli (`PORTAL_TIMEOUT`) sökülüp kayıtlı ağlar yeniden denenir.
+  Amaç: ~40 sn'lik geçici hotspot kesintisinde AP-portalında ASILI KALMAMAK (S3 paritesi).
+- **Yerel broker geri-dönüş ([B3])**: buluttayken yerel Mosquitto (ağ-geçidi) 15 sn'de bir
+  plain soketle yoklanır; ayağa kalkınca mevcut bulut bağlantısı düşürülür ve yerel ÖNCE
+  denenir → cihaz yerele döner. Yoklama başarısızsa hiçbir şey yapılmaz (bulut STABİL kalır,
+  E-stop aynası korunur). Broker seçimi yerel-önce / bulut-yedek (`_reconnectMQTT`).
+
 ## Flash öncesi
 
 `Secrets.h`'taki `<<GERCEK-DEGERI-FLASH-ONCESI-GIR>>` alanlarını doldur (kaynak:

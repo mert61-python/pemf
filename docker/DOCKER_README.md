@@ -14,6 +14,11 @@ Sistem **2 image + 1 compose** ile ayağa kalkar (donanım bağımsız — STM/E
 - `docker-compose.yml` — ikisini birden ayağa kaldırır (proje adı `pemf` → `pemf-backend-1` / `pemf-frontend-1`).
 - `docker.env.example` — **opsiyonel** ayar override'ları (`cp docker.env.example .env`). Compose zaten varsayılanlıdır.
 - `.dockerignore` (backend) + `pf/.dockerignore` (frontend).
+- **Mikroservis (GPU) profili — opsiyonel** (bkz. aşağı):
+  - `Dockerfile.ai` — bağımsız **GPU AI inference servisi** (`ai_service`, :8100).
+  - `Dockerfile.ai-full` — model ağırlıkları GÖMÜLÜ AI image'ı (`/models` mount GEREKMEZ); `FROM pemf-ai`.
+  - `docker-compose.micro.yml` — çekirdek + GPU AI + web (backend AI'yı `http://ai:8100`'e devreder).
+  - `docker-compose.ai.yml` — yalnız AI servisini tek başına build/test eder.
 
 ## Çalıştırma
 ```bash
@@ -74,6 +79,19 @@ Kalıcı istersen `docker-compose.yml`'de her iki servise ekle:
 3. **DB (SQLCipher) + loglar** → `pemf_data` adlı kalıcı volume (`/data`). Konteyner silinse de kalır.
 4. **requirements ayrımı bilerek:** lokal Windows build sürüm-kilitli kalsın, Docker'daki farklar ana sistemi bozmasın diye.
 5. **Server modu:** `--no-headless-services` (mosquitto/UDP-keşif kapalı), `PEMF_REQUIRE_AUTH=1`, `PEMF_ENCRYPT_AT_REST=1`. Klinik/donanım için bu image DEĞİL — o hâlâ Windows servis/EXE.
+
+## Mikroservis (GPU) profili — opsiyonel
+Yukarıdaki varsayılan `docker-compose.yml` **monolit** (AI in-process, CPU/Mac dostu). AI'yı ayrı bir
+**GPU servisine** devretmek isteyen yayınlar için `docker-compose.micro.yml` var (NVIDIA GPU +
+nvidia-container-runtime ister):
+```bash
+# guii/docker/ içinde — çekirdek + GPU AI (:8100) + web:
+docker compose -f docker-compose.micro.yml up --build -d
+# Yalnız AI servisini tek başına build/test:
+docker compose -f docker-compose.ai.yml up --build   # → http://localhost:8100/health · /models · /benchmark
+```
+- `backend`, AI uçlarını `PEMF_AI_SERVICE_URL=http://ai:8100` ile `ai` servisine devreder; devredilmeyen uçlar (`em_fantom` vb.) in-process kalır.
+- ⚠️ **Güvenlik (denetim 2026-08-04):** `ai_service`'in `/infer/...` uçlarında auth YOKtur → AI portu host'a **yalnız loopback** (`127.0.0.1:8100`) yayınlanır; servisler zaten aynı compose ağındadır. Ayrıca `PEMF_TRUSTED_PROXIES` docker ağını fail-closed (her zaman UZAK) yapar — mikroservis profilinde de. Bu satırları geri açma.
 
 ## Sürüm uyumu
 Backend pinleri ana `requirements.txt` ile birebir aynı (yalnız yukarıdaki 4 fark). `sqlcipher3-binary` prebuilt olduğundan sürümü Linux'ta değişebilir — SQLCipher 4.x DB formatı uyumludur.

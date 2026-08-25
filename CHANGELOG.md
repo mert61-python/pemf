@@ -32,6 +32,36 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.23 · launcher 1.9.38 · mobile 2.3.24 — 2026-08-25 (3. tur hata denetimi)
+
+Yayın etiketleri: app → `client-app-v1.9.23`, launcher → `launcher-v1.9.38`, mobil → `launcher-v1.9.38`.
+buildId / paket sha256: _(build sonrası doldurulacak — `pemf-app-packages/manifest.json`)._
+
+**🔴 Hasta güvenliği / tedavi bütünlüğü (önce):**
+- **AI Pro seans sahipliği.** İki cihazlı klinikte (klinik PC + telefon, ya da iki veteriner) yalnızca
+  seansı **başlatan** operatörün kamerası tedaviyi sürebilir. İkinci bir cihaz AI Pro panelini açıp kare
+  aksa bile artık **bobinleri kendi kamerasından hesaplanan hedefe süremez**, seans ortasında **organı
+  değiştiremez** ve paneli kapatınca **birincinin onaylı seansını durduramaz**. Herkesin "Durdur"/acil-durdur
+  düğmesi eskisi gibi açık kalır (her operatör tedaviyi durdurabilmeli); onaylanan doz/organ/süre mührü değişmez.
+- **Seans-durdurma teyidi ve kayıt bütünlüğü.** Kapanmış seanslar buluta güvenilir gidiyor; onay (NACK)
+  gelmeyen bobin komutları hayalet koşu kaydı bırakmıyor.
+
+**Güvenilirlik / veri:**
+- **"Beni hatırla" artık kapanışta bayatlamıyor.** Uygulama kapanırken (güncelleme/pencere kapanışı) en son
+  oturum jetonu diske işleniyor; oturum deposu yazımı atomik yapıldı (yarıda kesilen yazım eski kaydı bozmaz).
+  Sonuç: gereksiz "yeniden giriş" istekleri elendi.
+- **Güncelleme sağlamlığı.** Bozuk bir yayının her açılışta yeniden kurulup geri alındığı döngü kırıcısı
+  üretimde etkin; çalışan backend'i sahiplenen yolda oturum rotasyonu artık başlıyor; kaldırma/onarımda
+  bobinler her zaman önce güvene alınıyor.
+
+**Firmware (bu commit'te KAYNAK olarak var; OTA ile GİTMEZ — bobinlere ayrıca flash'lanır, tezgah doğrulaması
+sürüyor):** S3 çok-bobin faz-kilidi ilk-darbe edinimi; ESP8266 WiFi portal öz-iyileşmesi (tek bir kopuşta
+kalıcı çevrimdışı kalma giderildi); ESP8266 yerel MQTT broker'a geri dönüş; ESP8266 EEPROM bellek-harita düzeni.
+
+Ayrıntı (25 bulgu, kırmızı-önce test + mutasyon + adversaryal inceleme): `denetim-bulgular-3.md`.
+
+---
+
 ## app 1.9.22 · mobile 2.3.23 — 2026-08-24 (🔴 AI Pro telefonda hiç başlamıyordu)
 
 **Saha bildirimi:** *"Bu hatayı verip çalışmıyor AI Pro."* — ekranda "Organ henüz lokalize

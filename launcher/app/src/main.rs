@@ -8,7 +8,7 @@
 //! ilerleme olaylarıdır. Böylece kurulum akışı UI olmadan test edilebilir kalır
 //! (bkz. core/tests/real_artifacts.rs).
 
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pemf_launcher_core::{auth, backend, extract, flow, install, net, platform, secret_store, verify};
@@ -54,6 +54,10 @@ struct AppState {
     /// işletim sistemi korumalı (`secret_store`). ⚠️ Bu alan `progress` snapshot'ına ASLA
     /// yazılmaz: o snapshot `get_progress` ile webview'e akar ve jetonlar UI'ya sızardı.
     session: Mutex<Option<auth::Session>>,
+    /// Oturum-rotasyon senkron thread'i çalışıyor mu (C3/L7 çift-thread guard'ı). Senkron BİR
+    /// backend için tek thread; sahiplenme dalı her Başlat'ta koşabildiğinden guard olmadan thread
+    /// biriktirirdi. Thread bittiğinde (backend öldü / 5 ardışık başarısız yoklama) serbest bırakılır.
+    rotasyon_senkronu_aktif: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -65,6 +69,7 @@ impl Default for AppState {
             control: Arc::new(AtomicU8::new(CTL_RUN)),
             teardown: Mutex::new(None),
             session: Mutex::new(None),
+            rotasyon_senkronu_aktif: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -101,9 +106,10 @@ fn stop_backend_for_teardown(
     tracked: Option<(std::process::Child, u16)>,
     root: &std::path::Path,
 ) {
-    // 1) Bu oturumun tracked backend'i: E-stop (TIBBİ GÜVENLİK) + kill.
+    // 1) Bu oturumun tracked backend'i: E-stop (TIBBİ GÜVENLİK) + [F5] son-yakalama + kill.
     let had_tracked = if let Some((mut child, port)) = tracked {
         backend::safe_stop_coils(port);
+        son_oturumu_yakala(port, root); // [F5] E-stop SONRASI / kill ÖNCESİ: son jetonu diske işle
         let _ = child.kill();
         let _ = child.wait();
         true
@@ -124,6 +130,24 @@ fn stop_backend_for_teardown(
     // taskkill sonrası OS'un dosya kilitlerini bırakması için kısa bekle (extract'tan ÖNCE).
     std::thread::sleep(std::time::Duration::from_millis(800));
     clear_port_if_stopped(root, None);
+}
+
+/// [F5] (denetim 2026-08-24): kapanış-ÖNCESİ SON oturum yakalama. Teardown yolunda E-stop
+/// gönderildi ama backend HENÜZ öldürülMEDİ → 60 sn rotasyon döngüsünün kaçırdığı son (≤60 sn)
+/// döndürülmüş jetonu diske işlemek için SON şans. Aksi halde tüketilmiş refresh jeton diskte kalır
+/// → sonraki açılışta SessionRevoked → "Beni hatırla" parola yeniden ister.
+///
+/// ⚠️ TIBBİ GÜVENLİK: bu çağrı `safe_stop_coils`'ten SONRA / `child.kill()`'den ÖNCE gelir —
+/// bobinler DAİMA önce güvene alınır (pemf-device-safety-shutdown değişmezi); yakalama E-stop'u
+/// ASLA geciktirmez. KISA timeout (`PULL_TEARDOWN_TIMEOUT_S`): backend meşgulse kapanışı bekletme.
+/// best-effort: `None` → yazma yok (bugünküyle aynı). `rotasyonu_isle` YENİDEN kullanılır → 3 yazma
+/// kapısı (kayıt-yok / boş-jeton / başka-eposta) OTOMATİK korunur (save() DOĞRUDAN çağrılmaz).
+/// ⚠️ Yalnız BU oturumun TRACKED backend'inde çağrılır; orphan/backend.port dalında ASLA —
+/// başka sürecin portundan jeton okumak loopback-jeton-zehirlenmesi savunmasını deler.
+fn son_oturumu_yakala(port: u16, root: &std::path::Path) {
+    if let Some(s) = backend::pull_desktop_session_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
+        let _ = secret_store::rotasyonu_isle(root, &s);
+    }
 }
 
 /// `backend.port`'u YALNIZ backend gerçekten sustuysa sil.
@@ -223,17 +247,49 @@ fn on_backend_ready(
     // ⚠️ Yazma kararı `secret_store::rotasyonu_isle`de (kayıtlı oturum yoksa / boş jeton /
     // başka e-posta → YAZMAZ). Burada yalnız OKUMA ve tetikleme var.
     // ⚠️ Backend ölünce görev kendiliğinden biter (okuma başarısız → sayaç → çık); sızıntı yok.
-    oturum_rotasyon_senkronu_baslat(port);
+    oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port);
 
     // Uygulamayı AYRI pencerede aç → client/profil penceresi ("main") AÇIK KALIR.
     open_app_window(app, url);
+}
+
+/// Senkron thread BİR KEZ başlar (C3/L7 çift-thread guard'ı). Bayrak `false→true` geçebiliyorsa
+/// başlatılmalı (bu çağrı thread'i açar); başka thread zaten aktifse (`true`) atlanır. Saf ve
+/// yan-etkisiz → doğrudan test edilebilir.
+fn senkron_baslamali(aktif: &AtomicBool) -> bool {
+    aktif
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Rotasyon-senkron döngüsünün ardışık-başarısızlık sayacı kararı (F4, denetim 2026-08-24).
+///
+/// `pull_desktop_session` `None` döndüğünde `kesin_olu` = `backend_is_definitely_gone(port)`
+/// (TCP REDDEDİLDİ = süreç yok). Kesin-ölüyse sayaç artar ve eşikte thread çıkar; aksi halde
+/// (backend CANLI ama meşgul / oturum boş `{}` — loopback 5 sn'de yanıt vermeyebilir, TCP yine de
+/// KABUL edilir) sayaç SIFIRLANIR ve thread YAŞAR. "meşgul ≠ ölü": uzun AI çıkarım yükünde
+/// (backend.rs session_active timeout'u tam bu yüzden 10 sn) meşgul-timeout'u "ölü" saymak thread'i
+/// öldürür ve o oturumun sonraki rotasyonlarını kaçırırdı → "Beni hatırla" aralıklı geri gelirdi.
+fn rotasyon_ardisik(kesin_olu: bool, ardisik: u32, esik: u32) -> (u32, bool) {
+    if kesin_olu {
+        let yeni = ardisik.saturating_add(1);
+        (yeni, yeni >= esik)
+    } else {
+        (0, false)
+    }
 }
 
 /// Backend'teki devir oturumunu periyodik okuyup DÖNDÜRÜLEN jetonu diske işler.
 ///
 /// Aralık 60 sn: Supabase erişim jetonu ~1 saat yaşar, yani rotasyon seyrektir; 60 sn hem
 /// "kapatmadan önce yakala" için fazlasıyla sık hem de loopback'te maliyetsizdir.
-fn oturum_rotasyon_senkronu_baslat(port: u16) {
+fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16) {
+    // ÇİFT-THREAD GUARD (C3/L7, denetim 2026-08-24): sahiplenme dalı (`start_installed` →
+    // `detect_running_backend`) her Başlat'ta koşabilir ve `state.proc`a KOYMAZ; guard olmadan her
+    // çağrı yeni bir thread biriktirirdi. Bir thread aktifken yenisi açılmaz.
+    if !senkron_baslamali(&aktif) {
+        return;
+    }
     std::thread::spawn(move || {
         let root = install::default_install_root(&home_dir());
         let mut ardisik_hata = 0u32;
@@ -245,14 +301,21 @@ fn oturum_rotasyon_senkronu_baslat(port: u16) {
                     let _ = secret_store::rotasyonu_isle(&root, &s);
                 }
                 None => {
-                    // Backend kapandı / oturum yok → birkaç denemeden sonra görevi bitir.
-                    ardisik_hata += 1;
-                    if ardisik_hata >= 5 {
-                        return;
+                    // F4 (denetim 2026-08-24): None'ı sınıfla — backend KESİN ÖLÜ mü (TCP reddedildi)
+                    // yoksa CANLI ama meşgul/oturum-boş mu? Yalnız kesin-ölüde say; meşgul-timeout
+                    // (uzun AI yükü) thread'i öldürmemeli (bkz. rotasyon_ardisik).
+                    let kesin_olu = backend::backend_is_definitely_gone(port);
+                    let (yeni, cik) = rotasyon_ardisik(kesin_olu, ardisik_hata, 5);
+                    ardisik_hata = yeni;
+                    if cik {
+                        break;
                     }
                 }
             }
         }
+        // Thread bitti → bayrağı serbest bırak: sonraki backend (farklı port) için yeniden
+        // başlatılabilsin. Aksi halde guard bir daha hiç açılmaz ve rotasyon kalıcı dururdu.
+        aktif.store(false, Ordering::Release);
     });
 }
 
@@ -602,6 +665,13 @@ async fn start_installed(
         // SAHİPLENİLEN backend'e de oturumu devret (idempotent) — o süreci biz başlatmadık ama
         // kullanıcı BU client'tan giriş yaptı; uygulama yine kendi login'ini atlamalı.
         hand_off_session(&state, port).await;
+        // 🔴 C3 (denetim 2026-08-24): sahiplenilen backend'in ROTASYON SENKRONU da başlamalı.
+        // `on_backend_ready` burada ÇAĞRILAMAZ (child yok — süreci biz başlatmadık, `state.proc`a
+        // koymuyoruz, öldürme hakkımız yok) ve senkron thread yalnız orada başlatılıyordu → pencere
+        // jetonu döndürüp backend'e push eder, launcher pull ETMEZ, diskteki kopya bayatlar ve
+        // sonraki açılışta SessionRevoked → "Beni hatırla" SİLİNİR (saha arızasının açık kalan kolu).
+        // Guard (senkron_baslamali) çift-Başlat'ta thread biriktirmeyi önler.
+        oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port);
         let url = backend::app_url(port);
         open_app_window(&app, &url);
         return Ok(url);
@@ -727,17 +797,14 @@ fn aktif_seans_kapisi(root: &std::path::Path) -> Result<(), String> {
     }
 }
 
-/// Diskteki kurulum manifest'e göre bayat mı? (AĞA ÇIKMAZ — manifest UI'da zaten çekilmiştir.)
+/// `UpdatePlan`'ı UI'nın beklediği JSON şekline çevirir (camelCase anahtarlar UI sözleşmesi).
 ///
-/// SAHİP KARARI 2026-08-08: kullanıcı "Onar"a basmasın; client açılışta kendi anlasın.
-#[tauri::command]
-fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
-    let root = install::default_install_root(&home_dir());
-    // Kaydı olmayan ESKİ kurulumlarda profil sha'larını önce benimse — yoksa üç profil birden
-    // (~2,2 GB) boşuna iner. Base bilerek kapsam dışı: o gerçekten değişmiştir.
-    let _ = flow::adopt_unknown_models(&manifest_raw, &root);
-    let plan = flow::pending_updates(&manifest_raw, &root).map_err(|e| e.to_string())?;
-    Ok(serde_json::json!({
+/// ⚠️ AYRI FONKSİYON çünkü `check_runtime_update` dosya-sistemine bağlı (birim testte zor);
+/// bu saf dönüşüm ise plan → JSON kablolamasını doğrudan test edilebilir kılar. `flow.rs`'te
+/// PLAN üzerinde hesaplanan her bayrak burada UI'ya TAŞINMALI, yoksa hesap ölü kalır (C2:
+/// `otomatik_durduruldu` flow'da hesaplanıp bu köprüde unutulmuştu → döngü kırıcı üretimde ölüydü).
+fn plan_to_json(plan: &flow::UpdatePlan) -> serde_json::Value {
+    serde_json::json!({
         "needed": plan.needed(),
         "base": plan.base,
         "deps": plan.deps,
@@ -751,7 +818,25 @@ fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, Strin
         // GERİ ÇAĞIRMA: kurulu sürüm asgarinin altında → rollout ezildi, güncelleme zorunlu.
         // UI bunu AYRICA gösterir; sessizce beklemek geri çağırmanın amacını boşa çıkarır.
         "recall": plan.zorunlu,
-    }))
+        // C2 GERİ-ALMA DÖNGÜ KIRICI (denetim 2026-08-24): bu hedef 2 kez sağlık kapısından
+        // geçemedi → deneme sınırı doldu. UI (`index.html`) bu bayrağı okuyup otomatik kurulumu
+        // DURDURUR (`plan.otomatik_durduruldu` → rtBlocked). ⚠️ flow.rs bayrağı hesaplıyordu ama bu
+        // köprü onu HİÇ taşımıyordu → bozuk yayın her açılışta yeniden kurulup geri alınıyordu.
+        "otomatik_durduruldu": plan.otomatik_durduruldu,
+    })
+}
+
+/// Diskteki kurulum manifest'e göre bayat mı? (AĞA ÇIKMAZ — manifest UI'da zaten çekilmiştir.)
+///
+/// SAHİP KARARI 2026-08-08: kullanıcı "Onar"a basmasın; client açılışta kendi anlasın.
+#[tauri::command]
+fn check_runtime_update(manifest_raw: String) -> Result<serde_json::Value, String> {
+    let root = install::default_install_root(&home_dir());
+    // Kaydı olmayan ESKİ kurulumlarda profil sha'larını önce benimse — yoksa üç profil birden
+    // (~2,2 GB) boşuna iner. Base bilerek kapsam dışı: o gerçekten değişmiştir.
+    let _ = flow::adopt_unknown_models(&manifest_raw, &root);
+    let plan = flow::pending_updates(&manifest_raw, &root).map_err(|e| e.to_string())?;
+    Ok(plan_to_json(&plan))
 }
 
 /// ARKA PLAN İNDİRME — paketleri önbelleğe çeker, kuruluma DOKUNMAZ, UI'ı BLOKLAMAZ.
@@ -856,7 +941,18 @@ async fn apply_runtime_update(
             Err(flow::FlowError::Extract(extract::ExtractError::Cancelled)) => {
                 return Ok(GuncellemeSonucu::Iptal)
             }
-            Err(e) => return Err(e.to_string()),
+            Err(e) => {
+                // 🔴 C2 (denetim 2026-08-24): sağlık kapısı geri alması (aşağıda) deneme sayacını
+                // artırıyordu ama `update_installed` İÇİNDEKİ DETERMİNİSTİK hatalar (kilitli model /
+                // AV karantinası / eksik-exe / bozuk manifest) sayılmıyordu → o sınıf döngü
+                // kırıcısına (`otomatik_durduruldu`) HİÇ takılmadan her açılışta backend'i öldürüp
+                // ~1,19 GB açıp geri alıyordu. Cancel/Pause/Extract-Cancel yukarıda ayrıldı; GEÇİCİ
+                // ağ hataları `hata_deterministik_mi`de dışlanır (yeniden denenir, bloklama yok).
+                if flow::hata_deterministik_mi(&e) {
+                    flow::geri_almayi_kaydet(&root2, &manifest_raw);
+                }
+                return Err(e.to_string());
+            }
         };
         if !geri.bir_sey_yapildi() {
             return Ok(GuncellemeSonucu::DegisiklikYok);
@@ -1697,6 +1793,7 @@ fn main() {
                         // FnOnce; ama gövde &mut child istediği için binding mutable olmalı).
                         let mut job = move || {
                             backend::safe_stop_coils(port);
+                            son_oturumu_yakala(port, &root); // [F5] E-stop SONRASI / kill ÖNCESİ
                             let _ = child.kill();
                             let _ = child.wait();
                             // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
@@ -1743,6 +1840,161 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// C2 (denetim 2026-08-24): `check_runtime_update`'in UI'ya döndürdüğü JSON, flow'un
+    /// hesapladığı `otomatik_durduruldu` bayrağını TAŞIMALI. Bayrak `flow.rs`'te hesaplanıyor
+    /// (`test_KRITIK_3`) ve UI okuyor (`test_KRITIK_4`) ama ARADAKİ komut köprüsü onu hiç
+    /// serileştirmiyordu → döngü kırıcı üretimde ölüydü (bozuk yayın her açılışta yeniden kurulur).
+    /// Bu test o köprüyü DAVRANIŞSAL olarak kilitler (isim değil, üretilen değer ölçülür).
+    #[test]
+    fn plan_to_json_otomatik_durduruldu_tasir() {
+        let durduruldu = flow::UpdatePlan { otomatik_durduruldu: true, ..Default::default() };
+        let j = plan_to_json(&durduruldu);
+        assert_eq!(
+            j.get("otomatik_durduruldu").and_then(|v| v.as_bool()),
+            Some(true),
+            "komut çıktısı otomatik_durduruldu=true'yu UI'ya taşımıyor — C2 döngü kırıcı ölü"
+        );
+        // KARŞIT-KANIT: false plan da açıkça false taşımalı (alanın sabit true'ya çakılmaması).
+        let devam = flow::UpdatePlan { otomatik_durduruldu: false, ..Default::default() };
+        assert_eq!(
+            plan_to_json(&devam).get("otomatik_durduruldu").and_then(|v| v.as_bool()),
+            Some(false),
+            "otomatik_durduruldu koşulsuz true — normal güncelleme de bloklanır"
+        );
+    }
+
+    /// F4 (denetim 2026-08-24): rotasyon döngüsü "meşgul (canlı, timeout)" ile "kesin ölü (TCP
+    /// reddedildi)"yi ayırmalı. Meşgul → sayaç SIFIRLANIR, thread ASLA çıkmaz (sonraki rotasyonu
+    /// yakalar); kesin-ölü → sayaç artar, eşikte çıkar. Meşgul-yoklamayı "ölü" saymak thread'i
+    /// öldürür ve o oturumun rotasyonlarını kaçırırdı ("Beni hatırla" aralıklı geri gelir).
+    #[test]
+    fn rotasyon_ardisik_mesgulu_oldurmez() {
+        // MEŞGUL/canlı-boş (kesin_olu=false): sayaç SIFIRLANIR, ASLA çıkmaz.
+        assert_eq!(rotasyon_ardisik(false, 4, 5), (0, false));
+        assert_eq!(rotasyon_ardisik(false, 0, 5), (0, false));
+        // KESİN-ÖLÜ: 0'dan 5 kez → tam 5.'de çık, 4.'de değil.
+        let mut a = 0u32;
+        for i in 1..=5 {
+            let (yeni, cik) = rotasyon_ardisik(true, a, 5);
+            a = yeni;
+            assert_eq!(cik, i == 5, "kesin-ölü {i}. yoklamada çık={cik}");
+        }
+        // Araya giren CANLI yoklama sayacı sıfırlar → çık gecikir (meşgul-boot arasında ölmez).
+        let (a1, _) = rotasyon_ardisik(true, 0, 5); // 1
+        let (a2, _) = rotasyon_ardisik(true, a1, 5); // 2
+        let (a3, c3) = rotasyon_ardisik(false, a2, 5); // canlı → 0
+        assert_eq!((a3, c3), (0, false));
+        let (_, c4) = rotasyon_ardisik(true, a3, 5); // 1
+        assert!(!c4, "sıfırlama sonrası tek kesin-ölü çıkmamalı");
+    }
+
+    /// Rust yorum-soyucu (satır + blok + string-bilinçli) — yapısal kapılar doc-comment'lerdeki
+    /// token'lardan (safe_stop_coils / son_oturumu_yakala / kill) etkilenmesin.
+    fn f5_yorumlari_soy(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        let mut ch = src.chars().peekable();
+        #[derive(PartialEq)]
+        enum S {
+            Kod,
+            Satir,
+            Blok,
+            Str,
+        }
+        let mut s = S::Kod;
+        while let Some(c) = ch.next() {
+            match s {
+                S::Satir => {
+                    if c == '\n' {
+                        s = S::Kod;
+                        out.push('\n');
+                    }
+                }
+                S::Blok => {
+                    if c == '*' && ch.peek() == Some(&'/') {
+                        ch.next();
+                        s = S::Kod;
+                    }
+                }
+                S::Str => {
+                    out.push(c);
+                    if c == '\\' {
+                        if let Some(n) = ch.next() {
+                            out.push(n);
+                        }
+                    } else if c == '"' {
+                        s = S::Kod;
+                    }
+                }
+                S::Kod => {
+                    if c == '/' && ch.peek() == Some(&'/') {
+                        ch.next();
+                        s = S::Satir;
+                    } else if c == '/' && ch.peek() == Some(&'*') {
+                        ch.next();
+                        s = S::Blok;
+                    } else {
+                        if c == '"' {
+                            s = S::Str;
+                        }
+                        out.push(c);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// [F5] (denetim 2026-08-24): KAPANIŞ SIRASI değişmezi. Her teardown gövdesinde `safe_stop_coils`
+    /// (E-stop, TIBBİ GÜVENLİK) hem son-yakalamadan hem kill'den ÖNCE; son-yakalama kill'den ÖNCE
+    /// (backend hâlâ ayaktayken oturum okunur). Orphan/backend.port dalı son-yakalama İÇERMEMELİ
+    /// (başka sürecin portundan jeton okumak = loopback-jeton-zehirlenmesi). Yorum-soyulmuş ölçülür.
+    #[test]
+    fn f5_kapanis_sirasi_estop_ONCE_yakalama_kill_ONCE_orphan_HARIC() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+
+        // stop_backend_for_teardown gövdesi: imza → sonraki üst-seviye `\nfn `.
+        let i = soy.find("fn stop_backend_for_teardown").expect("teardown fn yok");
+        let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+        let govde = &soy[i..son];
+        let estop = govde.find("safe_stop_coils(").expect("teardown E-stop yok");
+        let yakala = govde.find("son_oturumu_yakala(").expect("teardown son-yakalama YOK (F5)");
+        let kill = govde.find(".kill()").expect("teardown kill yok");
+        assert!(estop < yakala, "E-stop son-yakalamadan SONRA — bobin güvenliği geciker (TIBBİ)");
+        assert!(yakala < kill, "son-yakalama kill'den SONRA — backend ölmüş, oturum okunamaz (F5)");
+
+        // Orphan (!had_tracked) dalı son-yakalama İÇERMEMELİ.
+        let o = govde.find("if !had_tracked").expect("orphan dalı yok");
+        let orphan_son = govde[o..].find('}').map(|j| o + j).unwrap_or(govde.len());
+        let orphan = &govde[o..orphan_son];
+        assert!(
+            !orphan.contains("son_oturumu_yakala("),
+            "orphan/backend.port dalında son-yakalama var — başka sürecin jetonunu okur (zehirlenme)"
+        );
+
+        // Destroyed job closure: E-stop → son-yakalama → kill sırası.
+        let d = soy.find("let mut job = move ||").expect("Destroyed job closure yok");
+        let jg = &soy[d..(d + 600).min(soy.len())];
+        let de = jg.find("safe_stop_coils(").expect("job E-stop yok");
+        let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
+        let dk = jg.find(".kill()").expect("job kill yok");
+        assert!(de < dy && dy < dk, "Destroyed job sırası bozuk (E-stop→yakala→kill)");
+    }
+
+    /// C3/L7 (denetim 2026-08-24): rotasyon-senkron çift-thread guard'ı. İlk çağrı thread'i
+    /// AÇMALI (true), aktifken ikinci çağrı ATLANMALI (false); thread bitip bayrağı serbest
+    /// bıraktıktan sonra yeniden AÇILABİLMELİ (sonraki backend). Sahiplenme dalı her Başlat'ta
+    /// koştuğundan bu guard olmadan thread biriktirilirdi.
+    #[test]
+    fn senkron_baslamali_cift_thread_onler() {
+        let aktif = AtomicBool::new(false);
+        assert!(senkron_baslamali(&aktif), "ilk çağrı thread'i açmalı");
+        assert!(!senkron_baslamali(&aktif), "aktif thread varken ikinci çağrı atlanmalı (çift-thread yok)");
+        assert!(!senkron_baslamali(&aktif), "hâlâ aktif → yine atlanmalı");
+        // Thread bitişini taklit et: bayrağı serbest bırak → sonraki backend için yeniden açılabilmeli.
+        aktif.store(false, Ordering::Release);
+        assert!(senkron_baslamali(&aktif), "thread bittikten sonra yeni backend için yeniden açılmalı");
+    }
 
     /// GÜVENLİK: open_url kabuk-metakarakteri / izinsiz-host / kontrol-karakteri içeren
     /// (manifest-türevi zehirli) URL'leri open_browser'a ULAŞTIRMADAN reddetmeli.

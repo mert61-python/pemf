@@ -38,6 +38,7 @@ class _SyncModel:
         self.locked = 0
         self.ignored = 0
         self.active = True  # mevcut testler aktif seansı modeller — davranışları değişmez
+        self.awaiting_acquire = False  # E4: seans başı/freq değişimi → ilk darbe faz kilidini EDİNİR
         self._pasif_darbe_latchler = pasif_darbe_latchler
 
     def timer_tick(self):
@@ -55,8 +56,10 @@ class _SyncModel:
 
     def start(self, tpp: int):
         """_beginOutput→_updatePWM eşdeğeri: parametre uygula + aktif et.
-        Latch reset yalnız GERÇEK freq değişiminde (update_pwm kuralı aynen)."""
+        Latch reset yalnız GERÇEK freq değişiminde (update_pwm kuralı aynen).
+        E4: _beginOutput edinimi KOŞULSUZ armlar (aynı-freq restart freqChanged=false olsa da)."""
         self.update_pwm(tpp)
+        self.awaiting_acquire = True  # _beginOutput'taki koşulsuz arm
         self.active = True
 
     def sync_pulse(self):
@@ -64,6 +67,15 @@ class _SyncModel:
         if not self.active and not self._pasif_darbe_latchler:
             return  # [4.3] düzeltmesi: pasifken darbe SAYILMAZ ve LATCH BİRİKMEZ
         if self.sync_disabled:
+            return
+        if self.awaiting_acquire:
+            # E4: İLK-DARBE FAZ EDİNİMİ — darbe nerede gelirse gelsin s_tick=0 ile kilidi EDİN.
+            # Kapılardan SONRA (HG-3/[4.3] korunur); tolerans dalından ÖNCE (orta-periyot da edinir).
+            self.awaiting_acquire = False
+            self.natural_wrap = False
+            self.early_streak = 0
+            self.tick = 0
+            self.locked += 1
             return
         tol = self.tpp // 50 + 2
         t = self.tick
@@ -95,6 +107,7 @@ class _SyncModel:
             self.sync_disabled = False
             self.early_streak = 0
             self.natural_wrap = False
+            self.awaiting_acquire = True  # E4: yeni frekans → faz kilidini yeniden EDİN
 
 
 def test_KRITIK_STM_cok_hizli_sync_DEVRE_DISI():
@@ -241,6 +254,109 @@ def test_MODEL_AYIRT_EDIYOR_eski_semantik_bosta_latchlerdi():
     m.start(tpp=50000)
     assert m.sync_disabled, (
         "model ayrıştırmıyor: eski semantik de latch'lemedi — [4.3] kapısı yanlış şeyi ölçüyor olabilir"
+    )
+
+
+# ── 3. TUR DENETİMİ [E4] (2026-08-24): İLK-DARBE FAZ EDİNİMİ ────────────────────────────────
+# s_tick yalnız iki ISR'da yazılır ve START'ta HİÇBİR ortak epoch'a hizalanmaz. STM main.c ref_ms
+# epoch-hizasını ESP'de taklit edemeyiz (ortak saat yok) → ESP fazını YALNIZ PB1 darbesinden
+# öğrenebilir. Mevcut tolerans dalı yalnız periyot SINIRINA yakın (±%2) darbeyi kilitler; AYNI
+# frekanslı ama SABİT faz-ofsetli STM/ESP çifti (darbe periyot ORTASINDA) tolerans penceresine
+# HİÇ giremez → darbe hep 'ignored' → faz kilidi ASLA kurulmaz → komut edilen çok-bobin faz
+# deseni yanlış uygulanır (klinik çıktı hatası; DC-yapışma değil ama faz superpozisyonu bozuk).
+# Düzeltme: seans başı (_beginOutput KOŞULSUZ) ve freq değişimi (_updatePWM freqChanged) →
+# s_awaiting_acquire armlanır; İLK darbe nerede gelirse gelsin s_tick=0 ile faz kilidini EDİNİR,
+# sonra tolerans dalı kilidi SÜRDÜRÜR. Edinim s_sync_disabled/!s_active kapılarından SONRA →
+# HG-3 DC-yapışma latch'ini ve [4.3] pasif-darbe korumasını BOZMAZ.
+
+
+def test_KRITIK_E4_ayni_freq_sabit_ofset_ILK_darbede_kilitlenir():
+    """STM ve ESP AYNI frekans (1 Hz, tpp=50000) ama SABİT faz ofseti: PB1 hep periyot ORTASINDA
+    (t≈30000). Edinim OLMADAN darbe hep 'ignored' → ESP faz kilidini HİÇ kuramaz. Edinimle ilk
+    darbede s_tick=0 → anında kilit. (Edinimsiz model bu testte tick≠0 ile RED verir.)"""
+    m = _SyncModel(tpp=50000)
+    m.start(tpp=50000)  # yeni seans başı → _beginOutput KOŞULSUZ edinim armlar (freqChanged=false)
+    for _ in range(30000):  # ESP'yi periyot ortasına getir
+        m.timer_tick()
+    assert m.tick == 30000  # ön-doğrulama: darbe gerçekten periyot ortasında gelecek
+    m.sync_pulse()
+    assert m.tick == 0, (
+        "ilk PB1 darbesi faz kilidini EDİNMEDİ (s_tick sıfırlanmadı) — aynı frekanslı sabit-ofsetli "
+        "çift periyot ortasında sonsuza dek 'ignored' kalır, komut edilen faz deseni yanlış (E4)"
+    )
+    assert m.locked >= 1, "edinim kilidi telemetride sayılmadı"
+
+
+def test_KRITIK_E4_edinim_sonrasi_ayni_freq_STABIL_kilitli_kalir():
+    """Edinim faz penceresine SOKAR; sonrasında aynı-freq çift tolerans dalıyla kilitli kalmalı,
+    DC-yapışma latch'i YANLIŞ tetiklenmemeli (edinim sonrası doğal wrap normal akar)."""
+    m = _SyncModel(tpp=50000)
+    m.start(tpp=50000)
+    for _ in range(30000):
+        m.timer_tick()
+    m.sync_pulse()  # EDİNİM: tick=0
+    # Sonraki periyotlar: STM aynı freq → her ~tpp tick'te bir darbe, ESP wrap'la hizalı gelir.
+    for _ in range(10):
+        for _ in range(50000):
+            m.timer_tick()
+        m.sync_pulse()
+    assert not m.sync_disabled, "edinim sonrası aynı-freq çift DC-yapışma sandı (yanlış disable)"
+    assert m.locked >= 11, "edinim sonrası tolerans kilidi sürmedi"
+
+
+def test_MODEL_AYIRT_EDIYOR_E4_edinimsiz_orta_darbe_kilit_KURAMAZ():
+    """Ayrıştırıcı: edinim ARMLANMADAN (start çağrılmadan, doğrudan active) periyot-ortası darbe
+    kilit KURAMAZ — mevcut tolerans davranışı. E4 kapısı yeni yeteneği ölçüyor, tolerans dalını
+    değil; kapı kendi varsayımını doğrulamıyor."""
+    m = _SyncModel(tpp=50000)
+    m.active = True  # start() ÇAĞIRMADAN → awaiting_acquire FALSE kalır
+    for _ in range(30000):
+        m.timer_tick()
+    m.sync_pulse()
+    assert m.tick == 30000 and m.ignored == 1 and m.locked == 0, (
+        "edinim armlanmadan orta darbe kilitledi — model tolerans ile edinimi AYIRMIYOR"
+    )
+
+
+def test_KRITIK_C_syncPulseISR_edinim_kapilardan_SONRA_tolerans_ONCE():
+    """Yapısal kapı (yorum-soyulmuş kaynak): edinim dalı !s_active + s_sync_disabled kapılarından
+    SONRA (HG-3/[4.3] bozulmasın) AMA tolerans (tol) mantığından ÖNCE (orta-periyot darbe hâlâ
+    ignored'a düşmeden edinsin)."""
+    cpp = _c_soy((S3 / "CoilController.cpp").read_text(encoding="utf-8", errors="replace"))
+    i = cpp.index("static void IRAM_ATTR syncPulseISR()")
+    j = cpp.index("static void", i + 10)
+    govde = cpp[i:j]
+    a = govde.find("!s_active")
+    d = govde.find("s_sync_disabled")
+    e = govde.find("s_awaiting_acquire")
+    tol = govde.find("tol")
+    assert e >= 0, "syncPulseISR'da s_awaiting_acquire edinim dalı YOK (E4)"
+    assert 0 <= a < e and 0 <= d < e, (
+        "edinim dalı !s_active / s_sync_disabled kapılarından ÖNCE — pasif ya da uyumsuz seansta "
+        "yanlış edinim; HG-3 DC-yapışma latch'i ve [4.3] pasif-darbe koruması BOZULUR"
+    )
+    assert 0 <= e < tol, (
+        "edinim dalı tolerans (tol) mantığından SONRA — orta-periyot darbe yine 'ignored'a düşer, "
+        "edinim hiç çalışmaz (E4 etkisiz)"
+    )
+
+
+def test_KARSIT_KANIT_C_edinim_iki_yerde_armlanir():
+    """Edinim seans başında (_beginOutput KOŞULSUZ) ve freq değişiminde (_updatePWM freqChanged)
+    armlanmalı — biri eksikse aynı-freq restart / freq değişimi faz edinemez."""
+    cpp = (S3 / "CoilController.cpp").read_text(encoding="utf-8", errors="replace")
+    i = cpp.index("void CoilController::_beginOutput")
+    bg = cpp[i : i + 1400]
+    assert "s_awaiting_acquire = true" in bg, (
+        "_beginOutput seans başında edinimi armlamıyor — AI Pro aynı-freq (1 Hz) yeniden başlatmada "
+        "freqChanged=false, faz HİÇ yeniden edinilemez (E4)"
+    )
+    k = cpp.index("void CoilController::_updatePWM")
+    ug = cpp[k : k + 2200]
+    fc = ug.index("if (freqChanged)")
+    blok = ug[fc : ug.index("}", fc)]
+    assert "s_awaiting_acquire = true" in blok, (
+        "_updatePWM freqChanged bloğunda edinim armlanmıyor — mid-seans freq değişiminde faz yeniden edinilmez (E4)"
     )
 
 

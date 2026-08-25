@@ -1,29 +1,37 @@
 # PEMF Vet — Web Sitesi (Vercel)
 
 Veteriner **PEMF Vet Client** için indirme/tanıtım sitesi. Vite + React + TypeScript + Tailwind v4.
-Kullanıcı buradan **küçük client’ı (~52 MB)** indirir; asıl uygulama client içinden iner.
+Kullanıcı buradan **küçük client’ı (~3 MB NSIS launcher)** indirir; asıl uygulama (büyük) client içinden iner.
 
 ## Ürün modeli (siteyi anlamak için)
 
-**3 katman:** Website (bu proje, Vercel) → **Client/Launcher** (~52 MB, indirilir, next-next kurulur; profil seçilir, modeller iner, “Başlat” ile açılır, masaüstü kısayolları) → **Uygulama** (büyük, gömülü; React web arayüzü). Mobil ayrıdır (App/Play Store).
+**3 katman:** Website (bu proje, Vercel) → **Client/Launcher** (~3 MB NSIS launcher, indirilir, next-next kurulur; profil seçilir, modeller iner, “Başlat” ile açılır, masaüstü kısayolları) → **Uygulama** (büyük, gömülü; React web arayüzü). Mobil ayrıdır (App/Play Store).
 
 **İki bağımsız eksen:**
 - **Kullanım profili = NE kurulur** (Ev Sahibi · Veteriner · Araştırma) — çoklu seçim, **client içinde**; yalnız seçilen AI modelleri iner.
-- **Üyelik seviyesi = İŞLEM önceliği** — Başlangıç / Pro / **Pro+**. Pro **kuyrukta** bekler, **Pro+ gerçek-zamanlı** (kuyruksuz).
+- **Üyelik seviyesi = JETON hakkı** — Başlangıç / Kullandıkça Öde / Pro / **Pro+**. 1 jeton = 1 yapay zekâ analizi; her seviye aylık bir jeton hakkı verir (devretmez), satın alınan jeton süresizdir. (Eski “işlem önceliği / kuyruk / gerçek-zamanlı” çerçevesi sahip kararıyla kaldırıldı — 2026-08-20; tek kaynak `src/config.ts` `JETON`.)
 
-**Fiyat politikası:** Seviye = aylık abonelik (compute önceliği). Ev Sahibi + Veteriner seviyeye **dahil**; **Araştırma** ağır olduğu için **+₺390/ay eklenti**.
+**Fiyat politikası:** Ücretli seviyeler aylık abonelik (jeton hakkı) + isteğe bağlı **Kullandıkça Öde** (aylık ücret yok, yalnız harcanan jeton faturalanır). Ev Sahibi + Veteriner profili seviyeye **dahil**; **Araştırma** ağır olduğu için **+₺390/ay eklenti**. ⚠️ Satış şu an **kapalı** (`FREE_MODE = true`): tüm profiller ücretsiz/indirilebilir, ücret etiketleri gizli — iyzico canlıya geçince `false` yapılır.
 
 ## Yapı
 
 ```
 src/
 ├── config.ts            → TÜM içerik & fiyatlar (tek yerden düzenle)
-├── main.tsx / App.tsx   → router + layout (ScrollToTop)
+├── main.tsx / App.tsx   → router + layout (ScrollToTop + ErrorBoundary + AuthProvider)
 ├── index.css            → Tasarım sistemi (Tailwind v4 @theme: teal/navy, Inter)
+├── context/
+│   ├── AuthContext.tsx  → Supabase oturumu (React context)
+│   └── AuthModal.tsx    → giriş / kayıt / şifre-sıfırlama modali
+├── lib/                 → yardımcılar: supabase (istemci), checkout, download, jeton, planFiyat, os, usageStats, authHatalari
 ├── components/
 │   ├── Icons.tsx        → SVG ikon seti + Logo
 │   ├── Header.tsx / Footer.tsx
-│   ├── DownloadButtons.tsx
+│   ├── AccountButton.tsx → hesap menüsü (giriş/çıkış, abonelik iptali, jeton bakiyesi)
+│   ├── DownloadButtons.tsx / DownloadGate.tsx → indirme butonları + oturum kapısı (indirmeden önce giriş)
+│   ├── DownloadStats.tsx → GitHub Releases indirme sayacı
+│   ├── AppScreenshots.tsx → telefon çerçeveli uygulama ekran görüntüsü galerisi
+│   ├── ErrorBoundary.tsx → hata sınırı
 │   ├── LauncherMock.tsx → dashboard/launcher önizleme (saf CSS)
 │   └── PackageBuilder.tsx → profil seçim + boyut/ücret tahmini
 └── pages/
@@ -31,18 +39,26 @@ src/
     ├── Features.tsx     → özellik detayı + launcher önizleme
     ├── Pricing.tsx      → seviyeler + karşılaştırma tablosu + profiller + eklentiler
     ├── Download.tsx     → client indir + profil seçimi + sistem gereksinimleri
-    └── Support.tsx      → SSS + iletişim
-public/                  → favicon, hero/launcher görselleri
-vercel.json              → SPA rewrite + asset cache
+    ├── Odeme.tsx        → iyzico ödeme/abonelik akışı (/odeme)
+    ├── Legal.tsx        → yasal belge sayfaları (LEGAL_DOCS'tan üretilir)
+    ├── ResetPassword.tsx → şifre sıfırlama (/sifre-sifirla)
+    ├── Support.tsx      → SSS + iletişim
+    └── NotFound.tsx     → 404
+api/                     → Vercel serverless (iyzico abonelik + jeton): checkout · callback · webhook · cancel · tokens (+ _lib/iyzico·util, _types)
+public/                  → favicon, hero/launcher görselleri, screenshots/
+vercel.json              → SPA rewrite + güvenlik başlıkları (CSP/HSTS) + asset cache
 ```
 
 ## İçeriği düzenleme
 
 Metin/fiyat/link **tamamı `src/config.ts`** içinde:
-- `CLIENT` — sürüm, boyut, **indirme URL’leri** (win/mac). ⚠️ Şu an `#` — client yayınlanınca gerçek dosya URL’si koyun. **52 MB’lık client’ı Vercel’e koymayın**; GitHub Releases / Cloudflare R2 / S3’te barındırın, URL’yi buraya yazın.
-- `PLANS` — Başlangıç / Pro / Pro+ (fiyat + `realtime`/`queue` politikası).
-- `MODULES` — Ev Sahibi / Veteriner / Araştırma (boyut + `included`/`addonMonthly`).
-- `ADDONS`, `COMPARE`, `FEATURES`, `LAUNCHER_STEPS`, `FAQ`, `BRAND`.
+- `CLIENT` / `DOWNLOAD_HOST` — sürüm, boyut, **indirme kaynağı** (GitHub Releases; `windowsTag` tek kaynak, asset adı etiketten türetilir). **Client’ı (ve app/deps katmanlarını) Vercel’e koymayın**; harici host’ta durmalı.
+- `PLANS` — Başlangıç / Kullandıkça Öde / Pro / Pro+ (fiyat + `jetonHakki`). ⚠️ Eski `realtime`/`queue` alanları SİLİNDİ; ayrım artık jeton hakkına dayanır.
+- `JETON` — jeton ücretlendirme modeli (plan hakları, işlem maliyeti, ek paketler, kullandıkça-öde). Tek kaynak.
+- `MODULES` — Ev Sahibi / Veteriner / Araştırma (boyut + `included`/`addonMonthly`); `RESEARCH_ADDON` araştırma eklenti tarifesi.
+- `FREE_MODE` — `true` iken satış kapalı: tüm profiller ücretsiz, ücret etiketleri gizli (iyzico canlıya geçince `false`).
+- `COMPANY` — satıcı/şirket kimliği (yasal zorunlu, tek kaynak); `LEGAL_DOCS` — yasal sayfa slug/başlıkları (route + footer + `Legal.tsx` buradan üretilir); `MEDICAL_DISCLAIMER`.
+- `NAV`, `ADDONS`, `COMPARE`, `FEATURES`, `LAUNCHER_STEPS`, `PATCH`, `FAQ`, `BRAND`.
 
 ## Geliştirme
 
@@ -114,7 +130,7 @@ Teal marka (`oklch(66% 0.13 184)`), koyu navy zemin, **Inter**, radius `.625rem`
 
 ## İndirme sayacı (2026-08-06)
 
-`/indir` sayfasındaki sayaç GitHub Releases API'sinden (`download_count`) beslenir.
+İndir (`/download`) sayfasındaki sayaç GitHub Releases API'sinden (`download_count`) beslenir (`DownloadStats.tsx`).
 
 ⚠️ **"Kaç kişi" değil "kaç indirme".** İki bilinen şişme kaynağı var:
 1. **Oto-güncelleme** — client v1.9.3'ten beri kendini güncellerken `PEMFVetClient-Setup.exe`'yi

@@ -36,7 +36,10 @@ dalga biçimi **rekonstrüksiyon**, skopla doğrulanmadan kliniğe güvenilmez:
 
 1. A/B çıkışları (GPIO4/5) iki kanalda: simetrik bipolar, örtüşme YOK, geçişlerde ≥40 µs boşluk
    (DEAD_TIME_TICKS=2), duty ≤ %50 tavanı.
-2. `phase: 90` komutu → desen çeyrek periyot kaymalı.
+2. `phase: 90` komutu → desen çeyrek periyot kaymalı. **Faz kilidi seans başında ve her
+   freq değişiminde ilk PB1 darbesinde EDİNİLİR** (darbe periyot ortasında gelse bile) —
+   aynı frekanslı ama sabit faz-ofsetli çiftte bile komut edilen faz farkı skopta görünmeli
+   ([E4], 2026-08-24; edinim olmadan orta-darbe 'ignored'a düşüp faz HİÇ kilitlenmezdi).
 3. STM bağlı + aynı frekans → status'ta `sync_ignored` sabit; kasıtlı farklı frekans →
    `sync_ignored` artar AMA çıkış bozulmaz (toleranslı kilit).
 4. **DC-yapışma latch'i (HG-3, 2026-08-19):** STM freq'i ESP'nin ≳50 katına çıkar (örn. STM

@@ -10,6 +10,11 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | [`RUNBOOK.md`](RUNBOOK.md) | Saha **operasyon / olay-müdahale** rehberi (klinik PC, `PemfBackend` NSSM servisi, hızlı komutlar) | Saha/destek |
 | [`VERIFICATION.md`](VERIFICATION.md) | Üretim **doğrulama checklist'i** (çalıştırılabilir adımlar; cihaz/panel gerektirenler işaretli) | Sürüm-öncesi doğrulama |
 | [`PEMF_SISTEM_RAPORU.md`](PEMF_SISTEM_RAPORU.md) | Kapsamlı **tam sistem raporu** (2026-03) — üst-düzey genel bakış | Yönetici/genel |
+| [`TEMIZ-MAKINE.md`](TEMIZ-MAKINE.md) | **Temiz makinede sıfırdan** — kur-kullan (Yol A) ve build/yayın (Yol B, sır geri-yükleme) akışlarını ayrık anlatır | Yeni makine / build |
+| [`JETON-SISTEMI.md`](JETON-SISTEMI.md) | **Jeton (token) ücretlendirme** sistemi — sahip kararı; ⚠️ `PEMF_TIER_ENFORCED` varsayılan **KAPALI** (bugün üretimde koşmuyor) | Ürün/ücretlendirme |
+| [`AGPL-KARARI.md`](AGPL-KARARI.md) | Ultralytics **AGPL-3.0** durum tespiti + karar notu (**AÇIK**; `tests/test_license_surface.py` yüzey kapısı) | Sahip/hukuk |
+| [`DONANIM-UYUM-ANALIZI-2026-08-19.md`](DONANIM-UYUM-ANALIZI-2026-08-19.md) | Donanım↔backend **protokol uyum** denetim raporu (14 iddia → 12 gerçek uyumsuzluk) | Donanım/protokol |
+| [`SAHA-TEST-LISTESI.md`](SAHA-TEST-LISTESI.md) | Elle koşulan **saha test** senaryoları — otomatik süitlerin göremediği gerçek donanım/OS/kullanıcı sınıfı | Saha/QA |
 | `version_info.txt` | Windows EXE sürüm kaynağı (`sync_versions.ps1` yazar) | Build |
 | `screenshots/` | Arayüz ekran görüntüleri (kök README + TÜBİTAK raporu kullanır) | — |
 

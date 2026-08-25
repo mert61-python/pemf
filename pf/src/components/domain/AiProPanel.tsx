@@ -68,12 +68,22 @@ type FrameResult = {
    *  ⚠️ Opsiyonel: eski backend bu alanı göndermez → hazırlık metni "hayvan aranıyor"da kalır,
    *  akış BOZULMAZ (alan yokluğu "kedi yok" gibi davranır ve kullanıcı yine yönlendirilir). */
   catDetected?: boolean;
+  /** Lokalizasyon damgası (cache 'at') — panel ardisik sayacını EKO karelerden ayırır (F2, denetim
+   *  2026-08-24). ⚠️ Opsiyonel: eski backend göndermezse damga-kapısı devre dışı, kare-başı sayıma
+   *  düşülür (geriye-uyum; kilitlenme yok — catDetected/ownerClientId sürüm-kayması deseni). */
+  localizedAt?: number;
   perCoil?: Coil[];
   target?: { x: number; y: number; z: number };
   eField?: number;
   organId?: number;
   organName?: string;
   reliability?: number;
+  /** [B1] Bu istemci AKTİF seansın sahibi DEĞİL (başka operatör başlattı) → kareleri bobin SÜRMEZ,
+   *  panel "yalnız görüntüleme" gösterir. ⚠️ Opsiyonel: eski backend göndermez → undefined = eski
+   *  davranış (sürüm-kayması geriye-uyumu). */
+  foreignViewer?: boolean;
+  /** [B1] Bu kare gerçekten bobin sürdü mü (sahip + localized + aktif seans). */
+  driven?: boolean;
 };
 
 function fmtSec(sec: number): string {
@@ -91,7 +101,14 @@ interface AiProStatus {
   /** Seansı BAŞLATAN istemcinin kimliği. ALAN YOKSA = onay/sahiplik öncesi backend (bkz. sync). */
   ownerClientId?: string;
 }
-interface AiProAction { status?: string }
+interface AiProAction {
+  status?: string;
+  message?: string;
+  /** [B1] /start yanıtı: seansın SAHİBİNİN kimliği (taze başlatımda BİZ, "Already running"da MEVCUT
+   *  sahip). Panel ownedRef'i YALNIZ bu===kendi kimliğimiz ise true yapar → başkasının seansını
+   *  unmount'ta durdurmaz. ALAN YOKSA = eski backend → eski davranış (başarı=sahip). */
+  ownerClientId?: string;
+}
 /** `/api/ai/pro/propose` yanıtı — hekime gösterilecek ve onaylanınca uygulanacak parametreler. */
 interface AiProposeResponse {
   proposalId?: string;
@@ -142,6 +159,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const [oneriHatasi, setOneriHatasi] = useState("");
   /** Ardışık doğrulanmış ölçüm sayacı (bkz. ARDISIK_ONAY). */
   const ardisikRef = useRef(0);
+  /** F2: son SAYILAN lokalizasyon damgası — aynı damga (eko kare) yeniden sayılmaz. */
+  const sonDamgaRef = useRef<number | null>(null);
   const [ardisik, setArdisik] = useState(0);
   /** Hazırlığın başladığı an — gecikmede yönlendirme ve üst sınır için. */
   const hazirlikBasRef = useRef(0);
@@ -236,9 +255,10 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       oneriIstendiRef.current = false;
       oneriBeklemeRef.current = 0;
       ardisikRef.current = 0;
+      sonDamgaRef.current = null;   // F2: her hazırlık taze damgayla sayar
       setArdisik(0);
       setOneriHatasi("");
-      await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null);  // taze lokalizasyon iste
+      await apiPost<AiProAction | null>("/ai/pro/calibrate", { client_id: clientIdRef.current }, null);  // taze lokalizasyon iste
       setHazirlik(true);   // kareler akmaya başlar → kedi → organ → öneri (otomatik)
       return;
     }
@@ -263,10 +283,21 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     if (IS_WEB || !hazirlik || oneriIstendiRef.current) return;
     if (!mobileResult?.detected) {
       ardisikRef.current = 0;      // ölçüm koptu → sayaç sıfırlanır (ARDIŞIK olmalı)
+      sonDamgaRef.current = null;  // F2: ölçüm koptu → damga da sıfırla (sonraki taze sayar)
       setArdisik(0);
       return;
     }
     // ⚠️ ARDIŞIK DOĞRULAMA: tek bir şanslı kare tedavi parametrelerini tetiklemesin.
+    // F2 (denetim 2026-08-24): sayaç yalnız YENİ LOKALİZASYONDA artar. Kareler 1,5 sn'de, sunucu
+    // lokalizasyonu ≤10 sn'de bir → aynı ölçümün ekosu AYNI localizedAt'i taşır; eko'yu saymak
+    // "iki tutarlı ölçüm"ü tek ölçüme indirir (sahte sertleştirme). Damga eşitse ARTIRMA — ama
+    // SIFIRLAMA da yapma (streak korunur; yoksa eko'yla bölünmüş iki gerçek ölçüm asla 2'ye ulaşmaz).
+    const damga = mobileResult?.localizedAt;
+    if (typeof damga === "number") {
+      if (damga === sonDamgaRef.current) return; // eko kare
+      sonDamgaRef.current = damga;
+    }
+    // (damga undefined = eski backend → her detected karede say; geriye-uyum, kilitlenme yok.)
     ardisikRef.current += 1;
     setArdisik(ardisikRef.current);
     if (ardisikRef.current < ARDISIK_ONAY) return;
@@ -317,6 +348,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         setHazirlik(false);
         oneriIstendiRef.current = false;
         ardisikRef.current = 0;
+        sonDamgaRef.current = null;   // F2
         setOneriHatasi("");
         platformAlert(
           "Konumlandırma tamamlanamadı",
@@ -346,7 +378,17 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     );
     setApprovalBusy(false);
     if (res?.status === "success") {
-      ownedRef.current = true;   // seansı BİZ başlattık → unmount'ta durdurma yetkisi doğar
+      // [B1]: ownedRef'i YALNIZ backend BİZİ sahip gösteriyorsa true yap. "Already running" yanıtı
+      // MEVCUT sahibi (A) döndürür → B ownedRef=false kalır ve panelini kapatınca A'nın onaylı
+      // seansına /stop GÖNDERMEZ (ownedRef <3sn drift kapanır). Alan yoksa (eski backend) eski
+      // davranış: başarı=sahip (sürüm-kayması geriye-uyumu).
+      // ⚠️ `!!res.ownerClientId`: status-poll (satır ~199) ile AYNI formül — boş ownerClientId'yi
+      // İKİSİ de "sahip değil" sayar. Aksi halde boş-owner'da start=true / poll=false ıraksar ve
+      // sahibin unmount /stop'u atlanabilirdi (adversaryal kod-inceleme minor tutarlılık).
+      ownedRef.current =
+        res.ownerClientId === undefined
+          ? true
+          : !!res.ownerClientId && res.ownerClientId === clientIdRef.current;
       setRunning(true);
       setProposal(null);
     }
@@ -385,13 +427,17 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const changeOrgan = useCallback(async (id: number) => {
     setOrganId(id);
     // DÜŞÜK fix: sessiz yutma yerine başarısızlıkta uyar (komut ulaşmadıysa kullanıcı bilsin).
-    const res = await apiPost<AiProAction | null>("/ai/pro/organ", { organ_id: id }, null);
+    // [B1]: client_id ile → backend YABANCI (sahip dışı) istemcinin mid-seans organ değişimini
+    // (onaylanmamış organa enerji) reddeder. Sahip kendi id'siyle çağırır → izin.
+    const res = await apiPost<AiProAction | null>(
+      "/ai/pro/organ", { organ_id: id, client_id: clientIdRef.current }, null
+    );
     if (!res) platformAlert("Organ değiştirilemedi", "Komut sunucuya ulaşmadı — tekrar deneyin.");
   }, []);
 
   const relocalize = useCallback(async () => {
     // Bir sonraki karede cat_organ organ-lokalizasyonunu zorla tazele (avuç-Z kalibrasyonu KALKTI).
-    const res = await apiPost<AiProAction | null>("/ai/pro/calibrate", {}, null);
+    const res = await apiPost<AiProAction | null>("/ai/pro/calibrate", { client_id: clientIdRef.current }, null);
     if (!res) {
       platformAlert("Yeniden konumlandırılamadı", "Komut sunucuya ulaşmadı — tekrar deneyin.");
       return;
@@ -420,6 +466,10 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         if (photo?.base64) {
           const fd = new FormData();
           fd.append("image_base64", photo.base64);
+          // [B1]: kare sahipliği → backend YABANCI istemcinin karesini bobin SÜRMEZ. Sahip kendi
+          // id'sini taşır (start'takiyle aynı). Boşsa (id henüz yüklenmedi / hazırlık) backend
+          // sahip-yokken zaten bastırmaz — güvenli.
+          fd.append("client_id", clientIdRef.current);
           const ctrl = new AbortController();
           const t = setTimeout(() => ctrl.abort(), 15000);
           const headers: Record<string, string> = { Accept: "application/json" };
@@ -564,7 +614,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || asamaMetni}</Text>
           <TouchableOpacity
             style={styles.hazirlikIptal}
-            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; setArdisik(0); setOneriHatasi(""); }}
+            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; sonDamgaRef.current = null; setArdisik(0); setOneriHatasi(""); }}
             accessibilityRole="button"
             accessibilityLabel="Hazırlığı iptal et"
           >

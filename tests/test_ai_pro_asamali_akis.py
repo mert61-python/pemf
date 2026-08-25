@@ -63,18 +63,59 @@ def test_KRITIK_kedi_varligi_organdan_AYRI_bildirilir(router):
     assert "organs_by_id" in m.group(0) and "kedi_var" in m.group(0), "kedi varligi organ sozlugunden turetilmiyor"
 
 
+def test_KRITIK_her_cache_update_kedi_var_PARITE(router):
+    """🔴 İKİ TRANSPORT PARİTESİ (denetim 2026-08-24, E3): web (_ai_pro_loop) ve mobil
+    (ai_pro_frame) yollari `_ai_organ_cache`i AYNI asama anahtarlariyla guncellemeli.
+
+    Loop `lkedi`yi cozup ATIYORDU — cache'i yalniz frame yolu (kedi_var) guncelliyordu. Sonuc: web/
+    sunucu-kamerali seansta ws `catDetected` ve /status + propose-409 ipucu SUREC OMRU boyunca bayat
+    kaliyor, hedef kaybolunca yanlis operator yonlendirmesi (kedi kabinden ciktiginda 'aciyi
+    degistirin'). Bu deponun 1 NUMARALI hata deseni: ayni kural iki transport, biri uygulamiyor.
+    Her cache.update sozlugu kedi_var TASIMALI."""
+    bloklar = re.findall(r"_ai_organ_cache\.update\(\s*\{(.*?)\}\s*\)", router, re.S)
+    assert len(bloklar) >= 2, (
+        f"iki cache.update yolu (loop + frame) beklendi, {len(bloklar)} bulundu — ai_router.py bicimi degismis"
+    )
+    for i, b in enumerate(bloklar):
+        assert '"kedi_var"' in b, (
+            f"{i}. cache.update kedi_var YAZMIYOR — o transport'ta (web-loop ya da mobil-frame) asama "
+            "bilgisi bayat kalir ve yanlis yonlendirme uretir (E3)"
+        )
+
+
 def test_KRITIK_kare_yaniti_asamayi_TASIR(router):
-    """Arayuz asamayi kare yanitindan okur; alan yoksa hazirlik ekrani sessiz kalir."""
-    i = router.find('"detected": localized')
-    assert i > 0, "kare yaniti bulunamadi"
-    blok = router[i - 400 : i + 400]
-    assert "catDetected" in blok, "kare yaniti kedi varligini TASIMIYOR"
+    """Mobil panel asamayi /frame HTTP yanitindan okur; alan yoksa hazirlik ekrani sessiz kalir.
+
+    ⚠️ GERCEK ai_pro_frame YANITINA capalanir (denetim 2026-08-24, E2): router.find('"detected":
+    localized') ILK gecis WS yayinidir (_ai_pro_loop, catDetected orada VAR ama mobil onu /frame'den
+    okur, /status'tan degil). Eski test ilk gecisi (WS blogu) olcup /frame yanitini HIC gormeden
+    yesil donuyordu; /frame catDetected TASIMIYORDU ve mobil hazirlik ekraninin 'hayvan gorunuyor,
+    organ araniyor' asamasi olu kaliyordu (F1 sinifi yanlis-yesil kapi)."""
+    fi = router.find("def ai_pro_frame")
+    assert fi > 0, "ai_pro_frame ucu bulunamadi — ai_router.py bicimi degismis"
+    govde = router[fi:]
+    # 3. tur B1: 'detected' değeri artık `bool(localized) and not is_foreign` → JSON-anahtarına
+    # pinle (çıplak değer ifadesine değil), yoksa sahiplik-kapısı eklenince çıpa kayar.
+    i = govde.find('"detected":')
+    assert i > 0, "ai_pro_frame HTTP yanitinda 'detected' bulunamadi"
+    blok = govde[i - 200 : i + 600]
+    # ⚠️ JSON ANAHTARI desenini ara (`"catDetected":`), cIplak "catDetected" DEGIL: yanit
+    # yorumlarinda da "catDetected" kelimesi geciyor ve ciplak arama bir mutasyonu KACIRDI
+    # (kod satiri silinse bile yorum kelimesi yesil birakiyordu — deponun 1 numarali hata deseni,
+    # bu testin kendisinde). Anahtar-deger sozdizimi yorumda gecmez.
+    assert '"catDetected":' in blok, (
+        "ai_pro_frame HTTP yaniti kedi varligini (catDetected) TASIMIYOR — mobil panel onu YALNIZ "
+        "/frame yanitindan okur (AiProStatus tipi catDetected icermez); hazirlik ekrani 'hayvan "
+        "gorunuyor, organ araniyor' asamasini HIC gosteremez, hayvan kadrajdayken bile 'hayvan "
+        "araniyor' der (E2)"
+    )
 
 
 def test_KRITIK_durum_ucu_asamayi_TASIR(router):
     i = router.find("def ai_pro_status")
     assert i > 0, "status ucu bulunamadi"
-    assert "catDetected" in router[i : i + 900], "durum ucu kedi varligini tasimiyor"
+    # JSON anahtari (`"catDetected":`) — ciplak kelime yorumda da gecebilir (mutasyon kacisi).
+    assert '"catDetected":' in router[i : i + 900], "durum ucu kedi varligini tasimiyor"
 
 
 def test_KARSIT_KANIT_hazirlik_karesi_BOBIN_SURMEZ(router):
@@ -83,8 +124,15 @@ def test_KARSIT_KANIT_hazirlik_karesi_BOBIN_SURMEZ(router):
     Hazirlik icin kare akitmak bu kapiyi GEVSETMEZ; gevsetilseydi onaysiz ve suresiz bir
     PEMF maruziyeti dogardi.
     """
-    assert "if localized and session_active:" in router, (
+    # 3. tur B1: kapı `... and not is_foreign:` ile SIKILAŞTIRILDI (yabancı kare de sürmez).
+    # `localized and session_active` şartı KORUNUYOR → renksiz koşula (iki-koşul ÖN-EK) pinle;
+    # gevşetme (koşulun kaldırılması) yine kırmızı verir, meşru sıkılaştırma yeşil kalır.
+    assert "if localized and session_active" in router, (
         "bobin surus kapisi degismis — hazirlik karesi bobin surebilir (P0 ihlali)"
+    )
+    # Sıkılaştırmanın gevşemeye dönüşmediğini de doğrula: kapı hâlâ `session_active`'i ŞART koşmalı.
+    assert "session_active and not is_foreign" in router, (
+        "B1 sahiplik kapısı (not is_foreign) düştü — yabancı kare bobin sürebilir"
     )
 
 

@@ -6,8 +6,11 @@ Launcher / güncelleme-sunucusunun tükettiği **manifest + runtime paketi**. Bu
 ## İçerik
 | Dosya | İçerik |
 |---|---|
-| `base.zip` | win-x64 istemci runtime'ı (~1.29 GB) — [`../build_tools/make_base_zip.py`](../build_tools/README.md) çıktısı (`_internal/ai_models` hariç) |
-| `manifest.json` | Şema v2 (+ v1 geriye-uyum). Anahtarlar: `launcher` (version/`installer_url`/sha256/size — self-update), `runtimes.{win-x64,mac-arm64,linux-x64}`, `models`/`profiles` `{home,vet,research}`, eski `base`/`base_mac`/`base_linux`. Tüm URL'ler `mert61-python/pemf-update` release'lerine |
+| `base-app.zip` | **Katmanlı paket — app katmanı** (~71 MB): istemci kodu; her sürümde iner (client ≥1.9.13). [`../build_tools/make_base_zip.py`](../build_tools/README.md) çıktısı |
+| `base-deps.zip` | **Katmanlı paket — deps katmanı** (~1.46 GB): torch/AI bağımlılıkları + çekirdek `cat_organ` modeli; yalnız bağımlılıklar değişince yenilenir |
+| `base.zip` | **Tek-parça runtime** (~1.5 GB, `_internal/ai_models` hariç) — ESKİ launcher'lar (≤1.9.12) için DURUR, silme (bkz. manifest `_layers_note`). [`../build_tools/make_base_zip.py`](../build_tools/README.md) çıktısı |
+| `home.zip` | `home` profil model paketi (~318 MB) — [`../build_tools/make_model_zip.py`](../build_tools/README.md) çıktısı (`vet.zip`/`research.zip` yalnız yayında tutulur) |
+| `manifest.json` | Şema v2 (+ v1 geriye-uyum). Anahtarlar: `launcher` (version/`installer_url`/sha256/size — self-update), `layers.win-x64.{app,deps,rollout}` (client ≥1.9.13 **birincil**), `runtimes.win-x64` **+** eski `base` (≤1.9.12 geri-uyum), `models`/`profiles` `{home,vet,research}`, `mobile.android` (APK oto-güncelleme). Tüm URL'ler sürüm-başına `mert61-python/pemf-update` etiketine |
 
 ## Yayın (özet — tam akış [`../BUILD.md`](../BUILD.md) §6)
 ```powershell

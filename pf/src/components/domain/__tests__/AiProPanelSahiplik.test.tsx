@@ -194,3 +194,35 @@ it("KRİTİK: BİZ başlatınca ilk poll'dan ÖNCE çıkmak bile DURDURUR (başs
 
   expect(stopCagrilari()).toHaveLength(1);
 });
+
+// ── F2 (denetim 2026-08-24): ARDISIK "iki tutarlı ölçüm" eko-karelerle boşa düşmemeli ──
+const proposeCagrilari = () =>
+  (apiPost as jest.Mock).mock.calls.filter((c) => c[0] === "/ai/pro/propose");
+
+/** Her kare AYNI localizedAt (tek ölçümün ekosu) → ardisik 2'ye ULAŞMAMALI → propose YOK. */
+it("🔴 F2: AYNI lokalizasyon damgalı eko kareler öneriyi TETİKLEMEZ (sahte sertleşme değil)", async () => {
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    json: async () => ({ status: "success", detected: true, catDetected: true, reliability: 0.9, localizedAt: 100 }),
+  })) as unknown as typeof fetch;
+  mockDurum = { active: false };
+  const u = await panel();
+  await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });
+  await hazirligiIlerlet();
+  // Tek gerçek ölçümün ~20 eko karesi: damga sabit → sayaç 1'de kalır → öneri istenmez.
+  expect(proposeCagrilari()).toHaveLength(0);
+});
+
+/** localizedAt her karede DEĞİŞİRSE (iki AYRI ölçüm) sayaç 2'ye ulaşır → propose istenir. */
+it("F2 KARŞIT-KANIT: YENİ lokalizasyon damgaları öneriyi tetikler (gerçek iki ölçüm)", async () => {
+  let at = 100;
+  global.fetch = jest.fn(async () => ({
+    ok: true,
+    json: async () => ({ status: "success", detected: true, catDetected: true, reliability: 0.9, localizedAt: (at += 1) }),
+  })) as unknown as typeof fetch;
+  mockDurum = { active: false };
+  const u = await panel();
+  await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });
+  await hazirligiIlerlet();
+  expect(proposeCagrilari().length).toBeGreaterThan(0);
+});

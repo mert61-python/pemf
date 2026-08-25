@@ -221,15 +221,40 @@ def test_KRITIK_port_DOGRULANIR_karsit_kanit():
     assert re.search(r"65535", k), "port araligi (1-65535) denetlenmiyor"
 
 
-def test_KALDIRMA_yolunda_da_ESTOP_var_karsit_kanit():
-    """Kaldırma yolu da aynı değişmeze tabi: orada da backend öldürülüyor."""
+def _uninstall_yordami() -> str:
+    """GERÇEK `procedure CurUninstallStepChanged` gövdesi (yordam başlığından dosya sonuna).
+
+    ⚠️ `k.find("CurUninstallStepChanged")` KULLANMA (denetim 2026-08-24, bulgu F1): ilk geçiş
+    procedure'den ~270 satır ÖNCEKİ bir YORUM satırındadır ('[UninstallRun]dan [Code]a tasindi'
+    açıklaması) ve o dilim INSTALL yolunun `taskkill`'ini + E-stop yordamlarını da kapsar → test
+    kaldırma yolunda E-stop OLMASA BİLE daima yeşil döner (hiçbir zaman kırmızıya dönemez tautoloji;
+    P0 kapanışını yanlış sertifikalıyordu). Yalnız `procedure` anahtar sözcüğüyle başlayan gerçek
+    yordam ölçülür — E-stop yordam TANIMLARI (PemfEstopPortaGonder, PemfBobinleriGuveneAl) bu
+    yordamdan ÖNCE olduğundan bu dilime sızmaz; çağrının burada görünmesi için gerçekten burada
+    OLMASI gerekir."""
     k = _iss_kaynak()
-    kaldirma = k[k.find("CurUninstallStepChanged") :] if "CurUninstallStepChanged" in k else ""
-    if not kaldirma or "taskkill" not in kaldirma:
-        pytest.skip(".iss kaldirma yolunda taskkill yok — kapsam disi")
-    assert "emergency_stop" in kaldirma, (
-        "kaldirma yolunda backend oldurulurken E-stop YOK — kurulum yolu duzeltilip kaldirma "
-        "unutulmus (bu deponun 1 numarali hata deseni)"
+    bas = k.find("procedure CurUninstallStepChanged")
+    assert bas > 0, "CurUninstallStepChanged yordami bulunamadi — .iss yapisi degismis"
+    return k[bas:]
+
+
+def test_KALDIRMA_yolunda_da_ESTOP_var_karsit_kanit():
+    """🔴 Kaldırma yolu da aynı değişmeze tabi: orada da backend ÖLDÜRÜLÜYOR.
+
+    `CurUninstallStepChanged` → `setup_services.ps1 -Uninstall` → `Stop-AppProcs`
+    (`Get-Process PEMF_Backend | Stop-Process -Force`, ad-eşleşmeli, sinyalsiz) ve
+    `pemf_teardown.ps1` de aynı. Backend servis DIŞINDA koşuyorsa (servis durdurulmuş/silinmiş +
+    launcher/elle backend; `.iss:368` bu durumu kendisi tanıyor) graceful `nssm stop` telafisi de
+    yoktur → `_safe_stop_outputs` koşmadan süreç ölür, ESP bobinleri 6-8 (link-watchdog YOK)
+    hastanın üzerinde enerjili kalır. Kurulum yolundaki `PemfBobinleriGuveneAl()` çağrısı kaldırma
+    yordamının EN BAŞINA da konmalı (denetim 2026-08-24, bulgu C6; 08-23 raporu §79 önerisi).
+    """
+    g = _uninstall_yordami()
+    assert re.search(_ESTOP_CAGRI, g), (
+        "kaldirma yordami bobinleri guvene ALMADAN backend'i olduruyor (E-stop YOK) — kurulum "
+        "yolu duzeltildi ama kaldirma unutuldu (bu deponun 1 numarali hata deseni). "
+        "PemfBobinleriGuveneAl() cagrisini usUninstall dalinin basina, setup_services.ps1 "
+        "cagrilmadan ONCE koy."
     )
 
 

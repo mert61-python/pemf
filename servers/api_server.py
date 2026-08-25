@@ -1529,8 +1529,12 @@ def _wait_ack(command_id: str, timeout: float):
 _START_ACK_TIMEOUT = 2.0  # sn — E-stop bekcisiyle ayni sozlesme (testle kilitli)
 
 
-def _start_ack_watch(coil_id: int, command_id: str) -> None:
-    """Manuel ESP start onayini ARKA PLANDA izle (bkz. ustteki blok yorumu)."""
+def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
+    """Manuel ESP start onayini ARKA PLANDA izle (bkz. ustteki blok yorumu).
+
+    ⚠️ run_id (denetim 2026-08-24, D2): bekci baslatildigi andaki kosu kaydinin id'si. NACK'te
+    kosu YALNIZ hala BU run ise kapatilir — ayni bobine hizli ikinci bir start (KABUL edilmis) run'i
+    devraldiysa, bu (bayat) NACK araya giren CALISAN kosuyu DUSURMEMELI."""
     confirmed = _wait_ack(command_id, timeout=_START_ACK_TIMEOUT)
     if confirmed is True:
         logging.getLogger(__name__).debug("start bobin %s: ESP onayladi (ack)", coil_id)
@@ -1542,7 +1546,8 @@ def _start_ack_watch(coil_id: int, command_id: str) -> None:
             coil_id,
         )
         try:
-            _finish_coil_run(coil_id)
+            # D2: yalniz BU start'in run'ini kapat (araya giren yeni start run'i devraldiysa dokunma).
+            _finish_coil_run(coil_id, only_run_id=run_id)
         except Exception:
             logging.getLogger(__name__).debug("NACK sonrasi run kapatma hatasi", exc_info=True)
         try:
@@ -1568,16 +1573,18 @@ def _start_ack_watch(coil_id: int, command_id: str) -> None:
         pass
 
 
-def _start_ack_izle_arka_planda(coil_id: int, command_id: str, publish_ok: bool) -> None:
+def _start_ack_izle_arka_planda(coil_id: int, command_id: str, publish_ok: bool, run_id=None) -> None:
     """Publish sonucu belliyken bekciyi baglar. Kayit publish'ten ONCE acilmis olmali (hizli ESP
-    ack yarisi kaybolmasin — HG-4 deseni); publish dusmusse bekleyecek sey yok → kaydi temizle."""
+    ack yarisi kaybolmasin — HG-4 deseni); publish dusmusse bekleyecek sey yok → kaydi temizle.
+
+    run_id (D2): bekciye bu start'in kosu kaydi id'sini gecir → NACK yalniz KENDI run'ini kapatir."""
     if not publish_ok:
         with _pending_acks_lock:
             _pending_acks.pop(command_id, None)
         return
     try:
         threading.Thread(
-            target=_start_ack_watch, args=(coil_id, command_id), daemon=True, name=f"start-ack-{coil_id}"
+            target=_start_ack_watch, args=(coil_id, command_id, run_id), daemon=True, name=f"start-ack-{coil_id}"
         ).start()
     except Exception:
         # Thread acilamazsa (kaynak tukenmesi) start akisi BOZULMAZ — yalniz izleme kaybolur.
@@ -2149,10 +2156,12 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te — broker oluyken komut KESIN gitmedi;
     # "kostu" yazmak hic kosmamis bobini tedavi gecmisine sokar. STOP'ta finish her halde.
     if payload.start:
+        _esp_run_id = None
         if ok:
             _begin_coil_run(coil_id, esp_freq, payload.duty, payload.phase, None, "esp")
+            _esp_run_id = _active_coil_runs.get(coil_id)  # D2: bekçiye BU start'ın run'ını taşı
         # NACK gelirse bekci bu kaydi kapatir; timeout'ta kayit korunur (bkz. _start_ack_watch).
-        _start_ack_izle_arka_planda(coil_id, command_id, ok)
+        _start_ack_izle_arka_planda(coil_id, command_id, ok, _esp_run_id)
     else:
         _finish_coil_run(coil_id)
     _yanit = {"status": "success" if ok else "mqtt_unavailable", "command_id": command_id, "transport": "mqtt"}
@@ -2257,9 +2266,11 @@ async def control_batch_coils(payload: BatchCoilPayload):
         # Asama-2: per-bobin run logging (ESP/MQTT dali) — loglanan freq = ESP'ye GIDEN (normalize).
         # [4.5]: kosu kaydi yalniz DOGRULANMIS publish'te (tekil yolla ayni gerekce).
         if payload.start:
+            _b_run_id = None
             if ok:
                 _begin_coil_run(coil_id, _b_esp_freq, payload.duty, payload.phase, None, "esp")
-            _start_ack_izle_arka_planda(coil_id, command_id, ok)
+                _b_run_id = _active_coil_runs.get(coil_id)  # D2: bekçiye BU start'ın run'ını taşı
+            _start_ack_izle_arka_planda(coil_id, command_id, ok, _b_run_id)
         else:
             _finish_coil_run(coil_id)
         _satir = {"coilId": coil_id, "status": "success" if ok else "mqtt_unavailable", "transport": "mqtt"}
@@ -2521,23 +2532,41 @@ async def start_session(payload: SessionStartPayload, request: Request):
 
     _esp_sess_freq = _sess_nesp(payload.frequency)
     mqtt_duration_seconds = payload.duration_minutes * 60
+    # [E1] (denetim 2026-08-24): NACK bekcisi yalniz broker CANLIYKEN baglanir. Broker oluyken NACK
+    # gelemez (publish gitmedi) ve `esp_unreachable` (asagida) zaten uyarir; bekci timeout'u cift
+    # uyari uretmesin (8. parti bilincli karari: broker-olu yarisi snappy-start + esp_unreachable).
+    _esp_broker_ok = bool(esp_coils) and _broker_reachable()
     for coil_id in esp_coils:
+        command_id = f"sess_{coil_id}_{int(_t.time() * 1000)}"
         mqtt_payload = {
             "command": "start",
-            "command_id": f"sess_{coil_id}_{int(_t.time() * 1000)}",
+            "command_id": command_id,
             "freq": _esp_sess_freq,
             "duty": payload.duty,
             "phase": payload.phase,
             "duration": mqtt_duration_seconds,
         }
+        # [E1]: 18. parti ack-mimarisi tekil+batch yollarina baglandi ama SEANS yolu DISARIDA
+        # kalmisti — termal-kilitli 8266 seans-start'i NACK'lerse (command_error) hayalet kosu kaydi
+        # seans boyu acik kalir, kapanista TAM SURELI muhurlenir. Onay kaydi publish'ten ONCE acilir
+        # (hizli ack yarisi kaybolmasin — HG-4 deseni; bekci publish sonucundan BAGIMSIZ, NACK ESP'nin
+        # command_error event'iyle gelir). Tekil/batch yoluyla ayni sozlesme.
+        if _esp_broker_ok:
+            _register_ack(command_id)
         # ESP publish arka planda → broker yavaş/erişilemezse seans başlatmayı bekletme (snappy start).
         _threading.Thread(
             target=_mqtt_publish, args=(f"pemf/coil/{coil_id}/control", mqtt_payload), daemon=True
         ).start()
         # Asama-2: seans-baslangic bobini icin per-bobin run kaydi. /session/start bobinleri
         # KENDI dongusuyle baslattigindan control_single/batch hook'u buraya ULASMAZ → burada ac.
-        # [4.4]: loglanan freq = ESP'ye GIDEN (normalize) deger — tek-bobin/batch kuraliyla ayni.
+        # ⚠️ KOSULSUZ (8. parti bilincli karari: fire-and-forget publish → sonuc bilinemez; broker-olu
+        # seans zaten esp_unreachable tasir). [4.4]: loglanan freq = ESP'ye GIDEN (normalize) deger.
         _begin_coil_run(coil_id, _esp_sess_freq, payload.duty, payload.phase, payload.intensity, "esp")
+        _sess_run_id = _active_coil_runs.get(coil_id)  # D2: bekçiye BU start'ın run'ını taşı
+        # NACK gelirse bekci bu kaydi kapatir (hayalet kayit) + operatore bildirir; ack TIMEOUT'unda
+        # kayit KORUNUR (ack QoS-0, kayip ack gercek kosunun dozunu silmemeli). Tekil yolla ayni.
+        if _esp_broker_ok:
+            _start_ack_izle_arka_planda(coil_id, command_id, True, _sess_run_id)
 
     # event-loop-blok fix: update_coil = STM32'ye SENKRON seri-port yazımı (bobin başına ~onlarca ms) →
     # async-uçta doğrudan çalışınca event-loop'u bloklar; STM bobin döngüsünü thread'e offload et.
@@ -2593,7 +2622,8 @@ async def start_session(payload: SessionStartPayload, request: Request):
     with _session_lock:
         _sess_snapshot = dict(_active_session)
     resp = {"status": "success", "session": _sess_snapshot}
-    if esp_coils and not _broker_reachable():
+    # `_esp_broker_ok` yukarida bir kez olculdu (esp_coils VE broker canli); ayni degeri kullan.
+    if esp_coils and not _esp_broker_ok:
         msg = f"Sistem bağlantısı yok — ESP bobinleri {esp_coils} aktif OLMAYABİLİR (STM bobinleri çalışıyor)."
         logging.getLogger(__name__).warning("Seans başladı ama %s", msg)
         resp["warning"] = msg

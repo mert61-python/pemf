@@ -376,7 +376,11 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 #    Yalniz surumsuzu yuklemek indirme butonunu SESSIZCE 404 yapar. 2026-08-22'de once APK'da,
 #    sonra EXE'de (1.9.34) TAM BU OLDU. Kilit: tests/test_site_indirme_varligi_URETILDI.py (uretim)
 #    + adim 5 (yukleme). Silme YOK, yalniz ek ad -> --clobber GEREKMEZ.
-gh release create launcher-v1.9.13 -R mert61-python/pemf-update --title "PEMF Vet Client 1.9.13" --notes "..." PEMFVetClient-Setup.exe release_assets\PEMF_Vet_Mobil.apk
+# ⚠️ SURUMSUZ Setup.exe de release_assets\'ten (TAZE) alinir — APK ile SIMETRIK (denetim 2026-08-24, C7):
+#    depo KOKUNDEKI PEMFVetClient-Setup.exe gitignore'lu ve BAYAT (hicbir build tazelemiyor); kokten
+#    yuklenirse ayni etikete eski launcher gider ve manifest sha taze kopyadan alininca saha
+#    self-update'i fail-closed 404 duser. Kilit: tests/test_yayin_runbook_etiketi.py (C7 kapisi).
+gh release create launcher-v1.9.13 -R mert61-python/pemf-update --title "PEMF Vet Client 1.9.13" --notes "..." release_assets\PEMFVetClient-Setup.exe release_assets\PEMF_Vet_Mobil.apk
 gh release upload launcher-v1.9.13 -R mert61-python/pemf-update release_assets\PEMFVetClient-Setup-1.9.13.exe release_assets\PEMF_Vet_Mobil-2.3.22.apk
 # 3b) APK YUKLENDIKTEN SONRA manifest'in mobil blogunu tazele ve manifest'i YENIDEN yukle.
 #    ⚠️ make_manifest `mobile` blogunu URETMEZ, onceki manifest'ten TASIR (CARRY_ONLY) — yani

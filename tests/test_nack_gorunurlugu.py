@@ -96,7 +96,12 @@ def istemci(api, monkeypatch):
     monkeypatch.setattr(api_mod, "_mqtt_publish", lambda topic, payload: True)
     # Bekçi timeout'u testte kısa (gerçek değer 2.0 sn — sözleşme ayrı testte kilitli).
     monkeypatch.setattr(api_mod, "_START_ACK_TIMEOUT", 0.3, raising=True)
-    return TestClient(api_mod.app), api_mod, bildirimler
+    yield TestClient(api_mod.app), api_mod, bildirimler
+    # TEARDOWN: seans testleri `_active_session`i acik birakabilir (koşu kaydini kapatir ama seansi
+    # degil) → sonraki seans testleri "Zaten aktif seans" (409) alir. Global durumu temizle
+    # (test izolasyonu; `_active_session` modul-genel).
+    with api_mod._session_lock:
+        api_mod._active_session["is_active"] = False
 
 
 def _acik_run_var(api, coil_id: int) -> bool:
@@ -245,3 +250,147 @@ def test_KRITIK_BATCH_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
     assert _bekle(lambda: not _acik_run_var(api, 6)), (
         "BATCH start NACK'lendi ama kosu kaydi acik kaldi — tekil yol duzeltilmis, batch unutulmus"
     )
+
+
+def test_KRITIK_SEANS_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
+    """🔴 E1 (denetim 2026-08-24): 18. parti ack-mimarisi tekil+batch yollarina baglandi ama
+    /api/session/start ESP dali DISARIDA kaldi (deponun 1 numarali deseni: ayni kural, UCUNCU yuzey).
+    Termal-kilitli 8266 seans-start'i NACK'lerse hayalet kosu kaydi seans boyu acik kalir ve
+    kapanista TAM SURELI muhurlenir → tedavi gecmisine hic kosmamis bobin 'kostu' yazilir.
+
+    ⚠️ 8. parti bilincli karari KORUNUR: publish fire-and-forget (snappy start) + kosulsuz
+    _begin_coil_run; bekci yalniz broker CANLIYKEN baglanir. Yani broker-olu yarisi DEGISMEZ; yalniz
+    NACK yarisi kapanir (karsit-kanit asagida)."""
+    client, api, bildirimler = istemci
+    from servers import coil_run_tracker as crt
+
+    monkeypatch.setattr(crt, "_db_session_id_getter", lambda: 42)
+
+    class _DB:
+        def start_coil_run(self, *a, **k):
+            return 781
+
+        def finish_coil_run(self, *a, **k):
+            return True
+
+    monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
+    monkeypatch.setattr(api, "_kayit_db_hazir", lambda: (True, ""))
+    monkeypatch.setattr(api, "_broker_reachable", lambda: True)
+    with api._session_lock:  # onceki testten sizan seansi temizle (test izolasyonu)
+        api._active_session["is_active"] = False
+    with api._pending_acks_lock:
+        api._pending_acks.clear()
+
+    r = client.post(
+        "/api/session/start",
+        json={
+            "coil_ids": [6],
+            "frequency": 100,
+            "duty": 50,
+            "phase": 0,
+            "duration_minutes": 20,
+            "intensity": 50,
+            "mode": "Test",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert _acik_run_var(api, 6), "seans ESP bobini kosu kaydi acilmali (mevcut davranis)"
+
+    with api._pending_acks_lock:
+        adaylar = list(api._pending_acks.keys())
+    assert adaylar, "seans start pending-ack kaydi ACMADI — bekci hic baglanmamis (E1: seans yolu ack-mimarisiz)"
+    for cid in adaylar:
+        api._resolve_ack(cid, False)
+
+    assert _bekle(lambda: not _acik_run_var(api, 6)), (
+        "SEANS start NACK'lendi ama kosu kaydi acik kaldi — tekil/batch duzeltilmis, seans yolu unutulmus (E1)"
+    )
+    assert _bekle(lambda: any("6" in m and "redd" in m.lower() for m, s in bildirimler)), (
+        f"seans NACK operatore bildirilmedi: {bildirimler!r}"
+    )
+
+
+def test_KRITIK_D2_geciken_NACK_araya_giren_kosuyu_KAPATMAZ(istemci, monkeypatch):
+    """🔴 D2 (denetim 2026-08-24): NACK bekçisi `_finish_coil_run(coil_id)` ile o an açık HANGİ run
+    varsa kapatıyordu (command/run eşlemesi YOK). Aynı bobine hızlı çift-start'ta start#1'in GECİKEN
+    NACK'i, araya giren KABUL edilmiş start#2'nin ÇALIŞAN koşusunu düşürüyordu (+ 'bobin çalışmıyor'
+    yanlış bildirim). Bekçi YALNIZ kendi run'ını (başlatıldığı andaki run_id) hedeflemeli."""
+    client, api, bildirimler = istemci
+    from servers import coil_run_tracker as crt
+
+    monkeypatch.setattr(crt, "_db_session_id_getter", lambda: 42)
+    _sayac = {"n": 0}
+
+    class _DB:
+        def start_coil_run(self, *a, **k):
+            _sayac["n"] += 1
+            return 900 + _sayac["n"]  # her start FARKLI run_id (901, 902, ...)
+
+        def finish_coil_run(self, *a, **k):
+            return True
+
+    monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
+    monkeypatch.setattr(api, "_START_ACK_TIMEOUT", 2.0, raising=True)
+
+    # start#1 → run#1 (901); bekçi#1 başlar (run_id=901'i yakalamalı).
+    r1 = client.post("/api/coil/6/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60})
+    cid1 = r1.json()["command_id"]
+    assert _acik_run_var(api, 6), "start#1 sonrası açık run olmalı"
+
+    # start#2 → begin#2 run#1'i (normal) kapatır, run#2 (902) açar; bekçi#2 run_id=902 yakalar.
+    r2 = client.post("/api/coil/6/control", json={"start": True, "freq": 100, "duty": 60, "phase": 0, "duration": 60})
+    assert r2.status_code == 200
+    assert _acik_run_var(api, 6), "start#2 sonrası açık run olmalı (run#2)"
+
+    # start#1'in GECİKEN NACK'i gelir → bekçi#1 (run_id=901) yalnız 901'i hedefler; run#2 (902) KORUNMALI.
+    api._resolve_ack(cid1, False)
+    _time.sleep(0.3)
+    assert _acik_run_var(api, 6), (
+        "geciken NACK#1, araya giren KABUL edilmiş start#2'nin ÇALIŞAN koşusunu (run#2) düşürdü — "
+        "bobin çalışıyor ama açık koşu kaydı yok, operatöre 'çalışmıyor' yanlış bildirimi (D2)"
+    )
+    api._finish_coil_run(6)  # temizlik
+
+
+def test_KARSIT_KANIT_SEANS_broker_OLU_iken_bekci_baglanmaz(istemci, monkeypatch):
+    """8. parti bilincli karari: broker oluyken seans ESP yolu snappy-start + `esp_unreachable`
+    uyarisi. Bekci broker oluyken baglanMAZ — NACK gelemez zaten (publish gitmedi) ve gereksiz
+    timeout WARN 'esp_unreachable' ile CIFT uyari uretirdi. Bu test broker-olu yarisini kilitler."""
+    client, api, bildirimler = istemci
+    from servers import coil_run_tracker as crt
+
+    monkeypatch.setattr(crt, "_db_session_id_getter", lambda: 42)
+
+    class _DB:
+        def start_coil_run(self, *a, **k):
+            return 782
+
+        def finish_coil_run(self, *a, **k):
+            return True
+
+    monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
+    monkeypatch.setattr(api, "_kayit_db_hazir", lambda: (True, ""))
+    monkeypatch.setattr(api, "_broker_reachable", lambda: False)  # BROKER OLU
+    with api._session_lock:  # onceki testten sizan seansi temizle (test izolasyonu)
+        api._active_session["is_active"] = False
+    with api._pending_acks_lock:
+        api._pending_acks.clear()
+
+    r = client.post(
+        "/api/session/start",
+        json={
+            "coil_ids": [7],
+            "frequency": 100,
+            "duty": 50,
+            "phase": 0,
+            "duration_minutes": 20,
+            "intensity": 50,
+            "mode": "Test",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("esp_unreachable") is True, "broker olu → esp_unreachable uyarisi (8. parti) KORUNMALI"
+    with api._pending_acks_lock:
+        adaylar = list(api._pending_acks.keys())
+    assert not adaylar, "broker OLUYKEN bekci baglandi — NACK gelemez, esp_unreachable ile cift-uyari (bilincli hayir)"
+    api._finish_coil_run(7)  # temizlik (kosu kaydi seans yolunda kosulsuz acilir)

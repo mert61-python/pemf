@@ -15,12 +15,32 @@
 //! dışı bırakır ve sebebini söyler.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::auth::Session;
+
+/// [F5] (denetim 2026-08-25): süreç-içi `save()` serileştirme. F6 pid-suffixli tek tmp yolu kullanır
+/// ve atomikliği "intra-process tek-yazar" varsayımına dayandırır. F5 ikinci bir eşzamanlı yazar
+/// ekledi (`son_oturumu_yakala` teardown'da, 60 sn rotasyon thread'i HÂLÂ canlıyken) → ikisi de AYNI
+/// pid-tmp'ye yazınca atomik-rename kurtarmaz (iç içe yazım tmp'yi bozar). Bu kilit iki yazarı
+/// serileştirir: her rename tam-geçerli bir blob koyar (son yazan kazanır; ikisi de aynı kullanıcının
+/// geçerli oturumu). C3 guard rotasyon THREAD'lerini tekilleştirir ama son_oturumu_yakala'yı kapsamaz.
+static SAVE_KILIDI: Mutex<()> = Mutex::new(());
 
 /// Şifreli oturum blob'u. `install_root` içinde → kaldırmada birlikte silinir.
 pub fn blob_path(install_root: &Path) -> PathBuf {
     install_root.join("auth_session.bin")
+}
+
+/// Atomik yazım için geçici blob yolu (F6, denetim 2026-08-24).
+///
+/// ⚠️ AYNI DİZİNDE (`install_root`) → aynı birim → `fs::rename` gerçekten atomiktir. `temp_dir()`
+/// KULLANILMAZ: cross-volume rename ya çöker ya kopyalar (atomiklik kaybolur). pid-suffix
+/// cross-process çakışmayı önler; intra-process eşzamanlı yazarları (F5 teardown-yakalama + rotasyon
+/// thread'i) `save()` içindeki `SAVE_KILIDI` serileştirir (yol deterministik kalır — F6 testleri
+/// bu yola dayanıyor).
+fn gecici_blob_path(install_root: &Path) -> PathBuf {
+    install_root.join(format!("auth_session.bin.{}.tmp", std::process::id()))
 }
 
 /// Bu platformda kalıcı ("beni hatırla") saklama var mı?
@@ -37,8 +57,28 @@ pub fn save(install_root: &Path, session: &Session) -> bool {
     let Some(sifreli) = protect(&json) else {
         return false;
     };
+    // ⚠️ protect() write'tan ÖNCE: serileştirme/DPAPI hatasında diske HİÇ dokunulmaz → eski blob
+    // sağlam kalır (mevcut best-effort davranışı korunur).
+    // [F5]: disk bölümünü serileştir — teardown son-yakalama ile 60 sn rotasyon thread'i aynı
+    // pid-tmp'ye eşzamanlı yazıp bozmasın (zehirlenmede de guard'ı kurtar, best-effort sürsün).
+    let _kilit = SAVE_KILIDI.lock().unwrap_or_else(|e| e.into_inner());
     let _ = std::fs::create_dir_all(install_root);
-    std::fs::write(blob_path(install_root), sifreli).is_ok()
+    // 🔴 F6 (denetim 2026-08-24): ATOMİK yazım (tmp aynı dizinde → rename). C3/4df79cc ile yazma
+    // "yalnız girişte"den her jeton rotasyonuna (~saatte 1) çıktı; düz `fs::write` yarıda kesilirse
+    // (elektrik/kill) SAĞLAM eski blob bozulur → açılışta `None` → parola yeniden. tmp'ye yaz, sonra
+    // rename: yeni yazım düşerse eski blob DOKUNULMAZ. Windows `fs::rename` = MoveFileExW +
+    // REPLACE_EXISTING (hedef varsa değiştirir) → manuel remove_file(blob)+rename EKLEME, atomik
+    // boşluk açar. Emsal: flow.rs::atomik_takas, net.rs part_path.
+    let g = gecici_blob_path(install_root);
+    if std::fs::write(&g, &sifreli).is_err() {
+        let _ = std::fs::remove_file(&g);
+        return false;
+    }
+    if std::fs::rename(&g, blob_path(install_root)).is_err() {
+        let _ = std::fs::remove_file(&g);
+        return false;
+    }
+    true
 }
 
 /// Saklanan oturumu oku. Dosya yok / çözülemiyor / bozuk → `None` (sessiz).
@@ -221,6 +261,47 @@ mod tests {
         assert!(!metin.contains("REFRESH-XYZ"), "refresh_token DISKTE DUZ METIN");
         assert!(!metin.contains("eyJACCESS"), "access_token DISKTE DUZ METIN");
         assert!(!metin.contains("vet@klinik.com"), "e-posta (PII) DISKTE DUZ METIN");
+    }
+
+    /// 🔴 F6 (denetim 2026-08-24): yazım anında elektrik/kill blob'u BOZMAMALI. `save` düz
+    /// `fs::write` yaparsa yarım yazım SAĞLAM eski oturumu ezer → açılışta bozuk `None` → parola
+    /// yeniden. Atomik (tmp+rename): yeni yazım düşerse eski blob DOKUNULMAZ kalır. Geçici-dosya
+    /// yolunu bir DİZİN yaparak yeni yazımı deterministik BLOKE eder (elektrik/kill taklidi).
+    #[cfg(windows)]
+    #[test]
+    fn yarim_yazim_ESKI_oturumu_BOZMAZ() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(save(d.path(), &ornek()), "onkosul: eski oturum saklanamadi");
+        assert_eq!(load(d.path()).unwrap().refresh_token, "REFRESH-XYZ");
+        // Geçici-dosya yolunu DİZİN yap → yeni yazım (tmp'ye) deterministik DÜŞER.
+        std::fs::create_dir_all(gecici_blob_path(d.path())).unwrap();
+        let mut yeni = ornek();
+        yeni.refresh_token = "YENI-YARIDA".into();
+        let ok = save(d.path(), &yeni);
+        assert!(!ok, "yarim yazim 'basarili' dondu — atomik degil (duz fs::write bloke tmp'yi yok saydi)");
+        assert_eq!(
+            load(d.path()).unwrap().refresh_token,
+            "REFRESH-XYZ",
+            "yarim yazim SAGLAM eski oturumu EZDI (F6: atomik degil)"
+        );
+    }
+
+    /// Geçici yol `install_root` İÇİNDE olmalı (aynı birim → rename atomik; temp_dir cross-volume çöker).
+    #[cfg(windows)]
+    #[test]
+    fn gecici_yol_install_root_icinde() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(gecici_blob_path(d.path()).parent(), blob_path(d.path()).parent());
+    }
+
+    /// Başarılı save sonrası geçici dosya KALMAZ (yalnız auth_session.bin).
+    #[cfg(windows)]
+    #[test]
+    fn basarili_save_sonrasi_tmp_kalmaz() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(save(d.path(), &ornek()));
+        assert!(!gecici_blob_path(d.path()).exists(), "basarili save sonrasi yetim .tmp kaldi");
+        assert!(blob_path(d.path()).exists());
     }
 
     /// Bozuk/başkasına ait blob sessizce `None` olmalı — çökme YOK (açılış yolunda çalışır).

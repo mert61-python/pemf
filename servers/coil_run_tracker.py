@@ -101,15 +101,23 @@ def _begin_coil_run(coil_id, freq, duty, phase, intensity, hw_type):
         logging.getLogger(__name__).debug("_begin_coil_run hatasi (coil=%s)", coil_id, exc_info=True)
 
 
-def _finish_coil_run(coil_id):
+def _finish_coil_run(coil_id, only_run_id=None):
     """Acik bobin calismasini kapat: end_coil_run + run-ozetini (add_sensor_run_summary) yaz.
-    Run-map ve istatistik akumulatorundan siler. Best-effort (hata seansi durdurmaz)."""
+    Run-map ve istatistik akumulatorundan siler. Best-effort (hata seansi durdurmaz).
+
+    ⚠️ only_run_id (denetim 2026-08-24, D2): verilirse SADECE o an acik run bu run_id ise kapatir.
+    NACK bekcisi bunu kullanir: ayni bobine hizli cift-start'ta araya giren KABUL edilmis bir start
+    run'i devraldiysa, GECIKEN eski NACK o CALISAN run'i DUSURMEMELI (command/run eslemesi). None =
+    kosulsuz kapat (stop / begin-ici eski-run kapatma / seans finalize — mevcut davranis)."""
     try:
         coil_id = int(coil_id)
     except Exception:
         return
     try:
         with _active_coil_runs_lock:
+            if only_run_id is not None and _active_coil_runs.get(coil_id) != only_run_id:
+                # Araya giren yeni start run'i devraldi → bu (bayat) NACK'in isi degil, DOKUNMA.
+                return
             run_id = _active_coil_runs.pop(coil_id, None)
         if run_id is None:
             return

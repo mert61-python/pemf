@@ -133,8 +133,23 @@ void NetworkManager::update() {
         // WiFiManager artık kullanılmıyor - sadece kendi HTTP sunucumuz
         _portalStatusServer.handleClient();
 
-        // âœ… Portal timeout KALDIRILDI - Portal sadece WiFi baÄŸlantÄ±sÄ± kurulduÄŸunda kapanacak
-        // Kullanıcı WiFi yapılandırması yapana kadar portal açık kalacak
+        // 3. tur denetimi [B2] (2026-08-24): SINIRLI portal-timeout GERİ KONDU (eski hâl: timeout
+        // tamamen KALDIRILMIŞTI → hotspot dönse bile cihaz portal-AP'de kilitli). Sahip kararıyla
+        // UZLAŞMA: portal yalnız kayıtlı kredi VARKEN süreli sökülür; kredi YOKKEN (gerçek provizyon
+        // ihtiyacı) SÜRESİZ açık kalır (kaldırma-kararının asıl amacı budur). Kullanıcı Android'den
+        // SSID/parola gönderirken (_pendingWifiConnect) portal yankılanmasın. Söküldükten sonra
+        // reconnect (EDIT-1) kayıtlı ağları yeniden dener → sınırlı döngü (portal → saved-retry).
+        // ⚠️ PORTAL_TIMEOUT=5dk bir TUNING değeri (korrektlik değil); sahip 60-120sn'ye çekebilir.
+        if (!_pendingWifiConnect && _hasSavedCredentials() &&
+            safeMillisDiff(millis(), _portalStartTime) >= PORTAL_TIMEOUT) {
+            LOG_PRINTLN("[WiFi] Portal timeout (kayitli kredi var) - portal sokuluyor, kayitli aglar yeniden denenecek");
+            _portalActive = false;
+            _portalStatusServer.stop();
+            WiFi.softAPdisconnect(true);
+            WiFi.mode(WIFI_STA);
+            _wifiConnectState = WIFI_IDLE;
+            _wifiRetryCount = 0;
+        }
     }
 
     // MQTT bağlantı durumu kontrolü
@@ -156,6 +171,31 @@ void NetworkManager::update() {
 
     // MQTT mesajlarini isle
     _mqttClient.loop();
+
+    // 3. tur denetimi [B3] (2026-08-24) hunk-1: YEREL BROKER GERİ-DÖNÜŞ PROBE'u. Buluttayken 15
+    // sn'de bir yerel Mosquitto'yu (ağ-geçidi) plain soketle yokla; ayağa kalkmışsa mevcut bağlantıyı
+    // düşür ve sayacı sıfırla → sonraki _reconnectMQTT yerel'i ÖNCE dener ve ona döner. Yoklama
+    // BAŞARISIZSA hiçbir şey yapılmaz (bulut STABİL kalır — Plan-A/E-stop aynası korunur). Probe
+    // yalnız broker==CLOUD iken; çalışan yereli koparmaz. safeMillisDiff wrap-güvenli. (S3 paritesi.)
+    // ⚠️ TEZGÂHTA: BearSSL aktifken plain probe soketinin free-heap headroom'u DOĞRULANMALI.
+    if (_activeBroker == BROKER_CLOUD) {
+        static unsigned long lastLocalMqttProbe = 0;
+        if (safeMillisDiff(millis(), lastLocalMqttProbe) > 15000) {
+            lastLocalMqttProbe = millis();
+            WiFiClient probeClient;
+            // ⚠️ [B3] adversaryal C-inceleme BLOCKER'ı (2026-08-24): WiFiClient VARSAYILAN connect
+            // timeout'u 5000 ms. Yerel broker gerçekten DOWN + hedef SYN'i sessizce DÜŞÜRÜRSE (firewall
+            // DROP / filtreli port, RST yok) connect() kooperatif loop'u ~5 sn BLOKLAR → o sürede
+            // _mqttClient.loop() servis edilmez → BULUT E-stop aynası ~5 sn geciker (hasta-güvenliği).
+            // Kısa timeout ile worst-case blok ~0,4 sn'ye indirilir; sağlıklı LAN broker'ı <50 ms yanıtlar.
+            probeClient.setTimeout(400);
+            if (probeClient.connect(_localMqttHost.c_str(), _localMqttPort)) {
+                probeClient.stop();
+                _mqttClient.disconnect();   // sonraki tick _reconnectMQTT çağırır
+                _localRetryCount = 0;        // yerel ÖNCE denensin
+            }
+        }
+    }
 }
 
 void NetworkManager::setMqttCallback(MqttMessageCallback cb) {
@@ -354,14 +394,8 @@ void NetworkManager::_setupWiFi() {
         LOG_PRINTLN("[WiFi] Secrets.h WiFi ayarlari bos, kayitli aglar denenecek...");
     }
 
-    // Kayitli WiFi var mi kontrol et
-    bool hasSavedWiFi = false;
-    for (int i = 0; i < MAX_WIFI_CREDENTIALS; i++) {
-        if (_savedWiFiList[i].valid && strlen(_savedWiFiList[i].ssid) > 0) {
-            hasSavedWiFi = true;
-            break;
-        }
-    }
+    // Kayitli WiFi var mi kontrol et (3. tur B2: tek-kaynak yardımcı — _reconnectWiFi/update de kullanır)
+    bool hasSavedWiFi = _hasSavedCredentials();
 
     if (!hasSavedWiFi) {
         // KayÄ±tlÄ± WiFi yok, portal aÃ§Ä±lacak (update() iÃ§inde)
@@ -372,6 +406,18 @@ void NetworkManager::_setupWiFi() {
     // KayÄ±tlÄ± WiFi var, mevcut aÄŸlarÄ± tara (non-blocking, update() iÃ§inde yapÄ±lacak)
     LOG_PRINTLN("[WiFi] Kayitli WiFi'ler var, baglanti denemesi yapilacak");
     // GerÃ§ek baÄŸlantÄ± kontrolÃ¼ update() iÃ§inde yapÄ±lacak
+}
+
+// 3. tur denetimi [B2] (2026-08-24): kayıtlı-kredi kontrolü tek-kaynak. _setupWiFi'deki inline
+// döngüden çıkarıldı; _reconnectWiFi ilk-retry kapısı ve update() portal-timeout muhafızı da bunu
+// çağırır (kredi VARSA portalı erteler / süreli sök, YOKSA süresiz açık tut).
+bool NetworkManager::_hasSavedCredentials() {
+    for (int i = 0; i < MAX_WIFI_CREDENTIALS; i++) {
+        if (_savedWiFiList[i].valid && strlen(_savedWiFiList[i].ssid) > 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void NetworkManager::_checkWiFiConnection() {
@@ -466,6 +512,10 @@ void NetworkManager::_checkWiFiConnection() {
         if (_wifiRetryCount > 0) {
             _wifiRetryCount = 0;
         }
+        // 3. tur [B2] hardening: başarılı bağlantı _reconnectWiFi'yi çağırmadığından oradaki
+        // CONNECTING→IDLE reset (:521) atlanabiliyordu; portal-timeout döngüsü bunu tetiklerse
+        // FSM'i tutarlı tut (bağlıyken CONNECTING'te asılı kalmasın).
+        _wifiConnectState = WIFI_IDLE;
     }
     // Portal açıkken: WiFi bağlantısı yok ama reconnect denemesi yapılmıyor
     // Kullanıcı Android uygulamasından WiFi yapılandırması yapacak
@@ -477,12 +527,16 @@ void NetworkManager::_reconnectWiFi() {
         _wifiRetryCount++;
         LOG_PRINTF("[WiFi] Reconnect denemesi #%d\n", _wifiRetryCount);
 
-        // Portal aÃ§Ä±k deÄŸilse ve ilk denemede portal aÃ§
-        if (!_portalActive && _wifiRetryCount == 1) {
-            LOG_PRINTLN("[WiFi] Portal aciliyor...");
+        // 3. tur denetimi [B2] (2026-08-24): çalışırken-kopuş yolunda kayıtlı ağları DENEMEDEN
+        // portalı açmak, hotspot ~40 sn düşüp geri geldiğinde cihazı SONSUZA DEK AP-only bırakıyordu
+        // (WiFi.mode(WIFI_AP) STA'yı öldürür + portal timeout'u kaldırılmıştı → reconnect bir daha
+        // koşmaz). Boot yolu (_checkWiFiConnection firstConnectionAttempt) önce kayıtlı ağları dener;
+        // çalışırken-kopuş da aynı S3-paritesini izlesin: kayıtlı ağ VARSA ilk retry'de portal AÇMA,
+        // aşağıdaki saved-network bloğuna düş. Kayıtlı ağ YOKSA (ilk kurulum) portalı hemen aç.
+        if (!_portalActive && _wifiRetryCount == 1 && !_hasSavedCredentials()) {
+            LOG_PRINTLN("[WiFi] Kayitli ag yok, portal aciliyor...");
             _startWiFiPortal();
-            // âœ… Portal aÃ§Ä±lÄ±nca WiFi bağlantı denemesi YAPMA
-            // Sadece kullanÄ±cÄ± Android'den yapÄ±landÄ±rma yapana kadar bekle
+            // Portal aÃ§Ä±lÄ±nca WiFi bağlantı denemesi YAPMA — kullanÄ±cÄ± Android'den yapÄ±landÄ±rana kadar bekle
             return;
         }
 
@@ -555,8 +609,13 @@ void NetworkManager::_reconnectWiFi() {
                 _wifiConnectStartTime = millis();  // Reset timer
             } else {
                 // Tüm credential'ler denendi, başarısız
-                LOG_PRINTLN("[WiFi] Tüm kayıtlı WiFi'lere bağlanamadı. Portal açık kalmaya devam ediyor...");
+                // 3. tur [B2]: EDIT-1 ilk-retry portal açmayı kayıtlı-ağ denemesine erteledi; krediler
+                // GERÇEKTEN tükenince (hepsi başarısız) portalı ŞİMDİ aç ki provizyon mümkün olsun.
+                LOG_PRINTLN("[WiFi] Tüm kayıtlı WiFi'lere bağlanamadı. Portal aciliyor...");
                 _wifiConnectState = WIFI_IDLE;
+                if (!_portalActive) {
+                    _startWiFiPortal();
+                }
             }
         }
         // Portal aktif durumda WiFi bağlantısını bekliyoruz
@@ -747,11 +806,18 @@ void NetworkManager::_reconnectMQTT() {
     // 2. Local başarısız → Cloud'a geç
     if (_connectToCloudBroker()) {
         _activeBroker = BROKER_CLOUD;
+        // 3. tur denetimi [B3] (2026-08-24) hunk-3: cloud'a geçince yerel sayacı SIFIRLA. Yoksa
+        // sayaç MQTT_LOCAL_MAX_RETRIES'e ulaşınca yerel branch (`_localRetryCount < MAX`) BİR DAHA
+        // koşmaz → Mosquitto dönse bile cihaz kalıcı buluta yaslanır (S3 :545 paritesi).
+        _localRetryCount = 0;
         _mqttClient.subscribe(_controlTopic);
         publishEvent("mqtt_connected", "HiveMQ Cloud'a baÄŸlandÄ±");
         return;
     }
     // 2026-08-19: buradaki FAZLA "}" kaldirildi (175/176 dengesizligi - dosya hic derlenmemisti)
+    // 3. tur [B3] hunk-2: HER İKİ broker da başarısız → sayacı SIFIRLA ki MAX'ta takılıp kalmasın;
+    // yoksa Mosquitto dönse bile yerel BİR DAHA denenmez (yalnız cloud, o da down → kalıcı None). S3 :592.
+    _localRetryCount = 0;
 }
 
 void NetworkManager::sendCommandAck(const char* command_id, bool success) {
@@ -1151,8 +1217,10 @@ void NetworkManager::clearAllWiFiCredentials() {
         memset(_savedWiFiList[i].password, 0, sizeof(_savedWiFiList[i].password));
     }
 
-    // EEPROM'u tamamen temizle (sifirla)
-    for (int i = 0; i < EEPROM_SIZE; i++) {
+    // 3. tur denetimi [D4] (2026-08-24): YALNIZ WiFi bölgesini (0..494) sil, tüm EEPROM'u DEĞİL.
+    // Non-WiFi blok artık ≥512'ye taşındı; tüm EEPROM'u silmek relocated CONFIG_VER(540)/PWM(512)'i
+    // ezip her WiFi-temizlemede boot sürüm-uyuşmazlığı → wipe döngüsünü yeniden tetiklerdi.
+    for (int i = 0; i < EEPROM_WIFI_REGION_END; i++) {
         EEPROM.write(i, 0);
     }
 

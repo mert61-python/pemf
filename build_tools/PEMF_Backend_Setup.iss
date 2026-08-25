@@ -395,6 +395,20 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
+    // 🔴 TIBBI GUVENLIK (denetim 2026-08-24, bulgu C6): setup_services.ps1 -Uninstall backend'i
+    // Stop-AppProcs ile AD-eslesmeli, SINYALSIZ (Stop-Process -Force = TerminateProcess) olduruyor
+    // ve backend servis DISINDA kosuyorsa (servis durdurulmus/silinmis + launcher/elle backend;
+    // asagida ':368' bu durumu taniyor) graceful `nssm stop` telafisi de kosmuyor -> backend'in
+    // signal-handler'i, dolayisiyla _safe_stop_outputs hic calismiyor: STM kuyruk-flush ve ESP
+    // bobinlerine MQTT STOP YAYINLANMAZ. Bobin 1-5 olu-adam devresiyle ~1500 ms'de duser; bobin
+    // 6-8'in link-watchdog'u YOKTUR -> kalan seans suresince (20-120 dk) hastanin uzerinde
+    // enerjili kalir. Kurulum yolundaki (CurStepChanged/ssInstall) korumanin AYNISI: backend
+    // oldurulmeden ONCE, KOSULSUZ, en basta bobinleri guvene al (port dosyasindan E-stop POST +
+    // ~1800 ms bekle). Sessiz basarisizlik kabul (backend kapaliysa POST zaten duser); kaldirma
+    // hicbir kosulda bloklanmaz. Kilit: tests/test_inno_kurulum_bobin_guvenligi.py
+    // (::test_KALDIRMA_yolunda_da_ESTOP_var_karsit_kanit).
+    PemfBobinleriGuveneAl();
+
     Purge := False;
     // Sessiz kaldirmada SORMA -> veri KORUNUR (sessiz akis hasta verisini onaysiz silmesin).
     if not UninstallSilent then

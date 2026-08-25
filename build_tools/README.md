@@ -12,6 +12,11 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 | `PEMF_Backend_onedir.spec` | PyInstaller **onedir** spec (birincil) — mosquitto, cloudflared, web `frontend/dist`, `deploy/` env, ai_models gömer |
 | `PEMF_Backend_onefile.spec` | PyInstaller **onefile** spec (alternatif tek-EXE) |
 | `PEMF_Backend_Setup.iss` | Inno Setup scripti → `PEMFBackendSetup_device_vX.exe` (DiskSpanning `.bin` dilimleri); `[Run]`'da `setup_services.ps1` çağırır |
+| `make_model_zip.py` | Profil model paketlerini üretir → **`home.zip`/`vet.zip`/`research.zip`** (manifest `models`/`profiles`); `inference_cat_organ` çekirdek modelinin hangi zip'te olduğunu kilitler |
+| `compile_pyd.py` | Kaynak koruması — `.py → .pyd` **NATIVE (Cython) derleme**; kaynağı geri-alınamaz biçimde yok eder |
+| `encrypt_sources.py` + `source_crypto.py` | Kaynak koruması — build çıktısındaki `.py`'leri şifreler (`.pyenc`); çözücü ilkeleri `../utils/source_crypto.py`'de durur (frozen EXE'ye bundle edilen o) |
+| `make_cloud_provision.py` | E-stop **bulut aynası** sır provizyonu → `../data/cloud_mqtt_provision.json` (git-dışı; varsa spec'e gömülür — ⚠️sahip kararı) |
+| `secrets_backup.py` | Makine-özel sırların taşınabilir yedeği → tek `.pemfsec` arşivi (⚠️PAROLASIZ base64, sahip kararı 2026-08-19); yeni makinede `restore` |
 | `hook-paho.mqtt.py` | PyInstaller hook — tüm `paho.mqtt` alt-modül/verisini dahil eder |
 | `myenv-requirements.txt` | Gömülü Python build ortamının **pinli pip kilidi** (kurtarma için; myenv/sistem Python silindi) |
 | `Output/` | **Inno installer çıktısı** — `PEMFBackendSetup_device_v1.9.5.exe` + `-1.bin`/`-2.bin` DiskSpanning dilimleri |
