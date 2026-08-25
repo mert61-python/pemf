@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.23",
-  "tag": "client-app-v1.9.23",
+  "version": "1.9.24",
+  "tag": "client-app-v1.9.24",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.23/base.zip",
-      "sha256": "bd71bb25a8d447426ab15156cc87f48eb0bb530417cba04d6dcb166a1125c2cf",
-      "size": 1533358888,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.24/base.zip",
+      "sha256": "6e57f412d3d7bdc3d94f12265ca9ced924e59fca7e40d106355962bbe7785b54",
+      "size": 1533361722,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.23/base-app.zip",
-        "sha256": "8e5ad639da1012ea65db6730b61af841e724c257f234679d5d0b5545e3b998ee",
-        "size": 71255971,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.24/base-app.zip",
+        "sha256": "9125d636a9c43bea90c15da764ea212590d791e2a6eaa92c2935bcb84b6f8120",
+        "size": 71258805,
         "kind": "zip"
       },
       "deps": {
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.23/base.zip",
-    "sha256": "bd71bb25a8d447426ab15156cc87f48eb0bb530417cba04d6dcb166a1125c2cf",
-    "size": 1533358888,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.24/base.zip",
+    "sha256": "6e57f412d3d7bdc3d94f12265ca9ced924e59fca7e40d106355962bbe7785b54",
+    "size": 1533361722,
     "kind": "zip"
   },
   "_mobile_note": "MOBIL OTO-GUNCELLEME (2026-08-08): APK acilista bu bolume bakar; `versionCode` kendisininkinden BUYUKSE yeni APK'yi indirir, SHA256 dogrular ve kurulum onayi sunar. Kullanici siteden tekrar indirmek zorunda kalmaz. YAYIN: APK'yi yukledikten SONRA burayi guncelleyin (once dosya, sonra manifest) — ters sirada client'lar 404 alir. `versionCode` pf/app.json ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir.",

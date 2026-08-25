@@ -35,8 +35,8 @@ geçmiyorsa test kırılır.
 ## app 1.9.24 — 2026-08-26 (🔴 Web/masaüstünde AI Pro "organ konumlandırılmadı" ile açılmıyordu)
 
 Yayın etiketi: app → `client-app-v1.9.24`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ.
-Paket kimliği (`buildId`, ≥1.9.13 istemcilerin `/api/health`te raporladığı **app katmanı** sha): `PLACEHOLDER`.
-Monolit `base.zip` sha (≤1.9.12): `PLACEHOLDER2`.
+Paket kimliği (`buildId`, ≥1.9.13 istemcilerin `/api/health`te raporladığı **app katmanı** sha): `9125d636a9c4`.
+Monolit `base.zip` sha (≤1.9.12): `6e57f412d3d7`.
 
 **Saha bildirimi:** *"Daha kamera bile açılmadan hata veriyor."* — masaüstü panelinde "AI Pro Başlat"a
 basınca kamera hiç açılmadan **"Karaciğer henüz konumlandırılmadı"** (Sunucu Hatası) çıkıyordu.
