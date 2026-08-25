@@ -35,7 +35,8 @@ geçmiyorsa test kırılır.
 ## app 1.9.23 · launcher 1.9.38 · mobile 2.3.24 — 2026-08-25 (3. tur hata denetimi)
 
 Yayın etiketleri: app → `client-app-v1.9.23`, launcher → `launcher-v1.9.38`, mobil → `launcher-v1.9.38`.
-buildId / paket sha256: _(build sonrası doldurulacak — `pemf-app-packages/manifest.json`)._
+Paket kimliği (`buildId`, ≥1.9.13 istemcilerin `/api/health`te raporladığı **app katmanı** sha): `8e5ad639da10`.
+Monolit `base.zip` sha (≤1.9.12 tek-parça istemciler): `bd71bb25a8d4`. Launcher setup sha: `7acb5c058161`.
 
 **🔴 Hasta güvenliği / tedavi bütünlüğü (önce):**
 - **AI Pro seans sahipliği.** İki cihazlı klinikte (klinik PC + telefon, ya da iki veteriner) yalnızca
