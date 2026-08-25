@@ -559,6 +559,15 @@ import threading as _ai_threading
 # kamera loop'u acip VideoCapture(0)'i cakistiramasin / bobinleri cift suremesin.
 _ai_loop_lock = _ai_threading.Lock()
 _ai_thread = None
+# 3. tur denetimi — WEB KAPALI-DÖNGÜ (2026-08-25): web/sunucu-kameralı yolda öneri ÖNCESİ
+# lokalizasyon için HAZIRLIK önizleme loop'u. Kamerayı açar + seçili organı periyodik lokalize
+# eder (cache'i günceller) ama BOBİN SÜRMEZ ve SEANS BAŞLATMAZ. Gerçek seans (/ai/pro/start)
+# başlarken durur ve kamerayı bırakır → tek fiziksel kamera, çakışma yok. Telefondaki "hazırlık"ın
+# sunucu-kamera karşılığı (1.9.22 mobil kapalı-döngü düzeltmesi web'e uygulanmamıştı).
+_ai_hazirlik_active = False
+_ai_hazirlik_thread = None
+_ai_hazirlik_started_at = 0.0
+_AI_HAZIRLIK_TAVAN_S = 120  # önizleme üst sınırı — kamera sonsuza dek tutulmasın (mobil HAZIRLIK_TAVAN paritesi)
 _ai_organ_id = 0
 _ai_duration_min = 20
 _ai_started_at = 0.0
@@ -870,13 +879,109 @@ def _build_ai_pro_percoil(D, P):
     return out
 
 
+def _ai_hazirlik_loop():
+    """WEB/sunucu-kameralı HAZIRLIK önizlemesi: kamerayı açar, seçili organı periyodik LOKALİZE eder
+    (cache'i günceller) ama BOBİN SÜRMEZ ve SEANS BAŞLATMAZ (`_active_session`e / `_ai_loop_active`e
+    dokunmaz). Panel /ai/pro/status'tan `localized` görünce öneriyi (propose) OTOMATİK ister.
+
+    ⚠️ TEK KAMERA: gerçek seans loop'u (`_ai_pro_loop`) da VideoCapture(0) açar; ikisi AYNI ANDA
+    açamaz. `/ai/pro/start` bu önizlemeyi ÖNCE durdurup kamerayı bıraktırır (join), sonra seans
+    loop'unu başlatır. `/ai/pro/hazirlik/baslat` da seans aktifken (`_ai_loop_active`) başlamaz.
+    ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
+    değişirse İKİSİ birlikte güncellenmeli."""
+    global _ai_hazirlik_active, _ai_relocalize
+    logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (sunucu kamerası, sürüş YOK).")
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")
+        cap.release()
+        _ai_hazirlik_active = False
+        return
+    try:
+        _get_or_load_kedi()
+        _get_or_load_catorgan()
+    except Exception as e:
+        logger.error("Hazırlık: em_kedi/cat_organ yüklenemedi, kamera bırakılıyor: %s", e)
+        cap.release()
+        _ai_hazirlik_active = False
+        return
+    try:
+        while _ai_hazirlik_active:
+            if _ai_hazirlik_started_at and (time.monotonic() - _ai_hazirlik_started_at) >= _AI_HAZIRLIK_TAVAN_S:
+                logger.info("Hazırlık tavanı (%s sn) doldu — önizleme kendiliğinden duruyor.", _AI_HAZIRLIK_TAVAN_S)
+                break
+            ret, frame = cap.read()
+            if not ret:
+                time.sleep(0.3)
+                continue
+            now = time.time()
+            need_localize = (
+                _ai_relocalize
+                or _ai_organ_cache["organ_id"] != _ai_organ_id
+                or (now - _ai_organ_cache["at"]) >= _ORGAN_LOCALIZE_INTERVAL_S
+            )
+            if need_localize:
+                # ⚠️ _ai_pro_loop'un lokalizasyon bloğuyla BİREBİR (organ-snapshot + relocalize-ÖNCE-tüket,
+                # denetim P2): işlem sırasında gelen organ/relocalize isteği YUTULMAZ.
+                _oid = _ai_organ_id
+                _ai_relocalize = False
+                try:
+                    lz, lx, ly, lzz, lrel, lov, lkedi = _localize_organ(frame, _oid)
+                    with _ai_cache_lock:
+                        _ai_organ_cache.update(
+                            {
+                                "x_mm": lx,
+                                "y_mm": ly,
+                                "z_mm": lzz,
+                                "reliability": lrel,
+                                "localized": lz,
+                                "overlay_bgr": lov,
+                                "at": now,
+                                "organ_id": _oid,
+                                "kedi_var": lkedi,
+                            }
+                        )
+                except Exception as le:
+                    logger.error("Hazırlık cat_organ lokalizasyon hatası: %s", le)
+                    with _ai_cache_lock:
+                        _ai_organ_cache["localized"] = False
+            time.sleep(0.05)  # CPU nefes payı (lokalizasyon zaten ~1-4 sn'de bir)
+    finally:
+        cap.release()
+        _ai_hazirlik_active = False
+        logger.info("AI Pro HAZIRLIK önizlemesi DURDU (kamera bırakıldı).")
+
+
+def _ai_hazirlik_durdur_ic():
+    """Önizleme loop'unu durdur ve KAMERANIN bırakılmasını BEKLE (join). `/ai/pro/start` seans
+    kamerasını açmadan ÖNCE bunu çağırır → iki VideoCapture çakışmaz."""
+    global _ai_hazirlik_active, _ai_hazirlik_thread
+    _ai_hazirlik_active = False
+    t = _ai_hazirlik_thread
+    if t is not None and t.is_alive():
+        # ⚠️ join, önizleme loop'unun O AN _localize_organ içinde (kesintisiz, ~1-4 sn) olabileceğini
+        # KAPSAMALI: bayrak set edilse de o kare bitene kadar loop çıkamaz → kamerayı bırakamaz.
+        # Kısa timeout (3 sn) 4 sn'lik lokalizasyonu kaçırıp handoff'ta çift VideoCapture'a yol
+        # açıyordu (adversaryal inceleme MAJOR). _ai_pro_loop açılışta ayrıca retry yapar (savunma).
+        t.join(timeout=6.0)
+    _ai_hazirlik_thread = None
+
+
 def _ai_pro_loop():
     global _ai_loop_active, _ai_relocalize
     logger.info("AI Pro Closed-Loop (cat_organ organ-lokalizasyon + em_kedi) arkaplan görevi BAŞLADI.")
+    # WEB handoff (2026-08-25): hazırlık önizlemesi kamerayı henüz bırakıyor olabilir (join,
+    # kesintisiz ~4 sn'lik bir lokalizasyonu aşabilir) → açılışı birkaç kez DENE (0,5 sn arayla) ki
+    # çift-open yüzünden doktor-ONAYLI seans sessizce ölmesin (adversaryal inceleme MAJOR savunması).
     cap = cv2.VideoCapture(0)
-
+    for _ in range(5):
+        if cap.isOpened():
+            break
+        cap.release()
+        time.sleep(0.5)
+        cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        logger.error("Kamera açılamadı (VideoCapture(0)). AI Pro durduruluyor.")
+        logger.error("Kamera açılamadı (VideoCapture(0), tekrarlı denemeye rağmen). AI Pro durduruluyor.")
         cap.release()
         _ai_loop_active = False
         return
@@ -1349,6 +1454,9 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         logger.exception("start_ai_session failed")
     import threading
 
+    # WEB kapalı-döngü (2026-08-25): hazırlık önizlemesi kamerayı tutuyor olabilir → seans loop'u
+    # VideoCapture(0)'ı açmadan ÖNCE önizlemeyi durdur ve kameranın bırakılmasını BEKLE (join).
+    _ai_hazirlik_durdur_ic()
     _ai_thread = threading.Thread(target=_ai_pro_loop, daemon=True)
     _ai_thread.start()
     return {
@@ -1367,6 +1475,8 @@ def stop_ai_pro():
     with _ai_loop_lock:
         _ai_loop_active = False
         _ai_owner_client = ""
+    # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
+    _ai_hazirlik_durdur_ic()
 
     # Bobinleri TÜM transport'larda durdur: STM 1-5 + ESP 6-8 (Audit P1 #3). Eskiden yalnız
     # stop_all_coils (STM) çağrılıyordu; kamerasız/mobil yolda loop-cleanup çalışmadığı için
@@ -1422,6 +1532,47 @@ def calibrate_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz.")
     _ai_relocalize = True
     return {"status": "success", "relocalize": True}
+
+
+@ai_router.post("/api/ai/pro/hazirlik/baslat")
+def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
+    """WEB/sunucu-kameralı HAZIRLIK önizlemesini başlat: kamera açılır + seçili organ lokalize edilir
+    (BOBİN SÜRÜLMEZ, SEANS BAŞLAMAZ). Panel /status'tan `localized` görünce öneriyi otomatik ister.
+    Telefonun hazırlık akışının sunucu-kamera karşılığı — web'in propose-önce-lokalizasyon kapalı
+    döngüsünü kırar (2026-08-25). Aktif seans varsa gereksiz (kamera zaten seansta) → sessiz başarı."""
+    global _ai_hazirlik_active, _ai_hazirlik_thread, _ai_hazirlik_started_at, _ai_organ_id, _ai_relocalize
+    import threading
+
+    _organ_req = int(payload.organ_id)
+    if _organ_req in (0, 1, 2, 3, 4, 5, 6):
+        _ai_organ_id = _organ_req  # panelde seçili organ için lokalize et
+    _ai_relocalize = True  # yeni hazırlıkta taze lokalizasyon zorla
+    # MINOR (adversaryal inceleme): bayat `localized`=True bir önceki önizlemeden kalmış olabilir →
+    # önizleme TAZE lokalize etmeden panel bayat ölçümden öneri istemesin. Cache'i geçersiz kıl;
+    # /status 'localized' önizleme yeni kare üretene kadar False döner (start_ai_pro:1434 paritesi).
+    with _ai_cache_lock:
+        _ai_organ_cache["localized"] = False
+    # ⚠️ ATOMİK (adversaryal inceleme MAJOR-2 TOCTOU): _ai_loop_active + _ai_hazirlik_active kontrolü
+    # VE thread spawn'ı AYNI _ai_loop_lock içinde. Eskiden _ai_loop_active kilit DIŞINDA okunuyordu →
+    # eş-zamanlı /ai/pro/start ile çift VideoCapture(0) açılabiliyordu (kilit tam bunu önlemek içindi).
+    with _ai_loop_lock:
+        if _ai_loop_active:
+            return {"status": "success", "message": "Seans zaten aktif (kamera seansta)"}
+        if _ai_hazirlik_active:
+            return {"status": "success", "message": "Hazırlık zaten çalışıyor"}
+        _ai_hazirlik_active = True
+        _ai_hazirlik_started_at = time.monotonic()
+        _ai_hazirlik_thread = threading.Thread(target=_ai_hazirlik_loop, daemon=True)
+        _ai_hazirlik_thread.start()
+    return {"status": "success", "message": "Hazırlık başladı"}
+
+
+@ai_router.post("/api/ai/pro/hazirlik/durdur")
+def ai_pro_hazirlik_durdur():
+    """Önizlemeyi durdur (kamera bırakılır). Panel Vazgeç / süre-tavanı / seans başlangıcında çağırır.
+    Gövdesiz + açık: önizleme bir tedavi DEĞİL (bobin sürmez), durdurmak herkese açık kalabilir."""
+    _ai_hazirlik_durdur_ic()
+    return {"status": "success"}
 
 
 @ai_router.get("/api/ai/pro/status")

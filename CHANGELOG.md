@@ -32,6 +32,28 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.24 — 2026-08-26 (🔴 Web/masaüstünde AI Pro "organ konumlandırılmadı" ile açılmıyordu)
+
+Yayın etiketi: app → `client-app-v1.9.24`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ.
+Paket kimliği (`buildId`, ≥1.9.13 istemcilerin `/api/health`te raporladığı **app katmanı** sha): `PLACEHOLDER`.
+Monolit `base.zip` sha (≤1.9.12): `PLACEHOLDER2`.
+
+**Saha bildirimi:** *"Daha kamera bile açılmadan hata veriyor."* — masaüstü panelinde "AI Pro Başlat"a
+basınca kamera hiç açılmadan **"Karaciğer henüz konumlandırılmadı"** (Sunucu Hatası) çıkıyordu.
+
+**Neydi.** Masaüstü/web yolu "Başlat"ta DOĞRUDAN öneri hesaplatıyordu; öneri ise organın önceden
+konumlandırılmış olmasını şart koşuyor. Ama sunucu kamerası ancak **seans sürerken** konumlandırma
+yapıyordu — seans başlamadan önce hiçbir şey konumlanmadığı için istek hemen hata veriyordu. (Telefonda
+1.9.22'de çözülen "kapalı döngü"nün masaüstü hâli; o düzeltme web yoluna uygulanmamıştı.)
+
+**Yeni akış.** Masaüstü de artık telefondaki gibi **önce hazırlık** yapıyor: "Başlat" sunucu kamerasını
+bir **ön-izlemede ısıtır** (kamera açılır, seçili organ konumlandırılır, **hiçbir bobin SÜRÜLMEZ, seans
+BAŞLAMAZ**); organ konumlanınca öneri **kendiliğinden** hazırlanıp onay ekranına gelir. Hekim onaylayınca
+gerçek seans başlar ve kamerayı devralır (tek kamera → çakışma yok). ⚠️ Masaüstünde AI Pro için sunucu
+bilgisayarına **kamera bağlı olması** gerekir. Onay kapısı, doz/organ/süre mührü ve süre-watchdog aynen korunur.
+
+---
+
 ## app 1.9.23 · launcher 1.9.38 · mobile 2.3.24 — 2026-08-25 (3. tur hata denetimi)
 
 Yayın etiketleri: app → `client-app-v1.9.23`, launcher → `launcher-v1.9.38`, mobil → `launcher-v1.9.38`.

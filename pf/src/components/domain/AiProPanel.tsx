@@ -147,6 +147,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   useEffect(() => { hazirlikRef.current = hazirlik; }, [hazirlik]);
   /** Hazırlık sırasında öneri BİR KEZ istenir (kareler periyodik geliyor). */
   const oneriIstendiRef = useRef(false);
+  /** WEB hazırlık: ardışık kaç status-poll'da `localized` görüldü (tek şanslı kareyi elemek). */
+  const webLokalizeSayacRef = useRef(0);
   /**
    * Öneri BAŞARISIZ olursa bir sonraki denemenin en erken zamanı (ms).
    *
@@ -262,14 +264,27 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       setHazirlik(true);   // kareler akmaya başlar → kedi → organ → öneri (otomatik)
       return;
     }
-    const prop = await apiPost<AiProposeResponse | null>(
-      "/ai/pro/propose",
-      { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+    // 🔴 WEB KAPALI-DÖNGÜ DÜZELTMESİ (2026-08-25): eskiden web DOĞRUDAN propose çağırıyordu ve
+    // "organ henüz konumlandırılmadı" (409) alıyordu — sunucu kamerası ancak SEANS sürerken
+    // lokalize ediyor, seans öncesi hiçbir şey lokalize etmiyordu (telefonda 1.9.22'de çözülen
+    // kapalı-döngünün web hâli). Artık web de telefondaki gibi ÖNCE hazırlık: sunucu kamerasını
+    // önizlemede ısıtır (lokalize eder, bobin SÜRMEZ), organ konumlanınca öneri OTOMATİK gelir.
+    setBusy(false);
+    oneriIstendiRef.current = false;
+    oneriBeklemeRef.current = 0;
+    ardisikRef.current = 0;
+    sonDamgaRef.current = null;
+    webLokalizeSayacRef.current = 0;
+    setArdisik(0);
+    setOneriHatasi("");
+    setLocalized(false);   // bayat lokalizasyondan öneri tetiklenmesin (backend cache'i de sıfırlar)
+    oneriBeklemeRef.current = 0;
+    await apiPost<AiProAction | null>(
+      "/ai/pro/hazirlik/baslat",
+      { organ_id: organId, client_id: clientIdRef.current },
       null
     );
-    setBusy(false);
-    if (!prop?.proposalId) return;   // apiPost hata mesajını zaten gösterdi (409/422 dahil)
-    setProposal(prop);
+    setHazirlik(true);   // status /localized görününce web-öneri efekti propose'u tetikler
   }, [organId, duration, permission, requestPermission]);
 
   /**
@@ -331,6 +346,47 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   }, [hazirlik, mobileResult, organId, duration]);
 
   /**
+   * WEB HAZIRLIK → öneri (2026-08-25 kapalı-döngü düzeltmesi). Sunucu kamerası önizlemede organı
+   * lokalize edince (`/ai/pro/status` → `localized`) öneriyi OTOMATİK ister. Telefondaki
+   * `mobileResult` yerine web `localized` state'ini izler; İKİ ardışık gözlem (webLokalizeSayacRef)
+   * tek şanslı lokalizasyonu eler (mobil ARDISIK_ONAY paritesi). Öneri gelince önizleme durdurulur
+   * (kamera bırakılır; `/ai/pro/start` seans loop'uyla yeniden açar).
+   */
+  useEffect(() => {
+    if (!IS_WEB || !hazirlik || oneriIstendiRef.current || !localized) return;
+    if (Date.now() < oneriBeklemeRef.current) return;   // başarısız denemeden sonra aralıklı bekle
+    // ⚠️ `localized` KARARLI bir boolean (false→true bir kez değişir, sonra sabit) → efekt bir
+    // kez koşar. Bu yüzden web'de sayaç-tabanlı "iki ölçüm" İŞLEMEZ (mobildeki `mobileResult`
+    // her karede yeni nesne olduğu için oradaki sayaç çalışır). Sunucu önizlemesi organı güvenilir
+    // lokalize eder ve propose ucu tazeliği (localized + ≤120sn) AYRICA doğrular → ilk `localized`
+    // gözleminde öneri istenir (web'in ESKİ davranışı da buydu; fark: artık ÖNCE kamera ısıtılıyor).
+    oneriIstendiRef.current = true;
+    (async () => {
+      const prop = await apiPost<AiProposeResponse | null>(
+        "/ai/pro/propose",
+        { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+        null,
+        { silent: true }
+      );
+      if (prop?.proposalId) {
+        setOneriHatasi("");
+        await apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); // önizlemeyi bırak
+        setProposal(prop);
+        setHazirlik(false);
+      } else {
+        // Model bu konum için sürülebilir parametre üretmedi (ya da anlık sunucu hıçkırığı). `localized`
+        // sabit boolean olduğundan efekt kendiliğinden yeniden koşmaz → localized'ı sıfırla: sonraki 3sn'lik
+        // status poll (backend cache hâlâ localized) onu tekrar true yapar ve efekt ARALIKLI (bekleme)
+        // yeniden dener. (Adversaryal inceleme MINOR: mobil retry paritesi.)
+        setOneriHatasi("Öneri alınamadı — konumlandırma sürüyor, tekrar deneniyor.");
+        oneriBeklemeRef.current = Date.now() + ONERI_BEKLEME_MS;
+        oneriIstendiRef.current = false;
+        setLocalized(false);
+      }
+    })();
+  }, [hazirlik, localized, organId, duration]);
+
+  /**
    * HAZIRLIK SAATİ — gecikmede somut yönlendirme, üst sınırda otomatik durma.
    *
    * ⚠️ Üst sınır YALNIZ hazırlığa aittir: süren bir otonom seansı KESMEZ (onun kendi
@@ -349,6 +405,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         oneriIstendiRef.current = false;
         ardisikRef.current = 0;
         sonDamgaRef.current = null;   // F2
+        webLokalizeSayacRef.current = 0;
+        if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); // sunucu önizlemesini bırak
         setOneriHatasi("");
         platformAlert(
           "Konumlandırma tamamlanamadı",
@@ -446,11 +504,23 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     // başlamadan akmadığı için bayrağı işleyecek kare HİÇ gelmiyordu → düğme görsel olarak
     // çalışıyor ama lokalizasyon hiç olmuyordu. Üstelik kullanıcıya hata mesajında tam da bu
     // düğmeye basması söyleniyordu. Artık kare akışını da başlatır.
-    if (!IS_WEB && !running) {
+    if (!running) {
       oneriIstendiRef.current = false;
+      if (IS_WEB) {
+        // WEB: "Yeniden Konumla" sunucu-kamera önizlemesini (yoksa) başlatır → lokalize → öneri.
+        // Zaten hazırlıktaysa yukarıdaki /calibrate önizlemenin yeniden-lokalize etmesini sağlar.
+        webLokalizeSayacRef.current = 0;
+        ardisikRef.current = 0;
+        setArdisik(0);
+        await apiPost<AiProAction | null>(
+          "/ai/pro/hazirlik/baslat",
+          { organ_id: organId, client_id: clientIdRef.current },
+          null
+        );
+      }
       setHazirlik(true);
     }
-  }, [running]);
+  }, [running, organId]);
 
   // ── Mobil: telefon kamerasından periyodik kare yakala → /ai/ai_pro/frame ──
   useEffect(() => {
@@ -507,6 +577,11 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     // operatörü tedaviyi durdurabilmeli.
     if (runningRef.current && ownedRef.current) {
       apiPost<AiProAction | null>("/ai/pro/stop", {}, null).catch(() => {});
+    }
+    // WEB hazırlık önizlemesi açıkken panel kapanırsa sunucu kamerasını bırak (backend 120 sn'de
+    // kendisi de durur; bu yalnız kamerayı erken serbest bırakır).
+    if (IS_WEB && hazirlikRef.current) {
+      apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null).catch(() => {});
     }
   }, []);
 
@@ -614,7 +689,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || asamaMetni}</Text>
           <TouchableOpacity
             style={styles.hazirlikIptal}
-            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; sonDamgaRef.current = null; setArdisik(0); setOneriHatasi(""); }}
+            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; sonDamgaRef.current = null; webLokalizeSayacRef.current = 0; setArdisik(0); setOneriHatasi(""); if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); }}
             accessibilityRole="button"
             accessibilityLabel="Hazırlığı iptal et"
           >
