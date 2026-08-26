@@ -142,6 +142,52 @@ class CatDiseasePredictor:
 
 
 # ============================================================
+# XAI — sunum-katmani (2026-08-26, xai-entegrasyon-plani.md Faz 1.3)
+# ============================================================
+def xai_top_features(predictor, age, weight, hr, temp, duration, symptom_indices, top_n=7):
+    """Tek hasta icin SHAP TreeExplainer top-N ozellik katkisi.
+
+    XGBoost.pkl guii'de ANA model — ek agirlik/GPU gerekmez; TreeExplainer ms
+    mertebesindedir (KernelExplainer'a gore ~100x). Tahmin edilen SINIFIN katmani
+    raporlanir. TEK-KAYNAK: hem router in-process yolu hem ai_service /infer/disease
+    bu fonksiyonu cagirir (kapi-paritesi dersi — 2026-08-17).
+
+    Doner: {"disease": <top-1 sinif>, "top_features": [{"feature", "attribution"}, ...]}
+    (attribution isaretli: pozitif -> bu sinif lehine katki).
+    """
+    import shap
+
+    X_raw = predictor._encode(age, weight, hr, temp, duration, symptom_indices)
+    X_scaled = predictor.scaler.transform(X_raw).astype(np.float32)
+    probs = predictor.model.predict_proba(X_scaled)[0]
+    cls = int(np.argmax(probs))
+
+    # Explainer'i predictor uzerinde cache'le (istek basina yeniden kurulmasin).
+    expl = getattr(predictor, "_shap_explainer", None)
+    if expl is None:
+        expl = shap.TreeExplainer(predictor.model)
+        try:
+            predictor._shap_explainer = expl
+        except Exception:
+            pass  # cache'lenemezse her cagri yeniden kurar (davranis ayni)
+
+    sv = expl.shap_values(X_scaled)
+    sv_arr = np.stack(sv, axis=-1) if isinstance(sv, list) else np.asarray(sv)
+    if sv_arr.ndim == 2:
+        sv_arr = sv_arr[..., None]                                  # (N, F, 1)
+    attr = sv_arr[0, :, cls if cls < sv_arr.shape[-1] else 0]       # (F,)
+
+    order = np.argsort(-np.abs(attr))[: int(top_n)]
+    return {
+        "disease": predictor.diseases[cls],
+        "top_features": [
+            {"feature": FEATURE_NAMES[int(i)], "attribution": round(float(attr[int(i)]), 4)}
+            for i in order
+        ],
+    }
+
+
+# ============================================================
 # CLI
 # ============================================================
 def print_symptom_menu():

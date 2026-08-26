@@ -619,7 +619,7 @@ def infer_disease(payload: dict = Body(...)):
         )
         formatted = [{"disease": d, "probability": p} for d, p in results]
         top_p = max((float(p) for _, p in results), default=0.0)
-        return {
+        yanit = {
             "status": "success",
             "device": "cpu",
             "inference_ms": round((time.time() - t0) * 1000, 1),
@@ -627,6 +627,28 @@ def infer_disease(payload: dict = Body(...)):
             "top_probability": round(top_p, 3),
             "low_confidence": top_p < 0.40,
         }
+        # Sunum-katmanı XAI paritesi (2026-08-26): router'daki explain=true buraya da düşer
+        # (delegate_json payload'ı aynen taşır) — TEK-KAYNAK ai_hub.xai_top_features.
+        # ⚠️ Açıklama İKİNCİL: hatası analizi düşürmez (router ile aynı zarif düşüş).
+        if payload.get("explain"):
+            try:
+                from ai_hub.cat_disease import inference_cat_disease as _icd
+
+                yanit["xai"] = _icd.xai_top_features(
+                    clf,
+                    payload.get("age", 0.0),
+                    payload.get("weight", 0.0),
+                    payload.get("hr", 0.0),
+                    payload.get("temp", 0.0),
+                    payload.get("duration", 0.0),
+                    payload.get("symptom_indices", []),
+                )
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("cat_disease XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     # ⚠️ SIRA KRİTİK: bu kol `except Exception`dan ÖNCE gelmeli, yoksa `_err500` onu yutup 500
     # döner ve kullanıcı reddin SEBEBİNİ göremez (aynı sınıf hata bu turda bir kez yaşandı).
     except _AsgariGirdiYok as ag:

@@ -267,6 +267,9 @@ class DiseaseInput(BaseModel):
     temp: float = 0.0
     duration: float = 0.0
     symptom_indices: list[int] = []
+    # Sunum-katmanı XAI (2026-08-26): true → yanıta SHAP top-özellik katkıları eklenir
+    # ("xai" alanı). Aynı uç/aynı jeton (Faz 0 karar #6: açıklama analizin parçası).
+    explain: bool = False
 
 
 @ai_router.post("/api/ai/disease")
@@ -302,12 +305,32 @@ async def analyze_disease(data: DiseaseInput):
         # Güven-eşiği: en yüksek olasılık düşükse FE "düşük güven — veteriner doğrulaması
         # gerekir" uyarısı göstersin (audit: güven-eşiği yoktu).
         top_p = max((float(p) for _, p in results), default=0.0)
-        return {
+        yanit = {
             "status": "success",
             "results": formatted,
             "top_probability": round(top_p, 3),
             "low_confidence": top_p < 0.40,
         }
+        # Sunum-katmanı XAI (2026-08-26): SHAP TreeExplainer top-özellik katkıları.
+        # ⚠️ Açıklama İKİNCİLDİR — hatası ana analizi ASLA düşürmez (zarif düşüş; plan §8).
+        if data.explain:
+            try:
+                from ai_hub.cat_disease import inference_cat_disease as _icd
+
+                yanit["xai"] = await asyncio.to_thread(
+                    _icd.xai_top_features,
+                    predictor,
+                    data.age,
+                    data.weight,
+                    data.hr,
+                    data.temp,
+                    data.duration,
+                    data.symptom_indices,
+                )
+            except Exception as xe:
+                logger.warning("cat_disease XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         logger.error(f"Disease inference error: {e}", exc_info=True)
         raise _ai_fail("Hastalık analizi hatası", e)
