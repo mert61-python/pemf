@@ -12,8 +12,16 @@ scikit-learn==1.7.2
 xgboost==3.2.0                    # cat_disease (XGBoost.pkl)
 shap==0.49.1                      # XAI Faz 1 (cat_disease TreeExplainer + CKD/EM kernel-SHAP)
 slicer==0.0.8                     # shap bagimliligi
-# XAI Faz 2 (gradient tabanli — grad-cam + captum + timm) BURAYA gelecek; cu128/torch 2.7.1
-# uyum testi yapilmadan EKLEME (xai-entegrasyon-plani.md §5).
+# XAI Faz 2 (2026-08-26): ses/termal Grad-CAM isi haritalari (/infer/sound|thermal explain=true).
+# Pinler torch 2.1.2+cpu ile OLCULEREK dogrulandi; cu128/torch 2.7.1 imaj-ici smoke
+# (docker build + /explain istegi) GPU makinesinde YAYIN ONCESI kosulmali — grad-cam/timm
+# saf-Python + torch-API katmani oldugundan uyumsuzluk beklenmiyor ama olculmedi.
+# ⚠️ grad-cam pip'te opencv-python-headless ceker; imajda opencv-python zaten var —
+# Dockerfile.ai'de kurulum SIRASI/temizligi ayni cift-cv2 tuzagina dikkat.
+grad-cam==1.5.7
+timm==1.0.28
+ttach==0.0.3
+safetensors==0.8.0
 joblib==1.5.3
 pandas==2.3.3
 PyYAML==6.0.3

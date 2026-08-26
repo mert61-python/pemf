@@ -345,6 +345,66 @@ def _collect_audio_from_dir(d: Path) -> list[str]:
     return out
 
 
+# ============================================================
+# XAI — gradient (Grad-CAM++) mel isi haritasi (Faz 2, 2026-08-26)
+# ============================================================
+# ⚠️ grad-cam hook'lari thread-safe DEGIL → TEK-IS kilidi; XAI kendi PT instance'ini
+# kullanir (canli ONNX yoluna dokunmaz; PT init zaten weights_only=True — Audit P3).
+import threading as _xai_threading
+
+_XAI_KILIT = _xai_threading.Lock()
+_XAI_PT_CACHE: dict = {}
+
+
+def xai_ses_isi_haritasi(audio_path: str, pt_path: str | None = None,
+                          method: str = "gradcam++", alpha: float = 0.5) -> dict:
+    """Ses icin mel-spektrogram uzerinde Grad-CAM — BELLEK-ICI base64 (karar #3, disk yok).
+
+    Isi haritasi top-1 sinif icindir (class_idx=None -> argmax): "model bu duyguya mel'in
+    hangi frekans/zaman bandindan karar verdi". ⚠️ SESSIZLIK KAPISININ ARKASINDA cagrilmali
+    (saha 2026-08-15): sessiz kayda duygu isi-haritasi uretmek kapinin varlik sebebini deler.
+    TEK-KAYNAK: router + ai_service ayni fonksiyon.
+
+    Doner: {"xai_image_base64": <jpg b64 mel-overlay>, "method": ...}
+    """
+    import base64 as _b64
+
+    import cv2
+    import torch  # noqa: F401 — PT runtime zorunlulugunu erken/dogru hatayla soyle
+
+    from ai_hub.xai_utils.grad_cam import GradCAMExplainer
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    if pt_path is None:
+        from utils.model_downloader import download_model_sync
+
+        pt_path = download_model_sync("ai_hub/inference_cat_sound/EfficientNet_Lite0.pt")
+
+    with _XAI_KILIT:
+        clf = _XAI_PT_CACHE.get("sound")
+        if clf is None:
+            clf = CatSoundClassifier(model_path=pt_path, runtime="pt")
+            _XAI_PT_CACHE["sound"] = clf
+
+        mel_img = audio_to_mel_image(audio_path)              # PIL RGB (IMGSZ, IMGSZ)
+        mel_rgb = np.asarray(mel_img, dtype=np.uint8)
+        x_np = _preprocess(mel_img)                            # (1, 3, H, W)
+        import torch as _t
+
+        x_t = _t.from_numpy(x_np).to(clf.device)
+
+        expl = GradCAMExplainer(clf.model, target_layer=clf.model.backbone.blocks[-1],
+                                 method=method, device=str(clf.device))
+        heatmap = expl.explain(x_t, class_idx=None)            # argmax = top-1 duygu
+
+    overlay = blend_to_array(mel_rgb, heatmap, alpha=alpha)
+    ok, buf = cv2.imencode(".jpg", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
+                            [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not ok:
+        raise RuntimeError("XAI mel-overlay JPG encode basarisiz")
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="inference_cat_sound",

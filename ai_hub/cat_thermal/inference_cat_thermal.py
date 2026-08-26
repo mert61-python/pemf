@@ -119,6 +119,111 @@ class CatThermalPredictor:
         return results
 
 
+# ============================================================
+# XAI — gradient (Grad-CAM++) isi haritasi (Faz 2, 2026-08-26)
+# ============================================================
+# ⚠️ grad-cam hook'lari + ayni model uzerinde eszamanli explain THREAD-SAFE DEGIL
+# (plan §2): tum XAI cagrisi TEK-IS kilidi icinde. XAI kendi PT instance'ini kullanir
+# (canli ONNX yoluna dokunmaz); model cache'lenir (istek basina 21MB yukleme olmasin).
+import threading as _xai_threading
+
+_XAI_KILIT = _xai_threading.Lock()
+_XAI_PT_CACHE: dict = {}
+
+
+def _build_thermal_model_pt(pt_path: str, backbone_name: str = "ghostnetv2_100.in1k"):
+    """training.ThermalClassifier ile birebir mimari + state_dict yukle.
+
+    ⚠️ Audit P3: torch.load weights_only=True — agirlik SAF state_dict (pickle-RCE kapisi
+    ACILMAZ; gelen inference(1) kodu False kullaniyordu, tasinirken duzeltildi).
+    '_orig_mod.' prefix'i torch.compile artefakti — soyulur.
+    """
+    import timm
+    import torch
+    import torch.nn as nn
+
+    class ThermalClassifier(nn.Module):
+        def __init__(self, bb_name):
+            super().__init__()
+            self.backbone = timm.create_model(bb_name, pretrained=False, num_classes=0)
+            self.backbone.eval()
+            with torch.no_grad():
+                dummy = torch.randn(2, 3, IMGSZ, IMGSZ)
+                feat_dim = self.backbone(dummy).shape[1]
+            self.classifier = nn.Sequential(
+                nn.Linear(feat_dim, 256), nn.ReLU(), nn.Dropout(0.3),
+                nn.Linear(256, 1),
+            )
+
+        def forward(self, x):
+            feat = self.backbone(x)
+            return self.classifier(feat).squeeze(1)
+
+    model = ThermalClassifier(backbone_name)
+    sd = torch.load(pt_path, map_location="cpu", weights_only=True)
+    if any(k.startswith("_orig_mod.") for k in sd.keys()):
+        sd = {k[len("_orig_mod."):] if k.startswith("_orig_mod.") else k: v for k, v in sd.items()}
+    model.load_state_dict(sd)
+    return model.eval()
+
+
+def xai_termal_isi_haritasi(image_path: str, pt_path: str | None = None,
+                             method: str = "gradcam++", alpha: float = 0.5) -> dict:
+    """Termal goruntu icin Grad-CAM isi haritasi — BELLEK-ICI base64 (disk yok, karar #3).
+
+    Binary sigmoid model squeeze sorunu _NoSqueeze ile cozulur (bkz. XAI_INTEGRATION §9.5);
+    class_idx=0 = Sick logiti ("modeli 'hasta' dedirten bolgeler"). TEK-KAYNAK: router
+    in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi dersi).
+
+    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": ...}
+    """
+    import cv2
+    import torch
+
+    from ai_hub.xai_utils.grad_cam import GradCAMExplainer
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    if pt_path is None:
+        from utils.model_downloader import download_model_sync
+
+        pt_path = download_model_sync("ai_hub/cat_thermal/GhostNetV2.pt")
+
+    class _NoSqueeze(torch.nn.Module):
+        def __init__(self, m):
+            super().__init__()
+            self.m = m
+
+        def forward(self, x):
+            return self.m.classifier(self.m.backbone(x))  # (B, 1) — squeeze YOK
+
+    with _XAI_KILIT:
+        model_raw = _XAI_PT_CACHE.get("thermal")
+        if model_raw is None:
+            model_raw = _build_thermal_model_pt(str(pt_path))
+            _XAI_PT_CACHE["thermal"] = model_raw
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        model_raw = model_raw.to(device)
+        model = _NoSqueeze(model_raw).to(device).eval()
+
+        img = Image.open(image_path).convert("RGB").resize((IMGSZ, IMGSZ), Image.BILINEAR)
+        img_rgb = np.array(img)
+        arr = (img_rgb.astype(np.float32) / 255.0 - MEAN) / STD
+        x_t = torch.from_numpy(arr.transpose(2, 0, 1)[None]).to(device)
+
+        expl = GradCAMExplainer(model, target_layer=model_raw.backbone.blocks[-1],
+                                 method=method, device=device)
+        heatmap = expl.explain(x_t, class_idx=0)  # (H, W) 0-1 — Sick logiti
+
+    overlay = blend_to_array(img_rgb, heatmap, alpha=alpha)
+    ok, buf = cv2.imencode(".jpg", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
+                            [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not ok:
+        raise RuntimeError("XAI overlay JPG encode basarisiz")
+    import base64 as _b64
+
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": method}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Kedi Thermal Saglik Tahmini (ONNX)",

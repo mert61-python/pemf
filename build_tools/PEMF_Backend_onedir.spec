@@ -286,7 +286,10 @@ for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             'sklearn',
             # XAI Faz 1 (2026-08-26): ai_hub/xai_tabular lazy-import'lari statik analizde
             # gorunmez — shap (Tree/Kernel explainer) + slicer frozen'a acikca toplanir.
-            'shap', 'slicer'):
+            'shap', 'slicer',
+            # XAI Faz 2 (2026-08-26): ses/termal Grad-CAM — pytorch_grad_cam + timm
+            # (+ttach/safetensors) lazy import; karar #2 geregi klinik CPU yolunda da var.
+            'pytorch_grad_cam', 'timm', 'ttach', 'safetensors'):
     try:
         hidden += collect_submodules(pkg)
     except Exception:

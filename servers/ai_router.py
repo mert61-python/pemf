@@ -1858,11 +1858,16 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 
 
 @ai_router.post("/api/ai/vision/thermal")
-async def analyze_thermal(file: UploadFile = File(None), image_base64: str = Form(None)):
-    """GhostNetV2 Termal Analiz"""
+async def analyze_thermal(file: UploadFile = File(None), image_base64: str = Form(None), explain: bool = Form(False)):
+    """GhostNetV2 Termal Analiz (+opsiyonel Grad-CAM ısı haritası — Faz 2, 2026-08-26)"""
     try:
         if ai_service_enabled():
-            return await _kapili_devret("thermal", file=file, image_base64=image_base64)
+            return await _kapili_devret(
+                "thermal",
+                file=file,
+                image_base64=image_base64,
+                data=({"explain": "true"} if explain else None),
+            )
         img = await _decode_image(file, image_base64, label="thermal")
 
         def _load_thermal():
@@ -1879,8 +1884,23 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
         cv2.imwrite(tmp.name, img)
 
         # P2 audit 2026-06-28: tmp .jpg'yi HER durumda sil (predict hata yolunda sizmasin → disk dolar).
+        # Faz 2: XAI da AYNI tmp'yi kullanir → silme XAI'den SONRA (finally kapsami genisletildi).
+        yanit = {}
         try:
             result = await asyncio.to_thread(lambda: predictor.predict(tmp.name, threshold=0.5))
+            # Sunum-katmanı XAI: Grad-CAM ısı haritası (modeli 'hasta' dedirten bölgeler).
+            # ⚠️ Açıklama İKİNCİL — hatası analizi ASLA düşürmez (zarif düşüş). CPU'da PT
+            # Grad-CAM sn'ler sürebilir (karar #2 notu) → to_thread; tek-iş kilidi modülde.
+            if explain:
+                try:
+                    from ai_hub.cat_thermal import inference_cat_thermal as _ict
+
+                    _x = await asyncio.to_thread(_ict.xai_termal_isi_haritasi, tmp.name)
+                    yanit["xai_image_base64"] = _x["xai_image_base64"]
+                    yanit["xai_method"] = _x.get("method")
+                except Exception as xe:
+                    logger.warning("Termal XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                    yanit["xai_error"] = "Açıklama üretilemedi"
         finally:
             try:
                 os.unlink(tmp.name)
@@ -1889,7 +1909,7 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
 
         b64_image = _encode_jpg_b64(img)
 
-        return {"status": "success", "prediction": result, "image_base64": b64_image}
+        return {"status": "success", "prediction": result, "image_base64": b64_image, **yanit}
     except Exception as e:
         logger.error(f"Thermal inference error: {e}", exc_info=True)
         raise _ai_fail("Termal model hatası", e)
@@ -2330,7 +2350,7 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
 
 
 @ai_router.post("/api/ai/sound/cat")
-async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = Form(None)):
+async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = Form(None), explain: bool = Form(False)):
     """Kedi Sesi Sınıflandırma (EfficientNet_Lite0 mel-spektrogram ONNX).
 
     Ses (mp3/wav/m4a/…) → ffmpeg 22050Hz mono WAV → librosa mel-spektrogram (mel+delta+
@@ -2446,11 +2466,30 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
         # ÖLÇÜLDÜ: ffmpeg 27-31 ms + RMS 2-9 ms. WAV göndermek 2. transcode'dan ~0-3 ms kazandırır
         # ama yükü ~3,5× şişirir → HAM bayt gönderilir, tel formatı DEĞİŞMEZ.
         if ai_service_enabled():
-            return await delegate_infer("sound", audio_base64=base64.b64encode(content).decode("ascii"))
+            return await delegate_infer(
+                "sound",
+                audio_base64=base64.b64encode(content).decode("ascii"),
+                data=({"explain": "true"} if explain else None),
+            )
 
         # Kayit analiz edilebilir -> ANCAK SIMDI modeli yukle.
         clf = await asyncio.to_thread(_get_or_load_model, "cat_sound", _load_cat_sound)
         result = await asyncio.to_thread(lambda: clf.predict(tmp_wav, top_k=3))
+        # Sunum-katmanı XAI (Faz 2, 2026-08-26): mel üzerinde Grad-CAM — SESSİZLİK KAPISININ
+        # ARKASINDA (yukarıda 422 kesti; sessiz kayda duygu ısı-haritası ÜRETİLMEZ, saha
+        # 2026-08-15). ⚠️ tmp_wav finally'de siliniyor → XAI burada, silinmeden. Açıklama
+        # İKİNCİL: hatası analizi düşürmez.
+        _xai_alanlari = {}
+        if explain:
+            try:
+                from ai_hub.inference_cat_sound import inference_cat_sound as _ics
+
+                _x = await asyncio.to_thread(_ics.xai_ses_isi_haritasi, tmp_wav)
+                _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
+                _xai_alanlari["xai_method"] = _x.get("method")
+            except Exception as xe:
+                logger.warning("Ses XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
         # BELİRSİZLİK sonuçla BİRLİKTE taşınır: istemci düşük güvende sonucu kesin bir bulgu
         # gibi sunmaz. ⚠️ `guvenilir=False` "kedi sesi yok" DEMEK DEĞİLDİR — bu model bunu
         # söyleyemez; aralıklar örtüşüyor (gerçek ağrı kaydı 0,563 · oda gürültüsü 0,595).
@@ -2469,6 +2508,7 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             # düşerdi. `-inf` sessizlik kapısında zaten elenir ama `nan` eşik karşılaştırmasını
             # False geçer; burada sonluluk kontrolü son savunmadır.
             "rms_dbfs": None if _rms is None or not _math.isfinite(_rms) else round(_rms, 1),
+            **_xai_alanlari,
         }
     except Exception as e:
         logger.error(f"cat_sound inference error: {e}", exc_info=True)

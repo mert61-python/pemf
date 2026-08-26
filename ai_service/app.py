@@ -279,8 +279,12 @@ def infer_histopath(file: UploadFile = File(...)):
 
 
 @app.post("/infer/sound")
-def infer_sound(file: UploadFile = File(...)):
-    """Kedi sesi (mp3/wav/m4a) → ffmpeg 22050 mono WAV → 10 sınıf + top-3 (ONNX GPU)."""
+def infer_sound(file: UploadFile = File(...), explain: str = Form(None)):
+    """Kedi sesi (mp3/wav/m4a) → ffmpeg 22050 mono WAV → 10 sınıf + top-3 (ONNX GPU).
+
+    explain=true → mel üzerinde Grad-CAM (Faz 2 paritesi — TEK-KAYNAK
+    ai_hub.inference_cat_sound.xai_ses_isi_haritasi; sessizlik kapısının ARKASINDA).
+    """
     tmp_in = tmp_wav = None
     try:
         data = file.file.read()
@@ -353,6 +357,20 @@ def infer_sound(file: UploadFile = File(...)):
         _ek = {}
         if len(_p) >= 2:
             _ek = {"guvenilir": _ses_guvenilir_mi(_p), "belirsizlik": round(_ses_entropi(_p), 3)}
+        # Faz 2 XAI paritesi: sessizlik kapısı YUKARIDA kesti — buraya gelen kayıt analiz
+        # edilebilir. Açıklama İKİNCİL: hatası analizi düşürmez.
+        if str(explain).lower() == "true":
+            try:
+                from ai_hub.inference_cat_sound import inference_cat_sound as _ics
+
+                _x = _ics.xai_ses_isi_haritasi(tmp_wav)
+                _ek["xai_image_base64"] = _x["xai_image_base64"]
+                _ek["xai_method"] = _x.get("method")
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("Ses XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                _ek["xai_error"] = "Açıklama üretilemedi"
         return {
             "status": "success",
             "device": getattr(clf, "device", "?"),
@@ -517,8 +535,13 @@ def infer_landmark(file: UploadFile = File(...)):
 
 # ── Faz 2c: termal (görüntü, GPU), cat_organ (görüntü 3B, GPU) ──
 @app.post("/infer/thermal")
-def infer_thermal(file: UploadFile = File(...)):
-    """Termal görüntü → sağlık sınıflandırma (GhostNetV2 ONNX, GPU)."""
+def infer_thermal(file: UploadFile = File(...), explain: str = Form(None)):
+    """Termal görüntü → sağlık sınıflandırma (GhostNetV2 ONNX, GPU).
+
+    explain=true → Grad-CAM ısı haritası (Faz 2 paritesi — router ile TEK-KAYNAK
+    ai_hub.cat_thermal.xai_termal_isi_haritasi; GPU'da PT Grad-CAM 200-500 ms).
+    ⚠️ Açıklama İKİNCİL: hatası analizi düşürmez (xai_error).
+    """
     tmp = None
     try:
         data = file.file.read()
@@ -532,7 +555,20 @@ def infer_thermal(file: UploadFile = File(...)):
         t0 = time.time()
         result = clf.predict(tmp, threshold=0.5)
         dev = clf.session.get_providers()[0].replace("ExecutionProvider", "").lower()
-        return {"status": "success", "device": dev, "inference_ms": round((time.time() - t0) * 1000, 1), **result}
+        yanit = {"status": "success", "device": dev, "inference_ms": round((time.time() - t0) * 1000, 1), **result}
+        if str(explain).lower() == "true":
+            try:
+                from ai_hub.cat_thermal import inference_cat_thermal as _ict
+
+                _x = _ict.xai_termal_isi_haritasi(tmp)
+                yanit["xai_image_base64"] = _x["xai_image_base64"]
+                yanit["xai_method"] = _x.get("method")
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("Termal XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         return _err500(e)
     finally:
