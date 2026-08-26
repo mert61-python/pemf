@@ -45,3 +45,14 @@ imageio-ffmpeg==0.6.0              # ses cozme zinciri (ai_router cat_sound): HA
                                    # ATLANIYORDU ve uc bir kez 500 dondu (kosu 31938268657, 2026-08-16).
                                    # "Agir AI" listesinde DEGIL (~30 MB, model kosturmaz); surum shipped
                                    # requirements.txt:71 ile birebir.
+# ── XAI Faz 1 (2026-08-26, kosu 32947175192 dersi): test_xai_vendor_sertlestirme
+# matplotlib/shap importunda ModuleNotFoundError ile CI'da KIRMIZI verdi (yerelde yesildi).
+# Bunlar "agir AI" DEGIL (torch/model kosturmaz; toplam ~50 MB): ai_hub/xai_tabular
+# sensitivity/SHAP + xai_utils overlay/rapor testleri gercek kutuphaneyle kosar.
+# Surumler shipped requirements.txt ile birebir. imageio-ffmpeg dersinin ayni politikasi:
+# test-kapsami sessizce atlanmasin diye kur, importorskip'e DUSME.
+matplotlib==3.10.9
+shap==0.49.1
+slicer==0.0.8
+pandas==2.3.3
+scikit-learn==1.7.2
