@@ -6,13 +6,29 @@
 > önce; PT ikizleri release_assets'te (21+15MB, downloader yerel çözer); grad-cam 1.5.7 + timm
 > 1.0.28 dört yüzeyde (⚠️ çift-cv2 tuzağı notlu); UI opt-in "🔍 Isı haritası" anahtarı (termal+ses,
 > canlı döngüye asla). Backend süit 1827, frontend 578/578.
-> **Faz 2 KALAN:** cu128 imaj-içi smoke (GPU makinesi, yayın öncesi) · feline/kidney_ct EigenCAM
-> (CT onaylı — Faz 4'le birleşik) · PT'lerin sahaya inişi sonraki model-zip yayını.
-> Faz 4 kalan: RNA IG (captum) · renal 859MB · paper_dilek_hoca ATLANDI · cat_llm kapsam dışı.
-> **1.9.26 sonrası tek açık iş — LAUNCHER ÇOKLU-MODEL-ZIP:** ÖLÇÜLDÜ: GitHub asset sınırı 2 GiB;
-> renal PT'li research.zip (2,51GB) 422 ile reddedildi → PT sahaya İNEMİYOR (GPU-mount'ta çalışıyor,
-> klinikte zarif düşüş). Kalıcı çözüm: launcher'ın profil başına BİRDEN ÇOK model zip'i desteklemesi
-> (örn. models.research + models.research_ek) → launcher 1.9.39 işi.
+> **GÜNCELLEME (2026-08-26 gece — 6-denetçili eksik-denetimi, tam teslim `Desktop\entegre` ile):**
+> Üstteki "KALAN" satırları BAYATTI — gerçek durum:
+> ✅ **YAPILDI (1.9.25/1.9.26 + sonrası):** feline+kidney_ct EigenCAM · RNA IG (captum üç yüzeyde)
+> · renal HiRes-CAM ×3 ensemble + disagreement · cu128 imaj-içi smoke (RTX 4070, `SMOKE-OK
+> device=cuda 17.5ms`) · pt_coz tek yol çözücüsü. Süitler: backend **1873**, frontend **583/583**.
+> ✅ **paper_dilek_hoca artık ATLANMADI** → aynı gün AYRI planla ENTEGRE EDİLDİ:
+> **`scratch-entegrasyon-plani.md`** (8 sahip kararı KESİN; `/api/ai/vision/scratch` + `/infer/scratch`
+> + "Yara Kapanma (Scratch)" UI + 27 backend + 5 jest testi; cell/ paketi sahibinden bekleniyor).
+> 🔴 **HÂLÂ AÇIK — LAUNCHER ÇOKLU-MODEL-ZIP (1.9.39):** launcher 1.9.38'de iş yok (ölçüldü);
+> artık İKİ PT'nin (renal 859MB + scratch 872MB) saha ön-koşulu — scratch planında **Faz 4.5**.
+>
+> **DENETİMİN BULDUĞU GERÇEK EKSİKLER (kod-kanıtlı) — aşağıda §KALAN-2026-08-26:**
+> (A) UI explain düğmesi 4 modülde yok (CT/histopat/retikülosit/RNA — backend hazır, buton yok);
+> Faz 1.5 UI kalıntıları (cat_organ mirror/anatomik rozetleri, petri N≥30 gerekçe satırı,
+> landmark p5-p95 bandı); EM canlı xaiSensitivity yalnız em_kedi'de (fantom/petri uçları eklemiyor).
+> (B) **Mod-2 batch/rapor katmanı HİÇBİR modülde taşınmadı:** explain_*.py scriptleri, CLI --xai
+> bayrakları, report.html/index.html/summary.csv/CSV+PNG çıktıları — `report_html.build_report`,
+> `overlay.side_by_side`, `feature_ranking` şu an yalnız scratch+testlerden çağrılan vendored kod.
+> WebView rapor modalı + PDF-XAI (Faz 3) buna bağlı. **SAHİP KARARI GEREKİYOR** (retrospektif/audit
+> akışı istenirse Faz 5 olarak planlanır; karar #3 "anlık gösterim" tekil analiz içindi).
+> (C) Küçükler: RNA signed-CSV + SHAP-Deep yolu · histopat backbone-başına CAM'ler · CAM-yöntemi
+> parametresi termal/ses uçlarında dışa kapalı · retikülosit test-girdisi PEMF_AI_Test_Girdileri'nde
+> HİÇ yok · cat_organ calibrate_camera.py aracı · segmentation help-metin düzeltmesi.
 
 **Kaynak:** `C:\Users\merta\Downloads\inference (1)\inference\` (XAI Faz 0-10 sprint çıktısı: 10 modüle Grad-CAM/EigenCAM/SHAP/IG/sensitivity + `xai_utils` + `xai_tabular` + `XAI_INTEGRATION.md`).
 **Hedef:** Bu XAI yeteneğini PEMF ekosistemine (guii backend + ai_service :8100 + pf frontend + AI geçmişi) regresyonsuz entegre etmek.
@@ -107,7 +123,7 @@ ai_hub/
 | 2 | PT ağırlık dağıtımı | **Klinik makinelerde DE kullanılabilir** — mekanizma: `release_assets/ai_models` + model_downloader (ilk kullanımda iner, tıpkı bugünkü 858MB histopat ONNX gibi → OTA katmanları BÜYÜMEZ) + ai_service /models mount. CPU'da gradient-XAI 10-30 sn → **async "açıklama hazırlanıyor" UI deseni zorunlu**; GPU'lu kurulumda :8100'den 200-500 ms |
 | 3 | Kalıcılık | **(b) Anlık gösterim** — görsel kaydedilmez (bugünkü overlay davranışı); top-özellik METNİ `result_detail`e (şifreli) yazılır. KVKK'da yeni yüzey yok |
 | 4 | AGPL / CT-XAI | **ONAY** — araştırma fazında EigenCAM eklenir (mevcut AGPL kararının devamı; ultralytics zaten kullanımda). yolov8s.pt (21,5MB) dağıtılır |
-| 5 | Büyük kalemler | Histopat 859MB PT: **klinik makinelerde de** (karar #2 mekanizmasıyla ilk kullanımda iner). paper_dilek_hoca: **ATLANDI** (sahip: "model entegresi yapılmadı" — modülün kendisi PEMF'e hiç entegre edilmemiş, XAI'den önce o iş gerekir). cat_llm: kapsam dışı |
+| 5 | Büyük kalemler | Histopat 859MB PT: **klinik makinelerde de** (karar #2 mekanizmasıyla ilk kullanımda iner). paper_dilek_hoca: ~~ATLANDI~~ → **2026-08-26 gece ENTEGRE EDİLDİ** (bkz. `scratch-entegrasyon-plani.md` — closure metrikli yeni teslimle sahip kararı tazelendi). cat_llm: kapsam dışı |
 | 6 | Jeton | **XAI = analizin parçası, ek jeton YOK** — 1 jeton = 1 analiz kuralı korunur; yeni XAI uçları jeton TAM-YOL listesine "serbest" olarak bilinçli eklenir (otomatik "goruntu"ya düşmesin) |
 
 ---
@@ -167,7 +183,7 @@ ai_hub/
 - renal_histopath ensemble HiRes-CAM + disagreement haritası (859MB PT — yalnız ai_service; disagreement klinik "model kararsızlığı" göstergesi olarak değerli).
 - human_kidney_ct EigenCAM — **ONAYLI** (Faz 0 karar #4).
 - renal histopat PT — **klinik makinelerde de** (karar #2/#5 mekanizması: downloader ile ilk kullanımda iner).
-- paper_dilek_hoca: **ATLANDI** (sahip kararı — modül PEMF'e hiç entegre edilmemiş; XAI'den önce model entegrasyonu gerekir. Teslimat zaten çalıştırılamaz: 872MB ağırlık + cell/ kırık symlink).
+- paper_dilek_hoca: ~~ATLANDI~~ → **ENTEGRE (2026-08-26 gece, ayrı plan: `scratch-entegrasyon-plani.md`)** — closure metrikli yeni teslim sahip kararını tazeledi; 872MB PT release_assets'te, cell/ paketi sahibinden bekleniyor (Faz 4).
 - cat_llm: kapsam dışı (Ollama daemon dağıtım modeline yabancı).
 
 ---
@@ -217,3 +233,44 @@ ai_hub/
 | 9 | Araştırma genişletmeleri (Faz 4) | ayrı kararlar | ayrı |
 
 Efor tahminleri kod-okuma temellidir; her kalem proje test disipliniyle (RED→GREEN→mutasyon) kapatılır.
+
+---
+
+## §KALAN-2026-08-26 — Eksik-denetimi sonuç tablosu (6 denetçi, tam teslim `Desktop\entegre`)
+
+### A) Canlı-ürün eksikleri (küçük/orta iş — sahip önceliklendirmesi)
+| # | Eksik | Kanıt | İş |
+|---|---|---|---|
+| A1 | UI explain düğmesi 4 modülde yok: **kidney_ct, histopath, reticulocytes, RNA** | backend explain hazır (router 1989/2282/2611/2688) — pf'te buton yalnız termal/ses/scratch | küçük (VisionModule `explainDestegi` deseni) |
+| A2 | cat_organ **mirror/anatomik rozetleri** UI'da yok | yanıta ekleniyor (router ~2858) — pf grep 0 | küçük |
+| A3 | petri "KANSER: mavi piksel N≥30" gerekçe satırı UI'da yok | n_cancer_pixels taşınıyor, render yok | küçük |
+| A4 | landmark ölçülen-değer vs p5-p95 bandı UI'da yok | thresholds_calibrated.json var, panel yok | orta |
+| A5 | EM canlı xaiSensitivity yalnız em_kedi'de | fantom/petri uçları meta eklemiyor | küçük |
+| A6 | CAM-yöntemi parametresi termal/ses uçlarında dışa kapalı (hep gradcam++) | scratch'te ALLOWLIST'le açıldı — desen hazır | küçük |
+| A7 | SHAP output_agg D1-D7 hedefli varyantı + organ_id dipnotu | em_sensitivity yalnız mean/first | küçük |
+
+### B) Mod-2 batch/rapor katmanı — **SAHİP KARARI BEKLİYOR (öneri: Faz 5)**
+Hiçbir modülde taşınmadı: `explain_*.py` batch scriptleri, CLI `--xai` bayrakları, `report.html`
++ `index.html` + `summary.csv` + hasta/görüntü-başına CSV/PNG çıktıları. `report_html.build_report`,
+`overlay.side_by_side`, `feature_ranking.bar_plot/top_features_csv` şu an ölü-vendored (yalnız
+scratch + testler çağırıyor). Buna bağlı Faz-3 kalanları: WebView rapor modalı, PDF'e XAI görseli,
+AI-geçmişi #8 kaleminin rapor-paketi kısmı. Karar #3 ("anlık gösterim") TEKİL analiz içindi —
+retrospektif/audit akışı isteniyorsa bu katman ayrı fazdır; istenmiyorsa ölü util'ler not düşülerek
+bilinçli-bekletmede kalır. ⚠️ Ölçülen batch tuzağı scratch planı bulgu-19'da (recursive kendi-çıktısı).
+
+### C) Küçük teknik kalanlar
+RNA: işaretli `ig_top_genes_signed.csv` + SHAP-Deep yolu yok · histopat: backbone-başına CAM'ler
+dönmüyor (yalnız ensemble+disagreement) · retikülosit: PEMF_AI_Test_Girdileri'nde kan-yayması test
+görseli HİÇ yok (gerçek-girdi E2E kör noktası) · cat_organ: `calibrate_camera.py` üretici aracı
+guii'de yok (CLI `--camera-intrinsics-npz` tüketiyor) · segmentation: help-metin default'ları yanlış
+(0.25/0.7 yazıyor, gerçek 0.5/0.5 — entegre'de düzeltilmiş) · EM/CT/RNA/histopat `test_data/` +
+`xai_out_mod2/` örnekleri taşınmadı.
+
+### D) Bilinçli kapsam-dışı (eksik DEĞİL)
+cat_llm (Ollama; scratch planı §7 notu) · landmark/segmentation XAI (dokümanın kendisi "gerekmez"
+diyor) · cat_organ ölü yardımcıları (estimate_sy_scale_hint, cross_photo_consistency — entegre'de de
+çağıran yok) · Mod-2'nin subprocess deseni (kopyalama-yasak kuralı gereği patch/API tercih edildi).
+
+### Sıradaki tek kırmızı ön-koşul
+**Launcher çoklu-model-zip (1.9.39)** — renal 859MB + scratch 872MB PT'lerin sahaya inişi;
+ayrıntı ve geriye-uyum tasarımı: `scratch-entegrasyon-plani.md` **Faz 4.5**.
