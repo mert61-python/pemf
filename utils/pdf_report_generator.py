@@ -294,6 +294,42 @@ class PDFReportGenerator:
             self.logger.error(f"Hasta raporu oluşturma hatası: {e}")
             raise
 
+    def generate_xai_report(self, baslik: str, ogeler: list, output_path: str = None) -> str:
+        """XAI toplu çıktısını PDF'e derle (xai-entegrasyon-plani §KALAN B — opsiyonel XAI görseli).
+
+        Args:
+            baslik: rapor üst başlığı (serbest metin — kaçırılır)
+            ogeler: [{"etiket": str, "goruntu": str|Path|None, "aciklama": str|None}, ...]
+            output_path: çıktı .pdf yolu (None → masaüstü, zaman damgalı)
+
+        Görüntüsü olmayan öğe yalnız metin satırı olur; OKUNAMAYAN görüntü öğeyi
+        DÜŞÜRMEZ (uyarı + metin — zarif düşüş: tek bozuk PNG raporu 500 yapmamalı).
+        """
+        from reportlab.lib.utils import ImageReader
+
+        output_path = output_path or self._default_output_path("PEMF_XAI_Raporu")
+        story = []
+        self._add_header(story)
+        story.append(Paragraph(_esc(baslik), self.styles['SectionHeader']))
+        story.append(Spacer(1, 8))
+        for oge in ogeler:
+            story.append(Paragraph(f"<b>{_esc(oge.get('etiket', '-'))}</b>", self.styles['UnicodeNormal']))
+            g = oge.get('goruntu')
+            if g:
+                try:
+                    iw, ih = ImageReader(str(g)).getSize()
+                    # A4 metin alanına sığdır (en-boy korunur): maks 15cm genişlik / 16cm yükseklik
+                    olcek = min((15 * cm) / iw, (16 * cm) / ih, 1.0)
+                    story.append(Image(str(g), width=iw * olcek, height=ih * olcek))
+                except Exception as e:
+                    self.logger.warning("XAI raporu: görüntü okunamadı, metinle geçildi (%s): %s", g, e)
+                    story.append(Paragraph(_esc(f"(görüntü okunamadı: {g})"), self.styles['UnicodeNormal']))
+            if oge.get('aciklama'):
+                story.append(Paragraph(_esc(oge['aciklama']), self.styles['UnicodeNormal']))
+            story.append(Spacer(1, 12))
+        self._add_footer(story)
+        return self._build_pdf(story, output_path, "XAI raporu")
+
     def _default_output_path(self, prefix: str, name_hint: str = "") -> str:
         """Masaüstünde zaman-damgalı çıktı yolu üret (opsiyonel güvenli-karakterli hasta-adı parçası)."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
