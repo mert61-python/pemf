@@ -5,7 +5,9 @@ PEMF AI Servisi (GPU) — mikroservis.
   • /benchmark       → seçilen modeli CUDA ile yükle, sentetik girdiyle süre ölç
   • /infer/histopath → (görüntü)  Böbrek histopatoloji grade — GPU
   • /infer/sound      → (ses)      Kedi sesi sınıflandırma — GPU (mel-spektrogram CPU)
-ai_hub predictor'ları GERÇEK inference; ağırlıklar /models mount. torch YOK (saf-ONNX).
+ai_hub predictor'ları GERÇEK inference; ağırlıklar /models mount.
+NOT (2026-08-26): başlıktaki "torch YOK" tarihiydi — XAI dalgası (grad-cam) ve
+/infer/scratch (CPN, celldetection) torch KULLANIR; requirements-ai torch cu128 pinli.
 """
 
 import asyncio
@@ -55,6 +57,22 @@ from utils.ses_kalitesi import wav_rms_dbfs as _ses_wav_rms
 
 MODELS_DIR = os.environ.get("PEMF_AI_MODELS_DIR", "/models")
 app = FastAPI(title="PEMF AI Service (GPU)", version="0.3.0")
+
+
+@app.on_event("startup")
+def _scratch_warmup():
+    """CPN (872 MB) warmup — plan v2 bulgu 12: yükleme istek anına kalırsa
+    scratch'in İLK isteği 15-30 sn boyunca predictor kilidini tutar. Açılışta
+    arka-plan thread'inde ısıtılır; cell/PT yoksa zarifçe atlanır (isit loglar).
+    Kapatma: PEMF_SCRATCH_WARMUP=0."""
+    if os.environ.get("PEMF_SCRATCH_WARMUP", "1") != "1":
+        return
+    import threading
+
+    from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd
+
+    threading.Thread(target=_ipd.isit, daemon=True, name="scratch-warmup").start()
+
 
 # GPU tespiti (_gpu_ok / _yolo_device / _providers) → ai_service.gpu (tek nokta; üstte import edildi).
 
@@ -289,6 +307,61 @@ def infer_histopath(file: UploadFile = File(...), explain: str = Form(None)):
                 _lg.getLogger("ai_service").warning("Histopat XAI üretilemedi: %s", xe)
                 yanit["xai_error"] = "Açıklama üretilemedi"
         return yanit
+    except Exception as e:
+        return _err500(e)
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+@app.post("/infer/scratch")
+def infer_scratch(
+    file: UploadFile = File(...),
+    scratch_yonu: str = Form(None),
+    pixel_mm: float = Form(None),
+    explain: str = Form(None),
+    xai_method: str = Form(None),
+):
+    """Yara Kapanma (Scratch) — CPN + wound-closure (TEK-KAYNAK scratch_analiz;
+    router paritesi). Delegate alanları STRING gelir, None'lar ATLANIR →
+    her alan Form(None) + burada default'lanır (plan v2 bulgu 3)."""
+    tmp = None
+    try:
+        from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd
+
+        yon = scratch_yonu or "dikey"
+        if yon not in _ipd.GECERLI_SCRATCH_YONLERI:
+            return JSONResponse({"error": "scratch_yonu 'dikey' ya da 'yatay' olmalı"}, status_code=422)
+        met = xai_method or "eigencam"
+        if met not in _ipd.GECERLI_XAI_YONTEMLERI:
+            return JSONResponse({"error": f"xai_method geçersiz: {met}"}, status_code=422)
+        pmm = float(pixel_mm) if pixel_mm else _ipd.PIXEL_TO_MM_DEFAULT
+
+        data = file.file.read()
+        if len(data) < 200:
+            return JSONResponse({"error": "görüntü boş/çok küçük"}, status_code=400)
+        # Modalite kapısı YOK (karar 0.3) — boş görüntüyü scratch_analiz'in
+        # n_cells==0 yapılandırılmış uyarısı yakalar. KAYIPSIZ .png tmp (ölçüm!).
+        tmp = _save_temp(data, ".png")
+        t0 = time.time()
+        try:
+            sonuc = _ipd.scratch_analiz(
+                tmp, scratch_yonu=yon, pixel_mm=pmm, explain=str(explain).lower() == "true", xai_method=met
+            )
+        except _ipd.ScratchMesgul:
+            # Kilit kısa timeout'la denendi — semafor slotu dakikalarca işgal edilmez
+            return JSONResponse(
+                {"error": "Başka bir yara-kapanma analizi sürüyor — birazdan yeniden deneyin."}, status_code=429
+            )
+        except _ipd.ModelKurulumEksik:
+            # SABİT mesaj — ham istisna metni sunucu yollarını sızdırıyordu (auth-muaf uç)
+            return JSONResponse(
+                {"error": "Yara kapanma modeli bu kurulumda hazır değil — model paketi /models mount'una eklenmeli."},
+                status_code=503,
+            )
+        except ValueError as ve:
+            return JSONResponse({"error": str(ve)}, status_code=422)
+        return {"status": "success", "inference_ms": round((time.time() - t0) * 1000, 1), **sonuc}
     except Exception as e:
         return _err500(e)
     finally:

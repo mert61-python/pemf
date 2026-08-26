@@ -2715,6 +2715,106 @@ async def analyze_histopath(
         raise _ai_fail("Histopatoloji analiz hatası", e)
 
 
+@ai_router.post("/api/ai/vision/scratch")
+async def analyze_scratch(
+    file: UploadFile = File(None),
+    image_base64: str = Form(None),
+    scratch_yonu: str = Form("dikey"),
+    pixel_mm: float = Form(0.0016),
+    explain: bool = Form(False),
+    xai_method: str = Form("eigencam"),
+    _res=Depends(require_research),
+):
+    """Yara Kapanma (Scratch) — CPN hücre segmentasyonu + wound-closure metrikleri.
+
+    TEK girdi → ÇOKLU görsel çıktı (seg/overlay/analysis/closure + opsiyonel XAI),
+    bellek-içi base64 (plan: scratch-entegrasyon-plani.md v3). Karar 0.6: ağır
+    araştırma = 3 jeton (jeton.py::_AGIR_UCLAR). Karar 0.3: modalite kapısı YOK —
+    boş/yanlış görüntü `uyari` alanıyla döner. Karar 0.5: explain EK jeton değil.
+    `/vision/` auth-muaf.
+    """
+    from ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca import (
+        GECERLI_SCRATCH_YONLERI,
+        GECERLI_XAI_YONTEMLERI,
+    )
+
+    if scratch_yonu not in GECERLI_SCRATCH_YONLERI:
+        raise HTTPException(status_code=422, detail="scratch_yonu 'dikey' ya da 'yatay' olmalı")
+    if xai_method not in GECERLI_XAI_YONTEMLERI:
+        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
+    if not (0.00001 <= pixel_mm <= 0.01):
+        raise HTTPException(status_code=422, detail="pixel_mm 0.00001-0.01 aralığında olmalı (mm/px)")
+    _SCRATCH_KURULUM_MSG = "Yara kapanma modeli bu kurulumda hazır değil — GPU AI servisi ya da model paketi gerekli."
+    _SCRATCH_MESGUL_MSG = "Şu anda başka bir yara-kapanma analizi sürüyor — birazdan yeniden deneyin."
+    try:
+        if ai_service_enabled():
+            # Delegate STRING'lerle gider (ai_client str() yapar; ai_service Form parse eder)
+            data = {"scratch_yonu": scratch_yonu, "pixel_mm": str(pixel_mm), "xai_method": xai_method}
+            if explain:
+                data["explain"] = "true"
+            try:
+                return await _kapili_devret("scratch", file=file, image_base64=image_base64, data=data)
+            except Exception as devir_hatasi:
+                # DÜŞMAN-DOĞRULAMA (deneysel kanıtlı): :8100'ün 503/429/422'si
+                # raise_for_status ile HTTPStatusError'a dönüyor ve _ai_fail bunu
+                # jenerik 500 yapıyordu — zarif sözleşme birincil (mikroservis)
+                # modda kayboluyordu. Alt-servis durum kodları AYNEN geçirilir.
+                import httpx
+
+                if isinstance(devir_hatasi, httpx.HTTPStatusError):
+                    kod = devir_hatasi.response.status_code
+                    if kod == 503:
+                        raise HTTPException(status_code=503, detail=_SCRATCH_KURULUM_MSG) from devir_hatasi
+                    if kod == 429:
+                        raise HTTPException(status_code=429, detail=_SCRATCH_MESGUL_MSG) from devir_hatasi
+                    if kod == 422:
+                        try:
+                            detay = devir_hatasi.response.json().get("error") or "Geçersiz parametre"
+                        except Exception:
+                            detay = "Geçersiz parametre"
+                        raise HTTPException(status_code=422, detail=detay) from devir_hatasi
+                raise
+
+        # Gömülü yol (karar 0.1: celldetection frozen'da). Girdi 25MB/50MP kapısından
+        # geçer; analize KAYIPSIZ PNG tmp ile gider — ölçüm görüntüsü (µm/mm²)
+        # JPEG'e SIKIŞTIRILMAZ. "scratch" EXPECTED'da yok → modalite denetimi atlanır.
+        img = await _decode_image(file, image_base64, label="scratch")
+
+        import tempfile
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        tmp.close()
+        cv2.imwrite(tmp.name, img)
+        try:
+            from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd
+
+            try:
+                sonuc = await asyncio.to_thread(
+                    _ipd.scratch_analiz,
+                    tmp.name,
+                    scratch_yonu=scratch_yonu,
+                    pixel_mm=pixel_mm,
+                    explain=explain,
+                    xai_method=xai_method,
+                )
+            except _ipd.ScratchMesgul as mesgul:
+                # Kilit KISA timeout'la denenir (modül) — thread'ler dakikalarca
+                # executor işgal etmez; istemciye dürüst 429.
+                raise HTTPException(status_code=429, detail=_SCRATCH_MESGUL_MSG) from mesgul
+            except _ipd.ModelKurulumEksik as kurulum_hatasi:
+                # DAR eşleme (düşman-doğrulama: genel RuntimeError CUDA-OOM'u da
+                # 'model paketi gerekli' sanıyordu) — yalnız gerçek kurulum eksiği 503.
+                raise HTTPException(status_code=503, detail=_SCRATCH_KURULUM_MSG) from kurulum_hatasi
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+        return {"status": "success", **sonuc}
+    except Exception as e:
+        raise _ai_fail("Yara kapanma analiz hatası", e)
+
+
 @ai_router.post("/api/ai/vision/cat_organ")
 async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = Form(None)):
     """Kedi Organ 3B Lokalizasyon (YOLOv8m-seg + SuperAnimal FasterRCNN + RTMPose ONNX).

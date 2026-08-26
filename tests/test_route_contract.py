@@ -55,6 +55,7 @@ GOLDEN_ROUTES = {
     ("/api/ai/vision/em_fantom", "POST"),
     ("/api/ai/vision/em_petri", "POST"),
     ("/api/ai/vision/histopath", "POST"),
+    ("/api/ai/vision/scratch", "POST"),
     ("/api/ai/vision/kidney_ct", "POST"),
     ("/api/ai/vision/landmark", "POST"),
     ("/api/ai/vision/reticulocytes", "POST"),
@@ -198,4 +199,4 @@ def test_route_contract_unchanged():
     # → 96 (+2 web AI Pro hazırlık önizlemesi: ai/pro/hazirlik/baslat+durdur), 2026-08-25
     # Sayı da koşula göre daralır: simülatör derlemesi yoksa 96 değil 95 beklenir. Toplamın
     # KENDİSİ hâlâ sabitlenir (yeni rota sessizce eklenemez) — yalnız koşullu olan düşülür.
-    assert len(current) == len(beklenen) == 96 - (0 if _simulator_mountlu() else 1)
+    assert len(current) == len(beklenen) == 97 - (0 if _simulator_mountlu() else 1)

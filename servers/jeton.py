@@ -296,8 +296,17 @@ _SERBEST_AI_UCLARI: frozenset = frozenset(
         "/api/ai/pro/calibrate",
     }
 )
-# Ağır araştırma (belge: patoloji, RNA, tomografi = 3 jeton):
-_AGIR_UCLAR: frozenset = frozenset({"/api/ai/vision/kidney_ct", "/api/ai/vision/histopath"})
+# Ağır araştırma (belge: patoloji, RNA, tomografi, yara-kapanma = 3 jeton).
+# scratch: KARAR 0.6 (2026-08-26, scratch-entegrasyon-plani.md) — 872MB CPN
+# araştırma analizi histopath sınıfıdır; explain (XAI) EK jeton DEĞİL (karar 0.5:
+# jetonlama uç-çağrısı başınadır, explain parametresi ayrıca sayılmaz).
+_AGIR_UCLAR: frozenset = frozenset(
+    {
+        "/api/ai/vision/kidney_ct",
+        "/api/ai/vision/histopath",
+        "/api/ai/vision/scratch",
+    }
+)
 
 
 def _islem_turu(path: str) -> "str | None":
