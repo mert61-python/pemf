@@ -120,3 +120,20 @@ def test_KARSIT_KANIT_muafiyet_DAR_kalir():
         assert not oge.strip().rstrip("/").endswith(("tests", "tests/.*", "tests/*")), (
             f"muafiyet TUM tests/ dizinini kapsiyor: {oge!r} — dosya bazinda dar tutun"
         )
+
+
+def test_KARSIT_KANIT_gitleaksignore_COMMIT_PINLI():
+    """.gitleaksignore YALNIZ commit-pinli parmak izi içerebilir. Yol/desen bazlı genel
+    satır, GELECEKTEKİ gerçek bir sızıntıyı da sessizce geçirirdi (2026-08-26: 7 tarihî
+    şablon yanlış-pozitifi için eklendi — hepsi git-show ile tek tek doğrulandı)."""
+    dosya = _CONFIG.parent / ".gitleaksignore"
+    assert dosya.exists(), ".gitleaksignore silinmiş — dispatch tam-tarih taraması yine kırmızıya döner"
+    desen = re.compile(r"^[0-9a-f]{40}:[^:]+:[^:]+:\d+$")
+    for i, satir in enumerate(dosya.read_text(encoding="utf-8").splitlines(), 1):
+        s = satir.strip()
+        if not s or s.startswith("#"):
+            continue
+        assert desen.match(s), (
+            f".gitleaksignore:{i} commit-pinli değil: {s!r} — "
+            "yalnız <40-hex>:<dosya>:<kural>:<satır> biçimi kabul (genel muafiyet YASAK)"
+        )

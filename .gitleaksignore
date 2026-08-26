@@ -1,0 +1,18 @@
+# .gitleaksignore — TARİHÎ yanlış-pozitif muafiyetleri (2026-08-26)
+#
+# workflow_dispatch'te gitleaks TÜM tarihi tarar (push'ta yalnız yeni commit'ler) ve
+# aşağıdaki 7 bulguyla HEP KIRMIZI kalıyordu. Hepsi `git show` ile tek tek doğrulandı:
+# f-string ŞABLON satırları — değerler {cred.username}/{cred.password}/{host}/{pw} gibi
+# YER TUTUCU, gerçek sır DEĞİL (kuralın [^"<]+ deseni f-string süslü parantezini eliyor
+# sanılmıştı; elemiyor). Dosyaların bugünkü hâllerinde desen yok; push kapıları yeşil.
+#
+# ⚠️ KURAL: Bu dosyaya YALNIZ commit-pinli parmak izi eklenebilir
+# (<40-hex-commit>:<dosya>:<kural>:<satır>). Yol/desen bazlı genel muafiyet YASAK —
+# bekçi: tests/test_gitleaks_config_derlenir.py::test_KARSIT_KANIT_gitleaksignore_COMMIT_PINLI
+1dc33d918a0b312b684ac18a13fb988061e45ee8:services/credential_manager.py:pemf-firmware-secrets-h-gercek-deger:195
+1dc33d918a0b312b684ac18a13fb988061e45ee8:services/credential_manager.py:pemf-firmware-secrets-h-gercek-deger:196
+21263399ab030d71886354b8efc19c8450d155e4:services/credential_manager.py:pemf-firmware-secrets-h-gercek-deger:203
+21263399ab030d71886354b8efc19c8450d155e4:services/credential_manager.py:pemf-firmware-secrets-h-gercek-deger:204
+e3b95daac510d09263c61def7525e846e7c54982:tests/test_cloud_provision.py:pemf-firmware-secrets-h-gercek-deger:24
+e3b95daac510d09263c61def7525e846e7c54982:tests/test_cloud_provision.py:pemf-firmware-secrets-h-gercek-deger:26
+e3b95daac510d09263c61def7525e846e7c54982:tests/test_cloud_provision.py:pemf-firmware-secrets-h-gercek-deger:27
