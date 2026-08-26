@@ -65,15 +65,15 @@ Bu embeddable-python klasörünü kopyala, sonra **guii kökünden**:
 Yukarıdaki (b) maddesi **klasörü kopyalayarak** taşımayı anlatır. **Git'ten** gelindiğinde bir
 parça eksiktir: AI model ağırlıkları.
 
-⚠️ **Neden git'te yoklar (ölçüldü 2026-08-18):** `release_assets/ai_models` 2.130 MB ve içinde
-100 MiB'ı aşan dört dosya var (`v22_kmc_classictrio_kmc.onnx` tek başına 857 MB). GitHub tek
+⚠️ **Neden git'te yoklar (ölçüldü 2026-08-26):** `release_assets/ai_models` ~3.940 MB ve içinde
+100 MiB'ı aşan altı dosya var (`ginoro_CpnResNeXt101UNet-…pt` tek başına 872 MiB, `v22_kmc_classictrio_kmc` .onnx/.pt ~857 MiB). GitHub tek
 dosyada 100 MiB'ı **sert** reddediyor; Git LFS ise **ücretli** (public depo muafiyeti LFS'e
 geçmiyor). Bu yüzden bölünme şöyle:
 
 | Nerede | Ne |
 |---|---|
 | **git** | kaynak kod + yayınlanmış hiçbir pakette kopyası **olmayan** 11 küçük model (6 MB) |
-| **Releases** | büyük ağırlıklar (2,1 GB) — `home.zip` / `vet.zip` / `research.zip` içinde |
+| **Releases** | büyük ağırlıklar — `home.zip` / `vet.zip` / `research.zip` içinde; **istisna:** iki `.pt` (renal ~858 MB + scratch CPN ~872 MB) 2 GiB asset sınırı gereği zip'lere GİRMEZ — tek kaynak `release_assets/ai_models`, sahaya iniş launcher çoklu-model-zip işine bağlı |
 
 `tests/test_yedek_kapsami.py` bu ayrımı kilitler: yedeği olmayan bir dosya `.gitignore`'a düşerse
 ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
@@ -121,7 +121,7 @@ cd guii
 .\scripts\build_backend_exe.ps1 -BuildRoot C:\PEMF_BUILD   # derin/uzun hedefte MAX_PATH kaçışı
 ```
 
-- **Çıktı:** `guii\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe` (+ `_internal\` = mosquitto + cloudflared + web + ai_models 2.1GB).
+- **Çıktı:** `guii\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe` (+ `_internal\` = mosquitto + cloudflared + web + ai_models ~3,9GB).
 - Guard: önce `check_headless_imports.py` (Qt sızıntısı KIRMIZI ise build durur).
 - İzolasyon: `PYTHONNOUSERSITE=1` + `PYTHONPATH=""` (Conda/Roaming sızıntısı yok).
 - **PyInstaller onedir = kendi kendine yeter** → boş Windows'ta Python KURULU OLMADAN çalışır.
@@ -487,7 +487,7 @@ kopyalayıp kaynağı doğrudan okumayı engeller; **tersine mühendisliği ENGE
 `.py → .pyd` native derlemedir (Cython/Nuitka). "Kod şifreli" demek "kaynak çıkarılamaz" demek değildir.
 
 **Neden `ai_hub` (ölçüldü):** frozen build'de `servers/`, `database/`, `utils/` EXE'ye gömülü
-`.pyc` olarak gider — diskte kaynak YOKTUR. Ama `ai_hub/` **49 dosya / 507 KB düz `.py`** olarak
+`.pyc` olarak gider — diskte kaynak YOKTUR. Ama `ai_hub/` **~79 dosya / ~630 KB düz `.py`** (ölçüm 2026-08-26; XAI + scratch modülleri dahil) olarak
 `_internal/ai_hub/` altına kopyalanır; yani tüm AI çıkarım pipeline'ları okunabilir durumdadır.
 Şifreleme tam olarak bu açığı hedefler.
 

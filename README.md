@@ -7,7 +7,7 @@ tüm build/dağıtım zinciri — hepsi **tek klasörde**.
 > **Yeni geliştiriciysen buradan başla.** Aşağıdaki **dizin haritası** her üst-klasörün kendi `README.md`'sine
 > link verir; oradan alt-sisteme inersin. Build için → [`BUILD.md`](BUILD.md). Mimari için → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> **Önemli:** Tüm AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
+> **Önemli:** AI modelleri EXE'ye **gömülüdür** (offline, self-contained). **İstisna (2026-08-26):** iki büyük `.pt` (renal XAI ~858 MB + scratch CPN ~872 MB) 2 GiB release sınırı yüzünden profil zip'lerine girmez — GPU mikroservis/mount'ta tam çalışır, klinikte zarif düşüş. **Hugging Face indirme kaldırıldı** — runtime internet gerektirmez.
 
 ---
 
@@ -95,9 +95,9 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ### Yapay Zekâ
 | Klasör | Ne işe yarar |
 |---|---|
-| [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (13+ model) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
-| [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu, opsiyonel) |
-| [`release_assets/`](release_assets/README.md) | **Model ağırlık deposu (2.1 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` |
+| [`ai_hub/`](ai_hub/README.md) | Teşhis modeli **kodu** (14+ model; yeni: Yara Kapanma/Scratch CPN) + gömülü küçük ağırlıklar + `PEMF_AI_Test_Girdileri/` |
+| [`ai_service/`](ai_service/README.md) | Bağımsız **GPU (CUDA) inference mikroservisi** (:8100, onnxruntime-gpu + torch cu128 — scratch CPN; opsiyonel) |
+| [`release_assets/`](release_assets/README.md) | **Model ağırlık deposu (~3,9 GB) TEK-KAYNAK** + `PEMF_Vet_Mobil.apk` |
 | [`training_archive/`](training_archive/) | **DONMUŞ eğitim arşivi** (doktora/TÜBİTAK; silinen `esp` dalından kurtarıldı, 434 dosya/296 MB). Lint/format **muaf** — değeri sadakati; elleme |
 
 ### Frontend / Web
@@ -130,7 +130,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör | Ne işe yarar |
 |---|---|
 | [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
-| [`tests/`](tests/README.md) | pytest paketi (138 dosya / ~1300 test; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
+| [`tests/`](tests/README.md) | pytest paketi (208 dosya / ~1650 test; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
 | [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
 | [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher/testflight) + dependabot — **yalnız KÖK `.github/` geçerli** |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |

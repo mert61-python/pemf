@@ -41,7 +41,7 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
 | Bobin komutu | mobil → `/api/coil` → STM (`hardware_controller`) veya ESP (`_mqtt_publish`) | süre-watchdog auto-stop |
 | Hasta/seans | mobil → `/api/patients` `/api/session` → **SQLCipher** DB (local) | at-rest şifreli + PII maskeleme |
 | Uzaktan erişim | mobil ↔ Cloudflare tünel ↔ backend; adres Supabase `devices`'ta | token + RLS + RPC-only |
-| AI teşhis | mobil (foto/ses/CSV) → `/api/ai/*` → gömülü ONNX modelleri (offline) | — |
+| AI teşhis | mobil (foto/ses/CSV) → `/api/ai/*` → gömülü ONNX modelleri (offline) + torch CPN (scratch; opsiyonel GPU mikroservis :8100) | — |
 | OTA/rollback | backend → `pemf-update/latest.json` → indir+SHA256+Authenticode → sessiz kur | fail-closed (aktif tedavi) |
 
 ## Güven sınırları

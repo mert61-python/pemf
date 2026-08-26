@@ -79,7 +79,7 @@ Get-Content "$env:APPDATA\PEMF_GUI\logs\*.log" | Select-String "tunnel|trycloudf
 ```powershell
 # Düşük-risk (test-doğrulandı): cryptography>=43.0.1, python-multipart>=0.0.31, zeroconf>=0.149.0
 # starlette: FastAPI'ye bağlı → FastAPI ile birlikte yükselt.
-# onnx 1.15→1.16+, torch 2.1.2→2.6+: AI-model çıktısını yeniden-doğrula (8 model) + frozen EXE rebuild.
+# onnx 1.15→1.16+, torch 2.1.2→2.6+: AI-model çıktısını yeniden-doğrula (14 modül; torch-tabanlı scratch CPN dahil) + frozen EXE rebuild.
 pip install -U cryptography python-multipart zeroconf
 py -3.10 -m pytest guii/tests   # yeşil olmalı (bu ortamda doğrulandı)
 ```

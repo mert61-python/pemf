@@ -10,7 +10,7 @@ Sistem **2 image + 1 compose** ile ayağa kalkar (donanım bağımsız — STM/E
 ## Dosyalar
 - `Dockerfile.backend` — backend image (build context = `guii/`). Non-root çalışır; BuildKit pip cache.
 - `Dockerfile.frontend` — frontend image (build context = `guii/pf`). nginx sertleştirilmiş (gzip + güvenlik başlıkları + cache).
-- `requirements-docker.txt` — **backend'in Docker bağımlılıkları** (ana `requirements.txt`'e DOKUNULMAZ; sadece 4 fark: opencv-headless, sqlcipher3-binary, pyinstaller/pytest çıkarıldı).
+- `requirements-docker.txt` — **backend'in Docker bağımlılıkları** (ana `requirements.txt`'e DOKUNULMAZ; farklar: sqlcipher3→sqlcipher3-binary, pyinstaller/pytest çıkarıldı; ⚠️ 2026-08-26 scratch/XAI ekleri — `celldetection==0.4.9`, grad-cam, captum, shap, timm vb. — henüz buraya taşınmadı → monolit imajda `/api/ai/vision/scratch` in-process ÇALIŞMAZ, senkron gerekir).
 - `docker-compose.yml` — ikisini birden ayağa kaldırır (proje adı `pemf` → `pemf-backend-1` / `pemf-frontend-1`).
 - `docker.env.example` — **opsiyonel** ayar override'ları (`cp docker.env.example .env`). Compose zaten varsayılanlıdır.
 - `.dockerignore` (backend) + `pf/.dockerignore` (frontend).
@@ -94,4 +94,4 @@ docker compose -f docker-compose.ai.yml up --build   # → http://localhost:8100
 - ⚠️ **Güvenlik (denetim 2026-08-04):** `ai_service`'in `/infer/...` uçlarında auth YOKtur → AI portu host'a **yalnız loopback** (`127.0.0.1:8100`) yayınlanır; servisler zaten aynı compose ağındadır. Ayrıca `PEMF_TRUSTED_PROXIES` docker ağını fail-closed (her zaman UZAK) yapar — mikroservis profilinde de. Bu satırları geri açma.
 
 ## Sürüm uyumu
-Backend pinleri ana `requirements.txt` ile birebir aynı (yalnız yukarıdaki 4 fark). `sqlcipher3-binary` prebuilt olduğundan sürümü Linux'ta değişebilir — SQLCipher 4.x DB formatı uyumludur.
+Backend pinleri ana `requirements.txt`'i izler (Docker farkları: sqlcipher3→`sqlcipher3-binary`, pyinstaller/pytest çıkarıldı). ⚠️ 2026-08-26: `celldetection==0.4.9` (Yara Kapanma/scratch) ve XAI paketleri (grad-cam, captum, shap, slicer, ttach, timm, safetensors) ana dosyada olup burada henüz YOK — "birebir aynı" geçerli değil; scratch/XAI'nin Docker'da çalışması için senkronlanmalı. `sqlcipher3-binary` prebuilt olduğundan sürümü Linux'ta değişebilir — SQLCipher 4.x DB formatı uyumludur.

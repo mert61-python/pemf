@@ -75,7 +75,7 @@ gh auth login          # GitHub Releases yayını için (hesap: mert61-python)
 
 ### Adım 2 — AI model ağırlıkları: `restore_assets.ps1`
 **Yalnız git'ten geldiyseniz gerekir** (klasörü kopyaladıysanız zaten var). Büyük ağırlıklar
-(2,1 GB) git'te tutulamıyor (GitHub 100 MiB sınırı + LFS ücretli) → Releases'ten iner, **SHA256
+(~3,9 GB; iki büyük `.pt` — renal + scratch CPN — 2 GiB asset sınırı gereği Releases zip'lerinde de YOK, ayrıca edinilir) git'te tutulamıyor (GitHub 100 MiB sınırı + LFS ücretli) → Releases'ten iner, **SHA256
 doğrulamalı** (atlanamaz — tıbbi cihaz, yanlış ağırlık yanlış klinik çıktı demek).
 ```powershell
 .\scripts\restore_assets.ps1

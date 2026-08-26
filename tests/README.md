@@ -9,9 +9,9 @@ pytest tests -v --cov            # guii kökünden (embedded python ile)
 - `conftest.py`: `guii` kökünü `sys.path`'e ekler; **`temp_app_data`** fixture'ı `%APPDATA%`'yı izole eder (gerçek veriye dokunmaz).
 - Özel marker yok; düz fonksiyon testleri (`pytest.ini` yok).
 
-## Kapsam (197 `test_*.py` · ~1551 test + conftest)
+## Kapsam (208 `test_*.py` · ~1650 test + conftest)
 
-> Sayım anlık görüntüdür (bu tazeleme 2026-08-25). Aşağıdaki tablo TAM LİSTE değil,
+> Sayım anlık görüntüdür (bu tazeleme 2026-08-26). Aşağıdaki tablo TAM LİSTE değil,
 > alan başına **seçkidir**; güncel sayım: `ls tests/test_*.py | wc -l`.
 | Alan | Örnek dosyalar |
 |---|---|

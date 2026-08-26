@@ -20,7 +20,7 @@ Kilit: `tests/test_tier_kullandikca_tanimi.py`.
 | **Aylık plan hakkı** | Her dönem yenilenir, **devretmez** (Başlangıç 50 · Pro 500 · Pro+ 2.000) |
 | **Satın alınan jeton** | Ek paketle alınır, **süresi dolmaz** |
 | **Tüketim sırası** | Önce aylık hak, sonra satın alınan → kullanıcı parasıyla aldığını kaybetmez |
-| **Maliyetler** | görüntü/ses/sensör 1 · ağır araştırma (patoloji, RNA, tomografi) 3 · AI Pro otomatik seans 5 |
+| **Maliyetler** | görüntü/ses/sensör 1 · ağır araştırma (patoloji, RNA, tomografi, yara-kapanma/scratch) 3 · AI Pro otomatik seans 5 |
 | **Ek paketler** | 100 → ₺249 · 500 → ₺990 · 2.000 → ₺3.490 (birim fiyat adet arttıkça düşer) |
 
 Tek kaynak: `pemf-vet-web/src/config.ts::JETON` (web) ↔ `servers/jeton.py::MALIYET` (cihaz).
