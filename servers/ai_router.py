@@ -2640,7 +2640,10 @@ async def analyze_kidney_ct(
 
 @ai_router.post("/api/ai/vision/histopath")
 async def analyze_histopath(
-    file: UploadFile = File(None), image_base64: str = Form(None), _res=Depends(require_research)
+    file: UploadFile = File(None),
+    image_base64: str = Form(None),
+    explain: bool = Form(False),
+    _res=Depends(require_research),
 ):
     """Böbrek Histopatoloji Grade (V22-KMC-ClassicTrio ONNX, 5 sınıf grade0-4).
 
@@ -2649,7 +2652,12 @@ async def analyze_histopath(
     """
     try:
         if ai_service_enabled():
-            return await _kapili_devret("histopath", file=file, image_base64=image_base64)
+            return await _kapili_devret(
+                "histopath",
+                file=file,
+                image_base64=image_base64,
+                data=({"explain": "true"} if explain else None),
+            )
         img = await _decode_image(file, image_base64, label="histopath")
 
         def _load_histopath():
@@ -2671,8 +2679,23 @@ async def analyze_histopath(
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
         cv2.imwrite(tmp.name, img)
+        _xai_alanlari = {}
         try:
             result = await asyncio.to_thread(lambda: clf.predict(tmp.name, top_k=5))
+            # Sunum-katmanı XAI (Faz 4): ensemble HiRes-CAM + DISAGREEMENT haritası.
+            # tmp bu blokta silinir → XAI silinmeden. Açıklama İKİNCİL (zarif düşüş).
+            # ⚠️ CPU'da 3-backbone backward dakikaya uzayabilir → to_thread + modül kilidi.
+            if explain:
+                try:
+                    from ai_hub.inference_renal_histopath_kmc import inference_renal_histopath_kmc as _irh
+
+                    _x = await asyncio.to_thread(_irh.xai_histopat_isi_haritasi, tmp.name)
+                    _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
+                    _xai_alanlari["xai_disagreement_base64"] = _x["xai_disagreement_base64"]
+                    _xai_alanlari["xai_method"] = _x.get("method")
+                except Exception as xe:
+                    logger.warning("Histopat XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                    _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
         finally:
             try:
                 os.unlink(tmp.name)
@@ -2685,6 +2708,7 @@ async def analyze_histopath(
             "top_1_prob": result["top_1_prob"],
             "top_k": result["top_k"],
             "probabilities": result["probabilities"],
+            **_xai_alanlari,
         }
     except Exception as e:
         logger.error(f"histopath inference error: {e}", exc_info=True)

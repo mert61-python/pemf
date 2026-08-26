@@ -81,6 +81,9 @@ PROFILLER: dict[str, tuple[str, ...]] = {
     ),
     "research": (
         "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
+        # XAI Faz 4 (2026-08-26, sahip secimi 'a'): ensemble HiRes-CAM PT ikizi (~858MB;
+        # Faz-0 karar #5 — klinik makinelerde de, downloader YEREL cozer).
+        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt",
         "ai_hub/inference_em_petri/BaggingRegressor.onnx",
         "ai_hub/em_petri/PetriNet_v3.onnx",
         "ai_hub/em_petri/scaler_D_petri_v3.pkl",

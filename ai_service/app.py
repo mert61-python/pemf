@@ -248,8 +248,12 @@ def benchmark(model: Optional[str] = Query(None), runs: int = Query(20, ge=1, le
 
 # ── GERÇEK inference uçları ──────────────────────────────────────────────────
 @app.post("/infer/histopath")
-def infer_histopath(file: UploadFile = File(...)):
-    """Böbrek histopatoloji doku görüntüsü → grade0-4 + olasılıklar (GPU)."""
+def infer_histopath(file: UploadFile = File(...), explain: str = Form(None)):
+    """Böbrek histopatoloji doku görüntüsü → grade0-4 + olasılıklar (GPU).
+
+    explain=true → ensemble HiRes-CAM + DISAGREEMENT (Faz 4 paritesi — TEK-KAYNAK
+    xai_histopat_isi_haritasi; GPU'da ~sn, CPU'da dakikaya uzayabilir).
+    """
     tmp = None
     try:
         data = file.file.read()
@@ -262,7 +266,7 @@ def infer_histopath(file: UploadFile = File(...)):
         tmp = _save_temp(data, ".jpg")
         t0 = time.time()
         result = clf.predict(tmp, top_k=5)
-        return {
+        yanit = {
             "status": "success",
             "device": getattr(clf, "device", "?"),
             "inference_ms": round((time.time() - t0) * 1000, 1),
@@ -271,6 +275,20 @@ def infer_histopath(file: UploadFile = File(...)):
             "top_k": result["top_k"],
             "probabilities": result.get("probabilities"),
         }
+        if str(explain).lower() == "true":
+            try:
+                from ai_hub.inference_renal_histopath_kmc import inference_renal_histopath_kmc as _irh
+
+                _x = _irh.xai_histopat_isi_haritasi(tmp)
+                yanit["xai_image_base64"] = _x["xai_image_base64"]
+                yanit["xai_disagreement_base64"] = _x["xai_disagreement_base64"]
+                yanit["xai_method"] = _x.get("method")
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("Histopat XAI üretilemedi: %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         return _err500(e)
     finally:

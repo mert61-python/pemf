@@ -276,6 +276,95 @@ def _collect_from_dir(d: Path) -> list[str]:
             if f.is_file() and f.suffix.lower() in _IMG_EXTS]
 
 
+# ============================================================
+# XAI — HiRes-CAM x3 backbone + ensemble mean + DISAGREEMENT (Faz 4, 2026-08-26)
+# ============================================================
+# 3 backbone (VGG19-BN / WideResNet50-2 / DenseNet201) ayri ayri HiRes-CAM alir;
+# ortalama = konsensus isi haritasi, std = DISAGREEMENT ("uc modelin AYRISTIGI bolgeler"
+# — tek skalar guvenin gosteremedigi klinik model-kararsizligi gostergesi).
+# ⚠️ 858MB PT + grad-cam hook'lari: TEK-IS kilidi + instance cache (canli ONNX yoluna
+# dokunmaz); bellek-ici base64 (karar #3 anlik gosterim). weights_only=True sinif
+# icindeki _init_pytorch'tan gelir (Audit P3 korunur).
+import threading as _xai_threading
+
+_XAI_KILIT = _xai_threading.Lock()
+_XAI_PT_CACHE: dict = {}
+
+# Backbone -> HiRes-CAM hedef katmani (KMCTrio yapisina pinli).
+_KMC_TRIO_TARGET_LAYERS = {
+    "VGG19-BN": lambda m: m.vgg.features[-1],
+    "WideResNet50-2": lambda m: m.wrn.layer4[-1],
+    "DenseNet-201": lambda m: m.dense.features.denseblock4,
+}
+
+
+def xai_histopat_isi_haritasi(image_path: str, pt_path: str | None = None,
+                                method: str = "hirescam", alpha: float = 0.45) -> dict:
+    """Histopat kesiti icin ensemble HiRes-CAM — bellek-ici base64.
+
+    Doner: {"xai_image_base64": ensemble-MEAN overlay (modelin dayandigi bolgeler),
+            "xai_disagreement_base64": std overlay 'hot' (modellerin AYRISTIGI bolgeler),
+            "method": "hirescam-ensemble"}.
+    TEK-KAYNAK: router + ai_service ayni fonksiyon (kapi-paritesi dersi).
+    ⚠️ CPU'da 3 backbone backward DAKIKA mertebesine uzayabilir (GPU'da ~sn) — cagiran
+    async/thread kullanir; kilit ayni anda tek istegi isler.
+    """
+    import base64 as _b64
+
+    import cv2
+    import torch
+    from PIL import Image
+
+    from ai_hub.xai_utils.disagreement import ensemble_disagreement_map, mean_cam
+    from ai_hub.xai_utils.grad_cam import GradCAMExplainer
+    from ai_hub.xai_utils.overlay import blend_to_array
+
+    if pt_path is None:
+        if DEFAULT_PT.exists():
+            pt_path = DEFAULT_PT
+        else:
+            from utils.model_downloader import download_model_sync
+
+            pt_path = download_model_sync(
+                "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt")
+
+    with _XAI_KILIT:
+        clf = _XAI_PT_CACHE.get("kmc")
+        if clf is None:
+            clf = RenalHistopathClassifier(model_path=pt_path, backend="pytorch")
+            _XAI_PT_CACHE["kmc"] = clf
+
+        pred = clf.predict(image_path, top_k=1)
+        top1_idx = clf.classes.index(pred["top_1_class"])
+
+        img_pil = Image.open(str(image_path)).convert("RGB").resize(
+            (IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+        img_np = np.asarray(img_pil)
+        x_t = torch.from_numpy(image_to_tensor(image_path)).to(clf.device)
+
+        cams = []
+        for _ad, layer_fn in _KMC_TRIO_TARGET_LAYERS.items():
+            expl = GradCAMExplainer(clf.model, layer_fn(clf.model),
+                                     method=method, device=str(clf.device))
+            cams.append(expl.explain(x_t, class_idx=top1_idx))
+
+    avg = mean_cam(cams)
+    dis = ensemble_disagreement_map(cams, mode="std")
+
+    def _jpg64(rgb_overlay):
+        ok, buf = cv2.imencode(".jpg", cv2.cvtColor(rgb_overlay, cv2.COLOR_RGB2BGR),
+                                [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ok:
+            raise RuntimeError("XAI overlay JPG encode basarisiz")
+        return _b64.b64encode(buf.tobytes()).decode("ascii")
+
+    return {
+        "xai_image_base64": _jpg64(blend_to_array(img_np, avg, alpha=alpha)),
+        "xai_disagreement_base64": _jpg64(blend_to_array(img_np, dis, alpha=0.5, colormap="hot")),
+        "method": "hirescam-ensemble",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="inference_renal_histopath_kmc",
