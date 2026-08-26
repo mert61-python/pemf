@@ -42,8 +42,8 @@
     },
     "research": {
       "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.26/research.zip",
-      "sha256": "cb4c425a3bfb6727c7b340cc9989b46dcfcbb8b1af4d6acef58df8e8f796a065",
-      "size": 2513961615,
+      "sha256": "206d82aa1563add238f03ab4283cfc57c13faeaaa5fbc210c120dbce4fab06fe",
+      "size": 1613947855,
       "kind": "zip"
     }
   },
@@ -62,8 +62,8 @@
     },
     "research": {
       "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.26/research.zip",
-      "sha256": "cb4c425a3bfb6727c7b340cc9989b46dcfcbb8b1af4d6acef58df8e8f796a065",
-      "size": 2513961615,
+      "sha256": "206d82aa1563add238f03ab4283cfc57c13faeaaa5fbc210c120dbce4fab06fe",
+      "size": 1613947855,
       "kind": "zip"
     }
   },

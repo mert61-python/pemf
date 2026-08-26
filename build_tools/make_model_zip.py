@@ -81,9 +81,12 @@ PROFILLER: dict[str, tuple[str, ...]] = {
     ),
     "research": (
         "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
-        # XAI Faz 4 (2026-08-26, sahip secimi 'a'): ensemble HiRes-CAM PT ikizi (~858MB;
-        # Faz-0 karar #5 — klinik makinelerde de, downloader YEREL cozer).
-        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt",
+        # ⚠️ RENAL PT (v22_...pt ~858MB) BILEREK LISTEDE DEGIL (2026-08-26, OLCULDU):
+        # GitHub release asset siniri 2 GiB (2147483648 B) — PT'li research.zip 2.51GB
+        # HTTP 422 'size must be less than 2147483648' ile REDDEDILDI. PT release_assets
+        # tek-kaynaginda durur: GPU mikroservis (/models mount) renal XAI'yi CALISTIRIR;
+        # klinik tek-EXE'de PT yoksa zarif 'Aciklama uretilemedi' dususu. Sahaya inis
+        # LAUNCHER COKLU-MODEL-ZIP destegi (research'u bolme) isine bagli — plan notu.
         "ai_hub/inference_em_petri/BaggingRegressor.onnx",
         "ai_hub/em_petri/PetriNet_v3.onnx",
         "ai_hub/em_petri/scaler_D_petri_v3.pkl",

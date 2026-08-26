@@ -37,7 +37,11 @@ geçmiyorsa test kırılır.
 Yayın etiketi: app → `client-app-v1.9.26`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ;
 **deps katmanı da DEĞİŞMEDİ** (1.9.25'teki sha aynen — yeni bağımlılık yok).
 Paket kimliği (`buildId`): `d4ad28a47dc9`. Monolit `base.zip` sha: `4757e30f35f8`.
-`research.zip` yenilendi (+858MB renal PT ikizi → ~2,46GB).
+`research.zip` İÇERİK OLARAK DEĞİŞMEDİ (sha aynı; yalnız v1.9.26 etiketine de kondu).
+⚠️ Renal PT ikizi (~858MB) pakete GİREMEDİ — ÖLÇÜLDÜ: GitHub release asset sınırı 2 GiB,
+PT'li research.zip (2,51GB) HTTP 422 ile reddedildi. Renal ısı haritası GPU mikroservis
+kurulumunda (/models mount) ÇALIŞIR; klinik tek-EXE'de PT bulunamazsa zarif "Açıklama
+üretilemedi" düşer. Saha inişi launcher çoklu-model-zip işine bağlı (plan notu).
 
 **Ne değişti (XAI Faz 4 — 1.9.25'in tamamlayıcısı):**
 - **Böbrek Patoloji:** `explain=true` → 3-backbone ensemble'ın (VGG19-BN + WideResNet50-2 +

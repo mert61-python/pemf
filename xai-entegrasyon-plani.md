@@ -9,6 +9,10 @@
 > **Faz 2 KALAN:** cu128 imaj-içi smoke (GPU makinesi, yayın öncesi) · feline/kidney_ct EigenCAM
 > (CT onaylı — Faz 4'le birleşik) · PT'lerin sahaya inişi sonraki model-zip yayını.
 > Faz 4 kalan: RNA IG (captum) · renal 859MB · paper_dilek_hoca ATLANDI · cat_llm kapsam dışı.
+> **1.9.26 sonrası tek açık iş — LAUNCHER ÇOKLU-MODEL-ZIP:** ÖLÇÜLDÜ: GitHub asset sınırı 2 GiB;
+> renal PT'li research.zip (2,51GB) 422 ile reddedildi → PT sahaya İNEMİYOR (GPU-mount'ta çalışıyor,
+> klinikte zarif düşüş). Kalıcı çözüm: launcher'ın profil başına BİRDEN ÇOK model zip'i desteklemesi
+> (örn. models.research + models.research_ek) → launcher 1.9.39 işi.
 
 **Kaynak:** `C:\Users\merta\Downloads\inference (1)\inference\` (XAI Faz 0-10 sprint çıktısı: 10 modüle Grad-CAM/EigenCAM/SHAP/IG/sensitivity + `xai_utils` + `xai_tabular` + `XAI_INTEGRATION.md`).
 **Hedef:** Bu XAI yeteneğini PEMF ekosistemine (guii backend + ai_service :8100 + pf frontend + AI geçmişi) regresyonsuz entegre etmek.

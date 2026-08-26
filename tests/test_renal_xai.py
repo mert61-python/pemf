@@ -168,9 +168,14 @@ def test_YAPISAL_ai_service_histopat_XAI_paritesi():
     assert "xai_histopat_isi_haritasi" in govde and "explain" in govde, ":8100 histopath XAI paritesi yok"
 
 
-def test_YAPISAL_renal_pt_research_paketinde():
-    """Karar #5: 858MB PT klinik makinelere research.zip ile iner (downloader YEREL çözer)."""
+def test_YAPISAL_renal_pt_dagitim_karari_KAYITLI():
+    """ÖLÇÜLDÜ (2026-08-26): GitHub asset sınırı 2GiB — PT'li research.zip (2.51GB) 422 ile
+    reddedildi. PT bilerek LİSTEDE DEĞİL; karar+gerekçe kodda kayıtlı olmalı (sessizce
+    'unutulmuş' sanılmasın). GPU-mount yolu çalışır; saha inişi launcher çoklu-zip işine bağlı."""
     src = (KOK / "build_tools" / "make_model_zip.py").read_text(encoding="utf-8")
     i = src.index('"research": (')
-    govde = src[i : src.index('}', i)]
-    assert "v22_kmc_classictrio_kmc.pt" in govde, "renal PT research profil listesinde değil — sahaya inemez"
+    govde = src[i : src.index("}", i)]
+    assert "v22_kmc_classictrio_kmc.pt" not in govde or "BILEREK" in govde, (
+        "renal PT listede ama 2GiB gerekçesi yok — 422 tekrar yaşanır"
+    )
+    assert "2147483648" in govde or "2 GiB" in govde, "2GiB sınır kararı/gerekçesi koddan silinmiş"
