@@ -45,6 +45,10 @@ GOLDEN_ROUTES = {
     ("/api/ai/pro/propose", "POST"),
     ("/api/ai/pro/approve", "POST"),
     ("/api/ai/pro/reject", "POST"),
+    # 2026-08-25 — web/sunucu-kamerali kapali-dongu duzeltmesi (hazirlik onizlemesi:
+    # organi lokalize eder, bobin surmez, seans baslatmaz — propose artik calisir):
+    ("/api/ai/pro/hazirlik/baslat", "POST"),
+    ("/api/ai/pro/hazirlik/durdur", "POST"),
     ("/api/ai/rna/kidney", "POST"),
     ("/api/ai/sound/cat", "POST"),
     ("/api/ai/vision/cat_organ", "POST"),
@@ -191,6 +195,7 @@ def test_route_contract_unchanged():
     # → 92 (+2 veri saklama ayarı: settings/retention GET+POST), 2026-08-09 Tier 1
     # → 93 (+1 denetim izi okuma: audit/events GET), 2026-08-09 Tier 3
     # → 94 (+1 destek paketi: support/bundle POST), 2026-08-09 Tier 3
-    # Sayı da koşula göre daralır: simülatör derlemesi yoksa 94 değil 93 beklenir. Toplamın
+    # → 96 (+2 web AI Pro hazırlık önizlemesi: ai/pro/hazirlik/baslat+durdur), 2026-08-25
+    # Sayı da koşula göre daralır: simülatör derlemesi yoksa 96 değil 95 beklenir. Toplamın
     # KENDİSİ hâlâ sabitlenir (yeni rota sessizce eklenemez) — yalnız koşullu olan düşülür.
-    assert len(current) == len(beklenen) == 94 - (0 if _simulator_mountlu() else 1)
+    assert len(current) == len(beklenen) == 96 - (0 if _simulator_mountlu() else 1)
