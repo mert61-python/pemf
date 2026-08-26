@@ -283,7 +283,10 @@ for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             # sklearn.compose / sklearn.pipeline gibi alt modülleri ister; statik import'ta
             # görünmediği için TÜM sklearn toplanmalı (CKD ColumnTransformer "No module
             # named 'sklearn.impute'" hatası). Geleceğe dönük tüm pickled sklearn için.
-            'sklearn'):
+            'sklearn',
+            # XAI Faz 1 (2026-08-26): ai_hub/xai_tabular lazy-import'lari statik analizde
+            # gorunmez — shap (Tree/Kernel explainer) + slicer frozen'a acikca toplanir.
+            'shap', 'slicer'):
     try:
         hidden += collect_submodules(pkg)
     except Exception:

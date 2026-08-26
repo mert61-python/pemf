@@ -51,6 +51,11 @@ ultralytics==8.4.47             # YOLO (landmark/segmentasyon/CT/retikülosit/pe
 pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3                    # torch/sklearn/librosa çekirdeği
 scikit-learn==1.7.2             # CKD modeli PICKLE'dan yüklenir (statik import DEĞİL)
+# XAI Faz 1 (xai-entegrasyon-plani.md, 2026-08-26): ai_hub/xai_tabular — cat_disease
+# TreeExplainer + CKD KernelExplainer + EM sensitivity/SHAP. numpy 1.26.4 pinine
+# DOKUNMADAN kuruldugu dogrulandi (numba'siz kurulum; 0.49 numba'yi zorunlu istemez).
+shap==0.49.1
+slicer==0.0.8                    # shap bagimliligi
 # ⚠️ BİLİNEN SÜRÜM UYUŞMAZLIĞI (2026-08-15, SAHİP KARARIYLA BÖYLE KALIYOR).
 # Pickle'lanmış CKD bileşenleri (SimpleImputer/StandardScaler/OneHotEncoder/ColumnTransformer/
 # Pipeline) scikit-learn **1.8.0** ile kaydedilmiş; çalışma zamanı 1.7.2. sklearn her yüklemede

@@ -10,6 +10,10 @@ pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigi
 scipy==1.15.3
 scikit-learn==1.7.2
 xgboost==3.2.0                    # cat_disease (XGBoost.pkl)
+shap==0.49.1                      # XAI Faz 1 (cat_disease TreeExplainer + CKD/EM kernel-SHAP)
+slicer==0.0.8                     # shap bagimliligi
+# XAI Faz 2 (gradient tabanli — grad-cam + captum + timm) BURAYA gelecek; cu128/torch 2.7.1
+# uyum testi yapilmadan EKLEME (xai-entegrasyon-plani.md §5).
 joblib==1.5.3
 pandas==2.3.3
 PyYAML==6.0.3
