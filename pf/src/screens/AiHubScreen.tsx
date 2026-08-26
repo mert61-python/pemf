@@ -156,6 +156,8 @@ interface AiResult {
   label?: string; prob_pct?: number; model?: string;
   // Sunum-katmanı XAI (2026-08-26): SHAP top-özellikler (alan yoksa satır gizli)
   xai?: { disease?: string; prob_ckd?: number; top_features?: { feature: string; attribution: number }[] } | null;
+  // Faz 2: gradient ısı haritası (termal/ses; explain=true istenirse)
+  xai_image_base64?: string; xai_method?: string; xai_error?: string;
   // top-k sınıflandırma (cat_sound / histopath / reticulocytes)
   top_1_class?: string; top_1_prob?: number; top_k?: AiTopK[];
   // cat_sound BELİRSİZLİK (sunucu ölçer — utils/ses_kalitesi). Model "kedi sesi yok" DİYEMEZ
@@ -254,7 +256,7 @@ export function AiHubScreen() {
       case "disease": return <DiseaseModule patientName={patientName} />;
       case "landmark": return <VisionModule key="landmark" endpoint="/vision/landmark" title="Yüz Ağrısı Skoru (FGS)" subtitle="YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder." patientName={patientName} />;
       case "segmentation": return <VisionModule key="segmentation" endpoint="/vision/segmentation" title="Kedi Segmentasyonu" subtitle="YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder." patientName={patientName} />;
-      case "thermal": return <VisionModule key="thermal" endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." patientName={patientName} />;
+      case "thermal": return <VisionModule key="thermal" endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." patientName={patientName} explainDestegi />;
       case "reticulocytes": return <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." patientName={patientName} galleryOnly />;
       case "em_fantom": return <PhantomModule key="em_fantom" patientName={patientName} />;
       case "em_petri": return <PetriModule key="em_petri" patientName={patientName} />;
@@ -1003,13 +1005,16 @@ function resetAiCachesForOwner(owner: string | null): boolean {
   return true;
 }
 
-function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean }) {
+function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
   const { showToast } = useToast();
   const { realtime } = useEntitlement();
   const [imageUri, setImageUri] = useState<string | null>(visionCache[endpoint]?.imageUri ?? null);
   const [imageBase64, setImageBase64] = useState<string | null>(visionCache[endpoint]?.imageBase64 ?? null);
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  /** Sunum-katmanı XAI (Faz 2, 2026-08-26): opt-in Grad-CAM ısı haritası — CPU'da sn'ler
+   *  sürebildiği için OTOMATİK DEĞİL; yalnız manuel analizde ve destekleyen uçlarda. */
+  const [isiHaritasi, setIsiHaritasi] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[endpoint]?.result ?? null);
 
   const [isLive, setIsLive] = useState(false);
@@ -1295,6 +1300,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
         }
       }
       formData.append("auto_adjust", driveHw ? "true" : "false");
+      // Sunum-katmanı XAI: yalnız MANUEL analizde ve kullanıcı açıkça istediyse (canlı
+      // döngüde ASLA — kare başına sn'lerce Grad-CAM akışı kilitler).
+      if (explainDestegi && isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       analyzeAbortRef.current = ctrl; // unmount iptali için sakla
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş timeout
@@ -1453,6 +1461,19 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
       </View>
 
       <View style={styles.analyzeBtn}>
+        {explainDestegi && (
+          <TouchableOpacity
+            style={styles.xaiToggle}
+            onPress={() => setIsiHaritasi((v) => !v)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isiHaritasi }}
+            accessibilityLabel="Isı haritası üret (Grad-CAM)"
+          >
+            <Text style={styles.xaiToggleText}>
+              {isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (modelin baktığı bölgeler — analiz biraz uzar)
+            </Text>
+          </TouchableOpacity>
+        )}
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "AI Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={() => analyzeImage()} />
       </View>
       {longLoading && <Text style={styles.modelHint}>Model hazırlanıyor (ilk kullanım uzun sürebilir)…</Text>}
@@ -1536,6 +1557,14 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
               <Text style={styles.resultText}>Agrege Retikülosit: {result.counts["aggregate reticulocyte"]}</Text>
             </>
           )}
+          {/* Sunum-katmanı XAI (Faz 2): Grad-CAM ısı haritası — istenip üretildiyse. */}
+          {result.xai_image_base64 && (
+            <>
+              <Text style={styles.ctSubLabel}>🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)</Text>
+              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.imagePreview} resizeMode="contain" />
+            </>
+          )}
+          {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
         </View>
       )}
@@ -2356,6 +2385,8 @@ function CatSoundModule({ patientName }: { patientName: string }) {
   const [audioUri, setAudioUri] = useState<string | null>(moduleCache.cat_sound?.audioUri ?? null);
   const [fileName, setFileName] = useState<string>(moduleCache.cat_sound?.fileName ?? "");
   const [webFile, setWebFile] = useState<any>(moduleCache.cat_sound?.webFile ?? null);
+  /** Sunum-katmanı XAI (Faz 2): opt-in mel ısı haritası (Grad-CAM — pahalı, otomatik değil). */
+  const [isiHaritasi, setIsiHaritasi] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2422,6 +2453,8 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         Platform.OS === "web",
         (uri) => FileSystemLegacy.readAsStringAsync(uri, { encoding: "base64" as any }),
       );
+      // Sunum-katmanı XAI (Faz 2): kullanıcı açıkça istediyse mel ısı haritası.
+      if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/sound/cat", {
@@ -2487,6 +2520,17 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         </View>
       </View>
 
+      <TouchableOpacity
+        style={styles.xaiToggle}
+        onPress={() => setIsiHaritasi((v) => !v)}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: isiHaritasi }}
+        accessibilityLabel="Mel ısı haritası üret (Grad-CAM)"
+      >
+        <Text style={styles.xaiToggleText}>
+          {isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (modelin dinlediği frekans/zaman bandı — analiz biraz uzar)
+        </Text>
+      </TouchableOpacity>
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Ses Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!audioUri || loading || isRecording} onPress={analyze} />
       </View>
@@ -2519,6 +2563,14 @@ function CatSoundModule({ patientName }: { patientName: string }) {
               );
             })}
           </View>
+          {/* Sunum-katmanı XAI (Faz 2): mel-spektrogram ısı haritası — istenip üretildiyse. */}
+          {result.xai_image_base64 && (
+            <>
+              <Text style={styles.ctSubLabel}>🔍 Mel ısı haritası — modelin dinlediği bölgeler (kırmızı = karara güçlü etki)</Text>
+              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.imagePreview} resizeMode="contain" />
+            </>
+          )}
+          {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
         </View>
       )}
@@ -3147,6 +3199,9 @@ const styles = StyleSheet.create({
   diseaseDefaultsNote: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(17), marginTop: spacing.sm, backgroundColor: colors.bg, borderRadius: radius.sm, padding: spacing.sm },
   // Sunum-katmanı XAI satırı (2026-08-26): "kararı sürükleyenler" — sessiz, sonucun altında.
   xaiSatiri: { color: colors.textMuted, fontSize: typography.small, marginTop: spacing.sm },
+  // Faz 2: opt-in ısı haritası anahtarı (Grad-CAM pahalı — otomatik değil).
+  xaiToggle: { paddingVertical: spacing.xs, marginBottom: spacing.xs },
+  xaiToggleText: { color: colors.textMuted, fontSize: typography.small },
   liveHint: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(17), marginTop: spacing.xs, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.sm },
   symptomsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   symptomBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border },
