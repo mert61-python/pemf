@@ -120,10 +120,21 @@ def test_KRITIK_pt_coz_ONCE_models_mount_sonra_downloader(tmp_path, monkeypatch)
     p = pt_coz("ai_hub/cat_thermal/GhostNetV2.pt")
     assert str(p) == str(hedef / "GhostNetV2.pt"), f"mount önceliklenmedi: {p}"
 
-    # KARŞIT: env yok → downloader yolu (yerelde release_assets'ten çözer)
+    # KARŞIT: env yok → downloader yolu. Gerçek dosyaya DAYANMAZ: PT ikizleri git dışı,
+    # CI checkout'unda yoklar (ilk sürüm CI'da bu yüzden düştü) → downloader mock'lanır.
     monkeypatch.delenv("PEMF_AI_MODELS_DIR", raising=False)
+    import utils.model_downloader as _md
+
+    cagri = {}
+
+    def _sahte_indir(rel):
+        cagri["rel"] = rel
+        return hedef / "GhostNetV2.pt"
+
+    monkeypatch.setattr(_md, "download_model_sync", _sahte_indir)
     p2 = pt_coz("ai_hub/cat_thermal/GhostNetV2.pt")
-    assert Path(p2).name == "GhostNetV2.pt" and Path(p2).exists()
+    assert cagri["rel"] == "ai_hub/cat_thermal/GhostNetV2.pt", "downloader'a düşülmedi"
+    assert str(p2) == str(hedef / "GhostNetV2.pt")
 
 
 def test_YAPISAL_xai_fonksiyonlari_pt_coz_kullanir():
