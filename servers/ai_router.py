@@ -2264,6 +2264,9 @@ class KidneyDiseaseInput(BaseModel):
     appet: str | None = None
     pe: str | None = None
     ane: str | None = None
+    # Sunum-katmanı XAI (2026-08-26): true → yanıta SHAP top-özellik katkıları ("xai").
+    # ⚠️ Uçta features'tan POP edilir — alan sayımına (total_fields=24) SIZMAMALI.
+    explain: bool = False
 
 
 # ⚠️ CKD ASGARİ GİRDİ KURALI `utils/klinik_asgari.py`ye TAŞINDI (denetim 2026-08-17): sabitler
@@ -2284,17 +2287,19 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
     bkz. `utils.klinik_asgari.CKD_MIN_ALAN`.
     """
     features = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+    # XAI bayrağını klinik alanlardan AYIR (total_fields=24 şeffaflık sözleşmesi bozulmasın).
+    explain = bool(features.pop("explain", False))
     try:
         dolu = _ckd_kapisi(features)
     except _AsgariGirdiYok as ag:
         raise HTTPException(status_code=422, detail=ag.user_message()) from None
     try:
         if ai_service_enabled():
-            return await delegate_json("kidney_disease", features)
+            return await delegate_json("kidney_disease", {**features, "explain": explain})
         from ai_hub.inference_human_kidney_disease import predict_one
 
         result = await asyncio.to_thread(lambda: predict_one(features))
-        return {
+        yanit = {
             "status": "success",
             "prob_ckd": result["prob_ckd"],
             "prob_pct": round(result["prob_ckd"] * 100, 1),
@@ -2307,6 +2312,18 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
             "imputed_fields": len(features) - len(dolu),
             "low_evidence": len(dolu) < 12,
         }
+        # Sunum-katmanı XAI (2026-08-26): SHAP KernelExplainer over ONNX ('ortalama-hasta'
+        # referansıyla — tek-hasta dejenerasyonu yok). ⚠️ Açıklama İKİNCİL: hatası ana
+        # analizi ASLA düşürmez (zarif düşüş).
+        if explain:
+            try:
+                from ai_hub import inference_human_kidney_disease as _ihd
+
+                yanit["xai"] = await asyncio.to_thread(_ihd.xai_top_features, features)
+            except Exception as xe:
+                logger.warning("CKD XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         logger.error(f"kidney_disease inference error: {e}", exc_info=True)
         raise _ai_fail("Böbrek hastalığı analiz hatası", e)

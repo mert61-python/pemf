@@ -663,12 +663,14 @@ def infer_kidney_disease(payload: dict = Body(...)):
     try:
         # ⚠️ ASGARİ GİRDİ KAPISI — MODEL YÜKLEMESİNDEN ÖNCE (2026-08-16 dersinin aynısı:
         # reddedilecek istek için ağırlık yüklenmesin) ve router ile AYNI nesneden.
+        # XAI bayrağını klinik alanlardan AYIR (router ile aynı sözleşme).
+        explain = bool(payload.pop("explain", False)) if isinstance(payload, dict) else False
         _ckd_kapisi(payload)
         from ai_hub.inference_human_kidney_disease import predict_one
 
         t0 = time.time()
         r = predict_one(payload)
-        return {
+        yanit = {
             "status": "success",
             "device": "cpu",
             "inference_ms": round((time.time() - t0) * 1000, 1),
@@ -677,6 +679,19 @@ def infer_kidney_disease(payload: dict = Body(...)):
             "label": r["label"],
             "model": r.get("model"),
         }
+        # Sunum-katmanı XAI paritesi (2026-08-26): TEK-KAYNAK xai_top_features; hatası
+        # analizi düşürmez (router ile aynı zarif düşüş).
+        if explain:
+            try:
+                from ai_hub import inference_human_kidney_disease as _ihd
+
+                yanit["xai"] = _ihd.xai_top_features(payload)
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("CKD XAI üretilemedi (analiz etkilenmedi): %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except _AsgariGirdiYok as ag:  # ⚠️ `except Exception`dan ÖNCE (yukarıdaki gerekçe)
         return JSONResponse({"error": ag.user_message(), "insufficient_input": True}, status_code=422)
     except Exception as e:

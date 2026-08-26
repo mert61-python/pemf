@@ -164,6 +164,106 @@ def available_models() -> list[str]:
 # ===========================================================================
 # CLI smoke test
 # ===========================================================================
+# ===========================================================================
+# XAI — sunum-katmani (Faz 1.4, 2026-08-26)
+# ===========================================================================
+def _preprocessor_feature_names(pre) -> list[str]:
+    """ColumnTransformer'dan post-transform feature isimlerini cikart."""
+    try:
+        return list(pre.get_feature_names_out())
+    except Exception:
+        return [f"f{i}" for i in range(pre.transform(
+            pd.DataFrame([{k: (0 if k in NUMERIC else "normal") for k in ALL_FEATURES}],
+                          columns=ALL_FEATURES)).shape[1])]
+
+
+def _aggregate_to_raw(shap_row: np.ndarray, post_names: list[str]) -> dict[str, float]:
+    """Post-transform katkilari 24 HAM klinik ozellige topla.
+
+    ColumnTransformer isim formati: numeric 'num__<col>', categorical 'cat__<col>_<val>'.
+    """
+    raw = {f: 0.0 for f in ALL_FEATURES}
+    for name, val in zip(post_names, shap_row):
+        if name.startswith("num__"):
+            base = name[len("num__"):]
+            if base in raw:
+                raw[base] += float(val)
+        elif name.startswith("cat__"):
+            rest = name[len("cat__"):]
+            for cand in ALL_FEATURES:
+                if rest.startswith(cand + "_") or rest == cand:
+                    raw[cand] += float(val)
+                    break
+        else:  # bilinmeyen format — kaba eslesme
+            for cand in ALL_FEATURES:
+                if cand in name:
+                    raw[cand] += float(val)
+                    break
+    return raw
+
+
+def _referans_background(post_names: list[str]) -> np.ndarray:
+    """(1, F_post) 'ORTALAMA-HASTA' baseline'i.
+
+    ⚠️ Gelen kodda tek-hasta DEJENERASYONU vardi (EM'dekiyle ayni sinif): background=
+    kaydin KENDISI -> f(x)-E[f(bg)]=0 -> tum SHAP ~0. Burada referans egitim-oncesi
+    donusum uzayindan turetilir: numeric kolonlar standardize (num__* -> 0.0 = egitim
+    ortalamasi), one-hot kolonlar bilgisiz 0.5. Katkilar 'ortalama hastaya gore' okunur;
+    deterministik, ek veri dosyasi gerektirmez.
+    """
+    return np.array([[0.0 if ad.startswith("num__") else 0.5 for ad in post_names]],
+                     dtype=np.float32)
+
+
+def xai_top_features(features: dict, top_n: int = 7,
+                      model_name: str | None = None,
+                      n_kernel_samples: int = 60) -> dict:
+    """Tek hasta icin SHAP KernelExplainer top-N klinik ozellik katkisi (ONNX uzerinde).
+
+    PT'siz XAI yolu: KernelExplainer model-agnostik predict-callable sarar (GPU gerekmez).
+    Determinizm: koalisyon orneklemesi np.random kullanir -> cagri suresince seed(0),
+    sonra GLOBAL DURUM GERI YUKLENIR. TEK-KAYNAK: router in-process + ai_service ayni
+    fonksiyonu cagirir (kapi-paritesi dersi).
+
+    Doner: {"prob_ckd", "top_features": [{"feature","attribution"}...], "baseline"}.
+    """
+    import shap
+
+    pre, sess, input_name = load_model(model_name)
+    df = pd.DataFrame([_normalise_record(features)], columns=ALL_FEATURES)
+    Xp = pre.transform(df).astype(np.float32)
+
+    def _proba(x):
+        p = _predict_onnx(sess, input_name, x)
+        return np.stack([1 - p, p], axis=1)
+
+    post_names = _preprocessor_feature_names(pre)
+    bg = _referans_background(post_names)
+
+    _rng_durum = np.random.get_state()
+    try:
+        np.random.seed(0)
+        expl = shap.KernelExplainer(_proba, bg)
+        sv = expl.shap_values(Xp, nsamples=n_kernel_samples, silent=True)
+    finally:
+        np.random.set_state(_rng_durum)
+
+    # ckd sinifinin katmani: List[(N,F)x2] (eski shap) veya (N,F,2) (yeni shap)
+    if isinstance(sv, list):
+        sv_ckd = np.asarray(sv[1])
+    else:
+        sv = np.asarray(sv)
+        sv_ckd = sv[..., 1] if sv.ndim == 3 else sv
+
+    raw = _aggregate_to_raw(sv_ckd[0], post_names)
+    sirali = sorted(raw.items(), key=lambda kv: -abs(kv[1]))[: int(top_n)]
+    return {
+        "prob_ckd": float(_predict_onnx(sess, input_name, Xp)[0]),
+        "top_features": [{"feature": f, "attribution": round(v, 4)} for f, v in sirali],
+        "baseline": "ortalama_hasta",
+    }
+
+
 def _smoke() -> None:
     """Sanity check: pull 5 rows from the cleaned dataset, run inference on
     each available ONNX, compare to the ground truth."""
