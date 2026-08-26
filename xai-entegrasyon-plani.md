@@ -238,18 +238,37 @@ Efor tahminleri kod-okuma temellidir; her kalem proje test disipliniyle (RED→G
 
 ## §KALAN-2026-08-26 — Eksik-denetimi sonuç tablosu (6 denetçi, tam teslim `Desktop\entegre`)
 
-### A) Canlı-ürün eksikleri (küçük/orta iş — sahip önceliklendirmesi)
+> **KAPANIŞ 2026-08-27 (gece emri "cat_llm dışında hepsi bitsin"):** A1-A7 ✅ + B ✅ + C ✅
+> tamamlandı. Kilitler: `tests/test_xai_kalan_a_grubu.py` (19) + `tests/test_xai_batch_rapor.py`
+> (5) + `pf/src/screens/__tests__/xaiKalanA.test.tsx` (7). B kararı: kullanıcı "hepsi bitsin"
+> dediği için Faz-5 beklemeden `scripts/xai_batch_rapor.py` TEK-CLI olarak yapıldı (görüntü/ses
+> CAM · RNA IG işaretli-CSV · EM sensitivity+SHAP; summary.csv + index.html + `--pdf`
+> → `PDFReportGenerator.generate_xai_report`; çıktı-dizini-girdi-dışında bekçisi bulgu-19'a karşı).
+> Kalan tek bilinçli-borç: D bölümü (kapsam-dışı) + cat_llm (sabah tartışması).
+
+### A) Canlı-ürün eksikleri — ✅ TAMAMI KAPANDI (2026-08-27)
 | # | Eksik | Kanıt | İş |
 |---|---|---|---|
-| A1 | UI explain düğmesi 4 modülde yok: **kidney_ct, histopath, reticulocytes, RNA** | backend explain hazır (router 1989/2282/2611/2688) — pf'te buton yalnız termal/ses/scratch | küçük (VisionModule `explainDestegi` deseni) |
-| A2 | cat_organ **mirror/anatomik rozetleri** UI'da yok | yanıta ekleniyor (router ~2858) — pf grep 0 | küçük |
-| A3 | petri "KANSER: mavi piksel N≥30" gerekçe satırı UI'da yok | n_cancer_pixels taşınıyor, render yok | küçük |
-| A4 | landmark ölçülen-değer vs p5-p95 bandı UI'da yok | thresholds_calibrated.json var, panel yok | orta |
-| A5 | EM canlı xaiSensitivity yalnız em_kedi'de | fantom/petri uçları meta eklemiyor | küçük |
-| A6 | CAM-yöntemi parametresi termal/ses uçlarında dışa kapalı (hep gradcam++) | scratch'te ALLOWLIST'le açıldı — desen hazır | küçük |
-| A7 | SHAP output_agg D1-D7 hedefli varyantı + organ_id dipnotu | em_sensitivity yalnız mean/first | küçük |
+| A1 | ✅ CT/histopat/RNA/retikülosit explain UI | CT+histopat ısı-haritası toggle'ı (histopat ÇİFT: konsensus + kararsızlık), RNA "Sürükleyen genler ↑/↓" satırı, retikülosit `explainDestegi` | jest: xaiKalanA A1 ×2 |
+| A2 | ✅ cat_organ mirror/anatomik rozetleri | AiHubScreen resultBox başı — ⚠️ anahtar `passed` ("ok" DEĞİL; validation.py dönüşü ölçüldü) | jest A2 ×2 |
+| A3 | ✅ petri gerekçe satırı | kuyu satırında "gerekçe: N mavi piksel (eşik ≥30)" — yalnız kanser kuyusunda | jest A3 |
+| A4 | ✅ landmark p5-p95 bandı | router `fgs_bantlari` (thresholds_calibrated.json, modül-cache `_fgs_bantlari()`) + UI "Ölçümler · popülasyon bandı" paneli (bant-dışı işaretli; bantlar yoksa panel gizli) | pytest ×3 + jest ×2 |
+| A5 | ✅ EM xaiSensitivity fantom/petri | modül sarmalayıcıları + router meta (to_thread, zarif) + **ai_service app.py paritesi** (kapı-paritesi dersi) | pytest ×4 |
+| A6 | ✅ termal/ses `xai_method` allowlist | router + ai_service Form paramı; geçersiz → 422 | pytest ×10 |
+| A7 | ✅ `output_agg="duty"` varyantı | shap_kernel_em ilk n_duty kolon ortalaması; geçersiz agg → ValueError | pytest ×2 (mühendislenmiş karşıt-kanıtlı) |
 
-### B) Mod-2 batch/rapor katmanı — **SAHİP KARARI BEKLİYOR (öneri: Faz 5)**
+### B) Mod-2 batch/rapor katmanı — ✅ YAPILDI (`scripts/xai_batch_rapor.py`, 2026-08-27)
+Tek CLI: `--modul {ct,histopat,termal,retikulosit,ses,rna,em_fantom,em_petri,em_kedi}`
+`--girdi <dosya|klasör> --cikti <dizin>` (+`--limit/--xai-method/--top-n/--no-shap/--embed/--pdf`).
+Çıktılar: XAI PNG/JPG'ler + `summary.csv` + `index.html` (galeri; `report_html._esc` tek-kaynak
+kaçırma) + opsiyonel `rapor.pdf` (`PDFReportGenerator.generate_xai_report` — yeni, bozuk görüntü
+raporu düşürmez). RNA yolu C-kalemindeki **işaretli CSV**'yi üretir (`rna_top_genler.csv`:
+patient_id/sıra/gene/attribution/yön ↑↓). EM yolu modülün `_run_xai_em` tam paketini çağırır
+(sample_id'li). Bulgu-19 tuzağına karşı **çıktı-girdi-dışında bekçisi** (SystemExit). Duman:
+em_fantom 4 nokta 0.87s · RNA 2 hasta IG 4.2s · retikülosit 2 görüntü. Not: cp1254 konsolda
+UnicodeEncodeError ölçüldü → stdout/stderr UTF-8 reconfigure. Aşağıdaki eski karar-notu TARİHSEL:
+
+**(eski not — SAHİP KARARI BEKLİYOR (öneri: Faz 5))**
 Hiçbir modülde taşınmadı: `explain_*.py` batch scriptleri, CLI `--xai` bayrakları, `report.html`
 + `index.html` + `summary.csv` + hasta/görüntü-başına CSV/PNG çıktıları. `report_html.build_report`,
 `overlay.side_by_side`, `feature_ranking.bar_plot/top_features_csv` şu an ölü-vendored (yalnız
@@ -258,7 +277,14 @@ AI-geçmişi #8 kaleminin rapor-paketi kısmı. Karar #3 ("anlık gösterim") TE
 retrospektif/audit akışı isteniyorsa bu katman ayrı fazdır; istenmiyorsa ölü util'ler not düşülerek
 bilinçli-bekletmede kalır. ⚠️ Ölçülen batch tuzağı scratch planı bulgu-19'da (recursive kendi-çıktısı).
 
-### C) Küçük teknik kalanlar
+### C) Küçük teknik kalanlar — ✅ KAPANDI (2026-08-27)
+RNA işaretli-CSV → batch CLI'da (üstte) · retikülosit test görselleri → `04a/04b_Retikulosit.jpg`
+(entegre'den; repo `ai_hub/PEMF_AI_Test_Girdileri` = tek-kaynak, Desktop kopyası aynalandı; ayrıca
+03a/03b termal + 11b gerçek-format RNA + 90_Batch_XAI/points.csv örnekleri) · `calibrate_camera.py`
+→ `ai_hub/inference_cat_organ/` (cabin_config_example.yaml 84. satır referansı artık çözülüyor) ·
+segmentation help-metni 0.5/0.5 düzeltildi. Bilinçli-dışı: histopat backbone-başına CAM (ensemble+
+kararsızlık yeterli — sahip isterse ayrı iş) · SHAP-Deep RNA yolu (IG tek-kaynak kaldı).
+Aşağıdaki metin TARİHSEL:
 RNA: işaretli `ig_top_genes_signed.csv` + SHAP-Deep yolu yok · histopat: backbone-başına CAM'ler
 dönmüyor (yalnız ensemble+disagreement) · retikülosit: PEMF_AI_Test_Girdileri'nde kan-yayması test
 görseli HİÇ yok (gerçek-girdi E2E kör noktası) · cat_organ: `calibrate_camera.py` üretici aracı
@@ -271,6 +297,7 @@ cat_llm (Ollama; scratch planı §7 notu) · landmark/segmentation XAI (doküman
 diyor) · cat_organ ölü yardımcıları (estimate_sy_scale_hint, cross_photo_consistency — entegre'de de
 çağıran yok) · Mod-2'nin subprocess deseni (kopyalama-yasak kuralı gereği patch/API tercih edildi).
 
-### Sıradaki tek kırmızı ön-koşul
-**Launcher çoklu-model-zip (1.9.39)** — renal 859MB + scratch 872MB PT'lerin sahaya inişi;
-ayrıntı ve geriye-uyum tasarımı: `scratch-entegrasyon-plani.md` **Faz 4.5**.
+### Sıradaki tek kırmızı ön-koşul — ✅ YAPILDI
+**Launcher çoklu-model-zip (1.9.39)** — Faz 4.5 gerçekleşti (research-2.zip 1.81GB, manifest
+`model_parts`, launcher parça-döngüsü + ETA); ayrıntı: `scratch-entegrasyon-plani.md` Faz 4.5.
+Yayın zinciri bu gece koşuluyor (app 1.9.27 · launcher 1.9.39 · mobil 2.3.25).
