@@ -160,6 +160,20 @@ def xai_ref_stats():
     return load_ref_stats(_DIR)
 
 
+def xai_hizli_sensitivity(predictor, x_mm: float, y_mm: float, z_mm: float,
+                          organ_id: float, achieved_B: float = 0.0,
+                          duty_sum: float = 0.0, top_n: int = 3) -> list[dict]:
+    """Canli hafif duyarlilik (7+1 forward; PNG/SHAP yok) — em_kedi paritesi
+    (xai plani §KALAN A5). Girdi semasi EM_FEATURES ile birebir (olculdu:
+    predict(x, y, z, organ_id, achieved_B, duty_sum) ayni 6'li).
+    Doner: [{"feature", "etki"}...] |delta| azalan; hata cagiranin zarif dususune."""
+    from ai_hub.xai_tabular.em_runtime import hizli_sensitivity
+
+    return hizli_sensitivity(predictor, xai_ref_stats(), float(x_mm), float(y_mm),
+                             float(z_mm), float(organ_id), float(achieved_B or 0.0),
+                             float(duty_sum or 0.0), top_n=top_n)
+
+
 def _run_xai_em(predictor, X, out_dir, **kw):
     """Mod-2 batch XAI paketi (sensitivity+SHAP+CSV+PNG) — ref_stats'la dejenerasyonsuz."""
     from ai_hub.xai_tabular.em_runtime import batch_xai

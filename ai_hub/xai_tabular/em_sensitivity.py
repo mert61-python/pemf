@@ -14,10 +14,11 @@ Kullanim (her inference_em_*.py icinde):
     run_em_xai(predict_fn, X, feature_names=[...], out_dir=..., target_output_idx=[...])
 """
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Callable, Sequence
-import numpy as np
 
+import numpy as np
 
 EM_FEATURES = ["x", "y", "z", "organ_id", "achieved_B", "duty_sum"]
 
@@ -125,11 +126,19 @@ def shap_kernel_em(predict_fn: Callable[[np.ndarray], np.ndarray],
                     n_background: int = 40,
                     n_kernel_samples: int = 80,
                     output_agg: str = "mean",
-                    background: np.ndarray | None = None) -> np.ndarray:
+                    background: np.ndarray | None = None,
+                    n_duty: int = 7) -> np.ndarray:
     """SHAP KernelExplainer output aggregate (regressor icin).
 
     Args:
-        output_agg: 'mean' -> tum output'lari ortala tek skalar; 'first' -> ilk output.
+        output_agg: 'mean' -> tum output'lari ortala tek skalar; 'first' -> ilk output;
+                    'duty' -> yalniz ILK n_duty kolonun (D1..D7 bobin duty kanallari)
+                    ortalamasi (§KALAN A7): faz sin/cos + E kanallari klinik olarak
+                    duty'yi surukleyen soruyu sulandiriyordu — "dozu ne belirledi"
+                    aciklamasi D-kanallarina odaklanmali (em_runtime.hizli_sensitivity
+                    ile ayni hedef).
+        n_duty:     'duty' agregasyonunda kullanilacak kolon sayisi (EM cikti
+                    yerlesimi D(7)+sinP(7)+cosP(7)+E(2) -> varsayilan 7).
         background: (M, F) referans arka plan (egitim dagilimi). PEMF sertlestirmesi
                     (2026-08-26): verilirse X-dilimi yerine BU kullanilir — N=1'de
                     background=X olunca f(x)-E[f(bg)]=0 ve tum SHAP ~0 cikardi
@@ -148,11 +157,18 @@ def shap_kernel_em(predict_fn: Callable[[np.ndarray], np.ndarray],
             "EM kernel-SHAP N=1'de background=X olur ve tum katkilar ~0 cikar "
             "(dejenerasyon). Tek-ornek aciklama icin egitim-dagilimi background verin.")
 
+    if output_agg not in ("mean", "first", "duty"):
+        raise ValueError(f"output_agg 'mean'|'first'|'duty' olmali: {output_agg!r}")
+
     def _agg_pred(x):
         y = predict_fn(x)
         if y.ndim == 1:
             return y
-        return y.mean(axis=1) if output_agg == "mean" else y[:, 0]
+        if output_agg == "mean":
+            return y.mean(axis=1)
+        if output_agg == "duty":
+            return y[:, : min(n_duty, y.shape[1])].mean(axis=1)
+        return y[:, 0]
 
     bg = background if background is not None else X[: min(n_background, len(X))]
     _rng_durum = np.random.get_state()
@@ -183,8 +199,9 @@ def run_em_xai(predict_fn: Callable[[np.ndarray], np.ndarray],
     dagilimi referanslari. Canli/tek-ornek (N=1) aciklamada ZORUNLU; verilmezse
     N=1'de sensitivity/SHAP dejenere oldugu icin alt fonksiyonlar ValueError verir.
     """
-    from .feature_ranking import bar_plot
     import pandas as pd
+
+    from .feature_ranking import bar_plot
 
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     N = X.shape[0]

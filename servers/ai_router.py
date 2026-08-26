@@ -511,6 +511,9 @@ async def analyze_landmark(
                 "image_base64": b64_image,
                 "detected": detected,
                 "fgs_total": total,
+                # §KALAN A4: olculen-deger-vs-populasyon-bandi paneli icin p5/p95
+                # bantlari (thresholds_calibrated.json — kalibrasyon tek-kaynagi).
+                "fgs_bantlari": _fgs_bantlari(),
                 "pain_level": pain_level,
                 "raw_fgs": fgs_result if detected else None,
                 "action_units": fgs_result.get("action_units") if detected else None,
@@ -1857,16 +1860,51 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
         raise _ai_fail("Segmentasyon hatası", e)
 
 
+_FGS_BANTLARI_CACHE: dict | None = None
+
+
+def _fgs_bantlari() -> dict:
+    """thresholds_calibrated.json'dan {olcum: {p5, p95}} — bir kez yüklenir.
+
+    §KALAN A4: UI 'ölçülen değer vs popülasyon bandı' panelini bu bantlarla çizer;
+    dosya okunamazsa boş dict (panel gizlenir — zarif)."""
+    global _FGS_BANTLARI_CACHE
+    if _FGS_BANTLARI_CACHE is None:
+        try:
+            import json as _json
+
+            _yol = os.path.join(project_root, "ai_hub", "cat_landmark", "thresholds_calibrated.json")
+            with open(_yol, encoding="utf-8") as _f:
+                _ham = _json.load(_f)
+            _FGS_BANTLARI_CACHE = {
+                k: {"p5": round(float(v["p5"]), 4), "p95": round(float(v["p95"]), 4)}
+                for k, v in _ham.items()
+                if isinstance(v, dict) and "p5" in v and "p95" in v
+            }
+        except Exception:
+            logger.warning("fgs bantlari yuklenemedi (panel gizlenecek)", exc_info=True)
+            _FGS_BANTLARI_CACHE = {}
+    return _FGS_BANTLARI_CACHE
+
+
 @ai_router.post("/api/ai/vision/thermal")
-async def analyze_thermal(file: UploadFile = File(None), image_base64: str = Form(None), explain: bool = Form(False)):
-    """GhostNetV2 Termal Analiz (+opsiyonel Grad-CAM ısı haritası — Faz 2, 2026-08-26)"""
+async def analyze_thermal(
+    file: UploadFile = File(None),
+    image_base64: str = Form(None),
+    explain: bool = Form(False),
+    xai_method: str = Form("gradcam++"),
+):
+    """GhostNetV2 Termal Analiz (+opsiyonel Grad-CAM ısı haritası — Faz 2 + §KALAN A6:
+    CAM yöntemi dışa açıldı, allowlist'li)."""
+    if xai_method not in ("gradcam++", "gradcam", "eigencam", "hirescam"):
+        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
     try:
         if ai_service_enabled():
             return await _kapili_devret(
                 "thermal",
                 file=file,
                 image_base64=image_base64,
-                data=({"explain": "true"} if explain else None),
+                data=({"explain": "true", "xai_method": xai_method} if explain else None),
             )
         img = await _decode_image(file, image_base64, label="thermal")
 
@@ -1895,7 +1933,7 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
                 try:
                     from ai_hub.cat_thermal import inference_cat_thermal as _ict
 
-                    _x = await asyncio.to_thread(_ict.xai_termal_isi_haritasi, tmp.name)
+                    _x = await asyncio.to_thread(_ict.xai_termal_isi_haritasi, tmp.name, None, xai_method)
                     yanit["xai_image_base64"] = _x["xai_image_base64"]
                     yanit["xai_method"] = _x.get("method")
                 except Exception as xe:
@@ -2080,6 +2118,27 @@ async def analyze_em_fantom(
             _ef.set_context(payload.get("tumor_regions") or [])
         except Exception:
             logger.debug("canlı E-alanı bağlamı kurulamadı", exc_info=True)
+        # §KALAN A5 (em_kedi paritesi): "tahmini en cok ne surukledi" meta'si — ILK
+        # tumor bolgesi icin hafif duyarlilik. Aciklama IKINCIL: hatasi analizi dusurmez.
+        _xai_meta = {}
+        if result.success and payload.get("tumor_regions"):
+            try:
+                from ai_hub.inference_em_fantom import inference_em_fantom as _ief
+
+                _r0 = payload["tumor_regions"][0]
+                _c = list(_r0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _xai_meta["xaiSensitivity"] = await asyncio.to_thread(
+                    _ief.xai_hizli_sensitivity,
+                    cache["predictor"],
+                    _c[0],
+                    _c[1],
+                    _c[2],
+                    _r0.get("organ_id", 1),
+                    achieved_B or 0.0,
+                    duty_sum or 0.0,
+                )
+            except Exception as xe:
+                logger.warning("em_fantom XAI meta üretilemedi (analiz etkilenmedi): %s", xe)
         return {
             "status": status,
             "image_base64": b64_image,
@@ -2092,6 +2151,7 @@ async def analyze_em_fantom(
             "tumor_regions": payload["tumor_regions"],
             "healthy_regions": payload["healthy_regions"],
             "timing_ms": result.timing_ms,
+            **_xai_meta,
         }
     except Exception as e:
         logger.error(f"em_fantom inference error: {e}", exc_info=True)
@@ -2188,6 +2248,26 @@ async def analyze_em_petri(
         from dataclasses import asdict
 
         wells = [asdict(w) for w in result.wells]
+        # §KALAN A5: em_kedi paritesi — ilk kuyu icin hafif duyarlilik meta'si (zarif).
+        _xai_meta = {}
+        if result.success and wells:
+            try:
+                from ai_hub.inference_em_petri import inference_em_petri as _iep
+
+                _w0 = wells[0]
+                _c = list(_w0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _xai_meta["xaiSensitivity"] = await asyncio.to_thread(
+                    _iep.xai_hizli_sensitivity,
+                    cache["predictor"],
+                    _c[0],
+                    _c[1],
+                    _c[2],
+                    _w0.get("organ_id", 1),
+                    achieved_B or 0.0,
+                    duty_sum or 0.0,
+                )
+            except Exception as xe:
+                logger.warning("em_petri XAI meta üretilemedi (analiz etkilenmedi): %s", xe)
         return {
             "status": status,
             "image_base64": b64_image,
@@ -2200,6 +2280,7 @@ async def analyze_em_petri(
             "mm_per_px": round(result.mm_per_px, 4),
             "wells": wells,
             "timing_ms": result.timing_ms,
+            **_xai_meta,
         }
     except Exception as e:
         logger.error(f"em_petri inference error: {e}", exc_info=True)
@@ -2392,13 +2473,20 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
 
 
 @ai_router.post("/api/ai/sound/cat")
-async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = Form(None), explain: bool = Form(False)):
+async def analyze_cat_sound(
+    file: UploadFile = File(None),
+    audio_base64: str = Form(None),
+    explain: bool = Form(False),
+    xai_method: str = Form("gradcam++"),
+):
     """Kedi Sesi Sınıflandırma (EfficientNet_Lite0 mel-spektrogram ONNX).
 
     Ses (mp3/wav/m4a/…) → ffmpeg 22050Hz mono WAV → librosa mel-spektrogram (mel+delta+
     delta²) → EfficientNet_Lite0 ONNX → 10 sınıf (Angry..Warning) + top-3. Foto/CSV/form
     DEĞİL — SES. `/api/ai/sound` prefix'iyle auth-muaf.
     """
+    if xai_method not in ("gradcam++", "gradcam", "eigencam", "hirescam"):
+        raise HTTPException(status_code=422, detail=f"xai_method geçersiz: {xai_method}")
     import tempfile
 
     tmp_in = None
@@ -2511,7 +2599,7 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             return await delegate_infer(
                 "sound",
                 audio_base64=base64.b64encode(content).decode("ascii"),
-                data=({"explain": "true"} if explain else None),
+                data=({"explain": "true", "xai_method": xai_method} if explain else None),
             )
 
         # Kayit analiz edilebilir -> ANCAK SIMDI modeli yukle.
@@ -2526,7 +2614,7 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
             try:
                 from ai_hub.inference_cat_sound import inference_cat_sound as _ics
 
-                _x = await asyncio.to_thread(_ics.xai_ses_isi_haritasi, tmp_wav)
+                _x = await asyncio.to_thread(_ics.xai_ses_isi_haritasi, tmp_wav, None, xai_method)
                 _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
                 _xai_alanlari["xai_method"] = _x.get("method")
             except Exception as xe:

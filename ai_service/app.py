@@ -381,7 +381,7 @@ def infer_scratch(
 
 
 @app.post("/infer/sound")
-def infer_sound(file: UploadFile = File(...), explain: str = Form(None)):
+def infer_sound(file: UploadFile = File(...), explain: str = Form(None), xai_method: str = Form(None)):
     """Kedi sesi (mp3/wav/m4a) → ffmpeg 22050 mono WAV → 10 sınıf + top-3 (ONNX GPU).
 
     explain=true → mel üzerinde Grad-CAM (Faz 2 paritesi — TEK-KAYNAK
@@ -465,7 +465,7 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None)):
             try:
                 from ai_hub.inference_cat_sound import inference_cat_sound as _ics
 
-                _x = _ics.xai_ses_isi_haritasi(tmp_wav)
+                _x = _ics.xai_ses_isi_haritasi(tmp_wav, None, xai_method or "gradcam++")
                 _ek["xai_image_base64"] = _x["xai_image_base64"]
                 _ek["xai_method"] = _x.get("method")
             except Exception as xe:
@@ -653,7 +653,7 @@ def infer_landmark(file: UploadFile = File(...)):
 
 # ── Faz 2c: termal (görüntü, GPU), cat_organ (görüntü 3B, GPU) ──
 @app.post("/infer/thermal")
-def infer_thermal(file: UploadFile = File(...), explain: str = Form(None)):
+def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_method: str = Form(None)):
     """Termal görüntü → sağlık sınıflandırma (GhostNetV2 ONNX, GPU).
 
     explain=true → Grad-CAM ısı haritası (Faz 2 paritesi — router ile TEK-KAYNAK
@@ -678,7 +678,7 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None)):
             try:
                 from ai_hub.cat_thermal import inference_cat_thermal as _ict
 
-                _x = _ict.xai_termal_isi_haritasi(tmp)
+                _x = _ict.xai_termal_isi_haritasi(tmp, None, xai_method or "gradcam++")
                 yanit["xai_image_base64"] = _x["xai_image_base64"]
                 yanit["xai_method"] = _x.get("method")
             except Exception as xe:
@@ -982,6 +982,23 @@ def infer_em_fantom(
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
         payload = result.to_dict()
+        # §KALAN A5 (router paritesi): ilk tumor bolgesi icin hafif duyarlilik meta'si.
+        # Aciklama IKINCIL — hatasi analizi ASLA dusurmez (zarif). Sync uc (threadpool)
+        # oldugundan dogrudan cagri yeterli; 7+1 ONNX forward ~ms mertebesi.
+        _xai_meta = {}
+        if result.success and payload.get("tumor_regions"):
+            try:
+                from ai_hub.inference_em_fantom import inference_em_fantom as _ief
+
+                _r0 = payload["tumor_regions"][0]
+                _c = list(_r0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _xai_meta["xaiSensitivity"] = _ief.xai_hizli_sensitivity(
+                    c["predictor"], _c[0], _c[1], _c[2], _r0.get("organ_id", 1), achieved_B or 0.0, duty_sum or 0.0
+                )
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("em_fantom XAI meta uretilemedi (analiz etkilenmedi): %s", xe)
         return {
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
@@ -996,6 +1013,7 @@ def infer_em_fantom(
             "healthy_regions": payload["healthy_regions"],
             "timing_ms": result.timing_ms,
             "image_base64": _jpg_b64(overlay),
+            **_xai_meta,
         }
     except Exception as e:
         return _err500(e)
@@ -1027,6 +1045,22 @@ def infer_em_petri(
         result, ctx = pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum)
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
+        wells = [asdict(w) for w in result.wells]
+        # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
+        _xai_meta = {}
+        if result.success and wells:
+            try:
+                from ai_hub.inference_em_petri import inference_em_petri as _iep
+
+                _w0 = wells[0]
+                _c = list(_w0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _xai_meta["xaiSensitivity"] = _iep.xai_hizli_sensitivity(
+                    c["predictor"], _c[0], _c[1], _c[2], _w0.get("organ_id", 1), achieved_B or 0.0, duty_sum or 0.0
+                )
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("em_petri XAI meta uretilemedi (analiz etkilenmedi): %s", xe)
         return {
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
@@ -1038,9 +1072,10 @@ def infer_em_petri(
             "n_healthy": result.n_healthy,
             "method": result.method,
             "mm_per_px": round(result.mm_per_px, 4),
-            "wells": [asdict(w) for w in result.wells],
+            "wells": wells,
             "timing_ms": result.timing_ms,
             "image_base64": _jpg_b64(overlay),
+            **_xai_meta,
         }
     except Exception as e:
         return _err500(e)
