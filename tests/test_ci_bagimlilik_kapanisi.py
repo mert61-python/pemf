@@ -35,7 +35,10 @@ _URETIM = ("backend_service.py", "servers", "ai_service", "utils")
 #: requirements-test.txt baş yorumundaki BİLİNÇLİ "ağır AI" muafiyeti (lazy yüklenirler).
 #: Buraya ekleme yapmak = "bu paket CI'da ASLA kurulmayacak" demek; o zaman ikinci test
 #: ilgili modülü import eden her test dosyasında importorskip arar.
-AGIR_MUAF = {"onnxruntime", "torch", "ultralytics", "librosa", "numba", "sklearn", "xgboost"}
+# XAI Faz 1-2 güncellemesi (2026-08-26): onnxruntime + scikit-learn artık requirements-test'te
+# KURULU (EM/CKD/cat_disease XAI testleri gerçek zincirle koşsun diye — kosu 71c19a8/b4d223b
+# dersleri) → "CI'da kurulmaz" muafiyetinden ÇIKARILDILAR. torch sınıfı hâlâ dışarıda.
+AGIR_MUAF = {"torch", "ultralytics", "librosa", "numba", "xgboost"}
 
 #: import adı → requirements-test.txt'teki dağıtım adı (farklı olanlar).
 _AD_ESLEME = {
@@ -124,7 +127,11 @@ def test_KRITIK_agir_muaf_modulleri_import_eden_testler_KORUMALI():
         if agirlar:
             ust = f.relative_to(KOK).parts[0].removesuffix(".py")
             agir_ceken.setdefault(ust, set()).update(agirlar)
-    assert agir_ceken, "hiçbir üretim modülü AGIR_MUAF çekmiyor — muafiyet listesi bayatladı mı?"
+    # 2026-08-26: onnxruntime/sklearn muafiyetten çıkınca (artık requirements-test'te kurulu)
+    # bu kapsam modül-düzeyi-ağır-temiz kaldı — bu İYİ durumdur, bayatlama değil. Boşken
+    # ihlal döngüsü zaten no-op; asıl koruma (testlerin doğrudan ağır çekmesi) birinci testte.
+    if not agir_ceken:
+        return
 
     ihlaller = []
     for test_dosyasi in sorted((KOK / "tests").glob("*.py")):

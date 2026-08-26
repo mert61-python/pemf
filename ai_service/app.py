@@ -392,8 +392,11 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None)):
 
 # ── YOLO/görüntü uçları (Faz 2b — GPU via ultralytics device=0 → onnxruntime CUDA) ──
 @app.post("/infer/kidney_ct")
-def infer_kidney_ct(file: UploadFile = File(...)):
-    """Böbrek CT → YOLOv8s tespit (taş/kist/normal) + annotated görsel (GPU)."""
+def infer_kidney_ct(file: UploadFile = File(...), explain: str = Form(None)):
+    """Böbrek CT → YOLOv8s tespit (taş/kist/normal) + annotated görsel (GPU).
+
+    explain=true → EigenCAM (Faz 2 paritesi — TEK-KAYNAK xai_ct_isi_haritasi).
+    """
     tmp = None
     try:
         data = file.file.read()
@@ -407,7 +410,7 @@ def infer_kidney_ct(file: UploadFile = File(...)):
         t0 = time.time()
         result = det.predict(tmp)
         overlay = det.draw_overlay(tmp, result)
-        return {
+        yanit = {
             "status": "success",
             "device": _yolo_device(),
             "inference_ms": round((time.time() - t0) * 1000, 1),
@@ -416,6 +419,19 @@ def infer_kidney_ct(file: UploadFile = File(...)):
             "detections": result.get("detections"),
             "image_base64": _jpg_b64(overlay),
         }
+        if str(explain).lower() == "true":
+            try:
+                from ai_hub.inference_human_kidney_ct import inference_human_kidney_ct as _ikt
+
+                _x = _ikt.xai_ct_isi_haritasi(tmp)
+                yanit["xai_image_base64"] = _x["xai_image_base64"]
+                yanit["xai_method"] = _x.get("method")
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("CT XAI üretilemedi: %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         return _err500(e)
     finally:
@@ -735,8 +751,12 @@ def infer_kidney_disease(payload: dict = Body(...)):
 
 
 @app.post("/infer/rna")
-def infer_rna(file: UploadFile = File(...)):
-    """Böbrek RNA-seq CSV (satır=hasta, sütun=gen) → KIRC sınıflandırma (MLP ONNX)."""
+def infer_rna(file: UploadFile = File(...), explain: str = Form(None)):
+    """Böbrek RNA-seq CSV (satır=hasta, sütun=gen) → KIRC sınıflandırma (MLP ONNX).
+
+    explain=true → hasta başına IG top-gen katkıları (Faz 2 paritesi — TEK-KAYNAK
+    xai_top_genler; router ile aynı N<=25 sınırı).
+    """
     try:
         import io as _io
 
@@ -756,7 +776,7 @@ def infer_rna(file: UploadFile = File(...)):
             )
         t0 = time.time()
         predictions = pred.predict(df)
-        return {
+        yanit = {
             "status": "success",
             "device": "cpu",
             "inference_ms": round((time.time() - t0) * 1000, 1),
@@ -764,14 +784,32 @@ def infer_rna(file: UploadFile = File(...)):
             "classes": pred.classes,
             "predictions": predictions,
         }
+        if str(explain).lower() == "true":
+            if len(df) > 25:
+                yanit["xai_error"] = "Açıklama en fazla 25 hastalık CSV için üretilir (IG maliyeti)."
+            else:
+                try:
+                    from ai_hub.inference_human_kidney_rna import inference_human_kidney_rna as _ihr
+
+                    yanit["xai"] = _ihr.xai_top_genler(df)
+                except Exception as xe:
+                    import logging as _lg
+
+                    _lg.getLogger("ai_service").warning("RNA XAI üretilemedi: %s", xe)
+                    yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         return _err500(e)
 
 
 # ── Faz kalan: reticulocytes (YOLO detect) + em_fantom/em_petri (kabin-CV pipeline) ──
 @app.post("/infer/reticulocytes")
-def infer_reticulocytes(file: UploadFile = File(...)):
-    """Kan mikroskop görüntüsü → YOLOv8s retikülosit tespiti + sayım + overlay (GPU)."""
+def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None)):
+    """Kan mikroskop görüntüsü → YOLOv8s retikülosit tespiti + sayım + overlay (GPU).
+
+    explain=true → EigenCAM ısı haritası (Faz 2 paritesi — TEK-KAYNAK
+    ai_hub.feline_reticulocytes.xai_retikulosit_isi_haritasi).
+    """
     tmp = None
     try:
         data = file.file.read()
@@ -786,13 +824,26 @@ def infer_reticulocytes(file: UploadFile = File(...)):
         results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640, device=_yolo_device(), verbose=False)
         r = results[0]
         n = len(r.boxes) if r.boxes is not None else 0
-        return {
+        yanit = {
             "status": "success",
             "device": _yolo_device(),
             "inference_ms": round((time.time() - t0) * 1000, 1),
             "n_detections": int(n),
             "image_base64": _jpg_b64(r.plot()),
         }
+        if str(explain).lower() == "true":
+            try:
+                from ai_hub.feline_reticulocytes import inference_feline_reticulocytes as _ifr
+
+                _x = _ifr.xai_retikulosit_isi_haritasi(tmp)
+                yanit["xai_image_base64"] = _x["xai_image_base64"]
+                yanit["xai_method"] = _x.get("method")
+            except Exception as xe:
+                import logging as _lg
+
+                _lg.getLogger("ai_service").warning("Retikülosit XAI üretilemedi: %s", xe)
+                yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except Exception as e:
         return _err500(e)
     finally:

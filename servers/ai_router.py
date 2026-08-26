@@ -1916,12 +1916,19 @@ async def analyze_thermal(file: UploadFile = File(None), image_base64: str = For
 
 
 @ai_router.post("/api/ai/vision/reticulocytes")
-async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str = Form(None)):
-    """YOLO Detect Retikülosit Sayımı"""
+async def analyze_reticulocytes(
+    file: UploadFile = File(None), image_base64: str = Form(None), explain: bool = Form(False)
+):
+    """YOLO Detect Retikülosit Sayımı (+opsiyonel EigenCAM — Faz 2 kuyruğu)"""
     tmp = None  # finally'de temizlenecek temp görüntü (hata olsa da sızmasın)
     try:
         if ai_service_enabled():
-            return await _kapili_devret("reticulocytes", file=file, image_base64=image_base64)
+            return await _kapili_devret(
+                "reticulocytes",
+                file=file,
+                image_base64=image_base64,
+                data=({"explain": "true"} if explain else None),
+            )
         img = await _decode_image(file, image_base64, label="reticulocytes")
 
         def _load_retic():
@@ -1976,9 +1983,21 @@ async def analyze_reticulocytes(file: UploadFile = File(None), image_base64: str
         else:
             b64_image = _encode_jpg_b64(img)
 
-        os.unlink(tmp.name)
+        # Sunum-katmanı XAI (Faz 2 kuyruğu): EigenCAM — tespitte dayanılan hücre bölgeleri.
+        # ⚠️ tmp finally'de siliniyor → XAI burada. Açıklama İKİNCİL (zarif düşüş).
+        _xai_alanlari = {}
+        if explain:
+            try:
+                from ai_hub.feline_reticulocytes import inference_feline_reticulocytes as _ifr
 
-        return {"status": "success", "counts": counts, "image_base64": b64_image}
+                _x = await asyncio.to_thread(_ifr.xai_retikulosit_isi_haritasi, tmp.name)
+                _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
+                _xai_alanlari["xai_method"] = _x.get("method")
+            except Exception as xe:
+                logger.warning("Retikülosit XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
+
+        return {"status": "success", "counts": counts, "image_base64": b64_image, **_xai_alanlari}
     except Exception as e:
         logger.error(f"Reticulocytes inference error: {e}", exc_info=True)
         raise _ai_fail("Retikülosit model hatası", e)
@@ -2189,7 +2208,10 @@ async def analyze_em_petri(
 
 @ai_router.post("/api/ai/rna/kidney")
 async def analyze_kidney_rna(
-    file: UploadFile = File(None), csv_base64: str = Form(None), _res=Depends(require_research)
+    file: UploadFile = File(None),
+    csv_base64: str = Form(None),
+    explain: bool = Form(False),
+    _res=Depends(require_research),
 ):
     """Böbrek RNA-seq → KIRC sınıflandırma (MLP-medium ONNX).
 
@@ -2199,7 +2221,12 @@ async def analyze_kidney_rna(
     """
     try:
         if ai_service_enabled():
-            return await delegate_infer("rna", file=file, csv_base64=csv_base64)
+            return await delegate_infer(
+                "rna",
+                file=file,
+                csv_base64=csv_base64,
+                data=({"explain": "true"} if explain else None),
+            )
         if csv_base64:
             content = base64.b64decode(csv_base64)
         elif file:
@@ -2243,12 +2270,27 @@ async def analyze_kidney_rna(
             )
 
         predictions = await asyncio.to_thread(lambda: predictor.predict(df))
-        return {
+        yanit = {
             "status": "success",
             "n_patients": len(predictions),
             "classes": predictor.classes,
             "predictions": predictions,
         }
+        # Sunum-katmanı XAI (Faz 2 kuyruğu): hasta başına IG top-gen katkıları.
+        # ⚠️ IG maliyeti N ile lineer → N>25'te ÜRETİLMEZ (60MB CSV'de patlama); analiz
+        # yine döner. Açıklama İKİNCİL: hatası analizi düşürmez.
+        if explain:
+            if len(df) > 25:
+                yanit["xai_error"] = "Açıklama en fazla 25 hastalık CSV için üretilir (IG maliyeti)."
+            else:
+                try:
+                    from ai_hub.inference_human_kidney_rna import inference_human_kidney_rna as _ihr
+
+                    yanit["xai"] = await asyncio.to_thread(_ihr.xai_top_genler, df)
+                except Exception as xe:
+                    logger.warning("RNA XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                    yanit["xai_error"] = "Açıklama üretilemedi"
+        return yanit
     except HTTPException:
         raise
     except Exception as e:
@@ -2524,7 +2566,10 @@ async def analyze_cat_sound(file: UploadFile = File(None), audio_base64: str = F
 
 @ai_router.post("/api/ai/vision/kidney_ct")
 async def analyze_kidney_ct(
-    file: UploadFile = File(None), image_base64: str = Form(None), _res=Depends(require_research)
+    file: UploadFile = File(None),
+    image_base64: str = Form(None),
+    explain: bool = Form(False),
+    _res=Depends(require_research),
 ):
     """Böbrek CT Tespit (YOLOv8s ONNX, 3 sınıf: Kidney Stone / Kidney / Kidney Cyst).
 
@@ -2532,7 +2577,12 @@ async def analyze_kidney_ct(
     """
     try:
         if ai_service_enabled():
-            return await _kapili_devret("kidney_ct", file=file, image_base64=image_base64)
+            return await _kapili_devret(
+                "kidney_ct",
+                file=file,
+                image_base64=image_base64,
+                data=({"explain": "true"} if explain else None),
+            )
         img = await _decode_image(file, image_base64, label="kidney_ct")
 
         def _load_kidney_ct():
@@ -2552,9 +2602,22 @@ async def analyze_kidney_ct(
         tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
         tmp.close()
         cv2.imwrite(tmp.name, img)
+        _xai_alanlari = {}
         try:
             result = await asyncio.to_thread(lambda: det.predict(tmp.name))
             overlay = await asyncio.to_thread(lambda: det.draw_overlay(tmp.name, result))
+            # Sunum-katmanı XAI (Faz 2 kuyruğu; Faz-0 karar #4 AGPL onaylı): EigenCAM.
+            # tmp bu blokta silinir → XAI silinmeden. Açıklama İKİNCİL (zarif düşüş).
+            if explain:
+                try:
+                    from ai_hub.inference_human_kidney_ct import inference_human_kidney_ct as _ikt
+
+                    _x = await asyncio.to_thread(_ikt.xai_ct_isi_haritasi, tmp.name)
+                    _xai_alanlari["xai_image_base64"] = _x["xai_image_base64"]
+                    _xai_alanlari["xai_method"] = _x.get("method")
+                except Exception as xe:
+                    logger.warning("CT XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
+                    _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
         finally:
             try:
                 os.unlink(tmp.name)
@@ -2568,6 +2631,7 @@ async def analyze_kidney_ct(
             "n_detections": result["n_detections"],
             "class_counts": result["class_counts"],
             "detections": result["detections"],
+            **_xai_alanlari,
         }
     except Exception as e:
         logger.error(f"kidney_ct inference error: {e}", exc_info=True)

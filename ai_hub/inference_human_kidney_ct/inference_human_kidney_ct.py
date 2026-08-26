@@ -261,6 +261,56 @@ def _collect_from_dir(d: Path) -> list[str]:
             if f.is_file() and f.suffix.lower() in _IMG_EXTS]
 
 
+# ============================================================
+# XAI — EigenCAM isi haritasi (Faz 2 kuyrugu, 2026-08-26; Faz-0 karar #4 AGPL ONAYLI)
+# ============================================================
+# EigenCAM label-agnostik, GRADIENT'SIZ (YOLO'da Grad-CAM gurultulu). TEK-IS kilidi +
+# XAI kendi PT-YOLO instance'i (detektorun ONNX oturumuna dokunmaz); bellek-ici base64.
+import threading as _xai_threading
+
+_XAI_KILIT = _xai_threading.Lock()
+_XAI_PT_CACHE: dict = {}
+
+
+def xai_ct_isi_haritasi(image_path: str, pt_path: str | None = None,
+                          alpha: float = 0.5) -> dict:
+    """CT goruntusu icin EigenCAM — modelin tespitte bakis bolgeleri (arastirma yuzeyi).
+
+    TEK-KAYNAK: router + ai_service ayni fonksiyon (kapi-paritesi dersi).
+    Doner: {"xai_image_base64": <jpg b64 overlay>, "method": "eigencam"}
+    """
+    import base64 as _b64
+
+    import cv2
+
+    from ai_hub.xai_utils.overlay import blend_to_array
+    from ai_hub.xai_utils.yolo_cam import YoloEigenCAM
+
+    if pt_path is None:
+        from utils.model_downloader import download_model_sync
+
+        pt_path = download_model_sync("ai_hub/inference_human_kidney_ct/yolov8s.pt")
+
+    with _XAI_KILIT:
+        expl = _XAI_PT_CACHE.get("ct")
+        if expl is None:
+            from ultralytics import YOLO
+
+            expl = YoloEigenCAM(YOLO(str(pt_path)), layer_idx=-2, imgsz=640, device="cpu")
+            _XAI_PT_CACHE["ct"] = expl
+        heatmap = expl.explain(image_path)
+
+    bgr = cv2.imread(str(image_path))
+    if bgr is None:
+        raise RuntimeError(f"XAI icin goruntu okunamadi: {image_path}")
+    overlay = blend_to_array(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), heatmap, alpha=alpha)
+    ok, buf = cv2.imencode(".jpg", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
+                            [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not ok:
+        raise RuntimeError("XAI overlay JPG encode basarisiz")
+    return {"xai_image_base64": _b64.b64encode(buf.tobytes()).decode("ascii"), "method": "eigencam"}
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="inference_human_kidney_ct",

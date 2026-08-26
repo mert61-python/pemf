@@ -163,8 +163,12 @@ class KidneyRnaPredictor:
         return rows
 
 
-def _predict_proba_pytorch(pt_path: Path, X: np.ndarray, in_dim: int,
-                            n_classes: int) -> np.ndarray:
+def _load_mlp_medium_pt(pt_path: Path, in_dim: int, n_classes: int):
+    """MLP-medium mimarisini kur + state_dict yukle (TEK mimari kaynagi — XAI de kullanir).
+
+    Faz 2 kuyrugu (2026-08-26): _predict_proba_pytorch'un icindeki kurulum XAI (IG) icin
+    ayrildi; davranis birebir (weights_only=True — Audit P3 korunur).
+    """
     import torch
     import torch.nn as nn
 
@@ -178,11 +182,72 @@ def _predict_proba_pytorch(pt_path: Path, X: np.ndarray, in_dim: int,
     )
     sd = torch.load(pt_path, map_location="cpu", weights_only=True)
     model.load_state_dict(sd)
-    model.eval()
+    return model.eval()
+
+
+def _predict_proba_pytorch(pt_path: Path, X: np.ndarray, in_dim: int,
+                            n_classes: int) -> np.ndarray:
+    import torch
+
+    model = _load_mlp_medium_pt(pt_path, in_dim, n_classes)
     with torch.no_grad():
         logits = model(torch.from_numpy(X.astype(np.float32)))
         probs = torch.softmax(logits, dim=1).numpy()
     return probs
+
+
+# ============================================================
+# XAI — Integrated Gradients gen katkilari (Faz 2 kuyrugu, 2026-08-26)
+# ============================================================
+import threading as _xai_threading
+
+_XAI_KILIT = _xai_threading.Lock()
+_XAI_PT_CACHE: dict = {}
+
+
+def xai_top_genler(df: "pd.DataFrame", top_n: int = 10,
+                    pt_path: "Path | None" = None) -> list:
+    """Hasta basina IG top-N gen katkisi (Captum; internal_batch_size'li — OOM zarfi).
+
+    Zincir predict ile BIREBIR: log2(x+1) -> scaler -> fs_idx secimi -> MLP; katki tahmin
+    edilen sinif (argmax) icindir, isaretli (pozitif -> o sinif lehine). Gen isimleri
+    df kolonlarindan fs_idx ile secilir. TEK-KAYNAK: router + ai_service ayni fonksiyon.
+    ⚠️ IG maliyeti N ile lineer — cagiran N sinirini uygular (router: N<=25).
+
+    Doner: [{"patient_id", "top_genes": [{"gene", "attribution"}...]}, ...]
+    """
+    from ai_hub.xai_tabular.ig_torch import integrated_gradients
+
+    meta, scaler, fs_idx, classes = _load_meta_and_aux()
+    if pt_path is None:
+        pt_path = HERE / meta.get("torch_state_dict", "mlp_medium_kirc.pt")
+        if not Path(pt_path).exists():
+            from utils.model_downloader import download_model_sync
+
+            pt_path = download_model_sync("ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt")
+
+    X = np.log2(df.values.astype(np.float32) + 1.0)
+    X = scaler.transform(X)[:, fs_idx].astype(np.float32)
+    gen_adlari = [str(df.columns[int(i)]) for i in fs_idx]
+
+    with _XAI_KILIT:
+        model = _XAI_PT_CACHE.get("mlp")
+        if model is None:
+            model = _load_mlp_medium_pt(Path(pt_path), in_dim=X.shape[1], n_classes=len(classes))
+            _XAI_PT_CACHE["mlp"] = model
+        attrs = integrated_gradients(model, X, class_idx=None, internal_batch_size=64)  # (N, F)
+
+    sonuc = []
+    for i, pid in enumerate(df.index):
+        sira = np.argsort(-np.abs(attrs[i]))[: int(top_n)]
+        sonuc.append({
+            "patient_id": str(pid),
+            "top_genes": [
+                {"gene": gen_adlari[int(j)], "attribution": round(float(attrs[i, int(j)]), 6)}
+                for j in sira
+            ],
+        })
+    return sonuc
 
 
 def main():
