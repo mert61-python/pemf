@@ -6,9 +6,35 @@ hücre instance segmentasyonu + TScratch-benzeri **wound-closure metrikleri**
 
 Plan ve sahip kararları: `guii/scratch-entegrasyon-plani.md` (v3, kararlar KESİN).
 
+## 📦 TESLİM BEKLENİYOR — Çağlar Hoca'dan istenenler (2026-08-26)
+
+> **1) `cell/` klasörü (ZORUNLU — bunsuz model çalışmaz).**
+> Eğitim deposundaki **`training/paper_dilek_hoca/cell/`** klasörünün kendisi
+> (içerik: `cpn.py`, `prep.py`, varsa `__init__.py` — toplam birkaç KB).
+>
+> **Neden:** Teslim paketindeki `cell` girdisi gerçek klasör değil, **kırık POSIX
+> symlink** — içinde yalnız şu yol yazıyor:
+> `/home/caglargurkan/Projects/Doktora/.../training/paper_dilek_hoca/cell`
+> Windows'a kopyalanınca içi boş geldi (her iki teslimde de aynı). İçindeki iki
+> parça olmadan 872 MB'lık model koşamaz:
+> - `CpnInterface` — modeli yükleyip tile'lı (1664/384) inference süren sarmalayıcı,
+> - `multi_norm(img, "cstm-mix")` — modelin **eğitimde kullandığı** normalizasyon.
+>
+> pip `celldetection` bu ikisini **içermiyor** (ölçüldü — export listesinde yoklar).
+> `multi_norm`'u tahminle yeniden yazmak sessiz-yanlış hücre sayısı üretir; bu
+> yüzden bilerek beklenildi. **Geliş yeri:** bu klasöre `cell/` olarak konacak →
+> `ai_hub/inference_paper_dilek_hoca/cell/`.
+>
+> **2) celldetection sürümü (opsiyonel ama iyi olur).**
+> Eğitim ortamındaki `pip show celldetection` çıktısındaki sürüm numarası.
+> Şimdilik `celldetection==0.4.9` pinli; farklıysa birebir eşitlenecek.
+>
+> **Geldiğinde yapılacak (her şey hazır bekliyor):** klasörü koy → gerçek-model
+> smoke (paketteki referanslarla toleranslı doğrulama: CONTROL-0H 1494 hücre /
+> %4.3, CONTROL-24H 2085 / %29.3) → Docker cu128 GPU smoke → yayın.
+
 ## Durum
-- ⚠️ **`cell/` alt paketi HENÜZ YOK** — teslim paketinde kırık POSIX symlink'ti
-  (CpnInterface + `multi_norm` sahibin eğitim deposunda). Gelene kadar
+- ⚠️ **`cell/` alt paketi HENÜZ YOK** (yukarıdaki teslim bekleniyor). Gelene kadar
   `CellSegmentationPredictor` açık `RuntimeError` verir; endpoint zarif 503 döner.
 - Ağırlık: `ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt` (~872 MB) —
   `release_assets/ai_models/ai_hub/inference_paper_dilek_hoca/` tek-kaynağında;
