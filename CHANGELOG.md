@@ -32,6 +32,21 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.26 — 2026-08-26 (🔬 Histopatoloji XAI: ensemble ısı haritası + model-kararsızlık haritası)
+
+Yayın etiketi: app → `client-app-v1.9.26`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ;
+**deps katmanı da DEĞİŞMEDİ** (1.9.25'teki sha aynen — yeni bağımlılık yok).
+Paket kimliği (`buildId`): `d4ad28a47dc9`. Monolit `base.zip` sha: `4757e30f35f8`.
+`research.zip` yenilendi (+858MB renal PT ikizi → ~2,46GB).
+
+**Ne değişti (XAI Faz 4 — 1.9.25'in tamamlayıcısı):**
+- **Böbrek Patoloji:** `explain=true` → 3-backbone ensemble'ın (VGG19-BN + WideResNet50-2 +
+  DenseNet-201) kesitin NERESİNE dayandığı (ensemble HiRes-CAM ortalaması) **ve üç modelin
+  nerede AYRIŞTIĞI** (std **disagreement haritası** — tek skalar güvenin gösteremediği
+  model-kararsızlığı göstergesi) görselde döner. XAI hatası analizi düşürmez; PT yüklemesi
+  `weights_only=True`; tek-iş kilidi.
+- Test: 6 yeni (gerçek 858MB PT ile deterministik) + mutasyon; tam süit 1843.
+
 ## app 1.9.25 — 2026-08-26 (🔍 Açıklanabilir AI: analizler artık NEDENİNİ gösteriyor)
 
 Yayın etiketi: app → `client-app-v1.9.25`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ.
