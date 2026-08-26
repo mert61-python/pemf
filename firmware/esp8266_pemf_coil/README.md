@@ -41,6 +41,13 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
   plain soketle yoklanır; ayağa kalkınca mevcut bulut bağlantısı düşürülür ve yerel ÖNCE
   denenir → cihaz yerele döner. Yoklama başarısızsa hiçbir şey yapılmaz (bulut STABİL kalır,
   E-stop aynası korunur). Broker seçimi yerel-önce / bulut-yedek (`_reconnectMQTT`).
+- **EEPROM adres haritası çakışması ([D4])** (yukarıdaki 2026-08-19 LWT `D-4`'ten AYRI bulgu):
+  non-WiFi adresler (PWM/BROKER/CONFIG_VER, eski 256/300/304) 5-slotluk WiFi kimlik bölgesinin
+  ([0,495)) İÇİNDEYDİ → 30 sn'lik `savePWMState` kayıtlı WiFi'yi, portal WiFi yazımı `CONFIG_VER`'i
+  bozup her boot'ta yanlış sürüm-uyuşmazlığı + wipe tetikliyordu. Non-WiFi blok bölgenin sonrasına
+  (`≥512`) taşındı, `CONFIG_VERSION 1→2`; **5-slot kapasitesi korundu** (`SharedDefs.h`). Yalnız
+  portal-tabanlı kurulumları etkiliyordu (gömülü `Secrets.h` kimlikli mutlu yol EEPROM'a yazmaz).
+  ⚠️ Reflash sonrası tek-seferlik WiFi wipe olur → yeniden provizyon gerekir.
 
 ## Flash öncesi
 

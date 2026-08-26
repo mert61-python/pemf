@@ -19,7 +19,7 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 | `secrets_backup.py` | Makine-özel sırların taşınabilir yedeği → tek `.pemfsec` arşivi (⚠️PAROLASIZ base64, sahip kararı 2026-08-19); yeni makinede `restore` |
 | `hook-paho.mqtt.py` | PyInstaller hook — tüm `paho.mqtt` alt-modül/verisini dahil eder |
 | `myenv-requirements.txt` | Gömülü Python build ortamının **pinli pip kilidi** (kurtarma için; myenv/sistem Python silindi) |
-| `Output/` | **Inno installer çıktısı** — `PEMFBackendSetup_device_v1.9.5.exe` + `-1.bin`/`-2.bin` DiskSpanning dilimleri |
+| `Output/` | **Inno installer çıktısı** — `PEMFBackendSetup_device_v1.9.20.exe` + `-1.bin`/`-2.bin` DiskSpanning dilimleri |
 | `tools/Autologon64.exe` | Sysinternals Autologon (klinik mini-PC gözetimsiz oturum yardımcısı) |
 
 ## ⚠️ Dikkat
