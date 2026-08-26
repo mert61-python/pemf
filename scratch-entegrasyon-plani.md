@@ -1,6 +1,15 @@
 # paper_dilek_hoca (Scratch/Wound-Healing) Entegrasyon Planı — v2
 
-**Tarih:** 2026-08-26 · **Kaynak paket:** `C:\Users\merta\Desktop\entegre` (984 MB) · **Durum:** PLAN v2 — onay bekliyor
+**Tarih:** 2026-08-26 · **Kaynak paket:** `C:\Users\merta\Desktop\entegre` (984 MB) · **Durum:** ✅ FAZ 1-4.5 GERÇEKLEŞTİ (2026-08-27)
+
+> **KAPANIŞ ÖZETİ:** Faz 1-3 (modül+uçlar+UI; 40 backend + 5 jest kilidi) → cell/ teslimi
+> (26.08 23:12, cell.zip) → **GERÇEK-MODEL doğrulaması** (CPU ~18 sn/görüntü; 0H:
+> 1495/%4.29/1053.5µm, 24H: 2083/%29.36/428.0µm — sahip referanslarıyla neredeyse birebir)
+> → **GPU smoke** `SCRATCH-SMOKE-OK cuda:0 9.8sn 2086 %29.32 eigencam` → **Faz 4.5
+> launcher 1.9.39 çoklu-model-zip** (`model_parts`; cargo 223 `--locked`; research-2.zip
+> **1.81 GB, sha 10e177b8…** üretildi; make_manifest + BUILD.md runbook AYNI commit'te).
+> İki düşman-doğrulama turu 10+ hakem-onaylı bulguyu yayına çıkmadan kapattı.
+> **Kalan tek iş:** bir sonraki yayında research-2.zip asset yüklemesi (BUILD.md §6 kuralı).
 **Keşif:** 5 paralel okuyucu · **Denetim:** 5 bağımsız denetçi (v1'de 18 eksik bulundu, bu sürümde kapatıldı)
 
 ---
