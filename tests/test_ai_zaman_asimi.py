@@ -141,7 +141,7 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
     # sessizce kopmasına izin verir — arızanın kök sebebi zaten tam olarak buydu.
     # 12 = 1 tanım + 11 çağrı (AI modüllerinin `catch` blokları). Yeni bir AI modülü
     # eklenince bu sayı BİLİNÇLİ güncellenmeli; `/simulator` rota sözleşmesiyle aynı mantık.
-    BEKLENEN_GECIS = 12
+    BEKLENEN_GECIS = 13  # 2026-08-26: +1 ScratchModule (Yara Kapanma) — tek-kaynak aiHataMesaji kullanır
     kullanim = len(re.findall(r"aiHataMesaji\(", kod))
     assert kullanim == BEKLENEN_GECIS, (
         f"aiHataMesaji gecis sayisi {kullanim}, beklenen {BEKLENEN_GECIS} — bir AI modulu "

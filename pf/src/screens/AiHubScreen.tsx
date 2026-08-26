@@ -28,7 +28,7 @@ import { UpgradeModal, type UpgradeFeature } from "@/components/UpgradeModal";
 import { useResponsive } from "@/hooks/useResponsive";
 import { PatientGate } from "@/components/domain/PatientGate";
 
-type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ";
+type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ" | "cell_scratch";
 
 const SYMPTOMS = [
   "İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü",
@@ -168,6 +168,14 @@ interface AiResult {
   // kidney_ct / cat_organ
   class_counts?: Record<string, number>; detections?: AiDetection[];
   n_organs?: number; organs?: AiOrgan[]; pose_type?: string; pnp_residual_px?: number;
+  // cell_scratch (Yara Kapanma — plan: scratch-entegrasyon-plani.md v3). Görsel alanlar
+  // TOP-LEVEL tutulur (cleanDetail depth≥2 iç-nesneyi olduğu gibi kopyalar — ölçüldü).
+  n_cells?: number; coverage_ratio?: number; score_mean?: number;
+  scratch_yonu?: string; pixel_mm?: number;
+  closure?: { closure_pct: number; mean_gap_um: number; max_gap_um: number; gap_area_mm2: number } | null;
+  uyari?: string; closure_uyari?: string; device?: string;
+  input_image_base64?: string; seg_image_base64?: string; overlay_image_base64?: string;
+  analysis_image_base64?: string; closure_image_base64?: string; xai_side_by_side_base64?: string;
 }
 
 function summarizeVision(d: any): string {
@@ -229,7 +237,7 @@ export function AiHubScreen() {
 
   const patientName = selectedPatient?.name || "";
 
-  // Modüller profile göre filtrelenir: veterinarian → 7 kedi modeli; researcher → 6 araştırma modeli
+  // Modüller profile göre filtrelenir: veterinarian → 7 kedi modeli; researcher → 7 araştırma modeli
   // (fantom/petri/böbrek). Yeni model eklenince yalnız modes'unu ayarla. (pet_owner yukarıda ayrılır.)
   // 2026-08-06 sahip kararı araştırma profiline CİHAZ ROTALARINI açtı (config/access.ts); AI Hub'ın
   // bu bölüşümü BİLİNÇLİ olarak DEĞİŞMEDİ — kedi modelleri klinik, araştırma modelleri laboratuvar işi.
@@ -246,6 +254,7 @@ export function AiHubScreen() {
     { id: "cat_sound", label: "Kedi Sesi", desc: "Miyavdan duygu/durum sınıflandırma", icon: AudioLines, modes: ["veterinarian"] },
     { id: "kidney_ct", label: "Böbrek CT", desc: "CT'de taş / kist tespiti", icon: ScanLine, modes: ["researcher"] },
     { id: "histopath", label: "Böbrek Patoloji", desc: "Histopatoloji derece (grade 0–4)", icon: Microscope, modes: ["researcher"] },
+    { id: "cell_scratch", label: "Yara Kapanma (Scratch)", desc: "Hücre segmentasyonu + kapanma metrikleri", icon: FlaskConical, modes: ["researcher"] },
     { id: "cat_organ", label: "Kedi Organ", desc: "Organ 3B lokalizasyon (10 organ)", icon: PawPrint, modes: ["veterinarian"] },
   ];
   const MODULES = ALL_MODULES.filter((m) => userMode != null && m.modes.includes(userMode));
@@ -265,6 +274,7 @@ export function AiHubScreen() {
       case "cat_sound": return <CatSoundModule key="cat_sound" patientName={patientName} />;
       case "kidney_ct": return <KidneyCTModule key="kidney_ct" patientName={patientName} />;
       case "histopath": return <HistopathModule key="histopath" patientName={patientName} />;
+      case "cell_scratch": return <ScratchModule key="cell_scratch" patientName={patientName} />;
       case "cat_organ": return <CatOrganModule key="cat_organ" patientName={patientName} />;
       default: return null;
     }
@@ -2929,6 +2939,262 @@ const relColor = (r: number) => (r >= 0.6 ? colors.success : r >= 0.4 ? colors.w
  * Kedi Organ 3B Lokalizasyon — kedi fotoğrafından 10 organın 3B konumu (YOLOseg+DLC+RTMPose+PnP).
  * Backend: POST /api/ai/vision/cat_organ → organ overlay + organ tablosu (3B koordinat + güven).
  */
+// ── Yara Kapanma (Scratch) — plan: guii/scratch-entegrasyon-plani.md v3 (§5) ─────────────────
+// TEK girdi → ÇOKLU görsel çıktı; butonlu galeri (dikey istif DEĞİL — 6 görsel ekranı kaydırır).
+// TIF gerçekleri (plan v2 §2/11, ÖLÇÜLDÜ): tarayıcı/RN Image TIF RENDER EDEMEZ ve shrinkForUpload
+// (a) TIFF decode edemez (b) 1500px JPEG'e küçültür — µm/mm² ÖLÇÜMÜNÜ BOZAR. Bu modül shrink'i
+// BYPASS eder: HAM dosya file-part gider (base64 form-part Starlette 1MB sınırına takılır),
+// önizleme yerine dosya-adı gösterilir, orijinal [Orijinal] sekmesinde sunucu JPEG'iyle gelir.
+// Modül-LOKAL 300sn timeout: 872MB CPN soğuk başlatması CPU'da dakikalar (karar 0.1) — global
+// AI_TIMEOUT_MS'e DOKUNULMAZ (13 modülü etkiler).
+const SCRATCH_TIMEOUT_MS = 300_000;
+const SCRATCH_OBJEKTIFLER = [
+  { ad: "4×", pmm: "0.0016" }, { ad: "10×", pmm: "0.00065" },
+  { ad: "20×", pmm: "0.00033" }, { ad: "40×", pmm: "0.00016" },
+] as const;
+const SCRATCH_GALERI: { k: string; ad: string; alan: keyof AiResult; not: string }[] = [
+  { k: "closure", ad: "Kapanma", alan: "closure_image_base64", not: "Sarı bant = scratch ROI · kırmızı = maks gap · mavi = ort. gap" },
+  { k: "analysis", ad: "Analiz", alan: "analysis_image_base64", not: "Kırmızı çizgiler = yaraya dik ROI kuşağı · sarı = kuşağa en yakın hücreler" },
+  { k: "seg", ad: "Segmentasyon", alan: "seg_image_base64", not: "Her hücre ayrı renk (CPN instance)" },
+  { k: "overlay", ad: "Overlay", alan: "overlay_image_base64", not: "Segmentasyon + orijinal karışımı" },
+  { k: "input", ad: "Orijinal", alan: "input_image_base64", not: "Orijinal görüntü (sunucu JPEG önizlemesi — TIF tarayıcıda gösterilemez)" },
+  { k: "xai", ad: "XAI", alan: "xai_image_base64", not: "EigenCAM — bölgesel model ilgisi (hücre-düzeyi açıklama DEĞİLDİR)" },
+  { k: "panel", ad: "3'lü panel", alan: "xai_side_by_side_base64", not: "Orijinal | ısı haritası | overlay" },
+];
+type ScratchKayit = { etiket: string; closure_pct: number; mean_gap_um: number };
+
+function ScratchModule({ patientName }: { patientName: string }) {
+  const CK = "cell_scratch";
+  const onceki = moduleCache[CK] || {};
+  const [dosya, setDosya] = useState<{ uri: string | null; name: string; file: File | null } | null>(onceki.dosya ?? null);
+  const [yon, setYon] = useState<"dikey" | "yatay">(onceki.yon ?? "dikey");
+  const [pmm, setPmm] = useState<string>(onceki.pmm ?? "0.0016");
+  const [xaiAc, setXaiAc] = useState<boolean>(onceki.xaiAc ?? false);
+  const [result, setResult] = useState<AiResult | null>(onceki.result ?? null);
+  const [galeri, setGaleri] = useState<string>(onceki.galeri ?? "closure");
+  const [loading, setLoading] = useState(false);
+  const [longLoading, setLongLoading] = useState(false);
+  const [yenidenGerek, setYenidenGerek] = useState<boolean>(onceki.yenidenGerek ?? false);
+  const [kayitlar, setKayitlar] = useState<ScratchKayit[]>(onceki.kayitlar ?? []);
+  const [karsiAcik, setKarsiAcik] = useState(false);
+  const mountedRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
+  // DÜŞMAN-DOĞRULAMA: 300sn'lik pencerede kullanıcı yeni dosya/parametre seçebilir;
+  // ESKİ isteğin yanıtı gelirse sessizce yeni girdinin sonucu sanılırdı → istek-kimliği.
+  const istekRef = useRef(0);
+  const { showToast } = useToast();
+  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort(); }, []);
+  // Kalıcılık: moduleCache (hasta/profil değişince resetAiCachesForOwner temizler — KRİTİK desen).
+  // `imageUri` alias'ı BİLİNÇLİ: resetAiCachesForOwner blob revoke'unu bu alandan yapar
+  // (düşman-doğrulama: dosya.uri altında saklanan web blob'u temizlikte kaçıyordu).
+  useEffect(() => { moduleCache[CK] = { dosya, yon, pmm, xaiAc, result, galeri, yenidenGerek, kayitlar, imageUri: dosya?.uri ?? null }; });
+
+  const parametreDegisti = () => { istekRef.current++; if (result) setYenidenGerek(true); };
+
+  const dosyaSec = async () => {
+    if (loading) return; // analiz sürerken girdi değiştirilemez (stale-yanıt yarışı)
+    // DocumentPicker (RNA deseni): image/* + image/tiff — native foto seçici TIFF listelemez.
+    const res = await DocumentPicker.getDocumentAsync({ type: ["image/*", "image/tiff"], copyToCacheDirectory: true });
+    if (res.canceled || !res.assets?.[0]) return;
+    const a = res.assets[0];
+    istekRef.current++; // olası eski yanıtları geçersiz kıl
+    if (dosya?.uri?.startsWith("blob:")) { try { URL.revokeObjectURL(dosya.uri); } catch { /* ignore */ } }
+    setDosya({ uri: a.uri, name: a.name || "goruntu", file: (a as any).file || null });
+    setResult(null); setYenidenGerek(false);
+  };
+
+  const analiz = async () => {
+    if (!dosya || loading) return;
+    setLoading(true); setLongLoading(false);
+    const benimIstek = ++istekRef.current;
+    const uzun = setTimeout(() => { if (mountedRef.current) setLongLoading(true); }, 8000);
+    try {
+      const fd = new FormData();
+      if (Platform.OS === "web") {
+        let blob: Blob | null = dosya.file;
+        if (!blob && dosya.uri) blob = await (await fetch(dosya.uri)).blob();
+        if (!blob) throw new Error("Dosya okunamadı.");
+        fd.append("file", blob, dosya.name);
+      } else {
+        // ÖLÇÜLMÜŞ (RNA/cat_sound notları): RN multipart file:// URI'sini doğrudan
+        // OKUYAMIYOR ("Ağ hatası") → base64 okuyup image_base64 gönderilir; router'ın
+        // _allow_large_upload kapısı base64 form-part'ı 50MB'a açar (shrink YOK —
+        // µm ölçümü bozulmaz; 20MB TIF base64 ~27MB sınıra sığar).
+        const b64 = await FileSystemLegacy.readAsStringAsync(dosya.uri!, { encoding: "base64" });
+        fd.append("image_base64", b64);
+      }
+      fd.append("scratch_yonu", yon);
+      fd.append("pixel_mm", pmm);
+      if (xaiAc) fd.append("explain", "true");
+      const ctrl = new AbortController(); abortRef.current = ctrl;
+      const to = setTimeout(() => ctrl.abort(), SCRATCH_TIMEOUT_MS);
+      const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/scratch", {
+        method: "POST", body: fd,
+        headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
+      });
+      clearTimeout(to);
+      const data = await r.json();
+      if (!mountedRef.current) return;
+      if (istekRef.current !== benimIstek) return; // stale yanıt: girdi/parametre değişti
+      if (r.ok && data.status === "success") {
+        setResult(data); setYenidenGerek(false);
+        setGaleri(data.uyari ? "input" : "closure");
+        if (!data.uyari && data.closure) {
+          const etiket = dosya.name.replace(/\.[^.]+$/, "");
+          // Aynı etiketin tekrar analizi (örn. objektif düzeltmesi) yeni kayıt AÇMAZ,
+          // mevcut kaydı günceller — Δ kartı aynı görüntüyü kendisiyle kıyaslamasın.
+          setKayitlar((k) => [...k.filter((x) => x.etiket !== etiket).slice(-7), {
+            etiket, closure_pct: data.closure.closure_pct, mean_gap_um: data.closure.mean_gap_um,
+          }]);
+        }
+        logAiResult(patientName, "Yara Kapanma (Scratch)",
+          data.uyari ? "Hücre tespit edilemedi" : `Kapanma %${data.closure?.closure_pct ?? "?"} · ${data.n_cells} hücre`,
+          { moduleId: "cell_scratch", inputType: "image", detail: data });
+      } else showToast(data?.detail || data?.error || "Analiz sırasında hata oluştu.", "error");
+    } catch (e) {
+      if (mountedRef.current) showToast(aiHataMesaji(e), "error");
+    } finally {
+      clearTimeout(uzun);
+      if (mountedRef.current) { setLoading(false); setLongLoading(false); }
+    }
+  };
+
+  const aktifGaleri = SCRATCH_GALERI.filter((g) => result && (result as any)[g.alan]);
+  const seciliGorsel = aktifGaleri.find((g) => g.k === galeri) || aktifGaleri[0];
+  const son2 = kayitlar.slice(-2);
+
+  return (
+    <Card style={styles.card}>
+      <Text style={styles.title}>Yara Kapanma (Scratch)</Text>
+      <Text style={styles.subtitle}>CPN hücre segmentasyonu + TScratch kapanma metrikleri (araştırma verisi — hasta kaydı değildir).</Text>
+
+      <TouchableOpacity style={styles.scFileBtn} onPress={dosyaSec} accessibilityRole="button">
+        <FileText size={16} color={colors.textMuted} />
+        <Text style={styles.scFileText} numberOfLines={1}>
+          {dosya ? dosya.name : "Görüntü seç (.tif / .png / .jpg)"}
+        </Text>
+      </TouchableOpacity>
+      {dosya && /\.tiff?$/i.test(dosya.name) && !result && (
+        <Text style={styles.ctHint}>TIF önizlemesi desteklenmez — analiz sonrası [Orijinal] sekmesini kullanın.</Text>
+      )}
+
+      <Text style={styles.ctSubLabel}>Yara yönü</Text>
+      <View style={styles.scChipRow} accessibilityRole="radiogroup">
+        {(["dikey", "yatay"] as const).map((v) => (
+          <TouchableOpacity key={v} accessibilityRole="radio" accessibilityState={{ selected: yon === v }}
+            style={[styles.scChip, yon === v && styles.scChipOn]}
+            onPress={() => { setYon(v); parametreDegisti(); }}>
+            <Text style={[styles.scChipText, yon === v && styles.scChipTextOn]}>{v === "dikey" ? "Dikey" : "Yatay"}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.ctSubLabel}>Objektif (kalibrasyon)</Text>
+      <View style={styles.scChipRow} accessibilityRole="radiogroup">
+        {SCRATCH_OBJEKTIFLER.map((o) => (
+          <TouchableOpacity key={o.ad} accessibilityRole="radio" accessibilityState={{ selected: pmm === o.pmm }}
+            style={[styles.scChip, pmm === o.pmm && styles.scChipOn]}
+            onPress={() => { setPmm(o.pmm); parametreDegisti(); }}>
+            <Text style={[styles.scChipText, pmm === o.pmm && styles.scChipTextOn]}>{o.ad}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={styles.ctHint}>pixel_mm = {pmm} mm/px — çekimde kullanılan objektifi seçin (µm/mm² doğruluğu buna bağlı).</Text>
+
+      <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: xaiAc }}
+        onPress={() => { setXaiAc(!xaiAc); parametreDegisti(); }}>
+        <Text style={styles.xaiToggleText}>{xaiAc ? "☑" : "☐"} 🔍 Isı haritası üret (bölgesel model ilgisi — hücre-düzeyi değildir)</Text>
+      </TouchableOpacity>
+
+      <Button label={loading ? "Analiz ediliyor…" : "Analiz Et"} onPress={analiz} disabled={!dosya || loading} loading={loading} block />
+      {loading && longLoading && (
+        <Text style={styles.modelHint}>Büyük model hazırlanıyor — ilk çalıştırma dakikalar sürebilir…</Text>
+      )}
+      {yenidenGerek && !loading && (
+        <Text style={styles.modelHint}>⚠ Parametre değişti — sonuçlar eski ayarlara ait. Yeniden analiz edin.</Text>
+      )}
+
+      {result && (
+        <View style={styles.resultBox}>
+          {result.uyari ? (
+            <Text style={styles.scUyari}>⚠ {result.uyari}</Text>
+          ) : (
+            <>
+              <View style={styles.scMetricRow}>
+                <View style={[styles.scMetricBox, styles.scMetricHero]}>
+                  <Text style={[styles.scMetricVal, { color: colors.primary }]}>%{result.closure?.closure_pct}</Text>
+                  <Text style={styles.scMetricLbl}>Kapanma</Text>
+                </View>
+                <View style={styles.scMetricBox}>
+                  <Text style={styles.scMetricVal}>{result.closure?.mean_gap_um} µm</Text>
+                  <Text style={styles.scMetricLbl}>Ort. gap</Text>
+                </View>
+                <View style={styles.scMetricBox}>
+                  <Text style={styles.scMetricVal}>{result.closure?.max_gap_um} µm</Text>
+                  <Text style={styles.scMetricLbl}>Maks gap</Text>
+                </View>
+                <View style={styles.scMetricBox}>
+                  <Text style={styles.scMetricVal}>{result.n_cells}</Text>
+                  <Text style={styles.scMetricLbl}>Hücre</Text>
+                </View>
+              </View>
+              <Text style={styles.ctHint}>
+                Gap alanı {result.closure?.gap_area_mm2} mm² · coverage {result.coverage_ratio} · skor {result.score_mean} · cihaz: {result.device}
+              </Text>
+            </>
+          )}
+
+          {aktifGaleri.length > 0 && (
+            <>
+              <View style={styles.scChipRow} accessibilityRole="tablist">
+                {aktifGaleri.map((g) => (
+                  <TouchableOpacity key={g.k} accessibilityRole="tab" accessibilityState={{ selected: seciliGorsel?.k === g.k }}
+                    style={[styles.scChip, seciliGorsel?.k === g.k && styles.scChipOn]} onPress={() => setGaleri(g.k)}>
+                    <Text style={[styles.scChipText, seciliGorsel?.k === g.k && styles.scChipTextOn]}>{g.ad}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {seciliGorsel && (
+                <>
+                  {/* AÇIK yükseklik (plan v2: styles.imagePreview %100-yükseklik tuzağı) */}
+                  <Image testID="sc-stage" source={{ uri: `data:image/jpeg;base64,${(result as any)[seciliGorsel.alan]}` }}
+                    style={styles.scStage} resizeMode="contain" />
+                  <Text style={styles.ctHint}>{seciliGorsel.not}</Text>
+                </>
+              )}
+              {!result.uyari && (
+                <Text style={styles.ctHint}>ℹ Görsel içi sayımlar ROI bandına aittir; toplam hücre sayısı üstteki karttadır.</Text>
+              )}
+            </>
+          )}
+          {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
+          {result.closure_uyari ? <Text style={styles.scUyari}>⚠ {result.closure_uyari}</Text> : null}
+
+          {kayitlar.length >= 2 && (
+            <>
+              <TouchableOpacity style={[styles.scChip, karsiAcik && styles.scChipOn, { alignSelf: "stretch", alignItems: "center", marginTop: spacing.sm }]}
+                onPress={() => setKarsiAcik(!karsiAcik)} accessibilityRole="button">
+                <Text style={[styles.scChipText, karsiAcik && styles.scChipTextOn]}>⇄ Karşılaştır (son iki analiz)</Text>
+              </TouchableOpacity>
+              {karsiAcik && son2.length === 2 && (
+                <View style={styles.scDelta}>
+                  <Text style={styles.scDeltaVal}>
+                    Δ {(son2[1].closure_pct - son2[0].closure_pct) >= 0 ? "+" : ""}{(son2[1].closure_pct - son2[0].closure_pct).toFixed(1)} puan
+                  </Text>
+                  <Text style={styles.ctHint}>
+                    {son2[0].etiket} %{son2[0].closure_pct} → {son2[1].etiket} %{son2[1].closure_pct} · ort. gap {son2[0].mean_gap_um}→{son2[1].mean_gap_um} µm
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+          <MedicalDisclaimer />
+        </View>
+      )}
+    </Card>
+  );
+}
+
 function CatOrganModule({ patientName }: { patientName: string }) {
   const { showToast } = useToast();
   const CK = "/vision/cat_organ";
@@ -3293,5 +3559,23 @@ const styles = StyleSheet.create({
   modelHint: { color: colors.warning, fontSize: typography.small, textAlign: 'center', marginTop: spacing.sm, fontStyle: 'italic' },
   ctFindingChip: { alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.md, borderWidth: 1, marginBottom: spacing.sm },
   ctSubLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing.sm, marginBottom: 2 },
-  ctHint: { color: colors.textMuted, fontSize: typography.small, fontStyle: 'italic', lineHeight: rf(17), marginTop: 6 }
+  ctHint: { color: colors.textMuted, fontSize: typography.small, fontStyle: 'italic', lineHeight: rf(17), marginTop: 6 },
+  // ── Yara Kapanma (Scratch) — butonlu galeri + metrik kartları (plan §5) ──
+  scFileBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12, marginTop: spacing.sm },
+  scFileText: { color: colors.text, fontSize: typography.small, flex: 1 },
+  scChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  scChip: { backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
+  scChipOn: { backgroundColor: colors.primary + '22', borderColor: colors.primary },
+  scChipText: { color: colors.textMuted, fontSize: typography.small, fontWeight: '600' },
+  scChipTextOn: { color: colors.primary },
+  // AÇIK yükseklik — styles.imagePreview'ın %100-yükseklik tuzağına KARŞI (plan v2)
+  scStage: { width: '100%', height: rs(300), borderRadius: radius.md, backgroundColor: '#0C111C', marginTop: spacing.sm },
+  scMetricRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  scMetricBox: { flexGrow: 1, minWidth: 110, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 12 },
+  scMetricHero: { borderColor: colors.primary },
+  scMetricVal: { color: colors.text, fontSize: rf(19), fontWeight: '800', fontVariant: ['tabular-nums'] },
+  scMetricLbl: { color: colors.textMuted, fontSize: typography.small, textTransform: 'uppercase', letterSpacing: 0.5 },
+  scUyari: { color: colors.warning, fontSize: typography.small, marginTop: spacing.sm, lineHeight: rf(17) },
+  scDelta: { backgroundColor: colors.success + '18', borderWidth: 1, borderColor: colors.success, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm },
+  scDeltaVal: { color: colors.success, fontSize: rf(18), fontWeight: '800', fontVariant: ['tabular-nums'] }
 });

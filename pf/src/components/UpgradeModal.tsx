@@ -21,7 +21,7 @@ const COPY: Record<UpgradeFeature, { title: string; desc: string; Icon: typeof Z
   },
   research: {
     title: "Araştırma Modu",
-    desc: "Kanser-araştırma modelleri (fantom tümör, petri kuyu, böbrek RNA · CT · patoloji · hastalık) Araştırma eklentisiyle açılır.",
+    desc: "Kanser-araştırma modelleri (fantom tümör, petri kuyu, böbrek RNA · CT · patoloji · hastalık, yara kapanma/scratch) Araştırma eklentisiyle açılır.",
     Icon: FlaskConical,
   },
   tier: {

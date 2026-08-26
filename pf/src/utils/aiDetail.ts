@@ -69,6 +69,15 @@ export const DETAIL_LABELS: Record<string, string> = {
   class_name: "Bulgu türü", conf: "Güven", classes: "Sınıflar", predictions: "Tahminler",
   prob_KIRC: "Olasılık (KIRC)", prob_other: "Olasılık (diğer)", results: "Tahmin sonuçları",
   top_probability: "En yüksek olasılık", low_confidence: "Düşük güven uyarısı",
+  // cell_scratch — Yara Kapanma (2026-08-26): metrikler geçmiş detayında Türkçe görünsün
+  n_cells: "Hücre sayısı", coverage_ratio: "Hücre kaplama oranı",
+  closure: "Kapanma metrikleri", closure_pct: "Kapanma (%)",
+  mean_gap_um: "Ortalama gap (µm)", max_gap_um: "Maks gap (µm)",
+  gap_area_mm2: "Gap alanı (mm²)", scratch_yonu: "Yara yönü",
+  pixel_mm: "Kalibrasyon (mm/px)", uyari: "Uyarı", closure_uyari: "Kapanma uyarısı",
+  inference_ms: "Analiz süresi (ms)", device: "Cihaz",
+  cell_area_mean: "Hücre alanı (ort. px)", cell_area_median: "Hücre alanı (medyan px)",
+  score_mean: "Ortalama skor", score_min: "En düşük skor",
 };
 
 /** Girdi tipi → Türkçe. */
