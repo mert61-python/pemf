@@ -98,6 +98,39 @@ it("KRİTİK WEB: /status `localized` görününce öneri OTOMATİK istenir + ö
   expect(cagri("/ai/pro/hazirlik/durdur").length).toBeGreaterThan(0);
 });
 
+it("KRİTİK WEB: status guvenDokumu → panel 'Güven dökümü' satırını NEDENLERİYLE gösterir", async () => {
+  // Sunum-katmanı XAI (2026-08-26): reliability bileşen dökümü — düşük güvenin NEDENİ görünür.
+  mockDurum = {
+    active: false,
+    localized: true,
+    reliability: 0.21,
+    guvenDokumu: {
+      pose_confidence: 0.74,
+      depth_factor: 0.9,
+      mask_factor: 0.6,
+      uncertainty_factor: 0.85,
+      calibration_cap: 0.25,
+    },
+  };
+  const u = await panel();
+  for (let i = 0; i < 2; i++) {
+    await act(async () => { jest.advanceTimersByTime(3000); await Promise.resolve(); });
+  }
+  const satir = u.getByText(/Güven dökümü:/);
+  expect(satir.props.children).toContain("poz %74");
+  expect(satir.props.children).toContain("maske-dışı ×0,6");
+  expect(satir.props.children).toContain("kalibrasyonsuz — tavan %25");
+});
+
+it("KARŞIT-KANIT WEB: eski backend (guvenDokumu alanı YOK) → döküm satırı GİZLİ", async () => {
+  mockDurum = { active: false, localized: true, reliability: 0.8 };
+  const u = await panel();
+  for (let i = 0; i < 2; i++) {
+    await act(async () => { jest.advanceTimersByTime(3000); await Promise.resolve(); });
+  }
+  expect(u.queryByText(/Güven dökümü:/)).toBeNull();
+});
+
 it("KARŞIT-KANIT WEB: organ LOKALİZE OLMADIKÇA öneri İSTENMEZ (sürüş kapısı gevşemez)", async () => {
   const u = await panel();
   await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });

@@ -172,6 +172,36 @@ def test_KARSIT_KANIT_kernel_shap_global_rng_durumunu_BOZMAZ():
     assert np.allclose(sonra, beklenen), "kernel-SHAP global np.random durumunu kalıcı değiştirdi"
 
 
+# ── (e') torch'suz ortam dayanikliligi ───────────────────────────────────────
+def test_KRITIK_xai_utils_TORCHSUZ_ortamda_import_edilir():
+    """CI dersi (koşu 32948xxx): grad_cam.py torch'u modül-seviyesinde ister; koşulsuz paket
+    import'u torch'suz ortamda (CI test seti, ağır-AI'sız kurulum) overlay/report_html'i DE
+    kilitliyordu. Torch'u BLOKLAYAN alt-süreçte paket import edilmeli, overlay çalışmalı."""
+    import subprocess
+    import sys
+
+    kod = (
+        "import sys\n"
+        "class _Blok:\n"
+        "    def find_module(self, name, path=None):\n"
+        "        if name == 'torch' or name.startswith('torch.'):\n"
+        "            return self\n"
+        "    def load_module(self, name):\n"
+        "        raise ImportError('torch BLOKLANDI (test)')\n"
+        "sys.meta_path.insert(0, _Blok())\n"
+        f"sys.path.insert(0, {str(KOK)!r})\n"
+        "import ai_hub.xai_utils as xu\n"
+        "assert xu.TORCH_XAI_AVAILABLE is False, 'bayrak torch-yok durumunu soylemiyor'\n"
+        "assert xu.GradCAMExplainer is None\n"
+        "import numpy as np\n"
+        "rgb = xu.heatmap_to_rgb(np.linspace(0, 1, 16).reshape(4, 4))\n"
+        "assert rgb.shape == (4, 4, 3)\n"
+        "print('TORCHSUZ-OK')\n"
+    )
+    r = subprocess.run([sys.executable, "-c", kod], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0 and "TORCHSUZ-OK" in r.stdout, f"torch'suz ortamda xai_utils kırık:\n{r.stderr[-800:]}"
+
+
 # ── (e) paket hijyeni ────────────────────────────────────────────────────────
 def test_YAPISAL_vendored_paketlerde_sys_path_insert_YOK():
     """ai_hub kopyaları paket-göreli çalışır; sys.path.insert kalıntısı (docstring dahil) kalmamalı."""

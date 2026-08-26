@@ -611,6 +611,9 @@ _ai_organ_cache = {
     # Karede kedi var mı (organ lokalizasyonundan AYRI) — hazırlık ekranı operatöre doğru
     # yönlendirmeyi verebilsin: "kediyi kadraja alın" mı, "açıyı değiştirin" mi?
     "kedi_var": False,
+    # Sunum-katmanı XAI (2026-08-26): seçili organın reliability bileşen dökümü
+    # (pipeline guven_dokumu_hesapla) — panel "Güven %X"in NEDENİNİ gösterebilsin.
+    "guven_dokumu": None,
 }
 # Audit P2: _ai_organ_cache arkaplan loop (_ai_pro_loop) VE mobil frame ucu (ai_pro_frame) arasinda
 # paylasilir. Cok-alanli okuma/.update() kilitsiz interleave olursa yirtik-okuma (bir organin
@@ -650,7 +653,9 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     """cat_organ sonucundan (CPU dict VEYA GPU-JSON'dan kurulmuş dict) seçili organ hedefini çıkar.
     organs_by_id: {id: {coord_cabin_cm|coord_3d_cm, reliability}}. organ_id 0 (Tüm Vücut) → max-reliability
     güven-geçidi + koordinat (0,0,0). NOT: estimate_organs_pnp INT-anahtarlı ama JSON'da str → ikisi denenir.
-    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var).
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var, guven_dokumu).
+    guven_dokumu (2026-08-26, sunum-katmanı XAI): seçili organın reliability_components'ı
+    (yoksa/Tüm Vücut'ta None). Tüketiciler `*ekstra` ile açar → eski 7'li tuple'lar KIRILMAZ.
 
     ⚠️ `kedi_var` NEDEN AYRI (sahip isteği 2026-08-24): "kedi yok" ile "kedi var ama hedef organ
     bulunamadı" tek bir `detected: false` altında birleşiyordu ve operatöre NE YAPACAĞI
@@ -661,19 +666,21 @@ def _extract_organ_target(organs_by_id, organ_id, overlay):
     if int(organ_id) == 0:
         # Tüm Vücut: EN AZ BİR organ güvenle lokalize değilse "bulunamadı" → coil SÜRÜLMEZ (max güven-geçidi;
         # eski zorla-1.0 baypası KALDIRILDI — okluzyonlu organlara rağmen gerçek kediyi reddetmez, çöpte sürmez).
+        # Döküm None: agregat max-güvenin tek-organ bileşen dökümü anlamlı değil.
         rels = [float(v.get("reliability") or 0.0) for v in organs_by_id.values() if isinstance(v, dict)]
         conf = max(rels) if rels else 0.0
-        return (conf >= _MIN_RELIABILITY), 0.0, 0.0, 0.0, conf, overlay, kedi_var
+        return (conf >= _MIN_RELIABILITY), 0.0, 0.0, 0.0, conf, overlay, kedi_var, None
     o = organs_by_id.get(int(organ_id)) or organs_by_id.get(str(int(organ_id)))
     if not o:
-        return False, 0.0, 0.0, 0.0, 0.0, overlay, kedi_var
+        return False, 0.0, 0.0, 0.0, 0.0, overlay, kedi_var, None
     coord = o.get("coord_cabin_cm") or o.get("coord_3d_cm") or [0.0, 0.0, 0.0]
     rel = float(o.get("reliability") or 0.0)
+    dokum = o.get("reliability_components") if isinstance(o.get("reliability_components"), dict) else None
 
     def _mm(v):
         return max(-300.0, min(300.0, float(v) * 10.0))  # cm→mm + em_kedi aralığı
 
-    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay, kedi_var
+    return (rel >= _MIN_RELIABILITY), _mm(coord[0]), _mm(coord[1]), _mm(coord[2]), rel, overlay, kedi_var, dokum
 
 
 # E3-b (denetim 2026-08-24): cat_organ SEGMENTASYON aşaması başarısız olursa (kedi kadrajda YOK)
@@ -926,7 +933,9 @@ def _ai_hazirlik_loop():
                 _oid = _ai_organ_id
                 _ai_relocalize = False
                 try:
-                    lz, lx, ly, lzz, lrel, lov, lkedi = _localize_organ(frame, _oid)
+                    # *l_ek: 8. eleman guven_dokumu (2026-08-26) — eski 7'li tuple'lar (test
+                    # mock'lari dahil) KIRILMADAN acilir (l_ek bos kalir, dokum None yazilir).
+                    lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)
                     with _ai_cache_lock:
                         _ai_organ_cache.update(
                             {
@@ -939,6 +948,7 @@ def _ai_hazirlik_loop():
                                 "at": now,
                                 "organ_id": _oid,
                                 "kedi_var": lkedi,
+                                "guven_dokumu": (l_ek[0] if l_ek else None),
                             }
                         )
                 except Exception as le:
@@ -1589,6 +1599,9 @@ def ai_pro_status():
         "localized": bool(_ai_organ_cache.get("localized")),
         "catDetected": bool(_ai_organ_cache.get("kedi_var")),
         "reliability": round(float(_ai_organ_cache.get("reliability", 0.0)), 3),
+        # Sunum-katmanı XAI (2026-08-26): güvenin bileşen dökümü (poz × derinlik × maske ×
+        # belirsizlik + kalibrasyon tavanı) — panel "Güven %X"in NEDENİNİ gösterebilsin.
+        "guvenDokumu": _ai_organ_cache.get("guven_dokumu"),
         # ⚠️ Alanın VARLIĞI istemci için anlamlı: yoksa (eski backend) panel ESKİ davranışı sürdürür.
         "ownerClientId": _ai_owner_client,
     }
@@ -1633,7 +1646,8 @@ async def ai_pro_frame(
             # bayragini ONCE tuket (islem sirasinda gelen yeni istek yutulmasin).
             _oid = _ai_organ_id
             _ai_relocalize = False
-            lz, lx, ly, lzz, lrel, lov, lkedi = await asyncio.to_thread(_localize_organ, img, _oid)
+            # *l_ek: 8. eleman guven_dokumu (2026-08-26) — geriye-uyumlu acilim (7'li tuple'da None).
+            lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = await asyncio.to_thread(_localize_organ, img, _oid)
             with _ai_cache_lock:
                 _ai_organ_cache.update(
                     {
@@ -1646,6 +1660,7 @@ async def ai_pro_frame(
                         "at": now,
                         "organ_id": _oid,
                         "kedi_var": lkedi,
+                        "guven_dokumu": (l_ek[0] if l_ek else None),
                     }
                 )
 
@@ -1656,6 +1671,7 @@ async def ai_pro_frame(
             z_mm = _ai_organ_cache["z_mm"]
             rel = _ai_organ_cache["reliability"]
             kedi_var = bool(_ai_organ_cache.get("kedi_var"))
+            guven_dokumu = _ai_organ_cache.get("guven_dokumu")  # snapshot (yirtik-okuma politikasi)
             # F2 (denetim 2026-08-24): bir LOKALİZASYONUN kimliği (cache 'at'; istek-başı `now` DEĞİL).
             # Kareler 1,5 sn'de, lokalizasyon en fazla 10 sn'de bir → eko karelerde update bloğuna
             # girilmez, `at` önceki ölçümün damgasını korur. Panel ARDISIK_ONAY sayacını yalnız YENİ
@@ -1734,6 +1750,8 @@ async def ai_pro_frame(
                 "driven": bool(localized and session_active and not is_foreign),
                 "sessionActive": session_active,
                 "reliability": round(rel, 3),
+                # Sunum-katmanı XAI (2026-08-26): web/mobil paritesi — güven dökümü.
+                "guvenDokumu": guven_dokumu,
                 "perCoil": _build_ai_pro_percoil(D, P),
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
@@ -2565,6 +2583,9 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
                 "coord_3d_cm": o.get("coord_3d_cm"),
                 "coord_cabin_cm": o.get("coord_cabin_cm"),
                 "reliability": o.get("reliability"),
+                # Sunum-katmanı XAI (2026-08-26): güvenin bileşen dökümü (pipeline zaten
+                # hesaplıyordu, atılıyordu) — UI "neden düşük güven" gösterebilsin.
+                "reliability_components": o.get("reliability_components"),
                 # #49: kalibrasyon durumunu İLET → istemci/UI ölçülmüş (ArUco kalibreli) vs kanonik
                 # şablon koordinatını ayırt edebilsin (aksi halde şablonu ölçülmüş sanabilir).
                 "calibrated": o.get("calibrated"),
@@ -2579,6 +2600,10 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
             "organs": organs_list,
             "pose_type": (result.get("pose_classifier") or {}).get("type"),
             "pnp_residual_px": round(float((result.get("pnp_fit") or {}).get("residual_px", 0.0)), 1),
+            # Sunum-katmanı XAI rozetleri (2026-08-26): sağ/sol ayna şüphesi + anatomik tutarlılık
+            # ihlalleri — pipeline üretiyordu, yanıt taşımıyordu.
+            "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),
+            "anatomic_consistency": result.get("anatomic_consistency"),
         }
     except Exception as e:
         logger.error(f"cat_organ inference error: {e}", exc_info=True)

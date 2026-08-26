@@ -24,6 +24,33 @@ from .cabin_config import (has_perspective_data, is_camera_anchored,
                                        axis_to_vector)
 
 
+def guven_dokumu_hesapla(pose_confidence: float, depth_factor: float,
+                          in_mask: bool, cm_sd: float, cabin_active: bool):
+    """Organ reliability + bileşen dökümü — TEK formül kaynağı (sunum-katmanı XAI, 2026-08-26).
+
+    Eskiden ayni formul estimate_organs_pnp icinde inline'di ve bilesenler ATILIYORDU;
+    operator "Guven %62"nin nedenini (poz mu, maske-disi mi, kalibrasyonsuzluk mu)
+    goremiyordu. Simdi: rel = poz × derinlik × maske × belirsizlik, kalibresizken
+    Audit-P2 tavani min(rel, 0.25) — ve her bilesen dokumde raporlanir.
+
+    Doner: (reliability, {"pose_confidence", "depth_factor", "mask_factor",
+            "uncertainty_factor", "calibration_cap"}).
+    """
+    mask_factor = 1.0 if in_mask else 0.6
+    uncertainty_factor = float(np.clip(1.0 - cm_sd / 10.0, 0.4, 1.0))
+    rel = float(pose_confidence) * float(depth_factor) * mask_factor * uncertainty_factor
+    cap = None if cabin_active else 0.25
+    if cap is not None:
+        rel = min(rel, cap)
+    return rel, {
+        "pose_confidence": round(float(pose_confidence), 3),
+        "depth_factor": round(float(depth_factor), 3),
+        "mask_factor": mask_factor,
+        "uncertainty_factor": round(uncertainty_factor, 3),
+        "calibration_cap": cap,
+    }
+
+
 def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
                             bbox: np.ndarray, pose_info: dict,
                             mask_xy: list | None = None,
@@ -231,17 +258,12 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
         cm_sd = float(np.linalg.norm(organ_3d_std[i]))      # cm (skalar)
         # Mask flag (organ vucut silueti icinde mi)
         in_mask = bool(organ_in_mask[i]) if i < len(organ_in_mask) else True
-        # Reliability'i mask + uncertainty ile penalize et
-        rel_base = depth_factor * pose_info["confidence"]
-        rel_mask = rel_base if in_mask else rel_base * 0.6
-        # std-temelli penalty: 3cm ust std varsa hafif dus
-        rel_unc = rel_mask * float(np.clip(1.0 - cm_sd / 10.0, 0.4, 1.0))
-        # Audit P2: ArUco/kabin kalibrasyonu YOKKEN coord_3d = canonical sablon (OLCULMEMIS) → yuksek
-        # reliability YANLIS-GUVENCE (AI Pro reliability>=0.3'te otonom bobin surer, gercek kediyle
-        # ortusmeyen bolge isitilabilir). Kalibresizken esik ALTINA kapa (otonom surusu engelle) +
-        # acik 'calibrated' bayragi (tuketici kalibre/kalibresiz ayirabilsin).
-        if not cabin_active:
-            rel_unc = min(rel_unc, 0.25)
+        # Reliability = poz × derinlik × maske × belirsizlik (+ Audit-P2 kalibresiz 0.25 tavani).
+        # Formul TEK kaynakta (guven_dokumu_hesapla) — bilesenler entry'ye de yazilir ki
+        # operator dusuk guvenin NEDENINI gorebilsin (sunum-katmani XAI, 2026-08-26).
+        rel_unc, guven_dokumu = guven_dokumu_hesapla(
+            pose_info["confidence"], depth_factor, in_mask, cm_sd, cabin_active
+        )
         entry = {
             "name": name,
             "pixel_xy": [round(float(org_xy[i, 0]), 1),
@@ -258,6 +280,7 @@ def estimate_organs_pnp(kp_dict: dict, kp_conf: np.ndarray,
                                           round(float(organ_3d_std[i, 2]), 2)],
             "in_body_mask": in_mask,
             "reliability": round(rel_unc, 3),
+            "reliability_components": guven_dokumu,  # sunum-katmani XAI: guvenin NEDENI (2026-08-26)
             "calibrated": bool(cabin_active),  # Audit P2: ArUco/kabin kalibrasyonu var mi (coord olculmus mu)
         }
         # Level 3: perspektif sonuc varsa cabin mutlak 3D koord ekle

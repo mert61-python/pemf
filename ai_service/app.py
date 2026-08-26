@@ -576,6 +576,10 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
                 "coord_3d_cm": o.get("coord_3d_cm"),
                 "coord_cabin_cm": o.get("coord_cabin_cm"),
                 "reliability": o.get("reliability"),
+                # Sunum-katmanı XAI paritesi (2026-08-26): router GPU yolunda da güven dökümü
+                # taşınsın (_extract_organ_target 8. eleman) — kapı-paritesi dersi.
+                "reliability_components": o.get("reliability_components"),
+                "calibrated": o.get("calibrated"),
             }
             for oid, o in sorted(organs.items(), key=lambda kv: int(kv[0]))
         ]

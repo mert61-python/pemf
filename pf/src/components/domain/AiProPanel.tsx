@@ -78,6 +78,9 @@ type FrameResult = {
   organId?: number;
   organName?: string;
   reliability?: number;
+  /** Sunum-katmanı XAI (2026-08-26): güvenin bileşen dökümü — "Güven %X"in NEDENİ.
+   *  ⚠️ Opsiyonel: eski backend göndermez → satır gizlenir (sürüm-kayması geriye-uyumu). */
+  guvenDokumu?: GuvenDokumu | null;
   /** [B1] Bu istemci AKTİF seansın sahibi DEĞİL (başka operatör başlattı) → kareleri bobin SÜRMEZ,
    *  panel "yalnız görüntüleme" gösterir. ⚠️ Opsiyonel: eski backend göndermez → undefined = eski
    *  davranış (sürüm-kayması geriye-uyumu). */
@@ -92,12 +95,25 @@ function fmtSec(sec: number): string {
   return `${m}:${String(s0 % 60).padStart(2, "0")}`;
 }
 
+/** Sunum-katmanı XAI (2026-08-26): pipeline guven_dokumu_hesapla bileşenleri.
+ *  reliability = pose_confidence × depth_factor × mask_factor × uncertainty_factor,
+ *  kalibrasyonsuzken min(·, calibration_cap=0.25). */
+interface GuvenDokumu {
+  pose_confidence?: number;
+  depth_factor?: number;
+  mask_factor?: number;
+  uncertainty_factor?: number;
+  calibration_cap?: number | null;
+}
+
 // Backend yanıt sözleşmeleri (audit B-10.1) — AI-Pro otonom tedavi uçları.
 interface AiProStatus {
   active?: boolean;
   localized?: boolean;
   organId?: number;
   remainingSec?: number;
+  /** Sunum-katmanı XAI (2026-08-26): güven dökümü — alan yoksa (eski backend) satır gizlenir. */
+  guvenDokumu?: GuvenDokumu | null;
   /** Seansı BAŞLATAN istemcinin kimliği. ALAN YOKSA = onay/sahiplik öncesi backend (bkz. sync). */
   ownerClientId?: string;
 }
@@ -125,6 +141,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const [duration, setDuration] = useState("20");
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);
+  /** Sunum-katmanı XAI (2026-08-26): web yolunda güven dökümü status poll'dan gelir. */
+  const [webGuvenDokumu, setWebGuvenDokumu] = useState<GuvenDokumu | null>(null);
   const [busy, setBusy] = useState(false);
   /**
    * 🔴 HAZIRLIK AŞAMASI (saha bildirimi 2026-08-24) — AI Pro mobilde HİÇ BAŞLAMIYORDU.
@@ -214,6 +232,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           : active && !!st.ownerClientId && st.ownerClientId === clientIdRef.current;
       setRunning(active);
       setLocalized(Boolean(st.localized));
+      setWebGuvenDokumu(st.guvenDokumu ?? null); // sunum-katmanı XAI (web: status poll'dan)
       // ORTA fix: organId'yi YALNIZ aktif seansta backend'den senkronla. Seans yokken kullanıcının seçtiği
       // organ'ı 3sn'lik poll EZMESİN (kullanıcı organ seçerken seçim geri zıplıyordu).
       if (active && typeof st.organId === "number") setOrganId(st.organId);
@@ -605,6 +624,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
    *   · konumlandı      → parametreler hesaplanıyor
    */
   const catDetected = IS_WEB ? Boolean((v as any)?.catDetected) : Boolean(mobileResult?.catDetected);
+  /** Sunum-katmanı XAI (2026-08-26): web = status poll'dan, mobil = /frame yanıtından. */
+  const guvenDokumu: GuvenDokumu | null = (IS_WEB ? webGuvenDokumu : mobileResult?.guvenDokumu) ?? null;
   const organAdi = ORGANS.find((o) => o.id === organId)?.name ?? "";
   /** Güven yüzdesi — ⚠️ eşik 0,3 olduğu için "konumlandı" %30 da olabilir; operatör SAYIYI görmeli. */
   const guvenYuzde = Math.round((Number(reliability) || 0) * 100);
@@ -682,6 +703,20 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
         <Metric label="Z (mm)" value={`${targetZ ?? "—"}`} />
       </View>
+
+      {/* Sunum-katmanı XAI (2026-08-26): "Güven %X"in NEDENİ — operatör düşük güvenin poz mu,
+          maske-dışı mı, kalibrasyonsuzluk mu olduğunu görür. Eski backend alanı göndermez → gizli. */}
+      {guvenDokumu && typeof guvenDokumu.pose_confidence === "number" ? (
+        <Text style={styles.guvenDokumu} numberOfLines={2}>
+          {`Güven dökümü: poz %${Math.round((guvenDokumu.pose_confidence ?? 0) * 100)}` +
+            ` × derinlik ${(guvenDokumu.depth_factor ?? 1).toFixed(2).replace(".", ",")}` +
+            ((guvenDokumu.mask_factor ?? 1) < 1 ? " × maske-dışı ×0,6" : "") +
+            ` × belirsizlik ${(guvenDokumu.uncertainty_factor ?? 1).toFixed(2).replace(".", ",")}` +
+            (guvenDokumu.calibration_cap != null
+              ? ` · ⚠️ kalibrasyonsuz — tavan %${Math.round(guvenDokumu.calibration_cap * 100)}`
+              : "")}
+        </Text>
+      ) : null}
 
       {/* HAZIRLIK ŞERİDİ — aşamayı ve çıkış yolunu gösterir (2026-08-24). */}
       {hazirlik ? (
@@ -786,6 +821,8 @@ function Metric({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
   note: { color: colors.textMuted, fontSize: typography.small, fontStyle: "italic" },
+  // Sunum-katmanı XAI (2026-08-26): güven dökümü satırı — küçük, sessiz, metrik altına.
+  guvenDokumu: { color: colors.textMuted, fontSize: typography.small, marginTop: 4 },
   camBox: {
     height: rs(200), backgroundColor: "#000", borderRadius: 12,
     alignItems: "center", justifyContent: "center", overflow: "hidden",
