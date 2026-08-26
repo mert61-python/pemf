@@ -48,9 +48,9 @@ def xai_retikulosit_isi_haritasi(image_path: str, pt_path: str | None = None,
     from ai_hub.xai_utils.yolo_cam import YoloEigenCAM
 
     if pt_path is None:
-        from utils.model_downloader import download_model_sync
+        from ai_hub.xai_utils.pt_yolu import pt_coz
 
-        pt_path = download_model_sync("ai_hub/feline_reticulocytes/yolov8s.pt")
+        pt_path = pt_coz("ai_hub/feline_reticulocytes/yolov8s.pt")
 
     with _XAI_KILIT:
         expl = _XAI_PT_CACHE.get("retic")

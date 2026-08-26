@@ -106,6 +106,39 @@ def test_KRITIK_ses_isi_haritasi_URETIR(tmp_path):
     assert float(ov.std()) > 1.0, "mel-CAM overlay tekdüze"
 
 
+# ── 2b) PT yol çözücü (GPU-imaj smoke dersi, 2026-08-26) ─────────────────────
+def test_KRITIK_pt_coz_ONCE_models_mount_sonra_downloader(tmp_path, monkeypatch):
+    """ÖLÇÜLDÜ (cu128 smoke): imajda utils.model_downloader YOK (Dockerfile minimal) →
+    'No module named utils.model_downloader' ile XAI zarif düşüşe takılıyordu. pt_coz
+    ÖNCE PEMF_AI_MODELS_DIR mount'una bakar (ai_service yolu), yoksa downloader'a düşer."""
+    from ai_hub.xai_utils.pt_yolu import pt_coz
+
+    hedef = tmp_path / "ai_hub" / "cat_thermal"
+    hedef.mkdir(parents=True)
+    (hedef / "GhostNetV2.pt").write_bytes(b"x")
+    monkeypatch.setenv("PEMF_AI_MODELS_DIR", str(tmp_path))
+    p = pt_coz("ai_hub/cat_thermal/GhostNetV2.pt")
+    assert str(p) == str(hedef / "GhostNetV2.pt"), f"mount önceliklenmedi: {p}"
+
+    # KARŞIT: env yok → downloader yolu (yerelde release_assets'ten çözer)
+    monkeypatch.delenv("PEMF_AI_MODELS_DIR", raising=False)
+    p2 = pt_coz("ai_hub/cat_thermal/GhostNetV2.pt")
+    assert Path(p2).name == "GhostNetV2.pt" and Path(p2).exists()
+
+
+def test_YAPISAL_xai_fonksiyonlari_pt_coz_kullanir():
+    """Beş gradient-XAI modülü de PT'yi TEK çözücüden almalı (imaj/klinik parite)."""
+    for dosya in [
+        "ai_hub/cat_thermal/inference_cat_thermal.py",
+        "ai_hub/inference_cat_sound/inference_cat_sound.py",
+        "ai_hub/feline_reticulocytes/inference_feline_reticulocytes.py",
+        "ai_hub/inference_human_kidney_ct/inference_human_kidney_ct.py",
+        "ai_hub/inference_renal_histopath_kmc/inference_renal_histopath_kmc.py",
+    ]:
+        src = (KOK / dosya).read_text(encoding="utf-8", errors="replace")
+        assert "pt_coz(" in src, f"{dosya}: PT çözümü pt_coz'dan geçmiyor (GPU imajında kırılır)"
+
+
 # ── 3) Tek-iş kilidi (yapısal — gerçek çağrıya pinli) ────────────────────────
 def test_YAPISAL_xai_cagri_tek_is_kilidi_ICINDE():
     """grad-cam hook'ları thread-safe değil (plan §2): explain çağrısı modül kilidi içinde olmalı."""

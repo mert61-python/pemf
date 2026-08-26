@@ -376,9 +376,9 @@ def xai_ses_isi_haritasi(audio_path: str, pt_path: str | None = None,
     from ai_hub.xai_utils.overlay import blend_to_array
 
     if pt_path is None:
-        from utils.model_downloader import download_model_sync
+        from ai_hub.xai_utils.pt_yolu import pt_coz
 
-        pt_path = download_model_sync("ai_hub/inference_cat_sound/EfficientNet_Lite0.pt")
+        pt_path = pt_coz("ai_hub/inference_cat_sound/EfficientNet_Lite0.pt")
 
     with _XAI_KILIT:
         clf = _XAI_PT_CACHE.get("sound")

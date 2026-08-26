@@ -323,10 +323,9 @@ def xai_histopat_isi_haritasi(image_path: str, pt_path: str | None = None,
         if DEFAULT_PT.exists():
             pt_path = DEFAULT_PT
         else:
-            from utils.model_downloader import download_model_sync
+            from ai_hub.xai_utils.pt_yolu import pt_coz
 
-            pt_path = download_model_sync(
-                "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt")
+            pt_path = pt_coz("ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt")
 
     with _XAI_KILIT:
         clf = _XAI_PT_CACHE.get("kmc")
