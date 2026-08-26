@@ -289,7 +289,15 @@ for pkg in ('controllers', 'services', 'database', 'servers', 'utils', 'ai',
             'shap', 'slicer',
             # XAI Faz 2 (2026-08-26): ses/termal Grad-CAM — pytorch_grad_cam + timm
             # (+ttach/safetensors) lazy import; karar #2 geregi klinik CPU yolunda da var.
-            'pytorch_grad_cam', 'timm', 'ttach', 'safetensors', 'captum'):
+            'pytorch_grad_cam', 'timm', 'ttach', 'safetensors', 'captum',
+            # Scratch/Yara-Kapanma (2026-08-26, KARAR 0.1 scratch-entegrasyon-plani.md):
+            # celldetection frozen'a BILEREK girer (sahip karari; deps 6. degisim).
+            # ai_hub/inference_paper_dilek_hoca lazy-import eder — statikte gorunmez.
+            # ⚠️ transitifleri agir (pytorch-lightning/tensorboard/albumentations);
+            # albumentations opencv-python-headless CEKER → cift-cv2 tuzagi:
+            # myenv kurulumunda headless KALDIRILIP opencv-python force-reinstall edilir
+            # (requirements.txt'teki olculmus kural — grad-cam dersiyle ayni).
+            'celldetection'):
     try:
         hidden += collect_submodules(pkg)
     except Exception:

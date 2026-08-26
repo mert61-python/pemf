@@ -87,6 +87,11 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # tek-kaynaginda durur: GPU mikroservis (/models mount) renal XAI'yi CALISTIRIR;
         # klinik tek-EXE'de PT yoksa zarif 'Aciklama uretilemedi' dususu. Sahaya inis
         # LAUNCHER COKLU-MODEL-ZIP destegi (research'u bolme) isine bagli — plan notu.
+        # ⚠️ SCRATCH PT (ginoro_CpnResNeXt101UNet ~872MB) de AYNI 2 GiB karariyla
+        # BILEREK LISTEDE DEGIL (2026-08-26, scratch-entegrasyon-plani.md Faz 4.5):
+        # research.zip 1.61GB + 872MB = 2.48GB > 2147483648 B. Cozum listeye eklemek
+        # DEGIL, launcher coklu-model-zip (1.9.39) — o gelene kadar scratch klinikte
+        # 'model kurulmamis' zarif 503 ile calisir, GPU/mount makinelerde TAM calisir.
         "ai_hub/inference_em_petri/BaggingRegressor.onnx",
         "ai_hub/em_petri/PetriNet_v3.onnx",
         "ai_hub/em_petri/scaler_D_petri_v3.pkl",

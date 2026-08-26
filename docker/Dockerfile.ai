@@ -34,7 +34,16 @@ WORKDIR /app
 COPY ai_service/requirements-ai.txt ./ai_service/requirements-ai.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128 \
- && pip3 install -r ai_service/requirements-ai.txt
+ && pip3 install -r ai_service/requirements-ai.txt \
+ # ÇİFT-cv2 TEMİZLİĞİ (düşman-doğrulama 2026-08-26, hakem-onaylı): grad-cam VE
+ # celldetection→albumentations, opencv-python-headless'ı SERT bağımlılık olarak
+ # çeker; iki dağıtım aynı site-packages/cv2'ye açılır ve SON yazılan kazanır —
+ # 4.11.0.86 pini fiilen düşer. requirements-ai.txt'nin şart koştuğu önlem BURADA
+ # uygulanır (imaj build'i betiklidir, elle müdahale yoktur):
+ && pip3 uninstall -y opencv-python-headless || true \
+ && pip3 install --force-reinstall --no-deps opencv-python==4.11.0.86 \
+ # torch cu128'in celldetection transitifleriyle EZİLMEDİĞİNİN build-anı kanıtı:
+ && python3 -c "import torch, cv2; assert torch.__version__.startswith('2.7.1'), torch.__version__; print('torch', torch.__version__, '| cv2', cv2.__version__)"
 
 # ai_hub = predictor KODU (ağırlıklar .dockerignore ile hariç → /models mount'tan gelir)
 # DENETİM 2026-08-04 (P3): önce `COPY` + sonra `chown -R /app` yapılıyordu; bu, /app'in
