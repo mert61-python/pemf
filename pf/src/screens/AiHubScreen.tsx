@@ -134,7 +134,8 @@ interface AiDetection { class_name: string; conf?: number; bbox_xyxy?: number[];
 interface AiOrgan { name: string; coord_cabin_cm?: number[]; coord_3d_cm?: number[]; reliability?: number; }
 interface DiseasePrediction { disease: string; probability: number; }
 interface ThermalPrediction { label?: string; confidence?: number; }
-interface FgsRaw { action_units?: Record<string, { score?: number | string }>; }
+interface FgsRaw {
+  measurements?: Record<string, number>; action_units?: Record<string, { score?: number | string }>; }
 
 /**
  * AI backend yanıt sözleşmesi (audit B-2.4): 8+ modelin (vision/CT/patoloji/ses/RNA/CKD/organ)
@@ -158,6 +159,7 @@ interface AiResult {
   xai?: { disease?: string; prob_ckd?: number; top_features?: { feature: string; attribution: number }[] } | null;
   // Faz 2: gradient ısı haritası (termal/ses; explain=true istenirse)
   xai_image_base64?: string; xai_method?: string; xai_error?: string;
+  xai_disagreement_base64?: string;  // histopat: 3-model kararsızlık haritası
   // top-k sınıflandırma (cat_sound / histopath / reticulocytes)
   top_1_class?: string; top_1_prob?: number; top_k?: AiTopK[];
   // cat_sound BELİRSİZLİK (sunucu ölçer — utils/ses_kalitesi). Model "kedi sesi yok" DİYEMEZ
@@ -266,7 +268,7 @@ export function AiHubScreen() {
       case "landmark": return <VisionModule key="landmark" endpoint="/vision/landmark" title="Yüz Ağrısı Skoru (FGS)" subtitle="YOLO-pose modeli ile yüzdeki kilit noktaları analiz eder." patientName={patientName} />;
       case "segmentation": return <VisionModule key="segmentation" endpoint="/vision/segmentation" title="Kedi Segmentasyonu" subtitle="YOLOv8-seg modeli ile kedinin vücut sınırlarını tespit eder." patientName={patientName} />;
       case "thermal": return <VisionModule key="thermal" endpoint="/vision/thermal" title="Termal Görüntü Analizi" subtitle="GhostNetV2 ile termal anormallikleri tespit eder." patientName={patientName} explainDestegi />;
-      case "reticulocytes": return <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." patientName={patientName} galleryOnly />;
+      case "reticulocytes": return <VisionModule key="reticulocytes" endpoint="/vision/reticulocytes" title="Retikülosit Sayımı" subtitle="Mikroskop görüntüsünden hücreleri otomatik sayar." patientName={patientName} galleryOnly explainDestegi />;
       case "em_fantom": return <PhantomModule key="em_fantom" patientName={patientName} />;
       case "em_petri": return <PetriModule key="em_petri" patientName={patientName} />;
       case "kidney_rna": return <RnaModule key="kidney_rna" patientName={patientName} />;
@@ -1552,6 +1554,33 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
                   <Text style={[styles.resultText, {fontSize: typography.small}]}>• Baş Pozisyonu: {result.raw_fgs.action_units["AU5_Head_Position"]?.score ?? "-"}</Text>
                 </View>
               )}
+              {result.raw_fgs?.measurements && (result as any).fgs_bantlari ? (() => {
+                const OLCUM_TR: Record<string, string> = {
+                  ear_angle: "Kulak açısı", ear_elev: "Kulak yüksekliği", ear_spread: "Kulak açıklığı",
+                  eye_ratio_avg: "Göz oranı", mouth_aspect: "Ağız oranı", muzzle_compact: "Burun sıkılığı",
+                  whisker_tension: "Bıyık gerginliği", head_center_y: "Baş konumu",
+                };
+                const bant = (result as any).fgs_bantlari as Record<string, { p5: number; p95: number }>;
+                const olc = result.raw_fgs!.measurements as Record<string, number>;
+                const satirlar = Object.keys(OLCUM_TR).filter((k) => bant[k] && olc[k] != null);
+                if (!satirlar.length) return null;
+                return (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Text style={styles.ctSubLabel}>Ölçümler · popülasyon bandı (p5–p95)</Text>
+                    {satirlar.map((k) => {
+                      const v = Number(olc[k]); const b = bant[k];
+                      const disari = v < b.p5 || v > b.p95;
+                      return (
+                        <Text key={k} style={[styles.resultText, { fontSize: typography.small }]}>
+                          • {OLCUM_TR[k]}: <Text style={{ fontWeight: "bold", color: disari ? colors.warning : colors.text }}>{v.toFixed(3)}</Text>
+                          <Text style={{ color: colors.textMuted }}>{`  [${b.p5.toFixed(2)} – ${b.p95.toFixed(2)}]${disari ? "  ← bant dışı" : ""}`}</Text>
+                        </Text>
+                      );
+                    })}
+                    <Text style={styles.ctHint}>Bant, sağlıklı kalibrasyon popülasyonunun p5–p95 aralığıdır; bant dışı değer tek başına tanı değildir.</Text>
+                  </View>
+                );
+              })() : null}
             </View>
           )}
           {result.cat_count !== undefined && <Text style={styles.resultText}>Tespit Edilen Kedi: <Text style={{fontWeight:'bold'}}>{result.cat_count}</Text></Text>}
@@ -2068,6 +2097,7 @@ function PetriModule({ patientName }: { patientName: string }) {
                   <View key={i} style={styles.tumorRow}>
                     <Text style={styles.tumorHeader}>
                       {w.well_id}   ·   <Text style={{ color: isCancer ? colors.danger : colors.success }}>{isCancer ? "Kanser" : "Sağlıklı"}</Text>   ·   ({Number(c[0]).toFixed(1)}, {Number(c[1]).toFixed(1)}, {Number(c[2]).toFixed(1)}) {unit}
+                      {isCancer && (w as any).n_cancer_pixels != null ? <Text style={{ color: colors.textMuted, fontSize: typography.small }}>{`  — gerekçe: ${(w as any).n_cancer_pixels} mavi piksel (eşik ≥30)`}</Text> : null}
                     </Text>
                     <Text style={[styles.resultText, { fontSize: typography.small }]}>
                       E_kanser: <Text style={{ fontWeight: "bold", color: colors.danger }}>{Number(w.E_cancer).toFixed(4)}</Text>   ·   E_sağlıklı: {Number(w.E_healthy).toFixed(4)}   ·   Alan: {Number(w.area_mm2).toFixed(1)} mm²
@@ -2107,6 +2137,8 @@ function RnaModule({ patientName }: { patientName: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(moduleCache.kidney_rna?.result ?? null);
   const [longLoading, setLongLoading] = useState(false);
+  // XAI opt-in (plan §KALAN A1): IG top-genler — hasta başına en etkili genler.
+  const [isiHaritasi, setIsiHaritasi] = useState(false);
   useEffect(() => { moduleCache.kidney_rna = { result, file }; }, [result, file]);
 
   useEffect(() => {
@@ -2151,6 +2183,7 @@ function RnaModule({ patientName }: { patientName: string }) {
       }
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+      if (isiHaritasi) formData.append("explain", "true");
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/rna/kidney", {
         method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal,
       });
@@ -2190,6 +2223,10 @@ function RnaModule({ patientName }: { patientName: string }) {
       </View>
       {file && <Text style={styles.rnaFileName} numberOfLines={1}>📄 {file.name}</Text>}
 
+      <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Sürükleyen genleri göster (Integrated Gradients — en fazla 25 hasta)</Text>
+      </TouchableOpacity>
+
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "RNA Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!file || loading} onPress={analyze} />
       </View>
@@ -2223,9 +2260,20 @@ function RnaModule({ patientName }: { patientName: string }) {
                   Güven: <Text style={{ fontWeight: "bold" }}>%{(Number(p.confidence) * 100).toFixed(1)}</Text>
                   {p.prob_KIRC != null ? `   ·   KIRC olasılığı: %${(Number(p.prob_KIRC) * 100).toFixed(1)}` : ""}
                 </Text>
+                {(() => {
+                  const xl = (result as any).xai as { patient_id: string; top_genes: { gene: string; attribution: number }[] }[] | undefined;
+                  const h = Array.isArray(xl) ? xl.find((x) => x.patient_id === p.patient_id) : undefined;
+                  if (!h || !h.top_genes?.length) return null;
+                  return (
+                    <Text style={styles.xaiSatiri} numberOfLines={2}>
+                      🔍 Sürükleyen genler: {h.top_genes.slice(0, 5).map((g) => `${g.gene} ${g.attribution >= 0 ? "↑" : "↓"}`).join("  ·  ")}
+                    </Text>
+                  );
+                })()}
               </View>
             );
           })}
+          {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
         </View>
       )}
@@ -2603,6 +2651,8 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[CK]?.result ?? null);
   const [longLoading, setLongLoading] = useState(false);
+  // XAI opt-in (plan §KALAN A1): backend explain'i destekliyordu, düğme yoktu.
+  const [isiHaritasi, setIsiHaritasi] = useState(false);
   const { isCompact } = useResponsive();
 
   useEffect(() => { visionCache[CK] = { imageUri, imageBase64, result }; }, [imageUri, imageBase64, result]);
@@ -2658,6 +2708,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         if (imageBase64) formData.append("image_base64", imageBase64);
         else formData.append("file", { uri: imageUri, name: "ct.jpg", type: "image/jpeg" } as any);
       }
+      if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/kidney_ct", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
@@ -2725,6 +2776,10 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         <View style={{ flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
       </View>
 
+      <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (EigenCAM — modelin baktığı bölgeler)</Text>
+      </TouchableOpacity>
+
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "CT Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
@@ -2771,6 +2826,14 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
               <Text style={styles.ctHint}>“Güven”, modelin o bölgeyi doğru tanıma olasılığıdır. İki böbrek dokusunun güveni farklı olabilir (ör. %89 ve %87) — bunlar aynı böbreğin iki ölçümü değil, görüntüdeki iki ayrı böbrek bölgesidir.</Text>
             </>
           )}
+          {result.xai_image_base64 ? (
+            <>
+              <Text style={styles.ctSubLabel}>🔍 Isı haritası (EigenCAM)</Text>
+              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.scStage} resizeMode="contain" />
+              <Text style={styles.ctHint}>Kırmızı bölgeler modelin tespitte en çok dayandığı alanlardır (bölgesel ilgi — tanı kanıtı değildir).</Text>
+            </>
+          ) : null}
+          {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
         </View>
       )}
@@ -2795,6 +2858,8 @@ function HistopathModule({ patientName }: { patientName: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[CK]?.result ?? null);
   const [longLoading, setLongLoading] = useState(false);
+  // XAI opt-in (plan §KALAN A1): ensemble HiRes-CAM + kararsızlık; CPU'da DAKİKALAR.
+  const [isiHaritasi, setIsiHaritasi] = useState(false);
   const { isCompact } = useResponsive();
 
   useEffect(() => { visionCache[CK] = { imageUri, imageBase64, result }; }, [imageUri, imageBase64, result]);
@@ -2850,6 +2915,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         if (imageBase64) formData.append("image_base64", imageBase64);
         else formData.append("file", { uri: imageUri, name: "histo.jpg", type: "image/jpeg" } as any);
       }
+      if (isiHaritasi) formData.append("explain", "true");
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/histopath", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
@@ -2894,6 +2960,10 @@ function HistopathModule({ patientName }: { patientName: string }) {
         <View style={{ flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
       </View>
 
+      <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (3-model konsensus + kararsızlık — CPU'da dakikalar sürebilir)</Text>
+      </TouchableOpacity>
+
       <View style={styles.analyzeBtn}>
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Patoloji Analizini Başlat"} icon={loading ? <ActivityIndicator color={colors.white} /> : <Sparkles color={colors.white} size={16} />} disabled={!imageUri || loading} onPress={analyze} />
       </View>
@@ -2922,6 +2992,21 @@ function HistopathModule({ patientName }: { patientName: string }) {
             );
           })}
           <Text style={styles.ctHint}>“Güven”, modelin görüntüyü o dereceye atama olasılığıdır. Grade 0 en hafif, Grade 4 en ileri histopatolojik derecedir; komşu dereceler (ör. 2↔3) benzer görünebilir.</Text>
+          {result.xai_image_base64 ? (
+            <>
+              <Text style={styles.ctSubLabel}>🔍 Konsensus ısı haritası (3-model HiRes-CAM)</Text>
+              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.scStage} resizeMode="contain" />
+              <Text style={styles.ctHint}>Üç modelin ORTAK dayandığı doku bölgeleri.</Text>
+            </>
+          ) : null}
+          {result.xai_disagreement_base64 ? (
+            <>
+              <Text style={styles.ctSubLabel}>⚠ Model kararsızlık haritası</Text>
+              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_disagreement_base64}` }} style={styles.scStage} resizeMode="contain" />
+              <Text style={styles.ctHint}>Parlak bölgelerde üç model AYRIŞIYOR — derece o bölgede daha az güvenilirdir.</Text>
+            </>
+          ) : null}
+          {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
         </View>
       )}
@@ -3385,6 +3470,12 @@ function CatOrganModule({ patientName }: { patientName: string }) {
 
       {result && (
         <View style={styles.resultBox}>
+          {(result as any).mirror_warning ? (
+            <Text style={styles.scUyari}>⚠ Ayna belirsizliği: bu karede sağ/sol organ ayrımı güvenilir olmayabilir — farklı açıdan ikinci kare önerilir.</Text>
+          ) : null}
+          {(result as any).anatomic_consistency && (result as any).anatomic_consistency.passed === false ? (
+            <Text style={styles.scUyari}>⚠ Anatomik tutarlılık uyarısı: organ dizilimi beklenen anatomiyle çelişiyor — lokalizasyona temkinli yaklaşın.</Text>
+          ) : null}
           {(() => {
             const organs = result.organs || [];
             if (organs.length === 0) {
