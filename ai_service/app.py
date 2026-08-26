@@ -74,7 +74,9 @@ def _scratch_warmup():
     # edilmemisse thread HIC baslatilmaz — senkron ve ucuz on-kontrol:
     import importlib.util
 
-    if importlib.util.find_spec("ai_hub.inference_paper_dilek_hoca.cell") is None:
+    # ⚠️ ALT-MODULE bakilir: cell/ artik ISKELET olarak repoda (sahip talimati) —
+    # paket-varligi yanlis-pozitif olur; gercek teslim gostergesi cell/cpn.py'dir.
+    if importlib.util.find_spec("ai_hub.inference_paper_dilek_hoca.cell.cpn") is None:
         return
     import threading
 

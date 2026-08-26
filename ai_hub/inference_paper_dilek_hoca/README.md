@@ -22,12 +22,16 @@ Plan ve sahip kararları: `guii/scratch-entegrasyon-plani.md` (v3, kararlar KES�
 >
 > pip `celldetection` bu ikisini **içermiyor** (ölçüldü — export listesinde yoklar).
 > `multi_norm`'u tahminle yeniden yazmak sessiz-yanlış hücre sayısı üretir; bu
-> yüzden bilerek beklenildi. **Geliş yeri:** bu klasöre `cell/` olarak konacak →
-> `ai_hub/inference_paper_dilek_hoca/cell/`.
+> yüzden bilerek beklenildi.
 >
-> **2) celldetection sürümü (opsiyonel ama iyi olur).**
-> Eğitim ortamındaki `pip show celldetection` çıktısındaki sürüm numarası.
-> Şimdilik `celldetection==0.4.9` pinli; farklıysa birebir eşitlenecek.
+> **GÜNCELLEME (2026-08-26 23:00, sahip yanıtı):** Hoca üç dosyayı adlandırdı —
+> **`cpn.py`, `prep.py`, `util.py`** — ve iskelet klasör HAZIRLANDI:
+> `ai_hub/inference_paper_dilek_hoca/cell/` (boş `__init__.py` ile). Üç dosya
+> geldiğinde AYNEN bu klasöre bırakılır, başka değişiklik gerekmez (hazır-olma
+> denetimleri alt-modüle, `cell/cpn.py`'ye bakar).
+>
+> **2) celldetection sürümü — ✅ ÇÖZÜLDÜ.** Sahip onayı: **0.4.9** ("pin'le
+> sabitlemen lazım"). Dört yüzeyde zaten `celldetection==0.4.9` pinli — birebir.
 >
 > **Geldiğinde yapılacak (her şey hazır bekliyor):** klasörü koy → gerçek-model
 > smoke (paketteki referanslarla toleranslı doğrulama: CONTROL-0H 1494 hücre /
