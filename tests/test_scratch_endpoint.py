@@ -282,5 +282,12 @@ def test_YAPISAL_warmup_baglantisi():
     kilidinin ilk-istekte tutulmasına karşı)."""
     src = (KOK / "ai_service" / "app.py").read_text(encoding="utf-8")
     assert "PEMF_SCRATCH_WARMUP" in src and "_ipd.isit" in src
+    # CI exit-134 dersi: cell yokken daemon thread HIC baslamamali (find_spec on-kontrolu)
+    i = src.index("_scratch_warmup")
+    govde = src[i : i + 1600]
+    assert 'find_spec("ai_hub.inference_paper_dilek_hoca.cell")' in govde, (
+        "warmup cell'siz ortamda da thread aciyor — interpreter-kapanis yarisi (exit 134) geri gelir"
+    )
+    assert govde.index("find_spec") < govde.index("threading.Thread"), "on-kontrol thread'den SONRA"
     msrc = (KOK / "ai_hub" / "inference_paper_dilek_hoca" / "inference_paper_dilek_hoca.py").read_text(encoding="utf-8")
     assert "def isit(" in msrc and "with _KILIT:" in msrc[msrc.index("def isit(") :]

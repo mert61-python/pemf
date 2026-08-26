@@ -67,6 +67,15 @@ def _scratch_warmup():
     Kapatma: PEMF_SCRATCH_WARMUP=0."""
     if os.environ.get("PEMF_SCRATCH_WARMUP", "1") != "1":
         return
+    # CI OLCUMU (2026-08-26, exit 134): cell/ yokken daemon thread isit() icinde
+    # loglayip HEMEN bitiyor ve kisa omurlu TestClient/interpreter kapanisiyla
+    # yarisinca 'Fatal Python error: _enter_buffered_busy ... daemon threads'
+    # SIGABRT'i uretebiliyordu (1724 test GECTIKTEN sonra surec dustu). cell teslim
+    # edilmemisse thread HIC baslatilmaz — senkron ve ucuz on-kontrol:
+    import importlib.util
+
+    if importlib.util.find_spec("ai_hub.inference_paper_dilek_hoca.cell") is None:
+        return
     import threading
 
     from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd

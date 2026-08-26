@@ -37,6 +37,10 @@ _OTURUM_IZOLE = Path(tempfile.mkdtemp(prefix="pemf_test_veri_"))
 (_OTURUM_IZOLE / "PEMF_GUI").mkdir(parents=True, exist_ok=True)
 os.environ["PEMF_DATA_DIR"] = str(_OTURUM_IZOLE)
 os.environ["APPDATA"] = str(_OTURUM_IZOLE)
+# Scratch CPN warmup thread'i testte ASLA başlamasın (CI ölçümü 2026-08-26, exit 134:
+# daemon thread + interpreter kapanışı yarışı — app.py'de find_spec ön-kontrolü de var,
+# bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
+os.environ.setdefault("PEMF_SCRATCH_WARMUP", "0")
 
 
 @pytest.fixture(autouse=True)
