@@ -23,6 +23,16 @@ from fastapi.testclient import TestClient
 
 KOK = Path(__file__).resolve().parents[1]
 
+# CKD model agirliklari BILEREK repo disi (.gitignore *.onnx/*.pkl — release_assets tek-kaynak).
+# CI checkout'unda YOKLAR (kosu b4d223b dersi): gercek-model testleri ACIK reason'la atlanir
+# (sessiz kayip degil); endpoint KABLOLAMA testleri mock'la her ortamda kosar.
+_CKD_DIR = KOK / "ai_hub" / "inference_human_kidney_disease"
+_MODEL_VAR = (_CKD_DIR / "ExtraTrees.onnx").exists() and (_CKD_DIR / "preprocessor.pkl").exists()
+gercek_model_gerekir = pytest.mark.skipif(
+    not _MODEL_VAR,
+    reason="CKD ONNX/preprocessor yerel degil (gitignore'lu model agirligi) — gercek-model testi yalniz modelli ortamda",
+)
+
 # Belirgin CKD tablosu (doc-doğrulanmış klinik sıralama: htn > hemo > ane > pc > rbc > sc > bp)
 _HASTA = {
     "age": 62,
@@ -53,6 +63,7 @@ _HASTA = {
 
 
 # ── 1) Modül fonksiyonu ──────────────────────────────────────────────────────
+@gercek_model_gerekir
 def test_KRITIK_ckd_xai_tek_hasta_DEJENERE_DEGIL_ve_klinik_cekirdek():
     from ai_hub.inference_human_kidney_disease import ALL_FEATURES, xai_top_features
 
@@ -68,6 +79,7 @@ def test_KRITIK_ckd_xai_tek_hasta_DEJENERE_DEGIL_ve_klinik_cekirdek():
     assert 0.0 <= res["prob_ckd"] <= 1.0
 
 
+@gercek_model_gerekir
 def test_KRITIK_ckd_xai_DETERMINISTIK():
     from ai_hub.inference_human_kidney_disease import xai_top_features
 
@@ -76,6 +88,7 @@ def test_KRITIK_ckd_xai_DETERMINISTIK():
     assert a == b, "aynı hastaya iki çağrıda farklı açıklama (kernel örneklemesi seed'siz)"
 
 
+@gercek_model_gerekir
 def test_KARSIT_KANIT_referans_background_ortalama_hasta():
     """Baseline 'ortalama-hasta': post-uzayda numeric=0, one-hot=0.5 — tek satır, deterministik."""
     from ai_hub.inference_human_kidney_disease import _preprocessor_feature_names, _referans_background, load_model
@@ -89,34 +102,45 @@ def test_KARSIT_KANIT_referans_background_ortalama_hasta():
         assert bg[0, j] == pytest.approx(beklenen), f"{ad}: {bg[0, j]} != {beklenen}"
 
 
-# ── 2) Uç sözleşmesi ─────────────────────────────────────────────────────────
+# ── 2) Uç sözleşmesi (KABLOLAMA — model gerektirmez, CI'da da koşar) ─────────
+_XAI_SENTINEL = {
+    "prob_ckd": 0.91,
+    "baseline": "ortalama_hasta",
+    "top_features": [{"feature": "htn", "attribution": 0.12}],
+}
+
+
 @pytest.fixture()
-def istemci():
+def istemci(monkeypatch):
+    """Model ağırlıkları gitignore'lu (CI'da yok) → predict_one mock'lanır; ölçülen şey
+    UÇ KABLOLAMASI: explain pop'u, total_fields=24, xai alanı, zarif düşüş."""
+    import ai_hub.inference_human_kidney_disease as ihd
+    import servers.ai_router as air
     import servers.api_server as apis
 
-    return TestClient(apis.app)
+    monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
+    monkeypatch.setattr(
+        ihd, "predict_one", lambda features, **k: {"prob_ckd": 0.91, "label": "ckd", "model": "ExtraTrees"}
+    )
+    return TestClient(apis.app), ihd
 
 
 def test_KRITIK_endpoint_explain_true_xai_DONER(istemci, monkeypatch):
-    import servers.ai_router as air
-
-    monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
-    r = istemci.post("/api/ai/disease/kidney", json={**_HASTA, "explain": True})
+    client, ihd = istemci
+    monkeypatch.setattr(ihd, "xai_top_features", lambda features, **k: _XAI_SENTINEL)
+    r = client.post("/api/ai/disease/kidney", json={**_HASTA, "explain": True})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body.get("status") == "success" and "prob_ckd" in body
     assert body.get("total_fields") == 24, (
         f"explain bayrağı alan sayımına SIZDI (total_fields={body.get('total_fields')}) — mevcut şeffaflık sözleşmesi bozuldu"
     )
-    xai = body.get("xai")
-    assert xai and xai.get("top_features"), "explain=true iken xai.top_features yok"
+    assert body.get("xai") == _XAI_SENTINEL, "explain=true iken xai alanı modül fonksiyonundan taşınmadı"
 
 
-def test_KARSIT_KANIT_explain_yoksa_sozlesme_AYNEN(istemci, monkeypatch):
-    import servers.ai_router as air
-
-    monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
-    r = istemci.post("/api/ai/disease/kidney", json=_HASTA)
+def test_KARSIT_KANIT_explain_yoksa_sozlesme_AYNEN(istemci):
+    client, _ihd = istemci
+    r = client.post("/api/ai/disease/kidney", json=_HASTA)
     assert r.status_code == 200
     body = r.json()
     assert "xai" not in body and "xai_error" not in body
@@ -124,16 +148,13 @@ def test_KARSIT_KANIT_explain_yoksa_sozlesme_AYNEN(istemci, monkeypatch):
 
 
 def test_KRITIK_xai_hatasi_analizi_DUSURMEZ(istemci, monkeypatch):
-    import ai_hub.inference_human_kidney_disease as ihd
-    import servers.ai_router as air
-
-    monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
+    client, ihd = istemci
 
     def _patla(*a, **k):
         raise RuntimeError("shap patladı (test)")
 
     monkeypatch.setattr(ihd, "xai_top_features", _patla)
-    r = istemci.post("/api/ai/disease/kidney", json={**_HASTA, "explain": True})
+    r = client.post("/api/ai/disease/kidney", json={**_HASTA, "explain": True})
     assert r.status_code == 200, f"XAI hatası analizi düşürdü: {r.text}"
     body = r.json()
     assert body.get("status") == "success" and body.get("xai_error") and "xai" not in body
