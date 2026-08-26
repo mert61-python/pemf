@@ -74,6 +74,8 @@ captum==0.8.0                    # RNA IG (hasta basina top-gen katkilari); torc
 # ve albumentations opencv-python-headless CEKER → grad-cam'dekiyle AYNI cift-cv2
 # kurali: kurulumdan sonra headless KALDIRILIP opencv-python yeniden kurulmali.
 # 872MB PT release_assets tek-kaynak (2GiB kurali) — sahaya inis launcher coklu-zip.
+# ⚠️ OLCULDU: pip celldetection kurulumunda numpy 2.2.6 + protobuf 7.x'e YUKSELTTI →
+# kurulum SONRASI numpy==1.26.4 + protobuf==3.20.3 --force-reinstall --no-deps ZORUNLU.
 celldetection==0.4.9
 # ⚠️ BİLİNEN SÜRÜM UYUŞMAZLIĞI (2026-08-15, SAHİP KARARIYLA BÖYLE KALIYOR).
 # Pickle'lanmış CKD bileşenleri (SimpleImputer/StandardScaler/OneHotEncoder/ColumnTransformer/

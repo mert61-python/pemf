@@ -6,6 +6,29 @@ hücre instance segmentasyonu + TScratch-benzeri **wound-closure metrikleri**
 
 Plan ve sahip kararları: `guii/scratch-entegrasyon-plani.md` (v3, kararlar KESİN).
 
+## ✅ TESLİM TAMAMLANDI (2026-08-26 23:12 — cell.zip) + GERÇEK-MODEL DOĞRULAMASI
+
+`cpn.py`, `prep.py`, `util.py` geldi ve `cell/` altına kondu; celldetection==0.4.9
+sahip onaylı. **Gerçek 872 MB CPN ile ölçüldü (bu makine, CPU!):** yükleme 7.0 sn,
+görüntü başına ~17.9 sn — CPU yolunda bile pratik.
+
+| Girdi | Ölçülen | Sahip referansı |
+|---|---|---|
+| CONTROL-0H | **1495 hücre · %4.29 · 1053.5 µm** | 1494 · %4.3 · 1053 µm |
+| CONTROL-24H | **2083 hücre · %29.36 · 428.0 µm** | 2085 · %29.3 · 428.0 µm |
+
+Neredeyse birebir (hücre farkı 1-2/2000, gap 24H'te BİREBİR) — platform farkına
+rağmen model davranışı korunuyor. Kilit: `tests/test_scratch_gercek_model.py`
+(toleranslı; cell/PT/celldetection yoksa sebepli atlar). Test girdileri kanonik
+kardeş-kaynakta: `PEMF_AI_Test_Girdileri/12a-12b_YaraKapanma_*.tif` (dizin
+git-DIŞI — release_assets gibi yayın-makinesi kaynağı; CI'da test sebepli atlar).
+
+⚠️ Kurulumda İKİ ölçülmüş tuzak yeniden yaşandı ve kapatıldı: çift-cv2 (headless)
+ve **numpy pin ezilmesi** (pip 2.2.6'ya yükseltti → 1.26.4 + protobuf 3.20.3 geri
+pinlendi). myenv kurulumunda aynı geri-pinleme adımı ZORUNLU (BUILD notu).
+
+<details><summary>Arşiv — teslim öncesi istek metni</summary>
+
 ## 📦 TESLİM BEKLENİYOR — Çağlar Hoca'dan istenenler (2026-08-26)
 
 > **1) `cell/` klasörü (ZORUNLU — bunsuz model çalışmaz).**
@@ -37,9 +60,11 @@ Plan ve sahip kararları: `guii/scratch-entegrasyon-plani.md` (v3, kararlar KES�
 > smoke (paketteki referanslarla toleranslı doğrulama: CONTROL-0H 1494 hücre /
 > %4.3, CONTROL-24H 2085 / %29.3) → Docker cu128 GPU smoke → yayın.
 
+</details>
+
 ## Durum
-- ⚠️ **`cell/` alt paketi HENÜZ YOK** (yukarıdaki teslim bekleniyor). Gelene kadar
-  `CellSegmentationPredictor` açık `RuntimeError` verir; endpoint zarif 503 döner.
+- ✅ `cell/` teslim alındı, gerçek-model doğrulaması GEÇTİ (yukarıdaki tablo).
+  celldetection==0.4.9 bu makinede kurulu; klinik frozen'a sonraki build'de girer.
 - Ağırlık: `ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt` (~872 MB) —
   `release_assets/ai_models/ai_hub/inference_paper_dilek_hoca/` tek-kaynağında;
   **hiçbir model-zip'ine girmez** (GitHub 2 GiB sınırı — renal emsali).
