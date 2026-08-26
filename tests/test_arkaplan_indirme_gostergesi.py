@@ -215,3 +215,13 @@ def test_KRITIK_kalan_sure_ETA_gosterilir(ui):
     )
     assert "etaLeft" in govde, "ETA'nın 'kaldı/left' etiketi yok"
     assert ui.count("etaLeft:") == 2, "etaLeft iki dilde de tanımlı olmalı"
+
+
+def test_KRITIK_FAZ45_profil_boyutu_PARCALARI_da_toplar(ui):
+    """Düşman-doğrulama bulgusu: parçalı profilde yalnız ana zip boyutu gösterilirse
+    kurulum onayı ('Kur · X GB') gerçek indirmenin YARISINI söyler (research 1,6 GB
+    görünür, gerçek ~3,4 GB). sizes[k] hesabı model_parts boyutlarını da toplamalı."""
+    i = ui.index("for (const k of profileKeys)")
+    govde = ui[i : i + 700]
+    assert "model_parts" in govde, "profil boyutu parça boyutlarını görmüyor (yarım onay)"
+    assert "reduce" in govde and "size" in govde

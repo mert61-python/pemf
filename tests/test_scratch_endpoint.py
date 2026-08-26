@@ -243,22 +243,32 @@ def test_YAPISAL_router_kayipsiz_png_ve_503():
 
 
 def test_YAPISAL_scratch_pt_dagitim_karari_KAYITLI():
-    """872MB CPN PT hicbir model-zip profiline GIREMEZ (2 GiB — renal emsali).
-    Yanlislikla eklenirse yayin HTTP 422'de patlar; karar + gerekce kodda kilitli."""
-    src = (KOK / "build_tools" / "make_model_zip.py").read_text(encoding="utf-8")
-    assert "ginoro_CpnResNeXt101UNet" in src, "scratch PT karari make_model_zip'te kayitli degil"
-    # DÜŞMAN-DOĞRULAMA DERSİ: ilk sürüm PROFILLER→CEKIRDEK_HARIC dilimi kullanıyordu
-    # ama CEKIRDEK_HARIC dosyada ÖNCE tanımlı → dilim BOŞTU, döngü hiç koşmuyordu
-    # (vacuous bekçi). Artık TÜM dosya satırları taranır: ginoro yalnız YORUMDA geçebilir.
-    ginolu = [s for s in src.splitlines() if "ginoro" in s]
-    assert ginolu, "ginoro satırı hiç yok"
-    for satir in ginolu:
-        assert satir.lstrip().startswith("#"), f"scratch PT profil listesine GIRMIS: {satir!r}"
-    # KARŞIT-KANIT (bekçinin bekçisi): gerçek kod satırı eklenirse yakalanır
-    assert not all(s.lstrip().startswith("#") for s in (src + '\nX="ginoro_x.pt"').splitlines() if "ginoro" in s), (
-        "bekçi mantığı sahte-pozitife karşı ölçülemedi"
+    """FAZ 4.5 sozlesmesi: iki buyuk PT (renal 858MB + scratch 872MB) ANA profil
+    listelerine GIREMEZ (2 GiB — HTTP 422 OLCULDU); dagitimlari PARCALAR
+    (research-2.zip, launcher model_parts) uzerindendir + uretim-ani 2GiB bekcisi.
+    (Ilk surum yorum-satiri bekcisiydi ve VACUOUS cikmisti — artik VERIYE bakar.)"""
+    mz = _mmz()
+
+    BUYUKLER = (
+        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt",
+        "ai_hub/inference_paper_dilek_hoca/ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt",
     )
-    assert "2147483648" in src and ("coklu-model-zip" in src.lower() or "COKLU-MODEL-ZIP" in src)
+    for profil, dosyalar in mz.PROFILLER.items():
+        for buyuk in BUYUKLER:
+            assert buyuk not in dosyalar, f"{buyuk} ANA {profil} listesine girmis (2GiB/422)"
+    assert set(BUYUKLER) <= set(mz.PARCALAR["research-2"]), "buyuk PT'ler research-2 parcasinda degil"
+    # ad sozlesmesi: <profil>-<n>, profil PROFILLER'de var olmali (launcher etiketleriyle uyum)
+    import re as _re
+
+    for ad in mz.PARCALAR:
+        m = _re.fullmatch(r"([a-z]+)-(\d+)", ad)
+        assert m and m.group(1) in mz.PROFILLER, f"parca adi sozlesme disi: {ad}"
+    # uretim-ani siniri: sabit dogru + zip_yaz gercekten denetliyor
+    assert mz.GITHUB_ASSET_SINIRI == 2147483648
+    src = (KOK / "build_tools" / "make_model_zip.py").read_text(encoding="utf-8")
+    zy = src[src.index("def zip_yaz") : src.index("def sha256")]
+    assert "GITHUB_ASSET_SINIRI" in zy and "SystemExit" in zy, "2GiB uretim bekcisi zip_yaz'da yok"
+    assert zy.index("GITHUB_ASSET_SINIRI") < zy.index("os.replace"), "bekci rename'den SONRA (gec)"
 
 
 def test_YAPISAL_celldetection_DORT_yuzeyde_pinli():
@@ -292,3 +302,60 @@ def test_YAPISAL_warmup_baglantisi():
     assert govde.index("find_spec") < govde.index("threading.Thread"), "on-kontrol thread'den SONRA"
     msrc = (KOK / "ai_hub" / "inference_paper_dilek_hoca" / "inference_paper_dilek_hoca.py").read_text(encoding="utf-8")
     assert "def isit(" in msrc and "with _KILIT:" in msrc[msrc.index("def isit(") :]
+
+
+def _mmz():
+    """make_model_zip'i TEK-ISIM kuralıyla import et (atomik suite'in modül-kimlik
+    kapısı — paket-nitelikli import İKİNCİ kimlik doğurur; ölçüldü: kapı patladı)."""
+    import sys as _sys
+
+    yol = str(KOK / "build_tools")
+    if yol not in _sys.path:
+        _sys.path.insert(0, yol)
+    import make_model_zip as m
+
+    return m
+
+
+def test_KRITIK_2gib_bekcisi_DAVRANISSAL(monkeypatch, tmp_path):
+    """'Varlık değil UYGULAMA ölç' — yapısal metin-dilimi bekçisi mutasyona dayanmaz
+    (eşik '*2' yapılsa yeşil kalırdı). Sınır küçültülüp zip_yaz'ın GERÇEKTEN
+    SystemExit verdiği, geçici .tmp'nin silindiği ve hedefin OLUŞMADIĞI ölçülür."""
+    mz = _mmz()
+
+    kaynak = tmp_path / "kaynak"
+    (kaynak / "ai_hub" / "x").mkdir(parents=True)
+    (kaynak / "ai_hub" / "x" / "buyuk.bin").write_bytes(b"B" * 4096)
+    monkeypatch.setattr(mz, "KAYNAK", kaynak)
+    monkeypatch.setattr(mz, "CIKTI", tmp_path / "cikti")
+    monkeypatch.setattr(mz, "GITHUB_ASSET_SINIRI", 1024)  # 4KB dosya > 1KB sinir
+    tablo = {"deneme-2": ("ai_hub/x/buyuk.bin",)}
+    with pytest.raises(SystemExit, match="bayti asiyor"):
+        mz.zip_yaz("deneme-2", tablo)
+    assert not (tmp_path / "cikti" / "deneme-2.zip").exists(), "sinir asan paket diske cikti"
+    assert not list((tmp_path / "cikti").glob("*.tmp")), "gecici .tmp artigi kaldi"
+    # sinir genisken ayni paket UretILIR (bekci yanlis-pozitif degil)
+    monkeypatch.setattr(mz, "GITHUB_ASSET_SINIRI", 10_000_000)
+    assert mz.zip_yaz("deneme-2", tablo).exists()
+
+
+def test_YAPISAL_PARCALAR_ile_PARCA_ASSETS_esli():
+    """Çapraz-tutarlılık kapısı (düşman-doğrulama): parça yalnız bir tarafa eklenirse
+    ya zip üretilir manifest'e girmez (sahaya sessizce inmez) ya da alan yazılır
+    dosya hiç üretilmez. İki sözlüğün anahtar kümesi birebir eşleşmeli."""
+    import importlib.util
+
+    mz = _mmz()
+
+    spec = importlib.util.spec_from_file_location("mmani", KOK / "scripts" / "make_manifest.py")
+    mmani = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mmani)
+    zip_taraf = {f"{ad}.zip" for ad in mz.PARCALAR}
+    manifest_taraf = set(mmani.PARCA_ASSETS)
+    assert zip_taraf == manifest_taraf, (
+        f"parça sözlükleri ayrıştı: make_model_zip={zip_taraf} make_manifest={manifest_taraf}"
+    )
+    # profil eşlemesi de ana PROFILLER'le tutarlı olmalı
+    for dosya, (profil, _idx) in mmani.PARCA_ASSETS.items():
+        assert profil in mz.PROFILLER, f"{dosya}: bilinmeyen profil {profil}"
+        assert dosya.startswith(f"{profil}-"), f"{dosya}: ad sözleşmesi (profil-N.zip) dışı"

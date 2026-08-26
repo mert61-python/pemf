@@ -49,6 +49,16 @@ ASSETS = {
     "research.zip": ("models", "research", None),
 }
 
+# ── FAZ 4.5 (2026-08-26, scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
+# 2 GiB asset siniri (OLCULDU: HTTP 422) buyuk PT'leri research.zip'e sokamiyor.
+# Parca zip'leri manifest'in OPSIYONEL `model_parts` alaninda gider — YALNIZ
+# launcher >=1.9.39 okur; eski launcher'lar alani yok sayar (deny_unknown_fields
+# yok — manifest.rs kaniti) ve davranislari bit degismeden surer. Bu yuzden
+# v1 `profiles`e ASLA aynalanmaz. dosya adi -> (profil, parca sirasi 0-tabanli).
+PARCA_ASSETS = {
+    "research-2.zip": ("research", 0),
+}
+
 # ── KATMANLI PAKETLER (v1.9.13+) ─────────────────────────────────────────────────────────
 # ⚠️ DENETİM 2026-08-09 (ENGEL): bu betik `layers`i ne ÜRETİYOR ne de TAŞIYORDU. Manifest her
 # yeniden üretildiğinde bölüm DÜŞÜYOR ve client >=1.9.13 tek-parça `runtimes`e geri dönüyordu:
@@ -253,6 +263,44 @@ def main() -> int:
                 missing.remove(name)
                 carried.append(f"{name} -> {section}.{key} (mevcut manifest'ten)")
 
+    # ── FAZ 4.5: PROFIL PARCALARI (model_parts) — ASSETS ile AYNI kurallar ──────────────────
+    # URL-koruma: sha ayniysa eski etiket URL'i KORUNUR (ayni sessiz-404 dersi).
+    # Yerelde yoksa oncekinden AYNEN tasinir (--drop-missing dusurur). Ne yerelde ne
+    # oncekinde varsa alan HIC yazilmaz -> bugunku manifest bit degismez.
+    for name, (profil, idx) in PARCA_ASSETS.items():
+        path = args.dir / name
+        _onceki_liste = (prev.get("model_parts") or {}).get(profil) or []
+        _onceki = _onceki_liste[idx] if idx < len(_onceki_liste) else {}
+        if not path.exists():
+            if _onceki and not args.drop_missing:
+                _liste = manifest.setdefault("model_parts", {}).setdefault(profil, [])
+                while len(_liste) <= idx:
+                    _liste.append(None)
+                _liste[idx] = _onceki
+                carried.append(f"{name} -> model_parts.{profil}[{idx}] (mevcut manifest'ten)")
+            continue
+        _sha = sha256(path)
+        _url = f"{base_url}/{name}"
+        _onceki_url = str(_onceki.get("url") or "")
+        if _onceki_url and str(_onceki.get("sha256") or "") == _sha and _onceki_url != _url:
+            _url = _onceki_url
+            _parca = _onceki_url.rsplit("/", 2)
+            _etiket = _parca[-2] if len(_parca) >= 2 else "?"
+            url_korundu.append(f"{name} (sha ayni, etiket: {_etiket})")
+        _liste = manifest.setdefault("model_parts", {}).setdefault(profil, [])
+        while len(_liste) <= idx:
+            _liste.append(None)
+        _liste[idx] = {"url": _url, "sha256": _sha, "size": path.stat().st_size, "kind": "zip"}
+        found.append(f"{name} -> model_parts.{profil}[{idx}]")
+    # Parca zinciri KESINTISIZ olmali: [None, parca2] gibi delikli liste launcher'da
+    # serde hatasi -> TUM manifest reddi demektir. Uretimde yakala.
+    for _profil, _liste in (manifest.get("model_parts") or {}).items():
+        if any(e is None for e in _liste):
+            raise SystemExit(
+                f"[HATA] model_parts.{_profil} icinde eksik parca (None) — "
+                "parca dosyalari/tasima zinciri kesintisiz olmali"
+            )
+
     # ── KATMANLAR: yereldeki app/deps paketlerinden ÜRET, eksikleri ÖNCEKİNDEN taşı ──────────
     for name, (plat, katman) in LAYER_ASSETS.items():
         path = args.dir / name
@@ -446,6 +494,13 @@ def main() -> int:
             if plat in manifest["layers"] or plat in (args.drop_platform or []):
                 continue
             kayip.append(f"layers.{plat}")
+        # FAZ 4.5 (dusman-dogrulama 2026-08-27): model_parts da ayni kurala tabi —
+        # PARCA_ASSETS tablosundan bir girdi silinirse/yeniden adlandirilirsa prev'teki
+        # parca SESSIZCE duserdi; launcher >=1.9.39 tarafinda hedef birlesik-sha ana-sha'ya
+        # doner, kurulu kayit 'ana+parca' oldugundan sahte guncelleme tetiklenir.
+        for profil in prev.get("model_parts") or {}:
+            if profil not in (manifest.get("model_parts") or {}):
+                kayip.append(f"model_parts.{profil} (parca zip'leri sahadan sessizce kaybolur)")
         if kayip:
             print("[HATA] önceki manifest'te olan bölümler kayboluyor — manifest YAZILMADI:", file=sys.stderr)
             for k in kayip:

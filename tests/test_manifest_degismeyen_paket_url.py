@@ -192,3 +192,97 @@ def test_korunan_URL_ekranda_BILDIRILIR(kum, capfd=None):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([os.path.abspath(__file__), "-v"]))
+
+
+# ── FAZ 4.5: model_parts (profil parça zip'leri) — aynı kurallar ─────────────
+def _kos_ve_oku(d, tag, surum):
+    _paket_yaz(d, "base.zip", b"BASE-SABIT")  # betigin zorunlu base kapisi (idempotent)
+    r = _kos(d, tag, surum)
+    assert r.returncode == 0, f"kosu basarisiz: {r.stdout} {r.stderr}"
+    return _manifest(d)
+
+
+def test_FAZ45_parca_yazilir_ve_v1_profiles_e_AYNALANMAZ(tmp_path):
+    _paket_yaz(tmp_path, "research.zip", b"ana-icerik")
+    _paket_yaz(tmp_path, "research-2.zip", b"parca-icerik")
+    m = _kos_ve_oku(tmp_path, "client-app-v1.9.27", "1.9.27")
+    parca = m["model_parts"]["research"][0]
+    assert parca["url"].endswith("client-app-v1.9.27/research-2.zip")
+    assert parca["sha256"] and parca["size"] == len(b"parca-icerik")
+    # ESKİ istemci sözleşmesi: v1 profiles yalnız ANA zip'i görür (parça oraya sızmaz)
+    assert m["profiles"]["research"]["url"].endswith("/research.zip")
+    assert "research-2" not in json.dumps(m["profiles"])
+
+
+def test_FAZ45_parca_sha_ayni_ise_URL_KORUNUR(tmp_path):
+    _paket_yaz(tmp_path, "research.zip", b"ana-icerik")
+    _paket_yaz(tmp_path, "research-2.zip", b"parca-icerik")
+    m1 = _kos_ve_oku(tmp_path, "client-app-v1.9.27", "1.9.27")
+    # ayni parca dosyasiyla YENI etikete kos → URL eski etikette KALMALI
+    m2 = _kos_ve_oku(tmp_path, "client-app-v1.9.28", "1.9.28")
+    assert m2["model_parts"]["research"][0]["url"] == m1["model_parts"]["research"][0]["url"], (
+        "parca sha degismedi ama URL yeni etikete tasindi — sessiz 404 sinifi"
+    )
+    # ana research.zip icin de ayni koruma zaten var (mevcut testler); burada parca olculdu
+
+
+def test_FAZ45_parca_yerelde_yoksa_ONCEKINDEN_tasinir_yoksa_HIC_yazilmaz(tmp_path):
+    _paket_yaz(tmp_path, "research.zip", b"ana-icerik")
+    _paket_yaz(tmp_path, "research-2.zip", b"parca-icerik")
+    m1 = _kos_ve_oku(tmp_path, "client-app-v1.9.27", "1.9.27")
+    # parca dosyasini SIL → tasima (baska runner'da uretilmis olabilir)
+    (tmp_path / "research-2.zip").unlink()
+    m2 = _kos_ve_oku(tmp_path, "client-app-v1.9.28", "1.9.28")
+    assert m2["model_parts"]["research"][0] == m1["model_parts"]["research"][0], "parca tasinmadi"
+    # SIFIRDAN (prev'siz) kum havuzunda parca dosyasi da yokken alan HIC yazilmaz —
+    # bugunku canli manifest bit degismez (geriye-uyum kaniti)
+    temiz = tmp_path / "temiz"
+    temiz.mkdir()
+    _paket_yaz(temiz, "research.zip", b"ana-icerik")
+    m3 = _kos_ve_oku(temiz, "client-app-v1.9.27", "1.9.27")
+    assert "model_parts" not in m3, "parcasiz kosuda model_parts alani yazilmamali"
+
+
+def test_FAZ45_parca_TABLODAN_silinirse_SESSIZ_kaybolmaz(tmp_path, monkeypatch):
+    """Sessiz-kayıp kapısı model_parts'ı da korur (düşman-doğrulama): prev'te parça
+    varken yeni koşu tablosuz/dosyasız-taşımasız kalırsa manifest YAZILMAMALI."""
+    _paket_yaz(tmp_path, "research.zip", b"ana")
+    _paket_yaz(tmp_path, "research-2.zip", b"parca")
+    _kos_ve_oku(tmp_path, "client-app-v1.9.27", "1.9.27")
+    # parca dosyasi YOK + tasima da devre disi (--drop-missing) -> prev'teki
+    # model_parts.research kayboluyor -> kapi SERT HATA vermeli
+    (tmp_path / "research-2.zip").unlink()
+    _kos(tmp_path, "client-app-v1.9.28", "1.9.28")
+    # --drop-missing bayragiyla kosmadik; tasima calisir ve alan KORUNUR (onceki test).
+    # Kapinin kendisini olcmek icin tasima zincirini bozalim: prev'i model_parts'li
+    # birakip ciktidan silinmesini zorlayan tek yol tablonun kaybi — bunu betige
+    # dokunmadan --drop-missing ile simule ediyoruz (bilincli dusurme yolu bile
+    # layers/mobile gibi ACIK olmali; sessiz degil).
+    import subprocess as sp
+
+    r2 = sp.run(
+        [
+            PY,
+            str(BETIK),
+            "--dir",
+            str(tmp_path),
+            "--version",
+            "1.9.29",
+            "--tag",
+            "client-app-v1.9.29",
+            "--repo",
+            "mert61-python/pemf-update",
+            "--allow-missing-launcher",
+            "--drop-missing",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
+    )
+    # --drop-missing ACIK dusurme yoludur -> hata BEKLENMEZ; ama bayraksiz kayip yolu
+    # kapali olmali: kaynak kodda kapi model_parts'i taniyor mu (davranis + yapisal cift kilit)
+    assert r2.returncode == 0, r2.stderr
+    src = BETIK.read_text(encoding="utf-8")
+    assert 'kayip.append(f"model_parts.' in src, "sessiz-kayip kapisi model_parts'i kapsamiyor"

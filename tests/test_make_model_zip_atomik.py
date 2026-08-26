@@ -115,9 +115,9 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_home_zipi_BOZMAZ(mmz):
     gercek = m.dosyalari_topla
     cagri = []
 
-    def _sabotaj(profil):
+    def _sabotaj(profil, tablo=None):  # FAZ 4.5: zip_yaz artik tablo da gecirir
         cagri.append(profil)
-        ciftler = list(gercek(profil))
+        ciftler = list(gercek(profil) if tablo is None else gercek(profil, tablo))
         src, arc = ciftler[1]
         src.unlink()
         src.mkdir()

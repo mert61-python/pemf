@@ -87,11 +87,10 @@ PROFILLER: dict[str, tuple[str, ...]] = {
         # tek-kaynaginda durur: GPU mikroservis (/models mount) renal XAI'yi CALISTIRIR;
         # klinik tek-EXE'de PT yoksa zarif 'Aciklama uretilemedi' dususu. Sahaya inis
         # LAUNCHER COKLU-MODEL-ZIP destegi (research'u bolme) isine bagli — plan notu.
-        # ⚠️ SCRATCH PT (ginoro_CpnResNeXt101UNet ~872MB) de AYNI 2 GiB karariyla
-        # BILEREK LISTEDE DEGIL (2026-08-26, scratch-entegrasyon-plani.md Faz 4.5):
-        # research.zip 1.61GB + 872MB = 2.48GB > 2147483648 B. Cozum listeye eklemek
-        # DEGIL, launcher coklu-model-zip (1.9.39) — o gelene kadar scratch klinikte
-        # 'model kurulmamis' zarif 503 ile calisir, GPU/mount makinelerde TAM calisir.
+        # ⚠️ SCRATCH PT (ginoro ~872MB) da ayni sebeple ana listede DEGIL.
+        # FAZ 4.5 COZUMU (2026-08-26): iki buyuk PT artik `PARCALAR['research-2']`
+        # ile AYRI zip'te gider (launcher 1.9.39 model_parts destegi); eski
+        # launcher'larda davranis degismez (PT'siz research, zarif dusus).
         "ai_hub/inference_em_petri/BaggingRegressor.onnx",
         "ai_hub/em_petri/PetriNet_v3.onnx",
         "ai_hub/em_petri/scaler_D_petri_v3.pkl",
@@ -119,9 +118,28 @@ PROFILLER: dict[str, tuple[str, ...]] = {
 }
 
 
-def dosyalari_topla(profil: str) -> list[tuple[Path, str]]:
+# ── FAZ 4.5 (2026-08-26, scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
+# GitHub release asset siniri 2 GiB (OLCULDU: HTTP 422 'size must be less than
+# 2147483648'). research'un iki buyuk PT'si (renal 858MB + scratch CPN 872MB) ana
+# zip'e SIGMAZ → ayri parca zip'i. Manifest'te OPSIYONEL `model_parts` alaninda
+# gider (launcher 1.9.39): eski launcher'lar alani gormez → bugunku davranislari
+# (PT'siz research, zarif dusus) bit degismeden surer; yeni launcher ana zip'ten
+# SONRA parcalari da indirir/acar. Ad sozlesmesi: `<profil>-<n>.zip` (n>=2).
+PARCALAR: dict[str, tuple[str, ...]] = {
+    "research-2": (
+        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.pt",
+        "ai_hub/inference_paper_dilek_hoca/ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt",
+    ),
+}
+
+# GitHub tek-asset ust siniri — bir paket bunu asarsa hata YAYIN ANINDA (422) degil
+# URETIM ANINDA patlar (olculen tuzagi one cek; zip_yaz icinde denetlenir).
+GITHUB_ASSET_SINIRI = 2_147_483_648
+
+
+def dosyalari_topla(profil: str, tablo: dict[str, tuple[str, ...]] = PROFILLER) -> list[tuple[Path, str]]:
     ciftler: list[tuple[Path, str]] = []
-    for rel in PROFILLER[profil]:
+    for rel in tablo[profil]:
         if rel.startswith(CEKIRDEK_HARIC):
             raise SystemExit(
                 f"[HATA] '{rel}' CEKIRDEKTE — profil paketine konulamaz (cift indirme). "
@@ -134,8 +152,8 @@ def dosyalari_topla(profil: str) -> list[tuple[Path, str]]:
     return ciftler
 
 
-def zip_yaz(profil: str) -> Path:
-    ciftler = dosyalari_topla(profil)
+def zip_yaz(profil: str, tablo: dict[str, tuple[str, ...]] = PROFILLER) -> Path:
+    ciftler = dosyalari_topla(profil, tablo)
     CIKTI.mkdir(parents=True, exist_ok=True)
     hedef = CIKTI / f"{profil}.zip"
     # ⚠️ ATOMİK YAZIM (DENETİM 2026-08-17; `make_base_zip.py::_yaz` ile AYNI desen). Hedef eskiden
@@ -166,6 +184,15 @@ def zip_yaz(profil: str) -> Path:
                         z.writestr(zi, fh.read())
             cikis.flush()
             os.fsync(cikis.fileno())  # elektrik kesintisinde rename'den ONCE veri diskte olsun
+        # FAZ 4.5 BEKCISI: 2 GiB'i asan paket yayina HIC cikmasin (research+PT'de
+        # HTTP 422 OLCULDU) — hata uretim aninda, gecici dosya silinerek verilir.
+        boyut = os.path.getsize(gecici)
+        if boyut >= GITHUB_ASSET_SINIRI:
+            raise SystemExit(
+                f"[HATA] {hedef.name} {boyut} bayt — GitHub asset siniri "
+                f"{GITHUB_ASSET_SINIRI} bayti asiyor; iceriği yeni bir PARCALAR "
+                "girdisine bol (scratch-entegrasyon-plani.md Faz 4.5)."
+            )
         os.replace(gecici, hedef)
     finally:
         if os.path.exists(gecici):
@@ -181,12 +208,12 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def dogrula(profil: str, hedef: Path) -> bool:
+def dogrula(profil: str, hedef: Path, tablo: dict[str, tuple[str, ...]] = PROFILLER) -> bool:
     with zipfile.ZipFile(hedef) as z:
         adlar = z.namelist()
     kapilar = {
         "cekirdek model YOK (cift indirme onlendi)": not any("inference_cat_organ" in n for n in adlar),
-        "dosya sayisi beklenen": len(adlar) == len(PROFILLER[profil]),
+        "dosya sayisi beklenen": len(adlar) == len(tablo[profil]),
         "hepsi ai_models/ onekli": all(n.startswith("ai_models/") for n in adlar),
     }
     ok = True
@@ -197,17 +224,19 @@ def dogrula(profil: str, hedef: Path) -> bool:
 
 
 def main(argv: list[str]) -> int:
-    istenen = argv or list(PROFILLER)
-    bilinmeyen = [p for p in istenen if p not in PROFILLER]
+    tum = {**PROFILLER, **PARCALAR}
+    istenen = argv or list(tum)
+    bilinmeyen = [p for p in istenen if p not in tum]
     if bilinmeyen:
-        print(f"[HATA] tanimsiz profil: {', '.join(bilinmeyen)}  (var: {', '.join(PROFILLER)})")
+        print(f"[HATA] tanimsiz profil: {', '.join(bilinmeyen)}  (var: {', '.join(tum)})")
         return 2
     tamam = True
     for profil in istenen:
-        hedef = zip_yaz(profil)
+        tablo = PROFILLER if profil in PROFILLER else PARCALAR
+        hedef = zip_yaz(profil, tablo)
         boyut = hedef.stat().st_size
         print(f"\n{profil}.zip : {boyut} bayt ({boyut / 1e6:.1f} MB)  sha256 {sha256(hedef)}")
-        tamam = dogrula(profil, hedef) and tamam
+        tamam = dogrula(profil, hedef, tablo) and tamam
     print(f"\nVALIDATION: {'PASS' if tamam else 'FAIL'}")
     return 0 if tamam else 1
 

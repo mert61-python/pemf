@@ -73,7 +73,7 @@ geçmiyor). Bu yüzden bölünme şöyle:
 | Nerede | Ne |
 |---|---|
 | **git** | kaynak kod + yayınlanmış hiçbir pakette kopyası **olmayan** 11 küçük model (6 MB) |
-| **Releases** | büyük ağırlıklar — `home.zip` / `vet.zip` / `research.zip` içinde; **istisna:** iki `.pt` (renal ~858 MB + scratch CPN ~872 MB) 2 GiB asset sınırı gereği zip'lere GİRMEZ — tek kaynak `release_assets/ai_models`, sahaya iniş launcher çoklu-model-zip işine bağlı |
+| **Releases** | büyük ağırlıklar — `home.zip` / `vet.zip` / `research.zip` **+ `research-2.zip`** (FAZ 4.5, launcher 1.9.39): iki büyük `.pt` (renal ~858 MB + scratch CPN ~872 MB) 2 GiB tek-asset sınırı gereği ana zip'e sığmaz, **ayrı parça zip'iyle** iner (manifest `model_parts`; eski launcher'lar alanı yok sayar, davranışları değişmez) |
 
 `tests/test_yedek_kapsami.py` bu ayrımı kilitler: yedeği olmayan bir dosya `.gitignore`'a düşerse
 ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
