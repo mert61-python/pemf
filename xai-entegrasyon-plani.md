@@ -1,5 +1,11 @@
 # XAI Entegrasyon Planı — PEMF Ekosistemi (2026-08-26)
 
+> **DURUM (2026-08-26 akşam): FAZ 1 TAMAMLANDI ✅** — kalem 1-6 kapandı (vendoring+sertleştirme ·
+> AI Pro güven dökümü · cat_disease SHAP · EM üçlüsü ref-stats+canlı sensitivity+propose-XAI ·
+> CKD KernelExplainer · UI satırları+onay modalı). Backend süit 1819, frontend 578/578.
+> Commit zinciri: 762e8be → 84ba6ff → 71c19a8 → cc02c5b → 30636b6 → 4ab9872.
+> Sıradaki: Faz 2 (GPU gradient-XAI — grad-cam/captum/timm cu128 uyum testi + PT dağıtımı).
+
 **Kaynak:** `C:\Users\merta\Downloads\inference (1)\inference\` (XAI Faz 0-10 sprint çıktısı: 10 modüle Grad-CAM/EigenCAM/SHAP/IG/sensitivity + `xai_utils` + `xai_tabular` + `XAI_INTEGRATION.md`).
 **Hedef:** Bu XAI yeteneğini PEMF ekosistemine (guii backend + ai_service :8100 + pf frontend + AI geçmişi) regresyonsuz entegre etmek.
 **Keşif yöntemi:** 7 paralel derin-okuma ajanı — tüm XAI kodu satır-satır + guii yüzeyi (ai_router/ai_hub/ai_service/pf/paketleme) + 15 ortak modülün dosya-dosya diff'i. Bulguların tamamı koddan doğrulandı; ölçülemeyenler "tahmin" olarak işaretlidir.
