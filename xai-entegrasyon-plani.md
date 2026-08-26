@@ -1,10 +1,14 @@
 # XAI Entegrasyon Planı — PEMF Ekosistemi (2026-08-26)
 
-> **DURUM (2026-08-26 akşam): FAZ 1 TAMAMLANDI ✅** — kalem 1-6 kapandı (vendoring+sertleştirme ·
-> AI Pro güven dökümü · cat_disease SHAP · EM üçlüsü ref-stats+canlı sensitivity+propose-XAI ·
-> CKD KernelExplainer · UI satırları+onay modalı). Backend süit 1819, frontend 578/578.
-> Commit zinciri: 762e8be → 84ba6ff → 71c19a8 → cc02c5b → 30636b6 → 4ab9872.
-> Sıradaki: Faz 2 (GPU gradient-XAI — grad-cam/captum/timm cu128 uyum testi + PT dağıtımı).
+> **DURUM (2026-08-26): FAZ 1 ✅ + FAZ 2 ÇEKİRDEĞİ ✅** — Faz 1 kalem 1-6 (commit 762e8be→4ab9872,
+> +de0726a CKD-CI uyarlaması). **Faz 2 (896bed8+d6414c9):** ses+termal Grad-CAM ısı haritaları —
+> `explain=true` → `xai_image_base64`; weights_only=True; tek-iş kilidi; sessizlik kapısı XAI'den
+> önce; PT ikizleri release_assets'te (21+15MB, downloader yerel çözer); grad-cam 1.5.7 + timm
+> 1.0.28 dört yüzeyde (⚠️ çift-cv2 tuzağı notlu); UI opt-in "🔍 Isı haritası" anahtarı (termal+ses,
+> canlı döngüye asla). Backend süit 1827, frontend 578/578.
+> **Faz 2 KALAN:** cu128 imaj-içi smoke (GPU makinesi, yayın öncesi) · feline/kidney_ct EigenCAM
+> (CT onaylı — Faz 4'le birleşik) · PT'lerin sahaya inişi sonraki model-zip yayını.
+> Faz 4 kalan: RNA IG (captum) · renal 859MB · paper_dilek_hoca ATLANDI · cat_llm kapsam dışı.
 
 **Kaynak:** `C:\Users\merta\Downloads\inference (1)\inference\` (XAI Faz 0-10 sprint çıktısı: 10 modüle Grad-CAM/EigenCAM/SHAP/IG/sensitivity + `xai_utils` + `xai_tabular` + `XAI_INTEGRATION.md`).
 **Hedef:** Bu XAI yeteneğini PEMF ekosistemine (guii backend + ai_service :8100 + pf frontend + AI geçmişi) regresyonsuz entegre etmek.

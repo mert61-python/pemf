@@ -191,8 +191,9 @@ def test_KRITIK_termal_xai_hatasi_analizi_DUSURMEZ(istemci, monkeypatch):
 
 def test_KRITIK_ses_SESSIZLIK_KAPISI_xai_den_ONCE(istemci, monkeypatch, tmp_path):
     """Saha kuralı (2026-08-15): sessiz kayda DUYGU ısı haritası üretilmez — kapı 422'si
-    XAI'den ÖNCE keser (explain=true olsa bile xai fonksiyonu HİÇ çağrılmaz)."""
-    import soundfile as sf
+    XAI'den ÖNCE keser (explain=true olsa bile xai fonksiyonu HİÇ çağrılmaz).
+    WAV stdlib `wave` ile yazılır (soundfile CI test-setinde yok — koşu d6414c9 dersi)."""
+    import wave
 
     client, air = istemci
     import ai_hub.inference_cat_sound.inference_cat_sound as ics
@@ -201,9 +202,12 @@ def test_KRITIK_ses_SESSIZLIK_KAPISI_xai_den_ONCE(istemci, monkeypatch, tmp_path
     monkeypatch.setattr(ics, "xai_ses_isi_haritasi", lambda *a, **k: cagri.append(1) or _SENT)
 
     sr = 22050
-    sessiz = np.zeros(sr, dtype=np.float32) + 1e-6
     wav = tmp_path / "sessiz.wav"
-    sf.write(str(wav), sessiz, sr)
+    with wave.open(str(wav), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)  # 16-bit PCM
+        w.setframerate(sr)
+        w.writeframes(np.zeros(sr, dtype=np.int16).tobytes())  # 1 sn tam sessizlik
     b64 = base64.b64encode(wav.read_bytes()).decode()
 
     r = client.post("/api/ai/sound/cat", data={"audio_base64": b64, "explain": "true"})
