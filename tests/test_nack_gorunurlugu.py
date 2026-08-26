@@ -199,7 +199,13 @@ def test_KARSIT_KANIT_basarili_ack_gurultu_URETMEZ(istemci, monkeypatch):
     api._resolve_ack(cid, True)
     _time.sleep(0.5)
     assert _acik_run_var(api, 8), "başarılı ack'te koşu kaydı kapanmamalı"
-    assert not any(s == "error" for _m, s in bildirimler), f"başarılı start'ta hata bildirimi: {bildirimler!r}"
+    # ⚠️ İZOLASYON: `_estop_ack_watch` ARKA PLAN thread'idir; süitteki BAŞKA testlerin acil-durdurma
+    # çağrıları 2 sn sonra bu testin monkeypatch'li `_push_notification`'ına "acil durdurma ... GELMEDİ"
+    # bildirimi sızdırabilir (api_server.py:1643). Bu test HİÇ E-stop tetiklemez → o bildirimler bu
+    # testin start/ack yolundan GELEMEZ. Sözleşme "başarılı ack, start/ack yolundan hata gürültüsü
+    # üretmez"; yabancı asenkron E-stop bekçi gürültüsünü dışla (start-yolu hatası hâlâ yakalanır).
+    start_yolu_hatalari = [(m, s) for m, s in bildirimler if s == "error" and "acil durdurma" not in m]
+    assert not start_yolu_hatalari, f"başarılı start'ta hata bildirimi: {start_yolu_hatalari!r}"
     api._finish_coil_run(8)  # temizlik
 
 
