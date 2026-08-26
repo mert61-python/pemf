@@ -43,18 +43,25 @@ def load_ref_stats(module_dir: str | Path) -> dict:
     p = Path(module_dir) / "xai_ref_stats.npz"
     if not p.exists():
         raise FileNotFoundError(
-            f"{p} yok — EM tek-örnek XAI referanssız DEJENERE olur. "
-            "build_tools/make_em_xai_ref_stats.py ile üretin."
+            f"{p} yok — EM tek-örnek XAI referanssız DEJENERE olur. build_tools/make_em_xai_ref_stats.py ile üretin."
         )
     d = np.load(p, allow_pickle=False)
-    return {"std": np.asarray(d["std"], dtype=np.float64),
-            "background": np.asarray(d["background"], dtype=np.float64)}
+    return {"std": np.asarray(d["std"], dtype=np.float64), "background": np.asarray(d["background"], dtype=np.float64)}
 
 
-def hizli_sensitivity(predictor, ref_stats: dict,
-                       x: float, y: float, z: float, organ_id: float,
-                       achieved_B: float, duty_sum: float,
-                       *, n_duty: int = 7, top_n: int = 3) -> list[dict]:
+def hizli_sensitivity(
+    predictor,
+    ref_stats: dict,
+    x: float,
+    y: float,
+    z: float,
+    organ_id: float,
+    achieved_B: float,
+    duty_sum: float,
+    *,
+    n_duty: int = 7,
+    top_n: int = 3,
+) -> list[dict]:
     """Canlı yol: tek nokta için hafif duyarlılık (7+1 forward; PNG/SHAP yok).
 
     D-kanalları (ilk n_duty çıktı = bobin duty'leri) üzerinden ölçer: "önerilen dozu en
@@ -68,13 +75,32 @@ def hizli_sensitivity(predictor, ref_stats: dict,
     return [{"feature": EM_FEATURES[int(i)], "etki": round(float(vals[int(i)]), 4)} for i in order]
 
 
-def batch_xai(predictor, ref_stats: dict, X: np.ndarray, out_dir,
-               *, output_labels: Sequence[str] | None = None,
-               sample_ids: Sequence[str] | None = None,
-               run_shap: bool = True, shap_nsamples: int = 60) -> dict:
-    """Mod-2: seans-sonrası/batch tam paket (sensitivity+SHAP+CSV+PNG+~200KB)."""
+def batch_xai(
+    predictor,
+    ref_stats: dict,
+    X: np.ndarray,
+    out_dir,
+    *,
+    output_labels: Sequence[str] | None = None,
+    sample_ids: Sequence[str] | None = None,
+    run_shap: bool = True,
+    shap_nsamples: int = 60,
+    shap_output_agg: str = "duty",
+) -> dict:
+    """Mod-2: seans-sonrası/batch tam paket (sensitivity+SHAP+CSV+PNG+~200KB).
+
+    SHAP varsayılanı 'duty' (§KALAN A7 wiring, 2026-08-27): hizli_sensitivity ile aynı
+    klinik soru — "önerilen DOZU ne belirledi". mean-agregasyon 23 heterojen çıktıda
+    (D7+faz14+E2) duty sinyalini sulandırıyordu (test: duty-sürücü özellik mean'de top-1
+    OLMUYOR, duty'de OLUYOR — mühendislenmiş karşıt-kanıt)."""
     return run_em_xai(
-        predict_raw_fn(predictor), np.asarray(X, dtype=np.float64), out_dir,
-        output_labels=output_labels, sample_ids=sample_ids,
-        run_shap=run_shap, shap_nsamples=shap_nsamples, ref_stats=ref_stats,
+        predict_raw_fn(predictor),
+        np.asarray(X, dtype=np.float64),
+        out_dir,
+        output_labels=output_labels,
+        sample_ids=sample_ids,
+        run_shap=run_shap,
+        shap_nsamples=shap_nsamples,
+        ref_stats=ref_stats,
+        shap_output_agg=shap_output_agg,
     )

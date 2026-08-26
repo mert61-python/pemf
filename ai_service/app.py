@@ -387,6 +387,10 @@ def infer_sound(file: UploadFile = File(...), explain: str = Form(None), xai_met
     explain=true → mel üzerinde Grad-CAM (Faz 2 paritesi — TEK-KAYNAK
     ai_hub.inference_cat_sound.xai_ses_isi_haritasi; sessizlik kapısının ARKASINDA).
     """
+    # A6 allowlist paritesi (dusman-dogrulama 2026-08-27): router 422 veriyordu, burasi
+    # yazim-hatasini zarif-dususe yutuyordu -> cagiran yontem adinin hatali oldugunu ogrenemiyordu.
+    if xai_method is not None and xai_method not in _GECERLI_CAM:
+        return JSONResponse({"error": f"xai_method geçersiz: {xai_method}"}, status_code=422)
     tmp_in = tmp_wav = None
     try:
         data = file.file.read()
@@ -635,12 +639,20 @@ def infer_landmark(file: UploadFile = File(...)):
                         if px > 0 or py > 0:
                             cv2.circle(img, (px, py), 4, (0, 255, 80), -1)
 
+        # Kapi-paritesi (dusman-dogrulama 2026-08-27): raw_fgs/action_units/fgs_bantlari
+        # router yanitinda vardi ama burada YOKTU -> GPU profilinde AU dokumu + A4
+        # olcum-band paneli sessizce hic cikmiyordu. Bantlar TEK-KAYNAK modul fonksiyonundan.
+        from ai_hub.cat_landmark.inference_cat_landmark import fgs_bantlari as _fgs_bantlari_tek
+
         return {
             "status": "success",
             "device": _yolo_device(),
             "inference_ms": infer_ms,
             "detected": detected,
             "fgs_total": (fgs.get("fgs_total") if detected else None),
+            "fgs_bantlari": _fgs_bantlari_tek(),
+            "raw_fgs": (fgs if detected else None),
+            "action_units": (fgs.get("action_units") if detected else None),
             "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
             "image_base64": _jpg_b64(img),
         }
@@ -652,6 +664,9 @@ def infer_landmark(file: UploadFile = File(...)):
 
 
 # ── Faz 2c: termal (görüntü, GPU), cat_organ (görüntü 3B, GPU) ──
+_GECERLI_CAM = ("gradcam++", "gradcam", "eigencam", "hirescam")
+
+
 @app.post("/infer/thermal")
 def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_method: str = Form(None)):
     """Termal görüntü → sağlık sınıflandırma (GhostNetV2 ONNX, GPU).
@@ -660,6 +675,10 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
     ai_hub.cat_thermal.xai_termal_isi_haritasi; GPU'da PT Grad-CAM 200-500 ms).
     ⚠️ Açıklama İKİNCİL: hatası analizi düşürmez (xai_error).
     """
+    # A6 allowlist paritesi (dusman-dogrulama 2026-08-27): router 422 veriyordu, burasi
+    # yazim-hatasini zarif-dususe yutuyordu -> cagiran yontem adinin hatali oldugunu ogrenemiyordu.
+    if xai_method is not None and xai_method not in _GECERLI_CAM:
+        return JSONResponse({"error": f"xai_method geçersiz: {xai_method}"}, status_code=422)
     tmp = None
     try:
         data = file.file.read()
@@ -744,6 +763,10 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
             "n_organs": len(organs_list),
             "organs": organs_list,
             "pose_type": (result.get("pose_classifier") or {}).get("type"),
+            # Kapi-paritesi (dusman-dogrulama 2026-08-27): A2 rozetleri router'da vardi,
+            # burada YOKTU -> GPU dagitiminda ayna/anatomik uyarilar hic gorunmuyordu.
+            "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),
+            "anatomic_consistency": result.get("anatomic_consistency"),
             "image_base64": image_b64,
         }
     except Exception as e:
@@ -992,8 +1015,12 @@ def infer_em_fantom(
 
                 _r0 = payload["tumor_regions"][0]
                 _c = list(_r0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                # Baz-nokta = tahminin FIILEN kullandigi nokta (dusman-dogrulama 2026-08-27:
+                # 'or 0.0' cfg-default'la [B=0.001, duty=2.4] celisiyordu — pipeline ikamesiyle birebir).
+                _B = achieved_B if achieved_B is not None else float(c["cfg"].phantom.achieved_B)
+                _D = duty_sum if duty_sum is not None else float(c["cfg"].phantom.duty_sum)
                 _xai_meta["xaiSensitivity"] = _ief.xai_hizli_sensitivity(
-                    c["predictor"], _c[0], _c[1], _c[2], _r0.get("organ_id", 1), achieved_B or 0.0, duty_sum or 0.0
+                    c["predictor"], _c[0], _c[1], _c[2], _r0.get("organ_id", 1), _B, _D
                 )
             except Exception as xe:
                 import logging as _lg
@@ -1054,8 +1081,10 @@ def infer_em_petri(
 
                 _w0 = wells[0]
                 _c = list(_w0.get("centroid_cabin_mm") or (0.0, 0.0, 0.0))
+                _B = achieved_B if achieved_B is not None else float(c["cfg"].phantom.achieved_B)
+                _D = duty_sum if duty_sum is not None else float(c["cfg"].phantom.duty_sum)
                 _xai_meta["xaiSensitivity"] = _iep.xai_hizli_sensitivity(
-                    c["predictor"], _c[0], _c[1], _c[2], _w0.get("organ_id", 1), achieved_B or 0.0, duty_sum or 0.0
+                    c["predictor"], _c[0], _c[1], _c[2], _w0.get("organ_id", 1), _B, _D
                 )
             except Exception as xe:
                 import logging as _lg

@@ -245,6 +245,24 @@ Efor tahminleri kod-okuma temellidir; her kalem proje test disipliniyle (RED→G
 > CAM · RNA IG işaretli-CSV · EM sensitivity+SHAP; summary.csv + index.html + `--pdf`
 > → `PDFReportGenerator.generate_xai_report`; çıktı-dizini-girdi-dışında bekçisi bulgu-19'a karşı).
 > Kalan tek bilinçli-borç: D bölümü (kapsam-dışı) + cat_llm (sabah tartışması).
+>
+> **DÜŞMAN-DOĞRULAMA TURU (2026-08-27 gece, 4 denetçi + çürütme ajanları — 25 ham → 17
+> doğrulanmış bulgu, TAMAMI KAPATILDI):** ⚠️ P1'ler: `xai_ref_stats.npz` frozen EXE'ye hiç
+> paketlenmiyordu (spec `.npz` tuple'da yoktu — canlı EM XAI üretimde sessiz ölüydü, 1.9.25'ten
+> beri!); FGS band-paneli anahtar uyuşmazlığı (bant `ear_angle` ↔ ölçüm `ear_angle_avg` — 4/8
+> satır hiç basılmıyordu → `OLCUM_KAYNAK` eşlemesi); ai_service landmark/cat_organ yanıtları
+> A2/A4 alanlarını taşımıyordu (GPU profilinde rozetler+panel ölü → parite + `fgs_bantlari()`
+> TEK-KAYNAK modül fonksiyonu); batch ses yolu sessizlik kapısını BAYPAS ediyordu (değişmez
+> ihlali → `_ses_kapili_explain` ffmpeg+RMS kapısı); özyinelemeli taramada aynı-stem çakışması
+> (görsel yanlış girdiye → yol-tabanlı benzersiz ad); EM sample_id ham dosya-adına (sanitize).
+> P2'ler: XAI baz-noktası (0,0)≠pipeline cfg-default'u (8/8 noktada top-3 farklıydı → cfg
+> ikamesi 4 sitede); ai_service termal/ses allowlist yoktu (422 paritesi); bekçi tek-dosya
+> yanlış-pozitifi + symlink deliği; CSV/embed/URL-encode/PDF-önvalidasyon sertleştirmeleri;
+> `batch_xai` SHAP artık 'duty'-agregasyonlu (A7 gerçek wiring). Test-kalitesi bulguları:
+> `**_xai_meta` yanıt-wiring kilidi, PDF `/Image` kanıtı, bekçi main()-wiring testi eklendi.
+> **Bilinçli-borç (düşük):** A6 yöntem-ulaşımı uçtan-uca testi (model yüklemeli), EM
+> sahte-predictor baz-nokta mutasyon körlüğü, petri 'eşik ≥30' metninin sabit oluşu, A1
+> jest'inin yalnız CT yüzeyini ölçmesi, RNA mock-sözleşme testi.
 
 ### A) Canlı-ürün eksikleri — ✅ TAMAMI KAPANDI (2026-08-27)
 | # | Eksik | Kanıt | İş |

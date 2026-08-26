@@ -224,7 +224,10 @@ if os.path.exists(ai_hub_dir):
             rel = os.path.relpath(root, project_path)
             if f.endswith(('.py', '.json', '.txt', '.yaml', '.yml')):
                 datas.append((full, rel))
-            elif f.endswith(('.pkl', '.onnx', '.npy')) and os.path.getsize(full) < 5 * 1024 * 1024:
+            # ⚠️ .npz ŞART (düşman-doğrulama 2026-08-27): xai_ref_stats.npz'ler (EM canlı XAI
+            # referansları) bu listede olmadığı için frozen EXE'ye HİÇ girmiyordu → üretimde
+            # em_kedi/fantom/petri xaiSensitivity sessizce üretilemiyordu (zarif düşüş maskeledi).
+            elif f.endswith(('.pkl', '.onnx', '.npy', '.npz')) and os.path.getsize(full) < 5 * 1024 * 1024:
                 datas.append((full, rel))
 
 # TÜM AI MODELLERİNİ EXE'YE GÖM (Hugging Face KALDIRILDI → self-contained; ProgramData staging'e

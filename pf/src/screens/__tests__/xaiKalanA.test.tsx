@@ -101,8 +101,10 @@ const FGS_TAM = {
   status: "success", detected: true, fgs_total: 3, pain_level: "mild", image_base64: "IMG64",
   raw_fgs: {
     action_units: { AU1_Ear_Position: { score: 1 }, AU2_Orbital_Tightening: { score: 0 } },
-    // ear_angle bandın ÜSTÜNDE (0.9 > p95=0.8) → "bant dışı"; eye_ratio_avg bant İÇİNDE.
-    measurements: { ear_angle: 0.9, eye_ratio_avg: 0.3 },
+    // ⚠️ measurements GERÇEK backend adlarıyla (compute_fgs: ear_angle_avg/eye_aperture_ratio —
+    // bant anahtarlarından FARKLI; UI OLCUM_KAYNAK eşlemesi tam bu yüzden var, ölçüldü).
+    // ear_angle_avg bandın ÜSTÜNDE (0.9 > p95=0.8) → "bant dışı"; eye_aperture_ratio İÇERİDE.
+    measurements: { ear_angle_avg: 0.9, eye_aperture_ratio: 0.3 },
   },
   fgs_bantlari: { ear_angle: { p5: 0.2, p95: 0.8 }, eye_ratio_avg: { p5: 0.1, p95: 0.5 } },
 };

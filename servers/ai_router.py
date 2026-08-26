@@ -2134,8 +2134,11 @@ async def analyze_em_fantom(
                     _c[1],
                     _c[2],
                     _r0.get("organ_id", 1),
-                    achieved_B or 0.0,
-                    duty_sum or 0.0,
+                    # Baz-nokta = pipeline'in FIILEN kullandigi (None -> cfg.phantom
+                    # default'lari; dusman-dogrulama 2026-08-27 — 'or 0.0' yanlis noktada
+                    # aciklama uretiyordu, 8/8 test noktasinda top-3 farkliydi).
+                    achieved_B if achieved_B is not None else float(cache["cfg"].phantom.achieved_B),
+                    duty_sum if duty_sum is not None else float(cache["cfg"].phantom.duty_sum),
                 )
             except Exception as xe:
                 logger.warning("em_fantom XAI meta üretilemedi (analiz etkilenmedi): %s", xe)
@@ -2263,8 +2266,8 @@ async def analyze_em_petri(
                     _c[1],
                     _c[2],
                     _w0.get("organ_id", 1),
-                    achieved_B or 0.0,
-                    duty_sum or 0.0,
+                    achieved_B if achieved_B is not None else float(cache["cfg"].phantom.achieved_B),
+                    duty_sum if duty_sum is not None else float(cache["cfg"].phantom.duty_sum),
                 )
             except Exception as xe:
                 logger.warning("em_petri XAI meta üretilemedi (analiz etkilenmedi): %s", xe)

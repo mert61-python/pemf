@@ -26,57 +26,50 @@ MODEL_PATH = os.path.join(_DIR, "yolo26m-pose.onnx")
 # ============================================================
 KEYPOINT_NAMES = {
     # Merkez/orta hat (3 nokta)
-    0:  "nose_tip",                # burun ucu / üst dudak orta üst
-    1:  "left_eye_center",         # sol göz pupil/center
-    2:  "lower_lip_center",        # alt dudak orta
-
+    0: "nose_tip",  # burun ucu / üst dudak orta üst
+    1: "left_eye_center",  # sol göz pupil/center
+    2: "lower_lip_center",  # alt dudak orta
     # Sag goz konturu (5 nokta + 3 iris)
-    3:  "right_eye_center",        # sag göz pupil/center
-    4:  "right_eye_top_outer",
-    5:  "right_eye_bottom",
-    6:  "right_eye_top_inner",
-    7:  "right_eye_outer_corner",
+    3: "right_eye_center",  # sag göz pupil/center
+    4: "right_eye_top_outer",
+    5: "right_eye_bottom",
+    6: "right_eye_top_inner",
+    7: "right_eye_outer_corner",
     36: "right_eye_iris_1",
     37: "right_eye_iris_2",
     38: "right_eye_iris_3",
-
     # Sol goz konturu (4 nokta + 3 iris)
-    8:  "left_eye_outer",
-    9:  "left_eye_inner",
+    8: "left_eye_outer",
+    9: "left_eye_inner",
     10: "left_eye_top",
     11: "left_eye_bottom",
     39: "left_eye_iris_1",
     40: "left_eye_iris_2",
     41: "left_eye_iris_3",
-
     # Burun bolgesi (4 nokta)
     12: "nose_right_top",
     13: "nose_left_top",
     14: "nostril_right",
     15: "nostril_left",
-
     # Agiz (6 nokta)
-    16: "philtrum",                # ust dudak orta (filtrum)
+    16: "philtrum",  # ust dudak orta (filtrum)
     17: "upper_lip_center",
     18: "mouth_right_corner",
     19: "mouth_right_lower",
     20: "mouth_left_corner",
     21: "mouth_left_lower",
-
     # Sag kulak (5 nokta: base_outer -> outer_mid -> tip -> inner_mid -> base_inner)
     22: "right_ear_base_outer",
     23: "right_ear_outer_mid",
     24: "right_ear_tip",
     25: "right_ear_inner_mid",
     26: "right_ear_base_inner",
-
     # Sol kulak (5 nokta: simetrik)
     27: "left_ear_base_inner",
     28: "left_ear_inner_mid",
     29: "left_ear_tip",
     30: "left_ear_outer_mid",
     31: "left_ear_base_outer",
-
     # Yanak / yuz konturu (10 nokta)
     32: "right_cheek_outer",
     33: "right_cheek_lower",
@@ -84,7 +77,7 @@ KEYPOINT_NAMES = {
     35: "left_cheek_outer",
     42: "right_cheek_inner",
     43: "left_cheek_inner",
-    44: "muzzle_right",            # burun-agiz gecis sag
+    44: "muzzle_right",  # burun-agiz gecis sag
     45: "muzzle_left",
     46: "right_chin_outer",
     47: "left_chin_outer",
@@ -99,14 +92,14 @@ _THRESH_JSON = os.path.join(_DIR, "thresholds_calibrated.json")
 
 # Fallback degerler (calibrate ile JSON yazilana kadar)
 _THRESH_DEFAULT = {
-    "ear_angle":         {"p5": 43.307, "p25": 58.984, "p50": 63.332, "p75": 67.121, "p95": 71.714},
-    "ear_elev":          {"p5": 0.143,  "p25": 0.227,  "p50": 0.256,  "p75": 0.281,  "p95": 0.320},
-    "ear_spread":        {"p5": 1.383,  "p25": 1.488,  "p50": 1.559,  "p75": 1.638,  "p95": 1.768},
-    "eye_ratio_avg":     {"p5": 0.950,  "p25": 1.118,  "p50": 1.320,  "p75": 1.650,  "p95": 2.681},
-    "mouth_aspect":      {"p5": 0.905,  "p25": 1.371,  "p50": 1.779,  "p75": 2.262,  "p95": 3.371},
-    "muzzle_compact":    {"p5": 1.023,  "p25": 1.243,  "p50": 1.439,  "p75": 1.685,  "p95": 2.193},
-    "whisker_tension":   {"p5": 0.565,  "p25": 0.602,  "p50": 0.625,  "p75": 0.647,  "p95": 0.679},
-    "head_center_y":     {"p5": 0.528,  "p25": 0.582,  "p50": 0.608,  "p75": 0.631,  "p95": 0.663},
+    "ear_angle": {"p5": 43.307, "p25": 58.984, "p50": 63.332, "p75": 67.121, "p95": 71.714},
+    "ear_elev": {"p5": 0.143, "p25": 0.227, "p50": 0.256, "p75": 0.281, "p95": 0.320},
+    "ear_spread": {"p5": 1.383, "p25": 1.488, "p50": 1.559, "p75": 1.638, "p95": 1.768},
+    "eye_ratio_avg": {"p5": 0.950, "p25": 1.118, "p50": 1.320, "p75": 1.650, "p95": 2.681},
+    "mouth_aspect": {"p5": 0.905, "p25": 1.371, "p50": 1.779, "p75": 2.262, "p95": 3.371},
+    "muzzle_compact": {"p5": 1.023, "p25": 1.243, "p50": 1.439, "p75": 1.685, "p95": 2.193},
+    "whisker_tension": {"p5": 0.565, "p25": 0.602, "p50": 0.625, "p75": 0.647, "p95": 0.679},
+    "head_center_y": {"p5": 0.528, "p25": 0.582, "p50": 0.608, "p75": 0.631, "p95": 0.663},
 }
 
 
@@ -127,6 +120,21 @@ def _load_thresholds():
 
 
 THRESH = _load_thresholds()
+
+
+def fgs_bantlari() -> dict:
+    """UI 'olculen deger vs populasyon bandi' paneli icin {olcum: {p5, p95}} — TEK-KAYNAK.
+
+    Router (guii sunucu) + ai_service (:8100) ayni bantlari dondursun diye buradan okunur
+    (kapi-paritesi dersi; dusman-dogrulama 2026-08-27: bantlar yalniz router'daydi, GPU
+    profilinde panel sessizce kayboluyordu). THRESH zaten JSON→fallback zinciriyle yuklu."""
+    out = {}
+    for k, v in THRESH.items():
+        try:
+            out[k] = {"p5": round(float(v["p5"]), 4), "p95": round(float(v["p95"]), 4)}
+        except Exception:
+            continue
+    return out
 
 
 # ============================================================
@@ -153,8 +161,7 @@ def compute_fgs(keypoints):
     """
     kp = np.array(keypoints)
     if kp.shape[0] < 48:
-        return {"fgs_total": -1, "pain": False, "pain_level": "Unknown",
-                "action_units": {}, "measurements": {}}
+        return {"fgs_total": -1, "pain": False, "pain_level": "Unknown", "action_units": {}, "measurements": {}}
 
     eps = 1e-8
 
@@ -164,33 +171,33 @@ def compute_fgs(keypoints):
 
     # --- AU1: Ear Position (sag: 22-26, sol: 27-31) ---
     # tip = 24 (sag), 29 (sol); base ortalamasi = (base_outer + base_inner) / 2
-    right_ear_tip  = kp[24]
+    right_ear_tip = kp[24]
     right_ear_base = (kp[22] + kp[26]) / 2.0
-    left_ear_tip   = kp[29]
-    left_ear_base  = (kp[27] + kp[31]) / 2.0
+    left_ear_tip = kp[29]
+    left_ear_base = (kp[27] + kp[31]) / 2.0
 
     # Tip base'den yukarida mi? (y kucuk = yukari)
     right_ear_elevation = -(right_ear_tip[1] - right_ear_base[1])
-    left_ear_elevation  = -(left_ear_tip[1]  - left_ear_base[1])
+    left_ear_elevation = -(left_ear_tip[1] - left_ear_base[1])
     avg_ear_elevation = (right_ear_elevation + left_ear_elevation) / 2.0
 
     # Kulak acisi: 90° = dik, 0° = yatik
     right_ear_vec = right_ear_tip - right_ear_base
-    left_ear_vec  = left_ear_tip  - left_ear_base
+    left_ear_vec = left_ear_tip - left_ear_base
     right_ear_angle = abs(np.degrees(np.arctan2(-right_ear_vec[1], abs(right_ear_vec[0]) + eps)))
-    left_ear_angle  = abs(np.degrees(np.arctan2(-left_ear_vec[1],  abs(left_ear_vec[0])  + eps)))
+    left_ear_angle = abs(np.degrees(np.arctan2(-left_ear_vec[1], abs(left_ear_vec[0]) + eps)))
     avg_ear_angle = (right_ear_angle + left_ear_angle) / 2.0
 
     # Spread: tip'ler arasi / base'ler arasi (>1 = acilmis, <1 = duzlesmis)
-    ear_tips_dist  = np.linalg.norm(right_ear_tip  - left_ear_tip)
+    ear_tips_dist = np.linalg.norm(right_ear_tip - left_ear_tip)
     ear_bases_dist = np.linalg.norm(right_ear_base - left_ear_base)
     ear_spread = ear_tips_dist / (ear_bases_dist + eps)
 
     # --- AU2: Orbital Tightening (sag: 3-7, sol: 1,8,9,10,11) ---
     # Sag goz: top=(4+6)/2, bottom=5, outer=7, center=3 (pupil)
-    right_eye_top    = (kp[4] + kp[6]) / 2.0
+    right_eye_top = (kp[4] + kp[6]) / 2.0
     right_eye_bottom = kp[5]
-    right_eye_outer  = kp[7]
+    right_eye_outer = kp[7]
     right_eye_center = kp[3]
     right_eye_h = np.linalg.norm(right_eye_top - right_eye_bottom)
     # Width: outer ile center arasi yaklasik gozun yari genisligi → ×2
@@ -198,10 +205,10 @@ def compute_fgs(keypoints):
     right_eye_ratio = right_eye_h / (right_eye_w + eps)
 
     # Sol goz: top=10, bottom=11, outer=8, inner=9
-    left_eye_top    = kp[10]
+    left_eye_top = kp[10]
     left_eye_bottom = kp[11]
-    left_eye_outer  = kp[8]
-    left_eye_inner  = kp[9]
+    left_eye_outer = kp[8]
+    left_eye_inner = kp[9]
     left_eye_h = np.linalg.norm(left_eye_top - left_eye_bottom)
     left_eye_w = np.linalg.norm(left_eye_outer - left_eye_inner)
     left_eye_ratio = left_eye_h / (left_eye_w + eps)
@@ -209,11 +216,11 @@ def compute_fgs(keypoints):
     avg_eye_ratio = (right_eye_ratio + left_eye_ratio) / 2.0
 
     # --- AU3: Muzzle Tension (nose=0, mouth=16-21, lips=17/2) ---
-    nose_tip       = kp[0]
-    upper_lip      = kp[17]
-    lower_lip      = kp[2]
-    mouth_right    = kp[18]
-    mouth_left     = kp[20]
+    nose_tip = kp[0]
+    upper_lip = kp[17]
+    lower_lip = kp[2]
+    mouth_right = kp[18]
+    mouth_left = kp[20]
 
     # Muzzle length: burun ucundan ust dudaga
     muzzle_length = np.linalg.norm(nose_tip - upper_lip)
@@ -229,10 +236,10 @@ def compute_fgs(keypoints):
 
     # --- AU4: Whisker Position (yanak gerginliginden tahmin) ---
     # 32/35 = sag/sol cheek_outer, 42/43 = cheek_inner, 44/45 = muzzle, 46/47 = chin
-    cheek_outer_dist = np.linalg.norm(kp[32] - kp[35])   # dis yanak genisligi
-    cheek_inner_dist = np.linalg.norm(kp[42] - kp[43])   # ic yanak genisligi
-    muzzle_dist      = np.linalg.norm(kp[44] - kp[45])   # burun-agiz gecis genisligi
-    chin_dist        = np.linalg.norm(kp[46] - kp[47])   # cene altı
+    cheek_outer_dist = np.linalg.norm(kp[32] - kp[35])  # dis yanak genisligi
+    cheek_inner_dist = np.linalg.norm(kp[42] - kp[43])  # ic yanak genisligi
+    muzzle_dist = np.linalg.norm(kp[44] - kp[45])  # burun-agiz gecis genisligi
+    chin_dist = np.linalg.norm(kp[46] - kp[47])  # cene altı
 
     # Whisker tension: gergin biyik → yanak iceri çekilir (cheek_inner azalir vs outer)
     whisker_tension = cheek_inner_dist / (cheek_outer_dist + eps)
@@ -244,8 +251,8 @@ def compute_fgs(keypoints):
 
     # Bas egimi: kulak baselari (alin proxy) -> alt dudak
     forehead_center = (kp[26] + kp[27]) / 2.0  # ic kulak base'lerinin ortasi
-    chin_center     = lower_lip
-    head_tilt_vec   = chin_center - forehead_center
+    chin_center = lower_lip
+    head_tilt_vec = chin_center - forehead_center
     head_tilt_angle = np.degrees(np.arctan2(head_tilt_vec[0], head_tilt_vec[1]))
 
     # Bas dusuklugu: alt dudak y (1.0 = en alt)
@@ -277,14 +284,18 @@ def compute_fgs(keypoints):
     T = THRESH  # kalibre eşikler (JSON'dan yuklendi)
 
     # AU1: Ear (yuksek angle + elev = dik; dusuk = yatik)
-    if (avg_ear_angle >= T["ear_angle"]["p25"]
+    if (
+        avg_ear_angle >= T["ear_angle"]["p25"]
         and avg_ear_elevation >= T["ear_elev"]["p25"]
-        and T["ear_spread"]["p25"] <= ear_spread <= T["ear_spread"]["p75"]):
+        and T["ear_spread"]["p25"] <= ear_spread <= T["ear_spread"]["p75"]
+    ):
         au1 = 0  # forward & upright (normal: p25-p75 araligi)
-    elif (avg_ear_angle < T["ear_angle"]["p5"]
-          or avg_ear_elevation < T["ear_elev"]["p5"]
-          or ear_spread < T["ear_spread"]["p5"]
-          or ear_spread > T["ear_spread"]["p95"]):
+    elif (
+        avg_ear_angle < T["ear_angle"]["p5"]
+        or avg_ear_elevation < T["ear_elev"]["p5"]
+        or ear_spread < T["ear_spread"]["p5"]
+        or ear_spread > T["ear_spread"]["p95"]
+    ):
         au1 = 2  # flattened / extreme
     else:
         au1 = 1  # slightly pulled apart
@@ -298,12 +309,16 @@ def compute_fgs(keypoints):
         au2 = 1
 
     # AU3: Muzzle Tension
-    if (mouth_aspect <= T["mouth_aspect"]["p75"]
-        and T["muzzle_compact"]["p25"] <= muzzle_compactness <= T["muzzle_compact"]["p75"]):
+    if (
+        mouth_aspect <= T["mouth_aspect"]["p75"]
+        and T["muzzle_compact"]["p25"] <= muzzle_compactness <= T["muzzle_compact"]["p75"]
+    ):
         au3 = 0  # relaxed, round
-    elif (mouth_aspect > T["mouth_aspect"]["p95"]
-          or muzzle_compactness < T["muzzle_compact"]["p5"]
-          or muzzle_compactness > T["muzzle_compact"]["p95"]):
+    elif (
+        mouth_aspect > T["mouth_aspect"]["p95"]
+        or muzzle_compactness < T["muzzle_compact"]["p5"]
+        or muzzle_compactness > T["muzzle_compact"]["p95"]
+    ):
         au3 = 2  # taut, oval/elongated
     else:
         au3 = 1
@@ -366,21 +381,25 @@ def compute_fgs(keypoints):
 # ============================================================
 def _get_kp_colors(n=48):
     import colorsys
-    return [tuple(int(255*c) for c in colorsys.hsv_to_rgb(i/n, 0.9, 0.9)) for i in range(n)]
+
+    return [tuple(int(255 * c) for c in colorsys.hsv_to_rgb(i / n, 0.9, 0.9)) for i in range(n)]
 
 
 def _get_font(size=14):
     try:
         from PIL import ImageFont
+
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
     except Exception:
         from PIL import ImageFont
+
         return ImageFont.load_default()
 
 
 def viz_indexed_keypoints(image_path, model, out_dir, conf=0.25, device="0"):
     """YOLO inference + her keypoint'i indeks numarasiyla ciz, kaydet."""
     from PIL import Image, ImageDraw
+
     os.makedirs(out_dir, exist_ok=True)
     colors = _get_kp_colors(48)
     font = _get_font(14)
@@ -401,7 +420,7 @@ def viz_indexed_keypoints(image_path, model, out_dir, conf=0.25, device="0"):
         bbox_conf = float(r.boxes.conf[cat_idx])
 
         draw.rectangle([x1, y1, x2, y2], outline="blue", width=3)
-        draw.text((x1+5, y1+5), f"cat_face {bbox_conf:.2f}", fill="blue", font=font)
+        draw.text((x1 + 5, y1 + 5), f"cat_face {bbox_conf:.2f}", fill="blue", font=font)
 
         bw = x2 - x1
         radius = max(4, int(bw * 0.008))
@@ -412,12 +431,10 @@ def viz_indexed_keypoints(image_path, model, out_dir, conf=0.25, device="0"):
             ci = float(kp_conf[i]) if kp_conf is not None else 1.0
             color = colors[i]
             if ci < 0.3:
-                draw.ellipse([x-2, y-2, x+2, y+2], outline=color, width=1)
+                draw.ellipse([x - 2, y - 2, x + 2, y + 2], outline=color, width=1)
             else:
-                draw.ellipse([x-radius, y-radius, x+radius, y+radius],
-                             fill=color, outline="white", width=1)
-                draw.text((x+radius+2, y-7), str(i), fill="white",
-                          font=font, stroke_width=2, stroke_fill="black")
+                draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=color, outline="white", width=1)
+                draw.text((x + radius + 2, y - 7), str(i), fill="white", font=font, stroke_width=2, stroke_fill="black")
 
     out_path = os.path.join(out_dir, os.path.basename(image_path).rsplit('.', 1)[0] + "_kp_idx.jpg")
     img.save(out_path, quality=92)
@@ -429,6 +446,7 @@ def viz_dataset_annotation(json_label_path, dataset_images_dir, out_dir):
     """Bir CatFLW ham annotation JSON'unu okuyup keypoint'leri indeksli ciz.
     Mapping dogrulamak icin kullanilir."""
     from PIL import Image, ImageDraw
+
     os.makedirs(out_dir, exist_ok=True)
     colors = _get_kp_colors(48)
     font = _get_font(14)
@@ -453,16 +471,14 @@ def viz_dataset_annotation(json_label_path, dataset_images_dir, out_dir):
     img = Image.open(img_path).convert("RGB")
     draw = ImageDraw.Draw(img)
     draw.rectangle([x1, y1, x2, y2], outline="blue", width=3)
-    draw.text((x1+5, y1+5), "GT bbox", fill="blue", font=font)
+    draw.text((x1 + 5, y1 + 5), "GT bbox", fill="blue", font=font)
 
     bw = x2 - x1
     radius = max(4, int(bw * 0.008))
     for i, (x, y) in enumerate(kps):
         color = colors[i]
-        draw.ellipse([x-radius, y-radius, x+radius, y+radius],
-                     fill=color, outline="white", width=1)
-        draw.text((x+radius+2, y-7), str(i), fill="white",
-                  font=font, stroke_width=2, stroke_fill="black")
+        draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=color, outline="white", width=1)
+        draw.text((x + radius + 2, y - 7), str(i), fill="white", font=font, stroke_width=2, stroke_fill="black")
 
     out_path = os.path.join(out_dir, base + "_GT_indexed.jpg")
     img.save(out_path, quality=92)
@@ -490,8 +506,9 @@ def _measure_from_kp(kp_pix, bbox):
     lt, lb = kp[29], (kp[27] + kp[31]) / 2.0
     ear_elev = (-(rt[1] - rb[1]) + -(lt[1] - lb[1])) / 2.0
     rv, lv = rt - rb, lt - lb
-    ear_angle = (abs(np.degrees(np.arctan2(-rv[1], abs(rv[0]) + eps)))
-                 + abs(np.degrees(np.arctan2(-lv[1], abs(lv[0]) + eps)))) / 2.0
+    ear_angle = (
+        abs(np.degrees(np.arctan2(-rv[1], abs(rv[0]) + eps))) + abs(np.degrees(np.arctan2(-lv[1], abs(lv[0]) + eps)))
+    ) / 2.0
     ear_spread = np.linalg.norm(rt - lt) / (np.linalg.norm(rb - lb) + eps)
 
     # AU2
@@ -516,16 +533,21 @@ def _measure_from_kp(kp_pix, bbox):
     head_center_y = float(np.mean(kp[:, 1]))
 
     return {
-        "ear_angle": float(ear_angle), "ear_elev": float(ear_elev),
-        "ear_spread": float(ear_spread), "eye_ratio_avg": float(eye_ratio_avg),
-        "mouth_aspect": float(mouth_aspect), "muzzle_compact": float(muzzle_compact),
-        "whisker_tension": float(whisker_tension), "head_center_y": head_center_y,
+        "ear_angle": float(ear_angle),
+        "ear_elev": float(ear_elev),
+        "ear_spread": float(ear_spread),
+        "eye_ratio_avg": float(eye_ratio_avg),
+        "mouth_aspect": float(mouth_aspect),
+        "muzzle_compact": float(muzzle_compact),
+        "whisker_tension": float(whisker_tension),
+        "head_center_y": head_center_y,
     }
 
 
 def calibrate_from_dataset(labels_dir, output_json=None):
     """Dataset annotation JSON'larindan percentile threshold'larini cikar ve kaydet."""
     from glob import glob
+
     if output_json is None:
         output_json = _THRESH_JSON
 
@@ -559,12 +581,13 @@ def calibrate_from_dataset(labels_dir, output_json=None):
     for k in keys:
         vals = np.array([r[k] for r in records])
         s = {
-            "p5":  float(np.percentile(vals, 5)),
+            "p5": float(np.percentile(vals, 5)),
             "p25": float(np.percentile(vals, 25)),
             "p50": float(np.percentile(vals, 50)),
             "p75": float(np.percentile(vals, 75)),
             "p95": float(np.percentile(vals, 95)),
-            "mean": float(np.mean(vals)), "std": float(np.std(vals)),
+            "mean": float(np.mean(vals)),
+            "std": float(np.std(vals)),
         }
         stats[k] = s
         print(f"{k:<22} {s['p5']:>8.3f} {s['p25']:>8.3f} {s['p50']:>8.3f} {s['p75']:>8.3f} {s['p95']:>8.3f}")
@@ -591,7 +614,8 @@ Ornekler — INFERENCE:
 DEBUG / KALIBRASYON:
   python inference_cat_landmark.py --calibrate <dataset>/labels
   python inference_cat_landmark.py --viz-dataset <dataset>/labels --dataset-images <dataset>/images
-""")
+""",
+    )
     # Inference args
     parser.add_argument("--image", type=str, help="Tek goruntu")
     parser.add_argument("--source", type=str, help="Klasor veya video")
@@ -600,20 +624,27 @@ DEBUG / KALIBRASYON:
     parser.add_argument("--save", action="store_true", help="Annotated sonuclari kaydet")
     parser.add_argument("--json", action="store_true", help="JSON cikti kaydet")
     parser.add_argument("--output", type=str, default="results", help="Cikti klasoru")
-    parser.add_argument("--viz-indexed", action="store_true",
-                        help="Her keypoint'i INDEX numarasiyla goster (debug)")
+    parser.add_argument("--viz-indexed", action="store_true", help="Her keypoint'i INDEX numarasiyla goster (debug)")
 
     # Calibration mode
-    parser.add_argument("--calibrate", type=str, metavar="LABELS_DIR",
-                        help="Verilen dataset labels klasoru icin percentile threshold uret")
+    parser.add_argument(
+        "--calibrate",
+        type=str,
+        metavar="LABELS_DIR",
+        help="Verilen dataset labels klasoru icin percentile threshold uret",
+    )
 
     # Dataset annotation viz mode
-    parser.add_argument("--viz-dataset", type=str, metavar="LABELS_DIR",
-                        help="Dataset GT annotation'larindan indeksli viz (mapping dogrulamak icin)")
-    parser.add_argument("--dataset-images", type=str, default=None,
-                        help="--viz-dataset ile birlikte: images klasoru")
-    parser.add_argument("--dataset-limit", type=int, default=5,
-                        help="--viz-dataset icin maksimum ornek sayisi (default 5)")
+    parser.add_argument(
+        "--viz-dataset",
+        type=str,
+        metavar="LABELS_DIR",
+        help="Dataset GT annotation'larindan indeksli viz (mapping dogrulamak icin)",
+    )
+    parser.add_argument("--dataset-images", type=str, default=None, help="--viz-dataset ile birlikte: images klasoru")
+    parser.add_argument(
+        "--dataset-limit", type=int, default=5, help="--viz-dataset icin maksimum ornek sayisi (default 5)"
+    )
 
     args = parser.parse_args()
 
@@ -630,7 +661,7 @@ DEBUG / KALIBRASYON:
         labels_dir = args.viz_dataset
         images_dir = args.dataset_images or os.path.join(os.path.dirname(labels_dir), "images")
         out_dir = os.path.join(_DIR, "dataset_kp_viz")
-        files = sorted(os.listdir(labels_dir))[:args.dataset_limit]
+        files = sorted(os.listdir(labels_dir))[: args.dataset_limit]
         print(f"[Dataset Viz] {len(files)} ornek -> {out_dir}")
         for fn in files:
             if fn.endswith(".json"):
@@ -645,7 +676,9 @@ DEBUG / KALIBRASYON:
     print("Kedi Yuz Landmark + FGS Agri Skorlamasi")
     print(f"Model: YOLO26m-pose (48 keypoint, mAP50-95=0.729)")
     print(f"FGS: 5 AU (0-2), Toplam 0-10, >=4 = Agri")
-    print(f"Thresholds: {'thresholds_calibrated.json (kalibre)' if os.path.exists(_THRESH_JSON) else 'inline fallback'}")
+    print(
+        f"Thresholds: {'thresholds_calibrated.json (kalibre)' if os.path.exists(_THRESH_JSON) else 'inline fallback'}"
+    )
     print("=" * 60)
 
     model = YOLO(MODEL_PATH, task="pose")
@@ -669,17 +702,21 @@ DEBUG / KALIBRASYON:
                     continue
 
                 results = model.predict(
-                    source=path, conf=args.conf, device=args.device,
-                    save=True, project=_DIR, name=args.output, exist_ok=True,
-                    verbose=False
+                    source=path,
+                    conf=args.conf,
+                    device=args.device,
+                    save=True,
+                    project=_DIR,
+                    name=args.output,
+                    exist_ok=True,
+                    verbose=False,
                 )
 
                 for r in results:
                     _print_result(r, args.json)
 
                 if args.viz_indexed:
-                    viz_indexed_keypoints(path, model, indexed_out_dir,
-                                          conf=args.conf, device=args.device)
+                    viz_indexed_keypoints(path, model, indexed_out_dir, conf=args.conf, device=args.device)
 
             except KeyboardInterrupt:
                 print("\n  Cikis.")
@@ -689,9 +726,14 @@ DEBUG / KALIBRASYON:
     else:
         print(f"\nKaynak: {source}")
         results = model.predict(
-            source=source, conf=args.conf, device=args.device,
-            save=args.save, project=_DIR, name=args.output, exist_ok=True,
-            verbose=False
+            source=source,
+            conf=args.conf,
+            device=args.device,
+            save=args.save,
+            project=_DIR,
+            name=args.output,
+            exist_ok=True,
+            verbose=False,
         )
 
         all_results = []
@@ -700,8 +742,7 @@ DEBUG / KALIBRASYON:
             if result_data:
                 all_results.append(result_data)
             if args.viz_indexed:
-                viz_indexed_keypoints(r.path, model, indexed_out_dir,
-                                      conf=args.conf, device=args.device)
+                viz_indexed_keypoints(r.path, model, indexed_out_dir, conf=args.conf, device=args.device)
 
         if args.json and all_results:
             json_path = os.path.join(_DIR, args.output, "results.json")
@@ -743,7 +784,7 @@ def _print_result(r, save_json=False):
             # FGS Scoring
             fgs = compute_fgs(kp_norm)
 
-            print(f"\n  Kedi {i+1} (conf={conf:.2f}):")
+            print(f"\n  Kedi {i + 1} (conf={conf:.2f}):")
             print(f"    Bbox: [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]")
             print(f"    Keypoints: {len(kp)} nokta")
             if kp_conf is not None:

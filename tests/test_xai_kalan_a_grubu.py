@@ -124,6 +124,13 @@ def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
             f"{modul}: XAI meta hatası zarif değil — analiz düşebilir"
         )
         assert "asyncio.to_thread" in blok, f"{modul}: sensitivity event-loop üstünde koşuyor (bloklar)"
+        # WIRING kilidi (düşman-doğrulama 2026-08-27: **_xai_meta silinince eski test yeşil
+        # kalıyordu): meta gerçekten YANITA yayılıyor mu?
+        assert "**_xai_meta," in src[i : i + 1600], f"{modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
+        # Baz-nokta kilidi: açıklama tahminin FİİLEN kullandığı noktada (None → cfg.phantom
+        # default'ları; 'or 0.0' yanlış noktada açıklama üretiyordu — 8/8 noktada top-3 farklıydı)
+        assert 'cache["cfg"].phantom.achieved_B' in blok, f"{modul}: XAI baz-noktası cfg ikamesiz"
+        assert "achieved_B or 0.0" not in blok, f"{modul}: 'or 0.0' baz-nokta hatası geri geldi"
 
 
 def test_YAPISAL_ai_service_fantom_ve_petri_meta_PARITESI():
@@ -136,10 +143,75 @@ def test_YAPISAL_ai_service_fantom_ve_petri_meta_PARITESI():
     ]:
         assert cagri in src, f"ai_service {modul}: xaiSensitivity paritesi kayıp (router dönerken :8100 dönmez)"
         i = src.index(cagri)
-        blok = src[max(0, i - 500) : i + 500]
+        blok = src[max(0, i - 800) : i + 800]
         assert "except Exception" in blok and "analiz etkilenmedi" in blok, (
             f"ai_service {modul}: XAI meta hatası zarif değil"
         )
+        assert "**_xai_meta," in src[i : i + 1600], f"ai_service {modul}: _xai_meta yanıta yayılmıyor"
+        assert 'c["cfg"].phantom.achieved_B' in blok, f"ai_service {modul}: XAI baz-noktası cfg ikamesiz"
+        assert "achieved_B or 0.0" not in blok, f"ai_service {modul}: 'or 0.0' baz-nokta hatası geri geldi"
+
+
+# ── Kapı-paritesi (düşman-doğrulama 2026-08-27): landmark + cat_organ GPU yolu ──
+def test_KRITIK_fgs_bantlari_TEK_KAYNAK_paritesi():
+    """Kanonik modül fonksiyonu (ai_service bunu kullanır) router'ın döndürdüğüyle BİREBİR
+    aynı olmalı — ayrışırsa GPU ve gömülü profil farklı bant gösterir."""
+    import servers.ai_router as air
+    from ai_hub.cat_landmark.inference_cat_landmark import fgs_bantlari
+
+    air._FGS_BANTLARI_CACHE = None
+    assert fgs_bantlari() == air._fgs_bantlari(), "modül bantları ile router bantları ayrıştı"
+    assert set(fgs_bantlari()) == _BEKLENEN_OLCUMLER
+
+
+def test_YAPISAL_ai_service_landmark_ve_cat_organ_PARITESI():
+    """GPU mikroservis yanıtları A2/A4 alanlarını taşımalı (düşman-doğrulama: taşımıyordu —
+    rozetler + ölçüm-band paneli GPU dağıtımında sessizce ölüydü)."""
+    src = (KOK / "ai_service/app.py").read_text(encoding="utf-8")
+    i = src.index("/infer/landmark")
+    blok = src[i : i + 4000]
+    for alan in ('"fgs_bantlari"', '"raw_fgs"', '"action_units"'):
+        assert alan in blok, f"ai_service landmark yanıtı {alan} taşımıyor (A4 GPU'da ölü)"
+    i = src.index("/infer/cat_organ")
+    blok = src[i : i + 4000]
+    for alan in ('"mirror_warning"', '"anatomic_consistency"'):
+        assert alan in blok, f"ai_service cat_organ yanıtı {alan} taşımıyor (A2 GPU'da ölü)"
+
+
+def test_KRITIK_ai_service_termal_ses_allowlist_422():
+    """A6 GERÇEK paritesi: :8100'e doğrudan geçersiz CAM yöntemi 422 almalı (eskiden zarif
+    düşüşe yutuluyordu — çağıran yazım hatasını asla öğrenemiyordu)."""
+    from ai_service.app import app as svc_app
+
+    svc = TestClient(svc_app)
+    for uc in ("/infer/thermal", "/infer/sound"):
+        r = svc.post(uc, files={"file": ("x.bin", b"0" * 400)}, data={"xai_method": "grad-cam"})
+        assert r.status_code == 422 and "xai_method" in r.text, f"{uc}: {r.status_code} {r.text[:120]}"
+        # KARŞIT: geçerli yöntem allowlist'e TAKILMAZ (girdi-kapısı vs. farklı hata dönebilir)
+        r = svc.post(uc, files={"file": ("x.bin", b"0" * 400)}, data={"xai_method": "eigencam"})
+        assert not (r.status_code == 422 and "xai_method" in r.text), f"{uc}: geçerli yöntem reddedildi"
+
+
+def test_KRITIK_batch_xai_SHAP_duty_agregasyonuyla():
+    """A7 wiring (düşman-doğrulama: varyant hiçbir üretim yolunda çağrılmıyordu): Mod-2
+    batch_xai SHAP'ı D1-D7 duty-agregasyonuyla istemeli."""
+    import ai_hub.xai_tabular.em_runtime as rt
+
+    yakalanan = {}
+
+    def _sahte_run(*a, **k):
+        yakalanan.update(k)
+        return {"sensitivity": None, "shap_values": None, "out_dir": "x"}
+
+    orijinal = rt.run_em_xai
+    rt.run_em_xai = _sahte_run
+    try:
+        rt.batch_xai(object(), {"std": np.ones(6), "background": np.zeros((4, 6))}, np.zeros((2, 6)), "cikti")
+    finally:
+        rt.run_em_xai = orijinal
+    assert yakalanan.get("shap_output_agg") == "duty", (
+        f"batch_xai SHAP agregasyonu duty değil: {yakalanan.get('shap_output_agg')!r}"
+    )
 
 
 # ── A7: shap_kernel_em output_agg='duty' ─────────────────────────────────────

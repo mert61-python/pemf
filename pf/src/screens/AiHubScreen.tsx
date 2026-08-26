@@ -1560,15 +1560,27 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
                   eye_ratio_avg: "Göz oranı", mouth_aspect: "Ağız oranı", muzzle_compact: "Burun sıkılığı",
                   whisker_tension: "Bıyık gerginliği", head_center_y: "Baş konumu",
                 };
+                // ⚠️ Bant anahtarları (thresholds_calibrated.json) ile measurements adları AYNI
+                // DEĞİL (ölçüldü: ear_angle↔ear_angle_avg vb.) — eşleme olmadan 8 satırın 4'ü
+                // sessizce hiç basılmıyordu (düşman-doğrulama 2026-08-27).
+                const OLCUM_KAYNAK: Record<string, string> = {
+                  ear_angle: "ear_angle_avg", ear_elev: "ear_elevation", ear_spread: "ear_spread",
+                  eye_ratio_avg: "eye_aperture_ratio", mouth_aspect: "mouth_aspect",
+                  muzzle_compact: "muzzle_compactness", whisker_tension: "whisker_tension",
+                  head_center_y: "head_center_y",
+                };
                 const bant = (result as any).fgs_bantlari as Record<string, { p5: number; p95: number }>;
                 const olc = result.raw_fgs!.measurements as Record<string, number>;
-                const satirlar = Object.keys(OLCUM_TR).filter((k) => bant[k] && olc[k] != null);
+                const satirlar = Object.keys(OLCUM_TR).filter(
+                  (k) => bant[k] && Number.isFinite(Number(bant[k].p5)) && Number.isFinite(Number(bant[k].p95))
+                    && Number.isFinite(Number(olc[OLCUM_KAYNAK[k]])),
+                );
                 if (!satirlar.length) return null;
                 return (
                   <View style={{ marginTop: spacing.sm }}>
                     <Text style={styles.ctSubLabel}>Ölçümler · popülasyon bandı (p5–p95)</Text>
                     {satirlar.map((k) => {
-                      const v = Number(olc[k]); const b = bant[k];
+                      const v = Number(olc[OLCUM_KAYNAK[k]]); const b = bant[k];
                       const disari = v < b.p5 || v > b.p95;
                       return (
                         <Text key={k} style={[styles.resultText, { fontSize: typography.small }]}>

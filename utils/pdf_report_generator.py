@@ -317,6 +317,13 @@ class PDFReportGenerator:
             g = oge.get('goruntu')
             if g:
                 try:
+                    # Ön-doğrulama (düşman-doğrulama 2026-08-27): ReportLab görüntüyü doc.build
+                    # ANINDA çözer — bozuk/dev tek görüntü o aşamada TÜM PDF'i düşürüyordu.
+                    # PIL ile burada tam decode edilir ki hata bu öğenin zarif-düşüş dalına düşsün.
+                    from PIL import Image as _PilImage
+
+                    with _PilImage.open(str(g)) as _im:
+                        _im.load()
                     iw, ih = ImageReader(str(g)).getSize()
                     # A4 metin alanına sığdır (en-boy korunur): maks 15cm genişlik / 16cm yükseklik
                     olcek = min((15 * cm) / iw, (16 * cm) / ih, 1.0)

@@ -13,9 +13,15 @@ Kullanım örnekleri:
     python scripts/xai_batch_rapor.py --modul em_fantom --girdi points.csv --cikti out_em
     (+ --pdf: çıktıdaki görselleri tek PDF'te topla)
 
-⚠️ ÇIKTI DİZİNİ GİRDİNİN DIŞINDA OLMALI: girdi klasörünün içine yazmak, sonraki
-koşuda aracın KENDİ çıktısını girdi sanıp özyinelemeli işlemesine yol açar —
-açık hatayla reddedilir.
+⚠️ KLASÖR girdisinde ÇIKTI DİZİNİ GİRDİNİN DIŞINDA OLMALI: girdi klasörünün içine
+yazmak, sonraki koşuda aracın KENDİ çıktısını girdi sanıp özyinelemeli işlemesine
+yol açar — açık hatayla reddedilir. (Tek-dosya girdisinde tarama olmadığı için bu
+kısıt uygulanmaz — düşman-doğrulama 2026-08-27: eski hâli docstring'in kendi
+örneğini bile reddediyordu.) Tarama ayrıca çıktı dizinine ÇÖZÜMLENEN her yolu
+(symlink/junction dahil) atlar.
+
+Sessizlik kapısı (ses): duygu ısı-haritası ancak kapıdan GEÇEN kayıt için üretilir
+(utils/ses_kalitesi — kapı-XAI sırası değişmezi); sessiz kayıt hata satırı olur.
 
 Zarif düşüş: tek dosyanın hatası akışı DÜŞÜRMEZ; summary.csv'ye hata satırı
 yazılır ve devam edilir (plan ilkesi: XAI hatası analizi düşürmez).
@@ -26,9 +32,11 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
@@ -45,31 +53,60 @@ for _akis in (sys.stdout, sys.stderr):
 GECERLI_CAM = ("gradcam++", "gradcam", "eigencam", "hirescam")
 GORUNTU_UZANTILARI = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 SES_UZANTILARI = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
+# --embed toplam ham-bayt tavanı (report_html.max_embed_bytes ile aynı ruh): aşılırsa
+# gömme SESSİZCE devam etmez — bağlantılı moda düşülür ve açıkça söylenir.
+EMBED_TAVANI_BAYT = 40_000_000
 
 
 def _cikti_bekcisi(girdi: Path, cikti: Path) -> None:
-    """Çıktı dizini girdinin içinde/kendisiyse AÇIK hata (özyinelemeli kendi-çıktısı tuzağı)."""
+    """KLASÖR girdisinde çıktı girdinin içinde/kendisiyse AÇIK hata (özyinelemeli
+    kendi-çıktısı tuzağı — scratch bulgu-19). Tek-dosya girdisinde tarama yok → kısıt yok."""
+    if not girdi.is_dir():
+        return
     g = girdi.resolve()
     c = cikti.resolve()
-    hedef = g if g.is_dir() else g.parent
-    if c == hedef or c.is_relative_to(hedef):
+    if c == g or c.is_relative_to(g):
         raise SystemExit(
-            f"HATA: çıktı dizini ({c}) girdi klasörünün ({hedef}) içinde — sonraki koşu "
+            f"HATA: çıktı dizini ({c}) girdi klasörünün ({g}) içinde — sonraki koşu "
             "kendi çıktısını girdi sanır. Çıktıyı girdinin DIŞINA verin."
         )
 
 
-def _dosyalari_tara(girdi: Path, uzantilar: set[str], limit: int | None) -> list[Path]:
+def _dosyalari_tara(girdi: Path, cikti: Path, uzantilar: set[str], limit: int | None) -> list[Path]:
     if girdi.is_file():
         dosyalar = [girdi]
     else:
-        dosyalar = sorted(p for p in girdi.rglob("*") if p.suffix.lower() in uzantilar)
+        c = cikti.resolve()
+
+        def _cikti_disinda(p: Path) -> bool:
+            # Symlink/junction girdi içinden çıktıya işaret edebilir (ölçüldü —
+            # düşman-doğrulama 2026-08-27): ÇÖZÜMLENMİŞ yol çıktı içindeyse atla.
+            try:
+                r = p.resolve()
+                return not (r == c or r.is_relative_to(c))
+            except OSError:
+                return False  # çözümlenemeyen yol işlenmez
+
+        dosyalar = sorted(p for p in girdi.rglob("*") if p.suffix.lower() in uzantilar and _cikti_disinda(p))
     if limit and len(dosyalar) > limit:
         print(f"NOT: {len(dosyalar)} dosyadan ilk {limit} işlenecek (--limit); kalanı ATLANDI.")
         dosyalar = dosyalar[:limit]
     if not dosyalar:
         raise SystemExit(f"HATA: {girdi} altında uygun dosya yok ({', '.join(sorted(uzantilar))}).")
     return dosyalar
+
+
+def _benzersiz_ad(p: Path, tarama_koku: Path) -> str:
+    """Çıktı dosya-adı gövdesi: tarama köküne göre YOL-TABANLI benzersiz ad.
+
+    Salt stem kullanmak özyinelemeli taramada klinik1/kedi.jpg ile klinik2/kedi.jpg'yi
+    AYNI çıktıya yazıp XAI görselini sessizce yanlış girdiye atıyordu (ölçüldü)."""
+    try:
+        rel = p.resolve().relative_to(tarama_koku.resolve())
+        govde = "__".join(list(rel.parts[:-1]) + [rel.stem])
+    except Exception:
+        govde = p.stem
+    return re.sub(r"[^0-9A-Za-z_.-]", "_", govde) or "girdi"
 
 
 def _b64_yaz(b64: str, hedef: Path) -> Path:
@@ -82,8 +119,27 @@ def _index_html_yaz(cikti: Path, baslik: str, kartlar: list[dict], embed: bool) 
     Kaçırma report_html._esc'ten (tek kaynak — PII/XSS)."""
     from ai_hub.xai_utils.report_html import _esc, _img_data_uri
 
+    if embed:
+        toplam = 0
+        for k in kartlar:
+            for _alt, ad in k.get("gorseller", []):
+                try:
+                    toplam += (cikti / ad).stat().st_size
+                except OSError:
+                    pass
+        if toplam > EMBED_TAVANI_BAYT:
+            print(
+                f"UYARI: --embed toplamı {toplam / 1e6:.0f} MB > tavan {EMBED_TAVANI_BAYT / 1e6:.0f} MB — "
+                "dev index.html yerine BAĞLANTILI moda düşüldü (görseller yan dosyalardan yüklenir)."
+            )
+            embed = False
+
     def _src(ad: str) -> str:
-        return _img_data_uri(cikti / ad) if embed else ad
+        if embed:
+            return _img_data_uri(cikti / ad)
+        # '#'/'%'/boşluk içeren adlar URL-encode edilmezse tarayıcıda kırık görsel (ölçüldü);
+        # alt-dizin ayracı '/' korunur.
+        return quote(ad.replace("\\", "/"), safe="/")
 
     parcalar = [
         "<!doctype html>",
@@ -112,13 +168,53 @@ def _summary_yaz(cikti: Path, satirlar: list[dict]) -> Path:
     yol = cikti / "summary.csv"
     alanlar = sorted({k for s in satirlar for k in s})
     with open(yol, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=alanlar)
+        w = csv.DictWriter(f, fieldnames=alanlar, restval="")
         w.writeheader()
         w.writerows(satirlar)
     return yol
 
 
+def _csv_oku(girdi: Path, index_col: bool):
+    """CSV'yi anlaşılır hatayla oku (ham traceback yerine — ölçüldü)."""
+    import pandas as pd
+
+    try:
+        df = pd.read_csv(girdi, index_col=0 if index_col else None)
+    except Exception as e:
+        raise SystemExit(f"HATA: {girdi.name} okunamadı ({type(e).__name__}: {e}). Geçerli bir CSV verin.") from e
+    if df.empty:
+        raise SystemExit(f"HATA: {girdi.name} boş — işlenecek satır yok.")
+    return df
+
+
 # ── görüntü/ses modülleri ────────────────────────────────────────────────────
+def _ses_kapili_explain(p: Path, xai_method: str) -> dict:
+    """Ses XAI'si SESSİZLİK KAPISININ ARKASINDA (değişmez; router ile aynı sıra):
+    ffmpeg → 22050Hz mono WAV → RMS ölçümü → sessizse ısı haritası ÜRETİLMEZ."""
+    import subprocess
+    import tempfile
+
+    import imageio_ffmpeg
+
+    from ai_hub.inference_cat_sound.inference_cat_sound import xai_ses_isi_haritasi
+    from utils.ses_kalitesi import sessiz_mi, wav_rms_dbfs
+
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    with tempfile.TemporaryDirectory() as td:
+        wav = str(Path(td) / "kapi.wav")
+        r = subprocess.run(
+            [ff, "-y", "-i", str(p), "-ac", "1", "-ar", "22050", wav],
+            capture_output=True,
+            timeout=120,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"ffmpeg transcode başarısız: {r.stderr.decode(errors='replace')[-200:]}")
+        rms = wav_rms_dbfs(wav)
+        if sessiz_mi(rms):
+            raise RuntimeError(f"sessizlik kapısı: kayıt sessiz (RMS {rms:.1f} dBFS) — duygu ısı-haritası üretilmez")
+        return xai_ses_isi_haritasi(wav, None, xai_method)
+
+
 def _gorsel_explain_fn(modul: str, xai_method: str):
     """Modülün TEK-KAYNAK explain fonksiyonunu (dosya-yolu → dict) closure olarak döndür."""
     if modul == "termal":
@@ -126,9 +222,7 @@ def _gorsel_explain_fn(modul: str, xai_method: str):
 
         return lambda p: xai_termal_isi_haritasi(str(p), None, xai_method)
     if modul == "ses":
-        from ai_hub.inference_cat_sound.inference_cat_sound import xai_ses_isi_haritasi
-
-        return lambda p: xai_ses_isi_haritasi(str(p), None, xai_method)
+        return lambda p: _ses_kapili_explain(p, xai_method)
     if modul == "ct":
         from ai_hub.inference_human_kidney_ct.inference_human_kidney_ct import xai_ct_isi_haritasi
 
@@ -150,47 +244,47 @@ def _gorsel_explain_fn(modul: str, xai_method: str):
 
 def _kos_gorsel(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict], list[dict]]:
     uzantilar = SES_UZANTILARI if modul == "ses" else GORUNTU_UZANTILARI
-    dosyalar = _dosyalari_tara(girdi, uzantilar, args.limit)
+    dosyalar = _dosyalari_tara(girdi, cikti, uzantilar, args.limit)
+    tarama_koku = girdi if girdi.is_dir() else girdi.parent
     fn = _gorsel_explain_fn(modul, args.xai_method)
     satirlar: list[dict] = []
     kartlar: list[dict] = []
     for i, p in enumerate(dosyalar, 1):
+        govde = _benzersiz_ad(p, tarama_koku)
         t0 = time.time()
         try:
             sonuc = fn(p)
-            ana = _b64_yaz(sonuc["xai_image_base64"], cikti / f"{p.stem}_xai.jpg")
+            ana = _b64_yaz(sonuc["xai_image_base64"], cikti / f"{govde}_xai.jpg")
             gorseller = [("XAI ısı haritası", ana.name)]
             if sonuc.get("xai_disagreement_base64"):
-                kar = _b64_yaz(sonuc["xai_disagreement_base64"], cikti / f"{p.stem}_kararsizlik.jpg")
+                kar = _b64_yaz(sonuc["xai_disagreement_base64"], cikti / f"{govde}_kararsizlik.jpg")
                 gorseller.append(("Model kararsızlık haritası", kar.name))
             sure = round(time.time() - t0, 2)
             satirlar.append(
-                {"dosya": p.name, "yontem": sonuc.get("method", "?"), "cikti": ana.name, "sure_s": sure, "hata": ""}
+                {"dosya": govde, "yontem": sonuc.get("method", "?"), "cikti": ana.name, "sure_s": sure, "hata": ""}
             )
             kartlar.append(
-                {"etiket": p.name, "gorseller": gorseller, "not": f"yöntem: {sonuc.get('method', '?')} · {sure}s"}
+                {"etiket": govde, "gorseller": gorseller, "not": f"yöntem: {sonuc.get('method', '?')} · {sure}s"}
             )
-            print(f"[{i}/{len(dosyalar)}] {p.name} OK ({sure}s)")
+            print(f"[{i}/{len(dosyalar)}] {govde} OK ({sure}s)")
         except Exception as e:  # tek dosya akışı düşürmez
             sure = round(time.time() - t0, 2)
             satirlar.append(
-                {"dosya": p.name, "yontem": "-", "cikti": "-", "sure_s": sure, "hata": f"{type(e).__name__}: {e}"}
+                {"dosya": govde, "yontem": "-", "cikti": "-", "sure_s": sure, "hata": f"{type(e).__name__}: {e}"}
             )
-            kartlar.append({"etiket": p.name, "gorseller": [], "hata": True, "not": f"HATA: {type(e).__name__}: {e}"})
-            print(f"[{i}/{len(dosyalar)}] {p.name} HATA: {e}")
+            kartlar.append({"etiket": govde, "gorseller": [], "hata": True, "not": f"HATA: {type(e).__name__}: {e}"})
+            print(f"[{i}/{len(dosyalar)}] {govde} HATA: {e}")
     return satirlar, kartlar
 
 
 # ── rna ──────────────────────────────────────────────────────────────────────
 def _kos_rna(girdi: Path, cikti: Path, args) -> tuple[list[dict], list[dict]]:
     """Hasta-CSV → IG top-genler → İŞARETLİ CSV (gene, attribution, yön) + index tablosu."""
-    import pandas as pd
-
     from ai_hub.inference_human_kidney_rna.inference_human_kidney_rna import xai_top_genler
 
     if girdi.is_dir():
         raise SystemExit("HATA: rna modülü TEK CSV dosyası ister (klasör değil).")
-    df = pd.read_csv(girdi, index_col=0)
+    df = _csv_oku(girdi, index_col=True)
     if args.limit and len(df) > args.limit:
         print(f"NOT: {len(df)} hastadan ilk {args.limit} işlenecek (--limit); kalanı ATLANDI.")
         df = df.iloc[: args.limit]
@@ -236,34 +330,52 @@ _EM_MODULLER = {
 }
 
 
+def _guvenli_ornek_idler(df) -> list[str]:
+    """sample_id'ler DOSYA ADINA gömülür (em_sensitivity bar_shap_<pid>.png) — ham geçirmek
+    geçersiz karakterde koşuyu düşürüyor, path ayracında em_paket DIŞINA yazıyordu, NaN'ler
+    tek 'nan' dosyada üst üste biniyordu (ölçüldü). Sanitize + benzersizleştir."""
+    ham = [str(v) for v in df["sample_id"]] if "sample_id" in df.columns else [f"nokta_{i}" for i in range(len(df))]
+    gorulen: dict[str, int] = {}
+    out = []
+    for i, h in enumerate(ham):
+        tmz = re.sub(r"[^0-9A-Za-z_.-]", "_", h)
+        if not tmz or tmz.lower() in ("nan", "none"):
+            tmz = f"nokta_{i}"
+        n = gorulen.get(tmz, 0)
+        gorulen[tmz] = n + 1
+        out.append(tmz if n == 0 else f"{tmz}_{n}")
+    return out
+
+
 def _kos_em(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict], list[dict]]:
     """points.csv (x,y,z,organ_id,achieved_B,duty_sum) → Mod-2 tam paket (_run_xai_em)."""
     import importlib
-
-    import pandas as pd
 
     from ai_hub.xai_tabular.em_sensitivity import EM_FEATURES
 
     if girdi.is_dir():
         raise SystemExit(f"HATA: {modul} modülü points.csv dosyası ister (klasör değil).")
-    df = pd.read_csv(girdi)
+    df = _csv_oku(girdi, index_col=False)
     eksik = [k for k in EM_FEATURES if k not in df.columns]
     if eksik:
         raise SystemExit(f"HATA: {girdi.name} kolonları eksik: {eksik} (beklenen: {EM_FEATURES})")
+    try:
+        X = df[list(EM_FEATURES)].astype(float).values
+    except (TypeError, ValueError) as e:
+        raise SystemExit(
+            f"HATA: {girdi.name} sayı olmayan hücre içeriyor ({e}) — {EM_FEATURES} kolonları sayısal olmalı."
+        ) from e
     if args.limit and len(df) > args.limit:
         print(f"NOT: {len(df)} noktadan ilk {args.limit} işlenecek (--limit); kalanı ATLANDI.")
         df = df.iloc[: args.limit]
+        X = X[: args.limit]
 
     mod_yolu, sinif_adi = _EM_MODULLER[modul]
     m = importlib.import_module(mod_yolu)
     pred = getattr(m, sinif_adi)()
-    ornek_idler = (
-        [str(v) for v in df["sample_id"]] if "sample_id" in df.columns else [f"nokta_{i}" for i in range(len(df))]
-    )
+    ornek_idler = _guvenli_ornek_idler(df)
     t0 = time.time()
-    paket = m._run_xai_em(
-        pred, df[list(EM_FEATURES)].values, cikti / "em_paket", sample_ids=ornek_idler, run_shap=not args.no_shap
-    )
+    paket = m._run_xai_em(pred, X, cikti / "em_paket", sample_ids=ornek_idler, run_shap=not args.no_shap)
     sure = round(time.time() - t0, 2)
 
     uretilen = sorted(x.name for x in (cikti / "em_paket").iterdir())
@@ -272,7 +384,7 @@ def _kos_em(modul: str, girdi: Path, cikti: Path, args) -> tuple[list[dict], lis
             "dosya": girdi.name,
             "nokta_sayisi": len(df),
             "paket": "em_paket/",
-            "shap": "hayır" if args.no_shap else "evet",
+            "shap": "hayır" if args.no_shap else "evet (D1-D7 duty-agg)",
             "sure_s": sure,
             "hata": "",
         }
@@ -323,7 +435,7 @@ def main() -> None:
         choices=["ct", "histopat", "termal", "retikulosit", "ses", "rna", "em_fantom", "em_petri", "em_kedi"],
     )
     ap.add_argument("--girdi", required=True, help="dosya ya da klasör (rna/em: CSV dosyası)")
-    ap.add_argument("--cikti", required=True, help="çıktı dizini (girdinin DIŞINDA olmalı)")
+    ap.add_argument("--cikti", required=True, help="çıktı dizini (klasör girdisinde girdinin DIŞINDA olmalı)")
     ap.add_argument("--limit", type=int, default=None, help="en fazla N dosya/satır işle")
     ap.add_argument(
         "--xai-method",
@@ -333,7 +445,7 @@ def main() -> None:
     )
     ap.add_argument("--top-n", type=int, default=10, help="rna: hasta başına top-N gen")
     ap.add_argument("--no-shap", action="store_true", help="em: SHAP'ı atla (yalnız sensitivity)")
-    ap.add_argument("--embed", action="store_true", help="index.html'e görselleri data-URI göm")
+    ap.add_argument("--embed", action="store_true", help="index.html'e görselleri data-URI göm (40MB tavanlı)")
     ap.add_argument("--pdf", action="store_true", help="çıktı görsellerinden tek PDF derle")
     args = ap.parse_args()
 
