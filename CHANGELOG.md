@@ -32,6 +32,31 @@ geçmiyorsa test kırılır.
 
 ---
 
+## app 1.9.25 — 2026-08-26 (🔍 Açıklanabilir AI: analizler artık NEDENİNİ gösteriyor)
+
+Yayın etiketi: app → `client-app-v1.9.25`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ.
+Paket kimliği (`buildId`, ≥1.9.13 istemcilerin `/api/health`te raporladığı **app katmanı** sha): `db30473e34d0`.
+Monolit `base.zip` sha (≤1.9.12): `6bb3f21ca2ca`.
+⚠️ Bu yayında **deps katmanı DEĞİŞTİ** (5. değişim; yeni XAI kütüphaneleri: shap/grad-cam/timm/captum)
+ve **model paketleri yenilendi** (home/vet/research — XAI PT ikizleri eklendi; içerik listeleri artık
+`build_tools/make_model_zip.py`te KODDA, elle-üretim dönemi bitti).
+
+**Ne değişti (Açıklanabilir AI — Faz 1+2, `xai-entegrasyon-plani.md`):**
+- **AI Pro:** "Güven %62" artık NEDENİYLE görünür (poz × derinlik × maske × belirsizlik + kalibrasyonsuz
+  tavan uyarısı); hekim onay ekranında **"Dozu en çok belirleyen: güç bütçesi · hedef alan"** satırı
+  (7+1 hızlı duyarlılık — kapalı döngüye ağır hesap SOKULMADI).
+- **Kedi Hastalık / CKD:** sonuç altında "🔍 Kararı sürükleyenler: Öksürük ↑ · Süre ↑ · Nabız ↓"
+  (SHAP; CKD'de 'ortalama-hasta' referansı — tek-hasta ~0 dejenerasyonu çözüldü).
+- **Termal / Ses:** opt-in **"🔍 Isı haritası üret"** anahtarı — modelin baktığı bölgeler / dinlediği
+  frekans-zaman bandı görselde (Grad-CAM; sessizlik kapısının ARKASINDA — sessiz kayda duygu ısı
+  haritası ÜRETİLMEZ; canlı kamera döngüsüne asla eklenmez).
+- **Retikülosit / Böbrek-CT:** `explain=true` ile EigenCAM ısı haritası; **RNA:** hasta başına en
+  etkili genler (IG; ≤25 hasta sınırı).
+- Güvenlik değişmezleri: XAI hatası analizi/öneriyi ASLA düşürmez (zarif düşüş); tüm PT yüklemeleri
+  `weights_only=True`; kapı sıraları korunud; iki taşımada (tek-EXE + :8100) parite; jeton şemasında
+  açıklama analizin PARÇASI (ek jeton yok — sahip kararı #6).
+- Test: ~75 yeni test (RED→GREEN), 18+ iki-yönlü mutasyon; tam süit 1837 + frontend 578/578.
+
 ## app 1.9.24 — 2026-08-26 (🔴 Web/masaüstünde AI Pro "organ konumlandırılmadı" ile açılmıyordu)
 
 Yayın etiketi: app → `client-app-v1.9.24`. Launcher (1.9.38) ve mobil (2.3.24) DEĞİŞMEDİ.

@@ -49,15 +49,61 @@ CEKIRDEK_HARIC = ("ai_hub/inference_cat_organ/",)
 # bkz. launcher/core/src/install.rs::models_dir).
 PROFILLER: dict[str, tuple[str, ...]] = {
     # 2026-08-10 öncesi yayındaki home.zip 11 dosyaydı; 3 cat_organ ONNX'i ÇEKİRDEĞE taşındı.
+    # 2026-08-26 (XAI Faz 2): EfficientNet_Lite0.pt eklendi — ses Grad-CAM ısı haritası
+    # PT ikizi ister (Faz-0 karar #2: klinik makinelerde de; download_model_sync YEREL çözer).
     "home": (
         "ai_hub/cat_landmark/thresholds_calibrated.json",
         "ai_hub/cat_landmark/yolo26m-pose.onnx",
         "ai_hub/cat_segmentation/yolov8m-seg.onnx",
         "ai_hub/inference_cat_sound/EfficientNet_Lite0.onnx",
+        "ai_hub/inference_cat_sound/EfficientNet_Lite0.pt",
         "ai_hub/cat_disease/label_encoder.pkl",
         "ai_hub/cat_disease/scaler_X.pkl",
         "ai_hub/cat_disease/XGBoost.onnx",
         "ai_hub/cat_disease/XGBoost.pkl",
+    ),
+    # 2026-08-26: vet/research listeleri YAYINDAKİ zip merkez-dizinlerinden keşfedilip koda
+    # alındı (home ile AYNI gerekçe — içerik elle/yazısızdı, v1.8.0'a pinliydi) + XAI PT
+    # ikizleri eklendi. Sıra ve mevcut girdiler BİREBİR korunmuştur.
+    "vet": (
+        "ai_hub/em_kedi/BiLSTM_XXL_Raw.onnx",
+        "ai_hub/em_kedi/scaler_extra.pkl",
+        "ai_hub/em_kedi/scaler_X.pkl",
+        "ai_hub/em_kedi/scaler_y.pkl",
+        "ai_hub/em_kedi_legacy/ResNet_kedi_v2.onnx",
+        "ai_hub/em_kedi_legacy/scaler_extra_kedi.pkl",
+        "ai_hub/em_kedi_legacy/scaler_X_kedi_v2.pkl",
+        "ai_hub/em_kedi_legacy/scaler_y_kedi_v2.pkl",
+        "ai_hub/cat_thermal/GhostNetV2.onnx",
+        # XAI Faz 2: termal Grad-CAM PT ikizi. (xai_ref_stats.npz'ler BİLEREK YOK:
+        # modül dizinlerinde commit'li → app katmanıyla/EXE-gömülü giderler.)
+        "ai_hub/cat_thermal/GhostNetV2.pt",
+    ),
+    "research": (
+        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
+        "ai_hub/inference_em_petri/BaggingRegressor.onnx",
+        "ai_hub/em_petri/PetriNet_v3.onnx",
+        "ai_hub/em_petri/scaler_D_petri_v3.pkl",
+        "ai_hub/em_petri/scaler_extra_petri_v3.pkl",
+        "ai_hub/em_petri/scaler_E_petri_v3.pkl",
+        "ai_hub/em_petri/scaler_X_petri_v3.pkl",
+        "ai_hub/em_phantom/PhantomNet_v3.onnx",
+        "ai_hub/em_phantom/scaler_D_phantom_v3.pkl",
+        "ai_hub/em_phantom/scaler_extra_phantom_v3.pkl",
+        "ai_hub/em_phantom/scaler_E_phantom_v3.pkl",
+        "ai_hub/em_phantom/scaler_X_phantom_v3.pkl",
+        "ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",
+        "ai_hub/inference_em_fantom/scaler_extra.pkl",
+        "ai_hub/inference_em_fantom/scaler_X.pkl",
+        "ai_hub/inference_em_fantom/scaler_y.pkl",
+        "ai_hub/inference_human_kidney_ct/yolov8s.onnx",
+        "ai_hub/petri_dish/yolo11m-seg.onnx",
+        "ai_hub/inference_petri_dish/yolo11m-seg.onnx",
+        "ai_hub/feline_reticulocytes/yolov8s.onnx",
+        # XAI Faz 2 kuyruğu: EigenCAM PT ikizleri (CT — Faz-0 #4 AGPL onaylı; feline).
+        # (xai_ref_stats.npz'ler app katmanında — bkz. vet notu.)
+        "ai_hub/inference_human_kidney_ct/yolov8s.pt",
+        "ai_hub/feline_reticulocytes/yolov8s.pt",
     ),
 }
 
