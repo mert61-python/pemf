@@ -36,7 +36,21 @@ export interface AiProposalMeta {
   y_mm?: number;
   z_mm?: number;
   reliability?: number;
+  /** Sunum-katmanı XAI (2026-08-26): "önerilen dozu en çok ne belirledi" — backend
+   *  hafif D-kanal duyarlılığı (|Δ| azalan). Alan yoksa (eski backend / XAI zarif
+   *  düşüşü) satır gizlenir. */
+  xaiSensitivity?: { feature: string; etki: number }[];
 }
+
+/** EM girdi adları → hekim diline (öneri ekranı). */
+const XAI_ETIKET: Record<string, string> = {
+  x: "konum X",
+  y: "konum Y",
+  z: "konum Z",
+  organ_id: "organ seçimi",
+  achieved_B: "hedef alan (B)",
+  duty_sum: "güç bütçesi",
+};
 
 export function AiSpecApprovalModal({
   visible, specs, meta, organName, busy, onApprove, onReject, onDismiss,
@@ -94,6 +108,14 @@ export function AiSpecApprovalModal({
             <Text style={[s.rel, dusukGuven && s.relWarn]}>
               Lokalizasyon güveni: %{Math.round(guven * 100)}
               {dusukGuven ? " — DÜŞÜK, konumu doğrulayın" : ""}
+            </Text>
+          )}
+
+          {/* Sunum-katmanı XAI (2026-08-26): hekim onaylamadan "dozu ne belirledi" görür. */}
+          {Array.isArray(meta?.xaiSensitivity) && meta!.xaiSensitivity!.length > 0 && (
+            <Text style={s.xai}>
+              {"Dozu en çok belirleyen: " +
+                meta!.xaiSensitivity!.map((t) => XAI_ETIKET[t.feature] ?? t.feature).join(" · ")}
             </Text>
           )}
 
@@ -193,6 +215,8 @@ const s = StyleSheet.create({
   metaValue: { color: colors.text, fontSize: rf(13), fontWeight: "700" },
   rel: { color: colors.textMuted, fontSize: rf(11) },
   relWarn: { color: colors.warning, fontWeight: "700" },
+  // Sunum-katmanı XAI satırı (2026-08-26)
+  xai: { color: colors.textMuted, fontSize: rf(11), marginTop: 2 },
   tableWrap: { maxHeight: rs(200), borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
   tr: { flexDirection: "row", paddingVertical: rs(6), paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   trHead: { backgroundColor: colors.bgAlt },

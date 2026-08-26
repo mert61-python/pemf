@@ -31,8 +31,8 @@ import { PatientGate } from "@/components/domain/PatientGate";
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ";
 
 const SYMPTOMS = [
-  "İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü", 
-  "Topallık", "Deri Lezyonları", "Burun Akıntısı", "Göz Akıntısı", 
+  "İştah Kaybı", "Kusma", "İshal", "Öksürük", "Solunum Güçlüğü",
+  "Topallık", "Deri Lezyonları", "Burun Akıntısı", "Göz Akıntısı",
   "Halsizlik / Uyuşukluk", "Kilo Kaybı", "Hapşırma", "Dehidrasyon", "Ateş"
 ];
 
@@ -154,6 +154,8 @@ interface AiResult {
   // kidney_rna / kidney_disease (CKD)
   predictions?: AiPrediction[]; n_patients?: number;
   label?: string; prob_pct?: number; model?: string;
+  // Sunum-katmanı XAI (2026-08-26): SHAP top-özellikler (alan yoksa satır gizli)
+  xai?: { disease?: string; prob_ckd?: number; top_features?: { feature: string; attribution: number }[] } | null;
   // top-k sınıflandırma (cat_sound / histopath / reticulocytes)
   top_1_class?: string; top_1_prob?: number; top_k?: AiTopK[];
   // cat_sound BELİRSİZLİK (sunucu ölçer — utils/ses_kalitesi). Model "kedi sesi yok" DİYEMEZ
@@ -552,7 +554,7 @@ function PetOwnerAiScreen() {
           return (
             <View style={styles.petOwnerResult}>
               <Text style={styles.petOwnerResultTitle}>Yapay Zeka Analiz Sonucu</Text>
-              
+
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
                 <Text style={styles.body}>Ağrı Skoru (FGS):</Text>
                 <Text style={[styles.title, { color: notDetected ? colors.textMuted : score > 3 ? colors.danger : colors.success }]}>{notDetected ? "—" : `${score} / 10`}</Text>
@@ -562,7 +564,7 @@ function PetOwnerAiScreen() {
                 <Text style={[styles.recommendationText, requiresVet && { color: colors.danger, fontWeight: 'bold' }]}>
                   {recommendation}
                 </Text>
-                
+
                 {requiresVet && (
                   <TouchableOpacity
                     style={[styles.startTherapyBtn, { backgroundColor: colors.danger }]}
@@ -808,14 +810,37 @@ function ResultInterpretation({ tone, title, text, emoji, points }: {
   );
 }
 
+/** Sunum-katmanı XAI (2026-08-26): backend SHAP özellik adları → kullanıcı diline. */
+const DISEASE_FEATURE_TR: Record<string, string> = {
+  Age: "Yaş", Weight: "Kilo", Heart_Rate: "Nabız", Body_Temperature: "Ateş",
+  Duration_days: "Şikâyet süresi", Appetite_Loss_bin: "İştah kaybı", Vomiting_bin: "Kusma",
+  Diarrhea_bin: "İshal", Coughing_bin: "Öksürük", Labored_Breathing_bin: "Zor solunum",
+  Lameness_bin: "Topallama", Skin_Lesions_bin: "Deri lezyonu", Nasal_Discharge_bin: "Burun akıntısı",
+  Eye_Discharge_bin: "Göz akıntısı", has_Lethargy: "Halsizlik", has_Weight_Loss: "Kilo kaybı",
+  has_Sneezing: "Hapşırık", has_Dehydration: "Dehidrasyon", has_Fever: "Ateş (semptom)",
+};
+
+type DiseaseXai = { disease?: string; top_features?: { feature: string; attribution: number }[] } | null;
+
+/** Ortak XAI satırı: "🔍 Kararı sürükleyenler: Öksürük ↑ · Süre ↑ · Nabız ↓" (↑ tahmin lehine). */
+function XaiSatiri({ xai, etiketle }: { xai: DiseaseXai; etiketle: (f: string) => string }) {
+  if (!xai?.top_features?.length) return null;
+  const metin = xai.top_features
+    .slice(0, 5)
+    .map((t) => `${etiketle(t.feature)} ${t.attribution >= 0 ? "↑" : "↓"}`)
+    .join(" · ");
+  return <Text style={styles.xaiSatiri}>{`🔍 Kararı sürükleyenler: ${metin}`}</Text>;
+}
+
 function DiseaseModule({ patientName }: { patientName: string }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiseasePrediction[] | null>(moduleCache.disease?.result ?? null);
+  const [xai, setXai] = useState<DiseaseXai>(moduleCache.disease?.xai ?? null);
   const [form, setForm] = useState(moduleCache.disease?.form ?? { age: "", weight: "", hr: "", temp: "", duration: "" });
   const [selectedSymptoms, setSelectedSymptoms] = useState<number[]>(moduleCache.disease?.symptoms ?? []);
   const [resultUsedDefaults, setResultUsedDefaults] = useState<boolean>(moduleCache.disease?.usedDefaults ?? false);
-  useEffect(() => { moduleCache.disease = { result, form, symptoms: selectedSymptoms, usedDefaults: resultUsedDefaults }; }, [result, form, selectedSymptoms, resultUsedDefaults]);
+  useEffect(() => { moduleCache.disease = { result, xai, form, symptoms: selectedSymptoms, usedDefaults: resultUsedDefaults }; }, [result, xai, form, selectedSymptoms, resultUsedDefaults]);
 
   const toggleSymptom = (idx: number) => {
     if (selectedSymptoms.includes(idx)) setSelectedSymptoms(selectedSymptoms.filter(i => i !== idx));
@@ -858,7 +883,10 @@ function DiseaseModule({ patientName }: { patientName: string }) {
       hr: parseFloat(form.hr) || 140,        // normal kedi nabzı ~120-140 bpm
       temp: parseFloat(form.temp) || 38.5,   // normal kedi vücut sıcaklığı ~38.5 °C
       duration: parseFloat(form.duration) || 3,
-      symptom_indices: selectedSymptoms.map(i => i + 1)
+      symptom_indices: selectedSymptoms.map(i => i + 1),
+      // Sunum-katmanı XAI (2026-08-26): TreeExplainer ms-hızlı → her analizde iste;
+      // hata/eski-backend'de alan gelmez, satır gizlenir (zarif düşüş).
+      explain: true
       // AI_TIMEOUT_MS: apiPost'un varsayılan 8sn'si AI ÇIKARIMI için çok kısa. Modeller gecikmeli
       // yüklenir; ölçüm (soğuk backend): /ai/disease ilk çağrı 3.2sn, /ai/sound/cat ilk çağrı 28sn.
       // Eşzamanlı ikinci bir analizle CPU çekişmesinde 8sn rahatça aşılıyor → istek SESSİZCE iptal
@@ -868,6 +896,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
     setLoading(false);
     if (res.status === "success") {
       setResult(res.results);
+      setXai(res.xai ?? null); // sunum-katmanı XAI (alan yoksa satır gizli)
       setResultUsedDefaults(usedDefaults);
       const top = res.results?.[0];
       logAiResult(patientName, "Hastalık Analizi", top ? `${trValue(top.disease)} (%${(top.probability * 100).toFixed(0)})` : "Belirgin sonuç yok", { moduleId: "disease", inputType: "clinical", detail: res, confidence: top?.probability });
@@ -899,7 +928,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
       <View style={{ marginTop: spacing.sm }}>
         <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhisi Başlat"} onPress={analyze} disabled={loading} />
       </View>
-      
+
       {result && (
         <View style={styles.resultBox}>
           {result.length === 0 ? (
@@ -931,6 +960,7 @@ function DiseaseModule({ patientName }: { patientName: string }) {
                   </Text>
                 </View>
               ))}
+              <XaiSatiri xai={xai} etiketle={(f) => DISEASE_FEATURE_TR[f] ?? f} />
             </>
           )}
           {resultUsedDefaults && result.length > 0 && (
@@ -981,7 +1011,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[endpoint]?.result ?? null);
-  
+
   const [isLive, setIsLive] = useState(false);
   // BUG FIX: Canlı kamera varsayılan olarak ARKA ('back') kamera (kediyi çekmek için);
   // selfie/ön kamera açılmasını engeller. Flip butonu ile ön↔arka geçiş yapılabilir.
@@ -1327,7 +1357,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly }: {
           </View>
         )}
       </View>
-      
+
       {!imageUri && !isLive && (
         <View style={styles.photoGuide}>
           {endpoint === "/vision/landmark" ? (
@@ -2175,6 +2205,10 @@ const CKD_NUMERIC: { k: string; label: string }[] = [
   { k: "hemo", label: "Hemoglobin (g/dL)" }, { k: "pcv", label: "Hematokrit (%)" },
   { k: "wc", label: "Beyaz küre (/µL)" }, { k: "rc", label: "Kırmızı küre (mil/µL)" },
 ];
+// Sunum-katmanı XAI (2026-08-26): SHAP özellik kodu → mevcut form etiketleri (tek kaynak).
+// Not: harita CKD_CATEGORICAL tanımından SONRA doldurulur (aşağıda).
+const CKD_XAI_ETIKET: Record<string, string> = {};
+
 const CKD_CATEGORICAL: { k: string; label: string; opts: [string, string][] }[] = [
   { k: "rbc", label: "Kırmızı küre", opts: [["normal", "Normal"], ["abnormal", "Anormal"]] },
   { k: "pc", label: "Pus hücresi", opts: [["normal", "Normal"], ["abnormal", "Anormal"]] },
@@ -2187,6 +2221,8 @@ const CKD_CATEGORICAL: { k: string; label: string; opts: [string, string][] }[] 
   { k: "pe", label: "Ödem (pedal)", opts: [["no", "Hayır"], ["yes", "Evet"]] },
   { k: "ane", label: "Anemi", opts: [["no", "Hayır"], ["yes", "Evet"]] },
 ];
+// XAI etiket haritasını MEVCUT form etiketlerinden doldur (ikinci bir kopya tutma).
+for (const { k, label } of [...CKD_NUMERIC, ...CKD_CATEGORICAL]) CKD_XAI_ETIKET[k] = label;
 
 /**
  * Böbrek Hastalığı Analizi (UCI-CKD) — 24 klinik değerden kronik böbrek hastalığı tahmini.
@@ -2211,6 +2247,9 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         if (!isNaN(v)) payload[k] = v;
       });
       CKD_CATEGORICAL.forEach(({ k }) => { if (cat[k]) payload[k] = cat[k]; });
+      // Sunum-katmanı XAI (2026-08-26): SHAP top-özellikler — hata/eski-backend'de alan
+      // gelmez, satır gizlenir (backend zarif düşüşü).
+      payload.explain = true;
       const res = await apiPost<any>("/ai/disease/kidney", payload, null, { timeoutMs: AI_TIMEOUT_MS });
       if (res && res.status === "success") {
         setResult(res);
@@ -2287,6 +2326,10 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
                     : `Girilen değerlere göre CKD olasılığı düşük (%${pct}). Yine de şüphe varsa periyodik kontrol ve hekim değerlendirmesi önerilir.`}
                   points={["Sonuç girilen 24 klinik değere dayanır; boş alanlar tahmin edilir (impute).", "Bu bir tarama tahminidir, kesin tanı değildir."]} />
                 <Text style={[styles.resultText, { fontSize: typography.small, color: colors.textMuted }]}>Model: {result.model}</Text>
+                <XaiSatiri
+                  xai={result.xai ?? null}
+                  etiketle={(f) => CKD_XAI_ETIKET[f] ?? f}
+                />
               </>
             );
           })()}
@@ -3102,6 +3145,8 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.bg, color: colors.text, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   diseaseHint: { color: colors.textMuted, fontSize: typography.small, fontStyle: 'italic', lineHeight: rf(17), marginTop: 6, marginBottom: spacing.sm },
   diseaseDefaultsNote: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(17), marginTop: spacing.sm, backgroundColor: colors.bg, borderRadius: radius.sm, padding: spacing.sm },
+  // Sunum-katmanı XAI satırı (2026-08-26): "kararı sürükleyenler" — sessiz, sonucun altında.
+  xaiSatiri: { color: colors.textMuted, fontSize: typography.small, marginTop: spacing.sm },
   liveHint: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(17), marginTop: spacing.xs, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: spacing.sm },
   symptomsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   symptomBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border },
