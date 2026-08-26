@@ -658,6 +658,7 @@
           rtDone: "Uygulama güncellendi.",
           rtBusy: "Seans sürerken güncelleme yapılmaz — seans bitince otomatik güncellenecek.",
           rtBg: "Yeni sürüm arka planda indiriliyor — uygulamayı şimdi kullanabilirsiniz, güncelleme bir sonraki açılışta kurulacak.",
+          etaLeft: "kaldı",
           rtBgDone: "Yeni sürüm indirildi — güncelleme bir sonraki açılışta kurulacak.",
           rtBgFail: "Arka plan indirmesi tamamlanamadı — bir sonraki açılışta kaldığı yerden denenecek.",
           rtReady: "Güncelleme hazır — uygulamayı kapatıp açtığınızda kurulacak.",
@@ -738,6 +739,7 @@
           rtDone: "App updated.",
           rtBusy: "Updates are not applied during a session — it will update automatically once the session ends.",
           rtBg: "A new version is downloading in the background — you can use the app now; it will be installed on the next launch.",
+          etaLeft: "left",
           rtBgDone: "New version downloaded — it will be installed on the next launch.",
           rtBgFail: "Background download did not finish — it will resume on the next launch.",
           rtReady: "Update ready — it will be installed when you close and reopen the app.",
@@ -1036,7 +1038,15 @@
           pctEl.textContent = has ? "%" + ((p.done / p.total) * 100).toFixed(0) : "";
           const parcalar = [pkgLabel(p.what)];
           parcalar.push(has ? `${fmtBytes(p.done)} / ${fmtBytes(p.total)}` : fmtBytes(p.done));
-          if (prefetchDl.speed > 0) parcalar.push(fmtSpeed(prefetchDl.speed));
+          if (prefetchDl.speed > 0) {
+            parcalar.push(fmtSpeed(prefetchDl.speed));
+            // KALAN SÜRE (sahip isteği 2026-08-26): ANLIK hıza göre — hız zaten
+            // EMA-yumuşatılmış (0.6/0.4, 350ms pencere), ETA bu yüzden zıplamaz.
+            // Content-Length yoksa (has=false) ya da hız henüz oturmadıysa gösterilmez.
+            if (has && p.total > p.done) {
+              parcalar.push(fmtEta((p.total - p.done) / prefetchDl.speed) + " " + (t().etaLeft || "kaldı"));
+            }
+          }
           sub.textContent = parcalar.join(" · ");
         } else {
           // manifest/verify/extract/cached: yüzde anlamlı değil → belirsiz bar + faz etiketi.

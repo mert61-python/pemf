@@ -199,3 +199,19 @@ def test_i18n_iki_dilde_de_TAM(ui):
         assert ui.count(f"{anahtar}:") == 2, (
             f"`{anahtar}` iki dilde de tanımlı olmalı (bulunan: {ui.count(f'{anahtar}:')})"
         )
+
+
+def test_KRITIK_kalan_sure_ETA_gosterilir(ui):
+    """Sahip isteği (2026-08-26): arka-plan indirme satırına ANLIK hıza göre kalan
+    süre eklendi. Kilitler: (a) ETA renderPrefetch'in downloading dalında, EMA
+    hızdan (prefetchDl.speed) ve (total-done)'dan hesaplanır; (b) Content-Length
+    yokken (has=false) GÖSTERİLMEZ (belirsiz toplamla saçma ETA basılmaz);
+    (c) etiket iki dilde de tanımlı."""
+    i = ui.index("function renderPrefetch")
+    govde = ui[i : i + 3000]
+    assert "fmtEta((p.total - p.done) / prefetchDl.speed)" in govde, "arka-plan göstergesinde kalan-süre hesabı yok"
+    assert "if (has && p.total > p.done)" in govde, (
+        "ETA Content-Length'siz (has=false) durumda da basılıyor — belirsiz toplamla ETA saçmalar"
+    )
+    assert "etaLeft" in govde, "ETA'nın 'kaldı/left' etiketi yok"
+    assert ui.count("etaLeft:") == 2, "etaLeft iki dilde de tanımlı olmalı"

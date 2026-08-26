@@ -65,10 +65,13 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
         global.$ = (id) => (id === "notice" ? NOTICE : new El("div"));
         global.performance = { now: () => Date.now() };
         global.t = () => ({ verifying:"dogrulaniyor", cached:"onbellekte",
-                            reconnecting:"yeniden baglaniyor", rtBgPrep:"Haziralaniyor" });
+                            reconnecting:"yeniden baglaniyor", rtBgPrep:"Haziralaniyor",
+                            etaLeft:"kaldi" });
         global.pkgLabel = (w) => "PKT:" + w;
         global.fmtBytes = (n) => (n/1048576).toFixed(0) + " MB";
         global.fmtSpeed = (b) => (b/1048576).toFixed(1) + " MB/s";
+        // ETA eklendi (2026-08-26): gerçek fmtEta sandbox'ta yok — stub'la
+        global.fmtEta = (s) => "~" + Math.ceil(s) + " sn";
         __KOD__
 
         function anlik(){
@@ -212,3 +215,25 @@ def test_KRITIK_ilk_null_yoklamayi_durdurmaz_ilerleme_sonrasi_null_durdurur(tmp_
     assert s["ilkNullSonrasi"] is False, "ilk null'da durdu → bar hiç görünmez"
     assert s["ilerlemeSonrasi"] is False, "ilerleme akarken durdu"
     assert s["sonunda"] is True, "indirme bitince yoklama DURMADI → zamanlayıcı sızar"
+
+
+def test_KRITIK_kalan_sure_ETA_davranisi(tmp_path):
+    """Sahip isteği (2026-08-26): ANLIK (EMA) hıza göre kalan süre alt satırda.
+    5 MB/s'de 85 MB kalan → ~17 sn; Content-Length yokken ETA GÖSTERİLMEZ."""
+    s = _kos(
+        """
+        let saat = 1000; global.performance = { now: () => saat };
+        renderPrefetch({ step:"downloading", what:"app", done: 10000000, total: 100000000 });
+        saat += 1000;   // 1 sn'de +5 MB → hız 5 MB/s
+        renderPrefetch({ step:"downloading", what:"app", done: 15000000, total: 100000000 });
+        const etali = anlik().alt;
+        renderPrefetch({ step:"downloading", what:"boyutsuz", done: 5000000, total: 0 });
+        saat += 1000;
+        renderPrefetch({ step:"downloading", what:"boyutsuz", done: 9000000, total: 0 });
+        const boyutsuz = anlik().alt;
+        console.log(JSON.stringify({ etali, boyutsuz }));
+    """,
+        tmp_path,
+    )
+    assert "~17 sn kaldi" in s["etali"], f"ETA yok/yanlış: {s['etali']!r}"
+    assert "kaldi" not in s["boyutsuz"], f"Content-Length'siz indirmede ETA basılmış: {s['boyutsuz']!r}"

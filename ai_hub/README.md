@@ -30,6 +30,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | `inference_human_kidney_disease/` | **Gömülü ONNX zoo** (CatBoost/ExtraTrees/LogReg/RandomForest) + preprocessor — CKD |
 | `inference_human_kidney_rna/` | RNA-seq KIRC MLP (`mlp_medium_kirc.onnx` gömülü) + scaler |
 | `inference_renal_histopath_kmc/` | Grade 0–4 histopatoloji (ağırlık `/models`'ten) |
+| `inference_paper_dilek_hoca/` | **Yara Kapanma (Scratch)**: CPN hücre segmentasyonu + TScratch closure metrikleri (872MB PT `/models`'ten; ⚠️ `cell/` paketi sahibinden bekleniyor — modül README'sine bakın) |
 | `em_kedi/` | AI-Pro bobin-sürme BiLSTM (x/y/z/organ → duty/phase); scaler'lar gömülü |
 
 ## Gömme deseni
