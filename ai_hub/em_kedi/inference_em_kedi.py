@@ -15,12 +15,13 @@ Kullanim:
         --organ_id 2 --achieved_B 0.001 --duty_sum 2.4
   python inference_em_kedi.py --csv input.csv --output results.csv
 """
-import os
 import argparse
-import numpy as np
-import pandas as pd
+import os
+
 import joblib
+import numpy as np
 import onnxruntime as ort
+import pandas as pd
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BiLSTM_XXL_Raw"
@@ -124,13 +125,41 @@ class KediPredictor:
         return result
 
 
+# ── XAI (Faz 1.2, 2026-08-26) — TEK-KAYNAK ai_hub.xai_tabular.em_runtime ─────
+XAI_OUTPUT_LABELS = D_COLS + [f"sinP{i}" for i in range(1, 8)] + [f"cosP{i}" for i in range(1, 8)] + ["E"]
+
+
+def xai_ref_stats():
+    """Eğitim-dağılımı referansları (std+background) — canlı/tek-örnek XAI için ZORUNLU."""
+    from ai_hub.xai_tabular.em_runtime import load_ref_stats
+
+    return load_ref_stats(_DIR)
+
+
+def xai_hizli_sensitivity(predictor, x, y, z, organ_id, achieved_B=0.001, duty_sum=2.0, top_n=3):
+    """CANLI yol (AI Pro öneri-onay ekranı): 7+1 ONNX forward'lık D-kanal duyarlılığı —
+    'önerilen dozu en çok ne belirledi' JSON'u (PNG/SHAP yok; ~ms mertebesi)."""
+    from ai_hub.xai_tabular.em_runtime import hizli_sensitivity
+
+    return hizli_sensitivity(predictor, xai_ref_stats(), x, y, z, organ_id,
+                              achieved_B, duty_sum, n_duty=7, top_n=top_n)
+
+
+def _run_xai_em(predictor, X, out_dir, **kw):
+    """Mod-2 batch: seans-sonrası tam XAI paketi (sensitivity+SHAP+CSV+PNG)."""
+    from ai_hub.xai_tabular.em_runtime import batch_xai
+
+    kw.setdefault("output_labels", XAI_OUTPUT_LABELS)
+    return batch_xai(predictor, xai_ref_stats(), X, out_dir, **kw)
+
+
 def main():
     parser = argparse.ArgumentParser(description=f"Kedi Inference ({MODEL_NAME})")
     parser.add_argument("--x", type=float)
     parser.add_argument("--y", type=float)
     parser.add_argument("--z", type=float)
     parser.add_argument("--organ_id", type=int, default=0, choices=ORGAN_IDS,
-                          help=f"organ_id (0..6). " + ", ".join(f"{k}={v}" for k, v in ORGAN_NAMES.items()))
+                          help="organ_id (0..6). " + ", ".join(f"{k}={v}" for k, v in ORGAN_NAMES.items()))
     parser.add_argument("--achieved_B", type=float, default=0.001)
     parser.add_argument("--duty_sum", type=float, default=2.0)
     parser.add_argument("--csv", type=str)

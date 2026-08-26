@@ -22,12 +22,13 @@ Kullanim:
   out = pred.predict(x=78, y=210, z=-57.85, organ_id=0,
                      achieved_B=0.001, duty_sum=2.4)
 """
-import os
 import argparse
-import numpy as np
-import pandas as pd
+import os
+
 import joblib
+import numpy as np
 import onnxruntime as ort
+import pandas as pd
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "BaggingRegressor"
@@ -143,6 +144,28 @@ class PetriPredictor:
         result["result_E_cancer"] = E_c
         result["result_E_avg"] = 0.5 * (E_h + E_c)
         return result
+
+
+# ── XAI (Faz 1.2, 2026-08-26) — TEK-KAYNAK ai_hub.xai_tabular.em_runtime ─────
+# ⚠️ ref-stats organ_id std'si 0.5 OVERRIDE'lı: eğitim CSV'sinde organ_id sabit 0
+# (kanser bilgisi ayrı kolonda) — CSV'den ölçülseydi std=0 dejenerasyonu olurdu.
+XAI_OUTPUT_LABELS = (D_COLS + [f"sinP{i}" for i in range(1, 8)]
+                     + [f"cosP{i}" for i in range(1, 8)] + ["E_healthy", "E_cancer"])
+
+
+def xai_ref_stats():
+    """Eğitim-dağılımı referansları (std+background) — tek-örnek XAI için ZORUNLU."""
+    from ai_hub.xai_tabular.em_runtime import load_ref_stats
+
+    return load_ref_stats(_DIR)
+
+
+def _run_xai_em(predictor, X, out_dir, **kw):
+    """Mod-2 batch XAI paketi (sensitivity+SHAP+CSV+PNG) — ref_stats'la dejenerasyonsuz."""
+    from ai_hub.xai_tabular.em_runtime import batch_xai
+
+    kw.setdefault("output_labels", XAI_OUTPUT_LABELS)
+    return batch_xai(predictor, xai_ref_stats(), X, out_dir, **kw)
 
 
 def main():

@@ -1326,6 +1326,20 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         )
     from servers import ai_approval
 
+    # Sunum-katmanı XAI (Faz 1.2, 2026-08-26): hekim onay ekranına "önerilen dozu en çok
+    # ne belirledi" satırı — 7+1 ONNX forward'lık HAFİF duyarlılık (D-kanalları; eğitim-
+    # dağılımı ref_std ile tek-örnek dejenerasyonu yok; SHAP/PNG YOK — kapalı-döngü kuralı).
+    # ⚠️ Açıklama İKİNCİL: hatası ÖNERİYİ asla düşürmez (zarif düşüş).
+    xai_meta = {}
+    try:
+        from ai_hub.em_kedi import inference_em_kedi as _iek
+
+        xai_meta["xaiSensitivity"] = _iek.xai_hizli_sensitivity(
+            _get_or_load_kedi(), c["x_mm"], c["y_mm"], c["z_mm"], oid
+        )
+    except Exception as xe:
+        logger.warning("AI Pro öneri XAI üretilemedi (öneri etkilenmedi): %s", xe)
+
     sure = max(1, min(_AI_PRO_MAX_DURATION_MIN, int(payload.duration_minutes)))
     rec = ai_approval.create(
         "ai_pro",
@@ -1343,6 +1357,7 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "z_mm": c["z_mm"],
             "reliability": round(float(c.get("reliability") or 0.0), 3),
             "localized_at": c.get("at"),
+            **xai_meta,
         },
     )
     return {

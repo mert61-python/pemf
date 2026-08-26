@@ -56,3 +56,6 @@ shap==0.49.1
 slicer==0.0.8
 pandas==2.3.3
 scikit-learn==1.7.2
+onnxruntime==1.19.2               # EM modulleri (em_kedi/fantom/petri) modul-seviyesinde ister;
+                                   # XAI kalem-4 testleri gercek predict-zinciri sozlesmesini olcer
+                                   # (CPU wheel ~50MB, GB-sinifi 'agir AI' degil; kosu 71c19a8 dersi)

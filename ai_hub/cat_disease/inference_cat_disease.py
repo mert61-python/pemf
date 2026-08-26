@@ -17,13 +17,16 @@ Kullanim:
   python inference_cat_disease.py --csv input.csv --output results.csv
 """
 
-import os
-import sys
 import argparse
+import os
+
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-import onnxruntime as ort
+
+# NOT (2026-08-26): 'import onnxruntime' KALDIRILDI — guii surumu pkl+predict_proba ile
+# tahmin eder, ort hicbir yerde kullanilmiyordu (olu import) ve onnxruntime'siz ortamda
+# (CI test seti) modulu bosuna kilitliyordu (kosu 71c19a8 dersi).
 
 # ============================================================
 # CONFIG
@@ -229,7 +232,7 @@ def main():
         # Arguman ile
         sym_idx = [int(x) for x in args.symptoms.split(",")] if args.symptoms else []
         results = predictor.predict(args.age, args.weight, args.hr, args.temp, args.duration, sym_idx)
-        print(f"\nTahmin:")
+        print("\nTahmin:")
         for rank, (disease, prob) in enumerate(results, 1):
             bar = "█" * int(prob * 50)
             print(f"  {rank}. {disease:35s} %{prob*100:.1f}  {bar}")
@@ -260,7 +263,7 @@ def main():
                 results = predictor.predict(age, weight, hr, temp, duration, sym_idx)
 
                 print(f"\n  {'='*50}")
-                print(f"  TAHMIN:")
+                print("  TAHMIN:")
                 print(f"  {'='*50}")
                 for rank, (disease, prob) in enumerate(results, 1):
                     bar = "█" * int(prob * 40)
