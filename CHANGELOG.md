@@ -6,6 +6,27 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.39 — 2026-08-27 (coklu-model-zip: buyuk PT'ler sahaya inebiliyor)
+
+- **Ne degisti:** Launcher artik bir profilin modellerini BIRDEN COK zip'ten kurabiliyor
+  (manifest `model_parts` alani). Ilk kullanim: `research-2.zip` — GitHub'in 2 GiB tek-dosya
+  siniri (OLCULDU: HTTP 422) yuzunden ana research.zip'e sigmayan iki buyuk agirlik
+  (renal histopatoloji PT ~858 MB + yara-kapanma/scratch CPN PT ~872 MB) artik ayri
+  parcayla klinik makinelere inebilecek.
+- **Geriye uyum:** eski launcher'lar yeni alani YOK SAYAR (canli manifestte kanitli desen);
+  davranislari bit degismeden surer. Parcasiz profillerde 1.9.39 da birebir eski davranistir.
+- **Ayrintilar:** parca indirme ayni dogrulama/kaldigi-yerden-devam borusundan gecer;
+  onbellek etiketleri benzersiz (`research-p2`); kurulum kaydi birlesik kimlikle tutulur
+  (tek parcada eski kayitlarla birebir — sahte 'guncelleme var' uretmez). Uretim tarafinda
+  `make_model_zip.py` 2 GiB'i asan paketi YAYINA CIKMADAN durdurur.
+- **Geri donus maliyeti (bilincli):** parcali kurulumdan 1.9.38'e donulurse eski launcher
+  research'u bir kez bayat sayip ana zip'i (~1,6 GB) yeniden indirir ve stabilize olur (veri
+  kaybi yok; PT'ler diskte kalir). Eski surumun onbellek-koruma listesi research-2.zip'i
+  tanimadigindan olu-onbellek temizligi parca kopyasini silebilir — 1.9.39'a geri gelis parca
+  indirmesini tekrarlar.
+- Testler: cargo 223 (7 yeni manifest/etiket/adopt kilidi) + manifest URL-koruma suiti parca
+  vakalariyla 9; BUILD.md runbook'u AYNI commit'te guncellendi (parcalar da once-asset kurali).
+
 ## Kural
 
 **Bir sürüm, buraya yazılmadan yayınlanmaz.** Kayıt en az şunları içerir:

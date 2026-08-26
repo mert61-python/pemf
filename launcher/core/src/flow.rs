@@ -303,8 +303,8 @@ pub(crate) fn cihazin_guncel_paket_adlari(
         paketler.push((p, "base".to_string()));
     }
     for ad in install::read_installed_profiles(install_root) {
-        if let Ok(pkg) = manifest.model_package(&ad) {
-            paketler.push((pkg, ad.clone()));
+        if let Ok(ciftler) = profil_paketleri(manifest, &ad) {
+            paketler.extend(ciftler);
         }
     }
     paketler
@@ -371,6 +371,32 @@ pub(crate) fn disk_kapisi(
 }
 
 /// Bir güncelleme planının dokunacağı TÜM paketleri topla (disk kapısı için).
+/// FAZ 4.5 (coklu-model-zip): profilin TUM zip'leri (ana + parcalar) BENZERSIZ
+/// onbellek etiketiyle. Parca etiketi "<profil>-p2", "-p3"... — URL adi guvensizse
+/// `cache_path_for` etikete duser; ana ile ayni etikete dusup birbirini EZMESIN.
+fn profil_paketleri<'a>(
+    manifest: &'a Manifest,
+    ad: &str,
+) -> Result<Vec<(&'a crate::Package, String)>, crate::manifest::ManifestError> {
+    let pkgs = manifest.model_packages(ad)?;
+    Ok(pkgs
+        .into_iter()
+        .enumerate()
+        .map(|(i, p)| (p, if i == 0 { ad.to_string() } else { format!("{ad}-p{}", i + 1) }))
+        .collect())
+}
+
+/// FAZ 4.5: `installed_packages.models` kaydindaki BIRLESIK kimlik. TEK parcada ana
+/// sha'nin KENDISI — eski kayitlarla birebir, yukseltmede sahte "bayat" uretmez.
+/// Cok parcada sha'lar '+' ile birlesir (kayit yalniz ESITLIK kiyasinda kullanilir).
+fn birlesik_model_sha(pkgs: &[&crate::Package]) -> String {
+    if pkgs.len() == 1 {
+        pkgs[0].sha256.clone()
+    } else {
+        pkgs.iter().map(|p| p.sha256.as_str()).collect::<Vec<_>>().join("+")
+    }
+}
+
 fn plan_paketleri<'a>(
     manifest: &'a Manifest,
     plan: &UpdatePlan,
@@ -389,8 +415,8 @@ fn plan_paketleri<'a>(
         }
     }
     for ad in &plan.profiles {
-        if let Ok(pkg) = manifest.model_package(ad) {
-            v.push((pkg, ad.clone()));
+        if let Ok(ciftler) = profil_paketleri(manifest, ad) {
+            v.extend(ciftler);
         }
     }
     v
@@ -419,9 +445,10 @@ pub fn install_profiles(
         Some(manifest.runtime_for_current_platform()?)
     };
     // TÜM profilleri İNDİRMEDEN ÖNCE doğrula (biri manifestte yoksa hiç indirme başlamasın).
-    let model_pkgs: Vec<(&String, &crate::Package)> = profiles
+    // FAZ 4.5: profil = ana zip + opsiyonel parçalar (etiketli) — hepsi birlikte doğrulanır.
+    let model_pkgs: Vec<(&String, Vec<(&crate::Package, String)>)> = profiles
         .iter()
-        .map(|p| manifest.model_package(p).map(|pk| (p, pk)))
+        .map(|p| profil_paketleri(&manifest, p).map(|ciftler| (p, ciftler)))
         .collect::<Result<_, _>>()?;
 
     // Yükseltme: eski boşluksuz "PEMFVetClient" kurulumu varsa yeni isme taşı (2 GB yeniden inmesin).
@@ -443,8 +470,10 @@ pub fn install_profiles(
         if let Some(pp) = runtime_pkg {
             gerekli.push((pp, "base".to_string()));
         }
-        for (ad, pkg) in &model_pkgs {
-            gerekli.push((pkg, ad.to_string()));
+        for (_ad, ciftler) in &model_pkgs {
+            for (pkg, etiket) in ciftler {
+                gerekli.push((pkg, etiket.clone()));
+            }
         }
         let koru = cihazin_guncel_paket_adlari(&manifest, install_root, &cache);
         disk_kapisi(&gerekli, install_root, &cache, on, true, &koru)?;
@@ -515,8 +544,13 @@ pub fn install_profiles(
 
     // Her profil paketi `ai_models/...` önekiyle geldiği için kurulum KÖKÜNE açılır →
     // <kök>/ai_models/... oluşur ve PEMF_AI_MODELS_DIR tam oraya işaret eder.
-    for (name, pkg) in &model_pkgs {
-        let model_zip = ensure_package(pkg, &cache, name, on, control)?;
+    for (name, ciftler) in &model_pkgs {
+        // FAZ 4.5: yarım-ağaç penceresi küçük kalsın diye TÜM parçalar önce İNER,
+        // açılım sonra parça sırasıyla yapılır (ana zip önce — bugünkü davranış).
+        let mut zipler: Vec<std::path::PathBuf> = Vec::with_capacity(ciftler.len());
+        for (pkg, etiket) in ciftler {
+            zipler.push(ensure_package(pkg, &cache, etiket, on, control)?);
+        }
         on(Progress::Extracting { what: (*name).clone() });
         // ⚠️ DENETİM 2026-08-23 (C12): SHA KAYDI AÇILIMDAN ÖNCE GEÇERSİZ KILINIR.
         // `repair()` doğrudan buraya düşer ve onarım senaryosunda kayıt ZATEN doğru sha'yı taşır.
@@ -528,9 +562,11 @@ pub fn install_profiles(
         install::record_model_sha(install_root, name, "");
         // `is_profile = true`: profil paketi doğrulanmış `runtime/` ağacını ve launcher durum
         // dosyalarını EZEMEZ (bkz. extract::PROFILE_FORBIDDEN_TOP, #104).
-        extract::extract_zip_cancellable(&model_zip, install_root, &mut extract_budget, true, &|| {
-            control() == net::Control::Cancel
-        })?;
+        for model_zip in &zipler {
+            extract::extract_zip_cancellable(model_zip, install_root, &mut extract_budget, true, &|| {
+                control() == net::Control::Cancel
+            })?;
+        }
         // Bu profil TAM indi + açıldı → HEMEN "kurulu" işaretle (mevcutlarla birleşir).
         // ÖNEMLİ: işaretlemeyi döngü SONUNA bırakma. Çoklu-profil kurulumunda kullanıcı
         // sonraki profili İPTAL ederse (ör. Ev Sahibi bitti, Veteriner yarıda iptal),
@@ -538,7 +574,8 @@ pub fn install_profiles(
         // extract'ından hemen sonra kaydederek, iptal-sonrası kullanıcı tamamlanmış
         // profil(ler)le uygulamayı kurup başlatabilir.
         install::add_installed_profiles(install_root, std::slice::from_ref(*name));
-        install::record_model_sha(install_root, name, &pkg.sha256);
+        let pkgs: Vec<&crate::Package> = ciftler.iter().map(|(p, _)| *p).collect();
+        install::record_model_sha(install_root, name, &birlesik_model_sha(&pkgs));
     }
     // Denetim Masası boyutunu GERÇEK kullanımla güncelle: NSIS onu kurulum anında hesaplar ve
     // o an dizinde yalnız launcher vardır (~11 MB); runtime + profil modelleri SONRA iner.
@@ -1047,7 +1084,8 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
 
     for name in install::read_installed_profiles(install_root) {
         // Manifestte olmayan profil (kaldırılmış) → dokunma, hata da verme.
-        let Ok(pkg) = manifest.model_package(&name) else { continue };
+        let Ok(pkgs) = manifest.model_packages(&name) else { continue };
+        let hedef = birlesik_model_sha(&pkgs);
         // ⚠️ MODELLERDE KURAL BASE'DEN FARKLI: KAYIT YOKSA "bayat" DEMİYORUZ.
         // Base'de bilinmeyeni bayat saymak 1,3 GB'a mal olur ve backend gerçekten değişmiştir.
         // Modellerde aynı kuralı uygulamak, kaydı olmayan her eski kurulumda ÜÇ profili birden
@@ -1057,8 +1095,8 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
         // her model değişikliği normal biçimde yakalanır. Tam yeniden doğrulama isteyen
         // kullanıcının yolu hâlâ "Onar"dır.
         let Some(mevcut) = kurulu.models.get(&name) else { continue };
-        if !mevcut.eq_ignore_ascii_case(&pkg.sha256) {
-            plan.bytes += pkg.size;
+        if !mevcut.eq_ignore_ascii_case(&hedef) {
+            plan.bytes += pkgs.iter().map(|p| p.size).sum::<u64>();
             plan.profiles.push(name);
         }
     }
@@ -1075,8 +1113,10 @@ pub fn pending_updates(manifest_raw: &str, install_root: &Path) -> Result<Update
         }
     }
     for name in &plan.profiles {
-        if let Ok(pkg) = manifest.model_package(name) {
-            if !paket_onbellekte_hazir(pkg, &cache, name) { hepsi = false; }
+        if let Ok(ciftler) = profil_paketleri(&manifest, name) {
+            for (pkg, etiket) in ciftler {
+                if !paket_onbellekte_hazir(pkg, &cache, &etiket) { hepsi = false; }
+            }
         }
     }
     plan.cached = hepsi;
@@ -1139,7 +1179,9 @@ pub fn prefetch_updates(
         ensure_package(manifest.runtime_for_current_platform()?, &cache, "base", on, control)?;
     }
     for name in &plan.profiles {
-        ensure_package(manifest.model_package(name)?, &cache, name, on, control)?;
+        for (pkg, etiket) in profil_paketleri(&manifest, name)? {
+            ensure_package(pkg, &cache, &etiket, on, control)?;
+        }
     }
     Ok(())
 }
@@ -1158,8 +1200,16 @@ pub fn adopt_unknown_models(manifest_raw: &str, install_root: &Path) -> Result<(
         if kurulu.models.contains_key(&name) {
             continue;
         }
-        let Ok(pkg) = manifest.model_package(&name) else { continue };
-        install::record_model_sha(install_root, &name, &pkg.sha256);
+        let Ok(pkgs) = manifest.model_packages(&name) else { continue };
+        // FAZ 4.5 (dusman-dogrulama bulgusu): benimseme parcalarin DISKTE var olup
+        // olmadigini dogrulayamaz. Parcali profilde BIRLESIK kimligi benimsemek,
+        // kaydi kaybolmus ama parcalari HIC inmemis cihazi sonsuza dek "guncel"
+        // sayardi (sessiz eksik-model — adopt'un onledigi sinifin parca surumu).
+        // MUHAFAZAKAR benimseme: yalniz ANA sha yazilir; parcali manifestte hedef
+        // (birlesik) != kayit (ana) oldugu icin profil plana girer ve parcalar
+        // indirilir. Bedeli: kayit kaybi + parcalar aslinda kuruluysa ~1,8 GB
+        // gereksiz yenileme — nadir ve guvenli yon (tam dogrulama yolu zaten Onar).
+        install::record_model_sha(install_root, &name, &pkgs[0].sha256);
     }
     Ok(())
 }
@@ -1336,14 +1386,21 @@ fn profilleri_yenile(
     control: &dyn Fn() -> net::Control,
 ) -> Result<(), FlowError> {
     for name in &plan.profiles {
-        let pkg = manifest.model_package(name)?;
-        let model_zip = ensure_package(pkg, cache, name, on, control)?;
+        let ciftler = profil_paketleri(manifest, name)?;
+        // FAZ 4.5: tum parcalar ONCE iner, acilim sonra sirayla (install_profiles ile ayni).
+        let mut zipler: Vec<std::path::PathBuf> = Vec::with_capacity(ciftler.len());
+        for (pkg, etiket) in &ciftler {
+            zipler.push(ensure_package(pkg, cache, etiket, on, control)?);
+        }
         on(Progress::Extracting { what: name.clone() });
         install::record_model_sha(install_root, name, "");
-        extract::extract_zip_cancellable(&model_zip, install_root, butce, true, &|| {
-            control() == net::Control::Cancel
-        })?;
-        install::record_model_sha(install_root, name, &pkg.sha256);
+        for model_zip in &zipler {
+            extract::extract_zip_cancellable(model_zip, install_root, butce, true, &|| {
+                control() == net::Control::Cancel
+            })?;
+        }
+        let pkgs: Vec<&crate::Package> = ciftler.iter().map(|(p, _)| *p).collect();
+        install::record_model_sha(install_root, name, &birlesik_model_sha(&pkgs));
     }
     Ok(())
 }
@@ -2723,5 +2780,51 @@ mod tests {
         install::record_base_sha(dir.path(), "");
         let plan = pending_updates(&manifest_json(SHA_A, None), dir.path()).unwrap();
         assert!(plan.base, "yarim acilim guncel sayildi: {plan:?}");
+    }
+
+    // ── FAZ 4.5: birlesik kimlik + benzersiz onbellek etiketi ───────────────
+    #[test]
+    fn faz45_birlesik_sha_tek_parcada_ana_shanin_kendisi() {
+        // Eski installed_packages kayitlariyla BIREBIR kalmali — yoksa yukseltmede
+        // her profil sahte-bayat olur ve GB'lar bosuna iner.
+        let a = pkg("https://x/research.zip", ABC_SHA);
+        assert_eq!(birlesik_model_sha(&[&a]), ABC_SHA);
+        let b = pkg("https://x/research-2.zip", "f".repeat(64).as_str());
+        let birlesik = birlesik_model_sha(&[&a, &b]);
+        assert!(birlesik.contains('+') && birlesik.starts_with(ABC_SHA));
+    }
+
+    #[test]
+    fn faz45_profil_paketleri_etiketleri_benzersiz() {
+        // cache_path_for guvensiz-URL fallback'i ETIKETE duser; iki parca ayni
+        // etikete duserse onbellekte birbirini EZER (kesif tuzagi #3).
+        let manifest = Manifest::parse(&format!(
+            r#"{{"schema":2,"version":"1",
+                 "models": {{"research": {{"url":"https://x/a.zip","sha256":"{h}","size":1}} }},
+                 "model_parts": {{"research": [ {{"url":"https://x/b.zip","sha256":"{h}","size":1}} ] }} }}"#,
+            h = ABC_SHA
+        ))
+        .unwrap();
+        let ciftler = profil_paketleri(&manifest, "research").unwrap();
+        assert_eq!(ciftler.len(), 2);
+        assert_eq!(ciftler[0].1, "research");
+        assert_eq!(ciftler[1].1, "research-p2");
+        assert_ne!(ciftler[0].1, ciftler[1].1);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn faz45_adopt_parcali_profilde_MUHAFAZAKAR_ana_sha_benimser() {
+        // Kayit kaybi senaryosu: parcalarin diskte oldugu DOGRULANAMAZ ->
+        // birlesik kimlik benimsenirse eksik parcalar sonsuza dek gizli kalirdi.
+        // Kaynak-duzeyi kilit: adopt govdesi birlesik degil pkgs[0] yazmali.
+        let src = include_str!("flow.rs");
+        let i = src.find("pub fn adopt_unknown_models").expect("adopt bulunmali");
+        let govde = &src[i..i + 1600];
+        assert!(govde.contains("pkgs[0].sha256"), "adopt ana-sha benimsemiyor");
+        assert!(
+            !govde.contains("birlesik_model_sha"),
+            "adopt birlesik kimlik benimsiyor — sessiz eksik-model penceresi"
+        );
     }
 }

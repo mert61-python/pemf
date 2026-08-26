@@ -2064,7 +2064,14 @@
         profileKeys = (info.profiles || []).filter((k) => /^[A-Za-z0-9_-]{1,64}$/.test(k));
         try {
           const m = JSON.parse(info.raw);
-          for (const k of profileKeys) sizes[k] = m.models?.[k]?.size ?? m.profiles?.[k]?.size ?? 0;
+          // FAZ 4.5 (düşman-doğrulama bulgusu): parçalı profilde yalnız ana zip boyutu
+          // gösterilirse kullanıcı onayı 2 KAT eksik olur (research 1,6 GB görünür,
+          // gerçek indirme ~3,4 GB). Parça boyutları da toplanır; parçasızda 0 ekler.
+          for (const k of profileKeys) {
+            const ana = m.models?.[k]?.size ?? m.profiles?.[k]?.size ?? 0;
+            const parcalar = (m.model_parts?.[k] || []).reduce((t, p) => t + (p?.size || 0), 0);
+            sizes[k] = ana + parcalar;
+          }
           baseBytes = m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0;
         } catch {}
         // Kartlar/boyutlar manifest gelince TAZELENİR (ADIM 1'de boyutsuz çizilmişti).

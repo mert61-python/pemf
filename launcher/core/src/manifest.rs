@@ -119,6 +119,13 @@ pub struct Manifest {
     pub layers: HashMap<String, RuntimeLayers>,
     /// profil adı -> model paketi
     pub models: HashMap<String, Package>,
+    /// FAZ 4.5 (2026-08-26, scratch-entegrasyon-plani.md): profil adı -> EK model
+    /// zip'leri. GitHub release asset sınırı 2 GiB (ÖLÇÜLDÜ: HTTP 422) büyük PT'leri
+    /// (renal 858MB + scratch CPN 872MB) tek research.zip'e sığdırmıyor. `models`
+    /// girdisi AYNEN kalır (ana zip); parçalar bu OPSİYONEL alanda gelir — layers
+    /// göçüyle aynı desen: eski launcher'lar alanı görmez → kırılmaz, bugünkü
+    /// davranışları (PT'siz, zarif düşüş) bit değişmeden sürer.
+    pub model_parts: HashMap<String, Vec<Package>>,
     /// Yayındaki en son launcher sürümü (opsiyonel; açılışta self-update bildirimi için).
     pub launcher: Option<LauncherInfo>,
     /// Kaynak şema sürümü (1 veya 2) — teşhis/log için.
@@ -143,6 +150,8 @@ struct RawV2 {
     layers: HashMap<String, RuntimeLayers>,
     #[serde(default)]
     models: HashMap<String, Package>,
+    #[serde(default)]
+    model_parts: HashMap<String, Vec<Package>>,
     #[serde(default)]
     launcher: Option<LauncherInfo>,
     #[serde(default)]
@@ -179,6 +188,7 @@ impl Manifest {
                 runtimes: v2.runtimes,
                 layers: v2.layers,
                 models: v2.models,
+                model_parts: v2.model_parts,
                 launcher: v2.launcher,
                 schema: 2,
                 min_supported_version: v2.min_supported_version,
@@ -202,6 +212,7 @@ impl Manifest {
                 runtimes,
                 layers: HashMap::new(),   // v1'de katman kavramı yok
                 models: v1.profiles,
+                model_parts: HashMap::new(), // v1'de parça kavramı yok
                 launcher: v1.launcher,
                 schema: 1,
                 // v1'de geri çağırma kavramı yok — o manifest'ler zaten çok eski.
@@ -225,6 +236,18 @@ impl Manifest {
                     key: key.clone(),
                     got: pkg.sha256.clone(),
                 });
+            }
+        }
+        // FAZ 4.5: parçalar da AYNI kapıdan — bozuk parça digest'i, kurulu olmayan
+        // profilinki bile, indirmeden ÖNCE yakalanır (models ile aynı ilke).
+        for (key, parcalar) in self.model_parts.iter() {
+            for (i, pkg) in parcalar.iter().enumerate() {
+                if !is_hex64(&pkg.sha256) {
+                    return Err(ManifestError::BadDigest {
+                        key: format!("{key}.parca{}", i + 2),
+                        got: pkg.sha256.clone(),
+                    });
+                }
             }
         }
         // Katmanlar (2026-08-08) da AYNI kapıdan geçer: bozuk digest'i indirmeden önce yakala.
@@ -279,6 +302,17 @@ impl Manifest {
                 profile: profile.to_string(),
                 available: sorted_keys(&self.models),
             })
+    }
+
+    /// FAZ 4.5: profilin TÜM zip'leri — ana paket + (varsa) parçalar, kurulum
+    /// sırasına göre. Parçasız profilde tek elemanlı döner (bugünkü davranış).
+    pub fn model_packages(&self, profile: &str) -> Result<Vec<&Package>, ManifestError> {
+        let ana = self.model_package(profile)?;
+        let mut hepsi = vec![ana];
+        if let Some(parcalar) = self.model_parts.get(profile) {
+            hepsi.extend(parcalar.iter());
+        }
+        Ok(hepsi)
     }
 }
 
@@ -612,5 +646,67 @@ mod tests {
         );
         assert!(l.sha256.is_some());
         assert_eq!(l.size, Some(2596084));
+    }
+
+    // ── FAZ 4.5: coklu-model-zip (model_parts) ──────────────────────────────
+    fn parcali_v2_json(parca_sha: &str) -> String {
+        format!(
+            r#"{{
+                "schema": 2,
+                "version": "1.9.27",
+                "models": {{ "research": {{"url":"https://x/research.zip","sha256":"{D1}","size":10,"kind":"zip"}} }},
+                "model_parts": {{ "research": [ {{"url":"https://x/research-2.zip","sha256":"{parca_sha}","size":20,"kind":"zip"}} ] }}
+            }}"#
+        )
+    }
+
+    #[test]
+    fn faz45_parcali_manifest_ayristirilir_ve_sirali_doner() {
+        let m = Manifest::parse(&parcali_v2_json(D2)).expect("parcali manifest ayrismali");
+        let pkgs = m.model_packages("research").expect("profil bulunmali");
+        assert_eq!(pkgs.len(), 2, "ana + 1 parca beklenir");
+        // SIRA SOZLESMESI: ana zip HEP once (kurulum/acilim sirasi buna dayanir)
+        assert!(pkgs[0].url.ends_with("/research.zip"));
+        assert!(pkgs[1].url.ends_with("/research-2.zip"));
+    }
+
+    #[test]
+    fn faz45_parcasiz_profil_tek_elemanli_doner_geriye_uyum() {
+        // model_parts alani HIC olmayan manifest (bugunku canli durum) — tek eleman.
+        let m = Manifest::parse(&parcali_v2_json(D2)).unwrap();
+        // parcali manifestte bile parcasi olmayan profil sorulursa: bilinmeyen profil hatasi
+        assert!(m.model_packages("vet").is_err());
+        // parcasiz klasik manifest:
+        let klasik = format!(
+            r#"{{"schema":2,"version":"1.9.27",
+                 "models": {{"vet": {{"url":"https://x/vet.zip","sha256":"{D1}","size":1}} }} }}"#
+        );
+        let m2 = Manifest::parse(&klasik).unwrap();
+        assert_eq!(m2.model_packages("vet").unwrap().len(), 1);
+        assert!(m2.model_parts.is_empty());
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn faz45_bozuk_parca_digesti_INDIRMEDEN_once_reddedilir() {
+        // validate_digests kurulu olmayan profilin parcasini da denetler (models ilkesi).
+        let err = Manifest::parse(&parcali_v2_json("KOTU-HEX")).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("parca2"), "parca anahtari hatada gorunmeli: {msg}");
+    }
+
+    #[test]
+    fn faz45_eski_launcher_semantigi_bilinmeyen_alan_yok_sayilir() {
+        // deny_unknown_fields YOK sozlesmesinin dogrudan kaniti: model_parts'i
+        // TANIMAYAN v1 yolu (schema alanini silersek) yine ayrisir — alan yok sayilir.
+        let v1_gibi = format!(
+            r#"{{"version":"1.8.0",
+                 "profiles": {{"vet": {{"url":"https://x/vet.zip","sha256":"{D1}","size":1}} }},
+                 "model_parts": {{"vet": [ {{"url":"https://x/v2.zip","sha256":"{D2}","size":2}} ] }} }}"#
+        );
+        let m = Manifest::parse(&v1_gibi).expect("v1 yolu bilinmeyen alani yok saymali");
+        assert_eq!(m.schema, 1);
+        // v1 normalizasyonu parca tasimaz — eski davranis birebir:
+        assert_eq!(m.model_packages("vet").unwrap().len(), 1);
     }
 }
