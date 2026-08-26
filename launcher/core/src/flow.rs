@@ -2820,7 +2820,13 @@ mod tests {
         // Kaynak-duzeyi kilit: adopt govdesi birlesik degil pkgs[0] yazmali.
         let src = include_str!("flow.rs");
         let i = src.find("pub fn adopt_unknown_models").expect("adopt bulunmali");
-        let govde = &src[i..i + 1600];
+        // SABIT-UZUNLUK PENCERESI KULLANMA (CI'da olculdu): Windows runner CRLF
+        // checkout eder, ayni bayt penceresi daha az satir kapsar ve assert
+        // penceresinin DISINDA kalir (yerel LF'te yesil, CI'da kirmizi).
+        // Fonksiyon-sonu cipasi bayt-bicimden bagimsizdir.
+        let j = src[i..].find("
+pub fn ").map(|k| i + k).unwrap_or(src.len());
+        let govde = &src[i..j];
         assert!(govde.contains("pkgs[0].sha256"), "adopt ana-sha benimsemiyor");
         assert!(
             !govde.contains("birlesik_model_sha"),
