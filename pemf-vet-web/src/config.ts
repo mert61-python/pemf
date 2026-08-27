@@ -159,7 +159,7 @@ export const DOWNLOAD_HOST = {
   // ⚠️ SÜRÜM FARKI KULLANICIYA AÇIKLANIR (metin denetimi 2026-08-20): İndir sayfasında bilgisayar
   // kartı "1.9.32", telefon kartı "2.3.18" gösteriyor ve sebebi hiçbir yerde yazmıyordu. Telefon
   // uygulaması AYRI sürüm döngüsüne sahiptir (ayrı yayın etiketi); numaraların eşleşmesi beklenmez.
-  androidVersion: '2.3.25',
+  androidVersion: '2.3.26',
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
   androidRolNotu: 'Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.',
