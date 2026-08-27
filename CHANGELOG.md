@@ -6,6 +6,42 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.27 · launcher 1.9.39 · mobile 2.3.25 — 2026-08-27 (🧫 Yara Kapanma/Scratch + coklu-model-zip)
+
+- **YENI MODUL — Yara Kapanma (Scratch), Arastirma profili:** CPN hucre segmentasyonu +
+  TScratch kapanma metrikleri (PEMF calismasinin primary endpoint'i). TEK goruntuden coklu
+  gorsel cikti: Kapanma/Analiz/Segmentasyon/Overlay/Orijinal (+istege bagli EigenCAM XAI ve
+  3'lu panel) — butonlu galeri; yara-yonu (dikey/yatay) ve objektif (4x-40x) secimi;
+  Karsilastir modu (0H↔24H delta-kapanma karti). GERCEK-MODEL dogrulamasi sahip
+  referanslariyla neredeyse birebir (24H: 2083 hucre %29.36, gap 428.0um BIREBIR); GPU
+  smoke cuda:0 9.8sn. Uc: /api/ai/vision/scratch (3 jeton sinifi; FREE_MODE'da etkisiz).
+- **Klinik EXE'ye celldetection eklendi** (sahip karari 0.1): scratch CPU'da da calisir
+  (~18 sn/goruntu; 872MB model ilk kullanimda yuklenir). deps katmani bu yuzden DEGISTI
+  (6. degisim, bilincli).
+- **mobile 2.3.25:** ayni Yara Kapanma modulu mobil arayuzde (dosya secici + galeri +
+  Karsilastir); arastirma profili modul sayisi 7.
+- **XAI §KALAN kapanisi (A+B+C, cat_llm haric):** (A) Bobrek CT + Histopatoloji'de
+  "Isi haritasi uret" anahtari (histopat CIFT harita: konsensus + model-kararsizligi),
+  RNA hasta satirinda "Surukleyen genler" (yon oklu), retikulosit isi-haritasi; Kedi Organ
+  ayna/anatomik-tutarlilik rozetleri; Petri kanser kuyusunda "gerekce: N mavi piksel
+  (esik >=30)" satiri; Yuz Agrisi'nda "Olcumler · populasyon bandi (p5-p95)" paneli
+  (bant-disi isaretli); termal/ses uclarinda CAM yontemi secilebilir (allowlist, gecersiz
+  422); EM fantom/petri yanitlarinda canli xaiSensitivity meta (router + :8100 paritesi).
+  (B) `scripts/xai_batch_rapor.py` — tek CLI ile toplu XAI: goruntu/ses CAM, RNA IG
+  isaretli-CSV, EM sensitivity+SHAP paketi; summary.csv + index.html + istege bagli PDF
+  (yeni `generate_xai_report`). (C) test-girdileri: 03 termal + 04 retikulosit + 11b
+  gercek-format RNA + 12 scratch TIF'leri + 90_Batch_XAI ornekleri; calibrate_camera.py
+  araci; segmentation help-metni duzeltmesi.
+- Launcher 1.9.39 ayrintilari icin asagidaki kendi girdisine bakin (coklu-model-zip —
+  renal + scratch PT'leri research-2.zip parcasiyla sahaya iner).
+- Dusman-dogrulama turu (yayin oncesi, 25 ham -> 17 dogrulanmis bulgu, TAMAMI kapatildi):
+  en kritigi `.npz` spec eksigi — EM canli XAI referanslari frozen EXE'ye hic girmiyordu
+  (1.9.25'ten beri uretimde sessiz oluydu); ayrica GPU-mikroservis paritesi (landmark/
+  cat_organ/termal/ses), FGS band-paneli anahtar eslemesi, batch ses sessizlik-kapisi,
+  XAI baz-noktasi cfg ikamesi. Ayrinti: xai-entegrasyon-plani.md KAPANIS notu.
+- Rollout: %100. Etiket: client-app-v1.9.27. buildId 1bb79548612e (app-katmani
+  sha'sinin ilk 12 hanesi; deps ce9f9dfcca50 — celldetection nedeniyle 6. degisim).
+
 ## launcher 1.9.39 — 2026-08-27 (coklu-model-zip: buyuk PT'ler sahaya inebiliyor)
 
 - **Ne degisti:** Launcher artik bir profilin modellerini BIRDEN COK zip'ten kurabiliyor
