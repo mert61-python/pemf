@@ -96,12 +96,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.26",
-      "versionCode": 33,
+      "version": "2.3.27",
+      "versionCode": 34,
       "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.39/PEMF_Vet_Mobil.apk",
-      "sha256": "ad78a9fe2e4dd9af3dc66dbecd7f102d45f16af4295e216b2d626d0a0d7f5419",
-      "size": 128475471,
-      "notes": "Guncelleme indirmesi artik ekran kilidi/arka planda kesilmez (on-plan servisi + kaldigi-yerden otomatik devam) ve kartta anlik hiza gore kalan sure gorunur."
+      "sha256": "1efd5cf00438237c298e14a2b7473c97c61794d98bc806e56168ad384bf2662f",
+      "size": 128475863,
+      "notes": "AI Pro seansinda her karede calan deklansor sesi kaldirildi; olcum kareleri artik sessiz alinir (canli kamera modlarinda da)."
     }
   }
 }
