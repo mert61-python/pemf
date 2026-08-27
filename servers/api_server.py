@@ -88,6 +88,37 @@ else:
 
 
 @asynccontextmanager
+def _scratch_isit_baslat() -> None:
+    """Yara-kapanma (CPN, 872 MB) modelini AÇILIŞTA arka planda ısıt — saha bildirimi 2026-08-27.
+
+    ÖLÇÜLEN ARIZA: ısıtma YALNIZ GPU mikroserviste (ai_service) vardı; klinik kurulumda model
+    ilk "Analiz Et" anında yükleniyordu. Ölçüm (bu makinede, boşta): İLK istek 32,8 sn, ikinci
+    22,4 sn — yani ilk analizin ~10 sn'si saf model yüklemesi ve o süre boyunca predictor kilidi
+    tutuluyor. Yük altındaki bir klinik makinesinde bu fark büyür; kullanıcı ilk denemeyi
+    "çalışmıyor" sanıp ikinci kez basıyor (sahadan bildirilen davranış tam buydu).
+
+    ⚠️ CI DERSİ (ai_service, exit 134): cell/ teslim edilmemişken daemon thread isit() içinde
+    hemen bitip kısa ömürlü interpreter kapanışıyla yarışıyor ve SIGABRT üretebiliyordu →
+    thread YALNIZ alt-modül (cell.cpn) gerçekten varsa başlatılır; ucuz senkron ön-kontrol.
+    ⚠️ Ayrı thread ŞART: default executor'da yapılırsa 872 MB yükleme boyunca E-stop dahil
+    to_thread çağrıları kuyruğa girerdi (ölçülmüş executor-tükenmesi bulgusu).
+    Kapatma: PEMF_SCRATCH_WARMUP=0 (araştırma profili kurulu olmayan makinede RAM'i boşa yemesin).
+    """
+    if os.environ.get("PEMF_SCRATCH_WARMUP", "1") != "1":
+        return
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("ai_hub.inference_paper_dilek_hoca.cell.cpn") is None:
+            return
+        from ai_hub.inference_paper_dilek_hoca import inference_paper_dilek_hoca as _ipd
+
+        threading.Thread(target=_ipd.isit, daemon=True, name="scratch-warmup").start()
+        logging.info("Yara-kapanma modeli arka planda ısıtılıyor (ilk analiz beklemesin).")
+    except Exception as e:  # ısıtma bir KOLAYLIK — hiçbir hatası servisi düşürmez
+        logging.info("scratch ısıtma atlandı: %s", e)
+
+
 async def lifespan(app: FastAPI):
     """Uygulama yaşam-döngüsü (audit B-2.2: deprecated @app.on_event yerine + import-zamanı
     thread yan-etkisini kaldırır). Arka-plan thread'leri (safety süre-watchdog dahil) YALNIZ sunucu
@@ -103,6 +134,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=_start_mdns_service, daemon=True, name="PEMFmDNSService").start()
     # Arka-plan daemon'ları (süre-watchdog + sensör-persist + günlük-bakım + opsiyonel sim).
     _start_background_threads()
+    _scratch_isit_baslat()
     try:
         yield
     finally:
