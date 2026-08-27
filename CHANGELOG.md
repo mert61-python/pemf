@@ -6,6 +6,17 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.29 — 2026-08-27 (⚡ Yara Kapanma: ilk analiz artik beklemiyor)
+
+- **Yara Kapanma modelinin ilk analizi belirgin hizlandi.** Model (872 MB) artik uygulama
+  acilirken ARKA PLANDA hazirlaniyor; onceden ilk "Analiz Et" anina birakiliyordu.
+  Olculen fark (ayni makine, bosta): ilk analiz **32,8 sn → ~22 sn**; aradaki sure saf
+  model yuklemesiydi ve o pencerede ikinci bir analiz istegi "baska analiz suruyor"
+  uyarisi aliyordu. Sahadan bildirilen "ilk basista bos dondu, ikincide cikti" davranisinin
+  sebebi buydu.
+- Hazirlama seansi/E-stop yolunu ETKILEMEZ (ayri is parcaciginda calisir) ve arastirma
+  profili kurulu olmayan makinelerde  ile kapatilabilir.
+
 ## app 1.9.28 — 2026-08-27 (🩹 Yara Kapanma modulu sahada CALISMIYORDU — duzeltildi)
 
 - **SAHA ARIZASI:** Guncel kurulumda "Yara kapanma modeli bu kurulumda hazir degil —
