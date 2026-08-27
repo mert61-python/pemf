@@ -6,6 +6,29 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.28 — 2026-08-27 (🩹 Yara Kapanma modulu sahada CALISMIYORDU — duzeltildi)
+
+- **SAHA ARIZASI:** Guncel kurulumda "Yara kapanma modeli bu kurulumda hazir degil —
+  GPU AI servisi ya da model paketi gerekli." cikiyordu. **Model paketi kuruluydu**
+  (872 MB agirlik diskte, launcher paket kaydi dogru); gosterilen sebep YANLISTI.
+  Gercek neden: uygulama paketinde (frozen EXE) bir kutuphanenin **paket kimlik
+  bilgisi (metadata)** eksikti; hucre-segmentasyon zinciri acilirken
+  `No package metadata was found for imageio` ile olu doguyordu. Duzeltildi —
+  modul artik referans degerleri birebir uretiyor (12a: 1495 hucre, kapanma %4.29,
+  ort. gap 1053,5 um; sahip referansi 1494 / %4.3 / 1053 um).
+- **AYNI SINIF HATA BIR DAHA SESSIZ KALMASIN diye ucu kapatan iki kapi:**
+  - **`GET /api/ai/hazirlik`** (destek/tanilama ucu): her AI modulu icin **kod** ve
+    **model** durumu AYRI raporlanir; `?derin=1` gercek yuklemeyi dener. "Kod bozuk"
+    ile "model inmemis" bir daha karismaz. (Yol/sistem detayi donmez.)
+  - **Yayin oncesi otomatik kapi:** uretilen uygulama paketi derlendikten sonra tum
+    AI modulleri gercekten yuklenerek sinanir; biri olu ise **yayin uretimi durur**.
+    Bu arizanin sahaya inebilmesinin sebebi tam olarak boyle bir kapinin olmamasiydi
+    (tum testler paketlenmemis ortamda kosuyor, orada bagimlilik hep var).
+  - Kurulum-eksigi hatasi artik **kok nedeniyle loglanir** (kullaniciya gosterilen
+    metin sade kalir) — destek sahadaki nedeni ilk bakista gorebilir.
+- Kullanici etkisi: guncelleme sonrasi Arastirma profilinde **Yara Kapanma (Scratch)**
+  modulu calisir. Diger 12 AI modulu bu arizadan etkilenmemisti (dogrulandi: 13/13).
+
 ## mobile 2.3.26 — 2026-08-27 (indirme kesinti-dayanikliligi + kalan sure)
 
 - **Guncelleme indirmesi artik ekran kilidi / arka plana alma ile SUREKLI KESILMIYOR**
