@@ -148,3 +148,37 @@ def test_KARSIT_KANIT_hazirlik_ucu_yol_SIZDIRMAZ(client):
     """auth-muaf uç: mutlak yol / sürücü harfi / kullanıcı adı DÖNMEMELİ."""
     g = client.get("/api/ai/hazirlik").text
     assert "C:\\" not in g and "/Users/" not in g and "AppData" not in g
+
+
+# ── 4) spec: paket METADATA'sı (ölçülen kök neden) ───────────────────────────
+def test_KRITIK_spec_paket_METADATASINI_topluyor():
+    """ÖLÇÜLEN KÖK NEDEN (2026-08-27): frozen EXE'de scratch modülü
+    `PackageNotFoundError: No package metadata was found for imageio` ile ölüyordu.
+
+    Modül KODUNU toplamak yetmez: çalışma anında `importlib.metadata.version("X")`
+    çağıran her kütüphane için X'in .dist-info'su da frozen'a KOPYALANMALI. Bu satır
+    silinirse aynı sınıf arıza sessizce geri gelir (kullanıcı 'model paketi gerekli'
+    görür, model kuruluyken)."""
+    from pathlib import Path
+
+    spec = (Path(__file__).resolve().parents[1] / "build_tools" / "PEMF_Backend_onedir.spec").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    assert "copy_metadata(_meta_pkg, recursive=True)" in spec, "metadata toplama döngüsü kayboldu"
+    # Ölçülen arızanın paketi ADIYLA listede olmalı (döngü boşalırsa kapı vacuous olur)
+    for zorunlu in ("'imageio'", "'celldetection'"):
+        assert zorunlu in spec, f"metadata listesinde {zorunlu} yok — ölçülen arıza geri gelebilir"
+
+
+def test_KRITIK_build_betigi_AI_KAPISINI_kosuyor():
+    """Kapı olmadan bozuk EXE yayına çıkar (bu arıza tam böyle çıktı). Build betiği
+    üretilen EXE'de derin=1 taraması yapıp eksik modülde build'i KIRMIZI yapmalı."""
+    from pathlib import Path
+
+    ps = (Path(__file__).resolve().parents[1] / "scripts" / "build_backend_exe.ps1").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    assert "/api/ai/hazirlik?derin=1" in ps, "build kapısı derin taramayı çağırmıyor"
+    assert "AI HAZIRLIK KAPISI KIRMIZI" in ps, "eksik modülde build KIRMIZI olmuyor"
+    # Kapı varsayılan AÇIK olmalı (yalnız açık bayrakla atlanabilsin)
+    assert "-not $SkipAiGate" in ps

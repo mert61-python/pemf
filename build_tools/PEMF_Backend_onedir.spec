@@ -76,6 +76,23 @@ try:
 except Exception as e:
     print("Metadata uyarısı:", e)
 
+# ⚠️ PAKET METADATA'SI (2026-08-27 SAHA ARIZASI — kök neden). Modül KODUNU toplamak
+# YETMEZ: bir kütüphane çalışma anında `importlib.metadata.version("X")` çağırıyorsa,
+# X'in .dist-info'su frozen'a KOPYALANMADIĞI sürece `PackageNotFoundError` alır.
+# Ölçülen vaka: scratch/CPN zinciri (celldetection → imageio) EXE'de
+# "No package metadata was found for imageio" ile ölüyordu; kullanıcı bunu
+# "model paketi gerekli" olarak görüyordu (model diskte KURULUYDU).
+# `recursive=True` bağımlılık ağacındaki metadata'yı da toplar → aynı sınıf hata
+# yeni AI modüllerinde tekrar etmesin. Tek tek eklemek yerine zincir toplanır;
+# eksik paket sessizce atlanır (uyarı basılır), build düşmez.
+for _meta_pkg in ('celldetection', 'imageio', 'scikit-image', 'albumentations',
+                  'pytorch-lightning', 'torchmetrics', 'timm', 'shap', 'captum',
+                  'grad-cam', 'librosa', 'scikit-learn'):
+    try:
+        datas += copy_metadata(_meta_pkg, recursive=True)
+    except Exception as _me:
+        print(f"[metadata] {_meta_pkg} atlandı: {_me}")
+
 # --- SQLCipher (AT-REST ŞİFRELEME) — KRİTİK ---
 # treatment_history_db lazy try-except ile import ettiğinden PyInstaller static analizi
 # sqlcipher3'ü KAÇIRIR → frozen EXE'de paket eksik bundle olur → `from sqlcipher3 import
