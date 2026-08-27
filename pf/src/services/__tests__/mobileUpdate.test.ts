@@ -420,7 +420,7 @@ describe("apkIndir", () => {
   it("KRITIK: kesinti sonrası KENDİLİĞİNDEN yeni deneme açılır ve KALDIĞI BAYTTAN sürer", async () => {
     // 1. deneme: 400 baytta ağ kopar (reddedilir). 2. deneme: diskte 700 bayt bulunur →
     // devam noktası "700" ile açılır ve tamamlanır. Kullanıcı HİÇBİR ŞEYE dokunmaz.
-    const cagrilar: Array<string | undefined> = [];
+    const cagrilar: (string | undefined)[] = [];
     let deneme = 0;
     const olustur = jest.fn().mockImplementation((_u, _h, _o, _cb, devam) => {
       cagrilar.push(devam);
