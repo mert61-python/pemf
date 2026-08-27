@@ -39,8 +39,10 @@
   (1.9.25'ten beri uretimde sessiz oluydu); ayrica GPU-mikroservis paritesi (landmark/
   cat_organ/termal/ses), FGS band-paneli anahtar eslemesi, batch ses sessizlik-kapisi,
   XAI baz-noktasi cfg ikamesi. Ayrinti: xai-entegrasyon-plani.md KAPANIS notu.
-- Rollout: %100. Etiket: client-app-v1.9.27. buildId 1bb79548612e (app-katmani
-  sha'sinin ilk 12 hanesi; deps ce9f9dfcca50 — celldetection nedeniyle 6. degisim).
+- Rollout: %100. Etiket: client-app-v1.9.27.
+
+Paket kimliği (`buildId`): `1bb79548612e`. Monolit `base.zip` sha: `4c3d5b6b621f`.
+Deps katmanı: `ce9f9dfcca50` (celldetection nedeniyle 6. değişim — bilinçli).
 
 ## launcher 1.9.39 — 2026-08-27 (coklu-model-zip: buyuk PT'ler sahaya inebiliyor)
 
