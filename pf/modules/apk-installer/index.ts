@@ -15,6 +15,9 @@ interface ApkInstallerNative {
   izinEkraniniAc(): Promise<boolean>;
   apkKur(yol: string): Promise<boolean>;
   sha256(yol: string): Promise<string>;
+  // Eski APK'larda bu ikisi YOKTUR (2026-08-27'de eklendi) — çağıran taraf yokluğu tolere eder.
+  indirmeServisiniBaslat?(baslik: string | null): Promise<boolean>;
+  indirmeServisiniDurdur?(): Promise<boolean>;
 }
 
 const yerli =
@@ -67,5 +70,27 @@ export async function dosyaSha256(dosyaUri: string): Promise<string> {
     return yerli ? await yerli.sha256(dosyaUri) : "";
   } catch {
     return "";
+  }
+}
+
+/**
+ * İndirme süresince ön-plan servisini başlat (ekran kilidi/arka plan indirmeyi kesmesin —
+ * saha bildirimi 2026-08-27). Servis bir GÜVENCEDİR: yokluğu/başarısızlığı indirmeyi düşürmez,
+ * yalnız arka plan dayanıklılığı eski (kırılgan) davranışa düşer.
+ */
+export async function indirmeServisiniBaslat(baslik: string | null): Promise<boolean> {
+  try {
+    return yerli?.indirmeServisiniBaslat ? await yerli.indirmeServisiniBaslat(baslik) : false;
+  } catch {
+    return false;
+  }
+}
+
+/** Ön-plan servisini durdur (indirme bitti/düştü — bildirim kalkar). */
+export async function indirmeServisiniDurdur(): Promise<boolean> {
+  try {
+    return yerli?.indirmeServisiniDurdur ? await yerli.indirmeServisiniDurdur() : false;
+  } catch {
+    return false;
   }
 }

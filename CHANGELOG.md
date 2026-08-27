@@ -6,6 +6,20 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## mobile 2.3.26 — 2026-08-27 (indirme kesinti-dayanikliligi + kalan sure)
+
+- **Guncelleme indirmesi artik ekran kilidi / arka plana alma ile SUREKLI KESILMIYOR**
+  (saha bildirimi): (1) indirme boyunca ekran uyanik tutulur (otomatik kilit devreye
+  girmez); (2) indirme, dataSync ON-PLAN SERVISI ile korunur — bildirim cubugunda
+  "guncelleme indiriliyor" gorunur, Android arka planda agi kesmez; (3) yine de kesilirse
+  KENDILIGINDEN kaldigi bayttan surer (40 denemeye kadar; arka plandaysa on-plana donus
+  beklenir, on-plandayken 90 sn ilerlemeyen indirme dusurulup diskteki kismi dosyadan
+  yeniden acilir). Duraklatma YOK — yalniz istemsiz kesintinin onarimi.
+- **Indirme kartinda anlik hiza gore KALAN SURE** ("~3 dk 20 sn kaldi") — masaustu
+  istemcideki gostergenin mobil esi; hem acilis kapisinda hem uygulama ici bantta.
+- Not: bu iki iyilestirme 2.3.26'yi INDIRIRKEN henuz aktif degildir (eski surum indirir);
+  ilk faydasi bir SONRAKI guncellemede gorulur.
+
 ## app 1.9.27 · launcher 1.9.39 · mobile 2.3.25 — 2026-08-27 (🧫 Yara Kapanma/Scratch + coklu-model-zip)
 
 - **YENI MODUL — Yara Kapanma (Scratch), Arastirma profili:** CPN hucre segmentasyonu +

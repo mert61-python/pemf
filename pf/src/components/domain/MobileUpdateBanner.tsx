@@ -26,7 +26,7 @@ export function MobileUpdateBanner() {
   const [gizli, setGizli] = useState(false);
 
   // İndirme/kurulum akışı açılış kapısıyla ORTAK (tek kaynak) — bkz. useApkGuncelleme.
-  const { oran, hata, bilgi, kurulumAcildi, guncelle } = useApkGuncelleme(surum);
+  const { oran, eta, hata, bilgi, kurulumAcildi, guncelle } = useApkGuncelleme(surum);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -58,8 +58,9 @@ export function MobileUpdateBanner() {
         <Text style={[styles.alt, hata ? styles.altHata : null]}>
           {hata || bilgi ||
             (oran !== null
-              // Yüzdenin yanında MB: 128 MB'lık paketde kullanıcı kotasını görsün.
-              ? `İndiriliyor… %${Math.round(oran * 100)} · ${Math.round((oran * surum.size) / 1_000_000)} / ${Math.round(surum.size / 1_000_000)} MB`
+              // Yüzdenin yanında MB: 128 MB'lık pakette kullanıcı kotasını görsün.
+              // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
+              ? `İndiriliyor… %${Math.round(oran * 100)} · ${Math.round((oran * surum.size) / 1_000_000)} / ${Math.round(surum.size / 1_000_000)} MB${eta ? ` · ${eta}` : ""}`
               : surum.notes || "Güncellemek için dokunun.")}
         </Text>
       </View>

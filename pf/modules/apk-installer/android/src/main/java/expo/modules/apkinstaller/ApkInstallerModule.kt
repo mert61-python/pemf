@@ -117,6 +117,36 @@ class ApkInstallerModule : Module() {
       baslat(intent)
       true
     }
+
+    /**
+     * Indirme suresince on-plan servisi baslatir (bkz. IndirmeServisi) — ekran kilidi /
+     * arka plan, sureci ve ag erisimini kesmesin (saha bildirimi 2026-08-27). Uygulama
+     * ON-PLANDAYKEN cagrilir (FGS baslatma kisiti bu yuzden sorun degil). Hata YUTULUR:
+     * servis bir guvencedir, baslamamasi indirmeyi dusurmemeli.
+     */
+    AsyncFunction("indirmeServisiniBaslat") { baslik: String? ->
+      try {
+        val niyet = Intent(context, IndirmeServisi::class.java).putExtra("baslik", baslik)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(niyet)
+        } else {
+          context.startService(niyet)
+        }
+        true
+      } catch (e: Exception) {
+        false
+      }
+    }
+
+    /** Indirme bitti/dustu — on-plan servisini durdur (bildirim kalkar). Hata yutulur. */
+    AsyncFunction("indirmeServisiniDurdur") {
+      try {
+        context.stopService(Intent(context, IndirmeServisi::class.java))
+        true
+      } catch (e: Exception) {
+        false
+      }
+    }
   }
 
   /**

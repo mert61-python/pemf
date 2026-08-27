@@ -15,6 +15,8 @@
 const mockApkKur = jest.fn();
 const mockIzinVarMi = jest.fn();
 const mockIzinEkrani = jest.fn();
+const mockServisBaslat = jest.fn(async () => true);
+const mockServisDurdur = jest.fn(async () => true);
 jest.mock("../../../modules/apk-installer", () => ({
   apkKur: (...a: unknown[]) => mockApkKur(...(a as [])),
   kurulumIzniVarMi: () => mockIzinVarMi(),
@@ -23,6 +25,17 @@ jest.mock("../../../modules/apk-installer", () => ({
   // ⚠️ Yerel modul YOKMUS gibi bos dize doner (eski APK davranisi): akis SURMELI.
   // Gercek dogrulama vakalari `sha256Hesapla` enjeksiyonuyla ayri testlerde olculuyor.
   dosyaSha256: jest.fn(async () => ""),
+  indirmeServisiniBaslat: (...a: unknown[]) => mockServisBaslat(...(a as [])),
+  indirmeServisiniDurdur: () => mockServisDurdur(),
+}));
+
+// Ekran-uyanik-tut: kod `require("expo-keep-awake")` kullanir (statik import degil — gerekce
+// mobileUpdate.ts::ekraniUyanikTut) → jest.mock require'i da keser, casuslar buradan olculur.
+const mockUyanikTut = jest.fn(async () => {});
+const mockUyanikBirak = jest.fn(async () => {});
+jest.mock("expo-keep-awake", () => ({
+  activateKeepAwakeAsync: (...a: unknown[]) => mockUyanikTut(...(a as [])),
+  deactivateKeepAwake: (...a: unknown[]) => mockUyanikBirak(...(a as [])),
 }));
 
 const mockPaylas = jest.fn();
@@ -207,10 +220,13 @@ describe("apkIndir", () => {
   });
 
   it("indirme çökerse 'indirme' hatası döner (çökme YOK)", async () => {
+    // azamiYenidenDeneme: 0 → otomatik-devam döngüsü kapalı; bu test TEK denemenin
+    // sözleşmesini ölçer (döngünün kendi kilidi ayrı: "kesinti sonrası ... sürer").
     const r = await apkIndir(SURUM(), undefined, {
       createDownloadResumable: jest.fn().mockReturnValue({
         downloadAsync: jest.fn().mockRejectedValue(new Error("kesildi")),
       }) as never,
+      azamiYenidenDeneme: 0,
     });
     expect(r).toEqual({ ok: false, hata: "indirme" });
   });
@@ -393,10 +409,103 @@ describe("apkIndir", () => {
       devamOku: jest.fn().mockResolvedValue(KAYIT()) as never,
       devamYaz: jest.fn() as never,
       devamSil: kayitSil as never,
+      azamiYenidenDeneme: 0, // tek-deneme sözleşmesi (otomatik-devam döngüsünün kendi kilidi ayrı)
     });
     expect(r).toEqual({ ok: false, hata: "indirme" });
     expect(kayitSil).not.toHaveBeenCalled();   // ⚠️ iz SİLİNMEZ
     expect(sil).not.toHaveBeenCalled();        // ⚠️ kısmi dosya DURUR
+  });
+
+  // ── KESİNTİ-SONRASI OTOMATİK DEVAM (2026-08-27 saha bildirimi: "sürekli kesilmesin") ──
+  it("KRITIK: kesinti sonrası KENDİLİĞİNDEN yeni deneme açılır ve KALDIĞI BAYTTAN sürer", async () => {
+    // 1. deneme: 400 baytta ağ kopar (reddedilir). 2. deneme: diskte 700 bayt bulunur →
+    // devam noktası "700" ile açılır ve tamamlanır. Kullanıcı HİÇBİR ŞEYE dokunmaz.
+    const cagrilar: Array<string | undefined> = [];
+    let deneme = 0;
+    const olustur = jest.fn().mockImplementation((_u, _h, _o, _cb, devam) => {
+      cagrilar.push(devam);
+      deneme++;
+      return deneme === 1
+        ? { downloadAsync: jest.fn().mockRejectedValue(new Error("ağ koptu")) }
+        : { downloadAsync: jest.fn().mockResolvedValue({ uri: "file:///cache/pemf-vet-20.apk", status: 206 }) };
+    });
+    // getInfoAsync sırası: [1. deneme hazır-kontrol] 400/kısmi → [2. deneme hazır-kontrol] 700/kısmi
+    // → [2. deneme boyut kapısı] 1000/tam.
+    const bilgi = jest.fn()
+      .mockResolvedValueOnce({ exists: true, size: 400 })
+      .mockResolvedValueOnce({ exists: true, size: 700 })
+      .mockResolvedValue({ exists: true, size: 1000 });
+    const bekle = jest.fn().mockResolvedValue(undefined);
+    const r = await apkIndir(S20(), undefined, {
+      createDownloadResumable: olustur as never,
+      getInfoAsync: bilgi as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: jest.fn().mockResolvedValue(KAYIT()) as never,
+      devamYaz: jest.fn() as never,
+      devamSil: jest.fn() as never,
+      azamiYenidenDeneme: 3,
+      kesintiBekle: bekle,
+    });
+    expect(r.ok).toBe(true);
+    expect(bekle).toHaveBeenCalledTimes(1);          // kesintiden sonra beklendi ve devam edildi
+    expect(cagrilar).toEqual(["400", "700"]);        // ⚠️ 2. deneme SIFIRDAN değil, 700. bayttan
+  });
+
+  it("KRITIK: indirme boyunca ekran uyanık + ön-plan servisi; bitince İKİSİ DE bırakılır", async () => {
+    // (2026-08-27 saha bildirimi: ekran kilidi/arka plan kesintisi.) Başarı YOLUNDA da hata
+    // yolunda da 'finally' temizliği çalışmalı — bildirim asılı kalmasın, ekran kilitlenebilsin.
+    mockServisBaslat.mockClear(); mockServisDurdur.mockClear();
+    mockUyanikTut.mockClear(); mockUyanikBirak.mockClear();
+    const tamam = await apkIndir(SURUM(), undefined, {
+      createDownloadResumable: jest.fn().mockReturnValue({
+        downloadAsync: jest.fn().mockResolvedValue({ uri: "file:///cache/pemf-vet-14.apk", status: 200 }),
+      }) as never,
+      getInfoAsync: jest.fn()
+        .mockResolvedValueOnce({ exists: false })
+        .mockResolvedValue({ exists: true, size: 1000 }) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: jest.fn().mockResolvedValue(null) as never,
+      devamYaz: jest.fn() as never,
+      devamSil: jest.fn() as never,
+    });
+    expect(tamam.ok).toBe(true);
+    expect(mockUyanikTut).toHaveBeenCalledTimes(1);
+    expect(mockUyanikBirak).toHaveBeenCalledTimes(1);
+    expect(mockServisBaslat).toHaveBeenCalledTimes(1);
+    expect(String((mockServisBaslat.mock.calls[0] as unknown[])[0])).toContain("2.3.7"); // bildirim sürümü söyler
+    expect(mockServisDurdur).toHaveBeenCalledTimes(1);
+
+    // hata yolunda da temizlik (finally):
+    mockServisDurdur.mockClear(); mockUyanikBirak.mockClear();
+    _indirmeyiSifirla();
+    await apkIndir(SURUM(), undefined, {
+      createDownloadResumable: jest.fn().mockReturnValue({
+        downloadAsync: jest.fn().mockRejectedValue(new Error("koptu")),
+      }) as never,
+      azamiYenidenDeneme: 0,
+    });
+    expect(mockUyanikBirak).toHaveBeenCalledTimes(1);
+    expect(mockServisDurdur).toHaveBeenCalledTimes(1);
+  });
+
+  it("KARŞIT: deterministik hatalar ('sunucu') YENİDEN DENENMEZ — tekrar durumu değiştirmez", async () => {
+    const bekle = jest.fn().mockResolvedValue(undefined);
+    const olustur = jest.fn().mockReturnValue({
+      downloadAsync: jest.fn().mockResolvedValue({ uri: "file:///cache/pemf-vet-20.apk", status: 404 }),
+    });
+    const r = await apkIndir(S20(), undefined, {
+      createDownloadResumable: olustur as never,
+      getInfoAsync: jest.fn().mockResolvedValue({ exists: false }) as never,
+      deleteAsync: jest.fn() as never,
+      devamOku: jest.fn().mockResolvedValue(null) as never,
+      devamYaz: jest.fn() as never,
+      devamSil: jest.fn() as never,
+      azamiYenidenDeneme: 5,
+      kesintiBekle: bekle,
+    });
+    expect(r).toEqual({ ok: false, hata: "sunucu" });
+    expect(olustur).toHaveBeenCalledTimes(1);  // tek deneme
+    expect(bekle).not.toHaveBeenCalled();
   });
 
   it("devam ederken ilerleme GERİ GİTMEZ (yüzde sıfırlanmaz)", async () => {

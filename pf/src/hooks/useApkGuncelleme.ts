@@ -9,7 +9,7 @@
  * yükleyici). Her sonucun kullanıcıya söylediği şey FARKLI olmalı — "bir hata oldu" demek,
  * kullanıcının izni açması gerektiğini gizler ve akışı çıkmaza sokar.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { apiGet } from "@/services/apiClient";
 import {
@@ -64,9 +64,28 @@ async function seansSuruyorMu(): Promise<boolean> {
   }
 }
 
+/**
+ * Kalan süreyi insan diliyle yaz (launcher indirme kartındaki ETA'nın mobil eşi,
+ * 2026-08-27 sahip isteği). Boş dize = "gösterme" (hız henüz ölçülemedi/anlamsız).
+ */
+export function etaMetni(kalanSn: number): string {
+  if (!Number.isFinite(kalanSn) || kalanSn < 0) return "";
+  const s = Math.round(kalanSn);
+  if (s < 60) return `~${Math.max(1, s)} sn kaldı`;
+  const dk = Math.floor(s / 60);
+  if (dk < 60) return `~${dk} dk ${s % 60} sn kaldı`;
+  return `~${Math.floor(dk / 60)} sa ${dk % 60} dk kaldı`;
+}
+
+/** ETA hız penceresi: son 15 sn'lik örneklerden anlık hız (launcher'dakiyle aynı yaklaşım). */
+const ETA_PENCERE_MS = 15_000;
+const ETA_ASGARI_SN = 3; // ilk saniyelerde hız gürültülü — gösterme
+
 export interface ApkGuncelleme {
   /** 0..1 indirme oranı; `null` = indirme yürümüyor. */
   oran: number | null;
+  /** "~3 dk 20 sn kaldı" — anlık hıza göre; ölçülemiyorsa boş dize. */
+  eta: string;
   /** Kullanıcının BİR ŞEY YAPMASI gereken durum; boş = yok. */
   hata: string;
   /** Bilgilendirme (hata değil), ör. kurulum ekranı açıldı. */
@@ -82,10 +101,13 @@ export interface ApkGuncelleme {
 
 export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
   const [oran, setOran] = useState<number | null>(null);
+  const [eta, setEta] = useState("");
   const [hata, setHata] = useState("");
   const [bilgi, setBilgi] = useState("");
   const [kurulumAcildi, setKurulumAcildi] = useState(false);
   const [paketHazir, setPaketHazir] = useState(false);
+  // ETA örnekleri (t, bayt) — state DEĞİL: her ilerleme geri çağrısında render tetiklemesin.
+  const etaOlcumleri = useRef<{ t: number; bayt: number }[]>([]);
 
   const guncelle = useCallback(async () => {
     if (!surum) return;
@@ -95,10 +117,28 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     setHata("");
     setBilgi("");
     setOran(0);
+    etaOlcumleri.current = [];
+    setEta("");
+    const toplamBoyut = Number(surum.size) || 0;
+    const ilerleme = (o: number) => {
+      setOran(o);
+      // Anlık hız = son ~15 sn penceresindeki bayt farkı / süre. Devam edilen indirmede de
+      // doğru: örnekler mutlak bayttan (oran×boyut) türetilir, taban farkı pencerede sadeleşir.
+      const simdi = Date.now();
+      const dizi = etaOlcumleri.current;
+      dizi.push({ t: simdi, bayt: o * toplamBoyut });
+      while (dizi.length > 2 && simdi - dizi[0].t > ETA_PENCERE_MS) dizi.shift();
+      const ilk = dizi[0];
+      const gecenSn = (simdi - ilk.t) / 1000;
+      const inenBayt = o * toplamBoyut - ilk.bayt;
+      if (gecenSn < ETA_ASGARI_SN || inenBayt <= 0 || toplamBoyut <= 0) return;
+      setEta(etaMetni(((1 - o) * toplamBoyut) / (inenBayt / gecenSn)));
+    };
     // ⚠️ Aynı sürüm zaten iniyorsa `apkIndir` YENİ indirme başlatmaz, sürene abone olur ve
     // ilerlemeyi kaldığı yerden verir (bkz. mobileUpdate.ts::_suren).
-    const ind = await apkIndir(surum, setOran);
+    const ind = await apkIndir(surum, ilerleme);
     setOran(null);
+    setEta("");
     if (!ind.ok || !ind.dosyaUri) {
       // ⚠️ "boyut" ve "indirme" AYRI metinler: ilkinde bağlantı vardı ama paket eksik indi
       // (tekrar denemek işe yarar), ikincisinde bağlantı hiç kurulamadı. Tek bir "hata oldu"
@@ -161,5 +201,5 @@ export function useApkGuncelleme(surum: MobilSurum | null): ApkGuncelleme {
     }
   }, [surum]);
 
-  return { oran, hata, bilgi, kurulumAcildi, paketHazir, guncelle };
+  return { oran, eta, hata, bilgi, kurulumAcildi, paketHazir, guncelle };
 }

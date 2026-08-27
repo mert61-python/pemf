@@ -31,9 +31,36 @@ import Constants from "expo-constants";
 // paylaşım YEDEĞİ hiçbir testle sınanamıyor, sessizce ölse fark edilmezdi. Yedek yolun kendisi
 // bir emniyet ağı; sınanamayan emniyet ağı yok sayılır. Modül küçük ve zaten bağımlılıkta.
 import * as Sharing from "expo-sharing";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
-import { apkKur, dosyaSha256, izinEkraniniAc, kurulumIzniVarMi } from "../../modules/apk-installer";
+import {
+  apkKur,
+  dosyaSha256,
+  indirmeServisiniBaslat,
+  indirmeServisiniDurdur,
+  izinEkraniniAc,
+  kurulumIzniVarMi,
+} from "../../modules/apk-installer";
+
+/**
+ * İndirme sürerken ekranı uyanık tut (2026-08-27 saha bildirimi: "ekranı kilitleyince
+ * indirme kesiliyor"). Otomatik ekran kilidi, kesintinin EN SIK tetikleyicisi — indirme
+ * boyunca ekran kendiliğinden kilitlenmezse vaka sınıfının çoğu hiç doğmaz.
+ *
+ * ⚠️ `require` KASITLI (statik import değil): `expo-keep-awake` import ANINDA yerel modül
+ * ister; jest'te bu, mobileUpdate'i dolaylı içe aktaran ONLARCA test dosyasına mock dayatırdı.
+ * Uyanık tutma bir KOLAYLIKTIR — hiçbir ortamda yokluğu indirmeyi düşüremez (hepsi yutulur).
+ */
+function ekraniUyanikTut(ac: boolean): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const ka = require("expo-keep-awake");
+    if (ac) void ka.activateKeepAwakeAsync?.("pemf-apk-indirme")?.catch?.(() => {});
+    else void ka.deactivateKeepAwake?.("pemf-apk-indirme")?.catch?.(() => {});
+  } catch {
+    /* keep-awake yoksa (jest/eski ortam) sessizce geç */
+  }
+}
 
 /** Yayın manifest'i — masaüstü client ile AYNI dosya (tek kaynak, ayrı servis yok). */
 export const MANIFEST_URL =
@@ -221,6 +248,60 @@ export interface IndirmeSonucu {
   hata?: "indirme" | "boyut" | "sunucu" | "butunluk";
 }
 
+/**
+ * KESİNTİ SONRASI OTOMATİK DEVAM (2026-08-27, saha bildirimi: "ekranı kilitleyince /
+ * arka plana alınca indirme kesiliyor, sürekli kesilmesin").
+ *
+ * ⚠️ Bu DURAKLATMA DEĞİLDİR — o bilerek yok (bkz. `_apkIndirGercek` başlığı ve casus test).
+ * Buradaki mekanizma tam tersi: indirme İSTEMSİZ düştüğünde (Doze ağı askıya aldı, OEM pil
+ * katili soketi kesti) kullanıcıya "tekrar deneyin" demek yerine KALDIĞI BAYTTAN kendiliğinden
+ * sürdürmek. Her deneme diskteki kısmi dosyadan devam eder → kesinti ne kadar sık olursa olsun
+ * İLERLEME HEP BİRİKİR; kayıp yalnız kesinti anındaki soket tamponudur.
+ *
+ * - Uygulama ÖN-PLANDAYSA kısa nefes (3 sn) sonra hemen devam edilir.
+ * - ARKA PLANDAYSA deneme hakkı boşa yakılmaz: 'active' olana kadar (tavan 30 dk) beklenir —
+ *   `AppState` aboneliği YALNIZ bu anda, geçici olarak kurulur (casus test mutlu-yolda
+ *   AppState'e hiç abone olunmadığını kilitlemeye devam eder).
+ * - TIKANMA BEKÇİSİ: askıya alınan ağda `downloadAsync` reddedilmeden SONSUZA DEK askıda
+ *   kalabilir. Ön-plandayken 90 sn boyunca TEK BAYT ilerleme yoksa deneme `pauseAsync` ile
+ *   düşürülür (yerel iş iptal olur, söz reddedilir) ve döngü diskten devamla yeni deneme açar.
+ */
+const AZAMI_YENIDEN_DENEME = 40;
+const AKTIF_NEFES_MS = 3_000;
+const ARKA_PLAN_TAVANI_MS = 30 * 60 * 1000;
+const TIKANMA_ESIGI_MS = 90_000;
+const TIKANMA_KONTROL_MS = 15_000;
+
+function _uygulamaDurumu(): string {
+  // Test mock'ları `currentState` taşımaz → bilinmiyorsa "active" varsay (fail-open:
+  // yanlışlıkla beklemek, yanlışlıkla denemekten kötüdür — deneme zaten zararsız).
+  return (AppState as { currentState?: string }).currentState ?? "active";
+}
+
+/** Kesinti sonrası yeni denemeden önce bekle (üstteki blok yorumun gerekçesiyle). */
+async function _kesintiSonrasiBekle(): Promise<void> {
+  if (_uygulamaDurumu() === "active") {
+    await new Promise((coz) => setTimeout(coz, AKTIF_NEFES_MS));
+    return;
+  }
+  await new Promise<void>((coz) => {
+    let abonelik: { remove(): void } | null = null;
+    const bitir = () => {
+      clearTimeout(tavan);
+      try { abonelik?.remove(); } catch { /* yut */ }
+      coz();
+    };
+    const tavan = setTimeout(bitir, ARKA_PLAN_TAVANI_MS);
+    try {
+      abonelik = AppState.addEventListener("change", (d: string) => {
+        if (d === "active") bitir();
+      }) as { remove(): void };
+    } catch {
+      bitir(); // AppState yoksa bekleme atlanır — deneme yine de yapılır
+    }
+  });
+}
+
 /** Yarım kalan indirmenin izi (AsyncStorage). İndirme BAŞLAMADAN yazılır. */
 const DEVAM_ANAHTARI = "@pemf_apk_indirme";
 
@@ -300,17 +381,26 @@ export function _indirmeyiSifirla(): void {
   _suren = null;
 }
 
+/** `apkIndir`/`_apkIndirGercek` test-enjeksiyon noktaları (tek tip — ikisi aynı sözleşme). */
+interface IndirmeDeps {
+  createDownloadResumable?: typeof FileSystem.createDownloadResumable;
+  getInfoAsync?: typeof FileSystem.getInfoAsync;
+  deleteAsync?: typeof FileSystem.deleteAsync;
+  devamOku?: typeof devamOku;
+  devamYaz?: typeof devamYaz;
+  devamSil?: typeof devamSil;
+  readDirectoryAsync?: typeof FileSystem.readDirectoryAsync;
+  sha256Hesapla?: typeof dosyaSha256;
+  /** Test kancası: kesinti-sonrası yeniden deneme sayısı (varsayılan AZAMI_YENIDEN_DENEME). */
+  azamiYenidenDeneme?: number;
+  /** Test kancası: denemeler arası bekleme (varsayılan _kesintiSonrasiBekle). */
+  kesintiBekle?: () => Promise<void>;
+}
+
 export async function apkIndir(
   surum: MobilSurum,
   onIlerleme?: IlerlemeCb,
-  deps: {
-    createDownloadResumable?: typeof FileSystem.createDownloadResumable;
-    getInfoAsync?: typeof FileSystem.getInfoAsync;
-    deleteAsync?: typeof FileSystem.deleteAsync;
-    devamOku?: typeof devamOku;
-    devamYaz?: typeof devamYaz;
-    devamSil?: typeof devamSil;
-  } = {},
+  deps: IndirmeDeps = {},
 ): Promise<IndirmeSonucu> {
   const anahtar = `${surum.versionCode}|${surum.url}`;
 
@@ -351,16 +441,7 @@ export async function apkIndir(
 async function _apkIndirGercek(
   surum: MobilSurum,
   onIlerleme?: IlerlemeCb,
-  deps: {
-    createDownloadResumable?: typeof FileSystem.createDownloadResumable;
-    getInfoAsync?: typeof FileSystem.getInfoAsync;
-    deleteAsync?: typeof FileSystem.deleteAsync;
-    devamOku?: typeof devamOku;
-    devamYaz?: typeof devamYaz;
-    devamSil?: typeof devamSil;
-    readDirectoryAsync?: typeof FileSystem.readDirectoryAsync;
-    sha256Hesapla?: typeof dosyaSha256;
-  } = {},
+  deps: IndirmeDeps = {},
 ): Promise<IndirmeSonucu> {
   const hedef = `${FileSystem.cacheDirectory || ""}pemf-vet-${surum.versionCode}.apk`;
   const olustur = deps.createDownloadResumable ?? FileSystem.createDownloadResumable;
@@ -403,6 +484,10 @@ async function _apkIndirGercek(
     try { await sil(kayit.fileUri, { idempotent: true }); } catch { /* yut */ }
   }
 
+  // ⚠️ İlk denemede dış bloktaki `ayniIs` geçerli; SONRAKİ denemelerde kayıt bu işin kendisi
+  // tarafından yazılmış olur → devam hakkı her denemede yeniden türetilir (aksi hâlde ilk
+  // deneme "farklı iş"le başlayan bir indirme, kesintiden sonra hep sıfırdan başlardı).
+  const birDeneme = async (devamEdilebilir: boolean): Promise<IndirmeSonucu> => {
   try {
     // ⚠️ 2026-08-17 SAHA BİLDİRİMİ — "geri çıkma tuşuna bastım, tekrar yüzde 0'dan başladı".
     // TAM inmiş dosya artık KAYITTAN BAĞIMSIZ tanınır. Eskiden bu kontrol `ayniIs` kapısının
@@ -417,7 +502,7 @@ async function _apkIndirGercek(
 
     // Diskteki kısmi dosya → devam noktası.
     let devamBaytlari: string | undefined;
-    if (ayniIs) {
+    if (devamEdilebilir) {
       const kismi = hazir;
       const boyut = Number(kismi?.size ?? 0);
       if (kismi?.exists && boyut > 0 && boyut < beklenen) {
@@ -432,11 +517,13 @@ async function _apkIndirGercek(
     await yaz({ versionCode: surum.versionCode, url: surum.url, fileUri: hedef });
 
     const baslangic = Number(devamBaytlari ?? 0);
+    let sonIlerlemeMs = Date.now();
     const dl = olustur(
       surum.url,
       hedef,
       {},
       (p) => {
+        sonIlerlemeMs = Date.now(); // tıkanma bekçisi için: bayt aktığı sürece deneme sağlıklı
         // ⚠️ İlerleme, devam edilen indirmede de 0'dan değil KALDIĞI YERDEN gösterilmeli
         // (kullanıcının gördüğü yüzde geri gitmesin). Yerel modül `resumeData`yı sayaçlarına
         // zaten ekliyor; toplam beklenen bilinmiyorsa manifest boyutuna düşülür.
@@ -447,7 +534,24 @@ async function _apkIndirGercek(
       devamBaytlari,
     );
 
-    const sonuc = await dl.downloadAsync();
+    // TIKANMA BEKÇİSİ: askıya alınmış ağda `downloadAsync` reddedilmeden SONSUZA DEK bekleyebilir
+    // (arka planda ağı kesilen soket, ön-plana dönüşte hep hata fırlatmıyor — bazen sadece susuyor).
+    // Ön-plandayken 90 sn hiç bayt akmadıysa yerel işi `pauseAsync` ile düşür → söz reddedilir →
+    // dış döngü diskteki kısmi dosyadan YENİ denemeyle sürer. ⚠️ Bu, arka-plan DURAKLATMASI
+    // DEĞİLDİR (o bilerek yok — üstteki başlık): yalnız ÖLÜ bir denemenin enkazı kaldırılıyor.
+    const bekci = setInterval(() => {
+      if (_uygulamaDurumu() === "active" && Date.now() - sonIlerlemeMs > TIKANMA_ESIGI_MS) {
+        clearInterval(bekci);
+        void (dl as { pauseAsync?: () => Promise<unknown> }).pauseAsync?.()?.catch?.(() => {});
+      }
+    }, TIKANMA_KONTROL_MS);
+
+    let sonuc: Awaited<ReturnType<typeof dl.downloadAsync>>;
+    try {
+      sonuc = await dl.downloadAsync();
+    } finally {
+      clearInterval(bekci);
+    }
     if (!sonuc?.uri) return { ok: false, hata: "indirme" };
 
     // ⚠️ HTTP DURUMU DENETLENİR (denetim 2026-08-23). Yerel katman gövdeyi durumdan BAĞIMSIZ
@@ -496,6 +600,27 @@ async function _apkIndirGercek(
     // ⚠️ Kayıt ve kısmi dosya BİLEREK bırakılır: ağ koptuğunda bir sonraki deneme kaldığı
     // yerden sürebilsin (asıl istenen davranış). Bozuk dosyayı boyut kapısı zaten eliyor.
     return { ok: false, hata: "indirme" };
+  }
+  };
+
+  // ── KESİNTİ-SONRASI OTOMATİK DEVAM DÖNGÜSÜ (gerekçe: dosya başındaki blok yorum) ──
+  // Yalnız "indirme" (ağ) hatası yeniden denenir: "sunucu"/"boyut"/"butunluk" DETERMİNİSTİK
+  // sonuçlardır — tekrar etmek durumu değiştirmez, arayüz doğru metni hemen göstermelidir.
+  // Ekran, indirme boyunca uyanık tutulur; ön-plan servisi arka planda ağı canlı tutar
+  // (ikisi de kolaylık: yokluğu akışı düşürmez).
+  const azami = deps.azamiYenidenDeneme ?? AZAMI_YENIDEN_DENEME;
+  const bekle = deps.kesintiBekle ?? _kesintiSonrasiBekle;
+  ekraniUyanikTut(true);
+  void indirmeServisiniBaslat?.(`PEMF Vet ${surum.version} indiriliyor`)?.catch?.(() => {});
+  try {
+    for (let deneme = 0; ; deneme++) {
+      const sonuc = await birDeneme(deneme === 0 ? ayniIs : true);
+      if (sonuc.ok || sonuc.hata !== "indirme" || deneme >= azami) return sonuc;
+      await bekle();
+    }
+  } finally {
+    ekraniUyanikTut(false);
+    void indirmeServisiniDurdur?.()?.catch?.(() => {});
   }
 }
 

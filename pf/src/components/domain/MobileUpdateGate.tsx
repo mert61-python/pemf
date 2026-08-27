@@ -78,7 +78,7 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   const [surum, setSurum] = useState<MobilSurum | null>(null);
   const bittiRef = useRef(false);
 
-  const { oran, hata, bilgi, kurulumAcildi, paketHazir, guncelle } = useApkGuncelleme(surum);
+  const { oran, eta, hata, bilgi, kurulumAcildi, paketHazir, guncelle } = useApkGuncelleme(surum);
 
   /** Kapıyı aç ve BİR DAHA kapanmayacağını işaretle (geç gelen sonuç ekranı geri almasın). */
   const kapiyiAc = useCallback(() => {
@@ -161,9 +161,10 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
             {hata ||
               bilgi ||
               (indiriliyor
-                ? // ⚠️ Yalnız yüzde YETMEZ: 128 MB'lık bir paketde kullanıcı ne kadar veri
+                ? // ⚠️ Yalnız yüzde YETMEZ: 128 MB'lık bir pakette kullanıcı ne kadar veri
                   // harcadığını da görmeli (mobil kota). MB'ler manifest boyutundan türetilir.
-                  `İndiriliyor… %${Math.round((oran ?? 0) * 100)} · ${mb((oran ?? 0) * (surum?.size ?? 0))} / ${mb(surum?.size ?? 0)}`
+                  // Kalan süre anlık hızdan (launcher paritesi, 2026-08-27) — ölçülemediyse gizli.
+                  `İndiriliyor… %${Math.round((oran ?? 0) * 100)} · ${mb((oran ?? 0) * (surum?.size ?? 0))} / ${mb(surum?.size ?? 0)}${eta ? ` · ${eta}` : ""}`
                 : surum?.notes || "Kullanmadan önce güncellemeniz önerilir.")}
           </Text>
 
