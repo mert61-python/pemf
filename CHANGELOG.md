@@ -14,6 +14,9 @@
   model yuklemesiydi ve o pencerede ikinci bir analiz istegi "baska analiz suruyor"
   uyarisi aliyordu. Sahadan bildirilen "ilk basista bos dondu, ikincide cikti" davranisinin
   sebebi buydu.
+Paket kimliği (`buildId`): `2e49b39e3d9a`. Monolit `base.zip` sha: `b806d908bea4`.
+Deps katmanı DEĞİŞMEDİ (`3b39061b2286`) — klinikler yalnız ~81 MB uygulama katmanını indirir.
+
 - Hazirlama seansi/E-stop yolunu ETKILEMEZ (ayri is parcaciginda calisir) ve arastirma
   profili kurulu olmayan makinelerde  ile kapatilabilir.
 
