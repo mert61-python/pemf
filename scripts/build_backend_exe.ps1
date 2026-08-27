@@ -22,7 +22,11 @@ param(
     [switch]$SkipWeb,
     # Kod korumasını (.pyd derleme) ATLA — YALNIZ hata ayıklama için.
     # make_base_zip.py korumasız paketi zaten REDDEDER, bu yüzden yayına sızamaz.
-    [switch]$SkipProtect
+    [switch]$SkipProtect,
+    # AI hazırlık kapısını ATLA (üretilen EXE'de her AI modülünün gerçekten import
+    # edilebildiğini doğrular — saha bulgusu 2026-08-27). Yalnız acil durumda kullanın:
+    # kapı kapalıyken ölü-doğmuş bir modül yayına çıkabilir.
+    [switch]$SkipAiGate
 )
 $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[build] $m" -ForegroundColor Cyan }
@@ -239,6 +243,50 @@ if (-not $SkipProtect -and (Test-Path $exe)) {
             Warn "$kalan modül derlenemedi → şifreleme uygulanıyor (yedek katman)..."
             & $PY "$GuiRoot\build_tools\encrypt_sources.py" --dist "$dist\PEMF_Backend" --verify
         }
+    }
+}
+
+# ── AI HAZIRLIK KAPISI (2026-08-27, saha bulgusu) ────────────────────────────────
+# NEDEN: "Yara kapanma modeli bu kurulumda hazır değil" sahada, model paketi KURULUYKEN
+# çıktı. Sebep bir bağımlılığın frozen EXE'de import EDİLEMEMESİYDİ — build yeşil, testler
+# yeşil, paket yeşil; yalnız ÜRÜN ölüydü. Hiçbir kapı bunu görmüyordu çünkü tüm testler
+# frozen OLMAYAN ortamda koşuyor (orada her bağımlılık pip'ten gelir ve hep vardır).
+# ⚠️ SINIF: her yeni AI modülü aynı şekilde sessizce ölü doğabilir. Kapı, ÜRETİLEN EXE'yi
+# ayağa kaldırıp `/api/ai/hazirlik?derin=1` ile GERÇEK import'u zorlar; bir modül ölüyse
+# build KIRMIZI olur ve o EXE yayına çıkmaz. -SkipAiGate ile atlanabilir (acil durum).
+if ((Test-Path $exe) -and -not $SkipAiGate) {
+    Info "AI hazırlık kapısı: üretilen EXE'de tüm AI modülleri gerçekten import ediliyor mu?"
+    $gatePort = 8177
+    $gateLog = Join-Path $BuildRoot "ai_hazirlik_kapisi.log"
+    $env:PEMF_SIMULATE = "1"
+    $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort" `
+        -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
+    try {
+        $hazir = $false
+        foreach ($i in 1..90) {
+            Start-Sleep -Seconds 2
+            try {
+                $null = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/health" -TimeoutSec 3
+                $hazir = $true; break
+            } catch { }
+        }
+        if (-not $hazir) { Warn "AI kapısı: EXE $gatePort portunda açılmadı → kapı ATLANDI (log: $gateLog)" }
+        else {
+            # derin=1: find_spec DEĞİL, GERÇEK import — ölü-doğmuş modülü yakalayan tek mod.
+            $rapor = Invoke-RestMethod "http://127.0.0.1:$gatePort/api/ai/hazirlik?derin=1" -TimeoutSec 600
+            Info "AI hazırlık: $($rapor.hazir)/$($rapor.toplam) modül hazır."
+            if ($rapor.eksik.Count -gt 0) {
+                foreach ($m in $rapor.moduller) {
+                    if (-not $m.hazir) { Write-Host "   ✗ $($m.modul): kod=$($m.kod) model=$($m.model) — $($m.sebep)" -ForegroundColor Red }
+                }
+                Die ("AI HAZIRLIK KAPISI KIRMIZI: $($rapor.eksik -join ', ') modülü ÜRETİLEN EXE'de çalışmıyor. " +
+                     "Bu EXE yayına çıkarsa kullanıcı 'model paketi gerekli' yanlış teşhisini görür " +
+                     "(saha bulgusu 2026-08-27). Eksik bağımlılığı spec'e ekleyin ya da -SkipAiGate ile bilinçli geçin.")
+            }
+        }
+    } finally {
+        try { Stop-Process -Id $proc.Id -Force -EA 0 } catch { }
+        Remove-Item Env:PEMF_SIMULATE -EA 0
     }
 }
 

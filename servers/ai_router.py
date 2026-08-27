@@ -84,6 +84,25 @@ def _ai_fail(label: str, e: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail=label)
 
 
+def _kok_neden_zinciri(e: BaseException, sinir: int = 5) -> str:
+    """İstisna zincirini ('__cause__') tek satırlık okunur köke indirger.
+
+    ⚠️ SAHA DERSİ (2026-08-27): scratch modülü `ImportError`ı sabit bir "model paketi
+    gerekli" metnine sarıyor, router da onu loglamadan 503'e çeviriyordu. Sahadaki
+    kullanıcı KURULU bir model için "model yok" görüyor, destek ise hiçbir kayıt
+    bulamıyordu. Zincir artık ilk halkadan köke kadar tek satırda yazılır —
+    "yeni model eklendi, sessizce çalışmıyor" sınıfının teşhis anahtarı budur.
+    """
+    parcalar = []
+    gecerli: BaseException | None = e
+    for _ in range(sinir):
+        if gecerli is None:
+            break
+        parcalar.append(f"{type(gecerli).__name__}: {gecerli}")
+        gecerli = gecerli.__cause__ or gecerli.__context__
+    return " ⇐ ".join(parcalar) or "?"
+
+
 # ── PETRİ MAKULLİK REDDİ (2026-08-06, sahip bildirimi) ────────────────────────────────────
 # Denetimin KENDİSİ ai_hub boru hattındadır (mikroservis yolunda da çalışsın diye — bkz.
 # ai_hub/inference_petri_dish/plausibility.py). Burada YALNIZ HTTP çevrimi yapılır.
@@ -2895,6 +2914,15 @@ async def analyze_scratch(
             except _ipd.ModelKurulumEksik as kurulum_hatasi:
                 # DAR eşleme (düşman-doğrulama: genel RuntimeError CUDA-OOM'u da
                 # 'model paketi gerekli' sanıyordu) — yalnız gerçek kurulum eksiği 503.
+                # ⚠️ SAHA DERSİ (2026-08-27): bu blok hatayı SESSİZCE yutuyordu. Kullanıcı
+                # "model paketi gerekli" görüyordu ama model paketi KURULUYDU; gerçek sebep
+                # (bağımlılık import'u) hiçbir yere yazılmadığı için sahada teşhis İMKANSIZDI.
+                # Artık kök neden zinciriyle loglanır (kullanıcı mesajı sade kalır).
+                logger.error(
+                    "SCRATCH KURULUM EKSİĞİ → 503. Kök neden: %s",
+                    _kok_neden_zinciri(kurulum_hatasi),
+                    exc_info=True,
+                )
                 raise HTTPException(status_code=503, detail=_SCRATCH_KURULUM_MSG) from kurulum_hatasi
         finally:
             try:
@@ -2982,3 +3010,114 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
     except Exception as e:
         logger.error(f"cat_organ inference error: {e}", exc_info=True)
         raise _ai_fail("Kedi organ analiz hatası", e)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AI HAZIRLIK SELF-TESTİ (2026-08-27, saha bulgusu)
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEDEN VAR: "Yara kapanma modeli bu kurulumda hazır değil" mesajı sahada, model
+# paketi KURULUYKEN çıktı. Sebep model eksikliği değil, modülün bir bağımlılığının
+# frozen EXE'de import edilememesiydi; hata hiçbir yere yazılmadığı için ne kullanıcı
+# ne destek gerçek nedeni görebildi. Tek bir uç yanlış teşhis üretiyordu.
+#
+# ⚠️ SINIF SORUNU (sahibin uyarısı): her YENİ AI modeli aynı sessiz kırılmayı
+# tekrarlayabilir — model paketi iner, kod gelir, ama bir transitif bağımlılık
+# frozen'a girmediği için modül ölü doğar ve kullanıcı "model paketi gerekli" görür.
+# Bu uç o sınıfı görünür kılar: her modül için (1) kodun import edilebilirliği,
+# (2) model dosyasının çözülebilirliği AYRI AYRI raporlanır.
+#
+# GÜVENLİK: uç auth-muaf (`/api/ai/` prefix'i) → dosya yolu/sistem detayı DÖNMEZ;
+# yalnız modül adı, durum ve hata TİPİ + kısa mesaj. Tam zincir sunucu log'una yazılır.
+#
+# MALİYET: varsayılan mod HAFİFTİR (find_spec + dosya varlığı, model YÜKLEMEZ).
+# `?derin=1` gerçek import dener — ölü-doğmuş modülü yakalayan tek mod budur; ağır
+# olduğu için istek üzerine çalışır ve canlı seans akışına girmez.
+_AI_MODUL_ENVANTERI = [
+    # (ad, import yolu, model göreli yolu | None)
+    ("landmark", "ai_hub.cat_landmark.inference_cat_landmark", None),
+    ("thermal", "ai_hub.cat_thermal.inference_cat_thermal", None),
+    ("segmentation", "ai_hub.cat_segmentation.inference_cat_segmentation", None),
+    ("cat_sound", "ai_hub.inference_cat_sound.inference_cat_sound", None),
+    ("cat_organ", "ai_hub.inference_cat_organ.catorgan_predictor", None),
+    ("reticulocytes", "ai_hub.feline_reticulocytes.inference_feline_reticulocytes", None),
+    ("kidney_ct", "ai_hub.inference_human_kidney_ct.inference_human_kidney_ct", None),
+    ("kidney_rna", "ai_hub.inference_human_kidney_rna.inference_human_kidney_rna", None),
+    ("histopath", "ai_hub.inference_renal_histopath_kmc.inference_renal_histopath_kmc", None),
+    ("em_kedi", "ai_hub.em_kedi.inference_em_kedi", None),
+    ("em_fantom", "ai_hub.inference_em_fantom.inference_em_fantom", None),
+    ("em_petri", "ai_hub.inference_em_petri.inference_em_petri", None),
+    (
+        "scratch",
+        "ai_hub.inference_paper_dilek_hoca.cell.cpn",
+        "ai_hub/inference_paper_dilek_hoca/ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt",
+    ),
+]
+
+
+def _modul_hazir_mi(import_yolu: str, derin: bool) -> tuple[str, str]:
+    """(durum, ayrıntı). derin=False → find_spec; derin=True → GERÇEK import."""
+    import importlib
+
+    try:
+        if derin:
+            importlib.import_module(import_yolu)
+            return "ok", ""
+        spec = importlib.util.find_spec(import_yolu)
+        return ("ok", "") if spec is not None else ("kod_yok", "modül bulunamadı")
+    except Exception as e:  # ImportError + modül-içi her hata
+        return "kod_hatali", _kok_neden_zinciri(e)
+
+
+def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
+    if not rel_yol:
+        return "gomulu", ""
+    try:
+        from ai_hub.xai_utils.pt_yolu import pt_coz
+
+        pt_coz(rel_yol)
+        return "ok", ""
+    except Exception as e:
+        return "model_yok", _kok_neden_zinciri(e)
+
+
+@ai_router.get("/api/ai/hazirlik")
+async def ai_hazirlik(derin: int = 0):
+    """AI modüllerinin gerçek durumu (kod + model AYRI) — destek/tanılama ucu.
+
+    derin=0 (varsayılan): hafif tarama. derin=1: gerçek import — ölü-doğmuş modülü
+    yakalar (frozen'a girmemiş bağımlılık), ilk çağrıda yavaştır.
+    """
+    derin_mi = bool(derin)
+    moduller = []
+    for ad, import_yolu, model_yolu in _AI_MODUL_ENVANTERI:
+        kod_durum, kod_ayrinti = await asyncio.to_thread(_modul_hazir_mi, import_yolu, derin_mi)
+        model_durum, model_ayrinti = await asyncio.to_thread(_model_hazir_mi, model_yolu)
+        hazir = kod_durum == "ok" and model_durum in ("ok", "gomulu")
+        if not hazir:
+            logger.warning(
+                "AI HAZIRLIK: %s HAZIR DEĞİL — kod=%s (%s) model=%s (%s)",
+                ad,
+                kod_durum,
+                kod_ayrinti or "-",
+                model_durum,
+                model_ayrinti or "-",
+            )
+        moduller.append(
+            {
+                "modul": ad,
+                "hazir": hazir,
+                "kod": kod_durum,
+                "model": model_durum,
+                # Kısa sebep: tip + ilk 200 karakter (yol/sistem detayı sızdırmaz).
+                "sebep": (kod_ayrinti or model_ayrinti or "")[:200],
+            }
+        )
+    hazir_sayisi = sum(1 for m in moduller if m["hazir"])
+    return {
+        "status": "success",
+        "derin": derin_mi,
+        "toplam": len(moduller),
+        "hazir": hazir_sayisi,
+        "eksik": [m["modul"] for m in moduller if not m["hazir"]],
+        "moduller": moduller,
+    }
