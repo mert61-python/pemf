@@ -1112,7 +1112,11 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       if (loadingRef.current || !cameraRef.current) return;
       loadingRef.current = true;
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, skipProcessing: true });
+        // shutterSound: false — canlı analiz döngüsü saniyeler arayla kare alır; her karede
+        // deklanşör sesi çalmak klinik ortamda rahatsız edici (saha bildirimi 2026-08-27).
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.5, skipProcessing: true, shutterSound: false,
+        });
         const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
         if (shrunk.base64) {
           const fd = new FormData();
@@ -3325,7 +3329,10 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       if (liveLoadingRef.current || !cameraRef.current) return;
       liveLoadingRef.current = true;
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, skipProcessing: true });
+        // shutterSound: false — canlı organ takibi ~3,5 sn'de bir kare alır (saha bildirimi).
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.6, skipProcessing: true, shutterSound: false,
+        });
         const shrunk = photo?.uri ? await shrinkForUpload(photo.uri) : { uri: "", base64: null };
         if (shrunk.base64) {
           const fd = new FormData();

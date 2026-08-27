@@ -6,6 +6,16 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## mobile 2.3.27 — 2026-08-27 (🔇 AI Pro: kare yakalama sessiz)
+
+- **AI Pro seansinda her karede calan DEKLANSOR SESI kaldirildi** (saha bildirimi). Otonom
+  seans ~3 saniyede bir olcum karesi alir; sistem her karede fotograf-cekim sesi caliyordu —
+  klinikte hem operatoru rahatsiz ediyor hem hayvani urkutuyordu. Yakalanan sey bir fotograf
+  degil OLCUM karesidir; artik sessiz alinir. Ayni duzeltme canli kamera modlarinda da
+  gecerli (yuz agrisi canli takibi ve kedi organ canli takibi).
+- Not: Windows istemcisinde bu ses zaten yoktu (orada kareler klinik sunucu kamerasindan
+  alinir, telefon kamerasi kullanilmaz) — dogrulandi.
+
 ## app 1.9.29 — 2026-08-27 (⚡ Yara Kapanma: ilk analiz artik beklemiyor)
 
 - **Yara Kapanma modelinin ilk analizi belirgin hizlandi.** Model (872 MB) artik uygulama

@@ -551,7 +551,13 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       if (!runningRef.current && !hazirlikRef.current) return;
       inFlightRef.current = true;
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
+        // ⚠️ shutterSound: false — SAHA BİLDİRİMİ (2026-08-27): AI Pro tedavi sürerken kare
+        // her ~3 sn'de bir alınıyor ve sistem HER karede deklanşör sesi çalıyordu. Klinikte
+        // hasta üzerinde süren bir seansta bu hem rahatsız edici hem de hayvanı ürkütür.
+        // Yakalama SESSİZ olmalı: bu bir fotoğraf çekimi değil, ölçüm karesidir.
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.5, base64: true, skipProcessing: true, shutterSound: false,
+        });
         if (photo?.base64) {
           const fd = new FormData();
           fd.append("image_base64", photo.base64);
