@@ -1,27 +1,27 @@
 {
   "schema": 2,
-  "version": "1.9.27",
-  "tag": "client-app-v1.9.27",
+  "version": "1.9.28",
+  "tag": "client-app-v1.9.28",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.27/base.zip",
-      "sha256": "4c3d5b6b621fd76616e6c322e67a2c5b475aefb63a27adfd4868aed7a07ba536",
-      "size": 1558983986,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.28/base.zip",
+      "sha256": "e4acbdb0e3f11eb7b8b810bbf63703280841469c55528a39734429f58a1d0c35",
+      "size": 1568741183,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.27/base-app.zip",
-        "sha256": "1bb79548612e2e0f2e52fe2eabf818c7ced6638b765d30f070db7ed418614212",
-        "size": 81258716,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.28/base-app.zip",
+        "sha256": "8a3ed351dc9798750c280d5551535fdf0fdf5f762d4cc6e1d1f78e0855ada245",
+        "size": 81290429,
         "kind": "zip"
       },
       "deps": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.27/base-deps.zip",
-        "sha256": "ce9f9dfcca50e228144af4937414c23a3781546d809562ab39dd1c94cfc356bc",
-        "size": 1477725292,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.28/base-deps.zip",
+        "sha256": "3b39061b2286e06e98f3138876cd7f23328414ef64733d860e7f57755e1ea30e",
+        "size": 1487450776,
         "kind": "zip"
       },
       "rollout": 100
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.27/base.zip",
-    "sha256": "4c3d5b6b621fd76616e6c322e67a2c5b475aefb63a27adfd4868aed7a07ba536",
-    "size": 1558983986,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.28/base.zip",
+    "sha256": "e4acbdb0e3f11eb7b8b810bbf63703280841469c55528a39734429f58a1d0c35",
+    "size": 1568741183,
     "kind": "zip"
   },
   "model_parts": {

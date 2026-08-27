@@ -26,6 +26,9 @@
     (tum testler paketlenmemis ortamda kosuyor, orada bagimlilik hep var).
   - Kurulum-eksigi hatasi artik **kok nedeniyle loglanir** (kullaniciya gosterilen
     metin sade kalir) — destek sahadaki nedeni ilk bakista gorebilir.
+Paket kimliği (`buildId`): `8a3ed351dc97`. Monolit `base.zip` sha: `e4acbdb0e3f1`.
+Deps katmanı: `3b39061b2286` (paket metadata dosyaları bu katmana girdi).
+
 - Kullanici etkisi: guncelleme sonrasi Arastirma profilinde **Yara Kapanma (Scratch)**
   modulu calisir. Diger 12 AI modulu bu arizadan etkilenmemisti (dogrulandi: 13/13).
 
