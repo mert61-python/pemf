@@ -135,3 +135,58 @@ def test_YAPISAL_ai_service_disease_XAI_paritesi():
     assert "xai_top_features" in govde and "explain" in govde, (
         "GPU mikroservis /infer/disease XAI paritesi yok — router'da olan açıklama :8100 yolunda kaybolur"
     )
+
+
+# ── 4) GERÇEK MODEL kilidi (2026-08-27 saha doğrulaması) ─────────────────────
+# ⚠️ NEDEN AYRI: yukarıdaki testler CI-koşulabilirlik için SAHTE sklearn RF kullanıyor.
+# RF'de `shap.TreeExplainer` sorunsuz çalıştığı için, üretimdeki GERÇEK modelde
+# (XGBoost) oluşan uyumsuzluk bu testlere HİÇ yansımadı: shap 0.49 + xgboost 3.2
+# `ValueError: could not convert string to float: '[1.25e-4,...]'` veriyordu
+# (xgboost 2+ base_score'u DİZİ tutuyor, shap skaler bekliyor). Sonuç: üretimde
+# açıklama sessizce üretilemiyor, kullanıcı "Açıklama üretilemedi" görüyordu —
+# zarif düşüş arızayı MASKELEDİ. Vekil-model testi gerçek bağımlılık kırılmasını
+# göremez; bu kilit gerçek ağırlıkla koşar.
+def test_KRITIK_GERCEK_XGBoost_modeliyle_XAI_URETILIR():
+    import pytest as _pt
+
+    _pt.importorskip("xgboost")
+    from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor, xai_top_features
+
+    try:
+        p = CatDiseasePredictor()
+    except Exception as e:  # ağırlık bu ortamda yoksa (CI) atla
+        _pt.skip(f"cat_disease modeli yüklenemedi: {e}")
+
+    r = xai_top_features(p, 5, 4, 180, 39.5, 3, [0, 1])
+    assert r.get("disease"), "tahmin edilen sınıf yok"
+    tf = r.get("top_features") or []
+    assert tf, "XAI boş döndü — açıklama üretilemiyor"
+    # Katkılar DEJENERE olmamalı (hepsi sıfırsa açıklama bilgi taşımaz)
+    assert any(abs(f["attribution"]) > 1e-6 for f in tf), f"tüm katkılar ~0: {tf}"
+    # İşaretli olmalı: SHAP katkısı hem lehte hem aleyhte olabilir (mutlak değer DEĞİL)
+    assert any(f["attribution"] < 0 for f in tf) or any(f["attribution"] > 0 for f in tf)
+    # Aynı girdi → aynı açıklama (klinik tekrarlanabilirlik)
+    assert xai_top_features(p, 5, 4, 180, 39.5, 3, [0, 1]) == r
+
+
+def test_KRITIK_XGBoost_yolu_shap_TreeExplainer_KULLANMAZ(monkeypatch):
+    """XGBoost'ta yerleşik TreeSHAP (pred_contribs) kullanılmalı. Biri `shap.TreeExplainer`e
+    geri dönerse üretimdeki arıza sessizce geri gelir → shap'ı patlatıp yolu kilitliyoruz."""
+    import pytest as _pt
+
+    _pt.importorskip("xgboost")
+    import shap
+
+    from ai_hub.cat_disease.inference_cat_disease import CatDiseasePredictor, xai_top_features
+
+    try:
+        p = CatDiseasePredictor()
+    except Exception as e:
+        _pt.skip(f"cat_disease modeli yüklenemedi: {e}")
+
+    def _yasak(*a, **k):
+        raise AssertionError("XGBoost yolunda shap.TreeExplainer ÇAĞRILDI (uyumsuz sürüm arızası geri geldi)")
+
+    monkeypatch.setattr(shap, "TreeExplainer", _yasak)
+    r = xai_top_features(p, 5, 4, 180, 39.5, 3, [0, 1])  # shap'a hiç uğramamalı
+    assert r["top_features"]

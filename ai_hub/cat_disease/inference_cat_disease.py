@@ -157,28 +157,49 @@ def xai_top_features(predictor, age, weight, hr, temp, duration, symptom_indices
 
     Doner: {"disease": <top-1 sinif>, "top_features": [{"feature", "attribution"}, ...]}
     (attribution isaretli: pozitif -> bu sinif lehine katki).
-    """
-    import shap
 
+    ⚠️ XGBoost'ta YERLESIK TreeSHAP kullanilir (`pred_contribs`), shap.TreeExplainer DEGIL.
+    OLCULDU (saha dogrulamasi 2026-08-27): shap 0.49 + xgboost 3.2 UYUMSUZ —
+    `shap.TreeExplainer(model)` kurulumda
+    `ValueError: could not convert string to float: '[1.25e-4,...]'` ile patliyor
+    (xgboost 2+ base_score'u DIZI olarak saklıyor, shap'in XGBTreeModelLoader'i skaler
+    bekliyor). Sonuc: cat_disease aciklamasi URETIMDE SESSIZCE olusmuyordu (zarif dusus
+    "Aciklama uretilemedi" deyip geciyordu). XGBoost'un kendi C++ TreeSHAP'i AYNI
+    matematiktir (exact Tree SHAP), surum-uyumludur ve daha hizlidir.
+    Diger agac modelleri (sklearn RF vb.) icin shap.TreeExplainer yolu KORUNUR.
+    """
     X_raw = predictor._encode(age, weight, hr, temp, duration, symptom_indices)
     X_scaled = predictor.scaler.transform(X_raw).astype(np.float32)
     probs = predictor.model.predict_proba(X_scaled)[0]
     cls = int(np.argmax(probs))
 
-    # Explainer'i predictor uzerinde cache'le (istek basina yeniden kurulmasin).
-    expl = getattr(predictor, "_shap_explainer", None)
-    if expl is None:
-        expl = shap.TreeExplainer(predictor.model)
-        try:
-            predictor._shap_explainer = expl
-        except Exception:
-            pass  # cache'lenemezse her cagri yeniden kurar (davranis ayni)
+    booster = getattr(predictor.model, "get_booster", None)
+    if callable(booster):
+        import xgboost as _xgb
 
-    sv = expl.shap_values(X_scaled)
-    sv_arr = np.stack(sv, axis=-1) if isinstance(sv, list) else np.asarray(sv)
-    if sv_arr.ndim == 2:
-        sv_arr = sv_arr[..., None]                                  # (N, F, 1)
-    attr = sv_arr[0, :, cls if cls < sv_arr.shape[-1] else 0]       # (F,)
+        katki = np.asarray(booster().predict(_xgb.DMatrix(X_scaled), pred_contribs=True))
+        # (N, sinif, F+1) cok-sinifli | (N, F+1) ikili — SON kolon taban degeri (bias)
+        if katki.ndim == 3:
+            attr = katki[0, cls if cls < katki.shape[1] else 0, :-1]
+        else:
+            attr = katki[0, :-1]
+    else:
+        import shap
+
+        # Explainer'i predictor uzerinde cache'le (istek basina yeniden kurulmasin).
+        expl = getattr(predictor, "_shap_explainer", None)
+        if expl is None:
+            expl = shap.TreeExplainer(predictor.model)
+            try:
+                predictor._shap_explainer = expl
+            except Exception:
+                pass  # cache'lenemezse her cagri yeniden kurar (davranis ayni)
+
+        sv = expl.shap_values(X_scaled)
+        sv_arr = np.stack(sv, axis=-1) if isinstance(sv, list) else np.asarray(sv)
+        if sv_arr.ndim == 2:
+            sv_arr = sv_arr[..., None]                              # (N, F, 1)
+        attr = sv_arr[0, :, cls if cls < sv_arr.shape[-1] else 0]   # (F,)
 
     order = np.argsort(-np.abs(attr))[: int(top_n)]
     return {
