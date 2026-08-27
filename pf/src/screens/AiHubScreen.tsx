@@ -2973,7 +2973,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
       </View>
 
       <TouchableOpacity style={styles.xaiToggle} accessibilityRole="switch" accessibilityState={{ checked: isiHaritasi }} onPress={() => setIsiHaritasi(!isiHaritasi)}>
-        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} 🔍 Isı haritası üret (3-model konsensus + kararsızlık — CPU'da dakikalar sürebilir)</Text>
+        <Text style={styles.xaiToggleText}>{isiHaritasi ? "☑" : "☐"} {"🔍 Isı haritası üret (3-model konsensus + kararsızlık — CPU'da dakikalar sürebilir)"}</Text>
       </TouchableOpacity>
 
       <View style={styles.analyzeBtn}>
