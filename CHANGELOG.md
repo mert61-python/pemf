@@ -19,6 +19,9 @@
   konsensus + model-kararsizligi haritalari, RNA gen katkilari (isaretli), EM duyarlilik
   metasi, CKD ozellik katkilari, yuz-agrisi populasyon bantlari, organ guven dokumu.
   12'si sorunsuz; yalniz yukaridaki ariza bulundu ve duzeltildi.
+Paket kimliği (`buildId`): `5b5b89b74f97`. Monolit `base.zip` sha: `8894aa98945b`.
+Deps katmanı DEĞİŞMEDİ (`3b39061b2286`) — klinikler yalnız ~81 MB uygulama katmanını indirir.
+
 - Test tarafinda kalici koruma: hastalik aciklamasi artik GERCEK model agirligiyla sinaniyor
   (onceki kilitler CI kolayligi icin vekil bir model kullaniyordu ve bu yuzden gercek surum
   uyumsuzlugunu goremiyordu).
