@@ -6,6 +6,23 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.30 — 2026-08-27 (🔍 Hastalik analizinde aciklama artik gercekten uretiliyor)
+
+- **Kedi Hastalik modulunde "Aciklama uretilemedi" arizasi giderildi.** Analiz calisiyordu
+  ama "karari surukleyen ozellikler" dokumu URETIMDE SESSIZCE olusmuyordu: kullanilan SHAP
+  kutuphanesi, model kutuphanesinin yeni surumuyle uyumsuzdu. Artik model kutuphanesinin
+  KENDI yerlesik hesaplayicisi kullaniliyor — ayni matematik, daha hizli, surum-bagimsiz.
+  Ornek cikti (gercek modelle dogrulandi): Gastroenteritis icin "sikayet suresi +3,29",
+  "ishal -1,60", "kilo -0,87" — isaretli ve tekrarlanabilir.
+- **Tum aciklanabilir-AI yuzeyleri gercek girdilerle bastan sona dogrulandi (13 yuzey):**
+  termal / retikulosit / bobrek CT / kedi sesi / yara kapanma isi haritalari, histopatolojide
+  konsensus + model-kararsizligi haritalari, RNA gen katkilari (isaretli), EM duyarlilik
+  metasi, CKD ozellik katkilari, yuz-agrisi populasyon bantlari, organ guven dokumu.
+  12'si sorunsuz; yalniz yukaridaki ariza bulundu ve duzeltildi.
+- Test tarafinda kalici koruma: hastalik aciklamasi artik GERCEK model agirligiyla sinaniyor
+  (onceki kilitler CI kolayligi icin vekil bir model kullaniyordu ve bu yuzden gercek surum
+  uyumsuzlugunu goremiyordu).
+
 ## mobile 2.3.27 — 2026-08-27 (🔇 AI Pro: kare yakalama sessiz)
 
 - **AI Pro seansinda her karede calan DEKLANSOR SESI kaldirildi** (saha bildirimi). Otonom
