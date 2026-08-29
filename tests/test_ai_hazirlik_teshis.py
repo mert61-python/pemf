@@ -111,7 +111,15 @@ def test_KRITIK_hazirlik_ucu_KOD_ve_MODEL_ayri_raporlar(client, monkeypatch):
     # "saglam" GERÇEK bir ağırlık yolu alır; ayrık-teşhis sözleşmesi (kod ≠ model) korunur.
     from servers.ai_router import _AI_MODUL_ENVANTERI as _gercek
 
-    gercek_model = next(m for _a, _i, m in _gercek if m)
+    # ⚠️ ÇÖZÜLEBİLEN bir ağırlık seçilir, envanterdeki İLK yol değil (CI'da ölçüldü): ağırlıkların
+    # klonlanmadığı ortamda ilk yol çözülemez, "saglam" modül HAZIR olamaz ve kapı, ilgisi olmayan
+    # bir sebeple kırmızı yanar. Sözleşme (kod ≠ model ayrımı) ortamdan bağımsızdır; testin onu
+    # ölçebilmek için yalnızca gerçekten var olan TEK bir ağırlığa ihtiyacı vardır.
+    from utils.model_downloader import find_installed_model
+
+    gercek_model = next((m for _a, _i, m in _gercek if m and find_installed_model(m)), None)
+    if gercek_model is None:
+        pytest.skip("bu ortamda hiçbir model ağırlığı kurulu değil — 'saglam' senaryosu kurulamaz")
     monkeypatch.setattr(
         air,
         "_AI_MODUL_ENVANTERI",

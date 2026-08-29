@@ -250,18 +250,41 @@ def _cp1254_uyumlu(karakter: str) -> bool:
         return False
 
 
-@pytest.mark.parametrize("paket", _METADATA_SART)
-def test_paketler_bu_ortamda_gercekten_KURULU(paket):
-    """Liste hayali olmasın: spec'in toplayacağı paketler build makinesinde kurulu olmalı."""
+def _paket_kurulu(ad: str) -> bool:
     from importlib.metadata import PackageNotFoundError, version
 
     try:
-        assert version(paket)
+        return bool(version(ad))
     except PackageNotFoundError:
-        pytest.fail(
-            f"'{paket}' bu ortamda kurulu değil — spec onu toplayamaz ve frozen EXE'de "
-            f"ilgili yol sessizce bozulur (build makinesinde `pip install {paket}`)"
-        )
+        return False
+
+
+def _build_makinesi_mi() -> bool:
+    """Spec'i GERÇEKTEN çalıştırabilecek ortam mı?
+
+    Kapının sorusu "spec bu paketi toplayabilecek mi" — bu sorunun anlamı yalnız paketi
+    toplayacak makinede vardır. PyInstaller'ın varlığı bunun dar ve doğrulanmış işaretidir:
+    `requirements-test.txt` onu KURMAZ (ölçüldü), dolayısıyla CI bu daldan geçmez; build
+    makinesinde ise zorunlu olarak kuruludur.
+
+    ⚠️ Ortamı "CI mi" diye sormaktan KASITLI olarak kaçınılıyor: `CI` bayrağı, kapıyı kapatmanın
+    kolay yolu olur ve zamanla gerçek eksikleri de gizler. Burada ölçülen şey ortamın adı değil,
+    YETENEĞİ.
+    """
+    return _paket_kurulu("pyinstaller")
+
+
+@pytest.mark.parametrize("paket", _METADATA_SART)
+def test_paketler_bu_ortamda_gercekten_KURULU(paket):
+    """Liste hayali olmasın: spec'in toplayacağı paketler build makinesinde kurulu olmalı."""
+    if _paket_kurulu(paket):
+        return
+    if not _build_makinesi_mi():
+        pytest.skip(f"'{paket}' yok ve bu ortam paketleme yapmıyor (PyInstaller kurulu değil)")
+    pytest.fail(
+        f"'{paket}' bu ortamda kurulu değil — spec onu toplayamaz ve frozen EXE'de "
+        f"ilgili yol sessizce bozulur (build makinesinde `pip install {paket}`)"
+    )
 
 
 def test_urun_kaynaginda_calisma_ani_pip_cagrisi_YOK():

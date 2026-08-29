@@ -35,6 +35,28 @@ from servers.ai_router import _AI_MODUL_ENVANTERI, _model_hazir_mi, _xai_zinciri
 
 _KOK = Path(__file__).resolve().parents[1]
 
+
+def _model_agaci_kurulu() -> bool:
+    """Bu ortamda AI ağırlık ağacı kurulu mu? Ölçüt: envanterin YARIDAN FAZLASI çözülüyor.
+
+    Dosya sistemine bakan bir kontrol, **yanlış yazılmış bir yol** ile **kurulmamış bir ağırlık**
+    arasını tek başına ayırt edemez — ikisi de "dosya yok" der. Ayrımı ortamın BÜTÜNÜNE bakarak
+    yapıyoruz.
+
+    ⚠️ ÇOĞUNLUK ÖLÇÜTÜ KASITLI — iki bariz alternatif de denendi ve İKİSİ DE ÖLÇÜLEREK ELENDİ:
+      - "hiçbiri çözülmüyorsa eksik" (any): CI'da tek bir küçük ağırlık depoda bulunduğu için
+        devreye girmedi; 14 modül SAHTE KIRMIZI yandı (2026-08-29 CI koşusu).
+      - "hepsi çözülüyorsa tam" (all): envantere YANLIŞ bir yol eklendiğinde ortam "eksik"
+        sayıldı ve kapı, yakalamak için var olduğu hatayı ATLADI (mutasyon: 17 skip).
+    Çoğunluk ikisini de eler: tek bir hatalı yol çoğunluğu bozmaz (hata GÖRÜNÜR kalır), ağırlığı
+    klonlamayan bir ortam ise çoğunluğu asla sağlayamaz (sahte kırmızı DOĞMAZ).
+    """
+    from utils.model_downloader import find_installed_model
+
+    cozulen = sum(1 for _a, _i, m in _AI_MODUL_ENVANTERI if find_installed_model(m))
+    return cozulen * 2 > len(_AI_MODUL_ENVANTERI)
+
+
 # Envanterde MUTLAKA bulunması gereken uçlar (denetim #03(c) — eklenmeden önce yoktular).
 _ZORUNLU_MODULLER = {"cat_disease", "kidney_disease"}
 
@@ -93,13 +115,12 @@ def test_KRITIK_gomulu_durumu_HAZIR_saymaz(monkeypatch):
 def test_envanterdeki_her_model_yolu_bu_ortamda_COZULEBILIYOR(ad, _imp, model):
     """Yollar hayali olmasın: yanlış yazılmış bir yol SAHTE kırmızı üretir ve kapı güvenilmez olur.
 
-    (Bu test geliştirme/build makinesinde model kökleri kuruluyken anlamlıdır; ağırlıkların hiç
-    kurulmadığı bir ortamda tümü atlanır.)
+    (Yalnız ağırlık ağacı kurulu makinede anlamlıdır — gerekçe: `_model_agaci_kurulu`.)
     """
     from utils.model_downloader import find_installed_model
 
-    if not any(find_installed_model(m) for _a, _i, m in _AI_MODUL_ENVANTERI):
-        pytest.skip("bu ortamda hiçbir model ağırlığı kurulu değil")
+    if not _model_agaci_kurulu():
+        pytest.skip("AI ağırlık ağacı bu ortamda kurulu değil — eksik ağırlık ile yanlış yol ayırt edilemez")
     assert find_installed_model(model), (
         f"'{ad}' için yazılan yol çözülemiyor: {model} — envanterdeki yol YANLIŞ olabilir "
         f"(sahte kırmızı, kapıyı güvenilmez yapar). Gerçek dosya konumunu doğrulayın."
@@ -214,6 +235,12 @@ def test_envanter_yollari_model_paketi_listeleriyle_TUTARLI():
     Envanter (frozen'da build_tools yok diye) açık yazılır; bu test tek-kaynak sapmasını
     yakalar — paket listesinden çıkarılmış bir ağırlığa kapı hâlâ bakıyorsa ya da tersi.
     """
+    # ⚠️ Üçüncü kategori (aşağıdaki `gomulu_kok`) dosya sistemine bakar; ağaç eksikken sevk
+    # EDİLEN bir ağırlık "hiçbir yerde yok" görünür (CI'da ölçüldü). Kategori ayrımı ancak
+    # ağaç tamken yapılabilir.
+    if not _model_agaci_kurulu():
+        pytest.skip("AI ağırlık ağacı bu ortamda kurulu değil — gömülü/paketli ayrımı ölçülemez")
+
     sys.path.insert(0, str(_KOK / "build_tools"))
     try:
         mmz = importlib.import_module("make_model_zip")
