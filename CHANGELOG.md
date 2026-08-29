@@ -6,6 +6,33 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.34 — 2026-08-29 (📶 Ayni WiFi'de otomatik baglanma + uzaktan erisim kilidi)
+
+- **"Ayni WiFi'de oldugu halde telefon otomatik baglanmiyor" duzeltildi** (saha bildirimi).
+  Cihaz acilirken kendi PEMF-Gateway hotspot'unu baslatiyor; Windows o ag arayuzunu yaklasik
+  yarim dakika sonra olusturuyor. Sistem bunu gorunce ag duyurusunu (mDNS) KAPATIP yeniden
+  kuruyordu ve duyuru birkac saniye ortadan kalkiyordu. Telefonun arama penceresi de tam o
+  kadar — yani cihaz tam kullanicinin denedigi anda gorunmez oluyordu. Hotspot bosta kalinca
+  Windows onu uyutup uyandirdigi icin ayni kesinti gun icinde tekrar tekrar yasaniyordu
+  (bir gunde 21 kez olculdu).
+  ⚠️ Telefonun hotspot'a bagli olmasi GEREKMIYORDU: hotspot yalnizca VAR OLMAKLA ev
+  WiFi'sindeki keşfi kesiyordu.
+  Iki yerden duzeltildi: (a) bir ag arayuzu KAYBOLDUGUNDA duyuru artik yeniden kurulmuyor —
+  kalan aglar zaten calisiyor; (b) acilistan sonraki ilk dakikada arayuzler siklikla
+  kontrol ediliyor, boylece hotspot belirir belirmez is bitiyor ve kullanici telefonu
+  denemeden once sistem kararli hale geliyor.
+
+- **Yeniden kurulum sonrasi UZAKTAN ERISIM kalici olarak bozulabiliyordu.** Cihazin bulut
+  kimlik anahtari iki ayri yerde tutulabiliyordu; kaldirma birini siliyor, digeri kaliyordu.
+  Ikisi ayrisinca cihaz buluta kaldirma ONCESI ve SONRASI farkli anahtar gonderiyor, bulut
+  ilk anahtara muhurlendigi icin sonrakini KALICI olarak reddediyordu — uzaktan erisim bir
+  daha acilmiyordu (bu makinede 269 kez olculdu). Artik kaldirmada KORUNAN kaynak tek
+  yetkilidir; ayrisma tespit edilirse gunluge yazilir.
+  Not: 1.9.33 anahtari kalici hale getirmisti; bu surum "hangi kopya gecerli" sorusunu da
+  kapatiyor. Zaten bozulmus bir cihazin bulut kaydinin bir kez sifirlanmasi gerekir.
+
+- 10 yeni otomatik kontrol (4'u davranissal); bes mutasyonun besi de KIRMIZI dogrulandi.
+
 ## launcher 1.9.42 — 2026-08-29 (🌐 Anlasilir ag hatasi + temiz kaldirma)
 
 - **Ag hatalari artik ne yapmaniz gerektigini soyluyor.** Kurulum sirasinda internet ya da DNS
