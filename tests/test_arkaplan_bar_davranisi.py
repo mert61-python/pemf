@@ -34,6 +34,12 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
     # o bildirim satırı alınmazsa `ReferenceError` olur — ilk denemede tam bu oldu.
     durum = next(s for s in ham.splitlines() if "let prefetchTimer" in s)
     parcalar = [durum.strip()]
+    # ⚠️ `renderPrefetch` artık kartın altına Duraklat/İptal düğmelerini kuran `bgDenetimKur`u
+    # çağırıyor (saha bildirimi 2026-08-28). BU DOSYANIN KONUSU çubuk/yüzde/ETA davranışıdır;
+    # düğmeler `tests/test_launcher_indirme_denetimi.py`de ayrıca kilitlenir. Burada gerçek
+    # fonksiyonu çıkarmak `invoke`/`t()`/`bgButonlariYaz` bağımlılıklarını da sürüklerdi ve
+    # testi ölçtüğü şeyden uzaklaştırırdı → bilinçli STUB.
+    parcalar.append("function bgDenetimKur(_box) {}  // stub: dugmeler ayri dosyada kilitli")
     for ad in ("function stopPrefetchPoll", "function renderPrefetch", "function startPrefetchPoll"):
         i = ham.index(ad)
         # Fonksiyon sonunu bul: aynı girintideki kapanış süslü parantezi

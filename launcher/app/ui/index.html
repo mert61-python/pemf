@@ -241,6 +241,19 @@
         min-width: 46px; text-align: right; }
       #notice .bgsub { margin-top: 6px; font-size: 12px; color: var(--muted);
         font-variant-numeric: tabular-nums; }
+      /* Arka plan indirmesi denetimi (saha bildirimi 2026-08-28): 1,4 GB inerken kullanıcının
+         durdurma yolu yoktu. Düğmeler ilerleme satırının altında, ikincil ağırlıkta durur —
+         "Başlat"la yarışmasınlar. */
+      /* Teknik hata ayrıntısı — kullanıcı cümlesinin ALTINDA, ikincil (destek için korunur). */
+      #error .errdetail { margin-top: 8px; font-size: 11px; opacity: 0.72; word-break: break-word; }
+      #notice .bgact { display: flex; gap: 8px; margin-top: 10px; }
+      #notice .bgbtn { appearance: none; cursor: pointer; font: inherit; font-size: 12px;
+        font-weight: 600; padding: 6px 14px; border-radius: 8px; color: var(--muted);
+        background: var(--surface2); border: 1px solid var(--line);
+        transition: color .15s ease, border-color .15s ease, background .15s ease; }
+      #notice .bgbtn:hover { color: var(--text); border-color: var(--teal-d); background: var(--surface); }
+      #notice .bgbtn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+      #notice .bgbtn-danger:hover { color: #fca5a5; border-color: #b91c1c; }
 
       /* progress */
       .pct { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; margin: 2px 0 12px;
@@ -671,6 +684,16 @@
           selfUpdateFailed: "Başlatıcı güncellemesi tamamlanamadı — uygulama normal açılıyor. Bir sonraki açılışta yeniden denenecek.",
           rtRecall: "⚠️ ÖNEMLİ GÜVENLİK GÜNCELLEMESİ bekliyor. Bu sürüm artık desteklenmiyor; uygulamayı KAPATIP AÇIN ki güncelleme kurulsun. Seans sürüyorsa bitmesini bekleyin.",
           rtBgPrep: "Hazırlanıyor…",
+          // Arka plan indirmesi kullanıcı denetimi (saha bildirimi 2026-08-28).
+          bgPause: "Duraklat", bgResume: "Devam et", bgCancel: "İptal",
+          // Teknik hata metinlerinin kullanıcı karşılığı (saha bildirimi 2026-08-29).
+          errDns: "İnternet bağlantısı kurulamadı — sunucu adresi çözümlenemedi. Wi-Fi/ağ bağlantınızı kontrol edip tekrar deneyin. Bağlantı varsa birkaç dakika sonra yeniden deneyin.",
+          errTimeout: "Bağlantı zaman aşımına uğradı. Ağınız yavaş ya da geçici olarak kesilmiş olabilir; tekrar deneyin.",
+          errSunucu: "Güncelleme sunucusuna şu an ulaşılamıyor. Bağlantınızla ilgili değil; kısa süre sonra tekrar deneyin.",
+          errDisk: "Diskte yeterli yer yok. Yer açıp tekrar deneyin.",
+          bgCancelConfirm: "İndirmeyi iptal etmek istiyor musunuz?\n\nŞu ana kadar inen kısım SİLİNİR ve güncelleme bir sonraki açılışta BAŞTAN indirilir.\n\nSadece ara vermek istiyorsanız \"Duraklat\" kullanın — inen kısım korunur ve kaldığı yerden devam eder.",
+          rtBgPaused: "Güncelleme indirmesi duraklatıldı — inen kısım korundu, \"Devam et\" ile kaldığı yerden sürer.",
+          rtBgCancelled: "Güncelleme indirmesi iptal edildi — bir sonraki açılışta yeniden denenecek.",
           rtRollback: "Yeni sürüm açılamadı; önceki çalışan sürüme geri dönüldü. Uygulama kullanılabilir.",
           rtRollbackFail: "Yeni sürüm açılamadı ve geri alma tamamlanamadı. Lütfen \"Onar\" ile kurulumu yenileyin.",
           // ── Giriş (Supabase) ──
@@ -749,6 +772,14 @@
           selfUpdateFailed: "Launcher update could not be completed — the app is opening normally. It will be retried on the next launch.",
           rtRecall: "⚠️ IMPORTANT SAFETY UPDATE pending. This version is no longer supported; please CLOSE AND REOPEN the app so the update installs. If a session is running, wait for it to finish.",
           rtBgPrep: "Preparing…",
+          bgPause: "Pause", bgResume: "Resume", bgCancel: "Cancel",
+          errDns: "Could not reach the internet — the server address could not be resolved. Check your Wi-Fi/network and try again. If you are online, retry in a few minutes.",
+          errTimeout: "The connection timed out. Your network may be slow or briefly interrupted; please try again.",
+          errSunucu: "The update server is unreachable right now. This is not about your connection; try again shortly.",
+          errDisk: "Not enough disk space. Free up space and try again.",
+          bgCancelConfirm: "Cancel the download?\n\nThe part downloaded so far will be DELETED and the update will start OVER on the next launch.\n\nIf you only want a break, use \"Pause\" — the downloaded part is kept and resumes where it left off.",
+          rtBgPaused: "Update download paused — the downloaded part is kept; \"Resume\" continues where it left off.",
+          rtBgCancelled: "Update download cancelled — it will be retried on the next launch.",
           rtRollback: "The new version failed to start; rolled back to the previous working version. The app is usable.",
           rtRollbackFail: "The new version failed to start and the rollback could not finish. Please use \"Repair\" to reinstall.",
           // ── Sign in (Supabase) ──
@@ -979,9 +1010,41 @@
       }
       /** Şu an görünen ekran (arka plandaki manifest işi kullanıcının ekranını ÇALMASIN diye). */
       function curScreen() { return SCREENS.find((s) => !$(s).hidden) || null; }
+      /// Teknik hata metnini kullanıcının ANLAYIP EYLEME ÇEVİREBİLECEĞİ bir cümleye dönüştür.
+      ///
+      /// ⚠️ SAHA BİLDİRİMİ 2026-08-29: klinik ekranında ham metin görünüyordu —
+      ///   "indirme aktarımı başarısız: https://…/base-deps.zip: Dns Failed: resolve dns name
+      ///    'github.com:443': Bilinen böyle bir ana bilgisayar yok. (os error 11001)"
+      /// Bu cümle (a) ne yapılacağını söylemez, (b) "aktarım başarısız" ifadesiyle sorunu
+      /// SUNUCUDA sandırır — oysa sebep neredeyse her zaman yereldir (Wi-Fi düştü, DNS yanıtsız).
+      /// Teknik ayrıntı SİLİNMEZ, ikinci satıra alınır: destek mühendisinin ona ihtiyacı var.
+      function hataCumlesi(msg) {
+        const m = String(msg);
+        const x = t();
+        if (/ağ adı çözümlenemedi|Dns Failed|dns error|resolve dns name/i.test(m)) return x.errDns;
+        if (/zaman aşımı|timed out|timeout|os error 10060/i.test(m)) return x.errTimeout;
+        if (/HTTP 5\d\d|HTTP 429|HTTP 408/i.test(m)) return x.errSunucu;
+        if (/disk|yer kalmadı|No space|os error 112/i.test(m)) return x.errDisk;
+        return "";
+      }
+
       function fail(msg) {
-        $("error").textContent = String(msg);
-        $("error").hidden = false;
+        const kutu = $("error");
+        kutu.textContent = "";
+        const anlamli = hataCumlesi(msg);
+        if (anlamli) {
+          const p = document.createElement("div");
+          p.textContent = anlamli;
+          kutu.appendChild(p);
+          // Teknik ayrıntı KORUNUR (destek için) ama ikincil ağırlıkta.
+          const d = document.createElement("div");
+          d.className = "errdetail";
+          d.textContent = String(msg);
+          kutu.appendChild(d);
+        } else {
+          kutu.textContent = String(msg);
+        }
+        kutu.hidden = false;
       }
       function clearErr() { $("error").hidden = true; }
 
@@ -1006,9 +1069,94 @@
       // Rust tarafı ayrı bir kanala yazar (`get_prefetch_progress`) → sürmekte olan bir
       // kurulum/onarım ile karışmaz.
       let prefetchTimer = null, prefetchSeen = false, prefetchDl = { what: "", done: 0, t: 0, speed: 0 };
+      // Arka plan indirmesi için kullanıcı kararları (saha bildirimi 2026-08-28).
+      // ⚠️ `prefetchDuraklatildi` OTURUM boyunca korunur: periyodik tur (6 saat) duraklatılmış
+      // bir indirmeyi kendiliğinden yeniden başlatmamalı — kullanıcı "dur" dediyse durur.
+      let prefetchDuraklatildi = false, prefetchIptalEdildi = false;
 
       function stopPrefetchPoll() {
         if (prefetchTimer) { clearInterval(prefetchTimer); prefetchTimer = null; }
+      }
+
+      /// Düğme etiketlerini duruma göre yaz (Duraklat ↔ Devam et).
+      function bgButonlariYaz() {
+        const d = $("bg-pause"), i = $("bg-cancel");
+        if (!d || !i) return;
+        const x = t();
+        d.textContent = prefetchDuraklatildi ? x.bgResume : x.bgPause;
+        // İptal edildikten sonra düğmeler anlamsız: kart zaten kapanacak.
+        d.style.display = prefetchIptalEdildi ? "none" : "";
+        i.style.display = prefetchIptalEdildi ? "none" : "";
+      }
+
+      /// `prefetch_runtime_update` sonucunu tek yerden yorumla.
+      /// ⚠️ Kullanıcı kararı (duraklat/iptal) HATA GİBİ gösterilmez — eskiden tek bir
+      /// "tamamlanamadı" mesajı vardı ve kullanıcı kendi bastığı düğmeyi arıza sanardı.
+      function prefetchSonucIsle(r) {
+        sonBildirim = "";
+        const durum = r && r.status;
+        if (durum === "prefetched") { prefetchDuraklatildi = false; notice(t().rtBgDone); bgTemizle(); }
+        else if (durum === "paused") { notice(t().rtBgPaused); bgButonlariYaz(); }
+        else if (durum === "cancelled") { notice(t().rtBgCancelled); bgTemizle(); }
+        else notice(t().rtBgFail);
+      }
+
+      /// İlerleme kartını (çubuk + düğmeler) kaldır — indirme bitti/iptal edildi.
+      function bgTemizle() {
+        const box = $("notice");
+        box.querySelectorAll(".bgline, .bgsub, .bgact").forEach((el) => el.remove());
+        prefetchIptalEdildi = false;
+      }
+
+      /// Arka plan indirmesi denetim düğmelerini kartın altına kur (Duraklat/Devam et + İptal).
+      ///
+      /// ⚠️ `renderPrefetch` İÇİNDE değil AYRI: orada tanımlıyken iç closure'lar (`onclick`)
+      /// fonksiyonu şişirip, UI'yı kaynak-metinden çıkarıp Node'da koşturan testlerin
+      /// fonksiyon-sınırı bulucusunu erken kestiriyordu (ölçüldü: ETA kapısı yanlış yerde
+      /// kırıldı). Ayrı fonksiyon hem o kırılganlığı kaldırır hem okunurluğu artırır.
+      function bgDenetimKur(box) {
+        // ⚠️ SAHA BİLDİRİMİ 2026-08-28: 1,4 GB'lık arka plan indirmesi başladıktan sonra
+        // kullanıcının DURDURMA YOLU YOKTU — ekranda yalnız ilerleme çubuğu vardı. Yetenek
+        // (`net::Control::Pause/Cancel` + `pause_install`/`cancel_install`) ZATEN vardı ve
+        // kurulum yolunda çalışıyordu; bağlanmamış olan tek yer buydu.
+        const eylemler = document.createElement("div"); eylemler.className = "bgact";
+        const btnDuraklat = document.createElement("button");
+        btnDuraklat.className = "bgbtn"; btnDuraklat.id = "bg-pause";
+        const btnIptal = document.createElement("button");
+        btnIptal.className = "bgbtn bgbtn-danger"; btnIptal.id = "bg-cancel";
+        btnIptal.textContent = t().bgCancel;
+        eylemler.appendChild(btnDuraklat); eylemler.appendChild(btnIptal);
+        box.appendChild(eylemler);
+        bgButonlariYaz();
+
+        btnDuraklat.onclick = async () => {
+          if (prefetchDuraklatildi) {
+            // DEVAM ET: bayrağı serbest bırak ve turu yeniden başlat (`.part` korunmuştu,
+            // indirme Range ile kaldığı yerden sürer — baştan inmez).
+            prefetchDuraklatildi = false;
+            try { await invoke("resume_install"); } catch (_) {}
+            // Turu yeniden başlat: duraklatma indirmeyi SONLANDIRIR (Paused hatası), bayrağı
+            // serbest bırakmak tek başına sürdürmez. `.part` korunduğu için Range ile kaldığı
+            // yerden devam eder — 1,4 GB baştan inmez.
+            startPrefetchPoll();
+            invoke("prefetch_runtime_update", { manifestRaw })
+              .then((r) => { stopPrefetchPoll(); prefetchSonucIsle(r); })
+              .catch(() => { stopPrefetchPoll(); notice(t().rtBgFail); });
+          } else {
+            prefetchDuraklatildi = true;
+            try { await invoke("pause_install"); } catch (_) {}
+          }
+          bgButonlariYaz();
+        };
+        btnIptal.onclick = async () => {
+          // İPTAL: `.part` SİLİNİR. Kullanıcıya bunu açıkça söyle — "duraklat" sanıp
+          // ilerlemeyi koruduğunu düşünmesin (1,4 GB yeniden inecek).
+          if (!confirm(t().bgCancelConfirm)) return;
+          prefetchIptalEdildi = true; prefetchDuraklatildi = false;
+          try { await invoke("cancel_install"); } catch (_) {}
+          bgButonlariYaz();
+        };
+        bgButonlariYaz();
       }
 
       function renderPrefetch(p) {
@@ -1020,6 +1168,8 @@
           const pct = document.createElement("div"); pct.className = "bgpct";
           line.appendChild(bar); line.appendChild(pct); box.appendChild(line);
           const sub = document.createElement("div"); sub.className = "bgsub"; box.appendChild(sub);
+
+          bgDenetimKur(box);
         }
         const bar = box.querySelector(".bgbar"), fill = bar.querySelector("i");
         const pctEl = box.querySelector(".bgpct"), sub = box.querySelector(".bgsub");
@@ -1105,16 +1255,19 @@
 
         if (!plan.cached) {
           // Paketler eksik → arka planda indir (kuruluma DOKUNMAZ, seansı etkilemez).
+          //
+          // ⚠️ KULLANICI KARARINA SAYGI (saha bildirimi 2026-08-28): periyodik tur 6 saatte bir
+          // koşar; duraklatan ya da iptal eden kullanıcının indirmesini kendiliğinden yeniden
+          // BAŞLATMAZ — yoksa "Duraklat" düğmesi birkaç saat sonra sessizce geri alınır ve
+          // kullanıcı neden yine indiğini anlayamaz. Karar oturum boyunca geçerlidir; bir
+          // sonraki açılışta (yeni oturum) indirme normal şekilde yeniden denenir.
+          if (prefetchDuraklatildi || prefetchIptalEdildi) return;
           if (sonBildirim !== "indiriyor") {
             sonBildirim = "indiriyor";
             notice(plan.recall ? t().rtRecall : t().rtBg);
             startPrefetchPoll();
             invoke("prefetch_runtime_update", { manifestRaw })
-              .then((r) => {
-                stopPrefetchPoll();
-                sonBildirim = "";
-                notice(r && r.status === "prefetched" ? t().rtBgDone : t().rtBgFail);
-              })
+              .then((r) => { stopPrefetchPoll(); prefetchSonucIsle(r); })
               .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); });
           }
           return;
@@ -1684,11 +1837,9 @@
           // "bir sonraki açılışta kurulacak" yazar, açılışta hiçbir şey olmaz ve sebep
           // hiçbir yerde görünmez. Durumu açıkça ayır.
           invoke("prefetch_runtime_update", { manifestRaw })
-            .then((r) => {
-              stopPrefetchPoll();
-              sonBildirim = "";                            // indirme bitti → yeni tur yine bildirebilsin
-              notice(r && r.status === "prefetched" ? t().rtBgDone : t().rtBgFail);
-            })
+            // `prefetchSonucIsle` duraklat/iptal'i HATA saymaz (saha bildirimi 2026-08-28) ve
+            // `sonBildirim`i kendisi sıfırlar → yeni tur yine bildirebilir.
+            .then((r) => { stopPrefetchPoll(); prefetchSonucIsle(r); })
             .catch(() => { stopPrefetchPoll(); sonBildirim = ""; notice(t().rtBgFail); })
           return false;                                    // ekranı ELE GEÇİRME, "Başlat" çalışsın
         }

@@ -874,11 +874,35 @@ async fn prefetch_runtime_update(
     let store = state.prefetch.clone();
     *store.lock().unwrap() = None;
     let store_is = store.clone();
+    // ⚠️ SAHA BİLDİRİMİ 2026-08-28: burada `&|| net::Control::Continue` SABİT veriliyordu.
+    // Sonuç: 1,4 GB'lık arka plan indirmesi başladıktan sonra kullanıcının DURDURMA YOLU YOKTU —
+    // ekranda yalnız ilerleme çubuğu vardı, düğme yoktu. Oysa `net::Control` (Pause/Cancel) ve
+    // `pause_install`/`cancel_install` komutları ZATEN mevcuttu ve kurulum yolunda çalışıyordu;
+    // bağlanmamış olan tek yer arka plan indirmesiydi. Ölçülen sınıf: yetenek var, kablo yok.
+    // ⚠️ Bayrağı SIFIRLAMIYORUZ (`store(CTL_RUN)` YOK): kurulum yolları turun başında sıfırlar,
+    // ama ön-indirme kullanıcının önceki "duraklat" kararını EZMEMELİ. Duraklatılmışken tur
+    // açılırsa ilk yığında durur ve `.part` korunur.
+    let ctl = state.control.clone();
     let sonuc = tauri::async_runtime::spawn_blocking(move || {
         // Kurulum yolundakiyle AYNI yazıcı (throttle + son-parça istisnası) — tek kaynak.
         let mut on = snapshot_yazici(store_is, 150);
-        flow::prefetch_updates(&manifest_raw, &root, &mut on, &|| net::Control::Continue)
-            .map_err(|e| e.to_string())
+        flow::prefetch_updates(&manifest_raw, &root, &mut on, &|| match ctl.load(Ordering::Relaxed)
+        {
+            CTL_PAUSE => net::Control::Pause,
+            CTL_CANCEL => net::Control::Cancel,
+            _ => net::Control::Continue,
+        })
+        // ⚠️ Durum kodu HATA TİPİNDEN çıkarılır, mesaj METNİNDEN değil: metne bakan bir
+        // ayrım, hata cümlesi bir gün düzenlendiğinde SESSİZCE bozulur ve kullanıcının
+        // "duraklat"ı yeniden "indirme tamamlanamadı" diye görünmeye başlar.
+        .map_err(|e| {
+            let kod = match &e {
+                flow::FlowError::Net(net::NetError::Paused) => "paused",
+                flow::FlowError::Net(net::NetError::Cancelled) => "cancelled",
+                _ => "failed",
+            };
+            (kod, e.to_string())
+        })
     })
     .await
     .map_err(|e| format!("arka plan indirme çöktü: {e}"))?;
@@ -887,8 +911,15 @@ async fn prefetch_runtime_update(
     *store.lock().unwrap() = None;
     match sonuc {
         Ok(()) => Ok(serde_json::json!({ "status": "prefetched" })),
-        // Ağ hatası sessizce yutulur: bu isteğe bağlı bir ön-indirmedir, kullanıcıyı ilgilendirmez.
-        Err(e) => Ok(serde_json::json!({ "status": "failed", "reason": e })),
+        // ⚠️ KULLANICI KARARI ≠ HATA (saha bildirimi 2026-08-28). "Duraklat"/"İptal"e basan
+        // kullanıcıya "indirme tamamlanamadı" demek yanlış geri bildirimdir: arıza sanır ve
+        // `.part` korunmuşken (Pause) sanki kaybolmuş gibi okunur. UI ikisini ayrı gösterir.
+        Err((kod, sebep)) => Ok(match kod {
+            "paused" => serde_json::json!({ "status": "paused" }),
+            "cancelled" => serde_json::json!({ "status": "cancelled" }),
+            // Ağ hatası sessizce yutulur: bu isteğe bağlı bir ön-indirmedir.
+            _ => serde_json::json!({ "status": "failed", "reason": sebep }),
+        }),
     }
 }
 
@@ -1078,6 +1109,22 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
 
     #[cfg(windows)]
     {
+        // ⚠️ GÜVENLİK DUVARI TEMİZLİĞİ (kaldırma denetimi 2026-08-29). Kural EKLENİYOR ama
+        // SİLEN KOD HİÇ YOKTU: kaldırmadan sonra `PEMF Backend API` + `PEMF UDP Discovery`
+        // kuralları makinede kalıyor ve artık var olmayan bir exe'yi işaret ediyordu. NSIS
+        // kancasının kendi notu bunu "ayrı ADMIN uninstaller'ın işi" sayıyor — ama backend'i
+        // CLIENT kuruyor; o ayrı admin kurulumu hiç yapılmamış makinelerde kurallar hiçbir
+        // kaldırıcıya ait değildi (bu makinede ölçüldü: 3 yetim kural).
+        //
+        // ⚠️ BURADA yapılır, NSIS kancasında DEĞİL: kanca currentUser bağlamında koşar ve
+        // yükseltemez; client ise UAC isteyebilir.
+        // ⚠️ HATA YUTULUR: kullanıcı UAC'yi reddederse kaldırma NORMAL devam eder — yetim bir
+        // firewall kuralı, kaldırmayı düşürmeyi haklı çıkarmaz. Tam temizlik için
+        // `scripts/pemf_teardown.ps1` zaten var.
+        if let Err(e) = ps_yukselterek_kos(&pemf_launcher_core::firewall::silme_betigi()) {
+            eprintln!("[uninstall] güvenlik duvarı kuralları temizlenemedi (yok sayıldı): {e}");
+        }
+
         // uninstall.exe launcher exe'sinin YANINDADIR (NSIS ikisini de $INSTDIR'a koyar). current_exe
         // üzerinden bul → özel kurulum dizinlerinde de doğru (sabit yol varsaymaz).
         let uninstaller = std::env::current_exe()
@@ -1350,6 +1397,18 @@ fn pause_install(state: tauri::State<'_, AppState>) {
 #[tauri::command]
 fn cancel_install(state: tauri::State<'_, AppState>) {
     state.control.store(CTL_CANCEL, Ordering::Relaxed);
+}
+
+/// Duraklatılmış indirmeyi SÜRDÜR (saha bildirimi 2026-08-28).
+///
+/// ⚠️ `pause_install` vardı ama karşılığı YOKTU: kurulum yolları turun başında bayrağı zaten
+/// `CTL_RUN`a çektiği için orada eksikliği görünmüyordu. Arka plan indirmesi ise bayrağı
+/// BİLEREK sıfırlamaz (kullanıcının "duraklat" kararı bir sonraki turda ezilmesin diye) —
+/// dolayısıyla açık bir "devam et" komutu olmadan duraklatılmış indirme SÜREKLİ duraklı kalırdı.
+/// `.part` korunmuş olduğu için indirme Range ile kaldığı yerden sürer, baştan inmez.
+#[tauri::command]
+fn resume_install(state: tauri::State<'_, AppState>) {
+    state.control.store(CTL_RUN, Ordering::Relaxed);
 }
 
 /// Açılıştaki "yarım kalan kurulum" bildirimini AT: pending kaydı + `.part` dosyalarını sil
@@ -1636,6 +1695,40 @@ fn firewall_durumu() -> serde_json::Value {
 ///
 /// Launcher bilerek yükseltilmemiş çalışır (sessiz oto-güncelleme UAC'siz olsun diye) → kural
 /// ekleme ancak kullanıcının AÇIK onayıyla, tek seferlik bir yükseltmeyle yapılabilir.
+
+/// PowerShell betiğini UAC ile YÜKSELTEREK çalıştır (firewall kuralları admin ister).
+///
+/// ⚠️ Base64 taşıma KASITLI: betik kullanıcı-etkili yollar içerebilir; tırnak/kaçış katmanları
+/// arasında bozulmasın (bkz. firewall.rs enjeksiyon notu). Konsol penceresi açılmaz.
+#[cfg(windows)]
+fn ps_yukselterek_kos(betik: &str) -> Result<(), String> {
+    let b64 = {
+        const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let g: Vec<u8> = betik.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        let mut o = String::new();
+        for c in g.chunks(3) {
+            let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
+            let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
+            for i in 0..4 {
+                if i <= c.len() {
+                    o.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
+                } else { o.push('='); }
+            }
+        }
+        o
+    };
+    let arg = format!(
+        "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden              -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}'");
+    let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
+        .output()
+        .map_err(|e| format!("Yükseltme başlatılamadı: {e}"))?;
+    if !cikti.status.success() {
+        return Err("Yönetici izni verilmedi.".to_string());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
     #[cfg(not(windows))]
@@ -1647,36 +1740,9 @@ fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
         if !exe.exists() {
             return Err("Backend henüz kurulu değil — önce kurulumu tamamlayın.".to_string());
         }
-        let betik = ekleme_betigi(&exe);
-        // `Start-Process -Verb RunAs` → UAC istemi. Betik base64 ile taşınır: tırnak/kaçış
-        // katmanları arasında bozulmasın (yol kullanıcı-etkilidir, bkz. firewall.rs enjeksiyon notu).
-        let b64 = {
-            const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-            let g: Vec<u8> = betik.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
-            let mut o = String::new();
-            for c in g.chunks(3) {
-                let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-                let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-                for i in 0..4 {
-                    if i <= c.len() {
-                        o.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
-                    } else { o.push('='); }
-                }
-            }
-            o
-        };
-        let arg = format!(
-            "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden              -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','{b64}'");
-        // Konsol penceresi AÇMADAN (bkz. platform::gizli_komut). Yükseltilen süreç zaten
-        // `-WindowStyle Hidden`; gizlenmesi gereken BAŞLATAN kabuktur.
-        let cikti = pemf_launcher_core::platform::gizli_komut("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &arg])
-            .output()
-            .map_err(|e| format!("Yükseltme başlatılamadı: {e}"))?;
-        if !cikti.status.success() {
-            // En sık sebep: kullanıcı UAC istemini reddetti.
-            return Err("Yönetici izni verilmedi — güvenlik duvarı kuralı eklenemedi.".to_string());
-        }
+        // Ortak yardımcı (base64 + UAC) — silme yolu da aynısını kullanır, kopya yok.
+        ps_yukselterek_kos(&ekleme_betigi(&exe))
+            .map_err(|_| "Yönetici izni verilmedi — güvenlik duvarı kuralı eklenemedi.".to_string())?;
         Ok(serde_json::json!({ "status": "ok" }))
     }
 }
@@ -1752,6 +1818,7 @@ fn main() {
             app_window_open,
             pause_install,
             cancel_install,
+            resume_install,
             discard_pending,
             open_url,
             apply_self_update,

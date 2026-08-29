@@ -180,13 +180,26 @@ def test_KRITIK_basarisiz_on_indirme_BASARILI_denmez(rs, ui):
     assert 'json!({ "status": "failed"' in govde, (
         "komut artık hata döndürüyor olabilir — bu testin dayandığı varsayım değişmiş, gözden geçir"
     )
+    # ⚠️ Sonuç yorumu 2026-08-28'de TEK YERE alındı (`prefetchSonucIsle`): duraklat/iptal de
+    # ayırt edilmesi gerektiği için `.then()` içindeki üç-durumlu ifade yetmiyordu. Çıpa o
+    # fonksiyona taşındı; ölçülen DEĞİŞMEZ aynı: başarı, `status` OKUNMADAN ilan edilmemeli.
     m = re.search(r'invoke\("prefetch_runtime_update".*?\n\s*\.catch', ui, re.S)
     assert m, "ön-indirme çağrısı bulunamadı"
     blok = m.group(0)
-    assert "status" in blok and "prefetched" in blok, (
+    assert "prefetchSonucIsle" in blok or "status" in blok, (
+        "ön-indirme sonucu hiç yorumlanmıyor → başarısız indirmede 'indirildi' denir"
+    )
+    yorumlayici = re.search(r"function prefetchSonucIsle\(r\) \{(.*?)\n      \}", ui, re.S)
+    assert yorumlayici, "sonuç yorumlayıcısı (prefetchSonucIsle) bulunamadı"
+    govde_ui = yorumlayici.group(1)
+    assert "status" in govde_ui and "prefetched" in govde_ui, (
         "başarı `status` alanına BAKILMADAN ilan ediliyor → başarısız indirmede 'indirildi' denir"
     )
-    assert "rtBgFail" in blok, "başarısızlık için ayrı mesaj yok"
+    assert "rtBgFail" in govde_ui, "başarısızlık için ayrı mesaj yok"
+    # Kullanıcı kararı da hata sayılmamalı (saha bildirimi: Duraklat/İptal düğmeleri).
+    assert "rtBgPaused" in govde_ui and "rtBgCancelled" in govde_ui, (
+        "duraklat/iptal ayrı raporlanmıyor → kullanıcı kendi bastığı düğmeyi arıza sanar"
+    )
 
 
 def test_basarisizlik_mesaji_iki_dilde(ui):

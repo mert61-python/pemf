@@ -83,6 +83,32 @@ pub fn ekleme_betigi(backend_exe: &Path) -> String {
     )
 }
 
+/// KALDIRMA temizliği: kendi adlandırdığımız kuralları sil.
+///
+/// ⚠️ SAHA BULGUSU 2026-08-29 (kaldırma denetimi): kural EKLENİYOR ama SİLEN KOD HİÇ YOKTU.
+/// Kullanıcı client'ı kaldırdıktan sonra `PEMF Backend API` ve `PEMF UDP Discovery` kuralları
+/// makinede kaldı ve artık var olmayan bir exe'yi (`...\PEMF Vet Client\runtime\...`) işaret
+/// ediyordu. Kaldırma kancasının kendi notu bunu "ayrı ADMIN uninstaller'ının işi" sayıyordu;
+/// ama backend'i CLIENT kuruyor, ayrı bir admin kurulumu bu makinede hiç olmadı → kurallar
+/// hiçbir kaldırıcıya ait değildi.
+///
+/// ⚠️ YALNIZ KENDİ ADLANDIRDIĞIMIZ kurallar silinir. Windows'un kullanıcı onayıyla açtığı
+/// program-kapsamlı kuralına DOKUNULMAZ: o kullanıcının kendi kararıdır ve başka bir yolla
+/// (ör. yeniden kurulum) hâlâ geçerli olabilir.
+///
+/// ⚠️ Admin gerektirir (`Remove-NetFirewallRule`). Çağıran UAC ile yükseltir ve BAŞARISIZLIĞI
+/// YUTAR: temizlik bir nezakettir, kaldırmayı düşürmesi kabul edilemez.
+pub fn silme_betigi() -> String {
+    format!(
+        "$ErrorActionPreference='SilentlyContinue'; \
+         foreach ($ad in @('{api}','{kesif}')) {{ \
+           Get-NetFirewallRule -DisplayName $ad -ErrorAction SilentlyContinue | \
+             Remove-NetFirewallRule -ErrorAction SilentlyContinue }}",
+        api = KURAL_API,
+        kesif = KURAL_KESIF
+    )
+}
+
 /// Durum denetimi betiği — `backend_exe` biliniyorsa Windows'un KENDİ izni de sayılır.
 ///
 /// ⚠️ YANLIŞ ALARM DÜZELTMESİ (2026-08-11, sahip bildirimi: "eskiden buna gerek olmadan

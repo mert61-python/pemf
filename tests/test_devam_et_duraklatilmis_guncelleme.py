@@ -66,7 +66,12 @@ def _kos(senaryo: str, tmp_path: Path) -> dict:
             _fonksiyon(ham, "function startEtiketi(x)"),
             _fonksiyon(ham, "function setInstallControls(mode)"),
             _fonksiyon(ham, "function showPaused()"),
-            "let guncellemeTimer = null, sonBildirim = \"\";",
+            # Denetim 2026-08-28: arka plan indirmesine Duraklat/İptal eklendi;
+            # `recheckUpdates` bu modül-seviyesi bayrakları okuyor (kullanıcı kararını
+            # periyodik tur EZMESİN diye). Harness gerçek modül kapsamını taklit ettiği
+            # için burada da tanımlanmalı — aksi hâlde ReferenceError.
+            'let guncellemeTimer = null, sonBildirim = "";'
+            ' let prefetchDuraklatildi = false, prefetchIptalEdildi = false;',
             recheck,
             try_rt,
         ]

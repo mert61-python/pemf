@@ -185,6 +185,13 @@
     RMDir /r "$LOCALAPPDATA\com.vpemf.client"
     ; Eski client registry ayarları (bugün com.pemfmedical; eski sürüm "vpemf" bırakırdı).
     DeleteRegKey HKCU "Software\vpemf"
+    ; ⚠️ KALDIRMA DENETİMİ 2026-08-29: per-user `PEMF_System` kalıntısı hiçbir yerde
+    ; silinmiyordu. Ayak izi tanımı (`pemf_footprint.ps1`) onu `Kvkk=$false` işaretliyor —
+    ; yani TIBBİ VERİ DEĞİL, silinmesi gerekiyordu; ama aşağıdaki not "ProgramData/hotspot
+    ; ADMIN uninstaller'ın işi" derken bu PER-USER dizini de kapsıyor sanılmıştı. Ölçüldü:
+    ; kaldırmadan sonra `hotspot.log` geride kaldı. Buradaki yol kullanıcı-kapsamlıdır ve
+    ; admin GEREKTİRMEZ → kancanın işi. (ProgramData tarafı gerçekten admin uninstaller'da.)
+    RMDir /r "$LOCALAPPDATA\PEMF_System"
     DetailPrint "PEMF Vet Client temizliği tamamlandı."
   ${Else}
     DetailPrint "PEMF: 'uygulama verisini sil' işaretsiz — indirilen profiller/modeller KORUNUYOR (yeniden kurulumda tekrar inmez). Tamamen silmek için kaldırırken kutuyu işaretleyin."

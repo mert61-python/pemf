@@ -229,6 +229,17 @@ pub enum NetError {
     Io(#[from] io::Error),
     #[error("indirme aktarımı başarısız: {0}")]
     Transport(String),
+    /// AĞ ADI ÇÖZÜMLENEMEDİ (DNS). Kullanıcıya AYRI söylenir (saha bildirimi 2026-08-29).
+    ///
+    /// ⚠️ Eskiden `Transport` içinde eriyordu ve klinik ekranında ham metin görünüyordu:
+    ///   "indirme aktarımı başarısız: https://…/base-deps.zip: Dns Failed: resolve dns name
+    ///    'github.com:443': Bilinen böyle bir ana bilgisayar yok. (os error 11001)"
+    /// Bu cümle kullanıcıya NE YAPACAĞINI söylemez; üstelik "aktarım başarısız" ifadesi sorunu
+    /// sunucuda sanmasına yol açar — oysa sebep neredeyse her zaman YEREL ağdadır (Wi-Fi düştü,
+    /// DNS sunucusu yanıtsız, captive portal). Ayrı varyant, arayüzün doğru cümleyi kurmasını
+    /// sağlar. Sınıf GEÇİCİ sayılır (`is_retriable`): DNS anlık olarak düşüp geri gelebilir.
+    #[error("ağ adı çözümlenemedi (DNS): {0}")]
+    Dns(String),
     /// Kullanıcı DURAKLATTI — `.part` KORUNUR, sonra Range ile kaldığı yerden sürer.
     #[error("indirme duraklatıldı")]
     Paused,
@@ -263,6 +274,28 @@ pub enum Control {
     Continue,
     Pause,
     Cancel,
+}
+
+
+/// ureq hatasını sınıflandır. DNS ayrı varyanta düşer (kullanıcıya farklı cümle kurulur).
+///
+/// ⚠️ Metin eşleştirme KAÇINILMAZ: ureq 2 DNS hatasını ayrı bir tip olarak sunmuyor, yalnız
+/// `Transport` içinde `kind = Dns` ve mesajda "Dns Failed" ile geliyor. En dar eşleşme seçildi
+/// ve İKİ dilde de tutuyor (mesajın ilk kısmı ureq'ten, İngilizce sabit); yanlış eşleşme olsa
+/// bile sonuç yalnız kullanıcıya gösterilen CÜMLEYİ değiştirir, akışı değiştirmez (ikisi de
+/// `is_retriable`).
+fn ureq_hatasi(e: ureq::Error, url: &str) -> NetError {
+    match e {
+        ureq::Error::Status(status, _) => NetError::HttpStatus { status, url: url.to_string() },
+        other => {
+            let m = other.to_string();
+            if m.contains("Dns Failed") || m.contains("dns error") || m.contains("resolve dns name") {
+                NetError::Dns(m)
+            } else {
+                NetError::Transport(m)
+            }
+        }
+    }
 }
 
 /// URL'yi şema + host bakımından doğrula. Kabul edilirse host'u döndürür.
@@ -405,13 +438,7 @@ pub fn download_to_file(
     if done > 0 {
         req = req.set("Range", &format!("bytes={done}-"));
     }
-    let resp = req.call().map_err(|e| match e {
-        ureq::Error::Status(status, _) => NetError::HttpStatus {
-            status,
-            url: url.to_string(),
-        },
-        other => NetError::Transport(other.to_string()),
-    })?;
+    let resp = req.call().map_err(|e| ureq_hatasi(e, url))?;
 
     // Redirect host-pin: SON URL'nin host'u allowlist içinde olmalı.
     validate_url(resp.get_url())?;
@@ -538,16 +565,8 @@ pub fn download_to_file(
 /// `fetch_string_pinned_budgeted` kullan — o, duvar-saati bütçesiyle sarmalar.
 pub fn fetch_string_pinned(url: &str) -> Result<String, NetError> {
     validate_download_source(url)?;
-    let resp = build_text_agent()
-        .get(url)
-        .call()
-        .map_err(|e| match e {
-            ureq::Error::Status(status, _) => NetError::HttpStatus {
-                status,
-                url: url.to_string(),
-            },
-            other => NetError::Transport(other.to_string()),
-        })?;
+    // Aynı sınıflandırıcı (DNS ayrı varyanta düşer) — indirme yoluyla tek kaynak.
+    let resp = build_text_agent().get(url).call().map_err(|e| ureq_hatasi(e, url))?;
     validate_url(resp.get_url())?;
     resp.into_string().map_err(NetError::from)
 }

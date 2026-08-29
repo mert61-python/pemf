@@ -72,6 +72,10 @@ fn is_retriable(e: &net::NetError) -> bool {
     match e {
         // Ağ kopması / timeout / aktarım hatası → geçici.
         net::NetError::Io(_) | net::NetError::Transport(_) => true,
+        // DNS çözümlemesi → GEÇİCİ (saha bildirimi 2026-08-29). Wi-Fi anlık düşer, DNS sunucusu
+        // bir sorguyu kaçırır, uyanma sonrası çözümleyici geç toparlanır. Kalıcı "internet yok"
+        // hâlinde de yeniden denemek zararsızdır: bağlantı kurulamadığı için hızlı düşer.
+        net::NetError::Dns(_) => true,
         // 5xx sunucu tarafı geçicidir; 408 (Request Timeout) ve 429 (Too Many Requests) da öyle.
         // Diğer 4xx'ler KALICI: yeniden denemek yalnız kullanıcıyı bekletir.
         net::NetError::HttpStatus { status, .. } => *status >= 500 || *status == 408 || *status == 429,
@@ -1835,10 +1839,16 @@ mod tests {
     fn kayit_yokken_profiller_diskten_cikarilir() {
         let d = tempfile::tempdir().unwrap();
         let root = d.path();
-        // Eski kurulum: kayit dosyasi YOK ama model verisi VAR.
-        for prof in ["home", "vet"] {
-            std::fs::create_dir_all(install::models_dir(root).join(prof)).unwrap();
-            std::fs::write(install::models_dir(root).join(prof).join("m.onnx"), b"x").unwrap();
+        // ⚠️ DENETIM 2026-08-28 #06: bu fixture ESKIDEN `ai_models/home/` + `ai_models/vet/`
+        // diye ELLE uyduruluyordu — URETIMDE HIC OLUSMAYAN bir duzen. Gercek profil zip'leri
+        // `ai_models/ai_hub/<modul>/...` acar (make_model_zip.py; yayindaki vet.zip merkezi
+        // dizininde dogrulandi). Uydurma duzen yuzunden bu kapi, "Onar" fiilen bozukken
+        // YESIL kaliyordu: gercek kurulumda cikarim ["ai_hub"] donuyor ve repair()
+        // UnknownProfile{profile:"ai_hub"} ile indirme baslamadan dusuyordu.
+        let hub = install::models_dir(root).join("ai_hub");
+        for modul in ["cat_disease", "cat_thermal", "em_petri"] {
+            std::fs::create_dir_all(hub.join(modul)).unwrap();
+            std::fs::write(hub.join(modul).join("m.onnx"), b"x").unwrap();
         }
         assert!(matches!(
             install::read_installed_profiles_detailed(root),
@@ -1846,8 +1856,42 @@ mod tests {
         ));
 
         let bulunan = install::infer_profiles_from_disk(root);
-        assert_eq!(bulunan, vec!["home".to_string(), "vet".to_string()],
-            "profiller diskten cikarilamadi — eski kurulumlarda Onar calismaz");
+        assert_eq!(
+            bulunan,
+            vec!["home".to_string(), "research".to_string(), "vet".to_string()],
+            "GERCEK sevk duzeninden profiller cikarilamadi — eski kurulumlarda Onar calismaz"
+        );
+    }
+
+    /// Geriye uyum: dogrudan `ai_models/<profil>/` duzeni de kabul edilmeli (elle kurulum).
+    #[test]
+    fn duz_profil_dizini_duzeni_de_desteklenir() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        for prof in ["home", "vet"] {
+            std::fs::create_dir_all(install::models_dir(root).join(prof)).unwrap();
+            std::fs::write(install::models_dir(root).join(prof).join("m.onnx"), b"x").unwrap();
+        }
+        assert_eq!(
+            install::infer_profiles_from_disk(root),
+            vec!["home".to_string(), "vet".to_string()]
+        );
+    }
+
+    /// ⚠️ Manifest'te KARSILIGI OLMAYAN bir dizin adi profil sanilmamali.
+    /// Eskiden "ai_hub" tam da boyle sizip repair()'i UnknownProfile ile dusuruyordu.
+    #[test]
+    fn bilinmeyen_dizin_adi_profil_sayilmaz() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        for ad in ["ai_hub", "gecici", "yedek"] {
+            std::fs::create_dir_all(install::models_dir(root).join(ad)).unwrap();
+        }
+        // ai_hub bos (modul yok) → hicbir profil cikmamali; digerleri de profil DEGIL.
+        assert!(
+            install::infer_profiles_from_disk(root).is_empty(),
+            "bilinmeyen dizin adlari profil sanildi — repair() UnknownProfile ile duser"
+        );
     }
 
     /// BOZUK kayitta ise gercekten belirsiz → sessiz basari yerine ACIK hata (davranis korunuyor).

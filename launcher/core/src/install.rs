@@ -1011,15 +1011,91 @@ pub enum ProfileRecord {
 /// olur ve model verisi de vardır. Sonuç: o kullanıcılarda "Onar" düğmesi tamamen çalışmaz hale
 /// gelmişti. Kayıt yoksa profiller diskten güvenle çıkarılabilir; `Corrupt` (dosya var ama
 /// bozuk) ise gerçekten belirsizdir ve hata vermek doğrudur.
+/// `ai_models/ai_hub/<modül>` → PROFİL ADI ters eşlemesi.
+///
+/// ⚠️ DENETİM 2026-08-28 (bulgu #06 — ÖLÇÜLDÜ): profil zip'leri `ai_models/ai_hub/<modül>/...`
+/// düzeniyle açılır (`build_tools/make_model_zip.py::dosyalari_topla` her girdiyi
+/// `f"ai_models/{rel}"` yazar ve `rel` DAİMA `ai_hub/` ile başlar). Yayındaki `vet.zip`
+/// merkezî dizininde birebir doğrulandı: `ai_models/vet/` diye bir girdi YOKTUR.
+/// Yani `ai_models` altında tek bir dizin oluşur: `ai_hub`. Eski çıkarım o adı PROFİL sanıyor,
+/// `repair()` de `UnknownProfile { profile: "ai_hub" }` ile İNDİRME BAŞLAMADAN düşüyordu:
+/// kullanıcı "eski kurulum algılandı (1 profil)" ardından "'ai_hub' profili manifest'te yok"
+/// görüyordu. 2026-08-04 P3 düzeltmesinin kapısı, fixture'ı `ai_models/home/` diye ELLE
+/// uydurduğu için (üretimde hiç oluşmayan düzen) hata canlıyken yeşil kalıyordu.
+///
+/// ⚠️ SAĞDAKİ ADLAR MANİFEST ANAHTARIDIR (`models.home` / `models.vet` / `models.research`).
+/// `research-2.zip` ayrı bir profil DEĞİL, `model_parts` parçasıdır → "research"e eşlenir.
+///
+/// Sürüklenme kapısı: `tests/test_profil_modul_haritasi.py` (kaynak = make_model_zip.py).
+pub const PROFIL_MODULLERI: [(&str, &str); 17] = [
+    ("cat_disease", "home"),
+    ("cat_landmark", "home"),
+    ("cat_segmentation", "home"),
+    ("inference_cat_sound", "home"),
+    ("cat_thermal", "vet"),
+    ("em_kedi", "vet"),
+    ("em_kedi_legacy", "vet"),
+    ("em_petri", "research"),
+    ("em_phantom", "research"),
+    ("feline_reticulocytes", "research"),
+    ("inference_em_fantom", "research"),
+    ("inference_em_petri", "research"),
+    ("inference_human_kidney_ct", "research"),
+    ("inference_paper_dilek_hoca", "research"),
+    ("inference_petri_dish", "research"),
+    ("inference_renal_histopath_kmc", "research"),
+    ("petri_dish", "research"),
+];
+
+/// Bir dizin adını profil adına çevir. `ai_hub` altındaki modül adları eşlemeden çözülür;
+/// doğrudan profil adı olan dizinler (eski/elle kurulumlar) OLDUĞU GİBİ kabul edilir.
+fn dizin_adini_profile_cevir(ad: &str) -> Option<String> {
+    if matches!(ad, "home" | "vet" | "research") {
+        return Some(ad.to_string());
+    }
+    PROFIL_MODULLERI
+        .iter()
+        .find(|(modul, _)| *modul == ad)
+        .map(|(_, profil)| (*profil).to_string())
+}
+
 pub fn infer_profiles_from_disk(install_root: &Path) -> Vec<String> {
-    let mut v: Vec<String> = std::fs::read_dir(models_dir(install_root))
-        .map(|rd| {
-            rd.flatten()
-                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-                .filter_map(|e| e.file_name().to_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default();
+    let models = models_dir(install_root);
+
+    // Gerçek sevk düzeni: `ai_models/ai_hub/<modül>/...`. Varsa modül adlarından profil çıkar.
+    let ai_hub = models.join("ai_hub");
+    let mut v: Vec<String> = if ai_hub.is_dir() {
+        std::fs::read_dir(&ai_hub)
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                    .filter_map(|e| e.file_name().to_str().and_then(dizin_adini_profile_cevir))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Geriye uyum: doğrudan `ai_models/<profil>/` düzeni de kabul edilir (elle kurulum /
+    // gelecekte düzen değişirse). Bilinmeyen adlar SESSİZCE ATILIR — eskiden buradan
+    // manifest'te olmayan bir "profil" sızıp repair()'i düşürüyordu.
+    if let Ok(rd) = std::fs::read_dir(&models) {
+        for e in rd.flatten() {
+            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            if let Some(ad) = e.file_name().to_str() {
+                if ad == "ai_hub" {
+                    continue;
+                }
+                if let Some(p) = dizin_adini_profile_cevir(ad) {
+                    v.push(p);
+                }
+            }
+        }
+    }
+
     v.sort();
     v.dedup();
     v
