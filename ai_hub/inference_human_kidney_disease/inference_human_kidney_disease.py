@@ -60,8 +60,20 @@ def load_model(model_name: str | None = None):
                 f"best_model.txt missing at {THIS_DIR}. "
                 "Run training/human_kidney_disease/export_onnx.py first."
             ) from e
-    onnx_path = THIS_DIR / f"{model_name}.onnx"
-    pre_path = THIS_DIR / "preprocessor.pkl"
+    # ⚠️ DENETİM 2026-08-28 #09: bu modül ONNX DAHİL hiçbir dosya için `/models` mount'una
+    # bakmıyordu (kardeş modüllerde en azından ana model için fallback vardı). Docker imajında
+    # `ai_hub/**/*.pkl|*.onnx` elendiği için `load_model` FileNotFoundError ile ölüyordu →
+    # `/api/ai/disease/kidney` monolit Docker profilinde tamamen ölü. Klinik frozen EXE
+    # etkilenmez: dosyalar modülün yanına gömülüdür, ilk koşul tutar.
+    try:
+        from utils.model_downloader import yan_dosya_coz as _yan
+    except Exception:  # utils yolu yoksa eski davranış
+
+        def _yan(yerel, _repo):
+            return str(yerel)
+
+    onnx_path = Path(_yan(THIS_DIR / f"{model_name}.onnx", f"ai_hub/inference_human_kidney_disease/{model_name}.onnx"))
+    pre_path = Path(_yan(THIS_DIR / "preprocessor.pkl", "ai_hub/inference_human_kidney_disease/preprocessor.pkl"))
     if not onnx_path.exists():
         raise FileNotFoundError(f"{onnx_path} missing — run export_onnx.py")
     if not pre_path.exists():
@@ -215,9 +227,27 @@ def _referans_background(post_names: list[str]) -> np.ndarray:
                      dtype=np.float32)
 
 
+# ⚠️ DENETİM 2026-08-28 #04 — KLİNİK-NORMAL REFERANS HASTA.
+# `_referans_background` (num=0, one-hot=0.5) sentetik "ortalama hasta"sını model %98,99996
+# CKD sanıyor (ÖLÇÜLDÜ). Efficiency gereği açıklanabilecek toplam kütle f(x)−f(bg) = 0,0100'e
+# düşüyor: yani POZİTİF bir hastada, yani en kritik yerde, gürültü/sinyal oranı en kötü.
+# Aşağıdaki klinik-normal referansla aynı ölçümde bg prob_ckd = 0,0125 → kütle 0,9875 (~100×).
+# Katkılar artık "sağlıklı bir referansa göre" okunur. Eğitim veri seti GEREKTİRMEZ
+# (dataset/ sevk edilmiyor) ve deterministiktir.
+NORMAL_REFERANS: dict = {
+    # Sayısal: erişkin sağlıklı aralık ortası (UCI-CKD notckd sınıfının tipik değerleri).
+    "age": 45, "bp": 80, "sg": 1.020, "al": 0, "su": 0,
+    "bgr": 100, "bu": 30, "sc": 1.0, "sod": 140, "pot": 4.5,
+    "hemo": 15.0, "pcv": 45, "wc": 8000, "rc": 5.0,
+    # Kategorik: normal/yokluk.
+    "rbc": "normal", "pc": "normal", "pcc": "notpresent", "ba": "notpresent",
+    "htn": "no", "dm": "no", "cad": "no", "appet": "good", "pe": "no", "ane": "no",
+}
+
+
 def xai_top_features(features: dict, top_n: int = 7,
                       model_name: str | None = None,
-                      n_kernel_samples: int = 60) -> dict:
+                      n_kernel_samples: int = 8000) -> dict:
     """Tek hasta icin SHAP KernelExplainer top-N klinik ozellik katkisi (ONNX uzerinde).
 
     PT'siz XAI yolu: KernelExplainer model-agnostik predict-callable sarar (GPU gerekmez).
@@ -238,13 +268,30 @@ def xai_top_features(features: dict, top_n: int = 7,
         return np.stack([1 - p, p], axis=1)
 
     post_names = _preprocessor_feature_names(pre)
-    bg = _referans_background(post_names)
+    # Denetim #04: baseline artık klinik-normal referans hasta (ölçüm gerekçesi
+    # NORMAL_REFERANS'ın üstünde). Eski `_referans_background` geriye-uyum ve karşıt-kanıt
+    # testi için DURUYOR ama artık kullanılmıyor.
+    bg = pre.transform(pd.DataFrame([_normalise_record(NORMAL_REFERANS)], columns=ALL_FEATURES)).astype(np.float32)
 
     _rng_durum = np.random.get_state()
     try:
         np.random.seed(0)
         expl = shap.KernelExplainer(_proba, bg)
-        sv = expl.shap_values(Xp, nsamples=n_kernel_samples, silent=True)
+        # ⚠️ DENETİM 2026-08-28 #04 — İKİ AYAR DA ZORUNLU, ÖLÇÜLDÜ:
+        #
+        # (1) `l1_reg=False`. Verilmezse shap 0.49.1 varsayılanı `"num_features(10)"` devreye
+        #     girer (`_kernel.py:51`). Dönüşüm sonrası uzay tam 24 kolon olduğu için
+        #     24 özelliğin 14'ü TAM SIFIRA zorlanıyordu — ve sıfırlananların arasında `sc`
+        #     (KREATİNİN) vardı. Böbrek hastalığı açıklamasında kreatininin katkısı "0.0"
+        #     olarak raporlanıyordu; `l1_reg=False` ile aynı hastada `sc = +0.0221`.
+        #
+        # (2) `nsamples` 60 → 8000. 60 koalisyon, 24 özellikli bir modelde Monte-Carlo
+        #     gürültüsünün içinde kalıyordu; `np.random.seed(0)` bunu tekrarlanabilir yapıyor
+        #     ama YAKINSAMIŞ yapmıyor — deterministik biçimde yanlış. Ölçüm: yalnız seed'i
+        #     değiştirince ilk-5 kümesi TAMAMEN değişiyordu (seed 0/1/2 → ayrık kümeler).
+        #     8000'de 6 farklı seed ilk-5'i BİREBİR aynı veriyor: {htn, sg, dm, al, appet}.
+        #     Bedel ölçüldü: 0,009 s → 0,175 s/çağrı; AI_TIMEOUT_MS bütçesinde önemsiz.
+        sv = expl.shap_values(Xp, nsamples=n_kernel_samples, silent=True, l1_reg=False)
     finally:
         np.random.set_state(_rng_durum)
 
@@ -260,7 +307,8 @@ def xai_top_features(features: dict, top_n: int = 7,
     return {
         "prob_ckd": float(_predict_onnx(sess, input_name, Xp)[0]),
         "top_features": [{"feature": f, "attribution": round(v, 4)} for f, v in sirali],
-        "baseline": "ortalama_hasta",
+        # Denetim #04: baseline değişti — tüketiciler hangi referansa göre okuduklarını bilmeli.
+        "baseline": "klinik_normal_referans",
     }
 
 

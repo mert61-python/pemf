@@ -3889,16 +3889,25 @@ async def export_clinic_data(payload: DataExportPayload, request: Request):
         "data_b64": _base64.b64encode(blob).decode("ascii"),
         # Sayımlar kullanıcıya gösterilir: "ne taşındığını" görebilmeli. Doz kaydı (bobin
         # koşuları) ayrı kalem — eskiden hiç taşınmadığı için hiç görünmüyordu da.
+        #
+        # ⚠️ DENETİM 2026-08-28 #05: `patients` anahtarı EKLEMELİ ve KALMALI. Arayüz (masaüstü +
+        # yayınlanmış APK'lar dahil) `counts.patients ?? 0` okur; bu anahtar yanıtta HİÇ yoktu →
+        # 300 hastalık yedek alan operatör "Yedek oluşturuldu: 0 hasta" görüyordu. Veri doğruydu,
+        # SAYI yalan söylüyordu — operatör yedeğe güvenmiyor ya da işlemi tekrarlıyordu.
+        # `patient_db` geriye uyum için duruyor; ikisi AYNI değeri taşır (kapı: test_yedek_sayaclari).
         "counts": {
-            k: len(paket.get(k) or [])
-            for k in (
-                "patient_db",
-                "treatment_sessions",
-                "session_coil_runs",
-                "sensor_samples",
-                "session_events",
-                "ai_analyses",
-            )
+            **{
+                k: len(paket.get(k) or [])
+                for k in (
+                    "patient_db",
+                    "treatment_sessions",
+                    "session_coil_runs",
+                    "sensor_samples",
+                    "session_events",
+                    "ai_analyses",
+                )
+            },
+            "patients": len(paket.get("patient_db") or []),
         },
     }
 
@@ -4006,13 +4015,22 @@ async def import_clinic_data(payload: DataImportPayload, request: Request):
     # olduğunu söylemez — tıbbi kayıt taşımada bu ayrım kritiktir. EKLEMELİ alanlar: mevcut
     # istemciler (`SettingsScreen` yalnız `patients`/`treatment_sessions`/`ai_analyses` okur)
     # etkilenmez.
+    #
+    # ⚠️ DENETİM 2026-08-28 #05: `n["patients"]` GERÇEK hasta sayısı DEĞİL — tedavi DB'sindeki
+    # FK hasta KOPYASININ satır sayısı. Arayüz `counts.patients` okuduğu için geri yüklemede
+    # yanlış sayıyı gösteriyordu. FK kopyası `patients_fk_kopya` adına taşındı; `patients` artık
+    # gerçekten eklenen hasta sayısını taşır (export ile aynı anlam). Kapı: test_yedek_sayaclari.
+    _n_disari = dict(n)
+    _fk_kopya = _n_disari.pop("patients", 0)
     return {
         "status": "success",
         "counts": {
             "patient_db": eklenen_hasta,
             "patient_db_zaten_vardi": _zaten_var,
             "patient_db_basarisiz": _basarisiz,
-            **n,
+            **_n_disari,
+            "patients": eklenen_hasta,
+            "patients_fk_kopya": _fk_kopya,
         },
     }
 

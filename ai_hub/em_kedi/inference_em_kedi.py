@@ -33,9 +33,17 @@ if not os.path.exists(ONNX_PATH):
         ONNX_PATH = download_model_sync(f"ai_hub/em_kedi/{MODEL_NAME}.onnx")
     except Exception as exc:
         MODEL_DOWNLOAD_ERROR = exc
-SCALER_X_PATH = os.path.join(_DIR, "scaler_X.pkl")
-SCALER_EXTRA_PATH = os.path.join(_DIR, "scaler_extra.pkl")
-SCALER_Y_PATH = os.path.join(_DIR, "scaler_y.pkl")
+# Denetim 2026-08-28 #09: yan dosyalar da /models'e duser (Docker imajinda
+# ai_hub/**/*.pkl elenir; klinik frozen EXE'de dosya modul yaninda oldugu icin
+# ilk kosul tutar ve cozucuye hic girilmez).
+try:
+    from utils.model_downloader import yan_dosya_coz as _yan
+except Exception:
+    def _yan(yerel, _repo):
+        return yerel
+SCALER_X_PATH = _yan(os.path.join(_DIR, "scaler_X.pkl"), "ai_hub/em_kedi/scaler_X.pkl")
+SCALER_EXTRA_PATH = _yan(os.path.join(_DIR, "scaler_extra.pkl"), "ai_hub/em_kedi/scaler_extra.pkl")
+SCALER_Y_PATH = _yan(os.path.join(_DIR, "scaler_y.pkl"), "ai_hub/em_kedi/scaler_y.pkl")
 
 ORGAN_IDS = [0, 1, 2, 3, 4, 5, 6]
 ORGAN_NAMES = {0: "kutu_butun", 1: "mide", 2: "bobrek", 3: "karaciger",

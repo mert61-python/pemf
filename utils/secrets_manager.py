@@ -308,6 +308,111 @@ def _config_dir() -> Path:
     return _data_dir()
 
 
+# ───────────────────── BULUT CİHAZ KİMLİĞİ — VERİ KÖKÜNDEN BAĞIMSIZ DEPO ─────────────────────
+# ⚠️ DENETİM 2026-08-28 #02 — KÖK NEDEN: KALICILIK ASİMETRİSİ.
+#   * `device_id` NIC MAC'inden türetilir (`path_utils.get_unique_device_id` → `uuid.getnode()`),
+#     yani veri kökü silinse de YENİDEN AYNI değeri üretir — kalıcıdır.
+#   * `device_registry_secret` ise rastgele üretilir ve YALNIZ veri kökündeki `pemf_secrets.json`
+#     içinde yaşar — veri kökü yenilenince KAYBOLUR ve yenisi doğar.
+# Buluttaki TOFU mührü `(device_id, secret_hash)` çiftine bağlı olduğundan sonuç deterministik:
+# veri kökü yenilenince birincil anahtar AYNI kalır, sır DEĞİŞİR → KALICI `secret_mismatch`.
+# Ölçülen saha sonucu: cihaz 13 gün boyunca buluta yazamadı; uzaktan bağlanan "cihaz bulunamadı"
+# gördü (cihaz açık, internete bağlıydı).
+#
+# ÇÖZÜM (sahip kararı 2026-08-28): sır veri kökünün DIŞINDA, makine kapsamlı bir dosyada tutulur.
+# Böylece veri kökü yenilense de sır device_id ile birlikte sabit kalır → uyuşmazlık HİÇ OLUŞMAZ.
+#
+# ⚠️ KVKK ÖDÜNLEŞİMİ VE KARŞILIĞI: sır artık hasta-verisi silme kapsamının dışında bir yerde.
+# Bu bilinçli; karşılığı `scripts/pemf_footprint.ps1`e `Kvkk = $true` kalemi olarak eklendi →
+# sıradan kaldır-kur sırrı KORUR (arıza olmaz), KVKK silmesi sırrı da GÖTÜRÜR (doğru davranış).
+#
+# ⚠️ DPAPI kapsamı LOCAL_MACHINE (`_dpapi`, flag 0x4): LocalSystem servisi de masaüstü kullanıcısı
+# da aynı blob'u çözebilir. Disk imajı/klonlama sırrı taşır — bu, seçilen yolun bilinen bedeli.
+_KIMLIK_DOSYASI = "device_identity.json"
+
+
+def _cihaz_kimlik_deposu() -> Path:
+    """Bulut cihaz sırrının VERİ KÖKÜNDEN BAĞIMSIZ kalıcı deposu.
+
+    Windows: `%ProgramData%\\PEMF_System\\device_identity.json` — `PEMF_System\\PEMF_GUI` (veri
+    kökü) silinse de ayakta kalır; `PEMF_System` KÖKÜ teardown'da KVKK-dışı sayılır (ölçüldü:
+    `pemf_footprint.ps1:35` kök `Kvkk=$false`, yalnız alt dizinler işaretli).
+    Linux/mac: `/var/lib/pemf` yazılabilirse orası, değilse `~/.pemf`.
+    Test/özel kurulum: `PEMF_DEVICE_IDENTITY_DIR` ile yönlendirilebilir.
+    """
+    override = os.getenv("PEMF_DEVICE_IDENTITY_DIR", "").strip()
+    if override:
+        d = Path(override)
+    elif os.name == "nt":
+        d = Path(os.getenv("PROGRAMDATA") or r"C:\ProgramData") / "PEMF_System"
+    else:
+        d = Path("/var/lib/pemf")
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            (d / ".yazma_denemesi").touch()
+            (d / ".yazma_denemesi").unlink()
+        except Exception:
+            d = Path.home() / ".pemf"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _kimlik_deposu_oku() -> str:
+    """Makine deposundaki bulut sırrını döndür (yoksa boş). ASLA istisna fırlatmaz."""
+    try:
+        p = _cihaz_kimlik_deposu() / _KIMLIK_DOSYASI
+        if not p.is_file():
+            return ""
+        ham = (json.loads(p.read_text(encoding="utf-8")) or {}).get("device_registry_secret", "")
+        if not ham:
+            return ""
+        return _dec(str(ham)).strip()
+    except Exception as e:
+        # Çözülemiyorsa (başka makine / bozuk dosya) SESSİZ düşme YOK: kararın izi kalsın.
+        logger.warning("Cihaz kimlik deposu okunamadı (%s) — veri kökündeki sır kullanılacak.", e)
+        return ""
+
+
+def _kimlik_deposu_yaz(deger: str) -> None:
+    """Sırrı makine deposuna yaz (DPAPI/makine-anahtarı ile). Başarısızlık AKIŞI KESMEZ."""
+    try:
+        p = _cihaz_kimlik_deposu() / _KIMLIK_DOSYASI
+        gecici = p.with_suffix(".tmp")
+        gecici.write_text(
+            json.dumps({"device_registry_secret": _enc(deger, critical=True)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(gecici, p)
+        # ⚠️ `_ensure_dir_hardened(p.parent)` BİLEREK ÇAĞRILMIYOR — iki sebeple:
+        #   (1) O fonksiyon SÜREÇ-GENELİ `_dir_hardened` bayrağını kullanır; burada başarıyla
+        #       koşarsa ASIL SIR DİZİNİNİN (veri kökü) sertleştirmesi bir daha denenmez.
+        #   (2) Kilitlenecek dizin `ProgramData\PEMF_System` KÖKÜ olurdu; orada `logs`,
+        #       `mosquitto`, `hotspot.json` gibi başka bileşenlerin yazdığı yollar var
+        #       (`pemf_footprint.ps1:43-45`) — ACL kısıtı onları bozabilir.
+        # İçerik zaten DPAPI/LOCAL_MACHINE ile şifreli: dosyayı okuyan başka bir makine çözemez.
+        logger.info("Bulut cihaz sırrı makine deposuna yazıldı (veri kökünden bağımsız): %s", p)
+    except Exception as e:
+        logger.warning("Cihaz kimlik deposuna yazılamadı (%s) — sır yalnız veri kökünde kalır.", e)
+
+
+def _bulut_sirri_oku() -> str:
+    """`device_registry_secret` için eski-kaynak okuyucusu: env → MAKİNE DEPOSU.
+
+    `get_secret` bu değeri bulursa veri kökündeki dosyaya migrate eder; yani veri kökü
+    yenilendiğinde sır AYNI kalır ve TOFU mührü bozulmaz."""
+    return (os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip() or _kimlik_deposu_oku()).strip()
+
+
+def _bulut_sirri_uret() -> str:
+    """Yeni bulut sırrı üret VE makine deposuna yaz.
+
+    ⚠️ Yazma şart: yalnız veri köküne yazılırsa bir sonraki kök yenilemesinde yine kaybolur ve
+    bulgu geri gelir (bu fonksiyonun tek varlık sebebi budur)."""
+    yeni = _gen_urlsafe32()
+    _kimlik_deposu_yaz(yeni)
+    return yeni
+
+
 def _bundled_cloud(key: str) -> str:
     """PAKETE GÖMÜLÜ bulut-MQTT provizyonunu oku (E-stop bulut aynası — sahip kararı 2026-08-19).
 
@@ -374,11 +479,14 @@ _REGISTRY: dict[str, tuple] = {
     # Coverage-audit P1: bulut capability-token — Supabase RPC'lerinde device_id (gizli-değil) yerine
     # YETKİ anahtarı. dpapi=True (kritik). İlk publish'te TOFU ile bulut secret_hash'e mühürlenir; sonra
     # her RPC (upsert_device/upsert_patient/resolve_patients...) bunu p_secret olarak gönderir.
+    # ⚠️ DENETİM 2026-08-28 #02: üreteç ve eski-kaynak okuyucusu MAKİNE DEPOSUNA bağlandı
+    # (bkz. `_cihaz_kimlik_deposu` üstündeki uzun not). Veri kökü yenilendiğinde sır artık
+    # kaybolmuyor → TOFU mührü bozulmuyor → kalıcı `secret_mismatch` OLUŞMUYOR.
     "device_registry_secret": (
         "auto",
         True,
-        _gen_urlsafe32,
-        lambda: os.getenv("PEMF_DEVICE_REGISTRY_SECRET", "").strip(),
+        _bulut_sirri_uret,
+        _bulut_sirri_oku,
     ),
     "master_secret": (
         "operator",
@@ -605,7 +713,15 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
         raw = (doc.get(section, {}).get(key) or "").strip()
         if raw:
             try:
-                return _dec(raw)
+                _cozulen = _dec(raw)
+                # ⚠️ DENETİM 2026-08-28 #02 — GERİYE DÖNÜK KURTARMA. Kalıcı çözüm yalnız YENİ
+                # kurulumları korusaydı sahadaki cihazlar açıkta kalırdı: onlarda sır zaten veri
+                # kökünde DOLU olduğu için aşağıdaki migrate/üret yoluna hiç girilmez ve makine
+                # deposuna hiç yazılmazdı → ilk kaldır-kur döngüsünde sır yine kaybolur, TOFU
+                # mührü yine bozulurdu. Bu satır mevcut sırrı bir kereliğine depoya taşır.
+                if key == "device_registry_secret" and _cozulen and not _kimlik_deposu_oku():
+                    _kimlik_deposu_yaz(_cozulen)
+                return _cozulen
             except Exception as e:
                 # KRİTİK VERİ-KORUMA (brick koruması): sır DEPOLANMIŞ ama çözülemiyor (ör. DPAPI
                 # makine/kullanıcı-profili değişti, master-key döndü). Burada YENİ üretip dosyayı EZERSEK

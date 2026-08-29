@@ -3032,24 +3032,76 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
 # MALİYET: varsayılan mod HAFİFTİR (find_spec + dosya varlığı, model YÜKLEMEZ).
 # `?derin=1` gerçek import dener — ölü-doğmuş modülü yakalayan tek mod budur; ağır
 # olduğu için istek üzerine çalışır ve canlı seans akışına girmez.
+# ⚠️ DENETİM 2026-08-28 #03 — BU ENVANTERİN MODEL SÜTUNU SAHTEYDİ. 13 modülün 12'sinde model
+# yolu `None`'dı; `_model_hazir_mi(None)` tek satırda `return "gomulu",""` diyor, HİÇBİR dosyaya
+# bakmıyordu ve "gomulu" PASS sayılıyordu. Ölçülen sonuç: model dizini eksik bir kurulumda
+# `/api/ai/sound/cat` ve `/vision/thermal` HTTP 500 verirken kapı **12/13 "gomulu"** diyordu;
+# eksik dizin koşan sürece kopyalanıp uçlar 200'e dönünce kapı çıktısı BİT DÜZEYİNDE AYNI kaldı.
+# Yani sütunun bilgi içeriği sıfırdı — sessiz ölümün panzehri olarak eklenen uç, kendisi kördü.
+# "Gömülü" iddiası da yanlıştı: bu modüllerin çoğunun ağırlığı profil paketlerinde (model zip'i).
+#
+# Yollar `build_tools/make_model_zip.py::PROFILLER` + `make_base_zip.py::CORE_MODELS` ile aynı
+# olmalı; sapmayı `tests/test_ai_hazirlik_envanteri.py` kilitler (frozen'da build_tools yok,
+# bu yüzden liste burada AÇIK yazılır — tek-kaynak sapması testle yakalanır).
 _AI_MODUL_ENVANTERI = [
-    # (ad, import yolu, model göreli yolu | None)
-    ("landmark", "ai_hub.cat_landmark.inference_cat_landmark", None),
-    ("thermal", "ai_hub.cat_thermal.inference_cat_thermal", None),
-    ("segmentation", "ai_hub.cat_segmentation.inference_cat_segmentation", None),
-    ("cat_sound", "ai_hub.inference_cat_sound.inference_cat_sound", None),
-    ("cat_organ", "ai_hub.inference_cat_organ.catorgan_predictor", None),
-    ("reticulocytes", "ai_hub.feline_reticulocytes.inference_feline_reticulocytes", None),
-    ("kidney_ct", "ai_hub.inference_human_kidney_ct.inference_human_kidney_ct", None),
-    ("kidney_rna", "ai_hub.inference_human_kidney_rna.inference_human_kidney_rna", None),
-    ("histopath", "ai_hub.inference_renal_histopath_kmc.inference_renal_histopath_kmc", None),
-    ("em_kedi", "ai_hub.em_kedi.inference_em_kedi", None),
-    ("em_fantom", "ai_hub.inference_em_fantom.inference_em_fantom", None),
-    ("em_petri", "ai_hub.inference_em_petri.inference_em_petri", None),
+    # (ad, import yolu, model göreli yolu) — model yolu None OLAMAZ (kapı testi bunu yasaklar).
+    ("landmark", "ai_hub.cat_landmark.inference_cat_landmark", "ai_hub/cat_landmark/yolo26m-pose.onnx"),
+    ("thermal", "ai_hub.cat_thermal.inference_cat_thermal", "ai_hub/cat_thermal/GhostNetV2.onnx"),
+    (
+        "segmentation",
+        "ai_hub.cat_segmentation.inference_cat_segmentation",
+        "ai_hub/cat_segmentation/yolov8m-seg.onnx",
+    ),
+    (
+        "cat_sound",
+        "ai_hub.inference_cat_sound.inference_cat_sound",
+        "ai_hub/inference_cat_sound/EfficientNet_Lite0.onnx",
+    ),
+    # cat_organ ÇEKİRDEK pakette (CORE_MODELS) — üç ONNX'ten biri yoksa modül ölür; en büyüğü kilit.
+    # ⚠️ Ağırlıklar `models/` ALT DİZİNİNDE (diğer modüllerin aksine); yol buna göre yazıldı.
+    (
+        "cat_organ",
+        "ai_hub.inference_cat_organ.catorgan_predictor",
+        "ai_hub/inference_cat_organ/models/yolov8m-seg.onnx",
+    ),
+    (
+        "reticulocytes",
+        "ai_hub.feline_reticulocytes.inference_feline_reticulocytes",
+        "ai_hub/feline_reticulocytes/yolov8s.onnx",
+    ),
+    (
+        "kidney_ct",
+        "ai_hub.inference_human_kidney_ct.inference_human_kidney_ct",
+        "ai_hub/inference_human_kidney_ct/yolov8s.onnx",
+    ),
+    (
+        "kidney_rna",
+        "ai_hub.inference_human_kidney_rna.inference_human_kidney_rna",
+        "ai_hub/inference_human_kidney_rna/mlp_medium_kirc.pt",
+    ),
+    (
+        "histopath",
+        "ai_hub.inference_renal_histopath_kmc.inference_renal_histopath_kmc",
+        "ai_hub/inference_renal_histopath_kmc/v22_kmc_classictrio_kmc.onnx",
+    ),
+    ("em_kedi", "ai_hub.em_kedi.inference_em_kedi", "ai_hub/em_kedi/BiLSTM_XXL_Raw.onnx"),
+    (
+        "em_fantom",
+        "ai_hub.inference_em_fantom.inference_em_fantom",
+        "ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",
+    ),
+    ("em_petri", "ai_hub.inference_em_petri.inference_em_petri", "ai_hub/inference_em_petri/BaggingRegressor.onnx"),
     (
         "scratch",
         "ai_hub.inference_paper_dilek_hoca.cell.cpn",
         "ai_hub/inference_paper_dilek_hoca/ginoro_CpnResNeXt101UNet-fbe875f1a3e5ce2c.pt",
+    ),
+    # Denetim #03(c): bu iki uç envanterde HİÇ YOKTU — 15 canlı AI rotasından 13'ü kapsanıyordu.
+    ("cat_disease", "ai_hub.cat_disease.inference_cat_disease", "ai_hub/cat_disease/XGBoost.pkl"),
+    (
+        "kidney_disease",
+        "ai_hub.inference_human_kidney_disease.inference_human_kidney_disease",
+        "ai_hub/inference_human_kidney_disease/ExtraTrees.onnx",
     ),
 ]
 
@@ -3069,12 +3121,23 @@ def _modul_hazir_mi(import_yolu: str, derin: bool) -> tuple[str, str]:
 
 
 def _model_hazir_mi(rel_yol: str | None) -> tuple[str, str]:
-    if not rel_yol:
-        return "gomulu", ""
-    try:
-        from ai_hub.xai_utils.pt_yolu import pt_coz
+    """Model ağırlığı GERÇEKTEN çözülebiliyor mu (denetim #03).
 
-        pt_coz(rel_yol)
+    ⚠️ İKİ DEĞİŞMEZ, ikisi de ölçümle kondu:
+      1. `rel_yol is None` artık "gomulu" DEĞİL, `envanter_eksik` HATASIDIR. Eski davranış
+         (None → "gomulu" → PASS) kapının 12 modülde hiçbir şeye bakmamasının sebebiydi.
+      2. Çözücü `find_installed_model` — CANLI çıkarımın baktığı 5 kök + bütünlük sağlaması.
+         `pt_coz` yalnız PT ikizleri içindir ve farklı bir yol kümesine bakar; kapının canlı
+         yoldan BAŞKA bir yere bakması, tam olarak "yeşil kapı / ölü uç" durumunu üretir.
+    """
+    if not rel_yol:
+        return "envanter_eksik", "model yolu tanımsız — envantere gerçek yol yazılmalı (denetim #03)"
+    try:
+        from utils.model_downloader import find_installed_model
+
+        yol = find_installed_model(rel_yol)
+        if not yol:
+            return "model_yok", f"{rel_yol} hiçbir model kökünde bulunamadı (ya da bütünlük sağlaması başarısız)"
         return "ok", ""
     except Exception as e:
         return "model_yok", _kok_neden_zinciri(e)
@@ -3092,7 +3155,9 @@ async def ai_hazirlik(derin: int = 0):
     for ad, import_yolu, model_yolu in _AI_MODUL_ENVANTERI:
         kod_durum, kod_ayrinti = await asyncio.to_thread(_modul_hazir_mi, import_yolu, derin_mi)
         model_durum, model_ayrinti = await asyncio.to_thread(_model_hazir_mi, model_yolu)
-        hazir = kod_durum == "ok" and model_durum in ("ok", "gomulu")
+        # Denetim #03: "gomulu" PASS listesinden ÇIKARILDI — dosyaya bakmadan verilen bir
+        # geçiş notuydu. Artık yalnız gerçekten çözülen ağırlık ("ok") hazır sayılır.
+        hazir = kod_durum == "ok" and model_durum == "ok"
         if not hazir:
             logger.warning(
                 "AI HAZIRLIK: %s HAZIR DEĞİL — kod=%s (%s) model=%s (%s)",
@@ -3108,12 +3173,16 @@ async def ai_hazirlik(derin: int = 0):
                 "hazir": hazir,
                 "kod": kod_durum,
                 "model": model_durum,
+                # Denetim #07: modül GERÇEKTE nereden yüklendi (pyd/pyenc = korumalı,
+                # pyz/py = koruma yok). Yalnız derin=1'de anlamlı — sığ taramada import
+                # yapılmadığı için modül henüz sys.modules'te olmayabilir.
+                "yukleme": (_modul_yukleme_bicimi(import_yolu) if derin_mi else "olculmedi"),
                 # Kısa sebep: tip + ilk 200 karakter (yol/sistem detayı sızdırmaz).
                 "sebep": (kod_ayrinti or model_ayrinti or "")[:200],
             }
         )
     hazir_sayisi = sum(1 for m in moduller if m["hazir"])
-    return {
+    yanit = {
         "status": "success",
         "derin": derin_mi,
         "toplam": len(moduller),
@@ -3121,3 +3190,97 @@ async def ai_hazirlik(derin: int = 0):
         "eksik": [m["modul"] for m in moduller if not m["hazir"]],
         "moduller": moduller,
     }
+    if derin_mi:
+        yanit["xai"] = await asyncio.to_thread(_xai_zinciri_durumu)
+        yanit["pip_yasagi"] = _pip_yasagi_durumu()
+    return yanit
+
+
+def _xai_zinciri_durumu() -> dict:
+    """Açıklanabilirlik zincirinin GERÇEK durumu (denetim #03(b)).
+
+    ⚠️ Kapı yalnız üst-seviye import deniyordu; XAI kütüphaneleri (`pytorch_grad_cam`, `captum`,
+    `shap`, `ttach`) FONKSİYON İÇİNDE lazy import edilir → hiçbiri görünmüyordu. Ölçüldü:
+    tüm XAI yığını `sys.meta_path` ile bloklandığında kapı 13/13 `kod=ok` demeye devam etti,
+    aynı anda gerçek termal XAI `ImportError` ile patlıyordu.
+
+    ⚠️ `TORCH_XAI_AVAILABLE` KULLANILMAZ: o bayrak yalnız `grad_cam` MODÜLÜNÜN import
+    edilebildiğini söyler; `pytorch_grad_cam` yokken de `True` döner (modül kendi içinde
+    `_AVAILABLE=False`'a düşüp sessizce açıklamasız çalışır). Doğru sinyal `grad_cam._AVAILABLE`.
+    """
+    import importlib
+
+    durum: dict = {}
+    try:
+        gc = importlib.import_module("ai_hub.xai_utils.grad_cam")
+        durum["grad_cam"] = "ok" if getattr(gc, "_AVAILABLE", False) else "kutuphane_yok"
+    except Exception as e:
+        durum["grad_cam"] = "kod_hatali"
+        durum["grad_cam_sebep"] = _kok_neden_zinciri(e)[:200]
+
+    for ad in ("pytorch_grad_cam", "captum", "shap", "ttach"):
+        try:
+            importlib.import_module(ad)
+            durum[ad] = "ok"
+        except Exception as e:
+            durum[ad] = "yok"
+            durum[f"{ad}_sebep"] = _kok_neden_zinciri(e)[:200]
+
+    # EM XAI referans istatistikleri: `.npz` bir kez spec'te yoktu → EM XAI 1.9.25'ten beri
+    # üretimde SESSİZ ölüydü ve kapı görmedi (denetim #03'ün kendi örneği).
+    eksik_npz = []
+    for modul in ("em_kedi", "inference_em_fantom", "em_petri", "em_phantom", "inference_em_petri"):
+        try:
+            spec = importlib.util.find_spec(f"ai_hub.{modul}")
+            if spec is None or not spec.submodule_search_locations:
+                continue
+            from pathlib import Path as _P
+
+            if not (_P(list(spec.submodule_search_locations)[0]) / "xai_ref_stats.npz").exists():
+                eksik_npz.append(modul)
+        except Exception:
+            continue
+    durum["em_ref_stats_eksik"] = eksik_npz
+    durum["hazir"] = durum.get("grad_cam") == "ok" and not eksik_npz
+    return durum
+
+
+def _modul_yukleme_bicimi(import_yolu: str) -> str:
+    """Modül GERÇEKTE nereden yüklendi? (denetim 2026-08-28 #07)
+
+    ⚠️ UZANTIYA BAKMA. PyInstaller 6.20, PYZ arşivinden yüklenen modüle de `.py` uzantılı bir
+    `__file__` verir (`pyimod02_importers.py:405-418` bunu bilerek yapar), `EncryptedLoader` ise
+    (`utils/encrypted_import.py:88` — `spec_from_loader` + `get_filename` yok) `__file__`
+    ATAMAZ. İkisi de ölçüldü: uzantı tabanlı ayrım "PYZ bytecode" ile "diskte düz kaynak"ı
+    karıştırır — oysa alanın var oluş sebebi tam olarak bu ayrımdır.
+
+    Anlamlar:
+      pyd    → Cython native uzantı. KORUMALI.
+      pyenc  → şifreli yedek katman. MEŞRU koruma (build_installer.ps1:574 sahip ölçütü).
+      pyz    → PYZ arşivi. KORUMA YOK — okunabilir bytecode.
+      py     → diskte düz kaynak. KORUMA YOK.
+    """
+    import sys as _sys
+
+    mod = _sys.modules.get(import_yolu)
+    if mod is None:
+        return "yok"
+    ad = type(getattr(mod, "__loader__", None)).__name__
+    return {
+        "ExtensionFileLoader": "pyd",
+        "PyiFrozenLoader": "pyz",
+        "EncryptedLoader": "pyenc",
+        "SourceFileLoader": "py",
+        "SourcelessFileLoader": "pyc",
+        "_NamespaceLoader": "nspkg",
+    }.get(ad, f"bilinmiyor:{ad}")
+
+
+def _pip_yasagi_durumu() -> dict:
+    """Çalışma-anı pip yasağı gerçekten kurulu mu (denetim #10 kapısının teşhis görünürlüğü)."""
+    try:
+        from utils.runtime_guards import kurulum_yasagi_etkin_mi
+
+        return {"etkin": bool(kurulum_yasagi_etkin_mi())}
+    except Exception as e:
+        return {"etkin": False, "sebep": _kok_neden_zinciri(e)[:200]}

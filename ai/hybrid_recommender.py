@@ -140,6 +140,9 @@ CLINICAL_PROTOCOLS = {
     'ağrı': {'freq': 70, 'duty': 50, 'duration': 30, 'intensity': 1.75, 'evidence': 'high'},
     'akut ağrı': {'freq': 85, 'duty': 55, 'duration': 20, 'intensity': 1.5, 'evidence': 'medium'},
     'inflamasyon': {'freq': 87, 'duty': 47, 'duration': 27, 'intensity': 1.25, 'evidence': 'high'},
+    # Arayüz yazımı 'Enflamasyon' (E-) — 'inflamasyon' (İ-) ile eşleşmiyordu → sessizce wellness
+    # dozu dönüyordu. Denetim 2026-08-28 #01; kapı: test_literatur_hedef_sozlesmesi.py.
+    'enflamasyon': {'freq': 87, 'duty': 47, 'duration': 27, 'intensity': 1.25, 'evidence': 'high'},
     'iltihap': {'freq': 87, 'duty': 47, 'duration': 27, 'intensity': 1.25, 'evidence': 'high'},
     'kırık': {'freq': 60, 'duty': 37, 'duration': 52, 'intensity': 2.0, 'evidence': 'high'},
     'kemik': {'freq': 60, 'duty': 37, 'duration': 52, 'intensity': 2.0, 'evidence': 'high'},
@@ -154,11 +157,17 @@ CLINICAL_PROTOCOLS = {
     'nörolojik': {'freq': 70, 'duty': 42, 'duration': 37, 'intensity': 1.15, 'evidence': 'high'},
     'ivdd': {'freq': 70, 'duty': 42, 'duration': 37, 'intensity': 1.15, 'evidence': 'high'},
     'nöropati': {'freq': 70, 'duty': 42, 'duration': 37, 'intensity': 1.15, 'evidence': 'high'},
+    # Arayüz hedefi 'Sinir Rejenerasyonu' hiçbir anahtarla eşleşmiyordu (denetim #01).
+    'sinir': {'freq': 70, 'duty': 42, 'duration': 37, 'intensity': 1.15, 'evidence': 'high'},
     'wellness': {'freq': 77, 'duty': 50, 'duration': 30, 'intensity': 1.0, 'evidence': 'high'},
     'rahatlama': {'freq': 77, 'duty': 50, 'duration': 30, 'intensity': 1.0, 'evidence': 'high'},
     'ödem': {'freq': 110, 'duty': 45, 'duration': 25, 'intensity': 1.5, 'evidence': 'medium'},
     'tendon': {'freq': 75, 'duty': 40, 'duration': 37, 'intensity': 1.75, 'evidence': 'high'},
     'ligament': {'freq': 75, 'duty': 40, 'duration': 37, 'intensity': 1.75, 'evidence': 'high'},
+    # 'Bağ Dokusu Tamiri' kısa 'doku' anahtarına takılıp YUMUŞAK-DOKU dozunu (105/50/30)
+    # 'literature_exact' etiketiyle döndürüyordu — en sinsi hâli: kaynak doğru görünüyor, doz
+    # yanlış. Substring taraması en-uzun-anahtar öncelikli olduğu için bu anahtar 'doku'yu yener.
+    'bağ dokusu': {'freq': 75, 'duty': 40, 'duration': 37, 'intensity': 1.75, 'evidence': 'high'},
 }
 
 # Audit P1: anahtarları girdiyle AYNI normalizasyondan geçir. CLINICAL_PROTOCOLS anahtarları ham
@@ -585,7 +594,18 @@ def get_literature_recommendation(treatment_target: str, app_data_dir: Optional[
     if protocol is not None:
         source = 'literature_exact'
     else:
-        # Fallback to default wellness when no direct/substring protocol exists
+        # Fallback to default wellness when no direct/substring protocol exists.
+        # Denetim 2026-08-28 #01: bu dal SESSİZDİ — vet hedefe-özel doz aldığını sanıyordu.
+        # Artık iz bırakır; arayüz de 'source' alanına bakıp rozet gösterir.
+        logger.warning(
+            "Literatür protokolü YOK: hedef=%r (temiz=%r) → genel wellness dozuna düşüldü "
+            "(%s Hz / %s%% / %s dk). Hedefe özel doz istiyorsanız CLINICAL_PROTOCOLS'a anahtar ekleyin.",
+            treatment_target,
+            target_clean,
+            recommender.clinical_db['wellness']['freq'],
+            recommender.clinical_db['wellness']['duty'],
+            recommender.clinical_db['wellness']['duration'],
+        )
         protocol = recommender.clinical_db['wellness'].copy()
 
     return {

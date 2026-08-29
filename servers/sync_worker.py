@@ -441,6 +441,10 @@ class CloudSyncWorker:
         'last_seen' bir heartbeat'tir (cihazin canli oldugunu gosterir).
         """
         if not self.client:
+            # Denetim #02: durum burada da yazilir. Bu erken cikisa uretimde yalniz `publish_now`
+            # (tunel geri-cagrimi) ulasabilir ve o anda durum zaten "unknown"dir; yine de
+            # sessiz birakmak, durumu tuketen arayuzu belirsizlikte birakirdi.
+            self._registry_status = "istemci_yok"
             return False
         try:
             from datetime import datetime, timezone
@@ -561,6 +565,16 @@ class CloudSyncWorker:
         except Exception as e:
             # Yazilamadi (tablo yok / RLS / RPC yok). Sync'i bozma ama GORUNUR logla
             # (eskiden DEBUG'ta sessizce yutuluyordu → registry'nin neden bos kaldigi gizleniyordu).
+            #
+            # ⚠️ DENETIM 2026-08-28 #02: bu dal `_registry_status`'u GUNCELLEMIYORDU. Bir kez
+            # "ok" olmus cihazda sonraki turlar burada dusunce /api/health SONSUZA DEK "ok"
+            # demeye devam ediyordu — yani durum alanini tuketen her sey (yeni arayuz rozeti
+            # dahil) YANLIS SUSAR. Bayat "ok" en kotu teshis bilgisidir: arizayi gizler.
+            # ("error" sinifi zaten yukarida ic dalda da kullaniliyor; burada YALNIZ bayatligi
+            # kiriyoruz, `return False` kararina ve backoff davranisina dokunmuyoruz.)
+            if self._registry_status != "secret_mismatch":
+                # secret_mismatch KALICI ve daha tanilayici bir siniftir — genel "error" ile EZME.
+                self._registry_status = "error"
             logger.warning(f"Device registry publish BASARISIZ: {e}")
             return False  # ağ/RPC hatası → _sync_loop backoff'u ×2 (üst 300sn) → uzun kesintide gürültü azalır
 

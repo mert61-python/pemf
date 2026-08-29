@@ -37,6 +37,14 @@ _OTURUM_IZOLE = Path(tempfile.mkdtemp(prefix="pemf_test_veri_"))
 (_OTURUM_IZOLE / "PEMF_GUI").mkdir(parents=True, exist_ok=True)
 os.environ["PEMF_DATA_DIR"] = str(_OTURUM_IZOLE)
 os.environ["APPDATA"] = str(_OTURUM_IZOLE)
+# ⚠️ DENETİM 2026-08-28 #02: `device_registry_secret` artık VERİ KÖKÜNÜN DIŞINDA, makine
+# kapsamlı bir dosyada tutuluyor (`utils/secrets_manager._cihaz_kimlik_deposu`). O yol
+# `PEMF_DATA_DIR`e BAKMAZ → yukarıdaki izolasyon onu KAPSAMAZ. ÖLÇÜLDÜ: süit, gerçek
+# `C:\ProgramData\PEMF_System\device_identity.json` dosyasına TEST SIRRI yazdı ve
+# oradaki değer klinik cihazınkinden FARKLIYDI. Sonucu sinsi: veri kökü bir gün
+# yenilendiğinde o yanlış sır kullanılır ve düzeltilen `secret_mismatch` arızası GERİ GELİR.
+# (Aynı sınıf: `test_veri_dizini_izolasyonu.py`nin kilitlediği eski sızıntı.)
+os.environ["PEMF_DEVICE_IDENTITY_DIR"] = str(_OTURUM_IZOLE / "makine_kimligi")
 # Scratch CPN warmup thread'i testte ASLA başlamasın (CI ölçümü 2026-08-26, exit 134:
 # daemon thread + interpreter kapanışı yarışı — app.py'de find_spec ön-kontrolü de var,
 # bu satır çift emniyet + testlerin startup davranışını deterministik kılar).
@@ -74,6 +82,8 @@ def _gercek_kurulumu_koru(tmp_path):
     mp = pytest.MonkeyPatch()
     mp.setenv("PEMF_DATA_DIR", str(izole))
     mp.setenv("APPDATA", str(izole))
+    # Denetim #02: makine kapsamlı bulut-kimlik deposu da izole edilmeli (veri kökünün dışında).
+    mp.setenv("PEMF_DEVICE_IDENTITY_DIR", str(izole / "makine_kimligi"))
     try:
         import utils.secrets_manager as sm
 
@@ -116,6 +126,8 @@ def temp_app_data(tmp_path):
     mp = pytest.MonkeyPatch()
     mp.setenv("APPDATA", str(tmp_path))
     mp.setenv("PEMF_DATA_DIR", str(tmp_path))
+    # Denetim #02: bkz. yukarıdaki not — bu yol PEMF_DATA_DIR'e bakmaz, ayrıca izole edilir.
+    mp.setenv("PEMF_DEVICE_IDENTITY_DIR", str(tmp_path / "makine_kimligi"))
 
     def _onbellegi_temizle():
         try:

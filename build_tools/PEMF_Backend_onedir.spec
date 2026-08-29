@@ -83,15 +83,57 @@ except Exception as e:
 # "No package metadata was found for imageio" ile ölüyordu; kullanıcı bunu
 # "model paketi gerekli" olarak görüyordu (model diskte KURULUYDU).
 # `recursive=True` bağımlılık ağacındaki metadata'yı da toplar → aynı sınıf hata
-# yeni AI modüllerinde tekrar etmesin. Tek tek eklemek yerine zincir toplanır;
-# eksik paket sessizce atlanır (uyarı basılır), build düşmez.
-for _meta_pkg in ('celldetection', 'imageio', 'scikit-image', 'albumentations',
-                  'pytorch-lightning', 'torchmetrics', 'timm', 'shap', 'captum',
-                  'grad-cam', 'librosa', 'scikit-learn'):
-    try:
-        datas += copy_metadata(_meta_pkg, recursive=True)
-    except Exception as _me:
-        print(f"[metadata] {_meta_pkg} atlandı: {_me}")
+# yeni AI modüllerinde tekrar etmesin.
+#
+# ⚠️ DENETİM 2026-08-28 #10 — BU BLOK KENDİ HEDEF PAKETİ İÇİN ÇALIŞMIYORDU. Ölçüldü:
+# `recursive=True`, ağaçtaki TEK bir eksik dağıtımda (`opencv-python-headless` — bu ortamda
+# kurulu olan `opencv-python`) TÜM çağrıyı `PackageNotFoundError` ile düşürüyor. Sonuç:
+# celldetection + albumentations + grad-cam metadata'sı HİÇ toplanmıyordu; yani 27 Ağustos
+# arızasını çözmek için yazılan önlem, arızanın paketini kapsamıyordu. `except` sessizce
+# yutup build'i yeşil bırakıyordu — kapının kendisi sessiz ölmüştü.
+#
+# Yeni davranış üç kademeli:
+#   1) recursive dene (en geniş kapsam),
+#   2) patlarsa DÜZ copy_metadata'ya düş — paketin KENDİ .dist-info'su yine toplanır,
+#   3) o da patlarsa: paket ortamda KURULUYSA build'i DÜŞÜR (sessiz atlama yok), kurulu
+#      değilse yalnız uyar (isteğe bağlı bağımlılık meşru şekilde yok olabilir).
+def _metadata_topla(_pkgler):
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _surum
+
+    _cikti = []
+    for _p in _pkgler:
+        try:
+            _cikti += copy_metadata(_p, recursive=True)
+            continue
+        except Exception as _me:
+            print(f"[metadata] {_p}: recursive basarisiz ({_me}) -> duz metadata deneniyor")
+        try:
+            _cikti += copy_metadata(_p)
+            print(f"[metadata] {_p}: duz metadata toplandi")
+            continue
+        except Exception as _me2:
+            try:
+                _v = _surum(_p)
+            except PackageNotFoundError:
+                print(f"[metadata] {_p}: ortamda KURULU DEGIL, atlaniyor")
+                continue
+            raise SystemExit(
+                f"[metadata] KRITIK: {_p} {_v} kurulu ama .dist-info toplanamadi ({_me2}). "
+                f"Frozen EXE'de importlib.metadata.version('{_p}') PackageNotFoundError verir; "
+                f"ilgili AI modulu SESSIZCE olur. Build durduruldu."
+            )
+    return _cikti
+
+
+# `onnxruntime`: denetim #10 — metadata'sı yoktu, ultralytics onu 'eksik' sanıp çalışma anında
+# `PEMF_Backend.exe -m pip install onnxruntime` ile KENDİNİ alt-süreç olarak başlatıyordu
+# (exit 2, model başına ~2,9 sn ve destek mühendisini yanıltan kırmızı log).
+datas += _metadata_topla((
+    'celldetection', 'imageio', 'scikit-image', 'albumentations',
+    'pytorch-lightning', 'torchmetrics', 'timm', 'shap', 'captum',
+    'grad-cam', 'librosa', 'scikit-learn', 'onnxruntime', 'pi-heif',
+))
 
 # --- SQLCipher (AT-REST ŞİFRELEME) — KRİTİK ---
 # treatment_history_db lazy try-except ile import ettiğinden PyInstaller static analizi
@@ -434,7 +476,41 @@ a = Analysis(
 )
 
 # torch/torchvision .py kaynaklarını at (boyut)
-a.datas = [x for x in a.datas if not (('torch' in x[0].lower() or 'torchvision' in x[0].lower()) and x[0].endswith('.py'))]
+#
+# ⚠️ DENETİM 2026-08-28 #07(a): eski filtre `'torch' in x[0].lower()` idi ve YOL-ÇIPASIZ olduğu
+# için `ai_hub/xai_tabular/ig_torch.py`yi de yiyordu (adında "torch" geçiyor). ÖLÇÜLDÜ: o modül
+# sevk ağacında HİÇ yoktu (compile_pyd hedef listesi 65, ig_torch orada değil), yalnız PYZ'de
+# bytecode olarak yaşıyordu. `inference_human_kidney_rna.py:219` onu canlı XAI yolunda lazy
+# import eder — yani aşağıdaki PYZ temizliği bu düzeltme OLMADAN yapılsaydı, RNA gen-katkısı
+# açıklaması sahada sessizce ölecekti. (Kapı: scripts/sevk_agaci_ai_hub_kapisi.py)
+def _torch_kaynagi_mi(hedef: str) -> bool:
+    """YALNIZ torch/torchvision paket KÖKÜNDEKİ .py kaynakları (boyut için atılır)."""
+    p = hedef.replace('\\', '/').lower()
+    return p.endswith('.py') and (p.startswith('torch/') or p.startswith('torchvision/'))
+
+
+a.datas = [x for x in a.datas if not _torch_kaynagi_mi(x[0])]
+
+# ⚠️ DENETİM 2026-08-28 #07(b) — KOD KORUMASININ ASIL KAPISI.
+# `collect_submodules('ai_hub')` ai_hub'ın tüm modüllerini `a.pure`'a, oradan da PYZ arşivine
+# BYTECODE olarak gömüyordu; `compile_pyd.py` ise yalnız DİSKTEKİ .py'leri .pyd'ye çevirip
+# siliyordu. PyInstaller 6'da `PyiFrozenFinder` aynı dizin için ÖNCE PYZ'ye bakar, orada YOKSA
+# python'un FileFinder'ına düşer → PYZ diski HER ZAMAN yener.
+#
+# ÖLÇÜLDÜ (sevk edilen 1.9.31 EXE'si, çalışan süreçte): yüklü ai_hub `.pyd` sayısı 1/65 — ve o
+# tek modül tam olarak `cat_segmentation`, yani PYZ'de ikizi OLMAYAN tek modül. Doğal deney:
+# 64 `.pyd` hiç yüklenmiyordu, Cython katmanının koruma katkısı SIFIRDI. EXE'nin PYZ'sinden
+# okunabilir bytecode çıkarıldı (docstring + fonksiyon adları dahil), dört koruma kapısı da
+# yeşil yanıyordu çünkü dördü de yalnız "DİSKTE düz .py var mı" diye soruyordu.
+#
+# ai_hub PYZ'den ÇIKARILIR → import zorunlu olarak diskteki .pyd/.pyenc'e düşer.
+# ⚠️ YERİNDE (dilim) atama ŞART: PYZ, kod önbelleğini `id(a.pure)` ile arar
+# (build_main.py:953 → api.py:109). Listeyi yeniden bağlarsan önbellek düşer ve tüm PYZ
+# kaynaklardan yeniden derlenir (build belirgin şekilde yavaşlar).
+a.pure[:] = [x for x in a.pure if x[0].split('.')[0] != 'ai_hub']
+_ai_kalan = [x[0] for x in a.pure if x[0].split('.')[0] == 'ai_hub']
+assert not _ai_kalan, f"ai_hub HALA PYZ'de ({len(_ai_kalan)} giris): {_ai_kalan[:5]}"
+print('[KORUMA] ai_hub PYZ disi birakildi -> import diskteki .pyd/.pyenc e duser')
 
 pyz = PYZ(a.pure)
 

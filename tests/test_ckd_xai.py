@@ -79,6 +79,165 @@ def test_KRITIK_ckd_xai_tek_hasta_DEJENERE_DEGIL_ve_klinik_cekirdek():
     assert 0.0 <= res["prob_ckd"] <= 1.0
 
 
+# ── 1b) DENETİM 2026-08-28 #04: açıklama YAKINSAMIŞ ve EKSİKSİZ olmalı ───────
+# ⚠️ Yukarıdaki test bu üç kusuru GÖREMİYORDU (ölçüldü): `nsamples` 10'a düşürüldüğünde bile
+# yeşil kalıyordu, çünkü toplam-kütle eşiği (1e-4) ve "klinik çekirdek kesişimi" gürültüyle de
+# sağlanabiliyor. Ölçülen kusurlar:
+#   (1) YAKINSAMA YOK — yalnız seed değişince ilk-5 kümesi TAMAMEN değişiyordu (n=60).
+#   (2) l1_reg VARSAYILANI ("num_features(10)") 24 özelliğin 14'ünü TAM SIFIRA zorluyordu —
+#       aralarında `sc` (KREATİNİN) vardı: böbrek açıklamasında kreatinin katkısı "0.0"du.
+#   (3) BASELINE DEJENERASYONU — sentetik "ortalama hasta" modelce %98,99996 CKD sanılıyordu,
+#       açıklanabilir kütle 0,0100'e düşüyordu (en kritik hastada en kötü sinyal).
+
+
+@gercek_model_gerekir
+def test_KRITIK_ckd_aciklamasi_YAKINSAMIS():
+    """Aynı hasta, farklı global RNG durumları → ilk-5 AYNI olmalı.
+
+    Fonksiyon kendi içinde `seed(0)` kuruyor; bu test global durumu değiştirerek
+    tekrarlanabilirliği DEĞİL yakınsamayı ölçer."""
+    import numpy as np
+
+    from ai_hub.inference_human_kidney_disease import xai_top_features
+
+    kumeler = []
+    for tohum in (100, 200, 300):
+        np.random.seed(tohum)
+        r = xai_top_features(_HASTA, top_n=5)
+        kumeler.append(frozenset(t["feature"] for t in r["top_features"]))
+    assert len(set(kumeler)) == 1, (
+        f"ilk-5 kümesi RNG durumuna göre değişiyor → açıklama yakınsamamış: {[sorted(k) for k in kumeler]}"
+    )
+
+
+@gercek_model_gerekir
+def test_KARSIT_KANIT_eski_yapilandirma_gercekten_KARARSIZDI():
+    """⚠️ BU TEST DÜZELTMEYİ DEĞİL, GEREKÇESİNİ KİLİTLER.
+
+    Ölçüldü (mutasyon turunda): yukarıdaki yakınsama testi tek bir ayarı geri almakla kırmızı
+    OLMUYOR — düzeltilmiş baseline + `l1_reg=False` ile n=60'ta, hatta n=4'te bile ilk-5
+    kararlı (shap alt sınır uyguluyor). Yani kararsızlığın asıl sebebi örnek sayısı değil,
+    ESKİ BASELINE ile SEYREKLEŞTİRMENİN BİRLİKTE etkisiydi. O kombinasyonu burada doğrudan
+    kurup kararsız olduğunu gösteriyoruz; aksi hâlde "yakınsama" kapısı hiçbir şey kanıtlamaz.
+
+    Kırmızıya dönerse: eski yapılandırma artık kararsız DEĞİL demektir (shap sürümü değişmiş
+    olabilir) — o zaman düzeltmenin gerekçesi gözden geçirilmeli.
+    """
+    import numpy as np
+    import pandas as pd
+    import shap
+
+    from ai_hub.inference_human_kidney_disease.inference_human_kidney_disease import (
+        ALL_FEATURES,
+        _aggregate_to_raw,
+        _normalise_record,
+        _predict_onnx,
+        _preprocessor_feature_names,
+        _referans_background,
+        load_model,
+    )
+
+    pre, sess, giris = load_model(None)
+    Xp = pre.transform(pd.DataFrame([_normalise_record(_HASTA)], columns=ALL_FEATURES)).astype("float32")
+    post = _preprocessor_feature_names(pre)
+    eski_bg = _referans_background(post)  # ESKİ dejenere baseline
+
+    def _proba(x):
+        p = _predict_onnx(sess, giris, x)
+        return np.stack([1 - p, p], axis=1)
+
+    kumeler = []
+    durum = np.random.get_state()
+    try:
+        for tohum in (0, 1, 2):
+            np.random.seed(tohum)
+            expl = shap.KernelExplainer(_proba, eski_bg)
+            sv = expl.shap_values(Xp, nsamples=60, silent=True)  # ESKİ n, ESKİ l1_reg varsayılanı
+            sv = np.asarray(sv[1]) if isinstance(sv, list) else np.asarray(sv)
+            sv_ckd = sv[..., 1] if sv.ndim == 3 else sv
+            ham = _aggregate_to_raw(sv_ckd[0], post)
+            ilk5 = sorted(ham.items(), key=lambda kv: -abs(kv[1]))[:5]
+            kumeler.append(frozenset(f for f, _ in ilk5))
+    finally:
+        np.random.set_state(durum)
+
+    assert len(set(kumeler)) > 1, (
+        "eski yapılandırma (dejenere baseline + varsayılan l1_reg + n=60) KARARLI çıktı — "
+        f"düzeltmenin gerekçesi doğrulanamıyor: {[sorted(k) for k in kumeler]}"
+    )
+
+
+@gercek_model_gerekir
+def test_KRITIK_kreatinin_SIFIRA_zorlanmiyor():
+    """`l1_reg` seyrekleştirmesi klinik çekirdek özellikleri susturmamalı.
+
+    Ölçüldü: varsayılan `num_features(10)` ile bu hastada `sc` (kreatinin) katkısı TAM 0.0
+    dönüyordu — böbrek hastalığı açıklamasında kabul edilemez. `l1_reg=False` ile 0.02+."""
+    from ai_hub.inference_human_kidney_disease import xai_top_features
+
+    r = xai_top_features(_HASTA, top_n=24)
+    katki = {t["feature"]: t["attribution"] for t in r["top_features"]}
+    assert katki.get("sc", 0.0) != 0.0, "kreatinin (sc) katkısı TAM SIFIR — l1_reg özelliği susturuyor"
+    sifirlar = [f for f, v in katki.items() if v == 0.0]
+    assert len(sifirlar) <= 6, (
+        f"{len(sifirlar)}/24 özellik tam sıfır ({sifirlar}) — seyrekleştirme açıklamayı buduyor "
+        f"(ölçülen bozuk hâl 14/24 idi)"
+    )
+
+
+@gercek_model_gerekir
+def test_KRITIK_baseline_DEJENERE_DEGIL():
+    """Açıklanabilir kütle f(x)−f(bg) anlamlı olmalı.
+
+    Eski sentetik baseline'da bu kütle 0,0100'dü (model baseline'ı da %99 CKD sanıyordu);
+    klinik-normal referansla ~0,99. Kütle küçükse tüm katkılar gürültüye gömülür."""
+    from ai_hub.inference_human_kidney_disease import xai_top_features
+
+    r = xai_top_features(_HASTA, top_n=24)
+    kutle = sum(abs(t["attribution"]) for t in r["top_features"])
+    assert kutle > 0.2, (
+        f"açıklanabilir toplam kütle {kutle:.4f} — baseline hastaya çok yakın, katkılar gürültüde "
+        f"(ölçülen bozuk hâl 0,0100)"
+    )
+    assert r["baseline"] == "klinik_normal_referans", f"baseline etiketi beklenmedik: {r['baseline']}"
+
+
+@gercek_model_gerekir
+def test_KARSIT_KANIT_eski_baseline_gercekten_dejenereydi():
+    """Bulgunun kendisini kanıtla: eski sentetik baseline modelce ~CKD sayılıyor.
+
+    Bu test düzeltmeyi değil, DÜZELTME GEREKÇESİNİ kilitler — biri "eski baseline de iyiydi"
+    diye geri almak isterse ölçüm burada duruyor."""
+    import numpy as np
+    import pandas as pd
+
+    from ai_hub.inference_human_kidney_disease.inference_human_kidney_disease import (
+        _predict_onnx,
+        _preprocessor_feature_names,
+        _referans_background,
+        load_model,
+    )
+
+    pre, sess, giris = load_model(None)
+    post = _preprocessor_feature_names(pre)
+    eski_bg = _referans_background(post)
+    p_eski = float(_predict_onnx(sess, giris, np.asarray(eski_bg, dtype=np.float32))[0])
+    assert p_eski > 0.9, (
+        f"eski sentetik baseline'ın prob_ckd'si {p_eski:.4f} — bulgunun gerekçesi (baseline'ın "
+        f"kendisinin hasta sayılması) artık geçerli değil, düzeltmeyi gözden geçirin"
+    )
+
+    from ai_hub.inference_human_kidney_disease.inference_human_kidney_disease import (
+        ALL_FEATURES,
+        NORMAL_REFERANS,
+        _normalise_record,
+    )
+
+    yeni_bg = pre.transform(pd.DataFrame([_normalise_record(NORMAL_REFERANS)], columns=ALL_FEATURES))
+    p_yeni = float(_predict_onnx(sess, giris, np.asarray(yeni_bg, dtype=np.float32))[0])
+    assert p_yeni < 0.2, f"yeni referans hasta da CKD sayılıyor (prob={p_yeni:.4f}) — referans klinik değil"
+
+
 @gercek_model_gerekir
 def test_KRITIK_ckd_xai_DETERMINISTIK():
     from ai_hub.inference_human_kidney_disease import xai_top_features

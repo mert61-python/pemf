@@ -105,13 +105,21 @@ def test_KRITIK_hazirlik_ucu_KOD_ve_MODEL_ayri_raporlar(client, monkeypatch):
     """Asıl yanlış-teşhisin panzehiri: modül kodu bozuksa 'model yok' DENMEZ."""
     import servers.ai_router as air
 
+    # ⚠️ DENETİM 2026-08-28 #03: bu fixture eskiden model yolu olarak `None` veriyordu ve
+    # "saglam" modülün HAZIR sayılmasını bekliyordu — yani testin kendisi, kapının 12 modülde
+    # hiçbir dosyaya bakmadan PASS vermesini (bulgunun ta kendisini) kilitliyordu. Artık
+    # "saglam" GERÇEK bir ağırlık yolu alır; ayrık-teşhis sözleşmesi (kod ≠ model) korunur.
+    from servers.ai_router import _AI_MODUL_ENVANTERI as _gercek
+
+    gercek_model = next(m for _a, _i, m in _gercek if m)
     monkeypatch.setattr(
         air,
         "_AI_MODUL_ENVANTERI",
         [
-            ("saglam", "json", None),
-            ("kodu_bozuk", "olmayan_paket_xyz", None),
+            ("saglam", "json", gercek_model),
+            ("kodu_bozuk", "olmayan_paket_xyz", gercek_model),
             ("modeli_yok", "json", "ai_hub/olmayan/model.pt"),
+            ("envanteri_eksik", "json", None),
         ],
     )
     r = client.get("/api/ai/hazirlik?derin=1")
@@ -120,16 +128,19 @@ def test_KRITIK_hazirlik_ucu_KOD_ve_MODEL_ayri_raporlar(client, monkeypatch):
     durum = {m["modul"]: m for m in d["moduller"]}
 
     assert durum["saglam"]["hazir"] is True
-    # kod bozuk → kod alanı işaretli, model alanı SUÇLANMAZ
+    # kod bozuk → kod alanı işaretli, model alanı SUÇLANMAZ (asıl yanlış-teşhisin panzehiri)
     assert durum["kodu_bozuk"]["hazir"] is False
     assert durum["kodu_bozuk"]["kod"] in ("kod_hatali", "kod_yok")
-    assert durum["kodu_bozuk"]["model"] == "gomulu"
+    assert durum["kodu_bozuk"]["model"] == "ok", "kod bozukken model haksız yere suçlanıyor"
     # model yok → kod SAĞLAM raporlanır (ayrık teşhis)
     assert durum["modeli_yok"]["hazir"] is False
     assert durum["modeli_yok"]["kod"] == "ok"
     assert durum["modeli_yok"]["model"] == "model_yok"
+    # envanterde yol yoksa bu bir HATA'dır — sessiz "gomulu" PASS'ı geri gelmemeli
+    assert durum["envanteri_eksik"]["hazir"] is False
+    assert durum["envanteri_eksik"]["model"] == "envanter_eksik"
 
-    assert d["hazir"] == 1 and sorted(d["eksik"]) == ["kodu_bozuk", "modeli_yok"]
+    assert d["hazir"] == 1 and sorted(d["eksik"]) == ["envanteri_eksik", "kodu_bozuk", "modeli_yok"]
 
 
 def test_KRITIK_hazirlik_ucu_gercek_envanterde_SCRATCH_var():
@@ -158,16 +169,34 @@ def test_KRITIK_spec_paket_METADATASINI_topluyor():
     Modül KODUNU toplamak yetmez: çalışma anında `importlib.metadata.version("X")`
     çağıran her kütüphane için X'in .dist-info'su da frozen'a KOPYALANMALI. Bu satır
     silinirse aynı sınıf arıza sessizce geri gelir (kullanıcı 'model paketi gerekli'
-    görür, model kuruluyken)."""
+    görür, model kuruluyken).
+
+    ⚠️ DENETİM 2026-08-28 #10: bu kapının ilk hali düz metin araması yapıyordu ve döngünün
+    KENDİSİNİN sessizce çalışmadığını göremiyordu — `recursive=True`, ağaçtaki tek bir eksik
+    dağıtımda (`opencv-python-headless`) tüm çağrıyı düşürüyor, `except` yutuyor, build yeşil
+    kalıyordu. Ölçüldü: celldetection + albumentations + grad-cam metadata'sı HİÇ toplanmıyordu,
+    yani 27 Ağustos arızasının önlemi kendi paketini kapsamıyordu. Toplama artık
+    `_metadata_topla` fonksiyonunda (recursive → düz → kuruluysa build DURUR) ve çıpa AST'ye
+    pinlendi. Derin kontroller `tests/test_calisma_ani_pip_yasagi.py`'de.
+    """
+    import ast
     from pathlib import Path
 
-    spec = (Path(__file__).resolve().parents[1] / "build_tools" / "PEMF_Backend_onedir.spec").read_text(
-        encoding="utf-8", errors="replace"
+    yol = Path(__file__).resolve().parents[1] / "build_tools" / "PEMF_Backend_onedir.spec"
+    agac = ast.parse(yol.read_text(encoding="utf-8", errors="replace"))
+    cagri = next(
+        (
+            d
+            for d in ast.walk(agac)
+            if isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "_metadata_topla" and d.args
+        ),
+        None,
     )
-    assert "copy_metadata(_meta_pkg, recursive=True)" in spec, "metadata toplama döngüsü kayboldu"
-    # Ölçülen arızanın paketi ADIYLA listede olmalı (döngü boşalırsa kapı vacuous olur)
-    for zorunlu in ("'imageio'", "'celldetection'"):
-        assert zorunlu in spec, f"metadata listesinde {zorunlu} yok — ölçülen arıza geri gelebilir"
+    assert cagri is not None, "metadata toplama çağrısı kayboldu"
+    liste = [e.value for e in cagri.args[0].elts if isinstance(e, ast.Constant)]
+    # Ölçülen arızanın paketi ADIYLA listede olmalı (liste boşalırsa kapı vacuous olur)
+    for zorunlu in ("imageio", "celldetection"):
+        assert zorunlu in liste, f"metadata listesinde {zorunlu} yok — ölçülen arıza geri gelebilir"
 
 
 def test_KRITIK_build_betigi_AI_KAPISINI_kosuyor():

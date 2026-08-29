@@ -21,6 +21,16 @@ import tempfile
 import time
 from typing import Optional
 
+# ÇALIŞMA-ANI PİP YASAĞI (denetim 2026-08-28 #10) — ultralytics/predictor importlarından ÖNCE.
+# Mikroservis konteynerde koşar: çalışırken kendine paket kurmaya kalkması hem sessiz bir
+# sürüm sapması hem de ağ erişimi olmayan kurulumda boşa gecikme demektir.
+try:
+    from utils.runtime_guards import pip_kurulumunu_yasakla as _pip_yasakla
+
+    _pip_yasakla()
+except Exception:
+    os.environ.setdefault("YOLO_AUTOINSTALL", "false")  # yardımcı yoksa asgari kilit
+
 import numpy as np
 import onnxruntime as ort
 from fastapi import Body, FastAPI, File, Form, Query, UploadFile
@@ -692,7 +702,20 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
         t0 = time.time()
         result = clf.predict(tmp, threshold=0.5)
         dev = clf.session.get_providers()[0].replace("ExecutionProvider", "").lower()
-        yanit = {"status": "success", "device": dev, "inference_ms": round((time.time() - t0) * 1000, 1), **result}
+        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `servers/ai_router.py:1969`
+        # `{"prediction": result, "image_base64": ...}` döndürüyor ve arayüzün TÜM termal
+        # paneli (`AiHubScreen.tsx:1517` geçmiş kaydı + `:1603` sonuç satırı) `result.prediction`
+        # kapısının ARDINDA. Burada `**result` düz açıldığı için GPU/mikroservis profilinde
+        # panel sessizce BOŞ kalıyordu — veri geliyordu, arayüz göremiyordu.
+        # Düz anahtarlar GERİYE UYUM için kalır (:8100'e doğrudan bağlanan smoke betikleri);
+        # yalnız sarmalayıcı EKLENİR, hiçbir alan çıkarılmaz.
+        yanit = {
+            "status": "success",
+            "device": dev,
+            "inference_ms": round((time.time() - t0) * 1000, 1),
+            "prediction": result,
+            **result,
+        }
         if str(explain).lower() == "true":
             try:
                 from ai_hub.cat_thermal import inference_cat_thermal as _ict
@@ -949,11 +972,27 @@ def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None))
         results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640, device=_yolo_device(), verbose=False)
         r = results[0]
         n = len(r.boxes) if r.boxes is not None else 0
+        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `servers/ai_router.py:2057`
+        # sınıf bazlı `counts` döndürüyor; arayüzde retikülosit ORANI (`AiHubScreen.tsx:1535`)
+        # ve üç sayım satırı (`:1608-1612`) TAM O ALANIN kapısında. Burada yalnız toplam
+        # `n_detections` dönüyordu → mikroservis profilinde oran ve sayımlar sessizce kayboluyordu.
+        # Veri kayıp DEĞİLDİ: aynı `r.boxes.cls`ten türetilebiliyor, sadece atılıyordu.
+        SINIF_ADLARI = ["erythrocyte", "punctate reticulocyte", "aggregate reticulocyte"]
+        counts = {c: 0 for c in SINIF_ADLARI}
+        if r.boxes is not None:
+            for box in r.boxes:
+                try:
+                    cls_id = int(box.cls[0])
+                except Exception:
+                    continue
+                if 0 <= cls_id < len(SINIF_ADLARI):
+                    counts[SINIF_ADLARI[cls_id]] += 1
         yanit = {
             "status": "success",
             "device": _yolo_device(),
             "inference_ms": round((time.time() - t0) * 1000, 1),
-            "n_detections": int(n),
+            "n_detections": int(n),  # geriye uyum: :8100'e doğrudan bağlanan istemciler
+            "counts": counts,
             "image_base64": _jpg_b64(r.plot()),
         }
         if str(explain).lower() == "true":

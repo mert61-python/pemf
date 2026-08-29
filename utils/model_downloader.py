@@ -143,3 +143,38 @@ def download_model_sync(repo_path: str):
         f"ProgramData\\PEMF_GUI\\ai_models / release_assets altında olmalı "
         f"(Hugging Face indirme kaldırıldı)."
     )
+
+
+def yan_dosya_coz(yerel_yol, repo_yolu: str) -> str:
+    """Modelin YANINDAKİ dosyayı (scaler / encoder / preprocessor) çöz.
+
+    ⚠️ DENETİM 2026-08-28 #09 — ÖLÇÜLEN ARIZA. AI modülleri ANA modeli
+    `download_model_sync` ile `/models` mount'undan çözüyor ama yanındaki scaler/encoder
+    dosyaları modül dizinine (`_DIR`) SABİT kalıyordu. Docker imajında
+    `docker/Dockerfile.backend.dockerignore` `ai_hub/**/*.pkl|*.onnx|*.pt` desenini eliyor →
+    imajda o dosyalar YOK. Ölçüldü (imaj düzeni birebir kurulup koşuldu):
+
+        cat_disease      MODEL_PATH var: True   SCALER_PATH var: False  → FileNotFoundError
+        em_kedi          ONNX var: True         3 scaler var: False
+        kidney_disease   (hiç fallback yok)                              → FileNotFoundError
+
+    Yani monolit Docker profilinde kedi-hastalık, böbrek-hastalık ve AI Pro doz uçları
+    ölüydü. Gerekli dosyaların hepsi `/models` ağacında MEVCUT — sadece oraya bakılmıyordu.
+
+    ⚠️ KLİNİK (frozen EXE) YOLU ETKİLENMEZ: `PEMF_Backend_onedir.spec` 5 MB altı
+    `.pkl/.onnx/.npy/.npz` dosyalarını modülün YANINA gömer, dolayısıyla ilk koşul tutar ve
+    fonksiyon hemen döner — çözücüye hiç girilmez.
+
+    Args:
+        yerel_yol: modül dizinindeki varsayılan yol (str | Path)
+        repo_yolu: `ai_hub/<modül>/<dosya>` biçiminde paket-göreli yol
+    Returns:
+        Var olan bir yol (bulunamazsa `yerel_yol` — çağıran kendi hatasını üretsin).
+    """
+    try:
+        if os.path.exists(str(yerel_yol)):
+            return str(yerel_yol)
+        bulunan = find_installed_model(repo_yolu)
+        return bulunan or str(yerel_yol)
+    except Exception:
+        return str(yerel_yol)

@@ -244,6 +244,33 @@ if (-not $SkipProtect -and (Test-Path $exe)) {
             & $PY "$GuiRoot\build_tools\encrypt_sources.py" --dist "$dist\PEMF_Backend" --verify
         }
     }
+
+    # ── 5. KAPI: PYZ ARŞİVİNDE ai_hub VAR MI? (denetim 2026-08-28 #07) ──────────
+    # ⚠️ Yukarıdaki dört kapının DÖRDÜ DE "DİSKTE düz .py kaldı mı" diye soruyordu ve
+    # dördü de YEŞİL yanıyordu. Ölçüldü: sevk edilen EXE'nin PYZ arşivinde 87 ai_hub girişi
+    # okunabilir bytecode olarak duruyordu; çalışan süreçte yüklü ai_hub .pyd sayısı 1/65 idi
+    # (o tek modül de PYZ'de ikizi olmayan tek modül). Cython katmanının katkısı SIFIRDI.
+    # PYZ'de ai_hub kalırsa import diskteki .pyd'yi ATLAR — koruma etkisizdir.
+    Info "Koruma kapısı: EXE'nin PYZ arşivinde ai_hub var mı?"
+    & $PY "$GuiRoot\scripts\pyz_koruma_kapisi.py" $exe --duz-py-de-kontrol "$dist\PEMF_Backend"
+    if ($LASTEXITCODE -ne 0) {
+        Die ("KOD KORUMASI KAPISI KIRMIZI: ai_hub PYZ arşivinde (ya da diskte düz .py olarak) " +
+             "duruyor. Bu EXE'de Cython koruması ETKİSİZDİR — import .pyd'yi atlar. " +
+             "spec'te `a.pure[:] = [... != 'ai_hub']` satırı PYZ(a.pure)'dan ÖNCE olmalı.")
+    }
+
+    # ── 6. KAPI: kaynak ai_hub'ın TAMAMI sevk ağacında mı? ───────────────────────
+    # ⚠️ Bu kapı bir SESSİZ ÖLÜM kapısıdır, koruma kapısı değil. Ölçülen arıza: spec'teki
+    # yol-çıpasız torch filtresi `ai_hub/xai_tabular/ig_torch.py`yi yiyordu (adında "torch"
+    # geçiyor) → modül sevk ağacına HİÇ girmiyor, yalnız PYZ'de yaşıyordu. PYZ temizlenince
+    # (5. kapının gerektirdiği düzeltme) RNA gen-katkısı açıklaması sessizce ölecekti.
+    Info "Sevk ağacı kapısı: kaynak ai_hub modüllerinin hepsi pakette mi?"
+    & $PY "$GuiRoot\scripts\sevk_agaci_ai_hub_kapisi.py" "$dist\PEMF_Backend"
+    if ($LASTEXITCODE -ne 0) {
+        Die ("SEVK AĞACI KAPISI KIRMIZI: kaynaktaki bir ai_hub modülü pakete GİRMEMİŞ. " +
+             "Lazy import edilen bir modülse ilgili özellik sahada sessizce ölür ve başka " +
+             "hiçbir kapı bunu görmez. Genellikle sebep spec'teki yol-çıpasız bir datas filtresidir.")
+    }
 }
 
 # ── AI HAZIRLIK KAPISI (2026-08-27, saha bulgusu) ────────────────────────────────
@@ -282,6 +309,49 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
                 Die ("AI HAZIRLIK KAPISI KIRMIZI: $($rapor.eksik -join ', ') modülü ÜRETİLEN EXE'de çalışmıyor. " +
                      "Bu EXE yayına çıkarsa kullanıcı 'model paketi gerekli' yanlış teşhisini görür " +
                      "(saha bulgusu 2026-08-27). Eksik bağımlılığı spec'e ekleyin ya da -SkipAiGate ile bilinçli geçin.")
+            }
+
+            # ⚠️ DENETİM 2026-08-28 #03/#10 — kapının KENDİSİ kördü: model sütunu dosyaya bakmadan
+            # "gomulu" diyordu ve XAI zinciri (lazy import) hiç görünmüyordu. Uç artık ikisini de
+            # raporluyor; build de ikisini KONTROL ETMELİ, yoksa kapı yine boş çalışır.
+            if ($null -eq $rapor.xai) {
+                Die "AI HAZIRLIK: yanıtta 'xai' bölümü yok — derin sorgu XAI zincirini ölçmüyor (denetim #03(b))."
+            }
+            if (-not $rapor.xai.hazir) {
+                Write-Host "   ✗ XAI: grad_cam=$($rapor.xai.grad_cam) pytorch_grad_cam=$($rapor.xai.pytorch_grad_cam) shap=$($rapor.xai.shap) captum=$($rapor.xai.captum) ttach=$($rapor.xai.ttach)" -ForegroundColor Red
+                if ($rapor.xai.em_ref_stats_eksik.Count -gt 0) {
+                    Write-Host "   ✗ EM referans istatistikleri EKSİK: $($rapor.xai.em_ref_stats_eksik -join ', ')" -ForegroundColor Red
+                }
+                Die ("XAI ZİNCİRİ KIRMIZI: açıklanabilirlik kütüphaneleri ya da EM referans " +
+                     "istatistikleri üretilen EXE'de eksik. Bu tam olarak 1.9.25'te yaşanan sessiz " +
+                     "ölümdür (.npz spec'te yoktu, EM XAI üretimde ölüydü, hiçbir kapı görmedi).")
+            }
+            Info "XAI zinciri: grad_cam=$($rapor.xai.grad_cam), shap=$($rapor.xai.shap), captum=$($rapor.xai.captum), ttach=$($rapor.xai.ttach); EM ref-stats tam."
+
+            if ($null -eq $rapor.pip_yasagi -or -not $rapor.pip_yasagi.etkin) {
+                Die ("ÇALIŞMA-ANI PİP YASAĞI ETKİN DEĞİL: üretilen EXE çalışırken kendine paket " +
+                     "kurmaya kalkabilir (denetim #10 — ürün kendi EXE'sini `-m pip install` ile " +
+                     "alt-süreç olarak başlatıyordu). utils/runtime_guards.py giriş noktasında çağrılmalı.")
+            }
+            Info "Çalışma-anı pip yasağı: etkin."
+
+            # ⚠️ DENETİM 2026-08-28 #07 — KORUMANIN ÇALIŞMA-ANI KANITI. Statik kapılar
+            # (PYZ/disk) "korumasız dosya var mı" der; bu kontrol modüllerin GERÇEKTEN
+            # nereden yüklendiğini ölçer. `.pyenc` MEŞRU sayılır: build_installer.ps1:574 ve
+            # make_base_zip.py::_korumasiz_ai_hub() sahip ölçütü "düz .py YOK mu" — .pyd
+            # zorunluluğu AYRI bir sahip kararıdır, buradan sessizce dayatılmaz.
+            # `-SkipProtect` / MSVC-yok build'lerinde bu blok hiç çalışmaz (aşağıdaki koşul).
+            if (-not $SkipProtect) {
+                $korumasiz = @($rapor.moduller | Where-Object { $_.yukleme -notin @('pyd', 'pyenc') })
+                if ($korumasiz.Count -gt 0) {
+                    foreach ($m in $korumasiz) {
+                        Write-Host "   ✗ $($m.modul): yukleme=$($m.yukleme)" -ForegroundColor Red
+                    }
+                    Die ("KOD KORUMASI ÇALIŞMA-ANINDA ETKİSİZ: $($korumasiz.Count)/$($rapor.toplam) modül " +
+                         ".pyd/.pyenc DIŞINDAN yükleniyor ('pyz' = PYZ arşivinden, 'py' = diskteki düz " +
+                         "kaynaktan). Sevk edilen 1.9.31'de bu oran 64/65'ti ve dört kapı da yeşildi.")
+                }
+                Info "Kod koruması (çalışma-anı): $($rapor.toplam)/$($rapor.toplam) modül .pyd/.pyenc'ten yükleniyor."
             }
         }
     } finally {

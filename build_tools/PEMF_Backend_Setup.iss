@@ -15,7 +15,7 @@
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.20"
+#define MyAppVersion   "1.9.33"
 #define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
 ; ⚠️ pemfvet.com KULLANILMIYOR (2026-08-18): alan adı Vercel'e hiç bağlanmadı, kayıt
 ; firmasının park sayfasını gösteriyor. "Program Ekle/Kaldır"daki yayımcı linki oraya

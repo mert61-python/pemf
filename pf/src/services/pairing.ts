@@ -30,7 +30,10 @@ export type EslesmeSonuc =
   | { durum: "ok"; url: string; deviceId: string }
   /** Çözümleme sebepleri (deviceRegistry ile birebir). */
   | { durum: "yok" }
-  | { durum: "adres_yok" }
+  /** Cihaz kayıtlı ama uzak adresi yok. `sonGorulme`: bulut kaydının son güncellenme anı
+   *  (ISO). Kayıt eskiyse sorun "uzaktan erişim kapalı" DEĞİL, cihazın buluta hiç
+   *  yazamamasıdır (denetim 2026-08-28 #02). */
+  | { durum: "adres_yok"; sonGorulme?: string }
   | { durum: "bayat" }
   | { durum: "hata" }
   /** Kayıt bulundu ama cihaz şu an yanıt vermiyor / kimlik doğrulanamadı. */
@@ -45,8 +48,25 @@ export function eslesmeMesaji(s: EslesmeSonuc): string {
   switch (s.durum) {
     case "ok":
       return "Cihaz eşleştirildi ve bağlanıldı ✓";
-    case "adres_yok":
-      return "Cihaz bulundu ama uzaktan erişim adresi yok. Cihazın kendi ekranından uzaktan erişimi açın; kod doğru.";
+    case "adres_yok": {
+      // ⚠️ DENETİM 2026-08-28 #02 — ESKİ CÜMLE İKİ KEZ YANLIŞ YÖNE KİLİTLİYORDU:
+      // "Cihazın kendi ekranından uzaktan erişimi açın; kod doğru."
+      // Ölçülen saha durumunda uzaktan erişim ZATEN AÇIK ve kodun doğru olduğu da bilinmiyor —
+      // cihaz bulut kaydına 13 gündür yazamıyordu (sır uyuşmazlığı), yani buluttaki kod
+      // ekrandakinden farklı olabilir. Kayıt bayatsa bunu SÖYLE; "kod doğru" iddiasını kaldır.
+      const gun = s.sonGorulme ? Math.floor((Date.now() - new Date(s.sonGorulme).getTime()) / 86400000) : null;
+      if (gun !== null && gun >= 1) {
+        return (
+          `Cihaz kayıtlı ama uzaktan erişim adresi yok ve bulut kaydı ${gun} gündür güncellenmemiş. `
+          + "Bu genellikle cihazın buluta yazamadığı anlamına gelir (cihaz açık olsa bile). "
+          + "Cihazın Ayarlar ekranındaki uyarıyı kontrol edin; sorun sürerse destek ekibine bildirin."
+        );
+      }
+      return (
+        "Cihaz bulundu ama uzaktan erişim adresi yok. Cihaz açıksa ve uzaktan erişim etkinse, "
+        + "cihazın Ayarlar ekranındaki bulut kaydı uyarısını kontrol edin."
+      );
+    }
     case "bayat":
       return "Cihaz kayıtlı ama şu an çevrimdışı görünüyor. Cihazın açık ve internete bağlı olduğundan emin olun.";
     case "hata":
@@ -84,7 +104,17 @@ export async function cihazaBaglan(girdi: string): Promise<EslesmeSonuc> {
   try {
     const kodMu = input.length <= KOD_MAX_UZUNLUK;
     const c = kodMu ? await uzakCihaziKodlaCoz(input) : await uzakCihaziKimlikleCoz(input);
-    if (c.durum !== "bulundu") return { durum: c.durum };
+    if (c.durum !== "bulundu") {
+      // ⚠️ DENETİM 2026-08-28 #02: `adres_yok` dalında `deviceRegistry` `device`i (dolayısıyla
+      // `last_seen`i) DÖNDÜRÜYOR ama burada atılıyordu. Oysa arızayı yaşayan kişi tam da bu
+      // uzak operatördür: cihazın bulut kaydı 13 gündür güncellenmediği hâlde kendisine
+      // "uzaktan erişimi açın; kod doğru" deniyor — ikisi de yanlış yöne kilitliyor.
+      // Kaydın ne kadar bayat olduğunu taşırsak mesaj gerçeği söyleyebilir.
+      if (c.durum === "adres_yok" && c.device?.last_seen) {
+        return { durum: "adres_yok", sonGorulme: c.device.last_seen };
+      }
+      return { durum: c.durum };
+    }
 
     const url = c.url;
     const deviceId = c.device.device_id;

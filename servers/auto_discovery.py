@@ -60,6 +60,55 @@ def get_api_port(default: int = 8000) -> int:
     return p if 1 <= p <= 65535 else default
 
 
+def _mdns_ad(taban: str = "PEMF-Vet") -> str:
+    """mDNS servis adı: taban ad + cihaz kimliğinden türetilmiş KARARLI benzersiz sonek.
+
+    ⚠️ DENETİM 2026-08-28 #08 — SABİT AD ÇAKIŞIYOR. Aynı ağdaki iki cihaz `PEMF-Vet` adını
+    birden iddia edince `register_service` `NonUniqueNameException` atıyor (gerçek LAN'da
+    ölçüldü). Kardeş modül `services/mdns_service.py` bu çakışmayı zaten sonekle çözüyordu;
+    bu yol çözmüyordu — asimetri belgelenmemişti.
+
+    ⚠️ `allow_name_change=True` YETERSİZ (ölçüldü): zeroconf yalnız `info.name`i değiştirir
+    (`_core.py:559-563`), `server=` hostname'i (A kaydı) HÂLÂ çakışır.
+
+    ⚠️ HAM device_id YAYINLANMAZ: `get_unique_device_id()` MAC'in ondalık hâlidir ve
+    `system_router` onu uzak isteklere BİLEREK vermez (tenant anahtarı). mDNS LAN'a multicast
+    ettiği için kimliğin kendisi değil, SHA1 özetinin 6 hanesi yayınlanır (geri döndürülemez).
+
+    ⚠️ KARARLI olmak zorunda: her açılışta değişen ad ağda çöp kayıt biriktirir. device_id
+    dosyada kalıcı olduğu için aynı makinede hep aynı ad üretilir.
+
+    ⚠️ HİÇBİR KOŞULDA PATLAMAZ: sonek türetilemezse taban ada düşer (bugünkü davranış).
+    """
+    import hashlib
+
+    taban = (os.environ.get("PEMF_DEVICE_NAME") or taban).strip() or "PEMF-Vet"
+    try:
+        from utils.path_utils import get_unique_device_id
+
+        cekirdek = str(get_unique_device_id() or "")
+        if cekirdek:
+            sonek = hashlib.sha1(cekirdek.encode("utf-8")).hexdigest()[:6]
+            return f"{taban}-{sonek}"
+    except Exception:
+        pass
+    try:
+        return f"{taban}-{hashlib.sha1(socket.gethostname().encode('utf-8')).hexdigest()[:6]}"
+    except Exception:
+        return taban
+
+
+def _hata_metni(e: BaseException) -> str:
+    """İstisnayı OKUNABİLİR biçimde anlat.
+
+    ⚠️ DENETİM #08: zeroconf 0.148'de `NonUniqueNameException` dâhil tüm `Error` alt
+    sınıflarının `str(e)` değeri BOŞ. Canlı logda `mDNS başlatılamadı:` satırı 12 kez geçiyor
+    ve 12'sinin de mesajı boştu — destek, ad çakışması mı `EventLoopBlocked` mi ayırt
+    edemiyordu. Tip adı her zaman yazılır."""
+    metin = str(e).strip()
+    return f"{type(e).__name__}: {metin}" if metin else type(e).__name__
+
+
 def _build_info(local_ip: str, port: int, device_name: str):
     """_pemfvet ServiceInfo'yu güncel IP ile kurar (start_mdns + re-register ortak kullanır)."""
     import socket as _socket
@@ -101,7 +150,7 @@ def _reregister() -> None:
         _mdns_service_info = info
         logger.info("mDNS (_pemfvet) yeni arayüzlere re-register edildi: %s", ip)
     except Exception as e:
-        logger.warning("_pemfvet re-register hatası: %s", e)
+        logger.warning("_pemfvet re-register hatası: %s", _hata_metni(e))
 
 
 def _get_local_ip() -> str:
@@ -145,6 +194,10 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
     try:
         from utils.zeroconf_singleton import add_reregister_callback, get_shared_zeroconf
 
+        # Denetim #08: sabit ad yerine cihaza özgü KARARLI ad — aynı ağdaki ikinci cihaz
+        # artık çakışmıyor. Çağıran hâlâ "PEMF-Vet" geçiyor; benzersizleştirme burada yapılır
+        # ki tüm çağrı yolları (api_server + testler) aynı davranışı alsın.
+        device_name = _mdns_ad(device_name)
         _mdns_port, _mdns_device_name = port, device_name
         local_ip = _get_local_ip()
 
@@ -154,9 +207,24 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
         # arayüz/IP gelince otomatik kaydolur (_reregister aynı 127.* guard'ına sahip).
         if local_ip and not local_ip.startswith("127."):
             info = _build_info(local_ip, port, device_name)
-            zc.register_service(info)
-            _zeroconf_instance = zc
-            _mdns_service_info = info
+            # ⚠️ DENETİM #08 — SIRA KRİTİK. Eskiden `register_service` burada patlarsa
+            # (`NonUniqueNameException`) fonksiyon TEK dıştaki except'e düşüyor, dolayısıyla
+            # `_mdns_started = True` ve `add_reregister_callback` ATLANIYORDU. Sonuç:
+            # `_reregister` süreç ömrü boyunca guard'a takılıp no-op oluyor VE callback zaten
+            # hiç kaydedilmemiş oluyordu → arayüz/IP değişiminde de toparlanma YOK.
+            # Artık kayıt hatası YUTULMAZ ama akışı kesmez: bayrak + callback kurulur, böylece
+            # sonraki arayüz olayında yeniden denenir.
+            try:
+                zc.register_service(info)
+                _zeroconf_instance = zc
+                _mdns_service_info = info
+            except Exception as _kayit_hatasi:
+                _zeroconf_instance = zc
+                logger.warning(
+                    "mDNS ilk kaydı başarısız (%s) — ad=%r. Arayüz değişiminde yeniden denenecek.",
+                    _hata_metni(_kayit_hatasi),
+                    device_name,
+                )
         else:
             _zeroconf_instance = zc
             logger.info("mDNS ilk-kayıt atlandı: geçerli LAN IP yok (ip=%r) — arayüz gelince kaydolacak.", local_ip)
@@ -166,7 +234,9 @@ def start_mdns(port: int = 8000, device_name: str = "PEMF-Vet") -> bool:
         logger.info("mDNS servisi başlatıldı: %s:%d (%s)", local_ip, port, device_name)
         return True
     except Exception as e:
-        logger.warning("mDNS başlatılamadı: %s", e)
+        # Denetim #08: zeroconf istisnalarinin str() degeri BOS — tip adi olmadan
+        # destek hangi hatayi aldigini ayirt edemiyordu (canli logda 12/12 bos satir).
+        logger.warning("mDNS başlatılamadı: %s", _hata_metni(e))
         return False
 
 

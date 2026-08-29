@@ -21,3 +21,17 @@ Yapı:
 NOT: ONNX model dosyaları exe'ye dahil edilmez.
      Runtime'da utils.model_downloader üzerinden Hugging Face'den indirilir.
 """
+
+# ── ÇALIŞMA-ANI PİP YASAĞI (denetim 2026-08-28 #10) ──────────────────────────
+# ai_hub altındaki modüllerin çoğu ultralytics import eder; AUTOINSTALL bayrağı ultralytics
+# import ANINDA okunduğu için yasak buradan da kurulur. Backend ve AI mikroservis kendi giriş
+# noktalarında zaten çağırıyor — bu üçüncü kilit, ai_hub'ı DOĞRUDAN import eden yolları
+# (testler, XAI CLI, scratch ısıtma) kapsar. Idempotent; hiçbir yan etkisi yok.
+try:
+    from utils.runtime_guards import pip_kurulumunu_yasakla as _pip_yasakla
+
+    _pip_yasakla()
+except Exception:  # utils yolu yoksa (izole kullanım) asgari kilit
+    import os as _os
+
+    _os.environ.setdefault("YOLO_AUTOINSTALL", "false")

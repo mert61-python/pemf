@@ -17,6 +17,9 @@ import { BackupPassphraseDialog, type ParolaKipi } from "@/components/domain/Bac
 import { useLiveData } from "@/context/LiveDataContext";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { FIRMA } from "@/config/firma";
+// Denetim 2026-08-28 #02: bulut kayit durumunun operatore gorunen karsiligi.
+// Saf fonksiyonlar AYRI modulde: testleri tum ekran bagimlilik grafigini yuklemeden kosar.
+import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bulutKayit";
 
 
 export function SettingsScreen() {
@@ -127,7 +130,20 @@ export function SettingsScreen() {
       setTasimaMesgul("");
       if (!res?.counts) return;
       const c = res.counts;
-      showToast(`Geri yüklendi: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`, "success");
+      // Denetim 2026-08-28 #05: backend "eklendi / zaten vardı / BAŞARISIZ" ayrımını BİLEREK
+      // döndürüyor ama ekrana hiç ulaşmıyordu — "0 hasta" tek başına "hepsi zaten vardı" mı
+      // yoksa "hepsi başarısız" mı olduğunu söylemez; tıbbi kayıt taşımada bu ayrım kritik.
+      const zatenVardi = c.patient_db_zaten_vardi ?? 0;
+      const basarisiz = c.patient_db_basarisiz ?? 0;
+      const ek = [
+        zatenVardi > 0 ? `${zatenVardi} hasta zaten vardı` : "",
+        basarisiz > 0 ? `${basarisiz} hasta AKTARILAMADI` : "",
+      ].filter(Boolean).join(", ");
+      showToast(
+        `Geri yüklendi: ${c.patients ?? 0} hasta, ${c.treatment_sessions ?? 0} seans, ${c.ai_analyses ?? 0} analiz.`
+        + (ek ? ` (${ek})` : ""),
+        basarisiz > 0 ? "error" : "success",
+      );
     };
     inp.click();
   }, [showToast, parolaSor]);
@@ -138,7 +154,7 @@ export function SettingsScreen() {
     mqtt_port: "1883",
     server_ip: "127.0.0.1"
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [searching, setSearching] = useState(false);
@@ -147,6 +163,12 @@ export function SettingsScreen() {
   // Bu cihazın eşleştirme kimliği (operatör paylaşsın diye) — /api/health'ten gelir.
   const [pairingCode, setPairingCode] = useState("");
   const [deviceId, setDeviceId] = useState("");
+  // Bulut cihaz-kaydının son yayınlanan durumu (/api/health → cloudRegistry).
+  // Denetim 2026-08-28 #02: backend bu alanı tam da arızayı göstermek için yayınlıyordu,
+  // ama onu çizen hiçbir ekran yoktu → cihaz 13 gündür buluta yazamazken ekran susuyordu.
+  // ⚠️ Bu bir ANLIK GÖRÜNTÜDÜR: aşağıdaki health çağrısı useEffect(..., []) içinde tek kez
+  // koşar (polling yok), yani ekranın açıldığı andaki durumu gösterir.
+  const [cloudRegistry, setCloudRegistry] = useState<string>("unknown");
   // Uzak cihaza bağlanmak için girilen kod/kimlik.
   const [remoteInput, setRemoteInput] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -223,6 +245,7 @@ export function SettingsScreen() {
       if (mounted && health) {
         setPairingCode(health.pairingCode || "");
         setDeviceId(health.deviceId || "");
+        setCloudRegistry(String(health.cloudRegistry ?? "unknown"));
       }
     };
     fetchSettings();
@@ -542,6 +565,22 @@ export function SettingsScreen() {
                 <Text style={styles.pairTitle}>Cihaz Eşleştirme</Text>
               </View>
 
+              {/* Denetim #02: bulut kaydı bozuksa KODDAN ÖNCE söyle. Eskiden kod koşulsuz
+                  "bu cihazın kodu" diye sunuluyordu; oysa buluta gitmediği için uzaktan
+                  bağlanmakta işe yaramıyordu ve hiçbir ekran bunu söylemiyordu. */}
+              {bulutKayitRozeti(cloudRegistry) ? (
+                <Text
+                  style={
+                    bulutKayitRozeti(cloudRegistry)!.seviye === "hata"
+                      ? styles.bulutKayitHata
+                      : styles.bulutKayitUyari
+                  }
+                >
+                  {bulutKayitRozeti(cloudRegistry)!.seviye === "hata" ? "⛔ " : "⚠️ "}
+                  {bulutKayitRozeti(cloudRegistry)!.metin}
+                </Text>
+              ) : null}
+
               {(pairingCode || deviceId) ? (
                 <View style={styles.pairIdentity}>
                   <Text style={styles.helperText}>
@@ -554,6 +593,9 @@ export function SettingsScreen() {
                     >
                       <Text selectable style={styles.pairCodeText}>
                         Bu cihazın eşleştirme kodu: <Text style={styles.pairCodeValue}>{pairingCode}</Text>
+                        {!eslestirmeKoduUzaktanGecerliMi(cloudRegistry) ? (
+                          <Text style={styles.bulutKayitHata}> (uzaktan geçersiz)</Text>
+                        ) : null}
                       </Text>
                       <Copy color={colors.primary} size={16} />
                     </TouchableOpacity>
@@ -674,10 +716,10 @@ export function SettingsScreen() {
               <Text style={[styles.cardTitle, {color: colors.danger}]}>Donanım Bakım ve Servis</Text>
             </View>
             <Text style={styles.helperText}>Sadece acil durumlarda veya sistem kilitlenmelerinde kullanın.</Text>
-            
+
             <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-              <TouchableOpacity 
-                style={[styles.btnOutline, { borderColor: colors.warning }]} 
+              <TouchableOpacity
+                style={[styles.btnOutline, { borderColor: colors.warning }]}
                 onPress={async () => {
                   // HASTA GÜVENLİĞİ: self-test bobinleri sürebilir. Tedavi sürerken çalıştırmak
                   // devam eden protokolü bozar → tek dokunuşla değil, onaylı ve seans-kontrollü.
@@ -893,6 +935,17 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     color: colors.textMuted,
     fontStyle: 'italic'
+  },
+  // Bulut kayit rozeti (denetim #02) — sessiz arizayi gorunur kilar.
+  bulutKayitHata: {
+    fontSize: typography.caption,
+    color: colors.danger,
+    marginBottom: spacing.sm,
+  },
+  bulutKayitUyari: {
+    fontSize: typography.caption,
+    color: colors.warning,
+    marginBottom: spacing.sm,
   },
   cardHeaderRow: {
     flexDirection: 'row',

@@ -70,6 +70,8 @@ export function ControlScreen() {
   const [autoDuration, setAutoDuration] = useState("20");
   const [autoIntensity, setAutoIntensity] = useState("1.0");
   const [autoLoading, setAutoLoading] = useState(false);
+  // auto_preset yanıtındaki "source": "literature_exact" | "default_wellness" (denetim #01 rozeti).
+  const [autoKaynak, setAutoKaynak] = useState<string | null>(null);
 
   // ── Manuel Mod state ───────────────────────────────────────────────────
   const [masterFreq, setMasterFreq] = useState("100");
@@ -128,6 +130,9 @@ export function ControlScreen() {
         if (p.duty != null) setAutoDuty(String(p.duty));
         if (p.duration != null) setAutoDuration(String(Math.round(p.duration)));
         if (p.intensity != null) setAutoIntensity(String(p.intensity));
+        // Denetim 2026-08-28 #01: literatürde karşılığı olmayan hedef SESSİZCE genel wellness
+        // dozuna düşüyordu — ekranda hiçbir fark yoktu, vet hedefe özel doz aldığını sanıyordu.
+        setAutoKaynak(typeof p.source === "string" ? p.source : null);
       }
     } catch {
       /* öneri alınamadı — kullanıcı elle ayarlar */
@@ -540,6 +545,17 @@ export function ControlScreen() {
             <ParamField label="Süre (dk)" value={autoDuration} onChangeText={setAutoDuration} />
           </View>
           {autoLoading && <Text style={styles.hint}>Literatür önerisi alınıyor…</Text>}
+          {/* Denetim #01: doz kaynağı görünür olmalı. "default_wellness" = seçilen hedefin
+              literatürde karşılığı yok, genel dozla devam ediliyor — operatör bunu bilmeli. */}
+          {!autoLoading && autoKaynak === "default_wellness" && (
+            <Text style={styles.kaynakUyari}>
+              ⚠️ Bu hedef için literatür protokolü yok — genel (wellness) dozu uygulanıyor.
+              Hedefe özel doz istiyorsanız parametreleri elle ayarlayın.
+            </Text>
+          )}
+          {!autoLoading && autoKaynak === "literature_exact" && (
+            <Text style={styles.kaynakBilgi}>📖 Literatür protokolü uygulandı.</Text>
+          )}
 
           <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} />
 
@@ -875,6 +891,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.small,
     lineHeight: rf(20),
+  },
+  // Doz kaynağı rozetleri (denetim #01) — sessiz düşüşü görünür kılar.
+  kaynakUyari: {
+    color: colors.warning,
+    fontSize: typography.small,
+    lineHeight: rf(20),
+    marginTop: spacing.xs,
+  },
+  kaynakBilgi: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: rf(20),
+    marginTop: spacing.xs,
   },
   formLabel: {
     color: colors.textMuted,

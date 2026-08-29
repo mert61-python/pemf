@@ -53,6 +53,45 @@ def test_izolasyon_yururlukte():
     assert "PEMF_DATA_DIR" in os.environ, "izolasyon PEMF_DATA_DIR'i ayarlamamış"
 
 
+def test_KRITIK_makine_kimlik_deposu_da_IZOLE(tmp_path):
+    """⚠️ ÖLÇÜLEN SIZINTI (2026-08-28): süit GERÇEK makine kimlik deposuna yazdı.
+
+    `device_registry_secret` artık veri kökünün DIŞINDA, makine kapsamlı bir dosyada tutuluyor
+    (`%ProgramData%\\PEMF_System\\device_identity.json`) — bu yol `PEMF_DATA_DIR`e BAKMAZ,
+    dolayısıyla mevcut izolasyon onu kapsamıyordu. Süit gerçek dosyaya TEST SIRRI yazdı ve
+    oradaki değer klinik cihazınkinden FARKLI çıktı (ölçüldü). Sonucu sinsi: veri kökü bir gün
+    yenilendiğinde o yanlış sır kullanılır ve yeni düzeltilen `secret_mismatch` arızası GERİ
+    GELİR — üstelik sebebi test süiti olur.
+    """
+    from utils.secrets_manager import _cihaz_kimlik_deposu
+
+    assert "PEMF_DEVICE_IDENTITY_DIR" in os.environ, (
+        "conftest makine kimlik deposunu izole etmemiş — süit gerçek cihaz sırrını EZEBİLİR"
+    )
+    coz = str(_cihaz_kimlik_deposu()).lower()
+    for gercek in (r"c:\programdata\pemf_system", "/var/lib/pemf"):
+        assert not coz.startswith(gercek.lower()), (
+            f"makine kimlik deposu GERÇEK kuruluma çözümlendi: {coz} — süit klinik cihazının bulut sırrını bozabilir"
+        )
+
+
+def test_KRITIK_suit_gercek_cihaz_sirrini_YAZMAZ():
+    """Davranışsal: gerçek depo dosyası bu süit sırasında DEĞİŞMEMELİ.
+
+    (Dosya yoksa test anlamlıdır: oluşmamış olması da doğru sonuçtur.)"""
+    from pathlib import Path
+
+    gercek = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "PEMF_System" / "device_identity.json"
+    onceki = gercek.read_bytes() if gercek.is_file() else None
+
+    from utils.secrets_manager import get_secret
+
+    get_secret("device_registry_secret")  # izole ortamda koşmalı
+
+    sonraki = gercek.read_bytes() if gercek.is_file() else None
+    assert onceki == sonraki, "süit GERÇEK makine kimlik deposunu değiştirdi — klinik cihazının bulut mührü bozulabilir"
+
+
 def test_KRITIK_monkeypatch_undo_izolasyonu_SOKEMEZ(monkeypatch):
     """🔴 ASIL REGRESYON: bir testin `monkeypatch.undo()`su korumayı kaldırmamalı.
 

@@ -377,7 +377,23 @@ a = Analysis(
 )
 
 # torch/torchvision .py kaynaklarını at (boyut)
-a.datas = [x for x in a.datas if not (('torch' in x[0].lower() or 'torchvision' in x[0].lower()) and x[0].endswith('.py'))]
+#
+# ⚠️ DENETİM 2026-08-28 #07 — onedir spec'iyle BİREBİR aynı blok (test bu iki kopyanın
+# eşitliğini kilitler: tests/test_kod_korumasi_pyz.py). ONEFILE ölçülüp reddedilmiş bir sahip
+# kararıdır ama spec canlı tutuluyor; bu yama olmadan onefile "korumalı SANILAN" bir EXE üretir:
+# `collect_submodules('ai_hub')` ai_hub'ı PYZ'ye çeker, .pyd paketlense bile düz bytecode kalır.
+def _torch_kaynagi_mi(hedef: str) -> bool:
+    """YALNIZ torch/torchvision paket KÖKÜNDEKİ .py kaynakları (boyut için atılır)."""
+    p = hedef.replace('\\', '/').lower()
+    return p.endswith('.py') and (p.startswith('torch/') or p.startswith('torchvision/'))
+
+
+a.datas = [x for x in a.datas if not _torch_kaynagi_mi(x[0])]
+
+a.pure[:] = [x for x in a.pure if x[0].split('.')[0] != 'ai_hub']
+_ai_kalan = [x[0] for x in a.pure if x[0].split('.')[0] == 'ai_hub']
+assert not _ai_kalan, f"ai_hub HALA PYZ'de ({len(_ai_kalan)} giris): {_ai_kalan[:5]}"
+print('[KORUMA] ai_hub PYZ disi birakildi (onefile)')
 
 pyz = PYZ(a.pure)
 

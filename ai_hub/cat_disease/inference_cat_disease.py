@@ -39,8 +39,16 @@ if not os.path.exists(MODEL_PATH):
         MODEL_PATH = download_model_sync("ai_hub/cat_disease/XGBoost.pkl")
     except Exception:
         pass
-SCALER_PATH = os.path.join(_DIR, "scaler_X.pkl")
-ENCODER_PATH = os.path.join(_DIR, "label_encoder.pkl")
+# Denetim 2026-08-28 #09: yan dosyalar da /models'e duser (Docker imajinda
+# ai_hub/**/*.pkl elenir; klinik frozen EXE'de dosya modul yaninda oldugu icin
+# ilk kosul tutar ve cozucuye hic girilmez).
+try:
+    from utils.model_downloader import yan_dosya_coz as _yan
+except Exception:  # utils yolu yoksa (izole kullanim) eski davranis
+    def _yan(yerel, _repo):
+        return yerel
+SCALER_PATH = _yan(os.path.join(_DIR, "scaler_X.pkl"), "ai_hub/cat_disease/scaler_X.pkl")
+ENCODER_PATH = _yan(os.path.join(_DIR, "label_encoder.pkl"), "ai_hub/cat_disease/label_encoder.pkl")
 
 SYMPTOM_LIST = [
     "Appetite Loss",       # 1

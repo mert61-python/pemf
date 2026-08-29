@@ -18,6 +18,16 @@ try:
 except Exception:  # yükleyici yoksa/başarısızsa uygulama normal (şifresiz) açılmaya devam eder
     pass
 
+# ÇALIŞMA-ANI PİP YASAĞI (denetim 2026-08-28 #10) — ultralytics'ten ÖNCE olmalı: AUTOINSTALL
+# bayrağı ultralytics import anında okunur. Ürün kendi EXE'sini `-m pip install` ile alt-süreç
+# olarak başlatıyordu; paketlenmiş tıbbi cihaz yazılımı bağımlılıklarını çalışırken değiştirmez.
+try:
+    from utils.runtime_guards import pip_kurulumunu_yasakla as _pip_yasakla
+
+    _pip_yasakla()
+except Exception:  # kapı kurulamazsa uygulama açılmaya devam eder (davranış eskisi gibi)
+    pass
+
 import uvicorn
 
 from controllers.hardware_controller import HardwareController

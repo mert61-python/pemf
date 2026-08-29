@@ -65,6 +65,14 @@ function Get-PemfFootprint {
         @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_Staging\PEMF_GUI';        Owner = 'shared';  Kvkk = $true  }
         @{ Kind = 'PerUser'; Path = 'AppData\Roaming\PEMF_GUI';                    Owner = 'shared';  Kvkk = $true  }
         @{ Kind = 'PerUser'; Path = '.pemf_gui';                                   Owner = 'gui';     Kvkk = $true  }
+        # ⚠️ DENETİM 2026-08-28 #02 — BULUT CİHAZ KİMLİĞİ (veri kökünün DIŞINDA, BİLEREK).
+        # `device_registry_secret` artık burada tutuluyor: veri kökü yenilendiğinde sırrın
+        # kaybolması, cihazın buluta KALICI olarak yazamamasına yol açıyordu (13 gün ölçüldü).
+        # Sır kasıtlı olarak `PEMF_System\PEMF_GUI` dışında; ama bulut YAZMA YETKİSİ taşıdığı
+        # için KVKK kapsamındadır: "cihazı kaldırdım" diyen klinikte yetki makinede KALMAMALI.
+        # Bu satır o ödünleşimin karşılığıdır — kaldırılırsa yetki geride kalır.
+        # (Sıradan kaldır-kur bu dosyaya DOKUNMAZ; yalnız -IncludePatientData siler.)
+        @{ Kind = 'Abs';     Path = 'C:\ProgramData\PEMF_System\device_identity.json'; Owner = 'shared'; Kvkk = $true }
     )
     [pscustomobject]@{
         Paths       = $paths
