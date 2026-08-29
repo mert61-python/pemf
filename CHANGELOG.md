@@ -6,6 +6,156 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.42 — 2026-08-29 (🌐 Anlasilir ag hatasi + temiz kaldirma)
+
+- **Ag hatalari artik ne yapmaniz gerektigini soyluyor.** Kurulum sirasinda internet ya da DNS
+  duserse ekranda ham teknik metin cikiyordu ("indirme aktarimi basarisiz: ... Dns Failed:
+  resolve dns name ... os error 11001"). Bu cumle iki bakimdan kotuydu: kullaniciya hicbir
+  eylem onermiyordu ve sorunu SUNUCUDA sandiriyordu — oysa o hata neredeyse her zaman yerel
+  bir ag kesintisidir. Artik "Wi-Fi baglantinizi kontrol edip tekrar deneyin" gibi net bir
+  cumle gosteriliyor; teknik ayrinti destek icin ikinci satirda KORUNUYOR.
+- **DNS hatasi gecici sayilip yeniden deneniyor** — anlik bir cozumleme hatasi artik kurulumu
+  tamamen dusurmuyor.
+- **Kaldirma daha temiz:** program kaldirildiginda kendi guvenlik duvari kurallari ve yerel
+  uygulama verisi de siliniyor (kullanicinin kendi onayladigi Windows kurallarina dokunulmaz).
+- 21 yeni otomatik kontrol eklendi; her biri, yakalamasi gereken hatayi bilerek geri koyarak
+  KIRMIZI yandigi dogrulandi.
+
+## mobile 2.3.28 — 2026-08-29 (🔴 "Guncelle"ye basinca uygulama kapaniyordu)
+
+- **Guncelleme baslatirken uygulamanin kapanmasi duzeltildi** (saha bildirimi, Galaxy S23 /
+  Android 16). Kullanici "Guncelle"ye basiyor, uygulama aninda kapaniyordu — indirme hic
+  baslamadan. Bu, guncellemeyi TAMAMEN engelliyordu: her deneme ayni yerde kapanmayla
+  bitiyordu.
+- **Sebep bir SIRA hatasiydi, izin sorunu degil.** Indirme boyunca sureci canli tutan on-plan
+  servisi baslatiliyor, ancak indirme cok hizli bittiginde (ornegin paket daha once tam
+  inmisse) servis kendini on plana almaya firsat bulamadan durduruluyordu. Android bunu
+  olumcul sayip uygulamayi kapatiyor. Olculen aralik 23 milisaniye.
+- **Uc yerde birden saglamlastirildi**, biri kacsa da digerleri tutsun diye: servis artik
+  kendini her kosulda once on plana aliyor; durdurma istegi servise dogrudan iletiliyor; ve
+  durdurma, baslatmanin tamamlanmasi beklenmeden gonderilmiyor.
+- Not: paketi daha once tam indirmis cihazlar bu hataya HER denemede giriyordu — bu yuzden
+  ariza "bir kere oldu" degil, kalici gorunuyordu.
+
+## app 1.9.33 — 2026-08-28 (📡 Uzaktan erisim ariza SEBEBI ortadan kalkti)
+
+- **Yeniden kurulum artik uzaktan erisimi BOZMUYOR.** 1.9.32 arizayi GORUNUR yapmisti; bu surum
+  SEBEBINI ortadan kaldiriyor. Kok neden bir kalicilik asimetrisiydi: cihazin bulut kimligi
+  yeniden kurulumda AYNI geliyordu (ag donanimindan turetiliyor), ona esilik eden guvenlik
+  anahtari ise yalnizca silinen veri klasorunde durdugu icin DEGISIYORDU. Bulut, kimlik ayni
+  anahtar farkli olunca yazmayi kalici olarak reddediyordu — cihaz acik ve internete bagliyken
+  bile uzaktan erisim guncellenmiyordu. Anahtar artik veri klasorunun DISINDA, makineye bagli
+  bir yerde saklaniyor; klasor yenilense de ayni kaliyor.
+- **Mevcut cihazlar da korunuyor:** ilk acilista anahtar sessizce yeni yerine tasiniyor. Yalniz
+  yeni kurulumlari korusaydi sahadaki cihazlar ilk kaldir-kur dongusunde yine bozulacakti.
+- **KVKK dengesi korundu:** siradan kaldir-kur anahtari BIRAKIR (ariza olmasin diye), ama
+  "hasta verisini de sil" secildiginde bulut yazma yetkisi de MAKINEDEN SILINIR. Kaldirma
+  betigine bunun icin ayri bir kalem eklendi.
+- Bu makinedeki 31 gunluk ariza giderildi: bulut kaydi silinip cihaz kendini yeniden muhurledi
+  (dogrulandi — kayit 31 gun sonra ilk kez guncellendi, yerel IP ve surum bilgisi dogru yazildi).
+- Kalici koruma: iki yeni test dosyasi + test izolasyonuna bir kalem. ⚠️ Yol boyunca test
+  suitinin GERCEK cihaz anahtarina yazdigi bulundu ve kapatildi; kapatilmasaydi bir sonraki
+  kaldir-kur'da ariza test suiti yuzunden geri gelecekti.
+Paket kimliği (`buildId`): `1e09964006ad`. Monolit `base.zip` sha: `4ecbc61df2e2`.
+Deps katmanı DEĞİŞMEDİ (`06622c47209b`) — klinikler yalnız ~77 MB uygulama katmanını indirir.
+
+## app 1.9.32 — 2026-08-28 (🔒 Kod korumasi gercekten etkin + uzaktan erisim teshisi + CKD aciklamasi)
+
+> Bu surum, 28 Agustos "sessiz olum" taramasinda bulunan **10 arizanin tamamini** kapatir.
+> 1.9.31'de dordu kapanmisti; kalan alti burada. Hicbiri sahaya YAYINLANMADAN once bu surumde
+> birlestirildi (1.9.31 paketleri hazirlandi ama manifest yayinlanmadi).
+
+- **🔒 KOD KORUMASI ARTIK GERCEKTEN ETKIN.** AI modul kaynaklari Cython ile `.pyd`'ye
+  derleniyordu ama **hicbiri yuklenmiyordu**: paketleyici ayni modullerin okunabilir
+  bytecode'unu da EXE'nin ic arsivine gomuyor ve calisma aninda o kopya onceligi aliyordu.
+  Olculdu: 65 derlenmis modulden **yalniz 1'i** kullaniliyordu; sevk edilen EXE'den okunabilir
+  kaynak cikarilabiliyordu. Dort koruma kapisi da yesil yaniyordu, cunku dordu de yalniz
+  "diskte duz kaynak kaldi mi" diye soruyordu. Arsiv artik temizleniyor; iki YENI kapi eklendi
+  (arsivde AI kodu var mi + moduller gercekte nereden yukleniyor) ve build bunlar kirmiziysa
+  DURUYOR.
+- **⚠️ Ayni duzeltme bir sessiz olumu onledi:** paketleme filtresi, adinda "torch" gectigi icin
+  `ig_torch` modulunu pakete hic almiyordu; bugune kadar yalnizca arsiv kopyasi sayesinde
+  calisiyordu. Arsiv temizligi tek basina yapilsaydi **bobrek RNA gen-katki aciklamasi sahada
+  sessizce olecekti**. Filtre yola gore duzeltildi + kaynak/paket butunlugu kapisi eklendi.
+- **📡 Uzaktan erisim arizasi artik EKRANDA GORUNUYOR.** Cihazin bulut kaydi bozulmussa
+  (genellikle yeniden kurulum sonrasi) Ayarlar ekraninda net bir uyari cikiyor ve eslestirme
+  kodunun yaninda "(uzaktan gecersiz)" etiketi beliriyor — eskiden kod kosulsuz gecerli gibi
+  sunuluyordu. Uzaktan baglanmaya calisan operatore de artik dogru sey soyleniyor: eski mesaj
+  *"uzaktan erisimi acin; kod dogru"* diyordu (ikisi de yanlis yone kilitliyordu); yenisi
+  bulut kaydinin **kac gundur guncellenmedigini** soyluyor. Ayrica bir tur basarisiz olunca
+  durum artik "saglikli" kalmiyor (bayat teshis, teshissizlikten kotudur).
+- **🧪 Bobrek hastaligi (CKD) aciklamasi duzeltildi — klinik dogruluk.** Uc kusur ust uste
+  binmisti: (1) aciklama **yakinsamamisti** — ayni hastada, ayni girdiyle en etkili bes ozellik
+  her calistirmada degisiyordu; (2) kullanilan seyreklestirme 24 ozellikten 14'unu sifira
+  zorluyordu ve **bunlarin arasinda KREATININ vardi** (bobrek aciklamasinda katkisi "0,0"
+  yaziyordu); (3) karsilastirma referansi modelce zaten hasta sayiliyordu, aciklanacak sinyal
+  gurultuye gomuluyordu. Olculen yeni durum: ilk-5 dort farkli kosuda **birebir ayni**,
+  kreatinin katkisi 0,0 → 0,026, aciklanabilir sinyal ~100 kat guclu. Gecikme 0,18 sn.
+- **🛠 Launcher "Onar" dugmesi calisiyor.** Model paketi bozulan klinikte "Onar" **indirme
+  baslamadan** "'ai_hub' profili manifest'te yok" hatasiyla dusuyordu: kurulum dizinindeki
+  klasor adi profil sanilıyordu. 4 Agustos'ta yazilan duzeltme fiilen calismiyordu ve kapisi da
+  gercekte hic olusmayan bir dizin duzeni kurdugu icin yesil kaliyordu.
+- **📶 Ayni agda iki cihaz artik birbirini engellemiyor.** mDNS servis adi sabit oldugu icin
+  ikinci cihazin kaydi reddediliyor ve o oturum boyunca **hic toparlanamiyordu**; ustelik hata
+  gunluge bos satir olarak yaziliyordu (destek hangi hatayi aldigini goremiyordu). Ad artik
+  cihaza ozel ve kararli; kayit reddedilse bile arayuz degisiminde yeniden deneniyor.
+- **🐳 GPU/Docker profilindeki uc olu uc onarildi** (bu profil henuz sevk edilmiyor): termal ve
+  retikulosit sonuclari arayuzun bekledigi bicimde donmuyordu (panel sessizce bos kaliyordu) ve
+  uc AI modulu, yaninda duran yardimci model dosyalarini bulamadigi icin hata veriyordu.
+- Kalici korumalar: alti yeni test dosyasi + iki yeni build kapisi. Her kapi, yakalamasi gereken
+  hatayi **bilerek geri koyularak** kirmizi oldugu dogrulandi (20 mutasyon). Bu turda kendi
+  kapilarimizin **besi ilk halinde bos calisti** ve ancak bu yontemle yakalandi.
+Paket kimliği (`buildId`): `d8f4fc7ca6dc`. Monolit `base.zip` sha: `5efa035ef3d6`.
+
+- ⚠️ **Bu yayinda BAGIMLILIK KATMANI da degisti** (`3b39061b2286` -> `06622c47209b`): eksik
+  surum bilgileri (`.dist-info`) pakete eklendigi icin klinikler bu sefer yalniz ~77 MB
+  uygulama katmanini degil, ~1,4 GB bagimlilik katmanini da indirecek. Son dort yayinda
+  degismemisti; duzeltmenin kacinilmaz bedeli, bir defalik.
+
+## app 1.9.31 — 2026-08-28 (🎯 Hedefe ozel doz + yedek sayaci + kor kalan kapilar)
+
+> ⚠️ Bu surum SAHAYA CIKMADI: paketleri hazirlandi ama manifest yayinlanmadan once kalan alti
+> ariza da duzeltildi ve hepsi 1.9.32'de birlestirildi. Asagidaki degisiklikler 1.9.32'de canli.
+
+- **Otomatik modda UC HEDEF YANLIS DOZ aliyordu — duzeltildi (klinik dogruluk).** Arayuzdeki
+  8 seans hedefinden ucu literatur protokolune baglanamiyordu: *Enflamasyon Azaltma* ve
+  *Sinir Rejenerasyonu* sessizce **genel (wellness) dozuna** dusuyordu; *Bag Dokusu Tamiri*
+  ise yumusak-doku dozunu (105 Hz / %50 / 30 dk) aliyordu — bag/tendon dozu (75 Hz / %40 /
+  37 dk) yerine. Ucunde de ekranda hicbir fark yoktu, veteriner hedefe ozel doz aldigini
+  saniyordu ve seans kaydina o hedef yaziliyordu. Olculen yeni durum: 8 hedefin 8'i dogru
+  protokolu aliyor.
+- **Doz kaynagi artik ekranda gorunuyor.** Secilen hedefin literatur karsiligi yoksa
+  "genel (wellness) dozu uygulaniyor" uyarisi cikar; varsa "Literatur protokolu uygulandi"
+  yazar. Doz yine doner — seans engellenmez, yalnizca sessizlik kaldirildi.
+- **Yedekleme ozeti "0 hasta" demeyi birakti.** 300 hastalik yedek alan klinik
+  "Yedek olusturuldu: **0 hasta**" goruyordu; veriler dogru tasiniyordu, **sayi yalan
+  soyluyordu** — arayuzun okudugu sayac backend yanitinda hic yoktu. Geri yuklemede de
+  yanlis sayac okunuyordu. Ayrica geri yuklemenin uc sonucu (**eklendi / zaten vardi /
+  AKTARILAMADI**) artik ekrana ulasiyor; aktarilamayan kayit varsa bildirim hata rengine doner.
+- **AI hazirlik teshis ucu artik gercekten olcuyor.** Sahada "model calismiyor" arizasinda
+  destegin baktigi uc, 13 modulun 12'sinde **hicbir dosyaya bakmadan** "hazir" diyordu ve
+  aciklanabilir-AI zincirini hic gormuyordu; iki AI ucu ise listede yoktu. Uc artik 15 modulu
+  gercek agirlik dosyasi uzerinden dogruluyor, XAI kutuphanelerini ve EM referans
+  istatistiklerini ayrica raporluyor. Build kapisi bunlarin hepsini kontrol ediyor — bir
+  eksiklik varsa o EXE yayina cikmiyor.
+- **Urun artik calisirken kendine paket kurmaya kalkmiyor.** Her AI modeli yuklenirken
+  `pip install` alt-sureci deneniyordu (basarisiz, model basina ~2,9 saniye ve destegi
+  yaniltan kirmizi kayit). Iki bagimsiz onlem: paketleme tarafinda eksik surum bilgileri
+  eklendi, calisma tarafinda otomatik kurulum tumden kapatildi.
+- **Paketleme kapisindaki sessiz atlama giderildi.** Surum bilgisi toplama adimi, agactaki
+  tek bir eksik bagimlilik yuzunden UC PAKETI birden sessizce atliyordu (27 Agustos
+  arizasinin kendi paketi dahil) ve build yine yesil kaliyordu. Artik once genis, sonra dar
+  toplama denenir; kurulu bir paketin bilgisi yine alinamazsa **build durur**.
+- Kalici korumalar: dort yeni test dosyasi (hedef-doz sozlesmesi, yedek sayaclari, pip yasagi,
+  hazirlik envanteri). Her kapi, yakalamasi gereken hatayi **bilerek geri koyularak** kirmizi
+  oldugu dogrulandi — bu turda iki kapinin ilk halinin bos calistigi boylece bulundu ve duzeltildi.
+Paket kimliği (`buildId`): `38fa24480204`. Monolit `base.zip` sha: `86c96c5aa207`.
+
+- ⚠️ **Bu yayinda BAGIMLILIK KATMANI da degisti** (`3b39061b2286` -> `8c7beec846bb`): eksik surum
+  bilgileri (`.dist-info`) pakete eklendigi icin klinikler bu sefer yalniz ~78 MB uygulama
+  katmanini degil, ~1,4 GB bagimlilik katmanini da indirecek. Son dort yayinda degismemisti;
+  duzeltmenin kacinilmaz bedeli, bir defalik.
+
 ## app 1.9.30 — 2026-08-27 (🔍 Hastalik analizinde aciklama artik gercekten uretiliyor)
 
 - **Kedi Hastalik modulunde "Aciklama uretilemedi" arizasi giderildi.** Analiz calisiyordu
@@ -127,6 +277,43 @@ Deps katmanı: `3b39061b2286` (paket metadata dosyaları bu katmana girdi).
 
 Paket kimliği (`buildId`): `1bb79548612e`. Monolit `base.zip` sha: `4c3d5b6b621f`.
 Deps katmanı: `ce9f9dfcca50` (celldetection nedeniyle 6. değişim — bilinçli).
+
+## launcher 1.9.41 — 2026-08-29 (🚑 1.9.40 ACILIS ARIZASI GIDERILDI)
+
+- **1.9.40 kurulan cihazlar "Ortam algılanıyor…" ekraninda kaliyordu — duzeltildi.** Uygulama
+  aciliyor ama hicbir dugme cikmiyordu; baslikta surum yerine `v—` yaziyordu. Sebep, 1.9.40 ile
+  eklenen bir uyari metnindeki bicimlendirme hatasiydi: metin ic ic e gecen satirlar yuzunden
+  arayuz kodunun TAMAMI calisamaz hale geliyordu. Metin duzeltildi.
+- ⚠️ **1.9.40 kurulu cihazlar KENDILIGINDEN duzelemez**: arayuz calismadigi icin guncelleme
+  kontrolu de yapilamiyor. O cihazlarda kurulum dosyasi ELLE indirilip calistirilmalidir
+  (site > Windows icin indir). Kurulu veriler, hasta kayitlari ve profiller ETKILENMEZ.
+- **Kalici koruma:** arayuz kodunun ayristirilabilir oldugunu dogrulayan bir kapi eklendi
+  (`tests/test_launcher_ui_sozdizimi.py`). Bu ariza sinifi daha once HIC olculmuyordu: mevcut
+  kapilarin hepsi arayuzun tek tek PARCALARINA bakiyordu, butununun calisip calismadigina
+  bakan yoktu. Kapi, arizanin birebir hali geri konularak kirmizi oldugu dogrulandi.
+- 1.9.40'in getirdigi Duraklat/Iptal ozelligi aynen gecerli (asagidaki nota bakin).
+
+## launcher 1.9.40 — 2026-08-28 (⏸ Arka plan indirmesi artik DURDURULABILIYOR)
+
+- **"Duraklat" ve "Iptal" dugmeleri eklendi.** Yeni surum arka planda inerken (ornekte 1,39 GB
+  `deps` paketi) ekranda yalnizca ilerleme cubugu vardi; indirmeyi durdurmanin HICBIR yolu
+  yoktu. Klinik hattini mesgul eden bir indirmeyi ancak uygulamayi kapatarak kesebiliyordunuz.
+- **Duraklat**: indirme durur, **inen kisim KORUNUR**. "Devam et"e bastiginizda kaldigi yerden
+  surer — bastan inmez. Karar oturum boyunca gecerlidir: 6 saatte bir kosan otomatik kontrol,
+  duraklattiginiz indirmeyi kendiliginden yeniden BASLATMAZ (yoksa "Duraklat" birkac saat sonra
+  sessizce geri alinirdi). Bir sonraki acilista normal sekilde yeniden denenir.
+- **Iptal**: inen kisim SILINIR ve guncelleme bir sonraki acilista bastan indirilir. Bu kayip
+  onemli oldugu icin once ONAY sorulur ve onay metni daha ucuz secenegi ("Duraklat") acikca
+  onerir.
+- **Kendi bastiginiz dugme artik "hata" gibi gosterilmiyor.** Eskiden tum sonuclar tek bir
+  "indirme tamamlanamadi" mesajina dusuyordu; duraklatan kullanici bunu ariza saniyordu. Artik
+  "duraklatildi — inen kisim korundu" ve "iptal edildi — sonraki acilista yeniden denenecek"
+  ayri ayri yazilir.
+- ⚠️ Teknik not (ileride geri alinmasin): durdurma yetenegi (`net::Control::Pause/Cancel`) ve
+  `pause_install`/`cancel_install` komutlari ZATEN vardi ve kurulum ekraninda calisiyordu; arka
+  plan indirmesi tek bir satirda sabit "devam et" ile cagrildigi icin kullaniciya ulasmiyordu.
+  Ayrica `resume_install` komutu HIC YOKTU. Kapilar: `launcher/core/tests/
+  arka_plan_indirme_denetimi.rs` (cekirdek) + `tests/test_launcher_indirme_denetimi.py` (kablo).
 
 ## launcher 1.9.39 — 2026-08-27 (coklu-model-zip: buyuk PT'ler sahaya inebiliyor)
 
