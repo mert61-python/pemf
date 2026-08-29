@@ -611,7 +611,15 @@ async function _apkIndirGercek(
   const azami = deps.azamiYenidenDeneme ?? AZAMI_YENIDEN_DENEME;
   const bekle = deps.kesintiBekle ?? _kesintiSonrasiBekle;
   ekraniUyanikTut(true);
-  void indirmeServisiniBaslat?.(`PEMF Vet ${surum.version} indiriliyor`)?.catch?.(() => {});
+  // ⚠️ Başlatma sözü TUTULUR ve durdurmadan önce beklenir — saha çökmesi 2026-08-29
+  // (Galaxy S23 / Android 16): indirme çok hızlı bittiğinde (ör. APK zaten tam inmiş) durdurma,
+  // başlatma daha yerli tarafa varmadan gönderiliyordu. Çerçeve `startForegroundService()` borcunu
+  // ödenmemiş sayıp uygulamayı öldürüyordu — kullanıcı "Güncelle"ye basar basmaz kapanma.
+  // Servis tarafı da ayrıca sağlamlaştırıldı (IndirmeServisi: startForeground her yolda ilk iş),
+  // ama sırayı burada da korumak iki tarafı birbirine bağımlı olmaktan çıkarır.
+  const servisSozu = Promise.resolve(
+    indirmeServisiniBaslat?.(`PEMF Vet ${surum.version} indiriliyor`),
+  ).catch(() => {});
   try {
     for (let deneme = 0; ; deneme++) {
       const sonuc = await birDeneme(deneme === 0 ? ayniIs : true);
@@ -620,7 +628,8 @@ async function _apkIndirGercek(
     }
   } finally {
     ekraniUyanikTut(false);
-    void indirmeServisiniDurdur?.()?.catch?.(() => {});
+    await servisSozu;
+    await Promise.resolve(indirmeServisiniDurdur?.()).catch(() => {});
   }
 }
 

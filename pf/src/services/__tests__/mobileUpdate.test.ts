@@ -488,6 +488,42 @@ describe("apkIndir", () => {
     expect(mockServisDurdur).toHaveBeenCalledTimes(1);
   });
 
+  it("KRITIK: durdurma, BAŞLATMA çözülmeden gönderilmez (saha çökmesi 2026-08-29)", async () => {
+    // ÖLÇÜLEN ÇÖKME — Galaxy S23 / Android 16, logcat (23 milisaniye):
+    //   .916  FGS Allowed [uidState: TOP]           ← izin sorunu YOK
+    //   .924  "Bringing down service while still waiting for start foreground"
+    //   .939  FATAL ForegroundServiceDidNotStartInTimeException
+    //
+    // Tetikleyici: indirme ANINDA bitiyor (APK zaten tam inmiş) → `finally` durdurmayı,
+    // başlatma yerli tarafa varmadan gönderiyor. Çerçeve `startForegroundService()` borcunu
+    // ödenmemiş sayıp süreci ÖLDÜRÜYOR: kullanıcı "Güncelle"ye basar basmaz uygulama kapanıyordu.
+    //
+    // ⚠️ Kapı SIRAYI ölçer, çağrı SAYISINI değil: eski kod da ikisini birer kez çağırıyordu —
+    // yanlış olan tek şey sıraydı, ve o hiçbir kapıda yoktu.
+    const sira: string[] = [];
+    mockServisBaslat.mockClear(); mockServisDurdur.mockClear();
+    mockServisBaslat.mockImplementationOnce(
+      () => new Promise<boolean>((coz) => setTimeout(() => { sira.push("baslat"); coz(true); }, 20)),
+    );
+    mockServisDurdur.mockImplementationOnce(async () => { sira.push("durdur"); return true; });
+
+    _indirmeyiSifirla();
+    const r = await apkIndir(SURUM(), undefined, {
+      // "APK zaten tam inmiş" — çökmenin gerçek sahadaki tetikleyicisi.
+      getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }) as never,
+      createDownloadResumable: jest.fn(() => {
+        throw new Error("hazır dosya yolunda indirme HİÇ başlamamalıydı");
+      }) as never,
+      devamOku: jest.fn().mockResolvedValue(null) as never,
+      devamYaz: jest.fn() as never,
+      devamSil: jest.fn() as never,
+      azamiYenidenDeneme: 0,
+    });
+
+    expect(r.ok).toBe(true);                    // hızlı yol gerçekten işledi (senaryo ayrıştı)
+    expect(sira).toEqual(["baslat", "durdur"]); // ⚠️ ters sıra = sahadaki çökme
+  });
+
   it("KARŞIT: deterministik hatalar ('sunucu') YENİDEN DENENMEZ — tekrar durumu değiştirmez", async () => {
     const bekle = jest.fn().mockResolvedValue(undefined);
     const olustur = jest.fn().mockReturnValue({

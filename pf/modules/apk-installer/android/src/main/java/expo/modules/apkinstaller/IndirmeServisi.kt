@@ -34,6 +34,20 @@ class IndirmeServisi : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    // ⚠️ SAHA ÇÖKMESİ 2026-08-29 (Galaxy S23, Android 16 / API 36) — ÖLÇÜLDÜ:
+    //
+    //   17:37:01.916  ActivityManager: Background started FGS: Allowed [uidState: TOP]
+    //   17:37:01.924  ActivityManager: Bringing down service while still waiting for start foreground
+    //   17:37:01.939  FATAL: ForegroundServiceDidNotStartInTimeException
+    //
+    // 23 milisaniye. İzin sorunu YOK (FGS "Allowed", uygulama TOP). Olan şu: JS tarafı servisi
+    // başlatıyor, indirme İŞİ ERKEN BİTİYOR (ör. APK zaten tam inmiş → hızlı dönüş) ve `finally`
+    // bloğu `stopService` çağırıyor. `startForegroundService()` çağrıldıktan sonra servis
+    // `startForeground()` ÇAĞIRMADAN indirilirse Android süreci ÖLDÜRÜR — kullanıcı "Güncelle"ye
+    // basar basmaz uygulama kapanıyordu.
+    //
+    // KURAL: `startForeground` bu metodun İLK işi olmalı ve HER YOLDA çağrılmalı — durdurma
+    // isteğiyle gelinse bile. Önce çağır, sonra dur (`stopSelf`); ters sıra çökme demektir.
     val kanalId = "pemf_guncelleme_indirme"
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -53,10 +67,26 @@ class IndirmeServisi : Service() {
     } else {
       startForeground(BILDIRIM_ID, bildirim)
     }
+
+    // Durdurma isteği: `startForeground` YUKARIDA çağrıldı, borç kapandı — artık güvenle durabiliriz.
+    // Servis hiç yaratılmamışken bile bu yol çalışır: dur-niyeti servisi yaratır, servis kendini
+    // ön plana alır ve hemen kapanır. Çerçevenin gördüğü sıra her zaman start → foreground → stop.
+    if (intent?.getBooleanExtra(EXTRA_DUR, false) == true) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+      } else {
+        @Suppress("DEPRECATION")
+        stopForeground(true)
+      }
+      stopSelf()
+    }
     return START_NOT_STICKY
   }
 
   companion object {
     const val BILDIRIM_ID = 4127
+
+    /** Dur-niyeti işareti — bkz. `onStartCommand` başındaki çökme notu. */
+    const val EXTRA_DUR = "dur"
   }
 }

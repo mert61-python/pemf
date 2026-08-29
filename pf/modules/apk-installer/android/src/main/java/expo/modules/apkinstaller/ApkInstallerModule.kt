@@ -138,13 +138,38 @@ class ApkInstallerModule : Module() {
       }
     }
 
-    /** Indirme bitti/dustu — on-plan servisini durdur (bildirim kalkar). Hata yutulur. */
+    /**
+     * Indirme bitti/dustu — on-plan servisini durdur (bildirim kalkar). Hata yutulur.
+     *
+     * ⚠️ DUZ `stopService` KULLANMA — saha cokmesi 2026-08-29 (Galaxy S23 / Android 16):
+     * indirme cok hizli bittiginde (or. APK zaten tam inmis) durdurma, servis
+     * `startForeground()` cagirmadan ONCE yetisiyordu; cerceve bunu olumcul sayip uygulamayi
+     * olduruyordu (`ForegroundServiceDidNotStartInTimeException`, olculen aralik 23 ms).
+     *
+     * Bunun yerine servise DUR-NIYETI gonderiyoruz: servis once kendini on plana alir
+     * (baslatma borcunu kapatir), sonra kendini durdurur. Servis hic yaratilmamis olsa bile
+     * sira dogru kalir. `stopService` yalnizca bu yol reddedilirse geri-cekilmedir — o noktada
+     * servis ya zaten on plandadir ya da hic baslamamistir; iki durumda da guvenlidir.
+     */
     AsyncFunction("indirmeServisiniDurdur") {
+      val durNiyeti = Intent(context, IndirmeServisi::class.java)
+        .putExtra(IndirmeServisi.EXTRA_DUR, true)
       try {
-        context.stopService(Intent(context, IndirmeServisi::class.java))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(durNiyeti)
+        } else {
+          context.startService(durNiyeti)
+        }
         true
       } catch (e: Exception) {
-        false
+        // Arka planda FGS baslatma reddedilebilir (Android 12+). Servis o an calisiyorsa
+        // zaten on plandadir; duz durdurma bu durumda cokme uretmez.
+        try {
+          context.stopService(Intent(context, IndirmeServisi::class.java))
+          true
+        } catch (e2: Exception) {
+          false
+        }
       }
     }
   }
