@@ -33,6 +33,9 @@
 
 - 10 yeni otomatik kontrol (4'u davranissal); bes mutasyonun besi de KIRMIZI dogrulandi.
 
+Paket kimliği (`buildId`): `d7021de55a8c`. Monolit `base.zip` sha: `dc072a4c92d9`.
+Bagimlilik katmani DEGISMEDI (`06622c47209b`) → sahaya yalnizca ~81 MB iner.
+
 ## launcher 1.9.42 — 2026-08-29 (🌐 Anlasilir ag hatasi + temiz kaldirma)
 
 - **Ag hatalari artik ne yapmaniz gerektigini soyluyor.** Kurulum sirasinda internet ya da DNS
