@@ -107,6 +107,31 @@ def ensure_interfaces_current() -> bool:
     with _lock:
         if _zc is None or not ips or set(ips) == set(_bound_ips):
             return False
+
+        # ⚠️ SALT-KAYIP DEĞİŞİMDE YENİDEN YARATMA YOK — saha bildirimi 2026-08-29
+        # ("aynı WiFi'de olmasına rağmen telefon otomatik bağlanmadı; 3. denemede bağlandı").
+        #
+        # ÖLÇÜLEN: client açılışta hotspot'u başlatıyor, Windows ICS arayüzü (192.168.137.1)
+        # ~30 sn sonra beliriyor, sonra BOŞTA KALINCA tekrar kayboluyor — bir günde 21 kez
+        # gel-git. Her değişimde bu fonksiyon Zeroconf'u KAPATIP yeniden yaratıyordu ve mDNS
+        # kaydı 2-4 sn ölüyordu. Telefonun keşif penceresi 4 sn (discovery.ts::MDNS_TIMEOUT_MS)
+        # → kesinti tam o boyutta. Telefonun hotspot'a bağlı olması gerekmiyor; hotspot yalnızca
+        # VAR OLMAKLA ana WiFi'deki keşfi kesiyordu.
+        #
+        # Yalnız KAYIP varsa (yeni ⊂ eski) yeniden bağlanmak GEREKSİZ: kalan arayüzlerin
+        # soketleri çalışmaya devam eder, kaybolan arayüzün soketi zararsızca ölür. Takibi
+        # güncelleyip Zeroconf'a DOKUNMUYORUZ → o arayüz geri geldiğinde (ekleme) yeniden
+        # bağlanma normal şekilde tetiklenir ve yeni arayüz soketini alır.
+        if set(ips) < set(_bound_ips):
+            logger.info(
+                "LAN arayüz seti daraldı %s → %s; kalan arayüzler çalışıyor, Zeroconf KORUNDU "
+                "(gereksiz yeniden bağlanma mDNS kaydını 2-4 sn öldürüyordu)",
+                list(_bound_ips),
+                ips,
+            )
+            _bound_ips = ips
+            return False
+
         from zeroconf import Zeroconf
 
         old_ips = list(_bound_ips)

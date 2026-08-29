@@ -248,6 +248,23 @@ class MDNSService:
         bakıyor ve `_reregister_mqtt` kendi guard'ını sürdürüyor."""
         kurulum_ok = False
         hata_sayisi = 0
+        # ⚠️ AÇILIŞTA SIK KONTROL — saha bildirimi 2026-08-29 ("aynı WiFi'de olmasına rağmen
+        # telefon ilk açılışta otomatik bağlanmadı; 3. denemede bağlandı").
+        #
+        # ÖLÇÜLEN AÇILIŞ ZİNCİRİ (iki ayrı açılışta birebir aynı):
+        #   +0 sn   backend başladı, mDNS yayında
+        #   +30 sn  hotspot (Windows ICS, 192.168.137.1) arayüzü BELİRDİ → bu döngü fark etti
+        #           → Zeroconf yeniden bağlandı → mDNS kaydı 2-4 sn ÖLDÜ
+        # Telefonun keşif penceresi 4 sn; kullanıcı client'ı açıp telefonu tam bu aralıkta
+        # deniyor. Kesintiyi tamamen yok etmek yeni bir Zeroconf'u eskisiyle örtüştürmeyi
+        # gerektirir (5353'te iki örnek — bu depoda daha önce KAYIT FLAPPING'İNE yol açtığı
+        # için bilerek terk edildi, bkz. zeroconf_singleton başlığı). Bunun yerine kesintiyi
+        # ERKENE ÇEKİYORUZ: ilk dakikada 3 sn'de bir bakılır, hotspot arayüzü belirir belirmez
+        # yeniden bağlanma olur ve kullanıcı telefonu denemeden ÖNCE biter.
+        ACILIS_PENCERESI_SN = 60
+        ACILIS_ARALIGI_SN = 3
+        NORMAL_ARALIK_SN = 30
+        _basladi = time.time()
 
         while self._running:
             if not kurulum_ok:
@@ -266,7 +283,9 @@ class MDNSService:
                         )
 
             try:
-                time.sleep(30)  # 30 saniyede bir kontrol
+                # Açılış penceresinde sık, sonra normal tempo (gerekçe: döngü başındaki not).
+                _acilista = (time.time() - _basladi) < ACILIS_PENCERESI_SN
+                time.sleep(ACILIS_ARALIGI_SN if _acilista else NORMAL_ARALIK_SN)
                 if not self._running:
                     break
                 # ⚠️ KENDİ KURULUMUMUZ BAŞARISIZ OLSA DA DEVAM EDİYORUZ. Bu, bulgunun kalbi:

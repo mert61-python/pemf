@@ -719,8 +719,28 @@ def get_secret(key: str, default: str = "", generate: bool = True) -> str:
                 # kökünde DOLU olduğu için aşağıdaki migrate/üret yoluna hiç girilmez ve makine
                 # deposuna hiç yazılmazdı → ilk kaldır-kur döngüsünde sır yine kaybolur, TOFU
                 # mührü yine bozulurdu. Bu satır mevcut sırrı bir kereliğine depoya taşır.
-                if key == "device_registry_secret" and _cozulen and not _kimlik_deposu_oku():
-                    _kimlik_deposu_yaz(_cozulen)
+                if key == "device_registry_secret" and _cozulen:
+                    _makinedeki = _kimlik_deposu_oku()
+                    if not _makinedeki:
+                        _kimlik_deposu_yaz(_cozulen)
+                    elif _makinedeki != _cozulen:
+                        # ⚠️ AYRIŞMA — MAKİNE DEPOSU OTORİTEDİR (saha bulgusu 2026-08-29).
+                        #
+                        # ÖLÇÜLEN ARIZA: bu makinede iki kaynak FARKLI sır taşıyordu ve `raw`
+                        # dolu olduğu için VERİ KÖKÜNDEKİ kazanıyordu. Veri kökü kaldırmada
+                        # SİLİNİYOR, makine deposu KALIYOR → aynı cihaz, kaldır-kur'dan önce ve
+                        # sonra buluta BAŞKA BAŞKA sır gönderiyor. Bulut ilk sırla TOFU'ya
+                        # mühürlendiği için ikinci gönderim kalıcı `secret_mismatch` alıyor ve
+                        # uzaktan erişim bir daha AÇILMIYOR (269 kez ölçüldü, 26→29 Ağustos).
+                        #
+                        # #02'nin taşıması yalnız "depo BOŞSA" çalışıyordu; depo başka bir yolla
+                        # (üretimle) dolduysa ayrışma kalıcılaşıyordu. Kalıcı olan kaynağı
+                        # otorite yapmak, kaldır-kur'un sırrı değiştirmesini kökten bitirir.
+                        logger.warning(
+                            "device_registry_secret AYRIŞMASI: veri kökü ile makine deposu farklı — "
+                            "makine deposu kullanılıyor (kaldır-kur'da korunan kaynak odur)."
+                        )
+                        return _makinedeki
                 return _cozulen
             except Exception as e:
                 # KRİTİK VERİ-KORUMA (brick koruması): sır DEPOLANMIŞ ama çözülemiyor (ör. DPAPI
