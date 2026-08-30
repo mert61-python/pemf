@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""TÜRKÇE-GÜVENLİ METİN KATLAMA — arama/karşılaştırma için TEK KAYNAK.
+"""TÜRKÇE-DOĞRU ARAMA NORMALİZASYONU — arama/karşılaştırma için TEK KAYNAK.
 
 ⚠️ NEDEN (saha bulgusu 2026-08-30): Python `str.lower()` Türkçe'de yanlıştır ve tıbbi kayıtta
 hasta erişimini bozar:
@@ -11,9 +11,15 @@ hasta erişimini bozar:
 adının `.lower()` ile karşılaştırıldığı HER yerde (arama indeksi, PDF rapor filtresi) tekrarlar.
 Bu modül o mantığı TEK yerde toplar → bir yüzeyde düzeltilip başka yüzeyde unutulması imkânsız.
 
-`arama_katla` GÖRÜNTÜLENEN metni DEĞİŞTİRMEZ; yalnız arama/karşılaştırma token'ı üretir. Katlama
-bilinçli olarak GENİŞtir (kullanıcı ASCII klavyeyle de arayabilmeli: "isik" → "Işık"); yanlış
-eşleşme değil, geniş eşleşme — sonucu insan seçer.
+⚠️ KURAL YALNIZ İ/I'DİR — AKSAN DÜZLEŞTİRİLMEZ (mobil `pf/src/utils/aramaNormalize.ts` ile
+BİREBİR AYNI, bilinçli hizalama 2026-08-30). İlk düzeltme aksanları da katlıyordu (ş→s, ç→c,
+ö→o…); bu YANLIŞTI: "Şirin" ile "Sirin"i, "Gökçe" ile "Gokce"yi birleştirmek bir HASTA-KİMLİĞİ
+ekranında yanlış kayda bakma riski demektir (mobil ekip bunu daha önce ölçüp reddetmişti). Üstelik
+ı ve i Türkçe'de AYRI harflerdir; onları birleştirmek dilbilimsel olarak da yanlış. İki uç (mobil
+client-side süzme + backend arama indeksi) artık AYNI kuralı kullanır → aynı hasta, aynı terim,
+iki cihazda AYNI sonuç.
+
+`arama_katla` GÖRÜNTÜLENEN metni DEĞİŞTİRMEZ; yalnız arama/karşılaştırma token'ı üretir.
 """
 
 from __future__ import annotations
@@ -21,40 +27,26 @@ from __future__ import annotations
 import re
 import unicodedata
 
-# Türkçe → ASCII katlama. `str.lower()`ın bozduğu İ/I/ı BURADA, düşürmeden ÖNCE çözülür.
-_TR_FOLD = str.maketrans(
-    {
-        "İ": "i",
-        "I": "i",
-        "ı": "i",
-        "Ş": "s",
-        "ş": "s",
-        "Ğ": "g",
-        "ğ": "g",
-        "Ç": "c",
-        "ç": "c",
-        "Ö": "o",
-        "ö": "o",
-        "Ü": "u",
-        "ü": "u",
-    }
-)
+# Türkçe-DOĞRU küçültme: İ→i, I→ı. `str.lower()`ın bozduğu tam bu iki harf; ötekiler `.lower()`e
+# bırakılır. Mobil `toLocaleLowerCase("tr")` eşdeğeri. ⚠️ AKSAN (ş/ç/ğ/ö/ü) BURADA YOK — bilinçli.
+_TR_LOWER = str.maketrans({"İ": "i", "I": "ı"})
 
 # Bu mantık her değişince ARTIR. Arama indeksi parmak-izine katılır
 # (database.patient_database._SEARCH_NORM_VERSION) → sahadaki indeks kendiliğinden yeniden kurulur.
-SURUM = 2
+# v2: Türkçe düzeltme (aksan katlamalı, geri alındı). v3: mobil ile hizalı (İ/I-only, aksan korunur).
+SURUM = 3
 
 
 def arama_katla(value: str) -> str:
-    """Metni Türkçe-güvenli, ASCII-katlanmış, boşluk-normalize bir arama token'ına indirger.
-
-    Kayıt ve sorgu AYNI fonksiyondan geçtiğinde "İhsan"/"ihsan"/"IHSAN"/"isik" hepsi eşleşir.
+    """Metni Türkçe-doğru küçültülmüş, NFC-normalize, boşluk-tekilleştirilmiş bir arama token'ına
+    indirger. Kayıt ve sorgu AYNI fonksiyondan geçtiğinde "İhsan"/"ihsan"/"İHSAN" eşleşir; ama
+    "Şirin"/"Sirin" ve "Işık"/"isik" AYRI kalır (aksan ve ı/i korunur — mobil ile aynı).
     """
     text = str(value or "").strip()
-    # 1) Türkçe özel harfler ÖNCE (str.lower'ın İ/I bozması burada engellenir).
-    text = text.translate(_TR_FOLD)
-    # 2) Kalan aksanları (é, ñ …) NFKD ile ayrıştırıp birleşik işaretleri at.
-    text = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
-    # 3) Artık ASCII-güvenli; düşürme birleşik-nokta üretmez.
-    text = text.lower()
+    # 1) İ→i, I→ı (Türkçe-doğru); kalan harfler .lower() ile — İ/I map'i önce olduğu için
+    #    `str.lower()`ın birleşik-nokta/yanlış-eşleme tuzağı devreye girmez.
+    text = text.translate(_TR_LOWER).lower()
+    # 2) NFC: farklı kaynaklardan (klavye, kopyala-yapıştır, DB) gelen birleşik işaretleri tek
+    #    kod noktasına toparla ki aynı görünen metinler eşit karşılaşsın. Aksan SİLİNMEZ.
+    text = unicodedata.normalize("NFC", text)
     return re.sub(r"\s+", " ", text)

@@ -44,15 +44,19 @@ def _adlar(sonuc):
 @pytest.mark.parametrize(
     "kayit_adi,aramalar",
     [
-        ("İhsan", ["ihsan", "İhsan", "İHSAN", "ihsan"]),  # noktalı İ ↔ küçük i
-        ("Işık", ["ışık", "isik", "IŞIK", "Işık"]),  # noktasız I / ASCII
-        ("Çağla", ["çağla", "cagla", "ÇAĞLA"]),  # ç, ğ
-        ("Gökçe Öztürk", ["gokce", "öztürk", "ozturk", "GÖKÇE"]),
-        ("Ünal", ["ünal", "unal", "UNAL"]),
+        # İ/I bug'ı: 'İ'.lower() birleşik nokta, 'I'.lower() 'i' — bunlar DÜZELMELİ.
+        ("İhsan", ["ihsan", "İhsan", "İHSAN"]),  # noktalı İ ↔ küçük i (eskiden bulunamıyordu)
+        ("İpek", ["ipek", "İpek", "İPEK"]),
+        ("Işık", ["ışık", "IŞIK", "Işık"]),  # noktasız I → ı (Türkçe-doğru, kendisiyle eşleşir)
+        ("Gökçe", ["gökçe", "GÖKÇE", "Gökçe"]),  # aksan KORUNUR ama kendisini bulur
+        ("Çağla Öz", ["çağla", "ÇAĞLA öz", "çağla öz"]),
     ],
 )
 def test_KRITIK_turkce_ad_kaydet_ARA_BUL(hasta_db, kayit_adi, aramalar):
-    """⚠️ Her arama biçimi kaydı BULMALI — eskiden `str.lower()` yüzünden bulamıyordu."""
+    """⚠️ Her Türkçe-doğru arama biçimi kaydı BULMALI — eskiden `str.lower()` İ/I'yı bozuyordu.
+
+    ⚠️ AKSAN ASCII'ye KATLANMAZ (mobil ile hizalı): "Gökçe" araması "gökçe" ile bulunur ama
+    "gokce" ile DEĞİL (bkz. karşıt-kanıt). ı/i de ayrı harflerdir."""
     hasta_db.add_patient({"name": kayit_adi, "owner": "Test", "species": "Kedi"})
     for terim in aramalar:
         bulunan = _adlar(hasta_db.search_patients(terim))
@@ -66,16 +70,37 @@ def test_KRITIK_turkce_ad_kaydet_ARA_BUL(hasta_db, kayit_adi, aramalar):
 
 
 def test_KARSIT_farkli_hastalar_KARISMAZ(hasta_db):
-    """Türkçe katlama arama için geniş ama SINIRSIZ değil: farklı adlar birbirini çekmemeli."""
+    """Farklı adlar birbirini çekmemeli."""
     for ad in ("Ahmet", "Mehmet", "Zeynep", "Zehra"):
         hasta_db.add_patient({"name": ad, "owner": "T", "species": "Kedi"})
 
     ahmet = _adlar(hasta_db.search_patients("ahmet"))
     assert "Ahmet" in ahmet, "kendi kaydını bulamadı"
-    assert "Mehmet" not in ahmet, "'ahmet' araması 'Mehmet'i getirdi → katlama aşırı geniş"
+    assert "Mehmet" not in ahmet, "'ahmet' araması 'Mehmet'i getirdi"
 
     zeynep = _adlar(hasta_db.search_patients("zeynep"))
     assert "Zeynep" in zeynep and "Zehra" not in zeynep, "Zeynep/Zehra karıştı"
+
+
+def test_KRITIK_AKSAN_KORUNUR_mobil_ile_hizali(hasta_db):
+    """⚠️ HASTA-KİMLİĞİ GÜVENLİĞİ — mobil `aramaNormalize.ts` ile birebir aynı karar.
+
+    Aksanı ASCII'ye katlamak "Şirin" ile "Sirin"i, "Gökçe" ile "Gokce"yi birleştirir; bir
+    hasta-kimliği ekranında bu YANLIŞ KAYDA bakma riskidir. İlk düzeltme (2026-08-30) aksanı
+    katlıyordu; mobil ekibin daha önce ölçtüğü kararla hizalanarak geri alındı. ı/i de AYRI."""
+    for ad in ("Şirin", "Sirin", "Gökçe", "Gokce", "Işık", "Isik"):
+        hasta_db.add_patient({"name": ad, "owner": "T", "species": "Kedi"})
+
+    sirin = _adlar(hasta_db.search_patients("sirin"))
+    assert "Sirin" in sirin, "ASCII 'Sirin' kendini bulmalı"
+    assert "Şirin" not in sirin, "'sirin' araması 'Şirin'i getirdi → yanlış-hasta riski (aksan katlandı)"
+
+    gokce = _adlar(hasta_db.search_patients("gokce"))
+    assert "Gökçe" not in gokce, "'gokce' araması 'Gökçe'yi getirdi → aksan katlanmamalı"
+
+    # ı/i ayrı harf: "isik" araması "Işık"ı (→ ışık) getirmemeli
+    isik = _adlar(hasta_db.search_patients("isik"))
+    assert "Işık" not in isik, "'isik' araması 'Işık'ı getirdi → ı/i birleşti (Türkçe'de ayrı)"
 
 
 # ── Normalize sözleşmesi (birim) ────────────────────────────────────────────
@@ -117,17 +142,42 @@ def test_KRITIK_arama_ve_PDF_AYNI_katlamayi_kullaniyor():
 
 
 def test_util_arama_katla_dogrudan():
-    """Ortak util'in kendisi: Türkçe vakalar aynı token'a inmeli, farklılar ayrı kalmalı."""
+    """Ortak util: İ/I düzelir; aksan ve ı/i KORUNUR (mobil aramaNormalize.ts ile aynı)."""
     from utils.turkce_metin import arama_katla
 
-    assert arama_katla("İhsan") == arama_katla("ihsan") == arama_katla("IHSAN")
-    assert arama_katla("Işık") == arama_katla("isik") == arama_katla("IŞIK")
-    assert arama_katla("Çağla Öz") == arama_katla("cagla oz")
+    # İ/I bug'ı düzelir
+    assert arama_katla("İhsan") == arama_katla("ihsan") == arama_katla("İHSAN")
+    assert arama_katla("İpek") == arama_katla("ipek")
+    # ⚠️ Aksan KATLANMAZ (hasta-kimliği güvenliği)
+    assert arama_katla("Şirin") != arama_katla("Sirin"), "aksan katlandı → yanlış-hasta riski"
+    assert arama_katla("Gökçe") != arama_katla("gokce")
+    # ⚠️ ı ve i AYRI harf
+    assert arama_katla("Işık") != arama_katla("isik")
+    # Farklı adlar
     assert arama_katla("Ahmet") != arama_katla("Mehmet")
     # Birleşik nokta üretilmemeli (bug'ın kökü)
     import unicodedata
 
     assert not any(unicodedata.combining(c) for c in arama_katla("İ"))
+
+
+def test_KRITIK_backend_mobil_AYNI_kural(hasta_db):
+    """⚠️ İKİ UÇ PARİTESİ: mobil client-side süzme (aramaNormalize.ts) ile backend arama indeksi
+    AYNI hastayı AYNI terimle aynı bulmalı. Mobilin `aramaNormalize.test.ts`te kilitlediği
+    vakaların backend'de de aynı sonucu vermesi, "aynı hasta iki cihazda farklı bulunuyor"
+    sınıfını kapatır."""
+    from utils.turkce_metin import arama_katla
+
+    def mobil_eslesir(metin, sorgu):
+        # aramaNormalize.ts::aramaEslesir'in Python ikizi (aynı token, includes).
+        return arama_katla(sorgu).strip() == "" or arama_katla(sorgu).strip() in arama_katla(metin)
+
+    # aramaNormalize.test.ts satır 52-60'ın birebir karşılığı:
+    assert mobil_eslesir("İpek", "ipek") is True
+    assert mobil_eslesir("Işık", "ışık") is True
+    assert mobil_eslesir("İpek", "pamuk") is False
+    assert mobil_eslesir("Şirin", "sirin") is False  # aksan korunur
+    assert mobil_eslesir("Gökçe", "gokce") is False
 
 
 def test_norm_surumu_parmak_izinde():
