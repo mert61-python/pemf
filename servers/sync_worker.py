@@ -23,6 +23,39 @@ logger = logging.getLogger(__name__)
 _TUNNEL_URL_TTL_S = 15 * 60.0
 
 
+def _cihaz_adi() -> str:
+    """Bulut envanterinde görünecek ad — üretim kurulumu DEĞİLSE `-dev` ile işaretlenir.
+
+    ⚠️ SAHA BULGUSU 2026-08-29: `devices` tablosunda 26 satır birikmişti ve yalnız BİRİ gerçek
+    cihazdı. `device_id` `uuid.getnode()`ten türediği için AYNI makinedeki her veri kökü
+    (`dist/`, `PEMF_BUILD/`, geçici kopyalar, Docker) kendi kimliğini üretip ÜRETİM tablosuna
+    yazıyor; bulut yazımını sınırlayan hiçbir koruma yoktu. Bir teşhis turu bile yeni satır
+    oluşturdu. Sonuç: "hangi klinik hangi sürümde" sorusu okunamaz hâle geliyordu — ki filo
+    envanterinin var oluş sebebi tam olarak o soru (geri çağırma).
+
+    ⚠️ NEDEN ENGELLEME DEĞİL ETİKETLEME (sahip kararı 2026-08-30): "kurulu değilse YAZMA" daha
+    temiz görünür ama SESSİZ ARIZA riski taşır — kurulum yolu beklenenden farklı bir klinikte
+    cihaz bulut kaydını hiç oluşturmaz ve uzaktan erişim, kimse fark etmeden ölür. Etiketleme
+    bu riski taşımaz: kayıt HER KOŞULDA yazılır, yalnızca adı değişir. Yanlış tarafa düşen bir
+    üretim cihazı işlevini tam sürdürür; bedeli envanterde yanlış etiketten ibarettir.
+
+    İşaret olarak `PEMF_LAUNCHER_VERSION` kullanılır: klinik kurulumda backend'i HER ZAMAN
+    launcher başlatır (bkz. `launcher/core/src/install.rs::ENV_LAUNCHER_VERSION`); elle ya da
+    test amaçlı çalıştırmada bu değişken yoktur. Yanlış pozitif mümkün değildir — değişken
+    varsa backend'i kesinlikle launcher başlatmıştır.
+
+    Envanteri süzmek için: `where name not like '%-dev'`.
+    """
+    import os as _os
+
+    ad = _os.environ.get("PEMF_DEVICE_NAME", "PEMF-Vet")
+    if (_os.environ.get("PEMF_LAUNCHER_VERSION") or "").strip():
+        return ad
+    if not ad.endswith("-dev"):
+        ad = f"{ad}-dev"
+    return ad
+
+
 def _surum_alanlari() -> dict:
     """Cihazın sahadaki KİMLİĞİ: hangi sürüm, hangi build, veri şifreli mi.
 
@@ -474,7 +507,7 @@ class CloudSyncWorker:
                     self._last_tunnel_url = None
             payload = {
                 "device_id": get_unique_device_id(),
-                "name": os.environ.get("PEMF_DEVICE_NAME", "PEMF-Vet"),
+                "name": _cihaz_adi(),
                 "tunnel_url": cur_url or getattr(self, "_last_tunnel_url", None),
                 "local_ip": _get_local_ip(),
                 "api_port": get_api_port(),  # ⚠️ GERÇEK port (denetim 2026-08-17); env yoksa 8000
