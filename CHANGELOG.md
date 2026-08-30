@@ -6,6 +6,29 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.36 — 2026-08-30 (🔤 Turkce arama + dogru doz: I/i ve ondalik virgul duzeltmeleri)
+
+- **Turkce adli hastalar artik araninca BULUNUYOR.** Hasta arama "İ"/"I" harflerini yanlis
+  isliyordu (Python/JS'in bilinen Turkce hatasi): "İhsan" kaydedip "ihsan" arayan hekim hastayi
+  BULAMIYORDU -> erisilemeyen kayit ya da mukerrer hasta. Arama artik Turkce-dogru; aksan ve
+  i/i(noktasiz) ayrimi KORUNUR ("Sirin" ile "Sirin" karismaz -> yanlis hastaya bakma riski yok).
+  Mevcut hastalarin arama dizini acilista kendiliginden yenilenir. Ayni duzeltme PDF hasta
+  raporu filtresine de uygulandi. Masaustu ve mobil arama artik BIREBIR ayni davranir.
+
+- **⚠️ DOGRU DOZ: ondalik VIRGUL artik dogru okunuyor (hasta guvenligi).** Hasta kilosu/yasi
+  virgulle girilmisse (3,5 kg) sistem bunu okuyamayip SESSIZCE varsayilana (15 kg) dusuyor ve
+  kucuk bir hayvana ORTA-BOY doz suresi onerebiliyordu. Artik "3,5" dogru okunuyor -> dogru
+  kilo kategorisi -> dogru doz. (Cihazin uyguladigi gercek sure zaten ayri bir saatle
+  guvencedeydi; bu duzeltme ONERI/kayit tarafini duzeltir.)
+
+- **Filo envanteri + coklu klinik saglamlastirmalari** (denetim turu): gelistirme kosumlari
+  bulut listesinde '-dev' ile isaretlenir; ayni klinikte iki cihaz ayni seansi cakismadan
+  kaydeder. Ayrica bobin sure-kapaginin monotonik saat kullanmasi ve hasta kaydinin kismi
+  guncelleme (gonderilmeyen alani koruma) davranislari otomatik kontrollerle kilitlendi
+  (regresyon korumasi).
+
+Paket kimliği (`buildId`): `b8e324b5f1fd`. Monolit `base.zip` sha: `84f4aa5eb685`.
+
 ## app 1.9.35 — 2026-08-30 (🧭 Filo envanteri okunabilir: gelistirme kosumlari isaretleniyor)
 
 - **Cihaz listesi artik gercek klinikleri gosteriyor.** Bulut cihaz kaydinda 26 satir birikmisti
