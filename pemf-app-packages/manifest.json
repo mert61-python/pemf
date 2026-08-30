@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "version": "1.9.37",
-  "tag": "client-app-v1.9.37",
+  "version": "1.9.38",
+  "tag": "client-app-v1.9.38",
   "runtimes": {
     "win-x64": {
       "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.33/base.zip",
@@ -13,9 +13,9 @@
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.37/base-app.zip",
-        "sha256": "80bdb402db5678e8d2ff9b8b5a812a166222959c85e15486f76f86166bc1468e",
-        "size": 81078942,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.38/base-app.zip",
+        "sha256": "4985be7e316050102478300c01f8e1c3e837acea1f4316b37eeb2d4a95c168b9",
+        "size": 81081864,
         "kind": "zip"
       },
       "deps": {
@@ -96,12 +96,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.29",
-      "versionCode": 36,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.37/PEMF_Vet_Mobil-2.3.29.apk",
-      "sha256": "f3f6b33c28002b922c6b36bdf7b4b1a575870b4e5e3897322ced14a6a5ceadab",
-      "size": 128481595,
-      "notes": "Ayni hastayi iki cihazdan ayni anda duzenlerken bir tarafin degisikliginin sessizce kaybolmasi onlendi; artik yalnizca gercekten degistirdiginiz alanlar kaydedilir, digerleri korunur."
+      "version": "2.3.30",
+      "versionCode": 37,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.38/PEMF_Vet_Mobil-2.3.30.apk",
+      "sha256": "3bae84909ad44efe7e223fba60b43af3d2c002edc46a94539ac32a31e234663f",
+      "size": 128483571,
+      "notes": "AI analizinde buyuk gorsel secildiginde cikan '1024KB' hatasi giderildi (sinir 32 MB'a cikarildi); analiz basarisiz olursa artik anlasilir, ne yapilacagini soyleyen bir mesaj gosterilir."
     }
   }
 }

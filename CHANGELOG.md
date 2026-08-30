@@ -6,6 +6,21 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.38 · mobile 2.3.30 — 2026-08-30 (🖼️ AI analizinde buyuk gorsel + anlasilir hata)
+
+- **AI analizinde "1024KB" hatasi giderildi.** Yara Kapanma (Scratch) basta olmak uzere gorsel
+  yukleyen AI analizlerinde, biraz buyuk bir gorsel (~1 MB uzeri) secildiginde "Part exceeded
+  maximum size of 1024KB" hatasi cikip analiz BASLAMIYORDU. Sinir gereksiz yere dusuktu; artik
+  32 MB'a kadar gorsel kabul ediliyor (asiri buyuk dosyalar yine reddedilir — bellek korumasi).
+
+- **AI hata mesajlari artik ANLASILIR.** Bir analiz basarisiz oldugunda kullaniciya bazen ham
+  teknik metin (yukaridaki gibi Ingilizce cerceve mesaji) gosteriliyordu; kullanici ne yapacagini
+  anlamiyordu. Artik teknik mesajlar eyleme cevriliyor ("Gorsel cok buyuk, daha kucuk cozunurlukte
+  bir gorsel secin" gibi); sistemin kendi anlasilir Turkce uyarilari oldugu gibi korunuyor. Bu 10+
+  AI modulunun tamaminda gecerli.
+
+Paket kimliği (`buildId`): `4985be7e3160`. Monolit `base.zip` sha: `3f897aa17cb9`.
+
 ## app 1.9.37 · mobile 2.3.29 — 2026-08-30 (🔒 Hasta duzenleme cakismasi + seans suresi kaydi)
 
 - **Ayni hastayi iki cihazdan duzenlerken degisiklik KAYBOLMASI onlendi.** Iki kullanici (ornegin
