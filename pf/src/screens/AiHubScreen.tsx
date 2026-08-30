@@ -14,6 +14,7 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
+import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
 import { useUserMode, UserMode } from "@/context/UserModeContext";
@@ -122,6 +123,7 @@ function aiHataMesaji(e: unknown, varsayilan = "Ağ veya sunucu hatası."): stri
   if (ad === "AbortError" || ad === "TimeoutError") return AI_ZAMAN_ASIMI_MESAJI;
   return varsayilan;
 }
+
 
 // audit B-2.4: AI-sonuç eleman şekilleri — .map/.filter/.reduce callback'lerini tiplemek için
 // (display render; tsc-doğrulanabilir). Sonuç CONTAINER state'i (useState) heterojen per-model
@@ -486,7 +488,7 @@ function PetOwnerAiScreen() {
         // AI Geçmişi'ne kaydet (Evcil Hayvan Sahibi FGS ağrı analizi de audit'e yazılsın — eskiden atlanıyordu).
         logAiResult("", "Ağrı Analizi (FGS)", summarizeVision(data), { moduleId: "landmark", inputType: "image", detail: data });
       } else {
-        showToast(data?.detail || "Teşhis sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Teşhis sırasında hata oluştu."), "error");
       }
     } catch (error) {
       // Satır-içi AbortError ayrımı `aiHataMesaji`ye devredildi (2026-08-12): mesaj tek
@@ -709,7 +711,7 @@ function PetOwnerSoundCard() {
         setResult(data);
         logAiResult("", "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
@@ -1336,7 +1338,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         if (isLive) setImageUri(`data:image/jpeg;base64,${data.image_base64}`); // overlay updated
         else logAiResult(patientName, title, summarizeVision(data), { moduleId: endpoint.replace("/vision/", ""), inputType: "image", detail: data }); // sadece manuel analizleri audit'e yaz
       }
-      else if (!isLive) showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+      else if (!isLive) showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
     } catch (error) {
       if (mountedRef.current && !isLive) showToast(aiHataMesaji(error), "error");
     } finally {
@@ -1800,7 +1802,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           logAiResult(patientName, "Fantom Tümör Analizi", `${data.n_tumor} tümör${ec != null ? `, E_c≈${Number(ec).toFixed(3)}` : ""}`, { moduleId: "em_fantom", inputType: "image", detail: data });
         }
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2020,7 +2022,7 @@ function PetriModule({ patientName }: { patientName: string }) {
           logAiResult(patientName, "Petri Kuyu Analizi", `${data.n_wells} kuyu (${data.n_cancer} kanser)`, { moduleId: "em_petri", inputType: "image", detail: data });
         }
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2209,7 +2211,7 @@ function RnaModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(patientName, "Böbrek RNA (KIRC)", `${data.n_patients} hasta`, { moduleId: "kidney_rna", inputType: "csv", detail: data });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       // Ham istisna metni kullanıcıya basılıyordu; dosya seçici yolunda bu metin DOSYA YOLU/ADI
@@ -2540,7 +2542,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(patientName, "Kedi Sesi", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob ?? 0) * 100)}`, { moduleId: "cat_sound", inputType: "audio", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e, "Hata: " + errorMessage(e).slice(0, 120)), "error");
@@ -2735,7 +2737,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         const c = data.class_counts || {};
         logAiResult(patientName, "Böbrek CT", `${data.n_detections} tespit (taş:${c["Kidney Stone"] ?? 0} kist:${c["Kidney Cyst"] ?? 0})`, { moduleId: "kidney_ct", inputType: "image", detail: data });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2941,7 +2943,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(patientName, "Böbrek Patoloji", `${trValue(data.top_1_class)} %${Math.round((data.top_1_prob || 0) * 100)}`, { moduleId: "histopath", inputType: "image", detail: data, confidence: data.top_1_prob });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -3118,9 +3120,11 @@ function ScratchModule({ patientName }: { patientName: string }) {
         fd.append("file", blob, dosya.name);
       } else {
         // ÖLÇÜLMÜŞ (RNA/cat_sound notları): RN multipart file:// URI'sini doğrudan
-        // OKUYAMIYOR ("Ağ hatası") → base64 okuyup image_base64 gönderilir; router'ın
-        // _allow_large_upload kapısı base64 form-part'ı 50MB'a açar (shrink YOK —
-        // µm ölçümü bozulmaz; 20MB TIF base64 ~27MB sınıra sığar).
+        // OKUYAMIYOR ("Ağ hatası") → base64 okuyup image_base64 gönderilir (shrink YOK —
+        // µm ölçümü bozulmaz). ⚠️ 2026-08-30: base64 FORM ALANI Starlette 1MB part-limitine
+        // takılıyordu ("Part exceeded maximum size of 1024KB"); backend artık limiti 32MB'a
+        // çıkarıyor (utils/multipart_limit — Request.form patch'i). Eski router dependency
+        // _allow_large_upload BU İŞİ YAPAMIYORDU (ölçüldü: FastAPI form-cache'i erken doluyor).
         const b64 = await FileSystemLegacy.readAsStringAsync(dosya.uri!, { encoding: "base64" });
         fd.append("image_base64", b64);
       }
@@ -3151,7 +3155,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
         logAiResult(patientName, "Yara Kapanma (Scratch)",
           data.uyari ? "Hücre tespit edilemedi" : `Kapanma %${data.closure?.closure_pct ?? "?"} · ${data.n_cells} hücre`,
           { moduleId: "cell_scratch", inputType: "image", detail: data });
-      } else showToast(data?.detail || data?.error || "Analiz sırasında hata oluştu.", "error");
+      } else showToast(aiDetayCumlesi(data?.detail || data?.error, "Analiz sırasında hata oluştu."), "error");
     } catch (e) {
       if (mountedRef.current) showToast(aiHataMesaji(e), "error");
     } finally {
@@ -3422,7 +3426,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         setResult(data);
         logAiResult(patientName, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
       } else {
-        showToast(data?.detail || "Analiz sırasında hata oluştu.", "error");
+        showToast(aiDetayCumlesi(data?.detail, "Analiz sırasında hata oluştu."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");

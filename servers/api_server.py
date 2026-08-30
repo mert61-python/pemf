@@ -154,6 +154,13 @@ async def lifespan(app: FastAPI):
             pass
 
 
+# ⚠️ Multipart form-alanı limitini FastAPI app'i oluşturmadan ÖNCE yükselt (saha bulgusu
+# 2026-08-30: scratch/base64 uçlarında "Part exceeded maximum size of 1024KB"). Bkz.
+# utils/multipart_limit — Starlette varsayılanı 1MB, base64 görüntüler bunu aşıyordu.
+from utils.multipart_limit import buyuk_form_alani_limitini_uygula as _buyuk_form_limiti
+
+_buyuk_form_limiti()
+
 app = FastAPI(
     title="PEMF React Native API Bridge",
     description="PyQt6 arayüzüne gerek duymayan Headless Donanım API'si",
