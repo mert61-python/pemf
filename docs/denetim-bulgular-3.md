@@ -1,7 +1,7 @@
 # PEMF Vet — Hata Denetimi 3. Tur (2026-08-24)
 
-Kapsam: yalnızca **kırık davranış**. Önceki üç denetim (`denetim-bulgular.md` 2026-08-17,
-`denetim-bulgular-2.md` 2026-08-19/22, `denetim-guncelleme-altyapisi-2026-08-23.md`) kapattığı ~120
+Kapsam: yalnızca **kırık davranış**. Önceki üç denetim (`docs/denetim-bulgular.md` 2026-08-17,
+`docs/denetim-bulgular-2.md` 2026-08-19/22, `docs/denetim-guncelleme-altyapisi-2026-08-23.md`) kapattığı ~120
 bulgu tekrar raporlanmadı; düzeltmelerin KENDİSİNDE bulunan yeni kusurlar raporlandı (birçoğu).
 Çürütülen bulgular (C13, M6, M9, M10, Y3, Y4, O1) yeniden açılmadı.
 
@@ -438,7 +438,7 @@ alınmamış; `test_nack_gorunurlugu.py` çift-start içermiyor.
 ### [D3] `secrets_backup.py` git-koruması dubious-ownership'te (git exit 128) SESSİZCE geçiyor — skip-worktree uygulanmadan restore biter — DARALDI (ciddiyet 2)
 **Yer:** `build_tools/secrets_backup.py:109-135` (`_git_sir_korumasi`): `git ls-files --error-unmatch`
 her dosyada nonzero dönerse izlenenler boş kalır ve fonksiyon `:119` UYARISIZ `return` eder;
-"git düşerse YÜKSEK SESLE uyar" sözleşmesi ([2.2] düzeltmesi, `denetim-bulgular-2.md:121`) yalnız
+"git düşerse YÜKSEK SESLE uyar" sözleşmesi ([2.2] düzeltmesi, `docs/denetim-bulgular-2.md:121`) yalnız
 `FileNotFoundError` + update-index-düşmesi dalına bağlı.
 **Tetikleyici:** Yeni build makinesinde repo farklı kullanıcı/yükseltilmiş oturumla klonlanır
 (safe.directory uyuşmazlığı → git ≥2.35.2 tüm komutlara 128 döner); `secrets_backup.py restore`
@@ -468,7 +468,7 @@ kimlikle bağlanır, mutlu yolda `_setupWiFi` hiç kayıt YAPMAZ, EEPROM kimlik 
 portal-tabanlı kurulumlara sınırlı; güvenlik tarafı fail-safe.
 **Nasıl doğrulandı:** Adres aritmetiği (`+1/+33/+65`, `sizeof(struct)` değil) gömülü Python ile
 modellendi (`scratchpad/eeprom_model.py`): slot2 parola 232-296 ⊇ PWM 256-279; portal kaydı → EEPROM[304]≠1
-→ Boot-2 wipe (slot0 gitti, PWM 0xAB korundu) → Boot-3 (kayıtsız) wipe DURDU. `denetim-bulgular-2.md:93`
+→ Boot-2 wipe (slot0 gitti, PWM 0xAB korundu) → Boot-3 (kayıtsız) wipe DURDU. `docs/denetim-bulgular-2.md:93`
 "adres çakışması yok" hükmü yalnız CoilController restore-save kapsamındaydı, WiFi bölgesini incelememişti.
 
 ---
@@ -543,7 +543,7 @@ edildi" der (yalan). Kurtarma ancak sonraki açılışta `yarim_takasi_kurtar` (
 tur app'i önbellekten yeniden açar. Zarar tipik olarak tek oturum + yanıltıcı mesaj.
 **Nasıl doğrulandı:** `extract.rs:145` iptalde `Err(Cancelled)` döner → Err dalından geçer; iç
 `let _ =` ile dış yolun açık yükseltmesi karşılaştırıldı; deponun kendi tatbikatı (`upgrade_drill.rs`
-TATBIKAT 5) aynı üretim analojisini kullanıyor. `denetim-bulgular-2.md` 7. parti "iptal maskesi
+TATBIKAT 5) aynı üretim analojisini kullanıyor. `docs/denetim-bulgular-2.md` 7. parti "iptal maskesi
 takılmaz" hedefiyle çelişiyor.
 
 ### [C5] Kurulum kilidi Unix'te sessiz no-op — Linux/macOS'ta iki eşzamanlı yıkıcı akış çakışabilir — AYAKTA (ciddiyet 3)
@@ -608,7 +608,7 @@ sıcak kalan bobinin `g_thermalLock` reddi → 8266 termal kilidi NACK+`command_
 **Sonuç:** Hiç çalışmamış bobin seans süresi boyunca "koştu" kalır ve seans sonunda `_stop_session_coils`
 onu TAM SÜRELİ koşu olarak mühürler → tedavi geçmişine/doz belgesine hayalet bobin koşusu yazılır.
 **Zarf (çürütme ile daraldı — iki yarı):** (1) **Broker-ölü/fire-and-forget yarısı bug DEĞİL** — 8.
-parti bilinçli kararı (`denetim-bulgular-2.md:197`) "Seans yolunun ESP koşu kayıtları DEĞİŞMEDİ:
+parti bilinçli kararı (`docs/denetim-bulgular-2.md:197`) "Seans yolunun ESP koşu kayıtları DEĞİŞMEDİ:
 publish bilerek arka planda; `esp_unreachable` uyarısı taşıyor" birebir kapsıyor (`api_server.py:2596`
 doğrulandı). (2) **NACK yarısı AYAKTA** — 8. parti bu yarıyı "AÇIK kaldı" diye kaydetti, 18. parti
 (`8d8b99d`) bekçiyi yalnız "Manuel ESP start (tekil VE batch)" yoluna bağladı; seans yolu 18. partiden
@@ -808,7 +808,7 @@ yalnız CHANGELOG + test değişti (betik değişmemiş).
 ## KASITLI GÖRÜNÜYOR — TEYİT İSTER
 
 - **[BLD-6] `.iss` MyAppVersion bayat (1.9.20; ağaç 1.9.22) — çıplak-ISCC koridoru yanlış etiketli
-  kurulum üretir.** Mekanizmanın çekirdeği KAYITLI sahip kararıyla örtüşüyor (`denetim-bulgular-2.md:226`:
+  kurulum üretir.** Mekanizmanın çekirdeği KAYITLI sahip kararıyla örtüşüyor (`docs/denetim-bulgular-2.md:226`:
   ".iss MyAppVersion üretimi build_installer'da KALDI"). Üretim yolu kendini iyileştiriyor:
   `build_installer.ps1` önce `sync_versions`'i koşar sonra `Sync-ReleaseVersion` MyAppVersion'ı VERSION'dan
   yeniden yazar → her kurulum doğru etiketlenir. Ayakta kalan dar boşluk: `.iss` başlığının kendi KULLANIM

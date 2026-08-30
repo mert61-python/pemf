@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""xai_batch_rapor.py — Mod-2 toplu XAI raporu (xai-entegrasyon-plani.md §KALAN B).
+"""xai_batch_rapor.py — Mod-2 toplu XAI raporu (docs/xai-entegrasyon-plani.md §KALAN B).
 
 TEK CLI: klasör/dosya tara → modülün TEK-KAYNAK explain fonksiyonunu çağır →
 PNG/JPG + summary.csv + index.html (+ opsiyonel --pdf). Canlı döngüye ağır XAI

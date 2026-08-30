@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""GRADIENT-XAI: SES + TERMAL ISI HARİTALARI — Faz 2 (xai-entegrasyon-plani.md §5).
+"""GRADIENT-XAI: SES + TERMAL ISI HARİTALARI — Faz 2 (docs/xai-entegrasyon-plani.md §5).
 
 ÖLÇÜLEN DURUM: termal/ses analizleri sınıf+olasılık döner ama modelin görüntünün/melin
 NERESİNE baktığı görünmez. Grad-CAM ailesi gradient ister → PT ikizleri Faz-0 karar #2

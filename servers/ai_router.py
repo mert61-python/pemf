@@ -2838,7 +2838,7 @@ async def analyze_scratch(
     """Yara Kapanma (Scratch) — CPN hücre segmentasyonu + wound-closure metrikleri.
 
     TEK girdi → ÇOKLU görsel çıktı (seg/overlay/analysis/closure + opsiyonel XAI),
-    bellek-içi base64 (plan: scratch-entegrasyon-plani.md v3). Karar 0.6: ağır
+    bellek-içi base64 (plan: docs/scratch-entegrasyon-plani.md v3). Karar 0.6: ağır
     araştırma = 3 jeton (jeton.py::_AGIR_UCLAR). Karar 0.3: modalite kapısı YOK —
     boş/yanlış görüntü `uyari` alanıyla döner. Karar 0.5: explain EK jeton değil.
     `/vision/` auth-muaf.

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""CKD SHAP AÇIKLAMASI — Faz 1 kalem 5 (xai-entegrasyon-plani.md §4/1.4).
+"""CKD SHAP AÇIKLAMASI — Faz 1 kalem 5 (docs/xai-entegrasyon-plani.md §4/1.4).
 
 ÖLÇÜLEN DURUM: /api/ai/disease/kidney prob_ckd + imputed/low_evidence şeffaflığı döner ama
 hangi klinik özelliğin kararı sürüklediğini dönmez. Model ONNX-only → SHAP KernelExplainer

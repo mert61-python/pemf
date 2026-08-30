@@ -21,7 +21,7 @@ KLİNİK ETKİ: `pemf-gateway.local`, ESP32 bobinlerinin (6-8) MQTT broker'ını
 Offline klinikte bobinler broker'a bağlanamaz → tedavi başlatılamaz.
 
 ⚠️ Bu kalem denetimin KENDİ açık borcuydu: `tests/test_pemfvet_mdns_yeniden_kayit.py` başlığı ve
-`denetim-bulgular.md` "KAPSAM DIŞI (bilerek) … ikinci dosya = daha büyük yama; ayrı kalem" diyordu.
+`docs/denetim-bulgular.md` "KAPSAM DIŞI (bilerek) … ikinci dosya = daha büyük yama; ayrı kalem" diyordu.
 """
 
 import os

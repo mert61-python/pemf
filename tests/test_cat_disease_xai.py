@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""CAT_DISEASE SHAP AÇIKLAMASI — Faz 1 kalem 3 (xai-entegrasyon-plani.md §4/1.3).
+"""CAT_DISEASE SHAP AÇIKLAMASI — Faz 1 kalem 3 (docs/xai-entegrasyon-plani.md §4/1.3).
 
 ÖLÇÜLEN DURUM: /api/ai/disease 18-hastalık tahmini döner ama NEDEN'i dönmez; XGBoost.pkl
 guii'de ANA model olduğu için SHAP TreeExplainer ek ağırlık/GPU gerektirmeden ms

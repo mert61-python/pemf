@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""XAI VENDORING SERTLEŞTİRMESİ — Faz 1.1 (xai-entegrasyon-plani.md, 2026-08-26).
+"""XAI VENDORING SERTLEŞTİRMESİ — Faz 1.1 (docs/xai-entegrasyon-plani.md, 2026-08-26).
 
 ÖLÇÜLEN DURUM: `inference (1)` teslimatındaki xai_utils/xai_tabular paketleri "CLI-script"
 kalitesinde: (a) overlay.heatmap_to_rgb matplotlib'in 3.11'de KALDIRILACAK `cm.get_cmap`'ini

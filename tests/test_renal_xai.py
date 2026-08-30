@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""RENAL HİSTOPATOLOJİ HiRes-CAM — Faz 4 (xai-entegrasyon-plani.md §7; sahip seçimi 'a').
+"""RENAL HİSTOPATOLOJİ HiRes-CAM — Faz 4 (docs/xai-entegrasyon-plani.md §7; sahip seçimi 'a').
 
 ÖLÇÜLEN DURUM: histopat ucu top-k grade döner ama 3-backbone ensemble'ın (VGG19+WRN50+
 DenseNet201) kesitin NERESİNE dayandığı görünmez. XAI = backbone başına HiRes-CAM +

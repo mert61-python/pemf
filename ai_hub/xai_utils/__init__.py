@@ -5,7 +5,7 @@ Kullanim (PEMF vendored kopya, 2026-08-26 — ai_hub paketi icinden):
     ⚠️ grad_cam/yolo_cam torch ister ve KOSULLU yuklenir (asagida) — torch'suz ortamda
     (CI test seti, agir-AI'siz kurulum) overlay/report_html/disagreement YINE calisir;
     GradCAMExplainer/YoloEigenCAM None kalir (TORCH_XAI_AVAILABLE bayragi). Gradient-XAI
-    tercihen ai_service/PT'li yollarda (xai-entegrasyon-plani.md §2).
+    tercihen ai_service/PT'li yollarda (docs/xai-entegrasyon-plani.md §2).
 
     from ai_hub.xai_utils.overlay import blend_and_save
     from ai_hub.xai_utils.report_html import build_report

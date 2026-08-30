@@ -52,7 +52,7 @@ def sensitivity_analysis(
         raise ValueError(
             "EM sensitivity N=1'de X.std=0 ile DEJENERE olur (tum degerler ~0). "
             "Canli/tek-ornek aciklama icin egitim-dagilimi ref_std verin "
-            "(bkz. xai-entegrasyon-plani.md Faz 1.2)."
+            "(bkz. docs/xai-entegrasyon-plani.md Faz 1.2)."
         )
     y0 = predict_fn(X)  # (N, O)
     O = y0.shape[1] if y0.ndim > 1 else 1

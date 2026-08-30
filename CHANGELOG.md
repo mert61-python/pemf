@@ -381,7 +381,7 @@ Deps katmanı: `3b39061b2286` (paket metadata dosyaları bu katmana girdi).
   en kritigi `.npz` spec eksigi — EM canli XAI referanslari frozen EXE'ye hic girmiyordu
   (1.9.25'ten beri uretimde sessiz oluydu); ayrica GPU-mikroservis paritesi (landmark/
   cat_organ/termal/ses), FGS band-paneli anahtar eslemesi, batch ses sessizlik-kapisi,
-  XAI baz-noktasi cfg ikamesi. Ayrinti: xai-entegrasyon-plani.md KAPANIS notu.
+  XAI baz-noktasi cfg ikamesi. Ayrinti: docs/xai-entegrasyon-plani.md KAPANIS notu.
 - Rollout: %100. Etiket: client-app-v1.9.27.
 
 Paket kimliği (`buildId`): `1bb79548612e`. Monolit `base.zip` sha: `4c3d5b6b621f`.
@@ -499,7 +499,7 @@ Monolit `base.zip` sha (≤1.9.12): `6bb3f21ca2ca`.
 ve **model paketleri yenilendi** (home/vet/research — XAI PT ikizleri eklendi; içerik listeleri artık
 `build_tools/make_model_zip.py`te KODDA, elle-üretim dönemi bitti).
 
-**Ne değişti (Açıklanabilir AI — Faz 1+2, `xai-entegrasyon-plani.md`):**
+**Ne değişti (Açıklanabilir AI — Faz 1+2, `docs/xai-entegrasyon-plani.md`):**
 - **AI Pro:** "Güven %62" artık NEDENİYLE görünür (poz × derinlik × maske × belirsizlik + kalibrasyonsuz
   tavan uyarısı); hekim onay ekranında **"Dozu en çok belirleyen: güç bütçesi · hedef alan"** satırı
   (7+1 hızlı duyarlılık — kapalı döngüye ağır hesap SOKULMADI).
@@ -564,7 +564,7 @@ Monolit `base.zip` sha (≤1.9.12 tek-parça istemciler): `bd71bb25a8d4`. Launch
 sürüyor):** S3 çok-bobin faz-kilidi ilk-darbe edinimi; ESP8266 WiFi portal öz-iyileşmesi (tek bir kopuşta
 kalıcı çevrimdışı kalma giderildi); ESP8266 yerel MQTT broker'a geri dönüş; ESP8266 EEPROM bellek-harita düzeni.
 
-Ayrıntı (25 bulgu, kırmızı-önce test + mutasyon + adversaryal inceleme): `denetim-bulgular-3.md`.
+Ayrıntı (25 bulgu, kırmızı-önce test + mutasyon + adversaryal inceleme): `docs/denetim-bulgular-3.md`.
 
 ---
 
@@ -815,7 +815,7 @@ katmanının** sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.z
 dağıtım profilleri (`deploy/*.env`) yanlış katmandaydı ve sınır düzeltildi — profiller artık
 app katmanında, yani bundan sonraki profil değişiklikleri kliniklere yalnız ~71 MB indirtecek.
 
-12-ajanlı eksik-taramasının P1/P2 kod kapanışları (denetim-bulgular-2.md 18. parti + p2 turu).
+12-ajanlı eksik-taramasının P1/P2 kod kapanışları (docs/denetim-bulgular-2.md 18. parti + p2 turu).
 
 ### Hasta kaydı ve güvenlik (önce bunlar)
 
@@ -878,7 +878,7 @@ sha'sını raporlar. Eski ≤1.9.12 tek-parça istemciler `base.zip` sha'sı `f4
 değişmedi; paketin baytları bir **derleme belirlenimciliği hatası** yüzünden ayrışıyordu ve bu
 sürümde kaynağında düzeltildi (aşağıya bakın). Sonraki sürümler yine ~71 MB olacak.
 
-İkinci tur çok-ajanlı denetimin (23 bulgu, `denetim-bulgular-2.md`) tamamı ile bu turda alınan
+İkinci tur çok-ajanlı denetimin (23 bulgu, `docs/denetim-bulgular-2.md`) tamamı ile bu turda alınan
 sahip kararları. Beraberinde: site metni elden geçti, jeton ücretlendirme **altyapısı** kuruldu
 (satış **kapalı**) ve canlı Supabase şeması sertleştirildi.
 

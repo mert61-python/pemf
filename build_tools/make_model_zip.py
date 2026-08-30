@@ -118,7 +118,7 @@ PROFILLER: dict[str, tuple[str, ...]] = {
 }
 
 
-# ── FAZ 4.5 (2026-08-26, scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
+# ── FAZ 4.5 (2026-08-26, docs/scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
 # GitHub release asset siniri 2 GiB (OLCULDU: HTTP 422 'size must be less than
 # 2147483648'). research'un iki buyuk PT'si (renal 858MB + scratch CPN 872MB) ana
 # zip'e SIGMAZ → ayri parca zip'i. Manifest'te OPSIYONEL `model_parts` alaninda
@@ -191,7 +191,7 @@ def zip_yaz(profil: str, tablo: dict[str, tuple[str, ...]] = PROFILLER) -> Path:
             raise SystemExit(
                 f"[HATA] {hedef.name} {boyut} bayt — GitHub asset siniri "
                 f"{GITHUB_ASSET_SINIRI} bayti asiyor; iceriği yeni bir PARCALAR "
-                "girdisine bol (scratch-entegrasyon-plani.md Faz 4.5)."
+                "girdisine bol (docs/scratch-entegrasyon-plani.md Faz 4.5)."
             )
         os.replace(gecici, hedef)
     finally:

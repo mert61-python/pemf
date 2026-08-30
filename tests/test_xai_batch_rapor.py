@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""XAI BATCH RAPOR CLI — davranış kilitleri (xai-entegrasyon-plani.md §KALAN B).
+"""XAI BATCH RAPOR CLI — davranış kilitleri (docs/xai-entegrasyon-plani.md §KALAN B).
 
 Kilitlenenler:
  1) Çıktı-dizini bekçisi: girdinin içine/kendisine yazmak AÇIK SystemExit

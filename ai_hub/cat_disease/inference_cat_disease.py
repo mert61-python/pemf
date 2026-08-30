@@ -153,7 +153,7 @@ class CatDiseasePredictor:
 
 
 # ============================================================
-# XAI — sunum-katmani (2026-08-26, xai-entegrasyon-plani.md Faz 1.3)
+# XAI — sunum-katmani (2026-08-26, docs/xai-entegrasyon-plani.md Faz 1.3)
 # ============================================================
 def xai_top_features(predictor, age, weight, hr, temp, duration, symptom_indices, top_n=7):
     """Tek hasta icin SHAP TreeExplainer top-N ozellik katkisi.

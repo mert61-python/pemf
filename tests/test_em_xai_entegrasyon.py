@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""EM ÜÇLÜSÜ XAI ENTEGRASYONU — Faz 1 kalem 4 (xai-entegrasyon-plani.md §4/1.2).
+"""EM ÜÇLÜSÜ XAI ENTEGRASYONU — Faz 1 kalem 4 (docs/xai-entegrasyon-plani.md §4/1.2).
 
 ÖLÇÜLEN DURUM: em_kedi CANLI AI Pro'nun doz modelidir; öneri-onay ekranı parametreleri
 NEDENSİZ gösterir. Tek-örnek XAI dejenere olduğundan (std/background X'ten türetilirse ~0)

@@ -2,7 +2,7 @@
 
 Kapsam: yalnızca **kırık davranış**; 2026-08-17 denetiminin kapattığı ~45 bulgu tekrar
 raporlanmadı (düzeltmelerin KENDİSİNDE bulunan yeni kusurlar raporlandı — birkaç tane var).
-Yöntem: tek başına oryantasyon (denetim-bulgular.md + BUILD.md + CHANGELOG + donanım-uyum
+Yöntem: tek başına oryantasyon (docs/denetim-bulgular.md + BUILD.md + CHANGELOG + donanım-uyum
 raporu + `git log --since=2026-08-17`, 66 commit) → 5 katman tarayıcısı (36 benzersiz şüpheli)
 → **her şüpheli ayrı bir çürütme ajanına** ("bu neden bug DEĞİL?") → katman-aşan izler elle
 kovalandı. Çürütme turu 3 şüpheliyi eledi, 18'ini daralttı; ölçülebilen her iddia

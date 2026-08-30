@@ -12,7 +12,7 @@ Task: PEMF calismasinin mikroskop hucre goruntulerinde tekil hucre instance
       segmentation + TScratch-benzeri wound-closure metrikleri (primary endpoint:
       closure_pct, mean/max gap um, gap area mm2).
 
-VENDOR NOTU (2026-08-26 — guii sertlestirmeleri, plan: scratch-entegrasyon-plani.md):
+VENDOR NOTU (2026-08-26 — guii sertlestirmeleri, plan: docs/scratch-entegrasyon-plani.md):
   * Gelen kod `torch.load`'u GLOBAL monkey-patch'liyordu (weights_only=False surec
     geneli!) — Audit P3 sinifi regresyon. Patch `_cpn_yukleme_kapsami()`
     contextmanager'ina DARALTILDI: yalniz CPN ckpt yuklemesi sirasinda gecerli,

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""AI PRO GÜVEN DÖKÜMÜ — sunum-katmanı XAI, Faz 1 kalem 2 (xai-entegrasyon-plani.md §4/1.5).
+"""AI PRO GÜVEN DÖKÜMÜ — sunum-katmanı XAI, Faz 1 kalem 2 (docs/xai-entegrasyon-plani.md §4/1.5).
 
 ÖLÇÜLEN DURUM: cat_organ pipeline'ı reliability'yi 4 bileşenden (poz güveni × derinlik ×
 maske-cezası × belirsizlik) + kalibrasyonsuz 0.25 tavanından hesaplıyor ama TEK skalara

@@ -297,7 +297,7 @@ _SERBEST_AI_UCLARI: frozenset = frozenset(
     }
 )
 # Ağır araştırma (belge: patoloji, RNA, tomografi, yara-kapanma = 3 jeton).
-# scratch: KARAR 0.6 (2026-08-26, scratch-entegrasyon-plani.md) — 872MB CPN
+# scratch: KARAR 0.6 (2026-08-26, docs/scratch-entegrasyon-plani.md) — 872MB CPN
 # araştırma analizi histopath sınıfıdır; explain (XAI) EK jeton DEĞİL (karar 0.5:
 # jetonlama uç-çağrısı başınadır, explain parametresi ayrıca sayılmaz).
 _AGIR_UCLAR: frozenset = frozenset(

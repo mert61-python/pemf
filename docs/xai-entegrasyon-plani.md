@@ -12,7 +12,7 @@
 > · renal HiRes-CAM ×3 ensemble + disagreement · cu128 imaj-içi smoke (RTX 4070, `SMOKE-OK
 > device=cuda 17.5ms`) · pt_coz tek yol çözücüsü. Süitler: backend **1873**, frontend **583/583**.
 > ✅ **paper_dilek_hoca artık ATLANMADI** → aynı gün AYRI planla ENTEGRE EDİLDİ:
-> **`scratch-entegrasyon-plani.md`** (8 sahip kararı KESİN; `/api/ai/vision/scratch` + `/infer/scratch`
+> **`docs/scratch-entegrasyon-plani.md`** (8 sahip kararı KESİN; `/api/ai/vision/scratch` + `/infer/scratch`
 > + "Yara Kapanma (Scratch)" UI + 27 backend + 5 jest testi; cell/ paketi sahibinden bekleniyor).
 > 🔴 **HÂLÂ AÇIK — LAUNCHER ÇOKLU-MODEL-ZIP (1.9.39):** launcher 1.9.38'de iş yok (ölçüldü);
 > artık İKİ PT'nin (renal 859MB + scratch 872MB) saha ön-koşulu — scratch planında **Faz 4.5**.
@@ -123,7 +123,7 @@ ai_hub/
 | 2 | PT ağırlık dağıtımı | **Klinik makinelerde DE kullanılabilir** — mekanizma: `release_assets/ai_models` + model_downloader (ilk kullanımda iner, tıpkı bugünkü 858MB histopat ONNX gibi → OTA katmanları BÜYÜMEZ) + ai_service /models mount. CPU'da gradient-XAI 10-30 sn → **async "açıklama hazırlanıyor" UI deseni zorunlu**; GPU'lu kurulumda :8100'den 200-500 ms |
 | 3 | Kalıcılık | **(b) Anlık gösterim** — görsel kaydedilmez (bugünkü overlay davranışı); top-özellik METNİ `result_detail`e (şifreli) yazılır. KVKK'da yeni yüzey yok |
 | 4 | AGPL / CT-XAI | **ONAY** — araştırma fazında EigenCAM eklenir (mevcut AGPL kararının devamı; ultralytics zaten kullanımda). yolov8s.pt (21,5MB) dağıtılır |
-| 5 | Büyük kalemler | Histopat 859MB PT: **klinik makinelerde de** (karar #2 mekanizmasıyla ilk kullanımda iner). paper_dilek_hoca: ~~ATLANDI~~ → **2026-08-26 gece ENTEGRE EDİLDİ** (bkz. `scratch-entegrasyon-plani.md` — closure metrikli yeni teslimle sahip kararı tazelendi). cat_llm: kapsam dışı |
+| 5 | Büyük kalemler | Histopat 859MB PT: **klinik makinelerde de** (karar #2 mekanizmasıyla ilk kullanımda iner). paper_dilek_hoca: ~~ATLANDI~~ → **2026-08-26 gece ENTEGRE EDİLDİ** (bkz. `docs/scratch-entegrasyon-plani.md` — closure metrikli yeni teslimle sahip kararı tazelendi). cat_llm: kapsam dışı |
 | 6 | Jeton | **XAI = analizin parçası, ek jeton YOK** — 1 jeton = 1 analiz kuralı korunur; yeni XAI uçları jeton TAM-YOL listesine "serbest" olarak bilinçli eklenir (otomatik "goruntu"ya düşmesin) |
 
 ---
@@ -183,7 +183,7 @@ ai_hub/
 - renal_histopath ensemble HiRes-CAM + disagreement haritası (859MB PT — yalnız ai_service; disagreement klinik "model kararsızlığı" göstergesi olarak değerli).
 - human_kidney_ct EigenCAM — **ONAYLI** (Faz 0 karar #4).
 - renal histopat PT — **klinik makinelerde de** (karar #2/#5 mekanizması: downloader ile ilk kullanımda iner).
-- paper_dilek_hoca: ~~ATLANDI~~ → **ENTEGRE (2026-08-26 gece, ayrı plan: `scratch-entegrasyon-plani.md`)** — closure metrikli yeni teslim sahip kararını tazeledi; 872MB PT release_assets'te, cell/ paketi sahibinden bekleniyor (Faz 4).
+- paper_dilek_hoca: ~~ATLANDI~~ → **ENTEGRE (2026-08-26 gece, ayrı plan: `docs/scratch-entegrasyon-plani.md`)** — closure metrikli yeni teslim sahip kararını tazeledi; 872MB PT release_assets'te, cell/ paketi sahibinden bekleniyor (Faz 4).
 - cat_llm: kapsam dışı (Ollama daemon dağıtım modeline yabancı).
 
 ---
@@ -317,5 +317,5 @@ diyor) · cat_organ ölü yardımcıları (estimate_sy_scale_hint, cross_photo_c
 
 ### Sıradaki tek kırmızı ön-koşul — ✅ YAPILDI
 **Launcher çoklu-model-zip (1.9.39)** — Faz 4.5 gerçekleşti (research-2.zip 1.81GB, manifest
-`model_parts`, launcher parça-döngüsü + ETA); ayrıntı: `scratch-entegrasyon-plani.md` Faz 4.5.
+`model_parts`, launcher parça-döngüsü + ETA); ayrıntı: `docs/scratch-entegrasyon-plani.md` Faz 4.5.
 Yayın zinciri bu gece koşuluyor (app 1.9.27 · launcher 1.9.39 · mobil 2.3.25).

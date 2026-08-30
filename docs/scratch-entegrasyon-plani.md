@@ -122,7 +122,7 @@
 - **İmaj yenileme sırası**: rebuild → tag → çalışan container restart → **mevcut uçların regresyon smoke'u** (thermal/renal) → scratch smoke.
 - cell/ gelince: gerçek-model smoke (**toleranslı** — bulgu 18) + **VRAM eş-zamanlı-yük ölçümü** (bulgu 13) + Docker GPU smoke (`scripts/ai_service_xai_smoke.ps1` genişletme).
 - **Yayın runbook**: versions.json + **CHANGELOG kanal başlığı** (pre-commit `check_changelog_surum` kapısı) + manifest ÜÇ yer + **deps-sha DEĞİŞMEDİ kanıtı** (planın ana vaadi — ölçülerek doğrulanır) + rollout.
-- Kapanış: `xai-entegrasyon-plani.md`'deki "paper_dilek_hoca ATLANDI" notunun güncellenmesi + memory kaydı.
+- Kapanış: `docs/xai-entegrasyon-plani.md`'deki "paper_dilek_hoca ATLANDI" notunun güncellenmesi + memory kaydı.
 
 ### Faz 4.5 — Launcher çoklu-model-zip (karar 0.1'in ÖN KOŞULU)
 Sahip frozen yolu seçtiği için 872 MB PT'nin klinik/CPU makinelere inişi ancak research paketinin bölünmesiyle mümkün (2 GiB sınırı). Backlog'daki 1.9.39 işi bu modülün saha kapsamına ALINDI: launcher manifest'te `research` profilinin ÇOKLU zip beyanını desteklemeli (`research.zip` + `research-2.zip` …); eski launcher'lar tek-zip'i okumaya devam eder (geriye-uyumlu). Bu iş bitene kadar: GPU/geliştirme makineleri (release_assets ya da /models mount) TAM çalışır; kliniklerde model dosyası yoksa "model kurulmamış" zarif mesajı.

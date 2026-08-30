@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn, cglrgrkn
-"""XAI §KALAN A-GRUBU — backend davranış kilitleri (xai-entegrasyon-plani.md §KALAN-2026-08-26).
+"""XAI §KALAN A-GRUBU — backend davranış kilitleri (docs/xai-entegrasyon-plani.md §KALAN-2026-08-26).
 
 A4: landmark yanıtı `fgs_bantlari` taşır (thresholds_calibrated.json p5/p95 — UI
     'ölçülen değer vs popülasyon bandı' paneli buradan çizilir; dosya yoksa boş dict → panel gizli).

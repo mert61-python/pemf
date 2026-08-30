@@ -49,7 +49,7 @@ ASSETS = {
     "research.zip": ("models", "research", None),
 }
 
-# ── FAZ 4.5 (2026-08-26, scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
+# ── FAZ 4.5 (2026-08-26, docs/scratch-entegrasyon-plani.md): PROFIL EK PARCALARI ─────
 # 2 GiB asset siniri (OLCULDU: HTTP 422) buyuk PT'leri research.zip'e sokamiyor.
 # Parca zip'leri manifest'in OPSIYONEL `model_parts` alaninda gider — YALNIZ
 # launcher >=1.9.39 okur; eski launcher'lar alani yok sayar (deny_unknown_fields

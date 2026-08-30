@@ -51,7 +51,7 @@ ultralytics==8.4.47             # YOLO (landmark/segmentasyon/CT/retikülosit/pe
 pillow==12.3.0        # CVE fix (denetim 2026-08-04): 12.2.0'da 26 acik — yigin OOB-write/decompression-bomb; ai_router kullanici yuklemesini dogrudan PIL.Image.open'a veriyor ve o uclar auth-muaf
 scipy==1.15.3                    # torch/sklearn/librosa çekirdeği
 scikit-learn==1.7.2             # CKD modeli PICKLE'dan yüklenir (statik import DEĞİL)
-# XAI Faz 1 (xai-entegrasyon-plani.md, 2026-08-26): ai_hub/xai_tabular — cat_disease
+# XAI Faz 1 (docs/xai-entegrasyon-plani.md, 2026-08-26): ai_hub/xai_tabular — cat_disease
 # TreeExplainer + CKD KernelExplainer + EM sensitivity/SHAP. numpy 1.26.4 pinine
 # DOKUNMADAN kuruldugu dogrulandi (numba'siz kurulum; 0.49 numba'yi zorunlu istemez).
 shap==0.49.1
@@ -67,7 +67,7 @@ timm==1.0.28
 ttach==0.0.3                     # grad-cam bagimliligi
 safetensors==0.8.0               # timm bagimliligi
 captum==0.8.0                    # RNA IG (hasta basina top-gen katkilari); torch 2.1.2 ile dogrulandi
-# Scratch/Yara-Kapanma CPN (2026-08-26, KARAR 0.1 — scratch-entegrasyon-plani.md):
+# Scratch/Yara-Kapanma CPN (2026-08-26, KARAR 0.1 — docs/scratch-entegrasyon-plani.md):
 # sahip karari ile FROZEN'a girer (deps 6. degisim BILINCLI). torch>=2.0 ister →
 # 2.1.2+cpu pini UYUMLU (PyPI requires_dist olculdu). ⚠️ TRANSITIFLERI AGIR
 # (pytorch-lightning/tensorboard/albumentations/scikit-image/segmentation-models-pytorch)
