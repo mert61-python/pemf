@@ -2821,6 +2821,7 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
                 prev.get("db_session_id"),
                 prev.get("started_epoch") or prev.get("start_time"),
                 reason="ai-devralma",
+                start_mono=prev.get("start_mono"),
             )
             logging.getLogger(__name__).warning(
                 "AI seansi (%s) aktif MANUEL seansi devraldi → eski seans (db_id=%s) duzgun kapatildi (orphan onlendi).",
@@ -2871,7 +2872,29 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
             logging.getLogger(__name__).exception("AI seansi DB satiri acilamadi (tedavi surer).")
 
 
-def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: str = "auto") -> int:
+def _kayit_suresi_dk(start_mono, started_epoch):
+    """Seans KAYIT süresini (dakika) hesapla — MONOTONIC öncelikli, wall-clock geri-çekilmeli.
+
+    ⚠️ DST/SAAT-DEĞİŞİMİ (denetim 2026-08-30): kayıt süresi `time.time()` farkından hesaplanıyordu.
+    Duvar saati ileri/geri giderse (NTP/DST/manuel) RAPORLANAN süre gerçekten sapıyordu (max(0,…)
+    negatifi engelliyordu ama değeri yanlış). Gerçek tedavi zaten monotonic watchdog'la
+    güvencedeydi (bkz. start_mono, hardware_controller deadline) — bu yalnız KAYDI düzeltir.
+    `start_mono` varsa ondan (saat-değişiminden bağımsız); yoksa eski wall-clock yolu (geriye
+    uyumlu: recovery gibi monotonic snapshot'ı olmayan yollar). Negatif clamp korunur."""
+    if start_mono is not None:
+        try:
+            return max(0, int((time.monotonic() - float(start_mono)) / 60))
+        except (TypeError, ValueError):
+            pass
+    if started_epoch:
+        try:
+            return max(0, int((time.time() - float(started_epoch)) / 60))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: str = "auto", start_mono=None) -> int:
     """Seansi DB'de KAPAT: kismi dakika-ortalamasi + sensor buffer flush + end_session/ended_epoch.
 
     DENETIM P2: /api/session/stop DISINDAKI bitis yollari DB'ye HIC dokunmuyordu:
@@ -2916,7 +2939,7 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                     logging.warning("finalize: %d sensor ornegi yazilamadi → buffer'a geri konuldu.", len(pending))
             try:
                 _now = time.time()
-                dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
+                dur_min = _kayit_suresi_dk(start_mono, started_epoch)
                 # ⚠️ SEBEP ARTIK KAYDA DA GECER (kampanya bulgusu S09). `reason` buraya zaten
                 # tasiniyordu ama YALNIZ loglaniyordu → acil durdurma ile biten seans gecmiste
                 # normal bitenden ayirt EDILEMIYORDU ("bu hastada e-stop yasandi mi?" cevapsiz).
@@ -2973,7 +2996,12 @@ def _session_duration_watchdog():
                     # DENETIM P2: seansi DB'de de KAPAT. Frontend timer bitiminde /stop
                     # cagirmadigindan NORMAL tam-sure bitisi buradan gecer; eskiden satir
                     # kalici 'active' kaliyor ve son dakikanin sensor verisi kayboluyordu.
-                    _finalize_session_db(sess.get("db_session_id"), sess.get("started_epoch"), reason="sure-doldu")
+                    _finalize_session_db(
+                        sess.get("db_session_id"),
+                        sess.get("started_epoch"),
+                        reason="sure-doldu",
+                        start_mono=sess.get("start_mono"),
+                    )
                     try:
                         update_live_session_state(is_active=False, mode="Sistem Hazır")
                         _ws_broadcast_sync(
@@ -3389,6 +3417,7 @@ async def stop_session():
         coil_ids = _active_session.get("coil_ids", list(range(1, 9)))
         db_session_id = _active_session.get("db_session_id")
         started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
+        start_mono = _active_session.get("start_mono")  # kayıt süresi DST-güvenli (bkz. _kayit_suresi_dk)
         _stopping_session_id = _active_session.get("session_id")  # TOCTOU muhru (asagi bkz.)
         _active_session["is_active"] = False
 
@@ -3444,7 +3473,7 @@ async def stop_session():
                             logging.exception("stop: sensor flush hatasi")
                     try:
                         _now = time.time()
-                        dur_min = int((_now - float(started_epoch)) / 60) if started_epoch else None
+                        dur_min = _kayit_suresi_dk(start_mono, started_epoch)
                         db.end_session(db_session_id, duration_minutes=dur_min)
                         # Yeni kolon: gercek wall-clock bitis epoch'u (end_session bunu yazmaz).
                         db.set_session_meta(db_session_id, ended_epoch=_now)
@@ -4046,6 +4075,7 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
         _was_active = bool(_active_session.get("is_active"))
         _db_sid = _active_session.get("db_session_id")
         _started_ep = _active_session.get("started_epoch")
+        _start_mono_es = _active_session.get("start_mono")  # kayıt süresi DST-güvenli
         _active_session["is_active"] = False
     stm_stopped = False
     if state.hardware:
@@ -4149,7 +4179,9 @@ def _emergency_stop_all(reason: str = "manual", mode: str = "Acil Durdurma"):
             )
         except Exception:
             logging.getLogger(__name__).warning("estop: session_event yazilamadi", exc_info=True)
-        _finalize_session_db(_db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}")
+        _finalize_session_db(
+            _db_sid, _started_ep, coil_ids=coil_ids, reason=f"acil-durdurma:{reason}", start_mono=_start_mono_es
+        )
     # Audit P2: ust-seviye status'u transport sonuclarindan TURET — eskiden kosulsuz 'success'
     # donuyordu (STM hatasi + broker cokuk olsa bile UI 'ciktilar kesildi' saniyordu). Bir transport
     # dogrulanamadiysa 'partial'/'error' don + confirmed=False (keep-alive/firmware fiziksel-telafi P2).
