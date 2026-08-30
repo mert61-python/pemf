@@ -50,3 +50,27 @@ def arama_katla(value: str) -> str:
     #    kod noktasına toparla ki aynı görünen metinler eşit karşılaşsın. Aksan SİLİNMEZ.
     text = unicodedata.normalize("NFC", text)
     return re.sub(r"\s+", " ", text)
+
+
+def sayiya_cevir(deger, varsayilan=None):
+    """Türkçe ondalık-virgül TOLERANSLI sayı çözümü. "3,5" → 3.5, "3.5" → 3.5, 3.5 → 3.5.
+
+    ⚠️ NEDEN (saha bulgusu 2026-08-30, hasta güvenliği): Python `float("3,5")` → ValueError.
+    `ai/hybrid_recommender` hasta kilosunu `float(weight)` ile çözüp HATA'da SESSİZCE 15 kg
+    varsayılana düşüyordu → 3,5 kg'lık küçük hayvan "medium" kategoriye girip YANLIŞ DOZ süresi
+    alıyordu. Frontend nokta-normalize ediyor ama eski kayıt / import / doğrudan-API virgül
+    içerebilir. Kilo ve yaş DOZA girer → parse HER YÜZEYDE virgül-toleranslı olmalı; tek kaynak.
+
+    Geçersiz (harf, boş, None) girdide `varsayilan` döner — çağıran güvenli bir varsayılan verir.
+    ⚠️ Binlik ayraç DESTEKLENMEZ (tıbbi kilo/yaşta kullanılmaz): "1.234,5" → başarısız → varsayılan.
+    """
+    if deger is None:
+        return varsayilan
+    if isinstance(deger, bool):  # bool int'in alt-tipi; kiloda anlamsız
+        return varsayilan
+    if isinstance(deger, (int, float)):
+        return float(deger)
+    try:
+        return float(str(deger).strip().replace(",", "."))
+    except (ValueError, TypeError):
+        return varsayilan

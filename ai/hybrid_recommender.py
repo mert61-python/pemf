@@ -284,22 +284,24 @@ class PatientProfileAdaptor:
         adapted['duration'] = int(adapted['duration'] * species_factor['duration'])
 
         # Yaş adaptasyonu
-        age = patient_info.get('age', 5)
-        try:
-            age = float(age)  # Audit P3: string age → categorize_age TypeError → coerce
-        except (TypeError, ValueError):
-            age = 5.0
+        # ⚠️ Türkçe ondalık-virgül TOLERANSLI (saha bulgusu 2026-08-30): `float("2,5")` ValueError
+        # verip SESSİZCE varsayılana düşüyordu → yanlış yaş kategorisi → yanlış doz. Tek kaynak:
+        # utils.turkce_metin.sayiya_cevir (kilo ile aynı düzeltme).
+        from utils.turkce_metin import sayiya_cevir
+
+        age = sayiya_cevir(patient_info.get('age', 5), 5.0)
         age_category = self.categorize_age(age)
         age_factor = self.ADAPTATION_RULES['age_categories'][age_category]
         adapted['intensity'] = adapted.get('intensity', 1.0) * age_factor['intensity']
         adapted['duration'] = int(adapted['duration'] * age_factor['duration'])
 
         # Ağırlık adaptasyonu
-        weight = patient_info.get('weight', 15)
-        try:
-            weight = float(weight)  # Audit P3: string weight → coerce
-        except (TypeError, ValueError):
-            weight = 15.0
+        # ⚠️ Türkçe ondalık-virgül TOLERANSLI (saha bulgusu 2026-08-30, HASTA GÜVENLİĞİ):
+        # `float("3,5")` ValueError → SESSİZCE 15 kg varsayılan → 3,5 kg'lık küçük hayvan "medium"
+        # kategoriye düşüp YANLIŞ DOZ süresi alıyordu. sayiya_cevir "3,5"→3.5 çözer.
+        from utils.turkce_metin import sayiya_cevir
+
+        weight = sayiya_cevir(patient_info.get('weight', 15), 15.0)
         weight_category = self.categorize_weight(weight)
         weight_factor = self.ADAPTATION_RULES['weight_categories'][weight_category]
         adapted['duration'] = int(adapted['duration'] * weight_factor['duration'])
