@@ -121,7 +121,12 @@ begin
     (p_session->>'frequency_hz')::double precision, (p_session->>'intensity_mt')::double precision,
     (p_session->>'pulse_duration_ms')::int, p_session->>'operator_name', p_session->>'patient_name',
     p_session->>'patient_notes', p_session->>'session_status', p_session->>'created_at')
-  on conflict (id) do update set
+  -- ⚠️ ÇAKIŞMA CİHAZ-KAPSAMLI (2026-08-30 denetimi, çoklu klinik): `id` kliniğin YEREL
+  -- SQLite tablosundan gelir ve orada AUTOINCREMENT'tir → her klinik 1,2,3… kullanır.
+  -- `on conflict (id)` iken ikinci kliniğin seansı SESSİZCE yazılmıyordu (ne INSERT, ne
+  -- UPDATE, ne hata). Anahtar `(device_id, id)` yapıldı; göç:
+  -- `supabase/seans_kimligi_bilesik_anahtar.sql`.
+  on conflict (device_id, id) do update set
     end_time=excluded.end_time, duration_minutes=excluded.duration_minutes, session_status=excluded.session_status
   where public.treatment_sessions.device_id = p_device_id;
 end; $$;
