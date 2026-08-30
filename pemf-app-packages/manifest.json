@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "version": "1.9.34",
-  "tag": "client-app-v1.9.34",
+  "version": "1.9.35",
+  "tag": "client-app-v1.9.35",
   "runtimes": {
     "win-x64": {
       "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.33/base.zip",
@@ -13,9 +13,9 @@
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.34/base-app.zip",
-        "sha256": "d7021de55a8cbf9f689ad02b1d4ab42ee7561ba6787d462195a2aca681ac8799",
-        "size": 81074669,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.35/base-app.zip",
+        "sha256": "8d4f8e8f18f8364b9edd9cfb709f0ad65647c405bd94ac2edb184469297227cc",
+        "size": 81075604,
         "kind": "zip"
       },
       "deps": {

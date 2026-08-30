@@ -6,6 +6,28 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.35 — 2026-08-30 (🧭 Filo envanteri okunabilir: gelistirme kosumlari isaretleniyor)
+
+- **Cihaz listesi artik gercek klinikleri gosteriyor.** Bulut cihaz kaydinda 26 satir birikmisti
+  ve bunlarin yalnizca BIRI gercek bir cihazdi; gerisi ayni gelistirme makinesinin farkli
+  ortamlariydi (derleme klasorleri, gecici kopyalar, Docker). Cihaz kimligi ag donanimindan
+  turedigi icin her ortam kendi kimligini uretip ayni listeye yaziyordu. Bu, listenin TEK var
+  olus sebebini — "hangi klinik hangi surumde calisiyor" sorusunu, yani gerektiginde geri
+  cagirma yapabilmeyi — islevsiz birakiyordu.
+- **Cozum: engelleme degil isaretleme.** Uygulamayi normal yoldan (PEMF Vet Client uzerinden)
+  baslatmayan kosumlar listede adlarinin sonunda `-dev` ile gorunur. Kayit HER KOSULDA
+  yazilmaya devam eder; yalnizca adi degisir.
+  ⚠️ "Kurulu degilse hic yazma" secenegi bilerek REDDEDILDI (sahip karari): kurulum yolu
+  beklenenden farkli bir klinikte cihaz kaydini hic olusturmaz ve uzaktan erisim KIMSE FARK
+  ETMEDEN olurdu. Isaretleme o riski tasimaz — yanlis tarafa dusen bir cihaz islevini tam
+  surdurur, bedeli listedeki etiketten ibarettir.
+- 6 yeni otomatik kontrol; en kritigi bu kararin kendisini kilitliyor (isaretleme ileride
+  engellemeye cevrilirse kontrol KIRMIZI yanar). Uc mutasyonun ucu de dogrulandi.
+- Not: eski kalinti kayitlar ayrica temizlendi (25 → 1).
+
+Paket kimliği (`buildId`): `8d4f8e8f18f8`. Monolit `base.zip` sha: `990a69a90a0f`.
+Bagimlilik katmani DEGISMEDI (`06622c47209b`) → sahaya yalnizca ~81 MB iner.
+
 ## app 1.9.34 — 2026-08-29 (📶 Ayni WiFi'de otomatik baglanma + uzaktan erisim kilidi)
 
 - **"Ayni WiFi'de oldugu halde telefon otomatik baglanmiyor" duzeltildi** (saha bildirimi).
