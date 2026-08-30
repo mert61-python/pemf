@@ -320,7 +320,10 @@ class PatientDatabase:
         arama SESSİZCE bozulur. Anahtar parmak-izini saklayıp değişimi tespit ediyoruz.)"""
         cursor.execute("SELECT COUNT(*) FROM patient_search_index")
         count = cursor.fetchone()[0]
-        _fp = hashlib.sha256(self._search_hmac_key).hexdigest()[:16]
+        # ⚠️ Parmak izi HMAC anahtarını VE normalize sürümünü kapsar: normalize mantığı
+        # değişince (ör. Türkçe katlama, 2026-08-30) eski indeks yeni aramalarla eşleşmez →
+        # sürümü parmak izine katmak sahadaki indeksi açılışta KENDİLİĞİNDEN yeniden kurar.
+        _fp = hashlib.sha256(self._search_hmac_key + f"|norm{self._SEARCH_NORM_VERSION}".encode()).hexdigest()[:16]
         _fp_file = self._key_dir / ".patient_search_keyfp"
         _stored_fp = ""
         try:
@@ -337,9 +340,22 @@ class PatientDatabase:
         except Exception:
             pass
 
+    # ⚠️ NORMALİZE SÜRÜMÜ — arama indeksi parmak-izine dahil (bkz. _ensure_search_index).
+    # ORTAK KAYNAK: `utils.turkce_metin.SURUM` (arama katlaması orada tek yerde tanımlı;
+    # aynı tuzak PDF rapor filtresinde de vardı — iki yüzey artık aynı fonksiyonu kullanır).
+    # Katlama mantığı her değişince `utils.turkce_metin.SURUM`ı ARTIR → sahadaki indeks açılışta
+    # KENDİLİĞİNDEN yeniden kurulur.
+    from utils.turkce_metin import SURUM as _SEARCH_NORM_VERSION
+
     def _normalize_search_value(self, value: str) -> str:
-        text = str(value or "").strip().lower()
-        return re.sub(r"\s+", " ", text)
+        """Arama token'ı — Türkçe-güvenli katlamaya delege eder (bkz. utils.turkce_metin).
+
+        ⚠️ TÜRKÇE COLLATION TUZAĞI (saha bulgusu 2026-08-30): `str.lower()` 'İ'yi birleşik-noktalı
+        'i̇'ye, 'I'yı 'i'ye çeviriyordu → "İhsan" kaydedip "ihsan" arayan doktor hastayı bulamıyordu.
+        Katlama TEK yerde toplandı ki PDF rapor filtresiyle ayrışmasın."""
+        from utils.turkce_metin import arama_katla
+
+        return arama_katla(value)
 
     def _tokenize_for_search(self, value: str) -> Set[str]:
         normalized = self._normalize_search_value(value)

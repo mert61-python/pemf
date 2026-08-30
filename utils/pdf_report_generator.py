@@ -365,13 +365,20 @@ class PDFReportGenerator:
                 "Hasta raporu: gecmis %d kayitta KIRPILDI — rapor EKSIK olabilir (tarih araligi daraltin).",
                 _HISTORY_FETCH_LIMIT,
             )
+        # ⚠️ TÜRKÇE-GÜVENLİ KARŞILAŞTIRMA (saha bulgusu 2026-08-30): eskiden iki taraf da
+        # `str.lower()` kullanıyordu. `patient_name` bir HTTP parametresi (kullanıcı/istemci
+        # girişi); DB'deki adla arasında herhangi bir case-dönüşümü olursa 'İ'/'I' tuzağı
+        # yüzünden "seans bulunamadı" hatası doğuyordu (hasta adı raporu üretilemiyordu).
+        # Arama indeksiyle AYNI katlamayı kullanır (utils.turkce_metin) → ayrışma imkânsız.
+        from utils.turkce_metin import arama_katla
+
+        _hedef = arama_katla(patient_name or "")
         patient_sessions = [
             s
             for s in sessions
             # None-güvenli: SQL NULL → Python None; .get(k, '') anahtar VAR ama None ise None döner
             # → str+None TypeError → PDF daima 500 (Audit P1). `or ''` hem eksik hem None'u boşa çevirir.
-            if ((s.get('patient_name') or '') + ' ' + (s.get('patient_surname') or '')).strip().lower()
-            == (patient_name or '').lower()
+            if arama_katla((s.get('patient_name') or '') + ' ' + (s.get('patient_surname') or '')) == _hedef
         ]
         if not patient_sessions:
             raise ValueError(f"'{patient_name}' adlı hasta için seans bulunamadı")
