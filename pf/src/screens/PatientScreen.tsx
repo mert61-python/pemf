@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
+import { duzenlemePayloadu } from "@/utils/hastaGuncelleme";
 import type { Patient } from "@/types/domain";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAppNav } from "@/context/AppNavContext";
@@ -40,6 +41,11 @@ export function PatientScreen() {
   const [form, setForm] = useState({
     id: "", name: "", species: "", breed: "", age: "", weight: "", owner: "", vet_contact: "", owner_email: ""
   });
+  // ⚠️ LOST-UPDATE SAVUNMASI (denetim 2026-08-30): düzenlemeye başlarkenki ORİJİNAL değerler.
+  // Kaydederken yalnız DEĞİŞEN alanlar gönderilir → backend field-merge dokunulmayan alanı korur.
+  // İki cihaz aynı hastayı farklı alanlarda düzenlerse biri diğerini SİLMEZ. Tüm-form göndermek
+  // (eski davranış) B'nin bayat değerini A'nın yeni değerinin üstüne yazıyordu.
+  const [editBaseline, setEditBaseline] = useState<Record<string, string>>({});
 
   const loadPatients = async () => {
     setLoading(true);
@@ -84,9 +90,13 @@ export function PatientScreen() {
 
     // Ondalıkları nokta-normalize ederek gönder (backend/AI parse edebilsin).
     const normalized = { ...form, age: form.age ? String(ageN) : "", weight: form.weight ? String(weightN) : "" };
-    // Yeni kayitta operator_email = giris yapan hekim (klinik-ici sahiplik). Duzenlemede DEGISMEZ (backend de yok sayar).
-    const payload = editingId
-      ? { ...normalized, id: editingId }
+    // ⚠️ LOST-UPDATE SAVUNMASI: düzenlemede YALNIZ değişen alanları gönder (bkz. editBaseline).
+    // Karşılaştırma ham `form` üzerinden (baseline ham yüklendi); gönderim `normalized` (nokta).
+    // Boşaltma da bir değişikliktir → boş gönderilir → backend o alanı temizler (kasıtlı silme).
+    // Backend field-merge, GÖNDERİLMEYEN alanı korur → iki cihaz çakışmaz.
+    const payload: Record<string, string> = editingId
+      ? duzenlemePayloadu(form, editBaseline, normalized, editingId)
+      // Yeni kayit: operator_email = giris yapan hekim (klinik-ici sahiplik). Duzenlemede DEGISMEZ.
       : { ...normalized, operator_email: myEmail };
     setSaving(true);
     const res = await apiPost<{ status: string }>("/patients", payload, { status: "error" });
@@ -104,7 +114,7 @@ export function PatientScreen() {
   };
 
   const handleEdit = (p: Patient) => {
-    setForm({
+    const loaded = {
       id: p.id || "",
       name: p.name || "",
       species: p.species || "",
@@ -114,7 +124,9 @@ export function PatientScreen() {
       owner: p.owner || "",
       vet_contact: p.vet_contact || "",
       owner_email: p.owner_email || ""
-    });
+    };
+    setForm(loaded);
+    setEditBaseline(loaded);  // orijinal snapshot → kaydetmede diff için
     setEditingId(p.id ?? null);
     setIsAdding(true);
   };
@@ -194,8 +206,8 @@ export function PatientScreen() {
               onPress={handleDeleteAll}
             />
           )}
-          <Button 
-            label={isAdding ? "İptal" : "Yeni Hasta Kayıt"} 
+          <Button
+            label={isAdding ? "İptal" : "Yeni Hasta Kayıt"}
             icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
             variant={isAdding ? "secondary" : "primary"}
             onPress={() => {
@@ -204,7 +216,7 @@ export function PatientScreen() {
                 setForm({ id: "", name: "", species: "", breed: "", age: "", weight: "", owner: "", vet_contact: "", owner_email: "" });
               }
               setIsAdding(!isAdding);
-            }} 
+            }}
           />
         </View>
       </View>
