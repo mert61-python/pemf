@@ -7,6 +7,8 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 |---|---|
 | `build_backend_exe.ps1` | **(Pipeline 1)** PyInstaller frozen backend → `../PEMF_BUILD/dist/PEMF_Backend`; env izole, headless-guard, taze web export |
 | `check_headless_imports.py` | **Guard** — statik AST import-grafiği: headless backend'e Qt/GUI sızmadığını doğrular (kırmızıysa build durur) |
+| `pyz_koruma_kapisi.py` | **(5. koruma kapısı, `build_backend_exe.ps1`)** — sevk EXE'nin PYZ arşivinde düz `ai_hub` bytecode'u KALMADIĞINI denetler. Önceki 4 kapı yalnız "diskte düz .py kaldı mı?" soruyordu; ölçülünce PYZ içinde 87 ai_hub girişi okunabilir bytecode olarak duruyordu (Cython koruma katkısı=0) → gerçek koruma bu kapıyla kanıtlanır (denetim 2026-08-28 #07) |
+| `sevk_agaci_ai_hub_kapisi.py` | **(6. koruma kapısı, `build_backend_exe.ps1`)** — kaynaktaki HER `ai_hub` modülünün sevk ağacına girdiğini doğrular. `xai_tabular/ig_torch.py` adında "torch" geçtiği için torch-eleme filtresine takılıp üründe yalnız PYZ bytecode'u olarak yaşıyordu → yol-çıpasız filtrenin sessiz düşürmesini yakalar (denetim 2026-08-28 #07) |
 | `make_manifest.py` | `../pemf-app-packages/manifest.json` üretir (sha256/size hesaplı) — elle düzenlemeyi bitirir |
 | `publish_release.ps1` | GitHub release oluştur + asset yükle + `latest.json` güncelle (`-Branch exe\|mobil`) |
 | `restore_assets.ps1` | Boş/yeni makinede depoyu çalışır kılar — yayınlardaki AI model ağırlıklarını (`home/vet/research.zip` + deps katmanından çekirdek `cat_organ`) indirip `../release_assets/ai_models`'a açar |
