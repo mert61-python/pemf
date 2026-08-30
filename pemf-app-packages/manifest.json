@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "version": "1.9.36",
-  "tag": "client-app-v1.9.36",
+  "version": "1.9.37",
+  "tag": "client-app-v1.9.37",
   "runtimes": {
     "win-x64": {
       "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.33/base.zip",
@@ -13,9 +13,9 @@
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.36/base-app.zip",
-        "sha256": "b8e324b5f1fd2659163e982da869a9fbb5f82f636d989861ff700b53c4bb4a86",
-        "size": 81078148,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.37/base-app.zip",
+        "sha256": "80bdb402db5678e8d2ff9b8b5a812a166222959c85e15486f76f86166bc1468e",
+        "size": 81078942,
         "kind": "zip"
       },
       "deps": {
@@ -96,12 +96,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.28",
-      "versionCode": 35,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.42/PEMF_Vet_Mobil-2.3.28.apk",
-      "sha256": "a40a4cb37edd61bb354cccc2ff6ca982897fba39da6ba32748cb9a709ad2fbc6",
-      "size": 128481043,
-      "notes": "Guncelleme baslatirken uygulamanin kapanmasi duzeltildi. Indirme cok hizli bittiginde (paket daha once tam inmisse) arka plan servisi durdurulurken sistem uygulamayi kapatiyordu; guncelleme bu yuzden hicbir denemede tamamlanamiyordu."
+      "version": "2.3.29",
+      "versionCode": 36,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.37/PEMF_Vet_Mobil-2.3.29.apk",
+      "sha256": "f3f6b33c28002b922c6b36bdf7b4b1a575870b4e5e3897322ced14a6a5ceadab",
+      "size": 128481595,
+      "notes": "Ayni hastayi iki cihazdan ayni anda duzenlerken bir tarafin degisikliginin sessizce kaybolmasi onlendi; artik yalnizca gercekten degistirdiginiz alanlar kaydedilir, digerleri korunur."
     }
   }
 }

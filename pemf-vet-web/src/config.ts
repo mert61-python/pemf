@@ -148,7 +148,7 @@ export const DOWNLOAD_HOST = {
   // 2026-08-06: Android AYRI etiket. Eskiden mac/linux ile ORTAK launcherTag'i (1.9.2) kullanıyordu
   // → APK güncellense bile site ESKİ sürümü (2.3.2) veriyordu. Mobil sürüm döngüsü masaüstünden
   // bağımsız olduğu için kendi etiketi olmalı.
-  androidTag: 'launcher-v1.9.42',
+  androidTag: 'client-app-v1.9.37',
   // ⚠️ SÜRÜM DOSYA ADINDA (2026-08-11) — Windows ile AYNI gerekçe: İndirilenler klasöründe üç
   // sürüm yan yana durunca hangisinin hangisi olduğu anlaşılmıyor ve destek çağrısında "hangi
   // APK'yı kurdunuz?" cevapsız kalıyordu. Windows `windowsTag`ten türetilebiliyor (etiket sürümü
@@ -159,7 +159,7 @@ export const DOWNLOAD_HOST = {
   // ⚠️ SÜRÜM FARKI KULLANICIYA AÇIKLANIR (metin denetimi 2026-08-20): İndir sayfasında bilgisayar
   // kartı "1.9.32", telefon kartı "2.3.18" gösteriyor ve sebebi hiçbir yerde yazmıyordu. Telefon
   // uygulaması AYRI sürüm döngüsüne sahiptir (ayrı yayın etiketi); numaraların eşleşmesi beklenmez.
-  androidVersion: '2.3.28',
+  androidVersion: '2.3.29',
   /** İndir sayfasında telefon kartında gösterilir — uygulamanın ROLÜNÜ açıklar (tek başına
    *  terapi uygulamaz; masaüstündeki cihazın uzaktan kumandasıdır). */
   androidRolNotu: 'Kliniğinizdeki cihaza bağlanır: seans başlatıp durdurabilir, bobin ayarlarını değiştirebilir, sensörleri izleyebilir ve hasta kayıtlarına bakabilirsiniz. Cihazın bağlı olduğu klinik bilgisayarı açık olmalıdır.',

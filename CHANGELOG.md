@@ -6,6 +6,25 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.37 · mobile 2.3.29 — 2026-08-30 (🔒 Hasta duzenleme cakismasi + seans suresi kaydi)
+
+- **Ayni hastayi iki cihazdan duzenlerken degisiklik KAYBOLMASI onlendi.** Iki kullanici (ornegin
+  masaustu + telefon) ayni hastayi ayni anda acip FARKLI alanlari degistirirse, birinin kaydettigi
+  degisiklik sessizce kayboluyordu: kaydetme ekrandaki TUM formu gonderiyor, boylece bir cihazin
+  eski (bayat) degeri digerinin yeni degerinin uzerine yaziliyordu. Artik yalnizca GERCEKTEN
+  degistirdiginiz alanlar gonderilir; dokunmadiginiz alanlar oldugu gibi korunur. (Hem masaustu
+  hem mobil.)
+
+- **Seans suresi kaydi saat degisiminden etkilenmiyor.** Kayitli seans suresi bilgisayarin duvar
+  saatine gore hesaplaniyordu; yaz/kis saati gecisi, otomatik saat duzeltmesi (NTP) ya da elle
+  saat degisimi olursa RAPORLANAN sure yanlis cikabiliyordu (ornegin saat 1 saat ileri atlarsa
+  30 dakikalik seans 90 dakika gorunebiliyordu). Artik sure, saatten bagimsiz bir olcumle
+  hesaplanir.
+  ⚠️ Onemli: uygulanan GERCEK tedavi suresi bu sorundan zaten ETKILENMIYORDU (ayri bir guvenlik
+  sayaci onu koruyordu); bu duzeltme yalnizca KAYDI/raporu dogru gosterir.
+
+Paket kimliği (`buildId`): `80bdb402db56`. Monolit `base.zip` sha: `adeef8dd66f7`.
+
 ## app 1.9.36 — 2026-08-30 (🔤 Turkce arama + dogru doz: I/i ve ondalik virgul duzeltmeleri)
 
 - **Turkce adli hastalar artik araninca BULUNUYOR.** Hasta arama "İ"/"I" harflerini yanlis
