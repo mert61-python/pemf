@@ -38,6 +38,35 @@ def _fake_clock(monkeypatch, holder):
     monkeypatch.setattr(hardware_controller.time, "monotonic", lambda: holder[0])
 
 
+def test_KRITIK_deadline_WALL_CLOCK_degil_MONOTONIC(hw, monkeypatch):
+    """⚠️ HASTA GÜVENLİĞİ — saha/denetim 2026-08-30 (zaman-işleme denetimi).
+
+    Bobin süre-kapağı MONOTONIC saatle ölçülmeli. Duvar saati geri alınsa (manuel düzeltme, DST
+    geri-atlama, NTP sıçraması) bile bobin GERÇEK süre sonunda kapanmalı. Deadline duvar-saatine
+    (time.time) bağlı olsaydı, saat geri gidince deadline HİÇ dolmaz → bobin süresiz çalışır =
+    AŞIRI DOZ. Gerçek tedavi süresi bu değişmeze dayanır; kayıttaki duration_minutes'in wall-clock
+    olması yalnız RAPORU etkiler (tedaviyi değil), asıl koruma budur."""
+    clk = [1000.0]
+    _fake_clock(monkeypatch, clk)  # monotonic = clk
+    wall = [50000.0]
+    monkeypatch.setattr(hardware_controller.time, "time", lambda: wall[0])  # duvar saati AYRI
+
+    assert hw.update_coil(1, 100.0, 25.0, 0.0, duration=1) is True
+    dl = hw._coil_deadline[1]
+    # ⚠️ deadline monotonic tabanlı (~1060) olmalı, duvar-saati tabanlı (~50060) DEĞİL.
+    assert dl == pytest.approx(1060.0), (
+        f"deadline duvar-saatine bağlı görünüyor ({dl}) → saat değişimi bobin kapağını bozar"
+    )
+
+    # Duvar saati 1 saat GERİ alınır (DST/manuel), ama monotonic gerçek süre dolar:
+    wall[0] = 50000.0 - 3600
+    clk[0] = 1061.0
+    hw._tick()
+    assert hw.coils_state[1]["is_running"] is False, (
+        "saat geri alınınca bobin süresinde KAPANMADI → duvar-saati kapağı (aşırı doz riski)"
+    )
+
+
 def test_deadline_auto_stop(hw, monkeypatch):
     clk = [1000.0]
     _fake_clock(monkeypatch, clk)
