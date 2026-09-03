@@ -6,6 +6,27 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.39 · mobile 2.3.31 — 2026-09-03 (🧠 AI Hub 5 duzeltme + STM uyumluluk)
+
+- **AI Hub: organ analizinden canli kameraya gecince eski sonuc kalmiyor.** Galeriden secilen
+  fotografin organ isaretleri/rozeti canli goruntunun ustunde kaliyordu; canliya gecis artik
+  onceki analizi temizler, gec gelen sonuclar yanlis moda dusmez.
+- **Isi haritasi dogru yerde ve boyutta.** Tum AI modullerinde isi haritasi ince bir serit gibi
+  cikip alttaki karta tasiyordu; artik analiz gorseliyle ayni boyut/hizada gosteriliyor.
+- **AI Pro siyah ekran ve "Hazirlaniyor..." takilmasi giderildi.** Sunucu kamerasi hazirlik
+  onizlemesi artik ekrana gelir; kamera acilamaz veya model yuklenemezse NEDENI ekranda gosterilir
+  (120 saniye kor bekleyis yok). Onizleme sirasinda "bobin surulmuyor" acikca belirtilir.
+- **Yara Kapanma isi haritasi hemen gorunur.** Isi haritasi istenmisse sonuc dogrudan XAI
+  sekmesiyle acilir; istenip gelmediyse uyari verilir.
+- **CKD (bobrek) analizi duzeltildi.** Secilmemis bulgular yanlislikla "anormal" sayiliyor,
+  saglikli hasta %60 CKD aliyordu — artik dogru sekilde tamamlaniyor (%6). Yetersiz girdide
+  ne yapilacagi soylenir: en az 6 alan ve Kreatinin/Ure/Idrar oz.ag./Albumin/Hemoglobin'den biri.
+- **STM uyumluluk (bobin 1-5):** frekans tabani 1 Hz'e hizalandi (0,5 girilince cihaz sessizce
+  1,0 suruyordu); firmware termal kesme bildirimi (STM_EVT) artik backend'de islenir; aktif seans
+  kartinda yogunluk (mT) "kayit" olarak etiketlendi (cihaza gonderilmez); donanim surumu tek kaynak.
+
+Paket kimliği (`buildId`): `2f8741aecf22`. Monolit `base.zip` sha: `8d3f7cdc6d34`.
+
 ## launcher 1.9.43 — 2026-09-03 (🔌 Bos/offline cihazda WebView2 kurulumu artik takilmiyor)
 
 - **Bos cihazda kurulum "Installing WebView2..." adiminda takiliyordu.** Bos (fresh) bir Latte

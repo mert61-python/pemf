@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.38",
-  "tag": "client-app-v1.9.38",
+  "version": "1.9.39",
+  "tag": "client-app-v1.9.39",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.33/base.zip",
-      "sha256": "4ecbc61df2e22ed0caad2d86857c9a42be0aa473e69a813c917abc51df9c47c4",
-      "size": 1568784955,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base.zip",
+      "sha256": "8d3f7cdc6d34217cf58ed3bbe9a38d255be9d7ea1d59d60c7b6d061dc0b301c8",
+      "size": 1568800417,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.38/base-app.zip",
-        "sha256": "4985be7e316050102478300c01f8e1c3e837acea1f4316b37eeb2d4a95c168b9",
-        "size": 81081864,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base-app.zip",
+        "sha256": "2f8741aecf226dfae92ca6117e4fe31c2657485db4ec3fae6b00e4155cf41181",
+        "size": 81089614,
         "kind": "zip"
       },
       "deps": {
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.33/base.zip",
-    "sha256": "4ecbc61df2e22ed0caad2d86857c9a42be0aa473e69a813c917abc51df9c47c4",
-    "size": 1568784955,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base.zip",
+    "sha256": "8d3f7cdc6d34217cf58ed3bbe9a38d255be9d7ea1d59d60c7b6d061dc0b301c8",
+    "size": 1568800417,
     "kind": "zip"
   },
   "model_parts": {
@@ -96,12 +96,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.30",
-      "versionCode": 37,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.38/PEMF_Vet_Mobil-2.3.30.apk",
-      "sha256": "3bae84909ad44efe7e223fba60b43af3d2c002edc46a94539ac32a31e234663f",
-      "size": 128483571,
-      "notes": "AI analizinde buyuk gorsel secildiginde cikan '1024KB' hatasi giderildi (sinir 32 MB'a cikarildi); analiz basarisiz olursa artik anlasilir, ne yapilacagini soyleyen bir mesaj gosterilir."
+      "version": "2.3.31",
+      "versionCode": 38,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/PEMF_Vet_Mobil-2.3.31.apk",
+      "sha256": "bf58a42163da5a1e27e68ec39be1787553a546674bb070a10b0c2c56e3b8a412",
+      "size": 128485991,
+      "notes": "AI Hub duzeltmeleri: organ analizinden canliya gecince eski sonuc temizlenir; isi haritasi dogru boyutta; AI Pro kamera onizlemesi ve hata nedeni ekranda; Yara Kapanma isi haritasi hemen gorunur; CKD analizinde secilmemis bulgular artik dogru tamamlanir ve yetersiz girdide ne yapilacagi soylenir."
     }
   }
 }
