@@ -6,6 +6,46 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.40 — 2026-09-03 (🔑 Guncelleme sonrasi giris istenmesi — ASIL neden duzeltildi)
+
+- **Guncelleme sonrasi (ya da uygulamayi acmadan yapilan birkac launcher acilisindan sonra) e-posta+sifre
+  yeniden isteniyordu.** Kok neden (bu makinede dosya-sistemi gunlugu ve Supabase kaynagiyla OLCULDU):
+  uygulama penceresi, launcher ile AYNI oturum jeton ailesinin KENDI kalici kopyasini tarayici deposunda
+  tutuyor ve her acilista launcher'in devrinden ONCE o ESKI kopyayla yenilemeye kalkiyordu. Launcher ise
+  uygulama acilmadan yapilan acilislarda (guncelleme gunu: oto-guncelleme, uzun indirme, kapat-ac) jetonu
+  kendi basina yeniliyor ama pencerenin kopyasini guncellemiyordu. Kopya 2+ nesil geride kalinca Supabase
+  guvenlik kurali (yeniden-kullanim tespiti) TUM aileyi iptal ediyor -> launcher'daki taze jeton da
+  gecersizlesiyor -> sonraki acilista giris ekrani.
+- **Cozum:** launcher'in actigi pencerede (masaustu) oturum artik KALICI TUTULMAZ (pencere omru boyunca
+  bellekte); eski kalici kopya bir kez temizlenir. Pencere daima launcher'in devrettigi taze oturumla
+  baslar. Telefon/LAN tarayici davranisi DEGISMEDI. Kilit: `supabaseAuthDesktopStorage.test.ts`.
+- ⚠️ Gecis: bu surumu alan makinede bir kez daha giris istenebilir (eski aile zaten iptal olmus
+  olabilir); sonrasinda oturum guncellemeler boyunca korunur.
+
+Paket kimliği (`buildId`): `f7369b58eee1`. Monolit `base.zip` sha: `8b3ae5c14c04`.
+
+## launcher 1.9.44 — 2026-09-03 (🔑 Guncelleme sonrasi "Beni hatirla" — ikincil kemerler)
+
+- **Baglam:** "guncelleme sonrasi e-posta+sifre yeniden" belirtisinin ASIL nedeni uygulama
+  penceresindedir ve **app 1.9.40**'ta duzeltildi (yukaridaki giris). Bu launcher surumu, ayni
+  belirtiyi ikincil yollardan uretebilecek uc bosluğu kapatan **guvenlik kemerleridir**; tek
+  baslarina belirtiyi uretmezler (Supabase bir nesil geriyi tolere eder) ama birikince uretirler.
+- **[F5] Oto-guncelleme cikisinda son oturum yakalama:** self-update yolu `app.exit(0)` ile cikiyor,
+  normal kapanistaki "kapanis-oncesi son oturum yakalama" bu yolda yoktu. Artik yeniden-baslatici
+  calismadan ONCE, yalniz bu oturumun izlenen backend'inden son oturum diske islenir.
+  Parite testi: `f5_selfupdate_son_yakalama_var`.
+- **[S4] Bellekteki oturum rotasyonla senkron:** rotasyonla gelen taze oturum yalniz DISKE
+  yaziliyor, bellekteki kopya guncellenmiyordu; uygulama guncellemesi backend'i yeniden baslatinca,
+  ikinci "Baslat"ta ya da calisan backend sahiplenilince BAYAT bellek oturumu devrediliyordu.
+  Artik rotasyon senkronu ve kapanis yakalamasi bellegi de tazeler; calisan backend sahiplenilirken
+  devirden ONCE ondaki (daha taze olabilecek) oturum cekilir. Testler: `s4_bellek_rotasyonu_kurali`,
+  `s4_rotasyon_bellegi_de_tazeler_ve_sahiplenme_once_ceker`.
+- **[S4-yon] Geriye yazma korumasi:** posta kutusundan/devirden gelen jeton diskteki/bellekteki
+  kayittan daha ESKIYSE (bayat devir ekosu) artik yazilmaz (`expires_at` karsilastirmasi; eski
+  backend'de bilinmiyorsa kapi devre disi).
+- ⚠️ Gecis notu: 1.9.43 -> 1.9.44 guncellemesi ESKI (1.9.43) kodla uygulanir; o tek seferde bir
+  kez daha giris istenebilir. 1.9.44'ten sonraki guncellemelerde oturum korunur.
+
 ## app 1.9.39 · mobile 2.3.31 — 2026-09-03 (🧠 AI Hub 5 duzeltme + STM uyumluluk)
 
 - **AI Hub: organ analizinden canli kameraya gecince eski sonuc kalmiyor.** Galeriden secilen

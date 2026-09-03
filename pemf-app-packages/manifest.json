@@ -1,21 +1,21 @@
 {
   "schema": 2,
-  "version": "1.9.39",
-  "tag": "client-app-v1.9.39",
+  "version": "1.9.40",
+  "tag": "client-app-v1.9.40",
   "runtimes": {
     "win-x64": {
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base.zip",
-      "sha256": "8d3f7cdc6d34217cf58ed3bbe9a38d255be9d7ea1d59d60c7b6d061dc0b301c8",
-      "size": 1568800417,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.40/base.zip",
+      "sha256": "8b3ae5c14c04613185a19b804c32b659f6f7e916215580dbb60c07f1f8c65919",
+      "size": 1568801040,
       "kind": "zip"
     }
   },
   "layers": {
     "win-x64": {
       "app": {
-        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base-app.zip",
-        "sha256": "2f8741aecf226dfae92ca6117e4fe31c2657485db4ec3fae6b00e4155cf41181",
-        "size": 81089614,
+        "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.40/base-app.zip",
+        "sha256": "f7369b58eee18014722e2bba1552eb60eb742965f100815e6fd44540bd3cce56",
+        "size": 81090237,
         "kind": "zip"
       },
       "deps": {
@@ -68,9 +68,9 @@
     }
   },
   "base": {
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/base.zip",
-    "sha256": "8d3f7cdc6d34217cf58ed3bbe9a38d255be9d7ea1d59d60c7b6d061dc0b301c8",
-    "size": 1568800417,
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.40/base.zip",
+    "sha256": "8b3ae5c14c04613185a19b804c32b659f6f7e916215580dbb60c07f1f8c65919",
+    "size": 1568801040,
     "kind": "zip"
   },
   "model_parts": {
@@ -87,11 +87,11 @@
   "_layers_note": "KATMANLI PAKET (2026-08-08): client >=1.9.13 'layers' bolumunu OKUR ve tek parca 'runtimes'i YOK SAYAR. Siradan bir surumde yalniz base-app.zip (~71 MB) iner; base-deps.zip (~1,19 GB) yalniz bagimliliklar degisince yenilenir. 'runtimes'/'base' girdileri ESKI launcher'lar (<=1.9.12) icin DURUYOR ve o yayindaki base.zip'i gosterir — DOKUNMAYIN, silerseniz eski client'lar kurulum yapamaz. Eski client acilista zaten kendini gunceller, sonra katmanli yola gecer.",
   "_rollout_note": "GERI CEKME ANAHTARI: layers.<platform>.rollout = 0-100 (varsayilan 100 = herkes). Bozuk bir yayin fark edilirse 0 yazip manifest'i yeniden yukleyin — henuz guncellememis HICBIR cihaz almaz. Kademeli acmak icin once 10, sonra 50, sonra 100. Cihaz dilimi kurulum kimliginden turer, KARARLIDIR (ayni cihaz zaman icinde zipilamaz).",
   "launcher": {
-    "version": "1.9.43",
-    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.43/PEMFVetClient-Setup.exe",
-    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.43/PEMFVetClient-Setup-1.9.43.exe",
-    "sha256": "4cca2d47d149b4ae381e487f0d704277b421ab588a6fe7585fc3cdee08ea4dab",
-    "size": 264881280,
+    "version": "1.9.44",
+    "url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.44/PEMFVetClient-Setup.exe",
+    "installer_url": "https://github.com/mert61-python/pemf-update/releases/download/launcher-v1.9.44/PEMFVetClient-Setup-1.9.44.exe",
+    "sha256": "66a2d3a4e4eaf215d315ab08cf5800663bb1c6762d33370eb28119eab851b522",
+    "size": 264885724,
     "rollout": 100
   },
   "mobile": {

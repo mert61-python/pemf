@@ -120,6 +120,12 @@ pub fn rotasyonu_isle(install_root: &Path, yeni: &Session) -> bool {
     if mevcut.refresh_token == yeni.refresh_token {
         return false; // değişmemiş → boşuna yazma
     }
+    // [S4-yön] (saha 2026-09-03): posta kutusundan/devirden gelen jeton diskteki kayıttan daha ESKİ
+    // olabilir (bayat devir ekosu). Daha eski jetonu yazmak diski GERİYE çeker → GoTrue reuse-
+    // detection aileyi iptal eder. expires_at bilinmiyorsa (0) kapı devre dışı (eski backend).
+    if mevcut.expires_at > 0 && yeni.expires_at > 0 && yeni.expires_at < mevcut.expires_at {
+        return false;
+    }
     save(install_root, yeni)
 }
 

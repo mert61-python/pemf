@@ -126,9 +126,44 @@ async function _secRemove(key: string): Promise<void> {
 
 const supabaseSecureStorage = { getItem: _secGet, setItem: _secSet, removeItem: _secRemove };
 
+// ── Masaüstü (launcher) penceresi: oturum otoritesi LAUNCHER'dır ─────────────────────────────
+// ⚠️ SAHA 2026-09-03 (USN-journal + GoTrue kaynağıyla ÖLÇÜLDÜ): "güncelleme sonrası kapatıp açınca
+// e-posta+şifre yeniden isteniyor". Pencerenin supabase-js'i AYNI refresh-token ailesinin KENDİ kalıcı
+// kopyasını (localStorage `sb-<ref>-auth-token`) tutuyor ve her açılışta launcher devrinden ÖNCE
+// `_recoverAndRefresh` ile o ESKİ jetonla yenilemeye kalkıyordu. Launcher ise launcher-yalnız
+// açılışlarda (güncelleme günü: self-update boot'u, uzun runtime indirmesi, kapat-aç) aileyi pencere
+// görmeden döndürüyor; kopya ≥2 nesil geride kalınca GoTrue reuse-detection TÜM AİLEYİ iptal ediyor →
+// launcher'ın taze jetonu da ölüyor → sonraki açılışta giriş ekranı. 1.9.37/1.9.38 yalnız TERS yönü
+// (pencere döndürdü, launcher diski bayat) kapatmıştı.
+// Çözüm: loopback host'ta (launcher'ın açtığı pencere) oturum yalnız BELLEKTE tutulur (pencere ömrü);
+// eski kalıcı kopya bir kez temizlenir. Pencere daima launcher devriyle (taze) başlar, sayfa
+// yenilemede backend posta kutusundan hydrate olur (AuthContext). Mobil/LAN tarayıcı (kendi ailesi,
+// kendi kalıcılığı) DEĞİŞMEZ. Kilit: __tests__/supabaseAuthDesktopStorage.test.ts
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+export function masaustuLoopbackMi(): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined" || !window.location) return false;
+  return LOOPBACK_HOSTS.has(String(window.location.hostname || "").toLowerCase());
+}
+/** supabase-js'in kalıcı oturum anahtarı (`sb-<projectRef>-auth-token`). */
+export const SUPABASE_STORAGE_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
+const _bellek = new Map<string, string>();
+const bellekStorage = {
+  getItem: async (k: string): Promise<string | null> => _bellek.get(k) ?? null,
+  setItem: async (k: string, v: string): Promise<void> => { _bellek.set(k, v); },
+  removeItem: async (k: string): Promise<void> => { _bellek.delete(k); },
+};
+if (masaustuLoopbackMi()) {
+  // Eski kurulumların bayat kalıcı kopyası: supabase-js onu görmeden ÖNCE temizle (bir kez, senkron).
+  for (const k of [SUPABASE_STORAGE_KEY, `${SUPABASE_STORAGE_KEY}-user`, `${SUPABASE_STORAGE_KEY}-code-verifier`]) {
+    try { window.localStorage.removeItem(k); } catch { /* localStorage kapalı/erişilemez */ }
+    AsyncStorage.removeItem(k).catch(() => { /* ignore */ });
+  }
+}
+
 export const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    storage: supabaseSecureStorage as unknown as any, // native=SecureStore(parçalı), web=AsyncStorage
+    // masaüstü loopback = BELLEK (launcher otorite); native=SecureStore(parçalı); LAN/mobil web=AsyncStorage
+    storage: (masaustuLoopbackMi() ? bellekStorage : supabaseSecureStorage) as unknown as any,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false, // native: URL-token ayrıştırma yok

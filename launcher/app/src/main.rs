@@ -53,7 +53,7 @@ struct AppState {
     /// Doğrulanmış Supabase oturumu — YALNIZ BELLEKTE. Kalıcılık ("Beni hatırla") ayrı ve
     /// işletim sistemi korumalı (`secret_store`). ⚠️ Bu alan `progress` snapshot'ına ASLA
     /// yazılmaz: o snapshot `get_progress` ile webview'e akar ve jetonlar UI'ya sızardı.
-    session: Mutex<Option<auth::Session>>,
+    session: Arc<Mutex<Option<auth::Session>>>,
     /// Oturum-rotasyon senkron thread'i çalışıyor mu (C3/L7 çift-thread guard'ı). Senkron BİR
     /// backend için tek thread; sahiplenme dalı her Başlat'ta koşabildiğinden guard olmadan thread
     /// biriktirirdi. Thread bittiğinde (backend öldü / 5 ardışık başarısız yoklama) serbest bırakılır.
@@ -68,7 +68,7 @@ impl Default for AppState {
             prefetch: Arc::new(Mutex::new(None)),
             control: Arc::new(AtomicU8::new(CTL_RUN)),
             teardown: Mutex::new(None),
-            session: Mutex::new(None),
+            session: Arc::new(Mutex::new(None)),
             rotasyon_senkronu_aktif: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -94,7 +94,7 @@ struct Environment {
 /// bobin riskini keser). state.proc bu oturumda başlatılan backend'i tutar.
 fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Path) {
     let tracked = state.proc.lock().unwrap().take();
-    stop_backend_for_teardown(tracked, root);
+    stop_backend_for_teardown(tracked, root, state.session.clone());
 }
 
 /// `stop_tracked_backend`'in kilitten BAĞIMSIZ gövdesi.
@@ -105,11 +105,12 @@ fn stop_tracked_backend(state: &tauri::State<'_, AppState>, root: &std::path::Pa
 fn stop_backend_for_teardown(
     tracked: Option<(std::process::Child, u16)>,
     root: &std::path::Path,
+    bellek: Arc<Mutex<Option<auth::Session>>>, // [S4] F5 yakalama belleği de tazeler (thread'e taşınabilir Arc)
 ) {
     // 1) Bu oturumun tracked backend'i: E-stop (TIBBİ GÜVENLİK) + [F5] son-yakalama + kill.
     let had_tracked = if let Some((mut child, port)) = tracked {
         backend::safe_stop_coils(port);
-        son_oturumu_yakala(port, root); // [F5] E-stop SONRASI / kill ÖNCESİ: son jetonu diske işle
+        son_oturumu_yakala(port, root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ: son jetonu diske işle
         let _ = child.kill();
         let _ = child.wait();
         true
@@ -144,9 +145,43 @@ fn stop_backend_for_teardown(
 /// kapısı (kayıt-yok / boş-jeton / başka-eposta) OTOMATİK korunur (save() DOĞRUDAN çağrılmaz).
 /// ⚠️ Yalnız BU oturumun TRACKED backend'inde çağrılır; orphan/backend.port dalında ASLA —
 /// başka sürecin portundan jeton okumak loopback-jeton-zehirlenmesi savunmasını deler.
-fn son_oturumu_yakala(port: u16, root: &std::path::Path) {
+fn son_oturumu_yakala(port: u16, root: &std::path::Path, bellek: &Mutex<Option<auth::Session>>) {
     if let Some(s) = backend::pull_desktop_session_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
         let _ = secret_store::rotasyonu_isle(root, &s);
+        bellek_rotasyonu_uygula(bellek, &s); // [S4] bellek de taze kalsın (yeniden devir bayat itmesin)
+    }
+}
+
+/// [S4] (saha arızası 2026-09-03, ÖLÇÜLDÜ): rotasyonla gelen oturum yalnız DİSKE yazılıyor, bellekteki
+/// `AppState.session` HİÇ güncellenmiyordu. `hand_off_session` belleği ittiği için bir sonraki devirde
+/// (runtime güncellemesi backend'i yeniden başlatınca / orphan sahiplenmede / ikinci Başlat'ta) backend'e
+/// BAYAT jeton gidiyor, pencere onunla yenilemeye kalkıyor ve GoTrue reuse-detection TÜM AİLEYİ iptal
+/// ediyordu → sonraki açılışta SessionRevoked → "Beni hatırla" parola istiyordu (bugün 17:07'den beri
+/// açık launcher, 20:3x app 1.9.39 güncellemesi, 20:38 yeniden giriş). Bellek kuralı diskten AYRI:
+/// "Beni hatırla" kapalı olsa da bellek taze kalmalı. Aynı e-posta + dolu + DEĞİŞMİŞ refresh → uygula;
+/// bellekte oturum yoksa (giriş yapılmamış) devralma YOK (uydurma/otomatik giriş olmasın).
+fn bellek_rotasyonu_gerekli(mevcut: Option<&auth::Session>, yeni: &auth::Session) -> bool {
+    if yeni.refresh_token.trim().is_empty() {
+        return false;
+    }
+    match mevcut {
+        None => false,
+        // [S4-yön] daha ESKİ jeton (bayat devir ekosu) belleği GERİYE çekemez; expires_at bilinmiyorsa (0) kabul.
+        Some(m) => {
+            m.email.eq_ignore_ascii_case(&yeni.email)
+                && m.refresh_token != yeni.refresh_token
+                && !(m.expires_at > 0 && yeni.expires_at > 0 && yeni.expires_at < m.expires_at)
+        }
+    }
+}
+
+fn bellek_rotasyonu_uygula(bellek: &Mutex<Option<auth::Session>>, yeni: &auth::Session) -> bool {
+    let mut g = bellek.lock().unwrap();
+    if bellek_rotasyonu_gerekli(g.as_ref(), yeni) {
+        *g = Some(yeni.clone());
+        true
+    } else {
+        false
     }
 }
 
@@ -247,7 +282,7 @@ fn on_backend_ready(
     // ⚠️ Yazma kararı `secret_store::rotasyonu_isle`de (kayıtlı oturum yoksa / boş jeton /
     // başka e-posta → YAZMAZ). Burada yalnız OKUMA ve tetikleme var.
     // ⚠️ Backend ölünce görev kendiliğinden biter (okuma başarısız → sayaç → çık); sızıntı yok.
-    oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port);
+    oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
 
     // Uygulamayı AYRI pencerede aç → client/profil penceresi ("main") AÇIK KALIR.
     open_app_window(app, url);
@@ -283,7 +318,7 @@ fn rotasyon_ardisik(kesin_olu: bool, ardisik: u32, esik: u32) -> (u32, bool) {
 ///
 /// Aralık 60 sn: Supabase erişim jetonu ~1 saat yaşar, yani rotasyon seyrektir; 60 sn hem
 /// "kapatmadan önce yakala" için fazlasıyla sık hem de loopback'te maliyetsizdir.
-fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16) {
+fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Arc<Mutex<Option<auth::Session>>>) {
     // ÇİFT-THREAD GUARD (C3/L7, denetim 2026-08-24): sahiplenme dalı (`start_installed` →
     // `detect_running_backend`) her Başlat'ta koşabilir ve `state.proc`a KOYMAZ; guard olmadan her
     // çağrı yeni bir thread biriktirirdi. Bir thread aktifken yenisi açılmaz.
@@ -299,6 +334,7 @@ fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16) {
                 Some(s) => {
                     ardisik_hata = 0;
                     let _ = secret_store::rotasyonu_isle(&root, &s);
+                    bellek_rotasyonu_uygula(&bellek, &s); // [S4] bellek de taze kalsın
                 }
                 None => {
                     // F4 (denetim 2026-08-24): None'ı sınıfla — backend KESİN ÖLÜ mü (TCP reddedildi)
@@ -664,6 +700,21 @@ async fn start_installed(
     if let Some(port) = backend::detect_running_backend(&root) {
         // SAHİPLENİLEN backend'e de oturumu devret (idempotent) — o süreci biz başlatmadık ama
         // kullanıcı BU client'tan giriş yaptı; uygulama yine kendi login'ini atlamalı.
+        // [S4] Sahiplenilen backend BİZDEN TAZE bir oturum tutuyor olabilir (pencere döndürmüş, biz
+        // kapalıyken / başka açılışta). Önce ÇEK; tazeyse belleğe+diske al; ANCAK ondan sonra devret —
+        // aksi hâlde bayat jeton backend'e itilir, pencere onunla yeniler, GoTrue aileyi iptal eder.
+        {
+            let bellek = state.session.clone();
+            let root_c = root.clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                if let Some(s) = backend::pull_desktop_session_kisa(port, backend::PULL_TEARDOWN_TIMEOUT_S) {
+                    if bellek_rotasyonu_uygula(&bellek, &s) {
+                        let _ = secret_store::rotasyonu_isle(&root_c, &s);
+                    }
+                }
+            })
+            .await;
+        }
         hand_off_session(&state, port).await;
         // 🔴 C3 (denetim 2026-08-24): sahiplenilen backend'in ROTASYON SENKRONU da başlamalı.
         // `on_backend_ready` burada ÇAĞRILAMAZ (child yok — süreci biz başlatmadık, `state.proc`a
@@ -671,7 +722,7 @@ async fn start_installed(
         // jetonu döndürüp backend'e push eder, launcher pull ETMEZ, diskteki kopya bayatlar ve
         // sonraki açılışta SessionRevoked → "Beni hatırla" SİLİNİR (saha arızasının açık kalan kolu).
         // Guard (senkron_baslamali) çift-Başlat'ta thread biriktirmeyi önler.
-        oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port);
+        oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
         let url = backend::app_url(port);
         open_app_window(&app, &url);
         return Ok(url);
@@ -957,6 +1008,7 @@ async fn apply_runtime_update(
     // Güncelleme + SAĞLIK KAPISI tek blokta: yeni sürüm takas edilir, backend başlatılır
     // (`start_and_wait` zaten `/api/health` bekler → başlaması sağlığın KANITIdır). Başlayamazsa
     // eski sürüme DÖNÜLÜR. Böylece bozuk bir yayın kliniği çalışmaz hâlde bırakamaz.
+    let bellek2 = state.session.clone(); // [S4] geri-alma dalındaki teardown için (closure'a taşınır)
     let sonuc: Result<GuncellemeSonucu, String> = tauri::async_runtime::spawn_blocking(move || {
         let mut on = progress_reporter(app2, store);
         let control = || match ctrl.load(Ordering::Relaxed) {
@@ -1007,7 +1059,7 @@ async fn apply_runtime_update(
                     // ⚠️ TIBBİ GÜVENLİK: yeni sürümü durdururken de sıra E-stop → kill.
                     // `stop_backend_for_teardown` bu değişmezi tek yerde tutuyor; burada
                     // `child.kill()` çağırmak bobinleri enerjili bırakabilirdi.
-                    stop_backend_for_teardown(Some((child, port)), &root2);
+                    stop_backend_for_teardown(Some((child, port)), &root2, bellek2.clone());
                     flow::geri_almayi_kaydet(&root2, &manifest_raw);
                     let geri_hata =
                         flow::guncellemeyi_geri_al(&root2, &geri).err().map(|x| x.to_string());
@@ -1101,8 +1153,9 @@ async fn uninstall(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> 
     // durdurma işini burada kendi thread'imizde yapıp SONUCU bekliyoruz).
     let tracked = state.proc.lock().unwrap().take();
     let root2 = root.clone();
+    let bellek2 = state.session.clone(); // [S4]
     tauri::async_runtime::spawn_blocking(move || {
-        stop_backend_for_teardown(tracked, &root2);
+        stop_backend_for_teardown(tracked, &root2, bellek2);
     })
     .await
     .map_err(|e| format!("kaldırma hazırlığı çöktü: {e}"))?;
@@ -1562,6 +1615,27 @@ async fn apply_self_update(
             }
         }
         install::record_selfupdate_attempt(&install::default_install_root(&home_dir()), &version);
+        // 🔴 [F5-SELFUPDATE] (saha bildirimi 2026-09-03): "güncelleme sonrası kapatıp açınca hesaptan
+        // çıkmış oluyor, e-posta+şifre yeniden isteniyor". Kök neden: bu yol `app.exit(0)` ile çıkar;
+        // teardown'daki [F5] "kapanış-ÖNCESİ son oturum yakalama" YALNIZ `WindowEvent::Destroyed`
+        // kancasında ve `stop_backend_for_teardown`da vardı — `app.exit()` açık pencerelere Destroyed'ı
+        // güvenilir teslim etmez (ve etse bile süreç çıkışıyla yarışır). Uygulama PENCERESİ (supabase-js)
+        // oturumu tazeledikçe refresh jetonunu DÖNDÜRÜR (tek-kullanımlık) ve backend posta kutusuna
+        // yazar; rotasyon-senkron thread'i 60 sn'de bir çektiği için diskteki kopya son rotasyonun
+        // gerisinde kalabilir. (NSIS `/S` sessiz kurulumda kancalar KOŞMAZ — backend yetim kalır; yeni
+        // launcher onu sahiplenir ya da runtime güncellemesi kill_stray ile öldürür.) Bu yol tek başına
+        // en fazla 1 nesil kaybettirir (GoTrue 1 nesil geriyi tolere eder) → İKİNCİL kemer. ASIL neden
+        // pencerenin kalıcı localStorage kopyası (app 1.9.40, pf/src/services/supabaseAuth.ts).
+        // Çözüm: relauncher'dan ÖNCE, teardown ile AYNI yardımcıyla son oturumu diske işle.
+        // ⚠️ YALNIZ bu oturumun TRACKED backend'i (`state.proc`): child ALINMAZ (kill burada değil, NSIS'te);
+        // `detect_running_backend`/`backend.port` (orphan) ASLA — başka sürecin jetonunu okumak
+        // zehirlenmedir (bkz. f5_kapanis_sirasi_* parite testi). Kilit: f5_selfupdate_son_yakalama_var.
+        {
+            let tracked_port = state.proc.lock().unwrap().as_ref().map(|(_, p)| *p);
+            if let Some(port) = tracked_port {
+                son_oturumu_yakala(port, &install::default_install_root(&home_dir()), &state.session); // [F5] relauncher ÖNCE
+            }
+        }
         // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
         spawn_update_relauncher(&dest)?;
         app.exit(0);
@@ -1856,11 +1930,12 @@ fn main() {
                     let is_main = window.label() == "main";
                     if let Some((mut child, port)) = state.proc.lock().unwrap().take() {
                         let root = install::default_install_root(&home_dir());
+                        let bellek = state.session.clone(); // [S4] job'a taşınır (F5 belleği de tazeler)
                         // `mut`: closure `child`'ı taşır ve üzerinde kill/wait çağırır (FnMut değil,
                         // FnOnce; ama gövde &mut child istediği için binding mutable olmalı).
                         let mut job = move || {
                             backend::safe_stop_coils(port);
-                            son_oturumu_yakala(port, &root); // [F5] E-stop SONRASI / kill ÖNCESİ
+                            son_oturumu_yakala(port, &root, &bellek); // [F5] E-stop SONRASI / kill ÖNCESİ
                             let _ = child.kill();
                             let _ = child.wait();
                             // child.kill() ÇOCUK-AĞACINI öldürmez → BİZİM spawn ettiğimiz
@@ -2046,6 +2121,72 @@ mod tests {
         let dy = jg.find("son_oturumu_yakala(").expect("job son-yakalama YOK (F5)");
         let dk = jg.find(".kill()").expect("job kill yok");
         assert!(de < dy && dy < dk, "Destroyed job sırası bozuk (E-stop→yakala→kill)");
+    }
+
+    /// [F5-SELFUPDATE] (saha bildirimi 2026-09-03): self-update yolu `app.exit(0)` ile çıkar; F5
+    /// son-yakalama yalnız Destroyed kancası + teardown'da vardı → güncelleme sonrası açılışta
+    /// bayat refresh jetonu → SessionRevoked → "Beni hatırla" parola istiyordu. Değişmez:
+    /// `apply_self_update` gövdesinde `son_oturumu_yakala(` VAR, `spawn_update_relauncher(`den
+    /// ve `app.exit(`ten ÖNCE gelir; port kaynağı TRACKED `state.proc`tur (orphan
+    /// `detect_running_backend` DEĞİL — başka sürecin jetonunu okumak zehirlenmedir).
+    /// MUTASYON: yakalama silinirse / relauncher'dan sonraya alınırsa / port orphan'dan alınırsa KIRMIZI.
+    #[test]
+    fn f5_selfupdate_son_yakalama_var() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("fn apply_self_update").expect("apply_self_update yok");
+        let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+        let govde = &soy[i..son];
+        let yakala = govde.find("son_oturumu_yakala(").expect("self-update son-yakalama YOK (F5-SELFUPDATE)");
+        let relauncher = govde.find("spawn_update_relauncher(").expect("self-update relauncher yok");
+        let cikis = govde.find("app.exit(").expect("self-update app.exit yok");
+        assert!(yakala < relauncher, "son-yakalama relauncher'dan SONRA — NSIS backend'i öldürür, jeton okunamaz");
+        assert!(relauncher < cikis, "relauncher app.exit'ten SONRA — sıra bozuk");
+        // Port kaynağı: yakalamadan önceki EN YAKIN kaynak tracked `state.proc` olmalı (orphan değil).
+        let onceki = &govde[..yakala];
+        let tracked = onceki.rfind("state.proc.lock()").expect("yakalama portu tracked state.proc'tan alınmıyor");
+        let orphan = onceki.rfind("detect_running_backend(").unwrap_or(0);
+        assert!(tracked > orphan, "yakalama portu orphan detect_running_backend'den geliyor — zehirlenme (F5)");
+    }
+
+    /// [S4] Bellek rotasyon kuralı: aynı e-posta + dolu + DEĞİŞMİŞ refresh → uygula; boş refresh,
+    /// başka e-posta, aynı jeton, giriş yok → uygulama. MUTASYON: kural gevşetilirse kırmızı.
+    #[test]
+    fn s4_bellek_rotasyonu_kurali() {
+        let s = |email: &str, rt: &str| auth::Session { access_token: "a".into(), refresh_token: rt.into(), email: email.into(), expires_at: 0 };
+        let m = s("vet@k.tr", "r1");
+        assert!(bellek_rotasyonu_gerekli(Some(&m), &s("vet@k.tr", "r2")), "değişmiş jeton uygulanmalı");
+        assert!(bellek_rotasyonu_gerekli(Some(&m), &s("VET@K.TR", "r2")), "e-posta büyük/küçük duyarsız");
+        assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("vet@k.tr", "r1")), "aynı jeton → boşuna yazma");
+        assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("vet@k.tr", "  ")), "boş refresh → uygulama");
+        assert!(!bellek_rotasyonu_gerekli(Some(&m), &s("baska@k.tr", "r2")), "başka kullanıcı → uygulama");
+        assert!(!bellek_rotasyonu_gerekli(None, &s("vet@k.tr", "r2")), "giriş yokken devralma YOK");
+        let se = |rt: &str, exp: i64| auth::Session { access_token: "a".into(), refresh_token: rt.into(), email: "vet@k.tr".into(), expires_at: exp };
+        assert!(bellek_rotasyonu_gerekli(Some(&se("r1", 100)), &se("r2", 200)), "daha YENİ jeton uygulanmalı");
+        assert!(!bellek_rotasyonu_gerekli(Some(&se("r1", 200)), &se("r2", 100)), "daha ESKİ jeton (bayat devir ekosu) uygulanMAMALI [S4-yön]");
+        assert!(bellek_rotasyonu_gerekli(Some(&se("r1", 0)), &se("r2", 100)), "mevcut expires_at bilinmiyorsa (0) kabul");
+        let bellek = Mutex::new(Some(m.clone()));
+        assert!(bellek_rotasyonu_uygula(&bellek, &s("vet@k.tr", "r2")));
+        assert_eq!(bellek.lock().unwrap().as_ref().unwrap().refresh_token, "r2");
+        assert!(!bellek_rotasyonu_uygula(&bellek, &s("vet@k.tr", "r2")), "ikinci kez aynı → false");
+    }
+
+    /// [S4] Parite: rotasyon senkron thread'i ve F5 yakalama BELLEĞİ de güncellemeli; orphan
+    /// sahiplenme devirden ÖNCE çekmeli. MUTASYON: herhangi biri kaldırılırsa kırmızı.
+    #[test]
+    fn s4_rotasyon_bellegi_de_tazeler_ve_sahiplenme_once_ceker() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("fn oturum_rotasyon_senkronu_baslat").expect("rotasyon fn yok");
+        let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+        assert!(soy[i..son].contains("bellek_rotasyonu_uygula("), "rotasyon thread'i belleği tazelemiyor (S4)");
+        let y = soy.find("fn son_oturumu_yakala").expect("F5 fn yok");
+        let yson = soy[y..].find("\nfn ").map(|j| y + j).unwrap_or(soy.len());
+        assert!(soy[y..yson].contains("bellek_rotasyonu_uygula("), "F5 yakalama belleği tazelemiyor (S4)");
+        let o = soy.find("if let Some(port) = backend::detect_running_backend(&root) {").expect("orphan sahiplenme yok");
+        let oson = soy[o..].find("open_app_window(").map(|j| o + j).unwrap_or(soy.len());
+        let blok = &soy[o..oson];
+        let cek = blok.find("pull_desktop_session_kisa(").expect("sahiplenmede ÖNCE çekme yok (S4)");
+        let devir = blok.find("hand_off_session(").expect("sahiplenmede devir yok");
+        assert!(cek < devir, "sahiplenme devirden SONRA çekiyor — bayat itme (S4)");
     }
 
     /// C3/L7 (denetim 2026-08-24): rotasyon-senkron çift-thread guard'ı. İlk çağrı thread'i
