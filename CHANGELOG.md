@@ -6,6 +6,20 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.43 — 2026-09-03 (🔌 Bos/offline cihazda WebView2 kurulumu artik takilmiyor)
+
+- **Bos cihazda kurulum "Installing WebView2..." adiminda takiliyordu.** Bos (fresh) bir Latte
+  Panda / Windows cihaza client kurarken kurulum WebView2 adiminda SONSUZA KADAR asili kaliyordu.
+  Kok neden: `webviewInstallMode` tanimsizdi -> Tauri v2 varsayilani `downloadBootstrapper` idi.
+  Bootstrapper (~2 MB) iniyor ("downloaded successfully"), sonra Microsoft CDN'den WebView2
+  Runtime'i (~150 MB) `/silent` indirmeye calisiyor; klinik cihazinda internet yok/kisitli (PEMF
+  gateway ortami) -> sessiz modda TIMEOUT OLMADAN sonsuza kadar takiliyor.
+
+- **Cozum: `offlineInstaller`.** WebView2 Runtime'in tam offline kurulumu artik client
+  installer'ina gomulu; internet gerektirmez, bos cihazda da kurar. Sistem WebView2'si zaten
+  varsa atlar; evergreen kalir (guvenlik yamasi alir). Yan etki: Windows installer boyutu
+  ~3 MB'tan ~130 MB'a cikar (tek seferlik indirme; sonrasi ayni).
+
 ## app 1.9.38 · mobile 2.3.30 — 2026-08-30 (🖼️ AI analizinde buyuk gorsel + anlasilir hata)
 
 - **AI analizinde "1024KB" hatasi giderildi.** Yara Kapanma (Scratch) basta olmak uzere gorsel
