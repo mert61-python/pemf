@@ -2428,7 +2428,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
   return (
     <Card style={styles.card}>
       <Text style={styles.title}>Böbrek Hastalığı Analizi (CKD)</Text>
-      <Text style={styles.subtitle}>Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. En az 6 alan ve Kreatinin / Üre / İdrar öz.ağ. / Albümin / Hemoglobin'den en az biri gerekir; kalan alanlar boş bırakılabilir (otomatik tamamlanır — ne kadar çok değer, o kadar isabetli). Bulgu düğmeleri tek başına yeterli değildir.</Text>
+      <Text style={styles.subtitle}>Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. En az 6 alan ve Kreatinin / Üre / İdrar öz.ağ. / Albümin / Hemoglobin&apos;den en az biri gerekir; kalan alanlar boş bırakılabilir (otomatik tamamlanır — ne kadar çok değer, o kadar isabetli). Bulgu düğmeleri tek başına yeterli değildir.</Text>
 
       <Text style={styles.ckdSection}>Laboratuvar / Vital</Text>
       <View style={styles.ckdGrid}>
