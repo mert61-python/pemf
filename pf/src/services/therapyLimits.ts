@@ -10,7 +10,7 @@
  * NOT: duration 0 = "süresiz" (geçerli); start dışı (stop) komutlarda clamp UYGULANMAZ.
  */
 export const THERAPY_LIMITS = {
-  freq: { min: 0.5, max: 100, label: "Frekans", unit: "Hz" },
+  freq: { min: 1, max: 100, label: "Frekans", unit: "Hz" }, // min=1 Hz: firmware FREQ_MIN=1.0 + backend FREQ_MIN_HZ=1.0 ile hizali (M4). 0.5 girilirse backend sessizce 1.0'a cekiyordu -> UI 0.5 gosterip cihaz 1.0 suruyordu.
   duty: { min: 1, max: 50, label: "Duty", unit: "%" },
   phase: { min: 0, max: 360, label: "Faz", unit: "°" },
   intensity: { min: 0.1, max: 20, label: "Yoğunluk", unit: "mT" },

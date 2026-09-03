@@ -780,6 +780,35 @@ int main(void) {
           g_pwm_started = 1;
         }
 
+        /* [M7] (denetim 2026-09-03) Keep-alive faz-sicramasi onleme.
+         * Backend her 2 Hz keep-alive'de TAZE ref_ms tasir; firmware her gecerli pakette
+         * ref_ms_valid=1 gorup g_dds_tick'i yeniden konumlandiriyordu -> calisan bobinlerde
+         * 2 Hz'lik periyodik FAZ SICRAMASI (dalga-formu surekliligi kaybi; cok-bobin faz
+         * senkronu bu cihazin temel islevi). Cozum: gelen parametreler mevcut AKTIF setle
+         * BIREBIR ayni ise (yeni tedavi/ayar DEGIL, yalniz keep-alive tekrari) yeniden-
+         * hizalamayi ATLA. Yalniz faz hizalamasini etkiler: watchdog tazelemesi (yukarida
+         * last_communication_ms) ve sure takibi (g_start_ms, ISR) DEGISMEZ. 88-bayt paket
+         * formati DEGISMEZ -> geriye uyumlu (backend/simulator degismez). Parametre GERCEKTEN
+         * degisince ka_ayni=0 kalir, hizalama normal yapilir. g_active volatile: yaris olsa
+         * bile en kotu ihtimal fazladan bir hizalama (mevcut davranis) -> guvenli.
+         * ⚠️ FIRMWARE: etki icin REFLASH + osiloskopla dogrulama gerekir (ozellikle 1 Hz ve
+         * 1000'e tam bolunmeyen frekanslar). Reflash oncesi saha davranisi AYNEN korunur. */
+        if (parsed.ref_ms_valid) {
+          uint8_t ka_ayni = 1U;
+          for (uint32_t i = 0U; i < NUM_COILS; i++) {
+            if (parsed.coil[i].duty != g_active.coil[i].duty ||
+                parsed.coil[i].phase != g_active.coil[i].phase ||
+                parsed.coil[i].freq != g_active.coil[i].freq ||
+                parsed.coil[i].dur_min != g_active.coil[i].dur_min) {
+              ka_ayni = 0U;
+              break;
+            }
+          }
+          if (ka_ayni) {
+            parsed.ref_ms_valid = 0U; /* keep-alive tekrari -> yeniden hizalama yok */
+          }
+        }
+
         /* Atomik bölge: Gölge değişkenleri güncelle */
         __disable_irq();
         memcpy((void *)&g_shadow, &parsed, sizeof(CoilParamSet_t));

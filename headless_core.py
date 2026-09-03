@@ -257,6 +257,36 @@ class HeadlessCore:
                 )
             return
 
+        if "STM_EVT" in decoded:
+            # M2 (denetim 2026-09-03): firmware NTC termal kesme (PEMF_NTC_TERMAL_ENABLED=1)
+            # yeniden derlenirse '-> STM_EVT: TERMAL kesme (>=48C) ...' gonderir. Bu dal
+            # OLMADAN satir hicbir kosula uymuyor, jenerik logger'a dusup SESSIZCE yutuluyordu
+            # -> operatore/UI'ye ulasmiyordu (hasta guvenligi olayi kaybi). Watchdog dalıyla
+            # ayni kalibi izler: CRITICAL olay + etkilenen bobinleri sifirla. (Termal su an
+            # firmware'de KAPALI oldugundan latent; parser once inmeli, sonra firmware acilmali.)
+            self._publish_event(
+                "hardware.stm.thermal_cutoff",
+                {"message": decoded},
+                priority=EventPriority.CRITICAL,
+            )
+            for coil_id in range(1, self.STM_COIL_COUNT + 1):
+                self._publish_event(
+                    "hardware.stm.coil_update",
+                    {
+                        "coil_id": coil_id,
+                        "duty": 0.0,
+                        "duty_cycle": 0.0,
+                        "freq": 0.0,
+                        "frequency": 0.0,
+                        "phase": 0.0,
+                        "duration_min": 0,
+                        "running": False,
+                        "pwm_active": False,
+                    },
+                    priority=EventPriority.HIGH,
+                )
+            return
+
         if "STM_ERR" in decoded:
             self._publish_event(
                 "hardware.stm.error",

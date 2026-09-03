@@ -17,7 +17,7 @@ from datetime import datetime
 
 from fastapi import WebSocket
 
-from utils.path_utils import get_app_version
+from utils.path_utils import HARDWARE_VERSION, get_app_version
 
 _APP_VERSION = get_app_version()
 
@@ -156,7 +156,7 @@ _live_state = {
     "notifications": [],
     "system": {
         "softwareVersion": _APP_VERSION,
-        "hardwareVersion": "HW-2026.1",
+        "hardwareVersion": HARDWARE_VERSION,
         "deviceId": "PEMF-001",
         "startTime": datetime.now().isoformat(),
         "totalSessions": 0,

@@ -449,6 +449,11 @@ def packaged_resource_path(*parts):
 
 _APP_VERSION = None
 
+# TEK donanim-surumu kaynagi (M4/denetim 2026-09-03): eskiden system_router.py "HW-2025.1",
+# live_state.py "HW-2026.1" derdi -> ayni /status uclari celisen deger donuyordu. Ikisi de
+# artik BURADAN okur. ⚠️ Deger sahip tarafindan gercek donanim revizyonuyla teyit edilmeli.
+HARDWARE_VERSION = "HW-2026.1"
+
 
 def get_app_version() -> str:
     """TEK versiyon kaynağı (audit B-8.1): eskiden FastAPI/discovery/system_info farklı sabitler

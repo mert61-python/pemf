@@ -122,7 +122,10 @@ export function SessionProgressCard({
       {/* Params */}
       <View style={styles.paramRow}>
         <ParamChip label="FREKANS" value={`${frequencyHz} Hz`} />
-        <ParamChip label="YOĞUNLUK" value={`${intensityMt} mT`} />
+        {/* M3 (denetim 2026-09-03): mT yogunlugu CIHAZA GONDERILMEZ (STM/ESP paketi mT
+            tasimaz), yalniz kayda yazilir. FREKANS ile yan yana esit gosterilince operator
+            uygulanan doz saniyordu -> "(kayit)" etiketi gercek doz beklentisini duzeltir. */}
+        <ParamChip label="YOĞUNLUK (kayıt)" value={`${intensityMt} mT`} />
       </View>
 
       {/* Buttons */}

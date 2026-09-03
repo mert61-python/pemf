@@ -20,6 +20,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from utils.path_utils import HARDWARE_VERSION  # TEK donanim-surumu kaynagi (M6); leaf util, circular yok
+
 router = APIRouter(tags=["system"])
 
 
@@ -70,7 +72,7 @@ async def system_info(request: Request):
     _local = is_local_request(request.client.host if request.client else "", _via_proxy)
     return {
         "softwareVersion": _api._APP_VERSION,
-        "hardwareVersion": "HW-2025.1",
+        "hardwareVersion": HARDWARE_VERSION,
         "deviceId": (device_id if _local else None),  # Audit P2: tenant-anahtarı uzak sızıntısı kapatıldı
         "pairingCode": (pairing_code if _local else None),
         "tunnelUrl": ((tunnel_url or None) if _local else None),
