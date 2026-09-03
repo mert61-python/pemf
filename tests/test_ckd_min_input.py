@@ -150,3 +150,46 @@ def test_bos_metin_dolu_SAYILMAZ(client):
         "/api/ai/disease/kidney", json={"rbc": "  ", "pc": "  ", "pcc": " ", "ba": " ", "htn": " ", "dm": " "}
     )
     assert r.status_code == 422
+
+
+def test_KATEGORIK_EKSIKKEN_impute_edilir_abnormal_SAYILMAZ(cikarim_gerekir):
+    """B5 (denetim 2026-09-03, OLCULDU): `_normalise_record` eksik kategorigi `None` gecirince
+    object-dtype `SimpleImputer(most_frequent)` onu EKSIK SAYMIYORDU (maske `X != X`), OHE
+    (`drop='first', handle_unknown='ignore'`) tum-sifir = DUSURULEN kategori ('abnormal') kodluyordu
+    → hicbir bulgu secmemis SAGLIKLI hasta %6 yerine %60 CKD aliyordu. Ayni kusur `float('nan')`
+    (predict_batch / CSV yolu) icin de vardi: `str(nan).lower()`='nan' METNI → yine unknown.
+    Artik eksik → np.nan → GERCEK impute (normal/notpresent/no/good) — acik-normal ile AYNI olasilik.
+    MUTASYON: np.nan → None geri alinirsa UserWarning('Found unknown categories') + olasilik farki → KIRMIZI."""
+    import warnings
+
+    import pandas as pd
+
+    from ai_hub.inference_human_kidney_disease.inference_human_kidney_disease import (
+        ALL_FEATURES,
+        predict_batch,
+        predict_one,
+    )
+
+    sayisal = {"sg": 1.02, "al": 0, "su": 0, "bgr": 100, "bu": 30, "sc": 1.0, "hemo": 15.0, "pcv": 45}
+    acik = {
+        **sayisal,
+        "rbc": "normal",
+        "pc": "normal",
+        "pcc": "notpresent",
+        "ba": "notpresent",
+        "htn": "no",
+        "dm": "no",
+        "cad": "no",
+        "appet": "good",
+        "pe": "no",
+        "ane": "no",
+    }
+    ref = predict_one(acik)["prob_ckd"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)  # 'Found unknown categories' → test kirmizi
+        eksik = predict_one(sayisal)  # kategorikler hic yok (None)
+        nan_float = predict_one({**sayisal, "rbc": float("nan")})  # float NaN kategorik
+        batch = predict_batch(pd.DataFrame([{**sayisal, "rbc": float("nan")}], columns=ALL_FEATURES))
+    assert abs(eksik["prob_ckd"] - ref) < 1e-6, "eksik kategorik 'abnormal' gibi kodlandi (None impute edilmedi)"
+    assert abs(nan_float["prob_ckd"] - ref) < 1e-6, "float NaN kategorik 'nan' METNI olarak gitti (impute edilmedi)"
+    assert abs(float(batch["prob_ckd"].iloc[0]) - ref) < 1e-6, "predict_batch NaN kategorik impute edilmedi"

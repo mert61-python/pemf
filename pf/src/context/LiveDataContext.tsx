@@ -42,6 +42,10 @@ export interface AiVisionData {
   detected?: boolean;
   /** Organ lokalizasyon güveni [0,1]. */
   reliability?: number;
+  /** Karede hayvan var mı (organdan AYRI) — hazırlık yönlendirmesi. */
+  catDetected?: boolean;
+  /** B3: sunucu HAZIRLIK önizlemesi karesi (bobin sürülmüyor, seans yok). Seans karelerinde yok/false. */
+  preview?: boolean;
   /** Eski FGS alanları (artık AI Pro yayını göndermiyor; geriye uyumluluk için opsiyonel). */
   fgs_total?: number | null;
   fgs_raw?: unknown;  // eski/legacy alan — artık gönderilmiyor, hiçbir yerde okunmuyor

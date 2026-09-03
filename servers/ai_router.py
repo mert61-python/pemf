@@ -613,6 +613,13 @@ _ai_hazirlik_active = False
 _ai_hazirlik_thread = None
 _ai_hazirlik_started_at = 0.0
 _AI_HAZIRLIK_TAVAN_S = 120  # önizleme üst sınırı — kamera sonsuza dek tutulmasın (mobil HAZIRLIK_TAVAN paritesi)
+# B3 (siyah ekran, 2026-09-03): önizleme thread'i kamera/model hatasıyla SESSİZCE ölüyordu; /baslat
+# "success" demişti ve /status bunu hiç söylemiyordu → panel 120 sn "Hazırlanıyor…"da takılıyordu.
+# Hata metni burada tutulur, /status `hazirlikHata` olarak verir, /baslat sıfırlar.
+_ai_hazirlik_hata = ""
+# Önizleme kare yayını aralığı (sn). Seans loop'u 1 Hz yayınlar; önizlemede operatör kadrajı ayarlar,
+# biraz daha akıcı olsun ama WS kuyruğunu (64) boğmasın.
+_AI_HAZIRLIK_YAYIN_ARALIK_S = 0.33
 _ai_organ_id = 0
 _ai_duration_min = 20
 _ai_started_at = 0.0
@@ -941,12 +948,16 @@ def _ai_hazirlik_loop():
     loop'unu başlatır. `/ai/pro/hazirlik/baslat` da seans aktifken (`_ai_loop_active`) başlamaz.
     ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
     değişirse İKİSİ birlikte güncellenmeli."""
-    global _ai_hazirlik_active, _ai_relocalize
+    global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata
     logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (sunucu kamerası, sürüş YOK).")
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")
         cap.release()
+        _ai_hazirlik_hata = (
+            "Sunucu kamerası açılamadı (VideoCapture(0)). Kameranın bağlı olduğunu ve başka bir "
+            "uygulamanın kullanmadığını kontrol edin."
+        )
         _ai_hazirlik_active = False
         return
     try:
@@ -955,8 +966,17 @@ def _ai_hazirlik_loop():
     except Exception as e:
         logger.error("Hazırlık: em_kedi/cat_organ yüklenemedi, kamera bırakılıyor: %s", e)
         cap.release()
+        _ai_hazirlik_hata = f"AI modeli yüklenemedi: {str(e)[:160]}"
         _ai_hazirlik_active = False
         return
+    # B3 (siyah ekran): önizleme kareleri istemciye HİÇ gitmiyordu (yalnız _ai_pro_loop `ai_vision`
+    # yayınlıyordu) → web paneli hazırlıkta kapkara kalıyor, "kedi var/yok"u da öğrenemiyordu.
+    # Seans loop'uyla AYNI `ai_vision` şeması (perCoil boş, remainingSec 0) + `preview: True`.
+    _son_yayin = 0.0
+    try:
+        from servers.api_server import _ws_broadcast_sync as _yayinla
+    except Exception:  # pragma: no cover — api_server yoksa (izole test) yayın atlanır
+        _yayinla = None
     try:
         while _ai_hazirlik_active:
             if _ai_hazirlik_started_at and (time.monotonic() - _ai_hazirlik_started_at) >= _AI_HAZIRLIK_TAVAN_S:
@@ -1000,6 +1020,45 @@ def _ai_hazirlik_loop():
                     logger.error("Hazırlık cat_organ lokalizasyon hatası: %s", le)
                     with _ai_cache_lock:
                         _ai_organ_cache["localized"] = False
+            # ── Önizleme yayını (B3): cache'li overlay (varsa) yoksa ham kare → web paneli ──
+            if _yayinla is not None and (now - _son_yayin) >= _AI_HAZIRLIK_YAYIN_ARALIK_S:
+                _son_yayin = now
+                try:
+                    with _ai_cache_lock:
+                        _c = dict(_ai_organ_cache)
+                    overlay = _c.get("overlay_bgr")
+                    src = overlay if overlay is not None else frame
+                    oh, ow = src.shape[:2]
+                    sc = min(1.0, 960.0 / max(oh, ow))
+                    ov = (
+                        cv2.resize(src, (int(ow * sc), int(oh * sc)), interpolation=cv2.INTER_AREA) if sc < 1.0 else src
+                    )
+                    _, buffer = cv2.imencode(".jpg", ov, [cv2.IMWRITE_JPEG_QUALITY, 55 if overlay is not None else 50])
+                    _yayinla(
+                        {
+                            "type": "ai_vision",
+                            "data": {
+                                "imageBase64": base64.b64encode(buffer).decode("utf-8"),
+                                "preview": True,
+                                "detected": bool(_c.get("localized")),
+                                "catDetected": bool(_c.get("kedi_var")),
+                                "reliability": round(float(_c.get("reliability", 0.0)), 3),
+                                "target": {
+                                    "x": round(float(_c.get("x_mm", 0.0)), 1),
+                                    "y": round(float(_c.get("y_mm", 0.0)), 1),
+                                    "z": round(float(_c.get("z_mm", 0.0)), 1),
+                                },
+                                "eField": 0.0,
+                                "organId": _ai_organ_id,
+                                "organName": _ORGAN_NAMES.get(_ai_organ_id, ""),
+                                "perCoil": [],
+                                "remainingSec": 0,
+                                "durationMin": _ai_duration_min,
+                            },
+                        }
+                    )
+                except Exception as wse:
+                    logger.error("Hazırlık önizleme WS yayın hatası: %s", wse)
             time.sleep(0.05)  # CPU nefes payı (lokalizasyon zaten ~1-4 sn'de bir)
     finally:
         cap.release()
@@ -1611,8 +1670,10 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
     Telefonun hazırlık akışının sunucu-kamera karşılığı — web'in propose-önce-lokalizasyon kapalı
     döngüsünü kırar (2026-08-25). Aktif seans varsa gereksiz (kamera zaten seansta) → sessiz başarı."""
     global _ai_hazirlik_active, _ai_hazirlik_thread, _ai_hazirlik_started_at, _ai_organ_id, _ai_relocalize
+    global _ai_hazirlik_hata
     import threading
 
+    _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
     _organ_req = int(payload.organ_id)
     if _organ_req in (0, 1, 2, 3, 4, 5, 6):
         _ai_organ_id = _organ_req  # panelde seçili organ için lokalize et
@@ -1664,6 +1725,10 @@ def ai_pro_status():
         "guvenDokumu": _ai_organ_cache.get("guven_dokumu"),
         # ⚠️ Alanın VARLIĞI istemci için anlamlı: yoksa (eski backend) panel ESKİ davranışı sürdürür.
         "ownerClientId": _ai_owner_client,
+        # B3 (siyah ekran): web önizlemesi canlı mı + neden öldü (kamera/model). Panel `hazirlikHata`
+        # doluysa hazırlığı sonlandırıp NEDENİ gösterir (120 sn kör bekleyiş yerine).
+        "hazirlikActive": bool(_ai_hazirlik_active),
+        "hazirlikHata": _ai_hazirlik_hata,
     }
 
 
@@ -2491,7 +2556,13 @@ async def analyze_kidney_disease(data: KidneyDiseaseInput, _res=Depends(require_
         return yanit
     except Exception as e:
         logger.error(f"kidney_disease inference error: {e}", exc_info=True)
-        raise _ai_fail("Böbrek hastalığı analiz hatası", e)
+        # B5 (2026-09-03): 500 yolu — mesaj EYLEME dönük olsun (ham "analiz hatası" operatörü
+        # kör bırakıyordu). `_ai_fail` exc_info'yu zaten loglar; Türkçe olduğu için aiDetayCumlesi aynen gösterir.
+        raise _ai_fail(
+            "Böbrek hastalığı analizi yapılamadı — model dosyası veya bağımlılık eksik olabilir; "
+            "sunucu günlüğünü (kidney_disease inference error) kontrol edin.",
+            e,
+        )
 
 
 @ai_router.post("/api/ai/sound/cat")

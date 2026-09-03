@@ -3,7 +3,7 @@
   "_neden": "Uretim on-isleyicileri sklearn 1.8.0 ile serilestirilmis, runtime 1.7.2 sabitli. sklearn her yuklemede 'may lead to INVALID RESULTS' diyor. Bu dosya, sayilarin gercekten kaymadiginin tek kaniti.",
   "_yeniden_olcum": "python tests/golden/olc_altin_degerler.py > tests/golden/ai_golden_values.json  (SADECE bilincli model degisikliginde)",
   "_olcum_ortami": {
-    "tarih": "2026-08-10",
+    "tarih": "2026-09-03",
     "sklearn": "1.7.2",
     "xgboost": "3.2.0",
     "numpy": "1.26.4",
@@ -14,7 +14,7 @@
   "ckd": {
     "hasta": { "prob_ckd": 0.9974995852, "label": "ckd", "model": "ExtraTrees" },
     "saglikli": { "prob_ckd": 0.0149999997, "label": "notckd", "model": "ExtraTrees" },
-    "eksik": { "prob_ckd": 0.9949995875, "label": "ckd", "model": "ExtraTrees" }
+    "eksik": { "prob_ckd": 0.9924995899, "label": "ckd", "model": "ExtraTrees" }
   },
 
   "em_fantom": {

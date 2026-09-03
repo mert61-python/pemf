@@ -116,6 +116,13 @@ interface AiProStatus {
   guvenDokumu?: GuvenDokumu | null;
   /** Seansı BAŞLATAN istemcinin kimliği. ALAN YOKSA = onay/sahiplik öncesi backend (bkz. sync). */
   ownerClientId?: string;
+  /** Karede hayvan var mı (cache) — B3: web hazırlık metni WS yerine BURADAN da beslenir. */
+  catDetected?: boolean;
+  /** B3 (siyah ekran): sunucu önizleme thread'i canlı mı. ⚠️ Opsiyonel: eski backend göndermez. */
+  hazirlikActive?: boolean;
+  /** B3: önizleme kamera/model hatasıyla öldüyse NEDENİ (boş = hata yok). Doluysa panel hazırlığı
+   *  sonlandırıp operatöre gösterir — 120 sn "Hazırlanıyor…" kör bekleyişi yerine. */
+  hazirlikHata?: string;
 }
 interface AiProAction {
   status?: string;
@@ -143,6 +150,14 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const [localized, setLocalized] = useState(false);
   /** Sunum-katmanı XAI (2026-08-26): web yolunda güven dökümü status poll'dan gelir. */
   const [webGuvenDokumu, setWebGuvenDokumu] = useState<GuvenDokumu | null>(null);
+  /**
+   * B3 (siyah ekran, 2026-09-03): web'de "kedi var mı" YALNIZ WS `ai_vision`tan okunuyordu; sunucu
+   * önizlemesi (eski backend) hiç `ai_vision` yayınlamadığından hazırlık şeridi backend kediyi
+   * GÖRMÜŞKEN bile "Hayvan aranıyor…"da kalıyordu. /status `catDetected` zaten bunu taşıyor → ikinci kaynak.
+   */
+  const [webCatDetected, setWebCatDetected] = useState(false);
+  /** B3: sunucu önizlemesinin bildirdiği hata (kamera açılamadı / model yüklenemedi) — kamera kutusunda. */
+  const [hazirlikHata, setHazirlikHata] = useState("");
   const [busy, setBusy] = useState(false);
   /**
    * 🔴 HAZIRLIK AŞAMASI (saha bildirimi 2026-08-24) — AI Pro mobilde HİÇ BAŞLAMIYORDU.
@@ -233,6 +248,18 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       setRunning(active);
       setLocalized(Boolean(st.localized));
       setWebGuvenDokumu(st.guvenDokumu ?? null); // sunum-katmanı XAI (web: status poll'dan)
+      setWebCatDetected(Boolean(st.catDetected)); // B3: hazırlık metni için ikinci kaynak
+      // B3 (siyah ekran): sunucu önizlemesi kamera/model hatasıyla öldüyse panel bunu ÖĞRENSİN.
+      // Eskiden /baslat "success" diyor, thread anında ölüyor ve panel 120 sn "Hazırlanıyor…"da
+      // takılıp sonra "hayvan bulunamadı" (YANLIŞ teşhis) diyordu. ⚠️ Yalnız hata METNİ doluysa
+      // (salt `hazirlikActive:false` değil): propose→/durdur→setHazirlik(false) arasındaki poll
+      // ve eski backend (alan yok) yanlış tetiklemesin.
+      if (IS_WEB && hazirlikRef.current && typeof st.hazirlikHata === "string" && st.hazirlikHata) {
+        setHazirlik(false);
+        oneriIstendiRef.current = false;
+        setHazirlikHata(st.hazirlikHata);
+        platformAlert("Sunucu kamerası başlatılamadı", st.hazirlikHata);
+      }
       // ORTA fix: organId'yi YALNIZ aktif seansta backend'den senkronla. Seans yokken kullanıcının seçtiği
       // organ'ı 3sn'lik poll EZMESİN (kullanıcı organ seçerken seçim geri zıplıyordu).
       if (active && typeof st.organId === "number") setOrganId(st.organId);
@@ -296,13 +323,20 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     webLokalizeSayacRef.current = 0;
     setArdisik(0);
     setOneriHatasi("");
+    setHazirlikHata("");   // B3: yeni deneme taze
     setLocalized(false);   // bayat lokalizasyondan öneri tetiklenmesin (backend cache'i de sıfırlar)
     oneriBeklemeRef.current = 0;
-    await apiPost<AiProAction | null>(
+    const hz = await apiPost<AiProAction | null>(
       "/ai/pro/hazirlik/baslat",
       { organ_id: organId, client_id: clientIdRef.current },
       null
     );
+    // B3: komut sunucuya ULAŞMADIYSA hazırlığa girme — aksi hâlde düğme 120 sn "Hazırlanıyor…"da
+    // takılır, kamera kutusu kapkara kalır ve operatör sebebi göremez.
+    if (!hz) {
+      setHazirlikHata("Hazırlık komutu sunucuya ulaşmadı — bağlantıyı kontrol edip tekrar deneyin.");
+      return;
+    }
     setHazirlik(true);   // status /localized görününce web-öneri efekti propose'u tetikler
   }, [organId, duration, permission, requestPermission]);
 
@@ -531,11 +565,18 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         webLokalizeSayacRef.current = 0;
         ardisikRef.current = 0;
         setArdisik(0);
-        await apiPost<AiProAction | null>(
+        setHazirlikHata("");   // B3: yeni deneme taze — bayat "⚠️ …" metni kutuda kalmasın
+        const hz = await apiPost<AiProAction | null>(
           "/ai/pro/hazirlik/baslat",
           { organ_id: organId, client_id: clientIdRef.current },
           null
         );
+        // B3: start() ile AYNI kapı — komut sunucuya ULAŞMADIYSA hazırlığa girme; aksi hâlde bu
+        // düğmeyle de eski kör 120 sn "Hazırlanıyor…" davranışı geri gelirdi.
+        if (!hz) {
+          setHazirlikHata("Hazırlık komutu sunucuya ulaşmadı — bağlantıyı kontrol edip tekrar deneyin.");
+          return;
+        }
       }
       setHazirlik(true);
     }
@@ -611,7 +652,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   }, []);
 
   // ── Görüntülenecek değerler: web = WS (aiVisionData), mobil = HTTP yanıtı ──
-  const detected = IS_WEB ? Boolean(v?.detected) : Boolean(mobileResult?.detected);
+  // B3: web hazırlıkta lokalizasyon /status'tan gelir (WS yoksa da) → şerit "konumlandı"ya geçebilsin.
+  const detected = IS_WEB ? Boolean(v?.detected) || (hazirlik && localized) : Boolean(mobileResult?.detected);
   const reliability = IS_WEB ? (v as any)?.reliability : mobileResult?.reliability;
   const targetX = IS_WEB ? v?.target?.x : mobileResult?.target?.x;
   const targetY = IS_WEB ? v?.target?.y : mobileResult?.target?.y;
@@ -629,7 +671,10 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
    *   · kedi var, organ yok → hayvan görünüyor ama o organ (açı/okluzyon) seçilemiyor → açıyı değiştir
    *   · konumlandı      → parametreler hesaplanıyor
    */
-  const catDetected = IS_WEB ? Boolean((v as any)?.catDetected) : Boolean(mobileResult?.catDetected);
+  // B3: web'de WS karesi (yeni backend önizlemesi) VEYA /status cache'i (eski backend / WS kopuk).
+  const catDetected = IS_WEB
+    ? Boolean((v as any)?.catDetected) || webCatDetected
+    : Boolean(mobileResult?.catDetected);
   /** Sunum-katmanı XAI (2026-08-26): web = status poll'dan, mobil = /frame yanıtından. */
   const guvenDokumu: GuvenDokumu | null = (IS_WEB ? webGuvenDokumu : mobileResult?.guvenDokumu) ?? null;
   const organAdi = ORGANS.find((o) => o.id === organId)?.name ?? "";
@@ -644,7 +689,11 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const asamaMetni = !hazirlik
     ? ""
     : detected
-      ? ardisik < ARDISIK_ONAY
+      // B3: web'de ardisik sayaci HİÇ artmaz (mobil efekti); detected artık hazırlıkta web'de de true
+      // olabildiğinden şerit "doğrulanıyor (0/2) · ikinci ölçüm bekleniyor…" derdi — oysa web öneriyi ilk
+      // localized anında zaten ister. (Yorumda backtick YOK: test_ai_pro_asamali_akis kaynak-regex kapısı
+      // bu bloktaki backtick'li metinleri asama sayar — tam 4 olmalı.)
+      ? (!IS_WEB && ardisik < ARDISIK_ONAY)
         ? `✓ ${organAdi} görüldü — doğrulanıyor (${ardisik}/${ARDISIK_ONAY}) · ikinci ölçüm bekleniyor…`
         : `✓ ${organAdi} konumlandı — güven %${guvenYuzde}${dusukGuven ? " ⚠️ sınırda" : ""} · öneri hesaplanıyor…`
       : catDetected
@@ -677,7 +726,17 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           overlayB64 ? (
             <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.cam} resizeMode="contain" />
           ) : (
-            <Text style={styles.camPlaceholder}>{running ? "Görüntü bekleniyor…" : "AI Pro durdu."}</Text>
+            // B3 (siyah ekran): `hazirlik` burada YOK SAYILIYORDU → önizleme açıkken kutu "AI Pro durdu."
+            // yazarken hemen altındaki şerit "Hayvan aranıyor…" diyordu (çelişki). Hata varsa NEDENİ göster.
+            <Text style={styles.camPlaceholder}>
+              {hazirlikHata
+                ? `⚠️ ${hazirlikHata}`
+                : running
+                  ? "Görüntü bekleniyor…"
+                  : hazirlik
+                    ? "Sunucu kamerası açılıyor… görüntü bekleniyor"
+                    : "AI Pro durdu."}
+            </Text>
           )
         ) : (running || hazirlik) && permission?.granted ? (
           // ⚠️ `hazirlik` ŞART (2026-08-24): kamera YALNIZ `running` iken monte ediliyordu →

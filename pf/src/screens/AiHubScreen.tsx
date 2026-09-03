@@ -15,6 +15,7 @@ import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
+import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { serviceConfig } from "@/services/config";
 import { useUserMode, UserMode } from "@/context/UserModeContext";
@@ -180,6 +181,7 @@ interface AiResult {
   uyari?: string; closure_uyari?: string; device?: string;
   input_image_base64?: string; seg_image_base64?: string; overlay_image_base64?: string;
   analysis_image_base64?: string; closure_image_base64?: string; xai_side_by_side_base64?: string;
+  _xai_istendi?: boolean; // B4 ScratchModule: ısı haritası bu analizde İSTENDİ mi (istenip gelmeyeni sessiz bırakmamak için)
 }
 
 function summarizeVision(d: any): string {
@@ -794,6 +796,34 @@ function MedicalDisclaimer() {
       ⚠️ Bu yapay zeka sonucu yalnızca karar-destek amaçlıdır; veteriner hekim muayenesi ve
       teşhisinin yerine geçmez. Nihai karar hekime aittir.
     </Text>
+  );
+}
+
+/**
+ * XaiIsiHaritasi — TÜM modüllerin ORTAK ısı haritası (Grad-CAM / EigenCAM / HiRes-CAM) sahnesi.
+ *
+ * B2-isi-haritasi-ui (2026-09-03, ölçüldü): heatmap <Image> eskiden `styles.imagePreview`
+ * ({width:"100%", height:"100%"}) ile SABİT-yükseklikli `imagePreviewContainer`ın DIŞINDA,
+ * otomatik-yükseklikli `resultBox` içinde çiziliyordu. Yüzde yükseklik yalnız ebeveyni sabitse
+ * anlamlıdır: web'de (RNW ScrollView zinciri) resultBox'un KENDİ yüksekliğine çözülüp kutudan
+ * taşıyor (ince şerit + alttaki karta sarkan kopya), belirsiz zincirde ise 0px'e çöküyordu.
+ * Çözüm: görselin KENDİSİNE analiz sahnesiyle (imagePreviewContainer, rs(300)) birebir aynı
+ * ölçüde AÇIK yükseklik ver → heatmap analiz görseliyle aynı boyut/hizada, konteynere sığar.
+ * Ebeveyne bağımlılık yok (refaktörde başka kutuya taşınsa da bozulmaz).
+ */
+function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etiket: string; not?: string; testID?: string }) {
+  return (
+    <>
+      <Text style={styles.ctSubLabel}>{etiket}</Text>
+      <Image
+        testID={testID ?? "xai-isi-haritasi"}
+        accessibilityLabel={etiket}
+        source={{ uri: `data:image/jpeg;base64,${base64}` }}
+        style={styles.xaiStage}
+        resizeMode="contain"
+      />
+      {not ? <Text style={styles.ctHint}>{not}</Text> : null}
+    </>
   );
 }
 
@@ -1414,9 +1444,13 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
                 {/* Rozet ARTIK tazeliğe bağlı: aiVisionData son kareyi kalıcı tuttuğundan, backend
                     döngüsü bittiğinde (süre dolumu / E-stop / kamera hatası) "AKTİF" yazısı donmuş
                     kareyle sonsuza dek açık kalıyordu. */}
-                <View style={[styles.liveIndicator, !aiVisionFresh && { backgroundColor: colors.warning }]}>
+                {/* B3 (2026-09-03): AI Pro HAZIRLIK önizleme kareleri de `ai_vision` ile gelir
+                    (`preview:true`, bobin SÜRÜLMÜYOR) → "AKTİF" DEME, önizleme olduğunu söyle. */}
+                <View style={[styles.liveIndicator, (!aiVisionFresh || aiVisionData.preview) && { backgroundColor: colors.warning }]}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>{aiVisionFresh ? "OTONOM BİOFEEDBACK AKTİF" : "YAYIN DURDU — GÜNCEL DEĞİL"}</Text>
+                  <Text style={styles.liveText}>
+                    {!aiVisionFresh ? "YAYIN DURDU — GÜNCEL DEĞİL" : aiVisionData.preview ? "ÖNİZLEME — BOBİN SÜRÜLMÜYOR" : "OTONOM BİOFEEDBACK AKTİF"}
+                  </Text>
                 </View>
               </>
             ) : (
@@ -1616,10 +1650,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           )}
           {/* Sunum-katmanı XAI (Faz 2): Grad-CAM ısı haritası — istenip üretildiyse. */}
           {result.xai_image_base64 && (
-            <>
-              <Text style={styles.ctSubLabel}>🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)</Text>
-              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.imagePreview} resizeMode="contain" />
-            </>
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası — modelin baktığı bölgeler (kırmızı = karara güçlü etki)" />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
@@ -1676,7 +1707,12 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           {/* Tazelik kapısı: yayın durduysa "güncelleniyor" DEME (donmuş kareyi canlı gösterme).
               Bu, kaldırılan GLOBAL 3-durumlu göstergeyi geri getirmez — yalnız aktif otonom
               seansa özgü, yerel bir doğrulama. */}
-          {aiVisionFresh ? (
+          {aiVisionFresh && aiVisionData.preview ? (
+            // B3: hazırlık önizlemesi — lokalizasyon var, SÜRÜŞ YOK. "güncelleniyor" DEME.
+            <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.warning + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.warning }}>
+              <Text style={[styles.resultText, { fontWeight: "bold", color: colors.warning }]}>Önizleme — cihaz SÜRÜLMÜYOR (AI Pro hazırlık)</Text>
+            </View>
+          ) : aiVisionFresh ? (
             <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
               <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>Cihaz otonom olarak güncelleniyor (saniyede 1)</Text>
             </View>
@@ -2352,15 +2388,35 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
         if (!isNaN(v)) payload[k] = v;
       });
       CKD_CATEGORICAL.forEach(({ k }) => { if (cat[k]) payload[k] = cat[k]; });
+      // B5 (2026-09-03): GÖNDERİM ÖNCESİ eyleme dönük ön-kontrol — utils/klinik_asgari.py
+      // (CKD_MIN_ALAN=6 / CKD_CEKIRDEK {sc,bu,sg,al,hemo}) ile hizalı; sunucu 422 kapısı NİHAİ.
+      // Eskiden yalnız bulgu düğmeleriyle basınca sunucu 422 dönüyor, UI bunu jenerik
+      // "Analiz sırasında hata oluştu."a çeviriyordu → operatör "ne seçersem seçeyim çalışmıyor" görüyordu.
+      // ⚠️ `payload.explain = true` bu sayımdan SONRA gelmeli (bayrak alan sayılmaz; fonksiyon yine de eler).
+      const onKontrol = ckdOnKontrol(payload, (k) => CKD_XAI_ETIKET[k] ?? k);
+      if (onKontrol) { showToast(onKontrol, "error"); return; } // finally → setLoading(false)
       // Sunum-katmanı XAI (2026-08-26): SHAP top-özellikler — hata/eski-backend'de alan
       // gelmez, satır gizlenir (backend zarif düşüşü).
       payload.explain = true;
-      const res = await apiPost<any>("/ai/disease/kidney", payload, null, { timeoutMs: AI_TIMEOUT_MS });
+      // B5: sunucunun gerekçesi (422: hangi alanlar eksik / 500: model) KAYBOLMASIN.
+      // ⚠️ `silent: true` KULLANMA — apiClient'ın zaman-aşımı toast'ı ("ilk analiz model yüklemesi
+      // nedeniyle uzun sürebilir") korunmalı (2026-08-12 "analiz boş döndü" dersi). HTTP hatasında
+      // apiClient zaten "Sunucu Hatası: <gerekçe>" toast'ını basar → modül İKİNCİ toast basıp onu EZMESİN.
+      let sunucuBildirdi = false;
+      let sunucuDetay: string | undefined;
+      const res = await apiPost<any>("/ai/disease/kidney", payload, null, {
+        timeoutMs: AI_TIMEOUT_MS,
+        onHttpError: (_st, detail) => { sunucuBildirdi = true; sunucuDetay = detail; },
+      });
       if (res && res.status === "success") {
         setResult(res);
         logAiResult(patientName, "Böbrek Hastalığı (CKD)", `${trValue(res.label)} %${res.prob_pct}`, { moduleId: "kidney_disease", inputType: "clinical", detail: res, confidence: res.prob_pct != null ? res.prob_pct / 100 : undefined });
-      } else {
-        showToast("Analiz sırasında hata oluştu.", "error");
+      } else if (!sunucuBildirdi) {
+        // Ağ/JSON-boş yolu (HTTP hatası değil): sunucu bir gerekçe vermedi → anlaşılır varsayılan.
+        showToast("Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin.", "error");
+      } else if (!sunucuDetay) {
+        // HTTP hatası ama gerekçe metni yok (beklenmedik gövde) → teknik metin yerine eylem cümlesi.
+        showToast(aiDetayCumlesi(undefined, "Böbrek analizi tamamlanamadı. Değerleri kontrol edip tekrar deneyin."), "error");
       }
     } catch (e) {
       showToast(aiHataMesaji(e), "error");
@@ -2372,7 +2428,7 @@ function KidneyDiseaseModule({ patientName }: { patientName: string }) {
   return (
     <Card style={styles.card}>
       <Text style={styles.title}>Böbrek Hastalığı Analizi (CKD)</Text>
-      <Text style={styles.subtitle}>Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. Bilinmeyen alanları boş bırakabilirsiniz — otomatik tamamlanır (ama ne kadar çok değer, o kadar isabetli).</Text>
+      <Text style={styles.subtitle}>Klinik değerlerden kronik böbrek hastalığı (CKD) tahmini. En az 6 alan ve Kreatinin / Üre / İdrar öz.ağ. / Albümin / Hemoglobin'den en az biri gerekir; kalan alanlar boş bırakılabilir (otomatik tamamlanır — ne kadar çok değer, o kadar isabetli). Bulgu düğmeleri tek başına yeterli değildir.</Text>
 
       <Text style={styles.ckdSection}>Laboratuvar / Vital</Text>
       <View style={styles.ckdGrid}>
@@ -2641,10 +2697,7 @@ function CatSoundModule({ patientName }: { patientName: string }) {
           </View>
           {/* Sunum-katmanı XAI (Faz 2): mel-spektrogram ısı haritası — istenip üretildiyse. */}
           {result.xai_image_base64 && (
-            <>
-              <Text style={styles.ctSubLabel}>🔍 Mel ısı haritası — modelin dinlediği bölgeler (kırmızı = karara güçlü etki)</Text>
-              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.imagePreview} resizeMode="contain" />
-            </>
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Mel ısı haritası — modelin dinlediği bölgeler (kırmızı = karara güçlü etki)" />
           )}
           {result.xai_error && <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text>}
           <MedicalDisclaimer />
@@ -2845,11 +2898,8 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
             </>
           )}
           {result.xai_image_base64 ? (
-            <>
-              <Text style={styles.ctSubLabel}>🔍 Isı haritası (EigenCAM)</Text>
-              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.scStage} resizeMode="contain" />
-              <Text style={styles.ctHint}>Kırmızı bölgeler modelin tespitte en çok dayandığı alanlardır (bölgesel ilgi — tanı kanıtı değildir).</Text>
-            </>
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Isı haritası (EigenCAM)"
+              not="Kırmızı bölgeler modelin tespitte en çok dayandığı alanlardır (bölgesel ilgi — tanı kanıtı değildir)." />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
@@ -3011,18 +3061,12 @@ function HistopathModule({ patientName }: { patientName: string }) {
           })}
           <Text style={styles.ctHint}>“Güven”, modelin görüntüyü o dereceye atama olasılığıdır. Grade 0 en hafif, Grade 4 en ileri histopatolojik derecedir; komşu dereceler (ör. 2↔3) benzer görünebilir.</Text>
           {result.xai_image_base64 ? (
-            <>
-              <Text style={styles.ctSubLabel}>🔍 Konsensus ısı haritası (3-model HiRes-CAM)</Text>
-              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_image_base64}` }} style={styles.scStage} resizeMode="contain" />
-              <Text style={styles.ctHint}>Üç modelin ORTAK dayandığı doku bölgeleri.</Text>
-            </>
+            <XaiIsiHaritasi base64={result.xai_image_base64} etiket="🔍 Konsensus ısı haritası (3-model HiRes-CAM)"
+              not="Üç modelin ORTAK dayandığı doku bölgeleri." />
           ) : null}
           {result.xai_disagreement_base64 ? (
-            <>
-              <Text style={styles.ctSubLabel}>⚠ Model kararsızlık haritası</Text>
-              <Image source={{ uri: `data:image/jpeg;base64,${result.xai_disagreement_base64}` }} style={styles.scStage} resizeMode="contain" />
-              <Text style={styles.ctHint}>Parlak bölgelerde üç model AYRIŞIYOR — derece o bölgede daha az güvenilirdir.</Text>
-            </>
+            <XaiIsiHaritasi base64={result.xai_disagreement_base64} etiket="⚠ Model kararsızlık haritası" testID="xai-kararsizlik-haritasi"
+              not="Parlak bölgelerde üç model AYRIŞIYOR — derece o bölgede daha az güvenilirdir." />
           ) : null}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
           <MedicalDisclaimer />
@@ -3142,8 +3186,11 @@ function ScratchModule({ patientName }: { patientName: string }) {
       if (!mountedRef.current) return;
       if (istekRef.current !== benimIstek) return; // stale yanıt: girdi/parametre değişti
       if (r.ok && data.status === "success") {
-        setResult(data); setYenidenGerek(false);
-        setGaleri(data.uyari ? "input" : "closure");
+        // B4 (2026-09-03): ısı haritası bu analizde İSTENDİ mi → istenip gelmeyeni sessiz bırakmamak için.
+        setResult({ ...data, _xai_istendi: xaiAc }); setYenidenGerek(false);
+        // Isı haritası İSTENDİYSE ve geldiyse sahne onunla açılır (diğer modüllerle parite: ısı haritası
+        // sonuç kartında hemen görünür). Eskiden hep "Kapanma"ya iniyor, [XAI] chip'i sessiz kalıyordu.
+        setGaleri(data.uyari ? "input" : (xaiAc && data.xai_image_base64 ? "xai" : "closure"));
         if (!data.uyari && data.closure) {
           const etiket = dosya.name.replace(/\.[^.]+$/, "");
           // Aynı etiketin tekrar analizi (örn. objektif düzeltmesi) yeni kayıt AÇMAZ,
@@ -3273,6 +3320,12 @@ function ScratchModule({ patientName }: { patientName: string }) {
             </>
           )}
           {result.xai_error ? <Text style={styles.xaiSatiri}>🔍 {result.xai_error}</Text> : null}
+          {/* B4 (2026-09-03): ısı haritası İSTENDİ ama yanıt ne XAI alanı ne xai_error taşıyorsa SESSİZ KALMA
+              (eski backend / XAI üretmeyen sürüm). `!result.uyari` ŞART: hücre-yok `uyari` yolunda backend
+              explain'e hiç girmez (tasarım) → orada bu uyarı YANLIŞ teşhis olur (doğrulayıcı mutasyonla kanıtladı). */}
+          {(result as any)._xai_istendi && !result.uyari && !result.xai_image_base64 && !result.xai_error ? (
+            <Text style={styles.xaiSatiri}>🔍 Isı haritası istendi ama bu yanıtta gelmedi — sunucu sürümü XAI üretmiyor olabilir (analiz sonucu geçerlidir).</Text>
+          ) : null}
           {result.closure_uyari ? <Text style={styles.scUyari}>⚠ {result.closure_uyari}</Text> : null}
 
           {kayitlar.length >= 2 && (
@@ -3318,6 +3371,10 @@ function CatOrganModule({ patientName }: { patientName: string }) {
   const cameraRef = useRef<any>(null);
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveLoadingRef = useRef(false);
+  // B1: mod geçişinde UÇUŞTAKİ istek sonucu (statik analiz ↔ canlı kare) diğer modun ekranına düşmesin.
+  const liveAbortRef = useRef<AbortController | null>(null);
+  const isLiveRef = useRef(false);
+  useEffect(() => { isLiveRef.current = isLive; }, [isLive]);
 
   useEffect(() => { visionCache[CK] = { imageUri, imageBase64, result }; }, [imageUri, imageBase64, result]);
   useEffect(() => {
@@ -3342,12 +3399,14 @@ function CatOrganModule({ patientName }: { patientName: string }) {
           const fd = new FormData();
           fd.append("image_base64", shrunk.base64);
           const ctrl = new AbortController();
+          liveAbortRef.current = ctrl;
           // CANLI-DONGU: kisa sinir ZORUNLU (uzun timeout kamera akisini kilitler)
           const t = setTimeout(() => ctrl.abort(), 25000);
           const r = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: fd, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
           clearTimeout(t);
           const data = await r.json();
-          if (r.ok && data?.status === "success") setResult(data); // overlay = data.image_base64
+          // B1: "Canlıyı Durdur" sonrası geç gelen kare sonucu boş statik ekrana düşmesin.
+          if (r.ok && data?.status === "success" && isLiveRef.current) setResult(data); // overlay = data.image_base64
         }
       } catch {
         /* canlı modda kare hatalarını sessiz geç */
@@ -3356,7 +3415,11 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       }
     };
     liveIntervalRef.current = setInterval(capture, 3500);
-    return () => { if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; } };
+    return () => {
+      if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+      try { liveAbortRef.current?.abort(); } catch { /* ignore */ }
+      liveAbortRef.current = null;
+    };
   }, [isLive]);
 
   const toggleLive = async () => {
@@ -3368,7 +3431,12 @@ function CatOrganModule({ patientName }: { patientName: string }) {
     }
     const next = !isLive;
     setIsLive(next);
-    if (!next) { setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null); }
+    // B1-organ-canli-kalinti: sıfırlama HER İKİ yönde de yapılır. Eskiden yalnız DURDURURKEN
+    // (`!next`) temizleniyordu → galeri fotoğrafının analiz sonucu (result.image_base64 overlay'i,
+    // "10 ORGAN" rozeti, organ listesi) canlı kadrajın ÜSTÜNDE kalıyordu; ilk canlı kare
+    // (~3,5 sn) gelene dek kullanıcı eski fotoğrafın keypoint'lerini canlı kedi üzerinde görüyordu.
+    if (imageUri && imageUri.startsWith('blob:')) { try { URL.revokeObjectURL(imageUri); } catch { /* ignore */ } }
+    setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null);
   };
 
   const takePhoto = async () => {
@@ -3422,6 +3490,8 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/cat_organ", { method: "POST", body: formData, headers: { Accept: "application/json", ...authHeaders() }, signal: ctrl.signal });
       clearTimeout(to);
       const data = await response.json();
+      // B1: analiz sürerken "Canlı Kamera"ya geçildiyse statik sonuç canlı kadrajın üstüne düşmesin.
+      if (isLiveRef.current) return;
       if (response.ok && data.status === "success") {
         setResult(data);
         logAiResult(patientName, "Kedi Organ", `${data.n_organs} organ lokalize`, { moduleId: "cat_organ", inputType: "image", detail: data });
@@ -3594,7 +3664,12 @@ const styles = StyleSheet.create({
   photoGuideItem: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(18) },
   photoGuideBold: { color: colors.text, fontWeight: "bold" },
   photoGuideWarn: { color: colors.warning, fontSize: typography.small, fontStyle: "italic", marginTop: spacing.xs },
+  // ⚠️ imagePreview YALNIZ sabit-yükseklikli imagePreviewContainer İÇİNDE kullanılır (%100 yükseklik
+  // ebeveyne bağlıdır). Serbest duran görsel (ısı haritası vb.) için xaiStage/scStage (AÇIK yükseklik).
   imagePreview: { width: "100%", height: "100%", resizeMode: "contain" },
+  // B2-isi-haritasi-ui: heatmap sahnesi — imagePreviewContainer ile BİREBİR aynı ölçü/çerçeve
+  // (rs(300) + 1px kenarlık) → analiz görseliyle aynı boyut/hiza; yükseklik ebeveynden bağımsız.
+  xaiStage: { width: "100%", height: rs(300), borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, marginTop: 4 },
   cameraContainer: { width: "100%", height: "100%", position: "relative" },
   cameraView: { flex: 1 },
   cameraOverlay: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", resizeMode: "contain", opacity: 0.8 },

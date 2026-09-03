@@ -17,8 +17,10 @@ together with a fitted preprocessor and the canonical feature-name list:
 `predict_one(features)` accepts a raw dict whose keys match UCI CKD column
 names (age, bp, sg, al, su, rbc, pc, pcc, ba, bgr, bu, sc, sod, pot, hemo,
 pcv, wc, rc, htn, dm, cad, appet, pe, ane) and returns a {prob_ckd, label}
-dict. Missing values may be passed as None and are imputed by the
-preprocessor.
+dict. Missing values (None / '' / '?' / NaN / '—') are normalised to np.nan and
+imputed by the preprocessor — numerics by median, categoricals by most-frequent
+class (normal / notpresent / no / good). ⚠️ B5 (2026-09-03): they MUST reach the
+preprocessor as np.nan, not None — see `_normalise_record`.
 
 Use `predict_batch(records)` for batched inference; identical contract but
 accepts a list of dicts or a pandas DataFrame.
@@ -89,22 +91,43 @@ def load_model(model_name: str | None = None):
 # ===========================================================================
 # Public API
 # ===========================================================================
+def _eksik(v: Any) -> bool:
+    """Eksik deger mi: None, float NaN (pandas/CSV/predict_batch yolu) ya da bos/placeholder metin."""
+    if v is None:
+        return True
+    if isinstance(v, float) and v != v:  # float('nan') — isinstance(v, str) DEGIL, ayri ele alinmali
+        return True
+    return isinstance(v, str) and v.strip() in ("", "?", "NA", "NaN", "nan", "—", "-")
+
+
 def _normalise_record(rec: dict[str, Any]) -> dict[str, Any]:
-    """Lowercase + strip categorical strings; cast numeric to float; pass
-    None / '' / '?' through as NaN."""
+    """Lowercase + strip categorical strings; cast numeric to float; eksik degerleri
+    (None / '' / '?' / NaN / '—') **np.nan** olarak gecir.
+
+    ⚠️ B5 (denetim 2026-09-03, OLCULDU): eskiden eksik deger `None` olarak geciyordu. Sayisal
+    kolonlarda pandas None→NaN yaptigi icin sorun yoktu; ama KATEGORIK (object-dtype) kolonda
+    pickled `SimpleImputer(strategy='most_frequent')` `None`'i EKSIK SAYMIYOR (maske `X != X`,
+    None == None), `OneHotEncoder(drop='first', handle_unknown='ignore')` ise bilinmeyen degeri
+    tum-sifir = DUSURULEN kategori (rbc/pc icin 'abnormal') olarak kodluyordu → hicbir bulgu
+    secmemis SAGLIKLI hasta %6 yerine %60 CKD aliyordu. Docstring'in "None is imputed" vaadi
+    kategorikler icin YANLISTI. Artik np.nan → preprocessor GERCEKTEN impute eder (en sik sinif:
+    normal / notpresent / no / good). Ayni islev `float('nan')` icin de gecerli (predict_batch,
+    CSV/_smoke yolu — `str(nan).lower()`='nan' METNI de unknown'a dusuyordu).
+    Kilit: tests/test_ckd_min_input.py::test_KATEGORIK_EKSIKKEN_impute_edilir_abnormal_SAYILMAZ"""
     out: dict[str, Any] = {}
     for k in ALL_FEATURES:
         v = rec.get(k, None)
-        if v is None or (isinstance(v, str) and v.strip() in ("", "?", "NA", "NaN", "nan")):
-            out[k] = None
+        if _eksik(v):
+            out[k] = np.nan  # None DEGIL (yukaridaki not)
             continue
         if k in NUMERIC:
             try:
-                out[k] = float(v)
+                out[k] = float(v.replace(",", ".")) if isinstance(v, str) else float(v)
             except (TypeError, ValueError):
-                out[k] = None
+                out[k] = np.nan
         else:
-            out[k] = str(v).strip().lower()
+            s = str(v).strip().lower()
+            out[k] = s if s else np.nan
     return out
 
 

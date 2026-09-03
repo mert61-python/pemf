@@ -138,6 +138,34 @@ describe("Yara Kapanma (Scratch) modülü", () => {
     expect(u.queryByText("3'lü panel")).toBeNull();
   });
 
+  it("KRITIK (B4): anahtar AÇIK → sahne doğrudan [XAI] ile açılır; istenip gelmeyince uyarı; uyari yolunda uyarı YOK", async () => {
+    // Bug: ısı haritası istenip üretilmişken sonuç hep "Kapanma"ya iniyor, [XAI] chip'i iki tık
+    // arkada sessiz kalıyordu → operatör "ısı haritası gelmedi" sanıyordu. Ayrıca eski backend
+    // (alan da xai_error da yok) tamamen sessizdi. `uyari` (hücre yok) yolunda XAI TASARIM GEREĞİ
+    // üretilmez → orada uyarı YANLIŞ olur (doğrulayıcı mutasyonla kanıtladı: `!result.uyari` şart).
+    const u = render(<Ekran />);
+    await moduluAcVeSec(u);
+    fireEvent.press(u.getByText(/Isı haritası üret/));
+    fetchYaniti({ ...TAM_YANIT, xai_image_base64: "XAI64", xai_side_by_side_base64: "P364" });
+    await act(async () => { fireEvent.press(u.getByText("Analiz Et")); });
+    await waitFor(() => u.getByText("XAI"));
+    expect(u.getByTestId("sc-stage").props.source.uri).toContain("XAI64"); // sahne XAI ile AÇILDI
+    fireEvent.press(u.getAllByText("Kapanma")[1]); // [0]=metrik etiketi, [1]=sekme chip'i
+    expect(u.getByTestId("sc-stage").props.source.uri).toContain("CL64");
+    // Eski backend: XAI alanı da xai_error da yok → istenip gelmedi uyarısı
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    fetchYaniti({ ...TAM_YANIT });
+    await act(async () => { fireEvent.press(u.getByText("Analiz Et")); });
+    await waitFor(() => u.getByText(/bu yanıtta gelmedi/));
+    // Hücre-yok `uyari` yolu: XAI üretilmez (tasarım) → "gelmedi" uyarısı OLMAMALI
+    await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+    fetchYaniti({ status: "success", n_cells: 0, closure: null, uyari: "Hucre tespit edilemedi",
+      input_image_base64: "GIRDI64", scratch_yonu: "dikey", pixel_mm: 0.0016, device: "cpu" });
+    await act(async () => { fireEvent.press(u.getByText("Analiz Et")); });
+    await waitFor(() => u.getByText(/Hucre tespit edilemedi/));
+    expect(u.queryByText(/bu yanıtta gelmedi/)).toBeNull();
+  });
+
   it("KRITIK: hücre-yok uyarısı — dejenere sekme YOK, uyarı + Orijinal VAR", async () => {
     const u = render(<Ekran />);
     await moduluAcVeSec(u);
