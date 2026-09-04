@@ -132,8 +132,8 @@ def test_rf_9_ve_10_puntolari_azaliyor():
         for no, satir in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"fontSize:\s*rf\(\s*(9|10)\s*\)", satir):
                 kalan.append(f"{p.relative_to(_PF).as_posix()}:{no}")
-    # 2026-09-05: 17 → 9 (AppShell 3, SessionProgressCard 2, CoilParameterPanel 3 düzeltildi).
-    assert len(kalan) == 9, (
-        f"rf(9|10) punto sayısı {len(kalan)}, sabit 9.\nARTTIYSA: typography.small (11) kullanın.\n"
+    # 2026-09-05: 17 → 9 (S6) → 7 (S7 adım 10: liveText, serverCamNote).
+    assert len(kalan) == 7, (
+        f"rf(9|10) punto sayısı {len(kalan)}, sabit 7.\nARTTIYSA: typography.small (11) kullanın.\n"
         "AZALDIYSA: bu sabiti düşürün.\n" + "\n".join(kalan)
     )

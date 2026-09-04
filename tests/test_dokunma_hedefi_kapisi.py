@@ -34,9 +34,9 @@ import pytest
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _PF = _KOK / "pf" / "src"
 
-# 2026-09-05 ölçümü (S3 sonrası: 139 → 119; ilkel göçü + rs(44)→touch.min ile 20 hedef düzeldi).
+# 2026-09-05 ölçümü (S3: 139 → 119; S7 adım 10 flipBtn ile 118).
 # Faz D hedefi: 0. Düşürdükçe bu sayıyı da düşürün.
-KALAN_IHLAL = 119
+KALAN_IHLAL = 118
 # Gerekçeli muafiyetler (perde/kart gibi dokunuş yutucular).
 MUAF_SAYISI = 2
 

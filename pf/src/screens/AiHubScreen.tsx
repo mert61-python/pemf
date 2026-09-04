@@ -148,6 +148,13 @@ interface FgsRaw {
  * `any` yerine bu tip → alan-adı typo'ları derleme-zamanı yakalanır + autocomplete.
  * (disease modülü DİZİ döndürür → DiseasePrediction[], AiResult değil.)
  */
+/**
+ * [S7 adım 8 / aihub-3] Duty çubuğu dolgusu YÜZDE ile. Eskiden `26 px` sabitine göre hesaplanıyordu:
+ * kap yüksekliği ölçekle değişince (rs) dolgu kabın dışına taşıyor ya da yarısında kalıyordu.
+ * Yüzde dolgu `soundBarFill` deseniyle aynı ve her ölçekte doğru.
+ */
+const dutyYuzde = (d: number) => `${Math.max(4, Math.round((Math.min(Math.max(d, 0), 0.5) / 0.5) * 100))}%` as const;
+
 interface AiResult {
   status?: string; success?: boolean; method?: string; image_base64?: string;
   /** [S7 adım 4] Kodlanan karenin gerçek boyutu — önizleme kutusunun oran kilidi.
@@ -1968,7 +1975,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
                         {D.map((d: number, j: number) => (
                           <View key={j} style={styles.dBarWrap}>
                             <View style={styles.dBarTrack}>
-                              <View style={[styles.dBarFill, { height: Math.max(2, Math.round((Math.min(Math.max(d, 0), 0.5) / 0.5) * 26)) }]} />
+                              <View style={[styles.dBarFill, { height: dutyYuzde(d) }]} />
                             </View>
                             <Text style={styles.dBarLabel}>D{j + 1}</Text>
                           </View>
@@ -2201,7 +2208,7 @@ function PetriModule({ patientName }: { patientName: string }) {
                         {D.map((d: number, j: number) => (
                           <View key={j} style={styles.dBarWrap}>
                             <View style={styles.dBarTrack}>
-                              <View style={[styles.dBarFill, { height: Math.max(2, Math.round((Math.min(Math.max(d, 0), 0.5) / 0.5) * 26)) }]} />
+                              <View style={[styles.dBarFill, { height: dutyYuzde(d) }]} />
                             </View>
                             <Text style={styles.dBarLabel}>D{j + 1}</Text>
                           </View>
@@ -2553,6 +2560,7 @@ const CATSOUND_TR: Record<string, string> = {
  * POST /api/ai/sound/cat (ffmpeg→WAV→librosa mel→EfficientNet_Lite0 ONNX).
  */
 function CatSoundModule({ patientName }: { patientName: string }) {
+  const { isCompact } = useResponsive();
   const { showToast } = useToast();
   const [audioUri, setAudioUri] = useState<string | null>(moduleCache.cat_sound?.audioUri ?? null);
   const [fileName, setFileName] = useState<string>(moduleCache.cat_sound?.fileName ?? "");
@@ -2725,12 +2733,17 @@ function CatSoundModule({ patientName }: { patientName: string }) {
             {(result.top_k || []).map((t: AiTopK, i: number) => {
               const pct = Math.round(t.prob * 100);
               return (
-                <View key={i} style={styles.soundBarRow}>
-                  <Text style={styles.soundBarLabel} numberOfLines={1}>{i + 1}. {CATSOUND_TR[t.class] || t.class}</Text>
-                  <View style={styles.soundBarTrack}>
+                <View key={i} style={[styles.soundBarRow, isCompact && styles.soundBarRowCompact]}>
+                  {/* [S7 adım 9] Dar ekranda etiket ve yüzde ÜSTTE tek satırda, çubuk altta tam
+                      genişlikte: aynı satırda çubuk 30-40 px'e düşüp okunmaz oluyordu. */}
+                  <View style={isCompact ? styles.soundBarUst : styles.soundBarSatirIci}>
+                    <Text style={styles.soundBarLabel} numberOfLines={1}>{i + 1}. {CATSOUND_TR[t.class] || t.class}</Text>
+                    {isCompact ? <Text style={styles.soundBarPct}>%{pct}</Text> : null}
+                  </View>
+                  <View style={[styles.soundBarTrack, isCompact && { flex: 0, width: "100%" }]}>
                     <View style={[styles.soundBarFill, { width: (`${Math.max(2, pct)}%` as any) }]} />
                   </View>
-                  <Text style={styles.soundBarPct}>%{pct}</Text>
+                  {isCompact ? null : <Text style={styles.soundBarPct}>%{pct}</Text>}
                 </View>
               );
             })}
@@ -3746,8 +3759,9 @@ const styles = StyleSheet.create({
   liveIndicator: { position: "absolute", top: 12, right: 12, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 6 },
   flipCameraBtn: { position: "absolute", bottom: 12, right: 12, width: touch.min, height: touch.min, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   liveDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: colors.danger },
-  liveText: { color: colors.white, fontSize: rf(10), fontWeight: "bold" },
-  serverCamNote: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.65)", color: colors.white, fontSize: rf(10), textAlign: "center", paddingVertical: 5, paddingHorizontal: 8 },
+  // [S7 adım 10] 10 px rozet metni 320 px'te 8-9 px'e düşüyordu.
+  liveText: { color: colors.white, fontSize: typography.small, fontWeight: "bold" },
+  serverCamNote: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.65)", color: colors.white, fontSize: typography.small, textAlign: "center", paddingVertical: 5, paddingHorizontal: 8 },
   placeholderBox: { alignItems: "center", gap: spacing.md },
   placeholderText: { color: colors.textMuted, fontSize: typography.body },
   btnRow: { flexDirection: "row", gap: spacing.md },
@@ -3780,6 +3794,11 @@ const styles = StyleSheet.create({
   recText: { color: colors.danger, fontSize: typography.body, fontWeight: "700" },
   soundFileName: { color: colors.text, fontSize: typography.small, marginTop: spacing.xs, fontWeight: "600", maxWidth: rs(220) },
   soundBarRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs },
+  // [S7 adım 9 / aihub-11] Dar ekranda etiket + çubuk + yüzde aynı satıra sığmıyor, çubuk
+  // 30-40 px'e düşüp okunmaz oluyordu. Kompaktta etiket/yüzde üstte, çubuk tam genişlikte.
+  soundBarRowCompact: { flexDirection: "column", alignItems: "stretch", gap: 2 },
+  soundBarUst: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.xs },
+  soundBarSatirIci: { flexShrink: 1 },
   soundBarLabel: { color: colors.text, fontSize: typography.small, width: rs(96) },
   soundBarTrack: { flex: 1, height: rs(12), backgroundColor: colors.primarySoft + "44", borderRadius: 6, overflow: "hidden" },
   soundBarFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 6 },

@@ -20,7 +20,13 @@ export function DemaSimulatorScreen() {
   // ÇÖZÜM: WebView'i İÇERİĞİNİN TAM yüksekliğine büyüt (postMessage ile ölç) + nestedScrollEnabled
   // → dış AppShell ScrollView'i tüm sayfayı kaydırır, WebView scroll'u kilitlemez. Ölçüm gelene
   // kadar cömert fallback (kesilme yerine fazladan boşluk daha iyi).
-  const [webHeight, setWebHeight] = useState(Math.max(640, Math.round(height * 0.78)));
+  // [S7 adım 11 / ekranB-11] Yükseklik state'e KİLİTLENMİYOR: ilk render'daki pencere
+  // yüksekliğine sabitlendiği için PC penceresi küçültülünce/cihaz yan yatınca iframe ekranı
+  // aşıyor, alt kontroller kesiliyordu. Ölçüm gelirse (postMessage) o kullanılır, YOKSA pencere
+  // yüksekliğinden CANLI türetilir.
+  const [olculenH, setOlculenH] = useState<number | null>(null);
+  const webHeight = olculenH ?? Math.max(rs(480), Math.round(height * 0.78));
+  const setWebHeight = setOlculenH;
 
   // apiBaseUrl'den base URL'yi çıkar: http://IP:8000/api → http://IP:8000
   const baseUrl = serviceConfig.apiBaseUrl
