@@ -17,7 +17,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { platformAlert } from "@/services/apiClient";
 import {
@@ -27,7 +27,14 @@ import {
 } from "@/services/emergencyStop";
 import { emitToast } from "@/services/toastBridge";
 
-export function GlobalEmergencyStop({ bottomOffset = 0 }: { bottomOffset?: number }) {
+export function GlobalEmergencyStop({
+  bottomOffset = 0,
+  compact = false,
+}: {
+  bottomOffset?: number;
+  /** Kısa ekranda (yatay telefon) dar ve sağa hizalı çizilir — ASLA gizlenmez/küçülmez. */
+  compact?: boolean;
+}) {
   const { snapshot } = useLiveData();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
@@ -64,10 +71,21 @@ export function GlobalEmergencyStop({ bottomOffset = 0 }: { bottomOffset?: numbe
   };
 
   return (
-    <View style={[styles.wrap, { bottom: bottomOffset + insets.bottom + spacing.md }]} pointerEvents="box-none">
+    <View
+      style={[
+        styles.wrap,
+        compact && styles.wrapCompact,
+        {
+          bottom: bottomOffset + insets.bottom + spacing.md,
+          left: Math.max(spacing.md, insets.left),
+          right: Math.max(spacing.md, insets.right),
+        },
+      ]}
+      pointerEvents="box-none"
+    >
       <Pressable
         onPress={onPress}
-        style={styles.btn}
+        style={[styles.btn, compact && styles.btnCompact]}
         accessibilityRole="button"
         accessibilityLabel="Acil durdur"
         accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
@@ -87,17 +105,18 @@ export function GlobalEmergencyStop({ bottomOffset = 0 }: { bottomOffset?: numbe
 const styles = StyleSheet.create({
   wrap: {
     position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
+    // left/right inline verilir (yatay çentik güvenli alanı) — bkz. render.
     alignItems: "center",
     zIndex: 10000,
   },
+  wrapCompact: { alignItems: "flex-end" },
   btn: {
     backgroundColor: colors.danger,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    minHeight: rs(52),
+    // ⚠️ HASTA GÜVENLİĞİ: taban ölçekle küçülmez — rs(52) 320 px'te 44'ün ALTINA (41) iniyordu.
+    minHeight: Math.max(touch.min, rs(52)),
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "stretch",
@@ -110,5 +129,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff3",
   },
+  // Kısa ekranda dar ama TAM metinli (adjustsFontSizeToFit sığdırır); asla gizlenmez.
+  btnCompact: { maxWidth: rs(260), paddingHorizontal: spacing.md },
   text: { color: "#fff", fontWeight: "800", fontSize: rf(15), letterSpacing: 0.4 },
 });

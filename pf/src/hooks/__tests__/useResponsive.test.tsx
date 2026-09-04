@@ -28,11 +28,11 @@ type Olcum = ReturnType<typeof import("@/hooks/useResponsive").useResponsive>;
 /** Hook'u verilen cihazda taze yükleyip döndürdüğü değerleri okur. */
 function olc(width: number, height: number, os: "ios" | "android" | "web" = "ios"): Olcum {
   cihaziKur({ width, height, os });
-  /* eslint-disable @typescript-eslint/no-var-requires */
+  /* eslint-disable @typescript-eslint/no-require-imports */
   const React = require("react");
   const TestRenderer = require("react-test-renderer");
   const { useResponsive } = require("@/hooks/useResponsive") as typeof import("@/hooks/useResponsive");
-  /* eslint-enable @typescript-eslint/no-var-requires */
+  /* eslint-enable @typescript-eslint/no-require-imports */
   let sonuc: Olcum | null = null;
   function Sonda() {
     sonuc = useResponsive();
@@ -68,7 +68,7 @@ describe("useResponsive", () => {
     expect(r.sidebarWidth).toBeGreaterThan(0);
     expect(r.contentWidth).toBeLessThan(768); // pencere genişliği DEĞİL
     // Beklenti ÖLÇEKTEN BAĞIMSIZ hesaplanır (S1 tavanı değişince literal pin kırılırdı):
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { spacing } = require("@/theme/tokens") as typeof import("@/theme/tokens");
     expect(r.contentWidth).toBe(768 - r.sidebarWidth - 2 * spacing.xl);
   });

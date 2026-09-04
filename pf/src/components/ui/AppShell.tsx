@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { ReactNode, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
+import { Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View, PanResponder } from "react-native";
 import { Activity, BarChart3, Bell, BrainCircuit, ClipboardList, History, LayoutDashboard, MoreHorizontal, Settings, SlidersHorizontal, Waves, Users, Heart, Stethoscope, FlaskConical, ChevronDown, LogOut, Check, type LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -10,7 +10,9 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { useTeardownGuard } from "@/hooks/useTeardownGuard";
 import { installedModes } from "@/services/installedProfiles";
 import { DevicePairingGuide } from "@/components/domain/DevicePairingGuide";
-import { colors, radius, spacing, typography, rf, rs, gradients, elevation } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rf, rs, gradients, elevation, touch } from "@/theme/tokens";
+import { ShellLayoutProvider } from "@/context/ShellLayoutContext";
+import { KAV_BEHAVIOR_PENCERE, useKeyboard } from "@/hooks/useKeyboard";
 import { RouteKey } from "@/types/domain";
 import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
@@ -65,6 +67,18 @@ const allNavItems: NavItem[] = [
   { key: "settings", label: "Ayarlar", icon: Settings }
 ];
 
+/**
+ * ALT BARDA GÖRÜNEN kısa etiketler (sahip kararı 2026-09-04).  [S6/kabuk-5]
+ * 5 slotlu alt barda 320-360 px'te 'Akıllı Teşhis' → 'Akıllı Te…' diye kırpılıyordu; Android yazı
+ * ölçeği 1,3'te neredeyse tüm etiketler kırpılıyordu. ⚠️ Yalnız GÖRÜNEN metin kısalır:
+ * `accessibilityLabel` ve kenar çubuğu TAM adı kullanmaya devam eder (ekran okuyucu + mevcut testler).
+ */
+const KISA_ETIKET: Partial<Record<RouteKey, string>> = {
+  ai: "Teşhis",
+  ai_history: "Geçmiş",
+  history: "Seanslar",
+};
+
 // Üst-bar profil-çipi/menüsü için profil meta.
 // NOT: buradaki eski `researchOnly` bayrağı ÖLÜ koddu (hiçbir yerde okunmuyordu) ve üstündeki
 // yorum ".edu şartı var" derken 30 satır aşağıdaki yorum "3 profil de açık" diyordu — gating'i
@@ -96,7 +110,16 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   const guardTeardown = useTeardownGuard();
   // Masaüstü client'ın kurduğu profiller (WelcomeScreen ile AYNI kaynak). null → kısıt yok (mobil).
   const installed = installedModes();
-  const desktop = responsive.isDesktop || responsive.isTablet;
+  // [S2/S5] Kabuk türü artık İÇERİK ve YÜKSEKLİK farkında: bottom (telefon) · rail (ikon şeridi:
+  // tablet dikey, yatay telefon, dar PC penceresi) · sidebar (masaüstü). `desktop` adı ve anlamı
+  // KORUNUR — alt bar, "Daha Fazla", E-stop ofseti ve içerik dolgusu aynı bayrağa bağlı kalır.
+  const { shellKind } = responsive;
+  const desktop = shellKind !== "bottom";
+  const rail = shellKind === "rail";
+  // [S4] Klavye açıkken alt bar gizlenir ve ACİL DURDUR klavyenin ÜSTÜNE taşınır (gizlenmez).
+  const klavye = useKeyboard();
+  // [S2] Ölçülen içerik genişliği → ResponsiveGrid/isCompact gerçek alandan karar verir.
+  const [icerikGenislik, setIcerikGenislik] = useState<number | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMeta = PROFILE_LIST.find((p) => p.mode === userMode);
   const ProfileIcon = profileMeta?.icon ?? Heart;
@@ -206,18 +229,21 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
   ).current;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    // [S5] Yatay çentik/kamera kesiği: insets.left/right hiç okunmuyordu.
+    <View style={[styles.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <AuroraBackground intensity={0.4} />
       {desktop ? (
-        <View style={styles.sidebar}>
-          <View style={styles.brand}>
+        <View style={[styles.sidebar, rail && styles.sidebarRail, { width: responsive.sidebarWidth }]}>
+          <View style={[styles.brand, rail && styles.brandRail]}>
             {/* Marka ikonu = UYGULAMA İKONU. Önceden jenerik bir `Gauge` (gösterge) ikonu
                 gradyan kutu içinde duruyordu; giriş ekranı, masaüstü kısayolu, APK ve tarayıcı
                 sekmesi hep gerçek ikonu gösterirken yalnız burası farklıydı. Tek görsel kimlik. */}
             <Image source={APP_ICON} style={styles.brandLogoImg} resizeMode="contain" />
-            <View>
-              <Text style={styles.brandTitle}>PEMF Vet</Text>
-            </View>
+            {!rail && (
+              <View>
+                <Text style={styles.brandTitle}>PEMF Vet</Text>
+              </View>
+            )}
           </View>
           <ScrollView style={styles.navScroll} contentContainerStyle={styles.navList} showsVerticalScrollIndicator={false}>
             {navItems.map((item) => (
@@ -227,6 +253,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 icon={item.icon}
                 active={activeRoute === item.key}
                 compact={false}
+                rail={rail}
                 onPress={() => onRouteChange(item.key)}
               />
             ))}
@@ -236,6 +263,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
               icon={LOGOUT_ITEM.icon}
               active={false}
               compact={false}
+              rail={rail}
               danger
               onPress={handleLogout}
             />
@@ -243,11 +271,21 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
         </View>
       ) : null}
 
-      <View style={styles.main} {...(!desktop ? panResponder.panHandlers : {})}>
-        <View style={styles.header}>
+      {/* [S4] KAV `main`in YERİNE geçer (root'un doğrudan çocuğu) → frame alt kenarı pencere
+          altıdır ve keyboardVerticalOffset gerekmez. [S2] Swipe-gezinme yalnız NATIVE'de bağlanır:
+          web'de fare sürüklemesi (metin seçimi) sekme değiştiriyordu. */}
+      <KeyboardAvoidingView
+        style={styles.main}
+        behavior={KAV_BEHAVIOR_PENCERE}
+        enabled={responsive.isNative}
+        {...(!desktop && responsive.isNative ? panResponder.panHandlers : {})}
+      >
+        <View style={[styles.header, responsive.isShort && styles.headerShort]}>
           <View style={styles.headerLeft}>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
-            <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
+            {/* [S5] Yatay telefonda (360-430 px) iki satırlık alt başlık dikey alanın ~%15'ini
+                yiyordu; kısa ekranda gizlenir (bilgi başlıkta ve ekranda zaten var). */}
+            {!responsive.isShort && <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>}
           </View>
           <View style={styles.headerRight}>
             {/* AKTİF OPERATÖR (2026-08-08): tek makineyi 3-4 veteriner paylaşıyor. Kayıtlara kimin
@@ -273,7 +311,9 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
               </Pressable>
             )}
             <Pressable onPress={reconnect} style={styles.wsContainer} accessibilityRole="button" accessibilityLabel="Bağlantıyı yenile">
-              {connectionQuality === "offline" && (
+              {/* [kabuk-3] Dar telefonda bu metin sağ bloğu ~65 px büyütüp sayfa BAŞLIĞINI
+                  yutuyordu; kompaktta kırmızı gösterge tek başına yeterli (dokunulunca yeniden bağlanır). */}
+              {connectionQuality === "offline" && !responsive.isCompact && (
                 <Text style={[styles.wsTextOff, styles.wsTextOffline]} numberOfLines={1}>
                   Çevrimdışı
                 </Text>
@@ -386,24 +426,48 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           contentContainerStyle={[
             styles.content,
             // Kayan ACİL DURDUR butonu içeriğin son satırını örtmesin.
-            !desktop ? { paddingBottom: rs(160) + insets.bottom } : { paddingBottom: rs(84) },
+            !desktop
+              ? { paddingBottom: (responsive.isShort ? rs(120) : rs(160)) + insets.bottom }
+              : { paddingBottom: rs(84) },
           ]}
           keyboardShouldPersistTaps="handled"
+          // [S2] Gerçek içerik genişliği (kap − iki kat iç boşluk) ölçülür ve aşağı taşınır.
+          onLayout={(e) => setIcerikGenislik(Math.max(0, Math.round(e.nativeEvent.layout.width) - 2 * spacing.xl))}
         >
-          {children}
+          <ShellLayoutProvider value={icerikGenislik}>{children}</ShellLayoutProvider>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
 
       {/* HASTA GÜVENLİĞİ: donanım çalışırken HER rotada erişilebilir durdurma. Alt navigasyonun
           üstünde konumlanır (mobil); masaüstünde alt bar yok. */}
-      <GlobalEmergencyStop bottomOffset={desktop ? 0 : rs(76)} />
+      {/* ⚠️ HASTA GÜVENLİĞİ — ofset önceliği: klavye > kısa ekran > varsayılan. Klavye açıkken
+          düğme GİZLENMEZ, klavyenin ÜSTÜNE taşınır (sahip kararı 2026-09-04). */}
+      <GlobalEmergencyStop
+        bottomOffset={
+          desktop ? 0 : klavye.acik ? klavye.yukseklik : responsive.isShort ? rs(60) : rs(76)
+        }
+        compact={responsive.isShort}
+      />
 
-      {!desktop ? (
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      {/* [S4] Klavye açıkken alt bar UNMOUNT edilir: edge-to-edge'de zaten klavyenin altında
+          kalıyordu, eski Android'de ise klavyenin üstüne binip 64 px çalıyordu. */}
+      {!desktop && !(klavye.acik && responsive.isNative) ? (
+        <View
+          style={[
+            styles.bottomNav,
+            responsive.isShort && styles.bottomNavShort,
+            {
+              paddingBottom: Math.max(insets.bottom, spacing.sm),
+              paddingLeft: Math.max(insets.left, spacing.sm),
+              paddingRight: Math.max(insets.right, spacing.sm),
+            },
+          ]}
+        >
           {primaryItems.map((item) => (
             <NavButton
               key={item.key}
               label={item.label}
+              text={KISA_ETIKET[item.key] ?? item.label}
               icon={item.icon}
               active={activeRoute === item.key}
               compact
@@ -427,8 +491,17 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           <Pressable style={styles.moreBackdrop} onPress={() => setShowMore(false)}>
             <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
             {/* Aynı sorun: sheet içi boşluğa dokunmak menüyü kapatıyordu. */}
-            <Pressable onPress={() => {}} style={[styles.moreSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+            {/* [S5/kabuk-4] Sheet ScrollView'suz ve maxHeight'sızdı: yatay telefonda (360-430 px)
+                üstteki satırlar ekran dışına çıkıyor ve KAYDIRILAMIYORDU → o ekranlara ulaşılamıyordu. */}
+            <Pressable
+              onPress={() => {}}
+              style={[
+                styles.moreSheet,
+                { maxHeight: Math.round(responsive.height * 0.85), paddingBottom: insets.bottom + spacing.lg },
+              ]}
+            >
               <Text style={styles.moreTitle}>Diğer Ekranlar</Text>
+              <ScrollView contentContainerStyle={styles.moreList} showsVerticalScrollIndicator={false}>
               {moreEntries.map((entry) => {
                 if (entry.kind === "action") {
                   // Çıkış: rota DEĞİL → onRouteChange çağrılmaz, sheet handler içinde kapanır.
@@ -460,6 +533,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                   </Pressable>
                 );
               })}
+              </ScrollView>
             </Pressable>
           </Pressable>
         </Modal>
@@ -479,8 +553,11 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
 
 // `item` yerine label+icon alır: rota ögeleri kadar AKSİYON ögesi (Çıkış) de aynı düğmeyle
 // çizilebilsin — aksiyonun RouteKey'i yoktur. `danger` yıkıcı ögeyi görsel olarak ayırır.
-function NavButton({ label, icon: Icon, active, compact, danger, onPress }: {
-  label: string; icon: LucideIcon; active: boolean; compact: boolean; danger?: boolean; onPress: () => void;
+function NavButton({ label, text, icon: Icon, active, compact, rail, danger, onPress }: {
+  label: string;
+  /** Ekranda GÖRÜNEN metin (kısaltılmış olabilir); `label` ekran okuyucuya gider. */
+  text?: string;
+  icon: LucideIcon; active: boolean; compact: boolean; rail?: boolean; danger?: boolean; onPress: () => void;
 }) {
   const tint = danger ? colors.danger : active ? colors.primary : colors.textMuted;
   return (
@@ -489,15 +566,22 @@ function NavButton({ label, icon: Icon, active, compact, danger, onPress }: {
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[compact ? styles.bottomItem : styles.navItem, active && styles.navItemActive, danger && styles.navItemDanger]}
+      style={[
+        compact ? styles.bottomItem : rail ? styles.railItem : styles.navItem,
+        active && styles.navItemActive,
+        danger && (rail ? styles.railItemDanger : styles.navItemDanger),
+      ]}
     >
       <Icon size={18} color={tint} />
-      <Text
-        style={[compact ? styles.bottomLabel : styles.navLabel, active && styles.navLabelActive, danger && { color: colors.danger }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {/* Ray kipinde yalnız ikon: 72 px şeritte etiket sığmaz (erişilebilir ad korunur). */}
+      {!rail && (
+        <Text
+          style={[compact ? styles.bottomLabel : styles.navLabel, active && styles.navLabelActive, danger && { color: colors.danger }]}
+          numberOfLines={1}
+        >
+          {text ?? label}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -513,9 +597,28 @@ const styles = StyleSheet.create({
     borderRightColor: colors.border,
     borderRightWidth: 1,
     gap: spacing.xl,
-    padding: spacing.xl,
-    width: rs(248)
+    padding: spacing.xl
+    // ⚠️ `width` BURADA DEĞİL: kabuk türüne göre inline verilir (theme/layout.ts tek kaynak).
+    // Eski `rs(248)` PC'de 322 px'e çıkıp içeriği daraltıyordu (ekranA-3 / ekranC-1 kökeni).
   },
+  sidebarRail: { paddingHorizontal: spacing.sm, alignItems: "center", gap: spacing.md },
+  railItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    minWidth: touch.min,
+    minHeight: touch.min,
+  },
+  railItemDanger: {
+    backgroundColor: colors.danger + "14",
+    borderWidth: 1,
+    borderColor: colors.danger + "44",
+    marginTop: spacing.sm,
+  },
+  brandRail: { justifyContent: "center" },
+  headerShort: { paddingVertical: spacing.sm },
+  bottomNavShort: { paddingTop: 0 },
+  moreList: { gap: spacing.xs },
   brand: {
     alignItems: "center",
     flexDirection: "row",

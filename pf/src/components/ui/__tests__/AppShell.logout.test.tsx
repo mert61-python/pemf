@@ -33,8 +33,14 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 let mockDesktop = true;
+// Ortak mock (hook dönüşü genişledikçe TEK yerden güncellenir; eksik alan masaüstü kabuğunu
+// yanlışlıkla açıp alt bar testlerini kırıyordu — bkz. responsiveMock.ts).
 jest.mock("@/hooks/useResponsive", () => ({
-  useResponsive: () => ({ isDesktop: mockDesktop, isTablet: false, isCompact: !mockDesktop, width: mockDesktop ? 1280 : 390 }),
+  useResponsive: () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require("@/hooks/__tests__/responsiveMock");
+    return mockDesktop ? m.sahteMasaustu() : m.sahteTelefon();
+  },
 }));
 
 let mockSnap: any;

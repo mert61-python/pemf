@@ -42,7 +42,8 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock("@/hooks/useResponsive", () => ({
-  useResponsive: () => ({ isDesktop: true, isTablet: false, isCompact: false, width: 1280 }),
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  useResponsive: () => require("@/hooks/__tests__/responsiveMock").sahteMasaustu(),
 }));
 
 // Rehber gövdesi bu dosyanın konusu değil; AÇILDIĞINI görebilmek için sade bir işaret bırakır.
