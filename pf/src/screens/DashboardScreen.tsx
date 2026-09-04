@@ -192,8 +192,11 @@ const styles = StyleSheet.create({
   wsTextOff: { color: "#f59e0b" },
 
   heroGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg },
-  patientCard: { flex: 1, gap: spacing.md, minWidth: rs(280) },
-  treatmentCard: { flex: 1.4, gap: spacing.md, minWidth: rs(280) },
+  // [S2 adım 5 / ekranA-2] `minWidth` + `flex` birleşimi Yoga'da kartı kaptan TAŞIRIYORDU
+  // (flexShrink varsayılanı 0). 768 px tablette kart-içi ACİL DURDUR düğmesinin sağ kenarı
+  // kırpılıyordu. flexBasis sarma kararını verir, flexShrink kaba sığdırır.
+  patientCard: { flexGrow: 1, flexShrink: 1, flexBasis: rs(280), minWidth: 0, gap: spacing.md },
+  treatmentCard: { flexGrow: 1.4, flexShrink: 1, flexBasis: rs(280), minWidth: 0, gap: spacing.md },
 
   cardHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   cardTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800", flex: 1 },

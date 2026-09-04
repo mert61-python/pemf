@@ -1,6 +1,8 @@
 // Author: mertaygn, cglrgrkn
 import React from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsive } from "@/hooks/useResponsive";
 import { Card } from "@/components/ui/Card";
 import { AuroraBackground } from "@/components/ui/AuroraBackground";
 import { FadeInView } from "@/components/ui/FadeInView";
@@ -19,9 +21,12 @@ export function WelcomeScreen() {
   // aboneliğe göre belirlenecek; app tarafında e-posta şartı yok.)
   const { session, logout } = useAuth();
   const { tier, trialing, trialDaysLeft, realtime, research } = useEntitlement();
-  const { width } = useWindowDimensions();
+  // [S2 adım 7 / ekranA-13] Kendi `width < 768` eşiği yerine ortak kabuk kararı.
+  // Welcome kabuk DIŞINDA olduğu için contentWidth = pencere genişliği → anlam AYNI.
+  const { width, layout, isCompact } = useResponsive();
+  const insets = useSafeAreaInsets();
   const guardTeardown = useTeardownGuard();
-  const isMobile = width < 768;
+  const isMobile = isCompact;
   // Masaüstü client'ın kurduğu profiller (?profiles). null → tüm modlar (mobil / bilgi yok).
   const installed = installedModes();
   const showMode = (m: "pet_owner" | "veterinarian" | "researcher") => !installed || installed.has(m);
@@ -29,7 +34,20 @@ export function WelcomeScreen() {
   return (
     <View style={styles.root}>
       <AuroraBackground intensity={0.75} />
-      <ScrollView contentContainerStyle={styles.container} bounces={false}>
+      {/* [S5 adım 7 / ekranA-4] Güvenli alan: çentikli telefonda üst çubuk çentiğin altında
+          kalıyor, yatayda sol/sağ çentik kartları kırpıyordu. */}
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: insets.top + spacing.lg,
+            paddingBottom: insets.bottom + spacing.xl,
+            paddingLeft: Math.max(spacing.xl, insets.left),
+            paddingRight: Math.max(spacing.xl, insets.right),
+          },
+        ]}
+        bounces={false}
+      >
         <View style={styles.topBar}>
           <Text style={styles.topEmail} numberOfLines={1}>{session?.email ?? ""}</Text>
           {/* HASTA GÜVENLİĞİ: bu ekrana seans sürerken de gelinebilir (Ayarlar → "Farklı Bir
@@ -66,7 +84,7 @@ export function WelcomeScreen() {
 
         <View style={[styles.cardsContainer, { flexDirection: isMobile ? 'column' : 'row' }]}>
           {showMode("pet_owner") && (
-          <FadeInView delay={90} style={styles.cardWrapper}>
+          <FadeInView delay={90} style={[styles.cardWrapper, layout === "tablet" && styles.cardWrapperTablet]}>
             <TouchableOpacity
               onPress={() => setUserMode('pet_owner')}
               accessibilityRole="button"
@@ -85,7 +103,7 @@ export function WelcomeScreen() {
           )}
 
           {showMode("veterinarian") && (
-          <FadeInView delay={170} style={styles.cardWrapper}>
+          <FadeInView delay={170} style={[styles.cardWrapper, layout === "tablet" && styles.cardWrapperTablet]}>
             <TouchableOpacity
               onPress={() => setUserMode('veterinarian')}
               accessibilityRole="button"
@@ -104,7 +122,7 @@ export function WelcomeScreen() {
           )}
 
           {showMode("researcher") && (
-            <FadeInView delay={250} style={styles.cardWrapper}>
+            <FadeInView delay={250} style={[styles.cardWrapper, layout === "tablet" && styles.cardWrapperTablet]}>
               <TouchableOpacity
                 onPress={() => setUserMode('researcher')}
                 accessibilityRole="button"
@@ -206,10 +224,14 @@ const styles = StyleSheet.create({
     maxWidth: layoutMax.genis,
     width: '100%',
   },
+  // Sarma kararı flexBasis'te; minWidth 0 ile kart kaptan taşmaz (tablet 2+1 dizilimi).
   cardWrapper: {
-    flex: 1,
-    minWidth: rs(280),
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: rs(280),
+    minWidth: 0,
   },
+  cardWrapperTablet: { flexBasis: "47%", maxWidth: rs(380) },
   card: {
     alignItems: 'center',
     padding: spacing.xxl,

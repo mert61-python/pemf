@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 import { KAV_BEHAVIOR_PENCERE } from "@/hooks/useKeyboard";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Mail, Lock, Eye, EyeOff, Check, X, ArrowRight, GraduationCap, User, Phone, Building2, MapPin, Home, Stethoscope } from "lucide-react-native";
 import type { ComponentType } from "react";
 import { colors, spacing, radius, typography, rf, rs, touch } from "@/theme/tokens";
@@ -22,6 +23,7 @@ const LOGO = require("../../assets/icon.png");
 type Mode = "login" | "register" | "reset";
 
 export function AuthScreen() {
+  const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -182,7 +184,15 @@ export function AuthScreen() {
           kaynakta (hooks/useKeyboard.KAV_BEHAVIOR_PENCERE). */}
       <KeyboardAvoidingView behavior={KAV_BEHAVIOR_PENCERE} style={styles.flex}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: insets.top + spacing.xl,
+              paddingBottom: insets.bottom + spacing.xxl,
+              paddingLeft: Math.max(spacing.xl, insets.left),
+              paddingRight: Math.max(spacing.xl, insets.right),
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -458,7 +468,8 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, paddingVertical: spacing.xxl },
+  // Yatay dolgu inline verilir (çentik güvenli alanı) — bkz. render.
+  scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: spacing.xxl },
 
   card: {
     width: "100%", maxWidth: rs(430), alignSelf: "center",
