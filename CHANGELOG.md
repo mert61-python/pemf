@@ -28,6 +28,9 @@
   `find`i one cikabiliyordu). Calisan-uygulama kontrolu CSV biciminde (tablo ciktisi adi 25 karakterde
   kirpiyordu; uzun ad eslesmeyince ikinci pencere aciliyordu — gercek cmd.exe'de olculdu).
 - Kaldirma temizlik listesi + profil paketi yasakli kok dosyalari: `selfupdate_inprogress.json` eklendi.
+- CI konsol-penceresi kapisi: bilgilendirme penceresi kopyasinin spawn'i `CREATE_NO_WINDOW` tasir (kaynak
+  duzeltmesi, commit sonrasi). Yayinlanan 1.9.45 paketinde bayrak yok; kopya GUI alt-sisteminde oldugundan
+  davranis AYNI (gercek ekranda bayrakli spawn ile dogrulandi) — yeniden yayin gerekmedi.
 - Kilitler: `relaunch_script_gomer_ve_enjeksiyon_reddeder` (PID bekleme, start korumasi, kopya silme,
   tam yollar), `guncelleme_ekrani_sirasi_ve_acilis_bekcisi` (isaret → pencere → batch → cik sirasi;
   bekci Builder'dan once), `guncelleme_isareti_testleri` (taze/bayat/from==to/bozuk JSON).

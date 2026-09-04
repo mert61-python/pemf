@@ -1678,7 +1678,15 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
     let kopya = std::env::temp_dir().join(format!("PEMFVetClient-Guncelleme-{sfx}.exe"));
     let _ = std::fs::remove_file(&kopya);
     std::fs::copy(&exe, &kopya).ok()?;
-    std::process::Command::new(&kopya).arg(GUNCELLEME_EKRANI_ARG).spawn().ok()?;
+    // Konsol-penceresi kapısı (core/tests/konsol_penceresi.rs): her spawn CREATE_NO_WINDOW taşır.
+    // Kopya GUI alt-sisteminde (Tauri) olduğundan bayrak davranışı değiştirmez, kuralı korur.
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    std::process::Command::new(&kopya)
+        .arg(GUNCELLEME_EKRANI_ARG)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .ok()?;
     Some(kopya)
 }
 
