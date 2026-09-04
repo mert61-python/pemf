@@ -11,6 +11,7 @@ import { rf } from "@/theme/tokens";
 import { View, StyleSheet, Platform, Text } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText, G, Circle } from "react-native-svg";
 import type { CoilSensorHistory, SensorDataPoint } from "@/types/domain";
+import { hesaplaPad, cizimAlani, canvasBoyutla, type TuvalGibi, type BaglamGibi } from "@/components/visual/chartLayout";
 
 // 8 bobin için yüksek kontrastlı, kategorik (birbirinden barizce ayrık) palet.
 // Üst üste binen çizgiler ayırt edilebilsin diye kırmızı/mavi/yeşil/turuncu/mor/turkuaz/pembe/sarı.
@@ -47,11 +48,16 @@ export function RealtimeChart({
     ctx.lineJoin = "round";  // premium: yumuşak çizgi köşeleri/uçları
     ctx.lineCap = "round";
 
-    const W = canvas.width;
-    const H = canvas.height;
-    const PAD = { top: 20, right: 60, bottom: 40, left: 60 };
-    const plotW = W - PAD.left - PAD.right;
-    const plotH = H - PAD.top - PAD.bottom;
+    // [S7 adım 2] Tuval CİHAZ PİKSEL ORANINA göre kurulur: mantıksal pikselle kurulduğunda
+    // DPR 2-3 ekranlarda eğri ve etiketler BULANIK çıkıyordu (tıbbi eğri okunurluğu).
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    canvasBoyutla(canvas as unknown as TuvalGibi, ctx as unknown as BaglamGibi, width, height, dpr);
+    const W = width;
+    const H = height;
+    // Eksen boşlukları GENİŞLİKTEN türetilir: sabit 60+60 boşluk 320 px'te çizim alanını
+    // 200 px'e düşürüyor, sıcaklık ekseni kapalıyken sağda 60 px boş duruyordu.
+    const PAD = hesaplaPad(width, showTemp);
+    const { genislik: plotW, yukseklik: plotH } = cizimAlani(W, H, PAD);
 
     // Background
     ctx.fillStyle = "#0a0f1e";
@@ -211,7 +217,8 @@ export function RealtimeChart({
     ctx.lineWidth = 1;
     ctx.strokeRect(PAD.left, PAD.top, plotW, plotH);
 
-  }, [history, visibleCoils, showMagnetic, showTemp]);
+    // width/height artık draw() içinde kullanılıyor (tuval DPR kurulumu + PAD hesabı).
+  }, [history, visibleCoils, showMagnetic, showTemp, width, height]);
 
   // Sürekli 60fps yerine yalnızca veri/ayar/boyut değişince çiz (CPU/batarya tasarrufu).
   useEffect(() => {
@@ -237,12 +244,8 @@ export function RealtimeChart({
   return (
     <View style={styles.wrap}>
       {/* @ts-ignore — canvas is web-only */}
-      <canvas
-        ref={canvasRef as any}
-        width={width}
-        height={height}
-        style={{ display: "block", width: "100%", height: "auto", borderRadius: 8 }}
-      />
+      {/* Boyut/DPR ölçeklemesi draw() içinde canvasBoyutla ile kurulur (CSS px = mantıksal px). */}
+      <canvas ref={canvasRef as any} style={{ display: "block", borderRadius: 8 }} />
     </View>
   );
 }
@@ -251,9 +254,8 @@ export function RealtimeChart({
 function NativeRealtimeChart({
   history, visibleCoils, showMagnetic = true, showTemp = true, width = 800, height = 300,
 }: Props) {
-  const PAD = { top: 20, right: 60, bottom: 40, left: 60 };
-  const plotW = width - PAD.left - PAD.right;
-  const plotH = height - PAD.top - PAD.bottom;
+  const PAD = hesaplaPad(width, showTemp);
+  const { genislik: plotW, yukseklik: plotH } = cizimAlani(width, height, PAD);
 
   const downsample = (pts: SensorDataPoint[]): SensorDataPoint[] => {
     if (pts.length <= 120) return pts;

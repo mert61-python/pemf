@@ -411,11 +411,19 @@ function TempChart({
   coilIds: number[];
   minTs: number;
 }) {
-  const width = 720;
-  const height = 260;
-  const PAD = { top: 20, right: 20, bottom: 36, left: 48 };
-  const plotW = width - PAD.left - PAD.right;
-  const plotH = height - PAD.top - PAD.bottom;
+  /**
+   * [S7 adım 1 / ekranC-3] GENİŞLİK ÖLÇÜLÜR, sabit DEĞİL.
+   * Eski kod `viewBox="0 0 720 260"` ile çiziyor ve SVG'yi `width="100%"` ile geriyordu: 360 px'lik
+   * telefonda tüm grafik 0,5 ölçekle küçülüyor, eksen yazıları 11 px yerine 5-6 px'e düşüp
+   * okunmaz oluyordu. Artık viewBox = ölçülen px (1:1) → yazı boyutu gerçek px.
+   */
+  const [olculenW, setOlculenW] = useState(0);
+  const width = olculenW;
+  const height = rs(240);
+  const dar = width < 420;
+  const PAD = { top: 20, right: dar ? 12 : 20, bottom: 36, left: dar ? 36 : 48 };
+  const plotW = Math.max(0, width - PAD.left - PAD.right);
+  const plotH = Math.max(0, height - PAD.top - PAD.bottom);
 
   // Aralıkları topla (x = göreli dakika, y = °C).
   let tMin = Infinity;
@@ -445,8 +453,16 @@ function TempChart({
   const yAt = (temp: number) => PAD.top + plotH - ((temp - tMin) / tRange) * plotH;
 
   return (
-    <View style={styles.chartWrap}>
-      <Svg width="100%" height={rs(260)} viewBox={`0 0 ${width} ${height}`}>
+    <View
+      style={styles.chartWrap}
+      testID="seans-sicaklik-grafigi"
+      onLayout={(e) => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        setOlculenW((eski) => (Math.abs(w - eski) < 1 ? eski : w));
+      }}
+    >
+      {width <= 0 ? null : (
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         <Rect x={0} y={0} width={width} height={height} fill="#0a0f1e" />
         {/* Yatay grid + °C ekseni */}
         {Array.from({ length: 5 }, (_, i) => {
@@ -541,6 +557,7 @@ function TempChart({
           strokeWidth={1}
         />
       </Svg>
+      )}
     </View>
   );
 }

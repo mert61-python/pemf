@@ -279,6 +279,18 @@ def _encode_jpg_b64(img: np.ndarray, quality: int | None = None) -> str:
     return base64.b64encode(buffer).decode("utf-8")
 
 
+def _kare_boyutu(img: np.ndarray) -> dict:
+    """Kodlanan karenin GERÇEK boyutu — istemci oran kilidi için.  [S7 adım 4, 2026-09-04]
+
+    ÖLÇÜLEN DURUM: yanıtlar yalnız `image_base64` taşıyordu; boyut burada zaten hesaplanıyor
+    (küçültme için) ama ATILIYORDU. İstemci kutunun oranını bilemediği için kareyi kırpıyor,
+    üzerine çizilen ORGAN İŞARETLERİ canlı görüntüyle kayıyordu (tıbbi karar ekranı).
+    Alan YALNIZ-EK: eski istemciler yok sayar, yeni istemci yoksa varsayılana düşer.
+    """
+    h, w = img.shape[:2]
+    return {"image_w": int(w), "image_h": int(h)}
+
+
 class DiseaseInput(BaseModel):
     age: float = 0.0
     weight: float = 0.0
@@ -528,6 +540,7 @@ async def analyze_landmark(
             content={
                 "status": "success",
                 "image_base64": b64_image,
+                **_kare_boyutu(img),
                 "detected": detected,
                 "fgs_total": total,
                 # §KALAN A4: olculen-deger-vs-populasyon-bandi paneli icin p5/p95
@@ -1039,6 +1052,9 @@ def _ai_hazirlik_loop():
                             "type": "ai_vision",
                             "data": {
                                 "imageBase64": base64.b64encode(buffer).decode("utf-8"),
+                                # [S7 adım 4] Kare boyutu istemcinin oran kilidi için (yalnız-ek).
+                                "imageW": int(ov.shape[1]),
+                                "imageH": int(ov.shape[0]),
                                 "preview": True,
                                 "detected": bool(_c.get("localized")),
                                 "catDetected": bool(_c.get("kedi_var")),
@@ -1274,13 +1290,18 @@ def _ai_pro_loop():
                     if sc < 1.0
                     else overlay
                 )
+                _kodlanan_kare = ov
                 _, buffer = cv2.imencode('.jpg', ov, [cv2.IMWRITE_JPEG_QUALITY, 55])
             else:
+                _kodlanan_kare = frame
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
             b64_image = base64.b64encode(buffer).decode('utf-8')
             per_coil = _build_ai_pro_percoil(D, P)
             ws_data = {
                 "imageBase64": b64_image,
+                # [S7 adım 4] Kare boyutu istemcinin oran kilidi için (yalnız-ek).
+                "imageW": int(_kodlanan_kare.shape[1]),
+                "imageH": int(_kodlanan_kare.shape[0]),
                 "detected": localized,
                 # AŞAMA (sahip isteği 2026-08-24): "kedi yok" ile "kedi var, organ bulunamadı"
                 # ayrı bilgiler — hazırlık ekranı operatöre doğru yönlendirmeyi verir.
@@ -1860,6 +1881,7 @@ async def ai_pro_frame(
             content={
                 "status": "success",
                 "image_base64": b64_image,
+                **_kare_boyutu(img_out),
                 # [B1]: yabancı izleyici için detected/catDetected bastırılır (kendi kamerasını
                 # localize etmedik → dürüst değer False) + foreignViewer bayrağı + sahip kimliği.
                 "detected": bool(localized) and not is_foreign,
@@ -1938,7 +1960,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 
         b64_image = _encode_jpg_b64(img)
 
-        return {"status": "success", "cat_count": cat_count, "image_base64": b64_image}
+        return {"status": "success", "cat_count": cat_count, "image_base64": b64_image, **_kare_boyutu(img)}
     except Exception as e:
         logger.error(f"Segmentation inference error: {e}", exc_info=True)
         raise _ai_fail("Segmentasyon hatası", e)
@@ -2031,7 +2053,7 @@ async def analyze_thermal(
 
         b64_image = _encode_jpg_b64(img)
 
-        return {"status": "success", "prediction": result, "image_base64": b64_image, **yanit}
+        return {"status": "success", "prediction": result, "image_base64": b64_image, **_kare_boyutu(img), **yanit}
     except Exception as e:
         logger.error(f"Thermal inference error: {e}", exc_info=True)
         raise _ai_fail("Termal model hatası", e)
@@ -2101,9 +2123,10 @@ async def analyze_reticulocytes(
 
         if os.path.exists(saved_image_path):
             img_res = cv2.imread(saved_image_path)
-            b64_image = _encode_jpg_b64(img_res)
+            _kodlanan = img_res
         else:
-            b64_image = _encode_jpg_b64(img)
+            _kodlanan = img
+        b64_image = _encode_jpg_b64(_kodlanan)
 
         # Sunum-katmanı XAI (Faz 2 kuyruğu): EigenCAM — tespitte dayanılan hücre bölgeleri.
         # ⚠️ tmp finally'de siliniyor → XAI burada. Açıklama İKİNCİL (zarif düşüş).
@@ -2119,7 +2142,13 @@ async def analyze_reticulocytes(
                 logger.warning("Retikülosit XAI üretilemedi (analiz etkilenmedi): %s", xe, exc_info=True)
                 _xai_alanlari["xai_error"] = "Açıklama üretilemedi"
 
-        return {"status": "success", "counts": counts, "image_base64": b64_image, **_xai_alanlari}
+        return {
+            "status": "success",
+            "counts": counts,
+            "image_base64": b64_image,
+            **_kare_boyutu(_kodlanan),
+            **_xai_alanlari,
+        }
     except Exception as e:
         logger.error(f"Reticulocytes inference error: {e}", exc_info=True)
         raise _ai_fail("Retikülosit model hatası", e)
@@ -2809,6 +2838,7 @@ async def analyze_kidney_ct(
         return {
             "status": "success",
             "image_base64": b64_image,
+            **_kare_boyutu(overlay),
             "n_detections": result["n_detections"],
             "class_counts": result["class_counts"],
             "detections": result["detections"],

@@ -126,7 +126,9 @@ export function SensorMonitorScreen() {
             visibleCoils={visibleCoils}
             showMagnetic={showMagnetic}
             showTemp={showTemp}
-            width={Math.min(chartW, 1200)}
+            // [S7 adım 2] 1200 px kapağı kaldırıldı: eksen boşlukları artık genişlikten
+            // türetiliyor, geniş ekranda grafik kabı tam kullanır.
+            width={chartW}
             height={grafikY}
           />
         )}
