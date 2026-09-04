@@ -548,3 +548,62 @@ Kapsam taraması (find): pf/src/screens (12 ekran), pf/src/components (domain 20
 
 ---
 *Üretim: `rapor_uret.py` — 153 ham / 121 benzersiz bulgu, ikinci doğrulama Claude, 10 alan, 22 ajan, 557 araç çağrısı.*
+
+---
+
+## Kapanış durumu — 2026-09-05
+
+Plan (`docs/responsive-duzeltme-plani-2026-09-04.md`) sırayla uygulandı. 15 commit,
+`production-hardening` dalında.
+
+### Kapanan fazlar
+
+| Faz | Kapsam | Durum |
+|---|---|---|
+| 0 | ekranB-2: ACİL DURDUR erişimi + STM belirsizliğinde gizlenmeme | kapandı |
+| A1 | touch/layoutMax/MAX_FONT_SCALE token'ları, theme/layout.ts, ShellLayoutContext, useKeyboard, ScrollableModalCard | kapandı |
+| A2 | Ölçek tavanı: büyük ekran %110, telefon değişmezliği | kapandı |
+| B | İçerik-farkında kabuk (bottom/rail/sidebar), klavyede erişilebilir ACİL DURDUR | kapandı |
+| C | S1, S2, S3, S4, S5, S6, S7 ekran düzeyi düzeltmeleri | kapandı (cihaz doğrulaması hariç) |
+| D | Beş pytest kapısı + bir vitest kapısı + görünüm alanı kapısı CI'da | kapandı |
+| E | Başlatıcı: dikey taşma, pencere boyutu, klavye erişimi | kapandı (yayın hariç) |
+| F | Site: yatay taşma, dokunma hedefleri, tek koyu tema, iOS giriş alanları | kapandı (yayın hariç) |
+| G | Yayın zinciri + cihaz test matrisi | **AÇIK — sahip onayı bekliyor** |
+
+### Ampirik kanıt (headless Edge + CDP, `scripts/responsive_kapisi.py`)
+
+| Hedef | Ölçüm | Denetimde | Şimdi |
+|---|---|---|---|
+| pf (web dışa aktarım) | 16 | 1 yüksek | **0** |
+| launcher | 36 | 4 yüksek | **0** |
+| site | 40 | 100 (yüksek/orta) | **0** |
+
+### Regresyon kapıları
+
+| Kapı | Ne ölçer | Kırmızı kanıtı |
+|---|---|---|
+| `tests/test_kabuk_ic_scrollview_kapisi.py` | Kabuk içi dikey kaydırıcı yasağı | 3/3 mutasyon |
+| `tests/test_modal_kaydirilabilir_kapisi.py` | Her modal kısa ekranda kaydırılabilir | 3/3 mutasyon |
+| `tests/test_dokunma_hedefi_kapisi.py` | Dokunma hedefi cırcırı (139 → 118, hedef 0) | 3/3 mutasyon |
+| `tests/test_arayuz_yazi_olcegi_kapisi.py` | Yazı ölçeği tavanı + rf(9\|10) cırcırı (17 → 7) | 4/4 mutasyon |
+| `tests/test_responsive_grafik_kapisi.py` | Grafik/kamera katmanı çıpaları | 7/7 mutasyon |
+| `tests/test_launcher_responsive_kapisi.py` | Başlatıcı yerleşim/erişilebilirlik | 7/7 mutasyon |
+| `tests/test_ai_kare_boyutu.py` | Backend kare boyutu alanları | 3/3 mutasyon |
+| `pemf-vet-web/src/__tests__/responsive-sozlesmesi.test.ts` | Site responsive sözleşmesi | 6/6 mutasyon |
+| `scripts/responsive_kapisi.py` (CI) | Gerçek tarayıcıda piksel ölçümü | CSS mutasyonu → exit 1 |
+
+⚠️ Kapıların KENDİ zaafları da ölçülerek düzeltildi: yorum satırlarını ihlal sayma (3 kapı),
+ham metinde konum karşılaştırması, `hitSlop`u boyut muafiyeti sayma, genel `createElement`
+araması. Her biri commit mesajında belgeli.
+
+### Açık kalanlar
+
+1. **Faz G — yayın zinciri.** Sürüm artışları ve GitHub Release yayını sahip onayı bekliyor:
+   backend 1.9.41 → OTA → APK 2.3.32 (vc39) → launcher 1.9.46 → site.
+2. **Cihaz test matrisi.** Aşağıdakiler yalnız fiziksel cihazda ölçülebilir:
+   · Klavye yerleşimi (Android 15 APK + iOS EAS) — S4 adım 8.
+   · Kamera hizası / organ işareti çakışması — S7 adım 7 (A4 kâğıt + ArUco protokolü).
+   · Yazı ölçeği 1,3 ve 0,85 turu — S6 adım 10.
+   · iOS çentik (insets.left 44-59) yalnız EAS derlemesiyle.
+3. **Pricing mobil kart görünümü.** Sahip kararı alındı ama FREE_MODE fiyat tutarsızlığıyla
+   birlikte ele alınacak ayrı iş.
