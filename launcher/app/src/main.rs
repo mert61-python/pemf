@@ -412,8 +412,22 @@ fn open_app_window(app: &tauri::AppHandle, url: &str) {
             return;
         }
     };
+    // [matris-9] Pencere maximize açılır ama kullanıcı "geri yükle" derse eski varsayılan boyut
+    // 860 px'e düşüyor ve arayüz kabuğu (900 px eşiği) TELEFON düzenine geçiyordu. Asgari boyut
+    // masaüstü kırılma noktasını hedefler; ekranı aşmaz (bkz. uygulama_pencere_boyutu).
+    let ((uw, uh), (umw, umh)) = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let l = m.size().to_logical::<f64>(m.scale_factor());
+            uygulama_pencere_boyutu(l.width, l.height)
+        })
+        .unwrap_or(((1280.0, 860.0), (900.0, 520.0)));
     let built = tauri::WebviewWindowBuilder::new(app, "app", tauri::WebviewUrl::External(parsed))
         .title("PEMF Vet")
+        .inner_size(uw, uh)
+        .min_inner_size(umw, umh)
         .maximized(true)
         .build();
     if built.is_err() {
@@ -1937,6 +1951,45 @@ fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
     }
 }
 
+/// [L adım 3 / launcher-2] PENCERE BOYUTUNU MONİTÖR ÇALIŞMA ALANINA SIĞDIR.
+///
+/// ÖLÇÜLEN DURUM: `tauri.conf` sabit 880×600 pencere ve 700×540 asgari boyut veriyordu.
+/// 1366×768 ekranda %150 DPI ile mantıksal çalışma alanı 911×480'e düşüyor: pencere ekrandan
+/// TAŞIYOR, asgari yükseklik 540 > 480 olduğu için kullanıcı KÜÇÜLTEMİYOR da. Alt kısımdaki
+/// "Kur ve Başlat" düğmesi ekran dışında kalıyordu.
+///
+/// Dönüş: ((pencere_w, pencere_h), (asgari_w, asgari_h)) — hepsi MANTIKSAL px.
+/// Kural: çalışma alanından 40 px pay bırak, 880×600'ü aşma, 640×400'ün altına inme.
+fn ana_pencere_boyutu(wa_w: f64, wa_h: f64) -> ((f64, f64), (f64, f64)) {
+    const PAY: f64 = 40.0;
+    const TAVAN_W: f64 = 880.0;
+    const TAVAN_H: f64 = 600.0;
+    const TABAN_W: f64 = 640.0;
+    const TABAN_H: f64 = 400.0;
+    const MIN_W: f64 = 700.0;
+    const MIN_H: f64 = 460.0;
+    let w = (wa_w - PAY).min(TAVAN_W).max(TABAN_W);
+    let h = (wa_h - PAY).min(TAVAN_H).max(TABAN_H);
+    // Asgari boyut pencereden BÜYÜK olamaz: aksi hâlde kullanıcı pencereyi küçültemez ve
+    // içerik ekran dışında kalır (tam da denetimde ölçülen durum).
+    let min_w = MIN_W.min(w);
+    let min_h = MIN_H.min(h);
+    ((w, h), (min_w, min_h))
+}
+
+/// Kurulu uygulama ("app") penceresi: masaüstü kırılma noktasını (≥900 px) koruyacak kadar geniş
+/// olsun ama ekranı da aşmasın. `matris-9`: geri-yükle sonrası pencere 860 px'e düşünce kabuk
+/// telefon düzenine geçiyordu.
+fn uygulama_pencere_boyutu(wa_w: f64, wa_h: f64) -> ((f64, f64), (f64, f64)) {
+    const PAY: f64 = 40.0;
+    let w = (wa_w - PAY).min(1280.0).max(700.0);
+    let h = (wa_h - PAY).min(860.0).max(460.0);
+    // Kabuk 900 px'te sidebar'a geçer; asgari genişlik bunu HEDEFLER ama ekranı aşmaz.
+    let min_w = 900.0_f64.min(w);
+    let min_h = 520.0_f64.min(h);
+    ((w, h), (min_w, min_h))
+}
+
 fn main() {
     let ctx = tauri::generate_context!();
     // [GÜNCELLEME EKRANI] bilgilendirme penceresi kipi: normal açılışın hiçbiri koşmaz.
@@ -1955,6 +2008,31 @@ fn main() {
     }
     tauri::Builder::default()
         .manage(AppState::default())
+        // [L adım 3-4] Pencere boyutu monitör çalışma alanına göre kırpılır ve ANCAK ondan sonra
+        // gösterilir (tauri.conf `visible:false`). Aksi hâlde pencere önce 880×600 çizilip sonra
+        // zıplıyordu. ⚠️ Gecikmeli iş parçacığı kalıbı BİLİNÇLİ: setup içinde doğrudan yapılan
+        // boyut çağrıları pencere yaratılırken uygulanan config tarafından EZİLİYOR (güncelleme
+        // ekranında ölçüldü, main.rs'teki gunc kipi aynı kalıbı kullanıyor).
+        // ⚠️ show() JS'e DEĞİL bu koşulsuz zamanlayıcıya bağlı: JS ayrıştırılamazsa (2026-08-29
+        // arızası) JS'e bağlı bir show() görünmez donmuş uygulama üretirdi.
+        .setup(|app| {
+            if let Some(w) = app.get_webview_window("main") {
+                let w2 = w.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    if let Ok(Some(mon)) = w2.current_monitor() {
+                        let olcek = mon.scale_factor();
+                        let boyut = mon.size().to_logical::<f64>(olcek);
+                        let ((pw, ph), (mw, mh)) = ana_pencere_boyutu(boyut.width, boyut.height);
+                        let _ = w2.set_min_size(Some(tauri::LogicalSize::new(mw, mh)));
+                        let _ = w2.set_size(tauri::LogicalSize::new(pw, ph));
+                        let _ = w2.center();
+                    }
+                    let _ = w2.show();
+                });
+            }
+            Ok(())
+        })
 
         .invoke_handler(tauri::generate_handler![
             detect_environment,
@@ -2778,4 +2856,43 @@ Connection: close
 
         let _ = std::fs::remove_dir_all(&d);
     }
+    /// [L adım 3 / launcher-2] Pencere boyutu monitör çalışma alanına sığmalı.
+    /// ÖLÇÜLEN: 1366×768 @%150 → mantıksal 911×480. Sabit 880×600 pencere + 700×540 asgari
+    /// boyut ile pencere ekrandan taşıyor ve KÜÇÜLTÜLEMİYORDU (asgari 540 > 480).
+    #[test]
+    fn ana_pencere_calisma_alanina_sigar() {
+        // 1366×768 @%150 maximize
+        let ((w, h), (mw, mh)) = ana_pencere_boyutu(911.0, 480.0);
+        assert!(h <= 480.0, "pencere yüksekliği çalışma alanını aşıyor: {h}");
+        assert!(mh <= h, "asgari yükseklik pencereden büyük → küçültülemez: {mh} > {h}");
+        assert_eq!((w, h), (871.0, 440.0));
+        assert_eq!((mw, mh), (700.0, 440.0));
+
+        // 1366×768 @%125 → 1093×576
+        let ((w2, h2), (_, mh2)) = ana_pencere_boyutu(1093.0, 576.0);
+        assert_eq!((w2, h2), (880.0, 536.0));
+        assert_eq!(mh2, 460.0);
+
+        // Geniş ekran: tavan aşılmaz.
+        let ((w3, h3), _) = ana_pencere_boyutu(2560.0, 1440.0);
+        assert_eq!((w3, h3), (880.0, 600.0));
+
+        // Çok küçük sanal ekran: taban altına inilmez.
+        let ((w4, h4), (mw4, mh4)) = ana_pencere_boyutu(500.0, 300.0);
+        assert_eq!((w4, h4), (640.0, 400.0));
+        assert!(mw4 <= w4 && mh4 <= h4);
+    }
+
+    /// [matris-9] Kurulu uygulama penceresi masaüstü kırılma noktasını (900 px) hedefler.
+    #[test]
+    fn uygulama_penceresi_masaustu_kirilma_noktasini_korur() {
+        let ((w, _), (mw, _)) = uygulama_pencere_boyutu(1920.0, 1080.0);
+        assert!(w >= 900.0);
+        assert_eq!(mw, 900.0, "asgari genişlik kabuğu telefon düzenine düşürmemeli");
+
+        // Dar ekranda asgari genişlik pencereyi AŞMAZ (aksi hâlde küçültülemez).
+        let ((w2, _), (mw2, _)) = uygulama_pencere_boyutu(800.0, 600.0);
+        assert!(mw2 <= w2);
+    }
+
 }

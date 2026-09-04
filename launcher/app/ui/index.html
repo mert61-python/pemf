@@ -91,9 +91,16 @@
         box-shadow: 0 0 8px var(--ok); }
 
       /* ---------- Main / stage ---------- */
+      /* [L adım 1 / launcher-1] DİKEY TAŞMA KÖKÜ. `justify-content: center` içerik pencereden
+         UZUN olduğunda taşan kısmı İKİ UÇTAN birden kırpar: 700x540'lık asgari pencerede
+         "Giriş yapın" başlığı üst şeridin ALTINDA kalıyor ve KAYDIRMAYLA DA ULAŞILAMIYORDU
+         (ölçüldü: ilk içerik üstü 45 px < header altı 75 px). `flex-start` + `.stage`e
+         `margin: auto 0`: içerik sığdığında auto marj dikey ORTALAR, taştığında 0'a düşer →
+         içerik en üstten başlar ve main'in overflow:auto'su kaydırır. */
+      .app-root { display: contents; }
       main { flex: 1; overflow: auto; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; padding: 18px 30px; text-align: center; }
-      .stage { width: 100%; max-width: 560px; }
+        align-items: center; justify-content: flex-start; padding: 18px 30px; text-align: center; }
+      .stage { width: 100%; max-width: 560px; margin: auto 0; }
       .title { font-size: 26px; font-weight: 800; margin: 0 0 5px; letter-spacing: -0.4px; }
       /* [GÜNCELLEME EKRANI] küçük bilgilendirme penceresi (640×400): üst şerit/alt bilgi gizli,
          iç boşluk dar → başlık + bar + metin tek bakışta sığar. */
@@ -137,6 +144,9 @@
         padding: 12px 15px; border-radius: var(--radius);
         background: var(--surface); border: 1px solid var(--line);
         transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        /* <button>e geçtikten sonra tarayıcı varsayılanlarını sıfırla (görünüm AYNI kalsın). */
+        appearance: none; -webkit-appearance: none; font: inherit; color: inherit;
+        text-align: left; width: 100%; cursor: pointer;
       }
       .card:hover { border-color: var(--line2); }
       .card.sel { border-color: var(--teal); background: rgba(45, 212, 191, 0.06); }
@@ -395,15 +405,47 @@
         .hbtn span { display: none; }
         #auth-email { max-width: 120px; }
       }
-      @media (max-width: 680px) {
-        .brand p { display: none; }
+      /* [L adım 2 / launcher-12] ÖLÜ KURAL SİLİNDİ: pencere minWidth 700 olduğu için
+         `max-width: 680px` HİÇ tetiklenmiyordu. Asıl kritik eksen YÜKSEKLİK. */
+
+      /* Kısa pencere (1366x768 @%150 maximize → mantıksal 911x480; 1920x1080 @%200 → 960x540). */
+      @media (max-height: 620px) {
+        .title { font-size: 22px; }
+        .lead { margin-bottom: 10px; }
+        .check { width: 64px; height: 64px; }
+        .check svg { width: 34px; height: 34px; }
+        .pct { font-size: 36px; min-height: 40px; }
+        .cards { gap: 6px; }
+        .card { padding: 9px 12px; }
+        .subactions { margin-top: 12px; }
+        .chips { margin-bottom: 14px; }
+      }
+
+      /* Geniş ekranda sahne biraz genişler (1600 px üstü). */
+      @media (min-width: 1600px) {
+        .stage { max-width: 680px; }
+      }
+
+      /* [launcher-11] DOKUNMATİK (Surface): fare kullanıcısına görsel bedel ödetmeden
+         dokunma hedefi 44 px tabanı. */
+      @media (pointer: coarse) {
+        .hbtn, .link, .btn, .card { min-height: 44px; }
+        .hbtn, .link { display: inline-flex; align-items: center; }
+      }
+
+      /* Oturum açıkken üst şerit etiketleri dar pencerede gizlenir; title/aria-label kalır. */
+      @media (max-width: 860px) {
         .hbtn span { display: none; }
-        .title { font-size: 24px; }
+        .brand p { display: none; }
       }
     </style>
   </head>
   <body>
     <!-- ===== Header ===== -->
+    <!-- [L adım 7] Modal açıkken `inert` verilen kök: Tab arka plandaki "Kur ve Başlat"a
+         gitmesin. Yalnız sarmalayıcı; düzen `body` flex zincirini bozmasın diye
+         `display: contents` alır. -->
+    <div id="app-root" class="app-root">
     <header>
       <div class="brand">
         <span class="logo" aria-hidden="true">
@@ -423,22 +465,22 @@
           <button id="lang-tr" class="on">TR</button>
           <button id="lang-en">EN</button>
         </div>
-        <button class="hbtn" id="btn-web">
+        <button class="hbtn" id="btn-web" title="Web Sitesi" aria-label="Web Sitesi">
           <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>
           <span id="t-web">Web Sitesi</span>
         </button>
-        <button class="hbtn" id="btn-guide">
+        <button class="hbtn" id="btn-guide" title="Kılavuz" aria-label="Kılavuz">
           <svg class="icon" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2V5Z"/><path d="M20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5Z"/></svg>
           <span id="t-guide">Kılavuz</span>
         </button>
-        <button class="hbtn" id="btn-about">
+        <button class="hbtn" id="btn-about" title="Hakkında" aria-label="Hakkında">
           <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
           <span id="t-about">Hakkında</span>
         </button>
         <!-- Giriş yapılınca: e-posta + Çıkış. Jeton ASLA gösterilmez (sözleşme). -->
         <span class="authbox" id="auth-box" hidden>
           <span class="who" id="auth-email">—</span>
-          <button class="hbtn" id="btn-logout">
+          <button class="hbtn" id="btn-logout" title="Çıkış" aria-label="Çıkış">
             <svg class="icon" viewBox="0 0 24 24"><path d="M15 16l4-4-4-4M19 12H9M11 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
             <span id="t-logout">Çıkış</span>
           </button>
@@ -589,6 +631,7 @@
         <a id="foot-support"><span id="t-foot-support">Destek</span></a>
       </span>
     </footer>
+    </div>
 
     <!-- ===== About modal ===== -->
     <div class="overlay" id="about" hidden>
@@ -1544,8 +1587,15 @@
           const [name, desc] = meta ? meta[LANG] : [key, ""];
           const on = eff.has(key);
           const isDep = on && !selected.has(key);       // başka profil için otomatik dahil
-          const card = document.createElement("div");
+          // [L adım 6 / launcher-6] Kart <div> idi: klavyeyle SEÇİLEMİYORDU ve ekran okuyucu
+          // seçili durumu bildirmiyordu. <button type=button aria-pressed> ile hem Tab hem
+          // Enter/Space çalışır; `busy` iken disabled (mevcut `if (busy) return` görsel karşılığı).
+          const card = document.createElement("button");
+          card.type = "button";
           card.className = "card" + (on ? " sel" : "");
+          card.setAttribute("aria-pressed", on ? "true" : "false");
+          card.disabled = !!busy;
+          card.setAttribute("aria-label", name);
           const cb = document.createElement("span"); cb.className = "box";
           cb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#04211d"><path d="m5 13 4 4L19 7"/></svg>';
           const pico = document.createElement("span"); pico.className = "pico";
@@ -1952,15 +2002,46 @@
       const openWeb = () => invoke("open_url", { url: WEB }).catch(() => {});
       $("btn-web").onclick = openWeb;
       $("foot-support").onclick = () => invoke("open_url", { url: WEB + "support" }).catch(() => openWeb());
+      // ---------- [L adım 7 / launcher-5] MODAL ODAK YÖNETİMİ ----------
+      // ÖLÇÜLEN DURUM: modallar yalnız `hidden` ile açılıp kapanıyordu. Tab tuşu ARKA PLANDAKİ
+      // düğmelere (Kur ve Başlat dahil) gidiyor, Escape hiçbir şey yapmıyordu.
+      // `inert` (Chromium 102+, WebView2'de var) elle Tab-döngüsü kodu yazmadan arka planı
+      // etkisizleştirir. ⚠️ closeModal inert'i KOŞULSUZ kaldırır: kaldırılmazsa Başlat/E-stop'a
+      // giden TÜM yol klavyeden kilitlenir.
+      let acikModal = null;
+      function openModal(id, odak) {
+        const m = $(id);
+        m.hidden = false;
+        m.setAttribute("role", "dialog");
+        m.setAttribute("aria-modal", "true");
+        $("app-root").inert = true;
+        acikModal = id;
+        const hedef = odak && $(odak);
+        if (hedef && hedef.focus) { try { hedef.focus(); } catch (_e) {} }
+      }
+      function closeModal(id) {
+        const m = $(id || acikModal);
+        if (m) m.hidden = true;
+        // KOŞULSUZ: hangi yolla kapanırsa kapansın arka plan yeniden kullanılabilir olmalı.
+        $("app-root").inert = false;
+        acikModal = null;
+      }
+      // Escape = KAPAT, "vazgeç" DEĞİL: confirm'de hiçbir geri çağrı çalıştırılmaz. Gerekçe:
+      // resumeTitle onayının noCb'si `discard_pending` (inen 1,4 GB'ı SİLER) — yanlışlıkla
+      // basılan Escape veri silmemeli.
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && acikModal) { e.preventDefault(); closeModal(); }
+      });
+
       $("btn-about").onclick = () => {
         $("about-ver").textContent = ver; $("about-plat").textContent = platform;
-        $("about").hidden = false;
+        openModal("about", "about-close");
       };
-      $("about-close").onclick = () => { $("about").hidden = true; };
-      $("about").onclick = (e) => { if (e.target === $("about")) $("about").hidden = true; };
-      $("btn-guide").onclick = () => { renderGuide(); $("guide").hidden = false; };
-      $("guide-close").onclick = () => { $("guide").hidden = true; };
-      $("guide").onclick = (e) => { if (e.target === $("guide")) $("guide").hidden = true; };
+      $("about-close").onclick = () => closeModal("about");
+      $("about").onclick = (e) => { if (e.target === $("about")) closeModal("about"); };
+      $("btn-guide").onclick = () => { renderGuide(); openModal("guide", "guide-close"); };
+      $("guide-close").onclick = () => closeModal("guide");
+      $("guide").onclick = (e) => { if (e.target === $("guide")) closeModal("guide"); };
 
       // ---------- confirm modal ----------
       let confirmCb = null, confirmNoCb = null;
@@ -1970,10 +2051,11 @@
         $("confirm-no").textContent = opts.noLabel || t().cancel;
         $("confirm-yes").className = "mbtn " + (opts.danger ? "danger" : "primary");
         confirmCb = cb; confirmNoCb = opts.noCb || null;
-        $("confirm").hidden = false;
+        // Odak GÜVENLİ varsayılana ("Vazgeç") taşınır → Enter yanlışlıkla onaylamaz.
+        openModal("confirm", "confirm-no");
       }
-      $("confirm-no").onclick = () => { $("confirm").hidden = true; const cb = confirmNoCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
-      $("confirm-yes").onclick = () => { $("confirm").hidden = true; const cb = confirmCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
+      $("confirm-no").onclick = () => { closeModal("confirm"); const cb = confirmNoCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
+      $("confirm-yes").onclick = () => { closeModal("confirm"); const cb = confirmCb; confirmCb = null; confirmNoCb = null; if (cb) cb(); };
 
       // OTO-GÜNCELLEME: yeni client sürümü (installer_url'li) varsa açılışta SESSİZCE indir + SHA doğrula
       // + kur + yeniden başlat. Başarılıysa Rust uygulamadan çıkar (true döner, boot durur). Başarısızsa
