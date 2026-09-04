@@ -38,6 +38,10 @@ const STM_COIL_MAX_ID = 5;
 // AI Pro kapalı-döngü canlı telemetrisi (backend ai_router._ai_pro_loop yayını).
 export interface AiVisionData {
   imageBase64?: string;
+  /** [S7 adım 4] Kodlanan karenin gerçek boyutu — istemci kutu oranını buradan kilitler.
+   *  ⚠️ Opsiyonel: eski backend göndermez → cihaz yönü varsayılanına düşülür. */
+  imageW?: number;
+  imageH?: number;
   /** Organ lokalize edildi mi — AI Pro cat_organ pipeline'ı (el-takibi söküldü). */
   detected?: boolean;
   /** Organ lokalizasyon güveni [0,1]. */

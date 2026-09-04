@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useStageHeight } from "@/hooks/useStageHeight";
+import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
@@ -149,6 +150,9 @@ interface FgsRaw {
  */
 interface AiResult {
   status?: string; success?: boolean; method?: string; image_base64?: string;
+  /** [S7 adım 4] Kodlanan karenin gerçek boyutu — önizleme kutusunun oran kilidi.
+   *  ⚠️ Opsiyonel: eski backend göndermez → cihaz yönü varsayılanına düşülür. */
+  image_w?: number; image_h?: number;
   // disease vision (FGS / termal / segmentasyon / retikülosit / AI-Pro donanım)
   fgs_total?: number | null; detected?: boolean; raw_fgs?: FgsRaw;
   prediction?: ThermalPrediction; cat_count?: number; counts?: Record<string, number>;
@@ -1063,6 +1067,11 @@ function resetAiCachesForOwner(owner: string | null): boolean {
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // [S7 adım 5 / aihub-1] ÖNİZLEME KUTUSU ORAN KİLİDİ. Kutu sabit yükseklikteydi ve canlı
+  // kamera ile üzerine bindirilen sunucu overlay'i farklı ölçeklerde oturuyordu: organ işaretleri
+  // görüntüyle KAYIYORDU (tıbbi karar ekranı). Kutu artık karenin GERÇEK oranında açık px.
+  const [onizlemeW, setOnizlemeW] = useState(0);
+  const { width: pencereX, height: pencereY } = useResponsive();
   const { showToast } = useToast();
   const { realtime } = useEntitlement();
   const [imageUri, setImageUri] = useState<string | null>(visionCache[endpoint]?.imageUri ?? null);
@@ -1073,6 +1082,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
    *  sürebildiği için OTOMATİK DEĞİL; yalnız manuel analizde ve destekleyen uçlarda. */
   const [isiHaritasi, setIsiHaritasi] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[endpoint]?.result ?? null);
+  const onizlemeKutu =
+    onizlemeW > 0 ? kameraKutusu(onizlemeW, kareOrani(result, pencereY > pencereX), pencereY, 0.55) : null;
 
   const [isLive, setIsLive] = useState(false);
   // BUG FIX: Canlı kamera varsayılan olarak ARKA ('back') kamera (kediyi çekmek için);
@@ -1446,7 +1457,19 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           <Text style={styles.photoGuideWarn}>⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.</Text>
         </View>
       )}
-      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+      <View
+        style={[
+          styles.imagePreviewContainer,
+          onizlemeKutu
+            ? { width: onizlemeKutu.width, height: onizlemeKutu.height, alignSelf: "center" }
+            : { height: sahneH },
+        ]}
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          // Kutu kendi genişliğini de değiştirir → yalnız İLK ölçüm alınır (ölç-daralt döngüsü yok).
+          setOnizlemeW((eski) => (eski > 0 ? eski : w));
+        }}
+      >
         {(isLive && autoAdjust) ? (
           // Otonom Biofeedback: SUNUCU (klinik) kamerası sürüyor — telefon kamerası DEĞİL.
           // Sunucu karesi gelene kadar telefon CameraView'ı GÖSTERME (kafa-karışıklığı önlenir).
@@ -3379,6 +3402,11 @@ function ScratchModule({ patientName }: { patientName: string }) {
 function CatOrganModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // [S7 adım 5 / aihub-1] ÖNİZLEME KUTUSU ORAN KİLİDİ. Kutu sabit yükseklikteydi ve canlı
+  // kamera ile üzerine bindirilen sunucu overlay'i farklı ölçeklerde oturuyordu: organ işaretleri
+  // görüntüyle KAYIYORDU (tıbbi karar ekranı). Kutu artık karenin GERÇEK oranında açık px.
+  const [onizlemeW, setOnizlemeW] = useState(0);
+  const { width: pencereX, height: pencereY } = useResponsive();
   const { showToast } = useToast();
   const CK = "/vision/cat_organ";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -3386,6 +3414,8 @@ function CatOrganModule({ patientName }: { patientName: string }) {
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AiResult | null>(visionCache[CK]?.result ?? null);
+  const onizlemeKutu =
+    onizlemeW > 0 ? kameraKutusu(onizlemeW, kareOrani(result, pencereY > pencereX), pencereY, 0.55) : null;
   const [longLoading, setLongLoading] = useState(false);
   const { isCompact } = useResponsive();
 
@@ -3545,7 +3575,19 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+      <View
+        style={[
+          styles.imagePreviewContainer,
+          onizlemeKutu
+            ? { width: onizlemeKutu.width, height: onizlemeKutu.height, alignSelf: "center" }
+            : { height: sahneH },
+        ]}
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          // Kutu kendi genişliğini de değiştirir → yalnız İLK ölçüm alınır (ölç-daralt döngüsü yok).
+          setOnizlemeW((eski) => (eski > 0 ? eski : w));
+        }}
+      >
         {isLive ? (
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />

@@ -18,7 +18,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useOperator } from "@/context/OperatorContext";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
+import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
+import { useResponsive } from "@/hooks/useResponsive";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { getClientInstanceId, serviceConfig } from "@/services/config";
@@ -63,6 +65,9 @@ const DUSUK_GUVEN = 0.5;
 type Coil = { id: number; freq: number; duty: number; phase: number };
 type FrameResult = {
   image_base64?: string;
+  /** [S7 adım 4] Kodlanan karenin gerçek boyutu (oran kilidi). Eski backend göndermez. */
+  image_w?: number;
+  image_h?: number;
   detected?: boolean;
   /** Karede hayvan var mı — organ lokalizasyonundan AYRI (bkz. ai_router::_extract_organ_target).
    *  ⚠️ Opsiyonel: eski backend bu alanı göndermez → hazırlık metni "hayvan aranıyor"da kalır,
@@ -142,6 +147,7 @@ interface AiProposeResponse {
 
 /** @param patientName Aktif hasta adı — seansın kime uygulandığının denetim izi için backend'e taşınır. */
 export function AiProPanel({ patientName = "" }: { patientName?: string }) {
+  const { width: pencereX, height: pencereY } = useResponsive();
   const { aiVisionData: v } = useLiveData();
 
   const [organId, setOrganId] = useState(0);
@@ -659,6 +665,19 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   const targetY = IS_WEB ? v?.target?.y : mobileResult?.target?.y;
   const targetZ = IS_WEB ? v?.target?.z : mobileResult?.target?.z;
   const overlayB64 = IS_WEB ? v?.imageBase64 : mobileResult?.image_base64;
+
+  /**
+   * [S7 adım 6 / aihub-2] KAMERA KUTUSU ORAN KİLİDİ.
+   * Kutu SABİT rs(200) yükseklikteydi ve içerik `resizeMode="contain"` ile sığdırılıyordu:
+   * canlı önizleme ile ÜZERİNE çizilen organ overlay'i farklı ölçeklerde oturuyor, işaretler
+   * görüntüyle KAYIYORDU. Kutu artık karenin GERÇEK oranında açık px olarak hesaplanıyor →
+   * contain ≡ cover, kayma yok. Boyut yoksa cihaz yönü varsayılanına düşer.
+   */
+  const [kutuW, setKutuW] = useState(0);
+  const kareOran = IS_WEB
+    ? kareOrani({ image_w: v?.imageW, image_h: v?.imageH }, false)
+    : kareOrani(mobileResult, pencereY > pencereX);
+  const kutu = kutuW > 0 ? kameraKutusu(kutuW, kareOran, pencereY, 0.5) : null;
   const perCoil: Coil[] = (IS_WEB ? v?.perCoil : mobileResult?.perCoil) ?? [];
   const remaining = IS_WEB ? (v?.remainingSec ?? 0) : remainingSec;
 
@@ -721,7 +740,15 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       </Text>
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
-      <View style={styles.camBox}>
+      <View
+        style={[styles.camBox, kutu ? { width: kutu.width, height: kutu.height, alignSelf: "center" } : null]}
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          // Kutu kendi genişliğini de değiştirdiği için yalnız BÜYÜK sapmalarda yeniden ölç
+          // (aksi hâlde ölç → daralt → ölç döngüsü kurulur).
+          setKutuW((eski) => (eski > 0 ? eski : w));
+        }}
+      >
         {IS_WEB ? (
           overlayB64 ? (
             <Image source={{ uri: `data:image/jpeg;base64,${overlayB64}` }} style={styles.cam} resizeMode="contain" />
@@ -889,16 +916,18 @@ const styles = StyleSheet.create({
   // Sunum-katmanı XAI (2026-08-26): güven dökümü satırı — küçük, sessiz, metrik altına.
   guvenDokumu: { color: colors.textMuted, fontSize: typography.small, marginTop: 4 },
   camBox: {
-    height: rs(200), backgroundColor: "#000", borderRadius: 12,
+    // Yükseklik artık ÖLÇÜLEN kutudan (oran kilidi); bu yalnız ölçüm gelene kadarki taban.
+    width: "100%", minHeight: rs(200), backgroundColor: "#000", borderRadius: 12,
     alignItems: "center", justifyContent: "center", overflow: "hidden",
     borderWidth: 1, borderColor: "#1e3a5f",
   },
   cam: { width: "100%", height: "100%" },
   camOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
   camPlaceholder: { color: colors.textMuted, fontSize: typography.small },
+  // [S3/S7] 32 px dokunma hedefi 320 px'te 27 px'e düşüyordu; taban ölçekle küçülmeyen touch.min.
   flipBtn: {
     position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 16, width: rs(32), height: rs(32), alignItems: "center", justifyContent: "center",
+    borderRadius: 22, width: touch.min, height: touch.min, alignItems: "center", justifyContent: "center",
   },
   flipText: { fontSize: rf(16) },
   metricRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

@@ -82,3 +82,21 @@ def test_kamera_kutusu_oran_kilidi_tek_kaynakta():
         "Oran kilidi aspectRatio'ya dönmüş: maxHeight ile birlikte genişlik %100 kalır ve "
         "oran yine bozulur (organ işaretleri canlı görüntüyle kayar)."
     )
+
+
+def test_KRITIK_canli_kamera_kutulari_oran_kilidine_bagli():
+    """Saf hesap testleri, bileşenin o hesabı KULLANMAYI bırakmasını yakalayamaz (ölçüldü)."""
+    aihub = _oku("screens/AiHubScreen.tsx")
+    assert aihub.count("kameraKutusu(onizlemeW") == 2, (
+        "AI Hub'ın İKİ canlı modülü (VisionModule, CatOrganModule) de kutu oran kilidini kullanmalı."
+    )
+    aipro = _oku("components/domain/AiProPanel.tsx")
+    assert "kameraKutusu(kutuW" in aipro, "AI Pro paneli kutu oran kilidini bırakmış"
+    assert "height: rs(200), backgroundColor" not in aipro, "camBox sabit yüksekliğe dönmüş"
+
+
+def test_kare_boyutu_alanlari_istemci_tiplerinde_var():
+    """Backend yalnız-ek alanları istemci tipinde tanımlı olmalı (yoksa okunmaz)."""
+    assert "imageW?: number;" in _oku("context/LiveDataContext.tsx")
+    assert "image_w?: number;" in _oku("components/domain/AiProPanel.tsx")
+    assert "image_w?: number;" in _oku("screens/AiHubScreen.tsx")
