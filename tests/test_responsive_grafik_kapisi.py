@@ -100,3 +100,10 @@ def test_kare_boyutu_alanlari_istemci_tiplerinde_var():
     assert "imageW?: number;" in _oku("context/LiveDataContext.tsx")
     assert "image_w?: number;" in _oku("components/domain/AiProPanel.tsx")
     assert "image_w?: number;" in _oku("screens/AiHubScreen.tsx")
+
+
+def test_KPI_pasta_lejanti_SVG_disinda():
+    """chart-kit lejantı SVG içinde x=width/2.5 sabitinde çizip pastanın üzerine biniyordu."""
+    src = _oku("screens/KpiDashboardScreen.tsx")
+    assert "hasLegend={false}" in src, "chart-kit lejantı yeniden açılmış (pastanın üzerine biner)"
+    assert "pieLejant" in src, "RN lejantı kaldırılmış"

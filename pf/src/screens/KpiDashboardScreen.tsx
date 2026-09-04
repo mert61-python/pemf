@@ -166,17 +166,33 @@ export function KpiDashboardScreen() {
           <Text style={styles.chartTitle}>Seans Modu Dağılımı</Text>
           <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
             {chartW > 0 && (
-              <PieChart
-                data={pieData}
-                width={chartW}
-                height={rs(220)}
-                chartConfig={chartConfig}
-                accessor={"population"}
-                backgroundColor={"transparent"}
-                paddingLeft={"15"}
-                center={[10, 0]}
-                absolute
-              />
+              <>
+                {/* [S7 adım 3 / ekranC-2] Lejant chart-kit'in SVG'si İÇİNDE, x = width/2.5 sabit
+                    konumunda çiziliyordu: 300 px'lik kartta mod adları ("Yara İyileşmesi") pastanın
+                    ÜZERİNE biniyor ve kırpılıyordu. Lejant artık RN View olarak grafiğin ALTINDA,
+                    sarmalı bir satırda. */}
+                <PieChart
+                  data={pieData}
+                  width={chartW}
+                  height={rs(200)}
+                  chartConfig={chartConfig}
+                  accessor={"population"}
+                  backgroundColor={"transparent"}
+                  paddingLeft={String(Math.round(chartW / 4))}
+                  center={[0, 0]}
+                  hasLegend={false}
+                />
+                <View style={styles.pieLejant}>
+                  {pieData.map((d) => (
+                    <View key={d.name} style={styles.pieLejantOge}>
+                      <View style={[styles.pieLejantNokta, { backgroundColor: d.color }]} />
+                      <Text style={styles.pieLejantMetin} numberOfLines={1}>
+                        {d.name} ({d.population})
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
             )}
           </View>
         </Card>
@@ -298,6 +314,10 @@ const styles = StyleSheet.create({
   },
   chartCard: { padding: spacing.sm, alignItems: 'center', overflow: "hidden" },
   chartInner: { width: "100%", alignItems: "center" },
+  pieLejant: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingHorizontal: spacing.sm, justifyContent: "center" },
+  pieLejantOge: { flexDirection: "row", alignItems: "center", gap: spacing.xs, maxWidth: "100%" },
+  pieLejantNokta: { width: rs(10), height: rs(10), borderRadius: rs(5) },
+  pieLejantMetin: { color: colors.textMuted, fontSize: typography.small, flexShrink: 1 },
   chart: { marginVertical: spacing.sm, borderRadius: 8 },
   chartTitle: { color: colors.text, fontSize: typography.body, fontWeight: "700", marginBottom: spacing.sm, alignSelf: 'flex-start', paddingLeft: spacing.sm },
   tableCard: { padding: 0, overflow: "hidden" },
