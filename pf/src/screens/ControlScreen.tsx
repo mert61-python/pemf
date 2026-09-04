@@ -938,7 +938,8 @@ const styles = StyleSheet.create({
   targetChipTextActive: { color: "#fff", fontWeight: "700" },
 
   paramRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  paramField: { flex: 1, minWidth: rs(140) },
+  // [S1/ekranB-12] Tavan ÖLÇEKSİZ: PC'de rs() ile çarpılırsa 260 px kabul ölçütü aşılır.
+  paramField: { flex: 1, minWidth: rs(140), maxWidth: layoutMax.alan },
   paramFieldLabel: { color: colors.textMuted, fontSize: rf(11), fontWeight: "600", marginBottom: 4 },
   paramFieldInput: {
     backgroundColor: "#1e293b",

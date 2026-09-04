@@ -70,8 +70,10 @@ export const touch = {
  * EKRAN-KONTEYNER GENİŞLİK TAVANLARI — ÖLÇEKSİZ (CSS px).  [S1, 2026-09-04]
  * `maxWidth: rs(1100)` PC'de 1430 px'e çıkıyordu: "en fazla 1100 px" niyetinin tam tersi.
  * maxWidth bir tavandır, telefon-içi orantı değil → `rs()` ile ÇARPILMAZ.
+ * `alan`: tek bir FORM ALANI tavanı (ParamField). 1430 px'lik içerikte flex:1 alanlar 340 px'e
+ * yayılıp ortalanmış üç haneli sayıyı okunmaz kılıyordu; kabul ölçütü ≤ 260 px (ekranB-12).
  */
-export const layoutMax = { icerik: 1100, genis: 1200, aiHub: 980, ayar: 900, modal: 900 } as const;
+export const layoutMax = { icerik: 1100, genis: 1200, aiHub: 980, ayar: 900, modal: 900, alan: 260 } as const;
 
 /**
  * SİSTEM YAZI ÖLÇEĞİ TAVANI (sahip kararı 2026-09-04: 1,2).  [S6]

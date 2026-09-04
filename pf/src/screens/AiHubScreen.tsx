@@ -11,6 +11,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { useStageHeight } from "@/hooks/useStageHeight";
 import { colors, radius, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
@@ -812,6 +813,8 @@ function MedicalDisclaimer() {
  * Ebeveyne bağımlılık yok (refaktörde başka kutuya taşınsa da bozulmaz).
  */
 function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etiket: string; not?: string; testID?: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   return (
     <>
       <Text style={styles.ctSubLabel}>{etiket}</Text>
@@ -819,7 +822,7 @@ function XaiIsiHaritasi({ base64, etiket, not, testID }: { base64: string; etike
         testID={testID ?? "xai-isi-haritasi"}
         accessibilityLabel={etiket}
         source={{ uri: `data:image/jpeg;base64,${base64}` }}
-        style={styles.xaiStage}
+        style={[styles.xaiStage, { height: sahneH }]}
         resizeMode="contain"
       />
       {not ? <Text style={styles.ctHint}>{not}</Text> : null}
@@ -1050,6 +1053,8 @@ function resetAiCachesForOwner(owner: string | null): boolean {
 }
 
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const { realtime } = useEntitlement();
   const [imageUri, setImageUri] = useState<string | null>(visionCache[endpoint]?.imageUri ?? null);
@@ -1433,7 +1438,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           <Text style={styles.photoGuideWarn}>⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.</Text>
         </View>
       )}
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {(isLive && autoAdjust) ? (
           // Otonom Biofeedback: SUNUCU (klinik) kamerası sürüyor — telefon kamerası DEĞİL.
           // Sunucu karesi gelene kadar telefon CameraView'ı GÖSTERME (kafa-karışıklığı önlenir).
@@ -1735,6 +1740,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
  * Backend: POST /api/ai/vision/em_fantom (phantom_cv). Canlı kamera/otonom YOK — tek foto.
  */
 function PhantomModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const CK = "/vision/em_fantom";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -1864,7 +1871,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {imageUri ? (
           <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
         ) : (
@@ -1956,6 +1963,8 @@ function PhantomModule({ patientName }: { patientName: string }) {
  * Backend: POST /api/ai/vision/em_petri (petri_cv). Canlı kamera/otonom YOK — tek foto.
  */
 function PetriModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const CK = "/vision/em_petri";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -2084,7 +2093,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {imageUri ? (
           <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
         ) : (
@@ -2714,6 +2723,8 @@ const CT_TR: Record<string, string> = { "Kidney Stone": "Böbrek Taşı", "Kidne
  * Backend: POST /api/ai/vision/kidney_ct → annotated görsel + sınıf sayıları + tespit listesi.
  */
 function KidneyCTModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const CK = "/vision/kidney_ct";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -2835,7 +2846,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {imageUri ? (
           <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
         ) : (
@@ -2918,6 +2929,8 @@ const HISTO_COLOR: Record<string, string> = { grade0: colors.success, grade1: "#
  * olasılıklar (sınıflandırıcı, detektör değil → overlay yok, orijinal görüntü gösterilir).
  */
 function HistopathModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const CK = "/vision/histopath";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -3016,7 +3029,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="contain" />
         ) : (
@@ -3111,6 +3124,8 @@ const SCRATCH_GALERI: { k: string; ad: string; alan: keyof AiResult; not: string
 type ScratchKayit = { etiket: string; closure_pct: number; mean_gap_um: number };
 
 function ScratchModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const CK = "cell_scratch";
   const onceki = moduleCache[CK] || {};
   const [dosya, setDosya] = useState<{ uri: string | null; name: string; file: File | null } | null>(onceki.dosya ?? null);
@@ -3310,7 +3325,7 @@ function ScratchModule({ patientName }: { patientName: string }) {
                 <>
                   {/* AÇIK yükseklik (plan v2: styles.imagePreview %100-yükseklik tuzağı) */}
                   <Image testID="sc-stage" source={{ uri: `data:image/jpeg;base64,${(result as any)[seciliGorsel.alan]}` }}
-                    style={styles.scStage} resizeMode="contain" />
+                    style={[styles.scStage, { height: sahneH }]} resizeMode="contain" />
                   <Text style={styles.ctHint}>{seciliGorsel.not}</Text>
                 </>
               )}
@@ -3354,6 +3369,8 @@ function ScratchModule({ patientName }: { patientName: string }) {
 }
 
 function CatOrganModule({ patientName }: { patientName: string }) {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const CK = "/vision/cat_organ";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -3520,7 +3537,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={styles.imagePreviewContainer}>
+      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
         {isLive ? (
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />

@@ -16,6 +16,7 @@ import {
 import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
 const COIL_COLORS = [
@@ -123,7 +124,7 @@ export function SensorMonitorScreen() {
 
       {/* Coil stats grid */}
       <Text style={styles.statsTitle}>Anlık Değerler</Text>
-      <View style={styles.statsGrid}>
+      <ResponsiveGrid minItemWidth={160}>
         {Array.from({ length: 8 }, (_, i) => i + 1).map((id) => {
           const coil = coils.find((c) => c.id === id);
           const pts = sensorHistory[id] ?? [];
@@ -143,7 +144,7 @@ export function SensorMonitorScreen() {
             />
           );
         })}
-      </View>
+      </ResponsiveGrid>
     </ScrollView>
   );
 }
@@ -261,14 +262,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: spacing.xs,
   },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
+  // [S1 adım 6] statsGrid kaldırıldı: sütun kararı artık ResponsiveGrid'de, GERÇEK kap
+  // genişliğinden veriliyor. Eski flexWrap+flex:1 son satırdaki kartları da geriyordu
+  // (3 sütunda son 2 kart komşularından geniş çıkıyordu).
   statCard: {
-    minWidth: rs(140),
-    flex: 1,
     backgroundColor: "#0a0f1e",
     borderRadius: 12,
     padding: spacing.md,
