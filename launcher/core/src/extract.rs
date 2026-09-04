@@ -54,7 +54,7 @@ const MAX_SYMLINK_LEN: u64 = 4096;
 /// Listenin bir daha eskimemesi `tests/test_profil_paketi_kok_dosyalari.py` ile sağlanır: kapı
 /// adları değil KAYNAĞI ölçer — `install_root.join("...")` ile üretilen her kök girdisi ya bu
 /// listede olmalı ya da açıkça meşru sayılmalı (tek istisna `ai_models`, profillerin hedefi).
-const PROFILE_FORBIDDEN_TOP: [&str; 14] = [
+const PROFILE_FORBIDDEN_TOP: [&str; 15] = [
     "runtime",
     // Sahneleme/geri-dönüş kardeşleri: `runtime` korunup bunların açıkta kalması korumayı
     // anlamsız kılıyordu — özellikle `runtime.old`, sağlık kapısı düştüğünde dönülecek sürüm.
@@ -67,6 +67,7 @@ const PROFILE_FORBIDDEN_TOP: [&str; 14] = [
     // Geri alma döngüsü kırıcının sayacı (C2). Ezilirse iki yönde de zarar: sıfırlanırsa döngü
     // geri gelir, şişirilirse GERÇEK bir güncelleme kalıcı olarak bloklanır.
     "runtime_attempt.json",
+    "selfupdate_inprogress.json",
     // Off-site yedek hedefi — değiştirilirse yedekler başka bir yere yazılır.
     "backup_dir.txt",
     "cache",

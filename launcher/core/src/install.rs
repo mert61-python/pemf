@@ -919,6 +919,75 @@ pub fn selfupdate_auto_allowed(install_root: &Path, target_version: &str) -> boo
     }
 }
 
+// ── SELF-UPDATE "GÜNCELLEME SÜRÜYOR" İŞARETİ (saha bildirimi 2026-09-04) ──────────────────────
+//
+// Launcher self-update'te `app.exit(0)` ile çıkar; kurulum bitip yeni sürüm açılana kadar ekranda
+// HİÇBİR ŞEY yoktu (Defender'ın 265 MB setup taraması + NSIS + sabit beklemeler = yavaş makinede
+// 10-30 sn). Kullanıcı bu boşlukta exe'ye yeniden tıklıyor → ESKİ exe açılıp NSIS'in dosya
+// kilidine çarpıyordu. Bu işaret dosyası iki şeye yarar:
+//   (1) `--guncelleme-ekrani` ile açılan bilgilendirme penceresi, işaret silinince (yeni sürüm
+//       açıldı) ya da işaret bayatlayınca kendini kapatır;
+//   (2) boşlukta yeniden tıklanan ESKİ exe işareti görüp SESSİZCE çıkar (ekranda zaten
+//       "güncelleniyor" penceresi var). Yeni sürüm açılınca işaret temizlenir.
+// ⚠️ Kilit KENDİLİĞİNDEN çözülür: işaret `azami_yas_s`'den yaşlıysa (kurulum başarısız/asılı)
+// eski exe yine açılır — kullanıcı asla kalıcı olarak dışarıda kalmaz.
+pub const GUNCELLEME_ISARETI_DOSYASI: &str = "selfupdate_inprogress.json";
+
+fn guncelleme_isareti_yolu(install_root: &Path) -> PathBuf {
+    install_root.join(GUNCELLEME_ISARETI_DOSYASI)
+}
+
+fn unix_simdi() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// İşareti yaz: `{from, to, started_unix}`. Yazılamazsa sessizce geç (güncelleme yine sürer).
+pub fn guncelleme_isareti_yaz(install_root: &Path, from: &str, to: &str) {
+    let _ = std::fs::create_dir_all(install_root);
+    if let Ok(json) = serde_json::to_string(&serde_json::json!({
+        "from": from, "to": to, "started_unix": unix_simdi()
+    })) {
+        let _ = std::fs::write(guncelleme_isareti_yolu(install_root), json);
+    }
+}
+
+/// İşareti oku: `(from, to, yaş_saniye)`. Yoksa/bozuksa `None`. Saat geriye alınmışsa yaş 0.
+pub fn guncelleme_isareti_oku(install_root: &Path) -> Option<(String, String, u64)> {
+    let s = std::fs::read_to_string(guncelleme_isareti_yolu(install_root)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&s).ok()?;
+    let from = v.get("from")?.as_str()?.to_string();
+    let to = v.get("to")?.as_str()?.to_string();
+    let basladi = v.get("started_unix").and_then(|x| x.as_u64()).unwrap_or(0);
+    Some((from, to, unix_simdi().saturating_sub(basladi)))
+}
+
+/// İşaret var ve `azami_yas_s`'den genç mi?
+pub fn guncelleme_isareti_taze(install_root: &Path, azami_yas_s: u64) -> bool {
+    matches!(guncelleme_isareti_oku(install_root), Some((_, _, yas)) if yas <= azami_yas_s)
+}
+
+pub fn guncelleme_isaretini_temizle(install_root: &Path) {
+    let _ = std::fs::remove_file(guncelleme_isareti_yolu(install_root));
+}
+
+/// Açılıştaki karar: bu süreç, güncelleme boşluğunda yeniden tıklanan ESKİ exe mi?
+/// `true` → sessizce çık (bilgilendirme penceresi zaten ekranda; işaret KALIR, pencere ona bakıyor).
+/// Diğer her durumda işaret temizlenir (yeni sürüm açıldı / işaret bayat / hedef == kaynak) →
+/// normal açılış. `from == to` (yanlış yapılandırılmış manifest) ASLA kilitlemez.
+pub fn guncelleme_bosluguna_dusen_eski_exe_mi(install_root: &Path, calisan_surum: &str, azami_yas_s: u64) -> bool {
+    match guncelleme_isareti_oku(install_root) {
+        Some((from, to, yas)) if yas <= azami_yas_s && from != to && calisan_surum == from => true,
+        Some(_) => {
+            guncelleme_isaretini_temizle(install_root);
+            false
+        }
+        None => false,
+    }
+}
+
 // ── RUNTIME GÜNCELLEMESİ: geri alma döngüsü kırıcı (denetim 2026-08-23, C2) ──────────────────
 //
 // ⚠️ SORUN: sağlık kapısı düşünce güncelleme geri alınıyordu ama HİÇBİR deneme sayacı
@@ -1813,5 +1882,63 @@ mod tests {
             assert!(p.ends_with("PEMF_Backend"));
         }
         assert!(p.starts_with("/opt/pemf/runtime"));
+    }
+}
+
+
+#[cfg(test)]
+mod guncelleme_isareti_testleri {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SAYAC: AtomicUsize = AtomicUsize::new(0);
+
+    fn tmp() -> PathBuf {
+        let d = std::env::temp_dir().join(format!(
+            "pemf_gisaret_{}_{}",
+            std::process::id(),
+            SAYAC.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn yaz_oku_taze_temizle() {
+        let d = tmp();
+        assert!(guncelleme_isareti_oku(&d).is_none());
+        assert!(!guncelleme_isareti_taze(&d, 120));
+        guncelleme_isareti_yaz(&d, "1.9.44", "1.9.45");
+        let (f, t, yas) = guncelleme_isareti_oku(&d).expect("işaret okunamadı");
+        assert_eq!((f.as_str(), t.as_str()), ("1.9.44", "1.9.45"));
+        assert!(yas <= 5, "yaş {yas}");
+        assert!(guncelleme_isareti_taze(&d, 120));
+        guncelleme_isaretini_temizle(&d);
+        assert!(!guncelleme_isareti_taze(&d, 120));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn eski_exe_karari() {
+        let d = tmp();
+        guncelleme_isareti_yaz(&d, "1.9.44", "1.9.45");
+        // ESKİ exe (from), taze işaret → sessiz çıkış; işaret KALIR (pencere ona bakıyor).
+        assert!(guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.44", 120));
+        assert!(guncelleme_isareti_oku(&d).is_some(), "eski exe işareti silmemeli");
+        // YENİ exe (to) → normal açılış + işaret temizlenir → pencere kapanır.
+        assert!(!guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.45", 120));
+        assert!(guncelleme_isareti_oku(&d).is_none(), "yeni exe işareti temizlemeli");
+        // BAYAT işaret: eski exe bile olsa çıkmaz (kurulum başarısızsa uygulama yine açılmalı).
+        let json = serde_json::json!({"from": "1.9.44", "to": "1.9.45", "started_unix": 1}).to_string();
+        std::fs::write(d.join(GUNCELLEME_ISARETI_DOSYASI), json).unwrap();
+        assert!(!guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.44", 120));
+        assert!(guncelleme_isareti_oku(&d).is_none(), "bayat işaret temizlenmeli");
+        // from == to (manifest yanlış) → ASLA kilitleme.
+        guncelleme_isareti_yaz(&d, "1.9.45", "1.9.45");
+        assert!(!guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.45", 120));
+        // Bozuk JSON → işaret yok sayılır.
+        std::fs::write(d.join(GUNCELLEME_ISARETI_DOSYASI), "{bozuk").unwrap();
+        assert!(!guncelleme_bosluguna_dusen_eski_exe_mi(&d, "1.9.44", 120));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

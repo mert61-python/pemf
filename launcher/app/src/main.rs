@@ -1637,10 +1637,49 @@ async fn apply_self_update(
             }
         }
         // İndirildi + SHA doğrulandı → sessiz kur + yeniden başlat helper'ını DETACHED başlat, sonra çık.
-        spawn_update_relauncher(&dest)?;
+        // [GÜNCELLEME EKRANI] (saha bildirimi 2026-09-04): çıkıştan yeni sürüm açılana kadar ekran
+        // BOŞTU (Defender'ın 265 MB setup taraması + NSIS + sabit beklemeler) → kullanıcı exe'ye
+        // yeniden tıklıyordu. Sıra: işaret → bilgilendirme penceresi → batch → çık. Pencere
+        // açılamazsa güncelleme YİNE sürer (eski davranış); batch başlatılamazsa işaret silinir.
+        let kok = install::default_install_root(&home_dir());
+        install::guncelleme_isareti_yaz(&kok, env!("CARGO_PKG_VERSION"), &version);
+        let pencere = guncelleme_penceresini_ac(&sfx);
+        if let Err(e) = spawn_update_relauncher(&dest, pencere.as_deref()) {
+            install::guncelleme_isaretini_temizle(&kok);
+            return Err(e);
+        }
         app.exit(0);
         Ok(())
     }
+}
+
+/// [GÜNCELLEME EKRANI] Bilgilendirme penceresi kipi (bkz. `guncelleme_ekranini_calistir`).
+const GUNCELLEME_EKRANI_ARG: &str = "--guncelleme-ekrani";
+/// Boşlukta yeniden tıklanan ESKİ exe'nin sessizce çıkacağı azami işaret yaşı (sn). Kurulum bu
+/// süreyi aşarsa (başarısız/asılı) uygulama yine açılabilmeli → kilit kendiliğinden çözülür.
+const GUNCELLEME_KILIT_AZAMI_S: u64 = 120;
+/// Bilgilendirme penceresinin kendini kapatacağı azami süre (sn) — işaret silinmese bile.
+const GUNCELLEME_EKRANI_AZAMI_S: u64 = 180;
+static GUNCELLEME_MODU: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// UI açılışta sorar: bu süreç "güncelleniyor" bilgilendirme penceresi mi? (normal açılışta false)
+#[tauri::command]
+fn guncelleme_modu() -> bool {
+    GUNCELLEME_MODU.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Bilgilendirme penceresini launcher exe'sinin %TEMP%'e alınmış FARKLI ADLI kopyasından başlat.
+/// Neden kopya: NSIS'in "uygulama çalışıyor" denetimi `PEMFVetClient.exe` ADINA bakar ve sessiz
+/// kurulumda onu öldürür; farklı adlı kopya ne öldürülür ne de kurulum exe'sinin kilidini tutar.
+/// Başarısızlık güncellemeyi DURDURMAZ (eski davranışa düşer). Kopyayı batch siler.
+#[cfg(windows)]
+fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let kopya = std::env::temp_dir().join(format!("PEMFVetClient-Guncelleme-{sfx}.exe"));
+    let _ = std::fs::remove_file(&kopya);
+    std::fs::copy(&exe, &kopya).ok()?;
+    std::process::Command::new(&kopya).arg(GUNCELLEME_EKRANI_ARG).spawn().ok()?;
+    Some(kopya)
 }
 
 /// Sessiz kurulum + yeniden başlatma helper'ı (Windows). Bu launcher ÇIKTIKTAN sonra bağımsız
@@ -1651,26 +1690,44 @@ async fn apply_self_update(
 /// savunması: yollar tırnak / yeni-satır içeremez (meşru Windows yollarında bulunmaz). `ping` =
 /// taşınabilir uyku (timeout.exe redirected-stdin'de çalışmaz): ~3sn bekle → sessiz kur → ~2sn → başlat.
 #[cfg(windows)]
-fn build_relaunch_script(installer: &str, exe: &str) -> Result<String, String> {
-    for p in [installer, exe] {
+fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Option<&str>) -> Result<String, String> {
+    for p in [Some(installer), Some(exe), pencere].into_iter().flatten() {
         if p.contains('"') || p.contains('\r') || p.contains('\n') {
             return Err("Güncelleme yolu güvensiz karakter içeriyor".to_string());
         }
     }
-    Ok(format!(
-        "@echo off\r\n\
-         ping -n 4 127.0.0.1 >nul\r\n\
-         \"{inst}\" /S\r\n\
-         ping -n 3 127.0.0.1 >nul\r\n\
-         start \"\" \"{exe}\"\r\n\
-         del \"%~f0\"\r\n",
-        inst = installer,
-        exe = exe,
-    ))
+    let exe_adi = std::path::Path::new(exe)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("PEMFVetClient.exe");
+    // Araçları TAM YOLLA çağır: PATH'te Git'in `find`i öne çıkabiliyor (geliştirici makinesi).
+    const TL: &str = "%SystemRoot%\\System32\\tasklist.exe";
+    const FD: &str = "%SystemRoot%\\System32\\find.exe";
+    let mut s = String::from("@echo off\r\n");
+    // 1) Launcher'ın çıkmasını PID ile bekle (sabit 3 sn yerine ~1 sn adımlarla; en çok ~30 sn).
+    s.push_str("set /a n=0\r\n:bekle\r\n");
+    s.push_str(&format!("{TL} /FI \"PID eq {eski_pid}\" 2>nul | {FD} \" {eski_pid} \" >nul\r\n"));
+    s.push_str("if errorlevel 1 goto kur\r\nset /a n+=1\r\nif %n% GEQ 30 goto kur\r\n");
+    s.push_str("ping -n 2 127.0.0.1 >nul\r\ngoto bekle\r\n:kur\r\n");
+    // 2) Sessiz kurulum (NSIS eski dosyaların üstüne yazar; `/S`te kancalar koşmaz).
+    s.push_str(&format!("\"{installer}\" /S\r\nping -n 2 127.0.0.1 >nul\r\n"));
+    // 3) Kullanıcı bu arada yeni exe'yi KENDİSİ açtıysa ikinci pencere AÇMA. `/FO CSV` ŞART:
+    //    tablo çıktısı görüntü adını 25 karakterde KIRPAR (ölçüldü: uzun ad hiç eşleşmedi → ikinci
+    //    pencere açıldı); CSV kırpmaz. `/NH` başlığı atar.
+    s.push_str(&format!("{TL} /FI \"IMAGENAME eq {exe_adi}\" /NH /FO CSV 2>nul | {FD} /I \"{exe_adi}\" >nul\r\n"));
+    s.push_str(&format!("if errorlevel 1 start \"\" \"{exe}\"\r\n"));
+    // 4) Bilgilendirme penceresinin kopyasını (kendini kapatınca) sil — en çok ~40 sn dene.
+    if let Some(pk) = pencere {
+        s.push_str("set /a k=0\r\n:sil\r\n");
+        s.push_str(&format!("del \"{pk}\" >nul 2>&1\r\nif not exist \"{pk}\" goto son\r\n"));
+        s.push_str("set /a k+=1\r\nif %k% GEQ 40 goto son\r\nping -n 2 127.0.0.1 >nul\r\ngoto sil\r\n:son\r\n");
+    }
+    s.push_str("del \"%~f0\"\r\n");
+    Ok(s)
 }
 
 #[cfg(windows)]
-fn spawn_update_relauncher(installer: &std::path::Path) -> Result<(), String> {
+fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     const DETACHED_PROCESS: u32 = 0x0000_0008;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
@@ -1679,7 +1736,11 @@ fn spawn_update_relauncher(installer: &std::path::Path) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_s = exe.to_str().ok_or("launcher yolu UTF-8 değil")?;
     let inst_s = installer.to_str().ok_or("setup yolu UTF-8 değil")?;
-    let script = build_relaunch_script(inst_s, exe_s)?;
+    let pencere_s = match pencere {
+        Some(p) => Some(p.to_str().ok_or("pencere yolu UTF-8 değil")?),
+        None => None,
+    };
+    let script = build_relaunch_script(inst_s, exe_s, std::process::id(), pencere_s)?;
     // Batch adı da kuruluma özel: sabit ad, iki eşzamanlı denemede birbirini ezerdi ve
     // yol önceden bilinirdi. Kurulum exe'sinin adından türetiliyor (o da SHA'ya bağlı).
     let stem = installer
@@ -1821,7 +1882,6 @@ fn firewall_kurali_ekle() -> Result<serde_json::Value, String> {
     }
 }
 
-
 /// OFF-SITE YEDEK HEDEFİ — durum (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ Yedekler bugüne kadar hasta verisiyle AYNI DİSKE alınıyordu; disk arızasında ya da fidye
@@ -1870,6 +1930,21 @@ fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
 }
 
 fn main() {
+    let ctx = tauri::generate_context!();
+    // [GÜNCELLEME EKRANI] bilgilendirme penceresi kipi: normal açılışın hiçbiri koşmaz.
+    if std::env::args().any(|a| a == GUNCELLEME_EKRANI_ARG) {
+        guncelleme_ekranini_calistir(ctx);
+        return;
+    }
+    // Güncelleme boşluğunda yeniden tıklanan ESKİ exe: sessizce çık (pencere zaten ekranda).
+    // Yeni sürüm ya da bayat işaret → işaret temizlenir (pencere kapanır), normal açılış.
+    if install::guncelleme_bosluguna_dusen_eski_exe_mi(
+        &install::default_install_root(&home_dir()),
+        env!("CARGO_PKG_VERSION"),
+        GUNCELLEME_KILIT_AZAMI_S,
+    ) {
+        return;
+    }
     tauri::Builder::default()
         .manage(AppState::default())
 
@@ -1898,7 +1973,8 @@ fn main() {
             apply_self_update,
             auth_status,
             auth_login,
-            auth_logout
+            auth_logout,
+            guncelleme_modu
         ])
         .on_window_event(|window, event| {
             // Pencere kapanınca backend'i BIRAKMA: yetim süreç portu tutar ve sonraki açılışta
@@ -1975,8 +2051,55 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
+        .run(ctx)
         .expect("Tauri uygulaması başlatılamadı");
+}
+
+/// `--guncelleme-ekrani`: self-update boşluğunu dolduran KÜÇÜK bilgilendirme penceresi.
+/// Backend'e, oturuma, kuruluma DOKUNMAZ; yalnız metin + hareketli bar. Kapanma: işaret dosyası
+/// silinince (yeni sürüm açıldı) ya da bayatlayınca / azami süre dolunca.
+fn guncelleme_ekranini_calistir(ctx: tauri::Context<tauri::Wry>) {
+    use tauri::Manager as _;
+    GUNCELLEME_MODU.store(true, std::sync::atomic::Ordering::Relaxed);
+    let root = install::default_install_root(&home_dir());
+    let sonuc = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![guncelleme_modu])
+        .setup(move |app| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_title("PEMF Vet — güncelleniyor");
+                let _ = w.set_always_on_top(true);
+                // Boyut/konum: pencere yaratılırken uygulanan config (880×600, minWidth 700, center)
+                // bu çağrıları `setup` içinde EZİYORDU (ölçüldü: pencere 880×600 kaldı, ekran
+                // kenarına düştü). Kısa gecikmeyle, olay döngüsü yerleştikten sonra uygula.
+                let w2 = w.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    let _ = w2.set_min_size(None::<tauri::Size>);
+                    let _ = w2.set_resizable(false);
+                    let _ = w2.set_size(tauri::LogicalSize::new(640.0, 400.0));
+                    let _ = w2.center();
+                });
+            }
+            let h = app.handle().clone();
+            std::thread::spawn(move || {
+                let baslangic = std::time::Instant::now();
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(400));
+                    if !install::guncelleme_isareti_taze(&root, GUNCELLEME_EKRANI_AZAMI_S) {
+                        break;
+                    }
+                    if baslangic.elapsed().as_secs() > GUNCELLEME_EKRANI_AZAMI_S {
+                        break;
+                    }
+                }
+                h.exit(0);
+            });
+            Ok(())
+        })
+        .run(ctx);
+    if let Err(e) = sonuc {
+        eprintln!("güncelleme penceresi açılamadı: {e}");
+    }
 }
 
 #[cfg(test)]
@@ -2232,18 +2355,67 @@ mod tests {
         let s = build_relaunch_script(
             r"C:\Temp\PEMFVetClient-Update.exe",
             r"C:\Users\x\AppData\Local\PEMF Vet Client\PEMF Vet Client.exe",
+            4242,
+            Some(r"C:\Temp\PEMFVetClient-Guncelleme-ab.exe"),
         )
         .unwrap();
         // Sessiz kurulum (/S) + doğru setup yolu.
         assert!(s.contains("\"C:\\Temp\\PEMFVetClient-Update.exe\" /S"));
+        // [GÜNCELLEME EKRANI] sabit 3 sn yerine PID bekleme; ikinci pencere açmama; kopyayı silme.
+        assert!(s.contains("PID eq 4242"), "launcher çıkışı PID ile beklenmeli");
+        assert!(s.contains("if %n% GEQ 30 goto kur"), "PID beklemesi sınırlı olmalı");
+        assert!(s.contains("IMAGENAME eq PEMF Vet Client.exe\" /NH /FO CSV"), "çalışıyorsa yeniden başlatma; CSV = ad kırpılmaz");
+        assert!(s.contains("if errorlevel 1 start \"\" \""), "start yalnız çalışmıyorsa");
+        assert!(s.contains("del \"C:\\Temp\\PEMFVetClient-Guncelleme-ab.exe\""), "pencere kopyası silinmeli");
+        assert!(s.contains("System32\\tasklist.exe") && s.contains("System32\\find.exe"), "araçlar tam yolla");
+        assert!(!s.contains("ping -n 4 127.0.0.1"), "eski sabit 3 sn bekleme kalkmalı");
+        // Pencere yoksa (kopya açılamadı) batch yine geçerli; sil-döngüsü yok.
+        let s2 = build_relaunch_script("C:\\a.exe", "C:\\b.exe", 7, None).unwrap();
+        assert!(s2.contains("\"C:\\a.exe\" /S") && !s2.contains(":sil"));
+        assert!(build_relaunch_script("C:\\a.exe", "C:\\b.exe", 1, Some("C:\\c\".exe")).is_err());
         // Yeni launcher'ı başlat (boşluklu yol tırnaklı).
         assert!(s.contains("start \"\" \"C:\\Users\\x\\AppData\\Local\\PEMF Vet Client\\PEMF Vet Client.exe\""));
         // Kendini sil.
         assert!(s.contains("del \"%~f0\""));
         // Batch-enjeksiyonu: tırnak veya yeni-satır içeren yol → REDDET.
-        assert!(build_relaunch_script("C:\\a\".exe", "C:\\b.exe").is_err());
-        assert!(build_relaunch_script("C:\\a.exe", "C:\\b\n.exe").is_err());
-        assert!(build_relaunch_script("C:\\a\r.exe", "C:\\b.exe").is_err());
+        assert!(build_relaunch_script("C:\\a\".exe", "C:\\b.exe", 1, None).is_err());
+        assert!(build_relaunch_script("C:\\a.exe", "C:\\b\n.exe", 1, None).is_err());
+        assert!(build_relaunch_script("C:\\a\r.exe", "C:\\b.exe", 1, None).is_err());
+    }
+
+    /// [GÜNCELLEME EKRANI] kaynak-paritesi: self-update kuyruğunda işaret → pencere → batch → çık
+    /// sırası ve açılış bekçisinin Builder'dan ÖNCE koşması (pencere açılmadan sessiz çıkış).
+    #[test]
+    fn guncelleme_ekrani_sirasi_ve_acilis_bekcisi() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("fn apply_self_update").expect("apply_self_update yok");
+        let g = &soy[i..];
+        let a = g.find("guncelleme_isareti_yaz(").expect("işaret yazılmıyor");
+        let b = g.find("guncelleme_penceresini_ac(").expect("pencere açılmıyor");
+        let c = g.find("spawn_update_relauncher(&dest").expect("relauncher yok");
+        let d = g.find("app.exit(0)").expect("exit yok");
+        assert!(a < b && b < c && c < d, "sıra: işaret → pencere → batch → çık olmalı");
+        let m = soy.find("fn main()").expect("main yok");
+        let mm = &soy[m..];
+        let kip = mm.find("GUNCELLEME_EKRANI_ARG").expect("pencere kipi yok");
+        let bekci = mm.find("guncelleme_bosluguna_dusen_eski_exe_mi(").expect("açılış bekçisi yok");
+        let builder = mm.find("tauri::Builder::default()").expect("builder yok");
+        assert!(kip < bekci && bekci < builder, "kip ve bekçi Builder'dan ÖNCE koşmalı");
+    }
+
+    /// [GÜNCELLEME EKRANI] Elle uçtan-uca doğrulama kancası (CI'da KOŞMAZ — `--ignored`):
+    /// ortam değişkenlerinden gelen parametrelerle üretilen batch'i `%TEMP%\pemf_relaunch_dump.bat`e
+    /// yazar; test yürütücüsü onu gerçek cmd.exe'de sahte kurulumla çalıştırıp PID-bekleme,
+    /// start-koruması ve kopya-silme davranışını ölçer.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn relaunch_script_dump_ignored() {
+        let al = |k: &str| std::env::var(k).unwrap_or_default();
+        let (inst, exe, pid, splash) = (al("PEMF_TEST_INSTALLER"), al("PEMF_TEST_EXE"), al("PEMF_TEST_PID"), al("PEMF_TEST_SPLASH"));
+        let pid: u32 = pid.parse().unwrap_or(0);
+        let s = build_relaunch_script(&inst, &exe, pid, if splash.is_empty() { None } else { Some(&splash) }).unwrap();
+        std::fs::write(std::env::temp_dir().join("pemf_relaunch_dump.bat"), s).unwrap();
     }
 
     /// KALDIRMA: uninstaller batch'i yolu gömer + İNTERAKTİF başlatır (/S YOK) + enjeksiyon REDDEDER.

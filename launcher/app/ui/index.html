@@ -95,6 +95,11 @@
         align-items: center; justify-content: center; padding: 18px 30px; text-align: center; }
       .stage { width: 100%; max-width: 560px; }
       .title { font-size: 26px; font-weight: 800; margin: 0 0 5px; letter-spacing: -0.4px; }
+      /* [GÜNCELLEME EKRANI] küçük bilgilendirme penceresi (640×400): üst şerit/alt bilgi gizli,
+         iç boşluk dar → başlık + bar + metin tek bakışta sığar. */
+      html.gunc header, html.gunc footer { display: none; }
+      html.gunc main { padding: 22px 30px; justify-content: center; }
+      html.gunc .title { font-size: 24px; margin-bottom: 10px; }
       .lead { color: var(--muted); font-size: 13.5px; margin: 0 auto 16px; max-width: 460px; }
 
       /* success check */
@@ -533,6 +538,14 @@
           </div>
         </section>
 
+        <!-- self-update bilgilendirme penceresi: --guncelleme-ekrani kipinde TEK ekran budur -->
+        <section id="s-guncelleme" hidden>
+          <h2 class="title" id="gunc-title">Başlatıcı güncelleniyor…</h2>
+          <div class="progress indet" id="gunc-bar"><i></i></div>
+          <p id="gunc-lead" style="margin-top:14px;line-height:1.55;opacity:.92"></p>
+          <p id="gunc-slow" style="margin-top:10px;line-height:1.5;opacity:.75" hidden></p>
+        </section>
+
         <!-- ready -->
         <section id="s-ready" hidden>
           <div class="check">
@@ -666,6 +679,9 @@
           notSupported: (p) => `Bu platform (${p}) için uygulama paketi henüz yayınlanmadı.`,
           updatingTitle: "Başlatıcı güncelleniyor…", updatingLead: "Yeni bir başlatıcı sürümü bulundu — indirilip kuruluyor. Uygulama kendiliğinden yeniden açılacak.",
           updatingApply: "Güncelleme uygulanıyor, uygulama yeniden başlatılıyor…",
+          guncTitle: "Başlatıcı güncelleniyor…",
+          guncLead: "Lütfen bekleyin — yeni sürüm kuruluyor. PEMF Vet birazdan kendiliğinden açılacak; bu pencereyi kapatmanız ya da uygulamayı yeniden açmanız gerekmez.",
+          guncSlow: "Biraz uzun sürdü — kurulum bilgisayarın hızına göre 1-2 dakika alabilir. Bu pencere kendiliğinden kapanmazsa PEMF Vet'i Başlat menüsünden açabilirsiniz.",
           rtTitle: "Uygulama güncelleniyor…",
           rtLead: "Yeni bir uygulama sürümü bulundu — indirilip kuruluyor. Bittiğinde başlatabilirsiniz.",
           rtDone: "Uygulama güncellendi.",
@@ -757,6 +773,9 @@
           notSupported: (p) => `The package for this platform (${p}) is not published yet.`,
           updatingTitle: "Updating launcher…", updatingLead: "A new launcher version was found — downloading and installing. The app will restart automatically.",
           updatingApply: "Applying update, restarting the app…",
+          guncTitle: "Updating launcher…",
+          guncLead: "Please wait — the new version is being installed. PEMF Vet will reopen by itself; you don't need to close this window or start the app again.",
+          guncSlow: "Taking a bit longer — installation can take 1–2 minutes depending on your computer. If this window doesn't close on its own, open PEMF Vet from the Start menu.",
           rtTitle: "Updating app…",
           rtLead: "A new app version was found — downloading and installing. You can start it when this finishes.",
           rtDone: "App updated.",
@@ -999,7 +1018,7 @@
         $("btn-pause").hidden = true; $("btn-resume").hidden = true; $("btn-cancel").hidden = true;
       }
 
-      const SCREENS = ["s-detect", "s-login", "s-select", "s-install", "s-ready"];
+      const SCREENS = ["s-detect", "s-login", "s-select", "s-install", "s-ready", "s-guncelleme"];
       function show(id) {
         for (const s of SCREENS) $(s).hidden = (s !== id);
         // "Hazır!" ekranına dönüldüyse güncelleme işi BİTMİŞTİR (kurulum/onarım/güncelleme hepsi
@@ -2262,8 +2281,24 @@
         bootNetwork(env).catch(() => {}); // arka planda; boot'u BLOKLAMAZ
       }
 
+      /** [GÜNCELLEME EKRANI] Self-update boşluğunu dolduran bilgilendirme penceresi (Rust
+       *  `--guncelleme-ekrani` kipi). Normal açılışın HİÇBİRİ koşmaz: manifest yok, kimlik yok,
+       *  backend yok — yalnız metin + hareketli bar. Pencere işaret silinince Rust tarafından
+       *  kapatılır; 90 sn geçerse 'uzun sürdü' ipucu eklenir. */
+      function guncellemeEkrani() {
+        $("gunc-title").textContent = t().guncTitle;
+        $("gunc-lead").textContent = t().guncLead;
+        $("gunc-slow").textContent = t().guncSlow;
+        document.documentElement.classList.add("gunc");
+        show("s-guncelleme");
+        setTimeout(() => { $("gunc-slow").hidden = false; }, 90000);
+      }
+
       async function boot() {
         applyLang();
+        try {
+          if (await invoke("guncelleme_modu")) { guncellemeEkrani(); return; }
+        } catch (_) {}
         // 1) Giriş kapısı EN BAŞTA. `auth_status` yalnız YEREL blob'u okur; jeton tazeyse ağa
         //    hiç çıkmaz, süresi dolmuşsa duvar-saati bütçeli sessiz yenileme dener.
         //

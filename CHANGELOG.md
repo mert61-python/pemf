@@ -6,6 +6,34 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.45 — 2026-09-04 (⏳ Guncelleme sirasinda ekran artik BOS KALMIYOR)
+
+- **Saha bildirimi:** oto-guncellemede pencere kapaniyor, yeni surum acilana kadar ekranda HICBIR
+  SEY yoktu; kullanici bu bosluk sirasinda uygulamayi yeniden acmaya calisiyordu. Olculen bosluk:
+  sabit 3 sn bekleme + Windows Defender'in 265 MB kurulum dosyasini calistirmadan once bastan sona
+  taramasi (yavas klinik makinesinde 10-30 sn) + sessiz kurulum + 2 sn bekleme.
+- **Bilgilendirme penceresi:** launcher cikmadan hemen once kendi kopyasini (`%TEMP%`, FARKLI ADLA —
+  NSIS'in "uygulama calisiyor" denetimi `PEMFVetClient.exe` adina bakar) `--guncelleme-ekrani` kipinde
+  acar: "Baslatici guncelleniyor… PEMF Vet birazdan kendiliginden acilacak; bu pencereyi kapatmaniz ya
+  da uygulamayi yeniden acmaniz gerekmez." + hareketli bar; 90 sn gecerse "uzun surdu" ipucu. Pencere
+  yeni surum acilinca (isaret dosyasi silinince) ya da en gec 3 dk sonra kendini kapatir; backend'e,
+  oturuma, kuruluma dokunmaz. Kip acilamazsa guncelleme eski davranisla yine surer.
+- **Boslukta yeniden tiklama korumasi:** `selfupdate_inprogress.json` isareti (kurulum koku). Taze
+  isaret (<=2 dk) + calisan surum = eski surum ise exe SESSIZCE cikar (pencere zaten ekranda, NSIS'in
+  dosya kilidine carpilmaz). Yeni surum acilinca isaret temizlenir; bayat isaret ya da hedef == kaynak
+  ASLA kilitlemez (basarisiz kurulumda uygulama yine acilir).
+- **Yeniden-baslatici daha hizli ve guvenli:** sabit 3 sn yerine launcher'in cikisini PID ile bekler
+  (~1 sn adim, en cok 30 sn); kurulumdan sonra uygulama zaten calisiyorsa (kullanici kendisi acti)
+  ikinci pencere ACMAZ; pencere kopyasini siler; `tasklist`/`find` tam yolla cagrilir (PATH'te Git'in
+  `find`i one cikabiliyordu). Calisan-uygulama kontrolu CSV biciminde (tablo ciktisi adi 25 karakterde
+  kirpiyordu; uzun ad eslesmeyince ikinci pencere aciliyordu — gercek cmd.exe'de olculdu).
+- Kaldirma temizlik listesi + profil paketi yasakli kok dosyalari: `selfupdate_inprogress.json` eklendi.
+- Kilitler: `relaunch_script_gomer_ve_enjeksiyon_reddeder` (PID bekleme, start korumasi, kopya silme,
+  tam yollar), `guncelleme_ekrani_sirasi_ve_acilis_bekcisi` (isaret → pencere → batch → cik sirasi;
+  bekci Builder'dan once), `guncelleme_isareti_testleri` (taze/bayat/from==to/bozuk JSON).
+- Gecis notu: 1.9.44 → 1.9.45 guncellemesi ESKI kodla uygulanir (bu tek seferde bosluk yine gorulur);
+  1.9.45'ten sonraki guncellemelerde pencere gosterilir.
+
 ## app 1.9.40 — 2026-09-03 (🔑 Guncelleme sonrasi giris istenmesi — ASIL neden duzeltildi)
 
 - **Guncelleme sonrasi (ya da uygulamayi acmadan yapilan birkac launcher acilisindan sonra) e-posta+sifre

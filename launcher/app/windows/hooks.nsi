@@ -153,6 +153,7 @@
     Delete "$INSTDIR\installed_profiles.json.bak"
     Delete "$INSTDIR\pending_install.json"
     Delete "$INSTDIR\selfupdate_attempt.json"
+    Delete "$INSTDIR\selfupdate_inprogress.json"
     Delete "$INSTDIR\backend.port"
     ; DENETİM 2026-08-06: "Beni hatırla" oturumu (DPAPI ile şifreli Supabase access+refresh
     ; jetonu) bu denetimde eklendi ve listeye ALINMAMIŞTI. İki sonucu vardı: (1) özyinelemesiz
