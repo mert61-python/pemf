@@ -14,7 +14,7 @@
  * bu yüzden yalnız `activeTreatment.isActive`e bakmak yanıltıcıdır (DashboardScreen'deki
  * `hardwareRunning` mantığının aynısı).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
@@ -34,7 +34,23 @@ export function GlobalEmergencyStop({ bottomOffset = 0 }: { bottomOffset?: numbe
 
   const running = (snapshot.coils ?? []).filter((c) => c?.running).length;
   const active = snapshot.activeTreatment?.isActive === true;
-  if (!running && !active) return null;
+
+  // ⚠️ HASTA GÜVENLİĞİ — [ekranB-2, 2026-09-04 responsive denetimi]
+  // STM seri bağlantısı koptuğunda `LiveDataContext.normalizeStmCoils` 1-5 numaralı bobinleri
+  // `running:false` yapar. Bu "bobin DURDU" değil, "durum BİLİNMİYOR" demektir — üstelik WiFi
+  // bobinleri (6-8) o sırada gerçekten sürülüyor olabilir. Eski kod belirsizliği "hiçbir şey
+  // çalışmıyor" sayıp acil durdurma düğmesini TAM DA operatörün en çok ihtiyaç duyduğu anda
+  // gizliyordu. KURAL: bir kez "çalışıyor" gördüysek, STM yeniden çevrimiçi olup "durdu" diyene
+  // kadar düğme EKRANDA KALIR. Hiç çalışmamışsa (donanımsız/demo makine) gürültü yapmaz.
+  const stmBelirsiz = snapshot.stm !== "online";
+  const [belirsizKilit, setBelirsizKilit] = useState(false);
+  useEffect(() => {
+    if (running > 0 || active) setBelirsizKilit(true);
+    else if (!stmBelirsiz) setBelirsizKilit(false);
+  }, [running, active, stmBelirsiz]);
+  const belirsiz = stmBelirsiz && belirsizKilit && running === 0 && !active;
+
+  if (!running && !active && !belirsiz) return null;
 
   const onPress = async () => {
     // Çift-tık koruması YOK (bilinçli): panik anındaki ikinci dokunuş yutulmamalı. `busy` yalnız
@@ -57,7 +73,11 @@ export function GlobalEmergencyStop({ bottomOffset = 0 }: { bottomOffset?: numbe
         accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır"
       >
         <Text style={styles.text} numberOfLines={1} adjustsFontSizeToFit>
-          {busy ? "🚨 DURDURULUYOR…" : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
+          {busy
+            ? "🚨 DURDURULUYOR…"
+            : belirsiz
+              ? "🚨 ACİL DURDUR (bağlantı yok)"
+              : `🚨 ACİL DURDUR${running > 0 ? ` (${running} bobin)` : ""}`}
         </Text>
       </Pressable>
     </View>

@@ -490,6 +490,20 @@ export function ControlScreen() {
           aksi halde bileşen kendini render ETMEZ (bkz. EFieldBar). */}
       <EFieldBar />
 
+      {/* ── ACİL DURDUR — sekme İÇERİĞİNDEN ÖNCE ────────────────────────────────
+          ⚠️ HASTA GÜVENLİĞİ [ekranB-2, 2026-09-04]: bu düğme sayfanın SONUNDAYDI; Manuel
+          sekmesinde 8 bobin kartının altında ~3000 px derinde kalıyordu. Kayan
+          `GlobalEmergencyStop` bunu telafi ediyor sanılıyordu ama o da yalnız
+          `running || activeTreatment` iken çizilir ve STM çevrimdışıyken bobin durumu
+          BİLİNMEDİĞİ için gizleniyordu. Düğme artık sekme çubuğunun ÜSTÜNDE: hangi sekme
+          açık olursa olsun, kaydırmadan erişilir. AŞAĞI TAŞIMA. */}
+      <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
+        accessibilityRole="button"
+        accessibilityLabel="Tüm bobinleri acil durdur"
+        accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır">
+        <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
+      </TouchableOpacity>
+
       {/* ── Tab bar ───────────────────────────────────────────── */}
       <View style={styles.tabBar}>
         {TABS.map((tab) => (
@@ -727,14 +741,6 @@ export function ControlScreen() {
           <AiProPanel patientName={patientName} />
         </View>
       )}
-
-      {/* ── Emergency Stop (always visible) ──────────────────── */}
-      <TouchableOpacity style={styles.emergencyBtn} onPress={emergencyStop}
-        accessibilityRole="button"
-        accessibilityLabel="Tüm bobinleri acil durdur"
-        accessibilityHint="Tüm bobinleri anında durdurur ve aktif seansı sonlandırır">
-        <Text style={styles.emergencyBtnText} numberOfLines={2} adjustsFontSizeToFit>🚨 TÜM BOBİNLERİ ACİL DURDUR</Text>
-      </TouchableOpacity>
 
       {/* Gözlem notu modalı seans BİTİNCE otomatik açılır ve tam ekranı kaplar → o sırada donanım
           hâlâ enerjiliyse (yerel sayaç bitti ama backend/bobin durmadıysa) ACİL DURDUR'a erişimi
