@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
 import { Save, UserCog, Network, ServerCrash, RefreshCcw, Trash2, Wifi, Search, Link2, Copy, Building2 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -883,7 +883,7 @@ const styles = StyleSheet.create({
   container: {
     paddingBottom: spacing.xxl,
     width: "100%",
-    maxWidth: rs(900),
+    maxWidth: layoutMax.ayar,
     alignSelf: "center"
   },
   headerTitle: {

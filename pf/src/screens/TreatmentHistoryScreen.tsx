@@ -6,7 +6,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { colors, spacing, typography, rs, radius } from "@/theme/tokens";
+import { colors, spacing, typography, rs, radius, layoutMax } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { apiGet, apiPost, platformConfirm, platformAlert } from "@/services/apiClient";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -220,7 +220,7 @@ export function TreatmentHistoryScreen() {
 
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1100), alignSelf: "center" }}>
+    <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" }}>
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.</Text>
         <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
@@ -253,7 +253,7 @@ export function TreatmentHistoryScreen() {
           onChangeText={setSearchQuery}
         />
       </View>
-      
+
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xl }} />
       ) : loadError ? (
@@ -410,9 +410,9 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
             <TouchableOpacity onPress={() => setIsEditingNotes(true)}><Edit3 color={colors.textMuted} size={14} /></TouchableOpacity>
           )}
         </View>
-        
+
         {isEditingNotes ? (
-          <TextInput 
+          <TextInput
             style={styles.notesInput}
             value={notes}
             onChangeText={setNotes}

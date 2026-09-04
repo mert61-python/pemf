@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
@@ -401,7 +401,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, width: "100%", maxWidth: rs(1100), alignSelf: "center" },
+  container: { flex: 1, backgroundColor: colors.bg, width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",

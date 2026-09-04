@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xxl,
     width: "100%",
-    maxWidth: rs(1100),
+    maxWidth: layoutMax.icerik,
     alignSelf: "center",
   },
   tabBar: {

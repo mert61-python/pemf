@@ -11,7 +11,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { colors, radius, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
@@ -3639,7 +3639,7 @@ const styles = StyleSheet.create({
   moduleLabel: { color: colors.text, fontSize: typography.body, fontWeight: "700" },
   moduleLabelActive: { color: colors.primary },
   moduleDesc: { color: colors.textMuted, fontSize: typography.small, marginTop: 2, lineHeight: rf(15) },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, width: "100%", maxWidth: rs(980), alignSelf: "center" },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, width: "100%", maxWidth: layoutMax.aiHub, alignSelf: "center" },
   card: { gap: spacing.lg },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },

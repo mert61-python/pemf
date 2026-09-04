@@ -24,6 +24,42 @@ export function rf(size: number): number {
   return Math.round(size * softScale);
 }
 
+/**
+ * DOKUNMA HEDEFİ TABANLARI — ölçekle KÜÇÜLMEZ.  [S3, 2026-09-04 responsive denetimi]
+ * `rs(44)` 320 px telefonda 38 px'e iniyordu: tam da dokunmanın en zor olduğu cihazda hedef
+ * WCAG/Android alt sınırının altına düşüyordu. Taban `Math.max` ile korunur, büyük ekranda büyür.
+ */
+export const touch = {
+  /** Birincil dokunma hedefi (düğme, ikon-düğme, satır). */
+  min: Math.max(44, rs(44)),
+  /** Çip/segment gibi ikincil hedefler. */
+  sm: Math.max(40, rs(40)),
+  /** Standart hitSlop. */
+  slop: { top: 8, bottom: 8, left: 8, right: 8 },
+  /**
+   * Komşu hedefler arası boşluğa göre GÜVENLİ hitSlop: kural `hitSlop ≤ gap/2`.
+   * (Bobin seçicide 8 px hitSlop + 3 px gap ile dokunma alanları üst üste biniyordu → yanlış bobin.)
+   */
+  slopFor(gap: number) {
+    const v = Math.max(0, Math.floor(gap / 2));
+    return { top: v, bottom: v, left: v, right: v };
+  },
+};
+
+/**
+ * EKRAN-KONTEYNER GENİŞLİK TAVANLARI — ÖLÇEKSİZ (CSS px).  [S1, 2026-09-04]
+ * `maxWidth: rs(1100)` PC'de 1430 px'e çıkıyordu: "en fazla 1100 px" niyetinin tam tersi.
+ * maxWidth bir tavandır, telefon-içi orantı değil → `rs()` ile ÇARPILMAZ.
+ */
+export const layoutMax = { icerik: 1100, genis: 1200, aiHub: 980, ayar: 900, modal: 900 } as const;
+
+/**
+ * SİSTEM YAZI ÖLÇEĞİ TAVANI (sahip kararı 2026-09-04: 1,2).  [S6]
+ * `allowFontScaling={false}` ASLA kullanılmaz — görme zorluğu olan operatörün tercihi tamamen
+ * kapatılmaz, yalnız tavanlanır. Varsayılan `fonts.ts::injectFont` içinde uygulanır.
+ */
+export const MAX_FONT_SCALE = 1.2;
+
 export const colors = {
   bg: "#121827",
   bgAlt: "#182033",

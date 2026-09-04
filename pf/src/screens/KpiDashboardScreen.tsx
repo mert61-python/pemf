@@ -8,7 +8,7 @@ import { ScrollView, Text, View, StyleSheet } from "react-native";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
@@ -278,7 +278,7 @@ export function KpiDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
+  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: layoutMax.genis, alignSelf: "center" },
   sectionTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "700", marginTop: spacing.md },
   staleBanner: {
     color: "#f59e0b",

@@ -5,7 +5,7 @@ import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "l
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { duzenlemePayloadu } from "@/utils/hastaGuncelleme";
 import type { Patient } from "@/types/domain";
@@ -358,7 +358,7 @@ export function PatientScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: rs(1100), alignSelf: "center" },
+  container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" },
   loadMoreBtn: {
     marginTop: spacing.md, paddingVertical: spacing.md, alignItems: "center",
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgAlt,

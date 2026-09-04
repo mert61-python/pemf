@@ -13,7 +13,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 
@@ -187,7 +187,7 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: rs(1200), alignSelf: "center" },
+  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: layoutMax.genis, alignSelf: "center" },
   chartArea: { width: "100%", alignItems: "center" },
   header: {
     flexDirection: "row",

@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { StyleSheet, View, Platform, Text, TouchableOpacity, useWindowDimensions, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { RefreshCcw } from "lucide-react-native";
 import { EFieldBar } from "@/components/domain/EFieldBar";
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   container: {
     gap: spacing.lg,
     width: "100%",
-    maxWidth: rs(1100),
+    maxWidth: layoutMax.icerik,
     alignSelf: "center",
   },
   headerCard: {

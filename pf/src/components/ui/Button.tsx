@@ -3,7 +3,7 @@ import { ReactNode, useRef } from "react";
 import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { colors, radius, spacing, typography, rs, rf, gradients, motion, elevation } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs, rf, gradients, motion, elevation, touch } from "@/theme/tokens";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 type ButtonVariant = "primary" | "danger" | "success" | "secondary" | "ghost";
@@ -123,9 +123,12 @@ export function Button({
         ) : icon ? (
           <View style={styles.icon}>{icon}</View>
         ) : null}
+        {/* [S2/S6] Yan yana iki düğmede etiket kırpılıyordu: flexShrink + sığdırma. */}
         <Text
           style={[styles.label, LABEL[size], variant === "ghost" && styles.ghostLabel, variant === "secondary" && styles.secondaryLabel]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
         >
           {label}
         </Text>
@@ -148,18 +151,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.btn,
     borderTopRightRadius: radius.btn,
   },
-  content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
+  content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, flexShrink: 1, minWidth: 0 },
   // boyutlar
-  size_sm: { minHeight: rs(38), paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  size_md: { minHeight: rs(46), paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  size_lg: { minHeight: rs(54), paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
+  // [S3] Tabanlar ölçekle KÜÇÜLMEZ: 320 px'te rs(38)=32 / rs(46)=39 idi (44 px hedefin altı).
+  size_sm: { minHeight: touch.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  size_md: { minHeight: Math.max(touch.min, rs(46)), paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  size_lg: { minHeight: Math.max(touch.min, rs(54)), paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   block: { alignSelf: "stretch", width: "100%" },
   // solid varyantlar
   secondary: { backgroundColor: colors.panelSoft, borderColor: colors.border, borderWidth: 1 },
   ghost: { backgroundColor: "transparent", borderColor: colors.border, borderWidth: 1 },
   disabled: { opacity: 0.45 },
   icon: { alignItems: "center", justifyContent: "center" },
-  label: { color: colors.white, fontWeight: "700" },
+  label: { color: colors.white, fontWeight: "700", flexShrink: 1 },
   label_sm: { fontSize: typography.caption },
   label_md: { fontSize: rf(14.5) },
   label_lg: { fontSize: typography.subtitle },

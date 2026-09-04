@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, useWindowDimensio
 import { Card } from "@/components/ui/Card";
 import { AuroraBackground } from "@/components/ui/AuroraBackground";
 import { FadeInView } from "@/components/ui/FadeInView";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
 import { Heart, Stethoscope, FlaskConical, LogOut, Sparkles, Zap } from "lucide-react-native";
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
     justifyContent: 'center',
     flexWrap: 'wrap',
-    maxWidth: rs(1200),
+    maxWidth: layoutMax.genis,
     width: '100%',
   },
   cardWrapper: {
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     alignSelf: 'stretch',
-    maxWidth: rs(1200),
+    maxWidth: layoutMax.genis,
     width: '100%',
     marginBottom: spacing.lg,
     gap: spacing.md,

@@ -23,7 +23,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
-import { colors, spacing, typography, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1e3a5f",
     width: "100%",
-    maxWidth: rs(900),
+    maxWidth: layoutMax.modal,
     maxHeight: "92%",
     padding: spacing.lg,
     gap: spacing.md,
