@@ -67,7 +67,10 @@ describe("useResponsive", () => {
     expect(r.layout).toBe("tablet");
     expect(r.sidebarWidth).toBeGreaterThan(0);
     expect(r.contentWidth).toBeLessThan(768); // pencere genişliği DEĞİL
-    expect(r.contentWidth).toBe(768 - r.sidebarWidth - 2 * r.width * 0 - 2 * 31); // spacing.xl = rs(24) = 31 (SCALE 1.3)
+    // Beklenti ÖLÇEKTEN BAĞIMSIZ hesaplanır (S1 tavanı değişince literal pin kırılırdı):
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { spacing } = require("@/theme/tokens") as typeof import("@/theme/tokens");
+    expect(r.contentWidth).toBe(768 - r.sidebarWidth - 2 * spacing.xl);
   });
 
   it("geniş PC: sidebar kabuğu, kompakt değil", () => {

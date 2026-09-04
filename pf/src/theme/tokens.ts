@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { Dimensions, Platform } from "react-native";
 import type { ViewStyle } from "react-native";
+import { breakpoints } from "@/theme/breakpoints";
 
 // ── RESPONSIVE ÖLÇEK ─────────────────────────────────────────────────────────
 // Tüm boyutlandırma (spacing/typography/radius + bileşenlerdeki ham sayılar) bu
@@ -8,10 +9,29 @@ import type { ViewStyle } from "react-native";
 // (yaygın telefon). Çok küçük (~320) ve çok büyük (tablet) ekranlarda aşırıya kaçmasın
 // diye clamp'lenir. Uygulama açılışında cihaz genişliğinden bir kez hesaplanır (portre).
 const BASE_WIDTH = 375;
-const _screenW = Math.min(Dimensions.get("window").width, Dimensions.get("window").height); // kısa kenar (portre genişliği)
-const _rawScale = (_screenW || BASE_WIDTH) / BASE_WIDTH;
-// 0.85 (küçük telefon) … 1.30 (büyük telefon/küçük tablet) arası
-const SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);
+
+/**
+ * ÖLÇEK TAVANI — ortama göre.  [S1, 2026-09-04 denetimi · sahip kararı: %110]
+ * ÖLÇÜLEN DURUM: tek tavan (1,30) vardı ve kısa kenarı 488 px'i geçen HER yüzey (tablet, WebView2
+ * penceresi, LAN tarayıcısı, DPI'lı dizüstü) ona yapışıyordu → kenar çubuğu 322 px, gövde yazısı
+ * 17 px, `maxWidth: rs(1100)` 1430 px. PC'de "telefon büyütmesi" görünümünün ve tablet dikeyde
+ * içeriğe 352 px kalmasının kökeni buydu.
+ * ⚠️ TELEFON FORMÜLÜ BİREBİR KORUNUR (native kısa kenar < 600) → APK'da sıfır fark.
+ * GERİ ALMA: `OLCEK_TAVAN_BUYUK_EKRAN = 1.30` (tek satır) → eski davranış.
+ */
+export const OLCEK_TAVAN_BUYUK_EKRAN = 1.1;
+export const OLCEK_TAVAN_TELEFON = 1.3;
+/** Native'de "büyük ekran" sınırı = Android sw600dp tablet sınırı. */
+const NATIVE_BUYUK_KISA_KENAR = 600;
+
+const _win = Dimensions.get("window");
+const _screenW = Math.min(_win.width, _win.height) || BASE_WIDTH; // kısa kenar (portre genişliği)
+// Web'de PC penceresi hiçbir zaman 480 px'in altına inmez; telefon tarayıcısı (LAN) telefon
+// formülünde kalsın diye eşik `breakpoints.phone`.
+const _buyukEkran = Platform.OS === "web" ? _screenW >= breakpoints.phone : _screenW >= NATIVE_BUYUK_KISA_KENAR;
+const SCALE = Math.min(Math.max(_screenW / BASE_WIDTH, 0.85), _buyukEkran ? OLCEK_TAVAN_BUYUK_EKRAN : OLCEK_TAVAN_TELEFON);
+/** Etkin ölçek (test ve kapı için dışa aktarılır). */
+export const OLCEK = SCALE;
 
 /** responsive size — ham pikseli cihaza göre ölçekle (yuvarlanmış). Hard-coded boyut yerine kullan. */
 export function rs(size: number): number {
