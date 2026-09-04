@@ -24,6 +24,7 @@ import { useAppNav } from "@/context/AppNavContext";
 import { useUserMode } from "@/context/UserModeContext";
 import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { IconButton } from "@/components/ui/IconButton";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 
 interface Hasta { id: string; name: string; species?: string }
@@ -87,9 +88,9 @@ export function PatientGate({ children, soft = false }: { children: React.ReactN
     <View style={{ gap: spacing.sm }}>
       <View style={styles.secHead}>
         <Text style={styles.secTitle}>{S.secKisa}</Text>
-        <TouchableOpacity onPress={() => setAcik(false)} accessibilityRole="button" accessibilityLabel="Kapat">
+        <IconButton label="Kapat" onPress={() => setAcik(false)}>
           <X color={colors.textMuted} size={rs(17)} />
-        </TouchableOpacity>
+        </IconButton>
       </View>
 
       {liste === null ? (

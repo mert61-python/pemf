@@ -13,7 +13,7 @@ import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 import { KAV_BEHAVIOR_PENCERE } from "@/hooks/useKeyboard";
 import { Mail, Lock, Eye, EyeOff, Check, X, ArrowRight, GraduationCap, User, Phone, Building2, MapPin, Home, Stethoscope } from "lucide-react-native";
 import type { ComponentType } from "react";
-import { colors, spacing, radius, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, radius, typography, rf, rs, touch } from "@/theme/tokens";
 import { passwordChecks, isPasswordValid, isEmailValid, isResearchEmail } from "@/services/authApi";
 import { signUpUser, signInUser, sendPasswordReset } from "@/services/supabaseAuth";
 
@@ -492,8 +492,13 @@ const styles = StyleSheet.create({
   resetTitle: { color: colors.text, fontSize: typography.title, fontWeight: "800" },
   resetSub: { color: colors.textMuted, fontSize: typography.small, textAlign: "center" },
   adminHint: { color: colors.textMuted, fontSize: typography.caption, marginTop: rs(4), marginLeft: rs(2) },
-  forgotRow: { alignSelf: "flex-end", marginTop: rs(-4) },
-  forgotText: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
+  // [S3 adım 7 / ampirik-4] Metin bağlantısının dokunma alanı metin kutusuyla sınırlıydı (~20 px).
+  // Yükseklik tabanı + yatay dolgu ile 44 px; negatif marj görsel ritmi korur.
+  forgotRow: {
+    alignSelf: "flex-end", minHeight: touch.min, justifyContent: "center",
+    paddingHorizontal: spacing.sm, marginTop: rs(-4) - spacing.sm, marginRight: -spacing.sm,
+  },
+  forgotText: { color: colors.primary, fontSize: touch.linkFont, fontWeight: "700" },
 
   field: {
     flexDirection: "row", alignItems: "center",
@@ -536,8 +541,8 @@ const styles = StyleSheet.create({
   submitDisabled: { backgroundColor: colors.panelSoft, shadowOpacity: 0, elevation: 0 },
   submitText: { color: colors.white, fontSize: rf(18), fontWeight: "800", textAlign: "center", flexShrink: 1 },
 
-  switchRow: { alignItems: "center", marginTop: spacing.xs },
-  switchText: { color: colors.textMuted, fontSize: typography.small },
+  switchRow: { alignItems: "center", justifyContent: "center", minHeight: touch.min, marginTop: 0 },
+  switchText: { color: colors.textMuted, fontSize: touch.linkFont },
   switchLink: { color: colors.primary, fontWeight: "800" },
 
   footer: { color: colors.textMuted, fontSize: typography.caption, textAlign: "center", marginTop: spacing.lg, opacity: 0.7 },

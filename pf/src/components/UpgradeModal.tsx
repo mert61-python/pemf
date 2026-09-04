@@ -7,7 +7,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { IconButton } from "@/components/ui/IconButton";
+import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { Sparkles, X, Zap, FlaskConical } from "lucide-react-native";
 import { useEntitlement } from "@/context/EntitlementContext";
 import { TIER_LABEL } from "@/config/entitlement";
@@ -58,14 +59,9 @@ export function UpgradeModal({
       cardStyle={styles.card}
       contentStyle={styles.icerik}
       header={
-        <TouchableOpacity
-          style={styles.close}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Kapat"
-        >
+        <IconButton label="Kapat" onPress={onClose} style={styles.close}>
           <X size={20} color={colors.textMuted} />
-        </TouchableOpacity>
+        </IconButton>
       }
       footer={
         <TouchableOpacity style={styles.btn} onPress={onClose} accessibilityRole="button">
@@ -94,7 +90,7 @@ const styles = StyleSheet.create({
   // Perde/kart iskeleti ScrollableModalCard'dan gelir; burada yalnız görsel farklar kalır.
   card: { backgroundColor: colors.bgAlt, borderRadius: rs(20) },
   icerik: { alignItems: "center", gap: spacing.md, paddingBottom: spacing.md },
-  close: { alignSelf: "flex-end", minWidth: rs(44), minHeight: rs(44), alignItems: "flex-end", justifyContent: "center" },
+  close: { alignSelf: "flex-end", minWidth: touch.min, minHeight: touch.min, alignItems: "flex-end", justifyContent: "center" },
   iconRing: {
     width: rs(64),
     height: rs(64),

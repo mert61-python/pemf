@@ -16,7 +16,7 @@ import { Download, X } from "lucide-react-native";
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 export function MobileUpdateBanner() {
   // ⚠️ Ölçü `useDonanimCalisiyor`: seans kaydı açık olmasa da çalışan bobin bandı susturur
@@ -90,6 +90,6 @@ const styles = StyleSheet.create({
   alt: { color: colors.textMuted, fontSize: rf(11), marginTop: rs(2) },
   altHata: { color: colors.warning },
   btn: { backgroundColor: colors.cyan, borderRadius: radius.md,
-         paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: rs(44), justifyContent: "center" },
+         paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: touch.min, justifyContent: "center" },
   btnText: { color: "#04121F", fontWeight: "800", fontSize: rf(12) },
 });

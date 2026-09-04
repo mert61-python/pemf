@@ -16,6 +16,7 @@ import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { Chip } from "@/components/ui/Chip";
 import { useResponsive } from "@/hooks/useResponsive";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
@@ -99,20 +100,20 @@ export function SensorMonitorScreen() {
           const active = visibleCoils.has(id);
           const color = COIL_COLORS[id - 1];
           return (
-            <TouchableOpacity
+            // [S3 adım 5] Ortak çip: eski gövde paddingVertical 6 ile 320 px'te 28 px yükseklikteydi
+            // ve 8 düğme 4 px aralıkla diziliyordu → komşu bobin filtresine basılıyordu.
+            <Chip
               key={id}
-              style={[
-                styles.coilBtn,
-                active && { backgroundColor: color + "33", borderColor: color },
-                !connected && styles.coilBtnOffline,
-              ]}
+              label={`Bobin ${id}`}
+              active={active}
               onPress={() => toggleCoil(id)}
-            >
-              <View style={[styles.coilBtnDot, { backgroundColor: active ? color : "#475569" }]} />
-              <Text style={[styles.coilBtnText, active && { color }]}>
-                Bobin {id}
-              </Text>
-            </TouchableOpacity>
+              accessibilityLabel={`Bobin ${id} grafiğini göster/gizle`}
+              style={[styles.coilBtn, !connected && styles.coilBtnOffline]}
+              activeStyle={{ backgroundColor: color + "33", borderColor: color }}
+              textStyle={styles.coilBtnText}
+              activeTextStyle={{ color }}
+              left={<View style={[styles.coilBtnDot, { backgroundColor: active ? color : "#475569" }]} />}
+            />
           );
         })}
       </View>
@@ -248,17 +249,14 @@ const styles = StyleSheet.create({
   axisChipTemp: { borderColor: "#fb923c", backgroundColor: "#431407" },
   axisChipText: { color: colors.text, fontSize: typography.small, fontWeight: "600" },
 
+  // [S3 adım 5] Boşluk 4 → 8: komşu çipe basma riski (hitSlop ≤ gap/2 kuralının ön koşulu).
   coilBtnRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
+  // Yükseklik/padding artık Chip ilkelinden; burada yalnız RENK ve çerçeve kalır.
   coilBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: "#1e293b",
     borderWidth: 1,

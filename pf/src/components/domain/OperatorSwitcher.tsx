@@ -17,7 +17,7 @@ import { Lock, LogOut, UserCheck, UserPlus } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 const PIN_UZUNLUK = 6;
 
@@ -218,19 +218,19 @@ const styles = StyleSheet.create({
   liste: { maxHeight: rs(160), borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
   satir: { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
            paddingVertical: rs(11), paddingHorizontal: spacing.md,
-           borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: rs(44) },
+           borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: touch.min },
   satirSecili: { backgroundColor: colors.panel },
   satirAd: { flex: 1, color: colors.text, fontSize: rf(13), fontWeight: "600" },
   giris: { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
            borderRadius: radius.md, color: colors.text, padding: spacing.sm, fontSize: rf(14),
-           letterSpacing: rs(2), minHeight: rs(44) },
+           letterSpacing: rs(2), minHeight: touch.min },
   hata: { color: colors.danger, fontSize: rf(12) },
   satirBtn: { flexDirection: "row", gap: spacing.sm },
   birincil: { flex: 1, backgroundColor: colors.cyan, borderRadius: radius.md,
-              paddingVertical: rs(11), alignItems: "center", minHeight: rs(44), justifyContent: "center" },
+              paddingVertical: rs(11), alignItems: "center", minHeight: touch.min, justifyContent: "center" },
   birincilText: { color: "#04121F", fontWeight: "800", fontSize: rf(13) },
   ikincil: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
-             paddingVertical: rs(11), paddingHorizontal: spacing.md, minHeight: rs(44), justifyContent: "center" },
+             paddingVertical: rs(11), paddingHorizontal: spacing.md, minHeight: touch.min, justifyContent: "center" },
   ikincilText: { color: colors.textMuted, fontWeight: "700", fontSize: rf(12) },
   altSatir: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   metinBtn: { flexDirection: "row", alignItems: "center", gap: rs(5), paddingVertical: rs(6) },

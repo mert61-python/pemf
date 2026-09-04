@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { KeyboardAvoidingView, Modal, View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from "react-native";
 import { KAV_BEHAVIOR_MODAL } from "@/hooks/useKeyboard";
+import { Chip, ChipRow } from "@/components/ui/Chip";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -125,17 +126,22 @@ export function ObservationNotesModal({
           {session?.patientName ? <Text style={styles.sub}>{session.patientName}</Text> : null}
 
           <Text style={styles.label}>Hasta tepkisi</Text>
-          <View style={styles.chips}>
+          {/* [S3 adım 5] Ortak çip: eski gövde paddingVertical spacing.xs ile 320 px'te 26 px
+              yükseklikteydi ve aralık 4 px'ti — hekim komşu tepkiyi işaretliyordu. */}
+          <ChipRow>
             {REACTIONS.map((r) => (
-              <TouchableOpacity
+              <Chip
                 key={r}
-                style={[styles.chip, selected.has(r) && styles.chipActive]}
+                label={r}
+                active={selected.has(r)}
                 onPress={() => toggle(r)}
-              >
-                <Text style={[styles.chipText, selected.has(r) && styles.chipTextActive]}>{r}</Text>
-              </TouchableOpacity>
+                style={styles.chip}
+                activeStyle={styles.chipActive}
+                textStyle={styles.chipText}
+                activeTextStyle={styles.chipTextActive}
+              />
             ))}
-          </View>
+          </ChipRow>
 
           <Text style={styles.label}>Notlar</Text>
           <TextInput
@@ -188,12 +194,10 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },
   sub: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
   label: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  // Satır boşluğu ve yükseklik ChipRow/Chip'ten; burada yalnız RENK ve çerçeve kalır.
   chip: {
     backgroundColor: "#1e293b",
     borderRadius: 18,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
     borderWidth: 1,
     borderColor: "#334155",
   },

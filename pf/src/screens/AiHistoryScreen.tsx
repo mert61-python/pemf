@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, radius, rf, rs, layoutMax, touch } from "@/theme/tokens";
+import { Chip as OrtakChip } from "@/components/ui/Chip";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
@@ -390,17 +391,23 @@ export function AiHistoryScreen() {
   );
 }
 
+/**
+ * [S3 adım 5] Yerel çip ORTAK `Chip` ilkeline devredildi. Eski gövde `paddingVertical: spacing.xs`
+ * ile 320 px'te 26 px yükseklikte kalıyordu (erişilebilirlik tabanı 40). Renkler style/activeStyle
+ * ile aynen taşındığı için GÖRSEL DEĞİŞİKLİK YOK; yalnız dokunma alanı büyüdü.
+ */
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive]}
+    <OrtakChip
+      label={label}
+      active={active}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
       accessibilityLabel={`Filtre: ${label}`}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>{label}</Text>
-    </TouchableOpacity>
+      style={styles.chip}
+      activeStyle={styles.chipActive}
+      textStyle={styles.chipText}
+      activeTextStyle={styles.chipTextActive}
+    />
   );
 }
 
@@ -418,7 +425,7 @@ const styles = StyleSheet.create({
   refreshBtn: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   silBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: rs(6),
             marginTop: spacing.sm, paddingVertical: rs(10), borderRadius: radius.md,
-            borderWidth: 1, borderColor: colors.danger, minHeight: rs(44) },
+            borderWidth: 1, borderColor: colors.danger, minHeight: touch.min },
   silText: { color: colors.danger, fontWeight: "700", fontSize: rf(12) },
   refreshText: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
   segment: { flexDirection: "row", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: rs(4), gap: rs(4), marginHorizontal: spacing.lg, marginBottom: spacing.sm },

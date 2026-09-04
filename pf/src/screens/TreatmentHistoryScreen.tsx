@@ -6,7 +6,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { colors, spacing, typography, rs, radius, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, rs, radius, layoutMax, touch } from "@/theme/tokens";
 import { serviceConfig } from "@/services/config";
 import { apiGet, apiPost, platformConfirm, platformAlert } from "@/services/apiClient";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: rs(10),
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: rs(44),
+    minHeight: touch.min,
     justifyContent: "center",
     alignItems: "center",
   },

@@ -18,7 +18,7 @@ import { KAV_BEHAVIOR_MODAL } from "@/hooks/useKeyboard";
 import { Eye, EyeOff } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 /** Backend `utils/data_export.MIN_PAROLA` ile AYNI olmalı. */
 export const MIN_PAROLA = 12;
@@ -123,17 +123,17 @@ const styles = StyleSheet.create({
   girisSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   giris: { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
            borderRadius: radius.md, color: colors.text, padding: spacing.sm,
-           fontSize: rf(14), minHeight: rs(44) },
-  goz: { padding: spacing.sm, minHeight: rs(44), justifyContent: "center" },
+           fontSize: rf(14), minHeight: touch.min },
+  goz: { padding: spacing.sm, minHeight: touch.min, justifyContent: "center" },
   hata: { color: colors.danger, fontSize: rf(12) },
   satirBtn: { flexDirection: "row", gap: spacing.sm },
   birincil: { flex: 1, backgroundColor: colors.cyan, borderRadius: radius.md,
-              paddingVertical: rs(11), alignItems: "center", minHeight: rs(44),
+              paddingVertical: rs(11), alignItems: "center", minHeight: touch.min,
               justifyContent: "center" },
   pasif: { opacity: 0.5 },
   birincilText: { color: "#04121F", fontWeight: "800", fontSize: rf(13) },
   ikincil: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
-             paddingVertical: rs(11), paddingHorizontal: spacing.md, minHeight: rs(44),
+             paddingVertical: rs(11), paddingHorizontal: spacing.md, minHeight: touch.min,
              justifyContent: "center" },
   ikincilText: { color: colors.textMuted, fontWeight: "700", fontSize: rf(12) },
 });

@@ -64,6 +64,13 @@ export const touch = {
     const v = Math.max(0, Math.floor(gap / 2));
     return { top: v, bottom: v, left: v, right: v };
   },
+  /**
+   * DOKUNULABİLİR metnin taban punto'su (ampirik-4/ekranA-10).
+   * "Şifremi unuttum?", "Hesabın yok mu?" gibi bağlantılar `rf(11)` ile 320 px'te 9 px'e düşüyordu:
+   * hem okunmuyor hem de dokunma hedefi metin kutusuyla sınırlı kalınca 20 px'e iniyordu.
+   * Süsleme metinleri için DEĞİL — yalnız dokunulabilir metinlerde kullanılır.
+   */
+  linkFont: Math.max(12, rf(11)),
 };
 
 /**

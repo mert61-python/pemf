@@ -5,7 +5,7 @@
  */
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated } from "react-native";
 import { useRef, useEffect } from "react";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { platformConfirm } from "@/services/apiClient";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
@@ -156,8 +156,9 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: "#fff", fontSize: rf(11), fontWeight: "800" },
   headerActions: { flexDirection: "row", gap: spacing.sm },
-  actionBtn: { padding: spacing.xs },
-  actionBtnText: { color: colors.primary, fontSize: typography.small, fontWeight: "600" },
+  // [S3 adım 7] "Temizle"/"Tümünü okundu say" dokunma alanı 20 px'ti; taban 44 px.
+  actionBtn: { minHeight: touch.min, justifyContent: "center", paddingHorizontal: spacing.sm },
+  actionBtnText: { color: colors.primary, fontSize: touch.linkFont, fontWeight: "600" },
 
   list: { maxHeight: rs(240) },
   // Kompakt liste artık kaydırılmıyor → maxHeight kırpardı. Öge sayısı çağıranda sınırlı (maxVisible).

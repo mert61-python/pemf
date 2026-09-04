@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, useWindowDimensio
 import { Card } from "@/components/ui/Card";
 import { AuroraBackground } from "@/components/ui/AuroraBackground";
 import { FadeInView } from "@/components/ui/FadeInView";
-import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useUserMode } from "@/context/UserModeContext";
 import { useAuth } from "@/context/AuthContext";
 import { Heart, Stethoscope, FlaskConical, LogOut, Sparkles, Zap } from "lucide-react-native";
@@ -249,9 +249,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   topEmail: { color: colors.textMuted, fontSize: typography.small, flex: 1 },
+  // [S3 adım 7] Çıkış düğmesi 320 px'te 30 px yükseklikteydi; taban ölçekle küçülmeyen touch.min.
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: touch.min,
     gap: rs(6),
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,

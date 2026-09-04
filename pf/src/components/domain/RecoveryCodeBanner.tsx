@@ -23,7 +23,7 @@ import { ShieldAlert } from "lucide-react-native";
 
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost } from "@/services/apiClient";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 interface KurtarmaDurumu {
   warn?: boolean;
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   baslik: { color: colors.text, fontSize: rf(13), fontWeight: "800" },
   alt: { color: colors.textMuted, fontSize: rf(11), marginTop: rs(2), lineHeight: rf(16) },
   btn: { backgroundColor: colors.cyan, borderRadius: radius.md,
-         paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: rs(44),
+         paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: touch.min,
          justifyContent: "center" },
   btnText: { color: "#04121F", fontWeight: "800", fontSize: rf(12) },
 });

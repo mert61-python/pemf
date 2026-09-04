@@ -7,7 +7,7 @@
  */
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, AccessibilityInfo } from "react-native";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
 
@@ -390,6 +390,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: spacing.sm,
     alignItems: "center",
+    justifyContent: "center",
+    // [S3] 320 px'te dolgu ile 32 px kalıyordu; bobin başlat/durdur hedefi 44 px tabanında.
+    minHeight: touch.min,
   },
   btnStartText: { color: "#fff", fontWeight: "700", fontSize: typography.small },
   btnStop: {
@@ -398,6 +401,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: spacing.sm,
     alignItems: "center",
+    justifyContent: "center",
+    // [S3] 320 px'te dolgu ile 32 px kalıyordu; bobin başlat/durdur hedefi 44 px tabanında.
+    minHeight: touch.min,
   },
   btnStopText: { color: "#fff", fontWeight: "700", fontSize: typography.small },
   btnDisabled: { opacity: 0.4 },

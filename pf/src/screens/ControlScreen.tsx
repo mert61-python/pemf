@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
-import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import type { CoilStatus } from "@/types/domain";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
@@ -811,7 +811,10 @@ function CoilSelector({
                 !connected && styles.coilSelectorBtnOffline,
               ]}
               onPress={() => onToggle(c.id)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              // ⚠️ [S3 adım 6 / ekranB-15] hitSlop ≤ gap/2. Eski 8 px tampon + 4 px ızgara boşluğu
+              // ile komşu kutuların dokunma alanları ÜST ÜSTE biniyordu: aralığa yapılan dokunuş
+              // sağdaki bobine gidiyor, operatör YANLIŞ BOBİNİ seansa sokabiliyordu.
+              hitSlop={touch.slopFor(spacing.sm)}
               accessibilityRole="button"
               accessibilityState={{ selected: selected.has(c.id) }}
               accessibilityLabel={`Bobin ${c.id}, ${selected.has(c.id) ? "seçili" : "seçili değil"}, ${connected ? "çevrimiçi" : "çevrimdışı"}`}
@@ -967,10 +970,12 @@ const styles = StyleSheet.create({
   coilGrid: { gap: spacing.sm },
 
   coilSelector: { gap: spacing.xs },
-  coilSelectorGrid: { flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" },
+  // Boşluk 4 → 8: hitSlop kuralının ön koşulu (4 px boşlukta güvenli tampon 2 px kalırdı).
+  coilSelectorGrid: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
   coilSelectorBtn: {
-    width: rs(40),
-    height: rs(40),
+    // Ölçekle AŞAĞI inmez: 320 px'te rs(40) = 34 px'ti (erişilebilirlik tabanı 44).
+    width: touch.min,
+    height: touch.min,
     borderRadius: 10,
     backgroundColor: "#1e293b",
     alignItems: "center",
@@ -978,7 +983,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-  coilSelectorBtnActive: { backgroundColor: "#1d4ed8", borderColor: "#3b82f6" },
+  // Seçili durum yalnız RENKLE anlatılmıyor: çerçeve kalınlığı da değişiyor (renk körlüğü).
+  coilSelectorBtnActive: { backgroundColor: "#1d4ed8", borderColor: "#3b82f6", borderWidth: 2 },
   coilSelectorBtnOffline: { opacity: 0.4 },
   coilSelectorText: { color: colors.textMuted, fontWeight: "700" },
   coilSelectorTextActive: { color: "#fff" },

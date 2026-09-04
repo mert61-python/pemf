@@ -17,9 +17,10 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
+import { IconButton } from "@/components/ui/IconButton";
 import { CheckCircle2, X, XCircle } from "lucide-react-native";
 
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 export interface AiProposalSpecs {
   organ_id: number;
@@ -98,9 +99,9 @@ export function AiSpecApprovalModal({
       header={
         <View style={s.head}>
           <Text style={s.title}>AI Seans Önerisi</Text>
-          <TouchableOpacity onPress={kapat} accessibilityRole="button" accessibilityLabel="Kapat">
+          <IconButton label="Kapat" onPress={kapat}>
             <X size={rs(20)} color={colors.textMuted} />
-          </TouchableOpacity>
+          </IconButton>
         </View>
       }
       footer={
@@ -245,7 +246,9 @@ const s = StyleSheet.create({
   rejectLabel: { color: colors.textMuted, fontSize: rf(11) },
   input: { minHeight: rs(64), backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, padding: spacing.sm, fontSize: rf(12), textAlignVertical: "top" },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm, marginTop: spacing.xs },
-  btn: { flexDirection: "row", alignItems: "center", gap: rs(6), paddingVertical: rs(10), paddingHorizontal: spacing.md, borderRadius: radius.md },
+  // [S3] Onay/red düğmeleri: 320 px'te rs(10) dolgu ile 34 px yükseklikte kalıyordu.
+  btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: rs(6),
+         minHeight: touch.min, paddingVertical: rs(10), paddingHorizontal: spacing.md, borderRadius: radius.md },
   btnPrimary: { backgroundColor: colors.cyan },
   btnPrimaryText: { color: "#04121F", fontWeight: "800", fontSize: rf(13) },
   btnDanger: { backgroundColor: colors.danger },

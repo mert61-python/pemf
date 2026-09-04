@@ -43,7 +43,7 @@ import { Download } from "lucide-react-native";
 
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { guncellemeVarMi, guncellemeyiAtla, kurulumunuErtele, type MobilSurum } from "@/services/mobileUpdate";
-import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
+import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
 
 /** Uygulama ikonu — AuthScreen/AppShell ile AYNI kaynak (tek görsel kimlik). */
 const LOGO = require("../../../assets/icon.png");
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   logo: { width: rs(86), height: rs(86), borderRadius: radius.card },
   marka: { color: colors.text, fontSize: rf(20), fontWeight: "800", marginTop: spacing.md },
   durum: { color: colors.textMuted, fontSize: rf(13), marginTop: spacing.md, textAlign: "center" },
-  atla: { marginTop: spacing.lg, paddingVertical: rs(11), paddingHorizontal: spacing.lg, minHeight: rs(44), justifyContent: "center" },
+  atla: { marginTop: spacing.lg, paddingVertical: rs(11), paddingHorizontal: spacing.lg, minHeight: touch.min, justifyContent: "center" },
   atlaText: { color: colors.textSubtle, fontSize: rf(12), fontWeight: "700", textAlign: "center" },
   kart: {
     width: "100%",

@@ -5,7 +5,7 @@ import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "l
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { colors, radius, spacing, typography, rs, layoutMax } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rs, layoutMax, touch } from "@/theme/tokens";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { duzenlemePayloadu } from "@/utils/hastaGuncelleme";
 import type { Patient } from "@/types/domain";
@@ -398,5 +398,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: spacing.sm },
   // WCAG 2.5.5 / platform kılavuzu: minimum 44pt dokunma hedefi. `padding: xs` ile ~28px kalıyordu
   // ve üç yıkıcı-yakın buton (sil / düzenle / seans başlat) yan yana duruyordu → yanlış dokunuş.
-  actionBtnIcon: { padding: spacing.xs, minWidth: rs(44), minHeight: rs(44), alignItems: "center", justifyContent: "center" }
+  actionBtnIcon: { padding: spacing.xs, minWidth: touch.min, minHeight: touch.min, alignItems: "center", justifyContent: "center" }
 });

@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useStageHeight } from "@/hooks/useStageHeight";
-import { colors, radius, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
@@ -3659,7 +3659,7 @@ const styles = StyleSheet.create({
   moduleChevron: { color: colors.textMuted, fontSize: rf(12), marginLeft: spacing.xs },
   moduleChevronActive: { color: colors.primary },
   moduleBody: { marginTop: -1, marginBottom: spacing.xs, paddingHorizontal: 2 },
-  moduleIconWrap: { width: rs(44), height: rs(44), borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border },
+  moduleIconWrap: { width: touch.min, height: touch.min, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border },
   moduleIconWrapActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   moduleLabel: { color: colors.text, fontSize: typography.body, fontWeight: "700" },
   moduleLabelActive: { color: colors.primary },
@@ -3702,7 +3702,7 @@ const styles = StyleSheet.create({
   cameraView: { flex: 1 },
   cameraOverlay: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", resizeMode: "contain", opacity: 0.8 },
   liveIndicator: { position: "absolute", top: 12, right: 12, flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 6 },
-  flipCameraBtn: { position: "absolute", bottom: 12, right: 12, width: rs(44), height: rs(44), borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  flipCameraBtn: { position: "absolute", bottom: 12, right: 12, width: touch.min, height: touch.min, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   liveDot: { width: rs(8), height: rs(8), borderRadius: 4, backgroundColor: colors.danger },
   liveText: { color: colors.white, fontSize: rf(10), fontWeight: "bold" },
   serverCamNote: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.65)", color: colors.white, fontSize: rf(10), textAlign: "center", paddingVertical: 5, paddingHorizontal: 8 },

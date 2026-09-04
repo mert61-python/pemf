@@ -12,6 +12,7 @@ import { installedModes } from "@/services/installedProfiles";
 import { DevicePairingGuide } from "@/components/domain/DevicePairingGuide";
 import { colors, radius, spacing, typography, rf, rs, gradients, elevation, touch } from "@/theme/tokens";
 import { ShellLayoutProvider } from "@/context/ShellLayoutContext";
+import { IconButton } from "@/components/ui/IconButton";
 import { KAV_BEHAVIOR_PENCERE, useKeyboard } from "@/hooks/useKeyboard";
 import { RouteKey } from "@/types/domain";
 import { useUserMode } from "@/context/UserModeContext";
@@ -301,16 +302,13 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
             )}
             {!desktop && (
               // a11y: ikon-only düğmede rol/etiket yoktu ve dokunma hedefi ~30pt idi (min 44pt).
-              <Pressable
-                onPress={() => onRouteChange("settings")}
-                style={styles.iconBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Ayarlar"
-              >
+              <IconButton label="Ayarlar" onPress={() => onRouteChange("settings")}>
                 <Settings size={22} color={colors.textMuted} />
-              </Pressable>
+              </IconButton>
             )}
-            <Pressable onPress={reconnect} style={styles.wsContainer} accessibilityRole="button" accessibilityLabel="Bağlantıyı yenile">
+            {/* [S3 adım 3] 10 px'lik nokta tek başına dokunma hedefiydi; artık 44 px kutuda ortalı.
+                Çevrimdışı metni yanında kalabilsin diye kutu YATAYDA esner (flexShrink korunur). */}
+            <IconButton label="Bağlantıyı yenile" onPress={reconnect} style={styles.wsContainer}>
               {/* [kabuk-3] Dar telefonda bu metin sağ bloğu ~65 px büyütüp sayfa BAŞLIĞINI
                   yutuyordu; kompaktta kırmızı gösterge tek başına yeterli (dokunulunca yeniden bağlanır). */}
               {connectionQuality === "offline" && !responsive.isCompact && (
@@ -322,13 +320,8 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 styles.wsIndicator,
                 connectionQuality === "offline" && styles.wsIndicatorOff,
               ]} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Bildirimler"
-              accessibilityRole="button"
-              onPress={() => setShowNotifications(true)}
-              style={styles.notifBadgeWrap}
-            >
+            </IconButton>
+            <IconButton label="Bildirimler" onPress={() => setShowNotifications(true)} style={styles.notifBadgeWrap}>
               <Bell size={16} color={colors.textMuted} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
@@ -337,7 +330,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                   </Text>
                 </View>
               )}
-            </Pressable>
+            </IconButton>
           </View>
         </View>
 
@@ -644,7 +637,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     flexDirection: "row",
     gap: spacing.md,
-    minHeight: rs(44),
+    minHeight: touch.min,
     paddingHorizontal: spacing.md
   },
   navItemActive: {
@@ -695,9 +688,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flex: 1, minWidth: 0, marginRight: spacing.sm },
   headerRight: { flexShrink: 0, flexDirection: "row", alignItems: "center", gap: spacing.md },
-  iconBtn: { minWidth: rs(44), minHeight: rs(44), alignItems: "center", justifyContent: "center" },
+  // iconBtn KALDIRILDI: ölçüler IconButton ilkelinden (touch.min, ölçekle AŞAĞI inmez) geliyor.
   profileChip: {
     flexDirection: "row", alignItems: "center", gap: rs(5),
+    // [S3 adım 8] 320 px'te yükseklik 28 px'e düşüyordu; taban ölçekle küçülmeyen touch.min.
+    minHeight: touch.min,
     paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgAlt,
   },
@@ -722,7 +717,7 @@ const styles = StyleSheet.create({
   profileMenuDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs, marginHorizontal: spacing.sm },
   // Yıkıcı satırı profil satırlarından görsel olarak ayır (yanlış-dokunuş riski).
   profileMenuDanger: { backgroundColor: colors.danger + "14", borderWidth: 1, borderColor: colors.danger + "44", marginTop: spacing.xs },
-  wsContainer: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  wsContainer: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.xs },
   wsTextOff: { flexShrink: 1, color: "#f59e0b", fontSize: typography.small, fontWeight: "700" },
   wsIndicator: {
     width: rs(10), height: rs(10), borderRadius: 5,
