@@ -16,6 +16,7 @@ import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { useResponsive } from "@/hooks/useResponsive";
 
 // Grafikteki çizgi renkleriyle BİREBİR aynı kategorik palet (legend/filtre butonu + stat kartı tutarlılığı).
 const COIL_COLORS = [
@@ -24,6 +25,11 @@ const COIL_COLORS = [
 ];
 
 export function SensorMonitorScreen() {
+  // [S5 adım 11 / ekranB-3] Grafik yüksekliği pencereye bağlı: sabit rs(280) yatay telefonda
+  // (yükseklik 360-430) ekranın neredeyse tamamını yiyor, kart ızgarası görünmüyordu.
+  // Taban rs(160): RealtimeChart PAD sabitleriyle çizim alanı ~100 px'in altına düşmesin.
+  const { height: pencereY } = useResponsive();
+  const grafikY = Math.max(rs(160), Math.min(rs(280), Math.round(pencereY * 0.45)));
   // YÜKSEK fix: ham wsConnected yerine connectionQuality (live/stale/offline). WS soketi açık ama backend
   // sensör yayınını durdurduysa (STM/köprü/MQTT donması) "CANLI" göstermek operatörü DONMUŞ veriyi canlı
   // sanmaya iter (medikal yanıltma). connectionQuality 'stale' bunu "GECİKMELİ" olarak ayırt eder.
@@ -120,7 +126,7 @@ export function SensorMonitorScreen() {
             showMagnetic={showMagnetic}
             showTemp={showTemp}
             width={Math.min(chartW, 1200)}
-            height={rs(280)}
+            height={grafikY}
           />
         )}
       </View>

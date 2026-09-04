@@ -427,3 +427,20 @@ it("indirme ilerlemesi MB olarak da yazılır (mobil kota görünsün)", async (
   // 128.000.000 B * 0,5 = 64 MB / 128 MB
   await waitFor(() => expect(getByText(/%50 · 64 MB \/ 128 MB/)).toBeTruthy());
 });
+
+/**
+ * [S5 adım 8 / kapsam-1] KAPI KAYDIRILABİLİR
+ * ------------------------------------------
+ * ÖLÇÜLEN DURUM: kök `View` sabit `flex:1 + justifyContent:center` idi. Yatay telefonda
+ * (yükseklik 360-430) logo + marka + güncelleme kartı toplamı ekranı aşınca "Şimdilik devam et"
+ * ve "Atla" düğmeleri görünür alanın ALTINDA kalıyordu — dosyanın kendi ilkesi olan
+ * "kapı ASLA kalıcı kilitlenmez" görsel olarak kırılıyordu (mantık doğru, erişim yok).
+ *
+ * ⚠️ MUTASYON: kök tekrar View yapılırsa bu test KIRILIR.
+ */
+it("KRİTİK: kök kaydırılabilir — kısa ekranda çıkış düğmelerine ulaşılır", () => {
+  const u = render(<MobileUpdateGate><Text>uygulama</Text></MobileUpdateGate>);
+  const kok = u.getByTestId("mobil-acilis-kapisi");
+  expect(kok.type).toBe("RCTScrollView");
+  u.unmount();
+});

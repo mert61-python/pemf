@@ -6,7 +6,7 @@
  * D-kanal hafif duyarlılık). Modal bunu Türkçe etiketlerle göstermeli; alan yoksa (eski
  * backend / XAI hatası zarif düşüşü) satır TAMAMEN gizli.
  */
-import { render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
 import React from "react";
 
 import { AiSpecApprovalModal } from "../AiSpecApprovalModal";
@@ -60,4 +60,64 @@ it("KARŞIT-KANIT: alan yoksa (eski backend / XAI zarif düşüşü) satır GİZ
     />,
   );
   expect(u.queryByText(/Dozu en çok belirleyen/)).toBeNull();
+});
+
+/**
+ * [S5 adım 10 / ekranB-10] ONAY SATIRI SABİT — HASTA GÜVENLİĞİ AKIŞI
+ * ------------------------------------------------------------------
+ * ÖLÇÜLEN DURUM: kart yüzde tabanlı `maxHeight: "88%"` ile kaydırılamıyordu (Yoga'da çocuklar
+ * varsayılan flexShrink:0 → içerik tavanı aşınca TAŞIYOR, kırpılıyor). 8 bobinli öneride ve yatay
+ * telefonda (yükseklik 360-430) "Onayla ve Başlat" kartın altında ekran DIŞINDA kalıyordu:
+ * "otonom seans onaylanmadan başlamaz" ilkesi doğru çalışıyor ama hekim ONAY VEREMİYORDU.
+ *
+ * SÖZLEŞME: eylem satırı kaydırma gövdesinin DIŞINDA; onay/red handler'ları değişmedi.
+ * ⚠️ MUTASYON: footer tekrar gövdenin içine alınırsa 1. vaka KIRILIR.
+ */
+const SEKIZ_BOBIN = {
+  organ_id: 3,
+  duration_minutes: 20,
+  coil_ids: [1, 2, 3, 4, 5, 6, 7, 8],
+  D: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+  P: [0, 45, 90, 135, 180, 225, 270, 315],
+  e_field: 0.07,
+};
+
+it("KRİTİK: 'Onayla ve Başlat' kaydırma gövdesinin DIŞINDA (kısa ekranda hep görünür)", () => {
+  const u = render(
+    <AiSpecApprovalModal visible specs={SEKIZ_BOBIN} organName="Karaciğer"
+      onApprove={bos} onReject={bos} onDismiss={bos} />,
+  );
+  const govde = u.getByTestId("ai-onay-govde");
+  expect(within(govde).queryByLabelText("Öneriyi onayla ve seansı başlat")).toBeNull();
+  expect(u.getByLabelText("Öneriyi onayla ve seansı başlat")).toBeTruthy();
+});
+
+it("KRİTİK: onay düğmesi hâlâ onApprove'u çağırıyor (yerleşim değişti, akış değişmedi)", () => {
+  let onaylandi = 0;
+  const u = render(
+    <AiSpecApprovalModal visible specs={SEKIZ_BOBIN} organName="Karaciğer"
+      onApprove={() => { onaylandi += 1; }} onReject={bos} onDismiss={bos} />,
+  );
+  fireEvent.press(u.getByLabelText("Öneriyi onayla ve seansı başlat"));
+  expect(onaylandi).toBe(1);
+});
+
+it("red gerekçesi alanı da eylem satırında kalır (klavye açıkken erişilir)", () => {
+  const u = render(
+    <AiSpecApprovalModal visible specs={SEKIZ_BOBIN} organName="Karaciğer"
+      onApprove={bos} onReject={bos} onDismiss={bos} />,
+  );
+  fireEvent.press(u.getByLabelText("Öneriyi reddet"));
+  const govde = u.getByTestId("ai-onay-govde");
+  expect(u.getByLabelText("Red gerekçesi")).toBeTruthy();
+  expect(within(govde).queryByLabelText("Red gerekçesi")).toBeNull();
+});
+
+it("8 bobinin tamamı tabloda listelenir (iç kaydırıcı kaldırıldı, satır kaybı yok)", () => {
+  const u = render(
+    <AiSpecApprovalModal visible specs={SEKIZ_BOBIN} organName="Karaciğer"
+      onApprove={bos} onReject={bos} onDismiss={bos} />,
+  );
+  expect(u.getByText("315°")).toBeTruthy();
+  expect(u.getByText("Sürülen bobin")).toBeTruthy();
 });

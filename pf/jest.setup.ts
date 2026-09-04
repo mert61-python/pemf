@@ -15,3 +15,17 @@ jest.mock("expo-secure-store", () => {
     deleteItemAsync: (k: string) => AS.removeItem("secure:" + k),
   };
 });
+
+// [S5, 2026-09-04] SafeAreaProvider VARSAYILAN mock'u. Üretimde sağlayıcı `app/_layout.tsx`te
+// köktedir; testler ise bileşenleri sağlayıcısız render ediyor ve `useSafeAreaInsets()`
+// "No safe area value available" diye ATIYOR. Güvenli alanı okuyan bileşen sayısı arttıkça
+// (kabuk, ACİL DURDUR, Toast, açılış kapısı, modallar) her test dosyasına aynı mock kopyalanır
+// hâle gelmişti — tek yerden sıfır inset veriliyor.
+// ⚠️ Çentik/inset DAVRANIŞINI ölçen testler kendi `jest.mock`'unu yazar; dosya bazlı mock BUNU EZER.
+jest.mock("react-native-safe-area-context", () => {
+  const gercek = jest.requireActual("react-native-safe-area-context");
+  return {
+    ...gercek,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
+});

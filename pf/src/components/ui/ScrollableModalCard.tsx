@@ -89,6 +89,9 @@ export function ScrollableModalCard({
           >
             {header ? <View style={styles.header}>{header}</View> : null}
             <ScrollView
+              // Gövde testID'si karttan türetilir: yapısal testler "footer gövdenin DIŞINDA" iddiasını
+              // bununla ölçer (within(getByTestId(`${testID}-govde`)).queryByText(...) === null).
+              testID={testID ? `${testID}-govde` : undefined}
               style={styles.body}
               contentContainerStyle={[styles.bodyContent, contentStyle]}
               keyboardShouldPersistTaps="handled"

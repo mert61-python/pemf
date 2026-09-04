@@ -32,11 +32,13 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Download } from "lucide-react-native";
 
 import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
@@ -69,6 +71,7 @@ function mb(bayt: number): string {
 }
 
 export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
   // Android DIŞI (web + iOS): kapı hiç kurulmaz. Web'i masaüstü client güncelliyor, iOS'ta
   // doğrudan APK kurulumu yok → beklemenin karşılığı sıfır olurdu.
   const [durum, setDurum] = useState<Durum>(() =>
@@ -131,7 +134,23 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
   const indiriliyor = oran !== null;
 
   return (
-    <View style={styles.root} testID="mobil-acilis-kapisi">
+    // [S5 adım 8 / kapsam-1] Kök artık kaydırılabilir ve güvenli alanı okuyor. Yatay telefonda
+    // (yükseklik 360-430) logo + marka + kart yüksekliği aşıyor, "Şimdilik devam et" ekranın
+    // ALTINDA kalıyordu: açılış kapısı ASLA kalıcı kilitlenmemeli ilkesi görsel olarak kırılıyordu.
+    <ScrollView
+      style={styles.rootScroll}
+      contentContainerStyle={[
+        styles.root,
+        {
+          paddingTop: Math.max(spacing.xl, insets.top),
+          paddingBottom: Math.max(spacing.xl, insets.bottom),
+          paddingLeft: Math.max(spacing.xl, insets.left),
+          paddingRight: Math.max(spacing.xl, insets.right),
+        },
+      ]}
+      testID="mobil-acilis-kapisi"
+      keyboardShouldPersistTaps="handled"
+    >
       <Image source={LOGO} style={styles.logo} resizeMode="contain" />
       <Text style={styles.marka}>PEMF Vet</Text>
 
@@ -201,17 +220,18 @@ export function MobileUpdateGate({ children }: { children: React.ReactNode }) {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  rootScroll: { flex: 1, backgroundColor: colors.bg },
+  // İçerik sığdığında ORTALANIR (flexGrow + justifyContent), sığmadığında kaydırılır.
   root: {
-    flex: 1,
-    backgroundColor: colors.bg,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: spacing.xl,
+    // padding inline verilir (güvenli alan) — bkz. render.
   },
   logo: { width: rs(86), height: rs(86), borderRadius: radius.card },
   marka: { color: colors.text, fontSize: rf(20), fontWeight: "800", marginTop: spacing.md },

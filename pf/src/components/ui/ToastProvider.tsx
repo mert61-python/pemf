@@ -1,6 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
 import { StyleSheet, Text, View, Animated, AccessibilityInfo } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckCircle, AlertCircle, Info } from "lucide-react-native";
 import { colors, radius, spacing, typography, rs } from "@/theme/tokens";
 import { setToastHandler } from "@/services/toastBridge";
@@ -26,6 +27,7 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   // useRef: Animated.Value'lar her render'da YENİDEN oluşturulmasın (eskiden her render'da
   // new Animated.Value → animasyon stale değerlere bağlanıyor + gereksiz alokasyon).
@@ -62,7 +64,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     translateY.setValue(-20);
     Animated.parallel([
       Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 20, useNativeDriver: true })
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true })
     ]).start();
 
     hideTimer.current = setTimeout(() => {
@@ -90,7 +92,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         // pointerEvents="box-none": konteyner tam genişlikte ve absolute konumlu; ayarlanmadığında
         // 3+ saniye boyunca altındaki AppShell başlık kontrollerini (profil çipi, bildirimler,
         // yeniden bağlan) dokunulmaz yapıyordu. Artık dokunuşlar konteynerin BOŞ alanından geçer.
-        <Animated.View pointerEvents="box-none" style={[styles.toastContainer, { opacity, transform: [{ translateY }] }]}>
+        // [S5 adım 6] Konum güvenli alandan hesaplanır: rs(40) sabiti çentikli telefonda (inset 47-59)
+        // toast'ı çentiğin ALTINA sokuyordu, yatayda ise sol/sağ çentik metni kırpıyordu. Yaylanma
+        // hedefi de 20 → 0: eski değer toast'ı her açılışta 20 px aşağı bırakıyordu.
+        <Animated.View
+          pointerEvents="box-none"
+          style={[
+            styles.toastContainer,
+            {
+              top: insets.top + spacing.md,
+              left: Math.max(spacing.md, insets.left),
+              right: Math.max(spacing.md, insets.right),
+            },
+            { opacity, transform: [{ translateY }] },
+          ]}
+        >
           <View
             style={[styles.toast, styles[toast.type]]}
             accessibilityRole="alert"
@@ -110,9 +126,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   toastContainer: {
     position: "absolute",
-    top: rs(40),
-    left: spacing.md,
-    right: spacing.md,
+    // top/left/right inline verilir (güvenli alan) — bkz. render.
     alignItems: "center",
     zIndex: 9999
   },

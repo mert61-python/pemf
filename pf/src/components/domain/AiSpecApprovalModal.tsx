@@ -15,7 +15,8 @@
  *  * Duty'ler yüzde olarak gösterilir (model 0-1 üretir) — hekim klinik birimde okur.
  */
 import { useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
 import { CheckCircle2, X, XCircle } from "lucide-react-native";
 
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
@@ -82,16 +83,80 @@ export function AiSpecApprovalModal({
   const kapat = () => { setRejecting(false); setReason(""); onDismiss(); };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={kapat}>
-      <View style={s.backdrop}>
-        <View style={s.card} accessibilityLabel="AI seans önerisi onay penceresi">
-          <View style={s.head}>
-            <Text style={s.title}>AI Seans Önerisi</Text>
-            <TouchableOpacity onPress={kapat} accessibilityRole="button" accessibilityLabel="Kapat">
-              <X size={rs(20)} color={colors.textMuted} />
+    // [S5 adım 10 / ekranB-10] ONAY SATIRI ARTIK SABİT. Kart yüzde tabanlı maxHeight ile
+    // kaydırılamıyordu: 8 bobinli öneride ve yatay telefonda (yükseklik 360-430) "Onayla ve Başlat"
+    // kartın altında ekran DIŞINDA kalıyordu — hekim onay veremediği için seans hiç başlamıyordu.
+    // Gövde kaydırılır, eylem satırı her zaman görünür. Onay/red handler'ları DEĞİŞMEDİ.
+    <ScrollableModalCard
+      visible={visible}
+      onRequestClose={kapat}
+      onBackdropPress={kapat}
+      maxWidth={rs(520)}
+      testID="ai-onay"
+      accessibilityLabel="AI seans önerisi onay penceresi"
+      contentStyle={s.icerik}
+      header={
+        <View style={s.head}>
+          <Text style={s.title}>AI Seans Önerisi</Text>
+          <TouchableOpacity onPress={kapat} accessibilityRole="button" accessibilityLabel="Kapat">
+            <X size={rs(20)} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      }
+      footer={
+        rejecting ? (
+          <View style={s.rejectBox}>
+            <Text style={s.rejectLabel}>Red gerekçesi (kayda geçer)</Text>
+            <TextInput
+              style={s.input}
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Örn. lokalizasyon hatalı, duty çok yüksek…"
+              placeholderTextColor={colors.textSubtle}
+              multiline
+              accessibilityLabel="Red gerekçesi"
+            />
+            <View style={s.actions}>
+              <TouchableOpacity style={[s.btn, s.btnGhost]} onPress={() => setRejecting(false)}>
+                <Text style={s.btnGhostText}>Vazgeç</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btn, s.btnDanger, (!reason.trim() || busy) && s.btnDisabled]}
+                disabled={!reason.trim() || !!busy}
+                onPress={() => onReject(reason.trim())}
+                accessibilityRole="button"
+                accessibilityLabel="Reddi onayla"
+              >
+                <Text style={s.btnDangerText}>Reddet</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={s.actions}>
+            <TouchableOpacity
+              style={[s.btn, s.btnGhost]}
+              onPress={() => setRejecting(true)}
+              disabled={!!busy}
+              accessibilityRole="button"
+              accessibilityLabel="Öneriyi reddet"
+            >
+              <XCircle size={rs(16)} color={colors.danger} />
+              <Text style={s.btnGhostText}>Reddet</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.btn, s.btnPrimary, busy && s.btnDisabled]}
+              onPress={onApprove}
+              disabled={!!busy}
+              accessibilityRole="button"
+              accessibilityLabel="Öneriyi onayla ve seansı başlat"
+            >
+              <CheckCircle2 size={rs(16)} color="#04121F" />
+              <Text style={s.btnPrimaryText}>{busy ? "Başlatılıyor…" : "Onayla ve Başlat"}</Text>
             </TouchableOpacity>
           </View>
-
+        )
+      }
+    >
           <Text style={s.lead}>
             Otonom seans <Text style={s.bold}>onaylanmadan başlamaz</Text>. Aşağıdaki
             parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.
@@ -119,7 +184,9 @@ export function AiSpecApprovalModal({
             </Text>
           )}
 
-          <ScrollView style={s.tableWrap}>
+          {/* [S5 adım 10] İç ScrollView → View: iç içe kaydırıcı Android'de dokunuşu çalıyordu.
+              Tablo artık tek kaydırıcının (kart gövdesi) parçası. */}
+          <View style={s.tableWrap}>
             <View style={[s.tr, s.trHead]}>
               <Text style={[s.th, s.cCoil]}>Bobin</Text>
               <Text style={[s.th, s.cDuty]}>Duty</Text>
@@ -134,62 +201,8 @@ export function AiSpecApprovalModal({
                 <Text style={[s.td, s.cPhase]}>{r.phase.toFixed(0)}°</Text>
               </View>
             ))}
-          </ScrollView>
-
-          {rejecting ? (
-            <View style={s.rejectBox}>
-              <Text style={s.rejectLabel}>Red gerekçesi (kayda geçer)</Text>
-              <TextInput
-                style={s.input}
-                value={reason}
-                onChangeText={setReason}
-                placeholder="Örn. lokalizasyon hatalı, duty çok yüksek…"
-                placeholderTextColor={colors.textSubtle}
-                multiline
-                accessibilityLabel="Red gerekçesi"
-              />
-              <View style={s.actions}>
-                <TouchableOpacity style={[s.btn, s.btnGhost]} onPress={() => setRejecting(false)}>
-                  <Text style={s.btnGhostText}>Vazgeç</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.btn, s.btnDanger, (!reason.trim() || busy) && s.btnDisabled]}
-                  disabled={!reason.trim() || !!busy}
-                  onPress={() => onReject(reason.trim())}
-                  accessibilityRole="button"
-                  accessibilityLabel="Reddi onayla"
-                >
-                  <Text style={s.btnDangerText}>Reddet</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={s.actions}>
-              <TouchableOpacity
-                style={[s.btn, s.btnGhost]}
-                onPress={() => setRejecting(true)}
-                disabled={!!busy}
-                accessibilityRole="button"
-                accessibilityLabel="Öneriyi reddet"
-              >
-                <XCircle size={rs(16)} color={colors.danger} />
-                <Text style={s.btnGhostText}>Reddet</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.btn, s.btnPrimary, busy && s.btnDisabled]}
-                onPress={onApprove}
-                disabled={!!busy}
-                accessibilityRole="button"
-                accessibilityLabel="Öneriyi onayla ve seansı başlat"
-              >
-                <CheckCircle2 size={rs(16)} color="#04121F" />
-                <Text style={s.btnPrimaryText}>{busy ? "Başlatılıyor…" : "Onayla ve Başlat"}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
+          </View>
+    </ScrollableModalCard>
   );
 }
 
@@ -203,8 +216,8 @@ function Meta({ label, value }: { label: string; value: string }) {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: spacing.md },
-  card: { width: "100%", maxWidth: rs(520), maxHeight: "88%", backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm },
+  // Perde/kart iskeleti ScrollableModalCard'dan gelir (mutlak maxHeight + sabit eylem satırı).
+  icerik: { gap: spacing.sm, paddingBottom: spacing.sm },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: colors.text, fontSize: rf(17), fontWeight: "800" },
   lead: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
@@ -217,7 +230,8 @@ const s = StyleSheet.create({
   relWarn: { color: colors.warning, fontWeight: "700" },
   // Sunum-katmanı XAI satırı (2026-08-26)
   xai: { color: colors.textMuted, fontSize: rf(11), marginTop: 2 },
-  tableWrap: { maxHeight: rs(200), borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  // maxHeight kaldırıldı: tablo artık kart gövdesiyle birlikte kayıyor (iç içe kaydırıcı yok).
+  tableWrap: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
   tr: { flexDirection: "row", paddingVertical: rs(6), paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   trHead: { backgroundColor: colors.bgAlt },
   th: { color: colors.textSubtle, fontSize: rf(11), fontWeight: "700" },

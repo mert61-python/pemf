@@ -5,7 +5,8 @@
  * "bu özellik X plan gerektirir, hesabınızdan yönetebilirsiniz" der. Satış web'de.
  */
 import React from "react";
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { ScrollableModalCard } from "@/components/ui/ScrollableModalCard";
 import { colors, spacing, typography, rf, rs } from "@/theme/tokens";
 import { Sparkles, X, Zap, FlaskConical } from "lucide-react-native";
 import { useEntitlement } from "@/context/EntitlementContext";
@@ -44,61 +45,56 @@ export function UpgradeModal({
   const { title, desc, Icon } = COPY[feature];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.close}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Kapat"
-          >
-            <X size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.iconRing}>
-            <Icon size={30} color={colors.primary} />
-          </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.desc}>{desc}</Text>
-
-          <View style={styles.planRow}>
-            <Text style={styles.planLabel}>Mevcut plan</Text>
-            <Text style={styles.planVal}>{TIER_LABEL[tier]}</Text>
-          </View>
-
-          {/* A1 / Apple 3.1.1 uyumu: satın-alma linki/CTA YOK. */}
-          <Text style={styles.note}>Aboneliğinizi hesabınızdan yönetebilirsiniz.</Text>
-
-          <TouchableOpacity style={styles.btn} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.btnText}>Anladım</Text>
-          </TouchableOpacity>
-        </View>
+    // [S5 adım 9 / kapsam-4] Ortak kaydırılabilir kart: yatay telefonda ve %125 DPI'lı küçük
+    // pencerede "Anladım" düğmesi kartın altında ekran dışında kalıyor ve KAYDIRILAMIYORDU.
+    // Düğme artık gövdenin DIŞINDA sabit; perdeye dokununca da kapanıyor.
+    <ScrollableModalCard
+      visible={visible}
+      onRequestClose={onClose}
+      onBackdropPress={onClose}
+      maxWidth={rs(420)}
+      testID="upgrade-modal"
+      accessibilityLabel="Plan yükseltme bilgisi"
+      cardStyle={styles.card}
+      contentStyle={styles.icerik}
+      header={
+        <TouchableOpacity
+          style={styles.close}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Kapat"
+        >
+          <X size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+      }
+      footer={
+        <TouchableOpacity style={styles.btn} onPress={onClose} accessibilityRole="button">
+          <Text style={styles.btnText}>Anladım</Text>
+        </TouchableOpacity>
+      }
+    >
+      <View style={styles.iconRing}>
+        <Icon size={30} color={colors.primary} />
       </View>
-    </Modal>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.desc}>{desc}</Text>
+
+      <View style={styles.planRow}>
+        <Text style={styles.planLabel}>Mevcut plan</Text>
+        <Text style={styles.planVal}>{TIER_LABEL[tier]}</Text>
+      </View>
+
+      {/* A1 / Apple 3.1.1 uyumu: satın-alma linki/CTA YOK. */}
+      <Text style={styles.note}>Aboneliğinizi hesabınızdan yönetebilirsiniz.</Text>
+    </ScrollableModalCard>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  card: {
-    width: "100%",
-    maxWidth: rs(420),
-    backgroundColor: colors.bgAlt,
-    borderRadius: rs(20),
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xxl,
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  close: { position: "absolute", top: spacing.md, right: spacing.md, padding: rs(6) },
+  // Perde/kart iskeleti ScrollableModalCard'dan gelir; burada yalnız görsel farklar kalır.
+  card: { backgroundColor: colors.bgAlt, borderRadius: rs(20) },
+  icerik: { alignItems: "center", gap: spacing.md, paddingBottom: spacing.md },
+  close: { alignSelf: "flex-end", minWidth: rs(44), minHeight: rs(44), alignItems: "flex-end", justifyContent: "center" },
   iconRing: {
     width: rs(64),
     height: rs(64),
