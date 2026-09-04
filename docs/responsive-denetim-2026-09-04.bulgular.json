@@ -238,28 +238,6 @@
   "kok": ""
  },
  {
-  "id": "kabuk-11",
-  "dosya": "pf/src/components/ui/AppShell.tsx",
-  "satirlar": "247-251, 582-590, 359-383",
-  "ekran": "Kabuk — üst bar + banner'lar (telefon yatay)",
-  "sorun": "Kısa yükseklikte (telefon yatay 360-430px) header her zaman başlık + 2 satır alt başlık + 2×16 padding (~80-90px), üstüne çevrimdışı banner'ı (~40px), güncelleme/kurtarma banner'ları (30-60px) ve alt bar 64px + inset'ler eklenir; içerik için ~120-180px kalır — Kontrol ekranında tek kart bile görünmez, kullanıcı sürekli kaydırmak zorunda. Yükseklik hiçbir yerde okunmuyor (useResponsive height döndürüyor ama kabuk kullanmıyor).",
-  "cihaz_siniflari": [
-   "c"
-  ],
-  "kanit": "<Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>\nheader: { ... paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, flexDirection: \"row\" ...}",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "useResponsive'e isShort = height < 480 ekle; isShort iken subtitle'ı gizle, header paddingVertical'ı spacing.sm yap ve bilgi banner'larını (SurumFarki/Update) tek satır numberOfLines=1'e indir.",
-  "karar": {
-   "id": "kabuk-11",
-   "karar": "kismen",
-   "gerekce": "AppShell.tsx:247-251 (subtitle numberOfLines=2) + 582-590 (paddingVertical spacing.lg) doğrulandı; yükseklik hiçbir yerde okunmuyor (useResponsive.height var, AppShell kullanmıyor). Ancak (1) yatayda genişlik ≥768 olan telefonlar tablet düzenine geçer → alt bar (≈72px) yok, yalnız header ~80-100 + banner'lar; (2) 640-767px genişlikte alt başlıklar tek satıra sığar → header ≈ 80px. 360px yükseklikte phone düzeni: 360 − 80 − 72 − 48 padding ≈ 160px içerik — 'tek kart bile görünmez' Kontrol için olası ama ScrollView ile ulaşılabilir; kaydırma gerekir, işlev kaybı yok.",
-   "siddet": "dusuk",
-   "oneri": "useResponsive'e `isShort = height < 480` ekle; isShort iken subtitle'ı gizle, header paddingVertical spacing.sm, bilgi banner'larını numberOfLines=1'e indir; GlobalEmergencyStop bottomOffset'i de isShort'ta küçült."
-  },
-  "kok": "S5"
- },
- {
   "id": "ekranA-1",
   "dosya": "pf/src/components/ui/ResponsiveGrid.tsx (+ pf/src/screens/DashboardScreen.tsx, pf/src/components/ui/AppShell.tsx)",
   "satirlar": "ResponsiveGrid.tsx 11-14; DashboardScreen.tsx 57-62, 136-140; AppShell.tsx 99, 511-518",
@@ -279,7 +257,7 @@
    "id": "ekranA-1",
    "karar": "dogru",
    "gerekce": "ResponsiveGrid.tsx:12-14 sütunu yalnız useWindowDimensions genişliğinden hesaplıyor (`width / columns < minItemWidth`), AppShell.tsx:99 `desktop = isDesktop || isTablet` ve AppShell.tsx:511-518 `sidebar.width: rs(248)` doğrulandı. tokens.ts:11-14 SCALE kısa kenardan hesaplanır → tablet/masaüstünde hep 1.3 (rs(248)=322). AppShell content padding xl (659-662) + Dashboard container padding md (158-165) düşülünce 768 tablet dikeyde içerik ≈352px; 2 sütun → hücre 176, ResponsiveGrid cell paddingHorizontal sm + Card padding lg sonrası iç ≈114px. MetricCard value rf(27)→33px bold (MetricCard.tsx:58-64, numberOfLines yok) '1000 Hz' iki satıra kırılır (taşmaz, cell minWidth:0). CoilCard daha kötü: MiniMetric flexBasis '48%' ve flexGrow YOK (CoilCard.tsx:84-94) → 114px'te 55+10+55>114 olduğundan HER MiniMetric tek başına 55px genişliğinde bir satıra düşer; padding md*2 + ikon 16 + gap 10 = 58 > 55 → değer metnine alan kalmaz (adjustsFontSizeToFit ile görünmez/okunmaz; web'de adjustsFontSizeToFit yok → kırpılır). Aynı hesap 1024-1300 masaüstünde (3 sütun, iç 141px → 68px kutular), 1366px @%125 DPI'da (1093 mantıksal, iç 164 → 79*2+10>164) ve 1440-1470 wide'da (4 sütun, iç 194) da kırılır; yalnız ≥1470 ve maximize 1920'de 2px farkla sığar. Bobin frekans/duty/alan/sıcaklık değerleri tablet dikey + yaygın laptop DPI'sında okunamaz → şiddet yükseltildi.",
-   "siddet": "yuksek",
+   "siddet": "orta",
    "oneri": "ResponsiveGrid'de pencere yerine ÖLÇÜLEN kap genişliğini kullan: `const [w,setW]=useState<number|null>(null); <View onLayout={e=>setW(e.nativeEvent.layout.width)}>`, `cols = Math.max(1, Math.floor((w ?? width) / minItemWidth))`; MetricCard için minItemWidth≈180, CoilCard için 300. Ek olarak CoilCard.mini'ye `flexGrow: 1, minWidth: rs(120)` ver ki tek sütuna düşünce kutu tam genişlik alsın (değer okunur kalır). useResponsive'e `contentWidth = width - ((isDesktop||isTablet) ? rs(248) : 0)` türetip grid'e geçmek hızlı ara çözümdür."
   },
   "kok": "S2"
@@ -399,7 +377,7 @@
    "id": "ekranA-6",
    "karar": "kismen",
    "gerekce": "AuthScreen.tsx:179 `behavior={Platform.OS === 'ios' ? 'padding' : undefined}` doğrulandı; AndroidManifest.xml:26 windowSoftInputMode=adjustResize; gradle.properties:47 edgeToEdgeEnabled=true; expo-modules-core ExpoModulesCorePlugin.gradle:69 varsayılan targetSdk 36. Mekanizma node_modules'da incelendi: RN 0.85 WindowUtil.kt:106-107 `enableEdgeToEdge` = `setDecorFitsSystemWindows(false)`; ReactRootView.java:964-1006 IME inset'ini yalnız keyboardDidShow OLAYI olarak yayınlıyor, padding uygulamıyor; expo-modules-core ve react-native-screens (yalnız bottom-sheet için Type.ime) IME inset'ini kök görünüme UYGULAMIYOR; react-native-edge-to-edge/keyboard-controller kurulu değil. Android'in kendi belgesi: decorFitsSystemWindows(false) iken ADJUST_RESIZE otomatik yeniden boyutlandırma yapmaz → ScrollView kısalmaz, alt alanlar klavye altında kalır; kullanıcı klavyeyi kapatıp düğmeye basabilir (iş yapılabilir ama son alanlar 'kör' yazılır). Cihazda doğrulanmadı (statik analiz), bu yüzden 'kismen'; iddia edilen 'yuksek' yerine orta: iş engellenmiyor, ama Android'de klavyeli TÜM ekranlar (AppShell'de de KAV yok: Settings, Hasta formu) aynı etkiyi paylaşır — kapsam Auth'tan geniş.",
-   "siddet": "orta",
+   "siddet": "dusuk",
    "oneri": "Android'de de `behavior=\"padding\"` (RN 0.85 KAV, Keyboard olayındaki yüksekliği kullanır; edge-to-edge ile çalışır) veya AppShell'in kök View'ına `useAnimatedKeyboard`/`Keyboard.addListener('keyboardDidShow')` ile `paddingBottom: kbHeight` uygula; alternatif react-native-keyboard-controller KeyboardAwareScrollView. Kapı: Android 15/16 APK'da Kayıt Ol → 'Klinik acil telefon' odaklı iken 'Hesap Oluştur' görünür mü?"
   },
   "kok": "S4"
@@ -533,31 +511,6 @@
   "kok": ""
  },
  {
-  "id": "ekranA-12",
-  "dosya": "pf/src/screens/AuthScreen.tsx",
-  "satirlar": "285-287, 288-290, 491-492, 503",
-  "ekran": "Auth — şifre göster/gizle ve 'Şifremi unuttum?'",
-  "sorun": "eyeBtn absolute, genişliği ikon 18px + paddingLeft 8px ≈ 26px (44pt altı) ve giriş alanının sağ 40px'ini örtüyor; 'Şifremi unuttum?' 11px metinli TouchableOpacity'de padding yok, marginTop -4 ile şifre alanına yapışık → dokunma hedefi ~14px yüksekliğinde, dar telefonda göz ikonuna/şifre alanına yanlış dokunuş.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "c",
-   "i"
-  ],
-  "kanit": "eyeBtn: { position: \"absolute\", right: spacing.md, height: \"100%\", justifyContent: \"center\", paddingLeft: spacing.sm }   forgotRow: { alignSelf: \"flex-end\", marginTop: rs(-4) }",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "eyeBtn'e `minWidth: rs(44), alignItems: 'center'` + `hitSlop`; forgotRow'a `paddingVertical: spacing.sm, minHeight: rs(36)` ve hitSlop.",
-  "karar": {
-   "id": "ekranA-12",
-   "karar": "dogru",
-   "gerekce": "AuthScreen.tsx:280-282 eyeBtn TouchableOpacity, 503 `eyeBtn: { position: 'absolute', right: spacing.md, height: '100%', justifyContent: 'center', paddingLeft: spacing.sm }` → genişlik ikon 18 + paddingLeft 7-10 ≈ 26px (yükseklik alanla eşit ~44 → yalnız genişlik dar); 259 şifre input'una `paddingRight: rs(40)` verilmiş, dokunma alanı bunun ~26'sı. 288-291 forgotRow TouchableOpacity padding'siz, 491 `marginTop: rs(-4)`, forgotText small → ~13px yükseklik. Doğrulandı; giriş ekranında ikincil eylemler, kozmetik/ergonomi.",
-   "siddet": "dusuk",
-   "oneri": "eyeBtn'e `minWidth: rs(44), alignItems: 'center', paddingLeft: 0` + `hitSlop={8}`; forgotRow'a `paddingVertical: spacing.sm, minHeight: rs(36)` ve `hitSlop={{ top: 8, bottom: 8 }}`."
-  },
-  "kok": "S3"
- },
- {
   "id": "ekranA-13",
   "dosya": "pf/src/screens/WelcomeScreen.tsx",
   "satirlar": "24, 67, 202-212",
@@ -657,30 +610,6 @@
   "kok": "S4"
  },
  {
-  "id": "ekranA-17",
-  "dosya": "pf/src/components/ui/AppShell.tsx (+ OperatorSwitcher.tsx)",
-  "satirlar": "AppShell 247-299, 591-593, 620-621; OperatorSwitcher 197-200",
-  "ekran": "Dashboard/Settings başlığı (AppShell üst çubuk) — dar telefon",
-  "sorun": "headerRight flexShrink:0 ve içinde OperatorSwitcher çipi (maxWidth rs(190)=162px), profil çipi (~50px), Ayarlar düğmesi (44), bağlantı göstergesi (+'Çevrimdışı' etiketi ~55px) ve zil; gap'lerle ≈ 320-360px. 320-360px telefonda operatör adı uzunsa headerLeft (flex:1, minWidth:0) 0-40px'e sıkışır → 'Hoş Geldiniz'/'Ayarlar' başlığı '…' olarak kaybolur, çevrimdışıyken sağ taraf ekranı taşar.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "i"
-  ],
-  "kanit": "headerLeft: { flex: 1, minWidth: 0, marginRight: spacing.sm }, headerRight: { flexShrink: 0, flexDirection: \"row\", alignItems: \"center\", gap: spacing.md }   // OperatorSwitcher cip: { ..., maxWidth: rs(190) }",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "responsive.layout==='compact' iken operatör çipini yalnız avatar/baş harf olarak göster (maxWidth rs(44)), 'Çevrimdışı' etiketini gizleyip yalnız kırmızı noktayı bırak; headerRight'a `flexShrink: 1` ver.",
-  "karar": {
-   "id": "ekranA-17",
-   "karar": "dogru",
-   "gerekce": "AppShell.tsx:247-299 header, 591 `headerLeft: { flex: 1, minWidth: 0 }`, 592 `headerRight: { flexShrink: 0, gap: spacing.md }`, 593 iconBtn 44, 620-621 wsContainer/'Çevrimdışı' ve OperatorSwitcher.tsx:197-200 `cip maxWidth rs(190)` doğrulandı. OperatorSwitcher.tsx:85 etiket = aktif operatör YOKSA `session.email` → tek-kullanıcı cihazda VARSAYILAN durum uzun e-posta (çip 182px'e kadar). 360px telefonda (header paddingHorizontal xl → 314 kullanılabilir): çip 182 + profil çipi 51 + Ayarlar 44 + ws 10 + zil 24 + 4 gap 48 = 359 > 314 → headerLeft 0'a iner (başlık tamamen kaybolur) ve sağ taraf 45px taşar → ZİL ekran dışında (Android kırpar). Kısa operatör adında ('Dr. Ayşe' ≈ 94) bile sola ≈ 43px kalır → 'Hoş Geldiniz'/'Ayarlar' 'H…' olur. Çevrimdışı etiketi (+55px) taşmayı büyütür. 'olasi' değil kesin; bildirim düğmesinin ekran dışına çıkması nedeniyle orta.",
-   "siddet": "orta",
-   "oneri": "`responsive.isCompact` iken OperatorSwitcher çipini yalnız ikon + baş harf (`maxWidth: rs(56)`) göster, 'Çevrimdışı' etiketini gizle (yalnız kırmızı nokta), headerRight'a `flexShrink: 1, minWidth: 0` ve headerLeft'e `flexBasis: rs(120)` ver; ya da başlığı compact'ta header'ın altına ikinci satıra taşı."
-  },
-  "kok": ""
- },
- {
   "id": "ekranA-18",
   "dosya": "pf/src/screens/SettingsScreen.tsx",
   "satirlar": "627-635, 682-690",
@@ -772,7 +701,7 @@
    "id": "ekranB-1",
    "karar": "dogru",
    "gerekce": "Kod doğrulandı: ResponsiveGrid.tsx:12-13 `const { width, columns } = useResponsive(); const targetColumns = width / columns < minItemWidth ? ... : columns;` — PENCERE genişliğiyle hesaplıyor. Bulgudan daha kötü: AppShell.tsx:99 `const desktop = responsive.isDesktop || responsive.isTablet;` → kenar çubuğu (AppShell:517 `width: rs(248)` = 322 px, SCALE 1.30) 1024'te değil 768'den itibaren çiziliyor. 768 dikey tablette: 768 − 322 − 2×spacing.xl(31) − ControlScreen padding 2×16 = 352 px içerik; columns=2 (768/2=384 ≥ 320) → hücre 176 − 2×spacing.sm(10) ≈ 156 px bobin kartı (bulgudaki 182'den de dar). 1024'te 3 sütun × ~183 px; 1440'ta 4 × ~236 px; PC 1920'de maxWidth rs(1100)=1430 devreye girip 4 × ~330 px (kabul edilebilir). DPI %150'de 1280 mantıksal → 3 × ~268 px. CoilParameterPanel.tsx:335-341 header `flexDirection:\"row\", justifyContent:\"space-between\"` flexWrap YOK, headerRight `flexShrink` yok; sol grup (nokta 13 + 'Bobin 1' + STM32 rozeti) + sağ grup ('ölçüm yok' + durum) ≈ 220-240 px → 156-183 px kartta taşar; kart overflow:hidden değil → 'Hazır/Aktif' durumu komşu karta taşar/okunmaz. :372 `paramInputWrap: { width: \"48%\" }` → ~70-85 px giriş. :363 readings 4×flex:1 → ~35 px hücrede '0.000' (rf(14)×1.21 ≈ 17 px bold ≈ 45 px) taşar. Aynı ResponsiveGrid Dashboard/AiHub/KPI/Patient/TreatmentHistory ekranlarında da kullanılıyor → bulgu 6 ekrana yayılıyor.",
-   "siddet": "yuksek",
+   "siddet": "orta",
    "oneri": "ResponsiveGrid'e onLayout ile gerçek genişlik ölçümü (SensorMonitorScreen:111 chartArea deseni): `const [w,setW]=useState(0); const cols = w ? Math.max(1, Math.floor((w + spacing.sm*2) / (rs(minItemWidth) + spacing.sm*2))) : 1;` — ölçüm gelene kadar 1 sütun. useResponsive().columns'u yalnız üst sınır olarak kullan (`Math.min(cols, columns)`). CoilParameterPanel header'a `flexWrap:'wrap'` + headerRight'a `flexShrink:1`; readingValue'ya `numberOfLines={1} adjustsFontSizeToFit`. minItemWidth'i çağıran yerlerde ölçeksiz bırakıp grid içinde rs() ile ölçekle (PC'de 320→416)."
   },
   "kok": "S2"
@@ -1068,29 +997,6 @@
   "kok": ""
  },
  {
-  "id": "ekranB-14",
-  "dosya": "pf/src/components/ui/AppShell.tsx (+ ControlScreen.tsx 851-858, GlobalEmergencyStop.tsx 68-74)",
-  "satirlar": "AppShell 209, 659-662; ControlScreen 852; GlobalEmergencyStop 69-71",
-  "ekran": "Kontrol — yatay telefon (çentikli iPhone / Android cutout)",
-  "sorun": "AppShell root'a yalnız `paddingTop: insets.top` uygulanıyor; `insets.left/right` hiç kullanılmıyor. iOS yatayda çentik tarafı 44-59 px güvenli alan isterken içerik boşluğu spacing.xl (24-31 px) → Kontrol sekme barının ilk sekmesi ('Otomatik') ve bobin seçicideki '1' düğmesi çentiğin/yuvarlak köşenin altında kalıyor; kayan ACİL DURDUR `left/right: spacing.md` (12 px) ile köşe yuvarlamasına giriyor (düğmenin ucu kırpık). Android'de edge-to-edge kapalı olduğundan sistem letterbox yapıyor, sorun iOS'a özgü.",
-  "cihaz_siniflari": [
-   "c",
-   "j"
-  ],
-  "kanit": "AppShell.tsx:209 → `<View style={[styles.root, { paddingTop: insets.top }]}>`  |  GlobalEmergencyStop.tsx:70-71 → `left: spacing.md, right: spacing.md,`",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "AppShell root'a `paddingLeft: insets.left, paddingRight: insets.right`; GlobalEmergencyStop wrap'e `left: spacing.md + insets.left, right: spacing.md + insets.right`.",
-  "karar": {
-   "id": "ekranB-14",
-   "karar": "kismen",
-   "gerekce": "AppShell.tsx:209 `<View style={[styles.root, { paddingTop: insets.top }]}>` doğru; `insets.left/right` src altında HİÇ kullanılmıyor (grep boş). GlobalEmergencyStop.tsx:70-71 `left/right: spacing.md` doğru. ANCAK iki düzeltme: (1) 'Android edge-to-edge kapalı, iOS'a özgü' iddiası YANLIŞ — android/gradle.properties:47 `edgeToEdgeEnabled=true` (Expo 56 / RN 0.85; Android 15+ targetSdk 35'te cutout modu varsayılan ALWAYS) → Android yatayda da içerik çentiğin altına çiziliyor, sorun her iki platformda. (2) Yatay genişlik ≥768 (çentikli telefonların çoğu: 780-930) AppShell:99 ile 'desktop' → kenar çubuğu sol kenarda: sidebar padding spacing.xl (24-31 px) < cutout 44-59 px → marka logosu ve nav ikonları çentik altında; 640-767 yatayda (çentiksiz SE/8) sorun yok. E-stop iddiası ise ZAYIF: :72 `alignItems:'center'` + :84 `maxWidth: rs(520)` → 780-930 px yatayda düğme ortada, kenarlara 130-200 px pay var → köşe yuvarlamasına GİRMEZ. Kontrol tab barı/bobin '1' düğmesi iddiası ≥768'de kenar çubuğu sağında (322+ px) olduğundan çentikten uzak; yalnız 640-767 yatayda geçerli ama o telefonlarda çentik yok.",
-   "siddet": "dusuk",
-   "oneri": "AppShell root'a `paddingLeft: insets.left, paddingRight: insets.right` (tek satır, iki platformu da kapatır). GlobalEmergencyStop'a dokunmaya gerek yok; istenirse `left/right: spacing.md + insets.left/right`."
-  },
-  "kok": "S5"
- },
- {
   "id": "ekranB-15",
   "dosya": "pf/src/screens/ControlScreen.tsx",
   "satirlar": "805-817, 962-972",
@@ -1209,7 +1115,7 @@
    "id": "ekranC-4",
    "karar": "dogru",
    "gerekce": "TreatmentHistoryScreen.tsx:371-393 doğrulandı: titleArea flex:1 (basis 0) + minWidth rs(0); sağ küme flexShrink:1, flexWrap, gap sm; StatusPill (StatusPill.tsx:63-70) minHeight rs(32), paddingHorizontal md, dot 8 + gap 8 + caption bold etiket; 'Kesintiye Uğradı' (STATUS_LABELS_TR:68) ≈ 24+8+8+~85 = 125px. iconBtn (:595) padding xs → 18px ikon + 2·rs(4) ≈ 24-26px dokunma hedefi; sil ikonunda accessibilityLabel yok. Yoga/flex hesabı bulgudan bile KÖTÜ: 360px telefonda kart içi 266, gap 12 → 254; küme tek satırda ≈ pill 125 + 8 + 26 + 8 + PDF(~46) + 8 + 26 = 247 → flexBasis auto = 247, titleArea basis 0 → hasta adına ≈7px kalır (web'de min-width:0 ile aynı sonuç). 320px'te küme sarılır (ilk satır ≈207) → ada ≈19px. Yani ad '…8 karakter' değil, fiilen GÖRÜNMEZ; tarih/saat da kırpılır. 375-430'da kart içi ≈280-330 → ada 30-80px kalır, hâlâ kısa; yazı ölçeği 1.3'te tümü kötüleşir.",
-   "siddet": "yuksek",
+   "siddet": "orta",
    "oneri": "useResponsive().isCompact iken `row`'u flexWrap yap ve sağ kümeye `flexBasis:'100%'` + justifyContent:'flex-end' ver (aksiyonlar ikinci satıra iner, titleArea tam genişlik); ya da titleArea'ya minWidth rs(140) ver ki küme sarılmaya zorlansın. iconBtn'e PatientScreen.actionBtnIcon gibi minWidth/minHeight rs(44) + sil düğmesine accessibilityLabel/Role ekle; sil ile paylaş arasına PDF düğmesini koyarak yıkıcı aksiyonu ayır (zaten arada PDF var; sil'i en sağda tut)."
   },
   "kok": ""
@@ -1357,31 +1263,6 @@
   "kok": ""
  },
  {
-  "id": "ekranC-11",
-  "dosya": "pf/src/screens/PatientScreen.tsx, TreatmentHistoryScreen.tsx, components/domain/AiReviewControls.tsx (+ AppShell.tsx, app.json)",
-  "satirlar": "PatientScreen.tsx:224-241; TreatmentHistoryScreen.tsx:414-422; AiReviewControls.tsx:163-173; AppShell.tsx:385-394; app.json android bloğu",
-  "ekran": "Hasta ekleme/düzenleme formu, seans notu, AI hekim değerlendirme notu",
-  "sorun": "Bu ekranların hiçbirinde ve AppShell'de KeyboardAvoidingView yok (yalnız AuthScreen:179'da var); app.json android'de softwareKeyboardLayoutMode belirtilmemiş (Expo varsayılanı 'resize' → Android'de genelde tolere edilir). iOS'ta ve Android yatay telefonda (yükseklik 360-430, klavye ≈200px): AppShell başlık (~90px) + bantlar sonrası görünür alan ≈70-120px → dokunulan 'Sahip E-Posta' (8. alan), kart ortasındaki not TextInput'u ve AI 'Red gerekçesi' alanı klavyenin ALTINDA kalır; kullanıcı yazdığını göremez. Yazı ölçeği 1.3'te form yüksekliği artar, sorun dikey telefonda da başlar.",
-  "cihaz_siniflari": [
-   "b",
-   "c",
-   "j",
-   "i"
-  ],
-  "kanit": "AppShell.tsx:385-391  <ScrollView contentContainerStyle={[styles.content, ...]} keyboardShouldPersistTaps=\"handled\">   // KeyboardAvoidingView yok\nPatientScreen.tsx:235  <TextInput style={styles.input} ... placeholder=\"Sahip E-Posta (rapor için)\" ... keyboardType=\"email-address\" .../>\nAuthScreen.tsx:179  <KeyboardAvoidingView behavior={Platform.OS === \"ios\" ? \"padding\" : undefined} ...>   // yalnız burada",
-  "siddet": "orta",
-  "kesinlik": "olasi",
-  "oneri": "AppShell içerik ScrollView'ını AuthScreen deseniyle KeyboardAvoidingView(behavior='padding' iOS) içine al; app.json android.softwareKeyboardLayoutMode='resize' açıkça yaz; çok satırlı not alanlarında onFocus → scrollTo ile alanı görünür kıl (ScrollView ref AppShell'den context ile verilebilir).",
-  "karar": {
-   "id": "ekranC-11",
-   "karar": "kismen",
-   "gerekce": "Kanıt doğru: `grep KeyboardAvoidingView` yalnız AuthScreen.tsx:10/179/405; AppShell.tsx:385-394 ScrollView'ı KAV'sız; app.json android bloğunda softwareKeyboardLayoutMode yok (Expo varsayılanı 'resize'). Etki ise platforma bağlı: Android 'resize' modunda pencere klavye kadar küçülür ve ReactScrollView odaklanan TextInput'u otomatik görünür alana kaydırır (ScrollView.requestChildRectangleOnScreen) → Android dikey/yatayda giriş genelde görünür kalır (yatayda Android çoğu klavyede zaten tam-ekran 'extract' moduna geçer). iOS'ta (EAS build, com.pemf.vet) KAV olmadan ScrollView içeriği kaymaz (automaticallyAdjustKeyboardInsets varsayılan false) → PatientScreen.tsx:235 'Sahip E-Posta', TreatmentHistory not TextInput'u (:414-422) ve AiReviewControls input'u (:170) klavyenin altında kalır → iOS için DOĞRU. PC/WebView2/LAN masaüstünde klavye yok. Yani (b)/(j) iOS'ta gerçek, Android'de olası değil.",
-   "siddet": "orta",
-   "oneri": "AppShell içerik ScrollView'ını `<KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1}} keyboardVerticalOffset={insets.top + header yüksekliği}>` içine al (AuthScreen deseni) VEYA daha basit: ScrollView'a iOS için `automaticallyAdjustKeyboardInsets` ver. app.json'a `\"softwareKeyboardLayoutMode\": \"resize\"` açıkça yazmak zararsız belge niteliğinde."
-  },
-  "kok": "S4"
- },
- {
   "id": "ekranC-12",
   "dosya": "pf/src/screens/AiHistoryScreen.tsx, KpiDashboardScreen.tsx (+ AppShell.tsx)",
   "satirlar": "AiHistoryScreen.tsx:404, 409, 420, 425, 437; KpiDashboardScreen.tsx:281; AppShell.tsx:659-662",
@@ -1427,30 +1308,6 @@
    "oneri": "İç ScrollView'ları düz View ile değiştir (davranış aynı, gereksiz katman gider, alt padding'ler tekilleşir). Sticky filtre isteniyorsa AppShell'e `scroll={false}` prop'u ekleyip AiHistory/TreatmentHistory'yi FlatList + ListHeaderComponent + stickyHeaderIndices ile kur — bu ayrı bir iyileştirme kalemi, düzeltme değil."
   },
   "kok": "S4"
- },
- {
-  "id": "ekranC-14",
-  "dosya": "pf/src/theme/tokens.ts (etki: dört ekran + AppShell)",
-  "satirlar": "tokens.ts:10-25; AppShell.tsx:517; KpiDashboardScreen.tsx:190-211; TreatmentHistoryScreen.tsx:275, 524-530",
-  "ekran": "PC (WebView2 küçültülmüş pencere), DPI %125-200, tablet",
-  "sorun": "rs()/rf() ölçeği açılışta bir kez min(genişlik,yükseklik)/375'ten hesaplanıp 1.30'a clamp'lenir; kısa kenar ≥488px olan HER PC/tablet penceresinde SCALE=1.30 sabittir ve pencere küçültülünce yeniden hesaplanmaz. Sonuç: masaüstünde sidebar 322px, spacing.xl 31px, rs(44) düğmeler 57px, MetricCard değeri 32px. DPI %150 laptopta (1366×768 → 911×512 mantıksal) veya launcher penceresi 700×540'a çekildiğinde: içerik = 911-322-62 = 527px; KPI 4 metrik kartı 2 sütun (911/2=455 → 263px hücre), Geçmiş ızgarası 2 sütun (455≥360) → ≈242px SessionCard'da 5 parametre karosu (minWidth rs(100)=130) 2'şerli sarılır ve sağ aksiyon kümesi 2 satıra düşer; 700px pencerede içerik 316px'e iner (telefon kadar) ama bileşenler telefon ölçeğinin 1.5 katı. Yatay taşma yok, ama 'PC'de her şey büyük ve sıkışık' hissi.",
-  "cihaz_siniflari": [
-   "e",
-   "g",
-   "d"
-  ],
-  "kanit": "tokens.ts:11-14  const _screenW = Math.min(Dimensions.get(\"window\").width, Dimensions.get(\"window\").height);\n  const _rawScale = (_screenW || BASE_WIDTH) / BASE_WIDTH;\n  const SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);\nAppShell.tsx:517  width: rs(248)   // → 322px masaüstünde",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "Platform.OS==='web' veya kısa kenar ≥600 (tablet/PC) için SCALE üst sınırını 1.0-1.1'e çek (telefon büyütme mantığı PC'ye uygulanmasın); sidebar genişliğini rs'siz 232px sabit tut; ResponsiveGrid/useResponsive gerçek içerik genişliğiyle çalışsın (ekranC-1).",
-  "karar": {
-   "id": "ekranC-14",
-   "karar": "dogru",
-   "gerekce": "tokens.ts:10-14 doğrulandı: SCALE modül yüklenirken bir kez `min(width,height)/375` ile hesaplanır, 0.85-1.30 clamp; resize/rotate'te yeniden hesaplanmaz (Dimensions listener yok). Kısa kenar ≥488 olan HER tablet/PC'de (WebView2 maximize 1080p → 1080/375=2.88 → 1.30) SCALE=1.30 sabit → sidebar rs(248)=322 (AppShell.tsx:517), spacing.xl=31, rs(44)=57, MetricCard değeri rf(27)≈32px (MetricCard.tsx:60). DPI %150 laptop 911×512 mantıksal: SCALE 1.30, tablet düzeni, içerik 527px → KPI 4 metrik 2 sütun (263px hücre), Geçmiş grid 2 sütun → ≈243px SessionCard'da parametre karoları (minWidth rs(100)=130, TreatmentHistoryScreen.tsx:524-530) 2'şerli sarılır, sağ aksiyon kümesi kırılır → DOĞRU. DÜZELTME: launcher 700×540 penceresinde width 700 < 768 → layout 'phone', sidebar YOK, alt bar açılır; içerik 700-62=638px (316 değil) — bulgudaki '316px' hesabı yanlış; ama bileşenler yine 1.30 ölçekli ('telefon düzeninde 1.3× büyük') kalır. Yatay taşma yok, 'her şey büyük ve sıkışık' hissi doğru.",
-   "siddet": "orta",
-   "oneri": "tokens.ts'te SCALE üst sınırını ortama göre ver: `const cap = (Platform.OS==='web' || _screenW >= 600) ? 1.05 : 1.30` (tablet/PC'de telefon büyütmesi uygulanmasın); sidebar width'i rs'siz 232 sabit tut. Ayrıca useResponsive'daki contentWidth (ekranC-1) ile grid'i gerçek alana bağla. Not: SCALE'in canlı yeniden hesaplanması StyleSheet.create ile sabitlenen tüm token'ları etkiler; kapsamlı refaktör yerine cap düşürmek yeterli."
-  },
-  "kok": "S1"
  },
  {
   "id": "ekranC-15",
@@ -1676,7 +1533,7 @@
    "id": "aihub-8",
    "karar": "dogru",
    "gerekce": "1382-1414 ve 3630-3633 doğrulandı. Sağ blok (1390) `alignItems:'flex-end'` View — flexShrink yok (Yoga varsayılanı 0) → içeriği kadar sabit: rtTag 'Kuyruklu · Pro+ anlık' 11 px bold ≈130 + padding 16 + kenarlık 2 ≈ 148 px; autoAdjustBtn ≈ 139 px. 320'de Card iç genişliği 218 → başlığa 218−148 = 70 px: 'Yüz Ağrısı Skoru (FGS)' 14 px bold (≈176 px) 3 satıra, subtitle (≈400 px) 6 satıra kırılır. 375'te ≈ 97 px (2 + 4-5 satır). Yazı ölçeği 1,3'te sağ blok ≈ 190 px → 320'de başlığa ≈ 28 px: kelime kelime kırılma. Kesilme değil sarma olduğundan bilgi kaybolmaz ama 320'de sayfanın üstü bozuk görünür; 375-430 telefonda da belirgin.",
-   "siddet": "orta",
+   "siddet": "dusuk",
    "oneri": "VisionModule zaten `isCompact` okuyor (1076): başlık satırını `isCompact ? {flexDirection:'column', gap: spacing.sm} : {flexDirection:'row', ...}` yap; kompaktta sağ bloğu `flexDirection:'row', flexWrap:'wrap'` ile başlığın altına al. rtTagOnText/rtTagOffText ve gateBadgeText'i `typography.small`'a bağla; sağ bloğa `flexShrink:1, maxWidth:'55%'` güvenlik sınırı."
   },
   "kok": ""
@@ -1753,30 +1610,6 @@
   "kok": "S7"
  },
  {
-  "id": "aihub-12",
-  "dosya": "pf/src/components/domain/AiProPanel.tsx",
-  "satirlar": "819-838, 931-933",
-  "ekran": "AI Pro → Süre / Kalan / Yeniden Konumla satırı — dar telefon ve LAN tarayıcısı",
-  "sorun": "Üç eşit flex:1 sütun; 320 px'de her biri ~75 px. '🎯 Yeniden Konumla' (typography.small ≈ 10-11 px, ~110 px) adjustsFontSizeToFit ile minimumFontScale verilmeden küçülür → ~6-7 px okunmaz düğme (hedef organı yeniden konumlama, seans öncesi kritik eylem). Web'de (LAN'dan telefon tarayıcısı) RNW adjustsFontSizeToFit'i uygulamaz → numberOfLines=1 ile '🎯 Yeniden Ko…' kesilir.",
-  "cihaz_siniflari": [
-   "a",
-   "h",
-   "i"
-  ],
-  "kanit": "819: <View style={styles.row}>  // row: { flexDirection:'row', gap: spacing.sm, alignItems:'flex-end' }\n835: <Text style={styles.calBtnText} numberOfLines={1} adjustsFontSizeToFit>{localized ? '✓ Konumlandı' : '🎯 Yeniden Konumla'}</Text>",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "useResponsive().isCompact'ta satırı sar (Süre+Kalan yan yana, Yeniden Konumla altta block); `minimumFontScale={0.8}` ekle; kısa etiket 'Konumla'.",
-  "karar": {
-   "id": "aihub-12",
-   "karar": "dogru",
-   "gerekce": "819 row (931 gap spacing.sm, alignItems flex-end) ve 835 `numberOfLines={1} adjustsFontSizeToFit` (minimumFontScale yok) doğrulandı; ControlScreen'de AiProPanel Card'sız düz section içinde, container padding spacing.md. 320'de: 320−40−20 = 260 → sütun (260−14)/3 ≈ 82 → calBtn padding 7×2 → 68 px metin alanı; '🎯 Yeniden Konumla' 10 px bold ≈105 px → ≈%65 küçülme → ≈6,5 px. 375'te de sütun ≈96, metin alanı 80, etiket 11 px ≈118 px → ≈7,5 px: yani YAYGIN telefonlarda da oluşur, sadece 320'ye özgü değil (Android alt sınır 4 sp, iOS pratikte sınırsız). Web (LAN tarayıcı/WebView2 küçük pencere): RNW adjustsFontSizeToFit'i uygulamaz → numberOfLines=1 ile '🎯 Yeniden Ko…'. Konumlandırma sonrası '✓ Konumlandı' sığar; sorun seans öncesi ilk durumda.",
-   "siddet": "orta",
-   "oneri": "AiProPanel'de `useResponsive().isCompact` iken row'u `flexWrap:'wrap'` yap ve üçüncü sütuna `flexBasis:'100%'` ver (Süre+Kalan yan yana, Yeniden Konumla altta tam genişlik); `minimumFontScale={0.8}` ekle; etiketi kısalt ('🎯 Konumla')."
-  },
-  "kok": ""
- },
- {
   "id": "aihub-13",
   "dosya": "pf/src/screens/AiHubScreen.tsx",
   "satirlar": "524-531, 3724-3728",
@@ -1824,58 +1657,6 @@
   "kok": ""
  },
  {
-  "id": "ilkel-1",
-  "dosya": "pf/src/components/domain/OperatorSwitcher.tsx",
-  "satirlar": "197-200 (+ AppShell.tsx 591-592, 275-298)",
-  "ekran": "Üst bar: operatör çipi + profil çipi + Ayarlar + bağlantı durumu + bildirim zili",
-  "sorun": "Operatör çipi maxWidth rs(190) (320px'te 162px) ve flexShrink yok; AppShell headerRight flexShrink:0. Dar telefonda sağ grup (çip ~162 + profil çipi ~51 + Ayarlar 44 + 'Çevrimdışı' metni+nokta ~65 + zil 24 + 4×gap 12) ≈ 390px, kullanılabilir alan 320-48=272px. headerLeft (flex:1, minWidth:0) sıfıra iner → ekran başlığı ve alt başlığı kaybolur, bildirim zili sağ kenardan taşar ve dokunulamaz. 360px'te uzun operatör adıyla (örn. 'Dr. Ayşe Yılmaz') aynı taşma çevrimdışıyken tekrarlanır.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "c",
-   "i"
-  ],
-  "kanit": "cip: { ..., maxWidth: rs(190) },\ncipText: { ..., flexShrink: 1 },   // çipin kendisi küçülemiyor (RN flexShrink varsayılanı 0)\nAppShell: headerRight: { flexShrink: 0, flexDirection: \"row\", alignItems: \"center\", gap: spacing.md }",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "Çipe flexShrink:1 + minWidth:0 ver ve useResponsive().isCompact'ta maxWidth'i rs(110)'a düşür (ya da yalnız ikon + ilk ad); headerRight'a flexShrink:1 + minWidth:0; 'Çevrimdışı' metnini compact'ta gizleyip yalnız kırmızı noktaya bırak (bant zaten uyarıyor).",
-  "karar": {
-   "id": "ilkel-1",
-   "karar": "dogru",
-   "gerekce": "Kod doğrulandı: OperatorSwitcher.tsx:197-199 `cip: {..., maxWidth: rs(190)}` — flexShrink yok (RN/RNW varsayılanı 0); AppShell.tsx:591 `headerRight: { flexShrink: 0, ..., gap: spacing.md }`, 590 `headerLeft: { flex: 1, minWidth: 0 }`. Kendi hesabım 320px'te (SCALE 0.853, header paddingHorizontal rs(24)=20 → 280px kullanılabilir): uzun ad çipi 162 + profil çipi ~49 + Ayarlar iconBtn rs(44)=38 + 'Çevrimdışı'+nokta ~62 + zil 22 + 4×gap 10 = ~373 > 280 → headerRight taşar, zil sağ kenar dışına çıkar. Daha önemlisi bulgunun altını çiziyor: 360px'te ÇEVRİMİÇİ ve kısa etiketle ('Operatör seçin') bile sağ grup ~278px alıp headerLeft'e ~36px bırakıyor → ekran başlığı (typography.title 23px, numberOfLines=1) 'K…' diye kırpılıyor. Yani bozulma yalnız uzun ad/çevrimdışı istisnasına bağlı değil, dar telefonda kalıcı.",
-   "siddet": "orta",
-   "oneri": "OperatorSwitcher.cip'e `flexShrink: 1, minWidth: 0` ve useResponsive().isCompact'ta `maxWidth: rs(110)` (ya da yalnız ikon + ilk ad); AppShell.headerRight'a `flexShrink: 1, minWidth: 0`; 'Çevrimdışı' metnini `!desktop`'ta gizle (connBanner zaten aynı bilgiyi veriyor, AppShell.tsx:637). headerLeft'e `minWidth: rs(96)` ile başlığın en azından ilk kelimesi görünür kalsın."
-  },
-  "kok": ""
- },
- {
-  "id": "ilkel-2",
-  "dosya": "pf/src/components/domain/SessionDetailModal.tsx",
-  "satirlar": "406-409, 441-442, 462-503",
-  "ekran": "Seans Detayı → Sıcaklık Grafiği",
-  "sorun": "SVG viewBox 720×260 sabit, width='100%', height=rs(260). preserveAspectRatio varsayılanı (meet) ile 300px genişlikte kart içinde grafik 300×108'e küçülür ve 260px'lik alanın ortasında letterbox'lanır; eksen yazıları fontSize 10-11 → ~4.5px (okunamaz), çizgi 1.5→0.6px. Telefonda sıcaklık grafiği okunmaz; tablet dikeyde de (~700px) hâlâ küçülür.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "c",
-   "d",
-   "g",
-   "i"
-  ],
-  "kanit": "const width = 720;\nconst height = 260;\n<Svg width=\"100%\" height={rs(260)} viewBox={`0 0 ${width} ${height}`}>",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "RealtimeChart/SensorMonitorScreen deseniyle chartWrap'e onLayout koyup gerçek genişliği al; width=ölçülen, height=rs(220) ile viewBox'ı bu boyuta eşitle (ölçekleme yok); dar ekranda PAD.left 48→36 ve etiket sayısını 5→3'e düşür; eksen fontSize'ı rf(11) yap.",
-  "karar": {
-   "id": "ilkel-2",
-   "karar": "dogru",
-   "gerekce": "SessionDetailModal.tsx:406-407 `const width = 720; const height = 260;`, 442 `<Svg width=\"100%\" height={rs(260)} viewBox={`0 0 ${width} ${height}`}>`; eksen yazıları fontSize={11}/{10} ham (467, 487, 498). preserveAspectRatio verilmemiş → xMidYMid meet. Modal kartı: backdrop padding spacing.md + card padding spacing.lg → 320px telefonda çizim alanı ≈ 320−2×10−2×14 ≈ 272px → ölçek 0.38, yazı ≈ 4px, 260px yükseklikte ~98px grafik ortada letterbox. Aynı depoda SensorMonitorScreen.tsx:111-118 ve KpiDashboardScreen.tsx:151 onLayout ile genişliği ölçüyor; TempChart bu deseni kullanmıyor. Tablet dikey iddiası zayıf (Modal tam ekran üstünde: ~700px kart → ölçek 0.97, önemsiz); telefon/yatay/DPI sınıfları geçerli.",
-   "siddet": "orta",
-   "oneri": "chartWrap'e `onLayout` koyup `chartW` state'i al (SensorMonitorScreen deseni); `width={chartW}`, `height={rs(220)}`, viewBox'ı aynı boyuta eşitle (ölçekleme yok); chartW<480'de PAD.left 48→36, x-eksen etiketi 5→3, fontSize'ları rf(11)/rf(10) yap. Cihaz sınıflarından (d) çıkarılabilir."
-  },
-  "kok": "S7"
- },
- {
   "id": "ilkel-3",
   "dosya": "pf/src/components/domain/AiSpecApprovalModal.tsx",
   "satirlar": "90-93",
@@ -1895,7 +1676,7 @@
    "id": "ilkel-3",
    "karar": "dogru",
    "gerekce": "AiSpecApprovalModal.tsx:90-92: `<TouchableOpacity onPress={kapat} accessibilityRole=\"button\" accessibilityLabel=\"Kapat\"><X size={rs(20)} .../>` — style/padding/hitSlop yok; dokunma alanı = ikon kutusu (320px'te 17px, 375'te 20px, tablette 26px). Aynı dosyadaki DevicePairingGuide.tsx:86-93 `hitSlop={10}` kullanıyor, AppShell.iconBtn rs(44) — tutarsız. Hekim 'ertele' yolunu ıskalar; alternatif kapatma yolu (dışa tıklama) da yok (backdrop düz View, 86).",
-   "siddet": "orta",
+   "siddet": "dusuk",
    "oneri": "`style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} hitSlop={8}` (ham 44 — rs ile küçültme, bkz. ilkel-7)."
   },
   "kok": "S3"
@@ -1944,34 +1725,10 @@
    "id": "ilkel-5",
    "karar": "dogru",
    "gerekce": "NotificationCenter.tsx:145-147 `headerActions: { flexDirection: 'row', gap: spacing.sm }`, `actionBtn: { padding: spacing.xs }`, `actionBtnText: { fontSize: typography.small }` → hedef ≈ 11+2×4 ≈ 19-22px yüksek, iki hedef arası 7-8px. 'Temizle' için platformConfirm var (31-35) → geri alınamazlık riski hafifletilmiş; ama 'Okundu işaretle' sık kullanılan bir kontrol ve hedef <44. Şiddet 'orta' yerinde (zor kullanım), ancak veri kaybı riski onayla kapalı olduğu için 'yuksek'e çıkmaz.",
-   "siddet": "orta",
+   "siddet": "dusuk",
    "oneri": "`actionBtn: { minHeight: 40, paddingHorizontal: spacing.md, justifyContent: 'center' }`, `headerActions gap: spacing.md`; 'Temizle'yi `<Button variant=\"ghost\" size=\"sm\">` ile çiz (Button.size_sm minHeight rs(38) — ham 40'a çekilirse ilkel-7 ile birlikte düzelir)."
   },
   "kok": "S3"
- },
- {
-  "id": "ilkel-6",
-  "dosya": "pf/src/components/UpgradeModal.tsx",
-  "satirlar": "46-78, 83-101",
-  "ekran": "Plan yükseltme bilgilendirme modalı",
-  "sorun": "Kart ScrollView'sız ve maxHeight yok; içerik ≈ padding 2×32 + ikon 64 + başlık ~30 + açıklama 4 satır×22 + plan satırı 40 + not 14 + düğme 44 + 5×gap 12 ≈ 400px. Telefon yatayda (360px yükseklik) ve font ölçeği 1.3'te kart viewport'u aşar, ortalandığı için 'Anladım' düğmesi ve X alttan/üstten kesilir; kaydırılamaz. Ayrıca X düğmesi padding rs(6)+ikon 20 → ~32px hedef.",
-  "cihaz_siniflari": [
-   "c",
-   "i",
-   "a"
-  ],
-  "kanit": "backdrop: { flex: 1, ..., alignItems: \"center\", justifyContent: \"center\", padding: spacing.xl },\ncard: { width: \"100%\", maxWidth: rs(420), ..., padding: spacing.xxl, alignItems: \"center\", gap: spacing.md },\nclose: { position: \"absolute\", top: spacing.md, right: spacing.md, padding: rs(6) },",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "card'a maxHeight:'90%' ver ve içeriği ScrollView'e sar (contentContainerStyle ile mevcut alignItems/gap); useResponsive().height < 480 ise padding'i spacing.lg'ye, ikon halkasını rs(48)'e düşür; close'a minWidth/minHeight 44 + hitSlop.",
-  "karar": {
-   "id": "ilkel-6",
-   "karar": "kismen",
-   "gerekce": "UpgradeModal.tsx:83-101 doğrulandı: backdrop `justifyContent: 'center'`, card `padding: spacing.xxl, gap: spacing.md`, ScrollView ve maxHeight yok; `close: { padding: rs(6) }` + ikon 20 → ~32px hedef. Kendi hesabım telefon YATAY (kısa kenar 360 → SCALE 0.96, viewport yüksekliği 360): padding 62 + ikon 61 + başlık 28 + açıklama 2-3 satır ~63 + plan satırı 33 + not 13 + düğme 49 + 5×gap 12 = ~369 > 360 → 'Anladım' ve X birkaç px kesilir, kaydırılamaz. Ancak DİKEY 320px (a) ve font ölçeği 1.3 dikeyde (i) yükseklik ≥568 olduğundan sığar — o sınıflar yanlış. Etki yalnız (c) yatay (+ yatayda font ölçeği). Android geri tuşu onRequestClose ile kapatır; iOS'ta X kısmen görünür → kullanıcı sıkışmaz.",
-   "siddet": "dusuk",
-   "oneri": "card'a `maxHeight: '92%'` + içeriği ScrollView'e sar (contentContainerStyle'a mevcut alignItems/gap); useResponsive().height<480'de padding'i spacing.lg, iconRing'i rs(48) yap; close'a `minWidth/minHeight: 44` + hitSlop. Cihaz sınıfı: yalnız (c)."
-  },
-  "kok": "S5"
  },
  {
   "id": "ilkel-7",
@@ -1991,83 +1748,10 @@
    "id": "ilkel-7",
    "karar": "dogru",
    "gerekce": "tokens.ts:11-19 doğrulandı: `_screenW = min(w,h)`, `SCALE = clamp(_screenW/375, 0.85, 1.30)`, `rs(size) = round(size*SCALE)`. 320px'te SCALE=0.853 → rs(44)=38, rs(46)=39, rs(38)=32; 360px'te 0.96 → rs(44)=42. Button.tsx:153-155 `size_sm: minHeight rs(38)`, `size_md: rs(46)`; BackupPassphraseDialog.tsx:114,119,124 ve OperatorSwitcher.tsx:209,214,218,221 `minHeight: rs(44)`; AppShell.iconBtn rs(44). Yani 'minimum dokunma hedefi' sabiti de küçülüyor. Ancak etki: 38-42px, WCAG 2.5.8 AA (24px) üstünde, 2.5.5/Android 44-48 altında; 360px+ cihazlarda fark 2px. Sistemik ama tek başına iş engellemiyor → dusuk.",
-   "siddet": "dusuk",
+   "siddet": "orta",
    "oneri": "tokens.ts'e `export const touch = { min: Math.max(44, rs(44)), sm: Math.max(40, rs(40)) }` ekle; Button size_md/size_lg → touch.min, size_sm → touch.sm; PIN/parola girişleri ve modal düğmelerinde `minHeight: touch.min`; AppShell.iconBtn aynı."
   },
   "kok": "S3"
- },
- {
-  "id": "ilkel-8",
-  "dosya": "pf/src/components/ui/ResponsiveGrid.tsx",
-  "satirlar": "11-14",
-  "ekran": "Ana Ekran metrik kartları, Kontrol/Hastalar/Raporlar/AI Hub kart ızgaraları (AppShell kenar çubuğuyla)",
-  "sorun": "Sütun sayısı pencere genişliğinden hesaplanıyor, konteynerin gerçek genişliğinden değil. Tablet yatay (1024) ve PC'de AppShell kenar çubuğu rs(248)=322px (PC'de SCALE 1.3) + içerik padding 2×31 alır: 1024'te 3 sütun → hücre ≈ (1024-322-62)/3 ≈ 213px, 768-1023 tablet dikeyde 2 sütun → ≈ 199px; minItemWidth=260 şartı window/columns=341/384 ile 'sağlanmış' sanılır. MetricCard rf(27)→35px değerler ('1000 Hz', '25 / 8') ve CoilCard 3'lü MiniMetric satırı 200px'te sıkışır/sarar. Launcher penceresi küçültüldüğünde (700-1023px) aynı durum.",
-  "cihaz_siniflari": [
-   "d",
-   "e",
-   "g"
-  ],
-  "kanit": "const { width, columns } = useResponsive();\nconst targetColumns = width / columns < minItemWidth ? Math.max(1, columns - 1) : columns;\nAppShell: sidebar: { ..., width: rs(248) }",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "Grid'e onLayout ile kendi genişliğini ölçtür (Skeleton deseni) ve targetColumns = max(1, floor(w / minItemWidth)) hesapla; ilk render için useResponsive genişliğini fallback yap. Alternatif: useResponsive'e AppShell'in içerik genişliğini (width - sidebarW) veren `contentWidth` ekle.",
-  "karar": {
-   "id": "ilkel-8",
-   "karar": "dogru",
-   "gerekce": "ResponsiveGrid.tsx:12-13 `const { width, columns } = useResponsive(); targetColumns = width / columns < minItemWidth ? columns-1 : columns` — pencere genişliği, konteyner değil. AppShell.tsx:99 `desktop = isDesktop || isTablet` → kenar çubuğu 768'den itibaren; 517 `width: rs(248)`; tablette SCALE = clamp(768/375=2.05) = 1.30 → 322px; content padding spacing.xl = 31 ×2. 768 dikey tablet: içerik 768−322−62 = 384px, tablet columns=2 → kontrol 768/2=384 ≥ 320 'geçer' → ControlScreen.tsx:609 minItemWidth=320 için 2 sütun, hücre ≈ 192−2×rs(8) = 172px; CoilCard.tsx:80-88 `mini: { flexBasis: '48%', padding: spacing.md }` → 4 MiniMetric ~80px kutulara, değer alanı ~30px → '1000 Hz' sarar. 1024 yatay: desktop 3 sütun, 1024/3=341 ≥ 320 → hücre ≈ 193px, aynı sorun. Launcher penceresi 768-1023'te de tablet düzeni → aynı. MetricCard.tsx:60 `fontSize: rf(27)` = 33px. Doğrulandı.",
-   "siddet": "orta",
-   "oneri": "ResponsiveGrid'e `onLayout` ile kendi genişliğini ölçtür (Skeleton.tsx:34 deseni): `cols = Math.max(1, Math.floor((w + spacing.sm*2) / minItemWidth))`, ölçüm gelene kadar mevcut useResponsive hesabını fallback yap. Alternatif: AppShell'in `contentWidth = width − (desktop ? rs(248) : 0) − 2*spacing.xl` değerini context'le ResponsiveGrid'e ver."
-  },
-  "kok": "S2"
- },
- {
-  "id": "ilkel-9",
-  "dosya": "pf/src/components/visual/RealtimeChart.tsx",
-  "satirlar": "50-52, 101, 188, 240-245, 254",
-  "ekran": "Sensörler → gerçek zamanlı grafik",
-  "sorun": "(1) Web canvas'ın backing store'u CSS piksel boyutunda (width={width}, devicePixelRatio çarpanı yok) → DPI %125-200 PC'de ve DPR 2-3 telefon tarayıcısında çizgi ve eksen yazıları bulanık. (2) PAD left/right 60px sabit: 320px telefonda çizim alanı ≈ 272-120 = 152px (genişliğin %44'ü kenar boşluğu), 8 dikey grid çizgisi 19px aralıklı, 2000 nokta 152px'e sıkışır. (3) Canvas yazı boyutları '11px'/'14px' sabit (rf yok), font ölçeği/DPI'a tepki vermez.",
-  "cihaz_siniflari": [
-   "g",
-   "h",
-   "a",
-   "b"
-  ],
-  "kanit": "const PAD = { top: 20, right: 60, bottom: 40, left: 60 };\nctx.font = \"11px Inter, sans-serif\";\n<canvas ref={canvasRef as any} width={width} height={height} style={{ display: \"block\", width: \"100%\", height: \"auto\", borderRadius: 8 }} />",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "canvas.width = width*dpr, height = height*dpr, ctx.scale(dpr,dpr) (dpr = window.devicePixelRatio||1) ve style width/height'ı CSS px'te tut; PAD'i genişliğe göre seç (width<480 → left 40/right 44, etiket toFixed(0)); font boyutlarını rf(11)/rf(14) ile üret.",
-  "karar": {
-   "id": "ilkel-9",
-   "karar": "dogru",
-   "gerekce": "RealtimeChart.tsx:50-52 `W = canvas.width; PAD = { top:20, right:60, bottom:40, left:60 }`, 101/188 `ctx.font = '14px…'/'11px…'` sabit, 240-245 `<canvas width={width} height={height} style={{ width:'100%', height:'auto' }}>` — devicePixelRatio çarpanı yok. SensorMonitorScreen.tsx:111-118 genişliği onLayout'tan CSS px olarak veriyor → backing store = CSS px → DPR>1'de (Windows %125-200, telefon tarayıcısı DPR 2-3) çizgi/yazı bulanık. 320px'te chartArea ≈ 280px → çizim alanı ≈ 160px (%43 kenar boşluğu), 8 dikey grid 20px aralıklı. Native SVG dalı (254) da aynı PAD=60 ve rf(11) kullanıyor — orada bulanıklık yok ama kenar boşluğu sorunu aynı. Doğrulandı; PC'nin birincil dağıtım ortamı WebView2 olduğundan orta.",
-   "siddet": "orta",
-   "oneri": "draw() içinde `const dpr = window.devicePixelRatio||1; canvas.width = width*dpr; canvas.height = height*dpr; ctx.setTransform(dpr,0,0,dpr,0,0)`; canvas style'ını `width: width, height: height` (CSS px) tut; PAD'i genişliğe göre seç: width<480 → left 40 / right 44, etiket toFixed(0); fontları `${rf(11)}px`/`${rf(14)}px`. NativeRealtimeChart'ta da PAD'i aynı kuralla küçült."
-  },
-  "kok": "S7"
- },
- {
-  "id": "ilkel-10",
-  "dosya": "pf/src/components/domain/AiSpecApprovalModal.tsx",
-  "satirlar": "86-88, 122-138, 207, 220",
-  "ekran": "AI Seans Önerisi onay modalı",
-  "sorun": "Kart maxHeight %88 ama tek kaydırılabilir öğe bobin tablosu (flexShrink:1). Telefon yatayda (360px yükseklik → kart ≤ 317px) başlık+açıklama+4 meta hücresi (2 satıra sarar)+güven+XAI satırı+eylemler ≈ 300px'i alır; tablo 0-20px'e çöker (bobin duty/faz listesi görünmez) — hekim onayladığı parametreleri göremez. Ret gerekçesi açılıp klavye çıkınca eylem düğmeleri de klavye altında kalır (kart ScrollView'sız).",
-  "cihaz_siniflari": [
-   "c",
-   "i",
-   "a"
-  ],
-  "kanit": "card: { width: \"100%\", maxWidth: rs(520), maxHeight: \"88%\", ... },\n<ScrollView style={s.tableWrap}>   // tableWrap: { maxHeight: rs(200), ... } — tek esneyen çocuk",
-  "siddet": "orta",
-  "kesinlik": "olasi",
-  "oneri": "Kart gövdesini (lead+summary+tablo+eylemler) tek ScrollView'e al, tabloya maxHeight yerine minHeight rs(120) ver; useResponsive().height<480'de lead metnini gizle ve meta hücrelerini 4 sütun yerine 2×2 yap; eylemleri sheet altına sabit (ScrollView dışında) koy.",
-  "karar": {
-   "id": "ilkel-10",
-   "karar": "kismen",
-   "gerekce": "AiSpecApprovalModal.tsx:207 `card: { maxHeight: '88%', gap: spacing.sm }`, 122 `<ScrollView style={s.tableWrap}>` (220: `maxHeight: rs(200)`); RN ScrollView'ün taban stili flexShrink:1 olduğundan kartın tek küçülebilen çocuğu tablo. Kendi hesabım 360 yükseklikli yatayda (kart ≤317): padding 30 + head 20 + lead 2 satır 34 + 4 meta hücresi tek satır ~34 + rel 11 + xai 11 + actions 40 + 7×gap 8 = ~236 → tabloya ~80px kalır (başlık + 2 satır, kaydırılabilir). 'Tablo 0-20px'e çöker' iddiası düz yatayda abartılı; ama (i) font ölçeği 1.3 + yatayda ~30px'e, ret gerekçesi açılıp klavye çıkınca (Android resize → pencere ~160px → kart 141px) tablo 0'a düşer ve eylem düğmeleri kart dışına taşar (kart ScrollView'sız, backdrop kaydırılamaz). Dikey 320 (a) için 568px yükseklik yeterli → o sınıf yanlış.",
-   "siddet": "orta",
-   "oneri": "Kart gövdesini (lead+summary+rel+xai+tablo+rejectBox) tek ScrollView'e al, tableWrap'a maxHeight yerine `minHeight: rs(120)`; eylemleri ScrollView DIŞINDA kartın altına sabit koy; useResponsive().height<480'de lead'i gizle ve meta hücrelerini `flexBasis:'48%'` ile 2×2 yap; backdrop'u KeyboardAvoidingView(ios:'padding') ile sar. Cihaz sınıfı: (c), (i); (a) çıkarılmalı."
-  },
-  "kok": "S5"
  },
  {
   "id": "ilkel-11",
@@ -2115,31 +1799,6 @@
    "gerekce": "NotificationCenter.tsx:149-150 `list: { maxHeight: rs(240) }` ve AppShell.tsx:468 `marginTop: insets.top + spacing.xl` doğrulandı. Ancak (2) yatay taşma iddiası hesapta tutmuyor: 360 yükseklikte insets.top ≤24 + marginTop 23 + container padding 12 + başlık ~22 + gap 8 + liste rs(240)=230 + padding 12 ≈ 331 < 360; 320-yükseklikli yatayda (SCALE 0.85) ≈ 297 < 320 → sığar, liste kendi içinde kaydırılır. (1) tablet/PC'de PC'de SCALE 1.3 → liste 312px'lik bir açılır panel — bu bir sayfa değil zilden açılan popover (notifSheet maxWidth rs(420), sağa yaslı), 20 öğe içinde kaydırılır; '%78 boş' ölçütü popover için anlamlı değil. Geriye kalan gerçek etki: PC'de 20 bildirimlik listede ~6 öğe görünür → kozmetik/kullanım kolaylığı.",
    "siddet": "dusuk",
    "oneri": "list maxHeight'ını `Math.min(useResponsive().height * 0.6, rs(560))` yap (PC'de daha fazla öğe görünür), yatay güvenliği için AppShell.notifSheet'e `maxHeight: height − insets.top − spacing.xl*2` + NotificationCenter.container'a `flexShrink: 1`. Cihaz sınıfları (d),(e),(f) ile sınırlı; (c) çıkarılmalı."
-  },
-  "kok": "S5"
- },
- {
-  "id": "ilkel-13",
-  "dosya": "pf/src/components/ui/ToastProvider.tsx",
-  "satirlar": "65, 111-118",
-  "ekran": "Tüm ekranlar – toast bildirimi",
-  "sorun": "Toast konteyneri top: rs(40) sabit + translateY 20 → üstten ~54-72px; safe-area üst inset kullanılmıyor. Çentikli/edge-to-edge Android ve iOS'ta (inset 44-59px) toast durum çubuğu/çentik altına kısmen girer; AppShell paddingTop insets.top verdiği için toast başlık satırının üzerine de biner. Küçük PC penceresinde/DPI %200'de toast sayfa başlığını 3sn örter (kozmetik).",
-  "cihaz_siniflari": [
-   "j",
-   "a",
-   "b",
-   "g"
-  ],
-  "kanit": "Animated.spring(translateY, { toValue: 20, useNativeDriver: true })\ntoastContainer: { position: \"absolute\", top: rs(40), left: spacing.md, right: spacing.md, alignItems: \"center\", zIndex: 9999 }",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "useSafeAreaInsets() ile top: insets.top + spacing.md; PC'de (isDesktop) toast'ı alt-orta (bottom: spacing.xl) veya sağ-üst köşeye al ki başlık örtülmesin.",
-  "karar": {
-   "id": "ilkel-13",
-   "karar": "kismen",
-   "gerekce": "ToastProvider.tsx:65 `translateY toValue: 20`, 111-117 `toastContainer: { position:'absolute', top: rs(40), left/right: spacing.md }`; useSafeAreaInsets yok; app/_layout.tsx:32-33 SafeAreaProvider>ToastProvider doğrudan kökte → top ekranın en üstünden ölçülür. Toast üst kenarı: 320px'te 34+20=54, 375'te 60, PC'de 52+20=72px. Android durum çubuğu 24-48dp, iOS 47-59pt → toast üst kenarı bunların ALTINDA/sınırında kalıyor; Dynamic Island (~11-48pt) ile örtüşmez. 'Çentik altına girer' iddiası pratikte oluşmuyor (en kötü iPhone 59pt'de ~5px sınır teması). Doğru kısım: AppShell header (paddingTop insets.top + spacing.lg) tam bu bölgede → toast başlık satırını 3sn örter (pointerEvents box-none ile dokunuş sorunu zaten çözülmüş, 93). Kozmetik.",
-   "siddet": "dusuk",
-   "oneri": "`const insets = useSafeAreaInsets()` ile `top: insets.top + spacing.sm` (sabit rs(40) yerine); useResponsive().isDesktop'ta toast'ı alt-orta (`bottom: spacing.xl`) veya sağ-üst köşeye al ki başlık örtülmesin. Cihaz sınıfı (j) düşürülmeli; etki tüm sınıflarda kozmetik."
   },
   "kok": "S5"
  },
@@ -2215,29 +1874,6 @@
   "kok": "S6"
  },
  {
-  "id": "ilkel-17",
-  "dosya": "pf/src/theme/tokens.ts",
-  "satirlar": "10-14",
-  "ekran": "PC'de tüm ilkeller (launcher WebView2, LAN tarayıcı)",
-  "sorun": "SCALE = min(width,height)/375, modül yüklenirken BİR KEZ hesaplanır. PC'de kısa kenar = pencere yüksekliği (≥488px) → SCALE her zaman 1.30: spacing.xl 31px, Button md 60px, toast maxWidth 624px, modal maxWidth 546-676px, kenar çubuğu 322px. DPI %200'de (mantıksal 683×384) bu 1.3 üstüne OS ölçeği biner; 700×540 launcher penceresinde 322px kenar çubuğu/546px modal içerik alanını yer (tablet aralığında). Pencere sonradan küçültülünce ölçek yenilenmez.",
-  "cihaz_siniflari": [
-   "e",
-   "g"
-  ],
-  "kanit": "const _screenW = Math.min(Dimensions.get(\"window\").width, Dimensions.get(\"window\").height);\nconst _rawScale = (_screenW || BASE_WIDTH) / BASE_WIDTH;\nconst SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);",
-  "siddet": "orta",
-  "kesinlik": "olasi",
-  "oneri": "Platform.OS==='web' (ve/veya width≥768) için SCALE'i 1.0-1.1'e sabitle; tablette 1.15 tavanı; büyük yüzeylerde büyütme yerine useResponsive.columns/maxWidth ile alan kullan.",
-  "karar": {
-   "id": "ilkel-17",
-   "karar": "kismen",
-   "gerekce": "tokens.ts:11-14 doğrulandı: modül yüklenirken BİR KEZ min(w,h)/375 → PC maximize (≥488px kısa kenar) SCALE=1.30; pencere sonradan küçültülünce yenilenmez. Sonuçları doğru: spacing.xl 31, Button md rs(46)=60, sidebar rs(248)=322, modal maxWidth rs(420/520)=546/676. Yanlış kısım: 'DPI %200'de mantıksal 683×384 → 1.3 üstüne OS ölçeği biner' — 384/375 = 1.02 → SCALE 1.02, 1.3 değil; ölçek yığılması %125-150 DPI'da (ör. 1920×1080 @150% → 1280×720 → 1.3 × 1.5) gerçekleşir. 700×540 launcher penceresi: 700 < 768 → 'phone' düzeni (kenar çubuğu YOK, alt bar); kenar çubuğu 768-1023'te 322px (ilkel-8 ile örtüşür). PC'de 1.3 büyütme büyük ölçüde tasarım tercihi; somut zarar orta-küçük pencere + DPI birleşiminde içerik sığmaması.",
-   "siddet": "orta",
-   "oneri": "Platform.OS==='web' için SCALE tavanını 1.10'a çek (`const MAX = Platform.OS === 'web' ? 1.10 : 1.30`), tablette (768-1023) 1.15; büyük yüzeylerde büyütme yerine useResponsive.columns/maxWidth ile alan kullan. Pencere yeniden boyutlanmasına tepki gerekiyorsa rs/rf'yi hook'a taşımak büyük refaktör — önce tavanı düşürmek yeterli. Cihaz sınıfı (g) yalnız %125-150 için geçerli."
-  },
-  "kok": "S1"
- },
- {
   "id": "ilkel-18",
   "dosya": "pf/src/components/domain/SessionDetailModal.tsx",
   "satirlar": "284-294, 612-629",
@@ -2261,30 +1897,6 @@
   "kok": "S6"
  },
  {
-  "id": "ilkel-19",
-  "dosya": "pf/src/components/domain/ObservationNotesModal.tsx",
-  "satirlar": "111-118, 136-145, 167-178",
-  "ekran": "Seans Gözlem Notu bottom-sheet – Notlar girişi",
-  "sorun": "Sheet KeyboardAvoidingView'sız; Android'de (resize modu) pencere küçülüp sheet maxHeight %90 ile kaydırılabilir kalır, ancak iOS'ta (EAS build) klavye çok satırlı 'Notlar' girişini ve Kaydet düğmesini örter; yatayda klavye ~%55 yükseklik alır. Aynı desen DevicePairingGuide kod girişinde.",
-  "cihaz_siniflari": [
-   "b",
-   "c",
-   "j"
-  ],
-  "kanit": "<Modal visible={visible} transparent animationType=\"slide\" onRequestClose={skip}>\n  <View style={styles.backdrop}>\n    <View style={styles.card}>   // card: maxHeight \"90%\", KeyboardAvoidingView yok",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "backdrop'u KeyboardAvoidingView(behavior: Platform.OS==='ios' ? 'padding' : undefined) ile sar (AuthScreen deseni); app.json android.softwareKeyboardLayoutMode:'resize' açıkça yaz.",
-  "karar": {
-   "id": "ilkel-19",
-   "karar": "dogru",
-   "gerekce": "ObservationNotesModal.tsx:111-118: `<Modal …><View style={styles.backdrop}><View style={styles.card}><ScrollView keyboardShouldPersistTaps='handled'>`; backdrop `justifyContent: 'flex-end'`, card `maxHeight: '90%'`; KeyboardAvoidingView yok (depoda yalnız AuthScreen.tsx:179 kullanıyor). app.json'da softwareKeyboardLayoutMode yok → Expo varsayılanı resize → Android'de pencere küçülür, sheet %90 ile kaydırılabilir kalır (doğru). iOS'ta (EAS build var) pencere küçülmez → alt-yaslı sheet'in alt ~%40'ı (Notlar girişi 136-145 + Kaydet 147-158) klavye altında; kullanıcı yazdığını göremez. DevicePairingGuide.tsx:80-97 aynı yapı (sheet maxHeight %88, ScrollView var, KAV yok) → kod girişi (160) iOS'ta örtülür. Doğrulandı; iOS ikincil kanal olduğundan dusuk.",
-   "siddet": "dusuk",
-   "oneri": "backdrop'u `KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios' ? 'padding' : undefined}` ile sar (AuthScreen deseni) — her iki bileşende; app.json android'e `softwareKeyboardLayoutMode: 'resize'` açıkça yaz ki varsayılan değişse de davranış sabit kalsın."
-  },
-  "kok": "S4"
- },
- {
   "id": "launcher-1",
   "dosya": "launcher/app/ui/index.html",
   "satirlar": "96-98, 128 (main / .stage)",
@@ -2302,7 +1914,7 @@
    "id": "launcher-1",
    "karar": "dogru",
    "gerekce": "Kod kanıtı yerinde: index.html:94-96 `main { flex:1; overflow:auto; display:flex; flex-direction:column; justify-content:center; padding:18px 30px }` ve `.stage { width:100%; max-width:560px }` — .stage'de margin:auto yok. Bozulma AMPİRİK olarak teyit edildi (headless Chromium, index.html'in modül-script'i stub'lanmış kopyası, viewport tam 700x540): main 75..497 (iç 386px). s-login tek başına stage h=420 → başlığın üst 17px'i kesik; s-login + 'E-posta ve parola gerekli' hatası → stage 482px, başlık 'Giriş yapın' main üstünün 58px yukarısında biter → ekran görüntüsünde yalnız 'ş y' kuyrukları görünüyor, main.scrollTop=0 ve yukarı kaydırılamıyor. s-select + dep-notice + 'Geri dön' → stage 493px, başlık tamamen kayıp; s-select + uzun hata → stage 538px, başlık VE lead'in yarısı kayıp (ekran görüntüsüyle teyit). Varsayılan 880x600 pencerede de (iç 446px) login+hata 18px, select+hata 46px başlık kırpıyor → sorun yalnız minimum pencereye özgü değil. DÜZELTME: '1366@%150 maximize → 326px alan / Hazır! ekranı kesilir' alt-iddiası YANLIŞ: minHeight 540 iç yüksekliği hiç 540'ın altına indirmez; o senaryoda kesen flexbox değil EKRANDIR (launcher-2). 480px'lik iç yükseklikte s-ready (369px) yalnız onay ikonunun üst 21px'ini kaybederdi, başlık değil. Şiddet: kırpılan içerik başlık+lead (yönerge metni), form/kartlar/düğmeler kullanılabilir ve alt kısım kaydırmayla erişilir → 'orta' (kullanıcı işi yapabiliyor, ama hata kutusu varken ekranın ne olduğunu söyleyen başlık görünmüyor).",
-   "siddet": "orta",
+   "siddet": "yuksek",
    "oneri": "Her ortamda çalışan çözüm: `main { justify-content: flex-start; }` + `.stage { margin: auto 0; }` (auto margin sığdığında ortalar, taştığında 0'a düşer ve içerik en üstten başlayıp kaydırılabilir). `justify-content: safe center` Chromium 115+ (WebView2 evergreen) için ek olarak konabilir ama tek başına bırakılmasın. Buna ek olarak `@media (max-height: 620px) { main { padding: 10px 20px } .title { font-size: 22px } .lead { margin-bottom: 10px } .check { width:64px; height:64px } .btn.big { padding: 12px 32px } }` ile 540 bütçesine (386px) login+hata (≈482px) sığdırılamaz ama fark 30-40px'e iner; kalan kısım kaydırmayla erişilir."
   },
   "kok": "L"
@@ -2726,7 +2338,7 @@
    "id": "site-7",
    "karar": "dogru",
    "gerekce": "Pricing.tsx 231-248 doğrulandı: `sm:flex-row sm:justify-between sm:p-10`, düğme grubu `flex shrink-0 flex-col gap-3 sm:flex-row`. Hesap: 640'ta kart 640-48 = 592, p-10 → 512 iç; düğmeler btn-ghost 'İletişime Geçin' (~150) + gap 12 + btn-primary '14 gün ücretsiz dene' (~183, 16px font — btn sınıfları font-size vermez) ≈ 345 shrink-0; metne 512-24-345 ≈ 143px kalır → text-2xl (24px bold) başlık 'Zincir klinik veya kurum musunuz?' 4-5 satır, açıklama 8+ satır. 768'de ≈271px (başlık 2-3 satır), ~900'e kadar sıkışık. Telefon yatay (667-767), tablet dikey 768 ve DPI %150'li 1366 laptop (911) bu aralıktadır.",
-   "siddet": "orta",
+   "siddet": "dusuk",
    "oneri": "Pricing.tsx 231: `sm:flex-row sm:justify-between sm:text-left` → `lg:flex-row lg:justify-between lg:text-left` (p-10 sm'de kalabilir); 239: `sm:flex-row` düğme grubunda kalsın (yan yana düğmeler metnin altında). 640-1023'te dikey düzen."
   },
   "kok": "W"
@@ -2973,149 +2585,6 @@
   "kok": "S6"
  },
  {
-  "id": "matris-2",
-  "dosya": "pf/src/components/ui/AppShell.tsx",
-  "satirlar": "247-299, 591-593, 620-621; pf/src/components/domain/OperatorSwitcher.tsx:197-200",
-  "ekran": "AppShell üst bar (tüm rotalar)",
-  "sorun": "headerRight flexShrink:0 iken içinde OperatorSwitcher çipi (maxWidth rs(190)), profil çipi (~50px), Ayarlar düğmesi (minWidth rs(44)), bağlantı göstergesi (+ çevrimdışıyken 'Çevrimdışı' metni ~55px), zil (24px) ve 4 adet gap rs(12) var. 320 px dar telefonda (SCALE 0.85) yatay padding sonrası 280 px kalır; operatör seçiliyken sağ blok 260-315 px tutar → headerLeft (flex:1, minWidth:0) 0-20 px'e sıkışır, ekran başlığı ve alt başlık görünmez olur; 360 px'te de uzun operatör adıyla taşar. Kullanıcı hangi ekranda olduğunu üst bardan okuyamaz.",
-  "cihaz_siniflari": [
-   "a",
-   "b"
-  ],
-  "kanit": "headerLeft: { flex: 1, minWidth: 0, marginRight: spacing.sm },\nheaderRight: { flexShrink: 0, flexDirection: \"row\", alignItems: \"center\", gap: spacing.md },  (591-592)\ncip: { ... maxWidth: rs(190) }  (OperatorSwitcher 197-199)",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "useResponsive().layout === 'compact' iken OperatorSwitcher'ı yalnız avatar/ikon olarak çiz (etiketi 'Daha Fazla' sheet'ine taşı), headerRight'a flexShrink:1 + gap spacing.sm ver ve 'Çevrimdışı' metnini compact'ta gizleyip yalnız kırmızı noktayı bırak (banner zaten uyarıyor).",
-  "karar": {
-   "id": "matris-2",
-   "karar": "dogru",
-   "gerekce": "AppShell.tsx:591-592 headerLeft {flex:1,minWidth:0}, headerRight {flexShrink:0, gap: spacing.md} ve header paddingHorizontal spacing.xl (583) doğrulandı; OperatorSwitcher PemfApp.tsx:115 OperatorProvider altında olduğundan çip HER rotada çizilir (cip maxWidth rs(190), OperatorSwitcher.tsx:199). Aritmetik 320 px / SCALE 0.85: kullanılabilir 320-2×20=280 px; sağ blok = çip ≤162 + profil çipi (16+5+14+2×7≈45) + Ayarlar iconBtn 37 + ws noktası 9 (çevrimdışıyken +'Çevrimdışı' ≈55) + zil 22 + 4×gap 10 = ~315 (çevrimdışı ~366) > 280 → headerLeft 0 px'e iner, başlık ve alt başlık tamamen görünmez; flexShrink:0 olduğu için taşma sağdan kırpılır (zil ekran dışına çıkabilir). 360 px'te (SCALE 0.96) kullanılabilir 314, sağ blok uzun operatör adıyla ~351 → aynı sorun. Operatör adı kısa olsa bile ('Operatör seçin' ~105 px) 320'de headerLeft ≈ 22 px kalır. Alt barda aktif sekme yandığı için gezinme yapılabilir → 'orta' doğru.",
-   "siddet": "orta",
-   "oneri": "headerRight'a `flexShrink:1, minWidth:0` ve isCompact'ta `gap: spacing.sm`; OperatorSwitcher'a `compact` prop'u ekleyip useResponsive().isCompact iken yalnız UserCheck ikonu + 44 px hedef çiz (etiket 'Daha Fazla' sheet'ine veya çipin açtığı modala); 'Çevrimdışı' metnini compact'ta gizle (connBanner 342-353 zaten aynı uyarıyı veriyor)."
-  },
-  "kok": ""
- },
- {
-  "id": "matris-3",
-  "dosya": "pf/src/theme/tokens.ts",
-  "satirlar": "10-14, 16-25; pf/src/components/ui/AppShell.tsx:511-517, 659-662; pf/src/screens/DashboardScreen.tsx:157-163, 186-189",
-  "ekran": "Tablet dikey (768-830 px), DPI'lı dizüstü, küçültülmüş WebView2 penceresi — Ana Ekran ve kenar çubuklu tüm ekranlar",
-  "sorun": "SCALE kısa kenardan hesaplanır ve tablet/PC'de daima 1.30'a clamp'lenir (kısa kenar ≥ 488). 768 px genişlikte breakpoints 'tablet' → kenar çubuğu rs(248)=322 px açılır; AppShell içerik padding rs(24)=31×2 ve Dashboard container padding rs(12)=16×2 sonrası kart alanı 352 px kalır, oysa patientCard/treatmentCard minWidth rs(280)=364 px → kart konteyneri 12 px aşar (web'de sağ kenar kırpılır/yatay taşma, native'de kesilir). Aynı durum 1366×768 ekranın %150 DPI'da 911 px mantıksal genişliğe düşmesinde ve WebView2 penceresinin 800 px'e küçültülmesinde (kart 384 px'e zor sığar) yaşanır.",
-  "cihaz_siniflari": [
-   "d",
-   "e",
-   "g"
-  ],
-  "kanit": "const _screenW = Math.min(Dimensions.get(\"window\").width, Dimensions.get(\"window\").height);\nconst SCALE = Math.min(Math.max(_rawScale, 0.85), 1.30);  (tokens.ts 11-14)\nsidebar: { ... width: rs(248) }  (AppShell 511-517)\npatientCard: { flex: 1, gap: spacing.md, minWidth: rs(280) }  (Dashboard 188)",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "tokens.ts'te SCALE'i yalnız telefonda büyüt: kısa kenar ≥ 600 (tablet/PC) ise SCALE=1.0 (ya da clamp üstü 1.10). AppShell'de tablet düzeninde kenar çubuğunu daraltılmış (ikon-only, ~72 px) çiz veya 768-899 aralığında alt bar kullan; Dashboard minWidth'i rs(280) yerine 260 sabit ver.",
-  "karar": {
-   "id": "matris-3",
-   "karar": "dogru",
-   "gerekce": "tokens.ts:11-14 kısa kenardan tek-seferlik SCALE, clamp 1.30 (kısa kenar ≥488 → 1.30) doğrulandı; AppShell.tsx:511-517 sidebar width rs(248)=322, content padding spacing.xl=31 (659-662), DashboardScreen.tsx:157-163 container padding spacing.md=16 ve 188 patientCard minWidth rs(280)=364 doğrulandı. 768 px dikey tablette kart alanı 768-322-62-32=352 px < 364 → heroGrid (flexWrap) içindeki tek kart 12 px taşar; dikey ScrollView içinde yatay taşma web'de kırpılır, native'de kartın sağ kenarı/border'ı kesilir. Düzeltme: 911 px (1366×768 @%150) senaryosunda alan 495 px → kart SIĞAR; 800 px WebView2'de 384 ≥ 364 sığar; yani taşma yalnız 768-~780 px bandında. ANCAK daha ciddi bir yan etki bulundu: ResponsiveGrid.tsx:12-13 sütun sayısını `width / columns` ile PENCERE genişliğinden hesaplar, kenar çubuğunu düşmez → 768 px'te 768/2=384 ≥ minItemWidth(320) sayılıp Kontrol ekranındaki CoilParameterPanel'ler (ControlScreen.tsx:609, 634) 352 px'lik alana 2 sütun (~168 px) sıkıştırılır: 4 okuma kolonu ~35 px, '%48' genişlikli parametre girişleri ~75 px → değerler üst üste biner/okunmaz (olası; 768-~900 px tablet bandı). Şiddet 'orta' korunuyor; Kontrol ekranı için yüksek'e yaklaşır.",
-   "siddet": "orta",
-   "oneri": "tokens.ts: `const SCALE = _screenW >= 600 ? 1.0 : clamp(...)` (tablet/PC 1:1). ResponsiveGrid'e `availableWidth` prop'u ekle veya AppShell'in içerik genişliğini bir context ile geçir; hesap `(width - (desktop ? rs(248) : 0) - 2*spacing.xl) / columns` olsun. Dashboard hero kartlarında minWidth'i rs(280) yerine `Math.min(rs(280), width*0.9)` ya da sabit 260 yap. 768-899 bandında kenar çubuğunu ikon-only (~72 px) daralt."
-  },
-  "kok": "S1"
- },
- {
-  "id": "matris-4",
-  "dosya": "pf/src/theme/tokens.ts",
-  "satirlar": "10-25",
-  "ekran": "PC (WebView2) ve LAN tarayıcı — tüm ekranlar",
-  "sorun": "Ölçek uygulama yüklenirken BİR KEZ hesaplanır; masaüstünde kısa kenar (yükseklik) 1080 → 1.30 sabitlenir: gövde metni 14→17 px, başlık 24→29 px, padding 24→31 px. Windows %125-%150 DPI ile çarpılınca fiziksel büyütme ~1.6-1.95× olur; 1366×768 / 1536×864 mantıksal dizüstülerde tek satıra 1 kart sığar, Kontrol ekranı 5 bobin paneli dikey uzun bir liste olur. Ayrıca yeniden boyutlandırma/yön değişiminde hiç yeniden hesaplanmaz: telefonu yatay açıp uygulamayı yatayda başlatan kullanıcı ile dikeyde başlatan farklı ölçek alır (Dimensions modül yüklenirken okunur).",
-  "cihaz_siniflari": [
-   "e",
-   "f",
-   "g",
-   "h",
-   "c"
-  ],
-  "kanit": "// Uygulama açılışında cihaz genişliğinden bir kez hesaplanır (portre).\nconst _screenW = Math.min(Dimensions.get(\"window\").width, Dimensions.get(\"window\").height);\nexport function rs(size: number): number { return Math.round(size * SCALE); }",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "Platform.OS==='web' veya kısa kenar ≥ 600 için SCALE=1.0 sabitle (masaüstü tasarım 1:1). Telefon/tablet ayrımını useResponsive.layout'a bırak; DPI'yı tarayıcı zaten uyguluyor, ek büyütme gereksiz.",
-  "karar": {
-   "id": "matris-4",
-   "karar": "kismen",
-   "gerekce": "tokens.ts:10-25 kanıtı doğru: SCALE modül yüklenirken Dimensions'tan bir kez okunur, yeniden boyutlandırmada/yön değişiminde güncellenmez; masaüstünde kısa kenar (yükseklik) ≥488 → 1.30 sabit → body rf(14)=17 px, title rf(24)=29 px, spacing.xl rs(24)=31 px. Windows DPI tarayıcı/WebView2 tarafından zaten uygulandığından fiziksel büyütme 1.3×DPI (%150'de ~1.95×) olur — DOĞRU. 1366×768@%150 → 911 mantıksal px → 'tablet' düzeni + 1.3 ölçek → hero kartları tek sütun — DOĞRU. YANLIŞ olan kısım: 'yatayda başlatan ile dikeyde başlatan farklı ölçek alır' — kod `Math.min(width,height)` (kısa kenar) kullandığı için yön bağımsızdır; yalnız web'de pencere YÜKLEME anındaki boyutuna bağlı (ör. tarayıcı 500×400 iken açılıp sonra büyütülürse ölçek küçük kalır). 1920×1080 ve 1536×864 masaüstünde her şey sığar (3 sütun 640/410 px) → etki büyük ölçüde 'UI gereksiz iri' + DPI'lı dizüstünde tablet düzenine düşme (matris-3 ile örtüşür). Gerçek şiddet dusuk-orta arası; matris-3 ile birlikte tek fix.",
-   "siddet": "dusuk",
-   "oneri": "tokens.ts'te `Platform.OS === 'web' || _screenW >= 600` için SCALE=1.0; telefon/tablet ayrımını useResponsive.layout'a bırak. Yön/yeniden-boyut bağımsızlığı zaten kısa-kenar seçimiyle sağlanmış — bunu yorumda belirt."
-  },
-  "kok": "S1"
- },
- {
-  "id": "matris-5",
-  "dosya": "pf/src/components/ui/AppShell.tsx",
-  "satirlar": "209, 401-402, 663-674; pf/src/components/ui/GlobalEmergencyStop.tsx:50, 64-70",
-  "ekran": "AppShell (kenar çubuğu, alt bar, ACİL DURDUR) — yatay telefon",
-  "sorun": "Yön kilidi yok (orientation 'default', expo-screen-orientation kurulu değil) ve Android edge-to-edge açık, fakat kabuk yalnız insets.top uyguluyor; insets.left/right hiçbir yerde kullanılmıyor. Çentikli telefon yatayda: ≥768 px genişlikte kenar çubuğu (ilk nav öğeleri) kamera kesiğinin altına girer; 640-767 px'te alt barın ilk sekmesi ve left: spacing.md ile konumlanan ACİL DURDUR düğmesinin sol ucu çentik/köşe-yuvarlamasının altında kalır. Hasta güvenliği düğmesinin bir kısmı dokunulamaz bölgede olabilir.",
-  "cihaz_siniflari": [
-   "c",
-   "j"
-  ],
-  "kanit": "<View style={[styles.root, { paddingTop: insets.top }]}>  (209)\nbottomNav: { ... bottom: 0, left: 0, position: \"absolute\", right: 0 }  (663-674)\nwrap: { position: \"absolute\", left: spacing.md, right: spacing.md ... }  (GlobalEmergencyStop 64-70)",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "AppShell root'a paddingLeft: insets.left, paddingRight: insets.right ekle (bottomNav ve GlobalEmergencyStop root'un çocuğu olduğundan otomatik içeri girer). Alternatif: telefonda (layout compact/phone) app.json orientation 'portrait' + tablet için expo-screen-orientation ile serbest bırak.",
-  "karar": {
-   "id": "matris-5",
-   "karar": "kismen",
-   "gerekce": "Kanıtlar doğru: AppShell.tsx:209 yalnız paddingTop: insets.top; `grep insets.left|insets.right pf/src` = 0; app.json orientation 'default'; package.json'da expo-screen-orientation yok; gradle.properties:47 edgeToEdgeEnabled=true; bottomNav absolute left:0/right:0 (663-674); GlobalEmergencyStop.tsx:68-71 wrap left/right spacing.md. ANCAK etki abartılı: (1) ACİL DURDUR düğmesi btn maxWidth rs(520) + alignItems:center (75-84) → 640-767 px yatayda buton ~520 px olup ORTALANIR, sol kenarı ≥60 px içeride → tipik 30-45 dp çentik altına GİRMEZ. (2) Alt bar sekmeleri flex:1 ile 128+ px slotlar, ikon+etiket slot ortasında → yalnız ilk slotun boş kenar bölgesi çentik altında; dokunma hedefi kaybı yok. (3) Kenar çubuğu (≥768 px yatay telefon, ör. Pixel 915×412) sidebar padding spacing.xl ≈ 26 px → nav ikonları 30-45 dp'lik çentikle birkaç px çakışabilir (olası; Expo edge-to-edge'in cutout modunu shortEdges/always yapıp yapmadığı node_modules'ta doğrulanamadı). Yani hasta-güvenliği düğmesi etkilenmez; kozmetik/olası çakışma.",
-   "siddet": "dusuk",
-   "oneri": "AppShell.tsx:209 root'a `paddingLeft: insets.left, paddingRight: insets.right` ekle (tek satır; bottomNav ve GlobalEmergencyStop root'un çocuğu olduğundan otomatik içeri girer). Telefonda dikey kilidi (expo-screen-orientation) ayrı bir ürün kararı; zorunlu değil."
-  },
-  "kok": "S5"
- },
- {
-  "id": "matris-6",
-  "dosya": "pf/src/components/ui/AppShell.tsx",
-  "satirlar": "99, 246-300, 385-394, 399, 401-423; pf/src/hooks/useResponsive.ts:5-11",
-  "ekran": "Yatay telefon — tüm rotalar (özellikle Kontrol ve Ana Ekran)",
-  "sorun": "Düzen yalnız genişliğe bakar; yükseklik 360-430 px'e düşünce hiçbir uyarlama yok. 640-767 px yatay telefonda: header (~90 px) + çevrimdışı bandı (~34) + güncelleme/kurtarma bantları + alt bar (72 + inset) + içerik paddingBottom rs(160) → görünür içerik ~120-150 px, kaydırılabilir ama seans kartı (SessionProgressCard) ve bobin panelleri hiç tek bakışta görünmez. ≥768 px yatay telefonda (Pixel/iPhone Pro Max: 844-932 px) 'tablet' sayılır: kenar çubuğu rs(248) açılır, alt bar ve Ayarlar düğmesi kaybolur, ACİL DURDUR bottomOffset 0 ile içeriğin son satırını örter, swipe gezinme kapanır (desktopRef) — kullanıcı aynı cihazda iki farklı gezinme modeli görür.",
-  "cihaz_siniflari": [
-   "c"
-  ],
-  "kanit": "const desktop = responsive.isDesktop || responsive.isTablet;  (99)\n!desktop ? { paddingBottom: rs(160) + insets.bottom } : { paddingBottom: rs(84) }  (389)\n<GlobalEmergencyStop bottomOffset={desktop ? 0 : rs(76)} />  (399)",
-  "siddet": "orta",
-  "kesinlik": "olasi",
-  "oneri": "useResponsive'a isShort = height < 500 ve isLandscapePhone = isShort && width < 1024 ekle; AppShell'de bu durumda kenar çubuğu yerine alt bar + header'ı tek satıra (subtitle gizli) daralt, paddingBottom'u rs(96)'ya indir. Veya telefonlarda dikey kilidi (matris-5 önerisi).",
-  "karar": {
-   "id": "matris-6",
-   "karar": "kismen",
-   "gerekce": "Kanıtlar yerinde: AppShell.tsx:99 `desktop = isDesktop || isTablet`, 389 paddingBottom rs(160)+inset (mobil) / rs(84) (desktop), 399 bottomOffset desktop?0:rs(76); useResponsive.ts:5-11 yalnız genişliğe bakar (height döner ama kullanılmaz). 640-767×360-430 yatay telefonda: header ≈ 90 px (paddingVertical 16×2 + title 26 + subtitle 15+4), alt bar ≈ 72-90 px → görünür içerik ~200 px (bantsız), çevrimdışı bandıyla ~165 px; SessionProgressCard (~260 px) tek bakışta sığmaz — DOĞRU ama kaydırılabilir. ≥768 yatay telefonda (Pixel/Pro Max 844-932 dp) tablet düzeni: kenar çubuğu, alt bar kaybolur, swipe kapanır (desktopRef, 177/189) — DOĞRU. YANLIŞ: 'ACİL DURDUR bottomOffset 0 ile içeriğin son satırını örter' — desktop'ta content paddingBottom rs(84) var (389) ve buton yüksekliği 52+md ≈ 65 < 84 → örtmez. Aynı cihazda dikey/yatay iki gezinme modeli görme kafa karıştırıcı ama işlevsel; içerik kaydırılarak erişilir.",
-   "siddet": "dusuk",
-   "oneri": "useResponsive'a `isShort = height < 500` ekle; AppShell'de `desktop = (isDesktop || isTablet) && !isShort` yap (yatay telefon her zaman alt bar + swipe kalsın), isShort'ta header paddingVertical'ı spacing.sm'e ve subtitle'ı gizleyerek ~50 px kazan, paddingBottom'u rs(96)'ya indir."
-  },
-  "kok": "S5"
- },
- {
-  "id": "matris-7",
-  "dosya": "pf/src/components/ui/AppShell.tsx",
-  "satirlar": "385-394, 399, 401-402, 663-674; pf/src/screens/AuthScreen.tsx:179; pf/dist/index.html:6, 16-18",
-  "ekran": "Kontrol (bobin parametre girişleri), Hastalar (form), Ayarlar, Seans Geçmişi arama, AiHub notları — klavye açıkken",
-  "sorun": "KeyboardAvoidingView yalnız AuthScreen'de var (Android'de behavior undefined). Diğer ekranlarda TextInput'lar AppShell ScrollView'ünde; Android adjustResize pencereyi daraltır ve RN odaklanan girişi ScrollView görünür alanına kaydırır — ama görünür alanın alt 72 px'i (absolute bottomNav) + ACİL DURDUR şeridi (seans sürerken) içeriğin ÜSTÜNDE durur → ekranın alt yarısındaki giriş (örn. Kontrol'de 5. bobinin parametre alanı, Hasta formunun adres alanı) alt barın arkasına kaydırılır; kullanıcı yazdığını göremez. Web'de (LAN tarayıcı, Android Chrome) body{overflow:hidden} + viewport'ta interactive-widget yok → klavye açılınca layout viewport küçülmez, alt yarıdaki giriş klavyenin altında kalır ve sayfa kaydırılamaz.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "h",
-   "j"
-  ],
-  "kanit": "<ScrollView contentContainerStyle={[styles.content, !desktop ? { paddingBottom: rs(160) + insets.bottom } ...]} keyboardShouldPersistTaps=\"handled\">  (385-392)\nbottomNav: { ... position: \"absolute\", bottom: 0 }  (663-674)\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\" />  (dist/index.html:6)",
-  "siddet": "orta",
-  "kesinlik": "olasi",
-  "oneri": "AppShell'de ScrollView'e automaticallyAdjustKeyboardInsets (iOS) + Keyboard.addListener ile keyboardVisible durumunda alt barı gizle (isCompact && keyboardVisible → bottomNav render etme, paddingBottom'u insets.bottom'a indir). Web export sonrası postexport-web.js ile viewport'a 'interactive-widget=resizes-content' ekle.",
-  "karar": {
-   "id": "matris-7",
-   "karar": "kismen",
-   "gerekce": "Kanıtlar doğru: AppShell.tsx:385-392 ScrollView + keyboardShouldPersistTaps, 663-674 bottomNav absolute bottom:0; KeyboardAvoidingView yalnız AuthScreen.tsx:179 (Android'de behavior undefined); AndroidManifest.xml:26 windowSoftInputMode=adjustResize; dist/index.html:6 viewport'ta interactive-widget yok, 16-18 body overflow:hidden. NATIVE: adjustResize pencereyi daraltır, Android ScrollView odaklanan EditText'i yalnız kendi görünür dikdörtgenine getirir; ScrollView'ün alt ~72 px'i (bottomNav) + bobin çalışıyorsa E-stop şeridi (76+52) içeriğin ÜSTÜNDE → bu banda düşen giriş (Hasta formu orta alanları, Kontrol'de alt bobin panelleri) alt barın arkasında kalır — OLASI/GERÇEKÇİ (paddingBottom rs(160) yalnız listenin SON öğesini korur). WEB kısmı zayıf: Android Chrome 108+ ve iOS Safari varsayılanı 'resizes-visual' → klavye açılınca tarayıcı görsel viewport'u odaklı öğeye KAYDIRIR, RN-web ScrollView div'i de kendi içinde kaydırılabilir; body{overflow:hidden} bunu engellemez → 'sayfa kaydırılamaz, giriş klavyenin altında kalır' iddiası doğrulanamadı (bottomNav ise klavyenin altında kalır, girişi örtmez). interactive-widget=resizes-content eklemek yine de layout'u tutarlı kılar.",
-   "siddet": "orta",
-   "oneri": "AppShell'de `Keyboard.addListener('keyboardDidShow'/'keyboardDidHide')` ile keyboardVisible state'i; `!desktop && keyboardVisible` iken bottomNav'ı render etme, GlobalEmergencyStop bottomOffset'i 0'a çek ve content paddingBottom'u rs(100)+insets.bottom'a indir. Web için postexport-web.js'e viewport regex'i: `, interactive-widget=resizes-content` (matris-12 ile birlikte tek değişiklik)."
-  },
-  "kok": "S4"
- },
- {
   "id": "matris-8",
   "dosya": "pf/src/components/ui/AppShell.tsx",
   "satirlar": "275-298, 594-598, 620-627, 639",
@@ -3165,53 +2634,6 @@
   "kok": "L"
  },
  {
-  "id": "matris-10",
-  "dosya": "launcher/app/tauri.conf.json",
-  "satirlar": "12-20; launcher/app/src/main.rs:2085-2089",
-  "ekran": "PC launcher ana penceresi ve güncelleme penceresi — yüksek DPI",
-  "sorun": "Ana pencere minWidth 700 / minHeight 540 ve güncelleme penceresi 640×400 sabit + resizable=false mantıksal px. %150 DPI'daki 1366×768 ekranda mantıksal çalışma alanı ~911×480 (görev çubuğu sonrası) → 540 px min yükseklik çalışma alanını aşar, pencere altı (Başlat/ilerleme/alt bilgi) görev çubuğunun arkasında kalır; %200'de (683×384) ana pencere ekrandan geniştir ve güncelleme penceresi (400 > 384) boyutlandırılamadığı için ilerleme metni ekran dışına taşar. body{overflow:hidden} olduğu için kaydırılarak da ulaşılamaz (yalnız main overflow:auto).",
-  "cihaz_siniflari": [
-   "g"
-  ],
-  "kanit": "\"width\": 880, \"height\": 600, \"minWidth\": 700, \"minHeight\": 540  (tauri.conf.json 14-17)\nlet _ = w2.set_resizable(false);\nlet _ = w2.set_size(tauri::LogicalSize::new(640.0, 400.0));  (main.rs 2086-2088)",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "setup'ta monitor.work_area()'ya göre min boyutu clamp'le (min(700, work_w-40) × min(540, work_h-40)); güncelleme penceresini resizable bırak veya 640×min(400, work_h-40) yap.",
-  "karar": {
-   "id": "matris-10",
-   "karar": "kismen",
-   "gerekce": "tauri.conf.json:12-20 (880×600, minWidth 700, minHeight 540) ve main.rs:2085-2088 (set_min_size(None), set_resizable(false), LogicalSize 640×400) doğrulandı; ui/index.html:41 body overflow:hidden, :94 main overflow:auto, footer (583-591) yalnız telif + Destek bağlantısı; 'Başlat/Kur ve Başlat' düğmeleri (513, 559) main içinde → kaydırılabilir. %150 DPI'da 1366×768 → mantıksal 911×512, görev çubuğu sonrası ~480 < 540 → pencere altı görev çubuğu arkasında kalır ama kaybolan kısım footer (kozmetik), ana düğmeler main'de kaydırılarak erişilebilir. %200'de 683×384: ana pencere 700 > 683 → yatay taşma; güncelleme penceresi 400 > 384 ve resizable=false → ilerleme metni kısmen ekran dışı — DOĞRU ama 1366×768'de %200 çok nadir bir yapılandırma (Windows önerisi %100). Etki: küçük kullanıcı kümesi, kozmetik/ulaşılabilir → dusuk, olası.",
-   "siddet": "dusuk",
-   "oneri": "main.rs setup'ta `w.current_monitor()?.work_area()` ile `set_min_size(Some(LogicalSize(700.min(wa.w-40), 540.min(wa.h-40))))` ve `set_size` aynı clamp; güncelleme penceresini `LogicalSize(640, 400.min(wa.h-40))` yap ve resizable'ı kapatma (yalnız maximizable=false)."
-  },
-  "kok": "L"
- },
- {
-  "id": "matris-11",
-  "dosya": "pf/src/screens/WelcomeScreen.tsx",
-  "satirlar": "31-40, 136-143, 240-248; pf/src/screens/AuthScreen.tsx:179-183, 455-458; pf/src/components/domain/MobileUpdateGate.tsx:208-214",
-  "ekran": "Profil seçimi (Welcome), Giriş (Auth), Güncelleme kapısı — kabuk dışı ekranlar",
-  "sorun": "AppShell dışındaki üç ekran useSafeAreaInsets kullanmıyor; Android edge-to-edge (gradle.properties:47 edgeToEdgeEnabled=true) ile durum çubuğu saydam. WelcomeScreen'de üç profil kartı dikey telefonda ekran yüksekliğini aşar → ScrollView en üstte durur ve topBar (e-posta + 'Çıkış' düğmesi) container paddingVertical rs(32)=27-42 px ile durum çubuğu (24-48 px, çentikli cihazlarda 48) altına kısmen girer; alt uçta son kartın 'Devam' düğmesi gesture-bar (~24-48 px) üstüne gelir. Yatayda (c) aynı ekranlarda sol/sağ çentik boşluğu da yok.",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "c",
-   "j"
-  ],
-  "kanit": "container: { flexGrow: 1, ... padding: spacing.xl, paddingVertical: spacing.xxl }  (WelcomeScreen 137-143)\ntopBar: { flexDirection: 'row', ... marginBottom: spacing.lg }  (240-248)\nscroll: { flexGrow: 1, alignItems: \"center\", justifyContent: \"center\", padding: spacing.xl, paddingVertical: spacing.xxl }  (AuthScreen 457)",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "Üç ekranın root View'ına useSafeAreaInsets ile paddingTop/Bottom/Left/Right ekle (AppShell.tsx:209 deseni) ya da react-native-safe-area-context'in SafeAreaView'ünü root yap.",
-  "karar": {
-   "id": "matris-11",
-   "karar": "kismen",
-   "gerekce": "Kanıtlar doğru: WelcomeScreen.tsx:30-33 root View + ScrollView (insets yok), 137-143 container paddingVertical spacing.xxl=rs(32) (27-42 px), 240-248 topBar; AuthScreen.tsx:457 scroll centered paddingVertical xxl; MobileUpdateGate.tsx:208-214 root centered padding xl; `grep useSafeAreaInsets` yalnız AppShell/GlobalEmergencyStop/ObservationNotesModal; _layout.tsx:32-34 SafeAreaProvider + StatusBar style=light (translucent), gradle edgeToEdgeEnabled=true, Stack headerShown:false. Etki: Welcome'da 3 kart dikey telefonda (~900+ px) ekranı aşar → ScrollView üstte başlar, topBar durum çubuğu (24-40 dp; çentikli cihazlarda 40+) ile 27-32 px padding'i 0-13 px aşar → e-posta metni/Çıkış düğmesi üst kenarı kısmen durum çubuğu ikonlarıyla çakışır — olası, kozmetik. Alt: 'son kartın Devam düğmesi' YOK (kartlar bütünüyle dokunulabilir); paddingBottom 32 vs gesture bar 24 → sorun yok, 3-düğmeli nav 48 → kartın alt border'ı ~16 px navın altında (kaydırma sonu). Auth ve UpdateGate içerikleri ortalandığından (kart ~ekran boyu değil) pratikte çakışma yok; yalnız küçük telefon + klavye açıkken Auth kartı üstte kalabilir. Yatayda sol/sağ çentik: içerik ortalandığı için görünür etki yok.",
-   "siddet": "dusuk",
-   "oneri": "WelcomeScreen root View'a `useSafeAreaInsets()` ile `paddingTop: insets.top, paddingBottom: insets.bottom` (AppShell.tsx:209 deseni); Auth/UpdateGate için aynı iki satır yeterli — SafeAreaView'e geçiş gerekmiyor."
-  },
-  "kok": "S5"
- },
- {
   "id": "matris-12",
   "dosya": "pf/dist/index.html",
   "satirlar": "6, 16-18",
@@ -3235,29 +2657,6 @@
   "kok": ""
  },
  {
-  "id": "matris-13",
-  "dosya": "pemf-vet-web/src/pages/Pricing.tsx",
-  "satirlar": "159-160",
-  "ekran": "Tanıtım sitesi — Fiyatlandırma karşılaştırma tablosu",
-  "sorun": "Tablo min-w-[560px] ile overflow-x-auto sarmalında; 320-430 px telefonda tablonun 3.-4. sütunları ekran dışında kalır ve kaydırılabilir olduğuna dair görsel ipucu (gölge/ok) yok → kullanıcı paket farklarını görmeden geçer.",
-  "cihaz_siniflari": [
-   "a",
-   "b"
-  ],
-  "kanit": "<div className=\"mt-8 overflow-x-auto\">\n  <table className=\"w-full min-w-[560px] border-collapse text-sm\">",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "md: altı için tabloyu paket-başına kart listesine çevir (Tailwind 'md:hidden' / 'hidden md:table') ya da sarmalayıcıya sağ kenar gradient + 'kaydırın' ipucu ekle.",
-  "karar": {
-   "id": "matris-13",
-   "karar": "dogru",
-   "gerekce": "pemf-vet-web/src/pages/Pricing.tsx:159-160 doğrulandı: `<div className=\"mt-8 overflow-x-auto\"><table className=\"w-full min-w-[560px] ...\">`; dosyada md:hidden/hidden md:table gibi mobil alternatif veya kaydırma ipucu (gradient/ok) yok (grep = 0). 320-430 px telefonda (px-5 → 280-390 px içerik) tablo 560 px → 4 plan sütunundan 2-3'ü ekran dışı; yatay kaydırma mümkün ama görünür ipucu yok. Tablo üstündeki plan kartları (127-150) özellik listesini zaten veriyor → kullanıcı bilgiye erişebilir; 'dusuk' doğru.",
-   "siddet": "dusuk",
-   "oneri": "Sarmalayıcıya `relative` + sağda `pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-bg-soft` ve `md:hidden` bir 'Tabloyu yana kaydırın →' satırı; ya da `snap-x` + ilk sütuna `sticky left-0 bg-bg-soft` vererek etiket sütununu sabitle."
-  },
-  "kok": "W"
- },
- {
   "id": "ampirik-1",
   "dosya": "pemf-vet-web/src/components/LauncherMock.tsx (kök neden) + pemf-vet-web/src/pages/Home.tsx:16,51 ve Features.tsx:63 (yerleşim)",
   "satirlar": "LauncherMock.tsx 39-62; Home.tsx 16 ve 51; Features.tsx 63",
@@ -3277,52 +2676,6 @@
    "gerekce": "Kod kanıtı yerinde: LauncherMock.tsx:48-53 `<span className=\"min-w-0\">` içinde iki `block truncate` (white-space:nowrap) satır; :54 `ml-auto flex shrink-0` sürüm çipi; :43 `shrink-0` logo. Bu yapı flex kapsayıcının min-content genişliğini nowrap alt başlık (229px) + çip + logo + gap'lerle ~371px'e çıkarır; `min-w-0` yalnız flex-item'ın otomatik minimumunu sıfırlar, ÜST grid öğesine (Home.tsx:51 ve Features.tsx:63 `<div className=\"lg:pl-6\">`, min-width:auto) min-content katkısını düşürmez → tek sütunlu `grid` (Home.tsx:16, Features.tsx:41) track'i 371px'e büyür ve kardeş metin sütunu da o genişlikte yerleşir. Görüntüler bunu doğruluyor: web_home_320x568.png'de 'Kontrol Standardı' ve paragraf sağdan kesik ('elektromanyetik ala', 'PEMF Vet'i'), web_home_320x568_scroll520.png'de mock kartı ve 'Sürüm 1.9.45 · 3 MB kurulum' kesik, web_home_320x568_menu.png'de giriş modalında 'Şifremi unuttum' sağ kenardan taşmış, web_features_320x568_sec3.png'de 'Tek pencereden yöneti' kesik. Ölçüm mobile:true emülasyonla yapılmış (jobs2/3.json) → gerçek Android Chrome davranışıyla uyumlu. Sayfa 360px'te de (en yaygın Android genişliği) bozuk; kullanıcı yatay kaydırmadan başlığı/paragrafı okuyamıyor, modal bağlantısı ekran dışında → yuksek haklı.",
    "siddet": "yuksek",
    "oneri": "Tek satırlık kesin çözüm: Home.tsx:51 ve Features.tsx:63 sarmalayıcısına `min-w-0` (`<div className=\"min-w-0 lg:pl-6\">`). Grid öğesinin min-width'i 0 olunca track container genişliğine iner; LauncherMock'un iç `span.min-w-0 + truncate` yapısı zaten var olduğu için alt başlık kendiliğinden '…' ile kısalır — LauncherMock.tsx'e ek `flex-1` şart değil (isteğe bağlı: :50 alt başlığa `hidden sm:block`). Doğrulama: cdp_eval.py ile 320/360'ta document.scrollingElement.scrollWidth === innerWidth ve `.glow-ring` genişliği ≤ 280px."
-  },
-  "kok": "W"
- },
- {
-  "id": "ampirik-2",
-  "dosya": "launcher/app/ui/index.html",
-  "satirlar": "94-96 (main), 455-580 (s-login / s-select / s-ready / #notice / #error)",
-  "ekran": "Tauri başlatıcı — Giriş, Profil seçimi, Hazır (+ arka plan güncelleme notu / hata kutusu) ekranları",
-  "sorun": "`main { overflow:auto; display:flex; flex-direction:column; justify-content:center }` — içerik `main`den uzun olunca flex ortalama taşmayı ÜST ve alta eşit böler; üstteki taşma negatif alana düşer ve KAYDIRILARAK ULAŞILAMAZ. Varsayılan 880×600 pencerede bile profil seçimi başlığı 'Kullanım profilinizi seçin' ve Hazır ekranındaki onay ikonu header'ın altında kesik kalıyor; minimum 700×540 ve 1366×768@%150 (911×~512) pencerede giriş başlığı, profil başlığı, hata kutusu üst kısmı görünmüyor ve hiçbir kaydırma bunları geri getirmiyor.",
-  "cihaz_siniflari": [
-   "e",
-   "g"
-  ],
-  "kanit": "CDP ölçümü (main.scrollTop=0 iken ilk öğenin top'u vs header alt kenarı 75px): select 880×600 → title top=60 UNREACHABLE; ready 880×600 → check top=74 UNREACHABLE; select 700×540 → title top=30; ready 700×540 → 44; error 700×540 → 59; login 911×512 → 62; select 911×512 → 16 (hepsi header'ın altında). Görüntüler: launcher_select_880x600.png (başlık yok, sadece 'Birden fazla profil seçebilirsiniz' görünüyor), launcher_ready_880x600.png (onay ikonu üstten kesik), launcher_select_700x540.png, launcher_ready_700x540.png, launcher_login_911x512.png ('Giriş yapın' üstten kesik), launcher_select_911x512.png (lead metni bile header altında).",
-  "siddet": "orta",
-  "kesinlik": "kesin",
-  "oneri": "`main`de `justify-content:center` yerine `.stage { margin: auto 0 }` kullanın (auto margin taşmada güvenli ortalar) veya `main { justify-content: safe center }`; ayrıca `main`e `padding-top: 18px` korunup `.stage`e `min-height:0` verin. Doğrulama: cdp_eval.py jobs1 → firstUnreachable=false her ekranda.",
-  "karar": {
-   "id": "ampirik-2",
-   "karar": "dogru",
-   "gerekce": "index.html:94-96 `main { flex:1; overflow:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; ... }` ve :96 `.stage { width:100%; max-width:560px }` — flex sütununda içerik kapsayıcıdan uzunken `justify-content:center` negatif boş alanı iki yana böler; üstteki kısım scroll alanının dışında kalır (bilinen CSS davranışı, `safe` anahtar sözcüğü yok: grep 'safe center' → 0 sonuç; :101 `html.gunc main` de aynı kuralı tekrarlar). Ölçüm dosyası launcher_variants/launcher.html'in ilk 340 satırı (tüm CSS) orijinal index.html ile birebir (diff boş) → sonuç üretim CSS'ine ait. Pencere boyutları gerçek: tauri.conf.json:14-17 width 880 / height 600 / minWidth 700 / minHeight 540. Görüntüler doğruluyor: launcher_select_880x600.png'de 'Kullanım profilinizi seçin' başlığı hiç yok (sadece lead görünüyor), launcher_ready_880x600.png'de onay ikonu üstten kesik, launcher_login_911x512.png'de 'Giriş yapın' üstten kesik ve alt bağlantılar footer'ın altına girmiş, launcher_select_700x540.png'de lead metni header'a bitişik. Ekran içeriği (dep-notice + 'Geri dön' / #notice arka plan güncelleme kutusu) gerçek kullanım durumları (index.html:509-520, :577). Kullanıcı düğmelere ulaşabildiği için 'işi yapamaz' değil ama başlık/onay simgesi geri getirilemiyor → orta uygun.",
-   "siddet": "orta",
-   "oneri": "index.html:94-95'te `justify-content:center` kaldırıp :96 `.stage { width:100%; max-width:560px; margin:auto 0; }` yapın (auto margin, taşma varken 0'a düşer → üstten başlar ve kaydırılır); :101 `html.gunc main { justify-content:center }` için de aynı değişiklik (`.stage` margin'i zaten kapsar, satırdaki justify-content'i silin). Alternatif: `main { justify-content: safe center }` — WebView2 (Chromium ≥115) destekler. Doğrulama: jobs1.json ölçümünde her ekran için firstUnreachable=false, 911×512'de lastBottom_at_maxScroll ≤ footerTop."
-  },
-  "kok": "L"
- },
- {
-  "id": "ampirik-3",
-  "dosya": "pemf-vet-web/src/components/Header.tsx",
-  "satirlar": "14-40 (brand + nav `hidden md:flex gap-1` + aksiyonlar `gap-3`)",
-  "ekran": "Web sitesi üst çubuğu — tablet dikey / küçük dizüstü",
-  "sorun": "md (768px) kırılımında masaüstü nav açılıyor ama marka + 4 bağlantı + 2 düğme 768px'e ancak sığıyor: 'PEMF Vet' markası (r=133) ile 'Özellikler' (l=136) arasında 3px, 'Destek' (r=462) ile 'Giriş yap' (l=464) arasında 2px boşluk var; görsel olarak tek kelime grubu gibi okunuyor, biraz daha uzun metin (EN dili, sürüm çipi) veya font-scale ile üst üste binecek.",
-  "cihaz_siniflari": [
-   "d",
-   "h"
-  ],
-  "kanit": "CDP ölçümü 768×1024 /features: brand 24-133, Özellikler 136-219, Fiyatlandırma 223-333, İndir 337-391, Destek 395-462, Giriş yap 464-564, İndir düğmesi 576-744. Görüntü: web_features_768x1024.png (üst satırda 'PEMF Vet Özellikler' bitişik).",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "Nav kırılımını `lg:` yapın (`hidden lg:flex`, hamburger `lg:hidden`) ya da 768-1023 arasında 'Giriş yap' düğmesini gizleyip (`hidden lg:inline-flex`) nav'a `gap-0.5 md:text-[13px]` uygulayın.",
-  "karar": {
-   "id": "ampirik-3",
-   "karar": "kismen",
-   "gerekce": "Header.tsx:13 `flex h-16 ... justify-between px-5 sm:px-6`, :21 `hidden items-center gap-1 md:flex` nav (`px-3` NavLink, :27), :37 `hidden items-center gap-3 md:flex` aksiyonlar (AccountButton `btn-ghost`, index.css:103 padding 0.75rem 1.35rem; İndir `btn-primary`). 768px'te bu üç grup 720px iç genişliğe tam sığıyor (ölçüm: brand r=133 / nav l=136, Destek r=462 / Giriş yap l=464 → justify-between'in dağıtacak boşluğu yok). web_features_768x1024.png'de 'PEMF Vet' ile 'Özellikler' gerçekten sıkışık (görsel aralık ~15px: 3px kutu + 12px px-3). Ancak 'Destek'–'Giriş yap' arası kutu sınırı 2px olsa da her iki tarafta iç padding (12px + 21.6px) olduğundan görsel boşluk ~34px; 'tek kelime grubu gibi okunuyor' iddiası yalnız marka/Özellikler çifti için geçerli. 'EN dili' riski hayali: pemf-vet-web'de i18n yok (grep useTranslation/i18n → 0). Tarayıcı yazı büyütmesi/DPI'da 768-800 aralığında taşma olasılığı gerçek ama sınırlı. Kozmetik → dusuk doğru.",
-   "siddet": "dusuk",
-   "oneri": "En az riskli: Header.tsx:21 ve :37'deki `md:flex` → `lg:flex`, :46 ve :55'teki `md:hidden` → `lg:hidden` (768-1023 arasında hamburger kalır; mobil menü zaten AccountButton + İndir düğmesini içeriyor, Header.tsx:71-77). Alternatif: :21 nav'a `md:gap-0 lg:gap-1` ve NavLink'e `md:px-2 lg:px-3`, :39 İndir düğmesine `md:hidden lg:inline-flex`."
   },
   "kok": "W"
  },
@@ -3372,122 +2725,6 @@
    "oneri": "AuthScreen.tsx:494 `field`'a `minHeight: 44` ekleyin (rs'den bağımsız). :227 placeholder'ı 'Ünvan — opsiyonel' yapın (ipucunu :502 `sectionLabel` benzeri küçük bir yardımcı metinle verin). Font-scale için `maxFontSizeMultiplier` ihtiyacı kanıtlanmadı; yalnız yatay (c) sınıfında kart yüksekliği artacağı için ScrollView zaten var (:180), ek işlem gerekmez."
   },
   "kok": "S3"
- },
- {
-  "id": "ampirik-6",
-  "dosya": "pemf-vet-web/src/pages/Pricing.tsx",
-  "satirlar": "159-160",
-  "ekran": "/pricing 'Plan karşılaştırması' tablosu — telefonlar",
-  "sorun": "560px tablo 350px sarmalayıcıda yatay kaydırılıyor ama kaydırma çubuğu/gölge/ipucu yok; 390px'te yalnız 'Başlangıç' ve 'Kullandıkça Öde' sütunları görünüyor, 'Pro' ve 'Pro+' sütunları (asıl ücretli planlar) ekran dışında ve kullanıcı yana kaydırılabildiğini fark etmeyebiliyor. Hücre metinleri de 'AI Pro otomatik seans' gibi 3 satıra bölünüyor.",
-  "cihaz_siniflari": [
-   "a",
-   "b"
-  ],
-  "kanit": "CDP: sarmalayıcı `.mt-8.overflow-x-auto` w=350 scrollWidth=560; TH 'Pro' l=340 r=460 (>390). Görüntü: web_pricing_390x844_table.png (sağ kenarda 'Pro' sütunu yarım harf 'je' ile kesik, hiç kaydırma göstergesi yok).",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "Sarmalayıcıya sağ kenar gradyan ipucu (`relative after:absolute after:inset-y-0 after:right-0 after:w-8 after:bg-gradient-to-l after:from-bg`) ve mobilde 'Sağa kaydırın →' notu ekleyin; ya da `md:` altında tabloyu plan-başına kart listesine çevirin. İlk sütunu `sticky left-0 bg-bg` yapın.",
-  "karar": {
-   "id": "ampirik-6",
-   "karar": "dogru",
-   "gerekce": "Pricing.tsx:159-160 `<div className=\"mt-8 overflow-x-auto\"><table className=\"w-full min-w-[560px] ...\">` — sarmalayıcıda gölge/ipucu/sticky sütun yok; kapsayıcı `max-w-6xl px-5` (:157) 390'da 350px. web_pricing_390x844_table.png'de yalnız 'Başlangıç' ve 'Kullandıkça Öde' sütunları tam, sağ kenarda 'je' / 'E' parçaları kesik; asıl ücretli planlar (Pro/Pro+) görünmüyor. Not: ekran görüntüsü `--hide-scrollbars` ile alınmış (cdp_eval.py:5) — kaydırma çubuğu yokluğu kısmen artefakt, ancak mobil tarayıcılarda overlay scrollbar zaten kaydırana kadar görünmediği için sonuç gerçek cihazda da aynı. Sayfa üstündeki plan kartları (Pricing.tsx ~100-150) tüm planları zaten dikey listelediği için bilgi kaybı yok → dusuk doğru.",
-   "siddet": "dusuk",
-   "oneri": "Pricing.tsx:159 sarmalayıcı: `relative mt-8 overflow-x-auto` + kapsayıcıya sağ kenar gradyan (`after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-10 after:bg-gradient-to-l after:from-bg-soft md:after:hidden`) ve :163 ilk `<th>` + :172 ilk `<td>`'ye `sticky left-0 bg-bg-soft` (satır etiketleri kaydırırken sabit kalsın). Tablo üstüne `<p className=\"mt-2 text-xs text-muted md:hidden\">Tabloyu sağa kaydırın →</p>`."
-  },
-  "kok": "W"
- },
- {
-  "id": "ampirik-7",
-  "dosya": "pemf-vet-web/src/components/Footer.tsx + src/pages/Download.tsx",
-  "satirlar": "Footer bağlantı listesi (ölçüm: 11 bağlantı, h=20px); Download 'Çıkınca haber ver' (h=16px)",
-  "ekran": "Web sitesi alt bilgi ve /download macOS/Linux kartları — telefonlar",
-  "sorun": "Alt bilgideki 11 yasal/menü bağlantısı 20px yüksekliğinde, 'Çıkınca haber ver' bağlantısı 16px; dokunma hedefi 44px'in yarısından az (yasal metinlere mobilden erişim KVKK/mesafeli satış için önemli).",
-  "cihaz_siniflari": [
-   "a",
-   "b",
-   "c"
-  ],
-  "kanit": "metrics_web_home.json small: Özellikler/Fiyatlandırma/İndir/Destek/Gizlilik/Çerez/Kullanım Şartları w=120-162 h=20; web_download 320: 'Çıkınca haber ver' 222×16 (2 adet). Görüntü: web_home_320x568_footer.png (bağlantılar sık dizili).",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "Footer `<a>`'lara `inline-block py-2` (min 40px), Download'daki bağlantıya `inline-flex min-h-11 items-center` verin.",
-  "karar": {
-   "id": "ampirik-7",
-   "karar": "dogru",
-   "gerekce": "Footer.tsx:30-41 `grid grid-cols-2 gap-x-10 gap-y-2 text-sm` içinde `flex flex-col gap-2` sütunlar ve `<Link className=\"hover:text-fg\">` (padding yok) → her bağlantı text-sm satır yüksekliği = 20px, komşuyla 8px aralık; NAV 4 + LEGAL_DOCS 7 = 11 bağlantı (config.ts:49-57, :233-238). Download.tsx:75-79 `<a className=\"mt-2 text-center text-xs text-primary hover:underline\">Çıkınca haber ver</a>` → 16px. metrics_web_home.json 'small' listesi h=20 değerlerini doğruluyor. Not: referans verilen web_home_320x568_footer.png aslında 'Üyelik' bölümünü gösteriyor, footer'ı değil — görsel kanıt eksik ama kod ve ölçüm yeterli. Yasal bağlantılar dikey listede 28px adımla dizili; yanlış dokunma olası ama iş engellenmez → dusuk.",
-   "siddet": "dusuk",
-   "oneri": "Footer.tsx:34 ve :40 Link'lere `inline-block py-1.5 -my-1.5` (görsel aralık aynı kalır, dokunma yüksekliği 32px) ya da sütun `gap-2`→`gap-0` + Link `py-2` (36px). Download.tsx:77 `<a>`'ya `inline-flex min-h-10 items-center justify-center` ve :88/:97 alt-paket düğmelerine aynı sınıf."
-  },
-  "kok": "W"
- },
- {
-  "id": "ampirik-8",
-  "dosya": "pf/src/theme/tokens.ts",
-  "satirlar": "10-14 (`_screenW = Math.min(window.width, window.height)` bir kez hesaplanıyor)",
-  "ekran": "pf web export — PC WebView2 penceresi küçültüldüğünde / LAN tarayıcısı yeniden boyutlandığında",
-  "sorun": "rs()/rf() ölçeği yalnız uygulama yüklenirken hesaplanıyor (SCALE sabit). Masaüstünde pencere 1920×1080 iken 1.30 ile açılan uygulama, kullanıcı pencereyi 700×540'a küçültünce aynı 1.30 ölçeğiyle kalır (spacing.xl=31px, kart maxWidth 559px, düğme 70px) — 700×540'ta giriş kartı ekrana ancak sığıyor ve kaydırma gerektiriyor; tersine küçük pencerede açılıp büyütülünce her şey küçük kalır. Kapı ekranında iş engellemiyor (ScrollView), ama ölçekle çalışan tüm ekranlar için yeniden boyutlanma tepkisizliği kalıcı.",
-  "cihaz_siniflari": [
-   "e",
-   "h"
-  ],
-  "kanit": "1920×1080 register görüntüsünde düğme h=70, input h=52 (SCALE 1.30); 700×540'ta ilk açılışta SCALE = min(700,540)/375 → 1.30 (aynı); yeniden boyutlandırma ölçülemedi (headless tek boyut) — kod-okuma + ölçek değerlerinin viewport'a göre değişmemesinden çıkarım. Görüntüler: pf_gate_700x540.png (kart alt kısmı kesik, kaydırma şart), pf_register_1920x1080.png.",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "Masaüstü/web için SCALE'i 1.0-1.15 ile sınırlayın (`Platform.OS==='web' && width>=breakpoints.desktop ? 1.0`), ya da rs/rf'yi useResponsive() içinden width'e bağlı hesaplayan bir hook'a taşıyın; AppShell zaten useResponsive kullanıyor, kapı ekranı da aynı yolu izlemeli.",
-  "karar": {
-   "id": "ampirik-8",
-   "karar": "dogru",
-   "gerekce": "tokens.ts:10-14 `_screenW = Math.min(Dimensions.get('window').width, height)` modül yüklenirken BİR KEZ hesaplanıyor, `SCALE` sabit; pf/src'de `Dimensions.addEventListener` yok (grep 0), rs/rf 55 dosyada kullanılıyor, AuthScreen `useWindowDimensions`'ı yalnız arka plan SVG'si için kullanıyor (:24, :174-176). Masaüstü/web'de min(w,h) ≥ 488 olan her pencerede SCALE=1.30'a clamp'lenir: 1920×1080 → 1.30, 700×540 → 540/375=1.44→1.30. Yani kart maxWidth rs(430)=559, submit minHeight rs(54)=70, spacing.xl=31. pf_gate_700x540.png bunu gösteriyor: 559px kart 700px pencerede, alt düğme ekran dışında (ScrollView ile ulaşılır). Yeniden boyutlandırmada ölçek güncellenmez — kod-okumadan kesin (const). Etki: PC'de her şey telefon tasarımının 1.3 katı; iş engellemez, AppShell yerleşimi useResponsive ile ayrı ölçekleniyor → dusuk.",
-   "siddet": "dusuk",
-   "oneri": "tokens.ts:14'te web-masaüstü için tavanı düşürün: `const SCALE = Platform.OS==='web' && Dimensions.get('window').width >= 1024 ? Math.min(Math.max(_rawScale,0.85),1.10) : Math.min(Math.max(_rawScale,0.85),1.30)` (breakpoints.desktop=1024 ile uyumlu). Kalıcı çözüm için rs/rf'yi `useResponsive()` içinden width'e bağlı üreten bir `useScale()` hook'u ekleyip AuthScreen/AppShell gibi ekranlarda kullanın; StyleSheet.create sabitleri olduğu için kapsamlı geçiş ayrı iş."
-  },
-  "kok": "S1"
- },
- {
-  "id": "ampirik-9",
-  "dosya": "launcher/app/ui/index.html",
-  "satirlar": "30-44 (body overflow:hidden) + 94-96 (main)",
-  "ekran": "Launcher — yatay telefon/dar pencere ölçümü (kapsam dışı sınıf notu)",
-  "sorun": "Launcher yalnız Tauri/WebView2 masaüstü penceresinde (min 700×540) çalıştığı için 320-640px viewport'lar üretimde oluşmaz; bu boyutlardaki görüntülerde (viewport meta yok → mobil emülasyon 980px'e düşüyor) header taşması gerçek bir kullanım senaryosu DEĞİLDİR ve bulgu olarak raporlanmadı. 700×540 minimumda header ve s-install/s-gunc tamamen sığıyor.",
-  "cihaz_siniflari": [
-   "e"
-  ],
-  "kanit": "launcher_orig_700x540.png, launcher_gunc_640x400.png; metrics_launcher_orig.json 320/640 satırlarında vw=980 (viewport meta yok) — üretim dışı.",
-  "siddet": "dusuk",
-  "kesinlik": "kesin",
-  "oneri": "Bilgi notu; işlem gerekmez. (İsteğe bağlı: `<meta name=viewport>` eklemek WebView2'yi etkilemez.)",
-  "karar": {
-   "id": "ampirik-9",
-   "karar": "dogru",
-   "gerekce": "Bilgi notu; kod ve ölçüm tutarlı: launcher/app/ui/index.html:3-5 head'de yalnız charset+title var (viewport meta yok) → mobil emülasyonda 980px layout (metrics_launcher_orig.json 320 ve 640 satırlarında vw=980, sw=980). Launcher yalnız Tauri penceresinde çalışıyor (tauri.conf.json:14-17, min 700×540); launcher_orig_700x540.png'de header (TR/EN, ikonlar, sürüm) ve içerik tamamen sığıyor. Üretimde 320-640 viewport oluşmaz; bulgu olarak raporlanmaması doğru.",
-   "siddet": "dusuk",
-   "oneri": "İşlem gerekmez. (İsteğe bağlı: `<meta name=\"viewport\" content=\"width=device-width\">` eklemek WebView2'de davranışı değiştirmez; yalnız gelecekteki tarayıcı ölçümlerini gerçekçi kılar.)"
-  },
-  "kok": ""
- },
- {
-  "id": "ampirik-10",
-  "dosya": "pf/src/screens/AuthScreen.tsx",
-  "satirlar": "179-185 (KeyboardAvoidingView behavior yalnız iOS'ta 'padding')",
-  "ekran": "pf giriş/kayıt — Android yatay telefon, klavye açıkken / font-scale",
-  "sorun": "ÖLÇÜLEMEDİ: Android klavye (adjustResize) davranışı, çentik/safe-area (j) ve Android yazı boyutu ölçeği (i) headless masaüstü tarayıcıda emüle edilemiyor; 640×360 yatayda klavye ~200px alınca kalan ~160px'te alanın görünür kalıp kalmadığı cihazda doğrulanmalı. Web tarafında 640×360'ta form ScrollView ile erişilebiliyor.",
-  "cihaz_siniflari": [
-   "c",
-   "i",
-   "j"
-  ],
-  "kanit": "pf_gate_640x360.png (klavyesiz, kaydırılabilir); klavye/safe-area/font-scale için görüntü alınamadı.",
-  "siddet": "dusuk",
-  "kesinlik": "olasi",
-  "oneri": "Gerçek Android cihazda (yatay, font-scale 1.3) manuel kontrol; gerekirse `behavior=\"height\"` (Android) + `keyboardVerticalOffset` ve `android:windowSoftInputMode=adjustResize` doğrulanmalı.",
-  "karar": {
-   "id": "ampirik-10",
-   "karar": "kismen",
-   "gerekce": "Kod: AuthScreen.tsx:179 `KeyboardAvoidingView behavior={Platform.OS==='ios' ? 'padding' : undefined}` + :180-184 ScrollView `keyboardShouldPersistTaps='handled'`; AndroidManifest.xml:26 `android:windowSoftInputMode=\"adjustResize\"` mevcut → Android'de pencere klavye kadar küçülür, ScrollView odaklı alanı görünür tutar (standart ve doğru desen; behavior=undefined Android için beklenen). Yani 'behavior=height + keyboardVerticalOffset' önerisi gereksiz, hatta adjustResize ile çift telafi yapıp boşluk bırakabilir. Ölçülemediği doğru (headless masaüstü); 640×360 yatayda klavye ~200px → ~160px kalan alan ScrollView ile yine kaydırılabilir. Safe-area (j): AuthScreen root'ta inset kullanımı yok (:455 `root: { flex:1 }`), ancak scroll padding spacing.xxl (≥27px) çentiği pratikte karşılıyor. Font-scale (i) için `maxFontSizeMultiplier` yok; sabit yükseklik olmadığından taşma değil uzama olur. Bulgu 'olasi' etiketiyle bilgi notu düzeyinde; öneri kısmı yanlış yönde.",
-   "siddet": "dusuk",
-   "oneri": "Gerçek Android cihazda yatay + font-scale 1.3 ile manuel kontrol (Ayarlar > Ekran > Yazı boyutu). `behavior='height'`/`keyboardVerticalOffset` EKLEMEYİN (adjustResize zaten var). Safe-area için AuthScreen.tsx:455 root'a `useSafeAreaInsets()` ile `paddingTop: insets.top` (AppShell'deki mevcut kullanımla aynı) — yalnız (j) sınıfı için küçük iyileştirme."
-  },
-  "kok": "S4"
  },
  {
   "id": "kapsam-1",
