@@ -6,6 +6,28 @@ Kaynak: `docs/responsive-denetim-2026-09-04.md` (121 benzersiz bulgu, ikinci do�
 
 Her kullanıcı, hangi cihazda olursa olsun (dar telefon, telefon yatay, tablet dikey/yatay, DPI'lı küçük PC penceresi, geniş PC, LAN tarayıcısı, sistem yazı ölçeği büyütülmüş, çentikli/klavye açık) uygulamayı okuyabilir, dokunabilir ve kritik eylemleri (ACİL DURDUR, seans başlat/durdur, hasta kaydı, giriş, kurulum) kaydırmadan ya da en fazla bir kaydırmayla yapabilir.
 
+### Sahip kararları (2026-09-04)
+
+Aşağıdaki 16 karar doğrudan sahibe soruldu ve plana işlendi; paket metinlerindeki 'açık sorular' bu kararlarla kapanır.
+
+| Konu | Karar | Uygulama | Paket |
+|---|---|---|---|
+| Ölçek tavanı (tablet/PC) | **%110** | `OLCEK_TAVAN_BUYUK_EKRAN = 1.10`. Gövde 14→15 px, başlık 24→26 px; kenar çubuğu ve ızgara düzelir. Telefon formülü BİREBİR korunur (375/430 kareleri piksel-eş kanıtı). | S1 |
+| Yatay telefon kabuğu (≥768 px) | **İkon rayı** | 72 px ikon şeridi; alt bar 428 px yüksekliğin %17'sini yiyordu. `getShellKind` rail dalı. | S2 · S5 |
+| Sistem yazı ölçeği tavanı | **1,2** | `MAX_FONT_SCALE = 1.2` injectFont varsayılanı; `allowFontScaling={false}` YASAK (kapı). Erişilebilirlik korunur, düzenler sığar. | S6 |
+| Seans süresi biçimi | **Her zaman dk:sn** | `formatTime` tek dal: 65:30. Klinik kapak 120 dk → en fazla 6 karakter, her ekranda sığar. | S6 |
+| Klavye açıkken ACİL DURDUR | **Klavyenin üstüne taşınsın** | `bottomOffset = klavyeYüksekliği`; düğme gizlenmez, içeriğin alt ~64 px'ini örter (içerik kaydırılabilir). | S4 |
+| Başlatıcı minimum yüksekliği | **540 → 460** | `tauri.conf.json` minHeight 460 + Rust'ta monitör çalışma alanına göre kırpma. 1366×768 @%150'de pencere sığar. | L |
+| Başlatıcıda Esc tuşu | **Yalnızca kapatsın** | Onay pencerelerinde HİÇBİR geri çağrı çalışmaz; yanlışlıkla Esc inen 1,4 GB paketi silmez. Odak `Vazgeç` düğmesinde. | L |
+| Android tablet kullanımı | **Kullanılıyor** | Tablet dikey/yatay düzen ve cihaz testi planda kalır (ikon rayı, ızgara sütunları, 768-1024 kareleri). | S2 · test matrisi |
+| ACİL DURDUR erişim hatası (ekranB-2) | **Faz 0 ile birlikte** | Responsive değil DAVRANIŞ hatası: kayan düğme STM belirsizken gizleniyordu + sayfa düğmesi ~3000 px derinde. Faz 0'da düzeltilir, acil paketle yayınlanır. | Faz 0 |
+| Site üst menü kırılımı | **1024 px** | `md:flex` → `lg:flex`; 768-1023 px'te (iPad dikey, küçük dizüstü) hamburger menü. Başlık sıkışması biter. | W |
+| PC web kamerası (canlı mod) | **Kullanılıyor** | Web canlı mod korunur: oran kilidi ve overlay hizası PC için de uygulanır, cihaz testine PC kamerası eklenir. | S7 |
+| Ekran ölçümü kapısı | **GitHub'da otomatik** | `scripts/responsive_kapisi.py` CI'ya bağlanır (windows-latest, Edge headless + CDP); baseline ilk koşuda insan onaylı. CI süresi ~4-6 dk uzar. | Faz D |
+| Alt bar etiketleri | **Kısaltılsın** | 'Akıllı Teşhis'→'Teşhis', 'AI Geçmişi'→'Geçmiş', 'Seans Geçmişi'→'Seanslar'. Sesli okuyucu ve kenar çubuğu TAM adı kullanmaya devam eder. | S6 |
+| Fiyat tablosu (telefon) | **Kart görünümü** | Telefonda her plan ayrı kart; yatay kaydırma gerekmez. Tabloya göre ~3 saat ek iş. | W |
+| iOS gerçek cihaz testi | **Var** | Klavye, çentik ve yatay senaryoları iPhone'da doğrulanır; EAS bulut derlemesi kapanış koşulu. | Faz G |
+| Uygulama kapsamı | **Tüm plan sırayla** | Faz 0'dan G'ye kesintisiz; her fazda kapılar koşturulup rapor verilir. | — |
 ## 2. Cihaz sınıfı başına kabul kriteri (Definition of Done)
 
 | # | Sınıf | Kabul |
@@ -27,7 +49,7 @@ Toplam tahmini efor: **~152 saat** (planlayıcı toplamı, cihaz doğrulama turl
 
 | Faz | Kapsam | Yayın | Paketler | Süre |
 |---|---|---|---|---|
-| 0 | Temel ölçüm (commit yok) | — | Görsel regresyon referansı: 7 görünüm alanı × 5 ekran + ACİL DURDUR kareleri (PEMF_SIMULATE=1)<br>Dokunma-hedefi kapısının TABAN ihlal sayısı<br>ResponsiveGrid testi önce KIRMIZI | 0,5 gün |
+| 0 | Temel ölçüm + ACİL DURDUR erişimi (sahip kararı) | app 1.9.41 ile yayınlanır | <strong>ekranB-2 düzeltmesi:</strong> kayan ACİL DURDUR STM belirsizken gizlenmiyor (kalıcı kilit) + ControlScreen sayfa düğmesi sekme çubuğunun ÜSTÜNE alındı<br>Görsel regresyon referansı: 7 görünüm alanı × 5 ekran + ACİL DURDUR kareleri (PEMF_SIMULATE=1)<br>Dokunma-hedefi kapısının TABAN ihlal sayısı<br>ResponsiveGrid testi önce KIRMIZI | 1 gün |
 | A1 | Davranış değiştirmeyen altyapı (tek PR) | app 1.9.41 paketine girer | S3: touch token, IconButton, Chip<br>S2: theme/layout.ts (ölçeksiz 240/200/72) + ShellLayoutContext<br>S2+S5: useResponsive birleşik (shellKind, contentWidth, isShort…) + ortak responsiveMock<br>S4: useKeyboard + KAV_BEHAVIOR_*<br>S5: ScrollableModalCard<br>S6: MAX_FONT_SCALE<br>Button.tsx tek commit (S2 flexShrink + S3 boyut + S6 sığdırma)<br>S1: layoutMax token + 13 maxWidth | 1,5 gün |
 | A2 | Global görsel tavanlar (iki ayrı commit, önce/sonra görüntü) | app 1.9.41 · OTA · APK 2.3.32 | S1: OLCEK tavanı 1,10 + jest matrisi (375/430 kareleri piksel-eş)<br>S6: injectFont maxFontSizeMultiplier | 0,5 gün |
 | B | HASTA GÜVENLİĞİ kabuk PR'ı (ayrı PR, cihazda ÖNCE test) | app 1.9.41 · APK 2.3.32 (vc 39) | S5: GlobalEmergencyStop compact (tek sahip, minHeight max(touch.min, rs(48)))<br>AppShell birleşik edit: S2 rail/context/panHandlers isNative + S4 KAV/klavyede alt bar gizle/E-stop klavye üstü + S5 insets L/R, isShort, Daha Fazla + S3 profileChip/iconBtn + S6 kısa etiketler<br>Jest: AppShell.rail/klavye/landscape + GlobalEmergencyStop + mevcut logout/pairing | 2 gün |
