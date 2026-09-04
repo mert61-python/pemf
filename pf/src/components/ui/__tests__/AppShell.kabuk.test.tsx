@@ -85,9 +85,10 @@ jest.mock("@/context/UserModeContext", () => ({
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ logout: jest.fn() }) }));
 
 import React from "react";
-import { Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { render } from "@testing-library/react-native";
 import { AppShell } from "@/components/ui/AppShell";
+import { typography } from "@/theme/tokens";
 
 const setup = () =>
   render(
@@ -189,5 +190,14 @@ describe("alt bar etiketleri", () => {
   it("kısa karşılığı olmayan rota tam adıyla yazılır", () => {
     const u = setup();
     expect(u.getByText("Ana Ekran")).toBeTruthy();
+  });
+
+  // [S6 adım 3] Alt bar etiketi rf(10) idi: 320 px'te (ölçek 0,85) 9 px'e düşüyor, %125 DPI'lı
+  // PC ekranında ve yaşlı gözünde okunmuyordu. Taban 11 px (typography.small).
+  it("KRİTİK: alt bar etiketi 11 px tabanının altına inmez", () => {
+    const u = setup();
+    const stil = StyleSheet.flatten(u.getByText("Teşhis").props.style) as { fontSize: number };
+    expect(stil.fontSize).toBe(typography.small);
+    expect(stil.fontSize).toBeGreaterThanOrEqual(11);
   });
 });

@@ -332,7 +332,9 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
               <Bell size={16} color={colors.textMuted} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+                  <Text style={styles.notifBadgeText} numberOfLines={1} maxFontSizeMultiplier={1.1}>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Text>
                 </View>
               )}
             </Pressable>
@@ -721,7 +723,7 @@ const styles = StyleSheet.create({
   // Yıkıcı satırı profil satırlarından görsel olarak ayır (yanlış-dokunuş riski).
   profileMenuDanger: { backgroundColor: colors.danger + "14", borderWidth: 1, borderColor: colors.danger + "44", marginTop: spacing.xs },
   wsContainer: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  wsTextOff: { flexShrink: 1, color: "#f59e0b", fontSize: rf(10), fontWeight: "700" },
+  wsTextOff: { flexShrink: 1, color: "#f59e0b", fontSize: typography.small, fontWeight: "700" },
   wsIndicator: {
     width: rs(10), height: rs(10), borderRadius: 5,
     backgroundColor: "#22c55e",
@@ -742,13 +744,15 @@ const styles = StyleSheet.create({
   notifBadgeWrap: { position: "relative", padding: spacing.xs },
   notifBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "flex-end", paddingHorizontal: spacing.lg },
   notifSheet: { width: "100%", maxWidth: rs(420) },
+  // [S6/S7-10] 9 px rozet metni okunmuyordu. 11 px'e çıkınca kutu da büyütüldü; genişlik
+  // minWidth ile TABAN, içerik ("99+") gerektiğinde kutuyu yatayda büyütür (kırpma yok).
   notifBadge: {
     position: "absolute", top: 0, right: 0,
     backgroundColor: "#ef4444",
-    borderRadius: 8, minWidth: rs(16), height: rs(16),
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 3,
+    borderRadius: rs(10), minWidth: rs(20), height: rs(20),
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
   },
-  notifBadgeText: { color: "#fff", fontSize: rf(9), fontWeight: "800" },
+  notifBadgeText: { color: "#fff", fontSize: typography.small, fontWeight: "800" },
   title: {
     color: colors.text,
     fontSize: typography.title,
@@ -784,9 +788,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing.xs
   },
+  // [S6 adım 3] 10 px alt bar etiketi 320 px'te ve %125 DPI'da okunmuyordu → 11 px taban.
   bottomLabel: {
     color: colors.textMuted,
-    fontSize: rf(10),
+    fontSize: typography.small,
     fontWeight: "700"
   },
   moreBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
