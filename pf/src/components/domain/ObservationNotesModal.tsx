@@ -6,7 +6,8 @@
  * birlikte history'ye yazar (/api/session/notes). "Atla" → kaydetmeden kapatır.
  */
 import { useState, useEffect } from "react";
-import { Modal, View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Modal, View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from "react-native";
+import { KAV_BEHAVIOR_MODAL } from "@/hooks/useKeyboard";
 import { colors, spacing, typography, rs } from "@/theme/tokens";
 import { apiPost, platformAlert } from "@/services/apiClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -109,12 +110,16 @@ export function ObservationNotesModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={skip}>
-      <View style={styles.backdrop}>
+      {/* [S4 adım 4] Perde KeyboardAvoidingView oldu. Android'de RN Modal KENDİ penceresini açar ve
+          adjustResize ile zaten daralır → padding eklemek ÇİFT boşluk yapar; bu yüzden davranış
+          yalnız iOS'ta 'padding' (KAV_BEHAVIOR_MODAL, tek kaynak). */}
+      <KeyboardAvoidingView style={styles.backdrop} behavior={KAV_BEHAVIOR_MODAL}>
         <View style={styles.card}>
           <ScrollView
-            contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + spacing.lg, gap: spacing.md }}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            style={styles.govde}
           >
           <Text style={styles.title}>📝 Seans Gözlem Notu</Text>
           {session?.patientName ? <Text style={styles.sub}>{session.patientName}</Text> : null}
@@ -144,7 +149,12 @@ export function ObservationNotesModal({
             numberOfLines={3}
           />
 
-          <View style={styles.btnRow}>
+          </ScrollView>
+
+          {/* [S4 adım 4] Atla/Kaydet ScrollView'ın DIŞINDA: yatay telefonda (sheet ≈160 px) ve klavye
+              açıkken düğmeler kaydırma alanının altında kalıp görünmüyordu. Artık kartın sabit alt
+              şeridi; güvenli alan dolgusu da buraya taşındı. */}
+          <View style={[styles.btnRow, { paddingBottom: insets.bottom + spacing.lg }]}>
             <TouchableOpacity style={[styles.btn, styles.btnSkip]} onPress={skip} disabled={saving}>
               <Text style={styles.btnText} numberOfLines={1}>Atla</Text>
             </TouchableOpacity>
@@ -156,9 +166,8 @@ export function ObservationNotesModal({
               <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit>{saving ? "Kaydediliyor…" : "💾 Kaydet"}</Text>
             </TouchableOpacity>
           </View>
-          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -201,7 +210,13 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     minHeight: rs(70),
   },
-  btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
+  // Gövde kaydırılır, düğme şeridi kartın altında SABİT kalır (flexShrink/flexGrow ile).
+  govde: { flexShrink: 1, flexGrow: 0 },
+  btnRow: {
+    flexDirection: "row", gap: spacing.sm,
+    paddingHorizontal: spacing.lg, paddingTop: spacing.sm,
+    borderTopWidth: 1, borderTopColor: "#1e3a5f",
+  },
   btn: { flex: 1, borderRadius: 12, padding: spacing.md, alignItems: "center" },
   btnSkip: { backgroundColor: "#334155" },
   btnSave: { backgroundColor: "#22c55e" },

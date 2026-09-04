@@ -65,13 +65,26 @@ export function NotificationCenter({ maxVisible = 20, compact = false }: Props) 
           <Text style={styles.emptyText}>Henüz bildirim yok</Text>
         </View>
       ) : (
-        <ScrollView style={compact ? styles.listCompact : styles.list} showsVerticalScrollIndicator={false}>
-          {notifications.map((n, idx) => (
-            // ORTA fix: n.id backend sayacı — benzersiz garanti DEĞİL (backend restart→1'e döner çakışma / id
-            // yoksa undefined). timestamp+idx ile stabil bileşik key → yanlış-satır render/animasyon önlenir.
-            <NotificationItem key={`${n.id ?? "n"}-${(n as any).timestamp ?? idx}`} notification={n} compact={compact} />
-          ))}
-        </ScrollView>
+        // [S4 adım 3] KOMPAKT kipte ScrollView YOK. Dashboard kartındaki bu liste, kabuğun
+        // ScrollView'ı içinde iç içe kaydırıcıydı: Android'de `nestedScrollEnabled` olmadığı için
+        // HİÇ kaydırılamıyor (120 px'e sığmayan bildirimlere ulaşılamıyordu), iOS'ta ise sayfa
+        // kaydırmasını takıyordu. Tam listeye üst bardaki zil ikonundan (maxVisible 20) ulaşılır.
+        // Modal içindeki TAM kipte kaydırıcı kalır ve artık nestedScrollEnabled taşır.
+        compact ? (
+          <View style={styles.listCompact}>
+            {notifications.map((n, idx) => (
+              <NotificationItem key={`${n.id ?? "n"}-${(n as { timestamp?: string }).timestamp ?? idx}`} notification={n} compact />
+            ))}
+          </View>
+        ) : (
+          <ScrollView style={styles.list} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+            {notifications.map((n, idx) => (
+              // ORTA fix: n.id backend sayacı — benzersiz garanti DEĞİL (backend restart→1'e döner çakışma / id
+              // yoksa undefined). timestamp+idx ile stabil bileşik key → yanlış-satır render/animasyon önlenir.
+              <NotificationItem key={`${n.id ?? "n"}-${(n as { timestamp?: string }).timestamp ?? idx}`} notification={n} compact={compact} />
+            ))}
+          </ScrollView>
+        )
       )}
     </View>
   );
@@ -147,7 +160,8 @@ const styles = StyleSheet.create({
   actionBtnText: { color: colors.primary, fontSize: typography.small, fontWeight: "600" },
 
   list: { maxHeight: rs(240) },
-  listCompact: { maxHeight: rs(120) },
+  // Kompakt liste artık kaydırılmıyor → maxHeight kırpardı. Öge sayısı çağıranda sınırlı (maxVisible).
+  listCompact: { gap: 0 },
 
   item: {
     flexDirection: "row",

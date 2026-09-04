@@ -10,7 +10,8 @@
  * operatör seçilmesini ister — hasta güvenliği kontrolleri her zaman erişilebilir kalır.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from "react-native";
+import { KAV_BEHAVIOR_MODAL } from "@/hooks/useKeyboard";
 import { Lock, LogOut, UserCheck, UserPlus } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
@@ -94,8 +95,15 @@ export function OperatorSwitcher() {
       </TouchableOpacity>
 
       <Modal visible={acik} transparent animationType="fade" onRequestClose={kapat}>
-        <View style={styles.perde}>
+        {/* [S4 adım 5] Perde KAV (yalnız iOS 'padding'; Android Modal kendi penceresini daraltır),
+            kart yüksekliği %92. PIN alanı klavye açılınca yatay telefonda ekran dışında kalıyordu. */}
+        <KeyboardAvoidingView style={styles.perde} behavior={KAV_BEHAVIOR_MODAL}>
           <Card style={styles.kart}>
+            <ScrollView
+              contentContainerStyle={styles.govde}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             <Text style={styles.baslik}>{kayitKipi ? "Bu cihaza kaydol" : "Kullanıcı Değiştir"}</Text>
 
             {kayitKipi ? (
@@ -186,8 +194,9 @@ export function OperatorSwitcher() {
                 </TouchableOpacity>
               ) : null}
             </View>
+            </ScrollView>
           </Card>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -200,10 +209,13 @@ const styles = StyleSheet.create({
   cipText: { color: colors.text, fontSize: rf(11), fontWeight: "700", flexShrink: 1 },
   perde: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center",
            padding: spacing.md },
-  kart: { width: "100%", maxWidth: rs(420), gap: spacing.sm },
+  kart: { width: "100%", maxWidth: rs(420), maxHeight: "92%" },
+  govde: { gap: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(16), fontWeight: "800" },
   not: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
-  liste: { maxHeight: rs(200), borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  // [S4 adım 5] Sabit rs(200) yatay telefonda kartın tamamını yiyordu; kart zaten %92 ile
+  // sınırlı ve gövde kaydırılıyor → iç liste tavanı düşürüldü, nestedScrollEnabled kalıyor.
+  liste: { maxHeight: rs(160), borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
   satir: { flexDirection: "row", alignItems: "center", justifyContent: "space-between",
            paddingVertical: rs(11), paddingHorizontal: spacing.md,
            borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: rs(44) },

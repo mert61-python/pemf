@@ -13,7 +13,8 @@
  * ile ayrıca uygular (istemci kontrolü kolaylıktır, kapı sunucudadır).
  */
 import { useEffect, useState } from "react";
-import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { KeyboardAvoidingView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { KAV_BEHAVIOR_MODAL } from "@/hooks/useKeyboard";
 import { Eye, EyeOff } from "lucide-react-native";
 
 import { Card } from "@/components/ui/Card";
@@ -50,8 +51,16 @@ export function BackupPassphraseDialog({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.perde}>
+      {/* [S4 adım 5] Perde KAV oldu (yalnız iOS 'padding'; Android Modal kendi penceresini daraltır)
+          ve kart yüksekliği %92 ile sınırlandı. Yatay telefonda (yükseklik 360-430) parola alanları
+          klavye açılınca ekran dışında kalıyordu; kart içeriği artık kaydırılabiliyor. */}
+      <KeyboardAvoidingView style={styles.perde} behavior={KAV_BEHAVIOR_MODAL}>
         <Card style={styles.kart}>
+          <ScrollView
+            contentContainerStyle={styles.govde}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <Text style={styles.baslik}>
             {olustur ? "Yedek parolası belirleyin" : "Yedek parolasını girin"}
           </Text>
@@ -96,8 +105,9 @@ export function BackupPassphraseDialog({
               <Text style={styles.ikincilText}>Vazgeç</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </Card>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -105,7 +115,9 @@ export function BackupPassphraseDialog({
 const styles = StyleSheet.create({
   perde: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center",
            justifyContent: "center", padding: spacing.md },
-  kart: { width: "100%", maxWidth: rs(440), gap: spacing.sm },
+  // gap karttan ScrollView içeriğine taşındı: kart artık yalnız kaydırıcıyı barındırıyor.
+  kart: { width: "100%", maxWidth: rs(440), maxHeight: "92%" },
+  govde: { gap: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(16), fontWeight: "800" },
   not: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
   girisSatiri: { flexDirection: "row", alignItems: "center", gap: spacing.xs },

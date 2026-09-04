@@ -8,6 +8,7 @@
  *   • asgari politika yoktu → tek karakterlik parola kabul ediliyordu,
  *   • `window.prompt` parolayı düz metin gösterir ve native'de hiç çalışmaz.
  */
+import { ScrollView } from "react-native";
 import { render, fireEvent } from "@testing-library/react-native";
 import { BackupPassphraseDialog, MIN_PAROLA } from "@/components/domain/BackupPassphraseDialog";
 
@@ -89,4 +90,16 @@ it("vazgeçilince onSubmit ÇAĞRILMAZ", () => {
   fireEvent.press(u.getByLabelText("Vazgeç"));
   expect(u.onCancel).toHaveBeenCalled();
   expect(u.onSubmit).not.toHaveBeenCalled();
+});
+
+/**
+ * [S4 adım 5] Kart yüksekliği %92 ile sınırlı ve gövde KAYDIRILABİLİR. Yatay telefonda (yükseklik
+ * 360-430) klavye açılınca ikinci parola alanı ve "Yedeği Oluştur" ekran dışında kalıyordu.
+ * ⚠️ MUTASYON: ScrollView kaldırılırsa ya da keyboardShouldPersistTaps düşerse bu test KIRILIR.
+ */
+it("KRİTİK: kart gövdesi kaydırılabilir ve klavye açıkken dokunuşu geçirir", () => {
+  const u = render(<BackupPassphraseDialog visible kip="olustur" onSubmit={() => {}} onCancel={() => {}} />);
+  const sv = u.UNSAFE_getAllByType(ScrollView);
+  expect(sv.length).toBeGreaterThan(0);
+  expect(sv[0].props.keyboardShouldPersistTaps).toBe("handled");
 });

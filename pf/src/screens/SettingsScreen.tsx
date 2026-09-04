@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { colors, spacing, typography, radius, rf, rs, layoutMax } from "@/theme/tokens";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
@@ -425,7 +425,11 @@ export function SettingsScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       <Text style={styles.headerTitle}>Sistem Ayarları</Text>
       <Text style={styles.intro}>Uygulama tercihleri ve cihaz bağlantı ayarları.</Text>
 
@@ -865,7 +869,7 @@ export function SettingsScreen() {
         onCancel={() => parolaKapat(null)}
         onSubmit={(p) => parolaKapat(p)}
       />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -881,7 +885,8 @@ function Info({ label, value }: { label: string; value?: string }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: spacing.xxl,
+    // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı veriyor (mobil rs(160)+güvenli
+    // alan / masaüstü rs(84)); ekranın kendi dolgusu üstüne binip ~200 px ölü alan bırakıyordu.
     width: "100%",
     maxWidth: layoutMax.ayar,
     alignSelf: "center"

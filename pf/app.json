@@ -31,6 +31,7 @@
         "backgroundColor": "#121827"
       },
       "package": "com.pemf.vet",
+      "softwareKeyboardLayoutMode": "resize",
       "versionCode": 38,
       "allowBackup": false,
       "usesCleartextTraffic": true,

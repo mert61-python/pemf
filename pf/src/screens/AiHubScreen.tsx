@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { useState, useEffect, useRef, useCallback } from "react";
-import { StyleSheet, Text, View, Image, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Platform, Linking } from "react-native";
+import { StyleSheet, Text, View, Image, ActivityIndicator, TouchableOpacity, TextInput, Platform, Linking } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as DocumentPicker from "expo-document-picker";
@@ -289,7 +289,11 @@ export function AiHubScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
         {/* HASTA KAPISI (2026-08-07): hasta seçilmeden modüller GÖSTERİLMEZ. AI Hub'da
             güvenlik-kritik bir kontrol (ACİL DURDUR vb.) yok → sert kapı güvenli.
             Kontrol ekranında ise `soft` kip kullanılır, bkz. PatientGate prop açıklaması. */}
@@ -350,7 +354,7 @@ export function AiHubScreen() {
           })}
         </View>
         </PatientGate>
-      </ScrollView>
+      </View>
       <UpgradeModal visible={!!upgradeFor} onClose={() => setUpgradeFor(null)} feature={upgradeFor ?? "tier"} />
     </View>
   );
@@ -507,7 +511,11 @@ function PetOwnerAiScreen() {
   // buradan KALDIRILDI. Ev kullanıcısı cihaz sürmez; ağrı bulgusunda veteriner hekime yönlendirilir.
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <Sparkles color={colors.primary} size={28} />
@@ -615,7 +623,7 @@ function PetOwnerAiScreen() {
       <View style={{ marginTop: spacing.xl }}>
         <DiseaseModule patientName="" />
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -3656,7 +3664,10 @@ const styles = StyleSheet.create({
   moduleLabel: { color: colors.text, fontSize: typography.body, fontWeight: "700" },
   moduleLabelActive: { color: colors.primary },
   moduleDesc: { color: colors.textMuted, fontSize: typography.small, marginTop: 2, lineHeight: rf(15) },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, width: "100%", maxWidth: layoutMax.aiHub, alignSelf: "center" },
+  // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı rs(160)+güvenli alan (mobil) /
+  // rs(84) (masaüstü) veriyor. Ekranın kendi paddingBottom'ı bunun ÜSTÜNE binip sayfa sonunda
+  // ~200 px ölü alan bırakıyordu.
+  content: { paddingHorizontal: spacing.lg, width: "100%", maxWidth: layoutMax.aiHub, alignSelf: "center" },
   card: { gap: spacing.lg },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   title: { color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },

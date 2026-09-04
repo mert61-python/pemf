@@ -29,6 +29,7 @@ jest.mock("@/services/apiClient", () => ({
   platformAlert: jest.fn(),
 }));
 
+import { ScrollView } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
@@ -135,4 +136,34 @@ it("AÇILIŞTA sıfırlama korunuyor (session null → yeni hasta)", () => {
   );
 
   expect(notAlani(u).props.value).toBe("");
+});
+
+/**
+ * [S4 adım 4] KAYDET DÜĞMESİ KAYDIRMA ALANININ DIŞINDA
+ * ---------------------------------------------------
+ * ÖLÇÜLEN DURUM: Atla/Kaydet satırı ScrollView'ın İÇİNDEYDİ. Yatay telefonda sheet ≈160 px'e
+ * düştüğü ve klavye açıldığında görünür alan daha da daraldığı için düğmeler kaydırma alanının
+ * altında kalıyordu: operatör notu yazıp KAYDEDEMİYORDU.
+ *
+ * ⚠️ MUTASYON: btnRow tekrar ScrollView'ın içine alınırsa bu test KIRILIR.
+ */
+it("KRİTİK: Kaydet düğmesi ScrollView'ın DIŞINDA (kısa ekranda hep görünür)", () => {
+  const u = render(<ObservationNotesModal visible session={REX} onClose={() => {}} />);
+  type Dugum = { type?: unknown; parent?: Dugum | null };
+  const atalar: string[] = [];
+  let n: Dugum | null | undefined = u.getByText("💾 Kaydet") as unknown as Dugum;
+  for (let i = 0; i < 20 && n; i++) {
+    const t = n.type as string | { displayName?: string; name?: string } | undefined;
+    atalar.push(typeof t === "string" ? t : t?.displayName ?? t?.name ?? "?");
+    n = n.parent;
+  }
+  expect(atalar.some((a) => a.includes("ScrollView"))).toBe(false);
+});
+
+/** Klavye açıkken ilk dokunuş yutulmasın (kaydırıcı varsayılanı "never"dır). */
+it("gövde kaydırıcısı klavye açıkken dokunuşu ilk seferde geçirir", () => {
+  const u = render(<ObservationNotesModal visible session={REX} onClose={() => {}} />);
+  const sv = u.UNSAFE_getAllByType(ScrollView);
+  expect(sv.length).toBeGreaterThan(0);
+  expect(sv[0].props.keyboardShouldPersistTaps).toBe("handled");
 });

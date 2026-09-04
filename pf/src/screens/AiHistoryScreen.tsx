@@ -299,7 +299,11 @@ export function AiHistoryScreen() {
             : "Henüz AI analiz kaydı yok. Akıllı Teşhis'ten bir analiz çalıştırın — sonuç burada şifreli, detaylı saklanır."}
         </Text>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <View style={styles.list}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
           {shown.map((it) => {
             const open = expanded === it.id;
             const rows = open ? detailRows(it.result_detail) : [];
@@ -380,7 +384,7 @@ export function AiHistoryScreen() {
               {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={{ color: colors.primary, fontWeight: "700" }}>Daha Fazla Yükle</Text>}
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -434,7 +438,10 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   chipText: { color: colors.textMuted, fontSize: typography.caption, fontWeight: "600", maxWidth: rf(160) },
   chipTextActive: { color: colors.primary },
-  list: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
+  // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı rs(160)+güvenli alan (mobil) /
+  // rs(84) (masaüstü) veriyor. Ekranın kendi paddingBottom'ı bunun ÜSTÜNE binip sayfa sonunda
+  // ~200 px ölü alan bırakıyordu.
+  list: { padding: spacing.lg, gap: spacing.md },
   card: { padding: spacing.md, gap: spacing.xs },
   cardHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   module: { flex: 1, color: colors.text, fontSize: typography.subtitle, fontWeight: "800" },

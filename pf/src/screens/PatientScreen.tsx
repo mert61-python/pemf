@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, TextInput, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -280,7 +280,11 @@ export function PatientScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.list}>
+      <View style={styles.list}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
         {loading ? (
           <View style={styles.stateBox}>
             <ActivityIndicator color={colors.primary} />
@@ -352,7 +356,7 @@ export function PatientScreen() {
             <Text style={styles.loadMoreText}>Daha fazla göster ({hiddenCount} kayıt)</Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -377,7 +381,10 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: colors.white },
   searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgAlt, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, height: rs(48), gap: spacing.sm },
   searchInput: { flex: 1, color: colors.text, fontSize: typography.body },
-  list: { gap: spacing.md, paddingBottom: spacing.xl },
+  // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı rs(160)+güvenli alan (mobil) /
+  // rs(84) (masaüstü) veriyor. Ekranın kendi paddingBottom'ı bunun ÜSTÜNE binip sayfa sonunda
+  // ~200 px ölü alan bırakıyordu.
+  list: { gap: spacing.md },
   patientCard: { gap: spacing.md },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   headerLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },

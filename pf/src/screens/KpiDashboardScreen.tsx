@@ -4,7 +4,7 @@
  * Gerçek veriye dayalı KPI kartları — API'den ve canlı sensör verisinden.
  */
 import { useEffect, useState, useMemo } from "react";
-import { ScrollView, Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet } from "react-native";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Card } from "@/components/ui/Card";
@@ -185,7 +185,11 @@ export function KpiDashboardScreen() {
   }, [kpi.last7Days, kpi.modeDistribution, chartW]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       <Text style={styles.sectionTitle}>📊 Klinik Göstergeler & Analitik</Text>
       <ResponsiveGrid>
         <MetricCard
@@ -273,12 +277,15 @@ export function KpiDashboardScreen() {
           </Card>
         </>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl, width: "100%", maxWidth: layoutMax.genis, alignSelf: "center" },
+  // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı rs(160)+güvenli alan (mobil) /
+  // rs(84) (masaüstü) veriyor. Ekranın kendi paddingBottom'ı bunun ÜSTÜNE binip sayfa sonunda
+  // ~200 px ölü alan bırakıyordu.
+  container: { padding: spacing.md, gap: spacing.md, width: "100%", maxWidth: layoutMax.genis, alignSelf: "center" },
   sectionTitle: { color: colors.text, fontSize: typography.subtitle, fontWeight: "700", marginTop: spacing.md },
   staleBanner: {
     color: "#f59e0b",

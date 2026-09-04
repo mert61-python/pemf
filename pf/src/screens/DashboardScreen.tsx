@@ -1,5 +1,5 @@
 // Author: mertaygn, cglrgrkn
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { Clock, HeartPulse, RadioTower, Wifi } from "lucide-react-native";
 import { CoilCard } from "@/components/domain/CoilCard";
 import { Card } from "@/components/ui/Card";
@@ -33,7 +33,11 @@ export function DashboardScreen() {
   const hardwareRunning = at.isActive || runningCount > 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       {/* Connection status row */}
       <View style={styles.statusRow}>
         <StatusPill label="Bağlantı" state={snapshot.gateway} />
@@ -143,14 +147,16 @@ export function DashboardScreen() {
       {/* Bottom row: Notifications + System Info + Gateway */}
       <View style={styles.bottomGrid}>
         <View style={styles.bottomLeft}>
-          <NotificationCenter maxVisible={8} compact />
+          {/* [S4 adım 3] 8 → 4: kompakt liste artık kaydırılmıyor, kart Dashboard'u uzatmasın.
+              Tam listeye üst bardaki zil ikonundan ulaşılır. */}
+          <NotificationCenter maxVisible={4} compact />
         </View>
         <View style={styles.bottomRight}>
           <SystemInfoPanel />
           <GatewayStatusPanel />
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -158,7 +164,8 @@ const styles = StyleSheet.create({
   container: {
     padding: spacing.md,
     gap: spacing.md,
-    paddingBottom: spacing.xxl,
+    // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı veriyor (mobil rs(160)+güvenli
+    // alan / masaüstü rs(84)); ekranın kendi dolgusu üstüne binip ~200 px ölü alan bırakıyordu.
     width: "100%",
     maxWidth: layoutMax.genis,
     alignSelf: "center",

@@ -7,9 +7,10 @@
 import { useRef, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Image,
-  ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, useWindowDimensions,
+  ActivityIndicator, ScrollView, KeyboardAvoidingView, useWindowDimensions,
 } from "react-native";
 import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
+import { KAV_BEHAVIOR_PENCERE } from "@/hooks/useKeyboard";
 import { Mail, Lock, Eye, EyeOff, Check, X, ArrowRight, GraduationCap, User, Phone, Building2, MapPin, Home, Stethoscope } from "lucide-react-native";
 import type { ComponentType } from "react";
 import { colors, spacing, radius, typography, rf, rs } from "@/theme/tokens";
@@ -176,7 +177,10 @@ export function AuthScreen() {
         <Rect x={0} y={0} width={winW} height={winH} fill="url(#gT)" />
       </Svg>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      {/* [S4 adım 6] Android 11+ (API 30) edge-to-edge pencerede aktivite klavyeyle DARALMAZ;
+          manifest adjustResize tek başına yetmez → orada da 'padding' gerekir. Karar tek
+          kaynakta (hooks/useKeyboard.KAV_BEHAVIOR_PENCERE). */}
+      <KeyboardAvoidingView behavior={KAV_BEHAVIOR_PENCERE} style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"

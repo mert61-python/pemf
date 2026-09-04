@@ -1,6 +1,6 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Platform } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Edit3, Trash2, Share2 } from "lucide-react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -220,7 +220,11 @@ export function TreatmentHistoryScreen() {
 
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl, width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" }}>
+    <View style={{ width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" }}>
+  {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
+  keyboardShouldPersistTaps='handled' taşıyor. İç ScrollView'ın yükseklik sınırı
+  olmadığı için kendi kaydırmasını hiç üretmiyordu; ama klavye açıkken dokunuşu
+  yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.</Text>
         <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
@@ -303,7 +307,7 @@ export function TreatmentHistoryScreen() {
         sessionId={selectedSessionId}
         onClose={() => setSelectedSessionId(null)}
       />
-    </ScrollView>
+    </View>
   );
 }
 

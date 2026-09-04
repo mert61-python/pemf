@@ -857,7 +857,8 @@ const styles = StyleSheet.create({
   container: {
     padding: spacing.md,
     gap: spacing.md,
-    paddingBottom: spacing.xxl,
+    // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı veriyor (mobil rs(160)+güvenli
+    // alan / masaüstü rs(84)); ekranın kendi dolgusu üstüne binip ~200 px ölü alan bırakıyordu.
     width: "100%",
     maxWidth: layoutMax.icerik,
     alignSelf: "center",
