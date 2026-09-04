@@ -60,7 +60,9 @@ export default function Features() {
               </ul>
             </div>
           </div>
-          <div className="lg:pl-6">
+          {/* [W adım 1 / ampirik-1] `min-w-0`: ızgara öğesinin OTOMATİK minimum genişliği (min-content)
+              320 px telefonda parçayı 391 px'e şişirip SAYFAYI yatay kaydırılabilir yapıyordu. */}
+          <div className="min-w-0 lg:pl-6">
             <LauncherMock />
           </div>
         </div>

@@ -127,7 +127,7 @@ export default function AccountButton({ onNavigate }: { onNavigate?: () => void 
 
           {onay && (
             <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+              <p className="text-xs leading-relaxed text-warning">
                 Aboneliğiniz iptal edilsin mi? Otomatik yenileme durur ve bir daha ücret alınmaz.
               </p>
               <div className="mt-3 flex gap-2">
@@ -145,8 +145,8 @@ export default function AccountButton({ onNavigate }: { onNavigate?: () => void 
             <p
               className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed ${
                 sonuc.ok
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-success'
+                  : 'border-red-500/40 bg-red-500/10 text-danger'
               }`}
             >
               {sonuc.mesaj}

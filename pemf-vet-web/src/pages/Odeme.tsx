@@ -180,7 +180,7 @@ export default function Odeme() {
           <input placeholder="Posta kodu (isteğe bağlı)" value={form.zipCode} onChange={(e) => set('zipCode', e.target.value)} className="input" />
 
           {err && <p className="text-sm text-red-500">{err}</p>}
-          {!session && <p className="text-sm text-amber-600 dark:text-amber-400">Devam etmek için giriş yapın.</p>}
+          {!session && <p className="text-sm text-warning">Devam etmek için giriş yapın.</p>}
 
           <label className="flex items-start gap-2.5 text-xs leading-relaxed text-muted">
             <input type="checkbox" required checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0" />

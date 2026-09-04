@@ -70,3 +70,34 @@ jobs:
 
       - name: Uretim derlemesi
         run: npx vite build
+
+      # [Faz D, 2026-09-05] GORUNUM ALANI + DOKUNMA HEDEFI KAPISI.
+      # Statik kaynak kapilari (vitest/pytest) sinif adlarini olcer; bu kapi TARAYICIDA gercek
+      # piksel olcer: yatay tasma (document.scrollWidth > innerWidth), ust-kesik icerik ve
+      # 44 px altindaki dokunma hedefleri. Ikisi birbirinin yerine gecmez —
+      # `min-w-0` sinifi kaynakta VAR ama baska bir kural tasmayi geri getirebilir.
+      #
+      # ⚠️ ORTAM: betik CI bayragi degil TARAYICI YETENEGI arar (memory: kapi-ortam-varsayimi).
+      # ubuntu-latest'te Edge/Chrome yok -> `--zorunlu` ile exit 2 verir; bu yuzden tarayici
+      # actions/setup-chrome ile kurulur. Kurulum basarisiz olursa kapi ATLANIR (exit 3) ve
+      # is akisi kirmizi olmaz; kapinin kendisi bunu raporlar.
+      - name: Tarayici (headless olcum icin)
+        uses: browser-actions/setup-chrome@v1
+        continue-on-error: true
+
+      - name: Gorunum alani + dokunma hedefi kapisi
+        working-directory: .
+        run: |
+          python3 scripts/responsive_kapisi.py --hedef site --zorunlu --png-yok             --site-dist pemf-vet-web/dist --cikti /tmp/responsive-site || KOD=$?
+          if [ "${KOD:-0}" = "3" ]; then
+            echo "::warning::Tarayici bulunamadi, gorunum alani kapisi ATLANDI."
+            exit 0
+          fi
+          exit "${KOD:-0}"
+
+      - name: Olcum raporu (bulgu varsa)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: responsive-site-raporu
+          path: /tmp/responsive-site

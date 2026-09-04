@@ -67,7 +67,7 @@ export default function ResetPassword() {
           yoktu — kullanıcı akışı yeniden başlatamıyordu. Artık ana sayfaya dönüp "Şifremi
           unuttum" adımını tekrarlayabileceği bir yol var. */}
       {!ready && (
-        <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+        <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-warning">
           Sıfırlama bağlantısı doğrulanıyor… Bu mesaj kalıcıysa bağlantının süresi dolmuş olabilir.
           Yeni bir bağlantı almak için{' '}
           <Link to="/" className="font-medium underline">ana sayfadan giriş penceresini açıp</Link>{' '}

@@ -212,7 +212,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
     // arkadaki sayfada geziniyordu (ekran okuyucu kullanıcısı formda olduğunu anlamıyordu).
     // Ayrıca dışa tıklama, uzun kayıt formunu UYARISIZ siliyordu → yalnız form boşken kapat.
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] grid place-items-start overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:place-items-center"
       onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div
@@ -221,7 +221,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
         aria-modal="true"
         aria-labelledby="auth-modal-title"
         tabIndex={-1}
-        className="card flex max-h-[90vh] w-full max-w-md flex-col p-7"
+        className="card my-auto flex max-h-[calc(100svh-2rem)] w-full max-w-md flex-col p-7"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
@@ -243,7 +243,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
         {/* Kapatma onayı MODAL İÇİNDE (eski hâli tarayıcının `confirm` kutusuydu). */}
         {kapatmaOnayi && (
           <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-            <p className="text-sm text-amber-700 dark:text-amber-300">
+            <p className="text-sm text-warning">
               Girdiğiniz bilgiler kaybolacak. Pencere kapatılsın mı?
             </p>
             <div className="mt-3 flex gap-2">
@@ -261,7 +261,7 @@ function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthRea
             kullanıcıya gösteriliyordu — klinik sahibi için hiçbir anlamı yok ve yapabileceği bir
             şey de yok. Kullanıcıya DURUMU ve ÇIKIŞ YOLUNU söyle; teknik ayrıntı konsola gider. */}
         {!ready && (
-          <p className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+          <p className="mt-5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-warning">
             Giriş servisine şu anda ulaşılamıyor. Kısa süre sonra tekrar deneyin; sürerse
             {COMPANY.email} adresine yazın.
           </p>

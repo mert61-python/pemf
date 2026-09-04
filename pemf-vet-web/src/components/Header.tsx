@@ -18,13 +18,16 @@ export default function Header() {
           <span className="text-[15px] font-bold tracking-tight">{BRAND.name}</span>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        {/* [W adım 2 / site-1] Masaüstü navigasyonu lg (1024) kırılımına taşındı: 768-1023 px
+            tablette bağlantılar + CTA aynı satıra sığmıyor, "PEMF Vet'i İndir" iki satıra
+            kırılıyordu. Tablet kullanıcısı artık hamburger görüyor (dokunmatik için de uygun). */}
+        <nav className="hidden items-center gap-1 lg:flex">
           {NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               className={({ isActive }) =>
-                `rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                `rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive ? 'text-fg' : 'text-muted hover:text-fg'
                 }`
               }
@@ -34,16 +37,16 @@ export default function Header() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <AccountButton />
-          <Link to="/download" className="btn-primary text-sm">
+          <Link to="/download" className="btn-primary text-sm whitespace-nowrap">
             <Download className="h-4 w-4" />
             PEMF Vet’i İndir
           </Link>
         </div>
 
         <button
-          className="grid h-10 w-10 place-items-center rounded-md text-muted hover:text-fg md:hidden"
+          className="grid h-11 w-11 place-items-center rounded-md text-muted hover:text-fg lg:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Menü"
         >
@@ -52,7 +55,7 @@ export default function Header() {
       </div>
 
       {open && (
-        <div className="border-t border-border/70 bg-bg-soft md:hidden">
+        <div className="max-h-[calc(100svh-4rem)] overflow-y-auto border-t border-border/70 bg-bg-soft lg:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-5 py-4">
             {NAV.map((n) => (
               <NavLink

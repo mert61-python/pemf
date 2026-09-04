@@ -138,7 +138,7 @@ export default function DownloadPage() {
     <>
       {success && (
         <div className="mx-auto max-w-5xl px-5 pt-6 sm:px-6">
-          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400">
+          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-success">
             ✓ Aboneliğiniz başladı. Aşağıdan PEMF Vet’i indirip aynı hesapla giriş yapın; planınız otomatik tanınır, ayrıca kod girmeniz gerekmez.
           </div>
         </div>

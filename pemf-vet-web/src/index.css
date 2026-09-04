@@ -32,6 +32,9 @@
   /* Durum */
   --color-success: oklch(72% 0.17 152);
   --color-warning: oklch(78% 0.15 80);
+  /* [W adım 6 / site-6] Site TEK KOYU TEMA. `dark:` varyantı hiç tanımlı olmadığı için o
+     sınıflar ÖLÜYDÜ ve açık-tema rengi (text-red-600) koyu zeminde okunmuyordu. */
+  --color-danger: oklch(70% 0.19 25);
 }
 
 @layer base {
@@ -190,5 +193,49 @@
   .glow-ring {
     box-shadow: 0 0 0 1px var(--color-border-strong),
       0 30px 80px -30px color-mix(in oklch, var(--color-primary) 45%, transparent);
+  }
+}
+
+@layer components {
+  /* [W adım 9 / site-16] Metin bağlantısının dokunma alanı METİN KUTUSU kadardı: altbilgi ve
+     destek sayfasındaki yasal bağlantılar 120-276 × 20 px ölçüldü (taban 44). `.tap` yüksekliği
+     44 px'e çıkarır; dikey ritim `-my-2` ile korunur (görsel boşluk aynı kalır). */
+  .tap {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   [W adım 4] KATMANSIZ KURALLAR — Tailwind v4 katman sırası:
+   theme < base < components < utilities. `.input { font-size: .875rem }`
+   components katmanında, `text-sm` utilities katmanında; bu blok
+   @layer base içine yazılsaydı İKİSİNE DE YENİLİRDİ. Katmansız CSS
+   tüm katmanları yener → kural burada, dosyanın SONUNDA.
+   ============================================================ */
+
+/* [site-3] iOS Safari 16 px'in ALTINDAKİ input'a odaklanınca sayfayı YAKINLAŞTIRIR ve geri
+   çıkmaz. `maximum-scale=1` ASLA kullanılmaz (yakınlaştırma erişilebilirliği); çözüm punto. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: max(1rem, 1em);
+  }
+}
+
+/* [site-4] `html { scroll-behavior: smooth }` vestibüler rahatsızlığı olan kullanıcıda sorun
+   yaratır; sistem tercihi varsa animasyon kapatılır. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

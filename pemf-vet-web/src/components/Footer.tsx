@@ -27,17 +27,19 @@ export default function Footer() {
           </div>
 
           {/* Menü + Yasal bağlantılar */}
-          <div className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm text-muted">
-            <div className="flex flex-col gap-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-fg/60">Menü</div>
+          {/* [W adım 9 / site-16] Bağlantı yüksekliği 44 px (.tap); satır aralığı `gap-y-0` ile
+              telafi edildi → altbilgi görsel olarak büyümüyor. */}
+          <div className="grid grid-cols-2 gap-x-10 gap-y-0 text-sm text-muted">
+            <div className="flex flex-col">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">Menü</div>
               {NAV.map((n) => (
-                <Link key={n.to} to={n.to} className="hover:text-fg">{n.label}</Link>
+                <Link key={n.to} to={n.to} className="tap hover:text-fg">{n.label}</Link>
               ))}
             </div>
-            <div className="flex flex-col gap-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-fg/60">Yasal</div>
+            <div className="flex flex-col">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg/60">Yasal</div>
               {LEGAL_DOCS.map((d) => (
-                <Link key={d.slug} to={`/${d.slug}`} className="hover:text-fg">{d.title}</Link>
+                <Link key={d.slug} to={`/${d.slug}`} className="tap hover:text-fg">{d.title}</Link>
               ))}
             </div>
           </div>

@@ -33,8 +33,8 @@ export default function Pricing() {
         <div className="mx-auto max-w-6xl px-5 pt-6 sm:px-6">
           <div className={`rounded-lg border px-4 py-3 text-sm ${
             checkout === 'success'
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-              : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-success'
+              : 'border-amber-500/40 bg-amber-500/10 text-warning'
           }`}>
             {/* Metin denetimi 2026-08-20: "tekrar deneyin veya destek ile iletişime geçin" diyordu
                 ama hiçbiri tıklanabilir değildi — kullanıcı hata bandında sıkışıp kalıyordu. */}

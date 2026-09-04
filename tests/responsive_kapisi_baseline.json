@@ -1,0 +1,10 @@
+{
+  "_not": [
+    "GÖRÜNÜM ALANI + DOKUNMA HEDEFİ KAPISI temel çizgisi. [Faz D, 2026-09-05]",
+    "Boş liste = bilinen bulgu YOK. Kapı yeni bulgu görürse exit 1 verir.",
+    "Ölçüm: scripts/responsive_kapisi.py (headless Edge + CDP).",
+    "2026-09-05 durumu: pf 16 ölçüm 0 bulgu · launcher 36 ölçüm 0 bulgu · site 40 ölçüm 0 bulgu.",
+    "Bir bulgu BİLİNÇLİ olarak kabul edilecekse anahtarı 'bilinen' listesine gerekçesiyle eklenir."
+  ],
+  "bilinen": []
+}
