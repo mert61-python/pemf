@@ -25,11 +25,26 @@ interface Props {
   stale?: boolean;
 }
 
+/**
+ * [S6 adım 4 / ekranB-8] HER ZAMAN 'mm:ss' — saatli dal KALDIRILDI.
+ * Klinik seans kapağı 120 dk olduğu için en fazla 6 karakter çıkar ("120:00"). Saatli biçim
+ * ("1:05:30") 320 px'te NORMAL yazı ölçeğinde bile taşıyordu; sistem ölçeği 1,3'te kart genişliğini
+ * aşıp kırpılıyordu — hekimin KALAN süreyi okuyamaması hasta güvenliği açısından kabul edilemez.
+ */
+/**
+ * KRİTİK SAYISAL ALAN sözleşmesi: tek satır, sığmıyorsa KÜÇÜLTÜLEREK sığdırılır, sistem yazı
+ * ölçeği burada 1,1 ile daha sıkı tavanlanır. Süre asla kırpılmaz/sarılmaz.
+ */
+const SURE_METNI = {
+  numberOfLines: 1,
+  adjustsFontSizeToFit: true,
+  minimumFontScale: 0.6,
+  maxFontSizeMultiplier: 1.1,
+} as const;
+
 function formatTime(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
+  const m = Math.floor(sec / 60);
   const s = sec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
@@ -106,14 +121,17 @@ export function SessionProgressCard({
       <View style={styles.timeRow}>
         <View style={styles.timeBlock}>
           <Text style={styles.timeLabel}>GEÇEN</Text>
-          <Text style={styles.timeValue}>{formatTime(elapsedSec)}</Text>
+          <Text style={styles.timeValue} {...SURE_METNI}>{formatTime(elapsedSec)}</Text>
         </View>
         <View style={styles.timeBlockCenter}>
           <Text style={styles.progressPct}>{indefinite ? "∞" : `${Math.round(progress * 100)}%`}</Text>
         </View>
         <View style={[styles.timeBlock, { alignItems: "flex-end" }]}>
           <Text style={styles.timeLabel}>KALAN</Text>
-          <Text style={[styles.timeValue, { color: indefinite ? colors.textMuted : remainingSec < 60 ? "#ef4444" : colors.primary }]}>
+          <Text
+            style={[styles.timeValue, { color: indefinite ? colors.textMuted : remainingSec < 60 ? "#ef4444" : colors.primary }]}
+            {...SURE_METNI}
+          >
             {indefinite ? "Süresiz" : formatTime(remainingSec)}
           </Text>
         </View>
@@ -239,7 +257,8 @@ const styles = StyleSheet.create({
   },
   timeBlock: { flex: 1 },
   timeBlockCenter: { flex: 1, alignItems: "center" },
-  timeLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700", letterSpacing: 1 },
+  // [S6/S7-10] 10 px etiket 320 px'te 9 px'e düşüyordu; taban typography.small (11).
+  timeLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700", letterSpacing: 1 },
   timeValue: { color: colors.text, fontSize: typography.title, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
   progressPct: { color: "#22c55e", fontSize: typography.subtitle, fontWeight: "700" },
 
@@ -251,7 +270,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     alignItems: "center",
   },
-  paramLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700", letterSpacing: 1 },
+  paramLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700", letterSpacing: 1 },
   paramValue: { color: colors.primary, fontSize: typography.body, fontWeight: "700" },
 
   btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },

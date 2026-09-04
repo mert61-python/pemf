@@ -17,8 +17,11 @@ import { useApkGuncelleme } from "@/hooks/useApkGuncelleme";
 import { useDonanimCalisiyor } from "@/hooks/useDonanimCalisiyor";
 import { atlandiMi, guncellemeVarMi, type MobilSurum } from "@/services/mobileUpdate";
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { useResponsive } from "@/hooks/useResponsive";
 
 export function MobileUpdateBanner() {
+  const { width } = useResponsive();
+  const dar = width < 360;
   // ⚠️ Ölçü `useDonanimCalisiyor`: seans kaydı açık olmasa da çalışan bobin bandı susturur
   // (bobinler seanssız da sürülebilir — denetim bulgusu M4, 2026-08-23).
   const seansAktif = useDonanimCalisiyor();
@@ -45,7 +48,10 @@ export function MobileUpdateBanner() {
     return null;
 
   return (
-    <View style={styles.bant}>
+    // [S6 adım 8 / kapsam-7] Dar telefonda (< 360 px) ve büyük yazı ölçeğinde ikon + iki satır
+    // metin + "Güncelle" + X aynı satıra sığmıyor, düğme metni kırpılıyordu. Dar ekranda bant
+    // sütuna iner ve eylemler alta, tam genişlikte yerleşir.
+    <View style={[styles.bant, dar && styles.bantDar]}>
       <Download color={colors.primary} size={rs(16)} />
       <View style={{ flex: 1 }}>
         <Text style={styles.baslik}>Yeni sürüm hazır: {surum.version}</Text>
@@ -65,8 +71,8 @@ export function MobileUpdateBanner() {
         </Text>
       </View>
       {oran === null ? (
-        <>
-          <TouchableOpacity style={styles.btn} onPress={guncelle}
+        <View style={dar ? styles.eylemlerDar : undefined}>
+          <TouchableOpacity style={[styles.btn, dar && { flex: 1 }]} onPress={guncelle}
             accessibilityRole="button" accessibilityLabel={`Sürüm ${surum.version} güncellemesini indir ve kur`}>
             {/* Kurulum bir kez açıldıysa ikinci dokunuş İNDİRMEZ (dosya diskte tam),
                 doğrudan yükleyiciyi tekrar açar. */}
@@ -76,7 +82,7 @@ export function MobileUpdateBanner() {
             accessibilityRole="button" accessibilityLabel="Güncelleme bildirimini kapat">
             <X color={colors.textMuted} size={rs(15)} />
           </TouchableOpacity>
-        </>
+        </View>
       ) : null}
     </View>
   );
@@ -87,7 +93,10 @@ const styles = StyleSheet.create({
           backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border,
           borderRadius: radius.md, padding: spacing.sm, margin: spacing.sm },
   baslik: { color: colors.text, fontSize: rf(13), fontWeight: "800" },
-  alt: { color: colors.textMuted, fontSize: rf(11), marginTop: rs(2) },
+  // 11 px 320 px'te 9 px'e düşüyordu; bant metni EYLEM anlatıyor, okunur kalmalı.
+  alt: { color: colors.textMuted, fontSize: Math.max(12, rf(11)), marginTop: rs(2) },
+  bantDar: { flexDirection: "column", alignItems: "stretch" },
+  eylemlerDar: { flexDirection: "row", alignItems: "center", gap: spacing.sm, justifyContent: "flex-end" },
   altHata: { color: colors.warning },
   btn: { backgroundColor: colors.cyan, borderRadius: radius.md,
          paddingVertical: rs(9), paddingHorizontal: spacing.md, minHeight: touch.min, justifyContent: "center" },

@@ -512,11 +512,13 @@ const styles = StyleSheet.create({
   eyeBtn: { position: "absolute", right: spacing.md, height: "100%", justifyContent: "center", paddingLeft: spacing.sm },
 
   rules: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: rs(-2) },
-  rule: { flexDirection: "row", alignItems: "center", gap: rs(6), width: "48%" },
+  // [S6 adım 7 / ekranA-19] Sabit %48 genişlik, yazı ölçeği 1,3'te kural metnini kırpıyordu.
+  // flexBasis + flexGrow: sığdığında 2 sütun, sığmadığında tek sütuna iner.
+  rule: { flexDirection: "row", alignItems: "center", gap: rs(6), flexBasis: "48%", flexGrow: 1, minWidth: rs(130) },
   ruleDot: { width: rs(16), height: rs(16), borderRadius: rs(8), alignItems: "center", justifyContent: "center" },
   ruleDotOk: { backgroundColor: colors.success },
   ruleDotOff: { backgroundColor: "transparent", borderWidth: 1.5, borderColor: colors.border },
-  ruleText: { color: colors.textMuted, fontSize: typography.caption },
+  ruleText: { color: colors.textMuted, fontSize: typography.caption, flexShrink: 1 },
   ruleTextOk: { color: colors.text },
 
   eduHint: {

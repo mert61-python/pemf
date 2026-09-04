@@ -289,7 +289,17 @@ export function CoilParameterPanel({
 function Reading({ label, value, active }: { label: string; value: string; active: boolean }) {
   return (
     <View style={styles.reading}>
-      <Text style={[styles.readingValue, !active && { color: "#475569" }]}>{value}</Text>
+      {/* [S6 adım 4] Canlı okuma (mT / °C / A) tek satır ve sığdırılarak yazılır: sistem yazı
+          ölçeği 1,3'te "12.34 mT" iki satıra bölünüp kart yüksekliğini kaydırıyordu. */}
+      <Text
+        style={[styles.readingValue, !active && { color: "#475569" }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        maxFontSizeMultiplier={1.1}
+      >
+        {value}
+      </Text>
       <Text style={styles.readingLabel}>{label}</Text>
     </View>
   );
@@ -343,7 +353,8 @@ const styles = StyleSheet.create({
   coilTitle: { color: colors.text, fontWeight: "700", fontSize: typography.body },
   statusDot: { width: rs(8), height: rs(8), borderRadius: 4 },
   statusWrap: { flexDirection: "row", alignItems: "center", gap: rs(4) },
-  statusLabel: { fontSize: rf(10), fontWeight: "700", letterSpacing: 0.3 },
+  // [S6/S7-10] 320 px'te 9 px'e düşüyordu (okunmuyordu).
+  statusLabel: { fontSize: typography.small, fontWeight: "700", letterSpacing: 0.3 },
   tempBadge: {
     backgroundColor: "#1e293b",
     paddingHorizontal: 6,
@@ -362,7 +373,7 @@ const styles = StyleSheet.create({
   },
   reading: { flex: 1, alignItems: "center" },
   readingValue: { color: colors.primary, fontSize: typography.body, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
-  readingLabel: { color: colors.textMuted, fontSize: rf(10), fontWeight: "700" },
+  readingLabel: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700" },
 
   paramGrid: {
     flexDirection: "row",
@@ -432,5 +443,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#22c55e",
   },
-  sourceBadgeText: { color: "#fff", fontSize: rf(9), fontWeight: "800" },
+  sourceBadgeText: { color: "#fff", fontSize: typography.small, fontWeight: "800" },
 });

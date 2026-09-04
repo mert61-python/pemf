@@ -146,6 +146,14 @@ function hwLabel(hw?: string): string {
   return hw ? hw.toUpperCase() : "—";
 }
 
+/**
+ * [S6 adım 6 / ilkel-18] TABLO HÜCRESİ sözleşmesi: tek satır + sistem yazı ölçeği 1,1 tavanı.
+ * Sabit sütun genişliklerinde ölçek 1,3'te "Başlangıç"/"12:04:31" iki satıra bölünüp başlık ile
+ * hücre hizası kayıyordu (yanlış sütunda okuma riski). Yatay kaydırma zaten var.
+ */
+const BASLIK_HUCRE = { numberOfLines: 1 as const, maxFontSizeMultiplier: 1.1 };
+const VERI_HUCRE = { ...BASLIK_HUCRE, adjustsFontSizeToFit: true, minimumFontScale: 0.75 };
+
 export function SessionDetailModal({
   visible,
   sessionId,
@@ -282,15 +290,15 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
           <View>
             {/* Tablo başlığı */}
             <View style={[styles.tableRow, styles.tableHeaderRow]}>
-              <Text style={[styles.th, styles.colCoil]}>Bobin</Text>
-              <Text style={[styles.th, styles.colTime]}>Başlangıç</Text>
-              <Text style={[styles.th, styles.colDur]}>Süre</Text>
-              <Text style={[styles.th, styles.colNum]}>Frekans</Text>
-              <Text style={[styles.th, styles.colNum]}>Duty</Text>
-              <Text style={[styles.th, styles.colNum]}>Şiddet</Text>
-              <Text style={[styles.th, styles.colHw]}>Donanım</Text>
-              <Text style={[styles.th, styles.colNum]}>Ort. °C</Text>
-              <Text style={[styles.th, styles.colNum]}>Maks. °C</Text>
+              <Text style={[styles.th, styles.colCoil]} {...BASLIK_HUCRE}>Bobin</Text>
+              <Text style={[styles.th, styles.colTime]} {...BASLIK_HUCRE}>Başlangıç</Text>
+              <Text style={[styles.th, styles.colDur]} {...BASLIK_HUCRE}>Süre</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Frekans</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Duty</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Şiddet</Text>
+              <Text style={[styles.th, styles.colHw]} {...BASLIK_HUCRE}>Donanım</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Ort. °C</Text>
+              <Text style={[styles.th, styles.colNum]} {...BASLIK_HUCRE}>Maks. °C</Text>
             </View>
             {coilRuns.map((run, idx) => {
               const coilId = run.coil_id ?? 0;
@@ -303,26 +311,26 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
                 >
                   <View style={[styles.colCoil, styles.coilCell]}>
                     <View style={[styles.coilDot, { backgroundColor: color }]} />
-                    <Text style={[styles.td, { color, fontWeight: "700" }]}>
+                    <Text style={[styles.td, { color, fontWeight: "700" }]} {...VERI_HUCRE}>
                       Bobin {coilId || "—"}
                     </Text>
                   </View>
-                  <Text style={[styles.td, styles.colTime]}>{fmtClock(run.started_epoch)}</Text>
-                  <Text style={[styles.td, styles.colDur]}>{fmtDuration(run.duration_seconds)}</Text>
-                  <Text style={[styles.td, styles.colNum]}>
+                  <Text style={[styles.td, styles.colTime]} {...VERI_HUCRE}>{fmtClock(run.started_epoch)}</Text>
+                  <Text style={[styles.td, styles.colDur]} {...VERI_HUCRE}>{fmtDuration(run.duration_seconds)}</Text>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {run.frequency_hz != null ? `${run.frequency_hz} Hz` : "—"}
                   </Text>
-                  <Text style={[styles.td, styles.colNum]}>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {run.duty_percent != null ? `%${run.duty_percent}` : "—"}
                   </Text>
-                  <Text style={[styles.td, styles.colNum]}>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {run.intensity_mt != null ? `${run.intensity_mt} mT` : "—"}
                   </Text>
-                  <Text style={[styles.td, styles.colHw]}>{hwLabel(run.hw_type)}</Text>
-                  <Text style={[styles.td, styles.colNum]}>
+                  <Text style={[styles.td, styles.colHw]} {...VERI_HUCRE}>{hwLabel(run.hw_type)}</Text>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {summary ? `${fmtNum(summary.temp_avg)}` : "—"}
                   </Text>
-                  <Text style={[styles.td, styles.colNum]}>
+                  <Text style={[styles.td, styles.colNum]} {...VERI_HUCRE}>
                     {summary ? `${fmtNum(summary.temp_max)}` : "—"}
                   </Text>
                 </View>
