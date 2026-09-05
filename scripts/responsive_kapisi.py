@@ -210,6 +210,16 @@ METRIK_JS = r"""
   // 1) taşan elemanlar (teşhis için ilk 8)
   let n = 0; for (const el of document.querySelectorAll('body *')) { if (n++ > 5000 || out.tasan.length >= 8) break;
     const r = el.getBoundingClientRect(); if (r.width && r.right > vw + 1 && r.left < vw) out.tasan.push({ tag: el.tagName, k: anahtar(el), sag: Math.round(r.right) }); }
+  // 1b) `main` İÇİNDE taşanlar. ⚠️ (1) görünüm alanına göre bakar; `main` kendi içeriğinden dar
+  //     kaldığında (mainSW > mainCW) hiçbir eleman vw'yi aşmayabilir → bulgu SAYI olarak gelir,
+  //     hangi eleman olduğu SÖYLENMEZ. 2026-09-05'te tam bu oldu: CI'da 4 px'lik bir taşma çıktı,
+  //     yerelde (farklı yazı tipi metrikleri) tekrar üretilemedi ve rapor eyleme dönüşemedi.
+  out.mainTasan = [];
+  if (main) { const mr = main.getBoundingClientRect(); const icSag = mr.left + main.clientLeft + main.clientWidth;
+    let m = 0; for (const el of main.querySelectorAll('*')) { if (m++ > 5000 || out.mainTasan.length >= 6) break;
+      const r = el.getBoundingClientRect(); if (!r.width) continue;
+      if (r.right > icSag + 1) out.mainTasan.push({ k: anahtar(el), sag: Math.round(r.right), g: Math.round(r.width),
+        metin: (el.children.length ? '' : (el.textContent || '').trim().slice(0, 30)) }); } }
   // 2) dokunma hedefleri
   const SEL = 'button,a[href],[role=button],[role=link],[role=tab],[role=switch],[role=checkbox],[role=radio],[role=menuitem],input[type=checkbox],input[type=radio],input[type=submit],summary';
   out.satirIci = []; out.aralikMuaf = [];
@@ -542,7 +552,10 @@ def bulgular_uret(hedef: str, durum: str, w: int, h: int, mobil: bool, met: dict
             {
                 "anahtar": f"{hedef}/{durum}/tasma-main@{kv}",
                 "siddet": "yuksek",
-                "detay": f"main.scrollWidth {met['mainSW']} > clientWidth {met['mainCW']}",
+                "detay": (
+                    f"main.scrollWidth {met['mainSW']} > clientWidth {met['mainCW']}"
+                    f"; taşanlar: {met.get('mainTasan') or 'BULUNAMADI (satır-içi metin/pseudo öğe olabilir)'}"
+                ),
                 "g": f"{w}x{h}",
             }
         )

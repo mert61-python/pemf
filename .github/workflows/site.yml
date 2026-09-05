@@ -12,9 +12,13 @@ on:
   push:
     branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
     # Yol filtresi: backend/firmware degisikligi bu hatti tetiklemesin.
-    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml" ]
+    # ⚠️ `scripts/responsive_kapisi.py` DE BURADA OLMALI: bu is akisi onu CALISTIRIYOR ama
+    # izlemiyordu -> kapi betigini bozan bir degisiklik CI'da hic gorunmuyordu (2026-09-05'te
+    # tam bu oldu: kapi ubuntu-24.04'te tarayiciyi acamiyordu ve kirmizi ancak ALAKASIZ bir
+    # site degisikligiyle ortaya cikti). Bir isin CALISTIRDIGI her dosya tetikleyicisindedir.
+    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml", "scripts/responsive_kapisi.py", "tests/responsive_kapisi_baseline.json" ]
   pull_request:
-    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml" ]
+    paths: [ "pemf-vet-web/**", ".github/workflows/site.yml", "scripts/responsive_kapisi.py", "tests/responsive_kapisi_baseline.json" ]
   workflow_dispatch:
 
 concurrency:
