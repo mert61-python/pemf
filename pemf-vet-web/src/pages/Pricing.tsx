@@ -356,8 +356,15 @@ export default function Pricing() {
       {/* Kurumsal + trial */}
       <section>
         <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
-          <div className="card flex flex-col items-center gap-6 p-8 text-center sm:flex-row sm:justify-between sm:p-10 sm:text-left">
-            <div>
+          {/* ⚠️ YAN YANA DÜZEN `md`DE BAŞLAR, `sm`DE DEĞİL (CI ölçümü 2026-09-05). 640 px'te
+              `sm:flex-row` açılıyordu ama sağdaki iki düğme `shrink-0` ile 424 px tutuyor;
+              kartın iç genişliği 512 px olduğundan başlık bloğuna yer kalmıyor ve sayfa YATAY
+              KAYIYORDU (Linux/Chrome'da main.scrollWidth 644 > 640). Yerelde (Windows/Edge)
+              glifler daha dar olduğu için taşma GÖRÜNMÜYORDU — kırılım noktası yazı tipi
+              metriklerine bu kadar yakın olmamalı. `min-w-0` da uzun kelimenin bloğu şişirmesini
+              engeller. */}
+          <div className="card flex flex-col items-center gap-6 p-8 text-center md:flex-row md:justify-between md:p-10 md:text-left">
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold">Zincir klinik veya kurum musunuz?</h2>
               <p className="mt-2 max-w-lg text-muted">Sınırsız cihaz ve şube, kendi sistemlerinizle bütünleşme, yerinde kurulum ve garantili destek için özel fiyat.</p>
             </div>

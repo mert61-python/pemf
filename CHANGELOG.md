@@ -6,6 +6,27 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.47 — 2026-09-05 (🔧 Otomatik guncelleme ARTIK GERCEKTEN KURUYOR)
+
+**Bu surum bir saha arizasini kapatiyor: 1.9.45 ve 1.9.46'da otomatik guncelleme HIC
+CALISMIYORDU.** Belirti: "Baslatici guncelleniyor..." penceresi aciliyor, uzun sure bekliyor,
+sonra kapaniyor — ama uygulama geri acilmiyor ve surum degismiyor. Elle acinca ayni guncelleme
+bastan indiriliyordu.
+
+- **Neden oluyordu.** Guncellemeyi yapan yardimci komut dosyasi, konsolsuz baslatildigi icin
+  **ilk boru (`|`) satirinda oluyordu.** O satir 1.9.45'te eklenmisti ve yardimcinin ILK calisan
+  satiriydi; yani kurulum hic baslamiyordu. Dort belirtinin (kurulum olmuyor, uygulama geri
+  acilmiyor, pencere 180 sn kaliyor, gecici dosya silinmiyor) tek sebebi buydu. Kurulumun kendisi
+  saglamdi: ayni kurulum dosyasi elle calistirildiginda 27 saniyede sorunsuz kuruluyor.
+- **Duzeltildi.** Yardimci artik konsollu (gizli) baslatiliyor ve boru kullanmiyor; ayrica ne
+  yaptigini bir gunluk dosyasina yaziyor — boyle bir ariza bir daha sessiz kalmasin.
+- **Regresyon kapisi.** Yardimci artik testte GERCEKTEN calistiriliyor; eski hali geri konuldugunda
+  test kirmizi yaniyor (metin denetimi bu arizayi yakalayamamisti).
+
+> ⚠️ **1.9.45 veya 1.9.46 kullanan cihazlar bu surume KENDILIGINDEN GECEMEZ** — onlardaki bozuk
+> yardimci hala eski koddur. Bu cihazlarda kurulum dosyasi **bir kez elle** calistirilmalidir
+> (hasta kayitlari ve profiller etkilenmez). Sonrasinda otomatik guncelleme yeniden calisir.
+
 ## app 1.9.41 · launcher 1.9.46 · mobile 2.3.32 — 2026-09-05 (📱 Her ekranda duzgun gorunum)
 
 Bu surum bastan sona bir **responsive denetiminin** urunudur: 121 bulgu, dokuz sistemik kok,
