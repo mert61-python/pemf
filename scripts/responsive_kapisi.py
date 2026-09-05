@@ -403,9 +403,23 @@ def sunucu_baslat(dizin: Path) -> tuple[ThreadingHTTPServer, int]:
     return srv, port
 
 
+# ⚠️ POSIX SANDBOX (2026-09-05, CI kırmızısıyla ÖLÇÜLDÜ). `ubuntu-latest` artık 24.04 ve çekirdek
+# `kernel.apparmor_restrict_unprivileged_userns=1` ile geliyor → Chrome'un kendi sandbox'ı
+# ayrıcalıksız kullanıcı ad alanı AÇAMIYOR ve süreç CDP portunu hiç açmadan ölüyor. Kapı bu yüzden
+# 20 sn bekleyip "port açılmadı" diyordu; stderr DEVNULL olduğu için sebep de görünmüyordu.
+# Ölçtüğümüz içerik YALNIZCA kendi yerel derlememiz (127.0.0.1'deki geçici statik sunucu) olduğundan
+# sandbox'ı POSIX'te kapatmak kabul edilebilir bir bedel; Windows/macOS'ta dokunulmuyor.
+_SANDBOX_BAYRAKLARI = [] if os.name == "nt" else ["--no-sandbox", "--disable-dev-shm-usage"]
+
+
 def tarayici_baslat(exe: str, profil: Path) -> tuple[subprocess.Popen, int]:
     port = bos_port()
     shutil.rmtree(profil, ignore_errors=True)
+    profil.parent.mkdir(parents=True, exist_ok=True)
+    # ⚠️ stderr DOSYAYA yazılır (DEVNULL değil): tarayıcı açılmazsa sebebi söyleyebilmenin tek yolu.
+    # PIPE kullanılmıyor — kimse okumazsa boru dolunca tarayıcı bloklanır.
+    gunluk_yolu = profil.parent / "tarayici_hata.log"
+    gunluk = open(gunluk_yolu, "w+b")
     proc = subprocess.Popen(
         [
             exe,
@@ -418,21 +432,44 @@ def tarayici_baslat(exe: str, profil: Path) -> tuple[subprocess.Popen, int]:
             "--force-device-scale-factor=1",
             "--font-render-hinting=none",
             "--disable-extensions",
+            *_SANDBOX_BAYRAKLARI,
             f"--remote-debugging-port={port}",
             f"--user-data-dir={profil}",
             "about:blank",
         ],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=gunluk,
     )
+    olu = False
     for _ in range(80):
         try:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2).read()
+            gunluk.close()
             return proc, port
         except Exception:
+            if proc.poll() is not None:  # süreç öldü → port asla açılmayacak, 20 sn bekleme
+                olu = True
+                break
             time.sleep(0.25)
+
+    kod = proc.poll()
     proc.kill()
-    raise RuntimeError("tarayıcı 20 sn içinde CDP portunu açmadı")
+    try:
+        gunluk.flush()
+        gunluk.close()
+        iz = gunluk_yolu.read_bytes()[-1500:].decode("utf-8", "replace").strip()
+    except Exception:
+        iz = ""
+    neden = f"süreç {kod} koduyla ÖLDÜ" if olu else "süreç yaşıyor ama 20 sn'de portu açmadı"
+    raise RuntimeError(
+        f"tarayıcı CDP portunu açmadı ({neden}).\n"
+        f"  tarayıcı : {exe}\n"
+        f"  günlük   : {gunluk_yolu}\n"
+        + (f"  son satırlar:\n{iz}\n" if iz else "  (tarayıcı stderr'e hiçbir şey yazmadı)\n")
+        + "  YAPILACAK: 'Failed to move to new namespace' / 'No usable sandbox' geçiyorsa çekirdek\n"
+        "  sandbox'ı engelliyordur — POSIX'te --no-sandbox zaten veriliyor, verilmiyorsa ekleyin.\n"
+        "  Tarayıcı hiç kurulamıyorsa kapı ORTAM YOK (çıkış 3) ile atlanmalı, bu yol değil."
+    )
 
 
 def sekme_ac(port: int) -> dict:
