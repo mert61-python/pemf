@@ -110,6 +110,13 @@ APP_ROOTS = [
     # VERSION/provision emsaliyle APP katmanina aittir. DEPS'te kalsalardi her profil
     # degisikligi kliniklere 1,4 GB indirtirdi (katmanli paketin varlik sebebi bozulur).
     'PEMF_Backend/_internal/deploy',
+    # Frontend OTA surum dosyasi (2026-09-05, AYNI yontemle olculdu: Range-merkezi-dizin kiyasi
+    # 7021 dosyadan YALNIZ BUNUN farkli oldugunu gosterdi — 7020 girdi bayt-bayt ayniydi).
+    # `sync_versions.ps1` bunu versions.json->frontendOta'dan HER yayinda yazar; VERSION'in
+    # ikizidir (utils/path_utils.py surumu once VERSION'dan, sonra BURADAN okur). DEPS'te
+    # kaldigi surece frontendOta her degistiginde 1,49 GB'lik deps katmani "bayat" gorunur ve
+    # HER KLINIK HER YAYINDA 1,49 GB indirir — katmanli paketin varlik sebebi tam olarak budur.
+    'PEMF_Backend/_internal/frontend_version.json',
     # Sinir dosyasi KENDISI de app katmanina aittir. Listede olmazsa launcher onu yedege almaz
     # ve geri alma sinirini okuyamaz -> basarisiz guncelleme geri alinamaz (2026-08-08'de test
     # yakaladi). Launcher ayrica savunma amacli marker'i yedege KOPYALAR; bu satir tutarlilik icin.

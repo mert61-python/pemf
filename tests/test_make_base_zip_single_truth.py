@@ -16,6 +16,7 @@ Bu dosya betiği GERÇEKTEN çalıştırır (sahte bir `dist/` ağacı üzerinde
 iddia etmek yerine kanıtlar.
 """
 
+import ast
 import os
 import subprocess
 import sys
@@ -215,6 +216,78 @@ def test_KRITIK_VERSION_dosyasi_APP_katmaninda(ortam):
         "VERSION app katmaninda DEGIL — siradan yayinda surum tazelenmez, geri cagirma yanilir"
     )
     assert "PEMF_Backend/_internal/VERSION" not in deps, "VERSION iki katmanda birden"
+
+
+def test_KRITIK_frontend_version_APP_katmaninda(ortam):
+    """VERSION'ın İKİZİ — aynı arıza, aynı yöntemle 2026-09-05'te ölçüldü.
+
+    Yayın öncesi `base-deps.zip` (1,49 GB) yeni sha aldı ama BOYUTU eskisiyle birebir aynıydı.
+    Uzak zip'in merkezi dizini HTTP Range ile okunup karşılaştırıldı: **7021 girdinin 7020'si
+    bayt-bayt aynı**, farklı olan TEK dosya `_internal/frontend_version.json` (153 bayt).
+
+    `sync_versions.ps1` bu dosyayı `versions.json → frontendOta`dan HER yayında yazar. DEPS
+    katmanında kaldığı sürece frontendOta'nın her değişimi 1,49 GB'lık katmanı "bayat" gösterir
+    ve HER KLİNİK HER YAYINDA 1,49 GB indirir — katmanlı paketin varlık sebebi tam olarak budur.
+    (VERSION 2026-08-09'da, cloud_mqtt_provision.json 2026-08-19'da, deploy/*.env 2026-08-22'de
+    aynı sebeple taşınmıştı; bu dördüncüsü.)
+    """
+    dist, cikti = ortam
+    (dist / "_internal" / "frontend_version.json").write_text('{"version": "1.4.2"}', encoding="utf-8")
+    assert _calistir(dist, cikti=cikti).returncode == 0
+    app = set(_crc(cikti / "base-app.zip"))
+    deps = set(_crc(cikti / "base-deps.zip"))
+    yol = "PEMF_Backend/_internal/frontend_version.json"
+    assert yol in app, (
+        "frontend_version.json app katmaninda DEGIL — her frontendOta degisimi kliniklere 1,49 GB indirtir"
+    )
+    assert yol not in deps, "frontend_version.json iki katmanda birden"
+
+
+def test_KRITIK_SURUM_ZINCIRINDEKI_HER_dosya_APP_kokunde():
+    """GENEL KURAL: kurulu sürümü BELİRLEYEN her paket dosyası APP katmanındadır.
+
+    Tek tek dosya saymak bu arızayı dört kez kaçırdı; kural kaynağa bağlanıyor:
+    `utils/path_utils.get_app_version()` sürümü hangi paket dosyalarından okuyorsa, `make_base_zip`
+    onların HEPSİNİ app kökü saymalıdır. Biri deps'e düşerse ya sürüm aylarca tazelenmez (geri
+    çağırma yanlış sürüme bakar) ya da her yayın 1,49 GB'lık katmanı bayatlatır.
+
+    ⚠️ Çıpa AST'ye pinli: ham metinde `packaged_resource_path("...")` aramak yorumları ve
+    başka fonksiyonlardaki çağrıları da yakalardı.
+    """
+    agac = ast.parse((GUII / "utils" / "path_utils.py").read_text(encoding="utf-8"))
+    govde = next(
+        (d for d in ast.walk(agac) if isinstance(d, ast.FunctionDef) and d.name == "get_app_version"),
+        None,
+    )
+    assert govde is not None, "get_app_version bulunamadi — surum zinciri tasinmis, kapi guncellenmeli"
+
+    beklenen = {
+        c.args[0].value
+        for c in ast.walk(govde)
+        if isinstance(c, ast.Call)
+        and getattr(c.func, "id", None) == "packaged_resource_path"
+        and c.args
+        and isinstance(c.args[0], ast.Constant)
+        and isinstance(c.args[0].value, str)
+    }
+    assert beklenen, "surum zinciri hicbir paket dosyasi okumuyor — kapi bos kalirdi"
+
+    kaynak = ast.parse((GUII / "build_tools" / "make_base_zip.py").read_text(encoding="utf-8"))
+    kokler: set[str] = set()
+    for dugum in ast.walk(kaynak):
+        if isinstance(dugum, ast.Assign) and any(
+            isinstance(h, ast.Name) and h.id == "APP_ROOTS" for h in dugum.targets
+        ):
+            for liste in ast.walk(dugum.value):
+                if isinstance(liste, ast.List):
+                    kokler |= {e.value for e in liste.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+    assert kokler, "APP_ROOTS listesi AST'den okunamadi — bicim degismis, kapi guncellenmeli"
+
+    eksik = sorted(ad for ad in beklenen if f"PEMF_Backend/_internal/{ad}" not in kokler)
+    assert not eksik, (
+        f"surum zincirindeki {eksik} APP_ROOTS'ta yok -> deps katmanina duser: "
+        "ya surum bayatlar (geri cagirma yanilir) ya da her yayin kliniklere 1,49 GB indirtir"
+    )
 
 
 def test_KRITIK_korumasiz_py_PAKETLEMEYI_DURDURUR(ortam):

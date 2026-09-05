@@ -6,6 +6,73 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.41 · launcher 1.9.46 · mobile 2.3.32 — 2026-09-05 (📱 Her ekranda duzgun gorunum)
+
+Bu surum bastan sona bir **responsive denetiminin** urunudur: 121 bulgu, dokuz sistemik kok,
+sekiz faz. Degisikliklerin tamami olculdu (headless tarayici + CDP) ve regresyon kapilariyla
+kilitlendi.
+
+### Hasta guvenligi
+
+- **ACIL DURDUR klavye acikken erisilebilir.** Form doldururken (hasta kaydi, gozlem notu, bobin
+  parametresi) dugme klavyenin ALTINDA kaliyordu. Artik gizlenmiyor, klavyenin ustune tasiniyor.
+- **ACIL DURDUR baglanti koptugunda kaybolmuyor.** STM seri baglantisi kesilince bobinler
+  "durdu" degil "durumu BILINMIYOR" olur; dugme eski surumde tam da o anda kendini gizliyordu.
+- **Hekim onay penceresi kaydirilabilir.** 8 bobinli oneride ve yatay telefonda "Onayla ve Baslat"
+  ekran disinda kaliyordu: otonom seans onaysiz baslamiyordu ama hekim onay da VEREMIYORDU.
+- **Bobin seciciler artik komsu bobine basmiyor.** 8 px dokunma tamponu 4 px izgara bosluguyla
+  ust uste biniyordu; aradaki bosluga dokunus SAGDAKI bobine gidiyordu.
+- **Seans suresi her yazi olceginde okunur.** Saatli bicim ("1:05:30") 320 px telefonda tasiyordu;
+  bicim artik daima dakika:saniye (klinik kapagi 120 dk).
+- **Canli kamera goruntusundeki organ isaretleri kaymiyor.** Kutu orani ile kare orani
+  tutmadigi icin overlay canli goruntuyle hizalanmiyordu (tibbi karar ekrani).
+
+### Arayuz (uygulama)
+
+- Kabuk artik pencere genisliginin yani sira YUKSEKLIGI ve gercek icerik alanini da okuyor:
+  telefonda alt bar, tablet/dar pencerede ikon rayi, genis ekranda kenar cubugu.
+- Tablet ve PC'de olcek tavani %110 (onceden %130): kenar cubugu 322 px'e, govde 17 px'e
+  cikmiyor. Telefon gorunumu BIREBIR ayni kaldi.
+- Sistem yazi olcegi tavanlandi (1,2). Buyuk yazida alt bar etiketleri, seans suresi, bildirim
+  rozeti ve seans detay tablosu artik tasmiyor.
+- Klavye acilinca alt bar kalkiyor, formlar kaydirilabiliyor; kabuk ici cift kaydirici kaldirildi
+  (eskiden "Kaydet"/"Cihaza Baglan" iki dokunus istiyordu).
+- Dokunma hedefleri 44 px tabanina cekildi; grafikler ve kamera katmanlari olculen genislikten
+  cizilyor.
+
+### Baslatici (client)
+
+- **Kucuk ekranda baslik artik kirpilmiyor.** 700x540 asgari pencerede "Giris yapin" ust seridin
+  altinda kaliyor ve KAYDIRMAYLA DA ULASILAMIYORDU.
+- **Pencere ekrana sigiyor.** 1366x768 @%150 DPI'da pencere ekrandan tasiyor ve asgari yukseklik
+  yuzunden kucultulemiyordu.
+- Ust serit etiketleri artik gorunuyor (olu bir medya sorgusu onlari her pencerede gizliyordu),
+  profil kartlari klavyeyle secilebiliyor, modallar Escape ile kapaniyor.
+
+### Site
+
+- 320 px telefonda sayfa yatay kaymiyor; fiyat karsilastirmasi telefonda KART gorunumune geciyor
+  (tablonun yarisi gizliydi ve satir etiketi kayboluyordu).
+- iOS Safari giris alanlarina dokununca sayfayi yakinlastirmiyor.
+- Dokunma hedefleri ve genis ekran yerlesimi duzeltildi.
+
+### Paketleme (yayin oncesi olculdu)
+
+- **Bundan sonraki siradan guncellemeler yine ~81 MB inecek.** Bu yayin hazirlanirken
+  `base-deps.zip` (1,49 GB) yeni bir sha aldi ama BOYUTU eskisiyle birebir ayniydi. Uzak paketin
+  merkezi dizini karsilastirildi: **7021 dosyanin 7020'si bayt-bayt ayniydi**, farkli olan tek
+  dosya `frontend_version.json` (153 bayt) — her yayinda yeniden yazilan surum dosyasi. Yanlis
+  katmanda (deps) durdugu icin frontendOta'nin her degisimi 1,49 GB'lik katmani "bayat"
+  gosteriyor, yani her klinige her yayinda 1,49 GB indirtiyordu. Dosya, ikizi `VERSION` gibi app
+  katmanina alindi. (Bu yayinda deps bir kez daha iner; sonrasinda yalnizca bagimliliklar
+  degisince.)
+
+### Not
+
+Bu surumde iOS yayini YAPILMADI (sahip karari); iOS derleme numarasi degismedi.
+
+Paket kimliği (`buildId`): `49c980a6d99e`. Monolit `base.zip` sha: `3d1056c4c6b5`.
+
 ## launcher 1.9.45 — 2026-09-04 (⏳ Guncelleme sirasinda ekran artik BOS KALMIYOR)
 
 - **Saha bildirimi:** oto-guncellemede pencere kapaniyor, yeni surum acilana kadar ekranda HICBIR
