@@ -34,6 +34,7 @@ import FEATURES_SRC from '../pages/Features.tsx?raw'
 import FOOTER_SRC from '../components/Footer.tsx?raw'
 import HEADER_SRC from '../components/Header.tsx?raw'
 import HOME_SRC from '../pages/Home.tsx?raw'
+import PACKAGE_SRC from '../components/PackageBuilder.tsx?raw'
 import ODEME_SRC from '../pages/Odeme.tsx?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
 import RESET_SRC from '../pages/ResetPassword.tsx?raw'
@@ -47,6 +48,7 @@ const TSX = {
   Header: HEADER_SRC,
   Home: HOME_SRC,
   Odeme: ODEME_SRC,
+  PackageBuilder: PACKAGE_SRC,
   Pricing: PRICING_SRC,
   ResetPassword: RESET_SRC,
 }
@@ -111,5 +113,65 @@ describe('giriş/kayıt penceresi', () => {
     expect(modal).toContain('overflow-y-auto')
     // 90vh iOS'ta araç çubuğu yüzünden ekrandan taşıyordu.
     expect(modal).not.toContain('max-h-[90vh]')
+  })
+})
+
+describe('geniş ekran ve akış', () => {
+  it('KRİTİK: 1536 üstünde kapsayıcı genişler (2560 pikselde 704 px ölü kenar vardı)', () => {
+    // ÖLÇÜLDÜ: max-w-6xl → 2560 px'te kap 1152 px, iki yanda 704 px boşluk.
+    // 2xl:max-w-7xl ile kap 1280 px, boşluk 640 px.
+    for (const [ad, src] of [
+      ['Home', HOME_SRC],
+      ['Features', FEATURES_SRC],
+      ['Pricing', PRICING_SRC],
+      ['Header', HEADER_SRC],
+      ['Footer', FOOTER_SRC],
+    ] as const) {
+      const kaynak = kaynakSoy(src)
+      const toplam = (kaynak.match(/max-w-6xl/g) ?? []).length
+      const genis = (kaynak.match(/max-w-6xl 2xl:max-w-7xl/g) ?? []).length
+      expect(genis, `${ad}: ${toplam - genis} kapsayıcı 2xl varyantı almamış`).toBe(toplam)
+    }
+  })
+
+  it('KRİTİK: "Önerilen" rozeti AKIŞTA (mutlak konumda başlığın üstüne biniyordu)', () => {
+    // ÖLÇÜLDÜ 320 px: rozet 224-283, başlık 81-244 → 20 px yatay çakışma.
+    const paket = kaynakSoy(PACKAGE_SRC)
+    expect(paket).not.toMatch(/absolute right-4 top-4/)
+    expect(paket, 'başlık daralabilmeli, rozet daralmamalı').toMatch(/min-w-0 flex-1 text-lg font-bold/)
+    expect(paket).toMatch(/shrink-0 rounded-full bg-primary\/15/)
+  })
+
+  it('hesap menüsü 320 px görünüm alanını AŞMAZ ve çekmecede akışa girer', () => {
+    // ÖLÇÜLDÜ: sabit w-72 (288 px) + absolute right-0 → 320 px'te taşıyordu.
+    const hesap = kaynakSoy(ACCOUNT_SRC)
+    expect(hesap).toContain('max-w-[calc(100vw-2.5rem)]')
+    expect(hesap).toMatch(/inline \? 'static w-full'/)
+    expect(kaynakSoy(HEADER_SRC), 'çekmecedeki menü inline değil').toMatch(/AccountButton[\s\S]{0,80}?inline/)
+  })
+})
+
+describe('dokunma hedefi kalanları', () => {
+  it('KRİTİK: fiyat dönemi düğmeleri 44 px tabanını alır (32 px ölçülmüştü)', () => {
+    const fiyat = kaynakSoy(PRICING_SRC)
+    const pill = fiyat.match(/rounded-full px-4 font-medium transition-colors/g) ?? []
+    expect(pill.length, 'Aylık/Yıllık düğmeleri bulunamadı').toBe(2)
+    expect(fiyat).toMatch(/min-h-11 items-center justify-center rounded-full px-4/)
+  })
+
+  it('KRİTİK: "Çıkınca haber ver" 44 px tabanını alır (222×16 px ölçülmüştü)', () => {
+    // ⚠️ Kapı bunu WCAG 2.5.8 ARALIK muafiyetiyle geçiriyor (komşu hedef yok) —
+    // yani kapı yeşilken de bu hedef parmakla ıskalanıyordu. Kapı tabanı ≠ kullanılabilirlik.
+    const indir = kaynakSoy(DOWNLOAD_SRC)
+    const i = indir.indexOf('Çıkınca haber ver')
+    expect(i).toBeGreaterThan(-1)
+    expect(indir.slice(Math.max(0, i - 400), i)).toMatch(/className="tap /)
+  })
+
+  it('KRİTİK: altbilgi 400 px altında TEK sütuna iner', () => {
+    // ÖLÇÜLDÜ 320 px: iki sütun × 120 px → "İptal, İade ve Cayma Hakkı" üç satıra sarıyordu.
+    const alt = kaynakSoy(FOOTER_SRC)
+    expect(alt).toMatch(/grid-cols-1/)
+    expect(alt).toMatch(/min-\[400px\]:grid-cols-2/)
   })
 })

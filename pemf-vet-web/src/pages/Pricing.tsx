@@ -83,7 +83,7 @@ export default function Pricing() {
   return (
     <>
       {checkout && (
-        <div className="mx-auto max-w-6xl px-5 pt-6 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 pt-6 sm:px-6">
           <div className={`rounded-lg border px-4 py-3 text-sm ${
             checkout === 'success'
               ? 'border-emerald-500/40 bg-emerald-500/10 text-success'
@@ -112,7 +112,7 @@ export default function Pricing() {
       )}
 
       {FREE_MODE && (
-        <div className="mx-auto max-w-6xl px-5 pt-6 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 pt-6 sm:px-6">
           <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-primary">
             Test aşaması: tüm planlar şu an <strong>ücretsiz</strong>. Aşağıdaki planlardan hangisini seçerseniz seçin doğrudan indirmeye gidersiniz; kart bilgisi istenmez, ödeme alınmaz.
           </div>
@@ -121,7 +121,7 @@ export default function Pricing() {
 
       {/* Hero + billing toggle */}
       <section className="bg-hero border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6 sm:py-20">
           <span className="chip"><Sparkle className="h-3.5 w-3.5" /> Fiyatlandırma</span>
           <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">Kliniğinize göre plan</h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted">
@@ -131,9 +131,11 @@ export default function Pricing() {
             Hangi yapay zekâ modellerinin ineceğini ise kurulumda seçtiğiniz profiller belirler.
           </p>
 
+          {/* [W adım 7 / site-11] Dönem düğmeleri 63×32 ve 135×32 px ölçüldü; taban 44.
+              Kapı bunları aralık muafiyetiyle geçiriyordu ama parmakla ıskalanıyorlardı. */}
           <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border-strong bg-bg-soft p-1 text-sm">
-            <button onClick={() => setYearly(false)} className={`rounded-full px-4 py-1.5 font-medium transition-colors ${!yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>Aylık</button>
-            <button onClick={() => setYearly(true)} className={`rounded-full px-4 py-1.5 font-medium transition-colors ${yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>
+            <button onClick={() => setYearly(false)} className={`inline-flex min-h-11 items-center justify-center rounded-full px-4 font-medium transition-colors ${!yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>Aylık</button>
+            <button onClick={() => setYearly(true)} className={`inline-flex min-h-11 items-center justify-center rounded-full px-4 font-medium transition-colors ${yearly ? 'bg-primary text-primary-fg' : 'text-muted'}`}>
               Yıllık<span className={`ml-1.5 text-xs ${yearly ? 'text-primary-fg/80' : 'text-primary'}`}>2 ay ücretsiz</span>
             </button>
           </div>
@@ -157,7 +159,7 @@ export default function Pricing() {
 
       {/* Seviyeler */}
       <section className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="grid items-start gap-6 md:grid-cols-2 lg:grid-cols-4">
             {PLANS.map((p) => {
               const pv = planFiyatGorunumu(p, yearly)
@@ -207,7 +209,7 @@ export default function Pricing() {
 
       {/* Karşılaştırma — 1024 altı SATIR kartları, üstü mevcut tablo (bkz. degerGruplari yorumu) */}
       <section className="border-b border-border/60 bg-bg-soft/50">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <h2 id="plan-karsilastirmasi" className="text-2xl font-bold sm:text-3xl">Plan karşılaştırması</h2>
           <p className="mt-3 max-w-2xl text-sm text-muted lg:hidden">
             Her kart tek bir özelliği tüm planlarda birlikte gösterir; aynı değeri veren planlar
@@ -311,7 +313,7 @@ export default function Pricing() {
 
       {/* Kullanım profilleri (kurulum) */}
       <section className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="max-w-2xl">
             <span className="chip">Kurulum profilleri</span>
             <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Ne kurulacağını siz seçin</h2>
@@ -328,7 +330,7 @@ export default function Pricing() {
 
       {/* Eklentiler */}
       <section className="border-b border-border/60 bg-bg-soft/50">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="max-w-xl">
             <span className="chip">Eklentiler</span>
             <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Ek özellikler</h2>
@@ -353,7 +355,7 @@ export default function Pricing() {
 
       {/* Kurumsal + trial */}
       <section>
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="card flex flex-col items-center gap-6 p-8 text-center sm:flex-row sm:justify-between sm:p-10 sm:text-left">
             <div>
               <h2 className="text-2xl font-bold">Zincir klinik veya kurum musunuz?</h2>

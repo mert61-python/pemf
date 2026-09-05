@@ -36,7 +36,7 @@ function PlatformCard({
 }) {
   const { loading, gated, download } = useDownloadGate()
   return (
-    <div className="card flex flex-col p-7">
+    <div className="card flex flex-col p-5 xl:p-7">
       <div className="flex items-center gap-3">
         <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary/12 text-fg ring-1 ring-white/10">
           <Icon className="h-6 w-6" />
@@ -73,7 +73,9 @@ function PlatformCard({
               konuya gömmek yerine sabit konu kullanıyoruz (kapı korunur, kullanıcı yine yazar). */}
           <a
             href="mailto:ibiatechnology@gmail.com?subject=Yeni%20platform%20s%C3%BCr%C3%BCm%C3%BC%20haber%20ver"
-            className="mt-2 text-center text-xs text-primary hover:underline"
+            /* [W adım 9 / site-11] Dokunma alanı 222×16 px'ti. Kapı bunu WCAG 2.5.8 ARALIK
+               muafiyetiyle geçiriyor (komşu hedef yok) ama parmakla ıskalanıyordu. */
+            className="tap mt-1 justify-center text-center text-xs text-primary hover:underline"
           >
             Çıkınca haber ver
           </a>

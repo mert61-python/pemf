@@ -8,7 +8,7 @@ export default function Features() {
   return (
     <>
       <section className="bg-hero border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6 sm:py-20">
           <span className="chip">Özellikler</span>
           <h1 className="mt-5 text-4xl font-extrabold sm:text-5xl">Uçtan uca terapi kontrolü</h1>
           <p className="mx-auto mt-4 max-w-2xl text-muted">
@@ -18,7 +18,7 @@ export default function Features() {
       </section>
 
       <section className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 sm:px-6">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((f) => {
               const Icon = ICONS[f.icon as keyof typeof ICONS]
@@ -38,7 +38,7 @@ export default function Features() {
 
       {/* Launcher önizleme + yama notları */}
       <section className="border-b border-border/60 bg-bg-soft/60">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:px-6 lg:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl 2xl:max-w-7xl items-center gap-12 px-5 py-16 sm:px-6 lg:grid-cols-2">
           <div>
             <span className="chip">Masaüstü uygulaması</span>
             <h2 className="mt-4 text-3xl font-bold">Tek pencereden yönetim</h2>
@@ -69,7 +69,7 @@ export default function Features() {
       </section>
 
       <section>
-        <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-16 text-center sm:px-6">
           <h2 className="text-2xl font-bold sm:text-3xl">Başlamaya hazır mısınız?</h2>
           <p className="mt-3 text-muted">PEMF Vet’i indirin; kurulum ve güncellemeler otomatik.</p>
           <Link to="/download" className="btn-primary mt-6 !px-6 !py-3.5">

@@ -25,7 +25,7 @@ export default function AppScreenshots() {
 
   return (
     <section className="border-b border-border/60">
-      <div className="mx-auto max-w-6xl px-5 py-20 sm:px-6">
+      <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div className="max-w-xl">
             <span className="chip">Uygulama</span>

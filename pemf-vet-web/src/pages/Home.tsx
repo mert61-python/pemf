@@ -13,7 +13,7 @@ export default function Home() {
     <>
       {/* ── HERO ─────────────────────────────────────────── */}
       <section className="bg-hero border-b border-border/60">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:py-28">
+        <div className="mx-auto grid max-w-6xl 2xl:max-w-7xl items-center gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:py-28">
           <div>
             {/* Metin denetimi 2026-08-20: burada `CLIENT.channel` ("Sürüm 2026.1") yazıyordu ve
                 aynı ekranın altında "v1.9.32" görünüyordu — iki ayrı sürüm şeması yan yana,
@@ -58,7 +58,7 @@ export default function Home() {
 
       {/* ── LAUNCHER AKIŞI (Riot-benzeri) ───────────────────── */}
       <section className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
             <span className="chip">Nasıl çalışır</span>
             <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Tek indirme, gerisi otomatik</h2>
@@ -85,7 +85,7 @@ export default function Home() {
 
       {/* ── ÖZELLİKLER ──────────────────────────────────────── */}
       <section className="border-b border-border/60 bg-bg-soft/60">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-6xl 2xl:max-w-7xl px-5 py-20 sm:px-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div className="max-w-xl">
               <span className="chip">Özellikler</span>
@@ -122,7 +122,7 @@ export default function Home() {
 
       {/* ── PROFİLLER + PLAN TEASER ─────────────────────────── */}
       <section className="border-b border-border/60 bg-bg-soft/60">
-        <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:items-center">
+        <div className="mx-auto grid max-w-6xl 2xl:max-w-7xl gap-12 px-5 py-20 sm:px-6 lg:grid-cols-2 lg:items-center">
           <div>
             <span className="chip">Kurulum profilleri</span>
             <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Herkes kendi ihtiyacını kurar</h2>

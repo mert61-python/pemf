@@ -20,7 +20,7 @@ import { jetonBakiyesiniOku, type JetonBakiyesi } from '../lib/jeton'
    ⚠️ BİLEREK YOK: plan adı / yenileme tarihi / fatura. `subscriptions.current_period_end`
    alanına bu depoda HİÇBİR yol değer yazmıyor (bkz. api/cancel.ts içindeki ölçüm notu) →
    tarih göstermek uydurma veri olurdu. Satış açılınca gerçek "Hesabım" sayfası ayrı iş. */
-export default function AccountButton({ onNavigate }: { onNavigate?: () => void }) {
+export default function AccountButton({ onNavigate, inline }: { onNavigate?: () => void; inline?: boolean }) {
   const { session, email, signOut, ready } = useAuth()
   const { requireAuth } = useAuthModal()
   const [acik, setAcik] = useState(false)
@@ -86,9 +86,15 @@ export default function AccountButton({ onNavigate }: { onNavigate?: () => void 
       </button>
 
       {acik && (
+        /* [W adım 3 / site-15] Menü SABİT 288 px (w-72) + `absolute right-0` idi: 320 px
+           telefonda görünüm alanının DIŞINA taşıyordu. Genişlik artık görünüm alanıyla sınırlı;
+           mobil çekmecede (inline) AKIŞA girip kendi yerini açıyor — üst üste binen iki katman
+           yerine tek sütun. */
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-bg p-4 text-left shadow-xl"
+          className={`z-50 mt-2 rounded-xl border border-border bg-bg p-4 text-left shadow-xl ${
+            inline ? 'static w-full' : 'absolute right-0 w-72 max-w-[calc(100vw-2.5rem)]'
+          }`}
         >
           <div className="text-xs text-muted">Giriş yapıldı</div>
           <div className="mt-0.5 truncate text-sm font-medium" title={email ?? undefined}>{email}</div>

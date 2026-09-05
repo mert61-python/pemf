@@ -38,11 +38,9 @@ export default function PackageBuilder() {
                 on ? 'ring-2 ring-primary/60 glow-ring' : 'hover:border-border-strong'
               }`}
             >
-              {m.recommended && (
-                <span className="absolute right-4 top-4 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  Önerilen
-                </span>
-              )}
+              {/* [W adım 8 / site-8] Rozet `absolute right-4 top-4` idi: dar kartta başlığın
+                  ÜSTÜNE biniyordu (320 px'te başlık 81-244, rozet 224-283 → 20 px çakışma).
+                  Artık başlık satırının AKIŞINDA; başlık min-w-0 ile daralır, rozet shrink-0. */}
               <div className="flex items-center gap-3">
                 <span
                   className={`grid h-6 w-6 place-items-center rounded-md border transition-colors ${
@@ -51,7 +49,12 @@ export default function PackageBuilder() {
                 >
                   <Check className="h-4 w-4" />
                 </span>
-                <span className="text-lg font-bold">{m.name}</span>
+                <span className="min-w-0 flex-1 text-lg font-bold">{m.name}</span>
+                {m.recommended && (
+                  <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                    Önerilen
+                  </span>
+                )}
               </div>
               <p className="mt-2 text-sm text-muted">{m.tagline}</p>
 

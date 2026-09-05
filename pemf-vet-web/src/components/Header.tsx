@@ -10,7 +10,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/70 bg-bg/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-6xl 2xl:max-w-7xl items-center justify-between px-5 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/25">
             <Logo className="h-5 w-5" />
@@ -56,7 +56,7 @@ export default function Header() {
 
       {open && (
         <div className="max-h-[calc(100svh-4rem)] overflow-y-auto border-t border-border/70 bg-bg-soft lg:hidden">
-          <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-5 py-4">
+          <nav className="mx-auto flex max-w-6xl 2xl:max-w-7xl flex-col gap-1 px-5 py-4">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
@@ -72,7 +72,7 @@ export default function Header() {
               </NavLink>
             ))}
             <div className="mt-2 px-3">
-              <AccountButton onNavigate={() => setOpen(false)} />
+              <AccountButton onNavigate={() => setOpen(false)} inline />
             </div>
             <Link to="/download" onClick={() => setOpen(false)} className="btn-primary mt-2 text-sm">
               <Download className="h-4 w-4" />
