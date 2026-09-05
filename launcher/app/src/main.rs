@@ -1711,6 +1711,27 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
 /// Yeniden-başlatma batch'inin İÇERİĞİNİ üret (saf → birim-test edilebilir). Batch-enjeksiyonu
 /// savunması: yollar tırnak / yeni-satır içeremez (meşru Windows yollarında bulunmaz). `ping` =
 /// taşınabilir uyku (timeout.exe redirected-stdin'de çalışmaz): ~3sn bekle → sessiz kur → ~2sn → başlat.
+/// 🔴 SAHA ARIZASI 2026-09-05 — YARDIMCI BATCH'İN SÜREÇ BAYRAKLARI.
+///
+/// `DETACHED_PROCESS` verilen `cmd.exe` KONSOLSUZ başlar ve **ilk BORU (`|`) satırında ÖLÜR**.
+/// 1.9.45'te bekleme döngüsüne `tasklist … | find …` eklendi; o satır batch'in İLK çalışan
+/// satırıydı → yardımcı hiç kurulum yapmadan ölüyordu. Görünen belirti dört katlıydı ve hiçbiri
+/// sebebi göstermiyordu: kurulum olmuyor, uygulama geri açılmıyor, bilgilendirme penceresi
+/// 180 sn ekranda kalıyor, `.bat` kendini silmiyor (sonuna hiç varmıyor).
+///
+/// ÖLÇÜM (varsayım değil): aynı batch dört bayrak kombinasyonuyla koşuldu —
+///   DETACHED|GRUP|NO_WINDOW → yalnız "BASLADI" yazıldı, boruda öldü
+///   DETACHED|GRUP           → yalnız "BASLADI" yazıldı, boruda öldü
+///   GRUP|NO_WINDOW          → SONA KADAR koştu
+///   bayraksız               → SONA KADAR koştu
+///
+/// `CREATE_NO_WINDOW` konsol-altsistem sürece GİZLİ bir konsol verir: boru çalışır, kullanıcı
+/// hiçbir şey görmez (siyah-konsol kapısı korunur). Süreç bağımsızlığı `DETACHED_PROCESS`e
+/// BAĞLI DEĞİLDİR — Windows'ta ebeveynin çıkması çocuğu öldürmez; Ctrl+C/konsol sinyallerinden
+/// ayrışma `CREATE_NEW_PROCESS_GROUP` ile zaten sağlanır.
+#[cfg(windows)]
+const YARDIMCI_BATCH_BAYRAKLARI: u32 = 0x0000_0200 /* CREATE_NEW_PROCESS_GROUP */ | 0x0800_0000 /* CREATE_NO_WINDOW */;
+
 #[cfg(windows)]
 fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Option<&str>) -> Result<String, String> {
     for p in [Some(installer), Some(exe), pencere].into_iter().flatten() {
@@ -1724,26 +1745,47 @@ fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Opt
         .unwrap_or("PEMFVetClient.exe");
     // Araçları TAM YOLLA çağır: PATH'te Git'in `find`i öne çıkabiliyor (geliştirici makinesi).
     const TL: &str = "%SystemRoot%\\System32\\tasklist.exe";
-    const FD: &str = "%SystemRoot%\\System32\\find.exe";
+    const FS: &str = "%SystemRoot%\\System32\\findstr.exe";
+    // ⚠️ BORU YASAK (yukarıdaki saha arızası). `tasklist` çıktısı GEÇİCİ DOSYAYA yönlendirilir,
+    // `findstr` o dosyayı okur. Yönlendirme konsolsuz `cmd`de de çalışır; boru çalışmaz.
+    // Kapı: `betik_BORU_icermez` + `yardimci_batch_uretimdeki_bayraklarla_SONA_KADAR_kosar`.
+    let t = format!("%TEMP%\\pemf_upd_{eski_pid}.txt");
+    let g = format!("%TEMP%\\pemf_selfupdate_{eski_pid}.log");
     let mut s = String::from("@echo off\r\n");
-    // 1) Launcher'ın çıkmasını PID ile bekle (sabit 3 sn yerine ~1 sn adımlarla; en çok ~30 sn).
+    s.push_str(&format!("set \"T={t}\"\r\nset \"G={g}\"\r\n"));
+    // Günlük: bu yardımcı sessizce ölürse sahada tek kanıt budur (arıza tam da bu yüzden
+    // teşhis edilemiyordu — hiçbir yere hiçbir şey yazılmıyordu).
+    s.push_str("echo [%DATE% %TIME%] yardimci basladi > \"%G%\"\r\n");
+    // 1) Launcher'ın çıkmasını PID ile bekle (~1 sn adımlarla; en çok ~30 sn).
     s.push_str("set /a n=0\r\n:bekle\r\n");
-    s.push_str(&format!("{TL} /FI \"PID eq {eski_pid}\" 2>nul | {FD} \" {eski_pid} \" >nul\r\n"));
+    s.push_str(&format!("{TL} /FI \"PID eq {eski_pid}\" /NH > \"%T%\" 2>nul\r\n"));
+    s.push_str(&format!("{FS} /C:\" {eski_pid} \" \"%T%\" >nul 2>&1\r\n"));
     s.push_str("if errorlevel 1 goto kur\r\nset /a n+=1\r\nif %n% GEQ 30 goto kur\r\n");
     s.push_str("ping -n 2 127.0.0.1 >nul\r\ngoto bekle\r\n:kur\r\n");
+    s.push_str("echo [%TIME%] kurulum baslatiliyor (bekleme turu %n%) >> \"%G%\"\r\n");
     // 2) Sessiz kurulum (NSIS eski dosyaların üstüne yazar; `/S`te kancalar koşmaz).
-    s.push_str(&format!("\"{installer}\" /S\r\nping -n 2 127.0.0.1 >nul\r\n"));
+    s.push_str(&format!("\"{installer}\" /S\r\n"));
+    s.push_str("echo [%TIME%] kurulum bitti errorlevel=%ERRORLEVEL% >> \"%G%\"\r\n");
+    s.push_str("ping -n 2 127.0.0.1 >nul\r\n");
     // 3) Kullanıcı bu arada yeni exe'yi KENDİSİ açtıysa ikinci pencere AÇMA. `/FO CSV` ŞART:
     //    tablo çıktısı görüntü adını 25 karakterde KIRPAR (ölçüldü: uzun ad hiç eşleşmedi → ikinci
     //    pencere açıldı); CSV kırpmaz. `/NH` başlığı atar.
-    s.push_str(&format!("{TL} /FI \"IMAGENAME eq {exe_adi}\" /NH /FO CSV 2>nul | {FD} /I \"{exe_adi}\" >nul\r\n"));
+    s.push_str(&format!("{TL} /FI \"IMAGENAME eq {exe_adi}\" /NH /FO CSV > \"%T%\" 2>nul\r\n"));
+    s.push_str(&format!("{FS} /I /C:\"{exe_adi}\" \"%T%\" >nul 2>&1\r\n"));
+    // ⚠️ `if errorlevel` ile onu ÜRETEN komut arasına HİÇBİR satır girmez (echo dahil): araya
+    // giren komut ERRORLEVEL'i sıfırlayabilir ve uygulama bir daha ASLA başlatılmaz. Günlük
+    // satırı bu yüzden if'ten SONRA. Parantezli if/else de kullanılmaz — `%TIME%` gibi özel
+    // karakterli değerlerle blok ayrıştırması kırılgandır.
     s.push_str(&format!("if errorlevel 1 start \"\" \"{exe}\"\r\n"));
+    s.push_str("echo [%TIME%] baslatma adimi gecildi >> \"%G%\"\r\n");
+    s.push_str("del \"%T%\" >nul 2>&1\r\n");
     // 4) Bilgilendirme penceresinin kopyasını (kendini kapatınca) sil — en çok ~40 sn dene.
     if let Some(pk) = pencere {
         s.push_str("set /a k=0\r\n:sil\r\n");
         s.push_str(&format!("del \"{pk}\" >nul 2>&1\r\nif not exist \"{pk}\" goto son\r\n"));
         s.push_str("set /a k+=1\r\nif %k% GEQ 40 goto son\r\nping -n 2 127.0.0.1 >nul\r\ngoto sil\r\n:son\r\n");
     }
+    s.push_str("echo [%TIME%] yardimci bitti >> \"%G%\"\r\n");
     s.push_str("del \"%~f0\"\r\n");
     Ok(s)
 }
@@ -1751,9 +1793,6 @@ fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Opt
 #[cfg(windows)]
 fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_s = exe.to_str().ok_or("launcher yolu UTF-8 değil")?;
@@ -1775,7 +1814,7 @@ fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::pa
     std::process::Command::new("cmd.exe")
         .arg("/c")
         .arg(&bat)
-        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
+        .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -1805,9 +1844,6 @@ fn build_uninstall_script(uninstaller: &str) -> Result<String, String> {
 #[cfg(windows)]
 fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     let unins_s = uninstaller.to_str().ok_or("kaldırıcı yolu UTF-8 değil")?;
     let script = build_uninstall_script(unins_s)?;
@@ -1817,7 +1853,7 @@ fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), Strin
     std::process::Command::new("cmd.exe")
         .arg("/c")
         .arg(&bat)
-        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
+        .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -2453,7 +2489,7 @@ mod tests {
         assert!(s.contains("IMAGENAME eq PEMF Vet Client.exe\" /NH /FO CSV"), "çalışıyorsa yeniden başlatma; CSV = ad kırpılmaz");
         assert!(s.contains("if errorlevel 1 start \"\" \""), "start yalnız çalışmıyorsa");
         assert!(s.contains("del \"C:\\Temp\\PEMFVetClient-Guncelleme-ab.exe\""), "pencere kopyası silinmeli");
-        assert!(s.contains("System32\\tasklist.exe") && s.contains("System32\\find.exe"), "araçlar tam yolla");
+        assert!(s.contains("System32\\tasklist.exe") && s.contains("System32\\findstr.exe"), "araçlar tam yolla");
         assert!(!s.contains("ping -n 4 127.0.0.1"), "eski sabit 3 sn bekleme kalkmalı");
         // Pencere yoksa (kopya açılamadı) batch yine geçerli; sil-döngüsü yok.
         let s2 = build_relaunch_script("C:\\a.exe", "C:\\b.exe", 7, None).unwrap();
@@ -2467,6 +2503,116 @@ mod tests {
         assert!(build_relaunch_script("C:\\a\".exe", "C:\\b.exe", 1, None).is_err());
         assert!(build_relaunch_script("C:\\a.exe", "C:\\b\n.exe", 1, None).is_err());
         assert!(build_relaunch_script("C:\\a\r.exe", "C:\\b.exe", 1, None).is_err());
+    }
+
+    /// 🔴 SAHA ARIZASI 2026-09-05 — YARDIMCI BATCH HİÇ KOŞMUYORDU (yapısal kapı).
+    ///
+    /// `DETACHED_PROCESS`li `cmd.exe` konsolsuzdur ve İLK BORU satırında ölür. 1.9.45'te bekleme
+    /// döngüsüne `tasklist … | find …` eklenince batch'in ilk çalışan satırı bir boru oldu →
+    /// kurulum hiç koşmadı. Metin ölçen mevcut test bunu YAKALAYAMADI (doğru araç adlarını
+    /// içeriyordu, sadece çalışmıyordu). Borular geri gelirse burası kırmızı yanar.
+    #[cfg(windows)]
+    #[test]
+    fn betik_BORU_icermez() {
+        let s = build_relaunch_script(r"C:\a.exe", r"C:\b.exe", 4242, Some(r"C:\c.exe")).unwrap();
+        assert!(
+            !s.contains('|'),
+            "yeniden-başlatma batch'i BORU içeriyor — konsolsuz cmd ilk boruda ölür, kurulum hiç koşmaz:\n{s}"
+        );
+        let u = build_uninstall_script(r"C:\u.exe").unwrap();
+        assert!(!u.contains('|'), "kaldırma batch'i BORU içeriyor (aynı tuzak)");
+    }
+
+    /// Kök neden kapısı: yardımcı batch'in bayrakları `DETACHED_PROCESS` TAŞIMAMALI, ama
+    /// `CREATE_NO_WINDOW` taşımalı (siyah-konsol kapısı + boru çalışsın).
+    #[cfg(windows)]
+    #[test]
+    fn yardimci_bayraklari_DETACHED_tasimaz() {
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        assert_eq!(
+            YARDIMCI_BATCH_BAYRAKLARI & DETACHED_PROCESS,
+            0,
+            "DETACHED_PROCESS geri gelmiş: cmd konsolsuz kalır ve batch boruda ölür"
+        );
+        assert_ne!(
+            YARDIMCI_BATCH_BAYRAKLARI & CREATE_NO_WINDOW,
+            0,
+            "CREATE_NO_WINDOW düşmüş: kullanıcıya siyah konsol penceresi görünür"
+        );
+    }
+
+    /// 🔴 DAVRANIŞSAL KAPI: üretilen batch, ÜRETİMDEKİ bayraklarla başlatıldığında SONA KADAR
+    /// koşuyor mu? Metin denetimi bu arızayı kaçırdı; burada batch GERÇEKTEN çalıştırılır.
+    ///
+    /// Kurulum yerine işaret bırakan bir .bat konur; "yeni exe" de öyle. Sonda üç şey ölçülür:
+    /// kurulum adımı koştu, uygulama başlatıldı, batch kendini sildi (yani sona vardı).
+    #[cfg(windows)]
+    #[test]
+    fn yardimci_batch_uretimdeki_bayraklarla_SONA_KADAR_kosar() {
+        use std::os::windows::process::CommandExt;
+        let tmp = std::env::temp_dir();
+        let pid: u32 = 999_123; // var olmayan PID → bekleme döngüsü hemen geçer
+        let uyg_iz = tmp.join("pemf_kapi_uygulama.txt");
+        let pencere = tmp.join("pemf_kapi_pencere.tmp");
+        // ⚠️ SAHTE KURULUM GERÇEK BİR .exe OLMALI. Batch içinden `.bat` çağırmak `call`sız
+        // kontrolü DEVREDER ve GERİ DÖNMEZ — ilk denemede tam bu oldu ve bu kapı yakaladı.
+        // Üretimde kurulum daima .exe'dir; burada dönüş yapan zararsız bir sistem exe'si kullanılır
+        // ("/S" onun için geçersiz argüman → hemen çıkar). Adımın koştuğu GÜNLÜKTEN doğrulanır.
+        let sahte_kur = std::path::PathBuf::from(r"C:\Windows\System32\findstr.exe");
+        let sahte_uyg = tmp.join("pemf_kapi_uyg.bat");
+        let betik = tmp.join("pemf_kapi_relaunch.bat");
+        let gunluk = tmp.join(format!("pemf_selfupdate_{pid}.log"));
+        for p in [&uyg_iz, &gunluk] {
+            let _ = std::fs::remove_file(p);
+        }
+        std::fs::write(&sahte_uyg, format!("@echo off\r\necho acildi > \"{}\"\r\n", uyg_iz.display())).unwrap();
+        std::fs::write(&pencere, b"x").unwrap();
+
+        let s = build_relaunch_script(
+            sahte_kur.to_str().unwrap(),
+            sahte_uyg.to_str().unwrap(),
+            pid,
+            pencere.to_str(),
+        )
+        .unwrap();
+        std::fs::write(&betik, s).unwrap();
+
+        std::process::Command::new("cmd.exe")
+            .arg("/c")
+            .arg(&betik)
+            .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
+            .spawn()
+            .expect("yardımcı başlatılamadı");
+
+        let mut bitti = false;
+        for _ in 0..120 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if !betik.exists() {
+                bitti = true;
+                break;
+            }
+        }
+        // ⚠️ `start` ASENKRONDUR: batch bittiğinde başlatılan süreç henüz yazmamış olabilir.
+        // (İlk sürümde burada yarış vardı ve test yanlış-kırmızı yandı.)
+        for _ in 0..40 {
+            if uyg_iz.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+        let g = std::fs::read_to_string(&gunluk).unwrap_or_default();
+        assert!(
+            g.contains("kurulum bitti errorlevel="),
+            "KURULUM ADIMI HİÇ KOŞMADI/DÖNMEDİ — batch erken öldü (1.9.45 arızası). Günlük:\n{g}"
+        );
+        assert!(uyg_iz.exists(), "uygulama yeniden başlatılmadı. Günlük:\n{g}");
+        assert!(bitti, "batch kendini silmedi (sona varamadı). Günlük:\n{g}");
+        assert!(g.contains("yardimci bitti"), "günlük eksik — saha teşhisi yine kör kalır:\n{g}");
+        assert!(!pencere.exists(), "bilgilendirme penceresinin kopyası silinmedi");
+        for p in [&uyg_iz, &sahte_uyg, &pencere, &gunluk] {
+            let _ = std::fs::remove_file(p);
+        }
     }
 
     /// [GÜNCELLEME EKRANI] kaynak-paritesi: self-update kuyruğunda işaret → pencere → batch → çık
