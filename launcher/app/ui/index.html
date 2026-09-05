@@ -401,10 +401,13 @@
         /* Giriş yapılmışken çip yer kapladığı için alt başlık ve buton etiketleri ÖNCE gider. */
         .brand p { display: none; }
       }
-      @media (max-width: 1040px) {
-        .hbtn span { display: none; }
-        #auth-email { max-width: 120px; }
-      }
+      /* ⚠️ [L adım 5 / launcher-3] ÖNCEDEN `@media (max-width: 1040px)` idi. Pencere genişliği
+         ZATEN en fazla 880 px olduğu için bu kural HER ZAMAN geçerliydi: üst şerit etiketleri
+         ("Web Sitesi" / "Kılavuz" / "Hakkında" / "Çıkış") HİÇBİR pencerede görünmüyordu.
+         Etiketler artık yalnız (a) oturum açıkken (e-posta + Çıkış yer kaplar) ya da
+         (b) 860 px altında gizlenir. Her durumda title + aria-label kalıcı addır. */
+      header.authed .hbtn span { display: none; }
+      #auth-email { max-width: 120px; }
       /* [L adım 2 / launcher-12] ÖLÜ KURAL SİLİNDİ: pencere minWidth 700 olduğu için
          `max-width: 680px` HİÇ tetiklenmiyordu. Asıl kritik eksen YÜKSEKLİK. */
 
@@ -1524,6 +1527,14 @@
         document.documentElement.lang = LANG;
         $("tagline").textContent = x.tagline;
         $("t-web").textContent = x.web; $("t-about").textContent = x.about;
+        // [L adım 5] Etiket <span>'i dar pencerede/oturum açıkken GİZLENİR → kalıcı ad
+        // title + aria-label'dır ve DİLE göre güncellenmelidir (yoksa EN'de Türkçe okunur).
+        for (const [id, ad] of [["btn-web", x.web], ["btn-guide", x.guide], ["btn-about", x.about], ["btn-logout", x.logout]]) {
+          const el = $(id);
+          if (!el) continue;
+          el.title = ad;
+          el.setAttribute("aria-label", ad);
+        }
         $("t-guide").textContent = x.guide; $("t-guide-title").textContent = x.guideTitle;
         if ($("guide") && !$("guide").hidden) renderGuide();
         $("t-detect").textContent = x.detect;
@@ -2140,6 +2151,8 @@
         authed = !!(st && st.logged_in);
         authEmail = (st && st.email) || "";
         $("auth-box").hidden = !authed;
+        // Oturum açıkken e-posta + Çıkış yer kapladığı için etiketler gizlenir (bkz. CSS).
+        document.querySelector("header").classList.toggle("authed", !!authed);
         $("auth-email").textContent = authEmail;
         persistAvailable = !st || st.persist_available !== false;
         applyRememberLabel();

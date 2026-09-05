@@ -114,3 +114,26 @@ def test_KRITIK_pencere_boyutu_monitore_gore_kirpiliyor():
         "saf fonksiyon tanımlı ama KULLANILMIYOR (setup'ta çağrı yok)"
     )
     assert "min_inner_size(" in rs, "app penceresi asgari boyut vermiyor (matris-9)"
+
+
+def test_KRITIK_ust_serit_etiketleri_HER_pencerede_gizli_degil():
+    """Pencere genişliği en fazla 880 px; `max-width: 1040px` kuralı etiketleri HİÇ göstermiyordu."""
+    ui = _ui()
+    assert "@media (max-width: 1040px)" not in ui, (
+        "1040 px kuralı geri gelmiş: pencere zaten 880 px'i aşmadığı için etiketler HİÇBİR pencerede görünmez."
+    )
+    assert "header.authed .hbtn span" in ui, (
+        "etiket gizleme oturum durumuna bağlı değil (yalnız yer daraldığında gizlenmeli)"
+    )
+
+
+def test_KRITIK_erisilebilir_ad_DILE_gore_guncellenir():
+    """Etiket gizlendiğinde kalıcı ad title/aria-label'dır; dil değişince o da değişmeli."""
+    ui = _ui()
+    i = ui.find("function applyLang(")
+    assert i > -1, "applyLang bulunamadı"
+    govde = ui[i : i + 2000]
+    assert 'setAttribute("aria-label"' in govde, (
+        "applyLang aria-label güncellemiyor → EN'e geçince ekran okuyucu Türkçe ad okur"
+    )
+    assert "btn-logout" in govde
