@@ -89,8 +89,12 @@ const t = () => SOZLUK[LANG];
 // yaşar, yama yine çalışır ama test gerçeği ÖLÇMEZ.
 const _el = {{}};
 function $(id) {{
+  // ⚠️ Sahte öge GERÇEK DOM'un applyLang tarafından kullanılan yüzeyini taşımalı. `setAttribute`
+  // eksikti ve applyLang erişilebilir adları (aria-label) güncellemeye başlayınca beş test birden
+  // "el.setAttribute is not a function" ile düştü — davranış değil SAHTE DOM eksikti.
   if (!_el[id]) _el[id] = {{ textContent: "", hidden: false, disabled: false, dataset: {{}},
-    type: "password", classList: {{ toggle() {{}} }}, title: "", value: "", focus() {{}} }};
+    type: "password", classList: {{ toggle() {{}} }}, title: "", value: "", focus() {{}},
+    attrs: {{}}, setAttribute(k, v) {{ this.attrs[k] = v; }}, getAttribute(k) {{ return this.attrs[k]; }} }};
   return _el[id];
 }}
 const document = {{ documentElement: {{}} }};

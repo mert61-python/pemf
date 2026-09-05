@@ -566,8 +566,8 @@ Plan (`docs/responsive-duzeltme-plani-2026-09-04.md`) sırayla uygulandı. 15 co
 | B | İçerik-farkında kabuk (bottom/rail/sidebar), klavyede erişilebilir ACİL DURDUR | kapandı |
 | C | S1, S2, S3, S4, S5, S6, S7 ekran düzeyi düzeltmeleri | kapandı (cihaz doğrulaması hariç) |
 | D | Beş pytest kapısı + bir vitest kapısı + görünüm alanı kapısı CI'da | kapandı |
-| E | Başlatıcı: dikey taşma, pencere boyutu, klavye erişimi | kapandı (yayın hariç) |
-| F | Site: yatay taşma, dokunma hedefleri, tek koyu tema, iOS giriş alanları | kapandı (yayın hariç) |
+| E | Başlatıcı: dikey taşma, pencere boyutu, klavye erişimi, ölü medya sorguları | kapandı (yayın hariç) |
+| F | Site: yatay taşma, dokunma hedefleri, tek koyu tema, iOS giriş alanları, fiyat kartı, geniş ekran | kapandı (yayın hariç) |
 | G | Yayın zinciri + cihaz test matrisi | **AÇIK — sahip onayı bekliyor** |
 
 ### Ampirik kanıt (headless Edge + CDP, `scripts/responsive_kapisi.py`)
@@ -614,3 +614,39 @@ araması. Her biri commit mesajında belgeli.
    artık "₺990"un hangi satıra ait olduğunu söyleyebiliyor.
    FREE_MODE fiyat tutarsızlığı bölüm başına eklenen notla mobilde görünür kılındı; satış
    açıldığında COMPARE tarifesinin FREE_MODE'dan haberdar edilmesi hâlâ ayrı iş.
+
+### Faz E/F kapanış turu — 2026-09-05
+
+Planın W paketinde açık kalan beş adım ve L paketindeki iki eksik kapandı.
+Hepsi önce/sonra ÖLÇÜLDÜ (headless Edge + CDP).
+
+| Ölçüm | Önce | Sonra |
+|---|---|---|
+| Fiyat karşılaştırma tablosu, 320 px'te gizli kısım | 280 px | kart görünümü (gizli yok) |
+| Fiyat karşılaştırma tablosu, görünen sütun | 2 / 5 | tümü (kartta) |
+| Fiyat dönemi düğmesi yüksekliği | 32 px | 44 px |
+| /download 44 px altı dokunma hedefi | 2 | 0 |
+| Altbilgi sütunu (320 px) | 2 | 1 |
+| Kapsayıcı genişliği (2560 px) | 1152 px | 1280 px |
+| "Önerilen" rozeti ile başlık çakışması (320 px) | 20 px | yok |
+
+**Başlatıcıda iki ÖLÜ medya sorgusu bulundu.** İkisi de hiç tetiklenmiyor ya da
+her zaman tetikleniyordu:
+- `max-width: 680px` — pencere asgari genişliği 700 px olduğu için HİÇ çalışmıyordu.
+- `max-width: 1040px` — pencere en fazla 880 px olduğu için HER ZAMAN çalışıyor ve
+  üst şerit etiketlerini hiçbir pencerede göstermiyordu.
+
+**Kapı tabanı kullanılabilirlik tavanı değildir.** "Çıkınca haber ver" bağlantısı
+222×16 px'ti ama tarayıcı kapısı onu WCAG 2.5.8 ARALIK muafiyetiyle geçiriyordu
+(44 px çaplı daire komşu hedefe değmiyor). Kapı yeşilken de hedef parmakla
+ıskalanıyordu; düzeltme kapı bulgusu olmadan yapıldı.
+
+**Ölçüm sırasında yakalanan üç test/araç tuzağı** (hepsi commit mesajlarında belgeli):
+- `node:fs` kullanan bir vitest dosyası site CI'ının `tsc` adımını kıracaktı;
+  `index.css` bu kurulumda hiçbir sorgu ekiyle okunamıyor → CSS iddiaları Python
+  kapısına taşındı.
+- Python heredoc'ta yazılan sözcük-sınırı kaçışı (ters bölü + b) regex dizisi BACKSPACE karakterine dönüşüp
+  dosyaya öyle yazıldı; test sessizce hiçbir şeyle eşleşmedi.
+- Başlatıcının sahte DOM test koşumu `setAttribute` tanımıyordu; `applyLang`
+  erişilebilir ad güncellemeye başlayınca beş test birden düştü. Davranış değil
+  sahte DOM eksikti.
