@@ -605,5 +605,12 @@ araması. Her biri commit mesajında belgeli.
    · Kamera hizası / organ işareti çakışması — S7 adım 7 (A4 kâğıt + ArUco protokolü).
    · Yazı ölçeği 1,3 ve 0,85 turu — S6 adım 10.
    · iOS çentik (insets.left 44-59) yalnız EAS derlemesiyle.
-3. **Pricing mobil kart görünümü.** Sahip kararı alındı ama FREE_MODE fiyat tutarsızlığıyla
-   birlikte ele alınacak ayrı iş.
+3. ~~Pricing mobil kart görünümü.~~ **KAPANDI (2026-09-05, commit 382555e).** 1024 altında
+   SATIR kartı görünümü (her kart bir özelliği tüm planlarda gösterir, aynı değeri veren planlar
+   birleşir). ÖLÇÜLEN durum: 320 px'te tablonun 280 px'i gizliydi, 5 sütundan 2'si görünüyordu.
+   Beraberinde iki şey daha kapandı: (a) `—` glifinin tabloda iki ZIT anlam taşıması — sözlük
+   `Alınmıyor` (avantaj) / `Yok` (eksiklik) olarak ayrıldı ve masaüstü tablo da düzeldi;
+   (b) tablo erişilebilirliği (`scope="row"`/`scope="col"`/`aria-labelledby`) — ekran okuyucu
+   artık "₺990"un hangi satıra ait olduğunu söyleyebiliyor.
+   FREE_MODE fiyat tutarsızlığı bölüm başına eklenen notla mobilde görünür kılındı; satış
+   açıldığında COMPARE tarifesinin FREE_MODE'dan haberdar edilmesi hâlâ ayrı iş.
