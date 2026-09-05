@@ -17,11 +17,13 @@
  * ⚠️ DOM YOK: bu depoda jsdom ortamı yok → ölçülen şey KAYNAĞIN kendisidir. Görsel doğrulama
  * `scripts/responsive_kapisi.py --hedef site` ile yapılır (40 ölçüm, 0 bulgu).
  * ⚠️ Yorumlar SOYULUR: bu dosyanın kendi açıklaması eski hatalı sınıfları anlatıyor.
+ * ⚠️ CSS İDDİALARI BURADA DEĞİL: `index.css` bu vitest kurulumunda hiçbir sorgu ekiyle
+ *    (?raw / ?inline / import.meta.glob) okunamıyor — Vite CSS eklentisi araya giriyor ve
+ *    içerik BOŞ geliyor (ölçüldü). node:fs de kullanılamaz: tsconfig.app.json testleri de
+ *    tip denetiminden geçiriyor ve node tipleri yok (`npx tsc -b` kırmızı olurdu, ölçüldü).
+ *    CSS sözleşmesi: guii/tests/test_site_responsive_css.py
  */
 import { describe, expect, it } from 'vitest'
-
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 
 import { kaynakSoy } from './_soyucu'
 
@@ -35,10 +37,6 @@ import HOME_SRC from '../pages/Home.tsx?raw'
 import ODEME_SRC from '../pages/Odeme.tsx?raw'
 import PRICING_SRC from '../pages/Pricing.tsx?raw'
 import RESET_SRC from '../pages/ResetPassword.tsx?raw'
-
-// ⚠️ `import '../index.css?raw'` vitest'te BOŞ dönüyor (Vite CSS eklentisi araya giriyor,
-// ölçüldü) → CSS diskten okunur.
-const CSS_SRC = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8')
 
 const TSX = {
   AccountButton: ACCOUNT_SRC,
@@ -92,12 +90,6 @@ describe('dokunma hedefleri', () => {
     }
   })
 
-  it('.tap sınıfı 44 px yükseklik veriyor', () => {
-    const css = kaynakSoy(CSS_SRC)
-    const kural = css.match(/\.tap\s*\{[^}]*\}/)
-    expect(kural, '.tap sınıfı yok').toBeTruthy()
-    expect(kural![0]).toContain('min-height: 44px')
-  })
 })
 
 describe('tek koyu tema', () => {
@@ -109,23 +101,6 @@ describe('tek koyu tema', () => {
     expect(ihlal, `\`dark:\` varyantı tanımlı değil; token kullanın (text-warning/success/danger)`).toEqual([])
   })
 
-  it('danger token tanımlı (koyu zeminde okunur kırmızı)', () => {
-    expect(kaynakSoy(CSS_SRC)).toContain('--color-danger')
-  })
-})
-
-describe('iOS Safari giriş alanları', () => {
-  it('KRİTİK: dokunmatikte input punto tabanı 16 px (odakta yakınlaşma yok)', () => {
-    const css = kaynakSoy(CSS_SRC)
-    expect(css).toContain('pointer: coarse')
-    expect(css).toContain('font-size: max(1rem, 1em)')
-    // ⚠️ Yakınlaştırmayı KAPATMAK erişilebilirliği keser; çözüm punto olmalı.
-    expect(css).not.toContain('maximum-scale=1')
-  })
-
-  it('hareket-azalt tercihi kaydırma animasyonunu kapatır', () => {
-    expect(kaynakSoy(CSS_SRC)).toContain('prefers-reduced-motion')
-  })
 })
 
 describe('giriş/kayıt penceresi', () => {

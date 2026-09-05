@@ -557,15 +557,27 @@ export const PATCH = {
  * eksik kalıyordu. Artık `Record<Plan['tier'], string>`: yeni bir tier eklenirse DERLEYİCİ her
  * satırda değer ister; sütunlar da PLANS'ten türetilir → tek kaynak.
  */
+/**
+ * PLAN KARŞILAŞTIRMASI — değer SÖZLÜĞÜ İKİ SÖZCÜKLÜDÜR (2026-09-05).
+ *
+ * ⚠️ ÖNCEDEN '—' glifi İKİ ZIT anlam taşıyordu: 'Jeton başına ücret: —' Pro'da "bu plandan
+ * jeton başına ücret ALINMIYOR" (satış argümanı), 'Araştırma profili: —' Başlangıç'ta ise
+ * "bu planda YOK" (eksiklik) demekti. Tabloda sütun başlığı bu farkı taşıyordu; mobil KART
+ * görünümünde sütun yok, dolayısıyla glif tek başına ANLAMSIZ kalıyordu.
+ *
+ * SÖZLÜK: 'Alınmıyor' = ücret alınmıyor (AVANTAJ) · 'Yok' = bu planda yok (EKSİKLİK).
+ * Kod valansı TAHMİN ETMEZ (etiketten /ücret/i sezgiseli YASAK) — veri söyler.
+ * ⚠️ Yeni satır eklerken bu iki sözcükten birini seç; çıplak '—' KULLANMA.
+ */
 export const COMPARE: { label: string; values: Record<Plan['tier'], string> }[] = [
   { label: 'Aylık jeton hakkı', values: { baslangic: '50', kullandikca: 'Yok — kullandıkça', pro: '500', pro_plus: '2.000' } },
-  { label: 'Aylık ücret', values: { baslangic: 'Yok', kullandikca: 'Yok', pro: '₺990', pro_plus: '₺1.990' } },
-  { label: 'Jeton başına ücret', values: { baslangic: '—', kullandikca: '₺2,90', pro: '—', pro_plus: '—' } },
+  { label: 'Aylık ücret', values: { baslangic: 'Alınmıyor', kullandikca: 'Alınmıyor', pro: '₺990', pro_plus: '₺1.990' } },
+  { label: 'Jeton başına ücret', values: { baslangic: 'Alınmıyor', kullandikca: '₺2,90', pro: 'Alınmıyor', pro_plus: 'Alınmıyor' } },
   { label: 'Ek jeton paketi', values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
   { label: 'AI Pro otomatik seans', values: { baslangic: 'Yok', kullandikca: '✓ (5 jeton/seans)', pro: '✓ (5 jeton/seans)', pro_plus: '✓ (5 jeton/seans)' } },
   { label: 'Aynı anda bağlanan cihaz', values: { baslangic: '1', kullandikca: '2', pro: '5', pro_plus: '15' } },
   { label: 'Kurulum profilleri', values: { baslangic: 'Evcil Hayvan Sahibi', kullandikca: 'Evcil Hayvan Sahibi + Veteriner', pro: 'Evcil Hayvan Sahibi + Veteriner', pro_plus: 'Evcil Hayvan Sahibi + Veteriner' } },
-  { label: 'Araştırma profili', values: { baslangic: '—', kullandikca: '+₺390/ay', pro: '+₺390/ay', pro_plus: '+₺390/ay' } },
+  { label: 'Araştırma profili', values: { baslangic: 'Yok', kullandikca: '+₺390/ay', pro: '+₺390/ay', pro_plus: '+₺390/ay' } },
   { label: 'Hasta kayıtları + istatistikler', values: { baslangic: 'Temel', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
   { label: 'Otomatik güncelleme', values: { baslangic: '✓', kullandikca: '✓', pro: '✓', pro_plus: '✓' } },
   { label: 'Destek yanıt süresi', values: { baslangic: '2 iş günü', kullandikca: '1 iş günü', pro: '1 iş günü', pro_plus: 'Aynı iş günü' } },

@@ -12,6 +12,59 @@ const tl = (n: number) => `₺${n.toLocaleString('tr-TR')}`
 // ücreti olmayan "Kullandıkça Öde" planı eklenince ikisi ayrı ayrı "₺0/ay" üretti (ikisi de
 // yanlış — ücret jeton başına). Tek kaynak: src/lib/planFiyat.ts.
 
+/**
+ * MOBİL KARŞILAŞTIRMA — SATIR kartı  [2026-09-05, responsive denetimi kalanı]
+ * ==========================================================================
+ * ÖLÇÜLEN DURUM (headless Edge + CDP): karşılaştırma tablosu 560 px genişlikte ve
+ * `overflow-x-auto` içinde. 320 px telefonda kabı 280 px'e düşüyor → tablonun 280 px'i
+ * gizli, 5 sütundan yalnız 2'si görünüyor (390 px'te 3'ü). Satır etiketi yapışkan
+ * OLMADIĞI için kullanıcı sağa kaydırdığında hangi satıra baktığını da kaybediyordu.
+ *
+ * NEDEN PLAN BAŞINA DEĞİL SATIR BAŞINA KART: plan başına kartta karşılaştırma ekseni
+ * TAMAMEN kaybolur — kullanıcı iki planın aynı satırını yan yana tutamaz, oysa bu sayfaya
+ * gelme sebebi tam olarak budur. Satır kartında eksen kartın İÇİNDE kalır.
+ *
+ * ⚠️ İKİ GÖRÜNÜM DE tek kaynaktan (PLANS + COMPARE) türer; gömülü dizi YOKTUR.
+ * ⚠️ Kart bloğunda `lg:grid-cols-*` KULLANILMAZ: kullandikca-ode testi dosyadaki İLK
+ *    `lg:grid-cols-(\d)` eşleşmesini okuyor ve o çıpa plan ızgarasına (yukarıda) pinli.
+ * ⚠️ Kart bloğunda etkileşimli öge YOKTUR (düğme/bağlantı/summary) → 44 px dokunma
+ *    kapısında yeni hedef doğmaz.
+ */
+
+/** Bir karşılaştırma satırını AYNI DEĞERİ paylaşan plan gruplarına böler (PLANS sırası korunur).
+ *  Amaç: dar ekranda 4 satır yerine YALNIZ FARK KADAR satır çizmek.
+ *  ⚠️ Gruplar KESİNTİLİ olabilir: 'Jeton başına ücret' bugün "Başlangıç · Pro · Pro+" üretiyor
+ *  (Kullandıkça Öde aradan atlanıyor). Çıktı doğru ve okunur; sürpriz değil, bilinen davranış. */
+function degerGruplari(row: (typeof COMPARE)[number]) {
+  const gruplar: { deger: string; planlar: Plan[] }[] = []
+  for (const p of PLANS) {
+    const g = gruplar.find((x) => x.deger === row.values[p.tier])
+    if (g) g.planlar.push(p)
+    else gruplar.push({ deger: row.values[p.tier], planlar: [p] })
+  }
+  return gruplar
+}
+
+/** Tüm planlarda aynı olan satır AYIRT EDİCİ değildir; tek bir "hepsinde var" kartına toplanır. */
+const ayirtEdici = (row: (typeof COMPARE)[number]) => degerGruplari(row).length > 1
+
+/** Değer rozeti. "✓" ve "✓ (…)" site tik diline çevrilir; parantezli açıklama KORUNUR
+ *  (AI Pro'nun seans başına 5 jeton yaktığı bilgisi kartta kaybolmamalı).
+ *  ⚠️ `Yok` kontrolü CONFIG SÖZLÜĞÜNE bağlıdır: "Yok" = bu planda yok (eksiklik, soluk),
+ *  "Alınmıyor" = ücret alınmıyor (avantaj, normal). Etiketten valans TAHMİN EDİLMEZ. */
+function Deger({ v }: { v: string }) {
+  if (!v.startsWith('✓')) {
+    return <span className={/^Yok/.test(v) ? 'text-muted' : 'font-medium text-fg'}>{v}</span>
+  }
+  const ek = v.slice(1).trim()
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      <Check className="h-4 w-4 shrink-0 text-primary" />
+      <span className="text-xs text-muted">{ek || 'Var'}</span>
+    </span>
+  )
+}
+
 export default function Pricing() {
   const [yearly, setYearly] = useState(true)
   const [research, setResearch] = useState(false)
@@ -152,26 +205,99 @@ export default function Pricing() {
         </div>
       </section>
 
-      {/* Karşılaştırma tablosu */}
+      {/* Karşılaştırma — 1024 altı SATIR kartları, üstü mevcut tablo (bkz. degerGruplari yorumu) */}
       <section className="border-b border-border/60 bg-bg-soft/50">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6">
-          <h2 className="text-2xl font-bold sm:text-3xl">Plan karşılaştırması</h2>
-          <div className="mt-8 overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
+          <h2 id="plan-karsilastirmasi" className="text-2xl font-bold sm:text-3xl">Plan karşılaştırması</h2>
+          <p className="mt-3 max-w-2xl text-sm text-muted lg:hidden">
+            Her kart tek bir özelliği tüm planlarda birlikte gösterir; aynı değeri veren planlar
+            tek satırda birleşir, böylece farklar öne çıkar.
+          </p>
+          {/* COMPARE tarifeyi FREE_MODE'dan bağımsız yazar; test aşamasında tutar tahsil edilmez.
+              Sayfa başındaki band mobilde ekran dışında kaldığı için burada bir kez daha söylenir. */}
+          {FREE_MODE && (
+            <p className="mt-3 max-w-2xl text-sm text-primary">
+              Aşağıdaki tutarlar test sonrası tarifedir; şu an tahsil edilmez.
+            </p>
+          )}
+
+          {/* ——— DAR + ORTA EKRAN (1024 altı): satır kartları ———
+              ⚠️ `lg:grid-cols-*` YAZILMAZ: kullandikca-ode testi dosyadaki İLK `lg:grid-cols-(\d)`
+              eşleşmesini okur ve o çıpa yukarıdaki plan ızgarasına pinlidir. */}
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:hidden">
+            {COMPARE.filter(ayirtEdici).map((row) => (
+              <div key={row.label} className="card min-w-0 p-5">
+                <h3 className="text-sm font-semibold">{row.label}</h3>
+                <dl className="mt-3 space-y-2">
+                  {degerGruplari(row).map((g) => (
+                    <div
+                      key={g.deger}
+                      className={`flex min-w-0 items-start justify-between gap-3 rounded-lg border px-3 py-2 ${
+                        g.planlar.some((p) => p.highlight)
+                          ? 'border-primary/40 bg-primary/10'
+                          : 'border-border bg-bg/40'
+                      }`}
+                    >
+                      <dt className="min-w-0 flex-1 text-xs leading-snug">
+                        {g.planlar.map((p, i) => (
+                          <span key={p.tier} className={p.highlight ? 'font-semibold text-primary' : 'text-muted'}>
+                            {i > 0 && <span className="text-muted"> · </span>}
+                            {p.name}
+                          </span>
+                        ))}
+                      </dt>
+                      <dd className="min-w-0 max-w-[58%] break-words pl-3 text-right text-sm">
+                        <Deger v={g.deger} />
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+
+            {COMPARE.filter((r) => !ayirtEdici(r)).length > 0 && (
+              <div className="card min-w-0 p-5 sm:col-span-2">
+                {/* Sayı YAZILMAZ ("dört") — PLANS büyüyünce metin yalan olurdu. */}
+                <h3 className="text-sm font-semibold">Tüm planlarda var</h3>
+                <ul className="mt-3 space-y-2.5">
+                  {COMPARE.filter((r) => !ayirtEdici(r)).map((row) => (
+                    <li key={row.label} className="flex min-w-0 gap-2.5 text-sm text-muted">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 break-words">
+                        {row.label}
+                        {row.values[PLANS[0].tier] !== '✓' && ` — ${row.values[PLANS[0].tier]}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* ——— MASAÜSTÜ (1024 üstü): mevcut tablo. `overflow-x-auto` + `min-w-[560px]` KALIR:
+              sayfa gövdesinin yatay kaymasını o kap engelliyor. ——— */}
+          <div className="mt-8 hidden overflow-x-auto lg:block">
+            <table
+              className="w-full min-w-[560px] border-collapse text-sm"
+              aria-labelledby="plan-karsilastirmasi"
+            >
               <thead>
                 <tr className="border-b border-border">
-                  <th className="py-3 text-left font-medium text-muted"></th>
+                  {/* Boş köşe hücresi BAŞLIK değildir → td (ekran okuyucu boş başlık okumaz). */}
+                  <td className="py-3" />
                   {/* ⚠️ TEK KAYNAK: başlıklar PLANS’ten türer. Eskiden gömülü diziydi ve PLANS’e
                       eklenen plan tabloda görünmüyordu (8. partide kullandıkça-öde eklenince ölçüldü). */}
                   {PLANS.map((c) => (
-                    <th key={c.tier} className={`px-3 py-3 text-center font-bold ${c.highlight ? 'text-primary' : ''}`}>{c.name}</th>
+                    <th key={c.tier} scope="col" className={`px-3 py-3 text-center font-bold ${c.highlight ? 'text-primary' : ''}`}>{c.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {COMPARE.map((row) => (
                   <tr key={row.label} className="border-b border-border/60">
-                    <td className="py-3 pr-3 font-medium">{row.label}</td>
+                    {/* Satır etiketi de BAŞLIKTIR: `scope="row"` olmadan ekran okuyucu "₺990"un
+                        hangi satıra ait olduğunu söyleyemiyordu. Görünüm text-left ile korunur. */}
+                    <th scope="row" className="py-3 pr-3 text-left font-medium">{row.label}</th>
                     {PLANS.map((c) => (
                       <td key={c.tier} className={`px-3 py-3 text-center ${c.highlight ? 'text-fg' : 'text-muted'}`}>{row.values[c.tier]}</td>
                     ))}
