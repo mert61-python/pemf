@@ -6,6 +6,21 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.49 — 2026-09-06 (🧩 Profil seciminde "Ana uygulama" karti)
+
+- **"Ana uygulama" karti artik ekranda.** Ana uygulama (arayuz + ortak modeller) her kurulumda
+  zaten kuruluyordu ama profil secim ekraninda gorunmuyordu; yalniz "Kur ve Baslat" toplamina
+  sessizce ekleniyordu — kullanici 0,3 GB yazan karti secip 1,8 GB indigini gorunce sasiriyordu.
+  Artik en ustte, onceden secili ve **kaldirilamaz** bir kart olarak gorunur (ZORUNLU rozeti);
+  tiklama seçimi degistirmez.
+- **Boyutlar duzeltildi.** Ana uygulama karti gercek indirme boyutunu (uygulama + bagimliliklar
+  katmani, ~1,5 GB) yazar; ana uygulama zaten kuruluysa "kurulu" der ve toplama girmez. Profil
+  kartlarinda yalniz kendi boyutlari; dugmedeki toplam = ana uygulama + secilenler.
+- Aciklama metni ve kilavuzun 1. adimi (TR/EN) yeni karti anlatir. Klavye/ekran okuyucu: kart
+  odaklanabilir, "degistirilemez" olarak bildirilir.
+
+1.9.47+ kurulu cihazlar bu surume kendiliginden gecer.
+
 ## app 1.9.42 · launcher 1.9.48 — 2026-09-06 (🔍 Sessiz yardimci yollar denetimi)
 
 1.9.45 oto-guncelleme arizasinin SINIFI ("yardimci surec var, kaniti yok") saha kodunun tamaminda
