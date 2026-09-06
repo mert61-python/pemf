@@ -81,10 +81,16 @@ if ($ilk -eq '/Create') {
             Set-Content -LiteralPath $kasaYoluDosya -Value $Matches[1] -Encoding UTF8
             Copy-Item -LiteralPath $Matches[1] -Destination $kopya -Force
             # Çalışma dizininin ACL'si — SID'le (adlar yerelleşir): 'ACL=<sid>|<miras>|<haklar>'
+            # ⚠️ Get-Acl KULLANILMAZ (CI 2026-09-06): GitHub windows-latest runner'ında powershell.exe 5.1
+            # "Microsoft.PowerShell.Security ... could not be loaded" ile Get-Acl'ı YÜKLEYEMİYOR → stub
+            # fırlatıyor, tüm [ps51] zinciri çöküyordu (yerelde tekrar üretilemedi; runner'a özgü). .NET
+            # ACL API'si modül yükü gerektirmez ve iki kabukta da aynı SID satırlarını verir (ölçüldü).
             $dizin = [System.IO.Path]::GetDirectoryName($Matches[1])
-            foreach ($ace in (Get-Acl -LiteralPath $dizin).Access) {
-                $s = try { $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { "$($ace.IdentityReference)" }
-                Add-Content -LiteralPath $aclDosya -Value ('ACL=' + $s + '|' + $ace.IsInherited + '|' + $ace.FileSystemRights) -Encoding UTF8
+            $di = New-Object System.IO.DirectoryInfo $dizin
+            if ($PSVersionTable.PSVersion.Major -ge 6) { $sec = [System.IO.FileSystemAclExtensions]::GetAccessControl($di) }
+            else { $sec = $di.GetAccessControl() }
+            foreach ($ace in $sec.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+                Add-Content -LiteralPath $aclDosya -Value ('ACL=' + $ace.IdentityReference.Value + '|' + $ace.IsInherited + '|' + $ace.FileSystemRights) -Encoding UTF8
             }
         }
     }
