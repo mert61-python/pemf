@@ -554,7 +554,7 @@
         <!-- profile selection (multi-select) -->
         <section id="s-select" hidden>
           <h2 class="title" id="t-sel-title">Kullanım profilinizi seçin</h2>
-          <p class="lead" id="t-sel-lead">Uygulama çekirdeği her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.</p>
+          <p class="lead" id="t-sel-lead">Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.</p>
           <div class="cards" id="cards"></div>
           <!-- İşlevsel bağ notu: ENGELLEMEZ, yalnız söyler (bkz. JS `depNotice`). -->
           <div class="dep-notice" id="dep-notice" hidden></div>
@@ -694,10 +694,11 @@
           tagline: "Veteriner PEMF seans + yapay zekâ teşhis platformu",
           web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
           selTitle: "Kullanım profilinizi seçin",
-          selLead: "Uygulama çekirdeği her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
-          // Çekirdek kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
-          coreName: "Uygulama çekirdeği", coreDesc: "Ana uygulama, arayüz ve ortak modeller — her profil için gerekli",
-          coreTag: "zorunlu", coreInstalled: "kurulu", coreLocked: "Uygulama çekirdeği her kurulumda gelir; seçimi kaldırılamaz.",
+          selLead: "Ana uygulama her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
+          // Ana uygulama kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
+          // ⚠️ Ekranda "çekirdek" DENMEZ: sade-dil kapısı (test_client_arayuz_sade_dil) onu iç terim sayar.
+          coreName: "Ana uygulama", coreDesc: "Arayüz ve ortak modeller — her profil için gerekli",
+          coreTag: "zorunlu", coreInstalled: "kurulu", coreLocked: "Ana uygulama her kurulumda gelir; seçimi kaldırılamaz.",
           install: "Kur ve Başlat", selCancel: "Geri dön",
           instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
           appCore: "Uygulama dosyaları", calc: "hesaplanıyor",
@@ -795,9 +796,9 @@
           tagline: "Veterinary PEMF session + AI diagnostics platform",
           web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
           selTitle: "Choose your usage profile",
-          selLead: "The application core is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
-          coreName: "Application core", coreDesc: "Main app, interface and shared models — required by every profile",
-          coreTag: "required", coreInstalled: "installed", coreLocked: "The application core is part of every installation; it cannot be unselected.",
+          selLead: "The main application is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
+          coreName: "Main application", coreDesc: "Interface and shared models — required by every profile",
+          coreTag: "required", coreInstalled: "installed", coreLocked: "The main application is part of every installation; it cannot be unselected.",
           install: "Install & Start", selCancel: "Back",
           instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
           appCore: "App files", calc: "calculating",
@@ -926,7 +927,7 @@
           intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
           stepsTitle: "Kurulum — 3 adım",
           steps: [
-            ["Profil(ler)inizi seçin", "En üstteki 'Uygulama çekirdeği' kartı her kurulumda gelir ve kaldırılamaz (ana uygulama + ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam çekirdek + seçtiklerinizdir."],
+            ["Profil(ler)inizi seçin", "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam ana uygulama + seçtiklerinizdir."],
             ["‘Kur ve Başlat’a tıklayın", "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz."],
             ["Uygulama otomatik açılır", "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız."],
           ],
@@ -956,7 +957,7 @@
           intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
           stepsTitle: "Installation — 3 steps",
           steps: [
-            ["Choose your profile(s)", "The 'Application core' card at the top is part of every installation and cannot be removed (main app + shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total is core + your picks."],
+            ["Choose your profile(s)", "The 'Main application' card at the top is part of every installation and cannot be removed (interface and shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total is the main application + your picks."],
             ["Click ‘Install & Start’", "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen."],
             ["The app opens automatically", "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds."],
           ],

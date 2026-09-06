@@ -231,8 +231,12 @@ def test_sozluk_iki_dilde_cekirdek_anahtarlarini_tasir_ve_aciklama_cekirdegi_soy
     for ad in ("coreName", "coreDesc", "coreTag", "coreInstalled", "coreLocked"):
         assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", tr), f"tr sözlüğünde {ad} yok/boş"
         assert re.search(rf"\b{ad}:\s*\"[^\"]+\"", en), f"en sözlüğünde {ad} yok/boş"
-    assert "çekirde" in re.search(r'selLead:\s*"([^"]+)"', tr).group(1).lower(), "tr selLead çekirdeği anlatmıyor"
-    assert "core" in re.search(r'selLead:\s*"([^"]+)"', en).group(1).lower(), "en selLead core'u anlatmıyor"
+    assert "ana uygulama" in re.search(r'selLead:\s*"([^"]+)"', tr).group(1).lower(), (
+        "tr selLead ana uygulamayı anlatmıyor"
+    )
+    assert "main application" in re.search(r'selLead:\s*"([^"]+)"', en).group(1).lower(), (
+        "en selLead main application'ı anlatmıyor"
+    )
     # statik HTML varsayılanı tr selLead ile AYNI (JS çalışmadan da doğru metin görünsün)
     statik = re.search(r'id="t-sel-lead">([^<]+)<', ham).group(1)
     assert statik == re.search(r'selLead:\s*"([^"]+)"', tr).group(1), "statik #t-sel-lead tr selLead ile ayrıştı"
@@ -249,9 +253,9 @@ def test_cekirdek_boyutu_katmanlardan_hesaplanir():
 
 def test_kilavuz_iki_dilde_cekirdek_kartini_anlatir():
     ham = _UI.read_text(encoding="utf-8")
-    assert "Uygulama çekirdeği" in _blok(ham, "Profil(ler)inizi seçin", "\"],"), (
+    assert "Ana uygulama" in _blok(ham, "Profil(ler)inizi seçin", "\"],"), (
         "TR kılavuz 1. adım çekirdek kartını anlatmıyor"
     )
-    assert "Application core" in _blok(ham, "Choose your profile(s)", "\"],"), (
+    assert "Main application" in _blok(ham, "Choose your profile(s)", "\"],"), (
         "EN kılavuz 1. adım çekirdek kartını anlatmıyor"
     )
