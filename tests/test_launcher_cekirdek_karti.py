@@ -42,6 +42,11 @@ _SOZLUK = {
         "coreInstalled": "KURULU_TR",
         "coreLocked": "LOCK_TR",
         "install": "KUR_TR",
+        # fark akışı anahtarları (2026-09-06) — bu dosyada kurulu profil yok, yalnız kablolama için.
+        "applyStart": "UYGULA_TR",
+        "noChange": "FARKYOK_TR",
+        "keepOne": "BIRKALSIN_TR",
+        "willRemove": "KALDIR_TR",
     },
     "en": {
         "coreName": "CORE_EN",
@@ -50,6 +55,10 @@ _SOZLUK = {
         "coreInstalled": "KURULU_EN",
         "coreLocked": "LOCK_EN",
         "install": "KUR_EN",
+        "applyStart": "UYGULA_EN",
+        "noChange": "FARKYOK_EN",
+        "keepOne": "BIRKALSIN_EN",
+        "willRemove": "KALDIR_EN",
     },
 }
 
@@ -82,7 +91,14 @@ def _gb(n: int) -> str:
 
 
 def _kos(
-    tmp_path: Path, *, lang="tr", base_installed=False, base_bytes=BASE_APP + BASE_DEPS, secili=(), tikla=None
+    tmp_path: Path,
+    *,
+    lang="tr",
+    base_installed=False,
+    base_bytes=BASE_APP + BASE_DEPS,
+    secili=(),
+    tikla=None,
+    kurulu=(),
 ) -> dict:
     ham = _UI.read_text(encoding="utf-8")
     render = _fonksiyon(ham, "function renderCards()")
@@ -97,6 +113,8 @@ def _kos(
             _satir(ham, "function cumBytes(key)"),
             _satir(ham, "const gb = "),
             _fonksiyon(ham, "function orderedKeys()"),
+            # 2026-09-06: düğme toplamı artık `profilFarki()`ten gelir (kurulu profil sayılmaz).
+            _fonksiyon(ham, "function profilFarki()"),
             _fonksiyon(ham, "function updateInstallBtn()"),
             _fonksiyon(ham, "function cekirdekKarti()") if "function cekirdekKarti()" in ham else "",
             render,
@@ -106,7 +124,7 @@ def _kos(
 const SOZLUK = {json.dumps(_SOZLUK, ensure_ascii=False)};
 let LANG = {json.dumps(lang)};
 const t = () => SOZLUK[LANG];
-let busy = false, installed = [];
+let busy = false, installed = {json.dumps(list(kurulu))};
 let profileKeys = ["home", "vet", "research"];
 let sizes = {{ home: {HOME}, vet: {VET}, research: {RESEARCH + RESEARCH2} }};
 let baseBytes = {base_bytes};
@@ -207,6 +225,14 @@ def test_cekirdek_KURULUYSA_boyut_yerine_kurulu_der_ve_toplama_girmez(tmp_path):
     s = _kos(tmp_path, base_installed=True, secili=["vet"])
     assert s["once"][0]["size"] == "KURULU_TR", f"kuruluyken 'kurulu' yazmalı: {s['once'][0]['size']}"
     assert s["btn"] == f"KUR_TR · {_gb(VET)} GB", f"kuruluyken toplama çekirdek eklenmemeli: {s['btn']}"
+
+
+def test_KRITIK_kurulu_profil_kurulu_der_ve_toplama_GIRMEZ(tmp_path):
+    """ "Profilleri değiştir" (2026-09-06): kurulu+seçili profil yeniden inmez → kartta 'kurulu',
+    düğme toplamı yalnız YENİ seçileni sayar (ayrıntılı akış: test_launcher_profil_degistir)."""
+    s = _kos(tmp_path, base_installed=True, kurulu=["home"], secili=["home", "vet"])
+    assert s["once"][1]["size"] == "KURULU_TR", f"kurulu home kartı 'kurulu' demeli: {s['once'][1]['size']}"
+    assert s["btn"] == f"KUR_TR · {_gb(VET)} GB", f"kurulu home toplama girmemeli, yalnız vet: {s['btn']}"
 
 
 def test_dil_degisince_cekirdek_karti_yeniden_etiketlenir(tmp_path):

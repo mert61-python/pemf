@@ -264,7 +264,8 @@ fn on_backend_ready(
     app: &tauri::AppHandle,
     state: &tauri::State<'_, AppState>,
     child: std::process::Child,
-    url: &str,
+    // UI'ya donen adres; pencere URL'si `open_app_window` icinde kurulu profil listesiyle kurulur.
+    _url: &str,
     port: u16,
 ) {
     *state.proc.lock().unwrap() = Some((child, port));
@@ -285,7 +286,7 @@ fn on_backend_ready(
     oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
 
     // Uygulamayı AYRI pencerede aç → client/profil penceresi ("main") AÇIK KALIR.
-    open_app_window(app, url);
+    open_app_window(app, port);
 }
 
 /// Senkron thread BİR KEZ başlar (C3/L7 çift-thread guard'ı). Bayrak `false→true` geçebiliyorsa
@@ -379,16 +380,27 @@ async fn hand_off_session(state: &tauri::State<'_, AppState>, port: u16) {
 /// penceresi varsa onu tazele + öne getir (ikinci Başlat yeni pencere YIĞMASIN). WebView2 cache-bust
 /// korunur. Her pencere kapanınca on_window_event Destroyed → backend GÜVENLE durur (E-stop + kill);
 /// "main" açık kaldığı için "app" kapanınca kullanıcı client'a döner. Oluşturma imkânsızsa tarayıcıya düş.
-fn open_app_window(app: &tauri::AppHandle, url: &str) {
-    // WebView2 CACHE-BUST: kalıcı user-data-folder aynı origin'de (127.0.0.1:8000) ESKİ index.html'i
-    // cache'ler → eski bundle yüklenip "hata" verir (Chrome'da yok, WebView2'de kalır). Zaman-damgalı
-    // query her açılışta TAZE index.html çektirir; referans ettiği hash'li JS zaten yeni adla taze gelir.
+/// Uygulama penceresinin TAM URL'si (denetim 2026-09-06, profil kaldirma).
+///
+/// `?profiles=home,vet` → uygulama (pf `installedModes()`) yalniz KURULU profilleri sunar;
+/// kaldirilan profil arayuzden de duser. Ardindan WebView2 onbellek-kiricisi (`_=<ms>`):
+/// kalıcı user-data-folder aynı origin'de (127.0.0.1:8000) ESKİ index.html'i cache'ler → eski
+/// bundle yüklenip "hata" verir (Chrome'da yok, WebView2'de kalır). Zaman-damgalı query her
+/// açılışta TAZE index.html çektirir; referans ettiği hash'li JS zaten yeni adla taze gelir.
+/// Saf parcalar core'da (`flow::uygulama_url` / `flow::onbellek_kirici`) → testte olculur.
+fn uygulama_url(port: u16, installed: &[String]) -> String {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let sep = if url.contains('?') { '&' } else { '?' };
-    let busted = format!("{url}{sep}_={ts}");
+    flow::onbellek_kirici(&flow::uygulama_url(port, installed), ts)
+}
+
+fn open_app_window(app: &tauri::AppHandle, port: u16) {
+    // Kurulu profiller ACILIS ANINDA kayittan okunur (kaldirma/ekleme sonrasi taze).
+    let installed = install::read_installed_profiles(&install::default_install_root(&home_dir()));
+    let busted = uygulama_url(port, &installed);
+    let url = &busted;
 
     // Zaten açık bir uygulama penceresi varsa → SADECE öne getir. YENİDEN YÜKLEME.
     //
@@ -701,9 +713,8 @@ async fn start_installed(
     if let Some(port) = running_port {
         // İDEMPOTENT: kullanıcı arada "Çıkış yap"/"Giriş yap" yapmış olabilir → oturumu tazele.
         hand_off_session(&state, port).await;
-        let url = backend::app_url(port);
-        open_app_window(&app, &url);
-        return Ok(url);
+        open_app_window(&app, port);
+        return Ok(backend::app_url(port));
     }
 
     // DENETİM 2026-08-04: BAŞKA bir launcher instance'ı (ya da çökmüş bir önceki oturum) backend'i
@@ -737,9 +748,8 @@ async fn start_installed(
         // sonraki açılışta SessionRevoked → "Beni hatırla" SİLİNİR (saha arızasının açık kalan kolu).
         // Guard (senkron_baslamali) çift-Başlat'ta thread biriktirmeyi önler.
         oturum_rotasyon_senkronu_baslat(state.rotasyon_senkronu_aktif.clone(), port, state.session.clone());
-        let url = backend::app_url(port);
-        open_app_window(&app, &url);
-        return Ok(url);
+        open_app_window(&app, port);
+        return Ok(backend::app_url(port));
     }
 
     *state.progress.lock().unwrap() = None;
@@ -835,6 +845,66 @@ async fn repair(
         Ok(InstallOutcome::Cancelled) => Ok(serde_json::json!({ "status": "cancelled" })),
         Err(e) => Err(e),
     }
+}
+
+/// Profil kaldir (denetim 2026-09-06): "Profilleri degistir" ekraninda birakilan profil(ler)in
+/// model dosyalari (kalan profillerle ORTAK olanlar haric) + onbellek zip'leri + kayitlari silinir.
+/// Backend BASLATILMAZ — UI ardindan ya ekleme kurulumuna gecer ya da hazir ekranina doner.
+///
+/// Sira `repair` ile AYNI: kilit → aktif seans kapisi → E-stop + kill (`stop_tracked_backend`) →
+/// acik "app" penceresini kapat → `spawn_blocking`. Model dosyalari acik bir backend tarafindan
+/// kilitli olabilir; ve bobinler asla E-stop'suz kalmaz.
+///
+/// ILERLEME (inceleme 2026-09-06): `state.progress` None BIRAKILIR ve cekirdege no-op callback
+/// gecilir. `Progress` varyantlari kurulum adimlaridir; UI "extracting"i "Kuruluyor…/Installing…"
+/// diye basar ve 150 ms'lik yoklama T2'nin "Kaldırılıyor…" basligini ezerdi. UI o ekrani kendi
+/// yonetir.
+///
+/// PENCERE (inceleme 2026-09-06): acik "app" penceresi KAPATILIR. Aksi halde SPA eski
+/// `?profiles=home,vet` URL'si + localStorage kopyasiyla acik kalir, sonraki Baslat mevcut
+/// pencereyi yalniz one getirir (navigate YOK) → kaldirilan profil arayuzde secilebilir kalir ve
+/// modeller diskte olmadigi icin AI analizi anlasilmaz hatayla duser. Kapatma `stop_tracked_backend`
+/// SONRASINDA: `state.proc` orada atomik alinip E-stop → yakala → kill TAMAMLANIR; Destroyed
+/// kancasi `proc`u None bulur ve hicbir sey yapmaz (iki yolun ayni backend'i yarista E-stop'suz
+/// oldurmesi imkansiz).
+#[tauri::command]
+async fn remove_profiles(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    manifest_raw: String,
+    profiles: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    let root = install::default_install_root(&home_dir());
+    let _kilit = install::kurulum_kilidi_al(&root)?;
+    if let Some(p) = backend::detect_running_backend(&root) {
+        if backend::session_active(p) == Some(true) {
+            return Err(
+                "Şu anda bir seans sürüyor — profil kaldırma seans bittikten sonra yapılabilir."
+                    .to_string(),
+            );
+        }
+    }
+    stop_tracked_backend(&state, &root);
+    *state.progress.lock().unwrap() = None;
+    if let Some(w) = app.get_webview_window("app") {
+        let _ = w.close();
+    }
+
+    let root2 = root.clone();
+    let rapor = tauri::async_runtime::spawn_blocking(move || -> Result<flow::RemoveReport, String> {
+        let manifest = pemf_launcher_core::Manifest::parse(&manifest_raw).map_err(|e| e.to_string())?;
+        flow::remove_profiles(&root2, &manifest, &profiles, &mut |_| {}).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("profil kaldırma görevi çöktü: {e}"))??;
+
+    Ok(serde_json::json!({
+        "status": "ok",
+        "removed": rapor.removed,
+        "installed": rapor.installed,
+        "freed_bytes": rapor.freed_bytes,
+        "kept_shared": rapor.kept_shared,
+    }))
 }
 
 /// TIBBİ GÜVENLİK KAPISI — hastanın üzerinde seans sürüyorsa dosya değiştiren hiçbir iş yapılmaz.
@@ -2177,6 +2247,7 @@ fn main() {
             install_and_launch,
             start_installed,
             repair,
+            remove_profiles,
             check_runtime_update,
             apply_runtime_update,
             prefetch_runtime_update,
@@ -3241,6 +3312,32 @@ Connection: close
         // Dar ekranda asgari genişlik pencereyi AŞMAZ (aksi hâlde küçültülemez).
         let ((w2, _), (mw2, _)) = uygulama_pencere_boyutu(800.0, 600.0);
         assert!(mw2 <= w2);
+    }
+
+    /// Profil kaldırma komutu (inceleme 2026-09-06): (1) açık "app" penceresi KAPATILIR — aksi
+    /// hâlde SPA eski `?profiles=` listesiyle açık kalır ve kaldırılan profil seçilebilir kalır;
+    /// (2) kapatma `stop_tracked_backend`ten SONRA gelir — `state.proc` orada atomik alınıp E-stop →
+    /// kill tamamlanır, Destroyed kancası boş bulur (yarış yok); (3) ilerleme YAYINLANMAZ —
+    /// `progress_reporter` "extracting"i "Kuruluyor…" diye bastırır, kaldırma sırasında yanıltıcı.
+    #[test]
+    fn profil_kaldirma_komutu_pencereyi_stop_SONRASI_kapatir_ilerleme_yayinlamaz() {
+        let soy = f5_yorumlari_soy(include_str!("main.rs"));
+        let i = soy.find("async fn remove_profiles(").expect("remove_profiles komutu yok");
+        let son = soy[i..].find("\nfn ").map(|j| i + j).unwrap_or(soy.len());
+        let govde = &soy[i..son];
+        let stop = govde.find("stop_tracked_backend(").expect("remove_profiles E-stop+kill (stop_tracked_backend) çağırmıyor");
+        let pencere = govde
+            .find("get_webview_window(\"app\")")
+            .expect("remove_profiles açık \"app\" penceresini kapatmıyor — kaldırılan profil arayüzde seçilebilir kalır");
+        let kapat = govde[pencere..].find(".close()").expect("\"app\" penceresi bulunuyor ama close() yok");
+        assert!(kapat < 200, "get_webview_window(\"app\") ile close() arası kopuk");
+        let spawn = govde.find("spawn_blocking(").expect("remove_profiles spawn_blocking yok");
+        assert!(stop < pencere, "pencere kapatma stop_tracked_backend'ten ÖNCE — Destroyed kancası ile yarış (E-stop sırası)");
+        assert!(pencere < spawn, "pencere kapatma dosya silme başladıktan SONRA — eski profil listesi açık kalır");
+        assert!(
+            !govde.contains("progress_reporter("),
+            "remove_profiles ilerleme yayınlıyor — UI bunu 'Kuruluyor…/Installing…' diye gösterir (yanıltıcı)"
+        );
     }
 
 }

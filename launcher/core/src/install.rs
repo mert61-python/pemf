@@ -1203,6 +1203,34 @@ pub fn add_installed_profiles(install_root: &Path, profiles: &[String]) {
     }
 }
 
+/// Kaldirilan profili kayittan DUSUR (denetim 2026-09-06, profil kaldirma).
+///
+/// `add_installed_profiles` ile AYNI bicim (sirali, tekil, kompakt JSON) — iki yol ayrisirsa
+/// UI cipleri ile Onar farkli listeler gorur. Profil kayitta yoksa dosya yine de normalize
+/// edilerek yazilir (idempotent). Best-effort: yazma hatasi yutulur, cagiran `read_installed_profiles`
+/// ile sonucu dogrular.
+pub fn remove_installed_profile(install_root: &Path, profile: &str) {
+    let mut set = read_installed_profiles(install_root);
+    set.retain(|x| x != profile);
+    set.sort();
+    set.dedup();
+    if let Ok(json) = serde_json::to_string(&set) {
+        let _ = std::fs::write(installed_profiles_path(install_root), json);
+    }
+}
+
+/// Kaldirilan profilin `installed_packages.models` girdisini sil (denetim 2026-09-06).
+///
+/// Diger alanlar (`base`/`deps`/`app` ve kalan modeller) `write_installed_packages` ile AYNI
+/// serilestirmeden gecer → dosya bayt-uyumlu kalir; `pending_updates` kalan profilleri eskisi gibi
+/// kiyaslar. Girdi zaten yoksa dosyaya DOKUNULMAZ (gereksiz yazma yok).
+pub fn remove_model_record(install_root: &Path, profile: &str) {
+    let mut p = read_installed_packages(install_root);
+    if p.models.remove(profile).is_some() {
+        write_installed_packages(install_root, &p);
+    }
+}
+
 /// Devam-eden kurulum kaydı: kurulum BAŞLARKEN seçilen profiller yazılır, BİTİNCE/İPTAL'de silinir.
 /// Açılışta bu dosya varsa "kurulum yarım kaldı — devam et?" gösterilir (internet kesildi/laptop
 /// kapandı → `.part` cache'te durur, Range ile kaldığı yerden sürer).

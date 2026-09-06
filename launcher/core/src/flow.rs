@@ -48,6 +48,10 @@ pub enum FlowError {
          yeniden İNMEZ)."
     )]
     ProfileRecordUnreadable,
+    /// Profil kaldirma reddi (denetim 2026-09-06). Metin NE olduğunu ve NE yapilacagini soyler;
+    /// UI dogrudan gosterir. Hicbir dosya silinmeden once uretilir (bkz. `remove_profiles`).
+    #[error("{0}")]
+    ProfilKaldirma(String),
 }
 
 /// Cache dosya-adı güvenli mi: tek segment, yol-ayırıcı / sürücü / `..` / NUL YOK.
@@ -586,6 +590,349 @@ pub fn install_profiles(
     // (bkz. install::boyut_kaydini_guncelle)
     install::boyut_kaydini_guncelle(install_root);
     Ok(())
+}
+
+// ─────────────────────────── PROFIL KALDIRMA (denetim 2026-09-06) ──────────────────────────────
+//
+// "Profilleri degistir" ekraninda kullanici kurulu bir profili (or. Veteriner) birakabilir.
+// Kaldirma, KURULUM sirasinda ne acildiysa ONU siler — kaynak, onbellekteki profil zip'lerinin
+// merkezi dizinidir (ai_models/ altina acilan dosyalarin tam listesi). Iki profil ayni dosyayi
+// tasiyabilir (ortak ONNX/PT); kalan profillerin dosyalari KORUNUR. Bu yuzden kalan profillerin
+// zip'leri de okunabilir olmali; degilse ortak kume hesaplanamaz ve islem REDDEDILIR (yanlis
+// silme, yeniden indirmeden daha pahali: kullanici sebebini goremez, AI analizi anlasilmaz bir
+// hatayla duser).
+//
+// GUVENLIK: zip'ten okunan yol yalniz `ai_models/` altinda, `..`/mutlak/ters-egik-cizgi/surucu
+// icermeyen bir yol olabilir. Tek bir kotu girdi TUM islemi durdurur — hicbir dosya silinmez.
+// Hasta verisi (%APPDATA%\PEMF_GUI, ProgramData\PEMF_System) bu fonksiyonun ERISIM ALANININ
+// DISINDADIR: yalniz `install_root/ai_models/**` ve `install_root/cache/<profil zip'leri>`.
+
+/// `remove_profiles` sonucu — Tauri komutu bunu JSON'a cevirir.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct RemoveReport {
+    /// Kaldirilan profiller (istek sirasi).
+    pub removed: Vec<String>,
+    /// Islem SONRASI kurulu kalan profiller (`installed_profiles.json`'dan yeniden okunur).
+    pub installed: Vec<String>,
+    /// Diskten bosaltilan bayt (model dosyalari + onbellek zip'leri).
+    pub freed_bytes: u64,
+    /// Kaldirilan profil(ler)in dosyalarindan, kalan profil(ler) de kullandigi icin KORUNAN sayi.
+    pub kept_shared: usize,
+}
+
+/// Zip girdi adini `ai_models/...` altinda GUVENLI bir goreli yola normalize et.
+///
+/// `Ok(None)` → dizin girdisi (sonu `/`), atlanir. `Err(sebep)` → guvensiz; cagiran TUM islemi
+/// reddeder. Kurallar: ters-egik-cizgi, surucu (`:`), NUL, bos parca (mutlak yol / `//`), `..`,
+/// sonu nokta/bosluk ile biten parca yasak; `.` parcalari atilir; ilk parca TAM OLARAK `ai_models` olmali (buyuk/kucuk harf
+/// varyanti dahil baska hicbir kok kabul edilmez — `runtime/x` gibi girdiler zaten kurulumda
+/// acilmaz, bkz. extract::PROFILE_FORBIDDEN_TOP).
+fn model_yolunu_normalize_et(ad: &str) -> Result<Option<String>, String> {
+    if ad.contains('\\') || ad.contains(':') || ad.contains('\0') {
+        return Err(format!("guvensiz yol karakteri: {ad:?}"));
+    }
+    let dizin_girdisi = ad.ends_with('/');
+    let mut parcalar: Vec<&str> = Vec::new();
+    for (i, seg) in ad.split('/').enumerate() {
+        if seg.is_empty() {
+            // Sondaki bos parca dizin girdisidir; bastaki bos parca MUTLAK yoldur.
+            if i == 0 || !dizin_girdisi || parcalar.is_empty() {
+                return Err(format!("mutlak ya da bos parcali yol: {ad:?}"));
+            }
+            continue;
+        }
+        if seg == "." {
+            continue;
+        }
+        if seg == ".." {
+            return Err(format!("ust dizine kacis: {ad:?}"));
+        }
+        // Sondaki nokta/bosluk (sahip incelemesi 2026-09-06): Windows yol normalizasyonu bunlari
+        // DUSURUR ("em_kedi." → "em_kedi"), KEEP kiyasi ise dusurmez → kalan profilin dosyasi
+        // "ortak degil" sanilip silinebilirdi. Muhafazakar: boyle parca tasiyan paket kaldirilamaz.
+        let kirp = seg.trim_end_matches(['.', ' ']);
+        if kirp.len() != seg.len() {
+            return Err(format!("sonu nokta/bosluk ile biten parca: {ad:?}"));
+        }
+        parcalar.push(seg);
+    }
+    if parcalar.first().copied() != Some("ai_models") {
+        return Err(format!("ai_models/ disinda girdi: {ad:?}"));
+    }
+    if dizin_girdisi || parcalar.len() == 1 {
+        return Ok(None);
+    }
+    Ok(Some(parcalar.join("/")))
+}
+
+/// KEEP/DELETE kiyasi icin anahtar — buyuk/kucuk harf duyarsiz. Windows/macOS dosya sistemleri
+/// harf duyarsizdir; farkli yazimla ayni dosyayi "ortak degil" sayip silmek yerine MUHAFAZAKAR
+/// davranilir (Linux'ta fazladan koruma zararsizdir).
+fn yol_anahtari(yol: &str) -> String {
+    yol.to_ascii_lowercase()
+}
+
+/// Bir profilin onbellekteki zip'lerini (ana + parcalar) listele: `(etiket, yol)`.
+fn profil_onbellek_zipleri(
+    manifest: &Manifest,
+    cache: &Path,
+    ad: &str,
+) -> Result<Vec<(String, PathBuf)>, FlowError> {
+    let ciftler = profil_paketleri(manifest, ad).map_err(|_| {
+        FlowError::ProfilKaldirma(format!(
+            "'{ad}' profili manifestte yok — ortak dosyalar hesaplanamaz. Manifesti yenileyip \
+             tekrar deneyin."
+        ))
+    })?;
+    Ok(ciftler
+        .into_iter()
+        .map(|(pkg, etiket)| {
+            let yol = cache_path_for(pkg, cache, &etiket);
+            (etiket, yol)
+        })
+        .collect())
+}
+
+/// Zip merkezi dizininden `ai_models/...` dosya yollarini oku (normalize edilmis). Icerik
+/// ACILMAZ — yalniz girdi adlari (1 GB'lik zip'te bile milisaniyeler).
+fn zip_dosya_listesi(zip_yolu: &Path, profil: &str) -> Result<Vec<String>, FlowError> {
+    let f = fs::File::open(zip_yolu).map_err(|e| {
+        FlowError::ProfilKaldirma(format!(
+            "{profil} için önbellekteki {} okunamadı ({e}) — 'Kurulumu onar' sonrası tekrar deneyin",
+            zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
+        ))
+    })?;
+    let arsiv = zip::ZipArchive::new(f).map_err(|e| {
+        FlowError::ProfilKaldirma(format!(
+            "{profil} için önbellekteki {} bozuk ({e}) — 'Kurulumu onar' sonrası tekrar deneyin",
+            zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
+        ))
+    })?;
+    let mut v = Vec::with_capacity(arsiv.len());
+    for ad in arsiv.file_names() {
+        match model_yolunu_normalize_et(ad) {
+            Ok(Some(yol)) => v.push(yol),
+            Ok(None) => {}
+            // NOT (inceleme 2026-09-06): kurulum (extract) ters-egik-cizgili adlari ve ai_models
+            // disindaki yasak-listede olmayan kok girdilerini (or. README.txt) ACABILIR; kaldirma
+            // ise MUHAFAZAKAR olarak TUMUNU reddeder (yanlis silme > yeniden kurulum maliyeti).
+            // Boyle bir profil kurulabilir ama buradan kaldirilamaz → kullaniciya acik yol: paket
+            // bozuksa Onar, degilse uygulamayi kaldirip yalniz istenen profillerle yeniden kur.
+            Err(sebep) => {
+                return Err(FlowError::ProfilKaldirma(format!(
+                    "{profil} paketinde güvensiz girdi ({sebep}) — hiçbir dosya silinmedi. Bu profil \
+                     buradan kaldırılamıyor: paket bozuk görünüyorsa 'Kurulumu onar' deneyin; \
+                     sorun sürerse uygulamayı kaldırıp yalnız istediğiniz profillerle yeniden kurun."
+                )))
+            }
+        }
+    }
+    Ok(v)
+}
+
+/// Silme asamasindaki dosya sistemi hatasini EYLEME DONUK metne cevir (inceleme 2026-09-06).
+///
+/// Ham `Io` ("Access is denied (os error 5)") ne yapilacagini soylemiyordu. Kayit (adim 4)
+/// henuz degismedigi icin profil "kurulu" gorunur ve 'Kurulumu onar' eksigi onbellekten
+/// tamamlar; kullanici bunu bilmeli. Tipik sebep: antivirus taramasi ya da acik kalan bir
+/// uygulama dosyayi kilitlemistir (os error 5/32).
+fn silme_hatasi(yol: &str, e: &std::io::Error) -> FlowError {
+    FlowError::ProfilKaldirma(format!(
+        "{yol} silinemedi ({e}) — uygulama ya da antivirüs dosyayı kilitlemiş olabilir; açık \
+         uygulamaları kapatıp 'Kurulumu onar' ile tekrar deneyin. Profil kaydı değişmedi."
+    ))
+}
+
+/// Kurulu profil(ler)i KALDIR: model dosyalari (ortaklar haric) + onbellek zip'leri + kayitlar.
+///
+/// Sira (yarim kalma guvenligi): 1) TUM listeler okunur ve dogrulanir — burada hata = hicbir
+/// sey silinmedi. 2) Dosyalar silinir, bos dizinler budanir. 3) Onbellek zip'leri silinir.
+/// 4) Kayitlar guncellenir. 2-3 yarida kalirsa kayit DEGISMEZ → profil hala "kurulu" gorunur ve
+/// "Kurulumu onar" eksik dosyalari onbellekten/agdan tamamlar (sessiz yarim-profil YOK).
+///
+/// Cagiran backend'i ONCE durdurmus olmali (bobinler E-stop'lu; model dosyalari kilitli degil).
+///
+/// `_on` (inceleme 2026-09-06): HICBIR `Progress` olayi URETILMEZ. `Progress` varyantlarinin hepsi
+/// KURULUM adimidir (UI "extracting"i "Kuruluyor…/Installing…" basligiyla gosterir); kaldirma
+/// sirasinda o basligi ve `<profil> kaldırılıyor installing` gibi karisik metni gostermek yaniltici
+/// olurdu. Baslatici arayuzu "Kaldırılıyor…" ekranini kendisi yonetir. Parametre, `install_profiles`
+/// ile ayni cagri sekli korunsun diye duruyor.
+pub fn remove_profiles(
+    install_root: &Path,
+    manifest: &Manifest,
+    profiles: &[String],
+    _on: &mut dyn FnMut(Progress),
+) -> Result<RemoveReport, FlowError> {
+    if profiles.is_empty() {
+        return Err(FlowError::ProfilKaldirma(
+            "Kaldırılacak profil seçilmedi.".to_string(),
+        ));
+    }
+    let kurulu = install::read_installed_profiles(install_root);
+    for p in profiles {
+        if !kurulu.iter().any(|k| k == p) {
+            return Err(FlowError::ProfilKaldirma(format!(
+                "'{p}' kurulu görünmüyor — profil listesini yenileyip tekrar deneyin."
+            )));
+        }
+    }
+    let kalan: Vec<String> = kurulu
+        .iter()
+        .filter(|k| !profiles.iter().any(|p| p == *k))
+        .cloned()
+        .collect();
+    if kalan.is_empty() {
+        return Err(FlowError::ProfilKaldirma(
+            "En az bir profil kurulu kalmalı — önce başka bir profil kurun, sonra bunu kaldırın."
+                .to_string(),
+        ));
+    }
+
+    let cache = install::cache_dir(install_root);
+    let models = install::models_dir(install_root);
+
+    // 1a) KALAN profillerin dosya kumesi (KEEP). Zip eksikse REDDET: ortak dosya bilinemez.
+    let mut keep: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for q in &kalan {
+        for (_etiket, zip_yolu) in profil_onbellek_zipleri(manifest, &cache, q)? {
+            if !zip_yolu.is_file() {
+                return Err(FlowError::ProfilKaldirma(format!(
+                    "Kalan profil '{q}' için önbellekte {} yok — ortak dosyalar güvenle \
+                     hesaplanamaz. 'Kurulumu onar' sonrası tekrar deneyin.",
+                    zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
+                )));
+            }
+            for yol in zip_dosya_listesi(&zip_yolu, q)? {
+                keep.insert(yol_anahtari(&yol));
+            }
+        }
+    }
+
+    // 1b) Kaldirilacak profillerin dosya + zip listeleri.
+    let mut silinecek: Vec<String> = Vec::new();
+    let mut zipler: Vec<PathBuf> = Vec::new();
+    let mut kept_shared = 0usize;
+    let mut gorulen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for p in profiles {
+        for (_etiket, zip_yolu) in profil_onbellek_zipleri(manifest, &cache, p)? {
+            if !zip_yolu.is_file() {
+                return Err(FlowError::ProfilKaldirma(format!(
+                    "{p} için önbellekte {} yok — 'Kurulumu onar' sonrası tekrar deneyin",
+                    zip_yolu.file_name().and_then(|s| s.to_str()).unwrap_or("paket")
+                )));
+            }
+            for yol in zip_dosya_listesi(&zip_yolu, p)? {
+                let anahtar = yol_anahtari(&yol);
+                if !gorulen.insert(anahtar.clone()) {
+                    continue; // ayni profil icinde tekrar (parca ustune yazma)
+                }
+                // KEEP CIKARMA: kalan bir profil de tasiyorsa DOKUNMA (ortak model).
+                if keep.contains(&anahtar) {
+                    kept_shared += 1;
+                } else {
+                    silinecek.push(yol);
+                }
+            }
+            zipler.push(zip_yolu);
+        }
+    }
+
+    // 2) Dosyalari sil. Her hedef kurulum kokunun `ai_models/` altinda gercekten cozumlenmeli
+    //    (junction/symlink ile disari cikan yol → REDDET; extract ile ayni kapi).
+    let mut freed: u64 = 0;
+    let mut ebeveynler: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+    for yol in &silinecek {
+        let hedef = install_root.join(yol);
+        let meta = match fs::symlink_metadata(&hedef) {
+            Ok(m) => m,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue, // zaten yok
+            Err(e) => return Err(silme_hatasi(yol, &e)),
+        };
+        if !extract::is_within(&models, hedef.parent().unwrap_or(&models)) {
+            return Err(FlowError::ProfilKaldirma(format!(
+                "GÜVENLİK: {yol} kurulum kökünün dışına çözümlendi — silme durduruldu."
+            )));
+        }
+        if meta.is_dir() {
+            continue; // zip'te dosya, diskte dizin: dokunma (budama asamasi bossa alir)
+        }
+        fs::remove_file(&hedef).map_err(|e| silme_hatasi(yol, &e))?;
+        freed = freed.saturating_add(meta.len());
+        if let Some(e) = hedef.parent() {
+            ebeveynler.insert(e.to_path_buf());
+        }
+    }
+    // Bos kalan dizinleri buda: derinden yukari, `ai_models/`in KENDISI haric.
+    let mut adaylar: Vec<PathBuf> = ebeveynler.into_iter().collect();
+    adaylar.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
+    for mut d in adaylar {
+        while d.starts_with(&models) && d != models {
+            let bos = fs::read_dir(&d).map(|mut it| it.next().is_none()).unwrap_or(false);
+            if !bos || fs::remove_dir(&d).is_err() {
+                break;
+            }
+            match d.parent() {
+                Some(e) => d = e.to_path_buf(),
+                None => break,
+            }
+        }
+    }
+
+    // 3) Onbellek zip'leri (+ varsa yarim `.part` kalintisi degil — o kurulum alanidir).
+    for z in &zipler {
+        let etiket = z.file_name().and_then(|s| s.to_str()).unwrap_or("paket");
+        match fs::metadata(z) {
+            Ok(m) => {
+                fs::remove_file(z).map_err(|e| silme_hatasi(etiket, &e))?;
+                freed = freed.saturating_add(m.len());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(silme_hatasi(etiket, &e)),
+        }
+    }
+
+    // 4) Kayitlar — en son (yukaridaki adimlar yarim kalirsa profil "kurulu" kalir → Onar toparlar).
+    for p in profiles {
+        install::remove_installed_profile(install_root, p);
+        install::remove_model_record(install_root, p);
+    }
+    install::boyut_kaydini_guncelle(install_root);
+
+    Ok(RemoveReport {
+        removed: profiles.to_vec(),
+        installed: install::read_installed_profiles(install_root),
+        freed_bytes: freed,
+        kept_shared,
+    })
+}
+
+/// Uygulama penceresinin URL'si: backend adresi + kurulu profiller (`?profiles=home,vet`).
+///
+/// Uygulama (pf) `?profiles=` parametresini okuyup kalici olarak saklar (`installedModes()`);
+/// boylece profil kaldirildiginda arayuz o profili artik sunmaz. Bos listede parametre YOK
+/// (eski davranis). Adlar yalniz `[A-Za-z0-9_-]` olabilir — kayit dosyasindan gelen bozuk bir
+/// ad URL'yi kirmasin diye elenir (kodlama yerine eleme: profil adlari bizim manifestimizden).
+pub fn uygulama_url(port: u16, installed: &[String]) -> String {
+    let taban = crate::backend::app_url(port);
+    let adlar: Vec<&str> = installed
+        .iter()
+        .map(|s| s.as_str())
+        .filter(|s| {
+            !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        })
+        .collect();
+    if adlar.is_empty() {
+        taban
+    } else {
+        let sep = if taban.contains('?') { '&' } else { '?' };
+        format!("{taban}{sep}profiles={}", adlar.join(","))
+    }
+}
+
+/// WebView2 onbellek-kirici parametresi (`_=<ms>`) — mevcut sorgu parametreleri KORUNUR.
+pub fn onbellek_kirici(url: &str, ts_ms: u128) -> String {
+    let sep = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{sep}_={ts_ms}")
 }
 
 /// `runtime/` ağacını temizleyip verilen paketi açar. Yarım kalırsa ağacı SİLER.

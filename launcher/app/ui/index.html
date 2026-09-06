@@ -172,6 +172,10 @@
       .card .meta b .reqtag { margin-left: 8px; font-size: 10px; font-weight: 700; font-style: normal;
         color: var(--teal); background: rgba(45, 212, 191, 0.12); border: 1px solid rgba(45, 212, 191, 0.32);
         padding: 1px 7px; border-radius: 999px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px; }
+      /* "kaldırılacak" rozeti (2026-09-06): kurulu ama seçimi kaldırılmış profil — kırmızı. */
+      .card .meta b .rmtag { margin-left: 8px; font-size: 10px; font-weight: 700; font-style: normal;
+        color: #f87171; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.36);
+        padding: 1px 7px; border-radius: 999px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.3px; }
       .card .meta span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
       .card .size { flex: none; font-size: 12px; color: var(--muted2); font-variant-numeric: tabular-nums;
         padding: 4px 9px; border-radius: 7px; background: var(--bg2); border: 1px solid var(--line); }
@@ -700,6 +704,15 @@
           coreName: "Ana uygulama", coreDesc: "Arayüz ve ortak modeller — her profil için gerekli",
           coreTag: "zorunlu", coreInstalled: "kurulu", coreLocked: "Ana uygulama her kurulumda gelir; seçimi kaldırılamaz.",
           install: "Kur ve Başlat", selCancel: "Geri dön",
+          // "Profilleri değiştir" FARK akışı (denetim 2026-09-06): ekle = seçili−kurulu,
+          // kaldır = kurulu−seçili. Düğme yalnız GERÇEK işi söyler; kurulu profil toplama girmez.
+          applyStart: "Uygula ve Başlat", noChange: "Değişiklik yok", keepOne: "En az bir profil seçili kalmalı",
+          willRemove: "kaldırılacak", removing: "Kaldırılıyor…",
+          removeFailed: (neden) => `Profil kaldırılamadı: ${neden}`,
+          // Yedek hedefi notu (denetim 2026-09-06): metin koda gömülüydü → EN'de Türkçe kalıyordu.
+          backupUnreachable: (yol) => `Yedek hedefi şu an erişilemiyor: ${yol} — harici diski takın ya da yeni bir hedef seçin.`,
+          backupSameDisk: "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; harici bir disk ya da ağ paylaşımı seçin.",
+          backupChoose: "Yedek hedefi seç",
           instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
           appCore: "Uygulama dosyaları", calc: "hesaplanıyor",
           pause: "Duraklat", resume: "Devam Et", cancelDl: "İptal",
@@ -800,6 +813,12 @@
           coreName: "Main application", coreDesc: "Interface and shared models — required by every profile",
           coreTag: "required", coreInstalled: "installed", coreLocked: "The main application is part of every installation; it cannot be unselected.",
           install: "Install & Start", selCancel: "Back",
+          applyStart: "Apply & Start", noChange: "No changes", keepOne: "Keep at least one profile",
+          willRemove: "will be removed", removing: "Removing…",
+          removeFailed: (reason) => `Profile could not be removed: ${reason}`,
+          backupUnreachable: (path) => `Backup destination is currently unreachable: ${path} — plug in the external drive or choose a new destination.`,
+          backupSameDisk: "Backups are currently on the SAME disk as patient data. A disk failure would lose both; choose an external drive or a network share.",
+          backupChoose: "Choose backup destination",
           instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
           appCore: "App files", calc: "calculating",
           pause: "Pause", resume: "Resume", cancelDl: "Cancel",
@@ -927,7 +946,7 @@
           intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
           stepsTitle: "Kurulum — 3 adım",
           steps: [
-            ["Profil(ler)inizi seçin", "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam ana uygulama + seçtiklerinizdir."],
+            ["Profil(ler)inizi seçin", "En üstteki 'Ana uygulama' kartı her kurulumda gelir ve kaldırılamaz (arayüz ve ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam yalnız gerçekten inecekleri sayar (kurulu değilse ana uygulama + yeni seçtikleriniz). 'Profilleri değiştir'de zaten kurulu profil 'kurulu' der ve sayılmaz; işaretini kaldırdığınız kurulu profil 'kaldırılacak' rozeti alır ve düğmeye basınca bu bilgisayardan silinir."],
             ["‘Kur ve Başlat’a tıklayın", "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz."],
             ["Uygulama otomatik açılır", "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız."],
           ],
@@ -957,7 +976,7 @@
           intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
           stepsTitle: "Installation — 3 steps",
           steps: [
-            ["Choose your profile(s)", "The 'Main application' card at the top is part of every installation and cannot be removed (interface and shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total is the main application + your picks."],
+            ["Choose your profile(s)", "The 'Main application' card at the top is part of every installation and cannot be removed (interface and shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total counts only what will actually download (the main application if not yet installed + your new picks). In 'Change profiles', an already installed profile says 'installed' and is not counted; unticking an installed profile marks it 'will be removed' and it is deleted from this computer when you press the button."],
             ["Click ‘Install & Start’", "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen."],
             ["The app opens automatically", "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds."],
           ],
@@ -1050,6 +1069,7 @@
       let lastProfiles = [];   // duraklat→devam için son kurulum seçimi
       let resumeOp = null;     // "Devam Et" hangi işlemi sürdürecek (kurulum mu onarım mı)
       let pausedOp = false;    // [5.6] duraklatılmış ekranda mıyız? (İptal'in görevsiz yolu için)
+      let yedekNotuDurum = null; // ekrandaki yedek hedefi notunun backend durumu (dil değişiminde yeniden çizim; 2026-09-06)
 
       const mb = (n) => (n / 1048576).toFixed(0);
       const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 ? 1 : 2);
@@ -1126,6 +1146,7 @@
 
       /** Çevrimdışı bilgi kutusu — HATA DEĞİL. İsteğe bağlı "Tekrar dene" düğmesi taşır. */
       function notice(msg, onRetry) {
+        yedekNotuDurum = null; // kutu başka bir nota geçti → dil değişiminde yedek notu geri gelmesin
         const box = $("notice"); box.textContent = "";
         const p = document.createElement("div"); p.textContent = msg; box.appendChild(p);
         if (onRetry) {
@@ -1136,7 +1157,7 @@
         }
         box.hidden = false;
       }
-      function clearNotice() { $("notice").hidden = true; $("notice").textContent = ""; stopPrefetchPoll(); }
+      function clearNotice() { yedekNotuDurum = null; $("notice").hidden = true; $("notice").textContent = ""; stopPrefetchPoll(); }
 
       // ── ARKA PLAN İNDİRME GÖSTERGESİ (2026-08-16, sahip isteği: "yüzdelik real-time bar") ──
       // Ön-indirme SESSİZ tasarlanmıştı (kullanıcıyı bekletmemek için ekran ele geçirilmiyor),
@@ -1399,20 +1420,16 @@
        * ⚠️ Kurulumu ENGELLEMEZ (harici disk o an takılı olmayabilir) ama hedef seçilene kadar
        * hatırlatma KALICIDIR: ertelenirse maliyeti tüm klinik geçmişidir.
        */
-      async function yedekHedefiKontrol() {
-        let d;
-        try { d = await invoke("yedek_hedefi_durumu"); } catch (_) { return; }
-        if (!d) return;
-        if (d.yol && d.erisilebilir) return;                 // yapılandırılmış ve erişilebilir
+      // Gösterilen yedek notunun backend durumu `yedekNotuDurum` (uygulama durumu bloğunda):
+      // dil değişince not BACKEND'E SORMADAN yeniden çizilir; `notice()`/`clearNotice()` sıfırlar.
+      function yedekNotuCiz(d) {
+        const x = t();
         const box = $("notice"); box.textContent = "";
         const p1 = document.createElement("div");
-        p1.textContent = d.yol
-          ? ("Yedek hedefi şu an erişilemiyor: " + d.yol + " — harici diski takın ya da yeni bir hedef seçin.")
-          : "Yedekler şu anda hasta verisiyle AYNI diskte. Disk arızasında ikisi de kaybolur; "
-            + "harici bir disk ya da ağ paylaşımı seçin.";
+        p1.textContent = d.yol ? x.backupUnreachable(d.yol) : x.backupSameDisk;
         box.appendChild(p1);
         const b = document.createElement("button");
-        b.className = "nbtn"; b.textContent = "Yedek hedefi seç";
+        b.className = "nbtn"; b.textContent = x.backupChoose;
         b.onclick = async () => {
           b.disabled = true;
           try {
@@ -1422,6 +1439,18 @@
         };
         box.appendChild(b);
         box.hidden = false;
+        yedekNotuDurum = d;
+      }
+      /** Dil değişti: yedek notu ekrandaysa aynı durumla YENİDEN çiz (EN'de Türkçe kalmasın). */
+      function yedekNotuDiliYenile() {
+        if (yedekNotuDurum && !$("notice").hidden) yedekNotuCiz(yedekNotuDurum);
+      }
+      async function yedekHedefiKontrol() {
+        let d;
+        try { d = await invoke("yedek_hedefi_durumu"); } catch (_) { return; }
+        if (!d) return;
+        if (d.yol && d.erisilebilir) return;                 // yapılandırılmış ve erişilebilir
+        yedekNotuCiz(d);
       }
 
       /**
@@ -1581,6 +1610,10 @@
         applyRememberLabel(); // "Beni hatırla" mı yoksa "saklanamıyor" açıklaması mı
         $("lang-tr").classList.toggle("on", LANG === "tr");
         $("lang-en").classList.toggle("on", LANG === "en");
+        // Yedek notu açıksa yeni dilde yeniden çizilir (backend'e sorulmaz). `typeof` koruması
+        // `show()`taki `startKapisiAc` deseninin aynısı: applyLang'ı tek başına koşturan kapılar
+        // (test_baslat_kapisi_etiket) bu yardımcıyı taşımaz.
+        if (typeof yedekNotuDiliYenile === "function") yedekNotuDiliYenile();
         renderCards(); renderChips();
       }
       $("lang-tr").onclick = () => { LANG = "tr"; applyLang(); };
@@ -1593,13 +1626,45 @@
           ...profileKeys.filter((k) => !PROFILE_ORDER.includes(k)),
         ];
       }
-      function updateInstallBtn() {
+      /** PROFİL FARKI (denetim 2026-09-06) — "Profilleri değiştir" akışının SAF çekirdeği.
+       *
+       * Eskiden düğme seçili HER profili toplayıp "Kur ve Başlat · 2,1 GB" diyordu — kurulu
+       * olan da toplama giriyordu (yeniden inmeyecekti) ve seçimi kaldırılan profil için hiçbir
+       * şey olmuyordu. Artık:
+       *   ekle   = seçili − kurulu   (gerçekten inecek olanlar; bytes yalnız bunlardan)
+       *   kaldir = kurulu − seçili   (backend `remove_profiles` ile silinecekler)
+       *   bytes  = Σ sizes[ekle] + (ana uygulama kurulu değilse baseBytes)
+       * `secili` = etkin seçim sayısı (bağımlılıklar dâhil) — 0 ise hiçbir şey yapılmaz. */
+      function profilFarki() {
         const eff = withDeps([...selected]);
-        let total = 0; eff.forEach((k) => { total += sizes[k] || 0; });
-        // base (uygulama çekirdeği) kurulu değilse toplama ekle — gerçek indirme miktarı.
-        if (!baseInstalled) total += baseBytes;
-        $("btn-install").disabled = eff.size === 0 || busy;
-        $("t-install").textContent = eff.size ? `${t().install} · ${gb(total)} GB` : t().install;
+        const kurulu = new Set(installed);
+        // Kayıtlı + seçili profil yeniden İNMEZ (paketi önbellekte) → toplama girmez.
+        const yeni = new Set([...eff].filter((k) => !kurulu.has(k)));
+        // Ana uygulama kurulu DEĞİLSE (yarım kalan çalışma-zamanı güncellemesi ağacı siler; kayıt
+        // dosyası dolu kalır) kurulum SEÇİLEN HER profili yeniden geçer (kayıtlılar önbellekten
+        // açılır, inmez) ve hiçbir profil kaldırılmaz — aksi hâlde aynı seçim "Değişiklik yok"
+        // der ve kullanıcı kilitlenirdi (sahip incelemesi 2026-09-06; renderCards aynı kuralı izler).
+        const ekle = baseInstalled ? yeni : new Set(eff);
+        const kaldir = new Set(baseInstalled ? installed.filter((k) => !eff.has(k)) : []);
+        let bytes = 0; yeni.forEach((k) => { bytes += sizes[k] || 0; });
+        if (!baseInstalled) bytes += baseBytes;
+        return { ekle, kaldir, bytes, secili: eff.size };
+      }
+      function updateInstallBtn() {
+        const x = t(), f = profilFarki();
+        let etiket, kapali;
+        if (f.secili === 0) {
+          // İlk kurulumda (kurulu profil yok) eski etiket; değiştirme akışında "en az bir kalmalı".
+          etiket = (baseInstalled && installed.length) ? x.keepOne : x.install; kapali = true;
+        } else if (!f.ekle.size && !f.kaldir.size) {
+          etiket = x.noChange; kapali = true;
+        } else {
+          // Kurulu profil TOPLAMA GİRMEZ; yalnız kaldırma varsa boyut yazılmaz (indirme yok).
+          etiket = (f.ekle.size ? x.install : x.applyStart) + (f.bytes ? ` · ${gb(f.bytes)} GB` : "");
+          kapali = false;
+        }
+        $("btn-install").disabled = kapali || busy;
+        $("t-install").textContent = etiket;
       }
       /** UYGULAMA ÇEKİRDEĞİ KARTI (2026-09-06, sahip isteği).
        *
@@ -1659,13 +1724,19 @@
           const m = document.createElement("div"); m.className = "meta";
           const b = document.createElement("b"); b.textContent = name;
           if (isDep) { const tag = document.createElement("em"); tag.className = "reqtag"; tag.textContent = LANG === "tr" ? "gerekli" : "required"; b.appendChild(tag); }
+          // Kurulu ama seçimi kaldırılmış → kırmızı "kaldırılacak" rozeti (2026-09-06); boyutu
+          // AÇILACAK yer olarak kalır.
+          const kurulu = installed.includes(key);
+          // Ana uygulama yokken kaldırma yok → rozet de yok (bkz. profilFarki).
+          if (baseInstalled && kurulu && !on) { const tag = document.createElement("em"); tag.className = "rmtag"; tag.textContent = t().willRemove; b.appendChild(tag); }
           const s = document.createElement("span"); s.textContent = desc;
           m.append(b, s);
           const size = document.createElement("span"); size.className = "size";
           // Kartta profilin KENDİ boyutu yazar. (Eskiden kümülatifti: `vet` kartında home+vet
           // toplamı görünüyordu — zorunlu bağımlılık vardı, doğruydu. Bağımlılık kalkınca o
           // gösterim YANILTICI olurdu: kullanıcı 0,6 GB yazan kartı seçip 0,12 GB indirirdi.)
-          size.textContent = sizes[key] ? `${gb(cumBytes(key))} GB` : "";
+          // Kurulu + seçili → "kurulu" (yeniden inmez; toplama da girmez — bkz. profilFarki).
+          size.textContent = (kurulu && on) ? t().coreInstalled : (sizes[key] ? `${gb(cumBytes(key))} GB` : "");
           card.append(cb, pico, m, size);
           card.onclick = () => {
             if (busy) return;
@@ -1885,6 +1956,43 @@
         }
         finally { busy = false; stopPolling(); }
       }
+      /** PROFİL KALDIRMA (denetim 2026-09-06) — `remove_profiles` backend komutu.
+       *
+       * Yalnız bu profil(ler)e ÖZEL model dosyaları silinir; kalan profillerle paylaşılanlar
+       * ve hasta verisi backend'de korunur. İndirme yok → duraklat/iptal düğmeleri gizli kalır.
+       * Başarıda `installed` backend'in döndürdüğü listeyle tazelenir; hatada seçim ekranına
+       * dönülür ve sebep + ne yapılacağı (backend metni) gösterilir. Dönüş: başarı mı? */
+      async function profilKaldir(profiller) {
+        if (!manifestRaw) { fail(t().offlineSelect); return false; }
+        clearErr(); clearNotice(); busy = true;
+        show("s-install"); resetInstallUI(); indet(true);
+        $("inst-title").textContent = t().removing;
+        $("status").textContent = profiller.map(profName).join(", ");
+        try {
+          const r = await invoke("remove_profiles", { manifestRaw, profiles: profiller });
+          if (r && Array.isArray(r.installed)) installed = r.installed.slice();
+          return true;
+        } catch (e) {
+          try { await refreshEnv(); } catch (_) {}
+          renderCards(); show("s-select"); fail(t().removeFailed(String(e)));
+          return false;
+        } finally { busy = false; }
+      }
+      /** "Kur ve Başlat" / "Uygula ve Başlat": ÖNCE kaldır, SONRA ekle (bkz. profilFarki).
+       * Sıra kasıtlı: kaldırma yerel ve hızlıdır; ekleme indirme ister ve giriş gerektirir —
+       * giriş yoksa HİÇBİR şey yapılmadan giriş ekranına gidilir (yarım iş bırakma). */
+      async function profilleriUygula() {
+        if (busy) return;
+        const f = profilFarki();
+        if (f.secili === 0 || (!f.ekle.size && !f.kaldir.size)) return;
+        if (f.ekle.size && !authed) { show("s-login"); fail(t().loginRequired); return; }
+        if (f.kaldir.size && !(await profilKaldir([...f.kaldir]))) return;
+        if (f.ekle.size) { await doInstall([...f.ekle]); return; }
+        $("sel-back-wrap").hidden = true; renderChips(); show("s-ready");
+        // Kaldırma backend'i durdurup uygulama penceresini kapattı → "Başlat" etiketi tazelensin
+        // (`typeof` koruması: bu akışı tek başına koşturan kapılar yardımcıyı taşımaz).
+        if (typeof syncRunningState === "function") syncRunningState();
+      }
       async function doRepair() {
         if (!authed) { show("s-login"); fail(t().loginRequired); return; }
         // Onarım MANİFEST ister → çevrimdışıyken düğmeye basmak anlamsız bir hataya düşerdi.
@@ -1999,7 +2107,7 @@
         return true;
       }
 
-      $("btn-install").onclick = () => { const eff = withDeps([...selected]); if (!busy && eff.size) doInstall([...eff]); };
+      $("btn-install").onclick = () => { profilleriUygula(); };
       $("btn-pause").onclick = () => { $("btn-pause").disabled = true; invoke("pause_install").catch(() => {}); };
       $("btn-resume").onclick = () => { if (!busy && resumeOp) resumeOp(); };
       $("btn-cancel").onclick = iptalTiklandi; // [5.6] duraklatılmışken de çalışan İptal

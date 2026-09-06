@@ -6,6 +6,28 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.50 — 2026-09-06 (🧹 "Profilleri degistir": isareti kaldirilan profil bilgisayardan silinir)
+
+- **Isareti kaldirilan kurulu profil artik gercekten kaldirilir.** Eskiden "Profilleri degistir"de
+  bir profilin isaretini kaldirip devam etmek HICBIR sey yapmiyordu: model dosyalari diskte kaliyor,
+  profil uygulamanin acilis ekraninda gorunmeye devam ediyordu. Artik kart kirmizi "kaldirilacak"
+  rozeti alir; dugmeye basinca yalniz o profile ozel model dosyalari ve indirilen paketi silinir
+  (kalan profillerle ortak dosyalara ve hasta verisine dokunulmaz), kayit guncellenir ve uygulama
+  yalniz kurulu profilleri gosterir.
+- **Dugme toplami yalniz gercekten inecekleri sayar.** Kurulu profil kartta "kurulu" der ve
+  toplama girmez; yalniz kaldirma varsa "Uygula ve Baslat" (boyutsuz); degisiklik yoksa dugme
+  kapali ("Degisiklik yok"); son profil kaldirilamaz ("En az bir profil secili kalmali").
+- **Guvenlik sirasi.** Seans surerken kaldirma reddedilir; once bobinler durdurulur (E-stop) ve
+  arka plan kapatilir, acik uygulama penceresi kapanir, sonra dosyalar silinir. Silme yarida
+  kalirsa kayit degismez: profil "kurulu" gorunur ve "Kurulumu onar" tamamlar. Paket icinde
+  supheli bir yol varsa hicbir dosya silinmez.
+- **Yedek hedefi uyarisi Ingilizce arayuzde de Ingilizce.** Dil degistirilince not yeniden
+  cizilir; eskiden Turkce kaliyordu.
+- Ana uygulama eksikse (yarim kalan guncelleme) ayni secim "Degisiklik yok" deyip kilitlemez;
+  kurulum yeniden gecer.
+
+1.9.47+ kurulu cihazlar bu surume kendiliginden gecer.
+
 ## launcher 1.9.49 — 2026-09-06 (🧩 Profil seciminde "Ana uygulama" karti)
 
 - **"Ana uygulama" karti artik ekranda.** Ana uygulama (arayuz + ortak modeller) her kurulumda
