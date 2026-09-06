@@ -153,9 +153,15 @@ def test_KRITIK_var_olmayan_kimlik_silindi_DENMEZ_yoktu_denir(tmp_path):
     assert _failed_count(stdout) == 0, (
         f"var-olmayan (eski-ad) kimlik başarısızlık sayıldı — 'yoktu' normal olmalı:\n{stdout}"
     )
-    # Kapsam sınırı notu her çağrıda bir kez, Sarı: LocalSystem kasası bu adımın dışında.
+    # Kapsam sınırı notu her çağrıda bir kez, Sarı: LocalSystem kasası bu adımın dışında —
+    # 2026-09-06'dan beri bir SONRAKİ adım (Remove-PemfSystemCredentials) onu temizler; NOT bunu söyler.
     notlar = [
-        s for s in log if s.startswith("Yellow|") and "LocalSystem" in s and "servis kasası ayrıca temizlenmeli" in s
+        s
+        for s in log
+        if s.startswith("Yellow|")
+        and "LocalSystem" in s
+        and "SONRAKİ adımda" in s
+        and "Remove-PemfSystemCredentials" in s
     ]
     assert len(notlar) == 1, f"LocalSystem kasa-kapsamı NOT satırı tam 1 kez beklenirdi:\n{log}"
 

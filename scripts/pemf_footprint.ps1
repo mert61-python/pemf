@@ -98,7 +98,8 @@ function Get-PemfFootprint {
         # KVKK — Windows Credential Manager hedef adları. python-keyring'in Windows arka ucu hedefi
         # "<ad>@<servis>" biçiminde yazar (servis = 'PEMF_GUI'); ad listesi runtime'dan türetilir:
         #   utils/secrets_manager.py  _keyring_get("sqlcipher_key"|"patient_fernet_key"|"master_secret")
-        #   database/sqlcipher_util.py _KEY_NAME = "sqlcipher_key"  (keyring.set_password ile YAZAN tek yer)
+        #   keyring.set_password ile YAZANLAR: database/sqlcipher_util.py ("sqlcipher_key") +
+        #   pemf_gui/config.py ("patient_fernet_key") — ikisi de aşağıdaki listede (denetim 2026-09-06)
         # ⚠️ DENETİM 2026-09-06: burada 'fernet_key@PEMF_GUI' yazıyordu; runtime ise 'patient_fernet_key'
         # kullanır → o kayıt HİÇ silinmiyor, teardown ise sonucu doğrulamadığından her koşuda sahte
         # "kimlik silindi" raporluyordu. Ad düzeltildi + 'master_secret' eklendi. ESKİ adlar ('PEMF_GUI',
