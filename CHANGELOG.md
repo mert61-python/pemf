@@ -6,6 +6,43 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.42 · launcher 1.9.48 — 2026-09-06 (🔍 Sessiz yardimci yollar denetimi)
+
+1.9.45 oto-guncelleme arizasinin SINIFI ("yardimci surec var, kaniti yok") saha kodunun tamaminda
+arandi: 27 aday, her birine iki bagimsiz dogrulayici, 6 gercek bulgu. Hepsi duzeltildi ve her kapi
+eski hata geri konarak kirmizi kanitlandi.
+
+### Baslatici (launcher 1.9.48)
+
+- **Guncelleme yardimcisi ozel karakterli kullanici adinda da calisiyor.** Windows kullanici adinda
+  `&` ya da `^` varsa ("Vet & Co") yardimci komut dosyasi hic baslamiyor, guncelleme ve kaldirma
+  o makinede sessizce olu kaliyordu (6 dizinde olculdu). Tek ortak yardimci, guvenli komut satiri
+  bicimi ve erken-olum kapisi: yardimci hemen sonlanirsa artik hata soylenir.
+- **Yedek klasoru secici:** PowerShell kisitli makinede (ConstrainedLanguage/WDAC) seçicinin
+  dusmesi operatorun "Iptal"inden ayirt edilemiyordu; artik cikis kodu ve hata metni okunur.
+- **Guncelleme penceresi acilamazsa** sebebi yardimci gunlugune yazilir (Defender ASR/AppLocker).
+- **Kaldirmada bobin acil-durdurma sonucu artik goruluyor.** Kaldirici, backend'i oldurmeden once
+  gonderdigi E-stop'un sonucunu atiyordu: PowerShell engelli, zaman asimi, port olu ya da backend
+  "dogrulanmadi" dese bile basarili gorunuyordu. Sonuc kalici bir dosyaya yazilir
+  (PEMF_GUI/logs/uninstall_estop.log), etkilesimli kaldirmada uyari gosterilir; kaldirma asla
+  engellenmez.
+
+### Kurulum ve kaldirma betikleri (paketle gelir)
+
+- **Mosquitto guvenlik duvari kurali dogrulaniyor;** kurulum gunlugu artik dosyaya yaziliyor
+  (ProgramData/PEMF_System/logs/setup_services.log). Kural olusmazsa ESP bobin 6-8'in broker'a
+  ulasamayacagi acikca uyarilir.
+- **KVKK tam temizlik raporu artik dogru:** kimlik silme sonucu okunuyor (silindi / yoktu /
+  SILINEMEDI), yanlis kimlik adi duzeltildi.
+- **Backend servisinin (LocalSystem) kimlik kasasi da temizleniyor** — tek-seferlik SYSTEM gorevi
+  ile, dogrulamali; yukseltilmis oturumda gercek SYSTEM kasasinda dogrulandi.
+
+### Not
+
+Mobil uygulama (2.3.32) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
+
+Paket kimliği (`buildId`): `631ae4f10a99`. Monolit `base.zip` sha: `663a0586bc7f`. deps katmani DEGISMEDI (`99ac8a491f37`, URL korundu).
+
 ## launcher 1.9.47 — 2026-09-05 (🔧 Otomatik guncelleme ARTIK GERCEKTEN KURUYOR)
 
 **Bu surum bir saha arizasini kapatiyor: 1.9.45 ve 1.9.46'da otomatik guncelleme HIC
