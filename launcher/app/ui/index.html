@@ -157,6 +157,11 @@
       .card.sel .box { border-color: var(--teal); background: var(--teal); }
       .card .box svg { width: 13px; height: 13px; stroke: #04211d; stroke-width: 3; opacity: 0; }
       .card.sel .box svg { opacity: 1; }
+      /* Çekirdek kartı (2026-09-06): seçili ama DEĞİŞTİRİLEMEZ — imleç ok, hover rengi sabit
+         (tıklanabilir sanılmasın), kutu hafif soluk "kilitli" hissi. Odaklanabilir kalır. */
+      .card.core { cursor: default; }
+      .card.core:hover { border-color: var(--teal); }
+      .card.core .box { border-color: var(--teal); background: var(--teal); opacity: 0.85; }
       .card .pico {
         width: 40px; height: 40px; flex: none; border-radius: 10px; display: grid; place-items: center;
         background: rgba(45, 212, 191, 0.10); border: 1px solid rgba(45, 212, 191, 0.22); color: var(--teal-l);
@@ -549,7 +554,7 @@
         <!-- profile selection (multi-select) -->
         <section id="s-select" hidden>
           <h2 class="title" id="t-sel-title">Kullanım profilinizi seçin</h2>
-          <p class="lead" id="t-sel-lead">Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.</p>
+          <p class="lead" id="t-sel-lead">Uygulama çekirdeği her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.</p>
           <div class="cards" id="cards"></div>
           <!-- İşlevsel bağ notu: ENGELLEMEZ, yalnız söyler (bkz. JS `depNotice`). -->
           <div class="dep-notice" id="dep-notice" hidden></div>
@@ -689,7 +694,10 @@
           tagline: "Veteriner PEMF seans + yapay zekâ teşhis platformu",
           web: "Web Sitesi", about: "Hakkında", guide: "Kılavuz", guideTitle: "Kullanım Kılavuzu", detect: "Ortam algılanıyor…", authSlow: "Bağlantı yavaş — oturum arka planda doğrulanıyor. Uygulamayı şimdi başlatabilirsiniz.",
           selTitle: "Kullanım profilinizi seçin",
-          selLead: "Birden fazla profil seçebilirsiniz — yalnız seçtikleriniz indirilir.",
+          selLead: "Uygulama çekirdeği her kurulumda gelir (kaldırılamaz). Profillerden en az birini seçin — yalnız seçtikleriniz indirilir.",
+          // Çekirdek kartı (2026-09-06): en üstte, önceden seçili, KALDIRILAMAZ; boyutu katmanlardan.
+          coreName: "Uygulama çekirdeği", coreDesc: "Ana uygulama, arayüz ve ortak modeller — her profil için gerekli",
+          coreTag: "zorunlu", coreInstalled: "kurulu", coreLocked: "Uygulama çekirdeği her kurulumda gelir; seçimi kaldırılamaz.",
           install: "Kur ve Başlat", selCancel: "Geri dön",
           instDl: "İndiriliyor…", instVerify: "Doğrulanıyor…", instExtract: "Kuruluyor…", instStart: "Başlatılıyor…",
           appCore: "Uygulama dosyaları", calc: "hesaplanıyor",
@@ -787,7 +795,9 @@
           tagline: "Veterinary PEMF session + AI diagnostics platform",
           web: "Website", about: "About", guide: "Guide", guideTitle: "User Guide", detect: "Detecting environment…", authSlow: "Slow connection — verifying your session in the background. You can start the app now.",
           selTitle: "Choose your usage profile",
-          selLead: "You can select multiple profiles — only the ones you pick are downloaded.",
+          selLead: "The application core is always installed (cannot be removed). Pick at least one profile — only the ones you pick are downloaded.",
+          coreName: "Application core", coreDesc: "Main app, interface and shared models — required by every profile",
+          coreTag: "required", coreInstalled: "installed", coreLocked: "The application core is part of every installation; it cannot be unselected.",
           install: "Install & Start", selCancel: "Back",
           instDl: "Downloading…", instVerify: "Verifying…", instExtract: "Installing…", instStart: "Starting…",
           appCore: "App files", calc: "calculating",
@@ -916,7 +926,7 @@
           intro: "PEMF Vet; kedilerde yapay zekâ ile teşhis ve PEMF (darbeli manyetik alan) ile seans uygulayan bir platformdur. Bu client, uygulamayı bilgisayarınıza indirir, kurar ve başlatır. Aşağıdaki adımlar hiç deneyimi olmayan biri için hazırlanmıştır — sırayla takip etmeniz yeterli.",
           stepsTitle: "Kurulum — 3 adım",
           steps: [
-            ["Profil(ler)inizi seçin", "Aşağıdaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her birinin indirme boyutu kartının sağında yazar."],
+            ["Profil(ler)inizi seçin", "En üstteki 'Uygulama çekirdeği' kartı her kurulumda gelir ve kaldırılamaz (ana uygulama + ortak modeller; boyutu sağında yazar, kuruluysa 'kurulu' der). Altındaki 3 profilden en az birini işaretleyin (Ev Sahibi, Veteriner Hekim, Araştırma). Birden fazla seçebilirsiniz; her kartın sağında YALNIZ kendi indirme boyutu yazar, düğmedeki toplam çekirdek + seçtiklerinizdir."],
             ["‘Kur ve Başlat’a tıklayın", "Seçtiğiniz modeller inip kurulur. Çubukta yüzde, hız (MB/s) ve kalan süre görünür. İstediğinizde Duraklat veya İptal edebilir; internet kesilse ya da bilgisayar kapansa bile tekrar açtığınızda kaldığınız yerden devam edebilirsiniz."],
             ["Uygulama otomatik açılır", "Kurulum bitince uygulama tarayıcınızda açılır. Sonraki açılışlarda bu penceredeki ‘Başlat’ düğmesiyle saniyeler içinde açarsınız."],
           ],
@@ -946,7 +956,7 @@
           intro: "PEMF Vet is a platform for AI-assisted diagnosis and PEMF (pulsed magnetic field) sessions in cats. This client downloads, installs and starts the app on your computer. The steps below are written for someone with no prior experience — just follow them in order.",
           stepsTitle: "Installation — 3 steps",
           steps: [
-            ["Choose your profile(s)", "Tick at least one of the 3 profiles below (Pet Owner, Veterinarian, Research). You can pick several; each card shows its download size on the right."],
+            ["Choose your profile(s)", "The 'Application core' card at the top is part of every installation and cannot be removed (main app + shared models; its size is shown on the right, or 'installed' if already present). Tick at least one of the 3 profiles below it (Pet Owner, Veterinarian, Research). You can pick several; each card shows ONLY its own download size, and the button total is core + your picks."],
             ["Click ‘Install & Start’", "Your selected models download and install. The bar shows percent, speed (MB/s) and time left. You can Pause or Cancel anytime; even if the internet drops or the computer shuts down, you can resume where you left off when you reopen."],
             ["The app opens automatically", "When installation finishes, the app opens in your browser. Next time, use the ‘Start’ button in this window to open it in seconds."],
           ],
@@ -1590,9 +1600,43 @@
         $("btn-install").disabled = eff.size === 0 || busy;
         $("t-install").textContent = eff.size ? `${t().install} · ${gb(total)} GB` : t().install;
       }
+      /** UYGULAMA ÇEKİRDEĞİ KARTI (2026-09-06, sahip isteği).
+       *
+       * `base` (ana uygulama + arayüz + ortak modeller) her kurulumda flow.rs tarafından ZATEN
+       * kuruluyor ama ekranda GÖRÜNMÜYORDU: yalnız "Kur ve Başlat" toplamına sessizce ekleniyordu.
+       * Kullanıcı 0,3 GB yazan kartı seçip 1,8 GB indiğini görünce şaşırıyordu. Artık en üstte,
+       * önceden seçili ve KALDIRILAMAZ bir kart olarak gösterilir: tıklama hiçbir şey değiştirmez,
+       * `selected`e GİRMEZ (kurulum çağrısı yalnız gerçek profilleri taşır). Boyutu katmanlardan
+       * (app+deps) gelir; çekirdek kuruluysa "kurulu" yazar (yeniden inmez). Odaklanabilir kalır;
+       * ekran okuyucuya `aria-disabled` ile "değiştirilemez" denir. */
+      function cekirdekKarti() {
+        const x = t();
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "card sel core";
+        card.setAttribute("aria-pressed", "true");
+        card.setAttribute("aria-disabled", "true");
+        card.setAttribute("aria-label", `${x.coreName} — ${x.coreTag}`);
+        card.title = x.coreLocked;
+        const cb = document.createElement("span"); cb.className = "box";
+        cb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#04211d"><path d="m5 13 4 4L19 7"/></svg>';
+        const pico = document.createElement("span"); pico.className = "pico";
+        pico.innerHTML = '<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16v10H4zM9 20h6M12 16v4"/></svg>';
+        const m = document.createElement("div"); m.className = "meta";
+        const b = document.createElement("b"); b.textContent = x.coreName;
+        const tag = document.createElement("em"); tag.className = "reqtag"; tag.textContent = x.coreTag; b.appendChild(tag);
+        const s = document.createElement("span"); s.textContent = x.coreDesc;
+        m.append(b, s);
+        const size = document.createElement("span"); size.className = "size";
+        size.textContent = baseInstalled ? x.coreInstalled : (baseBytes ? `${gb(baseBytes)} GB` : "");
+        card.append(cb, pico, m, size);
+        card.onclick = () => {}; // kilitli: seçim durumu ve `selected` DEĞİŞMEZ
+        return card;
+      }
       function renderCards() {
         const box = $("cards"); box.textContent = "";
         const eff = withDeps([...selected]);
+        box.appendChild(cekirdekKarti()); // her zaman İLK sırada, önceden seçili, kaldırılamaz
         for (const key of orderedKeys()) {
           const meta = PROFILE_META[key];
           const [name, desc] = meta ? meta[LANG] : [key, ""];
@@ -2337,7 +2381,11 @@
             const parcalar = (m.model_parts?.[k] || []).reduce((t, p) => t + (p?.size || 0), 0);
             sizes[k] = ana + parcalar;
           }
-          baseBytes = m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0;
+          // Çekirdek boyutu (2026-09-06): ≥1.9.13 istemci KATMANLARI indirir (app + deps); tek-parça
+          // base.zip yalnız eski istemciler içindir. Katman alanı yoksa eski alanlara düş.
+          const kat = m.layers?.[info.platform];
+          const katToplam = (kat?.app?.size || 0) + (kat?.deps?.size || 0);
+          baseBytes = katToplam || (m.runtimes?.[info.platform]?.size ?? m.base?.size ?? 0);
         } catch {}
         // Kartlar/boyutlar manifest gelince TAZELENİR (ADIM 1'de boyutsuz çizilmişti).
         renderCards();
