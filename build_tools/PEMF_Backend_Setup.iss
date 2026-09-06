@@ -248,10 +248,31 @@ var
 begin
   // -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7 sn worst-case" diye belgeliyor;
   // daha kisa deger ESP bobinleri (6-8) yayinlanmadan dolabiliyordu (NSIS ikizinde olculdu).
-  Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod' +
+  // DENETIM 2026-09-06: komut `| Out-Null ... catch {}` idi ve ResultCode OKUNMUYORDU -> baglanti
+  // reddi / zaman asimi / backend "confirmed=false" hepsi basarili E-stop gibi gorunuyordu, kurulum
+  // gunlugunde iz yoktu. NSIS ikiziyle AYNI raporlayan tek-satir: cikis 0 = OK confirmed=True,
+  // cikis 2 = 200 ama confirmed<>true (STM/ESP yolu DOGRULANAMADI), cikis 1 = istisna (FAIL=<mesaj>).
+  // Tirnak kullanilmaz (-Command sinirlayicisiyla cakismasin). Sonuc Log()'a yazilir; kurulum
+  // hicbir kosulda bloklanmaz (yukaridaki "SESSIZ BASARISIZLIK KABUL" notu gecerli) - amac iz + teshis.
+  Komut := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMethod' +
            ' -Uri http://127.0.0.1:' + IntToStr(Port) + '/api/hardware/emergency_stop' +
-           ' -Method POST -TimeoutSec 10 | Out-Null } catch {}"';
-  Exec('powershell.exe', Komut, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+           ' -Method POST -TimeoutSec 10; Write-Host -NoNewline OK status=$($r.status) confirmed=$($r.confirmed)' +
+           ' t=$(Get-Date -Format s); if ($r.confirmed -ne $true) { exit 2 }; exit 0 }' +
+           ' catch { Write-Host -NoNewline FAIL=$($_.Exception.Message) t=$(Get-Date -Format s); exit 1 }"';
+  if Exec('powershell.exe', Komut, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if ResultCode = 0 then
+      Log('PEMF: E-stop powershell cikis kodu 0 - bobin acil-durdurma DOGRULANDI (port ' + IntToStr(Port) + ')')
+    else if ResultCode = 2 then
+      Log('PEMF: E-stop powershell cikis kodu 2 - backend yanit verdi ama confirmed=false (port ' +
+          IntToStr(Port) + '); bobinleri ELLE kontrol edin')
+    else
+      Log('PEMF: E-stop powershell cikis kodu ' + IntToStr(ResultCode) + ' - POST basarisiz (port ' +
+          IntToStr(Port) + ', baglanti yok/zaman asimi); backend zaten olu olabilir, bobinleri ELLE kontrol edin');
+  end
+  else
+    Log('PEMF: E-stop powershell BASLATILAMADI (Exec hata ' + IntToStr(ResultCode) +
+        ') - bobinleri ELLE kontrol edin; powershell.exe engelli/eksik mi bakin');
 end;
 
 // Verilen backend.port dosyasini oku, DOGRULA ve E-stop gonder. Gonderildiyse True doner.

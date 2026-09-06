@@ -205,6 +205,43 @@ def test_KRITIK_ESTOP_ile_kill_arasinda_BEKLEME_var():
     )
 
 
+def test_KRITIK_ESTOP_sonucu_OKUNUR_ve_gunluklenir():
+    """🔴 DENETİM 2026-09-06 (sessiz-yol taraması, bulgu #1'in Inno ikizi).
+
+    Yordam eskiden `Invoke-RestMethod ... | Out-Null } catch {}` gönderiyor ve `Exec(...)`'in
+    ResultCode'unu HİÇ okumuyordu: bağlantı reddi, zaman aşımı, backend'in `confirmed=false`
+    yanıtı — hepsi BAŞARILI E-stop gibi görünüyordu, kurulum günlüğünde iz yoktu. NSIS ikizi
+    (hooks.nsi) aynı turda düzeltildi; bu kapı Inno tarafının geri kaymasını engeller:
+      (a) PowerShell tek-satırı RAPORLAR: confirmed≠true → `exit 2`, istisna → `exit 1`;
+      (b) `Out-Null` ve boş `catch {}` YOK (sonucu yutan iki desen);
+      (c) `Exec(` sonucu okunur ve `ResultCode` `Log(`'a yazılır (iz).
+    """
+    # ⚠️ Yorumlar SOYULUR: yordamin kendi DENETIM notu yasaklanan deseni ("| Out-Null ... catch {}")
+    # aciklama olarak iceriyor; ham metinde arayan kapi kendi yorumunu ihlal sayip yanlis-KIRMIZI
+    # yanar (bu depoda 5. kez). Yalniz TAM-SATIR `//` yorumlari atilir — `http://` icindeki `//`
+    # komut satirinin parcasidir, dokunulmaz.
+    g = "\n".join(s for s in _estop_yordami().splitlines() if not s.strip().startswith("//"))
+    assert "Out-Null" not in g, (
+        "E-stop yaniti `| Out-Null` ile YUTULUYOR — backend 'confirmed=false' dese de kurulum bunu goremez. "
+        "Yaniti oku, confirmed<>true ise exit 2 ver."
+    )
+    assert not re.search(r"catch\s*\{\s*\}", g), (
+        "E-stop'ta BOS `catch {}` var — baglanti reddi/zaman asimi sessizce yutulur. catch icinde FAIL=<mesaj> yaz + exit 1."
+    )
+    assert "exit 2" in g and "exit 1" in g and "confirmed" in g, (
+        "PowerShell tek-satiri sonucu RAPORLAMIYOR (exit 2 = confirmed<>true, exit 1 = istisna bekleniyor)"
+    )
+    assert re.search(r"if\s+Exec\s*\(", g), "Exec(...) sonucu okunmuyor — `if Exec(...) then` bekleniyor"
+    log_satirlari = [s for s in g.splitlines() if "Log(" in s]
+    assert any("ResultCode" in s or "cikis kodu" in s for s in log_satirlari), (
+        "E-stop ResultCode hic Log()'lanmiyor — kurulum gunlugunde iz kalmaz, saha teshisi kor kalir"
+    )
+    # Log(...) cagrilari cok satirli (Pascal `+` ile devam) → eylem metni devam satirinda olabilir;
+    # Exec blogunun tamaminda aranir.
+    exec_blogu = g[g.find("if Exec(") :]
+    assert "ELLE" in exec_blogu, "basarisiz E-stop gunlugu ne yapilacagini soylemiyor ('bobinleri ELLE kontrol edin')"
+
+
 def test_KRITIK_port_DOGRULANIR_karsit_kanit():
     """⚠️ `backend.port` KULLANICI-YAZILABİLİR bir dizindedir (%LOCALAPPDATA%).
 

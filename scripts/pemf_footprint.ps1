@@ -95,6 +95,19 @@ function Get-PemfFootprint {
             @{ Path = 'HKCU:\Software\pemfmedical';               Owner = 'client' }  # client üretici (ESKİ — yetim)
             @{ Path = 'HKCU:\Software\vpemf';                     Owner = 'client' }  # eski client kalıntısı
         )
-        Credentials = @('fernet_key@PEMF_GUI', 'sqlcipher_key@PEMF_GUI', 'PEMF_GUI', 'api_token@PEMF_GUI')  # KVKK
+        # KVKK — Windows Credential Manager hedef adları. python-keyring'in Windows arka ucu hedefi
+        # "<ad>@<servis>" biçiminde yazar (servis = 'PEMF_GUI'); ad listesi runtime'dan türetilir:
+        #   utils/secrets_manager.py  _keyring_get("sqlcipher_key"|"patient_fernet_key"|"master_secret")
+        #   database/sqlcipher_util.py _KEY_NAME = "sqlcipher_key"  (keyring.set_password ile YAZAN tek yer)
+        # ⚠️ DENETİM 2026-09-06: burada 'fernet_key@PEMF_GUI' yazıyordu; runtime ise 'patient_fernet_key'
+        # kullanır → o kayıt HİÇ silinmiyor, teardown ise sonucu doğrulamadığından her koşuda sahte
+        # "kimlik silindi" raporluyordu. Ad düzeltildi + 'master_secret' eklendi. ESKİ adlar ('PEMF_GUI',
+        # 'api_token@PEMF_GUI', 'fernet_key@PEMF_GUI') eski kurulumlar için LİSTEDE KALIR — teardown
+        # artık var-olmayanı "yoktu" diye raporlar, başarısızlık saymaz. tests/test_teardown_kimlik_dogrulama.py
+        # bu listeyi runtime adlarıyla karşılaştırır.
+        Credentials = @(
+            'patient_fernet_key@PEMF_GUI', 'sqlcipher_key@PEMF_GUI', 'master_secret@PEMF_GUI',   # runtime (güncel)
+            'fernet_key@PEMF_GUI', 'PEMF_GUI', 'api_token@PEMF_GUI'                              # ESKİ kurulum adları
+        )
     }
 }

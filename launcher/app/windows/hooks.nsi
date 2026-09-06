@@ -21,6 +21,7 @@
   Push $0
   Push $1
   Push $2
+  Push $3  ; DENETİM 2026-09-06: E-stop sonuç-günlüğü için dosya tutamacı (aşağıda)
   ClearErrors
   FileOpen $0 "$INSTDIR\backend.port" r
   IfErrors pemf_estop_fallback
@@ -69,15 +70,70 @@
   ; -TimeoutSec 10: backend bu ucu "senkron MQTT publish ~7sn worst-case" diye belgeliyor;
   ; 3 sn ESP bobinleri (6-8) yayınlanmadan dolabiliyordu. /TIMEOUT: powershell.exe'nin kendisi
   ; (AV taraması / bozuk PSModulePath) asılırsa kaldırma SÜRESİZ donmasın.
-  nsExec::Exec /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10 | Out-Null } catch {}"'
-  Pop $0  ; nsExec::Exec dönüş-kodunu yığından AT — aksi halde aşağıdaki Pop'lar orijinal
-          ; kayıtlar yerine bu dönüşü yükler ve bir kayıt yığında sızardı (yığın dengesi).
+  ; ⚠️ DENETİM 2026-09-06 (iki bağımsız gözden geçirici): burası `nsExec::Exec` + `Pop $0` (dönüş
+  ; ATILIYOR) + PowerShell'de `| Out-Null ... catch {}` idi. HER başarısızlık türü — powershell
+  ; engelli ("error"), 20 sn aşımı ("timeout"), bayat port → bağlantı reddi, backend >10 sn asılı,
+  ; backend yanıt verdi ama `confirmed=false` (STM ya da ESP yolu DOĞRULANAMADI) — ya catch {}'e
+  ; düşüyor ya da yığından atılıyordu. Kaldırıcı BAŞARILI E-stop ile BİREBİR AYNI görünüyor,
+  ; "gönderiliyor…" basıp taskkill /F'e geçiyordu; log da yazmıyordu. Launcher çökmüş + backend
+  ; yetimken bu, sert kill'den önceki TEK bobin-durdurma noktasıdır (hasta güvenliği).
+  ; Artık: ExecToStack ile dönüş kodu + çıktı ALINIR; PowerShell tek-satırı RAPORLAR
+  ;   çıkış 0 → "OK status=<status> confirmed=True"   (backend /api/hardware/emergency_stop yanıtı:
+  ;   çıkış 2 → "OK status=<status> confirmed=False"   {status, confirmed, stmStopped, mqttResults…})
+  ;   çıkış 1 → "FAIL=<istisna mesajı>"                (bağlantı yok / zaman aşımı / HTTP hatası)
+  ; `confirmed -ne $true`: alan yoksa da DOĞRULANMADI sayılır (backend'in kendi fail-closed kuralı).
+  ; Tırnak kullanılmaz (NSIS `'` sınırlayıcısı + -Command `"` sınırlayıcısıyla çakışmasın); Write-Host
+  ; -NoNewline: tek satır, satır-sonu yok → günlük satırı bozulmaz. /OEM: powershell boruya OEM
+  ; (cp857) yazar, Türkçe istisna mesajı DetailPrint'te okunur kalsın.
+  ; Kaldırma HİÇBİR koşulda engellenmez/durdurulmaz — amaç görünürlük + kalıcı iz + elle kontrol uyarısı.
+  ; ⚠️ GÖZDEN GEÇİRME 2026-09-06: PowerShell'in HER `$`'ı `$$` ile KAÇIRILIR (yalnız NSIS port kaydı `$2`
+  ; çıplak kalır). makensis `'...'` içindeki `$(...)`'ı LangString sanıp (uyarı 6040) çalışma zamanında
+  ; BOŞ dizgeye çözüyordu → derlenmiş kaldırıcı fiilen "OK status= confirmed= t=" / "FAIL=" gönderiyordu
+  ; (gerçek derleme + koşturmayla ölçüldü). Çıkış kodları etkilenmiyordu ama günlük/uyarı teşhis
+  ; değerini yitiriyordu. test_kanca_gercekten_nsis_ile_derlenir artık 6040/6000 uyarısında KIRMIZI.
+  nsExec::ExecToStack /OEM /TIMEOUT=20000 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$r = Invoke-RestMethod -Uri http://127.0.0.1:$2/api/hardware/emergency_stop -Method POST -TimeoutSec 10; Write-Host -NoNewline OK status=$$($$r.status) confirmed=$$($$r.confirmed) t=$$(Get-Date -Format s); if ($$r.confirmed -ne $$true) { exit 2 }; exit 0 } catch { Write-Host -NoNewline FAIL=$$($$_.Exception.Message) t=$$(Get-Date -Format s); exit 1 }"'
+  Pop $0  ; nsExec dönüş: süreç çıkış kodu YA DA "error" (başlatılamadı) / "timeout" (20 sn aşıldı)
+  Pop $1  ; yakalanan çıktı (OK …/FAIL=…); $1'in ham port satırı $2'ye sanitize edildi, artık gerekmez.
+          ; İki Pop ŞART: ExecToStack yığına İKİ öğe iter; biri kalsa aşağıdaki kayıt geri-yüklemesi kayar.
+  ${If} $0 == "0"
+    DetailPrint "PEMF: bobin E-stop DOĞRULANDI — $1"
+  ${Else}
+    DetailPrint "PEMF: bobin E-stop DOĞRULANAMADI (nsExec=$0 $1) — bobinleri ELLE kontrol edin; iz: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+  ${EndIf}
+  ; Kaldırıcının kendi günlüğü yoktur; kaldırmadan SONRA da okunabilen tek satırlık iz bırak.
+  ; %APPDATA%\PEMF_GUI = KVKK gereği client-kaldırmanın ASLA silmediği veri kökü (bkz. dosya başlığı +
+  ; POSTUNINSTALL), logs\ = backend'in de yazdığı günlük dizini (install.rs::backend_log_path_with).
+  ; $APPDATA burada `all` bağlamında ProgramData'ya çözümlenir → yukarıdaki port-okumasıyla AYNI
+  ; bağlam dansı: okuma/yazma süresince `current`, hemen ardından `all` (kaldırıcının geri kalanı
+  ; makine bağlamına güvenir). Dizin yok / yazma izni yok → IfErrors ile ATLANIR, kaldırma sürer.
+  SetShellVarContext current
+  ClearErrors
+  CreateDirectory "$APPDATA\PEMF_GUI\logs"
+  ClearErrors
+  FileOpen $3 "$APPDATA\PEMF_GUI\logs\uninstall_estop.log" a
+  IfErrors pemf_estop_log_atla
+  FileSeek $3 0 END
+  FileWrite $3 "port=$2 nsExec=$0 $1$\r$\n"
+  FileClose $3
+  pemf_estop_log_atla:
+  SetShellVarContext all
+  ; Etkileşimli kaldırmada kullanıcıya SÖYLE (yalnız DetailPrint sessizce kayar gider). ${Silent}
+  ; (self-update /S) ve $UpdateMode (Tauri yükseltmesi eski kaldırıcıyı /UPDATE ile koşturur) dışarıda:
+  ; oralarda MessageBox akışı KİLİTLER. Bu bir uyarıdır, kaldırma yine devam eder (Abort YOK).
+  ; Kayıt yolu LİTERAL %APPDATA%: bu noktada bağlam yine `all` → $APPDATA ProgramData'ya çözümlenir,
+  ; kullanıcıya YANLIŞ yol gösterirdi (gözden geçirme 2026-09-06).
+  ${If} $0 != "0"
+    ${IfNot} ${Silent}
+    ${AndIf} $UpdateMode <> 1
+      MessageBox MB_OK|MB_ICONEXCLAMATION "PEMF: bobin acil-durdurma DOĞRULANAMADI ($0).$\r$\n$\r$\nBobinleri ELLE kontrol edin (cihaz üzerindeki göstergeler / fiziksel kapatma).$\r$\n$\r$\nAyrıntı: $1$\r$\nKayıt: %APPDATA%\PEMF_GUI\logs\uninstall_estop.log"
+    ${EndIf}
+  ${EndIf}
   ; STM STOP'un async seri-kuyruktan porta yazılması için bekle (backend flush deadline'ı 1.5s).
   Sleep 1800
   pemf_estop_done:
   ; --- Ardından backend sürecini durdur (orphan runtime/ dosya kilidini bırak) ---
   ; (Servis modunda NSSM yeniden başlatır; o senaryo Inno-backend uninstaller'ının alanı.)
-  ; taskkill'i kayıt-geri-yüklemeden ÖNCE yap; her iki yolda (atla/ilerle) yığın burada [$2o,$1o,$0o].
+  ; taskkill'i kayıt-geri-yüklemeden ÖNCE yap; her iki yolda (atla/ilerle) yığın burada [$3o,$2o,$1o,$0o].
   DetailPrint "PEMF: artık backend süreçleri durduruluyor…"
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM PEMF_Backend.exe /T'
   Pop $0  ; taskkill nsExec dönüş-kodunu da AT
@@ -103,6 +159,7 @@
   nsExec::Exec /TIMEOUT=30000 'taskkill /F /IM cloudflared.exe /T'
   Pop $0
   Sleep 800
+  Pop $3  ; orijinal $3 geri yüklenir
   Pop $2  ; orijinal $2 geri yüklenir
   Pop $1  ; orijinal $1 geri yüklenir
   Pop $0  ; orijinal $0 geri yüklenir

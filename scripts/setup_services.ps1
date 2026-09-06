@@ -23,7 +23,18 @@ param(
     [string]$HotspotPass = ""
 )
 $ErrorActionPreference = "Continue"   # installer akışını tek bir hata kesmesin
-function Log($m, $c = "White") { Write-Host "[setup-services] $m" -ForegroundColor $c }
+# DENETİM 2026-09-06: Inno bu script'i 'runhidden' ile çalıştırır → Write-Host çıktısı HİÇBİR YERE
+# gitmiyordu (konsol yok); firewall/mosquitto uyarıları sahada iz bırakmadan kayboluyordu. Şimdi her
+# satır ayrıca $LogDir\setup_services.log'a eklenir. Loglama ASLA kurulumu düşürmez (try/catch boş).
+# $LogDir aşağıda (satır ~36) tanımlanır — PowerShell çağrı anında çözer; yine de boşsa sabit yola düş.
+function Log($m, $c = "White") {
+    Write-Host "[setup-services] $m" -ForegroundColor $c
+    try {
+        $ld = if ($LogDir) { $LogDir } else { "C:\ProgramData\PEMF_System\logs" }
+        New-Item -ItemType Directory -Path $ld -Force -ErrorAction SilentlyContinue | Out-Null
+        Add-Content -Path (Join-Path $ld "setup_services.log") -Value ("{0} [setup-services] {1}" -f (Get-Date -Format o), $m) -Encoding UTF8 -ErrorAction Stop
+    } catch { }
+}
 
 if (-not $AppDir) { $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
@@ -72,6 +83,35 @@ $NssmExe = if (Test-Path $NssmBundled) {
 }
 $MosqInstallDir = "C:\Program Files\PEMF\mosquitto"
 $MosqDataRoot   = "C:\ProgramData\PEMF_System\mosquitto"
+# Mosquitto firewall kuralı: 'PEMF Mosquitto MQTT' = TCP 1883 inbound, YALNIZ hotspot subnet'i.
+# P0-3 (GÜVENLİK): Broker'a 1883 yalnız HOTSPOT subnet'inden (ESP bobin 6-8, 192.168.137.x)
+# erişilebilsin; klinik LAN'ından KAPALI. ESP firmware'i broker'a ANON bağlandığından
+# (BLE provisioner kimlik göndermiyor) auth açılamaz → savunma: hotspot WPA2 + bu subnet
+# kısıtı. Loopback (127.0.0.1) firewall'dan muaftır → backend localhost bağlantısı çalışır.
+#
+# DENETİM 2026-09-06: eski kod New-NetFirewallRule'u try/catch'siz, -ErrorAction Stop'suz ve
+# SON-KONTROLSÜZ çağırıyordu. MpsSvc durmuşsa / GPO firewall'u kilitlediyse cmdlet hata akışına
+# düşüp geçiyordu; 1883 loopback probe'u yine geçer, "Mosquitto hazır" loglanır, .install_verified
+# yazılır → ESP bobin 6-8 broker'a ULAŞAMAZ ama yerel her gösterge YEŞİL, sıfır kanıt. Şimdi:
+# try/catch + her yolda kuralı YENİDEN SORGULA + eylem söyleyen UYARI + [bool] dönüş (özet+bayrağa).
+# Fonksiyon olarak ayrıldı ki testler installer'ı çalıştırmadan dot-source edip mock'la ölçebilsin.
+function Ensure-PemfMosquittoFirewallRule {
+    $MosqFirewallOk = $false
+    if (-not (Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)) {
+        try {
+            New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any -ErrorAction Stop | Out-Null
+        } catch {
+            Log "UYARI: Firewall kuralı oluşturulamadı (PEMF Mosquitto MQTT): $_" "Yellow"
+        }
+    }
+    # HER YOLDA yeniden sorgula: cmdlet sessizce geçse de kural GERÇEKTEN var mı?
+    $MosqFirewallOk = [bool](Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)
+    if (-not $MosqFirewallOk) {
+        Log "UYARI: 'PEMF Mosquitto MQTT' (TCP 1883 <- 192.168.137.0/24) kuralı YOK -> ESP bobin 6-8 broker'a ULAŞAMAZ. MpsSvc (Windows Defender Firewall) servisi çalışıyor mu? (Get-Service MpsSvc) GPO firewall'u kilitliyor mu? Kural elle: New-NetFirewallRule -DisplayName 'PEMF Mosquitto MQTT' -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any" "Yellow"
+    }
+    return $MosqFirewallOk
+}
+$MosqFirewallOk = $false   # server/staging modunda ve mosquitto yoksa da tanımlı olsun (özet + .install_verified)
 $BackendExe     = Join-Path $AppDir "PEMF_Backend.exe"
 
 # Bundled mosquitto kaynağı (PyInstaller onedir: {app}\_internal\bin\mosquitto)
@@ -187,13 +227,7 @@ log_timestamp true
     Set-Content -Path "$MosqDataRoot\mosquitto.conf" -Value $conf -Encoding ASCII
 
     # Firewall (TCP 1883 — yalnız hotspot subnet, ESP bobin 6-8)
-    if (-not (Get-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -ErrorAction SilentlyContinue)) {
-        # P0-3 (GÜVENLİK): Broker'a 1883 yalnız HOTSPOT subnet'inden (ESP bobin 6-8, 192.168.137.x)
-        # erişilebilsin; klinik LAN'ından KAPALI. ESP firmware'i broker'a ANON bağlandığından
-        # (BLE provisioner kimlik göndermiyor) auth açılamaz → savunma: hotspot WPA2 + bu subnet
-        # kısıtı. Loopback (127.0.0.1) firewall'dan muaftır → backend localhost bağlantısı çalışır.
-        New-NetFirewallRule -DisplayName "PEMF Mosquitto MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow -Profile Any | Out-Null
-    }
+    $MosqFirewallOk = Ensure-PemfMosquittoFirewallRule
 
     # KRİTİK FIX: mosquitto NATIVE servis ('mosquitto install' = 'mosquitto.exe run') YERİNE NSSM ile
     # FOREGROUND yönetilir. Native mod Windows'ta SERVICE_RUNNING sinyali VERMEYİP StartPending'de
@@ -374,9 +408,12 @@ if ($EnvMap['PEMF_ENCRYPT_AT_REST'] -eq '1') {
     else { Log "At-rest şifreleme DOĞRULANDI (atRestEncrypted=true)." "Green" }
 }
 if ($MosqFailed) { Log "UYARI: Backend çalışıyor AMA Mosquitto broker başlamadı → ESP bobinleri (6-8) bağlanamaz. Yukarıdaki mosquitto hatasını giderin." "Yellow" }
-Log "Kurulum DOĞRULANDI → http://localhost:$probePort" "Green"
-# Başarı-bayrağı: Inno bunu [Code] ssPostInstall'da kontrol eder (PowerShell exit kodu Inno'da güvenilmez)
-Set-Content -Path (Join-Path $AppDir ".install_verified") -Value (Get-Date -Format o) -Encoding ASCII -ErrorAction SilentlyContinue
+# DENETİM 2026-09-06: firewall kuralı yoksa broker yerelde çalışsa bile ESP 6-8 (hotspot subnet) erişemez → özette görünsün.
+if ($Mode -eq "device" -and -not $MosqFirewallOk) { Log "UYARI: Mosquitto firewall kuralı (PEMF Mosquitto MQTT) DOĞRULANAMADI → ESP bobinleri (6-8) broker'a ulaşamaz. Yukarıdaki firewall uyarısındaki komutu elle çalıştırın." "Yellow" }
+Log "Kurulum DOĞRULANDI → http://localhost:$probePort (mosqFirewall=$MosqFirewallOk)" "Green"
+# Başarı-bayrağı: Inno bunu [Code] ssPostInstall'da kontrol eder (PowerShell exit kodu Inno'da güvenilmez).
+# Inno yalnız VARLIĞA bakar (FileExists), içeriği ayrıştırmaz → 1. satır zaman damgası, 2. satır firewall kanıtı.
+Set-Content -Path (Join-Path $AppDir ".install_verified") -Value @((Get-Date -Format o), "mosqFirewall=$MosqFirewallOk") -Encoding ASCII -ErrorAction SilentlyContinue
 
 # ───────────────────── HOTSPOT (PEMF-Gateway WiFi — yalnız KLİNİK/device) ─────────────────────
 # ESP bobinleri (6-8) bu WiFi'ye bağlanıp yerel mosquitto'ya (1883) MQTT yapar. Windows Mobile Hotspot

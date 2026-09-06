@@ -173,10 +173,36 @@ function Remove-PemfPaths($Footprint, [string]$Scope, [switch]$IncludePatientDat
 
 # NOT: $TargetNames = Windows Credential Manager HEDEF ADLARI (ör. 'PEMF_GUI') — PAROLA DEĞİL,
 # yalnız cmdkey /delete için tanımlayıcı. (İsim 'Cred' içerince analyzer parola sanıyordu.)
+#
+# ⚠️ DENETİM 2026-09-06 — KİMLİK SİLME SONUCU DOĞRULANMIYORDU (KVKK YANLIŞ-GÜVENCE).
+# Eski hâl: `cmdkey /delete:$c *>$null; Write-PemfLog "kimlik silindi"` KOŞULSUZ. cmdkey hedef
+# yoksa exit 1 döner ("Eleman bulunamadı" — ölçüldü), $LASTEXITCODE hiç okunmuyor, $PemfFailed'e
+# dokunulmuyordu. Footprint'teki ad da yanlıştı ('fernet_key' ≠ runtime'ın yazdığı
+# 'patient_fernet_key') → HER koşu, hiçbir şey silmeden "kimlik silindi (KVKK)" raporluyordu.
+# Artık: exit 0 → silindi; "bulunamadı" → yoktu (başarısızlık DEĞİL — eski-kurulum adları için
+# normal); başka her şey (erişim engeli vb.) → $PemfFailed'e eklenir + kırmızı satır → rapor
+# "tam temizlik" DEMEZ.
+# KAPSAM SINIRI: cmdkey YALNIZ çağıran kullanıcının ($env:USERNAME) kasasını görür. Backend servisi
+# LocalSystem olarak çalışır ve python-keyring KENDİ (SYSTEM) kasasına yazar — o kasa buradan
+# ERİŞİLEMEZ ve depoda onu temizleyen başka bir adım da YOK (2026-09-06 grep: cmdkey yalnız bu
+# dosyada). Fonksiyon bu yüzden çağrı başına bir kez Sarı uyarı basar; servis kasası ayrıca
+# temizlenmeli (SYSTEM bağlamında: psexec -s cmdkey /delete:<ad>).
 function Remove-PemfCredentials([string[]]$TargetNames, [switch]$DryRun) {
+    Write-PemfLog "NOT: cmdkey yalnız '$env:USERNAME' kasasını görür; backend servisinin LocalSystem (SYSTEM) kasası bu adımın DIŞINDA — servis kasası ayrıca temizlenmeli (SYSTEM olarak: psexec -s cmdkey /delete:<ad>)" 'Yellow'
     foreach ($c in $TargetNames) {
-        if ($DryRun) { Write-PemfLog "[DRY] kimlik (KVKK): $c" 'Yellow' }
-        else { & cmdkey /delete:$c *>$null; Write-PemfLog "kimlik silindi (KVKK): $c" }
+        if ($DryRun) { Write-PemfLog "[DRY] kimlik (KVKK): $c" 'Yellow'; continue }
+        # cmdkey HİÇ BAŞLATILAMAZSA (PATH bozuk) `2>&1` hatayı $out'a alır ama $LASTEXITCODE önceki
+        # değerinde kalır; önceki yerel komut 0 döndürmüşse sahte "silindi" olur. Önce 1'e çek.
+        $global:LASTEXITCODE = 1
+        $out = (& cmdkey /delete:$c 2>&1) -join ' '
+        if ($LASTEXITCODE -eq 0) {
+            Write-PemfLog "kimlik silindi (KVKK): $c"
+        } elseif ($out -match 'bulunamad|not found|cannot find|does not exist') {
+            Write-PemfLog "kimlik yoktu ($env:USERNAME kasası): $c"
+        } else {
+            $script:PemfFailed += "kimlik: $c"
+            Write-PemfLog "KİMLİK SİLİNEMEDİ (KVKK): $c — $out — yönetici olarak 'cmdkey /delete:$c' ile elle silin" 'Red'
+        }
     }
 }
 

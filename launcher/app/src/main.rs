@@ -1657,7 +1657,14 @@ async fn apply_self_update(
         // açılamazsa güncelleme YİNE sürer (eski davranış); batch başlatılamazsa işaret silinir.
         let kok = install::default_install_root(&home_dir());
         install::guncelleme_isareti_yaz(&kok, env!("CARGO_PKG_VERSION"), &version);
-        let pencere = guncelleme_penceresini_ac(&sfx);
+        let pencere_sonuc = guncelleme_penceresini_ac(&sfx);
+        // Bulgu #6: pencere sonucunu yardımcının GÜNLÜĞÜNE yaz (aynı dosya; batch `>>` ile ekler).
+        // Dosya adı `build_relaunch_script`in %TEMP%\pemf_selfupdate_<pid>.log'uyla AYNI olmalı.
+        let _ = std::fs::write(
+            std::env::temp_dir().join(format!("pemf_selfupdate_{}.log", std::process::id())),
+            pencere_gunluk_satiri(&pencere_sonuc),
+        );
+        let pencere = pencere_sonuc.ok(); // akış değişmez: pencere hatası güncellemeyi DURDURMAZ
         if let Err(e) = spawn_update_relauncher(&dest, pencere.as_deref()) {
             install::guncelleme_isaretini_temizle(&kok);
             return Err(e);
@@ -1686,12 +1693,18 @@ fn guncelleme_modu() -> bool {
 /// Neden kopya: NSIS'in "uygulama çalışıyor" denetimi `PEMFVetClient.exe` ADINA bakar ve sessiz
 /// kurulumda onu öldürür; farklı adlı kopya ne öldürülür ne de kurulum exe'sinin kilidini tutar.
 /// Başarısızlık güncellemeyi DURDURMAZ (eski davranışa düşer). Kopyayı batch siler.
+/// 🔴 DENETİM 2026-09-06 (bulgu #6): eskiden `Option` döndürüyordu — kopyalama/başlatma hatası
+/// `.ok()?` ile None'a çöküyor ve HİÇBİR yere yazılmıyordu; batch `:sil` bloğunu sessizce atlıyor,
+/// relauncher günlüğü pencere var/yok BİREBİR aynı çıkıyordu. Gerçekçi tetik: %TEMP%'e kopyalanan
+/// farklı adlı imzasız exe = Defender ASR / AppLocker hedefi → yönetilen makinede HER güncellemede.
+/// Artık SEBEP döner; çağıran onu yardımcının günlüğüne yazar. Akış değişmez: hata güncellemeyi
+/// DURDURMAZ (eski davranışa düşer).
 #[cfg(windows)]
-fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
-    let exe = std::env::current_exe().ok()?;
+fn guncelleme_penceresini_ac(sfx: &str) -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("exe yolu okunamadı: {e}"))?;
     let kopya = std::env::temp_dir().join(format!("PEMFVetClient-Guncelleme-{sfx}.exe"));
     let _ = std::fs::remove_file(&kopya);
-    std::fs::copy(&exe, &kopya).ok()?;
+    std::fs::copy(&exe, &kopya).map_err(|e| format!("kopyalanamadı ({}): {e}", kopya.display()))?;
     // Konsol-penceresi kapısı (core/tests/konsol_penceresi.rs): her spawn CREATE_NO_WINDOW taşır.
     // Kopya GUI alt-sisteminde (Tauri) olduğundan bayrak davranışı değiştirmez, kuralı korur.
     use std::os::windows::process::CommandExt;
@@ -1700,8 +1713,22 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
         .arg(GUNCELLEME_EKRANI_ARG)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
-        .ok()?;
-    Some(kopya)
+        .map_err(|e| {
+            format!(
+                "başlatılamadı ({}): {e} — Defender ASR / AppLocker %TEMP%'teki kopyayı engelliyor olabilir",
+                kopya.display()
+            )
+        })?;
+    Ok(kopya)
+}
+
+/// Pencere sonucunun relauncher günlüğüne yazılacak satırı — saf, tablo-testli (bulgu #6).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn pencere_gunluk_satiri(sonuc: &Result<std::path::PathBuf, String>) -> String {
+    match sonuc {
+        Ok(p) => format!("[rust] pencere=1 {}\r\n", p.display()),
+        Err(e) => format!("[rust] pencere=0 {e}\r\n"),
+    }
 }
 
 /// Sessiz kurulum + yeniden başlatma helper'ı (Windows). Bu launcher ÇIKTIKTAN sonra bağımsız
@@ -1732,6 +1759,59 @@ fn guncelleme_penceresini_ac(sfx: &str) -> Option<std::path::PathBuf> {
 #[cfg(windows)]
 const YARDIMCI_BATCH_BAYRAKLARI: u32 = 0x0000_0200 /* CREATE_NEW_PROCESS_GROUP */ | 0x0800_0000 /* CREATE_NO_WINDOW */;
 
+/// Yardımcı batch'i (güncelleme relauncher'ı / kaldırıcı) başlatan TEK yol.
+///
+/// 🔴 DENETİM 2026-09-06 (bulgu #2): `Command::new("cmd.exe").arg("/c").arg(&bat)` %TEMP% yolunda
+/// `&` ya da `^` varsa batch'i HİÇ BAŞLATMIYORDU — ve %TEMP%'in tek değişkeni Windows kullanıcı
+/// adıdır ("Vet & Co", "Ali^Veli" yerel hesap adında YASAK DEĞİL). cmd'nin /C tırnak-soyma kuralı
+/// komut satırında özel karakter görünce dış tırnakları soyar, yol `&`'de bölünür → cmd rc=1,
+/// spawn Ok döner, batch'in kendi günlüğü İLK satırı olduğu için log dosyası bile oluşmaz: o klinikte
+/// güncelleme VE kaldırma kalıcı ölü, sıfır kanıt. ÖLÇÜLDÜ (6 dizin, üretim bayraklarıyla):
+///     /c "<yol>"        → "Vet & Co" rc=1 iz=YOK · "Ali^Veli" rc=1 iz=YOK · diğer 4 tamam
+///     /S /C ""<yol>""   → 6/6 tamam
+/// `/S` cmd'yi "ilk ve son tırnağı soy" kuralına zorlar; iç tırnak çifti korunur, yol bölünmez.
+/// Mevcut davranışsal kapı geliştiricinin düz %TEMP%'inde koşuyor ve spawn'ı satır içinde yeniden
+/// yazıyordu → kör kalmıştı; artık kapı BU yardımcıyı metakarakterli dizinlerde çağırır.
+///
+/// Erken-ölüm kapısı: batch'in ilk işi en az ~1 sn uyur (`ping -n 2` / `ping -n 6`); 300 ms içinde
+/// BAŞARISIZ çıkmışsa cmd komut satırını ayrıştıramamış demektir → sessiz kalma, Err döndür ki
+/// çağıran (`apply_self_update`) işareti temizleyip kullanıcıya söylesin. Hızlı ve BAŞARILI çıkış
+/// (kod 0) hata değildir.
+#[cfg(windows)]
+fn yardimci_batch_baslat(bat: &std::path::Path) -> Result<std::process::Child, String> {
+    use std::os::windows::process::CommandExt;
+    let yol = bat.to_str().ok_or("yardımcı batch yolu UTF-8 değil")?;
+    if yol.contains('"') || yol.contains('\r') || yol.contains('\n') {
+        return Err("yardımcı batch yolu güvensiz karakter içeriyor".to_string());
+    }
+    // ⚠️ stdio NULL (2026-09-06): ayrık yardımcı ebeveynin tutamaçlarını DEVRALMAMALI. Launcher
+    // GUI olduğundan üretimde zaten konsol yok; ama `cargo test`/CI altında test ikilisinin stdout'u
+    // BORUDUR ve devralınan boru, batch zincirinden sağ kalan bir süreçte (ör. `start x.bat` → `cmd /K`)
+    // EOF'u sonsuza dek erteler → testi çağıran süreç ASILIR (ölçüldü: iki yetim `cmd /K`, Python
+    // `communicate()` bekliyordu). Null stdio ile yardımcının çocukları boruyu hiç görmez.
+    let mut cocuk = std::process::Command::new("cmd.exe")
+        .raw_arg(format!("/S /C \"\"{yol}\"\""))
+        .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("yardımcı başlatılamadı ({yol}): {e}"))?;
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    if let Ok(Some(durum)) = cocuk.try_wait() {
+        if !durum.success() {
+            let _ = std::fs::remove_file(bat);
+            return Err(format!(
+                "Yardımcı komut dosyası hemen sonlandı (cmd çıkış kodu {}) — yol: {}. \
+                 Geçici klasör yolunda özel karakter (&, ^) olabilir; %TEMP% değişkenini denetleyin.",
+                durum.code().map(|k| k.to_string()).unwrap_or_else(|| "yok".into()),
+                bat.display()
+            ));
+        }
+    }
+    Ok(cocuk)
+}
+
 #[cfg(windows)]
 fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Option<&str>) -> Result<String, String> {
     for p in [Some(installer), Some(exe), pencere].into_iter().flatten() {
@@ -1755,7 +1835,8 @@ fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Opt
     s.push_str(&format!("set \"T={t}\"\r\nset \"G={g}\"\r\n"));
     // Günlük: bu yardımcı sessizce ölürse sahada tek kanıt budur (arıza tam da bu yüzden
     // teşhis edilemiyordu — hiçbir yere hiçbir şey yazılmıyordu).
-    s.push_str("echo [%DATE% %TIME%] yardimci basladi > \"%G%\"\r\n");
+    // `>>` (EKLE) — Rust tarafı aynı dosyaya pencere sonucunu ÖNCE yazar (bulgu #6); `>` onu ezerdi.
+    s.push_str("echo [%DATE% %TIME%] yardimci basladi >> \"%G%\"\r\n");
     // 1) Launcher'ın çıkmasını PID ile bekle (~1 sn adımlarla; en çok ~30 sn).
     s.push_str("set /a n=0\r\n:bekle\r\n");
     s.push_str(&format!("{TL} /FI \"PID eq {eski_pid}\" /NH > \"%T%\" 2>nul\r\n"));
@@ -1792,8 +1873,6 @@ fn build_relaunch_script(installer: &str, exe: &str, eski_pid: u32, pencere: Opt
 
 #[cfg(windows)]
 fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::path::Path>) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_s = exe.to_str().ok_or("launcher yolu UTF-8 değil")?;
     let inst_s = installer.to_str().ok_or("setup yolu UTF-8 değil")?;
@@ -1811,12 +1890,8 @@ fn spawn_update_relauncher(installer: &std::path::Path, pencere: Option<&std::pa
     let bat = std::env::temp_dir().join(format!("{stem}.bat"));
     std::fs::write(&bat, script).map_err(|e| e.to_string())?;
 
-    std::process::Command::new("cmd.exe")
-        .arg("/c")
-        .arg(&bat)
-        .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    // Tek yol: `yardimci_batch_baslat` (bulgu #2 — `/S /C ""…""` + erken-ölüm kapısı).
+    yardimci_batch_baslat(&bat)?;
     Ok(())
 }
 
@@ -1843,19 +1918,13 @@ fn build_uninstall_script(uninstaller: &str) -> Result<String, String> {
 /// relauncher'la aynı desen). Launcher exe kilidi kalkınca uninstaller $INSTDIR'ı (launcher+runtime) siler.
 #[cfg(windows)]
 fn spawn_uninstaller_detached(uninstaller: &std::path::Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-
     let unins_s = uninstaller.to_str().ok_or("kaldırıcı yolu UTF-8 değil")?;
     let script = build_uninstall_script(unins_s)?;
     let bat = std::env::temp_dir().join("pemf_uninstall.bat");
     std::fs::write(&bat, script).map_err(|e| e.to_string())?;
 
-    std::process::Command::new("cmd.exe")
-        .arg("/c")
-        .arg(&bat)
-        .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    // Tek yol: `yardimci_batch_baslat` (bulgu #2 — relauncher ile AYNI tuzak, aynı düzeltme).
+    yardimci_batch_baslat(&bat)?;
     Ok(())
 }
 
@@ -1956,6 +2025,30 @@ fn yedek_hedefi_durumu() -> serde_json::Value {
     })
 }
 
+/// Klasör seçicinin (PowerShell + WinForms) çıktısını yorumla — SAF, tablo-testli.
+///
+/// 🔴 DENETİM 2026-09-06 (bulgu #3): boş stdout KOŞULSUZ "iptal" sayılıyordu; `o.status` hiç
+/// okunmuyor, `o.stderr` düşüyordu. Oysa PowerShell'in KENDİSİ düşmüş olabilir: CLM/WDAC altında
+/// `Add-Type` yasak, WinForms yüklenemez, PS çöker → stdout boş, stderr dolu, çıkış ≠ 0. Bu,
+/// operatörün "İptal"inden AYIRT EDİLEMEZDİ; UI yalnız düğmeyi geri açıyor, launcher'da günlük yok
+/// (Tier-1 özellik sessiz ölüyor). Kardeş spawn'lar (`ps_yukselterek_kos`, firewall) status'u okur;
+/// bu bir boşluktu, konvansiyon değil. Kural: çıkış başarısız YA DA (stdout boş VE stderr dolu) →
+/// hata; boş stdout + başarı → iptal; dolu stdout → yol.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn klasor_secici_sonucu(basarili: bool, kod: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<Option<String>, String> {
+    let yol = String::from_utf8_lossy(stdout).trim().to_string();
+    let hata = String::from_utf8_lossy(stderr).trim().to_string();
+    if !basarili || (yol.is_empty() && !hata.is_empty()) {
+        return Err(format!(
+            "Klasör seçici çalışmadı (PowerShell çıkış kodu {}): {}. PowerShell bu makinede kısıtlı \
+             olabilir (ConstrainedLanguage/WDAC) — bu mesajı BT yöneticinize iletin.",
+            kod.map(|k| k.to_string()).unwrap_or_else(|| "yok".into()),
+            if hata.is_empty() { "ayrıntı yok".to_string() } else { hata }
+        ));
+    }
+    Ok(if yol.is_empty() { None } else { Some(yol) })
+}
+
 /// Klasör seçtir ve doğrula. Tauri dialog eklentisi YOK (yeni bağımlılık istemiyoruz) →
 /// Windows'un kendi klasör seçicisi PowerShell üzerinden açılır.
 #[tauri::command]
@@ -1964,7 +2057,10 @@ fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
     { return Err("Bu platformda desteklenmiyor".to_string()); }
     #[cfg(windows)]
     {
-        let betik = "Add-Type -AssemblyName System.Windows.Forms; \
+        // `OutputEncoding=UTF8` (bulgu #3, bitişik): Türkçe karakterli yol (ör. "D:\Yedek Çekmece")
+        // varsayılan OEM kod sayfasında bozuluyor → sonraki "yazılamıyor" hatası yanlış teşhis.
+        let betik = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+            Add-Type -AssemblyName System.Windows.Forms; \
             $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
             $d.Description = 'Yedeklerin kopyalanacagi harici disk / ag paylasimi'; \
             if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }";
@@ -1974,10 +2070,11 @@ fn yedek_hedefi_sec() -> Result<serde_json::Value, String> {
             .args(["-NoProfile", "-STA", "-Command", betik])
             .output()
             .map_err(|e| format!("Klasör seçici açılamadı: {e}"))?;
-        let yol = String::from_utf8_lossy(&o.stdout).trim().to_string();
-        if yol.is_empty() {
-            return Ok(serde_json::json!({ "status": "iptal" }));
-        }
+        // Bulgu #3: çıkış kodu + stderr OKUNUR; boş stdout ancak PowerShell başarılıysa "iptal"dir.
+        let yol = match klasor_secici_sonucu(o.status.success(), o.status.code(), &o.stdout, &o.stderr)? {
+            Some(y) => y,
+            None => return Ok(serde_json::json!({ "status": "iptal" })),
+        };
         let root = install::default_install_root(&home_dir());
         // Veri kökü makine-geneli olabilir; kıyaslamayı GERÇEK hedefle yap.
         let veri = install::cozulmus_veri_dizini(|k| std::env::var(k).ok()).unwrap_or(root.clone());
@@ -2550,7 +2647,6 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn yardimci_batch_uretimdeki_bayraklarla_SONA_KADAR_kosar() {
-        use std::os::windows::process::CommandExt;
         let tmp = std::env::temp_dir();
         let pid: u32 = 999_123; // var olmayan PID → bekleme döngüsü hemen geçer
         let uyg_iz = tmp.join("pemf_kapi_uygulama.txt");
@@ -2566,7 +2662,13 @@ mod tests {
         for p in [&uyg_iz, &gunluk] {
             let _ = std::fs::remove_file(p);
         }
-        std::fs::write(&sahte_uyg, format!("@echo off\r\necho acildi > \"{}\"\r\n", uyg_iz.display())).unwrap();
+        // Bulgu #6: Rust tarafı aynı günlüğe pencere sonucunu ÖNCE yazar; batch `>>` ile eklemeli.
+        // `>`'a dönülürse bu satır kaybolur → aşağıdaki assert kırmızı yanar.
+        std::fs::write(&gunluk, pencere_gunluk_satiri(&Err("kapi-onsatir".to_string()))).unwrap();
+        // ⚠️ Sondaki `exit` ŞART: batch'teki `start "" "<uyg>"` bir .bat için `cmd /K` açar (pencere batch
+        // bitince KAPANMAZ). Üretimde hedef .exe'dir (sorun yok); testte ise sağ kalan `cmd /K`, devraldığı
+        // stdout borusunu tutup cargo'yu çağıran süreci ASIYORDU (ölçüldü: iki yetim cmd /K).
+        std::fs::write(&sahte_uyg, format!("@echo off\r\necho acildi > \"{}\"\r\nexit\r\n", uyg_iz.display())).unwrap();
         std::fs::write(&pencere, b"x").unwrap();
 
         let s = build_relaunch_script(
@@ -2578,12 +2680,9 @@ mod tests {
         .unwrap();
         std::fs::write(&betik, s).unwrap();
 
-        std::process::Command::new("cmd.exe")
-            .arg("/c")
-            .arg(&betik)
-            .creation_flags(YARDIMCI_BATCH_BAYRAKLARI)
-            .spawn()
-            .expect("yardımcı başlatılamadı");
+        // ÜRETİM yardımcısıyla başlat (satır içi yeniden yazım DEĞİL — bulgu #2: inline spawn kapıyı
+        // kör bırakıyordu; yardımcı değişirse test onu ölçmüyordu).
+        yardimci_batch_baslat(&betik).expect("yardımcı başlatılamadı");
 
         let mut bitti = false;
         for _ in 0..120 {
@@ -2609,10 +2708,113 @@ mod tests {
         assert!(uyg_iz.exists(), "uygulama yeniden başlatılmadı. Günlük:\n{g}");
         assert!(bitti, "batch kendini silmedi (sona varamadı). Günlük:\n{g}");
         assert!(g.contains("yardimci bitti"), "günlük eksik — saha teşhisi yine kör kalır:\n{g}");
+        assert!(
+            g.contains("[rust] pencere=0 kapi-onsatir"),
+            "batch, Rust'ın yazdığı pencere satırını EZDİ (`>>` yerine `>`): pencere teşhisi kaybolur:\n{g}"
+        );
         assert!(!pencere.exists(), "bilgilendirme penceresinin kopyası silinmedi");
         for p in [&uyg_iz, &sahte_uyg, &pencere, &gunluk] {
             let _ = std::fs::remove_file(p);
         }
+    }
+
+    /// 🔴 DENETİM 2026-09-06 (bulgu #2) — DAVRANIŞSAL: yardımcı batch, %TEMP%'te ÖZEL KARAKTER
+    /// olan dizinlerde de koşuyor mu? `cmd /c "<yol>"` biçimi "Vet & Co" ve "Ali^Veli"de batch'i
+    /// hiç başlatmıyordu (ölçüldü: rc=1, iz yok, sıfır kanıt). ÜRETİM yardımcısı çağrılır; satır
+    /// içi spawn yazmak kapıyı kör bırakır.
+    #[cfg(windows)]
+    #[test]
+    fn yardimci_batch_metakarakterli_TEMP_yolunda_da_kosar() {
+        let kok = std::env::temp_dir().join("pemf_kapi_meta");
+        let _ = std::fs::remove_dir_all(&kok);
+        let mut hatalar = Vec::new();
+        for ad in ["duz bosluk", "Vet & Co", "Ali^Veli", "Ahmet (Klinik)", "a@b!c"] {
+            let d = kok.join(ad);
+            std::fs::create_dir_all(&d).unwrap();
+            let iz = d.join("iz.txt");
+            let bat = d.join("t.bat");
+            // Yardımcının erken-ölüm kapısı 300 ms bakar; batch ≥1 sn yaşasın (ping-uyku, üretimdeki gibi).
+            std::fs::write(
+                &bat,
+                format!("@echo off\r\nping -n 2 127.0.0.1 >nul\r\necho kostu > \"{}\"\r\n", iz.display()),
+            )
+            .unwrap();
+            match yardimci_batch_baslat(&bat) {
+                Err(e) => hatalar.push(format!("{ad}: yardımcı Err döndü: {e}")),
+                Ok(mut cocuk) => {
+                    let _ = cocuk.wait();
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    if !iz.exists() {
+                        hatalar.push(format!("{ad}: batch KOŞMADI (iz dosyası yok) — cmd yolu böldü"));
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&kok);
+        assert!(hatalar.is_empty(), "yardımcı batch şu dizinlerde çalışmıyor:\n  {}", hatalar.join("\n  "));
+    }
+
+    /// Bulgu #2 — erken-ölüm kapısı: cmd komut satırını ayrıştıramayıp hemen rc≠0 ile çıkarsa
+    /// yardımcı SESSİZ kalmaz, Err döndürür (çağıran işareti temizler + kullanıcıya söyler).
+    /// Var olmayan .bat → cmd hemen "The system cannot find..." + rc=1.
+    #[cfg(windows)]
+    #[test]
+    fn yardimci_batch_hemen_olurse_HATA_doner() {
+        let yok = std::env::temp_dir().join("pemf_kapi_yok_bu_dosya_12345.bat");
+        let _ = std::fs::remove_file(&yok);
+        let r = yardimci_batch_baslat(&yok);
+        assert!(r.is_err(), "var olmayan batch için Ok döndü — erken ölüm sessiz kaldı");
+        let m = r.err().unwrap();
+        assert!(m.contains("hemen sonlandı") && m.contains("çıkış kodu"), "hata mesajı sebebi söylemiyor: {m}");
+    }
+
+    /// Bulgu #2 — kaynak-parite: iki spawn noktası da ORTAK yardımcıyı kullanmalı; `.arg("/c")`
+    /// geri gelirse tırnak-soyma tuzağı geri gelir.
+    #[cfg(windows)]
+    #[test]
+    fn spawn_yollari_ortak_yardimciyi_kullanir() {
+        let kaynak = f5_yorumlari_soy(include_str!("main.rs"));
+        for fn_adi in ["fn spawn_update_relauncher(", "fn spawn_uninstaller_detached("] {
+            let i = kaynak.find(fn_adi).unwrap_or_else(|| panic!("{fn_adi} yok"));
+            let govde = &kaynak[i..i + 1400];
+            assert!(govde.contains("yardimci_batch_baslat("), "{fn_adi} ortak yardımcıyı çağırmıyor");
+            assert!(!govde.contains(".arg(\"/c\")"), "{fn_adi} yeniden `.arg(\"/c\")` kullanıyor — tırnak-soyma tuzağı geri geldi");
+        }
+    }
+
+    /// 🔴 DENETİM 2026-09-06 (bulgu #3): klasör seçicinin boş çıktısı ancak PowerShell BAŞARILIYSA
+    /// "iptal"dir; PS düştüyse (CLM/WDAC, Add-Type yasak) operatörün İptal'inden ayırt edilmeli.
+    #[test]
+    fn klasor_secici_sonucu_tablosu() {
+        // (başarılı, kod, stdout, stderr) → beklenen
+        assert_eq!(klasor_secici_sonucu(true, Some(0), b"", b""), Ok(None), "temiz iptal korunmalı");
+        assert_eq!(
+            klasor_secici_sonucu(true, Some(0), b"D:\\Yedek\r\n", b""),
+            Ok(Some("D:\\Yedek".to_string())),
+            "yol trim'lenmeli"
+        );
+        let clm = klasor_secici_sonucu(
+            false,
+            Some(1),
+            b"",
+            b"Add-Type: Cannot invoke method. Method invocation is supported only on core types in this language mode. ConstrainedLanguage",
+        );
+        let m = clm.expect_err("PowerShell düştü ama Ok döndü — İptal'den ayırt edilemez");
+        assert!(m.contains("çıkış kodu 1") && m.contains("ConstrainedLanguage"), "hata sebebi taşımıyor: {m}");
+        assert!(m.contains("BT yöneticinize"), "hata ne yapılacağını söylemiyor: {m}");
+        // başarı kodu ama stdout boş + stderr dolu → yine hata (gerçek iptalde stderr boştur)
+        assert!(klasor_secici_sonucu(true, Some(0), b"", b"WinForms yuklenemedi").is_err());
+        // kod bilinmiyorsa (sinyalle öldü) mesaj "yok" der, panik etmez
+        assert!(klasor_secici_sonucu(false, None, b"", b"").expect_err("başarısız").contains("çıkış kodu yok"));
+    }
+
+    /// Bulgu #6: pencere sonucu günlük satırı — iki dal da yazılır, sebep taşınır.
+    #[test]
+    fn pencere_gunluk_satiri_iki_dal() {
+        let ok = pencere_gunluk_satiri(&Ok(std::path::PathBuf::from(r"C:\T\x.exe")));
+        assert!(ok.starts_with("[rust] pencere=1 ") && ok.contains("x.exe") && ok.ends_with("\r\n"));
+        let err = pencere_gunluk_satiri(&Err("kopyalanamadı (C:\\T): erişim engellendi".to_string()));
+        assert!(err.starts_with("[rust] pencere=0 ") && err.contains("erişim engellendi"), "{err}");
     }
 
     /// [GÜNCELLEME EKRANI] kaynak-paritesi: self-update kuyruğunda işaret → pencere → batch → çık
