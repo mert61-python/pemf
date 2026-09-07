@@ -16,6 +16,7 @@ import { AuthProvider } from './context/AuthContext'
 import { AuthModalProvider } from './context/AuthModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import ResetPassword from './pages/ResetPassword'
+import AuthRoute from './pages/AuthRoute'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -45,6 +46,15 @@ export default function App() {
                     (mobil uygulamanın GitHub Pages sayfası) düşüyor, web sitesinde yeni şifre
                     belirleyecek bir ekran hiç yoktu. */}
                 <Route path="/sifre-sifirla" element={<ResetPassword />} />
+                {/* Masaüstü uygulamasının hesap bağlantıları (launcher/app/ui/index.html `WEB + "…"`).
+                    2026-09-07: `/register` ve `/forgot` sitede YOKTU → "Sayfa bulunamadı". Sahadaki
+                    uygulamalar bu yolları kullanıyor; kaldırılamaz. Kapı: tests/test_launcher_site_yol_sozlesmesi.py */}
+                <Route path="/register" element={<AuthRoute kind="register" />} />
+                <Route path="/kayit" element={<AuthRoute kind="register" />} />
+                <Route path="/login" element={<AuthRoute kind="login" />} />
+                <Route path="/giris" element={<AuthRoute kind="login" />} />
+                <Route path="/forgot" element={<AuthRoute kind="forgot" />} />
+                <Route path="/sifremi-unuttum" element={<AuthRoute kind="forgot" />} />
                 <Route path="/support" element={<Support />} />
                 {LEGAL_DOCS.map((d) => (
                   <Route key={d.slug} path={`/${d.slug}`} element={<LegalPage />} />

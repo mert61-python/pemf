@@ -11,18 +11,24 @@ import { COMPANY } from '../config'
  *  Opsiyonel: mevcut `requireAuth(cb)` çağrıları (ödeme, hesap düğmesi) aynen çalışır. */
 export type AuthReason = 'checkout' | 'download'
 
-type ModalCtx = { requireAuth: (onAuthed?: () => void, reason?: AuthReason) => void }
+/** Modalın açılış sekmesi. Masaüstü uygulaması "Hesap oluştur"dan `/register`a yönlendirir;
+ *  o sayfa modalı doğrudan KAYIT sekmesinde açar (2026-09-07 saha bildirimi: bu yol 404'tü). */
+export type AuthMode = 'login' | 'signup'
+
+type ModalCtx = { requireAuth: (onAuthed?: () => void, reason?: AuthReason, mode?: AuthMode) => void }
 const Ctx = createContext<ModalCtx | undefined>(undefined)
 
 export function AuthModalProvider({ children }: { children: ReactNode }) {
   const { session, ready } = useAuth()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState<AuthReason>('checkout')
+  const [initialMode, setInitialMode] = useState<AuthMode>('login')
   const pendingRef = useRef<(() => void) | null>(null)
 
-  const requireAuth = useCallback((onAuthed?: () => void, r: AuthReason = 'checkout') => {
+  const requireAuth = useCallback((onAuthed?: () => void, r: AuthReason = 'checkout', m: AuthMode = 'login') => {
     pendingRef.current = onAuthed ?? null
     setReason(r)
+    setInitialMode(m)
     setOpen(true)
   }, [])
 
@@ -44,6 +50,7 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
         <AuthModal
           ready={ready}
           reason={reason}
+          initialMode={initialMode}
           onClose={() => {
             // Kullanıcı modalı KAPATTIYSA bekleyen işi de düşür: aksi halde daha sonra
             // (ör. hesap düğmesinden) giriş yapınca vazgeçtiği indirme kendiliğinden başlardı.
@@ -73,9 +80,9 @@ const ACCOUNT_TYPES: { id: AccountType; title: string; sub: string; icon: string
 const FIELD =
   'w-full rounded-lg border border-border bg-bg-soft px-3.5 py-2.5 text-sm outline-none focus:border-primary/60'
 
-function AuthModal({ ready, reason, onClose }: { ready: boolean; reason: AuthReason; onClose: () => void }) {
+function AuthModal({ ready, reason, initialMode = 'login', onClose }: { ready: boolean; reason: AuthReason; initialMode?: AuthMode; onClose: () => void }) {
   const { signIn, signUp, resetPassword } = useAuth()
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [mode, setMode] = useState<AuthMode>(initialMode)
   const [accountType, setAccountType] = useState<AccountType>('individual')
   const dialogRef = useRef<HTMLDivElement>(null)
 
