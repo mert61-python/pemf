@@ -96,12 +96,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.32",
-      "versionCode": 39,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/PEMF_Vet_Mobil-2.3.32.apk",
-      "sha256": "5fcf64813147850bf93596fe8e2632ed490c27ca986f0090f972bda8a45c32d0",
-      "size": 128505739,
-      "notes": "Her ekranda duzgun gorunum: ACIL DURDUR klavye acikken ve baglanti koptugunda erisilebilir; hekim onay penceresi kaydirilabilir (8 bobinli oneride 'Onayla ve Baslat' ekran disinda kaliyordu); bobin secicileri komsu bobine basmiyor; buyuk sistem yazi olceginde alt bar, seans suresi ve seans detay tablosu tasmiyor; klavye acilinca formlar kaydirilabiliyor; kamera uzerindeki organ isaretleri goruntuyle hizali."
+      "version": "2.3.33",
+      "versionCode": 40,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/PEMF_Vet_Mobil-2.3.33.apk",
+      "sha256": "e3e5183167d6fb3e0d453b0f6fe51469436fdf5b32b02936b537de7c50927f30",
+      "size": 128509127,
+      "notes": "Manuel kontrolde frekans/duty sinirsiz (cihaz siniri gecerli); ESP bobinlerinde cihaz onayi (bekleniyor/onayladi/reddetti/onay gelmedi); AI hata mesajlari eylem soyler (gonderilemedi / zaman asimi / gecersiz yanit)."
     }
   }
 }

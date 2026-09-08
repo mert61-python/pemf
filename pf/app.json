@@ -2,7 +2,7 @@
   "expo": {
     "name": "PEMF Vet Mobil",
     "slug": "pemf-vet-responsive",
-    "version": "2.3.32",
+    "version": "2.3.33",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "pemfvet",
@@ -32,7 +32,7 @@
       },
       "package": "com.pemf.vet",
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 39,
+      "versionCode": 40,
       "allowBackup": false,
       "usesCleartextTraffic": true,
       "blockedPermissions": [
