@@ -86,32 +86,50 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     assert '#include "pemf_surus.h"' in src, "main.c pemf_surus.h'ı dahil etmiyor → kip etkisiz"
     uni = _yorumsuz(_kip_dali(src, True))
     bip = _yorumsuz(_kip_dali(src, False))
-    assert "state = (adj < duty) ? 1U : 3U;" in uni, "unipolar dal yalnız A darbesi üretmiyor"
-    assert "state = 0U" not in uni, "unipolar dalda B durumu (0) üretiliyor — IN_B sürülür, tek-bacak değil"
+    # 2026-09-08 (sahip): bobin başına TEK bacak; hangisi olduğu PEMF_UNIPOLAR_B_BACAK_MASKESI ile
+    # seçilir (bobin 1 → IN_B/PD12, diğerleri IN_A). Darbe durumu 0 (B) ya da 1 (A), boşluk 3;
+    # aynı bobinde iki bacak birden ASLA (bipolar 'yarim' penceresi unipolar dalda yok).
+    assert "state = (adj < duty) ? darbe_durumu : 3U;" in uni, "unipolar dal tek-bacak darbe üretmiyor"
+    assert "PEMF_UNIPOLAR_B_BACAK_MASKESI >> i" in uni and "? 0U : 1U" in uni, "bacak seçimi maskeden okunmuyor"
+    assert "yarim" not in uni, "unipolar dalda yarım-periyot (ikinci bacak) penceresi var — tek-bacak değil"
+    hdr_k = (KANONIK / "Core" / ISTISNA).read_text(encoding="utf-8")
+    hdr_a = (AYNA / "Core" / ISTISNA).read_text(encoding="utf-8")
+    for h in (hdr_k, hdr_a):
+        assert re.search(r"^#define PEMF_UNIPOLAR_B_BACAK_MASKESI 0x01U$", h, re.M), (
+            "bacak maskesi 0x01 değil (sahip kararı 2026-09-08: YALNIZ bobin 1 IN_B/PD12'den sürülür; "
+            "değiştirmek bilinçli tezgâh kararıdır — bu satırı ve README'yi birlikte güncelle)"
+        )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
     assert uni.count("tpp - 1") + uni.count("g_tpp[i] - 1") >= 2, "unipolar duty tavanı tam-periyot−1 değil (iki klemp)"
     assert bip.count("/ 2U) - DDS_BIPOLAR_GAP_TICKS") >= 2, "bipolar yarım-periyot klempleri bozulmuş"
     assert "UNIPOLAR tek-bacak" in uni and "SYM-BIPOLAR" in bip, "STM_READY dizesi kipi yansıtmıyor"
 
 
-def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int) -> list[str]:
-    """main.c unipolar dalının Python modeli: yalnız A=[0,duty), gerisi LOW."""
+MASKE = 0x01  # pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bobin 1 → IN_B)
+
+
+def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> list[str]:
+    """main.c unipolar dalının Python modeli: seçili TEK bacak=[0,duty), gerisi LOW.
+    bobin_idx = ISR'deki i (0 tabanlı); maske biti set ise darbe B'de, değilse A'da."""
+    darbe = "B" if (MASKE >> bobin_idx) & 1 else "A"
     out = []
     for t in range(tpp):
         adj = t - faz_t
         if adj < 0:
             adj += tpp
-        out.append("A" if adj < duty_t else "-")
+        out.append(darbe if adj < duty_t else "-")
     return out
 
 
-def test_unipolar_dalga_modeli_B_asla_HIGH_degil_ve_tam_periyot_doluluk():
+def test_unipolar_dalga_modeli_tek_bacak_ve_tam_periyot_doluluk():
     tpp = 500
     for duty in (1, 250, 499):
-        d = _unipolar_dalga(tpp, duty, 0)
-        assert "B" not in d and d.count("A") == duty, f"duty={duty}: {d.count('A')} A tick"
+        d = _unipolar_dalga(tpp, duty, 0, bobin_idx=1)  # bobin 2: A bacağı
+        assert "B" not in d and d.count("A") == duty, f"bobin2 duty={duty}: {d.count('A')} A tick"
+        d1 = _unipolar_dalga(tpp, duty, 0, bobin_idx=0)  # bobin 1: B bacağı (PD12), A hiç HIGH değil
+        assert "A" not in d1 and d1.count("B") == duty, f"bobin1 duty={duty}: {d1.count('B')} B tick"
     # faz kaydırması sarmalı
-    d = _unipolar_dalga(tpp, 100, 450)
+    d = _unipolar_dalga(tpp, 100, 450, bobin_idx=1)
     assert d[450] == "A" and d[49] == "A" and d[50] == "-"
 
 

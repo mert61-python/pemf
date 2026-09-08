@@ -39,13 +39,18 @@
  *  │      pemf_surus.h farklıdır — kapı: tests/test_stm_main_saglik.py.   │
  *  │                                                                     │
  *  │  PİN DURUMU — UNIPOLAR projede "hangi pin PWM, hangisi boşta?":     │
- *  │    PWM ÇIKAN   (IN_A)        : PC8  PC9  PD10 PC6  PA8   (bobin 1-5) │
- *  │    SÜRÜLMEYEN  (IN_B, LOW)   : PD12 PE10 PD11 PC7  PA9   (bobin 1-5) │
- *  │    IN_B pinleri yine push-pull ÇIKIŞ olarak kurulur ve kalıcı LOW    │
+ *  │    Bobin 1: PWM → PD12 (IN_B) · PC8 (IN_A) kalıcı LOW  [sahip 09-08] │
+ *  │    Bobin 2: PWM → PC9  (IN_A) · PE10 (IN_B) kalıcı LOW               │
+ *  │    Bobin 3: PWM → PD10 (IN_A) · PD11 (IN_B) kalıcı LOW               │
+ *  │    Bobin 4: PWM → PC6  (IN_A) · PC7  (IN_B) kalıcı LOW               │
+ *  │    Bobin 5: PWM → PA8  (IN_A) · PA9  (IN_B) kalıcı LOW               │
+ *  │    Bacak seçimi: pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bit i = │
+ *  │    bobin i+1 darbeyi IN_B'den alır; 0x01 = yalnız bobin 1).          │
+ *  │    Sürülmeyen pinler yine push-pull ÇIKIŞ kurulur ve kalıcı LOW      │
  *  │    tutulur (yarım-köprü girişi için güvenli durum); fiziksel olarak  │
  *  │    boş bırakılabilir. Başka işe AYRILMIŞ pin YOK — ayırmak için      │
- *  │    coil_gpio[].portB/pinB ve Coil_GpioInit değişmeli. BİPOLAR projede│
- *  │    10 pinin hepsi (A+B) darbelenir.                                  │
+ *  │    coil_gpio[].portA/portB ve Coil_GpioInit değişmeli. BİPOLAR       │
+ *  │    projede 10 pinin hepsi (A+B) darbelenir.                          │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -119,8 +124,10 @@
  *
  *   SÜRÜŞ KİPİNE GÖRE (Core/Inc/pemf_surus.h):
  *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 10 pinin HEPSİ darbelenir
- *     UNIPOLAR (stm32_pemf_unipolar) : PWM YALNIZ IN_A sütununda (PC8 PC9 PD10 PC6 PA8);
- *                                      IN_B sütunu (PD12 PE10 PD11 PC7 PA9) sürülmez,
+ *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM: bobin 1 → PD12 (IN_B, sahip
+ *                                      kararı 2026-09-08; PC8 LOW), bobin 2-5 → PC9 PD10 PC6 PA8
+ *                                      (IN_A; PE10 PD11 PC7 PA9 LOW). Seçim:
+ *                                      PEMF_UNIPOLAR_B_BACAK_MASKESI (0x01). Sürülmeyen pinler
  *                                      çıkış olarak kurulu + kalıcı LOW, boşta.
  *
  ******************************************************************************
@@ -1331,10 +1338,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
      * (doz yeniden kalibre edilmeli — skop + alan probu; bkz. DONANIM-UYUM-ANALIZI-2026-08-19). */
     uint8_t state;
 #if PEMF_SURUS_UNIPOLAR
-    /* TEK-BACAK DÜZ SÜRÜŞ (2026-09-08): yalnız A darbesi [0,duty), geri kalan periyot LOW.
-     * B durumu (0) HİÇ üretilmez → IN_B kalıcı LOW (geçiş kodu B'yi zaten kapalı tutar).
+    /* TEK-BACAK DÜZ SÜRÜŞ (2026-09-08): bobin başına YALNIZ BİR bacak darbelenir [0,duty), geri
+     * kalan periyot LOW; öteki bacak hiç HIGH olmaz (geçiş kodu onu kapalı tutar). Hangi bacak:
+     * varsayılan IN_A (durum 1); PEMF_UNIPOLAR_B_BACAK_MASKESI'nde biti set olan bobinde IN_B
+     * (durum 0) — sahip 2026-09-08: bobin 1 → PD12 darbelenir, PC8 kalıcı LOW.
      * Bipolar dalın `yarim` hesabı burada kullanılmadığı için tanımlanmaz (-Wunused). */
-    state = (adj < duty) ? 1U : 3U;
+    const uint8_t darbe_durumu = ((PEMF_UNIPOLAR_B_BACAK_MASKESI >> i) & 1U) ? 0U : 1U;
+    state = (adj < duty) ? darbe_durumu : 3U;
 #else
     const int32_t yarim = tpp / 2;
     if (adj < duty) {
@@ -1525,9 +1535,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
  *   PC6   → Bobin 4 IN_A
  *   PD12  → Bobin 1 IN_B    PE10 → Bobin 2 IN_B
  *
- *   UNIPOLAR projede (PEMF_SURUS_UNIPOLAR=1) IN_B pinleri (PD12 PE10 PD11 PC7 PA9) de
- *   AYNEN çıkış olarak kurulur ama ISR onları hiç HIGH yapmaz → kalıcı LOW, boşta.
- *   PWM yalnız IN_A pinlerinde: PC8 PC9 PD10 PC6 PA8.
+ *   UNIPOLAR projede (PEMF_SURUS_UNIPOLAR=1) 10 pin de AYNEN çıkış olarak kurulur ama ISR
+ *   bobin başına yalnız BİR pini darbeler: bobin 1 → PD12 (PC8 LOW), bobin 2-5 → PC9 PD10 PC6
+ *   PA8 (PE10 PD11 PC7 PA9 LOW). Seçim maskesi: pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI.
  *
  * NOT: Önceki mimaride (v1.x) bu pinler AF modunda Timer OC kanallarına
  * bağlıydı. DDS mimarisinde (v2.0) tümü GPIO_OUTPUT_PP olarak yapılandırılır.
