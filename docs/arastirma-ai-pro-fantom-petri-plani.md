@@ -1,6 +1,25 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ BİTTİ · FAZ 1 ✅ BİTTİ (tüm kalemler) — sıradaki Faz 2.**
+> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ (backend tamam) — sıradaki Faz 3 (arayüz).**
+>
+> **Faz 2 (caa5fed sağlayıcılar · e178f37 meta + ai_hub):** `FantomSaglayici` ve `PetriSaglayici`
+> eklendi; sürüş `PEMF_ARASTIRMA_AIPRO` arkasında. Kapatılan sessiz hatalar: E anahtarı sınıfa göre
+> eşlenir (kedi anahtarı e_field'ı 0 yapardı); kalibrasyonsuz modda hedef YAPISAL olarak reddedilir
+> (yöntem tavanı 0,25 < eşik 0,3); petri kuyularına KALICI kimlik + yarıçap sınırlı takip (mühürlenen
+> etiket komşu kuyuya kaymaz); makullik reddi istisna değil "özne yok"; ağır modeller enjekte edilir ve
+> analiz uçlarıyla AYNI önbelleği paylaşır. `petri_detector` artık `SystemExit` yerine `RuntimeError`
+> fırlatıyor (thread'de kamera sızıntısı) ve EM scaler yolları `yan_dosya_coz` ile çözülüyor (Docker).
+> Sağlayıcı meta'sı (targets/method/E/ood) üç lokalizasyon yolundan cache'e, oradan `/status`, WS ve
+> `/frame` yanıtlarına akıyor — Faz 3 arayüzü bunlardan beslenecek.
+>
+> **ÖLÇÜM (bu makine):** fantom yükleme ~1,0 s, kare ~30-60 ms · petri yükleme ~5,1 s, kare ~0,33 s.
+> Petri için plan tahmini "1-3 s"ti; `join_timeout_s` ölçüme göre 12 s yerine 8 s yapıldı.
+> **Bir keşif iddiası çürütüldü:** "petri eğitiminde `organ_id` sabit 0" — referans örnekleminde her
+> iki sınıf da var; eğitim-aralığı uyarısı artık yalnız koordinata dayanıyor.
+>
+> **Faz 2'de YAPILMAYAN (bilinçli):** `coord_transform` yaması — karar #6 (hoca: fantom/petri fiziksel
+> yerleşimi ve koordinat çerçevesi) beklemede; bu yüzden sürüş bayrak arkasında. GPU mikroservis
+> paritesi Faz 5'e ertelendi (üretimde mikroservis kapalı).
 >
 > **Faz 1 çekirdeği (3b82185 sağlayıcı + delegasyon · 3ddd20f model mührü):** `servers/ai_pro_hedef.py`
 > geldi (Protocol + KediSaglayici; kedi kodu TAŞINMADI, geç bağlı delegasyon). `_localize_organ` ve
