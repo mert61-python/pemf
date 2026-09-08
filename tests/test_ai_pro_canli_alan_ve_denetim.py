@@ -64,6 +64,10 @@ def env(monkeypatch):
             return None
 
     monkeypatch.setitem(hedef.SAGLAYICILAR, "sahte", _Sag())
+    # Araştırma modelleriyle SÜRÜŞ bayrağı (2026-09-09): bu dosya mühür/akış sözleşmesini
+    # ölçüyor, tezgâh kapısını değil → bayrak AÇIK. Kapının kendisi
+    # tests/test_ai_pro_arastirma_bayragi.py içinde ölçülür.
+    monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO", "1")
 
     snap_cache = dict(air._ai_organ_cache)
     snap = (air._ai_hedef_modeli, air._ai_organ_id)
@@ -173,9 +177,15 @@ def test_KRITIK_kedi_XAI_FIILEN_kullanilan_baz_noktasiyla_uretilir(monkeypatch):
             yakalanan.update({"achieved_B": achieved_B, "duty_sum": duty_sum, "organ_id": organ_id})
             return [{"feature": "duty_sum", "etki": 1.0}]
 
+    # ⚠️ `from ai_hub.em_kedi import inference_em_kedi as _iek` iki yoldan çözülebilir: alt modül
+    # daha önce import edildiyse PAKET ATTRIBUTE'u, edilmediyse `sys.modules`. Süit sırasına göre
+    # ikisi de gerçekleşebildiği için İKİSİ de yamalanır (aksi hâlde test sıraya bağlı kırılır).
     import sys
 
+    import ai_hub.em_kedi as _paket
+
     monkeypatch.setitem(sys.modules, "ai_hub.em_kedi.inference_em_kedi", _SahteIek)
+    monkeypatch.setattr(_paket, "inference_em_kedi", _SahteIek, raising=False)
     monkeypatch.setattr(air, "_get_or_load_kedi", lambda: object())
 
     kedi = hedef.saglayici_al("kedi")

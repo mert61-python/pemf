@@ -66,6 +66,10 @@ def muhur_env(monkeypatch):
             return None
 
     monkeypatch.setitem(hedef.SAGLAYICILAR, "sahte", _Sahte())
+    # Araştırma modelleriyle SÜRÜŞ bayrağı (2026-09-09): bu dosya mühür/akış sözleşmesini
+    # ölçüyor, tezgâh kapısını değil → bayrak AÇIK. Kapının kendisi
+    # tests/test_ai_pro_arastirma_bayragi.py içinde ölçülür.
+    monkeypatch.setenv("PEMF_ARASTIRMA_AIPRO", "1")
 
     snap_cache = dict(air._ai_organ_cache)
     snap = (air._ai_organ_id, air._ai_hedef_modeli, air._ai_owner_client, air._ai_loop_active)

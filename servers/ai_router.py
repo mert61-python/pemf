@@ -833,6 +833,41 @@ def _localize_organ_gpu(frame, organ_id):
 _ai_hedef_yerel = _ai_threading.local()
 
 
+#: Araştırma modellerinin (kedi DIŞI) kapalı-döngü sürüşünü açan bayrak. VARSAYILAN KAPALI.
+#: Neden: fantom/petri koordinat dönüşümü ArUco modunda marker→kabin ROTASYONUNU uygulamıyor ve
+#: kesişimi kabin Z=plate_z düzleminde alıyor; kedi hattı ise kabin-merkezli PnP kullanıyor. İki
+#: hattın AYNI 3B çerçeveyi ürettiği KANITLANMADI (fantom eğitim aralığı da çok dar) → tezgâh
+#: doğrulaması ve hoca kararı (#6) gelmeden bobinler bu modellerin koordinatıyla SÜRÜLMEZ.
+#: ⚠️ Kapı UI'da değil BACKEND'de: AI Pro uçları sahip kararıyla auth-muaf ve backend istemci
+#: profilini bilmez → yalnız düğmeyi gizlemek yeterli değildi (eski/yanlış istemci ya da curl
+#: doğrudan propose+approve+start yapabilirdi).
+#: Taşıyıcı: deploy/device.env satırı (kurulum NSSM ortamına yazar; backend .env'i KENDİ okumaz).
+ARASTIRMA_AIPRO_BAYRAGI = "PEMF_ARASTIRMA_AIPRO"
+
+
+def _arastirma_aipro_acik() -> bool:
+    """Araştırma modelleriyle kapalı-döngü sürüşe izin var mı (env bayrağı; varsayılan HAYIR)."""
+    return str(os.environ.get(ARASTIRMA_AIPRO_BAYRAGI, "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _arastirma_aipro_kapisi(saglayici) -> None:
+    """Kedi DIŞI bir model için sürüş/öneri isteniyorsa bayrağı denetle → 409.
+
+    Metin operatöre durumu ve nedenini söyler; "hata" değil "henüz doğrulanmadı" durumudur."""
+    if getattr(saglayici, "ad", "kedi") == ai_pro_hedef.VARSAYILAN_MODEL:
+        return
+    if _arastirma_aipro_acik():
+        return
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"'{getattr(saglayici, 'title', 'Araştırma modeli')}' ile otonom seans tezgâh "
+            "doğrulaması bekliyor: bu modelin 3B konum ölçümü kabin kalibrasyonuyla henüz "
+            "karşılaştırılmadı. Bu sürümde analiz ve önizleme yapılabilir, bobin sürülmez."
+        ),
+    )
+
+
 def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     """Model yükleme istisnasını (kod, KULLANICI METNİ) çiftine çevir — eylem söyleyen hata kuralı.
 
@@ -1543,6 +1578,7 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         _saglayici = ai_pro_hedef.saglayici_al(payload.model)
     except ValueError as _me:
         raise HTTPException(status_code=422, detail=str(_me)) from None
+    _arastirma_aipro_kapisi(_saglayici)  # kedi DIŞI model + bayrak kapalı → 409
     if oid not in _saglayici.hedef_idleri():
         _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
         raise HTTPException(
@@ -1747,6 +1783,14 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
         with _ai_loop_lock:
             _ai_loop_active = False
         raise HTTPException(status_code=422, detail=str(_me)) from None
+    # Bayrak MÜHÜRLÜ model için de denetlenir: bayrak açıkken alınmış bir onay, bayrak
+    # kapatıldıktan sonra (ör. tezgâh sonucu olumsuz çıktı) SÜRÜLMEMELİ.
+    try:
+        _arastirma_aipro_kapisi(_saglayici)
+    except HTTPException:
+        with _ai_loop_lock:
+            _ai_loop_active = False
+        raise
     _organ_req = int(_spec.get("organ_id", payload.organ_id))
     if _organ_req not in _saglayici.hedef_idleri():
         with _ai_loop_lock:
@@ -1807,14 +1851,16 @@ def stop_ai_pro():
         # göndermeyen bir istemcinin (eski APK, mobil kare yolu) kareleri hâlâ fantom
         # sağlayıcısına gider ve "hedef yok" döngüsüne girerdi.
         _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
-    # Mobil (/frame) seansında loop teardown'ı YOKTUR → bağlamı burada da temizle.
+        # [B1] Sahiplik kilidin İÇİNDE temizlenir: stop'tan sonra başka bir modern istemci AI
+        # Pro'yu devralabilsin (stale owner kimseyi kilitlemesin).
+        _ai_owner_client = ""
+    # Mobil (/frame) seansında loop teardown'ı YOKTUR → canlı E bağlamını burada da temizle.
     try:
         from servers import efield_live as _ef3
 
         _ef3.set_context([])
     except Exception:
         logger.debug("AI Pro stop: canlı E bağlamı temizlenemedi", exc_info=True)
-        _ai_owner_client = ""
     # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
     _ai_hazirlik_durdur_ic()
 
@@ -2011,6 +2057,9 @@ def ai_pro_status():
         "hazirlikActive": bool(_ai_hazirlik_active),
         "hazirlikHata": _ai_hazirlik_hata,
         "hazirlikHataKodu": _ai_hazirlik_hata_kodu,  # YALNIZ-EK (2026-09-09)
+        # YALNIZ-EK (2026-09-09): araştırma modelleriyle sürüş açık mı? Panel model kartlarını
+        # buna göre "Deneysel — tezgâh doğrulaması bekleniyor" diye pasifleştirir.
+        "arastirmaAiProAcik": _arastirma_aipro_acik(),
     }
 
 
@@ -3573,6 +3622,15 @@ async def ai_hazirlik(derin: int = 0):
     if derin_mi:
         yanit["xai"] = await asyncio.to_thread(_xai_zinciri_durumu)
         yanit["pip_yasagi"] = _pip_yasagi_durumu()
+    # Araştırma AI Pro bayrağı: sahada "neden Onayla açılmıyor?" sorusu tek istekle yanıtlanır
+    # (frozen EXE'de env'in servise geçtiği de böyle doğrulanır).
+    yanit["arastirmaAiPro"] = {
+        "acik": _arastirma_aipro_acik(),
+        "bayrak": ARASTIRMA_AIPRO_BAYRAGI,
+        "neden": (
+            "" if _arastirma_aipro_acik() else "Fantom/petri 3B konum dönüşümü tezgâhta doğrulanmadı (plan kararı #6)."
+        ),
+    }
     return yanit
 
 
