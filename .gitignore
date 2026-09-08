@@ -300,3 +300,9 @@ data/cloud_mqtt_provision.json
 # `pf/modules/*/android/.gradle/` altındaki kilit/gc dosyaları build ÇIKTISIDIR; makineye
 # özeldir ve her build'de değişir. 2026-08-22 yayınında `git add -A` ile commit'e sızdılar.
 pf/modules/*/android/.gradle/
+
+# Unipolar (tek-bacak) ayna projesi — ayni kurallar (build ciktisi kaynak degil)
+firmware/stm32_pemf_unipolar/Debug/
+firmware/stm32_pemf_unipolar/Release/
+firmware/stm32_pemf_unipolar/.metadata/
+firmware/stm32_pemf_unipolar/RemoteSystemsTempFiles/

@@ -4,7 +4,8 @@ Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan ber
 
 | Alt klasör | Ne | Bobin |
 |---|---|---|
-| [`stm32_pemf/`](stm32_pemf/README.md) | STM32F429 CubeIDE projesi — **TEK KAYNAK, main.c dahil** | 1-5 (seri) |
+| [`stm32_pemf/`](stm32_pemf/README.md) | STM32F429 CubeIDE projesi — **TEK KAYNAK, main.c dahil** (simetrik bipolar, bobin başı IN_A+IN_B) | 1-5 (seri) |
+| `stm32_pemf_unipolar/` | **Aynı main.c'nin bayt-bayt AYNASI**, tek fark `Core/Inc/pemf_surus.h` = `PEMF_SURUS_UNIPOLAR 1` → **tek-bacak düz sürüş** (bobin başı yalnız IN_A, IN_B kalıcı LOW). Tezgâhta bipolar ile yan yana denemek için (2026-09-08, sahip isteği). Elle DÜZENLENMEZ: `python scripts/stm_unipolar_senkronla.py`; kapı `tests/test_stm_unipolar_ayna.py`. CubeIDE proje adı `PEMF_UNIPOLAR` (ikisi aynı workspace'e import edilir). | 1-5 (seri) |
 | [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) | ESP32-S3 (tam-köprü + BLE) | 6-7 (MQTT) |
 | [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) | ESP8266 (yarım-köprü, tek faz) | 8 (MQTT) |
 

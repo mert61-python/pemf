@@ -27,12 +27,6 @@
    `firmware/main.c` 2026-08-19'da SİLİNDİ (iki kopya bir kez gerçekten ayrışmıştı —
    masaüstü 2 ay geride kalmıştı); `test_stm_main_saglik.py` geri gelmesini de engeller.
    Başka yere KOPYALAMAYIN — derleme dahil her şey bu dosyayı okur.
-   **Tek istisna (2026-09-08): `../stm32_pemf_unipolar/`** — aynı `Core/`nin bayt-bayt AYNASI,
-   yalnız `Core/Inc/pemf_surus.h` farklı (`PEMF_SURUS_UNIPOLAR 1` = tek-bacak düz sürüş, bobin
-   başı yalnız IN_A). O projede main.c'ye DOKUNULMAZ; burada değişince
-   `python scripts/stm_unipolar_senkronla.py` koşturulur, `tests/test_stm_unipolar_ayna.py`
-   ayrışmayı kırmızı yapar. CubeIDE'de ikisi yan yana import edilir (adlar `PEMF` / `PEMF_UNIPOLAR`);
-   unipolar READY dizesi `DDS v2.3 (5-ch UNIPOLAR tek-bacak + HW_SYNC@PB1)`.
 
 ## Tezgâh
 
