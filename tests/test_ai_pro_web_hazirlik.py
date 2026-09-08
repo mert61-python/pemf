@@ -128,13 +128,20 @@ def test_KRITIK_web_hazirlik_durdur_KAMERAYI_birakir(air_env):
     assert air._ai_hazirlik_active is False, "durdur önizlemeyi durdurmadı (kamera bırakılmaz)"
 
 
-def test_KARSIT_KANIT_seans_aktifken_hazirlik_NO_OP(air_env):
+def test_KARSIT_KANIT_seans_aktifken_hazirlik_REDDEDILIR(air_env):
+    """Seans aktifken önizleme BAŞLAMAZ (aynı kamerayı ikinci kez açmaz).
+
+    ⚠️ SÖZLEŞME DEĞİŞTİ (2026-09-08): eskiden 200 "Seans zaten aktif" ile SESSİZ BAŞARI
+    dönülüyordu ve gövdedeki organ ZATEN uygulanmış oluyordu → onaylı seansın hedefi bu auth-muaf
+    uçtan değiştirilebiliyordu (bkz. tests/test_ai_pro_hazirlik_mutasyon_kilidi.py). Artık 409 ve
+    hiçbir mutasyon yok. 200 ayrıca panelde zararlıydı: yanıt truthy görülüp `setHazirlik(true)`
+    yapılıyor, hiç gelmeyecek önizleme 120 sn bekleniyordu (B3 dersi). Panelin `relocalize` akışı
+    bu ucu zaten yalnız `!running` iken çağırır (AiProPanel.tsx:566) → istemci etkilenmez."""
     air, apis, client, driven = air_env
     air._ai_loop_active = True  # seans zaten çalışıyor (kamera seansta)
     try:
         r = client.post("/api/ai/pro/hazirlik/baslat", json={"organ_id": 0})
-        assert r.status_code == 200
-        # Seans aktifken önizleme BAŞLAMAZ (aynı kamerayı ikinci kez açmaz).
+        assert r.status_code == 409, f"seans aktifken hazırlık {r.status_code} döndü (sessiz başarı?)"
         assert air._ai_hazirlik_active is False, "seans aktifken önizleme başladı (çift VideoCapture riski)"
     finally:
         air._ai_loop_active = False

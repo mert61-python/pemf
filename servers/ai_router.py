@@ -1706,22 +1706,49 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
     global _ai_hazirlik_hata
     import threading
 
-    _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
     _organ_req = int(payload.organ_id)
-    if _organ_req in (0, 1, 2, 3, 4, 5, 6):
-        _ai_organ_id = _organ_req  # panelde seçili organ için lokalize et
-    _ai_relocalize = True  # yeni hazırlıkta taze lokalizasyon zorla
-    # MINOR (adversaryal inceleme): bayat `localized`=True bir önceki önizlemeden kalmış olabilir →
-    # önizleme TAZE lokalize etmeden panel bayat ölçümden öneri istemesin. Cache'i geçersiz kıl;
-    # /status 'localized' önizleme yeni kare üretene kadar False döner (start_ai_pro:1434 paritesi).
-    with _ai_cache_lock:
-        _ai_organ_cache["localized"] = False
+
+    # ⚠️ SAHİPLİK KAPISI (2026-09-08) — `/api/ai/pro/organ`daki B1 kapısının paritesi. Bu uç sahip
+    # kararıyla auth-muaf olduğundan, aktif seansın sahibi OLMAYAN bir istemci buradan hedefe
+    # dokunabiliyordu (organ ucunda 403 vardı, burada yoktu). Deny-only: sahip bilinmiyorsa ya da
+    # seans aktif değilse bastırma YOK (geriye-uyum korunur).
+    if _ai_kare_yabanci(payload.client_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Bu AI Pro seansının sahibi değilsiniz; hedef değiştirilemez.",
+        )
+
+    # ⚠️ MUTASYON KİLİT İÇİNDE + AKTİFLİK KONTROLÜNDEN SONRA (2026-09-08 düzeltmesi):
+    # organ/relocalize/cache yazımları eskiden BU BLOKTAN ÖNCE, kilit dışında yapılıyor; sonra
+    # kilide girilip "Seans zaten aktif" ile SESSİZ BAŞARI dönülüyordu — yani mutasyon KALICI
+    # oluyordu. Onaylı bir seans sürerken herhangi bir istemci {"organ_id": 5} gönderip
+    # `need_localize` koşulunu tetikleyebiliyor, bobinler MÜHÜRDE ONAYLANMAYAN organa sürülüyordu
+    # (2026-08-06 "organ/süre gövdeden değil mühürden okunur" kararının yan kapısı).
+    # ⚠️ 200 yerine 409: sessiz başarı panelde de zararlıydı — `AiProPanel` yanıtı truthy görüp
+    # `setHazirlik(true)` yapıyor ve hiç gelmeyecek önizlemeyi 120 sn bekliyordu (B3 dersi).
+    # Kapı: tests/test_ai_pro_hazirlik_mutasyon_kilidi.py (mutasyonu kilit öncesine taşı → KIRMIZI).
     # ⚠️ ATOMİK (adversaryal inceleme MAJOR-2 TOCTOU): _ai_loop_active + _ai_hazirlik_active kontrolü
     # VE thread spawn'ı AYNI _ai_loop_lock içinde. Eskiden _ai_loop_active kilit DIŞINDA okunuyordu →
     # eş-zamanlı /ai/pro/start ile çift VideoCapture(0) açılabiliyordu (kilit tam bunu önlemek içindi).
     with _ai_loop_lock:
         if _ai_loop_active:
-            return {"status": "success", "message": "Seans zaten aktif (kamera seansta)"}
+            raise HTTPException(
+                status_code=409,
+                detail="Seans sürerken hedef değiştirilemez — önce AI Pro'yu durdurun.",
+            )
+        # Buradan sonrası: SEANS YOK → bobin sürülmüyor, hedef mutasyonu güvenli. Hazırlık zaten
+        # çalışıyorsa da organ güncellenir: panelin "Yeniden Konumla" akışı (AiProPanel.tsx:575)
+        # önizleme sürerken bu ucu yeni organla çağırır.
+        _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
+        if _organ_req in (0, 1, 2, 3, 4, 5, 6):
+            _ai_organ_id = _organ_req  # panelde seçili organ için lokalize et
+        _ai_relocalize = True  # yeni hazırlıkta taze lokalizasyon zorla
+        # MINOR (adversaryal inceleme): bayat `localized`=True bir önceki önizlemeden kalmış olabilir →
+        # önizleme TAZE lokalize etmeden panel bayat ölçümden öneri istemesin. Cache'i geçersiz kıl;
+        # /status 'localized' önizleme yeni kare üretene kadar False döner (start_ai_pro:1434 paritesi).
+        # Kilit sırası _ai_loop_lock → _ai_cache_lock (ters sıra depoda YOK → deadlock riski yok).
+        with _ai_cache_lock:
+            _ai_organ_cache["localized"] = False
         if _ai_hazirlik_active:
             return {"status": "success", "message": "Hazırlık zaten çalışıyor"}
         _ai_hazirlik_active = True
