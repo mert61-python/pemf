@@ -1,6 +1,13 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-08): PLAN — uygulama başlamadı.** Sahip isteği: AI Pro kapalı döngüsünde
+> **DURUM (2026-09-08): FAZ 0 ✅ BİTTİ — Faz 1 sırada.** Aşağıdaki üç mevcut kusur ayrı
+> commit'lerle kapatıldı (8b509a9 seans lokalizasyonu · 3ab9f04 hazırlık mutasyon kilidi ·
+> 4e8a034 jeton ölü yol · 15df6c6 petri YOLO envanteri · d373b66 koordinat karakterizasyonu);
+> dört sahip kararı alındı (#2, #4, #11, #15 — tablo aşağıda). Her kapı mutasyonla KIRMIZI
+> kanıtlandı; mevcut AI Pro süiti (92 test) değişmeden yeşil, yalnız bir karşıt-kanıt testi
+> yeni 409 sözleşmesine göre güncellendi.
+>
+> Sahip isteği: AI Pro kapalı döngüsünde
 > araştırma modunda (userMode `researcher`) KEDİ yerine İKİ model olsun — **Fantom Tümör**
 > (`inference_em_fantom` + `phantom_cv`) ve **Petri Kuyu** (`inference_em_petri` + `petri_cv`);
 > kedi (`em_kedi` + `cat_organ`) yalnız veteriner modunda kalsın; akış kod bilmeyen bir
@@ -290,12 +297,23 @@ Kedi koduna dokunulmadığının kanıtı davranışsal golden'dır (aynı sahte
 | §5 tablosundaki 21 kararı al, bu dokümana "✅ KESİN" olarak işle | bu dosya | — |
 | **Kusur #1**: `ai_router.py:1187` → `lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)` + cache'e `guven_dokumu` (1016/1796 paritesi); ayrı commit | `servers/ai_router.py`, `tests/test_ai_pro_seans_dongusu_lokalizasyon.py` (yeni) | `test_kalan_regression_gaps.py:629-711` `_SahteCv2`/sahte time harness'ı ile `_ai_pro_loop` GERÇEK 8'li tuple altında koşar → `_drive_coils_ai_pro` ≥1 kez çağrılır, `cache.localized` True. Mutasyon: 7'li açılıma geri al → kırmızı. Ek yapısal kapı: hazırlık ve seans döngüsü `_localize_organ` sonucunu AYNI biçimde açar (1187 tam da bu paritenin kopmasından çıktı). |
 | **Kusur #2**: `/hazirlik/baslat` organ/model/cache mutasyonu `_ai_loop_lock` içine, aktiflik kontrolünden sonra; seans aktif → 409; `_ai_kare_yabanci(client_id)` → 403; ayrı commit | `servers/ai_router.py`, `tests/test_ai_pro_hazirlik_mutasyon_kilidi.py` (yeni) | aktif seans (organ 2 mühürlü) + `/hazirlik/baslat {organ_id:5}` → 409 ve `_ai_organ_id` 2 kalır, cache `localized` değişmez; yabancı client → 403. Mutasyon: mutasyonu kilit öncesine taşı → kırmızı. `test_ai_pro_web_hazirlik.py:131-139` (hazırlık NO-OP) yeşil kalır. |
-| **Kusur #3**: `jeton.py:294` `/api/ai/pro/frame` → `/api/ai/ai_pro/frame` ekle (+ `/api/ai/pro/hazirlik/baslat|durdur`, `GET /api/ai/hazirlik` serbest); `test_jeton_gate.py:93` gerçek yol; `docs/JETON-SISTEMI.md` | `servers/jeton.py`, `tests/test_jeton_gate.py`, docs | `esle('/api/ai/ai_pro/frame') is None`. FREE_MODE değişmezine dokunulmaz. |
+| **Kusur #3** ✅: ölü yol düzeltildi + `hazirlik/baslat\|durdur` ve `GET /api/ai/hazirlik` serbest listeye alındı | `servers/jeton.py`, `tests/test_jeton_gate.py` | YENİ yapısal kapı: serbest listedeki HER yol `app.routes`'ta gerçekten kayıtlı olmalı (ölü yol → KIRMIZI). FREE_MODE değişmezine dokunulmadı. |
 | Hazırlık envanterine `('petri_yolo', 'ai_hub.inference_petri_dish.petri_cv.petri_detector', 'ai_hub/inference_petri_dish/yolo11m-seg.onnx')`; derin=1'de `phantom_cv`/`petri_cv` import + yaml/npz varlığı ayrı "kabin" bloğu | `servers/ai_router.py:3141-3208`, `tests/test_ai_hazirlik_envanteri.py` | yolo yolu monkeypatch ile 'yok' → `/api/ai/hazirlik` eksik listesinde `petri_yolo`. Mutasyon: satırı sil → kırmızı. Mevcut kurallar (None yasak, PROFILLER'de var, ≥15) yeşil. |
 | Karakterizasyon golden'ı: mevcut `pixel_to_cabin_mm`'in 05_FantomTumor.jpeg / 06b_PetriKuyu_aruco.jpg için ürettiği x,y,z sabitlenir (yama YAPILMAZ) | `tests/test_koordinat_donusumu_karakterizasyon.py` (yeni, `capraz.atla_yoksa`) | golden değişirse kırmızı → coord_transform'a dokunan her iş görünür olur |
 
-**Bitiş:** 21 karar tabloda; üç kusur ayrı commit'lerde mutasyon kanıtıyla; envanter kapısı petri YOLO
-eksikliğinde kırmızı; tam süit yeşil; fantom/petri davranışı henüz yok.
+**✅ BİTTİ (2026-09-08).** Yapılanlar ve kanıtları:
+
+| İş | Commit | Mutasyon kanıtı |
+|---|---|---|
+| Seans döngüsü lokalizasyon açılımı + güven dökümü | `8b509a9` | yıldızsız açılıma dön → 3 test KIRMIZI |
+| Hazırlık ucu mutasyon kilidi + 403 sahiplik + 409 | `3ab9f04` | atamayı kilit önüne taşı → 2 test KIRMIZI |
+| Jeton ölü yol (`/api/ai/pro/frame` → `/api/ai/ai_pro/frame`) | `4e8a034` | ölü yolu geri koy → 2 test KIRMIZI |
+| Hazırlık envanterine `petri_yolo` (85,5 MB YOLO) | `15df6c6` | satır eklenmeden KIRMIZI ölçüldü |
+| Koordinat dönüşümü karakterizasyon golden'ı | `d373b66` | dönüşüme eksen çevirmesi ekle → 3 test KIRMIZI |
+
+Dört sahip kararı alındı (#2, #4, #11, #15). Kalan 17 karar Faz 1-3 sırasında, ilgili işten
+hemen önce alınacak; #6 (koordinat çerçevesi) hoca görüşmesine bağlı ve Faz 2'yi kapılıyor.
+⚠️ Karar #11 tek yayın olduğu için Faz 0 düzeltmeleri sahaya Faz 3 bitmeden inmez.
 
 ### Faz 1 — Backend Hedef Sağlayıcı + model mührü (kedi davranış-sıfır; yayın: app 1.9.44 backend-only)
 
@@ -416,20 +434,20 @@ kapalı (`PEMF_AI_SERVICE_URL` yalnız docker-compose.micro.yml) → ertelenebil
 | # | Karar | Öneri |
 |---|---|---|
 | 1 | Hedef politikası (çoklu tümör / çoklu kuyu) | Varsayılan otomatik (en büyük tümör / en yüksek güvenli kanserli kuyu) + araştırmacı kare üstünde TEK hedef değiştirir; çoklu/sıralı sürüş KAPSAM DIŞI |
-| 2 | Sağlıklı hedef (EM sınıf 0, kontrol deneyi) izinli mi? | EVET, Adım 1'de kapalı-varsayılan anahtar ile; varsayılan yalnız kanserli |
+| 2 ✅ | Sağlıklı hedef (EM sınıf 0, kontrol deneyi) izinli mi? | **KESİN (2026-09-08):** EVET — Adım 1'de kapalı-varsayılan anahtar; varsayılan yalnız kanserli |
 | 3 | E gösterimi | Onayda hedefte + çevrede (göreli, birimsiz) ve oran; canlı `eField` = hedef sınıfının E'si |
-| 4 | Kalibrasyon şartı | Kapalı döngüde ArUco ZORUNLU; ölçek modu (fantom boyu / petri çapı) yalnız AI Hub tek-foto analizinde; piksel/ölçek modunda öneri 409 (tek dal, şerit yok) |
+| 4 ✅ | Kalibrasyon şartı | **KESİN (2026-09-08):** kapalı döngüde ArUco ZORUNLU. Ölçek modu (fantom boyu / petri çapı) yalnız AI Hub tek-foto analizinde kalır; piksel/ölçek modunda öneri 409 (TEK dal — onay ekranında piksel-modu şeridi YOK) |
 | 5 | achieved_B / duty_sum | Fantom/petri cfg (0.001 T, 2.4) — analiz paneliyle aynı; kedi 0.001/1.5 aynen; XAI baz-noktası tahminle aynı |
 | 6 | Fantom/petri fiziksel yerleşim ve koordinat çerçevesi (taban Y=−25 cm + kalınlık; fantom eğitim aralığı x∈[−56,6; −30,6] mm hangi kurulum?) | **HOCA ile** netleştirilir; karar gelmeden coord_transform yaması YAPILMAZ, fantom/petri sürüşü bayrak arkasında |
 | 7 | Fantom güven vekili ve eşik | solidity × n_blue_inside × yöntem tavanı (1.0 / 0.25); eşik 0.3 aynen; tezgâhta ölçüm protokolü (kaç kare, kaç konum, kabul ölçütü) yazılır |
 | 8 | Duty politikası | Mevcut ortak yol (0..0.50 clip zarfta + normalize 0.50) — yeni sınır eklenmez, mevcut kaldırılmaz |
 | 9 | Kedi XAI baz-nokta kayması (tahmin 1.5, açıklama 2.0) bu işte düzeltilsin mi? | EVET (Faz 1, tek satır) |
 | 10 | Profil kısıtı yalnız UI'da (backend profil-bilgisiz, auth-muaf değişmezi) | EVET (scratch emsali); backend model alanını doğrular, profili sormaz; istemci modu meta'ya denetim izi olarak yazılır |
-| 11 | Yayın kadansı | Faz 0+1 → app 1.9.44 (backend-only); Faz 2+3 → app 1.9.45; mobil 2.3.34 karar #15'e bağlı; launcher 1.9.50 aynen; Faz 5 ertelenir |
+| 11 ✅ | Yayın kadansı | **KESİN (2026-09-08, öneriden FARKLI):** TEK YAYIN — bütün fazlar bitince **app 1.9.44**. Ara yayın yok; launcher 1.9.50 aynen; Faz 5 ertelenir. ⚠️ Sonuç: Faz 0'daki hasta-güvenliği düzeltmeleri sahaya ancak Faz 3 bitince iner |
 | 12 | Terminoloji | Araştırmacıda 'hekim onayı' → 'onay', 'Hasta' → 'Örnek', "Seans Geçmişi"; sekme 'AI Pro', alt başlık 'Fantom / Petri Kapalı-Döngü'; kod/DB/hukuki metin sabit |
 | 13 | Simetrik gizleme (kedi araştırmacıda, fantom/petri veterinerde HİÇ görünmez) | EVET (AiHubScreen `modes` bölüşümüyle aynı) |
 | 14 | ~191 MB ölü ağırlık research.zip'ten çıkarılsın mı? | AYRI yayın; bu işte dokunulmaz |
-| 15 | Mobil (telefon kamerası) fantom/petri kapalı döngü v1'de var mı? | ÖNERİ: HAYIR — v1 yalnız kabin (sunucu) kamerası; telefon intrinsics'i kalibre değil ve marker arka duvarda (tepeden çekimde görünmez). Mobilde kart yönlendirme metni. |
+| 15 ✅ | Mobil (telefon kamerası) fantom/petri kapalı döngü v1'de var mı? | **KESİN (2026-09-08):** HAYIR — v1 yalnız kabin (sunucu) kamerası. Telefon iç parametreleri kalibre değil, marker arka duvarda. Mobilde kartlar "bu model masaüstü kabin kamerası ister" der; kedi akışı telefonda aynen kalır. Mobil sürüm artışı GEREKMEZ |
 | 16 | AI geçmişi (/ai/log) kaydı | EVET: onay anında `module_id em_fantom|em_petri`, `input_type camera`, `mode=userMode` (denetim izi #10 ile birleşir) |
 | 17 | Bayrak taşıyıcısı `PEMF_ARASTIRMA_AIPRO` | `deploy/device.env` satırı (Inno kurulumla servis env'ine iner) + NSSM env; UI status'tan okur |
 | 18 | "Araştırma paketi kurulu değil" yönlendirme metni | Launcher'daki gerçek profil-ekleme yolu neyse o (kullanıcıya görünen adıyla; 'Client/Launcher' kelimeleri yasak) — sahip söyler |
