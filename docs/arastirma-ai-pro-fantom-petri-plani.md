@@ -1,6 +1,24 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-08): FAZ 0 ✅ BİTTİ — Faz 1 sırada.** Aşağıdaki üç mevcut kusur ayrı
+> **DURUM (2026-09-09): FAZ 0 ✅ BİTTİ · FAZ 1 ÇEKİRDEĞİ ✅ BİTTİ (sağlayıcı + model mührü).**
+>
+> **Faz 1 çekirdeği (3b82185 sağlayıcı + delegasyon · 3ddd20f model mührü):** `servers/ai_pro_hedef.py`
+> geldi (Protocol + KediSaglayici; kedi kodu TAŞINMADI, geç bağlı delegasyon). `_localize_organ` ve
+> `_predict_and_drive` ince delegatör oldu; duty kırpması tek yere (zarfa) alındı; `model` alanı
+> payload → onay mührü → `/start` zinciri kuruldu; `(0..6)` literali dört yerden sıfıra indi;
+> lokalizasyon önbelleği model damgalı; status/WS/frame yalnız-ek alanlar kazandı. Kapılar bu sırada
+> **yeni bir hata yakaladı**: öneri ucu modeli mühürlerken dozu AKTİF modelle üretiyordu (mühürdeki
+> D/P başka modelin deseni olurdu) → sağlayıcı isteğin thread'ine bağlandı, imza korunduğu için
+> mevcut XAI testleri değişmeden yeşil kaldı. Tam süit **2431 geçti**; kalan 2 kırmızı (CHANGELOG
+> buildId / yayındaki paket sha) bu işten ÖNCE de kırmızıydı ve ilgisizdir (132ab94 worktree'sinde
+> ölçüldü) — ayrı bir yayın-kaydı bulgusu.
+>
+> **Faz 1 kalanı:** araştırma bayrağı (`PEMF_ARASTIRMA_AIPRO`, taşıyıcı karar #17), hazırlık hata
+> sınıfları `{kod, mesaj}`, model yüklemesinin kameradan ÖNCE yapılması + sağlayıcı bazlı join
+> timeout, `efield_live` model parametresi + teardown temizliği, kedi XAI baz-nokta düzeltmesi
+> (karar #9), mühür meta'sına `client_mode`. Sonra Faz 2 (fantom/petri sağlayıcıları).
+>
+> **FAZ 0 (2026-09-08):** Aşağıdaki üç mevcut kusur ayrı
 > commit'lerle kapatıldı (8b509a9 seans lokalizasyonu · 3ab9f04 hazırlık mutasyon kilidi ·
 > 4e8a034 jeton ölü yol · 15df6c6 petri YOLO envanteri · d373b66 koordinat karakterizasyonu);
 > dört sahip kararı alındı (#2, #4, #11, #15 — tablo aşağıda). Her kapı mutasyonla KIRMIZI
