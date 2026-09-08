@@ -821,12 +821,23 @@ def _localize_organ_gpu(frame, organ_id):
     return _extract_organ_target(organs_by_id, organ_id, overlay)
 
 
-def _aktif_saglayici():
-    """Seansın/hazırlığın AKTİF hedef sağlayıcısı (kedi | fantom | petri).
+# İSTEK-YEREL hedef bağlamı (2026-09-08): `/propose` HENÜZ AKTİF OLMAYAN bir modelin dozunu
+# hesaplar (model seansla birlikte aktifleşir). Aktif sağlayıcı okunursa öneri, mühre yazılan
+# modelden BAŞKASININ (varsayılan kedinin) duty/faz desenini taşır — mührün amacını boşa çıkaran
+# sessiz bir uyumsuzluk (kapı: tests/test_ai_pro_model_muhru.py). Global yerine THREAD-LOCAL:
+# eş zamanlı koşan hazırlık/seans thread'leri kendi modelini okumaya devam eder.
+_ai_hedef_yerel = _ai_threading.local()
 
-    `_ai_hedef_modeli` yalnız `_ai_loop_lock` altında yazılır (start mühürden okur). Bilinmeyen
-    bir ad kalırsa döngü ölmesin diye varsayılana (kedi) düşülür — istemci doğrulaması uçlarda
-    422 ile zaten yapılır."""
+
+def _aktif_saglayici():
+    """Bu iş parçacığı için geçerli hedef sağlayıcısı (kedi | fantom | petri).
+
+    Öncelik: istek-yerel bağlam (propose) → `_ai_hedef_modeli` (seans/hazırlık; yalnız
+    `_ai_loop_lock` altında yazılır, start onu MÜHÜRDEN okur). Bilinmeyen bir ad kalırsa döngü
+    ölmesin diye varsayılana (kedi) düşülür — istemci doğrulaması uçlarda 422 ile zaten yapılır."""
+    _yerel = getattr(_ai_hedef_yerel, "saglayici", None)
+    if _yerel is not None:
+        return _yerel
     try:
         return ai_pro_hedef.saglayici_al(_ai_hedef_modeli)
     except ValueError:
@@ -901,10 +912,11 @@ def _predict_and_drive(x_mm, y_mm, z_mm, organ_id):
 
     TAM başarısızlıkta (0,0,0) döner = bobin SÜRÜLMEZ (güvenli varsayılan, değişmedi).
     Döner: (D_list[7], P_list[7], e_field)."""
+    sag = _aktif_saglayici()
     try:
-        D, P, e_field = _aktif_saglayici().predict(x_mm, y_mm, z_mm, organ_id)
+        D, P, e_field = sag.predict(x_mm, y_mm, z_mm, organ_id)
     except Exception as pred_err:
-        logger.error("AI Pro doz tahmini hatası (model=%s): %s", _ai_hedef_modeli, pred_err)
+        logger.error("AI Pro doz tahmini hatası (model=%s): %s", getattr(sag, "ad", "?"), pred_err)
         return [0.0] * 7, [0.0] * 7, 0.0
     return (
         [float(d) for d in np.clip(D, 0.0, AI_PRO_DUTY_MAX_RATIO)],
@@ -1053,7 +1065,10 @@ def _ai_hazirlik_loop():
                                 "overlay_bgr": lov,
                                 "at": now,
                                 "organ_id": _oid,
-                                "kedi_var": lkedi,
+                                "kedi_var": lkedi,  # anahtar adı korunur (anlam: "özne kadrajda")
+                                # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
+                                # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
+                                "model": _ai_hedef_modeli,
                                 "guven_dokumu": (l_ek[0] if l_ek else None),
                             }
                         )
@@ -1094,7 +1109,12 @@ def _ai_hazirlik_loop():
                                 },
                                 "eField": 0.0,
                                 "organId": _ai_organ_id,
-                                "organName": _ORGAN_NAMES.get(_ai_organ_id, ""),
+                                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                                # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
+                                "model": _aktif_saglayici().ad,
+                                "modelName": _aktif_saglayici().title,
+                                "subjectLabel": _aktif_saglayici().subject_label,
+                                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
                                 "perCoil": [],
                                 "remainingSec": 0,
                                 "durationMin": _ai_duration_min,
@@ -1235,7 +1255,10 @@ def _ai_pro_loop():
                                 # yalnız mobil /frame yolu (:1411) güncelliyordu. Web/sunucu-kameralı
                                 # seansta ws `catDetected` bu yüzden bayat kalıyordu (aşama şeridi +
                                 # 409 ipucu yanlış yönlendirme). Frame yolu paritesi.
-                                "kedi_var": lkedi,
+                                "kedi_var": lkedi,  # anahtar adı korunur (anlam: "özne kadrajda")
+                                # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
+                                # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
+                                "model": _ai_hedef_modeli,
                                 # Sunum-katmanı XAI paritesi (2026-09-08): hazırlık ve mobil kare
                                 # yolları güven dökümünü yazıyordu, seans yolu yazmıyordu → seans
                                 # boyunca /status ve WS `guvenDokumu` hazırlıktan kalan BAYAT değeri
@@ -1313,7 +1336,7 @@ def _ai_pro_loop():
             rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1) if localized else 0.0
             update_live_session_state(
                 is_active=True,
-                mode=f"AI Pro · {_ORGAN_NAMES.get(_ai_organ_id, '')}",
+                mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
                 freq=_AI_PRO_FREQ_HZ,
                 intensity=rep_duty,
                 remaining_min=remaining // 60,
@@ -1350,7 +1373,12 @@ def _ai_pro_loop():
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _ai_organ_id,
-                "organName": _ORGAN_NAMES.get(_ai_organ_id, ""),
+                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
+                "model": _aktif_saglayici().ad,
+                "modelName": _aktif_saglayici().title,
+                "subjectLabel": _aktif_saglayici().subject_label,
+                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
                 "perCoil": per_coil,
                 "remainingSec": remaining,
                 "durationMin": _ai_duration_min,
@@ -1405,6 +1433,12 @@ def _ai_pro_loop():
 class AiProStartPayload(BaseModel):
     organ_id: int = 0
     duration_minutes: int = 20
+    #: Hedef modeli: "kedi" | "fantom" | "petri" (Faz 1, 2026-09-08). YENİ ROTA AÇILMADI — model
+    #: seçimi mevcut uçların gövdesinden gelir (route-contract sabit sayacı ve auth-muafiyet
+    #: önekleri değişmez). Boş = "kedi" → `model` göndermeyen ESKİ istemcilerde davranış AYNI.
+    #: ⚠️ `/ai/pro/start` bu alanı YOK SAYAR: model ONAY MÜHRÜNDEN okunur (organ/süre ile aynı
+    #: ilke) — "fantom önerisini onaylat, kediyi başlat" yapısal olarak imkânsızdır.
+    model: str = ""
     # SERT KAPI (2026-08-06 sahip kararı): onaylanmış öneri kimliği ZORUNLU.
     # Boş bırakılırsa istek 428 ile reddedilir — otonom tedavi hekim onayı olmadan başlamaz.
     proposal_id: str = ""
@@ -1416,6 +1450,9 @@ class AiProStartPayload(BaseModel):
 class AiProProposePayload(BaseModel):
     organ_id: int = 0
     duration_minutes: int = 20
+    #: Hedef modeli (bkz. `AiProStartPayload.model`). Öneri MÜHRÜNE (`specs.model`) yazılır ve
+    #: seans başlangıcı onu mühürden okur.
+    model: str = ""
 
 
 @ai_router.post("/api/ai/pro/propose")
@@ -1432,13 +1469,25 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
     için bu organda otonom tedaviyi başlatıyorum" beyanıdır.
     """
     oid = int(payload.organ_id)
-    if oid not in (0, 1, 2, 3, 4, 5, 6):
-        raise HTTPException(status_code=422, detail=f"organ_id {oid} AI Pro seansı için desteklenmiyor (geçerli 0-6).")
+    # Hedef modeli: istemciden gelir, MÜHÜRE yazılır, /start onu mühürden okur (Faz 1).
+    try:
+        _saglayici = ai_pro_hedef.saglayici_al(payload.model)
+    except ValueError as _me:
+        raise HTTPException(status_code=422, detail=str(_me)) from None
+    if oid not in _saglayici.hedef_idleri():
+        _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Hedef {oid} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
+        )
     with _ai_cache_lock:
         c = dict(_ai_organ_cache)
+    # ⚠️ TAZELİK MODELE DE BAKAR (Faz 1): kedi hazırlığından kalan taze cache, fantom önerisine
+    # "taze" görünüp YANLIŞ modelin koordinatıyla doz ürettirebilirdi.
     taze = (
         bool(c.get("localized"))
         and int(c.get("organ_id", -1)) == oid
+        and str(c.get("model") or ai_pro_hedef.VARSAYILAN_MODEL) == _saglayici.ad
         and (time.time() - float(c.get("at") or 0)) < 120.0
     )
     if not taze:
@@ -1448,19 +1497,21 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         # aynı hataya kilitleniyordu. Akış düzeltildi (panel artık hazırlık aşamasında kare
         # akıtıyor); mesaj da ne olduğunu ve kimin ne yapacağını dürüstçe söylüyor.
         with _ai_cache_lock:
-            _kedi = bool(_ai_organ_cache.get("kedi_var"))
-        _ad = _ORGAN_NAMES.get(oid, "hedef organ")
-        _ipucu = (
-            f"Hayvan görünüyor ama {_ad} seçilemedi — kamerayı biraz çevirip açıyı değiştirin."
-            if _kedi
-            else "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
-        )
+            _kedi = bool(_ai_organ_cache.get("kedi_var"))  # anahtar adı korunur: "özne kadrajda"
+        _ad = _saglayici.hedef_adi(oid) or "hedef organ"
+        _ipucu = _saglayici.ipucu(_kedi, _ad)
         raise HTTPException(
             status_code=409,
             detail=f"{_ad} henüz konumlandırılmadı. {_ipucu} Kamera görüntüsü akarken konumlandırma "
             "kendiliğinden tamamlanır ve öneri otomatik hazırlanır.",
         )
-    D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
+    # Sağlayıcıyı bu isteğin thread'ine bağla → `_predict_and_drive` MÜHÜRLENEN modelin dozunu
+    # üretir (imza değişmez: mevcut testlerin 4 argümanlı mock'ları çalışmaya devam eder).
+    _ai_hedef_yerel.saglayici = _saglayici
+    try:
+        D, P, e_field = _predict_and_drive(c["x_mm"], c["y_mm"], c["z_mm"], oid)
+    finally:
+        _ai_hedef_yerel.saglayici = None
     if not any(float(d) > 0 for d in D):
         raise HTTPException(
             status_code=422,
@@ -1474,11 +1525,9 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
     # ⚠️ Açıklama İKİNCİL: hatası ÖNERİYİ asla düşürmez (zarif düşüş).
     xai_meta = {}
     try:
-        from ai_hub.em_kedi import inference_em_kedi as _iek
-
-        xai_meta["xaiSensitivity"] = _iek.xai_hizli_sensitivity(
-            _get_or_load_kedi(), c["x_mm"], c["y_mm"], c["z_mm"], oid
-        )
+        _duyarlilik = _saglayici.xai_sensitivity(c["x_mm"], c["y_mm"], c["z_mm"], oid)
+        if _duyarlilik:
+            xai_meta["xaiSensitivity"] = _duyarlilik
     except Exception as xe:
         logger.warning("AI Pro öneri XAI üretilemedi (öneri etkilenmedi): %s", xe)
 
@@ -1488,6 +1537,9 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
         {
             "organ_id": oid,
             "duration_minutes": sure,
+            # MÜHÜRLÜ MODEL (Faz 1): /start bunu okur, gövdedeki `model` yok sayılır.
+            "model": _saglayici.ad,
+            "target_label": _saglayici.hedef_adi(oid),
             "coil_ids": list(range(1, 8)),
             "D": [round(float(d), 4) for d in D],
             "P": [round(float(p), 2) for p in P],
@@ -1499,6 +1551,9 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "z_mm": c["z_mm"],
             "reliability": round(float(c.get("reliability") or 0.0), 3),
             "localized_at": c.get("at"),
+            "subject_label": _saglayici.subject_label,
+            "achieved_B": _saglayici.achieved_B,
+            "duty_sum": _saglayici.duty_sum,
             **xai_meta,
         },
     )
@@ -1571,7 +1626,7 @@ def _kaydet_onay_izi(olay: str, rec: dict) -> None:
 
 @ai_router.post("/api/ai/pro/start")
 def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
-    global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize
+    global _ai_loop_active, _ai_thread, _ai_organ_id, _ai_duration_min, _ai_started_at, _ai_relocalize, _ai_hedef_modeli
     global _ai_owner_client
     # Güncelleme uygulanıyorken otonom AI Pro tedavisi BAŞLATMA: installer servisi durdurup
     # EXE'yi değiştirebilir → bobinler kontrolcüsüz kalır (update TOCTOU guard'ının ters yönü).
@@ -1613,14 +1668,27 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     # gösterir → klinisyeni 'kalp tedavi ediliyor' diye yanıltır. Desteklenmeyeni reddet + loop'u geri al.
     # Organ ve süre ONAYLANAN mühürden okunur; istemcinin gövdede gönderdiği değer YOK SAYILIR
     # (aksi halde "organ 2'yi onaylat, organ 5'i başlat" mümkün olurdu — enerji YANLIŞ ORGANA).
-    _organ_req = int(_spec.get("organ_id", payload.organ_id))
-    if _organ_req not in (0, 1, 2, 3, 4, 5, 6):
+    # MODEL de MÜHÜRDEN okunur (Faz 1, 2026-09-08): gövdedeki `model` YOK SAYILIR — "fantom
+    # önerisini onaylat, kediyi başlat" (ya da tersi) yapısal olarak imkânsız. Mühürsüz eski
+    # kayıtlar (Faz 1 öncesi onaylar) varsayılan "kedi" ile açılır → geriye-uyum korunur.
+    try:
+        _saglayici = ai_pro_hedef.saglayici_al(_spec.get("model"))
+    except ValueError as _me:
         with _ai_loop_lock:
             _ai_loop_active = False
+        raise HTTPException(status_code=422, detail=str(_me)) from None
+    _organ_req = int(_spec.get("organ_id", payload.organ_id))
+    if _organ_req not in _saglayici.hedef_idleri():
+        with _ai_loop_lock:
+            _ai_loop_active = False
+        _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
         raise HTTPException(
-            status_code=422, detail=f"organ_id {_organ_req} AI Pro seansı için desteklenmiyor (geçerli 0-6)."
+            status_code=422,
+            detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
         )
     _ai_organ_id = _organ_req
+    with _ai_loop_lock:
+        _ai_hedef_modeli = _saglayici.ad  # döngü ve /frame bu modeli kullanır
     # Süreyi klinik üst sınıra kapla (Audit P1) — aksi halde {duration_minutes: 999999} uzaktan
     # kabul ediliyordu. Bu değer hem STM/watchdog'a hem ESP MQTT yüküne (_ai_duration_min*60) gider.
     # Süre de MÜHÜRDEN okunur (organ ile aynı gerekçe: "20 dk onayla, 180 dk başlat" olmasın).
@@ -1639,7 +1707,8 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     try:
         from servers.api_server import start_ai_session
 
-        start_ai_session(0.0, 0.0, _ai_duration_min, range(1, 8), "AI Pro")
+        # ⚠️ "AI" ÖN EKİ KORUNUR: api_server ve ai_router'da `startswith("AI")` kontrolleri var.
+        start_ai_session(0.0, 0.0, _ai_duration_min, range(1, 8), f"AI Pro · {_saglayici.title}")
     except Exception:
         logger.exception("start_ai_session failed")
     import threading
@@ -1661,9 +1730,13 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
 
 @ai_router.post("/api/ai/pro/stop")
 def stop_ai_pro():
-    global _ai_loop_active, _ai_owner_client
+    global _ai_loop_active, _ai_owner_client, _ai_hedef_modeli
     with _ai_loop_lock:
         _ai_loop_active = False
+        # Aktif modeli VARSAYILANA döndür (Faz 1): aksi halde fantom seansından sonra `model`
+        # göndermeyen bir istemcinin (eski APK, mobil kare yolu) kareleri hâlâ fantom
+        # sağlayıcısına gider ve "hedef yok" döngüsüne girerdi.
+        _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
         _ai_owner_client = ""
     # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
     _ai_hazirlik_durdur_ic()
@@ -1705,11 +1778,28 @@ def set_ai_pro_organ(payload: AiProStartPayload = AiProStartPayload()):
     if _ai_kare_yabanci(payload.client_id):
         raise HTTPException(status_code=403, detail="Bu AI Pro seansının sahibi değilsiniz; organ değiştirilemez.")
     _organ_req = int(payload.organ_id)
-    if _organ_req not in (0, 1, 2, 3, 4, 5, 6):  # Audit P2: em_kedi yalnız 0-6 TEDAVİ eder (7-10 sessiz-sıfır)
-        raise HTTPException(status_code=422, detail=f"organ_id {_organ_req} desteklenmiyor (geçerli 0-6).")
+    # Hedef kümesi AKTİF sağlayıcıdan (Faz 1) — kedi için 0-6 (Audit P2: em_kedi yalnız 0-6
+    # TEDAVİ eder; 7-10 lokalize olur ama _build_input ValueError → sessiz sıfır-tedavi).
+    _saglayici = _aktif_saglayici()
+    if payload.model and payload.model.strip().lower() != _saglayici.ad:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Aktif model '{_saglayici.ad}'; '{payload.model}' için hedef değiştirilemez.",
+        )
+    if _organ_req not in _saglayici.hedef_idleri():
+        _gecerli = ", ".join(str(i) for i in sorted(_saglayici.hedef_idleri()))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Hedef {_organ_req} '{_saglayici.title}' için desteklenmiyor (geçerli: {_gecerli}).",
+        )
     _ai_organ_id = _organ_req
-    _ai_relocalize = True  # yeni organ için cat_organ'ı hemen yeniden çalıştır
-    return {"status": "success", "organId": _ai_organ_id, "organName": _ORGAN_NAMES.get(_ai_organ_id, "")}
+    _ai_relocalize = True  # yeni hedef için lokalizasyonu hemen yeniden çalıştır
+    return {
+        "status": "success",
+        "organId": _ai_organ_id,
+        "organName": _saglayici.hedef_adi(_ai_organ_id),
+        "model": _saglayici.ad,
+    }
 
 
 @ai_router.post("/api/ai/pro/calibrate")
@@ -1730,11 +1820,21 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
     (BOBİN SÜRÜLMEZ, SEANS BAŞLAMAZ). Panel /status'tan `localized` görünce öneriyi otomatik ister.
     Telefonun hazırlık akışının sunucu-kamera karşılığı — web'in propose-önce-lokalizasyon kapalı
     döngüsünü kırar (2026-08-25). Aktif seans varsa gereksiz (kamera zaten seansta) → sessiz başarı."""
-    global _ai_hazirlik_active, _ai_hazirlik_thread, _ai_hazirlik_started_at, _ai_organ_id, _ai_relocalize
+    global \
+        _ai_hazirlik_active, \
+        _ai_hazirlik_thread, \
+        _ai_hazirlik_started_at, \
+        _ai_organ_id, \
+        _ai_relocalize, \
+        _ai_hedef_modeli
     global _ai_hazirlik_hata
     import threading
 
     _organ_req = int(payload.organ_id)
+    try:
+        _saglayici = ai_pro_hedef.saglayici_al(payload.model)
+    except ValueError as _me:
+        raise HTTPException(status_code=422, detail=str(_me)) from None
 
     # ⚠️ SAHİPLİK KAPISI (2026-09-08) — `/api/ai/pro/organ`daki B1 kapısının paritesi. Bu uç sahip
     # kararıyla auth-muaf olduğundan, aktif seansın sahibi OLMAYAN bir istemci buradan hedefe
@@ -1768,8 +1868,15 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         # çalışıyorsa da organ güncellenir: panelin "Yeniden Konumla" akışı (AiProPanel.tsx:575)
         # önizleme sürerken bu ucu yeni organla çağırır.
         _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
-        if _organ_req in (0, 1, 2, 3, 4, 5, 6):
-            _ai_organ_id = _organ_req  # panelde seçili organ için lokalize et
+        # Model seçimi (Faz 1): seans YOK → güvenli. Hazırlık sürerken model değişirse önizleme
+        # yeni sağlayıcıyla devam eder (thread her turda `_aktif_saglayici()` okur).
+        _ai_hedef_modeli = _saglayici.ad
+        if _organ_req in _saglayici.hedef_idleri():
+            _ai_organ_id = _organ_req  # panelde seçili hedef için lokalize et
+        elif _organ_req != _saglayici.varsayilan_hedef:
+            # Hedef bu modele ait değil (ör. kedi organ 5 → fantom): varsayılana çek, 422 döngüsü
+            # yaratma (panel modeli yeni seçmiş olabilir).
+            _ai_organ_id = _saglayici.varsayilan_hedef
         _ai_relocalize = True  # yeni hazırlıkta taze lokalizasyon zorla
         # MINOR (adversaryal inceleme): bayat `localized`=True bir önceki önizlemeden kalmış olabilir →
         # önizleme TAZE lokalize etmeden panel bayat ölçümden öneri istemesin. Cache'i geçersiz kıl;
@@ -1802,11 +1909,18 @@ def ai_pro_status():
     return {
         "active": _ai_loop_active,
         "organId": _ai_organ_id,
-        "organName": _ORGAN_NAMES.get(_ai_organ_id, ""),
+        "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
         "durationMin": _ai_duration_min,
         "remainingSec": remaining,
         "localized": bool(_ai_organ_cache.get("localized")),
         "catDetected": bool(_ai_organ_cache.get("kedi_var")),
+        # YALNIZ-EK alanlar (Faz 1, 2026-09-08): mevcut anahtarlar (organId/organName/
+        # catDetected/guvenDokumu/ownerClientId/hazirlik*) AYNEN kalır → eski istemciler kırılmaz.
+        "model": _aktif_saglayici().ad,
+        "modelName": _aktif_saglayici().title,
+        "subjectLabel": _aktif_saglayici().subject_label,
+        "subjectDetected": bool(_ai_organ_cache.get("kedi_var")),
+        "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
         "reliability": round(float(_ai_organ_cache.get("reliability", 0.0)), 3),
         # Sunum-katmanı XAI (2026-08-26): güvenin bileşen dökümü (poz × derinlik × maske ×
         # belirsizlik + kalibrasyon tavanı) — panel "Güven %X"in NEDENİNİ gösterebilsin.
@@ -1872,7 +1986,10 @@ async def ai_pro_frame(
                         "overlay_bgr": lov,
                         "at": now,
                         "organ_id": _oid,
-                        "kedi_var": lkedi,
+                        "kedi_var": lkedi,  # anahtar adı korunur (anlam: "özne kadrajda")
+                        # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
+                        # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
+                        "model": _ai_hedef_modeli,
                         "guven_dokumu": (l_ek[0] if l_ek else None),
                     }
                 )
@@ -1925,7 +2042,7 @@ async def ai_pro_frame(
                 rep_duty = round(normalize_ai_pro_duty_ratio(D[0]) * 100.0, 1)
                 update_live_session_state(
                     is_active=True,
-                    mode=f"AI Pro · {_ORGAN_NAMES.get(_ai_organ_id, '')}",
+                    mode=f"AI Pro · {_aktif_saglayici().title} · {_aktif_saglayici().hedef_adi(_ai_organ_id)}",
                     freq=_AI_PRO_FREQ_HZ,
                     intensity=rep_duty,
                     remaining_min=remaining // 60,
@@ -1970,7 +2087,12 @@ async def ai_pro_frame(
                 "target": {"x": round(x_mm, 1), "y": round(y_mm, 1), "z": round(z_mm, 1)},
                 "eField": round(e_field, 4),
                 "organId": _ai_organ_id,
-                "organName": _ORGAN_NAMES.get(_ai_organ_id, ""),
+                "organName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                # YALNIZ-EK (Faz 1): mevcut anahtarlar aynen kalır (sürüm kayması deseni).
+                "model": _aktif_saglayici().ad,
+                "modelName": _aktif_saglayici().title,
+                "subjectLabel": _aktif_saglayici().subject_label,
+                "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
             }
         )
     except HTTPException:
