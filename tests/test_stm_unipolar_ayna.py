@@ -124,7 +124,19 @@ def test_KRITIK_iki_proje_CubeIDE_de_yan_yana_import_edilebilir():
     ioc = AYNA / "PEMF_UNIPOLAR.ioc"
     assert ioc.exists() and "ProjectManager.ProjectName=PEMF_UNIPOLAR" in ioc.read_text(encoding="utf-8")
     launch = AYNA / "PEMF_UNIPOLAR Debug.launch"
-    assert launch.exists() and "PEMF_UNIPOLAR.elf" in launch.read_text(encoding="utf-8")
+    assert launch.exists()
+    lt = launch.read_text(encoding="utf-8")
+    assert "PEMF_UNIPOLAR.elf" in lt
+    # SAHA 2026-09-08 (LattePanda): launch bipolar'dan kopyalanmıştı, ST yükleme listesindeki
+    # `fProjectName` "PEMF" kalmıştı → Debug önce `PEMF\Debug\PEMF_UNIPOLAR.elf: No such file`,
+    # PEMF projesi silinince `projectPath is null` verdi. Proje adı geçen HER alan PEMF_UNIPOLAR olmalı.
+    assert 'PROJECT_ATTR" value="PEMF_UNIPOLAR"' in lt, "launch PROJECT_ATTR PEMF_UNIPOLAR değil"
+    assert "&quot;fProjectName&quot;:&quot;PEMF_UNIPOLAR&quot;" in lt, (
+        "ST loadList fProjectName PEMF_UNIPOLAR değil → Debug 'projectPath is null' / elf bulunamaz"
+    )
+    assert "&quot;fProjectName&quot;:&quot;PEMF&quot;" not in lt, "loadList hâlâ bipolar PEMF projesini gösteriyor"
+    assert '<listEntry value="/PEMF_UNIPOLAR"/>' in lt and '<listEntry value="/PEMF"/>' not in lt
+    assert re.search(r"[\\/]PEMF[\\/]Debug[\\/]", lt) is None, "launch içinde PEMF\\Debug yolu kalmış (st-link log)"
     assert not (AYNA / "PEMF.ioc").exists() and not (AYNA / "PEMF Debug.launch").exists()
 
 
