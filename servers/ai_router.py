@@ -1184,7 +1184,14 @@ def _ai_pro_loop():
                     # iterasyonda yeniden lokalize edilir — istek YUTULMAZ. (Sonradan kosulsuz
                     # temizlemek, ayirt edilemedigi icin taze istegi siliyordu.)
                     _ai_relocalize = False
-                    lz, lx, ly, lzz, lrel, lov, lkedi = _localize_organ(frame, _oid)
+                    # ⚠️ *l_ek ZORUNLU (2026-09-08 düzeltmesi): `_extract_organ_target` 2026-08-26'dan
+                    # beri 8 eleman döndürüyor (8. = guven_dokumu). Hazırlık (:1016) ve mobil kare
+                    # (:1796) yolları yıldızlı açılıma geçirilmiş, SEANS döngüsü unutulmuştu → her
+                    # lokalizasyon "too many values to unpack" ile aşağıdaki except'e düşüyor,
+                    # localized=False kalıyor ve bobin HİÇ sürülmüyordu (onaylı seans "aktif"
+                    # görünürken tedavi uygulanmıyor; 3. turda yanıltıcı "hedef kaybı" STOP'u).
+                    # Kapı: tests/test_ai_pro_seans_dongusu_lokalizasyon.py (yıldızsız açılım → KIRMIZI).
+                    lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)
                     with _ai_cache_lock:
                         _ai_organ_cache.update(
                             {
@@ -1201,6 +1208,11 @@ def _ai_pro_loop():
                                 # seansta ws `catDetected` bu yüzden bayat kalıyordu (aşama şeridi +
                                 # 409 ipucu yanlış yönlendirme). Frame yolu paritesi.
                                 "kedi_var": lkedi,
+                                # Sunum-katmanı XAI paritesi (2026-09-08): hazırlık ve mobil kare
+                                # yolları güven dökümünü yazıyordu, seans yolu yazmıyordu → seans
+                                # boyunca /status ve WS `guvenDokumu` hazırlıktan kalan BAYAT değeri
+                                # (ya da None) taşıyordu. Panel "Güven %X"in nedenini yanlış gösterir.
+                                "guven_dokumu": (l_ek[0] if l_ek else None),
                             }
                         )
                 except Exception as le:
