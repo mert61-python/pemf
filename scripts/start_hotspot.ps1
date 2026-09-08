@@ -8,7 +8,9 @@
 # =============================================================================
 param(
     [string]$Ssid,
-    [string]$Pass
+    [string]$Pass,
+    # Yalniz durum tespiti yap (sahip/istemci/yok), hotspot'a DOKUNMA — tani + test icin.
+    [switch]$Kontrol
 )
 $ErrorActionPreference = "Continue"
 
@@ -62,9 +64,35 @@ if (-not $Pass) {
 # WPA2 asgari uzunluk (8) — kisa parola ConfigureAccessPointAsync'i sessizce dusurur.
 if ($Pass.Length -lt 8) { Log "UYARI: parola 8 karakterden kisa; WPA2 reddedebilir."; }
 
-# Zaten aktif mi? (hotspot subnet 192.168.137.x IP var mı)
-$active = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -like '192.168.137.*' }
-if ($active) { Log "Hotspot zaten aktif ($($active[0].IPAddress)) — atlandı."; exit 0 }
+# ── Zaten aktif mi? ──────────────────────────────────────────────────────────
+# SAHA 2026-09-08: iki klinik makinesi AYNI SSID'yi yayinlar (sahip karari — ESP firmware sabit).
+# Ikinci makine, Windows'un kayitli "PEMF-Gateway" istemci profiliyle BIRINCININ hotspot'una
+# katilinca 192.168.137.x'i DHCP'DEN alir; eski kontrol ("192.168.137.* var mi") bunu KENDI
+# hotspot'u sanip atliyordu -> o makinenin bobinleri oteki makineye bagalaniyor, mDNS adi
+# cakisiyordu ("mDNS adi cakisti" uyarisi). Hotspot'un BIZDE oldugunun kaniti YALNIZ ICS ana
+# bilgisayar adresidir: 192.168.137.1 ve DHCP-DISI (Manual/WellKnown) kaynak. DHCP kaynakli
+# 192.168.137.x = bu makine baska bir PEMF-Gateway'e ISTEMCI. Kapi: tests/test_hotspot_kardes_istemci_tespiti.py
+function Test-PemfHotspotDurumu {
+    $adresler = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -like '192.168.137.*' })
+    $sahip = @($adresler | Where-Object { $_.IPAddress -eq '192.168.137.1' -and "$($_.PrefixOrigin)" -ne 'Dhcp' })
+    if ($sahip.Count -gt 0) { return [pscustomobject]@{ Durum = 'sahip'; Ip = [string]$sahip[0].IPAddress; Arayuz = "$($sahip[0].InterfaceAlias)" } }
+    $istemci = @($adresler | Where-Object { "$($_.PrefixOrigin)" -eq 'Dhcp' })
+    if ($istemci.Count -gt 0) { return [pscustomobject]@{ Durum = 'istemci'; Ip = [string]$istemci[0].IPAddress; Arayuz = "$($istemci[0].InterfaceAlias)" } }
+    return [pscustomobject]@{ Durum = 'yok'; Ip = ''; Arayuz = '' }
+}
+$durum = Test-PemfHotspotDurumu
+if ($durum.Durum -eq 'sahip') {
+    Log "Hotspot zaten aktif ($($durum.Ip)) — atlandı."
+    if ($Kontrol) { Write-Output "DURUM=sahip" }
+    exit 0
+}
+if ($durum.Durum -eq 'istemci') {
+    Log "UYARI: bu makine BASKA bir PEMF-Gateway hotspot'una ISTEMCI olarak bagli ($($durum.Ip), arayuz: $($durum.Arayuz)) — kendi hotspot'u yine de baslatiliyor. Bobinlerin BU makineye baglanmasi icin oteki agdan ayrilin (netsh wlan disconnect) ya da istemci profilini silin (netsh wlan delete profile name=$Ssid). Otomatik yeniden katilim kapatiliyor (connectionmode=manual)."
+    # Gateway makinesi kardesinin SSID'sine bir daha KENDILIGINDEN katilmasin (mevcut baglantiyi KOPARMAZ).
+    # -Kontrol yalniz tespit: hicbir sey degistirmez.
+    if (-not $Kontrol) { try { netsh wlan set profileparameter name="$Ssid" connectionmode=manual 2>&1 | Out-Null } catch {} }
+}
+if ($Kontrol) { Write-Output "DURUM=$($durum.Durum)"; exit 0 }
 
 $useNetsh = $false
 try {
