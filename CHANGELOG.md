@@ -6,6 +6,57 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## mobile 2.3.33 — 2026-09-08 (📱 Serbest frekans/duty, ESP cihaz onayi, eylem soyleyen AI hata mesajlari)
+
+- **Manuel kontrolde frekans ve duty artik sinirlanmiyor** (1-100 Hz / 1-50 % klempi ve
+  "Parametre guvenligi" uyarisi kalkti; sinir cihazin kendisi, aralik disi komut cihazca reddedilir
+  ve panelde gorunur). Faz/sure/yogunluk sinirlari ayni.
+- **ESP bobinlerinde cihaz onayi:** "Cihaz onayi bekleniyor" → "Cihaz onayladi (NN ms)" /
+  "REDDETTI" / "onay gelmedi".
+- **AI hata mesajlari:** istek gonderilemedi, zaman asimi ve gecersiz yanit ayri ve ne yapilacagini
+  soyleyen mesajlar; ham teknik metin yok.
+- Uygulama-ici guncelleme (Ayarlar / banner) ile iner; Play Store degil.
+
+## app 1.9.43 — 2026-09-08 (🧪 Manuel kontrolde serbest frekans/duty, AI "Ag hatasi" kokeni, ESP cihaz onayi, kabin 65x50x50)
+
+### Manuel kontrol
+
+- **Frekans ve duty artik arayuzde sinirlanmiyor.** Bobin panelinde ve "Tumunu baslat"ta girilen
+  deger 1-100 Hz / 1-50 % araligina cekilmiyor, "Parametre guvenligi ... araligina cekildi" uyarisi
+  bu ikisi icin cikmiyor (sahip karari, tezgah calismasi). Tek sinir cihazin kendisidir: STM
+  1-25000 Hz (bipolar dalgada duty yarim periyoda, tek-bacakta tam periyoda kirpilir), ESP bobinleri
+  1-1000 Hz ve duty 1-99 %; aralik disi komutu cihaz REDDEDER ve panel bunu soyler. Faz, sure ve
+  yogunluk sinirlari degismedi.
+- **ESP bobinlerinde cihaz onayi gorunur.** "Baslat"a basinca panel once "Cihaz onayi bekleniyor",
+  bobin PWM'i gercekten uygulayinca "Cihaz onayladi — PWM bobinde calisiyor (NN ms)" der; cihaz
+  reddederse "REDDETTI", 2 sn icinde yanit gelmezse "onay gelmedi" uyarisi. Eskiden dugme yalnizca
+  komutun broker'a ulastigini gosteriyor, "Aktif" rozeti 3 sn sonra telemetriden geliyordu.
+
+### Akilli Teshis
+
+- **"Ag veya sunucu hatasi" kokeni duzeltildi.** Masaustunde secilen gorseli/sesi okuyan istek
+  tarayicinin guvenlik politikasina (CSP) takiliyor, analiz cihaz yazilimina hic ulasmadan
+  "Ag veya sunucu hatasi" diyordu; internetle ilgisi yoktu. Politika duzeltildi; tum modeller
+  internet olmadan calisir (Supabase'e ulasilamazken tum AI kapilari serbest gecer — olculdu).
+- **Hata mesajlari ne yapilacagini soyler.** Istek gonderilemediyse ("baglanti koptu / dosya
+  okunamadi") ile zaman asimi ve gecersiz yanit ayri mesajlardir; hicbiri ham teknik metin gostermez.
+- **Kayit/yukleme sesi tarayicida calinabiliyor** (media politikasi eksikti).
+
+### Kabin kalibrasyonu (kedi organ, fantom, petri)
+
+- **65 x 50 x 50 cm kabin geometrisi** (kamera sag-alt-on kose, ArUco marker arka duvar sol-ust)
+  uc kabin yapilandirmasinda canli; **A4 basilabilir marker sayfasi** (10 cm, cetvel cubuklu)
+  ve guncel kurulum kilavuzu paketle gelir.
+- **Kedi organ analizi kabin yapilandirmasini artik gercekten okuyor.** Eskiden varsayilan
+  (kalibrasyonsuz) ayarla calisiyor, marker olsa bile 3B konum hesabi devreye girmiyordu.
+
+### Iki makine ayni agda
+
+- **Ikinci makine birincinin PEMF-Gateway hotspot'una katildiginda kendi hotspot'unu artik
+  "zaten aktif" sanip atlamiyor;** uyari yazar ve kendi hotspot'unu baslatir, kardes SSID'ye
+  otomatik yeniden katilim kapatilir. "Iki makinede ayni hesap → biri Cevrimdisi" algisinin
+  kaynagi buydu; hesap/oturum tarafinda bir sinir yoktur.
+
 ## launcher 1.9.50 — 2026-09-06 (🧹 "Profilleri degistir": isareti kaldirilan profil bilgisayardan silinir)
 
 - **Isareti kaldirilan kurulu profil artik gercekten kaldirilir.** Eskiden "Profilleri degistir"de
