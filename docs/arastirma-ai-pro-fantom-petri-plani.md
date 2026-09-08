@@ -1,6 +1,6 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ BİTTİ · FAZ 1 ÇEKİRDEĞİ ✅ BİTTİ (sağlayıcı + model mührü).**
+> **DURUM (2026-09-09): FAZ 0 ✅ BİTTİ · FAZ 1 ✅ BİTTİ (tüm kalemler) — sıradaki Faz 2.**
 >
 > **Faz 1 çekirdeği (3b82185 sağlayıcı + delegasyon · 3ddd20f model mührü):** `servers/ai_pro_hedef.py`
 > geldi (Protocol + KediSaglayici; kedi kodu TAŞINMADI, geç bağlı delegasyon). `_localize_organ` ve
@@ -13,10 +13,27 @@
 > buildId / yayındaki paket sha) bu işten ÖNCE de kırmızıydı ve ilgisizdir (132ab94 worktree'sinde
 > ölçüldü) — ayrı bir yayın-kaydı bulgusu.
 >
-> **Faz 1 kalanı:** araştırma bayrağı (`PEMF_ARASTIRMA_AIPRO`, taşıyıcı karar #17), hazırlık hata
-> sınıfları `{kod, mesaj}`, model yüklemesinin kameradan ÖNCE yapılması + sağlayıcı bazlı join
-> timeout, `efield_live` model parametresi + teardown temizliği, kedi XAI baz-nokta düzeltmesi
-> (karar #9), mühür meta'sına `client_mode`. Sonra Faz 2 (fantom/petri sağlayıcıları).
+> **Faz 1 tamamlandı (c4ae271 · 2f77124 · 71c0676):**
+> · **Yükleme sırası:** model artık kameradan ÖNCE yükleniyor (ağır sağlayıcı kamerayı tutmasın);
+>   kamera devri join süresi sağlayıcı bazlı; loop başlamadan ölürse oturum PASİFE alınıyor
+>   (eskiden panel ve seans geçmişi tedaviyi "sürüyor" gösteriyordu).
+> · **Hazırlık hataları sınıflandı** (`kamera` · `model_paketi` · `model_yukleme`): ham istisna
+>   metni ve `VideoCapture(0)` gibi iç ayrıntılar artık kullanıcıya gitmiyor, eylem söyleyen metin
+>   gidiyor; sınıf `/status`ta yalnız-ek `hazirlikHataKodu` alanıyla bildiriliyor.
+> · **Canlı E bağlamı** seans ve stop sonunda temizleniyor; vekil model bağlamdaki modele göre
+>   seçiliyor (petri seansında fantom vekili barı yanlış ölçeğe oturtuyordu).
+> · **Kedi XAI baz-nokta kayması düzeltildi** (karar #9): açıklama artık dozun FİİLEN hesaplandığı
+>   `achieved_B`/`duty_sum` ile üretiliyor (eskiden modül varsayılanı 2.0 ile, doz 1.5 ile).
+> · **Onay izine istemci profili** (`client_mode`) yazılıyor — backend yetki VERMEZ, yalnız kaydeder.
+> · **Araştırma bayrağı `PEMF_ARASTIRMA_AIPRO`** (varsayılan KAPALI, taşıyıcı `deploy/device.env`):
+>   kedi dışı modelle öneri ve seans başlatma BACKEND'de kapılı; bayrak açıkken alınmış onay bayrak
+>   kapanınca da başlatılamaz; durum `/ai/pro/status` ve `/api/ai/hazirlik` uçlarında görünür.
+>
+> Bu sırada iki kendi hatam da kapılar tarafından yakalandı: `stop_ai_pro`da sahiplik temizleme
+> satırı yanlış bloğa kaymıştı (mevcut test yakaladı) ve yeni bir XAI testi süit sırasına bağlıydı.
+>
+> **Sıradaki: Faz 2 (fantom/petri sağlayıcıları).** Karar #6 (hoca: fantom/petri fiziksel yerleşimi
+> ve koordinat çerçevesi) Faz 2'nin sürüş kısmını kapılıyor; sağlayıcılar bayrak arkasında yazılır.
 >
 > **FAZ 0 (2026-09-08):** Aşağıdaki üç mevcut kusur ayrı
 > commit'lerle kapatıldı (8b509a9 seans lokalizasyonu · 3ab9f04 hazırlık mutasyon kilidi ·
