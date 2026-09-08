@@ -1,6 +1,17 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ (backend tamam) — sıradaki Faz 3 (arayüz).**
+> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ — sıradaki Faz 3 (arayüz).**
+>
+> **Karar #6 (7abf6a4):** fantom/petri kabinde YATAY, doğrudan tabanın üzerinde. Kod bu kararı
+> uygulayabilecek hâle getirildi: kesişim düzlemi yapılandırılabilir (`hedef_duzlem_eksen` +
+> `hedef_duzlem_cm`) ve marker→kabin rotasyonu artık uygulanıyor (eskiden hiç uygulanmıyordu).
+> ⚠️ **Ölçüm kararın mevcut kamera konumuyla çalışmadığını gösterdi:** kamera lensi taban hizasında
+> (Y=−25 cm), yatay hedef düzlemi onun 1 cm üstünde → ışın düzlemi sığ açıyla keser ve gerçek
+> fotoğrafta kuyu konumu kabin DIŞINA düşüyor (−97 · −24 · +1096 cm). **Sahip kararı: şimdilik
+> dokunulmuyor, tezgâhta ölçülecek** → yaml eski davranışta kaldı (AI Hub tek-foto analizi
+> bozulmuyor), sürüş `PEMF_ARASTIRMA_AIPRO` ile kapalı. Seçenekler ve ölçüm tablosu:
+> `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5 (hedefi kabin ortasına yükselt — fantom eğitim aralığıyla
+> da uyuşur — ya da kamerayı üst köşeye taşı; ikincisi kedi akışını yeniden doğrulamayı gerektirir).
 >
 > **Faz 2 (caa5fed sağlayıcılar · e178f37 meta + ai_hub):** `FantomSaglayici` ve `PetriSaglayici`
 > eklendi; sürüş `PEMF_ARASTIRMA_AIPRO` arkasında. Kapatılan sessiz hatalar: E anahtarı sınıfa göre
