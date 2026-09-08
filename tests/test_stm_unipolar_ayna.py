@@ -95,9 +95,10 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     hdr_k = (KANONIK / "Core" / ISTISNA).read_text(encoding="utf-8")
     hdr_a = (AYNA / "Core" / ISTISNA).read_text(encoding="utf-8")
     for h in (hdr_k, hdr_a):
-        assert re.search(r"^#define PEMF_UNIPOLAR_B_BACAK_MASKESI 0x01U$", h, re.M), (
-            "bacak maskesi 0x01 değil (sahip kararı 2026-09-08: YALNIZ bobin 1 IN_B/PD12'den sürülür; "
-            "değiştirmek bilinçli tezgâh kararıdır — bu satırı ve README'yi birlikte güncelle)"
+        assert re.search(r"^#define PEMF_UNIPOLAR_B_BACAK_MASKESI 0x03U$", h, re.M), (
+            "bacak maskesi 0x03 değil (2026-09-08: bobin 1 sahip kararıyla IN_B/PD12, bobin 2 tezgâh "
+            "ölçümüyle IN_B/PE10 — z işaretleri 1:+1,4 2:−4,9 4:+0,5 5:+3,9; değiştirmek bilinçli "
+            "tezgâh kararıdır — bu satırı ve README'yi birlikte güncelle)"
         )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
     assert uni.count("tpp - 1") + uni.count("g_tpp[i] - 1") >= 2, "unipolar duty tavanı tam-periyot−1 değil (iki klemp)"
@@ -105,7 +106,7 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     assert "UNIPOLAR tek-bacak" in uni and "SYM-BIPOLAR" in bip, "STM_READY dizesi kipi yansıtmıyor"
 
 
-MASKE = 0x01  # pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bobin 1 → IN_B)
+MASKE = 0x03  # pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bobin 1 ve 2 → IN_B; tezgâh 2026-09-08)
 
 
 def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> list[str]:
@@ -124,12 +125,13 @@ def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> li
 def test_unipolar_dalga_modeli_tek_bacak_ve_tam_periyot_doluluk():
     tpp = 500
     for duty in (1, 250, 499):
-        d = _unipolar_dalga(tpp, duty, 0, bobin_idx=1)  # bobin 2: A bacağı
-        assert "B" not in d and d.count("A") == duty, f"bobin2 duty={duty}: {d.count('A')} A tick"
-        d1 = _unipolar_dalga(tpp, duty, 0, bobin_idx=0)  # bobin 1: B bacağı (PD12), A hiç HIGH değil
-        assert "A" not in d1 and d1.count("B") == duty, f"bobin1 duty={duty}: {d1.count('B')} B tick"
+        d = _unipolar_dalga(tpp, duty, 0, bobin_idx=2)  # bobin 3: A bacağı
+        assert "B" not in d and d.count("A") == duty, f"bobin3 duty={duty}: {d.count('A')} A tick"
+        for idx in (0, 1):  # bobin 1 (PD12) ve bobin 2 (PE10): B bacağı, A hiç HIGH değil
+            d1 = _unipolar_dalga(tpp, duty, 0, bobin_idx=idx)
+            assert "A" not in d1 and d1.count("B") == duty, f"bobin{idx + 1} duty={duty}: {d1.count('B')} B tick"
     # faz kaydırması sarmalı
-    d = _unipolar_dalga(tpp, 100, 450, bobin_idx=1)
+    d = _unipolar_dalga(tpp, 100, 450, bobin_idx=2)
     assert d[450] == "A" and d[49] == "A" and d[50] == "-"
 
 
