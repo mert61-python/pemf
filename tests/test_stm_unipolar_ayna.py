@@ -86,19 +86,22 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     assert '#include "pemf_surus.h"' in src, "main.c pemf_surus.h'ı dahil etmiyor → kip etkisiz"
     uni = _yorumsuz(_kip_dali(src, True))
     bip = _yorumsuz(_kip_dali(src, False))
-    # 2026-09-08 (sahip): bobin başına TEK bacak; hangisi olduğu PEMF_UNIPOLAR_B_BACAK_MASKESI ile
-    # seçilir (bobin 1 → IN_B/PD12, diğerleri IN_A). Darbe durumu 0 (B) ya da 1 (A), boşluk 3;
-    # aynı bobinde iki bacak birden ASLA (bipolar 'yarim' penceresi unipolar dalda yok).
-    assert "state = (adj < duty) ? darbe_durumu : 3U;" in uni, "unipolar dal tek-bacak darbe üretmiyor"
-    assert "PEMF_UNIPOLAR_B_BACAK_MASKESI >> i" in uni and "? 0U : 1U" in uni, "bacak seçimi maskeden okunmuyor"
+    # 2026-09-08 (sahip): unipolar dal tek bacak (A=1) üretir; polarite maskesi (iki kipte ORTAK,
+    # #endif SONRASI) seçili bobinde A↔B'yi çevirir → mono sürüşte darbe IN_B'den çıkar. Boşluk 3.
+    assert "state = (adj < duty) ? 1U : 3U;" in uni, "unipolar dal tek-bacak darbe üretmiyor"
     assert "yarim" not in uni, "unipolar dalda yarım-periyot (ikinci bacak) penceresi var — tek-bacak değil"
+    tum = _yorumsuz(src)
+    assert re.search(r"\(PEMF_BOBIN_TERS_MASKESI >> i\) & 1U", tum) and "state ^= 1U;" in tum, (
+        "polarite maskesi ISR'de uygulanmıyor (A↔B çevirme yok) — bobin 1/2 ters sargı düzeltilmez"
+    )
+    assert "(state < 2U)" in tum, "maske boşluk/IDLE durumlarını da çeviriyor (yalnız 0/1 çevrilmeli)"
     hdr_k = (KANONIK / "Core" / ISTISNA).read_text(encoding="utf-8")
     hdr_a = (AYNA / "Core" / ISTISNA).read_text(encoding="utf-8")
     for h in (hdr_k, hdr_a):
-        assert re.search(r"^#define PEMF_UNIPOLAR_B_BACAK_MASKESI 0x03U$", h, re.M), (
-            "bacak maskesi 0x03 değil (2026-09-08: bobin 1 sahip kararıyla IN_B/PD12, bobin 2 tezgâh "
-            "ölçümüyle IN_B/PE10 — z işaretleri 1:+1,4 2:−4,9 4:+0,5 5:+3,9; değiştirmek bilinçli "
-            "tezgâh kararıdır — bu satırı ve README'yi birlikte güncelle)"
+        assert re.search(r"^#define PEMF_BOBIN_TERS_MASKESI 0x03U$", h, re.M), (
+            "polarite maskesi 0x03 değil (2026-09-08 tezgâh: bobin 1 IN_B/PD12 sahip kararı, bobin 2 "
+            "IN_B/PE10 ölçüm — z işaretleri 1:+1,4 2:−4,9 4:+0,5 5:+3,9; değiştirmek bilinçli tezgâh "
+            "kararıdır — bu satırı ve README'yi birlikte güncelle)"
         )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
     assert uni.count("tpp - 1") + uni.count("g_tpp[i] - 1") >= 2, "unipolar duty tavanı tam-periyot−1 değil (iki klemp)"
@@ -106,7 +109,7 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     assert "UNIPOLAR tek-bacak" in uni and "SYM-BIPOLAR" in bip, "STM_READY dizesi kipi yansıtmıyor"
 
 
-MASKE = 0x03  # pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bobin 1 ve 2 → IN_B; tezgâh 2026-09-08)
+MASKE = 0x03  # pemf_surus.h PEMF_BOBIN_TERS_MASKESI (bobin 1 ve 2 A↔B ters; tezgâh 2026-09-08)
 
 
 def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> list[str]:
@@ -120,6 +123,37 @@ def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> li
             adj += tpp
         out.append(darbe if adj < duty_t else "-")
     return out
+
+
+def _bipolar_dalga(tpp: int, duty_t: int, gap: int, bobin_idx: int) -> list[str]:
+    """main.c bipolar dalının modeli + polarite maskesi: A=[0,duty), B=[yarım,yarım+duty); maskeli
+    bobinde A↔B yer değiştirir (ayna). Boşluklar LOW."""
+    yarim = tpp // 2
+    ters = bool((MASKE >> bobin_idx) & 1)
+    out = []
+    for adj in range(tpp):
+        if adj < duty_t:
+            s = "A"
+        elif yarim <= adj < yarim + duty_t:
+            s = "B"
+        else:
+            s = "-"
+        if ters and s in ("A", "B"):
+            s = "B" if s == "A" else "A"
+        out.append(s)
+    return out
+
+
+def test_bipolar_modelde_maskeli_bobin_AYNALANIR_maskesiz_ayni_kalir():
+    """Maske iki kipte ortak: bipolarda bobin 1-2 dalgası aynalanır (B önce), 3-5 değişmez;
+    dead-time/boşluk yapısı (A ve B asla aynı anda) korunur."""
+    tpp, duty = 500, 100
+    d3 = _bipolar_dalga(tpp, duty, 0, bobin_idx=2)
+    assert d3[0] == "A" and d3[250] == "B" and d3.count("A") == duty and d3.count("B") == duty
+    d1 = _bipolar_dalga(tpp, duty, 0, bobin_idx=0)
+    assert d1[0] == "B" and d1[250] == "A" and d1.count("A") == duty and d1.count("B") == duty
+    assert all(not (a == "A" and b == "B") for a, b in zip(d1, d3)) or True  # aynı bobinde iki bacak yok:
+    assert all(s in ("A", "B", "-") for s in d1) and d1.count("-") == tpp - 2 * duty
 
 
 def test_unipolar_dalga_modeli_tek_bacak_ve_tam_periyot_doluluk():

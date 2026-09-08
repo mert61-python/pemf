@@ -25,7 +25,7 @@
  *   Bobin 3 : PWM → PD10 (IN_A)  ·  PD11 (IN_B) kalıcı LOW
  *   Bobin 4 : PWM → PC6  (IN_A)  ·  PC7  (IN_B) kalıcı LOW
  *   Bobin 5 : PWM → PA8  (IN_A)  ·  PA9  (IN_B) kalıcı LOW
- *   Hangi bacağın darbeleneceği PEMF_UNIPOLAR_B_BACAK_MASKESI ile seçilir (aşağıda): bit i set →
+ *   Hangi bacağın darbeleneceği PEMF_BOBIN_TERS_MASKESI ile seçilir (aşağıda): bit i set →
  *   bobin i+1 darbeyi IN_B'den alır, IN_A LOW; değilse IN_A darbelenir, IN_B LOW. Sürülmeyen pinler
  *   boşta ama AYRILMIŞ DEĞİL: çıkış kurulu + kalıcı LOW (yarım-köprü girişi için güvenli); fiziksel
  *   olarak bağlanmayabilir. Başka amaçla kullanmak için main.c'de coil_gpio[] ve Coil_GpioInit
@@ -42,14 +42,16 @@
 #define PEMF_SURUS_UNIPOLAR 1
 #endif
 
-/* UNIPOLAR bacak seçimi (yalnız PEMF_SURUS_UNIPOLAR=1'de okunur; bipolarda etkisiz). Bit i = bobin i+1
- * darbeyi IN_B'den alır (IN_A kalıcı LOW). 2026-09-08 tezgâh (S3 MLX90393, kart düz, aynı duruş, bobin
- * merkezinde z işareti): bobin 1 +1,4 mT · bobin 2 −4,9 · bobin 4 +0,5 · bobin 5 +3,9 → yalnız bobin 2
- * ters sargı. Bobin 1 sahip kararıyla IN_B'de; bobin 2 de IN_B'ye alınınca dört dikey bobin aynı yönde
- * (merkezde sönümleme yok). 0x03 = bit0 (bobin 1) + bit1 (bobin 2). İki projede AYNI satır (tek fark
- * PEMF_SURUS_UNIPOLAR); değiştirmek bilinçli tezgâh kararıdır — kapı: tests/test_stm_unipolar_ayna.py. */
-#ifndef PEMF_UNIPOLAR_B_BACAK_MASKESI
-#define PEMF_UNIPOLAR_B_BACAK_MASKESI 0x03U
+/* BOBİN POLARİTE MASKESİ — iki kipte ortak. Bit i = bobin i+1'in A↔B bacak rolleri yer değiştirir:
+ *   UNIPOLAR: darbe IN_B'den çıkar, IN_A kalıcı LOW (mono sürüş)   ·   BİPOLAR: dalga aynalanır (faz 180°).
+ * 2026-09-08 tezgâh (S3 MLX90393, kart düz, aynı duruş, bobin merkezinde z işareti, 100 Hz / %50 mono):
+ *   bobin 1 +1,4 mT (IN_B'den, sahip kararı) · bobin 2 −4,9 (IN_A'dan) · bobin 4 +0,5 · bobin 5 +3,9
+ *   → bobin 2 diğerlerine TERS. Bobin 2 de IN_B'ye alınınca dört dikey bobin aynı yönde (merkezde
+ *   sönümleme yok). 0x03 = bit0 (bobin 1, PD12) + bit1 (bobin 2, PE10); bobin 3-5 IN_A (PD10 PC6 PA8).
+ * İki projede AYNI satır (tek fark PEMF_SURUS_UNIPOLAR); değiştirmek bilinçli tezgâh kararıdır — kapı:
+ * tests/test_stm_unipolar_ayna.py. */
+#ifndef PEMF_BOBIN_TERS_MASKESI
+#define PEMF_BOBIN_TERS_MASKESI 0x03U
 #endif
 
 #endif /* PEMF_SURUS_H */

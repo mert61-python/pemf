@@ -44,8 +44,9 @@
  *  │    Bobin 3: PWM → PD10 (IN_A) · PD11 (IN_B) kalıcı LOW               │
  *  │    Bobin 4: PWM → PC6  (IN_A) · PC7  (IN_B) kalıcı LOW               │
  *  │    Bobin 5: PWM → PA8  (IN_A) · PA9  (IN_B) kalıcı LOW               │
- *  │    Bacak seçimi: pemf_surus.h PEMF_UNIPOLAR_B_BACAK_MASKESI (bit i = │
- *  │    bobin i+1 darbeyi IN_B'den alır; 0x03 = bobin 1 ve 2).            │
+ *  │    Polarite: pemf_surus.h PEMF_BOBIN_TERS_MASKESI (bit i = bobin i+1 │
+ *  │    A↔B ters; 0x03 = bobin 1 ve 2). BİPOLAR projede de geçerli: o     │
+ *  │    bobinlerde dalga aynalanır (10 pin yine aktif), tezgâh 09-08.     │
  *  │    Sürülmeyen pinler yine push-pull ÇIKIŞ kurulur ve kalıcı LOW      │
  *  │    tutulur (yarım-köprü girişi için güvenli durum); fiziksel olarak  │
  *  │    boş bırakılabilir. Başka işe AYRILMIŞ pin YOK — ayırmak için      │
@@ -123,11 +124,12 @@
  *   LED   → PB0
  *
  *   SÜRÜŞ KİPİNE GÖRE (Core/Inc/pemf_surus.h):
- *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 10 pinin HEPSİ darbelenir
- *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM: bobin 1 → PD12 (IN_B, sahip
- *                                      kararı 2026-09-08; PC8 LOW), bobin 2 → PE10 (IN_B, tezgâh:
- *                                      sargı ters; PC9 LOW), bobin 3-5 → PD10 PC6 PA8 (IN_A; PD11
- *                                      PC7 PA9 LOW). Seçim: PEMF_UNIPOLAR_B_BACAK_MASKESI (0x03).
+ *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 10 pinin HEPSİ darbelenir; bobin 1 ve 2'de
+ *                                      A↔B rolleri ters (PEMF_BOBIN_TERS_MASKESI 0x03, tezgâh
+ *                                      ölçümü 2026-09-08: sargı ters) → dalga aynalanır.
+ *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM: bobin 1 → PD12 (IN_B; PC8 LOW),
+ *                                      bobin 2 → PE10 (IN_B; PC9 LOW), bobin 3-5 → PD10 PC6 PA8
+ *                                      (IN_A; PD11 PC7 PA9 LOW). Aynı maske (0x03).
  *                                      Sürülmeyen pinler çıkış olarak kurulu + kalıcı LOW, boşta.
  *
  ******************************************************************************
@@ -1339,12 +1341,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     uint8_t state;
 #if PEMF_SURUS_UNIPOLAR
     /* TEK-BACAK DÜZ SÜRÜŞ (2026-09-08): bobin başına YALNIZ BİR bacak darbelenir [0,duty), geri
-     * kalan periyot LOW; öteki bacak hiç HIGH olmaz (geçiş kodu onu kapalı tutar). Hangi bacak:
-     * varsayılan IN_A (durum 1); PEMF_UNIPOLAR_B_BACAK_MASKESI'nde biti set olan bobinde IN_B
-     * (durum 0) — 2026-09-08: bobin 1 → PD12 (sahip), bobin 2 → PE10 (tezgâh: sargı ters).
-     * Bipolar dalın `yarim` hesabı burada kullanılmadığı için tanımlanmaz (-Wunused). */
-    const uint8_t darbe_durumu = ((PEMF_UNIPOLAR_B_BACAK_MASKESI >> i) & 1U) ? 0U : 1U;
-    state = (adj < duty) ? darbe_durumu : 3U;
+     * kalan periyot LOW; öteki bacak hiç HIGH olmaz (geçiş kodu onu kapalı tutar). Varsayılan
+     * bacak IN_A (durum 1); polarite maskesi (aşağıda, iki kipte ortak) seçili bobinde bunu IN_B'ye
+     * (durum 0) çevirir. Bipolar dalın `yarim` hesabı burada kullanılmadığı için tanımlanmaz. */
+    state = (adj < duty) ? 1U : 3U;
 #else
     const int32_t yarim = tpp / 2;
     if (adj < duty) {
@@ -1355,6 +1355,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       state = 3U; /* boşluk: İKİSİ DE LOW (3 = GAP; 2 = IDLE ile karışmasın) */
     }
 #endif
+
+    /* POLARİTE TERSLEME — İKİ KİPTE ORTAK (pemf_surus.h PEMF_BOBIN_TERS_MASKESI, tezgâh ölçümü
+     * 2026-09-08: bobin 1 ve 2 sargısı diğerlerine ters). Seçili bobinde A↔B rolleri yer değiştirir:
+     * bipolarda dalga aynalanır (faz 180° eşdeğeri, dead-time aynen korunur), unipolarda darbe
+     * IN_B'den çıkar ve IN_A kalıcı LOW kalır. Boşluk (3) ve IDLE (2) etkilenmez. */
+    if ((state < 2U) && (((PEMF_BOBIN_TERS_MASKESI >> i) & 1U) != 0U)) {
+      state ^= 1U;
+    }
 
     if (state != g_prev_state[i]) {
       if (state == 1U) {
@@ -1537,8 +1545,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
  *
  *   UNIPOLAR projede (PEMF_SURUS_UNIPOLAR=1) 10 pin de AYNEN çıkış olarak kurulur ama ISR
  *   bobin başına yalnız BİR pini darbeler: bobin 1 → PD12 (PC8 LOW), bobin 2 → PE10 (PC9 LOW),
- *   bobin 3-5 → PD10 PC6 PA8 (PD11 PC7 PA9 LOW). Seçim maskesi: pemf_surus.h
- *   PEMF_UNIPOLAR_B_BACAK_MASKESI (0x03).
+ *   bobin 3-5 → PD10 PC6 PA8 (PD11 PC7 PA9 LOW). Polarite maskesi: pemf_surus.h
+ *   PEMF_BOBIN_TERS_MASKESI (0x03) — bipolar projede aynı bobinlerde A↔B aynalanır.
  *
  * NOT: Önceki mimaride (v1.x) bu pinler AF modunda Timer OC kanallarına
  * bağlıydı. DDS mimarisinde (v2.0) tümü GPIO_OUTPUT_PP olarak yapılandırılır.

@@ -29,9 +29,9 @@
    Başka yere KOPYALAMAYIN — derleme dahil her şey bu dosyayı okur.
    **Tek istisna (2026-09-08): `../stm32_pemf_unipolar/`** — aynı `Core/`nin bayt-bayt AYNASI,
    yalnız `Core/Inc/pemf_surus.h` farklı (`PEMF_SURUS_UNIPOLAR 1` = tek-bacak düz sürüş: bobin
-   başı TEK pin darbelenir; hangi bacak `PEMF_UNIPOLAR_B_BACAK_MASKESI` ile — 0x03 = bobin 1
-   PD12/IN_B (sahip kararı) + bobin 2 PE10/IN_B (tezgâh ölçümü 2026-09-08: sargı ters), bobin 3-5 IN_A).
-   O projede main.c'ye DOKUNULMAZ; burada değişince
+   başı TEK pin darbelenir; hangi bacak `PEMF_BOBIN_TERS_MASKESI` ile — 0x03 = bobin 1
+   PD12/IN_B (sahip kararı) + bobin 2 PE10/IN_B (tezgâh ölçümü 2026-09-08: sargı ters), bobin 3-5 IN_A;
+   aynı maske BİPOLAR projede o bobinlerin dalgasını aynalar). O projede main.c'ye DOKUNULMAZ; burada değişince
    `python scripts/stm_unipolar_senkronla.py` koşturulur, `tests/test_stm_unipolar_ayna.py`
    ayrışmayı kırmızı yapar. CubeIDE'de ikisi yan yana import edilir (adlar `PEMF` / `PEMF_UNIPOLAR`);
    unipolar READY dizesi `DDS v2.3 (5-ch UNIPOLAR tek-bacak + HW_SYNC@PB1)`.
