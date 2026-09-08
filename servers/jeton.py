@@ -282,18 +282,29 @@ def _bearer_token(request: Request) -> str:
 #   pro/stop            → seans DURDURMA: güvenlik sınıfı, hiçbir koşulda kapılanmaz
 #   pro/status          → durum okuma
 #   pro/approve|reject  → operatör onay kararı (analiz zaten propose aşamasında yapıldı)
-#   pro/frame           → seans İÇİ kare akışı — ücret seans-başına (pro/start = 5) alınır;
+#   ai_pro/frame        → seans İÇİ kare akışı — ücret seans-başına (pro/start = 5) alınır;
 #                         kare başına almak 5 jetonluk seansı yüzlerce jetona çevirirdi
 #   pro/organ|calibrate → kalibrasyon/kurulum
+#   pro/hazirlik/*      → önizleme başlat/durdur: BOBİN SÜRMEZ, SEANS BAŞLATMAZ (2026-08-25 web
+#                         kapalı-döngü düzeltmesi) — analiz değil kurulum adımı
+#   hazirlik (GET)      → self-test/envanter okuma; `_islem_turu` HTTP metodunu görmediği için
+#                         listeye alınmazsa "goruntu" (1 jeton) sınıfına düşerdi
+# ⚠️ 2026-09-08: bu listede `/api/ai/pro/frame` yazıyordu — BÖYLE BİR ROTA HİÇ OLMADI. Gerçek uç
+# `/api/ai/ai_pro/frame` (ai_router.py:1756, tests/test_route_contract.py:22) → eşleşme tutmuyor,
+# her kare "goruntu" sınıfına düşüyordu. FREE_MODE=true bunu gizliyordu; ücretlendirme açılsaydı
+# 5 jetonluk seans kare başına ücretlenirdi. Ölü girdi düzeltildi (test de gerçek yola pinlendi).
 _SERBEST_AI_UCLARI: frozenset = frozenset(
     {
         "/api/ai/pro/stop",
         "/api/ai/pro/status",
         "/api/ai/pro/approve",
         "/api/ai/pro/reject",
-        "/api/ai/pro/frame",
+        "/api/ai/ai_pro/frame",
         "/api/ai/pro/organ",
         "/api/ai/pro/calibrate",
+        "/api/ai/pro/hazirlik/baslat",
+        "/api/ai/pro/hazirlik/durdur",
+        "/api/ai/hazirlik",
     }
 )
 # Ağır araştırma (belge: patoloji, RNA, tomografi, yara-kapanma = 3 jeton).

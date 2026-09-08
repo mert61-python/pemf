@@ -90,7 +90,14 @@ def test_KRITIK_GUVENLIK_tedavi_uclari_jeton_kapisinin_ARKASINDA_DEGIL():
 def test_KRITIK_uc_eslemesi_belgeyle_AYNI(jeton):
     esle = jeton._islem_turu
     assert esle("/api/ai/pro/stop") is None, "pro/stop kapılanamaz (seans durdurma = güvenlik sınıfı)"
-    assert esle("/api/ai/pro/frame") is None, "pro/frame seans-içi akış — kare başına ücret olmaz"
+    # ⚠️ GERÇEK rota (2026-09-08): serbest listede `/api/ai/pro/frame` yazıyordu ama böyle bir uç
+    # HİÇ olmadı; canlı rota `/api/ai/ai_pro/frame` (test_route_contract.py:22). Ölü girdi her
+    # kareyi "goruntu" sınıfına düşürüyordu (FREE_MODE gizliyordu). Bu satır artık ÜRETİM yolunu
+    # ölçer — yol yanlış yazılırsa KIRMIZI.
+    assert esle("/api/ai/ai_pro/frame") is None, "ai_pro/frame seans-içi akış — kare başına ücret olmaz"
+    assert esle("/api/ai/pro/hazirlik/baslat") is None, "hazırlık önizlemesi bobin sürmez — analiz değil"
+    assert esle("/api/ai/pro/hazirlik/durdur") is None, "hazırlık durdurma kapılanamaz"
+    assert esle("/api/ai/hazirlik") is None, "self-test/envanter okuma analiz değil (metodsuz eşleme)"
     assert esle("/api/ai/pro/status") is None
     assert esle("/api/ai/pro/start") == "ai_pro_seans"
     assert esle("/api/ai/rna/kidney") == "agir_arastirma"
@@ -102,6 +109,24 @@ def test_KRITIK_uc_eslemesi_belgeyle_AYNI(jeton):
     # ai_router dışı yollar bu kapının işi değil:
     assert esle("/api/session/stop") is None
     assert esle("/api/coil/6/control") is None
+
+
+def test_KRITIK_serbest_listede_OLU_yol_YOK(jeton):
+    """2026-09-08 bulgusu: listede `/api/ai/pro/frame` yazıyordu ama böyle bir rota HİÇ olmadı
+    (gerçek uç `/api/ai/ai_pro/frame`) → eşleşme tutmuyor, her kare "goruntu" sınıfına düşüyordu.
+    FREE_MODE=true bunu gizledi; ücretlendirme açılsaydı 5 jetonluk seans kare başına ücretlenirdi.
+
+    Muafiyet listeleri ADLA çalıştığı için tek harflik sapma sessizce ücretlendirmeye düşürür.
+    Kapı: serbest listedeki HER yol uygulamada GERÇEKTEN kayıtlı bir rota olmalı.
+    MUTASYON: listeye var olmayan bir yol ekleyin → KIRMIZI."""
+    import servers.api_server as apis
+
+    gercek = {getattr(r, "path", "") for r in apis.app.routes}
+    olu = sorted(p for p in jeton._SERBEST_AI_UCLARI if p not in gercek)
+    assert not olu, (
+        f"jeton serbest listesinde ÖLÜ yol(lar) var: {olu} — bu uçlar aslında ücretlendirmeye "
+        "düşüyor. Rota adını uygulamadaki gerçek yolla eşleyin (tests/test_route_contract.py)."
+    )
 
 
 # ── 3) Bayrak kapalı → tam no-op ─────────────────────────────────────────────────
