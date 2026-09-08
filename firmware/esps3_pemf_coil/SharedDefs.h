@@ -75,6 +75,9 @@
 #define I2C_SENSOR_INIT_DELAY_MS    300
 #define I2C_RETRY_DELAY_MS          500
 #define I2C_TIMEOUT_MS      1000
+// 2026-09-08: Wire islem zaman asimi (ms). Sensor kablosu cekilince her I2C islemi bu kadar bekler;
+// kisa tutulur ki ControlTask (200 ms) bloklanmasin ve WDT'ye (10 s) yaklasilmasin.
+#define I2C_TX_TIMEOUT_MS   20
 #define I2C_RETRY_COUNT     3
 
 #define WDT_TIMEOUT_SECONDS 10

@@ -31,6 +31,10 @@ SensorManager::SensorManager() : _acsOffset(ACS712_OFFSET_EXPECTED) {
     _magOk               = false;
     _tempFailCount       = 0;
     _magFailCount        = 0;
+    _tempNextRetryMs     = 0;
+    _magNextRetryMs      = 0;
+    _tempRetryStep       = 0;
+    _magRetryStep        = 0;
     _currentFailCount    = 0;
     _calibrated          = false;
 
@@ -301,18 +305,28 @@ SensorReadings SensorManager::readAll() {
             _tempFailCount = 0;
         } else {
             _tempFailCount++;
-            if (_tempFailCount == I2C_RECOVERY_THRESHOLD) {
-                LOG_PRINTLN("[Sensör] I2C-0 bus recovery deneniyor...");
-                recoverI2CBus(0);
-            }
-            if (_tempFailCount == CRITICAL_FAIL_THRESHOLD) {
-                LOG_PRINTLN("[CRITICAL] Sıcaklık sensörü offline — 10 ardışık hata");
+            // 2026-09-08: 5 ardisik hata → CEVRIMDISI isaretle, I2C trafigini kes (eski kod her
+            // 200 ms zaman asimi yiyip tek seferlik recovery deniyordu; basarisizsa bir daha HIC
+            // denemiyordu ve kopuk sensor ControlTask'i bloklayip cihazi yeniden baslatabiliyordu).
+            if (_tempFailCount >= I2C_RECOVERY_THRESHOLD) {
+                _tempOk          = false;
+                _tempRetryStep   = 0;
+                _tempNextRetryMs = millis() + _geriCekilmeMs(0);
+                LOG_PRINTLN("[Sensör] ✗ MLX90614 ÇEVRİMDIŞI (5 ardışık hata) — geri-çekilmeyle yeniden bağlanılacak; cihaz çalışmaya devam eder");
             }
         }
     } else {
         data.tempObject   = 0.0f;
         data.tempAmbient  = 0.0f;
         data.tempSensorOk = false;
+        // Cevrimdisi: zamani gelince TEK bounded yeniden baglanma denemesi (bus temizle + begin).
+        if ((int32_t)(millis() - _tempNextRetryMs) >= 0) {
+            recoverI2CBus(0);
+            if (!_tempOk) {
+                if (_tempRetryStep < 4) { _tempRetryStep++; }
+                _tempNextRetryMs = millis() + _geriCekilmeMs(_tempRetryStep);
+            }
+        }
     }
 
     // 2. Manyetik Alan — pipelined single-shot
@@ -346,18 +360,25 @@ SensorReadings SensorManager::readAll() {
             data.magX = data.magY = data.magZ = 0.0f;
             data.magSensorOk = false;
             _magFailCount++;
-            if (_magFailCount == I2C_RECOVERY_THRESHOLD) {
-                LOG_PRINTLN("[Sensör] I2C-1 bus recovery deneniyor...");
-                recoverI2CBus(1);
-            }
-            if (_magFailCount == CRITICAL_FAIL_THRESHOLD) {
-                LOG_PRINTLN("[CRITICAL] Manyetik sensör offline — 10 ardışık hata");
+            if (_magFailCount >= I2C_RECOVERY_THRESHOLD) {
+                _magOk                 = false;
+                _magMeasurementPending = false;
+                _magRetryStep          = 0;
+                _magNextRetryMs        = millis() + _geriCekilmeMs(0);
+                LOG_PRINTLN("[Sensör] ✗ MLX90393 ÇEVRİMDIŞI (5 ardışık hata) — geri-çekilmeyle yeniden bağlanılacak; cihaz çalışmaya devam eder");
             }
         }
     } else {
         data.magneticField = 0.0f;
         data.magX = data.magY = data.magZ = 0.0f;
         data.magSensorOk = false;
+        if ((int32_t)(millis() - _magNextRetryMs) >= 0) {
+            recoverI2CBus(1);
+            if (!_magOk) {
+                if (_magRetryStep < 4) { _magRetryStep++; }
+                _magNextRetryMs = millis() + _geriCekilmeMs(_magRetryStep);
+            }
+        }
     }
 
     // 3. Akım — [FIX-3] PWM durumuna göre strateji
@@ -433,6 +454,7 @@ void SensorManager::_initI2C() {
         LOG_PRINTLN("[I2C-0] ✗ Bus başlatılamadı!");
         _tempOk = false;
     } else {
+        Wire.setTimeOut(I2C_TX_TIMEOUT_MS); // kopuk sensor islem basina en fazla 20 ms bekletir
         delay(500);
         _tempOk = _mlxTemp.begin(0x5A, &Wire);
         LOG_PRINTF("[I2C-0] %s MLX90614\n", _tempOk ? "✓" : "✗");
@@ -449,6 +471,7 @@ void SensorManager::_initI2C() {
         LOG_PRINTLN("[I2C-1] ✗ Bus başlatılamadı!");
         _magOk = false;
     } else {
+        Wire1.setTimeOut(I2C_TX_TIMEOUT_MS);
         delay(500);
         _magOk = false;
         if (_mlxMag.begin_I2C(0x18, &Wire1)) {
@@ -471,6 +494,10 @@ void SensorManager::_initI2C() {
     LOG_PRINTF("[I2C] MLX90614: %s\n", _tempOk ? "✓ OK" : "✗ OFFLINE");
     LOG_PRINTF("[I2C] MLX90393: %s\n", _magOk  ? "✓ OK" : "✗ OFFLINE");
     LOG_PRINTLN("========================================\n");
+    // 2026-09-08: acilista bulunamayan sensor de artik terk edilmez — geri-cekilmeli yeniden
+    // baglanma (readAll icinde) 2 sn sonra baslar; sensor sonradan takilirsa kendiliginden gelir.
+    if (!_tempOk) { _tempRetryStep = 1; _tempNextRetryMs = millis() + _geriCekilmeMs(1); }
+    if (!_magOk)  { _magRetryStep  = 1; _magNextRetryMs  = millis() + _geriCekilmeMs(1); }
 }
 
 // ============================================================================
@@ -484,8 +511,17 @@ float SensorManager::_applyFilter(float newValue, float& filteredValue) {
 // ============================================================================
 // recoverI2CBus() — Takılı Bus Kurtarma
 // ============================================================================
+uint32_t SensorManager::_geriCekilmeMs(uint8_t step) {
+    static const uint32_t t[] = {1000UL, 2000UL, 5000UL, 10000UL, 30000UL};
+    return t[step < 4 ? step : 4];
+}
+
+// 2026-09-08 (sahip): BOUNDED TEK DENEME (~60 ms + basarili begin). Eski surum bus basina
+// 50+100 ms bekleme + manyetik icin 3×(begin + 200 ms) = iki sensor birden kopunca ~2 s
+// bloklamaydi ve yalniz bir kez deneniyordu. Basarisizsa cagiran (readAll) geri-cekilmeli
+// zamanlayiciyla yeniden cagirir; cihaz ASLA yeniden baslatilmaz.
 void SensorManager::recoverI2CBus(int busNumber) {
-    LOG_PRINTF("[Sensör] I2C-%d Bus Recovery başlatılıyor...\n", busNumber);
+    LOG_PRINTF("[Sensör] I2C-%d yeniden bağlanma deneniyor...\n", busNumber);
 
     int sdaPin = (busNumber == 0) ? PIN_I2C_TEMP_SDA : PIN_I2C_MAG_SDA;
     int sclPin = (busNumber == 0) ? PIN_I2C_TEMP_SCL : PIN_I2C_MAG_SCL;
@@ -493,18 +529,20 @@ void SensorManager::recoverI2CBus(int busNumber) {
     if (busNumber == 0) Wire.end();
     else                Wire1.end();
 
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(20));
 
-    // Manuel Bus Clear (9 clock pulse)
+    // Manuel Bus Clear (9 clock pulse) — kablo cekilirken SDA'yi LOW'da birakan slave'i serbest birakir
     pinMode(sdaPin, INPUT_PULLUP);
     pinMode(sclPin, OUTPUT);
     digitalWrite(sclPin, HIGH);
     delayMicroseconds(10);
+
     for (int i = 0; i < 9; i++) {
         digitalWrite(sclPin, LOW);  delayMicroseconds(10);
         digitalWrite(sclPin, HIGH); delayMicroseconds(10);
         if (digitalRead(sdaPin) == HIGH) break;
     }
+
     // STOP koşulu
     pinMode(sdaPin, OUTPUT);
     digitalWrite(sdaPin, LOW);  delayMicroseconds(10);
@@ -512,29 +550,29 @@ void SensorManager::recoverI2CBus(int busNumber) {
 
     if (busNumber == 0) {
         Wire.begin(sdaPin, sclPin, I2C_FREQ_TEMP);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        Wire.setTimeOut(I2C_TX_TIMEOUT_MS);
+        vTaskDelay(pdMS_TO_TICKS(20));
         if (_mlxTemp.begin(0x5A, &Wire)) {
             _tempOk        = true;
             _tempFailCount = 0;
-            LOG_PRINTLN("[Sensör] ✓ MLX90614 recovery başarılı");
+            _tempRetryStep = 0;
+            LOG_PRINTLN("[Sensör] ✓ MLX90614 geri geldi");
         }
     } else {
         Wire1.begin(sdaPin, sclPin, I2C_FREQ_MAG);
-        vTaskDelay(pdMS_TO_TICKS(100));
-        for (int retry = 0; retry < 3; retry++) {
-            if (_mlxMag.begin_I2C(0x18, &Wire1)) {
-                _magOk       = true;
-                _magFailCount = 0;
-                _mlxMag.setGain(MLX90393_GAIN_2_5X);
-                _mlxMag.setOversampling(MLX90393_OSR_1);
-                _mlxMag.setFilter(MLX90393_FILTER_3);
-                _magMeasurementPending = _mlxMag.startSingleMeasurement();
-                LOG_PRINTLN("[Sensör] ✓ MLX90393 recovery başarılı");
-                return;
-            }
-            vTaskDelay(pdMS_TO_TICKS(200));
+        Wire1.setTimeOut(I2C_TX_TIMEOUT_MS);
+        vTaskDelay(pdMS_TO_TICKS(20));
+        if (_mlxMag.begin_I2C(0x18, &Wire1)) {
+            _magOk        = true;
+            _magFailCount = 0;
+            _magRetryStep = 0;
+            _mlxMag.setGain(MLX90393_GAIN_2_5X);
+            _mlxMag.setOversampling(MLX90393_OSR_1);
+            _mlxMag.setFilter(MLX90393_FILTER_3);
+            _magMeasurementPending = _mlxMag.startSingleMeasurement();
+            LOG_PRINTLN("[Sensör] ✓ MLX90393 geri geldi");
+        } else {
+            _magOk = false;
         }
-        _magOk = false;
-        LOG_PRINTLN("[Sensör] ⚠ MLX90393 recovery başarısız — sistem devam ediyor");
     }
 }

@@ -87,6 +87,14 @@ private:
     int _currentFailCount;
     static const int CRITICAL_FAIL_THRESHOLD = 10;
     static const int I2C_RECOVERY_THRESHOLD  = 5;
+    // 2026-09-08 (sahip): sensor koptugunda cihaz YENIDEN BASLAMAZ. Kopan sensor cevrimdisi
+    // isaretlenir (I2C trafigi kesilir → dongu bloklanmaz), 1→2→5→10→30 sn geri-cekilmeyle
+    // TEK bounded yeniden baglanma denemesi yapilir; tak-cikar (hot-plug) kendiliginden toparlar.
+    uint32_t _tempNextRetryMs;
+    uint32_t _magNextRetryMs;
+    uint8_t  _tempRetryStep;
+    uint8_t  _magRetryStep;
+    static uint32_t _geriCekilmeMs(uint8_t step);
 
     // Moving average (şu an kullanılmıyor; ileride aktifleştirilebilir)
     float _tempObjectFiltered;
