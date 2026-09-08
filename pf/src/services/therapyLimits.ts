@@ -1,34 +1,45 @@
 // Author: mertaygn, cglrgrkn
 /**
- * therapyLimits — PEMF tedavi parametreleri için güvenlik sınırları (tek kaynak).
+ * therapyLimits — PEMF tedavi parametreleri için arayüz sınırları (tek kaynak).
  * ============================================================================
- * Medikal cihaz güvenliği: bobin sürücüsüne sınır-dışı değer GİTMEMELİ. Tüm
- * başlatma yolları (Otomatik/Manuel/AI + per-coil panel) bu sınırları uygular.
+ * SAHİP KARARI (2026-09-08): FREKANS ve DUTY arayüzde SINIRLANMAZ. Eski 1–100 Hz / 1–50 %
+ * klempi ("Parametre güvenliği … aralığına çekildi") tezgâhta istenen değerin verilmesini
+ * engelliyordu. Tek sınır artık CİHAZ FIRMWARE'İDİR ve geçersiz değer sessizce çekilmez,
+ * cihaz REDDEDER (STM: STM_NACK; ESP8266: "freq/duty out of range" NACK → panelde
+ * "Cihaz komutu REDDETTİ"). Firmware aralıkları: STM FREQ_MIN 1 Hz … FREQ_MAX (main.c),
+ * duty firmware klempi (bipolar yarım-periyot / unipolar tam-periyot); ESP8266 1–1000 Hz,
+ * duty 1–99 % (duty<1 = STOP). Backend safety-limit'i de sahip kararıyla YOK — GERİ EKLEME.
  *
- * Aralıklar literatür preset'iyle uyumludur (freq~10 Hz, duty~25%). Donanım
- * spesifikasyonu netleştikçe burada tek noktadan güncellenebilir.
- * NOT: duration 0 = "süresiz" (geçerli); start dışı (stop) komutlarda clamp UYGULANMAZ.
+ * Kalan sınırlar (kullanıcı istemedi, dokunulmadı): faz 0–360°, yoğunluk 0.1–20 mT,
+ * süre 0–120 dk (0 = süresiz). Stop komutlarında clamp UYGULANMAZ.
  */
 export const THERAPY_LIMITS = {
-  freq: { min: 1, max: 100, label: "Frekans", unit: "Hz" }, // min=1 Hz: firmware FREQ_MIN=1.0 + backend FREQ_MIN_HZ=1.0 ile hizali (M4). 0.5 girilirse backend sessizce 1.0'a cekiyordu -> UI 0.5 gosterip cihaz 1.0 suruyordu.
-  duty: { min: 1, max: 50, label: "Duty", unit: "%" },
   phase: { min: 0, max: 360, label: "Faz", unit: "°" },
   intensity: { min: 0.1, max: 20, label: "Yoğunluk", unit: "mT" },
   duration: { min: 0, max: 120, label: "Süre", unit: "dk" }, // 0 = süresiz
 } as const;
 
-export type TherapyParamKey = keyof typeof THERAPY_LIMITS;
+/** Arayüzde SINIRSIZ parametreler (sahip kararı 2026-09-08) — değer olduğu gibi cihaza gider. */
+export const SINIRSIZ_PARAMLAR = ["freq", "duty"] as const;
+type SinirsizKey = (typeof SINIRSIZ_PARAMLAR)[number];
 
-/** Tek bir değeri güvenli aralığa çeker (NaN → min). */
+export type TherapyParamKey = keyof typeof THERAPY_LIMITS | SinirsizKey;
+
+function sinirsizMi(key: TherapyParamKey): key is SinirsizKey {
+  return (SINIRSIZ_PARAMLAR as readonly string[]).includes(key);
+}
+
+/** Tek bir değeri arayüz aralığına çeker (NaN → min). freq/duty: olduğu gibi döner. */
 export function clampParam(key: TherapyParamKey, value: number): number {
+  if (sinirsizMi(key)) return value;
   const lim = THERAPY_LIMITS[key];
   if (isNaN(value)) return lim.min;
   return Math.min(lim.max, Math.max(lim.min, value));
 }
 
 /**
- * Verilen parametreleri güvenli aralığa çeker; sınır-dışı olanların kullanıcı
- * mesajını döndürür. (Reddetmek yerine clamp+bilgilendir → tedavi hep güvenli sürer.)
+ * Verilen parametreleri arayüz aralığına çeker; sınır-dışı olanların kullanıcı mesajını döndürür.
+ * freq/duty HİÇ çekilmez ve uyarı ÜRETMEZ (cihaz sınırı geçerlidir).
  */
 export function clampTherapyParams(
   input: Partial<Record<TherapyParamKey, number>>
@@ -40,7 +51,7 @@ export function clampTherapyParams(
     if (raw == null) return;
     const clamped = clampParam(k, raw);
     values[k] = clamped;
-    if (Math.abs(clamped - raw) > 1e-9) {
+    if (!sinirsizMi(k) && Math.abs(clamped - raw) > 1e-9) {
       const lim = THERAPY_LIMITS[k];
       warnings.push(`${lim.label} ${lim.min}–${lim.max} ${lim.unit} aralığına çekildi.`);
     }
