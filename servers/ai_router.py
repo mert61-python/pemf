@@ -3231,6 +3231,16 @@ _AI_MODUL_ENVANTERI = [
         "ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx",
     ),
     ("em_petri", "ai_hub.inference_em_petri.inference_em_petri", "ai_hub/inference_em_petri/BaggingRegressor.onnx"),
+    # Denetim 2026-09-08: em_petri ANALİZİ iki ağırlık ister — doz modeli (üstteki BaggingRegressor)
+    # VE kuyucuk tespiti için petri_cv'nin YOLO11m-seg'i (85,5 MB, research.zip). İkincisi
+    # envanterde HİÇ YOKTU: dosya eksikken /api/ai/hazirlik YEŞİL kalıyor, ilk petri isteği (ve
+    # araştırma AI Pro hazırlığı) FileNotFoundError ile ölüyordu. Kapı:
+    # tests/test_ai_hazirlik_envanteri.py::test_KRITIK_URETIMDE_cozulen_her_agirlik_envanterde_OLCULUYOR
+    (
+        "petri_yolo",
+        "ai_hub.inference_petri_dish.petri_cv.petri_detector",
+        "ai_hub/inference_petri_dish/yolo11m-seg.onnx",
+    ),
     (
         "scratch",
         "ai_hub.inference_paper_dilek_hoca.cell.cpn",

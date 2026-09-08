@@ -273,3 +273,36 @@ def test_envanter_yollari_model_paketi_listeleriyle_TUTARLI():
         "Envanterdeki bu ağırlıklar ne profil paketlerinde, ne çekirdekte, ne de gömülü model "
         f"ağacında — kapı sevk EDİLMEYEN bir dosyayı arıyor olabilir (kalıcı sahte kırmızı): {disarda}"
     )
+
+
+# ── Üretim bağı: kapı, gerçekten yüklenen ağırlıkları ölçüyor mu? ────────────────
+
+
+def test_KRITIK_URETIMDE_cozulen_her_agirlik_envanterde_OLCULUYOR():
+    """SESSİZ ÖLÜM SINIFI (bulgu 2026-09-08): `ai_router` bir ağırlığı `download_model_sync` ile
+    çözüyorsa `/api/ai/hazirlik` envanteri onu ÖLÇMELİDİR.
+
+    `petri_cv`nin YOLO11m-seg ağırlığı (85,5 MB, `research.zip`) envanterde YOKTU: dosya
+    eksikken kapı YEŞİL kalıyor, ilk `/api/ai/vision/em_petri` isteği (ve araştırma AI Pro
+    hazırlığı) FileNotFoundError ile ölüyordu — kapının panzehri olduğu hatanın tam kendisi
+    (bkz. bu dosyanın başındaki 'model sütunu sahteydi' bulgusu; aynı sınıf, yeni örnek).
+
+    ⚠️ Bu kapı İSİM değil BAĞ ölçer: beklenen liste elle yazılmaz, ÜRETİM KODUNDAN türetilir →
+    yarın yeni bir ağırlık yüklenmeye başlarsa envanter güncellenmediği sürece KIRMIZI olur.
+    MUTASYON: envanterden `petri_yolo` satırını silin → KIRMIZI.
+    """
+    import re
+
+    src = (_KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
+    cozulen = set(re.findall(r'download_model_sync\(\s*"([^"]+)"', src))
+    assert len(cozulen) >= 8, (
+        f"`download_model_sync(\"...\")` çağrıları bulunamadı ({len(cozulen)}) — çözüm biçimi "
+        "değiştiyse bu kapıyı yeni çağrı desenine pinleyin (yoksa sessizce boş çalışır)"
+    )
+    envanter = {model for _ad, _imp, model in _AI_MODUL_ENVANTERI}
+    eksik = sorted(cozulen - envanter)
+    assert not eksik, (
+        f"Üretimde yüklenen ama hazırlık kapısında ÖLÇÜLMEYEN ağırlık(lar): {eksik}. "
+        "Ağırlık eksikken /api/ai/hazirlik YEŞİL kalır, ilk istek FileNotFoundError ile ölür. "
+        "_AI_MODUL_ENVANTERI'ye (ad, import yolu, ağırlık yolu) satırı ekleyin."
+    )
