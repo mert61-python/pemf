@@ -868,6 +868,65 @@ def _arastirma_aipro_kapisi(saglayici) -> None:
     )
 
 
+def _yukle_em_fantom_cv() -> dict:
+    """phantom_cv boru hattı + PhantomPredictor'ı BİR KEZ ısıt → `_get_or_load_model` önbelleğine.
+
+    ⚠️ MODÜL SEVİYESİNE TAŞINDI (2026-09-09): eskiden `analyze_em_fantom` içinde bir kapanıştı.
+    Araştırma AI Pro fantom sağlayıcısı AYNI önbelleği kullanacağı için (anahtar "em_fantom_cv")
+    yükleyici de tek olmalı — aksi halde 60 MB ONNX + scaler'lar analiz ve seans yolları için İKİ
+    KEZ yüklenirdi. Dönen sözlük sözleşmesi DEĞİŞMEDİ: {cfg, predictor, cls}.
+    """
+    # Büyük ONNX runtime'da indirilir (ProgramData/HF); yerel dev'de mevcut.
+    try:
+        download_model_sync("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx")
+    except Exception as _de:
+        logger.warning("em_fantom ONNX indirme/çözümleme uyarısı: %s", _de)
+    from ai_hub.inference_em_fantom.phantom_cv import (
+        PhantomCvPipeline,
+        load_cabin_config,
+    )
+
+    cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
+    warm = PhantomCvPipeline(cfg, manual_fallback=False)
+    _ = warm.predictor  # ONNX + scaler'ları bir kez yükle
+    return {"cfg": cfg, "predictor": warm._predictor, "cls": PhantomCvPipeline}
+
+
+def _yukle_em_petri_cv() -> dict:
+    """petri_cv boru hattı + YOLO11m-seg + PetriPredictor'ı BİR KEZ ısıt → önbelleğe.
+
+    ⚠️ MODÜL SEVİYESİNE TAŞINDI (2026-09-09; fantomla aynı gerekçe): 239 MB BaggingRegressor +
+    90 MB YOLO analiz ve seans yolları için iki kez yüklenmesin. Sözleşme DEĞİŞMEDİ:
+    {cfg, cls, yolo, predictor, yolo_path}.
+    """
+    from ai_hub.inference_petri_dish.petri_cv import (
+        PetriCvPipeline,
+        load_cabin_config,
+    )
+
+    # YOLO ONNX yolu (ProgramData/HF'den indir; yoksa yerel dev).
+    try:
+        yolo_path = download_model_sync("ai_hub/inference_petri_dish/yolo11m-seg.onnx")
+    except Exception as _de:
+        logger.warning("em_petri YOLO ONNX indirme/çözümleme uyarısı: %s", _de)
+        yolo_path = os.path.join(project_root, "ai_hub", "inference_petri_dish", "yolo11m-seg.onnx")
+    cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
+    # yolo_device="cpu" ŞART (headless — CUDA yok).
+    warm = PetriCvPipeline(cfg, yolo_model_path=yolo_path, yolo_device="cpu")
+    _ = warm.predictor  # BaggingRegressor ONNX (kendi fallback'i)
+    try:
+        warm.process_image(np.zeros((640, 640, 3), dtype=np.uint8))  # YOLO modelini ısıt
+    except Exception:
+        pass
+    return {
+        "cfg": cfg,
+        "cls": PetriCvPipeline,
+        "yolo": warm.yolo,
+        "predictor": warm._predictor,
+        "yolo_path": yolo_path,
+    }
+
+
 def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     """Model yükleme istisnasını (kod, KULLANICI METNİ) çiftine çevir — eylem söyleyen hata kuralı.
 
@@ -2506,23 +2565,9 @@ async def analyze_em_fantom(
             )
         img = await _decode_image(file, image_base64, label="em_fantom")
 
-        def _load_em_fantom():
-            # Büyük ONNX runtime'da indirilir (ProgramData/HF); yerel dev'de mevcut.
-            try:
-                download_model_sync("ai_hub/inference_em_fantom/BiLSTM_XXL_Raw.onnx")
-            except Exception as _de:
-                logger.warning("em_fantom ONNX indirme/çözümleme uyarısı: %s", _de)
-            from ai_hub.inference_em_fantom.phantom_cv import (
-                PhantomCvPipeline,
-                load_cabin_config,
-            )
-
-            cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
-            warm = PhantomCvPipeline(cfg, manual_fallback=False)
-            _ = warm.predictor  # ONNX + scaler'ları bir kez yükle
-            return {"cfg": cfg, "predictor": warm._predictor, "cls": PhantomCvPipeline}
-
-        cache = await asyncio.to_thread(_get_or_load_model, "em_fantom_cv", _load_em_fantom)
+        # Yükleyici MODÜL SEVİYESİNDE (`_yukle_em_fantom_cv`): araştırma AI Pro fantom sağlayıcısı
+        # aynı önbelleği paylaşır → ağır ONNX iki kez yüklenmez.
+        cache = await asyncio.to_thread(_get_or_load_model, "em_fantom_cv", _yukle_em_fantom_cv)
         # Her istekte hafif pipeline (taze intrinsics), önbellekli predictor enjekte.
         # manual_fallback=False ŞART — headless serviste GUI açmamalı.
         pl = cache["cls"](cache["cfg"], phantom_length_cm=phantom_length_cm, manual_fallback=False)
@@ -2624,35 +2669,9 @@ async def analyze_em_petri(
             return _remote
         img = await _decode_image(file, image_base64, label="em_petri")
 
-        def _load_em_petri():
-            from ai_hub.inference_petri_dish.petri_cv import (
-                PetriCvPipeline,
-                load_cabin_config,
-            )
-
-            # YOLO ONNX yolu (ProgramData/HF'den indir; yoksa yerel dev).
-            try:
-                yolo_path = download_model_sync("ai_hub/inference_petri_dish/yolo11m-seg.onnx")
-            except Exception as _de:
-                logger.warning("em_petri YOLO ONNX indirme/çözümleme uyarısı: %s", _de)
-                yolo_path = os.path.join(project_root, "ai_hub", "inference_petri_dish", "yolo11m-seg.onnx")
-            cfg = load_cabin_config(None)  # gömülü cabin_config_example.yaml
-            # yolo_device="cpu" ŞART (headless — CUDA yok).
-            warm = PetriCvPipeline(cfg, yolo_model_path=yolo_path, yolo_device="cpu")
-            _ = warm.predictor  # BaggingRegressor ONNX (kendi fallback'i)
-            try:
-                warm.process_image(np.zeros((640, 640, 3), dtype=np.uint8))  # YOLO modelini ısıt
-            except Exception:
-                pass
-            return {
-                "cfg": cfg,
-                "cls": PetriCvPipeline,
-                "yolo": warm.yolo,
-                "predictor": warm._predictor,
-                "yolo_path": yolo_path,
-            }
-
-        cache = await asyncio.to_thread(_get_or_load_model, "em_petri_cv", _load_em_petri)
+        # Yükleyici MODÜL SEVİYESİNDE (`_yukle_em_petri_cv`): araştırma AI Pro petri sağlayıcısı
+        # aynı önbelleği paylaşır → 239 MB ONNX + 90 MB YOLO iki kez yüklenmez.
+        cache = await asyncio.to_thread(_get_or_load_model, "em_petri_cv", _yukle_em_petri_cv)
         # Her istekte hafif pipeline (taze intrinsics); önbellekli YOLO + predictor enjekte
         # (ağır modeller yeniden yüklenmez, yarış yok). yolo_device="cpu" ŞART.
         pl = cache["cls"](

@@ -56,6 +56,15 @@ select = ["F", "E9", "I"]
 quote-style = "preserve"
 indent-style = "space"
 
+[tool.pytest.ini_options]
+# Isaretler (marker): kayitli olmayan marker PytestUnknownMarkWarning verir ve `-m` ile
+# secilemez. `entegrasyon` = agir/gercek-model testleri (release_assets agirliklari sart;
+# yoksa tests/capraz.py ile ATLANIR). CI'da agirlik agaci olmadigi icin bu testler atlanir;
+# yerel tam suitte PEMF_CAPRAZ_KAYNAK_ZORUNLU=1 atlamayi HATAYA cevirir.
+markers = [
+    "entegrasyon: gercek model agirliklariyla ucdan uca (agirlik yoksa atlanir)",
+]
+
 [tool.coverage.run]
 # audit B-3.1: çekirdek modül kapsamı (AI-hub/scriptler hariç — ağır/ayrı).
 #
