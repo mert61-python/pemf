@@ -15,7 +15,7 @@ import { useStageHeight } from "@/hooks/useStageHeight";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
-import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS } from "@/services/apiClient";
+import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -99,33 +99,8 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** SAHA HATASI 2026-08-12 — "signal is aborted" kullanıcıya GÖSTERİLİYORDU.
- *
- * Ev kullanıcısı fps + hastalık + ses analizlerini PEŞ PEŞE başlattı; ilk ikisi döndü, ses
- * `AbortError: signal is aborted without reason` verdi. Hemen ardından tek başına denediğinde
- * ANINDA sonuçlandı. Sebep: `cat_sound` ilk çağrıda numba/librosa JIT derler (ölçüm: tek
- * başına 28 sn) ve üç analizin CPU çekişmesinde o elle yazılmış 60 sn'lik sınırı aşıyordu.
- *
- * İki ayrı kusur vardı ve ikisi de burada kapanıyor:
- *   • Sınır tek kaynaktan gelmiyordu → 10 çağrı `AI_TIMEOUT_MS`e bağlandı. (Aynı arıza
- *     2026-08-06'da `/ai/disease` için düzeltilmişti ama YALNIZ `apiPost` yolunda; ham
- *     `fetch` kullanan modüller atlanmıştı — bu yüzden aynı hata ses modülünde tekrarladı.)
- *   • İptal mesajı ham DOM metniydi. Zaman aşımı ile ağ hatası AYRI şeylerdir: ilkinde
- *     tekrar denemek İŞE YARAR (model artık bellekte), ikincisinde yaramaz. Kullanıcı bunu
- *     ayırt edebilmeli, yoksa "bozuk" sanıp vazgeçer.
- */
-const AI_ZAMAN_ASIMI_MESAJI =
-  "Analiz zaman aşımına uğradı. Bir modelin İLK çalıştırılması ~30 saniye sürebilir; " +
-  "aynı anda başka analizler çalışıyorsa daha da uzar. Tekrar deneyin — model artık " +
-  "hazır olduğu için bu kez hızlı sonuçlanır.";
-
-function aiHataMesaji(e: unknown, varsayilan = "Ağ veya sunucu hatası."): string {
-  // `AbortController.abort()` → DOMException(name: "AbortError"). `instanceof DOMException`
-  // React Native'de güvenilir DEĞİL (DOM yok) → ada bakılır; tarayıcı ve RN'de de aynı.
-  const ad = (e as { name?: string } | null)?.name;
-  if (ad === "AbortError" || ad === "TimeoutError") return AI_ZAMAN_ASIMI_MESAJI;
-  return varsayilan;
-}
+// `aiHataMesaji` (zaman aşımı / gönderilemedi / geçersiz yanıt sınıflandırması) 2026-09-08'de
+// `@/services/apiClient`e taşındı: saf fonksiyon, testi `services/__tests__/aiHataMesaji.test.ts`.
 
 
 // audit B-2.4: AI-sonuç eleman şekilleri — .map/.filter/.reduce callback'lerini tiplemek için

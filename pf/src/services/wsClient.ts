@@ -17,6 +17,7 @@ export type WsMessageType =
   | "session_tick"
   | "emergency_stop"
   | "ai_vision"
+  | "coil_ack"   // ESP start onayı: data={ok:true|false|null, reason:"ack"|"nack"|"timeout", latencyMs, ts}
   | "pong";  // heartbeat yanıtı (backend ping'e döner)
 
 export interface WsMessage {

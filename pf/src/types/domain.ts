@@ -16,6 +16,17 @@ export type RouteKey =
 export type ConnectionState = "online" | "warning" | "offline" | "error";
 
 // ─── Coil ────────────────────────────────────────────────────────────────────
+/** ESP bobininin START komutuna verdiği cihaz-onayı (backend `coil_ack` WS olayı, saha 2026-09-08).
+ *  ok=true → PWM gerçekten uygulandı (firmware `isActive()`), false → cihaz REDDETTİ (termal kilit /
+ *  doğrulama), null → 2 sn içinde onay GELMEDİ. Broker PUBACK'i DEĞİL, cihazın kendi sözüdür. */
+export interface CoilDeviceAck {
+  ok: boolean | null;
+  reason: "ack" | "nack" | "timeout";
+  commandId?: string;
+  latencyMs?: number;
+  ts: number;
+}
+
 export interface CoilStatus {
   id: number;
   connected: boolean;
@@ -29,6 +40,8 @@ export interface CoilStatus {
   stm32Driven?: boolean;
   phase?: number;
   durationMin?: number;
+  /** Son START komutunun cihaz onayı (yalnız ESP 6-8; status telemetrisiyle SİLİNMEZ). */
+  deviceAck?: CoilDeviceAck;
 }
 
 // ─── Patient ─────────────────────────────────────────────────────────────────

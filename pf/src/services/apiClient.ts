@@ -66,6 +66,54 @@ export interface ApiOpts {
 /** AI çıkarım uçları için zaman aşımı — ilk çağrıdaki model yükleme + JIT derlemesini kapsar. */
 export const AI_TIMEOUT_MS = 120000;
 
+/** SAHA HATASI 2026-08-12 — "signal is aborted" kullanıcıya GÖSTERİLİYORDU.
+ *
+ * Ev kullanıcısı fps + hastalık + ses analizlerini PEŞ PEŞE başlattı; ilk ikisi döndü, ses
+ * `AbortError: signal is aborted without reason` verdi. Hemen ardından tek başına denediğinde
+ * ANINDA sonuçlandı. Sebep: `cat_sound` ilk çağrıda numba/librosa JIT derler (ölçüm: tek
+ * başına 28 sn) ve üç analizin CPU çekişmesinde o elle yazılmış 60 sn'lik sınırı aşıyordu.
+ *
+ * İki ayrı kusur vardı ve ikisi de burada kapanıyor:
+ *   • Sınır tek kaynaktan gelmiyordu → 10 çağrı `AI_TIMEOUT_MS`e bağlandı.
+ *   • İptal mesajı ham DOM metniydi. Zaman aşımı ile ağ hatası AYRI şeylerdir: ilkinde
+ *     tekrar denemek İŞE YARAR (model artık bellekte), ikincisinde yaramaz.
+ */
+export const AI_ZAMAN_ASIMI_MESAJI =
+  "Analiz zaman aşımına uğradı. Bir modelin İLK çalıştırılması ~30 saniye sürebilir; " +
+  "aynı anda başka analizler çalışıyorsa daha da uzar. Tekrar deneyin — model artık " +
+  "hazır olduğu için bu kez hızlı sonuçlanır.";
+
+/** SAHA 2026-09-08 (masaüstü): her `fetch` reddi "Ağ veya sunucu hatası." diye gösteriliyordu.
+ *  Gerçek sebep backend'e HİÇ ulaşmayan bir istekti (tarayıcı CSP ile `fetch(blob:)`'u kesti);
+ *  kullanıcı "internet yok diye çalışmıyor" sandı, günlükte iz yoktu. Tarayıcının fetch reddi
+ *  (`TypeError: Failed to fetch` / RN `Network request failed`) sunucu hatasından AYRI bir sınıftır:
+ *  istek gönderilememiştir → eylem: bağlantı göstergesi + dosyayı yeniden seçme + yeniden başlatma. */
+export const AI_ISTEK_GONDERILEMEDI_MESAJI =
+  "İstek cihaz yazılımına GÖNDERİLEMEDİ (tarayıcı isteği kesti: bağlantı koptu, ağ değişti ya da " +
+  "seçilen dosya okunamadı). Üstteki gösterge 'Çevrimdışı' ise önce bağlantıyı düzeltin; değilse " +
+  "dosyayı yeniden seçip tekrar deneyin. Sürerse uygulamayı yeniden başlatın.";
+
+/** `response.json()` JSON olmayan gövdede düşer (vekil/portal sayfası, kesik yanıt). */
+export const AI_GECERSIZ_YANIT_MESAJI =
+  "Cihaz yazılımı geçersiz yanıt döndürdü (JSON değil). Tekrar deneyin; sürerse uygulama " +
+  "günlüklerini destek ekibine iletin.";
+
+const _FETCH_REDDI = /failed to fetch|network request failed|networkerror|load failed/i;
+
+/** AI isteği `catch`inden kullanıcıya gösterilecek TEK mesaj kaynağı (eylem söyler, ham metin
+ *  göstermez). `varsayilan` çağıranın bağlamına özel metnidir; yalnız sınıflandırılamayan
+ *  hatalarda kullanılır. */
+export function aiHataMesaji(e: unknown, varsayilan = "Ağ veya sunucu hatası."): string {
+  // `AbortController.abort()` → DOMException(name: "AbortError"). `instanceof DOMException`
+  // React Native'de güvenilir DEĞİL (DOM yok) → ada bakılır; tarayıcı ve RN'de de aynı.
+  const ad = (e as { name?: string } | null)?.name;
+  const mesaj = String((e as { message?: unknown } | null)?.message ?? "");
+  if (ad === "AbortError" || ad === "TimeoutError") return AI_ZAMAN_ASIMI_MESAJI;
+  if (ad === "TypeError" && _FETCH_REDDI.test(mesaj)) return AI_ISTEK_GONDERILEMEDI_MESAJI;
+  if (ad === "SyntaxError") return AI_GECERSIZ_YANIT_MESAJI;
+  return varsayilan;
+}
+
 // Entitlement (abonelik tier/eklenti) header'ları — EntitlementContext günceller; backend
 // tier-enforcement (PEMF_TIER_ENFORCED) AÇIKKEN kullanılır. Kapalıyken backend yok sayar (zararsız).
 let _entitlementHeaders: Record<string, string> = {};

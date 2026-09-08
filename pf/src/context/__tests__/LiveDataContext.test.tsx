@@ -50,6 +50,7 @@ function Probe() {
       <Text testID="aiData">{aiVisionData ? "var" : "yok"}</Text>
       <Text testID="unread">{String(unreadCount)}</Text>
       <Text testID="running">{String((snapshot.coils ?? []).filter((c: any) => c.running).length)}</Text>
+      <Text testID="ack1">{JSON.stringify((snapshot.coils ?? []).find((c: any) => c.id === 1)?.deviceAck ?? null)}</Text>
     </>
   );
 }
@@ -174,4 +175,19 @@ it("#46: markAllRead sonrası yeniden bağlanma okunmamış rozetini GERİ DİR�
 
   await send(withNotif); // yeniden bağlanma → sunucu hâlâ read:false diyor
   await waitFor(() => expect(getByTestId("unread").props.children).toBe("0"));
+});
+
+it("coil_ack (ESP cihaz onayı) bobine yazılır ve sonraki coil_status onu SİLMEZ (saha 2026-09-08)", async () => {
+  const { getByTestId } = await setup();
+  await setConnected(true);
+  await send(busySnapshot);
+  expect(getByTestId("ack1").props.children).toBe("null");
+  await send({ type: "coil_ack", coilId: 1, data: { ok: true, reason: "ack", commandId: "react_1_7", latencyMs: 41, ts: 1700000000000 } });
+  expect(JSON.parse(getByTestId("ack1").props.children)).toMatchObject({ ok: true, reason: "ack", commandId: "react_1_7", latencyMs: 41 });
+  // status telemetrisi (deviceAck alanı taşımaz) onayı ezmemeli — panel 'onayladı' demeye devam eder
+  await send({ type: "coil_status", coilId: 1, data: { id: 1, connected: true, running: true, frequencyHz: 50, dutyCycle: 25, magneticMt: 1, objectTemp: 30, ambientTemp: 25, currentA: 1 } });
+  expect(JSON.parse(getByTestId("ack1").props.children)).toMatchObject({ ok: true, commandId: "react_1_7" });
+  // yeni bir NACK onayı eskisini değiştirir
+  await send({ type: "coil_ack", coilId: 1, data: { ok: false, reason: "nack", commandId: "react_1_8", ts: 1700000001000 } });
+  expect(JSON.parse(getByTestId("ack1").props.children)).toMatchObject({ ok: false, reason: "nack", commandId: "react_1_8" });
 });

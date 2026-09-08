@@ -385,7 +385,16 @@ async def add_security_headers(request: Request, call_next):
     _ctype = response.headers.get("content-type", "")
     if _ctype.startswith("text/html"):
         _host = _h.get("host", "")
-        _connect = "'self' https://*.supabase.co"
+        # SAHA 2026-09-08 (masaüstü, WebView2): connect-src'de `blob:`/`data:` YOKTU. Arayüz seçilen
+        # görseli/sesi `fetch(blob:…)` / `fetch(data:…)` ile okuyup form-data'ya koyar (AiHub: imageFile
+        # yokken 7 yerde, scratch `dosya.file` yokken, ses kaydı). Tarayıcı bunu CSP ile kesince fetch
+        # `TypeError: Failed to fetch` fırlatır → arayüz "Ağ veya sunucu hatası." der, backend'e istek
+        # HİÇ ulaşmaz, günlükte iz yoktur (CDP `securitypolicyviolation` ile ÖLÇÜLDÜ: connect-src->blob,
+        # connect-src->data, media-src->blob). `blob:`/`data:` DIŞA veri sızdıramaz (aynı belgenin kendi
+        # nesneleri) → connect-src'nin sızıntı-önleme amacı korunur. `media-src` de eklendi: yoksa
+        # default-src 'self' devreye girip kayıt/yükleme (blob:) sesinin ÇALINMASINI engelliyordu.
+        # Kapı: tests/test_csp_blob_baglanti.py (mutasyonla kırmızı kanıtlı).
+        _connect = "'self' blob: data: https://*.supabase.co"
         if _host:
             _connect += f" ws://{_host} wss://{_host}"
         response.headers["Content-Security-Policy"] = (
@@ -393,6 +402,7 @@ async def add_security_headers(request: Request, call_next):
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
+            "media-src 'self' data: blob:; "
             "font-src 'self' data:; "
             "worker-src 'self' blob:; "
             f"connect-src {_connect}; "
@@ -1574,11 +1584,39 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
     ⚠️ run_id (denetim 2026-08-24, D2): bekci baslatildigi andaki kosu kaydinin id'si. NACK'te
     kosu YALNIZ hala BU run ise kapatilir — ayni bobine hizli ikinci bir start (KABUL edilmis) run'i
     devraldiysa, bu (bayat) NACK araya giren CALISAN kosuyu DUSURMEMELI."""
+    _t0 = time.monotonic()
     confirmed = _wait_ack(command_id, timeout=_START_ACK_TIMEOUT)
+    _gecikme_ms = int((time.monotonic() - _t0) * 1000)
+
+    # SAHA 2026-09-08 (sahip): "PWM basladi mi anlamiyorum, sadece butona dokunuyorum." ESP8266 ack'i
+    # ms icinde geliyor ve BASARI halinde yalniz debug-log'a dusuyordu; arayuz 'Aktif' rozetini 3 sn'lik
+    # status telemetrisinden ogreniyordu. Uc sonuc da (onay / NACK / zaman asimi) tek `coil_ack` WS
+    # olayi olarak yayinlanir -> panel "cihaz onayladi (NN ms)" / "REDDETTI" / "onay gelmedi" der.
+    # HTTP yaniti degismez (PUBACK'ta doner; bekci arka planda). Kapi: tests/test_esp_ack_basari_gorunurlugu.py
+    def _ack_yayinla(ok, neden: str) -> None:
+        try:
+            _ws_broadcast_sync(
+                {
+                    "type": "coil_ack",
+                    "coilId": coil_id,
+                    "data": {
+                        "ok": ok,
+                        "reason": neden,
+                        "commandId": command_id,
+                        "latencyMs": _gecikme_ms,
+                        "ts": int(time.time() * 1000),
+                    },
+                }
+            )
+        except Exception:
+            logging.getLogger(__name__).debug("coil_ack yayini basarisiz (bobin %s)", coil_id, exc_info=True)
+
     if confirmed is True:
-        logging.getLogger(__name__).debug("start bobin %s: ESP onayladi (ack)", coil_id)
+        logging.getLogger(__name__).debug("start bobin %s: ESP onayladi (ack, %d ms)", coil_id, _gecikme_ms)
+        _ack_yayinla(True, "ack")
         return
     if confirmed is False:
+        _ack_yayinla(False, "nack")
         # Kesin red: kosu kaydi hayalet — kapat. Sebep metni command_error eventiyle ayrica gelir.
         logging.getLogger(__name__).error(
             "start bobin %s: ESP komutu REDDETTI (NACK) — kosu kaydi kapatiliyor (hic kosmamis bobin)",
@@ -1603,6 +1641,7 @@ def _start_ack_watch(coil_id: int, command_id: str, run_id=None) -> None:
         coil_id,
         _START_ACK_TIMEOUT,
     )
+    _ack_yayinla(None, "timeout")
     try:
         _push_notification(
             f"⚠️ Bobin {coil_id}: start onayı gelmedi — bobinin gerçekten çalıştığını panelden kontrol edin",

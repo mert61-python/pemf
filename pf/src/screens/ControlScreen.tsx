@@ -657,6 +657,7 @@ export function ControlScreen() {
                 dutyCycle={coil.dutyCycle}
                 magneticMt={coil.magneticMt}
                 currentA={coil.currentA}
+                deviceAck={coil.deviceAck}
                 defaultFreq={parseFloat(masterFreq) || 50}
                 defaultDuty={parseFloat(masterDuty) || 25}
                 defaultPhase={parseFloat(masterPhase) || 0}

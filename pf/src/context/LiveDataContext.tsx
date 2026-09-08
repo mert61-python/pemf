@@ -25,6 +25,7 @@ import { useForegroundReconnect } from "@/hooks/useForegroundReconnect";
 import type {
   ActiveTreatment,
   AppNotification,
+  CoilDeviceAck,
   CoilSensorHistory,
   CoilStatus,
   ConnectionState,
@@ -285,6 +286,23 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         if ((d as any)?.running && Date.now() - emergencyStopTsRef.current < 3000) d = { ...d, running: false };
         setSnapshot((prev) => {
           const updated = mergeCoilIntoSnapshot(prev, coilId, d);
+          snapshotRef.current = updated;
+          return updated;
+        });
+        break;
+      }
+
+      // ESP start ONAYI (saha 2026-09-08): backend ack/NACK/zaman-aşımını ms içinde `coil_ack` ile
+      // yayınlar → panel "cihaz onayladı" diyebilsin ('Aktif' rozeti 3 sn'lik status'tan gelir).
+      // Sonraki coil_status (deviceAck alanı taşımaz) bu alanı SİLMEZ (mergeCoilIntoSnapshot birleştirir).
+      case "coil_ack": {
+        if (!msg.coilId || !msg.data) break;
+        const ack = msg.data as CoilDeviceAck;
+        const ackCoilId = msg.coilId;
+        setSnapshot((prev) => {
+          const updated = mergeCoilIntoSnapshot(prev, ackCoilId, {
+            deviceAck: { ...ack, ts: typeof ack.ts === "number" ? ack.ts : Date.now() },
+          });
           snapshotRef.current = updated;
           return updated;
         });

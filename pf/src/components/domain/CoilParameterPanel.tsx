@@ -10,6 +10,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { apiPost } from "@/services/apiClient";
 import { clampTherapyParams } from "@/services/therapyLimits";
+import type { CoilDeviceAck } from "@/types/domain";
 
 const COIL_COLORS = [
   "#FF5252", "#FF4081", "#E040FB", "#7C4DFF",
@@ -35,6 +36,8 @@ interface Props {
   disabled?: boolean;
   stm32Driven?: boolean;    // Bu bobin STM32 üzerinden mi çalışıyor?
   stmConnected?: boolean;   // STM32 USB bağlı mı?
+  /** Son START komutunun CİHAZ onayı (ESP `coil_ack`); commandId ile HTTP yanıtındaki command_id eşleşir. */
+  deviceAck?: CoilDeviceAck;
 }
 
 export function CoilParameterPanel({
@@ -53,6 +56,7 @@ export function CoilParameterPanel({
   disabled = false,
   stm32Driven = false,
   stmConnected = false,
+  deviceAck,
 }: Props) {
   const [freq, setFreq] = useState(String(defaultFreq));
   const [duty, setDuty] = useState(String(defaultDuty));
@@ -60,6 +64,9 @@ export function CoilParameterPanel({
   const [phase, setPhase] = useState(String(defaultPhase));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cihaz onayı beklenen START'ın command_id'si (saha 2026-09-08: "butona dokundum, PWM başladı mı?").
+  // Saat karşılaştırması DEĞİL, command_id eşleşmesi: tablet/backend saat kayması sonucu etkilemez.
+  const [bekleyenKomut, setBekleyenKomut] = useState<string | null>(null);
 
   const color = COIL_COLORS[(coilId - 1) % 8];
 
@@ -97,7 +104,7 @@ export function CoilParameterPanel({
       // YÜKSEK fix: apiPost ağ-hatası/non-2xx'te THROW ETMEZ (fallback=null döner) → dönüşü DOĞRULA.
       // Eskiden yanıt kontrol edilmeden "başarılı" sayılıyordu → STOP sessizce düşse bile kullanıcı
       // bobinin durduğunu sanıyordu (bobin ÇALIŞMAYA DEVAM). null/status:error → açık uyarı ver.
-      const res = await apiPost<{ status?: string } | null>(`/coil/${coilId}/control`, {
+      const res = await apiPost<{ status?: string; command_id?: string } | null>(`/coil/${coilId}/control`, {
         freq: f,
         duty: d,
         phase: ph,
@@ -110,6 +117,10 @@ export function CoilParameterPanel({
       // durduruldu" diyordu (sahte güvence, korumasızlıktan tehlikeli). Kilit:
       // __tests__/coilDurdurmaOnayi.test.tsx.
       const ok = !!res && res.status === "success";
+      // ESP bobini: broker aldı (PUBACK) ≠ cihaz uyguladı. Yanıttaki command_id ile `coil_ack` eşlenir;
+      // eski backend command_id vermezse bekleme durumu hiç açılmaz (sessiz geriye-uyum). STM bobinleri
+      // ack yayınlamaz → onlarda bekleme YOK.
+      setBekleyenKomut(start && ok && !stm32Driven && typeof res?.command_id === "string" ? res.command_id : null);
       if (!ok) {
         setError(start
           ? "Komut onaylanamadı — bobin başlatılamamış olabilir, tekrar deneyin."
@@ -149,6 +160,26 @@ export function CoilParameterPanel({
   }, [running, objectTemp, sendCommand]);
 
   const isDisabled = disabled || !connected || (stm32Driven && !stmConnected);
+
+  // Cihaz onayı metni: YALNIZ bekleyen START'ın command_id'siyle eşleşen ack sayılır (eski/başka
+  // komutun onayı sahte güvence olmasın). ok=true → PWM cihazda uygulandı; false → cihaz reddetti
+  // (termal kilit / doğrulama); null → 2 sn içinde onay gelmedi.
+  const guncelAck = bekleyenKomut && deviceAck && deviceAck.commandId === bekleyenKomut ? deviceAck : null;
+  let ackMetni: string | null = null;
+  let ackRenk = "#94a3b8";
+  if (bekleyenKomut && !guncelAck) {
+    ackMetni = "⏳ Cihaz onayı bekleniyor…";
+  } else if (guncelAck?.ok === true) {
+    const ms = typeof guncelAck.latencyMs === "number" ? ` (${guncelAck.latencyMs} ms)` : "";
+    ackMetni = `✓ Cihaz onayladı — PWM bobinde çalışıyor${ms}`;
+    ackRenk = "#22c55e";
+  } else if (guncelAck?.ok === false) {
+    ackMetni = "✗ Cihaz komutu REDDETTİ — bobin ÇALIŞMIYOR (termal kilit / geçersiz parametre)";
+    ackRenk = "#ef4444";
+  } else if (guncelAck) {
+    ackMetni = "⚠ Cihaz onayı gelmedi — bobin komutu almamış olabilir; Aktif rozetini ve bobin bağlantısını kontrol edin";
+    ackRenk = "#f59e0b";
+  }
 
   return (
     <View style={[styles.card, { borderColor: connected ? color + "44" : "#334155" }]}>
@@ -247,6 +278,20 @@ export function CoilParameterPanel({
       {error ? (
         <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           {error}
+        </Text>
+      ) : null}
+
+      {/* CİHAZ ONAYI (saha 2026-09-08): "butona dokundum, PWM başladı mı?" — broker PUBACK'i değil,
+          ESP'nin kendi `ack`i (firmware isActive()). Backend `coil_ack` WS olayı ms içinde gelir;
+          'Aktif' rozeti 3 sn'lik status telemetrisinden geldiği için tek başına geç kalıyordu. */}
+      {ackMetni ? (
+        <Text
+          style={[styles.ackText, { color: ackRenk }]}
+          testID="cihaz-onayi"
+          accessibilityRole="text"
+          accessibilityLiveRegion="polite"
+        >
+          {ackMetni}
         </Text>
       ) : null}
 
@@ -420,6 +465,7 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.4 },
 
   errorText: { color: "#ef4444", fontSize: typography.small },
+  ackText: { fontSize: typography.small, fontWeight: "600", marginTop: spacing.xs },
   offlineBanner: {
     backgroundColor: "#1e293b",
     borderRadius: 6,
