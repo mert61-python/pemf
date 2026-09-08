@@ -37,6 +37,15 @@
  *  │      bu bilinçli bir tezgâh karşılaştırmasıdır. Aynı main.c iki      │
  *  │      projede derlenir (stm32_pemf / stm32_pemf_unipolar), yalnız     │
  *  │      pemf_surus.h farklıdır — kapı: tests/test_stm_main_saglik.py.   │
+ *  │                                                                     │
+ *  │  PİN DURUMU — UNIPOLAR projede "hangi pin PWM, hangisi boşta?":     │
+ *  │    PWM ÇIKAN   (IN_A)        : PC8  PC9  PD10 PC6  PA8   (bobin 1-5) │
+ *  │    SÜRÜLMEYEN  (IN_B, LOW)   : PD12 PE10 PD11 PC7  PA9   (bobin 1-5) │
+ *  │    IN_B pinleri yine push-pull ÇIKIŞ olarak kurulur ve kalıcı LOW    │
+ *  │    tutulur (yarım-köprü girişi için güvenli durum); fiziksel olarak  │
+ *  │    boş bırakılabilir. Başka işe AYRILMIŞ pin YOK — ayırmak için      │
+ *  │    coil_gpio[].portB/pinB ve Coil_GpioInit değişmeli. BİPOLAR projede│
+ *  │    10 pinin hepsi (A+B) darbelenir.                                  │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -107,6 +116,12 @@
  *   PC6   → GPIO OUT (IN_A Bobin 4)   PC7   → GPIO OUT (IN_B Bobin 4)
  *   PA8   → GPIO OUT (IN_A Bobin 5)   PA9   → GPIO OUT (IN_B Bobin 5)
  *   LED   → PB0
+ *
+ *   SÜRÜŞ KİPİNE GÖRE (Core/Inc/pemf_surus.h):
+ *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 10 pinin HEPSİ darbelenir
+ *     UNIPOLAR (stm32_pemf_unipolar) : PWM YALNIZ IN_A sütununda (PC8 PC9 PD10 PC6 PA8);
+ *                                      IN_B sütunu (PD12 PE10 PD11 PC7 PA9) sürülmez,
+ *                                      çıkış olarak kurulu + kalıcı LOW, boşta.
  *
  ******************************************************************************
  */
@@ -1509,6 +1524,10 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
  *   PD11  → Bobin 3 IN_B
  *   PC6   → Bobin 4 IN_A
  *   PD12  → Bobin 1 IN_B    PE10 → Bobin 2 IN_B
+ *
+ *   UNIPOLAR projede (PEMF_SURUS_UNIPOLAR=1) IN_B pinleri (PD12 PE10 PD11 PC7 PA9) de
+ *   AYNEN çıkış olarak kurulur ama ISR onları hiç HIGH yapmaz → kalıcı LOW, boşta.
+ *   PWM yalnız IN_A pinlerinde: PC8 PC9 PD10 PC6 PA8.
  *
  * NOT: Önceki mimaride (v1.x) bu pinler AF modunda Timer OC kanallarına
  * bağlıydı. DDS mimarisinde (v2.0) tümü GPIO_OUTPUT_PP olarak yapılandırılır.

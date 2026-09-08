@@ -19,6 +19,13 @@
  * Değişmeyen: protokol (88 bayt), ölü-adam watchdog, süre auto-stop, slew, NTC, PB1 senkron,
  * IN_B pini yine çıkış olarak kurulur ve LOW tutulur (yanlış projeyle yakılsa bile tanımsız değil).
  *
+ * PİN DURUMU (UNIPOLAR projede — "hangi pinde PWM kaldı, hangisi boşta?"):
+ *   PWM ÇIKAN  (IN_A)      : PC8 (bobin 1) · PC9 (2) · PD10 (3) · PC6 (4) · PA8 (5)
+ *   SÜRÜLMEYEN (IN_B, LOW) : PD12 (bobin 1) · PE10 (2) · PD11 (3) · PC7 (4) · PA9 (5)
+ *   IN_B pinleri boşta ama AYRILMIŞ DEĞİL: çıkış kurulu + kalıcı LOW (yarım-köprü girişi için
+ *   güvenli); fiziksel olarak bağlanmayabilir. Başka amaçla kullanmak için main.c'de
+ *   coil_gpio[].portB/pinB ve Coil_GpioInit değişmeli. Bipolar projede 10 pinin hepsi darbelenir.
+ *
  * ⚠️ Unipolar tek yönlü darbe = net DC ≠ 0 (bipolar sözleşmenin tam tersi). Bu bilinçli bir tezgâh
  * karşılaştırmasıdır; doz kalibrasyonu ve termal davranış bipolar ölçümlerinden AYRI değerlendirilir.
  ******************************************************************************
