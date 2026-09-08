@@ -36,6 +36,7 @@ sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanl�
 import capraz  # noqa: E402  — `pf/` bu depoda izlenmez; yoksa atla (zorunlu kipte düşür)
 
 EKRAN = "pf/src/screens/AiHubScreen.tsx"
+YARDIMCI = "pf/src/services/apiClient.ts"  # aiHataMesaji + AI_ZAMAN_ASIMI_MESAJI tek kaynağı (2026-09-08)
 
 #: `setTimeout(() => ctrl.abort(), <X>)` — X sayı ise elle yazılmış sınır demektir.
 _IPTAL_DESENI = re.compile(r"ctrl\.abort\(\),\s*([A-Za-z_][A-Za-z0-9_]*|\d+)\s*\)")
@@ -126,9 +127,15 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
     # kontrolü `if (false)` yapıldı ve test GEÇTİ, çünkü BAŞKA iki modülde satır-içi kontroller
     # vardı. (Onlar da bu düzeltmede `aiHataMesaji`ye devredildi; ama iddia yine de yere
     # BAĞLI olmalı, yoksa aynı boşluk tekrar açılır.) Kontrol YARDIMCININ İÇİNDE aranır.
-    i = kod.find("function aiHataMesaji")
-    assert i >= 0, "aiHataMesaji yardimcisi yok → iptal ayrimi yapilamaz"
-    govde = kod[i : kod.find("\n}", i) + 2]
+    # 2026-09-08: yardımcı saf fonksiyon olarak `services/apiClient.ts`e taşındı (fetch reddi /
+    # geçersiz yanıt sınıfları eklendi; Jest `aiHataMesaji.test.ts`). Ekran onu ORADAN alır.
+    kod_y = _kod(capraz.oku(YARDIMCI))
+    i = kod_y.find("function aiHataMesaji")
+    assert i >= 0, "aiHataMesaji yardimcisi yok (apiClient.ts) → iptal ayrimi yapilamaz"
+    assert re.search(r'import \{[^}]*\baiHataMesaji\b[^}]*\} from "@/services/apiClient"', kod), (
+        "AiHubScreen aiHataMesaji'yi apiClient'tan ALMIYOR — yerel kopya/ayrisma"
+    )
+    govde = kod_y[i : kod_y.find("\n}", i) + 2]
     assert re.search(r'===\s*"AbortError"', govde), (
         "aiHataMesaji ICINDE AbortError kontrolu yok → ham DOM metni "
         '("signal is aborted without reason") kullaniciya gosterilir'
@@ -141,7 +148,8 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
     # sessizce kopmasına izin verir — arızanın kök sebebi zaten tam olarak buydu.
     # 12 = 1 tanım + 11 çağrı (AI modüllerinin `catch` blokları). Yeni bir AI modülü
     # eklenince bu sayı BİLİNÇLİ güncellenmeli; `/simulator` rota sözleşmesiyle aynı mantık.
-    BEKLENEN_GECIS = 13  # 2026-08-26: +1 ScratchModule (Yara Kapanma) — tek-kaynak aiHataMesaji kullanır
+    # 2026-09-08: tanım apiClient.ts'e taşındı → ekranda yalnız 12 ÇAĞRI kalır (eski 13 = 1 tanım + 12).
+    BEKLENEN_GECIS = 12
     kullanim = len(re.findall(r"aiHataMesaji\(", kod))
     assert kullanim == BEKLENEN_GECIS, (
         f"aiHataMesaji gecis sayisi {kullanim}, beklenen {BEKLENEN_GECIS} — bir AI modulu "
@@ -152,12 +160,12 @@ def test_KRITIK_iptal_HAM_DOM_METNI_gostermez():
 def test_zaman_asimi_mesaji_TEKRAR_DENEMEYI_soyler():
     """Zaman aşımında tekrar denemek İŞE YARAR (model artık bellekte). Kullanıcı bunu bilmeli;
     aksi hâlde ürünü bozuk sanıp vazgeçer — asıl şikâyet buydu."""
-    src = capraz.oku(EKRAN)
+    src = capraz.oku(YARDIMCI)  # 2026-09-08: sabit de yardımcıyla birlikte apiClient.ts'te
     # ⚠️ `(.+?);` KULLANMAYIN: mesaj çok satırlı `"..." + "..."` birleştirmesidir ve non-greedy
     # eşleşme ilk satırda kesiliyordu (test yanlış-kırmızı verdi). Sabitten sonraki pencereye bak.
     kod = _kod(src)
-    i = kod.find("AI_ZAMAN_ASIMI_MESAJI")
-    assert i >= 0, "AI_ZAMAN_ASIMI_MESAJI sabiti bulunamadi"
+    i = kod.find("AI_ZAMAN_ASIMI_MESAJI =")
+    assert i >= 0, "AI_ZAMAN_ASIMI_MESAJI sabiti bulunamadi (apiClient.ts)"
     mesaj = kod[i : i + 500]
     assert "zaman aşımı" in mesaj.lower(), "mesaj ne oldugunu SOYLEMIYOR"
     assert "Tekrar deneyin" in mesaj, "mesaj kullaniciya NE YAPACAGINI soylemiyor"

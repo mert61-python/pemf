@@ -59,3 +59,4 @@ scikit-learn==1.7.2
 onnxruntime==1.19.2               # EM modulleri (em_kedi/fantom/petri) modul-seviyesinde ister;
                                    # XAI kalem-4 testleri gercek predict-zinciri sozlesmesini olcer
                                    # (CPU wheel ~50MB, GB-sinifi 'agir AI' degil; kosu 71c19a8 dersi)
+PyYAML==6.0.3                    # cabin_config kapısı (tests/test_kabin_config_65x50x50.py) — üretimde requirements.txt'te; CI'da yoktu → predictor DEFAULT'a düşüyordu
