@@ -59,7 +59,7 @@ aruco:
   dict: DICT_5X5_50              # OpenCV ArUco sozluk
   real_cm: 10.0                    # marker kenar uzunlugu (kumpas)
   plane_offset_cm: 0.0
-  normal_axis_in_cabin: "+X"
+  normal_axis_in_cabin: "-Z"     # marker ARKA duvarda, siyah yuzu one (kameraya) bakar
   refine_corners: true
   use_apriltag_corners: false
 
@@ -68,8 +68,10 @@ aruco:
 # 2) GEOMETRY — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 geometry:
-  qr_to_origin_cm: [30.0, -21.5, -10.0]
-  cabin_extent_cm: [60.0, 43.0, 20.0]
+  # ONAYLI GEOMETRI 2026-09-08 (sahip olcusu 65x50x50): marker ARKA duvar sol-ust,
+  # merkezi (-24.5,+17,+25) -> origin vektoru; kamera sag-alt-ON kose. Ayrinti: cat_organ yaml.
+  qr_to_origin_cm: [24.5, -17.0, -25.0]
+  cabin_extent_cm: [65.0, 50.0, 50.0]
   axes: "x=lateral,y=dorsal,z=camera"
 
 
@@ -77,11 +79,11 @@ geometry:
 # 3) CAMERA — ArUco modunda kullanilir (kedi paterni)
 # -----------------------------------------------------------------------------
 camera:
-  fixed_position_cm: [30.0, -21.5, -10.0]
+  fixed_position_cm: [32.5, -25.0, -25.0]
   look_at_cm: [0.0, 0.0, 0.0]
   up_cabin: [0.0, 1.0, 0.0]
-  to_marker_cm: 76.5
-  to_origin_cm: 38.2
+  to_marker_cm: 86.7
+  to_origin_cm: 48.0
   intrinsics_npz: null            # null -> approx intrinsics
 
 

@@ -25,7 +25,7 @@ from .lib.pipeline import estimate_organs_pnp
 from .lib.pose import classify_pose
 from .lib.validation import anatomic_consistency_check
 from .lib.canonical import KEYPOINT_NAMES, ORGAN_IDS
-from .lib.cabin_config import load_cabin_config
+from .lib.cabin_config import load_cabin_config, varsayilan_kabin_yaml
 
 # organ_id → TR ad (canonical ORGAN_IDS ile birebir)
 ORGAN_NAMES = dict(ORGAN_IDS)  # {1:"mide", 2:"bobrek", ...}
@@ -48,10 +48,19 @@ class CatOrganPredictor:
     def __init__(self, device: str = "cpu", models_dir: str | os.PathLike | None = None):
         self.device = device
         self._resolve_models(models_dir)
-        # ArUco/cabin varsayılanları (main() ile aynı; CLI verilmediğinde)
-        _qr.ARUCO_REAL_CM = 10.0
-        _qr.ARUCO_DICT = "DICT_5X5_50"
-        self.cabin_cfg = load_cabin_config(None)
+        # Kabin yapılandırması = paketli cabin_config_example.yaml (kabin kurulumunda doldurulan dosya).
+        # 2026-09-08'e kadar burada `load_cabin_config(None)` → DEFAULT geliyordu: fixed_position/
+        # to_marker YOK → `has_perspective_data` False → ArUco/perspektif yolu uygulamada HİÇ
+        # çalışmıyordu (yaml güncellemeleri etkisizdi). Dosya yok/bozuksa eski davranış (DEFAULT,
+        # kalibrasyonsuz kanonik) korunur — analiz düşmez. Kapı: tests/test_kabin_config_65x50x50.py
+        try:
+            self.cabin_cfg = load_cabin_config(varsayilan_kabin_yaml())
+        except Exception as e:  # noqa: BLE001 — bozuk yaml analizi düşürmesin
+            print(f"  ! cabin_config yüklenemedi ({e}); DEFAULT (kalibrasyonsuz) kullanılıyor")
+            self.cabin_cfg = load_cabin_config(None)
+        # ArUco sabitleri TEK kaynaktan (yaml) — basılı marker sayfasıyla aynı: DICT_5X5_50 / 10 cm
+        _qr.ARUCO_REAL_CM = float((self.cabin_cfg.get("aruco") or {}).get("real_cm", 10.0))
+        _qr.ARUCO_DICT = str((self.cabin_cfg.get("aruco") or {}).get("dict", "DICT_5X5_50"))
         # cold-start: ilk çağrı ONNX session'ları yükler (runners cache)
 
     def _resolve_models(self, models_dir):
@@ -89,10 +98,13 @@ class CatOrganPredictor:
 
         # 3. Pose sınıflandırma + organ atlası (Procrustes + PnP)
         pose_info = classify_pose(kp_d, seg.get("mask_xy"), bbox)
+        _geo = self.cabin_cfg.get("geometry") or {}
         cabin_params = {
-            "qr_to_origin_cm": [0.0, 0.0, 0.0],
+            # marker→origin vektörü ve kabin boyutu yaml'dan (eskiden sabit 0 → QR bulununca
+            # koordinatlar origin'e değil marker'a göre çıkıyordu)
+            "qr_to_origin_cm": list(_geo.get("qr_to_origin_cm") or [0.0, 0.0, 0.0]),
             "axes_def": "x=right,y=down,z=depth",
-            "extent_cm": [0.0, 0.0, 0.0],
+            "extent_cm": list(_geo.get("cabin_extent_cm") or [0.0, 0.0, 0.0]),
             "config": self.cabin_cfg,
         }
         organs = estimate_organs_pnp(kp_d, kp[:, 2], bbox, pose_info,

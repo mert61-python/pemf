@@ -88,6 +88,16 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+# Paketli örnek yaml (kabin kurulumunda doldurulan tek dosya). em_fantom/petri loader'ları `None`'ı
+# bu dosyaya çözer; cat_organ 2026-09-08'e kadar çözmüyordu (DEFAULT → perspektif yolu hiç çalışmadı).
+DEFAULT_CONFIG_YAML = Path(__file__).resolve().parent.parent / "cabin_config_example.yaml"
+
+
+def varsayilan_kabin_yaml() -> str | None:
+    """Paketli `cabin_config_example.yaml` varsa yolunu döndür, yoksa None (DEFAULT_CONFIG)."""
+    return str(DEFAULT_CONFIG_YAML) if DEFAULT_CONFIG_YAML.exists() else None
+
+
 def load_cabin_config(yaml_path: str | None) -> dict:
     """YAML dosyasini yukle, default'lar ile birlestir.
 
