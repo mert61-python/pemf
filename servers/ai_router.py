@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from servers import ai_pro_hedef  # AI Pro hedef saglayicilari (kedi | fantom | petri)
 from servers.ai_client import (
     ai_service_enabled,
     delegate_infer,
@@ -32,6 +33,7 @@ from utils.ses_kalitesi import normalize_entropi as ses_normalize_entropi
 from utils.ses_kalitesi import sessiz_mi as ses_sessiz_mi
 from utils.ses_kalitesi import wav_rms_dbfs as ses_wav_rms_dbfs
 from utils.stm32_protocol_limits import (
+    AI_PRO_DUTY_MAX_RATIO,
     normalize_ai_pro_duty_ratio,
     normalize_phase_deg,
 )
@@ -660,6 +662,11 @@ _ORGAN_NAMES = {
 
 # ── cat_organ organ-lokalizasyon (el takibi YERİNE; kullanıcı kararı: MediaPipe Hands SÖKÜLDÜ) ──
 # cat_organ ~1-4sn/kare (ağır) → loop HER KAREDE çalıştırmaz; periyodik lokalize + cache.
+# AKTIF HEDEF MODELI (Faz 1, 2026-09-08): istemci `model` alaniyla secer, onay muhrune yazilir,
+# /ai/pro/start MUHURDEN okur. Yalniz `_ai_loop_lock` altinda yazilir. Varsayilan "kedi" ->
+# `model` gondermeyen ESKI istemciler (ve mobil kare yolu) bugunku davranisi surdurur.
+_ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
+
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
 _AI_LOST_STOP_STREAK = 3  # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
 _MIN_RELIABILITY = 0.3  # organ güveni bu eşiğin altında → "bulunamadı" → coil SÜRÜLMEZ
@@ -814,18 +821,31 @@ def _localize_organ_gpu(frame, organ_id):
     return _extract_organ_target(organs_by_id, organ_id, overlay)
 
 
+def _aktif_saglayici():
+    """Seansın/hazırlığın AKTİF hedef sağlayıcısı (kedi | fantom | petri).
+
+    `_ai_hedef_modeli` yalnız `_ai_loop_lock` altında yazılır (start mühürden okur). Bilinmeyen
+    bir ad kalırsa döngü ölmesin diye varsayılana (kedi) düşülür — istemci doğrulaması uçlarda
+    422 ile zaten yapılır."""
+    try:
+        return ai_pro_hedef.saglayici_al(_ai_hedef_modeli)
+    except ValueError:
+        logger.error("AI Pro: bilinmeyen hedef modeli %r → varsayılana düşüldü", _ai_hedef_modeli)
+        return ai_pro_hedef.saglayici_al(None)
+
+
 def _localize_organ(frame, organ_id):
-    """Kareden seçili organı cat_organ ile lokalize et (el takibinin YERİNE).
-    cat_organ pipeline (YOLOseg + DLC + RTMPose + PnP, ~1-4sn) → 10 organ 3B. Hedefin
-    coord_cabin_cm(ArUco)/coord_3d_cm → cm→mm [-300,300] clamp; organ_id 0 (Tüm Vücut) → (0,0,0).
-    ai_service_enabled() ise inference GPU servisine DEVREDİLİR (hata → CPU-yerel fallback, davranış korunur).
-    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, kedi_var)."""
-    if ai_service_enabled():
-        try:
-            return _localize_organ_gpu(frame, organ_id)
-        except Exception as e:
-            logger.warning("AI Pro cat_organ GPU delegasyonu başarısız → CPU-yerel: %s", e)
-    return _localize_organ_cpu(frame, organ_id)
+    """Kareden seçili HEDEFİ lokalize et — AKTİF SAĞLAYICIYA delege eder (Faz 1, 2026-09-08).
+
+    Kedi sağlayıcısında davranış DEĞİŞMEDİ: cat_organ pipeline (YOLOseg + DLC + RTMPose + PnP,
+    ~1-4sn) → 10 organ 3B; hedefin coord_cabin_cm(ArUco)/coord_3d_cm → cm→mm [-300,300] clamp;
+    organ_id 0 (Tüm Vücut) → (0,0,0); ai_service_enabled() ise GPU'ya devredilir (hata → CPU).
+
+    ⚠️ Bu ADIN ve 8'li tuple sözleşmesinin korunması bilinçlidir: hazırlık/seans/mobil üç yolu da
+    buradan geçer ve 9+ test bu adı monkeypatch'ler. Çağıranlar sonucu YILDIZLI açar (bkz.
+    tests/test_ai_pro_seans_dongusu_lokalizasyon.py).
+    Döner: (localized, x_mm, y_mm, z_mm, reliability, overlay_bgr, ozne_var, guven_dokumu)."""
+    return _aktif_saglayici().localize(frame, organ_id)
 
 
 def _predict_and_drive_cpu(x_mm, y_mm, z_mm, organ_id):
@@ -840,7 +860,8 @@ def _predict_and_drive_cpu(x_mm, y_mm, z_mm, organ_id):
         achieved_B=_AI_ACHIEVED_B,
         duty_sum=_AI_DUTY_SUM,
     )
-    D = np.clip([result.get(f"D{i}", 0.0) for i in range(1, 8)], 0.0, 0.50).tolist()
+    # ⚠️ HAM: duty kirpmasi `_predict_and_drive` ZARFINDA (2026-09-08, tek kaynak).
+    D = [float(result.get(f"D{i}", 0.0)) for i in range(1, 8)]
     P = [float(result.get(f"P{i}", 0.0)) for i in range(1, 8)]  # zaten bobin-1 referanslı
     e_field = float(max(0.0, result.get("result_E", 0.0)))
     return D, P, e_field
@@ -860,29 +881,36 @@ def _predict_and_drive_gpu(x_mm, y_mm, z_mm, organ_id):
             "duty_sum": _AI_DUTY_SUM,
         },
     )
-    D = np.clip([resp.get(f"D{i}", 0.0) for i in range(1, 8)], 0.0, 0.50).tolist()
+    # ⚠️ HAM: duty kirpmasi `_predict_and_drive` ZARFINDA (2026-09-08, tek kaynak).
+    D = [float(resp.get(f"D{i}", 0.0)) for i in range(1, 8)]
     P = [float(resp.get(f"P{i}", 0.0)) for i in range(1, 8)]
     e_field = float(max(0.0, resp.get("result_E", 0.0)))
     return D, P, e_field
 
 
 def _predict_and_drive(x_mm, y_mm, z_mm, organ_id):
-    """em_kedi.predict(x,y,z,organ_id) → D[7]/P[7]/e_field (eski el-pipeline'ının em_kedi kısmı, aynen).
-    ai_service_enabled() ise GPU servisine DEVREDİLİR (hata → CPU-yerel fallback). duty-clip+faz DEĞİŞMEDİ;
-    TAM başarısızlıkta (0,0,0) döner = coil SÜRÜLMEZ (güvenli). Döner: (D_list[7], P_list[7], e_field)."""
-    D = [0.0] * 7
-    P = [0.0] * 7
-    e_field = 0.0
+    """EM doz modeli → D[7]/P[7]/e_field — AKTİF SAĞLAYICIYA delege eder (Faz 1, 2026-09-08).
+
+    ⚠️ DUTY KIRPMASI ARTIK TEK YERDE: burada. Eskiden `_predict_and_drive_cpu`/`_gpu` içinde iki
+    kez yazılıydı (0..0.50 literali) ve YALNIZ kedi yolunu kapsıyordu; sağlayıcı arayüzü gelince
+    yeni bir model kırpmasız kalabilirdi. Kırpma zarfa alınınca HER sağlayıcı aynı politikadan
+    geçer ve onay ekranında gösterilen D ile donanıma giden D aynı olur (`_drive_coils_ai_pro` ve
+    `_build_ai_pro_percoil` zaten `normalize_ai_pro_duty_ratio` kullanıyor). Sınır DEĞİŞMEDİ:
+    `AI_PRO_DUTY_MAX_RATIO` (0.50) — bu YENİ bir backend güvenlik sınırı DEĞİL, mevcut model
+    politikasının tek kaynağa alınmasıdır.
+
+    TAM başarısızlıkta (0,0,0) döner = bobin SÜRÜLMEZ (güvenli varsayılan, değişmedi).
+    Döner: (D_list[7], P_list[7], e_field)."""
     try:
-        if ai_service_enabled():
-            try:
-                return _predict_and_drive_gpu(x_mm, y_mm, z_mm, organ_id)
-            except Exception as e:
-                logger.warning("AI Pro em_kedi GPU delegasyonu başarısız → CPU-yerel: %s", e)
-        return _predict_and_drive_cpu(x_mm, y_mm, z_mm, organ_id)
+        D, P, e_field = _aktif_saglayici().predict(x_mm, y_mm, z_mm, organ_id)
     except Exception as pred_err:
-        logger.error("KediPredictor tahmin hatası: %s", pred_err)
-    return D, P, e_field
+        logger.error("AI Pro doz tahmini hatası (model=%s): %s", _ai_hedef_modeli, pred_err)
+        return [0.0] * 7, [0.0] * 7, 0.0
+    return (
+        [float(d) for d in np.clip(D, 0.0, AI_PRO_DUTY_MAX_RATIO)],
+        [float(p) for p in P],
+        float(max(0.0, e_field)),
+    )
 
 
 def _drive_coils_ai_pro(D, P):
