@@ -301,19 +301,124 @@ def test_KRITIK_agir_modeller_ENJEKTE_edilir(sag):
     assert izler["kurulum"][1].get("yolo_device") == "cpu", "petri pipeline CPU'ya sabitlenmedi (CUDA yok)"
 
 
-def test_KRITIK_pipeline_patlarsa_SIFIR_doner_ve_ozne_yok(sag):
-    """Beklenmeyen istisna döngüyü öldürmemeli; hedef yok sayılır (bobin sürülmez)."""
+def test_KRITIK_pipeline_patlarsa_SIFIR_doner_ve_ozne_yok(sag, monkeypatch):
+    """Beklenmeyen istisna döngüyü öldürmemeli; hedef yok sayılır (bobin sürülmez).
+
+    ⚠️ `monkeypatch` ŞART: doğrudan `_SahtePipeline.process_image = ...` + `del` yapmak sınıfın
+    GERÇEK metodunu kalıcı silip SONRAKİ testleri bozuyordu (ölçüldü)."""
     hedef, fantom, petri, pred, izler = sag
 
     def _patla(*a, **k):
         raise RuntimeError("beklenmeyen")
 
     izler["sonuclar"] = []
-    _SahtePipeline.process_image = _patla
-    try:
-        sonuc = fantom.localize("kare", 0)
-    finally:
-        del _SahtePipeline.process_image
+    monkeypatch.setattr(_SahtePipeline, "process_image", _patla)
+    sonuc = fantom.localize("kare", 0)
 
     assert sonuc[0] is False and sonuc[6] is False
     assert fantom.son_lokalizasyon_meta().get("hata") == "pipeline"
+
+
+# ── Faz 2b: sağlayıcı meta'sının TEL SÖZLEŞMESİNE akması ──────────────────────────────────
+
+
+def test_KRITIK_saglayici_metasi_STATUS_ucuna_akar(monkeypatch):
+    """Kare üstünde hedef seçimi, kalibrasyon rozeti ve onay uyarıları BU alanlardan beslenir.
+    MUTASYON: cache.update'ten `**_saglayici_cache_alanlari()` satırını silin → KIRMIZI."""
+    from fastapi.testclient import TestClient
+
+    import servers.ai_router as air
+    import servers.api_server as apis
+
+    snap = dict(air._ai_organ_cache)
+    try:
+        with air._ai_cache_lock:
+            air._ai_organ_cache.update(
+                {
+                    "targets": [{"id": 3, "label": "Kuyu 3", "px": [10, 20], "secili": True}],
+                    "method": "aruco_pnp",
+                    "mm_per_px": 0.42,
+                    "target_label": "Kuyu 3",
+                    "ood": True,
+                }
+            )
+        st = TestClient(apis.app).get("/api/ai/pro/status").json()
+    finally:
+        air._ai_organ_cache.clear()
+        air._ai_organ_cache.update(snap)
+
+    assert st.get("targets") and st["targets"][0]["label"] == "Kuyu 3", f"hedef adayları status'a akmıyor: {st}"
+    assert st.get("method") == "aruco_pnp", "kalibrasyon yöntemi status'a akmıyor (rozet çizilemez)"
+    assert st.get("mmPerPx") == 0.42 and st.get("targetLabel") == "Kuyu 3"
+    assert st.get("ood") is True, "eğitim-aralığı işareti status'a akmıyor (onay uyarısı çizilemez)"
+
+
+def test_KRITIK_kedi_hattinda_meta_alanlari_BOS_kalir():
+    """Veteriner tel sözleşmesi değişmez: kedi sağlayıcısı kare üstü aday üretmez."""
+    import servers.ai_pro_hedef as hedef
+
+    assert hedef.saglayici_al("kedi").son_lokalizasyon_meta() == {}, (
+        "kedi sağlayıcısı meta üretiyor — veteriner panelinde beklenmeyen hedef adayları görünür"
+    )
+
+
+def test_YAPISAL_petri_dedektoru_SystemExit_FIRLATMAZ():
+    """SystemExit BaseException'dır ve `except Exception`dan KAÇAR: AI Pro thread'inde kamerayı
+    bırakan try/finally atlanır, `_ai_hazirlik_active` True kalır ve sonraki seans kamerayı
+    açamaz. MUTASYON: RuntimeError'ı SystemExit'e döndürün → KIRMIZI."""
+    from pathlib import Path
+
+    kok = Path(__file__).resolve().parents[1]
+    src = (kok / "ai_hub" / "inference_petri_dish" / "petri_cv" / "petri_detector.py").read_text(encoding="utf-8")
+    assert "raise SystemExit(" not in src, (
+        "petri dedektörü SystemExit fırlatıyor — hazırlık/seans thread'inde kamera sızdırır"
+    )
+    assert "raise RuntimeError(" in src, "ultralytics eksikliği artık hiç bildirilmiyor?"
+
+
+def test_YAPISAL_EM_scaler_yollari_MODEL_DIZINININ_disinda_da_aranir():
+    """Docker imajında ai_hub'ın küçük .pkl dosyaları elenir; ONNX ProgramData'dan çözülürken
+    scaler'lar modül dizininde aranıp predictor SESSİZCE ölüyordu (em_kedi'de çözülmüş desen).
+    MUTASYON: `_yan(...)` çağrılarını `os.path.join(_DIR, ...)`a döndürün → KIRMIZI."""
+    from pathlib import Path
+
+    kok = Path(__file__).resolve().parents[1]
+    for modul in ("inference_em_fantom", "inference_em_petri"):
+        src = (kok / "ai_hub" / modul / f"{modul}.py").read_text(encoding="utf-8")
+        assert "yan_dosya_coz" in src, f"{modul}: scaler yolu çözücüsü yok (Docker'da sessiz ölüm)"
+        for sabit in ("SCALER_X_PATH", "SCALER_EXTRA_PATH", "SCALER_Y_PATH"):
+            satir = [s for s in src.splitlines() if s.startswith(f"{sabit} = ")]
+            assert satir and "_yan(" in satir[0], f"{modul}: {sabit} çözücüsüz ({satir})"
+
+
+def test_KRITIK_meta_UC_lokalizasyon_yolunda_da_cache_e_YAZILIR(sag, monkeypatch):
+    """Önceki test status→cache OKUMASINI ölçüyor; bu test cache'e YAZIMI ölçer.
+
+    ⚠️ Neden ayrı: mutasyon (cache.update'ten `**_saglayici_cache_alanlari()` silinmesi) yalnız
+    okuma testinde YEŞİL kalıyordu — "varlık değil uygulama ölç" dersi. Burada (a) yardımcının
+    aktif sağlayıcının meta'sını gerçekten eşlediği, (b) ÜÇ lokalizasyon yolunun (hazırlık, seans,
+    mobil kare) da bu alanları yazdığı ölçülür.
+    MUTASYON: üç bloktan birindeki `**_saglayici_cache_alanlari()` satırını silin → KIRMIZI."""
+    from pathlib import Path
+
+    import servers.ai_router as air
+
+    hedef, fantom, petri, pred, izler = sag
+    _sonuc_kuyruguna(izler, _SahteSonuc(wells=[_SahteBolge((7, 7), (1.0, 2.0, 3.0), organ_id=1)]))
+    monkeypatch.setitem(hedef.SAGLAYICILAR, "petri_test", petri)
+    monkeypatch.setattr(air, "_ai_hedef_modeli", "petri_test")
+
+    petri.localize("kare", 0)
+    alanlar = air._saglayici_cache_alanlari()
+
+    assert alanlar.get("targets"), f"yardımcı aktif sağlayıcının hedeflerini eşlemiyor: {alanlar}"
+    assert alanlar.get("method") == "aruco_pnp", "kalibrasyon yöntemi eşlenmiyor"
+    assert alanlar.get("target_label"), "seçili hedef etiketi eşlenmiyor"
+    assert "ood" in alanlar and "e_cancer" in alanlar, f"onay ekranı alanları eksik: {sorted(alanlar)}"
+
+    src = (Path(air.__file__)).read_text(encoding="utf-8")
+    say = src.count("**_saglayici_cache_alanlari(),")
+    assert say == 3, (
+        f"lokalizasyon yollarından {say}/3'ü sağlayıcı meta'sını cache'e yazıyor — yazmayan yolda "
+        "(hazırlık / seans / mobil kare) kare üstü hedef seçimi ve kalibrasyon rozeti çalışmaz"
+    )

@@ -40,9 +40,24 @@ if not os.path.exists(ONNX_PATH):
         ONNX_PATH = download_model_sync(f"ai_hub/inference_em_petri/{MODEL_NAME}.onnx")
     except Exception as exc:
         MODEL_DOWNLOAD_ERROR = exc
-SCALER_X_PATH = os.path.join(_DIR, "scaler_X.pkl")
-SCALER_EXTRA_PATH = os.path.join(_DIR, "scaler_extra.pkl")
-SCALER_Y_PATH = os.path.join(_DIR, "scaler_y.pkl")
+# SCALER YOLU COZUCUSU (2026-09-09, em_kedi paritesi): Docker imajinda ai_hub kopyalanirken
+# kucuk .pkl dosyalari eleniyor (Dockerfile .dockerignore); ONNX ProgramData/release_assets
+# uzerinden cozulurken scaler'lar modul dizininde araniyor ve predictor SESSIZCE oluyordu.
+# `yan_dosya_coz` ONNX'in cozuldugu dizinde de arar; bulamazsa yerel yolu AYNEN dondurur
+# (klinik EXE davranisi degismez).
+def _yan(ad: str) -> str:
+    yerel = os.path.join(_DIR, ad)
+    try:
+        from utils.model_downloader import yan_dosya_coz
+
+        return yan_dosya_coz(yerel, f"ai_hub/inference_em_petri/{ad}")
+    except Exception:
+        return yerel
+
+
+SCALER_X_PATH = _yan("scaler_X.pkl")
+SCALER_EXTRA_PATH = _yan("scaler_extra.pkl")
+SCALER_Y_PATH = _yan("scaler_y.pkl")
 
 ORGAN_IDS = [0, 1]   # 0=saglikli, 1=kanserli
 D_COLS = [f"D{i}" for i in range(1, 8)]

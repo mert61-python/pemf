@@ -146,6 +146,12 @@ class KediSaglayici:
             return f"Hayvan görünüyor ama {ad} seçilemedi — kamerayı biraz çevirip açıyı değiştirin."
         return "Kamerayı hastaya doğrultun; hayvan kadrajda görünmüyor."
 
+    def son_lokalizasyon_meta(self) -> dict:
+        """Kedi hattı kare üstü HEDEF ADAYI üretmez (organ seçimi çiplerden yapılır) → boş meta.
+        Araştırma sağlayıcıları burada targets/method/ood/E döndürür; tel sözleşmesi ORTAK ve
+        kedi tarafında yalnız-ek alanlar BOŞ kalır (veteriner sözleşmesi değişmez)."""
+        return {}
+
     def xai_sensitivity(self, x_mm: float, y_mm: float, z_mm: float, hedef_id: int):
         from ai_hub.em_kedi import inference_em_kedi as _iek
         from servers import ai_router as air

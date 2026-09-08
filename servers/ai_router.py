@@ -927,6 +927,36 @@ def _yukle_em_petri_cv() -> dict:
     }
 
 
+def _saglayici_meta() -> dict:
+    """Aktif sağlayıcının SON lokalizasyon meta'sı (hedef adayları, kalibrasyon yöntemi, E, ood).
+
+    Kedi hattı BOŞ döndürür (kare üstü aday üretmez; organ çiplerden seçilir) → yalnız-ek alanlar
+    boş kalır ve veteriner tel sözleşmesi DEĞİŞMEZ."""
+    try:
+        return _aktif_saglayici().son_lokalizasyon_meta() or {}
+    except Exception:
+        logger.debug("AI Pro: sağlayıcı meta okunamadı", exc_info=True)
+        return {}
+
+
+def _saglayici_cache_alanlari() -> dict:
+    """`_ai_organ_cache.update(...)` için YALNIZ-EK meta alanları (Faz 2).
+
+    Üç lokalizasyon yolu (hazırlık / seans / mobil kare) aynı alanları yazar → /status, WS
+    `ai_vision` ve /frame yanıtları tek kaynaktan beslenir (kare üstü hedef seçimi + kalibrasyon
+    rozeti + onay ekranı E/ood satırları)."""
+    m = _saglayici_meta()
+    return {
+        "targets": m.get("targets") or [],
+        "method": m.get("method") or "",
+        "mm_per_px": m.get("mm_per_px"),
+        "target_label": m.get("target_label") or "",
+        "e_cancer": m.get("e_cancer"),
+        "e_healthy": m.get("e_healthy"),
+        "ood": bool(m.get("ood")),
+    }
+
+
 def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
     """Model yükleme istisnasını (kod, KULLANICI METNİ) çiftine çevir — eylem söyleyen hata kuralı.
 
@@ -1213,6 +1243,9 @@ def _ai_hazirlik_loop():
                                 # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
                                 # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
                                 "model": _ai_hedef_modeli,
+                                # Sağlayıcı meta'sı (Faz 2): kare üstü hedef adayları, kalibrasyon
+                                # yöntemi, seçili hedefin E'leri, eğitim-aralığı işareti. Kedi'de BOŞ.
+                                **_saglayici_cache_alanlari(),
                                 "guven_dokumu": (l_ek[0] if l_ek else None),
                             }
                         )
@@ -1259,6 +1292,9 @@ def _ai_hazirlik_loop():
                                 "modelName": _aktif_saglayici().title,
                                 "subjectLabel": _aktif_saglayici().subject_label,
                                 "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                                "targets": _ai_organ_cache.get("targets") or [],
+                                "method": _ai_organ_cache.get("method") or "",
+                                "targetLabel": _ai_organ_cache.get("target_label") or "",
                                 "perCoil": [],
                                 "remainingSec": 0,
                                 "durationMin": _ai_duration_min,
@@ -1408,6 +1444,9 @@ def _ai_pro_loop():
                                 # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
                                 # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
                                 "model": _ai_hedef_modeli,
+                                # Sağlayıcı meta'sı (Faz 2): kare üstü hedef adayları, kalibrasyon
+                                # yöntemi, seçili hedefin E'leri, eğitim-aralığı işareti. Kedi'de BOŞ.
+                                **_saglayici_cache_alanlari(),
                                 # Sunum-katmanı XAI paritesi (2026-09-08): hazırlık ve mobil kare
                                 # yolları güven dökümünü yazıyordu, seans yolu yazmıyordu → seans
                                 # boyunca /status ve WS `guvenDokumu` hazırlıktan kalan BAYAT değeri
@@ -1528,6 +1567,9 @@ def _ai_pro_loop():
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
                 "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "targets": _ai_organ_cache.get("targets") or [],
+                "method": _ai_organ_cache.get("method") or "",
+                "targetLabel": _ai_organ_cache.get("target_label") or "",
                 "perCoil": per_coil,
                 "remainingSec": remaining,
                 "durationMin": _ai_duration_min,
@@ -1703,7 +1745,10 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "duration_minutes": sure,
             # MÜHÜRLÜ MODEL (Faz 1): /start bunu okur, gövdedeki `model` yok sayılır.
             "model": _saglayici.ad,
-            "target_label": _saglayici.hedef_adi(oid),
+            "target_label": (c.get("target_label") or _saglayici.hedef_adi(oid)),
+            # Onay ekranı (Faz 2): hedef sınıfının ve çevresinin E'si — onaylayan kişi seçiciliği görsün.
+            "e_cancer": c.get("e_cancer"),
+            "e_healthy": c.get("e_healthy"),
             "coil_ids": list(range(1, 8)),
             "D": [round(float(d), 4) for d in D],
             "P": [round(float(p), 2) for p in P],
@@ -1716,6 +1761,11 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "reliability": round(float(c.get("reliability") or 0.0), 3),
             "localized_at": c.get("at"),
             "subject_label": _saglayici.subject_label,
+            "method": c.get("method") or "",
+            "mm_per_px": c.get("mm_per_px"),
+            # Konum modelin eğitim örnekleminin DIŞINDA mı? "Araştırma amaçlı model tahmini"
+            # uyarısını besler; sürüşü ENGELLEMEZ.
+            "ood": bool(c.get("ood")),
             "client_mode": str(payload.client_mode or "")[:32],
             "achieved_B": _saglayici.achieved_B,
             "duty_sum": _saglayici.duty_sum,
@@ -2102,6 +2152,13 @@ def ai_pro_status():
         # catDetected/guvenDokumu/ownerClientId/hazirlik*) AYNEN kalır → eski istemciler kırılmaz.
         "model": _aktif_saglayici().ad,
         "modelName": _aktif_saglayici().title,
+        # Faz 2 yalnız-ek: kare üstünde hedef seçimi (targets), kalibrasyon rozeti (method/mmPerPx)
+        # ve onay ekranı uyarıları (ood) BU alanlardan beslenir. Kedi hattında boş/varsayılan.
+        "targets": _ai_organ_cache.get("targets") or [],
+        "method": _ai_organ_cache.get("method") or "",
+        "mmPerPx": _ai_organ_cache.get("mm_per_px"),
+        "targetLabel": _ai_organ_cache.get("target_label") or "",
+        "ood": bool(_ai_organ_cache.get("ood")),
         "subjectLabel": _aktif_saglayici().subject_label,
         "subjectDetected": bool(_ai_organ_cache.get("kedi_var")),
         "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
@@ -2178,6 +2235,9 @@ async def ai_pro_frame(
                         # MODEL DAMGASI (Faz 1): propose tazelik kontrolü buna bakar —
                         # kedi hazırlığından kalan cache fantom önerisine "taze" görünmesin.
                         "model": _ai_hedef_modeli,
+                        # Sağlayıcı meta'sı (Faz 2): kare üstü hedef adayları, kalibrasyon
+                        # yöntemi, seçili hedefin E'leri, eğitim-aralığı işareti. Kedi'de BOŞ.
+                        **_saglayici_cache_alanlari(),
                         "guven_dokumu": (l_ek[0] if l_ek else None),
                     }
                 )
@@ -2281,6 +2341,9 @@ async def ai_pro_frame(
                 "modelName": _aktif_saglayici().title,
                 "subjectLabel": _aktif_saglayici().subject_label,
                 "targetName": _aktif_saglayici().hedef_adi(_ai_organ_id),
+                "targets": _ai_organ_cache.get("targets") or [],
+                "method": _ai_organ_cache.get("method") or "",
+                "targetLabel": _ai_organ_cache.get("target_label") or "",
             }
         )
     except HTTPException:

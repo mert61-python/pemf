@@ -66,7 +66,12 @@ class PetriYoloDetector:
             try:
                 from ultralytics import YOLO
             except ImportError:
-                raise SystemExit(
+                # SystemExit DEGIL RuntimeError (2026-09-09): SystemExit BaseException'dir ve
+                # `except Exception` bloklarindan KACAR. AI Pro hazirlik/seans thread'inde bu,
+                # kamerayi birakan try/finally'yi atlayip thread'i olduruyor ve
+                # `_ai_hazirlik_active` True kaliyordu -> sonraki seans kamerayi acamaz.
+                # (renal modulundeki ayni siniftan P3 dersi.)
+                raise RuntimeError(
                     "ultralytics yuklenmiyor. Yukle: pip install ultralytics"
                 )
             self._model = YOLO(str(self.model_path))
