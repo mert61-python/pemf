@@ -55,3 +55,37 @@ dalga biçimi **rekonstrüksiyon**, skopla doğrulanmadan kliniğe güvenilmez:
 
 Değişikliklerin tam gerekçeleri: bu klasördeki dosyaların baş yorumları + commit geçmişi
 (`git log -- firmware/esps3_pemf_coil`).
+
+## Bobin yönü (polarite) ölçümü — `[MAG]` seri raporu (2026-09-08)
+
+Firmware her **1 sn** seri porta (115200) şunu yazar:
+
+```
+[MAG] n=5 ort x=+0.012 y=-0.031 z=+0.418 |B|=0.421 mT | min/max x=… y=… z=+0.05/+0.83 |B|max=0.83 | pwm=ON 100Hz 50%
+```
+
+`ort` = son 1 sn'deki örneklerin ortalaması (**DC bileşen**), `min/max` = uç değerler, `n` = örnek
+sayısı (kontrol döngüsü 5 Hz; MLX90393 gain 2.5×, OSR 1, filtre 3). `pwm` = bu kartın kendi
+sürücüsünün durumu. Yer manyetik alanı + sensör ofseti ~0,03–0,06 mT olarak `ort`'ta hep vardır.
+
+**100 Hz / %50 duty ile bobin yönü ölçümü:**
+
+1. **Sürüş kipi:** yön için **tek-bacak (unipolar)** STM projesi `stm32_pemf_unipolar` ile sür
+   (tek yönlü darbe → net DC ≠ 0 → `ort` işareti polariteyi verir). Simetrik **bipolar** sürüşte
+   ortalama ≈ 0 çıkar, yalnız `|B|max` büyür — yön **okunamaz** (o kipte sadece büyüklük ölçülür).
+2. **Sensör duruşu:** MLX90393'ü bobin yüzeyinin ortasına, çip üzerindeki eksen işaretine göre
+   **her bobinde AYNI yönle** koy (öneri: sensör **Z** ekseni bobin eksenine paralel, çip üst yüzü
+   bobine bakıyor; kablo hep aynı tarafta). Bobinden bobine sensörü döndürürsen işaretler
+   karşılaştırılamaz.
+3. **Sıfır:** bobin kapalıyken (`pwm` yok, STM STOP) `ort z`'yi (seçtiğin eksen) not al = ofset.
+   Bobin açıkken okunan `ort z` − ofset = bobinin DC alanı.
+4. **Yön:** fark **pozitifse** alan sensörün +ekseni yönünde (o yüz sensöre göre KUZEY gibi davranır),
+   **negatifse** ters. Beş bobini aynı duruşla ölç; işareti diğerlerinden farklı çıkan bobin **ters
+   bağlıdır** (sargı yönü ya da IN_A/IN_B sırası). ⚠️ Unipolar projede **bobin 1 darbeyi IN_B'den
+   (PD12)** alır: köprü simetrikse bobin 1'in işareti diğerlerine göre **ters çıkar — beklenen**;
+   bipolar kutupluluk kıyasında bunu hesaba kat.
+5. **Büyüklük:** %50 duty tek-bacakta `ort` ≈ tepe alanın yarısı; `|B|max` tepeye yakındır ama 5 Hz
+   örnekleme tepeyi her saniye yakalamaz (birkaç saniye izle). 0,10 mT altında kalıyorsa mesafeyi
+   azalt / akımı kontrol et (self-test eşiği de 0,10 mT).
+6. **Kayıt:** Arduino IDE Serial Monitor (115200) ya da
+   `python -m serial.tools.miniterm COMx 115200 | tee bobinN.txt` — her bobin için ~10 satır yeter.

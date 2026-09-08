@@ -126,6 +126,47 @@ void TaskNetwork(void *pvParameters) {
 }
 
 // --- CORE 1: REAL-TIME CONTROL TASK ---
+// ============================================================================
+// [MAG] TEZGÂH ÖLÇÜMÜ (sahip 2026-09-08): manyetik sensörün eksen bileşenleri her 1 sn seri porta.
+// Amaç: bobin YÖNÜ (polarite) ölçümü. Kontrol döngüsü 5 Hz örnekler (SENSOR_READ_INTERVAL_MS);
+// 100 Hz sürüşte örnekleme dalga şeklini çözemez ama 1 sn'lik pencerenin ORTALAMASI DC bileşeni
+// verir: tek-bacak (unipolar) sürüşte DC ≠ 0 → `ort` işareti = polarite. Simetrik bipolar sürüşte
+// ortalama ≈ 0'dır (yalnız |B|max büyür) — yön için unipolar STM projesi (README "Bobin yönü").
+// LOG_PRINTF seri mutex'ini alır (100 ms zaman aşımı) → NetworkTask ile çakışmaz; loglama kapalıysa no-op.
+static void magRaporla(const SensorReadings& r, const PWMState& pwm) {
+    static uint32_t sonMs = 0;
+    static uint16_t n = 0, nHata = 0;
+    static float tx = 0.0f, ty = 0.0f, tz = 0.0f, tb = 0.0f;
+    static float mnx = 1e9f, mxx = -1e9f, mny = 1e9f, mxy = -1e9f, mnz = 1e9f, mxz = -1e9f, mxb = 0.0f;
+    if (r.magSensorOk) {
+        n++;
+        tx += r.magX; ty += r.magY; tz += r.magZ; tb += r.magneticField;
+        if (r.magX < mnx) { mnx = r.magX; }
+        if (r.magX > mxx) { mxx = r.magX; }
+        if (r.magY < mny) { mny = r.magY; }
+        if (r.magY > mxy) { mxy = r.magY; }
+        if (r.magZ < mnz) { mnz = r.magZ; }
+        if (r.magZ > mxz) { mxz = r.magZ; }
+        if (r.magneticField > mxb) { mxb = r.magneticField; }
+    } else {
+        nHata++;
+    }
+    uint32_t simdi = millis();
+    if (simdi - sonMs < 1000UL) { return; }
+    sonMs = simdi;
+    if (n == 0) {
+        LOG_PRINTF("[MAG] sensor okunamadi (%u hata/sn) — MLX90393 I2C baglantisini kontrol edin\n", (unsigned)nHata);
+    } else {
+        LOG_PRINTF("[MAG] n=%u ort x=%+.3f y=%+.3f z=%+.3f |B|=%.3f mT | min/max x=%+.3f/%+.3f y=%+.3f/%+.3f z=%+.3f/%+.3f |B|max=%.3f | pwm=%s %dHz %d%%\n",
+                   (unsigned)n, tx / n, ty / n, tz / n, tb / n,
+                   mnx, mxx, mny, mxy, mnz, mxz, mxb,
+                   pwm.active ? "ON" : "OFF", pwm.frequency, pwm.dutyCycle);
+    }
+    n = 0; nHata = 0;
+    tx = ty = tz = tb = 0.0f;
+    mnx = mny = mnz = 1e9f; mxx = mxy = mxz = -1e9f; mxb = 0.0f;
+}
+
 void TaskControl(void *pvParameters) {
     // -----------------------------------------------------------------------
     // BAŞLATMA SIRASI — KRİTİK
@@ -193,6 +234,7 @@ void TaskControl(void *pvParameters) {
         // cihazin kendisi (48C kesme / 45C histerezis; sensor arizaliysa dokunmaz).
         sysCoil.enforceThermalLimit(readings);
         PWMState pwmSelect = sysCoil.getState();
+        magRaporla(readings, pwmSelect); // [MAG] her 1 sn seri rapor (bobin yönü ölçümü)
 
         // Bellek istatistiklerini hesapla
         uint32_t freeHeap = ESP.getFreeHeap();
