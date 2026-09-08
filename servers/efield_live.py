@@ -47,15 +47,20 @@ _live: dict | None = None
 TICK_S = 0.5
 
 
-def set_context(regions: list[dict], organ_id: int | None = None) -> None:
-    """Analiz sonucundan konum bağlamını sakla. `regions`: her biri en az
-    ``centroid_cabin_mm`` (x,y,z) taşıyan tümör bölgeleri. Boş liste → bağlamı TEMİZLE."""
+def set_context(regions: list[dict], organ_id: int | None = None, model: str | None = None) -> None:
+    """Analiz/seans sonucundan konum bağlamını sakla. `regions`: her biri en az
+    ``centroid_cabin_mm`` (x,y,z) taşıyan hedef bölgeleri. Boş liste → bağlamı TEMİZLE.
+
+    `model` (2026-09-09, yalnız-ek): bağlamı hangi hedef modeli kurdu ("fantom" | "petri" | ...).
+    Vekil E modeli seçimi buna göre yapılır; verilmezse eski davranış (fantom vekili) sürer.
+    ⚠️ İmza GERİYE UYUMLU: mevcut çağrılar ve `tests/test_efield_live.py` etkilenmez."""
     global _ctx
     if not regions:
         with _ctx_lock:
             _ctx = None
         _set_live(None)
         return
+    _ad = (model or "").strip().lower() or None
     r0 = regions[0] or {}
     c = r0.get("centroid_cabin_mm") or r0.get("centroid") or []
     if len(c) < 3:
@@ -67,6 +72,7 @@ def set_context(regions: list[dict], organ_id: int | None = None) -> None:
             "y": float(c[1]),
             "z": float(c[2]),
             "organ_id": int(organ_id if organ_id is not None else (r0.get("organ_id") or 1)),
+            "model": _ad,
             "set_at": time.time(),
         }
     logger.info(
@@ -114,7 +120,7 @@ def compute(coils: list[dict]) -> dict | None:
             "ts": time.time(),
         }
     try:
-        pred = _predictor()
+        pred = _predictor((ctx or {}).get("model"))
         if pred is None:
             return None
         out = pred.predict(ctx["x"], ctx["y"], ctx["z"], ctx["organ_id"], achieved_b, duty_sum)
@@ -136,19 +142,32 @@ _pred_lock = threading.Lock()
 _pred = None
 
 
-def _predictor():
-    """Modeli BİR KEZ yükle (2 Hz döngüde her tikte yüklemek diski/CPU'yu boşa yorar)."""
+def _predictor(model: str | None = None):
+    """Vekil E modelini BİR KEZ yükle (2 Hz döngüde her tikte yüklemek diski/CPU'yu boşa yorar).
+
+    `model="petri"` → PetriPredictor, aksi hâlde PhantomPredictor (eski davranış). Sözlükte
+    modele göre önbelleklenir; petri seansında fantom vekili kullanmak E barını yanlış ölçeğe
+    oturtuyordu (2026-09-09)."""
     global _pred
+    _anahtar = "petri" if (model or "").strip().lower() == "petri" else "fantom"
     with _pred_lock:
-        if _pred is None:
-            try:
+        if isinstance(_pred, dict) and _anahtar in _pred:
+            return _pred[_anahtar] or None
+        if not isinstance(_pred, dict):
+            _pred = {}
+        try:
+            if _anahtar == "petri":
+                from ai_hub.inference_em_petri.inference_em_petri import PetriPredictor
+
+                _pred[_anahtar] = PetriPredictor()
+            else:
                 from ai_hub.inference_em_fantom.inference_em_fantom import PhantomPredictor
 
-                _pred = PhantomPredictor()
-            except Exception:
-                logger.warning("E-alanı vekil modeli yüklenemedi; canlı bar kapalı kalacak", exc_info=True)
-                _pred = False
-        return _pred or None
+                _pred[_anahtar] = PhantomPredictor()
+        except Exception:
+            logger.warning("E-alanı vekil modeli yüklenemedi; canlı bar kapalı kalacak", exc_info=True)
+            _pred[_anahtar] = False
+        return _pred[_anahtar] or None
 
 
 def get_live() -> dict | None:

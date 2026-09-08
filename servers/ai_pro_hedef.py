@@ -150,7 +150,20 @@ class KediSaglayici:
         from ai_hub.em_kedi import inference_em_kedi as _iek
         from servers import ai_router as air
 
-        return _iek.xai_hizli_sensitivity(air._get_or_load_kedi(), x_mm, y_mm, z_mm, hedef_id)
+        # ⚠️ BAZ NOKTASI DÜZELTMESİ (sahip kararı #9, 2026-09-09): açıklama, dozun FİİLEN
+        # hesaplandığı ekstra girdilerle üretilmeli. Eskiden bu çağrı achieved_B/duty_sum
+        # vermiyordu → modülün varsayılanları (0.001 / 2.0) kullanılıyor, oysa doz 1.5 duty_sum
+        # ile üretiliyordu. "Dozu en çok ne belirledi" satırı başka bir çalışma noktasını
+        # açıklıyordu (XAI vekil-nokta kayması).
+        return _iek.xai_hizli_sensitivity(
+            air._get_or_load_kedi(),
+            x_mm,
+            y_mm,
+            z_mm,
+            hedef_id,
+            achieved_B=self.achieved_B,
+            duty_sum=self.duty_sum,
+        )
 
 
 # Kayıt: Faz 2'de 'fantom' ve 'petri' eklenecek. Anahtar = tel sözleşmesindeki `model` değeri.

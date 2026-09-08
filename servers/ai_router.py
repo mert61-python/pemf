@@ -1480,6 +1480,15 @@ def _ai_pro_loop():
             if str(_api2._active_session.get("mode", "")).startswith("AI"):
                 _api2._active_session["is_active"] = False
         _api2.update_live_session_state(is_active=False, mode="Sistem Hazır")
+        # Canlı E bağlamını TEMİZLE (2026-09-09): fantom/petri seansı bağlamı kuruyor; seans
+        # bitince temizlenmezse bir sonraki (kedi) seansta E barı ESKİ hedefin değerini "canlı"
+        # göstermeye devam ederdi.
+        try:
+            from servers import efield_live as _ef2
+
+            _ef2.set_context([])
+        except Exception:
+            logger.debug("AI Pro teardown: canlı E bağlamı temizlenemedi", exc_info=True)
     except Exception:
         logger.exception("AI Pro loop sonu STOP hatasi")
     logger.info("AI Pro Closed-Loop arkaplan görevi DURDU.")
@@ -1508,6 +1517,11 @@ class AiProProposePayload(BaseModel):
     #: Hedef modeli (bkz. `AiProStartPayload.model`). Öneri MÜHRÜNE (`specs.model`) yazılır ve
     #: seans başlangıcı onu mühürden okur.
     model: str = ""
+    #: İstemcinin BİLDİRDİĞİ kullanıcı profili ("veterinarian" | "researcher" | ...). Yalnız
+    #: DENETİM İZİ: backend profil bilmez ve buna göre yetki VERMEZ (AI uçları auth-muaf — sahip
+    #: kararı); onay izinde "hangi profil bu dozu onaylattı" sorusu yanıtlanabilsin diye mühür
+    #: meta'sına yazılır (api_server AI-log'undaki `mode` alanı emsali). Boş bırakılabilir.
+    client_mode: str = ""
 
 
 @ai_router.post("/api/ai/pro/propose")
@@ -1607,6 +1621,7 @@ def propose_ai_pro(payload: AiProProposePayload = AiProProposePayload()):
             "reliability": round(float(c.get("reliability") or 0.0), 3),
             "localized_at": c.get("at"),
             "subject_label": _saglayici.subject_label,
+            "client_mode": str(payload.client_mode or "")[:32],
             "achieved_B": _saglayici.achieved_B,
             "duty_sum": _saglayici.duty_sum,
             **xai_meta,
@@ -1792,6 +1807,13 @@ def stop_ai_pro():
         # göndermeyen bir istemcinin (eski APK, mobil kare yolu) kareleri hâlâ fantom
         # sağlayıcısına gider ve "hedef yok" döngüsüne girerdi.
         _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
+    # Mobil (/frame) seansında loop teardown'ı YOKTUR → bağlamı burada da temizle.
+    try:
+        from servers import efield_live as _ef3
+
+        _ef3.set_context([])
+    except Exception:
+        logger.debug("AI Pro stop: canlı E bağlamı temizlenemedi", exc_info=True)
         _ai_owner_client = ""
     # WEB kapalı-döngü: hazırlık önizlemesi çalışıyorsa onu da durdur (kamera bırakılsın).
     _ai_hazirlik_durdur_ic()
