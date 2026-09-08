@@ -422,3 +422,42 @@ def test_KRITIK_meta_UC_lokalizasyon_yolunda_da_cache_e_YAZILIR(sag, monkeypatch
         f"lokalizasyon yollarından {say}/3'ü sağlayıcı meta'sını cache'e yazıyor — yazmayan yolda "
         "(hazırlık / seans / mobil kare) kare üstü hedef seçimi ve kalibrasyon rozeti çalışmaz"
     )
+
+
+class _SahteKare:
+    """`.shape` taşıyan asgari kare (gerçek karenin yerine); numpy gerektirmez."""
+
+    def __init__(self, h: int, w: int):
+        self.shape = (h, w, 3)
+
+
+def test_KRITIK_hedefler_KARE_ORANLI_pxn_tasir(sag):
+    """Panel halkaları hedefi kare üstünde `pxn` ile yerleştirir (0..1 oranı).
+
+    ⚠️ NEDEN ORAN: WS önizlemesi kareyi 960 px'e KÜÇÜLTÜP yayınlar ve `imageW` küçültülmüş boyutu
+    taşır; ham `px` / küçültülmüş genişlik oranı işaretleri gerçek hedeften kaydırırdı ([S7 adım 6]
+    overlay ölçek kaymasının aynı sınıfı).
+    MUTASYON: `_hedef_tel`de `pxn`i kare boyutuna bölmeyin (ham px yazın) → KIRMIZI."""
+    hedef, fantom, petri, pred, izler = sag
+    _sonuc_kuyruguna(izler, _SahteSonuc(tumor=[_SahteBolge((160, 60), (-40.0, 0.0, 0.0), organ_id=1)]))
+
+    fantom.localize(_SahteKare(240, 320), 0)
+    meta = fantom.son_lokalizasyon_meta()
+
+    assert meta.get("frame_w") == 320 and meta.get("frame_h") == 240, f"kare boyutu meta'da yok: {meta}"
+    t = meta["targets"][0]
+    assert t["pxn"] == pytest.approx([0.5, 0.25], abs=1e-4), f"pxn kare oranı değil: {t.get('pxn')} (px={t.get('px')})"
+    assert 0.0 <= t["pxn"][0] <= 1.0 and 0.0 <= t["pxn"][1] <= 1.0, "pxn 0..1 dışına çıkmış"
+
+
+def test_KARSIT_KANIT_boyutsuz_kare_lokalizasyonu_COKERTMEZ(sag):
+    """`pxn` yalnız SUNUM alanıdır: boyutu okunamayan girdide hedef bulma çalışmaya devam eder
+    (panel halkaları çizilmez, erişilebilir liste yedeği yine hedefleri gösterir)."""
+    hedef, fantom, petri, pred, izler = sag
+    _sonuc_kuyruguna(izler, _SahteSonuc(tumor=[_SahteBolge((10, 10), (-40.0, 0.0, 0.0), organ_id=1)]))
+
+    lokalize = fantom.localize("boyutsuz-kare", 0)
+
+    assert lokalize[0] is True, "boyutsuz kare lokalizasyonu düşürdü"
+    t = fantom.son_lokalizasyon_meta()["targets"][0]
+    assert "pxn" not in t, f"boyut bilinmezken uydurma pxn yazılmış: {t.get('pxn')}"

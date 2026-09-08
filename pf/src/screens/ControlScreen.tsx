@@ -25,6 +25,8 @@ import { clampTherapyParams } from "@/services/therapyLimits";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
 import { AiProPanel } from "@/components/domain/AiProPanel";
+import { modelleriAl } from "@/components/domain/aiProProfilleri";
+import { useUserMode } from "@/context/UserModeContext";
 import { EFieldBar } from "@/components/domain/EFieldBar";
 import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
@@ -62,6 +64,15 @@ export function ControlScreen() {
   } = useSessionControl();
 
   const [activeTab, setActiveTab] = useState<TabKey>("manual");
+  // AI Pro hedef modelleri PROFİLE göre — tek kaynak `aiProProfilleri.MODELLER_PROFILE_GORE`
+  // (sahip kararı #13: kedi araştırmacıda, fantom/petri veterinerde HİÇ görünmez).
+  // ⚠️ Bazı testler `useUserMode`u yalnız `{ userMode }` ile mock'lar; liste bilinmeyen profilde
+  // kediye düşer → ESKİ veteriner davranışı korunur.
+  const { userMode } = useUserMode();
+  const aiProModelleri = modelleriAl(userMode);
+  const aiProBaslik = aiProModelleri.includes("kedi")
+    ? "AI Pro — Kamera Kapalı-Döngü"
+    : "AI Pro — Fantom / Petri Kapalı-Döngü";
 
   // ── Otomatik Mod state ─────────────────────────────────────────────────
   const [autoTarget, setAutoTarget] = useState(AUTO_TARGETS[0]);
@@ -738,8 +749,12 @@ export function ControlScreen() {
       {/* ── TAB: AI Pro ───────────────────────────────────────── */}
       {activeTab === "aipro" && (
         <View style={styles.section}>
-          <SectionTitle text="AI Pro — Kamera Kapalı-Döngü" />
-          <AiProPanel patientName={patientName} />
+          <SectionTitle text={aiProBaslik} />
+          <AiProPanel
+            patientName={patientName}
+            secilebilirModeller={aiProModelleri}
+            kullaniciKipi={userMode || ""}
+          />
         </View>
       )}
 

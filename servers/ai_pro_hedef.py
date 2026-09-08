@@ -221,6 +221,24 @@ def _yontem_tavani(method: str) -> float:
     return YONTEM_TAVANI.get((method or "").strip().lower(), YONTEM_TAVANI_VARSAYILAN)
 
 
+def _hedef_tel(aday: dict, kare_w: int, kare_h: int) -> dict:
+    """Aday → TEL SÖZLEŞMESİ sözlüğü; `pxn` = kare oranına göre 0..1 merkez.
+
+    ⚠️ `pxn` ŞART: `px` ham kare pikselidir, WS önizlemesi kareyi 960 px'e küçültür ve
+    `imageW/imageH` KÜÇÜLTÜLMÜŞ boyutu taşır. Panel halkalarını ham piksel/küçültülmüş
+    genişlik ile yerleştirmek işaretleri hedeften kaydırır (aynı sınıf hata [S7 adım 6]'da
+    overlay ölçeğinde yaşandı). 0..1 oranı hem /status hem WS hem /frame için ÖLÇEK-BAĞIMSIZ.
+    """
+    d = {k: v for k, v in aday.items() if k in ("id", "label", "px", "x", "y", "z", "organ_id", "reliability")}
+    px = aday.get("px") or (0.0, 0.0)
+    if kare_w > 0 and kare_h > 0:
+        d["pxn"] = [
+            round(min(1.0, max(0.0, float(px[0]) / float(kare_w))), 5),
+            round(min(1.0, max(0.0, float(px[1]) / float(kare_h))), 5),
+        ]
+    return d
+
+
 def _yaricap_px(bbox) -> float:
     """bbox (x, y, w, h) → yaklaşık yarıçap (px). Takip eşleşmesi için ölçek."""
     try:
@@ -419,6 +437,11 @@ class _EmCvSaglayici:
                 self._meta = {"model": self.ad, "hata": "pipeline", "targets": []}
             return (False, 0.0, 0.0, 0.0, 0.0, None, False, None)
 
+        # Kare boyutu `pxn` (kare-oranlı hedef merkezi) için. ⚠️ SAVUNMALI okuma: boyutu
+        # olmayan bir girdi lokalizasyonun TAMAMINI çökertmesin — `pxn` yalnız SUNUM alanıdır,
+        # yokluğunda panel halkaları çizmez (liste yedeği çalışmaya devam eder).
+        _boyut = getattr(frame_bgr, "shape", None)
+        _kare_h, _kare_w = (int(_boyut[0]), int(_boyut[1])) if _boyut else (0, 0)
         basarili = bool(getattr(result, "success", False))
         hata = (getattr(result, "error", "") or "").strip()
         # Özne (fantom/plaka) kadrajda mı? Bu ayrım operatöre NE YAPACAĞINI söyler: özne yoksa
@@ -436,10 +459,9 @@ class _EmCvSaglayici:
             "method": yontem,
             "mm_per_px": float(getattr(result, "mm_per_px", 1.0) or 1.0),
             "yontem_tavani": tavan,
-            "targets": [
-                {k: v for k, v in a.items() if k in ("id", "label", "px", "x", "y", "z", "organ_id", "reliability")}
-                for a in adaylar
-            ],
+            "frame_w": _kare_w,
+            "frame_h": _kare_h,
+            "targets": [_hedef_tel(a, _kare_w, _kare_h) for a in adaylar],
             "hata": hata,
         }
         if secili is None:

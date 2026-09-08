@@ -61,6 +61,30 @@ export interface AiVisionData {
   perCoil?: { id: number; freq: number; duty: number; phase: number }[];
   remainingSec?: number;
   durationMin?: number;
+  // ── Araştırma hattı (Faz 2/3) YALNIZ-EK alanları: fantom/petri hedefi kare ÜSTÜNDEN seçilir.
+  //    Kedi yayınında boş/yok → eski istemci ve eski backend davranışı DEĞİŞMEZ.
+  /** Aktif hedef modeli ("kedi" | "fantom" | "petri"). */
+  model?: string;
+  modelName?: string;
+  /** Kadrajda aranan özne ("hayvan" | "fantom" | "petri plakası"). */
+  subjectLabel?: string;
+  /** Seçili hedefin adı ("Tümör 1", "Kuyu 3 · Kanserli"). */
+  targetName?: string;
+  targetLabel?: string;
+  /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü. */
+  method?: string;
+  /** Kare üstünde seçilebilir hedef adayları. `pxn` = kare oranına göre merkez (0..1). */
+  targets?: {
+    id?: number;
+    label?: string;
+    pxn?: number[];
+    x?: number;
+    y?: number;
+    z?: number;
+    organ_id?: number;
+    reliability?: number;
+    secili?: boolean;
+  }[];
 }
 
 function isStmCoil(coilId: number): boolean {

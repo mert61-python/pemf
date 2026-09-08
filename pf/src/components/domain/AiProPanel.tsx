@@ -20,6 +20,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
+import { type HedefModeli, MODUL_GEREKSINIMI, modelProfili } from "@/components/domain/aiProProfilleri";
+import { AdimGostergesi, type Adim } from "@/components/domain/aipro/AdimGostergesi";
+import { ModelSecimKartlari, type KurulumDurumu } from "@/components/domain/aipro/ModelSecimKartlari";
+import { HedefHalkalari, HedefListesi, type HedefAdayi } from "@/components/domain/aipro/HedefSecici";
+import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiClient";
@@ -94,6 +99,44 @@ type FrameResult = {
   driven?: boolean;
 };
 
+/**
+ * ARAŞTIRMA hazırlık şeridi (fantom / petri) — kedi bloğundan AYRI tutulur.
+ *
+ * ⚠️ NEDEN AYRI FONKSİYON: kedi `asamaMetni` bloğu, dört aşamanın birbirinden ayırt edilebilir
+ * kaldığını kanıtlayan bir kaynak-regex kapısına bağlıdır (tests/test_ai_pro_asamali_akis.py:362 —
+ * blokta TAM 4 backtick'li metin sayar). Araştırma dallarını o bloğa eklemek kapıyı kırar ve
+ * kedinin doğrulama/konumlandı ayrımının korunduğunu kimse ölçmez olurdu.
+ *
+ * Aşamalar kediyle AYNI mantıkta ama özneyi ve eylemi model adıyla söyler: özne yok → yerleşim,
+ * özne var/hedef yok → ışık ve işaret, hedef var/konum ölçülemedi → kabin işareti, konumlandı →
+ * öneri hesaplanıyor.
+ */
+function asamaMetniArastirma(a: {
+  ozne: string;
+  ozneIpucu: string;
+  hedefEtiketi: string;
+  ozneVar: boolean;
+  localized: boolean;
+  hedefSayisi: number;
+  yontem: string;
+  guvenYuzde: number;
+  gecikmeIpucu: string;
+}): string {
+  if (a.localized) {
+    return `✓ ${a.hedefEtiketi} konumlandı — güven %${a.guvenYuzde} · öneri hesaplanıyor…`;
+  }
+  if (!a.ozneVar) {
+    return `🔎 ${a.ozne} aranıyor… ${a.ozneIpucu}${a.gecikmeIpucu}`;
+  }
+  if (a.hedefSayisi > 0 && a.yontem && a.yontem !== "aruco_pnp") {
+    return (
+      `✓ ${a.hedefEtiketi} bulundu, konum ölçülemedi — kabin işareti (arka duvardaki kare kod) ` +
+      `kadrajda görünmüyor. Kamerayı işaret ve hedef aynı karede kalacak şekilde ayarlayın.`
+    );
+  }
+  return `🔎 ${a.ozne} görünüyor, ${a.hedefEtiketi.toLocaleLowerCase("tr")} aranıyor…${a.gecikmeIpucu}`;
+}
+
 function fmtSec(sec: number): string {
   const s0 = Math.max(0, Math.floor(sec));
   const m = Math.floor(s0 / 60);
@@ -128,6 +171,25 @@ interface AiProStatus {
   /** B3: önizleme kamera/model hatasıyla öldüyse NEDENİ (boş = hata yok). Doluysa panel hazırlığı
    *  sonlandırıp operatöre gösterir — 120 sn "Hazırlanıyor…" kör bekleyişi yerine. */
   hazirlikHata?: string;
+  // ── Araştırma hattı (Faz 2/3 yalnız-ek alanları; kedi hattında boş/varsayılan) ──
+  /** Aktif hedef modeli ("kedi" | "fantom" | "petri"). */
+  model?: string;
+  /** Kare üstünde seçilebilir hedef adayları (kalıcı kimlikli). */
+  targets?: HedefAdayi[];
+  /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü. */
+  method?: string;
+  /** Seçili hedefin adı ("Tümör 1", "Kuyu 3 · Kanserli"). */
+  targetLabel?: string;
+  /** Konum modelin eğitim aralığı dışında mı (onay ekranı uyarısı). */
+  ood?: boolean;
+  /** Kadrajda aranan öznenin adı ("fantom", "petri plakası"). */
+  subjectLabel?: string;
+  /** Özne kadrajda mı (kedi hattındaki `catDetected`in model-bağımsız adı). */
+  subjectDetected?: boolean;
+  /** Araştırma modelleriyle SÜRÜŞ açık mı (`PEMF_ARASTIRMA_AIPRO`). Alan yoksa bilinmiyor. */
+  arastirmaAiProAcik?: boolean;
+  /** Hazırlık hatasının SINIFI (kamera / model_paketi / model_yukleme / zaman_asimi). */
+  hazirlikHataKodu?: string;
 }
 interface AiProAction {
   status?: string;
@@ -145,12 +207,64 @@ interface AiProposeResponse {
   expiresAt?: number;
 }
 
-/** @param patientName Aktif hasta adı — seansın kime uygulandığının denetim izi için backend'e taşınır. */
-export function AiProPanel({ patientName = "" }: { patientName?: string }) {
+/**
+ * @param patientName Aktif hasta adı — seansın kime uygulandığının denetim izi için backend'e taşınır.
+ * @param secilebilirModeller Profilin seçebileceği hedef modelleri (ControlScreen'den gelir; tek
+ *   kaynak `aiProProfilleri.MODELLER_PROFILE_GORE`). Varsayılan `["kedi"]` → prop geçilmese bile
+ *   VETERİNER davranışı BİREBİR korunur (mevcut jest dosyaları mock'suz geçer).
+ *   ⚠️ Panele bilinçli olarak `useUserMode` SOKULMADI: profil ControlScreen'de okunur, panel yalnız
+ *   listeyi alır — böylece 5 panel testine provider mock'u eklemek gerekmez.
+ */
+export function AiProPanel({
+  patientName = "",
+  secilebilirModeller = ["kedi"],
+  kullaniciKipi = "",
+}: {
+  patientName?: string;
+  secilebilirModeller?: HedefModeli[];
+  kullaniciKipi?: string;
+}) {
   const { width: pencereX, height: pencereY } = useResponsive();
   const { aiVisionData: v } = useLiveData();
 
   const [organId, setOrganId] = useState(0);
+  // AKTİF HEDEF MODELİ: liste tek elemanlıysa (veteriner → "kedi") doğrudan o; araştırma modunda
+  // araştırmacı Adım 1'de kartlardan seçer (seçilmeden hazırlık başlatılamaz).
+  const [hedefModeli, setHedefModeli] = useState<HedefModeli | "">(
+    secilebilirModeller.length === 1 ? secilebilirModeller[0] : "",
+  );
+  // ⚠️ REF ŞART: modeli istek gövdelerine `hedefModeli` STATE'i ile koymak, öneri efektinin
+  // bağımlılık dizisini ([hazirlik, mobileResult, organId, duration]) değiştirmeyi gerektirirdi —
+  // o dizi kaynak-regex kapısıdır (tests/test_ai_pro_asamali_akis.py). `clientIdRef` deseni.
+  const hedefModeliRef = useRef<HedefModeli | "">(hedefModeli);
+  useEffect(() => {
+    hedefModeliRef.current = hedefModeli;
+  }, [hedefModeli]);
+  /** Denetim izi için taşınan profil — `hedefModeliRef` ile AYNI gerekçe (öneri efektinin
+   *  bağımlılık dizisi kaynak-regex kapısıdır, prop'u diziye sokmak onu kırardı). */
+  const kullaniciKipiRef = useRef(kullaniciKipi);
+  useEffect(() => {
+    kullaniciKipiRef.current = kullaniciKipi;
+  }, [kullaniciKipi]);
+  /** Araştırma kipi: listede kedi YOK → model kartları gösterilir, kedi organ çipleri gizlenir. */
+  const arastirmaKipi = !secilebilirModeller.includes("kedi");
+  /**
+   * ⚠️ ARAŞTIRMA HATTI YALNIZ KABİN KAMERASIYLA (sahip kararı #15): fantom/petri 3B konumu kabin
+   * işaretine (arka duvardaki ArUco) ve ölçülmüş kabin geometrisine dayanır. Telefon kamerası o
+   * çerçevenin dışındadır → konum ölçülemez. Telefonda panel görüntülenir ama seans başlatılamaz;
+   * sebebi peşinen yazılır (kör "öneri gelmiyor" bekleyişi yerine).
+   */
+  const arastirmaMobilKapali = arastirmaKipi && !IS_WEB;
+  /** Kare üstü hedef adayları + kalibrasyon/ood alanları (status poll ve WS aynı kaynağı besler). */
+  const [hedefler, setHedefler] = useState<HedefAdayi[]>([]);
+  const [yontem, setYontem] = useState("");
+  const [hedefEtiket, setHedefEtiket] = useState("");
+  const [ood, setOod] = useState(false);
+  const [ozneVar, setOzneVar] = useState(false);
+  /** `PEMF_ARASTIRMA_AIPRO`: null = bilinmiyor (alan yok / durum okunamadı). */
+  const [arastirmaAcik, setArastirmaAcik] = useState<boolean | null>(null);
+  /** Model kurulum durumu — `GET /api/ai/hazirlik` envanterinden BİR KEZ okunur (poll YOK). */
+  const [kurulum, setKurulum] = useState<Partial<Record<HedefModeli, KurulumDurumu>>>({});
   const [duration, setDuration] = useState("20");
   const [running, setRunning] = useState(false);
   const [localized, setLocalized] = useState(false);
@@ -238,6 +352,35 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     getClientInstanceId().then((id) => { clientIdRef.current = id; }).catch(() => {});
   }, []);
 
+  /**
+   * MODEL KURULUM DURUMU — araştırma kartlarındaki "Model kurulu ✓" rozeti.
+   *
+   * ⚠️ POLL YOK: envanter taraması gerçek dosya/import kontrolü yapar (pahalı). Kart ekranı
+   * açılınca BİR KEZ okunur; yanıt gelmezse rozet "okunamadı" der ve seçim ENGELLENMEZ (kapı
+   * backend'de: model yüklenemezse hazırlık sınıflı hata döndürür).
+   */
+  useEffect(() => {
+    if (!arastirmaKipi) return;   // veteriner ekranı bu isteği HİÇ atmaz
+    let alive = true;
+    (async () => {
+      const h = await apiGet<{ moduller?: { modul?: string; hazir?: boolean }[] } | null>(
+        "/ai/hazirlik",
+        null,
+        { silent: true },
+      );
+      if (!alive) return;
+      if (!h || !Array.isArray(h.moduller)) { setKurulum({}); return; }
+      const hazirAdlar = new Set(h.moduller.filter((m) => m?.hazir).map((m) => String(m?.modul || "")));
+      const sonuc: Partial<Record<HedefModeli, KurulumDurumu>> = {};
+      for (const m of secilebilirModeller) {
+        sonuc[m] = MODUL_GEREKSINIMI[m].every((mod) => hazirAdlar.has(mod)) ? "hazir" : "eksik";
+      }
+      setKurulum(sonuc);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arastirmaKipi]);
+
   // Backend durumunu senkronla (özellikle süre dolup auto-stop olduğunda).
   useEffect(() => {
     let alive = true;
@@ -255,6 +398,14 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       setLocalized(Boolean(st.localized));
       setWebGuvenDokumu(st.guvenDokumu ?? null); // sunum-katmanı XAI (web: status poll'dan)
       setWebCatDetected(Boolean(st.catDetected)); // B3: hazırlık metni için ikinci kaynak
+      // Araştırma hattı yalnız-ek alanları. ⚠️ Alan YOKSA eski davranış: boş liste / boş yöntem →
+      // halkalar ve rozet çizilmez, kedi ekranı BİREBİR aynı kalır.
+      setHedefler(Array.isArray(st.targets) ? st.targets : []);
+      setYontem(typeof st.method === "string" ? st.method : "");
+      setHedefEtiket(typeof st.targetLabel === "string" ? st.targetLabel : "");
+      setOod(Boolean(st.ood));
+      setOzneVar(Boolean(st.subjectDetected ?? st.catDetected));
+      setArastirmaAcik(typeof st.arastirmaAiProAcik === "boolean" ? st.arastirmaAiProAcik : null);
       // B3 (siyah ekran): sunucu önizlemesi kamera/model hatasıyla öldüyse panel bunu ÖĞRENSİN.
       // Eskiden /baslat "success" diyor, thread anında ölüyor ve panel 120 sn "Hazırlanıyor…"da
       // takılıp sonra "hayvan bulunamadı" (YANLIŞ teşhis) diyordu. ⚠️ Yalnız hata METNİ doluysa
@@ -277,6 +428,22 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
   }, []);
 
   const start = useCallback(async () => {
+    // ARAŞTIRMA KAPISI 1: model seçilmeden hazırlık başlatılamaz. Backend boş `model`i "kedi"
+    // sayar (eski istemci uyumu) → seçim yapılmadan başlatmak SESSİZCE kedi hattını açardı.
+    if (arastirmaKipi && !hedefModeliRef.current) {
+      platformAlert("Model seçilmedi", "Önce Adım 1'de Fantom ya da Petri kartını seçin.");
+      return;
+    }
+    // ARAŞTIRMA KAPISI 2 (sahip kararı #15): fantom/petri konumu KABİN çerçevesinde ölçülür;
+    // telefon kamerası o çerçevenin dışındadır → konum ölçülemez, öneri hiç üretilmez.
+    if (arastirmaMobilKapali) {
+      platformAlert(
+        "Bu seans kabin kamerasıyla yapılır",
+        "Fantom ve petri hedefi kabin işaretine göre ölçülür; telefon kamerası bu ölçümü yapamaz. " +
+          "Seansı kabin bilgisayarındaki uygulamadan başlatın.",
+      );
+      return;
+    }
     // DENETİM İZİ: AI Pro otonom tedavisi hiçbir hastaya BAĞLANMADAN başlatılabiliyordu —
     // seans kaydı sahipsiz kalıyor, tedavi geçmişinde hangi hayvana uygulandığı bilinmiyordu
     // (klinik izlenebilirlik). ControlScreen'deki `requirePatient` ile aynı yaklaşım: bloklamıyoruz,
@@ -334,7 +501,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     oneriBeklemeRef.current = 0;
     const hz = await apiPost<AiProAction | null>(
       "/ai/pro/hazirlik/baslat",
-      { organ_id: organId, client_id: clientIdRef.current },
+      { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current },
       null
     );
     // B3: komut sunucuya ULAŞMADIYSA hazırlığa girme — aksi hâlde düğme 120 sn "Hazırlanıyor…"da
@@ -344,7 +511,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       return;
     }
     setHazirlik(true);   // status /localized görününce web-öneri efekti propose'u tetikler
-  }, [organId, duration, permission, requestPermission]);
+  }, [organId, duration, permission, requestPermission, arastirmaKipi, arastirmaMobilKapali]);
 
   /**
    * HAZIRLIK: organ lokalize edilir edilmez öneriyi OTOMATİK iste.
@@ -382,7 +549,15 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       // başarısız denemede ekrana bir "Sunucu Hatası" bildirimi düşerdi.
       const prop = await apiPost<AiProposeResponse | null>(
         "/ai/pro/propose",
-        { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+        {
+          organ_id: organId,
+          duration_minutes: parseInt(duration) || 20,
+          // ⚠️ REF (state DEĞİL): bu efektin bağımlılık dizisi kaynak-regex kapısıdır
+          // (tests/test_ai_pro_asamali_akis.py) — modeli diziye sokmak kapıyı kırardı.
+          model: hedefModeliRef.current,
+          // DENETİM İZİ: hangi profil bu dozu onaylattı (backend yetki VERMEZ, yalnız mühre yazar).
+          client_mode: kullaniciKipiRef.current,
+        },
         null,
         { silent: true }
       );
@@ -423,7 +598,15 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     (async () => {
       const prop = await apiPost<AiProposeResponse | null>(
         "/ai/pro/propose",
-        { organ_id: organId, duration_minutes: parseInt(duration) || 20 },
+        {
+          organ_id: organId,
+          duration_minutes: parseInt(duration) || 20,
+          // ⚠️ REF (state DEĞİL): bu efektin bağımlılık dizisi kaynak-regex kapısıdır
+          // (tests/test_ai_pro_asamali_akis.py) — modeli diziye sokmak kapıyı kırardı.
+          model: hedefModeliRef.current,
+          // DENETİM İZİ: hangi profil bu dozu onaylattı (backend yetki VERMEZ, yalnız mühre yazar).
+          client_mode: kullaniciKipiRef.current,
+        },
         null,
         { silent: true }
       );
@@ -547,9 +730,16 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
     // [B1]: client_id ile → backend YABANCI (sahip dışı) istemcinin mid-seans organ değişimini
     // (onaylanmamış organa enerji) reddeder. Sahip kendi id'siyle çağırır → izin.
     const res = await apiPost<AiProAction | null>(
-      "/ai/pro/organ", { organ_id: id, client_id: clientIdRef.current }, null
+      "/ai/pro/organ",
+      { organ_id: id, client_id: clientIdRef.current, model: hedefModeliRef.current },
+      null
     );
-    if (!res) platformAlert("Organ değiştirilemedi", "Komut sunucuya ulaşmadı — tekrar deneyin.");
+    if (!res) {
+      // Araştırmada "Organ" kelimesi yanıltıcıdır (hedef bir tümör odağı / kuyudur). Ref'ten
+      // okunur ki bu callback'in boş bağımlılık dizisi korunsun.
+      const ad = hedefModeliRef.current && hedefModeliRef.current !== "kedi" ? "Hedef" : "Organ";
+      platformAlert(`${ad} değiştirilemedi`, "Komut sunucuya ulaşmadı — tekrar deneyin.");
+    }
   }, []);
 
   const relocalize = useCallback(async () => {
@@ -574,7 +764,7 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         setHazirlikHata("");   // B3: yeni deneme taze — bayat "⚠️ …" metni kutuda kalmasın
         const hz = await apiPost<AiProAction | null>(
           "/ai/pro/hazirlik/baslat",
-          { organ_id: organId, client_id: clientIdRef.current },
+          { organ_id: organId, client_id: clientIdRef.current, model: hedefModeliRef.current },
           null
         );
         // B3: start() ile AYNI kapı — komut sunucuya ULAŞMADIYSA hazırlığa girme; aksi hâlde bu
@@ -637,6 +827,23 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       }
     };
   }, [running, hazirlik]);
+
+  /**
+   * HAZIRLIKTAN VAZGEÇ — şeritteki "Vazgeç" düğmesi ve sihirbazın "Geri" düğmesi AYNI eylemi
+   * çağırır (iki ayrı satır-içi kopya, ikisinden birinin sessizce ayrışmasına açıktı).
+   * Davranış DEĞİŞMEDİ: sayaçlar sıfırlanır, web'de sunucu önizlemesi bırakılır.
+   */
+  const vazgec = useCallback(() => {
+    setHazirlik(false);
+    oneriIstendiRef.current = false;
+    oneriBeklemeRef.current = 0;
+    ardisikRef.current = 0;
+    sonDamgaRef.current = null;
+    webLokalizeSayacRef.current = 0;
+    setArdisik(0);
+    setOneriHatasi("");
+    if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null);
+  }, []);
 
   // Unmount'ta: interval'i temizle + ÇALIŞAN otonom tedaviyi DURDUR.
   // YÜKSEK fix: panel kapanınca (tab/modül değişimi) backend bobinleri BAŞSIZ sürmeye devam ediyordu
@@ -719,6 +926,53 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         ? `🔎 Hayvan görünüyor, ${organAdi} aranıyor… (kamerayı biraz çevirin)${gecikmeIpucu}`
         : `🐾 Hayvan aranıyor… kamerayı hastaya doğrultun${gecikmeIpucu}`;
 
+  // ── ARAŞTIRMA SUNUMU (kedi hattı yukarıda BİREBİR korunur) ────────────────────────────────
+  const modelProf = modelProfili(hedefModeli || "kedi");
+  /** Kare üstü hedef adayları: seans/önizleme WS'i (taze) yoksa status poll'u. */
+  const hedefAdaylari: HedefAdayi[] = (IS_WEB && v?.targets?.length ? v.targets : hedefler) as HedefAdayi[];
+  const yontemAktif = (IS_WEB && v?.method ? v.method : yontem) || "";
+  /** Şerit metni: araştırmada özneyi/hedefi model adıyla söyler. */
+  const seritMetni = !hazirlik
+    ? ""
+    : arastirmaKipi
+      ? asamaMetniArastirma({
+          ozne: modelProf.ozne,
+          ozneIpucu: modelProf.ozneIpucu,
+          hedefEtiketi: modelProf.hedefEtiketi,
+          ozneVar: IS_WEB ? ozneVar || catDetected : catDetected,
+          localized: detected,
+          hedefSayisi: hedefAdaylari.length,
+          yontem: yontemAktif,
+          guvenYuzde,
+          gecikmeIpucu,
+        })
+      : asamaMetni;
+  /**
+   * SİHİRBAZ ADIMI — ayrı bir state DEĞİL, gerçek durumdan TÜRETİLİR. Ayrı state tutmak
+   * göstergenin gerçekle ayrışmasına (ekran "Adım 3" derken hazırlık ölmüş olması) açıktı.
+   */
+  const adim: Adim = running
+    ? 5
+    : proposal
+      ? 4
+      : hazirlik && hedefAdaylari.length > 0
+        ? 3
+        : hazirlik
+          ? 2
+          : hedefModeli
+            ? 2   // model seçili, kamera henüz açılmadı → "Hazırlığı Başlat" adımı
+            : 1;
+  /** Seans ya da hazırlık sürerken model değiştirilemez (backend de 409 döndürür). */
+  const modelKilitli = running || hazirlik;
+  /**
+   * BAŞLAT KAPISI — düğme pasifse SEBEBİ erişilebilirlik ipucunda söylenir. `start()` içindeki
+   * kapılar KALDIRILMADI: düğme pasif olsa da (klavye/otomasyon) çağrı gelebilir.
+   */
+  const baslatKapali = !running && (arastirmaMobilKapali || (arastirmaKipi && !hedefModeli));
+  const baslatKapaliNedeni = arastirmaMobilKapali
+    ? "Fantom/petri seansı kabin bilgisayarından başlatılır."
+    : "Önce Adım 1'de bir hedef modeli seçin.";
+
   return (
     <View style={styles.wrap}>
       {/* SERT ONAY KAPISI (2026-08-06): AI önerisi hekime gösterilir; onaylanmadan seans
@@ -727,20 +981,49 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         visible={!!proposal}
         specs={proposal?.specs ?? null}
         meta={proposal?.meta ?? null}
-        organName={ORGANS.find((o) => o.id === (proposal?.specs?.organ_id ?? organId))?.name}
+        organName={
+          arastirmaKipi
+            ? hedefEtiket || modelProf.hedefEtiketi
+            : ORGANS.find((o) => o.id === (proposal?.specs?.organ_id ?? organId))?.name
+        }
         busy={approvalBusy}
         onApprove={approveAndStart}
         onReject={rejectProposal}
         onDismiss={() => setProposal(null)}
       />
+      {/* SİHİRBAZ (yalnız araştırma): neredeyim + geri nasıl dönerim. Veterinerde RENDER EDİLMEZ →
+          bugünkü ekran birebir korunur. */}
+      {arastirmaKipi ? (
+        <AdimGostergesi adim={adim} onGeri={hazirlik ? vazgec : undefined} geriEtiketi="Geri" />
+      ) : null}
+
+      {/* GİRİŞ CÜMLESİ: bir iddia değil KURAL — bu ekran onay olmadan bobin çalıştırmaz. */}
       <Text style={styles.note}>
-        {IS_WEB
-          ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
-          : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
+        {arastirmaKipi
+          ? arastirmaMobilKapali
+            ? "🔬 Fantom/petri seansı KABİN kamerasıyla yapılır: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bu ekranda yalnız izleyebilirsiniz."
+            : "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz."
+          : IS_WEB
+            ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."
+            : "📷 Telefon kameranızı KEDİYE doğrultun — organ lokalizasyonu (em_kedi) ile 7 bobin per-coil sürülür."}
       </Text>
+
+      {/* ADIM 1 — MODEL: yalnız araştırma kipinde (karar #13: gizleme SİMETRİK). */}
+      {arastirmaKipi ? (
+        <ModelSecimKartlari
+          modeller={secilebilirModeller}
+          secili={hedefModeli}
+          onSec={setHedefModeli}
+          kilitli={modelKilitli}
+          kilitNedeni="Seans/hazırlık sürerken model değiştirilemez — önce durdurun."
+          kurulum={kurulum}
+          arastirmaAcik={arastirmaAcik}
+        />
+      ) : null}
 
       {/* Kamera görüntüsü: web = sunucudan (Image), mobil = telefon kamerası (CameraView) */}
       <View
+        testID="ai-pro-kamera-kutusu"
         style={[styles.camBox, kutu ? { width: kutu.width, height: kutu.height, alignSelf: "center" } : null]}
         onLayout={(e) => {
           const w = Math.round(e.nativeEvent.layout.width);
@@ -785,11 +1068,22 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
             {running || hazirlik ? "Kamera izni bekleniyor…" : "AI Pro durdu. Başlat → kamera açılır."}
           </Text>
         )}
+        {/* ADIM 3 — hedefi KARE ÜSTÜNDEN seç (yalnız araştırma; kedide hedef organ çiplerinden).
+            ⚠️ Halkalar kutunun İÇİNDE mutlak konumlanır ve `pxn` (kare oranı) ile yerleşir. */}
+        {arastirmaKipi ? (
+          <HedefHalkalari
+            hedefler={hedefAdaylari}
+            seciliId={organId}
+            onSec={changeOrgan}
+            kutu={kutu}
+            kilitli={false}
+          />
+        ) : null}
       </View>
 
       {/* Canlı metrikler */}
       <View style={styles.metricRow}>
-        <Metric label="Organ" value={detected ? "✓ Bulundu" : "—"} />
+        <Metric label={arastirmaKipi ? modelProf.hedefEtiketi : "Organ"} value={detected ? "✓ Bulundu" : "—"} />
         <Metric label="Güven" value={typeof reliability === "number" ? `%${Math.round(reliability * 100)}` : "—"} />
         <Metric label="X (mm)" value={`${targetX ?? "—"}`} />
         <Metric label="Y (mm)" value={`${targetY ?? "—"}`} />
@@ -810,13 +1104,32 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         </Text>
       ) : null}
 
+      {/* 3B KONUM ROZETİ + HEDEF LİSTESİ (yalnız araştırma). Rozet, işaret görünmediğinde önerinin
+          NEDEN gelmediğini peşinen söyler; liste halkaların ZORUNLU erişilebilir yedeğidir. */}
+      {arastirmaKipi ? (
+        <>
+          <KalibrasyonRozeti yontem={yontemAktif} gorunur={hazirlik || running} />
+          {ood ? (
+            <Text style={styles.note}>
+              Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.
+            </Text>
+          ) : null}
+          <HedefListesi
+            hedefler={hedefAdaylari}
+            seciliId={organId}
+            onSec={changeOrgan}
+            otomatikMi
+          />
+        </>
+      ) : null}
+
       {/* HAZIRLIK ŞERİDİ — aşamayı ve çıkış yolunu gösterir (2026-08-24). */}
       {hazirlik ? (
         <View style={[styles.hazirlikKutu, dusukGuven && styles.hazirlikKutuUyari]}>
-          <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || asamaMetni}</Text>
+          <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || seritMetni}</Text>
           <TouchableOpacity
             style={styles.hazirlikIptal}
-            onPress={() => { setHazirlik(false); oneriIstendiRef.current = false; oneriBeklemeRef.current = 0; ardisikRef.current = 0; sonDamgaRef.current = null; webLokalizeSayacRef.current = 0; setArdisik(0); setOneriHatasi(""); if (IS_WEB) apiPost<AiProAction | null>("/ai/pro/hazirlik/durdur", {}, null); }}
+            onPress={vazgec}
             accessibilityRole="button"
             accessibilityLabel="Hazırlığı iptal et"
           >
@@ -825,7 +1138,9 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
         </View>
       ) : null}
 
-      {/* Organ seçimi */}
+      {/* Organ seçimi — KEDİ hattı. Araştırmada GİZLİ: fantom/petri hedefi kare üstünden seçilir. */}
+      {arastirmaKipi ? null : (
+        <>
       <Text style={styles.label}>🧠 Hedef Organ</Text>
       <View style={styles.organGrid}>
         {ORGANS.map((o) => (
@@ -841,6 +1156,8 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
           </TouchableOpacity>
         ))}
       </View>
+        </>
+      )}
 
       {/* Süre + kalibrasyon */}
       <View style={styles.row}>
@@ -868,16 +1185,29 @@ export function AiProPanel({ patientName = "" }: { patientName?: string }) {
       {/* a11y: otonom TEDAVİ başlatan/durduran düğmede rol ve etiket yoktu → ekran okuyucu
           kullanan operatör butonu ayırt edemiyordu. Durum da `accessibilityState` ile bildirilir. */}
       <TouchableOpacity
-        style={[styles.toggle, running ? styles.toggleStop : styles.toggleStart, busy && { opacity: 0.5 }]}
+        style={[
+          styles.toggle,
+          running ? styles.toggleStop : styles.toggleStart,
+          (busy || baslatKapali) && { opacity: 0.5 },
+        ]}
         onPress={running ? stop : start}
-        disabled={busy}
+        disabled={busy || baslatKapali}
         accessibilityRole="button"
-        accessibilityState={{ busy, selected: running }}
+        accessibilityState={{ busy, selected: running, disabled: busy || baslatKapali }}
         accessibilityLabel={running ? "AI Pro otonom seansı durdur" : "AI Pro otonom seansı başlat"}
-        accessibilityHint={running ? "Bobinleri durdurur" : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"}
+        accessibilityHint={
+          running
+            ? "Bobinleri durdurur"
+            : baslatKapali
+              ? baslatKapaliNedeni
+              : "Kamera kapalı-döngüsüyle bobinleri otomatik sürer"
+        }
       >
-        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
+        <Text style={styles.toggleText} numberOfLines={1} adjustsFontSizeToFit>{running ? "⏹ AI Pro'yu Durdur" : hazirlik ? "🔎 Hazırlanıyor…" : arastirmaKipi ? "🚀 Hazırlığı Başlat" : "🚀 AI Pro Başlat (1Hz DDS)"}</Text>
       </TouchableOpacity>
+      {/* ⚠️ Pasif düğmenin SEBEBİ GÖRÜNÜR olmalı: yalnız `accessibilityHint`e yazmak, ekran
+          okuyucu kullanmayan operatöre "düğme çalışmıyor" (yazılım arızası) izlenimi verirdi. */}
+      {baslatKapali ? <Text style={styles.note}>{baslatKapaliNedeni}</Text> : null}
 
       {/* Per-coil diagnostik tablo (7 bobin; bobin 8 kapalı) */}
       <Text style={styles.label}>📊 Bobin Diagnostiği</Text>
