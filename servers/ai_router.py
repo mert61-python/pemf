@@ -666,6 +666,10 @@ _ORGAN_NAMES = {
 # /ai/pro/start MUHURDEN okur. Yalniz `_ai_loop_lock` altinda yazilir. Varsayilan "kedi" ->
 # `model` gondermeyen ESKI istemciler (ve mobil kare yolu) bugunku davranisi surdurur.
 _ai_hedef_modeli = ai_pro_hedef.VARSAYILAN_MODEL
+#: Hazırlık hatasının SINIFI (kamera | model_paketi | model_yukleme). Kullanıcı metni
+#: `_ai_hazirlik_hata`da kalır (panel string bekliyor); bu alan YALNIZ-EK → panel uyarı
+#: başlığını koda göre seçebilir.
+_ai_hazirlik_hata_kodu = ""
 
 _ORGAN_LOCALIZE_INTERVAL_S = 10.0
 _AI_LOST_STOP_STREAK = 3  # DENETIM P2: bu kadar ARDISIK hedef-kaybindan sonra bobinleri durdur
@@ -827,6 +831,48 @@ def _localize_organ_gpu(frame, organ_id):
 # sessiz bir uyumsuzluk (kapı: tests/test_ai_pro_model_muhru.py). Global yerine THREAD-LOCAL:
 # eş zamanlı koşan hazırlık/seans thread'leri kendi modelini okumaya devam eder.
 _ai_hedef_yerel = _ai_threading.local()
+
+
+def _hazirlik_hata_sinifi(exc: Exception, saglayici) -> "tuple[str, str]":
+    """Model yükleme istisnasını (kod, KULLANICI METNİ) çiftine çevir — eylem söyleyen hata kuralı.
+
+    Ham istisna metni / iç sınıf adı KULLANICIYA GİTMEZ (yalnız log'a): "AI modeli yüklenemedi:
+    FileNotFoundError(...onnx bulunamadi...)" gibi bir metin operatöre "yazılımda bug var"
+    izlenimi verir, oysa yapılacak iş bellidir (paketi kur / uygulamayı yeniden başlat).
+    Model paketi metnindeki YÖNLENDİRME sahip kararı #18'e baglidir (kurulum programının
+    kullanıcıya görünen adı); karar gelince yalnız bu metin güncellenecek."""
+    _ad = getattr(saglayici, "title", "AI modeli")
+    if isinstance(exc, FileNotFoundError) or "bulunamad" in str(exc).lower():
+        return (
+            "model_paketi",
+            f"'{_ad}' model paketi bu cihazda kurulu değil. Masaüstü PEMF uygulamasının kurulum "
+            "adımından ilgili model paketini ekleyip bu ekrana dönün.",
+        )
+    return (
+        "model_yukleme",
+        f"'{_ad}' yüklenemedi. Uygulamayı yeniden başlatıp tekrar deneyin; sorun sürerse destek "
+        "kaydında bu ekranı belirtin.",
+    )
+
+
+def _ai_seansi_pasife_al(neden: str) -> None:
+    """Seans loop'u BAŞLAMADAN öldüyse `_active_session`i pasife çek (teardown paritesi).
+
+    2026-09-09 düzeltmesi: /ai/pro/start `start_ai_session(...)`i thread spawn'indan ÖNCE
+    çağırıyor. Loop kamerayı açamaz ya da modeli yükleyemezse `_ai_loop_active=False` yapıp
+    dönüyordu ama oturum AI modunda AKTİF kalıyordu → panel/geçmiş seansı "sürüyor" gösteriyor,
+    süre-watchdog dolana kadar kapanmıyordu. Bobin sürülmediği için tedavi yok; görünen durum
+    ile gerçek durum AYRIŞIYORDU."""
+    try:
+        import servers.api_server as _api3
+
+        with _api3._session_lock:
+            if str(_api3._active_session.get("mode", "")).startswith("AI"):
+                _api3._active_session["is_active"] = False
+        _api3.update_live_session_state(is_active=False, mode="Sistem Hazır")
+        logger.error("AI Pro seansı başlatılamadı (%s) — oturum pasife alındı.", neden)
+    except Exception:
+        logger.exception("AI Pro: oturum pasife alınamadı (%s)", neden)
 
 
 def _aktif_saglayici():
@@ -1001,25 +1047,29 @@ def _ai_hazirlik_loop():
     loop'unu başlatır. `/ai/pro/hazirlik/baslat` da seans aktifken (`_ai_loop_active`) başlamaz.
     ⚠️ Lokalizasyon yolu `_ai_pro_loop` ile BİREBİR (relocalize-tüket + organ-snapshot, denetim P2);
     değişirse İKİSİ birlikte güncellenmeli."""
-    global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata
-    logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (sunucu kamerası, sürüş YOK).")
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")
-        cap.release()
-        _ai_hazirlik_hata = (
-            "Sunucu kamerası açılamadı (VideoCapture(0)). Kameranın bağlı olduğunu ve başka bir "
-            "uygulamanın kullanmadığını kontrol edin."
-        )
+    global _ai_hazirlik_active, _ai_relocalize, _ai_hazirlik_hata, _ai_hazirlik_hata_kodu
+    _sag = _aktif_saglayici()
+    logger.info("AI Pro HAZIRLIK önizlemesi BAŞLADI (model=%s, sunucu kamerası, sürüş YOK).", _sag.ad)
+    # MODEL KAMERADAN ÖNCE (2026-09-09): eskiden kamera açılıp SONRA model yükleniyordu. Ağır
+    # sağlayıcılarda (petri: 239 MB ONNX + 90 MB YOLO + ısıtma) bu, kameranın yükleme boyunca
+    # TUTULMASI demekti; araya /ai/pro/start girerse `_ai_hazirlik_durdur_ic` join'i dolar ve seans
+    # loop'u kamerayı alamazdı. Yükleme önce yapılınca kamera tutma süresi yükten bağımsız olur.
+    try:
+        _sag.yukle()
+    except Exception as e:
+        logger.error("Hazırlık: %s yüklenemedi (kamera hiç açılmadı): %s", _sag.ad, e)
+        _ai_hazirlik_hata_kodu, _ai_hazirlik_hata = _hazirlik_hata_sinifi(e, _sag)
         _ai_hazirlik_active = False
         return
-    try:
-        _get_or_load_kedi()
-        _get_or_load_catorgan()
-    except Exception as e:
-        logger.error("Hazırlık: em_kedi/cat_organ yüklenemedi, kamera bırakılıyor: %s", e)
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        logger.error("Hazırlık: kamera açılamadı (VideoCapture(0)).")  # ham ayrıntı YALNIZ log'a
         cap.release()
-        _ai_hazirlik_hata = f"AI modeli yüklenemedi: {str(e)[:160]}"
+        _ai_hazirlik_hata_kodu = "kamera"
+        _ai_hazirlik_hata = (
+            "Kamera açılamadı. Kablosunu ve başka bir uygulamanın kamerayı kullanmadığını kontrol "
+            "edip hazırlığı yeniden başlatın."
+        )
         _ai_hazirlik_active = False
         return
     # B3 (siyah ekran): önizleme kareleri istemciye HİÇ gitmiyordu (yalnız _ai_pro_loop `ai_vision`
@@ -1141,7 +1191,9 @@ def _ai_hazirlik_durdur_ic():
         # KAPSAMALI: bayrak set edilse de o kare bitene kadar loop çıkamaz → kamerayı bırakamaz.
         # Kısa timeout (3 sn) 4 sn'lik lokalizasyonu kaçırıp handoff'ta çift VideoCapture'a yol
         # açıyordu (adversaryal inceleme MAJOR). _ai_pro_loop açılışta ayrıca retry yapar (savunma).
-        t.join(timeout=6.0)
+        # Sağlayıcı bazlı süre (2026-09-09): ağır modellerde bir lokalizasyon turu daha uzun
+        # sürebilir; kısa timeout kamera devrinde çift VideoCapture'a yol açar.
+        t.join(timeout=float(getattr(_aktif_saglayici(), "join_timeout_s", 6.0)))
     _ai_hazirlik_thread = None
 
 
@@ -1151,6 +1203,16 @@ def _ai_pro_loop():
     # WEB handoff (2026-08-25): hazırlık önizlemesi kamerayı henüz bırakıyor olabilir (join,
     # kesintisiz ~4 sn'lik bir lokalizasyonu aşabilir) → açılışı birkaç kez DENE (0,5 sn arayla) ki
     # çift-open yüzünden doktor-ONAYLI seans sessizce ölmesin (adversaryal inceleme MAJOR savunması).
+    # MODEL KAMERADAN ÖNCE (2026-09-09; hazırlık döngüsüyle aynı gerekçe): ağır sağlayıcının
+    # yüklemesi kamerayı tutmasın. Hata hâlinde kamera HİÇ açılmadığı için sızıntı da yok.
+    try:
+        _aktif_saglayici().yukle()
+    except Exception as e:
+        logger.error("AI Pro modeli yüklenemedi (kamera hiç açılmadı): %s", e)
+        _ai_loop_active = False
+        _ai_seansi_pasife_al("model yüklenemedi")
+        return
+
     cap = cv2.VideoCapture(0)
     for _ in range(5):
         if cap.isOpened():
@@ -1162,16 +1224,9 @@ def _ai_pro_loop():
         logger.error("Kamera açılamadı (VideoCapture(0), tekrarlı denemeye rağmen). AI Pro durduruluyor.")
         cap.release()
         _ai_loop_active = False
-        return
-
-    # Modeli erkenden yükle — hata fırlarsa kamerayı BIRAK (VideoCapture sızıntısını önle, Audit P1).
-    try:
-        _get_or_load_kedi()
-        _get_or_load_catorgan()
-    except Exception as e:
-        logger.error("AI Pro em_kedi/cat_organ yüklenemedi, kamera bırakılıyor: %s", e)
-        cap.release()
-        _ai_loop_active = False
+        # `start_ai_session` bu thread spawn edilmeden ÖNCE çağrıldı → oturum AI modunda AKTİF.
+        # Pasife almazsak panel/geçmiş seansı "sürüyor" gösterir (bobin sürülmediği hâlde).
+        _ai_seansi_pasife_al("kamera açılamadı")
         return
 
     _lost_streak = 0  # ardisik hedef-kaybi sayaci (bkz. _AI_LOST_STOP_STREAK)
@@ -1826,7 +1881,8 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         _ai_hazirlik_started_at, \
         _ai_organ_id, \
         _ai_relocalize, \
-        _ai_hedef_modeli
+        _ai_hedef_modeli, \
+        _ai_hazirlik_hata_kodu
     global _ai_hazirlik_hata
     import threading
 
@@ -1868,6 +1924,7 @@ def ai_pro_hazirlik_baslat(payload: AiProStartPayload = AiProStartPayload()):
         # çalışıyorsa da organ güncellenir: panelin "Yeniden Konumla" akışı (AiProPanel.tsx:575)
         # önizleme sürerken bu ucu yeni organla çağırır.
         _ai_hazirlik_hata = ""  # B3: her yeni hazırlık taze; eski hata metni bayat kalmasın
+        _ai_hazirlik_hata_kodu = ""
         # Model seçimi (Faz 1): seans YOK → güvenli. Hazırlık sürerken model değişirse önizleme
         # yeni sağlayıcıyla devam eder (thread her turda `_aktif_saglayici()` okur).
         _ai_hedef_modeli = _saglayici.ad
@@ -1931,6 +1988,7 @@ def ai_pro_status():
         # doluysa hazırlığı sonlandırıp NEDENİ gösterir (120 sn kör bekleyiş yerine).
         "hazirlikActive": bool(_ai_hazirlik_active),
         "hazirlikHata": _ai_hazirlik_hata,
+        "hazirlikHataKodu": _ai_hazirlik_hata_kodu,  # YALNIZ-EK (2026-09-09)
     }
 
 

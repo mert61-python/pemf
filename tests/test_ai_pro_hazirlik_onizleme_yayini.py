@@ -116,7 +116,19 @@ def test_KRITIK_model_YUKLENEMEZSE_status_NEDENI_soyler(env, monkeypatch):
     client.post("/api/ai/pro/hazirlik/baslat", json={"organ_id": 3})
     assert _bekle(lambda: air._ai_hazirlik_active is False)
     st = client.get("/api/ai/pro/status").json()
-    assert "cat_organ paketi yok" in st["hazirlikHata"]
+
+    # ⚠️ SÖZLEŞME DEĞİŞTİ (2026-09-09): eskiden HAM istisna metni ("cat_organ paketi yok")
+    # doğrudan status'a yazılıyordu. Operatöre "yazılımda bug var" izlenimi veren bu metin yerine
+    # SINIFLANDIRILMIŞ, eylem söyleyen bir mesaj gider (hata-mesajı-eylem-söylesin kuralı); ham
+    # ayrıntı yalnız log'a. Testin ASIL iddiası korunuyor: hazırlık SESSİZ ölmez, neden görünür.
+    mesaj = st["hazirlikHata"]
+    assert mesaj, "model yüklenemedi ama status hiçbir neden söylemiyor (sessiz ölüm)"
+    assert st.get("hazirlikHataKodu") == "model_yukleme", (
+        f"hata sınıfı bildirilmedi: {st.get('hazirlikHataKodu')!r} — panel uyarı başlığını seçemez"
+    )
+    assert "yeniden başlat" in mesaj.lower(), f"mesaj bir EYLEM söylemiyor: {mesaj!r}"
+    for sizinti in ("RuntimeError", "Traceback", "cat_organ", "VideoCapture"):
+        assert sizinti not in mesaj, f"kullanıcı metnine ham teknik ayrıntı sızdı ({sizinti}): {mesaj!r}"
     assert not any(m.get("type") == "ai_vision" for m in yayin)
 
 
