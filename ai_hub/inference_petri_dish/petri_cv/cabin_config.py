@@ -99,10 +99,28 @@ class PhantomPlateCfg:
     plate_z_cm: float
     width_cm: float
     height_cm: float
+    # HEDEF DUZLEMI (2026-09-09, sahip karari #6): kamera isini bu duzlemle kesistirilir.
+    #   "Y" = YATAY yuzey (fantom/petri tabanda/tepside duruyor) -> deger = taban + kalinlik
+    #   "Z" = eski davranis (kabinin DIKEY orta duzlemi); plate_z_cm kullanilir
+    # Yatay yerlesimde "Z" kullanmak hedefi yanlis noktaya tasir (dikey perde ile kesisim).
+    hedef_duzlem_eksen: str = "Z"
+    hedef_duzlem_cm: float = 0.0
 
     @property
     def plate_z_mm(self) -> float:
         return self.plate_z_cm * 10.0
+
+    @property
+    def hedef_duzlem_mm(self) -> float:
+        """Kesisim duzleminin mm degeri (eksen "Z" ise geriye-uyumlu plate_z)."""
+        if (self.hedef_duzlem_eksen or "Z").strip().upper() == "Z":
+            return self.plate_z_cm * 10.0
+        return self.hedef_duzlem_cm * 10.0
+
+    @property
+    def hedef_duzlem_indeksi(self) -> int:
+        """Kabin ekseni indeksi: X=0, Y=1, Z=2."""
+        return {"X": 0, "Y": 1, "Z": 2}.get((self.hedef_duzlem_eksen or "Z").strip().upper(), 2)
 
 
 @dataclass
@@ -286,6 +304,9 @@ def load_cabin_config(yaml_path: str | os.PathLike | None = None) -> CabinConfig
 
     plate = PhantomPlateCfg(
         plate_z_cm=float(plate_r.get("plate_z_cm", 0.0)),
+        # Karar #6: yaml'da verilmezse ESKI davranis ("Z" + plate_z_cm) korunur.
+        hedef_duzlem_eksen=str(plate_r.get("hedef_duzlem_eksen", "Z")),
+        hedef_duzlem_cm=float(plate_r.get("hedef_duzlem_cm", 0.0)),
         width_cm=float(plate_r.get("width_cm", 8.5)),
         height_cm=float(plate_r.get("height_cm", 13.0)),
     )

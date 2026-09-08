@@ -97,6 +97,24 @@ camera:
 # 4) PETRI PLATE (geriye uyum; pipeline kullanmiyor — z=0 sabit)
 # -----------------------------------------------------------------------------
 phantom_plate:
+  # HEDEF DUZLEMI (2026-09-09, sahip karari #6): fantom ve petri kabinde YATAY duruyor,
+  # DOGRUDAN TABANIN uzerinde (0-2 cm). Kabin ekseni: Y yukari, taban -25 cm, tavan +25 cm.
+  # Deger = taban (-25) + malzeme/tepsi kalinligi (~1 cm) -> -24.0 cm.
+  # ⚠️ TEZGAHTA OLC ve buraya yaz: kalinlik 1 cm degilse bu sayiyi duzelt (or. 3 mm tepsi ->
+  #    -24.7). Eksen "Z" yapilirsa ESKI davranis (kabinin dikey orta duzlemi) geri gelir.
+  # ⚠️ OLCUM (2026-09-09, 06b_PetriKuyu_aruco.jpg): eksen "Y" + -24,0 (taban) ile kuyu konumu
+  #    (-97 · -24 · +1096) cm cikti = KABIN DISI. Neden: kamera taban hizasinda (Y=-25 cm) ve
+  #    hedef duzlemi onun 1 cm ustunde -> isin duzlemi cok SIG bir aciyla kesiyor, kucuk piksel
+  #    hatasi metrelere donusuyor. Yani yatay yerlesim MATEMATIKSEL olarak dogru ama MEVCUT kamera
+  #    konumuyla sayisal olarak DAYANIKSIZ. Karsilastirma: eksen "Z" + 0,0 -> (-2,3 · +7,7 · 0,0)
+  #    cm = kabin ici.
+  #    KARAR BEKLIYOR (sahip/hoca): (a) kamerayi yukselt (ust kose/tavan) ya da (b) fantom/petri'yi
+  #    kabin ortasi yuksekligine (Y~0) bir platforma al -- (b) fantom modelinin egitim araligiyla da
+  #    uyusur (y -6..+6 cm). Karar gelince: hedef_duzlem_eksen "Y" + hedef_duzlem_cm = platform
+  #    yuksekligi. O ana kadar ESKI davranis (dikey orta duzlem) korunur ki AI Hub tek-foto analizi
+  #    BOZULMASIN.
+  hedef_duzlem_eksen: "Z"
+  hedef_duzlem_cm: 0.0
   plate_z_cm: 0.0
   width_cm: 5.0                   # sanity check (petri yaklasik cap, cm)
   height_cm: 5.0

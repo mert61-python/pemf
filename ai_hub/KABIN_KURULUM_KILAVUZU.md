@@ -31,6 +31,57 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 
 ---
 
+## 0.5) FANTOM / PETRİ YERLEŞİMİ ve HEDEF DÜZLEMİ (2026-09-09, sahip kararı #6)
+
+**Sahip kararı:** fantom ve petri plakası kabinde **YATAY** duruyor, **doğrudan tabanın üzerinde**
+(0-2 cm). Kabin işareti henüz yapıştırılmadı → "düz ve kenarları kabinle paralel" hedeflenecek.
+
+**Kodda ne değişti:** kesişim düzlemi artık yapılandırılabilir (`phantom_plate.hedef_duzlem_eksen`
++ `hedef_duzlem_cm`) ve marker→kabin **rotasyonu** uygulanıyor (eskiden hiç uygulanmıyordu).
+
+**⚠️ ÖLÇÜM — yatay düzlem mevcut KAMERA konumuyla dayanıksız.** `06b_PetriKuyu_aruco.jpg` ile:
+
+| Rotasyon | Hedef düzlemi | Bulunan kuyu konumu | Kabin içinde? |
+|---|---|---|---|
+| var | `Y = -24,0` cm (taban + 1 cm) | (−97,3 · −24,0 · **+1095,9**) cm | ❌ |
+| var | `Z = 0` cm (eski) | (−2,3 · +7,7 · 0,0) cm | ✅ |
+| yok (eski kod) | `Y = -24,0` cm | (73,3 · −24,0 · **−872,5**) cm | ❌ |
+
+**Neden:** kamera lensi **taban hizasında** (`fixed_position_cm: [32.5, -25, -25]`, yani Y = −25 cm)
+ve yatay hedef düzlemi onun yalnız **1 cm** üstünde. Işın bu düzlemi çok **sığ** bir açıyla keser;
+birkaç piksellik hata metrelere dönüşür. Kamera bu konumda kediyi (dikey hacim) görmek için
+seçilmişti — tabanda yatay duran bir plakayı 3B ölçmek için uygun değil.
+
+**Bu yüzden yaml şu an ESKİ davranışta** (`hedef_duzlem_eksen: "Z"`, 0 cm): AI Hub tek-foto
+analizi bozulmasın. Karar gelene kadar araştırma AI Pro sürüşü `PEMF_ARASTIRMA_AIPRO` bayrağıyla
+kapalı kalır.
+
+**KARAR BEKLİYOR — iki uygulanabilir seçenek:**
+
+1. **Hedefi yükselt (önerilen):** fantom/petri'yi kabin **orta yüksekliğine** (Y ≈ 0 cm) bir
+   platforma al. Kamera 25 cm aşağıdan bakar → açı makul. Ayrıca **fantom modelinin eğitim
+   aralığıyla uyuşur**: fantom verisi y ∈ [−6,0; +6,1] cm, z ∈ [−3,6; +4,0] cm, x ∈ [−5,7; −3,1] cm
+   (yani fantom kabin merkezinde, hafif solda duruyordu). Yaml: `hedef_duzlem_eksen: "Y"`,
+   `hedef_duzlem_cm: <platform yüksekliği>`.
+2. **Kamerayı yükselt:** lensi üst köşeye/tavana taşı ve `fixed_position_cm` + `to_origin_cm` +
+   `to_marker_cm`'i yeniden ölç. Taban düzlemine bakış açısı dikleşir. ⚠️ Kedi akışının görüş
+   alanı da değişir — kedi tarafı yeniden doğrulanmalı.
+
+**Eğitim aralığı karşılaştırması (referans örnekleminden ölçüldü, 2026-09-09):**
+
+| Model | x [cm] | y [cm] | z [cm] | Tabanda (y ≈ −24 cm) geçerli? |
+|---|---|---|---|---|
+| fantom | −5,7 … −3,1 | −6,0 … +6,1 | −3,6 … +4,0 | ❌ (hiç görmediği bölge) |
+| petri | −20,2 … +28,8 | −32,0 … +31,0 | −28,8 … +14,2 | ✅ |
+| kedi | −21,2 … +20,8 | −30,0 … +26,0 | −23,8 … +7,2 | ✅ |
+
+**Marker yapıştırma kontrolü (henüz yapılmadı):** sayfayı arka duvara **düz** yapıştır, kenarları
+kabin kenarlarına **paralel** olsun, "▲ ÜST" oku tavana baksın. Kod bu varsayımla marker→kabin
+dönüşümünü diag(−1, +1, −1) olarak kurar. **Eğik yapıştırılırsa** bu yetmez; tam rotasyonun
+`rvec`ten türetilmesi gerekir (ayrı iş). Yapıştırdıktan sonra bir gönye ile iki kenarı kontrol et.
+
+---
+
 ## 1) SABİT KURALLAR (3 kabinde de AYNI — değişmez)
 
 | Öğe | Kural |

@@ -226,7 +226,7 @@ def pixel_to_cabin_mm(px: tuple[float, float],
     cam_origin_marker = -Rt @ t
     ray_marker = Rt @ ray_cam
 
-    # 4) Marker -> cabin frame (translate + plane offset)
+    # 4) Marker -> cabin frame (rotate + translate + plane offset)
     # Marker yuzeyinin normal yonu cabin frame'de aruco.normal_axis_in_cabin
     # plane_offset_cm: marker plane -> ek z-ofset (marker plane'i kalin ise)
     plane_off_vec = np.array(
@@ -234,27 +234,54 @@ def pixel_to_cabin_mm(px: tuple[float, float],
     ) * (cfg.aruco.plane_offset_cm * 10.0)
 
     cam_origin_cabin = cam_origin_marker + pose.marker_pos_cabin_mm + plane_off_vec
-    # ray_marker -> ray_cabin: marker ekseni cabin ekseninden farkli olabilir.
-    # KISITLAMA: tek-marker setup'inda marker'in normal yonu cabin frame'de
-    # aruco_cfg.normal_axis_in_cabin. Bu yuzden marker-local Z ekseni cabin
-    # frame'de bu axis'tir. Marker-local X/Y'nin cabin'e gore yonu
-    # cv2.Rodrigues(rvec) ile zaten R icinde. Yani:
-    #   ray_cabin = ray_marker (cunku marker frame == ckine cabin frame
-    #               R uzerinden zaten degisik, ray_marker = Rt * ray_cam
-    #               cabin'de origin shift haricinde ekseni ayni varsayar)
-    # Pratik: tek marker + bilinen normal_axis ile bu yaklasim yeterli
-    # hassasiyette (kedi paternine sadik). Daha yuksek hassasiyet icin
-    # marker_to_cabin_R matrisi (R_axis) eklenebilir.
-    ray_cabin = ray_marker
+    # ray_marker -> ray_cabin: MARKER EKSENLERI KABIN EKSENLERI DEGILDIR.
+    # 2026-09-09 (karar #6): eskiden `ray_cabin = ray_marker` yaziliydi, yani marker cercevesi
+    # kabin cercevesiyle AYNI varsayiliyordu. Marker arka duvarda ve normali -Z oldugundan bu
+    # varsayim X ve Z eksenlerinin ISARETINI atliyor: isin ters yone gidiyor ve kesisim yanlis
+    # noktada bulunuyordu. Marker DUZ yapistirildiginda (kurulum kilavuzu sarti) eksenler
+    # hizalidir ama isaretler farklidir -> dogru donusum bir isaret/permutasyon matrisidir.
+    R_axis = _marker_to_cabin_R(cfg)
+    ray_cabin = R_axis @ ray_marker
+    cam_origin_marker = R_axis @ cam_origin_marker
 
-    # 5) Plate düzlemine ray-plane intersection
-    plate_z = cfg.phantom_plate.plate_z_mm
-    if abs(ray_cabin[2]) < 1e-9:
-        s = 1e6                                     # paralel — uzak nokta
+    # 5) HEDEF DUZLEMI ile ray-plane intersection (2026-09-09, karar #6)
+    # Duzlem ARTIK YAPILANDIRILABILIR: fantom/petri kabinde YATAY duruyorsa dogru duzlem
+    # "Y = taban + kalinlik"tir; eski kod her zaman kabin Z=0 (DIKEY orta duzlem) ile
+    # kesistiriyordu ve yatay bir plakada konumu yanlis veriyordu. Yaml'da alan yoksa eski
+    # davranis (eksen "Z", plate_z_cm) AYNEN korunur.
+    eksen = cfg.phantom_plate.hedef_duzlem_indeksi
+    duzlem = cfg.phantom_plate.hedef_duzlem_mm
+    if abs(ray_cabin[eksen]) < 1e-9:
+        s = 1e6                                     # isin duzleme paralel — uzak nokta
     else:
-        s = (plate_z - cam_origin_cabin[2]) / ray_cabin[2]
+        s = (duzlem - cam_origin_cabin[eksen]) / ray_cabin[eksen]
     p_cabin = cam_origin_cabin + s * ray_cabin
     return p_cabin.astype(np.float64)
+
+
+def _marker_to_cabin_R(cfg) -> "np.ndarray":
+    """Marker cercevesinden kabin cercevesine ISARET/PERMUTASYON matrisi.
+
+    Kurulum sarti (KABIN_KURULUM_KILAVUZU): marker arka duvara DUZ yapistirilir, kenarlari kabin
+    kenarlarina paralel, "ust" oku tavana bakar. O halde:
+        marker-Z (yuzey normali, disa) = cfg.aruco.normal_axis_in_cabin  (arka duvarda "-Z")
+        marker-Y (yukari, "ust" oku)   = cfg.camera.up_cabin             (kabin "+Y")
+        marker-X                        = marker-Y x marker-Z            (sag-el kurali)
+    Sutunlar bu birim vektorlerdir; carpim marker-cercevesi vektorunu kabin cercevesine tasir.
+
+    ⚠️ Marker EGIK yapistirilirsa bu matris yetmez (tam rotasyon rvec'ten turetilmelidir) —
+    kilavuz bu yuzden "duz ve paralel" sartini koyar ve kurulum kontrol adimi ekler.
+    """
+    z = np.array(_axis_vec(cfg.aruco.normal_axis_in_cabin), dtype=np.float64)
+    y = np.array(getattr(cfg.camera, "up_cabin", [0.0, 1.0, 0.0]), dtype=np.float64)
+    # y'yi z'ye dik hale getir (Gram-Schmidt) — kilavuz disi kurulumda bile tutarli kalsin.
+    y = y - z * float(np.dot(y, z))
+    n = float(np.linalg.norm(y))
+    y = y / n if n > 1e-9 else np.array([0.0, 1.0, 0.0])
+    x = np.cross(y, z)
+    nx = float(np.linalg.norm(x))
+    x = x / nx if nx > 1e-9 else np.array([1.0, 0.0, 0.0])
+    return np.column_stack([x, y, z])
 
 
 def _axis_vec(axis_str: str) -> list[float]:
