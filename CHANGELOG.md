@@ -129,7 +129,9 @@ eski hata geri konarak kirmizi kanitlandi.
 
 Mobil uygulama (2.3.32) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
 
-Paket kimliği (`buildId`): `631ae4f10a99`. Monolit `base.zip` sha: `663a0586bc7f`. deps katmani DEGISMEDI (`99ac8a491f37`, URL korundu).
+Paket kimliği (`buildId`): `357da554d88a`. Monolit `base.zip` sha: `1c2f1f50cc8b`. deps katmani DEGISMEDI (`99ac8a491f37`, URL korundu).
+
+> ⚠️ DUZELTME (2026-09-09): bu satirdaki iki sha ONCEKI bir yapinin degerleriydi (`631ae4f10a99` / `663a0586bc7f`); paket yeniden uretilip yayinlandiginda kayit guncellenmemis. Sahadaki cihazlar `/api/health`te app-katmani sha'sini raporlar, yani `357da554d88a`. Yayinlanan varliklarin BOYUTLARI da manifest ile birebir ayni (base-app.zip 81.148.553 · base.zip 1.568.859.019) → degerler manifestten duzeltildi. Kapilar: tests/test_changelog_buildid_etiketi.py + test_version_visibility.py.
 
 ## launcher 1.9.47 — 2026-09-05 (🔧 Otomatik guncelleme ARTIK GERCEKTEN KURUYOR)
 
