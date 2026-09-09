@@ -75,10 +75,25 @@
   tipiyle yeniden egitilmesi/ince-ayari gerekiyor (mevcut model tek sinifli ve yuvarlak kap
   odakli).
 
+### ESP8266 bobin firmware'i (⚠️ ELLE REFLASH gerekir — pakete GIRMEZ)
+
+- **Kart acilista surekli restart atiyordu (Exception 3 / LoadStoreError).** DDS durum
+  degiskenlerine `IRAM_ATTR` konulmustu; ESP8266'da IRAM YALNIZ 32-bit erisilebilir, oraya
+  konmus bir `bool`/`uint8_t`a bayt erisimi cokme uretir. `s_pin_a` (uint8_t)
+  `CoilController::begin()` icinde yazildigi icin cokme her boot'ta ayni noktada — "Adim 1:
+  Sensorler baslatildi" satirindan hemen sonra — olusuyordu; `s_dds_active` (bool) ise 50 kHz
+  DDS kesmesinin ilk satirinda okunuyor. Attribute veriden kaldirildi (veri zaten DRAM'de ve
+  kesmeden erisilebilir; `IRAM_ATTR` yalniz ISR KODU icindir). ESP32-S3 varyanti etkilenmemisti.
+- Yeni kapi: `tests/test_esp_iram_veri_kapisi.py` — hicbir ESP kaynagi `IRAM_ATTR`i veri
+  bildiriminde kullanamaz, ISR kodu ise onu tasimak zorundadir.
+- ⚠️ Bu degisiklik otomatik guncellemeyle GITMEZ: 8266 kartlarinin Arduino IDE ile yeniden
+  programlanmasi gerekir.
+
 ### Not
 
 Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
-Paket kimligi ve sha degerleri yapi alindiktan sonra bu bolume yazilir (manifestten).
+Paket kimliği (`buildId`): `82ad0f9633ad`. Monolit `base.zip` sha: `2a96b0936990`. deps katmani DEGISMEDI
+(`99ac8a491f37`, URL client-app-v1.9.41'de KORUNDU -> klinikler 1,49 GB indirmez).
 
 ## app 1.9.44 — 2026-09-09 (🔬 Arastirma modunda AI Pro: Fantom + Petri · 🚑 sunucu-kamerali AI Pro seansi duzeltildi)
 
