@@ -1,13 +1,13 @@
 # Author: mertaygn, cglrgrkn
-"""A4 basılabilir ArUco marker sayfası — PEMF kabin kalibrasyonu (DICT_5X5_50 · ID 0 · kenar 10,0 cm).
+"""A4 basılabilir ArUco marker sayfası — PEMF kabin kalibrasyonu (DICT_5X5_50 · ID 0 · kenar 15,0 cm).
 
 Neden ayrı bir sayfa: eski `PEMF_ArUco_Marker_5X5_50_ID0_10cm.png` DPI bilgisi taşımıyordu; yazıcı
-sürücüsü/görüntüleyici "sayfaya sığdır" ile ölçeği bozunca marker 10 cm çıkmıyor, ölçek (mm/px)
+sürücüsü/görüntüleyici "sayfaya sığdır" ile ölçeği bozunca marker istenen boyutta çıkmıyor, ölçek (mm/px)
 ve dolayısıyla 3B konum yanlış oluyordu. Bu sayfa 300 DPI'da A4 boyutundadır: %100 (gerçek boyut)
-basıldığında siyah karenin kenarı TAM 10,0 cm'dir; altındaki 10 cm cetvel çubuğu basımı doğrular.
+basıldığında siyah karenin kenarı TAM `KENAR_CM` kadardır; altındaki cetvel çubuğu basımı doğrular.
 
 Kendi kendini doğrular: üretilen sayfada marker cv2.aruco ile ID 0 olarak bulunur ve kenarı
-1181±4 px (= 10,0 cm @ 300 DPI) ölçülür; değilse çıkış 2.
+`KENAR_CM × 118,11` px (±4) ölçülür; değilse çıkış 2.
 
 Kullanım:
   python scripts/kabin_marker_a4.py                 # ai_hub/ altına PDF + PNG
@@ -29,11 +29,14 @@ KOK = Path(__file__).resolve().parents[1]
 DPI = 300
 PX_CM = DPI / 2.54  # 118.11 px/cm
 A4_PX = (int(round(21.0 * PX_CM)), int(round(29.7 * PX_CM)))  # 2480 x 3508
-KENAR_CM = 10.0  # cabin_config: aruco.real_cm
+# ⚠️ TEK KAYNAK: bu deger cabin_config `aruco.real_cm` ile AYNI olmak ZORUNDA.
+# 2026-09-09 sahip olcumu: kabin isareti kenari 15 cm (onceki sayfa 10 cm idi).
+# Yanlis kenar = tespit CALISIR ama olcek yanlis olur ve 3B konum SESSIZCE kayar.
+KENAR_CM = 15.0  # cabin_config: aruco.real_cm
 SESSIZ_CM = 2.0  # beyaz sessiz bölge (her kenarda)
 DICT_ADI = "DICT_5X5_50"
 MARKER_ID = 0
-AD = f"PEMF_ArUco_Marker_5X5_50_ID{MARKER_ID}_10cm_A4"
+AD = f"PEMF_ArUco_Marker_5X5_50_ID{MARKER_ID}_{KENAR_CM:g}cm_A4"
 
 
 def _cm(x: float) -> int:
@@ -94,17 +97,18 @@ def sayfa_uret() -> Image.Image:
     # Marker
     sayfa.paste(marker_goruntusu(kenar), (x0 + sessiz, y0 + sessiz))
 
-    # 10 cm cetvel çubuğu (doğrulama)
+    # Kenar boyu kadar cetvel çubuğu (doğrulama)
     cy = y0 + dis + _cm(1.2)
     cx0 = (W - kenar) // 2
     ciz.rectangle([cx0, cy, cx0 + kenar, cy + _cm(0.5)], outline=0, width=4)
-    for i in range(0, 11):
+    for i in range(0, int(KENAR_CM) + 1):
         x = cx0 + _cm(i)
         ciz.line([(x, cy), (x, cy + _cm(0.5 if i % 5 == 0 else 0.3))], fill=0, width=4)
         ciz.text((x, cy + _cm(0.85)), str(i), fill=0, font=_font(32), anchor="mm")
     ciz.text(
         (W // 2, cy + _cm(1.5)),
-        "DOĞRULAMA: bu çubuk cetvelde tam 10,0 cm ise siyah karenin kenarı da 10,0 cm'dir.",
+        f"DOĞRULAMA: bu çubuk cetvelde tam {KENAR_CM:.1f} cm ise siyah karenin kenarı da "
+        f"{KENAR_CM:.1f} cm'dir.".replace(".", ","),
         fill=0,
         font=_font(38, True),
         anchor="mm",
@@ -115,10 +119,10 @@ def sayfa_uret() -> Image.Image:
         "BASKI: %100 / 'gerçek boyut' — 'sayfaya sığdır' ve 'ölçekle' KAPALI. Mat kâğıt (parlama yok).",
         "KESME: kesik çizgiden kes (14 × 14 cm). Beyaz kenar (sessiz bölge) KALSIN — ArUco için zorunlu.",
         "YER: ARKA duvar (kameranın karşısı), SOL-ÜST köşe — marker MERKEZİ sol duvardan 8 cm,",
-        "     tavandan 8 cm. Kabin frame: merkez = [-24.5, +17.0, +25.0] cm  (65 × 50 × 50 kabin).",
+        "     tavandan 8 cm. Kabin frame: merkez = [-21.5, +14.0, +25.0] cm  (65 × 50 × 50 kabin).",
         "YÖN: siyah yüz kameraya (öne) baksın, '▲ ÜST' tavana. Düz yapıştır (kırışık/eğri değil).",
         "KAMERA: sağ-alt-ÖN köşe, lens [32.5, -25.0, -25.0] cm, kabin merkezine (origin) bakar.",
-        "CONFIG: qr_to_origin_cm [24.5, -17.0, -25.0] · to_marker_cm 86.7 · to_origin_cm 48.0",
+        "CONFIG: qr_to_origin_cm [21.5, -14.0, -25.0] · to_marker_cm 86.7 · to_origin_cm 48.0",
         "Farklı boyutta basarsan 3 cabin_config'te aruco.real_cm'i ölçtüğün kenara çek.",
     ]
     ty = cy + _cm(2.6)

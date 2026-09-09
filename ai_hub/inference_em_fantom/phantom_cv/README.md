@@ -130,8 +130,8 @@ results/<image_stem>/
 
 ### 1. Marker bas (opsiyonel — ArUco modu için)
 
-⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`
-(DICT_5X5_50, kenar **10,0 cm**, %100 ölçekte bas — sayfadaki cetvel çubuğuyla doğrula).
+⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`
+(DICT_5X5_50, kenar **15,0 cm**, %100 ölçekte bas — sayfadaki cetvel çubuğuyla doğrula).
 Sözlük ve kenar uzunluğu `cabin_config.yaml`'daki `aruco.dict` / `aruco.real_cm` ile AYNI
 olmak ZORUNDA: yanlış sözlük işaretin HİÇ bulunmamasına, yanlış kenar uzunluğu ise sessizce
 **ölçek hatasına** (3B koordinat 2 kat yanlış) yol açar.

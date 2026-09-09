@@ -31,7 +31,14 @@ def donusum():
     from ai_hub.inference_em_fantom.phantom_cv import coord_transform as ct
     from ai_hub.inference_em_fantom.phantom_cv.cabin_config import load_cabin_config
 
-    cfg = load_cabin_config(None)  # depoya gömülü 2026-09-08 kabin geometrisi (65x50x50)
+    cfg = load_cabin_config(None)  # depoya gömülü kabin geometrisi (65x50x50)
+    # ⚠️ GOLDEN DÜZLEMİ SABİTLENİR: bu dosya DÖNÜŞÜMÜ karakterize eder, sahadaki hedef düzlemi
+    # seçimini DEĞİL. 2026-09-09'da yaml "Y / -20 cm"e (sahip ölçüsü: tabandan 5 cm) geçti; o
+    # düzlemde sentetik ışınlar düzleme neredeyse PARALEL olduğu için sonuç 10^6 mm'ye fırlıyor
+    # (aşağıdaki ayrı karakterizasyon bunu ölçer). Dönüşümün kendisi eski düzlemde ölçülmeye
+    # devam eder ki gerçek bir regresyon bu gürültünün altında kaybolmasın.
+    cfg.phantom_plate.hedef_duzlem_eksen = "Z"
+    cfg.phantom_plate.hedef_duzlem_cm = 0.0
     intr = ct.CameraIntrinsics(
         K=np.array([[900.0, 0.0, 640.0], [0.0, 900.0, 360.0], [0.0, 0.0, 1.0]]),
         D=np.zeros((1, 5)),
@@ -44,22 +51,26 @@ def donusum():
         tvec=np.array([[0.0], [0.0], [500.0]]),  # kamera markerdan 500 mm uzakta
         R=np.eye(3),  # marker kameraya paralel
         reproj_error_px=0.0,
-        marker_pos_cabin_mm=np.array([245.0, -170.0, -250.0]),  # yaml qr_to_origin (24,5/-17/-25 cm)
+        # ⚠️ YAML'DAN TÜRETİLİR, elle yazılmaz: marker konumu = -qr_to_origin (cm -> mm).
+        # 2026-09-09'da işaret 15 cm'e çıkınca köşe yerleşimi 8/8 -> 11/11 cm taşındı; sabit yazılsaydı
+        # golden yaml'dan sessizce ayrışırdı.
+        marker_pos_cabin_mm=np.array([-float(v) * 10.0 for v in cfg.geometry.qr_to_origin_cm]),
     )
     return ct, cfg, intr, pose
 
 
-# (piksel, bugün üretilen kabin mm).
-# ⚠️ GÜNCELLENDİ 2026-09-09 (karar #6): marker→kabin ROTASYONU artık uygulanıyor (eskiden
-# `ray_cabin = ray_marker` ile hiç uygulanmıyordu) ve kamera orijini de aynı dönüşümden geçiyor.
-# Merkez piksel değişmedi; eksen dışı pikseller Y'de kaydı — beklenen ve BİLİNÇLİ değişim.
-# Kesişim düzlemi artık yapılandırılabilir; yaml şu an ESKİ davranışta (eksen "Z", 0 cm) çünkü
-# yatay düzlem mevcut kamera konumuyla sayısal olarak dayanıksız (yaml yorumundaki ölçüm).
+# (piksel, bugün üretilen kabin mm) — kesişim düzlemi "Z"/0 cm'de SABİTLENMİŞ fixture ile.
+# ⚠️ YENİDEN TEMELLENDİ 2026-09-09 (sahip ölçüsü): kabin işareti 10 -> 15 cm büyüdü ve köşe
+# yerleşimi 8/8 -> 11/11 cm taşındı (15 cm'lik işaretin sessiz bölgesi 8 cm'lik merkezde duvardan
+# taşıyordu). Marker konumu (-21,5 / +14 / +25 cm) değiştiği için TÜM golden değerleri kaydı —
+# dönüşüm mantığı DEĞİŞMEDİ. Önceki temel: marker (-24,5 / +17 / +25) cm.
+# ⚠️ Sahip notu (2026-09-09): kamera ile fantom/petri konumları SAHADA tekrar düzeltilecek →
+# bu tablo o ölçümden sonra bir kez daha yeniden temellenecektir.
 _GOLDEN = [
-    ((640.0, 360.0), (245.000000, -170.000000, 0.0)),  # görüntü merkezi (rotasyondan etkilenmedi)
-    ((740.0, 360.0), (328.333333, -170.000000, 0.0)),  # +100 px sağ
-    ((640.0, 460.0), (245.000000, -253.333333, 0.0)),  # +100 px aşağı (rotasyon sonrası)
-    ((300.0, 200.0), (-38.333333, -36.666667, 0.0)),  # sol üst (rotasyon sonrası)
+    ((640.0, 360.0), (-215.000000, 140.000000, 0.0)),  # görüntü merkezi = marker merkezi hizası
+    ((740.0, 360.0), (-187.222222, 140.000000, 0.0)),  # +100 px sağ
+    ((640.0, 460.0), (-215.000000, 112.222222, 0.0)),  # +100 px aşağı
+    ((300.0, 200.0), (-309.444444, 184.444444, 0.0)),  # sol üst
 ]
 
 
@@ -186,3 +197,31 @@ def test_KRITIK_yaml_ve_parser_hedef_duzlemini_TASIYOR():
         assert "hedef_duzlem_mm" in cfg_src and "hedef_duzlem_indeksi" in cfg_src, (
             f"{kok_dizin}: yapılandırma sınıfı düzlem yardımcılarını sunmuyor"
         )
+
+
+def test_KARAKTERIZASYON_SAHADAKI_yatay_duzlem_KOTU_KOSULLANMIS(donusum):
+    """ÖLÇÜM KAYDI (2026-09-09): sahaya yazılan hedef düzlemi (tabandan 5 cm = kabin `Y = -20` cm)
+    mevcut kamera konumuyla SAYISAL OLARAK DAYANIKSIZ.
+
+    Kamera lensi taban hizasında (Y = -25 cm); hedef düzlemi onun yalnız 5 cm üstünde. Işın düzlemi
+    çok sığ bir açıyla keser → küçük piksel hatası metrelere döner. Sentetik ışınlarda kesişim
+    10^6 mm'ye fırlıyor, gerçek ArUco'lu fotoğrafta kuyu (-48,3 · -20,0 · +445,4) cm = KABİN DIŞI.
+
+    ⚠️ BU KAPI BİLİNÇLİDİR ve bir HEDEFİ değil bir DURUMU sabitler: `PEMF_ARASTIRMA_AIPRO`ın neden
+    0 kaldığının ölçülmüş gerekçesidir. Sahada kamera/hedef konumu düzeltilince (sahip notu) bu
+    test KIRMIZI olacak — o zaman düzeltmenin İŞE YARADIĞI anlaşılır ve kapı yenilenir.
+    Ayrıntı: ai_hub/KABIN_KURULUM_KILAVUZU.md §0.5 · docs/VERIFICATION.md §15.
+    """
+    ct, cfg, intr, pose = donusum
+    cfg.phantom_plate.hedef_duzlem_eksen = "Y"
+    cfg.phantom_plate.hedef_duzlem_cm = -20.0
+
+    p = ct.pixel_to_cabin_mm((740.0, 360.0), pose, intr, cfg)
+
+    kabin_yarim = [float(v) * 10.0 / 2 for v in cfg.geometry.cabin_extent_cm]
+    disarida = any(abs(float(p[i])) > kabin_yarim[i] for i in range(3))
+    assert disarida, (
+        f"yatay düzlem artık kabin İÇİNDE sonuç veriyor: {p.tolist()} — kamera/hedef konumu "
+        "düzeltilmiş olabilir. Ölçümü tekrarlayıp bu kapıyı ve KABIN_KURULUM_KILAVUZU §0.5'i "
+        "güncelleyin; bayrak açılabilir hâle gelmiş olabilir."
+    )

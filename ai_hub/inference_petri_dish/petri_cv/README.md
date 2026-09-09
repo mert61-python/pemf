@@ -4,7 +4,7 @@
 
 **Kuyucuk tespiti** = eğitilmiş **YOLO11m-seg** modeli (mAP50=0.984, mAP50-95=0.961, 22.3M param) — model yolu: [`../yolo11m-seg.pt`](../yolo11m-seg.pt) (aynı klasör).
 
-Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir aynı** pattern (ArUco **DICT_5X5_50**, kenar **10,0 cm** + solvePnP — basılı sayfa: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`).
+Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir aynı** pattern (ArUco **DICT_5X5_50**, kenar **15,0 cm** + solvePnP — basılı sayfa: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`).
 
 ---
 
@@ -162,7 +162,7 @@ d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
 cv2.imwrite("marker_id0.png", cv2.aruco.generateImageMarker(d, 0, 500))
 ```
 
-⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf` — kenar **10,0 cm**, %100 ölçekte bas. Sözlük/kenar `cabin_config.yaml`'daki `aruco.dict` ve `aruco.real_cm` ile AYNI olmalı (yanlış kenar = sessiz ÖLÇEK hatası). Kabin işareti ARKA duvarın sol-üstüne yapıştırılır (onaylı geometri 2026-09-08 — bkz. `ai_hub/KABIN_KURULUM_KILAVUZU.md`). ArUco yoksa `--petri-diameter-cm` ile ölçek verilebilir, ama o modda **araştırma AI Pro hedefi reddeder** (karar #4).
+⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf` — kenar **15,0 cm**, %100 ölçekte bas. Sözlük/kenar `cabin_config.yaml`'daki `aruco.dict` ve `aruco.real_cm` ile AYNI olmalı (yanlış kenar = sessiz ÖLÇEK hatası). Kabin işareti ARKA duvarın sol-üstüne yapıştırılır (onaylı geometri 2026-09-08 — bkz. `ai_hub/KABIN_KURULUM_KILAVUZU.md`). ArUco yoksa `--petri-diameter-cm` ile ölçek verilebilir, ama o modda **araştırma AI Pro hedefi reddeder** (karar #4).
 
 ### 2. Kamera kalibre et (opsiyonel — ArUco modunda)
 

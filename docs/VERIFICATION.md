@@ -332,9 +332,27 @@ Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçl
     tamamen dışında kalır (arayüz bunu "eğitim aralığı dışında" diye yazar ama doğru çerçeve
     olmadan sayı zaten anlamsızdır).
 
+> ⚠️ **BU DEĞERLER GEÇİCİ — sahip notu (2026-09-09): "kamera ile fantom ve petri konumları için
+> sahada tekrar düzeltme yapacağım".** Aşağıdaki işaret kenarı (15 cm), köşe yerleşimi (11/11 cm),
+> hedef düzlemi (tabandan 5 cm) ve kamera konumu (`fixed_position_cm`) SAHADA ölçülüp
+> güncellenecektir. Yazılım tarafında yapılacak tek iş yaml'daki sayıları değiştirmektir; kod
+> değişikliği GEREKMEZ. Ölçüm bitene kadar `PEMF_ARASTIRMA_AIPRO` **0** kalır.
+
+**2026-09-09 SAHİP ÖLÇÜSÜ yapılandırmaya yazıldı:** işaret kenarı **15 cm** (yeni basılı sayfa
+`PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`; 10 cm sayfası SİLİNDİ), köşe yerleşimi 8/8 → **11/11 cm**
+(15 cm işaretin sessiz bölgesi 8 cm'lik merkezde duvardan taşardı), hedef düzlemi **tabandan 5 cm**
+(`hedef_duzlem_eksen: "Y"`, `hedef_duzlem_cm: -20.0`).
+
+> ⚠️ **ÖLÇÜLDÜ: tabandan 5 cm de mevcut kamera konumuyla YETMİYOR.** Gerçek ArUco'lu fotoğrafta
+> kuyu (−48,3 · −20,0 · **+445,4**) cm çıkıyor = kabin dışı; `Y = 0` (kabin ortası) ve eski dikey
+> düzlem sağlam. Sebep aynı: kamera lensi taban hizasında (Y = −25), 5 cm'lik yükseklik ışını hâlâ
+> sığ açıyla kesiyor. Bu yüzden bayrak 0 kalıyor ve aşağıdaki adım 4 bir SEÇİM gerektiriyor.
+
 **Yapılacak ölçüm (seçenekler ve tablo: `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5):**
-1. Kabin işaretini (A4 ArUco) arka duvara DÜZ ve duvara PARALEL yapıştır; `qr_to_origin_cm`'i
-   ölçüp `cabin_config.yaml`'a yaz.
+1. Kabin işaretini (15 cm, A4 ArUco) arka duvara DÜZ ve duvara PARALEL yapıştır (merkez sol
+   duvardan 11 cm, tavandan 11 cm). YAPIŞTIRDIKTAN SONRA CETVELLE ÖLÇ ve gerçek değeri yaz:
+   `qr_to_origin_cm = [32.5 - a, -(25 - b), -25]` (a = sol duvardan, b = tavandan cm);
+   `to_marker_cm`i de yeniden hesapla (kapı: tests/test_kabin_config_65x50x50.py).
 2. Hedef tepsisinin yüksekliğini ölç ve `hedef_duzlem_eksen: "Y"` + `hedef_duzlem_cm: <ölçülen>`
    yaz (varsayılan hâlâ eski davranış: `"Z"` / 0,0 — AI Hub tek-foto analizi bozulmasın diye).
 3. Kabinde bilinen bir noktaya (ör. tepsi merkezinden 10 cm sağa) hedef koy; Kontrol → AI Pro →

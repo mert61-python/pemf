@@ -25,8 +25,15 @@ import pytest
 _KOK = pathlib.Path(__file__).resolve().parents[1]
 _AI_HUB = _KOK / "ai_hub"
 
-#: Basılı sayfanın adı, gerçeğin tek kaynağı (dosya adı sözlük ve kenarı taşır).
-_BASILI = "PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf"
+
+def _basili_sayfalar() -> "list[pathlib.Path]":
+    """Depodaki basılabilir kabin işareti sayfaları (ad sözlüğü ve kenarı taşır).
+
+    ⚠️ PNG'ye bakılır, PDF'e DEĞİL: `.gitignore` `*.pdf`i dışlıyor → temiz bir checkout'ta (ve
+    CI'da) PDF YOKTUR. PDF'i arayan bir kapı sahte-kırmızı yanardı; sayfayı üreten betik ikisini
+    birlikte yazar, izlenen kopya PNG'dir."""
+    return sorted(_AI_HUB.glob("PEMF_ArUco_Marker_*_A4.png"))
+
 
 #: Kabin yaml'ları — hepsi AYNI işareti okumak zorunda (tek kabin, tek işaret).
 _YAMLLAR = (
@@ -45,6 +52,10 @@ _DOKUMANLAR = (
 pytestmark = pytest.mark.skipif(not (_AI_HUB / _YAMLLAR[0]).exists(), reason="ai_hub kaynak ağacı yok")
 
 
+#: Sayfa üreteci — kenar TEK sabitten gelir ve yaml ile aynı olmalı.
+_URETEC = _KOK / "scripts" / "kabin_marker_a4.py"
+
+
 def _yaml_isaret(gorece: str) -> "tuple[str, float]":
     src = (_AI_HUB / gorece).read_text(encoding="utf-8")
     d = re.search(r"^\s*dict:\s*(\S+)", src, re.M)
@@ -53,9 +64,13 @@ def _yaml_isaret(gorece: str) -> "tuple[str, float]":
     return d.group(1), float(r.group(1))
 
 
-def test_KRITIK_basili_sayfa_DOSYASI_var():
-    """Dokümanların yönlendirdiği sayfa gerçekten depoda olmalı (ölü yönlendirme yok)."""
-    assert (_AI_HUB / _BASILI).exists(), f"basılı işaret sayfası yok: ai_hub/{_BASILI}"
+def test_KRITIK_TEK_basili_sayfa_var():
+    """⚠️ TEK sayfa: iki farklı boyutta sayfa dururken yanlışını basmak SESSİZ ölçek hatasıdır.
+
+    Dokümanların yönlendirdiği sayfa gerçekten depoda olmalı (ölü yönlendirme yok) ve BAŞKA
+    boyutta bir sayfa YANINDA DURMAMALI (2026-09-09'da 10 cm sayfası 15 cm'e geçilirken silindi)."""
+    sayfalar = _basili_sayfalar()
+    assert len(sayfalar) == 1, f"basılı işaret sayfası tekil değil: {[p.name for p in sayfalar]}"
 
 
 def test_KRITIK_UC_kabin_yamli_AYNI_isareti_okur():
@@ -64,9 +79,10 @@ def test_KRITIK_UC_kabin_yamli_AYNI_isareti_okur():
     tekil = set(okunan.values())
     assert len(tekil) == 1, f"kabin yaml'ları farklı işaret okuyor: {okunan}"
     sozluk, kenar = tekil.pop()
-    # Basılı sayfanın ADI gerçeğin kaynağı: 5X5_50 ve 10cm onun içinde yazılı.
-    assert sozluk.replace("DICT_", "") in _BASILI, f"yaml sözlüğü ({sozluk}) basılı sayfayla uyuşmuyor"
-    assert f"{int(kenar)}cm" in _BASILI, f"yaml kenar uzunluğu ({kenar} cm) basılı sayfayla uyuşmuyor"
+    # Basılı sayfanın ADI sözlüğü ve kenarı taşır; yaml ile UYUŞMAK ZORUNDA.
+    basili = _basili_sayfalar()[0].name
+    assert sozluk.replace("DICT_", "") in basili, f"yaml sözlüğü ({sozluk}) basılı sayfayla uyuşmuyor: {basili}"
+    assert f"{kenar:g}cm" in basili, f"yaml kenar uzunluğu ({kenar} cm) basılı sayfayla uyuşmuyor: {basili}"
 
 
 def test_KRITIK_DOKUMANLAR_yanlis_SOZLUK_onermez():
@@ -111,3 +127,16 @@ def test_KAPI_gercekten_olcuyor():
     assert m, "tarayıcı basım talimatını görmüyor"
     sayilar = [float(g.replace(",", ".")) for g in m.groups() if g]
     assert not all(abs(s - kenar) < 0.01 for s in sayilar), "kapı yanlış kenarı doğru sayıyor"
+
+
+def test_KRITIK_SAYFA_URETECI_yaml_ile_AYNI_kenari_uretir():
+    """Sayfa elle değil betikle üretilir; betiğin kenarı yaml'dan AYRIŞIRSA bir sonraki baskı
+    sessizce yanlış ölçekte çıkar. MUTASYON: `KENAR_CM`i 10.0 yapın → KIRMIZI."""
+    _, kenar = _yaml_isaret(_YAMLLAR[0])
+    src = _URETEC.read_text(encoding="utf-8")
+    m = re.search(r"^KENAR_CM\s*=\s*([\d.]+)", src, re.M)
+    assert m, "kabin_marker_a4.py içinde KENAR_CM bulunamadı"
+    assert abs(float(m.group(1)) - kenar) < 0.01, (
+        f"sayfa üreteci {m.group(1)} cm basıyor, kabin yaml'ı {kenar} cm okuyor — "
+        "bir sonraki baskı yanlış ölçekte çıkar"
+    )

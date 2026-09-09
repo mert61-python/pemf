@@ -15,10 +15,10 @@ donanım = kabin + kamera + basılı QR; yazılım = `cabin_config_example.yaml`
 | **Kabin iç boyut** | `cabin_extent_cm: [65, 50, 50]` — [X genişlik (kedinin kafa yönü), Y yükseklik, Z derinlik (ön −/arka +)] |
 | **Duvarlar** | X = ±32.5 · Y = ±25 (taban −25, tavan +25) · Z = ±25 (ön −25, arka +25) |
 | **Kamera lensi** | `fixed_position_cm: [32.5, -25, -25]` = **sağ-alt-ÖN köşe** (alçak → kedinin yüzünü görür), **origin'e bakar** |
-| **QR marker merkezi** | **ARKA duvar (Z=+25), sol-üst**: sol duvardan 8 cm, tavandan 8 cm → `[-24.5, +17, +25]` |
-| **qr_to_origin_cm** | origin − marker = `[24.5, -17, -25]` |
-| **Marker** | DICT_5X5_50 · ID 0 · **10×10 cm** (3 pipeline'da tek ortak) · siyah yüz kameraya (öne, `normal_axis "-Z"`) |
-| **Şerit-metre** | kamera→origin = **48.0 cm** · kamera→marker merkezi = **86.7 cm** |
+| **QR marker merkezi** | **ARKA duvar (Z=+25), sol-üst**: sol duvardan 11 cm, tavandan 11 cm → `[-21.5, +14, +25]` |
+| **qr_to_origin_cm** | origin − marker = `[21.5, -14, -25]` |
+| **Marker** | DICT_5X5_50 · ID 0 · **15×15 cm** (3 pipeline'da tek ortak) · siyah yüz kameraya (öne, `normal_axis "-Z"`) |
+| **Şerit-metre** | kamera→origin = **48.0 cm** · kamera→marker merkezi = **83.3 cm** |
 
 > ⚠️ Kamera→marker ışını origin'in ~4 cm altından geçer: kedi origin'de yatarken marker'ı **kapatabilir**.
 > Kapatırsa marker'ı **tavana** taşı: merkez `[0, +25, -10]` → `qr_to_origin_cm: [0, -25, +10]`,
@@ -33,6 +33,12 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 
 ## 0.5) FANTOM / PETRİ YERLEŞİMİ ve HEDEF DÜZLEMİ (2026-09-09, sahip kararı #6)
 
+> ⚠️ **BU DEĞERLER GEÇİCİ — sahip notu (2026-09-09): "kamera ile fantom ve petri konumları için
+> sahada tekrar düzeltme yapacağım".** Aşağıdaki işaret kenarı (15 cm), köşe yerleşimi (11/11 cm),
+> hedef düzlemi (tabandan 5 cm) ve kamera konumu (`fixed_position_cm`) SAHADA ölçülüp
+> güncellenecektir. Yazılım tarafında yapılacak tek iş yaml'daki sayıları değiştirmektir; kod
+> değişikliği GEREKMEZ. Ölçüm bitene kadar `PEMF_ARASTIRMA_AIPRO` **0** kalır.
+
 **Sahip kararı:** fantom ve petri plakası kabinde **YATAY** duruyor, **doğrudan tabanın üzerinde**
 (0-2 cm). Kabin işareti henüz yapıştırılmadı → "düz ve kenarları kabinle paralel" hedeflenecek.
 
@@ -46,6 +52,26 @@ Kurulu makineye **yayınla** (app katmanı) gider; yayın sonrası backend yenid
 | var | `Y = -24,0` cm (taban + 1 cm) | (−97,3 · −24,0 · **+1095,9**) cm | ❌ |
 | var | `Z = 0` cm (eski) | (−2,3 · +7,7 · 0,0) cm | ✅ |
 | yok (eski kod) | `Y = -24,0` cm | (73,3 · −24,0 · **−872,5**) cm | ❌ |
+
+**2026-09-09 ikinci ölçüm — sahip ölçüsüyle (işaret 15 cm, merkez 11/11 cm), AYNI fotoğraf:**
+
+| Hedef düzlemi | Bulunan kuyu konumu | Kabin içinde? |
+|---|---|---|
+| `Z = 0` cm (eski davranış) | (12,0 · +0,1 · 0,0) cm | ✅ |
+| `Y = -24,0` (taban + 1 cm) | (−60,3 · −24,0 · **+534,1**) cm | ❌ |
+| **`Y = -20,0` (taban + 5 cm — SAHİP ÖLÇÜSÜ)** | (−48,3 · −20,0 · **+445,4**) cm | ❌ |
+| `Y = 0` (kabin ortası) | (11,7 · 0,0 · +2,0) cm | ✅ |
+
+> ⚠️ **Tabandan 5 cm de YETMİYOR.** Sahip ölçüsü yapılandırmaya yazıldı (`hedef_duzlem_eksen: "Y"`,
+> `hedef_duzlem_cm: -20.0`) ama ölçüm, kamera lensi taban hizasındayken (Y = −25) 5 cm'lik
+> yüksekliğin ışın-düzlem kesişimini hâlâ **kötü koşullandırdığını** gösteriyor: kesişim kabinin
+> ~4,5 m ötesine düşüyor. Kabin ortası (Y = 0) ve eski dikey düzlem sağlam çalışıyor.
+> Bu yüzden `PEMF_ARASTIRMA_AIPRO` **0 kalıyor**. Tezgâhta iki seçenekten biri gerekiyor:
+> **(a)** hedefi kabin ortası yüksekliğine bir platforma al (fantom modelinin eğitim aralığıyla da
+> uyuşur), **(b)** kamerayı üst köşeye/tavana taşı ve `fixed_position_cm`i yeniden ölç (kedi akışı
+> yeniden doğrulanmalı).
+> ⚠️ Bu ölçüm KABİN DOĞRULUĞU değil, DÜZLEM SEÇİMİNİN SAYISAL DAYANIKLILIĞI hakkındadır:
+> fotoğraf gerçek kabinde 15 cm'lik işaretle çekilmedi, mesafeler ölçek farkı taşır.
 
 **Neden:** kamera lensi **taban hizasında** (`fixed_position_cm: [32.5, -25, -25]`, yani Y = −25 cm)
 ve yatay hedef düzlemi onun yalnız **1 cm** üstünde. Işın bu düzlemi çok **sığ** bir açıyla keser;
@@ -103,11 +129,11 @@ dönüşümünü diag(−1, +1, −1) olarak kurar. **Eğik yapıştırılırsa*
 |---|---|
 | **Origin (0,0,0)** | Kabin merkezi = **coil array merkezi** |
 | **Eksenler** | +X (genişlik/kafa yönü) · **+Y = yukarı (dorsal)** · **+Z = arka (derinlik)** |
-| **QR marker** | **TEK ortak marker**: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf` (Masaüstü'nde kopyası). `DICT_5X5_50`, ID `0`, **kenar = 10.0 cm** |
-| **QR yeri** | **ARKA duvar sol-üst köşe** (merkez sol duvardan 8 cm, tavandan 8 cm); **siyah yüz kameraya (öne) bakar**, "▲ ÜST" tavana |
+| **QR marker** | **TEK ortak marker**: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf` (Masaüstü'nde kopyası). `DICT_5X5_50`, ID `0`, **kenar = 15.0 cm** (sahip ölçüsü 2026-09-09) |
+| **QR yeri** | **ARKA duvar sol-üst köşe** (merkez sol duvardan 11 cm, tavandan 11 cm — 15 cm işaretin yarısı 7,5 + 2 cm sessiz bölge duvara sığsın diye); **siyah yüz kameraya (öne) bakar**, "▲ ÜST" tavana |
 | **Kamera** | Sağ-alt-ön köşe, **origin'e (0,0,0) bakar**, "up" yönü = **+Y** |
 
-> ⚠️ Marker'ı **tam 10×10 cm** bas (sayfadaki 10 cm cetvel çubuğunu cetvelle doğrula). Farklı basarsan
+> ⚠️ Marker'ı **tam 15×15 cm** bas (sayfadaki 15 cm cetvel çubuğunu cetvelle doğrula). Farklı basarsan
 > 3 config'te `real_cm`'i o değere çek — yoksa ölçek (mm/px) ve 3B konum yanlış olur.
 
 ---
@@ -116,9 +142,9 @@ dönüşümünü diag(−1, +1, −1) olarak kurar. **Eğik yapıştırılırsa*
 
 | | cabin_extent [X,Y,Z] | kamera lens [x,y,z] | marker merkezi | qr→origin [x,y,z] |
 |---|---|---|---|---|
-| **cat_organ** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-24.5, +17, +25]` | `[24.5, -17, -25]` |
-| **em_fantom** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-24.5, +17, +25]` | `[24.5, -17, -25]` |
-| **petri** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-24.5, +17, +25]` | `[24.5, -17, -25]` |
+| **cat_organ** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-21.5, +14, +25]` | `[21.5, -14, -25]` |
+| **em_fantom** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-21.5, +14, +25]` | `[21.5, -14, -25]` |
+| **petri** | `[65, 50, 50]` | `[32.5, -25, -25]` | `[-21.5, +14, +25]` | `[21.5, -14, -25]` |
 
 Kamera lensi köşeye tam oturmuyorsa (gövde/tripod payı) **gerçek lens konumunu** ölç ve `fixed_position_cm`'e
 yaz; `to_origin_cm` / `to_marker_cm`'i §3'teki formülle yeniden hesapla. Kamera-sabitli modda tek kritik sayı budur.
@@ -127,21 +153,25 @@ yaz; `to_origin_cm` / `to_marker_cm`'i §3'teki formülle yeniden hesapla. Kamer
 
 ## 3) DOĞRULAMA (kabin kurulunca — ±2 cm tolerans)
 
-- `marker_pos = -qr_to_origin_cm` → `[-24.5, +17, +25]` ✓
+- `marker_pos = -qr_to_origin_cm` → `[-21.5, +14, +25]` ✓
 - `to_origin_cm  == |camera.fixed_position_cm|` → `|(32.5, -25, -25)| = √(1056.25+625+625) = 48.0` ✓
-- `to_marker_cm  == |camera.fixed_position_cm - marker_pos|` → `|(57, -42, -50)| = √(3249+1764+2500) = 86.7` ✓
+- `to_marker_cm  == |camera.fixed_position_cm - marker_pos|` → `|(54, -39, -50)| = √(2916+1521+2500) = 83.3` ✓
 
-Şerit metreyle: lens→kabin merkezi **48 cm**, lens→marker merkezi **87 cm** okunmalı.
+Şerit metreyle: lens→kabin merkezi **48 cm**, lens→marker merkezi **83 cm** okunmalı.
 
 ---
 
 ## 4) MARKER BASIMI + YAPIŞTIRMA
 
-1. `PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`'i **%100 / "gerçek boyut"** bas ("sayfaya sığdır" ve
-   "ölçekle" KAPALI, mat kâğıt). Sayfadaki **10 cm cetvel çubuğu** cetvelde tam 10,0 cm ise marker doğru.
-2. Kesik çizgiden kes (**14×14 cm**). Etrafındaki **beyaz kenar (sessiz bölge) kalsın** — ArUco için ZORUNLU.
-3. **Arka duvar sol-üst**: marker merkezi sol duvardan 8 cm, tavandan 8 cm (siyah karenin kenarı duvardan/tavandan
-   3 cm'de başlar). **Düz** yapıştır (kırışık/eğri değil), **siyah yüz kameraya**, "▲ ÜST" tavana.
+1. `PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`'i **%100 / "gerçek boyut"** bas ("sayfaya sığdır" ve
+   "ölçekle" KAPALI, mat kâğıt). Sayfadaki **15 cm cetvel çubuğu** cetvelde tam 15,0 cm ise marker doğru.
+2. Kesik çizgiden kes (**19×19 cm**). Etrafındaki **beyaz kenar (sessiz bölge) kalsın** — ArUco için ZORUNLU.
+3. **Arka duvar sol-üst**: marker merkezi sol duvardan 11 cm, tavandan 11 cm (siyah karenin kenarı
+   duvardan/tavandan 3,5 cm'de başlar). **Düz** yapıştır (kırışık/eğri değil), **siyah yüz kameraya**,
+   "▲ ÜST" tavana.
+   ⚠️ **YAPIŞTIRDIKTAN SONRA CETVELLE ÖLÇ.** Gerçek mesafeler 11/11 değilse yaml'ı düzelt:
+   `qr_to_origin_cm = [32.5 - a, -(25 - b), -25]` (a = sol duvardan cm, b = tavandan cm) ve
+   `to_marker_cm`i yeniden hesapla. 1 cm'lik sapma 3B konumda ~1 cm hata demektir.
 4. Işık: homojen, **parlama/yansıma yok** (marker üstünde ışık lekesi tespiti bozar).
 5. Yeniden üretmek için: `python scripts/kabin_marker_a4.py --masaustu` (300 DPI, kendi kendini doğrular).
 

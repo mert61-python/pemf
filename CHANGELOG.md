@@ -51,6 +51,23 @@
 - **⚠️ Telefonda yok:** konum kabin cercevesinde olculur; arastirma AI Pro yalniz kabin
   bilgisayarindaki Kontrol → AI Pro ekraninda calisir. Mobil uygulama DEGISMEDI (2.3.33).
 
+### Kabin olculeri (sahip olcumu 2026-09-09)
+
+- **Kabin isareti 10 cm -> 15 cm.** Yeni basilabilir sayfa uretildi
+  (`ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4`), 10 cm'lik sayfa SILINDI (iki sayfa yan yana
+  dururken yanlisini basmak sessiz olcek hatasidir). Uc kabin yapilandirmasi da `real_cm: 15.0`.
+- **Kose yerlesimi 8/8 cm -> 11/11 cm** (ZORUNLU): 15 cm'lik isaretin yarim kenari 7,5 cm; 8 cm'lik
+  merkez mesafesinde sessiz bolge duvardan TASAR ve kose tespiti bozulur. Yeni marker merkezi
+  (-21,5 / +14 / +25) cm, kamera->isaret mesafesi 86,7 -> 83,3 cm.
+- **Hedef duzlemi tabandan 5 cm** (`hedef_duzlem_eksen: "Y"`, `hedef_duzlem_cm: -20.0`).
+- ⚠️ **OLCULDU: tabandan 5 cm mevcut kamera konumuyla YETMIYOR.** Gercek ArUco'lu fotografta kuyu
+  (-48,3 · -20,0 · +445,4) cm = kabin disi; kabin ortasi (Y=0) ve eski dikey duzlem saglam.
+  Sebep: kamera lensi taban hizasinda (Y=-25), isin duzlemi hala sig aciyla kesiyor. Bu yuzden
+  `PEMF_ARASTIRMA_AIPRO` **0 kaliyor**. Sahip notu: kamera ile fantom/petri konumlari SAHADA
+  tekrar duzeltilecek; degerler yalniz yaml'dan guncellenir, kod degisikligi gerekmez.
+- ⚠️ Bu degisiklik AI Hub'daki fantom/petri TEK-FOTO analizinin koordinatlarini da etkiler
+  (ayni donusum): isaret boyu ve konumu degistigi icin okunan mm degerleri kayar.
+
 ### Dokuman duzeltmeleri
 
 - `phantom_cv` ve `petri_cv` README'leri kullaniciya **yanlis ArUco isareti** bas diyordu

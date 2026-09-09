@@ -29,7 +29,11 @@ YAMLLAR = {
 }
 EXTENT = [65.0, 50.0, 50.0]
 KAMERA = [32.5, -25.0, -25.0]
-MARKER = [-24.5, 17.0, 25.0]
+# 2026-09-09: isaret 10 -> 15 cm buyudu; kose yerlesimi 8/8 -> 11/11 cm tasindi
+# (15 cm isaretin yarisi 7,5 + 2 cm sessiz bolge = asgari 9,5 cm merkez mesafesi).
+MARKER = [-21.5, 14.0, 25.0]
+ISARET_KENAR_CM = 15.0
+SESSIZ_CM = 2.0
 
 
 def _yukle(p: Path) -> dict:
@@ -45,13 +49,21 @@ def test_KRITIK_yaml_geometri_65x50x50_ve_mesafeler_tutarli(ad):
     assert [float(x) for x in c["fixed_position_cm"]] == KAMERA, f"{ad}: kamera {c['fixed_position_cm']}"
     marker = [-float(x) for x in g["qr_to_origin_cm"]]
     assert marker == MARKER, f"{ad}: marker merkezi {marker} (qr_to_origin={g['qr_to_origin_cm']})"
-    # marker 10 cm + 2 cm sessiz bölge duvar/tavana sığmalı (merkez ≥ 7 cm içeride)
-    assert -EXTENT[0] / 2 + 7 <= marker[0] and marker[1] <= EXTENT[1] / 2 - 7 and marker[2] == EXTENT[2] / 2
+    # ⚠️ Isaret + sessiz bolge duvar/tavana SIGMALI: merkez >= kenar/2 + sessiz kadar iceride.
+    # Sabit "7" idi ve 10 cm isarete gore hesaplanmisti; 15 cm'de 9,5 cm gerekir -> kenardan TURET.
+    ic = float(a["real_cm"]) / 2 + SESSIZ_CM
+    assert -EXTENT[0] / 2 + ic <= marker[0], (
+        f"{ad}: marker sol duvara {marker[0] + EXTENT[0] / 2:.1f} cm — sessiz bölge taşar (asgari {ic})"
+    )
+    assert marker[1] <= EXTENT[1] / 2 - ic, (
+        f"{ad}: marker tavana {EXTENT[1] / 2 - marker[1]:.1f} cm — sessiz bölge taşar (asgari {ic})"
+    )
+    assert marker[2] == EXTENT[2] / 2, f"{ad}: marker arka duvarda değil"
     to_o = math.dist(KAMERA, [0, 0, 0])
     to_m = math.dist(KAMERA, marker)
     assert abs(to_o - float(c["to_origin_cm"])) <= 0.2, f"{ad}: to_origin {c['to_origin_cm']} ≠ {to_o:.2f}"
     assert abs(to_m - float(c["to_marker_cm"])) <= 0.2, f"{ad}: to_marker {c['to_marker_cm']} ≠ {to_m:.2f}"
-    assert a["dict"] == "DICT_5X5_50" and float(a["real_cm"]) == 10.0
+    assert a["dict"] == "DICT_5X5_50" and float(a["real_cm"]) == ISARET_KENAR_CM
     assert str(a["normal_axis_in_cabin"]).upper() == "-Z", "marker arka duvarda öne (kameraya) bakar"
 
 
@@ -78,7 +90,7 @@ def test_KRITIK_cat_organ_predictor_paketli_yamli_YUKLER(monkeypatch):
     assert [float(x) for x in cfg["camera"]["fixed_position_cm"]] == KAMERA, cfg["camera"]
     assert is_camera_anchored(cfg) and has_perspective_data(cfg), "perspektif/ArUco yolu yine kapalı"
     assert cfg.get("_yaml_path", "").endswith("cabin_config_example.yaml")
-    assert _qr.ARUCO_DICT == "DICT_5X5_50" and float(_qr.ARUCO_REAL_CM) == 10.0
+    assert _qr.ARUCO_DICT == "DICT_5X5_50" and float(_qr.ARUCO_REAL_CM) == ISARET_KENAR_CM
 
 
 def test_cat_organ_yaml_yoksa_DEFAULT_a_duser(monkeypatch, tmp_path):
@@ -95,12 +107,12 @@ def test_cat_organ_yaml_yoksa_DEFAULT_a_duser(monkeypatch, tmp_path):
 def test_marker_sayfasi_uretici_sabitleri_yaml_ile_AYNI():
     src = (KOK / "scripts" / "kabin_marker_a4.py").read_text(encoding="utf-8")
     assert re.search(r'^DICT_ADI = "DICT_5X5_50"$', src, re.M) and re.search(r"^MARKER_ID = 0$", src, re.M)
-    assert re.search(r"^KENAR_CM = 10\.0", src, re.M)
+    assert re.search(rf"^KENAR_CM = {ISARET_KENAR_CM:g}\.0", src, re.M)
     # sayfadaki talimat kabin sayılarını yaml ile aynı söyler
-    assert "[-24.5, +17.0, +25.0]" in src and "[32.5, -25.0, -25.0]" in src and "[24.5, -17.0, -25.0]" in src
+    assert "[-21.5, +14.0, +25.0]" in src and "[32.5, -25.0, -25.0]" in src and "[21.5, -14.0, -25.0]" in src
 
 
-def test_marker_sayfasi_cv2_ile_ID0_ve_10cm_bulunur():
+def test_marker_sayfasi_cv2_ile_ID0_ve_KENAR_bulunur():
     cv2 = pytest.importorskip("cv2")
     pytest.importorskip("PIL")
     if not hasattr(cv2, "aruco"):
@@ -116,10 +128,11 @@ def test_marker_sayfasi_cv2_ile_ID0_ve_10cm_bulunur():
 
 def test_kilavuz_ayni_sayilari_soyler_ve_marker_png_depoda():
     k = (KOK / "ai_hub" / "KABIN_KURULUM_KILAVUZU.md").read_text(encoding="utf-8")
-    for s in ("[65, 50, 50]", "[32.5, -25, -25]", "[-24.5, +17, +25]", "[24.5, -17, -25]", "48.0", "86.7"):
+    for s in ("[65, 50, 50]", "[32.5, -25, -25]", "[-21.5, +14, +25]", "[21.5, -14, -25]", "48.0", "83.3"):
         assert s in k, f"kılavuzda {s} yok"
-    assert "PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf" in k and "kabin_marker_a4.py" in k
-    assert (KOK / "ai_hub" / "PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.png").exists()
+    sayfa = f"PEMF_ArUco_Marker_5X5_50_ID0_{ISARET_KENAR_CM:g}cm_A4"
+    assert f"{sayfa}.pdf" in k and "kabin_marker_a4.py" in k
+    assert (KOK / "ai_hub" / f"{sayfa}.png").exists()
 
 
 def test_marker_pdf_A4_sayfa_boyutunda_uretilir(tmp_path):
@@ -135,7 +148,7 @@ def test_marker_pdf_A4_sayfa_boyutunda_uretilir(tmp_path):
     import kabin_marker_a4 as km
 
     assert km.main(["--cikti", str(tmp_path)]) == 0
-    pdf = tmp_path / "PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf"
+    pdf = tmp_path / f"PEMF_ArUco_Marker_5X5_50_ID0_{ISARET_KENAR_CM:g}cm_A4.pdf"
     m = re.search(rb"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]", pdf.read_bytes())
     assert m, "PDF MediaBox yok"
     w, h = float(m.group(1)), float(m.group(2))

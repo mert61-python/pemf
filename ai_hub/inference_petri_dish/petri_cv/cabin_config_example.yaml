@@ -57,7 +57,7 @@ cabin_id: "petri_helmholtz_v1"
 # -----------------------------------------------------------------------------
 aruco:
   dict: DICT_5X5_50              # OpenCV ArUco sozluk
-  real_cm: 10.0                    # marker kenar uzunlugu (kumpas)
+  real_cm: 15.0                    # marker kenar uzunlugu (sahip olcumu 2026-09-09; basili sayfa ile AYNI)
   plane_offset_cm: 0.0
   normal_axis_in_cabin: "-Z"     # marker ARKA duvarda, siyah yuzu one (kameraya) bakar
   refine_corners: true
@@ -69,8 +69,9 @@ aruco:
 # -----------------------------------------------------------------------------
 geometry:
   # ONAYLI GEOMETRI 2026-09-08 (sahip olcusu 65x50x50): marker ARKA duvar sol-ust,
-  # merkezi (-24.5,+17,+25) -> origin vektoru; kamera sag-alt-ON kose. Ayrinti: cat_organ yaml.
-  qr_to_origin_cm: [24.5, -17.0, -25.0]
+  # merkezi (-21.5,+14,+25) -> origin vektoru; kamera sag-alt-ON kose. Ayrinti: cat_organ yaml.
+  # (2026-09-09: 15 cm isaret icin merkez 8/8 -> 11/11 cm tasindi; sessiz bolge duvardan tasmasin.)
+  qr_to_origin_cm: [21.5, -14.0, -25.0]
   cabin_extent_cm: [65.0, 50.0, 50.0]
   axes: "x=lateral,y=dorsal,z=camera"
 
@@ -82,7 +83,7 @@ camera:
   fixed_position_cm: [32.5, -25.0, -25.0]
   look_at_cm: [0.0, 0.0, 0.0]
   up_cabin: [0.0, 1.0, 0.0]
-  to_marker_cm: 86.7
+  to_marker_cm: 83.3
   to_origin_cm: 48.0
   intrinsics_npz: null            # null -> approx intrinsics
 
@@ -113,8 +114,14 @@ phantom_plate:
   #    uyusur (y -6..+6 cm). Karar gelince: hedef_duzlem_eksen "Y" + hedef_duzlem_cm = platform
   #    yuksekligi. O ana kadar ESKI davranis (dikey orta duzlem) korunur ki AI Hub tek-foto analizi
   #    BOZULMASIN.
-  hedef_duzlem_eksen: "Z"
-  hedef_duzlem_cm: 0.0
+  # SAHIP OLCUSU 2026-09-09: hedef (fantom/petri) tepsisi tabandan 5 cm -> kabin cercevesinde
+  # Y = -25 + 5 = -20.0 cm. Onceki deger ESKI davranisti (dikey orta duzlem, "Z"/0,0).
+  # ⚠️ Bu deger TEZGAHTA DOGRULANMADAN surus acilmaz: PEMF_ARASTIRMA_AIPRO 0 kalir
+  # (bkz. docs/VERIFICATION.md §15). Kamera lensi taban hizasinda (Y=-25) oldugu icin isin
+  # bu duzlemi hala sig bir aciyla keser; okunan konumun kabin ICINDE ve elle olculen yerle
+  # ±2 cm uyumlu oldugu gorulmeden bayrak acilmamalidir.
+  hedef_duzlem_eksen: "Y"
+  hedef_duzlem_cm: -20.0
   plate_z_cm: 0.0
   width_cm: 5.0                   # sanity check (petri yaklasik cap, cm)
   height_cm: 5.0
@@ -223,8 +230,8 @@ output:
 #      (Standart petri kabi capi: 5/6/9/10 cm)
 #
 # 2) ArUco modu (gercek mm/px + cabin frame):
-#      a) Kabin isaretini BAS: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf
-#         (DICT_5X5_50, kenar 10,0 cm — asagidaki aruco.real_cm ile AYNI olmali;
+#      a) Kabin isaretini BAS: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf
+#         (DICT_5X5_50, kenar 15,0 cm — asagidaki aruco.real_cm ile AYNI olmali;
 #          yanlis kenar uzunlugu SESSIZ olcek hatasi verir). Kendin uretmek icin:
 #           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
 #                       cv2.aruco.DICT_5X5_50);
