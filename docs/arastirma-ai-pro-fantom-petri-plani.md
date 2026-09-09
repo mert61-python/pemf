@@ -1,7 +1,27 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ · FAZ 3 ✅ · FAZ 4 ✅ (kod+doküman+sürüm)**
-> **— kalan TEK iş: yapı alıp yayınlamak (sahibin açık "yayınla" onayı bekliyor).**
+> **DURUM (2026-09-09): TÜM FAZLAR ✅ — app 1.9.44 YAYINLANDI (44fd14b).**
+>
+> Yayın: `client-app-v1.9.44` → `base-app.zip` 81.228.896 + `base.zip` 1.568.939.362 (ikisi de
+> "uploaded", indirme adresleri 200); manifest SABİT adrese en son yüklendi ve yayından geri
+> okunarak doğrulandı. **Paket kimliği (`buildId`): `e07a306b0526`.** ⚠️ **deps katmanı DEĞİŞMEDİ**
+> (`99ac8a491f37`, URL `client-app-v1.9.41`'de korundu) → klinikler 1,49 GB indirmez;
+> `research.zip`e dokunulmadı. Mobil 2.3.33, launcher 1.9.50, frontend OTA 1.4.2 aynen.
+>
+> Yükleme öncesi **donmuş EXE üzerinde** doğrulandı: `/api/health` → 1.9.44 · derin AI taraması
+> 16/16 hazır, eksik yok · **`arastirmaAiPro.acik = false`** (bayrak kapalı sevk edildi) ·
+> em_fantom/em_petri/petri_yolo/cat_organ/em_kedi hepsi `yukleme=pyd` (kod koruması etkin) ·
+> XAI zinciri tam · çalışma-anı pip yasağı etkin. Tam süit 2498 geçti, kırmızı yok.
+>
+> ⚠️ **Yapı sırasında iki tuzak yakalandı** (hafızaya yazıldı): `build_backend_exe.ps1` PyInstaller
+> çökmesine rağmen **çıkış kodu 0** döndürdü ve `dist` silinmişti → artık çıkış kodu değil ÜRÜN
+> doğrulanıyor. Kök neden: önceki koşudan kalmış, **yapı ağacından çalışan yetim mosquitto**
+> `libcrypto-3-x64.dll`'i kilitliyordu; öldürmeden önce `sessionActive`/`stmConnected` false
+> doğrulandı (broker seansta bobin komutlarını ve E-stop'u taşır).
+>
+> **KALAN İŞ SAHİPTE:** (1) klinik makinesinde açılışta güncellemenin indiğini ve `/api/health`in
+> 1.9.44 dediğini görmek; (2) kabin tezgâhı — kamera ile fantom/petri konumlarının saha ölçümü
+> (`docs/VERIFICATION.md` §15), ardından `PEMF_ARASTIRMA_AIPRO=1`.
 >
 > **SAHA ÖLÇÜSÜ (2026-09-09, yayın sırasında geldi — 629e017):** kabin işareti kenarı **15 cm**
 > (10 cm sayfası silindi, yeni A4 üretildi), köşe yerleşimi 8/8 → **11/11 cm** (15 cm işaretin
