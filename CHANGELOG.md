@@ -84,8 +84,10 @@
 
 ### Not
 
-Mobil uygulama (2.3.33) ve frontend OTA (1.4.2) degismedi; iOS yayini yok. Paket kimligi
-(`buildId`) ve sha degerleri YAPI ALINDIKTAN SONRA bu bolume yazilir (manifestten).
+Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
+
+Paket kimliği (`buildId`): `e07a306b0526`. Monolit `base.zip` sha: `3fe4dd7e9e50`. deps katmani DEGISMEDI
+(`99ac8a491f37`, URL client-app-v1.9.41'de KORUNDU -> klinikler 1,49 GB indirmez).
 
 ## mobile 2.3.33 — 2026-09-08 (📱 Serbest frekans/duty, ESP cihaz onayi, eylem soyleyen AI hata mesajlari)
 
