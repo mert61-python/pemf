@@ -1,6 +1,45 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ — sıradaki Faz 3 (arayüz).**
+> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ · FAZ 3 ✅ — sıradaki Faz 4 (doküman + sürüm + yayın).**
+>
+> **Faz 3 (1c00aa6 arayüz · 6986178 onay ekranı + AI Hub köprüsü):** araştırma modunda AI Pro artık
+> kedi YERİNE iki modelle çalışıyor. Sihirbaz: model kartları → kamera → kare üstünde hedef →
+> onay → seans; her adımda **Geri**. `aiProProfilleri.ts` profil↔model eşlemesinin tek kaynağı
+> (araştırmacı listesinde kedi geçerse kapı KIRMIZI). Kedi ekranı BİREBİR korundu: organ çipleri,
+> "Hayvan aranıyor" şeridi ve dört aşama metni dokunulmadı (araştırma şeridi AYRI fonksiyon —
+> kedi aşama kapısı kaynak-regex ile sayıyor).
+>
+> **Faz 3'te ORTAYA ÇIKAN ve kapatılan kusur:** hedef adayları yalnız HAM piksel (`px`) taşıyordu,
+> ama WS önizlemesi kareyi 960 px'e küçültüp yayınlıyor ve `imageW` küçültülmüş boyutu taşıyor →
+> kare üstü halkalar hedeften KAYARDI ([S7 adım 6] overlay ölçek kaymasının aynı sınıfı). Sağlayıcı
+> artık kare-oranlı `pxn` (0..1) üretiyor; kare boyutu savunmalı okunuyor (yoksa halka çizilmez,
+> erişilebilir liste çalışır). İki yakası da kapılı.
+>
+> **Faz 3'te PLANDAN SAPMALAR (bilinçli, gerekçeli):**
+> - Prop adı `hedefKumesi` değil **`secilebilirModeller`** (liste): panel profil BİLMEZ, yalnız
+>   listeyi alır → 5 mevcut panel testine provider mock'u eklemek gerekmedi ve yetki tek kaynakta.
+> - Bayrak (`PEMF_ARASTIRMA_AIPRO`) kapalıyken kart **pasif DEĞİL**, "Deneysel — şimdilik yalnız
+>   görüntüleme" rozetiyle AÇIK. Gerekçe: hazırlık önizlemesi bayraktan bağımsız çalışıyor ve
+>   sahibin karar #6 tezgâh ölçümü (hedef düzlemini ölçüp yazmak) tam bu önizlemeyi gerektiriyor.
+>   Doz/sürüş yolu backend'de 409 ile kapalı kalıyor; kart bunu peşinen yazıyor.
+> - "Model seçilmeden başlat" için uyarı penceresi yerine **düğme pasif + GÖRÜNÜR sebep** satırı
+>   (sebep yalnız a11y ipucunda kalsaydı ekran okuyucu kullanmayan operatör "düğme bozuk" sanardı).
+> - **Mobil araştırma kapalı** (karar #15 pariteti): telefon kamerası kabin çerçevesinin dışında →
+>   konum ölçülemez. Panel telefonda görüntülenir, başlatma sebebiyle engellenir.
+> - `ResultInterpretation` taşınması YAPILMADI: AI Pro paneli yorum banner'ı göstermiyor, taşımak
+>   gerekçesiz bir refaktör olurdu. `PatientGate.sozluk()` ise TAŞINDI (`utils/profilSozlugu.ts`) —
+>   panel de aynı terimleri kullanıyor, kopya iki metnin ayrışmasına açık kapı bırakırdı.
+> - AI Hub → Kontrol köprüsü model ön-seçimini **AppNav üzerinden tek kullanımlık** taşıyor;
+>   ön-seçim yalnız `/status` okunduktan SONRA uygulanıyor (mount'ta `running` false olduğu için
+>   süren bir seansın üstüne gelindiğinde kartı mühürlenen modelden başkasına çeviriyordu — ölçüldü).
+> - ⚠️ **Türkçe ünlü uyumu:** `${tekilKisa}siz başlat` "Hastasiz" üretti; çekimli biçimler artık
+>   sözlükte TAM yazılı (ek üretilmiyor).
+>
+> **Faz 3'te YAPILMAYAN:** Playwright/Edge ile görsel doğrulama (5 adım) — sahip masaüstünde;
+> `DozOzeti` ayrı bileşen olarak açılmadı (onay modalı zaten doz özetini taşıyor).
+>
+> **Tam süit Faz 3 sonunda: 2482 geçti** (Faz 2 sonunda 2470); jest **850/850**. Kalan 2 kırmızı
+> (CHANGELOG buildId / yayındaki paket sha) bu işten ÖNCE de kırmızıydı ve ilgisizdir.
 >
 > **Karar #6 (7abf6a4):** fantom/petri kabinde YATAY, doğrudan tabanın üzerinde. Kod bu kararı
 > uygulayabilecek hâle getirildi: kesişim düzlemi yapılandırılabilir (`hedef_duzlem_eksen` +
@@ -444,6 +483,17 @@ auth-muafiyet pozitif kilitli; sağlayıcı kaydında fantom/petri henüz yok; `
 **Bitiş:** sağlayıcılar gerçek pipeline ile kamerasız testlerde hedef bulur, doğru predictor'la D/P/E üretir,
 kedi modelini hiç yüklemez; petri süresi ölçüldü; bayrak KAPALI kalır (tezgâh doğrulaması ve hoca kararı #6
 gelmeden araştırmacı Onayla'yı göremez).
+
+### Faz 3 ✅ — Frontend: araştırmacı sihirbazı (web) + onay modalı + hata metinleri
+
+**BİTTİ (2026-09-09, 1c00aa6 + 6986178).** Yeni dosyalar: `aiProProfilleri.ts` (tek kaynak),
+`aipro/AdimGostergesi.tsx`, `aipro/ModelSecimKartlari.tsx`, `aipro/HedefSecici.tsx`
+(halka + erişilebilir liste), `aipro/KalibrasyonRozeti.tsx`, `utils/profilSozlugu.ts`.
+Kapılar: `AiProPanelArastirma.test.tsx` (16 test), `AiSpecApprovalModal.test.tsx` (+6),
+`tests/test_ai_pro_arayuz_profil_tablosu.py` (13 kapı) — hepsi mutasyonla kırmızı görüldü.
+Dokunma-hedefi cırcırı 118'de KALDI (yeni dokunulabilirlerin tabanı `touch.min`).
+`patientScope.test.ts` YAZAN listesi DEĞİŞMEDİ: yeni dosyaların hiçbiri operatör kimliğiyle
+kayıt yazmıyor (liste o kimliği kullanan ekranlar içindir). Sapmalar ve yapılmayanlar DURUM'da.
 
 ### Faz 3 — Frontend: araştırmacı sihirbazı (web) + onay modalı + hata metinleri
 
