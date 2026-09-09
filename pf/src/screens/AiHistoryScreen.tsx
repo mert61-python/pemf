@@ -309,22 +309,40 @@ export function AiHistoryScreen() {
             const open = expanded === it.id;
             const rows = open ? detailRows(it.result_detail) : [];
             return (
-              <TouchableOpacity key={it.id} activeOpacity={0.85} onPress={() => setExpanded(open ? null : it.id)}>
+              <View key={it.id}>
                 <Card style={styles.card}>
-                  <View style={styles.cardHead}>
-                    <Brain color={colors.primary} size={18} />
-                    <Text style={styles.module} numberOfLines={1}>{it.module_label || it.module_id || "AI"}</Text>
-                    <ReviewBadge status={it.review_status} />
-                    {open ? <ChevronDown color={colors.textMuted} size={16} /> : <ChevronRight color={colors.textMuted} size={16} />}
-                  </View>
+                  {/* 🔴 SAHA ARIZASI (2026-09-09): genisletme dokunusu ESKIDEN KARTIN TAMAMINI sariyordu
+                      (toggle Card'i sariyordu). "Duzelt"e basip cikan "Dogru teshis"
+                      kutusuna YAZMAK ICIN dokununca kart KAPANIYOR ve yazilan metin kayboluyordu:
+                      TextInput dokunusu web'de tiklama olarak YUKARI SIZAR ve ust Touchable'in
+                      onPress'ini tetikler (ic Touchable'lar sizmayi durdurur, TextInput DURDURMAZ).
+                      Cozum yapisal: dokunus YALNIZ BASLIK bolgesinde; govde (detay + hekim
+                      degerlendirmesi + silme) Touchable'in DISINDA. Boylece govdedeki hicbir
+                      etkilesim akordeonu kapatamaz.
+                      Kapi: pf/src/screens/__tests__/aiGecmisiAkordeon.test.tsx */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setExpanded(open ? null : it.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    accessibilityLabel={`${it.module_label || it.module_id || "AI"} kaydi${open ? ", acik" : ""}`}
+                    accessibilityHint={open ? "Ayrintilari kapatir" : "Ayrintilari acar"}
+                  >
+                    <View style={styles.cardHead}>
+                      <Brain color={colors.primary} size={18} />
+                      <Text style={styles.module} numberOfLines={1}>{it.module_label || it.module_id || "AI"}</Text>
+                      <ReviewBadge status={it.review_status} />
+                      {open ? <ChevronDown color={colors.textMuted} size={16} /> : <ChevronRight color={colors.textMuted} size={16} />}
+                    </View>
 
-                  {it.result_summary ? <Text style={styles.summary}>{it.result_summary}</Text> : null}
+                    {it.result_summary ? <Text style={styles.summary}>{it.result_summary}</Text> : null}
 
-                  <View style={styles.metaRow}>
-                    <Text style={styles.meta}>{fmtDate(it.created_at)}</Text>
-                    {it.patient_name ? <Text style={styles.meta} numberOfLines={1}>· {it.patient_name}</Text> : null}
-                    {it.mode ? <Text style={styles.badge}>{MODE_LABEL[it.mode] || it.mode}</Text> : null}
-                  </View>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.meta}>{fmtDate(it.created_at)}</Text>
+                      {it.patient_name ? <Text style={styles.meta} numberOfLines={1}>· {it.patient_name}</Text> : null}
+                      {it.mode ? <Text style={styles.badge}>{MODE_LABEL[it.mode] || it.mode}</Text> : null}
+                    </View>
+                  </TouchableOpacity>
 
                   {open ? (
                     <View style={styles.detail}>
@@ -371,7 +389,7 @@ export function AiHistoryScreen() {
                     </View>
                   ) : null}
                 </Card>
-              </TouchableOpacity>
+              </View>
             );
           })}
           {hasMore && (
