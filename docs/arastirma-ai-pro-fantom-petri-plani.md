@@ -1,6 +1,30 @@
 # Araştırma Modu AI Pro — Fantom + Petri Entegrasyon Planı (2026-09-08)
 
-> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ · FAZ 3 ✅ — sıradaki Faz 4 (doküman + sürüm + yayın).**
+> **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ · FAZ 3 ✅ · FAZ 4 ✅ (kod+doküman+sürüm)**
+> **— kalan TEK iş: yapı alıp yayınlamak (sahibin açık "yayınla" onayı bekliyor).**
+>
+> **Faz 4 (437ed46):** `versions.json` → **app 1.9.44** (karar #11: tek yayın); `sync_versions.ps1`
+> ile `VERSION` + `docs/version_info.txt` yayıldı. **Mobil 2.3.33 ve launcher 1.9.50 AYNEN** —
+> araştırma AI Pro kabin bilgisayarındadır (karar #15), APK yeniden üretilmiyor. CHANGELOG'da
+> app 1.9.44 girdisi: hasta-güvenliği maddeleri BAŞTA. `buildId`/sha satırı bilinçli olarak BOŞ —
+> yapı alındıktan sonra manifestten yazılır (uydurma değer buildId kapısını kırmızı yapardı).
+> Dokümanlar: `servers/README`, `ai_hub/README`, kabin kılavuzu §0.5 yerleşim kontrol listesi,
+> test-girdileri README'sinin AI Pro bölümü, `docs/VERIFICATION.md` **§15** (kabin tezgâhı).
+>
+> **Faz 4'te ORTAYA ÇIKAN iki bulgu kapatıldı:**
+> 1. **Marker doküman sapması:** `phantom_cv`/`petri_cv` README'leri kullanıcıya `DICT_5X5_100`
+>    ve **5 cm** işaret bas diyordu; gerçek işaret `DICT_5X5_50` / **10 cm** (basılı A4, üç yaml da
+>    onu okuyor). Yanlış sözlük → işaret HİÇ bulunmaz (ekran "işaret görünmüyor" der, oysa
+>    asılmıştır); doğru sözlük + yanlış kenar → tespit ÇALIŞIR ama ölçek 2 kat yanlış olur ve 3B
+>    koordinat **sessizce** iki katına çıkar. Kapı: `tests/test_marker_dokuman_tutarliligi.py`.
+> 2. **Yayın kaydı (d8e1890):** CHANGELOG'un 1.9.43 girdisi `buildId 631ae4f10a99` / base
+>    `663a0586bc7f` diyordu; yayınlanan manifest app `357da554d88a` / base `1c2f1f50cc8b` taşıyor
+>    (paket aynı sürüm numarasıyla yeniden üretilip yayınlanmış, kayıt güncellenmemiş). Sahadan
+>    gelen kimlik CHANGELOG'da BULUNAMIYORDU. Yayınlanan varlıkların boyutları yerel manifestle
+>    birebir aynı (gh api ile okundu) → değerler manifestten düzeltildi. **Tam süitte 2026-09-08'den
+>    beri kırmızı olan 2 kapı bununla yeşile döndü.**
+>
+> **Tam süit: 2496 geçti · 5 atlandı · KIRMIZI YOK** (jest 850/850, tsc ve yeni dosyalarda lint temiz).
 >
 > **Faz 3 (1c00aa6 arayüz · 6986178 onay ekranı + AI Hub köprüsü):** araştırma modunda AI Pro artık
 > kedi YERİNE iki modelle çalışıyor. Sihirbaz: model kartları → kamera → kare üstünde hedef →
@@ -514,7 +538,41 @@ hata metinlerinde yasaklı kelimeler yok; `MODELLER_PROFILE_GORE.researcher` ked
 **Bitiş:** araştırmacı web'de 5 adımı kod bilgisi olmadan tamamlar (bayrak açıkken); veteriner ekranı birebir;
 tüm mevcut kapılar değişmeden yeşil; yeni kapılar mutasyon kanıtlı.
 
-### Faz 4 — Mobil parite (karar #15'e bağlı), doküman, sürüm, yayın
+### Faz 4 ✅ — Doküman, sürüm, yayın hazırlığı (mobil parite: karar #15 = HAYIR)
+
+**BİTTİ (2026-09-09, 437ed46 + d8e1890).** Mobil parite İSTENMEDİ (karar #15): telefonda kartlar
+yerine ekranın kendisi "bu modeller masaüstü kabin kamerası ister — bilgisayardaki Kontrol →
+AI Pro ekranını kullanın" der, başlat düğmesi görünür sebeple pasiftir. `/frame` yolu yine de
+kapılandı (`tests/test_ai_pro_frame_arastirma.py`): aktif araştırma seansında kare o sağlayıcıya
+gider ve `targets`/`pxn`/`method` taşır; YABANCI kare bobin sürmez; seans yokken hiçbir kare
+sürmez; **`model` göndermeyen eski APK kedi hattında kalır** ve araştırma sağlayıcısı hiç çağrılmaz.
+
+#### YAYIN ADIMLARI (app 1.9.44) — sıra ÖNEMLİ
+
+Tam akış `BUILD.md` §6'dadır; burada YALNIZ bu yayına özgü sıra ve tuzaklar var.
+
+0. **Sahip onayı:** yayın YALNIZ açık "yayınla" talimatıyla yapılır. Sahip masaüstünü
+   devraldığını söylediyse ("ben yapıyorum", "oyun oynayacağım") tıklama/yükleme DERHAL durur.
+1. **Ağaç temiz + süit yeşil** (şu an öyle: 2496/0). `PEMF_ARASTIRMA_AIPRO` **0 kalmalı**
+   (`deploy/device.env`) — tezgâh ölçümü (`docs/VERIFICATION.md` §15) bitmeden 1 yapılmaz.
+2. **Backend frozen EXE** (`scripts\build_backend_exe.ps1`). ⚠️ Backend build ile APK build
+   **PARALEL KOŞMAZ**; bu yayında APK zaten üretilmiyor.
+3. **Katmanlı paketler** (`build_tools/make_base_zip.py`). BEKLENEN: yeni kod yalnız `servers/`
+   (EXE'ye gömülü), `ai_hub/` ve `pf/` (frontend) → **deps sha DEĞİŞMEZ** (`99ac8a491f37`) ve
+   `research.zip` DOKUNULMAZ. Deps sha değiştiyse DUR ve nedenini bul (paket-belirlenimciliği
+   kaydına bak: sürüm dosyaları app katmanında olmalı) — yoksa her klinik 1,49 GB indirir.
+4. **Frozen EXE doğrulaması** (paket yüklemeden ÖNCE): `GET /api/ai/hazirlik?derin=1` →
+   `arastirmaAiPro.acik == false`, `em_fantom`/`em_petri`/`petri_yolo` **hazır**, `yukleme` alanı
+   `pyd`/`pyenc`. Frozen metadata tuzağı: modül sığ taramada "ok" görünüp derin taramada ölebilir.
+5. **Varlıkları yükle:** paketler **sürüm-başına** etikete (`client-app-v1.9.44`), `manifest.json`
+   SABİT adrese (`client-app-v1.8.0`, `--clobber`) ve **EN SON** (sha eşleşsin). `--clobber`
+   yüklemesini yarıda KESME. İki isim (sürümsüz + sürümlü) kuralı launcher varlıkları içindir.
+6. **CHANGELOG'u kapat:** app 1.9.44 girdisinin "Not" bölümüne manifestten `buildId`
+   (`layers.win-x64.app.sha256` ilk 12) + base sha yaz, commit et. Kapılar:
+   `test_changelog_buildid_etiketi.py` · `test_version_visibility.py`.
+7. **Yayın sonrası:** bir klinik makinesinde güncellemenin indiğini ve `/api/health` sürümünün
+   1.9.44 olduğunu gör. Sorun çıkarsa geri çekme anahtarı `layers.win-x64.rollout = 0`.
+
 
 | İş | Dosya |
 |---|---|
