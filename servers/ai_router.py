@@ -2708,6 +2708,16 @@ async def analyze_em_petri(
     petri_diameter_cm: float = Form(None),
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
+    # ── ARAYÜZDEN AYARLANABİLİR (sahip talebi 2026-09-09) ───────────────────────────────
+    # Hepsi opsiyonel; verilmeyen alan boru hattı varsayılanında kalır. Sınırlar ve çözüm
+    # TEK KAYNAK: ai_hub/inference_petri_dish/petri_ayar.py (mikroservis ucu da onu kullanır).
+    yolo_conf: float = Form(None),
+    yolo_iou: float = Form(None),
+    resize_max: float = Form(None),
+    plaus_circularity: float = Form(None),
+    plaus_conf: float = Form(None),
+    plaus_area_frac: float = Form(None),
+    plaus_guard: bool = Form(None),
 ):
     """Petri Kuyu Analizi (petri_cv YOLO11m-seg + BaggingRegressor ONNX).
 
@@ -2715,14 +2725,63 @@ async def analyze_em_petri(
     sınıflandırma → 3B mm koordinat (petri_diameter_cm verilirse gerçek mm) →
     PetriPredictor ile D1-7/P1-7 + E_cancer. Klasik CV + YOLO (headless-güvenli),
     7-panel annotated görsel döner.
+
+    AYARLANABİLİR PARAMETRELER (hepsi opsiyonel; hiçbiri verilmezse davranış BİT-BİT eskisi):
+      · yolo_conf (0.25) / yolo_iou (0.7) — tespit eşikleri. ÖLÇÜLDÜ (2026-09-09): aynı
+        fotoğrafta conf 0.25 → 0.05 bir kuyucuktan üç kuyucuğa çıkardı.
+      · resize_max — uzun kenar bunu aşarsa görüntü küçültülür (0/boş = kapalı). YOLO ONNX'i
+        640x640'a SABİT export edilmiştir; imgsz bu yüzden YÜKSELTİLEMEZ (960/1280 denemesi
+        "INVALID_ARGUMENT ... Expected: 640" verir) — küçültme o sabitin altında kalan tek
+        kontroldür. Ölçek-güvenlidir: petri ölçeği görüntünün İÇİNDEN gelir (kuyu çapı ya da
+        kabin işareti) ve kalibrasyon K'si _olcekli_intrinsics ile birlikte ölçeklenir.
+      · plaus_circularity (0.55) / plaus_conf (0.85) / plaus_area_frac (0.25) — "petri değil"
+        denetiminin eşikleri; plaus_guard=false denetimi tamamen kapatır.
+        ⚠️ Denetim YANLIŞ MODÜLE yüklenen fotoğrafa sessizce sonuç üretmeyi engeller; gevşetilmiş
+        eşikle çıkan sonuç yanıltıcı olabilir. Bu yüzden yanıt ETKİN ayarları taşır
+        (plausibility.thresholds + yolo_ayar + resize) — denetim izi.
     """
     try:
+        # Sınır doğrulaması İKİ DALIN DA ÖNÜNDE: uç auth-muaf ve curl ile doğrudan çağrılabilir,
+        # yani arayüz doğrulaması atlanabilir (resize_max=1 görüntüyü tek piksele indirir,
+        # yolo_conf=0 on binlerce sahte tespit üretir). petri_ayar ai_hub'da çünkü aynı kuralı
+        # ai_service/app.py::infer_em_petri de uygular — kopyalanırsa sürüklenir.
+        # ⚠️ Fonksiyon içi import: petri_cv paketini modül seviyesinde çekmek her açılışta
+        # onnxruntime/ultralytics zincirini yükletirdi (bkz. _PETRI_NOT_PLATE notu).
+        from ai_hub.inference_petri_dish import petri_ayar as _pa
+
+        try:
+            _ayar = _pa.coz(
+                yolo_conf=yolo_conf,
+                yolo_iou=yolo_iou,
+                resize_max=resize_max,
+                plaus_circularity=plaus_circularity,
+                plaus_conf=plaus_conf,
+                plaus_area_frac=plaus_area_frac,
+                plaus_guard=plaus_guard,
+            )
+        except _pa.AyarHatasi as _ae:
+            raise HTTPException(status_code=422, detail=str(_ae)) from None
+
         if ai_service_enabled():
             _remote = await _kapili_devret(
                 "em_petri",
                 file=file,
                 image_base64=image_base64,
-                data={"petri_diameter_cm": petri_diameter_cm, "achieved_B": achieved_B, "duty_sum": duty_sum},
+                # ⚠️ Ayarlar mikroservis dalına da GEÇER: taşınmazsa GPU dağıtımında arayüzdeki
+                # ayarlar sessizce ÖLÜ kalırdı (bugün scratch scratch_yonu'nda ölçülen sınıf).
+                # delegate_infer None alanları atar → gönderilmeyen alan varsayılanda kalır.
+                data={
+                    "petri_diameter_cm": petri_diameter_cm,
+                    "achieved_B": achieved_B,
+                    "duty_sum": duty_sum,
+                    "yolo_conf": yolo_conf,
+                    "yolo_iou": yolo_iou,
+                    "resize_max": resize_max,
+                    "plaus_circularity": plaus_circularity,
+                    "plaus_conf": plaus_conf,
+                    "plaus_area_frac": plaus_area_frac,
+                    "plaus_guard": plaus_guard,
+                },
             )
             # MİKROSERVİS YOLU: makullik reddi ai_hub boru hattında verilir (ai_service o kodu
             # aynen çalıştırır) ve JSON `error` alanıyla telden geçer. Burada da 422'ye çevrilmeli;
@@ -2738,7 +2797,11 @@ async def analyze_em_petri(
         # Her istekte hafif pipeline (taze intrinsics); önbellekli YOLO + predictor enjekte
         # (ağır modeller yeniden yüklenmez, yarış yok). yolo_device="cpu" ŞART.
         pl = cache["cls"](
-            cache["cfg"], petri_diameter_cm=petri_diameter_cm, yolo_model_path=cache["yolo_path"], yolo_device="cpu"
+            cache["cfg"],
+            petri_diameter_cm=petri_diameter_cm,
+            yolo_model_path=cache["yolo_path"],
+            yolo_device="cpu",
+            **_ayar,
         )
         pl.yolo = cache["yolo"]
         pl._predictor = cache["predictor"]
@@ -2796,6 +2859,11 @@ async def analyze_em_petri(
             "mm_per_px": round(result.mm_per_px, 4),
             "wells": wells,
             "timing_ms": result.timing_ms,
+            # ETKİN ayarlar (istek DEĞİL, boru hattının gerçekten kullandığı): arayüz sonucun
+            # hangi eşiklerle üretildiğini gösterir, gevşetilmiş bir koşu "normal" görünmesin.
+            "yolo_ayar": result.yolo_ayar,
+            "resize": result.resize,
+            "plausibility": result.plausibility,
             **_xai_meta,
         }
     except Exception as e:

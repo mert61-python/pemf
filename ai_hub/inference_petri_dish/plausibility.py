@@ -117,8 +117,33 @@ def circularity(contour: np.ndarray) -> float:
     return r[0] if r else 0.0
 
 
+#: Arayüzden AYARLANABİLEN eşiklerin adları ve varsayılanları — TEK KAYNAK (UI, uç ve kapı
+#: aynı bu sözlüğü okur; bir eşik eklenince üç yer birlikte öğrenir).
+ESIK_VARSAYILAN: dict[str, float] = {
+    "circularity_med": _MIN_CIRCULARITY,
+    "conf_med": _MIN_CONF,
+    "max_area_frac": _MAX_AREA_FRAC,
+}
+
+
+def esikleri_coz(esikler: "dict | None" = None) -> dict[str, float]:
+    """Override sözlüğünü varsayılanlarla birleştirir; bilinmeyen/None/bozuk alan YOK SAYILIR.
+
+    ⚠️ Modül sabitleri DEĞİŞTİRİLMEZ. İstek başına eşik uygulamak için globali yazmak,
+    eşzamanlı ikinci bir analizde birinin ayarını diğerine sızdırırdı."""
+    coz = dict(ESIK_VARSAYILAN)
+    for k, v in (esikler or {}).items():
+        if k not in ESIK_VARSAYILAN or v is None:
+            continue
+        try:
+            coz[k] = float(v)
+        except (TypeError, ValueError):
+            continue
+    return coz
+
+
 def analyze(contours: Sequence[np.ndarray], confs: Sequence[float],
-            image_area: float) -> dict[str, Any]:
+            image_area: float, esikler: "dict | None" = None) -> dict[str, Any]:
     """Tespitlerden RESİM DÜZEYİ makullik ölçümlerini çıkar. Saf fonksiyon, model-bağımsız.
 
     Girdi kasıtlı olarak ilkel (kontur listesi + conf listesi + görüntü alanı): YOLO'ya,
@@ -147,9 +172,12 @@ def analyze(contours: Sequence[np.ndarray], confs: Sequence[float],
     conf_med = float(np.median(confs_f)) if confs_f else 0.0
     max_area_frac = (max(areas) / area_img) if (areas and area_img > 0) else 0.0
 
-    area_ok = max_area_frac <= _MAX_AREA_FRAC
-    votes = (int(circ_med >= _MIN_CIRCULARITY)
-             + int(conf_med >= _MIN_CONF)
+    # ⚠️ Oylar ÇÖZÜLEN eşiklerle sayılır (arayüzden ayarlanabilir araştırma modu). Override
+    # yoksa `ESIK_VARSAYILAN` = eski davranış, bit-bit aynı.
+    esik = esikleri_coz(esikler)
+    area_ok = max_area_frac <= esik["max_area_frac"]
+    votes = (int(circ_med >= esik["circularity_med"])
+             + int(conf_med >= esik["conf_med"])
              + int(area_ok))
     return {
         "n_detections": len(circs),
@@ -166,9 +194,10 @@ def analyze(contours: Sequence[np.ndarray], confs: Sequence[float],
         "max_area_frac": round(max_area_frac, 4),
         "votes": votes,
         "votes_required": _MIN_VOTES,
-        "thresholds": {"circularity_med": _MIN_CIRCULARITY,
-                       "conf_med": _MIN_CONF,
-                       "max_area_frac": _MAX_AREA_FRAC},
+        # ETKİN eşikler (varsayılan DEĞİL): sonucun hangi eşiklerle üretildiği kayda geçer —
+        # gevşetilmiş bir eşikle çıkan sonuç sessizce "normal" görünmesin.
+        "thresholds": dict(esik),
+        "thresholds_default": dict(ESIK_VARSAYILAN),
     }
 
 
@@ -196,35 +225,46 @@ def user_message(metrics: dict | None = None) -> str:
     olcum = ""
     if m:
         try:
+            # ⚠️ "beklenen" sayıları ETKİN eşiklerden okunur, modül sabitlerinden DEĞİL
+            # (2026-09-09: eşikler arayüzden ayarlanabilir oldu). Sabitten okunursa kullanıcı
+            # güveni 0,40'a düşürüp yine reddedildiğinde mesaj "beklenen ≥0,85" der ve ayarının
+            # hiç uygulanmadığını sanar — sessiz ve ikna edici bir yanlış yönlendirme.
+            esik = esikleri_coz(m.get("thresholds"))
             olcum = (" (ölçülen: dairesellik {c:.2f} — beklenen ≥{mc:.2f}; tespit güveni {k:.2f} — "
                      "beklenen ≥{mk:.2f}; en büyük tespit karenin %{a:.0f}'ini kaplıyor — beklenen "
                      "≤%{ma:.0f})").format(
-                c=float(m.get("circularity_med", 0.0)), mc=_MIN_CIRCULARITY,
-                k=float(m.get("conf_med", 0.0)), mk=_MIN_CONF,
-                a=100.0 * float(m.get("max_area_frac", 0.0)), ma=100.0 * _MAX_AREA_FRAC)
+                c=float(m.get("circularity_med", 0.0)), mc=esik["circularity_med"],
+                k=float(m.get("conf_med", 0.0)), mk=esik["conf_med"],
+                a=100.0 * float(m.get("max_area_frac", 0.0)), ma=100.0 * esik["max_area_frac"])
         except Exception:
             olcum = ""
     return ("Bu modül petri kuyucuğu plakası fotoğrafı bekliyor; yüklenen görüntüde petri kuyucuğu "
             "geometrisi bulunamadı{olcum}. Fantom fotoğrafını 'Fantom Tümör' modülüne, hayvan "
             "fotoğrafını ilgili kedi modülüne yükleyin — yanlış modülde üretilen sonuç yanıltıcıdır. "
             "Görüntü gerçekten bir petri plakasıysa kuyucukları tepeden ve tam kadrajda gösteren bir "
-            "fotoğraf deneyin (araştırma için denetim PEMF_AI_PLAUSIBILITY_GUARD=0 ile kapatılabilir)."
+            "fotoğraf deneyin. Araştırma için eşikler Petri modülündeki 'Gelişmiş (araştırma) "
+            "ayarları' bölümünden gevşetilebilir ya da denetim tamamen kapatılabilir "
+            "(sunucu tarafında PEMF_AI_PLAUSIBILITY_GUARD=0)."
             ).format(olcum=olcum)
 
 
 def evaluate(contours: Sequence[np.ndarray], confs: Sequence[float],
-             image_area: float) -> tuple[bool, dict[str, Any]]:
+             image_area: float, esikler: "dict | None" = None,
+             guard: "bool | None" = None) -> tuple[bool, dict[str, Any]]:
     """Boru hattının çağırdığı tek giriş noktası → (kabul_edildi_mi, ölçümler).
 
     Denetim ÇÖKERSE meşru analizi ASLA engellemez (fail-open): tıbbi bir cihazda bir ölçüm
     hatasının çalışan bir iş akışını kilitlemesi, korumanın sağladığından fazla zarar verir.
     """
     try:
-        metrics = analyze(contours, confs, image_area)
+        metrics = analyze(contours, confs, image_area, esikler)
     except Exception:
         logger.debug("petri makullik ölçümü başarısız (denetim atlandı)", exc_info=True)
         return True, {}
-    if not guard_enabled():
+    # `guard` açıkça verilmişse ortam değişkenini EZER (arayüzdeki "denetimi kapat" anahtarı);
+    # verilmezse eski davranış (PEMF_AI_PLAUSIBILITY_GUARD).
+    acik = guard_enabled() if guard is None else bool(guard)
+    if not acik:
         metrics["guard"] = "off"
         return True, metrics
     ok = is_plausible(metrics)

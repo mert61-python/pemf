@@ -102,6 +102,10 @@ class PipelineResult:
     # JSON tuketicileri (frontend, ai_service) bilmedigi alani yok sayar. Reddedilen istekte
     # ayrica "message" tasir → ai_router bunu 422 govdesinde kullaniciya aynen gosterir.
     plausibility: dict[str, Any] = field(default_factory=dict)
+    #: Kucultme uygulandiysa {"from":[w,h],"to":[w,h],"max":N} — uygulanmadiysa BOS.
+    resize: dict[str, Any] = field(default_factory=dict)
+    #: Bu sonucu ureten ETKIN YOLO ayarlari (arayuzden ayarlanabilir) — denetim izi.
+    yolo_ayar: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items() if k != "wells"}
@@ -122,7 +126,10 @@ class PetriCvPipeline:
                  yolo_iou: float = 0.7,
                  yolo_imgsz: int = 640,
                  yolo_device: str = "0",
-                 cancer_pixel_threshold: int = 30):
+                 cancer_pixel_threshold: int = 30,
+                 resize_max: int | None = None,
+                 plaus_esikler: dict | None = None,
+                 plaus_guard: bool | None = None):
         if isinstance(cfg, CabinConfig):
             self.cfg = cfg
         else:
@@ -130,6 +137,14 @@ class PetriCvPipeline:
         self.petri_diameter_cm = petri_diameter_cm
         # Kuyucuk icinde >= bu kadar mavi piksel varsa kanser
         self.cancer_pixel_threshold = cancer_pixel_threshold
+        # ISTEK BASINA ayarlar (arayuzden gelir). Dedektor onbellekte PAYLASILDIGI icin
+        # conf/iou nesneye YAZILMAZ, `detect()`e cagri basina gecirilir.
+        self._yolo_conf = float(yolo_conf)
+        self._yolo_iou = float(yolo_iou)
+        #: Uzun kenar bu degeri asarsa goruntu KUCULTULUR (0/None = kapali).
+        self.resize_max = int(resize_max) if resize_max else None
+        self._plaus_esikler = dict(plaus_esikler) if plaus_esikler else None
+        self._plaus_guard = plaus_guard
 
         self.intrinsics: CameraIntrinsics | None = None
         self._approx_intrinsics = False
@@ -152,8 +167,34 @@ class PetriCvPipeline:
             self._predictor = PetriPredictor()
         return self._predictor
 
+    def _olcekli_intrinsics(self, w: int, h: int) -> None:
+        """Yuklenen K matrisini goruntu cozunurlugune OLCEKLE.
+
+        ⚠️ ZORUNLU (2026-09-09): `intrinsics_npz` bir dosyadan gelirse K, KALIBRASYON
+        cozunurlugune aittir (fx, fy, cx, cy piksel birimindedir). Goruntu baska bir
+        cozunurlukteyse — resize eklendigi icin ARTIK SIK — olceklenmemis K ile solvePnP
+        SESSIZCE yanlis 3B koordinat uretir. Yakin-tespit: `approx_intrinsics_from_marker`
+        yolu K'yi goruntuden turettigi icin bu sorundan etkilenmez; bu yuzden ariza yalniz
+        gercek kalibrasyon dosyasi konuldugunda ortaya cikardi.
+        """
+        if self.intrinsics is None:
+            return
+        kw, kh = (int(v) for v in self.intrinsics.image_size)
+        if (kw, kh) == (w, h) or kw <= 0 or kh <= 0:
+            return
+        sx, sy = float(w) / float(kw), float(h) / float(kh)
+        K = self.intrinsics.K.copy()
+        K[0, 0] *= sx
+        K[0, 2] *= sx
+        K[1, 1] *= sy
+        K[1, 2] *= sy
+        self.intrinsics = CameraIntrinsics(K=K, D=self.intrinsics.D,
+                                           image_size=(w, h), rms=self.intrinsics.rms)
+
     def _ensure_intrinsics(self, image_bgr: np.ndarray) -> bool:
         if self.intrinsics is not None:
+            h, w = image_bgr.shape[:2]
+            self._olcekli_intrinsics(w, h)
             return True
         approx = approx_intrinsics_from_marker(image_bgr, self.cfg)
         if approx is None:
@@ -228,6 +269,19 @@ class PetriCvPipeline:
         ctx: dict = {"img_und": None, "detections": None,
                      "cabin_pose": None, "marker": None}
 
+        # 0) RESIZE — YOLO girdisi 640x640'a SABIT export edilmis; 4032 px'lik bir telefon
+        # fotografinda kuyucuklar o boyuta inince tespit edilemiyor (olculdu). Kucultme
+        # OLCEK-GUVENLIDIR cunku petri olcegi GORUNTUNUN ICINDEN gelir (kuyu capi ya da
+        # kabin isareti) ve kalibrasyon K'si `_olcekli_intrinsics` ile birlikte olceklenir.
+        if self.resize_max:
+            h0, w0 = image_bgr.shape[:2]
+            if max(h0, w0) > self.resize_max:
+                o = float(self.resize_max) / float(max(h0, w0))
+                image_bgr = cv2.resize(image_bgr, (max(1, int(round(w0 * o))), max(1, int(round(h0 * o)))),
+                                       interpolation=cv2.INTER_AREA)
+                result.resize = {"from": [w0, h0], "to": [image_bgr.shape[1], image_bgr.shape[0]],
+                                 "max": int(self.resize_max)}
+
         self._ensure_intrinsics(image_bgr)
         result.camera_calib = {
             "K": self.intrinsics.K.tolist(),
@@ -280,7 +334,9 @@ class PetriCvPipeline:
 
         # 3) YOLO11m-seg — TUM kuyucuklar
         t1 = time.perf_counter()
-        dets = self.yolo.detect(img_und)
+        # ⚠️ conf/iou CAGRI BASINA: paylasilan onbellekli dedektorun alanini yazmak
+        # es-zamanli ikinci analizin esigini degistirirdi.
+        dets = self.yolo.detect(img_und, conf=self._yolo_conf, iou=self._yolo_iou)
         timings["yolo_detect"] = (time.perf_counter() - t1) * 1000
         if not dets:
             result.error = "yolo_no_well_detected"
@@ -297,9 +353,12 @@ class PetriCvPipeline:
         h_img, w_img = img_und.shape[:2]
         ok_plaus, plaus_metrics = _plaus.evaluate(
             [d.contour for d in dets], [d.conf for d in dets],
-            float(h_img) * float(w_img))
+            float(h_img) * float(w_img),
+            self._plaus_esikler, self._plaus_guard)
         timings["plausibility"] = (time.perf_counter() - t1) * 1000
         result.plausibility = plaus_metrics
+        result.yolo_ayar = {"conf": self._yolo_conf, "iou": self._yolo_iou,
+                            "imgsz": int(getattr(self.yolo, "imgsz", 0) or 0)}
         if not ok_plaus:
             # Mevcut erken-cikis deseni (yolo_no_well_detected gibi); ai_router bu hatayi
             # 200/"no_detection" YERINE 422 + anlasilir Turkce mesaja cevirir.

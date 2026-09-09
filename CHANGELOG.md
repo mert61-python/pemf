@@ -38,6 +38,43 @@
   onizleme olur. ⚠️ Olcum dogrulugunu bozan kucultme yoluna DOKUNULMADI — ham dosya yine
   oldugu gibi gonderilir (µm/mm² kalibrasyonu korunur).
 
+### Petri Kuyu Analizi — arastirma modulu
+
+- **"Kuyucuklari gormuyor" bulgusu olculdu ve sebebi entegrasyon DEGILDI.** Bagimsiz inference
+  ile uygulama yolu ayni agirligi ve ayni parametreleri kullaniyor. Asil sebep OLCEK: YOLO
+  modelinin girdisi 640x640'a SABIT export edilmis; 3024x4032'lik telefon fotografinda
+  kuyucuklar o boyuta inince tespit edilemiyor (8 goruntunun 4'unde model hicbir sey bulmadi,
+  bir karede kuyu yerine yesil bobin halkasini isaretledi). Plakaya kirpma ayni karede 1 -> 5
+  kuyucuk yaptirdi.
+- **Alti parametre artik arayuzden ayarlanabilir** (Petri modulu -> "Gelismis (arastirma)
+  ayarlari"): tespit guveni (conf), ortusme esigi (IoU), kucultme (uzun kenar px) ve "petri
+  degil" denetiminin uc esigi (dairesellik / guven / en buyuk tespit orani). Denetim bir
+  anahtarla tamamen kapatilabilir.
+- **Kucultme (resize) eklendi.** Uzun kenar verilen degeri asarsa goruntu INTER_AREA ile
+  kucultulur. `imgsz` yukseltmek MUMKUN DEGIL (ONNX 640'a sabit; 960/1280 denemesi
+  "INVALID_ARGUMENT ... Expected: 640" verir) -> kucultme o sabitin altinda kalan tek kontrol.
+  Olcek etkilenmez: mm/px kuyu capindan ya da kabin isaretinden, yani GORUNTUNUN ICINDEN gelir.
+- ⚠️ **OLCULEN ETKI** (gercek uc + gercek ONNX, sahadaki 8 fotograf): IMG_5211 varsayilanla hic
+  sonuc vermiyordu, kucultme 960 ile **2 kuyu**, guven 0,05 de eklenince **3 kuyu**. WhatsApp
+  13.08.26 karesinde guven 0,25 -> 0,05 **1 kuyu -> 3 kuyu**.
+- **Hicbir ayara dokunulmazsa davranis BIT-BIT eskisi:** bos birakilan alan gonderilmez,
+  gonderilmeyen alan boru hattinin kendi varsayilaninda kalir.
+- **Sonuc karti hangi ayarla uretildigini yaziyor** ("Bu sonuc degistirilmis ayarlarla
+  uretildi: ..."), ret mesaji da artik ETKIN esikleri soyluyor. Onceden esigi 0,40'a dusuren
+  kullanici reddedildiginde "beklenen >=0,85" yazisini goruyor ve ayarinin uygulanmadigini
+  saniyordu.
+- **"Tespit edilemedi" mesaji artik cikis yolu gosteriyor:** olculen kadraj/kucultme
+  farklariyla birlikte ne denenmesi gerektigini soyler ("tekrar deneyin" yerine).
+- **GPU mikroservis paritesi:** ayni yedi alan `:8100/infer/em_petri` ucunda da tanimli ve
+  sinir dogrulamasi TEK KAYNAKTAN (`ai_hub/inference_petri_dish/petri_ayar.py`) gelir —
+  mikroservis profilinde ayarlar sessizce olu kalmaz.
+- **Yan bulgu duzeltildi (henuz kimseyi etkilemedi):** gercek bir kalibrasyon dosyasi
+  konuldugunda kamera matrisi (K) goruntu cozunurlugune olceklenmiyordu. Kucultme eklenince bu
+  fark SESSIZCE yanlis 3B koordinat uretecekti; K artik goruntuyle birlikte olceklenir.
+- Otomatik plaka kirpma sahip karariyla ERTELENDI; guvenilir 24/24 sayim icin modelin bu plaka
+  tipiyle yeniden egitilmesi/ince-ayari gerekiyor (mevcut model tek sinifli ve yuvarlak kap
+  odakli).
+
 ### Not
 
 Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.

@@ -77,16 +77,25 @@ class PetriYoloDetector:
             self._model = YOLO(str(self.model_path))
         return self._model
 
-    def detect(self, image_bgr: np.ndarray) -> list[PetriDetection]:
+    def detect(self, image_bgr: np.ndarray, *,
+               conf: float | None = None,
+               iou: float | None = None) -> list[PetriDetection]:
         """Goruntude petri kaplarini tespit et.
 
+        Args:
+            conf/iou: ISTEK BASINA override (arayuzden ayarlanabilir). ⚠️ `self.conf`/`self.iou`
+                YAZILMAZ: bu dedektor nesnesi `ai_router` onbelleginde PAYLASILIR; alanini
+                yazmak es-zamanli ikinci analizin esigini sessizce degistirirdi.
+
         Returns:
-            list[PetriDetection] — conf > self.conf olanlar, skora gore sirali
+            list[PetriDetection] — conf esigini gecenler, skora gore sirali
         """
         model = self._ensure_model()
         h, w = image_bgr.shape[:2]
         results = model.predict(
-            source=image_bgr, conf=self.conf, iou=self.iou,
+            source=image_bgr,
+            conf=self.conf if conf is None else float(conf),
+            iou=self.iou if iou is None else float(iou),
             imgsz=self.imgsz, device=self.device,
             verbose=False, save=False, show=False,
         )

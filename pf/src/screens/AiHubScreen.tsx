@@ -2006,6 +2006,49 @@ function PhantomModule({ patientName }: { patientName: string }) {
 }
 
 /**
+ * PETRİ GELİŞMİŞ (ARAŞTIRMA) AYARLARI — sahip talebi 2026-09-09 ("altısı da ayarlanabilir olsun").
+ *
+ * NEDEN VAR: "PEMF uygulaması kuyucukları görmüyor" bulgusu ölçüldü (Desktop/petri test/sonuclar/
+ * BULGULAR.md). Kök neden entegrasyon DEĞİL, ÖLÇEK: YOLO ONNX'i 640×640'a SABİT export edilmiş,
+ * 3024×4032'lik telefon fotoğrafında kuyucuklar o boyuta inince kayboluyor. Ölçülen: tespit
+ * güveni 0,25 → 0,05 aynı karede 1 → 3 kuyucuk; plakaya kırpma 1 → 5 kuyucuk. Araştırmacının
+ * bu iki kolu sahada çevirebilmesi gerekiyor.
+ *
+ * ⚠️ SINIR TABLOSU BİR TEL SÖZLEŞMESİDİR: tek kaynak
+ * `ai_hub/inference_petri_dish/petri_ayar.py::SINIRLAR` + `varsayilanlar()`. TypeScript Python'u
+ * import edemediği için değerler burada KOPYA duruyor; `tests/test_petri_ayar_parametreleri.py`
+ * eşitliği kilitler → sessizce ayrışamaz (`_PETRI_NOT_PLATE` ile aynı desen).
+ */
+const PETRI_AYAR_ALANLARI: {
+  ad: string; etiket: string; vars: string; alt: number; ust: number; ipucu: string;
+}[] = [
+  {
+    ad: "yolo_conf", etiket: "Tespit güveni (conf)", vars: "0.25", alt: 0.01, ust: 0.95,
+    ipucu: "Düşürmek daha çok kuyucuk bulur (ölçüldü: 0,25 → 0,05 ⇒ 1 kuyu yerine 3), yanlış tespit riski artar.",
+  },
+  {
+    ad: "yolo_iou", etiket: "Örtüşme eşiği (IoU)", vars: "0.7", alt: 0.1, ust: 0.95,
+    ipucu: "Bitişik kuyucuklar tek tespide birleşiyorsa yükseltin.",
+  },
+  {
+    ad: "resize_max", etiket: "Küçültme (uzun kenar, px)", vars: "kapalı", alt: 320, ust: 8000,
+    ipucu: "Model girdisi 640 px'e SABİT; çok büyük fotoğrafta kuyucuklar kaybolur. 0 = kapalı. Ölçek etkilenmez (mm/px kuyu çapından ya da kabin işaretinden gelir).",
+  },
+  {
+    ad: "plaus_circularity", etiket: "Denetim: dairesellik ≥", vars: "0.55", alt: 0, ust: 1,
+    ipucu: "\"Petri değil\" denetiminin dairesellik oyu.",
+  },
+  {
+    ad: "plaus_conf", etiket: "Denetim: güven ≥", vars: "0.85", alt: 0, ust: 1,
+    ipucu: "Denetimin güven oyu. Ölçülen ret vakalarının çoğu bu oydan düşüyordu (0,44–0,80).",
+  },
+  {
+    ad: "plaus_area_frac", etiket: "Denetim: en büyük tespit ≤", vars: "0.25", alt: 0.01, ust: 1,
+    ipucu: "Tek tespit karenin bu oranından fazlasını kaplıyorsa görüntü petri sayılmaz (VETO oyu).",
+  },
+];
+
+/**
  * Petri Kuyu Analizi — petri fotoğrafından YOLO11m-seg ile N kuyucuk tespit eder,
  * her kuyuda HSV kanser sınıflandırması yapar, 3B konum + PetriPredictor (BaggingRegressor
  * ONNX) ile kuyu başına PEMF bobin duty (D1-7) + E-alan (E_cancer/E_healthy) tahmini üretir.
@@ -2024,6 +2067,15 @@ function PetriModule({ patientName }: { patientName: string }) {
   const [petriDia, setPetriDia] = useState<string>("");   // cm — boş = piksel modu
   const [longLoading, setLongLoading] = useState(false);
   const { isCompact } = useResponsive();
+  // Gelişmiş (araştırma) ayarları — VARSAYILAN olarak KAPALI ve BOŞ. Boş alan gönderilmez;
+  // gönderilmeyen alan backend'de boru hattı varsayılanında kalır → hiçbir ayara dokunmayan
+  // kullanıcı için davranış bugünküyle BİT-BİT aynı.
+  const [advAcik, setAdvAcik] = useState(false);
+  const [adv, setAdv] = useState<Record<string, string>>({});
+  // "Petri değil" denetimi: AÇIK durumda HİÇBİR ŞEY gönderilmez (ortam değişkeni
+  // PEMF_AI_PLAUSIBILITY_GUARD kararını korur); yalnız kullanıcı KAPATIRSA `false` gider.
+  const [denetimAcik, setDenetimAcik] = useState(true);
+  const advDegisti = !denetimAcik || PETRI_AYAR_ALANLARI.some((a) => (adv[a.ad] || "").trim() !== "");
 
   useEffect(() => {
     visionCache[CK] = { imageUri, imageBase64, result };
@@ -2103,6 +2155,26 @@ function PetriModule({ patientName }: { patientName: string }) {
       const dia = parseFloat(petriDia.replace(",", "."));
       if (!isNaN(dia) && dia > 0) formData.append("petri_diameter_cm", String(dia));
 
+      // ── Gelişmiş (araştırma) ayarları ────────────────────────────────────────────────
+      // ⚠️ `sayiya_cevir` dersi: Türkçe klavyede "0,05" yazılır. `parseFloat("0,05")` = 0
+      // döner (SESSİZ yanlış değer) — virgül noktaya çevrilmeden okunmaz.
+      for (const a of PETRI_AYAR_ALANLARI) {
+        const ham = (adv[a.ad] || "").trim();
+        if (!ham) continue;                       // boş = varsayılanda kal
+        const d = parseFloat(ham.replace(",", "."));
+        if (isNaN(d)) { showToast(`${a.etiket}: sayı girin (ör. ${a.vars}).`, "error"); setLoading(false); return; }
+        // resize_max için 0 = "küçültme kapalı" (sınır ihlali değil).
+        const kapali = a.ad === "resize_max" && d === 0;
+        if (!kapali && (d < a.alt || d > a.ust)) {
+          showToast(`${a.etiket}: ${a.alt} – ${a.ust} aralığında olmalı (girilen ${ham}).`, "error");
+          setLoading(false); return;
+        }
+        formData.append(a.ad, String(d));
+      }
+      // Denetim KAPATILDIYSA açıkça bildir; açıkken göndermeyiz ki sunucudaki
+      // PEMF_AI_PLAUSIBILITY_GUARD kaçış kapağı arayüz tarafından EZİLMESİN.
+      if (!denetimAcik) formData.append("plaus_guard", "false");
+
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS); // ilk-kullanım model indirme için geniş
       const response = await fetch(serviceConfig.apiBaseUrl + "/ai/vision/em_petri", {
@@ -2167,6 +2239,73 @@ function PetriModule({ patientName }: { patientName: string }) {
       </View>
       <Text style={styles.petriHint}>QR marker fotoğrafta varsa konum otomatik çıkarılır (QR); yoksa petri çapı ile ölçeklenir.</Text>
 
+      {/* GELİŞMİŞ (ARAŞTIRMA) AYARLARI — kapalı başlar; hiçbir alana dokunulmazsa istek
+          bugünküyle AYNI gider (boş alan gönderilmez). */}
+      <TouchableOpacity
+        style={styles.advBaslik}
+        onPress={() => setAdvAcik((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: advAcik }}
+        accessibilityLabel="Gelişmiş araştırma ayarları"
+        accessibilityHint={advAcik ? "Ayarları kapatır" : "Tespit ve denetim eşiklerini açar"}
+      >
+        <Text style={styles.advBaslikMetin}>
+          {advAcik ? "▾" : "▸"} ⚙️ Gelişmiş (araştırma) ayarları{advDegisti ? "  ·  değiştirildi" : ""}
+        </Text>
+      </TouchableOpacity>
+
+      {advAcik && (
+        <View style={styles.advGovde}>
+          <Text style={styles.advNot}>
+            Kuyucuklar bulunamıyorsa ilk deneyeceğiniz iki kol: tespit güvenini düşürmek ve küçültmeyi açmak.
+            Boş bıraktığınız alan varsayılanda kalır.
+          </Text>
+          {PETRI_AYAR_ALANLARI.map((a) => (
+            <View key={a.ad} style={styles.advAlan}>
+              <View style={styles.advSatir}>
+                <Text style={styles.advEtiket}>{a.etiket}</Text>
+                <TextInput
+                  style={styles.advGirdi}
+                  keyboardType="numeric"
+                  accessibilityLabel={a.etiket}
+                  placeholder={`varsayılan ${a.vars}`}
+                  placeholderTextColor={colors.textMuted}
+                  value={adv[a.ad] || ""}
+                  onChangeText={(t) => setAdv((p) => ({ ...p, [a.ad]: t }))}
+                />
+              </View>
+              <Text style={styles.advIpucu}>{a.ipucu}</Text>
+            </View>
+          ))}
+
+          <TouchableOpacity
+            style={styles.advAnahtar}
+            onPress={() => setDenetimAcik((v) => !v)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: denetimAcik }}
+            accessibilityLabel="Petri değil denetimi"
+          >
+            <Text style={styles.advAnahtarMetin}>
+              {denetimAcik ? "☑" : "☐"} “Petri değil” denetimi açık
+            </Text>
+          </TouchableOpacity>
+          {!denetimAcik && (
+            <Text style={styles.advUyari}>
+              ⚠️ Denetim kapalı: yanlış modüle yüklenen bir fotoğrafa da sonuç üretilir ve o sonuç yanıltıcı olur.
+            </Text>
+          )}
+
+          <TouchableOpacity
+            style={styles.advSifirla}
+            onPress={() => { setAdv({}); setDenetimAcik(true); }}
+            accessibilityRole="button"
+            accessibilityLabel="Ayarları varsayılana döndür"
+          >
+            <Text style={styles.advSifirlaMetin}>↺ Varsayılanlara dön</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
           <Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} />
@@ -2184,8 +2323,15 @@ function PetriModule({ patientName }: { patientName: string }) {
       {result && (
         <View style={styles.resultBox}>
           {(result.status === "no_detection" || !result.success) ? (
+            /* Ölçülen saha nedeni (BULGULAR.md): tam kare telefon fotoğrafında kuyucuklar
+               640 px'lik model girdisine inince kayboluyor. "Tekrar deneyin" tek başına
+               kullanıcıyı aynı sonuca götürüyordu — çıkışı olan bir yönlendirme veriyoruz. */
             <ResultInterpretation tone="alert" emoji="⚠️" title="Kuyucuk tespit edilemedi"
-              text="Net, tepeden ve iyi aydınlatılmış bir fotoğrafla tekrar deneyin." />
+              text="Plaka kareyi dolduracak şekilde, tam tepeden ve iyi aydınlatılmış çekmeyi deneyin."
+              points={[
+                "Kadraj denemesi ölçüldü: plakaya yaklaşmak 1 kuyucuktan 5 kuyucuğa çıkardı.",
+                "Gelişmiş (araştırma) ayarlarından tespit güvenini düşürün (0,25 → 0,05 ⇒ 1 yerine 3 kuyucuk) ya da küçültmeyi açın (ör. 960).",
+              ]} />
           ) : (
             <>
               {(() => {
@@ -2231,6 +2377,25 @@ function PetriModule({ patientName }: { patientName: string }) {
               })}
             </>
           )}
+          {/* ETKİN AYARLAR — istek DEĞİL, boru hattının gerçekten kullandığı değerler.
+              Gevşetilmiş bir eşikle çıkan sonucun "normal" görünmesini engeller (denetim izi);
+              varsayılanla koşulduysa hiçbir şey yazılmaz, arayüz kalabalıklaşmaz. */}
+          {(() => {
+            const ya = (result as any).yolo_ayar || {};
+            const rz = (result as any).resize || {};
+            const th = ((result as any).plausibility || {}).thresholds || {};
+            const thVars = ((result as any).plausibility || {}).thresholds_default || {};
+            const parca: string[] = [];
+            if (ya.conf != null && Number(ya.conf) !== 0.25) parca.push(`conf ${trValue(ya.conf)}`);
+            if (ya.iou != null && Number(ya.iou) !== 0.7) parca.push(`IoU ${trValue(ya.iou)}`);
+            if (rz.max) parca.push(`küçültme ${rz.from?.[0]}×${rz.from?.[1]} → ${rz.to?.[0]}×${rz.to?.[1]}`);
+            for (const [k, etiket] of [["circularity_med", "dairesellik"], ["conf_med", "güven"], ["max_area_frac", "alan oranı"]] as const) {
+              if (th[k] != null && thVars[k] != null && Number(th[k]) !== Number(thVars[k])) parca.push(`denetim ${etiket} ${trValue(th[k])}`);
+            }
+            if (((result as any).plausibility || {}).guard === "off") parca.push("denetim KAPALI");
+            if (!parca.length) return null;
+            return <Text style={styles.advEtkin}>{`⚙️ Bu sonuç değiştirilmiş ayarlarla üretildi: ${parca.join(" · ")}`}</Text>;
+          })()}
           {/* Analizden seansa köprü (Faz 3): bu ekran otonom seans BAŞLATMAZ, yalnız
               Kontrol → AI Pro'ya geçer ve model kartını ön-seçer. */}
           {result.success ? <AiProKopruDugmesi model="petri" hedefEtiketi="Kuyu" /> : null}
@@ -3832,6 +3997,23 @@ const styles = StyleSheet.create({
   fantomLenLabel: { color: colors.textMuted, fontSize: typography.small },
   fantomLenInput: { flex: 1, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.text, fontSize: typography.body },
   petriHint: { color: colors.textMuted, fontSize: typography.small, fontStyle: "italic", marginTop: spacing.xs },
+  // Petri gelişmiş (araştırma) ayarları. `touch.min` ZORUNLU: 320 px telefonda `rs()` ölçeği
+  // 44 px erişilebilirlik tabanını 37 px'e düşürürdü (bkz. tests/test_dokunma_hedefi_kapisi.py).
+  advBaslik: { minHeight: touch.min, justifyContent: "center", marginTop: spacing.sm },
+  advBaslikMetin: { color: colors.primary, fontSize: typography.small, fontWeight: "600" },
+  advGovde: { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md, gap: spacing.sm },
+  advNot: { color: colors.textMuted, fontSize: typography.small },
+  advAlan: { gap: rs(2) },
+  advSatir: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  advEtiket: { color: colors.text, fontSize: typography.small, flex: 1 },
+  advGirdi: { width: rs(120), minHeight: touch.min, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, color: colors.text, fontSize: typography.small, textAlign: "center" },
+  advIpucu: { color: colors.textMuted, fontSize: typography.small, fontStyle: "italic" },
+  advAnahtar: { minHeight: touch.min, justifyContent: "center" },
+  advAnahtarMetin: { color: colors.text, fontSize: typography.small },
+  advUyari: { color: colors.warning, fontSize: typography.small },
+  advSifirla: { minHeight: touch.min, justifyContent: "center", alignSelf: "flex-start" },
+  advSifirlaMetin: { color: colors.primary, fontSize: typography.small, fontWeight: "600" },
+  advEtkin: { color: colors.textMuted, fontSize: typography.small, marginTop: spacing.sm, fontStyle: "italic" },
   rnaFileName: { color: colors.text, fontSize: typography.small, marginTop: spacing.xs, fontWeight: "600" },
   ckdSection: { color: colors.primary, fontSize: typography.small, fontWeight: "800", marginTop: spacing.md, marginBottom: spacing.xs, textTransform: "uppercase" },
   ckdGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

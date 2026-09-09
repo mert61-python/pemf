@@ -1091,11 +1091,41 @@ def infer_em_petri(
     petri_diameter_cm: float = Form(None),
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
+    # ── ROUTER PARİTESİ (2026-09-09): arayüzden ayarlanabilir 6 parametre + denetim anahtarı.
+    # ⚠️ Bu alanlar OLMADAN GPU dağıtımında ayarlar SESSİZCE ölü kalırdı: `servers/ai_client.py`
+    # onları multipart form'da gönderiyor, FastAPI tanımadığı form alanını sessizce ATAR —
+    # kullanıcı arayüzde eşiği değiştirir, sonuç hiç değişmez ve hiçbir yerde hata görünmez.
+    yolo_conf: float = Form(None),
+    yolo_iou: float = Form(None),
+    resize_max: float = Form(None),
+    plaus_circularity: float = Form(None),
+    plaus_conf: float = Form(None),
+    plaus_area_frac: float = Form(None),
+    plaus_guard: bool = Form(None),
 ):
-    """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm."""
+    """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm.
+
+    Ayarlanabilir parametreler ve sınırları TEK KAYNAK:
+    `ai_hub/inference_petri_dish/petri_ayar.py` (gömülü uç `servers/ai_router.py` da onu
+    kullanır → iki uç ayrışamaz).
+    """
     from dataclasses import asdict
 
+    from ai_hub.inference_petri_dish import petri_ayar as _pa
+
     try:
+        try:
+            _ayar = _pa.coz(
+                yolo_conf=yolo_conf,
+                yolo_iou=yolo_iou,
+                resize_max=resize_max,
+                plaus_circularity=plaus_circularity,
+                plaus_conf=plaus_conf,
+                plaus_area_frac=plaus_area_frac,
+                plaus_guard=plaus_guard,
+            )
+        except _pa.AyarHatasi as _ae:
+            return JSONResponse({"error": str(_ae)}, status_code=422)
         data = file.file.read()
         _red = _kapi(data, "em_petri")
         if _red:
@@ -1103,7 +1133,11 @@ def infer_em_petri(
         img = _read_bgr(data)
         c = predictors.get("em_petri")
         pl = c["cls"](
-            c["cfg"], petri_diameter_cm=petri_diameter_cm, yolo_model_path=c["yolo_path"], yolo_device=_yolo_device()
+            c["cfg"],
+            petri_diameter_cm=petri_diameter_cm,
+            yolo_model_path=c["yolo_path"],
+            yolo_device=_yolo_device(),
+            **_ayar,
         )
         pl.yolo = c["yolo"]
         pl._predictor = c["predictor"]
@@ -1142,6 +1176,11 @@ def infer_em_petri(
             "mm_per_px": round(result.mm_per_px, 4),
             "wells": wells,
             "timing_ms": result.timing_ms,
+            # ETKİN ayarlar (router paritesi): arayüz sonucun hangi eşiklerle üretildiğini
+            # gösterir. `plausibility` ayrıca REDDİ de taşır — router 422'ye çevirebilsin.
+            "yolo_ayar": result.yolo_ayar,
+            "resize": result.resize,
+            "plausibility": result.plausibility,
             "image_base64": _jpg_b64(overlay),
             **_xai_meta,
         }
