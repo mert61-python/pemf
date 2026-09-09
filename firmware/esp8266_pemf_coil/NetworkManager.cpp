@@ -4,6 +4,36 @@
 
 // Diagnostics sistemi kaldırıldı
 
+/* ============================================================================
+ * STATUS JSON BOYUTU — SAHADA TELEMETRI DUSUYORDU (2026-09-09, olculdu)
+ * ============================================================================
+ * BELIRTI (sahibin seri cikti kaydi): `[MQTT] Status mesaji sigmadi! Req: 505` — status
+ * telemetrisi KOMPLE dusuyor, panel bayat deger gosteriyor.
+ *
+ * KOK NEDEN SURUKLENME: `_setupMQTT()` MQTT tasima buffer'ini 768'e cikarmis ve yorumunda
+ * "Status mesaji (640)" diyor — ama `publishStatus` icindeki yerel `jsonBuffer` 480'de
+ * KALMIS. Yani tasima 640 icin hazirlanmis, uretici hala 480'lik kaba yaziyordu.
+ *
+ * OLCUM (bicim dizesinden hesaplandi): statik metin 394 + degisken alanlarin EN KOTU toplami
+ * 269 (%s'ler 134: wifi_ssid 32, portal_ssid 32, wifi_ip/portal_ip 15, boollar 5; sayilar 135:
+ * 5x%d, 3x%lu, %llu 20, 3x%u) + NUL = **664 bayt**.
+ * Sahanin gordugu 505 bu tavanin altindaydi, yani buffer TASMAYA cok once yetmiyordu bile.
+ *
+ * ⚠️ SESSIZ DEGIL AMA ETKISI SESSIZ: `snprintf` tasmayi kirpar, kod da kirpilmis JSON'u
+ * gondermek yerine mesaji ATAR (dogru karar — yarim JSON parse edilemez). Ama kullanici
+ * tarafinda bu "veri gelmiyor" olarak gorunur, hata olarak gorunmez.
+ *
+ * ⚠️ TEK BASINA BUFFER'I BUYUTMEK YETMEZDI: PubSubClient'in kendi paket tavani da payload +
+ * topic + protokol ekini kapsamak zorunda. Asagidaki `static_assert` bu ucunu birbirine
+ * baglar — biri buyutulup digeri unutulursa DERLEME DURUR (bu hatanin tam olusma bicimi).
+ * ============================================================================ */
+#define STATUS_JSON_BUF   704   /**< >= 664 (olculen en kotu), 64un kati, 40 bayt pay    */
+#define MQTT_BUFFER_BYTES 768   /**< PubSubClient paket tavani (payload+topic+ek)        */
+#define MQTT_TOPIC_MAKS    32   /**< "pemf/coil/<id>/status" ve kardesleri               */
+#define MQTT_PROTOKOL_EK    8   /**< sabit baslik + topic uzunluk alani                  */
+static_assert(STATUS_JSON_BUF + MQTT_TOPIC_MAKS + MQTT_PROTOKOL_EK <= MQTT_BUFFER_BYTES,
+              "MQTT buffer status JSON + topic + protokol ekini KAPSAMIYOR");
+
 // Static instance pointer for MQTT callback
 NetworkManager* NetworkManager::_instance = nullptr;
 
@@ -243,8 +273,9 @@ void NetworkManager::publishStatus(const StatusData& status) {
         return;
     }
 
-    // Stack optimizasyonu: BSS segmentinde allocation
-    static char jsonBuffer[480];
+    // Stack optimizasyonu: BSS segmentinde allocation (heap'e dokunmaz).
+    // ⚠️ Boyut TAHMIN DEGIL: bkz. dosya basindaki "STATUS JSON BOYUTU" blogu (olculen 681).
+    static char jsonBuffer[STATUS_JSON_BUF];
 
     int jsonLen = snprintf_P(jsonBuffer, sizeof(jsonBuffer),
         PSTR("{\"coil_id\":%d,\"timestamp\":%lu,\"wifi_connected\":%s,\"wifi_ssid\":\"%s\",\"wifi_rssi\":%d,"
@@ -697,7 +728,8 @@ void NetworkManager::_startWiFiPortal() {
 }
 
 void NetworkManager::_setupMQTT() {
-    _mqttClient.setBufferSize(768);  // Status mesajÄ± (640) + topic (~50) + overhead (~78) iÃ§in
+    // Tavan sabiti dosya basinda; static_assert status JSON ile TUTARLILIGI kilitler.
+    _mqttClient.setBufferSize(MQTT_BUFFER_BYTES);
     _mqttClient.setServer(_localMqttHost.c_str(), _localMqttPort);
     _mqttClient.setCallback(_mqttCallbackHelper);
 }

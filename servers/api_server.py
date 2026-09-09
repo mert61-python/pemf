@@ -23,6 +23,7 @@ from servers import (
     live_state,  # audit B-2.2: canlı-durum (WS/live-state) çekirdeği ayrı modülde
     session_state,  # audit B-2.2 (son kademe): aktif-seans state ayrı modülde
 )
+from servers import sensor_kaydedici as _sensor_kaydedici  # yerel telemetri kaydi (CSV)
 from servers.ai_router import ai_router
 from servers.history_router import router as history_router
 from servers.settings_router import router as settings_router
@@ -734,6 +735,17 @@ def _on_mqtt_message_api(client, userdata, msg):
             # (retain=0) mesaj bobinin gerçekten yayın yaptığını kanıtlar.
             if not is_retained:
                 _coil_last_telemetry[coil_index] = time.monotonic()
+
+            # YEREL SENSOR KAYDI (sahip karari 2026-09-09: "bilgisayar tarafi" + "her zaman
+            # acik"). Buraya takiliyor cunku backend BU KONULARA ZATEN ABONE — yeni abonelik,
+            # ekstra ag yuku ve cihaz tarafinda degisiklik GEREKMEZ.
+            # ⚠️ `status` DA kaydedilir: S3 hic `sensors` yayinlamaz (UYUMSUZ-6) ve sensor
+            # degerlerini `status` icine koyar (telde olculdu) — yalniz `sensors` dinleyen bir
+            # kaydedici S3 bobinleri icin BOS dosya uretirdi.
+            # ⚠️ RETAINED mesaj kaydedilmez: broker'da kalmis bayat bir yuk, her reconnect'te
+            # yeniden teslim edilir ve gecmise SAHTE tekrar satirlari yazardi.
+            if not is_retained:
+                _sensor_kaydedici.kaydet(coil_id_str, msg_type, payload)
 
             if msg_type == "sensors" and not is_retained:
                 with _live_state_lock:

@@ -664,6 +664,18 @@ void PemfNetworkManager::publishStatus(const SystemStatusMsg &msg) {
   doc["current"] = msg.sensors.current;
   doc["magnetic_field"] = msg.sensors.magneticField; // GUI: magnetic_field
 
+  /* ⚠️ MANYETİK EKSEN BİLEŞENLERİ (2026-09-09, ölçülen eksik): skaler `magnetic_field`
+   * YÖN TAŞIMAZ — |B| = sqrt(x²+y²+z²) her zaman pozitiftir. Bobin polaritesi eksen
+   * İŞARETİNDEN okunur ve bu üç alan telemetride HİÇ YOKTU: yakalanan gerçek yükte
+   * (`pemf/coil/6/status`) `mag_x` sıfır kez geçiyordu. Sonuç: yön verisi yalnız seri
+   * porttaki `[MAG]` satırında kalıyor, MQTT'yi dinleyen hiçbir tüketici (panel, yerel
+   * CSV kaydı, araştırma analizi) polariteyi GÖREMİYORDU.
+   * Birim mT — `magnetic_field` ve 8266'nın `magX`i ile AYNI, yani kartlar arası
+   * karşılaştırma bozulmaz. ArduinoJson belgesi 2048 bayt tavanında; üç alan ~60 bayt. */
+  doc["mag_x"] = msg.sensors.magX;
+  doc["mag_y"] = msg.sensors.magY;
+  doc["mag_z"] = msg.sensors.magZ;
+
   // Maksimum değerler (PWM aktifken ölçülen)
   doc["max_magnetic_field"] = msg.sensors.maxMagneticField; // mT
   doc["max_current"] = msg.sensors.maxCurrent;              // A

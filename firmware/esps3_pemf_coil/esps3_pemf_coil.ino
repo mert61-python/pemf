@@ -16,6 +16,10 @@
 #include "TimeManager.h"
 #include "StatusLED.h"
 #include <esp_task_wdt.h>
+// ⚠️ [BKAYIT] zaman damgası için ZORUNLU: `gettimeofday`/`struct timeval` burada tanımlı.
+// Arduino-ESP32'de bazı sürümlerde Arduino.h üzerinden dolaylı gelir — ona GÜVENİLMEZ;
+// gelmediği sürümde .ino derlenmez ve hata ancak sahibin makinesinde görülür.
+#include <sys/time.h>
 
 // ============================================================================
 // GLOBAL HANDLES & STATIC OBJECTS
@@ -157,6 +161,73 @@ static void magRaporla(const SensorReadings& r, const PWMState& pwm) {
     tx = ty = tz = 0.0f;
 }
 
+// ============================================================================
+// [BKAYIT] PWM-KAPILI B KAYDI — iki kolon: zaman + toplam alan (sahip 2026-09-09)
+// ============================================================================
+// SAHİP İSTEĞİ: "manyetik alan değerleriyle zamanı, sadece, başka yok — 2 tane toplam: B
+// değeri ve zaman. PWM üretmeye başlayınca kayıt başlasın, bitince dursun."
+//
+// ⚠️ S3 MASAÜSTÜNE YAZAMAZ: mikrodenetleyicinin PC dosya sistemine erişimi yoktur. Bu yüzden
+// iş ikiye bölündü: kart veriyi AYRIŞTIRILABİLİR biçimde seri porta basar, PC tarafındaki
+// `scripts/b_kaydi_topla.py` her oturumu masaüstünde ayrı bir CSV'ye yazar. Kart tarafı hiçbir
+// yapılandırma istemez — reflash sonrası PWM başladığı anda kayıt akar.
+//
+// BİÇİM (üç satır türü, tek önek — PC ayrıştırıcısı bununla filtreler):
+//   [BKAYIT] BASLA coil=8 freq=100 duty=25 saat=epoch ts=1788964860508
+//   [BKAYIT] 1788964860708,0.0198          <- VERİ: yalnız zaman + B, başka HİÇBİR ŞEY
+//   [BKAYIT] BITTI ornek=1024 atlanan=3 sure_ms=205000
+//
+// ⚠️ `saat=` alanı ZORUNLU: NTP oturmadan `gettimeofday` açılıştan itibaren sayar. O durumda
+// zaman damgası epoch DEĞİL, uptime'dır; hangisi olduğunu söylemezsek masaüstündeki CSV
+// 1970'e düşen tarihlerle dolar ve kimse sebebini anlamaz. Veri satırı iki kolon kalsın diye
+// bu bilgi BASLA satırında bir kez verilir.
+//
+// ⚠️ SENSÖR OKUNAMAYAN ÖRNEK ATLANIR, 0 YAZILMAZ: `readAll()` hata durumunda alanı 0.0'a
+// çeker. "0,0000 mT" ölçülmüş bir değer gibi görünür ve alan analizinde GERÇEK bir sonuçtur —
+// ölçülemeyen örneği yazmak sessiz yanlış veri üretir. Atlananlar sayılır ve BITTI satırında
+// raporlanır, yani kayıp GÖRÜNÜR kalır.
+//
+// Örnekleme kontrol döngüsünün kendi hızıdır (5 Hz, SENSOR_READ_INTERVAL_MS 200) — ayrı bir
+// zamanlayıcı yok, ekstra I2C yok: bu fonksiyon döngünün ZATEN okuduğu veriyi kullanır.
+static void bKaydiRaporla(const SensorReadings& r, const PWMState& pwm) {
+    static bool oncekiAktif = false;
+    static uint32_t ornek = 0, atlanan = 0;
+    static uint32_t basMs = 0;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    unsigned long long epochMs =
+        (unsigned long long)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
+    // NTP oturmuşsa saniye alanı 2020'yi (1577836800) geçer; oturmamışsa açılıştan sayar.
+    bool ntpVar = (tv.tv_sec > 1577836800L);
+
+    if (pwm.active && !oncekiAktif) {
+        ornek = 0;
+        atlanan = 0;
+        basMs = millis();
+        LOG_PRINTF("[BKAYIT] BASLA coil=%d freq=%d duty=%d saat=%s ts=%llu\n",
+                   FACTORY_COIL_ID, pwm.frequency, pwm.dutyCycle,
+                   ntpVar ? "epoch" : "uptime", ntpVar ? epochMs : (unsigned long long)millis());
+    }
+
+    if (pwm.active) {
+        if (r.magSensorOk) {
+            LOG_PRINTF("[BKAYIT] %llu,%.4f\n",
+                       ntpVar ? epochMs : (unsigned long long)millis(), r.magneticField);
+            ornek++;
+        } else {
+            atlanan++;
+        }
+    }
+
+    if (!pwm.active && oncekiAktif) {
+        LOG_PRINTF("[BKAYIT] BITTI ornek=%u atlanan=%u sure_ms=%u\n",
+                   ornek, atlanan, (unsigned)(millis() - basMs));
+    }
+
+    oncekiAktif = pwm.active;
+}
+
 void TaskControl(void *pvParameters) {
     // -----------------------------------------------------------------------
     // BAŞLATMA SIRASI — KRİTİK
@@ -225,6 +296,9 @@ void TaskControl(void *pvParameters) {
         sysCoil.enforceThermalLimit(readings);
         PWMState pwmSelect = sysCoil.getState();
         magRaporla(readings, pwmSelect); // [MAG] her 1 sn seri rapor (bobin yönü ölçümü)
+        // [BKAYIT] PWM-kapılı B kaydı: PWM başlayınca akar, bitince durur (sahip 2026-09-09).
+        // AYNI okumayı kullanır — ekstra I2C ve ekstra zamanlayıcı YOK.
+        bKaydiRaporla(readings, pwmSelect);
 
         // Bellek istatistiklerini hesapla
         uint32_t freeHeap = ESP.getFreeHeap();
