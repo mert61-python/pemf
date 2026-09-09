@@ -171,8 +171,10 @@ void checkMemoryHealth() {
 // DEGISTIRMEZ. Pratik sonuc: her satir ~1 gercek ornek → ISARET (polarite) guvenilir,
 // BUYUKLUK darbe fazina gore oynar. Kararli DC icin birkac satiri birlikte oku.
 //
-// ⚠️ YON YALNIZ TEK-BACAK (UNIPOLAR) SURUSTE OKUNUR: simetrik bipolar suruste ortalama ~0'dir
-// (yalniz |B| buyur). Bkz. README "Bobin yonu" + firmware/stm32_pemf_unipolar.
+// ⚠️ YON TEK-BACAK (UNIPOLAR) SURUS ISTER — 8266'DA BU ZATEN SAGLANIR: bu kart yarim-kopru,
+// TEK pin (D5) surer, dolayisiyla net DC != 0 ve isaret polariteyi verir. S3 tam-kopru
+// BIPOLAR surdugu icin orada ortalama ~0'dir (yalniz |B| buyur) ve yon o kartta boyle
+// okunamaz. Yontem: README "Bobin yonu".
 static void magRaporla(const SensorData& d) {
     static uint32_t sonMs = 0;
     static uint16_t n = 0;

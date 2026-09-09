@@ -78,9 +78,13 @@ yalnız uyarı satırı gelir — PWM çalışmaya devam eder ama yön okunamaz.
 
 **100 Hz / %50 duty ile ölçüm — S3 ile aynı yöntem:**
 
-1. **Sürüş kipi:** yön için **tek-bacak (unipolar)** sürüş şart (tek yönlü darbe → net DC ≠ 0 →
-   ortalamanın işareti polariteyi verir). Simetrik **bipolar** sürüşte ortalama ≈ 0 çıkar, yalnız
-   `|B|max` büyür — yön **okunamaz**.
+1. **Sürüş kipi — 8266'da ZATEN UYGUN, ekstra bir şey yapmana gerek yok.** Yön ölçümü
+   **tek-bacak (unipolar)** sürüş ister (tek yönlü darbe → net DC ≠ 0 → ortalamanın işareti
+   polariteyi verir); bu kart **yarım-köprü, TEK pin** (`D5`) sürer, yani sürüş doğası gereği
+   unipolardır. ⚠️ Bu yüzden S3'teki "ölçüm için `stm32_pemf_unipolar` projesine geç" adımı
+   **6-8 numaralı bobinler için GEÇERSİZDİR** — kendi start komutuyla ölç.
+   (Karşılaştırma için: S3 tam-köprü **bipolar** sürer, orada ortalama ≈ 0 çıkar ve yalnız
+   `|B|max` büyür — yön o kartta bu şekilde **okunamaz**.)
 2. **Sensör duruşu:** MLX90393'ü bobin yüzeyinin ortasına, **her bobinde AYNI yönle** koy (öneri:
    sensör **Z** ekseni bobin eksenine paralel, çip üst yüzü bobine bakıyor, kablo hep aynı tarafta).
    Bobinden bobine sensörü döndürürsen işaretler karşılaştırılamaz. Bobinin üstüne **ok** çiz ve
