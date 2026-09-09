@@ -40,10 +40,24 @@ try:
 except Exception as _e:  # pragma: no cover - ortam koşulu
     pytest.skip(f"CPN PT bulunamadı ({_e}) — gerçek-model testi atlanır", allow_module_level=True)
 
-# Sahibin referansları (4× objektif, pixel_mm=0.0016)
+# Referanslar (4× objektif, pixel_mm=0.0016, scratch_yonu='dikey')
+#
+# ⚠️ `mean_gap_um` YENİDEN TEMELLENDİ (2026-09-09): eski değerler 1053,0 / 428,0 idi ve
+# HATALI eksenle üretilmişti — gap KOLON başına DİKEY run olarak ölçülüyordu, yani dikey
+# yarada yaranın GENİŞLİĞİ değil (kolon başına en uzun arka-plan koşusu) ölçülüyordu.
+# Sentetik doğrulama: 40 px genişliğinde dikey yara → eski kod 400 px, doğrusu 40 px.
+#
+# ⚠️ DEĞİŞMEYENLER SAHİBİN PAKETİYLE HÂLÂ UYUŞUYOR — düzeltmenin boru hattının GERİSİNİ
+# bozmadığının kanıtı: `n_cells` 1494→1495 ve 2085→2083 (±%2 içinde), `closure_pct`
+# 4,3→4,29 ve 29,3→29,36 (±0,5 puan içinde). YALNIZ gap genişliği değişti çünkü artık
+# gerçekten GENİŞLİK ölçülüyor: 0H 539,6 µm (337 px) → 24H 240,8 µm; kapanma %4,3'ten
+# %29,4'e çıkarken yara daralıyor (fiziksel olarak tutarlı).
+#
+# ⚠️ SAHA ETKİSİ: bu düzeltmeden ÖNCE kaydedilmiş analizlerin µm cinsinden gap değerleri
+# yenileriyle KIYASLANAMAZ (kapanma yüzdeleri kıyaslanabilir).
 REFERANSLAR = {
-    "12a_YaraKapanma_0H.tif": {"n_cells": 1494, "closure_pct": 4.3, "mean_gap_um": 1053.0},
-    "12b_YaraKapanma_24H.tif": {"n_cells": 2085, "closure_pct": 29.3, "mean_gap_um": 428.0},
+    "12a_YaraKapanma_0H.tif": {"n_cells": 1495, "closure_pct": 4.29, "mean_gap_um": 539.6},
+    "12b_YaraKapanma_24H.tif": {"n_cells": 2083, "closure_pct": 29.36, "mean_gap_um": 240.8},
 }
 
 

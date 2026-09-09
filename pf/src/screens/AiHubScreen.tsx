@@ -3171,8 +3171,10 @@ const SCRATCH_OBJEKTIFLER = [
   { ad: "20×", pmm: "0.00033" }, { ad: "40×", pmm: "0.00016" },
 ] as const;
 const SCRATCH_GALERI: { k: string; ad: string; alan: keyof AiResult; not: string }[] = [
-  { k: "closure", ad: "Kapanma", alan: "closure_image_base64", not: "Sarı bant = scratch ROI · kırmızı = maks gap · mavi = ort. gap" },
-  { k: "analysis", ad: "Analiz", alan: "analysis_image_base64", not: "Kırmızı çizgiler = yaraya dik ROI kuşağı · sarı = kuşağa en yakın hücreler" },
+  { k: "closure", ad: "Kapanma", alan: "closure_image_base64", not: "Sarı bant = ROI (yarayı içine alır) · kırmızı = maks gap hattı · mavi = ort. gap hattı" },
+  { k: "analysis", ad: "Analiz", alan: "analysis_image_base64", // ⚠️ ESKİ METİN "yaraya dik" diyordu ve çizim de öyleydi: dikey yara seçilince YATAY
+    // kuşak çiziliyordu (2026-09-09 sahip bildirimi). Kuşak yarayı İÇİNE alır.
+    not: "Kırmızı çizgiler = yarayı içine alan ROI kuşağı (yara yönüne göre) · sarı = kuşağa en yakın hücreler" },
   { k: "seg", ad: "Segmentasyon", alan: "seg_image_base64", not: "Her hücre ayrı renk (CPN instance)" },
   { k: "overlay", ad: "Overlay", alan: "overlay_image_base64", not: "Segmentasyon + orijinal karışımı" },
   { k: "input", ad: "Orijinal", alan: "input_image_base64", not: "Orijinal görüntü (sunucu JPEG önizlemesi — TIF tarayıcıda gösterilemez)" },
@@ -3222,6 +3224,19 @@ function ScratchModule({ patientName }: { patientName: string }) {
     setDosya({ uri: a.uri, name: a.name || "goruntu", file: (a as any).file || null });
     setResult(null); setYenidenGerek(false);
   };
+
+  /**
+   * Girdi önizlemesinin kaynağı — TEK yerde türetilir.
+   *  · png/jpg/webp/bmp: yerel dosya URI'si (anında görünür)
+   *  · tif/tiff: tarayıcı render EDEMEZ → analizden sonra sunucunun JPEG'i
+   *  · seçim yok: önizleme yok
+   */
+  const onizlemeKaynagi = (() => {
+    if (!dosya) return null;
+    if (/\.(png|jpe?g|webp|bmp)$/i.test(dosya.name) && dosya.uri) return dosya.uri;
+    if (result?.input_image_base64) return `data:image/jpeg;base64,${result.input_image_base64}`;
+    return null;
+  })();
 
   const analiz = async () => {
     if (!dosya || loading) return;
@@ -3299,8 +3314,23 @@ function ScratchModule({ patientName }: { patientName: string }) {
           {dosya ? dosya.name : "Görüntü seç (.tif / .png / .jpg)"}
         </Text>
       </TouchableOpacity>
-      {dosya && /\.tiff?$/i.test(dosya.name) && !result && (
-        <Text style={styles.ctHint}>TIF önizlemesi desteklenmez — analiz sonrası [Orijinal] sekmesini kullanın.</Text>
+
+      {/* GİRDİ ÖNİZLEMESİ (2026-09-09 sahip isteği: "girdi fotosu görünmüyor, sadece ismi yazıyor").
+          ⚠️ shrinkForUpload ÇAĞRILMAZ: bu modül ham dosyayı gönderir çünkü küçültme µm/mm²
+          ölçümünü bozar (plan v2 §2/11 ölçümü). Önizleme YALNIZ görüntülemedir, yüklenen veriye
+          DOKUNMAZ. TIF'i tarayıcı/RN Image render EDEMEZ → onun önizlemesi analizden sonra
+          sunucunun ürettiği JPEG'den (`input_image_base64`) gösterilir. */}
+      {onizlemeKaynagi ? (
+        <View style={styles.scOnizlemeKutu}>
+          <Image source={{ uri: onizlemeKaynagi }} style={styles.imagePreview}
+            accessibilityLabel={`Girdi görüntüsü önizlemesi: ${dosya?.name ?? ""}`} />
+        </View>
+      ) : null}
+      {dosya && /\.tiff?$/i.test(dosya.name) && !result?.input_image_base64 && (
+        <Text style={styles.ctHint}>
+          TIF önizlemesi tarayıcıda gösterilemez — analizden sonra girdi görüntüsü burada ve
+          [Orijinal] sekmesinde görünür.
+        </Text>
       )}
 
       <Text style={styles.ctSubLabel}>Yara yönü</Text>
@@ -3764,6 +3794,10 @@ const styles = StyleSheet.create({
   // ⚠️ imagePreview YALNIZ sabit-yükseklikli imagePreviewContainer İÇİNDE kullanılır (%100 yükseklik
   // ebeveyne bağlıdır). Serbest duran görsel (ısı haritası vb.) için xaiStage/scStage (AÇIK yükseklik).
   imagePreview: { width: "100%", height: "100%", resizeMode: "contain" },
+  // Scratch girdi önizlemesi: formu ezmemesi için imagePreviewContainer'dan (300) daha kısa.
+  scOnizlemeKutu: { width: "100%", height: rs(180), backgroundColor: colors.bg, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border, overflow: "hidden", justifyContent: "center",
+    alignItems: "center", marginTop: spacing.xs },
   // B2-isi-haritasi-ui: heatmap sahnesi — imagePreviewContainer ile BİREBİR aynı ölçü/çerçeve
   // (rs(300) + 1px kenarlık) → analiz görseliyle aynı boyut/hiza; yükseklik ebeveynden bağımsız.
   xaiStage: { width: "100%", height: rs(300), borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, marginTop: 4 },

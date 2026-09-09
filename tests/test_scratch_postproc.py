@@ -44,26 +44,29 @@ def _dikey_yara_maskesi(w=400, h=200, yara_sol=180, yara_gen=40):
 
 
 def test_KRITIK_closure_metrikleri_KESIN_degerler():
-    """W=400: band=max(40,120)=120 → ROI [140,260). Yara 40 kolon tam yükseklik.
-    cell=80*200, total=120*200 → closure %66.67; gap kolonları 200px → mean
-    (40*200)/120=66.67px*1.6=106.7µm, max 320µm; bg=8000px*0.0016² = 0.0205mm²."""
+    """W=400: band=max(40,120)=120 → ROI kolonları [140,260). Yara 40 kolon, tam yükseklik.
+    cell=80*200, total=120*200 → closure %66.67; bg=8000px*0.0016² = 0.0205mm².
+
+    ⚠️ GOLDEN DÜZELTİLDİ (2026-09-09): eski değerler mean 106,7 / max 320 µm idi ve HATALI
+    davranışı sabitliyordu — gap KOLON başına DİKEY run olarak ölçülüyordu, yani dikey yarada
+    yaranın GENİŞLİĞİ değil UZUNLUĞU (tam yükseklik 200 px = 320 µm) ölçülüyordu. Doğrusu:
+    her SATIR için yatay run = 40 px → 40*0,0016*1000 = 64 µm (mean = max, yara dikdörtgen)."""
     m = _modul()
-    r = m.compute_closure_metrics(_dikey_yara_maskesi(), pixel_mm=0.0016)
-    assert r["roi_left"] == 140 and r["roi_right"] == 260
+    r = m.compute_closure_metrics(_dikey_yara_maskesi(), pixel_mm=0.0016, scratch_yonu="dikey")
+    assert r["roi_eksen"] == "x" and (r["roi_bas"], r["roi_son"]) == (140, 260)
+    assert r["roi_left"] == 140 and r["roi_right"] == 260  # geriye-uyum adları (dikey = x)
     assert r["closure_pct"] == 66.67
-    assert r["mean_gap_um"] == 106.7
-    assert r["max_gap_um"] == 320.0
+    assert r["mean_gap_um"] == 64.0, "dikey yarada gap GENİŞLİK olmalı (eski hata: uzunluk)"
+    assert r["max_gap_um"] == 64.0
     assert r["gap_area_mm2"] == 0.0205
-    assert r["max_gap_col"] == 180  # ilk yara kolonu (mutlak x)
-    assert r["mean_gap_col"] == 140  # 0-genişlikli ilk ROI kolonu ortalamaya en yakın
+    assert r["gap_hat_eksen"] == "y", "dikey yarada maks/ort. gap hattı bir SATIRDIR"
 
 
 def test_KARSIT_pixel_mm_metrikleri_olcekler():
-    """Objektif kalibrasyonu: 10× (0.00065) → µm değerleri 0.65/1.6 oranında."""
+    """Objektif kalibrasyonu: 10× (0.00065) → 40 px gap = 26,0 µm (4×'te 64,0)."""
     m = _modul()
     r = m.compute_closure_metrics(_dikey_yara_maskesi(), pixel_mm=0.00065)
-    assert r["mean_gap_um"] == round(66.6666 * 0.65, 1) == 43.3
-    assert r["max_gap_um"] == 130.0
+    assert r["mean_gap_um"] == 26.0 and r["max_gap_um"] == 26.0
     assert r["closure_pct"] == 66.67  # oran kalibrasyondan BAĞIMSIZ
 
 
@@ -75,12 +78,16 @@ def _kirmizi(satir_veya_sutun: np.ndarray) -> int:
 
 
 def test_KRITIK_analysis_ROI_yonu_yatay_ve_dikey():
-    """vertical_box=False → YATAY kırmızı kuşak çizgileri (satır top=50);
-    vertical_box=True → DİKEY çizgiler (kolon left=150). Ters mod o çizgiyi çizmez."""
+    """`dikey_kusak=True` → DİKEY kırmızı kuşak çizgileri (kolon left=150);
+    `False` → YATAY çizgiler (satır top=50). Ters mod o çizgiyi çizmez.
+
+    ⚠️ AD/ANLAM DÜZELTİLDİ (2026-09-09): parametre `vertical_box`tu ve çağrı yerinde
+    `vertical_box=(scratch_yonu == "yatay")` yazılıydı — kullanıcı "dikey" seçince YATAY kuşak
+    çiziliyordu (sahip bildirimi). Kuşağın işi yarayı İÇİNE almaktır."""
     m = _modul()
     maske = _dikey_yara_maskesi()  # H=200, W=400
-    yatay = m.draw_analysis(maske, vertical_box=False)
-    dikey = m.draw_analysis(maske, vertical_box=True)
+    yatay = m.draw_analysis(maske, dikey_kusak=False)
+    dikey = m.draw_analysis(maske, dikey_kusak=True)
     # yatay mod: cy=100, half_band_h=max(50,20)=50 → top=50 satırı kırmızı şerit
     assert _kirmizi(yatay[50, :, :]) > 300, "yatay modda üst ROI çizgisi yok"
     # dikey mod: cx=200, half_band_v=max(50,40)=50 → left=150 kolonu kırmızı
@@ -146,7 +153,10 @@ class _SahtePred:
         self.n_cells = n_cells
         self.w, self.h = w, h
 
-    def predict(self, image_path, *, compute_closure=True, pixel_mm=0.0016):
+    # ⚠️ `scratch_yonu` GERCEK predictor imzasiyla AYNI olmali: 2026-09-09'da yon
+    # `predict`e tasindi ve bu sahte imza guncellenmeyince TUM sozlesme testleri
+    # TypeError ile dustu (sahte-imza kaymasi).
+    def predict(self, image_path, *, compute_closure=True, pixel_mm=0.0016, scratch_yonu="dikey"):
         binary = np.full((self.h, self.w), 255, dtype=np.uint8)
         binary[:, self.w // 2 - 50 : self.w // 2 + 50] = 0
         r = {
@@ -166,7 +176,7 @@ class _SahtePred:
         if compute_closure:
             import ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca as m
 
-            cm = m.compute_closure_metrics(binary, pixel_mm=pixel_mm)
+            cm = m.compute_closure_metrics(binary, pixel_mm=pixel_mm, scratch_yonu=scratch_yonu)
             cm["pixel_mm"] = pixel_mm
             r["closure"] = cm
         return r
@@ -218,12 +228,32 @@ def test_KRITIK_scratch_analiz_coklu_gorsel_ve_KUCULTME(monkeypatch, girdi_png):
     assert toplam < 1_500_000, f"6-görselli yanıt çok büyük: {toplam} B"
 
 
-def test_KRITIK_yatay_yara_closure_uyarisi_DONER(monkeypatch, girdi_png):
+def test_KRITIK_yara_yonu_METRIKLERE_ve_CIZIME_gercekten_ulasir(monkeypatch, girdi_png):
+    """⚠️ ESKİ TEST YANLIŞ BİR ŞEYİ KİLİTLİYORDU: "yatay"da `closure_uyari` döndüğünü ölçüyordu.
+    O uyarı "metrikler dikey varsayımıyla hesaplanır, yatayda yaklaşıktır" diyordu; ölçüm TERSİNİ
+    gösterdi (gap yatay-yara konvansiyonuyla ölçülüyordu) → uyarı yanlış yöne bakıyordu ve
+    DİKEY (varsayılan) seçimde sayılar sessizce hatalıydı. Uyarı kaldırıldı; yerine ölçülen şey:
+    yön gerçekten metriklere ve çizime ULAŞIYOR mu.
+
+    MUTASYON: `predict`te `scratch_yonu=scratch_yonu` argümanını kaldırın ya da `draw_analysis`
+    çağrısını `dikey_kusak=(scratch_yonu == "yatay")`e çevirin → KIRMIZI."""
     m = _modul()
     monkeypatch.setitem(m._PREDICTOR_CACHE, "cpn", _SahtePred())
-    y = m.scratch_analiz(girdi_png, scratch_yonu="yatay")
-    assert "dikey yara varsayimiyla" in y["closure_uyari"]
-    assert y["scratch_yonu"] == "yatay"
+
+    dik = m.scratch_analiz(girdi_png, scratch_yonu="dikey")
+    yat = m.scratch_analiz(girdi_png, scratch_yonu="yatay")
+
+    assert dik["scratch_yonu"] == "dikey" and yat["scratch_yonu"] == "yatay"
+    # 1) METRİKLER: eksen alanları yönü izler (aynı görüntü, farklı eksen).
+    assert dik["closure"]["roi_eksen"] == "x" and dik["closure"]["gap_hat_eksen"] == "y"
+    assert yat["closure"]["roi_eksen"] == "y" and yat["closure"]["gap_hat_eksen"] == "x"
+    # 2) ÇİZİM: analiz görseli DEĞİŞMELİ (aynı kalıyorsa yön çizime ulaşmıyor).
+    assert dik["analysis_image_base64"] != yat["analysis_image_base64"], (
+        "yön analiz görselini değiştirmiyor — çağrı yerinde yön kaybolmuş"
+    )
+    assert dik["closure_image_base64"] != yat["closure_image_base64"], "yön kapanma görselini değiştirmiyor"
+    # 3) Yanlış yöne uyarı ARTIK YOK (iki yön de kendi ekseninde doğru hesaplanır).
+    assert "closure_uyari" not in dik and "closure_uyari" not in yat
 
 
 def test_KRITIK_hucre_yoksa_yapilandirilmis_uyari(monkeypatch, girdi_png):
@@ -314,3 +344,90 @@ def test_YAPISAL_xai_requires_grad_RESTORE_edilir():
     assert "_eski_bayraklar" in govde and "finally:" in govde
     assert "p.requires_grad_(eski)" in govde, "bayrak restorasyonu yok"
     assert "p.grad = None" in govde, "backward artığı .grad temizlenmiyor"
+
+
+# ── 6) YÖN GERÇEKTEN UYGULANIYOR MU (2026-09-09 arızası) ─────────────────────
+def _uzun_kirmizi_hatlar(rgb: np.ndarray, oran: float = 0.4) -> tuple[int, int]:
+    """(uzun kırmızı KOLON sayısı, uzun kırmızı SATIR sayısı).
+
+    "Uzun" = hattın en az `oran` kadarı saf kırmızı. ROI kuşak çizgileri hattın tamamını
+    kaplar; kırmızı METİN glifleri (putText TEXT_COLOR=kırmızı) kısa kalır → eşik ikisini ayırır.
+    """
+    h, w, _ = rgb.shape
+    # ⚠️ GEVŞEK kırmızı ölçütü ŞART: yanıt görselleri JPEG'e sıkıştırılıp ≤1280 px'e
+    # küçültülüyor. Katı ölçüt (R>200, G<80, B<80) ile ÖLÇÜLDÜ: tam yükseklik çizgi bile
+    # yalnız 5/426 piksel veriyor → kapı sahte-kırmızı yanardı. Kanal FARKI sıkıştırmaya
+    # dayanıklı: aynı çizgi 426/426 çıkıyor.
+    R = rgb[:, :, 0].astype(int)
+    kirmizi = (R - np.maximum(rgb[:, :, 1].astype(int), rgb[:, :, 2].astype(int))) > 50
+    kolon = int(np.sum(kirmizi.sum(axis=0) >= oran * h))
+    satir = int(np.sum(kirmizi.sum(axis=1) >= oran * w))
+    return kolon, satir
+
+
+def test_KRITIK_DIKEY_secimde_analiz_cizgileri_DIKEY_cizilir(monkeypatch, girdi_png):
+    """🔴 SAHA ARIZASI: "yara yönünü dikey seçmeme rağmen çizgiler yatay çekiliyor."
+
+    Kuşağın işi yarayı İÇİNE almaktır; dikey yara → DİKEY çizgiler. Eski çağrı
+    `vertical_box=(scratch_yonu == "yatay")` bunun TERSİNİ yapıyordu.
+
+    ⚠️ "İki yön farklı görsel üretiyor" demek YETMEZ (ölçüldü: eşlemeyi ters çeviren mutasyon
+    o testten GEÇTİ — görseller yine farklıydı, sadece yer değiştirmişti). Bu yüzden ÇİZGİ
+    YÖNÜ ölçülür.
+    MUTASYON: çağrıyı `dikey_kusak=(scratch_yonu == "yatay")`e çevirin → KIRMIZI."""
+    m = _modul()
+    monkeypatch.setitem(m._PREDICTOR_CACHE, "cpn", _SahtePred())
+
+    # ⚠️ KANAL SIRASI: `_b64_gorsel` cv2.imdecode ile BGR döner; `_uzun_kirmizi_hatlar` RGB
+    # bekler. Dönüştürmeden ölçmek KIRMIZIYI MAVİ sanıp maskeyi boşaltıyordu (ölçüldü: 0/0).
+    dik = cv2.cvtColor(
+        _b64_gorsel(m.scratch_analiz(girdi_png, scratch_yonu="dikey")["analysis_image_base64"]), cv2.COLOR_BGR2RGB
+    )
+    yat = cv2.cvtColor(
+        _b64_gorsel(m.scratch_analiz(girdi_png, scratch_yonu="yatay")["analysis_image_base64"]), cv2.COLOR_BGR2RGB
+    )
+
+    d_kolon, d_satir = _uzun_kirmizi_hatlar(dik)
+    y_kolon, y_satir = _uzun_kirmizi_hatlar(yat)
+
+    assert d_kolon >= 2 and d_satir == 0, (
+        f"DİKEY seçimde çizgiler dikey değil (uzun kolon={d_kolon}, uzun satır={d_satir})"
+    )
+    assert y_satir >= 2 and y_kolon == 0, (
+        f"YATAY seçimde çizgiler yatay değil (uzun kolon={y_kolon}, uzun satır={y_satir})"
+    )
+
+
+def test_KRITIK_yon_predict_ZINCIRINDE_tasiniyor():
+    """⚠️ SAHTE PREDICTOR KÖR NOKTASI: sözleşme testleri closure'ı TEST DUBLÖRÜ içinde
+    hesaplıyor, dolayısıyla GERÇEK `predict`ten yönü silen mutasyon o testlerden GEÇİYOR
+    (ölçüldü). Bu yüzden argüman geçişi AST ile pinlenir.
+
+    MUTASYON: `predict` içindeki `compute_closure_metrics(...)` çağrısından `scratch_yonu`yu
+    ya da `scratch_analiz` içindeki `pred.predict(...)` çağrısından `scratch_yonu`yu kaldırın
+    → KIRMIZI (kullanıcının yön seçimi sessizce ölü kalır)."""
+    agac = ast.parse(MODUL_YOLU.read_text(encoding="utf-8"))
+
+    def _cagri_bul(govde, ad: str) -> list[ast.Call]:
+        return [
+            d
+            for d in ast.walk(govde)
+            if isinstance(d, ast.Call) and (getattr(d.func, "id", None) == ad or getattr(d.func, "attr", None) == ad)
+        ]
+
+    fonksiyonlar = {}
+    for dugum in ast.walk(agac):
+        if isinstance(dugum, ast.FunctionDef):
+            fonksiyonlar.setdefault(dugum.name, dugum)
+
+    for fn_adi, cagri_adi in (("predict", "compute_closure_metrics"), ("scratch_analiz", "predict")):
+        fn = fonksiyonlar.get(fn_adi)
+        assert fn is not None, f"{fn_adi} bulunamadı"
+        # Yön fonksiyonun KENDİ imzasında olmalı (yoksa taşıyacak değeri yok).
+        imza = [a.arg for a in fn.args.args + fn.args.kwonlyargs]
+        assert "scratch_yonu" in imza, f"{fn_adi} imzasında scratch_yonu yok"
+        cagrilar = _cagri_bul(fn, cagri_adi)
+        assert cagrilar, f"{fn_adi} içinde {cagri_adi} çağrısı yok"
+        assert any(any(kw.arg == "scratch_yonu" for kw in c.keywords) for c in cagrilar), (
+            f"{fn_adi} -> {cagri_adi} çağrısı scratch_yonu TAŞIMIYOR (yön seçimi ölü kalır)"
+        )

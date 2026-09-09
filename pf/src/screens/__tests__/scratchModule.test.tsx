@@ -201,3 +201,56 @@ describe("Yara Kapanma (Scratch) modülü", () => {
     expect(u.getByText(/1053→428 µm/)).toBeTruthy();
   });
 });
+
+/**
+ * 5) GİRDİ ÖNİZLEMESİ (2026-09-09 sahip isteği: "girdi fotosu görünmüyor, sadece ismi yazıyor").
+ *
+ * ⚠️ TIF GERÇEĞİ KORUNUR: tarayıcı/RN Image TIFF render EDEMEZ (plan v2 §2/11 ölçümü) ve bu modül
+ * shrinkForUpload'ı BİLİNÇLİ atlar (küçültme µm/mm² ölçümünü bozar). Bu yüzden önizleme:
+ *   · png/jpg → yerel URI ile ANINDA,
+ *   · tif → analizden SONRA sunucunun ürettiği JPEG (`input_image_base64`) ile.
+ * Kapı ikisini de ölçer; ayrıca önizlemenin yüklenen veriye dokunmadığını (ham dosya gider)
+ * mevcut sözleşme testleri koruyor.
+ */
+describe("Yara Kapanma — girdi önizlemesi", () => {
+  it("KRITIK: png/jpg seçilince önizleme ANINDA görünür (yalnız dosya adı değil)", async () => {
+    mockDosyaAdi = "yara-0h.png";
+    const u = render(<Ekran />);
+    await moduluAcVeSec(u);
+
+    const on = await waitFor(() => u.getByLabelText(/Girdi görüntüsü önizlemesi: yara-0h\.png/));
+    expect(on.props.source?.uri).toBe("file:///yara-0h.png");
+    // TIF ipucu png'de GÖRÜNMEZ (yanlış yönlendirme olurdu).
+    expect(u.queryByText(/TIF önizlemesi tarayıcıda gösterilemez/)).toBeNull();
+  });
+
+  it("KRITIK: TIF'te önce ipucu, analizden SONRA sunucu JPEG'i önizleme olur", async () => {
+    mockDosyaAdi = "CONTROL-0H.tif";
+    const u = render(<Ekran />);
+    await moduluAcVeSec(u);
+
+    // Analiz ÖNCESİ: önizleme yok ama SEBEBİ ve ne zaman geleceği yazılı.
+    expect(u.queryByLabelText(/Girdi görüntüsü önizlemesi/)).toBeNull();
+    expect(u.getByText(/TIF önizlemesi tarayıcıda gösterilemez/)).toBeTruthy();
+
+    fetchYaniti({ ...TAM_YANIT, input_image_base64: "GIRDI64" });
+    await act(async () => { fireEvent.press(u.getByText("Analiz Et")); });
+
+    const on = await waitFor(() => u.getByLabelText(/Girdi görüntüsü önizlemesi: CONTROL-0H\.tif/));
+    expect(on.props.source?.uri).toBe("data:image/jpeg;base64,GIRDI64");
+    expect(u.queryByText(/TIF önizlemesi tarayıcıda gösterilemez/)).toBeNull();
+  });
+
+  it("KRITIK: ROI açıklaması 'yaraya dik' DEMEZ (çizim yarayı İÇİNE alır)", async () => {
+    const u = render(<Ekran />);
+    await moduluAcVeSec(u);
+    fetchYaniti(TAM_YANIT);
+    await act(async () => { fireEvent.press(u.getByText("Analiz Et")); });
+
+    await waitFor(() => u.getByText("%29.3"));
+    await act(async () => { fireEvent.press(u.getByText("Analiz")); });
+    // 🔴 Eski metin "yaraya dik ROI kuşağı" idi ve çizim de öyle yapılıyordu (arıza).
+    expect(u.queryByText(/yaraya dik/)).toBeNull();
+    expect(u.getByText(/yarayı içine alan ROI kuşağı/)).toBeTruthy();
+  });
+});

@@ -218,7 +218,8 @@ class CellSegmentationPredictor:
     def predict(self, image_path: str | os.PathLike,
                 *, return_contours: bool = False,
                 compute_closure: bool = True,
-                pixel_mm: float = PIXEL_TO_MM_DEFAULT) -> dict:
+                pixel_mm: float = PIXEL_TO_MM_DEFAULT,
+                scratch_yonu: str = "dikey") -> dict:
         """Tek goruntude hucre segmentasyonu + closure metrikleri (opsiyonel).
 
         Donen dict'te "_labels" (H,W int) ve "_binary" (0/255) INTERNAL numpy
@@ -267,7 +268,9 @@ class CellSegmentationPredictor:
             binary = (labels > 0).astype(np.uint8) * 255
 
         if compute_closure and binary is not None:
-            cm = compute_closure_metrics(binary, pixel_mm=pixel_mm)
+            # ⚠️ YON TASINIR: 2026-09-09'a kadar burada yon HIC gecilmiyordu -> kullanicinin
+            # "yatay" secimi metriklerde OLU kaliyordu (gap her zaman kolon-bazli olculuyordu).
+            cm = compute_closure_metrics(binary, pixel_mm=pixel_mm, scratch_yonu=scratch_yonu)
             cm["pixel_mm"] = pixel_mm
             out["closure"] = cm
 
@@ -329,21 +332,46 @@ def to_binary_mask(vis_labels: np.ndarray) -> np.ndarray:
     return binary
 
 
+def _en_uzun_run(hat: np.ndarray) -> int:
+    """Bir hat (satir ya da kolon) boyunca en uzun kesintisiz 1 dizisinin uzunlugu."""
+    if hat.sum() == 0:
+        return 0
+    padded = np.concatenate([[0], hat, [0]])
+    diff = np.diff(padded)
+    runs = np.where(diff == -1)[0] - np.where(diff == 1)[0]
+    return int(runs.max()) if runs.size else 0
+
+
 def compute_closure_metrics(binary: np.ndarray,
-                            pixel_mm: float = PIXEL_TO_MM_DEFAULT) -> dict:
+                            pixel_mm: float = PIXEL_TO_MM_DEFAULT,
+                            scratch_yonu: str = "dikey") -> dict:
     """Scratch-wound closure metrikleri (goruntu uretmez, hizli).
 
-    ⚠️ DIKEY scratch varsayar: ROI = goruntu ortasinda DIKEY bant (genisligin
-    %30'u), gap'ler KOLON bazinda olculur. Yatay scratch'te sonuclar yaklasik
-    olur — servis yuzu bu durumda closure_uyari alani doner.
+    YON SOZLESMESI (2026-09-09 duzeltmesi):
+      · "dikey" yara (yara YUKARI-ASAGI akar): ROI = ortada KOLON bandi (yarayi icine alir),
+        gap HER SATIR icin YATAY run olarak olculur. Hat ekseni = y (satir).
+      · "yatay" yara: ROI = ortada SATIR bandi, gap HER KOLON icin DIKEY run. Hat ekseni = x.
+
+    ⚠️ ESKI DAVRANIS HATALIYDI (olculdu): ROI dikey-yara icin dogru seciliyor ama gap KOLON
+    basina DIKEY run olarak olculuyordu -> dikey yarada yaranin GENISLIGI degil UZUNLUGU
+    olculuyordu. 40 px genisliginde sentetik dikey yara max_gap'i tam yukseklik (400 px)
+    veriyordu; dogrusu 40 px. Yatay yarada tesadufen dogru cikiyordu (yara tum kolonlari
+    kestigi icin). Bu yuzden "metrikler her zaman dikey varsayimiyla hesaplanir" notu ve
+    yatay icin verilen closure_uyari da yanlisti; ikisi de kaldirildi.
     """
     h, w = binary.shape
-    band = max(int(0.10 * w), int(SCRATCH_ROI_RATIO * w))
-    cx = w // 2
-    left = max(0, cx - band // 2)
-    right = min(w, cx + band // 2)
-    roi = binary[:, left:right]
-    roi_w = roi.shape[1]
+    dikey = str(scratch_yonu).strip().lower() != "yatay"
+
+    # ROI yarayi ICINE alir: bant, yaraya DIK eksende secilir.
+    if dikey:
+        eksen_uzunluk, roi_eksen, hat_eksen = w, "x", "y"
+    else:
+        eksen_uzunluk, roi_eksen, hat_eksen = h, "y", "x"
+    band = max(int(0.10 * eksen_uzunluk), int(SCRATCH_ROI_RATIO * eksen_uzunluk))
+    orta = eksen_uzunluk // 2
+    bas = max(0, orta - band // 2)
+    son = min(eksen_uzunluk, orta + band // 2)
+    roi = binary[:, bas:son] if dikey else binary[bas:son, :]
 
     # Smoothing (yalnizca gap-width hesabi icin)
     roi_smooth = cv2.dilate(roi, SMOOTH_KERNEL, iterations=SMOOTH_ITERS)
@@ -355,38 +383,45 @@ def compute_closure_metrics(binary: np.ndarray,
     closure_pct = 100.0 * cell_px / total_px if total_px > 0 else 0.0
     gap_area_mm2 = bg_px * (pixel_mm * pixel_mm)
 
-    # Kolon basi en uzun siyah run
+    # Gap YARAYA DIK olculur: dikey yarada satir basina yatay run, yatay yarada kolon basina
+    # dikey run. `inv.T` ile ikinci durum da satir-bazli tek dongude islenir.
     inv = (roi_smooth == 0).astype(np.uint8)
-    gap_widths_px = np.zeros(roi_w, dtype=np.int32)
-    for col_idx in range(roi_w):
-        col = inv[:, col_idx]
-        if col.sum() == 0:
-            gap_widths_px[col_idx] = 0
-            continue
-        padded = np.concatenate([[0], col, [0]])
-        diff = np.diff(padded)
-        starts = np.where(diff == 1)[0]
-        ends = np.where(diff == -1)[0]
-        runs = ends - starts
-        gap_widths_px[col_idx] = int(runs.max()) if runs.size else 0
+    hatlar = inv if dikey else inv.T
+    gap_widths_px = np.array([_en_uzun_run(hatlar[i]) for i in range(hatlar.shape[0])],
+                             dtype=np.int32)
 
     mean_gap_um = float(np.mean(gap_widths_px)) * pixel_mm * 1000.0
     max_gap_um = float(np.max(gap_widths_px)) * pixel_mm * 1000.0
 
-    max_col_idx = int(np.argmax(gap_widths_px))
+    max_hat = int(np.argmax(gap_widths_px))
     mean_val = float(np.mean(gap_widths_px))
-    mean_col_idx = int(np.argmin(np.abs(gap_widths_px.astype(np.float64) - mean_val)))
+    mean_hat = int(np.argmin(np.abs(gap_widths_px.astype(np.float64) - mean_val)))
 
-    return {
+    sonuc = {
         "closure_pct": round(closure_pct, 2),
         "mean_gap_um": round(mean_gap_um, 1),
         "max_gap_um": round(max_gap_um, 1),
         "gap_area_mm2": round(gap_area_mm2, 4),
-        "roi_left": int(left),
-        "roi_right": int(right),
-        "max_gap_col": int(left + max_col_idx),
-        "mean_gap_col": int(left + mean_col_idx),
+        "scratch_yonu": "dikey" if dikey else "yatay",
+        # ROI bandi: [roi_bas, roi_son) — roi_eksen uzerinde. Cizimler BU alanlardan cizer.
+        "roi_eksen": roi_eksen,
+        "roi_bas": int(bas),
+        "roi_son": int(son),
+        # Maks/ort. gap'in bulundugu HAT: hat_eksen uzerinde MUTLAK indeks (ROI bu ekseni kirpmaz).
+        "gap_hat_eksen": hat_eksen,
+        "max_gap_hat": max_hat,
+        "mean_gap_hat": mean_hat,
     }
+    # Geriye-uyum: dikey yara (varsayilan) icin eski anahtar adlari LITERAL DOGRU (x ekseni) —
+    # kayitli analizlerin ve arayuz dokumunun okunurlugu korunur. Yatay yarada bu adlar YALAN
+    # olacagi icin YAZILMAZ (yerine roi_ust/roi_alt).
+    if dikey:
+        sonuc["roi_left"] = int(bas)
+        sonuc["roi_right"] = int(son)
+    else:
+        sonuc["roi_ust"] = int(bas)
+        sonuc["roi_alt"] = int(son)
+    return sonuc
 
 
 def draw_closure(binary: np.ndarray,
@@ -396,19 +431,35 @@ def draw_closure(binary: np.ndarray,
     if metrics is None:
         metrics = compute_closure_metrics(binary, pixel_mm)
     h, w = binary.shape
-    left, right = metrics["roi_left"], metrics["roi_right"]
+    # ⚠️ EKSEN METRIKLERDEN: elle "kolon" varsaymak dikey/yatay yarada cizgileri 90 derece
+    # yanlis cizerdi (2026-09-09 arizasinin ikinci yarisi). Eski kayitlarda alan yoksa x.
+    roi_eksen = str(metrics.get("roi_eksen") or "x")
+    bas = int(metrics.get("roi_bas", metrics.get("roi_left", 0)))
+    son = int(metrics.get("roi_son", metrics.get("roi_right", w)))
 
     result = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
     overlay = result.copy()
-    cv2.rectangle(overlay, (left, 0), (right, h), (0, 255, 255), -1)
+    if roi_eksen == "x":
+        cv2.rectangle(overlay, (bas, 0), (son, h), (0, 255, 255), -1)
+    else:
+        cv2.rectangle(overlay, (0, bas), (w, son), (0, 255, 255), -1)
     result = cv2.addWeighted(overlay, 0.08, result, 0.92, 0)
-    cv2.line(result, (left, 0), (left, h - 1), (0, 255, 255), 2)
-    cv2.line(result, (right - 1, 0), (right - 1, h - 1), (0, 255, 255), 2)
+    if roi_eksen == "x":
+        cv2.line(result, (bas, 0), (bas, h - 1), (0, 255, 255), 2)
+        cv2.line(result, (son - 1, 0), (son - 1, h - 1), (0, 255, 255), 2)
+    else:
+        cv2.line(result, (0, bas), (w - 1, bas), (0, 255, 255), 2)
+        cv2.line(result, (0, son - 1), (w - 1, son - 1), (0, 255, 255), 2)
 
-    max_col_x = metrics["max_gap_col"]
-    mean_col_x = metrics["mean_gap_col"]
-    cv2.line(result, (max_col_x, 0), (max_col_x, h - 1), (0, 0, 255), 3)
-    cv2.line(result, (mean_col_x, 0), (mean_col_x, h - 1), (255, 0, 0), 3)
+    # Maks/ort. gap HATTI: hat ekseni ROI ekseninin DIKI. Dikey yarada hat bir SATIR (yatay cizgi).
+    hat_eksen = str(metrics.get("gap_hat_eksen") or ("y" if roi_eksen == "x" else "x"))
+    max_hat = int(metrics.get("max_gap_hat", metrics.get("max_gap_col", 0)))
+    mean_hat = int(metrics.get("mean_gap_hat", metrics.get("mean_gap_col", 0)))
+    for hat, renk in ((max_hat, (0, 0, 255)), (mean_hat, (255, 0, 0))):
+        if hat_eksen == "y":
+            cv2.line(result, (0, hat), (w - 1, hat), renk, 3)
+        else:
+            cv2.line(result, (hat, 0), (hat, h - 1), renk, 3)
 
     y = LINE_SPACE
     cv2.putText(result, f"ROI closure: {metrics['closure_pct']:.1f}%",
@@ -422,11 +473,17 @@ def draw_closure(binary: np.ndarray,
     return cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
 
 
-def draw_analysis(binary: np.ndarray, vertical_box: bool = False) -> np.ndarray:
+def draw_analysis(binary: np.ndarray, dikey_kusak: bool = True) -> np.ndarray:
     """v4.analysis() gorsellemesi — RGB uint8 doner.
 
-    vertical_box=False: YATAY ROI kusagi (scratch DIKEY ise; default)
-    vertical_box=True : DIKEY ROI kusagi (scratch YATAY ise)
+    KUSAK YARAYI ICINE ALIR (yaraya DIK DEGIL):
+      dikey_kusak=True  : DIKEY ROI kusagi — scratch DIKEY ise (varsayilan)
+      dikey_kusak=False : YATAY ROI kusagi — scratch YATAY ise
+
+    ⚠️ 2026-09-09'a kadar bu esleme TERSTI (`vertical_box=(scratch_yonu == "yatay")`): kullanici
+    "dikey" secmesine ragmen YATAY cizgiler ciziliyor, hem sahip bildirimi hem de Kapanma paneli
+    ile celisiyordu (o panel kolon bandi ciziyor). Kusagin isi yarayi ICINE almaktir; closure
+    metrikleri de ayni bandi kullanir.
     """
     vis_bgr = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
     height, width = binary.shape
@@ -440,7 +497,7 @@ def draw_analysis(binary: np.ndarray, vertical_box: bool = False) -> np.ndarray:
     black = int(binary.size - white)
     overall_ratio = (black // white) if white > 0 else "No cancer"
 
-    if not vertical_box:
+    if not dikey_kusak:
         cy = height // 2
         top, bot = max(0, cy - half_band_h), min(height, cy + half_band_h)
         roi = binary[top:bot, :]
@@ -682,10 +739,11 @@ def scratch_analiz(image_path: str,
     TEK-KAYNAK: router in-process + ai_service ayni fonksiyonu cagirir (kapi-paritesi).
 
     Args:
-        scratch_yonu: "dikey" (default) | "yatay" — yaranin YONU. Analiz ROI'si
-            yaraya DIK secilir (dikey yara -> yatay kusak). Closure metrikleri
-            HER ZAMAN dikey-yara varsayimiyla hesaplanir; "yatay"da closure_uyari
-            alani doner (metrikler yine verilir, yaklasik oldugu soylenir).
+        scratch_yonu: "dikey" (default) | "yatay" — yaranin YONU. ROI kusagi yarayi
+            ICINE alir (dikey yara -> DIKEY kusak) ve gap yaraya DIK olculur; closure
+            metrikleri de ayni ekseni kullanir. ⚠️ 2026-09-09'a kadar hem esleme TERSTI
+            hem de gap her zaman kolon-bazli (yatay-yara) olculuyordu -> dikey yarada
+            (VARSAYILAN) sayilar sessizce yanlisti.
         pixel_mm: objektif kalibrasyonu (4x 0.0016 | 10x 0.00065 | 20x 0.00033 | 40x 0.00016)
         explain: True ise CAM overlay + 3-panel (XAI hatasi analizi DUSURMEZ —
             cagiran zarif dusus uygular).
@@ -726,7 +784,8 @@ def scratch_analiz(image_path: str,
             pred = CellSegmentationPredictor()
             _PREDICTOR_CACHE["cpn"] = pred
 
-        res = pred.predict(image_path, compute_closure=True, pixel_mm=pixel_mm)
+        res = pred.predict(image_path, compute_closure=True, pixel_mm=pixel_mm,
+                           scratch_yonu=scratch_yonu)
 
         yanit = {
             "n_cells": res["n_cells"],
@@ -753,8 +812,8 @@ def scratch_analiz(image_path: str,
         seg_rgb, overlay_rgb = pred.seg_gorselleri(image_path, res)
         binary = res["_binary"]
 
-        # ROI yaraya DIK: dikey yara -> yatay kusak (vertical_box=False)
-        analysis_rgb = draw_analysis(binary, vertical_box=(scratch_yonu == "yatay"))
+        # ROI kusagi yarayi ICINE alir: dikey yara -> DIKEY kusak.
+        analysis_rgb = draw_analysis(binary, dikey_kusak=(scratch_yonu == "dikey"))
         closure_rgb = draw_closure(binary, metrics=res.get("closure"),
                                    pixel_mm=pixel_mm)
 
@@ -765,10 +824,10 @@ def scratch_analiz(image_path: str,
             "analysis_image_base64": _jpg64(analysis_rgb),
             "closure_image_base64": _jpg64(closure_rgb),
         })
-        if scratch_yonu == "yatay":
-            yanit["closure_uyari"] = (
-                "Closure metrikleri dikey yara varsayimiyla hesaplanir; "
-                "yatay yarada yaklasik degerlerdir.")
+        # ⚠️ ESKI `closure_uyari` KALDIRILDI (2026-09-09): "metrikler dikey varsayimiyla
+        # hesaplanir, yatayda yaklasiktir" diyordu; olcum TERSINI gosterdi (gap yatay-yara
+        # konvansiyonuyla olculuyordu) ve dikey yarada SESSIZCE yanlis sayi uretiliyordu.
+        # Artik iki yon de kendi ekseninde DOGRU hesaplanir -> uyaracak bir yaklasiklik yok.
 
         if explain:
             # XAI İKİNCİLDİR (kapi-paritesi: zarif düşüş TEK-KAYNAK burada —

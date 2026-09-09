@@ -6,6 +6,43 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.45 — 2026-09-09 (🩹 AI gecmisinde duzeltme kutusu, yara yonu ARTIK UYGULANIYOR, girdi onizlemesi)
+
+### AI Gecmisi
+
+- **"Duzelt" kutusuna yazilamiyordu.** Kayit karti acilip "Duzelt"e basilinca "Dogru teshis /
+  duzeltme" kutusu cikiyor; kutuya YAZMAK ICIN dokununca kart KAPANIYOR ve yazilan metin
+  kayboluyordu — yani hekim bir AI sonucunu duzeltemiyordu. Sebep: genisletme dokunusu kartin
+  TAMAMINI sariyordu ve metin kutusuna dokunmak web'de tiklama olarak yukari siziyordu. Dokunus
+  artik YALNIZ baslik bolgesinde; govdedeki hicbir etkilesim karti kapatmiyor. Baslik ayrica
+  ekran okuyucuya acik/kapali durumunu bildiriyor.
+
+### Yara Kapanma (Scratch) — arastirma modulu
+
+- **Yara yonu secimi metriklere HIC ulasmiyordu.** "Dikey" (varsayilan) secilse bile gap her
+  zaman kolon-bazli olculuyordu: dikey yarada yaranin GENISLIGI degil uzunlugu olculuyordu.
+  Sentetik dogrulama: 40 px genisliginde dikey yara icin eski kod 400 px, dogrusu 40 px.
+  Artik yon hem ROI secimine hem gap eksenine uygulaniyor; iki yon de kendi ekseninde dogru.
+- **Analiz gorselindeki kirmizi cizgiler ters yondeydi:** "dikey" secilince YATAY kusak
+  ciziliyordu (Kapanma paneliyle de celisiyordu). Kusagin isi yarayi ICINE almaktir; dikey
+  yara -> dikey cizgiler. Panel aciklamasi da duzeltildi ("yaraya dik" -> "yarayi icine alan").
+- **Yanlis yone verilen uyari kaldirildi:** "metrikler dikey varsayimiyla hesaplanir, yatayda
+  yaklasiktir" notu gercegin TERSINI soyluyordu (hesap yatay konvansiyonundaydi).
+- ⚠️ **SAYI ETKISI:** µm cinsinden gap degerleri DEGISTI cunku artik gercekten GENISLIK
+  olculuyor. 4× objektifle referans goruntulerde: 0H 1053 -> **539,6 µm**, 24H 428 -> **240,8 µm**.
+  **Kapanma yuzdesi ve hucre sayisi DEGISMEDI** (0H %4,29 · 24H %29,36; sahibin referansiyla
+  hala uyusuyor) -> boru hattinin gerisi etkilenmedi. **Bu surumden ONCE kaydedilmis analizlerin
+  µm gap degerleri yenileriyle KIYASLANAMAZ; kapanma yuzdeleri kiyaslanabilir.**
+- **Girdi fotografi onizlemesi eklendi.** png/jpg seciminde onizleme ANINDA gorunur; TIF'i
+  tarayici gosteremedigi icin sebebi yazilir ve analizden sonra sunucunun urettigi goruntu
+  onizleme olur. ⚠️ Olcum dogrulugunu bozan kucultme yoluna DOKUNULMADI — ham dosya yine
+  oldugu gibi gonderilir (µm/mm² kalibrasyonu korunur).
+
+### Not
+
+Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
+Paket kimligi ve sha degerleri yapi alindiktan sonra bu bolume yazilir (manifestten).
+
 ## app 1.9.44 — 2026-09-09 (🔬 Arastirma modunda AI Pro: Fantom + Petri · 🚑 sunucu-kamerali AI Pro seansi duzeltildi)
 
 ### Hasta guvenligi (once bunlar)
