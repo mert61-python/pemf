@@ -201,7 +201,11 @@ def test_KRITIK_mobile_kaybolacaksa_manifest_YAZILMAZ(tmp_path):
     """Kapının kendisi: bir bölüm kaybolacaksa çıkış kodu 0 dönmemeli — yayın akışı (publish.ps1
     / CI) sıfırı 'başarılı' sayar ve bozuk manifest yayınlanır."""
     onceki = json.loads(json.dumps(ONCEKI))
-    onceki.pop("layers")
+    # ⚠️ 2026-09-09: burada `onceki.pop("layers")` vardı. Tek-parça base.zip pipeline'dayken
+    # `runtimes` ÖNCEKİNDEN taşınıyor ve "kurulabilir kanal" kapısını o besliyordu. Monolith
+    # kaldırılınca taşınacak `runtimes` kalmadı → layers de atılınca manifest HİÇBİR kanal
+    # sunmuyor ve kapı (haklı olarak) yayını durduruyordu. Bu testin ölçtüğü şey `mobile`ın
+    # taşınması; `layers` prev'te BIRAKILIR, kanal dolu kalır, ölçülen davranış değişmez.
     (tmp_path / "manifest.json").write_text(json.dumps(onceki), encoding="utf-8")
     # `mobile` taşınabilir olsun diye betiği CARRY yolundan geçir ama bloğu sil:
     onceki2 = json.loads(json.dumps(onceki))
@@ -225,9 +229,12 @@ def test_KRITIK_layers_kaybolursa_HATA_verir(dizin, monkeypatch):
 
 
 def test_drop_missing_ile_bilerek_silinebilir(dizin):
-    # `--drop-missing` hiçbir şey taşımaz → base de yerelde OLMALI (yoksa "hiçbir base paketi
-    # bulunamadı" ile zaten durur; o kontrol bu düzeltmeden ÖNCE de vardı).
-    (dizin / "base.zip").write_bytes(b"BASE" * 50)
+    # `--drop-missing` hiçbir şey taşımaz → yerelde EN AZ BİR kurulum kanalı olmalı (yoksa
+    # "hiçbir kurulum kanalı yok" ile zaten durur; o kontrol bu düzeltmeden ÖNCE de vardı).
+    # ⚠️ 2026-09-09: eskiden bunu `base.zip` sağlıyordu; win-x64 monolith'i kaldırıldı
+    # (ASSETS'ten çıktı) → artık dosya yazılsa bile manifeste GİRMEZ. Kanalı `base-linux.zip`
+    # ile besliyoruz: testin ölçtüğü şey (layers TAŞINMAZ) aynen korunur.
+    (dizin / "base-linux.zip").write_bytes(b"BASE" * 50)
     r = _calistir(dizin, "--drop-missing")
     assert r.returncode == 0, r.stderr[-800:]
     assert not _oku(dizin)["layers"], "acik --drop-missing'e ragmen layers tasindi"
@@ -289,14 +296,29 @@ def test_KARSIT_KANIT_allow_missing_mobile_kapiyi_ACAR(tmp_path):
 # ── mevcut davranış korunuyor mu (regresyon) ─────────────────────────────────
 
 
-def test_runtimes_ve_v1_alanlari_KORUNUR(dizin):
-    """⚠️ `runtimes`/`base` ESKİ client'lar (<=1.9.12) için DURMALI — katmanlar onların yerine
-    geçmez."""
+def test_KRITIK_win_monolith_ARTIK_YAZILMAZ(dizin):
+    """⚠️ SAHİP KARARI 2026-09-09 — TERS ÇEVRİLDİ.
+
+    Bu test eskiden `test_runtimes_ve_v1_alanlari_KORUNUR` adıyla tam TERSİNİ şart koşuyordu:
+    "`runtimes`/`base` ESKİ client'lar (<=1.9.12) için DURMALI". Sahip "daha dağıtıma
+    başlamadık, 1.9.12 kimsede yok" dedi → tek-parça base.zip pipeline'dan çıkarıldı
+    (`scripts/make_manifest.py` ASSETS). Kazanç: yayın başına 1,46 GiB yükleme.
+
+    Değişmez artık şu: ÖNCEKİ manifest'te ikisi de DOLU olsa bile üretilen manifeste
+    GEÇMEZLER. Taşıma kodu bir gün geri gelirse bu kapı kırmızı yanar.
+    """
+    assert ONCEKI["runtimes"].get("win-x64") and ONCEKI.get("base"), (
+        "fixture bozuk: bu testin anlamli olmasi icin ONCEKI'de ikisi de DOLU olmali"
+    )
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     m = _oku(dizin)
-    assert m["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"]
-    assert m["base"] == ONCEKI["base"]
+    assert "win-x64" not in m["runtimes"], (
+        "tek-parca runtimes.win-x64 geri geldi — her yayinda 1,46 GiB bosuna yuklenir"
+    )
+    assert "base" not in m, "v1 'base' anahtari geri geldi (ayni monolith'e isaret eder)"
+    # Kurulum kanalı KAYBOLMADI — layers taşınmaya devam ediyor.
+    assert m["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"]
 
 
 def test_launchersiz_manifest_HATA(tmp_path):
@@ -312,24 +334,48 @@ def test_launchersiz_manifest_HATA(tmp_path):
 # numarası altında iki farklı yazılım. Tıbbi cihazda bir arızanın hangi kodda olduğu bilinemez.
 
 
-def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(dizin):
-    (dizin / "base-app.zip").write_bytes(b"YENI-APP")
-    (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
-    # base.zip yerelde YOK → önceki manifest'ten taşınacaktı (bayat).
-    r = _calistir(dizin)
+# ⚠️ 2026-09-09: bu iki test win-x64 üzerinden koşuyordu. Monolith o platformdan kaldırılınca
+# kapı win-x64'te BOŞ çalışır hâle geldi (eşleşecek `runtimes` girdisi yok) — testleri orada
+# bırakmak, hiçbir şey ölçmeyen iki yeşil test demekti. Kapı SİLİNMEDİ: `base-linux.zip` /
+# `base-mac.zip` hâlâ ASSETS'te ve tek-parça o platformlarda geri devreye alınabilir. Bu yüzden
+# testler linux'a TAŞINDI — ölçtükleri değişmez (taze katman + bayat monolith YAYINLANMAZ) aynen
+# korunuyor ve kapı gerçekten ateşleniyor.
+
+
+def test_KRITIK_taze_katman_bayat_base_ile_YAYINLANMAZ(tmp_path):
+    d = _mac_linuxlu(tmp_path)
+    (d / "base-linux-app.zip").write_bytes(b"YENI-APP")
+    (d / "base-linux-deps.zip").write_bytes(b"YENI-DEPS")
+    # base-linux.zip yerelde YOK → önceki manifest'ten taşınacaktı (bayat).
+    r = _calistir(d)
     assert r.returncode == 1, "taze katman + bayat base yayinlandi (iki farkli yazilim)"
     assert "İKİ FARKLI" in r.stderr or "IKI FARKLI" in r.stderr
 
 
-def test_taze_katman_TAZE_base_ile_yayinlanir(dizin):
+def test_taze_katman_TAZE_base_ile_yayinlanir(tmp_path):
+    d = _mac_linuxlu(tmp_path)
+    (d / "base-linux-app.zip").write_bytes(b"YENI-APP")
+    (d / "base-linux-deps.zip").write_bytes(b"YENI-DEPS")
+    (d / "base-linux.zip").write_bytes(b"YENI-APPYENI-DEPS")
+    r = _calistir(d)
+    assert r.returncode == 0, r.stderr[-800:]
+    m = _oku(d)
+    assert m["runtimes"]["linux-x64"]["url"].endswith("client-app-v1.9.0/base-linux.zip")
+    assert m["layers"]["linux-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-linux-app.zip")
+
+
+def test_KRITIK_win_monolith_YOKLUGU_kapiyi_ATESLEMEZ(dizin):
+    """Kapının win-x64'te BOŞ çalıştığı BİLEREK böyle — kaza değil.
+
+    Katmanlar her yayında tazelenir ve win-x64'ün monolith'i artık hiç üretilmez; kapı bunu
+    "bayat base" sanıp yayını durdursaydı hiçbir sürüm çıkamazdı. Bu test o davranışı pinler:
+    taze win katmanları + monolith YOK → çıkış 0.
+    """
     (dizin / "base-app.zip").write_bytes(b"YENI-APP")
     (dizin / "base-deps.zip").write_bytes(b"YENI-DEPS")
-    (dizin / "base.zip").write_bytes(b"YENI-APPYENI-DEPS")
     r = _calistir(dizin)
-    assert r.returncode == 0, r.stderr[-800:]
-    m = _oku(dizin)
-    assert m["runtimes"]["win-x64"]["url"].endswith("client-app-v1.9.0/base.zip")
-    assert m["layers"]["win-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-app.zip")
+    assert r.returncode == 0, f"win-x64 monolith'siz yayin ENGELLENDI: {r.stderr[-800:]}"
+    assert "win-x64" not in _oku(dizin)["runtimes"]
 
 
 def test_ikisi_de_bayatsa_yayinlanir(dizin):
@@ -342,11 +388,11 @@ def test_baska_platformun_bayat_basei_ENGEL_DEGIL(dizin):
     """win-x64 tazelenirken mac/linux'un taşınması normaldir (ayrı runner'larda üretilirler)."""
     (dizin / "base-app.zip").write_bytes(b"A")
     (dizin / "base-deps.zip").write_bytes(b"B")
-    (dizin / "base.zip").write_bytes(b"AB")
     r = _calistir(dizin)
     assert r.returncode == 0, r.stderr[-800:]
     # win-x64 tazelendi, mac/linux hiç dokunulmadı → kapı yalnız TAZELENEN platformu denetler.
-    assert _oku(dizin)["runtimes"]["win-x64"]["url"].endswith("client-app-v1.9.0/base.zip")
+    # ⚠️ 2026-09-09: tazelenme artık KATMANDAN ölçülür; win-x64'ün tek-parçası kaldırıldı.
+    assert _oku(dizin)["layers"]["win-x64"]["app"]["url"].endswith("client-app-v1.9.0/base-app.zip")
 
 
 # ── LAUNCHER SELF-UPDATE GERİ ÇEKME (2026-08-09 denetimi, Tier 1) ────────────
@@ -424,8 +470,8 @@ def test_cikarma_DIGER_platformu_bozmaz(tmp_path):
     d = _mac_linuxlu(tmp_path)
     assert _calistir(d, "--drop-platform", "mac-arm64").returncode == 0
     m = _oku(d)
-    assert m["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"], "windows paketi bozuldu"
-    assert m["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"]
+    # ⚠️ 2026-09-09: "windows bozulmadı" ölçüsü artık KATMAN — win-x64 tek-parçası kaldırıldı.
+    assert m["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"], "windows paketi bozuldu"
     assert "linux-x64" in m["runtimes"], "istenmeyen platform da silindi"
 
 
@@ -445,7 +491,8 @@ def test_KRITIK_sessiz_kayip_kapisi_ACIK_cikarmayi_ENGELLEMEZ(tmp_path):
 
 def test_olmayan_platformu_cikarmak_ZARARSIZ(dizin):
     assert _calistir(dizin, "--drop-platform", "solaris-sparc").returncode == 0
-    assert _oku(dizin)["runtimes"]["win-x64"] == ONCEKI["runtimes"]["win-x64"]
+    # ⚠️ 2026-09-09: "hiçbir şey bozulmadı" ölçüsü katmandan okunur (win-x64 monolith'i yok).
+    assert _oku(dizin)["layers"]["win-x64"]["app"] == ONCEKI["layers"]["win-x64"]["app"]
 
 
 def test_cikarma_launcher_ve_mobile_bloklarini_KORUR(tmp_path):

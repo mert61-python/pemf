@@ -79,11 +79,11 @@ def _sahte_dist(kok: Path, ic_sira, ic_tarih=(1980, 1, 1, 0, 0, 0)) -> Path:
     return d
 
 
-def _calistir(dist: Path, cikti: Path):
+def _calistir(dist: Path, cikti: Path, *ek: str):
     """⚠️ `PEMF_PKG_OUT` ile çıktı tmp'ye yönlendirilir — GERÇEK yayın ziplerine dokunulmaz."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PEMF_PKG_OUT": str(cikti)}
     r = subprocess.run(
-        [sys.executable, str(BETIK), str(dist)],
+        [sys.executable, str(BETIK), str(dist), *ek],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -118,7 +118,11 @@ def iki_kosu(tmp_path):
         kok = tmp_path / ad
         dist = _sahte_dist(kok, sira, tarih)
         cikti = tmp_path / f"out_{ad}"
-        stdout = _calistir(dist, cikti)
+        # ⚠️ 2026-09-09: `--monolith` eklendi. Monolith varsayılan olarak üretilmiyor; bayraksız
+        # koşuda `BASEZIP_SHA` hiç basılmaz ve `test_monolith_de_iki_kosuda_AYNI` ölçecek bir şey
+        # bulamaz. Bayrak app/deps çıktısını DEĞİŞTİRMEZ → diğer belirlenimcilik testleri aynen
+        # geçerli; monolith geri istendiğinde onun da belirlenimci olduğu kanıtlanmış olur.
+        stdout = _calistir(dist, cikti, "--monolith")
         sonuc.append((cikti, stdout))
     return sonuc
 
@@ -191,5 +195,9 @@ def test_cikti_dizini_yonlendirilebilir(tmp_path):
     dist = _sahte_dist(tmp_path / "x", ["abc.pyc", "functools.pyc", "os.pyc", "types.pyc"])
     cikti = tmp_path / "ozel_cikti"
     _calistir(dist, cikti)
-    for ad in ("base-app.zip", "base-deps.zip", "base.zip"):
+    for ad in ("base-app.zip", "base-deps.zip"):
         assert (cikti / ad).is_file(), f"{ad} yönlendirilen dizine yazılmadı"
+    # ⚠️ 2026-09-09: listede `base.zip` de vardı. Monolith varsayılan olarak üretilmiyor —
+    # yönlendirmenin doğru çalıştığını katmanlar zaten kanıtlıyor; monolith'in bayraksız
+    # ÜRETİLMEMESİ de ayrıca pinlenir (yoksa her yayına 1,46 GiB eklenirdi).
+    assert not (cikti / "base.zip").exists(), "monolith bayraksiz uretildi"

@@ -3143,10 +3143,20 @@ mod tests {
             assert!(l.app.url.ends_with("base-app.zip"), "app url yanlis: {}", l.app.url);
             assert!(l.deps.url.ends_with("base-deps.zip"), "deps url yanlis: {}", l.deps.url);
         }
-        // Eski client'lar icin tek parca girdi DURMALI — silinirse <=1.9.12 kurulum yapamaz.
+        // ⚠️ SAHİP KARARI 2026-09-09 — TERS ÇEVRİLDİ. Burada "tek parça girdi DURMALI, silinirse
+        // <=1.9.12 kurulum yapamaz" yazıyordu. Sahip: "daha dağıtıma başlamadık, 1.9.12 kimsede
+        // yok" → monolith pipeline'dan çıkarıldı (yayın başına 1,46 GiB boşuna yükleme).
+        // İddia silinmedi, tersine çevrildi: paket geri sızarsa burası kırmızı yanar.
         assert!(
-            m.runtime_for_current_platform().is_ok(),
-            "tek parca 'runtimes' girdisi KAYBOLMUS — eski client'lar kurulum yapamaz"
+            m.runtime_for_current_platform().is_err(),
+            "tek parca 'runtimes' girdisi GERI GELMIS — monolith 2026-09-09'da kaldirildi \
+             (her yayinda 1,46 GiB bosuna yuklenir)"
+        );
+        // Monolith gidince kurulumun TEK kanalı katmanlar — bu platformda tanımlı olmalılar,
+        // yoksa manifest hiçbir şey kuramaz (yukarıdaki `if let` sessizce atlardı).
+        assert!(
+            m.layers_for_current_platform().is_some(),
+            "bu platform icin 'layers' YOK — monolith kaldirildi, kurulacak paket kalmadi"
         );
         // Self-update imzasi: installer_url varsa sha256 ZORUNLU (parse zaten dogrular, burada
         // manifest'in gercekten o alani tasidigini kilitliyoruz).

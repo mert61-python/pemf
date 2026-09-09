@@ -39,9 +39,25 @@ for _akis in (sys.stdout, sys.stderr):
     except Exception:  # noqa: BLE001 — eski/yonlendirilmis akisda reconfigure yoksa sessizce gec
         pass
 
+# ── TEK-PARÇA base.zip KALDIRILDI (2026-09-09, sahip kararı) ─────────────────────────────
+# Sahip: "daha dağıtıma başlamadık, 1.9.12 kimsede yok". Tek-parça `base.zip` YALNIZCA
+# client <=1.9.12 için vardı; >=1.9.13 her yolda (kurulum, güncelleme, önbellek temizliği)
+# önce `layers`e bakar ve `runtimes` sadece layers YOKSA devreye giren yedektir — ölçüldü:
+# flow.rs `cihazin_guncel_paket_adlari` / `plan_paketleri`, ikisi de `layers_for_current_platform()`
+# dalını önceliyor. `layers.win-x64` dolu olduğu için bu satırın kaldırılması sahada hiçbir
+# istemciyi etkilemez; `RawV2.runtimes` zaten `#[serde(default)]` (manifest.rs) → alanın hiç
+# olmaması ayrıştırmayı da kırmaz.
+#
+# NEDEN SATIRI SİLMEK GEREKTİ (dosyayı üretmemek YETMEZ): base.zip klasörde yoksa aşağıdaki
+# "eksikleri önceki manifestten taşı" adımı (bkz. `carried`) BAYAT URL'yi geri koyuyor, sonra
+# tek-sürüm-tek-yazılım kapısı onu yakalayıp manifesti hiç yazmıyordu. Girdi tablodan çıkınca
+# base.zip ne taşınır ne de v1 `base` anahtarına aynalanır.
+#
+# KAZANÇ: yayın başına 1.569.045.329 bayt (1,46 GiB) yükleme. ⚠️ GERİ EKLEME — geri gelirse
+# `real_artifacts.rs::uretim_manifesti_ayristirilabilir` kırmızı yanar (kapı oraya pinlendi).
+#
 # dosya adı -> (v2 bölümü, v2 anahtarı, v1 anahtarı)
 ASSETS = {
-    "base.zip": ("runtimes", "win-x64", "base"),
     "base-linux.zip": ("runtimes", "linux-x64", "base_linux"),
     "base-mac.zip": ("runtimes", "mac-arm64", "base_mac"),
     "home.zip": ("models", "home", None),
@@ -449,8 +465,21 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if not manifest["runtimes"]:
-        print("[HATA] hiçbir base paketi bulunamadı — manifest yazılmadı.", file=sys.stderr)
+    # ── KURULABİLİR KANAL KAPISI ────────────────────────────────────────────────────────────
+    # ⚠️ 2026-09-09: burada yalnız `runtimes` kontrol ediliyordu. Doğru soru "tek-parça var mı"
+    # değil, "client BU manifestle kurulum yapabilir mi". Monolith kaldırılınca (sahip kararı)
+    # `runtimes` kalıcı olarak boş kaldı ve bu kapı HER koşuda yanlış yere ateşleyip manifesti
+    # yazdırmaz oldu. Kanal artık İKİ TANE ve en az biri dolu olmalı:
+    #   layers   → client >=1.9.13 (bugün tek kanal)
+    #   runtimes → tek-parça (yalnız linux/mac geri devreye alınırsa)
+    # İkisi de boşsa manifest gerçekten kurulum yapamaz — o zaman DUR.
+    if not manifest["runtimes"] and not manifest["layers"]:
+        print(
+            "[HATA] hiçbir kurulum kanalı yok (ne 'layers' ne 'runtimes') — manifest yazılmadı.\n"
+            "  Client bu manifestle hiçbir şey kuramazdı. Paket klasöründe base-app.zip ve "
+            "base-deps.zip var mı?",
+            file=sys.stderr,
+        )
         return 1
 
     # ⚠️ DENETİM 2026-08-04 (P3): `launcher` bloğu düşerse yalnızca stderr'e UYARI basılıp ÇIKIŞ
@@ -539,7 +568,11 @@ def main() -> int:
     # ikisi FARKLI build'lerdendir. Sahada ölçüldü: 53 dosya farklı, `PEMF_Backend.exe` dahil →
     # client <=1.9.12 base.zip'ten ESKİ backend'i, >=1.9.13 layers'tan YENİ backend'i kuruyordu.
     # Aynı sürüm numarası altında iki farklı yazılım: bir arızanın hangi kodda olduğu bilinemez.
-    # Çözüm build tarafında (make_base_zip artık base.zip'i DAİMA üretir); burası yayın kapısıdır.
+    #
+    # ⚠️ 2026-09-09: win-x64 için bu kapı artık BOŞ çalışır — `base.zip` ASSETS'ten çıkarıldığı
+    # için o platformda eşleşecek bir `runtimes` girdisi kalmadı (bkz. dosya başındaki not).
+    # Kapı KALDIRILMADI: `base-linux.zip` / `base-mac.zip` hâlâ tabloda ve o platformlar için
+    # tek-parça yeniden devreye alınırsa aynı bayat-eşleşme tuzağı geri gelir.
     taze_katman = {p for p, _ in ((plat, k) for name, (plat, k) in LAYER_ASSETS.items() if (args.dir / name).exists())}
     bayat_ciftler = []
     for plat in taze_katman:
@@ -561,41 +594,26 @@ def main() -> int:
         )
         return 1
 
-    # ── TEK SÜRÜM, TEK YAZILIM — İÇERİK SAĞLAMASI (2026-08-09, Tier 1 eki) ──────────────────
-    # Yukarıdaki kapı "katmanlar taze ama base bayat" durumunu yakalar. ÜÇÜ DE yerelde varken
-    # yine de İÇERİK olarak ayrışmış olabilirler — gerçek durum tam olarak buydu: yayındaki
-    # base.zip ile base-app+base-deps 53 dosyada farklıydı, `PEMF_Backend.exe` dahil.
+    # ── base.zip GERİ SIZDI MI? (2026-09-09, monolith kaldırıldıktan sonra) ────────────────
+    # Burada eskiden base.zip ile base-app+base-deps'in CRC'lerini karşılaştıran bir sağlama
+    # vardı. Monolith pipeline'dan çıkınca o kontrol HİÇBİR ZAMAN çalışamaz hâle geldi
+    # (`base.zip` artık üretilmiyor → `_b.exists()` daima False): sessizce hiçbir şey yapmayan
+    # bir kapı, olmayan kapıdan daha kötüdür — yayıncı korunduğunu sanır.
     #
-    # ⚠️ BİLEREK UYARI, HATA DEĞİL. Asıl kapı build tarafındadır (`make_base_zip.py` uyuşmazsa
-    # DURUR). Bu betik ise ACİL DURUM aracıdır: bozuk bir yayını `--launcher-rollout 0` ile geri
-    # çekmek, paketlerin yeniden üretilmesini BEKLEYEMEZ. Emniyet kontrolünü acil çıkışın önüne
-    # koymak, korumaya çalıştığı şeyden daha büyük zarar verirdi.
-    try:
-        import zipfile
-
-        _b, _a, _d = (args.dir / "base.zip", args.dir / "base-app.zip", args.dir / "base-deps.zip")
-        if _b.exists() and _a.exists() and _d.exists():
-
-            def _crc(z):
-                with zipfile.ZipFile(z) as f:
-                    return {i.filename: i.CRC for i in f.infolist() if not i.is_dir()}
-
-            _mono, _kat = _crc(_b), _crc(_a)
-            _kat.update(_crc(_d))
-            if _mono != _kat:
-                _fark = len([n for n in set(_mono) & set(_kat) if _mono[n] != _kat[n]])
-                print(
-                    f"\n[UYARI] base.zip ile base-app+base-deps AYNI DEGIL: {_fark} dosyanin "
-                    f"icerigi farkli, {len(set(_kat) - set(_mono))} dosya yalniz katmanlarda, "
-                    f"{len(set(_mono) - set(_kat))} dosya yalniz base.zip'te.\n"
-                    "  Eski client'lar (<=1.9.12) base.zip'i, yeniler layers'i kurar → AYNI surum "
-                    "numarasi altinda FARKLI yazilim dagitilir.\n"
-                    "  Duzeltme: `python build_tools/make_base_zip.py` (ucunu birden yeniden "
-                    "uretir) ve UCUNU DE yayina yukleyin.",
-                    file=sys.stderr,
-                )
-    except Exception as e:
-        print(f"[UYARI] paket icerik saglamasi yapilamadi: {e}", file=sys.stderr)
+    # Yerine GERÇEKTEN ateşleyebilen kontrol kondu: base.zip paket klasörüne yeniden düşerse
+    # (eski bir build ağacı, elle kopyalama, `--monolith` ile koşulmuş make_base_zip) artık
+    # manifeste GİRMEZ ama yayın adımının glob'una takılıp 1,46 GiB'ı boşuna yükleyebilir ya da
+    # yayında manifestin işaret etmediği kafa karıştırıcı bir asset bırakır.
+    _mono = args.dir / "base.zip"
+    if _mono.exists():
+        print(
+            f"\n[UYARI] {_mono.name} paket klasorunde DURUYOR ama pipeline'dan kaldirildi "
+            "(2026-09-09) — manifeste girmeyecek.\n"
+            "  Yayina yuklenirse 1,46 GiB bosuna gider ve manifestin isaret etmedigi bir asset "
+            "olarak kalir.\n"
+            "  Duzeltme: dosyayi silin (`make_base_zip.py` varsayilan olarak artik uretmez).",
+            file=sys.stderr,
+        )
 
     out_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 

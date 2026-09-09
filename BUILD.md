@@ -24,7 +24,7 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 | # | Hedef | Komut (guii kökünden) | Çıktı |
 |---|-------|------------------------|-------|
 | 1 | **Backend** (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe` |
-| 2 | **base.zip** (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` (+ sha/size) |
+| 2 | **Katmanlar** (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base-app.zip` + `base-deps.zip` (+ sha/size) |
 | 3 | **Installer** (launcher/Tauri) | `cd launcher\app; npx @tauri-apps/cli build` | `launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.9_x64-setup.exe` |
 | 3b | **Installer** (Inno offline) | `.\build_tools\build_installer.ps1 [-Mode device\|server]` | Inno Setup .exe (her şeyi bundle) |
 | 4 | **Web frontend** | `cd pf; npm run export:web` + mirror | `pf\dist` → `frontend\dist` + runtime |
@@ -144,8 +144,9 @@ $env:PYTHONPATH=""; $env:PYTHONHOME=""; $env:PYTHONNOUSERSITE="1"
 ```powershell
 python .\build_tools\make_base_zip.py
 # override:      python .\build_tools\make_base_zip.py <DIST_YOLU>   (veya PEMF_DIST env)
-# katman-only:   python .\build_tools\make_base_zip.py --no-monolith
-#                (base.zip URETILMEZ; diskteki bayat base.zip SILINIR ki yanlislikla yayinlanmasin)
+# VARSAYILAN = katman-only: base.zip URETILMEZ, diskteki bayat base.zip SILINIR (2026-09-09).
+# tek-parca gerekiyorsa (ornegin linux/mac):
+#                python .\build_tools\make_base_zip.py --monolith
 ```
 
 **KATMANLI PAKET (2026-08-08).** Eskiden tek `base.zip` (~1,32 GB) vardı ve tek satırlık bir yazı
@@ -157,15 +158,25 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 |---|---|---|
 | `base-app.zip` | ~71 MB | **her sürümde** — exe + `ai_hub` .pyd + web arayüzü + scriptler |
 | `base-deps.zip` | ~1,19 GB | yalnız `requirements` değişince |
-| `base.zip` | ~1,32 GB | **her sürümde** — yukarıdaki ikisinin BİRLEŞİMİ, ≤1.9.12 eski client'lar için |
+| ~~`base.zip`~~ | ~~~1,46 GiB~~ | **KALDIRILDI (2026-09-09)** — aşağıya bakın |
 
-> ⚠️ **TEK SÜRÜM, TEK YAZILIM (2026-08-09 denetimi).** `base.zip` eskiden yalnız `--monolith`
-> ile üretiliyordu ve "normalde GEREKMEZ" deniyordu. Sonuç ölçüldü: yayındaki `base.zip` ile
-> `base-app`+`base-deps` **53 dosyada farklıydı — `PEMF_Backend.exe` dahil**. Yani eski client'lar
-> (`runtimes`/`base` okur) ile yeni client'lar (`layers` okur) aynı sürüm numarası altında
-> **farklı yazılım** alıyordu. Tıbbi cihazda bir arızanın hangi kodda olduğu bilinemez hale gelir.
-> Artık `base.zip` **varsayılan olarak** her koşuda aynı dosya kümesinden üretilir ve script
-> `base.zip == app+deps` eşitliğini (isim kümesi + CRC) **doğrulayıp uyuşmazsa DURUR**.
+> ⚠️ **MONOLITH KALDIRILDI (2026-09-09, sahip kararı).** Sahip: *"daha dağıtıma başlamadık,
+> 1.9.12 kimsede yok"*. Tek-parça `base.zip` YALNIZCA client ≤1.9.12 içindi; ≥1.9.13 her yolda
+> (kurulum, güncelleme, önbellek temizliği) önce `layers`e bakar ve `runtimes` sadece layers
+> YOKSA devreye giren yedektir. Sahada öyle bir kurulum hiç olmadığı için paket her yayında
+> **1,46 GiB'ı boşuna yüklüyordu**. Artık:
+> - `make_base_zip.py` **varsayılan olarak üretmez** (`--monolith` ile bilerek istenir; diskte
+>   kalan bayat `base.zip` bayraksız koşuda SİLİNİR).
+> - `make_manifest.py` ASSETS tablosundan çıkarıldı → manifeste ne `runtimes.win-x64` ne v1
+>   `base` yazılır. Dosyayı klasöre koysanız bile manifeste GİRMEZ (betik uyarı basar).
+> - Kapılar silinmedi, **ters çevrildi**: `flow.rs::uretim_manifesti_ayristirilabilir`,
+>   `manifest.rs::depodaki_gercek_manifest_ayristirilir` ve `real_artifacts.rs` artık paketin
+>   GERİ SIZMASINI kırmızı sayar.
+>
+> *(Tarihsel: 2026-08-09 denetiminde `base.zip` ile `base-app`+`base-deps` 53 dosyada farklı
+> ölçülmüştü — `PEMF_Backend.exe` dahil — ve aynı sürüm numarası altında iki farklı yazılım
+> dağıtılıyordu. Monolith gidince bu tuzak win-x64'te yapısal olarak imkânsız: tek kanal
+> `layers`. `--monolith` ile üretilirse eşitlik kapısı yine koşar.)*
 
 - **Çıktı:** `guii\pemf-app-packages\base-app.zip` + `base-deps.zip` + `base.zip` + ekranda
   `APPZIP_SHA/SIZE`, `DEPSZIP_SHA/SIZE` ve `BASEZIP_SHA/SIZE`.
@@ -179,10 +190,10 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 
 **manifest.json güncelle:**
 - `layers.<platform>.deps` ve `layers.<platform>.app` → yeni `sha256` + `size`.
-- ⚠️ **`runtimes` ve `base` girdileri KALMALI.** Onlar **≤1.9.12 eski client'lar** içindir.
-  Silinirse eski client'lar kurulum yapamaz. Eski client açılışta zaten kendini günceller, sonra
-  katmanlı yola geçer. **AMA BAYAT BIRAKILAMAZ:** katmanlar yenilendiğinde `base.zip` de
-  yenilenmeli ve yüklenmelidir (yukarıdaki "tek sürüm, tek yazılım" notu).
+- ⚠️ **`runtimes` ve v1 `base` ARTIK YAZILMAZ** (2026-09-09). Eskiden "≤1.9.12 eski client'lar
+  için KALMALI" deniyordu; sahada öyle bir kurulum hiç olmadığı (dağıtım başlamadı) için
+  monolith kaldırıldı. Manifestte `runtimes` **boş bir harita** olarak kalır — alan opsiyonel
+  (`RawV2.runtimes` `#[serde(default)]`), ayrıştırma kırılmaz. Kurulumun tek kanalı `layers`.
 - ⚠️ Manifest'i **elle düzenlemeyin** — `python scripts/make_manifest.py` üretir. Betik artık
   `layers` + `mobile` bloklarını da taşır/üretir, `rollout` geri-çekmesini korur ve şu iki
   durumda **manifest yazmadan HATA verir**: (a) önceki manifest'te olan bir bölüm kaybolacaksa,
@@ -362,7 +373,10 @@ python scripts\make_manifest.py --dir pemf-app-packages --tag client-app-v<sür�
 gh release create client-app-v<sürüm> -R mert61-python/pemf-update --title "PEMF app <sürüm>" --notes "..."
 gh release upload client-app-v<sürüm> -R mert61-python/pemf-update pemf-app-packages\base-app.zip
 #    (bagimliliklar degistiyse ayrica:)  ... pemf-app-packages\base-deps.zip
-#    (eski ≤1.9.12 istemciler icin:)     ... pemf-app-packages\base.zip
+#    ⚠️ base.zip ARTIK YUKLENMEZ (2026-09-09, sahip karari: "daha dagitima baslamadik, 1.9.12
+#    kimsede yok"). Tek-parca monolith pipeline'dan cikarildi -> manifeste ne runtimes.win-x64
+#    ne v1 `base` yazilir; yuklenirse 1,46 GiB bosuna gider ve manifestin isaret etmedigi bir
+#    asset olarak kalir. make_base_zip.py da varsayilan olarak uretmez.
 #    make_manifest ciktisiyla KARSILASTIR: hangi paketin URL'si hangi etiketi gosteriyorsa dosya
 #    ORADA olmali; "URL KORUNDU" denenler zaten eski etiketinde duruyor, dokunma.
 #    dogrulama: gh release view client-app-v<sürüm> -R mert61-python/pemf-update --json assets

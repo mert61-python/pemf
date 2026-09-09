@@ -74,20 +74,32 @@ def test_profil_paketleri_v1_ve_v2de_ayni(manifest):
 def test_her_paketin_digesti_ve_boyutu_makul(manifest):
     """Elle düzenlemede en sık kırılan iki alan: 64 haneli hex sha256 + pozitif boyut."""
     sayac = 0
+    # ⚠️ 2026-09-09: liste ("runtimes", "models")'ti. Tek-parça monolith kaldırılınca `runtimes`
+    # kalıcı olarak boşaldı ve kapı SAHAYA GİDEN paketlerin çoğunu (app/deps katmanları) hiç
+    # denetlemez oldu — sayaç 4'ün altına düştüğü için de yanlış yerden kırmızı verdi. Katmanlar
+    # artık TEK kurulum kanalı olduğuna göre asıl denetlenmesi gereken onlar.
+    girdiler = []
     for section in ("runtimes", "models"):
         for key, entry in (manifest.get(section) or {}).items():
-            sayac += 1
-            sha = entry.get("sha256", "")
-            assert isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
-                f"{section}.{key}: gecersiz sha256 {sha!r}"
-            )
-            assert isinstance(entry.get("size"), int) and entry["size"] > 0, (
-                f"{section}.{key}: gecersiz size {entry.get('size')!r}"
-            )
-            assert str(entry.get("url", "")).startswith("https://"), (
-                f"{section}.{key}: url HTTPS degil: {entry.get('url')!r}"
-            )
-    assert sayac >= 4, f"beklenenden az paket ({sayac}) — manifest bozulmus olabilir"
+            girdiler.append((f"{section}.{key}", entry))
+    for plat, katmanlar in (manifest.get("layers") or {}).items():
+        for ad, entry in katmanlar.items():
+            if isinstance(entry, dict) and "sha256" in entry:  # `rollout` gibi skaler alanları atla
+                girdiler.append((f"layers.{plat}.{ad}", entry))
+    for yol, entry in girdiler:
+        sayac += 1
+        sha = entry.get("sha256", "")
+        assert isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
+            f"{yol}: gecersiz sha256 {sha!r}"
+        )
+        assert isinstance(entry.get("size"), int) and entry["size"] > 0, f"{yol}: gecersiz size {entry.get('size')!r}"
+        assert str(entry.get("url", "")).startswith("https://"), f"{yol}: url HTTPS degil: {entry.get('url')!r}"
+    # 3 profil + 2 katman (app/deps) = 5 alt sınır. Katmanlardan biri düşerse burada yakalanır.
+    assert sayac >= 5, f"beklenenden az paket ({sayac}) — manifest bozulmus olabilir"
+    for zorunlu in ("layers.win-x64.app", "layers.win-x64.deps"):
+        assert any(y == zorunlu for y, _ in girdiler), (
+            f"{zorunlu} manifestte YOK — monolith kaldirildi, katmanlar tek kurulum kanali"
+        )
 
 
 def test_launcher_blogu_da_dogrulanir(manifest):

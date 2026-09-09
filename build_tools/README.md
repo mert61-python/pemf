@@ -5,7 +5,7 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `make_base_zip.py` | Frozen backend'i (`../PEMF_BUILD/dist/PEMF_Backend`) → **`../pemf-app-packages/base.zip`** paketler (ZIP_STORED, `_internal/ai_models` HARİÇ, setup/hotspot/teardown scriptleri eklenir), doğrular, `BASEZIP_SHA`/`BASEZIP_SIZE` basar |
+| `make_base_zip.py` | Frozen backend'i (`../PEMF_BUILD/dist/PEMF_Backend`) → **`../pemf-app-packages/base-app.zip` + `base-deps.zip`** katmanlarına paketler (ZIP_STORED, `_internal/ai_models` HARİÇ, setup/hotspot/teardown scriptleri eklenir), doğrular, `APPZIP_SHA/SIZE` + `DEPSZIP_SHA/SIZE` basar. ⚠️ Tek-parça `base.zip` **2026-09-09'da kaldırıldı** (yalnız client ≤1.9.12 içindi, yayın başına 1,46 GiB boşuna yükleme); `--monolith` ile bilerek istenebilir, bayraksız koşuda diskteki bayat kopya SİLİNİR |
 | `build_apk.ps1` | Android release APK — `pf\`'i kısa yola (`C:\pb`, MAX_PATH kaçışı) aynala → `gradle assembleRelease` → **`../release_assets/PEMF_Vet_Mobil.apk`** |
 | `build_installer.ps1` | **Inno offline installer** (PyInstaller onedir + Inno Setup); `-Mode device\|server`; sürümü `../VERSION`/`../versions.json`'dan senkronlar |
 | `sync_versions.ps1` | **`../versions.json` (tek-kaynak)** değerlerini hedef dosyalara (`pf\app.json` vb.) yazar; `build_apk.ps1`/`build_installer.ps1` otomatik çağırır; PS 5.1 için ASCII-only |

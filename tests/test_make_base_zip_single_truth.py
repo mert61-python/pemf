@@ -94,28 +94,58 @@ def _crc(z: Path):
         return {i.filename: i.CRC for i in f.infolist() if not i.is_dir()}
 
 
-# ── monolith artık VARSAYILAN ────────────────────────────────────────────────
+def _paket_icerigi(cikti: Path):
+    """Sahaya GİDEN paketin tam içeriği = base-app + base-deps.
+
+    ⚠️ 2026-09-09: aşağıdaki kapsam kapıları (ai_models hariç mi, çekirdek model içeride mi)
+    eskiden tek-parça `base.zip`i okuyordu. Monolith varsayılan olarak üretilmiyor ve manifeste
+    hiç girmiyor → onu okumak, SAHAYA GİTMEYEN bir dosyayı denetlemek olurdu. Kurulumun tek
+    kanalı katmanlar olduğu için kapsam artık onların BİRLEŞİMİ üzerinden ölçülür.
+    """
+    hepsi = _crc(cikti / "base-app.zip")
+    hepsi.update(_crc(cikti / "base-deps.zip"))
+    return hepsi
 
 
-def test_KRITIK_base_zip_bayrak_OLMADAN_uretilir(ortam):
-    """Eskiden `--monolith` gerekiyordu; unutulunca yayındaki base.zip bayat kalıyordu."""
+# ── monolith artık VARSAYILAN DEĞİL (2026-09-09, sahip kararı) ───────────────
+# Sahip: "daha dağıtıma başlamadık, 1.9.12 kimsede yok". Tek-parça base.zip YALNIZ o istemciler
+# içindi ve yayın başına 1,46 GiB'ı boşuna yüklüyordu → varsayılan KAPALI, `--monolith` ile
+# bilerek istenir. Aşağıdaki kapılar SİLİNMEDİ: monolith geri istendiğinde (ör. linux/mac)
+# katmanlarla birebir aynı olma şartı aynen geçerli, o yüzden hepsi `--monolith` ile ölçülüyor.
+
+
+def test_KRITIK_base_zip_bayraksiz_URETILMEZ(ortam):
+    """⚠️ TERS ÇEVRİLDİ (2026-09-09). Eski adı `..._bayrak_OLMADAN_uretilir`di ve tam tersini
+    şart koşuyordu. Bayraksız koşuda monolith üretilirse her yayına 1,46 GiB eklenir."""
     dist, cikti = ortam
     r = _calistir(dist, cikti=cikti)
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-800:]
-    assert (cikti / "base.zip").exists(), "base.zip bayraksiz uretilmedi — bayat kalirdi"
+    assert not (cikti / "base.zip").exists(), "base.zip bayraksiz URETILDI — yayin basina 1,46 GiB bosuna gider"
+    # Katmanlar (tek kurulum kanalı) yine üretilmiş olmalı.
+    assert (cikti / "base-app.zip").exists() and (cikti / "base-deps.zip").exists()
+
+
+def test_monolith_bayragi_ISTENIRSE_uretir(ortam):
+    """Kaçış yolu duruyor: linux/mac için tek-parça geri istenirse `--monolith` üretmeli."""
+    dist, cikti = ortam
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
+    assert (cikti / "base.zip").exists(), "--monolith verildi ama base.zip uretilmedi"
 
 
 def test_KRITIK_base_zip_katmanlarla_BIREBIR_ayni(ortam):
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     katman = _crc(cikti / "base-app.zip")
     katman.update(_crc(cikti / "base-deps.zip"))
     assert _crc(cikti / "base.zip") == katman, "base.zip katmanlardan FARKLI icerik tasiyor"
 
 
 def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
+    # ⚠️ 2026-09-09: `--monolith` OLMADAN bu iddia BOŞA geçerdi — monolith üretilmeyince
+    # `_monolith_esit()` "karşılaştıracak şey yok" deyip True döner ve satır yine [OK] basılır.
+    # Kapının gerçekten ölçtüğünü görmek için monolith'i bilerek ürettiriyoruz.
     dist, cikti = ortam
-    r = _calistir(dist, cikti=cikti)
+    r = _calistir(dist, "--monolith", cikti=cikti)
     assert "[OK] base.zip == app+deps" in r.stdout, r.stdout[-1500:]
 
 
@@ -125,7 +155,8 @@ def test_tek_surum_kapisi_dogrulamada_raporlanir(ortam):
 def test_KRITIK_BAYAT_base_zip_dogrulamayi_DUSURUR(ortam):
     """Asıl senaryonun modeli: base.zip eski bir build'den kalmış (exe farklı)."""
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    # ⚠️ 2026-09-09: monolith varsayılan değil → kapıyı ölçebilmek için bilerek ürettir.
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
 
     # base.zip'i "eski build" hâline getir: exe'nin içeriğini değiştir.
     bayat = cikti / "base.zip"
@@ -155,14 +186,19 @@ def test_KRITIK_BAYAT_base_zip_dogrulamayi_DUSURUR(ortam):
         sys.path.remove(str(GUII / "build_tools"))
 
 
-def test_no_monolith_BAYAT_dosyayi_SILER(ortam):
-    """`--no-monolith` seçilirse diskte bayat base.zip KALMAMALI — yayın adımında yanlışlıkla
-    yüklenirse eski client'lara bayat backend giderdi."""
+def test_monolith_KAPALIYKEN_BAYAT_dosya_SILINIR(ortam):
+    """Diskte bayat base.zip KALMAMALI — yayın adımında yanlışlıkla yüklenirse hem 1,46 GiB
+    boşa gider hem de manifestin işaret etmediği bir asset olarak kalır.
+
+    ⚠️ 2026-09-09: eski adı `test_no_monolith_BAYAT_dosyayi_SILER`di ve silmeyi `--no-monolith`
+    bayrağı tetikliyordu. Artık monolith VARSAYILAN OLARAK kapalı → bayraksız koşu da silmeli.
+    Asıl değişmez ("bayat monolith diskte kalmaz") aynen korunuyor, tetikleyen yol değişti.
+    """
     dist, cikti = ortam
-    assert _calistir(dist, cikti=cikti).returncode == 0
+    assert _calistir(dist, "--monolith", cikti=cikti).returncode == 0
     assert (cikti / "base.zip").exists()
 
-    r = _calistir(dist, "--no-monolith", cikti=cikti)
+    r = _calistir(dist, cikti=cikti)  # bayraksız = monolith kapalı
     assert r.returncode == 0, r.stdout[-1500:]
     assert not (cikti / "base.zip").exists(), "bayat base.zip diskte birakildi"
 
@@ -176,7 +212,7 @@ def test_ai_models_HARIC_kalir(ortam):
     ayrıca `test_DIGER_ai_models_HALA_HARIC` ile kilitli."""
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_paket_icerigi(cikti))
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models pakete girdi: {sizan[:5]}"
 
@@ -319,7 +355,7 @@ def test_belirlenimci_zip_ayni_sha(ortam):
 def test_KRITIK_cekirdek_model_cat_organ_PAKETTE(ortam):
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_paket_icerigi(cikti))
     assert any("inference_cat_organ" in n for n in hepsi), (
         "cekirdek ortak model pakete GIRMEDI — vet-only kurulumda AI Pro organ lokalizasyonu "
         "sessizce calismaz ve profil bagimliligini kaldirmak ANLAMSIZ olur"
@@ -343,7 +379,7 @@ def test_DIGER_ai_models_HALA_HARIC(ortam):
     """İstisna YALNIZ ortak modeldir. Genişlerse 2,1 GB'lık model ağacı çekirdeğe sızar."""
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0
-    hepsi = set(_crc(cikti / "base.zip"))
+    hepsi = set(_paket_icerigi(cikti))
     sizan = [n for n in hepsi if "/_internal/ai_models/" in n and "inference_cat_organ" not in n]
     assert not sizan, f"ai_models istisnasi GENISLEMIS: {sizan[:5]}"
 
@@ -364,7 +400,9 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
     """
     dist, cikti = ortam
     assert _calistir(dist, cikti=cikti).returncode == 0, "on-kosul: ilk kosu basarili olmali"
-    saglam = {ad: (cikti / ad).read_bytes() for ad in ("base-app.zip", "base-deps.zip", "base.zip")}
+    # ⚠️ 2026-09-09: liste `base.zip`i de içeriyordu; monolith varsayılan olarak üretilmediği
+    # için artık yok. Korunan değişmez aynı: yarım kalan bir yazım ÖNCEKİ geçerli paketleri EZMEZ.
+    saglam = {ad: (cikti / ad).read_bytes() for ad in ("base-app.zip", "base-deps.zip")}
 
     # PyInstaller iç-zip'i taklidi ama BOZUK → `_ic_zip_belirlenimci` `BadZipFile` atar.
     # ⚠️ ÖLÇÜLDÜ: bu dosya `_internal/` kökünde olduğu için **APP** katmanına düşüyor, yani kaza
@@ -395,7 +433,6 @@ def test_KRITIK_yarim_kalan_yazim_ONCEKI_zipi_BOZMAZ(ortam):
     assert sorted(x.name for x in cikti.iterdir()) == [
         "base-app.zip",
         "base-deps.zip",
-        "base.zip",
     ], f"cikti dizininde artik dosya kaldi: {sorted(x.name for x in cikti.iterdir())}"
 
 

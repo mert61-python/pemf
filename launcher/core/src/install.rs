@@ -114,6 +114,25 @@ pub const ENV_ENABLE_TUNNEL: &str = "PEMF_ENABLE_TUNNEL";
 /// tespit etmez; bu bulgu tam o kör noktada yaşadı).
 pub const ENV_STM_PORT: &str = "PEMF_STM_PORT";
 
+/// ARAŞTIRMA AI PRO SÜRÜŞ BAYRAĞI (2026-09-09) — bu sınıfın ALTINCI örneği olmasın.
+///
+/// `deploy/device.env` bu anahtarı 2026-09-09'da (`71c0676`, "FAZ 1e") tanımladı ama launcher
+/// backend'e GEÇİRMİYORDU. Sonucu sessiz ve yanıltıcıydı: tezgâh doğrulaması bitince operatör
+/// `PEMF_ARASTIRMA_AIPRO=1` yazıp servisi yeniden başlatır, launcher'ın başlattığı backend'de
+/// HİÇBİR ŞEY değişmez ve "açtım" sanır. (Yön fail-safe — sürüş kapalı kalır — ama operatörün
+/// gördüğü durum ile gerçek durum ayrışır.)
+///
+/// Backend semantiği (`servers/ai_router.py::_arastirma_aipro_acik`): yok/boş = KAPALI; yalnız
+/// `1|true|yes|on` açar. Bu yüzden varsayılanımız `"0"` — davranışı DEĞİŞTİRMEZ, sadece
+/// operatörün değerinin backend'e ULAŞMASINI sağlar.
+///
+/// ⚠️ Kapalıyken kedi DIŞI modellerle (fantom/petri) öneri+seans 409 döner: bobinler tezgâhta
+/// doğrulanmamış koordinatla SÜRÜLMEZ. Varsayılanı `"1"` yapmayın.
+///
+/// ÇIKIŞ KAPISI: ortamda tanımlıysa DOKUNULMAZ (`PEMF_ARASTIRMA_AIPRO=1` ile açılır).
+/// Kilit: `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
+pub const ENV_ARASTIRMA_AIPRO: &str = "PEMF_ARASTIRMA_AIPRO";
+
 /// DNS-REBINDING KORUMASI (eksik-taramasi P2, 2026-08-22) — bu sinifin BESINCI ornegi olmasin:
 /// `PEMF_ALLOWED_HOSTS` altyapisi backend'de 2026-08-04'ten beri vardi ama launcher gecirmedigi
 /// icin siteden kurulan HICBIR klinikte aktif degildi (ENABLE_TUNNEL/STM_PORT/DATA_DIR ile
@@ -559,6 +578,15 @@ where
         getenv(ENV_STM_PORT)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "auto".to_string()),
+    );
+    // ARAŞTIRMA AI PRO SÜRÜŞÜ (bkz. ENV_ARASTIRMA_AIPRO): bu satır olmadan operatörün açtığı
+    // bayrak launcher yolundaki backend'e HİÇ ulaşmıyordu. Varsayılan "0" = backend'in zaten
+    // uyguladığı fail-safe (kedi dışı modellerle sürüş KAPALI). Ortamda tanımlıysa DOKUNMA.
+    env.insert(
+        ENV_ARASTIRMA_AIPRO.to_string(),
+        getenv(ENV_ARASTIRMA_AIPRO)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "0".to_string()),
     );
     // DNS-REBINDING KORUMASI (bkz. ENV_ALLOWED_HOSTS): bu satir olmadan launcher ile kuran
     // hicbir klinikte Host korumasi calismiyordu. Ortamda tanimliysa DOKUNMA.
@@ -1623,6 +1651,10 @@ mod tests {
             // DNS-REBINDING KORUMASI (2026-08-22): bu satır olmadan Host koruması launcher
             // kurulumlarında ÖLÜydü. KOŞULSUZ eklenir; ortamdaki değer korunur.
             ENV_ALLOWED_HOSTS,
+            // ARAŞTIRMA AI PRO SÜRÜŞÜ (2026-09-09): device.env bayrağı tanımlıyordu ama launcher
+            // geçirmiyordu → operatör tezgâh sonrası "açtım" sanıp açamıyordu. KOŞULSUZ eklenir;
+            // varsayılan "0" backend'in fail-safe'iyle AYNI, ortamdaki değer korunur.
+            ENV_ARASTIRMA_AIPRO,
         ];
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()
