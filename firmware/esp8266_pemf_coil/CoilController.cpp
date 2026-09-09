@@ -15,16 +15,46 @@
 #define DDS_PWM_DEFAULT_HZ    100U                           /**< Varsayılan PWM frekansı */
 #define DDS_TICKS_PER_PERIOD  (DDS_TIMER_FREQ_HZ / DDS_PWM_DEFAULT_HZ)  /**< 500 tick   */
 
-/* ---- ISR'dan erişilen DDS global durumu (IRAM'de tutulur) ---- */
-static volatile uint32_t IRAM_ATTR s_tick_counter    = 0;
-static volatile uint32_t IRAM_ATTR s_ticks_per_period = DDS_TICKS_PER_PERIOD;
-static volatile uint32_t IRAM_ATTR s_duty_ticks       = 0;
-static volatile bool     IRAM_ATTR s_dds_active       = false;
-static volatile uint8_t  IRAM_ATTR s_pin_a            = 0;  /**< IN_A (veya tek pin)  */
+/* ============================================================================
+ * ISR'dan erişilen DDS global durumu — DRAM'de tutulur (IRAM_ATTR YOK!)
+ * ============================================================================
+ * ⚠️ BU DEĞİŞKENLERE `IRAM_ATTR` KOYMAYIN. ÖLÇÜLDÜ (2026-09-09, tezgâh):
+ * eski kod altısına da `IRAM_ATTR` koyuyordu ve kart açılışta sürekli
+ * restart atıyordu:
+ *
+ *     Adım 1: Sensörler başlatıldı (Kalibrasyon Bekliyor)
+ *     Exception (3):
+ *     epc1=0x402010a0 ... excvaddr=0x40106d23      <- 0x4010xxxx = IRAM
+ *     ets Jan  8 2013,rst cause:2, boot mode:(3,6) <- yeniden boot, döngü
+ *
+ * SEBEP: `IRAM_ATTR` = `__attribute__((section(".iram.text")))`, yani
+ * KOD bölümü. ESP8266'da IRAM YALNIZ 32-BİT erişilebilir; oraya konmuş bir
+ * `uint8_t`/`bool`a bayt erişimi LoadStoreError = Exception (3) fırlatır.
+ * `s_pin_a` (uint8_t) `CoilController::begin()`te yazılıyor — çökme tam
+ * "Adım 1" satırından sonra, yani `coil->begin()` içinde oluyordu.
+ * `s_dds_active` (bool) ise 50 kHz ISR'ın İLK satırında okunuyor.
+ *
+ * NEDEN ATTRIBUTE'A HİÇ GEREK YOK: ESP8266'da ISR'dan erişim kısıtı yalnız
+ * KOD içindir (bu yüzden ISR'lar `ICACHE_RAM_ATTR`). Global/statik VERİ zaten
+ * DRAM'dedir (0x3FFExxxx) ve kesme içinden serbestçe okunur/yazılır.
+ * ESP32-S3 varyantı (firmware/esps3_pemf_coil/CoilController.cpp) bunu
+ * baştan doğru yapıyor — düz `static volatile`; 8266 tek istisnaydı.
+ *
+ * ⚠️ ARDUINO AYARIYLA ÖRTMEYİN: "Non-32-Bit Access: Byte/Word access to
+ * IRAM/PROGMEM" seçeneği çökmeyi susturur ama her bayt erişimini bir kesme
+ * işleyicisine sokar. `s_dds_active`/`s_pin_a` 50 kHz ISR'da okunduğu için
+ * saniyede ~150 bin ek kesme demektir; DDS zamanlaması bozulur. Doğru
+ * ayar "Use pgm_read macros for IRAM/PROGMEM"dir ve veri DRAM'de kalmalıdır.
+ * ============================================================================ */
+static volatile uint32_t s_tick_counter     = 0;
+static volatile uint32_t s_ticks_per_period = DDS_TICKS_PER_PERIOD;
+static volatile uint32_t s_duty_ticks       = 0;
+static volatile bool     s_dds_active       = false;
+static volatile uint8_t  s_pin_a            = 0;  /**< IN_A (veya tek pin)  */
 
 #ifdef ESP32
 /* ESP32-S3: Full-bridge — iki çıkış pini */
-static volatile uint8_t  IRAM_ATTR s_pin_b            = 0;  /**< IN_B (negatif yön)   */
+static volatile uint8_t  s_pin_b            = 0;  /**< IN_B (negatif yön)   */
 static hw_timer_t*                  s_dds_timer        = nullptr;
 static portMUX_TYPE                 s_timer_mux        = portMUX_INITIALIZER_UNLOCKED;
 #endif
