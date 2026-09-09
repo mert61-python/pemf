@@ -16,6 +16,8 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useOperator } from "@/context/OperatorContext";
+import { useAppNav } from "@/context/AppNavContext";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
@@ -296,8 +298,30 @@ export function AiProPanel({
    * Hazırlık o kapıyı GEVŞETMEZ; yalnız lokalizasyonun oluşmasını sağlar.
    */
   const [hazirlik, setHazirlik] = useState(false);
+  /** `/ai/pro/status` en az bir kez okundu mu — mount'taki "seans yok" varsayımını önler. */
+  const [durumOkundu, setDurumOkundu] = useState(false);
   const hazirlikRef = useRef(false);
   useEffect(() => { hazirlikRef.current = hazirlik; }, [hazirlik]);
+  /**
+   * AI HUB'DAN GELEN ÖN-SEÇİM: araştırmacı fantom/petri ANALİZİNDEN "Bu hedefe AI Pro seansı"
+   * ile geldiyse model kartı zaten seçili gelir. TEK KULLANIMLIK: uygulanınca temizlenir, yoksa
+   * kullanıcının sonraki kendi seçimini her dönüşte EZERDİ.
+   *
+   * ⚠️ Sağlayıcı YOKSA (jest testleri, tek başına render) context varsayılanı boş dizge döndürür
+   * → davranış değişmez.
+   */
+  const { aiProModeli: onSecim, setAiProModeli: onSecimTemizle } = useAppNav();
+  useEffect(() => {
+    if (!onSecim) return;
+    // ⚠️ DURUM OKUNANA KADAR BEKLE: `running` mount'ta false'tur; beklemeden uygulamak, SÜREN bir
+    // seansın üzerine gelindiğinde (sekme değişimi) kartı mühürlenen modelden BAŞKASINA çevirir —
+    // ekran yanlış modeli seçili gösterir ve hedef değişimi backend'de 422'ye çarpar (ölçüldü).
+    if (!durumOkundu) return;
+    if (running || hazirlik) return;   // seans/hazırlık sürerken hedef değiştirilmez
+    if ((secilebilirModeller as string[]).includes(onSecim)) setHedefModeli(onSecim as HedefModeli);
+    onSecimTemizle("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSecim, running, hazirlik, durumOkundu]);
   /** Hazırlık sırasında öneri BİR KEZ istenir (kareler periyodik geliyor). */
   const oneriIstendiRef = useRef(false);
   /** WEB hazırlık: ardışık kaç status-poll'da `localized` görüldü (tek şanslı kareyi elemek). */
@@ -395,6 +419,7 @@ export function AiProPanel({
           ? active
           : active && !!st.ownerClientId && st.ownerClientId === clientIdRef.current;
       setRunning(active);
+      setDurumOkundu(true);
       setLocalized(Boolean(st.localized));
       setWebGuvenDokumu(st.guvenDokumu ?? null); // sunum-katmanı XAI (web: status poll'dan)
       setWebCatDetected(Boolean(st.catDetected)); // B3: hazırlık metni için ikinci kaynak
@@ -449,10 +474,14 @@ export function AiProPanel({
     // (klinik izlenebilirlik). ControlScreen'deki `requirePatient` ile aynı yaklaşım: bloklamıyoruz,
     // ama BİLİNÇLİ karar hâline getiriyoruz ve hasta bilgisini backend'e taşıyoruz.
     if (!patientName?.trim()) {
+      // Terminoloji (karar #12): araştırmacının önünde bir HASTA değil bir ÖRNEK vardır. Kapının
+      // kendisi ve denetim izi AYNI; yalnız arayüz dili role uyar (sözlük: utils/profilSozlugu).
+      const S = profilSozlugu({ researcher: arastirmaKipi });
       const go = await platformConfirm(
-        "Hasta seçilmedi",
-        "Otonom seans hiçbir hastaya bağlanmadan kaydedilecek; seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
-        "Hastasız başlat"
+        `${S.tekilKisa} seçilmedi`,
+        `${arastirmaKipi ? "Deney" : "Otonom"} seansı hiçbir ${S.belirtme} bağlanmadan kaydedilecek; ` +
+          "seans geçmişinde sahipsiz görünür.\n\nYine de başlatmak istiyor musunuz?",
+        S.sizBaslat
       );
       if (!go) return;
     }

@@ -830,6 +830,35 @@ const TONE_COLOR: Record<InterpTone, string> = {
 };
 
 /**
+ * AI PRO KÖPRÜSÜ (Faz 3) — "bu hedefi analiz ettim, şimdi seans yapmak istiyorum".
+ *
+ * Araştırmacı fantom/petri ANALİZİNİ burada yapar; otonom seans YALNIZ Kontrol → AI Pro
+ * panelinde (propose → onay → start) başlar. Bu düğme o yolu KISALTIR: Kontrol'e geçer ve model
+ * kartını ön-seçer.
+ *
+ * ⚠️ HİÇBİR `/ai/pro/*` ÇAĞRISI YAPMAZ. Bu ekrandan otonom başlatma denemesi 2026-08-17
+ * denetiminde kaldırıldı (onay kapısı olmadan `/start` çağrılıyordu; eski bir backend'e karşı
+ * ONAYSIZ seans başlatabilirdi). Kapı: src/screens/__tests__/aiHubOtonomOnayKapisi.test.tsx
+ */
+function AiProKopruDugmesi({ model, hedefEtiketi }: { model: "fantom" | "petri"; hedefEtiketi: string }) {
+  const { navigateTo, setAiProModeli } = useAppNav();
+  return (
+    <TouchableOpacity
+      style={styles.aiProKopru}
+      onPress={() => {
+        setAiProModeli(model);   // Kontrol ekranındaki AI Pro paneli kartı seçili açar
+        navigateTo("control");
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Bu ${hedefEtiketi.toLocaleLowerCase("tr")} için AI Pro seansı: Kontrol ekranına git`}
+      accessibilityHint="Seans onaydan sonra başlar; bu düğme yalnız Kontrol ekranını açar"
+    >
+      <Text style={styles.aiProKopruMetin}>{`⚡ Bu hedefe AI Pro seansı → Kontrol`}</Text>
+    </TouchableOpacity>
+  );
+}
+
+/**
  * ResultInterpretation — her AI sonucunun EN ÜSTÜNE konan düz-dil yorum banner'ı.
  * Rakam/sınıf yerine "ne anlama geliyor + ne yapmalı" der; tona göre renklenir.
  * `points` (opsiyonel): kısa madde-işaretli açıklamalar (nasıl okunur / öneriler).
@@ -1135,8 +1164,12 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
     // dolayısıyla kapatma yalnız onPress'te yapılamaz. Tek ek render, yanlış "aktif" izleniminin
     // ekranda kalmasından yeğdir.
     setAutoAdjust(false);
+    // Terminoloji (karar #12): araştırmacı bir HEKİM değildir; "hekim onayı" metni araştırma
+    // modunda yanlış rol atfediyordu. Kapının kendisi AYNI (onaysız otonom seans yok).
     showToast(
-      "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
+      currentAiMode === "researcher"
+        ? "Otonom Biofeedback onay gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın."
+        : "Otonom Biofeedback hekim onayı gerektirir: Kontrol → AI Pro sekmesinden öneriyi alıp onaylayın.",
       "info",
     );
     // `showToast` deps'te GÜVENLE durabilir: ToastProvider onu `useCallback(..., [])` ile stabil
@@ -1962,6 +1995,9 @@ function PhantomModule({ patientName }: { patientName: string }) {
               })}
             </>
           )}
+          {/* Analizden seansa köprü (Faz 3): bu ekran otonom seans BAŞLATMAZ, yalnız
+              Kontrol → AI Pro'ya geçer ve model kartını ön-seçer. */}
+          {result.success ? <AiProKopruDugmesi model="fantom" hedefEtiketi="Tümör" /> : null}
           <MedicalDisclaimer />
         </View>
       )}
@@ -2195,6 +2231,9 @@ function PetriModule({ patientName }: { patientName: string }) {
               })}
             </>
           )}
+          {/* Analizden seansa köprü (Faz 3): bu ekran otonom seans BAŞLATMAZ, yalnız
+              Kontrol → AI Pro'ya geçer ve model kartını ön-seçer. */}
+          {result.success ? <AiProKopruDugmesi model="petri" hedefEtiketi="Kuyu" /> : null}
           <MedicalDisclaimer />
         </View>
       )}
@@ -3742,6 +3781,13 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: "row", gap: spacing.md },
   analyzeBtn: { marginTop: spacing.sm },
   resultBox: { marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.bgAlt, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.primarySoft },
+  // AI Pro köprüsü — dokunma tabanı ölçekle küçülmez (dokunma-hedefi kapısı: touch.min).
+  aiProKopru: {
+    minHeight: touch.min, justifyContent: "center", alignItems: "center", marginTop: spacing.sm,
+    borderRadius: radius.sm, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+  },
+  aiProKopruMetin: { color: colors.white, fontWeight: "800", fontSize: typography.small },
   interpBox: { padding: spacing.md, borderRadius: radius.md, borderWidth: 1, marginBottom: spacing.md },
   interpTitle: { fontSize: typography.body, fontWeight: "800", marginBottom: 4 },
   interpText: { color: colors.text, fontSize: typography.small, lineHeight: rf(19) },

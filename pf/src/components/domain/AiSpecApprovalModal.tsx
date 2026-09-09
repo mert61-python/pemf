@@ -21,6 +21,8 @@ import { IconButton } from "@/components/ui/IconButton";
 import { CheckCircle2, X, XCircle } from "lucide-react-native";
 
 import { colors, radius, rf, rs, spacing, touch } from "@/theme/tokens";
+import { modelProfili } from "@/components/domain/aiProProfilleri";
+import { KalibrasyonRozeti } from "@/components/domain/aipro/KalibrasyonRozeti";
 
 export interface AiProposalSpecs {
   organ_id: number;
@@ -31,6 +33,15 @@ export interface AiProposalSpecs {
   /** Bobin başına faz (derece) */
   P: number[];
   e_field: number;
+  // ── Araştırma hattı (Faz 2/3) MÜHÜRLÜ yalnız-ek alanları; kedi önerisinde yok/boş ──
+  /** MÜHÜRLENEN hedef modeli ("kedi" | "fantom" | "petri"). `/start` modeli BURADAN okur. */
+  model?: string;
+  /** Seçili hedefin adı ("Tümör 1", "Kuyu 3 · Kanserli"). */
+  target_label?: string;
+  /** Hedefin (kanserli sınıf) göreli alan öngörüsü — birimsiz. */
+  e_cancer?: number | null;
+  /** Çevrenin (sağlıklı sınıf) göreli alan öngörüsü — seçiciliği gösterir. */
+  e_healthy?: number | null;
 }
 
 export interface AiProposalMeta {
@@ -38,6 +49,12 @@ export interface AiProposalMeta {
   y_mm?: number;
   z_mm?: number;
   reliability?: number;
+  /** 3B konum yöntemi — "aruco_pnp" = kabin işaretiyle ölçüldü (karar #4: zorunlu). */
+  method?: string;
+  /** Konum modelin eğitim örnekleminin DIŞINDA mı — sürüşü engellemez, UYARIR. */
+  ood?: boolean;
+  /** Kadrajda aranan özne ("hayvan" | "fantom" | "petri plakası"). */
+  subject_label?: string;
   /** Sunum-katmanı XAI (2026-08-26): "önerilen dozu en çok ne belirledi" — backend
    *  hafif D-kanal duyarlılığı (|Δ| azalan). Alan yoksa (eski backend / XAI zarif
    *  düşüşü) satır gizlenir. */
@@ -53,6 +70,14 @@ const XAI_ETIKET: Record<string, string> = {
   achieved_B: "hedef alan (B)",
   duty_sum: "güç bütçesi",
 };
+
+/** Araştırma hattında `organ_id` kanalı ORGAN değil DOKU SINIFIDIR (kanserli / sağlıklı). */
+const XAI_ETIKET_ARASTIRMA: Record<string, string> = { ...XAI_ETIKET, organ_id: "doku tipi" };
+
+/** Türkçe ondalık ayırıcı — ekranda "0,13" (klinik/akademik yazım), kodda nokta. */
+function tr(n: number, basamak = 2): string {
+  return Number(n ?? 0).toFixed(basamak).replace(".", ",");
+}
 
 export function AiSpecApprovalModal({
   visible, specs, meta, organName, busy, onApprove, onReject, onDismiss,
@@ -77,6 +102,17 @@ export function AiSpecApprovalModal({
     phase: Number(specs.P?.[i] ?? 0),
   }));
   const surulen = rows.filter((r) => r.duty > 0).length;
+  // ── ARAŞTIRMA SUNUMU: model MÜHÜRDEN okunur (istemcinin o anki seçimi DEĞİL) — onay ekranı
+  //    gerçekten neyin onaylandığını göstermek zorundadır. Alan yoksa kedi (eski öneri).
+  const model = String(specs.model || "kedi");
+  const arastirma = model !== "kedi";
+  const modelAdi = arastirma ? modelProfili(model).baslik : "";
+  const hedefEtiketi = arastirma ? modelProfili(model).hedefEtiketi : "Organ";
+  const hedefAdi = specs.target_label || organName || `#${specs.organ_id}`;
+  const eHedef = Number(specs.e_cancer ?? specs.e_field ?? 0);
+  const eCevre = Number(specs.e_healthy ?? 0);
+  const konumVar =
+    typeof meta?.x_mm === "number" && typeof meta?.y_mm === "number" && typeof meta?.z_mm === "number";
   const guven = typeof meta?.reliability === "number" ? meta.reliability : null;
   // Düşük lokalizasyon güveni sessiz kalmamalı — hekim onaylarken bunu bilmeli.
   const dusukGuven = guven !== null && guven < 0.5;
@@ -98,7 +134,14 @@ export function AiSpecApprovalModal({
       contentStyle={s.icerik}
       header={
         <View style={s.head}>
-          <Text style={s.title}>AI Seans Önerisi</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title} numberOfLines={2}>
+              {arastirma ? `AI Seans Önerisi — ${modelAdi} · ${hedefAdi}` : "AI Seans Önerisi"}
+            </Text>
+            {/* ⚠️ DÜRÜSTLÜK: fantom/petri klinik bir teşhis değil; onaylayan kişi bunu BAŞLIKTA
+                görmeli (küçük bir dipnot yeterli olmazdı). */}
+            {arastirma ? <Text style={s.altBaslik}>Araştırma amaçlı model tahmini</Text> : null}
+          </View>
           <IconButton label="Kapat" onPress={kapat}>
             <X size={rs(20)} color={colors.textMuted} />
           </IconButton>
@@ -159,16 +202,48 @@ export function AiSpecApprovalModal({
       }
     >
           <Text style={s.lead}>
-            Otonom seans <Text style={s.bold}>onaylanmadan başlamaz</Text>. Aşağıdaki
-            parametreleri inceleyip onaylayın veya gerekçesiyle reddedin.
+            {arastirma ? "Deney seansı " : "Otonom seans "}
+            <Text style={s.bold}>onaylanmadan başlamaz</Text>. Aşağıdaki parametreleri inceleyip
+            onaylayın veya gerekçesiyle reddedin.
           </Text>
 
           <View style={s.summary}>
-            <Meta label="Organ" value={organName || `#${specs.organ_id}`} />
+            <Meta label={hedefEtiketi} value={hedefAdi} />
             <Meta label="Süre" value={`${specs.duration_minutes} dk`} />
             <Meta label="Sürülen bobin" value={`${surulen}/${rows.length}`} />
-            <Meta label="E (öngörü)" value={Number(specs.e_field ?? 0).toFixed(4)} />
+            {arastirma ? null : <Meta label="E (öngörü)" value={Number(specs.e_field ?? 0).toFixed(4)} />}
           </View>
+
+          {/* KONUM: araştırmada dozu belirleyen tek girdi 3B konumdur → onaylayan kişi SAYIYI görmeli
+              (kedi hattında panelde zaten metrik satırı var, modal kalabalıklaşmasın). */}
+          {arastirma && konumVar ? (
+            <Text style={s.konum}>
+              {`Konum (mm): x ${tr(meta!.x_mm!, 1)} · y ${tr(meta!.y_mm!, 1)} · z ${tr(meta!.z_mm!, 1)}`}
+            </Text>
+          ) : null}
+
+          {/* GÖRELİ ALAN: model birimsiz bir göreli değer üretir; "V/m" yazmak uydurma olurdu.
+              Çevre değeri ölçülebilir düzeydeyse (>0,01) SEÇİCİLİK oranı da gösterilir. */}
+          {arastirma ? (
+            <Text style={s.konum}>
+              {`Tahmini alan (göreli, birimsiz): hedefte ${tr(eHedef)}` +
+                (eCevre > 0.01 ? ` · çevrede ${tr(eCevre)} (oran ${tr(eHedef / eCevre, 1)}×)` : "")}
+            </Text>
+          ) : null}
+
+          {/* 3B konum rozeti: karar #4 (kabin işareti ZORUNLU) — işaretsiz öneri zaten üretilmez,
+              rozet onaylayan kişiye konumun NEYE dayandığını söyler. */}
+          {arastirma ? <KalibrasyonRozeti yontem={meta?.method} /> : null}
+
+          {arastirma && meta?.ood ? (
+            <Text style={s.uyari}>
+              Konum, modelin eğitim aralığı dışında olabilir — sonuç araştırma amaçlıdır.
+            </Text>
+          ) : null}
+
+          {model === "petri" ? (
+            <Text style={s.uyari}>Kanserli/sağlıklı ayrımı bu modelde sınırlı doğrulanmıştır.</Text>
+          ) : null}
 
           {guven !== null && (
             <Text style={[s.rel, dusukGuven && s.relWarn]}>
@@ -181,7 +256,9 @@ export function AiSpecApprovalModal({
           {Array.isArray(meta?.xaiSensitivity) && meta!.xaiSensitivity!.length > 0 && (
             <Text style={s.xai}>
               {"Dozu en çok belirleyen: " +
-                meta!.xaiSensitivity!.map((t) => XAI_ETIKET[t.feature] ?? t.feature).join(" · ")}
+                meta!.xaiSensitivity!
+                  .map((t) => (arastirma ? XAI_ETIKET_ARASTIRMA : XAI_ETIKET)[t.feature] ?? t.feature)
+                  .join(" · ")}
             </Text>
           )}
 
@@ -221,6 +298,10 @@ const s = StyleSheet.create({
   icerik: { gap: spacing.sm, paddingBottom: spacing.sm },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: colors.text, fontSize: rf(17), fontWeight: "800" },
+  // Araştırma başlığının alt satırı: "klinik teşhis değil" mesajı başlıktan AYRILMADAN durur.
+  altBaslik: { color: colors.warning, fontSize: rf(11), fontWeight: "700", marginTop: 2 },
+  konum: { color: colors.text, fontSize: rf(12), fontWeight: "700" },
+  uyari: { color: colors.warning, fontSize: rf(11), fontWeight: "700" },
   lead: { color: colors.textMuted, fontSize: rf(12), lineHeight: rf(18) },
   bold: { color: colors.text, fontWeight: "800" },
   summary: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },

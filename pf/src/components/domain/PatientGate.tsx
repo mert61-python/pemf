@@ -26,25 +26,13 @@ import { apiGet } from "@/services/apiClient";
 import { colors, radius, rf, rs, spacing } from "@/theme/tokens";
 import { IconButton } from "@/components/ui/IconButton";
 import { aramaEslesir } from "@/utils/aramaNormalize";
+import { profilSozlugu } from "@/utils/profilSozlugu";
 
 interface Hasta { id: string; name: string; species?: string }
 
 /** Profile göre terimler — ev sahibi "hasta" demez, "evcil hayvanım" der. */
-function sozluk(petOwner: boolean, researcher: boolean) {
-  if (researcher) {
-    return { tekil: "Örnek / Denek", secKisa: "Örnek seçin", bos: "Kayıtlı örnek yok.",
-             ekle: "Örnek Ekle",
-             uyari: "Analiz için önce bir örnek seçin — sonuç o kayda işlenecek." };
-  }
-  if (petOwner) {
-    return { tekil: "Evcil Hayvanım", secKisa: "Hayvanınızı seçin",
-             bos: "Henüz kayıtlı hayvanınız yok.", ekle: "Hayvan Ekle",
-             uyari: "Analiz için önce hayvanınızı seçin — sonuç onun geçmişine işlenecek." };
-  }
-  return { tekil: "Hasta", secKisa: "Hasta seçin", bos: "Kayıtlı hasta yok.",
-           ekle: "Hasta Ekle",
-           uyari: "İşlem için önce hasta seçin — sonuç hasta geçmişine işlenecek." };
-}
+// ⚠️ SÖZLÜK TAŞINDI (Faz 3): metinler `@/utils/profilSozlugu` içinde. AI Pro paneli de aynı
+// terimlere ihtiyaç duyuyor; iki kopya, iki metnin sessizce ayrışması demekti. Metinler AYNEN.
 
 /**
  * @param soft `true` → çocuklar HER ZAMAN render edilir; seçim kartı yalnız üstte uyarı olarak
@@ -56,7 +44,7 @@ function sozluk(petOwner: boolean, researcher: boolean) {
 export function PatientGate({ children, soft = false }: { children: React.ReactNode; soft?: boolean }) {
   const { selectedPatient, setSelectedPatient, navigateTo } = useAppNav();
   const { isExpert, isResearcher } = useUserMode();
-  const S = sozluk(!isExpert && !isResearcher, isResearcher);
+  const S = profilSozlugu({ petOwner: !isExpert && !isResearcher, researcher: isResearcher });
 
   const [acik, setAcik] = useState(false);
   const [liste, setListe] = useState<Hasta[] | null>(null);

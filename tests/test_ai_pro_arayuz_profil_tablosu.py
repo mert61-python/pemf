@@ -191,3 +191,44 @@ def test_KRITIK_BACKEND_hedef_adaylarina_pxn_YAZAR():
     assert '"pxn"' in govde and "kare_w" in govde and "kare_h" in govde, "pxn kare boyutuna bölünerek üretilmiyor"
     # Ve GERÇEKTEN kullanılıyor mu (varlık değil UYGULAMA): targets listesi bu yardımcıdan kurulmalı.
     assert re.search(r'"targets":\s*\[_hedef_tel\(', src), "targets listesi _hedef_tel ile kurulmuyor"
+
+
+_AIHUB = "pf/src/screens/AiHubScreen.tsx"
+
+
+def _kopru_bileseni(src: str) -> str:
+    """`AiProKopruDugmesi` fonksiyonunun kaynak gövdesi."""
+    i = src.find("function AiProKopruDugmesi(")
+    assert i > 0, "AI Hub → Kontrol köprüsü bileşeni yok"
+    j = src.find("\n}\n", i)
+    return src[i : j + 3]
+
+
+def test_KRITIK_AIHUB_kroprusu_HICBIR_ai_pro_ucunu_CAGIRMAZ():
+    """⚠️ SÜRÜM KAYMASI DERSİ (2026-08-17, bulgu 21): AI Hub bir zamanlar `/ai/pro/start`i boş
+    gövdeyle çağırıyordu; onay kapısından ÖNCEKİ bir backend'e karşı bu ONAYSIZ otonom seans
+    başlatır. Köprü düğmesi yalnız NİYETİ taşır: ekran değiştirir, model kartını ön-seçer."""
+    govde = _kopru_bileseni(_oku(_AIHUB))
+    for yasak in ("/ai/pro", "apiPost", "fetch("):
+        assert yasak not in govde, f"köprü düğmesi backend'e dokunuyor: {yasak}"
+    assert 'navigateTo("control")' in govde, "köprü Kontrol ekranına gitmiyor"
+    assert "setAiProModeli(model)" in govde, "köprü model kartını ön-seçmiyor"
+
+
+def test_KRITIK_kopru_FANTOM_ve_PETRI_sonuclarinda_RENDER_EDILIR():
+    """Varlık değil UYGULAMA: bileşen tanımlı olup hiç render edilmezse köprü ÖLÜDÜR."""
+    src = _oku(_AIHUB)
+    for model in ("fantom", "petri"):
+        assert re.search(rf'<AiProKopruDugmesi\s+model="{model}"', src), f"{model} sonucunda köprü render edilmiyor"
+
+
+def test_KRITIK_otonom_kapisi_metni_PROFILE_gore():
+    """Terminoloji (karar #12): araştırmacı bir HEKİM değildir. Kapı AYNI, metin role uygun."""
+    src = _oku(_AIHUB)
+    m = re.search(r'currentAiMode === "researcher"\s*\n\s*\?\s*"([^"]+)"\s*\n\s*:\s*"([^"]+)"', src)
+    assert m, "otonom kapısı metni profile göre ayrılmıyor"
+    arastirma, veteriner = m.group(1), m.group(2)
+    assert "hekim" not in arastirma.lower(), f"araştırma metni hekim rolü atfediyor: {arastirma!r}"
+    assert "hekim onayı" in veteriner, f"veteriner metni değişmiş: {veteriner!r}"
+    for metin in (arastirma, veteriner):
+        assert "onay" in metin.lower(), f"kapı sebebini söylemiyor: {metin!r}"

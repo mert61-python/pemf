@@ -44,6 +44,18 @@ jest.mock("@/context/LiveDataContext", () => ({
   useLiveData: () => ({ snapshot: null, wsConnected: true, aiVisionData: mockVision, aiVisionFresh: false }),
 }));
 jest.mock("@/context/AuthContext", () => ({ useAuth: () => ({ session: { email: "a@x.com" } }) }));
+// AI Hub → Kontrol köprüsünün ön-seçim kanalı (tek kullanımlık).
+let mockOnSecim = "";
+const mockOnSecimTemizle = jest.fn((m: string) => { mockOnSecim = m; });
+jest.mock("@/context/AppNavContext", () => ({
+  useAppNav: () => ({
+    navigateTo: jest.fn(),
+    selectedPatient: null,
+    setSelectedPatient: jest.fn(),
+    get aiProModeli() { return mockOnSecim; },
+    setAiProModeli: mockOnSecimTemizle,
+  }),
+}));
 jest.mock("@/context/OperatorContext", () => ({ useOperator: () => ({ operatorEmail: "a@x.com" }) }));
 jest.mock("expo-camera", () => {
   const React2 = require("react");
@@ -74,6 +86,8 @@ beforeEach(() => {
   (apiPost as jest.Mock).mockClear();
   (apiGet as jest.Mock).mockClear();
   (platformAlert as jest.Mock).mockClear();
+  mockOnSecim = "";
+  mockOnSecimTemizle.mockClear();
 });
 afterEach(() => {
   jest.useRealTimers();
@@ -249,4 +263,64 @@ it("KRİTİK: sihirbaz adımı ve Geri — Geri sunucu önizlemesini BIRAKIR", a
   await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });
   await act(async () => { fireEvent.press(u.getByLabelText(/Geri: önceki adıma dön/)); });
   expect((apiPost as jest.Mock).mock.calls.some((k) => k[0] === "/ai/pro/hazirlik/durdur")).toBe(true);
+});
+
+
+it("KRİTİK: AI Hub'dan gelen ön-seçim modeli SEÇER ve kanalı TEMİZLER (tek kullanımlık)", async () => {
+  mockOnSecim = "petri";
+  const u = ciz();
+  await act(async () => {});
+  // Kart seçili gelir → araştırmacı analizden seansa tek dokunuşla geçer.
+  expect(u.getByLabelText(/Petri Kuyu/).props.accessibilityState?.selected).toBe(true);
+  // ⚠️ TEK KULLANIMLIK: temizlenmezse kullanıcının sonraki kendi seçimini her dönüşte EZERDİ.
+  expect(mockOnSecimTemizle).toHaveBeenCalledWith("");
+  await act(async () => { fireEvent.press(u.getByLabelText(/Fantom Tümör/)); });
+  expect(u.getByLabelText(/Fantom Tümör/).props.accessibilityState?.selected).toBe(true);
+});
+
+it("KARŞIT-KANIT: seans SÜRERKEN ön-seçim hedefi DEĞİŞTİRMEZ", async () => {
+  mockDurum = { active: true, localized: true, model: "fantom", method: "aruco_pnp" };
+  mockOnSecim = "petri";
+  const u = ciz();
+  await act(async () => {});
+  await bekle(u);
+  expect(u.getByLabelText(/Petri Kuyu/).props.accessibilityState?.selected).toBeFalsy();
+});
+
+it("KARŞIT-KANIT: profilin göremediği model ön-seçilse bile UYGULANMAZ", async () => {
+  mockOnSecim = "kedi";   // araştırmacı listesinde YOK (karar #13)
+  const u = ciz();
+  await act(async () => {});
+  expect(u.queryByText("🧠 Hedef Organ")).toBeNull();
+  const dugme = u.getByLabelText("AI Pro otonom seansı başlat");
+  expect(dugme.props.accessibilityState?.disabled).toBe(true);   // model seçilmemiş sayılır
+});
+it("KRİTİK: örneksiz başlatma uyarısı ARAŞTIRMA dilinde ('hasta' demez)", async () => {
+  const { platformConfirm } = jest.requireMock("@/services/apiClient");
+  (platformConfirm as jest.Mock).mockClear();
+  const u = render(
+    <AiProPanel patientName="" secilebilirModeller={["fantom", "petri"]} kullaniciKipi="researcher" />,
+  );
+  await act(async () => {});
+  await act(async () => { fireEvent.press(u.getByLabelText(/Fantom Tümör/)); });
+  await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });
+
+  const [baslik, govde, dugme] = (platformConfirm as jest.Mock).mock.calls[0];
+  // Terminoloji kararı #12: araştırmacının önünde bir hasta değil bir ÖRNEK vardır.
+  expect(baslik).toBe("Örnek seçilmedi");
+  expect(String(govde)).not.toMatch(/hasta/i);
+  expect(String(govde)).toMatch(/örneğe bağlanmadan/);
+  expect(dugme).toBe("Örneksiz başlat");
+});
+
+it("KARŞIT-KANIT: veterinerde uyarı metni AYNEN 'Hasta seçilmedi' kalır", async () => {
+  const { platformConfirm } = jest.requireMock("@/services/apiClient");
+  (platformConfirm as jest.Mock).mockClear();
+  const u = render(<AiProPanel patientName="" />);
+  await act(async () => {});
+  await act(async () => { fireEvent.press(u.getByLabelText("AI Pro otonom seansı başlat")); });
+  const [baslik, govde, dugme] = (platformConfirm as jest.Mock).mock.calls[0];
+  expect(baslik).toBe("Hasta seçilmedi");
+  expect(String(govde)).toMatch(/hiçbir hastaya bağlanmadan/);
+  expect(dugme).toBe("Hastasız başlat");
 });
