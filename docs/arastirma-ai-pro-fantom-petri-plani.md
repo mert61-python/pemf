@@ -3,6 +3,20 @@
 > **DURUM (2026-09-09): FAZ 0 ✅ · FAZ 1 ✅ · FAZ 2 ✅ · KARAR #6 ✅ · FAZ 3 ✅ · FAZ 4 ✅ (kod+doküman+sürüm)**
 > **— kalan TEK iş: yapı alıp yayınlamak (sahibin açık "yayınla" onayı bekliyor).**
 >
+> **SAHA ÖLÇÜSÜ (2026-09-09, yayın sırasında geldi — 629e017):** kabin işareti kenarı **15 cm**
+> (10 cm sayfası silindi, yeni A4 üretildi), köşe yerleşimi 8/8 → **11/11 cm** (15 cm işaretin
+> sessiz bölgesi 8 cm'lik merkezde duvardan taşardı), hedef düzlemi **tabandan 5 cm**
+> (`hedef_duzlem_eksen: "Y"`, `hedef_duzlem_cm: -20.0`). ⚠️ Bu yaml'lar **örnek değil çalışma-anı**
+> yapılandırmasıdır — paketlenmiş dosyayı hem kedi hem araştırma hattı okur.
+>
+> ⚠️ **ÖLÇÜLDÜ: tabandan 5 cm de yetmiyor.** Gerçek ArUco'lu fotoğrafta kuyu
+> (−48,3 · −20,0 · **+445,4**) cm = kabin dışı; kabin ortası (Y = 0) ve eski dikey düzlem sağlam
+> ((11,7 · 0,0 · +2,0) cm). Kamera lensi taban hizasında olduğu sürece ışın düzlemi sığ açıyla
+> kesiyor. **Bayrak 0 kalıyor.** Sahip notu: *"kamera ile fantom ve petri konumları için sahada
+> tekrar düzeltme yapacağım"* → değerler GEÇİCİ; güncelleme için yalnız yaml yeter, kod
+> değişikliği gerekmez. Yeni karakterizasyon kapısı bu kötü koşullanmayı ÖLÇÜYOR: saha
+> düzeltmesi işe yarayınca o kapı kırmızı olacak ve yenilenecek.
+>
 > **Faz 4 (437ed46):** `versions.json` → **app 1.9.44** (karar #11: tek yayın); `sync_versions.ps1`
 > ile `VERSION` + `docs/version_info.txt` yayıldı. **Mobil 2.3.33 ve launcher 1.9.50 AYNEN** —
 > araştırma AI Pro kabin bilgisayarındadır (karar #15), APK yeniden üretilmiyor. CHANGELOG'da
