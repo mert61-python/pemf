@@ -6,6 +6,54 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.46 — 2026-09-09 (🩹 guncelleme sonrasi "Beklenmeyen bir hata" ekrani duzeltildi)
+
+### Masaustu istemci
+
+- **Sessiz guncellemeden sonra uygulama acilmiyordu.** Kontrol ekranina gecince tam ekran
+  "Beklenmeyen bir hata olustu — Loading module .../ControlScreen-<hash>.js failed" cikiyor,
+  istemci hata gunlugune `[FATAL] Requiring unknown module "2636"` dusuyordu.
+- **Sebep olculdu, dosya kaybi DEGILDI:** istenen chunk diskte istenen hash'le vardi ve HTTP 200
+  donuyordu. Paket 15:21'de kuruldu, sunulan 13 chunk'in hepsi 15:21 damgaliydi (tek tutarli
+  yapi), ilk FATAL 15:21:55 — kurulumdan 34 saniye sonra. "Requiring unknown module" YALNIZCA
+  paketin iki yarisi FARKLI YAPILARDAN geldiginde olur (Metro modul numaralarini her yapida
+  yeniden atar). Olcum: `GET /` yanitinda `last-modified` + `etag` VAR ama **`Cache-Control`
+  YOKTU** → tarayici sezgisel tazelik uyguluyor (RFC 9111 §4.2.2) ve WebView2 `index.html`i
+  dogrulamadan yeniden kullanabiliyordu. Guncelleme `entry-*`/`__common-*` hash'lerini
+  degistirdigi icin onbellekten gelen ESKI sayfa YENI chunk'larla karisiyordu.
+- **Duzeltme:** arayuz artik acik onbellek politikasiyla sunuluyor — giris belgesi (`*.html`)
+  `no-store`, icerik-hash'li varliklar 1 yil `immutable`, hash'siz dosyalar `no-cache`.
+  Boylece sayfa ve chunk'lar HER ZAMAN ayni yapidan gelir.
+  ⚠️ Hash'li varliklarin uzun onbellegi BILEREK korundu: onlari da `no-store` yapmak arizayi
+  "cozer" ama her acilista tum paketi yeniden indirtir (klinik hotspot'unda olculur bedel).
+  Kapi iki yonu de kilitler.
+- Ayni politika DEMA simulatoru sunumuna da uygulandi (ayni sinif riski).
+- ⚠️ **Bu surumden ONCE hatayi gormus makinelerde**, eski sayfa hala tarayici onbelleginde
+  olabilir: uygulamayi kapatip `%LOCALAPPDATA%\com.pemfmedical.vetclient\EBWebView` klasorunu
+  silmek tek seferlik gerekir. Sonraki guncellemelerde gerekmez.
+
+### ESP8266 bobin firmware'i (⚠️ ELLE REFLASH gerekir — pakete GIRMEZ)
+
+- **Bobin yonu (polarite) olcumu 8266'ya geldi.** S3'te 2026-09-08'de eklenen `[MAG]` seri
+  raporu 8266'da YOKTU; yan bobinlerin (6-8) yonu bu yuzden olculemiyordu. Firmware artik her
+  1 sn seri porta (115200) yaziyor:
+  `[MAG] x=+0.012 y=-0.031 z=+0.418 B=0.421 mT`. Bicim ve birim S3 ile BIREBIR ayni tutuldu ki
+  iki kartin sayilari yan yana karsilastirilabilsin (kapi bu esitligi kilitler).
+- **Yan bulgu duzeltildi:** `SensorData.magX/magY/magZ` YALNIZCA yapicida sifirlaniyordu —
+  MLX90393 okumasi eksenleri ic diziye yazip SensorData'ya HIC gecirmiyordu. Tuketici olmadigi
+  icin (yayinlanan JSON yalniz `magnetic_field` tasir) kimse gormemisti; yon olcumu eksen
+  ISARETINE dayandigi icin bu alanlar doldurulmadan rapor kalici olarak 0 gosterirdi. Eksenler
+  artik mT biriminde (magnetic_field ve S3 ile ayni) doldurulur; sensor kritik durumdayken NaN
+  yapilir ki bayat deger gercek olcum gibi gorunmesin.
+- ⚠️ Yon YALNIZ tek-bacak (unipolar) suruste okunur; simetrik bipolar suruste ortalama ~0'dir.
+  8266'da ornekleme 1 Hz (S3'te 5 Hz) → her satir ~1 gercek ornek: isaret guvenilir, buyukluk
+  darbe fazina gore oynar. Yontem: `firmware/esp8266_pemf_coil/README.md` → "Bobin yonu".
+
+### Not
+
+Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
+Paket kimligi ve sha degerleri yapi alindiktan sonra bu bolume yazilir (manifestten).
+
 ## app 1.9.45 — 2026-09-09 (🩹 AI gecmisinde duzeltme kutusu, yara yonu ARTIK UYGULANIYOR, girdi onizlemesi)
 
 ### AI Gecmisi

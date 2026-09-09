@@ -4,6 +4,7 @@ import itertools as _itertools  # MQTT yayinci client_id sayaci (bkz. _mqtt_clie
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid as _uuid
@@ -4274,10 +4275,68 @@ async def emergency_stop():
 # --- PATIENT DATABASE ENDPOINTS ---
 # (audit B-2.2) Hasta CRUD uçları servers/patient_router.py'ye taşındı (modüler ayrım; yollar aynı).
 
+# ── ARAYÜZ ÖNBELLEK POLİTİKASI (2026-09-09, ÖLÇÜLEN SAHA ARIZASI) ─────────────────────────
+#
+# BELİRTİ: masaüstü istemcide "Beklenmeyen bir hata oluştu — Loading module .../ControlScreen-
+# <hash>.js failed" ve `client_errors.jsonl`de `[FATAL] Requiring unknown module "2636"`.
+#
+# ÖLÇÜM: istenen chunk diskte İSTENEN HASH'LE VARDI ve HTTP 200 dönüyordu → dosya kaybı değil.
+# `base-app.zip` 15:21'de kuruldu, sunulan 13 chunk'ın hepsi 15:21 damgalı (tek tutarlı yapı),
+# ilk FATAL 15:21:55 — kurulumdan 34 sn sonra. "Requiring unknown module" YALNIZCA paketin iki
+# yarısı FARKLI YAPILARDAN geldiğinde olur: Metro modül numaralarını her yapıda yeniden atar.
+#
+# KÖK NEDEN: `StaticFiles` yalnız `last-modified` + `etag` gönderir, `Cache-Control` GÖNDERMEZ.
+# Cache-Control'süz yanıtta tarayıcı SEZGİSEL önbellekleme uygular (RFC 9111 §4.2.2) → WebView2
+# `index.html`i doğrulamadan yeniden kullanabiliyor. Güncelleme `entry-*`/`__common-*` hash'lerini
+# değiştirdiği için önbellekten gelen ESKİ sayfa YENİ chunk'larla karışıyor ve modül kayıt
+# defteri uyuşmuyor. Sessiz güncelleme + sezgisel önbellek = her açılışta FATAL.
+#
+# POLİTİKA (SPA'ların standart deseni):
+#   · `*.html`            → `no-store`  : giriş belgesi ASLA önbellekten gelmez → sayfa ve
+#                                          chunk'lar HER ZAMAN aynı yapıdan gelir.
+#   · içerik-hash'li dosya → 1 yıl `immutable` : adı içeriğine bağlı, yapı değişince ad değişir.
+#                                          ⚠️ Bunu `no-store` yapmak arızayı "çözer" ama her
+#                                          açılışta tüm paketi yeniden indirtir (klinik hotspot).
+#   · diğerleri           → `no-cache`  : ETag ile 304 döner (ucuz) ama bayat kalmaz.
+_ICERIK_HASHI = re.compile(r"[-.][0-9a-f]{16,}(?=[.@]|$)")
+
+
+def _onbellek_politikasi(yol: str, icerik_tipi: str = "") -> str:
+    """Statik dosya yolundan `Cache-Control` değeri. SAF fonksiyon — kapı bunu doğrudan ölçer.
+
+    ⚠️ `icerik_tipi` PARAMETRESİ ZORUNLU (kapı yakaladı): `/` isteğinde Starlette
+    `get_response`a yol olarak "." verir ve `index.html`i KENDİ İÇİNDE sunar. Yalnız dosya
+    adına bakan ilk sürüm bu yüzden giriş belgesine `no-cache` yazıyordu — revalidasyon
+    zorladığı için tehlikesiz ama hedeflenen `no-store` DEĞİL. Yanıtın gerçek içerik tipine
+    bakmak hem `/` hem `/index.html` hem de html geri-düşüşlerini kapsar.
+    """
+    ad = yol.replace("\\", "/").rsplit("/", 1)[-1]
+    if ad.endswith((".html", ".htm")) or icerik_tipi.startswith("text/html"):
+        return "no-store, must-revalidate"
+    if _ICERIK_HASHI.search(ad):
+        return "public, max-age=31536000, immutable"
+    return "no-cache"
+
+
+class OnbellekPolitikaliStatik(StaticFiles):
+    """`StaticFiles` + açık `Cache-Control`.
+
+    ⚠️ Kanca `get_response`, `file_response` DEĞİL: 304 (koşullu istek) ve 404 yolları
+    `file_response`tan GEÇMEZ — politika oraya konsaydı tam da tarayıcının ETag'le sorduğu
+    anda düşer ve sezgisel davranış geri gelirdi.
+    """
+
+    async def get_response(self, path, scope):  # type: ignore[override]
+        yanit = await super().get_response(path, scope)
+        yanit.headers["Cache-Control"] = _onbellek_politikasi(path, yanit.headers.get("content-type", ""))
+        return yanit
+
+
 # 2. DEMA Simülatörü host etme
 sim_path = str(packaged_resource_path("dema-terapi-simülatörü", "dist"))
 if os.path.exists(sim_path):
-    app.mount("/simulator", StaticFiles(directory=sim_path, html=True), name="simulator")
+    # Aynı politika: simülatör de hash'li varlıklı bir SPA, aynı karışık-yapı riskini taşır.
+    app.mount("/simulator", OnbellekPolitikaliStatik(directory=sim_path, html=True), name="simulator")
 
 # 1. Ana React Arayüzünü host etme (frontend/dist)
 frontend_candidates = [
@@ -4288,7 +4347,7 @@ frontend_path = next((str(path) for path in frontend_candidates if (path / "inde
 if frontend_path:
     # DİKKAT: / endpoint'i diğer tüm API rotalarından (örn: /api) SONRA tanımlanmalıdır.
     # Bu yüzden mount işlemini en alta (API router'larından sonra) ekliyoruz.
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+    app.mount("/", OnbellekPolitikaliStatik(directory=frontend_path, html=True), name="frontend")
 else:
     import logging
 
