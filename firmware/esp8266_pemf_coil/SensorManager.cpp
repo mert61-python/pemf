@@ -165,6 +165,11 @@ SensorData SensorManager::getData() {
 
     if (_magneticSensorCritical) {
         _data.magneticField = NAN;
+        /* Eksenler de NaN olmali: bayat eksen degeri [MAG] raporunda GERCEK olcum gibi
+         * gorunur ve yanlis polarite kararina goturur. */
+        _data.magX = NAN;
+        _data.magY = NAN;
+        _data.magZ = NAN;
     } else if (!_data.magnetic_sensor_ok) {
         // Kritik deÄŸil ama baÅŸarÄ±sÄ±z - fallback kullan (geÃ§ici hata)
         _data.magneticField = _magFieldFiltered / 1000.0f;
@@ -412,6 +417,17 @@ void SensorManager::_processMLX90393StateMachine() {
                 if (_mlxMag.readData(&x, &y, &z)) {
                     float magnitude = sqrt(x*x + y*y + z*z);
                     _data.magneticField = magnitude / 1000.0;  // ÂµT'den mT'ye
+                    /* ⚠️ EKSEN BILESENLERI DOLDURULMUYORDU (2026-09-09, olculdu): `_data.magX/
+                     * magY/magZ` YALNIZ yapicida sifirlaniyordu; okuma bunlari `_lastGoodValues`
+                     * dizisine yaziyor ama SensorData'ya HIC gecirmiyordu. Kimse fark etmemisti
+                     * cunku tuketici yoktu (`publishSensorData` yalniz `magnetic_field`,
+                     * `populateStatus` eksen tasimiyor). Bobin YONU olcumu (asagidaki [MAG]
+                     * raporu) eksen ISARETINE dayanir → alanlar olmadan yon okunamaz.
+                     * BIRIM mT (magneticField ile AYNI ve S3'un `SensorReadings.magX`i ile AYNI)
+                     * → iki kartin sayilari dogrudan karsilastirilabilir kalir. */
+                    _data.magX = x / 1000.0f;
+                    _data.magY = y / 1000.0f;
+                    _data.magZ = z / 1000.0f;
                     _lastGoodValues[2] = x;
                     _lastGoodValues[3] = y;
                     _lastGoodValues[4] = z;

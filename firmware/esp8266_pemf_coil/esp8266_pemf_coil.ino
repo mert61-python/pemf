@@ -156,6 +156,50 @@ void checkMemoryHealth() {
 }
 
 // ============================================================================
+// [MAG] BOBIN YONU (POLARITE) SERI RAPORU — S3 PARITESI (sahip 2026-09-09)
+// ============================================================================
+// S3 varyantinda (2026-09-08) tezgah olcumu icin eklenen rapor 8266'da YOKTU; yan bobinlerin
+// (6-8) yonu bu yuzden olculemiyordu. Bicim S3 ile BIREBIR ayni tutuldu ki iki kartin
+// sayilari yan yana karsilastirilabilsin:
+//     [MAG] x=+0.012 y=-0.031 z=+0.418 B=0.421 mT
+// x/y/z = pencere ORTALAMASI (DC bilesen), B = sqrt(x^2+y^2+z^2) ayni ortalamalardan, birim mT.
+//
+// ⚠️ 8266'DA ORNEKLEME 1 Hz (S3'te 5 Hz): SensorManager::SENSOR_INTERVAL 1000 ms. Bu fonksiyon
+// mevcut 500 ms'lik termal blogun ZATEN okudugu SensorData'yi kullanir (ekstra I2C ve ekstra
+// getData() cagrisi YOK — getData() fallback uyarilari basar, her dongude cagrilmasi seri
+// portu bogardi). Ayni okuma iki kez sayilabilir; AYNI degeri iki kez ortalamak ortalamayi
+// DEGISTIRMEZ. Pratik sonuc: her satir ~1 gercek ornek → ISARET (polarite) guvenilir,
+// BUYUKLUK darbe fazina gore oynar. Kararli DC icin birkac satiri birlikte oku.
+//
+// ⚠️ YON YALNIZ TEK-BACAK (UNIPOLAR) SURUSTE OKUNUR: simetrik bipolar suruste ortalama ~0'dir
+// (yalniz |B| buyur). Bkz. README "Bobin yonu" + firmware/stm32_pemf_unipolar.
+static void magRaporla(const SensorData& d) {
+    static uint32_t sonMs = 0;
+    static uint16_t n = 0;
+    static float tx = 0.0f, ty = 0.0f, tz = 0.0f;
+    if (d.magnetic_sensor_ok && !isnan(d.magX)) {
+        n++;
+        tx += d.magX;
+        ty += d.magY;
+        tz += d.magZ;
+    }
+    uint32_t simdi = millis();
+    if (simdi - sonMs < 1000UL) {
+        return;
+    }
+    sonMs = simdi;
+    if (n == 0) {
+        LOG_PRINTLN(F("[MAG] sensor okunamadi — MLX90393 I2C baglantisini kontrol edin"));
+    } else {
+        const float x = tx / n, y = ty / n, z = tz / n;
+        const float b = sqrtf(x * x + y * y + z * z);
+        LOG_PRINTF("[MAG] x=%+.3f y=%+.3f z=%+.3f B=%.3f mT\n", x, y, z, b);
+    }
+    n = 0;
+    tx = ty = tz = 0.0f;
+}
+
+// ============================================================================
 // Setup Fonksiyonu
 // ============================================================================
 void setup() {
@@ -344,6 +388,7 @@ void loop() {
     if (millis() - lastThermalCheck >= 500) {
         lastThermalCheck = millis();
         SensorData td = sensors.getData();
+        magRaporla(td);  // [MAG] bobin yonu — AYNI okumayi kullanir (ekstra I2C yok)
         if (td.temp_sensor_ok) {
             if (td.tempObject >= TERMAL_KESME_C) {
                 if (coil->isActive()) {

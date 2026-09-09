@@ -55,6 +55,44 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
 `C:\Users\merta\Desktop\guii`) — **COMMIT ETME**. `WIFI_SSID_CONST` boşsa WiFiManager
 portalı devreye girer (normal akış).
 
+## Bobin yönü (polarite) ölçümü — `[MAG]` seri raporu (2026-09-09)
+
+S3 varyantındaki ölçümün 8266 paritesi. Firmware her **1 sn** seri porta (115200) şunu yazar:
+
+```
+[MAG] x=+0.012 y=-0.031 z=+0.418 B=0.421 mT
+```
+
+x, y, z = pencere ortalaması (**DC bileşen**), `B = √(x²+y²+z²)` aynı ortalamalardan, birim
+**mT** — S3 ile aynı biçim ve aynı birim, yani iki kartın sayıları yan yana karşılaştırılabilir.
+Sensör okunamıyorsa satır yerine `[MAG] sensor okunamadi — MLX90393 I2C baglantisini kontrol edin`
+gelir.
+
+⚠️ **8266'da örnekleme 1 Hz** (S3'te 5 Hz — `SensorManager::SENSOR_INTERVAL` 1000 ms). Rapor,
+500 ms'lik termal denetimin zaten okuduğu veriyi kullanır (ekstra I2C yok), dolayısıyla pratikte
+**her satır ≈ tek gerçek örnek** demektir: **işaret (polarite) güvenilir**, büyüklük darbe fazına
+göre oynar. Kararlı bir DC değeri için birkaç satırı birlikte oku.
+
+⚠️ Bu ölçüm için **MLX90393 bağlı olmalı** (I2C 0x18). Sensörsüz modda (`SENSÖRSÜZ MOD AKTİF`)
+yalnız uyarı satırı gelir — PWM çalışmaya devam eder ama yön okunamaz.
+
+**100 Hz / %50 duty ile ölçüm — S3 ile aynı yöntem:**
+
+1. **Sürüş kipi:** yön için **tek-bacak (unipolar)** sürüş şart (tek yönlü darbe → net DC ≠ 0 →
+   ortalamanın işareti polariteyi verir). Simetrik **bipolar** sürüşte ortalama ≈ 0 çıkar, yalnız
+   `|B|max` büyür — yön **okunamaz**.
+2. **Sensör duruşu:** MLX90393'ü bobin yüzeyinin ortasına, **her bobinde AYNI yönle** koy (öneri:
+   sensör **Z** ekseni bobin eksenine paralel, çip üst yüzü bobine bakıyor, kablo hep aynı tarafta).
+   Bobinden bobine sensörü döndürürsen işaretler karşılaştırılamaz. Bobinin üstüne **ok** çiz ve
+   sensörün +Z yönünü o oka hizala — böylece işaret ↔ fiziksel yön eşleşmesi kayıt altına girer.
+3. **Sıfır:** bobin kapalıyken `z`'yi not al = ofset (yer alanı + sensör ofseti ~0,03–0,06 mT
+   burada da vardır). Bobin açıkken okunan `z` − ofset = bobinin DC alanı.
+4. **Yön:** fark **pozitifse** alan sensörün +ekseni yönünde, **negatifse** ters. Yan bobinleri
+   (6-8) aynı duruşla ölç; işareti diğerlerinden farklı çıkan bobin **ters bağlıdır** (sargı yönü
+   ya da çıkış kablolarının sırası).
+5. **Kayıt:** Arduino IDE Serial Monitor (115200) ya da
+   `python -m serial.tools.miniterm COMx 115200 | tee bobinN.txt` — her bobin için ~10 satır yeter.
+
 ## Tezgâh listesi
 
 1. Seri monitörde `[SYNC] ESP8266: donanim senkronu KULLANILMIYOR` satırı.
