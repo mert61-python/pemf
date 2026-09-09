@@ -65,6 +65,11 @@
   Sebep: kamera lensi taban hizasinda (Y=-25), isin duzlemi hala sig aciyla kesiyor. Bu yuzden
   `PEMF_ARASTIRMA_AIPRO` **0 kaliyor**. Sahip notu: kamera ile fantom/petri konumlari SAHADA
   tekrar duzeltilecek; degerler yalniz yaml'dan guncellenir, kod degisikligi gerekmez.
+- ⚠️ **ZATEN 10 cm'lik isaret ASILDIYSA:** bu surumden sonra o kabinde olcek 1,5 kat yanlis olur
+  (tespit calisir, konum sessizce kayar). Yapilacak: yeni 15 cm sayfasini basip degistirin
+  (`python scripts/kabin_marker_a4.py --masaustu`) YA DA o cihazda `aruco.real_cm` degerini asili
+  isaretin gercek kenariyla ayni yapin. Kabin isareti 1.9.43'te (2026-09-08) yeni gelmisti;
+  cogu kabinde henuz asili DEGIL.
 - ⚠️ Bu degisiklik AI Hub'daki fantom/petri TEK-FOTO analizinin koordinatlarini da etkiler
   (ayni donusum): isaret boyu ve konumu degistigi icin okunan mm degerleri kayar.
 
