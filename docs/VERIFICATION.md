@@ -314,3 +314,49 @@ reflash gerekir; STM32'ye dokunulmadı.
 test_esp_lwt.py · test_s3_oneshot_kaybi.py (hepsi mutasyonla doğrulandı). C bu makinede
 derlenmediğinden İLK DERLEME Arduino IDE'de yapılacak — derleme hatası çıkarsa kaldırma
 turundaki artık-referans demektir (kapılar yakalamadıysa bildirin).
+
+---
+
+## ⏳ 15 — Araştırma AI Pro: fantom/petri 3B çerçevesi ve kapalı döngü (KABİN TEZGÂHI · SAHİBİN ELLE YAPACAĞI ADIM)
+
+**Bağlam:** Araştırma modunda AI Pro artık kedi yerine iki modelle çalışıyor (Fantom Tümör, Petri
+Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçli olarak **kapalı**:
+`PEMF_ARASTIRMA_AIPRO=0` (bkz. `deploy/device.env`). Sebep ölçülmüş bir belirsizlik, tahmin değil:
+
+  · Karar #6'ya göre fantom/petri kabinde YATAY, tabanın hemen üstünde duracak. Kamera lensi de
+    taban hizasında (Y=−25 cm) olduğu için ışın hedef düzlemini SIĞ açıyla keser: gerçek bir
+    fotoğrafta kuyu konumu kabin DIŞINA düştü (−97 · −24 · +1096 cm). Eski (Z=0) düzlemle aynı
+    fotoğraf (−2,3 · +7,7 · 0,0) cm veriyor.
+  · Fantom doz modelinin eğitim aralığı x −5,7…−3,1 · y −6,0…+6,1 · z −3,6…+4,0 cm — yani model
+    kabin ORTASINA yakın duran bir fantomla eğitilmiş. Taban yerleşimi (y ≈ −24 cm) bu aralığın
+    tamamen dışında kalır (arayüz bunu "eğitim aralığı dışında" diye yazar ama doğru çerçeve
+    olmadan sayı zaten anlamsızdır).
+
+**Yapılacak ölçüm (seçenekler ve tablo: `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5):**
+1. Kabin işaretini (A4 ArUco) arka duvara DÜZ ve duvara PARALEL yapıştır; `qr_to_origin_cm`'i
+   ölçüp `cabin_config.yaml`'a yaz.
+2. Hedef tepsisinin yüksekliğini ölç ve `hedef_duzlem_eksen: "Y"` + `hedef_duzlem_cm: <ölçülen>`
+   yaz (varsayılan hâlâ eski davranış: `"Z"` / 0,0 — AI Hub tek-foto analizi bozulmasın diye).
+3. Kabinde bilinen bir noktaya (ör. tepsi merkezinden 10 cm sağa) hedef koy; Kontrol → AI Pro →
+   Hazırlığı Başlat ile önizlemede okunan **Konum (mm)** değerini şeritten oku. KABUL: okunan
+   koordinat elle ölçülen konumla ±2 cm içinde ve kabin sınırları içinde.
+4. Fantom için: fantomu modelin eğitim aralığına (kabin ortasına) yükseltmek mi, kamerayı üst
+   köşeye taşımak mı — karar ölçüme göre verilir. Kamera taşınırsa **kedi akışı yeniden
+   doğrulanmalıdır** (aynı kamera onu da besliyor).
+5. Ölçüm kabul edilirse `PEMF_ARASTIRMA_AIPRO=1` yapılır (kurulum bunu NSSM servis ortamına yazar;
+   backend `.env`i KENDİ okumaz). Doğrulama: `GET /api/ai/hazirlik?derin=1` yanıtında
+   `arastirmaAiPro.acik == true`.
+
+**Kabul kriterleri (bayrak açıldıktan sonra, bobinler BAĞLI):**
+  · Hazırlık şeridi özneyi bulur ("fantom/petri plakası aranıyor" → "konumlandı").
+  · 3B rozet "kabin işaretiyle doğrulandı ✓" der; işaret kadrajdan çıkarılınca öneri ÜRETİLMEZ
+    (güven tavanı 0,25 < eşik 0,3) ve şerit sebebi söyler.
+  · Onay ekranı: Hedef adı, Konum (mm), göreli alan (hedefte/çevrede), süre, 7/7 bobin.
+  · Onayla → seans başlar; hedef kadrajdan çıkarılınca ~30 sn içinde bobinler DURUR ve şerit
+    "hedef görülmüyor" der; hedef geri konunca sürüş kendiliğinden devam eder.
+  · ACİL DURDUR her aşamada bobinleri durdurur (seans tipinden bağımsız).
+
+**Kod-düzeyi kilitler (bunlar tezgâhın YERİNE GEÇMEZ):** tests/test_ai_pro_arastirma_bayragi.py ·
+test_ai_pro_arastirma_saglayicilari.py · test_ai_pro_arastirma_gercek_pipeline.py ·
+test_ai_pro_frame_arastirma.py · test_koordinat_donusumu_karakterizasyon.py ·
+test_ai_pro_arayuz_profil_tablosu.py (hepsi mutasyonla doğrulandı).

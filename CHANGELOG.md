@@ -6,6 +6,65 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.44 — 2026-09-09 (🔬 Arastirma modunda AI Pro: Fantom + Petri · 🚑 sunucu-kamerali AI Pro seansi duzeltildi)
+
+### Hasta guvenligi (once bunlar)
+
+- **Sunucu kamerali AI Pro seansinda bobinler surulmuyordu.** Seans dongusu lokalizasyon sonucunu
+  7 isimle acmaya calisiyordu, oysa fonksiyon 8 deger donduruyor: her karede `ValueError` olusuyor,
+  hata yutuluyor ve `localized` FALSE kaliyordu. Hekim onay verdikten sonra ekran "seans suruyor"
+  diyor, kalan sure isliyor, ama hicbir bobin surulmuyordu. Duzeltildi (guven dokumu de artik
+  onbelege yaziliyor: panelde "Guven %X"in nedeni gorunur).
+- **Hazirlik ucu, seans SURERKEN hedefi degistirebiliyordu.** `/ai/pro/hazirlik/baslat` organ ve
+  lokalizasyon bayragini kilidin DISINDA yaziyor, sonra "Seans zaten aktif" diye SESSIZ BASARI
+  donduruyordu: mutasyon kalici oluyor ve bobinler MUHURDE ONAYLANMAYAN organa surulebiliyordu.
+  Artik mutasyon kilit icinde, seans aktifse istek 409 ile reddedilir; seansin sahibi olmayan
+  istemci 403 alir (organ ucundaki kapinin paritesi).
+- **AI Pro duty kirpmasi tek kaynaga alindi** (%50 tavan): oneri, seans dongusu ve mobil kare artik
+  AYNI kirpmayi kullanir — "gosterilen duty ile surulen duty" ayrisamaz.
+- **Jeton muafiyet listesindeki olu yol duzeltildi:** liste `/api/ai/ai_pro/frame` yerine var
+  olmayan bir yolu tasiyordu. Yeni kapi: muafiyet listesindeki HER yol gercekten uygulamada olmali.
+
+### Arastirma modu: AI Pro artik kedi yerine iki modelle calisiyor
+
+- **Iki hedef modeli:** 🎯 **Fantom Tumor** (silikon fantomdaki mavi tumor odaklari) ve
+  🧫 **Petri Kuyu** (plakadaki kuyular, kanserli/saglikli). Kedi modeli VETERINER modunda aynen
+  kalir; gizleme simetriktir (arastirmacida kedi, veterinerde fantom/petri gorunmez).
+- **5 adimli sihirbaz:** model kartlari → kamera hazirligi → kare ustunde hedef secimi → doz
+  onayi → seans. Her adimda **Geri**. Hedefler kare uzerinde tiklanabilir halkalarla VE ekran
+  okuyucuyla kullanilabilen bir listeyle secilir; hedef kimlikleri kare kare KORUNUR (mühürlenen
+  "Kuyu 3" etiketi komsu kuyuya kaymaz).
+- **Onay ekrani gercekten neyin onaylandigini soyler:** baslik model + hedef adi, alt satirda
+  "Arastirma amacli model tahmini"; konum (mm), goreli/birimsiz tahmini alan (hedefte · cevrede),
+  3B konum rozeti, egitim araligi disi uyarisi, petri icin sinif-ayrimi cekincesi. Model ONAY
+  MUHRUNDEN okunur — "fantom onerisini onaylat, kediyi baslat" yapisal olarak imkansiz.
+- **Kabin isareti ZORUNLU:** isaret kadrajda degilse konum olculemez ve oneri URETILMEZ; ekran
+  sebebi ve ne yapilacagini yazar (kalibrasyonsuz yontemde guven tavani esigin altinda kalir).
+- **AI Hub'dan kisayol:** fantom/petri analiz sonucunun altinda "Bu hedefe AI Pro seansi → Kontrol"
+  dugmesi; ekrani acar ve model kartini on-secer (otonom seansi BASLATMAZ — onay akisi yalnizca
+  Kontrol → AI Pro'da).
+- **Terminoloji:** arastirma modunda "hasta" yerine "ornek", "hekim onayi" yerine "onay".
+- **⚠️ Bu iki modelle SURUS bu surumde KAPALI** (`PEMF_ARASTIRMA_AIPRO=0`): fantom/petri 3B konum
+  cercevesi tezgahta dogrulanmadi. Kamera ve konum GORUNTULENIR, hedef secilir, ama doz
+  onaylanamaz — ekran bunu "Deneysel — simdilik yalniz goruntuleme" diye soyler. Tezgah adimlari:
+  `docs/VERIFICATION.md` §15 ve `ai_hub/KABIN_KURULUM_KILAVUZU.md` §0.5.
+- **⚠️ Telefonda yok:** konum kabin cercevesinde olculur; arastirma AI Pro yalniz kabin
+  bilgisayarindaki Kontrol → AI Pro ekraninda calisir. Mobil uygulama DEGISMEDI (2.3.33).
+
+### Dokuman duzeltmeleri
+
+- `phantom_cv` ve `petri_cv` README'leri kullaniciya **yanlis ArUco isareti** bas diyordu
+  (DICT_5X5_100, 5 cm); gercek kabin isareti DICT_5X5_50 ve **10 cm** (basili A4 sayfasi).
+  Yanlis sozluk isaretin HIC bulunmamasina, yanlis kenar ise SESSIZ olcek hatasina (3B koordinat
+  2 kat yanlis) yol acardi. Yeni kapi dokumanlari yaml'a pinler.
+- 1.9.43 kaydindaki `buildId` ve `base.zip` sha degerleri onceki bir yapiya aitti; yayinlanan
+  manifestten duzeltildi (destek, sahadan gelen kimligi artik kayitta bulabilir).
+
+### Not
+
+Mobil uygulama (2.3.33) ve frontend OTA (1.4.2) degismedi; iOS yayini yok. Paket kimligi
+(`buildId`) ve sha degerleri YAPI ALINDIKTAN SONRA bu bolume yazilir (manifestten).
+
 ## mobile 2.3.33 — 2026-09-08 (📱 Serbest frekans/duty, ESP cihaz onayi, eylem soyleyen AI hata mesajlari)
 
 - **Manuel kontrolde frekans ve duty artik sinirlanmiyor** (1-100 Hz / 1-50 % klempi ve

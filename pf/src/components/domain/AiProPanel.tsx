@@ -465,7 +465,7 @@ export function AiProPanel({
       platformAlert(
         "Bu seans kabin kamerasıyla yapılır",
         "Fantom ve petri hedefi kabin işaretine göre ölçülür; telefon kamerası bu ölçümü yapamaz. " +
-          "Seansı kabin bilgisayarındaki uygulamadan başlatın.",
+          "Bilgisayardaki Kontrol → AI Pro ekranını kullanın.",
       );
       return;
     }
@@ -999,7 +999,7 @@ export function AiProPanel({
    */
   const baslatKapali = !running && (arastirmaMobilKapali || (arastirmaKipi && !hedefModeli));
   const baslatKapaliNedeni = arastirmaMobilKapali
-    ? "Fantom/petri seansı kabin bilgisayarından başlatılır."
+    ? "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın."
     : "Önce Adım 1'de bir hedef modeli seçin.";
 
   return (
@@ -1030,7 +1030,7 @@ export function AiProPanel({
       <Text style={styles.note}>
         {arastirmaKipi
           ? arastirmaMobilKapali
-            ? "🔬 Fantom/petri seansı KABİN kamerasıyla yapılır: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bu ekranda yalnız izleyebilirsiniz."
+            ? "🔬 Bu modeller masaüstü KABİN kamerası ister: konum kabin işaretine göre ölçülür, telefon bunu yapamaz. Bilgisayardaki Kontrol → AI Pro ekranını kullanın; burada yalnız izleyebilirsiniz."
             : "🔬 Bu ekran deney hedefini kabin kamerasıyla bulur, 7 bobin için doz önerir ve SİZ onaylamadan hiçbir bobini çalıştırmaz."
           : IS_WEB
             ? "📷 Sunucu kamerasından canlı otonom seans: kedi organ lokalizasyonu → em_kedi → 7 bobin."

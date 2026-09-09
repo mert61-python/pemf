@@ -223,7 +223,9 @@ output:
 #      (Standart petri kabi capi: 5/6/9/10 cm)
 #
 # 2) ArUco modu (gercek mm/px + cabin frame):
-#      a) DICT_5X5_50 marker bas (5 cm kenar):
+#      a) Kabin isaretini BAS: ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf
+#         (DICT_5X5_50, kenar 10,0 cm — asagidaki aruco.real_cm ile AYNI olmali;
+#          yanlis kenar uzunlugu SESSIZ olcek hatasi verir). Kendin uretmek icin:
 #           python -c "import cv2; d=cv2.aruco.getPredefinedDictionary(
 #                       cv2.aruco.DICT_5X5_50);
 #                       cv2.imwrite('marker.png',

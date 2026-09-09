@@ -75,6 +75,21 @@ kapalı kalır.
 | petri | −20,2 … +28,8 | −32,0 … +31,0 | −28,8 … +14,2 | ✅ |
 | kedi | −21,2 … +20,8 | −30,0 … +26,0 | −23,8 … +7,2 | ✅ |
 
+**YERLEŞİM KONTROL LİSTESİ (her deneyden önce):**
+
+1. **Tepsi:** hedef her seferinde AYNI yerde dursun — tepsinin kabin içindeki konumunu işaretle
+   (bant/çentik). Konum değişirse `hedef_duzlem_cm` yeniden ölçülmelidir.
+2. **Kalınlık:** ölçülecek düzlem hedefin **üst yüzeyi** değil, modelin baktığı **merkez**
+   yüksekliğidir: petri plakasında sıvı yüzeyi, fantomda tümör odaklarının gömülü olduğu düzlem.
+   Tepsi yüksekliğine hedefin yarım kalınlığını ekleyerek yaz.
+3. **İşaret ve hedef AYNI karede:** kabin işareti (arka duvar) kadrajdan çıkarsa konum
+   ölçülemez; arayüz "kabin işareti görünmüyor" der ve **öneri üretmez** (karar #4).
+4. **Parlama:** işaret üzerinde yansıma olmasın; kabin ışığını hedefin üstüne, işaretin yüzüne
+   değil doğrult.
+5. **⚠️ TELEFON KAMERASI KULLANILMAZ** (karar #15): konum kabin çerçevesinde ölçülür, telefon o
+   çerçevenin dışındadır. Araştırma AI Pro yalnız kabin bilgisayarındaki Kontrol → AI Pro
+   ekranında çalışır; telefonda kartlar "masaüstü kabin kamerası ister" der.
+
 **Marker yapıştırma kontrolü (henüz yapılmadı):** sayfayı arka duvara **düz** yapıştır, kenarları
 kabin kenarlarına **paralel** olsun, "▲ ÜST" oku tavana baksın. Kod bu varsayımla marker→kabin
 dönüşümünü diag(−1, +1, −1) olarak kurar. **Eğik yapıştırılırsa** bu yetmez; tam rotasyonun

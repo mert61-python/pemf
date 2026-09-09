@@ -4,7 +4,7 @@
 
 **Kuyucuk tespiti** = eğitilmiş **YOLO11m-seg** modeli (mAP50=0.984, mAP50-95=0.961, 22.3M param) — model yolu: [`../yolo11m-seg.pt`](../yolo11m-seg.pt) (aynı klasör).
 
-Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir aynı** pattern (ArUco DICT_5X5_100 + solvePnP).
+Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir aynı** pattern (ArUco **DICT_5X5_50**, kenar **10,0 cm** + solvePnP — basılı sayfa: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`).
 
 ---
 
@@ -17,7 +17,7 @@ Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir 
 | Performans | mAP@50=0.866, OKS=0.94 | **mAP50=0.984, mAP50-95=0.961** |
 | **Hedef nokta** | **10 organ (kalp, böbrek...)** | **N kuyucuk (W1, W2, ...)** |
 | Çıktı x,y,z | 10 organ cabin frame mm | **N kuyucuk cabin frame mm** |
-| Kalibrasyon | ArUco DICT_5X5_50 + solvePnP | **ArUco DICT_5X5_100 + solvePnP** |
+| Kalibrasyon | ArUco DICT_5X5_50 + solvePnP | **ArUco DICT_5X5_50 + solvePnP** (aynı sayfa) |
 | Cabin pattern | `cabin_config.yaml` | `cabin_config.yaml` (aynı) |
 | Predictor | Hibrit Çok-Başlı | **PetriPredictor** (BaggingRegressor R²=0.9849) |
 
@@ -158,11 +158,11 @@ results/<image_stem>/
 
 ```python
 import cv2
-d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_100)
+d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
 cv2.imwrite("marker_id0.png", cv2.aruco.generateImageMarker(d, 0, 500))
 ```
 
-5 cm × 5 cm yazdır, kabinin sol duvarına yapıştır. ArUco yoksa `--petri-diameter-cm` ile kalibrasyon.
+⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf` — kenar **10,0 cm**, %100 ölçekte bas. Sözlük/kenar `cabin_config.yaml`'daki `aruco.dict` ve `aruco.real_cm` ile AYNI olmalı (yanlış kenar = sessiz ÖLÇEK hatası). Kabin işareti ARKA duvarın sol-üstüne yapıştırılır (onaylı geometri 2026-09-08 — bkz. `ai_hub/KABIN_KURULUM_KILAVUZU.md`). ArUco yoksa `--petri-diameter-cm` ile ölçek verilebilir, ama o modda **araştırma AI Pro hedefi reddeder** (karar #4).
 
 ### 2. Kamera kalibre et (opsiyonel — ArUco modunda)
 
@@ -231,7 +231,7 @@ python -m petri_cv.cli -c petri_cv/cabin_config.yaml \
 
 | Mod | Tetiklenme | mm_per_px | area_mm2 hesabı |
 |---|---|---|---|
-| **`aruco_pnp`** | ArUco DICT_5X5_100 marker varsa | 0.0 | Contour cabin-frame integration (ray-plane) |
+| **`aruco_pnp`** | ArUco DICT_5X5_50 marker varsa | 0.0 | Contour cabin-frame integration (ray-plane) |
 | **`petri_diameter`** | `--petri-diameter-cm` verilmiş | sabit | `area_px × mm_per_px²` |
 | **`pixel`** | İkisi de yok | 1.0 | `area_px` (px = mm) |
 
@@ -240,7 +240,7 @@ python -m petri_cv.cli -c petri_cv/cabin_config.yaml \
 ## CLI Çıktı Örneği
 
 ```
-[CABIN  ] cabin=petri_helmholtz_v1 aruco=DICT_5X5_100/5.0cm ...
+[CABIN  ] cabin=petri_helmholtz_v1 aruco=DICT_5X5_50/10.0cm ...
 [PETRI  ] diameter = 5.0 cm (None=piksel mod)
 [YOLO   ] yolo11m-seg.pt conf=0.25 imgsz=640
 

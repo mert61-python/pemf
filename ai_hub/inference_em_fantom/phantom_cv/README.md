@@ -130,13 +130,23 @@ results/<image_stem>/
 
 ### 1. Marker bas (opsiyonel — ArUco modu için)
 
+⚠️ **BASILI SAYFAYI KULLAN:** `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_10cm_A4.pdf`
+(DICT_5X5_50, kenar **10,0 cm**, %100 ölçekte bas — sayfadaki cetvel çubuğuyla doğrula).
+Sözlük ve kenar uzunluğu `cabin_config.yaml`'daki `aruco.dict` / `aruco.real_cm` ile AYNI
+olmak ZORUNDA: yanlış sözlük işaretin HİÇ bulunmamasına, yanlış kenar uzunluğu ise sessizce
+**ölçek hatasına** (3B koordinat 2 kat yanlış) yol açar.
+
+Kendin üretmek istersen (aynı sözlük, aynı boyut):
+
 ```python
 import cv2
-d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_100)
+d = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
 cv2.imwrite("marker_id0.png", cv2.aruco.generateImageMarker(d, 0, 500))
 ```
 
-5 cm × 5 cm yazdır. ArUco olmasa da pipeline çalışır (`--phantom-length-cm`).
+⚠️ ArUco olmadan pipeline yine çalışır (`--phantom-length-cm`) ama o modda **araştırma
+AI Pro hedefi REDDEDER** (kalibrasyonsuz güven tavanı 0,25 < eşik 0,3, sahip kararı #4);
+işaretsiz mod yalnız AI Hub tek-foto analizi içindir.
 
 ### 2. Kamera kalibre et (opsiyonel — ArUco modunda)
 
@@ -183,7 +193,7 @@ python -m phantom_cv.cli -c phantom_cv/cabin_config.yaml \
 ## CLI Çıktı Örneği
 
 ```
-[CABIN  ] cabin=phantom_helmholtz_v1 aruco=DICT_5X5_100/5.0cm ...
+[CABIN  ] cabin=phantom_helmholtz_v1 aruco=DICT_5X5_50/10.0cm ...
 [PHANTOM] length = 10.0 cm (None=piksel mod)
 [MANUAL ] fallback = OFF
 [BATCH ] 4 goruntu islenecek
