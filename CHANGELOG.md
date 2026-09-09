@@ -104,7 +104,12 @@
 ### Not
 
 Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
-Paket kimligi ve sha degerleri yapi alindiktan sonra bu bolume yazilir (manifestten).
+
+Paket kimliği (`buildId`): `d56a19296ffd`. Tek-parca `base.zip` bu surumden itibaren YOK
+(bkz. "Paketleme" basligi) — onceki kayitlardaki "Monolit base.zip sha" satirinin karsiligi
+artik bulunmuyor. deps katmani DEGISMEDI (ust uste 6. kez): `client-app-v1.9.41` etiketindeki
+`base-deps.zip` aynen kullanilir, yeniden yuklenmez. Bu yayinda sahaya inen tek paket
+`base-app.zip` (81.341.963 bayt).
 
 ## app 1.9.45 — 2026-09-09 (🩹 AI gecmisinde duzeltme kutusu, yara yonu ARTIK UYGULANIYOR, girdi onizlemesi)
 
