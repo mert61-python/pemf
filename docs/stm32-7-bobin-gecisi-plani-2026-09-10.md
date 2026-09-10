@@ -484,7 +484,7 @@ Bu geçiş sadece pin taşımıyor; **sahada tekrar eden bir arıza ailesini kö
 | Faz | İş | Çıktı |
 |---|---|---|
 | **0** | ✅ Sahip kararları alındı (bkz. başlık) · ⏳ bobin 6-7 sargı yönü ölçümü **BEKLİYOR** | maske bitleri |
-| **1** | Protokol 88→120 (Grup A) + simülatör + kapılar. **Sensör yok, ESP hâlâ açık.** | STM 7 bobin sürüyor; 6-7 pinleri fiziksel bağlı değil → görünür değişiklik yok, süit yeşil |
+| **1** | ✅ **BİTTİ** (`07c2d4c`) — protokol 88→120, pin tablosu, sürüklenme kaynakları, 5 mutasyon kanıtı. Tam süit **2615 geçti**. ⚠️ REFLASH + YAYIN bekliyor | STM 7 bobin sürebiliyor; backend topolojisi hâlâ 1-5, bobin 6-7 alanları SIFIR gidiyor |
 | **2** | Bobin 6-7 kablolaması + tezgâh: ISR ölçümü, darbe kenarı, alan yönü, doz | 7 bobin STM'den sürülüyor; ESP'ler hâlâ takılı ama **kullanılmıyor** |
 | **3** | I2C1+I2C2 + MLX90614/MLX90393 (yalnız bobin 6-7) + `STM_TELE` çerçevesi + backend/DB yolu | gerçek sıcaklık/alan geri geliyor; 48 °C istemci interlock'unun bobin 6-7'de tetiklendiği doğrulanıyor (R1). Termal kesme **eklenmiyor** (karar 2), ACS712 **taşınmıyor** (karar 3) |
 | **4** | Topoloji anahtarı (Grup B) + arayüz (Grup C) | `ESP_COIL_IDS = set()`; ESP kodu uykuda, silinmiş değil |
@@ -496,6 +496,18 @@ dolayısıyla bobin 6-7'de kalan **tek** otomatik katman, sıcaklığın arayüz
 tamamen korumasız kalır. Sıra bu yüzden pazarlık konusu değil.
 
 ⚠️ Firmware pakete **hiç girmez** → her fazda STM'e **elle reflash** (ST-Link/USB).
+
+⚠️⚠️ **FAZ 1 ATOMİK SEVK GEREKTİRİR.** Paket 88 → 120 bayt oldu. Firmware ve backend
+**birlikte** gitmezse boyut ve CRC tutmaz → firmware **her paketi NACK'ler** → **hiçbir bobin
+çalışmaz** (5'i dahil). Yani:
+
+* STM reflash edilip uygulama eski sürümde kalırsa → bobinler çalışmaz
+* Uygulama yayınlanıp STM eski firmware'de kalırsa → bobinler çalışmaz
+
+Sahibin zaten bekleyen bir reflash borcu var (maske 0x00 düzeltmesi, §2.4) — bu ikisi
+**aynı reflash'ta** gitmeli. Paketin sürüm alanı olmadığı için uyumsuzluk zarif değil:
+`STM_NACK` yağar ve backend son paketi tekrar oynatır. Belirti nettir ama sebebi
+loglara bakmadan anlaşılmaz.
 
 ---
 
