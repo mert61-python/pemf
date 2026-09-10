@@ -27,6 +27,42 @@
 
 1.9.47+ kurulu cihazlar bu surume kendiliginden gecer.
 
+## app 1.9.47 — 2026-09-10 (🩹 bobin baglantisi kesilince kart artik "Offline" diyor)
+
+### Masaustu istemci
+
+- **Bobin koptugunda kart "Hazir"da asili kaliyordu.** Hotspot kapatildiginda ya da bir ESP
+  aga erisimini kaybettiginde bildirim merkezine "Bobin N baglantisi kesildi" DUSUYOR, ama
+  bobin karti hala **"Hazir"** gosteriyordu; "Offline"a hic donmuyordu. Operator icin bu,
+  susmus bir bobini calismaya hazir sanmak demek.
+- **Sebep olculdu:** backend'in `offline` olay dali sunucu durumunu dogru guncelliyor ve
+  bildirimi atiyordu, ama istemciye `coil_status` **yayini yapmiyordu**. Arayuz `connected`
+  alanini YALNIZCA o yayindan ya da ilk baglantidaki anlik goruntuden ogrenir; kartin
+  uzerindeki etiket dogrudan o alandan gelir (Aktif / Hazir / Offline).
+- **Iki mekanizma birbirini kilitliyordu.** Telemetri bekcisi (30 sn sessizlik) normalde bu
+  yayini yapardi, ama demote kosulu "bobin hala bagli mi" idi ve `offline` dali onu ZATEN
+  dusurmus oluyordu; bekci bobini atliyor, dolayisiyla yayin hic gitmiyordu. Arayuz ancak tam
+  yeniden baglanmada (yeni anlik goruntu) kendini duzeltiyordu.
+- **Duzeltme:** `offline`/`wifi_disconnected` ve `wifi_connected` dallarinin ikisi de artik
+  `coil_status` yayinliyor. Anlik goruntu kilit ICINDE alinir, yayin kilit DISINDA yapilir
+  (bekcinin zaten dogru olan deseni). Ayna yol da duzeldi: bobin geri geldiginde kart
+  "Offline"da asili kalmiyor.
+
+### Not
+
+Mobil uygulama (2.3.33), launcher (1.9.51) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
+
+ESP8266 firmware duzeltmeleri **BU PAKETTE DEGIL.** Ayni turda iki firmware degisikligi yapildi
+(portal artik istasyon modunu kilitlemiyor, yani bobin hotspot dondugunde yeniden baglaniyor;
+yerel termal kesme esigi sahip karariyla yukseltildi) ama **firmware pakete hic girmez** —
+kartlara USB'den elle reflash gerekir.
+
+Paket kimliği (`buildId`): `f766e69ce0f2`. Monolit `base.zip` sha: `50df3bb27978`.
+deps katmani DEGISMEDI (ust uste 7. kez): `client-app-v1.9.41` etiketindeki `base-deps.zip`
+aynen kullanilir, yeniden yuklenmez. Launcher >=1.9.13 katmanli yolu tercih ettigi icin
+kliniklerin indirdigi tek yeni paket `base-app.zip` (81.348.586 bayt); tek-parca `base.zip`
+(1.569.059.052 bayt) yalnizca <=1.9.12 istemciler icin yayinda tutuluyor.
+
 ## app 1.9.46 — 2026-09-09 (🩹 guncelleme sonrasi "Beklenmeyen bir hata" ekrani duzeltildi)
 
 ### Masaustu istemci
