@@ -2,7 +2,29 @@
 
 **Tarih:** 2026-09-10 · **Sahip kararı:** ESP bobinleri (6-8) kaldırılacak; bobin 6 ve 7 STM32F429ZI
 tarafından sürülecek; manyetik + sıcaklık sensörleri de STM'e bağlanacak.
-**Durum:** ANALİZ + PLAN. Kod yazılmadı, pin bağlanmadı. Sahip onayı bekliyor.
+**Durum:** ANALİZ + PLAN. Kod yazılmadı, pin bağlanmadı. **Kapsam kararları alındı — bkz. §9.**
+
+## Sahip kararları (2026-09-10, §9'daki sorulara yanıt)
+
+| # | Karar |
+|---|---|
+| 1 | **Sensör kapsamı: yalnız bobin 6-7.** Bobin 1-5'e sensör bağlanmayacak → mux gerekmez, iki I2C bus yeterli. |
+| 2 | **Termal KESME yapılmayacak** ("6 7 termal kesme boşver"). Sıcaklık **ölçülüp** gösterilecek/kaydedilecek, ama PWM'i otomatik durduran kilit STM'e eklenmeyecek. |
+| 3 | **ACS712 şimdilik duracak** — bobin 6-7 için akım ölçümü taşınmıyor. |
+| 4 | **8. slot kalacak** — kaldırılmıyor. |
+| 5 | **ESP kodu uykuda kalacak** — silinmiyor. |
+| 6 | NTC bloğu: karar 2'nin sonucu olarak **dokunulmuyor** (derleme-kapılı, ADC pinleri ayrılmış kalıyor). |
+
+⚠️ Karar 2'nin anlamı yazılı olsun: bobin 6-7'de **cihaz-taraflı** termal kesme kalmaz. Ağdan
+bağımsız çalışan koruma gider; yerine yalnızca arayüzdeki **48 °C istemci interlock'u** kalır
+(Kontrol sekmesi açık + WS bağlı iken çalışır — bkz. §B2). Bu bilinçli bir sahip kararıdır;
+`api_server.py`'ye ya da STM'e sessizce bir limit **geri eklenmez**.
+
+⚠️ Karar 3'ün anlamı: bobin 6-7 için `currentA` **0.0** kalır. `_coil_last_telemetry` damgası
+sıcaklık/alan geldiği için yazılır → DB satırı üretilir ve akım sütunu 0.0 olarak birikir.
+Bu, geçmişte "0.0 °C ölçüldü" sahte satırını doğuran desenin aynısı. Telemetri çerçevesi
+akım alanını **hiç göndermemeli** (alan yok), backend de yokluğunda akım ortalamasını
+biriktirmemeli (`i_n` sayacı 0 kalsın) — bkz. §3.3.
 
 Bu belge, depodaki gerçek kaynak okunarak yazıldı. Her sayı ya kaynak dosyada işaretli ya da
 "TAHMİN/ÖLÇÜLMELİ" olarak etiketli. Tahminleri gerçek gibi sunmuyorum.
@@ -43,12 +65,47 @@ Bugün bobin 6-8'i aşırı ısınmada durduran **tek** mekanizma 8266'nın kend
 | ESP8266 | 100 °C kesme + 97 °C histerezis — **çalışan tek katman** |
 
 ESP'yi çıkarıp STM'e sıcaklık okuma + kesme **eklemeden** geçiş yapılırsa bobin 6-7 için
-sistemde hiçbir termal kesme kalmaz. Bu, geçişin en kritik ön koşuludur ve tezgâhta
-doğrulanmadan sahaya çıkmamalıdır.
+sistemde hiçbir termal kesme kalmaz.
 
-Ayrıca bir **eşik kararı** gerekiyor: STM'in NTC bloğunda `NTC_KESME_C 48.0f` yazıyor
-(`main.c:629`), sahip ise 8266 için 100 °C dedi. Bobin 6-7 STM'e taşınırken hangi eşik
-geçerli olacak? Sessizce 48'e dönmek, dünkü kararı iptal eder.
+**→ SAHİP KARARI (2026-09-10): kesme eklenmeyecek** (yukarıdaki karar 2). Yani geçişten sonra
+tablo şöyle olur ve **bilinçli olarak** böyle kalır:
+
+| Katman | Bobin 1-5 (bugün) | Bobin 6-7 (bugün) | Bobin 6-7 (geçiş sonrası) |
+|---|---|---|---|
+| Backend | yok | yok | yok |
+| STM32 firmware | yok (NTC derleme-kapılı) | — | **yok** (sahip kararı) |
+| ESP8266 firmware | — | 100 °C kesme | **devre dışı** |
+| **İstemci (arayüz)** | tetiklenemez — ölçüm yok | **48 °C'de STOP** | **48 °C'de STOP** |
+
+**DÜZELTME — "hiçbir katman kalmaz" doğru değil.** Arayüzde bir **istemci-taraflı interlock**
+var ve ölçüm gelen her bobinde çalışıyor:
+
+```
+pf/src/components/domain/CoilParameterPanel.tsx:21   const SAFE_TEMP_CUTOFF = 48;
+pf/src/components/domain/CoilParameterPanel.tsx:143  const overheating = running && objectTemp > SAFE_TEMP_CUTOFF;
+                                                     → sendCommand(false) + "otomatik durduruldu"
+```
+
+Yani bobin 6-7 sıcaklığı STM telemetrisiyle bildirmeye başladığı anda bu interlock onlara
+**kendiliğinden** uygular. Kaybedilen şey *bütün* koruma değil, **cihaz-taraflı** koruma.
+Farkı önemli: istemci interlock'u yalnız Kontrol sekmesindeki panel **ekranda** ve WS **bağlı**
+iken çalışır; ağ koparsa ya da operatör başka sekmedeyse tetiklenmez. Cihaz-taraflı kilit ise
+ağdan bağımsızdı. Geçiş sonrası bobin 6-7'de kalan **tek** otomatik katman, ağa ve açık arayüze
+bağımlı olan zayıf katmandır.
+
+⚠️ **BUGÜN VAR OLAN ÇELİŞKİ (geçişten bağımsız):** istemci 48 °C'de durduruyor, 8266 firmware'i
+ise dün 100 °C'ye çekildi. Kontrol sekmesi açıkken bobin **48'de** durur — yani 100 °C kararı
+pratikte çoğu zaman **hiç devreye girmiyor**. İki eşik tek bir yerden türemiyor ve bu, deponun
+tekrar eden "sihirli sayı ikinci bir yere kopyalanmış" sınıfı. `SAFE_TEMP_CUTOFF` da senin
+kararına hizalanmalı mı, karar senin.
+
+`NTC_KESME_C 48.0f` (`main.c:629`) ile 8266'nın 100 °C'si arasındaki eşik seçimi ise **konusuz
+kaldı** — STM'de kesme derlenmediği için orada hiçbir eşik uygulanmıyor.
+
+⚠️ Arayüz metni de kontrol edilmeli: `CoilParameterPanel:204-215`'teki "ölçüm yok → otomatik
+termal durdurma uygulanmaz" rozeti bobin 6-7'de artık **yanlış** olacak (ölçüm gelecek), ama
+"bobin otomatik durduruldu" mesajı da cihazın kendini durdurduğu izlenimini vermemeli — durduran
+**arayüz**. Bu ayrım operatöre görünür kalmalı.
 
 ### B3 — ⚠️ `.ioc` firmware'i TARİF ETMİYOR; CubeMX "Generate Code" bu işi bozar
 
@@ -186,13 +243,16 @@ yönü **tezgâhta ölçülmeden** maske biti belirlenemez (bkz. §6).
 `main.c:614` NTC için beş ADC pini **ayırmış**: PA0, PA3, PA4, PC0, PC3 — ama NTC'ler hiç
 bağlanmadı ve blok `PEMF_NTC_TERMAL_ENABLED 0` ile derlenmiyor.
 
-Sıcaklık MLX90614 (I2C) ile okunacaksa **NTC yolu terk edilir** ve bu beş ADC pini serbest
-kalır → ACS712'ler için fazlasıyla yeter. Terk edilmezse yeni pin gerekir: PC2 (ADC1_IN12),
-PA6 (ADC1_IN6).
+**→ SAHİP KARARI: ACS712 şimdilik taşınmıyor (karar 3), termal kesme de yapılmıyor (karar 2).**
+Dolayısıyla bu fazda **hiçbir ADC pini kullanılmıyor**: NTC bloğu derleme-kapılı olarak olduğu
+gibi duruyor, ayrılmış beş pin (PA0, PA3, PA4, PC0, PC3) ayrılmış kalıyor.
 
-⚠️ Bu bir **karar** noktası: NTC bloğu ile MLX90614 aynı kesmenin iki farklı gerçeklenmesi.
-İkisini birden bırakmak, iki farklı eşikle çelişen iki kesme demektir. Biri seçilmeli.
-(NTC bloğu belgelenmiş bir açık P0'dır — silmeden önce kararın yazılı olması lazım.)
+Sonradan akım ölçümü istenirse iki yol var: NTC yolu terk edilirse o beş pin serbest kalır,
+edilmezse PC2 (ADC1_IN12) ve PA6 (ADC1_IN6) boş.
+
+⚠️ İleride termal kesme istenirse o zaman bir **karar** gerekir: NTC bloğu ile MLX90614 aynı
+kesmenin iki farklı gerçeklenmesi; ikisini birden bırakmak iki farklı eşikle çelişen iki kesme
+demektir. (NTC bloğu belgelenmiş bir açık P0'dır — silmeden önce kararın yazılı olması lazım.)
 
 ---
 
@@ -210,8 +270,14 @@ Her MLX90614 fabrikadan 0x5A ile çıkar. Aynı bus'ta iki tanesi **çalışmaz*
 
 MLX90393 bu sorunu yaşamıyor: A0/A1 straplarıyla 0x0C-0x0F, yani bir bus'ta **4 tane**.
 
-**Öneri:** kapsam bobin 6-7 ise **A** (iki bus, ek çip yok). Kapsam 7 bobinin hepsi ise **C**
-(mux) — ve bu durumda I2C2 boş kalır, yedek olur.
+**→ SAHİP KARARI: kapsam yalnız bobin 6-7 (karar 1) → yol A.** İki ayrı bus, ek çip YOK,
+mux alınmayacak. MLX90614'ler adres programlaması gerektirmiyor: biri I2C1'de, biri I2C2'de,
+ikisi de fabrika adresi 0x5A'da kalıyor. MLX90393'ler de aynı iki bus'ta 0x0C'de durabilir
+(farklı bus → çakışma yok).
+
+Bobin 1-5 sensörsüz kalıyor — `objectTemp`/`magneticMt` onlar için **0.0** kalacak ve arayüzdeki
+"ölçüm yok" rozeti doğru olmaya devam edecek. İleride 7 bobinin hepsi istenirse yol **C**
+(TCA9548A mux) gerekir; o zaman I2C2 yedeğe düşer.
 
 ### 3.2 ⚠️ I2C uzun kablo sevmez — bu geçişin gizli riski
 
@@ -240,13 +306,20 @@ STM'in yukarı yönlü tek kanalı ASCII ACK satırı: `STM_READY`, `STM_OK: D=.
 `STM_NACK`. **Sıcaklık/alan/akım için alan yok.** Yani sensör eklemek, aynı zamanda yeni bir
 telemetri çerçevesi demek:
 
-1. Firmware: yeni satır, ör. `-> STM_TELE: C=<id>,T=<obj>,A=<amb>,B=<mT>,I=<A>` (bobin başına,
+1. Firmware: yeni satır, ör. `-> STM_TELE: C=<id>,T=<obj>,A=<amb>,B=<mT>` (bobin başına,
    ~1 Hz). ASCII kalması akıllıca — mevcut satır-tabanlı okuyucu ve `readline()` yolu değişmez.
+   ⚠️ **Akım alanı YOK** (karar 3: ACS712 taşınmıyor). Alanı 0.0 ile doldurmak, geçmişte
+   "0.0 °C ölçüldü" sahte satırını doğuran desenin aynısıdır — alan **hiç gönderilmemeli**.
 2. `headless_core`: ayrıştırıcı + `hardware.stm.telemetry` olayı.
 3. `api_server`: olayı `_live_state["coils"][idx]`'e yaz **ve** `_coil_last_telemetry[idx]`'i
    damgala — aksi halde DB kaydı yine üretilmez (`api_server.py:3291` kapısı).
 4. `coil_status` + `sensor_data` WS yayınları (ESP yolundaki ile **aynı sözleşme**; istemci
    tarafında hiçbir şey değişmez).
+5. ⚠️ Dakika-ortalaması biriktiricisi (`api_server.py:3296+`, `_minute_acc`) akım için
+   `i_sum`/`i_n` tutuyor. Akım gelmeyeceği için `i_n` **0 kalmalı**; `currentA`nın
+   `_live_state`'teki 0.0 başlangıç değeri "ölçüm" sayılmamalı. Bu, `_coil_last_telemetry`
+   kapısının çözdüğü sorunun **alan bazında** tekrarı: bobin artık telemetri gönderiyor, ama
+   yalnız **bazı** alanları gönderiyor.
 
 Bu tasarım bilinçli: istemci ve DB, verinin ESP'den mi STM'den mi geldiğini **bilmesin**.
 
@@ -306,9 +379,10 @@ hepsini kapılar.
 | `test_stm32_source_parity.py` | 88 → **120**; `NUM_COILS` üç kaynakta 7 |
 | YENİ `test_stm_bobin_sayisi_tek_kaynak.py` | firmware initializer'larındaki eleman sayısı == `NUM_COILS` (eksik initializer sessizce sıfırlanır — **derleyici uyarmaz**) |
 | YENİ `test_stm_ack_formati_turetilmis.py` | ACK format dizesinde **sabit sayıda `%d` grubu OLMASIN** (termal mesaj kapısının aynı sınıfı) |
-| YENİ `test_stm_termal_kesme_zorunlu.py` | 7 bobinin **hepsi** için derlenen bir termal kesme var; eşik sabitten türetiliyor |
+| YENİ `test_stm_termal_kesme_EKLENMEDI.py` | Sahip kararı 2'yi **iki yönlü** pinler: (a) STM'e sessizce bir sıcaklık limiti eklenmemiş, (b) `SAFE_TEMP_CUTOFF = 48` istemci interlock'u **duruyor** — tek kalan otomatik katman kazara silinmesin |
+| YENİ `test_stm_telemetri_akim_alani_YOK.py` | `STM_TELE` çerçevesi akım alanı **taşımıyor** ve backend akım ortalamasını biriktirmiyor (karar 3; sahte-0.0 sınıfı) |
 | YENİ `test_bobin_topolojisi.py` | `STM_COIL_IDS ∪ ESP_COIL_IDS` çakışmasız; hiçbir bobin iki yoldan sürülmüyor; 8. slot `connected=False` |
-| `test_esp8266_termal_esik.py` | ESP yolu uykuya alınırsa kapı **BAYAT** olur → koşulu güncelle, sessizce yeşile bırakma |
+| `test_esp8266_termal_esik.py` | ESP kodu uykuda kalıyor (karar 5) → kapı **koşmaya devam eder** ve 100 °C'yi pinlemeyi sürdürür. ⚠️ Ama artık **ölü kodu** pinliyor: bobin sürülmediği için eşiğin saha etkisi yok. Kapının başlığına bu not düşülmeli, yoksa bir sonraki okuyan "termal koruma var" sanır. |
 | `test_stm_unipolar_ayna.py` | ayna senkronu (elle düzenleme yasağı) |
 
 Ayrıca: 284 test dosyasından **50'si** ESP/MQTT'ye, **19'u** STM sabitlerine dokunuyor. Geçişten
@@ -346,7 +420,7 @@ dead-time'ı çevrim-sayılı gerçek bir gecikmeyle değiştir.
 
 | # | Risk | Kabul kriteri |
 |---|---|---|
-| R1 | **Bobin 6-7 termal korumasız** (§B2) | Bobini ısıt, eşikte PWM'in **gerçekten** kesildiğini ve histerezisle döndüğünü gör. Eşik değeri sahip kararıyla yazılı olsun. |
+| R1 | **Bobin 6-7'de cihaz-taraflı termal kesme yok** (sahip kararı 2) | Kesme **eklenmiyor** → doğrulanacak bir kesme de yok. Doğrulanacak olan şu: sıcaklık ölçümü arayüze **ulaşıyor** ve 48 °C istemci interlock'u bobin 6-7'de **gerçekten** tetikleniyor. Bu tek kalan otomatik katman; sessizce çalışmıyor olması en kötü durum. |
 | R2 | **Sargı yönü bilinmiyor** → bobin 6-7 diğerlerini söndürebilir | `PEMF_BOBIN_TERS_MASKESI` biti, kabin merkezinde z ölçümüyle belirlenir. **Bu ölçüm hâlâ eksik** (sol + sağ duvar bobinleri). Ayrıca pankek işaret-dönmesi tuzağı: `sqrt(x²+y²)/|z| < 0,15` şartı. |
 | R3 | Uzun kablo I2C'yi düşürür | Gerçek uzunlukta kablo + **bobinler sürülürken** 10 dk kesintisiz okuma, NACK/kurtarma sayacı 0 |
 | R4 | ISR taşması | Skopla ISR süresi ölçümü; 7 bobin aynı fazda, en yüksek frekansta |
@@ -379,30 +453,38 @@ Bu geçiş sadece pin taşımıyor; **sahada tekrar eden bir arıza ailesini kö
 
 | Faz | İş | Çıktı |
 |---|---|---|
-| **0** | Sahip kararları (§9) + bobin 6-7 sargı yönü ölçümü | maske bitleri, eşik değeri, sensör kapsamı |
+| **0** | ✅ Sahip kararları alındı (bkz. başlık) · ⏳ bobin 6-7 sargı yönü ölçümü **BEKLİYOR** | maske bitleri |
 | **1** | Protokol 88→120 (Grup A) + simülatör + kapılar. **Sensör yok, ESP hâlâ açık.** | STM 7 bobin sürüyor; 6-7 pinleri fiziksel bağlı değil → görünür değişiklik yok, süit yeşil |
 | **2** | Bobin 6-7 kablolaması + tezgâh: ISR ölçümü, darbe kenarı, alan yönü, doz | 7 bobin STM'den sürülüyor; ESP'ler hâlâ takılı ama **kullanılmıyor** |
-| **3** | I2C + sensörler + `STM_TELE` çerçevesi + backend/DB yolu | gerçek telemetri geri geliyor; **termal kesme derlenip doğrulanıyor** (R1) |
+| **3** | I2C1+I2C2 + MLX90614/MLX90393 (yalnız bobin 6-7) + `STM_TELE` çerçevesi + backend/DB yolu | gerçek sıcaklık/alan geri geliyor; 48 °C istemci interlock'unun bobin 6-7'de tetiklendiği doğrulanıyor (R1). Termal kesme **eklenmiyor** (karar 2), ACS712 **taşınmıyor** (karar 3) |
 | **4** | Topoloji anahtarı (Grup B) + arayüz (Grup C) | `ESP_COIL_IDS = set()`; ESP kodu uykuda, silinmiş değil |
 | **5** | Yayın + saha | — |
 
-⚠️ **Faz 3, faz 4'ten ÖNCE bitmeli.** Sırayı bozup ESP'leri önce kapatmak, bobin 6-7'yi
-termal korumasız ve telemetrisiz bırakır (§B2).
+⚠️ **Faz 3, faz 4'ten ÖNCE bitmeli.** Cihaz-taraflı kesme bilinçli olarak yok (karar 2);
+dolayısıyla bobin 6-7'de kalan **tek** otomatik katman, sıcaklığın arayüze ulaşmasına bağlı olan
+48 °C istemci interlock'u. Faz 3 bitmeden ESP'leri kapatmak o katmanı da götürür → bobin 6-7
+tamamen korumasız kalır. Sıra bu yüzden pazarlık konusu değil.
 
 ⚠️ Firmware pakete **hiç girmez** → her fazda STM'e **elle reflash** (ST-Link/USB).
 
 ---
 
-## 9. Sahibe karar soruları
+## 9. Karar soruları — ✅ YANITLANDI (2026-09-10)
 
-1. **Sensör kapsamı:** yalnız bobin 6-7 mi (2 sensör çifti, iki I2C bus, ek çip yok), yoksa
-   7 bobinin hepsi mi (TCA9548A mux gerekir)?
-2. **Termal eşik:** bobin 6-7 için 8266'daki **100 °C** mi devredilecek, yoksa STM'in NTC
-   bloğundaki 48 °C mi? Bobin 1-5 için de eşik uygulanacak mı?
-3. **NTC yolu:** MLX90614 seçilince derleme-kapılı NTC bloğu **terk mi** edilecek (5 ADC pini
-   serbest kalır) yoksa duracak mı?
-4. **Akım ölçümü:** ACS712'ler bobin 6-7 için taşınacak mı, yoksa `currentA` bu bobinler için
-   düşecek mi? (DB/PDF raporu bu alanı okuyor)
-5. **8. slot:** tamamen kaldırılsın mı, yoksa boş/gizli kalsın mı? (öneri: kalsın — WS sözleşmesi
-   ve ~50 test dosyası bozulmaz)
-6. **ESP kodu:** silinsin mi, uykuya mı alınsın? (öneri: **uykuya** — geri dönüş bir satır)
+Kararların tamamı belgenin başındaki tabloda. Özet: (1) sensörler yalnız bobin 6-7 → mux yok,
+iki I2C bus · (2) termal **kesme yok** · (3) ACS712 şimdilik durur · (4) 8. slot kalır ·
+(5) ESP kodu uykuda kalır · (6) NTC bloğuna dokunulmaz.
+
+### Açık kalan tek girdi
+
+**Bobin 6-7'nin sargı yönü ölçümü** (sol duvar + sağ duvar). `PEMF_BOBIN_TERS_MASKESI` biti
+bundan çıkıyor; yanlış bit kabin merkezinde alanı **söndürür** ve bu sessiz bir doz hatasıdır
+(`efield_live.py` `duty_sum` bobinleri birlikte sayıyor). Faz 1 bu ölçüm olmadan da yapılabilir
+— maske yalnız faz 2'de (kablolama) gerekiyor.
+
+### İleride tekrar sorulacak (bugün kapalı)
+
+* `SAFE_TEMP_CUTOFF = 48` istemci eşiği, 8266 için verilen 100 °C kararına hizalanmalı mı?
+  (bugün ikisi çelişiyor — §B2)
+* Bobin 6-7'ye akım ölçümü ve/veya cihaz-taraflı termal kesme sonradan eklenecek mi?
+* Bobin 1-5'e de sensör istenirse TCA9548A mux gerekir.
