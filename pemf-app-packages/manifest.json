@@ -83,12 +83,12 @@
   },
   "mobile": {
     "android": {
-      "version": "2.3.33",
-      "versionCode": 40,
-      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.39/PEMF_Vet_Mobil-2.3.33.apk",
-      "sha256": "e3e5183167d6fb3e0d453b0f6fe51469436fdf5b32b02936b537de7c50927f30",
-      "size": 128509127,
-      "notes": "Manuel kontrolde frekans/duty sinirsiz (cihaz siniri gecerli); ESP bobinlerinde cihaz onayi (bekleniyor/onayladi/reddetti/onay gelmedi); AI hata mesajlari eylem soyler (gonderilemedi / zaman asimi / gecersiz yanit)."
+      "version": "2.3.34",
+      "versionCode": 41,
+      "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.48/PEMF_Vet_Mobil-2.3.34.apk",
+      "sha256": "b24cea2b0c31c60c875a7b232bc8315a883176491d35f811012a7fef8d08bb12",
+      "size": 128539115,
+      "notes": "Bobin 6-7 artik kabloyla (STM32) suruluyor; kontrol ekraninda tek liste: Bobinler 1-7. Bobin 1-5'te akim olcumu goruntuleniyor. Sensoru olmayan olcum artik kisa cizgi (-) gosteriliyor, 0.00 degil. ⚠️ Cihazdaki kontrolcu yazilimi da guncellenmis olmali."
     }
   }
 }
