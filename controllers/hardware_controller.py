@@ -13,6 +13,7 @@ from utils.stm32_protocol_limits import (
     normalize_frequency_hz,
     normalize_phase_deg,
 )
+from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_FMT
 
 #: Süre VERİLMEDEN başlatılan bir bobinin yazılım deadline'ı (dakika).
 #
@@ -324,10 +325,21 @@ class HardwareController:
         stm32_durs = []
 
         # State okuma + paket kurulumu kilit altinda (keep-alive/API yarisi). RLock re-entrant.
+        # ⚠️ DONGU PAKET GENISLIGINDE, topoloji genisliginde DEGIL (2026-09-10). Firmware
+        # NUM_COILS=7 (bobin 6-7 ESP'den STM'e tasindi) ama backend `coils_state` hala 1-5
+        # tutuyor; taniomlanmayan bobinler SIFIR gider. Bir alan eksik gonderilirse boyut/CRC
+        # tutmaz ve firmware TUM paketleri NACK'ler → hicbir bobin calismaz. Faz 4'te
+        # `coils_state` 7'ye cikinca bu dongu KENDILIGINDEN dogru davranir.
         with self._state_lock:
-            for i in range(1, 6):
-                state = self.coils_state[i]
-                if state["is_running"]:
+            for i in range(1, STM_PAKET_BOBIN_SAYISI + 1):
+                state = self.coils_state.get(i)
+                if state is None:
+                    # Bu bobin backend topolojisinde henuz YOK → sifir alan (surus komutu gitmez).
+                    stm32_duties.append(0.0)
+                    stm32_phases.append(0.0)
+                    stm32_freqs.append(100.0)
+                    stm32_durs.append(0)
+                elif state["is_running"]:
                     stm32_duties.append(state["duty"])
                     stm32_phases.append(state["phase"])
                     stm32_freqs.append(state["freq"])
@@ -354,17 +366,15 @@ class HardwareController:
         # osiloskopla dogrulanmadan uygulanmamalidir.
         ref_ms = int(time.monotonic() * 1000) % 1000
 
-        # Binary STM32 Packet Format:
+        # Binary STM32 Packet Format (genislik = STM_PAKET_BOBIN_SAYISI, su an 7 → 120 bayt):
         # <BB : header (0xAA, 0x55)
-        # 5f  : duty
-        # 5f  : phase
-        # 5f  : freq
-        # 5I  : duration
+        # Nf  : duty · Nf : phase · Nf : freq · NI : duration
         # H   : ref_ms
         # I   : crc32
-
-        fmt = '<BB 5f 5f 5f 5I H'
-        data_bytes = struct.pack(fmt, 0xAA, 0x55, *stm32_duties, *stm32_phases, *stm32_freqs, *stm32_durs, ref_ms)
+        # ⚠️ BICIM DIZESI ELLE YAZILMAZ → utils/stm32_transport.STM_PAKET_FMT (tek kaynak).
+        data_bytes = struct.pack(
+            STM_PAKET_FMT, 0xAA, 0x55, *stm32_duties, *stm32_phases, *stm32_freqs, *stm32_durs, ref_ms
+        )
         crc32_val = zlib.crc32(data_bytes) & 0xFFFFFFFF
         stm_msg = data_bytes + struct.pack('<I', crc32_val)
 

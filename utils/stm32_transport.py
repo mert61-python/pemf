@@ -55,18 +55,33 @@ class Stm32OpenResult:
     ready_line: str
 
 
+#: STM32 binary komut paketindeki BOBİN ALANI SAYISI = firmware `NUM_COILS`.
+#: ⚠️ Bu, backend topolojisindeki STM bobin sayısı DEĞİL, PROTOKOL GENİŞLİĞİdir. İkisi
+#: 2026-09-10'da ayrıldı: firmware 7 bobin sürebiliyor (bobin 6-7 ESP'den taşındı), ama
+#: backend `STM_COIL_IDS` hâlâ 1-5 — kullanılmayan alanlar SIFIR gider. Paket genişliği
+#: firmware ile BİREBİR olmak ZORUNDA: bir alan fazla/eksik → CRC ve boyut tutmaz →
+#: firmware her paketi NACK'ler → HİÇBİR bobin çalışmaz.
+#: Kapı: tests/test_stm32_source_parity.py (bu değeri firmware kaynağından çözüp karşılaştırır).
+STM_PAKET_BOBIN_SAYISI = 7
+
+#: `struct` biçimi ve paket boyu — SAYIYI ELLE YAZMA, yukarıdaki sabitten türet.
+STM_PAKET_FMT = "<BB {n}f {n}f {n}f {n}I H".format(n=STM_PAKET_BOBIN_SAYISI)
+#: crc32 dahil toplam boy (7 bobin → 120 bayt, 5 bobin → 88).
+STM_PAKET_BOYU = struct.calcsize(STM_PAKET_FMT) + 4
+
+
 def build_stm32_zero_duty_packet(freq_hz: float = 100.0) -> bytes:
-    """Build the main.c compatible 5-coil zero-duty packet used as ping/stop."""
-    fmt = "<BB 5f 5f 5f 5I H"
+    """main.c ile uyumlu SIFIR-DUTY paketi (ping/stop). Genişlik: STM_PAKET_BOBIN_SAYISI."""
+    n = STM_PAKET_BOBIN_SAYISI
     ref_ms = int(time.monotonic() * 1000) % 1000
     data = struct.pack(
-        fmt,
+        STM_PAKET_FMT,
         0xAA,
         0x55,
-        *([0.0] * 5),
-        *([0.0] * 5),
-        *([float(freq_hz)] * 5),
-        *([0] * 5),
+        *([0.0] * n),
+        *([0.0] * n),
+        *([float(freq_hz)] * n),
+        *([0] * n),
         ref_ms,
     )
     return data + struct.pack("<I", zlib.crc32(data) & 0xFFFFFFFF)
@@ -259,7 +274,7 @@ class Stm32SerialTransport:
 
         Firmware emits STM_READY at boot, but after the first valid packet it may
         keep running silently. A reopened GUI therefore cannot rely on passive
-        READY lines only. The active probe is a valid 88-byte zero-duty packet:
+        READY lines only. The active probe is a valid zero-duty packet (STM_PAKET_BOYU bayt):
         it is safe for outputs and returns STM_OK when the protocol path works.
         """
         start = time.monotonic()

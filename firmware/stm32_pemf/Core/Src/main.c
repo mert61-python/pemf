@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    main.c
- * @brief   STM32F4 — 5-Kanal Yazılımsal DDS Bipolar Full Bridge PWM Kontrolörü
+ * @brief   STM32F4 — 7-Kanal Yazılımsal DDS Bipolar Full Bridge PWM Kontrolörü
  * @version 2.3.0 (Software DDS — SYM-BIPOLAR Full Bridge + ref_ms Senkron Desteği)
  *
  * ============================================================================
@@ -13,7 +13,7 @@
  *  │                                                                     │
  *  │  TIM1 (50 kHz Kesme Kaynağı) — APB2, 168 MHz                       │
  *  │    Yalnızca Update Interrupt üretir — PWM kanalı KULLANILMAZ        │
- *  │    Her kesmede yazılımsal DDS ile 5 bobinin GPIO çıkışı üretilir    │
+ *  │    Her kesmede yazılımsal DDS ile 7 bobinin GPIO çıkışı üretilir    │
  *  │                                                                     │
  *  │  GPIO Çıkışları (Push-Pull, doğrudan BSRR ile sürülür):            │
  *  │    PC8  (IN_A Bobin 1)   PD12 (IN_B Bobin 1)                      │
@@ -21,6 +21,8 @@
  *  │    PD10 (IN_A Bobin 3)   PD11 (IN_B Bobin 3)                      │
  *  │    PC6  (IN_A Bobin 4)   PC7  (IN_B Bobin 4)                      │
  *  │    PA8  (IN_A Bobin 5)   PA9  (IN_B Bobin 5)                      │
+ *  │    PE13 (IN_A Bobin 6)   PE12 (IN_B Bobin 6)                      │
+ *  │    PE15 (IN_A Bobin 7)   PD13 (IN_B Bobin 7)                      │
  *  │                                                                     │
  *  │  Her bobin BAĞIMSIZ faz kaydırmasına sahiptir!                      │
  *  │  Dead Time: A/B geçişinde NOP döngüsü (DDS_DEADTIME_NOP_ITERS) — ÖLÇÜLMEMİŞ  │
@@ -44,6 +46,10 @@
  *  │    Bobin 3: PWM → PD10 (IN_A) · PD11 (IN_B) kalıcı LOW               │
  *  │    Bobin 4: PWM → PC6  (IN_A) · PC7  (IN_B) kalıcı LOW               │
  *  │    Bobin 5: PWM → PA8  (IN_A) · PA9  (IN_B) kalıcı LOW               │
+ *  │    Bobin 6: PWM → PE13 (IN_A) · PE12 (IN_B) kalıcı LOW  [2026-09-10] │
+ *  │    Bobin 7: PWM → PE15 (IN_A) · PD13 (IN_B) kalıcı LOW  [2026-09-10] │
+ *  │    ⚠️ Bobin 6-7 ESP8266'dan STM'e TASINDI (sahip karari 2026-09-10). │
+ *  │    IN_B pinlerine (PE12/PD13) KABLO YOK → maske bitleri 0 KALMALI.   │
  *  │    ⚠️ Polarite maskesi PEMF_BOBIN_TERS_MASKESI = 0x00 (sahip kararı  │
  *  │    2026-09-10) → HİÇBİR bobinde A↔B ters DEĞİL, darbe DAİMA IN_A.    │
  *  │    IN_B pinlerine kablo YOK; ters sargı DONANIMDA çevrildi. Maskeyi  │
@@ -52,7 +58,7 @@
  *  │    tutulur (yarım-köprü girişi için güvenli durum); fiziksel olarak  │
  *  │    boş bırakılabilir. Başka işe AYRILMIŞ pin YOK — ayırmak için      │
  *  │    coil_gpio[].portA/portB ve Coil_GpioInit değişmeli. BİPOLAR       │
- *  │    projede 10 pinin hepsi (A+B) darbelenir.                          │
+ *  │    projede 14 pinin hepsi (A+B) darbelenir.                          │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -75,20 +81,20 @@
  * UART PAKET FORMATI (AKTIF)
  * ============================================================================
  *
- *   BinaryCmdPacket_t (88 byte):
+ *   BinaryCmdPacket_t (120 byte — 2026-09-10'da 5 bobinden 7'ye cikti):
  *     0xAA 0x55
- *     float duty[5]
- *     float phase[5]
- *     float freq[5]
- *     uint32_t duration[5]
+ *     float duty[7]
+ *     float phase[7]
+ *     float freq[7]
+ *     uint32_t duration[7]
  *     uint16_t ref_ms
  *     uint32_t crc32
  *
  *   d      = Duty cycle    : >= 0.0 (float ratio; üst limit yok, timer tick
- * saturasyonu fiziksel sınırı uygular) — 5 bobin p      = Faz açısı     : 0.0
- * – 360.0 (float, derece)                    — 5 bobin f      = Frekans  : 1.0
- *  – FREQ_MAX (float, Hz)                     — 5 bobin dur    = Süre (dakika)
- * : 0 – DURATION_MAX_MINUTES                        — 5 bobin ref_ms = Periyot
+ * saturasyonu fiziksel sınırı uygular) — 7 bobin p      = Faz açısı     : 0.0
+ * – 360.0 (float, derece)                    — 7 bobin f      = Frekans  : 1.0
+ *  – FREQ_MAX (float, Hz)                     — 7 bobin dur    = Süre (dakika)
+ * : 0 – DURATION_MAX_MINUTES                        — 7 bobin ref_ms = Periyot
  * içi zaman ofseti (int, 0 – period_ms-1) Python tarafından time.monotonic() %
  * 1000 olarak hesaplanır. STM32, g_dds_tick'i bu değere göre hizalar (Sorun 1b
  * fix).
@@ -122,15 +128,17 @@
  *   PD10  → GPIO OUT (IN_A Bobin 3)   PD11  → GPIO OUT (IN_B Bobin 3)
  *   PC6   → GPIO OUT (IN_A Bobin 4)   PC7   → GPIO OUT (IN_B Bobin 4)
  *   PA8   → GPIO OUT (IN_A Bobin 5)   PA9   → GPIO OUT (IN_B Bobin 5)
+ *   PE13  → GPIO OUT (IN_A Bobin 6)   PE12  → GPIO OUT (IN_B Bobin 6, kablo YOK)
+ *   PE15  → GPIO OUT (IN_A Bobin 7)   PD13  → GPIO OUT (IN_B Bobin 7, kablo YOK)
  *   LED   → PB0
  *
  *   SÜRÜŞ KİPİNE GÖRE (Core/Inc/pemf_surus.h):
- *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 10 pinin HEPSİ darbelenir; bobin 1 ve 2'de
- *                                      A↔B rolleri maske ile ters çevrilebilir, ama
+ *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 14 pinin HEPSİ darbelenir; A↔B rolleri
+ *                                      maske ile ters çevrilebilir, ama
  *                                      PEMF_BOBIN_TERS_MASKESI 0x00 → hiçbir bobinde ters YOK.
- *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM, HEPSİ IN_A: bobin 1-5 sırayla
- *                                      PC8 PC9 PD10 PC6 PA8 (IN_B'ler PD12 PE10 PD11 PC7 PA9
- *                                      kalıcı LOW, kablo YOK). Maske 0x00 — sahip kararı.
+ *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM, HEPSİ IN_A: bobin 1-7 sırayla
+ *                                      PC8 PC9 PD10 PC6 PA8 PE13 PE15 (IN_B'ler PD12 PE10 PD11
+ *                                      PC7 PA9 PE12 PD13 kalıcı LOW, kablo YOK). Maske 0x00.
  *                                      Sürülmeyen pinler çıkış olarak kurulu + kalıcı LOW, boşta.
  *
  ******************************************************************************
@@ -210,7 +218,7 @@
 /** @} */
 
 /** Bobin sayısı */
-#define NUM_COILS 5U
+#define NUM_COILS 7U
 
 /** UART RX tampon boyutu (bayt) */
 #define UART_RX_BUF_SZ 128U
@@ -245,7 +253,7 @@ typedef struct {
 } CoilParam_t;
 
 /**
- * 5 bobinin parametre seti.
+ * NUM_COILS bobinin parametre seti.
  * volatile: ISR ve main arasında paylaşıldığı için zorunlu.
  */
 typedef struct {
@@ -280,7 +288,10 @@ typedef struct {
 } BinaryCmdPacket_t;
 #pragma pack(pop)
 
-#define BINARY_PKT_SIZE sizeof(BinaryCmdPacket_t) // 88 byte
+/* ⚠️ SAYIYI ELLE YAZMA: boyut NUM_COILS'ten TUREUR (7 bobin → 120 bayt, 5 bobin → 88).
+ * Python tarafi (hardware_controller / stm32_transport / stm32_simulator) ve
+ * tests/test_stm32_source_parity.py bu boyutu ayni kaynaktan cozer. */
+#define BINARY_PKT_SIZE sizeof(BinaryCmdPacket_t)
 
 uint32_t calculate_crc32(const uint8_t *data, size_t length) {
   uint32_t crc = 0xFFFFFFFF;
@@ -334,6 +345,14 @@ static const PEMF_CoilGPIO_t coil_gpio[NUM_COILS] = {
            .pinA = GPIO_PIN_8,
            .portB = GPIOA,
            .pinB = GPIO_PIN_9}, /* Bobin 5: PA8  (A), PA9  (B) */
+          {.portA = GPIOE,
+           .pinA = GPIO_PIN_13,
+           .portB = GPIOE,
+           .pinB = GPIO_PIN_12}, /* Bobin 6: PE13 (A, KABLOLU), PE12 (B, kablo YOK) */
+          {.portA = GPIOE,
+           .pinA = GPIO_PIN_15,
+           .portB = GPIOD,
+           .pinB = GPIO_PIN_13}, /* Bobin 7: PE15 (A, KABLOLU), PD13 (B, kablo YOK) */
 };
 
 /* ============================================================================
@@ -346,15 +365,11 @@ static const PEMF_CoilGPIO_t coil_gpio[NUM_COILS] = {
  *             → volatile ZORUNLU (bkz. tanımındaki DENETİM notu)
  * ============================================================================
  */
-static volatile CoilParamSet_t g_shadow = {
-    .coil = {{.duty = 0.0f, .phase = 0.0f, .freq = 100.0f, .dur_min = 0},
-             {.duty = 0.0f, .phase = 0.0f, .freq = 100.0f, .dur_min = 0},
-             {.duty = 0.0f, .phase = 0.0f, .freq = 100.0f, .dur_min = 0},
-             {.duty = 0.0f, .phase = 0.0f, .freq = 100.0f, .dur_min = 0},
-             {.duty = 0.0f, .phase = 0.0f, .freq = 100.0f, .dur_min = 0}},
-    .pending = 0,
-    .ref_ms_valid = 0,
-    .ref_ms = 0};
+/* ⚠️ SIFIRLA baslatilir; SIFIR-OLMAYAN varsayilan (freq) Coil_StateInit() icinde DONGUYLE atanir.
+ * NEDEN: eskiden burada bobin basina bir satirlik ELLE yazilmis initializer listesi vardi (5 satir).
+ * NUM_COILS artarsa C eksik elemanlari SESSIZCE sifirlar ve DERLEYICI UYARMAZ → yeni bobinler
+ * freq=0 ile acilir. Tek kaynak NUM_COILS olsun diye elle liste birakilmadi. */
+static volatile CoilParamSet_t g_shadow = {0};
 
 /** ISR'ın doğrudan eriştiği aktif parametre seti.
  *
@@ -381,19 +396,19 @@ static uint8_t g_pwm_started = 0;
  */
 
 /** Her bobin için ayrı DDS tick sayacı (0 … tpp-1, 50kHz'de artırılır) */
-static volatile uint32_t g_dds_tick[NUM_COILS] = {0, 0, 0, 0, 0};
+static volatile uint32_t g_dds_tick[NUM_COILS] = {0};
 
 /** Her bobinin Ticks Per Period değeri (50000 / freq) */
-static volatile uint32_t g_tpp[NUM_COILS] = {500, 500, 500, 500, 500};
+static volatile uint32_t g_tpp[NUM_COILS] = {0}; /* varsayilan Coil_StateInit'te */
 
 /** Süre kontrolü için başlangıç zamanı (systick tabanlı milisaniye) */
-static volatile uint32_t g_start_ms[NUM_COILS] = {0, 0, 0, 0, 0};
+static volatile uint32_t g_start_ms[NUM_COILS] = {0};
 
 /** Anlık duty tick değerleri (slew rate limiter çıkışı) */
-static int32_t g_duty_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
+static int32_t g_duty_ticks[NUM_COILS] = {0};
 
 /** Hedef duty tick değerleri (slew rate limiter girişi) */
-static int32_t g_target_duty_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
+static int32_t g_target_duty_ticks[NUM_COILS] = {0};
 
 /**
  * Periyot başına izin verilen duty değişimi (tick) — FREKANSA GÖRE ölçeklenir.
@@ -406,16 +421,14 @@ static int32_t g_target_duty_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
  * Yeni ölçek: slew = tpp / (f * DDS_SLEW_FULLSCALE_S) → tam-ölçek ramp süresi frekanstan
  * BAĞIMSIZ ~0.1 s. 100 Hz'de sonuç tam olarak 25'tir; nominal davranış birebir korunur.
  */
-static int32_t g_slew_ticks[NUM_COILS] = {DDS_MAX_DUTY_SLEW, DDS_MAX_DUTY_SLEW,
-                                          DDS_MAX_DUTY_SLEW, DDS_MAX_DUTY_SLEW,
-                                          DDS_MAX_DUTY_SLEW};
+static int32_t g_slew_ticks[NUM_COILS] = {0}; /* varsayilan Coil_StateInit'te */
 
 /** Faz offset tick değerleri */
-static int32_t g_phase_ticks[NUM_COILS] = {0, 0, 0, 0, 0};
+static int32_t g_phase_ticks[NUM_COILS] = {0};
 
 /** Önceki çıkış durumları (1: A darbesi, 0: B darbesi, 2: IDLE/kapalı,
  *  3: GAP her-iki-LOW [HG-2 simetrik bipolar], 255: init/bilinmiyor) */
-static uint8_t g_prev_state[NUM_COILS] = {255, 255, 255, 255, 255};
+static uint8_t g_prev_state[NUM_COILS] = {0}; /* 255 (init) Coil_StateInit'te */
 
 /* ============================================================================
  * DONANIM SYNC — Master Sync Pulse (PB1)
@@ -441,9 +454,9 @@ static volatile UartRxState_t g_rxState = RX_IDLE;
 static volatile uint8_t g_pktBuf[BINARY_PKT_SIZE];
 static volatile uint8_t g_pktReady = 0;
 /* DENETIM 2026-08-04: cerceve senkronizasyonunda BAYT-ARASI ZAMAN ASIMI yoktu. Durum makinesi
- * yalnizca 0xAA/0x55 desenine ve 88-bayt sayimina dayaniyordu; bir bayt DUSERSE RX_DATA 88'i
+ * yalnizca 0xAA/0x55 desenine ve paket-boyu sayimina dayaniyordu; bir bayt DUSERSE RX_DATA hedefi
  * doldurmak icin BIR SONRAKI paketten bayt yiyor, boylece iki paket birden bozuluyordu.
- * 115200 8N1'de 88 bayt = 7.64 ms → aralarinda 50 ms'lik bir sessizlik KESINLIKLE cerceve
+ * 115200 8N1'de 120 bayt = 10.4 ms → aralarinda 50 ms'lik bir sessizlik KESINLIKLE cerceve
  * sinirdir. Sessizlik gorulurse yarim cerceve ATILIR ve taze senkronizasyona gecilir. */
 #define RX_FRAME_GAP_MS 50U
 static volatile uint32_t g_rxLastByteMs = 0;
@@ -455,6 +468,9 @@ static volatile uint32_t g_rxLastByteMs = 0;
 
 /* Timer Kurulum */
 static void Coil_TimInit(void);         /* TIM1 → 50kHz DDS kesme kaynağı */
+static void Coil_StateInit(void);       /* NUM_COILS'e bagli SIFIR-OLMAYAN varsayilanlar */
+static int Coil_AckMetin(char *buf, size_t cap, int pos, const char *metin);
+static int Coil_AckSayi(char *buf, size_t cap, int pos, long deger);
 static void Coil_StartPwmOutputs(void); /* GPIO'ları güvenli başlangıca al */
 
 /* UART */
@@ -481,6 +497,57 @@ void Error_Handler(void);
  *         yazar; kesme/HAL/kilit gerektirmez, bu yüzden fault bağlamında güvenlidir.
  */
 void PEMF_ForceAllCoilOutputsLow(void);
+
+/**
+ * NUM_COILS'e bagli SIFIR-OLMAYAN baslangic degerleri — TEK KAYNAK KURALI.
+ *
+ * ⚠️ NEDEN FONKSIYON: bu degerler eskiden dosya kapsaminda ELLE yazilmis initializer
+ * listeleriydi (`{500, 500, 500, 500, 500}` gibi, bobin basina bir eleman). NUM_COILS
+ * artirildiginda C eksik elemanlari SESSIZCE sifirlar ve derleyici UYARMAZ → yeni bobinler
+ * tpp=0 (50000/0), slew=0 (duty asla yukselmez) ve prev_state=0 ("B darbesi surüyor" yalani)
+ * ile acilir. Dongu, sayiyi NUM_COILS'ten TUREUTIR; ayrisma imkansiz.
+ *
+ * ⚠️ CAGRI SIRASI: `Coil_TimInit()`ten (ISR'i baslatir) ve g_shadow→g_active memcpy'sinden
+ * ONCE cagrilmalidir. Kapi: tests/test_stm_bobin_sayisi_tek_kaynak.py
+ */
+static void Coil_StateInit(void) {
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    g_shadow.coil[i].duty = 0.0f;
+    g_shadow.coil[i].phase = 0.0f;
+    g_shadow.coil[i].freq = 100.0f; /* acilis varsayilani; ilk pakete kadar duty=0 → surus YOK */
+    g_shadow.coil[i].dur_min = 0U;
+    g_tpp[i] = 500U;                       /* 50000/100Hz */
+    g_slew_ticks[i] = DDS_MAX_DUTY_SLEW;
+    g_prev_state[i] = 255U;                /* init/bilinmiyor */
+  }
+  g_shadow.pending = 0U;
+  g_shadow.ref_ms_valid = 0U;
+  g_shadow.ref_ms = 0U;
+}
+
+/** ACK tamponuna metin ekler; TASMA YAZMAZ, yeni uzunlugu doner. */
+static int Coil_AckMetin(char *buf, size_t cap, int pos, const char *metin) {
+  if ((pos < 0) || ((size_t)pos + 1U >= cap)) {
+    return pos;
+  }
+  int n = snprintf(buf + pos, cap - (size_t)pos, "%s", metin);
+  if ((n < 0) || ((size_t)n >= cap - (size_t)pos)) {
+    return (int)cap - 1; /* kesildi → bir daha yazma */
+  }
+  return pos + n;
+}
+
+/** ACK tamponuna tam sayi ekler; TASMA YAZMAZ, yeni uzunlugu doner. */
+static int Coil_AckSayi(char *buf, size_t cap, int pos, long deger) {
+  if ((pos < 0) || ((size_t)pos + 1U >= cap)) {
+    return pos;
+  }
+  int n = snprintf(buf + pos, cap - (size_t)pos, "%ld", deger);
+  if ((n < 0) || ((size_t)n >= cap - (size_t)pos)) {
+    return (int)cap - 1;
+  }
+  return pos + n;
+}
 
 static void Coil_SendNack(const char *reason) {
   static char msg[160];
@@ -635,8 +702,16 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
 #define NTC_POLL_MS 500U
 
 /* Bobin i → ADC1 kanalı (PA0,PA3,PA4,PC0,PC3) — kablolamaya göre güncelle */
-static const uint8_t g_ntc_kanal[NUM_COILS] = {0U, 3U, 4U, 10U, 13U};
-static volatile uint8_t g_ntc_kilit[NUM_COILS] = {0U, 0U, 0U, 0U, 0U};
+/* Bobin 1-5 ADC1 kanallari (PA0 PA3 PA4 PC0 PC3). ⚠️ Bobin 6-7'de NTC YOK — sahip karari
+ * 2026-09-10: bobin 6-7 icin termal kesme YAPILMAYACAK. NTC_KANAL_YOK sentinel'i poll dongusunde
+ * atlanir. Bu liste kablolamaya ozgu oldugu icin ELLE kalmak zorunda → uzunlugu bir DERLEME-ZAMANI
+ * iddiasiyla NUM_COILS'e baglandi (eksik eleman sessizce 0 olur ve YANLIS ADC kanali okunurdu). */
+#define NTC_KANAL_YOK 0xFFU
+static const uint8_t g_ntc_kanal[NUM_COILS] = {0U,            3U, 4U, 10U, 13U,
+                                               NTC_KANAL_YOK, NTC_KANAL_YOK};
+_Static_assert(sizeof(g_ntc_kanal) / sizeof(g_ntc_kanal[0]) == NUM_COILS,
+               "g_ntc_kanal uzunlugu NUM_COILS ile ayrismis");
+static volatile uint8_t g_ntc_kilit[NUM_COILS] = {0};
 
 static void Coil_NtcAdcInit(void) {
   /* GPIO analog mod: PA0/PA3/PA4 + PC0/PC3 (GPIOA/GPIOC saatleri Coil_GpioInit'te açık) */
@@ -688,6 +763,9 @@ static void Coil_NtcTermalPoll(uint32_t simdi_ms) {
   sonraki_ms = simdi_ms + NTC_POLL_MS;
   uint8_t tetik = 0U;
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    if (g_ntc_kanal[i] == NTC_KANAL_YOK) {
+      continue; /* bobin 6-7: NTC yok → o bobinde termal kesme UYGULANMAZ (sahip karari) */
+    }
     float t = Coil_NtcOku(g_ntc_kanal[i]);
     if (t <= -200.0f) {
       continue; /* sensör güvenilmez → karar verme */
@@ -704,9 +782,16 @@ static void Coil_NtcTermalPoll(uint32_t simdi_ms) {
     }
   }
   if (tetik != 0U) {
-    static char termal_msg[] =
-        "-> STM_EVT: TERMAL kesme (>=48C) — bobin(ler) durduruldu, sogumada kilitli.\r\n";
-    (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)termal_msg, strlen(termal_msg));
+    /* ⚠️ ESIK SAYISI MESAJA ELLE YAZILMAZ: eskiden "(>=48C)" sabitti ve NTC_KESME_C
+     * degisince mesaj YALAN olurdu (ayni sinif hata 8266'da olculdu, 2026-09-10). */
+    static char termal_msg[120];
+    int tlen = snprintf(termal_msg, sizeof(termal_msg),
+                        "-> STM_EVT: TERMAL kesme (>=%.0fC) - bobin(ler) durduruldu, "
+                        "sogumada kilitli.\r\n",
+                        (double)NTC_KESME_C);
+    if (tlen > 0 && tlen < (int)sizeof(termal_msg)) {
+      (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)termal_msg, (uint16_t)tlen);
+    }
   }
 }
 #endif /* PEMF_NTC_TERMAL_ENABLED */
@@ -723,6 +808,9 @@ int main(void) {
   /* GPIO → UART → Timer sırası önemli */
   Coil_GpioInit();
   Coil_UartInit();
+
+  /* ⚠️ SIRA: bobin durumu ISR baslamadan ve g_active kopyasi alinmadan ONCE kurulmali. */
+  Coil_StateInit();
 
   /* Aktif parametreleri gölge başlangıç değerleriyle başlat */
   memcpy((void *)&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
@@ -742,12 +830,18 @@ int main(void) {
    * static: HAL_UART_Transmit_IT non-blocking olduğu için lokal buffer race
    * condition'ını önler. Blocking Transmit kullanılarak gönderimin tamamlandığı
    * garanti edilir. */
-  static const char init_msg[] =
+  /* ⚠️ KANAL SAYISI DIZEYE ELLE YAZILMAZ: eskiden "5-ch" sabitti ve NUM_COILS degisince
+   * READY satiri YALAN soyluyordu (ACK format dizesiyle ayni surukleme sinifi). */
+  static char init_msg[128];
+  (void)snprintf(init_msg, sizeof(init_msg),
+                 "-> STM_READY: DDS v2.3 (%u-ch %s + HW_SYNC@PB1) Waiting for commands...\r\n",
+                 (unsigned)NUM_COILS,
 #if PEMF_SURUS_UNIPOLAR
-      "-> STM_READY: DDS v2.3 (5-ch UNIPOLAR tek-bacak + HW_SYNC@PB1) Waiting for commands...\r\n";
+                 "UNIPOLAR tek-bacak"
 #else
-      "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR + HW_SYNC@PB1) Waiting for commands...\r\n";
+                 "SYM-BIPOLAR"
 #endif
+  );
   HAL_UART_Transmit(&huart3, (uint8_t *)init_msg, strlen(init_msg), 200U);
 
   uint32_t last_communication_ms = HAL_GetTick();
@@ -827,7 +921,7 @@ int main(void) {
          * senkronu bu cihazin temel islevi). Cozum: gelen parametreler mevcut AKTIF setle
          * BIREBIR ayni ise (yeni tedavi/ayar DEGIL, yalniz keep-alive tekrari) yeniden-
          * hizalamayi ATLA. Yalniz faz hizalamasini etkiler: watchdog tazelemesi (yukarida
-         * last_communication_ms) ve sure takibi (g_start_ms, ISR) DEGISMEZ. 88-bayt paket
+         * last_communication_ms) ve sure takibi (g_start_ms, ISR) DEGISMEZ. Sabit-boy paket
          * formati DEGISMEZ -> geriye uyumlu (backend/simulator degismez). Parametre GERCEKTEN
          * degisince ka_ayni=0 kalir, hizalama normal yapilir. g_active volatile: yaris olsa
          * bile en kotu ihtimal fazladan bir hizalama (mevcut davranis) -> guvenli.
@@ -861,24 +955,41 @@ int main(void) {
          * paket islenirken snprintf AYNI tamponu YENIDEN yaziyordu → ucusan ACK bozuluyordu.
          * Ustelik donus degeri (HAL_BUSY) hic kontrol edilmiyordu. ACK yalnizca TANI amaclidir:
          * TX mesgulse bu turu ATLA (tamponu bozma), bosalinca bir sonraki ACK zaten gider. */
-        static char ack_msg[256];
+        static char ack_msg[420];
         if (huart3.gState == HAL_UART_STATE_READY) {
-        int len = snprintf(
-            ack_msg, sizeof(ack_msg),
-            "-> STM_OK: D=%d,%d,%d,%d,%d P=%d,%d,%d,%d,%d F=%d,%d,%d,%d,%d "
-            "T=%lu,%lu,%lu,%lu,%lu\r\n",
-            (int)(parsed.coil[0].duty * 100), (int)(parsed.coil[1].duty * 100),
-            (int)(parsed.coil[2].duty * 100), (int)(parsed.coil[3].duty * 100),
-            (int)(parsed.coil[4].duty * 100), (int)(parsed.coil[0].phase),
-            (int)(parsed.coil[1].phase), (int)(parsed.coil[2].phase),
-            (int)(parsed.coil[3].phase), (int)(parsed.coil[4].phase),
-            (int)(parsed.coil[0].freq), (int)(parsed.coil[1].freq),
-            (int)(parsed.coil[2].freq), (int)(parsed.coil[3].freq),
-            (int)(parsed.coil[4].freq), (unsigned long)(parsed.coil[0].dur_min),
-            (unsigned long)(parsed.coil[1].dur_min),
-            (unsigned long)(parsed.coil[2].dur_min),
-            (unsigned long)(parsed.coil[3].dur_min),
-            (unsigned long)(parsed.coil[4].dur_min));
+        /* ⚠️ ALAN SAYISI FORMAT DIZESINE ELLE YAZILMAZ. Eskiden dize bobin basina bir
+         * "%d" tasiyordu (bes tane, elle) — NUM_COILS degisince ACK sessizce EKSIK basar,
+         * backend ayristiricisi da uzunluk kontrolu yaptigi icin satiri komple REDDEDERDI
+         * (canli durum bayat kalir). Deponun tekrar eden 'sihirli sayi ikinci bir yere
+         * kopyalanmis' sinifi; artik NUM_COILS'ten TUREYEN dongu ile kurulur.
+         * Tampon: 4 grup x 7 bobin x (10 hane + virgul) + etiketler ≈ 390 < 420. */
+        static const char *const ack_etiket[4] = {"-> STM_OK: D=", " P=", " F=", " T="};
+        int len = 0;
+        for (uint32_t g = 0U; g < 4U; g++) {
+          len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, ack_etiket[g]);
+          for (uint32_t ai = 0U; ai < NUM_COILS; ai++) {
+            long v;
+            switch (g) {
+            case 0U:
+              v = (long)(parsed.coil[ai].duty * 100.0f);
+              break;
+            case 1U:
+              v = (long)parsed.coil[ai].phase;
+              break;
+            case 2U:
+              v = (long)parsed.coil[ai].freq;
+              break;
+            default:
+              v = (long)parsed.coil[ai].dur_min;
+              break;
+            }
+            if (ai > 0U) {
+              len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, ",");
+            }
+            len = Coil_AckSayi(ack_msg, sizeof(ack_msg), len, v);
+          }
+        }
+        len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, "\r\n");
         /* DENETIM 2026-08-04: snprintf donus degeri kontrol EDILMIYORDU. Negatif donus
          * (uint16_t)(-1) = 65535 olur ve 256 baytlik .bss tamponunun ~64 KB otesi hattan
          * disari yazilirdi; kesilme (len >= sizeof) durumunda da tampon-disi okuma olurdu.
@@ -1030,7 +1141,7 @@ static void Coil_StartPwmOutputs(void) {
  *      b. Float → int32 tick dönüşümü (faz + duty)
  *      c. Duty slew rate limiter uygula
  *   3. Her tick'te (50 kHz):
- *      a. 5 bobinin faz-ofsetli bipolar dalga durumunu hesapla
+ *      a. NUM_COILS bobinin faz-ofsetli bipolar dalga durumunu hesapla
  *      b. GPIO BSRR ile çıkışı atomik güncelle
  *
  * Simetrik bipolar dalga formu (HG-2, 2026-08-19), geçişlerde NOP gecikmesi ile:
@@ -1187,7 +1298,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
        * (`test_host_tarafi_sure_deadlineI_hala_uygulaniyor`).
        *
        * Neden burada düzeltilmedi: firmware'in keep-alive tazelemesini "yeni tedavi"den ayırt
-       * edebilmesi için 88 baytlık SABİT pakete sıra-numarası/başlat-bayrağı eklemek gerekir
+       * edebilmesi için sabit-boy pakete sıra-numarası/başlat-bayrağı eklemek gerekir
        * (firmware + backend + simülatör üçünü birden değiştiren protokol değişikliği).
        * "Süre doldu" mandalı alternatifi ise hekimin aynı parametrelerle YENİDEN başlat
        * demesini sessizce etkisiz kılabilirdi — klinik bir cihazda kötü bir başarısızlık biçimi.
@@ -1300,7 +1411,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     }
   }
 
-  /* ---- 5 bobin için SİMETRİK BİPOLAR GPIO çıkışı üret (HG-2, 2026-08-19) ----
+  /* ---- NUM_COILS bobin için SİMETRİK BİPOLAR GPIO çıkışı üret (HG-2, 2026-08-19) ----
    * A darbesi [0,duty) · B darbesi [yarım, yarım+duty) · aralarda İKİSİ DE LOW.
    * Dead-time iki katman: yapısal boşluk (DDS_BIPOLAR_GAP_TICKS klempi) + her
    * açılış geçişinde NOP break-before-make (DDS_DEADTIME_NOP_ITERS). */
@@ -1439,17 +1550,17 @@ static void Coil_UartStartReceive(void) {
  * Byte-by-byte interrupt tabanlı alım + durum makinesi.
  * Her byte geldiğinde HAL bu callback'i çağırır.
  *
- * Binary Protokol State Machine (BinaryCmdPacket_t — 88 byte):
+ * Binary Protokol State Machine (BinaryCmdPacket_t — 120 byte, 7 bobin):
  *
  *  IDLE            ──[0xAA]──► RX_WAIT_HEADER2
  *  RX_WAIT_HEADER2 ──[0x55]──► RX_DATA        (paket başladı, rxLen=2)
  *  RX_WAIT_HEADER2 ──[0xAA]──► RX_WAIT_HEADER2 (yeniden hizalanma)
  *  RX_WAIT_HEADER2 ──[diğer]──► IDLE
- *  RX_DATA         ──[veri]──► RX_DATA         (88 byte dolana kadar topla)
+ *  RX_DATA         ──[veri]──► RX_DATA         (BINARY_PKT_SIZE dolana kadar topla)
  *  RX_DATA         ──[88. byte]──► IDLE + g_pktReady=1
  *
  * Paket: [0xAA][0x55][5×float duty][5×float phase][5×float freq]
- *        [5×uint32 duration][uint16 ref_ms][uint32 crc32] = 88 byte
+ *        [7×uint32 duration][uint16 ref_ms][uint32 crc32] = 120 byte
  *
  * Overrun koruması:
  *   g_pktReady == 1 iken yeni paket gelirse atlanır (drop edilir).
@@ -1596,12 +1707,12 @@ static void Coil_GpioInit(void) {
   GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /* PD10 (Bobin 3 A), PD11 (Bobin 3 B), PD12 (Bobin 1 B) */
-  GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12;
+  /* PD10 (Bobin 3 A), PD11 (Bobin 3 B), PD12 (Bobin 1 B), PD13 (Bobin 7 B) */
+  GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /* PE10 (Bobin 2 B) */
-  GPIO_InitStruct.Pin = GPIO_PIN_10;
+  /* PE10 (Bobin 2 B) + PE12/PE13 (Bobin 6 B/A) + PE15 (Bobin 7 A) */
+  GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /* PA8 (Bobin 5 A), PA9 (Bobin 5 B) */
@@ -1611,9 +1722,10 @@ static void Coil_GpioInit(void) {
   /* Tüm bobin çıkışlarını güvenli LOW durumuna al */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9,
                     GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12,
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13,
                     GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15,
+                    GPIO_PIN_RESET);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8 | GPIO_PIN_9, GPIO_PIN_RESET);
 }
 

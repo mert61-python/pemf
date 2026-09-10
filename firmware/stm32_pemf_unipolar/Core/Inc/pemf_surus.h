@@ -25,13 +25,16 @@
  *   Bobin 3 : PWM → PD10 (IN_A)  ·  PD11 (IN_B) kalıcı LOW
  *   Bobin 4 : PWM → PC6  (IN_A)  ·  PC7  (IN_B) kalıcı LOW
  *   Bobin 5 : PWM → PA8  (IN_A)  ·  PA9  (IN_B) kalıcı LOW
- *   ⚠️ SAHİP KABLOLAMASI (2026-09-10): darbe DAİMA IN_A'dan çıkar — PC8 PC9 PD10 PC6 PA8 sırayla.
- *   IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FİZİKSEL OLARAK BAĞLI DEĞİL → maske 0x00 KALMALI.
+ *   Bobin 6 : PWM → PE13 (IN_A)  ·  PE12 (IN_B) kalıcı LOW   ← ESP'den taşındı 2026-09-10
+ *   Bobin 7 : PWM → PE15 (IN_A)  ·  PD13 (IN_B) kalıcı LOW   ← ESP'den taşındı 2026-09-10
+ *   ⚠️ SAHİP KABLOLAMASI (2026-09-10): darbe DAİMA IN_A'dan çıkar — bobin 1-7 sırayla
+ *   PC8 PC9 PD10 PC6 PA8 PE13 PE15. IN_B pinleri (PD12 PE10 PD11 PC7 PA9 PE12 PD13)
+ *   FİZİKSEL OLARAK BAĞLI DEĞİL → maske 0x00 KALMALI.
  *   Hangi bacağın darbeleneceği PEMF_BOBIN_TERS_MASKESI ile seçilir (aşağıda): bit i set →
  *   bobin i+1 darbeyi IN_B'den alır, IN_A LOW; değilse IN_A darbelenir, IN_B LOW. Sürülmeyen pinler
  *   boşta ama AYRILMIŞ DEĞİL: çıkış kurulu + kalıcı LOW (yarım-köprü girişi için güvenli); fiziksel
  *   olarak bağlanmayabilir. Başka amaçla kullanmak için main.c'de coil_gpio[] ve Coil_GpioInit
- *   değişmeli. Bipolar projede 10 pinin hepsi darbelenir; maske orada ETKİSİZDİR.
+ *   değişmeli. Bipolar projede 14 pinin hepsi darbelenir; maske orada dalgayı aynalar.
  *
  * ⚠️ Unipolar tek yönlü darbe = net DC ≠ 0 (bipolar sözleşmenin tam tersi). Bu bilinçli bir tezgâh
  * karşılaştırmasıdır; doz kalibrasyonu ve termal davranış bipolar ölçümlerinden AYRI değerlendirilir.

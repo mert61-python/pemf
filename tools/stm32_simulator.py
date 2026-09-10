@@ -65,15 +65,18 @@ READY_DELAY_S = 2.0  # USB CDC enumerate simülasyonu (2 s)
 
 # Binary paket yapısı: <BB 5f 5f 5f 5I H I
 #   B  B         → header[2]         = 0xAA, 0x55
-#   5f 5f 5f     → duty[5], phase[5], freq[5]
+#   Nf Nf Nf     → duty[N], phase[N], freq[N]  (N = NUM_COILS)
 #   5I           → duration[5]
 #   H            → ref_ms
 #   I            → crc32
-PKT_FMT = "<BB 5f 5f 5f 5I H I"
-PKT_SIZE = struct.calcsize(PKT_FMT)  # 88 byte
-assert PKT_SIZE == 88, f"Paket boyutu {PKT_SIZE} != 88!"
+# ⚠️ SAYIYI ELLE YAZMA: bicim NUM_COILS'ten turer. 2026-09-10'da 5 -> 7 (bobin 6-7 ESP'den
+# STM'e tasindi) ve paket 88 -> 120 bayt oldu. Simulator, firmware ve backend UCU birden
+# ayni genislikte olmak ZORUNDA; kapi: tests/test_stm32_source_parity.py.
+NUM_COILS = 7
+PKT_FMT = "<BB {n}f {n}f {n}f {n}I H I".format(n=NUM_COILS)
+PKT_SIZE = struct.calcsize(PKT_FMT)
+assert PKT_SIZE == 120, f"Paket boyutu {PKT_SIZE} != 120!"
 
-NUM_COILS = 5
 DUTY_MIN = 0.0
 PHASE_MIN = 0.0
 PHASE_MAX = 360.0

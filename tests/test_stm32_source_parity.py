@@ -93,9 +93,16 @@ def test_simulator_sevkedilen_cihazla_ayni_limitleri_uyguluyor(sim, fw_src):
     assert sim.REF_MS_MAX == _define_int(fw_src, "REF_MS_MAX")
 
 
-def test_paket_boyutu_88_uc_kaynakta_da_ayni(sim, fw_src):
-    """88 bayt: firmware `#pragma pack(1)` struct'ı ↔ Python struct formatı."""
-    assert sim.PKT_SIZE == 88
+#: 7 bobin → 2 + 7*4*3 + 7*4 + 2 + 4 = 120 bayt. 2026-09-10'da 5 bobin/88 bayttan cikti
+#: (bobin 6-7 ESP8266'dan STM32'ye tasindi). Bu sayi UC kaynakta da ayni olmak ZORUNDA:
+#: bir alan fazla/eksik → boyut ve CRC tutmaz → firmware TUM paketleri NACK'ler → HICBIR
+#: bobin calismaz (sessiz degil, ama toptan arizadir).
+BEKLENEN_PAKET_BOYU = 120
+
+
+def test_paket_boyutu_UC_kaynakta_da_ayni(sim, fw_src):
+    """Paket boyu: firmware `#pragma pack(1)` struct'ı ↔ Python struct formatı ↔ simülatör."""
+    assert sim.PKT_SIZE == BEKLENEN_PAKET_BOYU
     # ⚠️ DENETİM 2026-08-04 (P3): burada `2 + (5*4)*3 + (5*4) + 2 + 4 == 88` yazıyordu — SAF
     # SABİT ARİTMETİĞİ, girdiden tamamen bağımsız; firmware struct'ı değişse bile HEP geçerdi.
     # Yani "üç kaynakta da aynı" iddiasının firmware ayağı hiç ölçülmüyordu.
@@ -137,11 +144,59 @@ def test_paket_boyutu_88_uc_kaynakta_da_ayni(sim, fw_src):
         toplam += boyutlar[alan.group(1)] * n
         alan_sayisi += 1
     assert alan_sayisi >= 6, f"struct alanlari ayristirilamadi (yalniz {alan_sayisi} alan)"
-    assert toplam == 88, (
-        f"firmware BinaryCmdPacket_t alanlarindan hesaplanan boyut {toplam} != 88 "
-        f"(Python struct formati ve simulator 88 varsayiyor -> sessiz protokol kaymasi)"
+    assert toplam == BEKLENEN_PAKET_BOYU, (
+        f"firmware BinaryCmdPacket_t alanlarindan hesaplanan boyut {toplam} != "
+        f"{BEKLENEN_PAKET_BOYU} (Python struct formati ve simulator o boyutu varsayiyor -> "
+        f"protokol kaymasi: firmware her paketi NACK'ler, hicbir bobin calismaz)"
     )
     assert "BINARY_PKT_SIZE sizeof(BinaryCmdPacket_t)" in fw_src
+
+
+def test_KRITIK_backend_paket_genisligi_FIRMWARE_ile_ayni(fw_src):
+    """`utils.stm32_transport` genisligi firmware `NUM_COILS` ile BIREBIR olmali.
+
+    ⚠️ Bu kapi 2026-09-10'da eklendi: o gune kadar bicim dizesi `'<BB 5f 5f 5f 5I H'` olarak
+    UC AYRI dosyaya elle yazilmisti (transport, hardware_controller, simulator) ve firmware
+    NUM_COILS'i degistiginde hicbiri uyarmiyordu.
+
+    MUTASYON: `STM_PAKET_BOBIN_SAYISI`yi 6 yap → KIRMIZI.
+    """
+    from utils.stm32_transport import (
+        STM_PAKET_BOBIN_SAYISI,
+        STM_PAKET_BOYU,
+        build_stm32_zero_duty_packet,
+    )
+
+    fw_n = _define_int(fw_src, "NUM_COILS")
+    assert STM_PAKET_BOBIN_SAYISI == fw_n, (
+        f"backend paket genisligi {STM_PAKET_BOBIN_SAYISI}, firmware NUM_COILS {fw_n} -> "
+        "boyut/CRC tutmaz, firmware TUM paketleri NACK'ler ve hicbir bobin calismaz"
+    )
+    assert STM_PAKET_BOYU == BEKLENEN_PAKET_BOYU, STM_PAKET_BOYU
+    # DAVRANIS: gercekten o boyda paket uretiyor mu (sabit degil, URUN olculuyor)
+    assert len(build_stm32_zero_duty_packet()) == BEKLENEN_PAKET_BOYU
+
+
+def test_KRITIK_hardware_controller_AYNI_bicimi_kullanir():
+    """Sürüş yolu kendi bicim dizesini TASIMAMALI — tek kaynaktan almali.
+
+    MUTASYON: hardware_controller'da `'<BB 5f 5f 5f 5I H'` diye elle bir dize yaz → KIRMIZI.
+    """
+    import re as _re
+
+    kaynak = _HWC.read_text(encoding="utf-8")
+    elle = _re.findall(r"""["']<BB[^"']*["']""", kaynak)
+    assert not elle, (
+        "hardware_controller icinde ELLE yazilmis struct bicim dizesi var: "
+        f"{elle} -> utils.stm32_transport.STM_PAKET_FMT kullanilmali (surukleme kaynagi)"
+    )
+    assert "STM_PAKET_FMT" in kaynak, "hardware_controller tek-kaynak bicimini kullanmiyor"
+
+
+def test_KRITIK_simulator_genisligi_de_AYNI(sim, fw_src):
+    """Simülatör E2E testlerin 'cihazi' — genisligi ayrisirsa testler YANLIS cihazi dogrular."""
+    assert sim.NUM_COILS == _define_int(fw_src, "NUM_COILS") == 7
+    assert sim.PKT_SIZE == BEKLENEN_PAKET_BOYU
 
 
 def test_olu_adam_watchdog_esigi_uc_kaynakta_da_1500ms(sim, fw_src):

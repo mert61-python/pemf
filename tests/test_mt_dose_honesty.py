@@ -3,8 +3,9 @@
 """mT DOZU DÜRÜSTLÜĞÜ (2026-08-09 denetimi, Tier 2).
 
 ÖLÇÜLEN DURUM: operatörün girdiği yoğunluk (mT) CİHAZA HİÇ ULAŞMIYOR.
-  • STM binary paketi: `<BB 5f 5f 5f 5I H` = başlık + duty[5] + phase[5] + freq[5] + duration[5]
-    + ref_ms. **mT alanı YOK.** `update_coil(coil_id, freq, duty, phase, duration)` imzasında da yok.
+  • STM binary paketi: `<BB Nf Nf Nf NI H` = başlık + duty[N] + phase[N] + freq[N] + duration[N]
+    + ref_ms (N = `STM_PAKET_BOBIN_SAYISI`). **mT alanı YOK.**
+    `update_coil(coil_id, freq, duty, phase, duration)` imzasında da yok.
   • ESP MQTT komutu: `{command, freq, duty, phase, duration}`. **mT alanı YOK.**
 Değer yalnız veritabanına yazılıyor.
 
@@ -27,10 +28,37 @@ import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımc�
 
 
 def test_KRITIK_STM_paketi_mT_TASIMIYOR():
-    """İddianın dayanağı. Bir gün paket genişletilirse bu test düşer ve etiketler/PDF
-    gözden geçirilir — sessizce 'artık uygulanıyor' sanılmasın."""
+    """İddianın dayanağı: pakette YALNIZ duty/phase/freq/duration + ref_ms + crc32 var.
+
+    ⚠️ ÇIPA DEĞİŞTİRİLDİ (2026-09-10). Eskiden `"'<BB 5f 5f 5f 5I H'" in hc` yazıyordu, yani
+    çıpa ELLE yazılmış bir bicim dizesineydi. O gün paket 5 bobinden 7'ye çıkarıldı (bobin 6-7
+    ESP'den STM'e taşındı) ve bu kapı, mT ile İLGİSİ OLMAYAN bir değişiklikte kırıldı — üstelik
+    dize tek kaynağa taşındığı için ARTIK HİÇ eşleşmeyecekti (dosyada literal kalmadı) ve
+    "mT eklendi mi?" sorusu bir daha ASLA sorulmayacaktı: sahte-kırmızı, sonra sahte-yeşil.
+
+    Yeni çıpa GENİŞLİKTEN BAĞIMSIZ ama ALAN EKLEMEYE duyarlı: biçim dizesi tek kaynaktan
+    okunur ve alan gruplarının SAYISI (3 float grubu + 1 uint32 grubu + ref_ms + crc32)
+    ölçülür. Bobin sayısı serbestçe değişebilir; yeni bir ALAN eklenirse kapı düşer.
+
+    MUTASYON: `STM_PAKET_FMT`e bir grup ekle (ör. `... {n}f H` → yoğunluk) → KIRMIZI.
+    """
+    import re as _re
+
+    from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_FMT
+
+    n = STM_PAKET_BOBIN_SAYISI
+    beklenen = "<BB {n}f {n}f {n}f {n}I H".format(n=n)
+    assert STM_PAKET_FMT == beklenen, (
+        f"STM paket bicimi {STM_PAKET_FMT!r}, beklenen {beklenen!r} — YENI BIR ALAN mi eklendi? "
+        "mT/yogunluk eklendiyse PDF ve arayuz etiketleri GOZDEN GECIRILMELI (uygulanmayan doz "
+        "beyan edilmesin)."
+    )
+    # Bobin genisligindeki grup sayisi: 3 float + 1 uint32. Fazlasi = yeni alan.
+    gruplar = _re.findall(r"(\d+)([fI])", STM_PAKET_FMT)
+    assert [g[1] for g in gruplar] == ["f", "f", "f", "I"], f"paket alan gruplari degismis: {gruplar}"
+    assert all(int(g[0]) == n for g in gruplar), gruplar
+
     hc = (KOK / "controllers" / "hardware_controller.py").read_text(encoding="utf-8")
-    assert "'<BB 5f 5f 5f 5I H'" in hc, "STM paket formatı değişti — mT eklendi mi?"
     # `update_coil` imzasında yoğunluk parametresi YOK.
     imza = hc.split("def update_coil(")[1].split(")")[0]
     assert "intensity" not in imza and "magnetic" not in imza, (
