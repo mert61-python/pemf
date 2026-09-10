@@ -449,9 +449,31 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if not manifest["runtimes"]:
-        print("[HATA] hiçbir base paketi bulunamadı — manifest yazılmadı.", file=sys.stderr)
+    # ── MONOLİT KALDIRMANIN 2. FAZI (2026-09-11, sahip onayı) ───────────────────────────────
+    # ⚠️ ESKİ KOŞUL `if not manifest["runtimes"]` İDİ ve monolit (`base.zip`) yayından
+    # çıkarılınca manifest ÜRETİLEMİYORDU. Bu, launcher 1.9.51'de düzeltilen hatanın
+    # YAYINCI TARAFINDAKİ AYNISI: orada `platform_supported` yalnız `runtimes`e bakıyor,
+    # katmanları saymıyordu ve "bu platform için paket yayınlanmadı" deyip kurulumu
+    # kilitliyordu. Burada da tek-parça kopya, kurulabilirliğin TEK ölçütü sanılmış.
+    #
+    # Doğru kural: bir platform `runtimes` YA DA `layers` üzerinden kurulabiliyorsa paket
+    # VARDIR. İkisi de boşsa gerçekten kurulacak bir şey yok → hata.
+    if not manifest["runtimes"] and not manifest["layers"]:
+        print(
+            "[HATA] hiçbir kurulabilir paket yok (ne runtimes ne layers) — manifest yazılmadı.",
+            file=sys.stderr,
+        )
         return 1
+    if not manifest["runtimes"]:
+        # ⚠️ SESSİZ DEĞİL: tek-parça kopya olmadan client <=1.9.12 kuramaz (o sürümler yalnız
+        # `base`/`runtimes` okur). Sahada 1.9.51 var, ama bu bilgi yayın çıktısında GÖRÜNMELİ —
+        # bir gün eski bir cihaz ortaya çıkarsa sebebi burada yazılı olsun.
+        print(
+            "[manifest] NOT: tek-parça `base.zip` YOK, kurulum yalnız KATMANLI yoldan yapılır. "
+            "client <=1.9.12 bu manifestle kuramaz (>=1.9.13 katmanları tercih eder, "
+            "launcher >=1.9.51 platform kontrolünde katmanları da sayar).",
+            file=sys.stderr,
+        )
 
     # ⚠️ DENETİM 2026-08-04 (P3): `launcher` bloğu düşerse yalnızca stderr'e UYARI basılıp ÇIKIŞ
     # KODU 0 ile manifest yazılıyordu. Yayın akışı (publish_release.ps1 / CI) sıfır çıkışı
