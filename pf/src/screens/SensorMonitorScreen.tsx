@@ -153,6 +153,7 @@ export function SensorMonitorScreen() {
               objectTemp={latest?.objectTemp ?? coil?.objectTemp ?? 0}
               currentA={latest?.currentA ?? coil?.currentA ?? 0}
               frequencyHz={coil?.frequencyHz ?? 0}
+              measuredFields={coil?.measuredFields}
             />
           );
         })}
@@ -165,11 +166,20 @@ export function SensorMonitorScreen() {
 // reconcile etmesin). Tüm prop'lar primitive → shallow-compare kesin.
 const CoilStatCard = memo(function CoilStatCard({
   id, color, connected, running,
-  magneticMt, objectTemp, currentA, frequencyHz,
+  magneticMt, objectTemp, currentA, frequencyHz, measuredFields,
 }: {
   id: number; color: string; connected: boolean; running: boolean;
   magneticMt: number; objectTemp: number; currentA: number; frequencyHz: number;
+  measuredFields?: string[];
 }) {
+  // ⚠️ ÖLÇÜLMEYEN ALAN KISA ÇİZGİ (—), SIFIR DEĞİL. Bobin 1-5'te yalnız ACS712 (akım),
+  // bobin 6-7'de yalnız MLX (sıcaklık/alan) var. `0.00 mT` / `0.0 °C` yazmak "ölçtüm,
+  // sıfır çıktı" diye okunur → operatör var olmayan bir sensöre güvenir. Kaynak backend'in
+  // GELEN telemetriden türettiği `measuredFields`; bobin numarasından TAHMİN edilmez.
+  // ⚠️ memo shallow-compare: `measuredFields` bir DİZİ, ama backend onu yalnız ölçüm
+  // kümesi DEĞİŞİNCE yeniden üretir (`sorted(set)`), her tick'te değil — yine de referans
+  // değişebilir; en kötü hâl gereksiz bir render, yanlış değer değil.
+  const olcum = (alan: string) => Array.isArray(measuredFields) && measuredFields.includes(alan);
   return (
     <View style={[styles.statCard, { borderColor: connected ? color + "44" : "#1e293b" }]}>
       <View style={styles.statCardHeader}>
@@ -178,9 +188,21 @@ const CoilStatCard = memo(function CoilStatCard({
       </View>
       {connected ? (
         <>
-          <Metric label="Manyetik" value={`${magneticMt.toFixed(2)} mT`} color="#22c55e" />
-          <Metric label="Sıcaklık" value={`${objectTemp.toFixed(1)} °C`} color={objectTemp > 45 ? "#ef4444" : "#fb923c"} />
-          <Metric label="Akım" value={`${currentA.toFixed(3)} A`} color="#60a5fa" />
+          <Metric
+            label="Manyetik"
+            value={olcum("magneticMt") ? `${magneticMt.toFixed(2)} mT` : "—"}
+            color="#22c55e"
+          />
+          <Metric
+            label="Sıcaklık"
+            value={olcum("objectTemp") ? `${objectTemp.toFixed(1)} °C` : "—"}
+            color={olcum("objectTemp") && objectTemp > 45 ? "#ef4444" : "#fb923c"}
+          />
+          <Metric
+            label="Akım"
+            value={olcum("currentA") ? `${currentA.toFixed(3)} A` : "—"}
+            color="#60a5fa"
+          />
           <Metric label="Frekans" value={frequencyHz > 0 ? `${frequencyHz} Hz` : "—"} color="#a78bfa" />
         </>
       ) : (

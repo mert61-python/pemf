@@ -45,6 +45,9 @@ export const mockSnapshot: DashboardSnapshot = {
     ambientTemp: 0,
     currentA: 0,
     stm32Driven: index < 7,   // Faz 4: bobin 1-7 STM32, slot 8 ESP (cihaz yok)
+    // Sahte veride de GERÇEK topoloji: bobin 1-5 yalnız akım (ACS712), 6-7 yalnız
+    // sıcaklık/alan (MLX). Böylece demo/geliştirme ekranı da kısa çizgileri gösterir.
+    measuredFields: index < 5 ? ["currentA"] : index < 7 ? ["ambientTemp", "magneticMt", "objectTemp"] : [],
   })),
   sessions: []
 };

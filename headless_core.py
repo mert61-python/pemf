@@ -212,6 +212,8 @@ class HeadlessCore:
         r"(?:.*?[,\s]T=(?P<t>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]A=(?P<a>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]B=(?P<b>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]I=(?P<i>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]X=(?P<x>[01]))?"
     )
 
     def _parse_stm_tele(self, decoded: str) -> dict | None:
@@ -230,7 +232,15 @@ class HeadlessCore:
         if not (1 <= coil_id <= 8):
             return None
         govde: dict = {"coil_id": coil_id}
-        for anahtar, alan in (("t", "object_temp"), ("a", "ambient_temp"), ("b", "magnetic_field")):
+        # ⚠️ `I` = ACS712 akimi (bobin 1-5). `X=1` = ADC tavanina dayandi (bolucusuz
+        # ~12 A ustu, bkz. firmware/.../pemf_akim.h) → deger GUVENILMEZ; yutulmaz,
+        # isaretlenir ki operatore soylenebilsin.
+        for anahtar, alan in (
+            ("t", "object_temp"),
+            ("a", "ambient_temp"),
+            ("b", "magnetic_field"),
+            ("i", "current"),
+        ):
             ham = m.group(anahtar)
             if ham is None:
                 continue
@@ -238,8 +248,10 @@ class HeadlessCore:
                 govde[alan] = float(ham)
             except ValueError:
                 continue
-        if len(govde) == 1:
-            return None  # yalniz C geldi → tasinacak olcum yok
+        if m.group("x") == "1":
+            govde["current_saturated"] = True
+        if not any(k in govde for k in ("object_temp", "ambient_temp", "magnetic_field", "current")):
+            return None  # yalniz C (ve/veya X) geldi → tasinacak olcum yok
         return govde
 
     def _handle_stm_line(

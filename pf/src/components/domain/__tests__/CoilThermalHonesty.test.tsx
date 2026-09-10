@@ -36,14 +36,43 @@ const temel = {
   currentA: 0,
   stm32Driven: true,
   stmConnected: true,
+  // ⚠️ Varsayilan BOS: hicbir alan olculmemis → panel kisa cizgi gosterir. Testler
+  // olcumu ACIKCA vererek (`measuredFields: ["objectTemp"]`) "olculuyor" halini kurar.
+  measuredFields: [] as string[],
 };
 
 const ciz = (ek: Partial<typeof temel> = {}) =>
   render(<CoilParameterPanel {...temel} {...ek} />);
 
-it("KRİTİK: ölçüm yoksa 'ölçüm yok' AÇIKÇA yazar (sessiz boşluk bırakmaz)", () => {
+/**
+ * ⚠️ SÖZLEŞME DEĞİŞTİ (2026-09-10, sahip isteği): "ölçüm yok" metni yerine KISA ÇİZGİ (—).
+ * İddia AYNI KALDI: ölçüm olmayan yerde SESSİZ BOŞLUK ya da güven veren bir SAYI olmaz.
+ *
+ * ⚠️ İKİNCİ VE DAHA ÖNEMLİ DEĞİŞİKLİK — ÖLÇÜM KAYNAĞI: eskiden "ölçülüyor mu" sorusu
+ * `objectTemp > 0` ile yanıtlanıyordu. O kural iki yönden yanlıştı:
+ *   (a) GERÇEK 0.0 °C ölçümü (soğuk oda / buz paketi) "ölçüm yok" görünüyordu,
+ *   (b) bobin 1-5'e ACS712 eklenince akım için de aynı soruya cevap gerekti ve
+ *       duran bir bobinin GERÇEK 0.000 A ölçümü "yok" sayılırdı.
+ * Artık kaynak backend'in GELEN telemetriden türettiği `measuredFields` — bobin
+ * numarasından TAHMİN edilmez, topoloji değişince arayüz kendiliğinden doğru kalır.
+ */
+it("KRİTİK: ölçüm yoksa KISA ÇİZGİ yazar (sessiz boşluk bırakmaz)", () => {
   const u = ciz({ objectTemp: 0 });
-  expect(u.getByText("ölçüm yok")).toBeTruthy();
+  // ⚠️ getAllByText: panelde artik BIRDEN COK kisa cizgi var (sicaklik + mT + A) —
+  // "olculmeyen her alan cizgi" kuralinin dogal sonucu. getByText coklu eslesmede PATLAR.
+  expect(u.getAllByText("-").length).toBeGreaterThanOrEqual(1);
+});
+
+it("KRİTİK: DEĞER gelse bile measuredFields yoksa ölçüm SAYILMAZ", () => {
+  // Sahte/bayat bir sayı paneli "ölçüyorum" göstermeye ikna edemez.
+  const u = ciz({ objectTemp: 38.4 });   // measuredFields YOK
+  expect(u.queryByText("38.4°C")).toBeNull();
+  expect(u.getAllByText("-").length).toBeGreaterThanOrEqual(1);
+});
+
+it("KRİTİK: GERÇEK 0.0 °C ölçümü 'yok' SAYILMAZ (eski kuralın hatası)", () => {
+  const u = ciz({ objectTemp: 0, measuredFields: ["objectTemp"] });
+  expect(u.getByText("0.0°C")).toBeTruthy();
 });
 
 it("KRİTİK: ölçüm yokken ekran-okuyucu 'termal durdurma uygulanmaz' der", () => {
@@ -59,13 +88,20 @@ it("KRİTİK: ölçüm yokken SAHTE bir sıcaklık değeri gösterilmez", () => 
 });
 
 it("ölçüm VARSA sıcaklık normal gösterilir", () => {
-  const u = ciz({ coilId: 7, stm32Driven: false, objectTemp: 38.4 });
+  const u = ciz({ coilId: 7, stm32Driven: false, objectTemp: 38.4, measuredFields: ["objectTemp"] });
   expect(u.getByText("38.4°C")).toBeTruthy();
   expect(u.queryByText("ölçüm yok")).toBeNull();
 });
 
+it("KRİTİK: bobin 1-5 AKIM ölçer, sıcaklık/alan KISA ÇİZGİ", () => {
+  // Sahip kararı 2026-09-10: bobin 1-5'e ACS712-30A bağlanıyor, MLX sensörü YOK.
+  const u = ciz({ coilId: 2, objectTemp: 0, magneticMt: 0, currentA: 0.412, measuredFields: ["currentA"] });
+  expect(u.getByText("0.412")).toBeTruthy();   // akım GÖSTERİLİR
+  expect(u.getAllByText("-").length).toBeGreaterThanOrEqual(2);  // sıcaklık + mT
+});
+
 it("yüksek sıcaklık uyarısı YALNIZ-RENK değil (⚠ + metin)", () => {
-  const u = ciz({ coilId: 7, stm32Driven: false, objectTemp: 46.2 });
+  const u = ciz({ coilId: 7, stm32Driven: false, objectTemp: 46.2, measuredFields: ["objectTemp"] });
   expect(u.getByText(/⚠ 46\.2°C/)).toBeTruthy();
 });
 

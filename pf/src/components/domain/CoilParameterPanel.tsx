@@ -25,6 +25,8 @@ interface Props {
   connected: boolean;
   running: boolean;
   objectTemp: number;
+  /** GERÇEKTEN ölçülmüş alan adları; yoksa ilgili okuma kısa çizgi (—) gösterilir. */
+  measuredFields?: string[];
   frequencyHz: number;
   dutyCycle: number;
   magneticMt: number;
@@ -45,6 +47,7 @@ export function CoilParameterPanel({
   connected,
   running,
   objectTemp,
+  measuredFields,
   frequencyHz,
   dutyCycle,
   magneticMt,
@@ -159,6 +162,12 @@ export function CoilParameterPanel({
     })();
   }, [running, objectTemp, sendCommand]);
 
+  /** Bu alan GERÇEKTEN ölçülüyor mu? (bkz. readings bloğundaki gerekçe) */
+  const olcum = useCallback(
+    (alan: string) => Array.isArray(measuredFields) && measuredFields.includes(alan),
+    [measuredFields]
+  );
+
   const isDisabled = disabled || !connected || (stm32Driven && !stmConnected);
 
   // Cihaz onayı metni: YALNIZ bekleyen START'ın command_id'siyle eşleşen ack sayılır (eski/başka
@@ -195,7 +204,7 @@ export function CoilParameterPanel({
           )}
         </View>
         <View style={styles.headerRight}>
-          {objectTemp > 0 ? (
+          {olcum("objectTemp") ? (
             <View style={[styles.tempBadge, objectTemp > 45 && styles.tempWarning]}
               accessibilityLabel={`Sıcaklık ${objectTemp.toFixed(1)} derece${objectTemp > 45 ? ", yüksek" : ""}`}>
               {/* #121: >45°C uyarısı yalnız-RENK değil — ⚠ ikonu + metin (renk-körü operatör görsün). */}
@@ -210,9 +219,13 @@ export function CoilParameterPanel({
                ZAMAN tetiklenemez. Koruma donanım tarafında yapılana kadar bu sınır GÖRÜNÜR olmalı;
                sessiz bir boşluk, operatörün var olmayan bir korumaya güvenmesine yol açar.
                (Gerçek çözüm: 1-5 için sıcaklık sensörü + STM telemetrisi + firmware kesmesi.) */
+            /* Sahip isteği 2026-09-10: ölçüm olmayan yerde KISA ÇİZGİ dursun.
+               ⚠️ Ekran-okuyucu etiketi AÇIK KALIYOR: görsel çizgi kısa ama "ölçüm yok +
+               otomatik termal durdurma uygulanmaz" bilgisi kaybolmamalı (görme engelli
+               operatör için tek kaynak). */
             <View style={styles.tempBadge}
               accessibilityLabel="Bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma uygulanmaz">
-              <Text style={[styles.tempText, { color: colors.textMuted }]}>ölçüm yok</Text>
+              <Text style={[styles.tempText, { color: colors.textMuted }]}>-</Text>
             </View>
           )}
           {/* A11y (#67): durum YALNIZ-RENK değil — nokta + kısa metin (renk-körü operatör AKTİF ile
@@ -233,10 +246,15 @@ export function CoilParameterPanel({
         </View>
       </View>
 
-      {/* Live readings */}
+      {/* Live readings
+          ⚠️ ÖLÇÜLMEYEN ALAN KISA ÇİZGİ (—), SIFIR DEĞİL. Bobin 1-5'te yalnız ACS712
+          (akım) var, bobin 6-7'de yalnız MLX (sıcaklık/alan). `0.00 mT` yazmak
+          "ölçtüm, sıfır çıktı" diye okunur ve operatör var olmayan bir sensöre güvenir.
+          Kaynak `measuredFields` — backend bunu GELEN telemetriden türetir, bobin
+          numarasından TAHMİN ETMEZ (topoloji değişince arayüz kendiliğinden doğru kalır). */}
       <View style={styles.readings}>
-        <Reading label="mT" value={magneticMt.toFixed(2)} active={running} />
-        <Reading label="A" value={currentA.toFixed(3)} active={running} />
+        <Reading label="mT" value={olcum("magneticMt") ? magneticMt.toFixed(2) : "-"} active={running} />
+        <Reading label="A" value={olcum("currentA") ? currentA.toFixed(3) : "-"} active={running} />
         <Reading label="Hz" value={frequencyHz > 0 ? String(frequencyHz) : "-"} active={running} />
         <Reading label="DC%" value={dutyCycle > 0 ? String(dutyCycle) : "-"} active={running} />
       </View>

@@ -194,18 +194,47 @@ def test_KRITIK_I2C_HAT_KURTARMA_VAR():
     assert "I2C_KURTARMA_ESIGI" in kod, "kurtarma esigi sabiti yok (sihirli sayi?)"
 
 
-def test_KRITIK_akim_alani_TELEMETRIDE_YOK():
-    """ACS712 taşınmıyor (sahip kararı 3) → `STM_TELE` satırı akım alanı TAŞIMAMALI."""
+def test_KRITIK_SENSOR_satiri_AKIM_alani_TASIMAZ():
+    """⚠️ KAPI BİLİNÇLİ ÇEVRİLDİ (2026-09-10): eskiden `STM_TELE`de `I=` TAMAMEN yasaktı
+    ("ACS712 taşınmıyor"). Sahip kararını değiştirdi → bobin 1-5'te akım var.
+
+    Yeni ve DAHA KESKİN iddia: **bobin 6-7'nin sensör satırı akım taşımaz** (o bobinlerde
+    ACS712 yok) ve alanlar `*_ok` ile kapılanır. Yani "akım hiç yok" değil, "ölçülmeyen
+    yerde yok". Ölçülmeyen alanı göndermek (özellikle 0.0) aşağı akışta "ölçüldü" olarak
+    kaydedilir — PDF'e "0.0 °C ölçüldü" yazdıran desen.
+    """
     ana = _oku(MAIN)
-    i = ana.find("STM_TELE")
-    assert i > 0, "main.c'de STM_TELE satiri yok -> telemetri hic gonderilmiyor"
-    pencere = ana[i : i + 2500]
-    assert re.search(r'"[^"]*\bI=', pencere) is None, (
-        "STM_TELE bicimi akim alani (I=) tasiyor — ACS712 TASINMIYOR, olculmeyen alan "
-        "gondermek 'olculdu' gibi kaydedilir (PDF'e 0.0 yazdiran desen)"
+    i = ana.find("BOBIN 6-7 SENSOR TELEMETRISI")
+    assert i > 0, "main.c'de sensor telemetri blogu yok -> telemetri hic gonderilmiyor"
+    j = ana.find("BOBIN 1-5 AKIM TELEMETRISI", i)
+    assert j > i, "akim telemetri blogu yok -> bobin 1-5 akimi hic gonderilmiyor"
+    sensor_blogu = ana[i:j]
+    assert re.search(r'"[^"]*\bI=', sensor_blogu) is None, (
+        "bobin 6-7 SENSOR satiri akim alani (I=) tasiyor — o bobinlerde ACS712 YOK"
     )
-    assert "sicaklik_ok" in pencere and "alan_ok" in pencere, (
+    assert "sicaklik_ok" in sensor_blogu and "alan_ok" in sensor_blogu, (
         "alanlar `*_ok` ile KAPILANMIYOR -> arizada sahte 0.0 gonderilir"
+    )
+
+
+def test_KRITIK_AKIM_satiri_SICAKLIK_ALAN_tasimaz():
+    """Bobin 1-5'te MLX sensörü YOK → akım satırı `T=`/`A=`/`B=` TAŞIMAMALI.
+
+    MUTASYON: akım satırına `,T=%.2f` ekle → KIRMIZI. Sahadaki etki: bobin 1-5 için DB'ye
+    ve PDF'e "0.0 °C ölçüldü" satırı girer (deponun tekrar eden sahte-ölçüm sınıfı).
+    """
+    ana = _oku(MAIN)
+    i = ana.find("BOBIN 1-5 AKIM TELEMETRISI")
+    assert i > 0, "akim telemetri blogu yok"
+    blok = ana[i : i + 2200]
+    for yasak in ("T=", "A=", "B="):
+        assert re.search(r'"[^"]*\b' + yasak, blok) is None, (
+            f"akim satiri '{yasak}' alani tasiyor — bobin 1-5'te o sensor YOK, "
+            "olculmeyen alan gondermek 'olculdu' gibi kaydedilir"
+        )
+    assert "av.ok" in blok, "akim alani `ok` ile KAPILANMIYOR -> kalibrasyon arizasinda sahte 0.0"
+    assert "av.doygun" in blok and "X=1" in blok, (
+        "ADC doygunlugu (X=1) bildirilmiyor -> kirpilmis akim SESSIZCE doz kaydina girer"
     )
 
 

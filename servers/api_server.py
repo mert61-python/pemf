@@ -630,6 +630,17 @@ def _on_mqtt_disconnect_api(client, userdata, rc):
 # bobinlerine dokunur (STM 1-5 zaten _sync_stm_coils'ten türer). Timestamp yalnız gerçek MQTT mesajında
 # yazılır → PEMF_SIMULATE modda sözlük boş kalır, watchdog no-op (sim coil'lerini bozmaz).
 _coil_last_telemetry: dict = {}
+
+#: bobin indeksi → GERCEKTEN olculmus `_live_state` alan adlari (`{"currentA", ...}`).
+#: ⚠️ NEDEN ALAN BAZINDA: bobin bazinda "telemetri geldi mi" bilgisi 2026-09-10'da YETERSIZ
+#: kaldi. Bobin 1-5 yalniz AKIM gonderiyor (ACS712), bobin 6-7 yalniz SICAKLIK/ALAN
+#: gonderecek. Bobin bazinda damgayla yetinmek, gonderilmeyen alanin 0.0 baslangic degerini
+#: "olculdu" sayip DB'ye yazdirir (PDF'te "0.0 °C olculdu" arizasinin ta kendisi).
+_coil_olculen_alanlar: dict = {}
+
+#: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
+_akim_doygun_son: dict = {}
+
 ESP_STALE_SEC = 30.0
 ESP_WATCHDOG_INTERVAL_SEC = 5.0
 
@@ -1130,22 +1141,51 @@ def _handle_backend_event(event) -> None:
         _t_idx = _t_coil_id - 1
         if not (0 <= _t_idx < 8):
             return
+        # ⚠️ ALAN BAZINDA KAYIT — SAHTE OLCUM SINIFININ IKINCI DALGASI.
+        #
+        # 2026-09-10'da bobin 1-5'e ACS712 eklendi ve o bobinler ARTIK telemetri
+        # gonderiyor (yalniz akim). Bobin bazinda `_coil_last_telemetry` damgasi tek
+        # basina YETMEZ: damga atilinca dakika-ortalamasi dongusu o bobinin
+        # `objectTemp`/`magneticMt` alanlarini da biriktirmeye baslar ve baslangic
+        # degeri 0.0 oldugu icin DB'ye "0.0 °C olculdu, sample_count=30" yazar —
+        # tam olarak PDF'e "0.0 °C olculdu" yazdiran eski ariza.
+        #
+        # Cozum: HANGI ALANIN gercekten olculdugunu kaydet. Akumulator yalniz bu
+        # kumedeki alanlari biriktirir; arayuz de olculmeyeni kisa cizgi (—) gosterir.
+        _t_alanlar = {
+            "object_temp": ("objectTemp", 1),
+            "ambient_temp": ("ambientTemp", 1),
+            "magnetic_field": ("magneticMt", 3),
+            "current": ("currentA", 3),
+        }
         _t_yazildi = False
         with _live_state_lock:
             _t_coil = _live_state["coils"][_t_idx]
-            if "object_temp" in data:
-                _t_coil["objectTemp"] = round(float(data["object_temp"]), 1)
+            _t_kume = _coil_olculen_alanlar.setdefault(_t_idx, set())
+            for _kaynak, (_hedef, _basamak) in _t_alanlar.items():
+                if _kaynak not in data:
+                    continue
+                _t_coil[_hedef] = round(float(data[_kaynak]), _basamak)
+                _t_kume.add(_hedef)
                 _t_yazildi = True
-            if "ambient_temp" in data:
-                _t_coil["ambientTemp"] = round(float(data["ambient_temp"]), 1)
-                _t_yazildi = True
-            if "magnetic_field" in data:
-                _t_coil["magneticMt"] = round(float(data["magnetic_field"]), 3)
-                _t_yazildi = True
+            if _t_yazildi:
+                _t_coil["measuredFields"] = sorted(_t_kume)
             _t_snap = dict(_t_coil)
         if not _t_yazildi:
             return
         _coil_last_telemetry[_t_idx] = time.monotonic()
+        # ⚠️ DOYGUNLUK: deger geldi ama ADC tavanina dayandi → sayi guvenilmez ve
+        # DOZ KAYDINA giriyor. Operatore SOYLENMELI. Yalnız 0→1 gecisinde bildir:
+        # her saniye bildirim basmak alarm yorgunlugu uretir ve gercek olaylari bogar.
+        _t_doygun = bool(data.get("current_saturated"))
+        if _t_doygun != bool(_akim_doygun_son.get(_t_idx)):
+            _akim_doygun_son[_t_idx] = _t_doygun
+            if _t_doygun:
+                _push_notification(
+                    f"⚠️ Bobin {_t_coil_id} akımı ölçüm aralığını AŞTI (ADC tavanı ~12 A) — "
+                    "gösterilen akım GÜVENİLMEZ ve doz kaydına öyle giriyor",
+                    "warning",
+                )
         _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
         _ws_broadcast_sync(
             {
@@ -1156,6 +1196,8 @@ def _handle_backend_event(event) -> None:
                     "magneticMt": _t_snap.get("magneticMt"),
                     "objectTemp": _t_snap.get("objectTemp"),
                     "ambientTemp": _t_snap.get("ambientTemp"),
+                    "currentA": _t_snap.get("currentA"),
+                    "measuredFields": _t_snap.get("measuredFields"),
                 },
             }
         )
@@ -3338,6 +3380,10 @@ def _sensor_persistence_loop():
                         # uretmemek ayni sonucu downstream riski OLMADAN verir.
                         if _coil_last_telemetry.get(cid - 1) is None:
                             continue
+                        # ⚠️ ALAN BAZINDA KAPI (2026-09-10): yukaridaki bobin-bazinda kapi
+                        # ARTIK YETMEZ. Bobin 1-5 yalniz AKIM olcuyor, 6-7 yalniz sicaklik/
+                        # alan. Olculmeyen alani biriktirmek DB'ye "0.0 olculdu" yazar.
+                        _olculen = _coil_olculen_alanlar.get(cid - 1) or set()
                         temp = coil.get("objectTemp")
                         cur = coil.get("currentA")
                         fld = coil.get("magneticMt")
@@ -3361,19 +3407,19 @@ def _sensor_persistence_loop():
                                 "phase": coil.get("phase"),
                             }
                             _minute_acc[cid] = acc
-                        if temp is not None:
+                        if temp is not None and "objectTemp" in _olculen:
                             tv = float(temp)
                             acc["t_sum"] += tv
                             acc["t_n"] += 1
                             acc["t_min"] = tv if acc["t_min"] is None else min(acc["t_min"], tv)
                             acc["t_max"] = tv if acc["t_max"] is None else max(acc["t_max"], tv)
-                        if cur is not None:
+                        if cur is not None and "currentA" in _olculen:
                             acc["i_sum"] += float(cur)
                             acc["i_n"] += 1
-                        if fld is not None:
+                        if fld is not None and "magneticMt" in _olculen:
                             acc["b_sum"] += float(fld)
                             acc["b_n"] += 1
-                        if amb is not None:
+                        if amb is not None and "ambientTemp" in _olculen:
                             acc["amb_sum"] += float(amb)
                             acc["amb_n"] += 1
                         acc["n"] += 1

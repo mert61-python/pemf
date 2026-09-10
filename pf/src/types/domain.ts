@@ -42,6 +42,18 @@ export interface CoilStatus {
   durationMin?: number;
   /** Son START komutunun cihaz onayı (yalnız ESP 6-8; status telemetrisiyle SİLİNMEZ). */
   deviceAck?: CoilDeviceAck;
+  /**
+   * GERÇEKTEN ölçülmüş alan adları (`"currentA"`, `"objectTemp"`, `"ambientTemp"`,
+   * `"magneticMt"`). Backend bunu gelen telemetriden TÜRETİR.
+   *
+   * ⚠️ NEDEN VAR: `0.0` ile "ölçülmedi" ayırt edilemiyordu. Bobin 1-5'te yalnız ACS712
+   * (akım), bobin 6-7'de yalnız MLX (sıcaklık/alan) var; ölçülmeyen alan `_live_state`te
+   * `0.0` olarak DURUR (aşağı akış `null` değil `0.0` bekliyor). Arayüz bu listeye bakıp
+   * ölçülmeyeni **kısa çizgi (—)** gösterir; `0.00 mT` yazmak ölçüm gibi okunur.
+   *
+   * Boş/tanımsız → hiçbir alan ölçülmemiş (henüz telemetri gelmedi ya da sensör yok).
+   */
+  measuredFields?: string[];
 }
 
 // ─── Patient ─────────────────────────────────────────────────────────────────

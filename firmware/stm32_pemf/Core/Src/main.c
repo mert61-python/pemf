@@ -147,6 +147,7 @@
 #include "main.h"
 #include "pemf_surus.h" /* PEMF_SURUS_UNIPOLAR: 0=simetrik bipolar (A/B) · 1=tek-bacak duz surus (yalniz A) */
 #include "pemf_sensor.h" /* Bobin 6-7 I2C sensorleri (MLX90614 + MLX90393) — BLOKLAMAYAN */
+#include "pemf_akim.h"   /* Bobin 1-5 ACS712-30A akim olcumu (ADC1) — BLOKLAMAYAN */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -818,6 +819,12 @@ int main(void) {
    * SURUS YOLU ETKILENMEZ (fail-safe: alan/sicaklik bildirilmez, bobin normal surulur). */
   PEMF_Sensor_Init();
 
+  /* Bobin 1-5 ACS712 akim olcumu. ⚠️ BOBINLER KAPALIYKEN cagrilmali: kurulum OFFSET
+   * KALIBRASYONU yapar (0 A cikisi). Akim varken kalibre edilirse o bobinin TUM olcumleri
+   * kalici olarak kayar. Bu yuzden `Coil_TimInit()`ten (50 kHz ISR) ONCE, PWM hic
+   * baslamamisken. Kanal okunamazsa o bobin icin akim BILDIRILMEZ (sahte 0.0 A yok). */
+  PEMF_Akim_Init();
+
   /* Aktif parametreleri gölge başlangıç değerleriyle başlat */
   memcpy((void *)&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
   g_active.pending = 0;
@@ -899,6 +906,41 @@ int main(void) {
         if ((tl > 0) && (tl < (int)sizeof(tele_msg) - 3)) {
           tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, "\r\n");
           (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)tele_msg, (uint16_t)tl);
+        }
+      }
+    }
+
+    /* ── BOBIN 1-5 AKIM TELEMETRISI (ACS712-30A) ────────────────────────────────────
+     * Sahip karari 2026-09-10: bobin 1-5'e ACS712 (30 A) baglanacak, 5 ADC kanali acildi.
+     * Bobin 6-7'de ACS712 YOK → onlarin satirinda `I=` alani HIC olmaz.
+     *
+     * ⚠️ SICAKLIK/ALAN ALANI YOK: bobin 1-5'te o sensorler YOK. Alan gondermek
+     * (ozellikle 0.0) asagi akista "olculdu" olarak kaydedilir ve gecmiste PDF'e
+     * "0.0 °C olculdu" yazdirmisti. Olculmeyen alan HIC GONDERILMEZ; arayuz onlari
+     * kisa cizgi (—) gosterir.
+     *
+     * ⚠️ `X=1` = ADC TAVANINA DAYANDI (bolucusuz ~12 A ustu, bkz. pemf_akim.h).
+     * Deger yine gonderilir ama GUVENILMEZ isaretlidir; sessizce yanlis sayi gondermek
+     * yasak. Backend bunu bildirime cevirir. */
+    if (PEMF_Akim_Poll()) {
+      for (uint32_t ai = 0U; ai < PEMF_AKIM_BOBIN_SAYISI; ai++) {
+        PEMF_AkimVerisi_t av;
+        PEMF_Akim_Oku(ai, &av);
+        if (!av.ok) {
+          continue; /* kalibrasyon/kanal arizasi → alan HIC gonderilmez */
+        }
+        if (huart3.gState != HAL_UART_STATE_READY) {
+          break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
+        }
+        static char akim_msg[80];
+        int al = snprintf(akim_msg, sizeof(akim_msg), "-> STM_TELE: C=%lu,I=%.3f",
+                          (unsigned long)(ai + 1U), (double)av.amper);
+        if (av.doygun && (al > 0) && (al < (int)sizeof(akim_msg))) {
+          al += snprintf(akim_msg + al, sizeof(akim_msg) - (size_t)al, ",X=1");
+        }
+        if ((al > 0) && (al < (int)sizeof(akim_msg) - 3)) {
+          al += snprintf(akim_msg + al, sizeof(akim_msg) - (size_t)al, "\r\n");
+          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)akim_msg, (uint16_t)al);
         }
       }
     }

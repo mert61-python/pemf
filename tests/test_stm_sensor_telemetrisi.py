@@ -73,11 +73,49 @@ def test_KRITIK_EKSIK_alan_ANAHTARI_HIC_KONMAZ(ayristir):
     assert "object_temp" not in g and "ambient_temp" not in g
 
 
-def test_akim_alani_SOZLESMEDE_YOK(ayristir):
-    """ACS712 taşınmıyor (sahip kararı 3) → satırda akım alanı olmamalı, olsa da yutulmalı."""
-    g = ayristir("-> STM_TELE: C=6,T=30.00,A=25.00,B=1.000,I=0.350")
-    assert "current" not in g and "currentA" not in g, g
-    assert set(g) == {"coil_id", "object_temp", "ambient_temp", "magnetic_field"}, g
+def test_KRITIK_akim_alani_SOZLESMEDE_VAR(ayristir):
+    """⚠️ KAPI BİLİNÇLİ OLARAK TERSİNE ÇEVRİLDİ (2026-09-10, aynı gün ikinci karar).
+
+    Önceki hâli `test_akim_alani_SOZLESMEDE_YOK` idi ve "ACS712 taşınmıyor (sahip kararı 3)
+    → satırda akım alanı OLMAMALI" diyordu. Sahip kararını değiştirdi: bobin 1-5'e ACS712-30A
+    bağlanacak ve STM'de 5 ADC kanalı açıldı (`pemf_akim.c`). Kapı, kararla birlikte çevrildi
+    — eski iddia sessizce silinmedi, burada kayıtlı.
+
+    ⚠️ Bobin 6-7'de ACS712 YOK: onların satırında `I=` HİÇ olmaz. Yani "akım alanı var"
+    iddiası bobine göre değişir; ayrıştırıcı bunu ALANIN VARLIĞINDAN öğrenir, bobin
+    numarasına göre TAHMİN ETMEZ.
+    """
+    g = ayristir("-> STM_TELE: C=1,I=0.350")
+    assert g == {"coil_id": 1, "current": 0.350}, g
+    # Karışık satır da desteklenir (ileride bir bobinde hepsi olabilir)
+    h = ayristir("-> STM_TELE: C=6,T=30.00,A=25.00,B=1.000,I=0.350")
+    assert h == {
+        "coil_id": 6,
+        "object_temp": 30.0,
+        "ambient_temp": 25.0,
+        "magnetic_field": 1.0,
+        "current": 0.350,
+    }, h
+
+
+def test_KRITIK_ADC_DOYGUNLUGU_isaretli_gelir(ayristir):
+    """`X=1` = ADC tavanına dayandı (bölücüsüz ~12 A üstü) → değer GÜVENİLMEZ.
+
+    ⚠️ NEDEN ÖNEMLİ: ACS712-30A 0 A'da 2,50 V verir ve 66 mV/A ile 3,30 V'a **+12,1 A**'da
+    dayanır. STM32'nin ADC'si orada kırpar; kırpılmış sayı sessizce doz kaydına girerse
+    "12 A ölçüldü" der ama gerçek akım 25 A olabilir. İşaret yutulmamalı.
+
+    MUTASYON: ayrıştırıcıdan `X` grubunu sil → KIRMIZI.
+    """
+    g = ayristir("-> STM_TELE: C=3,I=12.100,X=1")
+    assert g["current"] == 12.1 and g.get("current_saturated") is True, g
+    t = ayristir("-> STM_TELE: C=3,I=2.000")
+    assert "current_saturated" not in t, t
+
+
+def test_yalniz_X_tasiyan_satir_OLCUM_SAYILMAZ(ayristir):
+    """`X` tek başına bir ölçüm değildir → satır reddedilir (sahte damga atılmasın)."""
+    assert ayristir("-> STM_TELE: C=3,X=1") is None
 
 
 @pytest.mark.parametrize(
@@ -154,7 +192,13 @@ def test_KRITIK_olay_live_state_e_YAZAR_ve_YAYINLAR(kur):
     sd = _tip(yayinlar, "sensor_data", 6)
     assert sd is not None, "sensor_data yayini GITMEDI → grafik/kaydedici beslenmez"
     assert sd["data"]["objectTemp"] == 41.7 and sd["data"]["magneticMt"] == 1.842
-    assert "currentA" not in sd["data"], "sensor_data akim alani tasiyor — ACS712 TASINMIYOR"
+    # ⚠️ 2026-09-10 (ikinci karar): `currentA` ARTIK sözleşmede — bobin 1-5'te ACS712 var.
+    # Bu bobin (6) akım göndermediği için değer 0.0 KALIR ama `measuredFields` onu
+    # ölçülmüş SAYMAZ → arayüz kısa çizgi gösterir, DB satır yazmaz.
+    assert "currentA" in sd["data"], "sensor_data akim alanini tasimiyor"
+    assert "currentA" not in (sd["data"].get("measuredFields") or []), (
+        "bobin 6 akim OLCMUYOR ama measuredFields onu olculmus sayiyor → DB'ye 0.0 A yazilir"
+    )
 
 
 def test_KRITIK_telemetri_DAMGASI_atilir_yoksa_DB_satiri_URETILMEZ(kur):
@@ -208,3 +252,99 @@ def test_KARSIT_KANIT_kapi_gercekten_olcuyor(kur):
     assert _tip(yayinlar, "sensor_data", 6) is not None
     yayinlar.append({"type": "coil_status", "coilId": 7, "data": {}})
     assert _tip(yayinlar, "coil_status", 6) is None, "filtre YANLIS bobini esledi"
+
+
+# ── 3. ALAN BAZINDA ÖLÇÜM KAYDI — sahte 0.0 satırı üretilmesin ───────────────
+
+
+def test_KRITIK_measuredFields_YALNIZ_GELEN_alanlari_isaretler(kur):
+    """Bobin 1-5 yalnız AKIM ölçer → `measuredFields` sıcaklık/alanı SAYMAMALI.
+
+    ⚠️ NEDEN BU KAPI: bobin bazında "telemetri geldi mi" damgası 2026-09-10'da YETERSİZ
+    kaldı. Bobin 1-5'e ACS712 eklendi ve o bobinler artık telemetri gönderiyor; damga
+    atılınca dakika-ortalaması döngüsü `objectTemp`/`magneticMt` alanlarını da biriktirmeye
+    başlar ve başlangıç değeri 0.0 olduğu için DB'ye **"0.0 °C ölçüldü, sample_count=30"**
+    yazar — hasta sahibine giden PDF'te uygulanmamış bir ölçüm beyan edilir.
+
+    MUTASYON: handler'da `_t_kume.add(_hedef)` satırını sil → KIRMIZI.
+    """
+    api, _ = kur
+    api._coil_olculen_alanlar.pop(0, None)
+    api._handle_backend_event(_Olay({"coil_id": 1, "current": 0.412}))
+
+    with api._live_state_lock:
+        c = dict(api._live_state["coils"][0])
+    assert c["currentA"] == 0.412
+    assert c["measuredFields"] == ["currentA"], (
+        f"measuredFields {c['measuredFields']!r} — bobin 1'de SICAKLIK/ALAN sensoru YOK, "
+        "onlari olculmus saymak DB'ye '0.0 °C olculdu' yazdirir"
+    )
+
+
+def test_KRITIK_dakika_akumulatoru_OLCULMEYEN_alani_BIRIKTIRMEZ(kur, monkeypatch):
+    """Akümülatör yalnız `measuredFields`teki alanları toplamalı.
+
+    ⚠️ Bu, yukarıdaki iddianın DB ayağı: `_live_state` doğru olsa bile akümülatör
+    `if temp is not None` ile 0.0'ı gerçek ölçüm sayarsa satır yine yazılır.
+    MUTASYON: akümülatörde `and "objectTemp" in _olculen` koşulunu sil → KIRMIZI.
+    """
+    api, _ = kur
+    api._coil_olculen_alanlar.pop(0, None)
+    api._handle_backend_event(_Olay({"coil_id": 1, "current": 0.5}))
+
+    # Akümülatörün TEK turunu elle koştur (sonsuz döngüyü çalıştırmadan).
+    with api._minute_acc_lock:
+        api._minute_acc.pop(1, None)
+    with api._live_state_lock:
+        api._live_state["coils"][0]["running"] = True
+    with api._session_lock:
+        api._active_session["is_active"] = True
+    try:
+        _Dur = type("_Dur", (Exception,), {})
+        monkeypatch.setattr(api.time, "sleep", lambda _s: (_ for _ in ()).throw(_Dur()))
+        with pytest.raises(_Dur):
+            api._sensor_persistence_loop()
+    finally:
+        with api._session_lock:
+            api._active_session["is_active"] = False
+        with api._live_state_lock:
+            api._live_state["coils"][0]["running"] = False
+
+    with api._minute_acc_lock:
+        acc = dict(api._minute_acc.get(1) or {})
+    assert acc, "akumulator bobin 1 icin hic tur islemedi (test kurgusu bozuk)"
+    assert acc["i_n"] > 0, "AKIM biriktirilmedi — gercek olcum kayboluyor"
+    assert acc["t_n"] == 0, (
+        f"SICAKLIK biriktirildi (t_n={acc['t_n']}) ama bobin 1'de sensor YOK → "
+        "DB'ye '0.0 °C olculdu' satiri yazilir (PDF'te uygulanmamis olcum beyani)"
+    )
+    assert acc["b_n"] == 0, f"ALAN biriktirildi (b_n={acc['b_n']}) ama bobin 1'de sensor YOK"
+
+
+def test_KRITIK_ADC_doygunlugu_operatore_bildirilir_ve_TEKRARLAMAZ(kur, monkeypatch):
+    """`X=1` → uyarı çıkmalı; ama her saniye DEĞİL (alarm yorgunluğu).
+
+    ⚠️ Doygun akım doz kaydına giriyor: operatör "12 A" görürken gerçek 25 A olabilir.
+    Sessiz kalmak kabul edilemez. Ama 1 Hz'de bildirim basmak da gerçek olayları boğar →
+    yalnız 0→1 GEÇİŞİNDE bildir.
+    MUTASYON: geçiş kontrolünü (`if _t_doygun != ...`) kaldır → ikinci assert KIRMIZI.
+    """
+    api, _ = kur
+    bildirimler: list = []
+    monkeypatch.setattr(api, "_push_notification", lambda msg, sev="info": bildirimler.append((msg, sev)))
+    api._akim_doygun_son.pop(2, None)
+
+    api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
+    assert any("aral" in m.lower() for m, _ in bildirimler), (
+        f"ADC doygunlugu operatore BILDIRILMEDI: {bildirimler!r} — kirpilmis akim sessizce doz kaydina girer"
+    )
+    ilk = len(bildirimler)
+    api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
+    assert len(bildirimler) == ilk, (
+        f"doygunluk SURERKEN her turda bildirim basiliyor ({len(bildirimler)} > {ilk}) — "
+        "alarm yorgunlugu, gercek olaylar bogulur"
+    )
+    # Normale dönüş yeni bir episode açmalı (bir daha doygunlukta yine uyarılsın).
+    api._handle_backend_event(_Olay({"coil_id": 3, "current": 2.0}))
+    api._handle_backend_event(_Olay({"coil_id": 3, "current": 12.1, "current_saturated": True}))
+    assert len(bildirimler) > ilk, "normale dondukten sonraki YENI doygunluk bildirilmedi"

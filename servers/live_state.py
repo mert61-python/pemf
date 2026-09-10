@@ -141,6 +141,11 @@ _live_state = {
             # İstemci bu alanı sürüş yolunu seçmek için okur (CoilParameterPanel: STM bobini
             # `stmConnected`e kapılanır, ESP bobini `command_id` ACK'i bekler).
             "stm32Driven": i < 7,
+            # GERÇEKTEN ölçülmüş alanların adları. Boş = bu bobinde o sensör YOK →
+            # arayüz kısa çizgi (—) gösterir. ⚠️ 0.0 ile "ölçülmedi" ayırt edilebilsin
+            # diye var: bobin 1-5 yalnız akım, bobin 6-7 yalnız sıcaklık/alan ölçer ve
+            # ölçülmeyen alan 0.0 olarak DURUR (aşağı akış 0.0 bekliyor, None değil).
+            "measuredFields": [],
         }
         for i in range(8)
     },
