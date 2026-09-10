@@ -937,13 +937,32 @@ def _on_mqtt_message_api(client, userdata, msg):
                     )
                     return
                 if event_type in ("wifi_disconnected", "offline"):
+                    # SAHA ARIZASI 2026-09-10 (sahip bildirimi): "Bobin N baglantisi kesildi"
+                    # bildirimi DUSUYOR ama bobin karti "Hazır" kaliyordu. Kok neden: bu dal
+                    # sunucu durumunu guncelliyor ve bildirim atiyor ama `coil_status` WS
+                    # YAYINI YAPMIYORDU. Istemci `connected` alanini yalnizca WS anlik
+                    # goruntusunden ya da `coil_status` olayindan ogrenir; "Hazır" etiketi
+                    # dogrudan o alandan gelir (pf/src/components/domain/CoilParameterPanel.tsx
+                    # ve CoilCard.tsx: running ? "Aktif" : connected ? "Hazır" : "Offline").
+                    # ⚠️ `_esp_telemetry_watchdog` bunu KURTARAMAZ: onun kosulu
+                    # `coil.get("connected")` ve bu dal onu ZATEN False yapmis oluyor →
+                    # bekci bobini atliyor, dolayisiyla yayin HIC gitmiyordu. Arayuz ancak
+                    # tam yeniden baglanmada (yeni snapshot) kendini duzeltiyordu.
+                    # Anlik goruntu KILIT ICINDE alinir, yayin kilit DISINDA yapilir
+                    # (bekci deseninin aynisi).
                     with _live_state_lock:
                         _live_state["coils"][coil_index]["connected"] = False
                         _live_state["coils"][coil_index]["running"] = False
+                        _snap = dict(_live_state["coils"][coil_index])
+                    _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": _snap})
                     _push_notification(f"⚠️ Bobin {coil_id_str} bağlantısı kesildi", "warning")
                 elif event_type == "wifi_connected":
+                    # AYNI ARIZANIN AYNASI: yayin olmadan istemci "Offline" da asili kalirdi
+                    # (bobin geri geldiginde kart guncellenmiyordu).
                     with _live_state_lock:
                         _live_state["coils"][coil_index]["connected"] = True
+                        _snap = dict(_live_state["coils"][coil_index])
+                    _ws_broadcast_sync({"type": "coil_status", "coilId": int(coil_id_str), "data": _snap})
                     _push_notification(f"✅ Bobin {coil_id_str} bağlandı", "success")
 
             elif msg_type == "alarm":
