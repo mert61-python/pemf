@@ -14,7 +14,7 @@ function num(v: unknown, digits = 0): string {
 }
 
 export function CoilCard({ coil }: { coil: CoilStatus }) {
-  const isStmCoil = coil.stm32Driven || coil.id <= 5;
+  const isStmCoil = coil.stm32Driven || coil.id <= 7;
   const sourceText = coil.connected
     ? isStmCoil ? "Kablolu senkron" : "Kablosuz senkron"
     : "Veri bekleniyor";

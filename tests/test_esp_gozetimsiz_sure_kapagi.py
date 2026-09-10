@@ -1,5 +1,5 @@
 # Author: mertaygn, cglrgrkn
-"""GÖZETİMSİZ ENERJİLENDİRME SINIRI — ESP TARAFI (bobin 6-8).
+"""GÖZETİMSİZ ENERJİLENDİRME SINIRI — ESP TARAFI (ESP bobini-8).
 
 DENETİM BULGUSU (2026-08-17). 1.9.14'te eklenen klinik kapak (`GOZETIMSIZ_VARSAYILAN_DAKIKA = 120`)
 yalnız `controllers/hardware_controller.py` içinde, yani **8 bobinin 5'inde** yaşıyordu. ESP dalı
@@ -37,6 +37,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 from controllers.hardware_controller import GOZETIMSIZ_VARSAYILAN_DAKIKA  # noqa: E402
 
@@ -82,7 +84,7 @@ def _start_yayini(kayit):
 
 def test_KRITIK_ESP_sure_verilmeden_baslatilan_bobin_KAPAKLANIR(client, yayinlar):
     """`duration=0` ile başlatılan ESP bobini SONSUZ sürmemeli — klinik kapak uygulanmalı."""
-    r = client.post("/api/coil/6/control", json={"freq": 50, "duty": 25, "start": True})
+    r = client.post(f"/api/coil/{ESP_BOBIN}/control", json={"freq": 50, "duty": 25, "start": True})
     assert r.status_code == 200
     assert r.json()["transport"] == "mqtt"
 
@@ -100,7 +102,11 @@ def test_KRITIK_ESP_batch_yolunda_da_KAPAKLANIR(client, yayinlar):
     Bu ayrı bir test çünkü depo bu sınıfta bir kez yandı: 2026-08-12'de AI zaman aşımı düzeltmesi
     `apiPost` yolunda yapılıp ham `fetch` kullanan 10 modül atlanmıştı ("kısmi düzeltme,
     düzeltilmemiş demektir")."""
-    r = client.post("/api/coil/batch", json={"coil_ids": [7], "freq": 50, "duty": 25, "start": True})
+    # FAZ 4: bobin 7 STM'e tasindi; ESP batch yolunu olcmek icin ESP_BOBIN.
+    r = client.post(
+        "/api/coil/batch",
+        json={"coil_ids": [ESP_BOBIN], "freq": 50, "duty": 25, "start": True},
+    )
     assert r.status_code == 200
 
     gonderilen = _start_yayini(yayinlar)["duration"]
@@ -113,7 +119,7 @@ def test_ACIK_verilen_sure_DEGISTIRILMEZ_karsit_kanit(client, yayinlar):
     """Karşı-kanıt: operatör AÇIKÇA bir süre verdiyse ona dokunulmaz.
 
     Kapak yalnız "süre belirtilmedi" nöbetçisini (0) değiştirir; bu yeni bir üst-sınır DEĞİLDİR."""
-    r = client.post("/api/coil/6/control", json={"freq": 50, "duty": 25, "duration": 300, "start": True})
+    r = client.post(f"/api/coil/{ESP_BOBIN}/control", json={"freq": 50, "duty": 25, "duration": 300, "start": True})
     assert r.status_code == 200
     assert _start_yayini(yayinlar)["duration"] == 300
 
@@ -123,13 +129,13 @@ def test_sifir_sure_hala_KABUL_edilir_karsit_kanit(client, yayinlar):
 
     `tests/test_gozetimsiz_enerjilendirme.py::test_sifir_sure_hala_KABUL_edilir_karsit_kanit` ile
     aynı değişmezin ESP karşılığı."""
-    r = client.post("/api/coil/6/control", json={"freq": 20, "duty": 30, "duration": 0, "start": True})
+    r = client.post(f"/api/coil/{ESP_BOBIN}/control", json={"freq": 20, "duty": 30, "duration": 0, "start": True})
     assert r.status_code == 200
 
 
 def test_STOP_komutunda_sure_alani_HIC_gonderilmez_karsit_kanit(client, yayinlar):
     """Karşı-kanıt: kapak yalnız `start` yolunda. STOP payload'ı süre taşımaz ve taşımamalı."""
-    r = client.post("/api/coil/6/control", json={"freq": 0, "duty": 0, "duration": 0, "start": False})
+    r = client.post(f"/api/coil/{ESP_BOBIN}/control", json={"freq": 0, "duty": 0, "duration": 0, "start": False})
     assert r.status_code == 200
     stoplar = [k for k in yayinlar if k["payload"].get("command") == "stop"]
     assert len(stoplar) == 1

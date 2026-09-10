@@ -189,6 +189,7 @@ def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkey
 
     import database.treatment_history_db as thdb
     from servers import api_server
+    from servers.live_state import ESP_COIL_IDS as _ESP_IDS
 
     db = thdb.TreatmentHistoryDB(temp_app_data)
     db.at_rest_encrypted = True
@@ -203,7 +204,9 @@ def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkey
             api_server._active_session.clear()
 
         payload = api_server.SessionStartPayload(
-            coil_ids=[6, 7],
+            # FAZ 4: bobin 6-7 STM'e tasindi → STM donanimi gerekir. Bu test donanimsiz
+            # kosuyor, o yuzden ESP kapsamini kullan (slot 8: cihaz yok, yol canli).
+            coil_ids=sorted(_ESP_IDS),
             mode="Manuel",
             operator_name="op",
             frequency=10.0,

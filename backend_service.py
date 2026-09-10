@@ -205,6 +205,8 @@ def _safe_stop_outputs(api_server_module) -> None:
         import threading
         import time
 
+        from servers.live_state import ESP_COIL_IDS as _ESP_COIL_IDS
+
         # Audit P3: ESP STOP'larını PARALEL gönder + sıkı süre-bütçesi. Eskiden 6 publish SIRAYLA
         # (broker yavaşken ~14s worst-case) SCM/NSSM stop-timeout'unu aşıp süreç kill → ESP STOP almadan
         # bobinler firmware süre-watchdog'una kadar açık kalabiliyordu. emergency_stop zaten paralel.
@@ -228,7 +230,12 @@ def _safe_stop_outputs(api_server_module) -> None:
         # (servis "durduruldu" sayilmadan oldurulur → kapanis mutabakati yarim kalir).
         # DAEMON thread + join(timeout): butce GERCEKTEN uygulanir, kalanlar surec bitince duser.
         _threads = [
-            threading.Thread(target=_stop_esp, args=(c,), daemon=True, name=f"shutdown-estop-{c}") for c in range(6, 9)
+            # ⚠️ FAZ 4 (2026-09-10): kapsam ELLE `range(6, 9)` yaziliydi. Bobin 6-7 STM'e
+            # tasindiginda burasi hala MQTT'ye STOP basiyordu (dinleyen yok → bos yayin)
+            # ve gercek ESP kapsami ile AYRISMIS bir ikinci kaynak olusturuyordu.
+            # Tek kaynak: servers.live_state.ESP_COIL_IDS. Kapi: test_bobin_topolojisi.py
+            threading.Thread(target=_stop_esp, args=(c,), daemon=True, name=f"shutdown-estop-{c}")
+            for c in sorted(_ESP_COIL_IDS)
         ]
         for _t in _threads:
             _t.start()

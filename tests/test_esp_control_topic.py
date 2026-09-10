@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import inspect
 
+from topoloji import TUM_ESP, TUM_STM  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
+
 import servers.api_server as api
 
 
@@ -28,13 +30,13 @@ def test_KRITIK_broadcast_ESP_bobinlerine_DOGRU_topige(monkeypatch):
     topikler = [t for t, _ in cagrilar]
 
     # yalnız ESP bobinleri (6,7,8), yalnız coil/control
-    assert set(topikler) == {f"pemf/coil/{i}/control" for i in (6, 7, 8)}, (
+    assert set(topikler) == {f"pemf/coil/{i}/control" for i in sorted(TUM_ESP)}, (
         f"beklenen ESP control topikleri değil: {topikler}"
     )
     # ölü esp32_ topiği KULLANILMAMALI
     assert not any("esp32_" in t for t in topikler), "ölü pemf/esp32_ topiği geri geldi"
     # STM bobinleri (1-5) MQTT'ye çıkmamalı (seri protokol)
-    assert not any(f"pemf/coil/{i}/" in t for t in topikler for i in range(1, 6)), (
+    assert not any(f"pemf/coil/{i}/" in t for t in topikler for i in TUM_STM), (
         "STM bobinine MQTT komutu gitti (STM seri dinler)"
     )
 

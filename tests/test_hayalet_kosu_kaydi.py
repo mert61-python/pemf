@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -64,7 +65,9 @@ def test_KRITIK_esp_publish_dusunce_kosu_kaydi_ACILMAZ(api, client, izleyiciler,
     beginler, _f = izleyiciler
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p: False)  # broker ölü — komut KESİN gitmedi
 
-    r = client.post("/api/coil/6/control", json={"freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True})
+    r = client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True}
+    )
     assert r.json().get("status") == "mqtt_unavailable"
     assert beginler == [], f"komut hiçbir yere gitmedi ama tedavi geçmişine koşu yazıldı: {beginler!r} (bulgu [4.5])"
 
@@ -73,9 +76,11 @@ def test_KARSIT_KANIT_esp_publish_dogrulaninca_kosu_ACILIR(api, client, izleyici
     beginler, _f = izleyiciler
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p: True)
 
-    r = client.post("/api/coil/6/control", json={"freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True})
+    r = client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True}
+    )
     assert r.json().get("status") == "success"
-    assert beginler == [(6, "esp")], f"başarılı start koşu kaydı açmadı: {beginler!r}"
+    assert beginler == [(ESP_BOBIN, "esp")], f"başarılı start koşu kaydı açmadı: {beginler!r}"
 
 
 def test_KRITIK_stm_reddi_kosu_kaydi_ACMAZ_ve_success_DEMEZ(api, client, izleyiciler, monkeypatch):
@@ -105,11 +110,11 @@ def test_KRITIK_batch_yalniz_BASARILI_bobinlere_kosu_yazar(api, client, izleyici
 
     r = client.post(
         "/api/coil/batch",
-        json={"coil_ids": [2, 6], "freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True},
+        json={"coil_ids": [2, ESP_BOBIN], "freq": 50, "duty": 25, "phase": 0, "duration": 60, "start": True},
     )
     satirlar = {s["coilId"]: s["status"] for s in r.json()["results"]}
-    assert beginler == [(6, "esp")], f"batch'te koşu kaydı yanlış küme: {beginler!r}"
-    assert satirlar[6] == "success"
+    assert beginler == [(ESP_BOBIN, "esp")], f"batch'te koşu kaydı yanlış küme: {beginler!r}"
+    assert satirlar[ESP_BOBIN] == "success"
     assert satirlar[2] != "success", f"STM reddi batch satırında 'success' görünüyor: {satirlar!r}"
 
 
@@ -119,5 +124,7 @@ def test_KARSIT_KANIT_stop_publish_dusse_de_kosu_KAPATILIR(api, client, izleyici
     _b, finisler = izleyiciler
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p: False)
 
-    client.post("/api/coil/6/control", json={"freq": 0, "duty": 0, "phase": 0, "duration": 0, "start": False})
-    assert finisler == [6], f"STOP'ta koşu kapatılmadı (kayıt açık sızar): {finisler!r}"
+    client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"freq": 0, "duty": 0, "phase": 0, "duration": 0, "start": False}
+    )
+    assert finisler == [ESP_BOBIN], f"STOP'ta koşu kapatılmadı (kayıt açık sızar): {finisler!r}"

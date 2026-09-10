@@ -22,6 +22,7 @@ silmek de klinik olarak gerçek zararlar).
 """
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture()
@@ -250,7 +251,11 @@ def test_kapanis_ESP_STOP_butcesi_GERCEKTEN_uygulanir(monkeypatch):
     ana = threading.main_thread()
     assert hw.cagrildi and q.yoklama > 1, "STM flush dongusu HIC kosmadi"
     assert gecen >= bs._STM_FLUSH_BUDGET_S - 0.05, "STM flush butcesi hic beklenmedi (_deadline yok)"
-    assert len(set(kayit)) == 3, f"3 bobin PARALEL denenmedi (farkli thread={len(set(kayit))}, publish={len(kayit)})"
+    # FAZ 4: ESP kapsami kuculdu (bobin 6-7 STM'e gecti) → beklenen thread sayisi TUM_ESP.
+    # Iddia AYNI: her bobin AYRI thread'de (seri degil) denenmis olmali.
+    assert len(set(kayit)) == len(TUM_ESP), (
+        f"{len(TUM_ESP)} bobin PARALEL denenmedi (farkli thread={len(set(kayit))}, publish={len(kayit)})"
+    )
     assert all(t is not ana for t in kayit), "ESP STOP'lari ANA thread'de SIRAYLA gidiyor -> butce YOK"
     assert all(t.daemon for t in kayit), "ESP STOP thread'leri daemon DEGIL -> butce asiminda surec takilir"
     assert gecen < bs._STM_FLUSH_BUDGET_S + bs._ESP_STOP_BUDGET_S + 1.0, (
@@ -392,7 +397,7 @@ def test_dakika_birikimi_YENI_MANUEL_seansta_sifirlanir(api, monkeypatch):
     monkeypatch.setattr(api, "_kayit_db_hazir", lambda: (True, ""))
     _onceki_hastanin_artigini_koy(api)
     payload = api.SessionStartPayload(
-        coil_ids=[6, 7],  # ESP-only → STM donanımı gerekmez
+        coil_ids=sorted(TUM_ESP),  # ESP-only → STM donanımı gerekmez
         mode="Manuel",
         operator_name="op",
         frequency=10.0,
@@ -422,7 +427,13 @@ def test_KRITIK_dakika_birikimi_YENI_AI_seansinda_da_sifirlanir(api):
     with api._session_lock:
         api._active_session.clear()
         api._active_session.update(
-            {"is_active": True, "session_id": "manuel_1", "mode": "Manuel", "coil_ids": [6, 7], "start_time": 1.0}
+            {
+                "is_active": True,
+                "session_id": "manuel_1",
+                "mode": "Manuel",
+                "coil_ids": sorted(TUM_ESP),
+                "start_time": 1.0,
+            }
         )
 
     api.start_ai_session(0.0, 0.0, 20, range(1, 8), "AI Pro")

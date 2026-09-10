@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -166,12 +167,12 @@ def _coil(api, cid: int) -> dict:
 def test_KRITIK_S3_canli_status_connected_yapar(api):
     """S3 hiç `sensors` yayınlamaz (UYUMSUZ-6) ve status'unda `status` dizesi yoktur.
     CANLI (retain=0) status mesajının kendisi cihazın yaşadığının kanıtıdır → connected=True.
-    Eski davranış (`payload.get("status","") in (...)` → False) bobin 6-7'yi KALICI
+    Eski davranış (`payload.get("status","") in (...)` → False) ESP bobini-7'yi KALICI
     'bağlantı yok' gösteriyor, paneli kilitliyor ve watchdog'u kör ediyordu."""
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6)))
-    c = _coil(api, 6)
+    api._on_mqtt_message_api(None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN)))
+    c = _coil(api, ESP_BOBIN)
     assert c["connected"] is True, (
-        "CANLI S3 status'u connected=True yapmadı — bobin 6-7 kalıcı 'Offline' görünür, "
+        "CANLI S3 status'u connected=True yapmadı — ESP bobini kalıcı 'Offline' görünür, "
         "CoilParameterPanel kontrolleri kilitlenir, stale-STOP watchdog'u bu bobini ASLA durdurmaz"
     )
     assert c["running"] is True  # pwm_active'ten
@@ -179,8 +180,8 @@ def test_KRITIK_S3_canli_status_connected_yapar(api):
 
 def test_KRITIK_S3_status_current_ve_ambient_isler(api):
     """S3'te current/ambient yalnız status içinde gelir; okunmazsa doz kayıtlarına 0 yazılır."""
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6)))
-    c = _coil(api, 6)
+    api._on_mqtt_message_api(None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN)))
+    c = _coil(api, ESP_BOBIN)
     assert c["currentA"] == pytest.approx(0.42), "status'taki `current` okunmadı (S3'te başka kaynağı YOK)"
     assert c["ambientTemp"] == pytest.approx(24.0), "status'taki `ambient_temp` okunmadı"
     assert c["objectTemp"] == pytest.approx(31.5)
@@ -191,8 +192,8 @@ def test_KRITIK_S3_status_current_ve_ambient_isler(api):
 
 
 def test_KRITIK_S3_efektif_duty_pwm_duty_anahtarindan_okunur(api):
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6, pwm_duty=24)))
-    assert _coil(api, 6)["dutyCycle"] == 24, (
+    api._on_mqtt_message_api(None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN, pwm_duty=24)))
+    assert _coil(api, ESP_BOBIN)["dutyCycle"] == 24, (
         "S3 `pwm_duty` okunmadı — firmware'in DÜRÜST efektif duty raporu (D-2) live-state'e "
         "ulaşmıyor; dakika-akümülatörü doz kaydına duty=0 yazar"
     )
@@ -212,8 +213,10 @@ def test_KRITIK_bozuk_sensor_alani_mesajin_kalanini_oldurmez(api):
     işlemeyi YARIDA kesiyordu: connected/duty uygulanmış ama current/ambient + WS yayını +
     reconcile ATLANMIŞ kalıyordu (5 Hz'de WARN spam). Bozuk TEK alan yalnız KENDİSİNİ
     düşürmeli — kalanı işlenmeli."""
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6, object_temp=None)))
-    c = _coil(api, 6)
+    api._on_mqtt_message_api(
+        None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN, object_temp=None))
+    )
+    c = _coil(api, ESP_BOBIN)
     assert c["connected"] is True
     assert c["currentA"] == pytest.approx(0.42), (
         "object_temp=null (sensör arızası) current okumasını da öldürdü — S3'te current'ın "
@@ -227,8 +230,10 @@ def test_KRITIK_efektif_duty_komutlanan_duty_cycle_i_EZER(api):
     """Adversaryal review #4: bir firmware günün birinde HEM `duty_cycle` (komutlanan) HEM
     `pwm_duty`/`pwm_duty_cycle` (efektif) yayınlarsa DÜRÜST olan efektiftir — komutlanan değer
     efektifi gölgelememeli (D-2'nin bütün amacı gerçek çıkışı raporlamaktı)."""
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6, duty_cycle=50, pwm_duty=24)))
-    assert _coil(api, 6)["dutyCycle"] == 24, "komutlanan duty_cycle=50, efektif pwm_duty=24'ü gölgeledi"
+    api._on_mqtt_message_api(
+        None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN, duty_cycle=50, pwm_duty=24))
+    )
+    assert _coil(api, ESP_BOBIN)["dutyCycle"] == 24, "komutlanan duty_cycle=50, efektif pwm_duty=24'ü gölgeledi"
 
 
 # ── güvenlik zinciri: status → connected → stale-STOP watchdog ───────────────
@@ -259,9 +264,9 @@ def test_KRITIK_zincir_S3_status_sonrasi_susan_bobine_stale_STOP_gider(api, monk
     Zincir uçtan uca: gerçek MQTT ayrıştırması → connected → tek tur watchdog → STOP yayını."""
     import time as _t
 
-    api._on_mqtt_message_api(None, None, _mesaj("pemf/coil/6/status", _s3_status(6)))
+    api._on_mqtt_message_api(None, None, _mesaj(f"pemf/coil/{ESP_BOBIN}/status", _s3_status(ESP_BOBIN)))
     # Bobin sustu: damgayı eşikten öteye eskit.
-    api._coil_last_telemetry[5] = _t.monotonic() - (float(api.ESP_STALE_SEC) + 5.0)
+    api._coil_last_telemetry[ESP_BOBIN - 1] = _t.monotonic() - (float(api.ESP_STALE_SEC) + 5.0)
 
     yayinlar: list = []
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p=None, *a, **k: yayinlar.append((t, p)) or True)
@@ -269,12 +274,14 @@ def test_KRITIK_zincir_S3_status_sonrasi_susan_bobine_stale_STOP_gider(api, monk
     with pytest.raises(_CikisSinyali):
         api._esp_telemetry_watchdog()
 
-    stoplar = [(t, p) for t, p in yayinlar if t == "pemf/coil/6/control" and (p or {}).get("command") == "stop"]
+    stoplar = [
+        (t, p) for t, p in yayinlar if t == f"pemf/coil/{ESP_BOBIN}/control" and (p or {}).get("command") == "stop"
+    ]
     assert stoplar, (
         f"S3 status'undan sonra susan bobine stale-STOP YAYINLANMADI (yayinlar={yayinlar!r}) — "
         "1.9.16'nın 'sessizleşen ESP'ye gerçek STOP' güvenlik ağı S3 için ölü"
     )
-    assert _coil(api, 6)["connected"] is False, "bayat bobin UI'da hâlâ canlı görünüyor"
+    assert _coil(api, ESP_BOBIN)["connected"] is False, "bayat bobin UI'da hâlâ canlı görünüyor"
 
 
 # ── karşıt-kanıtlar: eski sözleşme + retained filtresi bozulmadı ─────────────

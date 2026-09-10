@@ -18,6 +18,7 @@ import os
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture
@@ -96,14 +97,14 @@ def mqtt_kur(api, monkeypatch):
 
 def test_PUBACK_gelirse_True(api, mqtt_kur):
     info = mqtt_kur(_SahteInfo(yayinlandi=True))
-    assert api._mqtt_publish("pemf/coil/6/control", {"command": "stop"}) is True
+    assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is True
     assert info.wait_cagrildi, "wait_for_publish cagrilmadi — mesaj disconnect'ten once teslim edilmeyebilir"
 
 
 def test_KRITIK_PUBACK_GELMEZSE_False(api, mqtt_kur):
     """Zaman aşımı = teslim edilmedi. Eskiden burada koşulsuz True dönüyordu."""
     mqtt_kur(_SahteInfo(yayinlandi=False))
-    assert api._mqtt_publish("pemf/coil/6/control", {"command": "stop"}) is False, (
+    assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is False, (
         "PUBACK gelmedigi halde yayin 'basarili' bildirildi"
     )
 
@@ -112,14 +113,14 @@ def test_KRITIK_wait_ISTISNA_atarsa_is_published_belirler(api, mqtt_kur):
     """paho ≥2.0 zaman aşımında istisna atar. İstisna yutulup True dönülmemeli;
     kesin cevabı `is_published()` verir."""
     mqtt_kur(_SahteInfo(yayinlandi=False, patlat=RuntimeError("timeout")))
-    assert api._mqtt_publish("pemf/coil/6/control", {"command": "stop"}) is False
+    assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is False
 
 
 def test_wait_istisna_atsa_da_GERCEKTEN_yayinlandiysa_True(api, mqtt_kur):
     """Yarış: PUBACK wait'in istisnasından hemen sonra gelmiş olabilir → False-negatif üretme
     (gereksiz 'DOĞRULANAMADI' uyarısı operatörü alarm-körlüğüne iter)."""
     mqtt_kur(_SahteInfo(yayinlandi=True, patlat=RuntimeError("timeout")))
-    assert api._mqtt_publish("pemf/coil/6/control", {"command": "stop"}) is True
+    assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is True
 
 
 def test_broker_erisilemezse_False(api, monkeypatch):
@@ -129,7 +130,7 @@ def test_broker_erisilemezse_False(api, monkeypatch):
         raise OSError("baglanti reddedildi")
 
     monkeypatch.setattr(_socket, "create_connection", _red)
-    assert api._mqtt_publish("pemf/coil/6/control", {"command": "stop"}) is False
+    assert api._mqtt_publish(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}) is False
 
 
 # ── zincir: taşıma yalanı → acil durdurma teyidi ─────────────────────────────
@@ -193,5 +194,6 @@ def test_ESP_STOP_daima_TUM_ESP_bobinlerine_gider(api, monkeypatch):
     sonuc = api._emergency_stop_all(reason="test")
 
     hedefler = {t.split("/")[2] for t in gidilen if t.startswith("pemf/coil/")}
-    assert {"6", "7", "8"} <= hedefler, f"tum ESP bobinlerine STOP gitmedi: {hedefler}"
-    assert len(sonuc["mqttResults"]) == 3
+    assert {str(c) for c in TUM_ESP} <= hedefler, f"tum ESP bobinlerine STOP gitmedi: {hedefler}"
+    # FAZ 4: sonuc satiri ESP bobini basina bir tane (bobin 6-7 STM'e tasindi).
+    assert len(sonuc["mqttResults"]) == len(TUM_ESP)

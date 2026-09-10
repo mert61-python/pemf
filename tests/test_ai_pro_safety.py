@@ -10,6 +10,7 @@ os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +101,9 @@ def test_stop_ai_pro_stops_coil_8_too(client, monkeypatch):
     assert r.status_code == 200
 
     stopped_esp = {t.split("/")[2] for t, cmd in published if cmd == "stop" and t.startswith("pemf/coil/")}
-    assert {"6", "7", "8"} <= stopped_esp, f"ESP 6-8'in hepsi durdurulmalıydı, gelen: {stopped_esp}"
+    assert {str(c) for c in TUM_ESP} <= stopped_esp, (
+        f"tum ESP bobinleri durdurulmaliydi ({sorted(TUM_ESP)}), gelen: {stopped_esp}"
+    )
 
 
 class _FakeCap:

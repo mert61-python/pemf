@@ -137,7 +137,10 @@ _live_state = {
             "objectTemp": 0.0,
             "ambientTemp": 0.0,
             "currentA": 0.0,
-            "stm32Driven": i < 5,
+            # ⚠️ i < 7 → bobin 1-7 STM (faz 4, 2026-09-10). Slot 8 ESP (cihaz yok).
+            # İstemci bu alanı sürüş yolunu seçmek için okur (CoilParameterPanel: STM bobini
+            # `stmConnected`e kapılanır, ESP bobini `command_id` ACK'i bekler).
+            "stm32Driven": i < 7,
         }
         for i in range(8)
     },
@@ -164,15 +167,33 @@ _live_state = {
 }
 _live_state_lock = threading.Lock()
 _notif_counter = 0
-STM_COIL_IDS = set(range(1, 6))
-ESP_COIL_IDS = set(range(6, 9))
+# ── BOBİN TOPOLOJİSİ ──────────────────────────────────────────────────────────
+# FAZ 4 (sahip kararı 2026-09-10): bobin 6-7 ESP8266'dan STM32'ye TAŞINDI.
+# Firmware `NUM_COILS = 7`, paket 120 bayt; bobin 6 → PE13, bobin 7 → PE15.
+#
+# ⚠️ SLOT 8 ESP'DE KALIYOR (sahip kararı "8. slot kalsın"): fiziksel bir bobin YOK, ama
+# `_live_state["coils"]` 8 slotlu kalıyor → WS anlık-görüntü sözleşmesi ve `range(8)` geçen
+# dokuz çağrı yeri DEĞİŞMİYOR. ESP yolu (MQTT/watchdog/E-stop aynası) böylece SİLİNMEDEN
+# uykuda kalır; bir gün 8. bobin takılırsa tek satırla geri gelir.
+#
+# ⚠️ BU KÜMELER YÖNLENDİRMEYİ BELİRLER: `STM_COIL_IDS` seri porta, `ESP_COIL_IDS` MQTT'ye
+# gider (`api_server` `/api/coil/{id}/control` ve batch yolları). Bir bobin YANLIŞ kümede
+# olursa komut hiç ulaşmaz ve arayüz bunu göstermez — 2026-09-10'a kadar bobin 6-7 tam
+# bu durumdaydı (kablo STM'e çekilmiş, komut MQTT'ye gidiyordu).
+STM_COIL_IDS = set(range(1, 8))
+ESP_COIL_IDS = {8}
 
 
 def _sync_stm_coils_locked() -> list[dict]:
-    """Keep coils 1-5 derived from the live STM connection state."""
+    """Bobin 1-7'yi canlı STM bağlantı durumundan türetir (faz 4: 5 → 7).
+
+    ⚠️ Bu döngü `STM_COIL_IDS` ile AYNI kapsamda olmalı. Ayrışırsa bobin 6-7 `connected`
+    alanını hiç güncellemez → STM çevrimdışıyken kart "Hazır"da asılı kalır (2026-09-10'da
+    ESP tarafında ölçülen arızanın aynısı).
+    """
     stm_online = _live_state["stm"] == "online"
     snapshots = []
-    for idx in range(5):
+    for idx in range(len(STM_COIL_IDS)):
         coil = _live_state["coils"][idx]
         coil["stm32Driven"] = True
         coil["connected"] = stm_online

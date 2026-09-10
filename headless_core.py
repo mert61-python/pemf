@@ -25,7 +25,11 @@ _RETRY_MAX_AGE_S = 0.75
 class HeadlessCore:
     """Qt-free backend core for STM32 communication and shared services."""
 
-    STM_COIL_COUNT = 5
+    #: STM ACK satirindaki bobin sayisi (faz 4, 2026-09-10: 5 → 7).
+    #: ⚠️ Ayristirici uzunluktan BAGIMSIZ (virgulle ayirir); bu sabit yalniz KIRPMA
+    #: sinirridir. Kucuk kalirsa bobin 6-7'nin ACK degerleri SESSIZCE atilir ve
+    #: canli durum bayat kalir (arayuz 'Aktif' der, gercek duty gorunmez).
+    STM_COIL_COUNT = 7
 
     def __init__(
         self,

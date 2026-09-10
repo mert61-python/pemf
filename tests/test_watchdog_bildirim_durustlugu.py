@@ -17,13 +17,17 @@ Watchdog tek-tur sürme deseni test_kalan_davranissal.py'den (sleep try-dışın
 import time
 
 import pytest
+from topoloji import ESP_BOBIN  # faz 4: literal bobin numarasi YASAK
 
 
 class _Dur(Exception):
     pass
 
 
-def _tek_tur_watchdog(api, monkeypatch, publish, coil_idx=5):
+# FAZ 4 (2026-09-10): varsayilan indeks 5 (bobin 6) idi; bobin 6 STM'e tasindi ve
+# `_esp_telemetry_watchdog` YALNIZ `ESP_COIL_IDS`i tarar → o indeksle bu test ARTIK
+# HICBIR SEY olcmuyordu (bekci bobini atliyor, hic bildirim cikmiyor). Cipa ESP_BOBIN'e bagli.
+def _tek_tur_watchdog(api, monkeypatch, publish, coil_idx=ESP_BOBIN - 1):
     """Bobin (idx) bayat+connected kur, watchdog'u TEK tur koştur, bildirimleri döndür."""
     bildirimler = []
     monkeypatch.setattr(api, "_mqtt_publish", publish)

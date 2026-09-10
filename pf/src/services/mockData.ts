@@ -44,7 +44,7 @@ export const mockSnapshot: DashboardSnapshot = {
     objectTemp: 0,
     ambientTemp: 0,
     currentA: 0,
-    stm32Driven: index < 5,   // Bobin 1-5 STM32, 6-8 ESP
+    stm32Driven: index < 7,   // Faz 4: bobin 1-7 STM32, slot 8 ESP (cihaz yok)
   })),
   sessions: []
 };

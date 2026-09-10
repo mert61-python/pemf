@@ -13,6 +13,7 @@ import os
 
 os.environ.pop("PEMF_SIMULATE", None)
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture()
@@ -150,7 +151,7 @@ def test_emergency_stop_all_ends_session_and_stops_coils(api):
             {
                 "is_active": True,
                 "session_id": "es_test",
-                "coil_ids": [6, 7, 8],
+                "coil_ids": sorted(TUM_ESP),
                 "duration_minutes": 20,
                 "start_time": time.time(),
             }
@@ -171,7 +172,7 @@ def test_emergency_stop_all_ends_session_and_stops_coils(api):
         assert api._live_state["coils"][idx]["dutyCycle"] == 0.0
     # ESP bobinleri (6,7,8) için MQTT stop sonucu dönmeli
     estopped = {r["coilId"] for r in result["mqttResults"]}
-    assert estopped == {6, 7, 8}, "ESP bobinlerine (6-8) acil-stop publish edilmeli"
+    assert estopped == TUM_ESP, "ESP bobinlerine (6-8) acil-stop publish edilmeli"
 
 
 def test_emergency_stop_all_defaults_to_all_coils_without_session(api):
@@ -179,7 +180,7 @@ def test_emergency_stop_all_defaults_to_all_coils_without_session(api):
     result = api._emergency_stop_all(reason="manual")
     assert result["status"] == "success"
     estopped = {r["coilId"] for r in result["mqttResults"]}
-    assert estopped == {6, 7, 8}, "seanssız estop ESP 6-8'i varsayılan kapsamalı"
+    assert estopped == TUM_ESP, "seanssız estop ESP 6-8'i varsayılan kapsamalı"
 
 
 def test_emergency_stop_all_ignores_narrow_session_scope(api, monkeypatch):
@@ -213,8 +214,11 @@ def test_emergency_stop_all_ignores_narrow_session_scope(api, monkeypatch):
     result = api._emergency_stop_all(reason="test")
 
     estopped = {r["coilId"] for r in result["mqttResults"]}
-    assert estopped == {6, 7, 8}, f"dar seans kapsamı ESP stop'unu daraltmamalı; gelen: {estopped}"
-    assert any("/7/" in t for t in published), "seans-dışı bobin 7'ye STOP publish edilmeliydi"
+    assert estopped == TUM_ESP, f"dar seans kapsamı ESP stop'unu daraltmamalı; gelen: {estopped}"
+    # FAZ 4: bobin 7 STM'e tasindi → "seans-disi ESP bobini" artik TUM_ESP'in bir uyesi.
+    # Iddia AYNI: acil durdurma seans kapsamiyla SINIRLANDIRILAMAZ.
+    _disari = max(TUM_ESP)
+    assert any(f"/{_disari}/" in t for t in published), f"seans-disi bobin {_disari}'ye STOP publish edilmeliydi"
     # Seans kapsamı ARTIK yalnız denetim izinde; durdurma kapsamını belirlemez.
     assert result["sessionCoilIds"] == [1, 2, 3]
 
@@ -246,7 +250,7 @@ def test_get_active_session_is_readonly_on_expiry(api):
             {
                 "is_active": True,
                 "session_id": "ro",
-                "coil_ids": [6],
+                "coil_ids": [ESP_BOBIN],
                 "duration_minutes": 1,
                 "start_time": time.time() - 120,  # 1dk seans, 2dk önce → dolmuş
             }

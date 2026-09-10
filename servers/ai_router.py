@@ -514,7 +514,10 @@ async def analyze_landmark(
                     try:
                         import servers.api_server as _api_esp
 
-                        for _cid in (6, 7, 8):
+                        # ⚠️ FAZ 4: kapsam elle (6, 7, 8) yaziliydi; bobin 6-7 STM'e
+                        # tasindi ve zaten `start_all_coils` ile suruluyor → buradaki
+                        # MQTT yayini onlara BOSA gidiyordu. Tek kaynak: ESP_COIL_IDS.
+                        for _cid in sorted(_api_esp.ESP_COIL_IDS):
                             _api_esp._mqtt_publish(
                                 f"pemf/coil/{_cid}/control",
                                 {
@@ -1601,7 +1604,8 @@ def _ai_pro_loop():
         if _api2.state and _api2.state.hardware:
             _api2.state.hardware.stop_all_coils()
         # ESP 6-8'i de durdur (AI bunları da sürüyordu — audit #13).
-        for _cid in (6, 7, 8):
+        # ⚠️ FAZ 4: kapsam elle yaziliydi (yukaridaki ile ayni sinif). Tek kaynak.
+        for _cid in sorted(_api2.ESP_COIL_IDS):
             try:
                 _api2._mqtt_publish(
                     f"pemf/coil/{_cid}/control",

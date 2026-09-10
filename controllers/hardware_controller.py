@@ -15,6 +15,14 @@ from utils.stm32_protocol_limits import (
 )
 from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_FMT
 
+#: STM'in SÜRDÜĞÜ bobin sayısı (faz 4, sahip kararı 2026-09-10: bobin 6-7 ESP'den taşındı).
+#: ⚠️ Bu, PAKET genişliği (`STM_PAKET_BOBIN_SAYISI`) ile AYNI OLMAK ZORUNDA DEĞİL — protokol
+#: daha geniş olabilir ve fazla alanlar sıfır gider. Ama topolojiden BÜYÜK olamaz: olursa
+#: `_send_stm_manual_update` var olmayan bir `coils_state` girdisi arar.
+#: Kaynak sözleşmesi: `servers.live_state.STM_COIL_IDS` ile aynı kapsam.
+#: Kapı: tests/test_bobin_topolojisi.py
+STM_BOBIN_SAYISI = 7
+
 #: Süre VERİLMEDEN başlatılan bir bobinin yazılım deadline'ı (dakika).
 #
 # ⚠️ NEDEN AYRI BİR SABİT (kampanya bulgusu S03, 2026-08-14): burada eskiden
@@ -46,7 +54,7 @@ class HardwareController:
         # 5 Bobin için bellek içi (In-Memory) state
         # Arayüz olmadığı için (Headless), parametreler burada tutulur
         self.coils_state = {
-            i: {"is_running": False, "duty": 0.0, "phase": 0.0, "freq": 100.0, "duration": 0} for i in range(1, 6)
+            i: {"is_running": False, "duty": 0.0, "phase": 0.0, "freq": 100.0, "duration": 0} for i in range(1, STM_BOBIN_SAYISI + 1)
         }
 
         # P0 fix: coils_state + paket kurulumunu koruyan TEK kilit. API thread'leri
@@ -61,7 +69,7 @@ class HardwareController:
         # gonderip firmware'in kendi sure-timer'ini resetliyordu → bobin SURESIZ enerjili
         # kalabiliyordu. Burada kullanicinin/uygulamanin ZATEN girdigi sureyi zorunlu kilariz
         # (yeni bir guvenlik-limiti DEGIL; istenen sureyi uygular). duration=0 → sinirsiz (degismedi).
-        self._coil_deadline = {i: None for i in range(1, 6)}
+        self._coil_deadline = {i: None for i in range(1, STM_BOBIN_SAYISI + 1)}
 
         # P0 fix: STOP garanti-teslim. Tek STOP paketi seri yazma hatasinda dusserse keep-alive
         # normalde tazelemezdi (any_running False). Durdurma sonrasi paketi birkac dongu tekrar
@@ -101,7 +109,7 @@ class HardwareController:
             now = time.monotonic()
             expired = [
                 i
-                for i in range(1, 6)
+                for i in range(1, STM_BOBIN_SAYISI + 1)
                 if self.coils_state[i]["is_running"]
                 and self._coil_deadline[i] is not None
                 and now >= self._coil_deadline[i]
@@ -114,7 +122,7 @@ class HardwareController:
                 self._force_send_left = self.STOP_RESEND_TICKS
                 self.logger.info("Bobin(ler) %s sure limiti doldu → donanim-tarafi otomatik durduruldu.", expired)
 
-            any_running = any(self.coils_state[i]["is_running"] for i in range(1, 6))
+            any_running = any(self.coils_state[i]["is_running"] for i in range(1, STM_BOBIN_SAYISI + 1))
             need_send = any_running or self._force_send_left > 0
             if self._force_send_left > 0:
                 self._force_send_left -= 1
@@ -138,7 +146,7 @@ class HardwareController:
         Belirli bir bobinin durumunu günceller ve STM32'ye yeni komut paketini fırlatır.
         duration birimi STM32 firmware ile uyumlu olarak dakikadır.
         """
-        if coil_id < 1 or coil_id > 5:
+        if coil_id < 1 or coil_id > STM_BOBIN_SAYISI:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
             return False
 
@@ -259,7 +267,7 @@ class HardwareController:
             # bobinleri ayni anda surdugu icin burada kapaksizlik daha da agir sonuc dogururdu.
             _dl_min = dur_min if dur_min > 0 else GOZETIMSIZ_VARSAYILAN_DAKIKA
             deadline = time.monotonic() + _dl_min * 60
-            for i in range(1, 6):
+            for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = True
                 self.coils_state[i]["freq"] = _freq
                 self.coils_state[i]["duty"] = _duty
@@ -273,7 +281,7 @@ class HardwareController:
 
     def stop_all_coils(self):
         with self._state_lock:
-            for i in range(1, 6):
+            for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = False
                 self.coils_state[i]["duty"] = 0.0
                 self._coil_deadline[i] = None
@@ -297,7 +305,7 @@ class HardwareController:
         (1) keep-alive artık 'çalışıyor' paketi tazelemesin, (2) bağlantı dönünce ESKİ
         freq/duty ile otomatik RE-FIRE olmasın (firmware watchdog'u geçersiz kılınmasın)."""
         with self._state_lock:
-            for i in range(1, 6):
+            for i in range(1, STM_BOBIN_SAYISI + 1):
                 self.coils_state[i]["is_running"] = False
                 self.coils_state[i]["duty"] = 0.0
                 self.coils_state[i]["duration"] = 0

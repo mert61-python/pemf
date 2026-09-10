@@ -144,12 +144,16 @@ def test_KARSIT_KANIT_stm_stop_gercekten_denenir(api, client, aktif_seans, monke
 
 def test_birim_stop_session_coils_teyitsiz_listesi(api, monkeypatch):
     """Birim düzeyi: karışık sonuçlarda liste tam olarak başarısız olanları içerir."""
-    sonuc = {"pemf/coil/6/control": True, "pemf/coil/7/control": False, "pemf/coil/8/control": False}
-    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: sonuc[topic])
+    # FAZ 4: bobin 6-7 ARTIK STM (batch) yolunda; MQTT yolunda yalniz ESP_COIL_IDS var.
+    # Iddia AYNI: karisik sonuclarda liste TAM OLARAK basarisiz olanlari icerir.
+    # 4 → STM (sahte donanim False dondurur) · ESP_BOBIN → MQTT False.
+    sonuc = {f"pemf/coil/{ESP_BOBIN}/control": False}
+    monkeypatch.setattr(api, "_mqtt_publish", lambda topic, payload: sonuc.get(topic, True))
     monkeypatch.setattr(api.state, "hardware", _SahteStm(sonuc=False))
 
-    teyitsiz = api._stop_session_coils([4, 6, 7, 8])
-    assert teyitsiz == [4, 7, 8], f"beklenen [4, 7, 8], gelen: {teyitsiz!r}"
+    _beklenen = [4, ESP_BOBIN]
+    teyitsiz = api._stop_session_coils([4, ESP_BOBIN])
+    assert teyitsiz == _beklenen, f"beklenen {_beklenen}, gelen: {teyitsiz!r}"
 
 
 # ── ADVERSARYAL REVIEW TAMAMLAMALARI (2026-08-20) ────────────────────────────────────────────
@@ -159,6 +163,8 @@ def test_birim_stop_session_coils_teyitsiz_listesi(api, monkeypatch):
 # seans "süre doldu" ile biterse operatöre hiçbir uyarı gitmiyordu.
 
 import queue as _q
+
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 class _DoluKuyruk:
@@ -246,7 +252,7 @@ def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch)
                     {
                         "is_active": True,
                         "session_id": "wd_teyitsiz",
-                        "coil_ids": [6, 7],
+                        "coil_ids": sorted(TUM_ESP),
                         "duration_minutes": 1,
                         "start_time": _t.time() - 120,  # süresi çoktan dolmuş
                         "db_session_id": None,
@@ -262,7 +268,8 @@ def test_KRITIK_sure_watchdog_teyitsiz_stopta_operatoru_uyarir(api, monkeypatch)
                 f"süre-watchdog teyitsiz STOP'ta operatörü uyarmadı (uyarilar={uyarilar!r}) — "
                 "broker ölüyken 'süre doldu' bitişi sessizce 'bitti' görünür"
             )
-            assert "6" in bulundu[0] and "7" in bulundu[0], f"hangi bobinler olduğu söylenmiyor: {bulundu[0]!r}"
+            # FAZ 4: uyari, kapsamdaki ESP bobinlerini adiyla saymali (elle 6/7 DEGIL).
+            assert all(str(c) in bulundu[0] for c in TUM_ESP), f"hangi bobinler olduğu söylenmiyor: {bulundu[0]!r}"
     finally:
         with api._session_lock:
             api._active_session.clear()
@@ -290,7 +297,7 @@ def test_KARSIT_KANIT_sure_watchdog_teyitli_stopta_uyari_yok(api, monkeypatch):
                     {
                         "is_active": True,
                         "session_id": "wd_teyitli",
-                        "coil_ids": [6, 7],
+                        "coil_ids": sorted(TUM_ESP),
                         "duration_minutes": 1,
                         "start_time": _t.time() - 120,
                         "db_session_id": None,

@@ -16,6 +16,8 @@ import concurrent.futures as cf
 import os
 import re
 
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
+
 os.environ.pop("PEMF_SIMULATE", None)  # testlerde sim loop baslatma
 
 
@@ -74,7 +76,7 @@ def test_emergency_stop_still_reaches_every_esp_coil(monkeypatch):
         for m in [re.search(r"/(?:coil|esp32_)(\d+)", t.replace("esp32_", "esp32_"))]
         if m
     }
-    assert {6, 7, 8} <= coils, f"tum ESP bobinlerine STOP gitmedi: {sorted(coils)}"
+    assert TUM_ESP <= coils, f"tum ESP bobinlerine STOP gitmedi: {sorted(coils)}"
     cids = [c for _, c in seen]
     assert len(set(cids)) == len(cids), "acil-durdurma yayinlarinda kimlik tekrari var"
     assert res is not None

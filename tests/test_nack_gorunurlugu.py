@@ -33,6 +33,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 KOK = Path(__file__).resolve().parents[1]
 
@@ -67,14 +68,14 @@ def _olay(api, coil_id: int, event_type: str, message: str = "", retain: bool = 
 
 def test_KRITIK_command_error_operatore_SEBEBIYLE_bildirilir(api):
     api, bildirimler, ws = api
-    _olay(api, 6, "command_error", "Command validation failed: freq out of range")
+    _olay(api, ESP_BOBIN, "command_error", "Command validation failed: freq out of range")
 
     assert bildirimler, (
         "command_error olayı operatöre HİÇ bildirilmedi — ESP'nin açık reddi görünmez, "
         "bobin 'çalışıyor' sanılır (bulgu [4.5] NACK yarısı)"
     )
     mesaj, sev = bildirimler[0]
-    assert "6" in mesaj, f"hangi bobinin reddettiği belirsiz: {mesaj!r}"
+    assert str(ESP_BOBIN) in mesaj, f"hangi bobinin reddettiği belirsiz: {mesaj!r}"
     assert "freq out of range" in mesaj, f"firmware'in RED SEBEBİ operatöre taşınmadı: {mesaj!r}"
     assert sev == "error"
     assert any(m.get("type") == "command_error" for m in ws), "WS'e command_error yayınlanmadı"
@@ -135,19 +136,21 @@ def test_KRITIK_manuel_start_NACK_inde_kosu_kaydi_KAPANIR(istemci, monkeypatch):
 
     monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
 
-    r = client.post("/api/coil/6/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60})
+    r = client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60}
+    )
     assert r.status_code == 200
     cid = r.json()["command_id"]
-    assert _acik_run_var(api, 6), "publish dogrulandi → kosu kaydi acilmali (mevcut [4.5] davranisi)"
+    assert _acik_run_var(api, ESP_BOBIN), "publish dogrulandi → kosu kaydi acilmali (mevcut [4.5] davranisi)"
 
     # ESP NACK'ler (firmware sendCommandAck(id, false) → backend _resolve_ack)
     api._resolve_ack(cid, False)
 
-    assert _bekle(lambda: not _acik_run_var(api, 6)), (
+    assert _bekle(lambda: not _acik_run_var(api, ESP_BOBIN)), (
         "ESP start'ı REDDETTİ (NACK) ama koşu kaydı AÇIK kaldı — hiç koşmamış bobin tedavi "
         "geçmişine 'koştu' olarak girer (hayalet kayıt, bulgu [4.5])"
     )
-    assert _bekle(lambda: any("6" in m and "redd" in m.lower() for m, s in bildirimler)), (
+    assert _bekle(lambda: any(str(ESP_BOBIN) in m and "redd" in m.lower() for m, s in bildirimler)), (
         f"NACK operatöre bildirilmedi: {bildirimler!r}"
     )
 
@@ -169,13 +172,17 @@ def test_KRITIK_ack_TIMEOUT_unda_kayit_KALIR_yalniz_uyari(istemci, monkeypatch):
 
     monkeypatch.setattr(crt, "_treatment_db_getter", lambda: _DB())
 
-    r = client.post("/api/coil/7/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60})
+    # FAZ 4: bobin 7 STM'e tasindi; bu test MQTT/ESP yolunu olcuyor → ESP_BOBIN.
+    r = client.post(
+        f"/api/coil/{ESP_BOBIN}/control",
+        json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60},
+    )
     assert r.status_code == 200
     # ack HİÇ gelmiyor → bekçi timeout'a düşer
-    assert _bekle(lambda: any("7" in m and "onay" in m.lower() for m, s in bildirimler), saniye=3.0), (
+    assert _bekle(lambda: any(str(ESP_BOBIN) in m and "onay" in m.lower() for m, s in bildirimler), saniye=3.0), (
         f"ack timeout'u operatöre uyarı üretmedi: {bildirimler!r}"
     )
-    assert _acik_run_var(api, 7), "timeout'ta koşu kaydı KAPATILMIŞ — kayıp ack, gerçek koşuyu kayıttan siler"
+    assert _acik_run_var(api, ESP_BOBIN), "timeout'ta koşu kaydı KAPATILMIŞ — kayıp ack, gerçek koşuyu kayıttan siler"
     api._finish_coil_run(7)  # temizlik
 
 
@@ -238,13 +245,13 @@ def test_KRITIK_BATCH_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
 
     r = client.post(
         "/api/coil/batch",
-        json={"coil_ids": [6], "start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60},
+        json={"coil_ids": [ESP_BOBIN], "start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60},
     )
     assert r.status_code == 200
     satirlar = r.json().get("results") or []
-    esp_satir = next((s for s in satirlar if s.get("coilId") == 6), None)
-    assert esp_satir is not None, f"batch yaniti bobin 6 icermiyor: {satirlar!r}"
-    assert _acik_run_var(api, 6), "batch publish dogrulandi → kosu kaydi acilmali"
+    esp_satir = next((s for s in satirlar if s.get("coilId") == ESP_BOBIN), None)
+    assert esp_satir is not None, f"batch yaniti ESP bobini icermiyor: {satirlar!r}"
+    assert _acik_run_var(api, ESP_BOBIN), "batch publish dogrulandi → kosu kaydi acilmali"
 
     # command_id batch yanitinda satir-bazinda yoksa pending kayittan bul
     with api._pending_acks_lock:
@@ -253,7 +260,7 @@ def test_KRITIK_BATCH_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
     for cid in adaylar:
         api._resolve_ack(cid, False)
 
-    assert _bekle(lambda: not _acik_run_var(api, 6)), (
+    assert _bekle(lambda: not _acik_run_var(api, ESP_BOBIN)), (
         "BATCH start NACK'lendi ama kosu kaydi acik kaldi — tekil yol duzeltilmis, batch unutulmus"
     )
 
@@ -290,7 +297,7 @@ def test_KRITIK_SEANS_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
     r = client.post(
         "/api/session/start",
         json={
-            "coil_ids": [6],
+            "coil_ids": [ESP_BOBIN],
             "frequency": 100,
             "duty": 50,
             "phase": 0,
@@ -300,7 +307,7 @@ def test_KRITIK_SEANS_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
         },
     )
     assert r.status_code == 200, r.text
-    assert _acik_run_var(api, 6), "seans ESP bobini kosu kaydi acilmali (mevcut davranis)"
+    assert _acik_run_var(api, ESP_BOBIN), "seans ESP bobini kosu kaydi acilmali (mevcut davranis)"
 
     with api._pending_acks_lock:
         adaylar = list(api._pending_acks.keys())
@@ -308,10 +315,10 @@ def test_KRITIK_SEANS_start_NACK_inde_de_kayit_kapanir(istemci, monkeypatch):
     for cid in adaylar:
         api._resolve_ack(cid, False)
 
-    assert _bekle(lambda: not _acik_run_var(api, 6)), (
+    assert _bekle(lambda: not _acik_run_var(api, ESP_BOBIN)), (
         "SEANS start NACK'lendi ama kosu kaydi acik kaldi — tekil/batch duzeltilmis, seans yolu unutulmus (E1)"
     )
-    assert _bekle(lambda: any("6" in m and "redd" in m.lower() for m, s in bildirimler)), (
+    assert _bekle(lambda: any(str(ESP_BOBIN) in m and "redd" in m.lower() for m, s in bildirimler)), (
         f"seans NACK operatore bildirilmedi: {bildirimler!r}"
     )
 
@@ -339,23 +346,27 @@ def test_KRITIK_D2_geciken_NACK_araya_giren_kosuyu_KAPATMAZ(istemci, monkeypatch
     monkeypatch.setattr(api, "_START_ACK_TIMEOUT", 2.0, raising=True)
 
     # start#1 → run#1 (901); bekçi#1 başlar (run_id=901'i yakalamalı).
-    r1 = client.post("/api/coil/6/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60})
+    r1 = client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"start": True, "freq": 100, "duty": 50, "phase": 0, "duration": 60}
+    )
     cid1 = r1.json()["command_id"]
-    assert _acik_run_var(api, 6), "start#1 sonrası açık run olmalı"
+    assert _acik_run_var(api, ESP_BOBIN), "start#1 sonrası açık run olmalı"
 
     # start#2 → begin#2 run#1'i (normal) kapatır, run#2 (902) açar; bekçi#2 run_id=902 yakalar.
-    r2 = client.post("/api/coil/6/control", json={"start": True, "freq": 100, "duty": 60, "phase": 0, "duration": 60})
+    r2 = client.post(
+        f"/api/coil/{ESP_BOBIN}/control", json={"start": True, "freq": 100, "duty": 60, "phase": 0, "duration": 60}
+    )
     assert r2.status_code == 200
-    assert _acik_run_var(api, 6), "start#2 sonrası açık run olmalı (run#2)"
+    assert _acik_run_var(api, ESP_BOBIN), "start#2 sonrası açık run olmalı (run#2)"
 
     # start#1'in GECİKEN NACK'i gelir → bekçi#1 (run_id=901) yalnız 901'i hedefler; run#2 (902) KORUNMALI.
     api._resolve_ack(cid1, False)
     _time.sleep(0.3)
-    assert _acik_run_var(api, 6), (
+    assert _acik_run_var(api, ESP_BOBIN), (
         "geciken NACK#1, araya giren KABUL edilmiş start#2'nin ÇALIŞAN koşusunu (run#2) düşürdü — "
         "bobin çalışıyor ama açık koşu kaydı yok, operatöre 'çalışmıyor' yanlış bildirimi (D2)"
     )
-    api._finish_coil_run(6)  # temizlik
+    api._finish_coil_run(ESP_BOBIN)  # temizlik
 
 
 def test_KARSIT_KANIT_SEANS_broker_OLU_iken_bekci_baglanmaz(istemci, monkeypatch):
@@ -385,7 +396,7 @@ def test_KARSIT_KANIT_SEANS_broker_OLU_iken_bekci_baglanmaz(istemci, monkeypatch
     r = client.post(
         "/api/session/start",
         json={
-            "coil_ids": [7],
+            "coil_ids": [ESP_BOBIN],  # FAZ 4: ESP yolu (bobin 7 artik STM)
             "frequency": 100,
             "duty": 50,
             "phase": 0,

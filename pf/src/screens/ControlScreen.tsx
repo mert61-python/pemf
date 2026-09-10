@@ -111,7 +111,9 @@ export function ControlScreen() {
   const isStmConnected = snapshot.stm === "online";
   const isCoilConnected = useCallback(
     (coil: { id: number; connected?: boolean }) =>
-      coil.id <= 5 ? isStmConnected : Boolean(coil.connected),
+      // Faz 4 (2026-09-10): bobin 1-7 STM → bağlılık STM'in kendi durumundan gelir.
+      // Slot 8 ESP (cihaz yok) → kendi `connected` alanına bakar.
+      coil.id <= 7 ? isStmConnected : Boolean(coil.connected),
     [isStmConnected]
   );
 
@@ -302,8 +304,8 @@ export function ControlScreen() {
     // Çalışmayan bobine STOP göndermek idempotent ve zararsızdır; eksik göndermek değildir.
     const runningIds = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
     const targets = Array.from(new Set<number>([...Array.from(selectedCoils), ...runningIds]));
-    const stmCoils = targets.filter((id) => id <= 5);
-    const espCoils = targets.filter((id) => id >= 6);
+    const stmCoils = targets.filter((id) => id <= 7);
+    const espCoils = targets.filter((id) => id > 7);
     // #74: durdurma yanıtlarını DOĞRULA — apiPost hata/timeout'ta null döner (throw etmez); eskiden
     // yanıt yutuluyordu → STOP düşse bile kullanıcı bobinin durduğunu sanıyordu (per-coil panelle tutarsız).
     // ⚠️ PARALEL (denetim 2026-08-17): batch + ESP istekleri ESKİDEN seri `await` idi, yani
@@ -629,10 +631,23 @@ export function ControlScreen() {
             </View>
           </View>
 
-          {/* STM32 Bobinler (1-5) */}
-          <Text style={styles.subTitle}>🔌 STM32 Bobinler (1–5)</Text>
+          {/* ── BOBİNLER (1–7) — FAZ 4, sahip kararı 2026-09-10 ──────────────────
+              Eskiden İKİ grup vardı: "🔌 STM32 Bobinler (1–5)" ve "📶 WiFi ESP
+              Bobinler (6–8)". Bobin 6-7 ESP8266'dan STM32'ye taşındı (PE13 / PE15,
+              firmware NUM_COILS=7, paket 120 bayt) → ayrım kalktı, TEK grup.
+
+              ⚠️ Slot 8 ARTIK ÇİZİLMİYOR. Backend'de duruyor (WS sözleşmesi ve
+              `range(8)` geçen dokuz çağrı yeri korunsun diye) ama FİZİKSEL BOBİN YOK;
+              kalıcı "Offline" bir kart göstermek operatöre var olmayan bir bobin
+              sunar. 8. bobin bir gün takılırsa `id <= 7` süzgeci ile geri gelir.
+
+              ⚠️ TERMAL: bobin 6-7'de artık CİHAZ-TARAFLI termal kesme YOK (sahip
+              kararı). Sensörler henüz bağlı değil → `objectTemp` gelmiyor → paneldeki
+              48 °C istemci interlock'u bu bobinlerde TETİKLENEMEZ ve rozet "ölçüm yok"
+              gösterir. Bu, bobin 1-5'in bugünkü durumuyla AYNI; bilinçli. */}
+          <Text style={styles.subTitle}>🔌 Bobinler (1–7)</Text>
           <ResponsiveGrid minItemWidth={320}>
-            {coils.filter(c => c.id <= 5).map((coil) => (
+            {coils.filter(c => c.id <= 7).map((coil) => (
               <CoilParameterPanel
                 key={coil.id}
                 coilId={coil.id}
@@ -649,32 +664,6 @@ export function ControlScreen() {
                 defaultDuration={parseDurationMin(masterDuration)}
                 stm32Driven={true}
                 stmConnected={isStmConnected}
-                disabled={isActive}
-              />
-            ))}
-          </ResponsiveGrid>
-
-          {/* ESP Bobinler (6-8) */}
-          <Text style={styles.subTitle}>📶 WiFi ESP Bobinler (6–8)</Text>
-          <ResponsiveGrid minItemWidth={320}>
-            {coils.filter(c => c.id >= 6).map((coil) => (
-              <CoilParameterPanel
-                key={coil.id}
-                coilId={coil.id}
-                connected={coil.connected}
-                running={coil.running}
-                objectTemp={coil.objectTemp}
-                frequencyHz={coil.frequencyHz}
-                dutyCycle={coil.dutyCycle}
-                magneticMt={coil.magneticMt}
-                currentA={coil.currentA}
-                deviceAck={coil.deviceAck}
-                defaultFreq={parseFloat(masterFreq) || 50}
-                defaultDuty={parseFloat(masterDuty) || 25}
-                defaultPhase={parseFloat(masterPhase) || 0}
-                defaultDuration={parseDurationMin(masterDuration)}
-                stm32Driven={false}
-                stmConnected={false}
                 disabled={isActive}
               />
             ))}
@@ -816,8 +805,11 @@ function CoilSelector({
     <View style={styles.coilSelector}>
       <Text style={styles.formLabel}>Bobin Seçimi</Text>
       <View style={styles.coilSelectorGrid}>
-        {(coils.length > 0 ? coils : Array.from({ length: 8 }, (_, i) => ({ id: i + 1, connected: false }))).map((c) => {
-          const connected = c.id <= 5 ? stmConnected : Boolean(c.connected);
+        {/* Faz 4: 7 fiziksel bobin. Yedek liste de 7 üretir — 8. slot backend'de
+            duruyor (WS sözleşmesi) ama CİHAZI YOK, seçilebilir gösterilmesi
+            operatöre var olmayan bir bobin sunar. */}
+        {(coils.length > 0 ? coils.filter((c) => c.id <= 7) : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, connected: false }))).map((c) => {
+          const connected = c.id <= 7 ? stmConnected : Boolean(c.connected);
           return (
             <TouchableOpacity
               key={c.id}

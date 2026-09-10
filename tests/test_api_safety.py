@@ -7,6 +7,7 @@ os.environ.pop("PEMF_SIMULATE", None)  # testlerde sim loop başlatma
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +29,7 @@ def test_emergency_stop_reports_transport_status(client):
 
 
 def test_double_session_start_conflicts(client):
-    payload = {"coil_ids": [6, 7, 8], "frequency": 50, "duty": 25, "duration_minutes": 10, "mode": "Test"}
+    payload = {"coil_ids": sorted(TUM_ESP), "frequency": 50, "duty": 25, "duration_minutes": 10, "mode": "Test"}
     # önce temizle
     client.post("/api/session/stop")
     r1 = client.post("/api/session/start", json=payload)
@@ -39,7 +40,7 @@ def test_double_session_start_conflicts(client):
 
 
 def test_emergency_stop_deactivates_session(client):
-    payload = {"coil_ids": [6, 7, 8], "frequency": 50, "duty": 25, "duration_minutes": 10, "mode": "Test"}
+    payload = {"coil_ids": sorted(TUM_ESP), "frequency": 50, "duty": 25, "duration_minutes": 10, "mode": "Test"}
     client.post("/api/session/start", json=payload)
     client.post("/api/hardware/emergency_stop")
     active = client.get("/api/session/active").json()

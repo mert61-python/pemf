@@ -141,3 +141,11 @@ def temp_app_data(tmp_path):
     yield d
     mp.undo()
     _onbellegi_temizle()
+
+
+# ⚠️ `tests/` dizinini de yola ekle: `capraz.py` ve `topoloji.py` YARDIMCI modüllerdir
+# (adları `test_*` olmadığı için pytest onları toplamaz) ve test dosyaları bunları
+# `import topoloji` ile alır. Eskiden her dosya kendi `sys.path.insert`ini yapıyordu;
+# tek yerde olması, yeni bir test dosyasının import'u unutup ImportError almasını önler.
+if str(_TESTS_DIR := Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))

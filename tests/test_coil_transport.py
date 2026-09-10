@@ -8,6 +8,7 @@ os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
 
 
 @pytest.fixture(scope="module")
@@ -59,10 +60,11 @@ def test_stm_coil_routes_to_hardware(client, mocked_hw):
 
 
 def test_esp_coil_routes_to_mqtt(client, mocked_hw):
-    r = client.post("/api/coil/7/control", json={"freq": 50, "duty": 25, "start": True})
+    # FAZ 4: bobin 7 ARTIK STM bobini → MQTT yolunu olcmek icin ESP_BOBIN (slot 8) kullan.
+    r = client.post(f"/api/coil/{ESP_BOBIN}/control", json={"freq": 50, "duty": 25, "start": True})
     assert r.status_code == 200
     assert r.json()["transport"] == "mqtt"
-    assert any("coil/7" in t for t in mocked_hw["mqtt"])  # ESP bobini MQTT'ye gitti
+    assert any(f"coil/{ESP_BOBIN}" in t for t in mocked_hw["mqtt"])  # ESP bobini MQTT'ye gitti
 
 
 def test_invalid_coil_rejected(client, mocked_hw):
@@ -71,11 +73,15 @@ def test_invalid_coil_rejected(client, mocked_hw):
 
 
 def test_batch_splits_stm_and_esp(client, mocked_hw):
-    r = client.post("/api/coil/batch", json={"coil_ids": [2, 6], "freq": 50, "duty": 25, "start": True})
+    # FAZ 4: karisik batch = bir STM bobini + bir ESP bobini (bobin 6 artik STM).
+    r = client.post(
+        "/api/coil/batch",
+        json={"coil_ids": [2, ESP_BOBIN], "freq": 50, "duty": 25, "start": True},
+    )
     assert r.status_code == 200
     results = {x["coilId"]: x["transport"] for x in r.json()["results"]}
     assert results[2] == "stm32"
-    assert results[6] == "mqtt"
+    assert results[ESP_BOBIN] == "mqtt"
 
 
 def test_stop_all_uses_hardware(client, mocked_hw):

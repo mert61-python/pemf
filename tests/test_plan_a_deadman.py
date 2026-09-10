@@ -165,6 +165,8 @@ def test_A1_kumulatif_tavan_MODEL():
 
 import re as _re
 
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
+
 
 def _c_soy(src: str) -> str:
     """C yorumlarını söker (/* */ + //). String içi '//' bu dosyalarda yok — LOG metinleri Türkçe."""
@@ -320,19 +322,19 @@ def test_KARSIT_KANIT_A1_taze_start_ve_sureli_resume_DEGISMEDI():
 def test_KRITIK_A3_niyet_ASIMETRIK_start_dogrulamali_stop_hemen():
     """F4 (review): START yalnız DOĞRULANMIŞ publish'te True; STOP hemen False + an damgası."""
     # başarısız/doğrulanmamış start niyeti True YAPMAZ (NVS-hayaleti süresiz muaf kalırdı)
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/control", {"command": "start", "freq": 10}, basarili=False)
-    assert api._esp_commanded_running.get(6) is not True
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/control", {"command": "start", "freq": 10}, basarili=False)
+    assert api._esp_commanded_running.get(ESP_BOBIN) is not True
     # doğrulanmış start → True
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/control", {"command": "start", "freq": 10}, basarili=True)
-    assert api._esp_commanded_running.get(6) is True
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/control", {"command": "start", "freq": 10}, basarili=True)
+    assert api._esp_commanded_running.get(ESP_BOBIN) is True
     # stop HEMEN (basarili=False çağrısında) False + F5 an damgası
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/control", {"command": "stop"}, basarili=False)
-    assert api._esp_commanded_running.get(6) is False
-    assert api._esp_stop_zamani.get(6, 0) > 0, "stop anı damgalanmadı (F5 grace penceresi çalışmaz)"
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}, basarili=False)
+    assert api._esp_commanded_running.get(ESP_BOBIN) is False
+    assert api._esp_stop_zamani.get(ESP_BOBIN, 0) > 0, "stop anı damgalanmadı (F5 grace penceresi çalışmaz)"
     # kontrol-dışı topic ve start/stop-dışı komutlar niyeti DEĞİŞTİRMEZ; bozuk topic çökertmez
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/status", {"command": "start"}, basarili=True)
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/control", {"command": "SELFTEST"}, basarili=True)
-    assert api._esp_commanded_running.get(6) is False
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/status", {"command": "start"}, basarili=True)
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/control", {"command": "SELFTEST"}, basarili=True)
+    assert api._esp_commanded_running.get(ESP_BOBIN) is False
     api._kaydet_esp_komut_niyeti("pemf/coil/abc/control", {"command": "start"}, basarili=True)
 
 
@@ -377,46 +379,50 @@ def _reconcile_kos(coil_id, snapshot, bekle=1.5):
 
 
 def test_KRITIK_A3_beklenmedik_calisan_bobine_STOP():
-    yayinlar = _reconcile_kos(6, {"running": True})
+    yayinlar = _reconcile_kos(ESP_BOBIN, {"running": True})
     assert yayinlar, "reconcile STOP yayınlamadı — hayalet bobin enerjili kalır"
     topic, payload = yayinlar[0]
-    assert topic == "pemf/coil/6/control" and payload["command"] == "stop"
+    assert topic == f"pemf/coil/{ESP_BOBIN}/control" and payload["command"] == "stop"
     assert payload["command_id"].startswith("reconcile_")
 
 
 def test_KRITIK_A3_mesru_calisma_DURDURULMAZ():
     # (a) backend start komutladıysa
     with api._esp_intent_lock:
-        api._esp_commanded_running[7] = True
-    assert not _reconcile_kos(7, {"running": True}, bekle=0.4), "komutlanmış bobini durdurdu (meşru seans katli)"
+        api._esp_commanded_running[ESP_BOBIN] = True  # FAZ 4: bobin 7 artik STM
+    assert not _reconcile_kos(ESP_BOBIN, {"running": True}, bekle=0.4), (
+        "komutlanmış bobini durdurdu (meşru seans katli)"
+    )
     # (b) aktif seans kapsıyorsa
     with api._session_lock:
         api._active_session["is_active"] = True
-        api._active_session["coil_ids"] = [8]
-    assert not _reconcile_kos(8, {"running": True}, bekle=0.4), "seanslı bobini durdurdu"
+        api._active_session["coil_ids"] = [ESP_BOBIN]
+    assert not _reconcile_kos(ESP_BOBIN, {"running": True}, bekle=0.4), "seanslı bobini durdurdu"
 
 
 def test_A3_STM_ve_durmus_bobin_TETIKLEMEZ():
     assert not _reconcile_kos(1, {"running": True}, bekle=0.3), "STM bobinine MQTT reconcile gitti"
-    assert not _reconcile_kos(6, {"running": False}, bekle=0.3), "durmuş bobine STOP gitti"
+    assert not _reconcile_kos(ESP_BOBIN, {"running": False}, bekle=0.3), "durmuş bobine STOP gitti"
 
 
 def test_A3_hiz_siniri_30sn():
-    assert _reconcile_kos(6, {"running": True})
-    assert not _reconcile_kos(6, {"running": True}, bekle=0.4), "30 sn içinde ikinci reconcile-STOP gitti (fırtına)"
+    assert _reconcile_kos(ESP_BOBIN, {"running": True})
+    assert not _reconcile_kos(ESP_BOBIN, {"running": True}, bekle=0.4), (
+        "30 sn içinde ikinci reconcile-STOP gitti (fırtına)"
+    )
 
 
 def test_KRITIK_A3_F5_stop_sonrasi_grace_penceresi():
     """Normal STOP'tan hemen sonra uçuştaki 'running' status sahte reconcile TETİKLEMEMELİ
     (her normal stop'ta sahte 'güvenlik durdurması' bildirimi = alarm yorgunluğu)."""
-    api._kaydet_esp_komut_niyeti("pemf/coil/6/control", {"command": "stop"}, basarili=False)
-    assert not _reconcile_kos(6, {"running": True}, bekle=0.4), (
+    api._kaydet_esp_komut_niyeti(f"pemf/coil/{ESP_BOBIN}/control", {"command": "stop"}, basarili=False)
+    assert not _reconcile_kos(ESP_BOBIN, {"running": True}, bekle=0.4), (
         "stop'tan hemen sonraki bayat 'running' status reconcile tetikledi (grace penceresi yok)"
     )
     # grace penceresi GEÇMİŞSE hayalet yakalanmalı (karşıt-kanıt)
     with api._esp_intent_lock:
-        api._esp_stop_zamani[6] = time.monotonic() - 60.0
-    assert _reconcile_kos(6, {"running": True}), "grace geçtikten sonra gerçek hayalet yakalanmadı"
+        api._esp_stop_zamani[ESP_BOBIN] = time.monotonic() - 60.0
+    assert _reconcile_kos(ESP_BOBIN, {"running": True}), "grace geçtikten sonra gerçek hayalet yakalanmadı"
 
 
 def test_KRITIK_A3_F3_publish_oncesi_son_kontrol():
@@ -446,11 +452,11 @@ def test_KRITIK_A3_F3_publish_oncesi_son_kontrol():
         import unittest.mock as mock
 
         with mock.patch.object(threading, "Thread", _GecikmisThread):
-            api._reconcile_esp_calisiyor(6, {"running": True})
+            api._reconcile_esp_calisiyor(ESP_BOBIN, {"running": True})
         assert "hedef" in yakalanan, "reconcile karar vermedi (test kurgusu bozuk)"
         # PENCERE: publish'ten önce meşru start geliyor
         with api._esp_intent_lock:
-            api._esp_commanded_running[6] = True
+            api._esp_commanded_running[ESP_BOBIN] = True  # FAZ 4: bobin 6 artik STM
         yakalanan["hedef"]()  # _stop_gonder şimdi koşuyor → son-kontrol vazgeçmeli
         assert not yayinlar, "F3 son-kontrol yok: reconcile-STOP meşru yeni tedaviyi durdurdu"
     finally:
@@ -475,7 +481,7 @@ def test_KRITIK_A3_handler_yalniz_CANLI_status_ile_tetikler():
 
 def test_KRITIK_A2_sirlar_yoksa_ayna_SESSIZ_devre_disi(monkeypatch):
     monkeypatch.setattr("utils.secrets_manager.get_secret", lambda *a, **k: "")
-    api._estop_cloud_mirror([6, 7, 8], "test")  # çökmemeli, paho'ya hiç dokunmamalı
+    api._estop_cloud_mirror(sorted(TUM_ESP), "test")  # çökmemeli, paho'ya hiç dokunmamalı
 
 
 def test_KRITIK_A2_F6_GERCEK_get_secret_ATLANDI_yolunu_izler(monkeypatch, caplog):
@@ -570,9 +576,9 @@ def test_KRITIK_A2_sirlar_varsa_buluta_stop_yayinlar(monkeypatch):
     monkeypatch.setitem(sys.modules, "paho.mqtt", fake_mqtt)
     monkeypatch.setitem(sys.modules, "paho.mqtt.client", fake_paho)
 
-    api._estop_cloud_mirror([6, 7, 8], "test")
+    api._estop_cloud_mirror(sorted(TUM_ESP), "test")
     topikler = [t for t, _ in yayinlar]
-    for cid in (6, 7, 8):
+    for cid in sorted(TUM_ESP):  # FAZ 4: kapsam topolojiden turer (elle 6,7,8 DEGIL)
         assert f"pemf/coil/{cid}/control" in topikler, f"bobin {cid} bulut STOP'u eksik"
     assert all(q == 1 for _, q in yayinlar), "bulut STOP qos=1 değil"
 

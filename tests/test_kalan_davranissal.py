@@ -16,6 +16,7 @@ yani takım bir süredir boş güvence veriyordu. Buradaki testler kodu GERÇEKT
 import time
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 # ───────────────────── BOBİN GÜVENLİĞİ ─────────────────────
 
@@ -34,8 +35,9 @@ def test_bayat_ESP_bobinine_GERCEK_stop_yayinlanir(monkeypatch):
     monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
     monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
 
-    # Bobin 6: telemetri ALMIŞ ama eşiği aşacak kadar eski + hâlâ connected
-    idx = 5
+    # FAZ 4: "bayat ESP bobini" artik ESP_BOBIN (bobin 6 STM'e tasindi ve watchdog yalniz
+    # ESP_COIL_IDS'i tarar → indeks 5 ile bu test ARTIK HICBIR SEY olcmezdi).
+    idx = ESP_BOBIN - 1
     with api._live_state_lock:
         api._live_state["coils"][idx]["connected"] = True
         api._live_state["coils"][idx]["running"] = True
@@ -56,7 +58,7 @@ def test_bayat_ESP_bobinine_GERCEK_stop_yayinlanir(monkeypatch):
     assert stoplar, (
         "bayat ESP bobinine STOP YAYINLANMADI → UI 'durdu' derken bobin kendi duration'ı bitene kadar enerjili kalır"
     )
-    assert any(t == "pemf/coil/6/control" for t, _ in stoplar), f"yanlış konu: {stoplar}"
+    assert any(t == f"pemf/coil/{ESP_BOBIN}/control" for t, _ in stoplar), f"yanlış konu: {stoplar}"
     assert any(p.get("reason") == "telemetry_stale" for _, p in stoplar)
 
 
@@ -84,9 +86,11 @@ def test_kapanis_ESP_STOP_butcesi_thread_leri_GERCEKTEN_bekler(monkeypatch):
 
     bs._safe_stop_outputs(_Sahte)
 
-    # DÖNER DÖNMEZ: 3 ESP bobini × 2 konu = 6 publish tamamlanmış olmalı (bütçe 3 sn > 0,25 sn)
-    assert len(yayinlar) == 6, (
-        f"kapanışta yalnız {len(yayinlar)}/6 STOP yayınlandı → bütçe thread'leri beklemiyor, "
+    # DÖNER DÖNMEZ: her ESP bobini × 2 konu publish tamamlanmış olmalı (bütçe 3 sn > 0,25 sn)
+    # FAZ 4: kapsam artık `ESP_COIL_IDS`ten türüyor (eskiden `range(6, 9)` ELLE yazılıydı ve
+    # bobin 6-7 STM'e taşındıktan sonra boşa MQTT yayını yapıyordu).
+    assert len(yayinlar) == 2 * len(TUM_ESP), (
+        f"kapanista yalniz {len(yayinlar)}/{2 * len(TUM_ESP)} STOP yayinlandi → butce thread'leri beklemiyor, "
         "bobinler STOP almadan süreç kapanır"
     )
 

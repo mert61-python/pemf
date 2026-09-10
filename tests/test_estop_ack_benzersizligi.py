@@ -22,6 +22,7 @@ import threading
 import time
 
 import pytest
+from topoloji import TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
 
 import servers.api_server as api
 
@@ -63,7 +64,8 @@ def test_KRITIK_ayni_milisaniyede_iki_estop_FARKLI_command_id_uretir(monkeypatch
     monkeypatch.setattr(time, "time", lambda: sabit)  # `_emergency_stop_all` içindeki `_t.time` da bunu görür
 
     idler = _estop_idleri_topla(monkeypatch)
-    assert len(idler) >= 6, f"beklenen ≥6 ESP STOP yayını, gelen: {idler!r}"
+    # FAZ 4: ESP kapsami kuculdu (bobin 6-7 STM'e gecti) → iki turda 2 x len(TUM_ESP).
+    assert len(idler) >= 2 * len(TUM_ESP), f"beklenen >= {2 * len(TUM_ESP)} ESP STOP yayini, gelen: {idler!r}"
     assert len(set(idler)) == len(idler), (
         f"AYNI ms'de üretilen command_id'ler çakıştı: {sorted(idler)!r} — _register_ack üzerine "
         "yazar, ikinci bekçi ack gelmişken 'ONAYI GELMEDİ' der (bulgu [3.2])"

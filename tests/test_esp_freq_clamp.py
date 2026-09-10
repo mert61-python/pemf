@@ -10,6 +10,7 @@ gönderiyordu. ESP firmware'i 1000 Hz sınırlı; >1000 komut → 8266 komutu TA
 from __future__ import annotations
 
 import pytest
+from topoloji import ESP_BOBIN  # faz 4: literal bobin numarasi YASAK
 
 from utils.stm32_protocol_limits import (
     ESP_FREQ_MAX_HZ,
@@ -89,14 +90,14 @@ def _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency: float):
                 "duty": 25,
                 "intensity": 0,
                 "duration_minutes": 5,
-                "coil_ids": [6],
+                "coil_ids": [ESP_BOBIN],
             },
         )
         assert r.status_code == 200, f"seans başlatılamadı: {r.status_code} {r.text}"
         # ESP publish'leri ARKA PLAN thread'inde gider (bilinçli: broker yavaşsa start bekletilmez)
         # → yayını kısa bir pencerede bekle.
         for _ in range(100):
-            eslesen = [p for t, p in yayinlar if t == "pemf/coil/6/control" and p.get("command") == "start"]
+            eslesen = [p for t, p in yayinlar if t == f"pemf/coil/{ESP_BOBIN}/control" and p.get("command") == "start"]
             if eslesen:
                 return eslesen[0]
             _t.sleep(0.02)

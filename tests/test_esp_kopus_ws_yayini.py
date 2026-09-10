@@ -35,6 +35,7 @@ import os
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 class _SahteMesaj:
@@ -48,7 +49,7 @@ class _SahteMesaj:
 
 @pytest.fixture()
 def kur(monkeypatch):
-    """Yayınları yakala, bildirimi sustur, bobin 6'yı BAĞLI başlat."""
+    """Yayınları yakala, bildirimi sustur, ESP bobini'yı BAĞLI başlat."""
     from servers import api_server as api
 
     yayinlar: list[dict] = []
@@ -56,8 +57,8 @@ def kur(monkeypatch):
     monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)
 
     with api._live_state_lock:
-        api._live_state["coils"][5]["connected"] = True
-        api._live_state["coils"][5]["running"] = True
+        api._live_state["coils"][ESP_BOBIN - 1]["connected"] = True
+        api._live_state["coils"][ESP_BOBIN - 1]["running"] = True
     return api, yayinlar
 
 
@@ -75,9 +76,11 @@ def test_KRITIK_offline_olayi_coil_status_YAYINLAR(kur):
     çağrısını sil → bu test KIRMIZI olur (sahadaki tam davranış: bildirim var, kart "Hazır").
     """
     api, yayinlar = kur
-    api._on_mqtt_message_api(None, None, _SahteMesaj("pemf/coil/6/events", {"event_type": "offline", "coil_id": 6}))
+    api._on_mqtt_message_api(
+        None, None, _SahteMesaj(f"pemf/coil/{ESP_BOBIN}/events", {"event_type": "offline", "coil_id": ESP_BOBIN})
+    )
 
-    m = _coil_status(yayinlar, 6)
+    m = _coil_status(yayinlar, ESP_BOBIN)
     assert m is not None, (
         "offline olayinda `coil_status` WS yayini GITMEDI → istemci `connected`i asla "
         'ogrenmez ve bobin karti "Hazır"da asili kalir (sahada olculen ariza). '
@@ -91,13 +94,13 @@ def test_KRITIK_wifi_connected_olayi_da_YAYINLAR(kur):
     """AYNA yol: bobin dönünce de yayın gitmeli, yoksa kart "Offline"da asılı kalır."""
     api, yayinlar = kur
     with api._live_state_lock:
-        api._live_state["coils"][5]["connected"] = False
+        api._live_state["coils"][ESP_BOBIN - 1]["connected"] = False
 
     api._on_mqtt_message_api(
-        None, None, _SahteMesaj("pemf/coil/6/events", {"event_type": "wifi_connected", "coil_id": 6})
+        None, None, _SahteMesaj(f"pemf/coil/{ESP_BOBIN}/events", {"event_type": "wifi_connected", "coil_id": ESP_BOBIN})
     )
 
-    m = _coil_status(yayinlar, 6)
+    m = _coil_status(yayinlar, ESP_BOBIN)
     assert m is not None, (
         "wifi_connected olayinda `coil_status` yayini GITMEDI → bobin geri geldiginde kart \"Offline\"da asili kalir"
     )
@@ -108,10 +111,12 @@ def test_sunucu_durumu_da_gercekten_dusuyor(kur):
     """Yayının yanında `_live_state` de düşmeli (yeni snapshot doğru olsun)."""
     api, _ = kur
     api._on_mqtt_message_api(
-        None, None, _SahteMesaj("pemf/coil/6/events", {"event_type": "wifi_disconnected", "coil_id": 6})
+        None,
+        None,
+        _SahteMesaj(f"pemf/coil/{ESP_BOBIN}/events", {"event_type": "wifi_disconnected", "coil_id": ESP_BOBIN}),
     )
     with api._live_state_lock:
-        c = dict(api._live_state["coils"][5])
+        c = dict(api._live_state["coils"][ESP_BOBIN - 1])
     assert c["connected"] is False and c["running"] is False, c
 
 
@@ -123,8 +128,8 @@ def test_KARSIT_KANIT_kapi_gercekten_olcuyor(kur):
     onu bulduğu, ALAKASIZ tipin ise bulunmadığı gösterilir.
     """
     _api, yayinlar = kur
-    assert _coil_status(yayinlar, 6) is None, "kurulum yayin uretmemeliydi"
+    assert _coil_status(yayinlar, ESP_BOBIN) is None, "kurulum yayin uretmemeliydi"
     yayinlar.append({"type": "gateway_status", "data": {}})
-    assert _coil_status(yayinlar, 6) is None, "filtre ALAKASIZ tipi coil_status sandi"
-    yayinlar.append({"type": "coil_status", "coilId": 6, "data": {"connected": False}})
-    assert _coil_status(yayinlar, 6) is not None, "filtre GERCEK coil_status'u bulamadi"
+    assert _coil_status(yayinlar, ESP_BOBIN) is None, "filtre ALAKASIZ tipi coil_status sandi"
+    yayinlar.append({"type": "coil_status", "coilId": ESP_BOBIN, "data": {"connected": False}})
+    assert _coil_status(yayinlar, ESP_BOBIN) is not None, "filtre GERCEK coil_status'u bulamadi"

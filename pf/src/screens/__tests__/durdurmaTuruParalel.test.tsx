@@ -133,13 +133,15 @@ it("KRİTİK: bobin STOP istekleri PARALEL gider (seri 4×8 sn DEĞİL)", async 
     mockSalStop!({ status: "success" });
   });
 
-  // HİÇBİRİNİ ÇÖZMEDEN dördü de uçuşta olmalı → paralel.
-  expect(mockYollar()).toEqual([
-    "/coil/6/control",
-    "/coil/7/control",
-    "/coil/8/control",
-    "/coil/batch",
-  ]);
+  // HİÇBİRİNİ ÇÖZMEDEN hepsi uçuşta olmalı → paralel.
+  //
+  // ⚠️ FAZ 4 (2026-09-10) — BEKLENEN YOL KÜMESİ DEĞİŞTİ, İDDİA DEĞİŞMEDİ.
+  // Bobin 6-7 ESP8266'dan STM32'ye taşındı → artık `/coil/batch` (STM yolu) içinde
+  // gidiyorlar; eskiden `/coil/6/control` + `/coil/7/control` (MQTT/ESP yolu) idiler.
+  // Tek başına kalan `/coil/8/control`, cihazı olmayan ESP slotudur (sahip kararı:
+  // slot 8 kalsın). Bu testin ÖLÇTÜĞÜ ŞEY hâlâ aynı: istekler PARALEL mi uçuyor
+  // (eskiden seri `await` yüzünden 4 × 8 sn = 32 sn sürüyordu).
+  expect(mockYollar()).toEqual(["/coil/8/control", "/coil/batch"]);
 });
 
 it("KRİTİK: uçuştaki tur varken ikinci basış YENİ tur BAŞLATMAZ", async () => {
@@ -155,7 +157,8 @@ it("KRİTİK: uçuştaki tur varken ikinci basış YENİ tur BAŞLATMAZ", async 
   await act(async () => {
     mockSalStop!({ status: "success" });
   });
-  expect(mockCagrilar).toHaveLength(4); // tek tur, 4 istek — iki tur olsaydı 8 olurdu
+  // FAZ 4: tur başına 2 istek (batch + slot 8) — eskiden 4'tü (bobin 6-7 ayrı gidiyordu).
+  expect(mockCagrilar).toHaveLength(2); // tek tur — iki tur olsaydı 4 olurdu
 });
 
 it("SAHİP KARARI: buton uçuştaki turda DEVRE DIŞI BIRAKILMAZ (ama geri bildirim verir)", async () => {
@@ -224,7 +227,9 @@ it("KRİTİK: tek-bobin STOP yanıtı mqtt_unavailable → 'Durdurma onaylanamad
   const u = await ekran();
 
   await turuKostur(u, (yol) =>
-    yol === "/coil/6/control"
+    // ⚠️ FAZ 4: bobin 6-7 artık STM (batch) yolunda. Tek-bobin MQTT yanıtını temsil eden
+    // rota artık cihazı olmayan slot 8; iddia aynı — tek-bobin `mqtt_unavailable` teyit SAYILMAZ.
+    yol === "/coil/8/control"
       ? { status: "mqtt_unavailable", transport: "mqtt" } // backend'in GERÇEK broker-ölü yanıtı
       : yol === "/coil/batch"
         ? { status: "success", results: [{ coilId: 1, status: "success" }] }

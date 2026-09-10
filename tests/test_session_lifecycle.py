@@ -15,6 +15,7 @@ import os
 
 os.environ.pop("PEMF_SIMULATE", None)
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 class _SahteIstek:
@@ -54,7 +55,7 @@ def api(monkeypatch):
 
 def _payload(api, **kw):
     base = dict(
-        coil_ids=[6, 7, 8],
+        coil_ids=sorted(TUM_ESP),
         mode="Manuel",
         operator_name="op",
         frequency=50,
@@ -74,7 +75,7 @@ def test_start_session_populates_active_session(api):
     with api._session_lock:
         s = dict(api._active_session)
     assert s["is_active"] is True
-    assert s["coil_ids"] == [6, 7, 8]
+    assert s["coil_ids"] == sorted(TUM_ESP)
     assert s["mode"] == "Manuel"
     assert s["operator_name"] == "op"
     assert s["session_id"].startswith("react_")
@@ -149,7 +150,7 @@ def test_start_ai_session_takes_over_active_manual(api):
                 "is_active": True,
                 "session_id": "react_x",
                 "mode": "Manuel",
-                "coil_ids": [6, 7, 8],
+                "coil_ids": sorted(TUM_ESP),
                 "db_session_id": None,
                 "start_time": 1.0,
             }

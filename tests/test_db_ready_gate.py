@@ -21,6 +21,7 @@ os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +43,7 @@ def _seans_govdesi():
         "duty": 25,
         "intensity": 2,
         "duration_minutes": 5,
-        "coil_ids": [6],
+        "coil_ids": [ESP_BOBIN],
         "patient_name": "Pamuk",
     }
 

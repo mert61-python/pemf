@@ -15,7 +15,11 @@ import zlib
 import pytest
 
 from controllers import hardware_controller
-from controllers.hardware_controller import GOZETIMSIZ_VARSAYILAN_DAKIKA, HardwareController
+from controllers.hardware_controller import (
+    GOZETIMSIZ_VARSAYILAN_DAKIKA,
+    STM_BOBIN_SAYISI,  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
+    HardwareController,
+)
 from utils.stm32_protocol_limits import DURATION_MAX_MINUTES
 
 
@@ -146,7 +150,8 @@ def test_stop_all_sets_force_send(hw):
 
 def test_invalid_coil_id_rejected(hw):
     assert hw.update_coil(0, 100.0, 25.0, 0.0, 30) is False
-    assert hw.update_coil(6, 100.0, 25.0, 0.0, 30) is False
+    # FAZ 4: bobin 6-7 ARTIK GECERLI (STM). Kapsam disi ilk kimlik STM_BOBIN_SAYISI + 1.
+    assert hw.update_coil(STM_BOBIN_SAYISI + 1, 100.0, 25.0, 0.0, 30) is False
 
 
 def test_stm_packet_crc_roundtrip(hw, monkeypatch):

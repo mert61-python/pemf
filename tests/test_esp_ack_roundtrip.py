@@ -17,6 +17,7 @@ import threading
 import time
 
 import pytest
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 import servers.api_server as api
 
@@ -104,13 +105,13 @@ def test_KRITIK_retain_bayragi_ACK_cozumunu_ENGELLEMEZ():
 def test_KRITIK_RETAINED_mesaj_watchdog_damgasini_TAZELEMEZ():
     """HG-4 denetimi: retained mesaj (broker'da kalmış) OFFLINE bobinin telemetri damgasını
     tazelememeli — yoksa stale-STOP tespiti 30 sn gecikir."""
-    idx = 5  # bobin 6
+    idx = ESP_BOBIN - 1  # ESP bobini (faz 4: indeks topolojiden turer)
     api._coil_last_telemetry[idx] = 0.0  # "uzun süredir sessiz" durumu
 
     class _RetStatus:
-        topic = "pemf/coil/6/status"
+        topic = f"pemf/coil/{ESP_BOBIN}/status"
         retain = True  # broker'da kalmış bayat status
-        payload = b'{"coil_id":6,"pwm_active":false,"status":"online"}'
+        payload = f'{{"coil_id": {ESP_BOBIN},"pwm_active":false,"status":"online"}}'.encode()
 
     api._on_mqtt_message_api(None, None, _RetStatus())
     assert api._coil_last_telemetry[idx] == 0.0, (
@@ -119,9 +120,9 @@ def test_KRITIK_RETAINED_mesaj_watchdog_damgasini_TAZELEMEZ():
 
     # karşıt-kanıt: CANLI (retain=0) status damgayı GERÇEKTEN tazeler
     class _CanliStatus:
-        topic = "pemf/coil/6/status"
+        topic = f"pemf/coil/{ESP_BOBIN}/status"
         retain = False
-        payload = b'{"coil_id":6,"pwm_active":false,"status":"online"}'
+        payload = f'{{"coil_id": {ESP_BOBIN},"pwm_active":false,"status":"online"}}'.encode()
 
     api._on_mqtt_message_api(None, None, _CanliStatus())
     assert api._coil_last_telemetry[idx] > 0.0, "canlı mesaj damgayı tazelemiyor — watchdog kör"
@@ -133,9 +134,11 @@ def test_KRITIK_BAYAT_retained_ack_aktif_bekleyeni_BOZMAZ():
     api._register_ack("estop_6_YENI")  # aktif E-stop bekliyor
 
     class _BayatMsg:
-        topic = "pemf/coil/6/ack"
+        topic = f"pemf/coil/{ESP_BOBIN}/ack"
         retain = True
-        payload = b'{"coil_id":6,"command_id":"estop_6_ESKI","success":true,"timestamp":1}'
+        payload = (
+            f'{{"coil_id": {ESP_BOBIN},"command_id":"estop_{ESP_BOBIN}_ESKI","success":true,"timestamp":1}}'
+        ).encode()
 
     api._on_mqtt_message_api(None, None, _BayatMsg())  # eski id
     # aktif bekleyen (YENI) çözülmemeli — bayat ESKI id onu etkilemez
@@ -146,13 +149,13 @@ def test_KRITIK_estop_ONAY_GELMEYINCE_operator_UYARILIR(monkeypatch):
     """_estop_ack_watch: onay gelmezse _push_notification ile AÇIK uyarı + error log."""
     uyarilar = []
     monkeypatch.setattr(api, "_push_notification", lambda msg, sev="info": uyarilar.append((msg, sev)))
-    api._register_ack("estop_6_777")  # ama kimse resolve etmeyecek → timeout
+    api._register_ack(f"estop_{ESP_BOBIN}_777")  # ama kimse resolve etmeyecek → timeout
 
     # gerçek watch (2s timeout) yerine kısa: fonksiyonu doğrudan ama düşük timeout'la taklit
     # _estop_ack_watch sabit 2.0s bekler; testi hızlandırmak için _wait_ack'i kısalt.
     orij = api._wait_ack
     monkeypatch.setattr(api, "_wait_ack", lambda cid, timeout: orij(cid, 0.2))
-    api._estop_ack_watch(6, "estop_6_777")
+    api._estop_ack_watch(ESP_BOBIN, f"estop_{ESP_BOBIN}_777")
 
     assert uyarilar, "onay gelmedi ama operatör UYARILMADI (sessiz başarısızlık geri geldi)"
     assert uyarilar[0][1] == "error"
@@ -176,4 +179,4 @@ def test_KARSIT_KANIT_subscribe_ve_kapsam_YERINDE():
     assert 'msg_type == "ack"' in src, "handler ack dalı düşmüş"
     assert "_register_ack(command_id)" in src, "E-stop publish öncesi ack kaydı düşmüş"
     # ESP kapsamı: watch yalnız ESP bobinleri için anlamlı (STM ack MQTT yollamaz)
-    assert api.ESP_COIL_IDS == {6, 7, 8}, f"ESP_COIL_IDS beklenmedik: {api.ESP_COIL_IDS}"
+    assert api.ESP_COIL_IDS == TUM_ESP, f"ESP_COIL_IDS beklenmedik: {api.ESP_COIL_IDS}"
