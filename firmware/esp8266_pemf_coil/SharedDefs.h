@@ -66,10 +66,12 @@ const char PROGMEM_INFO_STR[] PROGMEM = "[INFO]";
  * ============================================================================ */
 
 /* ============================================================================
- * YEREL TERMAL KORUMA EŞİKLERİ (2026-08-19)
+ * YEREL TERMAL KORUMA EŞİKLERİ
  * ============================================================================
- * Kesme eşiği backend güvenlik değişmeziyle BİREBİR (48°C — regresyon yapma listesi);
- * dönüş eşiği histerezisli ki sınırda aç-kapa titremesin. Kullanım: .ino ana döngüsü.
+ * ⚠️ DÜZELTME 2026-09-10: bu blok eskiden "kesme eşiği backend güvenlik değişmeziyle
+ * BİREBİR (48°C — regresyon yapma listesi)" diyordu. ARTIK YANLIŞ: backend hiçbir
+ * sıcaklık eşiği dayatmıyor (ölçüldü) ve 8266 eşiği sahip kararıyla 100 °C'ye çıktı.
+ * Değerler ve gerekçe AŞAĞIDA, tek kaynak. Kullanım: .ino ana döngüsü.
  * ============================================================================ */
 /* HG-5/6 (2026-08-19, Plan A-1): SURESIZ-MOD (duration=0) MUTLAK TAVANI, saniye.
  * Backend'in STM _coil_deadline'i (120 dk) ile ayni. Sureli seanslari ETKILEMEZ;
@@ -83,8 +85,32 @@ const char PROGMEM_INFO_STR[] PROGMEM = "[INFO]";
  * bir aralik erken durma; sureli seanslarin kalan-sure hesabina taban UYGULANMAZ. */
 #define NVS_KAYIT_ARALIGI_MS 30000UL
 
-#define TERMAL_KESME_C   48.0f  /**< MLX90614 nesne sıcaklığı bu değeri aşarsa PWM DURUR */
-#define TERMAL_DONUS_C   45.0f  /**< Kilit ancak bu değerin altında açılır (histerezis)  */
+/* TERMAL KESME EŞİĞİ — SAHİP KARARI 2026-09-10: 48 °C → 100 °C (YALNIZ 8266).
+ *
+ * ⚠️ Bu bir GÜVENLİK eşiğidir ve tek koruma katmanıdır: backend hiçbir sıcaklık limiti
+ * dayatmıyor (ölçüldü, `servers/` içinde eşik yok — safety-limit bilinçli kaldırılmıştı),
+ * dolayısıyla bobini durduracak TEK şey burada tanımlı değerdir.
+ *
+ * Sahibe bildirilen ölçülebilir riskler (karar sahibin, tezgâh onun):
+ *   1. MLX90614 NESNE sıcaklığını ~380 °C'ye kadar okur AMA kendi gövde/ortam sınıfı
+ *      tipik olarak −40..+85 °C. Bobin yüzeyi 100 °C iken sensör gövdesi kendi sınırını
+ *      aşabilir → tam kritik anda okuma sürüklenir/parça bozulur.
+ *   2. IR yalnız DIŞ YÜZEYİ görür; sarımın iç turları daha SICAKTIR. 100 okuması iç
+ *      sıcaklığın 100'ün ÜSTÜNDE olduğu anlamına gelir.
+ *   3. Kabinde hayvan var: 100 °C yüzeye temas ANINDA yanık. 48 °C zaten uzun temasta
+ *      acıtma sınırıydı.
+ *   4. Emaye tel muhtemelen dayanır (Sınıf 130/155) ama yeşil bant, plastik/akrilik
+ *      montaj parçaları dayanmaz (PVC 60-80 °C'de yumuşar).
+ *
+ * ⚠️ SADECE 8266 DEĞİŞTİ. S3 (`esps3_pemf_coil/SharedDefs.h`) ve STM32 48 °C'de KALDI;
+ * STM eşiği `tests/test_stm_dalga_sozlesmesi.py` ile pinli. Yani kabinde artık ASİMETRİK
+ * iki politika var — bilinçli.
+ */
+#define TERMAL_KESME_C   100.0f /**< MLX90614 nesne sıcaklığı bu değeri aşarsa PWM DURUR */
+/* Histerezis bandı 3 °C olarak KORUNDU (eski 48/45 ile aynı genişlik) → kesmeden sonra
+ * bobin 97 °C'ye düşünce start yeniden serbest. Daha uzun soğuma isteniyorsa bu değer
+ * düşürülür (ör. 90.0f); kesme eşiğini değiştirmeye gerek yok. */
+#define TERMAL_DONUS_C   97.0f  /**< Kilit ancak bu değerin altında açılır (histerezis)  */
 
 // Memory istatistikleri yapÄ±sÄ±
 struct MemoryStats {

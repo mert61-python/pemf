@@ -53,12 +53,26 @@ TimeManager timeManager;
 StatusLED statusLED(LED_PIN);
 CommandRateLimiter commandRateLimiter;
 
-// ── YEREL TERMAL KORUMA (2026-08-19) ─────────────────────────────────────────
-// Backend'in 48°C politikası SUNUCUDA koşar; PWM ise bilerek ağdan bağımsızdır —
-// yani ağ koptuğunda ısınan bobini durduracak HİÇBİR şey yoktu. Bu kilit cihazın
-// kendi son savunma hattıdır: eşik backend güvenlik değişmeziyle birebir (48.0),
-// dönüş histerezisli (45.0) ki sınırda aç-kapa titremesin. Sensör ARIZALIYSA kesme
-// YAPILMAZ (sensörsüz kart çalışabilmeli) — arıza zaten status'ta görünür.
+// ── YEREL TERMAL KORUMA ──────────────────────────────────────────────────────
+// PWM bilerek ağdan bağımsızdır → ağ koptuğunda ısınan bobini durduracak başka
+// hiçbir şey yok. Bu kilit cihazın SON savunma hattıdır.
+//
+// ⚠️ DÜZELTME 2026-09-10: bu yorum eskiden "Backend'in 48°C politikası SUNUCUDA
+// koşar" ve "eşik backend değişmeziyle birebir (48.0/45.0)" diyordu. İKİSİ DE
+// ARTIK YANLIŞ:
+//   · Backend HİÇBİR sıcaklık eşiği dayatmıyor (ölçüldü: `servers/` içinde yok;
+//     safety-limit bilinçli kaldırılmıştı). Yani burada tanımlı sabit, bobini
+//     durduracak TEK katman.
+//   · Eşik sahip kararıyla yükseltildi. SAYIYI BURAYA YAZMIYORUM — başka dosyadaki
+//     bir kopya kaçınılmaz olarak sürüklenir (bu deponun tekrar eden hatası). Tek
+//     kaynak: SharedDefs.h içindeki TERMAL_KESME_C / TERMAL_DONUS_C ve orada duran
+//     gerekçe bloğu.
+//
+// Sensör ARIZALIYSA kesme YAPILMAZ (sensörsüz kart çalışabilmeli) — arıza status'ta
+// görünür. ⚠️ AÇIK RİSK: sensör KRİTİK olunca (10 üst üste başarısız okuma) bu blok
+// komple atlanır → çalışan bobin durmaz VE kilit kurulmadığı için yeni start da
+// kabul edilir. Tek yönlü sürüşte net DC geçtiği için bobin sürekli ısınır.
+// Sahibe bildirildi 2026-09-10, kararı bekliyor.
 static bool g_thermalLock = false;
 
 
@@ -531,7 +545,16 @@ void processControlCommand(JsonDocument& doc) {
             LOG_PRINTLN(F("[CMD] start reddedildi: TERMAL KILIT aktif"));
             if (strlen(command_id) > 0 && network) {
                 network->sendCommandAck(command_id, false);
-                network->publishEvent("thermal_lock", "Start reddedildi: bobin sicak (>48C), sogumasi bekleniyor");
+                /* 2026-09-10: metin ESKİDEN sabit "(>48C)" yazıyordu. Eşik sabiti
+                 * (TERMAL_KESME_C) değiştiği an bu mesaj YALAN oluyordu — bu depoda
+                 * tekrar eden "sihirli sayı mesaja kopyalanmış" sürüklenme sınıfı
+                 * (bkz. 8266 status buffer'ında 480/640 sürüklenmesi). Artık sabitten
+                 * TÜRETİLİYOR, bir daha sürüklenemez. */
+                static char lmsg[80];
+                snprintf(lmsg, sizeof(lmsg),
+                         "Start reddedildi: bobin sicak (>=%.0fC), sogumasi bekleniyor",
+                         (double)TERMAL_KESME_C);
+                network->publishEvent("thermal_lock", lmsg);
             }
             return;
         }

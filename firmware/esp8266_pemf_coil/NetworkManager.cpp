@@ -48,6 +48,7 @@ NetworkManager::NetworkManager(int coilId) {
     _msgCallback = nullptr;
     _portalActive = false;
     _portalStartTime = 0;
+    _staKopusBasiMs = 0;
     _pendingWifiConnect = false;
     _pendingWifiConnectTime = 0;
     _pendingSSID[0] = '\0';
@@ -480,8 +481,15 @@ void NetworkManager::_checkWiFiConnection() {
         if (WiFi.status() == WL_CONNECTED) {
             currentWiFiState = true;
             _saveCurrentWiFi();
-        } else if (_wifiConnectState == WIFI_IDLE) {
-            // TÃ¼m credential'ler denendi, portal aÃ§
+        } else if (_wifiConnectState == WIFI_IDLE && !_hasSavedCredentials()) {
+            /* 2026-09-10: kosul ACIK hale getirildi. Eskiden yalniz
+             * `_wifiConnectState == WIFI_IDLE` bakiliyordu; bu ORTUK olarak "kayitli
+             * kredi yok" demekti (_tryConnectToSavedWiFi gecerli kredi bulursa durumu
+             * CONNECTING birakir). Ortuk oldugu icin KIRILGAN: o fonksiyonun durum
+             * yonetimi degisirse acilis yolu kredi VARKEN de portal acmaya baslar ve
+             * cihaz AP-ONLY modda hotspot u goremez hale gelir (sahibin 1. senaryosu).
+             * Kredi kontrolu artik burada da yazili -> derinlemesine savunma. */
+            LOG_PRINTLN("[WiFi] Acilista kayitli kredi YOK, portal aciliyor (provizyon)");
             _startWiFiPortal();
         }
     }
@@ -547,6 +555,10 @@ void NetworkManager::_checkWiFiConnection() {
         // CONNECTING→IDLE reset (:521) atlanabiliyordu; portal-timeout döngüsü bunu tetiklerse
         // FSM'i tutarlı tut (bağlıyken CONNECTING'te asılı kalmasın).
         _wifiConnectState = WIFI_IDLE;
+        // 2026-09-10: baglanti KURULDU -> provizyon geri-donus sayacini sifirla ki bir
+        // sonraki kopusta 30 dk yeniden bastan sayilsin (yoksa eski kopus birikip portali
+        // gereksiz acardi).
+        _staKopusBasiMs = 0;
     }
     // Portal açıkken: WiFi bağlantısı yok ama reconnect denemesi yapılmıyor
     // Kullanıcı Android uygulamasından WiFi yapılandırması yapacak
@@ -639,13 +651,32 @@ void NetworkManager::_reconnectWiFi() {
                           _savedWiFiList[_currentWiFiCredentialIndex].password);
                 _wifiConnectStartTime = millis();  // Reset timer
             } else {
-                // Tüm credential'ler denendi, başarısız
-                // 3. tur [B2]: EDIT-1 ilk-retry portal açmayı kayıtlı-ağ denemesine erteledi; krediler
-                // GERÇEKTEN tükenince (hepsi başarısız) portalı ŞİMDİ aç ki provizyon mümkün olsun.
-                LOG_PRINTLN("[WiFi] Tüm kayıtlı WiFi'lere bağlanamadı. Portal aciliyor...");
+                // Tüm credential'ler denendi, başarısız.
+                // ⚠️ 2026-09-10: eski log "Portal aciliyor..." diyordu ama portal artik
+                // KOSULLU aciliyor (asagi) — sabit metin yanlis teshise goturuyordu.
+                LOG_PRINTLN("[WiFi] Tüm kayıtlı WiFi'lere baglanilamadi.");
                 _wifiConnectState = WIFI_IDLE;
-                if (!_portalActive) {
+                /* 2026-09-10: ESKIDEN burada KOSULSUZ portal acilirdi -> AP-ONLY mod STA yi
+                 * oldurur, cihaz PORTAL_TIMEOUT (5 dk) boyunca hotspot u GOREMEZ. Sahibin iki
+                 * saha senaryosu da bundandi: (1) ESP erken acilip baglanamayinca 5 dk kor
+                 * kalip "hep offline" gorunuyordu, (2) hotspot kapatilip geri acildiginda
+                 * portaldayken goremedigi icin yeniden baglanmiyordu.
+                 * YENI: kayitli kredi VARSA portal ACILMAZ, STA da denemeye DEVAM edilir. */
+                if (_staKopusBasiMs == 0) {
+                    _staKopusBasiMs = millis();
+                }
+                const bool krediVar = _hasSavedCredentials();
+                const bool uzunKopus =
+                    safeMillisDiff(millis(), _staKopusBasiMs) >= PROVIZYON_GERI_DONUS;
+                if (!_portalActive && (!krediVar || uzunKopus)) {
+                    LOG_PRINTF("[WiFi] Portal aciliyor (%s)\n",
+                               krediVar ? "30 dk kesintisiz basarisizlik" : "kayitli kredi yok");
                     _startWiFiPortal();
+                    _staKopusBasiMs = millis();  // geri-donus sayacini sifirla
+                } else if (!_portalActive) {
+                    LOG_PRINTF("[WiFi] Kayitli aglar basarisiz; STA da DENEMEYE DEVAM "
+                               "(portal ACILMADI, kopus %lu sn)\n",
+                               safeMillisDiff(millis(), _staKopusBasiMs) / 1000UL);
                 }
             }
         }

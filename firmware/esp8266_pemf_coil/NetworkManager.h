@@ -105,6 +105,20 @@ private:
     bool _portalActive;
     unsigned long _portalStartTime;
     const unsigned long PORTAL_TIMEOUT = 300000;  // 5 dakika
+    /* SAHA ARIZASI + SAHIP KARARI 2026-09-10 ("surekli reconnect denemeli; baglanmazsa
+     * PEMF-Gateway e anlami yok tek basina").
+     * Portal `WiFi.mode(WIFI_AP)` ile AP-ONLY acilir -> STA OLUR ve cihaz hotspot u
+     * GOREMEZ. Eski akis: krediler tukenince portal acilir, PORTAL_TIMEOUT (5 dk) boyunca
+     * kor beklenir. Tek kayitli agda dinleme payi ~%9 (30 sn dene / 300 sn kor) -> ESP
+     * erken acilip baglanamazsa ya da hotspot dusup geri gelirse dakikalarca offline kalir.
+     * YENI DAVRANIS: kayitli kredi VARSA calisirken-kopusta portal ACILMAZ, STA da
+     * SONSUZA KADAR denenir (30 sn/kredi WIFI_CONNECT_TIMEOUT dogal kisici).
+     * Portal yalnizca (a) hic kayitli kredi YOKKEN (gercek ilk kurulum; sahibin eski
+     * "suresiz acik kalsin" karari KORUNUR) ya da (b) PROVIZYON_GERI_DONUS suresince
+     * KESINTISIZ basarisizliktan sonra BIR KEZ acilir -> SSID/parola degisirse provizyon
+     * yolu kapanmaz, ama kor oran %9 dan ~%3 e iner. */
+    unsigned long _staKopusBasiMs;                          // ilk basarisiz tur; 0 = kopus yok
+    const unsigned long PROVIZYON_GERI_DONUS = 1800000UL;   // 30 dakika
 
     // Pending WiFi connection (portal'dan gelen bağlantı isteği için)
     bool _pendingWifiConnect;
