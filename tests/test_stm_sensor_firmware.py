@@ -271,3 +271,70 @@ def test_KARSIT_KANIT_kapi_gercekten_olcuyor():
     # Butcesiz while GERCEKTEN yakalaniyor mu
     kotu = yorumsuz("while (!(SR1 & X)) { }")
     assert re.search(r"\bwhile\s*\(([^)]*)\)", kotu), "while deseni eslesmiyor -> kapi sahte"
+
+
+def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
+    """Bir bus'ta YALNIZ manyetik (ya da yalnız sıcaklık) sensör olabilir.
+
+    ⚠️ SAHİP KABLOLAMASI 2026-09-10: PB10/PB11'e (I2C2) yalnız manyetik sensör bağlanıyor.
+    Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu → yok olan MLX90614'ün her
+    turdaki NACK'i `i2c_hata_islet` sayacını 5'e taşır ve **her ~5 saniyede bir hat kurtarma**
+    (9 saat darbesi + SWRST) tetiklenir. Kurtarma çevre birimini sıfırladığı için AYNI
+    bus'taki ÇALIŞAN manyetik sensörün okumasını da bozar: **var olmayan sensör, var olanı
+    sakatlar** ve hiçbir hata görünmez — alan okuması aralıklı kaybolur.
+
+    MUTASYON: `S_TOBJ`taki `if (h->sicaklik_adres == 0U)` erken-çıkışını sil → KIRMIZI.
+    """
+    kod = yorumsuz(_oku(SRC))
+    assert "sicaklik_adres" in kod, "sicaklik cihazi icin VARLIK alani YOK"
+    assert "cihaz_var" in kod, "adres yoklama yardimcisi YOK"
+    # ⚠️ ZAYIF ÇIPA DÜZELTMESİ: bu kapının ilk hâli yalnız erken-çıkışın VAR OLDUĞUNU
+    # ölçüyordu. `sicaklik_adres = MLX90614_ADRES` (yoklamasız, hep "var") mutasyonu kapıyı
+    # YEŞİL bıraktı — erken-çıkış kodda duruyor ama hiç tetiklenmiyordu, yani arıza geri
+    # gelmişti. Artık varlığın GERÇEKTEN yoklandığı pinli.
+    # ⚠️ `=(?!=)`: `==` KARŞILAŞTIRMASINI atamadan ayır. İlk yazımda bu lookahead yoktu ve
+    # desen `sicaklik_adres == 0U` koşulunu da "atama" sanıp temiz kaynakta SAHTE-KIRMIZI
+    # verdi (aynı gün ADC kapısında iç-içe parantezle yaşananın kardeşi).
+    for m in re.finditer(r"sicaklik_adres\s*=(?!=)([^;]+);", kod):
+        atama = m.group(1)
+        if "0U" == atama.strip():
+            continue  # sifirlama (kurulum) mesru
+        assert "cihaz_var" in atama, (
+            f"`sicaklik_adres` YOKLAMASIZ atanmis: {atama.strip()!r} — cihaz hep 'var' "
+            "sayilir, erken-cikis hic tetiklenmez ve yok olan sensorun NACK'i 5 turda bir "
+            "hat kurtarma tetikleyip AYNI bus'taki manyetik sensoru sakatlar"
+        )
+    # Yok olan cihaz her iki sicaklik durumunda da ERKEN CIKMALI (hata sayilmadan)
+    for durum in ("S_TOBJ", "S_TA"):
+        i = kod.find("case " + durum + ":")
+        assert i > 0, f"{durum} durumu bulunamadi -> kapi BAYAT"
+        pencere = kod[i : i + 400]
+        assert "sicaklik_adres == 0U" in pencere, (
+            f"{durum} yok olan sicaklik sensorunu ATLAMIYOR -> her turda hata sayilir -> "
+            "5 turda bir hat kurtarma AYNI bus'taki manyetik sensoru sakatlar"
+        )
+        # Erken cikis, hata isletmeden ONCE olmali
+        atla = pencere.find("sicaklik_adres == 0U")
+        hata = pencere.find("i2c_hata_islet")
+        assert (hata < 0) or (atla < hata), f"{durum}: atlama hata sayimindan SONRA geliyor"
+    # Sonradan takilan cihaz bulunmali, ama HER TURDA aranmamali (bos START = butce israfi)
+    assert "SENSOR_YENIDEN_ARAMA_TUR" in kod, "periyodik yeniden arama YOK (sonradan takilan cihaz)"
+    assert re.search(r"tur_sayaci\s*%\s*SENSOR_YENIDEN_ARAMA_TUR", kod), (
+        "yeniden arama periyodik DEGIL -> her turda eksik adrese bosa START atilir"
+    )
+
+
+def test_KRITIK_iki_sensor_TEK_BUSTA_cakismaz():
+    """MLX90614 (0x5A) ve MLX90393 (0x18) farklı adresler → aynı bus'ta yaşayabilirler.
+
+    ⚠️ İKİ BUS'IN GERÇEK SEBEBİ BU DEĞİL: iki MLX90614'ün İKİSİ DE 0x5A'da sabit olduğu
+    için aynı hatta konamaz. Adresler eşitlenirse (biri yanlış yazılırsa) iki cihaz aynı
+    adreste yanıt verir ve okumalar birbirine karışır — sessiz ve teşhisi zor bir arıza.
+    """
+    kod = _oku(SRC)
+    m614 = re.search(r"#define\s+MLX90614_ADRES\s+0x([0-9A-Fa-f]+)U", kod)
+    m393 = re.search(r"#define\s+MLX90393_ADRES_VARSAYILAN\s+0x([0-9A-Fa-f]+)U", kod)
+    assert m614 and m393, "adres sabitleri bulunamadi -> kapi BAYAT"
+    a614, a393 = int(m614.group(1), 16), int(m393.group(1), 16)
+    assert a614 == 0x5A, f"MLX90614 adresi 0x{a614:02X}; fabrikada SABIT 0x5A"
+    assert a393 != a614, f"iki sensor AYNI adreste (0x{a614:02X}) -> tek bus'ta cakisirlar ve okumalar karisir"

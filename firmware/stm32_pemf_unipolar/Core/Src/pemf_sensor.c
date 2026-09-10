@@ -52,6 +52,23 @@
 /** Tam okuma turu periyodu (ms). ESP ~1 Hz yayınlıyordu; aynı hızda kalıyoruz. */
 #define SENSOR_TUR_MS 1000U
 
+/**
+ * BULUNAMAYAN cihaz kaç turda bir yeniden aranır.
+ *
+ * ⚠️ NEDEN CİHAZ BAZINDA VARLIK TESPİTİ VAR (2026-09-10, sahip kablolaması):
+ * Sahip PB10/PB11'e (I2C2) **yalnız manyetik sensör** bağlıyor — o bus'ta MLX90614 YOK.
+ * Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu: sıcaklık okuması her turda
+ * NACK alır, `i2c_hata_islet` sayacı 5'e ulaşır ve **her ~5 saniyede bir hat kurtarma**
+ * (9 saat darbesi + `SWRST`) tetiklenir. Kurtarma çevre birimini sıfırladığı için AYNI
+ * bus'taki ÇALIŞAN manyetik sensörün okumasını da bozar — yani var olmayan bir sensör,
+ * var olanı sakatlar. Üstelik hiçbir hata görünmez: alan okuması aralıklı kaybolur.
+ *
+ * Çözüm: açılışta adres yoklaması yapılır; bulunamayan cihaz **YOK** işaretlenir, onun
+ * durumları ATLANIR ve yokluğu hata SAYILMAZ. Sonradan takılabilir diye periyodik yeniden
+ * arama yapılır (her turda aramak, eksik adrese boşa START atıp bütçe harcar).
+ */
+#define SENSOR_YENIDEN_ARAMA_TUR 10U
+
 /* ============================================================================
  * MLX90614 (sıcaklık) — SMBus, adres 0x5A (FABRİKADA SABİT)
  * ----------------------------------------------------------------------------
@@ -128,7 +145,9 @@ typedef struct {
   GPIO_TypeDef *port;
   uint16_t scl_pin;
   uint16_t sda_pin;
-  uint8_t mag_adres; /**< 0 = bulunamadı */
+  uint8_t mag_adres;      /**< 0 = bulunamadı (o bus'ta MLX90393 YOK) */
+  uint8_t sicaklik_adres; /**< 0 = bulunamadı (o bus'ta MLX90614 YOK) */
+  uint32_t tur_sayaci;    /**< yeniden arama zamanlaması */
   SensorDurum_t durum;
   uint32_t sonraki_tur_ms;
   uint32_t mag_hazir_ms;
@@ -355,15 +374,23 @@ static bool mag_tek_komut(SensorHat_t *h, uint8_t komut) {
   return i2c_oku(h->i2c, h->mag_adres, &st, 1U);
 }
 
+/** Tek adres yoklaması: cihaz ACK veriyor mu? (yazma yönünde START + adres) */
+static bool cihaz_var(SensorHat_t *h, uint8_t adres) {
+  if (i2c_start(h->i2c, adres, false)) {
+    h->i2c->CR1 |= I2C_CR1_STOP;
+    return true;
+  }
+  i2c_iptal(h->i2c);
+  return false;
+}
+
 /** Adres tara: önce 0x18 (sahadaki modüller), sonra 0x0C..0x0F. 0 = bulunamadı. */
 static uint8_t mag_adres_bul(SensorHat_t *h) {
   static const uint8_t adaylar[] = {MLX90393_ADRES_VARSAYILAN, 0x0CU, 0x0DU, 0x0EU, 0x0FU};
   for (uint32_t i = 0U; i < (sizeof(adaylar) / sizeof(adaylar[0])); i++) {
-    if (i2c_start(h->i2c, adaylar[i], false)) {
-      h->i2c->CR1 |= I2C_CR1_STOP;
+    if (cihaz_var(h, adaylar[i])) {
       return adaylar[i];
     }
-    i2c_iptal(h->i2c);
   }
   return 0U;
 }
@@ -433,6 +460,8 @@ void PEMF_Sensor_Init(void) {
     h->sonraki_tur_ms = 0U;
     h->mag_hazir_ms = 0U;
     h->ardisik_hata = 0U;
+    h->tur_sayaci = 0U;
+    h->sicaklik_adres = 0U;
     h->veri.sicaklik_ok = false;
     h->veri.alan_ok = false;
     h->veri.nesne_c = 0.0f;
@@ -444,7 +473,11 @@ void PEMF_Sensor_Init(void) {
   hat_donanim_kur(&g_hat[0], 0U, 4U);
   hat_donanim_kur(&g_hat[1], 8U, 12U);
 
+  /* ⚠️ İKİ CİHAZ AYRI AYRI YOKLANIR: bir bus'ta yalnız biri olabilir (sahip kablolaması
+   * 2026-09-10: PB10/PB11'de YALNIZ manyetik sensör). Bulunamayan cihazın yokluğu hata
+   * SAYILMAZ; yoksa var olmayan sensör, aynı bus'taki var olanı hat kurtarmayla sakatlar. */
   for (uint32_t i = 0U; i < PEMF_SENSOR_BOBIN_SAYISI; i++) {
+    g_hat[i].sicaklik_adres = cihaz_var(&g_hat[i], MLX90614_ADRES) ? MLX90614_ADRES : 0U;
     g_hat[i].mag_adres = mag_adres_bul(&g_hat[i]);
     if (g_hat[i].mag_adres != 0U) {
       mag_yapilandir(&g_hat[i]);
@@ -458,7 +491,10 @@ void PEMF_Sensor_Init(void) {
  */
 static bool sicaklik_oku(SensorHat_t *h, uint8_t ram, float *cikti) {
   uint8_t rx[3] = {0};
-  if (!i2c_yaz_sonra_oku(h->i2c, MLX90614_ADRES, ram, rx, sizeof(rx))) {
+  if (h->sicaklik_adres == 0U) {
+    return false; /* o bus'ta MLX90614 YOK — cagiran bunu HATA saymaz */
+  }
+  if (!i2c_yaz_sonra_oku(h->i2c, h->sicaklik_adres, ram, rx, sizeof(rx))) {
     return false;
   }
   const uint16_t ham = (uint16_t)(((uint16_t)rx[1] << 8U) | rx[0]); /* LSB önce */
@@ -475,10 +511,30 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
     if ((int32_t)(simdi_ms - h->sonraki_tur_ms) < 0) {
       return false;
     }
+    h->tur_sayaci++;
+    /* Sonradan takılan cihazı bul (periyodik; her turda aramak boşa START harcar). */
+    if ((h->tur_sayaci % SENSOR_YENIDEN_ARAMA_TUR) == 0U) {
+      if (h->sicaklik_adres == 0U) {
+        h->sicaklik_adres = cihaz_var(h, MLX90614_ADRES) ? MLX90614_ADRES : 0U;
+      }
+      if (h->mag_adres == 0U) {
+        h->mag_adres = mag_adres_bul(h);
+        if (h->mag_adres != 0U) {
+          mag_yapilandir(h);
+        }
+      }
+    }
     h->durum = S_TOBJ;
     return false;
 
   case S_TOBJ: {
+    if (h->sicaklik_adres == 0U) {
+      /* ⚠️ O BUS'TA SICAKLIK SENSORU YOK → hata SAYILMAZ. Saymak, 5 turda bir hat
+       * kurtarma tetikler ve AYNI bus'taki calisan manyetik sensoru sakatlar. */
+      h->veri.sicaklik_ok = false;
+      h->durum = S_MAG_BASLAT;
+      return false;
+    }
     float t = 0.0f;
     if (sicaklik_oku(h, MLX90614_RAM_TOBJ1, &t)) {
       h->veri.nesne_c = t;
@@ -493,6 +549,11 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
   }
 
   case S_TA: {
+    if (h->sicaklik_adres == 0U) {
+      h->veri.sicaklik_ok = false;
+      h->durum = S_MAG_BASLAT;
+      return false;
+    }
     float t = 0.0f;
     if (sicaklik_oku(h, MLX90614_RAM_TA, &t)) {
       h->veri.ortam_c = t;
@@ -506,12 +567,8 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
   }
 
   case S_MAG_BASLAT:
-    if (h->mag_adres == 0U) {
-      h->mag_adres = mag_adres_bul(h); /* sensör sonradan takılmış olabilir */
-      if (h->mag_adres != 0U) {
-        mag_yapilandir(h);
-      }
-    }
+    /* Yeniden arama S_BOSTA'da periyodik yapılır — burada tekrar aramak her turda
+     * eksik adrese boşa START atmak olurdu (bütçe + bus gürültüsü). */
     if ((h->mag_adres == 0U) || !mag_tek_komut(h, MLX90393_KOMUT_SM)) {
       h->veri.alan_ok = false;
       if (h->mag_adres != 0U) {
