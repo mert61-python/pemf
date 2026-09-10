@@ -77,6 +77,10 @@ CORE_MODELS = ('pemf_backend/_internal/ai_models/ai_hub/inference_cat_organ/',)
 ADD_SCRIPTS = [
     'setup_services.ps1',
     'start_hotspot.ps1',
+    # 2026-09-10: hotspot keep-alive gorevini KULLANICI kapsaminda kurar. Bu betik olmadan
+    # launcher ile kurulan makineler gorevi hic almiyordu (yalniz Inno/servis yolu kuruyordu)
+    # -> hotspot dusunce geri gelmiyor, ESP bobinleri (6-8) baglanamiyordu.
+    'install_hotspot_task.ps1',
     'pemf_footprint.ps1',
     'pemf_teardown.ps1',
     'pemf_uninstall_all.ps1',

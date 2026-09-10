@@ -1756,6 +1756,51 @@ fn profilleri_yenile(
     Ok(())
 }
 
+/// HOTSPOT KEEP-ALIVE GÖREVİ GEREKLİ Mİ? — kurulu profillerden karar.
+///
+/// ⚠️ SAHADA ÖLÇÜLDÜ (2026-09-10): `PEMF-Hotspot` görevini YALNIZ Inno/servis kurulumu
+/// (`setup_services.ps1 -Mode device`) kuruyordu; launcher ile kurulan makineler HİÇ almıyordu.
+/// Sonuç: hotspot bir kez elle açılsa bile ağ değişiminde ya da yeniden başlatmada düşüyor ve
+/// onu geri getirecek kimse olmuyor → ESP bobinleri (6-8) broker'a bağlanamıyor.
+///
+/// ⚠️ NEDEN PROFİL KAPISI, "her makinede" DEĞİL: AP'yi koşulsuz açmak sahada iki kez arıza
+/// üretti (kendi hotspot'umuz aynı-WiFi keşfini bozuyordu — bkz. mDNS kesintisi bulgusu).
+/// Terapi `vet`/`research` profillerinde yapılır; `home` (ev sahibi) analiz-only olduğu için
+/// bobin sürmez → o makinede AP'ye gerek YOK.
+///
+/// ⚠️ NEDEN STM ALGISI DEĞİL: "STM bağlanınca aç" önerisi ELENDİ — yalnız ESP kullanan
+/// (STM'siz) kurulumlarda hiç tetiklenmez ve tavuk-yumurta olur: ESP bağlanmak için hotspot
+/// ister, hotspot ise donanım görülmesini beklerdi. Profil sinyali ağdan bağımsızdır.
+pub(crate) fn hotspot_gorevi_gerekli(profiller: &[String]) -> bool {
+    profiller.iter().any(|p| p == "vet" || p == "research")
+}
+
+/// Görevi kurulu profillere göre eşitle (kur ya da kaldır). Sahiplenilmez: başarısız olsa bile
+/// uygulama açılışını ENGELLEMEZ — eksik hotspot ESP'leri etkiler, uygulamanın kendisini değil.
+#[cfg(windows)]
+pub(crate) fn hotspot_gorevini_esitle(install_root: &Path) {
+    let betik = install::runtime_dir(install_root)
+        .join("PEMF_Backend")
+        .join("install_hotspot_task.ps1");
+    if !betik.exists() {
+        return; // eski paket (betik henüz yayınlanmamış) → sessizce geç
+    }
+    let gerekli = hotspot_gorevi_gerekli(&install::read_installed_profiles(install_root));
+    // ⚠️ `powershell` (5.1) ŞART, `pwsh` DEĞİL: Mobile Hotspot WinRT API'si PowerShell 7'de
+    // YOK → "Operation is not supported on this platform (0x80131539)", netsh yedeği de
+    // yönetici ister ve sessizce düşer. 2026-09-10'da tam bu yüzden yanlış teşhis kondu.
+    let mut c = crate::platform::gizli_komut("powershell");
+    c.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&betik);
+    if !gerekli {
+        c.arg("-Kaldir"); // profil kaldırıldıysa görev de temizlenir
+    }
+    let _ = c.spawn();
+}
+
+#[cfg(not(windows))]
+pub(crate) fn hotspot_gorevini_esitle(_install_root: &Path) {}
+
 /// Kurulu backend'i başlat (İNDİRME YOK). Hem ilk kurulum sonrası hem "Başlat" bunu kullanır.
 pub fn start_backend(
     install_root: &Path,
@@ -1769,6 +1814,10 @@ pub fn start_backend(
         std::time::Duration::from_secs(180),
     )?;
     let url = crate::backend::app_url(port);
+    // Hotspot keep-alive görevini her açılışta eşitle: idempotent, penceresiz ve
+    // sahiplenilmez. Her açılışta koşması KASITLI — görev elle silinmiş ya da profil
+    // değişmişse kendini onarır. Backend hazır olduktan SONRA, açılışı geciktirmesin diye.
+    hotspot_gorevini_esitle(install_root);
     on(Progress::Ready { url: url.clone() });
     // Port da döner: launcher pencere kapanışında bobinleri güvene almak için (safe_stop_coils).
     Ok((child, url, port))
@@ -3152,6 +3201,33 @@ mod tests {
         // manifest'in gercekten o alani tasidigini kilitliyoruz).
         let lc = m.launcher.as_ref().expect("launcher bolumu yok");
         assert!(lc.installer_url.is_some(), "installer_url yok — oto-guncelleme calismaz");
+    }
+
+    // ── HOTSPOT GÖREVİ PROFİL KAPISI (2026-09-10) ────────────────────────────────────────
+    // Bu kapı iki ayrı sahada-görülmüş arızanın arasında duruyor:
+    //   (a) görev HİÇ kurulmazsa  → hotspot düşünce geri gelmez, ESP bobinleri bağlanamaz;
+    //   (b) HER makinede kurulursa → gereksiz AP açılır, aynı-WiFi keşfini bozar (mDNS bulgusu).
+    // Bu yüzden hem "açılmalı" hem "açılmamalı" yönü ayrı ayrı pinlenir.
+    fn p(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn KRITIK_terapi_profilinde_hotspot_gorevi_GEREKLI() {
+        // vet ve research bobin sürer → AP şart (ESP 6-8 buraya bağlanır).
+        assert!(hotspot_gorevi_gerekli(&p(&["vet"])), "vet: gorev gerekli olmali");
+        assert!(hotspot_gorevi_gerekli(&p(&["research"])), "research: gorev gerekli olmali");
+        assert!(hotspot_gorevi_gerekli(&p(&["home", "vet"])), "home+vet: vet belirleyici olmali");
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn KRITIK_yalniz_ev_sahibi_profilinde_hotspot_gorevi_GEREKMEZ() {
+        // ⚠️ Ev sahibi profili ANALİZ-ONLY (otonom terapi yok) → bobin sürmez, AP'ye gerek yok.
+        // Bu iddia TRUE'ya dönerse her ev-sahibi kurulumunda gereksiz bir Wi-Fi AP açılır.
+        assert!(!hotspot_gorevi_gerekli(&p(&["home"])), "yalniz home: AP acilmamali");
+        assert!(!hotspot_gorevi_gerekli(&[]), "profilsiz kurulum: AP acilmamali");
     }
 
     #[test]
