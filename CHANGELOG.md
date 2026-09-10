@@ -32,36 +32,6 @@
   olabilir: uygulamayi kapatip `%LOCALAPPDATA%\com.pemfmedical.vetclient\EBWebView` klasorunu
   silmek tek seferlik gerekir. Sonraki guncellemelerde gerekmez.
 
-### Sensor telemetrisi YEREL KAYIT (arastirma) — yeni
-
-- **Sensor verileri artik bilgisayarda kalici olarak kaydediliyor** (sahip karari: "bilgisayar
-  tarafi" + "her zaman acik"). Kaydedici backend'in ZATEN abone oldugu MQTT noktasina takilir
-  -> yeni abonelik, ekstra ag yuku ve cihaz tarafinda degisiklik GEREKMEZ.
-- Cikti: `<veri koku>/sensor_log/sensor_YYYY-MM-DD.csv` — 24 sutun (zaman, bobin, sicaklik,
-  manyetik alan + **eksenler**, akim, PWM durumu, sensor bayraklari, uptime, RSSI). Excel/pandas
-  ile dogrudan acilir.
-- ⚠️ **`status` mesaji da kaydedilir:** S3 hic `sensors` yayinlamaz ve sensor degerlerini
-  `status` icine koyar (telde olculdu). Yalniz `sensors` dinleyen bir kaydedici S3 bobinleri
-  icin BOS dosya uretirdi.
-- ⚠️ **Hasta veritabanina YAZMAZ:** `headless_db_maintenance` o DB'ye retention + PII-maskeleme
-  + YEDEKLEME uyguluyor; olculen ~16 MB/gun telemetri her yedegi sisirir ve tibbi kaydin
-  geri-yukleme suresini bozardi. Arastirma telemetrisi ayri klasorde, duz CSV.
-- **Disk dolmasi yapisal olarak engelli:** gunluk dondurme + gun sinirli silme (14) + TOPLAM
-  BOYUT tavani (500 MB). Ayarlar: `PEMF_SENSOR_LOG_DAYS`, `PEMF_SENSOR_LOG_MB`,
-  `PEMF_SENSOR_LOG_DIR`. Kapatma: `PEMF_SENSOR_LOG=0`.
-- **Canli akisi asla bozmaz:** kaydedicinin her girisi hata yutar (bir dosya kilidi ya da dolu
-  disk yuzunden panel/E-stop gorunurlugu bozulamaz); atilan satirlar sayilir.
-- Olculmeyen alan sutunda **BOS** kalir, `0` YAZILMAZ — "olculmedi" ile "sifir olculdu"
-  karismasin (eksen sifiri polarite analizinde gercek bir sonuctur).
-
-### ESP32-S3 bobin firmware'i (⚠️ ELLE REFLASH gerekir — pakete GIRMEZ)
-
-- **Manyetik EKSEN bilesenleri artik telemetride.** Skaler `magnetic_field` yon TASIMAZ
-  (|B| her zaman pozitif); bobin polaritesi eksen ISARETINDEN okunur. Yakalanan gercek yukte
-  (`pemf/coil/6/status`) `mag_x` **sifir kez** geciyordu -> yon verisi yalniz seri porttaki
-  `[MAG]` satirinda kaliyor, MQTT'yi dinleyen hicbir tuketici (panel, yerel CSV kaydi,
-  arastirma analizi) polariteyi GOREMIYORDU. `mag_x/mag_y/mag_z` (mT) eklendi.
-
 ### ESP8266 bobin firmware'i (⚠️ ELLE REFLASH gerekir — pakete GIRMEZ)
 
 - **Bobin yonu (polarite) olcumu 8266'ya geldi.** S3'te 2026-09-08'de eklenen `[MAG]` seri
@@ -79,37 +49,22 @@
   8266'da ornekleme 1 Hz (S3'te 5 Hz) → her satir ~1 gercek ornek: isaret guvenilir, buyukluk
   darbe fazina gore oynar. Yontem: `firmware/esp8266_pemf_coil/README.md` → "Bobin yonu".
 
-### Arastirma AI Pro bayragi artik GERCEKTEN aciliyor
-
-- `deploy/device.env` icindeki `PEMF_ARASTIRMA_AIPRO` launcher tarafindan backend'e
-  **gecirilmiyordu**. Tezgah dogrulamasi bitip bayrak `1` yapilsa bile launcher'in baslattigi
-  backend'de hicbir sey degismiyor, operatore ise "actim" gibi gorunuyordu. Yon fail-safe'ti
-  (surus kapali kalir) ama gorunen durum ile gercek durum ayrisiyordu.
-- Bayrak artik `backend_env_with`te; varsayilan `0` — yani **davranis degismedi**, yalnizca
-  operatorun ayarladigi deger backend'e ulasiyor. Kedi disi modellerle (fantom/petri) surus
-  hala tezgah dogrulamasina bagli.
-
-### Paketleme — tek-parca `base.zip` kaldirildi (klinigi ETKILEMEZ)
-
-- Guncelleme paketi 2026-08-08'den beri iki katmanda geliyor (`base-app` + `base-deps`).
-  Yaninda ayrica tek-parca bir `base.zip` uretiliyordu; onu **yalnizca 1.9.12 ve oncesi**
-  istemciler okurdu. Dagitim hic baslamadigi icin sahada oyle bir kurulum yok, ama paket her
-  yayinda **1,46 GiB** olarak yeniden yukleniyordu.
-- Kaldirildi. Kurulumun tek kanali artik katmanlar; manifestte `runtimes` bos, v1 `base`
-  anahtari yok. **Klinik tarafinda hicbir sey degismez** — kurulum, guncelleme ve geri alma
-  aynen calisir (her kod yolu zaten once katmanlara bakiyordu).
-- Paketin kazara geri gelmesi uc test kapisiyla engellendi; `make_base_zip.py` monolith'i
-  yalnizca `--monolith` ile uretir.
-
 ### Not
 
 Mobil uygulama (2.3.33), launcher (1.9.50) ve frontend OTA (1.4.2) degismedi; iOS yayini yok.
 
-Paket kimliği (`buildId`): `d56a19296ffd`. Tek-parca `base.zip` bu surumden itibaren YOK
-(bkz. "Paketleme" basligi) — onceki kayitlardaki "Monolit base.zip sha" satirinin karsiligi
-artik bulunmuyor. deps katmani DEGISMEDI (ust uste 6. kez): `client-app-v1.9.41` etiketindeki
-`base-deps.zip` aynen kullanilir, yeniden yuklenmez. Bu yayinda sahaya inen tek paket
-`base-app.zip` (81.341.963 bayt).
+Paket kimliği (`buildId`): `d56a19296ffd`. Monolit `base.zip` sha: `7e269f2ca060`.
+deps katmani DEGISMEDI (ust uste 6. kez): `client-app-v1.9.41` etiketindeki `base-deps.zip`
+aynen kullanilir, yeniden yuklenmez. Kliniklerin indirdigi tek yeni paket `base-app.zip`
+(81.341.963 bayt).
+
+⚠️ **Yayin sirasinda tek-parca `base.zip` kisa sure manifestten cikarilmis, sonra GERI
+ALINMISTIR.** Kaldirma denemesi istemcilerde "Bu platform (win-x64) icin uygulama paketi
+henuz yayinlanmadi" hatasina yol acti: launcher'in platform kapisi (`main.rs`
+`platform_supported`) YALNIZCA `runtimes`e bakiyor, `layers`e bakmiyor — ve bu kod sahadaki
+1.9.50 ikilisinde derlenmis durumda, yani manifest tarafindan duzeltilemez. Monolith ancak
+o kapi duzeltilmis bir launcher sahaya tamamen yayildiktan SONRA kaldirilabilir; tek yayinda
+yapilamaz. Bu surumun icerigi etkilenmedi.
 
 ## app 1.9.45 — 2026-09-09 (🩹 AI gecmisinde duzeltme kutusu, yara yonu ARTIK UYGULANIYOR, girdi onizlemesi)
 

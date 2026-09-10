@@ -19,16 +19,9 @@
 # _internal/ai_models HARIC (profil-zip'lerinde ayri). ZIP_STORED.
 #
 # TASINABILIR: tum yollar bu scriptin konumundan turetilir; hard-code C:\ YOK.
-# Kullanim:  python make_base_zip.py [DIST_YOLU] [--monolith]
+# Kullanim:  python make_base_zip.py [DIST_YOLU] [--no-monolith]
 #
-# ⚠️ 2026-09-09 — MONOLITH KALDIRILDI. Asagidaki 2026-08-09 notu tek-parca base.zip HALA
-# uretilirken gecerliydi ve TARIHSEL kayit olarak duruyor. Bugun base.zip VARSAYILAN OLARAK
-# URETILMEZ (sahip: "daha dagitima baslamadik, 1.9.12 kimsede yok") ve manifestte ne
-# `runtimes.win-x64` ne v1 `base` anahtari vardir. Dolayisiyla "iki farkli yazilim" tuzagi
-# win-x64'te ARTIK MUMKUN DEGIL: tek kanal `layers`. `--monolith` yalnizca tek-parca bilerek
-# geri istendiginde (ornegin linux/mac) uretir; o zaman asagidaki esitlik kapisi yine calisir.
-#
-# ⚠️ DENETIM 2026-08-09 (ENGEL, TARIHSEL) — TEK SURUM, TEK YAZILIM.
+# ⚠️ DENETIM 2026-08-09 (ENGEL) — TEK SURUM, TEK YAZILIM.
 # `--monolith` ESKIDEN OPSIYONELDI ve yorumda "normalde GEREKMEZ" yaziyordu. Sonuc olculdu:
 # yayindaki base.zip ile base-app+base-deps 53 dosyada FARKLIYDI — PEMF_Backend.exe DAHIL.
 # Yani ayni surum numarasi altinda IKI FARKLI YAZILIM dagitiliyordu:
@@ -51,14 +44,8 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUII = os.path.dirname(HERE)
 _args = [a for a in sys.argv[1:] if not a.startswith('--')]
-# ── MONOLITH ARTIK VARSAYILAN DEGIL (2026-09-09, sahip karari) ─────────────────────────
-# Sahip: "daha dagitima baslamadik, 1.9.12 kimsede yok". Tek-parca base.zip YALNIZCA
-# client <=1.9.12 icindi; oyle bir kurulum sahada YOK. `scripts/make_manifest.py` ASSETS
-# tablosundan da cikarildi -> manifeste ne `runtimes.win-x64` ne v1 `base` yazilir.
-# Uretmeye devam etmek yayin basina 1,46 GiB'i BOSUNA yuklerdi.
-# `--monolith` bilerek istemek icin durur (ornegin linux/mac tek-parca yeniden devreye
-# alinirsa). Uretilmediginde asagidaki dal DISKTEKI bayat base.zip'i SILER.
-MONOLITH = '--monolith' in sys.argv
+# `--monolith` geriye uyum icin kabul edilir (artik varsayilan); kapatmak icin `--no-monolith`.
+MONOLITH = '--no-monolith' not in sys.argv
 DIST = _args[0] if _args else os.environ.get('PEMF_DIST') or os.path.join(GUII, 'PEMF_BUILD', 'dist', 'PEMF_Backend')
 PARENT = os.path.dirname(DIST)  # arcname'e PEMF_Backend/ oneki gelsin
 # ⚠️ DENETIM 2026-08-15: cikti dizini SABITTI ve testler betigi gercek `pemf-app-packages/`
@@ -283,7 +270,7 @@ elif os.path.exists(OUT_MONO):
     # BAYAT MONOLITH BIRAKMA: diskte kalan eski base.zip, yayin adiminda yanlislikla
     # yuklenirse eski client'lara BAYAT backend gider (bkz. bastaki denetim notu).
     os.remove(OUT_MONO)
-    print('  (monolith kapali) diskteki BAYAT base.zip silindi.', flush=True)
+    print('  (--no-monolith) diskteki BAYAT base.zip silindi.', flush=True)
 
 
 def _korumasiz_ai_hub(names):

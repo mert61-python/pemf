@@ -98,29 +98,17 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     // KALICI olarak kilitleniyor ve bozuk bir yayın geri çekilemiyordu. Site zaten "Yakında"
     // diyordu. Geri getirilecekse: CI ile paketleri üret + `layers`/`rollout` ekle, sonra bu
     // iddiaları güncelle (bkz. manifest.rs::depodaki_gercek_manifest_ayristirilir).
-    // ⚠️ SAHİP KARARI 2026-09-09: tek-parça `base.zip` KALDIRILDI. Eskiden burada
-    // `assert!(m.runtimes.contains_key(WIN_X64))` vardı; monolith YALNIZCA client <=1.9.12
-    // içindi ve sahada öyle bir kurulum hiç olmadı ("daha dağıtıma başlamadık"). Her yayında
-    // 1,46 GiB'ı boşuna yüklüyordu. İddia SİLİNMEDİ, TERS ÇEVRİLDİ: paket geri sızarsa bu kapı
-    // kırmızı yanar. Geri getirilecekse `scripts/make_manifest.py` ASSETS tablosuna `base.zip`
-    // satırını geri koyup buradaki iki iddiayı da güncelleyin.
-    for key in [platform::WIN_X64, platform::LINUX_X64, platform::MAC_ARM64] {
+    assert!(m.runtimes.contains_key(platform::WIN_X64), "win-x64 runtime eksik");
+    for key in [platform::LINUX_X64, platform::MAC_ARM64] {
         assert!(!m.runtimes.contains_key(key),
-            "{key} tek-parca runtime manifest'e geri girdi — monolith 2026-09-09'da kaldirildi \
-             (yayin basina 1,46 GiB bosuna yukleme)");
+            "{key} manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
     }
     for p in ["home", "vet", "research"] {
         assert!(m.models.contains_key(p), "{p} profili eksik");
     }
-    // Tek kurulum kanalı artık KATMANLAR — monolith gidince bu, sahaya giden TEK yol.
-    // Boş kalırsa client hiçbir şey kuramaz, o yüzden burada açıkça şart koşulur.
-    let l = m.layers.get(platform::WIN_X64).expect(
-        "layers.win-x64 YOK — monolith kaldirildi, katmanlar tek kurulum kanali: manifest kurulum yapamaz",
-    );
-    for (ad, pkg) in [("app", &l.app), ("deps", &l.deps)] {
-        assert!(pkg.url.starts_with("https://"), "beklenmeyen {ad} url: {}", pkg.url);
-        assert!(pkg.size > 0, "{ad} katmani bos gorunuyor (size=0)");
-    }
+    // Bu platformun paketi çözülebilmeli.
+    let pkg = m.runtime_for_current_platform().expect("platform paketi cozulemedi");
+    assert!(pkg.url.starts_with("https://"), "beklenmeyen url: {}", pkg.url);
 
     // #100: digest karşılaştırması, diskteki dosyayla AYNI platformun paketi üzerinden yapılmalı.
     // Önceden MEVCUT platformun paketi alınıp `base-mac.zip`e karşı doğrulanıyordu — mac dışında

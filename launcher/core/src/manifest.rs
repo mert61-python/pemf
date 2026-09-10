@@ -465,18 +465,7 @@ mod tests {
                 m.version
             );
         }
-        // ⚠️ SAHİP KARARI 2026-09-09: tek-parça `base.zip` KALDIRILDI (yalnız client <=1.9.12
-        // okurdu; sahada öyle bir kurulum hiç olmadı). Eskiden burada
-        // `assert!(m.runtimes.contains_key(WIN_X64))` vardı — ters çevrildi ki paket geri
-        // sızarsa kapı kırmızı yansın. Kurulumun tek kanalı artık `layers`.
-        assert!(
-            !m.runtimes.contains_key(platform::WIN_X64),
-            "win-x64 tek-parca base manifest'e geri girdi — monolith 2026-09-09'da kaldirildi"
-        );
-        assert!(
-            m.layers.contains_key(platform::WIN_X64),
-            "layers -> win-x64 YOK: monolith kaldirildi, katmanlar tek kurulum kanali"
-        );
+        assert!(m.runtimes.contains_key(platform::WIN_X64), "base -> win-x64");
         // ⚠️ SAHİP KARARI 2026-08-09 (Tier 1): `mac-arm64` ve `linux-x64` manifest'ten ÇIKARILDI.
         // Gerekçe (ölçüldü): o platformlarda `layers` yoktu → rollout freni çalışmıyordu, ve
         // client self-update'i Windows'a özel (`"Bu platformda oto-güncelleme desteklenmiyor"`)
