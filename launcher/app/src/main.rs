@@ -531,7 +531,13 @@ fn fetch_profiles_blocking() -> Result<serde_json::Value, String> {
 
     // Bu platformun paketi yayınlanmamışsa KULLANICIYA ŞİMDİ söyle — 2 GB
     // indirdikten sonra değil.
-    let supported = manifest.runtime_for_current_platform().is_ok();
+    //
+    // ⚠️ 2026-09-10: burada `runtime_for_current_platform().is_ok()` yazıyordu — yalnız
+    // tek-parça `runtimes`e bakıyordu. `base.zip` manifestten çıkarılınca (layers doluyken)
+    // sahadaki HER istemci "paket yayınlanmadı" deyip kilitlendi. Karar core'a taşındı ve
+    // orada testlerle pinlendi (`Manifest::platform_desteklenir`); burada satır içi mantık
+    // BIRAKMAYIN — bu dosyada test yok, o yüzden kapı sessizce kırılabiliyordu.
+    let supported = manifest.platform_desteklenir();
     let mut profiles: Vec<&str> = manifest.models.keys().map(|s| s.as_str()).collect();
     profiles.sort_unstable();
 

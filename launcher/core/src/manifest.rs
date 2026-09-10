@@ -295,6 +295,26 @@ impl Manifest {
         self.layers.get(platform::current())
     }
 
+    /// Bu platform için KURULABİLİR bir paket var mı? (UI'ın "paket yayınlanmamış" kapısı.)
+    ///
+    /// ⚠️ SAHADA KIRDI (2026-09-09 → 2026-09-10). Bu karar `launcher/app/src/main.rs` içinde
+    /// satır içi `runtime_for_current_platform().is_ok()` olarak duruyordu — yani YALNIZ
+    /// tek-parça `runtimes`e bakıyor, `layers`e BAKMIYORDU. Monolith manifestten çıkarılınca
+    /// (`runtimes: {}`) her istemci *"Bu platform (win-x64) için uygulama paketi henüz
+    /// yayınlanmadı"* deyip TÜM kurulumu kilitledi — oysa `layers` doluydu ve kurulum/güncelleme
+    /// yollarının HEPSİ zaten layers'ı öncelikli kullanıyordu (flow.rs). Yani kurulabilir paket
+    /// VARDI, yalnız bu kapı onu göremiyordu.
+    ///
+    /// Karar buraya taşındı çünkü `fetch_profiles_blocking` ağ I/O yapar ve test edilemez;
+    /// burada saf bir fonksiyon olarak aşağıdaki testlerle PİNLENİR. `main.rs` artık bunu çağırır.
+    ///
+    /// ⚠️ İki kanaldan biri yeterlidir — hangisinin kullanılacağını `flow.rs` seçer (layers
+    /// öncelikli). Bu fonksiyonu tekrar tek kanala daraltmayın.
+    pub fn platform_desteklenir(&self) -> bool {
+        self.layers_for_current_platform().is_some()
+            || self.runtime_for_current_platform().is_ok()
+    }
+
     pub fn model_package(&self, profile: &str) -> Result<&Package, ManifestError> {
         self.models
             .get(profile)
@@ -649,6 +669,78 @@ mod tests {
     }
 
     // ── FAZ 4.5: coklu-model-zip (model_parts) ──────────────────────────────
+    // ── PLATFORM KAPISI (2026-09-10, SAHADA KIRILDIKTAN SONRA yazildi) ──────────────────────
+    // `main.rs` satir ici `runtime_for_current_platform().is_ok()` kullaniyordu; monolith
+    // manifestten cikinca (layers doluyken) HER istemci "paket yayinlanmadi" deyip kilitlendi.
+    // O dosyada test yok, bu yuzden kirilma sessiz oldu ve ancak sahada gorundu. Karar core'a
+    // tasindi; asagidaki dort test kapinin DORT durumunu da pinler.
+
+    /// Yalniz KATMAN olan manifest (monolith YOK) — sahayi kiran tam durum.
+    fn yalniz_katman_json() -> String {
+        let plat = platform::current();
+        format!(
+            r#"{{
+                "schema": 2,
+                "version": "1.9.46",
+                "runtimes": {{}},
+                "layers": {{ "{plat}": {{
+                    "deps": {{"url":"https://x/base-deps.zip","sha256":"{D1}","size":100,"kind":"zip"}},
+                    "app":  {{"url":"https://x/base-app.zip","sha256":"{D2}","size":10,"kind":"zip"}}
+                }} }},
+                "models": {{ "vet": {{"url":"https://x/vet.zip","sha256":"{D1}","size":1,"kind":"zip"}} }}
+            }}"#
+        )
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn KRITIK_yalniz_katman_varken_platform_DESTEKLENIR() {
+        // ⚠️ Bu iddia FALSE olursa saha kilitlenir: kurulabilir paket (layers) VARDIR ama UI
+        // "bu platform icin paket yayinlanmadi" der ve hicbir kurulum yapilamaz.
+        let m = Manifest::parse(&yalniz_katman_json()).expect("katmanli manifest ayrismali");
+        assert!(m.runtimes.is_empty(), "fixture bozuk: monolith olmamali");
+        assert!(
+            m.platform_desteklenir(),
+            "layers dolu ama platform DESTEKLENMIYOR sayildi — 2026-09-09 saha arizasinin ta kendisi"
+        );
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn yalniz_monolith_varken_platform_DESTEKLENIR() {
+        // Eski manifest / linux-mac yolu: katman yok, tek-parca var → yine kurulabilir.
+        let m = Manifest::parse(&v1_json("")).expect("v1 manifest ayrismali");
+        assert!(m.layers.is_empty(), "fixture bozuk: katman olmamali");
+        if platform::current() == platform::WIN_X64 {
+            assert!(m.platform_desteklenir(), "tek-parca yolu desteklenmeli");
+        }
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn hicbir_paket_yoksa_platform_DESTEKLENMEZ() {
+        // Kapi gercekten olcuyor mu? Iki kanal da bossa FALSE donmeli — yoksa kullanici
+        // "kuruluyor" saniip 2 GB indirdikten sonra hata alirdi (kapinin varlik sebebi).
+        let raw = r#"{"schema":2,"version":"9.9.9","runtimes":{},"layers":{},"models":{}}"#;
+        let m = Manifest::parse(raw).expect("bos manifest ayrismali");
+        assert!(!m.platform_desteklenir(), "hicbir paket yokken DESTEKLENIYOR dendi");
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn baska_platformun_katmani_BU_platformu_desteklemez() {
+        // En kritik degismez: asla baska platformun paketine dusme.
+        let raw = format!(
+            r#"{{"schema":2,"version":"9.9.9","runtimes":{{}},
+                "layers": {{ "solaris-sparc": {{
+                    "deps": {{"url":"https://x/d.zip","sha256":"{D1}","size":1,"kind":"zip"}},
+                    "app":  {{"url":"https://x/a.zip","sha256":"{D2}","size":1,"kind":"zip"}}
+                }} }}, "models": {{}} }}"#
+        );
+        let m = Manifest::parse(&raw).expect("ayrismali");
+        assert!(!m.platform_desteklenir(), "baska platformun katmani BIZI destekler sayildi");
+    }
+
     fn parcali_v2_json(parca_sha: &str) -> String {
         format!(
             r#"{{
