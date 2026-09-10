@@ -1112,6 +1112,54 @@ def _handle_backend_event(event) -> None:
             running=bool(data.get("running", data.get("pwm_active", False))),
         )
         return
+    if event.event_type == "hardware.stm.telemetry":
+        # FAZ 3 (2026-09-10): bobin 6-7 sensorleri ESP'den STM'e tasindi. ESP yolundaki
+        # `sensor_data` SOZLESMESI BIREBIR KORUNUR → istemci ve DB verinin nereden geldigini
+        # BILMEZ (CoilParameterPanel/sensor kaydedici degismedi).
+        #
+        # ⚠️ `_coil_last_telemetry` DAMGASI ZORUNLU: dakika-ortalamasi dongusu
+        # (bkz. ~satir 3291) damgasi olmayan bobin icin DB satiri URETMEZ. Damga olmadan
+        # sicaklik arayuzde gorunur ama gecmis/PDF/KPI'de HIC yer almaz.
+        #
+        # ⚠️ EKSIK ALAN YAZILMAZ: `object_temp` gelmediyse alana DOKUNULMAZ (0.0 yazmak
+        # "olculdu" gibi kaydedilir — gecmiste PDF'e "0.0 °C olculdu" yazdiran desen).
+        try:
+            _t_coil_id = int(data.get("coil_id", 0))
+        except (TypeError, ValueError):
+            return
+        _t_idx = _t_coil_id - 1
+        if not (0 <= _t_idx < 8):
+            return
+        _t_yazildi = False
+        with _live_state_lock:
+            _t_coil = _live_state["coils"][_t_idx]
+            if "object_temp" in data:
+                _t_coil["objectTemp"] = round(float(data["object_temp"]), 1)
+                _t_yazildi = True
+            if "ambient_temp" in data:
+                _t_coil["ambientTemp"] = round(float(data["ambient_temp"]), 1)
+                _t_yazildi = True
+            if "magnetic_field" in data:
+                _t_coil["magneticMt"] = round(float(data["magnetic_field"]), 3)
+                _t_yazildi = True
+            _t_snap = dict(_t_coil)
+        if not _t_yazildi:
+            return
+        _coil_last_telemetry[_t_idx] = time.monotonic()
+        _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
+        _ws_broadcast_sync(
+            {
+                "type": "sensor_data",
+                "coilId": _t_coil_id,
+                "timestamp": time.time(),
+                "data": {
+                    "magneticMt": _t_snap.get("magneticMt"),
+                    "objectTemp": _t_snap.get("objectTemp"),
+                    "ambientTemp": _t_snap.get("ambientTemp"),
+                },
+            }
+        )
+        return
     if event.event_type == "hardware.stm.watchdog_timeout":
         # STM firmware watchdog'u ateşledi → STM PWM'i BİLİNMEYEN/durmuş durumda (komuta uymuyor). Bu bir
         # donanım-fault EVENT'i (backend EŞİK DAYATMAZ; donanımın kararına tepki verir) → STM kullanan aktif

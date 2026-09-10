@@ -146,6 +146,7 @@
 
 #include "main.h"
 #include "pemf_surus.h" /* PEMF_SURUS_UNIPOLAR: 0=simetrik bipolar (A/B) · 1=tek-bacak duz surus (yalniz A) */
+#include "pemf_sensor.h" /* Bobin 6-7 I2C sensorleri (MLX90614 + MLX90393) — BLOKLAMAYAN */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -812,6 +813,11 @@ int main(void) {
   /* ⚠️ SIRA: bobin durumu ISR baslamadan ve g_active kopyasi alinmadan ONCE kurulmali. */
   Coil_StateInit();
 
+  /* Bobin 6-7 I2C sensorleri. ⚠️ ISR baslamadan ONCE: kurulum tarama yapar (adres bulma) ve
+   * bu, Poll'dan farkli olarak birkac ms surebilir. Sensor yoksa sessizce basarisiz olur;
+   * SURUS YOLU ETKILENMEZ (fail-safe: alan/sicaklik bildirilmez, bobin normal surulur). */
+  PEMF_Sensor_Init();
+
   /* Aktif parametreleri gölge başlangıç değerleriyle başlat */
   memcpy((void *)&g_active, (const void *)&g_shadow, sizeof(CoilParamSet_t));
   g_active.pending = 0;
@@ -855,6 +861,47 @@ int main(void) {
    * =================================================================== */
   while (1) {
     uint32_t current_time = HAL_GetTick();
+
+    /* ── BOBIN 6-7 SENSOR TELEMETRISI (STM_TELE) ────────────────────────────────────
+     * ⚠️ Bu satir, bobin 6-7'nin sicakligini arayuze tasiyan TEK yoldur ve arayuzdeki
+     * 48 °C istemci interlock'u (CoilParameterPanel.tsx:21,143) buna bagimlidir — cihaz
+     * tarafli termal kesme sahip karariyla YOK. Yani bu satir kesilirse o iki bobinde
+     * HICBIR otomatik termal koruma kalmaz. Sessizce kaldirilmamali.
+     *
+     * ⚠️ AKIM ALANI YOK (sahip karari 3: ACS712 tasinmiyor). 0.0 gondermek 'olculdu' gibi
+     * kaydedilir; gecmiste ayni desen PDF'e '0.0 °C olculdu' yazdirmisti. Olculmeyen alan
+     * HIC GONDERILMEZ; sicaklik/alan da yalniz `*_ok` iken yazilir.
+     *
+     * Bicim (docs/stm32-sensor-protokolu.md):
+     *   -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
+     * Backend ayristiricisi eksik alani TOLERE eder (headless_core._parse_stm_tele). */
+    if (PEMF_Sensor_Poll(HAL_GetTick())) {
+      for (uint32_t si = 0U; si < PEMF_SENSOR_BOBIN_SAYISI; si++) {
+        PEMF_SensorVerisi_t sv;
+        PEMF_Sensor_Oku(si, &sv);
+        if (!sv.sicaklik_ok && !sv.alan_ok) {
+          continue; /* olcum YOK → satir hic basilmaz (sahte 0.0 uretilmez) */
+        }
+        if (huart3.gState != HAL_UART_STATE_READY) {
+          break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
+        }
+        static char tele_msg[96];
+        int tl = snprintf(tele_msg, sizeof(tele_msg), "-> STM_TELE: C=%lu",
+                          (unsigned long)(PEMF_SENSOR_ILK_BOBIN_ID + si));
+        if (sv.sicaklik_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
+          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",T=%.2f,A=%.2f",
+                         (double)sv.nesne_c, (double)sv.ortam_c);
+        }
+        if (sv.alan_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
+          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",B=%.3f",
+                         (double)sv.alan_mt);
+        }
+        if ((tl > 0) && (tl < (int)sizeof(tele_msg) - 3)) {
+          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, "\r\n");
+          (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)tele_msg, (uint16_t)tl);
+        }
+      }
+    }
 
 #if PEMF_NTC_TERMAL_ENABLED
     Coil_NtcTermalPoll(current_time); /* HG-1: 48/45 histerezisli bobin termal kesme */

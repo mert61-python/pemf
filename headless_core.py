@@ -196,12 +196,63 @@ class HeadlessCore:
             )
         return updates
 
+    #: Bobin 6-7 sensor telemetrisi (faz 3, 2026-09-10). ⚠️ Bu, o iki bobinin sicakliginin
+    #: arayuze ulastigi TEK yoldur; arayuzdeki 48 °C istemci interlock'u buna bagimlidir
+    #: (cihaz-tarafli termal kesme sahip karariyla YOK). Sozlesme:
+    #:     -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
+    #: ⚠️ ALANLAR OPSIYONEL ve bu KASITLIDIR: olculmeyen alan HIC GONDERILMEZ (0.0
+    #: gondermek "olculdu" gibi kaydedilir — gecmiste ayni desen PDF'e "0.0 °C olculdu"
+    #: yazdirmisti). Akim alani YOK: ACS712 tasinmiyor (sahip karari 3).
+    _TELE_DESENI = re.compile(
+        r"STM_TELE:\s*C=(?P<c>[0-9]+)"
+        r"(?:.*?[,\s]T=(?P<t>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]A=(?P<a>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]B=(?P<b>[+-]?[0-9]*[.]?[0-9]+))?"
+    )
+
+    def _parse_stm_tele(self, decoded: str) -> dict | None:
+        """`STM_TELE` satirini olay govdesine cevirir; eslesmezse None.
+
+        Eksik alan ANAHTARI HIC KOYULMAZ (None de koyulmaz) → asagi akis "olculmedi" ile
+        "0.0 olculdu"yu ayirt edebilir.
+        """
+        m = self._TELE_DESENI.search(decoded)
+        if not m:
+            return None
+        try:
+            coil_id = int(m.group("c"))
+        except (TypeError, ValueError):
+            return None
+        if not (1 <= coil_id <= 8):
+            return None
+        govde: dict = {"coil_id": coil_id}
+        for anahtar, alan in (("t", "object_temp"), ("a", "ambient_temp"), ("b", "magnetic_field")):
+            ham = m.group(anahtar)
+            if ham is None:
+                continue
+            try:
+                govde[alan] = float(ham)
+            except ValueError:
+                continue
+        if len(govde) == 1:
+            return None  # yalniz C geldi → tasinacak olcum yok
+        return govde
+
     def _handle_stm_line(
         self,
         decoded: str,
         retry_last_payload: Callable[[], None] | None = None,
     ) -> None:
         if not decoded:
+            return
+
+        if "STM_TELE" in decoded:
+            # ⚠️ INFO'ya YAZILMAZ: 1 Hz x 2 bobin = gunde ~170k satir; log'u bogar ve gercek
+            # olaylari (NACK/watchdog/termal) goze batmaz hale getirir. DEBUG yeterli.
+            self.logger.debug("[STM32] %s", decoded)
+            govde = self._parse_stm_tele(decoded)
+            if govde is not None:
+                self._publish_event("hardware.stm.telemetry", govde)
             return
 
         self.logger.info("[STM32] %s", decoded)
