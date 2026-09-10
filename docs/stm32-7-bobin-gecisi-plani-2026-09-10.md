@@ -212,19 +212,23 @@ Unipolar kip bobin başına **tek** pin sürüyor, ama simetri ve ileride bipola
 `Coil_GpioInit:1561` → `__HAL_RCC_GPIOE_CLK_ENABLE()`; ayrıca PE10 hâlihazırda bobin 2 için
 kullanıldığından bu blok başlıklara **çıkıyor** — kanıtlı):
 
-| Bobin | IN_A | IN_B | Not |
-|---|---|---|---|
-| 6 | **PE9** | **PE11** | `.ioc`'de bayat `TIM1_CH1/CH2` ataması var, firmware kullanmıyor |
-| 7 | **PE13** | **PE14** | `.ioc`'de bayat `TIM1_CH3/CH4` |
+**KESİNLEŞTİ (2026-09-10, sahip fiziksel kabloyu çekti).** İlk öneri PE9/PE11 idi; sahip o iki
+pini kullandığı başlıkta **bulamadı** (Nucleo-144'te PE9/PE11 diğer ZIO başlığında). Fotoğrafla
+doğrulanan, aynı başlıkta ve boş olan pinlere geçildi:
 
-Bunları seçmemin sebebi: Arduino başlığında **PWM etiketli** pinler (D6/D5/D3/D2 — teyit et),
-dördü bitişik, aynı port, ve seçimleri `.ioc`'deki artık TIM1 kanal atamasının **silinmesini
-zorunlu kılıyor** ki bu zaten yapılması gereken temizlik.
+| Bobin | IN_A (PWM — **kablo var**) | IN_B (kablo YOK, kalıcı LOW) |
+|---|---|---|
+| **6** | **PE13** | PE12 |
+| **7** | **PE15** | PD13 |
 
-**Yedek set** (birincisi başlıkta çıkmıyorsa): PE7 / PE8 / PE12 / PE15.
+Dördü de GPIOD/GPIOE'de → `Coil_GpioInit` saatleri **zaten açık**, ek RCC satırı gerekmiyor.
+PE12/PE15/PD13 firmware'de ve `.ioc`'de hiçbir yerde geçmiyor (doğrulandı). PE13, `.ioc`'de bayat
+`TIM1_CH3` olarak duruyor — firmware o kanalı kullanmıyor, ama `.ioc` temizliğinde silinmeli.
 
-Unipolar kipte darbelenecek bacak `PEMF_BOBIN_TERS_MASKESI` ile seçilir; bobin 6-7'nin sargı
-yönü **tezgâhta ölçülmeden** maske biti belirlenemez (bkz. §6).
+⚠️ **Maske bobin 6-7'de KULLANILAMAZ.** Unipolar kipte maske biti dalgayı değil, darbenin çıktığı
+**pini** değiştirir. IN_B'lerde (PE12/PD13) kablo olmadığı için bit set edilirse o bobin **sessizce
+sürülmez**. Yön yanlış çıkarsa çözüm **bobin uçlarını fiziksel çevirmek** — sahibin bobin 1-5'te
+yaptığı gibi. Maske bitleri 5 ve 6 **0** kalacak (zaten tüm maske 0x00, bkz. §2.4).
 
 ### 2.2 I2C — sensörler
 
@@ -253,6 +257,32 @@ edilmezse PC2 (ADC1_IN12) ve PA6 (ADC1_IN6) boş.
 ⚠️ İleride termal kesme istenirse o zaman bir **karar** gerekir: NTC bloğu ile MLX90614 aynı
 kesmenin iki farklı gerçeklenmesi; ikisini birden bırakmak iki farklı eşikle çelişen iki kesme
 demektir. (NTC bloğu belgelenmiş bir açık P0'dır — silmeden önce kararın yazılı olması lazım.)
+
+---
+
+### 2.4 ⚠️ Polarite maskesi 0x03 → 0x00 (sahip kararı, 2026-09-10) — ARIZA KAYDI
+
+Sahip bildirimi (birebir): *"PEMF_BOBIN_TERS_MASKESI daha önce kullanıldı mı kullanılmamalı çünkü
+ben fiziksel çevirdim bobini hep aynı pinlerde kalmalıydı PC8 PC9 PD10 PC6 VE PA8 1-5 ARASI
+SIRAYLA BÖYLE BAĞLI DİĞERLERİNİ BAĞLAMİCAM ZATEN"*
+
+**Kullanılmıştı.** `27c0743` (2026-09-08) maskeyi **0x03**'e çekti: bobin 1 → PD12/IN_B,
+bobin 2 → PE10/IN_B. Gerekçe o günün tezgâh ölçümüydü (z işaretleri 1:+1,4 · 2:−4,9 · 4:+0,5 ·
+5:+3,9 mT → bobin 2 ters). Düzeltme **yazılımda** yapılmıştı ve bir test kapısı 0x03'ü **pinliyordu**.
+
+⚠️ **Sonuç:** IN_B pinleri hiç bağlanmadığı için o firmware yakıldıysa bobin 1 ve 2'nin darbesi
+**bağlı olmayan** PD12/PE10'a gitti → iki bobin **hiç sürülmedi**, üstelik SESSİZCE: ACK'te duty
+görünür, `running` true olur, arayüz "Aktif" der, **alan sıfırdır**.
+
+**Yapılan:** maske `0x00`; `pemf_surus.h` + `main.c` pin blokları + `firmware/stm32_pemf/README.md`
+düzeltildi; ayna `scripts/stm_unipolar_senkronla.py` ile senkronlandı; kapı
+`tests/test_stm_unipolar_ayna.py` artık **0x00'ı** pinliyor ve mekanizmanın ISR'de durduğunu ayrıca
+doğruluyor (IN_B'ler bir gün bağlanırsa yeniden kullanılabilir). Mutasyon (0x00→0x03) ile
+**KIRMIZI olduğu kanıtlandı** (2 test). Yeni karşıt-kanıt testi, modelin maske bitini gerçekten
+okuduğunu gösteriyor. 55 test yeşil.
+
+⚠️ **REFLASH gerekli** — firmware pakete girmez. Reflash edilene kadar bobin 1-2'nin durumu
+yakılı firmware'e bağlı.
 
 ---
 
@@ -335,7 +365,7 @@ Bu tasarım bilinçli: istemci ve DB, verinin ESP'den mi STM'den mi geldiğini *
 |---|---|
 | `firmware/stm32_pemf/Core/Src/main.c` | `NUM_COILS 5→7`; `coil_gpio[]` +2 satır; başlık pin haritası; `Coil_GpioInit` GPIOE pinleri; ACK format dizesi (aş. uyarı); `STM_READY` metni "5-ch"→"7-ch"; `g_*[NUM_COILS]` initializer'ları (`{0,0,0,0,0}` → 7 eleman — **derleyici bunu sessizce kabul eder**, elle sayılmalı) |
 | `firmware/stm32_pemf_unipolar/` | **elle düzenlenmez** → `python scripts/stm_unipolar_senkronla.py` |
-| `Core/Inc/pemf_surus.h` | pin durumu bloğu + `PEMF_BOBIN_TERS_MASKESI` (bobin 6-7 bitleri tezgâh ölçümünden sonra) |
+| `Core/Inc/pemf_surus.h` | pin durumu bloğu (bobin 6-7 satırları). `PEMF_BOBIN_TERS_MASKESI` **0x00 KALIR** — §2.4 |
 | `controllers/hardware_controller.py` | `fmt` → `'<BB 7f 7f 7f 7I H'`; `range(1, 6)` → `range(1, 8)` (**8 yer**: 48, 63, 103, 116, 261, 275, 299, 328) ve `coil_id > 5` → `> 7` (140) |
 | `utils/stm32_transport.py:58-72` | ping/stop paketi `7f`; docstring |
 | `tools/stm32_simulator.py:66-76` | `PKT_FMT`, `assert PKT_SIZE == 120`, `NUM_COILS = 7` |
@@ -421,7 +451,7 @@ dead-time'ı çevrim-sayılı gerçek bir gecikmeyle değiştir.
 | # | Risk | Kabul kriteri |
 |---|---|---|
 | R1 | **Bobin 6-7'de cihaz-taraflı termal kesme yok** (sahip kararı 2) | Kesme **eklenmiyor** → doğrulanacak bir kesme de yok. Doğrulanacak olan şu: sıcaklık ölçümü arayüze **ulaşıyor** ve 48 °C istemci interlock'u bobin 6-7'de **gerçekten** tetikleniyor. Bu tek kalan otomatik katman; sessizce çalışmıyor olması en kötü durum. |
-| R2 | **Sargı yönü bilinmiyor** → bobin 6-7 diğerlerini söndürebilir | `PEMF_BOBIN_TERS_MASKESI` biti, kabin merkezinde z ölçümüyle belirlenir. **Bu ölçüm hâlâ eksik** (sol + sağ duvar bobinleri). Ayrıca pankek işaret-dönmesi tuzağı: `sqrt(x²+y²)/|z| < 0,15` şartı. |
+| R2 | **Sargı yönü bilinmiyor** → bobin 6-7 diğerlerini söndürebilir | Kabin merkezinde z ölçümü; yanlışsa **bobin uçları fiziksel çevrilir** (maske DEĞİL — §2.1). Ölçüm hâlâ eksik (sol + sağ duvar). Pankek işaret-dönmesi tuzağı: `sqrt(x²+y²)/|z| < 0,15` şartı. |
 | R3 | Uzun kablo I2C'yi düşürür | Gerçek uzunlukta kablo + **bobinler sürülürken** 10 dk kesintisiz okuma, NACK/kurtarma sayacı 0 |
 | R4 | ISR taşması | Skopla ISR süresi ölçümü; 7 bobin aynı fazda, en yüksek frekansta |
 | R5 | CubeMX Generate-Code her şeyi ezer (§B3) | I2C **elle** eklenecek; `.ioc`'ye dokunulmayacak; ayna senkron betiği koşacak |

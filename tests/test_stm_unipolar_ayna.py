@@ -98,10 +98,14 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     hdr_k = (KANONIK / "Core" / ISTISNA).read_text(encoding="utf-8")
     hdr_a = (AYNA / "Core" / ISTISNA).read_text(encoding="utf-8")
     for h in (hdr_k, hdr_a):
-        assert re.search(r"^#define PEMF_BOBIN_TERS_MASKESI 0x03U$", h, re.M), (
-            "polarite maskesi 0x03 değil (2026-09-08 tezgâh: bobin 1 IN_B/PD12 sahip kararı, bobin 2 "
-            "IN_B/PE10 ölçüm — z işaretleri 1:+1,4 2:−4,9 4:+0,5 5:+3,9; değiştirmek bilinçli tezgâh "
-            "kararıdır — bu satırı ve README'yi birlikte güncelle)"
+        assert re.search(r"^#define PEMF_BOBIN_TERS_MASKESI 0x00U$", h, re.M), (
+            "polarite maskesi 0x00 DEGIL. SAHIP KARARI 2026-09-10: maske KULLANILMAYACAK — ters "
+            "sargi bobin UCLARI CEVRILEREK donanimda cozuldu, darbe DAIMA IN_A'dan cikar "
+            "(PC8 PC9 PD10 PC6 PA8) ve IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FIZIKSEL OLARAK "
+            "BAGLI DEGIL. Mono suruste maske biti dalgayi degil DARBENIN CIKTIGI PINI degistirir "
+            "→ bagli olmayan bir pine darbe basmak o bobini SESSIZCE oldurur (ACK'te duty gorunur, "
+            "`running` true, arayuz 'Aktif', ALAN SIFIR). 2026-09-08'de 0x03 idi ve tam bu ariza "
+            "riskini tasiyordu. Degistirmek yeni bir SAHIP KARARI + IN_B kablolamasi gerektirir."
         )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
     assert uni.count("tpp - 1") + uni.count("g_tpp[i] - 1") >= 2, "unipolar duty tavanı tam-periyot−1 değil (iki klemp)"
@@ -109,7 +113,7 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     assert "UNIPOLAR tek-bacak" in uni and "SYM-BIPOLAR" in bip, "STM_READY dizesi kipi yansıtmıyor"
 
 
-MASKE = 0x03  # pemf_surus.h PEMF_BOBIN_TERS_MASKESI (bobin 1 ve 2 A↔B ters; tezgâh 2026-09-08)
+MASKE = 0x00  # pemf_surus.h PEMF_BOBIN_TERS_MASKESI — sahip kararı 2026-09-10: maske KULLANILMIYOR
 
 
 def _unipolar_dalga(tpp: int, duty_t: int, faz_t: int, bobin_idx: int = 1) -> list[str]:
@@ -144,29 +148,57 @@ def _bipolar_dalga(tpp: int, duty_t: int, gap: int, bobin_idx: int) -> list[str]
     return out
 
 
-def test_bipolar_modelde_maskeli_bobin_AYNALANIR_maskesiz_ayni_kalir():
-    """Maske iki kipte ortak: bipolarda bobin 1-2 dalgası aynalanır (B önce), 3-5 değişmez;
-    dead-time/boşluk yapısı (A ve B asla aynı anda) korunur."""
+def test_KRITIK_maske_SIFIR_hicbir_bobin_AYNALANMAZ():
+    """SAHİP KARARI 2026-09-10: maske 0x00 → beş bobinin HEPSİ aynı bacağı kullanır.
+
+    Bipolarda hiçbiri aynalanmaz (hepsi A ile başlar), unipolarda hepsi IN_A'dan darbelenir.
+    ⚠️ Bu, 2026-09-08'deki 0x03'ün TERSİ: o gün ters sargı YAZILIMDA düzeltilmişti, şimdi
+    bobin UÇLARI donanımda çevrildiği için yazılım düzeltmesi KALKTI.
+    """
+    assert MASKE == 0x00, f"maske {MASKE:#04x}; sahip kararı 0x00 (donanımda çevrildi)"
     tpp, duty = 500, 100
-    d3 = _bipolar_dalga(tpp, duty, 0, bobin_idx=2)
-    assert d3[0] == "A" and d3[250] == "B" and d3.count("A") == duty and d3.count("B") == duty
-    d1 = _bipolar_dalga(tpp, duty, 0, bobin_idx=0)
-    assert d1[0] == "B" and d1[250] == "A" and d1.count("A") == duty and d1.count("B") == duty
-    assert all(not (a == "A" and b == "B") for a, b in zip(d1, d3)) or True  # aynı bobinde iki bacak yok:
-    assert all(s in ("A", "B", "-") for s in d1) and d1.count("-") == tpp - 2 * duty
+    for idx in range(5):
+        d = _bipolar_dalga(tpp, duty, 0, bobin_idx=idx)
+        assert d[0] == "A" and d[250] == "B", f"bobin{idx + 1} bipolar dalgası aynalanmış: maske sıfır değil gibi"
+        assert d.count("A") == duty and d.count("B") == duty
+        assert all(x in ("A", "B", "-") for x in d) and d.count("-") == tpp - 2 * duty
 
 
 def test_unipolar_dalga_modeli_tek_bacak_ve_tam_periyot_doluluk():
+    """Maske 0x00 → BEŞ bobinin hepsi IN_A'dan darbelenir (PC8 PC9 PD10 PC6 PA8).
+
+    ⚠️ Bir bobinin B'ye kayması, darbeyi KABLOSU OLMAYAN pine taşır (IN_B'ler bağlı değil) →
+    o bobin sessizce sürülmez. Bu yüzden burada "B hiç yok" iddiası beş bobin için de pinli.
+    """
     tpp = 500
     for duty in (1, 250, 499):
-        d = _unipolar_dalga(tpp, duty, 0, bobin_idx=2)  # bobin 3: A bacağı
-        assert "B" not in d and d.count("A") == duty, f"bobin3 duty={duty}: {d.count('A')} A tick"
-        for idx in (0, 1):  # bobin 1 (PD12) ve bobin 2 (PE10): B bacağı, A hiç HIGH değil
-            d1 = _unipolar_dalga(tpp, duty, 0, bobin_idx=idx)
-            assert "A" not in d1 and d1.count("B") == duty, f"bobin{idx + 1} duty={duty}: {d1.count('B')} B tick"
+        for idx in range(5):
+            d = _unipolar_dalga(tpp, duty, 0, bobin_idx=idx)
+            assert "B" not in d and d.count("A") == duty, (
+                f"bobin{idx + 1} duty={duty}: darbe IN_A'da DEĞİL ({d.count('A')} A tick) — "
+                "maske biti set edilmiş olabilir; o pinde KABLO YOK"
+            )
     # faz kaydırması sarmalı
     d = _unipolar_dalga(tpp, 100, 450, bobin_idx=2)
     assert d[450] == "A" and d[49] == "A" and d[50] == "-"
+
+
+def test_KARSIT_KANIT_model_maskeyi_GERCEKTEN_uyguluyor():
+    """Öz-test: yukarıdaki iddialar maske sıfır OLDUĞU İÇİN mi geçiyor, yoksa model maskeyi hiç
+    okumuyor mu? Modele elle 0x03 verilirse bobin 1-2 B'ye kaymalı — kaymıyorsa kapı SAHTE-YEŞİL.
+    """
+    global MASKE
+    _yedek = MASKE
+    try:
+        MASKE = 0x03
+        d1 = _unipolar_dalga(500, 100, 0, bobin_idx=0)
+        d3 = _unipolar_dalga(500, 100, 0, bobin_idx=2)
+        assert "A" not in d1 and d1.count("B") == 100, "model maske bitini OKUMUYOR → kapı sahte-yeşil"
+        assert "B" not in d3, "maskesiz bobin de kaymış → model bit indeksini yanlış uyguluyor"
+        b1 = _bipolar_dalga(500, 100, 0, bobin_idx=0)
+        assert b1[0] == "B", "bipolar model maskeyi uygulamıyor"
+    finally:
+        MASKE = _yedek
 
 
 def test_KRITIK_iki_proje_CubeIDE_de_yan_yana_import_edilebilir():

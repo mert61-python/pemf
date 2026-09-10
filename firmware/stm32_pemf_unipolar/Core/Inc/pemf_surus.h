@@ -20,11 +20,13 @@
  * IN_B pini yine çıkış olarak kurulur ve LOW tutulur (yanlış projeyle yakılsa bile tanımsız değil).
  *
  * PİN DURUMU (UNIPOLAR projede — "hangi pinde PWM kaldı, hangisi boşta?"):
- *   Bobin 1 : PWM → PD12 (IN_B)  ·  PC8  (IN_A) kalıcı LOW   ← sahip kararı 2026-09-08 (maske bit0)
- *   Bobin 2 : PWM → PE10 (IN_B)  ·  PC9  (IN_A) kalıcı LOW   ← tezgâh ölçümü 2026-09-08: sargı ters (maske bit1)
+ *   Bobin 1 : PWM → PC8  (IN_A)  ·  PD12 (IN_B) kalıcı LOW   ← maske 0x00 (sahip kararı 2026-09-10)
+ *   Bobin 2 : PWM → PC9  (IN_A)  ·  PE10 (IN_B) kalıcı LOW   ← ters sargı DONANIMDA çevrildi
  *   Bobin 3 : PWM → PD10 (IN_A)  ·  PD11 (IN_B) kalıcı LOW
  *   Bobin 4 : PWM → PC6  (IN_A)  ·  PC7  (IN_B) kalıcı LOW
  *   Bobin 5 : PWM → PA8  (IN_A)  ·  PA9  (IN_B) kalıcı LOW
+ *   ⚠️ SAHİP KABLOLAMASI (2026-09-10): darbe DAİMA IN_A'dan çıkar — PC8 PC9 PD10 PC6 PA8 sırayla.
+ *   IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FİZİKSEL OLARAK BAĞLI DEĞİL → maske 0x00 KALMALI.
  *   Hangi bacağın darbeleneceği PEMF_BOBIN_TERS_MASKESI ile seçilir (aşağıda): bit i set →
  *   bobin i+1 darbeyi IN_B'den alır, IN_A LOW; değilse IN_A darbelenir, IN_B LOW. Sürülmeyen pinler
  *   boşta ama AYRILMIŞ DEĞİL: çıkış kurulu + kalıcı LOW (yarım-köprü girişi için güvenli); fiziksel
@@ -44,14 +46,33 @@
 
 /* BOBİN POLARİTE MASKESİ — iki kipte ortak. Bit i = bobin i+1'in A↔B bacak rolleri yer değiştirir:
  *   UNIPOLAR: darbe IN_B'den çıkar, IN_A kalıcı LOW (mono sürüş)   ·   BİPOLAR: dalga aynalanır (faz 180°).
- * 2026-09-08 tezgâh (S3 MLX90393, kart düz, aynı duruş, bobin merkezinde z işareti, 100 Hz / %50 mono):
- *   bobin 1 +1,4 mT (IN_B'den, sahip kararı) · bobin 2 −4,9 (IN_A'dan) · bobin 4 +0,5 · bobin 5 +3,9
- *   → bobin 2 diğerlerine TERS. Bobin 2 de IN_B'ye alınınca dört dikey bobin aynı yönde (merkezde
- *   sönümleme yok). 0x03 = bit0 (bobin 1, PD12) + bit1 (bobin 2, PE10); bobin 3-5 IN_A (PD10 PC6 PA8).
- * İki projede AYNI satır (tek fark PEMF_SURUS_UNIPOLAR); değiştirmek bilinçli tezgâh kararıdır — kapı:
- * tests/test_stm_unipolar_ayna.py. */
+ *
+ * ⚠️⚠️ 0x00 — SAHİP KARARI 2026-09-10: MASKE KULLANILMAYACAK. GERİ AÇMAYIN.
+ *
+ * SAHİP BİLDİRİMİ (birebir): "ben fiziksel çevirdim bobini hep aynı pinlerde kalmalıydı
+ * PC8 PC9 PD10 PC6 VE PA8 1-5 ARASI SIRAYLA BÖYLE BAĞLI DİĞERLERİNİ BAĞLAMİCAM ZATEN"
+ * Ters sargı problemi bobin UÇLARI ÇEVRİLEREK DONANIMDA çözüldü; darbe DAİMA IN_A'dan çıkacak,
+ * IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FİZİKSEL OLARAK BAĞLI DEĞİL ve bağlanmayacak.
+ *
+ * NEDEN MASKE UNIPOLAR KİPTE YAPISAL OLARAK YANLIŞ: mono sürüşte maske biti dalgayı değil,
+ * darbenin çıktığı PİNİ değiştirir. Bağlı olmayan bir pine darbe basmak = o bobin HİÇ SÜRÜLMEZ,
+ * üstelik SESSİZCE: ACK'te duty görünür, `running` true olur, arayüz "Aktif" der, ALAN SIFIRDIR.
+ * Bipolar kipte maske dalgayı aynalar (iki bacak da bağlıysa anlamlı) ama IN_B hiç bağlanmadığı
+ * için o kip de bu donanımda maskeyi kullanamaz. → IN_B pinleri bağlanmadıkça maske 0x00 KALIR.
+ *
+ * ARIZA KAYDI: 2026-09-08'de bu değer 0x03'e (bobin 1 + 2) çekilmişti; tezgâh z işaretleri
+ * 1:+1,4 2:−4,9 4:+0,5 5:+3,9 mT ölçülüp bobin 2 ters bulunmuş, düzeltme YAZILIMDA yapılmıştı.
+ * O firmware yakıldıysa bobin 1 ve 2'nin darbesi PD12/PE10'a gitti → BAĞLI OLMAYAN PİNLER →
+ * iki bobin hiç sürülmedi. Doğru düzeltme, sahibin yaptığı gibi bobin uçlarını çevirmekti.
+ * ⚠️ REFLASH gerekli — firmware pakete girmez.
+ *
+ * BOBİN 6-7 (STM'e taşınıyor) için de AYNI kural: tek kablo çekildiği için maske biti onlarda da
+ * 0 kalmalı; yön yanlışsa bobin uçları çevrilir. Bkz. docs/stm32-7-bobin-gecisi-plani-2026-09-10.md
+ *
+ * İki projede AYNI satır (tek fark PEMF_SURUS_UNIPOLAR). Kapı: tests/test_stm_unipolar_ayna.py
+ * (0x00'ı pinler + mekanizmanın ISR'de DURDUĞUNU pinler — IN_B'ler bağlanırsa yeniden kullanılır). */
 #ifndef PEMF_BOBIN_TERS_MASKESI
-#define PEMF_BOBIN_TERS_MASKESI 0x03U
+#define PEMF_BOBIN_TERS_MASKESI 0x00U
 #endif
 
 #endif /* PEMF_SURUS_H */
