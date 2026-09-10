@@ -6,6 +6,46 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.48 — 2026-09-11 (🔌 7 bobinin hepsi STM32'den sürülüyor + bobin 1-5 akım ölçümü)
+
+> ⚠️ **BU SÜRÜM YENİ STM32 FIRMWARE'İ İSTER.** Kontrolcü ile bilgisayar arasındaki komut
+> paketi 5 bobinden 7'ye çıktı (88 → 120 bayt). Eski firmware yeni paketi tanımaz ve
+> **hiçbir bobin çalışmaz — 1-5 dahil.** Kart USB'den yeniden programlanmadan güncellemeyi
+> almayın. Firmware paketin içinde gelmez, elle yüklenir.
+
+**Bobin 6 ve 7 artık kabloyla sürülüyor.** Bu iki bobin WiFi üzerinden çalışan ayrı kartlara
+bağlıydı; hotspot düşünce ya da kart uykuya geçince sessizce devre dışı kalabiliyorlardı.
+Artık diğer beşi gibi doğrudan kontrolcüye bağlılar. Kontrol ekranındaki "STM32 Bobinler" ve
+"WiFi ESP Bobinler" ayrımı kalktı: tek liste, **Bobinler 1–7**.
+
+- Kablo bağlantısı, WiFi'ın veremediği bir güvence getiriyor: bilgisayarla haberleşme 1,5 saniye
+  kesilirse kontrolcü **bobinleri kendisi durduruyor**. WiFi'lı kartlarda bu mümkün değildi —
+  bağlantı koptuğunda kart kendi süresi bitene kadar sürmeye devam edebiliyordu.
+- Bobin 8 yuvası arayüzden kaldırıldı: o yuvada fiziksel bir bobin yok ve kalıcı "Offline"
+  görünen bir kart, olmayan bir bobin varmış izlenimi veriyordu.
+
+**Bobin 1-5'te akım ölçümü.** Beş bobine akım sensörü bağlandı; ölçülen akım kontrol
+panelinde ve Sensörler sekmesinde görünüyor, seans kaydına da giriyor.
+
+- Ölçüm aralığı aşılırsa (sensörün sınırı) değer **güvenilmez** sayılıyor ve bildirim
+  merkezine uyarı düşüyor. Kırpılmış bir sayının sessizce doz kaydına girmesi engellendi.
+
+**Ölçülmeyen değerler artık kısa çizgi.** Bir bobinde sıcaklık ya da manyetik alan sensörü
+yoksa panel `0.00 mT` / `0.0 °C` yazıyordu; bu "ölçtüm, sıfır çıktı" diye okunuyor ve olmayan
+bir sensöre güven veriyordu. Artık **-** görünüyor.
+
+- Yan fayda: gerçekten 0,0 °C ya da 0,000 A ölçüldüğünde bu artık "ölçüm yok" sayılmıyor.
+- Geçmiş ve PDF raporu tarafında da düzeltildi: ölçülmeyen bir alan artık kayda **hiç**
+  yazılmıyor. Önceden akım ölçen bir bobinin ölçmediği sıcaklık, "0,0 °C ölçüldü" olarak
+  kaydedilebiliyordu.
+
+⚠️ **Bobin 6-7'de otomatik sıcaklık kesmesi yok** (bilinçli). O bobinlerin sıcaklık sensörleri
+henüz bağlı değil; bağlanana kadar arayüzdeki 48 °C güvenlik durdurması onlarda tetiklenemez —
+kartta "-" görünmesi bunu belli eder. Bobin 1-5 için de durum aynı ve öncedendir.
+
+**Paket boyutu düştü.** Bu sürümden itibaren tek-parça kopya yayınlanmıyor; güncelleme
+katmanlı iniyor. Klinik tarafında görünür bir değişiklik yok, yalnızca indirme küçülüyor.
+
 ## launcher 1.9.51 — 2026-09-10 (🩹 "Bu platform icin paket yayinlanmadi" hatasi bir daha olmayacak)
 
 - **Kurulabilir paket varken "paket yayinlanmadi" denmesi duzeltildi.** 2026-09-09'da guncelleme
