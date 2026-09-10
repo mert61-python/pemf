@@ -71,21 +71,41 @@ PB10 aranmak istenmezse: PB8/PB9'daki tek bus'a **2 kanallı I2C mux** (PCA9540 
 
 ---
 
-## 4. AYRILMIŞ AMA BAĞLI DEĞİL — NTC (derleme-kapılı)
+## 4. ADC — ACS712-30A AKIM SENSÖRLERİ (bobin 1-5)
 
-`PEMF_NTC_TERMAL_ENABLED 0` → **hiç derlenmiyor**, NTC'ler fiziksel olarak takılı değil.
-Sahip kararı 2026-09-10: **termal kesme yapılmayacak** → bu blok olduğu gibi duruyor.
+Sahip kararı 2026-09-10: bobin 1-5'e ACS712 (30 A sürümü) bağlanıyor. NTC'ler hiç
+bağlanmadığı ve termal kesme istenmediği için o beş ADC pini **akıma devredildi**.
 
 | Pin | ADC1 kanalı | Bobin |
 |---|---|---|
-| PA0 | IN0 | 1 |
-| PA3 | IN3 | 2 |
-| PA4 | IN4 | 3 |
-| PC0 | IN10 | 4 |
-| PC3 | IN13 | 5 |
+| **PA0** | IN0 | 1 |
+| **PA3** | IN3 | 2 |
+| **PA4** | IN4 | 3 |
+| **PC0** | IN10 | 4 |
+| **PC3** | IN13 | 5 |
 
-Bobin 6-7'de NTC **yok** (`NTC_KANAL_YOK` sentinel'i, poll döngüsü atlar).
-NTC yolu bir gün terk edilirse bu beş pin serbest kalır — ACS712 akım sensörleri için hazır yer.
+Sürücü: `firmware/stm32_pemf/Core/Src/pemf_akim.c` (registre seviyesi — `HAL_ADC` kapalı).
+Bobin 6-7'de ACS712 **yok**.
+
+⚠️⚠️ **SEVİYE UYUŞMAZLIĞI — KABLOLAMADAN ÖNCE OKU.** ACS712-30A **5 V** ile besleniyor,
+0 A çıkışı **2,50 V**, hassasiyet 66 mV/A. STM32'nin ADC referansı **3,30 V**, pin
+absolute-maximum 3,60 V. Sensörün üzerinde **gerilim bölücü yok**:
+
+| Akım | ADC girişi | Sonuç |
+|---|---|---|
+| 0 A | 2,50 V | okunur |
+| **+12,1 A** | **3,30 V** | **ADC tavanı — üstü kırpılır, sayı YANLIŞ** |
+| +16,7 A | 3,60 V | **pin absolute-maximum — üstü çipe ZARAR VERİR** |
+| +30 A | 4,48 V | pin hasarı |
+
+Bölücüsüz gerçek aralık **−30 A … +12 A** ve unipolar sürüşte akım **tam pozitif tarafta**.
+Doygunluk sessiz kalmıyor: firmware ham değeri izler, tavana dayanınca telemetriye `X=1`
+koyar ve backend operatöre uyarı basar. 12 A üstü akım bekleniyorsa **10k/20k bölücü**
+eklenmeli; oranı kod öğrenmek zorunda değil — offset kalibrasyonundaki `k` katsayısı
+bölücüyü ve 5 V rayının gerçek değerini kendiliğinden yakalar.
+
+⚠️ **NTC bloğu ile ÇAKIŞIR.** `PEMF_NTC_TERMAL_ENABLED` 1 yapılırsa aynı beş kanalı iki
+modül kurar → `pemf_akim.c` bunu `#error` ile derleme zamanında keser.
 
 ---
 
