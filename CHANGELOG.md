@@ -6,6 +6,20 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## mobile 2.3.34 — 2026-09-11 (📱 telefon uygulaması 7 bobini ve akımı görüyor)
+
+- Kontrol ekranındaki "STM32 Bobinler" / "WiFi ESP Bobinler" ayrımı kalktı: tek liste,
+  **Bobinler 1–7**. Bobin 6 ve 7 artık kabloyla sürülüyor.
+- Bobin 1-5'te **akım** gösteriliyor.
+- Sensörü olmayan ölçüm artık **-** görünüyor; `0.00 mT` / `0.0 °C` yazmıyor. O yazım
+  "ölçtüm, sıfır çıktı" diye okunuyor ve olmayan bir sensöre güven veriyordu.
+- Cihazı olmayan 8. bobin yuvası listeden kaldırıldı.
+
+⚠️ Telefon uygulaması tek başına terapi uygulamaz; klinikteki cihaza bağlanır. Cihazdaki
+kontrolcü yazılımının da güncellenmiş olması gerekir (bkz. app 1.9.48 uyarısı).
+
+**Sürüm kodu:** 41 · **APK:** `PEMF_Vet_Mobil-2.3.34.apk` (sha `b24cea2b0c31`).
+
 ## app 1.9.48 — 2026-09-11 (🔌 7 bobinin hepsi STM32'den sürülüyor + bobin 1-5 akım ölçümü)
 
 > ⚠️ **BU SÜRÜM YENİ STM32 FIRMWARE'İ İSTER.** Kontrolcü ile bilgisayar arasındaki komut
@@ -45,6 +59,8 @@ kartta "-" görünmesi bunu belli eder. Bobin 1-5 için de durum aynı ve önced
 
 **Paket boyutu düştü.** Bu sürümden itibaren tek-parça kopya yayınlanmıyor; güncelleme
 katmanlı iniyor. Klinik tarafında görünür bir değişiklik yok, yalnızca indirme küçülüyor.
+
+Paket kimliği (`buildId`): `1e22e09304c2`. Tek-parça `base.zip` bu sürümde YAYINLANMADI.
 
 ## launcher 1.9.51 — 2026-09-10 (🩹 "Bu platform icin paket yayinlanmadi" hatasi bir daha olmayacak)
 

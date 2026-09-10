@@ -73,21 +73,36 @@ def test_profil_paketleri_v1_ve_v2de_ayni(manifest):
 
 def test_her_paketin_digesti_ve_boyutu_makul(manifest):
     """Elle düzenlemede en sık kırılan iki alan: 64 haneli hex sha256 + pozitif boyut."""
+    # ⚠️ `layers` DE SAYILIR (2026-09-11, monolit kaldırmanın 2. fazı). Bu kapı eskiden yalnız
+    # `runtimes` + `models`e bakıyordu; tek-parça `base.zip` yayından çıkarılınca `runtimes`
+    # boşaldı ve sayaç 3'e düşüp "manifest bozulmuş olabilir" dedi — oysa manifest DOĞRUYDU,
+    # kurulacak paketler `layers` altındaydı. Aynı kör nokta bugün ÜÇÜNCÜ yerde bulundu:
+    # launcher'ın `platform_supported`ı (1.9.51'de düzeltildi) ve `make_manifest.py`nin
+    # "hiçbir base paketi yok" kapısı da tek-parça kopyayı kurulabilirliğin TEK ölçütü
+    # sanıyordu. Sha/boyut/URL doğrulaması artık GERÇEK paketleri de kapsıyor.
     sayac = 0
+    girdiler: list[tuple[str, dict]] = []
     for section in ("runtimes", "models"):
         for key, entry in (manifest.get(section) or {}).items():
-            sayac += 1
-            sha = entry.get("sha256", "")
-            assert isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
-                f"{section}.{key}: gecersiz sha256 {sha!r}"
-            )
-            assert isinstance(entry.get("size"), int) and entry["size"] > 0, (
-                f"{section}.{key}: gecersiz size {entry.get('size')!r}"
-            )
-            assert str(entry.get("url", "")).startswith("https://"), (
-                f"{section}.{key}: url HTTPS degil: {entry.get('url')!r}"
-            )
+            girdiler.append((f"{section}.{key}", entry))
+    for plat, katman in (manifest.get("layers") or {}).items():
+        for ad, entry in (katman or {}).items():
+            if isinstance(entry, dict) and "sha256" in entry:  # `rollout` gibi skalerleri atla
+                girdiler.append((f"layers.{plat}.{ad}", entry))
+    for yol, entry in girdiler:
+        sayac += 1
+        sha = entry.get("sha256", "")
+        assert isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha.lower()), (
+            f"{yol}: gecersiz sha256 {sha!r}"
+        )
+        assert isinstance(entry.get("size"), int) and entry["size"] > 0, f"{yol}: gecersiz size {entry.get('size')!r}"
+        assert str(entry.get("url", "")).startswith("https://"), f"{yol}: url HTTPS degil: {entry.get('url')!r}"
     assert sayac >= 4, f"beklenenden az paket ({sayac}) — manifest bozulmus olabilir"
+    # ⚠️ Sayı tek başına yetmez: KURULABİLİR bir paket bulunmalı. `models` (profil zip'leri)
+    # dört taneyse sayaç geçer ama uygulama kurulamaz. Kurulum ya `runtimes` ya `layers`tan olur.
+    assert manifest.get("runtimes") or manifest.get("layers"), (
+        "ne `runtimes` ne `layers` var — profil paketleri sayiyi doldurabilir ama UYGULAMA KURULAMAZ"
+    )
 
 
 def test_launcher_blogu_da_dogrulanir(manifest):

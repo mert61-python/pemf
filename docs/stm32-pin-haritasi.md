@@ -13,15 +13,22 @@
 ⚠️ **Donanım PWM kanalı YOK.** TIM1 yalnız 50 kHz kesme üretir; çıkışlar o kesmenin içinde
 bit-bang edilir. Bu yüzden bobin eklemek timer kanalı değil, **boş GPIO** ister.
 
-| Bobin | IN_A — **darbe buradan, KABLO VAR** | IN_B — kablo YOK, kalıcı LOW | Konum |
+| Bobin | IN_A — **darbe buradan, KABLO VAR** | IN_B — kablo YOK, kalıcı LOW | Kabindeki yeri |
 |---|---|---|---|
-| 1 | **PC8** | PD12 | alt |
-| 2 | **PC9** | PE10 | alt |
-| 3 | **PD10** | PD11 | üst |
-| 4 | **PC6** | PC7 | üst |
-| 5 | **PA8** | PA9 | duvar |
-| 6 | **PE13** | PE12 | ESP'den taşındı 2026-09-10 |
-| 7 | **PE15** | PD13 | ESP'den taşındı 2026-09-10 |
+| 1 | **PC8** | PD12 | alt sağ |
+| 2 | **PC9** | PE10 | alt sol |
+| 3 | **PD10** | PD11 | arka duvar |
+| 4 | **PC6** | PC7 | üst sol |
+| 5 | **PA8** | PA9 | üst sağ |
+| 6 | **PE13** | PE12 | **sağ duvar** · ESP'den taşındı |
+| 7 | **PE15** | PD13 | **sol duvar** · ESP'den taşındı |
+
+⚠️ **KONUM SÜTUNU İKİ KEZ DÜZELTİLDİ.** İlk yazımda 3'e "üst", 5'e "duvar" demiştim (yanlış).
+Sonra ölçüm kayıtlarından "3 ve 6 duvar çifti, 7 arka duvar" diye çıkardım — o da yanlıştı,
+çünkü kayıttaki "7 = arka duvar" satırı sahibin BEYANI değil benim VARSAYIMIMDI.
+**Sahip beyanı (2026-09-11): sağ duvar = 6, sol duvar = 7.** Arka duvar elemeyle **3**.
+Tutarlı: ESP'den taşınan iki bobin (6, 7) tam olarak duvar çifti; arka duvar zaten STM'deydi.
+Ders: ölçüm kaydına bobin numarasını SAHİP söylemeden yazma.
 
 ⚠️ **Maske 0x00 (sahip kararı 2026-09-10):** darbe DAİMA IN_A'dan çıkar. `PEMF_BOBIN_TERS_MASKESI`
 bitini set etmek darbeyi **kablosuz** IN_B pinine taşır → o bobin **sessizce sürülmez** (ACK'te
