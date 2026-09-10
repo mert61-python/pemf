@@ -277,11 +277,17 @@ def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
     """Bir bus'ta YALNIZ manyetik (ya da yalnız sıcaklık) sensör olabilir.
 
     ⚠️ SAHİP KABLOLAMASI 2026-09-10: PB10/PB11'e (I2C2) yalnız manyetik sensör bağlanıyor.
-    Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu → yok olan MLX90614'ün her
-    turdaki NACK'i `i2c_hata_islet` sayacını 5'e taşır ve **her ~5 saniyede bir hat kurtarma**
-    (9 saat darbesi + SWRST) tetiklenir. Kurtarma çevre birimini sıfırladığı için AYNI
-    bus'taki ÇALIŞAN manyetik sensörün okumasını da bozar: **var olmayan sensör, var olanı
-    sakatlar** ve hiçbir hata görünmez — alan okuması aralıklı kaybolur.
+    Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu.
+
+    ⚠️ İLK ANLATIMIMIN DÜZELTMESİ: "yok olan sensör her ~5 saniyede hat kurtarma tetikler ve
+    çalışan sensörü sakatlar" demiştim — **YANLIŞTI**. `ardisik_hata` HAT BAŞINA tutulur ve
+    BAŞARILI her işlem onu sıfırlar; manyetik okuma çalışırken sayaç 1→0 salınır ve 5'e asla
+    ulaşmaz. O kablolama düzeltmeden ÖNCE de çalışıyordu (ölçüldü:
+    `test_stm_sensor_kablolama_modeli.py`). Gerçek maliyet üç kalem, hepsi hijyen/teşhis:
+    (1) her turda boşa giden bir I2C işlemi, (2) `i2c_hata` teşhis sayacı takılı olmayan
+    cihaz için sonsuza kadar artar → gerçek arıza göstergesi olmaktan çıkar (tezgâh kabul
+    kriteri "sayaç 0" idi), (3) TAMAMEN BOŞ hatta hiç başarı olmadığı için sayaç 5'e ULAŞIR
+    ve boşuna kurtarma koşar.
 
     MUTASYON: `S_TOBJ`taki `if (h->sicaklik_adres == 0U)` erken-çıkışını sil → KIRMIZI.
     """
@@ -295,7 +301,10 @@ def test_KRITIK_CIHAZ_BAZINDA_VARLIK_TESPITI():
     # ⚠️ `=(?!=)`: `==` KARŞILAŞTIRMASINI atamadan ayır. İlk yazımda bu lookahead yoktu ve
     # desen `sicaklik_adres == 0U` koşulunu da "atama" sanıp temiz kaynakta SAHTE-KIRMIZI
     # verdi (aynı gün ADC kapısında iç-içe parantezle yaşananın kardeşi).
-    for m in re.finditer(r"sicaklik_adres\s*=(?!=)([^;]+);", kod):
+    # `(?:->|\.)` : YALNIZ hat yapısının alanına yapılan atamalar. `*sicaklik_adres = ...`
+    # (rapor fonksiyonunun ÇIKTI parametresi) bir varlık ataması DEĞİL; ilk hâlde o da
+    # yakalanıp temiz kaynakta sahte-kırmızı verdi.
+    for m in re.finditer(r"(?:->|\.)sicaklik_adres\s*=(?!=)([^;]+);", kod):
         atama = m.group(1)
         if "0U" == atama.strip():
             continue  # sifirlama (kurulum) mesru

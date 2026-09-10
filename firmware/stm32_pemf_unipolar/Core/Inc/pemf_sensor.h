@@ -26,7 +26,7 @@
  *   · `PEMF_Sensor_Poll()` her çağrıda EN FAZLA bir kısa I2C işlemi yapar,
  *   · MLX90393'ün ~17 ms dönüşüm süresi `HAL_GetTick()` damgasıyla beklenir — `delay` YOK,
  *   · her bayrak beklemesi ÇEVRİM SAYAÇLI (`I2C_SPIN_BUTCESI`), sonsuz döngü imkânsız.
- * Kapı: tests/test_stm_sensor_bloklamaz.py
+ * Kapı: tests/test_stm_sensor_firmware.py
  *
  * ============================================================================
  * ⚠️ TERMAL KESME YOK — SAHİP KARARI
@@ -37,10 +37,38 @@
  * bağlıdır — bu dosyanın asıl işlevi budur. Buraya sessizce bir kesme EKLENMEZ.
  *
  * ============================================================================
- * ⚠️ AKIM ÖLÇÜMÜ YOK — SAHİP KARARI
+ * BU DOSYADA AKIM YOK — AMA SİSTEMDE VAR
  * ============================================================================
- * ACS712'ler taşınmıyor (karar 3). Telemetri çerçevesi akım alanı **taşımaz**; 0.0 göndermek
- * "ölçüldü" gibi kaydedilir ve geçmişte tam bu desen PDF'e "0.0 °C ölçüldü" yazdırmıştı.
+ * ⚠️ BAYAT YORUM DÜZELTMESİ (aynı gün, ikinci karar): burada "ACS712'ler taşınmıyor"
+ * yazıyordu. Sahip kararını değiştirdi → **bobin 1-5**'e ACS712-30A bağlanıyor ve akım
+ * `pemf_akim.c` (ADC1) tarafından okunuyor. Bu dosya YALNIZ bobin 6-7'nin I2C sensörlerini
+ * yönetir; akımla ilgisi yoktur ve bobin 6-7'de ACS712 YOKTUR.
+ * Değişmeyen kural: ölçülmeyen alan telemetriye **hiç yazılmaz** — 0.0 göndermek aşağı
+ * akışta "ölçüldü" olarak kaydedilir ve geçmişte PDF'e "0.0 °C ölçüldü" yazdırmıştı.
+ *
+ * ============================================================================
+ * ⚠️ BİR BUS'TA YALNIZ BİR SENSÖR OLABİLİR
+ * ============================================================================
+ * Her hat İKİ cihazı da varsaymaz: açılışta ayrı ayrı yoklanır, bulunamayan **YOK**
+ * işaretlenir, durumları ATLANIR ve yokluğu hata SAYILMAZ. Böylece üç kablolama da çalışır:
+ *   (a) tek hatta sıcaklık + manyetik  (adresler 0x5A ↔ 0x18, çakışmazlar)
+ *   (b) bir hatta YALNIZ manyetik      (sahip kablolaması, PB10/PB11)
+ *   (c) iki hatta birer çift           (iki MLX90614 aynı hatta KONAMAZ: ikisi de 0x5A)
+ * ⚠️ İLK ANLATIMIN DÜZELTMESİ: bu dosyada bir süre "yok olan sıcaklık sensörü her ~5
+ * saniyede hat kurtarma tetikler ve aynı hattaki çalışan manyetik sensörü sakatlar"
+ * yazıyordu. **YANLIŞTI** ve modelle ölçülüp düzeltildi (`test_stm_sensor_kablolama_modeli.py`):
+ * `ardisik_hata` HAT BAŞINA tutulur ve BAŞARILI HER işlem onu sıfırlar. Manyetik okuma
+ * çalışırken sayaç her turda 1→0 salınır, 5'e ASLA ulaşmaz → kurtarma tetiklenmez.
+ * Yani o kablolama düzeltmeden ÖNCE de çalışıyordu.
+ *
+ * GERÇEK maliyet üç kalem — üçü de hijyen/teşhis, "çalışmıyor" değil:
+ *   1. Her turda BOŞA giden bir I2C işlemi (eksik adrese START, bütçe + bus gürültüsü).
+ *   2. `i2c_hata` teşhis sayacı takılı olmayan cihaz için SONSUZA kadar artar → sayaç
+ *      gerçek arıza göstergesi olmaktan çıkar (tezgâh kabul kriteri "sayaç 0" idi).
+ *   3. TAMAMEN BOŞ hatta (iki cihaz da yok) hiçbir başarı olmadığı için sayaç 5'e ULAŞIR
+ *      ve boşuna kurtarma koşar.
+ *
+ * Kapı: tests/test_stm_sensor_firmware.py + test_stm_sensor_kablolama_modeli.py
  ******************************************************************************
  */
 #ifndef PEMF_SENSOR_H
@@ -89,5 +117,19 @@ bool PEMF_Sensor_Poll(uint32_t simdi_ms);
  * @param sira 0 = bobin 6, 1 = bobin 7
  */
 void PEMF_Sensor_Oku(uint32_t sira, PEMF_SensorVerisi_t *hedef);
+
+/**
+ * Bir hatta AÇILIŞTA hangi cihazların bulunduğunu bildirir (kablolama doğrulaması).
+ *
+ * ⚠️ NEDEN VAR: bir bus'ta yalnız bir sensör olabilir (sahip kablolaması 2026-09-10) ve
+ * "sensör okumuyor" ile "sensör hiç bulunamadı" arasındaki fark UART'tan görünmezse
+ * tezgâhta saatler kaybedilir — telemetri satırı ikisinde de o alanı taşımaz.
+ * `main.c` bunu açılışta `-> STM_SENS:` satırı olarak basar.
+ *
+ * @param sira 0 = bobin 6 (I2C1), 1 = bobin 7 (I2C2)
+ * @param sicaklik_adres bulunan MLX90614 adresi, yok ise 0
+ * @param alan_adres     bulunan MLX90393 adresi, yok ise 0
+ */
+void PEMF_Sensor_Rapor(uint32_t sira, uint8_t *sicaklik_adres, uint8_t *alan_adres);
 
 #endif /* PEMF_SENSOR_H */

@@ -857,6 +857,38 @@ int main(void) {
   );
   HAL_UART_Transmit(&huart3, (uint8_t *)init_msg, strlen(init_msg), 200U);
 
+  /* ── BULUNAN SENSORLER (kablolama dogrulamasi) ────────────────────────────────────
+   * ⚠️ NEDEN: bir I2C hattina YALNIZ BIR sensor takilabilir ve "okumuyor" ile "hic
+   * bulunamadi" farki telemetriden GORUNMEZ — ikisinde de o alan satira yazilmaz.
+   * Bu satir olmadan tezgahta "kablo mu yanlis, sensor mu bozuk" sorusu saatler yiyor.
+   * Adres 0 = o hatta o cihaz YOK (kod onu atlar, hata saymaz). */
+  for (uint32_t sr = 0U; sr < PEMF_SENSOR_BOBIN_SAYISI; sr++) {
+    uint8_t s_adr = 0U;
+    uint8_t a_adr = 0U;
+    PEMF_Sensor_Rapor(sr, &s_adr, &a_adr);
+    static char sens_msg[112];
+    int sl = snprintf(sens_msg, sizeof(sens_msg),
+                      "-> STM_SENS: C=%lu I2C%lu sicaklik=0x%02X alan=0x%02X%s\r\n",
+                      (unsigned long)(PEMF_SENSOR_ILK_BOBIN_ID + sr),
+                      (unsigned long)(sr + 1U), (unsigned)s_adr, (unsigned)a_adr,
+                      ((s_adr == 0U) && (a_adr == 0U)) ? " (SENSOR YOK)" : "");
+    if ((sl > 0) && (sl < (int)sizeof(sens_msg))) {
+      HAL_UART_Transmit(&huart3, (uint8_t *)sens_msg, (uint16_t)sl, 200U);
+    }
+  }
+
+  /* Bobin 1-5 akim kanallarinin kalibrasyon sonucu (0 = o kanal okunamadi/olcek yok). */
+  for (uint32_t sr = 0U; sr < PEMF_AKIM_BOBIN_SAYISI; sr++) {
+    PEMF_AkimVerisi_t av;
+    PEMF_Akim_Oku(sr, &av);
+    static char akal_msg[96];
+    int kl = snprintf(akal_msg, sizeof(akal_msg), "-> STM_SENS: C=%lu ACS712=%s\r\n",
+                      (unsigned long)(sr + 1U), av.ok ? "hazir" : "YOK/kalibre-EDILEMEDI");
+    if ((kl > 0) && (kl < (int)sizeof(akal_msg))) {
+      HAL_UART_Transmit(&huart3, (uint8_t *)akal_msg, (uint16_t)kl, 200U);
+    }
+  }
+
   uint32_t last_communication_ms = HAL_GetTick();
   uint32_t last_ping_ms = HAL_GetTick();
 

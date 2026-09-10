@@ -57,11 +57,20 @@
  *
  * ⚠️ NEDEN CİHAZ BAZINDA VARLIK TESPİTİ VAR (2026-09-10, sahip kablolaması):
  * Sahip PB10/PB11'e (I2C2) **yalnız manyetik sensör** bağlıyor — o bus'ta MLX90614 YOK.
- * Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu: sıcaklık okuması her turda
- * NACK alır, `i2c_hata_islet` sayacı 5'e ulaşır ve **her ~5 saniyede bir hat kurtarma**
- * (9 saat darbesi + `SWRST`) tetiklenir. Kurtarma çevre birimini sıfırladığı için AYNI
- * bus'taki ÇALIŞAN manyetik sensörün okumasını da bozar — yani var olmayan bir sensör,
- * var olanı sakatlar. Üstelik hiçbir hata görünmez: alan okuması aralıklı kaybolur.
+ * Bu dosyanın ilk hâli her bus'ta İKİ cihazı da varsayıyordu.
+ * ⚠️ İLK ANLATIMIN DÜZELTMESİ: bu dosyada bir süre "yok olan sıcaklık sensörü her ~5
+ * saniyede hat kurtarma tetikler ve aynı hattaki çalışan manyetik sensörü sakatlar"
+ * yazıyordu. **YANLIŞTI** ve modelle ölçülüp düzeltildi (`test_stm_sensor_kablolama_modeli.py`):
+ * `ardisik_hata` HAT BAŞINA tutulur ve BAŞARILI HER işlem onu sıfırlar. Manyetik okuma
+ * çalışırken sayaç her turda 1→0 salınır, 5'e ASLA ulaşmaz → kurtarma tetiklenmez.
+ * Yani o kablolama düzeltmeden ÖNCE de çalışıyordu.
+ *
+ * GERÇEK maliyet üç kalem — üçü de hijyen/teşhis, "çalışmıyor" değil:
+ *   1. Her turda BOŞA giden bir I2C işlemi (eksik adrese START, bütçe + bus gürültüsü).
+ *   2. `i2c_hata` teşhis sayacı takılı olmayan cihaz için SONSUZA kadar artar → sayaç
+ *      gerçek arıza göstergesi olmaktan çıkar (tezgâh kabul kriteri "sayaç 0" idi).
+ *   3. TAMAMEN BOŞ hatta (iki cihaz da yok) hiçbir başarı olmadığı için sayaç 5'e ULAŞIR
+ *      ve boşuna kurtarma koşar.
  *
  * Çözüm: açılışta adres yoklaması yapılır; bulunamayan cihaz **YOK** işaretlenir, onun
  * durumları ATLANIR ve yokluğu hata SAYILMAZ. Sonradan takılabilir diye periyodik yeniden
@@ -627,6 +636,18 @@ bool PEMF_Sensor_Poll(uint32_t simdi_ms) {
     }
   }
   return tur_bitti;
+}
+
+void PEMF_Sensor_Rapor(uint32_t sira, uint8_t *sicaklik_adres, uint8_t *alan_adres) {
+  if (sira >= PEMF_SENSOR_BOBIN_SAYISI) {
+    return;
+  }
+  if (sicaklik_adres != 0) {
+    *sicaklik_adres = g_hat[sira].sicaklik_adres;
+  }
+  if (alan_adres != 0) {
+    *alan_adres = g_hat[sira].mag_adres;
+  }
 }
 
 void PEMF_Sensor_Oku(uint32_t sira, PEMF_SensorVerisi_t *hedef) {
