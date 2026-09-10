@@ -486,7 +486,7 @@ Bu geçiş sadece pin taşımıyor; **sahada tekrar eden bir arıza ailesini kö
 | **0** | ✅ Sahip kararları alındı (bkz. başlık) · ⏳ bobin 6-7 sargı yönü ölçümü **BEKLİYOR** | maske bitleri |
 | **1** | ✅ **BİTTİ** (`07c2d4c`) — protokol 88→120, pin tablosu, sürüklenme kaynakları, 5 mutasyon kanıtı. Tam süit **2615 geçti**. ⚠️ REFLASH + YAYIN bekliyor | STM 7 bobin sürebiliyor; backend topolojisi hâlâ 1-5, bobin 6-7 alanları SIFIR gidiyor |
 | **2** | Bobin 6-7 kablolaması + tezgâh: ISR ölçümü, darbe kenarı, alan yönü, doz | 7 bobin STM'den sürülüyor; ESP'ler hâlâ takılı ama **kullanılmıyor** |
-| **3** | I2C1+I2C2 + MLX90614/MLX90393 (yalnız bobin 6-7) + `STM_TELE` çerçevesi + backend/DB yolu | gerçek sıcaklık/alan geri geliyor; 48 °C istemci interlock'unun bobin 6-7'de tetiklendiği doğrulanıyor (R1). Termal kesme **eklenmiyor** (karar 2), ACS712 **taşınmıyor** (karar 3) |
+| **3** | ✅ **KOD BİTTİ** (`34a5e6c`) — `pemf_sensor.c/h` (registre I2C, bloklamayan), `STM_TELE` sözleşmesi, backend olay yolu, 25 test, 8/8 mutasyon kırmızı. ⏳ **TEZGÂH BEKLİYOR**: kablo + ESP karşılaştırması | gerçek sıcaklık/alan yolu hazır; termal kesme **eklenmedi** (karar 2), ACS712 **taşınmadı** (karar 3) |
 | **4** | Topoloji anahtarı (Grup B) + arayüz (Grup C) | `ESP_COIL_IDS = set()`; ESP kodu uykuda, silinmiş değil |
 | **5** | Yayın + saha | — |
 
@@ -510,6 +510,35 @@ Sahibin zaten bekleyen bir reflash borcu var (maske 0x00 düzeltmesi, §2.4) —
 loglara bakmadan anlaşılmaz.
 
 ---
+
+## 8.1 Faz 3 — ne yapıldı, tezgâhta ne doğrulanacak
+
+**Yapıldı (`34a5e6c`):** `firmware/stm32_pemf/Core/{Inc/pemf_sensor.h,Src/pemf_sensor.c}` —
+registre seviyesi I2C1 (PB8/PB9) + I2C2 (PB10/PB11) @100 kHz, iki sensör sürücüsü, bloklamayan
+durum makinesi, hat kurtarma; `main.c`'de `STM_TELE` satırı; backend'de ayrıştırıcı + olay +
+`_live_state` + `_coil_last_telemetry` damgası + `coil_status`/`sensor_data` yayınları.
+
+**Neden registre seviyesi:** `HAL_I2C_MODULE_ENABLED` kapalı ve `Drivers/.../Src` içinde
+`stm32f4xx_hal_i2c.c` **yok** (20 HAL kaynağı var, I2C onlardan biri değil). HAL'i açmak
+CubeF4'ten dosya eklemek demek; CubeMX "Generate Code" ise `main.c`'yi ezer (§B3). NTC bloğu
+da aynı gerekçeyle registre seviyesindeydi — yerleşik desen izlendi.
+
+**Ölçek sabitleri ESP ile birebir** (kıyaslanabilirlik şartı): XY **0.150** µT/LSB,
+Z **0.242** µT/LSB — `Adafruit_MLX90393.h` `mlx90393_lsb_lookup[HALLCONF=0xC][GAIN_SEL=7][RES_16]`.
+Ayarlar GAIN_SEL=7 · OSR=3 · DIG_FILT=1 (`SensorManager.cpp:284-288` ile aynı).
+`|B| = sqrt(x²+y²+z²)/1000` → mT, `magneticMt`'nin anlamı değişmiyor.
+
+⚠️ **TEZGÂHTA DOĞRULANMADI.** C bu depoda derlenmez ve I2C kabloları çekilmedi. Kabul kriterleri:
+
+| # | Ne | Nasıl |
+|---|---|---|
+| 1 | Bus çalışıyor | Aç, UART'ta `STM_TELE` satırı gelsin; MLX90393 adresi bulunmuş olsun |
+| 2 | **Sayılar ESP ile uyumlu** | Aynı sensörü aynı yerde ESP'ye ve STM'e oku → **%5 içinde** olmalı. Uymazsa ölçek/ayar yanlış |
+| 3 | Uzun kablo dayanıyor | Gerçek uzunlukta kablo, **bobinler sürülürken** 10 dk kesintisiz; `i2c_hata` sayacı 0 |
+| 4 | Ana döngü tıkanmıyor | Sensör bağlıyken bobin sür; `STM_NACK`/watchdog olayı **çıkmamalı** |
+| 5 | Arayüz zinciri | Sıcaklık kartta görünsün; 48 °C üstünde istemci interlock'u **gerçekten** tetiklensin |
+
+⚠️ Kriter 2 en önemlisi: yanlış ölçek sessiz bir doz hatasıdır (E-alanı barı + PDF).
 
 ## 9. Karar soruları — ✅ YANITLANDI (2026-09-10)
 
