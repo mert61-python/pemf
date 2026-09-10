@@ -6,6 +6,27 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## launcher 1.9.51 — 2026-09-10 (🩹 "Bu platform icin paket yayinlanmadi" hatasi bir daha olmayacak)
+
+- **Kurulabilir paket varken "paket yayinlanmadi" denmesi duzeltildi.** 2026-09-09'da guncelleme
+  paketinin tek-parca kopyasi yayindan cikarilinca, istemciler acilista *"Bu platform (win-x64)
+  icin uygulama paketi henuz yayinlanmadi"* deyip TUM kurulumu kilitledi. Oysa kurulacak paket
+  yerindeydi: uygulama 2026-08-08'den beri iki katmanda (`base-app` + `base-deps`) geliyor ve
+  kurulum/guncelleme zaten katmanlari kullaniyordu. Sorun yalnizca acilistaki "bu platform
+  destekleniyor mu" kontrolundeydi: **yalniz tek-parca kopyaya bakiyor, katmanlari saymiyordu.**
+- Kontrol artik **iki kanaldan birini** yeterli sayiyor (katman ya da tek-parca). Boylece paket
+  duzeni ilerideki bir yayinda degisse bile ayni sinif hata tekrarlanamaz.
+- **Arastirma AI Pro bayragi artik gercekten geciyor.** `deploy/device.env` icindeki
+  `PEMF_ARASTIRMA_AIPRO` launcher tarafindan backend'e iletilmiyordu: tezgah dogrulamasi bitip
+  bayrak `1` yapilsa bile hicbir sey degismiyor, operatore "actim" gibi gorunuyordu. Yon
+  fail-safe'ti (surus kapali kalir) ama gorunen durum ile gercek durum ayrisiyordu. Varsayilan
+  yine `0` — yani davranis degismedi, yalnizca ayarladiginiz deger artik backend'e ulasiyor.
+- Klinik tarafinda gorunur bir degisiklik yok; guncelleme kendiliginden iner.
+
+**Etiket:** `launcher-v1.9.51` → `PEMFVetClient-Setup-1.9.51.exe` (sha `7cc744445082`).
+
+1.9.47+ kurulu cihazlar bu surume kendiliginden gecer.
+
 ## app 1.9.46 — 2026-09-09 (🩹 guncelleme sonrasi "Beklenmeyen bir hata" ekrani duzeltildi)
 
 ### Masaustu istemci
