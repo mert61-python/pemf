@@ -131,12 +131,15 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
     for h in (hdr_k, hdr_a):
         assert re.search(r"^#define PEMF_BOBIN_TERS_MASKESI 0x00U$", h, re.M), (
             "polarite maskesi 0x00 DEGIL. SAHIP KARARI 2026-09-10: maske KULLANILMAYACAK — ters "
-            "sargi bobin UCLARI CEVRILEREK donanimda cozuldu, darbe DAIMA IN_A'dan cikar "
-            "(PC8 PC9 PD10 PC6 PA8) ve IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FIZIKSEL OLARAK "
-            "BAGLI DEGIL. Mono suruste maske biti dalgayi degil DARBENIN CIKTIGI PINI degistirir "
-            "→ bagli olmayan bir pine darbe basmak o bobini SESSIZCE oldurur (ACK'te duty gorunur, "
-            "`running` true, arayuz 'Aktif', ALAN SIFIR). 2026-09-08'de 0x03 idi ve tam bu ariza "
-            "riskini tasiyordu. Degistirmek yeni bir SAHIP KARARI + IN_B kablolamasi gerektirir."
+            "sargi bobin UCLARI CEVRILEREK DONANIMDA cozuldu, yani yazilimda cevirmeye GEREK YOK. "
+            "⚠️ DUZELTME 2026-09-11: bu mesajda 'IN_B pinleri FIZIKSEL OLARAK BAGLI DEGIL' "
+            "yaziyordu - YANLISTI. Sahip bildirimi: bobin 1-5'te IKI PWM DE BAGLI (tam kopru); "
+            "yalniz bobin 6-7'de surucu tek yonlu oldugu icin tek PWM var. "
+            "Maske TEK-BACAK bobinlerde (6-7) hala TEHLIKELI: mono suruste maske biti dalgayi "
+            "degil DARBENIN CIKTIGI PINI degistirir → IN_B kablosu OLMAYAN bir bobinde o bit "
+            "set edilirse bobin SESSIZCE olur (ACK'te duty gorunur, `running` true, arayuz "
+            "'Aktif', ALAN SIFIR). 2026-09-08'de 0x03 idi ve tam bu ariza riskini tasiyordu. "
+            "Degistirmek yeni bir SAHIP KARARI gerektirir."
         )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
 

@@ -198,15 +198,22 @@ def test_KRITIK_BIPOLAR_periyot_basina_4_KENAR_uretir():
     assert bi_kenar == 4, f"bipolar periyot basina {bi_kenar} kenar (4 bekleniyordu)"
 
 
-def test_KRITIK_IN_A_penceresi_IKI_KIPTE_de_AYNI():
-    """⚠️ IN_B kablosu ÇEKİLMEDEN bipolara geçmek alanı DEĞİŞTİRMEZ (zararsız ama etkisiz).
+def test_KRITIK_BIPOLARA_gecis_IN_A_yi_DEGISTIRMEZ_yalniz_IN_B_EKLER():
+    """Bipolar, IN_A penceresini KORUR ve üstüne ters yarıyı EKLER.
 
-    Bu, sahibe "önce kabloyu çek" diyebilmemizin dayanağı: IN_A penceresi özdeş
-    olduğu için, IN_B bağlanana kadar bipolar kip bugünküyle aynı alanı üretir.
-    Duty klempin altında kaldığı sürece (sahip zaten ≤%50 veriyor) fark YOKTUR.
+    ⚠️ DÜZELTME 2026-09-11: bu test önce "IN_B kablosu çekilene kadar bipolar etkisizdir"
+    iddiasını taşıyordu. Sahip bildirimi onu çürüttü: **bobin 1-5'te iki PWM de BAĞLI**
+    (tam köprü); yalnız bobin 6-7'de sürücü tek yönlü. Yani maske 0x60 ile flash edilir
+    edilmez bobin 1-5 GERÇEKTEN bipolar sürülür — kazanç ANINDA gelir, beklemez.
+
+    Ölçülen değişmez hâlâ değerli: bipolar kip IN_A darbesini KAYDIRMAZ/KISALTMAZ, yalnız
+    ikinci yarıya ters darbe ekler. Bu yüzden geçiş, mevcut dalganın ÜSTÜNE eklenir —
+    var olan dozu bozmaz, üstüne çıkar.
     """
     tpp = 500
     duty = tpp // 4  # %25 — bipolar klempi (tpp/2-2 = 248) BAGLAYICI DEGIL
-    a_uni, _ = _dalga(True, tpp, duty)
-    a_bi, _ = _dalga(False, tpp, duty)
-    assert a_uni == a_bi, "IN_A penceresi iki kipte AYRISTI -> 'kablo cekilene kadar ayni' iddiasi YANLIS"
+    a_uni, b_uni = _dalga(True, tpp, duty)
+    a_bi, b_bi = _dalga(False, tpp, duty)
+    assert a_uni == a_bi, "bipolar kip IN_A penceresini DEGISTIRDI -> mevcut doz bozulur"
+    assert not any(b_uni), "unipolar kipte B bacagi surulmus"
+    assert any(b_bi), "bipolar kipte B bacagi HIC surulmuyor -> ters yari eklenmiyor"

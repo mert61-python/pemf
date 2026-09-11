@@ -27,9 +27,17 @@
  *   Bobin 5 : PWM → PA8  (IN_A)  ·  PA9  (IN_B) kalıcı LOW
  *   Bobin 6 : PWM → PE13 (IN_A)  ·  PE12 (IN_B) kalıcı LOW   ← ESP'den taşındı 2026-09-10
  *   Bobin 7 : PWM → PE15 (IN_A)  ·  PD13 (IN_B) kalıcı LOW   ← ESP'den taşındı 2026-09-10
- *   ⚠️ SAHİP KABLOLAMASI (2026-09-10): darbe DAİMA IN_A'dan çıkar — bobin 1-7 sırayla
- *   PC8 PC9 PD10 PC6 PA8 PE13 PE15. IN_B pinleri (PD12 PE10 PD11 PC7 PA9 PE12 PD13)
- *   FİZİKSEL OLARAK BAĞLI DEĞİL → maske 0x00 KALMALI.
+ *   ⚠️⚠️ DÜZELTME 2026-09-11 — ÖNCEKİ KABLOLAMA İDDİASI YANLIŞTI.
+ *   Burada "IN_B pinleri (PD12 PE10 PD11 PC7 PA9 PE12 PD13) FİZİKSEL OLARAK BAĞLI DEĞİL"
+ *   yazıyordu. Sahip bildirimi (2026-09-11): **"donanımda 5 bobin için 2şer PWM de bağlı;
+ *   yanlardaki bobinler için sürücü yüzünden tek PWM unipolar sürüş vardı."**
+ *   GERÇEK KABLOLAMA:
+ *     bobin 1-5 : IN_A **ve** IN_B BAĞLI  → tam köprü, bipolar sürülebilir
+ *     bobin 6-7 : yalnız IN_A bağlı       → sürücü tek yönlü, YALNIZ unipolar
+ *   Yanlış iddia sahibin 2026-09-10 mesajındaki "diğerlerini bağlamıcam" ifadesinin
+ *   IN_B pinleri sanılmasından doğdu; o cümle bobin UÇLARININ sırasıyla ilgiliydi.
+ *   ⚠️ Maske 0x00 yine de KALIR — ama gerekçesi "IN_B bağlı değil" DEĞİL, sahibin ters
+ *   sargıyı DONANIMDA çevirmiş olmasıdır (aşağıdaki blok).
  *   Hangi bacağın darbeleneceği PEMF_BOBIN_TERS_MASKESI ile seçilir (aşağıda): bit i set →
  *   bobin i+1 darbeyi IN_B'den alır, IN_A LOW; değilse IN_A darbelenir, IN_B LOW. Sürülmeyen pinler
  *   boşta ama AYRILMIŞ DEĞİL: çıkış kurulu + kalıcı LOW (yarım-köprü girişi için güvenli); fiziksel
@@ -70,10 +78,12 @@
  * başına ΔB iki katı ve periyot başına 4 kenar (unipolarda 2). Duty tavanı farkı
  * (bipolar ~%50, unipolar ~%100) sahip için BAĞLAYICI DEĞİL — zaten en çok %50 veriliyor.
  *
- * ⚠️⚠️ IN_B BAĞLI DEĞİLKEN BİPOLAR ZARARSIZ AMA ETKİSİZDİR: IN_A penceresi
- * [0,duty) iki kipte de AYNIDIR; bipolar yalnız ikinci yarıda IN_B'yi darbeler.
- * IN_B kablosu çekilmemişse o darbe hiçbir yere gitmez → alan bugünküyle AYNI kalır.
- * Kazanç, IN_B (PD12 PE10 PD11 PC7 PA9) çekildiği an ortaya çıkar.
+ * ⚠️⚠️ KAZANÇ HEMEN ETKİLİDİR (düzeltme 2026-09-11): burada "IN_B bağlı değilken bipolar
+ * zararsız ama etkisizdir, kazanç kablo çekilince ortaya çıkar" yazıyordu. Sahip bildirimi
+ * bunu çürüttü: **bobin 1-5'te iki PWM de BAĞLI**. Yani maske 0x60 ile flash edildiği anda
+ * bobin 1-5 GERÇEKTEN bipolar sürülür ve dB/dt kazancı ANINDA gelir.
+ * ⚠️ Bunun güvenlik sonucu: duty klempi artık o bobinlerde BAĞLAYICI hâle gelir
+ * (yarım-periyot − boşluk) ve shoot-through koruması CANLIDIR — aşağıya bakınız.
  *
  * ⚠️⚠️ SHOOT-THROUGH: bipolar bobinde duty tavanı `tpp/2 − DDS_BIPOLAR_GAP_TICKS`
  * OLMAK ZORUNDA — A[0,duty) ve B[yarım,yarım+duty) pencereleri çakışırsa iki bacak
@@ -90,14 +100,20 @@
  *
  * SAHİP BİLDİRİMİ (birebir): "ben fiziksel çevirdim bobini hep aynı pinlerde kalmalıydı
  * PC8 PC9 PD10 PC6 VE PA8 1-5 ARASI SIRAYLA BÖYLE BAĞLI DİĞERLERİNİ BAĞLAMİCAM ZATEN"
- * Ters sargı problemi bobin UÇLARI ÇEVRİLEREK DONANIMDA çözüldü; darbe DAİMA IN_A'dan çıkacak,
- * IN_B pinleri (PD12 PE10 PD11 PC7 PA9) FİZİKSEL OLARAK BAĞLI DEĞİL ve bağlanmayacak.
+ * Ters sargı problemi bobin UÇLARI ÇEVRİLEREK DONANIMDA çözüldü → yazılımda çevirmeye GEREK YOK.
  *
- * NEDEN MASKE UNIPOLAR KİPTE YAPISAL OLARAK YANLIŞ: mono sürüşte maske biti dalgayı değil,
- * darbenin çıktığı PİNİ değiştirir. Bağlı olmayan bir pine darbe basmak = o bobin HİÇ SÜRÜLMEZ,
- * üstelik SESSİZCE: ACK'te duty görünür, `running` true olur, arayüz "Aktif" der, ALAN SIFIRDIR.
- * Bipolar kipte maske dalgayı aynalar (iki bacak da bağlıysa anlamlı) ama IN_B hiç bağlanmadığı
- * için o kip de bu donanımda maskeyi kullanamaz. → IN_B pinleri bağlanmadıkça maske 0x00 KALIR.
+ * ⚠️ DÜZELTME 2026-09-11: burada "IN_B pinleri FİZİKSEL OLARAK BAĞLI DEĞİL ve bağlanmayacak"
+ * yazıyordu — YANLIŞTI. Sahip bildirimi: bobin 1-5'te İKİ PWM DE BAĞLI (tam köprü); yalnız
+ * bobin 6-7'de sürücü tek yönlü olduğu için tek PWM var. Maske 0x00 KALIR ama gerekçe
+ * değişti: ters sargı zaten donanımda çözüldüğü için maskeye İHTİYAÇ YOK.
+ *
+ * NEDEN MASKE TEK-BACAK (UNIPOLAR) BOBİNDE YAPISAL OLARAK TEHLİKELİ: mono sürüşte maske biti
+ * dalgayı değil, darbenin çıktığı PİNİ değiştirir. Bobin 6-7'de IN_B'ye giden kablo YOKTUR →
+ * o bit set edilirse bobin HİÇ SÜRÜLMEZ, üstelik SESSİZCE: ACK'te duty görünür, `running`
+ * true olur, arayüz "Aktif" der, ALAN SIFIRDIR. (2026-09-08'de maske 0x03 idi ve bobin 1-2
+ * için tam bu arıza riskini taşıyordu.)
+ * Bobin 1-5 bipolar sürüldüğü için orada maske dalgayı aynalar (faz 180° eşdeğeri) ve
+ * teknik olarak anlamlıdır — ama ihtiyaç yok: yön donanımda düzeltildi. → maske 0x00 KALIR.
  *
  * ARIZA KAYDI: 2026-09-08'de bu değer 0x03'e (bobin 1 + 2) çekilmişti; tezgâh z işaretleri
  * 1:+1,4 2:−4,9 4:+0,5 5:+3,9 mT ölçülüp bobin 2 ters bulunmuş, düzeltme YAZILIMDA yapılmıştı.
