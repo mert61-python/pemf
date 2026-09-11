@@ -48,8 +48,36 @@ _push_notification = live_state._push_notification
 _build_ws_snapshot = live_state._build_ws_snapshot
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
-update_live_session_state = live_state.update_live_session_state
+update_measured_intensity = live_state.update_measured_intensity
 set_live_patient = live_state.set_live_patient
+
+# ── SEANS ALAN KAYDI (masaüstü CSV, sahip kararı 2026-09-11) ──────────────────────────
+# ⚠️ `sensor_kaydedici` İLE KARIŞTIRMA: o, HER ZAMAN açık, günlük dönen, veri kökündeki
+# araştırma günlüğüdür. Bu ise SEANSA ÖZEL, masaüstüne konan, operatörün elle açıp
+# hastaya ilişkilendireceği tek dosyadır ("MASAÜSTÜNE KOYSUN. SEANS ÖZELİNDE OLCAK BU.").
+from servers.seans_alan_kaydi import seans_alan_kaydi as _seans_alan  # noqa: E402
+
+
+def update_live_session_state(*args, **kwargs):
+    """`live_state.update_live_session_state` + seans alan kaydının kapanışı.
+
+    ⚠️ NEDEN SARMALAYICI, NEDEN HER STOP YOLUNA AYRI ÇAĞRI DEĞİL: seansı bitiren DÖRT yol
+    var (kullanıcı durdurma, süre-watchdog'u, STM watchdog'u, acil durdurma) ve hepsi
+    zaten buradan geçiyor — dosyadaki hasta temizliği de tam olarak bu değişmeze dayanıyor
+    ("TÜM stop yolları buradan geçtiği için ... tek noktada garanti"). Dört yere elle
+    çağrı koymak, yarın eklenecek BEŞİNCİ yolun CSV'yi açık bırakmasını garanti ederdi:
+    dosya diskte yarım kalır, özet satırı hiç yazılmaz.
+    """
+    _aktif = bool(args[0]) if args else bool(kwargs.get("is_active"))
+    if not _aktif:
+        try:
+            _yol = _seans_alan.seans_bitti("seans kapandı")
+            if _yol is not None:
+                _push_notification(f"📄 Seans alan kaydı masaüstüne yazıldı: {_yol.name}", "info")
+        except Exception:
+            logging.exception("seans alan kaydı kapatılamadı (seans akışı etkilenmez)")
+    return live_state.update_live_session_state(*args, **kwargs)
+
 
 # Headless Core State referansı (Singleton Bridge)
 # Bu obje main.py'den enjekte edilebilir veya burada global import edilebilir
@@ -641,6 +669,11 @@ _coil_olculen_alanlar: dict = {}
 #: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
 _akim_doygun_son: dict = {}
 
+#: bobin indeksi → son bilinen MANYETIK doygunluk durumu (ayni "yalniz gecis" kurali).
+#: ⚠️ AKIMDAN AYRI SOZLUK: ikisini tek sozlukte tutmak, akim doygunlugu 1'ken gelen bir
+#: manyetik doygunlugu "degismedi" sanip operatore HIC soylememek demekti.
+_mag_doygun_son: dict = {}
+
 ESP_STALE_SEC = 30.0
 ESP_WATCHDOG_INTERVAL_SEC = 5.0
 
@@ -1186,6 +1219,38 @@ def _handle_backend_event(event) -> None:
                     "gösterilen akım GÜVENİLMEZ ve doz kaydına öyle giriyor",
                     "warning",
                 )
+        # ⚠️ MANYETIK DOYGUNLUK: ham eksen tam ölçeğe DAYANDI → |B| GÜVENİLMEZ ve seansın
+        # "ölçülen yoğunluk"una öyle giriyor. RES_16'da taşma KIRPILMAZ, SARAR: gerçek alan
+        # KÜÇÜK görünür — yani doygunluk bayrağı, sayının düşük çıkabileceğinin de habercisi.
+        # Yalnız 0→1 geçişinde bildir (her saniye basmak alarm yorgunluğu üretir).
+        _t_mag_doygun = bool(data.get("magnetic_saturated"))
+        if _t_mag_doygun != bool(_mag_doygun_son.get(_t_idx)):
+            _mag_doygun_son[_t_idx] = _t_mag_doygun
+            if _t_mag_doygun:
+                _push_notification(
+                    f"⚠️ Bobin {_t_coil_id} manyetik alanı sensör aralığını AŞTI (±24,6 mT) — "
+                    "gösterilen mT GÜVENİLMEZ (taşma sarar, değer DÜŞÜK görünebilir)",
+                    "warning",
+                )
+        # ── SEANS YOĞUNLUĞU: ölçüm CSV'ye ve aktif seans kartına ─────────────────────
+        # Sahip kararı 2026-09-11: "ordaki yoğunluk değeri stm e bağlı olan SENSÖRDEN
+        # GELSİN VE AYNI ZAMANDA CSV YE KAYDEDİP MASAÜSTÜNE KOYSUN".
+        # ⚠️ Reçete alanı (`intensityMt`) DEĞİŞTİRİLMEZ — ikisi farklı büyüklüktür.
+        if "magnetic_field" in data:
+            try:
+                _seans_alan.olcum(
+                    _t_coil_id,
+                    float(data["magnetic_field"]),
+                    data.get("magnetic_samples"),
+                    _t_mag_doygun,
+                )
+                # Kartta SEANS BOYU TEPE gösterilir, son saniyeninki değil: bobinler
+                # birlikte anahtarlandığı için saniyelik tepe bile darbe-fazına göre
+                # oynar; operatörün sorduğu "bu seansta kaç mT verdik" sorusunun cevabı
+                # seans tepesidir. Saniyelik değer CSV'de satır satır zaten duruyor.
+                update_measured_intensity(_seans_alan.zirve(), _t_coil_id)
+            except Exception:
+                logging.exception("seans alan kaydı/ölçülen yoğunluk güncellenemedi")
         _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})
         _ws_broadcast_sync(
             {
@@ -2788,6 +2853,31 @@ async def start_session(payload: SessionStartPayload, request: Request):
         remaining_min=payload.duration_minutes,
         duration_sec=payload.duration_minutes * 60,
     )
+
+    # ── SEANSA ÖZEL ALAN KAYDI (masaüstü CSV) ────────────────────────────────────────
+    # ⚠️ `update_live_session_state`ten SONRA: o çağrı `isActive`i true yapar ve ölçülen
+    # yoğunluğu sıfırlar; kayıt ondan önce açılsaydı ilk telemetri satırı hâlâ kapalı
+    # görünen bir seansa yazılırdı. ⚠️ HATA SEANSI ENGELLEMEZ: CSV bir kolaylıktır,
+    # dolu disk ya da yazma izni yüzünden tedavi başlamaması kabul edilemez.
+    try:
+        _csv_yolu = _seans_alan.seans_basladi(
+            str(_active_session.get("session_id") or ""),
+            {
+                "patient_name": payload.patient_name,
+                "operator_name": payload.operator_name,
+                "mode": payload.mode,
+                "frequency": payload.frequency,
+                "duty": payload.duty,
+                "duration_minutes": payload.duration_minutes,
+                "intensity": payload.intensity,
+            },
+        )
+        if _csv_yolu is not None:
+            _push_notification(f"📄 Seans alan kaydı başladı: {_csv_yolu}", "info")
+        else:
+            _push_notification("⚠️ Seans alan kaydı (CSV) açılamadı — tedavi etkilenmedi", "warning")
+    except Exception:
+        logging.exception("seans alan kaydı açılamadı (seans akışı etkilenmez)")
 
     # Dashboard 'Hasta Özeti' kartı için aktif hastayı canlı-duruma yaz (aktif seansın GERÇEK hastası).
     # İsim in-memory payload'dan (maskesiz); tür/ırk/sahip patient_id ile hasta-DB'den (düz-metin, maskesiz)

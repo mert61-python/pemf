@@ -15,7 +15,13 @@ interface Props {
   remainingSec: number;
   durationSec: number;
   frequencyHz: number;
+  /** REÇETE yoğunluğu (operatörün yazdığı; cihaza gönderilmez). */
   intensityMt: number;
+  /**
+   * ÖLÇÜLEN yoğunluk — STM sensöründen gelen SEANS TEPE |B| (mT).
+   * ⚠️ null/undefined = ölçüm YOK (0 DEĞİL) → kart reçete değerine düşer ve etiket "(kayıt)" olur.
+   */
+  measuredIntensityMt?: number | null;
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
@@ -56,6 +62,7 @@ export function SessionProgressCard({
   durationSec,
   frequencyHz,
   intensityMt,
+  measuredIntensityMt = null,
   onStop,
   onEmergencyStop,
   loading = false,
@@ -140,10 +147,18 @@ export function SessionProgressCard({
       {/* Params */}
       <View style={styles.paramRow}>
         <ParamChip label="FREKANS" value={`${frequencyHz} Hz`} />
-        {/* M3 (denetim 2026-09-03): mT yogunlugu CIHAZA GONDERILMEZ (STM/ESP paketi mT
-            tasimaz), yalniz kayda yazilir. FREKANS ile yan yana esit gosterilince operator
-            uygulanan doz saniyordu -> "(kayit)" etiketi gercek doz beklentisini duzeltir. */}
-        <ParamChip label="YOĞUNLUK (kayıt)" value={`${intensityMt} mT`} />
+        {/* ⚠️ İKİ FARKLI YOĞUNLUK — ETİKET HANGİSİ OLDUĞUNU SÖYLER.
+            M3 (denetim 2026-09-03): reçete mT'si CIHAZA GÖNDERİLMEZ (STM/ESP paketi mT
+            taşımaz), yalnız kayda yazılır; FREKANS ile yan yana eşit gösterilince operatör
+            uygulanan doz sanıyordu → "(kayıt)" etiketi o beklentiyi düzeltir.
+            2026-09-11 (sahip): STM'e MLX90393 bağlandı → GERÇEK ölçüm varken onu göster ve
+            etiketi "(ölçülen)" yap. ⚠️ Ölçüm yokken 0 GÖSTERİLMEZ: reçeteye düşülür ve
+            etiket yine "(kayıt)" olur — "0 mT ölçtük" demek, ölçmediğimizi ölçtük demektir. */}
+        {measuredIntensityMt != null ? (
+          <ParamChip label="YOĞUNLUK (ölçülen)" value={`${measuredIntensityMt.toFixed(2)} mT`} />
+        ) : (
+          <ParamChip label="YOĞUNLUK (kayıt)" value={`${intensityMt} mT`} />
+        )}
       </View>
 
       {/* Buttons */}

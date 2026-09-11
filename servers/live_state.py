@@ -152,7 +152,16 @@ _live_state = {
     "activeTreatment": {
         "mode": "Sistem Hazır",
         "frequencyHz": 0,
+        # REÇETE yoğunluğu: operatörün yazdığı sayı. Cihaza GÖNDERİLMEZ (STM/ESP paketi mT
+        # taşımaz), yalnız DB'ye kaydedilir → arayüzde "(kayıt)" etiketiyle gösterilir.
         "intensityMt": 0.0,
+        # ÖLÇÜLEN yoğunluk: STM'e bağlı MLX90393'ün seans boyunca gördüğü TEPE |B| (mT).
+        # ⚠️ None = HİÇ ÖLÇÜM YOK (sensör bağlı değil / seans yok). 0.0 KOYULMAZ: aşağı
+        # akış 0.0'ı "ölçüldü" sayar — bu deponun tekrarlayan arızası. Arayüz None iken
+        # reçete değerine düşer ve ETİKETİ de "(kayıt)" olarak gösterir.
+        "measuredIntensityMt": None,
+        # Ölçümün geldiği bobin (tek manyetik sensör bobin 6'ya eşlenik). None = ölçüm yok.
+        "measuredIntensityCoil": None,
         "remainingMin": 0,
         "elapsedSec": 0,
         "durationSec": 0,
@@ -312,6 +321,11 @@ def update_live_session_state(
                 "durationSec": duration_sec,
             }
         )
+        # ⚠️ ÖLÇÜM SEANSA AİTTİR — BAŞLARKEN DE BİTERKEN DE SIFIRLANIR. Yalnız bitişte
+        # temizlemek yetmez: yeni seansın ilk telemetrisi gelene kadar arayüz ÖNCEKİ
+        # seansın tepe değerini "bu seansın ölçülen yoğunluğu" diye gösterirdi.
+        _live_state["activeTreatment"]["measuredIntensityMt"] = None
+        _live_state["activeTreatment"]["measuredIntensityCoil"] = None
         if not is_active:
             # Seans bitti (durdur/watchdog/acil) → Hasta Özeti "Aktif hasta yok"a dönsün. TÜM stop
             # yolları buradan geçtiği için hasta temizliği tek noktada garanti (kilit içinde, hafif).
@@ -321,6 +335,34 @@ def update_live_session_state(
     if not is_active:
         # patient session_update ile TAŞINMAZ → tam snapshot yayınla ki kart canlı temizlensin.
         _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
+
+
+def update_measured_intensity(mt: float | None, coil_id: int | None) -> bool:
+    """Aktif seansın ÖLÇÜLEN yoğunluğunu (tepe |B|, mT) yazar ve değiştiyse yayınlar.
+
+    SAHİP KARARI 2026-09-11: "aktif seans ... ordaki yoğunluk değeri stm e bağlı olan
+    SENSÖRDEN GELSİN". Reçete alanı (`intensityMt`) DEĞİŞTİRİLMEZ — ikisi farklı şeydir
+    (bkz. servers/seans_alan_kaydi.py başlığı).
+
+    ⚠️ SEANS YOKKEN YAZMAZ: ölçüm seansa aittir; boştaki cihazın okuduğu alan "uygulanan
+    doz" değildir ve arayüzde öyle görünmemelidir.
+    ⚠️ DEĞİŞMEDİYSE YAYINLAMAZ: telemetri saniyede bir gelir; her turda `session_update`
+    basmak, hiçbir şey değişmemişken WS'i ve istemci render'ını meşgul eder.
+
+    @return yayın yapıldıysa True.
+    """
+    with _live_state_lock:
+        at = _live_state["activeTreatment"]
+        if not at.get("isActive"):
+            return False
+        yeni = None if mt is None else round(float(mt), 3)
+        if (at.get("measuredIntensityMt") == yeni) and (at.get("measuredIntensityCoil") == coil_id):
+            return False
+        at["measuredIntensityMt"] = yeni
+        at["measuredIntensityCoil"] = None if yeni is None else coil_id
+        snapshot = dict(at)
+    _ws_broadcast_sync({"type": "session_update", "data": snapshot})
+    return True
 
 
 def set_live_patient(patient) -> None:

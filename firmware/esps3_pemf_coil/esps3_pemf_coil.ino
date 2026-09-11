@@ -30,6 +30,7 @@ SemaphoreHandle_t serialMutex; // Global Serial Mutex
 
 TaskHandle_t taskNetworkHandle = NULL;
 TaskHandle_t taskControlHandle = NULL;
+TaskHandle_t taskMagneticHandle = NULL;
 
 // Statik nesneler (Dinamik bellek / heap fragmentasyonunu önlemek için)
 static PemfNetworkManager sysNetManager;
@@ -228,6 +229,33 @@ static void bKaydiRaporla(const SensorReadings& r, const PWMState& pwm) {
     oncekiAktif = pwm.active;
 }
 
+// ============================================================================
+// TaskMagnetic — HIZLI MANYETIK ORNEKLEME (saniyelik zirve)
+// ----------------------------------------------------------------------------
+// SAHIP KARARI 2026-09-11: "bana max deger lazim... okuma hizini maxlayabilirsin...
+// saniyede 1 sonuc verir en yuksegini".
+//
+// ⚠️ NEDEN AYRI GOREV: ControlTask 200 ms periyotlu (5 Hz). 100 Hz'lik bir bobin
+// darbesini 5 Hz'le orneklemek darbenin neresine denk geldigini SANSA birakir. Bu gorev
+// ~2,5 ms'de bir ornek alir (~400 Hz) ve `SensorManager` saniyelik TEPE degeri mandallar.
+//
+// ⚠️ WATCHDOG'A KAYIT EDILMEZ (`esp_task_wdt_add` YOK): watchdog'a kayitli bir gorev
+// beslenmezse CIHAZI YENIDEN BASLATIR. Bu gorev olcum yapar; kopan bir I2C sensoru
+// yuzunden tedavi ortasinda cihaz yeniden baslamamalidir (kayitli karar: sensor kopunca
+// restart YOK). Gorevin kendisi olurse manyetik alan "olculmedi" olur, tedavi surer.
+//
+// ⚠️ `vTaskDelay` HER TURDA: ayni cekirdekteki ControlTask'a (daha yuksek oncelik) ve
+// idle goreve teslim eder. Bekleme ayni zamanda MLX90393'un 1,27 ms donusum suresini
+// karsilar — okuma/baslatma I2C islemleriyle birlikte tur ~2,5 ms olur.
+// ============================================================================
+void TaskMagnetic(void *pvParameters) {
+    LOG_PRINTLN("[Sys] Magnetic Task Started on Core 1");
+    for (;;) {
+        sysSensors.pollMagnetic();
+        vTaskDelay(pdMS_TO_TICKS(MAG_ORNEK_GECIKME_MS));
+    }
+}
+
 void TaskControl(void *pvParameters) {
     // -----------------------------------------------------------------------
     // BAŞLATMA SIRASI — KRİTİK
@@ -420,6 +448,19 @@ void setup() {
         PRIORITY_CONTROL,   // Priority
         &taskControlHandle, // Handle
         CORE_CONTROL        // Core ID
+    );
+
+    // ⚠️ ControlTask'TAN SONRA olusturulur: `sysSensors.pollMagnetic()` I2C'ye dokunur ve
+    // sensorler ControlTask'in basinda (`beginWithoutCalibration`) kuruluyor. Once
+    // baslatilsaydi kurulmamis bir Wire1'e girip sahte hata sayaci uretirdi.
+    xTaskCreatePinnedToCore(
+        TaskMagnetic,        // Function
+        "MagneticTask",      // Name
+        STACK_MAGNETIC,      // Stack size
+        NULL,                // Params
+        PRIORITY_MAGNETIC,   // Priority (ControlTask'in ALTINDA — guvenlik dongusu once)
+        &taskMagneticHandle, // Handle
+        CORE_CONTROL         // Core ID (Wire1 yalniz bu cekirdekten kullanilir)
     );
 
     LOG_PRINTLN("[Sys] Setup Complete. System Running.");

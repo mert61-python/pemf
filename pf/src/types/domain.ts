@@ -77,7 +77,18 @@ export interface Patient extends PatientSummary {
 export interface ActiveTreatment {
   mode: string;
   frequencyHz: number;
+  /** REÇETE yoğunluğu: operatörün yazdığı sayı. Cihaza GÖNDERİLMEZ, yalnız kayda girer. */
   intensityMt: number;
+  /**
+   * ÖLÇÜLEN yoğunluk: STM'e bağlı MLX90393'ün SEANS BOYUNCA gördüğü TEPE |B| (mT).
+   *
+   * ⚠️ `null`/`undefined` = HİÇ ÖLÇÜM YOK (sensör bağlı değil ya da seans yok) — 0 DEĞİL.
+   * Bu ayrım şart: 0 göstermek "ölçtük, alan yok" demektir; ölçüm yokken kart reçete
+   * değerine düşer ve ETİKETİ de "(kayıt)" olur ki operatör hangisini gördüğünü bilsin.
+   */
+  measuredIntensityMt?: number | null;
+  /** Ölçümün geldiği bobin (tek manyetik sensör bobin 6'ya eşlenik). */
+  measuredIntensityCoil?: number | null;
   remainingMin: number;
   elapsedSec: number;
   durationSec: number;

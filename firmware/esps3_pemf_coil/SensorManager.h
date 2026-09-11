@@ -46,6 +46,32 @@ public:
     // Core 1 loop içinden çağrılır
     SensorReadings readAll();
 
+    /**
+     * Manyetik boru hattini BIR adim ilerletir: bekleyen olcumu oku, zirveyi guncelle,
+     * yenisini baslat. Saniyelik pencere dolunca zirveyi mandallar.
+     *
+     * ⚠️ `_mlxMag`e (Wire1) DOKUNAN TEK YER BURASIDIR — `readAll()` artik yalniz
+     * mandallanmis degeri kopyalar. Iki yer birden I2C'ye girerse ayni bus'ta iki gorev
+     * carpisir; bunu mutex'le degil, SAHIPLIGI TEK YERE TASIYARAK cozduk.
+     *
+     * Cagiran: TaskMagnetic (esps3_pemf_coil.ino), ~`MAG_ORNEK_GECIKME_MS` periyotla.
+     */
+    void pollMagnetic();
+
+private:
+    /**
+     * MLX90393 olcek/hiz ayarlarini uygular — **TEK KAYNAK**.
+     *
+     * ⚠️ NEDEN AYRI FONKSIYON (2026-09-11): bu ayarlar IKI yerde yaziliydi — `_initI2C()`
+     * ve `recoverI2CBus(1)`. Olcegi yalniz birinde guncellemek, sensor bir kez hat
+     * kurtarmasindan gectikten SONRA sessizce ESKI aralia (±12,3 mT) donmesi demekti:
+     * sahibin 10 mT'lik alani o andan itibaren SARAR ve kucuk okunur, hicbir uyari cikmaz.
+     * Bu deponun kayitli "sihirli sayi ikinci yerde" arizasinin ta kendisi.
+     */
+    void _yapilandirMag();
+
+public:
+
     // PWM durumu bildirimi
     void setPWMActive(bool active);
 
@@ -79,6 +105,35 @@ private:
 
     // PWM aktifken max değerler
     float _maxMagneticField;
+
+    // ── SANIYELIK ZIRVE PENCERESI (sahip karari 2026-09-11) ───────────────────
+    unsigned long _magPencereBitisMs; /**< pencere kapanis damgasi */
+    float    _magBirikenZirve;        /**< pencere ici en buyuk |B| (mT) */
+    uint32_t _magBirikenOrnek;        /**< pencere ici gecerli ornek sayisi */
+    bool     _magBirikenDoygun;
+    float    _magBirikenX, _magBirikenY, _magBirikenZ; /**< ZIRVE aninin eksenleri */
+    // Mandallanmis (readAll'in okudugu) degerler:
+    float    _magZirveMt;
+    uint16_t _magZirveOrnek;
+    bool     _magZirveDoygun;
+    float    _magZirveX, _magZirveY, _magZirveZ;
+    /**
+     * Mandal koruyucusu. `pollMagnetic()` (TaskMagnetic) yazar, `readAll()` (ControlTask)
+     * okur — AYRI CEKIRDEKLERDE. 32-bit hizalanmis tek yazma atomiktir ama BES DEGER BIR
+     * KUMEDIR: koruma olmadan zirve N. pencereden, ornek sayisi N+1'den gelebilir ve
+     * "1 orneklik 8 mT zirve" gibi imkansiz bir satir uretilirdi.
+     */
+    portMUX_TYPE _magMux;
+    /**
+     * I2C KURULUMU BITTI MI. `pollMagnetic()` bu bayrak set edilene kadar HICBIR SEY YAPMAZ.
+     *
+     * ⚠️ NEDEN SART (yarissiz baslangic): TaskMagnetic, ControlTask'in `beginWithoutCalibration()`
+     * icindeki `delay()`leri sirasinda calisabilir (delay teslim eder). O anda Wire1 HENUZ
+     * kurulmamistir; `_magOk` de false oldugu icin `pollMagnetic()` dogrudan
+     * `recoverI2CBus(1)`e girer ve KURULUMLA CAKISIR — sensor ne kurulur ne kurtarilir,
+     * acilista sessizce olur. Bayrak `_initI2C()` bitiminde set edilir.
+     */
+    bool _i2cHazir;
     float _maxCurrent;
 
     // Hata sayaçları

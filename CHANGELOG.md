@@ -6,6 +6,40 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.49 — 2026-09-11 (🧲 manyetik alan artık TEPE değer: saniyede bir, en yüksek)
+
+> ⚠️ **BU SÜRÜM DE YENİ STM32 FIRMWARE'İ İSTER.** 1.9.48'deki 120 baytlık paket şartı
+> sürüyor; ayrıca manyetik ölçüm yolu tamamen değişti. Kart yeniden programlanmadan
+> bobin 6'daki mT değeri ve seans yoğunluğu **gelmez** (bobinler yine de çalışır).
+
+**Manyetik alan artık "o an ne okuduysam" değil, "son bir saniyenin en yükseği".**
+Bobinler birlikte açılıp kapanıyor. Saniyede bir alınan tek örnek, darbenin neresine denk
+geldiğine göre 0 ile tam alan arasında **rastgele** bir sayı veriyordu — operatör bunu
+"yoğunluk düştü" diye okuyordu. Sensör artık saniyede ~425 kez okunuyor ve raporlanan sayı
+o saniyenin **tepe** değeri. Telemetri hızı değişmedi (hâlâ saniyede bir satır).
+
+**⚠️ ÖLÇÜM ARALIĞI DÜZELTİLDİ — eski ayar 5 mT üstünü ÖLÇEMİYORDU.** Sahada 1–10 mT
+bekleniyor; sensörün eski kazanç ayarında X/Y ekseninin tam ölçeği **4,92 mT** idi ve taşma
+kırpılmıyor, **sarıyordu**: 6 mT'lik gerçek bir alan küçük ya da negatif bir sayı olarak
+okunuyordu, hiçbir uyarı çıkmadan. Aralık **±24,6 mT**'ye çıkarıldı. Çözünürlük kaybı yok
+(0,00075 mT). Aynı düzeltme WiFi'li ESP32-S3 kartına da uygulandı — iki kartın mT sayıları
+artık doğrudan kıyaslanabilir.
+
+**Manyetik sensör arayüzde bobin 6'da görünüyor.** Sahada tek sensör var; eskiden bobin 7
+diye raporlanıyordu.
+
+**Aktif seans kartındaki yoğunluk artık ÖLÇÜLEN değer.** Etiketi de söylüyor:
+- ölçüm varsa **"YOĞUNLUK (ölçülen)"** — sensörün seans boyunca gördüğü tepe alan,
+- ölçüm yoksa **"YOĞUNLUK (kayıt)"** — operatörün yazdığı reçete değeri (eski davranış).
+
+İkisi karıştırılmıyor: reçete sayısı kayda olduğu gibi giriyor, ölçüm onun üzerine yazılmıyor.
+
+**Her seans için masaüstüne CSV yazılıyor.** `PEMF_alan_<tarih>_<hasta>.csv`; her saniyenin
+tepe değeri, kaç örnekten geldiği ve ölçümün güvenilir olup olmadığı satır satır. Dosya
+seans sürerken **anında** yazılıyor — bilgisayar kapanırsa o ana kadarki veri kalır.
+
+Sensör aralığı aşılırsa operatöre bildirim çıkıyor ve değerin güvenilmez olduğu söyleniyor.
+
 ## mobile 2.3.34 — 2026-09-11 (📱 telefon uygulaması 7 bobini ve akımı görüyor)
 
 - Kontrol ekranındaki "STM32 Bobinler" / "WiFi ESP Bobinler" ayrımı kalktı: tek liste,

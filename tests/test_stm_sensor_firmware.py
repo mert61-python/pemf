@@ -112,41 +112,175 @@ def test_KRITIK_BLOKLAMAZ_HAL_Delay_ve_butcesiz_while_YOK():
 
 
 def test_KRITIK_donusum_suresi_DAMGA_ile_beklenir():
-    """MLX90393'ün ~17 ms dönüşümü bir bekleme DEĞİL, bir zaman damgası olmalı."""
+    """MLX90393 dönüşümü bir BEKLEME değil, bir zaman DAMGASI olmalı.
+
+    ⚠️ 2026-09-11'de damga kaynağı DEĞİŞTİ: dönüşüm 6,84 ms'ten 1,27 ms'e indi (DIG_FILT=0,
+    OSR=0) ve `HAL_GetTick()` 1 ms çözünürlüklü olduğu için artık DWT çevrim sayacı
+    kullanılıyor (`mag_hazir_cyc`), tick yolu YEDEK. Kapı ikisini de tanır; ASIL iddia
+    değişmedi: **beklemek için ana döngü BLOKLANMAZ**.
+
+    MUTASYON: `S_MAG_BEKLE` gövdesini `HAL_Delay(2); h->durum = S_MAG_OKU;` yap → KIRMIZI.
+    Sahadaki etki: ana döngü ~400 Hz'de 2 ms bloklanır, ölü-adam watchdog'u sahte kopuş
+    görüp tedavi ortasında bobinleri keser.
+    """
     kod = yorumsuz(_oku(SRC))
-    assert "mag_hazir_ms" in kod and "S_MAG_BEKLE" in kod, (
-        "donusum bekleme durumu yok — 17 ms bir yerde BLOKLAYARAK bekleniyor olabilir"
+    assert "S_MAG_BEKLE" in kod, "donusum bekleme durumu yok -> sure BLOKLAYARAK bekleniyor olabilir"
+    assert "mag_hazir_cyc" in kod or "mag_hazir_ms" in kod, "donusum damgasi YOK"
+    # Bekleme kararı ayrı bir yardımcıya taşındı; damga karşılaştırması ORADA olabilir.
+    _pencere = kod
+    assert re.search(r"(DWT->CYCCNT\s*-\s*[^;]*mag_hazir_cyc)|(simdi_ms\s*-\s*[^;]*mag_hazir_ms)", _pencere), (
+        "donusum beklemesi damga KARSILASTIRMIYOR"
     )
-    assert re.search(r"S_MAG_BEKLE[^}]*simdi_ms\s*-\s*.*mag_hazir_ms", kod, re.S), (
-        "S_MAG_BEKLE durumu zaman damgasini KARSILASTIRMIYOR"
+    # ⚠️ KARSIT-KANIT: bloklayici bekleme SIZMASIN. Bu dosyada `HAL_Delay` HIC olmamali.
+    assert "HAL_Delay" not in kod, (
+        "sensor katmaninda HAL_Delay VAR -> ana dongu bloklanir, olu-adam watchdog'u sahte kopus gorur"
     )
+
+
+def test_KRITIK_DWT_sayaci_OLCULEREK_dogrulanir():
+    """DWT çevrim sayacı VARSAYILMAZ, açılışta gerçekten ilerlediği ÖLÇÜLÜR.
+
+    ⚠️ NEDEN KAPI: 1,27 ms'lik dönüşüm beklemesi bu sayaca dayanıyor. Sayaç ilerlemezse
+    (bazı kartlarda TRCENA açılmaz) hedef çevrim ASLA gelmez ve manyetik durum makinesi
+    `S_MAG_BEKLE`de SONSUZA KADAR takılır. Ana döngü dönmeye devam ettiği için ölü-adam
+    watchdog'u bunu YAKALAMAZ — alan telemetrisi sessizce kesilir ve kimse fark etmez.
+
+    MUTASYON: `g_dwt_var = (DWT->CYCCNT != t0);` → `g_dwt_var = true;` yap → KIRMIZI.
+    """
+    kod = yorumsuz(_oku(SRC))
+    assert "g_dwt_var" in kod, "DWT kullanilabilirlik bayragi YOK"
+    # ⚠️ TUM atamalar taranir: ilki `static bool g_dwt_var = false;` BASLANGIC degeridir,
+    # onu okuyup "CYCCNT yok" demek kapiyi HER ZAMAN kirmizi yapardi (sahte kirmizi da
+    # sahte yesil kadar zararlidir — kimse kapiya bakmaz olur).
+    atamalar = re.findall(r"g_dwt_var\s*=\s*([^;]+);", kod)
+    assert atamalar, "g_dwt_var atamasi bulunamadi -> kapi BAYAT"
+    olcenler = [a for a in atamalar if "CYCCNT" in a]
+    assert olcenler, (
+        f"g_dwt_var atamalari {atamalar!r} — hicbiri sayacin GERCEKTEN ilerledigini OLCMUYOR. "
+        "Ilerlemeyen sayacta manyetik okuma sessizce sonsuza kadar durur."
+    )
+    # Baslangic degeri GUVENSIZ olmali: olcum yapilmadan once true varsayilirsa,
+    # `dwt_baslat()` cagrilmayi unutuldugunda kilitlenme geri gelir.
+    ilk = re.search(r"static bool g_dwt_var\s*=\s*([^;]+);", kod)
+    assert ilk and ilk.group(1).strip() == "false", (
+        f"g_dwt_var baslangici {ilk.group(1) if ilk else None} — 'false' olmali (olculene kadar YOK say)"
+    )
+    # Yedek yol da bulunmali: DWT yoksa tick'e dusulur, kilitlenilmez.
+    assert "MLX90393_DONUSUM_MS_YEDEK" in kod, "DWT yoksa YEDEK bekleme yolu YOK -> kilitlenme"
+
+
+#: Adafruit_MLX90393.h `mlx90393_lsb_lookup[HALLCONF=0xC][GAIN_SEL][RES_16]` — (XY, Z) µT/LSB.
+#: Kütüphane dosyasından BİREBİR kopyalandı (satır 105-125).
+ADAFRUIT_LSB_RES16 = {
+    0: (0.751, 1.210),
+    1: (0.601, 0.968),
+    2: (0.451, 0.726),
+    3: (0.376, 0.605),
+    4: (0.300, 0.484),
+    5: (0.250, 0.403),
+    6: (0.200, 0.323),
+    7: (0.150, 0.242),
+}
+
+#: Sahip 2026-09-11: "1-10 mT arası genelde, 0-5 arası aşırı fazla".
+#: Tam ölçek bu bandın ÜSTÜNDE olmalı — pay olmadan anahtarlama aşımı sarar.
+SAHIP_AZAMI_ALAN_MT = 10.0
+GEREKLI_TAM_OLCEK_MT = 15.0  # sahibin bandına en az %50 pay
+
+
+def _mlx_sabiti(kod, ad):
+    m = re.search(r"#define\s+" + ad + r"\s+([0-9.]+)f?U?", kod)
+    assert m, f"{ad} bulunamadi -> kapi BAYAT"
+    return m.group(1)
 
 
 def test_KRITIK_olcek_sabitleri_ADAFRUIT_TABLOSU_ile_AYNI():
-    """0.150 / 0.242 µT/LSB — ESP'nin bugün ürettiği sayının kaynağı.
+    """LSB sabitleri, kaynakta SEÇİLİ olan GAIN_SEL'in Adafruit satırıyla AYNI olmalı.
 
-    Kaynak: Adafruit_MLX90393.h `mlx90393_lsb_lookup[0][7][0] = {0.150, 0.242}`
-    (HALLCONF 0xC · GAIN_SEL 7 = 1x · RES_16). ESP ayarları: SensorManager.cpp:284-288.
+    ⚠️ KAPI 2026-09-11'DE YENİDEN ÇIPALANDI. Eskiden `GAIN_SEL == 7` ve `0.150/0.242`
+    SABİT olarak pinlenmişti; sahip ölçüm bandını verince (1-10 mT) o ayarın tam ölçeği
+    (XY 4,92 mT) YETERSİZ çıktı ve GAIN_SEL 0'a alındı. Sayıyı sabit pinlemek, kapının
+    KENDİSİNİ doğru değişimin önünde engel yapıyordu.
 
-    MUTASYON: 0.150'yi 0.161 yap → KIRMIZI. Sahadaki etki: alan sayıları geçmiş kayıtlarla
-    KIYASLANAMAZ olur ve E-alanı barı/doz raporu sessizce kayar.
+    Yeni iddia DAHA GÜÇLÜ ve ayardan bağımsız: **kaynaktaki LSB çifti, kaynaktaki
+    GAIN_SEL'in tablo satırıyla tutarlı olmalı**. Böylece asıl arıza sınıfı yakalanır:
+    gain değişip ölçek sabitinin unutulması (ya da tersi) — o hâlde her mT %500'e kadar
+    yanlış olur ve hiçbir şey uyarı vermez.
+
+    MUTASYON A: `MLX90393_GAIN_SEL 0` → `4` (LSB'lere dokunmadan) → KIRMIZI.
+    MUTASYON B: `MLX90393_LSB_XY_UT 0.751f` → `0.161f` → KIRMIZI.
     """
     kod = _oku(SRC)
-    xy = re.search(r"#define\s+MLX90393_LSB_XY_UT\s+([0-9.]+)f", kod)
-    z = re.search(r"#define\s+MLX90393_LSB_Z_UT\s+([0-9.]+)f", kod)
-    assert xy and z, "olcek sabitleri bulunamadi -> kapi BAYAT"
-    assert float(xy.group(1)) == 0.150, (
-        f"XY olcegi {xy.group(1)}, Adafruit tablosu 0.150 (GAIN_SEL=7, RES_16). Degistirmek "
-        "ESP'nin urettigi sayiyla kiyaslanabilirligi BOZAR."
+    gain = int(_mlx_sabiti(kod, "MLX90393_GAIN_SEL"))
+    assert gain in ADAFRUIT_LSB_RES16, f"GAIN_SEL={gain} Adafruit tablosunda YOK (0-7 olmali)"
+    bek_xy, bek_z = ADAFRUIT_LSB_RES16[gain]
+    xy = float(_mlx_sabiti(kod, "MLX90393_LSB_XY_UT"))
+    z = float(_mlx_sabiti(kod, "MLX90393_LSB_Z_UT"))
+    assert xy == bek_xy, (
+        f"GAIN_SEL={gain} icin XY olcegi {bek_xy} olmali, kaynakta {xy}. Ayar ile olcek "
+        "AYRISMIS -> uretilen her mT sessizce YANLIS."
     )
-    assert float(z.group(1)) == 0.242, f"Z olcegi {z.group(1)}, tablo 0.242"
-    # Ayar sabitleri de ESP ile ayni olmali (olcek ancak bu ayarlarda gecerli)
-    for ad, beklenen in (("MLX90393_GAIN_SEL", "7"), ("MLX90393_OSR", "3"), ("MLX90393_DIG_FILT", "1")):
-        m = re.search(r"#define\s+" + ad + r"\s+(\d+)U?", kod)
-        assert m and m.group(1) == beklenen, (
-            f"{ad} = {m.group(1) if m else None}, ESP'de {beklenen} — olcek tablosu YALNIZ "
-            "bu ayarlarda gecerlidir, ayar degisince 0.150/0.242 YANLIS olur"
-        )
+    assert z == bek_z, f"GAIN_SEL={gain} icin Z olcegi {bek_z} olmali, kaynakta {z}"
+
+
+def test_KRITIK_olcum_araligi_SAHIBIN_BANDINI_KAPSAR():
+    """Tam ölçek, sahibin ölçüm bandını (1-10 mT) PAYLA kapsamalı — HER EKSENDE.
+
+    ⚠️ NEDEN AYRI VE KRİTİK BİR KAPI (2026-09-11): RES_16'da MLX90393, 19-bit sonucun ALT
+    16 BİTİNİ döndürür. Taşan değer KIRPILMAZ, **SARAR** — 15 mT'lik gerçek bir alan küçük
+    ya da NEGATİF bir sayı olarak okunur. Sarma yazılımdan tespit EDİLEMEZ (doygunluk
+    bayrağı bile yakalayamaz, çünkü sarmış ham değer küçüktür). TEK savunma yeterli
+    aralıktır — yani bu kapı, bir bayrağın değil, FİZİĞİN kapısıdır.
+
+    İlk sürüm GAIN_SEL=7 ile geldi: XY tam ölçek 4,92 mT → sahibin bandının ÜST YARISI
+    ölçülemiyordu ve kimse fark etmezdi.
+
+    MUTASYON: `MLX90393_GAIN_SEL 0` → `7` (LSB'leri de 0.150/0.242 yaparak, yani yukarıdaki
+    tutarlılık kapısını MEMNUN EDEREK) → bu kapı KIRMIZI. İki kapı birlikte, "tutarlı ama
+    yetersiz" ayarı da yakalar.
+    """
+    kod = _oku(SRC)
+    xy = float(_mlx_sabiti(kod, "MLX90393_LSB_XY_UT"))
+    z = float(_mlx_sabiti(kod, "MLX90393_LSB_Z_UT"))
+    tam_xy_mt = 32767 * xy / 1000.0
+    tam_z_mt = 32767 * z / 1000.0
+    assert tam_xy_mt >= GEREKLI_TAM_OLCEK_MT, (
+        f"XY tam olcek {tam_xy_mt:.2f} mT < {GEREKLI_TAM_OLCEK_MT} mT. Sahip bandi "
+        f"{SAHIP_AZAMI_ALAN_MT} mT'ye kadar; RES_16'da tasma KIRPILMAZ, SARAR -> buyuk alan "
+        "KUCUK okunur ve zirve mantigi o yanlis sayiyi 'maksimum' diye kilitler."
+    )
+    assert tam_z_mt >= GEREKLI_TAM_OLCEK_MT, f"Z tam olcek {tam_z_mt:.2f} mT < {GEREKLI_TAM_OLCEK_MT} mT"
+
+
+def test_KRITIK_okuma_hizi_DARBEYI_yakalayacak_kadar():
+    """Dönüşüm süresi, 100 Hz'lik bobin darbesinde birden çok örnek düşürecek kadar kısa olmalı.
+
+    ⚠️ NEDEN: bobinler birlikte anahtarlanıyor. Darbe periyodunda tek örnek düşerse zirve
+    tesadüfe kalır — sahip tam olarak bunu bildirdi ("hepsi aynı anda açıkken kaç mT").
+    tconv tablosu (Adafruit_MLX90393.h `mlx90393_tconv[DIG_FILT][OSR]`) DIG_FILT=0/OSR=0'da
+    1,27 ms verir; eski ayar (DIG_FILT=1/OSR=3) 6,84 ms idi ve 100 Hz'de tek örnek bile
+    garanti değildi.
+
+    MUTASYON: `MLX90393_OSR 0` → `3` yap → KIRMIZI.
+    """
+    kod = _oku(SRC)
+    tconv = {
+        0: (1.27, 1.84, 3.00, 5.30),
+        1: (1.46, 2.23, 3.76, 6.84),
+        2: (1.84, 3.00, 5.30, 9.91),
+        3: (2.61, 4.53, 8.37, 16.05),
+    }
+    df = int(_mlx_sabiti(kod, "MLX90393_DIG_FILT"))
+    osr = int(_mlx_sabiti(kod, "MLX90393_OSR"))
+    assert df in tconv and osr < 4, f"DIG_FILT={df} OSR={osr} tconv tablosunda YOK"
+    sure_ms = tconv[df][osr]
+    assert sure_ms <= 2.0, (
+        f"tconv {sure_ms} ms — 100 Hz'lik darbe periyodunda (10 ms) yeterli ornek dusmez; "
+        "zirve darbenin neresine denk geldigine gore RASTGELE olur."
+    )
+    # Kaynaktaki bekleme, tconv'den KISA olamaz: donusum bitmeden okumak cop veri verir.
+    us = int(_mlx_sabiti(kod, "MLX90393_DONUSUM_US"))
+    assert us >= sure_ms * 1000, f"bekleme {us} us < tconv {sure_ms} ms — donusum BITMEDEN okunuyor"
 
 
 def test_KRITIK_buyukluk_mT_ve_ESP_ile_AYNI_TANIM():

@@ -108,6 +108,30 @@
 #define CURRENT_NOISE_FLOOR      0.3f    // [A]
 #define SENSOR_READ_INTERVAL_MS  200     // 5 Hz
 
+/**
+ * MANYETIK ZIRVE PENCERESI (ms) — "saniyede 1 sonuc, en yuksegi" (sahip karari 2026-09-11).
+ *
+ * ⚠️ NEDEN AYRI: bobinler ~1-100 Hz'de birlikte anahtarlaniyor. 5 Hz'lik `readAll()`
+ * ornegi darbenin neresine dustugune gore 0 ile tam alan arasi RASTGELE bir sayi verir
+ * ve operator bunu "yogunluk dustu" diye okur. Manyetik sensor artik ayri bir gorevde
+ * ~400 Hz ornekleniyor, pencere kapaninca EN BUYUK |B| raporlaniyor.
+ */
+#define MAG_ZIRVE_PENCERE_MS     1000
+
+/** Hizli manyetik ornekleme gorevinin tur gecikmesi (tick). tconv 1,27 ms < tur suresi. */
+#define MAG_ORNEK_GECIKME_MS     1
+
+/**
+ * Tam olcege DAYANMA esikleri (uT), EKSEN BASINA.
+ * GAIN_5X + RES_16 → XY 0.751 uT/LSB, Z 1.210 uT/LSB; int16 tam olcek 32767 →
+ *   XY tam olcek 24.606 uT (%97,5'i 24.000)   ·   Z tam olcek 39.650 uT (%97,6'si 38.700)
+ * ⚠️ TEK ESIK KULLANMA: 24.000 uT'yi Z'ye de uygularsak 24 mT'lik SAGLAM bir Z okumasi
+ * "doygun" ilan edilir ve operator gecerli bir olcumu atar.
+ * ⚠️ Bu bir ERKEN UYARIDIR, sarma tespiti DEGIL: tasan ham deger KUCUK gorunur.
+ */
+#define MAG_DOYGUNLUK_XY_UT      24000.0f
+#define MAG_DOYGUNLUK_Z_UT       38700.0f
+
 // ============================================================================
 // FreeRTOS CONFIGURATION
 // ============================================================================
@@ -116,6 +140,15 @@
 
 #define PRIORITY_NETWORK 1
 #define PRIORITY_CONTROL 2
+/**
+ * Hizli manyetik ornekleme gorevi.
+ * ⚠️ ONCELIK ControlTask'IN ALTINDA (1, 2 degil): bobin surusu, sure kontrolu ve termal
+ * kesme ControlTask'ta. Olcum gorevi onlarin ONUNE GECEMEZ — sensor okumasi ugruna
+ * guvenlik dongusunu geciktirmek kabul edilemez. Her turda `vTaskDelay` ile teslim eder.
+ * CORE_CONTROL'de kosar; Wire1 yalnizca bu cekirdekten kullanilir.
+ */
+#define PRIORITY_MAGNETIC 1
+#define STACK_MAGNETIC    3072
 
 #define CMD_QUEUE_SIZE   10
 #define DATA_QUEUE_SIZE  10
@@ -193,6 +226,19 @@ struct SensorReadings {
     bool allSensorsOk;
     float maxMagneticField;
     float maxCurrent;
+    /**
+     * `magneticField` ZIRVESININ turedigi ornek sayisi (son 1 sn penceresi). 0 = olcum YOK.
+     * ⚠️ TESHIS ICIN SART: zirvenin tek ornekten mi yuzlercesinden mi geldigi disaridan
+     * gorunmezse, yavaslamis bir I2C hatti "alan dustu" gibi okunur.
+     */
+    uint16_t magSamples;
+    /**
+     * Ham eksen tam olcege DAYANDI → |B| GUVENILMEZ.
+     * ⚠️ RES_16'da ham cikti 16-bit ISARETLIdir ve tasma KIRPILMAZ, SARAR — sarma
+     * tespit edilemez, tek savunma yeterli aralik (bkz. SensorManager.cpp GAIN gerekcesi).
+     * Bu bayrak yalniz tam olcege YAKLASILDIGINI soyler.
+     */
+    bool magSaturated;
 };
 
 // PWM Durumu

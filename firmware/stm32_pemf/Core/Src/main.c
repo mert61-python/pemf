@@ -869,7 +869,7 @@ int main(void) {
     static char sens_msg[112];
     int sl = snprintf(sens_msg, sizeof(sens_msg),
                       "-> STM_SENS: C=%lu I2C%lu sicaklik=0x%02X alan=0x%02X%s\r\n",
-                      (unsigned long)(PEMF_SENSOR_ILK_BOBIN_ID + sr),
+                      (unsigned long)PEMF_Sensor_BobinId(sr),
                       (unsigned long)(sr + 1U), (unsigned)s_adr, (unsigned)a_adr,
                       ((s_adr == 0U) && (a_adr == 0U)) ? " (SENSOR YOK)" : "");
     if ((sl > 0) && (sl < (int)sizeof(sens_msg))) {
@@ -911,8 +911,14 @@ int main(void) {
      * kaydedilir; gecmiste ayni desen PDF'e '0.0 °C olculdu' yazdirmisti. Olculmeyen alan
      * HIC GONDERILMEZ; sicaklik/alan da yalniz `*_ok` iken yazilir.
      *
+     * ⚠️ `B=` ANLIK DEGIL, SON 1 SANIYENIN **ZIRVESI** (sahip karari 2026-09-11).
+     * Bobinler birlikte anahtarlaniyor; anlik ornek darbenin neresine dustugune gore
+     * 0 ile tam alan arasi rastgele bir sayi verirdi. `N=` o zirvenin kac ornekten
+     * turedigi (~400 beklenir; dusmesi I2C hattinin yavasladigini soyler),
+     * `S=1` ise ham eksenin tam olcege DAYANDIGI = |B| GUVENILMEZ.
+     *
      * Bicim (docs/stm32-sensor-protokolu.md):
-     *   -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842
+     *   -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412
      * Backend ayristiricisi eksik alani TOLERE eder (headless_core._parse_stm_tele). */
     if (PEMF_Sensor_Poll(HAL_GetTick())) {
       for (uint32_t si = 0U; si < PEMF_SENSOR_BOBIN_SAYISI; si++) {
@@ -924,16 +930,21 @@ int main(void) {
         if (huart3.gState != HAL_UART_STATE_READY) {
           break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
         }
-        static char tele_msg[96];
+        static char tele_msg[112];
+        /* ⚠️ Bobin kimligi TABLODAN gelir, `ILK_BOBIN_ID + si` DEGIL: sahadaki tek
+         * manyetik sensor I2C2'de ama arayuzde bobin 6'da gorunmeli (sahip karari). */
         int tl = snprintf(tele_msg, sizeof(tele_msg), "-> STM_TELE: C=%lu",
-                          (unsigned long)(PEMF_SENSOR_ILK_BOBIN_ID + si));
+                          (unsigned long)PEMF_Sensor_BobinId(si));
         if (sv.sicaklik_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
           tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",T=%.2f,A=%.2f",
                          (double)sv.nesne_c, (double)sv.ortam_c);
         }
         if (sv.alan_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
-          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",B=%.3f",
-                         (double)sv.alan_mt);
+          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",B=%.3f,N=%u",
+                         (double)sv.alan_mt, (unsigned)sv.alan_ornek);
+          if (sv.alan_doygun && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
+            tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",S=1");
+          }
         }
         if ((tl > 0) && (tl < (int)sizeof(tele_msg) - 3)) {
           tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, "\r\n");

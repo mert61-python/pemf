@@ -80,8 +80,29 @@
 /** Sensörlü bobin sayısı (bobin 6 → I2C1, bobin 7 → I2C2). */
 #define PEMF_SENSOR_BOBIN_SAYISI 2U
 
-/** Sensörlü bobinlerin 1-tabanlı kimlikleri; telemetri satırındaki `C=` alanı budur. */
+/**
+ * Her hattın telemetride hangi bobin kimliğiyle raporlanacağı.
+ *
+ * ⚠️ NEDEN TABLO, NEDEN `ILK_BOBIN_ID + sira` DEĞİL (2026-09-11, sahip kararı):
+ * Sahada **TEK** MLX90393 var ve o PB10/PB11'de (I2C2 = 1. sıra). Aritmetik eşleme onu
+ * bobin **7** diye raporluyordu; sahip alanın arayüzde **bobin 6**'da görünmesini istedi
+ * ("1 tane manyetik bağlı olduğu için bobin 6'ya koy"). İki hat da 6'ya raporlar:
+ *   · I2C1 (PB8/PB9) → bobin 6   (sıcaklık takılırsa oraya gider)
+ *   · I2C2 (PB10/PB11) → bobin 6 (manyetik alan)
+ * Backend ALAN BAZINDA birleştirdiği için (`_coil_olculen_alanlar`) iki ayrı satır tek
+ * bobinde çakışmadan toplanır: biri `T=/A=`, diğeri `B=` taşır.
+ *
+ * ⚠️ AYNI ALANI İKİ HAT DA GÖNDERİRSE SONUNCU KAZANIR. Bugünkü kablolamada böyle bir
+ * çakışma yok (I2C1'de manyetik, I2C2'de sıcaklık yok). İkinci bir MLX90393 takılırsa
+ * bu tablo AYRILMALI — sessizce üzerine yazılmasın.
+ */
+#define PEMF_SENSOR_BOBIN_IDLERI {6U, 6U}
+
+/** Geriye uyum: eski aritmetik eşlemenin ilk kimliği (tablo dışı kullanılmaz). */
 #define PEMF_SENSOR_ILK_BOBIN_ID 6U
+
+/** @param sira 0 = I2C1, 1 = I2C2. @return telemetri `C=` alanı (1-tabanlı bobin no). */
+uint32_t PEMF_Sensor_BobinId(uint32_t sira);
 
 /**
  * Bir bobinin sensör okumaları.
@@ -90,11 +111,34 @@
  * göndermemek, 0.0 göndermekten daha dürüsttür — bkz. dosya başlığı).
  */
 typedef struct {
-  float nesne_c;   /**< MLX90614 nesne (bobin yüzeyi) sıcaklığı, °C */
-  float ortam_c;   /**< MLX90614 gövde/ortam sıcaklığı, °C */
-  float alan_mt;   /**< MLX90393 |B| = sqrt(x²+y²+z²), **mT** (ESP ile AYNI büyüklük) */
+  float nesne_c; /**< MLX90614 nesne (bobin yüzeyi) sıcaklığı, °C */
+  float ortam_c; /**< MLX90614 gövde/ortam sıcaklığı, °C */
+  /**
+   * MLX90393 |B| = sqrt(x²+y²+z²), **mT** — SON 1 SANİYENİN **TEPE** DEĞERİ.
+   *
+   * ⚠️ ANLIK DEĞİL, ZİRVE (2026-09-11, sahip kararı). Bobinler ~1-100 Hz'de birlikte
+   * anahtarlanıyor; saniyede bir alınan ANLIK örnek darbenin neresine denk geldiğine
+   * göre 0 ile tam alan arasında herhangi bir sayı verir — operatör "yoğunluk düştü"
+   * diye okur. Sensör artık ~425 Hz'de örneklenir ve saniyelik pencerenin EN BÜYÜK
+   * |B|'si raporlanır: "hepsi aynı anda açıkken kaç mT geliyor" sorusunun cevabı budur.
+   */
+  float alan_mt;
   bool sicaklik_ok;
   bool alan_ok;
+  /**
+   * Zirvenin türetildiği geçerli örnek sayısı (saniyelik pencerede). 0 → ölçüm YOK.
+   * ⚠️ TEŞHİS İÇİN ŞART: `alan_mt` tek bir örnekten mi yoksa yüzlercesinden mi geldiği
+   * dışarıdan görünmezse, yavaşlamış bir I2C hattı "düşük alan" gibi okunur.
+   */
+  uint16_t alan_ornek;
+  /**
+   * Ham eksen değeri tam ölçeğe dayandı → **|B| GÜVENİLMEZ**.
+   * ⚠️ RES_16'da ham çıktı 16-bit İŞARETLİdir ve taşma KIRPILMAZ, SARAR: 30 mT'lik
+   * gerçek alan küçük/negatif bir sayı olarak okunur. Sarma tespit EDİLEMEZ; tek
+   * savunma yeterli aralıktır (bkz. pemf_sensor.c GAIN_SEL gerekçesi). Bu bayrak
+   * yalnız tam ölçeğe YAKLAŞILDIĞINI söyler — erken uyarıdır, sarma kanıtı değil.
+   */
+  bool alan_doygun;
   uint16_t i2c_hata; /**< kümülatif I2C hata sayacı — teşhis; 0 beklenir */
 } PEMF_SensorVerisi_t;
 

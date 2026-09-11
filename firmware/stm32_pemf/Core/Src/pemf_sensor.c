@@ -49,8 +49,22 @@
 /** Üst üste bu kadar hatadan sonra hat kurtarma (9 saat darbesi + SWRST) denenir. */
 #define I2C_KURTARMA_ESIGI 5U
 
-/** Tam okuma turu periyodu (ms). ESP ~1 Hz yayınlıyordu; aynı hızda kalıyoruz. */
-#define SENSOR_TUR_MS 1000U
+/**
+ * ZİRVE PENCERESİ (ms) — telemetri periyodu da budur.
+ *
+ * SAHİP KARARI 2026-09-11: "saniyede 1 sonuç verir en yükseğini". Manyetik sensör
+ * pencere boyunca SÜREKLİ örneklenir, pencere kapanınca EN BÜYÜK |B| raporlanır ve
+ * biriktirici sıfırlanır. UART yükü DEĞİŞMEZ (hâlâ saniyede bir satır) — değişen,
+ * o satırdaki sayının ne anlama geldiği.
+ */
+#define SENSOR_ZIRVE_PENCERE_MS 1000U
+
+/* ⚠️ AYRI BİR "SICAKLIK PERİYODU" SABİTİ YOK — BİLEREK. Sıcaklık isteği zirve
+ * penceresi kapanınca (`pencere_kapat`) set edilir, yani periyodu TANIMI GEREĞİ
+ * `SENSOR_ZIRVE_PENCERE_MS`tir. İkinci bir sabit koymak, iki sayının sessizce
+ * ayrışabildiği ve birinin hiç okunmadığı klasik "sihirli sayı ikinci yerde"
+ * tuzağını açardı. MLX90614'ün termal zaman sabiti zaten saniyeler mertebesinde;
+ * daha hızlı okumak I2C bütçesini yer, bilgi getirmez. */
 
 /**
  * BULUNAMAYAN cihaz kaç turda bir yeniden aranır.
@@ -103,21 +117,58 @@
  * 0x18 → 0x0C..0x0F sırayla TARANIR ve bulunan adres kullanılır (ESP'deki
  * `_scanI2CDevices` davranışının aynısı) — modül değişirse kod değişmesin.
  *
- * AYAR (ESP ile BİREBİR; SensorManager.cpp:284-288 + kütüphane `_init`):
- *   HALLCONF = 0xC (varsayılan) · GAIN_SEL = 7 (1x) · RES_XYZ = 0 (RES_16)
- *   OSR = 3 (kütüphane varsayılanı, ESP değiştirmiyor) · DIG_FILT = 1 (ESP FILTER_1)
+ * AYAR: HALLCONF = 0xC (varsayılan) · GAIN_SEL = 0 · RES_XYZ = 0 (RES_16)
+ *       OSR = 0 · DIG_FILT = 0
  *
- * ÖLÇEK (Adafruit_MLX90393.h `mlx90393_lsb_lookup[HALLCONF=0xC][GAIN_SEL=7][RES_16]`):
- *   X,Y → 0.150 µT/LSB      Z → 0.242 µT/LSB
- * ⚠️ BU İKİ SAYI ESP'NİN BUGÜN ÜRETTİĞİ DEĞERİN KAYNAĞIDIR. Değiştirmek, geçmiş
- * kayıtlarla kıyaslanabilirliği bozar (aynı sınıf tuzak: 1.9.45'te µm gap değişimi).
+ * ÖLÇEK (Adafruit_MLX90393.h `mlx90393_lsb_lookup[HALLCONF=0xC][GAIN_SEL=0][RES_16]`):
+ *   X,Y → 0.751 µT/LSB      Z → 1.210 µT/LSB
  *
- * DÖNÜŞÜM SÜRESİ: `mlx90393_tconv[DIG_FILT=1][OSR=3]` = 6.84 ms; kütüphane +10 ms ekliyor
- * ("Without +10ms delay measurement doesn't always seem to work") → 17 ms. Burada bu süre
- * BEKLENMEZ, damgalanır: SM gönderilir, 17 ms sonraki Poll turunda RM okunur.
+ * ============================================================================
+ * ⚠️⚠️ ÖLÇEK NEDEN DEĞİŞTİ — ESKİ AYAR SAHİBİN ALANINI ÖLÇEMİYORDU
+ * ============================================================================
+ * Bu dosya GAIN_SEL = 7 ile başladı (0.150/0.242 µT/LSB, ESP8266 ile birebir).
+ * Sahip 2026-09-11'de ölçüm bandını verdi: **"1-10 mT arası genelde, 0-5 arası
+ * aşırı fazla"**. GAIN_SEL = 7 + RES_16'nın TAM ÖLÇEĞİ ise:
+ *      XY = 32767 × 0.150 µT = **4,92 mT**      Z = 32767 × 0.242 µT = **7,93 mT**
+ * Yani istenen bandın ÜST YARISI ÖLÇÜLEMİYORDU.
  *
- * BÜYÜKLÜK: |B| = sqrt(x²+y²+z²) / 1000 → **mT**. ESP ile BİREBİR
- * (SensorManager.cpp:418-419) → `magneticMt` alanının anlamı DEĞİŞMEZ.
+ * ⚠️ VE TAŞMA SESSİZDİR: RES_16'da cihaz 19-bit sonucun ALT 16 BİTİNİ verir; aşan değer
+ * KIRPILMAZ, **SARAR**. 6 mT'lik gerçek bir alan küçük ya da NEGATİF bir sayı olarak
+ * okunur. Zirve mantığı bu yanlış sayıyı "maksimum" diye kilitleyebilirdi. Sarmayı
+ * yazılımdan tespit etmek mümkün değildir — TEK savunma yeterli aralıktır.
+ *
+ * GAIN_SEL = 0 ile tam ölçek:  XY = **±24,6 mT**   Z = **±39,6 mT**
+ * → sahibin bandına (≤10 mT) 2,4 kat pay; anahtarlama sırasındaki aşımlar da güvende.
+ * Çözünürlük 0,751 µT = 0,00075 mT → 1 mT'lik okumada %0,08. Telemetri 3 haneye
+ * yuvarlıyor (`B=%.3f`), yani ÇÖZÜNÜRLÜK KAYBI GÖRÜNMEZ.
+ *
+ * ⚠️ KIYASLANABİLİRLİK NOTU: bu dosyada "bu iki sayı ESP'nin ürettiği değerin
+ * kaynağıdır, değiştirmek geçmişle kıyaslanabilirliği bozar" yazıyordu. Karar bilerek
+ * değiştirildi: 4,92 mT üstündeki ESKİ kayıtlar ZATEN yanlıştı (sarmıştı), dolayısıyla
+ * korunacak bir kıyaslanabilirlik yoktu. ESP-S3 de AYNI ayara çekildi
+ * (firmware/esps3_pemf_coil/SensorManager.cpp, `MLX90393_GAIN_5X`) → iki kart aynı
+ * ölçeği kullanır. ⚠️ ESP8266 firmware'i DOKUNULMADI (GAIN 1X, ±4,92 mT).
+ *
+ * ============================================================================
+ * HIZ — SAHİP "OKUMA HIZINI MAXLA" DEDİ
+ * ============================================================================
+ * `mlx90393_tconv[DIG_FILT][OSR]` en küçüğü DIG_FILT = 0, OSR = 0 → **1,27 ms**
+ * (eski ayar DIG_FILT=1/OSR=3 → 6,84 ms, üstüne kütüphanenin +10 ms'i = 17 ms).
+ * Gürültü artar ama sinyal 1-10 mT = 1300-13000 LSB; OSR gürültüsü mertebelerce altta.
+ *
+ * ⚠️ 1,27 ms'i `HAL_GetTick()` ile BEKLEYEMEYİZ: tick 1 ms çözünürlüklü ve damganın
+ * hemen ardından sınır geçerse "2 tick" aslında 1,0 ms olabilir → dönüşüm BİTMEDEN
+ * okunur. Bu yüzden bekleme **DWT çevrim sayacıyla** (168 MHz, ~6 ns) yapılır:
+ * `MLX90393_DONUSUM_US` = 1400 µs (tconv + %10 pay). DWT çalışmazsa (sayaç ilerlemiyor)
+ * `MLX90393_DONUSUM_MS_YEDEK` = 3 tick'e düşülür — 3 tick ≥ 2,0 ms > 1,27 ms GARANTİ.
+ *
+ * Örnek periyodu ≈ 1,4 ms dönüşüm + ~1,0 ms I2C (100 kHz'de SM 2 bayt + RM 8 bayt)
+ * ≈ 2,4 ms → **~425 Hz**. 100 Hz'lik bir bobin darbesinde ~4 örnek düşer; kare dalganın
+ * tepesi PLATODUR (sivri uç değil) → zirve yakalanır.
+ * ⚠️ I2C 100 kHz'de KALDI (400 kHz'e çıkmak kabin boyu kabloda gürültü payını yer,
+ * bkz. yukarısı). Daha fazla hız gerekirse sıradaki adım BURST kipidir, hız değil.
+ *
+ * BÜYÜKLÜK: |B| = sqrt(x²+y²+z²) / 1000 → **mT**; pencerede EN BÜYÜĞÜ raporlanır.
  * ============================================================================
  */
 #define MLX90393_ADRES_VARSAYILAN 0x18U
@@ -129,12 +180,29 @@
 #define MLX90393_KOMUT_RT 0xF0U
 #define MLX90393_CONF1 0x00U /**< GAIN_SEL bit 6:4, HALLCONF bit 3:0 */
 #define MLX90393_CONF3 0x02U /**< RES_Z 10:9, RES_Y 8:7, RES_X 6:5, DIG_FILT 4:2, OSR 1:0 */
-#define MLX90393_GAIN_SEL 7U
-#define MLX90393_OSR 3U
-#define MLX90393_DIG_FILT 1U
-#define MLX90393_LSB_XY_UT 0.150f
-#define MLX90393_LSB_Z_UT 0.242f
-#define MLX90393_DONUSUM_MS 17U
+#define MLX90393_GAIN_SEL 0U
+#define MLX90393_OSR 0U
+#define MLX90393_DIG_FILT 0U
+#define MLX90393_LSB_XY_UT 0.751f
+#define MLX90393_LSB_Z_UT 1.210f
+
+/** SYSCLK (MHz). main.c: SYSCLK 168 MHz, APB1 = /4 = 42 MHz → aşağıdaki iddia bunu pinler. */
+#define SISTEM_MHZ 168U
+_Static_assert(SISTEM_MHZ == (I2C_APB1_MHZ * 4U), "SISTEM_MHZ ile APB1 bolucusu uyusmuyor");
+
+/** Dönüşüm beklemesi (µs): tconv[DIG_FILT=0][OSR=0] = 1270 µs + %10 pay. */
+#define MLX90393_DONUSUM_US 1400U
+#define MLX90393_DONUSUM_CYC (MLX90393_DONUSUM_US * SISTEM_MHZ) /* 235.200 < 2^31 */
+
+/** DWT yoksa tick yedeği. 3 tick ≥ 2,0 ms GARANTİ (> 1,27 ms tconv). */
+#define MLX90393_DONUSUM_MS_YEDEK 3U
+
+/**
+ * Ham eksen bu eşiği geçerse tam ölçeğe DAYANMIŞ sayılır (int16 tam ölçek 32767).
+ * ⚠️ Bu bir ERKEN UYARIDIR, sarma tespiti DEĞİL: sarmış değer küçük görünür ve
+ * hiçbir eşikle yakalanamaz. Bkz. yukarıdaki GAIN_SEL gerekçesi.
+ */
+#define MLX90393_HAM_DOYGUNLUK 32000
 
 /* ============================================================================
  * DURUM MAKİNESİ
@@ -156,15 +224,40 @@ typedef struct {
   uint16_t sda_pin;
   uint8_t mag_adres;      /**< 0 = bulunamadı (o bus'ta MLX90393 YOK) */
   uint8_t sicaklik_adres; /**< 0 = bulunamadı (o bus'ta MLX90614 YOK) */
-  uint32_t tur_sayaci;    /**< yeniden arama zamanlaması */
+  uint32_t tur_sayaci;    /**< KAPANAN pencere sayısı — yeniden arama zamanlaması */
   SensorDurum_t durum;
-  uint32_t sonraki_tur_ms;
-  uint32_t mag_hazir_ms;
+  uint32_t pencere_bitis_ms; /**< zirve penceresinin kapanış damgası (1 s) */
+  uint32_t mag_hazir_ms;     /**< dönüşüm beklemesi — DWT YOKKEN tick yedeği */
+  uint32_t mag_hazir_cyc;    /**< dönüşüm beklemesi — DWT çevrim hedefi (asıl yol) */
+  bool sicaklik_istegi;      /**< pencere açılışında set; S_BOSTA sıcaklığı öne alır */
+  bool sicaklik_taze;        /**< BU pencerede sıcaklık BAŞARIYLA okundu */
+  float zirve_mt;            /**< pencere içi EN BÜYÜK |B| (mT) */
+  uint32_t zirve_ornek;      /**< pencere içi geçerli örnek sayısı */
+  bool zirve_doygun;         /**< pencerede en az bir örnek tam ölçeğe dayandı */
   uint16_t ardisik_hata;
   PEMF_SensorVerisi_t veri;
 } SensorHat_t;
 
 static SensorHat_t g_hat[PEMF_SENSOR_BOBIN_SAYISI];
+
+/**
+ * Hat → telemetri bobin kimliği. Sahip kararı 2026-09-11: TEK manyetik sensör I2C2'de
+ * ama arayüzde **bobin 6**'da görünmeli. Gerekçe: pemf_sensor.h.
+ */
+static const uint8_t g_bobin_idleri[] = PEMF_SENSOR_BOBIN_IDLERI;
+_Static_assert((sizeof(g_bobin_idleri) / sizeof(g_bobin_idleri[0])) == PEMF_SENSOR_BOBIN_SAYISI,
+               "PEMF_SENSOR_BOBIN_IDLERI tablosu hat sayisiyla uyusmuyor");
+
+/**
+ * DWT çevrim sayacı kullanılabilir mi (açılışta ÖLÇÜLÜR, varsayılmaz).
+ *
+ * ⚠️ NEDEN ÖLÇÜLÜYOR: 1,27 ms'lik dönüşüm beklemesi bu sayaca dayanıyor. Sayaç
+ * ilerlemezse (bazı kartlarda TRCENA açılmaz) `CYCCNT` sabit kalır, hedef ÇEVRİM
+ * ASLA gelmez ve manyetik durum makinesi S_MAG_BEKLE'de SONSUZA KADAR TAKILIR —
+ * ana döngü dönmeye devam ettiği için ölü-adam watchdog'u bunu YAKALAMAZ ve alan
+ * telemetrisi sessizce kesilir. Sayaç ilerlemiyorsa tick yedeğine düşülür.
+ */
+static bool g_dwt_var = false;
 
 /* ============================================================================
  * REGISTRE SEVİYESİ I2C — hepsi ÇEVRİM BÜTÇELİ
@@ -383,6 +476,34 @@ static bool mag_tek_komut(SensorHat_t *h, uint8_t komut) {
   return i2c_oku(h->i2c, h->mag_adres, &st, 1U);
 }
 
+/**
+ * DWT çevrim sayacını açar ve GERÇEKTEN ilerlediğini ÖLÇER.
+ * Ölçmezsek, ilerlemeyen bir sayaç manyetik okumayı sessizce sonsuza kadar durdurur.
+ */
+static void dwt_baslat(void) {
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0U;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  const uint32_t t0 = DWT->CYCCNT;
+  for (volatile uint32_t i = 0U; i < 64U; i++) {
+    __NOP();
+  }
+  g_dwt_var = (DWT->CYCCNT != t0);
+}
+
+/** Dönüşüm süresi doldu mu? DWT varsa µs, yoksa tick çözünürlüğünde. */
+static bool mag_donusum_bitti(const SensorHat_t *h, uint32_t simdi_ms) {
+  if (g_dwt_var) {
+    return ((int32_t)(DWT->CYCCNT - h->mag_hazir_cyc) >= 0);
+  }
+  return ((int32_t)(simdi_ms - h->mag_hazir_ms) >= 0);
+}
+
+/** Ham eksen tam ölçeğe dayandı mı? (erken uyarı; sarma tespiti DEĞİL) */
+static bool ham_doygun(int16_t v) {
+  return (v >= MLX90393_HAM_DOYGUNLUK) || (v <= -MLX90393_HAM_DOYGUNLUK);
+}
+
 /** Tek adres yoklaması: cihaz ACK veriyor mu? (yazma yönünde START + adres) */
 static bool cihaz_var(SensorHat_t *h, uint8_t adres) {
   if (i2c_start(h->i2c, adres, false)) {
@@ -450,6 +571,7 @@ static void hat_donanim_kur(SensorHat_t *h, uint32_t af_kaydir_scl, uint32_t af_
 }
 
 void PEMF_Sensor_Init(void) {
+  dwt_baslat();
   RCC->APB1ENR |= RCC_APB1ENR_I2C1EN | RCC_APB1ENR_I2C2EN;
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
@@ -466,8 +588,16 @@ void PEMF_Sensor_Init(void) {
   for (uint32_t i = 0U; i < PEMF_SENSOR_BOBIN_SAYISI; i++) {
     SensorHat_t *h = &g_hat[i];
     h->durum = S_BOSTA;
-    h->sonraki_tur_ms = 0U;
+    /* ⚠️ Pencere ŞİMDİDEN başlar: 0 verilirse ilk `Poll` çağrısı pencereyi hemen
+     * kapatır ve HİÇ örneği olmayan bir "tur bitti" üretir. */
+    h->pencere_bitis_ms = HAL_GetTick() + SENSOR_ZIRVE_PENCERE_MS;
     h->mag_hazir_ms = 0U;
+    h->mag_hazir_cyc = 0U;
+    h->sicaklik_istegi = true;
+    h->sicaklik_taze = false;
+    h->zirve_mt = 0.0f;
+    h->zirve_ornek = 0U;
+    h->zirve_doygun = false;
     h->ardisik_hata = 0U;
     h->tur_sayaci = 0U;
     h->sicaklik_adres = 0U;
@@ -476,6 +606,8 @@ void PEMF_Sensor_Init(void) {
     h->veri.nesne_c = 0.0f;
     h->veri.ortam_c = 0.0f;
     h->veri.alan_mt = 0.0f;
+    h->veri.alan_ornek = 0U;
+    h->veri.alan_doygun = false;
     h->veri.i2c_hata = 0U;
   }
   /* AFR kaydırmaları: PB8/PB9 → AFR[1] bit 0/4 · PB10/PB11 → AFR[1] bit 8/12 */
@@ -514,35 +646,96 @@ static bool sicaklik_oku(SensorHat_t *h, uint8_t ram, float *cikti) {
   return true;
 }
 
+/**
+ * ZİRVE PENCERESİNİ KAPAT — biriken en büyük |B|'yi rapora yansıt, biriktiriciyi sıfırla.
+ *
+ * ⚠️ ÖRNEK YOKSA ESKİ ZİRVE KORUNMAZ, 0.0 DA YAZILMAZ: `alan_ok=false` ile alan
+ * telemetriye HİÇ girmez. Bayat bir sayıyı "bu saniyenin ölçümü" diye göndermek,
+ * ölçülmeyeni 0.0 göndermekle aynı sınıf yalandır (bkz. dosya başlığı).
+ */
+static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
+  if (h->zirve_ornek > 0U) {
+    h->veri.alan_mt = h->zirve_mt;
+    h->veri.alan_ornek =
+        (h->zirve_ornek > 65535U) ? (uint16_t)65535U : (uint16_t)h->zirve_ornek;
+    h->veri.alan_doygun = h->zirve_doygun;
+    h->veri.alan_ok = true;
+  } else {
+    h->veri.alan_ok = false;
+    h->veri.alan_ornek = 0U;
+    h->veri.alan_doygun = false;
+  }
+  h->veri.sicaklik_ok = h->sicaklik_taze;
+
+  h->zirve_mt = 0.0f;
+  h->zirve_ornek = 0U;
+  h->zirve_doygun = false;
+  h->sicaklik_taze = false;
+  h->sicaklik_istegi = true;
+  h->tur_sayaci++;
+
+  /* Sabit adım → kayma birikmez. Uzun bir duraklamadan sonra (hat kurtarma vb.)
+   * geçmişte kalan damgayı şimdiye çekmezsek pencere ARDI ARDINA kapanır. */
+  h->pencere_bitis_ms += SENSOR_ZIRVE_PENCERE_MS;
+  if ((int32_t)(simdi_ms - h->pencere_bitis_ms) >= 0) {
+    h->pencere_bitis_ms = simdi_ms + SENSOR_ZIRVE_PENCERE_MS;
+  }
+
+  /* Sonradan takılan cihazı periyodik ara (her pencerede aramak boşa START harcar). */
+  if ((h->tur_sayaci % SENSOR_YENIDEN_ARAMA_TUR) == 0U) {
+    if (h->sicaklik_adres == 0U) {
+      h->sicaklik_adres = cihaz_var(h, MLX90614_ADRES) ? MLX90614_ADRES : 0U;
+    }
+    if (h->mag_adres == 0U) {
+      h->mag_adres = mag_adres_bul(h);
+      if (h->mag_adres != 0U) {
+        mag_yapilandir(h);
+      }
+    }
+  }
+}
+
+/**
+ * Durum makinesini BİR adım ilerletir (her çağrıda EN FAZLA bir kısa I2C işlemi).
+ *
+ * AKIŞ (2026-09-11 sahip kararıyla yeniden yazıldı):
+ *   · Manyetik ölçüm SÜREKLİ döner: SM → (1,4 ms) → RM → zirveyi güncelle → SM …
+ *     ≈ 2,4 ms/örnek ≈ 425 Hz. ESKİ hâli saniyede BİR örnek alıyordu ve bobin
+ *     darbesinin neresine denk geldiği tesadüftü.
+ *   · Sıcaklık saniyede bir kez araya girer (MLX90614'ün termal zaman sabiti saniyeler;
+ *     hızlandırmak I2C bütçesini yer, bilgi getirmez).
+ *   · Saniyelik pencere kapanınca zirve raporlanır ve `true` döner → telemetri satırı.
+ *
+ * @return true → pencere kapandı (telemetri basılabilir)
+ */
 static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
+  bool pencere_kapandi = false;
+  if ((int32_t)(simdi_ms - h->pencere_bitis_ms) >= 0) {
+    pencere_kapat(h, simdi_ms);
+    pencere_kapandi = true;
+  }
+
   switch (h->durum) {
   case S_BOSTA:
-    if ((int32_t)(simdi_ms - h->sonraki_tur_ms) < 0) {
-      return false;
-    }
-    h->tur_sayaci++;
-    /* Sonradan takılan cihazı bul (periyodik; her turda aramak boşa START harcar). */
-    if ((h->tur_sayaci % SENSOR_YENIDEN_ARAMA_TUR) == 0U) {
-      if (h->sicaklik_adres == 0U) {
-        h->sicaklik_adres = cihaz_var(h, MLX90614_ADRES) ? MLX90614_ADRES : 0U;
+    /* Sıcaklık isteği varsa ÖNCE o; yoksa/sensör yoksa doğrudan manyetiğe dön. */
+    if (h->sicaklik_istegi) {
+      h->sicaklik_istegi = false;
+      if (h->sicaklik_adres != 0U) {
+        h->durum = S_TOBJ;
+        break;
       }
-      if (h->mag_adres == 0U) {
-        h->mag_adres = mag_adres_bul(h);
-        if (h->mag_adres != 0U) {
-          mag_yapilandir(h);
-        }
-      }
+      /* ⚠️ O BUS'TA SICAKLIK SENSÖRÜ YOK → hata SAYILMAZ (yoksa 5 turda bir hat
+       * kurtarma tetikler ve AYNI bus'taki çalışan manyetik sensörü sakatlar). */
     }
-    h->durum = S_TOBJ;
-    return false;
+    if (h->mag_adres != 0U) {
+      h->durum = S_MAG_BASLAT;
+    }
+    break;
 
   case S_TOBJ: {
     if (h->sicaklik_adres == 0U) {
-      /* ⚠️ O BUS'TA SICAKLIK SENSORU YOK → hata SAYILMAZ. Saymak, 5 turda bir hat
-       * kurtarma tetikler ve AYNI bus'taki calisan manyetik sensoru sakatlar. */
-      h->veri.sicaklik_ok = false;
-      h->durum = S_MAG_BASLAT;
-      return false;
+      h->durum = S_BOSTA;
+      break;
     }
     float t = 0.0f;
     if (sicaklik_oku(h, MLX90614_RAM_TOBJ1, &t)) {
@@ -550,82 +743,88 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
       h->ardisik_hata = 0U;
       h->durum = S_TA;
     } else {
-      h->veri.sicaklik_ok = false;
       i2c_hata_islet(h);
-      h->durum = S_MAG_BASLAT; /* sıcaklık yoksa alanı denemeye DEVAM et */
+      h->durum = S_BOSTA; /* sıcaklık düştü → manyetiği BEKLETME */
     }
-    return false;
+    break;
   }
 
   case S_TA: {
     if (h->sicaklik_adres == 0U) {
-      h->veri.sicaklik_ok = false;
-      h->durum = S_MAG_BASLAT;
-      return false;
+      h->durum = S_BOSTA;
+      break;
     }
     float t = 0.0f;
     if (sicaklik_oku(h, MLX90614_RAM_TA, &t)) {
       h->veri.ortam_c = t;
-      h->veri.sicaklik_ok = true;
+      h->sicaklik_taze = true; /* TOBJ+TA ikisi de geldi → pencerede sıcaklık GEÇERLİ */
+      h->ardisik_hata = 0U;
     } else {
-      h->veri.sicaklik_ok = false;
       i2c_hata_islet(h);
     }
-    h->durum = S_MAG_BASLAT;
-    return false;
+    h->durum = S_BOSTA;
+    break;
   }
 
   case S_MAG_BASLAT:
-    /* Yeniden arama S_BOSTA'da periyodik yapılır — burada tekrar aramak her turda
-     * eksik adrese boşa START atmak olurdu (bütçe + bus gürültüsü). */
-    if ((h->mag_adres == 0U) || !mag_tek_komut(h, MLX90393_KOMUT_SM)) {
-      h->veri.alan_ok = false;
-      if (h->mag_adres != 0U) {
-        i2c_hata_islet(h);
-      }
+    /* Yeniden arama pencere kapanışında yapılır — burada aramak her örnekte eksik
+     * adrese boşa START atmak olurdu (bütçe + bus gürültüsü). */
+    if (h->mag_adres == 0U) {
       h->durum = S_BOSTA;
-      h->sonraki_tur_ms = simdi_ms + SENSOR_TUR_MS;
-      return true; /* tur bitti (eksik de olsa) → telemetri gitsin */
+      break;
     }
-    h->mag_hazir_ms = simdi_ms + MLX90393_DONUSUM_MS;
+    if (!mag_tek_komut(h, MLX90393_KOMUT_SM)) {
+      i2c_hata_islet(h);
+      h->durum = S_BOSTA;
+      break;
+    }
+    if (g_dwt_var) {
+      h->mag_hazir_cyc = DWT->CYCCNT + MLX90393_DONUSUM_CYC;
+    } else {
+      h->mag_hazir_ms = simdi_ms + MLX90393_DONUSUM_MS_YEDEK;
+    }
     h->durum = S_MAG_BEKLE;
-    return false;
+    break;
 
   case S_MAG_BEKLE:
-    /* ⚠️ BURADA `HAL_Delay` YOK: 17 ms damgayla beklenir, ana döngü serbest kalır. */
-    if ((int32_t)(simdi_ms - h->mag_hazir_ms) >= 0) {
+    /* ⚠️ BURADA `HAL_Delay` YOK: damgayla beklenir, ana döngü serbest kalır. */
+    if (mag_donusum_bitti(h, simdi_ms)) {
       h->durum = S_MAG_OKU;
     }
-    return false;
+    break;
 
   case S_MAG_OKU: {
     uint8_t komut = MLX90393_KOMUT_RM;
     uint8_t rx[7] = {0}; /* durum baytı + 6 veri baytı */
-    bool ok = i2c_yaz(h->i2c, h->mag_adres, &komut, 1U, true) &&
-              i2c_oku(h->i2c, h->mag_adres, rx, sizeof(rx));
-    if (ok) {
+    if (i2c_yaz(h->i2c, h->mag_adres, &komut, 1U, true) &&
+        i2c_oku(h->i2c, h->mag_adres, rx, sizeof(rx))) {
       const int16_t xi = (int16_t)(((uint16_t)rx[1] << 8U) | rx[2]);
       const int16_t yi = (int16_t)(((uint16_t)rx[3] << 8U) | rx[4]);
       const int16_t zi = (int16_t)(((uint16_t)rx[5] << 8U) | rx[6]);
       const float x = (float)xi * MLX90393_LSB_XY_UT;
       const float y = (float)yi * MLX90393_LSB_XY_UT;
       const float z = (float)zi * MLX90393_LSB_Z_UT;
-      h->veri.alan_mt = sqrtf((x * x) + (y * y) + (z * z)) / 1000.0f; /* µT → mT */
-      h->veri.alan_ok = true;
+      const float mt = sqrtf((x * x) + (y * y) + (z * z)) / 1000.0f; /* µT → mT */
+      if (mt > h->zirve_mt) {
+        h->zirve_mt = mt;
+      }
+      if (ham_doygun(xi) || ham_doygun(yi) || ham_doygun(zi)) {
+        h->zirve_doygun = true;
+      }
+      h->zirve_ornek++;
       h->ardisik_hata = 0U;
     } else {
-      h->veri.alan_ok = false;
       i2c_hata_islet(h);
     }
     h->durum = S_BOSTA;
-    h->sonraki_tur_ms = simdi_ms + SENSOR_TUR_MS;
-    return true;
+    break;
   }
 
   default:
     h->durum = S_BOSTA;
-    return false;
+    break;
   }
+  return pencere_kapandi;
 }
 
 bool PEMF_Sensor_Poll(uint32_t simdi_ms) {
@@ -636,6 +835,13 @@ bool PEMF_Sensor_Poll(uint32_t simdi_ms) {
     }
   }
   return tur_bitti;
+}
+
+uint32_t PEMF_Sensor_BobinId(uint32_t sira) {
+  if (sira >= PEMF_SENSOR_BOBIN_SAYISI) {
+    return 0U;
+  }
+  return (uint32_t)g_bobin_idleri[sira];
 }
 
 void PEMF_Sensor_Rapor(uint32_t sira, uint8_t *sicaklik_adres, uint8_t *alan_adres) {

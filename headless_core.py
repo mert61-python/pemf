@@ -212,6 +212,10 @@ class HeadlessCore:
         r"(?:.*?[,\s]T=(?P<t>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]A=(?P<a>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]B=(?P<b>[+-]?[0-9]*[.]?[0-9]+))?"
+        # `N` = B zirvesinin turedigi ornek sayisi; `S=1` = manyetik ham eksen tam olcege
+        # DAYANDI (|B| GUVENILMEZ). Firmware ikisini de yalniz `B` ile birlikte basar.
+        r"(?:.*?[,\s]N=(?P<n>[0-9]+))?"
+        r"(?:.*?[,\s]S=(?P<s>[01]))?"
         r"(?:.*?[,\s]I=(?P<i>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]X=(?P<x>[01]))?"
     )
@@ -248,6 +252,19 @@ class HeadlessCore:
                 govde[alan] = float(ham)
             except ValueError:
                 continue
+        # ⚠️ `magnetic_field` ARTIK ANLIK DEGIL, SON 1 SANIYENIN **ZIRVESI** (firmware
+        # 2026-09-11, sahip karari). Bobinler birlikte anahtarlandigi icin anlik ornek
+        # darbenin neresine dustugune gore 0 ile tam alan arasi rastgele bir sayi
+        # veriyordu. `magnetic_samples` o zirvenin kac ornekten turedigi (~400 beklenir;
+        # dusmesi I2C hattinin yavasladigini soyler) — alan YOKKEN anahtar KOYULMAZ.
+        _n = m.group("n")
+        if _n is not None and "magnetic_field" in govde:
+            try:
+                govde["magnetic_samples"] = int(_n)
+            except ValueError:
+                pass
+        if m.group("s") == "1" and "magnetic_field" in govde:
+            govde["magnetic_saturated"] = True
         if m.group("x") == "1":
             govde["current_saturated"] = True
         if not any(k in govde for k in ("object_temp", "ambient_temp", "magnetic_field", "current")):

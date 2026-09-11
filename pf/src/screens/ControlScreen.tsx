@@ -492,6 +492,7 @@ export function ControlScreen() {
         durationSec={treatment?.durationSec ?? 0}
         frequencyHz={treatment?.frequencyHz ?? 0}
         intensityMt={treatment?.intensityMt ?? 0}
+        measuredIntensityMt={treatment?.measuredIntensityMt ?? null}
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={loading}

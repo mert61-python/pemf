@@ -48,6 +48,19 @@ SensorManager::SensorManager() : _acsOffset(ACS712_OFFSET_EXPECTED) {
     _maxMagneticField      = 0.0f;
     _maxCurrent            = 0.0f;
 
+    // ── Saniyelik zirve penceresi ────────────────────────────────────────────
+    _magMux              = portMUX_INITIALIZER_UNLOCKED;
+    _i2cHazir            = false;   // `_initI2C()` bitiminde true olur (yarissiz baslangic)
+    _magPencereBitisMs   = 0;   // ilk `pollMagnetic()` cagrisinda simdiye kurulur
+    _magBirikenZirve     = 0.0f;
+    _magBirikenOrnek     = 0;
+    _magBirikenDoygun    = false;
+    _magBirikenX = _magBirikenY = _magBirikenZ = 0.0f;
+    _magZirveMt          = 0.0f;
+    _magZirveOrnek       = 0;
+    _magZirveDoygun      = false;
+    _magZirveX = _magZirveY = _magZirveZ = 0.0f;
+
     // Varsayılan hassasiyet: ilk kalibrasyon öncesi güvenli fallback
     _acsSensitivity = ACS712_BASE_SENSITIVITY *
                       (ACS712_OFFSET_EXPECTED / ACS712_VCC_HALF);
@@ -329,55 +342,36 @@ SensorReadings SensorManager::readAll() {
         }
     }
 
-    // 2. Manyetik Alan — pipelined single-shot
-    if (_magOk) {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        bool readOk = false;
+    // 2. Manyetik Alan — MANDALLANMIS SANIYELIK ZIRVE
+    // ⚠️ BURADA I2C YOK. Sensore yalniz `pollMagnetic()` dokunur (TaskMagnetic, ~400 Hz);
+    // burasi onun 1 saniyede bir mandalladigi TEPE degerini kopyalar. Iki yer birden
+    // Wire1'e girerse ayni bus'ta iki gorev carpisir.
+    // ⚠️ `magneticField` ARTIK ANLIK DEGIL, SON 1 SANIYENIN ZIRVESIDIR: bobinler birlikte
+    // anahtarlandigi icin anlik ornek darbenin neresine dustugune gore rastgele bir sayi
+    // veriyordu ("hepsi acikken kac mT" sorusunun cevabi degildi).
+    {
+        portENTER_CRITICAL(&_magMux);
+        const float    zirve  = _magZirveMt;
+        const uint16_t ornek  = _magZirveOrnek;
+        const bool     doygun = _magZirveDoygun;
+        const float    zx = _magZirveX, zy = _magZirveY, zz = _magZirveZ;
+        portEXIT_CRITICAL(&_magMux);
 
-        if (_magMeasurementPending) {
-            readOk = _mlxMag.readMeasurement(&x, &y, &z);
-            _magMeasurementPending = false;
-        }
-
-        if (_mlxMag.startSingleMeasurement()) {
-            _magMeasurementPending = true;
-        }
-
-        if (readOk) {
-            x /= 1000.0f; // µT → mT
-            y /= 1000.0f;
-            z /= 1000.0f;
-
-            float magnitude    = sqrtf(x*x + y*y + z*z);
-            data.magneticField = magnitude;
-            data.magX          = x;
-            data.magY          = y;
-            data.magZ          = z;
+        if (ornek > 0) {
+            data.magneticField = zirve;
+            data.magX = zx;   // ZIRVE anininin eksenleri (bobin yonu olcumu bunlari okur)
+            data.magY = zy;
+            data.magZ = zz;
+            data.magSamples    = ornek;
+            data.magSaturated  = doygun;
             data.magSensorOk   = true;
-            _magFailCount      = 0;
         } else {
+            // Pencerede HIC gecerli ornek yok → olcum YOK. Bayat zirve KORUNMAZ.
             data.magneticField = 0.0f;
             data.magX = data.magY = data.magZ = 0.0f;
-            data.magSensorOk = false;
-            _magFailCount++;
-            if (_magFailCount >= I2C_RECOVERY_THRESHOLD) {
-                _magOk                 = false;
-                _magMeasurementPending = false;
-                _magRetryStep          = 0;
-                _magNextRetryMs        = millis() + _geriCekilmeMs(0);
-                LOG_PRINTLN("[Sensör] ✗ MLX90393 ÇEVRİMDIŞI (5 ardışık hata) — geri-çekilmeyle yeniden bağlanılacak; cihaz çalışmaya devam eder");
-            }
-        }
-    } else {
-        data.magneticField = 0.0f;
-        data.magX = data.magY = data.magZ = 0.0f;
-        data.magSensorOk = false;
-        if ((int32_t)(millis() - _magNextRetryMs) >= 0) {
-            recoverI2CBus(1);
-            if (!_magOk) {
-                if (_magRetryStep < 4) { _magRetryStep++; }
-                _magNextRetryMs = millis() + _geriCekilmeMs(_magRetryStep);
-            }
+            data.magSamples    = 0;
+            data.magSaturated  = false;
+            data.magSensorOk   = false;
         }
     }
 
@@ -387,10 +381,12 @@ SensorReadings SensorManager::readAll() {
 
     data.allSensorsOk = data.tempSensorOk && data.magSensorOk && data.currentSensorOk;
 
-    // PWM aktifken max değerleri güncelle
+    // PWM aktifken max degerleri guncelle.
+    // ⚠️ MANYETIK MAKS ARTIK BURADA DEGIL: `pollMagnetic()` ~400 Hz'de besliyor. Burada
+    // (5 Hz'lik `readAll()` orneginden) tekrar beslemek yanlis olmazdi ama gereksiz;
+    // asil onemlisi eskiden SADECE burasi vardi ve gercek tepeyi kaciriyordu.
     if (_pwmActive) {
-        if (data.magneticField > _maxMagneticField) _maxMagneticField = data.magneticField;
-        if (data.current        > _maxCurrent)       _maxCurrent       = data.current;
+        if (data.current > _maxCurrent) _maxCurrent = data.current;
     }
 
     data.maxMagneticField = _maxMagneticField;
@@ -416,6 +412,146 @@ SensorReadings SensorManager::readAll() {
     }
 
     return data;
+}
+
+// ============================================================================
+// _yapilandirMag() — OLCEK/HIZ AYARLARI, TEK KAYNAK
+// ----------------------------------------------------------------------------
+// ⚠️ HEM `_initI2C()` HEM `recoverI2CBus(1)` BURAYI CAGIRIR. `begin_I2C` cihazi fabrika
+// varsayilanina dondurdugu icin ayarlar her baglantidan SONRA yeniden yazilmak zorunda.
+// Ayarlar iki ayri yerde yaziliyken kurtarma yolu guncellenmeyi UNUTMUSTU (2026-09-11'de
+// yapisal kapi yakaladi): sensor bir kez kurtarmadan gecince ±12,3 mT'ye donuyor, sahibin
+// 10 mT'lik alani sariyor ve KUCUK okunuyordu — hicbir uyari cikmadan.
+//
+// GAIN_5X (GAIN_SEL=0) → 0.751/1.210 uT/LSB, tam olcek XY ±24,6 mT / Z ±39,6 mT.
+// OSR_0 + FILTER_0 → tconv 1,27 ms (en hizli). STM32 ile BIREBIR AYNI.
+// ============================================================================
+void SensorManager::_yapilandirMag() {
+    _mlxMag.setGain(MLX90393_GAIN_5X);
+    delay(50);
+    _mlxMag.setOversampling(MLX90393_OSR_0);
+    delay(50);
+    _mlxMag.setFilter(MLX90393_FILTER_0);
+    delay(50);
+    _magMeasurementPending = _mlxMag.startSingleMeasurement();
+}
+
+// ============================================================================
+// pollMagnetic() — HIZLI MANYETIK ORNEKLEME + SANIYELIK ZIRVE
+// ----------------------------------------------------------------------------
+// SAHIP KARARI 2026-09-11: "bu bobinler ayni anda acilip kapaniyor ya bana max deger
+// lazim... okuma hizini maxlayabilirsin... sonra saniyede 1 sonuc verir en yuksegini".
+//
+// ⚠️ NEDEN AYRI GOREV: `readAll()` ControlTask'ta 200 ms'de bir (5 Hz) kosuyor. 100 Hz'lik
+// bir bobin darbesini 5 Hz'le orneklemek, darbenin neresine denk geldigini TAMAMEN sansa
+// birakir — okunan sayi 0 ile tam alan arasi herhangi bir sey olur. Boru hatli tek-atim
+// (oncekini oku + yenisini baslat) burada ~2,5 ms periyotla donuyor → ~400 Hz.
+//
+// ⚠️ `_mlxMag`e DOKUNAN TEK YER BURASI. `readAll()`in eski manyetik blogu (I2C dahil)
+// buraya tasindi; iki gorev ayni Wire1'e girerse cakisir.
+// ============================================================================
+void SensorManager::pollMagnetic() {
+    if (!_i2cHazir) {
+        return; // I2C kurulumu surerken bus'a DOKUNMA (bkz. SensorManager.h `_i2cHazir`)
+    }
+    const unsigned long simdi = millis();
+
+    // ── Pencere kapanisi ────────────────────────────────────────────────────
+    // ⚠️ Ilk cagride damga 0'dir; sifirla ve DONME — yoksa ilk pencere bos mandalanir.
+    if (_magPencereBitisMs == 0) {
+        _magPencereBitisMs = simdi + MAG_ZIRVE_PENCERE_MS;
+    } else if ((int32_t)(simdi - _magPencereBitisMs) >= 0) {
+        portENTER_CRITICAL(&_magMux);
+        _magZirveMt     = _magBirikenZirve;
+        _magZirveOrnek  = (_magBirikenOrnek > 65535U) ? (uint16_t)65535U
+                                                      : (uint16_t)_magBirikenOrnek;
+        _magZirveDoygun = _magBirikenDoygun;
+        _magZirveX = _magBirikenX;
+        _magZirveY = _magBirikenY;
+        _magZirveZ = _magBirikenZ;
+        portEXIT_CRITICAL(&_magMux);
+
+        _magBirikenZirve  = 0.0f;
+        _magBirikenOrnek  = 0;
+        _magBirikenDoygun = false;
+        _magBirikenX = _magBirikenY = _magBirikenZ = 0.0f;
+
+        // Sabit adim → kayma birikmez; cok geride kaldiysa (kurtarma vb.) simdiye cek.
+        _magPencereBitisMs += MAG_ZIRVE_PENCERE_MS;
+        if ((int32_t)(simdi - _magPencereBitisMs) >= 0) {
+            _magPencereBitisMs = simdi + MAG_ZIRVE_PENCERE_MS;
+        }
+    }
+
+    // ── Cevrimdisi: geri-cekilmeli yeniden baglanma (cihaz ASLA yeniden baslatilmaz) ──
+    if (!_magOk) {
+        if ((int32_t)(simdi - _magNextRetryMs) >= 0) {
+            recoverI2CBus(1);
+            if (!_magOk) {
+                if (_magRetryStep < 4) { _magRetryStep++; }
+                _magNextRetryMs = millis() + _geriCekilmeMs(_magRetryStep);
+            }
+        }
+        return;
+    }
+
+    // ── Boru hatli tek-atim: oncekini oku, yenisini baslat ──────────────────
+    // ⚠️ ILK TURDA bekleyen olcum YOKTUR → `readOk` false doner ama bu HATA DEGILDIR.
+    // Eski kod bunu ayirt etmiyordu; 5 Hz'de zararsizdi, 400 Hz'de sahte hata sayaci
+    // her saniye esigi asip calisan sensoru "CEVRIMDISI" ilan ederdi.
+    const bool bekleyenVardi = _magMeasurementPending;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    bool readOk = false;
+    if (bekleyenVardi) {
+        readOk = _mlxMag.readMeasurement(&x, &y, &z);
+        _magMeasurementPending = false;
+    }
+    const bool baslatildi = _mlxMag.startSingleMeasurement();
+    if (baslatildi) {
+        _magMeasurementPending = true;
+    }
+
+    if ((bekleyenVardi && !readOk) || !baslatildi) {
+        _magFailCount++;
+        if (_magFailCount >= I2C_RECOVERY_THRESHOLD) {
+            _magOk                 = false;
+            _magMeasurementPending = false;
+            _magRetryStep          = 0;
+            _magNextRetryMs        = millis() + _geriCekilmeMs(0);
+            LOG_PRINTLN("[Sensör] ✗ MLX90393 ÇEVRİMDIŞI (5 ardışık hata) — geri-çekilmeyle yeniden bağlanılacak; cihaz çalışmaya devam eder");
+        }
+        return;
+    }
+    if (!readOk) {
+        return; // ilk tur: okunacak bir sey yoktu, baslatma tuttu → hata DEGIL
+    }
+
+    x /= 1000.0f; // uT → mT
+    y /= 1000.0f;
+    z /= 1000.0f;
+    const float buyukluk = sqrtf(x*x + y*y + z*z);
+
+    if (buyukluk > _magBirikenZirve) {
+        _magBirikenZirve = buyukluk;
+        _magBirikenX = x;   // zirve ANININ eksenleri → bobin yonu olcumu bunlari okur
+        _magBirikenY = y;
+        _magBirikenZ = z;
+    }
+    // ⚠️ ESIK EKSEN BASINA: XY tam olcek 24.606 uT, Z 39.650 uT (GAIN_5X, RES_16).
+    // Tek esik kullanmak Z'de 24 mT'lik SAGLAM bir okumayi "doygun" ilan ederdi.
+    if ((fabsf(x) * 1000.0f >= MAG_DOYGUNLUK_XY_UT) ||
+        (fabsf(y) * 1000.0f >= MAG_DOYGUNLUK_XY_UT) ||
+        (fabsf(z) * 1000.0f >= MAG_DOYGUNLUK_Z_UT)) {
+        _magBirikenDoygun = true;
+    }
+    _magBirikenOrnek++;
+    _magFailCount = 0;
+
+    // PWM aktifken seans-boyu maksimumu da bu HIZLI ornekten beslenir (eskiden 5 Hz'lik
+    // `readAll()` orneginden besleniyordu ve gercek tepeyi kaciriyordu).
+    if (_pwmActive && (buyukluk > _maxMagneticField)) {
+        _maxMagneticField = buyukluk;
+    }
 }
 
 // ============================================================================
@@ -477,14 +613,28 @@ void SensorManager::_initI2C() {
         if (_mlxMag.begin_I2C(0x18, &Wire1)) {
             _magOk = true;
             delay(100);
-            _mlxMag.setGain(MLX90393_GAIN_2_5X);
-            delay(50);
-            _mlxMag.setOversampling(MLX90393_OSR_1);
-            delay(50);
-            _mlxMag.setFilter(MLX90393_FILTER_3);
-            delay(50);
-            _magMeasurementPending = _mlxMag.startSingleMeasurement();
-            LOG_PRINTLN("[I2C-1] ✓ MLX90393, Gain 2.5X, OSR 1, Filter 3");
+            /* ================================================================
+             * ⚠️ OLCEK 2026-09-11'DE DEGISTI — ESKI AYAR SAHIBIN ALANINI OLCEMIYORDU
+             * ================================================================
+             * Sahip olcum bandini verdi: "1-10 mT arasi genelde, 0-5 arasi asiri
+             * fazla". Eski ayar GAIN_2_5X + RES_16 idi (0.376/0.605 uT/LSB):
+             *     TAM OLCEK  XY = 32767 x 0.376 uT = 12,3 mT   Z = 19,8 mT
+             * XY'de 12,3 mT ustu OLCULEMIYORDU ve RES_16'da tasma KIRPILMAZ, SARAR:
+             * gercek 15 mT kucuk/negatif bir sayi olarak okunur. Sarma yazilimdan
+             * tespit EDILEMEZ — tek savunma yeterli aralik.
+             *
+             * GAIN_5X (GAIN_SEL=0) → 0.751/1.210 uT/LSB, tam olcek XY ±24,6 mT,
+             * Z ±39,6 mT. Cozunurluk 0,751 uT = 0,00075 mT (1 mT'de %0,08).
+             * ⚠️ STM32 ile BIREBIR AYNI (firmware/stm32_pemf/.../pemf_sensor.c) →
+             * iki kartin mT sayilari dogrudan kiyaslanabilir. ESP8266 firmware'ine
+             * DOKUNULMADI (hala GAIN 1X, ±4,92 mT).
+             *
+             * HIZ: OSR_0 + FILTER_0 → tconv 1,27 ms (eskisi OSR_1/FILTER_3 = 3,76 ms).
+             * Gurultu artar ama sinyal 1-10 mT = 1300-13000 LSB; OSR gurultusu
+             * mertebelerce altta kalir.
+             * ================================================================ */
+            _yapilandirMag();
+            LOG_PRINTLN("[I2C-1] ✓ MLX90393, Gain 5X (±24,6 mT), OSR 0, Filter 0 (tconv 1,27 ms)");
         } else {
             LOG_PRINTLN("[I2C-1] ✗ MLX90393 başlatılamadı (0x18)");
         }
@@ -498,6 +648,11 @@ void SensorManager::_initI2C() {
     // baglanma (readAll icinde) 2 sn sonra baslar; sensor sonradan takilirsa kendiliginden gelir.
     if (!_tempOk) { _tempRetryStep = 1; _tempNextRetryMs = millis() + _geriCekilmeMs(1); }
     if (!_magOk)  { _magRetryStep  = 1; _magNextRetryMs  = millis() + _geriCekilmeMs(1); }
+
+    // ⚠️ EN SON: bundan once TaskMagnetic bus'a DOKUNMAZ. Yukaridaki iki satirin ARDINDAN
+    // olmali — geri-cekilme damgalari kurulmadan gorevi salarsak ilk turda hemen
+    // `recoverI2CBus` calisir ve az once basarili olan kurulumu bozar.
+    _i2cHazir = true;
 }
 
 // ============================================================================
@@ -566,11 +721,12 @@ void SensorManager::recoverI2CBus(int busNumber) {
             _magOk        = true;
             _magFailCount = 0;
             _magRetryStep = 0;
-            _mlxMag.setGain(MLX90393_GAIN_2_5X);
-            _mlxMag.setOversampling(MLX90393_OSR_1);
-            _mlxMag.setFilter(MLX90393_FILTER_3);
-            _magMeasurementPending = _mlxMag.startSingleMeasurement();
-            LOG_PRINTLN("[Sensör] ✓ MLX90393 geri geldi");
+            // ⚠️ KURTARMADAN SONRA AYARLAR YENIDEN UYGULANIR — `begin_I2C` cihazi
+            // FABRIKA varsayilanina dondurur. Burada eskiden GAIN_2_5X/OSR_1/FILTER_3
+            // yaziliydi: sensor bir kez kurtarmadan gecince sessizce ESKI aralia
+            // (±12,3 mT) donuyordu ve 10 mT'lik alan SARIP kucuk okunuyordu.
+            _yapilandirMag();
+            LOG_PRINTLN("[Sensör] ✓ MLX90393 geri geldi (ayarlar yeniden uygulandi)");
         } else {
             _magOk = false;
         }

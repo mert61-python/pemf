@@ -243,12 +243,45 @@ def test_KRITIK_model_KAYNAKLA_ayrismis_DEGIL():
     i = kod.find("case S_MAG_BASLAT:")
     assert i > 0, "S_MAG_BASLAT bulunamadi -> kapi BAYAT"
     pencere = kod[i : i + 900]
-    assert re.search(r"if\s*\(h->mag_adres\s*!=\s*0U\)\s*\{\s*\n\s*i2c_hata_islet", pencere), (
-        "yok olan manyetik sensorun yoklugu KOSULSUZ hata sayiliyor -> bos hatta 5 turda bir hat kurtarma"
+    # ⚠️ CIPA 2026-09-11'DE DEGISTI: durum makinesi zirve penceresi icin yeniden yazildi ve
+    # "sensor yok" dali artik ERKEN CIKIS (`if (h->mag_adres == 0U) { ... break; }`), eskisi
+    # gibi `i2c_hata_islet`i saran bir kosul degil. IDDIA AYNI: sensorun YOKLUGU hata
+    # SAYILMAZ. Cipa da bu davranisi olcer, sozdizimini degil.
+    #
+    # MUTASYON: erken cikisi sil (mag_adres==0 iken de `mag_tek_komut` denensin) -> KIRMIZI.
+    m = re.search(r"case S_MAG_BASLAT:(.*?)case S_MAG_BEKLE:", kod, re.S)
+    assert m, "S_MAG_BASLAT govdesi ayristirilamadi -> kapi BAYAT"
+    govde = m.group(1)
+    erken = re.search(r"if\s*\(h->mag_adres\s*==\s*0U\)\s*\{([^}]*)\}", govde)
+    assert erken, (
+        "S_MAG_BASLAT'ta 'mag_adres == 0' erken cikisi YOK -> yok olan sensorun yoklugu "
+        "hata sayilir; bos hatta 5 turda bir bosuna hat kurtarma kosar"
     )
-    # 3) Tur, cihaz eksik olsa da TAMAMLANIYOR (return true)
-    assert "return true; /* tur bitti (eksik de olsa)" in pencere, (
-        "eksik cihazda tur TAMAMLANMIYOR -> Poll sonsuza kilitlenir, telemetri hic gitmez"
+    assert "i2c_hata_islet" not in erken.group(1), (
+        "sensor YOKKEN hata sayaci artiriliyor -> teshis sayaci gercek arizayi gostermez"
+    )
+    # Erken cikis `i2c_hata_islet`ten ONCE gelmeli (sonra gelirse hic korumaz).
+    assert govde.index("h->mag_adres == 0U") < govde.index("i2c_hata_islet"), (
+        "erken cikis hata isletmeden SONRA -> koruma etkisiz"
+    )
+    del pencere
+    # 3) Tur, cihaz eksik olsa da TAMAMLANIYOR.
+    # ⚠️ CIPA 2026-09-11'DE DEGISTI: "tur bitti" artik durum makinesinin bir dalinda degil,
+    # ZIRVE PENCERESININ kapanisinda uretiliyor (`pencere_kapat` -> `return true`). IDDIA
+    # AYNI VE DAHA GUCLU: tur bitisi CIHAZ VARLIGINDAN TAMAMEN BAGIMSIZ oldu — sensor hic
+    # yokken bile telemetri turu kapanir, `Poll` asla kilitlenmez.
+    #
+    # MUTASYON: pencere kapanisini `if (h->mag_adres != 0U)` icine al -> KIRMIZI.
+    m2 = re.search(
+        r"static bool hat_ilerlet\(SensorHat_t \*h, uint32_t simdi_ms\) \{(.*?)switch \(h->durum\)", kod, re.S
+    )
+    assert m2, "hat_ilerlet girisi ayristirilamadi -> kapi BAYAT"
+    giris = m2.group(1)
+    assert "pencere_kapat" in giris and "pencere_kapandi = true" in giris, (
+        "tur bitisi pencere kapanisina bagli DEGIL -> eksik cihazda Poll kilitlenebilir"
+    )
+    assert "mag_adres" not in giris and "sicaklik_adres" not in giris, (
+        "tur bitisi CIHAZ VARLIGINA kapilanmis -> sensor yokken telemetri turu HIC kapanmaz"
     )
 
 
