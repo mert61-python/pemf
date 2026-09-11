@@ -47,6 +47,42 @@
 #define PEMF_SURUS_UNIPOLAR 1
 #endif
 
+
+/* ============================================================================
+ * BOBİN BAŞINA SÜRÜŞ KİPİ — `PEMF_BOBIN_UNIPOLAR_MASKESI`
+ * ----------------------------------------------------------------------------
+ * Bit i SET → bobin i+1 **TEK-BACAK (unipolar)** sürülür (yalnız IN_A darbelenir).
+ * Bit i CLEAR → bobin i+1 **SİMETRİK BİPOLAR** sürülür (IN_A ve IN_B aynalı).
+ *
+ * ⚠️ NEDEN BAYRAK DEĞİL MASKE (sahip donanım bilgisi 2026-09-11):
+ *   bobin 1-5 : TAM KÖPRÜ sürücü  → bipolar DA unipolar DA sürülebilir
+ *   bobin 6-7 : TEK YÖNLÜ sürücü  → YALNIZ unipolar (sağ/sol duvar bobinleri)
+ * Tek bir derleme-zamanı `PEMF_SURUS_UNIPOLAR` bayrağı "5 bipolar + 2 unipolar"ı
+ * İFADE EDEMEZ. Kip artık bobinin SÜRÜCÜ DONANIMININ bir özelliğidir.
+ *
+ * ⚠️ NEDEN DERLEME-ZAMANI SABİT, ÇALIŞMA-ZAMANI PARAMETRE DEĞİL:
+ * Bu bir tedavi parametresi değil, DONANIM TOPOLOJİSİDİR. Çalışma zamanında
+ * değiştirilebilir olsaydı yanlış bir değer sürücüyle uyuşmazdı; operatörün
+ * değiştirebileceği bir şey olmamalı. (Aynı gerekçe `PEMF_BOBIN_TERS_MASKESI`de.)
+ *
+ * ⚠️ AMAÇ: dB/dt (tepe alan DEĞİL — sahip 2026-09-11). Doku indüksiyonu Faraday'dan
+ * gelir ve KENARLARDA olur. Gerçek bipolar sürüşte alan `−B → +B` salınır: kenar
+ * başına ΔB iki katı ve periyot başına 4 kenar (unipolarda 2). Duty tavanı farkı
+ * (bipolar ~%50, unipolar ~%100) sahip için BAĞLAYICI DEĞİL — zaten en çok %50 veriliyor.
+ *
+ * ⚠️⚠️ IN_B BAĞLI DEĞİLKEN BİPOLAR ZARARSIZ AMA ETKİSİZDİR: IN_A penceresi
+ * [0,duty) iki kipte de AYNIDIR; bipolar yalnız ikinci yarıda IN_B'yi darbeler.
+ * IN_B kablosu çekilmemişse o darbe hiçbir yere gitmez → alan bugünküyle AYNI kalır.
+ * Kazanç, IN_B (PD12 PE10 PD11 PC7 PA9) çekildiği an ortaya çıkar.
+ *
+ * ⚠️⚠️ SHOOT-THROUGH: bipolar bobinde duty tavanı `tpp/2 − DDS_BIPOLAR_GAP_TICKS`
+ * OLMAK ZORUNDA — A[0,duty) ve B[yarım,yarım+duty) pencereleri çakışırsa iki bacak
+ * aynı anda HIGH olur. Duty klempi ile çıkış aşaması AYNI maskeyi okumalıdır;
+ * ayrışırlarsa sürücü yanar. Kapı: tests/test_stm_bobin_basina_kip.py
+ * ============================================================================
+ */
+#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x7FU  /* 7 bobinin HEPSI unipolar - karsilastirma/geri donus yapisi */
+
 /* BOBİN POLARİTE MASKESİ — iki kipte ortak. Bit i = bobin i+1'in A↔B bacak rolleri yer değiştirir:
  *   UNIPOLAR: darbe IN_B'den çıkar, IN_A kalıcı LOW (mono sürüş)   ·   BİPOLAR: dalga aynalanır (faz 180°).
  *

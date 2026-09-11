@@ -432,6 +432,21 @@ static int32_t g_phase_ticks[NUM_COILS] = {0};
  *  3: GAP her-iki-LOW [HG-2 simetrik bipolar], 255: init/bilinmiyor) */
 static uint8_t g_prev_state[NUM_COILS] = {0}; /* 255 (init) Coil_StateInit'te */
 
+/**
+ * Bobin başına sürüş kipi — `PEMF_BOBIN_UNIPOLAR_MASKESI`ten ÖNCEDEN ÇÖZÜLÜR.
+ * 1 = tek-bacak (unipolar, yalnız IN_A) · 0 = simetrik bipolar (IN_A + IN_B aynalı)
+ *
+ * ⚠️ NEDEN DİZİ, NEDEN ISR'DA MASKE KAYDIRMA DEĞİL: çıkış aşaması 50 kHz × 7 bobin =
+ * saniyede 350 bin kez koşar. Maskeyi her tick'te kaydırıp maskelemek yerine bir kez
+ * çözülür; sıcak yolda tek bir dizi okuması kalır. ISR bütçesi 7 bobinde ~%28 (TAHMİN,
+ * ölçülmemiş) — bu yola eklenen her komut ölçülmeden büyütülmemeli.
+ *
+ * ⚠️ DUTY KLEMPİ İLE ÇIKIŞ AŞAMASI AYNI DİZİYİ OKUMAK ZORUNDA: ayrışırlarsa bipolar bir
+ * bobin yarım-periyottan uzun duty alır, A ve B pencereleri ÇAKIŞIR ve iki bacak aynı anda
+ * HIGH olur → SHOOT-THROUGH (sürücü yanar). Kapı: tests/test_stm_bobin_basina_kip.py
+ */
+static uint8_t g_unipolar[NUM_COILS];
+
 /* ============================================================================
  * DONANIM SYNC — Master Sync Pulse (PB1)
  * ============================================================================
@@ -512,7 +527,15 @@ void PEMF_ForceAllCoilOutputsLow(void);
  * ⚠️ CAGRI SIRASI: `Coil_TimInit()`ten (ISR'i baslatir) ve g_shadow→g_active memcpy'sinden
  * ONCE cagrilmalidir. Kapi: tests/test_stm_bobin_sayisi_tek_kaynak.py
  */
+/** `PEMF_BOBIN_UNIPOLAR_MASKESI`i bobin başına diziye çözer (bir kez, açılışta). */
+static void Coil_KipInit(void) {
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    g_unipolar[i] = (uint8_t)(((PEMF_BOBIN_UNIPOLAR_MASKESI >> i) & 1U) != 0U);
+  }
+}
+
 static void Coil_StateInit(void) {
+  Coil_KipInit();
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
     g_shadow.coil[i].duty = 0.0f;
     g_shadow.coil[i].phase = 0.0f;
@@ -847,14 +870,17 @@ int main(void) {
    * READY satiri YALAN soyluyordu (ACK format dizesiyle ayni surukleme sinifi). */
   static char init_msg[128];
   (void)snprintf(init_msg, sizeof(init_msg),
-                 "-> STM_READY: DDS v2.3 (%u-ch %s + HW_SYNC@PB1) Waiting for commands...\r\n",
+                 "-> STM_READY: DDS v2.3 (%u-ch %s uni=0x%02X + HW_SYNC@PB1) Waiting for commands...\r\n",
                  (unsigned)NUM_COILS,
-#if PEMF_SURUS_UNIPOLAR
-                 "UNIPOLAR tek-bacak"
-#else
-                 "SYM-BIPOLAR"
-#endif
-  );
+                 /* ⚠️ KIP DIZESI DE MASKEDEN TURER: elle yazilan etiket 2026-09-11 karma
+                  * yapilandirmasinda YALAN soylerdi. Banner, flash sonrasi TEK dogrulama
+                  * noktasidir (scripts/stm_firmware_kimligi.py bu satiri okur) — maske de
+                  * basilir ki hangi bobinin hangi kiple surulecegi UART'tan GORUNSUN. */
+                 (PEMF_BOBIN_UNIPOLAR_MASKESI == 0x00U) ? "SYM-BIPOLAR"
+                 : (PEMF_BOBIN_UNIPOLAR_MASKESI == ((1U << NUM_COILS) - 1U))
+                     ? "UNIPOLAR tek-bacak"
+                     : "KARMA",
+                 (unsigned)PEMF_BOBIN_UNIPOLAR_MASKESI);
   HAL_UART_Transmit(&huart3, (uint8_t *)init_msg, strlen(init_msg), 200U);
 
   /* ── BULUNAN SENSORLER (kablolama dogrulamasi) ────────────────────────────────────
@@ -1348,12 +1374,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
        * sığmalı, aralarında DDS_BIPOLAR_GAP_TICKS LOW kalmalı). Eski tavan (tpp−1) tam-periyoda
        * izin veriyordu — o sözleşme kalktı. */
       {
-#if PEMF_SURUS_UNIPOLAR
-        /* TEK-BACAK: tavan tam-periyot − 1 (B yok → çakışma/shoot-through yok). */
-        int32_t max_d_now = (int32_t)g_tpp[i] - 1;
-#else
-        int32_t max_d_now = (int32_t)(g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS;
-#endif
+        /* ⚠️ KİP BOBİN BAŞINA: tek-bacakta tavan tam-periyot − 1 (B hiç HIGH olmaz →
+         * çakışma yok); bipolarda YARIM-periyot − boşluk (A ve B pencereleri çakışmasın).
+         * Bu satır çıkış aşamasıyla AYNI `g_unipolar[i]`yi okumalı — bkz. dizinin notu. */
+        int32_t max_d_now = g_unipolar[i] ? ((int32_t)g_tpp[i] - 1)
+                                          : ((int32_t)(g_tpp[i] / 2U) - DDS_BIPOLAR_GAP_TICKS);
         if (max_d_now < 1)
           max_d_now = 1; /* uç frekans (tpp<6): boşluk NOP dead-time'a düşer, bkz. sabitin notu */
         if (g_duty_ticks[i] > max_d_now)
@@ -1518,11 +1543,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       }
 
       /* Duty güvenlik klempi — HG-2: tavan = yarım-periyot − boşluk (simetrik bipolar) */
-#if PEMF_SURUS_UNIPOLAR
-      int32_t max_d = (int32_t)tpp - 1; /* TEK-BACAK: tam-periyot − 1 */
-#else
-      int32_t max_d = (int32_t)(tpp / 2U) - DDS_BIPOLAR_GAP_TICKS;
-#endif
+      /* ⚠️ Klemp #1 ile AYNI kural, AYNI kaynak (`g_unipolar[i]`). */
+      int32_t max_d = g_unipolar[i] ? ((int32_t)tpp - 1)
+                                    : ((int32_t)(tpp / 2U) - DDS_BIPOLAR_GAP_TICKS);
       if (max_d < 1)
         max_d = 1; /* uç frekans: NOP dead-time devrede (bkz. DDS_BIPOLAR_GAP_TICKS notu) */
       if (g_duty_ticks[i] > max_d)
@@ -1583,23 +1606,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
      * ⚠️ TEZGÂH ZORUNLU: aynı sayısal duty'de teslim edilen enerji/alan ESKİ dalgadan FARKLIDIR
      * (doz yeniden kalibre edilmeli — skop + alan probu; bkz. DONANIM-UYUM-ANALIZI-2026-08-19). */
     uint8_t state;
-#if PEMF_SURUS_UNIPOLAR
-    /* TEK-BACAK DÜZ SÜRÜŞ (2026-09-08): bobin başına YALNIZ BİR bacak darbelenir [0,duty), geri
-     * kalan periyot LOW; öteki bacak hiç HIGH olmaz (geçiş kodu onu kapalı tutar). Varsayılan
-     * bacak IN_A (durum 1). Polarite maskesi (aşağıda, iki kipte ortak) bir bit set edilirse seçili
-     * bobinde bunu IN_B'ye (durum 0) çevirir — ⚠️ ama maske 0x00 (sahip kararı 2026-09-10), yani
-     * darbe DAİMA IN_A'dan çıkar. Bipolar dalın `yarim` hesabı burada kullanılmadığı için tanımlanmaz. */
-    state = (adj < duty) ? 1U : 3U;
-#else
-    const int32_t yarim = tpp / 2;
-    if (adj < duty) {
-      state = 1U; /* A darbesi (pozitif yarım) */
-    } else if ((adj >= yarim) && (adj < (yarim + duty))) {
-      state = 0U; /* B darbesi (negatif yarım — ayna) */
+    if (g_unipolar[i]) {
+      /* TEK-BACAK DÜZ SÜRÜŞ: yalnız bir bacak darbelenir [0,duty), kalan periyot LOW;
+       * öteki bacak hiç HIGH olmaz. Varsayılan bacak IN_A (durum 1); polarite maskesi
+       * (aşağıda, iki kipte ortak) onu IN_B'ye çevirebilir — ama maske 0x00 (sahip kararı
+       * 2026-09-10), darbe DAİMA IN_A'dan çıkar.
+       * ⚠️ Bobin 6-7 sürücüsü TEK YÖNLÜ → bu bobinler bipolar SÜRÜLEMEZ. */
+      state = (adj < duty) ? 1U : 3U;
     } else {
-      state = 3U; /* boşluk: İKİSİ DE LOW (3 = GAP; 2 = IDLE ile karışmasın) */
+      /* SİMETRİK BİPOLAR: A=[0,duty) · B=[yarım, yarım+duty) · kalan tick'lerde İKİSİ DE LOW
+       * → net DC = 0. Alan `−B → +B` salınır: kenar başına ΔB iki katı, periyot başına 4 kenar.
+       * ⚠️ dB/dt AMACININ ASIL KAZANCI BURADA (sahip 2026-09-11). */
+      const int32_t yarim = tpp / 2;
+      if (adj < duty) {
+        state = 1U; /* A darbesi (pozitif yarım) */
+      } else if ((adj >= yarim) && (adj < (yarim + duty))) {
+        state = 0U; /* B darbesi (negatif yarım — ayna) */
+      } else {
+        state = 3U; /* boşluk: İKİSİ DE LOW (3 = GAP; 2 = IDLE ile karışmasın) */
+      }
     }
-#endif
 
     /* POLARİTE TERSLEME — İKİ KİPTE ORTAK (pemf_surus.h PEMF_BOBIN_TERS_MASKESI, tezgâh ölçümü
      * 2026-09-08: bobin 1 ve 2 sargısı diğerlerine ters). Seçili bobinde A↔B rolleri yer değiştirir:

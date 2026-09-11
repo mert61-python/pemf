@@ -68,29 +68,60 @@ def test_KRITIK_Core_agaci_pemf_surus_haric_BAYT_BAYT_AYNI():
 
 
 def test_KRITIK_surus_kipi_iki_projede_FARKLI_ve_dogru():
+    """⚠️ 2026-09-11: kip artık BOBİN BAŞINA (`PEMF_BOBIN_UNIPOLAR_MASKESI`).
+
+    Sahip donanım bilgisi: bobin 1-5 TAM KÖPRÜ (bipolar olabilir), bobin 6-7 TEK YÖNLÜ
+    sürücü (yalnız unipolar). Tek bir `PEMF_SURUS_UNIPOLAR` bayrağı bunu İFADE EDEMEZ.
+    İki proje artık MASKEYLE ayrışır; ayrıntı: tests/test_stm_bobin_basina_kip.py
+    """
     k = (KANONIK / "Core" / ISTISNA).read_text(encoding="utf-8")
     a = (AYNA / "Core" / ISTISNA).read_text(encoding="utf-8")
     assert re.search(r"^#define PEMF_SURUS_UNIPOLAR 0$", k, re.M), "kanonik proje bipolar (0) olmalı"
     assert re.search(r"^#define PEMF_SURUS_UNIPOLAR 1$", a, re.M), "unipolar proje 1 olmalı"
 
-    # Yalnız #define satırı farklı olabilir (başlık yorumu iki değeri de anlatır → metin replace yanıltır).
-    def _define_siz(m: str) -> list[str]:
-        return [s for s in m.splitlines() if not s.startswith("#define PEMF_SURUS_UNIPOLAR ")]
+    mk = re.search(r"^#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x([0-9A-Fa-f]+)U", k, re.M)
+    ma = re.search(r"^#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x([0-9A-Fa-f]+)U", a, re.M)
+    assert mk and ma, "iki projede de kip MASKESİ tanımlı olmalı"
+    assert int(mk.group(1), 16) == 0x60, (
+        f"saha projesi maskesi 0x{mk.group(1)} != 0x60 — bobin 6-7 TEK YÖNLÜ sürücüde, "
+        "bipolar sürülemez; 1-5 tam köprüde ve dB/dt için bipolar sürülür"
+    )
+    assert int(ma.group(1), 16) == 0x7F, "karşılaştırma projesi HEPSİ-unipolar (0x7F) olmalı"
 
-    assert _define_siz(k) == _define_siz(a), "pemf_surus.h iki projede yalnız #define satırıyla farklı olmalı"
+    # Yalnız bu iki #define satırı farklı olabilir (başlık yorumu iki değeri de anlatır).
+    def _define_siz(m: str) -> list[str]:
+        return [
+            s
+            for s in m.splitlines()
+            if not s.startswith("#define PEMF_SURUS_UNIPOLAR ")
+            and not s.startswith("#define PEMF_BOBIN_UNIPOLAR_MASKESI ")
+        ]
+
+    assert _define_siz(k) == _define_siz(a), "pemf_surus.h iki projede yalnız kip #define'larıyla farklı olmalı"
 
 
 def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
-    """Metin değil DAVRANIŞ: unipolar dalda B durumu (0) hiç üretilmez, tavan tam-periyot."""
+    """Metin değil DAVRANIŞ: unipolar dalda B durumu (0) hiç üretilmez, tavan tam-periyot.
+
+    ⚠️ 2026-09-11: dallanma `#if PEMF_SURUS_UNIPOLAR` DEĞİL, çalışma-zamanı
+    `if (g_unipolar[i])` oldu (bobin başına kip). Dalların İÇERİĞİ aynı kaldı;
+    bu test onu ölçmeye devam eder, yalnız dalları ayıklama yolu değişti.
+    """
     src = _kaynak()
     assert '#include "pemf_surus.h"' in src, "main.c pemf_surus.h'ı dahil etmiyor → kip etkisiz"
-    uni = _yorumsuz(_kip_dali(src, True))
-    bip = _yorumsuz(_kip_dali(src, False))
-    # 2026-09-08 (sahip): unipolar dal tek bacak (A=1) üretir; polarite maskesi (iki kipte ORTAK,
-    # #endif SONRASI) seçili bobinde A↔B'yi çevirir → mono sürüşte darbe IN_B'den çıkar. Boşluk 3.
+    tum = _yorumsuz(src)
+
+    # Çalışma-zamanı kip dalları: if (g_unipolar[i]) { UNI } else { BIP }
+    m = re.search(
+        r"if \(g_unipolar\[i\]\) \{(?P<uni>.*?)\n    \} else \{(?P<bip>.*?)\n    \}",
+        tum,
+        re.S,
+    )
+    assert m, "çalışma-zamanı kip dallanması (`if (g_unipolar[i])`) bulunamadı → maske ETKİSİZ"
+    uni, bip = m.group("uni"), m.group("bip")
+
     assert "state = (adj < duty) ? 1U : 3U;" in uni, "unipolar dal tek-bacak darbe üretmiyor"
     assert "yarim" not in uni, "unipolar dalda yarım-periyot (ikinci bacak) penceresi var — tek-bacak değil"
-    tum = _yorumsuz(src)
     assert re.search(r"\(PEMF_BOBIN_TERS_MASKESI >> i\) & 1U", tum) and "state ^= 1U;" in tum, (
         "polarite maskesi ISR'de uygulanmıyor (A↔B çevirme yok) — bobin 1/2 ters sargı düzeltilmez"
     )
@@ -108,9 +139,22 @@ def test_KRITIK_main_c_kipi_okur_ve_DALGA_gercekten_degisir():
             "riskini tasiyordu. Degistirmek yeni bir SAHIP KARARI + IN_B kablolamasi gerektirir."
         )
     assert "state = 0U" in bip and "yarim + duty" in bip.replace("(", " ").replace(")", " "), "bipolar dal bozulmuş"
-    assert uni.count("tpp - 1") + uni.count("g_tpp[i] - 1") >= 2, "unipolar duty tavanı tam-periyot−1 değil (iki klemp)"
-    assert bip.count("/ 2U) - DDS_BIPOLAR_GAP_TICKS") >= 2, "bipolar yarım-periyot klempleri bozulmuş"
-    assert "UNIPOLAR tek-bacak" in uni and "SYM-BIPOLAR" in bip, "STM_READY dizesi kipi yansıtmıyor"
+
+    # ⚠️ 2026-09-11: klempler artık kip dallarının İÇİNDE değil, bobin başına TERNARY.
+    # İki klemp de `g_unipolar[i]` okumalı ve iki tavanı da taşımalı; ayrışırlarsa bipolar
+    # bobin yarım-periyottan uzun duty alır → A/B pencereleri çakışır → SHOOT-THROUGH.
+    klempler = re.findall(r"int32_t\s+max_d(?:_now)?\s*=\s*([^;]+);", tum, re.S)
+    assert len(klempler) == 2, f"beklenen 2 duty klempi, bulunan {len(klempler)}"
+    for kl in klempler:
+        assert "g_unipolar[i]" in kl, f"duty klempi kip dizisini okumuyor: {kl.strip()[:70]!r}"
+        assert "- 1" in kl, "unipolar tavanı (tam-periyot−1) klempte yok"
+        assert "DDS_BIPOLAR_GAP_TICKS" in kl, "bipolar tavanı (yarım−boşluk) klempte yok"
+
+    # STM_READY dizesi kipi MASKEDEN türetmeli (elle yazılan etiket karma kipte yalan söyler).
+    assert "PEMF_BOBIN_UNIPOLAR_MASKESI == 0x00U" in tum and '"KARMA"' in tum, (
+        "STM_READY dizesi kip maskesinden türetilmiyor → banner karma yapılandırmada YANLIŞ"
+    )
+    assert "UNIPOLAR tek-bacak" in tum and "SYM-BIPOLAR" in tum, "kip etiketleri kayboldu"
 
 
 MASKE = 0x00  # pemf_surus.h PEMF_BOBIN_TERS_MASKESI — sahip kararı 2026-09-10: maske KULLANILMIYOR
