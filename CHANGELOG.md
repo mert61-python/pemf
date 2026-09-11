@@ -32,6 +32,20 @@ açıkça yazıyor.
 ⚠️ **Kontrolcü yazılımı hâlâ güncel olmalı** (1.9.48'den beri geçerli): paket biçimi
 değişti; eski yazılım yüklü bir kartta **hiçbir bobin çalışmaz**.
 
+**Alan ölçümü artık işaretli uçları da kaydediyor.** Masaüstüne yazılan CSV'ye eksen
+başına **en düşük (−B) ve en yüksek (+B)** değerler ile aralarındaki fark eklendi.
+Neden önemli: şimdiye kadar kaydedilen `alan_mt` bir **büyüklüktür** — işareti yoktur.
+Bobin tek yönde sürülürken de (0 → +B) iki yönde sürülürken de (−B → +B) **aynı sayıyı**
+gösteriyordu. Sürüş biçiminin gerçek etkisi ancak yeni sütunlarda görünür.
+
+**Kontrolcü yazılımı bobin başına sürüş biçimi seçebiliyor.** Cihazdaki sürücü
+donanımı her bobinde aynı değil: beş bobin iki yönlü sürülebiliyor, yan duvarlardaki
+ikisi yalnız tek yönlü. Tek bir ayar bu ikisini birden anlatamıyordu; artık her bobin
+kendi donanımına uygun biçimde sürülüyor.
+
+⚠️ Bu iki değişiklik **kontrolcü yazılımının yeniden yüklenmesini** gerektirir; yalnız
+uygulamayı güncellemek yetmez.
+
 Paket kimliği (`buildId`): `738dd06e7d7f`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`99ac8a491f37`, URL korundu).
 
 ## app 1.9.49 — 2026-09-11 (🧲 manyetik alan artık TEPE değer: saniyede bir, en yüksek)
