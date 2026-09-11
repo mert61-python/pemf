@@ -32,6 +32,8 @@ açıkça yazıyor.
 ⚠️ **Kontrolcü yazılımı hâlâ güncel olmalı** (1.9.48'den beri geçerli): paket biçimi
 değişti; eski yazılım yüklü bir kartta **hiçbir bobin çalışmaz**.
 
+Paket kimliği (`buildId`): `738dd06e7d7f`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`99ac8a491f37`, URL korundu).
+
 ## app 1.9.49 — 2026-09-11 (🧲 manyetik alan artık TEPE değer: saniyede bir, en yüksek)
 
 > ⚠️ **BU SÜRÜM DE YENİ STM32 FIRMWARE'İ İSTER.** 1.9.48'deki 120 baytlık paket şartı
