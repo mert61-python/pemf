@@ -6,6 +6,32 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.50 — 2026-09-11 (🔌 kablo çıkarsa anlar, geri takınca kendine gelir)
+
+**Cihaz bağlı değilken "başladı" demiyor.** Kontrolcü bağlı olmadan bobin başlatma isteği
+artık **reddediliyor**. Eskiden uygulama "başarılı" cevabı veriyordu ama hiçbir şey
+çalışmıyordu — operatör tedavinin uygulandığını sanıyordu. Durdurma komutları hiçbir
+koşulda engellenmez.
+
+**Kablo çıkınca bobinler anında çevrimdışı oluyor.** Seri port kaybolduğu an bağlantı
+düşürülüyor ve bobinler arayüzde çevrimdışına dönüyor. Eskiden hiçbir bobin çalışmıyorken
+kablo çıkışı FARK EDİLMİYORDU (o durumda cihazla hiç konuşulmuyor) ve arayüz kartı
+sonsuza dek "bağlı" gösteriyordu.
+
+**Kabloyu geri takınca kendiliğinden hazıra dönüyor.** Yeniden bağlanmada bir yarış
+durumu vardı: kopan bağlantının okuyucusu geç uyanıp **yeni kurulmuş** bağlantıyı
+kapatabiliyordu. Kablo takılı ve cihaz sağlamken uygulama "kopuk" göstermeye devam
+ediyordu. Her oturum artık kendi kimliğini taşıyor; eskisi yenisine dokunamıyor.
+
+**Bildirim seli kesildi.** Cihaz komutları reddettiğinde saniyede iki özdeş satır
+basılıyordu (sahada 89+ ölçüldü) ve liste tıkanınca termal kesme / watchdog gibi
+**gerçek** uyarılar görünmez oluyordu. Artık tek ve ne yapılacağını söyleyen bir mesaj
+çıkıyor: kontrolcü yazılımı bu sürümle uyuşmuyorsa kartın yeniden programlanması gerektiği
+açıkça yazıyor.
+
+⚠️ **Kontrolcü yazılımı hâlâ güncel olmalı** (1.9.48'den beri geçerli): paket biçimi
+değişti; eski yazılım yüklü bir kartta **hiçbir bobin çalışmaz**.
+
 ## app 1.9.49 — 2026-09-11 (🧲 manyetik alan artık TEPE değer: saniyede bir, en yüksek)
 
 > ⚠️ **BU SÜRÜM DE YENİ STM32 FIRMWARE'İ İSTER.** 1.9.48'deki 120 baytlık paket şartı

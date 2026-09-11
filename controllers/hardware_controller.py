@@ -54,7 +54,8 @@ class HardwareController:
         # 5 Bobin için bellek içi (In-Memory) state
         # Arayüz olmadığı için (Headless), parametreler burada tutulur
         self.coils_state = {
-            i: {"is_running": False, "duty": 0.0, "phase": 0.0, "freq": 100.0, "duration": 0} for i in range(1, STM_BOBIN_SAYISI + 1)
+            i: {"is_running": False, "duty": 0.0, "phase": 0.0, "freq": 100.0, "duration": 0}
+            for i in range(1, STM_BOBIN_SAYISI + 1)
         }
 
         # P0 fix: coils_state + paket kurulumunu koruyan TEK kilit. API thread'leri
@@ -132,6 +133,29 @@ class HardwareController:
     def stop(self):
         self._keep_alive_stop.set()
 
+    def _stm_surus_hazir(self) -> bool:
+        """STM kopukken BAŞLATMA reddedilsin mi? (True = sürülebilir)
+
+        ⚠️ SAHA 2026-09-11: STM kopukken (`stmConnected: false`, hiç COM portu yok)
+        `/api/coil/1/control` `{"status":"success"}` dönüyordu. Donanım yokken "başarılı"
+        demek, operatöre tedavinin uygulandığını sandırır — SESSİZ BAŞARISIZLIK.
+
+        ⚠️ FAIL-OPEN BİLİNÇLİ: durum okunamazsa `True` döner, yani ENGELLEMEZ. Kapının
+        amacı sahte başarıyı kesmek; kendi arızasıyla cihazı kilitlemek DEĞİL. Kopuk
+        bağlantıda zaten iki katman daha var: firmware'in 1500 ms ölü-adam devresi
+        bobinleri sıfırlar ve arayüz kontrolü kilitler.
+
+        ⚠️ Gecikmeli (lazy) import: bu modülün import grafiğini `servers` katmanına
+        bağlamamak için. `live_state` yalnız stdlib+fastapi+utils kullanır → döngü yok.
+        """
+        try:
+            from servers.live_state import stm_surus_hazir
+
+            return bool(stm_surus_hazir())
+        except Exception:
+            self.logger.debug("STM surus durumu okunamadi → baslatma ENGELLENMEDI", exc_info=True)
+            return True
+
     def update_coil(
         self,
         coil_id: int,
@@ -148,6 +172,18 @@ class HardwareController:
         """
         if coil_id < 1 or coil_id > STM_BOBIN_SAYISI:
             self.logger.warning(f"Geçersiz bobin ID: {coil_id}")
+            return False
+
+        # ⚠️ STM KOPUKSA BAŞLATMA REDDEDİLİR — ama DURDURMA ASLA (bkz. `_stm_surus_hazir`).
+        # `start` kontrolü ŞART: STOP/E-stop kayıtlı sahip kararıyla hiçbir koşulda
+        # kapılanmaz, ayrıca kopuk bağlantıda STOP'u reddetmek yeniden bağlanınca
+        # bobinlerin ESKİ duty ile canlanmasına yol açar (keep-alive eski state'i sürer).
+        if start and not self._stm_surus_hazir():
+            self.logger.warning(
+                "Bobin %s BAŞLATILMADI: STM32 bağlı değil. USB (ST-Link) kablosunu takın; "
+                "bağlantı gelince komutu yeniden verin.",
+                coil_id,
+            )
             return False
 
         # DENETIM P2 (kismi uygulama): normalize_* cagrilari ESKIDEN state'e YAZARKEN
@@ -231,6 +267,13 @@ class HardwareController:
 
     def start_all_coils(self, freq=100.0, duty=25.0, phase=0.0, duration=30):
         """Tüm STM bobinlerini başlatır. duration birimi dakikadır."""
+        # ⚠️ AYNI KAPI BURADA DA OLMAK ZORUNDA: bu metot `update_coil`i ÇAĞIRMAZ (aşağıdaki
+        # yorumun anlattığı "BURAYA TAŞINMAMIŞTI" arızasının aynı sınıfı). Yalnız `update_coil`
+        # kapatılsa seans ve AI yolları STM kopukken hâlâ sessizce "başarılı" dönerdi —
+        # kısmi düzeltme, düzeltilmemiş demektir.
+        if not self._stm_surus_hazir():
+            self.logger.warning("TÜM bobinler BAŞLATILMADI: STM32 bağlı değil. USB (ST-Link) kablosunu takın.")
+            return False
         # DENETIM P2 (kismi uygulama) — update_coil:144-169'daki AYNI desen, gerekcesi orada.
         # Buraya TASINMAMISTI (git kaniti: 1413235 tek hunk, yalniz update_coil bolgesi).
         # normalize_* cagrilari dongu icinde, state'e YAZARKEN calisiyordu. duty TEK skalerdir

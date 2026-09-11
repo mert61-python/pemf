@@ -22,6 +22,82 @@ from utils.stm32_transport import Stm32SerialTransport
 _RETRY_MAX_AGE_S = 0.75
 
 
+class SeriBaglantiDurumu:
+    """Paylaşılan seri bağlantı + **NESİL** damgası (thread-güvenli).
+
+    ===========================================================================
+    ⚠️ NEDEN AYRI BİR SINIF — KAPATILAN YARIŞ (Audit P3, 2026-09-11)
+    ===========================================================================
+    Bağlantıya ÜÇ thread dokunur: sender (ana döngü), `reader` ve `reconnect`.
+    Eskiden `serial_conn` kilitsiz bir nonlocal'dı ve reader kapanırken KİMLİK
+    KONTROLÜ YAPMADAN `serial_conn = None` diyordu. Kablo takılıp çıkarıldığında:
+
+        1) kablo çıkar → reader'ın `readline()`ı patlar, döngüden çıkar
+        2) 3 sn sonra reconnect YENİ bağlantıyı kurar
+        3) ESKİ reader thread'i nihayet çalışır → `close(YENİ)` + `None`
+
+    → Kablo TAKILI ve firmware sağlamken bağlantı anında düşer; döngü tekrarlar.
+    Tam olarak "geri takınca hazıra dönmüyor" şikâyeti.
+
+    Çözüm: her reader kendi `conn`unu ve `nesil`ini taşır; paylaşılan durumu
+    **yalnızca hâlâ kendisininse** bırakır. Eski kodun "None-ataması yeni atamadan
+    önce olur" gerekçesi bir GARANTİ değil, thread zamanlaması VARSAYIMIYDI.
+
+    Kapı: tests/test_stm_seri_yeniden_baglanma.py (mutasyonla kanıtlı)
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._conn: Any = None
+        self._nesil = 0
+
+    def aktif(self) -> Any:
+        with self._lock:
+            return self._conn
+
+    def yerlestir(self, conn: Any) -> int:
+        """Yeni bağlantıyı kur; sahibine nesil damgasını döndür."""
+        with self._lock:
+            self._conn = conn
+            return self._nesil
+
+    def gecersizle(self) -> Any:
+        """Mevcut bağlantıyı bırak ve nesli ilerlet → eski reader'lar YABANCI olur.
+
+        @return kapatılması gereken eski bağlantı (yoksa None)
+        """
+        with self._lock:
+            eski = self._conn
+            self._conn = None
+            self._nesil += 1
+            return eski
+
+    def birak(self, conn: Any, nesil: int) -> bool:
+        """KİMLİK KONTROLLÜ bırakma.
+
+        @return True → paylaşılan durum GERÇEKTEN bu bağlantıyı tutuyordu ve bırakıldı.
+                False → araya YENİ bir bağlantı girmiş; çağıran ona DOKUNMAMALI.
+        """
+        with self._lock:
+            benim = self._nesil == nesil and self._conn is conn
+            if benim:
+                self._conn = None
+                self._nesil += 1
+            return benim
+
+
+#: "Seri port hâlâ duruyor mu" yoklamasının periyodu (sn).
+#
+# ⚠️ NEDEN VAR (sahip talebi 2026-09-11: "kablo çıktı bobinler offline dönsün"):
+# Boştayken (hiçbir bobin çalışmazken) UART **tamamen sessizdir** — keep-alive koşulsuz
+# değildir (`hardware_controller._tick`: `need_send = any_running or ...`) ve firmware de
+# ilk paketten sonra ping'i keser. Dolayısıyla ne yazma hatası ne okuma hatası oluşur ve
+# kablo çıkışı FARK EDİLMEZ: arayüz STM'i sonsuza dek "bağlı" gösterir.
+# Port varlığı kesin ölçüttür: USB çekilince COM portu numaralandırmadan düşer.
+# 2 sn, kopuşun operatöre anında görünmesi ile numaralandırma maliyeti arasında denge.
+_PORT_CHECK_S = 2.0
+
+
 class HeadlessCore:
     """Qt-free backend core for STM32 communication and shared services."""
 
@@ -379,12 +455,18 @@ class HeadlessCore:
             )
 
     def _hw_sender_worker(self) -> None:
-        serial_conn = None
         udp_sock = None
         # [0]=son yazilan paket, [1]=yazildigi monotonic an (bkz. retry_last_payload yas siniri)
+        # ⚠️ `payload_lock` ile korunur: reader thread'i (retry_last_payload) okur, sender yazar.
         last_payload: list[Any] = [None, 0.0]
+        payload_lock = threading.Lock()
         last_reconnect_time = 0.0
         transport = Stm32SerialTransport(self.logger)
+
+        # ⚠️ Seri bağlantı PAYLAŞILAN durumdur: sender (bu thread), reader ve reconnect
+        # thread'leri birlikte erişir. `nesil`, eski bir reader'ın YENİ bağlantıyı
+        # kapatmasını engelleyen kimlik damgasıdır (bkz. connect_serial gerekçesi).
+        baglanti = SeriBaglantiDurumu()
 
         def retry_last_payload() -> None:
             # DENETIM P2: STM_NACK gelince EN SON YAZILAN ham paket kosulsuz yeniden kuyruga
@@ -394,7 +476,12 @@ class HeadlessCore:
             #   (1) YAS SINIRI — paket bir keep-alive turundan (0.5 sn) eskiyse artik "guncel
             #       niyet" degildir; tazelemeyi keep-alive'a birak (o zaten guncel durumu gonderir).
             #   (2) Baglanti kopmasinda cagiran taraf last_payload'i None yapar (asagi bkz.).
-            payload, ts = last_payload[0], last_payload[1]
+            # ⚠️ KİLİT ŞART: bu fonksiyon READER thread'inden çağrılır, `last_payload`ı ise
+            # SENDER thread'i yazar. Kilitsiz okumada paket ile zaman damgası FARKLI turlardan
+            # gelebilir → bayat bir paket "taze" sanılıp yeniden oynatılır (STOP'tan sonra
+            # yeniden enerjileme riski; yaş sınırının koruduğu şeyin ta kendisi).
+            with payload_lock:
+                payload, ts = last_payload[0], last_payload[1]
             if payload is None:
                 return
             if (time.monotonic() - ts) > _RETRY_MAX_AGE_S:
@@ -402,57 +489,89 @@ class HeadlessCore:
                     "[STM32 NACK] son paket bayat (%.2fs) → tekrar gonderilmedi; keep-alive guncel durumu tazeleyecek.",
                     time.monotonic() - ts,
                 )
-                last_payload[0] = None
+                with payload_lock:
+                    if last_payload[0] is payload:  # arada tazelenmişse DOKUNMA
+                        last_payload[0] = None
                 return
             try:
                 self._hw_send_queue.put_nowait(payload)
-                last_payload[0] = None
+                with payload_lock:
+                    if last_payload[0] is payload:
+                        last_payload[0] = None
             except queue.Full:
                 pass
 
-        # Audit P3 (NOT — serial reconnect yarışı): serial_conn kilitsiz paylaşılan nonlocal + last_payload
-        # reader/sender arası kilitsiz. DOĞRULANMIŞ cerrahi fix mevcut (reader'a kendi conn'unu geçir +
-        # kimlik-kontrollü nonlocal sıfırla + last_payload'ı Lock ile koru) ama DONANIM-serisi yolu +
-        # test-edilmemiş → donanım smoke-doğrulaması OLMADAN uygulanmadı (arıza modu fail-safe: keep-alive
-        # telafi eder). Detay: memory pemf-coverage-gap-audit. Donanım erişimi olunca uygula + birim-test ekle.
+        # ====================================================================
+        # ⚠️ AUDIT P3 KAPATILDI (2026-09-11, sahip talebi: "kablo çıktı bobinler offline
+        # dönsün, geri takınca hazıra dönebilmeli").
+        # --------------------------------------------------------------------
+        # ESKİ HÂL: `serial_conn` kilitsiz paylaşılan bir nonlocal'dı ve reader kapanırken
+        # KİMLİK KONTROLÜ YAPMADAN `serial_conn = None` diyordu. Eski koddaki gerekçe
+        # "eski-reader None-ataması YENİ atamadan ÖNCE olur (clobber yok)" diyordu — bu bir
+        # GARANTİ DEĞİL, thread zamanlaması hakkında bir VARSAYIMDIR. Gerçek sıralama:
+        #   1) kablo çıkar → reader'ın readline()'ı patlar, döngüden çıkar
+        #   2) 3 sn sonra ana döngü reconnect açar, YENİ bağlantı kurulur (serial_conn = YENİ)
+        #   3) ESKİ reader thread'i nihayet çalışır → close_serial(YENİ) + serial_conn = None
+        # → kablo TAKILI, firmware sağlam, ama bağlantı hemen düşürülür ve döngü tekrarlar.
+        # Tam olarak "geri takınca hazıra dönmüyor" şikâyeti.
+        #
+        # YENİ HÂL: `baglanti` sözlüğü + `serial_lock` + NESİL SAYACI. Her reader kendi
+        # connection nesnesini ve nesil numarasını taşır; kapanışta paylaşılan durumu
+        # YALNIZCA hâlâ kendisininse temizler. `last_payload` da artık kilitli.
+        # ====================================================================
+        def _aktif_baglanti():
+            return baglanti.aktif()
+
         def connect_serial() -> None:
-            nonlocal serial_conn
+            # Eski bağlantıyı KAPAT ve nesli ilerlet → o nesle ait reader artık "yabancı"dır.
+            eski = baglanti.gecersizle()
+            if eski is not None:
+                try:
+                    transport.close_serial(eski)
+                except Exception:
+                    pass
+            self._set_stm_connected(False)
+
             try:
-                if serial_conn:
-                    transport.close_serial(serial_conn)
-                self._set_stm_connected(False)
                 result = transport.open_and_handshake(
                     stop_event=self._hw_sender_stop,
                     on_line=lambda line: self._handle_stm_line(line, retry_last_payload),
                 )
-                if result is None:
-                    serial_conn = None
-                    return
-
-                serial_conn = result.serial
-                self._set_stm_connected(True)
-
-                def reader() -> None:
-                    nonlocal serial_conn
-                    while serial_conn and serial_conn.is_open and not self._hw_sender_stop.is_set():
-                        try:
-                            line = serial_conn.readline()
-                            if line:
-                                decoded = line.decode("utf-8", errors="ignore").strip()
-                                self._handle_stm_line(decoded, retry_last_payload)
-                        except Exception as exc:
-                            self.logger.warning("[STM32 READER] %s", exc)
-                            break
-                    self._set_stm_connected(False)
-                    if serial_conn:
-                        transport.close_serial(serial_conn)
-                    serial_conn = None
-
-                threading.Thread(target=reader, daemon=True, name="STM32Reader").start()
             except Exception as exc:
-                serial_conn = None
-                self._set_stm_connected(False)
                 self.logger.warning("[STM32] Serial open failed: %s", exc)
+                return
+            if result is None:
+                return
+
+            yeni = result.serial
+            nesil = baglanti.yerlestir(yeni)
+            self._set_stm_connected(True)
+            threading.Thread(target=reader, args=(yeni, nesil), daemon=True, name="STM32Reader").start()
+
+        def reader(conn, nesil: int) -> None:
+            """Kendi `conn`unu okur — paylaşılan duruma KÖR. Kapanışta kimlik doğrular."""
+            try:
+                while not self._hw_sender_stop.is_set():
+                    try:
+                        if not conn.is_open:
+                            break
+                        line = conn.readline()
+                    except Exception as exc:
+                        self.logger.warning("[STM32 READER] %s", exc)
+                        break
+                    if line:
+                        decoded = line.decode("utf-8", errors="ignore").strip()
+                        self._handle_stm_line(decoded, retry_last_payload)
+            finally:
+                # ⚠️ KİMLİK KONTROLÜ — bu blok olmadan eski reader YENİ bağlantıyı öldürür.
+                benim = baglanti.birak(conn, nesil)
+                if benim:
+                    self._set_stm_connected(False)
+                # Kendi conn'unu HER ZAMAN kapat (yabancıysa bile kendi kaynağıdır).
+                try:
+                    transport.close_serial(conn)
+                except Exception:
+                    pass
 
         connect_serial()
 
@@ -464,21 +583,50 @@ class HeadlessCore:
             udp_sock = None
 
         reconnect_thread = None  # tek eşzamanlı non-blocking reconnect
+        last_port_check = 0.0  # kablo-çıktı yoklamasının son anı (monotonic)
         while not self._hw_sender_stop.is_set():
             # DENETIM P3: geri-cekilme DUVAR SAATI ile olculuyordu. Saat GERI alinirsa
             # (NTP duzeltmesi, DST, elle ayar) `now - last_reconnect_time` negatife duser ve
             # 3 sn kosulu saatlerce saglanmaz → STM kopuk kalir, hicbir yeniden-baglanma
             # DENENMEZ. Monotonik saat geri gitmez.
             now = time.monotonic()
+            _conn = _aktif_baglanti()
+
+            # ── KABLO ÇIKTI MI? (port hâlâ enumerate ediliyor mu) ────────────────────────
+            # ⚠️ NEDEN SESSİZLİK BEKÇİSİ DEĞİL: keep-alive KOŞULSUZ DEĞİL — hiçbir bobin
+            # çalışmıyorken paket gönderilmez (`hardware_controller._tick`: `need_send =
+            # any_running or ...`) ve firmware de ilk paketten sonra ping'i keser. Yani BOŞTA
+            # UART tamamen sessizdir; "N saniyedir satır gelmedi" kuralı boşta YANLIŞ tetikler.
+            # Port varlığı ise kesin bir ölçüttür: USB çekilince COM portu numaralandırmadan
+            # DÜŞER. Böylece hiçbir yazma/okuma denemesi olmadan da kopuş ANINDA görülür ve
+            # bobinler arayüzde offline'a döner (sahip talebi 2026-09-11).
+            if _conn is not None and (now - last_port_check > _PORT_CHECK_S):
+                last_port_check = now
+                if not transport.port_hala_var(getattr(_conn, "port", None)):
+                    self.logger.warning(
+                        "[STM32] Seri port kayboldu (%s) → bağlantı düşürülüyor, bobinler çevrimdışı.",
+                        getattr(_conn, "port", "?"),
+                    )
+                    if baglanti.aktif() is _conn:
+                        baglanti.gecersizle()
+                    self._set_stm_connected(False)
+                    try:
+                        transport.close_serial(_conn)
+                    except Exception:
+                        pass
+                    with payload_lock:
+                        last_payload[0] = None  # kopuk hatta BAYAT paketi tekrar oynatma
+                    _conn = None
+
             _reconnecting = reconnect_thread is not None and reconnect_thread.is_alive()
-            if (not serial_conn or not serial_conn.is_open) and not _reconnecting and (now - last_reconnect_time > 3.0):
+            _kopuk = _conn is None or not _conn.is_open
+            if _kopuk and not _reconnecting and (now - last_reconnect_time > 3.0):
                 last_reconnect_time = now
-                # NON-BLOCKING reconnect (reconnect-audit fix): connect_serial() handshake'i ~14sn BLOKLARDI →
-                # sender döngüsü + UDP/ESP komut yolu + kuyruk tüketimi o süre DONARDI. Ayrı thread'de koş;
-                # sender akmaya devam eder. Race FAIL-SAFE: serial_conn tek-atama atomik (GIL); tüm write/
-                # is_open try/except'li + kapalı-port kontrollü; tek-reconnect guard eşzamanlı denemeyi keser;
-                # eski-reader None-ataması handshake penceresinde YENİ atamadan önce olur (clobber yok).
-                # Sanal-STM (socket://127.0.0.1:5100 stm32_simulator) ile smoke-test edildi.
+                # NON-BLOCKING reconnect: `connect_serial()` handshake'i ~14 sn BLOKLAR →
+                # sender döngüsü + UDP/ESP komut yolu + kuyruk tüketimi o süre DONARDI.
+                # ⚠️ Yarış artık VARSAYIMLA değil KİMLİKLE çözülüyor: her reader kendi
+                # connection'ını ve nesil numarasını taşır, paylaşılan durumu yalnız hâlâ
+                # kendisininse temizler (bkz. `connect_serial`/`reader`).
                 reconnect_thread = threading.Thread(target=connect_serial, daemon=True, name="STM32Reconnect")
                 reconnect_thread.start()
 
@@ -488,14 +636,22 @@ class HeadlessCore:
                 continue
 
             stm_msg, udp_pkt, esp_ip, esp_port = payload_tuple
-            if serial_conn and serial_conn.is_open and stm_msg:
+            _yaz_conn = _aktif_baglanti()
+            if _yaz_conn is not None and _yaz_conn.is_open and stm_msg:
                 try:
-                    last_payload[0] = payload_tuple
-                    last_payload[1] = time.monotonic()
-                    serial_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
+                    with payload_lock:
+                        last_payload[0] = payload_tuple
+                        last_payload[1] = time.monotonic()
+                    _yaz_conn.write(stm_msg if isinstance(stm_msg, bytes) else stm_msg.encode("utf-8"))
                 except Exception as exc:
                     self.logger.warning("[STM32 SEND] %s", exc)
-                    self._set_stm_connected(False)
+                    # Paylaşılan durumu YALNIZ hâlâ bu bağlantıysa düşür (araya yeni bir
+                    # bağlantı girmiş olabilir — eski yazma hatası onu öldürmemeli).
+                    _benim = baglanti.aktif() is _yaz_conn
+                    if _benim:
+                        baglanti.gecersizle()
+                    if _benim:
+                        self._set_stm_connected(False)
                     # DENETIM P2: port KAPATILMIYORDU. Yeniden-baglanma kosulu
                     # `not serial_conn or not serial_conn.is_open` oldugundan, yalnizca
                     # "baglanti koptu" BAYRAGINI dusurmek hicbir zaman reconnect tetiklemiyordu →
@@ -504,10 +660,11 @@ class HeadlessCore:
                     # dongu basindaki reconnect devreye girer. (Bu arada keep-alive kesildigi icin
                     # firmware olu-adam devresi 1.5 sn'de bobinleri sifirlar = fail-safe yon.)
                     try:
-                        transport.close_serial(serial_conn)
+                        transport.close_serial(_yaz_conn)
                     except Exception:
                         pass
-                    last_payload[0] = None  # kopuk baglantida BAYAT paketi tekrar oynatma
+                    with payload_lock:
+                        last_payload[0] = None  # kopuk baglantida BAYAT paketi tekrar oynatma
 
             if udp_sock and udp_pkt:
                 try:
@@ -515,8 +672,12 @@ class HeadlessCore:
                 except Exception as exc:
                     self.logger.warning("[UDP SEND] %s", exc)
 
-        if serial_conn and serial_conn.is_open:
-            transport.close_serial(serial_conn)
+        _son = baglanti.gecersizle()
+        if _son is not None:
+            try:
+                transport.close_serial(_son)
+            except Exception:
+                pass
         if udp_sock:
             try:
                 udp_sock.close()

@@ -165,6 +165,34 @@ class Stm32SerialTransport:
         except Exception:
             pass
 
+    def port_hala_var(self, port_adi: Optional[str]) -> bool:
+        """Bu port hâlâ sistemde numaralandırılıyor mu? (kablo çıktı mı)
+
+        ⚠️ NEDEN GEREKLİ (sahip talebi 2026-09-11: "kablo çıktı bobinler offline dönsün"):
+        Hiçbir bobin çalışmazken UART **tamamen sessizdir** — keep-alive koşulsuz değildir
+        ve firmware de ilk paketten sonra ping'i keser. Yazma da okuma da olmadığı için
+        kopuş hiçbir istisna üretmez; arayüz STM'i sonsuza dek "bağlı" gösterirdi.
+        USB çekilince COM portu numaralandırmadan DÜŞER → kesin ölçüt budur.
+
+        ⚠️ FAIL-OPEN: numaralandırma yapılamazsa (pyserial yok, izin hatası) `True` döner.
+        "Bilmiyorum"u "koptu" saymak, çalışan bir bağlantıyı boşuna düşürürdü.
+
+        ⚠️ SANAL PORTLAR MUAF: `socket://` (stm32_simulator), `loop://`, `rfc2217://`
+        işletim sistemi port listesinde GÖRÜNMEZ; onları "kayboldu" saymak simülatör
+        tabanlı testleri ve uzak-seri köprüyü anında koparırdı.
+        """
+        if not port_adi:
+            return True
+        if "://" in str(port_adi):
+            return True  # sanal/uzak port — numaralandırmaya tabi değil
+        try:
+            from serial.tools import list_ports
+
+            mevcut = {str(p.device).upper() for p in list_ports.comports()}
+        except Exception:
+            return True  # numaralandıramıyoruz → "koptu" DEME
+        return str(port_adi).upper() in mevcut
+
     # ── Candidate Seçimi ──────────────────────────────────────────────────────
 
     def _select_candidate(self) -> Optional[Stm32PortCandidate]:

@@ -669,6 +669,36 @@ _coil_olculen_alanlar: dict = {}
 #: bobin indeksi → son bilinen ADC doygunluk durumu (bildirimi yalniz GECISTE basmak icin).
 _akim_doygun_son: dict = {}
 
+#: STM_NACK bildirim kısıtlayıcısı: {ozet: son_bildirim_ani}. Bkz. `_stm_nack_bastir`.
+_stm_nack_son: dict = {}
+_stm_nack_lock = threading.Lock()
+
+#: Aynı NACK sebebi için iki bildirim arası ASGARİ süre (sn).
+#
+# ⚠️ NEDEN (saha 2026-09-11): firmware/backend paket biçimi uyuşmazsa HER paket NACK'lenir.
+# Keep-alive 2 Hz → operatöre saniyede iki özdeş "→ STM_NACK: CRC" düşer; sahada 89+ bildirim
+# ölçüldü. Liste tıkanınca termal kesme / watchdog / doygunluk gibi GERÇEK olaylar görünmez
+# olur. Bu bir alarm-yorgunluğu arızasıdır; bastırma SEBEP BAZINDA yapılır ki farklı bir NACK
+# (ör. parametre reddi) CRC seline gömülmesin.
+_STM_NACK_BILDIRIM_ARALIGI_S = 30.0
+
+
+def _stm_nack_bastir(mesaj: str) -> bool:
+    """Bu NACK bildirimi BASTIRILMALI mı? (True = gösterme)
+
+    İlk olay HEMEN gösterilir; aynı sebep `_STM_NACK_BILDIRIM_ARALIGI_S` boyunca susturulur.
+    ⚠️ Sebep bazında: "CRC" bastırılırken farklı bir NACK metni kendi hakkını korur.
+    """
+    ozet = "".join(ch for ch in mesaj.upper() if ch.isalpha())[:40]
+    simdi = time.monotonic()
+    with _stm_nack_lock:
+        son = _stm_nack_son.get(ozet)
+        if son is not None and (simdi - son) < _STM_NACK_BILDIRIM_ARALIGI_S:
+            return True
+        _stm_nack_son[ozet] = simdi
+    return False
+
+
 #: bobin indeksi → son bilinen MANYETIK doygunluk durumu (ayni "yalniz gecis" kurali).
 #: ⚠️ AKIMDAN AYRI SOZLUK: ikisini tek sozlukte tutmak, akim doygunlugu 1'ken gelen bir
 #: manyetik doygunlugu "degismedi" sanip operatore HIC soylememek demekti.
@@ -1282,7 +1312,26 @@ def _handle_backend_event(event) -> None:
                 logging.exception("STM watchdog STOP failed")
         return
     if event.event_type in {"hardware.stm.error", "hardware.stm.nack"}:
-        _push_notification(str(data.get("message", event.event_type)), "error")
+        _ham = str(data.get("message", event.event_type))
+        # ⚠️ BİLDİRİM SELİ KAPISI (saha 2026-09-11): firmware/backend protokolü uyuşmazsa
+        # HER paket NACK'lenir → keep-alive 2 Hz olduğu için operatöre saniyede iki özdeş
+        # "→ STM_NACK: CRC" düşer. Sahada 89+ bildirim ölçüldü: liste tıkanır, gerçek olaylar
+        # (termal, watchdog, doygunluk) görünmez olur — klasik alarm yorgunluğu.
+        #
+        # ⚠️ VE MESAJ EYLEM SÖYLEMİYORDU: "CRC" ham firmware metnidir; operatör ondan ne
+        # yapacağını çıkaramaz. CRC reddi pratikte TEK bir şeyi gösterir: karttaki firmware
+        # ile bu sürümün paket biçimi UYUŞMUYOR (paket 5 bobinde 88, 7 bobinde 120 bayt).
+        if _stm_nack_bastir(_ham):
+            return
+        if "CRC" in _ham.upper():
+            _push_notification(
+                "⚠️ STM32 komutları REDDEDİYOR (CRC) — karttaki firmware sürümü bu uygulamayla "
+                "uyuşmuyor. Hiçbir bobin çalışmaz. Kartı güncel firmware ile yeniden programlayın "
+                "(CubeIDE: Project → Clean → Build → Run). Açılış satırı '7-ch' demeli.",
+                "error",
+            )
+            return
+        _push_notification(_ham, "error")
         return
     if event.event_type == "mqtt.broker.status":
         mqtt_state = "online" if data.get("port_open") or data.get("running") else "warning"

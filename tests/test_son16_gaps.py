@@ -64,7 +64,13 @@ def test_gecerli_parametrelerle_bobin_NORMAL_guncellenir():
 
     hw.core = None  # transport yok → paket kuyruğa konmaz, state güncellemesi yine yapılır
 
-    hw.update_coil(1, start=True, freq=50.0, duty=25.0, phase=0.0, duration=10)
+    # ⚠️ STM "bağlı" ÖN KOŞULU (2026-09-11): `update_coil` artık STM kopukken BAŞLATMAYI
+    # reddediyor (saha: donanım yokken `{"status":"success"}` dönüyordu). Bu test bağlantıyı
+    # değil parametre uygulanmasını ölçüyor → ön koşulu açıkça kurar.
+    from stm_baglanti import stm_bagli
+
+    with stm_bagli():
+        hw.update_coil(1, start=True, freq=50.0, duty=25.0, phase=0.0, duration=10)
     assert hw.coils_state[1]["is_running"] is True
     assert hw.coils_state[1]["freq"] == pytest.approx(50.0)
     assert hw.coils_state[1]["duty"] == pytest.approx(0.25), "duty yüzde→oran çevrimi yapılmadı"

@@ -37,7 +37,7 @@ kilitleri tests/test_stm_dalga_sozlesmesi.py'dedir. READY dizesi firmware ile
 hizali tutulur (backend 'STM_READY' alt-dizesini esler; surum eki serbesttir).
 
 YANIT FORMATI (ASCII, \r\n ile biten):
-  -> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n
+  -> STM_READY: DDS v2.3 (7-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n
   -> STM_OK: D=%d,%d,%d,%d,%d P=%d,%d,%d,%d,%d F=%d,%d,%d,%d,%d T=%lu,...\r\n
   -> STM_NACK: <sebep>\r\n
   -> STM_ERR: Watchdog Timeout! Baglanti koptu, bobinler 0'landi.\r\n
@@ -101,9 +101,19 @@ def crc32_of(data: bytes) -> int:
 
 def decode_packet(raw: bytes):
     """
-    88-byte binary paketi çözer.
+    `PKT_SIZE` baytlık binary paketi çözer (7 bobin → 120 bayt).
     Başarıda (duty, phase, freq, duration, ref_ms) tuple döner.
     Hata durumunda (None, sebep_str) döner.
+
+    ⚠️ ALAN DİLİMLERİ `NUM_COILS`TEN TÜRER — ELLE YAZILMAZ (2026-09-11 düzeltmesi).
+    2026-09-10'da `NUM_COILS` 5→7 ve `PKT_SIZE` 88→120 yapıldı ama BU FONKSİYONDAKİ
+    dilimler `fields[2:7]`, `fields[7:12]`… diye 5 bobine SABİT kalmıştı. Sonuç:
+    `ref_ms = fields[22]` aslında `freq[6]`yı okuyordu → simülatör her geçerli paketi
+    yanlış çözüp reddediyordu. Yani simülatör SEVK EDİLENDEN FARKLI bir cihazı
+    doğruluyordu ve `headless_core`daki "sanal-STM ile smoke-test edildi" notu geçersizdi.
+    ⚠️ Parite kapısı (`tests/test_stm32_source_parity.py`) bunu GÖREMEDİ: yalnız SABİTLERİ
+    (`NUM_COILS`, `PKT_SIZE`) eşliyordu, ÇÖZÜMLEME DAVRANIŞINI değil. Davranış kapısı:
+    `tests/test_stm32_simulator_cozumleme.py`.
     """
     if len(raw) != PKT_SIZE:
         return None, f"boyut={len(raw)} != {PKT_SIZE}"
@@ -119,12 +129,14 @@ def decode_packet(raw: bytes):
     if hdr0 != 0xAA or hdr1 != 0x55:
         return None, f"header={hdr0:02X}{hdr1:02X}"
 
-    duty = list(fields[2:7])  # float[5]
-    phase = list(fields[7:12])  # float[5]
-    freq = list(fields[12:17])  # float[5]
-    duration = list(fields[17:22])  # uint32[5]
-    ref_ms = fields[22]  # uint16
-    # fields[23] = crc32 (zaten doğrulandı)
+    # Yerleşim: [0,1]=header · duty[N] · phase[N] · freq[N] · duration[N] · ref_ms · crc32
+    n = NUM_COILS
+    duty = list(fields[2 : 2 + n])
+    phase = list(fields[2 + n : 2 + 2 * n])
+    freq = list(fields[2 + 2 * n : 2 + 3 * n])
+    duration = list(fields[2 + 3 * n : 2 + 4 * n])
+    ref_ms = fields[2 + 4 * n]
+    # fields[3 + 4*n] = crc32 (zaten doğrulandı)
 
     # Değer kontrolleri
     if ref_ms > REF_MS_MAX:
@@ -164,7 +176,10 @@ class Stm32SimClient:
 
     def _send_ready(self):
         time.sleep(READY_DELAY_S)  # USB enumerate simülasyonu
-        msg = "-> STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n"
+        # ⚠️ KANAL SAYISI TÜRETİLİR: elle yazılan "5-ch" 2026-09-10 geçişinde BAYATLADI ve
+        # banner okuyan araçlar (scripts/stm_firmware_kimligi.py) simülatörü ESKİ firmware
+        # sanardı. Tek kaynak `NUM_COILS`.
+        msg = f"-> STM_READY: DDS v2.3 ({NUM_COILS}-ch SYM-BIPOLAR SIM) Waiting for commands...\r\n"
         self._send(msg)
         log.info("✅ STM_READY gönderildi → %s", self.addr)
 

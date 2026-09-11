@@ -217,8 +217,14 @@ def test_KARSIT_KANIT_stm_stop_kuyruga_girince_True_ve_start_semantigi_DEGISMEDI
     hc = _controller(_AcikKuyruk())
     assert hc.update_coil(1, 0.0, 0.0, 0.0, 0, start=False) is True
 
+    # ⚠️ STM "bağlı" ÖN KOŞULU (2026-09-11): başlatma artık STM kopukken reddediliyor;
+    # bu iddia START'ın DÖNÜŞ SEMANTİĞİNİ ölçüyor, bağlantıyı değil.
+    from stm_baglanti import stm_bagli
+
     hc2 = _controller(_DoluKuyruk())
-    assert hc2.update_coil(1, 50.0, 25.0, 0.0, 10, start=True) is True, (
+    with stm_bagli():
+        _start_sonuc = hc2.update_coil(1, 50.0, 25.0, 0.0, 10, start=True)
+    assert _start_sonuc is True, (
         "START semantiği değişmemeli (belgeli karar) — keep-alive dolu kuyruğu sonraki turda telafi eder"
     )
     # ve state gerçekten uygulanmış olmalı (atomiklik korunuyor)

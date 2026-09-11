@@ -30,12 +30,28 @@ class _FakeCore:
 
 @pytest.fixture
 def hw():
+    # ⚠️ STM "ONLINE" KURULUMU ŞART (2026-09-11): `update_coil`/`start_all_coils` artık STM
+    # kopukken BAŞLATMAYI REDDEDİYOR (saha arızası: donanım yokken `{"status":"success"}`
+    # dönüyordu — bkz. tests/test_stm_kopukken_baslatma_reddi.py). `_live_state["stm"]`
+    # varsayılanı "warning"dir, yani bu dosyadaki SÜRÜŞ testleri kapıya çarpar.
+    # Bu kurulum kapıyı ETKİSİZLEŞTİRMEZ — kapının kendi kapısı ayrı dosyada ve
+    # mutasyonla kanıtlı; burada yalnız "donanım bağlı" ön koşulu sağlanıyor.
+    from servers import live_state as _ls
+
+    with _ls._live_state_lock:
+        _stm_eski = _ls._live_state["stm"]
+        _ls._live_state["stm"] = "online"
+
     c = HardwareController(_FakeCore())
     # keep-alive thread'ini durdur → testler _tick'i DETERMİNİSTİK sürsün (arka-plan yarışı yok).
     c._keep_alive_stop.set()
     c._keep_alive_thread.join(timeout=2)
-    yield c
-    c.stop()
+    try:
+        yield c
+    finally:
+        c.stop()
+        with _ls._live_state_lock:
+            _ls._live_state["stm"] = _stm_eski
 
 
 def _fake_clock(monkeypatch, holder):

@@ -103,17 +103,30 @@ def test_serial_write_failure_closes_port_and_drops_stale_payload():
         enerjilenebiliyordu. Artık yaş sınırı var.
     """
     import inspect
+    import re
 
     import headless_core
 
     src = inspect.getsource(headless_core.HeadlessCore._hw_sender_worker)
 
     # (1) yazım hatası dalında port kapatılmalı (dal = [STM32 SEND] logundan UDP bloğuna kadar)
+    #
+    # ⚠️ ÇIPA DEĞİŞKEN ADINA PİNLENMEZ (2026-09-11): burada `close_serial(serial_conn)` diye
+    # SABİT bir metin aranıyordu. Yeniden-bağlanma yarışı kapatılırken paylaşılan `serial_conn`
+    # nonlocal'ı `SeriBaglantiDurumu` + yerel `_yaz_conn`e dönüştü ve kapı, DAVRANIŞ hiç
+    # değişmediği hâlde kırmızı oldu — kayıtlı "yapısal çıpa kırılganlığı" sınıfı.
+    # Ölçülmesi gereken şey: bu dalda port GERÇEKTEN kapatılıyor mu (hangi isimle olursa olsun).
     _after_send_err = src.split("[STM32 SEND]")[1].split("if udp_sock")[0]
-    assert "close_serial(serial_conn)" in _after_send_err, (
+    assert re.search(r"close_serial\(\s*\w+\s*\)", _after_send_err), (
         "yazım hatasında port kapatılmalı (yoksa reconnect tetiklenmez)"
     )
     assert "last_payload[0] = None" in _after_send_err, "kopuk bağlantıda bayat paket düşürülmeli (re-fire önlemi)"
+    # ⚠️ VE KAPATMA "BENİM Mİ" KONTROLÜNE TABİ OLMALI: araya yeni bir bağlantı girmişse eski
+    # yazma hatası onu ÖLDÜRMEMELİ (bkz. SeriBaglantiDurumu gerekçesi).
+    assert "_benim" in _after_send_err, (
+        "yazım hatası paylaşılan bağlantıyı KİMLİK KONTROLÜ OLMADAN düşürüyor -> "
+        "yeni kurulmuş bağlantı eski hatayla kapatılabilir"
+    )
 
     # (2) retry yaş sınırına tabi olmalı
     assert "_RETRY_MAX_AGE_S" in src, "NACK tekrar-oynatması yaş sınırlı olmalı"

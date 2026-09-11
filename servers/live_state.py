@@ -217,6 +217,27 @@ def _sync_stm_coils_locked() -> list[dict]:
     return snapshots
 
 
+def stm_surus_hazir() -> bool:
+    """STM sürüş yolu komut KABUL EDEBİLİR durumda mı?
+
+    ⚠️ NEDEN VAR (saha, 2026-09-11): STM kopukken `/api/coil/1/control`
+    `{"status":"success","transport":"stm32"}` döndürüyordu. Donanım yokken, hiçbir şey
+    çalışmayacakken "başarılı" — bu deponun tekrarlayan SESSİZ BAŞARISIZLIK sınıfı.
+    `stm_is_connected` backend'in hiçbir yerinde kontrol edilmiyordu; tek kapı istemci
+    tarafındaydı (`CoilParameterPanel`), yani mobil/AI/doğrudan-API çağrıları kapısızdı.
+
+    ⚠️ NEDEN `core.stm_is_connected` DEĞİL, BU ALAN: aynı EXE sunucuda `PEMF_SIMULATE=1`
+    ile demo koşuyor ve simülasyon döngüsü `core.stm_is_connected`i AYARLAMAZ — yalnız
+    `_live_state["stm"]`i "online" yapar. Kapıyı core alanına bağlamak demo/sunucu
+    dağıtımında HİÇBİR bobinin başlatılamamasına yol açardı. Bu alan ayrıca arayüzün
+    okuduğu alandır → backend artık ekranda görünenle AYNI şeyi söyler.
+
+    Kapı: tests/test_stm_kopukken_baslatma_reddi.py
+    """
+    with _live_state_lock:
+        return _live_state["stm"] == "online"
+
+
 def _push_notification(message: str, level: str = "info") -> None:
     global _notif_counter
     with _live_state_lock:
