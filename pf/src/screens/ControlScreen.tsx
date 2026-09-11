@@ -32,6 +32,7 @@ import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
+import { gorunurBobinler, espSlotuGorunur } from "@/services/bobinGorunurlugu";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "ai" | "aipro";
@@ -494,6 +495,7 @@ export function ControlScreen() {
         frequencyHz={treatment?.frequencyHz ?? 0}
         intensityMt={treatment?.intensityMt ?? 0}
         measuredIntensityMt={treatment?.measuredIntensityMt ?? null}
+        measuredPeakMt={treatment?.measuredPeakMt ?? null}
         onStop={stopSession}
         onEmergencyStop={emergencyStop}
         loading={loading}
@@ -586,7 +588,7 @@ export function ControlScreen() {
             <Text style={styles.kaynakBilgi}>📖 Literatür protokolü uygulandı.</Text>
           )}
 
-          <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} />
+          <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
 
           <StartButton
             label="🤖 Otomatik Seansı Başlat"
@@ -610,7 +612,7 @@ export function ControlScreen() {
               <ParamField label="Faz (°)" value={masterPhase} onChangeText={setMasterPhase} />
               <ParamField label="Süre (dk)" value={masterDuration} onChangeText={setMasterDuration} />
             </View>
-            <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} />
+            <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
             {/* Sürüş kipi TOPLU panelde: bobin başına kip seçilir ama tek bir pakette
                 gider (protokolde tek maske alanı var) → tek yer, tek kaynak. Seans
                 aktifken kilitli: koşan sürüşün kipini ortasında değiştirmek doz
@@ -643,18 +645,20 @@ export function ControlScreen() {
               Bobinler (6–8)". Bobin 6-7 ESP8266'dan STM32'ye taşındı (PE13 / PE15,
               firmware NUM_COILS=7, paket 120 bayt) → ayrım kalktı, TEK grup.
 
-              ⚠️ Slot 8 ARTIK ÇİZİLMİYOR. Backend'de duruyor (WS sözleşmesi ve
-              `range(8)` geçen dokuz çağrı yeri korunsun diye) ama FİZİKSEL BOBİN YOK;
-              kalıcı "Offline" bir kart göstermek operatöre var olmayan bir bobin
-              sunar. 8. bobin bir gün takılırsa `id <= 7` süzgeci ile geri gelir.
+              ⚠️ Slot 8 KOŞULLU çizilir (bkz. `gorunurBobinler`): cihaz yokken hayalet
+              bir kart göstermemek için gizli, ama ESP bağlandığında ya da o slot
+              ÇALIŞIYORKEN mutlaka görünür — görünmeyen bobin durdurulamıyordu
+              (2026-09-11 saha arızası).
 
               ⚠️ TERMAL: bobin 6-7'de artık CİHAZ-TARAFLI termal kesme YOK (sahip
               kararı). Sensörler henüz bağlı değil → `objectTemp` gelmiyor → paneldeki
               48 °C istemci interlock'u bu bobinlerde TETİKLENEMEZ ve rozet "ölçüm yok"
               gösterir. Bu, bobin 1-5'in bugünkü durumuyla AYNI; bilinçli. */}
-          <Text style={styles.subTitle}>🔌 Bobinler (1–7)</Text>
+          <Text style={styles.subTitle}>
+            {espSlotuGorunur(coils) ? "🔌 Bobinler (1–8)" : "🔌 Bobinler (1–7)"}
+          </Text>
           <ResponsiveGrid minItemWidth={320}>
-            {coils.filter(c => c.id <= 7).map((coil) => (
+            {gorunurBobinler(coils).map((coil) => (
               <CoilParameterPanel
                 key={coil.id}
                 coilId={coil.id}
@@ -670,7 +674,11 @@ export function ControlScreen() {
                 defaultDuty={parseFloat(masterDuty) || 25}
                 defaultPhase={parseFloat(masterPhase) || 0}
                 defaultDuration={parseDurationMin(masterDuration)}
-                stm32Driven={true}
+                // ⚠️ SABİT `true` DEĞİL: slot 8 ESP/MQTT ile sürülür. Sabit kalsaydı panel
+                // o bobini `stmConnected`e kapatır ve ESP ACK'ini (`command_id`) hiç
+                // beklemezdi → STM kopukken ESP bobini başlatılamaz, başlatılınca da
+                // onayı doğrulanmazdı.
+                stm32Driven={coil.stm32Driven ?? coil.id <= 7}
                 stmConnected={isStmConnected}
                 disabled={isActive}
               />
@@ -732,7 +740,7 @@ export function ControlScreen() {
             </View>
           )}
 
-          <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} />
+          <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
 
           <StartButton
             label="🧠 AI Seansını Başlat"
@@ -802,21 +810,27 @@ function ParamField({
 }
 
 function CoilSelector({
-  coils, selected, onToggle, stmConnected,
+  coils, selected, onToggle, stmConnected, gorunur,
 }: {
   coils: CoilStatus[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   stmConnected: boolean;
+  /** Ekranın geri kalanıyla AYNI görünürlük kuralı (tek kaynak) — bkz. `gorunurBobinler`. */
+  gorunur: (liste: CoilStatus[]) => CoilStatus[];
 }) {
   return (
     <View style={styles.coilSelector}>
       <Text style={styles.formLabel}>Bobin Seçimi</Text>
       <View style={styles.coilSelectorGrid}>
-        {/* Faz 4: 7 fiziksel bobin. Yedek liste de 7 üretir — 8. slot backend'de
-            duruyor (WS sözleşmesi) ama CİHAZI YOK, seçilebilir gösterilmesi
-            operatöre var olmayan bir bobin sunar. */}
-        {(coils.length > 0 ? coils.filter((c) => c.id <= 7) : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, connected: false }))).map((c) => {
+        {/* Faz 4: 7 fiziksel STM bobini. Slot 8 (ESP) YALNIZ ortaya çıkınca listelenir —
+            `gorunur` süzgeci ekranın geri kalanıyla AYNI kuralı uygular, yoksa seçilemeyen
+            ama çizilen (ya da çizilen ama seçilemeyen) bir bobin olurdu.
+            Yedek liste 7 üretir: hiç snapshot yokken ESP'nin varlığı BİLİNMEZ. */}
+        {(coils.length > 0
+          ? gorunur(coils)
+          : Array.from({ length: 7 }, (_, i) => ({ id: i + 1, connected: false, running: false }))
+         ).map((c) => {
           const connected = c.id <= 7 ? stmConnected : Boolean(c.connected);
           return (
             <TouchableOpacity

@@ -132,6 +132,26 @@
 #define MAG_DOYGUNLUK_XY_UT      24000.0f
 #define MAG_DOYGUNLUK_Z_UT       38700.0f
 
+/* ============================================================================
+ * BOSTA MANYETIK REFERANS ESIKLERI (MagChk)
+ * ============================================================================
+ * "Sensor dogru okuyor mu?" sorusunun sahada okunabilir cevabi. Kart, PWM kapaliyken
+ * gordugu ilk saniyelik tepeyi BIR KEZ loglar ve yorumunu da yazar.
+ *
+ * ⚠️ ESIKLER OLCULMUS FIZIKTEN GELIR, KEYFI DEGIL:
+ *  · Dunyanin toplam manyetik alan siddeti Turkiye'de ~47 uT; dunya genelinde 25-65 uT.
+ *    Sensor bostayken BUNU gormelidir — sifir DEGIL.
+ *  · Alt esik 5 uT: en zayif bolgenin (~25 uT) beste biri. Alti "ekvatorda bile olamaz"
+ *    demektir -> eksenler okunmuyor. Sensorun kendi gurultusu (~0,75 uT/LSB, birkac LSB)
+ *    bu esigin ALTINDA kalir, yani gurultu tek basina "NORMAL" verdirmez.
+ *  · Ust esik 150 uT: en guclu bolgenin (~65 uT) iki katinin ustu -> yakinda demir/miknatis.
+ *
+ * ⚠️ STM32 tarafinda AYNI esikler var (main.c: MAGCHK_SUPHELI_DUSUK_UT / MAGCHK_DUNYA_UST_UT).
+ * Ayrisirlarsa iki kartin "normal" tanimi farklilasir ve karsilastirma anlamsizlasir.
+ */
+#define MAGCHK_SUPHELI_DUSUK_UT  5.0f
+#define MAGCHK_DUNYA_UST_UT      150.0f
+
 // ============================================================================
 // FreeRTOS CONFIGURATION
 // ============================================================================

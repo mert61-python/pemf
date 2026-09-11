@@ -59,6 +59,7 @@ SensorManager::SensorManager() : _acsOffset(ACS712_OFFSET_EXPECTED) {
     _magZirveMt          = 0.0f;
     _magZirveOrnek       = 0;
     _magZirveDoygun      = false;
+    _magChkBasildi       = false;
     _magZirveX = _magZirveY = _magZirveZ = 0.0f;
 
     // Varsayılan hassasiyet: ilk kalibrasyon öncesi güvenli fallback
@@ -365,6 +366,35 @@ SensorReadings SensorManager::readAll() {
             data.magSamples    = ornek;
             data.magSaturated  = doygun;
             data.magSensorOk   = true;
+
+            // ── BOSTA REFERANS OLCUMU (bir kez) ────────────────────────────────────
+            // SAHIP SORUSU 2026-09-11: "manyetik sensor dogru okuyor mu, bostayken ne
+            // okumali?" Ayni oz-test STM tarafinda da var (main.c, STM_MAGCHK) —
+            // esikler ve yorum BIREBIR ayni olmali ki iki karti karsilastirmak
+            // mumkun olsun.
+            //
+            // BEKLENEN: DUNYANIN MANYETIK ALANI. Turkiye'de toplam siddet ~47 uT
+            // (0,047 mT; dunya genelinde 25-65 uT). Yani bosta |B| ~0,02-0,08 mT
+            // OKUMALI — SIFIR DEGIL. Tam 0,000 "sensor var ama olcmuyor" demektir.
+            //
+            // ⚠️ DUNYA ALANI BIR DC OFSETTIR: buyukluk (|B|) ona biner, ama
+            // TEPEDEN-TEPEYE olcumler ofsetten etkilenmez (farkta sadelesir).
+            // Surus kipi / faz karsilastirmalari tepeden-tepeye uzerinden yapilmali.
+            //
+            // ⚠️ "bosta" olmasi, o an PWM'in kapali olmasina baglidir — bu yuzden
+            // yalniz `!_pwmActive` iken basilir ve etiketi "ilk-bosta-pencere"dir.
+            if (!_magChkBasildi && !_pwmActive) {
+                _magChkBasildi = true;
+                const float bosta_ut = zirve * 1000.0f;
+                const char *yorum =
+                    (bosta_ut < MAGCHK_SUPHELI_DUSUK_UT)
+                        ? "SUPHELI: ~0 -> sensor ACK veriyor ama eksenler OLCMUYOR olabilir"
+                    : (bosta_ut <= MAGCHK_DUNYA_UST_UT)
+                        ? "NORMAL (dunya alani ~47uT)"
+                        : "YUKSEK DC OFSET (yakinda demir/miknatis) -> |B| sapar, tepeden-tepeye SAPMAZ";
+                LOG_PRINTF("[MagChk] ilk-bosta-pencere |B|=%.3f mT (X:%.3f Y:%.3f Z:%.3f) N=%u -> %s\n",
+                           zirve, zx, zy, zz, (unsigned)ornek, yorum);
+            }
         } else {
             // Pencerede HIC gecerli ornek yok → olcum YOK. Bayat zirve KORUNMAZ.
             data.magneticField = 0.0f;

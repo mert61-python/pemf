@@ -170,6 +170,13 @@ _live_state = {
         "measuredIntensityMt": None,
         # Ölçümün geldiği bobin (tek manyetik sensör bobin 6'ya eşlenik). None = ölçüm yok.
         "measuredIntensityCoil": None,
+        # SEANS BOYU TEPE (mT) — `measuredIntensityMt` ANLIK (son saniyenin tepesi) iken
+        # bu, seansın TAMAMINDA görülen en büyük |B|. ⚠️ İKİSİ AYRI SORUNUN CEVABI:
+        # "şu an ne veriyoruz" (anlık, sahip isteği 2026-09-11) ve "bu seansta en fazla
+        # ne verdik" (tepe, kayda/PDF'e giren). Tek sayı ikisini birden söyleyemez:
+        # bobinler birlikte anahtarlandığı için anlık değer darbe fazına göre oynar,
+        # tepe ise asla düşmez. None = hiç ölçüm gelmedi (0.0 DEĞİL).
+        "measuredPeakMt": None,
         "remainingMin": 0,
         "elapsedSec": 0,
         "durationSec": 0,
@@ -374,6 +381,7 @@ def update_live_session_state(
         # seansın tepe değerini "bu seansın ölçülen yoğunluğu" diye gösterirdi.
         _live_state["activeTreatment"]["measuredIntensityMt"] = None
         _live_state["activeTreatment"]["measuredIntensityCoil"] = None
+        _live_state["activeTreatment"]["measuredPeakMt"] = None
         if not is_active:
             # Seans bitti (durdur/watchdog/acil) → Hasta Özeti "Aktif hasta yok"a dönsün. TÜM stop
             # yolları buradan geçtiği için hasta temizliği tek noktada garanti (kilit içinde, hafif).
@@ -385,17 +393,23 @@ def update_live_session_state(
         _ws_broadcast_sync({"type": "snapshot", "data": _build_ws_snapshot()})
 
 
-def update_measured_intensity(mt: float | None, coil_id: int | None) -> bool:
-    """Aktif seansın ÖLÇÜLEN yoğunluğunu (tepe |B|, mT) yazar ve değiştiyse yayınlar.
+def update_measured_intensity(mt: float | None, coil_id: int | None, tepe: float | None = None) -> bool:
+    """Aktif seansın ÖLÇÜLEN yoğunluğunu yazar ve değiştiyse yayınlar.
 
     SAHİP KARARI 2026-09-11: "aktif seans ... ordaki yoğunluk değeri stm e bağlı olan
-    SENSÖRDEN GELSİN". Reçete alanı (`intensityMt`) DEĞİŞTİRİLMEZ — ikisi farklı şeydir
-    (bkz. servers/seans_alan_kaydi.py başlığı).
+    SENSÖRDEN GELSİN" + "ANLIK yazdırmalı". Reçete alanı (`intensityMt`) DEĞİŞTİRİLMEZ —
+    ikisi farklı şeydir (bkz. servers/seans_alan_kaydi.py başlığı).
 
-    ⚠️ SEANS YOKKEN YAZMAZ: ölçüm seansa aittir; boştaki cihazın okuduğu alan "uygulanan
-    doz" değildir ve arayüzde öyle görünmemelidir.
-    ⚠️ DEĞİŞMEDİYSE YAYINLAMAZ: telemetri saniyede bir gelir; her turda `session_update`
-    basmak, hiçbir şey değişmemişken WS'i ve istemci render'ını meşgul eder.
+    @param mt    ANLIK değer: SON SANİYENİN tepesi (`SeansAlanKaydi.son_deger`).
+                 ⚠️ Gerçek "o mikrosaniyedeki" örnek DEĞİL ve olamaz: bobinler ~425 Hz
+                 örneklenirken darbe fazına göre 0 ile tam alan arasında zıplar. Saniyelik
+                 tepe, "şu an ne veriyoruz" sorusunun ölçülebilir en dürüst cevabıdır.
+    @param tepe  SEANS BOYU en büyük |B| (`SeansAlanKaydi.zirve`). Kayda/PDF'e giren budur.
+
+    ⚠️ SEANS YOKKEN YAZMAZ: ölçüm seansa aittir; boştaki cihazın okuduğu alan (dünyanın
+    manyetik alanı dahil) "uygulanan doz" değildir ve arayüzde öyle görünmemelidir.
+    ⚠️ DEĞİŞMEDİYSE YAYINLAMAZ: telemetri saniyede bir gelir; hiçbir şey değişmemişken
+    `session_update` basmak WS'i ve istemci render'ını boşuna meşgul eder.
 
     @return yayın yapıldıysa True.
     """
@@ -404,10 +418,16 @@ def update_measured_intensity(mt: float | None, coil_id: int | None) -> bool:
         if not at.get("isActive"):
             return False
         yeni = None if mt is None else round(float(mt), 3)
-        if (at.get("measuredIntensityMt") == yeni) and (at.get("measuredIntensityCoil") == coil_id):
+        yeni_tepe = None if tepe is None else round(float(tepe), 3)
+        if (
+            (at.get("measuredIntensityMt") == yeni)
+            and (at.get("measuredIntensityCoil") == coil_id)
+            and (at.get("measuredPeakMt") == yeni_tepe)
+        ):
             return False
         at["measuredIntensityMt"] = yeni
         at["measuredIntensityCoil"] = None if yeni is None else coil_id
+        at["measuredPeakMt"] = yeni_tepe
         snapshot = dict(at)
     _ws_broadcast_sync({"type": "session_update", "data": snapshot})
     return True

@@ -72,6 +72,12 @@ PROTOKOL_ISARETLERI = (
     ("unipolar_maskesi", "paket kip alani YOK -> 120 baytlik ESKI protokol"),
     ("Coil_KipUygula", "kip uygulama fonksiyonu YOK -> istek pakete girse de kullanilmaz"),
     ("g_yalniz_unipolar", "donanim yetenek tabani YOK -> bobin 6-7 bipolar surulmeye calisilir"),
+    # ⚠️ 2026-09-11 saha arizasi: newlib-nano float printf'i baglanmazsa TUM STM_TELE
+    # satirlari sayisiz gider (`B=`, `T=`, `A=`, `I=`), backend onlari reddeder ve
+    # sicaklik/manyetik alan/akim arayuze BIR DAHA HIC ULASMAZ. Bobinler calismaya
+    # devam ettigi icin ariza "sensor bozuk" gibi gorunur. Bayat bir kaynagin
+    # masaustune cikip flaslanmasini ENGELLE.
+    ("&_printf_float", "printf float zorlamasi YOK -> TUM sensor telemetrisi SESSIZCE olur"),
 )
 
 

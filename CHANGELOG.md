@@ -13,6 +13,39 @@
 > Kartta eski yazılım varsa **her komut** bozuk sayılır: hiçbir bobin çalışmaz ve ekranda
 > sürekli "komut reddedildi" uyarısı çıkar. Uygulama ile kart **birlikte** güncellenir.
 
+**🔴 SENSÖRLER NEDEN HİÇ OKUMUYORDU — bulundu ve düzeltildi.** Masaüstüne yazılan seans
+CSV'si **bomboş** çıkıyordu (seans ne kadar sürerse sürsün), bobin kartlarında sıcaklık /
+manyetik alan / akım hep kısa çizgi görünüyordu ve seans kartındaki yoğunluk reçete
+değerinde takılı kalıyordu — ama bobinler sorunsuz çalışıyordu.
+
+Sebep sensörlerde ya da kabloda değildi: kontrolcü yazılımı, **ondalıklı sayıları
+yazdırma desteği bağlanmadan** derleniyordu. Ölçüm satırları cihazdan sayısız olarak
+çıkıyor (`B=`, `T=`, `A=`, `I=` boş), uygulama da onları haklı olarak reddediyordu.
+Hiçbir hata mesajı üretmiyordu; arıza bu yüzden "sensör bozuk" gibi görünüyordu.
+Düzeltme kontrolcü yazılımının **kaynağına** kondu (derleme ayarına değil), böylece
+başka bir bilgisayarda ya da ayar sıfırlandığında geri gelemez.
+
+⚠️ Bu süre boyunca yan bobinlerdeki tek otomatik sıcaklık koruması da (arayüzdeki 48 °C
+eşiği) ölçüm ulaşmadığı için **çalışamıyordu**.
+
+**Seans kartı artık ANLIK yoğunluğu gösteriyor.** Eskiden yalnız seans boyu en yüksek
+değer yazıyordu; tepe değer düşmediği için operatör frekansı/şiddeti değiştirdiğinde
+ekranda hiçbir değişim göremiyordu. Artık iki ayrı rozet var: **YOĞUNLUK (ölçülen)** son
+saniyenin değeri, **TEPE (seans)** ise seansın en yükseği (kayda giren sayı budur).
+
+**Cihaz açılışta sensörü kendi kendine sınıyor.** Kart, daha hiç bobin sürülmemişken
+okuduğu alanı bir kez bildiriyor ve yorumluyor: ~0,05 mT **normaldir** (dünyanın manyetik
+alanı), tam sıfır "sensör var ama okumuyor" demektir, çok yüksek bir değer ise yakında
+demir/mıknatıs olduğunu söyler. Bu, "sensör doğru okuyor mu?" sorusunu tezgâhta saatler
+harcamadan cevaplar. Aynı sınama ESP kartında da var.
+
+**8. bobin ekranda görünüyor (ESP bağlıyken).** ESP ağa bağlandığında 8. slot çalışır
+duruma geçebiliyor ama ekranda **hiç çizilmiyordu**: "Durdur" o bobini hedefliyor,
+onay gelmeyince "Durdurma onaylanamadı" uyarısı çıkıyor, operatörün elinde o bobine
+dokunacak hiçbir kontrol olmuyordu. Artık ESP bağlandığında — ya da o slot çalışıyorken —
+kart çiziliyor ve normal şekilde başlatılıp durdurulabiliyor. Cihaz yokken yine
+gizli kalır (var olmayan bobin gösterilmez).
+
 **Sürüş biçimi artık Manuel sekmesinden seçiliyor.** "Toplu Uygulama" kartına **Sürüş
 Kipi** bölümü eklendi: her bobin için iki yönlü (BİP) / tek yönlü (UNİ) seçilebiliyor,
 "Hepsi Bipolar" ve "Hepsi Unipolar" düğmeleri de var. Eskiden bu seçim kontrolcü

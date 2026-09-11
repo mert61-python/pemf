@@ -161,3 +161,148 @@ def test_KRITIK_telemetri_TEPE_ve_ORNEK_SAYISINI_tasir():
     g = ayristir(sahte, "-> STM_TELE: C=6,T=34.20,A=27.10,B=1.842")
     assert g["magnetic_field"] == pytest.approx(1.842)
     assert "magnetic_samples" not in g
+
+
+# ============================================================================
+# ANLIK vs SEANS TEPESI — sahip istegi 2026-09-11 ("ANLIK yazdirmali")
+# ============================================================================
+
+
+def test_KRITIK_ANLIK_deger_DUSEBILIR_seans_tepesi_DUSMEZ():
+    """⚠️ İki sayı, iki ayrı soru — tek alanla ikisi birden söylenemez.
+
+    Eskiden karta yalnız SEANS TEPESİ gönderiliyordu. Tepe tanımı gereği asla düşmez;
+    operatör frekansı/duty'yi/sürüş kipini değiştirip etkisini görmek istediğinde ekranda
+    HİÇBİR değişim olmuyordu — "ölçüm donmuş" gibi görünüyordu.
+
+    MUTASYON: `update_measured_intensity`i tek değere döndür (tepe parametresini yok say)
+    → KIRMIZI.
+    """
+    from servers import live_state
+
+    with live_state._live_state_lock:
+        eski = dict(live_state._live_state["activeTreatment"])
+        live_state._live_state["activeTreatment"]["isActive"] = True
+    try:
+        live_state.update_measured_intensity(3.260, 6, 3.260)
+        with live_state._live_state_lock:
+            at = live_state._live_state["activeTreatment"]
+            assert at["measuredIntensityMt"] == pytest.approx(3.260)
+            assert at["measuredPeakMt"] == pytest.approx(3.260)
+
+        # Ayar degisti, alan DUSTU: anlik DUSMELI, tepe KALMALI.
+        live_state.update_measured_intensity(0.820, 6, 3.260)
+        with live_state._live_state_lock:
+            at = live_state._live_state["activeTreatment"]
+            assert at["measuredIntensityMt"] == pytest.approx(0.820), (
+                "ANLIK deger dusmedi -> operator ayar degisiminin etkisini GOREMEZ"
+            )
+            assert at["measuredPeakMt"] == pytest.approx(3.260), (
+                "SEANS TEPESI dustu -> kayda/PDF'e giren 'en fazla ne verdik' sayisi BOZULDU"
+            )
+    finally:
+        with live_state._live_state_lock:
+            live_state._live_state["activeTreatment"].clear()
+            live_state._live_state["activeTreatment"].update(eski)
+
+
+def test_KRITIK_seans_YOKKEN_olcum_YAZILMAZ():
+    """Boştaki cihazın okuduğu alan (dünya alanı dahil) "uygulanan doz" DEĞİLDİR."""
+    from servers import live_state
+
+    with live_state._live_state_lock:
+        eski = dict(live_state._live_state["activeTreatment"])
+        live_state._live_state["activeTreatment"]["isActive"] = False
+        live_state._live_state["activeTreatment"]["measuredIntensityMt"] = None
+        live_state._live_state["activeTreatment"]["measuredPeakMt"] = None
+    try:
+        assert live_state.update_measured_intensity(1.5, 6, 1.5) is False
+        with live_state._live_state_lock:
+            at = live_state._live_state["activeTreatment"]
+            assert at["measuredIntensityMt"] is None and at["measuredPeakMt"] is None
+    finally:
+        with live_state._live_state_lock:
+            live_state._live_state["activeTreatment"].clear()
+            live_state._live_state["activeTreatment"].update(eski)
+
+
+def test_DEGISMEDIYSE_yayin_YAPILMAZ():
+    """Telemetri saniyede bir gelir; degismemis durumu yayinlamak WS'i bosuna mesgul eder."""
+    from servers import live_state
+
+    with live_state._live_state_lock:
+        eski = dict(live_state._live_state["activeTreatment"])
+        live_state._live_state["activeTreatment"]["isActive"] = True
+        live_state._live_state["activeTreatment"]["measuredIntensityMt"] = None
+        live_state._live_state["activeTreatment"]["measuredPeakMt"] = None
+    try:
+        assert live_state.update_measured_intensity(2.0, 6, 2.0) is True
+        assert live_state.update_measured_intensity(2.0, 6, 2.0) is False, "ayni deger TEKRAR yayinlandi"
+        # Yalniz TEPE degisse bile yayin OLMALI (kart tepe rozetini gosteriyor).
+        assert live_state.update_measured_intensity(2.0, 6, 5.0) is True, (
+            "tepe degisti ama yayin yapilmadi -> TEPE rozeti BAYAT kalir"
+        )
+    finally:
+        with live_state._live_state_lock:
+            live_state._live_state["activeTreatment"].clear()
+            live_state._live_state["activeTreatment"].update(eski)
+
+
+def test_KRITIK_UCTAN_UCA_telemetriden_karta_ANLIK_deger_gider(tmp_path, monkeypatch):
+    """⚠️ ASIL KABLOLAMA KAPISI — hangi fonksiyonun cagrildigini olcer.
+
+    Yukaridaki kapilar `update_measured_intensity`i DOGRUDAN cagiriyordu; api_server'in
+    ona `son_deger()` yerine yine `zirve()` gecirmesi hepsinde YESIL kaliyordu
+    (2026-09-11 mutasyon turunda olculdu). Bu test gercek telemetri olayini gecirir.
+
+    MUTASYON: api_server'da `_seans_alan.son_deger()` -> `_seans_alan.zirve()` → KIRMIZI.
+    """
+    from servers import api_server, live_state
+    from servers.seans_alan_kaydi import seans_alan_kaydi
+
+    monkeypatch.setattr("servers.seans_alan_kaydi.masaustu_dizini", lambda: (tmp_path, "test"))
+
+    with live_state._live_state_lock:
+        eski = dict(live_state._live_state["activeTreatment"])
+        live_state._live_state["activeTreatment"]["isActive"] = True
+        live_state._live_state["activeTreatment"]["measuredIntensityMt"] = None
+        live_state._live_state["activeTreatment"]["measuredPeakMt"] = None
+
+    seans_alan_kaydi.seans_basladi("test_uctan_uca", {"patient_name": "test"})
+    try:
+
+        def _olay(mt: float):
+            return type(
+                "O",
+                (),
+                {
+                    "event_type": "hardware.stm.telemetry",
+                    "data": {"coil_id": 6, "magnetic_field": mt, "magnetic_samples": 400},
+                },
+            )()
+
+        api_server._handle_backend_event(_olay(3.260))
+        with live_state._live_state_lock:
+            at = dict(live_state._live_state["activeTreatment"])
+        assert at["measuredIntensityMt"] == pytest.approx(3.260)
+        assert at["measuredPeakMt"] == pytest.approx(3.260)
+
+        # Alan DUSTU (ayar degisti). Anlik dusmeli, tepe kalmali.
+        api_server._handle_backend_event(_olay(0.820))
+        with live_state._live_state_lock:
+            at = dict(live_state._live_state["activeTreatment"])
+        assert at["measuredIntensityMt"] == pytest.approx(0.820), (
+            "karta giden deger DUSMEDI -> api_server hala SEANS TEPESINI 'anlik' diye "
+            "geciriyor; operator ayar degisiminin etkisini GOREMEZ"
+        )
+        assert at["measuredPeakMt"] == pytest.approx(3.260), "seans tepesi BOZULDU"
+
+        # CSV de gercekten yazilmis olmali (ayni olay zincirinin diger ucu).
+        yol = seans_alan_kaydi.durum()["yol"]
+        assert seans_alan_kaydi.durum()["satir"] == 2, "telemetri olayindan CSV satiri URETILMEDI"
+        assert yol is not None
+    finally:
+        seans_alan_kaydi.seans_bitti("test bitti")
+        with live_state._live_state_lock:
+            live_state._live_state["activeTreatment"].clear()
+            live_state._live_state["activeTreatment"].update(eski)

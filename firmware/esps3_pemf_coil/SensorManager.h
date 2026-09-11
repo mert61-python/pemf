@@ -116,6 +116,8 @@ private:
     float    _magZirveMt;
     uint16_t _magZirveOrnek;
     bool     _magZirveDoygun;
+    /** Bosta referans olcumu (MagChk) bir kez loglandi mi. Bkz. SensorManager.cpp. */
+    bool     _magChkBasildi;
     float    _magZirveX, _magZirveY, _magZirveZ;
     /**
      * Mandal koruyucusu. `pollMagnetic()` (TaskMagnetic) yazar, `readAll()` (ControlTask)

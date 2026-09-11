@@ -22,6 +22,12 @@ interface Props {
    * ⚠️ null/undefined = ölçüm YOK (0 DEĞİL) → kart reçete değerine düşer ve etiket "(kayıt)" olur.
    */
   measuredIntensityMt?: number | null;
+  /**
+   * SEANS BOYU en büyük ölçülen |B| (mT). `measuredIntensityMt` ANLIK (son saniyenin
+   * tepesi) iken bu asla düşmez ve kayda/PDF'e giren sayıdır.
+   * ⚠️ null/undefined = ölçüm YOK → tepe rozeti HİÇ çizilmez (0 gösterilmez).
+   */
+  measuredPeakMt?: number | null;
   onStop: () => void;
   onEmergencyStop: () => void;
   loading?: boolean;
@@ -63,6 +69,7 @@ export function SessionProgressCard({
   frequencyHz,
   intensityMt,
   measuredIntensityMt = null,
+  measuredPeakMt = null,
   onStop,
   onEmergencyStop,
   loading = false,
@@ -158,6 +165,15 @@ export function SessionProgressCard({
           <ParamChip label="YOĞUNLUK (ölçülen)" value={`${measuredIntensityMt.toFixed(2)} mT`} />
         ) : (
           <ParamChip label="YOĞUNLUK (kayıt)" value={`${intensityMt} mT`} />
+        )}
+        {/* SEANS TEPESİ — ayrı rozet, ayrı soru.
+            "Şu an ne veriyoruz" (ölçülen, saniyelik) ile "bu seansta en fazla ne verdik"
+            (tepe) farklı sayılardır: anlık değer darbe fazına ve ayar değişimine göre
+            oynar, tepe ise asla düşmez. Tek rozette birleştirmek operatörü yanıltırdı —
+            frekansı değiştirince düşmeyen bir "ölçüm" görürdü.
+            ⚠️ Ölçüm yokken ÇİZİLMEZ: 0 göstermek "0 mT ölçtük" demektir. */}
+        {measuredPeakMt != null && (
+          <ParamChip label="TEPE (seans)" value={`${measuredPeakMt.toFixed(2)} mT`} />
         )}
       </View>
 

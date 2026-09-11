@@ -30,35 +30,49 @@
  *  │  arada İKİSİ DE LOW → her duty'de net DC=0 (ESP S3/8266 ile AYNI sözleşme).  │
  *  │  Eski "bir bacak hep enerjili" sözleşmesi duty≠%50'de DC-bias üretiyordu.    │
  *  │                                                                     │
- *  │  SÜRÜŞ KİPİ (2026-09-08, sahip isteği — Core/Inc/pemf_surus.h):     │
- *  │    PEMF_SURUS_UNIPOLAR=0 → yukarıdaki SİMETRİK BİPOLAR (A/B, 2 pin)  │
- *  │    PEMF_SURUS_UNIPOLAR=1 → TEK-BACAK DÜZ SÜRÜŞ: bobin başına YALNIZ  │
- *  │      IN_A darbelenir [0,duty), IN_B HİÇ sürülmez (kalıcı LOW);       │
- *  │      duty tam-periyot doluluk, tavan tpp−1; dead-time gereksiz (tek  │
- *  │      anahtar, shoot-through yok). ⚠️ Tek yönlü darbe → net DC≠0,     │
- *  │      bu bilinçli bir tezgâh karşılaştırmasıdır. Aynı main.c iki      │
- *  │      projede derlenir (stm32_pemf / stm32_pemf_unipolar), yalnız     │
- *  │      pemf_surus.h farklıdır — kapı: tests/test_stm_main_saglik.py.   │
+ *  │  SÜRÜŞ KİPİ — İKİ KATMANLI (2026-09-11 sahip isteğiyle yeniden yazıldı) │
  *  │                                                                     │
- *  │  PİN DURUMU — UNIPOLAR projede "hangi pin PWM, hangisi boşta?":     │
- *  │    Bobin 1: PWM → PC8  (IN_A) · PD12 (IN_B) kalıcı LOW               │
- *  │    Bobin 2: PWM → PC9  (IN_A) · PE10 (IN_B) kalıcı LOW               │
- *  │    Bobin 3: PWM → PD10 (IN_A) · PD11 (IN_B) kalıcı LOW               │
- *  │    Bobin 4: PWM → PC6  (IN_A) · PC7  (IN_B) kalıcı LOW               │
- *  │    Bobin 5: PWM → PA8  (IN_A) · PA9  (IN_B) kalıcı LOW               │
- *  │    Bobin 6: PWM → PE13 (IN_A) · PE12 (IN_B) kalıcı LOW  [2026-09-10] │
- *  │    Bobin 7: PWM → PE15 (IN_A) · PD13 (IN_B) kalıcı LOW  [2026-09-10] │
- *  │    ⚠️ Bobin 6-7 ESP8266'dan STM'e TASINDI (sahip karari 2026-09-10). │
- *  │    IN_B pinlerine (PE12/PD13) KABLO YOK → maske bitleri 0 KALMALI.   │
- *  │    ⚠️ Polarite maskesi PEMF_BOBIN_TERS_MASKESI = 0x00 (sahip kararı  │
- *  │    2026-09-10) → HİÇBİR bobinde A↔B ters DEĞİL, darbe DAİMA IN_A.    │
- *  │    IN_B pinlerine kablo YOK; ters sargı DONANIMDA çevrildi. Maskeyi  │
- *  │    açmak, darbeyi bağlı olmayan pine taşır → bobin SESSİZCE ölür.    │
- *  │    Sürülmeyen pinler yine push-pull ÇIKIŞ kurulur ve kalıcı LOW      │
- *  │    tutulur (yarım-köprü girişi için güvenli durum); fiziksel olarak  │
- *  │    boş bırakılabilir. Başka işe AYRILMIŞ pin YOK — ayırmak için      │
- *  │    coil_gpio[].portA/portB ve Coil_GpioInit değişmeli. BİPOLAR       │
- *  │    projede 14 pinin hepsi (A+B) darbelenir.                          │
+ *  │  ⚠️ ESKİ ANLATIM SİLİNDİ: burada bir süre `PEMF_SURUS_UNIPOLAR`     │
+ *  │  derleme bayrağı ve "aynı main.c iki projede derlenir               │
+ *  │  (stm32_pemf / stm32_pemf_unipolar)" yazıyordu. O ayna proje         │
+ *  │  2026-09-11'de KALDIRILDI; TEK kaynak bu projedir.                   │
+ *  │                                                                     │
+ *  │  KATMAN 1 — DONANIM YETENEĞİ (derleme zamanı, pemf_surus.h):        │
+ *  │    PEMF_BOBIN_UNIPOLAR_MASKESI = 0x60 → g_yalniz_unipolar[]         │
+ *  │    Bit i set = bobin i+1 YALNIZ unipolar sürülebilir. Bu bir TABAN, │
+ *  │    seçim DEĞİL: hiçbir istek onu kaldıramaz.                        │
+ *  │                                                                     │
+ *  │  KATMAN 2 — OPERATÖR İSTEĞİ (çalışma zamanı, paket baytı):          │
+ *  │    BinaryCmdPacket_t.unipolar_maskesi → Coil_KipUygula()            │
+ *  │    Arayüzdeki "Sürüş Kipi" düğmesi gönderir.                        │
+ *  │                                                                     │
+ *  │    ETKİN: g_unipolar[i] = g_yalniz_unipolar[i] || istenen[i]        │
+ *  │    ACK her pakette `K=<etkin maske>` döndürür → düğmenin GERÇEKTEN  │
+ *  │    ne yaptığı yalnız oradan doğrulanır.                             │
+ *  │                                                                     │
+ *  │  BİPOLAR  : A=[0,duty), B=[½,½+duty) — 4 kenar/periyot, alan −B↔+B  │
+ *  │             duty tavanı ½periyot−GAP (⚠️ SHOOT-THROUGH koruması)    │
+ *  │  UNİPOLAR : yalnız IN_A [0,duty), IN_B kalıcı LOW — 2 kenar/periyot │
+ *  │             alan 0→+B, duty tavanı tpp−1 (tek anahtar, kısa devre   │
+ *  │             riski yok)                                              │
+ *  │                                                                     │
+ *  │  PİN DURUMU — ⚠️ SAHİP DÜZELTMESİ 2026-09-11                        │
+ *  │    Burada "IN_B pinlerine KABLO YOK" yazıyordu. **YANLIŞTI.**       │
+ *  │    Bobin 1-5: TAM KÖPRÜ, İKİ PWM DE BAĞLI                           │
+ *  │      1: PC8/PD12 · 2: PC9/PE10 · 3: PD10/PD11 · 4: PC6/PC7          │
+ *  │      5: PA8/PA9        → bipolar da unipolar da sürülebilir         │
+ *  │    Bobin 6-7: SÜRÜCÜ TEK YÖNLÜ, ikinci yarım köprü FİZİKSEL YOK     │
+ *  │      6: PE13 (IN_A) · PE12 boşta   7: PE15 (IN_A) · PD13 boşta      │
+ *  │      → DAİMA unipolar (maske 0x60'ın sebebi budur)                  │
+ *  │    ⚠️ Bobin 6-7 ESP8266'dan STM'e TAŞINDI (sahip kararı 2026-09-10). │
+ *  │    ⚠️ PEMF_BOBIN_TERS_MASKESI = 0x00 ve ÖYLE KALIR (sahip kararı    │
+ *  │    2026-09-10): hiçbir bobinde A↔B ters DEĞİL, ters sargı bobin     │
+ *  │    uçları çevrilerek DONANIMDA düzeltildi. Maskeyi açmak darbeyi    │
+ *  │    yanlış bacağa taşır.                                             │
+ *  │    Sürülmeyen pinler yine push-pull ÇIKIŞ + kalıcı LOW kurulur      │
+ *  │    (yarım-köprü girişi için güvenli durum). Başka işe AYRILMIŞ pin  │
+ *  │    YOK — ayırmak için coil_gpio[].portA/portB ve Coil_GpioInit      │
+ *  │    değişmeli.                                                       │
  *  └───────────────────────────────────────────────────────────────────────┘
  *
  *  ┌───────────────────────────────────────────────────────────────────────┐
@@ -128,18 +142,23 @@
  *   PD10  → GPIO OUT (IN_A Bobin 3)   PD11  → GPIO OUT (IN_B Bobin 3)
  *   PC6   → GPIO OUT (IN_A Bobin 4)   PC7   → GPIO OUT (IN_B Bobin 4)
  *   PA8   → GPIO OUT (IN_A Bobin 5)   PA9   → GPIO OUT (IN_B Bobin 5)
- *   PE13  → GPIO OUT (IN_A Bobin 6)   PE12  → GPIO OUT (IN_B Bobin 6, kablo YOK)
- *   PE15  → GPIO OUT (IN_A Bobin 7)   PD13  → GPIO OUT (IN_B Bobin 7, kablo YOK)
+ *   PE13  → GPIO OUT (IN_A Bobin 6)   PE12  → GPIO OUT (IN_B Bobin 6, sürücü tek yönlü)
+ *   PE15  → GPIO OUT (IN_A Bobin 7)   PD13  → GPIO OUT (IN_B Bobin 7, sürücü tek yönlü)
  *   LED   → PB0
  *
- *   SÜRÜŞ KİPİNE GÖRE (Core/Inc/pemf_surus.h):
- *     BİPOLAR  (stm32_pemf)          : IN_A + IN_B → 14 pinin HEPSİ darbelenir; A↔B rolleri
- *                                      maske ile ters çevrilebilir, ama
- *                                      PEMF_BOBIN_TERS_MASKESI 0x00 → hiçbir bobinde ters YOK.
- *     UNIPOLAR (stm32_pemf_unipolar) : bobin başına TEK pin PWM, HEPSİ IN_A: bobin 1-7 sırayla
- *                                      PC8 PC9 PD10 PC6 PA8 PE13 PE15 (IN_B'ler PD12 PE10 PD11
- *                                      PC7 PA9 PE12 PD13 kalıcı LOW, kablo YOK). Maske 0x00.
- *                                      Sürülmeyen pinler çıkış olarak kurulu + kalıcı LOW, boşta.
+ *   ⚠️ "kablo YOK" İDDİASI DÜZELTİLDİ (sahip, 2026-09-11): bobin 1-5'te İKİ PWM DE
+ *   BAĞLIDIR (tam köprü). Yalnız bobin 6-7'nin sürücüsünde ikinci yarım köprü yoktur.
+ *
+ *   SÜRÜŞ KİPİ — bobin başına, ÇALIŞMA ZAMANINDA (Core/Inc/pemf_surus.h + paket baytı):
+ *     etkin[i] = g_yalniz_unipolar[i] || istenen[i]
+ *       · g_yalniz_unipolar ← PEMF_BOBIN_UNIPOLAR_MASKESI (0x60) = donanım TABANI
+ *       · istenen           ← BinaryCmdPacket_t.unipolar_maskesi = arayüz düğmesi
+ *     BİPOLAR  sürülen bobinde IN_A + IN_B darbelenir (A=[0,duty), B=[½,½+duty)).
+ *     UNİPOLAR sürülen bobinde yalnız IN_A darbelenir, IN_B kalıcı LOW.
+ *     A↔B rolleri PEMF_BOBIN_TERS_MASKESI ile ters çevrilebilirdi ama o maske
+ *     0x00'dır ve ÖYLE KALIR → hiçbir bobinde ters YOK.
+ *     Sürülmeyen pinler çıkış olarak kurulu + kalıcı LOW (yarım-köprü için güvenli).
+ *     ⚠️ Ayna proje (`stm32_pemf_unipolar`) 2026-09-11'de KALDIRILDI — TEK kaynak burası.
  *
  ******************************************************************************
  */
@@ -152,6 +171,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ============================================================================
+ * ⚠️⚠️ printf FLOAT DESTEĞİNİ ZORLA — TÜM SENSÖR TELEMETRİSİ BUNA BAĞLI
+ * ============================================================================
+ * SAHA ARIZASI 2026-09-11 (kök neden): seans CSV'si bomboş çıkıyordu
+ * (`# olcum_satiri,0`), arayüzde sıcaklık/alan/akım hep "—" gösteriyordu, seans
+ * kartındaki yoğunluk reçete değerinde kalıyordu. Bobinler ise sorunsuz sürülüyordu.
+ *
+ * SEBEP: proje `-specs=nano.specs` (newlib-nano) ile bağlanıyor ve newlib-nano'da
+ * `printf` ailesinin FLOAT dönüşümü VARSAYILAN OLARAK BAĞLANMAZ. `-u _printf_float`
+ * bayrağı ne `.cproject`te ne de `scripts/firmware_derle.py`de vardı. Sonuç:
+ * `snprintf(..., "%.3f", x)` o dönüşüm için HİÇBİR ŞEY basmaz — hata da vermez.
+ *
+ * Yani hatta giden satır şuydu:
+ *     -> STM_TELE: C=6,T=,A=,B=,N=412,XN=,XP=,YN=,YP=,ZN=,ZP=
+ * Backend ayrıştırıcısı (headless_core._parse_stm_tele) hiçbir sayısal alan
+ * eşleştiremeyip `None` döndü → olay HİÇ yayınlanmadı → CSV satırı yok, sıcaklık yok,
+ * alan yok, akım yok. ACK (`STM_OK`) tamsayı biçimleyicilerle (`Coil_AckSayi`)
+ * kurulduğu için ETKİLENMEDİ — arıza bu yüzden "bobinler çalışıyor ama sensör yok"
+ * diye göründü ve sensör/kablo arızası sanıldı.
+ *
+ * ⚠️ NEDEN LINKER BAYRAĞI DEĞİL DE BURASI: bayrak CubeIDE proje ayarında yaşar ve
+ * yeniden import / ayar sıfırlama / başka bir makinede derleme ile SESSİZCE kaybolur —
+ * kaybolduğunda da hiçbir hata vermez, yalnız tüm ölçümler bir daha gelmez. Bu satır
+ * KAYNAĞIN İÇİNDE: hangi IDE, hangi makine, hangi ayar olursa olsun taşınır.
+ * Ölçülen maliyet: ~13,8 KB flash (2 MB'ın %0,7'si).
+ *
+ * Kapılar: `tests/test_stm_printf_float_kapisi.py` (kaynak) +
+ * `scripts/firmware_derle.py` (bağlanan ELF'te sembolü ARAR, yoksa derleme DÜŞER).
+ * ⚠️ Bu yüzden derleme betiğine `-u _printf_float` EKLENMEZ: eklenirse betik kendi
+ * sağladığı bayrağı doğrulamış olur ve CubeIDE'nin ürettiği ikiliyi ölçmez.
+ */
+/* ⚠️ DÜZ C ile yazıldı, `asm(".global _printf_float")` ile DEĞİL: ikisi de aynı işi görür
+ * (ölçüldü: `--gc-sections` altında da sembol bağlanır, aynı boyut, uyarı yok) ama asm
+ * yazımı bazı IDE ayrıştırıcılarında "expected a type specifier" diye KIRMIZI görünür ve
+ * kalıcı sahte hata bırakır. Gerçek bir başvuru ise her ayrıştırıcı için geçerli C'dir.
+ *
+ * Gerçek imza farklıdır (newlib içi, `struct _reent*` alır) — ÇAĞIRMIYORUZ, yalnız ADRESİNİ
+ * alıyoruz: bağlayıcı çözümlemede sembolü kütüphaneden çeker, nano'nun `vfprintf`indeki
+ * zayıf başvuru da böylece çözülür ve `%f` gerçekten basılır. */
+extern int _printf_float(void);
+void *const g_printf_float_zorla = (void *)&_printf_float;
 
 /* ============================================================================
  * SABİTLER
@@ -366,11 +427,11 @@ static const PEMF_CoilGPIO_t coil_gpio[NUM_COILS] = {
           {.portA = GPIOE,
            .pinA = GPIO_PIN_13,
            .portB = GPIOE,
-           .pinB = GPIO_PIN_12}, /* Bobin 6: PE13 (A, KABLOLU), PE12 (B, kablo YOK) */
+           .pinB = GPIO_PIN_12}, /* Bobin 6: PE13 (IN_A). PE12 (IN_B) surucude KARSILIGI YOK -> daima LOW */
           {.portA = GPIOE,
            .pinA = GPIO_PIN_15,
            .portB = GPIOD,
-           .pinB = GPIO_PIN_13}, /* Bobin 7: PE15 (A, KABLOLU), PD13 (B, kablo YOK) */
+           .pinB = GPIO_PIN_13}, /* Bobin 7: PE15 (IN_A). PD13 (IN_B) surucude KARSILIGI YOK -> daima LOW */
 };
 
 /* ============================================================================
@@ -469,6 +530,30 @@ static uint8_t g_yalniz_unipolar[NUM_COILS];
 
 /** Arayüzden gelen İSTEK (son geçerli paket). Etkin kip = yetenek || istek. */
 static volatile uint8_t g_istenen_unipolar_maskesi = 0U;
+
+/* ============================================================================
+ * BOŞTA MANYETİK REFERANS ÖLÇÜMÜ (STM_MAGCHK) — bir kez, hat başına
+ * ============================================================================
+ * "Sensör doğru okuyor mu?" sorusunun sahada okunabilir cevabı. Kart açılışta,
+ * daha hiç bobin sürülmemişken gördüğü alanı BİR KEZ bildirir.
+ *
+ * ⚠️ EŞİKLER ÖLÇÜLMÜŞ FİZİKTEN GELİR, KEYFİ DEĞİL:
+ *  · Dünyanın toplam manyetik alan şiddeti Türkiye'de ~47 µT (yatay ~27, düşey ~38).
+ *    Dünya genelinde 25-65 µT. Sensör boştayken BUNU görmelidir.
+ *  · Alt eşik 5 µT: dünya alanının en zayıf bölgesinin (~25 µT) beşte biri. Bunun
+ *    altı "ekvatorda bile olamaz" demektir → eksenler okunmuyor/sıfır dönüyor.
+ *    ⚠️ Sensörün kendi gürültüsü (~0,75 µT/LSB, birkaç LSB) bu eşiğin ALTINDA kalır,
+ *    yani gürültü tek başına "NORMAL" verdirmez.
+ *  · Üst eşik 150 µT: dünya alanının en güçlü bölgesinin (~65 µT) iki katının üstü.
+ *    Aşılıyorsa yakında demir/mıknatıs var; bu bir DC ofsettir.
+ */
+#define MAGCHK_SUPHELI_DUSUK_UT 5.0f
+#define MAGCHK_DUNYA_UST_UT 150.0f
+
+/** Hat başına "STM_MAGCHK basıldı" biti (bit i = `g_hat[i]`). */
+static uint8_t g_magchk_basildi = 0U;
+_Static_assert(PEMF_SENSOR_BOBIN_SAYISI <= 8U,
+               "g_magchk_basildi 8 bit -> sensor hatti sayisi artarsa TIP BUYUTULMELI");
 
 /* ============================================================================
  * DONANIM SYNC — Master Sync Pulse (PB1)
@@ -738,9 +823,14 @@ static uint8_t Coil_DecodeAndValidatePacket(const BinaryCmdPacket_t *pkt,
 /* ============================================================================
  * HG-1: BOBİN NTC TERMAL KESME — DERLEME-KAPILI (2026-08-19)
  * ----------------------------------------------------------------------------
- * Donanım-uyum denetimi HG-1: bobin 1-5'in HİÇBİR katmanda termal koruması yoktu
- * (ESP bobinleri 6-8 kendi 48/45 kesmesine sahip; backend 48°C limiti sahip
- * kararıyla kaldırıldı ve GERİ EKLENMEYECEK — koruma cihaz-yerel olmalı).
+ * Donanım-uyum denetimi HG-1: bobin 1-5'in HİÇBİR katmanda termal koruması yoktu.
+ * ⚠️ BAYAT YORUM DÜZELTMESİ 2026-09-11: burada "ESP bobinleri 6-8 kendi 48/45
+ * kesmesine sahip" yazıyordu. Bobin 6-7 artık ESP'de DEĞİL, BU KARTTA (2026-09-10)
+ * ve onlarda da CİHAZ-TARAFLI termal kesme YOK (sahip kararı). Yani BUGÜN yedi
+ * bobinin HİÇBİRİNDE cihaz-yerel termal koruma yoktur.
+ * Kalan tek otomatik katman arayüzdeki 48 °C istemci interlock'udur ve o da
+ * `T=` telemetrisinin ULAŞMASINA bağlıdır (bkz. printf-float notu, dosya başı).
+ * Backend 48°C limiti sahip kararıyla kaldırıldı ve GERİ EKLENMEYECEK.
  *
  * Bu blok TAM bir NTC termal kesme uygular ama ⚠️ DONANIM HENÜZ BAĞLI DEĞİL:
  * PEMF_NTC_TERMAL_ENABLED=0 iken hiçbir kod derlenmez (davranış birebir eski).
@@ -1009,9 +1099,10 @@ int main(void) {
         if (huart3.gState != HAL_UART_STATE_READY) {
           break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
         }
-        /* ⚠️ 160: `B=`/`N=` yaninda uc eksenin TEPEDEN-TEPEYE degeri de tasiniyor.
-         * Tasarsa snprintf keser ve satir SESSIZCE eksik gider (asagidaki uzunluk
-         * kontrolleri kirpilmis satiri de gecerli sayar). */
+        /* ⚠️ 192: `B=`/`N=` yaninda uc eksenin ISARETLI UCLARI da tasiniyor
+         * (6 alan). Tasarsa snprintf keser ve satir SESSIZCE eksik gider (asagidaki
+         * uzunluk kontrolleri kirpilmis satiri de gecerli sayar).
+         * Olculen en uzun satir ~130 bayt; pay bilerek genis. */
         static char tele_msg[192];
         /* ⚠️ Bobin kimligi TABLODAN gelir, `ILK_BOBIN_ID + si` DEGIL: sahadaki tek
          * manyetik sensor I2C2'de ama arayuzde bobin 6'da gorunmeli (sahip karari). */
@@ -1035,6 +1126,46 @@ int main(void) {
         if ((tl > 0) && (tl < (int)sizeof(tele_msg) - 3)) {
           tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, "\r\n");
           (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)tele_msg, (uint16_t)tl);
+        }
+
+        /* ── BOSTA REFERANS OLCUMU (bir kez, ilk gecerli pencerede) ───────────────────
+         * SAHIP SORUSU 2026-09-11: "manyetik sensor dogru okuyor mu, bostayken ne
+         * okumali?" Cevabi sahada okunabilir kilmak icin kart, HENUZ HIC BOBIN
+         * SURULMEMISKEN gordugu alani bir kez bildirir ve YORUMUNU da yazar.
+         *
+         * BEKLENEN: DUNYANIN MANYETIK ALANI. Turkiye'de toplam siddet ~47 µT
+         * (0,047 mT; yatay ~27, dusey ~38 µT). Yani bosta |B| ~0,02-0,08 mT OKUMALI —
+         * SIFIR DEGIL. Tam 0,000 okumak "sensor var ama olcmuyor" demektir ve bu,
+         * "sensor yok" ile telemetriden AYIRT EDILEMEZDI.
+         *
+         * ⚠️ DUNYA ALANI BIR DC OFSETTIR: `B=` (buyukluk) ona BINER, ama eksen
+         * uclarindan turetilen TEPEDEN-TEPEYE (`pp_x/pp_y/pp_z`) ofsetten ETKILENMEZ
+         * (farkta sadelesir). Bu yuzden surus kipi / faz karsilastirmalari `pp_*`
+         * uzerinden yapilmalidir — CSV'ye o sutunlarin konmasinin sebebi de budur.
+         *
+         * ⚠️ Bu satir yalniz ACILISTAKI ilk penceredir; "bosta" olmasi kullanicinin
+         * o an bobin baslatmamis olmasina baglidir. Kart, karar veremeyecegi bir sey
+         * hakkinda kesin konusmaz: etiket "ILK PENCERE", "garantili bosta" degil. */
+        if (sv.alan_ok && ((g_magchk_basildi & (1U << si)) == 0U) &&
+            (huart3.gState == HAL_UART_STATE_READY)) {
+          g_magchk_basildi |= (uint8_t)(1U << si);
+          const float bosta_ut = sv.alan_mt * 1000.0f;
+          const char *yorum;
+          if (bosta_ut < MAGCHK_SUPHELI_DUSUK_UT) {
+            yorum = "SUPHELI: ~0 -> sensor ACK veriyor ama eksenler OLCMUYOR olabilir";
+          } else if (bosta_ut <= MAGCHK_DUNYA_UST_UT) {
+            yorum = "NORMAL (dunya alani ~47uT)";
+          } else {
+            yorum = "YUKSEK DC OFSET (yakinda demir/miknatis) -> B= sapar, pp_* SAPMAZ";
+          }
+          static char chk_msg[176];
+          int cl = snprintf(chk_msg, sizeof(chk_msg),
+                            "-> STM_MAGCHK: C=%lu ilk-pencere |B|=%.3fmT N=%u -> %s\r\n",
+                            (unsigned long)PEMF_Sensor_BobinId(si),
+                            (double)sv.alan_mt, (unsigned)sv.alan_ornek, yorum);
+          if ((cl > 0) && (cl < (int)sizeof(chk_msg))) {
+            (void)HAL_UART_Transmit_IT(&huart3, (uint8_t *)chk_msg, (uint16_t)cl);
+          }
         }
       }
     }
@@ -1895,9 +2026,18 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
  *   PC6   → Bobin 4 IN_A
  *   PD12  → Bobin 1 IN_B    PE10 → Bobin 2 IN_B
  *
- *   UNIPOLAR projede (PEMF_SURUS_UNIPOLAR=1) 10 pin de AYNEN çıkış olarak kurulur ama ISR
- *   bobin başına yalnız BİR pini darbeler: bobin 1 → PD12 (PC8 LOW), bobin 2 → PE10 (PC9 LOW),
- *   bobin 1-5 → PC8 PC9 PD10 PC6 PA8 (PD12 PE10 PD11 PC7 PA9 LOW, kablo YOK).
+ *   14 pinin HEPSİ her zaman çıkış olarak kurulur; hangisinin DARBELENECEĞİ kipe bağlıdır:
+ *     · BİPOLAR sürülen bobinde  → IN_A ve IN_B dönüşümlü
+ *     · UNİPOLAR sürülen bobinde → yalnız IN_A; IN_B çıkış olarak kurulu ama kalıcı LOW
+ *       (yarım-köprü girişi için güvenli durum)
+ *   IN_A pinleri sırayla: PC8 PC9 PD10 PC6 PA8 PE13 PE15
+ *   IN_B pinleri sırayla: PD12 PE10 PD11 PC7 PA9 PE12 PD13
+ *
+ *   ⚠️ DÜZELTME 2026-09-11: burada "bobin 1-5 … kablo YOK" yazıyordu — YANLIŞTI.
+ *   Sahip bildirimi: bobin 1-5'te İKİ PWM DE BAĞLIDIR (tam köprü). Yalnız bobin 6-7'nin
+ *   sürücüsünde ikinci yarım köprü yoktur; onların IN_B'si (PE12/PD13) kullanılmaz.
+ *   Bu yanlış iddia bir süre "bipolar sürüş etkisiz" sanılmasına yol açtı.
+ *
  *   Polarite maskesi PEMF_BOBIN_TERS_MASKESI ⚠️ 0x00 — sahip kararı 2026-09-10, KULLANILMIYOR.
  *
  * NOT: Önceki mimaride (v1.x) bu pinler AF modunda Timer OC kanallarına
@@ -1916,7 +2056,10 @@ static void Coil_GpioInit(void) {
 
   /* ---- LED: PB0 + SYNC_OUT: PB1 -- Push-Pull Çıkış ---- */
   /* PB0 = Durum LED'i (düşük hız yeterli)                                  */
-  /* PB1 = MASTER SYNC PULSE ÇIKIŞI — ESP32/ESP8266 Slave'lere periyot sync */
+  /* PB1 = MASTER SYNC PULSE ÇIKIŞI — harici slave'lere periyot senkronu.
+   * ⚠️ 2026-09-10'dan beri bobin 6-7 BU KARTTA; PB1'i dinleyen bir ESP bobini
+   * KALMADI. Hat yine de sürülür: slot 8 (ESP) takılabilir ve tezgahta
+   * osiloskop tetiği olarak kullanılıyor. Kaldırmadan önce ikisini de doğrulayın. */
   /*        RISING kenar: her PWM döngüsünün başını işaret eder (100Hz)      */
   /*        Sinyal: 100µs (5×20µs) HIGH, geri kalan periyot LOW             */
   GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
@@ -2099,17 +2242,22 @@ void assert_failed(uint8_t *file, uint32_t line) {
  * İMKANSIZDIR. Yazılımsal DDS ile her bobin için bağımsız faz sayacı
  * kullanılarak bu kısıt aşılır.
  *
- * ESP32 ile AYNI MİMARİ
- * ---------------------
- * Bu DDS uygulaması, ESP32-S3 CoilController.cpp'deki
- * pwm_timer_isr() fonksiyonunun STM32 versiyonudur.
- * Aynı bipolar dalga formu, aynı dead time mantığı kullanılır.
+ * ESP32-S3 İLE ORTAK KÖKEN
+ * ------------------------
+ * Bu DDS uygulaması, ESP32-S3 CoilController.cpp'deki pwm_timer_isr()
+ * fonksiyonunun STM32 versiyonu olarak doğdu: aynı bipolar dalga formu, aynı
+ * dead-time mantığı.
+ * ⚠️ 2026-09-11: ARTIK BİREBİR AYNI DEĞİL. Bu kartta kip bobin başına ve ÇALIŞMA
+ * ZAMANINDA seçilir (yetenek maskesi || paket isteği); S3'te böyle bir katman yok.
+ * "S3'e bak, aynısı" diye okumayın — dalga formu aynı, kip seçimi DEĞİL.
  *
  * PERFORMANS
  * ----------
- * ISR süresi: ~140 CPU cycle (168 MHz'de ~0.8 µs)
+ * ISR süresi: ~140 CPU cycle (168 MHz'de ~0.8 µs) — ⚠️ 5 bobinle ÖLÇÜLDÜ (2026-08).
+ * Bugün NUM_COILS=7; ISR döngüsü bobin başına çalıştığı için süre yaklaşık
+ * 7/5 ≈ 1,4 katıdır (~200 cycle, ~1,2 µs) → CPU yükü ~%6. YENİDEN ÖLÇÜLMEDİ;
+ * bu bir TAHMİN, ölçüm değil. Bütçe 3360 cycle olduğundan pay hâlâ geniş.
  * Kullanılabilir süre: 3360 cycle (20 µs @ 168 MHz)
- * CPU yükü: ~%4.2
  *
  * PWM FREKANSI DEĞİŞTİRME
  * ------------------------

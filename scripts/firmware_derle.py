@@ -170,6 +170,35 @@ def derle_stm() -> int:
                 print("[STM32] ### BAGLANMADI (cozulmemis sembol / tasma):")
                 print(r.stderr[:3000])
                 return 1
+            # ⚠️⚠️ printf FLOAT KAPISI — 2026-09-11 saha arizasinin kapisi.
+            #
+            # `-specs=nano.specs` ile newlib-nano'nun float donusumu VARSAYILAN OLARAK
+            # BAGLANMAZ. O zaman `snprintf(..., "%.3f", x)` hicbir sey basmaz, HATA DA
+            # VERMEZ: butun STM_TELE satirlari sayisiz gider (`B=,T=,A=,I=`), backend
+            # ayristiricisi satiri reddeder ve sicaklik/alan/akim BIR DAHA HIC GELMEZ.
+            # Bobinler calismaya devam ettigi icin ariza "sensor bozuk" gibi gorunur.
+            #
+            # ⚠️ BAYRAK BURADAN VERILMEZ (`-u _printf_float` EKLENMEZ): eklenirse bu betik
+            # kendi sagladigi bayragi dogrulamis olur ve sahibin CubeIDE'de urettigi ikiliyi
+            # OLCMEZ. Tek kaynak main.c'deki `g_printf_float_zorla` basvurusudur; burasi
+            # yalniz URUNU olcer.
+            nm = shutil.which("arm-none-eabi-nm") or str(Path(gcc).with_name("arm-none-eabi-nm.exe"))
+            if Path(nm).is_file():
+                r = subprocess.run([nm, str(elf)], capture_output=True, text=True, errors="replace")
+                if "_printf_float" not in (r.stdout or ""):
+                    print(
+                        "[STM32] ### BAGLANDI AMA KULLANILAMAZ: `_printf_float` ELF'te YOK.\n"
+                        "[STM32]     newlib-nano float printf'i baglanmamis -> TUM STM_TELE\n"
+                        "[STM32]     satirlari sayisiz gider (B=, T=, A=, I=) ve backend onlari\n"
+                        "[STM32]     reddeder: sicaklik/alan/akim ARAYUZE HIC ULASMAZ.\n"
+                        "[STM32]     Duzeltme: main.c'deki `g_printf_float_zorla` basvurusu\n"
+                        "[STM32]     silinmis olmali — geri koyun (bkz. oradaki not)."
+                    )
+                    return 1
+                print("[STM32] printf float destegi: BAGLI (_printf_float ELF'te).")
+            else:
+                print("[STM32] UYARI: arm-none-eabi-nm yok -> printf-float kapisi KOSULAMADI.")
+
             boyut = shutil.which("arm-none-eabi-size") or str(Path(gcc).with_name("arm-none-eabi-size.exe"))
             if Path(boyut).is_file():
                 r = subprocess.run([boyut, str(elf)], capture_output=True, text=True)

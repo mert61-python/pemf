@@ -1293,11 +1293,12 @@ def _handle_backend_event(event) -> None:
                         if k in data
                     },
                 )
-                # Kartta SEANS BOYU TEPE gösterilir, son saniyeninki değil: bobinler
-                # birlikte anahtarlandığı için saniyelik tepe bile darbe-fazına göre
-                # oynar; operatörün sorduğu "bu seansta kaç mT verdik" sorusunun cevabı
-                # seans tepesidir. Saniyelik değer CSV'de satır satır zaten duruyor.
-                update_measured_intensity(_seans_alan.zirve(), _t_coil_id)
+                # ⚠️ İKİ SAYI BİRDEN (sahip isteği 2026-09-11: "ANLIK yazdırmalı").
+                # `son_deger()` = SON SANİYENİN tepesi → kartta canlı görünen sayı.
+                # `zirve()`     = SEANS BOYU tepe → kayda/PDF'e giren, asla düşmeyen sayı.
+                # Eskiden yalnız seans tepesi gönderiliyordu: operatör alanı değiştirip
+                # (frekans/duty/kip) etkisini ANINDA göremiyordu, çünkü tepe düşmez.
+                update_measured_intensity(_seans_alan.son_deger(), _t_coil_id, _seans_alan.zirve())
             except Exception:
                 logging.exception("seans alan kaydı/ölçülen yoğunluk güncellenemedi")
         _ws_broadcast_sync({"type": "coil_status", "coilId": _t_coil_id, "data": _t_snap})

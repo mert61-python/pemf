@@ -69,3 +69,36 @@ describe("yoğunluk çipi — reçete / ölçüm ayrımı", () => {
     expect(u.queryByText("1.5 mT")).toBeNull();
   });
 });
+
+
+// ============================================================================
+// ANLIK vs SEANS TEPESI (sahip istegi 2026-09-11: "ANLIK yazdirmali")
+// ============================================================================
+
+test("KRITIK: ANLIK ile SEANS TEPESI AYRI rozetlerde gosterilir", () => {
+  // ⚠️ Tek rozette birlestirmek operatoru yanıltır: tepe ASLA DUSMEZ, yani frekansi/
+  // duty'yi/kipi degistirip etkisini gormek isteyen operator hicbir degisim goremezdi.
+  // Sahip "anlik yazdirmali" derken tam olarak bunu istedi.
+  //
+  // MUTASYON: `measuredPeakMt` rozetini sil → KIRMIZI.
+  const u = render(<SessionProgressCard {...temel} measuredIntensityMt={1.84} measuredPeakMt={3.26} />);
+  expect(u.getByText("YOĞUNLUK (ölçülen)")).toBeTruthy();
+  expect(u.getByText("1.84 mT")).toBeTruthy();
+  expect(u.getByText("TEPE (seans)")).toBeTruthy();
+  expect(u.getByText("3.26 mT")).toBeTruthy();
+});
+
+test("KRITIK: tepe YOKKEN rozet HIC cizilmez (0 gosterilmez)", () => {
+  // "0.00 mT tepe" demek "olctuk, sifir cikti" demektir — olcmedigimiz halde.
+  // MUTASYON: `measuredPeakMt != null &&` kapısını kaldır → KIRMIZI.
+  const u = render(<SessionProgressCard {...temel} measuredIntensityMt={1.84} measuredPeakMt={null} />);
+  expect(u.queryByText("TEPE (seans)")).toBeNull();
+  expect(u.queryByText("0.00 mT")).toBeNull();
+});
+
+test("tepe 0.0 ise (gercekten olculmus sifir) rozet CIZILIR", () => {
+  // Karsit kanit: kapı `null` ile `0`u ayirt etmeli, `!measuredPeakMt` ile degil.
+  // MUTASYON: kapiyi `measuredPeakMt &&` yap → KIRMIZI.
+  const u = render(<SessionProgressCard {...temel} measuredIntensityMt={0.5} measuredPeakMt={0} />);
+  expect(u.getByText("TEPE (seans)")).toBeTruthy();
+});

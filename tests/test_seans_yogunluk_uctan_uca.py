@@ -112,8 +112,24 @@ def test_KRITIK_zincir_TAM_telemetri_karta_ve_CSVye_ulasir(kur):
     assert veri[0][2] == "6" and veri[0][3] == "3.412" and veri[0][4] == "407"
 
 
-def test_KRITIK_seans_yogunlugu_SEANS_TEPESI_son_saniye_DEGIL(kur):
-    """Kartta seans boyu TEPE gösterilir; darbe fazına göre inip çıkan son saniye değil."""
+def test_KRITIK_kartta_ANLIK_ve_SEANS_TEPESI_AYRI_alanlarda(kur):
+    """⚠️ SÖZLEŞME DEĞİŞTİ — SAHİP İSTEĞİ 2026-09-11: "ANLIK yazdırmalı".
+
+    ESKİ HÂLİ (bu test önce onu kilitliyordu): kartta YALNIZ seans tepesi gösteriliyordu
+    ve `measuredIntensityMt == 9.6` bekleniyordu. Gerekçe doğruydu — tepe, "bu seansta kaç
+    mT verdik" sorusunun cevabıdır — ama bir SORUN üretiyordu: tepe tanımı gereği ASLA
+    DÜŞMEZ. Operatör frekansı/duty'yi/sürüş kipini değiştirip etkisini görmek istediğinde
+    ekranda hiçbir değişim olmuyordu; ölçüm donmuş gibi görünüyordu.
+
+    YENİ SÖZLEŞME — iki ayrı soru, iki ayrı alan:
+      · `measuredIntensityMt` = SON SANİYENİN tepesi  → kartta "YOĞUNLUK (ölçülen)"
+      · `measuredPeakMt`      = SEANS BOYU tepe       → kartta "TEPE (seans)"
+
+    ⚠️ Eski beklenti KAYBOLMADI, alan değiştirdi: seans tepesi hâlâ ölçülüyor, hâlâ
+    gösteriliyor, hâlâ kayda giriyor.
+
+    MUTASYON: api_server'da `son_deger()` → `zirve()` yap → KIRMIZI.
+    """
     api, kayit, _y, _b, _t = kur
     kayit.seans_basladi("SEANS-TEPE", {})
     api.live_state.update_live_session_state(is_active=True, mode="Manuel", freq=10, intensity=1.0, duration_sec=600)
@@ -121,8 +137,13 @@ def test_KRITIK_seans_yogunlugu_SEANS_TEPESI_son_saniye_DEGIL(kur):
         api._handle_backend_event(_Olay({"coil_id": 6, "magnetic_field": v, "magnetic_samples": 400}))
     with api._live_state_lock:
         at = dict(api._live_state["activeTreatment"])
-    assert at["measuredIntensityMt"] == pytest.approx(9.6), (
-        f"kartta {at['measuredIntensityMt']} — seans TEPESI degil, son saniye gosteriliyor"
+    assert at["measuredIntensityMt"] == pytest.approx(1.1), (
+        f"kartta {at['measuredIntensityMt']} — SON SANIYE (1.1) gosterilmeli; hala seans "
+        "tepesi gosteriliyorsa operator ayar degisiminin etkisini GOREMEZ"
+    )
+    assert at["measuredPeakMt"] == pytest.approx(9.6), (
+        f"seans tepesi {at['measuredPeakMt']} — 9.6 olmali; tepe KAYBOLURSA "
+        "'bu seansta en fazla ne verdik' sorusunun cevabi da kaybolur"
     )
 
 

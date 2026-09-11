@@ -100,6 +100,12 @@ export interface ActiveTreatment {
   measuredIntensityMt?: number | null;
   /** Ölçümün geldiği bobin (tek manyetik sensör bobin 6'ya eşlenik). */
   measuredIntensityCoil?: number | null;
+  /**
+   * SEANS BOYU en büyük ölçülen |B| (mT). `measuredIntensityMt` ANLIK (son saniyenin
+   * tepesi); bu asla düşmez ve kayda giren sayıdır.
+   * ⚠️ null = hiç ölçüm gelmedi (0.0 DEĞİL).
+   */
+  measuredPeakMt?: number | null;
   remainingMin: number;
   elapsedSec: number;
   durationSec: number;
