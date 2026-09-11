@@ -55,6 +55,21 @@ CSV_BASLIKLARI = [
     "alan_mt",  # o saniyenin TEPE |B| değeri (anlık DEĞİL)
     "ornek",  # tepenin türediği örnek sayısı ("" = firmware bildirmedi)
     "doygun",  # 1 = ham eksen tam ölçeğe dayandı → değer GÜVENİLMEZ
+    # ⚠️ İŞARETLİ EKSEN UÇLARI (mT) — sahip isteği 2026-09-11: "- +b diye kaydetsin".
+    # `alan_mt` BÜYÜKLÜKTÜR (işaretsiz) ve unipolar (0→+B) ile bipolari (−B→+B) AYNI
+    # gösterir. Sürüş kipinin ve fazın gerçek etkisi ancak burada görünür:
+    #   tepeden-tepeye = x_max − x_min  (eksen başına)
+    #   DC ofset       = (x_max + x_min) / 2   → unipolarda ≠0, bipolarda ≈0
+    "x_min",
+    "x_max",
+    "y_min",
+    "y_max",
+    "z_min",
+    "z_max",
+    # Türetilmiş kolaylık sütunları (aşağı akış hesaplamasın diye):
+    "pp_x",
+    "pp_y",
+    "pp_z",  # tepeden-tepeye, eksen başına
 ]
 
 
@@ -173,8 +188,20 @@ class SeansAlanKaydi:
         return yol
 
     # ── ölçüm girişi ─────────────────────────────────────────────────────────
-    def olcum(self, bobin: int, mt: float, ornek: int | None = None, doygun: bool = False) -> None:
-        """Bir saniyelik TEPE ölçümünü kaydeder. Seans yoksa sessizce yok sayılır."""
+    def olcum(
+        self,
+        bobin: int,
+        mt: float,
+        ornek: int | None = None,
+        doygun: bool = False,
+        uclar: dict | None = None,
+    ) -> None:
+        """Bir saniyelik TEPE ölçümünü kaydeder. Seans yoksa sessizce yok sayılır.
+
+        `uclar`: {"mag_x_min":…, "mag_x_max":…, …} — işaretli eksen uçları (mT).
+        ⚠️ Yoksa o sütunlar BOŞ bırakılır; 0.0 yazmak "ölçüldü, sıfır çıktı" diye
+        okunur (bu deponun tekrarlayan sahte-ölçüm sınıfı).
+        """
         try:
             deger = float(mt)
         except (TypeError, ValueError):
@@ -203,6 +230,15 @@ class SeansAlanKaydi:
                 "" if ornek is None else int(ornek),
                 1 if doygun else 0,
             ]
+            # İşaretli uçlar + türetilmiş tepeden-tepeye. Alan YOKSA boş bırakılır.
+            u = uclar or {}
+            for eksen in ("x", "y", "z"):
+                for uc in ("min", "max"):
+                    v = u.get(f"mag_{eksen}_{uc}")
+                    satir.append("" if v is None else round(float(v), 3))
+            for eksen in ("x", "y", "z"):
+                lo, hi = u.get(f"mag_{eksen}_min"), u.get(f"mag_{eksen}_max")
+                satir.append("" if (lo is None or hi is None) else round(float(hi) - float(lo), 3))
             yazici, dosya = self._yazici, self._dosya
         if yazici is None or satir is None:
             return

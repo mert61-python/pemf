@@ -139,6 +139,36 @@ typedef struct {
    * yalnız tam ölçeğe YAKLAŞILDIĞINI söyler — erken uyarıdır, sarma kanıtı değil.
    */
   bool alan_doygun;
+  /**
+   * EKSEN BAŞINA **İŞARETLİ UÇLAR** (mT) — son 1 saniyelik pencerenin min ve max'ı.
+   * Tepeden-tepeye = `max − min` (aşağı akışta türetilir).
+   *
+   * ⚠️ NEDEN TEPEDEN-TEPEYE DEĞİL DE MİN/MAX TAŞINIYOR (sahip isteği 2026-09-11):
+   * min/max'tan tepeden-tepeye TÜRETİLİR, tersi TÜRETİLEMEZ. Ayrıca ikisi birlikte
+   * **DC ofseti** gösterir: unipolarda min≈0 (tek yönlü), bipolarda min≈−max
+   * (simetrik). Yani kipin gerçekten değiştiğini ve akımın birikip birikmediğini
+   * tek bakışta söyler — tepeden-tepeye tek başına bunu gizlerdi.
+   *
+   * ⚠️ NEDEN VAR (sahip amacı 2026-09-11: **maksimum dB/dt**): doku indüksiyonu
+   * Faraday'dan gelir ve alanın DEĞİŞİM GENLİĞİYLE orantılıdır. `alan_mt` ise
+   * |B|'nin TEPESİ — büyüklük olduğu için İŞARETİ YOK:
+   *     unipolar  0 → +B  : tepe |B| = B,  tepeden-tepeye = B
+   *     bipolar  −B → +B  : tepe |B| = B,  tepeden-tepeye = **2B**
+   * Yani tepe |B| iki kipte AYNI okunur ve bipolar kazancını GÖSTEREMEZ.
+   * Ölçülmesi gereken büyüklük budur.
+   *
+   * ⚠️ Dik eksenler ayrı raporlanır çünkü faz deneyinde (dikey 0°, duvar 180°)
+   * alan büyüklükte değil DOĞRULTUDA değişir: |B| düşerken eksen salınımları artar.
+   * Tek bir toplam sayı o kazancı gizlerdi.
+   *
+   * ⚠️ ÖRNEKLEME SINIRI: ~425 Hz'de 100 Hz'lik bir dalgada periyot başına ~4 örnek
+   * düşer. Kare dalganın platosu yakalanır ama min/max GERÇEK uçlar değil, en
+   * yakın örneklerdir → değer bir miktar KÜÇÜK çıkar (yanlı, ama tutarlı yanlı:
+   * kipler arası KARŞILAŞTIRMA geçerli kalır).
+   */
+  float uc_x_min, uc_x_max;
+  float uc_y_min, uc_y_max;
+  float uc_z_min, uc_z_max;
   uint16_t i2c_hata; /**< kümülatif I2C hata sayacı — teşhis; 0 beklenir */
 } PEMF_SensorVerisi_t;
 

@@ -1273,6 +1273,20 @@ def _handle_backend_event(event) -> None:
                     float(data["magnetic_field"]),
                     data.get("magnetic_samples"),
                     _t_mag_doygun,
+                    # ⚠️ İŞARETLİ UÇLAR: `magnetic_field` BÜYÜKLÜKTÜR ve unipolar ile
+                    # bipolari AYNI gösterir. Sürüş kipi/faz kazancı yalnız burada görünür.
+                    uclar={
+                        k: data[k]
+                        for k in (
+                            "mag_x_min",
+                            "mag_x_max",
+                            "mag_y_min",
+                            "mag_y_max",
+                            "mag_z_min",
+                            "mag_z_max",
+                        )
+                        if k in data
+                    },
                 )
                 # Kartta SEANS BOYU TEPE gösterilir, son saniyeninki değil: bobinler
                 # birlikte anahtarlandığı için saniyelik tepe bile darbe-fazına göre

@@ -161,11 +161,15 @@ def test_KRITIK_STM_bobin_kimligi_TABLODAN_gelir():
 def test_KRITIK_STM_telemetri_ORNEK_SAYISINI_ve_DOYGUNLUGU_tasir():
     """`N=` ve `S=1` olmadan "zirve tek örnekten mi geldi" ve "değer güvenilir mi" görünmez."""
     ana = _oku(STM_MAIN)
-    assert ',B=%.3f,N=%u"' in ana, "telemetri satiri ornek sayisini (N=) TASIMIYOR"
+    # ⚠️ ÇIPA BİÇİM DİZESİNİN TAMAMINA PİNLENMEZ (2026-09-11): burada `,B=%.3f,N=%u"`
+    # aranıyordu — KAPANIŞ TIRNAĞIYLA. İşaretli eksen uçları (XN/XP/…) eklenince dize
+    # orada bitmedi ve kapı, DAVRANIŞ hiç bozulmadığı hâlde kırmızı oldu (bu deponun
+    # kayıtlı "yapısal çıpa kırılganlığı" sınıfı). Ölçülmesi gereken: `N=` alanı basılıyor mu.
+    assert ",B=%.3f,N=%u" in ana, "telemetri satiri ornek sayisini (N=) TASIMIYOR"
     assert '",S=1"' in ana, "manyetik doygunluk bayragi (S=1) telemetriye YAZILMIYOR"
     # ⚠️ Doygunluk yalniz alan VARKEN basilmali (alan yokken S=1 anlamsizdir).
-    i = ana.find(',B=%.3f,N=%u"')
-    pencere = ana[i : i + 400]
+    i = ana.find(",B=%.3f,N=%u")
+    pencere = ana[i : i + 600]
     assert "sv.alan_doygun" in pencere, "S=1 dali alan blogunun ICINDE degil"
 
 

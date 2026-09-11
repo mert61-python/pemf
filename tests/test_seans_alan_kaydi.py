@@ -45,7 +45,15 @@ def test_KRITIK_seans_basinca_CSV_olusur_ve_baslik_tasir(kayit, tmp_path):
     assert any("Karabaş" in s for s in duz), "hasta adi dosyada YOK"
     # Reçete yoğunluğu ölçümle KARIŞMASIN diye AYRI ve ETİKETLİ durmalı.
     assert any("recete_yogunluk_mt" in s for s in duz), "recete yogunlugu etiketli olarak YOK"
-    assert ["zaman", "gecen_sn", "bobin", "alan_mt", "ornek", "doygun"] in satirlar, "sutun basligi YOK"
+    # ⚠️ ÇIPA TAM LİSTEYE PİNLENMEZ (2026-09-11): işaretli eksen uçları (x_min/x_max/…)
+    # eklenince tam eşitlik kırıldı — oysa davranış bozulmamıştı. Sütunlar SONA eklenir
+    # (eski dosyalarla açılabilirlik), o yüzden ÖNEK olarak eşleriz: eski sütunların
+    # varlığı ve SIRASI korunmalı, yeni sütun eklemek serbest.
+    bas = next((s for s in satirlar if s and s[0] == "zaman"), None)
+    assert bas is not None, "sutun basligi YOK"
+    assert bas[:6] == ["zaman", "gecen_sn", "bobin", "alan_mt", "ornek", "doygun"], (
+        f"eski sutunlarin sirasi DEGISTI: {bas[:6]} — eski CSV okuyucular kirilir"
+    )
 
 
 def test_KRITIK_olcumler_SATIR_SATIR_yazilir_sonda_toplu_DEGIL(kayit):

@@ -238,6 +238,12 @@ typedef struct {
   bool sicaklik_istegi;      /**< pencere açılışında set; S_BOSTA sıcaklığı öne alır */
   bool sicaklik_taze;        /**< BU pencerede sıcaklık BAŞARIYLA okundu */
   float zirve_mt;            /**< pencere içi EN BÜYÜK |B| (mT) */
+  /* Eksen başına işaretli uç değerler (tepeden-tepeye için). ⚠️ `zirve_ornek == 0`
+   * iken ANLAMSIZ; ilk geçerli örnekte ikisi de o örneğe kurulur (0.0'a kurmak,
+   * alanın 0'ı hiç geçmediği durumda sahte bir salınım uydururdu). */
+  float uc_x_min, uc_x_max;
+  float uc_y_min, uc_y_max;
+  float uc_z_min, uc_z_max;
   uint32_t zirve_ornek;      /**< pencere içi geçerli örnek sayısı */
   bool zirve_doygun;         /**< pencerede en az bir örnek tam ölçeğe dayandı */
   uint16_t ardisik_hata;
@@ -604,6 +610,9 @@ void PEMF_Sensor_Init(void) {
     h->zirve_mt = 0.0f;
     h->zirve_ornek = 0U;
     h->zirve_doygun = false;
+    h->uc_x_min = h->uc_x_max = 0.0f;
+    h->uc_y_min = h->uc_y_max = 0.0f;
+    h->uc_z_min = h->uc_z_max = 0.0f;
     h->ardisik_hata = 0U;
     h->tur_sayaci = 0U;
     h->sicaklik_adres = 0U;
@@ -614,6 +623,9 @@ void PEMF_Sensor_Init(void) {
     h->veri.alan_mt = 0.0f;
     h->veri.alan_ornek = 0U;
     h->veri.alan_doygun = false;
+    h->veri.uc_x_min = h->veri.uc_x_max = 0.0f;
+    h->veri.uc_y_min = h->veri.uc_y_max = 0.0f;
+    h->veri.uc_z_min = h->veri.uc_z_max = 0.0f;
     h->veri.i2c_hata = 0U;
   }
   /* AFR kaydırmaları: PB8/PB9 → AFR[1] bit 0/4 · PB10/PB11 → AFR[1] bit 8/12 */
@@ -665,17 +677,26 @@ static void pencere_kapat(SensorHat_t *h, uint32_t simdi_ms) {
     h->veri.alan_ornek =
         (h->zirve_ornek > 65535U) ? (uint16_t)65535U : (uint16_t)h->zirve_ornek;
     h->veri.alan_doygun = h->zirve_doygun;
+    h->veri.uc_x_min = h->uc_x_min;  h->veri.uc_x_max = h->uc_x_max;
+    h->veri.uc_y_min = h->uc_y_min;  h->veri.uc_y_max = h->uc_y_max;
+    h->veri.uc_z_min = h->uc_z_min;  h->veri.uc_z_max = h->uc_z_max;
     h->veri.alan_ok = true;
   } else {
     h->veri.alan_ok = false;
     h->veri.alan_ornek = 0U;
     h->veri.alan_doygun = false;
+    h->veri.uc_x_min = h->veri.uc_x_max = 0.0f;
+    h->veri.uc_y_min = h->veri.uc_y_max = 0.0f;
+    h->veri.uc_z_min = h->veri.uc_z_max = 0.0f;
   }
   h->veri.sicaklik_ok = h->sicaklik_taze;
 
   h->zirve_mt = 0.0f;
   h->zirve_ornek = 0U;
   h->zirve_doygun = false;
+  h->uc_x_min = h->uc_x_max = 0.0f;
+  h->uc_y_min = h->uc_y_max = 0.0f;
+  h->uc_z_min = h->uc_z_max = 0.0f;
   h->sicaklik_taze = false;
   h->sicaklik_istegi = true;
   h->tur_sayaci++;
@@ -813,6 +834,22 @@ static bool hat_ilerlet(SensorHat_t *h, uint32_t simdi_ms) {
       const float mt = sqrtf((x * x) + (y * y) + (z * z)) / 1000.0f; /* µT → mT */
       if (mt > h->zirve_mt) {
         h->zirve_mt = mt;
+      }
+      /* İŞARETLİ uçlar (mT). ⚠️ İLK geçerli örnekte min=max=örnek: 0.0'dan
+       * başlatmak, alan hiç 0'ı geçmiyorsa (tek yönlü sürüş + DC ofset) SAHTE
+       * bir salınım uydururdu — tepeden-tepeye olduğundan büyük çıkardı. */
+      const float xm = x / 1000.0f, ym = y / 1000.0f, zm = z / 1000.0f;
+      if (h->zirve_ornek == 0U) {
+        h->uc_x_min = h->uc_x_max = xm;
+        h->uc_y_min = h->uc_y_max = ym;
+        h->uc_z_min = h->uc_z_max = zm;
+      } else {
+        if (xm < h->uc_x_min) { h->uc_x_min = xm; }
+        if (xm > h->uc_x_max) { h->uc_x_max = xm; }
+        if (ym < h->uc_y_min) { h->uc_y_min = ym; }
+        if (ym > h->uc_y_max) { h->uc_y_max = ym; }
+        if (zm < h->uc_z_min) { h->uc_z_min = zm; }
+        if (zm > h->uc_z_max) { h->uc_z_max = zm; }
       }
       if (ham_doygun(xi) || ham_doygun(yi) || ham_doygun(zi)) {
         h->zirve_doygun = true;

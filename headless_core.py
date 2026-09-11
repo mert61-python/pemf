@@ -292,6 +292,15 @@ class HeadlessCore:
         # DAYANDI (|B| GUVENILMEZ). Firmware ikisini de yalniz `B` ile birlikte basar.
         r"(?:.*?[,\s]N=(?P<n>[0-9]+))?"
         r"(?:.*?[,\s]S=(?P<s>[01]))?"
+        # ISARETLI EKSEN UCLARI (mT): saniyelik pencerenin min/max'i. Tepeden-tepeye
+        # bunlardan TURETILIR. ⚠️ `B=` tepe BUYUKLUKTUR (isaretsiz) ve unipolar (0->+B)
+        # ile bipolari (-B->+B) AYNI gosterir; bipolar/faz kazancini YALNIZ bunlar tasir.
+        r"(?:.*?[,\s]XN=(?P<xn>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]XP=(?P<xp>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]YN=(?P<yn>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]YP=(?P<yp>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]ZN=(?P<zn>[+-]?[0-9]*[.]?[0-9]+))?"
+        r"(?:.*?[,\s]ZP=(?P<zp>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]I=(?P<i>[+-]?[0-9]*[.]?[0-9]+))?"
         r"(?:.*?[,\s]X=(?P<x>[01]))?"
     )
@@ -319,6 +328,12 @@ class HeadlessCore:
             ("t", "object_temp"),
             ("a", "ambient_temp"),
             ("b", "magnetic_field"),
+            ("xn", "mag_x_min"),
+            ("xp", "mag_x_max"),
+            ("yn", "mag_y_min"),
+            ("yp", "mag_y_max"),
+            ("zn", "mag_z_min"),
+            ("zp", "mag_z_max"),
             ("i", "current"),
         ):
             ham = m.group(anahtar)

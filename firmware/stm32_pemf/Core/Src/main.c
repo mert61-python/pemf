@@ -943,8 +943,15 @@ int main(void) {
      * turedigi (~400 beklenir; dusmesi I2C hattinin yavasladigini soyler),
      * `S=1` ise ham eksenin tam olcege DAYANDIGI = |B| GUVENILMEZ.
      *
+     * ⚠️ `XN/XP/YN/YP/ZN/ZP` = EKSEN BASINA ISARETLI UCLAR (mT), son 1 sn penceresi.
+     * Tepeden-tepeye = XP-XN (asagi akista turetilir). Sahip amaci maks dB/dt;
+     * `B=` tepe BUYUKLUKTUR ve isaretsiz oldugu icin unipolar (0->+B) ile bipolari
+     * (-B->+B) AYNI gosterir. Kazanci ancak bu alanlar gosterir. min VE max birlikte
+     * ayrica DC OFSETI soyler (unipolar min~0, bipolar min~-max). Dik eksenler AYRI:
+     * faz deneyinde alan buyuklukte degil DOGRULTUDA degisir.
+     *
      * Bicim (docs/stm32-sensor-protokolu.md):
-     *   -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412
+     *   -> STM_TELE: C=6,T=34.20,A=27.10,B=1.842,N=412,XN=-1.203,XP=1.198,...
      * Backend ayristiricisi eksik alani TOLERE eder (headless_core._parse_stm_tele). */
     if (PEMF_Sensor_Poll(HAL_GetTick())) {
       for (uint32_t si = 0U; si < PEMF_SENSOR_BOBIN_SAYISI; si++) {
@@ -956,7 +963,10 @@ int main(void) {
         if (huart3.gState != HAL_UART_STATE_READY) {
           break; /* ACK ucuyor → bu turu atla, telemetri periyodiktir */
         }
-        static char tele_msg[112];
+        /* ⚠️ 160: `B=`/`N=` yaninda uc eksenin TEPEDEN-TEPEYE degeri de tasiniyor.
+         * Tasarsa snprintf keser ve satir SESSIZCE eksik gider (asagidaki uzunluk
+         * kontrolleri kirpilmis satiri de gecerli sayar). */
+        static char tele_msg[192];
         /* ⚠️ Bobin kimligi TABLODAN gelir, `ILK_BOBIN_ID + si` DEGIL: sahadaki tek
          * manyetik sensor I2C2'de ama arayuzde bobin 6'da gorunmeli (sahip karari). */
         int tl = snprintf(tele_msg, sizeof(tele_msg), "-> STM_TELE: C=%lu",
@@ -966,8 +976,12 @@ int main(void) {
                          (double)sv.nesne_c, (double)sv.ortam_c);
         }
         if (sv.alan_ok && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
-          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",B=%.3f,N=%u",
-                         (double)sv.alan_mt, (unsigned)sv.alan_ornek);
+          tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl,
+                         ",B=%.3f,N=%u,XN=%.3f,XP=%.3f,YN=%.3f,YP=%.3f,ZN=%.3f,ZP=%.3f",
+                         (double)sv.alan_mt, (unsigned)sv.alan_ornek,
+                         (double)sv.uc_x_min, (double)sv.uc_x_max,
+                         (double)sv.uc_y_min, (double)sv.uc_y_max,
+                         (double)sv.uc_z_min, (double)sv.uc_z_max);
           if (sv.alan_doygun && (tl > 0) && (tl < (int)sizeof(tele_msg))) {
             tl += snprintf(tele_msg + tl, sizeof(tele_msg) - (size_t)tl, ",S=1");
           }
