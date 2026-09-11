@@ -46,7 +46,7 @@ kendi donanımına uygun biçimde sürülüyor.
 ⚠️ Bu iki değişiklik **kontrolcü yazılımının yeniden yüklenmesini** gerektirir; yalnız
 uygulamayı güncellemek yetmez.
 
-Paket kimliği (`buildId`): `738dd06e7d7f`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`99ac8a491f37`, URL korundu).
+Paket kimliği (`buildId`): `cb33f48382a2`. Tek-parça `base.zip` YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`99ac8a491f37`, URL korundu).
 
 ## app 1.9.49 — 2026-09-11 (🧲 manyetik alan artık TEPE değer: saniyede bir, en yüksek)
 

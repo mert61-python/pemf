@@ -7,8 +7,8 @@
     "win-x64": {
       "app": {
         "url": "https://github.com/mert61-python/pemf-update/releases/download/client-app-v1.9.50/base-app.zip",
-        "sha256": "738dd06e7d7f5acb473c7ac545e0670bddd2a33d49ed731d7601d190da9bae26",
-        "size": 81362607,
+        "sha256": "cb33f48382a2eeef93af91f97aa56fb25ce8e40afb004a7d3df7fa6851013e89",
+        "size": 81363203,
         "kind": "zip"
       },
       "deps": {
