@@ -40,6 +40,8 @@ seans sürerken **anında** yazılıyor — bilgisayar kapanırsa o ana kadarki 
 
 Sensör aralığı aşılırsa operatöre bildirim çıkıyor ve değerin güvenilmez olduğu söyleniyor.
 
+Paket kimliği (`buildId`): `bbc4e97b274d`. Tek-parça `base.zip` bu sürümde de YAYINLANMADI. Bağımlılık katmanı DEĞİŞMEDİ (`99ac8a491f37`, URL korundu).
+
 ## mobile 2.3.34 — 2026-09-11 (📱 telefon uygulaması 7 bobini ve akımı görüyor)
 
 - Kontrol ekranındaki "STM32 Bobinler" / "WiFi ESP Bobinler" ayrımı kalktı: tek liste,

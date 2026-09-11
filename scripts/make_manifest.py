@@ -562,12 +562,26 @@ def main() -> int:
     # client <=1.9.12 base.zip'ten ESKİ backend'i, >=1.9.13 layers'tan YENİ backend'i kuruyordu.
     # Aynı sürüm numarası altında iki farklı yazılım: bir arızanın hangi kodda olduğu bilinemez.
     # Çözüm build tarafında (make_base_zip artık base.zip'i DAİMA üretir); burası yayın kapısıdır.
+    #
+    # ⚠️ 2026-09-11 DÜZELTME — AYNI KÖR NOKTA **DÖRDÜNCÜ** YERDE.
+    # Bu kapı "yerelde base.zip yok" ile "önceki manifest'ten BAYAT bir base TAŞINIYOR"u aynı
+    # şey sanıyordu. Monolit 1.9.48'de KALICI olarak yayından çıkarıldı → `base.zip` bir daha
+    # ASLA üretilmiyor → kapı her yayını bloke etmeye başladı. Oysa taşınacak bir tek-parça
+    # YOKSA ayrışacak iki yazılım da yoktur; kapının koruduğu şey gerçekleşemez.
+    # Aynı hata daha önce üç yerde bulunmuştu (hepsi 1.9.48'de): launcher `platform_supported`,
+    # bu dosyadaki "hiçbir base paketi yok" kapısı ve `test_manifest_consistency` sayacı.
+    # Ortak kök: **tek-parça kopyayı kurulabilirliğin/ tazeliğin TEK ölçütü saymak.**
+    # Doğru ölçüt: önceki manifest o platform için gerçekten bir `runtimes` girdisi taşıyor mu?
     taze_katman = {p for p, _ in ((plat, k) for name, (plat, k) in LAYER_ASSETS.items() if (args.dir / name).exists())}
     bayat_ciftler = []
     for plat in taze_katman:
         for name, (section, key, _v1) in ASSETS.items():
-            if section == "runtimes" and key == plat and not (args.dir / name).exists():
-                bayat_ciftler.append((plat, name))
+            if section != "runtimes" or key != plat or (args.dir / name).exists():
+                continue
+            # Taşınacak bir tek-parça YOKSA ayrışma da yok → kapı susar.
+            if not ((prev.get("runtimes") or {}).get(plat)):
+                continue
+            bayat_ciftler.append((plat, name))
     if bayat_ciftler and not args.drop_missing:
         print(
             "[HATA] katmanlar YENİ ama tek-parça base ESKİ manifest'ten taşınıyor — aynı sürüm "
