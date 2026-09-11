@@ -98,7 +98,20 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     // KALICI olarak kilitleniyor ve bozuk bir yayın geri çekilemiyordu. Site zaten "Yakında"
     // diyordu. Geri getirilecekse: CI ile paketleri üret + `layers`/`rollout` ekle, sonra bu
     // iddiaları güncelle (bkz. manifest.rs::depodaki_gercek_manifest_ayristirilir).
-    assert!(m.runtimes.contains_key(platform::WIN_X64), "win-x64 runtime eksik");
+    // ⚠️ 2026-09-11 DUZELTME — AYNI KOR NOKTA **YEDINCI** YERDE.
+    // Burada `m.runtimes.contains_key(WIN_X64)` vardi: tek-parca kopyayi kurulabilirligin
+    // TEK olcutu saniyordu. Monolit (`base.zip`) 1.9.48'de sahip karariyla KALICI olarak
+    // yayindan cikarildi (yayin 1,55 GB -> ~210 MB); manifest artik yalniz `layers` tasiyor
+    // -> DOGRU bir yayin bu iddiayi kiriyordu.
+    // Ayni kok daha once ALTI yerde bulundu: launcher `platform_supported` (1.9.51),
+    // `make_manifest`in "hicbir base paketi yok" kapisi, `test_manifest_consistency` sayaci,
+    // `make_manifest`in TAZELIK kapisi, `flow.rs` uretim-manifesti testi, `manifest.rs`
+    // depo-manifesti testi. Hepsi "tek-parca = kurulabilirligin TEK olcutu" saniyordu.
+    // DOGRU OLCUT: bu platformda KURULABILIR bir sey olmali — `runtimes` YA DA `layers`.
+    assert!(
+        m.runtimes.contains_key(platform::WIN_X64) || m.layers.contains_key(platform::WIN_X64),
+        "win-x64 icin NE `runtimes` NE `layers` var — Windows'ta hicbir kurulum yapilamaz"
+    );
     for key in [platform::LINUX_X64, platform::MAC_ARM64] {
         assert!(!m.runtimes.contains_key(key),
             "{key} manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
@@ -106,9 +119,19 @@ fn uretilen_manifest_launcher_tarafindan_okunur() {
     for p in ["home", "vet", "research"] {
         assert!(m.models.contains_key(p), "{p} profili eksik");
     }
-    // Bu platformun paketi çözülebilmeli.
-    let pkg = m.runtime_for_current_platform().expect("platform paketi cozulemedi");
-    assert!(pkg.url.starts_with("https://"), "beklenmeyen url: {}", pkg.url);
+    // Bu platformun paketi çözülebilmeli — tek-parça YA DA katman üzerinden.
+    // ⚠️ `runtime_for_current_platform()` YALNIZ tek-parçayı çözer; monolit kalktığı için
+    // tek başına kullanmak yukarıdakiyle aynı kör noktadır.
+    match m.runtime_for_current_platform() {
+        Ok(pkg) => assert!(pkg.url.starts_with("https://"), "beklenmeyen url: {}", pkg.url),
+        Err(_) => {
+            let l = m
+                .layers_for_current_platform()
+                .expect("ne tek-parca ne katman cozulebildi — bu platformda kurulum YAPILAMAZ");
+            assert!(l.app.url.starts_with("https://"), "beklenmeyen app url: {}", l.app.url);
+            assert!(l.deps.url.starts_with("https://"), "beklenmeyen deps url: {}", l.deps.url);
+        }
+    }
 
     // #100: digest karşılaştırması, diskteki dosyayla AYNI platformun paketi üzerinden yapılmalı.
     // Önceden MEVCUT platformun paketi alınıp `base-mac.zip`e karşı doğrulanıyordu — mac dışında

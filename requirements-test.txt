@@ -39,6 +39,13 @@ reportlab==4.0.7                   # history_router → pdf_report_generator imp
 cryptography==50.0.0               # DO-1: shipped ile esit (2026-08-04: 46.0.7->50.0.0 CVE bump)
 keyring==25.7.0                    # sqlcipher_util opsiyonel import eder (yoksa graceful)
 paho-mqtt==2.1.0                   # _mqtt_publish/_start_mqtt_for_api (graceful ama davranış eşleği)
+pyserial==3.5                      # SAHIP ISTEGI 2026-09-11. STM32 SERI YOLUNUN TAMAMI bunun uzerinde:
+                                   # port secimi/acma (utils/stm32_transport), kablo-cikti yoklamasi
+                                   # (`port_hala_var` -> list_ports.comports) ve reader/reconnect dongusu.
+                                   # ⚠️ YOKKEN CI, URETIMDEN FARKLI BIR SISTEMI dogruluyordu: seri yol
+                                   # sessizce fail-open dallarina dusuyor, gercek mantik HIC kosmuyordu
+                                   # (kosu 34598558738'de tam bu yuzden bir kapi kirmizi oldu).
+                                   # Surum shipped requirements.txt:30 ile BIREBIR.
 zeroconf==0.149.16                 # DO-1: ağ-açık mDNS (LAN keşif) — testler import etmese de pip-audit KAPSAMINA al (CVE geçmişi; shipped ile eşit)
 imageio-ffmpeg==0.6.0              # ses cozme zinciri (ai_router cat_sound): HASTA-GORUNUR sessizlik
                                    # kapisi (test_ses_sessiz_kayit_reddi, 3 test) bu paket yokken CI'da

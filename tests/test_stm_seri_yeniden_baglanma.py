@@ -257,13 +257,21 @@ def test_KRITIK_kaybolan_port_KOPUK_sayilir(monkeypatch):
     (`hardware_controller._tick`: `need_send = any_running or ...`) ve firmware de ilk
     paketten sonra ping'i keser → UART tamamen sessizdir, "satır gelmedi" YANLIŞ tetikler.
 
-    ⚠️ NUMARALANDIRMA ENJEKTE EDİLİR — ORTAMA GÜVENİLMEZ (2026-09-11, CI kırmızısı):
-    bu test önce GERÇEK `comports()`a dayanıyordu ve "var olmayan port False döner"
-    diyordu. CI koşucusunda numaralandırma hata verdi → `port_hala_var` fail-open ile
-    `True` döndü → kapı kırmızı oldu. Kapının ölçmesi gereken şey MANTIK, makinenin
-    donanımı değil. (Bu deponun kayıtlı "ortam varsayımı" sınıfı.)
+    ⚠️⚠️ NUMARALANDIRMA **ENJEKTE EDİLİR** — ORTAMA GÜVENİLMEZ (2026-09-11, CI iki kez kırmızı):
+    1. tur: test GERÇEK `comports()`a dayanıyordu. CI koşucusunda **pyserial YOK**
+       (`requirements-test.txt` onu içermiyor) → `port_hala_var` fail-open ile `True` döndü
+       → "var olmayan port False döner" iddiası kırıldı.
+    2. tur: "düzeltme" olarak `from serial.tools import list_ports` yazdım — bu sefer
+       **testin kendisi** `ModuleNotFoundError: No module named 'serial'` ile düştü.
+       Bir ortam varsayımını başka bir ortam varsayımıyla değiştirmiştim.
+
+    Doğrusu: `port_hala_var` içindeki import TEMBELDİR, o yüzden `sys.modules`a SAHTE bir
+    `serial.tools.list_ports` koymak yeter. Kapı artık pyserial KURULU OLSA DA OLMASA DA
+    aynı şeyi ölçer — MANTIĞI, makinenin donanımını/paketlerini değil.
+    (Bu deponun kayıtlı "ortam varsayımı → ÇOĞUNLUK" sınıfı.)
     """
-    from serial.tools import list_ports
+    import sys
+    import types
 
     from utils.stm32_transport import Stm32SerialTransport
 
@@ -271,11 +279,50 @@ def test_KRITIK_kaybolan_port_KOPUK_sayilir(monkeypatch):
         def __init__(self, d):
             self.device = d
 
-    monkeypatch.setattr(list_ports, "comports", lambda: [_Port("COM3"), _Port("COM10")])
+    lp = types.ModuleType("serial.tools.list_ports")
+    lp.comports = lambda: [_Port("COM3"), _Port("COM10")]
+    tools = types.ModuleType("serial.tools")
+    tools.list_ports = lp
+    kok = types.ModuleType("serial")
+    kok.tools = tools
+    monkeypatch.setitem(sys.modules, "serial", kok)
+    monkeypatch.setitem(sys.modules, "serial.tools", tools)
+    monkeypatch.setitem(sys.modules, "serial.tools.list_ports", lp)
+
     t = Stm32SerialTransport(None)
     assert t.port_hala_var("COM10") is True, "listede OLAN port kopuk sayildi"
     assert t.port_hala_var("com10") is True, "buyuk/kucuk harf duyarli -> Windows'ta yanlis kopus"
     assert t.port_hala_var("COM_OLMAYAN_999") is False, "listede OLMAYAN port 'duruyor' dendi"
+
+
+def test_KRITIK_numaralandirma_PATLARSA_fail_open(monkeypatch):
+    """⚠️ pyserial yoksa / izin hatası varsa "koptu" DEME — çalışan bağlantıyı düşürürdü.
+
+    Bu tam olarak CI koşucusunun durumu (pyserial kurulu değil) ve üretimde de olabilir.
+    """
+    import sys
+    import types
+
+    from utils.stm32_transport import Stm32SerialTransport
+
+    lp = types.ModuleType("serial.tools.list_ports")
+
+    def _patla():
+        raise OSError("numaralandirma yapilamadi")
+
+    lp.comports = _patla
+    tools = types.ModuleType("serial.tools")
+    tools.list_ports = lp
+    kok = types.ModuleType("serial")
+    kok.tools = tools
+    monkeypatch.setitem(sys.modules, "serial", kok)
+    monkeypatch.setitem(sys.modules, "serial.tools", tools)
+    monkeypatch.setitem(sys.modules, "serial.tools.list_ports", lp)
+
+    t = Stm32SerialTransport(None)
+    assert t.port_hala_var("COM10") is True, (
+        "numaralandirma patlayinca KOPUK denildi -> calisan baglanti bosuna dusurulur"
+    )
 
 
 def test_KRITIK_SANAL_portlar_kopuk_SAYILMAZ():
