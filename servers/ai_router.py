@@ -281,6 +281,40 @@ def _encode_jpg_b64(img: np.ndarray, quality: int | None = None) -> str:
     return base64.b64encode(buffer).decode("utf-8")
 
 
+#: GÖSTERİM JPEG kalitesi. ⚠️ YALNIZ operatöre GÖSTERİLEN kareler için — model GİRDİSİ
+#: olan kodlamalara UYGULANMAZ (bkz. `_localize_organ_gpu` notu).
+#:
+#: OpenCV varsayılanı q95'tir ve argüman verilmeyen her çağrı sessizce onu kullanır.
+#: q85 görsel olarak ayırt edilemez ama dosyayı yarıya indirir (plan ölçümü: segmentasyon
+#: 797→358 KB, termal 286→141 KB, fantom mozaik 1.646→364 KB).
+#:
+#: ⚠️ AYRICA PARİTE: gömülü backend q95, GPU mikroservisi q85 üretiyordu → AYNI analiz
+#: dağıtıma göre 1,9× farklı boyutta dönüyordu. Tek sabit bunu da kapatır.
+GOSTERIM_JPEG_KALITESI = 85
+
+#: Çok panelli mozaiklerin (fantom/petri) en uzun kenar kapağı (px).
+#: ⚠️ NEDEN GEREKLİ: `07_combined` 2×3 mozaiktir; dikey telefon fotoğrafında 6048×12256'ya
+#: kadar çıkıyor ve q95 ile megabaytlarca JPEG üretiyordu. Kapak olmadan yalnız kalite
+#: düşürmek YETMEZ — bağlayıcı kısıt ÇÖZÜNÜRLÜK.
+MOZAIK_AZAMI_KENAR = 1600
+
+
+def _kapakli_kodla(img: np.ndarray, azami: int = MOZAIK_AZAMI_KENAR) -> bytes:
+    """Uzun kenarı `azami`ye indir (gerekirse) ve GÖSTERİM kalitesinde JPEG'e kodla.
+
+    ⚠️ BÜYÜTME YAPMAZ (`min(1.0, ...)`): küçük bir görüntüyü şişirmek dosyayı büyütür,
+    bilgi eklemez. `INTER_AREA` küçültmede doğru olan (moiré üretmez).
+    """
+    oh, ow = img.shape[:2]
+    sc = min(1.0, float(azami) / max(oh, ow))
+    if sc < 1.0:
+        img = cv2.resize(img, (int(ow * sc), int(oh * sc)), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), GOSTERIM_JPEG_KALITESI])
+    if not ok:
+        raise RuntimeError("JPEG kodlama basarisiz")
+    return buf.tobytes()
+
+
 def _kare_boyutu(img: np.ndarray) -> dict:
     """Kodlanan karenin GERÇEK boyutu — istemci oran kilidi için.  [S7 adım 4, 2026-09-04]
 
@@ -441,7 +475,7 @@ async def analyze_landmark(
                         if px > 0 or py > 0:
                             cv2.circle(img, (px, py), 4, (0, 255, 80), -1)
 
-        b64_image = _encode_jpg_b64(img)
+        b64_image = _encode_jpg_b64(img, quality=GOSTERIM_JPEG_KALITESI)
 
         # KRİTİK: tespit yoksa FGS=0 "Ağrı Yok" YANLIŞ-GÜVENCESİ verme -> null + detected:false.
         if detected:
@@ -804,6 +838,12 @@ def _localize_organ_gpu(frame, organ_id):
     """cat_organ inference'ını GPU servisine DEVRET (delegate_infer_sync; kare zaten to_thread'de).
     GPU-JSON organs list → {id:organ} dict + overlay base64→BGR → paylaşılan _extract_organ_target.
     (Hoca yönü: AI Pro'nun AĞIR 3B-lokalizasyonu Docker/GPU servisinde koşar.)"""
+    # ⚠️ BURAYA KALİTE ARGÜMANI EKLENMEDİ — BİLEREK (ADIM 1 denetimi, 2026-09-11).
+    # Bu kare operatöre GÖSTERİLMİYOR; GPU mikroservisine ÇIKARIM GİRDİSİ olarak yükleniyor.
+    # Gösterim kodlamalarında q85 güvenlidir (göz ayırt etmez), ama model girdisinde
+    # sıkıştırma artefaktı tespit/segmentasyon sonucunu DEĞİŞTİREBİLİR ve bu bir tıbbi
+    # karar ekranını besler. Düşürülecekse önce doğruluk ÖLÇÜLMELİ (aynı görüntü kümesinde
+    # q95 vs q85 çıktı karşılaştırması), tahminle değil.
     ok, buf = cv2.imencode(".jpg", frame)
     if not ok:
         raise RuntimeError("frame JPG encode başarısız")
@@ -2402,7 +2442,7 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
             except Exception:
                 pass
 
-        b64_image = _encode_jpg_b64(img)
+        b64_image = _encode_jpg_b64(img, quality=GOSTERIM_JPEG_KALITESI)
 
         return {"status": "success", "cat_count": cat_count, "image_base64": b64_image, **_kare_boyutu(img)}
     except Exception as e:
@@ -2495,7 +2535,7 @@ async def analyze_thermal(
             except Exception:
                 pass
 
-        b64_image = _encode_jpg_b64(img)
+        b64_image = _encode_jpg_b64(img, quality=GOSTERIM_JPEG_KALITESI)
 
         return {"status": "success", "prediction": result, "image_base64": b64_image, **_kare_boyutu(img), **yanit}
     except Exception as e:
@@ -2570,7 +2610,7 @@ async def analyze_reticulocytes(
             _kodlanan = img_res
         else:
             _kodlanan = img
-        b64_image = _encode_jpg_b64(_kodlanan)
+        b64_image = _encode_jpg_b64(_kodlanan, quality=GOSTERIM_JPEG_KALITESI)
 
         # Sunum-katmanı XAI (Faz 2 kuyruğu): EigenCAM — tespitte dayanılan hücre bölgeleri.
         # ⚠️ tmp finally'de siliniyor → XAI burada. Açıklama İKİNCİL (zarif düşüş).
@@ -2644,12 +2684,15 @@ async def analyze_em_fantom(
 
         if result.success:
             panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang="tr"))
-            _, buffer = cv2.imencode('.jpg', panels["07_combined"])
+            # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
+            # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
+            # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
+            _bayt = _kapakli_kodla(panels["07_combined"])
             status = "success"
         else:
-            _, buffer = cv2.imencode('.jpg', img)  # tespit yok → orijinali dön
+            _bayt = _kapakli_kodla(img)  # tespit yok → orijinali dön
             status = "no_detection"
-        b64_image = base64.b64encode(buffer).decode('utf-8')
+        b64_image = base64.b64encode(_bayt).decode('utf-8')
 
         payload = result.to_dict()
         # CANLI E-ALANI bağlamı (2026-08-06): tümör konumu + organ seans boyunca DEĞİŞMEZ.
@@ -2821,12 +2864,15 @@ async def analyze_em_petri(
 
         if result.success:
             panels = await asyncio.to_thread(lambda: pl.render_panels(ctx, result, lang="tr"))
-            _, buffer = cv2.imencode('.jpg', panels["07_combined"])
+            # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
+            # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
+            # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
+            _bayt = _kapakli_kodla(panels["07_combined"])
             status = "success"
         else:
-            _, buffer = cv2.imencode('.jpg', img)  # tespit yok → orijinali dön
+            _bayt = _kapakli_kodla(img)  # tespit yok → orijinali dön
             status = "no_detection"
-        b64_image = base64.b64encode(buffer).decode('utf-8')
+        b64_image = base64.b64encode(_bayt).decode('utf-8')
 
         from dataclasses import asdict
 
@@ -3306,7 +3352,7 @@ async def analyze_kidney_ct(
             except Exception:
                 pass
 
-        b64_image = _encode_jpg_b64(overlay)
+        b64_image = _encode_jpg_b64(overlay, quality=GOSTERIM_JPEG_KALITESI)
         return {
             "status": "success",
             "image_base64": b64_image,

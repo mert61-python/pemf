@@ -88,11 +88,32 @@ def req(method, path, body=None, headers=None, timeout=30):
 
 def main():
     data_dir = Path(tempfile.mkdtemp(prefix="pemf_e2e_"))
+    # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser (bkz. asagidaki not).
+    sahte_ev = data_dir / "sahte_ev"
+    (sahte_ev / "Desktop").mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
     env.update(
         {
             "PEMF_SIMULATE": "1",  # sanal STM+ESP+8 bobin + sensör
             "PEMF_DATA_DIR": str(data_dir),  # İZOLE veri dizini
+            # ══════════════════════════════════════════════════════════════════════
+            # ⚠️ MASAUSTU DA IZOLE EDILMELI (2026-09-11, IKINCI KEZ yasandi)
+            # ══════════════════════════════════════════════════════════════════════
+            # `/api/session/start` her seansta masaustune `PEMF_alan_*.csv` yazar
+            # (servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
+            # ve pytest `conftest` izolasyonu BURADA GECERLI DEGILDIR → her kosu sahibin
+            # masaustune bir tomar test dosyasi birakiyordu (olculdu: 3 kosu = 18 dosya,
+            # hasta adlari SyncTest/ParamTest/Minnos/Duman...).
+            #
+            # `masaustu_dizini()` yolu `os.path.expanduser("~")`den cozer → alt surecin
+            # EV DIZINI sahteye cevrilir. ⚠️ Yalniz ALT SURECTE: ana surecteki gercek `~`
+            # dokunulmadan kalir, boylece `tests/test_veri_dizini_izolasyonu.py` gibi
+            # GERCEK ev dizinine bakan kapilar sahte-yesile DONMEZ.
+            #
+            # ⚠️ `Desktop` KLASORU ONCEDEN ACILIR: `masaustu_dizini()` masaustunu bulamazsa
+            # `Path.cwd()`e duser ve bu kez DEPO DIZINI dosyayla dolardi.
+            "USERPROFILE": str(sahte_ev),
+            "HOME": str(sahte_ev),
             # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
             # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
             # göçünü çalıştırıyor (utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici

@@ -135,13 +135,76 @@ def wait_until(fn, timeout=12, step=0.5):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+def _gercek_masaustu_dosyalari() -> set:
+    """SAHIBIN GERCEK masaustundeki PEMF ciktilari — e2e bunlara DOKUNMAMALI.
+
+    ⚠️ Uretimdeki `masaustu_dizini()` ile AYNI adaylar; cipa kendi listesini uydurmaz.
+    """
+    ev = Path(os.path.expanduser("~"))
+    bulunan = set()
+    for aday in (ev / "Desktop", ev / "OneDrive" / "Desktop", ev / "Masaüstü"):
+        if aday.is_dir():
+            bulunan |= set(aday.glob("PEMF_alan_*.csv"))
+            bulunan |= set(aday.glob("PEMF_Gecmis*.csv"))
+            bulunan |= set(aday.glob("PEMF_Rapor*.pdf"))
+    return bulunan
+
+
+def z_masaustu_temiz_kaldi():
+    """⚠️ SON KAPI — e2e sahibin masaustune COP BIRAKMADI mi?
+
+    Bu betik GERCEK bir backend alt sureci calistirir; pytest `conftest` izolasyonu
+    burada GECERLI DEGILDIR. Her `/api/session/start` masaustune bir `PEMF_alan_*.csv`
+    yazar ve olculdu: 3 kosu = 18 dosya (hasta adlari SyncTest/ParamTest/Minnos/Duman).
+    Alt surecin EV DIZINI sahteye cevrildi; bu kapi onun GERCEKTEN tuttugunu olcer.
+
+    MUTASYON: alt surec env'inden `USERPROFILE`i kaldir -> KIRMIZI.
+    """
+    section("Z. Masaustu temizligi (e2e cop birakmaz)")
+    once = globals().get("_MASAUSTU_ONCE")
+    if once is None:
+        check("masaustu 'once' fotografi alinmis", False, "_MASAUSTU_ONCE yok -> kapi olcum yapamaz")
+        return
+    yeni = _gercek_masaustu_dosyalari() - once
+    check(
+        "e2e GERCEK masaustune dosya BIRAKMADI",
+        not yeni,
+        f"{len(yeni)} yeni dosya: {sorted(p.name for p in yeni)[:6]}",
+    )
+
+
 def main():
     data_dir = Path(tempfile.mkdtemp(prefix="pemf_e2e_full_"))
+    # ⚠️ GERCEK MASAUSTUNUN "ONCE" FOTOGRAFI — e2e cop birakmadigini KENDI kanitlar.
+    # (2026-09-11'de iki kez sizdi: once pytest suiti, sonra bu betik.)
+    globals()["_MASAUSTU_ONCE"] = _gercek_masaustu_dosyalari()
+
+    # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser (bkz. asagidaki not).
+    sahte_ev = data_dir / "sahte_ev"
+    (sahte_ev / "Desktop").mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
     env.update(
         {
             "PEMF_SIMULATE": "1",
             "PEMF_STM_PORT": "SIM",
+            # ══════════════════════════════════════════════════════════════════════
+            # ⚠️ MASAUSTU DA IZOLE EDILMELI (2026-09-11, IKINCI KEZ yasandi)
+            # ══════════════════════════════════════════════════════════════════════
+            # `/api/session/start` her seansta masaustune `PEMF_alan_*.csv` yazar
+            # (servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
+            # ve pytest `conftest` izolasyonu BURADA GECERLI DEGILDIR → her kosu sahibin
+            # masaustune bir tomar test dosyasi birakiyordu (olculdu: 3 kosu = 18 dosya,
+            # hasta adlari SyncTest/ParamTest/Minnos/Duman...).
+            #
+            # `masaustu_dizini()` yolu `os.path.expanduser("~")`den cozer → alt surecin
+            # EV DIZINI sahteye cevrilir. ⚠️ Yalniz ALT SURECTE: ana surecteki gercek `~`
+            # dokunulmadan kalir, boylece `tests/test_veri_dizini_izolasyonu.py` gibi
+            # GERCEK ev dizinine bakan kapilar sahte-yesile DONMEZ.
+            #
+            # ⚠️ `Desktop` KLASORU ONCEDEN ACILIR: `masaustu_dizini()` masaustunu bulamazsa
+            # `Path.cwd()`e duser ve bu kez DEPO DIZINI dosyayla dolardi.
+            "USERPROFILE": str(sahte_ev),
+            "HOME": str(sahte_ev),
             # ⚠️ ESP ALT SISTEMI ACIK KOSULUR (sahip karari 2026-09-11: ESP'ler sokuldu,
             # kod SILINMEDI, `PEMF_ESP_ENABLED` ile kapatildi). Uretim varsayilani KAPALI;
             # ama e2e'nin isi, geri donus yolunun (hibrit/ESP-only kuruluma donus) GERCEKTEN
@@ -234,6 +297,7 @@ def run_all():
     h_profile_researcher()
     i_profile_vet_kpi()
     j_yeni_ozellikler_2026_09_11()
+    z_masaustu_temiz_kaldi()
 
 
 # ── A) SANAL DONANIM: STM + ESP bagliymis gibi ─────────────────────────────
@@ -976,10 +1040,9 @@ def j_yeni_ozellikler_2026_09_11():
     if k.get("status") == "success":
         yol = Path(k.get("yol") or "")
         check("CSV GERCEKTEN diske yazildi", yol.is_file() and yol.stat().st_size > 0, str(yol))
-        # ⚠️ E2E SAHIBIN MASAUSTUNE COP BIRAKMAZ. Bu uc, urun davranisi geregi gercek
-        # masaustune yazar (pytest conftest izolasyonu burada YOK — bu bir alt surec).
-        # Urettigimiz dosyayi KENDIMIZ toplariz; aksi halde her kosuda bir dosya birikir
-        # (2026-09-11'de suit icin tam bu ariza yasandi, bkz. tests/test_masaustu_sizintisi.py).
+        # ⚠️ Bu dosya artik alt surecin SAHTE ev dizinine yaziliyor (backend'in USERPROFILE'i
+        # ezildi) — yani gercek masaustune zaten dusmez. Yine de temizliyoruz: izolasyon bir
+        # gun kalkarsa bu satir tek savunma olur ve "Z" kapisi da ayrica olcer.
         try:
             yol.unlink()
             check("e2e artigi masaustunden temizlendi", not yol.exists(), str(yol))
