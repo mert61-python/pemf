@@ -65,8 +65,11 @@ class Stm32OpenResult:
 STM_PAKET_BOBIN_SAYISI = 7
 
 #: `struct` biçimi ve paket boyu — SAYIYI ELLE YAZMA, yukarıdaki sabitten türet.
-STM_PAKET_FMT = "<BB {n}f {n}f {n}f {n}I H".format(n=STM_PAKET_BOBIN_SAYISI)
-#: crc32 dahil toplam boy (7 bobin → 120 bayt, 5 bobin → 88).
+#: ⚠️ SON ALAN `B` = `unipolar_maskesi` (2026-09-11): bit i set → bobin i+1 UNIPOLAR
+#: surulsun. Bu bir ISTEKTIR; firmware onu DONANIM YETENEGIYLE OR'lar
+#: (`PEMF_BOBIN_UNIPOLAR_MASKESI`) → yalniz-unipolar bobin (6-7) bipolara CEVRILEMEZ.
+STM_PAKET_FMT = "<BB {n}f {n}f {n}f {n}I H B".format(n=STM_PAKET_BOBIN_SAYISI)
+#: crc32 dahil toplam boy (7 bobin → 121 bayt).
 STM_PAKET_BOYU = struct.calcsize(STM_PAKET_FMT) + 4
 
 
@@ -83,6 +86,7 @@ def build_stm32_zero_duty_packet(freq_hz: float = 100.0) -> bytes:
         *([float(freq_hz)] * n),
         *([0] * n),
         ref_ms,
+        0,  # unipolar_maskesi: sifir-duty ping/stop paketinde kip ISTEGI YOK
     )
     return data + struct.pack("<I", zlib.crc32(data) & 0xFFFFFFFF)
 

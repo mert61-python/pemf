@@ -1,19 +1,23 @@
 # firmware/ — Bobin-Sürücü Firmware'leri (STM32 + ESP)
 
 > ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
-> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
-> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
-> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
-> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+> **TEK kaynak: `firmware/stm32_pemf`.** İkinci bir derleme, `scripts/stm_unipolar_senkronla.py`
+> ve ayna kapısı yok. (Mirror'ın `.rar` arşivi de kaldırıldı — git geçmişinde duruyor.)
+>
+> Sürüş kipi artık İKİ katmanlı:
+> 1. **Donanım yeteneği (derleme zamanı)** — `PEMF_BOBIN_UNIPOLAR_MASKESI = 0x60`: bobin 6-7
+>    sürücülerinde ikinci yarım köprü FİZİKSEL OLARAK YOK, bu bir **taban**tır, seçim değil.
+> 2. **Operatör isteği (çalışma zamanı)** — pakete eklenen `unipolar_maskesi` baytı; arayüzdeki
+>    **Sürüş Kipi** düğmesi gönderir. Firmware `etkin = yetenek || istek` uygular, yani
+>    yeteneksiz bobin isteğe rağmen unipolar kalır. Uygulanan kip ACK'te `K=<maske>` döner.
 
 
 Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan beri **hepsi burada, tek çatı**:
 
 | Alt klasör | Ne | Bobin |
 |---|---|---|
-| [`stm32_pemf/`](stm32_pemf/README.md) | STM32F429 CubeIDE projesi — **TEK KAYNAK, main.c dahil** (simetrik bipolar, bobin başı IN_A+IN_B) | 1-5 (seri) |
-| `stm32_pemf_unipolar/` | **Aynı main.c'nin bayt-bayt AYNASI**, tek fark `Core/Inc/pemf_surus.h` = `PEMF_SURUS_UNIPOLAR 1` → **tek-bacak düz sürüş** (bobin başı yalnız IN_A, IN_B kalıcı LOW). Tezgâhta bipolar ile yan yana denemek için (2026-09-08, sahip isteği). Elle DÜZENLENMEZ: `python scripts/stm_unipolar_senkronla.py`; kapı `tests/test_stm_unipolar_ayna.py`. CubeIDE proje adı `PEMF_UNIPOLAR` (ikisi aynı workspace'e import edilir). | 1-5 (seri) |
-| [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) | ESP32-S3 (tam-köprü + BLE) | 6-7 (MQTT) |
+| [`stm32_pemf/`](stm32_pemf/README.md) | STM32F429 CubeIDE projesi — **TEK KAYNAK, main.c dahil**. Bobin başına bipolar (IN_A+IN_B) veya unipolar (yalnız IN_A); kip çalışma zamanında seçilir. | **1-7 (seri)** |
+| [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) | ESP32-S3 (tam-köprü + BLE) | — (tarihçe: eski bobin 6-7) |
 | [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) | ESP8266 (yarım-köprü, tek faz) | 8 (MQTT) |
 
 Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
@@ -22,8 +26,13 @@ Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
 (`tests/test_stm_main_saglik.py` geri gelmesini engeller). Derleme: CubeIDE'de `stm32_pemf/` aç → Build.
 
 - **MCU:** STM32F429ZI (STM32F4, Nucleo-144), SYSCLK 168 MHz.
-- **Ne sürer:** 5-kanal **yazılım DDS** bipolar tam-köprü bobin PWM. TIM1 @50 kHz ISR, BSRR ile 10 GPIO'yu (bobin-başı IN_A/IN_B) yazılımla sürer; 100 Hz PWM, bobin-başı bağımsız faz.
-- **Protokol:** USART3 @115200 (ST-Link VCP) ikili protokol — 88-byte `BinaryCmdPacket_t` (`0xAA 0x55` + duty/phase/freq/duration[5] + `ref_ms` + CRC32), yanıt `STM_OK`/`STM_NACK`/`STM_READY`. Backend tarafı: [`../utils/stm32_transport.py`](../utils/README.md) + [`../controllers/hardware_controller.py`](../controllers/README.md).
+- **Ne sürer:** **7-kanal** yazılım DDS bobin PWM. TIM1 @50 kHz ISR, BSRR ile 14 GPIO'yu (bobin-başı IN_A/IN_B) yazılımla sürer; bobin-başı bağımsız frekans/duty/faz.
+  Bobin 1-5 bipolar **ya da** unipolar sürülebilir (operatör seçer); bobin 6-7 sürücüsü tek yönlü → **daima unipolar**.
+- **Protokol:** USART3 @115200 (ST-Link VCP) ikili protokol — **121 byte** `BinaryCmdPacket_t`
+  (`0xAA 0x55` + duty/phase/freq/duration[7] + `ref_ms` + `unipolar_maskesi` + CRC32), yanıt
+  `STM_OK`/`STM_NACK`/`STM_READY`. ⚠️ **ATOMİK SEVK:** 88 → 120 (2026-09-10, 7 bobin) → **121**
+  (2026-09-11, kip alanı). Eski firmware yeni paketi CRC'den düşürür → `STM_NACK: CRC` seli ve
+  HİÇBİR bobin çalışmaz. Backend güncellenince kart MUTLAKA yeniden flaşlanır. Backend tarafı: [`../utils/stm32_transport.py`](../utils/README.md) + [`../controllers/hardware_controller.py`](../controllers/README.md).
 - **ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki master sync-pulse ile senkron.
   Firmware artık BURADA: [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) (6-7, tam-köprü, faz
   senkron GPIO7'de) + [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) (8, tek faz — 8266'da

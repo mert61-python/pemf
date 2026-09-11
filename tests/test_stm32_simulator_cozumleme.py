@@ -38,9 +38,12 @@ from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_BOYU, STM_PA
 sim = pytest.importorskip("tools.stm32_simulator", reason="simulator yok")
 
 
-def _backend_paketi(duty, phase, freq, dur, ref_ms=123) -> bytes:
-    """`hardware_controller._send_stm_manual_update` ile AYNI kurulum (tek kaynak biçim)."""
-    govde = struct.pack(STM_PAKET_FMT, 0xAA, 0x55, *duty, *phase, *freq, *dur, ref_ms)
+def _backend_paketi(duty, phase, freq, dur, ref_ms=123, kip=0) -> bytes:
+    """`hardware_controller._send_stm_manual_update` ile AYNI kurulum (tek kaynak biçim).
+
+    `kip` = `unipolar_maskesi` (2026-09-11): bit i set → bobin i+1 unipolar İSTENİYOR.
+    """
+    govde = struct.pack(STM_PAKET_FMT, 0xAA, 0x55, *duty, *phase, *freq, *dur, ref_ms, kip)
     return govde + struct.pack("<I", zlib.crc32(govde) & 0xFFFFFFFF)
 
 
@@ -69,9 +72,9 @@ def test_KRITIK_cozulen_ALANLAR_dogru_yerden_okunur():
     dur = [5 + i for i in range(n)]
     ref = 777
 
-    cozum, sebep = sim.decode_packet(_backend_paketi(duty, phase, freq, dur, ref))
+    cozum, sebep = sim.decode_packet(_backend_paketi(duty, phase, freq, dur, ref, kip=0x60))
     assert cozum is not None, f"gecerli paket reddedildi: {sebep}"
-    c_duty, c_phase, c_freq, c_dur, c_ref = cozum
+    c_duty, c_phase, c_freq, c_dur, c_ref, c_kip = cozum
 
     assert len(c_duty) == n and len(c_phase) == n and len(c_freq) == n and len(c_dur) == n, (
         f"alan uzunluklari {len(c_duty)}/{len(c_phase)}/{len(c_freq)}/{len(c_dur)} != {n} "
@@ -82,6 +85,7 @@ def test_KRITIK_cozulen_ALANLAR_dogru_yerden_okunur():
     assert c_freq == pytest.approx(freq), "freq YANLIS dilimden okundu"
     assert list(c_dur) == dur, "duration YANLIS dilimden okundu"
     assert c_ref == ref, f"ref_ms={c_ref} != {ref} -> ref_ms YANLIS ofsetten okundu (muhtemelen freq[n-1])"
+    assert c_kip == 0x60, f"unipolar_maskesi={c_kip:#04x} != 0x60 -> kip alani YANLIS ofsetten okundu"
 
 
 def test_KRITIK_BOZUK_crc_hala_REDDEDILIR():
@@ -95,6 +99,15 @@ def test_KRITIK_BOZUK_crc_hala_REDDEDILIR():
 
 def test_KRITIK_ESKI_88_baytlik_paket_REDDEDILIR():
     """Eski firmware/backend paketi artık geçmemeli — atomik sevk şartının kapısı."""
+    # ⚠️ 2026-09-11: "eski" artik 120 baytlik (7 bobin, kip alani YOK) surumdur de —
+    # ikisi de reddedilmeli. Once 88 (5 bobin), sonra 120 (kipsiz 7 bobin).
+    eski120 = struct.pack("<BB 7f 7f 7f 7I H", 0xAA, 0x55, *([0.25] * 7), *([0.0] * 7), *([50.0] * 7), *([10] * 7), 1)
+    eski120 += struct.pack("<I", zlib.crc32(eski120) & 0xFFFFFFFF)
+    assert len(eski120) == 120
+    c120, s120 = sim.decode_packet(eski120)
+    assert c120 is None, "120 baytlik KIPSIZ paket kabul edildi -> atomik sevk kapisi delik"
+    assert "boyut" in (s120 or "").lower()
+
     eski_fmt = "<BB 5f 5f 5f 5I H"
     govde = struct.pack(eski_fmt, 0xAA, 0x55, *([0.25] * 5), *([0.0] * 5), *([50.0] * 5), *([10] * 5), 1)
     eski = govde + struct.pack("<I", zlib.crc32(govde) & 0xFFFFFFFF)

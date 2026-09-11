@@ -73,9 +73,10 @@ READY_DELAY_S = 2.0  # USB CDC enumerate simülasyonu (2 s)
 # STM'e tasindi) ve paket 88 -> 120 bayt oldu. Simulator, firmware ve backend UCU birden
 # ayni genislikte olmak ZORUNDA; kapi: tests/test_stm32_source_parity.py.
 NUM_COILS = 7
-PKT_FMT = "<BB {n}f {n}f {n}f {n}I H I".format(n=NUM_COILS)
+#: ⚠️ `B` = unipolar_maskesi (2026-09-11, arayuz kip dugmesi). Paket 120 → 121 bayt.
+PKT_FMT = "<BB {n}f {n}f {n}f {n}I H B I".format(n=NUM_COILS)
 PKT_SIZE = struct.calcsize(PKT_FMT)
-assert PKT_SIZE == 120, f"Paket boyutu {PKT_SIZE} != 120!"
+assert PKT_SIZE == 121, f"Paket boyutu {PKT_SIZE} != 121!"
 
 DUTY_MIN = 0.0
 PHASE_MIN = 0.0
@@ -136,7 +137,8 @@ def decode_packet(raw: bytes):
     freq = list(fields[2 + 2 * n : 2 + 3 * n])
     duration = list(fields[2 + 3 * n : 2 + 4 * n])
     ref_ms = fields[2 + 4 * n]
-    # fields[3 + 4*n] = crc32 (zaten doğrulandı)
+    unipolar_maskesi = fields[3 + 4 * n]
+    # fields[4 + 4*n] = crc32 (zaten doğrulandı)
 
     # Değer kontrolleri
     if ref_ms > REF_MS_MAX:
@@ -152,7 +154,7 @@ def decode_packet(raw: bytes):
         if duration[i] > DUR_MAX:
             return None, f"coil={i + 1} duration={duration[i]} > {DUR_MAX}"
 
-    return (duty, phase, freq, duration, ref_ms), None
+    return (duty, phase, freq, duration, ref_ms, unipolar_maskesi), None
 
 
 class Stm32SimClient:

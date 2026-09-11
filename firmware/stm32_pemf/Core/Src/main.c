@@ -81,7 +81,7 @@
  * UART PAKET FORMATI (AKTIF)
  * ============================================================================
  *
- *   BinaryCmdPacket_t (120 byte — 2026-09-10'da 5 bobinden 7'ye cikti):
+ *   BinaryCmdPacket_t (121 byte — 7 bobin + 2026-09-11'de eklenen kip alani):
  *     0xAA 0x55
  *     float duty[7]
  *     float phase[7]
@@ -286,14 +286,30 @@ typedef struct {
   float freq[NUM_COILS];
   uint32_t duration[NUM_COILS];
   uint16_t ref_ms;
+  /**
+   * İSTENEN sürüş kipi — bit i SET → bobin i+1 UNIPOLAR sürülsün (arayüz düğmesi).
+   * ⚠️ Bu bir İSTEKTİR, emir değil: `PEMF_BOBIN_UNIPOLAR_MASKESI` (donanım yeteneği)
+   * ile OR'lanır → yalnız-unipolar bir bobin bu alanla bipolara ÇEVRİLEMEZ.
+   * ⚠️ Paket 120 → 121 bayt. ATOMİK SEVK: eski firmware yeni paketi NACK'ler.
+   */
+  uint8_t unipolar_maskesi;
   uint32_t crc32;
 } BinaryCmdPacket_t;
 #pragma pack(pop)
 
-/* ⚠️ SAYIYI ELLE YAZMA: boyut NUM_COILS'ten TUREUR (7 bobin → 120 bayt, 5 bobin → 88).
+/* ⚠️ SAYIYI ELLE YAZMA: boyut NUM_COILS'ten TUREUR (7 bobin + kip alani → 121 bayt).
  * Python tarafi (hardware_controller / stm32_transport / stm32_simulator) ve
  * tests/test_stm32_source_parity.py bu boyutu ayni kaynaktan cozer. */
 #define BINARY_PKT_SIZE sizeof(BinaryCmdPacket_t)
+
+/* ⚠️ DOLGU (padding) KAPISI. `unipolar_maskesi` eklendiginde alan dizilimi
+ * [uint16 ref_ms][uint8 kip][uint32 crc32] oldu. `#pragma pack(1)` DUSERSE ya da bir
+ * derleyici onu yok sayarsa crc32 4 bayta hizalanir, araya 1 bayt dolgu girer ve paket
+ * 122 bayt olur. Sonuc SESSIZ degil ama TESHISI ZOR: her paket CRC'den duser, kart
+ * hicbir komutu almaz (2026-09-11'de bayat ELF ile yasanan `STM_NACK: CRC` seli ile
+ * AYNI belirti, bambaska sebep). Derleme zamaninda yakala. */
+_Static_assert(BINARY_PKT_SIZE == (2U + NUM_COILS * 16U + 2U + 1U + 4U),
+               "BinaryCmdPacket_t DOLGU aldi -> #pragma pack(1) kaybolmus (paket 121 olmali)");
 
 uint32_t calculate_crc32(const uint8_t *data, size_t length) {
   uint32_t crc = 0xFFFFFFFF;
@@ -447,6 +463,13 @@ static uint8_t g_prev_state[NUM_COILS] = {0}; /* 255 (init) Coil_StateInit'te */
  */
 static uint8_t g_unipolar[NUM_COILS];
 
+/** DONANIM YETENEĞİ — `PEMF_BOBIN_UNIPOLAR_MASKESI`ten bir kez çözülür. 1 = bu bobin
+ *  YALNIZ unipolar sürülebilir; arayüz isteği bunu KALDIRAMAZ (taban). */
+static uint8_t g_yalniz_unipolar[NUM_COILS];
+
+/** Arayüzden gelen İSTEK (son geçerli paket). Etkin kip = yetenek || istek. */
+static volatile uint8_t g_istenen_unipolar_maskesi = 0U;
+
 /* ============================================================================
  * DONANIM SYNC — Master Sync Pulse (PB1)
  * ============================================================================
@@ -473,7 +496,7 @@ static volatile uint8_t g_pktReady = 0;
 /* DENETIM 2026-08-04: cerceve senkronizasyonunda BAYT-ARASI ZAMAN ASIMI yoktu. Durum makinesi
  * yalnizca 0xAA/0x55 desenine ve paket-boyu sayimina dayaniyordu; bir bayt DUSERSE RX_DATA hedefi
  * doldurmak icin BIR SONRAKI paketten bayt yiyor, boylece iki paket birden bozuluyordu.
- * 115200 8N1'de 120 bayt = 10.4 ms → aralarinda 50 ms'lik bir sessizlik KESINLIKLE cerceve
+ * 115200 8N1'de 121 bayt = 10.5 ms → aralarinda 50 ms'lik bir sessizlik KESINLIKLE cerceve
  * sinirdir. Sessizlik gorulurse yarim cerceve ATILIR ve taze senkronizasyona gecilir. */
 #define RX_FRAME_GAP_MS 50U
 static volatile uint32_t g_rxLastByteMs = 0;
@@ -530,7 +553,27 @@ void PEMF_ForceAllCoilOutputsLow(void);
 /** `PEMF_BOBIN_UNIPOLAR_MASKESI`i bobin başına diziye çözer (bir kez, açılışta). */
 static void Coil_KipInit(void) {
   for (uint32_t i = 0U; i < NUM_COILS; i++) {
-    g_unipolar[i] = (uint8_t)(((PEMF_BOBIN_UNIPOLAR_MASKESI >> i) & 1U) != 0U);
+    g_yalniz_unipolar[i] = (uint8_t)(((PEMF_BOBIN_UNIPOLAR_MASKESI >> i) & 1U) != 0U);
+    /* Açılışta istek YOK → etkin kip = yetenek. Yetenekli bobinler BİPOLAR başlar. */
+    g_unipolar[i] = g_yalniz_unipolar[i];
+  }
+}
+
+/**
+ * İstenen kipi uygula — YETENEK TABANIYLA.
+ *
+ * ⚠️ `etkin = yetenek || istek`: yalnız-unipolar bir bobin (6-7) hiçbir istekle bipolara
+ * çevrilemez. Tersi serbest: bipolar yetenekli bir bobin istek üzerine unipolar sürülür
+ * (sahip: "unipolarda B'leri kapatsın").
+ *
+ * ⚠️ ISR'DAN DEĞİL ANA DÖNGÜDEN çağrılır ve `g_unipolar` tek baytlık yazmadır → ISR
+ * yarım güncellenmiş bir dizi görmez. Duty klempi de AYNI diziyi okuduğu için kip
+ * değişince tavan bir sonraki periyot hesabında kendiliğinden düzelir.
+ */
+static void Coil_KipUygula(uint8_t istenen) {
+  g_istenen_unipolar_maskesi = istenen;
+  for (uint32_t i = 0U; i < NUM_COILS; i++) {
+    g_unipolar[i] = (uint8_t)(g_yalniz_unipolar[i] || (((istenen >> i) & 1U) != 0U));
   }
 }
 
@@ -881,6 +924,9 @@ int main(void) {
                      ? "UNIPOLAR tek-bacak"
                      : "KARMA",
                  (unsigned)PEMF_BOBIN_UNIPOLAR_MASKESI);
+  /* ⚠️ Banner YETENEK maskesini bildirir (acilista istek yoktur). Calisma-zamani ETKIN kip
+   * her ACK satirinda `K=0xNN` olarak gider — arayuz dugmesinin GERCEKTEN uygulandigi
+   * ancak oradan dogrulanir. */
   HAL_UART_Transmit(&huart3, (uint8_t *)init_msg, strlen(init_msg), 200U);
 
   /* ── BULUNAN SENSORLER (kablolama dogrulamasi) ────────────────────────────────────
@@ -1075,6 +1121,13 @@ int main(void) {
       if (pkt_ok) {
         last_communication_ms = current_time;
 
+        /* SÜRÜŞ KİPİ — arayüz düğmesinden gelen istek (sahip kararı 2026-09-11).
+         * ⚠️ YETENEK TABANIYLA uygulanır: `etkin = yalniz_unipolar[i] || istenen[i]`.
+         * Bobin 6-7'nin sürücüsü tek yönlü; onlara "bipolar sür" denemez.
+         * ⚠️ PWM BAŞLATMADAN ÖNCE uygulanır ki ilk periyot doğru kiple sürülsün;
+         * duty klempi de aynı diziyi okuduğundan tavan kendiliğinden düzelir. */
+        Coil_KipUygula(pkt_local.unipolar_maskesi);
+
         /* [FIX-1b] ref_ms faz hizalaması ARTIK BURADA DEĞİL — TIM1 ISR'ında, `g_tpp`
          * ile AYNI kritik bölgede uygulanıyor (bkz. HAL_TIM_PeriodElapsedCallback, #65).
          * Burada yapıldığında tick YENİ frekansa, tpp ise hâlâ ESKİ frekansa göre oluyordu.
@@ -1160,6 +1213,20 @@ int main(void) {
             }
             len = Coil_AckSayi(ack_msg, sizeof(ack_msg), len, v);
           }
+        }
+        /* ETKİN SÜRÜŞ KİPİ — `K=<maske>` (bit i set = bobin i+1 UNIPOLAR sürülüyor).
+         * ⚠️ İSTENEN değil ETKİN maske: `yetenek || istek`. Arayüz "hepsi bipolar" dese
+         * bile bobin 6-7 burada 1 görünür — düğmenin GERÇEKTEN ne yaptığını gösteren
+         * TEK yer budur. İstek yutulsaydı operatör bipolar sürdüğünü sanardı. */
+        {
+          uint32_t etkin = 0U;
+          for (uint32_t ki = 0U; ki < NUM_COILS; ki++) {
+            if (g_unipolar[ki]) {
+              etkin |= (1UL << ki);
+            }
+          }
+          len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, " K=");
+          len = Coil_AckSayi(ack_msg, sizeof(ack_msg), len, (long)etkin);
         }
         len = Coil_AckMetin(ack_msg, sizeof(ack_msg), len, "\r\n");
         /* DENETIM 2026-08-04: snprintf donus degeri kontrol EDILMIYORDU. Negatif donus
@@ -1722,7 +1789,7 @@ static void Coil_UartStartReceive(void) {
  * Byte-by-byte interrupt tabanlı alım + durum makinesi.
  * Her byte geldiğinde HAL bu callback'i çağırır.
  *
- * Binary Protokol State Machine (BinaryCmdPacket_t — 120 byte, 7 bobin):
+ * Binary Protokol State Machine (BinaryCmdPacket_t — 121 byte, 7 bobin):
  *
  *  IDLE            ──[0xAA]──► RX_WAIT_HEADER2
  *  RX_WAIT_HEADER2 ──[0x55]──► RX_DATA        (paket başladı, rxLen=2)
@@ -1732,7 +1799,7 @@ static void Coil_UartStartReceive(void) {
  *  RX_DATA         ──[88. byte]──► IDLE + g_pktReady=1
  *
  * Paket: [0xAA][0x55][5×float duty][5×float phase][5×float freq]
- *        [7×uint32 duration][uint16 ref_ms][uint32 crc32] = 120 byte
+ *        [7×uint32 duration][uint16 ref_ms][uint8 kip][uint32 crc32] = 121 byte
  *
  * Overrun koruması:
  *   g_pktReady == 1 iken yeni paket gelirse atlanır (drop edilir).

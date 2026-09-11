@@ -146,6 +146,14 @@ _live_state = {
             # diye var: bobin 1-5 yalnız akım, bobin 6-7 yalnız sıcaklık/alan ölçer ve
             # ölçülmeyen alan 0.0 olarak DURUR (aşağı akış 0.0 bekliyor, None değil).
             "measuredFields": [],
+            # SÜRÜŞ KİPİ — firmware'in ETKİN olarak uyguladığı kip (ACK `K=` alanı).
+            # None = firmware bildirmedi (eski sürüm) → arayüz "—" gösterir.
+            # ⚠️ İSTENEN değil ETKİN: bobin 6-7 sürücüsü tek yönlü, istek ne olursa olsun
+            # True kalır. Düğmenin gerçekte ne yaptığını gösteren TEK alan budur.
+            "unipolar": None,
+            # Bu bobin bipolar sürülebilir mi (donanım yeteneği). Arayüz düğmeyi buna göre
+            # kilitler; yeteneksiz bobinde düğme gösterilmez.
+            "bipolarYetenek": i < 5,
         }
         for i in range(8)
     },
@@ -213,8 +221,27 @@ def _sync_stm_coils_locked() -> list[dict]:
         coil["connected"] = stm_online
         if not stm_online:
             coil["running"] = False
+            # ⚠️ ETKİN SÜRÜŞ KİPİ DE UNUTULUR. Bu alan "kartın BANA BİLDİRDİĞİ kip"tir;
+            # kart gittiğinde artık kimse doğrulamıyor demektir. Eski değeri tutmak,
+            # yeniden bağlanan (belki YENİDEN PROGRAMLANMIŞ, belki BAŞKA) bir kart için
+            # doğrulanmamış bir kipi doğrulanmış gibi göstermek olurdu. None → arayüz
+            # kısa çizgi gösterir ve ilk ACK'te gerçek kip geri gelir.
+            coil["unipolar"] = None
         snapshots.append(dict(coil))
     return snapshots
+
+
+def update_live_coil_kip(coil_id: int, unipolar: bool) -> None:
+    """Bobinin ETKİN sürüş kipini canlı duruma yazar (ACK `K=` alanından)."""
+    idx = coil_id - 1
+    if not (0 <= idx < 8):
+        return
+    with _live_state_lock:
+        if _live_state["coils"][idx].get("unipolar") == bool(unipolar):
+            return  # değişmedi → boşuna yayın yapma
+        _live_state["coils"][idx]["unipolar"] = bool(unipolar)
+        snapshot = dict(_live_state["coils"][idx])
+    _ws_broadcast_sync({"type": "coil_status", "coilId": coil_id, "data": snapshot})
 
 
 def stm_surus_hazir() -> bool:

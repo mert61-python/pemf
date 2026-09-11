@@ -108,12 +108,58 @@ def test_KRITIK_kip_DERLEME_ZAMANI_dallanmasi_KALMADI():
     assert not kalan, f"surus yolunda hala derleme-zamani dal var ({len(kalan)}) -> maske ETKISIZ"
 
 
-def test_KRITIK_kip_dizisi_MASKEDEN_turetilir():
-    """Dizi elle doldurulursa maske yalan söyler."""
+def test_KRITIK_YETENEK_tabani_MASKEDEN_turetilir():
+    """⚠️ 2026-09-11'de kip İKİ KATMANLI oldu; kapı da öyle.
+
+    Katman 1 — `g_yalniz_unipolar[]`: DONANIM YETENEĞİ, derleme zamanında maskeden gelir.
+    Katman 2 — `g_unipolar[]`: ETKİN kip = yetenek **||** operatör isteği.
+
+    Bu test katman 1'i kilitler. Dizi elle doldurulursa maske yalan söyler ve bobin 6-7
+    bipolar sürülmeye çalışılır (sürücüde ikinci yarım köprü YOK).
+    """
     kod = _oku(MAIN)
-    m = re.search(r"g_unipolar\[i\]\s*=\s*([^;]+);", kod)
-    assert m, "g_unipolar dizisi HIC doldurulmuyor"
-    assert "PEMF_BOBIN_UNIPOLAR_MASKESI" in m.group(1), f"kip dizisi maskeden TURETILMIYOR: {m.group(1).strip()!r}"
+    m = re.search(r"g_yalniz_unipolar\[i\]\s*=\s*([^;]+);", kod)
+    assert m, "yetenek dizisi (g_yalniz_unipolar) HIC doldurulmuyor"
+    assert "PEMF_BOBIN_UNIPOLAR_MASKESI" in m.group(1), f"yetenek tabani maskeden TURETILMIYOR: {m.group(1).strip()!r}"
+
+
+def test_KRITIK_operator_istegi_YETENEGI_KALDIRAMAZ():
+    """⚠️ ASIL KAPI (çalışma-zamanı kip, 2026-09-11).
+
+    Etkin kip `yetenek || istek` olmalı. `=` ya da `&&` olursa arayüzden gelen "bipolar"
+    isteği bobin 6-7'yi de bipolara çevirir → tek yönlü sürücüde ikinci bacak sürülür.
+
+    MUTASYON: `Coil_KipUygula` içindeki `g_yalniz_unipolar[i] ||` kısmını sil → KIRMIZI.
+    """
+    kod = _oku(MAIN)
+    m = re.search(r"Coil_KipUygula\(uint8_t\s+\w+\)\s*\{(.+?)\n\}", kod, re.S)
+    assert m, "Coil_KipUygula fonksiyonu BULUNAMADI -> calisma-zamani kip yolu YOK"
+    govde = m.group(1)
+    atama = re.search(r"g_unipolar\[i\]\s*=\s*([^;]+);", govde)
+    assert atama, "Coil_KipUygula etkin kip dizisini DOLDURMUYOR"
+    ifade = atama.group(1)
+    assert "g_yalniz_unipolar[i]" in ifade and "||" in ifade, (
+        f"etkin kip yetenek TABANINI gozetmiyor: {ifade.strip()!r} -> "
+        "operator istegi bobin 6-7'yi bipolara CEVIREBILIR (surucude ikinci bacak YOK)"
+    )
+
+
+def test_KRITIK_kip_PWM_BASLAMADAN_uygulanir():
+    """İstek paketten okunup PWM başlatılmadan ÖNCE uygulanmalı.
+
+    Sonra uygulanırsa ilk periyot(lar) ESKİ kiple sürülür: bipolar→unipolar geçişinde
+    zararsız, ama unipolar→bipolar geçişinde tek yönlü sürücüye bir B darbesi gider.
+    """
+    kod = _oku(MAIN)
+    i_kip = kod.find("Coil_KipUygula(pkt_local.unipolar_maskesi)")
+    assert i_kip > 0, "paketteki kip alani HIC uygulanmiyor"
+    # ⚠️ Çıkışların AÇILDIĞI tek yer: `Coil_StartPwmOutputs()`. Kip ondan ÖNCE gelmeli.
+    i_pwm = kod.find("Coil_StartPwmOutputs();")
+    assert i_pwm > 0, "Coil_StartPwmOutputs cagrisi bulunamadi -> capa BAYAT"
+    assert i_kip < i_pwm, (
+        "kip PWM cikislari ACILDIKTAN SONRA uygulaniyor -> ilk periyot(lar) ESKI kiple "
+        "surulur; unipolar->bipolar gecisinde tek yonlu surucuye B darbesi gider"
+    )
 
 
 # ============================================================================

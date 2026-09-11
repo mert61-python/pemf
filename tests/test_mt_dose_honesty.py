@@ -47,7 +47,12 @@ def test_KRITIK_STM_paketi_mT_TASIMIYOR():
     from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI, STM_PAKET_FMT
 
     n = STM_PAKET_BOBIN_SAYISI
-    beklenen = "<BB {n}f {n}f {n}f {n}I H".format(n=n)
+    # ⚠️ 2026-09-11: `B` = `unipolar_maskesi` (bobin başına bipolar/unipolar İSTEĞİ).
+    # Bu kapı "pakete YOĞUNLUK (mT) alanı sızdı mı?" diye sorar. Kip alanı bir doz
+    # büyüklüğü DEĞİL, bir dalga-biçimi anahtarıdır: uygulanan mT'yi beyan etmez, cihazın
+    # ürettiği alanı ölçmez. Yine de kapı bilerek DAR: yeni bir alan eklenirse düşer ve
+    # "bu alan doz beyan ediyor mu?" sorusu TEKRAR sorulur. Genişletmeden önce oku.
+    beklenen = "<BB {n}f {n}f {n}f {n}I H B".format(n=n)
     assert STM_PAKET_FMT == beklenen, (
         f"STM paket bicimi {STM_PAKET_FMT!r}, beklenen {beklenen!r} — YENI BIR ALAN mi eklendi? "
         "mT/yogunluk eklendiyse PDF ve arayuz etiketleri GOZDEN GECIRILMELI (uygulanmayan doz "

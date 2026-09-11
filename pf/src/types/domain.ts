@@ -54,6 +54,17 @@ export interface CoilStatus {
    * Boş/tanımsız → hiçbir alan ölçülmemiş (henüz telemetri gelmedi ya da sensör yok).
    */
   measuredFields?: string[];
+  /**
+   * Kartın ETKİN olarak uyguladığı sürüş kipi (ACK `K=` alanı). `true` = unipolar.
+   *
+   * ⚠️ `undefined`/`null` = FIRMWARE BİLDİRMEDİ (eski sürüm ya da hiç sürüş olmadı).
+   * `false` varsaymak "bipolar doğrulandı" yalanıdır — arayüz bu durumda kısa çizgi
+   * gösterir. İSTEK değil ETKİN kiptir: bobin 6-7 sürücüsü tek yönlü olduğundan
+   * onlara bipolar istense de `true` döner.
+   */
+  unipolar?: boolean | null;
+  /** Bu bobin bipolar sürülebilir mi (donanım yeteneği). Yoksa düğme KİLİTLİ çizilir. */
+  bipolarYetenek?: boolean;
 }
 
 // ─── Patient ─────────────────────────────────────────────────────────────────

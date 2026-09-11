@@ -6,6 +6,33 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
+## app 1.9.51 — 2026-09-11 (🔀 sürüş biçimi artık ekrandan seçiliyor)
+
+> ⚠️⚠️ **KONTROLCÜ YAZILIMI MUTLAKA YENİDEN YÜKLENMELİ — YALNIZ UYGULAMAYI GÜNCELLEMEK
+> CİHAZI ÇALIŞMAZ HÂLE GETİRİR.** Komut paketine bir alan eklendi (120 → 121 bayt).
+> Kartta eski yazılım varsa **her komut** bozuk sayılır: hiçbir bobin çalışmaz ve ekranda
+> sürekli "komut reddedildi" uyarısı çıkar. Uygulama ile kart **birlikte** güncellenir.
+
+**Sürüş biçimi artık Manuel sekmesinden seçiliyor.** "Toplu Uygulama" kartına **Sürüş
+Kipi** bölümü eklendi: her bobin için iki yönlü (BİP) / tek yönlü (UNİ) seçilebiliyor,
+"Hepsi Bipolar" ve "Hepsi Unipolar" düğmeleri de var. Eskiden bu seçim kontrolcü
+yazılımının içine gömülüydü — değiştirmek için kartı yeniden derleyip yüklemek
+gerekiyordu.
+
+**Değiştirilemeyen bobinler açıkça kilitli gösteriliyor.** Yan duvarlardaki iki bobinin
+(6 ve 7) sürücü devresinde ikinci yarım köprü **fiziksel olarak yok** — bunlar yalnız tek
+yönlü sürülebilir. Arayüz onları kilit simgesiyle gösteriyor ve "Hepsi Bipolar" bile
+onları çevirmiyor. Basılabilen ama sessizce yok sayılan bir düğme sunmak, operatöre
+uygulanmayan bir ayarı uygulanmış gibi gösterirdi.
+
+**Ekran, kartın GERÇEKTEN uyguladığı biçimi yazıyor.** Cihaz her onayda hangi bobini
+hangi biçimde sürdüğünü bildiriyor ve arayüz bunu ayrı bir satırda gösteriyor. Kart henüz
+bildirmediyse **kısa çizgi** çıkıyor — "bilmiyorum" ile "iki yönlü" birbirine
+karıştırılmıyor.
+
+**Not:** Kip yalnız sürüş sırasında cihaza gider. Hiçbir bobin çalışmıyorken cihazla
+konuşulmadığı için seçim "kaydedildi" olarak saklanır ve bir sonraki başlatmada uygulanır.
+
 ## app 1.9.50 — 2026-09-11 (🔌 kablo çıkarsa anlar, geri takınca kendine gelir)
 
 **Cihaz bağlı değilken "başladı" demiyor.** Kontrolcü bağlı olmadan bobin başlatma isteği

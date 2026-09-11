@@ -77,6 +77,15 @@ class HardwareController:
         # gonderir → dusen STOP telafi edilir.
         self._force_send_left = 0
 
+        # ── SÜRÜŞ KİPİ (sahip kararı 2026-09-11: arayüzde düğmeyle ayarlanır) ──────────
+        # Bit i set → bobin i+1 UNIPOLAR sürülsün. Varsayılan 0 = "hepsi bipolar İSTE".
+        # ⚠️ Bu bir İSTEKTİR. Firmware onu DONANIM YETENEĞİYLE OR'lar
+        # (`PEMF_BOBIN_UNIPOLAR_MASKESI` = 0x60) → bobin 6-7 sürücüsü tek yönlü olduğu
+        # için onlar HER HÂLÜKÂRDA unipolar kalır. Backend bunu taklit ETMEZ: tek doğru
+        # yer firmware'dir, burada da kopyalarsak iki kaynak sessizce ayrışır.
+        # Gerçekte ne uygulandığı ACK satırındaki `K=` alanından okunur.
+        self._unipolar_maskesi = 0
+
         self._keep_alive_stop = threading.Event()
         self._keep_alive_thread = threading.Thread(target=self._keep_alive_loop, daemon=True, name="HWKeepAlive")
         self._keep_alive_thread.start()
@@ -132,6 +141,32 @@ class HardwareController:
 
     def stop(self):
         self._keep_alive_stop.set()
+
+    def surus_kipi_ayarla(self, unipolar_maskesi: int) -> int:
+        """Sürüş kipi İSTEĞİNİ ayarlar (bit i set = bobin i+1 unipolar). @return uygulanan istek.
+
+        ⚠️ ANINDA ETKİLİ DEĞİL — bir sonraki pakette gider. Hiçbir bobin çalışmıyorsa
+        keep-alive paket GÖNDERMEZ (`need_send = any_running or ...`), yani kip değişimi
+        bobin başlayana kadar karta ULAŞMAZ. Bu kasıtlı: boşta UART'ı meşgul etmiyoruz ve
+        kip yalnız sürüş anında anlam taşıyor. Operatöre "kaydedildi" demek için yeterli.
+
+        ⚠️ Maske YETENEĞİ KALDIRAMAZ: firmware `yetenek || istek` uygular. Bobin 6-7'ye
+        bipolar istemek SESSİZCE yok sayılmaz — ACK'teki `K=` alanı gerçek kipi gösterir.
+        """
+        try:
+            m = int(unipolar_maskesi) & 0xFF
+        except (TypeError, ValueError):
+            self.logger.warning("Gecersiz surus kipi maskesi: %r — DEGISTIRILMEDI", unipolar_maskesi)
+            return int(self._unipolar_maskesi)
+        with self._state_lock:
+            self._unipolar_maskesi = m
+            calisan = any(self.coils_state[i]["is_running"] for i in range(1, STM_BOBIN_SAYISI + 1))
+            if calisan:
+                # Çalışan bobin varsa kipi HEMEN tazele (sonraki keep-alive turunu bekleme).
+                self._force_send_left = self.STOP_RESEND_TICKS
+                self._send_stm_manual_update()
+        self.logger.info("Surus kipi istegi: maske=0x%02X (calisan bobin: %s)", m, calisan)
+        return m
 
     def _stm_surus_hazir(self) -> bool:
         """STM kopukken BAŞLATMA reddedilsin mi? (True = sürülebilir)
@@ -417,14 +452,17 @@ class HardwareController:
         # osiloskopla dogrulanmadan uygulanmamalidir.
         ref_ms = int(time.monotonic() * 1000) % 1000
 
-        # Binary STM32 Packet Format (genislik = STM_PAKET_BOBIN_SAYISI, su an 7 → 120 bayt):
+        # Binary STM32 Packet Format (genislik = STM_PAKET_BOBIN_SAYISI, su an 7 → 121 bayt):
         # <BB : header (0xAA, 0x55)
         # Nf  : duty · Nf : phase · Nf : freq · NI : duration
         # H   : ref_ms
+        # B   : unipolar_maskesi (ISTEK; firmware yetenekle OR'lar)
         # I   : crc32
         # ⚠️ BICIM DIZESI ELLE YAZILMAZ → utils/stm32_transport.STM_PAKET_FMT (tek kaynak).
+        with self._state_lock:
+            _kip = int(self._unipolar_maskesi) & 0xFF
         data_bytes = struct.pack(
-            STM_PAKET_FMT, 0xAA, 0x55, *stm32_duties, *stm32_phases, *stm32_freqs, *stm32_durs, ref_ms
+            STM_PAKET_FMT, 0xAA, 0x55, *stm32_duties, *stm32_phases, *stm32_freqs, *stm32_durs, ref_ms, _kip
         )
         crc32_val = zlib.crc32(data_bytes) & 0xFFFFFFFF
         stm_msg = data_bytes + struct.pack('<I', crc32_val)

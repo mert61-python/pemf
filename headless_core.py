@@ -232,6 +232,14 @@ class HeadlessCore:
         if not match:
             return []
 
+        # ETKIN SURUS KIPI (`K=<maske>`): firmware'in GERCEKTEN uyguladigi kip.
+        # ⚠️ Istenen DEGIL etkin: firmware `yetenek || istek` uygular, yani bobin 6-7
+        # arayuz "bipolar" dese bile 1 gelir. Arayuz dugmesinin gercekten ne yaptigini
+        # gosteren TEK kaynak budur; istegi geri yansitmak YALAN olurdu.
+        # Eski firmware bu alani basmaz -> anahtar HIC koyulmaz (None de degil).
+        _k = re.search(r"[,\s]K=(\d+)", decoded)
+        _etkin_kip = int(_k.group(1)) if _k else None
+
         d_vals = [float(x) for x in match.group(1).split(",")]
         p_vals = [float(x) for x in match.group(2).split(",")]
         f_vals = [float(x) for x in match.group(3).split(",")]
@@ -272,6 +280,10 @@ class HeadlessCore:
                     "duration_min": int(t_vals[index]),
                     "running": running,
                     "pwm_active": running,
+                    # ⚠️ ETKİN kip (istenen DEĞİL): firmware `yetenek || istek` uygular.
+                    # Alan YOKSA (eski firmware) anahtar HİÇ KONMAZ → aşağı akış
+                    # "bildirilmedi" ile "bipolar" ayırt edebilsin.
+                    **({"unipolar": bool((_etkin_kip >> index) & 1)} if _etkin_kip is not None else {}),
                 }
             )
         return updates

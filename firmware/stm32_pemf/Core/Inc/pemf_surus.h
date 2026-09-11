@@ -17,7 +17,8 @@
  *   · duty tavanı: bipolar yarım-periyot − DDS_BIPOLAR_GAP_TICKS · unipolar tam-periyot − 1
  *   · ISR durum makinesi: bipolar A=[0,duty), B=[yarım,yarım+duty) · unipolar yalnız A=[0,duty)
  *   · STM_READY dizesi: "SYM-BIPOLAR" / "UNIPOLAR tek-bacak" / "KARMA uni=0xNN"
- * Değişmeyen: protokol (120 bayt), ölü-adam watchdog, süre auto-stop, slew, NTC, PB1 senkron.
+ * Değişmeyen: ölü-adam watchdog, süre auto-stop, slew, NTC, PB1 senkron.
+ * Protokol 2026-09-11'de 121 bayt oldu (kip alani) — ATOMIK SEVK ister.
  *
  * PİN DURUMU ("hangi pinde PWM var, hangisi boşta?"):
  *   Bobin 1 : PWM → PC8  (IN_A)  ·  PD12 (IN_B) kalıcı LOW   ← maske 0x00 (sahip kararı 2026-09-10)
@@ -95,7 +96,21 @@
  * ayrışırlarsa sürücü yanar. Kapı: tests/test_stm_bobin_basina_kip.py
  * ============================================================================
  */
-#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x60U  /* bit5,6 = bobin 6,7 UNIPOLAR (surucu tek yonlu) - bobin 1-5 BIPOLAR */
+/* ⚠️⚠️ BU ARTIK "SECILEN KIP" DEGIL, **DONANIM YETENEGI TABANI**dir (2026-09-11, sahip:
+ * "arayuzde butonla ayarlanabilir olsun"). Bit i SET → bobin i+1 **YALNIZ unipolar
+ * surulebilir** (surucusu tek yonlu). Bit CLEAR → bobin bipolar DA surulebilir.
+ *
+ * Kip secimi artik CALISMA ZAMANINDA, komut paketindeki `unipolar_maskesi` ile yapilir.
+ * Ama firmware onu KORU KORUNE UYGULAMAZ:
+ *     etkin_unipolar[i] = YETENEK[i]  ||  istenen[i]
+ * Yani yetenek bir TABANDIR; arayuz onu KALDIRAMAZ. Bobin 6-7'ye "bipolar sur" komutu
+ * gelse bile unipolar kalir — aksi halde duty yarim-periyoda klemplenir ve o bobinler
+ * SESSIZCE zayif surulurdu (ACK'te duty gorunur, alan yarilanir).
+ *
+ * ⚠️ NEDEN YETENEK DERLEME-ZAMANI KALIYOR: bu bir tedavi parametresi degil, kartin
+ * KABLOLAMASIDIR. Calisma zamaninda degistirilebilir olsaydi yanlis bir deger surucuyle
+ * uyusmazdi ve operatorun degistirebilecegi bir sey olmamali. */
+#define PEMF_BOBIN_UNIPOLAR_MASKESI 0x60U  /* bit5,6 = bobin 6,7 YALNIZ unipolar (surucu tek yonlu) */
 
 /* BOBİN POLARİTE MASKESİ — iki kipte ortak. Bit i = bobin i+1'in A↔B bacak rolleri yer değiştirir:
  *   UNIPOLAR: darbe IN_B'den çıkar, IN_A kalıcı LOW (mono sürüş)   ·   BİPOLAR: dalga aynalanır (faz 180°).

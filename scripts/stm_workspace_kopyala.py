@@ -64,6 +64,25 @@ def _bobin_sayisi(main_c: Path) -> int | None:
         return None
 
 
+# ⚠️ PROTOKOL ÖZELLİKLERİ — her biri paketin GENİŞLİĞİNİ değiştirmiş bir aşamadır.
+# Kaynak eski bir aşamada kalmışsa flaşlanan kart backend'in paketini CRC'den düşürür ve
+# HİÇBİR bobin çalışmaz (2026-09-11 sahasında bayat ELF ile tam olarak bu yaşandı).
+# NUM_COILS tek başına YETMEZ: 7 bobinli ama kip alanı olmayan bir kaynak da 120 baytlıktır.
+PROTOKOL_ISARETLERI = (
+    ("unipolar_maskesi", "paket kip alani YOK -> 120 baytlik ESKI protokol"),
+    ("Coil_KipUygula", "kip uygulama fonksiyonu YOK -> istek pakete girse de kullanilmaz"),
+    ("g_yalniz_unipolar", "donanim yetenek tabani YOK -> bobin 6-7 bipolar surulmeye calisilir"),
+)
+
+
+def _protokol_eksikleri(main_c: Path) -> list[str]:
+    try:
+        kaynak = main_c.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ["main.c okunamadi"]
+    return [aciklama for isaret, aciklama in PROTOKOL_ISARETLERI if isaret not in kaynak]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--hedef", default=None, help="hedef kök (varsayılan: Masaüstü)")
@@ -101,7 +120,12 @@ def main() -> int:
         elif n != 7:
             sorun.append(f"{p}: NUM_COILS={n} (7 bekleniyordu) — BAYAT KAYNAK")
         else:
-            print(f"  dogrulandi : {p}  NUM_COILS=7")
+            eksik = _protokol_eksikleri(hedef / p / "Core" / "Src" / "main.c")
+            if eksik:
+                for e in eksik:
+                    sorun.append(f"{p}: {e} — BAYAT KAYNAK")
+            else:
+                print(f"  dogrulandi : {p}  NUM_COILS=7, paket 121 bayt (kip alani VAR)")
 
     print()
     if sorun:

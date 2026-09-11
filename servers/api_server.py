@@ -48,6 +48,7 @@ _push_notification = live_state._push_notification
 _build_ws_snapshot = live_state._build_ws_snapshot
 update_live_stm_status = live_state.update_live_stm_status
 update_live_coil_from_stm = live_state.update_live_coil_from_stm
+update_live_coil_kip = live_state.update_live_coil_kip
 update_measured_intensity = live_state.update_measured_intensity
 set_live_patient = live_state.set_live_patient
 
@@ -1185,6 +1186,10 @@ def _handle_backend_event(event) -> None:
             duration_min=int(data.get("duration_min", data.get("duration", 0))),
             running=bool(data.get("running", data.get("pwm_active", False))),
         )
+        # SÜRÜŞ KİPİ — yalnız firmware bildirdiyse (`K=` alanı) yazılır. Anahtar YOKSA
+        # (eski firmware) alana DOKUNULMAZ: False yazmak "bipolar doğrulandı" yalanı olur.
+        if "unipolar" in data:
+            update_live_coil_kip(int(data.get("coil_id", 0)), bool(data["unipolar"]))
         return
     if event.event_type == "hardware.stm.telemetry":
         # FAZ 3 (2026-09-10): bobin 6-7 sensorleri ESP'den STM'e tasindi. ESP yolundaki
@@ -1583,6 +1588,21 @@ class CoilControlPayload(BaseModel):
     phase: float = 0.0
     duration: int = Field(default=0, ge=0)  # seconds for ESP/MQTT payloads
     start: bool = True
+
+
+class SurusKipiPayload(BaseModel):
+    """Bobin başına sürüş kipi İSTEĞİ.
+
+    `unipolar[i] = True` → bobin i+1 tek yönlü sürülsün (yalnız IN_A darbelenir, IN_B kapalı).
+    `False` → çift yönlü (IN_A / IN_B dönüşümlü) istenir.
+
+    ⚠️ İSTEK ≠ ETKİN KİP. Bobin 6-7 sürücüsü donanımsal olarak tek yönlü; firmware
+    `etkin = yetenek || istek` uygular, yani onlara `False` göndermek bir şey değiştirmez.
+    Gerçekte uygulanan kip ACK'in `K=` alanından gelir ve canlı durumdaki `unipolar`
+    alanına yazılır — arayüz DAİMA o alanı gösterir, bu isteği değil.
+    """
+
+    unipolar: list[bool]
 
 
 class BatchCoilPayload(BaseModel):
@@ -2496,6 +2516,49 @@ async def control_single_coil(coil_id: int, payload: CoilControlPayload):
     if _sync_uyari:
         _yanit["sync_warning"] = _sync_uyari
     return _yanit
+
+
+@app.post("/api/coil/surus_kipi")
+async def set_surus_kipi(payload: SurusKipiPayload):
+    """STM bobinlerinin bipolar/unipolar sürüş kipini ayarlar.
+
+    ⚠️ ATOMİK SEVK: kip alanı pakete 2026-09-11'de eklendi (120 → 121 bayt). Kart ESKİ
+    firmware ile koşuyorsa TÜM paketler CRC'den düşer — bu uç değil, tüm sürüş durur.
+    Bu yüzden firmware ve backend birlikte sevk edilir.
+
+    ⚠️ Kip yalnız SÜRÜŞ anında karta gider: hiç bobin çalışmıyorsa keep-alive paket
+    göndermez (kasıtlı — boşta UART sessiz). Yanıttaki `etkin` bu yüzden "kaydedildi"
+    demektir, "karta ulaştı" değil; gerçekleşen kip ACK `K=` → canlı durum `unipolar`.
+    """
+    if not state.hardware:
+        raise HTTPException(status_code=503, detail="STM kontrolcusu yok")
+    n = len(STM_COIL_IDS)
+    if len(payload.unipolar) != n:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unipolar dizisi {n} elemanli olmali (bobin {min(STM_COIL_IDS)}-{max(STM_COIL_IDS)}), "
+            f"{len(payload.unipolar)} geldi",
+        )
+    maske = 0
+    for i, u in enumerate(payload.unipolar):
+        if u:
+            maske |= 1 << i
+    uygulanan = state.hardware.surus_kipi_ayarla(maske)
+    # YETENEK TAVANI: bobin 6-7 bipolar sürülemez → istek ne olursa olsun etkin kip unipolar.
+    # Bunu burada da hesaplayıp döndürüyoruz ki arayüz, kart hiç paket almadan da (boşta)
+    # düğmenin GERÇEKTE ne yapacağını gösterebilsin. Kart konuşunca ACK `K=` bunun üstüne yazar.
+    yetenek = 0
+    with _live_state_lock:
+        for idx in range(n):
+            if not _live_state["coils"][idx].get("bipolarYetenek", True):
+                yetenek |= 1 << idx
+    etkin = uygulanan | yetenek
+    return {
+        "status": "success",
+        "istek": [bool((uygulanan >> i) & 1) for i in range(n)],
+        "etkin": [bool((etkin >> i) & 1) for i in range(n)],
+        "maske": etkin,
+    }
 
 
 @app.post("/api/coil/batch")

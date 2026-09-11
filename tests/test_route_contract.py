@@ -78,6 +78,8 @@ GOLDEN_ROUTES = {
     ("/api/auth/token", "GET"),
     ("/api/client/error", "POST"),  # F-7 (prod-readiness Faz 2): frontend ErrorBoundary crash raporu
     ("/api/coil/batch", "POST"),
+    # 2026-09-11: bipolar/unipolar surus kipi (firmware paketi 120 -> 121 bayt, ATOMIK sevk).
+    ("/api/coil/surus_kipi", "POST"),
     ("/api/coil/{coil_id}/control", "POST"),
     ("/api/dashboard-snapshot", "GET"),
     ("/api/discovery", "GET"),
@@ -203,4 +205,5 @@ def test_route_contract_unchanged():
     # Sayı da koşula göre daralır: simülatör derlemesi yoksa 96 değil 95 beklenir. Toplamın
     # KENDİSİ hâlâ sabitlenir (yeni rota sessizce eklenemez) — yalnız koşullu olan düşülür.
     # → 98 (+1 AI hazırlık self-testi: ai/hazirlik GET), 2026-08-27 saha bulgusu
-    assert len(current) == len(beklenen) == 98 - (0 if _simulator_mountlu() else 1)
+    # → 99 (+1 bipolar/unipolar sürüş kipi: coil/surus_kipi POST), 2026-09-11
+    assert len(current) == len(beklenen) == 99 - (0 if _simulator_mountlu() else 1)

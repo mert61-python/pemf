@@ -31,6 +31,7 @@ import { EFieldBar } from "@/components/domain/EFieldBar";
 import { PatientGate } from "@/components/domain/PatientGate";
 import { ObservationNotesModal } from "@/components/domain/ObservationNotesModal";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 type TabKey = "automatic" | "manual" | "ai" | "aipro";
@@ -610,6 +611,11 @@ export function ControlScreen() {
               <ParamField label="Süre (dk)" value={masterDuration} onChangeText={setMasterDuration} />
             </View>
             <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} />
+            {/* Sürüş kipi TOPLU panelde: bobin başına kip seçilir ama tek bir pakette
+                gider (protokolde tek maske alanı var) → tek yer, tek kaynak. Seans
+                aktifken kilitli: koşan sürüşün kipini ortasında değiştirmek doz
+                tanımını bozar. */}
+            <SurusKipiSecici coils={coils} stmConnected={isStmConnected} disabled={isActive} />
             <View style={styles.manualBtnRow}>
               <View style={{ flex: 1 }}>
                 <StartButton

@@ -93,11 +93,15 @@ def test_simulator_sevkedilen_cihazla_ayni_limitleri_uyguluyor(sim, fw_src):
     assert sim.REF_MS_MAX == _define_int(fw_src, "REF_MS_MAX")
 
 
-#: 7 bobin → 2 + 7*4*3 + 7*4 + 2 + 4 = 120 bayt. 2026-09-10'da 5 bobin/88 bayttan cikti
-#: (bobin 6-7 ESP8266'dan STM32'ye tasindi). Bu sayi UC kaynakta da ayni olmak ZORUNDA:
-#: bir alan fazla/eksik → boyut ve CRC tutmaz → firmware TUM paketleri NACK'ler → HICBIR
-#: bobin calismaz (sessiz degil, ama toptan arizadir).
-BEKLENEN_PAKET_BOYU = 120
+#: 7 bobin → 2 + 7*4*3 + 7*4 + 2 + 1 + 4 = 121 bayt.
+#:   2026-09-10: 5 bobin/88 → 7 bobin/120 (bobin 6-7 ESP8266'dan STM32'ye tasindi)
+#:   2026-09-11: 120 → 121  (+1 bayt `unipolar_maskesi` — arayuzdeki SURUS KIPI dugmesi;
+#:               bit i set = bobin i+1 unipolar ISTENIYOR. Firmware bunu DONANIM
+#:               YETENEGIYLE OR'lar, yani yalniz-unipolar bobin bipolara cevrilemez.)
+#: Bu sayi UC kaynakta da ayni olmak ZORUNDA: bir alan fazla/eksik → boyut ve CRC tutmaz →
+#: firmware TUM paketleri NACK'ler → HICBIR bobin calismaz (toptan ariza).
+#: ⚠️ Her degisimde ATOMIK SEVK: firmware + backend BIRLIKTE gitmeli.
+BEKLENEN_PAKET_BOYU = 121
 
 
 def test_paket_boyutu_UC_kaynakta_da_ayni(sim, fw_src):

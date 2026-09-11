@@ -1,15 +1,25 @@
-# stm32_pemf — STM32F429 Bobin Sürücüsü CubeIDE Projesi (bobin 1-5) · TEK KAYNAK
+# stm32_pemf — STM32F429 Bobin Sürücüsü CubeIDE Projesi (bobin 1-7) · TEK KAYNAK
 
 > ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
-> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
-> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
-> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
-> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py`, ayna kapısı
+> ve mirror'ın `.rar` arşivi silindi (git geçmişinde duruyorlar).
+>
+> Sürüş kipi artık İKİ katmanlı:
+> | Katman | Nerede | Ne |
+> |---|---|---|
+> | **Yetenek** (derleme zamanı) | `PEMF_BOBIN_UNIPOLAR_MASKESI = 0x60` → `g_yalniz_unipolar[]` | Bobin 6-7 sürücüsünde ikinci yarım köprü **fiziksel olarak yok** → bunlar **daima** unipolar. TABAN'dır, seçim değil. |
+> | **İstek** (çalışma zamanı) | Paketin `unipolar_maskesi` baytı → `Coil_KipUygula()` | Arayüzdeki **Sürüş Kipi** düğmesi. Yalnız yetenekli bobinleri etkiler. |
+>
+> Etkin kip: `g_unipolar[i] = g_yalniz_unipolar[i] || istenen[i]` — ACK'te `K=<maske>` döner.
+> ⚠️ Paket bu yüzden **121 bayt** (120 → 121). **ATOMİK SEVK:** backend güncellenince kart
+> MUTLAKA yeniden flaşlanır, yoksa her komut CRC'den düşer ve hiçbir bobin çalışmaz.
 
 
 **2026-08-19'dan beri derleme BURADAN yapılır** (sahip kararı) — masaüstündeki eski
 `Desktop\PEMF` kopyası silindi. Donanım: NUCLEO-F429ZI (STM32F429ZITx), yazılım DDS
-5 kanal + PB1'den ESP'lere donanım faz senkron darbesi.
+**7 kanal** + PB1'den ESP'lere donanım faz senkron darbesi.
+Masaüstüne temiz bir kopya çıkarmak için (derleme artığı TAŞIMAZ, protokol aşamasını
+DOĞRULAR): `python scripts/stm_workspace_kopyala.py`.
 
 ## CubeIDE'de açma / derleme
 
@@ -21,8 +31,11 @@
    önce Project Explorer'da o girdiyi Delete edin, "contents on disk" İŞARETSİZ.)
 3. **Project → Build Project** (Ctrl+B). Başarı: `Build Finished. 0 errors` +
    `Debug/PEMF.elf` (Debug/ gitignore'lu — build çıktısı depoya girmez).
-4. Ölçülen referans (2026-08-19 akşam, v2.3.0 SYM-BIPOLAR): **0 hata 0 uyarı** (`-Wall`);
-   `STM_READY: DDS v2.3 (5-ch SYM-BIPOLAR + HW_SYNC@PB1)` dizesi binary'de.
+4. Ölçülen referans (2026-09-11): **0 hata 0 uyarı** (`-Wall -Wextra`), 21.340 B flash /
+   4.296 B bss. Banner: `STM_READY: DDS v2.3 (7-ch KARMA uni=0x60 + HW_SYNC@PB1)`.
+   ⚠️ **`5-ch` görüyorsanız ESKİ ikili yüklenmiştir** — Clean → Build → Debug tekrar.
+   Hızlı kontrol: `python scripts/stm_firmware_kimligi.py`.
+   Derleme CubeIDE'siz de doğrulanabilir: `python scripts/firmware_derle.py`.
 
 ## ⚠️ İKİ KURAL
 
@@ -34,16 +47,16 @@
    `firmware/main.c` 2026-08-19'da SİLİNDİ (iki kopya bir kez gerçekten ayrışmıştı —
    masaüstü 2 ay geride kalmıştı); `test_stm_main_saglik.py` geri gelmesini de engeller.
    Başka yere KOPYALAMAYIN — derleme dahil her şey bu dosyayı okur.
-   **Tek istisna (2026-09-08): `../stm32_pemf_unipolar/`** — aynı `Core/`nin bayt-bayt AYNASI,
-   yalnız `Core/Inc/pemf_surus.h` farklı (`PEMF_SURUS_UNIPOLAR 1` = tek-bacak düz sürüş: bobin
-   başı TEK pin darbelenir; hangi bacak `PEMF_BOBIN_TERS_MASKESI` ile — ⚠️ **0x00, SAHİP KARARI
-   2026-09-10: maske KULLANILMIYOR.** Bobin 1-5 darbeyi sırayla **PC8 PC9 PD10 PC6 PA8** (IN_A)
-   üzerinden alır; IN_B pinleri (PD12 PE10 PD11 PC7 PA9) fiziksel olarak **bağlı değil**, ters sargı
-   bobin uçları çevrilerek donanımda düzeltildi. Maskeyi açmak darbeyi kablosuz pine taşır → bobin
-   SESSİZCE sürülmez (2026-09-08'de 0x03 idi, tam bu riski taşıyordu)). O projede main.c'ye DOKUNULMAZ; burada değişince
-   `python scripts/stm_unipolar_senkronla.py` koşturulur, `tests/test_stm_unipolar_ayna.py`
-   ayrışmayı kırmızı yapar. CubeIDE'de ikisi yan yana import edilir (adlar `PEMF` / `PEMF_UNIPOLAR`);
-   unipolar READY dizesi `DDS v2.3 (5-ch UNIPOLAR tek-bacak + HW_SYNC@PB1)`.
+   **İstisna YOK** (2026-09-11): ayna proje kaldırıldı, CubeIDE'de **tek** proje import edilir: `PEMF`.
+   Workspace'te askıda bir `PEMF_UNIPOLAR` kaydı kaldıysa Project Explorer'da Delete edin
+   ("contents on disk" İŞARETSİZ) — yoksa yanlışlıkla o eski ikili flaşlanabilir.
+
+   ⚠️ **KABLOLAMA (sahip bildirimi 2026-09-11):** bobin 1-5'te **iki PWM de BAĞLI** (tam köprü):
+   IN_A = PC8 PC9 PD10 PC6 PA8, IN_B = PD12 PE10 PD11 PC7 PA9. Bobin 6-7'de sürücü tek yönlü,
+   yalnız IN_A kullanılır. `PEMF_BOBIN_TERS_MASKESI` **0x00** ve öyle kalır (sahip kararı
+   2026-09-10: ters sargı bobin uçları çevrilerek donanımda düzeltildi).
+   ⚠️ Bu README daha önce "IN_B pinleri fiziksel olarak bağlı değil" diyordu — **YANLIŞTI**,
+   sahip düzeltti. Yanlış bir kablolama iddiası bipolar kazancını "etkisiz" sandırıyordu.
 
 ## Tezgâh
 
