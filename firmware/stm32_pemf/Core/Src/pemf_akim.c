@@ -5,9 +5,13 @@
  *
  * Gerekçeler, seviye uyuşmazlığı ve kalibrasyon matematiği için `pemf_akim.h` başlığını oku.
  *
- * ⚠️ TEZGÂHTA DOĞRULANMADI. Bu depoda C derlenmez ve ACS712'ler bağlanmadı.
- * Kabul kriteri: bilinen bir yükte pens ampermetre ile STM okuması %5 içinde;
- * ayrıca bobin kapalıyken okuma < 0,15 A (offset kalibrasyonu doğru).
+ * ✅ DERLENİYOR (2026-09-11): `scripts/firmware_derle.py`. ⚠️ "Bu depoda C derlenmez" diyen
+ * eski not YANLIŞTI — makinede ARM derleyicisi kuruluymuş.
+ *
+ * ⚠️ TEZGÂHTA DOĞRULANMADI ve **ACS712'ler HENÜZ BAĞLI DEĞİL** (arayüzde bobin 1-5 akımı
+ * kısa çizgi görünüyorsa sebebi budur; açılıştaki `-> STM_SENS: C=n ACS712=...` satırı
+ * hangisi olduğunu söyler). Kabul kriteri: bilinen bir yükte pens ampermetre ile STM
+ * okuması %5 içinde; ayrıca bobin kapalıyken okuma < 0,15 A (offset kalibrasyonu doğru).
  ******************************************************************************
  */
 

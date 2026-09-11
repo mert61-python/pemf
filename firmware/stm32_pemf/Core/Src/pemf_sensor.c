@@ -6,10 +6,16 @@
  * Gerekçeler ve güvenlik şartları için `pemf_sensor.h` başlığını oku.
  * Kayıt/sabit türetmesi: docs/stm32-sensor-protokolu.md
  *
- * ⚠️ TEZGÂHTA DOĞRULANMADI. Bu depoda C DERLENMEZ ve I2C kabloları henüz çekilmedi.
- * Ölçek sabitleri Adafruit kütüphanelerinin AYNI ayarlarından türetildi (aşağıda kaynak
- * satırlarıyla) ki üretilen sayı ESP'nin bugün kaydettiğiyle KIYASLANABİLİR olsun.
- * Kabul kriteri: aynı sensör aynı yerde, ESP ve STM okumaları %5 içinde.
+ * ✅ DERLENİYOR (2026-09-11): `scripts/firmware_derle.py` — `-Wall -Wextra -O2` temiz,
+ * bağlama da temiz. ⚠️ "Bu depoda C DERLENMEZ" DİYEN ESKİ NOT YANLIŞTI: makinede CubeIDE'nin
+ * `arm-none-eabi-gcc`'si kuruluymuş. Her firmware değişiminde o betiği KOŞTUR.
+ *
+ * ⚠️ AMA TEZGÂHTA HÂLÂ DOĞRULANMADI — derlenmek çalışmak demek DEĞİL. Açık kabul kriterleri:
+ *   · aynı sensör aynı yerde, ESP ve STM okumaları **%5 içinde**,
+ *   · `N=` gerçekten ~400 geliyor mu (örnekleme hızı kâğıt üstünde ~425 Hz),
+ *   · DWT sayacı gerçek kartta ilerliyor mu (ilerlemezse tick yedeğine düşer — açılışta ölçülür),
+ *   · uzun kabloda I2C kararlılığı (`i2c_hata` sayacı 0 kalmalı),
+ *   · ISR süresi osiloskopta (7 bobinde ~%28 TAHMİN, ölçülmedi).
  ******************************************************************************
  */
 

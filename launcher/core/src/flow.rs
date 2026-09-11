@@ -3192,10 +3192,21 @@ mod tests {
             assert!(l.app.url.ends_with("base-app.zip"), "app url yanlis: {}", l.app.url);
             assert!(l.deps.url.ends_with("base-deps.zip"), "deps url yanlis: {}", l.deps.url);
         }
-        // Eski client'lar icin tek parca girdi DURMALI — silinirse <=1.9.12 kurulum yapamaz.
+        // ⚠️ 2026-09-11 DUZELTME — AYNI KOR NOKTA **BESINCI** YERDE.
+        // Burada "tek parca 'runtimes' girdisi DURMALI" yaziyordu. Monolit (`base.zip`) 1.9.48'de
+        // sahip karariyla KALICI olarak yayindan cikarildi (yayin 1,55 GB -> 210 MB) ve manifest
+        // artik yalniz `layers` tasiyor. Iddia, kurulabilirligi TEK-PARCA KOPYAYLA olcuyordu →
+        // dogru bir yayinda kirmizi oldu. Ayni kok daha once DORT yerde bulundu: launcher
+        // `platform_supported`, `make_manifest`in "hicbir base paketi yok" kapisi,
+        // `test_manifest_consistency` sayaci ve `make_manifest`in tazelik kapisi.
+        //
+        // DOGRU IDDIA: bu platformda KURULABILIR bir sey olmali — `runtimes` YA DA `layers`.
+        // Ikisi de yoksa client "paket yok" deyip durur; o hala bir ariza ve burada KIRMIZI.
+        // ⚠️ Not: `base.zip` yokken client <=1.9.12 kurulum yapamaz — bu BILINEN ve KABUL EDILEN
+        // bir sonuctur (launcher >=1.9.51 katmanlari da sayar), test edilecek bir hata degil.
         assert!(
-            m.runtime_for_current_platform().is_ok(),
-            "tek parca 'runtimes' girdisi KAYBOLMUS — eski client'lar kurulum yapamaz"
+            m.runtime_for_current_platform().is_ok() || m.layers_for_current_platform().is_some(),
+            "bu platformda NE tek-parca NE katman var — hicbir client kurulum yapamaz"
         );
         // Self-update imzasi: installer_url varsa sha256 ZORUNLU (parse zaten dogrular, burada
         // manifest'in gercekten o alani tasidigini kilitliyoruz).

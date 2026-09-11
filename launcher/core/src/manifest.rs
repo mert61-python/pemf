@@ -485,7 +485,14 @@ mod tests {
                 m.version
             );
         }
-        assert!(m.runtimes.contains_key(platform::WIN_X64), "base -> win-x64");
+        // ⚠️ 2026-09-11 DUZELTME — AYNI KOR NOKTA **ALTINCI** YERDE (besincisi flow.rs'te).
+        // Burada `m.runtimes.contains_key(WIN_X64)` vardi: tek-parca kopyayi kurulabilirligin
+        // TEK olcutu sayiyordu. Monolit 1.9.48'de sahip karariyla yayindan cikarildi → dogru bir
+        // manifest bu iddiayi kiriyor. Olculecek sey "base var mi" degil, "win-x64 KURULABILIR mi".
+        assert!(
+            m.runtimes.contains_key(platform::WIN_X64) || m.layers.contains_key(platform::WIN_X64),
+            "win-x64 icin NE `runtimes` NE `layers` var — Windows'ta hicbir kurulum yapilamaz"
+        );
         // ⚠️ SAHİP KARARI 2026-08-09 (Tier 1): `mac-arm64` ve `linux-x64` manifest'ten ÇIKARILDI.
         // Gerekçe (ölçüldü): o platformlarda `layers` yoktu → rollout freni çalışmıyordu, ve
         // client self-update'i Windows'a özel (`"Bu platformda oto-güncelleme desteklenmiyor"`)
