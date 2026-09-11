@@ -143,6 +143,95 @@ def temp_app_data(tmp_path):
     _onbellegi_temizle()
 
 
+@pytest.fixture(autouse=True)
+def _masaustunu_koru(tmp_path):
+    """⚠️ HİÇBİR TEST SAHİBİN MASAÜSTÜNE DOSYA BIRAKAMAZ — 2026-09-11'de ölçüldü.
+
+    ===========================================================================
+    ARIZA
+    ===========================================================================
+    Sahip "uygulama açık bile değil, masaüstüne sürekli yeni CSV geliyor" dedi.
+    Masaüstünde 18 adet `PEMF_alan_*.csv` birikmişti; içerikleri
+    `operator_name,op` / `patient_name,Boncuk` — yani TEST FIXTURE verisi. Zaman
+    damgaları süit koşularıyla birebir örtüşüyordu.
+
+    `/session/start` yolundan geçen her test `api_server._seans_alan` SINGLETON'ını
+    tetikliyor, o da `masaustu_dizini()` → `~/Desktop` çözüp oraya GERÇEKTEN dosya
+    yazıyordu. Kendi fixture'ında yolu yamalayan iki test (`test_seans_alan_kaydi`,
+    `test_seans_yogunluk_uctan_uca`) temizdi; DİĞER HEPSİ sızdırıyordu.
+
+    ===========================================================================
+    ⚠️ NEDEN `_gercek_kurulumu_koru` BUNU YAKALAMADI
+    ===========================================================================
+    O fixture VERİ KÖKÜNÜ izole eder (`APPDATA`, `PEMF_DATA_DIR`, cihaz kimliği).
+    Masaüstü veri kökü DEĞİLDİR ve `~` üzerinden çözülür. 2026-09-11'de masaüstüne
+    yazan yeni bir özellik eklendiğinde izolasyon onunla birlikte genişletilmedi —
+    bu deponun tekrar eden "koruma yazıldı ama YENİ yola uygulanmadı" sınıfı.
+
+    ===========================================================================
+    ⚠️ NEDEN `HOME`/`USERPROFILE` EZİLMEDİ (denendi, REDDEDİLDİ)
+    ===========================================================================
+    Tek satırda her `~` kullanıcısını (CSV + PDF + gelecekteki her yazıcı) kapatırdı
+    ama İKİ ZARARI ölçüldü:
+      1. `test_veri_dizini_izolasyonu.py` GERÇEK `~/.pemf_gui`ye bakarak sızıntı arar.
+         `~` sahteye çevrilseydi o kapı izole dizini ölçer ve SESSİZCE sahte-yeşile
+         dönerdi — var olan bir korumayı hadım etmek, yeni bir koruma eklemekten
+         daha pahalıdır.
+      2. `test_gitleaks_config_derlenir.py` gitleaks ikilisini `Path.home()/.cache`
+         altında arar; bulamazsa kapı işlevsizleşir.
+    Bu yüzden `~` DOKUNULMADAN kalır; yalnız masaüstüne YAZAN uçlar yönlendirilir.
+
+    ===========================================================================
+    NEDEN MODÜL NİTELİĞİ YAMANIYOR (import edilmiş ada DEĞİL)
+    ===========================================================================
+    `seans_basladi()` her çağrıda modül globalinden `masaustu_dizini()` okur → yama
+    etkilidir. Buna karşılık `test_seans_alan_kaydi.py` fonksiyonu `from ... import`
+    ile ALMIŞTIR; o bağ import anında kurulduğu için ORİJİNALİ gösterir ve
+    `systemprofile` davranışını sınayan kapı BOZULMADAN çalışmaya devam eder.
+    (İkisi de ölçüldü.)
+
+    Kapı: `tests/test_masaustu_sizintisi.py` — bu fixture kaldırılırsa KIRMIZI.
+    """
+    hedef = tmp_path / "sahte_masaustu"
+    hedef.mkdir(parents=True, exist_ok=True)
+    mp = pytest.MonkeyPatch()
+
+    try:
+        import servers.seans_alan_kaydi as _sak
+
+        # ⚠️ ORİJİNAL SAKLANIR: üretim mantığını (systemprofile reddi, aday sırası)
+        # SINAYAN testler buna ihtiyaç duyar. Yamalı sürümle sınamak, kapının
+        # KENDİ SAHTESİNİ doğrulaması olurdu.
+        # ⚠️ Fonksiyon GÖVDESİNDE `from ... import masaustu_dizini` yapmak YETMEZ:
+        # o satır test sırasında koşar ve YAMALI niteliği alır (ölçüldü). Yalnız
+        # MODÜL SEVİYESİNDE import eden dosyalar (test_seans_alan_kaydi.py)
+        # orijinale bağlı kalır — çünkü o bağ toplama anında kurulur.
+        mp.setattr(_sak, "_orijinal_masaustu_dizini", _sak.masaustu_dizini, raising=False)
+        mp.setattr(_sak, "masaustu_dizini", lambda: (hedef, "test izolasyonu"), raising=False)
+    except Exception:
+        pass
+
+    # PDF raporları da masaüstüne yazar (`utils/pdf_report_generator._default_output_path`).
+    # ⚠️ Bugün süitte sızıntı ÜRETMİYOR (masaüstünde test PDF'i yok) ama AYNI SINIF:
+    # yolu burada da kapatmak, yarın bir testin rapor üretmesiyle sızıntının geri
+    # gelmesini engeller. Sınıfı kapatmak, örneği kapatmaktan daha ucuzdur.
+    try:
+        from utils.pdf_report_generator import PDFReportGenerator as _PDF
+
+        _orijinal = _PDF._default_output_path
+
+        def _izole_yol(self, prefix: str, name_hint: str = "") -> str:
+            ham = _orijinal(self, prefix, name_hint)
+            return str(hedef / Path(ham).name)
+
+        mp.setattr(_PDF, "_default_output_path", _izole_yol, raising=False)
+    except Exception:
+        pass
+
+    yield hedef
+    mp.undo()
+
+
 # ⚠️ `tests/` dizinini de yola ekle: `capraz.py` ve `topoloji.py` YARDIMCI modüllerdir
 # (adları `test_*` olmadığı için pytest onları toplamaz) ve test dosyaları bunları
 # `import topoloji` ile alır. Eskiden her dosya kendi `sys.path.insert`ini yapıyordu;
