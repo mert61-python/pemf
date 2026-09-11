@@ -65,6 +65,39 @@ export function CoilParameterPanel({
   const [duty, setDuty] = useState(String(defaultDuty));
   const [duration, setDuration] = useState(String(defaultDuration));
   const [phase, setPhase] = useState(String(defaultPhase));
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⚠️ SAHA ARIZASI 2026-09-11 — "TOPLU UYGULAMA" DEĞERLERİ PANELLERE GEÇMİYORDU
+  // ══════════════════════════════════════════════════════════════════════════
+  // Sahip: "76 Hz, %50 duty, 30 dk ile başlattım, başlatınca kutu değerleri
+  // default'a dönüyor (100 Hz, %25, 20 dk)."
+  //
+  // KÖK NEDEN: yukarıdaki `useState(String(defaultFreq))` başlangıç değerini YALNIZ
+  // İLK MOUNT'ta okur. Operatör "Toplu Uygulama" alanlarını değiştirince prop güncelleniyor
+  // ama panel state'i İLK değerde (ekran açıldığındaki 100/25/0/20) donup kalıyordu.
+  //
+  // ⚠️ BU KOZMETİK DEĞİL, DOZ HATASI: toplu başlatma master değerlerini doğru gönderiyor,
+  // ama operatör panelde başka bir sayı GÖRÜYOR ve o panelin kendi "Başlat"ına basarsa
+  // bobin GÖRDÜĞÜ değerle değil, donmuş eski değerle sürülür.
+  //
+  // ÇÖZÜM: master değeri DEĞİŞTİĞİNDE paneli takip ettir. Alan başına "en son görülen
+  // master" ref'i tutulur; yalnız o alanın master'ı değiştiğinde üzerine yazılır.
+  // Böylece tek bir bobine özel değer girildiğinde (ör. bobin 3 = 200 Hz) master'ın
+  // DEĞİŞMEYEN alanları o bobini bozmaz — yalnız gerçekten değişen alan güncellenir.
+  const sonMaster = useRef({
+    freq: defaultFreq,
+    duty: defaultDuty,
+    phase: defaultPhase,
+    duration: defaultDuration,
+  });
+  useEffect(() => {
+    const s = sonMaster.current;
+    if (defaultFreq !== s.freq) { s.freq = defaultFreq; setFreq(String(defaultFreq)); }
+    if (defaultDuty !== s.duty) { s.duty = defaultDuty; setDuty(String(defaultDuty)); }
+    if (defaultPhase !== s.phase) { s.phase = defaultPhase; setPhase(String(defaultPhase)); }
+    if (defaultDuration !== s.duration) { s.duration = defaultDuration; setDuration(String(defaultDuration)); }
+  }, [defaultFreq, defaultDuty, defaultPhase, defaultDuration]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cihaz onayı beklenen START'ın command_id'si (saha 2026-09-08: "butona dokundum, PWM başladı mı?").
@@ -315,14 +348,19 @@ export function CoilParameterPanel({
 
       {/* Control buttons */}
       <View style={styles.btnRow}>
+        {/* ⚠️ ETİKET DURUMA GÖRE (sahip isteği 2026-09-11: "parametre güncelle butonu lazım").
+            Bobin ÇALIŞIRKEN bu düğme zaten bir güncellemedir — firmware çalışan bobinde
+            frekans/duty/faz/süreyi kesintisiz değiştirir, yeniden başlatma YOKTUR.
+            Ama üzerinde "Başlat" yazdığı için operatör basmaya çekiniyordu ("tedaviyi
+            baştan mı alır?"). Etiket artık ne yaptığını söylüyor; DAVRANIŞ AYNI. */}
         <TouchableOpacity
           style={[styles.btnStart, isDisabled && styles.btnDisabled]}
           onPress={() => sendCommand(true)}
           disabled={isDisabled || loading}
           accessibilityRole="button"
-          accessibilityLabel="Bobini başlat"
+          accessibilityLabel={running ? "Bobinin parametrelerini güncelle" : "Bobini başlat"}
         >
-          <Text style={styles.btnStartText}>▶ Başlat</Text>
+          <Text style={styles.btnStartText}>{running ? "🔄 Uygula" : "▶ Başlat"}</Text>
         </TouchableOpacity>
         {/* DURDURMA ASLA KİLİTLENMEZ: buton `running`'e bağlıydı ve `running` telemetriden gelir.
             STM çevrimdışı raporlandığında LiveDataContext bu bobinleri `running:false`'a

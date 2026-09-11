@@ -100,6 +100,8 @@ function GatewayRow({ label, state }: { label: string; state: RowState | boolean
     offline: { color: "#ef4444", text: "Kapalı",     dot: "#ef4444" },
     error:   { color: "#ef4444", text: "Hata",       dot: "#ef4444" },
     unknown: { color: "#94a3b8", text: "Bilinmiyor", dot: "#94a3b8" },
+    // KURULU DEĞİL ≠ ARIZALI (ESP söküldü, 2026-09-11). Nötr gri + açık metin.
+    devre_disi: { color: "#94a3b8", text: "Kurulu değil", dot: "#475569" },
   }[resolvedState] ?? { color: "#475569", text: "Bilinmiyor", dot: "#475569" };
 
   return (

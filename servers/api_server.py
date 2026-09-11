@@ -1114,6 +1114,14 @@ def _mqtt_client_id(role: str) -> str:
 
 def _start_mqtt_for_api() -> None:
     global _mqtt_client_api
+    # ⚠️ ESP SÖKÜLÜ → MQTT'YE HİÇ BAĞLANMA (sahip kararı 2026-09-11).
+    # Broker yokken `connect_async` + `loop_start` sonsuza dek yeniden dener; her deneme
+    # log'a satır basar, "Sistem" rozetini sarıya çeker ve kurulu OLMAYAN bir alt sistem
+    # için kalıcı alarm üretir. Kod SİLİNMEDİ: `PEMF_ESP_ENABLED=1` ile tamamı geri gelir
+    # (bkz. live_state.esp_etkin notu — hibrit/ESP-only kuruluma dönüş tek satırlık ayardır).
+    if not live_state.esp_etkin():
+        logging.info("MQTT dinleyicisi ATLANDI — ESP alt sistemi kapalı (PEMF_ESP_ENABLED=1 ile açılır).")
+        return
     try:
         import paho.mqtt.client as _mqtt
 
@@ -1354,17 +1362,40 @@ def _handle_backend_event(event) -> None:
         _push_notification(_ham, "error")
         return
     if event.event_type == "mqtt.broker.status":
-        mqtt_state = "online" if data.get("port_open") or data.get("running") else "warning"
+        # ⚠️ ESP KAPALIYKEN BROKER DURUMU ARIZA DEĞİLDİR: ESP kartları sistemden söküldü
+        # (sahip, 2026-09-11) → mosquitto çalışmıyor olabilir ve bu BEKLENEN durumdur.
+        # "warning" basmak, kurulu olmayan bir alt sistem için kalıcı sarı rozet üretirdi.
+        if not live_state.esp_etkin():
+            mqtt_state = "devre_disi"
+        else:
+            mqtt_state = "online" if data.get("port_open") or data.get("running") else "warning"
         with _live_state_lock:
             _live_state["mqtt"] = mqtt_state
             gateway_state = _live_state["gateway"]
         _ws_broadcast_sync({"type": "gateway_status", "data": {"gateway": gateway_state, "mqtt": mqtt_state}})
         return
     if event.event_type == "network.status":
+        # ══════════════════════════════════════════════════════════════════════════
+        # ⚠️ İNTERNET ≠ CİHAZ AĞI (sahip bildirimi 2026-09-11)
+        # ══════════════════════════════════════════════════════════════════════════
+        # ESKİ HÂLİ: `gateway_state = "online" if mode in ("online","hybrid") else "offline"`.
+        # `_determine_gateway_mode` hotspot AÇIK + internet YOK durumunu "offline" döndürür
+        # → "Bağlantı" rozeti KIRMIZI yanıyordu. Oysa o an hotspot çalışıyor, STM kablolu,
+        # bütün donanım kusursuz sürülüyor. Sahip: "internete bağlı olmasa bile hotspot
+        # açabiliyor ve bütün donanım kusursuz çalışıyor ama kırmızı dolu bir ekran var."
+        #
+        # BU ÜRÜN İNTERNETSİZ ÇALIŞIR. İnternet YALNIZ uzaktan erişim içindir. Bu yüzden:
+        #   · `gateway` = CİHAZ AĞI kullanılabilir mi (hotspot açık YA DA internet var)
+        #   · `internet` = ayrı, NÖTR bilgi (arayüz bunu arıza rengiyle göstermez)
+        # Böylece kırmızı yalnız GERÇEKTEN bozuk bir şey için kalır ve uyarı körlüğü olmaz.
         mode = data.get("gateway_mode", "unknown")
-        gateway_state = "online" if mode in ("online", "hybrid") else "offline"
+        internet_var = bool(data.get("internet_connected")) or mode in ("online", "hybrid")
+        # Hotspot açıksa cihaz ağı ÇALIŞIYOR demektir (mobil istemciler bağlanabilir).
+        cihaz_agi_var = bool(data.get("hotspot_active")) or mode in ("online", "offline", "hybrid")
+        gateway_state = "online" if cihaz_agi_var else "offline"
         with _live_state_lock:
             _live_state["gateway"] = gateway_state
+            _live_state["internet"] = "online" if internet_var else "offline"
             if data.get("mqtt_broker_reachable"):
                 _live_state["mqtt"] = "online"
             mqtt_state = _live_state["mqtt"]

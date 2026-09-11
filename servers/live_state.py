@@ -121,10 +121,44 @@ def _ws_broadcast_sync(message: dict) -> None:
             _ws_pending -= 1  # planlanamadi → sayaci geri al (sizinti olmasin)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ESP ALT SİSTEMİ — AÇIK/KAPALI (sahip kararı 2026-09-11: "espleri sistemden söktüm")
+# ══════════════════════════════════════════════════════════════════════════════
+# Sahip: "ilerde tekrar hibrit esp+stm ya da sadece esp sistemine dönebilirim" → ESP kodu
+# SİLİNMEZ, yalnız DEVRE DIŞI bırakılır. Tek kaldıraç bu bayraktır:
+#
+#     PEMF_ESP_ENABLED=1  → eski davranış (MQTT + ESP bobinleri + MQTT durum rozeti)
+#     (ayarlanmamış/0)    → ESP yok sayılır: MQTT'ye bağlanılmaz, "Sistem" rozeti
+#                           KIRMIZI/SARI göstermez, ESP bobin slotları sürülmez.
+#
+# ⚠️ NEDEN BAYRAK, NEDEN YORUM SATIRI DEĞİL: kodu yorumlamak onu derlenmez/test edilemez
+# hâle getirir; geri dönüşte "hangi satırlar açılacaktı?" sorusu kalır ve o satırlar
+# sessizce bayatlar. Bayrakla kod CANLI kalır, testler ONU KOŞMAYA devam eder
+# (`PEMF_ESP_ENABLED=1` ile) ve geri dönüş TEK satırlık bir ayardır.
+#
+# ⚠️ ÇALIŞMA ZAMANINDA OKUNUR (sabitlenmez): testler ortamı değiştirip iki dünyayı da
+# ölçebilsin. Sıcak yolda değil, yalnız durum/komut sınırlarında çağrılır.
+def esp_etkin() -> bool:
+    """ESP alt sistemi (MQTT + ESP bobinleri) açık mı? Varsayılan KAPALI."""
+    import os
+
+    return os.environ.get("PEMF_ESP_ENABLED", "0") == "1"
+
+
 # ── Canlı Durum (Live State) ───────────────────────────────────────
 _live_state = {
     "gateway": "offline",
-    "mqtt": "warning",
+    # ⚠️ ESP KAPALIYKEN "devre_disi": eskiden varsayılan "warning" idi ve broker hiç
+    # çalışmadığı için ORADA KALIYORDU → Dashboard'daki "Sistem" rozeti, kurulu olmayan
+    # bir alt sistem yüzünden KALICI SARI/KIRMIZI duruyordu (sahip: "kırmızı dolu bir
+    # ekran var"). Kurulu olmayan bir şey arızalı değildir.
+    "mqtt": ("warning" if esp_etkin() else "devre_disi"),
+    # İNTERNET — CİHAZ AĞINDAN AYRI (sahip bildirimi 2026-09-11).
+    # ⚠️ Bu ürün internetsiz ÇALIŞIR; internet yalnız UZAKTAN ERİŞİM içindir. Eskiden
+    # internet yokluğu `gateway`i "offline" yapıyor ve "Bağlantı" rozeti kırmızı
+    # yanıyordu — oysa hotspot açık, STM kablolu, tüm donanım kusursuz çalışıyor.
+    # Ayrı alan: arayüz bunu NÖTR bilgi olarak gösterir, arıza olarak DEĞİL.
+    "internet": "offline",
     "stm": "warning",
     "coils": {
         i: {
@@ -305,6 +339,7 @@ def _build_ws_snapshot() -> dict:
         return {
             "gateway": _live_state["gateway"],
             "mqtt": _live_state["mqtt"],
+            "internet": _live_state["internet"],
             "stm": _live_state["stm"],
             "activeTreatment": _live_state["activeTreatment"],
             "coils": coils_list,

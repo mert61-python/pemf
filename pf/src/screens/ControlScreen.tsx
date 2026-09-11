@@ -284,6 +284,87 @@ export function ControlScreen() {
     if (!ok) platformAlert("Hata", lastError() ?? "Manuel seans başlatılamadı (zaten aktif seans olabilir).");
   };
 
+  /**
+   * SEANS ORTASINDA PARAMETRE GÜNCELLE (sahip isteği 2026-09-11).
+   *
+   * "100 Hz ile başlattım 20 dk, 10. dakikada 150 Hz yapmak istiyorum; hem toplu hem tek
+   * bobin için, faz/duty/süre hepsi için değişiklik yapma özgürlüğü istiyorum."
+   *
+   * ⚠️ SEANSI YENİDEN BAŞLATMAZ. `handleStartManual` `/session/start` çağırır ve aktif
+   * seans varken 409 döner; ayrıca seansı yeniden başlatmak geçmişte İKİNCİ bir kayıt
+   * açar ve süre sayacını sıfırlardı. Bu yol yalnız ÇALIŞAN bobinlere yeni parametreyi
+   * yollar (`/coil/batch` + `start: true` — firmware çalışan bobinde parametreyi
+   * kesintisiz günceller) ve ardından seans kartı + doz kaydını tazeler.
+   *
+   * ⚠️ HEDEF = GERÇEKTEN ÇALIŞANLAR: "seçili ama durmuş" bir bobini bu düğmeyle
+   * BAŞLATMAYIZ. Güncelleme düğmesinin bobin enerjilendirmesi, operatörün beklemediği
+   * bir sürüş olurdu.
+   */
+  const handleParametreGuncelle = async () => {
+    const calisanlar = (snapshot.coils ?? []).filter((c) => c?.running).map((c) => c.id);
+    if (calisanlar.length === 0) {
+      platformAlert("Çalışan bobin yok", "Parametre güncelleme yalnız ÇALIŞAN bobinlere uygulanır.");
+      return;
+    }
+    const raw = readParams({
+      freq: [masterFreq, 100], duty: [masterDuty, 25], phase: [masterPhase, 0],
+    });
+    if (!raw) return;
+    const p = clampWithAlert({
+      freq: raw.freq, duty: raw.duty, phase: raw.phase, duration: parseDurationMin(masterDuration),
+    });
+
+    const stm = calisanlar.filter((id) => id <= 7);
+    const esp = calisanlar.filter((id) => id > 7);
+    const istekler: Promise<{ status?: string; results?: ({ status?: string } | null)[] } | null>[] = [];
+    if (stm.length > 0) {
+      istekler.push(apiPost("/coil/batch", {
+        coil_ids: stm, freq: p.freq, duty: p.duty, phase: p.phase, duration: p.duration * 60, start: true,
+      }, null));
+    }
+    for (const id of esp) {
+      istekler.push(apiPost(`/coil/${id}/control`, {
+        freq: p.freq, duty: p.duty, phase: p.phase, duration: p.duration * 60, start: true,
+      }, null));
+    }
+    const sonuclar = await Promise.all(istekler);
+    // ⚠️ TEYİT ZORUNLU (durdurma yolundaki ile AYNI kural): `/coil/batch` üst seviyede HEP
+    // "success" der ve satır sonuçlarını `results[]` içinde taşır. Yalnız üst seviyeye
+    // bakmak, hiçbir bobine ulaşmamış bir güncellemeyi "uygulandı" göstermek olurdu.
+    const satirOk = (r: { status?: string } | null | undefined) => !!r && r.status === "success";
+    const hepsiOk = sonuclar.every((r) => {
+      if (!satirOk(r)) return false;
+      const satirlar = r?.results;
+      return !Array.isArray(satirlar) || satirlar.every(satirOk);
+    });
+    if (!hepsiOk) {
+      platformAlert(
+        "Parametre güncellenemedi",
+        "Bir veya daha fazla bobine yeni parametre ULAŞMADI — bobinler ESKİ parametrelerle sürülmeye devam ediyor olabilir.",
+      );
+      return;
+    }
+    // Kart + doz kaydı. ⚠️ Donanım zaten güncellendi; bu adım başarısız olursa sürüş
+    // ETKİLENMEZ, yalnız kart eski frekansı gösterir → operatöre açıkça söylenir.
+    const kayit = await apiPost<{ status?: string } | null>("/session/parametre_guncelle", {
+      frequency: p.freq, duty: p.duty, phase: p.phase, duration_minutes: p.duration, coil_ids: calisanlar,
+    }, null, { silent: true });
+    if (kayit?.status === "success") {
+      platformAlert(
+        "Parametreler uygulandı",
+        `${calisanlar.length} bobin güncellendi: ${p.freq} Hz · %${p.duty} · ${p.phase}° · ${p.duration} dk`,
+      );
+    } else {
+      // ⚠️ DONANIM GÜNCELLENDİ ama kayıt tazelenemedi — bu SESSİZ GEÇİLMEZ: üstteki kart
+      // eski frekansı gösterir ve operatör uygulanan dozu yanlış okur.
+      platformAlert(
+        "Uygulandı — kart tazelenemedi",
+        `Bobinler ${p.freq} Hz'e geçti, ancak seans kartı/kaydı güncellenemedi. ` +
+          "Üstteki özet eski değeri gösteriyor olabilir; bobin kartlarındaki değerler doğrudur.",
+      );
+    }
+  };
+
   // Manuel "Durdur": aktif seansı durdur (timer/not/history) + seçili bobinleri sıfırla.
   const handleStopManual = async () => {
     // ⚠️ IN-FLIGHT KAPISI (denetim 2026-08-17): AYNI durdurma turu iki kez BAŞLAMAZ.
@@ -626,6 +707,19 @@ export function ControlScreen() {
                   disabled={isActive || loading}
                 />
               </View>
+              {/* PARAMETRE GÜNCELLE — yalnız donanım ÇALIŞIRKEN görünür.
+                  ⚠️ Seans kapalıyken göstermek anlamsız (güncellenecek sürüş yok) ve
+                  operatörü "başlat" ile karıştırırdı. */}
+              {hardwareRunningOutOfSession && (
+                <View style={{ flex: 1 }}>
+                  <StartButton
+                    label="🔄 Parametreleri Uygula"
+                    onPress={handleParametreGuncelle}
+                    disabled={loading}
+                    color="#0ea5e9"
+                  />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 {/* ⚠️ `disabled` DEĞİŞMEDİ: durdurma kontrolü kilitlenmez (sahip kararı).
                     Etiket, sessizce yutulan dokunuş yerine geri bildirim verir —

@@ -83,6 +83,13 @@ export function ObservationNotesModal({
     const full = [reactionText, notes.trim()].filter(Boolean).join(" — ");
     // DÜŞÜK fix: apiPost throw ETMEZ (null döner). Eskiden yanıt yutuluyordu → kaydetme başarısız olsa da
     // modal kapanıp gözlem-notu SESSİZCE kayboluyordu. Yanıtı doğrula; başarısızsa modalı AÇIK tut + uyar.
+    // ⚠️ SUNUCUNUN GEREKÇESİ YAKALANIR (saha 2026-09-11: "bazen notu kaydedemiyorum").
+    // Eski mesaj HER başarısızlıkta "sunucuya ulaşmadı" diyordu — ama istemci bunu BİLEMEZ:
+    // sunucu 500 döndüyse istek ULAŞMIŞTIR ve gerekçesi vardır. Yanlış teşhis, operatörü
+    // ağ/kablo aramaya gönderiyor ve asıl sebep (disk dolu, DB kilidi, yetki) hiç görünmüyordu.
+    // `silent: true` → apiClient'ın kendi pop-up'ı bastırılır; tek ve doğru mesajı biz veririz.
+    let sunucuDurumu: number | null = null;
+    let sunucuGerekce: string | undefined;
     const res = await apiPost<{ status?: string } | null>(
       "/session/notes",
       {
@@ -93,11 +100,36 @@ export function ObservationNotesModal({
         intensity: session?.intensity ?? 0,
         duration_minutes: session?.durationMinutes ?? 0,
       },
-      null
+      null,
+      {
+        silent: true,
+        // ⚠️ Not yazma, KONTROL komutu değil: 8 sn'lik genel bütçe burada dar. Seans
+        // bitiminde DB (şifreli SQLite) dakika-ortalamalarını ve sensör tamponunu yazarken
+        // kilit tutulabiliyor; not isteği o pencerede beklemek zorunda. Ölçüldü: uç düz-metin
+        // DB'de 0,08–0,28 sn, ama şifreli DB + eşzamanlı flush altında daha uzun sürebilir.
+        timeoutMs: 30000,
+        onHttpError: (status, detail) => { sunucuDurumu = status; sunucuGerekce = detail; },
+      }
     );
     setSaving(false);
     if (!res || res.status === "error") {
-      platformAlert("Not kaydedilemedi", "Gözlem notu sunucuya ulaşmadı. Bağlantıyı kontrol edip tekrar deneyin.");
+      // ⚠️ ÜÇ FARKLI DURUM, ÜÇ FARKLI CÜMLE — hepsine "ulaşmadı" demek YANLIŞTI.
+      if (sunucuDurumu !== null) {
+        // Sunucu YANIT VERDİ ve reddetti → gerekçesini göster; not GİTMEDİ, modal açık kalır.
+        platformAlert(
+          "Not kaydedilemedi",
+          `Sunucu isteği reddetti (${sunucuDurumu}). ${sunucuGerekce || "Gerekçe bildirilmedi."}\n\n` +
+            "Notunuz burada duruyor — tekrar deneyebilirsiniz.",
+        );
+      } else {
+        // Hiç yanıt yok (zaman aşımı / bağlantı). ⚠️ Not KAYDEDİLMİŞ DE OLABİLİR: uç aynı
+        // seansı GÜNCELLER (idempotent), yani tekrar denemek çift kayıt ÜRETMEZ.
+        platformAlert(
+          "Sunucudan yanıt alınamadı",
+          "Gözlem notu gönderildi ama yanıt gelmedi — kaydedilmiş olabilir.\n\n" +
+            "Tekrar denemek GÜVENLİDİR: aynı seans güncellenir, ikinci bir kayıt oluşmaz.",
+        );
+      }
       return;
     }
     reset();

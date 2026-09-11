@@ -77,8 +77,28 @@ it("KRİTİK: gizlenme sonrası KAYDET, notu ve tepkiyi TAM gönderir", async ()
       "/session/notes",
       expect.objectContaining({ notes: `Uyudu — ${NOT}`, patient_name: "Rex" }),
       null,
+      // ⚠️ 2026-09-11: 4. argüman (opts) EKLENDİ — aşağıdaki testte ayrıca kilitleniyor.
+      expect.objectContaining({ silent: true }),
     ),
   );
+});
+
+it("KRİTİK: not isteği 8 sn'lik GENEL bütçeye bırakılmaz + sunucu gerekçesi YAKALANIR", () => {
+  // ⚠️ SAHA 2026-09-11 ("bazen notu kaydedemiyorum"):
+  //  · 8 sn genel bütçe, seans bitiminde DB flush ile çakışan not yazımı için DAR.
+  //  · `silent: true` + `onHttpError` olmadan sunucunun GEREKÇESİ atılıyordu ve operatöre
+  //    HER durumda "sunucuya ulaşmadı" deniyordu — sunucu 500 döndüyse bu YANLIŞTIR ve
+  //    operatörü ağ/kablo aramaya gönderir.
+  //
+  // MUTASYON: `timeoutMs`i kaldır ya da `onHttpError`ü sil → KIRMIZI.
+  const u = render(<ObservationNotesModal visible session={REX} onClose={() => {}} />);
+  fireEvent.changeText(notAlani(u), "x");
+  fireEvent.press(u.getByText("💾 Kaydet"));
+
+  const opts = (apiPost as jest.Mock).mock.calls.at(-1)?.[3];
+  expect(opts?.timeoutMs).toBeGreaterThanOrEqual(20000);
+  expect(opts?.silent).toBe(true);
+  expect(typeof opts?.onHttpError).toBe("function");
 });
 
 it("#48 KORUMASI: HASTA DEĞİŞİMİNDE not SİLİNİR (yamadan önce de yeşil — kasıtlı bekçi)", () => {

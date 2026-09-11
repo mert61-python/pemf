@@ -16,6 +16,7 @@ import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { RealtimeChart } from "@/components/visual/RealtimeChart";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 import { Chip } from "@/components/ui/Chip";
 import { useResponsive } from "@/hooks/useResponsive";
 
@@ -39,6 +40,17 @@ export function SensorMonitorScreen() {
   // yön için container'a tam oturur; tablet/geniş ekranda 1200'de sınırlanır.
   const [chartW, setChartW] = useState(0);
   const coils = snapshot.coils ?? [];
+  /**
+   * ÇİZİLECEK BOBİNLER — Kontrol sekmesiyle AYNI kural (tek kaynak).
+   *
+   * ⚠️ Bu ekran `Array.from({length: 8})` ile KOŞULSUZ 8 bobin çiziyordu: cihazı olmayan
+   * slot 8 dahil, hepsi "Bağlı değil" ya da kısa çizgi dolu kartlar. Sahip tek bir gezici
+   * manyetik sonda kullanıyor; ekranın çoğu boş kutuyla doluyordu ve gerçek ölçüm o
+   * kalabalığın içinde kayboluyordu.
+   */
+  const cizilecek = gorunurBobinler<{ id: number; connected?: boolean; running?: boolean }>(
+    coils.length > 0 ? coils : Array.from({ length: 7 }, (_, i) => ({ id: i + 1 })),
+  ).map((c) => c.id);
 
   // Initially show all connected coils
   const [visibleCoils, setVisibleCoils] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6, 7, 8]));
@@ -94,7 +106,7 @@ export function SensorMonitorScreen() {
 
       {/* Coil filter buttons */}
       <View style={styles.coilBtnRow}>
-        {Array.from({ length: 8 }, (_, i) => i + 1).map((id) => {
+        {cizilecek.map((id) => {
           const coil = coils.find((c) => c.id === id);
           const connected = coil?.connected ?? false;
           const active = visibleCoils.has(id);
@@ -137,7 +149,7 @@ export function SensorMonitorScreen() {
       {/* Coil stats grid */}
       <Text style={styles.statsTitle}>Anlık Değerler</Text>
       <ResponsiveGrid minItemWidth={160}>
-        {Array.from({ length: 8 }, (_, i) => i + 1).map((id) => {
+        {cizilecek.map((id) => {
           const coil = coils.find((c) => c.id === id);
           const pts = sensorHistory[id] ?? [];
           const latest = pts[pts.length - 1];
@@ -185,11 +197,21 @@ const CoilStatCard = memo(function CoilStatCard({
       <View style={styles.statCardHeader}>
         <View style={[styles.statDot, { backgroundColor: running ? "#22c55e" : connected ? color : "#334155" }]} />
         <Text style={styles.statCardTitle}>Bobin {id}</Text>
+        {/* ⚠️ GEZİCİ SONDA ROZETİ (sahip kurulumu 2026-09-11: "1 tane sensör kullanıp
+            onu kutu içerisinde gezdirmeyi planlıyorum").
+            Manyetik değer, firmware'in o sensörü BAĞLADIĞI bobin numarasıyla geliyor
+            (`PEMF_SENSOR_BOBIN_IDLERI` → bugün bobin 6). Ama sonda kabinde GEZİYOR:
+            "Bobin 6: 1,84 mT" satırı "bobin 6 bu alanı üretiyor" diye okunur — oysa
+            değer, sondanın O AN durduğu noktadaki TOPLAM alandır (tüm bobinlerin katkısı
+            + dünya alanı). Rozet bu yanlış okumayı keser.
+            ⚠️ Bobin numarasından TAHMİN EDİLMEZ: hangi bobinin `magneticMt` ölçtüğü
+            `measuredFields`ten gelir → sensör başka bir kanala taşınırsa rozet onu izler. */}
+        {olcum("magneticMt") && <Text style={styles.sondaRozet}>🧲 gezici sonda</Text>}
       </View>
       {connected ? (
         <>
           <Metric
-            label="Manyetik"
+            label={olcum("magneticMt") ? "Alan (sonda)" : "Manyetik"}
             value={olcum("magneticMt") ? `${magneticMt.toFixed(2)} mT` : "—"}
             color="#22c55e"
           />
@@ -222,6 +244,7 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
 }
 
 const styles = StyleSheet.create({
+  sondaRozet: { color: "#22c55e", fontSize: 9, fontWeight: "700", marginLeft: "auto" },
   // [S4 adım 3] Alt boşluk TEK yerde: AppShell içerik ScrollView'ı rs(160)+güvenli alan (mobil) /
   // rs(84) (masaüstü) veriyor. Ekranın kendi paddingBottom'ı bunun ÜSTÜNE binip sayfa sonunda
   // ~200 px ölü alan bırakıyordu.

@@ -13,7 +13,15 @@ export type RouteKey =
   | "settings";
 
 // ─── Connection ──────────────────────────────────────────────────────────────
-export type ConnectionState = "online" | "warning" | "offline" | "error";
+/**
+ * Bağlantı/alt sistem durumu.
+ *
+ * ⚠️ `devre_disi` (2026-09-11): alt sistem KURULU DEĞİL — arıza DEĞİLDİR. ESP kartları
+ * sistemden söküldüğünde MQTT bu duruma düşer. Eskiden "warning" kalıyordu ve kurulu
+ * olmayan bir şey için kalıcı sarı rozet üretiyordu (sahip: "kırmızı dolu bir ekran var").
+ * Uyarı körlüğüne karşı: renk YALNIZ gerçekten bozuk olan için ayrılır.
+ */
+export type ConnectionState = "online" | "warning" | "offline" | "error" | "devre_disi";
 
 // ─── Coil ────────────────────────────────────────────────────────────────────
 /** ESP bobininin START komutuna verdiği cihaz-onayı (backend `coil_ack` WS olayı, saha 2026-09-08).
@@ -166,6 +174,13 @@ export interface EFieldLive {
 export interface DashboardSnapshot {
   gateway: ConnectionState;
   mqtt: ConnectionState;
+  /**
+   * İNTERNET — CİHAZ AĞINDAN AYRI. Bu ürün internetsiz ÇALIŞIR; internet yalnız uzaktan
+   * erişim içindir. ⚠️ Arayüz bunu NÖTR bilgi olarak gösterir, arıza rengiyle DEĞİL.
+   * Eski davranış: internet yokluğu `gateway`i offline yapıp "Bağlantı" rozetini
+   * kırmızıya çeviriyordu — hotspot açık ve tüm donanım çalışırken bile.
+   */
+  internet?: ConnectionState;
   stm: ConnectionState;
   patient: PatientSummary;
   activeTreatment: ActiveTreatment;

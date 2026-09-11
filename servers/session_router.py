@@ -150,3 +150,97 @@ def save_session_notes(payload: SessionNotesPayload, request: Request):
         # B3 güvenlik-fix: ham str(e) SIZMAZ (zaten loglanıyor) — generic detail.
         logging.exception("save_session_notes failed")
         raise HTTPException(status_code=500, detail="Not kaydedilemedi")
+
+
+class ParametreGuncellePayload(BaseModel):
+    """Seans ORTASINDA uygulanan parametre değişikliği (sahip isteği 2026-09-11).
+
+    Sahip: "100 Hz ile başlattım 20 dk, 10. dakikada 150 Hz yapmak istiyorum; hem toplu
+    hem tek bobin için, faz/duty/süre hepsi için değişiklik yapma özgürlüğü istiyorum."
+
+    ⚠️ BU UÇ DONANIMA DOKUNMAZ. Bobinlere yeni parametreyi `/api/coil/batch` (ya da tek
+    bobin için `/api/coil/{id}/control`) gönderir; burası YALNIZ KAYIT ve GÖRÜNÜRLÜK
+    tarafını düzeltir. Sebep: donanım sürüş mantığı TEK YERDE kalsın — ikinci bir sürüş
+    yolu açmak, güvenlik değişmezlerini (STM kopuk kapısı, duty klempi, jeton kapısı)
+    ikinci kez uygulamayı gerektirirdi ve o kopya kaçınılmaz olarak ayrışırdı.
+    """
+
+    frequency: float | None = None
+    duty: float | None = None
+    phase: float | None = None
+    duration_minutes: int | None = None
+    coil_ids: list[int] = []
+
+
+@router.post("/api/session/parametre_guncelle")
+def parametre_guncelle(payload: ParametreGuncellePayload):
+    """Aktif seansın ÖZET KARTINI ve DOZ KAYDINI, ortada değişen parametreye göre tazeler.
+
+    ⚠️ NEDEN GEREKLİ — KART YALAN SÖYLERDİ:
+    Bobinlere yeni frekans gönderildiğinde bobin kartları ACK üzerinden kendiliğinden
+    güncelleniyor (`update_live_coil_from_stm`), ama üstteki AKTİF SEANS kartı seans
+    başındaki değeri göstermeye devam ediyordu. Operatör 150 Hz'e geçtikten sonra ekranda
+    hâlâ "100 Hz" görürdü — uygulanan doz ile gösterilen doz AYRIŞIRDI.
+
+    ⚠️ DOZ KAYDI DA TAZELENİR: `session_parameters`e değişiklik işlenir. Seans satırındaki
+    `frequency_hz` seans BAŞINDAKİ reçetedir ve öyle KALIR (geçmişteki karşılaştırmaları
+    bozmamak için); değişiklikler ayrı parametre satırları olarak birikir, böylece
+    "bu seansta ne uygulandı" sorusu kaydın kendisinden cevaplanabilir.
+
+    Seans yoksa 409: ortada olmayan bir seansın parametresi güncellenemez (donanım
+    sürüşü ayrı bir yoldan zaten yapılabilir).
+    """
+    from servers import api_server as _api
+
+    with _api._session_lock:
+        aktif = bool(_api._active_session.get("is_active"))
+        sid = _api._active_session.get("db_session_id")
+    if not aktif:
+        raise HTTPException(status_code=409, detail="Aktif seans yok — güncellenecek parametre yok.")
+
+    # ── 1) Aktif seans kartı (arayüzün üstünde duran özet) ──────────────────────────
+    # ⚠️ YALNIZ `frequencyHz`: seans özet kartı duty GÖSTERMEZ (alanları için bkz.
+    # live_state `activeTreatment`). Gösterilmeyen bir alanı doldurmak, sözleşmeye
+    # okunmayan veri eklemek olurdu; duty zaten bobin kartlarında ACK'ten geliyor.
+    with _api._live_state_lock:
+        at = _api._live_state["activeTreatment"]
+        if payload.frequency is not None:
+            at["frequencyHz"] = float(payload.frequency)
+        anlik = dict(at)
+    _api.live_state._ws_broadcast_sync({"type": "session_update", "data": anlik})
+
+    # ── 2) Doz kaydı (best-effort: DB hatası sürüşü/seansı DURDURMAZ) ───────────────
+    yazildi = False
+    if sid:
+        try:
+            from database.treatment_history_db import get_treatment_db
+
+            db = get_treatment_db(_api._app_data_dir())
+            # ⚠️ ARTAN ANAHTAR: her değişiklik AYRI satır olarak birikir. Tek bir
+            # "guncel_frekans" anahtarını üzerine yazmak, seans içindeki değişim
+            # GEÇMİŞİNİ siler — "10. dakikada 150'ye çıktık" bilgisi kaybolurdu.
+            import time as _t
+
+            damga = int(_t.time())
+            for ad, deger, birim in (
+                ("degisiklik_frekans_hz", payload.frequency, "Hz"),
+                ("degisiklik_duty_yuzde", payload.duty, "%"),
+                ("degisiklik_faz_derece", payload.phase, "°"),
+                ("degisiklik_sure_dk", payload.duration_minutes, "dk"),
+            ):
+                if deger is not None:
+                    db.set_session_parameter(sid, f"{ad}@{damga}", str(deger), birim)
+            if payload.coil_ids:
+                db.set_session_parameter(
+                    sid, f"degisiklik_bobinler@{damga}", ",".join(str(c) for c in payload.coil_ids), ""
+                )
+            yazildi = True
+        except Exception:
+            logging.exception("parametre degisikligi kayda yazilamadi (surus ETKILENMEDI)")
+
+    return {
+        "status": "success",
+        "session_id": sid,
+        "kayda_yazildi": yazildi,
+        "frequencyHz": anlik.get("frequencyHz"),
+    }

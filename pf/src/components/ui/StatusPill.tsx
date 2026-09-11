@@ -16,6 +16,8 @@ const STATE_COLORS: Record<ConnectionState, { bg: string; fg: string; bd: string
   offline: { bg: "rgba(239,68,68,0.10)", fg: "#ef4444", bd: "rgba(239,68,68,0.42)" },
   // DÜŞÜK fix: error (cihaz-FAULT) ile offline (bağlantı-yok) görsel olarak AYRI ton (rose).
   error: { bg: "rgba(244,63,94,0.10)", fg: "#fb7185", bd: "rgba(244,63,94,0.45)" },
+  // KURULU DEĞİL ≠ ARIZALI: nötr gri, dikkat çekmez, nabız atmaz.
+  devre_disi: { bg: "rgba(148,163,184,0.08)", fg: "#94a3b8", bd: "rgba(148,163,184,0.28)" },
 };
 
 export function StatusPill({ label, state }: StatusPillProps) {

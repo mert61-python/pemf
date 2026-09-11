@@ -9,7 +9,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import { SystemInfoPanel } from "@/components/domain/SystemInfoPanel";
 import { GatewayStatusPanel } from "@/components/domain/GatewayStatusPanel";
-import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
+import { colors, spacing, typography, rf, rs, layoutMax, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
 
@@ -40,9 +40,19 @@ export function DashboardScreen() {
   yutup 'Kaydet/Bağlan' düğmelerini İKİ dokunuş gerektiriyordu. */}
       {/* Connection status row */}
       <View style={styles.statusRow}>
-        <StatusPill label="Bağlantı" state={snapshot.gateway} />
-        <StatusPill label="Sistem" state={snapshot.mqtt} />
+        <StatusPill label="Cihaz Ağı" state={snapshot.gateway} />
+        {/* ⚠️ "Sistem" (MQTT) rozeti YALNIZ ESP kuruluysa çizilir. ESP kartları söküldüğünde
+            (sahip, 2026-09-11) broker çalışmaz ve rozet kalıcı sarı/kırmızı kalırdı — kurulu
+            olmayan bir alt sistem için alarm, gerçek alarmları görünmez yapar. */}
+        {snapshot.mqtt !== "devre_disi" && <StatusPill label="ESP / MQTT" state={snapshot.mqtt} />}
         <StatusPill label="Donanım" state={snapshot.stm} />
+        {/* İNTERNET — NÖTR BİLGİ, ARIZA DEĞİL. Bu cihaz internetsiz tam çalışır; internet
+            yalnız UZAKTAN ERİŞİM içindir. Kırmızı rozet yerine ne kaybedildiğini söyler. */}
+        {snapshot.internet === "offline" && (
+          <View style={styles.internetYok}>
+            <Text style={styles.internetYokText}>İnternet yok — uzaktan erişim kapalı</Text>
+          </View>
+        )}
         <View style={[styles.wsBadge, !wsConnected && styles.wsBadgeOff]}>
           <Wifi size={12} color={wsConnected ? "#22c55e" : "#f59e0b"} />
           <Text style={[styles.wsText, !wsConnected && styles.wsTextOff]}>
@@ -161,6 +171,16 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  internetYok: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(148,163,184,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.28)",
+    justifyContent: "center",
+  },
+  internetYokText: { color: "#94a3b8", fontSize: typography.caption, fontWeight: "600" },
   container: {
     padding: spacing.md,
     gap: spacing.md,

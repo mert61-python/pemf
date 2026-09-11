@@ -111,6 +111,8 @@ GOLDEN_ROUTES = {
     ("/api/patients/{patient_id}/delete", "POST"),
     ("/api/session/active", "GET"),
     ("/api/session/notes", "POST"),
+    # 2026-09-11 seans ORTASINDA parametre degisikligi (kart + doz kaydi; DONANIMA dokunmaz).
+    ("/api/session/parametre_guncelle", "POST"),
     ("/api/session/start", "POST"),
     ("/api/session/stop", "POST"),
     ("/api/settings/", "GET"),
@@ -206,4 +208,5 @@ def test_route_contract_unchanged():
     # KENDİSİ hâlâ sabitlenir (yeni rota sessizce eklenemez) — yalnız koşullu olan düşülür.
     # → 98 (+1 AI hazırlık self-testi: ai/hazirlik GET), 2026-08-27 saha bulgusu
     # → 99 (+1 bipolar/unipolar sürüş kipi: coil/surus_kipi POST), 2026-09-11
-    assert len(current) == len(beklenen) == 99 - (0 if _simulator_mountlu() else 1)
+    # → 100 (+1 seans-ortası parametre güncelleme: session/parametre_guncelle POST), 2026-09-11
+    assert len(current) == len(beklenen) == 100 - (0 if _simulator_mountlu() else 1)
