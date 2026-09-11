@@ -2,8 +2,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Edit3, Trash2, Share2 } from "lucide-react-native";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs, radius, layoutMax, touch } from "@/theme/tokens";
@@ -16,45 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
-
-// GÜVENLİK (YÜKSEK fix): Raporu X-API-Key HEADER'ı ile indir → cihaz MASTER token'ı URL'de
-// (tarayıcı geçmişi / sunucu & Cloudflare tünel erişim-logları / PDF disk-cache) SIZMASIN. Eski
-// `withToken` token'ı ?token= olarak URL'e koyuyordu (Linking header gönderemediği için). Şimdi:
-// Web → fetch+blob+<a> indir; Native → FileSystem.downloadAsync+header → paylaş menüsü. Token hep header'da.
-async function downloadFileWithAuth(
-  url: string,
-  filename: string,
-  toast?: (m: string, t?: "success" | "error" | "info") => void,
-): Promise<void> {
-  const headers: Record<string, string> = serviceConfig.apiToken ? { "X-API-Key": serviceConfig.apiToken } : {};
-  const safeName = filename.replace(/[^\w.\-]/g, "_");
-  try {
-    if (Platform.OS === "web") {
-      const res = await fetch(url, { headers });
-      if (!res.ok) { toast?.(`İndirilemedi (${res.status}).`, "error"); return; }
-      const blob = await res.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objUrl; a.download = safeName;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
-      return;
-    }
-    const localPath = `${FileSystem.cacheDirectory}${safeName}`;
-    const { uri, status } = await FileSystem.downloadAsync(url, localPath, { headers });
-    if (status !== 200) { toast?.("İndirilemedi.", "error"); return; }
-    try {
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
-      else toast?.(`İndirildi: ${safeName}`, "success");
-    } finally {
-      // #84 (KVKK): paylaşım/indirme SONRASI önbellekteki hasta-raporu PDF'ini SİL — aksi halde
-      // hasta PII'si app cache'inde sınırsız birikir. (shareAsync resolve → share-sheet kapandı.)
-      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
-    }
-  } catch {
-    toast?.("İndirme sırasında hata oluştu.", "error");
-  }
-}
+import { downloadFileWithAuth } from "@/services/dosyaIndir";
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.

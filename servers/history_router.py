@@ -5,6 +5,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
@@ -27,6 +28,43 @@ class HistoryDeletePayload(BaseModel):
 # yoksa yazıcı/okuyucu farklı DB dosyalarına düşer (split-brain → geçmiş boş görünür).
 _app_data_dir = get_app_data_directory()
 _REPORTS_DIR = _app_data_dir / "temp_reports"
+
+
+def _diske_kaydet(icerik: bytes, ad: str) -> dict:
+    """Dosyayı KULLANICININ MASAÜSTÜNE yazar ve yolunu döndürür.
+
+    ===========================================================================
+    ⚠️ NEDEN VAR — "İndir" düğmeleri masaüstü uygulamasında ÖLÜYDÜ (2026-09-11)
+    ===========================================================================
+    Arayüz Tauri v2 **WebView2** penceresinde koşuyor. İstemci indirmeyi
+    `fetch → blob → <a download>.click()` ile yapıyordu; bu WebView2'de ancak
+    uygulama bir indirme işleyicisi kaydederse çalışır. `launcher/app/src/main.rs`
+    hiçbir `on_download` / dialog / fs eklentisi KAYDETMİYOR → tıklama **sessizce
+    hiçbir şey yapmıyordu.** Hata da çıkmıyordu: kod `a.click()`ten sonra hiçbir
+    geri bildirim vermeden dönüyordu, yani "çalıştı" ile "öldü" AYNI görünüyordu.
+
+    Rust tarafını düzeltmek launcher'ın yeniden yayınlanmasını gerektirirdi; sahada
+    tek makine var ve yayın DURDURULDU. Backend zaten AYNI MAKİNEDE koşuyor → dosyayı
+    o yazar, arayüz de yolu söyler. Hiçbir Tauri eklentisi, hiçbir launcher sürümü
+    gerekmez.
+
+    ⚠️ HEDEF DİZİN TEK KAYNAKTAN: seans CSV'siyle AYNI çözücü kullanılır
+    (`servers.seans_alan_kaydi.masaustu_dizini`) — "sahibin dosyaları nereye gider"
+    sorusunun depoda TEK cevabı olsun. Test süiti o çözücüyü yamalıyor
+    (`conftest._masaustunu_koru`), böylece bu uç da gerçek masaüstüne SIZMAZ.
+    """
+    from servers.seans_alan_kaydi import masaustu_dizini
+
+    dizin, gerekce = masaustu_dizini()
+    guvenli = "".join(c for c in ad if c.isalnum() or c in ("_", "-", ".")) or "PEMF_disa_aktarim"
+    hedef = Path(dizin) / guvenli
+    # Aynı saniyede iki dışa aktarım üst üste YAZMASIN.
+    if hedef.exists():
+        kok, uzanti = os.path.splitext(guvenli)
+        hedef = Path(dizin) / f"{kok}_{int(time.time() * 1000)}{uzanti}"
+    hedef.write_bytes(icerik)
+    logger.info("Disa aktarim diske yazildi: %s (%s)", hedef, gerekce)
+    return {"status": "success", "yol": str(hedef), "ad": hedef.name, "bayt": len(icerik)}
 
 
 def _safe_unlink(path):
@@ -96,9 +134,18 @@ def get_statistics(db=Depends(get_db)):
 @router.get("/export_pdf")
 def export_pdf(
     session_ids: str = Query(..., description="Virgülle ayrılmış session id listesi. Örn: 1,2,3"),
+    kaydet: int = Query(
+        0,
+        description="1 = dosyayı SUNUCUNUN çalıştığı makinenin masaüstüne yaz ve JSON yol döndür "
+        "(masaüstü uygulaması için; tarayıcı indirmesi WebView2'de çalışmıyor). "
+        "0 = normal akış indirmesi (web/mobil).",
+    ),
     pdf_gen=Depends(get_pdf_gen),
 ):
-    """Seçili seanslar için PDF raporu oluşturup indir"""
+    """Seçili seanslar için PDF raporu oluşturup indir.
+
+    ⚠️ `kaydet=1` yalnız backend ile arayüz AYNI makinedeyken anlamlıdır; istemci bunu
+    `apiBaseUrl` localhost'a bakıyorsa gönderir (bkz. TreatmentHistoryScreen)."""
     try:
         id_list = [int(sid.strip()) for sid in session_ids.split(",")]
         # PDF'i tmp bir yere üret
@@ -108,6 +155,13 @@ def export_pdf(
         out_path = str(tmp_dir / f"report_{id_list[0]}_{int(time.time() * 1000)}.pdf")
 
         pdf_path = pdf_gen.generate_session_report(session_ids=id_list, output_path=out_path)
+
+        if kaydet:
+            try:
+                veri = Path(pdf_path).read_bytes()
+            finally:
+                _safe_unlink(pdf_path)  # geçici PII PDF'i her durumda sil
+            return _diske_kaydet(veri, f"PEMF_Rapor_{len(id_list)}_seans.pdf")
 
         return FileResponse(
             path=pdf_path,
@@ -126,6 +180,7 @@ def export_csv(
         "",
         description="Opsiyonel: virgülle ayrılmış id listesiyle SINIRLA (aktif operatör-kapsam/arama). Boş = tümü (geriye uyumlu).",
     ),
+    kaydet: int = Query(0, description="1 = masaüstüne yaz + JSON yol döndür (bkz. export_pdf)."),
     db=Depends(get_db),
 ):
     """Seans geçmişini CSV indir. session_ids verilirse YALNIZ o kayıtlar (ekranda görünen
@@ -144,6 +199,11 @@ def export_csv(
             limit=10000, internal_full=True, session_ids=_idset
         )  # Audit P2: tam-export, 500'e kırpma
         if not sessions:
+            # ⚠️ ESKIDEN BU DA "indirilen dosya" oluyordu: istemci 200'ü başarı sayıp içinde
+            # "Veri bulunamadi" yazan bir `PEMF_Gecmis.csv` kaydediyordu. Operatör dosyayı
+            # açana kadar kayıt olmadığını anlamıyordu.
+            if kaydet:
+                return {"status": "bos", "mesaj": "Dışa aktarılacak seans kaydı yok."}
             return Response(content="Veri bulunamadi", media_type="text/plain")
 
         output = io.StringIO()
@@ -194,6 +254,9 @@ def export_csv(
         # Excel (özellikle Türkçe Windows) BOM'suz UTF-8'i sistem codepage'i (Windows-1254)
         # sanıp Türkçe karakterleri bozuyor. utf-8-sig ile BOM ekleyip charset belirtiyoruz.
         csv_bytes = csv_data.encode("utf-8-sig")
+
+        if kaydet:
+            return _diske_kaydet(csv_bytes, "PEMF_Gecmis.csv")
 
         return Response(
             content=csv_bytes,
