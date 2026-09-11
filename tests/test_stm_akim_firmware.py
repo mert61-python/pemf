@@ -38,7 +38,9 @@ KOK = Path(__file__).resolve().parents[1]
 SRC = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "pemf_akim.c"
 HDR = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_akim.h"
 MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
-AYNA = KOK / "firmware" / "stm32_pemf_unipolar" / "Core" / "Src" / "pemf_akim.c"
+# ⚠️ AYNA KAPISI KALDIRILDI (2026-09-11): `stm32_pemf_unipolar` projesi silindi.
+# Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
+# ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
 pytestmark = pytest.mark.skipif(not SRC.exists(), reason="pemf_akim.c yok")
 
@@ -261,12 +263,6 @@ def test_KRITIK_kanal_tablosu_NUM_ile_BAGLI():
         f"kanal listesi {elemanlar} — beklenen PA0=0 PA3=3 PA4=4 PC0=10 PC3=13 "
         "(NTC blogunun ayirdigi pinler; kablolama buna gore)"
     )
-
-
-def test_ayna_senkron():
-    if not AYNA.exists():
-        pytest.skip("ayna projesi yok")
-    assert _oku(AYNA) == _oku(SRC), "pemf_akim.c ayna ile AYRISMIS -> python scripts/stm_unipolar_senkronla.py"
 
 
 def test_KARSIT_KANIT_kapi_gercekten_olcuyor():

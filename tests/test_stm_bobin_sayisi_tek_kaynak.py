@@ -40,7 +40,9 @@ import pytest
 
 KOK = Path(__file__).resolve().parents[1]
 FW = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
-AYNA = KOK / "firmware" / "stm32_pemf_unipolar" / "Core" / "Src" / "main.c"
+# ⚠️ AYNA KAPISI KALDIRILDI (2026-09-11): `stm32_pemf_unipolar` projesi silindi.
+# Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
+# ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
 pytestmark = pytest.mark.skipif(not FW.exists(), reason="firmware/ kaynak agaci yok")
 
@@ -169,7 +171,7 @@ def test_KRITIK_elle_yazilmis_bobin_listeleri_NUM_COILS_ile_ayrisMAMIS():
     Sahadaki etki: bobin 6-7 tpp=0 ile açılır (50000/0) ve/veya duty asla yükselmez —
     derleyici UYARMAZ, log basılmaz, bobin sessizce sürülmez.
     """
-    for p in (FW, AYNA):
+    for p in (FW,):
         if not p.exists():
             continue
         kotu = ihlaller(_oku(p))

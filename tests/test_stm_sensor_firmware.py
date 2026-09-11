@@ -37,7 +37,9 @@ KOK = Path(__file__).resolve().parents[1]
 SRC = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "pemf_sensor.c"
 HDR = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_sensor.h"
 MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
-AYNA_SRC = KOK / "firmware" / "stm32_pemf_unipolar" / "Core" / "Src" / "pemf_sensor.c"
+# ⚠️ AYNA KAPISI KALDIRILDI (2026-09-11): `stm32_pemf_unipolar` projesi silindi.
+# Sebep: surus kipi artik `PEMF_BOBIN_UNIPOLAR_MASKESI` ile BOBIN BASINA seciliyor,
+# ikinci bir derleme gerekmiyor. TEK kaynak = firmware/stm32_pemf.
 
 pytestmark = pytest.mark.skipif(not SRC.exists(), reason="pemf_sensor.c yok")
 
@@ -383,13 +385,6 @@ def test_KRITIK_Init_ISR_BASLAMADAN_ONCE_cagriliyor():
         "PEMF_Sensor_Init(), Coil_TimInit()'ten SONRA cagriliyor -> adres taramasi 50 kHz ISR "
         "kosarken yapilir ve acilista DDS jitter'i uretir"
     )
-
-
-def test_ayna_senkron():
-    """Unipolar projedeki kopya bayt-bayt aynı olmalı (elle düzenleme yasağı)."""
-    if not AYNA_SRC.exists():
-        pytest.skip("ayna projesi yok")
-    assert _oku(AYNA_SRC) == _oku(SRC), "pemf_sensor.c ayna ile AYRISMIS -> python scripts/stm_unipolar_senkronla.py"
 
 
 def test_KARSIT_KANIT_kapi_gercekten_olcuyor():

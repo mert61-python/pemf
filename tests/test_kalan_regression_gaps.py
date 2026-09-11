@@ -294,8 +294,13 @@ def test_bayat_payload_TEKRAR_gonderilmez():
         None,
     )
     assert kod is not None, "retry_last_payload closure'i YOK -> yas kapisi silinmis/tasinmis"
-    assert kod.co_freevars == ("last_payload", "self"), (
-        f"closure sozlesmesi degisti, kapi guncellenmeli: {kod.co_freevars}"
+    # ⚠️ ÇIPA TAM EŞİTLİK DEĞİL, ALT KÜME (2026-09-11): burada
+    # `co_freevars == ("last_payload", "self")` yazıyordu. Yeniden-bağlanma yarışı
+    # kapatılırken `payload_lock` eklendi ve kapı, DAVRANIŞ hiç değişmediği hâlde CI'da
+    # kırmızı oldu (kayıtlı "yapısal çıpa kırılganlığı" sınıfı). Ölçülmesi gereken:
+    # closure'ın `last_payload`a GERÇEKTEN eriştiği — yanına başka değişken eklenmesi serbest.
+    assert {"last_payload", "self"} <= set(kod.co_freevars), (
+        f"closure `last_payload`a erisimini KAYBETMIS: {kod.co_freevars}"
     )
 
     def _hucre(v):
@@ -309,7 +314,17 @@ def test_bayat_payload_TEKRAR_gonderilmez():
         o.logger = logging.getLogger("test-retry")
         o._hw_send_queue = queue.Queue(maxsize=4)
         lp = [("STM_PAKET", b"udp", "1.2.3.4", 5000), time.monotonic() - yas_s]
-        fn = types.FunctionType(kod, headless_core.__dict__, "retry_last_payload", None, (_hucre(lp), _hucre(o)))
+        # ⚠️ HÜCRELER `co_freevars` SIRASINDAN TÜRETİLİR (2026-09-11): burada sabit
+        # `(_hucre(lp), _hucre(o))` ikilisi vardı. Closure'a `payload_lock` eklenince
+        # `ValueError: requires closure of length 3, not 2` ile patladı — davranış
+        # değişmediği hâlde. Yeni değişken eklemek artık kapıyı kırmıyor.
+        import threading as _th
+
+        _deger = {"last_payload": lp, "self": o, "payload_lock": _th.Lock()}
+        eksik = [ad for ad in kod.co_freevars if ad not in _deger]
+        assert not eksik, f"closure'a TANIMADIGIM degisken eklenmis: {eksik} -> kapi guncellenmeli"
+        hucreler = tuple(_hucre(_deger[ad]) for ad in kod.co_freevars)
+        fn = types.FunctionType(kod, headless_core.__dict__, "retry_last_payload", None, hucreler)
         return fn, lp, o
 
     # (1) KARŞIT-KANIT: TAZE paket tekrar GÖNDERİLİR — kapı "her şeyi at"a dönüşmemeli.

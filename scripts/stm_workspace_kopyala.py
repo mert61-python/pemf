@@ -33,7 +33,9 @@ import sys
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
-PROJELER = ["stm32_pemf", "stm32_pemf_unipolar"]
+#: ⚠️ TEK PROJE (2026-09-11): `stm32_pemf_unipolar` aynasi KALDIRILDI. Surus kipi artik
+#: `PEMF_BOBIN_UNIPOLAR_MASKESI` ile bobin basina seciliyor; ikinci bir derleme gerekmiyor.
+PROJELER = ["stm32_pemf"]
 
 #: Kopyaya ASLA girmeyecek dizinler — DERLEME ÇIKTISI.
 #: ⚠️ `Debug`/`Release` burada OLMAK ZORUNDA: içlerindeki `.elf` doğrudan flashlanabilir

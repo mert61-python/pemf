@@ -1,5 +1,12 @@
 # esps3_pemf_coil — ESP32-S3 Bobin Sürücüsü (bobin 6-7, tam-köprü bipolar)
 
+> ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
+> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
+> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
+> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
+> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+
+
 **Donanım:** ESP32-S3-WROOM **N16R8** (16 MB flash, 8 MB PSRAM) · tam-köprü sürüş (GPIO4/5)
 · STM32 donanım faz senkronu (PB1 → GPIO7) · MLX90614 + MLX90393 + ACS712.
 

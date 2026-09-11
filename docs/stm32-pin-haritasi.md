@@ -1,5 +1,12 @@
 # STM32F429ZIT6 (Nucleo-144) — TAM PİN HARİTASI
 
+> ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
+> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
+> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
+> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
+> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+
+
 **Kaynak:** `firmware/stm32_pemf/Core/Src/main.c` (`coil_gpio[]`, `Coil_GpioInit`) +
 `PEMF_UNIPOLAR.ioc`. Elle yazılmadı, kaynaktan üretildi — 2026-09-10, faz 1 sonrası
 (`NUM_COILS = 7`, paket 120 bayt).

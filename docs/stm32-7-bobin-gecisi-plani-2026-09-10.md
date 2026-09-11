@@ -1,5 +1,12 @@
 # ESP'leri Devre Dışı Bırak → 7 Bobinin Tamamını STM32'den Sür
 
+> ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
+> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
+> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
+> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
+> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+
+
 **Tarih:** 2026-09-10 · **Sahip kararı:** ESP bobinleri (6-8) kaldırılacak; bobin 6 ve 7 STM32F429ZI
 tarafından sürülecek; manyetik + sıcaklık sensörleri de STM'e bağlanacak.
 **Durum:** ANALİZ + PLAN. Kod yazılmadı, pin bağlanmadı. **Kapsam kararları alındı — bkz. §9.**

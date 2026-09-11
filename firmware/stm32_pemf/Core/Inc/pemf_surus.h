@@ -1,25 +1,25 @@
 /**
  ******************************************************************************
  * @file    pemf_surus.h
- * @brief   Bobin SÜRÜŞ KİPİ seçimi — iki CubeIDE projesi arasındaki TEK FARK.
+ * @brief   Bobin SÜRÜŞ KİPİ — BOBİN BAŞINA maske (`PEMF_BOBIN_UNIPOLAR_MASKESI`).
  *
- * 2026-09-08 (sahip isteği): aynı main.c iki projede derlenir, tezgâhta ikisi de ayrı denenir:
- *   firmware/stm32_pemf/           → PEMF_SURUS_UNIPOLAR 0  (SİMETRİK BİPOLAR, bobin başı IN_A + IN_B)
- *   firmware/stm32_pemf_unipolar/  → PEMF_SURUS_UNIPOLAR 1  (TEK-BACAK DÜZ SÜRÜŞ, bobin başı yalnız IN_A)
+ * ⚠️⚠️ TEK PROJE, TEK KAYNAK (2026-09-11). Burada eskiden İKİ CubeIDE projesi anlatılıyordu
+ * (`stm32_pemf` = bipolar, `stm32_pemf_unipolar` = unipolar) ve aralarındaki tek fark
+ * `PEMF_SURUS_UNIPOLAR` bayrağıydı. O kurgu KALDIRILDI çünkü sahibin donanımı onu
+ * ifade edemiyordu:
+ *     bobin 1-5 : TAM KÖPRÜ sürücü  → bipolar sürülebilir
+ *     bobin 6-7 : TEK YÖNLÜ sürücü  → YALNIZ unipolar (sağ/sol duvar)
+ * "5 bipolar + 2 unipolar" tek bir derleme-zamanı bayrağıyla anlatılamaz. Kip artık
+ * bobin başına maskeyle seçiliyor → ikinci bir proje derlemenin sebebi kalmadı.
+ * Ayna proje, `scripts/stm_unipolar_senkronla.py` ve ayna kapısı silindi.
  *
- * ⚠️ TEK KAYNAK KURALI: Core/ altındaki her dosya iki projede BAYT-BAYT AYNI olmalı — yalnız bu
- * başlık farklıdır. Kanonik kaynak stm32_pemf/; unipolar projeyi elle DÜZENLEMEYİN, senkronlayın:
- *     python scripts/stm_unipolar_senkronla.py
- * Kapı: tests/test_stm_main_saglik.py (ayrışma → kırmızı).
- *
- * Kipin ne değiştirdiği (main.c'de `#if PEMF_SURUS_UNIPOLAR` ile işaretli, 4 yer):
+ * Kipin ne değiştirdiği (main.c'de `g_unipolar[i]` ile, 3 yer):
  *   · duty tavanı: bipolar yarım-periyot − DDS_BIPOLAR_GAP_TICKS · unipolar tam-periyot − 1
  *   · ISR durum makinesi: bipolar A=[0,duty), B=[yarım,yarım+duty) · unipolar yalnız A=[0,duty)
- *   · STM_READY dizesi: "SYM-BIPOLAR" / "UNIPOLAR tek-bacak"
- * Değişmeyen: protokol (88 bayt), ölü-adam watchdog, süre auto-stop, slew, NTC, PB1 senkron,
- * IN_B pini yine çıkış olarak kurulur ve LOW tutulur (yanlış projeyle yakılsa bile tanımsız değil).
+ *   · STM_READY dizesi: "SYM-BIPOLAR" / "UNIPOLAR tek-bacak" / "KARMA uni=0xNN"
+ * Değişmeyen: protokol (120 bayt), ölü-adam watchdog, süre auto-stop, slew, NTC, PB1 senkron.
  *
- * PİN DURUMU (UNIPOLAR projede — "hangi pinde PWM kaldı, hangisi boşta?"):
+ * PİN DURUMU ("hangi pinde PWM var, hangisi boşta?"):
  *   Bobin 1 : PWM → PC8  (IN_A)  ·  PD12 (IN_B) kalıcı LOW   ← maske 0x00 (sahip kararı 2026-09-10)
  *   Bobin 2 : PWM → PC9  (IN_A)  ·  PE10 (IN_B) kalıcı LOW   ← ters sargı DONANIMDA çevrildi
  *   Bobin 3 : PWM → PD10 (IN_A)  ·  PD11 (IN_B) kalıcı LOW
@@ -51,9 +51,13 @@
 #ifndef PEMF_SURUS_H
 #define PEMF_SURUS_H
 
-#ifndef PEMF_SURUS_UNIPOLAR
-#define PEMF_SURUS_UNIPOLAR 0
-#endif
+/* ⚠️ `PEMF_SURUS_UNIPOLAR` KALDIRILDI (2026-09-11). Derleme-zamanı TEK bayraktı ve
+ * "5 bobin bipolar + 2 bobin unipolar"ı İFADE EDEMİYORDU. Yerini bobin başına
+ * `PEMF_BOBIN_UNIPOLAR_MASKESI` aldı (yukarıda). Bayrak son hâlinde hiçbir kod yolunda
+ * OKUNMUYORDU — yalnız tanımlıydı; ölü bir sabiti bırakmak "kip buradan seçiliyor"
+ * yanılgısı üretirdi. Aynı nedenle `stm32_pemf_unipolar` AYNA PROJESİ de kaldırıldı:
+ * onun varlık sebebi bu bayrağı 1 yapmaktı. Artık TEK proje + TEK maske.
+ */
 
 
 /* ============================================================================

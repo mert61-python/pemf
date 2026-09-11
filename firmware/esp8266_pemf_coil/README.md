@@ -1,5 +1,12 @@
 # esp8266_pemf_coil — ESP8266 Bobin Sürücüsü (bobin 8, yarım-köprü, TEK FAZ)
 
+> ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
+> Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
+> (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
+> **TEK kaynak: `firmware/stm32_pemf`.** `scripts/stm_unipolar_senkronla.py` ve
+> ayna kapısı da silindi. Aşağıdaki iki-proje anlatımı TARİHÇEDİR.
+
+
 **Donanım:** ESP8266 (NodeMCU/ESP-12) · yarım-köprü tek pin (D5) · MLX90614 + MLX90393 + ACS712.
 ⚠️ **Kart devreye LEHİMLİ — pin haritası DEĞİŞTİRİLEMEZ** (sahip kararı, 2026-08-19).
 

@@ -37,7 +37,6 @@ import pytest
 KOK = Path(__file__).resolve().parents[1]
 MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 SURUS = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_surus.h"
-SURUS_UNI = KOK / "firmware" / "stm32_pemf_unipolar" / "Core" / "Inc" / "pemf_surus.h"
 
 pytestmark = pytest.mark.skipif(not MAIN.exists(), reason="firmware kaynagi yok")
 
@@ -76,13 +75,6 @@ def test_KRITIK_saha_projesinde_bobin_6_7_UNIPOLAR_digerleri_BIPOLAR():
         f"saha maskesi 0x{m:02X} yanlis -> bobin kipleri {uni}; "
         "beklenen: 1-5 BIPOLAR (tam kopru), 6-7 UNIPOLAR (tek yonlu surucu)"
     )
-
-
-def test_KRITIK_karsilastirma_projesi_HEPSI_unipolar():
-    """`stm32_pemf_unipolar` geri-dönüş/karşılaştırma yapısı olarak kalır."""
-    n = _num_coils()
-    m = _maske(SURUS_UNI)
-    assert m == (1 << n) - 1, f"karsilastirma projesi maskesi 0x{m:02X} != hepsi-unipolar"
 
 
 # ============================================================================

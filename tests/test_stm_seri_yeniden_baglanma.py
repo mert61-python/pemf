@@ -250,17 +250,32 @@ def test_KRITIK_esZAMANLI_yerlestirme_ve_birakma_TUTARLI_kalir():
 # ============================================================================
 
 
-def test_KRITIK_kaybolan_port_KOPUK_sayilir():
+def test_KRITIK_kaybolan_port_KOPUK_sayilir(monkeypatch):
     """USB çekilince COM portu numaralandırmadan düşer → kopuş ANINDA görülür.
 
     ⚠️ Sessizlik bekçisi KULLANILAMAZ: boştayken keep-alive gönderilmez
     (`hardware_controller._tick`: `need_send = any_running or ...`) ve firmware de ilk
     paketten sonra ping'i keser → UART tamamen sessizdir, "satır gelmedi" YANLIŞ tetikler.
+
+    ⚠️ NUMARALANDIRMA ENJEKTE EDİLİR — ORTAMA GÜVENİLMEZ (2026-09-11, CI kırmızısı):
+    bu test önce GERÇEK `comports()`a dayanıyordu ve "var olmayan port False döner"
+    diyordu. CI koşucusunda numaralandırma hata verdi → `port_hala_var` fail-open ile
+    `True` döndü → kapı kırmızı oldu. Kapının ölçmesi gereken şey MANTIK, makinenin
+    donanımı değil. (Bu deponun kayıtlı "ortam varsayımı" sınıfı.)
     """
+    from serial.tools import list_ports
+
     from utils.stm32_transport import Stm32SerialTransport
 
+    class _Port:
+        def __init__(self, d):
+            self.device = d
+
+    monkeypatch.setattr(list_ports, "comports", lambda: [_Port("COM3"), _Port("COM10")])
     t = Stm32SerialTransport(None)
-    assert t.port_hala_var("COM_OLMAYAN_999") is False, "var olmayan port 'duruyor' dendi"
+    assert t.port_hala_var("COM10") is True, "listede OLAN port kopuk sayildi"
+    assert t.port_hala_var("com10") is True, "buyuk/kucuk harf duyarli -> Windows'ta yanlis kopus"
+    assert t.port_hala_var("COM_OLMAYAN_999") is False, "listede OLMAYAN port 'duruyor' dendi"
 
 
 def test_KRITIK_SANAL_portlar_kopuk_SAYILMAZ():

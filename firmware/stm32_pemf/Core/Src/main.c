@@ -145,7 +145,7 @@
  */
 
 #include "main.h"
-#include "pemf_surus.h" /* PEMF_SURUS_UNIPOLAR: 0=simetrik bipolar (A/B) · 1=tek-bacak duz surus (yalniz A) */
+#include "pemf_surus.h" /* PEMF_BOBIN_UNIPOLAR_MASKESI: bobin basina kip (bit set = tek-bacak) */
 #include "pemf_sensor.h" /* Bobin 6-7 I2C sensorleri (MLX90614 + MLX90393) — BLOKLAMAYAN */
 #include "pemf_akim.h"   /* Bobin 1-5 ACS712-30A akim olcumu (ADC1) — BLOKLAMAYAN */
 #include <math.h>
