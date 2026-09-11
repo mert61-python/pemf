@@ -1,5 +1,20 @@
 # services/ — Headless Destek Servisleri (Qt-siz)
 
+> ## ⚠️ ESP ALT SİSTEMİ ŞU AN DEVRE DIŞI (2026-09-11)
+>
+> Sahip ESP kartlarını sistemden **söktü**. Bobin 6-7 zaten 2026-09-10'da STM32'ye taşınmıştı;
+> geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
+>
+> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `servers/live_state.esp_etkin()`
+> * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
+>   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
+> * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
+>
+> ⚠️ **KOD SİLİNMEDİ, SİLİNMEYECEK** (sahip: "ileride tekrar hibrit ESP+STM ya da sadece ESP
+> sistemine dönebilirim"). Bu belgedeki MQTT/Mosquitto anlatımı **geçerlidir** — yalnız bugün
+> kullanılmıyor. Kapı: `tests/test_internetsiz_ve_esp_kapali.py`.
+
+
 Backend'in altyapı servisleri: MQTT broker denetimi, ağ-durumu, LAN keşfi, cihaz kimlik-bilgileri ve DB bakımı.
 Hepsi **Qt-bağımsızdır** (headless EXE'ye uygun).
 

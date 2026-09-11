@@ -11,7 +11,7 @@ STM32 bobin komutlarının **tek geçiş noktası** (choke-point). API katmanı 
 
 ## Sistemdeki yeri
 ```
-servers/api_server.py  →  HardwareController  →  HeadlessCore HW kuyruğu  →  utils/stm32_transport (seri, COM10) → STM32 (bobin 1-5)
+servers/api_server.py  →  HardwareController  →  HeadlessCore HW kuyruğu  →  utils/stm32_transport (seri, COM10) → STM32 (bobin 1-7)
                           (ESP bobinler 6-8 AYRI yoldan: api_server → MQTT publish)
 ```
 - Canlı bobin durumu ayrıca [`../servers/live_state.py`](../servers/README.md)'de aynalanır.

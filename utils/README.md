@@ -6,7 +6,7 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 | Dosya | Görev |
 |---|---|
 | `stm32_transport.py` | **`Stm32SerialTransport`** — STM32 port seçimi (`PEMF_STM_PORT` env / sabit `COM10` / ST-Link VCP oto-algılama USB VID/PID ile), 115200 baud açılış + handshake, güvenli sıfır-duty probe paketi |
-| `stm32_protocol_limits.py` | **Güvenlik-limit sabitleri + normalizer'lar** — 5 STM / 8 ESP bobin, freq 1 Hz–25 kHz (`DDS_ISR_HZ/2`), faz 0–360°, süre 0–9999 dk (0=sınırsız), AI-Pro duty tavanı 0.50. Python-tarafı STM duty-max **yok** (firmware doyurur) |
+| `stm32_protocol_limits.py` | **Güvenlik-limit sabitleri + normalizer'lar** — 7 STM (1-7) / 1 ESP (slot 8) bobin ⚠️ 2026-09-11'de düzeltildi (5/8 yazıyordu, 7-bobin geçişinde atlanmıştı), freq 1 Hz–25 kHz (`DDS_ISR_HZ/2`), faz 0–360°, süre 0–9999 dk (0=sınırsız), AI-Pro duty tavanı 0.50. Python-tarafı STM duty-max **yok** (firmware doyurur) |
 | `simple_signal.py` | **`SimpleSignal`** — minimal Qt-siz signal/slot (STM-bağlandı bildirimleri için) |
 | `path_utils.py` | App-data dizini, benzersiz cihaz-id, pairing-code, PyInstaller resource-path çözümü, `initialize_database()`, `get_app_version()` |
 | `secrets_manager.py` | Şifreli sır deposu — Windows DPAPI + makine-bağlı Fernet + keyring; token/pairing/admin-code/device-id üreteçleri. **TÜM sırlar tek dosyada** (`pemf_secrets.json`). 2026-08-19: `mqtt_cloud_host/port/user/pass` eklendi (operator bölümü; E-stop **bulut aynası** — tanımsızsa ayna sessiz devre dışı; env fallback `PEMF_MQTT_CLOUD_*`) |

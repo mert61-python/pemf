@@ -1,5 +1,20 @@
 # esp8266_pemf_coil — ESP8266 Bobin Sürücüsü (bobin 8, yarım-köprü, TEK FAZ)
 
+> ## ⚠️ ESP ALT SİSTEMİ ŞU AN DEVRE DIŞI (2026-09-11)
+>
+> Sahip ESP kartlarını sistemden **söktü**. Bobin 6-7 zaten 2026-09-10'da STM32'ye taşınmıştı;
+> geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
+>
+> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `servers/live_state.esp_etkin()`
+> * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
+>   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
+> * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
+>
+> ⚠️ **KOD SİLİNMEDİ, SİLİNMEYECEK** (sahip: "ileride tekrar hibrit ESP+STM ya da sadece ESP
+> sistemine dönebilirim"). Bu belgedeki MQTT/Mosquitto anlatımı **geçerlidir** — yalnız bugün
+> kullanılmıyor. Kapı: `tests/test_internetsiz_ve_esp_kapali.py`.
+
+
 > ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
 > Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
 > (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
@@ -88,8 +103,10 @@ yalnız uyarı satırı gelir — PWM çalışmaya devam eder ama yön okunamaz.
 1. **Sürüş kipi — 8266'da ZATEN UYGUN, ekstra bir şey yapmana gerek yok.** Yön ölçümü
    **tek-bacak (unipolar)** sürüş ister (tek yönlü darbe → net DC ≠ 0 → ortalamanın işareti
    polariteyi verir); bu kart **yarım-köprü, TEK pin** (`D5`) sürer, yani sürüş doğası gereği
-   unipolardır. ⚠️ Bu yüzden S3'teki "ölçüm için `stm32_pemf_unipolar` projesine geç" adımı
-   **6-8 numaralı bobinler için GEÇERSİZDİR** — kendi start komutuyla ölç.
+   unipolardır. ⚠️ Bu yüzden S3'teki "ölçüm için sürüş kipini UNİ yap" adımı bu kart için
+   **GEREKSİZDİR** — kendi start komutuyla ölç.
+   (⚠️ 2026-09-11: eski metin silinmiş `stm32_pemf_unipolar` projesine yönlendiriyordu; kip
+   artık çalışma zamanında, arayüzdeki **Sürüş Kipi** düğmesiyle seçiliyor.)
    (Karşılaştırma için: S3 tam-köprü **bipolar** sürer, orada ortalama ≈ 0 çıkar ve yalnız
    `|B|max` büyür — yön o kartta bu şekilde **okunamaz**.)
 2. **Sensör duruşu:** MLX90393'ü bobin yüzeyinin ortasına, **her bobinde AYNI yönle** koy (öneri:

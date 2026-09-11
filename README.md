@@ -36,8 +36,8 @@ Arayüz **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'
 Mobil/Web (pf → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
                                                                                   (FastAPI+uvicorn, NSSM servis)
    Supabase (yalnız cihaz-registry + şifreli PII)                                   ├─ servers/  (REST+WS+router'lar)
-   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ controllers/ → STM32 (bobin 1-5, seri)
-                                                                                    ├─ services/ + bin/mosquitto → ESP (bobin 6-8, MQTT)
+   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ controllers/ → STM32 (bobin 1-7, seri)
+                                                                                    ├─ services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
                                                                                     ├─ database/ (SQLCipher yerel)
                                                                                     └─ ai_hub/ (gömülü ONNX teşhis)
 ```
@@ -84,7 +84,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | `backend_service.py` · `headless_core.py` · `event_bus.py` | **Giriş noktası** (main), Qt-siz çekirdek (STM seri + kuyruk), pub/sub olay veri yolu |
 | [`servers/`](servers/README.md) | FastAPI uygulaması: REST + WebSocket + tüm router'lar + canlı durum + ağ (tünel/mDNS/sync) |
 | [`controllers/`](controllers/README.md) | STM32 bobin kontrol choke-point'i (keep-alive + süre-watchdog + garantili STOP) |
-| [`services/`](services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı |
+| [`services/`](services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı. ⚠️ Mosquitto yolu `PEMF_ESP_ENABLED=0` iken KULLANILMAZ (ESP söküldü) |
 | [`database/`](database/README.md) | Yerel SQLite/**SQLCipher** kalıcılık (hasta/seans/sensör/auth) + MQTT outbox |
 | [`utils/`](utils/README.md) | STM32 seri/protokol-limit, sırlar, yollar, config, PDF, telemetri, model-çözüm (offline) |
 | [`ai/`](ai/README.md) | Kural-tabanlı **tedavi-parametre önerisi** + global AI config (teşhis DEĞİL) |
@@ -123,7 +123,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | [`deploy/`](deploy/README.md) | `device.env` / `server.env` / `staging.env` dağıtım profilleri |
 | [`offline dağıtım/`](offline%20dağıtım/OKU-README.md) | İnternetsiz USB kurulum (Inno DiskSpanning `.bin` dilimleri) |
 | [`docker/`](docker/DOCKER_README.md) | Container'lar: backend/AI + frontend nginx + GPU AI (3 compose profili) |
-| [`bin/`](bin/README.md) | Gömülü ikililer: mosquitto (MQTT), cloudflared (tünel), nssm (servis) |
+| [`bin/`](bin/README.md) | Gömülü ikililer: mosquitto (MQTT — ESP kapalıyken kullanılmaz), cloudflared (tünel), nssm (servis) |
 | [`lattekurulum/`](lattekurulum/README.md) | LattePanda klinik mini-PC kurulum yardımcıları |
 
 ### Firmware · Test · CI · Diğer

@@ -2,6 +2,13 @@
 
 Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 
+## Firmware (STM32 + ESP-S3)
+| Script | Görev |
+|---|---|
+| `firmware_derle.py` | Her iki firmware'i de **gerçekten derler** (arm-none-eabi-gcc + arduino-cli), CubeIDE/Arduino IDE açmadan. ⚠️ Bağlanan ELF'te `_printf_float` sembolünü **ARAR**; yoksa derlemeyi DÜŞÜRÜR — o sembol olmadan tüm STM sensör telemetrisi sessizce ölür (2026-09-11 saha arızası). ⚠️ Bayrağı KENDİ vermez: CubeIDE'nin üreteceği ikiliyi ölçmek için |
+| `stm_workspace_kopyala.py` | Masaüstüne temiz CubeIDE workspace'i çıkarır — derleme artığı TAŞIMAZ (bayat `.elf` flaşlama kazasının kökü) ve kaynağın protokol aşamasını DOĞRULAR: `NUM_COILS=7`, `unipolar_maskesi` (121 bayt), `Coil_KipUygula`, `&_printf_float` |
+| `stm_firmware_kimligi.py` | Karttaki firmware'in açılış banner'ını okur — `7-ch` mi `5-ch` mi (yanlış ikili flaşlandı mı?) |
+
 ## Build & yayın
 | Script | Görev |
 |---|---|
@@ -26,7 +33,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | Script | Görev |
 |---|---|
 | `setup_gateway.ps1` | Boot: Windows Mobile Hotspot'u aç, Mosquitto'yu garanti et, GUI başlat |
-| `start_hotspot.ps1` | `PEMF-Gateway` Wi-Fi hotspot'unu başlat (ESP bobinler katılır); logon Scheduled Task |
+| `start_hotspot.ps1` | `PEMF-Gateway` Wi-Fi hotspot'unu başlat (mobil istemciler katılır; ESP kartları 2026-09-11'de söküldü); logon Scheduled Task |
 
 ## Kaldırma / teardown (KVKK-farkında)
 | Script | Görev |

@@ -1,5 +1,20 @@
 # esps3_pemf_coil — ESP32-S3 Bobin Sürücüsü (bobin 6-7, tam-köprü bipolar)
 
+> ## ⚠️ ESP ALT SİSTEMİ ŞU AN DEVRE DIŞI (2026-09-11)
+>
+> Sahip ESP kartlarını sistemden **söktü**. Bobin 6-7 zaten 2026-09-10'da STM32'ye taşınmıştı;
+> geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
+>
+> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `servers/live_state.esp_etkin()`
+> * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
+>   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
+> * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
+>
+> ⚠️ **KOD SİLİNMEDİ, SİLİNMEYECEK** (sahip: "ileride tekrar hibrit ESP+STM ya da sadece ESP
+> sistemine dönebilirim"). Bu belgedeki MQTT/Mosquitto anlatımı **geçerlidir** — yalnız bugün
+> kullanılmıyor. Kapı: `tests/test_internetsiz_ve_esp_kapali.py`.
+
+
 > ⚠️ **GÜNCELLEME 2026-09-11 — `stm32_pemf_unipolar` AYNA PROJESİ KALDIRILDI.**
 > Sürüş kipi artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile **bobin başına** seçiliyor
 > (`0x60` = bobin 1-5 bipolar, 6-7 unipolar) → ikinci bir derleme gerekmiyor.
@@ -77,9 +92,13 @@ x, y, z = son 1 sn'deki örneklerin ortalaması (**DC bileşen**; kontrol döng�
 
 **100 Hz / %50 duty ile bobin yönü ölçümü:**
 
-1. **Sürüş kipi:** yön için **tek-bacak (unipolar)** STM projesi `stm32_pemf_unipolar` ile sür
-   (tek yönlü darbe → net DC ≠ 0 → `ort` işareti polariteyi verir). Simetrik **bipolar** sürüşte
-   ortalama ≈ 0 çıkar, yalnız `|B|max` büyür — yön **okunamaz** (o kipte sadece büyüklük ölçülür).
+1. **Sürüş kipi:** yön için **tek-bacak (unipolar)** sürüş gerekir (tek yönlü darbe → net DC ≠ 0
+   → `ort` işareti polariteyi verir). Simetrik **bipolar** sürüşte ortalama ≈ 0 çıkar, yalnız
+   `|B|max` büyür — yön **okunamaz** (o kipte sadece büyüklük ölçülür).
+   ⚠️ **GÜNCEL YÖNTEM (2026-09-11):** ayrı bir `stm32_pemf_unipolar` projesi ARTIK YOK. Kip
+   çalışma zamanında seçiliyor: arayüzde **Manuel → Toplu Uygulama → ⚡ Sürüş Kipi** ile ilgili
+   bobini **UNİ** yapın (ya da `POST /api/coil/surus_kipi`). Kartın gerçekten uyguladığı kip
+   ACK'teki `K=<maske>` alanından doğrulanır.
 2. **Sensör duruşu:** MLX90393'ü bobin yüzeyinin ortasına, çip üzerindeki eksen işaretine göre
    **her bobinde AYNI yönle** koy (öneri: sensör **Z** ekseni bobin eksenine paralel, çip üst yüzü
    bobine bakıyor; kablo hep aynı tarafta). Bobinden bobine sensörü döndürürsen işaretler

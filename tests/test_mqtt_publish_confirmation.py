@@ -21,6 +21,21 @@ import pytest
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
+@pytest.fixture(autouse=True)
+def _esp_acik(monkeypatch):
+    """⚠️ ESP ALT SİSTEMİ AÇIK KOŞULUR (2026-09-11).
+
+    Sahip ESP kartlarını söktü → `PEMF_ESP_ENABLED` varsayılanı 0 ve `_mqtt_publish`
+    en başta `False` dönüp HİÇ yayınlamıyor. Bu dosyanın ölçtüğü şey ise YAYIN TEYİDİ
+    mantığıdır — yani ESP yolunun KENDİSİ.
+
+    Bayrak olmadan bu testler "publish False döndü" diye geçer/kalır ve asıl değişmezi
+    (PUBACK gelmeden True DENMEZ) bir daha ÖLÇMEZDİ. ESP kodu canlı tutuluyor ki geri
+    dönüş mümkün olsun; testleri de canlı tutmanın yolu bayrağı açık koşmaktır.
+    """
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+
+
 @pytest.fixture
 def api():
     from servers import api_server

@@ -1,4 +1,14 @@
-# tests/ — Pytest Test Paketi (CI kritik-yol)
+# tests/
+
+> **2026-09-11'de eklenen kapılar** (hepsi mutasyonla kırmızı kanıtlandı):
+> | Dosya | Neyi kilitler |
+> |---|---|
+> | `test_stm_printf_float_kapisi.py` | newlib-nano float printf — silinirse TÜM sensör telemetrisi ölür |
+> | `test_masaustu_sizintisi.py` | süit sahibin gerçek masaüstüne dosya bırakamaz |
+> | `test_disa_aktarim_diske_kaydet.py` | "Excel/CSV İndir" + "Tümünü PDF İndir" (WebView2'de `<a download>` ölü) |
+> | `test_internetsiz_ve_esp_kapali.py` | internet≠cihaz ağı · ESP `PEMF_ESP_ENABLED` ile kapalı, kod SİLİNMEZ |
+> | `test_stm_surus_kipi_ucu.py` | bipolar/unipolar kipi — yetenek tavanı delinemez |
+ — Pytest Test Paketi (CI kritik-yol)
 
 Backend'in otomatik testleri. Her push/PR'da CI çalıştırır ([`../.github/`](../.github/README.md) `tests.yml`).
 

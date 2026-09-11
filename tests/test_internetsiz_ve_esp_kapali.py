@@ -269,3 +269,56 @@ def test_KRITIK_simulasyon_BAGLANTIDAN_turetilmez():
             assert yasak not in metin, (
                 f"simulasyon karari '{yasak}' ile birlesmis -> baglanti kaybinda SAHTE VERI riski"
             )
+
+
+def test_KRITIK_ESP_kapaliyken_MQTT_PUBLISH_hic_denenmez(monkeypatch):
+    """⚠️ TEK BOĞAZ NOKTASI: bütün ESP komutları `_mqtt_publish`ten geçer.
+
+    Kapı burada olmazsa her komut (manuel, seans, AI, E-stop, reconcile, selftest) sökülü
+    donanım için soket probu açar ve `_kaydet_esp_komut_niyeti` ile BAYAT niyet biriktirir.
+    O niyet, ileride `PEMF_ESP_ENABLED=1` ile dönüldüğünde reconcile'ı yanlış tetikler.
+
+    ⚠️ "False döndü" YETMEZ — broker yokken zaten False döner. Bu kapı DENENMEDİĞİNİ ölçer:
+    soket açılmamalı ve niyet yazılmamalı.
+
+    MUTASYON: `_mqtt_publish` başındaki `esp_etkin()` kapısını sil → KIRMIZI.
+    """
+    import socket as _socket
+
+    from servers import api_server
+
+    monkeypatch.delenv("PEMF_ESP_ENABLED", raising=False)
+    izler = {"soket": 0, "niyet": 0}
+
+    def _soket_yasak(*a, **k):
+        izler["soket"] += 1
+        raise OSError("baglanti yok")
+
+    monkeypatch.setattr(_socket, "create_connection", _soket_yasak)
+    monkeypatch.setattr(
+        api_server, "_kaydet_esp_komut_niyeti", lambda *a, **k: izler.__setitem__("niyet", izler["niyet"] + 1)
+    )
+
+    sonuc = api_server._mqtt_publish("pemf/coil/8/control", {"command": "stop"})
+
+    assert sonuc is False, "ESP kapaliyken 'gonderildi' denildi -> gonderilmemis komut teyit edildi"
+    assert izler["soket"] == 0, "ESP kapaliyken SOKET acildi -> kapi calismiyor"
+    assert izler["niyet"] == 0, "ESP kapaliyken NIYET kaydedildi -> geri donuste bayat reconcile"
+
+
+def test_KRITIK_ESP_ACIKKEN_publish_GERCEKTEN_denenir(monkeypatch):
+    """Karşıt kanıt: bayrak açıkken yol kapanmamalı (geri dönüş GERÇEKTEN çalışmalı)."""
+    import socket as _socket
+
+    from servers import api_server
+
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+    izler = {"soket": 0}
+
+    def _soket_sayac(*a, **k):
+        izler["soket"] += 1
+        raise OSError("broker yok")
+
+    monkeypatch.setattr(_socket, "create_connection", _soket_sayac)
+    api_server._mqtt_publish("pemf/coil/8/control", {"command": "stop"})
+    assert izler["soket"] == 1, "ESP ACIKKEN publish denenmedi -> geri donus yolu KOPUK"

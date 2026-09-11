@@ -20,6 +20,12 @@ Klinik cihazının bobinlerini süren gömülü firmware'ler. 2026-08-19'dan ber
 | [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) | ESP32-S3 (tam-köprü + BLE) | — (tarihçe: eski bobin 6-7) |
 | [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) | ESP8266 (yarım-köprü, tek faz) | 8 (MQTT) |
 
+> ### 🔴 `g_printf_float_zorla` SATIRINI SİLMEYİN
+> `stm32_pemf/Core/Src/main.c` başındaki `&_printf_float` başvurusu kaldırılırsa **bütün
+> sensör telemetrisi sessizce ölür** (newlib-nano'da `%f` hiçbir şey basmaz, hata da vermez).
+> 2026-09-11 saha arızasının kök nedeni buydu. Ayrıntı + eşikler:
+> [`stm32_pemf/README.md`](stm32_pemf/README.md).
+
 Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
 `stm32_pemf/Core/Src/main.c` (**~1670 satır**, elle yazılmış; v2.3.0 SYM-BIPOLAR + derleme-kapılı NTC).
 ⚠️ Eski `firmware/main.c` kök kopyası 2026-08-19'da SİLİNDİ — iki kopya sessiz ayrışma üretiyordu
@@ -117,7 +123,8 @@ bir sonraki paket "kapalıyken açıldı" sayılıp süreyi baştan başlatır. 
 `controllers/hardware_controller.py` → `_coil_deadline`'dır; **silinirse bobin süresiz enerjili
 kalır.** Regresyon kapısı: `tests/test_stm32_source_parity.py::test_host_tarafi_sure_deadlineI_hala_uygulaniyor`.
 
-Firmware'de düzeltilmedi çünkü keep-alive'ı "yeni tedavi"den ayırmak 88 baytlık **sabit** pakete
+Firmware'de düzeltilmedi çünkü keep-alive'ı "yeni tedavi"den ayırmak **sabit boylu** pakete
+(bugün 121 bayt; o gün 88'di)
 sıra-numarası/başlat-bayrağı eklemeyi gerektirir (firmware + backend + simülatör üçünü birden
 değiştiren protokol değişikliği). "Süre doldu" mandalı alternatifi ise hekimin aynı parametrelerle
 yeniden başlat demesini sessizce etkisiz kılabilirdi — klinik bir cihazda kötü bir başarısızlık biçimi.

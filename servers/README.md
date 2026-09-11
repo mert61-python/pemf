@@ -9,8 +9,11 @@ yan-etkisizdir; arka-plan thread'ler **lifespan startup**'ta başlar.
 ## İstek akışı
 ```
 HTTP/WS → api_server route (control_single_coil / start_session / emergency_stop …)
-        → state.hardware (HardwareController) → core HW kuyruğu → STM32 seri (5 bobin)
-        → ESP bobinler (6-8) paralelde _mqtt_publish ile Mosquitto'ya
+        → state.hardware (HardwareController) → core HW kuyruğu → STM32 seri (7 bobin, 121 baytlık paket)
+        → ESP slotu (8) paralelde _mqtt_publish ile Mosquitto'ya
+        ⚠️ 2026-09-11: ESP kartları SÖKÜLDÜ. `live_state.esp_etkin()` (PEMF_ESP_ENABLED, varsayılan 0)
+          kapalıyken MQTT dinleyicisi HİÇ başlamaz ve `_mqtt_publish` yayın YAPMADAN False döner.
+          Kod SİLİNMEDİ — bayrak 1 yapılınca hibrit/ESP-only kuruluma dönülür.
 Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → treatment DB (batch)
 ```
 

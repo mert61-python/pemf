@@ -5,8 +5,15 @@ from __future__ import annotations
 
 import math
 
-STM32_NUM_COILS = 5
-ESP_NUM_COILS = 8
+# ⚠️ BAYAT SABİT DÜZELTİLDİ 2026-09-11: burada `STM32_NUM_COILS = 5` yazıyordu ve
+# 2026-09-10'daki 7-bobin geçişinde GÜNCELLENMEMİŞTİ. Bugün hiçbir yerde kullanılmıyor
+# (grep: yalnız bu tanım) — yani zarar vermedi, ama okuyana YANLIŞ ÖĞRETİYORDU.
+#
+# ⚠️ TEK KAYNAK `servers/live_state.STM_COIL_IDS` / `ESP_COIL_IDS`tir. Buradan import
+# edilmiyor çünkü `utils/` katmanı `servers/`e bağımlı olmamalı (katman tersine dönerdi);
+# bunun yerine `tests/test_bobin_sayisi_tek_kaynak.py` ikisinin AYRIŞMASINI kırmızı yapar.
+STM32_NUM_COILS = 7  # bobin 1-7 (seri/DDS)
+ESP_NUM_COILS = 1  # yalnız slot 8 (MQTT) — ⚠️ ADET, en büyük kimlik DEĞİL
 
 STM32_DUTY_MIN_RATIO = 0.0
 # No Python-side max duty clamp. Firmware/timer output saturates physically at

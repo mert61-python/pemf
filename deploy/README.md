@@ -1,5 +1,20 @@
 # PEMF Backend — Dağıtım Rehberi (Klinik PC + 24/7 Sunucu)
 
+> ## ⚠️ ESP ALT SİSTEMİ ŞU AN DEVRE DIŞI (2026-09-11)
+>
+> Sahip ESP kartlarını sistemden **söktü**. Bobin 6-7 zaten 2026-09-10'da STM32'ye taşınmıştı;
+> geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
+>
+> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `servers/live_state.esp_etkin()`
+> * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
+>   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
+> * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
+>
+> ⚠️ **KOD SİLİNMEDİ, SİLİNMEYECEK** (sahip: "ileride tekrar hibrit ESP+STM ya da sadece ESP
+> sistemine dönebilirim"). Bu belgedeki MQTT/Mosquitto anlatımı **geçerlidir** — yalnız bugün
+> kullanılmıyor. Kapı: `tests/test_internetsiz_ve_esp_kapali.py`.
+
+
 **Ana fikir:** Aynı frozen EXE (`PEMF_Backend.exe`) her yerde çalışır. Fark **yalnız ortam
 değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunucu/demo),
 `deploy/staging.env` (üretim-benzeri doğrulama — audit B-9.4). Python kodu değişmez; kurulum scripti
@@ -17,7 +32,7 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 | Dosya / klasör | Amaç | Kim için |
 |---|---|---|
 | `dist\PEMF_Backend\PEMF_Backend.exe` + `_internal\` | Backend (FastAPI:8000), self-contained, Python gerekmez | **BOTH** |
-| `_internal\bin\mosquitto\` | MQTT broker 1883 — ESP bobin 6-8 (offline gömülü) | DEVICE |
+| `_internal\bin\mosquitto\` | MQTT broker 1883 — ESP slot 8 (offline gömülü). ⚠️ ESP kapalıyken KULLANILMAZ | DEVICE |
 | `_internal\frontend\dist\` | React web UI (FastAPI `/` kökünden serve) | **BOTH** |
 | `_internal\deploy\device.env` / `server.env` | Profil knob'ları (EXE'ye bundle edilir) | her biri |
 | `_internal\bin\cloudflared\cloudflared.exe` | Uzaktan erişim tüneli — **elle eklenir** (bkz. §4) | DEVICE |

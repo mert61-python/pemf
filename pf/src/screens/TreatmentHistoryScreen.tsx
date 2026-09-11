@@ -318,8 +318,11 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
   };
 
   // Raporu PAYLAŞ: backend'den PDF indir → telefonun native paylaş menüsü (WhatsApp/
-  // e-posta/herhangi biri). App Password/SMTP GEREKTİRMEZ — vet kime gönüldüğünü paylaş
-  // hedefinde seçer. Web'de native menü yok → PDF'i yeni sekmede açar (kullanıcı paylaşır).
+  // e-posta/herhangi biri). App Password/SMTP GEREKTİRMEZ — vet kime gönderdiğini paylaş
+  // hedefinde seçer.
+  // ⚠️ BAYAT YORUM DÜZELTMESİ 2026-09-11: burada "web'de PDF'i yeni sekmede açar" yazıyordu —
+  // kod bunu HİÇ yapmadı (`<a download>` kullanıyordu) ve o yol WebView2'de sessizce ölüydü.
+  // Masaüstünde artık rapor MASAÜSTÜNE KAYDEDİLİR ve yolu bildirilir (bkz. services/dosyaIndir).
   const handleShareReport = async () => {
     showToast("Rapor hazırlanıyor...", "info");
     // Ortak header-tabanlı indirici (token URL'de SIZMAZ); web fetch+blob, native downloadAsync+paylaşım.

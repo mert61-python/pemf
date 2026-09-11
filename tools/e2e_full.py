@@ -2,6 +2,11 @@
 # Author: mertaygn, cglrgrkn
 """PEMF TAM uctan-uca test — STM + ESP donanimi BAGLIYMIS GIBI (PEMF_SIMULATE=1).
 
+⚠️ TOPOLOJI GUNCELLENDI 2026-09-11: bu dosya "STM 1-5 / ESP 6-8" varsayiyordu ve BAYATTI.
+Gercek: `STM_COIL_IDS = 1..7`, `ESP_COIL_IDS = {8}` (bobin 6-7 2026-09-10'da ESP8266'dan
+STM'e tasindi). Eski hali, tasinmayi hic gormedigi icin 7 bobinli sistemi 5 bobinli gibi
+dogruluyordu — yani gecen her testin anlami daralmisti.
+
 e2e_smoke.py denetim-regresyonlarini kilitler; BU betik KULLANICI AKISLARINI sinar:
 hasta kayitlari (CRUD + sayfalama + toplu-silme koruma), seans yasam dongusu
 (STM 1-5 / ESP 6-8 / 8-bobin), bobin kontrolu, canli telemetri (WS), gecmis + KPI
@@ -137,6 +142,13 @@ def main():
         {
             "PEMF_SIMULATE": "1",
             "PEMF_STM_PORT": "SIM",
+            # ⚠️ ESP ALT SISTEMI ACIK KOSULUR (sahip karari 2026-09-11: ESP'ler sokuldu,
+            # kod SILINMEDI, `PEMF_ESP_ENABLED` ile kapatildi). Uretim varsayilani KAPALI;
+            # ama e2e'nin isi, geri donus yolunun (hibrit/ESP-only kuruluma donus) GERCEKTEN
+            # calistigini kanitlamaktir. Kapali kosulsaydi ESP yollari e2e'de hic denenmez,
+            # sessizce bayatlar ve geri donus gunu kirik cikardi.
+            # Varsayilanin KAPALI oldugu `tests/test_internetsiz_ve_esp_kapali.py` ile ayrica kilitli.
+            "PEMF_ESP_ENABLED": "1",
             "PEMF_DATA_DIR": str(data_dir),
             # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
             # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
@@ -221,6 +233,7 @@ def run_all():
     g_profile_pet_owner()
     h_profile_researcher()
     i_profile_vet_kpi()
+    j_yeni_ozellikler_2026_09_11()
 
 
 # ── A) SANAL DONANIM: STM + ESP bagliymis gibi ─────────────────────────────
@@ -238,9 +251,15 @@ def a_hardware():
     conn = [c for c in coils if c.get("connected")]
     check("snapshot: 8 bobinin hepsi 'connected'", len(conn) == 8, f"{len(conn)}/8")
     check(
-        "snapshot: bobin 1-5 STM, 6-8 ESP olarak isaretli",
-        all(coil_of(sn, i).get("stm32Driven") for i in range(1, 6))
-        and not any(coil_of(sn, i).get("stm32Driven") for i in range(6, 9)),
+        "snapshot: bobin 1-7 STM, slot 8 ESP olarak isaretli",
+        all(coil_of(sn, i).get("stm32Driven") for i in range(1, 8)) and not coil_of(sn, 8).get("stm32Driven"),
+        "bobin 6-7 2026-09-10'da ESP8266'dan STM'e tasindi",
+    )
+    # SURUS KIPI YETENEGI (2026-09-11): bobin 6-7 surucusunde ikinci yarim kopru YOK.
+    check(
+        "snapshot: bobin 1-5 bipolar yetenekli, 6-7 DEGIL",
+        all(coil_of(sn, i).get("bipolarYetenek") for i in range(1, 6))
+        and not any(coil_of(sn, i).get("bipolarYetenek") for i in (6, 7)),
     )
     check("snapshot: bosta hicbir bobin calismiyor", running_ids(sn) == [], str(running_ids(sn)))
 
@@ -376,7 +395,7 @@ def b_patients():
 
 # ── C) SEANS — STM bobinleri (1-5) ─────────────────────────────────────────
 def c_session_stm():
-    section("C. Seans — STM bobinleri (1-5)")
+    section("C. Seans — STM bobinleri (1-7)")
     _s, pb, _ = req(
         "POST",
         "/api/patients",
@@ -404,14 +423,14 @@ def c_session_stm():
             "duty": 30.0,
             "intensity": 20.0,
             "duration_minutes": 5,
-            "coil_ids": [1, 2, 3, 4, 5],
+            "coil_ids": [1, 2, 3, 4, 5, 6, 7],
         },
     )
-    check("seans basladi (STM 1-5) 200", s == 200, f"HTTP {s} {str(b)[:120]}")
+    check("seans basladi (STM 1-7) 200", s == 200, f"HTTP {s} {str(b)[:120]}")
     sess = b.get("session", {})
     db_sid = sess.get("db_session_id")
     check("DB seans satiri seans BASINDA acildi", bool(db_sid), str(db_sid))
-    check("coil_ids beklenen", sess.get("coil_ids") == [1, 2, 3, 4, 5], str(sess.get("coil_ids")))
+    check("coil_ids beklenen", sess.get("coil_ids") == [1, 2, 3, 4, 5, 6, 7], str(sess.get("coil_ids")))
 
     s, act, _ = req("GET", "/api/session/active")
     check(
@@ -425,8 +444,8 @@ def c_session_stm():
         f"kalan={act.get('remaining_sec')}sn",
     )
 
-    sn = wait_until(lambda: snap() if len(running_ids(snap())) >= 5 else None, timeout=15) or snap()
-    check("bobin 1-5 CALISIYOR (sanal STM)", running_ids(sn) == [1, 2, 3, 4, 5], str(running_ids(sn)))
+    sn = wait_until(lambda: snap() if len(running_ids(snap())) >= 7 else None, timeout=15) or snap()
+    check("bobin 1-7 CALISIYOR (sanal STM)", running_ids(sn) == [1, 2, 3, 4, 5, 6, 7], str(running_ids(sn)))
     c1 = coil_of(sn, 1)
     check(
         "bobin parametreleri seansla eslesiyor (freq 40 Hz / duty %30)",
@@ -438,7 +457,7 @@ def c_session_stm():
     )
     check("manyetik alan telemetrisi akiyor (mT)", float(c1.get("magneticMt") or 0) > 0.5, f"{c1.get('magneticMt')} mT")
     check("akim telemetrisi akiyor (A)", float(c1.get("currentA") or 0) > 0, f"{c1.get('currentA')} A")
-    check("ESP bobinleri (6-8) bu seansta CALISMIYOR", all(not coil_of(sn, i).get("running") for i in (6, 7, 8)))
+    check("ESP slotu (8) bu seansta CALISMIYOR", not coil_of(sn, 8).get("running"))
     at = sn.get("activeTreatment") or {}
     check(
         "aktif tedavi ozeti canli (isActive + frekans)",
@@ -474,9 +493,12 @@ def c_session_stm():
     globals()["_STM_SID"] = db_sid
 
 
-# ── D) SEANS — ESP bobinleri (6-8) ─────────────────────────────────────────
+# ── D) SEANS — ESP slotu (8) ───────────────────────────────────────────────
 def d_session_esp():
-    section("D. Seans — ESP/MQTT bobinleri (6-8)")
+    """⚠️ Yalniz SLOT 8: bobin 6-7 artik STM'de (2026-09-10). Bu bolum ESP/MQTT yolunun
+    hala calistigini kanitlar — sahada ESP sokulu olsa da kod canli kalmali (sahip:
+    "ileride tekrar hibrit esp stm ya da sadece esp sistemine donebilirim")."""
+    section("D. Seans — ESP/MQTT slotu (8)")
     s, b, _ = req(
         "POST",
         "/api/session/start",
@@ -487,27 +509,27 @@ def d_session_esp():
             "frequency": 20.0,
             "duty": 50.0,
             "duration_minutes": 3,
-            "coil_ids": [6, 7, 8],
+            "coil_ids": [8],
         },
     )
     check("ESP seansi basladi 200", s == 200, f"HTTP {s}")
     sess = b.get("session", {})
-    check("coil_ids [6,7,8]", sess.get("coil_ids") == [6, 7, 8], str(sess.get("coil_ids")))
+    check("coil_ids [8]", sess.get("coil_ids") == [8], str(sess.get("coil_ids")))
 
-    sn = wait_until(lambda: snap() if running_ids(snap()) == [6, 7, 8] else None, timeout=15) or snap()
-    check("ESP bobinleri (6-8) CALISIYOR", running_ids(sn) == [6, 7, 8], str(running_ids(sn)))
-    c7 = coil_of(sn, 7)
+    sn = wait_until(lambda: snap() if running_ids(snap()) == [8] else None, timeout=15) or snap()
+    check("ESP slotu (8) CALISIYOR", running_ids(sn) == [8], str(running_ids(sn)))
+    c7 = coil_of(sn, 8)
     check(
         "ESP bobin parametreleri seansla eslesiyor (freq 20 Hz / duty %50)",
         abs(float(c7.get("frequencyHz") or 0) - 20.0) < 0.6 and abs(float(c7.get("dutyCycle") or 0) - 50.0) < 0.6,
         f"freq={c7.get('frequencyHz')} duty={c7.get('dutyCycle')}",
     )
-    check("STM bobinleri (1-5) bu seansta CALISMIYOR", all(not coil_of(sn, i).get("running") for i in range(1, 6)))
+    check("STM bobinleri (1-7) bu seansta CALISMIYOR", all(not coil_of(sn, i).get("running") for i in range(1, 8)))
 
     s, _b, _ = req("POST", "/api/session/stop")
     check("ESP seansi durduruldu 200", s == 200, f"HTTP {s}")
     sn2 = wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12) or snap()
-    check("ESP bobinleri durdu", running_ids(sn2) == [], str(running_ids(sn2)))
+    check("ESP slotu durdu", running_ids(sn2) == [], str(running_ids(sn2)))
     check("durdurmadan sonra aktif hasta temizlendi", sn2.get("patient") is None, str(sn2.get("patient")))
 
 
@@ -624,13 +646,15 @@ def f2_donanim_uyum():
     check("D-3: negatif freq 200 (1'e clamp, 500 yok)", s == 200, f"HTTP {s}")
     req("POST", "/api/coil/7/control", {"start": False})
 
-    # E-stop kapsami: yanit TUM ESP bobinlerini (6,7,8) icermeli (P0 kapsam fix'i — eskiden
+    # E-stop kapsami: yanit TUM ESP bobinlerini icermeli (P0 kapsam fix'i — eskiden
     # seans coil_ids'iyle sinirlaniyordu ve bos kalabiliyordu).
+    # ⚠️ 2026-09-11: bu kontrol [6,7,8] bekliyordu ve BAYATTI — bobin 6-7 2026-09-10'da
+    # STM'e tasindi, ESP olarak YALNIZ slot 8 kaldi (`ESP_COIL_IDS = {8}`).
     s, es, _ = req("POST", "/api/hardware/emergency_stop")
     check("E-stop 200", s == 200, f"HTTP {s}")
     mr = es.get("mqttResults") or es.get("mqtt_results") or []
     ids = sorted(int(r.get("coilId") or r.get("coil_id") or 0) for r in mr if isinstance(r, dict))
-    check("E-stop yaniti ESP 6-7-8'in UCUNU de kapsiyor", ids == [6, 7, 8], str(ids))
+    check("E-stop yaniti TUM ESP slotlarini kapsiyor (bugun: yalniz 8)", ids == [8], str(ids))
     check(
         "E-stop yanitinda teslim durumu alani var (sahte-guvence yok)",
         all(("mqtt" in r) for r in mr if isinstance(r, dict)),
@@ -663,7 +687,9 @@ def f2_donanim_uyum():
     )
     check("sync-uyari kurgusu: STM seansi (100 Hz) basladi", s == 200, f"HTTP {s} {str(sb)[:100]}")
     wait_until(lambda: coil_of(snap(), 1).get("running") or None, timeout=10)
-    s, b7, _ = req("POST", "/api/coil/7/control", {"freq": 1.0, "duty": 20.0, "duration": 30, "start": True})
+    # ⚠️ BOBIN 8 (tek ESP slotu). Eskiden bobin 7 kullaniliyordu; o artik STM ve
+    # `sync_warning` ESP yoluna ait bir kavram → kontrol sessizce ANLAMSIZ hale gelmisti.
+    s, b7, _ = req("POST", "/api/coil/8/control", {"freq": 1.0, "duty": 20.0, "duration": 30, "start": True})
     check("HG-3: >=50x ayrisan ESP istegi REDDEDILMEDI (200)", s == 200, f"HTTP {s}")
     check(
         "HG-3: yanit 'sync_warning' tasiyor (operatore acik uyari)",
@@ -672,15 +698,17 @@ def f2_donanim_uyum():
     )
     # NEGATIF (yanlis-yesil kilidi): YAKIN frekansta uyari OLMAMALI — kosulsuz-uyaran bir
     # regresyon yukaridaki pozitif kontrolu de gecerdi (alarm yorgunlugu ilkesi).
-    s, b7y, _ = req("POST", "/api/coil/7/control", {"freq": 60.0, "duty": 20.0, "duration": 30, "start": True})
+    s, b7y, _ = req("POST", "/api/coil/8/control", {"freq": 60.0, "duty": 20.0, "duration": 30, "start": True})
     check(
         "HG-3: yakin frekansta (100 vs 60 Hz) sync_warning YOK",
         s == 200 and not b7y.get("sync_warning"),
         str(b7y)[:120],
     )
     # Batch yolu da ayni normalize+uyari (review: batch bypass kapandi)
+    # ⚠️ BOBIN 8: bobin 7 artik STM (transport "stm32") ve sync_warning ESP yoluna ait —
+    # eski hali sessizce ANLAMSIZ bir sey olcuyordu.
     s, bb, _ = req(
-        "POST", "/api/coil/batch", {"coil_ids": [7], "freq": 1.0, "duty": 20.0, "duration": 30, "start": True}
+        "POST", "/api/coil/batch", {"coil_ids": [8], "freq": 1.0, "duty": 20.0, "duration": 30, "start": True}
     )
     _bsatir = (bb.get("results") or [{}])[0]
     check(
@@ -860,6 +888,105 @@ def i_profile_vet_kpi():
         s, hist, _ = req("GET", "/api/history/?limit=50")
         rows = hist if isinstance(hist, list) else (hist.get("data") or [])
         check("silinen seans gecmiste YOK", all(r.get("id") != sid for r in rows), f"n={len(rows)}")
+
+
+# ── J) 2026-09-11 EKLENEN OZELLIKLER ───────────────────────────────────────
+def j_yeni_ozellikler_2026_09_11():
+    """Bu turda eklenen uc ozellik UCTAN UCA: surus kipi, seans-ortasi parametre
+    guncelleme, disa aktarimin DISKE yazilmasi.
+
+    ⚠️ Birim testleri her katmani AYRI olcuyor; burasi zincirin GERCEKTEN bagli
+    oldugunu olcer (uc -> canli durum -> anlik goruntu)."""
+    section("J. Yeni ozellikler (surus kipi / parametre guncelleme / diske disa aktarim)")
+
+    # ── 1) SURUS KIPI ─────────────────────────────────────────────────────
+    s, b, _ = req("POST", "/api/coil/surus_kipi", {"unipolar": [False] * 7})
+    check("surus kipi ucu 200", s == 200, f"HTTP {s} {str(b)[:100]}")
+    check(
+        "bobin 6-7 YETENEK TAVANI delinemiyor (bipolar istense de unipolar)",
+        b.get("etkin", [None] * 7)[5] is True and b.get("etkin", [None] * 7)[6] is True,
+        str(b.get("etkin")),
+    )
+    check("bobin 1-5 bipolar istegi KABUL edildi", b.get("etkin", [None] * 7)[:5] == [False] * 5, str(b.get("etkin")))
+    check("etkin maske 0x60", b.get("maske") == 0x60, hex(b.get("maske") or 0))
+    s, _b, _ = req("POST", "/api/coil/surus_kipi", {"unipolar": [False] * 5})
+    check("yanlis uzunlukta dizi REDDEDILIYOR", s == 400, f"HTTP {s}")
+
+    # ── 2) SEANS ORTASINDA PARAMETRE GUNCELLEME ───────────────────────────
+    s, _b, _ = req("POST", "/api/session/parametre_guncelle", {"frequency": 150.0})
+    check("seans YOKKEN parametre guncelleme 409", s == 409, f"HTTP {s}")
+
+    s, b, _ = req(
+        "POST",
+        "/api/session/start",
+        {
+            "patient_name": "ParamTest",
+            "operator_name": "Dr. Test",
+            "mode": "Manuel",
+            "frequency": 100.0,
+            "duty": 25.0,
+            "duration_minutes": 5,
+            "coil_ids": [1, 2, 3],
+        },
+    )
+    check("parametre testi icin seans basladi", s == 200, f"HTTP {s}")
+    wait_until(lambda: snap() if running_ids(snap()) == [1, 2, 3] else None, timeout=15)
+
+    # Donanim: calisan bobinlere YENI parametre (arayuzun "Parametreleri Uygula" yolu).
+    s, _b, _ = req(
+        "POST",
+        "/api/coil/batch",
+        {"coil_ids": [1, 2, 3], "freq": 150.0, "duty": 40.0, "phase": 0.0, "duration": 300, "start": True},
+    )
+    check("calisan bobinlere yeni parametre gonderildi", s == 200, f"HTTP {s}")
+    sn = snap()
+    # ⚠️ BOBIN FREKANS YANKISI SIMULASYONDA OLCULEMEZ — ve bu, testin degil simulatorun siniri:
+    # `_simulate_hardware_loop` her 0,5 sn'de bobin durumunu AKTIF SEANSTAN yeniden turetir
+    # (`coil["frequencyHz"] = sfreq`), yani `/coil/batch` ile gonderilen yeni frekansi aninda
+    # UZERINE YAZAR. Gercek donanimda yol farkli: paket STM'e gider, ACK doner ve canli durum
+    # ACK'ten guncellenir.
+    # Bu yuzden burada KOMUTUN KABUL EDILDIGI ve SEANS KARTININ tazelendigi olculur; paketleme
+    # katmani `tests/test_stm_surus_kipi_ucu.py` ve `test_hardware_controller_safety.py` ile
+    # ayrica kilitli. Yanlis bir "gecti" uretmemek icin iddia BILEREK daraltildi.
+    check(
+        "seans HALA ayni (parametre degisimi seansi YENIDEN BASLATMADI)",
+        (sn.get("activeTreatment") or {}).get("isActive") is True,
+    )
+    check("bobinler hala calisiyor (guncelleme sürüşü KESMEDI)", running_ids(sn) == [1, 2, 3], str(running_ids(sn)))
+
+    # Kart + doz kaydi tazelenmeli — aksi halde ust ozet ESKI frekansi gosterir.
+    s, g, _ = req("POST", "/api/session/parametre_guncelle", {"frequency": 150.0, "duty": 40.0, "coil_ids": [1, 2, 3]})
+    check("parametre guncelleme ucu 200", s == 200, f"HTTP {s} {str(g)[:100]}")
+    sn2 = snap()
+    at = sn2.get("activeTreatment") or {}
+    check(
+        "SEANS KARTI yeni frekansi gosteriyor (eskiden 100'de kalirdi)",
+        abs(float(at.get("frequencyHz") or 0) - 150.0) < 0.6,
+        f"kart freq={at.get('frequencyHz')}",
+    )
+    check("degisiklik doz kaydina yazildi", g.get("kayda_yazildi") is True, str(g.get("kayda_yazildi")))
+
+    req("POST", "/api/session/stop")
+    wait_until(lambda: snap() if not running_ids(snap()) else None, timeout=12)
+
+    # ── 3) DISA AKTARIM DISKE ─────────────────────────────────────────────
+    # ⚠️ Masaustu uygulamasinda `<a download>` WebView2'de olu → backend diske yazar.
+    s, k, _ = req("GET", "/api/history/export_csv?kaydet=1")
+    check("CSV diske kaydetme ucu 200", s == 200, f"HTTP {s}")
+    if k.get("status") == "success":
+        yol = Path(k.get("yol") or "")
+        check("CSV GERCEKTEN diske yazildi", yol.is_file() and yol.stat().st_size > 0, str(yol))
+        # ⚠️ E2E SAHIBIN MASAUSTUNE COP BIRAKMAZ. Bu uc, urun davranisi geregi gercek
+        # masaustune yazar (pytest conftest izolasyonu burada YOK — bu bir alt surec).
+        # Urettigimiz dosyayi KENDIMIZ toplariz; aksi halde her kosuda bir dosya birikir
+        # (2026-09-11'de suit icin tam bu ariza yasandi, bkz. tests/test_masaustu_sizintisi.py).
+        try:
+            yol.unlink()
+            check("e2e artigi masaustunden temizlendi", not yol.exists(), str(yol))
+        except OSError as exc:
+            check("e2e artigi masaustunden temizlendi", False, f"silinemedi: {exc}")
+    else:
+        check("kayit yokken DOSYA URETILMEDI", k.get("status") == "bos", str(k)[:100])
 
 
 if __name__ == "__main__":

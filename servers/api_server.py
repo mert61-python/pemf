@@ -1743,6 +1743,20 @@ def _mqtt_publish(topic: str, payload: dict) -> bool:
     Broker kapalıyken paho.connect Windows'ta ~2sn bloke oluyordu (3 ESP bobin →
     seans başlatma ~8sn kilitleniyordu). Önce 0.3sn'lik hızlı socket probe ile
     broker erişilebilir mi bak; değilse anında çık (seansı kilitleme)."""
+    # ⚠️ ESP SÖKÜLÜ → HİÇ YAYINLAMA (sahip kararı 2026-09-11, bkz. live_state.esp_etkin).
+    # TEK BOĞAZ NOKTASI: bütün ESP komutları (manuel, seans, AI, E-stop, reconcile, selftest)
+    # buradan geçer → kapı burada olunca çağrı yerlerini tek tek gezmeye gerek kalmaz ve
+    # yeni bir çağrı yeri eklendiğinde de kendiliğinden kapanır.
+    #
+    # ⚠️ NİYET DE KAYDEDİLMEZ: `_kaydet_esp_komut_niyeti` reconcile içindir (ESP yeniden
+    # görününce geri al). ESP yokken biriken niyet, ileride `PEMF_ESP_ENABLED=1` ile geri
+    # dönüldüğünde BAYAT komutlarla reconcile tetikler — yani kapının altında kalmalı.
+    #
+    # Dönüş False: "yayınlanmadı" DOĞRUDUR. True demek, gönderilmemiş bir komutu
+    # gönderilmiş saymak olurdu (bu deponun tekrarlayan sahte-teyit sınıfı).
+    if not live_state.esp_etkin():
+        logging.getLogger(__name__).debug("ESP kapali -> MQTT publish ATLANDI: %s", topic)
+        return False
     # HG-6 (Plan A-3): backend'in ESP'ye komutladığı NİYET tek boğaz noktasında kaydedilir.
     # ASİMETRİK (review F4): STOP burada HEMEN (başarısız STOP'ta bile niyet False olmalı ki
     # ESP görününce reconcile denesin); START ise yalnız publish DOĞRULANINCA (aşağıda) —
