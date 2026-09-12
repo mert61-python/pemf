@@ -155,7 +155,7 @@ async function akis() {
   await waitFor(() => expect(u.queryByTestId("petri-sahne-sayac")).toBeTruthy());
   // ⚠️ Oran kilidi dalı `onLayout` olmadan HİÇ koşmaz (sahte-yeşil kaynağı) — genişliği
   // testin KENDİSİ verir. Plan turunda ölçüldü: bugüne dek hiçbir test onLayout ateşlemiyordu.
-  fireEvent(u.getByTestId("petri-sahne").children[0] as never, "layout", {
+  fireEvent(u.getByTestId("petri-sahne"), "layout", {
     nativeEvent: { layout: { width: 900, height: 400 } },
   });
   return u;

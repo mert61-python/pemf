@@ -170,11 +170,19 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
   );
 
   return (
-    <View testID={testID}>
-      <View
-        style={styles.kap}
-        onLayout={(e) => {
-          const w = Math.round(e.nativeEvent.layout.width);
+    // ⚠️ ÖLÇÜM BURADA, İÇ KAPTA DEĞİL — SAHADA ÖLÇÜLEN ARIZA (2026-09-12, sahip bildirimi):
+    // görsel HİÇ çizilmiyordu, modülü kapatıp açınca geliyordu. Sebep: ölçülen iç kap
+    // (`styles.kap`) sonuç gelene kadar BOŞ ve yüksekliği 0 olan bir kutuydu; ilk
+    // `ResizeObserver` geri çağrısı kaçırıldığında genişlik 0'da kalıyor ve `kutu` null
+    // olduğu için EKRANA HİÇBİR ŞEY çizilmiyordu. Bu dış kap kontrol satırını içerdiği için
+    // HER ZAMAN gerçek bir boyuta sahiptir; ölçüm kaçmaz.
+    // ⚠️ Döngü yok: kutunun genişliği daima ölçülen genişlikten KÜÇÜK EŞİTTİR
+    // (`kameraKutusu` yüksekliği kapa göre sınırlar), dolayısıyla dış kabı büyütemez.
+    <View
+      testID={testID}
+      style={styles.dis}
+      onLayout={(e) => {
+        const w = Math.round(e.nativeEvent.layout.width);
           // ⚠️ HER ÖLÇÜMDE GÜNCELLENİR — "yalnız ilk ölçüm" DEĞİL. `AiProPanel`de ölç → daralt →
           // ölç döngüsünü önlemek için ilk ölçüm kilitleniyor; oradaki gerekçe ÖLÇÜLEN kabın
           // KENDİSİNİN daralmasıydı. Burada ölçülen kap `width: "100%"` ve kutu onun ÇOCUĞU →
@@ -183,9 +191,10 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
           // yan yatması) `useStageHeight` yüksekliği CANLI daraltırken genişlik ESKİ değerde
           // kalır → kutu yatayda taşar ya da kenarda boşluk bırakır. Sahnenin canlı olması bu
           // bileşenin var oluş gerekçelerinden biri.
-          if (w > 0) setKapW((eski) => (Math.abs(eski - w) >= 1 ? w : eski));
-        }}
-      >
+        if (w > 0) setKapW((eski) => (Math.abs(eski - w) >= 1 ? w : eski));
+      }}
+    >
+      <View style={styles.kap}>
         {kutu ? (
           // ⚠️ ÇERÇEVE GENİŞLİĞE EKLENİR, İÇİNDEN GİTMEZ. React Native'de kutu modeli
           // `border-box`: `width: K` + `borderWidth: 1` verirsen İÇ ALAN K-2 olur ve K
@@ -199,7 +208,22 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             {gorsel(kutu, "sahne")}
             {ustKatman?.(kutu)}
           </View>
-        ) : null}
+        ) : (
+          // ⚠️ ÖLÇÜM GELMEDEN DE GÖRSEL ÇİZİLİR — "hiçbir şey gösterme" KABUL EDİLEMEZ.
+          // Sahada tam bu yaşandı: ölçüm kaçınca ekranda görsel YOKTU ve kullanıcı analizin
+          // çalışmadığını sandı. Bu dalda oran kilidi YOK (kutu bilinmiyor), yalnız yükseklik
+          // sınırlı: `contain` olduğu için görüntü BOZULMAZ, en fazla kenarda boşluk kalır.
+          // Ölçüm gelir gelmez yukarıdaki oran-kilitli dala geçilir.
+          <View style={[styles.kutu, styles.olcumsuz, { height: icTavan }]} testID={`${testID}-kutu-olcumsuz`}>
+            <Image
+              source={{ uri: sayfa.uri }}
+              style={styles.olcumsuzGorsel}
+              resizeMode="contain"
+              testID={`${testID}-gorsel-sahne`}
+              accessibilityLabel={`${sayfa.ad} paneli`}
+            />
+          </View>
+        )}
       </View>
 
       <View
@@ -325,7 +349,11 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
 }
 
 const styles = StyleSheet.create({
+  dis: { width: "100%" },
   kap: { width: "100%", alignItems: "center" },
+  // Ölçüm gelmeden çizilen yedek kutu: oran kilidi YOK, yalnız yükseklik sınırlı.
+  olcumsuz: { width: "100%" },
+  olcumsuzGorsel: { width: "100%", height: "100%" },
   kutu: {
     alignSelf: "center",
     backgroundColor: colors.bg,

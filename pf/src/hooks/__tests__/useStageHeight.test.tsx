@@ -71,3 +71,57 @@ describe("sahne yüksekliği", () => {
     expect(h).toBeLessThan(Math.round(480 * 0.45));
   });
 });
+
+/** Galeri yüksekliğini verilen cihazda taze ölçer (yukarıdaki `olc` ile aynı desen). */
+function olcGaleri(width: number, height: number, os: "ios" | "android" | "web" = "web") {
+  cihaziKur({ width, height, os });
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const React = require("react");
+  const TestRenderer = require("react-test-renderer");
+  const mod = require("@/hooks/useStageHeight") as typeof import("@/hooks/useStageHeight");
+  const { rs } = require("@/theme/tokens") as typeof import("@/theme/tokens");
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  const tut: { galeri?: number; sahne?: number } = {};
+  function Sonda() {
+    tut.galeri = mod.useGaleriYuksekligi();
+    tut.sahne = mod.useStageHeight();
+    return null;
+  }
+  TestRenderer.act(() => {
+    TestRenderer.create(React.createElement(Sonda));
+  });
+  if (tut.galeri === undefined || tut.sahne === undefined) throw new Error("hook okunamadı");
+  return { galeri: tut.galeri, sahne: tut.sahne, tavan: rs(mod.GALERI_TAVAN), taban: rs(mod.SAHNE_TABAN) };
+}
+
+describe("galeri yüksekliği (çok panelli AI sahnesi)", () => {
+  it("KRİTİK: GENİŞ pencerede sahne tavanından BÜYÜK", () => {
+    // ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "daha büyük olmalı ve responsive korunmalı". Galeri
+    // yüksekliğinden bir de kontrol satırı (~130 px) düşüyor; `SAHNE_TAVAN` (300) ile masaüstü
+    // penceresinde görsel ~170 px'de kalıyordu.
+    //
+    // MUTASYON: `GALERI_TAVAN`ı `SAHNE_TAVAN` yap → KIRMIZI.
+    const { galeri, sahne } = olcGaleri(1600, 1066);
+    expect(galeri).toBeGreaterThan(sahne);
+    expect(galeri).toBe(Math.round(1066 * 0.45)); // oran AYNI, yalnız tavan yükseldi
+  });
+
+  it("KRİTİK: launcher asgari penceresinde (700×540) sahne ile AYNI kalır", () => {
+    // ⚠️ Küçük pencerede büyütmek "Analiz Başlat kaydırmasız görünür" kapısını (G4) bozardı.
+    // Oran ve taban `useStageHeight` ile birebir aynı olduğu için burada fark OLMAMALI.
+    //
+    // MUTASYON: oranı 0,45 → 0,60 yap → KIRMIZI.
+    const { galeri, sahne } = olcGaleri(700, 540);
+    expect(galeri).toBe(sahne);
+  });
+
+  it("KRİTİK: çok uzun pencerede kendi tavanını aşmaz", () => {
+    const { galeri, tavan } = olcGaleri(1600, 2000);
+    expect(galeri).toBe(tavan);
+  });
+
+  it("kısa ekranda taban altına inmez", () => {
+    const { galeri, taban } = olcGaleri(1024, 300);
+    expect(galeri).toBeGreaterThanOrEqual(taban);
+  });
+});

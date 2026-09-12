@@ -11,7 +11,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
-import { useStageHeight } from "@/hooks/useStageHeight";
+import { useGaleriYuksekligi, useStageHeight } from "@/hooks/useStageHeight";
 import { GorselSahne } from "@/components/ui/GorselSahne";
 import { sahneSayfalari } from "@/utils/gorselSahneSayfalari";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
@@ -350,8 +350,8 @@ export function AiHubScreen() {
 }
 
 function PetOwnerAiScreen() {
-  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
-  const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   const { showToast } = useToast();
   const { session } = useAuth();
   // Sonuç + görüntü modül-cache'ten init → tab değişip geri gelince KAYBOLMAZ (yeni analize/hastaya kadar kalıcı).
@@ -547,7 +547,7 @@ function PetOwnerAiScreen() {
                 Galeri hem girdiyi hem işaretli sonucu erişilebilir kılar. */}
             <GorselSahne
               sayfalar={sahneSayfalari(result, imageUri)}
-              tavanY={sahneH}
+              tavanY={galeriH}
               sifirlaAnahtari={imageUri}
               testID="petowner-sahne"
             />
@@ -1101,6 +1101,8 @@ function resetAiCachesForOwner(owner: string | null): boolean {
 function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, explainDestegi }: { endpoint: string, title: string, subtitle: string, patientName: string, galleryOnly?: boolean, explainDestegi?: boolean }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   // [S7 adım 5 / aihub-1] ÖNİZLEME KUTUSU ORAN KİLİDİ. Kutu sabit yükseklikteydi ve canlı
   // kamera ile üzerine bindirilen sunucu overlay'i farklı ölçeklerde oturuyordu: organ işaretleri
   // görüntüyle KAYIYORDU (tıbbi karar ekranı). Kutu artık karenin GERÇEK oranında açık px.
@@ -1511,7 +1513,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
       {!isLive ? (
         <GorselSahne
           sayfalar={sahneSayfalari(result, imageUri)}
-          tavanY={sahneH}
+          tavanY={galeriH}
           sifirlaAnahtari={imageUri}
           testID="vision-sahne"
           bos={
@@ -1834,6 +1836,8 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
 function PhantomModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   const { showToast } = useToast();
   const CK = "/vision/em_fantom";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -1970,7 +1974,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
           7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
       <GorselSahne
         sayfalar={sahneSayfalari(result, imageUri)}
-        tavanY={sahneH}
+        tavanY={galeriH}
         sifirlaAnahtari={imageUri}
         testID="fantom-sahne"
           bos={
@@ -2112,6 +2116,8 @@ const PETRI_AYAR_ALANLARI: {
 function PetriModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   const { showToast } = useToast();
   const CK = "/vision/em_petri";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -2276,7 +2282,7 @@ function PetriModule({ patientName }: { patientName: string }) {
           7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
       <GorselSahne
         sayfalar={sahneSayfalari(result, imageUri)}
-        tavanY={sahneH}
+        tavanY={galeriH}
         sifirlaAnahtari={imageUri}
         testID="petri-sahne"
           bos={
@@ -3012,6 +3018,8 @@ const CT_TR: Record<string, string> = { "Kidney Stone": "Böbrek Taşı", "Kidne
 function KidneyCTModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   const { showToast } = useToast();
   const CK = "/vision/kidney_ct";
   const [imageUri, setImageUri] = useState<string | null>(visionCache[CK]?.imageUri ?? null);
@@ -3140,7 +3148,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
           7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
       <GorselSahne
         sayfalar={sahneSayfalari(result, imageUri)}
-        tavanY={sahneH}
+        tavanY={galeriH}
         sifirlaAnahtari={imageUri}
         testID="kidneyct-sahne"
           bos={
@@ -3697,6 +3705,8 @@ function ScratchModule({ patientName }: { patientName: string }) {
 function CatOrganModule({ patientName }: { patientName: string }) {
   // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
   const sahneH = useStageHeight();
+  // Galeri ASIL okuma yuzeyi: daha yuksek tavan, AYNI responsive oran (bkz. useGaleriYuksekligi).
+  const galeriH = useGaleriYuksekligi();
   // [S7 adım 5 / aihub-1] ÖNİZLEME KUTUSU ORAN KİLİDİ. Kutu sabit yükseklikteydi ve canlı
   // kamera ile üzerine bindirilen sunucu overlay'i farklı ölçeklerde oturuyordu: organ işaretleri
   // görüntüyle KAYIYORDU (tıbbi karar ekranı). Kutu artık karenin GERÇEK oranında açık px.
@@ -3878,7 +3888,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       {!isLive ? (
         <GorselSahne
           sayfalar={sahneSayfalari(result, imageUri)}
-          tavanY={sahneH}
+          tavanY={galeriH}
           sifirlaAnahtari={imageUri}
           testID="catorgan-sahne"
           bos={

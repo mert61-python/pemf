@@ -32,10 +32,17 @@ const YEDI: SahneSayfasi[] = [
   sayfa("07_combined", "Birleşik", 1600, 1067),
 ];
 
-/** Kabın genişliğini ve kontrol satırının yüksekliğini testin KENDİSİ verir. */
+/**
+ * Kabın genişliğini ve kontrol satırının yüksekliğini testin KENDİSİ verir.
+ *
+ * ⚠️ OLAY DIŞ KABA ATILIR (`getByTestId(testID)`), iç kaba DEĞİL. Ölçüm oraya taşındı: iç kap
+ * sonuç gelene kadar BOŞ ve 0 yükseklikte olduğu için ilk `ResizeObserver` geri çağrısı
+ * kaçabiliyordu ve sahada görsel HİÇ çizilmiyordu (sahip bildirimi 2026-09-12).
+ */
 function olc(api: ReturnType<typeof render>, kontrolY = KONTROL_TAHMINI, testID = "gorsel-sahne") {
-  const kap = api.getByTestId(testID).children[0] as never;
-  fireEvent(kap, "layout", { nativeEvent: { layout: { width: KAP_W, height: 400 } } });
+  fireEvent(api.getByTestId(testID), "layout", {
+    nativeEvent: { layout: { width: KAP_W, height: 400 } },
+  });
   fireEvent(api.getByTestId(`${testID}-kontrol`), "layout", {
     nativeEvent: { layout: { width: KAP_W, height: kontrolY } },
   });
@@ -134,6 +141,41 @@ test("KRITIK: sunucu boyut BILDIRDIYSE olcum HIC ALINMAZ", () => {
   expect(kutuOlcusu(api)).toEqual(once);
 });
 
+test("KRITIK: OLCUM HIC GELMESE BILE gorsel CIZILIR", () => {
+  // ⚠️ SAHADA ÖLÇÜLEN ARIZA (2026-09-12, sahip bildirimi + ekran görüntüsü): çipler ve sayaç
+  // görünüyordu ama GÖRSEL YOKTU; modülü kapatıp açınca geliyordu. Sebep: ölçüm boş bir iç
+  // kaptan alınıyordu, ilk `ResizeObserver` geri çağrısı kaçınca `kutu` null kalıyor ve
+  // `null` çizildiği için EKRANDA HİÇBİR ŞEY olmuyordu. Kullanıcı analizin çalışmadığını sandı.
+  //
+  // ⚠️ KURAL: ölçüm gecikse/kaçsa bile "hiçbir şey gösterme" KABUL EDİLEMEZ.
+  //
+  // MUTASYON: ölçümsüz dalı `: null`a geri çevir → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  // Bilerek HİÇBİR layout olayı ateşlenmiyor.
+  const gorsel = api.getByTestId("gorsel-sahne-gorsel-sahne");
+  expect(gorsel.props.source.uri).toBe(YEDI[5].uri); // varsayılan sayfa: Tahmin
+  expect(api.getByTestId("gorsel-sahne-kutu-olcumsuz")).toBeTruthy();
+});
+
+test("KRITIK: OLCUM her zaman ICERIGI OLAN dis kaptan alinir", () => {
+  // ⚠️ Ölçüm boş bir iç kaptan alınırsa (sonuç gelene kadar 0 yükseklik) ilk `ResizeObserver`
+  // geri çağrısı kaçabiliyor ve genişlik 0'da kalıyor — sahada tam bu yaşandı. Dış kap kontrol
+  // satırını içerdiği için HER ZAMAN gerçek bir boyuta sahiptir.
+  //
+  // MUTASYON: `onLayout`u iç kaba (`styles.kap`) geri taşı → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  expect(typeof api.getByTestId("gorsel-sahne").props.onLayout).toBe("function");
+});
+
+test("KRITIK: OLCUM GELINCE oran-kilitli kutuya GECILIR", () => {
+  // Yedek dal kalıcı olsaydı oran kilidi hiç devreye girmez, işaretler kayardı.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  expect(api.queryByTestId("gorsel-sahne-kutu")).toBeNull();
+  olc(api);
+  expect(api.queryByTestId("gorsel-sahne-kutu-olcumsuz")).toBeNull();
+  expect(api.getByTestId("gorsel-sahne-kutu")).toBeTruthy();
+});
+
 test("KRITIK: PENCERE YENIDEN BOYUTLANINCA kutu genisligi TAKIP EDER", () => {
   // ⚠️ ÖLÇÜLEN KUSUR (bu tur): ilk yazımda genişlik `eski > 0 ? eski : w` ile KİLİTLENİYORDU.
   // Gerekçe `AiProPanel`den kopyalanmıştı — orada ölçülen kabın KENDİSİ daraldığı için döngü
@@ -146,8 +188,7 @@ test("KRITIK: PENCERE YENIDEN BOYUTLANINCA kutu genisligi TAKIP EDER", () => {
   olc(api);
   const genis = kutuOlcusu(api);
 
-  const kap = api.getByTestId("gorsel-sahne").children[0] as never;
-  fireEvent(kap, "layout", { nativeEvent: { layout: { width: 400, height: 400 } } });
+  fireEvent(api.getByTestId("gorsel-sahne"), "layout", { nativeEvent: { layout: { width: 400, height: 400 } } });
   const dar = kutuOlcusu(api);
 
   expect(dar.width).toBeLessThan(genis.width);

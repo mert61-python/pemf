@@ -133,15 +133,33 @@ def test_KRITIK_sahnede_aspectRatio_YASAK():
     assert "aspectRatio" not in src, "GorselSahne aspectRatio kullaniyor -> oran kilidi bozulur, isaretler kayar"
 
 
-def test_KRITIK_gorsel_YUZDE_olcu_almaz():
-    """Taban görsel AÇIK SAYISAL kutu almalı; `{width:'100%',height:'100%'}` YASAK.
+def test_KRITIK_ORAN_KILITLI_gorsel_YUZDE_olcu_almaz():
+    """Oran-kilitli taban görsel AÇIK SAYISAL kutu almalı.
 
     ⚠️ Yüzde ölçü, üst katmanın (organ işaretleri) taban görselden FARKLI bir kutuya oturmasına
     yol açar — G10'un yasakladığı tam durum.
+
+    ⚠️ TEK İSTİSNA `olcumsuzGorsel`: ölçüm gelmeden çizilen yedek kare. Orada kutu HENÜZ
+    BİLİNMİYOR (yüzde vermekten başka seçenek yok) ve ÜST KATMAN ÇİZİLMİYOR, dolayısıyla hizalama
+    sorunu doğmaz. Bu istisnanın bedeli aşağıdaki ikinci iddiayla ödeniyor: üst katman YALNIZ
+    ölçülmüş dalda çağrılabilir.
+    ⚠️ Kural ilk yazımda kaba bir "hiçbir yerde yüzde olmasın" biçimindeydi ve yedek çizimi
+    (sahada görselin HİÇ görünmemesini düzelten şey) engelledi — kapı, gerekçesine göre daraltıldı.
     """
     src = _kod("components/ui/GorselSahne.tsx")
-    assert 'width: "100%", height: "100%"' not in src
-    assert "width: '100%', height: '100%'" not in src
+
+    # İstisna satırını ayıkla, kalan her yerde yüzde-ölçü YASAK.
+    kalan = "\n".join(s for s in src.splitlines() if "olcumsuzGorsel" not in s)
+    assert 'width: "100%", height: "100%"' not in kalan, (
+        "oran-kilitli gorsel yuzde olcu aliyor -> ust katman FARKLI kutuya oturur"
+    )
+    assert "width: '100%', height: '100%'" not in kalan
+
+    # ⚠️ ÜST KATMAN YALNIZ ÖLÇÜLMÜŞ DALDA: yedek dalda çizilseydi, bilinmeyen bir kutuya
+    # oturur ve işaretler kayardı (istisnanın bedeli tam olarak budur).
+    assert src.count("ustKatman?.(") == 1, (
+        f"ustKatman {src.count('ustKatman?.(')} yerde cagriliyor — olcumsuz dalda da cizilmis olabilir"
+    )
 
 
 # ============================================================================

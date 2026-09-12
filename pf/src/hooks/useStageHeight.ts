@@ -32,3 +32,26 @@ export function useStageHeight(): number {
   const oran = height < SHORT_HEIGHT ? SAHNE_ORAN_KISA : SAHNE_ORAN;
   return Math.min(rs(SAHNE_TAVAN), Math.max(rs(SAHNE_TABAN), Math.round(height * oran)));
 }
+
+/**
+ * GALERİ TAVANI — çok panelli AI galerisi için (`GorselSahne`).
+ *
+ * ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "daha büyük olmalı ve responsive korunmalı". Galeri artık
+ * analiz sonucunun ASIL okuma yüzeyi; üstelik yüksekliğinden bir de kontrol satırı (oklar +
+ * çipler, ~130 px) düşüyor. `SAHNE_TAVAN` (300) bu iş için tasarlanmamıştı — geniş bir masaüstü
+ * penceresinde görsel ~170 px'de kalıyordu.
+ *
+ * ⚠️ ORAN VE TABAN `useStageHeight` İLE BİREBİR AYNI; DEĞİŞEN YALNIZ TAVAN. Böylece:
+ *  · 540 px'lik launcher penceresinde sonuç DEĞİŞMEZ (0,45×540 = 243 < her iki tavan) →
+ *    "Analiz Başlat kaydırmasız görünür" kapısı (G4) aynen korunur,
+ *  · 1066 px'lik masaüstü penceresinde 300 yerine 480 px olur (%60 daha büyük).
+ * ⚠️ Sabit bir büyük sayı VERİLMEDİ: responsive'lik pencere oranından gelir.
+ */
+export const GALERI_TAVAN = 560;
+
+/** Çok panelli galeri yüksekliği (px) — `useStageHeight` ile aynı oran, daha yüksek tavan. */
+export function useGaleriYuksekligi(): number {
+  const { height } = useWindowDimensions();
+  const oran = height < SHORT_HEIGHT ? SAHNE_ORAN_KISA : SAHNE_ORAN;
+  return Math.min(rs(GALERI_TAVAN), Math.max(rs(SAHNE_TABAN), Math.round(height * oran)));
+}
