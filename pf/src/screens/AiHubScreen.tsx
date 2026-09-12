@@ -15,6 +15,7 @@ import { useStageHeight } from "@/hooks/useStageHeight";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
+import { webIcinKucult } from "@/services/gorselKucult";
 import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
@@ -378,9 +379,12 @@ function PetOwnerAiScreen() {
           // URL'si serbest bırakılmadan yenisi oluşturuluyor, tam boyutlu görüntüler bellekte
           // birikiyordu (web istemcisi klinikte gün boyu açık kalır).
           if (imageUri && imageUri.startsWith("blob:")) URL.revokeObjectURL(imageUri);
-          setImageFile(file);
-          setImageUri(URL.createObjectURL(file));
           setResult(null); setTreatmentStatus("");
+          // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
+          // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
+          // 1 MB multipart sınırına takılıyordu. `webIcinKucult` başarısızlıkta ORİJİNALİ
+          // döndürür (fail-open) — küçültme bir optimizasyondur, kapı değil.
+          void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -406,9 +410,12 @@ function PetOwnerAiScreen() {
         if (file) {
           // BUG #3 FIX: Eski objectURL'yi revoke et, memory leak önlenir
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file);
-          setImageUri(URL.createObjectURL(file));
           setResult(null); setTreatmentStatus("");
+          // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
+          // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
+          // 1 MB multipart sınırına takılıyordu. `webIcinKucult` başarısızlıkta ORİJİNALİ
+          // döndürür (fail-open) — küçültme bir optimizasyondur, kapı değil.
+          void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -1269,10 +1276,13 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         if (file) {
           // BUG #3 FIX: eski objectURL'yi temizle
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file);
-          setImageUri(URL.createObjectURL(file));
           setImageBase64(null);
           setResult(null);
+          // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
+          // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
+          // 1 MB multipart sınırına takılıyordu. `webIcinKucult` başarısızlıkta ORİJİNALİ
+          // döndürür (fail-open) — küçültme bir optimizasyondur, kapı değil.
+          void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -1298,10 +1308,13 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
         if (file) {
           // BUG #3 FIX: eski objectURL'yi temizle
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file);
-          setImageUri(URL.createObjectURL(file));
           setImageBase64(null);
           setResult(null);
+          // ⚠️ WEB KÜÇÜLTME (AI Hub planı, ADIM 1): web'de HİÇ küçültme yoktu → ham dosya
+          // yükleniyor, aynı analiz platforma göre 8× farklı boyutta gidiyor ve backend'in
+          // 1 MB multipart sınırına takılıyordu. `webIcinKucult` başarısızlıkta ORİJİNALİ
+          // döndürür (fail-open) — küçültme bir optimizasyondur, kapı değil.
+          void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -1817,7 +1830,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null);
+          setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -1839,7 +1852,7 @@ function PhantomModule({ patientName }: { patientName: string }) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null);
+          setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -2095,7 +2108,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null);
+          setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -2117,7 +2130,7 @@ function PetriModule({ patientName }: { patientName: string }) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
           if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri);
-          setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null);
+          setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); });
         }
       };
       input.click();
@@ -2973,7 +2986,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
@@ -2988,7 +3001,7 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
@@ -3179,7 +3192,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
@@ -3194,7 +3207,7 @@ function HistopathModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
@@ -3722,7 +3735,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*'; (input as any).capture = 'environment';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
@@ -3737,7 +3750,7 @@ function CatOrganModule({ patientName }: { patientName: string }) {
       input.type = 'file'; input.accept = 'image/*';
       input.onchange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageFile(file); setImageUri(URL.createObjectURL(file)); setImageBase64(null); setResult(null); }
+        if (file) { if (imageUri && imageUri.startsWith('blob:')) URL.revokeObjectURL(imageUri); setImageBase64(null); setResult(null); void webIcinKucult(file).then((k) => { setImageFile(k); setImageUri(URL.createObjectURL(k)); }); }
       };
       input.click();
     } else {
