@@ -354,6 +354,40 @@ test("KRITIK: tam ekran ACILIR, AYNI uri, kapanista SAYFA INDEKSI KORUNUR", () =
   expect(api.getByTestId("gorsel-sahne-sayac").props.children.join("")).toContain("4/7");
 });
 
+test("KRITIK: tam ekranda YATAY kaydiriciya ACIK YUKSEKLIK verilir", () => {
+  // ⚠️ SAHADA ÖLÇÜLEN ARIZA (2026-09-12, sahip bildirimi): tam ekran açılıyor, başlık ve zoom
+  // düğmeleri görünüyor ama GÖRSEL YOK. Sebep: yatay `ScrollView`in öz yüksekliği yok; dikey
+  // bir `ScrollView`in `alignItems: center` içerik kabının çocuğu olunca yüksekliği SIFIRA
+  // çöküyor ve görsel çizilmiyor. `flexGrow: 1` bunu ÇÖZMEZ (karşılıklı bağımlılık sıfırda
+  // dengeleniyor).
+  //
+  // ⚠️ JEST YERLEŞİM YAPMAZ, yani çökmeyi DAVRANIŞLA ölçemem. Bu yüzden sözleşme YAPISAL
+  // kilitleniyor: yatay kaydırıcı AÇIK SAYISAL yükseklik taşımalı ve bu yükseklik çizilen
+  // görselin yüksekliğiyle AYNI olmalı (1:1'de dikey kaydırma dıştakinden gelsin).
+  //
+  // MUTASYON: `style={{ height: tamOlcu.height }}`i kaldır → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  fireEvent.press(api.getByTestId("gorsel-sahne-tam-ekran"));
+
+  const gorsel = api.getByTestId("gorsel-sahne-gorsel-tam");
+
+  // ⚠️ ÇIPA `horizontal` PROP'UNA PİNLİ, "yukarı çıkıp ilk sayısal yüksekliği bul"a DEĞİL:
+  // ilk yazımda döngü GÖRSELİN KENDİ yüksekliğini buluyordu ve mutasyon YEŞİL kalıyordu
+  // (test kendini ölçüyordu). Aranan şey yatay KAYDIRICININ yüksekliği.
+  let yatay: typeof gorsel.parent = gorsel.parent;
+  for (let i = 0; i < 6 && yatay; i++) {
+    if (yatay.props?.horizontal === true) break;
+    yatay = yatay.parent;
+  }
+  expect(yatay?.props?.horizontal).toBe(true);
+
+  const st = yatay?.props?.style;
+  const duz = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
+  expect(typeof duz?.height).toBe("number");
+  expect(duz.height).toBe(gorsel.props.style.height);
+});
+
 test("KRITIK: %200'de SAYISAL boyut 2 kat, son basamak 1:1 KAYNAK PIKSEL", () => {
   // 3000×1000 kaynak, 900 px kutu → merdiven [1, 2, 3,33]. İlk basamak %200, son basamak 1:1.
   //

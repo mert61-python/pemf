@@ -137,6 +137,8 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
   // ⚠️ `useMemo` YOK — bu iki hesap birkaç aritmetik işlem; elle memolamak React Compiler'ın
   // bileşeni optimize etmesini tamamen ENGELLİYORDU (lint: "memoization could not be preserved").
   const basamaklar = zoomBasamaklari({ kaynakW, kaynakH, kutuW });
+  // Tam ekranda cizilen olcu: kutu x zoom (kutu yoksa null -> yedek cizim).
+  const tamOlcu = kutu ? { width: Math.round(kutu.width * zoom), height: Math.round(kutu.height * zoom) } : null;
   const birebir = birebirOrani({ kaynakW, kaynakH, kutuW });
 
   if (adet === 0) return <>{bos ?? null}</>;
@@ -330,17 +332,30 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             </View>
           </View>
 
-          <ScrollView
-            style={styles.tamKaydirma}
-            contentContainerStyle={styles.tamIcerik}
-            maximumZoomScale={1}
-            horizontal={false}
-          >
-            <ScrollView horizontal contentContainerStyle={styles.tamIcerik}>
-              {kutu
-                ? gorsel({ width: Math.round(kutu.width * zoom), height: Math.round(kutu.height * zoom) }, "tam")
-                : null}
-            </ScrollView>
+          <ScrollView style={styles.tamKaydirma} contentContainerStyle={styles.tamIcerik}>
+            {/* ⚠️ YATAY KAYDIRICIYA AÇIK YÜKSEKLİK ŞART — SAHADA ÖLÇÜLEN ARIZA (2026-09-12):
+                tam ekran açılıyordu ama GÖRSEL YOKTU (başlık ve zoom düğmeleri görünüyordu).
+                Sebep: yatay `ScrollView`in ÖZ YÜKSEKLİĞİ YOK. Dikey bir `ScrollView`in
+                `alignItems: center` olan içerik kabının çocuğu olduğunda yüksekliği SIFIRA
+                çöküyor ve içindeki görsel çizilmiyordu. `flexGrow: 1` bunu çözmez: dikey
+                kaydırıcının içerik kabı kendi yüksekliğini içeriğinden alır, yani karşılıklı
+                bağımlılık sıfırda dengeleniyordu.
+                ⚠️ Yükseklik GÖRSELİN yüksekliğidir: böylece 1:1 yakınlaştırmada dikey kaydırma
+                DIŞTAKİ kaydırıcıdan, yatay kaydırma İÇTEKİNDEN gelir — iki eksen de çalışır. */}
+            {tamOlcu ? (
+              <ScrollView horizontal style={{ height: tamOlcu.height }} contentContainerStyle={styles.tamYatay}>
+                {gorsel(tamOlcu, "tam")}
+              </ScrollView>
+            ) : (
+              // Ölçüm gelmemişse yine de göster (satır içi yedek çizimin tam ekran ikizi).
+              <Image
+                source={{ uri: sayfa.uri }}
+                style={styles.olcumsuzGorsel}
+                resizeMode="contain"
+                testID={`${testID}-gorsel-tam`}
+                accessibilityLabel={`${sayfa.ad} paneli`}
+              />
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -387,4 +402,6 @@ const styles = StyleSheet.create({
   zoomEtiket: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700", minWidth: 44, textAlign: "center" },
   tamKaydirma: { flex: 1 },
   tamIcerik: { justifyContent: "center", alignItems: "center", flexGrow: 1 },
+  // ⚠️ flexGrow YOK: yatay kaydiricinin yuksekligi ACIK verildigi icin buyumesi gerekmez.
+  tamYatay: { alignItems: "center", justifyContent: "center" },
 });
