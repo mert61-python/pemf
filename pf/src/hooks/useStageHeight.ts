@@ -49,9 +49,23 @@ export function useStageHeight(): number {
  */
 export const GALERI_TAVAN = 560;
 
-/** Çok panelli galeri yüksekliği (px) — `useStageHeight` ile aynı oran, daha yüksek tavan. */
+/**
+ * ⚠️ TAVANI YÜKSELTMEK TEK BAŞINA YETMEDİ — HESAPLANDI, VARSAYILMADI.
+ * Sahibin 1066 px'lik penceresinde bağlayıcı kısıt tavan DEĞİL, `0,45 × pencere` oranıydı
+ * (0,45×1066 = 480; `rs(300)` o genişlikte zaten ~475). Yalnız tavanı 560'a çıkarmak görseli
+ * 345 px'den 350 px'e taşırdı — sahibin "daha büyük olmalı" isteğini KARŞILAMAZDI.
+ *
+ * Bu yüzden GENİŞ pencerelerde ORAN da yükseliyor. Eşik `GENIS_EKRAN_Y`: altında davranış
+ * BİT-BİT eskisi gibi kalır (700×540 launcher penceresi = 243 px), üstünde galeri büyür.
+ * 1066 px'de: 0,62×1066 = 661 → kontrol satırı (~130) düşünce görsel ~531 px (eskiden ~345).
+ */
+export const GENIS_EKRAN_Y = 700;
+export const GALERI_ORAN_GENIS = 0.62;
+
+/** Çok panelli galeri yüksekliği (px). Dar pencerede `useStageHeight` ile AYNI. */
 export function useGaleriYuksekligi(): number {
   const { height } = useWindowDimensions();
-  const oran = height < SHORT_HEIGHT ? SAHNE_ORAN_KISA : SAHNE_ORAN;
+  let oran = height < SHORT_HEIGHT ? SAHNE_ORAN_KISA : SAHNE_ORAN;
+  if (height >= GENIS_EKRAN_Y) oran = GALERI_ORAN_GENIS;
   return Math.min(rs(GALERI_TAVAN), Math.max(rs(SAHNE_TABAN), Math.round(height * oran)));
 }

@@ -101,9 +101,12 @@ describe("galeri yüksekliği (çok panelli AI sahnesi)", () => {
     // penceresinde görsel ~170 px'de kalıyordu.
     //
     // MUTASYON: `GALERI_TAVAN`ı `SAHNE_TAVAN` yap → KIRMIZI.
-    const { galeri, sahne } = olcGaleri(1600, 1066);
+    const { galeri, sahne, tavan } = olcGaleri(1600, 1066);
     expect(galeri).toBeGreaterThan(sahne);
-    expect(galeri).toBe(Math.round(1066 * 0.45)); // oran AYNI, yalnız tavan yükseldi
+    // ⚠️ Geniş pencerede ORAN da yükseliyor: yalnız tavanı büyütmek 345 → 350 px yapardı
+    // (bağlayıcı kısıt oran), sahibin "daha büyük olmalı" isteğini karşılamazdı.
+    expect(galeri).toBe(Math.min(tavan, Math.round(1066 * 0.62)));
+    expect(galeri / sahne).toBeGreaterThan(1.25); // gözle görülür fark (ölçülen: 1,3x)
   });
 
   it("KRİTİK: launcher asgari penceresinde (700×540) sahne ile AYNI kalır", () => {
