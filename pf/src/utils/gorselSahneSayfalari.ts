@@ -101,9 +101,22 @@ export function sahneSayfalari(yanit: YanitBenzeri | null | undefined, yerelUri:
   if (Array.isArray(paneller) && paneller.length > 0) {
     for (const p of paneller) {
       if (!p || typeof p.k !== "string") continue;
-      // ⚠️ Girdi paneli YEREL dosyayla değiştirilir (yukarıdaki gerekçe).
+      // ⚠️ Girdi paneli YEREL dosyayla değiştirilir (yukarıdaki gerekçe) — ama SUNUCUNUN
+      // BİLDİRDİĞİ BOYUT KORUNUR. Sunucunun `01_input` kopyası aynı fotoğraftır, yalnız
+      // yeniden kodlanmıştır; dolayısıyla ORANI birebir aynıdır ve kutu oran kilidi onu okur.
+      // ⚠️ Boyut düşürülseydi Girdi sayfası yön varsayılanına (4:3) düşerdi: dikey bir telefon
+      // fotoğrafı kutunun ~%44'ünü boş bırakır ve sonuç panellerinin yanında bozuk görünürdü —
+      // üstelik bu, sahibin "girdi kayboluyor" şikâyeti için açtığımız sayfanın ta kendisi.
       if (p.k === GIRDI_ANAHTARI) {
-        if (yerelUri) sayfalar.push({ k: p.k, ad: p.ad || GIRDI_ADI, uri: yerelUri });
+        if (yerelUri) {
+          sayfalar.push({
+            k: p.k,
+            ad: p.ad || GIRDI_ADI,
+            uri: yerelUri,
+            image_w: p.image_w,
+            image_h: p.image_h,
+          });
+        }
         continue;
       }
       if (!p.image_base64) continue; // boş panel: sessiz `undefined` uri üretme

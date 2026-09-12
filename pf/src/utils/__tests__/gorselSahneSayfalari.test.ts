@@ -38,6 +38,25 @@ const YEDI_PANEL = [
 // 1. ⚠️ ASIL KAPI — GİRDİ ERİŞİLEBİLİR KALIR
 // ============================================================================
 
+test("KRITIK: Girdi sayfasi SUNUCUNUN BILDIRDIGI BOYUTU korur", () => {
+  // ⚠️ Uri yerel dosyayla değiştirilir ama BOYUT sunucudan kalmalı: sunucunun `01_input`
+  // kopyası AYNI fotoğraftır (yalnız yeniden kodlanmış), dolayısıyla ORANI birebir aynıdır.
+  // Boyut düşürülseydi Girdi sayfası yön varsayılanına (4:3) düşerdi ve DİKEY bir telefon
+  // fotoğrafı kutunun ~%44'ünü boş bırakırdı — üstelik bu, "girdi kayboluyor" şikâyeti için
+  // açtığımız sayfanın ta kendisi.
+  //
+  // MUTASYON: `image_w: p.image_w, image_h: p.image_h` satırlarını sil → KIRMIZI.
+  const dikey = [
+    { k: "01_input", ad: "Girdi", image_base64: "B64", image_w: 3024, image_h: 4032 },
+    panel("07_combined", "Birleşik", 1600, 1067),
+  ];
+  const sayfalar = sahneSayfalari({ paneller: dikey }, YEREL);
+  const girdi = sayfalar.find((s) => s.k === GIRDI_ANAHTARI);
+  expect(girdi?.uri).toBe(YEREL);
+  expect(girdi?.image_w).toBe(3024);
+  expect(girdi?.image_h).toBe(4032);
+});
+
 test("KRITIK: Girdi sayfasi YEREL dosyayi gosterir, sunucunun kopyasini DEGIL", () => {
   // ⚠️ Sunucunun `01_input` paneli yeniden kodlanmış (kapak 1600 px + q85) bir KOPYADIR.
   // Kullanıcının gördüğü "Girdi" kendi çektiği kare olmalı — hem gerçek orijinal budur hem de

@@ -42,6 +42,9 @@ import { basamakEtiketi, birebirOrani, oncekiBasamak, sonrakiBasamak, zoomBasama
  */
 export const KONTROL_TAHMINI = touch.min + touch.sm + spacing.sm * 2;
 
+/** Kutu çerçevesi (px) — RN border-box olduğu için kutu ölçüsüne EKLENİR (bkz. çizim). */
+export const CERCEVE = 1;
+
 /** Kutu bu yüksekliğin altına inmez — tanınmayacak kadar küçük sahne işe yaramaz. */
 export const SAHNE_ASGARI = 120;
 
@@ -94,16 +97,42 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
   const guvenliIndeks = adet > 0 ? Math.min(Math.max(indeks, 0), adet - 1) : 0;
   const sayfa = sayfalar[guvenliIndeks];
 
+  // ⚠️ BOYUTU BİLİNMEYEN SAYFAYI ÖLÇ (panelsiz modüllerin "Girdi" sayfası: yerel dosya, sunucu
+  // bir şey bildirmiyor). Ölçülmezse kutu yön varsayılanına (4:3) düşer ve dikey bir telefon
+  // fotoğrafı kutunun ~%44'ünü boş bırakır — sonuç panellerinin yanında bozuk görünür.
+  //
+  // ⚠️ `Image.getSize` DENENDİ VE TERK EDİLDİ: RN'in iOS uygulaması `ImageViewManager.getSize`
+  // native modülüne dayanıyor ve o yoksa SENKRON FIRLATIYOR ("Cannot read properties of
+  // undefined (reading 'then')") — testlerde tüm sahneyi çökertti; `try/catch` de yetmedi,
+  // çünkü sahte modül hatayı SONRAKİ TICK'te atıyor. Üstelik test ortamında sahteyle ölçülen
+  // bir kapı hiçbir şey kanıtlamazdı.
+  //
+  // ⚠️ YERİNE `onLoad`: çizilen görselin KENDİ yükleme olayı. Native modül gerektirmez, web'de
+  // de çalışır ve testte `fireEvent(gorsel, "load", …)` ile GERÇEKTEN sürülebilir. Bedeli tek
+  // kare: ilk çizim yön varsayılanında, yükleme bitince oran düzelir (`contain` olduğu için
+  // o karede de görüntü BOZULMAZ, yalnız kenarda boşluk kalır).
+  const [olculen, setOlculen] = useState<Record<string, { w: number; h: number }>>({});
+  const olcumAl = (k: string, w?: number, h?: number) => {
+    if (!(typeof w === "number" && typeof h === "number" && w > 0 && h > 0)) return;
+    setOlculen((o) => (o[k] ? o : { ...o, [k]: { w, h } }));
+  };
+
   // ⚠️ TAVANI HESABIN İÇİNE VER: `Math.min(tavan, kutu.height)` ile SONRADAN kırpmak yüksekliği
   // kırpıp genişliği bırakır → oran yine bozulur (`aspectRatio + maxHeight` tuzağının ikizi).
   const icTavan = Math.max(SAHNE_ASGARI, tavanY - kontrolY);
-  const oran = kareOrani({ image_w: sayfa?.image_w, image_h: sayfa?.image_h }, false);
+  const _olcu = sayfa ? olculen[sayfa.k] : undefined;
+  const oran = kareOrani(
+    { image_w: sayfa?.image_w ?? _olcu?.w, image_h: sayfa?.image_h ?? _olcu?.h },
+    false,
+  );
   const kutu = kapW > 0 ? kameraKutusu(kapW, oran, icTavan, 1) : null;
 
   // ⚠️ `basamaklar` ve `birebir` AYNI girdiden türer — etiket "son basamak tam sayı değilse
   // 1:1'dir" diye TAHMİN etmez (3000/600 = 5,0 gibi tam sayılı bir 1:1'i "%500" yazıyordu).
-  const kaynakW = sayfa?.image_w;
-  const kaynakH = sayfa?.image_h;
+  // ⚠️ ÖLÇÜLEN BOYUT ZOOM MERDİVENİNE DE GİRER: yerel dosya gerçekten o çözünürlükte, dolayısıyla
+  // 1:1 basamağı onun için de anlamlıdır. (4096 px doku sınırı kontrolü zaten merdivende.)
+  const kaynakW = sayfa?.image_w ?? _olcu?.w;
+  const kaynakH = sayfa?.image_h ?? _olcu?.h;
   const kutuW = kutu?.width ?? 0;
   // ⚠️ `useMemo` YOK — bu iki hesap birkaç aritmetik işlem; elle memolamak React Compiler'ın
   // bileşeni optimize etmesini tamamen ENGELLİYORDU (lint: "memoization could not be preserved").
@@ -125,6 +154,16 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
       source={{ uri: sayfa.uri }}
       style={{ width: kutuOlcu.width, height: kutuOlcu.height }}
       resizeMode="contain"
+      // ⚠️ Yalnız boyutu BİLİNMEYEN sayfa için ölçüm alınır; sunucu bildirdiyse ona dokunulmaz
+      // (sunucunun boyutu KODLANAN kareye aittir ve oran kilidinin tek kaynağıdır).
+      onLoad={
+        sayfa.image_w
+          ? undefined
+          : (e) => {
+              const k = (e?.nativeEvent as { source?: { width?: number; height?: number } } | undefined)?.source;
+              olcumAl(sayfa.k, k?.width, k?.height);
+            }
+      }
       testID={`${testID}-gorsel-${anahtar}`}
       accessibilityLabel={`${sayfa.ad} paneli`}
     />
@@ -136,13 +175,27 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
         style={styles.kap}
         onLayout={(e) => {
           const w = Math.round(e.nativeEvent.layout.width);
-          // Kutu kendi genişliğini de değiştirdiği için yalnız ilk ölçüm alınır
-          // (aksi hâlde ölç → daralt → ölç döngüsü kurulur — AiProPanel'de ölçüldü).
-          setKapW((eski) => (eski > 0 ? eski : w));
+          // ⚠️ HER ÖLÇÜMDE GÜNCELLENİR — "yalnız ilk ölçüm" DEĞİL. `AiProPanel`de ölç → daralt →
+          // ölç döngüsünü önlemek için ilk ölçüm kilitleniyor; oradaki gerekçe ÖLÇÜLEN kabın
+          // KENDİSİNİN daralmasıydı. Burada ölçülen kap `width: "100%"` ve kutu onun ÇOCUĞU →
+          // kutunun genişliği ölçülen genişliği ETKİLEYEMEZ, dolayısıyla döngü yok.
+          // ⚠️ Kilitli bırakılsaydı pencere yeniden boyutlandığında (launcher penceresi, cihaz
+          // yan yatması) `useStageHeight` yüksekliği CANLI daraltırken genişlik ESKİ değerde
+          // kalır → kutu yatayda taşar ya da kenarda boşluk bırakır. Sahnenin canlı olması bu
+          // bileşenin var oluş gerekçelerinden biri.
+          if (w > 0) setKapW((eski) => (Math.abs(eski - w) >= 1 ? w : eski));
         }}
       >
         {kutu ? (
-          <View style={[styles.kutu, { width: kutu.width, height: kutu.height }]} testID={`${testID}-kutu`}>
+          // ⚠️ ÇERÇEVE GENİŞLİĞE EKLENİR, İÇİNDEN GİTMEZ. React Native'de kutu modeli
+          // `border-box`: `width: K` + `borderWidth: 1` verirsen İÇ ALAN K-2 olur ve K
+          // genişliğindeki görsel her kenardan 1 px KIRPILIR (`overflow: hidden`). Kırpılan
+          // sadece bir çizgi ama sözleşme "taban görsel ile üst katman AYNI sayısal kutuyu alır"
+          // diyor; iç alanın 2 px küçük olması o sözleşmeyi sessizce bozardı.
+          <View
+            style={[styles.kutu, { width: kutu.width + CERCEVE * 2, height: kutu.height + CERCEVE * 2 }]}
+            testID={`${testID}-kutu`}
+          >
             {gorsel(kutu, "sahne")}
             {ustKatman?.(kutu)}
           </View>
@@ -277,7 +330,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     backgroundColor: colors.bg,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: CERCEVE,
     borderColor: colors.border,
     overflow: "hidden",
   },

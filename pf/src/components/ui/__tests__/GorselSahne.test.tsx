@@ -12,7 +12,7 @@
  * kapı bu taşmayı YEŞİL geçer — bu yüzden toplam yükseklik ayrı ölçülür (G11).
  */
 import { fireEvent, render } from "@testing-library/react-native";
-import { GorselSahne, KONTROL_TAHMINI } from "@/components/ui/GorselSahne";
+import { CERCEVE, GorselSahne, KONTROL_TAHMINI } from "@/components/ui/GorselSahne";
 import type { SahneSayfasi } from "@/utils/gorselSahneSayfalari";
 import { Text, View } from "react-native";
 
@@ -41,10 +41,17 @@ function olc(api: ReturnType<typeof render>, kontrolY = KONTROL_TAHMINI, testID 
   });
 }
 
+/**
+ * Kutunun İÇERİK ölçüsü (çerçeve hariç).
+ *
+ * ⚠️ React Native `border-box`tur: `width: K` + `borderWidth: 1` verilirse iç alan K-2 olur ve
+ * K genişliğindeki görsel her kenardan 1 px KIRPILIR. Bu yüzden bileşen çerçeveyi kutu
+ * ölçüsüne EKLİYOR; test de aynı hesabı yapmalı, yoksa 2 px'lik sahte fark ölçer.
+ */
 function kutuOlcusu(api: ReturnType<typeof render>, testID = "gorsel-sahne") {
   const st = api.getByTestId(`${testID}-kutu`).props.style;
   const duz = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
-  return { width: duz.width as number, height: duz.height as number };
+  return { width: (duz.width as number) - CERCEVE * 2, height: (duz.height as number) - CERCEVE * 2 };
 }
 
 // ============================================================================
@@ -81,6 +88,87 @@ test("boyut BILINMEYEN sayfada kutu yon varsayilanina duser (cokmez)", () => {
   const k = kutuOlcusu(api);
   expect(k.width).toBeGreaterThan(0);
   expect(k.height).toBeGreaterThan(0);
+});
+
+test("KRITIK: boyutu BILINMEYEN sayfa YUKLENINCE oran DUZELIR", () => {
+  // ⚠️ Panelsiz modüllerin "Girdi" sayfası yerel dosyadır; sunucu boyut bildirmez. Ölçülmezse
+  // kutu 4:3'te kalır ve DİKEY bir telefon fotoğrafı kutunun ~%44'ünü boş bırakır — üstelik bu,
+  // sahibin "girdi kayboluyor" şikâyeti için açtığımız sayfanın ta kendisi.
+  //
+  // ⚠️ `Image.getSize` DEĞİL `onLoad` kullanılıyor: getSize native modüle dayanıyor ve o yoksa
+  // SENKRON fırlatıp tüm sahneyi çökertiyordu (bu turda ölçüldü). `onLoad` gerçekten sürülebilir.
+  //
+  // MUTASYON: `onLoad` dalını kaldır → KIRMIZI (oran 4:3'te kalır).
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  fireEvent.press(api.getByTestId("gorsel-sahne-cip-01_input"));
+  const once = kutuOlcusu(api);
+  expect(once.width / once.height).toBeCloseTo(4 / 3, 1); // yön varsayılanı
+
+  fireEvent(api.getByTestId("gorsel-sahne-gorsel-sahne"), "load", {
+    nativeEvent: { source: { width: 3024, height: 4032 } }, // dikey telefon fotoğrafı
+  });
+  const sonra = kutuOlcusu(api);
+  expect(sonra.width / sonra.height).toBeCloseTo(3024 / 4032, 1);
+});
+
+test("KRITIK: sunucu boyut BILDIRDIYSE olcum HIC ALINMAZ", () => {
+  // ⚠️ Sunucunun boyutu KODLANAN kareye aittir ve oran kilidinin tek kaynağıdır; tarayıcının
+  // bildirdiği ham boyut onu ezerse istemci farklı bir kutu çizer ve işaretler kayar.
+  //
+  // ⚠️ MEKANİZMA `??` SIRASI DEĞİL, `onLoad` KANCASININ HİÇ BAĞLANMAMASIDIR — bu ayrımı mutasyon
+  // ölçümü gösterdi: `sayfa?.image_w ?? _olcu?.w` sırasını TERS çevirmek YEŞİL kalıyor, çünkü
+  // sunucu boyutu varken `_olcu` zaten hiç dolmuyor. Yani sıra gereksiz ikinci savunmadır;
+  // asıl kapı buradaki `onLoad === undefined` iddiasıdır.
+  //
+  // MUTASYON: `sayfa.image_w ? undefined : handler` guard'ını kaldırıp kancayı her zaman bağla
+  // → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  const once = kutuOlcusu(api); // "Tahmin" 1200x400
+  expect(api.getByTestId("gorsel-sahne-gorsel-sahne").props.onLoad).toBeUndefined();
+
+  fireEvent(api.getByTestId("gorsel-sahne-gorsel-sahne"), "load", {
+    nativeEvent: { source: { width: 100, height: 900 } },
+  });
+  expect(kutuOlcusu(api)).toEqual(once);
+});
+
+test("KRITIK: PENCERE YENIDEN BOYUTLANINCA kutu genisligi TAKIP EDER", () => {
+  // ⚠️ ÖLÇÜLEN KUSUR (bu tur): ilk yazımda genişlik `eski > 0 ? eski : w` ile KİLİTLENİYORDU.
+  // Gerekçe `AiProPanel`den kopyalanmıştı — orada ölçülen kabın KENDİSİ daraldığı için döngü
+  // riski var. Burada ölçülen kap `width: "100%"` ve kutu onun ÇOCUĞU → döngü YOK.
+  // Kilitli kalsaydı launcher penceresi küçültüldüğünde `useStageHeight` yüksekliği canlı
+  // daraltırken genişlik eski değerde kalır, kutu yatayda TAŞARDI.
+  //
+  // MUTASYON: `setKapW((eski) => (eski > 0 ? eski : w))`a geri dön → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  const genis = kutuOlcusu(api);
+
+  const kap = api.getByTestId("gorsel-sahne").children[0] as never;
+  fireEvent(kap, "layout", { nativeEvent: { layout: { width: 400, height: 400 } } });
+  const dar = kutuOlcusu(api);
+
+  expect(dar.width).toBeLessThan(genis.width);
+  expect(dar.width).toBeLessThanOrEqual(400);
+});
+
+test("KRITIK: CERCEVE kutu olcusune EKLENIR, gorseli KIRPMAZ", () => {
+  // ⚠️ React Native `border-box`tur: `width: K` + `borderWidth: 1` iç alanı K-2 yapar ve
+  // K genişliğindeki görsel her kenardan 1 px kırpılır (`overflow: hidden`). Sözleşme
+  // "taban görsel ile üst katman AYNI sayısal kutuyu alır" diyor; iç alanın 2 px küçük olması
+  // onu sessizce bozardı.
+  //
+  // MUTASYON: `kutu.width + CERCEVE * 2` yerine `kutu.width` yaz → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  const st = api.getByTestId("gorsel-sahne-kutu").props.style;
+  const duz = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
+  const gorselStil = api.getByTestId("gorsel-sahne-gorsel-sahne").props.style;
+  expect(duz.borderWidth).toBe(CERCEVE);
+  expect(duz.width - CERCEVE * 2).toBe(gorselStil.width);
+  expect(duz.height - CERCEVE * 2).toBe(gorselStil.height);
 });
 
 // ============================================================================
