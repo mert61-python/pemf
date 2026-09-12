@@ -32,7 +32,17 @@ pytestmark = pytest.mark.skipif(
 
 
 def _oku(bagil: str) -> str:
-    return (_PF / bagil).read_text(encoding="utf-8")
+    """Kaynağı YORUMLARI SÖKÜLMÜŞ olarak döndürür.
+
+    ⚠️ 2026-09-12'de ölçüldü: ADIM 4'te `kameraKutusu(onizlemeW…)` çağrısını ANAN iki açıklama
+    yorumu eklendi ve bu dosyadaki sayaç 2 → **4** oldu. Çağrı sayısı hiç değişmemişti; kapı
+    yorum metnini sayıyordu. (Bu depoda "yorum kapıyı kandırdı" hatasının beşinci tekrarı —
+    bkz. [[pemf-eksik-taramasi-2026-08-22]].) Soyucu string literalleri AYNEN korur, yalnız
+    gerçek yorumları söker; dolayısıyla `"data:image/jpeg"` gibi çıpalar etkilenmez.
+    """
+    from c_soyucu import c_soy
+
+    return c_soy((_PF / bagil).read_text(encoding="utf-8"))
 
 
 def test_KRITIK_realtime_grafik_bosluklari_genislikten_turer():

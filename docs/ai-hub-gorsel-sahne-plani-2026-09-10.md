@@ -374,6 +374,44 @@ const paneller = result?.paneller ?? (result?.image_base64
 
 Bu yoksa yeni istemci eski backend'de **boş galeri** gösterir (yeni↔eski senaryo B).
 
+**DURUM: TAMAMLANDI (2026-09-12).**
+`pf/src/components/ui/GorselSahne.tsx` (gezilebilir, oran-kilitli galeri) +
+`pf/src/utils/gorselSahneSayfalari.ts` (sayfa normalizasyonu) +
+`pf/src/utils/zoomMerdiveni.ts` (kaynak-piksele kilitli zoom).
+**5 ternary'nin tamamı kaldırıldı** (kaynak sayacı 0) ve altıncı bir yer olarak PetOwner da bağlandı.
+Kapılar: `GorselSahne.test.tsx` (18) · `gorselSahneSayfalari.test.ts` (12) · `zoomMerdiveni.test.ts` (10) ·
+`gorselSahneAkisi.test.tsx` (7, gerçek ekran akışı) · `tests/test_ai_gorsel_sahne_capalari.py` (8, kaynak çıpaları).
+**Mutasyon: 19 denemenin 18'i KIRMIZI** (biri bilerek yeşil — aşağıda).
+
+⚠️ §5'teki **8 kapının hiçbiri kırılmadı** — tasarım onları kırmamak üzere kuruldu:
+canlı kamera dalı ile galeri dalı AYRILDI (`{!isLive ? <GorselSahne/> : <kamera kutusu/>}`), böylece
+`kameraKutusu(onizlemeW` sayacı 2'de kaldı, XAI kendi bloğunda kaldı, canlıya geçişte galeri hiç
+mount edilmiyor (`catOrganCanliKalinti` yapısal olarak korunuyor), ikinci bir "Galeriden Seç" CTA'sı
+eklenmedi ve yeni düğmeler `IconButton`/`Chip` üzerinden geçtiği için dokunma/yazı-ölçeği sayaçları
+değişmedi.
+
+Plan dışında ölçülüp kapatılan **üç** şey:
+1. **Sayaç kapısını KENDİ YORUMLARIM kandırdı.** `kameraKutusu(onizlemeW…)` ifadesini anan iki
+   açıklama yorumu `test_responsive_grafik_kapisi.py`'deki sayacı 2 → **4** yaptı; çağrı sayısı hiç
+   değişmemişti. Bu depoda "yorum kapıyı kandırdı" hatasının **beşinci** tekrarı. Kapı artık
+   `c_soy` ile yorumları söküyor (string literalleri aynen korunur).
+2. **PetOwner ekranı `/ai/vision/landmark` çağırıp dönen İŞARETLİ görseli hiç göstermiyordu**
+   ("üretildi ama kimse görmedi"). Galeriye bağlandı. Ayrıca "Yeni Fotoğraf" düğmesi `setResult(null)`
+   yapmıyordu → girdi gidiyor, ALTTAKİ eski teşhis ekranda kalıyordu (plan §"Açık parite arızaları").
+3. **`waitFor(getByText("… Başlat"))` GERÇEK BİR BEKLEME DEĞİLDİ** — düğme görüntü seçilmeden de
+   render ediliyor (yalnız `disabled`). Foto seçimi async olduğu için testler analizi hiç
+   başlatmadan ölçüyordu. Çıpa, yalnız `imageUri` varken çizilen sahneye taşındı.
+
+⚠️ **BİLEREK YEŞİL KALAN MUTASYON (dürüst rapor):** gezinmedeki `clamp`i `(i+yon+adet)%adet`e
+çevirmek YEŞİL kalıyor — çünkü sınırdaki oklar zaten `disabled` ve sarma dalına hiç ulaşılmıyor.
+Clamp ikinci savunma hattıdır; birinci hat (`disabled`) ayrıca ölçülüyor ve onu kaldıran mutasyon
+KIRMIZI (M19).
+
+⚠️ **§8 KARARI (sahip onayı olmadan, gerekçesiyle):** varsayılan sayfa `07_combined` DEĞİL,
+`06_predictions`. Mozaik yapısı gereği okunmazdır; onu varsayılan yapmak, düzeltilmeye çalışılan
+şikâyetin ilk bakışta AYNEN sürmesi demekti. "Birleşik" bir çip uzaklıkta.
+Değiştirmek tek satır: `VARSAYILAN_SAYFA_SIRASI`.
+
 ### ADIM 5 — Ayrı, küçük PR
 
 Backend'e `GZipMiddleware` (ölçüldü oran 0,73-0,75: 960,8 KB → 699,2 KB). Kazanç **yalnız**

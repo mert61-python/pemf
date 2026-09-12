@@ -12,6 +12,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { useStageHeight } from "@/hooks/useStageHeight";
+import { GorselSahne } from "@/components/ui/GorselSahne";
+import { sahneSayfalari } from "@/utils/gorselSahneSayfalari";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -348,6 +350,8 @@ export function AiHubScreen() {
 }
 
 function PetOwnerAiScreen() {
+  // [S1 adım 7 / aihub-10] Sahne yüksekliği CANLI: pencere küçülünce/cihaz yan yatınca daralır.
+  const sahneH = useStageHeight();
   const { showToast } = useToast();
   const { session } = useAuth();
   // Sonuç + görüntü modül-cache'ten init → tab değişip geri gelince KAYBOLMAZ (yeni analize/hastaya kadar kalıcı).
@@ -537,10 +541,22 @@ function PetOwnerAiScreen() {
           </>
         ) : (
           <View style={{ gap: spacing.lg, marginTop: spacing.md }}>
-            <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
+            {/* ⚠️ ÖLÇÜLEN KAYIP (ADIM 4): bu ekran `/ai/vision/landmark` çağırıyor ve uç FGS
+                işaretleriyle çizilmiş bir görsel döndürüyordu — ama burada YALNIZ yerel fotoğraf
+                gösteriliyordu, işaretli kare hiç çizilmiyordu ("üretildi ama kimse görmedi").
+                Galeri hem girdiyi hem işaretli sonucu erişilebilir kılar. */}
+            <GorselSahne
+              sayfalar={sahneSayfalari(result, imageUri)}
+              tavanY={sahneH}
+              sifirlaAnahtari={imageUri}
+              testID="petowner-sahne"
+            />
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); }} />
+                {/* ⚠️ `setResult(null)` EKLENDİ: sonuç temizlenmeyince "Yeni Fotoğraf"a basıldığında
+                    girdi gidiyor ama ALTTAKİ ESKİ TEŞHİS ekranda kalıyordu — hayvan sahibi, henüz
+                    yüklemediği bir fotoğrafın sonucuna bakıyor sanıyordu. */}
+                <Button variant="secondary" label="Yeni Fotoğraf" onPress={() => { setImageUri(null); setImageBase64(null); setImageFile(null); setResult(null); }} />
               </View>
               <View style={{ flex: 1 }}>
                 <Button variant="primary" label={loading ? "Analiz Ediliyor..." : "Teşhis Et"} onPress={() => analyzeImage()} disabled={loading} icon={loading ? <ActivityIndicator color="#fff" /> : <Sparkles color="#fff" size={16} />} />
@@ -1485,6 +1501,29 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           <Text style={styles.photoGuideWarn}>⚠️ Yanlış/bulanık fotoğraf hatalı sonuç verir. Yüz net tespit edilemezse uyarı gösterilir.</Text>
         </View>
       )}
+      {/* ⚠️ CANLI KAMERA ve SONUÇ GALERİSİ AYRI DALLAR (ADIM 4). Eskiden ikisi de sabit
+          yükseklikli tek bir kapta çiziliyordu ve sonuç dalı şu ternary'ydi:
+            `uri: result?.image_base64 ? 'data:…' : imageUri`
+          → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu. Artık girdi bir
+          galeri sayfası: her zaman bir çip uzaklıkta.
+          ⚠️ Canlı daldaki `kameraKutusu(onizlemeW…)` oran kilidi DOKUNULMADAN kalır — kamera
+          karesi ile üzerine bindirilen organ işaretlerinin hizası ona bağlı. */}
+      {!isLive ? (
+        <GorselSahne
+          sayfalar={sahneSayfalari(result, imageUri)}
+          tavanY={sahneH}
+          sifirlaAnahtari={imageUri}
+          testID="vision-sahne"
+          bos={
+            <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+              <View style={styles.placeholderBox}>
+                <ImageIcon color={colors.textMuted} size={48} />
+                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+              </View>
+            </View>
+          }
+        />
+      ) : (
       <View
         style={[
           styles.imagePreviewContainer,
@@ -1498,7 +1537,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           setOnizlemeW((eski) => (eski > 0 ? eski : w));
         }}
       >
-        {(isLive && autoAdjust) ? (
+        {autoAdjust ? (
           // Otonom Biofeedback: SUNUCU (klinik) kamerası sürüyor — telefon kamerası DEĞİL.
           // Sunucu karesi gelene kadar telefon CameraView'ı GÖSTERME (kafa-karışıklığı önlenir).
           <View style={styles.cameraContainer}>
@@ -1525,7 +1564,7 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
             )}
             <Text style={styles.serverCamNote}>🖥️ Sunucu (klinik) kamerası seansı sürüyor — telefon kamerası kullanılmıyor</Text>
           </View>
-        ) : isLive ? (
+        ) : (
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
             {result?.image_base64 && (
@@ -1544,15 +1583,9 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
               <Text style={styles.liveText}>KAMERA AKTİF</Text>
             </View>
           </View>
-        ) : imageUri ? (
-          <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} />
-        ) : (
-          <View style={styles.placeholderBox}>
-            <ImageIcon color={colors.textMuted} size={48} />
-            <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
-          </View>
         )}
       </View>
+      )}
 
       <View style={[styles.btnRow, isCompact && { flexDirection: "column" }]}>
         <View style={isCompact ? { width: "100%" } : { flex: 1 }}>
@@ -1930,16 +1963,25 @@ function PhantomModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
-        {imageUri ? (
-          <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
-        ) : (
-          <View style={styles.placeholderBox}>
-            <ImageIcon color={colors.textMuted} size={48} />
-            <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
-          </View>
-        )}
-      </View>
+      {/* ⚠️ ÇOK PANELLİ GALERİ (ADIM 4). Eskiden burada şu ternary vardı:
+            `uri: result?.image_base64 ? 'data:…' : imageUri`
+          → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu; üstelik gösterilen tek
+          şey okunmaz `07_combined` mozaiğiydi (panel başına ~81 px). Artık backend'in ürettiği
+          7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
+      <GorselSahne
+        sayfalar={sahneSayfalari(result, imageUri)}
+        tavanY={sahneH}
+        sifirlaAnahtari={imageUri}
+        testID="fantom-sahne"
+          bos={
+            <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+              <View style={styles.placeholderBox}>
+                <ImageIcon color={colors.textMuted} size={48} />
+                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+              </View>
+            </View>
+          }
+      />
 
       <View style={styles.fantomLenRow}>
         <Text style={styles.fantomLenLabel}>Fantom boyu (cm)</Text>
@@ -2227,16 +2269,25 @@ function PetriModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
-        {imageUri ? (
-          <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
-        ) : (
-          <View style={styles.placeholderBox}>
-            <ImageIcon color={colors.textMuted} size={48} />
-            <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
-          </View>
-        )}
-      </View>
+      {/* ⚠️ ÇOK PANELLİ GALERİ (ADIM 4). Eskiden burada şu ternary vardı:
+            `uri: result?.image_base64 ? 'data:…' : imageUri`
+          → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu; üstelik gösterilen tek
+          şey okunmaz `07_combined` mozaiğiydi (panel başına ~81 px). Artık backend'in ürettiği
+          7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
+      <GorselSahne
+        sayfalar={sahneSayfalari(result, imageUri)}
+        tavanY={sahneH}
+        sifirlaAnahtari={imageUri}
+        testID="petri-sahne"
+          bos={
+            <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+              <View style={styles.placeholderBox}>
+                <ImageIcon color={colors.textMuted} size={48} />
+                <Text style={styles.placeholderText}>Görüntü seçilmedi</Text>
+              </View>
+            </View>
+          }
+      />
 
       <View style={styles.fantomLenRow}>
         <Text style={styles.fantomLenLabel}>Petri çapı (cm)</Text>
@@ -3082,13 +3133,22 @@ function KidneyCTModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
-        {imageUri ? (
-          <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
-        ) : (
-          <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
-        )}
-      </View>
+      {/* ⚠️ ÇOK PANELLİ GALERİ (ADIM 4). Eskiden burada şu ternary vardı:
+            `uri: result?.image_base64 ? 'data:…' : imageUri`
+          → sonuç gelir gelmez kullanıcının GİRDİSİ ekrandan siliniyordu; üstelik gösterilen tek
+          şey okunmaz `07_combined` mozaiğiydi (panel başına ~81 px). Artık backend'in ürettiği
+          7 panel de gezilebilir ve girdi bir çip uzaklıkta. */}
+      <GorselSahne
+        sayfalar={sahneSayfalari(result, imageUri)}
+        tavanY={sahneH}
+        sifirlaAnahtari={imageUri}
+        testID="kidneyct-sahne"
+          bos={
+            <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
+            </View>
+          }
+      />
 
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}><Button label="Galeriden Seç" icon={<ImageIcon color={colors.white} size={16} />} onPress={pickImage} /></View>
@@ -3810,20 +3870,37 @@ function CatOrganModule({ patientName }: { patientName: string }) {
         </View>
       )}
 
-      <View
-        style={[
-          styles.imagePreviewContainer,
-          onizlemeKutu
-            ? { width: onizlemeKutu.width, height: onizlemeKutu.height, alignSelf: "center" }
-            : { height: sahneH },
-        ]}
-        onLayout={(e) => {
-          const w = Math.round(e.nativeEvent.layout.width);
-          // Kutu kendi genişliğini de değiştirir → yalnız İLK ölçüm alınır (ölç-daralt döngüsü yok).
-          setOnizlemeW((eski) => (eski > 0 ? eski : w));
-        }}
-      >
-        {isLive ? (
+      {/* ⚠️ CANLI KAMERA ve SONUÇ GALERİSİ AYRI DALLAR (ADIM 4) — eski ternary
+            `uri: result?.image_base64 ? 'data:…' : imageUri`
+          sonuç gelince kullanıcının GİRDİSİNİ ekrandan siliyordu. Canlı daldaki
+          `kameraKutusu(onizlemeW…)` oran kilidi DOKUNULMADAN kalır: kamera karesi ile üzerine
+          bindirilen organ işaretlerinin hizası ona bağlı (tıbbi karar ekranı). */}
+      {!isLive ? (
+        <GorselSahne
+          sayfalar={sahneSayfalari(result, imageUri)}
+          tavanY={sahneH}
+          sifirlaAnahtari={imageUri}
+          testID="catorgan-sahne"
+          bos={
+            <View style={[styles.imagePreviewContainer, { height: sahneH }]}>
+              <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
+            </View>
+          }
+        />
+      ) : (
+        <View
+          style={[
+            styles.imagePreviewContainer,
+            onizlemeKutu
+              ? { width: onizlemeKutu.width, height: onizlemeKutu.height, alignSelf: "center" }
+              : { height: sahneH },
+          ]}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            // Kutu kendi genişliğini de değiştirir → yalnız İLK ölçüm alınır (ölç-daralt döngüsü yok).
+            setOnizlemeW((eski) => (eski > 0 ? eski : w));
+          }}
+        >
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.cameraView} facing={facing} />
             {result?.image_base64 && (
@@ -3837,12 +3914,8 @@ function CatOrganModule({ patientName }: { patientName: string }) {
               <Text style={styles.liveText}>{result ? `${result.n_organs ?? 0} ORGAN` : "ORGAN ARANIYOR…"}</Text>
             </View>
           </View>
-        ) : imageUri ? (
-          <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} style={styles.imagePreview} resizeMode="contain" />
-        ) : (
-          <View style={styles.placeholderBox}><ImageIcon color={colors.textMuted} size={48} /><Text style={styles.placeholderText}>Görüntü seçilmedi</Text></View>
-        )}
-      </View>
+        </View>
+      )}
 
       {isLive && (
         <Text style={styles.liveHint}>🎥 Canlı mod açık — kediyi kadraja alıp sabit tutun. Organ haritası ~3-4 saniyede bir güncellenir; barların rengi güven düzeyini gösterir.</Text>
