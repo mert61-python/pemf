@@ -66,6 +66,43 @@ karıştırılmıyor.
 **Not:** Kip yalnız sürüş sırasında cihaza gider. Hiçbir bobin çalışmıyorken cihazla
 konuşulmadığı için seçim "kaydedildi" olarak saklanır ve bir sonraki başlatmada uygulanır.
 
+### 🔬 Yapay zekâ görselleri: artık analizin HER adımı görülebiliyor
+
+**Yüklediğiniz fotoğraf artık kaybolmuyor.** Analiz bitince kendi fotoğrafınız ekrandan
+siliniyordu ve bir daha erişilemiyordu — karşılaştırmak için baştan seçmek gerekiyordu.
+Artık girdi bir sekme: sonuç panelleriyle aynı yerde, bir dokunuş uzakta.
+
+**Sonuç okunmaz değil.** Fantom ve Petri analizleri altı ayrı panel üretiyordu (tespit,
+maske, tümörler, koordinat, tahmin) ama ekrana bunların **hepsi tek bir küçük kareye
+sıkıştırılmış** hâlde geliyordu: panel başına bir tırnak kadar yer kalıyor, üzerlerindeki
+yazılar okunamıyordu. Paneller artık **tek tek, tam boy** gösteriliyor; aralarında ok
+tuşları ve etiketli sekmelerle geziliyor, kaçıncı panelde olduğunuz yazıyor.
+
+**Tam ekran ve gerçek yakınlaştırma.** Herhangi bir paneli tam ekran açıp
+yakınlaştırabilirsiniz. Yakınlaştırmanın son basamağı **görüntünün gerçek çözünürlüğüne**
+kilitli: pencere ne kadar küçük olursa olsun panel üzerindeki yazılar okunur boyuta çıkıyor.
+Daha ileri gitmeye izin verilmiyor — çünkü o noktadan sonra görüntü büyür ama netleşmez.
+
+**Görüntü artık hiçbir yerde eğilip bükülmüyor.** Panel kutusu her zaman görüntünün kendi
+oranında çiziliyor, böylece üzerine çizilen organ/tümör işaretleri görüntüyle birebir
+oturuyor. Panel değiştirdiğinizde kutu da yeni panelin oranını alıyor.
+
+**Hayvan sahibi ekranında işaretli sonuç görünüyor.** Ağrı analizi (FGS) işaretlenmiş bir
+görsel üretiyordu ama ekranda **hiç gösterilmiyordu**; yalnız ham fotoğraf vardı. Ayrıca
+"Yeni Fotoğraf"a basıldığında fotoğraf gidiyor, **alttaki eski teşhis ekranda kalıyordu** —
+henüz yüklenmemiş bir fotoğrafın sonucuna bakılıyor sanılabiliyordu. İkisi de düzeltildi.
+
+**Yükleme her platformda aynı ve daha hızlı.** Tarayıcıdan yapılan yüklemelerde fotoğraf
+küçültülmüyordu: aynı analiz telefondan ~8 kat farklı boyutta gidiyor, modern bir telefon
+fotoğrafı kimi zaman **sunucu tarafından reddediliyordu**. Artık her platformda aynı ölçüde
+küçültülüyor. Sonuç görselleri de sıkıştırılarak gönderiliyor (ölçülen: ~%25 daha az veri) —
+tünel/uzaktan erişimde fark edilir hızlanma.
+
+**GPU'lu kurulumda eksik kalan alanlar tamamlandı.** Ayrı GPU servisiyle çalışan
+kurulumlarda bazı ölçüm alanları yanıta hiç eklenmiyordu; sonuç ekranında oran bilgisi
+kaybolduğu için işaretler kayabiliyor, bir değer "undefined" görünebiliyordu. İki kurulum
+artık birebir aynı bilgiyi döndürüyor.
+
 ## app 1.9.50 — 2026-09-11 (🔌 kablo çıkarsa anlar, geri takınca kendine gelir)
 
 **Cihaz bağlı değilken "başladı" demiyor.** Kontrolcü bağlı olmadan bobin başlatma isteği
