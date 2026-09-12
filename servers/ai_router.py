@@ -70,6 +70,10 @@ from utils.image_domain import DomainMismatch as _ImgDomainMismatch
 from utils.klinik_asgari import AsgariGirdiYok as _AsgariGirdiYok
 from utils.klinik_asgari import ckd_kapisi as _ckd_kapisi
 from utils.klinik_asgari import vital_kapisi as _vital_kapisi
+from utils.panel_yayin import PANEL_ADLARI as _PANEL_ADLARI
+from utils.panel_yayin import PETRI_PANEL_ADLARI as _PETRI_PANEL_ADLARI
+from utils.panel_yayin import kok_gorseli_sec as _kok_gorseli_sec
+from utils.panel_yayin import panelleri_yayina_hazirla as _panelleri_hazirla
 
 
 def _ai_fail(label: str, e: Exception) -> HTTPException:
@@ -2694,12 +2698,20 @@ async def analyze_em_fantom(
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
-            _bayt, _boyut = _kapakli_kodla(panels["07_combined"])
+            # ⚠️ ÇOKLU PANEL (ADIM 3): boru hattı 7 panel üretiyordu ve 6'sı AYNI SATIRDA
+            # çöpe atılıyordu. Artık hepsi yayına çıkıyor; kök `image_base64` (07_combined)
+            # KALIYOR → eski istemci etkilenmez (`paneller` yalnızca EK alan).
+            _paneller = _panelleri_hazirla(panels, _kapakli_kodla, _PANEL_ADLARI)
+            # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak
+            # ÖLÇÜLEN 38 ms'i (6048×12256 dikey mozaik) boşuna yakar VE iki kodlamanın ileride
+            # sessizce ayrışmasına kapı açardı — kök görsel ile panel AYNI kare olmalı.
+            b64_image, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla, img)
             status = "success"
         else:
             _bayt, _boyut = _kapakli_kodla(img)  # tespit yok → orijinali dön
+            b64_image = base64.b64encode(_bayt).decode('utf-8')
+            _paneller = []
             status = "no_detection"
-        b64_image = base64.b64encode(_bayt).decode('utf-8')
 
         payload = result.to_dict()
         # CANLI E-ALANI bağlamı (2026-08-06): tümör konumu + organ seans boyunca DEĞİŞMEZ.
@@ -2742,6 +2754,7 @@ async def analyze_em_fantom(
             # `_kapakli_kodla` kareyi KÜÇÜLTEBİLDİĞİ için orijinal boyut YANLIŞ olurdu →
             # kutu oranı kayar, üzerine çizilen işaretler canlı görüntüyle uyuşmaz.
             **_boyut,
+            "paneller": _paneller,
             "success": result.success,
             "error": result.error,
             "n_tumor": result.n_tumor,
@@ -2878,12 +2891,23 @@ async def analyze_em_petri(
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
-            _bayt, _boyut = _kapakli_kodla(panels["07_combined"])
+            # ⚠️ ÇOKLU PANEL (ADIM 3): boru hattı 7 panel üretiyordu ve 6'sı AYNI SATIRDA
+            # çöpe atılıyordu. Artık hepsi yayına çıkıyor; kök `image_base64` (07_combined)
+            # KALIYOR → eski istemci etkilenmez (`paneller` yalnızca EK alan).
+            # ⚠️ PETRİ AYRI TABLO: boru hattı aynı 7 yuvayı FARKLI anahtarlarla dolduruyor
+            # (`02_yolo_dets`/`03_yolo_masks`) — fantom tablosu kullanılsaydı o paneller
+            # "bilinmeyen" dalına düşer, ham anahtarla adlandırılır ve SIRALARI bozulurdu.
+            _paneller = _panelleri_hazirla(panels, _kapakli_kodla, _PETRI_PANEL_ADLARI)
+            # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak
+            # ÖLÇÜLEN 38 ms'i (6048×12256 dikey mozaik) boşuna yakar VE iki kodlamanın ileride
+            # sessizce ayrışmasına kapı açardı — kök görsel ile panel AYNI kare olmalı.
+            b64_image, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla, img)
             status = "success"
         else:
             _bayt, _boyut = _kapakli_kodla(img)  # tespit yok → orijinali dön
+            b64_image = base64.b64encode(_bayt).decode('utf-8')
+            _paneller = []
             status = "no_detection"
-        b64_image = base64.b64encode(_bayt).decode('utf-8')
 
         from dataclasses import asdict
 
@@ -2915,6 +2939,7 @@ async def analyze_em_petri(
             # `_kapakli_kodla` kareyi KÜÇÜLTEBİLDİĞİ için orijinal boyut YANLIŞ olurdu →
             # kutu oranı kayar, üzerine çizilen işaretler canlı görüntüyle uyuşmaz.
             **_boyut,
+            "paneller": _paneller,
             "success": result.success,
             "error": result.error,
             "n_wells": result.n_wells,

@@ -247,30 +247,68 @@ def test_KAPI_TEK_KAYNAK_nesne_kimligi():
     assert A._ses_sessiz_mi.__module__ == "utils.ses_kalitesi"
 
 
+#: Depo-içi (birinci parti) üst-düzey paketler. `ai_service/app.py` bunlardan birini import
+#: ediyorsa o dosya imaja KOPYALANMIŞ olmalı — yoksa konteynerde modül yoktur.
+#: ⚠️ `ai_hub` ve `ai_service` KLASÖR OLARAK kopyalanıyor (`COPY ai_hub/ ./ai_hub/`), bu yüzden
+#: dosya-bazlı denetimden muaftır; kalan paketler yaprak-modül listesiyle alınır.
+BIRINCI_PARTI_PAKETLER = ("utils", "servers", "database", "controllers", "services", "ai")
+KLASOR_OLARAK_KOPYALANAN = ("ai_hub", "ai_service")
+
+
 def test_DOCKERFILE_kapi_modullerini_KOPYALIYOR():
-    """Yapısal kapı: `app.py`nin üst-düzey `utils.*` import'larının HEPSİ imaja kopyalanmalı.
+    """Yapısal kapı: `app.py`nin üst-düzey depo-içi import'larının HEPSİ imaja kopyalanmalı.
 
     ⚠️ AST TABANLI — yorum/docstring içindeki örnek bir `from utils...` satırı GÖRÜLMEZ ve
     `utils/`ü yalnız YORUMDA anan bir Dockerfile bu kapıdan GEÇEMEZ. (Bu depoda "yorum kapıyı
     kandırdı" hatası dört kez oldu; bu yüzden metin araması değil AST + yorum-soyma kullanılıyor.)
     Gerçek arıza sınıfı: `.dockerignore`/COPY kaynaklı sessiz dosya kaybı — bu depo onunla iki kez
-    yandı."""
+    yandı.
+
+    ⚠️ KAPSAM GENİŞLETİLDİ (2026-09-12) — İKİ yönde, ikisi de ÖLÇÜLMÜŞ arızadan:
+    1. Kapı YALNIZ `utils.*` tarıyordu. ADIM 3'te `panel_yayin` modülü **`servers/` altına**
+       konmuştu; `servers/` bu imaja HİÇ kopyalanmadığı için panel yayını GPU profilinde
+       SESSİZCE boş dönüyordu ve kapı bunu göremiyordu. Artık depo-içi TÜM paketler taranıyor.
+    2. Kapı YALNIZ `agac.body` üstündeki çıplak import'lara bakıyordu; `try/except` içine alınmış
+       bir depo-içi import görünmezdi. Oysa asıl tehlikeli biçim TAM DA BUDUR: dosya imajda yoksa
+       servis yine AÇILIR ve özellik ölü döner. Bu yüzden sarmalanmış olanlar da toplanıyor —
+       ve `utils.runtime_guards` (pip yasağı) böyle bulundu: kopyalanmıyordu, konteynerde
+       `except` dalındaki zayıf yedeğe düşüyordu.
+
+    ⚠️ `try/except`in KENDİSİ yasak DEĞİL (frozen EXE yolu için meşru bir emniyet kemeri olabilir);
+    yasak olan **kopyalanmayan** bir modülü sarmalamaktır. Kural bu yüzden "her depo-içi modül
+    imajda bulunmalı" biçiminde — sarmalı olsun olmasın.
+    """
     kaynak = (KOK / "ai_service" / "app.py").read_text(encoding="utf-8")
     agac = ast.parse(kaynak)
-    gerekli = set()
-    for d in agac.body:  # YALNIZ üst düzey: fonksiyon içi import fail-open olurdu
-        if isinstance(d, ast.ImportFrom) and (d.module or "").startswith("utils."):
-            gerekli.add((d.module or "").split(".")[1] + ".py")
 
-    assert gerekli, "app.py artik utils/ kapilarini import ETMIYOR → kapi kaldirilmis olabilir"
+    def _paket(mod) -> str:
+        return (mod or "").split(".")[0]
+
+    # Modül düzeyi = çıplak import'lar + üst düzey `try` blokları içindekiler.
+    # ⚠️ Fonksiyon içi import'lar KAPSAM DIŞI: onlar gerçekten isteğe bağlı yollardır ve
+    # başarısızlıkları tek bir ucu etkiler, servisin tamamını değil.
+    modul_duzeyi: list[ast.AST] = []
+    for d in agac.body:
+        if isinstance(d, ast.Try):
+            modul_duzeyi.extend(ast.walk(d))
+        else:
+            modul_duzeyi.append(d)
+
+    gerekli = {
+        (d.module or "").replace(".", "/") + ".py"
+        for d in modul_duzeyi
+        if isinstance(d, ast.ImportFrom) and _paket(d.module) in BIRINCI_PARTI_PAKETLER
+    }
+    assert gerekli, "app.py artik depo-ici kapi modullerini import ETMIYOR → kapi kaldirilmis olabilir"
 
     dockerfile = (KOK / "docker" / "Dockerfile.ai").read_text(encoding="utf-8")
     etkin = "\n".join(s for s in dockerfile.splitlines() if not s.strip().startswith("#"))
-    eksik = [m for m in sorted(gerekli) if f"utils/{m}" not in etkin]
+    eksik = [m for m in sorted(gerekli) if m.split("/")[0] not in KLASOR_OLARAK_KOPYALANAN and m not in etkin]
 
     assert not eksik, (
         f"docker/Dockerfile.ai bu kapi modullerini imaja KOPYALAMIYOR: {eksik}. "
-        "Konteynerde uvicorn ImportError ile acilmaz (ya da kapi sessizce kaybolur)."
+        "Konteynerde uvicorn ImportError ile acilmaz -- ya da import try/except icindeyse "
+        "servis ACILIR ve ozellik SESSIZCE olur."
     )
 
 

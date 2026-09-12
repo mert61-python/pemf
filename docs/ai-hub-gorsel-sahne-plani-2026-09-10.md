@@ -336,6 +336,32 @@ deseni — modeller CI'da yüklü değil). `render_panels` 7 anahtarı **farklı
 dizileriyle** döndürür; her panelin `image_w/image_h`'i **o panelin gerçek shape'iyle birebir**
 doğrulanır. Mutasyon: bir paneli yayından çıkar → KIRMIZI.
 
+**DURUM: TAMAMLANDI (2026-09-12).** `utils/panel_yayin.py` (tek kaynak) + dört çağrı yeri
+(`ai_router` fantom/petri, `ai_service/app.py` fantom/petri). Kapı `tests/test_ai_panel_yayini.py`
+— **14 test, 11 mutasyon KIRMIZI** (birim + TestClient/sahte-boru-hattı + AST parite).
+
+Planın ötesinde ölçülüp kapatılan **üç** şey:
+1. **GPU kök görseli KAPAKSIZDI.** `ai_service/app.py` fantom/petri kökü `_jpg_b64(overlay)` ile
+   HAM mozaiği gönderiyordu; gömülü yol aynı kareyi 1600 px'e indiriyordu. Yani ADIM 1'in ölçtüğü
+   6048×12256'lık dev kare **GPU profilinde yaşamaya devam ediyordu** ve kök görsel `07_combined`
+   panelinden farklı çözünürlükteydi (aynı kare, iki ayrı kodlama). Artık iki dağıtım da
+   `_kapakli_kodla_servis`/`_kapakli_kodla` kullanıyor.
+2. **Modül YANLIŞ KATMANDAYDI — GPU'da panel yayını ÖLÜ olurdu.** İlk yazımda modül
+   `servers/panel_yayin.py` idi ve `ai_service/app.py` onu `try/except` ile alıyordu.
+   `docker/Dockerfile.ai` **`servers/`i HİÇ kopyalamıyor** → konteynerde import başarısız,
+   `paneller` her zaman `[]`. Kaynak-metni tarayan AST kapısı bunu göremez (satır yerinde).
+   Modül `utils/`e taşındı (iki dağıtımın ortak katmanı), import ÜST DÜZEYE alındı ve
+   `docker/Dockerfile.ai` COPY satırına eklendi — artık unutulursa servis hiç açılmaz.
+   `test_ai_servis_8100_kapisi.py::test_DOCKERFILE_kapi_modullerini_KOPYALIYOR` kapısı
+   `utils.*`ten **tüm depo-içi paketlere** ve `try/except` içindeki import'lara genişletildi;
+   bu genişletme **önceden var olan** ikinci bir eksiği de buldu: `utils/runtime_guards.py`
+   (pip yasağı) da kopyalanmıyordu, konteynerde zayıf `except` yedeğine düşüyordu.
+3. **`test_xai_kalan_a_grubu` içindeki İKİZ kırılgan çıpa.** ADIM 2'de router tarafındaki
+   `src[i : i + 1600]` karakter penceresi AST'ye pinlenmişti; `app.py` tarafındaki ikizi ile
+   `/infer/landmark`+`/infer/cat_organ` üzerindeki `src[i : i + 4000]` pencereleri atlanmıştı.
+   ADIM 3'ün yorumları `**_xai_meta,`'yı pencerenin dışına taşırıp **sahte kırmızı** verdi.
+   Üçü de `_fonksiyon_govdesi` / yeni `_uc_govdesi` ile AST'ye pinlendi.
+
 ### ADIM 4 — Arayüz
 
 `GorselSahne.tsx` + oklar (`IconButton`) + çipler (`Chip`) + sayaç + tam ekran/zoom;

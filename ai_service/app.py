@@ -60,6 +60,15 @@ from utils.image_domain import check as _domain_check
 from utils.klinik_asgari import AsgariGirdiYok as _AsgariGirdiYok
 from utils.klinik_asgari import ckd_kapisi as _ckd_kapisi
 from utils.klinik_asgari import vital_kapisi as _vital_kapisi
+
+# ⚠️ ÜST DÜZEY, `try/except` DEĞİL — BİLİNÇLİ. `docker/Dockerfile.ai` bu modülü imaja
+# kopyalamayı unutursa servis ImportError ile AÇILMAZ; fail-open bir dal olsaydı panel
+# yayını GPU profilinde SESSİZCE boş dönerdi ve kimse fark etmezdi (bu deponun beş kez
+# ölçtüğü "gömülü'de var, GPU'da yok" sınıfı). Kapı: test_ai_servis_8100_kapisi.py.
+from utils.panel_yayin import PANEL_ADLARI as _PANEL_ADLARI
+from utils.panel_yayin import PETRI_PANEL_ADLARI as _PETRI_PANEL_ADLARI
+from utils.panel_yayin import kok_gorseli_sec as _kok_gorseli_sec
+from utils.panel_yayin import panelleri_yayina_hazirla as _panelleri_hazirla
 from utils.ses_kalitesi import guvenilir_mi as _ses_guvenilir_mi
 from utils.ses_kalitesi import normalize_entropi as _ses_entropi
 from utils.ses_kalitesi import sessiz_mi as _ses_sessiz_mi
@@ -162,6 +171,30 @@ def _jpg_b64(bgr) -> str:
 
     ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return base64.b64encode(buf).decode("utf-8")
+
+
+#: Çok panelli mozaiklerin en uzun kenar kapağı (px).
+#: ⚠️ `servers/ai_router.MOZAIK_AZAMI_KENAR` ile AYNI olmalı — ayrışırsa aynı analiz
+#: dağıtıma göre farklı çözünürlükte döner. Kapı: `test_ai_panel_yayini.py`.
+MOZAIK_AZAMI_KENAR = 1600
+
+
+def _kapakli_kodla_servis(bgr):
+    """(jpeg_baytlari, {"image_w","image_h"}) — gömülü `_kapakli_kodla` ile AYNI sözleşme.
+
+    ⚠️ BOYUT KODLANAN KAREYE AİT: kapak kareyi küçülttüğü için orijinal boyutu bildirmek
+    istemcinin oran kilidini bozar ve üzerine çizilen işaretleri kaydırır.
+    """
+    import cv2
+
+    oh, ow = bgr.shape[:2]
+    sc = min(1.0, float(MOZAIK_AZAMI_KENAR) / max(oh, ow))
+    if sc < 1.0:
+        bgr = cv2.resize(bgr, (int(ow * sc), int(oh * sc)), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    if not ok:
+        raise RuntimeError("JPEG kodlama basarisiz")
+    return buf.tobytes(), _kare_olcusu(bgr)
 
 
 def _kare_olcusu(bgr) -> dict:
@@ -1080,7 +1113,15 @@ def infer_em_fantom(
         t0 = time.time()
         result, ctx = pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum)
         infer_ms = round((time.time() - t0) * 1000, 1)
-        overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
+        # ⚠️ ÇOKLU PANEL (ADIM 3): `render_panels` zaten 7 panel üretiyor ve 6'sı AYNI
+        # SATIRDA çöpe atılıyordu. Artık hepsi yayına çıkıyor (ek CPU YOK — üretim zaten
+        # yapılıyordu). Kök `image_base64` KALIYOR → eski istemci etkilenmez.
+        _panels = pl.render_panels(ctx, result, lang="tr") if result.success else None
+        _paneller = _panelleri_hazirla(_panels, _kapakli_kodla_servis, _PANEL_ADLARI) if _panels else []
+        # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak ÖLÇÜLEN
+        # 38 ms'i (6048×12256 dikey mozaik) boşuna yakar ve iki kodlamanın sessizce
+        # ayrışmasına kapı açardı. Tespit yoksa orijinal kare kodlanır (yedek yol).
+        _b64, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla_servis, img)
         payload = result.to_dict()
         # §KALAN A5 (router paritesi): ilk tumor bolgesi icin hafif duyarlilik meta'si.
         # Aciklama IKINCIL — hatasi analizi ASLA dusurmez (zarif). Sync uc (threadpool)
@@ -1107,6 +1148,7 @@ def infer_em_fantom(
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
             "inference_ms": infer_ms,
+            "paneller": _paneller,
             "success": result.success,
             "error": result.error,
             "n_tumor": result.n_tumor,
@@ -1116,8 +1158,12 @@ def infer_em_fantom(
             "tumor_regions": payload["tumor_regions"],
             "healthy_regions": payload["healthy_regions"],
             "timing_ms": result.timing_ms,
-            "image_base64": _jpg_b64(overlay),
-            **_kare_olcusu(overlay),
+            # KAPAK PARITESI (ADIM 3): gomulu yol kok gorseli `_kapakli_kodla` ile
+            # 1600 px'e indiriyor; burasi `_jpg_b64` ile HAM mozaigi gonderiyordu — yani
+            # ADIM 1'in olctugu 6048x12256 dev kare GPU profilinde YASAMAYA DEVAM ediyordu.
+            # Ayni analiz artik iki dagitimda BIT-BIT ayni kok gorseli donuyor.
+            "image_base64": _b64,
+            **_boyut,
             **_xai_meta,
         }
     except Exception as e:
@@ -1183,7 +1229,14 @@ def infer_em_petri(
         t0 = time.time()
         result, ctx = pl.process_image(img, achieved_B=achieved_B, duty_sum=duty_sum)
         infer_ms = round((time.time() - t0) * 1000, 1)
-        overlay = pl.render_panels(ctx, result, lang="tr")["07_combined"] if result.success else img
+        # ⚠️ PETRİ AYRI AD TABLOSU (`02_yolo_dets`/`03_yolo_masks`) — fantom tablosu
+        # kullanılsaydı o paneller "bilinmeyen" dalına düşer ve SIRALARI bozulurdu.
+        _panels = pl.render_panels(ctx, result, lang="tr") if result.success else None
+        _paneller = _panelleri_hazirla(_panels, _kapakli_kodla_servis, _PETRI_PANEL_ADLARI) if _panels else []
+        # ⚠️ KÖK GÖRSEL PANELDEN: `07_combined` zaten kodlandı. İkinci kez kodlamak ÖLÇÜLEN
+        # 38 ms'i (6048×12256 dikey mozaik) boşuna yakar ve iki kodlamanın sessizce
+        # ayrışmasına kapı açardı. Tespit yoksa orijinal kare kodlanır (yedek yol).
+        _b64, _boyut = _kok_gorseli_sec(_paneller, _kapakli_kodla_servis, img)
         wells = [asdict(w) for w in result.wells]
         # §KALAN A5 (router paritesi): ilk kuyu icin hafif duyarlilik meta'si (zarif).
         _xai_meta = {}
@@ -1206,6 +1259,7 @@ def infer_em_petri(
             "status": "success" if result.success else "no_detection",
             "device": _prov_dev(c["predictor"].session),
             "inference_ms": infer_ms,
+            "paneller": _paneller,
             "success": result.success,
             "error": result.error,
             "n_wells": result.n_wells,
@@ -1220,8 +1274,12 @@ def infer_em_petri(
             "yolo_ayar": result.yolo_ayar,
             "resize": result.resize,
             "plausibility": result.plausibility,
-            "image_base64": _jpg_b64(overlay),
-            **_kare_olcusu(overlay),
+            # KAPAK PARITESI (ADIM 3): gomulu yol kok gorseli `_kapakli_kodla` ile
+            # 1600 px'e indiriyor; burasi `_jpg_b64` ile HAM mozaigi gonderiyordu — yani
+            # ADIM 1'in olctugu 6048x12256 dev kare GPU profilinde YASAMAYA DEVAM ediyordu.
+            # Ayni analiz artik iki dagitimda BIT-BIT ayni kok gorseli donuyor.
+            "image_base64": _b64,
+            **_boyut,
             **_xai_meta,
         }
     except Exception as e:

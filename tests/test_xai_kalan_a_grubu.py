@@ -128,6 +128,32 @@ def _fonksiyon_govdesi(src: str, karakter_ofseti: int) -> str:
     return "\n".join(satirlar[en_iyi.lineno - 1 : getattr(en_iyi, "end_lineno", en_iyi.lineno)])
 
 
+def _uc_govdesi(src: str, yol: str) -> str:
+    """Route dekoratöründe `yol` geçen fonksiyonun TAM gövdesi (AST ile).
+
+    ⚠️ `src[i : i + 4000]` karakter penceresinin yerine geçer. Pencere, ucun yanıt sözlüğüne
+    birkaç satır yorum eklenince aranan alanı dışarıda bırakıp SAHTE KIRMIZI veriyor — bu
+    depoda 2026-09-11'de iki kez ölçüldü (ADIM 2 ve ADIM 3). Pencereyi büyütmek kırılmayı
+    yalnız erteler; fonksiyon sınırı sorunun DOĞRU ölçeğidir.
+
+    ⚠️ Dekoratör AST'de `lineno`nun DIŞINDADIR: gövde dekoratör satırından başlatılır, yoksa
+    yol hiçbir fonksiyonla eşleşmez ve kapı sessizce her şeyi kabul ederdi.
+    """
+    import ast as _ast
+
+    agac = _ast.parse(src)
+    satirlar = src.split("\n")
+    for d in _ast.walk(agac):
+        if not isinstance(d, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            continue
+        if not d.decorator_list:
+            continue
+        bas = min([d.lineno] + [x.lineno for x in d.decorator_list])
+        if yol in "\n".join(satirlar[bas - 1 : d.lineno]):
+            return "\n".join(satirlar[bas - 1 : getattr(d, "end_lineno", d.lineno)])
+    raise AssertionError(f"{yol} rotasini tasiyan fonksiyon BULUNAMADI (uc silinmis olabilir)")
+
+
 def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
     """Gerçek çağrıya pinli: iki uç da xaiSensitivity'yi to_thread ile üretir ve
     hata analizi DÜŞÜRMEZ (except + warning)."""
@@ -179,7 +205,13 @@ def test_YAPISAL_ai_service_fantom_ve_petri_meta_PARITESI():
         assert "except Exception" in blok and "analiz etkilenmedi" in blok, (
             f"ai_service {modul}: XAI meta hatası zarif değil"
         )
-        assert "**_xai_meta," in src[i : i + 1600], f"ai_service {modul}: _xai_meta yanıta yayılmıyor"
+        # ⚠️ KARAKTER PENCERESİ TERK EDİLDİ (2026-09-12): çıpa `src[i : i + 1600]` idi ve
+        # ADIM 3'te yanıt sözlüğüne `"paneller"` + dört satırlık gerekçe yorumu eklenince
+        # `**_xai_meta,` pencerenin DIŞINA taştı → SAHTE KIRMIZI. (Aynı kırılma ADIM 2'de
+        # router tarafında yaşanmış ve orada AST'ye pinlenmişti; bu ikizi atlanmış.)
+        assert "**_xai_meta," in _fonksiyon_govdesi(src, i), (
+            f"ai_service {modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
+        )
         assert 'c["cfg"].phantom.achieved_B' in blok, f"ai_service {modul}: XAI baz-noktası cfg ikamesiz"
         assert "achieved_B or 0.0" not in blok, f"ai_service {modul}: 'or 0.0' baz-nokta hatası geri geldi"
 
@@ -200,12 +232,12 @@ def test_YAPISAL_ai_service_landmark_ve_cat_organ_PARITESI():
     """GPU mikroservis yanıtları A2/A4 alanlarını taşımalı (düşman-doğrulama: taşımıyordu —
     rozetler + ölçüm-band paneli GPU dağıtımında sessizce ölüydü)."""
     src = (KOK / "ai_service/app.py").read_text(encoding="utf-8")
-    i = src.index("/infer/landmark")
-    blok = src[i : i + 4000]
+    # ⚠️ Çıpa AST'ye pinli: `src[i : i + 4000]` karakter penceresi, ucun gövdesine yorum ya da
+    # yeni alan girdiğinde aranan alanı dışarıda bırakır (ADIM 2 ve ADIM 3'te iki kez ölçüldü).
+    blok = _uc_govdesi(src, "/infer/landmark")
     for alan in ('"fgs_bantlari"', '"raw_fgs"', '"action_units"'):
         assert alan in blok, f"ai_service landmark yanıtı {alan} taşımıyor (A4 GPU'da ölü)"
-    i = src.index("/infer/cat_organ")
-    blok = src[i : i + 4000]
+    blok = _uc_govdesi(src, "/infer/cat_organ")
     for alan in ('"mirror_warning"', '"anatomic_consistency"'):
         assert alan in blok, f"ai_service cat_organ yanıtı {alan} taşımıyor (A2 GPU'da ölü)"
 
