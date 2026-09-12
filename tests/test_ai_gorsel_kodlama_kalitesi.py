@@ -161,17 +161,24 @@ def test_KRITIK_mozaik_kodlayicisi_KAPAK_uyguluyor():
 
     MUTASYON: `_kapakli_kodla`daki `cv2.resize` dalını sil → KIRMIZI (kapak uygulanmaz).
     """
+    import cv2
     import numpy as np
 
     from servers.ai_router import MOZAIK_AZAMI_KENAR, _kapakli_kodla
 
     genis = np.zeros((400, 5000, 3), dtype=np.uint8)
-    bayt = _kapakli_kodla(genis)
-    import cv2
+    # ⚠️ ADIM 2'de imza (bayt, boyut) oldu: kapak kareyi KÜÇÜLTTÜĞÜ için istemcinin
+    # oran kilidi ORİJİNAL değil KODLANAN boyutu almalı.
+    bayt, boyut = _kapakli_kodla(genis)
 
     geri = cv2.imdecode(np.frombuffer(bayt, dtype=np.uint8), cv2.IMREAD_COLOR)
     assert max(geri.shape[:2]) <= MOZAIK_AZAMI_KENAR, (
         f"kapak UYGULANMADI: {geri.shape[:2]} (azami {MOZAIK_AZAMI_KENAR})"
+    )
+    # ⚠️ BİLDİRİLEN BOYUT, GERÇEKTEN KODLANAN KARE OLMALI — orijinali (400×5000)
+    # bildirmek istemcinin kutusunu bozar ve üzerine çizilen işaretleri kaydırır.
+    assert boyut == {"image_w": geri.shape[1], "image_h": geri.shape[0]}, (
+        f"bildirilen boyut {boyut} != kodlanan kare {geri.shape[1]}x{geri.shape[0]}"
     )
 
 
@@ -186,8 +193,10 @@ def test_KRITIK_kapak_kucuk_goruntuyu_BUYUTMEZ():
     from servers.ai_router import _kapakli_kodla
 
     kucuk = np.zeros((120, 200, 3), dtype=np.uint8)
-    geri = cv2.imdecode(np.frombuffer(_kapakli_kodla(kucuk), dtype=np.uint8), cv2.IMREAD_COLOR)
+    bayt, boyut = _kapakli_kodla(kucuk)
+    geri = cv2.imdecode(np.frombuffer(bayt, dtype=np.uint8), cv2.IMREAD_COLOR)
     assert geri.shape[:2] == (120, 200), f"kucuk goruntu BUYUTULDU: {geri.shape[:2]}"
+    assert boyut == {"image_w": 200, "image_h": 120}, f"bildirilen boyut yanlis: {boyut}"
 
 
 # ============================================================================

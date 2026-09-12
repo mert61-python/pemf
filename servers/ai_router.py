@@ -299,8 +299,15 @@ GOSTERIM_JPEG_KALITESI = 85
 MOZAIK_AZAMI_KENAR = 1600
 
 
-def _kapakli_kodla(img: np.ndarray, azami: int = MOZAIK_AZAMI_KENAR) -> bytes:
-    """Uzun kenarı `azami`ye indir (gerekirse) ve GÖSTERİM kalitesinde JPEG'e kodla.
+def _kapakli_kodla(img: np.ndarray, azami: int = MOZAIK_AZAMI_KENAR) -> tuple[bytes, dict]:
+    """Uzun kenarı `azami`ye indir (gerekirse), GÖSTERİM kalitesinde JPEG'e kodla.
+
+    @return (jpeg_baytlari, {"image_w", "image_h"}) — boyut KODLANAN kareye aittir.
+
+    ⚠️ BOYUT DA DÖNER, ÇÜNKÜ KAPAK KAREYİ KÜÇÜLTÜR. İstemcinin oran kilidi
+    (`_kare_boyutu` sözleşmesi) ORİJİNAL boyutu alırsa kutu oranı yanlış hesaplanır ve
+    üzerine çizilen işaretler canlı görüntüyle KAYAR — bu bir tıbbi karar ekranıdır.
+    (ADIM 1 kapağı eklenince doğan tuzak; ADIM 2'de kapatıldı.)
 
     ⚠️ BÜYÜTME YAPMAZ (`min(1.0, ...)`): küçük bir görüntüyü şişirmek dosyayı büyütür,
     bilgi eklemez. `INTER_AREA` küçültmede doğru olan (moiré üretmez).
@@ -312,7 +319,7 @@ def _kapakli_kodla(img: np.ndarray, azami: int = MOZAIK_AZAMI_KENAR) -> bytes:
     ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), GOSTERIM_JPEG_KALITESI])
     if not ok:
         raise RuntimeError("JPEG kodlama basarisiz")
-    return buf.tobytes()
+    return buf.tobytes(), _kare_boyutu(img)
 
 
 def _kare_boyutu(img: np.ndarray) -> dict:
@@ -2687,10 +2694,10 @@ async def analyze_em_fantom(
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
-            _bayt = _kapakli_kodla(panels["07_combined"])
+            _bayt, _boyut = _kapakli_kodla(panels["07_combined"])
             status = "success"
         else:
-            _bayt = _kapakli_kodla(img)  # tespit yok → orijinali dön
+            _bayt, _boyut = _kapakli_kodla(img)  # tespit yok → orijinali dön
             status = "no_detection"
         b64_image = base64.b64encode(_bayt).decode('utf-8')
 
@@ -2731,6 +2738,10 @@ async def analyze_em_fantom(
         return {
             "status": status,
             "image_base64": b64_image,
+            # ⚠️ KODLANAN karenin boyutu (ADIM 2): istemcinin oran kilidi bunu okur.
+            # `_kapakli_kodla` kareyi KÜÇÜLTEBİLDİĞİ için orijinal boyut YANLIŞ olurdu →
+            # kutu oranı kayar, üzerine çizilen işaretler canlı görüntüyle uyuşmaz.
+            **_boyut,
             "success": result.success,
             "error": result.error,
             "n_tumor": result.n_tumor,
@@ -2867,10 +2878,10 @@ async def analyze_em_petri(
             # ⚠️ KAPAK + KALİTE (ADIM 1): mozaik 2×3'tür ve dikey telefon fotoğrafında
             # 6048×12256'ya çıkıyordu; q95 ile megabayt üretiyordu. Kapak olmadan yalnız
             # kaliteyi düşürmek YETMEZ (bağlayıcı kısıt çözünürlük).
-            _bayt = _kapakli_kodla(panels["07_combined"])
+            _bayt, _boyut = _kapakli_kodla(panels["07_combined"])
             status = "success"
         else:
-            _bayt = _kapakli_kodla(img)  # tespit yok → orijinali dön
+            _bayt, _boyut = _kapakli_kodla(img)  # tespit yok → orijinali dön
             status = "no_detection"
         b64_image = base64.b64encode(_bayt).decode('utf-8')
 
@@ -2900,6 +2911,10 @@ async def analyze_em_petri(
         return {
             "status": status,
             "image_base64": b64_image,
+            # ⚠️ KODLANAN karenin boyutu (ADIM 2): istemcinin oran kilidi bunu okur.
+            # `_kapakli_kodla` kareyi KÜÇÜLTEBİLDİĞİ için orijinal boyut YANLIŞ olurdu →
+            # kutu oranı kayar, üzerine çizilen işaretler canlı görüntüyle uyuşmaz.
+            **_boyut,
             "success": result.success,
             "error": result.error,
             "n_wells": result.n_wells,
@@ -3587,14 +3602,18 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
 
         overlay = result.get("_overlay_bgr")
         image_b64 = None
+        # ⚠️ ÖNCEDEN TANIMLI: overlay yoksa yanıt boyut alanı TAŞIMAZ (uydurma 0×0 DEĞİL).
+        # İstemci sözleşmesi "alan yoksa oran kilidi kapalı" — 0 göndermek kutuyu bozar.
+        _cat_boyut: dict = {}
         if overlay is not None:
             # Overlay orijinal çözünürlükte (ör. 4032px) → mobil için max 1280px'e küçült
             oh, ow = overlay.shape[:2]
             scale = min(1.0, 1280.0 / max(oh, ow))
             if scale < 1.0:
                 overlay = cv2.resize(overlay, (int(ow * scale), int(oh * scale)), interpolation=cv2.INTER_AREA)
-            _, buf = cv2.imencode('.jpg', overlay, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            _, buf = cv2.imencode('.jpg', overlay, [cv2.IMWRITE_JPEG_QUALITY, GOSTERIM_JPEG_KALITESI])
             image_b64 = base64.b64encode(buf).decode('utf-8')
+            _cat_boyut = _kare_boyutu(overlay)
 
         organs_dict = result.get("organs") or {}
         organs_list = [
@@ -3617,6 +3636,10 @@ async def analyze_cat_organ(file: UploadFile = File(None), image_base64: str = F
         return {
             "status": "success",
             "image_base64": image_b64,
+            # ⚠️ ORAN KİLİDİ (ADIM 2): bu uç görsel döndürüyor ama boyutu HİÇ bildirmiyordu →
+            # istemci kutunun oranını bilemeyip kareyi kırpıyor ve ORGAN İŞARETLERİ canlı
+            # görüntüyle KAYIYORDU. Bu bir tıbbi karar ekranı; işaret kayması organ hatasıdır.
+            **_cat_boyut,
             "n_organs": len(organs_list),
             "organs": organs_list,
             "pose_type": (result.get("pose_classifier") or {}).get("type"),

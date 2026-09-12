@@ -164,6 +164,30 @@ def _jpg_b64(bgr) -> str:
     return base64.b64encode(buf).decode("utf-8")
 
 
+def _kare_olcusu(bgr) -> dict:
+    """KODLANAN karenin gerçek boyutu — istemcinin oran kilidi için.
+
+    ⚠️ PARİTE AÇIĞI (ADIM 2, 2026-09-11): bu dosyada `image_w` HİÇ YOKTU (grep 0 eşleşme).
+    `servers/ai_router.py` her görsel uçta `**_kare_boyutu(...)` gönderiyor ve
+    `ai_client.py` mikroservis JSON'unu AYNEN geçirdiği için, buraya eklenmeyen her alan
+    GPU dağıtımında SESSİZCE KAYBOLUYORDU.
+
+    Somut zarar: istemci kutunun oranını bilemeyince kareyi kırpıyor ve üzerine çizilen
+    ORGAN/TÜMÖR İŞARETLERİ canlı görüntüyle kayıyor — bu bir tıbbi karar ekranı.
+    ⚠️ Bu sınıf (router'da var, app.py'de yok) bu depoda 2026-08-27/28'de BEŞ KEZ ölçüldü.
+
+    @return {} — görüntü yoksa alan HİÇ konmaz (uydurma 0×0 DEĞİL: istemci sözleşmesi
+    "alan yoksa oran kilidi kapalı"dır; 0 göndermek kutuyu bozar).
+    """
+    if bgr is None:
+        return {}
+    try:
+        h, w = bgr.shape[:2]
+    except Exception:
+        return {}
+    return {"image_w": int(w), "image_h": int(h)}
+
+
 def _err500(exc, code: int = 500):
     """Audit P3: ham istisna metni (sunucu dosya yolları/iç detay) istemciye SIZMASIN — jenerik mesaj
     + correlation-id döndür, tam istisnayı yalnız sunucu log'una yaz (keşif/bilgi-ifşası engellenir)."""
@@ -534,6 +558,7 @@ def infer_kidney_ct(file: UploadFile = File(...), explain: str = Form(None)):
             "class_counts": result.get("class_counts"),
             "detections": result.get("detections"),
             "image_base64": _jpg_b64(overlay),
+            **_kare_olcusu(overlay),
         }
         if str(explain).lower() == "true":
             try:
@@ -589,6 +614,7 @@ def infer_segmentation(file: UploadFile = File(...)):
             "inference_ms": round((time.time() - t0) * 1000, 1),
             "cat_count": int(cat_count),
             "image_base64": _jpg_b64(img),
+            **_kare_olcusu(img),
         }
     except Exception as e:
         return _err500(e)
@@ -665,6 +691,7 @@ def infer_landmark(file: UploadFile = File(...)):
             "action_units": (fgs.get("action_units") if detected else None),
             "pain_level": (fgs.get("pain_level", "Unknown") if detected else "Kedi yüzü tespit edilemedi"),
             "image_base64": _jpg_b64(img),
+            **_kare_olcusu(img),
         }
     except Exception as e:
         return _err500(e)
@@ -758,12 +785,14 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
         infer_ms = round((time.time() - t0) * 1000, 1)
         overlay = result.get("_overlay_bgr")
         image_b64 = None
+        _cat_boyut: dict = {}
         if overlay is not None:
             oh, ow = overlay.shape[:2]
             scale = min(1.0, 1280.0 / max(oh, ow))
             if scale < 1.0:
                 overlay = cv2.resize(overlay, (int(ow * scale), int(oh * scale)), interpolation=cv2.INTER_AREA)
             image_b64 = _jpg_b64(overlay)
+            _cat_boyut = _kare_olcusu(overlay)
         organs = result.get("organs") or {}
         organs_list = [
             {
@@ -786,11 +815,15 @@ def infer_cat_organ(file: UploadFile = File(...), target_oid: int = Form(None)):
             "n_organs": len(organs_list),
             "organs": organs_list,
             "pose_type": (result.get("pose_classifier") or {}).get("type"),
+            # ⚠️ PARİTE (ADIM 2): router:3623'te VARDI, burada YOKTU → GPU dağıtımında arayüz
+            # canlıda **"PnP undefinedpx"** yazıyordu (AiHubScreen.tsx:3879).
+            "pnp_residual_px": round(float((result.get("pnp_fit") or {}).get("residual_px", 0.0)), 1),
             # Kapi-paritesi (dusman-dogrulama 2026-08-27): A2 rozetleri router'da vardi,
             # burada YOKTU -> GPU dagitiminda ayna/anatomik uyarilar hic gorunmuyordu.
             "mirror_warning": bool((result.get("pnp_fit") or {}).get("mirror_warning")),
             "anatomic_consistency": result.get("anatomic_consistency"),
             "image_base64": image_b64,
+            **_cat_boyut,
         }
     except Exception as e:
         return _err500(e)
@@ -987,13 +1020,18 @@ def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None))
                     continue
                 if 0 <= cls_id < len(SINIF_ADLARI):
                     counts[SINIF_ADLARI[cls_id]] += 1
+        # ⚠️ `r.plot()` TEK KEZ: pahalı bir çizim çağrısıdır; hem kodlama hem boyut için
+        # ayrı ayrı çağırmak işi iki katına çıkarır ve iki farklı kare üretme riski taşır.
+        _cizim = r.plot()
+        _cizim_b64 = _jpg_b64(_cizim)
         yanit = {
             "status": "success",
             "device": _yolo_device(),
             "inference_ms": round((time.time() - t0) * 1000, 1),
             "n_detections": int(n),  # geriye uyum: :8100'e doğrudan bağlanan istemciler
             "counts": counts,
-            "image_base64": _jpg_b64(r.plot()),
+            "image_base64": _cizim_b64,
+            **_kare_olcusu(_cizim),
         }
         if str(explain).lower() == "true":
             try:
@@ -1079,6 +1117,7 @@ def infer_em_fantom(
             "healthy_regions": payload["healthy_regions"],
             "timing_ms": result.timing_ms,
             "image_base64": _jpg_b64(overlay),
+            **_kare_olcusu(overlay),
             **_xai_meta,
         }
     except Exception as e:
@@ -1182,6 +1221,7 @@ def infer_em_petri(
             "resize": result.resize,
             "plausibility": result.plausibility,
             "image_base64": _jpg_b64(overlay),
+            **_kare_olcusu(overlay),
             **_xai_meta,
         }
     except Exception as e:

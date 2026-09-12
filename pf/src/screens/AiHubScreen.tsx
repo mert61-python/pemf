@@ -3876,7 +3876,15 @@ function CatOrganModule({ patientName }: { patientName: string }) {
                 : "Organlar konumlandı ama güven düşük. Daha net/yakın bir görüntüyle sonuç iyileşir. Aşağıda tüm organlar ve güven düzeyleri var."}
               points={["Renkli bar = modelin o organ konumuna güveni (yeşil ≥%60, sarı ≥%40, kırmızı düşük).", "Bu bir ön-lokalizasyondur, tıbbi tanı değildir."]} />;
           })()}
-          <Text style={styles.ctSubLabel}>Teknik: poz {result.pose_type ?? "?"} · PnP {result.pnp_residual_px}px</Text>
+          {/* ⚠️ "PnP undefinedpx" (saha, 2026-09-11): alan koşulsuz basılıyordu ve GPU
+              profilinde `pnp_residual_px` HİÇ gelmiyordu (`ai_service/app.py`de yoktu).
+              Backend tarafı ADIM 2'de düzeltildi; burası İKİNCİ savunma: alan yoksa
+              teknik satırda "—" çıkar. Bir sayı uydurmak (0px) daha kötü olurdu —
+              operatör onu "mükemmel uyum" diye okur. */}
+          <Text style={styles.ctSubLabel}>
+            Teknik: poz {result.pose_type ?? "?"} · PnP{" "}
+            {typeof result.pnp_residual_px === "number" ? `${result.pnp_residual_px}px` : "—"}
+          </Text>
           <Text style={styles.ctSubLabel}>Organlar (3B konum · güven)</Text>
           {(result.organs || []).map((o: AiOrgan, i: number) => {
             const c = o.coord_cabin_cm || o.coord_3d_cm || [0, 0, 0];

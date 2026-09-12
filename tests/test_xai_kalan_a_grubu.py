@@ -104,6 +104,30 @@ def test_KRITIK_em_modul_hizli_sensitivity_ANLAMLI(modul_yolu):
     assert all(t["etki"] > 0 for t in a), f"{modul_yolu}: sensitivity ~0 (ref-stats bağlanmamış olabilir)"
 
 
+def _fonksiyon_govdesi(src: str, karakter_ofseti: int) -> str:
+    """`karakter_ofseti`ni İÇEREN fonksiyonun tam kaynak gövdesi (AST ile).
+
+    ⚠️ NEDEN: karakter-pencereli çıpalar araya satır girince sahte-kırmızı verir
+    (2026-09-11'de ölçüldü). Fonksiyon sınırı, "aynı yanıt sözlüğü" sorusunun DOĞRU
+    ölçeğidir ve biçimlendirici satır kırmalarından etkilenmez.
+    """
+    import ast as _ast
+
+    satir = src.count("\n", 0, karakter_ofseti) + 1
+    agac = _ast.parse(src)
+    en_iyi = None
+    for d in _ast.walk(agac):
+        if not isinstance(d, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            continue
+        son = getattr(d, "end_lineno", d.lineno)
+        if d.lineno <= satir <= son and (en_iyi is None or d.lineno > en_iyi.lineno):
+            en_iyi = d
+    if en_iyi is None:
+        return src
+    satirlar = src.split("\n")
+    return "\n".join(satirlar[en_iyi.lineno - 1 : getattr(en_iyi, "end_lineno", en_iyi.lineno)])
+
+
 def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
     """Gerçek çağrıya pinli: iki uç da xaiSensitivity'yi to_thread ile üretir ve
     hata analizi DÜŞÜRMEZ (except + warning)."""
@@ -126,7 +150,15 @@ def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
         assert "asyncio.to_thread" in blok, f"{modul}: sensitivity event-loop üstünde koşuyor (bloklar)"
         # WIRING kilidi (düşman-doğrulama 2026-08-27: **_xai_meta silinince eski test yeşil
         # kalıyordu): meta gerçekten YANITA yayılıyor mu?
-        assert "**_xai_meta," in src[i : i + 1600], f"{modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
+        #
+        # ⚠️ KARAKTER PENCERESİ TERK EDİLDİ (2026-09-11): çıpa `src[i : i + 1600]` idi ve
+        # ADIM 2'de yanıt sözlüğüne üç satırlık bir yorum + `**_boyut,` eklenince
+        # `**_xai_meta,` pencerenin DIŞINA taştı → SAHTE KIRMIZI. Pencereyi büyütmek aynı
+        # kırılmayı yalnız erteler (bu depoda "yapısal çıpa kırılganlığı" olarak kayıtlı).
+        # Artık çıpa AST'ye pinli: meta'nın ÜRETİLDİĞİ fonksiyonun KENDİ gövdesinde
+        # `**_xai_meta` yayılımı aranır — araya kaç satır girdiği ÖNEMSİZ.
+        _fn = _fonksiyon_govdesi(src, i)
+        assert "**_xai_meta," in _fn, f"{modul}: _xai_meta üretiliyor ama YANITA yayılmıyor"
         # Baz-nokta kilidi: açıklama tahminin FİİLEN kullandığı noktada (None → cfg.phantom
         # default'ları; 'or 0.0' yanlış noktada açıklama üretiyordu — 8/8 noktada top-3 farklıydı)
         assert 'cache["cfg"].phantom.achieved_B' in blok, f"{modul}: XAI baz-noktası cfg ikamesiz"
