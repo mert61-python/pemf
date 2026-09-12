@@ -22,7 +22,7 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 ### Çekirdek uygulama
 | Dosya | Görev |
 |---|---|
-| `api_server.py` | **Ana FastAPI `app`** — WS ucu, bobin-kontrol/seans/acil-durdurma/metrics route'ları, MQTT dinleyici + ESP telemetri watchdog, seans-süre & sensör-kalıcılık arka-plan döngüleri, auth/rate-limit middleware, tüm alt-router'ların `include_router()`'ı |
+| `api_server.py` | **Ana FastAPI `app`** — WS ucu, bobin-kontrol/seans/acil-durdurma/metrics route'ları, MQTT dinleyici + ESP telemetri watchdog, seans-süre & sensör-kalıcılık arka-plan döngüleri, auth/rate-limit middleware, tüm alt-router'ların `include_router()`'ı **GZIP** (ADIM 5, 2026-09-12): `GZipMiddleware` + `GZIP_ASGARI_BAYT=1024` — çok panelli AI yanıtı base64 JPEG taşır ve base64 ikiliyi %33 şişirir; gzip onu geri alır (**ölçüldü: 5.917,7 KB → 4.472,6 KB, oran 0,756**). ⚠️ Kazanç YALNIZ Tauri/doğrudan :8000 yolunda (docker/web'de nginx zaten yapıyor). ⚠️ Eşiğin altındaki küçük yanıt sıkıştırılmaz (saf CPU kaybı); WebSocket etkilenmez. Kapı: `tests/test_gzip_sikistirma.py` |
 | `live_state.py` | Canlı cihaz durumunun tek kaynağı; WS istemci kaydı + serileştirilmiş broadcast; STM/bobin/seans/hasta canlı-güncelleme fonksiyonları |
 | `session_state.py` | Aktif-seans anlık görüntüsüne küçük paylaşımlı erişim (`snapshot()`, `is_active()`) |
 | `coil_run_tracker.py` | Her bobinin "coil run" yaşam döngüsü + dakika-ortalaması → run özeti (treatment DB'ye) |

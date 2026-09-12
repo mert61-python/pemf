@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.gzip import GZipMiddleware
 
 from servers import (
     coil_run_tracker,  # audit B-2.2: coil-run (treatment-DB) tracker ayrı modülde
@@ -235,6 +236,27 @@ app.add_middleware(
     allow_headers=["*"],
     **_cors_kwargs,
 )
+
+#: Bu boyutun altındaki yanıt SIKIŞTIRILMAZ.
+#: ⚠️ Küçük yanıtta gzip SAF KAYIP: gzip başlığı ~20 bayt, sıkıştırma CPU'su bedava değil ve
+#: canlı durum anlık görüntüsü (`/api/status`) saniyede birkaç kez çekiliyor. Kazanç AI
+#: yanıtlarında (yüzlerce KB base64 görsel); küçük JSON'da yok.
+GZIP_ASGARI_BAYT = 1024
+
+# ⚠️ GZIP (AI Hub planı, ADIM 5). NEDEN İŞE YARIYOR: 7 panelli fantom/petri yanıtı base64 JPEG
+# taşıyor ve base64 ikili veriyi %33 ŞİŞİRİR — gzip o şişmeyi büyük ölçüde geri alır.
+# ⚠️ BU MAKİNEDE ÖLÇÜLDÜ (2026-09-12, `test_gzip_sikistirma.py` çıktısı, 7 panelli gerçek petri
+# yanıtı): 5.917,7 KB → 4.472,6 KB, **oran 0,756**. Plan 0,73-0,75 öngörmüştü; bağımsız ölçüm
+# doğruladı. (Test panelleri saf gürültü, yani JPEG için EN KÖTÜ durum; saha fotoğrafında kazanç
+# bundan daha iyi olur.)
+#
+# ⚠️ KAZANÇ YALNIZ TAURI / DOĞRUDAN :8000 YOLUNDA. docker/web dağıtımında nginx zaten
+# sıkıştırıyor (`docker/Dockerfile.frontend`), yani orada bu satır ikinci bir sıkıştırma
+# DEĞİL — nginx upstream'den gelen `Content-Encoding: gzip`i olduğu gibi geçirir.
+#
+# ⚠️ WEBSOCKET ETKİLENMEZ: Starlette'in GZipMiddleware'i `scope["type"] != "http"` olan her şeyi
+# dokunmadan geçirir. Canlı telemetri WS'i bu yüzden bozulmaz (kapı: test_gzip_sikistirma.py).
+app.add_middleware(GZipMiddleware, minimum_size=GZIP_ASGARI_BAYT)
 
 # Audit P2 + eksik-taraması P2 (2026-08-22): DNS-rebinding'e karşı Host koruması.
 #

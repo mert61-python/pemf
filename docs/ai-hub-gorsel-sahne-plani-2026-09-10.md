@@ -418,6 +418,27 @@ Backend'e `GZipMiddleware` (ölçüldü oran 0,73-0,75: 960,8 KB → 699,2 KB). 
 Tauri/doğrudan :8000 yolunda — docker/web'de nginx bunu zaten yapıyor
 (Dockerfile.frontend:41-46). Faydalı ama asıl çözüm değil.
 
+**DURUM: TAMAMLANDI (2026-09-12).** `servers/api_server.py`de `GZipMiddleware`,
+`GZIP_ASGARI_BAYT = 1024` eşiğiyle CORS'tan hemen sonra kayıtlı.
+
+⚠️ **ORAN BAĞIMSIZ ÖLÇÜLDÜ, PLANIN SAYISINA GÜVENİLMEDİ:** gerçek 7 panelli petri yanıtında
+**5.917,7 KB → 4.472,6 KB, oran 0,756** (`test_gzip_sikistirma.py` çıktısı). Plan 0,73-0,75
+demişti; ölçüm doğruladı. Test panelleri saf gürültü — JPEG için EN KÖTÜ durum; saha
+fotoğrafında kazanç bundan daha iyi olur.
+
+⚠️ Eşik neden 0 değil: küçük yanıtta gzip SAF KAYIP (~20 bayt başlık + CPU) ve sağlık ucu /
+canlı durum anlık görüntüsü saniyede birkaç kez çekiliyor.
+
+Kapı `tests/test_gzip_sikistirma.py` (6 test) — "middleware kayıtlı mı" DEĞİL, **üretimdeki AI
+yanıtının gerçekten sıkıştığı** ölçülüyor: gövde açılıp JSON olarak doğrulanıyor, küçük yanıtın
+sıkışmadığı, `accept-encoding` göndermeyen istemcinin bozulmadığı ve **WebSocket'in
+etkilenmediği** (Starlette gzip'i `http` olmayan scope'a dokunmaz) kanıtlanıyor.
+**Mutasyon: 4/4 KIRMIZI.**
+
+⚠️ İlk yazımda kapı, çalışma anında `@app.get("/__gzip_kapi_testi__")` ile sahte bir uç
+ekliyordu; uygulama zaten kurulu olduğu için 404 döndü. Kurulabilseydi bile YANLIŞ ŞEYİ
+ölçerdi — kapının değeri üretimdeki yükü ölçmesinde.
+
 ---
 
 ## 5. Kıracağım mevcut kapılar — bütçe açıkça yazılı
