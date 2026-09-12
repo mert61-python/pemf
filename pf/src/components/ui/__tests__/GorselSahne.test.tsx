@@ -11,7 +11,7 @@
  * launcher penceresinde içerik taştı ve oklar kırpıldı. Kutu yüksekliğini TEK BAŞINA ölçen bir
  * kapı bu taşmayı YEŞİL geçer — bu yüzden toplam yükseklik ayrı ölçülür (G11).
  */
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { CERCEVE, GorselSahne, KONTROL_TAHMINI } from "@/components/ui/GorselSahne";
 import type { SahneSayfasi } from "@/utils/gorselSahneSayfalari";
 import { Text, View } from "react-native";
@@ -354,38 +354,84 @@ test("KRITIK: tam ekran ACILIR, AYNI uri, kapanista SAYFA INDEKSI KORUNUR", () =
   expect(api.getByTestId("gorsel-sahne-sayac").props.children.join("")).toContain("4/7");
 });
 
-test("KRITIK: tam ekranda YATAY kaydiriciya ACIK YUKSEKLIK verilir", () => {
-  // ⚠️ SAHADA ÖLÇÜLEN ARIZA (2026-09-12, sahip bildirimi): tam ekran açılıyor, başlık ve zoom
-  // düğmeleri görünüyor ama GÖRSEL YOK. Sebep: yatay `ScrollView`in öz yüksekliği yok; dikey
-  // bir `ScrollView`in `alignItems: center` içerik kabının çocuğu olunca yüksekliği SIFIRA
-  // çöküyor ve görsel çizilmiyor. `flexGrow: 1` bunu ÇÖZMEZ (karşılıklı bağımlılık sıfırda
-  // dengeleniyor).
+/** Tam ekranı açar ve modal görünümünün ölçüsünü testin KENDİSİ verir. */
+function tamEkranAc(api: ReturnType<typeof render>, gorunum = { width: 1900, height: 1000 }) {
+  fireEvent.press(api.getByTestId("gorsel-sahne-tam-ekran"));
+  // ⚠️  MODAL İÇİNDE ULAŞMIYOR (RNTL kısıtı: satır içi kapta çalışan
+  // aynı çağrı burada handler'ı HİÇ tetiklemiyor — bu turda ölçüldü). Bu yüzden ÜRETİMDEKİ
+  // handler doğrudan çağrılıyor; ölçülen davranış aynı, yalnız tetikleme yolu farklı.
+  act(() => {
+    api.getByTestId("gorsel-sahne-tam-alan").props.onLayout({
+      nativeEvent: { layout: { width: gorunum.width, height: gorunum.height } },
+    });
+  });
+}
+
+function tamGorselOlcusu(api: ReturnType<typeof render>) {
+  const st = api.getByTestId("gorsel-sahne-gorsel-tam").props.style;
+  return { width: st.width as number, height: st.height as number };
+}
+
+test("KRITIK: tam ekran %100 = EKRANA SIGDIR (satir ici kutu DEGIL)", () => {
+  // ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "100'de de 200'de de aynı, ekstra yakınlaşmıyor".
+  // Sebep: tam ekranın taban ölçüsü SATIR İÇİ kutuydu. Satır içi kutu sahne tavanıyla
+  // sınırlıdır (~486 px), yani tam ekran zaten "sığdırılmış" değildi: görsel ekranın
+  // ortasında küçük duruyor, %200 bile ekranı doldurmuyordu.
   //
-  // ⚠️ JEST YERLEŞİM YAPMAZ, yani çökmeyi DAVRANIŞLA ölçemem. Bu yüzden sözleşme YAPISAL
-  // kilitleniyor: yatay kaydırıcı AÇIK SAYISAL yükseklik taşımalı ve bu yükseklik çizilen
-  // görselin yüksekliğiyle AYNI olmalı (1:1'de dikey kaydırma dıştakinden gelsin).
-  //
-  // MUTASYON: `style={{ height: tamOlcu.height }}`i kaldır → KIRMIZI.
+  // MUTASYON: `tamTaban`ı `kutu`ya geri çevir → KIRMIZI.
   const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
   olc(api);
-  fireEvent.press(api.getByTestId("gorsel-sahne-tam-ekran"));
+  const satirIci = kutuOlcusu(api);
+  tamEkranAc(api, { width: 1900, height: 1000 });
 
-  const gorsel = api.getByTestId("gorsel-sahne-gorsel-tam");
+  const tam = tamGorselOlcusu(api);
+  expect(tam.height).toBeGreaterThan(satirIci.height * 1.5); // gözle görülür biçimde büyük
+  // Ekrana sığdırılmış: iki boyut da görünümü AŞMAZ, en az biri ona DEĞER.
+  expect(tam.width).toBeLessThanOrEqual(1900);
+  expect(tam.height).toBeLessThanOrEqual(1000);
+  expect(Math.max(tam.width / 1900, tam.height / 1000)).toBeCloseTo(1, 1);
+});
 
-  // ⚠️ ÇIPA `horizontal` PROP'UNA PİNLİ, "yukarı çıkıp ilk sayısal yüksekliği bul"a DEĞİL:
-  // ilk yazımda döngü GÖRSELİN KENDİ yüksekliğini buluyordu ve mutasyon YEŞİL kalıyordu
-  // (test kendini ölçüyordu). Aranan şey yatay KAYDIRICININ yüksekliği.
-  let yatay: typeof gorsel.parent = gorsel.parent;
-  for (let i = 0; i < 6 && yatay; i++) {
-    if (yatay.props?.horizontal === true) break;
-    yatay = yatay.parent;
-  }
-  expect(yatay?.props?.horizontal).toBe(true);
+test("KRITIK: tam ekranda ZOOM olcuyu GERCEKTEN buyutur", () => {
+  // ⚠️ Sahibin şikâyetinin ikinci yarısı: düğmeye basınca hiçbir şey değişmiyordu.
+  //
+  // ⚠️ GÖRÜNÜM BİLEREK KÜÇÜK (600×400): büyük bir görünümde "Tahmin" paneli (1200×400 kaynak)
+  // zaten sığdırılırken BÜYÜTÜLÜYOR ve 1:1'i aşmama kuralı gereği yakınlaştırma HAKLI OLARAK
+  // yapılmıyor. İlk yazımda test tam da bu yüzden kırmızıydı — kod değil, KURGU yanlıştı.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  tamEkranAc(api, { width: 600, height: 400 }); // sığdırma: 600×200, kaynak 1200 → 1:1 = 2,0
 
-  const st = yatay?.props?.style;
-  const duz = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
-  expect(typeof duz?.height).toBe("number");
-  expect(duz.height).toBe(gorsel.props.style.height);
+  const once = tamGorselOlcusu(api);
+  fireEvent.press(api.getByTestId("gorsel-sahne-yakinlastir"));
+  const sonra = tamGorselOlcusu(api);
+  expect(sonra.width).toBeGreaterThan(once.width);
+  expect(sonra.height / once.height).toBeCloseTo(sonra.width / once.width, 1); // oran korunur
+  expect(sonra.width).toBe(1200); // 1:1 = kaynak piksel
+});
+
+test("KRITIK: KAYNAK zaten sigdirilmisken yakinlastirma KAPALI", () => {
+  // ⚠️ 1:1'i aşmak yalnız bulanıklık üretir; düğme "basılıyor ama bir şey olmuyor" hissi
+  // vermemeli. Geniş görünümde 1200 px'lik panel zaten büyütülerek çizilir.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  tamEkranAc(api, { width: 1900, height: 1000 });
+  expect(api.getByTestId("gorsel-sahne-yakinlastir").props.accessibilityState.disabled).toBe(true);
+  expect(api.getByTestId("gorsel-sahne-zoom-etiket").props.children).toBe("%100");
+});
+
+test("KRITIK: tam ekran gorseli KAYDIRILABILIR (transform tasir)", () => {
+  // ⚠️ İç içe `ScrollView` terk edildi (yüksekliği sıfıra çöküyordu); kaydırma artık
+  // `transform` + sürükleme ile. Dönüşüm yoksa yakınlaştırılan görselin kenarlarına
+  // ERİŞİLEMEZ — zoom işe yaramaz hale gelir.
+  //
+  // MUTASYON: `transform` dizisini kaldır → KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  tamEkranAc(api);
+  const st = api.getByTestId("gorsel-sahne-gorsel-tam").props.style;
+  expect(Array.isArray(st.transform)).toBe(true);
+  expect(st.transform).toEqual([{ translateX: 0 }, { translateY: 0 }]);
 });
 
 test("KRITIK: %200'de SAYISAL boyut 2 kat, son basamak 1:1 KAYNAK PIKSEL", () => {

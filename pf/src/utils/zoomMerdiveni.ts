@@ -98,3 +98,23 @@ export function basamakEtiketi(deger: number, birebir: number | null): string {
   if (birebir !== null && Math.abs(deger - birebir) < BASAMAK_TOLERANSI) return "1:1";
   return `%${Math.round(deger * 100)}`;
 }
+
+/**
+ * Yakınlaştırmayı geçerli aralığa sıkıştırır.
+ *
+ * @param yeni      İstenen çarpan (tekerlek sürekli değer üretir).
+ * @param birebir   `birebirOrani()` sonucu — 1:1 kaynak piksel (yoksa `null`).
+ * @param basamaklar `zoomBasamaklari()` sonucu (1:1 yoksa üst sınır buradan gelir).
+ *
+ * ⚠️ ALT SINIR 1 = EKRANA SIĞDIR: altına inmek görüntüyü ekranın ortasında küçültür, hiçbir işe
+ * yaramaz ve kullanıcı "kayboldu" sanır.
+ * ⚠️ ÜST SINIR 1:1: ötesi yalnız JPEG bloklarını büyütür, BİLGİ EKLEMEZ.
+ *
+ * ⚠️ NEDEN AYRI FONKSİYON: sınır bileşenin içinde satır içiydi ve YALNIZ tekerlek yolundan
+ * geçiyordu; düğmeler zaten merdivenle sınırlı olduğu için mutasyon YEŞİL kalıyordu (ölçüldü).
+ * Saf fonksiyona çıkarılınca ölçülebilir oldu.
+ */
+export function zoomSinirla(yeni: number, birebir: number | null, basamaklar: number[]): number {
+  const enUst = birebir ?? basamaklar[basamaklar.length - 1] ?? 1;
+  return Math.min(Math.max(yeni, 1), Math.max(1, enUst));
+}

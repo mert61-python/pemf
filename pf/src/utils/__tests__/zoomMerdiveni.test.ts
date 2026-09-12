@@ -16,6 +16,7 @@ import {
   oncekiBasamak,
   sonrakiBasamak,
   zoomBasamaklari,
+  zoomSinirla,
 } from "@/utils/zoomMerdiveni";
 
 // ============================================================================
@@ -109,4 +110,33 @@ test("KRITIK: 1:1 TAM SAYIYA denk gelse de '1:1' yazar", () => {
 test("1:1 YOKKEN etiket her zaman yuzde", () => {
   expect(basamakEtiketi(2, null)).toBe("%200");
   expect(basamakEtiketi(1, null)).toBe("%100");
+});
+
+// ============================================================================
+// 4. ⚠️ SÜREKLİ ZOOM SINIRI (fare tekerleği)
+// ============================================================================
+
+test("KRITIK: tekerlek 1:1'i ASAMAZ", () => {
+  // ⚠️ Tekerlek sürekli değer üretir; merdiven basamaklarına takılı değildir. Sınır olmazsa
+  // kullanıcı sonsuza kadar yakınlaştırır ve yalnız JPEG blokları büyür — "yakınlaştırdım ama
+  // netleşmedi" hissi.
+  //
+  // MUTASYON: `Math.min(..., enUst)` sınırını kaldır → KIRMIZI.
+  const g = { kaynakW: 1200, kaynakH: 400, kutuW: 600 }; // 1:1 = 2,0
+  const b = zoomBasamaklari(g);
+  const bir = birebirOrani(g);
+  expect(zoomSinirla(99, bir, b)).toBeCloseTo(2, 5);
+  expect(zoomSinirla(1.5, bir, b)).toBeCloseTo(1.5, 5);
+});
+
+test("KRITIK: tekerlek SIGDIRMANIN altina inemez", () => {
+  // ⚠️ 1 = ekrana sığdır. Altına inmek görüntüyü ortada küçültür, kullanıcı "kayboldu" sanır.
+  const g = { kaynakW: 1200, kaynakH: 400, kutuW: 600 };
+  expect(zoomSinirla(0.2, birebirOrani(g), zoomBasamaklari(g))).toBe(1);
+  expect(zoomSinirla(-5, null, [1])).toBe(1);
+});
+
+test("1:1 YOKKEN ust sinir merdivenin son basamagidir", () => {
+  // Kaynak boyutu bilinmiyorsa (eski backend) merdiven [1,2]; tekerlek 2'yi aşmamalı.
+  expect(zoomSinirla(50, null, [1, 2])).toBe(2);
 });

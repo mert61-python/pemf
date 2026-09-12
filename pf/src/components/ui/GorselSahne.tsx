@@ -23,8 +23,8 @@
  * ⚠️ SARMA YOK: oklar sınırda durur (`clamp`), `(i+1)%n` DEĞİL. 7 panelde "Birleşik"ten sonra
  * "Girdi"ye atlamak, operatörün kaçıncı panelde olduğunu kaybetmesi demektir; sayaç da yalan söyler.
  */
-import { ReactNode, useState } from "react";
-import { Image, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { Image, Modal, PanResponder, StyleSheet, Text, View } from "react-native";
 import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus, X } from "lucide-react-native";
 import { Chip, ChipRow } from "@/components/ui/Chip";
 import { IconButton } from "@/components/ui/IconButton";
@@ -32,7 +32,14 @@ import { colors, radius, spacing, touch, typography } from "@/theme/tokens";
 import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import type { SahneSayfasi } from "@/utils/gorselSahneSayfalari";
 import { varsayilanSayfa } from "@/utils/gorselSahneSayfalari";
-import { basamakEtiketi, birebirOrani, oncekiBasamak, sonrakiBasamak, zoomBasamaklari } from "@/utils/zoomMerdiveni";
+import {
+  basamakEtiketi,
+  birebirOrani,
+  oncekiBasamak,
+  sonrakiBasamak,
+  zoomBasamaklari,
+  zoomSinirla,
+} from "@/utils/zoomMerdiveni";
 
 /**
  * Kontrol satırının ölçülemediği ilk karedeki TAHMİNİ yüksekliği (px).
@@ -133,13 +140,106 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
   // 1:1 basamağı onun için de anlamlıdır. (4096 px doku sınırı kontrolü zaten merdivende.)
   const kaynakW = sayfa?.image_w ?? _olcu?.w;
   const kaynakH = sayfa?.image_h ?? _olcu?.h;
-  const kutuW = kutu?.width ?? 0;
   // ⚠️ `useMemo` YOK — bu iki hesap birkaç aritmetik işlem; elle memolamak React Compiler'ın
   // bileşeni optimize etmesini tamamen ENGELLİYORDU (lint: "memoization could not be preserved").
-  const basamaklar = zoomBasamaklari({ kaynakW, kaynakH, kutuW });
-  // Tam ekranda cizilen olcu: kutu x zoom (kutu yoksa null -> yedek cizim).
-  const tamOlcu = kutu ? { width: Math.round(kutu.width * zoom), height: Math.round(kutu.height * zoom) } : null;
-  const birebir = birebirOrani({ kaynakW, kaynakH, kutuW });
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // TAM EKRAN GÖRÜNTÜLEYİCİ
+  // ⚠️ TABAN ÖLÇÜ TAM EKRAN GÖRÜNÜMÜNDEN GELİR, satır içi kutudan DEĞİL. Satır içi kutu
+  // kullanıldığında tam ekran "sığdırılmış" olmuyordu: görsel ekranın ortasında küçük duruyor ve
+  // %200'e basınca gözle fark edilmiyordu (sahip bildirimi: "100'de de 200'de de aynı").
+  // Artık %100 = EKRANA SIĞDIR, üst basamaklar oradan büyür.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  const [gorunum, setGorunum] = useState({ w: 0, h: 0 });
+  const [kaydirma, setKaydirma] = useState({ x: 0, y: 0 });
+  const tamAlanRef = useRef(null);
+  // ⚠️ "EN SON DEĞER" REF'LERİ: tekerlek dinleyicisi ve  bir kez kurulur; kapanışta
+  // eski state'i görmemeleri için güncel değerler ref'te tutulur. ⚠️ Yazma RENDER SIRASINDA
+  // DEĞİL EFEKTTE olur — React Compiler render sırasında ref yazmayı yasaklıyor (lint hatası).
+  const zoomRef = useRef(1);
+  const kaydirmaRef = useRef({ x: 0, y: 0 });
+  const baslangicRef = useRef({ x: 0, y: 0 });
+  const tamTabanRef = useRef<{ width: number; height: number } | null>(null);
+  const sinirlaRef = useRef<(n: { x: number; y: number }, o: { width: number; height: number } | null) => { x: number; y: number }>(() => ({ x: 0, y: 0 }));
+
+  const tamTaban = gorunum.w > 0 && gorunum.h > 0 ? kameraKutusu(gorunum.w, oran, gorunum.h, 1) : kutu;
+  const tamOlcu = tamTaban
+    ? { width: Math.round(tamTaban.width * zoom), height: Math.round(tamTaban.height * zoom) }
+    : null;
+
+  // ⚠️ KAYDIRMA SINIRLANIR: aksi hâlde görsel ekrandan tamamen çıkıp "kayboluyor" sanılır.
+  // Görsel görünümden küçükse kaydırma SIFIRDIR (ortada durur).
+  const sinirla = (n: { x: number; y: number }, olcu: { width: number; height: number } | null) => {
+    if (!olcu) return { x: 0, y: 0 };
+    const sx = Math.max(0, (olcu.width - gorunum.w) / 2);
+    const sy = Math.max(0, (olcu.height - gorunum.h) / 2);
+    return { x: Math.min(sx, Math.max(-sx, n.x)), y: Math.min(sy, Math.max(-sy, n.y)) };
+  };
+
+  const basamaklar = zoomBasamaklari({ kaynakW, kaynakH, kutuW: tamTaban?.width ?? 0 });
+  const birebir = birebirOrani({ kaynakW, kaynakH, kutuW: tamTaban?.width ?? 0 });
+
+  // ⚠️ REF'LER EFEKTTE EŞİTLENİR (render sırasında DEĞİL): tekerlek dinleyicisi ve `PanResponder`
+  // bir kez kurulur; kapanışta eski state'i görmemeleri için en son değerleri buradan okurlar.
+  // Bağımlılık dizisi YOK — her render sonrası eşitlenir.
+  useEffect(() => {
+    zoomRef.current = zoom;
+    kaydirmaRef.current = kaydirma;
+    tamTabanRef.current = tamTaban;
+    sinirlaRef.current = sinirla;
+  });
+
+  /** Zoom'u sınırlar içinde değiştirir ve kaydırmayı yeni ölçeğe göre toparlar. */
+  const zoomla = (yeni: number) => {
+    const z = zoomSinirla(yeni, birebir, basamaklar);
+    setZoom(z);
+    if (tamTaban) {
+      setKaydirma((k) => sinirla(k, { width: tamTaban.width * z, height: tamTaban.height * z }));
+    }
+  };
+
+  // ⚠️ FARE TEKERLEĞİ = YAKINLAŞTIRMA (sahip isteği: "farenin scrolluyla yakınlaştırıp
+  // uzaklaştıramaz mıyım, daha kullanıcı dostu olmaz mı"). RN'de `onWheel` PROP'U YOKTUR;
+  // web'de DOM düğümüne doğrudan bağlanır. `passive: false` ŞART, yoksa `preventDefault`
+  // yok sayılır ve sayfa tekerlekle kayar.
+  // ⚠️ Native'de sessizce atlanır (düğüme `addEventListener` yoktur) — düğmeler zaten var.
+  useEffect(() => {
+    if (!tamEkran) return;
+    const dugum = tamAlanRef.current as unknown as {
+      addEventListener?: (t: string, f: (e: WheelEvent) => void, o?: AddEventListenerOptions) => void;
+      removeEventListener?: (t: string, f: (e: WheelEvent) => void) => void;
+    } | null;
+    if (!dugum?.addEventListener) return;
+    const f = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomla(zoomRef.current * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    };
+    dugum.addEventListener("wheel", f, { passive: false });
+    return () => dugum.removeEventListener?.("wheel", f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tamEkran, tamTaban?.width, tamTaban?.height, birebir]);
+
+
+  // ⚠️ SÜRÜKLEYEREK GEZ: yakınlaştırıldığında görüntünün her yerine erişilebilmeli. İç içe
+  // `ScrollView` yerine `transform` kullanıldığı için kaydırmayı bu sağlar.
+  // ⚠️  baslatici ile BIR KEZ kurulur:  render sirasinda ref
+  // okumak olur ve React Compiler bunu uyarir.
+  const [tasiyici] = useState(() =>
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
+      onPanResponderMove: (_e, g) => {
+        const t = tamTabanRef.current;
+        if (!t) return;
+        const z = zoomRef.current;
+        setKaydirma(
+          sinirlaRef.current({ x: baslangicRef.current.x + g.dx, y: baslangicRef.current.y + g.dy },
+            { width: t.width * z, height: t.height * z }),
+        );
+      },
+      onPanResponderGrant: () => {
+        baslangicRef.current = kaydirmaRef.current;
+      },
+    }),
+  );
 
   if (adet === 0) return <>{bos ?? null}</>;
 
@@ -305,7 +405,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             <View style={styles.tamAraclar}>
               <IconButton
                 label="Uzaklaştır"
-                onPress={() => setZoom((z) => oncekiBasamak(basamaklar, z))}
+                onPress={() => zoomla(oncekiBasamak(basamaklar, zoomRef.current))}
                 disabled={basamaklar.length < 2}
                 testID={`${testID}-uzaklastir`}
                 style={styles.ok}
@@ -317,7 +417,7 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
               </Text>
               <IconButton
                 label="Yakınlaştır"
-                onPress={() => setZoom((z) => sonrakiBasamak(basamaklar, z))}
+                onPress={() => zoomla(sonrakiBasamak(basamaklar, zoomRef.current))}
                 disabled={basamaklar.length < 2}
                 testID={`${testID}-yakinlastir`}
                 style={styles.ok}
@@ -332,20 +432,36 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
             </View>
           </View>
 
-          <ScrollView style={styles.tamKaydirma} contentContainerStyle={styles.tamIcerik}>
-            {/* ⚠️ YATAY KAYDIRICIYA AÇIK YÜKSEKLİK ŞART — SAHADA ÖLÇÜLEN ARIZA (2026-09-12):
-                tam ekran açılıyordu ama GÖRSEL YOKTU (başlık ve zoom düğmeleri görünüyordu).
-                Sebep: yatay `ScrollView`in ÖZ YÜKSEKLİĞİ YOK. Dikey bir `ScrollView`in
-                `alignItems: center` olan içerik kabının çocuğu olduğunda yüksekliği SIFIRA
-                çöküyor ve içindeki görsel çizilmiyordu. `flexGrow: 1` bunu çözmez: dikey
-                kaydırıcının içerik kabı kendi yüksekliğini içeriğinden alır, yani karşılıklı
-                bağımlılık sıfırda dengeleniyordu.
-                ⚠️ Yükseklik GÖRSELİN yüksekliğidir: böylece 1:1 yakınlaştırmada dikey kaydırma
-                DIŞTAKİ kaydırıcıdan, yatay kaydırma İÇTEKİNDEN gelir — iki eksen de çalışır. */}
+          {/* ⚠️ İÇ İÇE `ScrollView` TERK EDİLDİ. Önce yatay kaydırıcının yüksekliği sıfıra
+              çöküyordu (görsel hiç çizilmedi); açık yükseklik verince çizildi ama ZOOM İŞE
+              YARAMIYORDU: taban ölçü SATIR İÇİ kutuydu, yani tam ekran zaten "sığdırılmış"
+              değildi ve %200 gözle fark edilmiyordu. Ayrıca kaydırıcıların ortalanmış içerik
+              kabı, içerik taşınca üst kenarı ERİŞİLEMEZ yapıyordu.
+              ⚠️ YERİNE: kırpan tek bir kap + `transform` ile ölçekleme/kaydırma. Taban ölçü
+              TAM EKRAN GÖRÜNÜMÜNDEN hesaplanır (zoom %100 = ekrana SIĞDIR), tekerlek sürekli
+              yakınlaştırır, sürükleme kaydırır. Sahibin istediği "fotoğraf görüntüleyici" davranışı. */}
+          <View
+            ref={tamAlanRef}
+            style={styles.tamAlan}
+            testID={`${testID}-tam-alan`}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              setGorunum((g) => (Math.abs(g.w - width) >= 1 || Math.abs(g.h - height) >= 1 ? { w: width, h: height } : g));
+            }}
+            {...tasiyici.panHandlers}
+          >
             {tamOlcu ? (
-              <ScrollView horizontal style={{ height: tamOlcu.height }} contentContainerStyle={styles.tamYatay}>
-                {gorsel(tamOlcu, "tam")}
-              </ScrollView>
+              <Image
+                source={{ uri: sayfa.uri }}
+                style={{
+                  width: tamOlcu.width,
+                  height: tamOlcu.height,
+                  transform: [{ translateX: kaydirma.x }, { translateY: kaydirma.y }],
+                }}
+                resizeMode="contain"
+                testID={`${testID}-gorsel-tam`}
+                accessibilityLabel={`${sayfa.ad} paneli`}
+              />
             ) : (
               // Ölçüm gelmemişse yine de göster (satır içi yedek çizimin tam ekran ikizi).
               <Image
@@ -356,7 +472,8 @@ export function GorselSahne({ sayfalar, tavanY, sifirlaAnahtari, bos, ustKatman,
                 accessibilityLabel={`${sayfa.ad} paneli`}
               />
             )}
-          </ScrollView>
+          </View>
+          <Text style={styles.tamIpucu}>Tekerlekle yakınlaştır · sürükleyerek gez</Text>
         </View>
       </Modal>
     </View>
@@ -400,6 +517,9 @@ const styles = StyleSheet.create({
   tamAd: { flex: 1, color: colors.text, fontSize: typography.body, fontWeight: "700" },
   tamAraclar: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   zoomEtiket: { color: colors.textMuted, fontSize: typography.small, fontWeight: "700", minWidth: 44, textAlign: "center" },
+  // Kirpan kap: gorsel transform ile buyur/kayar, tasan kisim gizlenir.
+  tamAlan: { flex: 1, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  tamIpucu: { color: colors.textSubtle, fontSize: typography.small, textAlign: "center", paddingVertical: spacing.xs },
   tamKaydirma: { flex: 1 },
   tamIcerik: { justifyContent: "center", alignItems: "center", flexGrow: 1 },
   // ⚠️ flexGrow YOK: yatay kaydiricinin yuksekligi ACIK verildigi icin buyumesi gerekmez.
