@@ -417,7 +417,16 @@ class TreatmentHistoryDB:
             # ESCROW İSTEYEN: PEMF_KEEP_PLAIN_BAK=1 (eski davranış; ACL kilitlenebilirse saklar).
             # ⚠️ Anahtar kaybı = geçmiş kaybı. Yedek yolu artık Ayarlar → "Veri Taşıma"
             # (parola korumalı şifreli dışa aktarma) ve SecretsManager kurtarma kodudur.
-            _keep = os.getenv("PEMF_KEEP_PLAIN_BAK", "0") == "1"
+            # ⚠️ KARAR TEK YERDEN GELİR (2026-09-15). Burada `os.getenv("PEMF_KEEP_PLAIN_BAK")`
+            # okunuyordu; `sqlcipher_util.py` ise AYNI politikayı `PEMF_KEEP_PLAIN_BACKUP`tan
+            # okuyordu. Emanet isteyen operatör bayrağı set ettiğinde İKİ veritabanından YALNIZ
+            # BİRİ etkileniyor, ötekinin tüm PII'sinin düz-metin kopyası ya korumasız kalıyor ya
+            # da sessizce siliniyordu. Ortak yardımcı iki adı da okur (eski ad geriye-uyum için,
+            # uyarı loglayarak). Doğrudan `os.getenv`e DÖNMEYİN — adlar yeniden ayrışır.
+            # Kapı: tests/test_duz_metin_yedek_bayragi_tek_ad.py
+            from database.sqlcipher_util import duz_metin_yedegi_emanete_al_mi
+
+            _keep = duz_metin_yedegi_emanete_al_mi(self.logger)
             if _keep:
                 _locked = False
                 try:

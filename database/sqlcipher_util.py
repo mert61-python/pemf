@@ -345,6 +345,51 @@ def _kilidi_gevset(yol, logger=None):
         return False
 
 
+#: Duz-metin yedegin emanete (escrow) alinip alinmayacagini belirleyen KANONIK bayrak.
+DUZ_METIN_YEDEK_BAYRAGI = "PEMF_KEEP_PLAIN_BACKUP"
+#: ESKI ad. 2026-09-15'e kadar `treatment_history_db.py` politikayi BU addan okuyordu.
+DUZ_METIN_YEDEK_BAYRAGI_ESKI = "PEMF_KEEP_PLAIN_BAK"
+
+
+def duz_metin_yedegi_emanete_al_mi(logger=None) -> bool:
+    """`.plain.bak` emanete mi alinsin (True) yoksa guvenli-mi-silinsin (False)?
+
+    ⚠️ BU FONKSIYON BIR ARIZADAN DOGDU (olculdu 2026-09-15). Goc kodu iki dosyaya
+    kopyalanmisti ve kopyalar AYNI politikayi IKI FARKLI ortam degiskeninden okuyordu:
+
+        database/sqlcipher_util.py        -> PEMF_KEEP_PLAIN_BACKUP  (hasta DB'si)
+        database/treatment_history_db.py  -> PEMF_KEEP_PLAIN_BAK     (tedavi + AI gecmisi)
+
+    Emanet isteyen bir operator bayragi set ettiginde IKI veritabanindan YALNIZ BIRI
+    etkileniyordu; digeri sessizce duz-metin yedegi guvenli-siliyordu. Tersi de dogruydu:
+    emaneti kapatmak isteyen biri yalniz birini kapatiyor, otekinin TUM PII'sinin duz-metin
+    kopyasi diskte KALIYORDU. Hangisinin hangisi oldugu ne belgede ne log'da yaziliydi.
+    Ustelik testler yalniz eski adi taniyordu — kanonik ad icin SIFIR kapi vardi.
+
+    ⚠️ ESKI AD OKUNMAYA DEVAM EDER. Sahada `PEMF_KEEP_PLAIN_BAK=1` set etmis biri olabilir;
+    sessizce yok saymak, emanet BEKLEYEN birinin tek geri-donus kopyasini siler. Gecis
+    okumayi BIRAKARAK degil UYARARAK yapilir.
+
+    ⚠️ VARSAYILAN "0" = GUVENLI-SIL ve bu bilincli bir sahip kararidir (denetim 2026-08-08):
+    `.plain.bak` TUM duz-metin PII'yi tasir ve SQLCipher'i baypas eder; disk calinir,
+    imajlanir ya da buluta senkronlanirsa at-rest garantisi COKER. Varsayilani "1" YAPMAYIN.
+
+    Kapi: tests/test_duz_metin_yedek_bayragi_tek_ad.py
+    """
+    if os.getenv(DUZ_METIN_YEDEK_BAYRAGI, "0") == "1":
+        return True
+    if os.getenv(DUZ_METIN_YEDEK_BAYRAGI_ESKI, "0") == "1":
+        if logger:
+            logger.warning(
+                "%s ESKI bir addir; %s kullanin. Eski ad su an icin okunmaya devam ediyor "
+                "(emanet KORUNDU) ama ileride kaldirilabilir.",
+                DUZ_METIN_YEDEK_BAYRAGI_ESKI,
+                DUZ_METIN_YEDEK_BAYRAGI,
+            )
+        return True
+    return False
+
+
 def _yedegi_kenara_al(backup, logger=None):
     """Var olan duz-metin yedegi SILME — zaman damgali bir ada TASI.
 
@@ -553,7 +598,10 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         # Audit P3: .plain.bak TÜM düz-metin PII'yi (SQLCipher-bypass) taşır → disk-çalınırsa/yedek/bulut-sync
         # okursa at-rest garantisi çöker. Migrasyon başarılı (enc DB yerinde) → VARSAYILAN GÜVENLİ-SİL
         # (üzerine-yaz + unlink). PEMF_KEEP_PLAIN_BACKUP=1 ile ACL-kilitli escrow saklanabilir (eski davranış).
-        if os.environ.get("PEMF_KEEP_PLAIN_BACKUP", "0") == "1":
+        # ⚠️ KARAR TEK YERDEN GELİR (2026-09-15): `duz_metin_yedegi_emanete_al_mi`. Bayrak burada
+        # doğrudan okunuyordu ve `treatment_history_db.py` BAŞKA bir ad okuyordu → operatör
+        # bayrağı set ettiğinde iki DB'den yalnız biri etkileniyordu. Doğrudan okumaya DÖNMEYİN.
+        if duz_metin_yedegi_emanete_al_mi(logger):
             try:
                 from utils.file_acl import lock_down_file
 

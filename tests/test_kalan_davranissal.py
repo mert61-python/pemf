@@ -247,8 +247,17 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     # adlandırma o iddiayı SUBSTRING olarak karşılar (mutasyon testi bunu yakaladı — aynı
     # tuzağa `if not _backup_ok` ve `skipped_session_active` testlerinde de düşülmüştü).
     # Tam-kelime + gerçek okuma biçimi aranır.
-    assert re.search(r'os\.getenv\(\s*["\']PEMF_KEEP_PLAIN_BAK["\']', src), (
-        "PEMF_KEEP_PLAIN_BAK bayrağı okunmuyor → escrow'u kapatma yolu kayıp"
+    #
+    # ⚠️ ÇIPA TAŞINDI (2026-09-15) — NİYET AYNI. Bu satır eskiden `os.getenv("PEMF_KEEP_PLAIN_BAK")`
+    # arıyordu. Ölçüldü: `sqlcipher_util.py` AYNI politikayı `PEMF_KEEP_PLAIN_BACKUP`tan okuyordu →
+    # operatör bayrağı set ettiğinde İKİ veritabanından YALNIZ BİRİ etkileniyordu. Karar ortak
+    # yardımcıya alındı (`duz_metin_yedegi_emanete_al_mi`, iki adı da okur). Bu testin koruduğu
+    # şey — "escrow'u kapatma yolu kayıp değil" — değişmedi, yalnız nerede okunduğu değişti.
+    # Bayrak adlarının ve varsayılanın kendisi artık orada ölçülüyor:
+    #   tests/test_duz_metin_yedek_bayragi_tek_ad.py
+    assert re.search(r"duz_metin_yedegi_emanete_al_mi\(", src), (
+        "escrow kararı artık ortak yardımcıdan gelmiyor → ya yol kayıp ya da bu dosya "
+        "yeniden kendi bayrağını okumaya başladı (adlar tekrar ayrışır)"
     )
 
     # Fail-closed sözleşmesi: escrow İSTENSE bile ACL uygulanamıyorsa dosya SİLİNİR.
@@ -258,9 +267,16 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     # (`sqlcipher_util`) bu kararı Audit P3'te zaten almıştı ve tedavi DB'si geride kalmıştı.
     # Eski yapı `if not _locked or not _keep:` idi; artık `if _keep:` bloğu içinde ACL denenir,
     # kilitlenemezse (ve varsayılanda hep) güvenli-silmeye düşülür.
-    assert re.search(r'os\.getenv\(\s*["\']PEMF_KEEP_PLAIN_BAK["\']\s*,\s*["\']0["\']', src), (
+    # ⚠️ ÇIPA TAŞINDI (2026-09-15): varsayılan artık ortak yardımcıda tanımlı. Bu dosyanın
+    # kaynağında aramak, kararın taşınmasından sonra KÖR bir kapı olurdu. Yardımcının
+    # kaynağı okunur — yani "varsayılan güvenli-sil" iddiası yine DAVRANIŞA pinli kalır.
+    from database.sqlcipher_util import duz_metin_yedegi_emanete_al_mi
+
+    _yardimci_src = inspect.getsource(duz_metin_yedegi_emanete_al_mi)
+    assert len(re.findall(r'os\.getenv\([A-Z_]+,\s*["\']0["\']\)', _yardimci_src)) >= 2, (
         "escrow VARSAYILAN AÇIK kalmış → at-rest şifreleme açılınca her klinikte tüm geçmişin "
-        "düz-metin tam kopyası diskte kalır (site 'cihazda şifreli' diye beyan ederken)"
+        "düz-metin tam kopyası diskte kalır (site 'cihazda şifreli' diye beyan ederken). "
+        "Yardımcı HER İKİ adı da '0' varsayılanıyla okumalı."
     )
 
     # Silmenin GÜVENLİ olması: yalnız `os.remove` içeriği diskte bırakır (kurtarılabilir).

@@ -18,8 +18,40 @@ C = hijyen. Klasör taşıma hiçbirini çözmez, o yüzden en sonda.
 | ⚠️ **Denetim düzeltmesi** | Denetim §2.3 *"göç kodu beş yerde"* diyordu — **bu ifade gevşek**. Ölçüldü: ortada **tek bir gerçek kopya** var, kalan dördü *farklı* göçler (anahtar göçü, veri-kökü göçü, AI JSONL, eski config dizini) — sadece dağınıklar. Gerçek kopya:<br>`sqlcipher_util.migrate_to_encrypted_if_needed` (129 anlamlı satır) ↔ `treatment_history_db._migrate_to_encrypted_if_needed` (139) → **%73 aynı, 98 satır birebir**. Fark tamamen mekanik: modül-fonksiyonu ↔ metot (`self.logger`/`self.db_path`) |
 | **Neden arıza** | 2026-09-13: ilk iki yol düzeltildi, **ürün hâlâ kaybediyordu** — üçüncü yol (şablon kopyalayıcı) önce davranıyordu. Dağınıklık teorik değil, **gerçekleşmiş** bir veri kaybı sebebi |
 | **Bugünkü durum** | Arıza kapatıldı (10 mutasyon-kanıtlı test, CI'da). Ama 98 satırlık kopya duruyor → bir tarafta düzeltilen sonraki hata diğerinde kalır |
-| **İş** | İki aşama: **(a)** gerçek kopyayı birleştir — `treatment_history_db` metodunu `sqlcipher_util`e delege et (98 satır düşer); **(b)** kalan dört göçü tek giriş noktasından sıraya sok, böylece "hangisi önce koşuyor" bir daha kaza olmasın. Mevcut 10 kapı birleştirmeden sonra da yeşil kalmalı |
+| ⚠️ **TUZAK — düz delegasyon REGRESYON olur** | Normalize edilmiş karşılaştırma (%82 aynı) mekanik olmayan **tek bir fark** gösterdi: `treatment_history_db` fazladan bir **emanet (escrow) politikası** taşıyor — `PEMF_KEEP_PLAIN_BAK` bayrağı · `.plain.bak`'ı ACL ile kilitleyip saklama · kilit tutmazsa emanetten vazgeçip **güvenli silme** · silme de düşerse `KRİTİK: ELLE SİLİN` log'u. `sqlcipher_util`de bunların **hiçbiri yok**.<br>Yani "metodu util'e delege et" demek, **hasta DB'sinin at-rest PII politikasını sessizce düşürmek** demek — ya korumasız düz-metin yedek kalır ya da emanet kopya kaybolur. İkisi de zaten bir kez veri kaybettiren alanda yeni bir arıza olurdu. |
+| **İş** | **(a)** Ortak 98 satırı tek fonksiyona al, **göç-sonrası yedek politikasını parametre/geri-çağrı yap** — iki çağıran da kendi politikasını AÇIKÇA belirtsin (`sqlcipher_util` = kenara al, `treatment_history_db` = emanet/güvenli-sil). **(b)** Kalan dört göçü tek giriş noktasından sıraya sok, "hangisi önce koşuyor" bir daha kaza olmasın.<br>✅ Escrow dalının kapısı **zaten var** (ölçüldü): `test_at_rest_encryption_rollout.py:188` davranışsal (`PEMF_KEEP_PLAIN_BAK=1` ile escrow geri gelir), `test_kalan_davranissal.py:250` bayrağın gerçekten okunduğunu regex'le çıpalıyor. Yani birleştirme bu kapıları **kırmadan** yapılmalı — kırılırlarsa politika düşmüş demektir. Mevcut 10 yarım-göç kapısı da yeşil kalmalı |
 | **Kim** | Ben |
+
+### A1b · ⛔ Aynı politika, **iki farklı bayrak adı** — kopyalamanın canlı sonucu
+
+Bu, A1'i araştırırken bulundu ve denetimin "kopya kod arıza doğurur" iddiasının **kanıtı**.
+Düz-metin yedeğin emanete alınıp alınmayacağını belirleyen bayrak iki kopyada **farklı adla**
+okunuyor:
+
+| Dosya | Okuduğu bayrak | Kapsadığı veri |
+|---|---|---|
+| `database/sqlcipher_util.py:129` | **`PEMF_KEEP_PLAIN_BACKUP`** | hasta DB'si |
+| `database/treatment_history_db.py:420` | **`PEMF_KEEP_PLAIN_BAK`** | tedavi + AI geçmişi DB'si |
+
+**Sonuç:** emanet isteyen bir operatör bayrağı set eder, **iki veritabanından yalnız birinde**
+işe yarar. Diğeri sessizce düz-metin yedeği güvenli-siler. Hangisi olduğunu hiçbir yerde
+yazmıyor; ekranda ya da log'da da ayrım yok.
+
+**Ölçüldü:**
+- Testler **yalnız `PEMF_KEEP_PLAIN_BAK`'ı** tanıyor — `PEMF_KEEP_PLAIN_BACKUP` için **sıfır**
+  test. Yani iki isimden biri tamamen kapısız.
+- İkisi de `deploy/device.env`'de **yok** → **servis (NSSM) kurulumunda ulaşılamaz**, çünkü
+  servis ortamı o dosyadan yazılır ve etkileşimli kullanıcının ortamını miras almaz.
+  ⚠️ **Düzeltme:** ilk okumamda bunu "jeton bayrağıyla aynı sınıf (launcher geçirmiyor)" diye
+  yazmıştım — **yanlış**. Ölçtüm: `launcher/core/src/backend.rs:484` haritayı `cmd.env(k, v)` ile
+  uyguluyor ve **`env_clear()` yok**, yani launcher'ın doğurduğu backend ortamı **miras alıyor**.
+  Eksik olan yalnız servis yolu; `install.rs`'e satır eklemek gerekmiyor.
+
+**İş:** tek ada indir (eskisi geriye-uyum için okunmaya devam etsin, uyarı loglasın) ·
+`device.env`'e kapı kaydı olarak yaz · her iki yolu da ölçen tek kapı. A1 ile **aynı turda**
+yapılmalı — birleştirme zaten bu kod yolunu elden geçiriyor.
+
+**Kim:** Ben
 
 ### A2 · MD5 birebir kopya CV kodu — biri düzeltilince diğeri sürükleniyor
 | | |
