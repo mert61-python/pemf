@@ -12,10 +12,20 @@
 ;        -> Ya da C:\PEMF_BUILD\dist\PEMF_Backend'i guii\dist\PEMF_Backend'e kopyalayin.
 ;   2. iscc.exe PEMF_Backend_Setup.iss     (veya Inno Setup IDE: Build > Compile)
 ; CIKTI: build_tools\Output\PEMFBackendSetup_v{VERSION}.exe
+;
+; ⚠️ SURUM ETIKETI — CIPLAK ISCC KORIDORU ([BLD-6], denetim 2026-08-24)
+; Yukaridaki adim 2 (ciplak iscc.exe / Inno Setup IDE) build_installer.ps1'i ATLAR. O betikteki
+; Sync-ReleaseVersion, asagidaki MyAppVersion'i guii\VERSION dosyasindan YENIDEN YAZAN TEK yerdir.
+; Bu koridordan derlenen kurulum, kodu yeni olsa bile ESKI surum etiketini tasir: "Program
+; Ekle/Kaldir"da yanlis surum, yanlis OutputBaseFilename, yanlis destek kaydi.
+; ⚠️ CIPLAK ISCC KULLANACAKSANIZ: once guii\VERSION degerini asagiya yazin, sonra derleyin.
+; Kapi: tests/test_iss_surum_senkron.py — iki deger ayrisirsa KIRMIZI olur (olculdu: 1.9.33
+; vs 1.9.50, yani 17 surum sessizce ayrismisti).
 ; ============================================================================
 
 #define MyAppName      "PEMF Medical Backend"
-#define MyAppVersion   "1.9.33"
+; ⚠️ guii\VERSION ile AYNI olmak ZORUNDA — yukaridaki nota bakin.
+#define MyAppVersion   "1.9.50"
 #define MyAppPublisher "İBİA Teknoloji Ltd. Şti."
 ; ⚠️ pemfvet.com KULLANILMIYOR (2026-08-18): alan adı Vercel'e hiç bağlanmadı, kayıt
 ; firmasının park sayfasını gösteriyor. "Program Ekle/Kaldır"daki yayımcı linki oraya
