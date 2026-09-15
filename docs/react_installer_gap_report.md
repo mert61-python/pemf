@@ -1,6 +1,17 @@
 # React Installer Eksik Analiz Raporu
 
-Tarih: 2026-06-04
+Tarih: 2026-06-04 · **Durum: ⚠️ TARİHÇE — ana bulgu KAPANDI**
+
+> **DURUM NOTU (2026-09-13, ölçüldü).** Bu raporun 1 numaralı kök nedeni
+> ("`build_installer.ps1` React web export adımını çalıştırmıyor") artık GEÇERLİ DEĞİL:
+> `build_tools/build_installer.ps1:242` "React Frontend Web Export" adımını taşıyor ve
+> `scripts/build_backend_exe.ps1` aynı deseni tekrarlıyor (`expo export` → `frontend\dist`).
+> Ayrıca mimari o tarihten sonra **PyQt GUI'den headless backend + Tauri launcher'a** geçti;
+> raporun DEMA/iframe ve `APPDATA\PEMF_GUI\frontend_dist` anlatımları o eski yapıya aittir.
+>
+> Rapor **silinmiyor**: hangi arızanın neden yaşandığını ve hangi kör noktadan doğduğunu
+> anlatıyor. Ama **yapılacak iş listesi olarak okunmamalı**.
+> Kayıt: `docs/acik-isler-2026-09-12.md` §5.
 
 ## Kapsam
 

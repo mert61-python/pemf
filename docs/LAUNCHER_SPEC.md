@@ -122,9 +122,26 @@ Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etm
 
 ## Açık sorular
 
-- [ ] Sahadaki Windows kurulumunun **kurulum dizini** nedir? (eski launcher kaynağı yok →
-      kurulu bir makineden tespit edilmeli; yükseltmenin veri kaybetmemesi buna bağlı)
-- [ ] Eski launcher backend'i **servis** olarak mı kaydediyor, yoksa süreç olarak mı
-      başlatıyor? (`scripts/install_backend_service.ps1` + NSSM mevcut)
+- [x] **Sahadaki Windows kurulum dizini** — ÖLÇÜLDÜ (2026-09-13, kurulu makinede):
+      `%LOCALAPPDATA%\PEMF Vet Client` (yani `C:\Users\<kullanıcı>\AppData\Local\PEMF Vet Client`).
+      **Per-user; yönetici hakkı gerekmiyor.** Ağaç:
+      `PEMFVetClient.exe` · `runtime\` (backend) · `ai_models\` (profil katmanı) ·
+      `cache\` · `installed_packages.json` · `installed_profiles.json` · `install_id.txt` ·
+      `auth_session.bin`.
+      ⚠️ **Yükseltmede DOKUNULMAYACAKLAR:** `installed_packages.json` (dokunulursa paketler
+      yeniden indirilir — bellek `pemf-yerel-test-kurulumu-yayinsiz`), `install_id.txt`,
+      `auth_session.bin` (oturum düşer).
+      ⚠️ **Hasta verisi burada DEĞİL:** `%APPDATA%\PEMF_GUI` altında (`patients.db`,
+      `pemf_treatment_history.db`). Kaldırma tıbbi veriye dokunmaz — bu bilinçli karardır.
+- [x] **Servis mi, süreç mi?** — ÖLÇÜLDÜ (2026-09-13): **SÜREÇ.** Kurulu makinede
+      `Get-Service *PEMF*` ve `Win32_Service` sorgusu **hiçbir kayıt döndürmedi**; mosquitto da
+      servis değil, backend'in kendi başlattığı bir alt süreç (`_internal\bin\mosquitto\`).
+      Yani launcher `PEMF_Backend.exe`yi doğrudan spawn ediyor.
+      ⚠️ **SONUÇ (ayrı kayıt):** `deploy/device.env` sıkılaştırmaları YALNIZ NSSM servis
+      kaydında uygulanır; süreç yolunda backend `.env` dosyalarını **kendi okumaz**. Bu yüzden
+      ortam değişkenleri (ör. `PEMF_ENCRYPT_AT_REST`, `PEMF_REQUIRE_AUTH`) launcher tarafından
+      **açıkça** verilmek zorundadır — bkz. `launcher/core/src/install.rs::ENV_*`.
 - [ ] `.dmg` içinde backend'in ilk açılışta karantina (`com.apple.quarantine`) sorunu —
       notarization kapsamı base paketini de kapsamalı mı?
+      ⚠️ Bu soru **notarization'a bağlı** ve o da Apple geliştirici sözleşmesiyle bloke
+      (`docs/acik-isler-2026-09-12.md` C5). Sözleşme çözülmeden ölçülemez.

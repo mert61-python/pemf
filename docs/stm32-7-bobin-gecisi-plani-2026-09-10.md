@@ -9,7 +9,23 @@
 
 **Tarih:** 2026-09-10 · **Sahip kararı:** ESP bobinleri (6-8) kaldırılacak; bobin 6 ve 7 STM32F429ZI
 tarafından sürülecek; manyetik + sıcaklık sensörleri de STM'e bağlanacak.
-**Durum:** ANALİZ + PLAN. Kod yazılmadı, pin bağlanmadı. **Kapsam kararları alındı — bkz. §9.**
+**Durum:** ⚠️ **KISMEN GERÇEKLEŞTİ — bu satır 2026-09-13'te düzeltildi.**
+
+> Eski hâli "Kod yazılmadı, pin bağlanmadı" diyordu; ölçünce YANLIŞ çıktı.
+>
+> | Kalem | Gerçek durum (koddan ölçüldü 2026-09-13) |
+> |---|---|
+> | Bobin başına sürüş kipi | ✅ **CANLI** — `PEMF_BOBIN_UNIPOLAR_MASKESI = 0x60` (`main.c`), ayna proje kaldırıldı |
+> | 7 bobinin STM'den sürülmesi | ✅ **CANLI** — `/api/coil/7` → `transport: stm32` |
+> | ESP devre dışı, kod silinmedi | ✅ `PEMF_ESP_ENABLED=0` |
+> | Bobin 6-7 sensörleri | ⏳ sahip tezgâhı |
+> | Termal kesme (6-7) | ⛔ **YAPILMAYACAK** — sahip kararı (§9 karar 2) |
+> | ACS712 akım (6-7) | ⛔ taşınmıyor — sahip kararı (§9 karar 3); `currentA` 0.0 kalır |
+>
+> **Aşağıdaki metin PLAN + TARİHÇEDİR.** Kalan tek yazılım işi yok; kalanlar tezgâh/sahip kararı.
+> Kayıt: `docs/acik-isler-2026-09-12.md` §5 · bellek `pemf-esp-kaldirma-7-bobin-stm`.
+
+**Kapsam kararları alındı — bkz. §9.**
 
 ## Sahip kararları (2026-09-10, §9'daki sorulara yanıt)
 

@@ -1,6 +1,12 @@
 # AI Hub Görsel Sahnesi — Kapsamlı Düzeltme Planı
 
-**Tarih:** 2026-09-10 · **Durum:** ONAY BEKLİYOR (kod yazılmadı) · **Kapsam:** 13 AI modülünün tamamı
+**Tarih:** 2026-09-10 · **Durum:** ✅ **TAMAMLANDI (2026-09-12)** · **Kapsam:** 13 AI modülünün tamamı
+
+> ⚠️ **DURUM DÜZELTMESİ (2026-09-13).** Bu satır aylarca "ONAY BEKLİYOR (kod yazılmadı)" diyordu;
+> ölçünce YANLIŞ çıktı — 5 adımın tamamı 2026-09-12'de bitmişti (galeri + zoom canlı, 5 ternary
+> kaldırıldı, gzip oranı 0,756 ölçüldü). Bayat başlık, açık-iş listesine hayalet iş ekliyordu.
+> Kayıt: bellek `pemf-ai-hub-gorsel-sahne-plani` · `docs/acik-isler-2026-09-12.md` §5.
+> **Aşağıdaki plan metni TARİHÇEDİR** — neyin neden yapıldığını anlatır, yapılacak iş değildir.
 
 Sahibin bildirimi (2026-09-09, fantom ekran görüntüleriyle):
 

@@ -7,14 +7,17 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | # | Konu | Durum | Nasıl |
 |---|------|-------|-------|
 | 1 | Firmware güvenlik satürasyonu | ⏳ donanım | Bench testi (aşağıda) |
-| 2 | SQLCipher sahada aktif | ⏳ cihaz | `/api/health` (aşağıda) |
-| 3 | Supabase RLS canlı | ✅ **DOĞRULANDI** | `scratchpad/verify_supabase_rls.py` — 5/5 geçti |
-| 4 | Cloudflare NAMED tünel | ⏳ cihaz | `device.env` + servis logu |
-| 5 | Bağımlılık CVE | ✅ tarandı / ⏳ upgrade | `pip-audit` + izole-venv upgrade testi |
-| 6 | AI model bütünlüğü/lisansı | ⏳ maintainer | SHA256 + lisans envanteri |
-| 7 | Yük/soak | ⏳ cihaz | `scripts/soak_publish_5hz_8coil.py` + izleme |
+| 2 | SQLCipher sahada aktif | ✅ **DOĞRULANDI (2026-09-13)** | `C:\ProgramData\PEMF_System\PEMF_GUI` → `patients.db` + `pemf_treatment_history.db` **ŞİFRELİ**. ⚠️ Ama anahtarın makine-dışı kopyası YOK — §2a |
+| 2a | ⚠️ **Anahtar emaneti** | ❌ **AÇIK (P0 sınıfı)** | Anahtar yalnız `pemf_secrets.json → auto.sqlcipher_key` (DPAPI, **makineye bağlı**). `~/pemf-sirlar.pemfsec` onu TAŞIMIYOR → makine kaybında veri **kalıcı okunamaz**. Araç: `scripts/hasta_anahtari_emanet.py` |
+| 3 | Supabase RLS canlı | ✅ **DOĞRULANDI (yeniden: 2026-09-13)** | 6 tablonun altısı da anon'a **401/42501**; RPC kapısı çalışıyor |
+| 4 | Cloudflare NAMED tünel | ⏳ **HÂLÂ ÖLÇÜLMEDİ** | ⚠️ 2026-09-13'te elle başlatılan backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL**. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl`. NAMED için Cloudflare token'ı gerekir (sahipte) |
+| 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
+| 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir** |
+| 6b | AI model **lisansı** | ⏳ maintainer | envanter — AGPL kalemi `docs/AGPL-KARARI.md` |
+| 7 | Yük/soak | ⚠️ **kısa koşu TEMİZ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
+| 16 | **STM reflash + doz yeniden kalibrasyonu** | ⏳ donanım | §16 (aşağıda) — DDS simetrik bipolara geçti, saha cihazı kalibre DEĞİL |
 
 ---
 
@@ -378,3 +381,110 @@ Kuyu — plan: `docs/arastirma-ai-pro-fantom-petri-plani.md`). Sürüş bilinçl
 test_ai_pro_arastirma_saglayicilari.py · test_ai_pro_arastirma_gercek_pipeline.py ·
 test_ai_pro_frame_arastirma.py · test_koordinat_donusumu_karakterizasyon.py ·
 test_ai_pro_arayuz_profil_tablosu.py (hepsi mutasyonla doğrulandı).
+
+---
+
+## ⏳ 16 — STM REFLASH (DDS simetrik bipolar) + DOZ YENİDEN KALİBRASYONU  ·  **B3**
+
+> **Neden zorunlu:** HG-2 düzeltmesiyle STM sürüş dalgası **asimetrik DC-bias'lıdan simetrik
+> bipolara** çevrildi (`356d576`). Aynı `duty` değeri artık **farklı bir alan** üretiyor —
+> sahadaki cihazın doz eğrisi bu yüzden **kalibre DEĞİL**. Reflash yapılmadan cihaz eski
+> firmware'i koşmaya devam eder; reflash yapılıp kalibrasyon yapılmazsa arayüzdeki mT değeri
+> ile gerçek alan ayrışır.
+
+### 16.1 — Yakılabilir çıktı (CubeIDE AÇMADAN)
+
+⚠️ **CubeIDE'de "Generate Code" `main.c`i EZER** (`docs/PEMF_SISTEM_RAPORU`/bellek kaydı).
+Bu yüzden reflash için CubeIDE'yi hiç açmayın; depodan üretilen ikiliyi yakın:
+
+```powershell
+python scripts\firmware_derle.py --stm --cikti firmware_cikti
+```
+
+Betik derler, `_printf_float` bağını doğrular (⚠️ bağlı değilse TÜM telemetri sessizce ölür —
+bkz. bellek `pemf-stm-printf-float-sessiz-sensor-olumu`) ve şunları üretir:
+
+| Dosya | Kullanım |
+|---|---|
+| `pemf.bin` | STM32CubeProgrammer → **adres `0x08000000`** |
+| `pemf.hex` | CubeProgrammer / ST-Link Utility (adres dosyanın içinde) |
+| `pemf.elf` | Hata ayıklama / sembol |
+
+Betik her dosyanın **SHA256**'sını basar. Yaktığınız dosyanın özetini aşağıya yazın — bu,
+"sahadaki cihazda depodaki kaynak mı koşuyor" sorusunun tek kanıtıdır.
+
+**Yakma (CubeProgrammer):** ST-LINK → Connect → Erase & Program → `pemf.bin`, `0x08000000`,
+"Verify programming" **işaretli** → Start. Sonra **Disconnect + karta güç döngüsü**.
+
+### 16.2 — Reflash sonrası ilk kontrol (kalibrasyondan ÖNCE)
+
+1. Backend'i simülatörsüz çalıştır (`PEMF_SIMULATE` **YOK**).
+2. `GET /api/coil/7` → `transport` **`stm32`** olmalı (ESP değil).
+3. Bobin 1'i kısa sür: `POST /api/coil/1/control {"freq":10,"duty":50,"duration":5,"start":true}`.
+4. ⚠️ **TELEMETRİ KAPISI:** gelen `STM_TELE` satırında `B=`, `T=`, `I=` alanları **sayılı**
+   olmalı. Boşsa (`B=,T=,A=,I=`) firmware'de `_printf_float` bağlanmamıştır — **kalibrasyona
+   başlamayın**, o hâlde ölçeceğiniz her şey sıfırdır.
+
+### 16.3 — Doz eğrisi (asıl iş)
+
+> ⚠️ **DÜZELTME (2026-09-13) — `measuredPeakMt` KULLANMAYIN.**
+> Bu bölüm ilk yazımında ölçümü `measuredPeakMt` üzerinden tarif ediyordu. **YANLIŞTI.**
+> `measuredPeakMt` = seans boyu en büyük **|B|**, yani *işaretsiz tepe BÜYÜKLÜĞÜ* — ve
+> firmware'in kendi notu bunu açıkça söylüyor (`main.c:1083`): *"`B=` tepe BÜYÜKLÜKTÜR ve
+> işaretsiz olduğu için unipolar (0→+B) ile bipolari (−B→+B) AYNI gösterir"*. **Yakındaki
+> sabit bir DC alan bu değeri SAPTIRIR.**
+>
+> Sahada ölçüldü (S3 reflash sonrası, bobinler boşta):
+> `[MagChk] ilk-bosta-pencere |B|=0.589 mT (X:-0.037 Y:-0.502 Z:0.305)` → dünya alanının
+> (~47 µT) **12,5 katı**, üst eşiğin (150 µT) **3,9 katı**. Yani o sensörün yanında
+> demir/mıknatıs var ve |B| tabanlı her okuma bu kadar kayar.
+>
+> **Doğrusu: TEPEDEN-TEPEYE.** İşaretli uçlardan türetilir ve ofset farkta sadeleşir:
+> `pp_x = XP − XN`, `pp_y = YP − YN`, `pp_z = ZP − ZN`.
+> Bu alanlar STM_TELE'de yayınlanıyor ve backend ayrıştırıcısında `mag_x_min` / `mag_x_max` …
+> olarak ZATEN çözülüyor (`headless_core._parse_stm_tele`).
+
+Ölçüm, bobin başına **tepeden-tepeye** değerle yapılır (yukarıdaki not). Aralık ±24,6 mT'ye
+açıldı — eski ayar 4,92 mT'de sessizce sarıyordu (bellek `pemf-manyetik-zirve-ve-aralik`).
+
+Her bobin için (1-7), sabit `freq = 10 Hz`, prob bobin merkezinde ve **sabit mesafede**:
+
+| duty (%) | pp_x (mT) | pp_y (mT) | pp_z (mT) | Not |
+|---|---|---|---|---|
+| 10 | | | | |
+| 25 | | | | ⚠️ eski firmware'de burada −%50·V DC bias vardı |
+| 50 | | | | tek "eski = yeni" noktası |
+| 75 | | | | |
+| 90 | | | | |
+
+**Kabul ölçütü:**
+
+1. Eğri **monoton artan** olmalı (duty büyürken pp küçülmemeli).
+2. Aynı bobinin üç ekseni **birbiriyle tutarlı** ölçeklenmeli: duty iki katına çıkınca
+   pp_x/pp_y/pp_z oranları kabaca korunmalı. Korunmuyorsa prob KAYMIŞTIR — ölçümü
+   tekrarlayın, eğriyi yazmayın.
+
+> ⚠️ **ESKİ ÖLÇÜMLE DOĞRUDAN KIYASLAMAYIN.** Bu bölüm bir ara sürümde *"duty=%50'de eski
+> ölçümle ±%10 içinde olmalı"* diyordu — **yanlıştı ve kaldırıldı.** Eski kayıtlar `|B|`
+> (işaretsiz tepe büyüklüğü) cinsindendi; buradaki değerler **tepeden-tepeye**. Simetrik
+> bipolar bir dalgada `pp ≈ 2 × |B|tepe`, üstelik eski `|B|` kayıtları yakındaki DC ofsetle
+> de kaymıştı. İki birimi ±%10 diye kıyaslamak uydurma bir kabul ölçütü üretirdi.
+> Elinizde ESKİ bir **pp** kaydı varsa onunla kıyaslayabilirsiniz; `|B|` kaydıyla kıyaslamayın.
+
+⚠️ **SARMA KONTROLÜ:** sarma sınırı **ham eksen uçları** (`XP`, `XN`, …) içindir: bunlardan
+biri **±24,6 mT**'ye dayanıyorsa değer sarmış olabilir. ⚠️ `pp` değerinin kendisine bakmayın —
+simetrik bir dalgada pp, tek eksen sınırının **iki katına** kadar çıkabilir (≈49 mT) ve sınıra
+dayanmadan da geçerlidir. Şüpheli satırı geçersiz sayın, probu uzaklaştırıp tekrarlayın.
+Sarma tespit EDİLEMEZ — tek savunma aralığın kendisidir.
+
+### 16.4 — Kayıt (güvenlik dosyası)
+
+Şunlar yazılmadan kalibrasyon tamamlanmış sayılmaz:
+
+- Yakılan dosyanın **SHA256**'sı + yakma tarihi
+- 7 bobin × 5 duty tablosu (yukarıdaki)
+- Prob tipi ve mesafesi (mm) — tekrarlanabilirliğin tek koşulu
+- `_printf_float` kapısının **geçtiği** (16.2 adım 4)
+
+> ⚠️ Bu ölçüm yapılmadan arayüzdeki "Yoğunluk (mT)" değeri **hedef** değeri gösterir, ölçülen
+> alanı değil. Klinik kararı ona dayandırmayın.

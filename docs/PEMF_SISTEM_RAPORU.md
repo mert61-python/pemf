@@ -414,6 +414,21 @@ pemf/
 
 ## 7. LATTEPANDA — YAPILACAKLAR LİSTESİ
 
+> ⚠️ **DURUM NOTU (2026-09-13, ölçüldü) — BU BÖLÜM BAYAT.**
+> Aşağıdaki adımlar bir conda ortamı (`...\.conda\envs\gui\python.exe`) ve
+> `services/mqtt_bridge.py` varsayar. **O conda ortamı bu makinede YOK** ve mimari o tarihten
+> sonra değişti: backend artık donmuş tek EXE (`PEMF_Backend.exe`, PyInstaller onedir) —
+> makinede Python kurulu olmasını gerektirmiyor. Mosquitto da Windows servisi DEĞİL, backend'in
+> kendi başlattığı bir alt süreç (ölçüldü: `Get-Service *PEMF*` ve `Win32_Service` sorgusu
+> **hiçbir kayıt döndürmüyor**). ESP kartları söküldü (`PEMF_ESP_ENABLED=0`) → MQTT köprüsü
+> zaten başlamıyor.
+>
+> **Güncel kurulum/çalıştırma yolu:** `docs/RUNBOOK.md` · `docs/TEMIZ-MAKINE.md` ·
+> `docs/LAUNCHER_SPEC.md` (kurulum dizini ve servis/süreç sorusu orada ÖLÇÜLMÜŞ hâliyle yazılı).
+>
+> Bölüm **silinmiyor** (LattePanda'ya dönülürse MQTT/bridge topolojisi hâlâ referans), ama
+> **yapılacaklar listesi olarak okunmamalı**. Kayıt: `docs/acik-isler-2026-09-12.md` §5.
+
 ### 7.1 Ön Koşullar (Kontrol Et)
 
 - [ ] Mosquitto Windows Service kurulu ve çalışıyor

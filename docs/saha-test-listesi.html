@@ -217,7 +217,7 @@
     <p class="etiket">PEMF Vet · sürüm öncesi denetim</p>
     <h1>Saha Testi</h1>
     <p class="giris">
-      Otomatik süitler (pytest ~1080 · jest 431 · vitest 52 · cargo) mutlu yolu ve kod
+      Otomatik süitler (pytest 2945 · jest 1041 · vitest · cargo) mutlu yolu ve kod
       düzeyindeki değişmezleri koruyor. Bu liste onların yapısal olarak göremediği sınıfı
       hedefler: gerçek donanım, gerçek işletim sistemi, gerçek kullanıcı davranışı.
     </p>
@@ -225,7 +225,13 @@
       <b>Neden gerekli:</b> 2026-08-17'de sahada yakalanan “indirme bitince paylaşım ekranı
       açılıyor” hatası. Kod okununca kurulum açılıyormuş gibi duruyordu; kullanılan API'nin
       o ekranı <b>hiçbir zaman</b> sunamayacağı ancak cihazda görülünce anlaşıldı. Hiçbir
-      statik denetim bunu bulamazdı.
+      statik denetim bunu bulamazdı. <b>İkinci kanıt (2026-09-12):</b> makinede internet
+      VARKEN uygulama “İnternet yok” diyordu, aynı ekranın alt kartı “İnternet Bağlantısı:
+      Aktif”. İki ölçüm birbirini yalanlıyordu ve ikisi de yanlıştı — süitler yeşildi.
+    </p>
+    <p class="kanit">
+      <b>Tek kaynak:</b> bu sayfa <code>docs/SAHA-TEST-LISTESI.md</code> dosyasından üretilir
+      (<code>scripts/saha_test_html_uret.py</code>). Senaryo eklerken Markdown düzenlenir.
     </p>
   </header>
 
@@ -270,18 +276,26 @@
     {
       no: "1", ad: "Hasta güvenliği", blok: true,
       not: "Her yayında, istisnasız. Bu bölümdeki her başarısızlık yayını durdurur.",
-      gruplar: [{ items: [
-        ["1.1", "Seans sürerken uygulamayı normal yoldan kapat", "Bobinler <b>kapanmadan önce</b> durur; kayıt tutarlı kapanır"],
-        ["1.2", "Seans sürerken client'ı Görev Yöneticisi'nden <b>öldür</b>", "Bobinler yine durur — kill öncesi durdurma yolu çalışır"],
-        ["1.3", "Seans sürerken makinenin <b>fişini çek</b>, tekrar aç", "Açılışta bobinler kapalı başlar; yarım seans “kesildi” olarak görünür, geçmişi bozmaz"],
-        ["1.4", "Seans sürerken STM/USB kablosunu çek", "Arayüz bağlantı kaybını <b>söyler</b>; sahte “çalışıyor” göstergesi kalmaz"],
-        ["1.5", "Seans sürerken makineyi uyku moduna al, uyandır", "Ya seans güvenli durdurulmuş ya tutarlı sürüyor; “hayalet seans” olmaz"],
-        ["1.6", "Mobilden ACİL DURDUR — cihazla aynı Wi-Fi'da", "Bobinler durur, telefon onayı görür"],
-        ["1.7", "Mobilden ACİL DURDUR — telefon <b>uçak modunda</b>", "Komutun gönderilemediği <b>açıkça</b> yazılır; “durduruldu” yalanı YOK"],
-        ["1.8", "ACİL DURDUR sonrası yeni seans başlat", "Temiz başlar; önceki seansın parametreleri sızmaz"],
-        ["1.9", "Seans sürerken mobilde güncelleme çıksın", "Güncelleme bandı <b>gösterilmez</b>; operatörün ekranı bölünmez"],
-        ["1.10", "Seans sürerken profil değiştirmeyi / çıkış yapmayı dene", "Önce onay + durdurma istenir; sessizce kesilmez"],
-      ]}]
+      gruplar: [
+        { items: [
+          ["1.1", "Seans sürerken uygulamayı normal yoldan kapat", "Bobinler <b>kapanmadan önce</b> durur; kayıt tutarlı kapanır"],
+          ["1.2", "Seans sürerken client'ı Görev Yöneticisi'nden <b>öldür</b>", "Bobinler durur (kill öncesi durdurma yolu çalışır)"],
+          ["1.3", "Seans sürerken makinenin <b>fişini çek</b>, tekrar aç", "Açılışta bobinler kapalı başlar; yarım seans \"Elektrik Kesintisi\" olarak görünür, geçmişi bozmaz"],
+          ["1.4", "Seans sürerken STM/USB kablosunu çek", "Arayüz bağlantı kaybını <b>söyler</b>; sahte \"çalışıyor\" göstergesi kalmaz"],
+          ["1.5", "Seans sürerken makineyi uyku moduna al, uyandır", "Ya seans güvenli durdurulmuş ya da tutarlı sürüyor; \"hayalet seans\" olmaz"],
+          ["1.6", "Mobilden <b>ACİL DURDUR</b> — cihazla aynı Wi-Fi'da", "Bobinler durur, telefon onayı görür"],
+          ["1.7", "Mobilden ACİL DURDUR — telefon <b>uçak modunda</b>", "Komut gönderilemediği <b>açıkça</b> yazılır; \"durduruldu\" yalanı YOK"],
+          ["1.8", "ACİL DURDUR sonrası yeni seans başlat", "Temiz başlar; önceki seansın parametreleri sızmaz"],
+          ["1.9", "Seans sürerken mobilde güncelleme çıksın (manifest'i geçici yükselt)", "Güncelleme bandı <b>gösterilmez</b>; operatörün ekranı bölünmez"],
+          ["1.10", "Seans sürerken profil değiştirmeyi / çıkış yapmayı dene", "Önce onay + durdurma istenir; sessizce kesilmez"],
+          ["1.11", "<b>Firmware sürümü uyumsuzken seans başlat</b> (eski firmware'li STM tak)", "Seans <b>BAŞLAMAZ</b> — 503 + \"hiçbir bobin komutu kabul etmedi\"; sahte ilerleme çubuğu YOK. Geçmişte kayıt \"Donanım Reddetti\" olur"],
+          ["1.12", "1.11'in karşıtı: firmware doğruyken aynı seansı başlat", "Normal başlar — kapı her seansı engellemiyor"],
+          ["1.13", "Seans ortasında STM komutları reddetmeye başlasın (kabloyu gevşet)", "Arayüz <b>durdurur</b> ve söyler; ekranda \"sürüyor\" kalmaz"],
+          ["1.14", "Seans sürerken ACİL DURDUR'a bas, <b>hemen</b> ardından geç bir telemetri paketi gelsin", "Bobin yeniden \"çalışıyor\" görünmez (yapışkan E-stop)"],
+          ["1.15", "AI Pro / Otomatik seans sürerken uygulamayı kapat", "Bobinler durur; otonom seans \"sahipsiz\" kayıt bırakmaz"],
+          ["1.16", "Bobin 6-7 uzun süre çalıştır, sıcaklığı elle izle", "⚠️ <b>Cihazda termal kesme YOK</b> (sahip kararı). Sıcaklık ekranda <b>görünür</b>; durdurma operatörün işidir. Görünmüyorsa bu bir bulgudur"],
+        ]},
+      ]
     },
     {
       no: "2", ad: "Güncelleme ve kurulum", blok: false,
@@ -290,84 +304,222 @@
         { alt: "Mobil açılış kapısı ve APK kurulumu", items: [
           ["2.1", "Uygulamayı <b>uçak modunda</b> aç", "Kapı beklemez; uygulama hemen açılır"],
           ["2.2", "Yeni sürüm varken aç", "Uygulama yerine güncelleme ekranı gelir"],
-          ["2.3", "Güncelleme ekranında “Şimdilik devam et”", "Uygulama açılır; içerideki bant aynı sürümü <b>hemen yeniden dayatmaz</b>"],
-          ["2.4", "2.3'ten sonra uygulamayı tamamen kapat, tekrar aç", "Kapı <b>yeniden sorar</b> — erteleme kalıcı değil"],
-          ["2.5", "Kontrol takılsın (çok yavaş ağ)", "2,5 sn'de “Atla” çıkar, en geç 7 sn'de kapı kendiliğinden açılır"],
+          ["2.3", "Güncelleme ekranında <b>\"Şimdilik devam et\"</b>", "Uygulama açılır; içerideki bant aynı sürümü <b>hemen yeniden dayatmaz</b>"],
+          ["2.4", "2.3'ten sonra uygulamayı tamamen kapat, tekrar aç", "Kapı <b>yeniden sorar</b> (erteleme kalıcı değil)"],
+          ["2.5", "Kontrol takılsın (çok yavaş ağ / kaynağı engelle)", "2,5 sn'de \"Atla\" çıkar, en geç 7 sn'de kapı kendiliğinden açılır"],
           ["2.6", "İndirmeyi başlat, <b>%40'ta uygulamayı kapat</b>, tekrar aç ve devam et", "Kaldığı yerden sürer, <b>%0'a dönmez</b>"],
           ["2.7", "İndirme bitince", "<b>Doğrudan kurulum ekranı</b> açılır — paylaşım sayfası DEĞİL"],
-          ["2.8", "Kurulumu reddet, geri dön, düğmeye tekrar bas", "Yeniden <b>indirmez</b>; kurulum anında açılır"],
-          ["2.9", "“Bilinmeyen kaynak” iznini <b>kapat</b>, güncelle", "İzin ekranına götürür ve ne yapılacağını yazar; anlaşılmaz ret vermez"],
-          ["2.10", "Kapıda indirmeye başla → “Şimdilik devam et” → banttan “Güncelle”", "Bant <b>kaldığı yüzdeden</b> devam eder; ikinci indirme başlamaz"],
-          ["2.11", "İndirme sırasında mobil veri ↔ Wi-Fi geçişi yap", "İndirme sürer ya da toparlar; bozuk paket kurulmaya çalışılmaz"],
-          ["2.12", "İndirme sırasında telefonu kilitle, 5 dk bekle, aç", "İndirme durmaz — arka planda tamamlanır"],
+          ["2.8", "Kurulumu reddet, geri dön, düğmeye tekrar bas", "Yeniden <b>indirmez</b>; kurulum anında açılır (\"Kurulumu tekrar aç\")"],
+          ["2.9", "Ayarlardan \"bilinmeyen kaynak\" iznini <b>kapat</b>, güncelle", "İzin ekranına götürür ve ne yapılacağını yazar; anlaşılmaz ret vermez"],
+          ["2.10", "Kapıda indirmeye başla → \"Şimdilik devam et\" → banttan \"Güncelle\"", "Bant <b>kaldığı yüzdeden</b> devam eder; ikinci indirme başlamaz"],
+          ["2.11", "İndirme sırasında mobil veri ↔ Wi-Fi geçişi yap", "İndirme ya sürer ya kaldığı yerden toparlar; bozuk paket kurulmaya çalışılmaz"],
+          ["2.12", "İndirme sırasında telefonu kilitle, 5 dk bekle, aç", "İndirme durmaz (arka planda tamamlanır)"],
           ["2.13", "Telefonun deposunu neredeyse doldur, güncelle", "Anlaşılır hata; yarım paket kurulmaya çalışılmaz"],
           ["2.14", "Kurulum bitince uygulamayı aç", "Yeni sürüm numarası görünür; oturum ve ayarlar korunur"],
         ]},
         { alt: "Windows client", items: [
-          ["2.15", "İnternetsiz makinede client'ı aç", "“Hazır!” ekranı <b>anında</b> çizilir, “Başlat” hemen açılır"],
-          ["2.16", "Güncelleme varken aç", "“Başlat” beklemede kalır (“Güncelleme kontrol ediliyor…”); kurulum bitince açılır"],
-          ["2.17", "Client'ı <b>24 saatten uzun</b> açık bırak", "Periyodik tur yeni sürümü fark eder ve bildirir; seansı kesmez"],
-          ["2.18", "Güncelleme kurulurken <b>elektriği kes</b>, tekrar aç", "Eski sürüm sağlam açılır — atomik takas + geri alma; tuğlalaşma yok"],
-          ["2.19", "Client açıkken ikinci kopyasını başlat", "İkinci pencere aynı ağaca yazmaya çalışmaz"],
+          ["2.15", "İnternetsiz makinede client'ı aç", "\"Hazır!\" ekranı <b>anında</b> çizilir, \"Başlat\" hemen açılır"],
+          ["2.16", "Güncelleme varken aç", "\"Başlat\" beklemede kalır, üstünde \"Güncelleme kontrol ediliyor…\" yazar; kurulum bitince açılır"],
+          ["2.17", "Client'ı <b>24 saatten uzun</b> açık bırak (klinik gerçeği)", "Periyodik tur yeni sürümü fark eder ve bildirir; seansı kesmez"],
+          ["2.18", "Güncelleme kurulurken <b>elektriği kes</b>, tekrar aç", "Eski sürüm sağlam açılır (atomik takas + geri alma); tuğlalaşma yok"],
+          ["2.19", "Client açıkken ikinci bir kopyasını başlat", "İkinci pencere aynı ağaca yazmaya çalışmaz"],
           ["2.20", "Diski neredeyse doldur, güncelleme al", "Disk kapısı uyarır; yarım indirme ağacı bozmaz"],
-          ["2.21", "<b>Kur → kaldır → tekrar kur</b> (aynı makine)", "Kalıntı süreç kalmaz (mosquitto/cloudflared); ikinci kurulum sorunsuz"],
-          ["2.22", "Kaldırma sonrası hasta verisi", "<b>Duruyor</b> — kaldırma tıbbi veriyi silmez (kasıtlı)"],
+          ["2.21", "<b>Kur → kaldır → tekrar kur</b> (aynı makine)", "Kalıntı süreç kalmaz (mosquitto/cloudflared), ikinci kurulum sorunsuz"],
+          ["2.22", "Kaldırma sonrası hasta verisi", "<b>Duruyor</b> (kasıtlı: kaldırma tıbbi veriyi silmez)"],
+          ["2.23", "Seans sürerken uygulamayı <b>kaldırmayı</b> dene", "Kaldırma önce bobinleri güvene alır (E-stop), sonra devam eder"],
         ]},
       ]
     },
     {
       no: "3", ad: "Ağ ve bağlantı", blok: false,
-      not: "Klinik gerçeği: hat kopar, modem yeniden başlar, izolasyon açıktır.",
-      gruplar: [{ items: [
-        ["3.1", "Wi-Fi'yi kapat, 30 sn bekle, aç", "Bağlantı kendiliğinden toparlar; elle yeniden başlatma gerekmez"],
-        ["3.2", "Modemi yeniden başlat", "Cihaz bulma (mDNS) tekrar çalışır"],
-        ["3.3", "Modemde <b>istemci izolasyonu (AP Isolation)</b> açık", "Mobil bunu tespit edip <b>sebebini</b> yazar; genel “bağlanamadı” demez"],
-        ["3.4", "Telefonu farklı bir ağa al, <b>eşleştirme kodu</b> ile bağlan", "Bağlanır; kod süresi dolmuşsa açıkça söyler"],
-        ["3.5", "Uzaktan erişim tüneli koparken kullan", "Durum “çevrimdışı” olur; sahte canlı değer gösterilmez"],
-        ["3.6", "<b>İki telefon</b> aynı anda bağlan", "İkisi de canlı veri görür; komutlar çakışmaz"],
-        ["3.7", "Bilgisayarda Ethernet + Wi-Fi + hotspot aynı anda açıkken", "Cihaz yine bulunur (çok-homed multicast)"],
-        ["3.8", "Backend'i kapat, mobili kullanmayı dene", "Anlaşılır hata; sonsuz dönen çark yok"],
-        ["3.9", "Çok yavaş ağda liste/geçmiş aç", "Zaman aşımı mesajı gelir; ekran donmaz"],
-      ]}]
+      not: "Klinik gerçeği: ağ kopar, IP değişir, internet gider. Yanlış renk = uyarı körlüğü.",
+      gruplar: [
+        { items: [
+          ["3.1", "Wi-Fi'yi kapat, 30 sn bekle, aç", "Bağlantı kendiliğinden toparlar; elle yeniden başlatma gerekmez"],
+          ["3.2", "Modemi yeniden başlat", "Cihaz bulma (mDNS) tekrar çalışır"],
+          ["3.3", "Modemde <b>istemci izolasyonu (AP Isolation)</b> açık", "Mobil bunu tespit edip <b>sebebini</b> yazar; genel \"bağlanamadı\" demez"],
+          ["3.4", "Telefonu farklı bir ağa al, <b>eşleştirme kodu</b> ile bağlan", "Bağlanır; kod süresi dolmuşsa açıkça söyler"],
+          ["3.5", "Uzaktan erişim tüneli koparken kullan", "Durum \"çevrimdışı\" olur; sahte canlı değer gösterilmez"],
+          ["3.6", "<b>İki telefon</b> aynı anda bağlan", "İkisi de canlı veri görür; komutlar çakışmaz"],
+          ["3.7", "Bilgisayarda birden fazla ağ arayüzü açıkken (Ethernet + Wi-Fi + hotspot)", "Cihaz yine bulunur (çok-homed multicast)"],
+          ["3.8", "Backend'i kapat, mobili kullanmayı dene", "Anlaşılır hata; sonsuz dönen çark yok"],
+          ["3.9", "Çok yavaş ağ (throttle) altında liste/geçmiş aç", "Zaman aşımı mesajı gelir; ekran donmaz"],
+          ["3.10", "<b>İnterneti kes, uygulamayı açık bırak</b>", "Ana ekranda \"İnternet yok — uzaktan erişim kapalı\" rozeti <b>çıkar</b>; cihaz ağı/donanım <b>kırmızı olmaz</b>"],
+          ["3.11", "3.10'un devamı: interneti <b>geri ver</b>, ekranı izle", "Rozet en geç ~1 dk içinde <b>kendiliğinden kaybolur</b>. ⚠️ Kalıyorsa bu 2026-09-12'de düzeltilen donmuş rozet hatasının nüksüdür"],
+          ["3.12", "İnternet KAPALIYKEN \"Sistem Durumu\" kartına bak", "\"İnternet Bağlantısı\" satırı <b>Kapalı</b> der. ⚠️ Yeşil \"Aktif\" diyorsa yalan-yeşil hatası geri gelmiştir"],
+          ["3.13", "İnterneti kes ama hotspot açık kalsın", "\"Cihaz Köprüsü\" Aktif kalır — internet yokluğu cihaz ağını düşürmez"],
+          ["3.14", "Uygulamayı internet YOKKEN aç (baştan)", "Rozet doğru (yok) başlar; internet gelince düzelir"],
+          ["3.15", "Uygulamayı internet VARKEN aç (baştan)", "Rozet <b>hiç çıkmaz</b>; yanlış alarm yok"],
+          ["3.16", "Hotspot'u (PEMF-Gateway) kapat", "\"Kablosuz Bağlantı\" Kapalı der; başka satırlar bundan etkilenmez"],
+          ["3.17", "Backend ile arayüz arasındaki WS bağlantısını kes (backend'i 10 sn durdur)", "Tüm durum satırları \"Bilinmiyor\"a düşer — <b>bayat yeşil kalmaz</b>"],
+        ]},
+      ]
     },
     {
-      no: "4", ad: "Veri, AI ve yetki", blok: false,
-      not: "Yanlış klinik çıktı ve veri bozulması — sessiz kalırsa en geç fark edilen sınıf.",
+      no: "4", ad: "Veri, AI, yetki", blok: false,
+      not: "Veri, dışa aktarma, AI ve kim-neyi-görür. Sessiz veri kaybı bu bölümde yakalanır.",
       gruplar: [
         { alt: "Hasta verisi", items: [
-          ["4.1", "Hasta adında Türkçe karakter (<code>İhsan</code>, <code>Işık</code>, <code>Çağla</code>) ara/kaydet/raporla", "Arama ve sıralama doğru; kayıt bozulmaz"],
+          ["4.1", "Hasta adında Türkçe karakter (<code>İhsan</code>, <code>Işık</code>, <code>Çağla</code>, <code>Ğ</code>) ara/kaydet/raporla", "Arama ve sıralama doğru; kayıt bozulmaz"],
           ["4.2", "Çok uzun ad / not (500+ karakter), emoji", "Kesilirse <b>belirtilir</b>; kayıt bozulmaz"],
           ["4.3", "Aynı hastayı iki cihazdan aynı anda düzenle", "Son yazan kazanır ama diğer alanlar <b>kaybolmaz</b>"],
-          ["4.4", "Saati 1 gün geri al, seans yap, saati düzelt", "Geçmiş sıralaması tutarlı kalır; kayıt kaybolmaz"],
+          ["4.4", "Makinenin saatini 1 gün geri al, seans yap, saati düzelt", "Geçmiş sıralaması tutarlı kalır; kayıt kaybolmaz"],
           ["4.5", "Yaz saati geçişi civarında süre hesabı", "Seans süresi doğru; negatif/atlamalı süre yok"],
           ["4.6", "Kurtarma kodu ile yedeği başka makinede aç", "Açılır; kod yanlışsa anlaşılır hata"],
+          ["4.7", "<code>mia</code> ve <code>MIA</code> adlı iki ayrı hasta oluştur", "<b>Ayrı</b> hastalar olarak durur — Türkçe katlama ikisini birleştirmez"],
+          ["4.8", "Hasta adını değiştir (ör. <code>Mia</code> → <code>MİA</code>), AI geçmişine bak", "Eski analizler <b>kaybolmaz</b> (kimlik bağı; ad yedeği)"],
+        ]},
+        { alt: "Toplu silme (yeni)", items: [
+          ["4.9", "Seans Geçmişi'nde birkaç kayıt seç, \"Seçilenleri Sil\"", "Onay ister; yalnız seçilenler silinir"],
+          ["4.10", "Seçim yaptıktan sonra <b>filtreyi değiştir</b> (seçili kayıtlar ekrandan çıksın), sil", "Ekranda olmayan kayıt <b>silinmez</b>; \"N kayıt ekranda değil\" uyarısı çıkar"],
+          ["4.11", "Hasta veritabanında toplu sil", "Aynı davranış; hasta + arama dizini birlikte temizlenir"],
+          ["4.12", "Toplu silme onayını iptal et", "Hiçbir şey silinmez"],
+          ["4.13", "Çok sayıda (100+) kayıt seçip sil", "Ya hepsi silinir ya hiçbiri (yarım kalmaz); sınır aşılırsa açıkça söyler"],
+        ]},
+        { alt: "Dışa aktarma ve rapor", items: [
+          ["4.14", "Seans geçmişini CSV indir, Excel'de aç", "\"Durum\" sütunu <b>Türkçe</b> (\"Tamamlandı\", \"Acil Durduruldu\", \"Donanım Reddetti\") — İngilizce <code>completed</code> YOK"],
+          ["4.15", "Türkçe karakterli hasta için seans PDF'i indir, aç", "<code>ı ş ğ İ Ş Ğ</code> harfleri <b>doğru</b> basılır — siyah kutucuk YOK. Başlıklar/kalın yazılar dahil kontrol et"],
+          ["4.16", "Kapsam \"Benim Seanslarım\" iken dışa aktar", "Düğme \"<b>Görünenleri</b> Excel/CSV İndir\" der ve gerçekten yalnız görünenleri indirir"],
+          ["4.17", "Kapsam \"Tüm Klinik\" iken dışa aktar", "Düğme \"<b>Tümünü</b> Excel/CSV İndir\" der"],
+          ["4.18", "AI analizi detayından \"Sonucu paylaş (PDF)\"", "PDF açılır; sayısal detaylar ve hasta adı içinde"],
+          ["4.19", "Masaüstünde indirme düğmesine bas", "Dosya gerçekten kaydedilir ve <b>nereye kaydedildiği söylenir</b> — sessiz ölüm yok"],
         ]},
         { alt: "AI", items: [
-          ["4.7", "<b>Boş/sessiz</b> ses kaydı analiz et", "Reddedilir ve sebebi yazılır — sonuç uydurmaz"],
-          ["4.8", "Kedi olmayan ses (müzik, insan konuşması, gürültü)", "Ya reddeder ya <b>düşük güven</b> uyarısı verir"],
-          ["4.9", "Çok kısa (1 sn) kayıt", "Anlaşılır ret"],
-          ["4.10", "Kamera izni reddedilmişken analiz", "İzin isteğine yönlendirir; çökmez"],
-          ["4.11", "Karanlık / çok bulanık fotoğraf", "Düşük güven ya da ret; kesin sonuç iddiası yok"],
-          ["4.12", "AI servisi kapalıyken analiz", "Zaman aşımı mesajı; sonsuz bekleme yok"],
-          ["4.13", "Analiz sürerken ekrandan çık, geri gel", "Ya sonuç durur ya temiz sıfırlanır; yarım sonuç gösterilmez"],
+          ["4.20", "<b>Boş/sessiz</b> ses kaydı analiz et", "Reddedilir ve sebebi yazılır (sonuç uydurmaz)"],
+          ["4.21", "Kedi olmayan ses (müzik, insan konuşması, gürültü)", "Ya reddeder ya <b>düşük güven</b> uyarısı verir"],
+          ["4.22", "Çok kısa (1 sn) kayıt", "Anlaşılır ret"],
+          ["4.23", "Kamera izni reddedilmişken analiz", "İzin isteğine yönlendirir; çökmez"],
+          ["4.24", "Karanlık / çok bulanık fotoğraf", "Düşük güven ya da ret; kesin sonuç iddiası yok"],
+          ["4.25", "AI servisi kapalıyken analiz", "Zaman aşımı mesajı; sonsuz bekleme yok"],
+          ["4.26", "Analiz sürerken ekrandan çık, geri gel", "Ya sonuç durur ya temiz sıfırlanır; yarım sonuç gösterilmez"],
+          ["4.27", "Analiz sonucunda <b>uzun bir metin</b> (kapanma metrikleri vb.)", "Üç noktayla kesilen metne <b>dokun</b> → tamamı açılır, tekrar dokun → kapanır"],
+          ["4.28", "Girdi fotoğrafını yükle, analiz et", "Girdi fotoğrafı <b>kaybolmaz</b>; ileri/geri ile sonuç ve girdi arasında gezinilir"],
+          ["4.29", "Sonuç görselini büyüt (zoom)", "Yakınlaşır, okunur; tam ekranda da kapatma düğmesi hep görünür"],
+          ["4.30", "Otomatik Mod ile seans öner", "Literatürden öneri gelir; parametreler <b>düzenlenebilir</b>; \"AI Modu\" diye ikinci bir sekme YOK"],
         ]},
-        { alt: "Profiller", items: [
-          ["4.14", "Üç profille de aç, kapalı rotalara gitmeye çalış", "Erişilemeyen rota panoya düşer"],
-          ["4.15", "Ev sahibi profiliyle tedavi başlatmayı dene", "Mümkün olmaz — yalnız analiz"],
-          ["4.16", "Operatör değiştir, hareketsiz bekle (kilit süresi)", "Seans sürerken kilit <b>ertelenir</b>; seans yokken kilitlenir"],
+        { alt: "Profiller ve sahiplik", items: [
+          ["4.31", "Üç profille de aç, kapalı rotalara URL/gezinme ile gitmeye çalış", "Erişilemeyen rota panoya düşer"],
+          ["4.32", "Ev sahibi (pet_owner) profiliyle tedavi başlatmayı dene", "Mümkün olmaz (yalnız analiz)"],
+          ["4.33", "Ev sahibi profiliyle aç", "<b>\"Ana Ekran\" sekmesi YOK</b>; uygulama AI ekranında açılır (boş/erişilemez rotaya düşmez)"],
+          ["4.34", "Operatör değiştir, hareketsiz bekle (kilit süresi)", "Seans sürerken kilit <b>ertelenir</b>; seans yokken kilitlenir"],
+          ["4.35", "<b>İki farklı e-posta</b> ile seans yap, sonra \"Benim Seanslarım\" filtresi", "Her hekim yalnız kendi seanslarını görür"],
+          ["4.36", "4.35'in devamı: \"Tüm Klinik\" seç", "İkisinin de seansları görünür"],
+          ["4.37", "Otomatik (AI) seans yap, \"Benim Seanslarım\"a bak", "Otonom seans da <b>sahipli</b> kaydedilir — herkesin listesinde çıkmaz"],
+          ["4.38", "Ev sahibi profiliyle AI geçmişine bak", "Yalnız <b>kendi</b> analizleri; başka hekimin analiz özeti görünmez"],
+          ["4.39", "Hasta kartına bak", "\"Son analiz: …\" özeti doğru hastaya ait"],
         ]},
       ]
     },
     {
       no: "5", ad: "Dayanıklılık", blok: false,
       not: "Sürüm turlarında. Uzun süre açık kalan klinik makinesinde ortaya çıkan sınıf.",
-      gruplar: [{ items: [
-        ["5.1", "Arka arkaya 10 seans, mola vermeden", "Bellek/handle sızıntısı yok; 10. seans 1. kadar hızlı"],
-        ["5.2", "Azami süreli tek seans, sonuna kadar", "Otomatik kapanır, kayıt tam"],
-        ["5.3", "Client 72 saat açık", "Bellek şişmez, bağlantı canlı, güncelleme kontrolü çalışıyor"],
-        ["5.4", "Mobil uygulamayı 24 saat arka planda bırak, geri dön", "Yeniden bağlanır; bayat veriyi canlı gibi göstermez"],
-        ["5.5", "Bobinlerin bir kısmını fiziksel olarak çıkar, seans dene", "Eksik bobin <b>söylenir</b>; sessizce eksik tedavi verilmez"],
-      ]}]
+      gruplar: [
+        { items: [
+          ["5.1", "Arka arkaya 10 seans (mola vermeden)", "Bellek/handle sızıntısı yok; 10. seans 1. kadar hızlı"],
+          ["5.2", "Azami süreli tek seans, sonuna kadar", "Otomatik kapanır, kayıt tam"],
+          ["5.3", "Client 72 saat açık", "Bellek şişmez, bağlantı canlı, güncelleme kontrolü çalışıyor"],
+          ["5.4", "Mobil uygulamayı 24 saat arka planda bırak, geri dön", "Yeniden bağlanır; bayat veriyi canlı gibi göstermez"],
+          ["5.5", "Bobinlerin bir kısmını fiziksel olarak çıkar, seans dene", "Eksik bobin <b>söylenir</b>; sessizce eksik tedavi verilmez"],
+          ["5.6", "500+ seans biriktikten sonra geçmiş/KPI ekranlarını aç", "Liste ve grafikler makul sürede açılır; donma yok"],
+          ["5.7", "Aynı anda 20+ AI analizi kuyruğa at", "Ya sıraya alır ya sınırı söyler; çökmez"],
+          ["5.8", "Uygulamayı 1 hafta hiç kapatmadan kullan (klinik gerçeği)", "Oturum, bağlantı ve bildirimler sağlam kalır"],
+        ]},
+      ]
+    },
+    {
+      no: "6", ad: "Mobil", blok: false,
+      not: "En az bakılan katman. Masaüstünde geçen senaryo burada geçmeyebilir: kabuk, izin, klavye, dosya yolu ve ağ farklı.",
+      gruplar: [
+        { alt: "Kurulum, açılış, sürüm", items: [
+          ["6.1", "APK'yı temiz telefona kur, ilk açılış", "Açılır; hangi izinleri neden istediği anlaşılır"],
+          ["6.2", "Ayarlar → sürüm numarasına bak", "Kurduğun APK'nın sürümüyle <b>aynı</b>"],
+          ["6.3", "Uygulamayı kapat-aç 5 kez üst üste", "Her seferinde aynı ekrana açılır; rastgele beyaz ekran yok"],
+          ["6.4", "Telefonu yeniden başlat, uygulamayı aç", "Oturum korunur (yeniden giriş istemez)"],
+          ["6.5", "Uygulamayı <b>arka plandan öldür</b>, hemen aç", "Bağlantı yeniden kurulur; \"bağlanıyor\" sonsuza kadar dönmez"],
+        ]},
+        { alt: "Cihaz bulma ve eşleştirme", items: [
+          ["6.6", "Telefon ve cihaz <b>aynı Wi-Fi'da</b>, uygulamayı aç", "Cihaz otomatik bulunur (elle IP girmek gerekmez)"],
+          ["6.7", "Telefonu <b>PEMF-Gateway hotspot'una</b> bağla", "Cihaz bulunur"],
+          ["6.8", "Telefonu <b>mobil veriye</b> al (cihazla farklı ağ)", "Eşleştirme kodu istenir; \"bulunamadı\" belirsizliği değil, <b>sebep</b> yazar"],
+          ["6.9", "Yanlış eşleştirme kodu gir", "\"Kod yanlış\" der — \"cihaz kapalı\" demez (sebepler karışmaz)"],
+          ["6.10", "Süresi dolmuş kod gir", "\"Kodun süresi doldu\" der"],
+          ["6.11", "Cihaz kapalıyken doğru kod gir", "\"Cihaz çevrimdışı\" der — \"kod yanlış\" demez"],
+          ["6.12", "Bağlandıktan sonra telefonu uçak moduna al, 1 dk sonra geri getir", "Kendiliğinden yeniden bağlanır"],
+          ["6.13", "Cihazın IP'si değişsin (modemi yeniden başlat)", "Uygulama yeni IP'yi bulur; elle müdahale gerekmez"],
+        ]},
+        { alt: "Canlı veri ve güvenlik", items: [
+          ["6.14", "Masaüstünde seans başlat, telefonda izle", "Süre/frekans/yoğunluk canlı akar; masaüstüyle <b>aynı</b> değerler"],
+          ["6.15", "Telefonu 30 sn kilitle, aç", "Değerler tazelenir; kilitlenmeden önceki donmuş değer \"canlı\" gösterilmez"],
+          ["6.16", "Backend'i kapat, telefonda ekranı izle", "\"Çevrimdışı\" olur; son değerler canlı gibi durmaz"],
+          ["6.17", "Telefondan ACİL DURDUR (seans sürerken)", "Bobinler durur; telefonda <b>onay</b> görünür"],
+          ["6.18", "Telefondan ACİL DURDUR, ağ tam o anda kopsun", "Başarısızlık <b>açıkça</b> yazılır; \"durduruldu\" yalanı YOK"],
+          ["6.19", "İki telefondan aynı anda ACİL DURDUR", "İkisi de çalışır; çakışma hatası yok"],
+          ["6.20", "Telefondan seans başlatmayı dene (yetkili profil)", "Ya başlar ya neden başlamadığını söyler"],
+        ]},
+        { alt: "Ekran, klavye, erişilebilirlik", items: [
+          ["6.21", "Dar telefonda (≤375 px) her ekranı gez", "Yatay kaydırma YOK; yazılar kesilmez"],
+          ["6.22", "Telefonu <b>yatay</b> çevir", "Kabuk ikon rayına geçer; alt bar ekranı yemez"],
+          ["6.23", "Tablette dikey ve yatay", "Düzen sığar; kartlar üst üste binmez"],
+          ["6.24", "Sistem yazı tipi ölçeğini <b>en büyüğe</b> al", "Yazılar büyür ama düzen bozulmaz (tavan %120)"],
+          ["6.25", "Bir form alanına dokun (klavye açılsın)", "<b>ACİL DURDUR klavyenin üstüne taşınır</b>, gizlenmez"],
+          ["6.26", "Klavye açıkken \"Kaydet\"e bas", "<b>Tek</b> dokunuşta çalışır (iki dokunuş gerekiyorsa bulgudur)"],
+          ["6.27", "Çentikli telefonda üst/alt kenar", "İçerik çentiğin altında kalmaz"],
+          ["6.28", "Karanlık/aydınlık tema değiştir", "Okunurluk her ikisinde de korunur"],
+          ["6.29", "Küçük dokunma hedeflerini dene (ikon düğmeler)", "Parmakla rahat basılır; yanlış düğmeye basılmaz"],
+        ]},
+        { alt: "Mobilde dosya, kamera, mikrofon", items: [
+          ["6.30", "Telefonda CSV/PDF indir", "<b>Paylaşım menüsü</b> açılır ve dosya gerçekten kaydedilebilir/gönderilebilir"],
+          ["6.31", "6.30'daki PDF'i telefonda aç", "Türkçe harfler doğru; siyah kutucuk yok"],
+          ["6.32", "Kamera iznini <b>reddet</b>, sonra analiz dene", "İzin ekranına yönlendirir; çökmez"],
+          ["6.33", "Kamerayla fotoğraf çek → analiz", "Fotoğraf yüklenir, sonuç gelir, <b>girdi fotoğrafı kaybolmaz</b>"],
+          ["6.34", "Galeriden çok büyük (12 MP+) fotoğraf seç", "Yüklenir veya anlaşılır sınır mesajı; sessiz başarısızlık yok"],
+          ["6.35", "Mikrofon iznini reddet, ses analizi dene", "İzin isteğine yönlendirir; çökmez"],
+          ["6.36", "Ses kaydı sırasında telefona çağrı gelsin", "Kayıt temiz durur; bozuk dosya analize gitmez"],
+          ["6.37", "Analiz sürerken uygulamayı arka plana at, geri gel", "Sonuç ya durur ya temiz sıfırlanır; yarım sonuç gösterilmez"],
+        ]},
+        { alt: "Mobil profil ve yetki", items: [
+          ["6.38", "Ev sahibi (pet_owner) profiliyle mobilde aç", "\"Ana Ekran\" sekmesi YOK; AI ekranı açılır"],
+          ["6.39", "Ev sahibi profiliyle kontrol/tedavi ekranına gitmeye zorla", "Erişemez; rota panoya düşer, boş/yarım ekran açılmaz"],
+          ["6.40", "Mobilde \"Tüm Klinik\" kapsamını seç (ev sahibi)", "Kilitli/gizli — kendi verisi dışına çıkamaz"],
+          ["6.41", "Mobilde çıkış yap", "Yalnız <b>bu cihazın</b> oturumu kapanır; masaüstü oturumu düşmez"],
+          ["6.42", "Mobilde bildirime dokun (uzun metinli)", "Metnin tamamı açılır; \"…\" ile kesik kalmaz"],
+        ]},
+      ]
+    },
+    {
+      no: "7", ad: "Bu turun değişiklikleri", blok: false,
+      not: "Bu turun regresyonu. Soru 'bozuldu mu' değil — 'istenen gerçekten oldu mu'.",
+      gruplar: [
+        { items: [
+          ["7.1", "Seans detayını aç", "\"Donanım: ESP\" <b>yazmaz</b> (sökülü olduğu belirtilir); hayalet bobin 8 kaydı yok"],
+          ["7.2", "Ana ekranda bobin sayacına bak", "<b>7 bobin</b> üzerinden sayar (<code>x / 7</code>); sökülü ESP slotu kart olarak çizilmez"],
+          ["7.3", "7.2'nin karşıtı: ESP geri takılırsa", "Slot 8 görünür olur ve payda kendiliğinden 8'e çıkar"],
+          ["7.4", "Seans başlat, sol alt köşeye bak", "Ayrı \"ACİL DURDUR\" kutusu <b>çıkmaz</b> (kontrol ekranının kendi düğmesi zaten var)"],
+          ["7.5", "Kontrol ekranı ve Ana Ekran dışındaki bir sekmede seans sürerken", "Global ACİL DURDUR <b>görünür</b> (kendi düğmesi olmayan ekranlarda korunmuş)"],
+          ["7.6", "\"Son 7 Gün\" grafiğine bak", "Eksen etiketleri tam sayı; değerler barların üstünde; toplam rozeti var"],
+          ["7.7", "Ayarlar'da uzun bir bilgi değerine dokun", "Tamamı açılır"],
+          ["7.8", "AI Hub'da \"kaldığın yerden devam\" şeridine bak", "Son analiz doğru hastayla eşleşir"],
+          ["7.9", "AI geçmişinde takip grafiğine bak", "Aynı modül + aynı metrik, ≥2 nokta; grafiğe alınmayanlar <b>söylenir</b>"],
+          ["7.10", "Otomatik Mod'u kullan", "Öneri gelir, parametre değiştirilebilir; \"AI Modu\" sekmesi yok"],
+          ["7.11", "Seans başına paylaşım düğmesine bak", "Tek düğme kaldı (PDF); ikiz \"Raporu Paylaş\" yok"],
+          ["7.12", "Türkçe karakterli hasta için PDF üret (7.15 ile birlikte)", "Kutucuk yok — <b>kalın ve italik</b> başlıklar dahil"],
+        ]},
+      ]
+    },
+    {
+      no: "8", ad: "Bilinen açıklar", blok: false,
+      not: "Bunlar bulgu DEĞİL: bilinçli kararlar ve kapanmamış işler. Beklenen sonuç 'belgelenen davranışın aynısı'. Farklıysa BELGE yanlıştır.",
+      gruplar: [
+        { items: [
+          ["8.1", "Bobin 1-5'i uzun süre yüksek duty'de sür, sıcaklığı ölç", "<b>Cihazda termal kesme YOK</b> (NTC derleme-kapılı). Yalnız süre sınırı ve operatör keser. ⚠️ Canlı üzerinde denemeyin — fantom/boş bobin"],
+          ["8.2", "Bobin 6-7 sıcaklığına bak", "Ölçülür ve <b>gösterilir</b>; otomatik kesme yok (sahip kararı)"],
+          ["8.3", "Bobin 6-7 akım değerine bak", "<code>0.0</code> gösterir — ACS712 taşınmadı (bilinçli). Sahte bir değer üretiliyorsa bulgudur"],
+          ["8.4", "Ödeme/abonelik ekranlarını dene", "Satış <b>kapalı</b> (FREE_MODE); jeton kapısı uykuda. Ücret istiyorsa bulgudur"],
+          ["8.5", "Uzaktan erişim (tünel) ile bağlan", "Çalışır; ⚠️ <code>resolve_device</code> tazelik SQL'i canlı Supabase'e uygulanmadıysa bayat cihaz görünebilir"],
+          ["8.6", "Araştırma AI Pro (fantom/petri) sürüşünü dene", "<b>Bayrak kapalı</b> — sürüş yok, yalnız görüntüleme. Bobin sürüyorsa bulgudur"],
+          ["8.7", "Güncelleme/sürüm bandına bak", "Yayın <b>donduruldu</b>: yeni sürüm gelmemeli"],
+        ]},
+      ]
     },
   ];
 

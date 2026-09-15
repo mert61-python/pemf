@@ -15,6 +15,8 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | [`AGPL-KARARI.md`](AGPL-KARARI.md) | Ultralytics **AGPL-3.0** durum tespiti + karar notu (**AÇIK**; `tests/test_license_surface.py` yüzey kapısı) | Sahip/hukuk |
 | [`DONANIM-UYUM-ANALIZI-2026-08-19.md`](DONANIM-UYUM-ANALIZI-2026-08-19.md) | Donanım↔backend **protokol uyum** denetim raporu (14 iddia → 12 gerçek uyumsuzluk) | Donanım/protokol |
 | [`SAHA-TEST-LISTESI.md`](SAHA-TEST-LISTESI.md) | Elle koşulan **saha test** senaryoları — otomatik süitlerin göremediği gerçek donanım/OS/kullanıcı sınıfı | Saha/QA |
+| [`acik-isler-2026-09-12.md`](acik-isler-2026-09-12.md) | **Açık işler** — docs/ tam taraması: sahip kararı / tezgâh / mühendislik / hiç bakılmayan katmanlar + ölçülen belge bayatlıkları | Sahip |
+| [`VAULT-ANAHTAR-EMANETI.md`](VAULT-ANAHTAR-EMANETI.md) | **Hasta anahtarı emaneti** — Vault kurulumu, kurtarma token'ı, disk kaybı sonrası adım adım kurtarma | Sahip |
 | `version_info.txt` | Windows EXE sürüm kaynağı (`sync_versions.ps1` yazar) | Build |
 | `screenshots/` | Arayüz ekran görüntüleri (kök README + TÜBİTAK raporu kullanır) | — |
 
