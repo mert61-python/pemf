@@ -54,8 +54,10 @@ _KANONIK = "PEMF_KEEP_PLAIN_BACKUP"
 _ESKI = "PEMF_KEEP_PLAIN_BAK"
 #: Bayragi okuyan ortak yardimci.
 _YARDIMCI = "duz_metin_yedegi_emanete_al_mi"
-#: Goc-sonrasi yedek politikasini uygulayan ortak fonksiyon. Iki goc yolu da BUNU cagirir.
+#: Goc-sonrasi yedek politikasini uygulayan ortak fonksiyon.
 _POLITIKA = "goc_sonrasi_yedek_politikasi"
+#: TEK goc uygulamasi. Tedavi yolu artik buna DELEGE eder (A1 - 2/2).
+_ORTAK_GOC = "migrate_to_encrypted_if_needed"
 
 
 def _kaynak(p: Path) -> str:
@@ -171,18 +173,19 @@ def test_KRITIK_yardimci_HEM_kanonik_HEM_eski_adi_okur():
     )
 
 
-def test_KRITIK_tedavi_yolu_ORTAK_politikayi_CAGIRIR():
-    """treatment_history_db kendi okumayi birakip ORTAK yola gecmeli — yoksa 'tek dosyada
-    okunur' testi, emanet dalini SILEREK de yesil yapilabilirdi.
+def test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder():
+    """treatment_history_db kendi goc kopyasini birakip ORTAK uygulamayi cagirmali.
 
-    ⚠️ CIPA TASINDI (ayni oturum): once `duz_metin_yedegi_emanete_al_mi` cagrisina pinliydi.
-    Kuyrugun tamami `goc_sonrasi_yedek_politikasi` icine alininca tedavi yolu artik bayrak
-    yardimcisini DOGRUDAN cagirmiyor — politikayi cagiriyor, o da yardimciyi. Olculen sey
-    ayni: "karar bu yola ORTAK kaynaktan geliyor mu?" Zincirin tamami asagida sinaniyor.
+    ⚠️ CIPA IKI KEZ TASINDI (ayni oturum, her seferinde kod bir halka daha ortaklasti):
+      1. once `duz_metin_yedegi_emanete_al_mi` cagrisina pinliydi (bayrak birlestirmesi),
+      2. sonra `goc_sonrasi_yedek_politikasi`na (kuyruk birlestirmesi),
+      3. simdi ortak GOC'e (govde birlestirmesi, A1 - 2/2).
+    Olculen sey hep ayni kaldi: "bu yol karari ORTAK kaynaktan mi aliyor?" Zincirin
+    halkalari (goc -> politika -> yardimci) ayri ayri sinaniyor.
     """
-    assert _POLITIKA in _cagrilan_adlar(_TEDAVI, "_migrate_to_encrypted_if_needed"), (
-        f"{_TEDAVI.name}: goc fonksiyonu ortak politikayi ({_POLITIKA}) CAGIRMIYOR — "
-        "emanet karari bu yolda ya kayboldu ya da yeniden yerel bir kopyaya baglandi"
+    assert _ORTAK_GOC in _cagrilan_adlar(_TEDAVI, "_migrate_to_encrypted_if_needed"), (
+        f"{_TEDAVI.name}: ortak goce ({_ORTAK_GOC}) DELEGE etmiyor — kopya geri gelmis "
+        "olabilir. Bu kopya tek oturumda UC yerden ayrismisti; dorduncusu kacinilmazdi."
     )
 
 
@@ -218,39 +221,17 @@ def test_KARSIT_KANIT_emanet_dali_SILINMEDI():
     )
 
 
-@pytest.mark.parametrize(
-    "yol, fonksiyon",
-    [
-        (_SQLCIPHER, "migrate_to_encrypted_if_needed"),
-        (_TEDAVI, "_migrate_to_encrypted_if_needed"),
-    ],
-    ids=["sqlcipher_util", "treatment_history_db"],
-)
-def test_KARSIT_KANIT_IKI_goc_yolu_da_politikayi_cagirir(yol: Path, fonksiyon: str):
-    """Politikayi tek yere almak, bir cagiranin onu CAGIRMAYI birakmasini engellemez.
+def test_KARSIT_KANIT_ortak_goc_politikayi_cagirir():
+    """Politikayi tek yere almak, ortak gocun onu CAGIRMAYI birakmasini engellemez.
 
     O durumda goc sonrasi `.plain.bak` oylece diskte kalirdi — emanet de guvenli-silme de
-    hic kosmadan.
+    hic kosmadan. Artik TEK uygulama oldugu icin bu tek satir HER iki veritabanini birden
+    dusururdu; kapi o yuzden daha da gerekli.
     """
-    assert _POLITIKA in _cagrilan_adlar(yol, fonksiyon), (
-        f"{yol.name}:{fonksiyon} ortak politikayi ({_POLITIKA}) CAGIRMIYOR -> goc sonrasi "
-        "duz-metin yedek islenmeden diskte KALIR"
+    assert _POLITIKA in _cagrilan_adlar(_SQLCIPHER, _ORTAK_GOC), (
+        f"{_ORTAK_GOC} ortak politikayi ({_POLITIKA}) CAGIRMIYOR -> goc sonrasi duz-metin "
+        "yedek islenmeden diskte KALIR (hem hasta hem tedavi DB'sinde)"
     )
-
-
-def test_KARSIT_KANIT_varsayilan_GUVENLI_SIL_kalir():
-    """Varsayilani "1" yapmak butun testleri yesil birakip at-rest garantisini COKERTIRDI."""
-    cagrilar = {ad: vars_ for ad, vars_ in _getenv_cagrilari(_SQLCIPHER) if "KEEP_PLAIN" in ad}
-    assert set(cagrilar) == {_KANONIK, _ESKI}, (
-        f"beklenen iki ad okunmuyor: {sorted(cagrilar)} — kapi KOR kalmasin diye "
-        "okuma bicimi degistiyse bu testi guncelleyin"
-    )
-    for ad, varsayilan in cagrilar.items():
-        assert varsayilan == "0", (
-            f"{ad} varsayilani {varsayilan!r} — '0' olmali. Varsayilan emanet demek, "
-            "her klinikte TUM PII'nin duz-metin kopyasinin diskte kalmasi demektir "
-            "(sahip karari 2026-08-08)."
-        )
 
 
 def test_KRITIK_bayrak_device_env_ile_TASINIR():

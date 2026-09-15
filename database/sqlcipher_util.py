@@ -549,7 +549,7 @@ def _yarim_goc_toparla(db, logger=None):
         return True
 
 
-def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
+def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="DB"):
     """Anahtar varsa ve mevcut DB DUZ-METIN ise sifreli kopyaya aktar (sqlcipher_export); eski
     duz-metin .plain.bak olur. Anahtar/binding yok veya zaten sifreli ise no-op (veri kaybi yok)."""
 
@@ -684,7 +684,7 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         # Bu kuyruk `treatment_history_db.py` icine de KOPYALANMISTI ve iki kopya UC ayri
         # yerden ayrismisti (bayrak adi · ACL basarisizlik politikasi · log seviyesi).
         # Kendi kopyanizi YAZMAYIN — ayrisacak yer birakmamak icin ortak fonksiyon var.
-        goc_sonrasi_yedek_politikasi(backup, logger, etiket="DB")
+        goc_sonrasi_yedek_politikasi(backup, logger, etiket=etiket)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")

@@ -11,7 +11,7 @@ C = hijyen. Klasör taşıma hiçbirini çözmez, o yüzden en sonda.
 
 ## A — Gerçek arızalar
 
-### A1 · Göç kodu beş yerde — bu zaten hasta geçmişi kaybettirdi ⛔
+### ✅ A1 · Göç kodu beş yerde — bu zaten hasta geçmişi kaybettirdi (2026-09-15 KAPANDI)
 | | |
 |---|---|
 | **Kanıt (2026-09-15 AST ile ölçüldü)** | **935 satır göç kodu, 18 fonksiyon, 5 dosya:**<br>`sqlcipher_util.py` 285 · `treatment_history_db.py` 342 · `path_utils.py` 174 · `api_server.py` 75 · `pemf_gui/config.py` 59 |
@@ -22,7 +22,7 @@ C = hijyen. Klasör taşıma hiçbirini çözmez, o yüzden en sonda.
 | **İş** | **(a)** Ortak 98 satırı tek fonksiyona al, **göç-sonrası yedek politikasını parametre/geri-çağrı yap** — iki çağıran da kendi politikasını AÇIKÇA belirtsin (`sqlcipher_util` = kenara al, `treatment_history_db` = emanet/güvenli-sil). **(b)** Kalan dört göçü tek giriş noktasından sıraya sok, "hangisi önce koşuyor" bir daha kaza olmasın.<br>✅ Escrow dalının kapısı **zaten var** (ölçüldü): `test_at_rest_encryption_rollout.py:188` davranışsal (`PEMF_KEEP_PLAIN_BAK=1` ile escrow geri gelir), `test_kalan_davranissal.py:250` bayrağın gerçekten okunduğunu regex'le çıpalıyor. Yani birleştirme bu kapıları **kırmadan** yapılmalı — kırılırlarsa politika düşmüş demektir. Mevcut 10 yarım-göç kapısı da yeşil kalmalı |
 | **Kim** | Ben |
 
-### A1b · ⛔ Aynı politika, **iki farklı bayrak adı** — kopyalamanın canlı sonucu
+### ✅ A1b · Aynı politika, **iki farklı bayrak adı** — kopyalamanın canlı sonucu (KAPANDI)
 
 Bu, A1'i araştırırken bulundu ve denetimin "kopya kod arıza doğurur" iddiasının **kanıtı**.
 Düz-metin yedeğin emanete alınıp alınmayacağını belirleyen bayrak iki kopyada **farklı adla**
@@ -61,7 +61,7 @@ yapılmalı — birleştirme zaten bu kod yolunu elden geçiriyor.
 | **İş** | `ai_hub/cv_ortak/` paketi; `client_id` çağıran tarafın parametresi olur |
 | **Kim** | Ben |
 
-### A3 · Bu oturumun 14 yeni testi CI'ı hiç görmedi
+### ✅ A3 · Bu oturumun 14 yeni testi CI'ı hiç görmedi (KAPANDI)
 | | |
 |---|---|
 | **Kanıt (ölçüldü)** | `origin/production-hardening`'in **18 commit** önünde · **71 değiştirilmiş + 48 takipsiz** dosya · takipsizlerin **14'ü `tests/` altında** |
@@ -116,7 +116,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 
 | # | İş | Kanıt |
 |---|---|---|
-| **C1** | `firmware_cikti/` → `.gitignore` | `.gitignore`'da **yok**, `git status`'ta `?? firmware_cikti/` |
+| ✅ **C1** | `firmware_cikti/` → `.gitignore` — **YAPILDI** | `.gitignore`'da **yok**, `git status`'ta `?? firmware_cikti/` |
 | **C2** | `training_archive/` (299 MB / 434 takipli) + `bin/` (61 MB / 14 takipli ikili) → LFS ya da ayrı depo | `.git` **347 MB**; her klon indiriyor. `cloudflared.exe` 52 MB. ⚠️ `training_archive/ai_data/real_clinical_data/ecg_signals.npy` — PUBLIC depoda **"gerçek klinik veri"** adlandırması ayrıca doğrulanmalı |
 | **C3** | Ölü dizinleri kaldır | `frontend/` 0 · `lattekurulum/` 0 · `website/` 3 · `web_static/` 3 · `dema-terapi-simülatörü/` 12 · `pemf_vet_landing/` 13 takipli. `ai/config.py` (349 satır) üretimde **sıfır** import — tek tüketicisi donmuş arşiv |
 | **C4** | Bayat belgeler | `PEMF_SISTEM_RAPORU.md` (2026-03) · `RUNBOOK.md` (08-15, ESP sökülmesi sonrası güncellenmemiş) · `frontend_version.json` (2026-06-27) · `LAUNCHER_SPEC.md` (07-29, launcher o gün 1.9.9'du) |
@@ -145,3 +145,26 @@ alma · Cloudflare NAMED tünel · firmware satürasyon tezgâhı · 72 saatlik 
 [`SAHA-ISLERI-REHBERI.md`](SAHA-ISLERI-REHBERI.md)
 
 **Yayın:** ⛔ DONDURULDU — sahip "yayınla" demeden manifest/release koşturulmaz.
+
+---
+
+## ✅ Kapananlar — 2026-09-15 oturumu
+
+| # | İş | Nasıl doğrulandı |
+|---|---|---|
+| **A3** | 12 commit push edildi, CI yeşil | `lint` · `security-audit` · `frontend-ci` · `critical-path-tests` dördü de yeşil. Yayın **yok** — release üreten üç workflow yalnız etiketle çalışıyor, ölçüldü |
+| **A1b** | Bayrak adı ayrışması | Ortak `duz_metin_yedegi_emanete_al_mi()`; kanonik `PEMF_KEEP_PLAIN_BACKUP`, eski ad uyarıyla okunmaya devam. `device.env` + launcher `install.rs`. 6 mutasyon |
+| **A1b-2** | ⛔ Hasta DB emanet yolu **fail-open**'dı + log yalan söylüyordu | `lock_down_file` dönüşü atılıyordu; ACL tutmasa bile korumasız `.plain.bak` diskte kalıyor, log "ACL-kilitli" diyordu. Davranışsal kapı + 4 mutasyon |
+| **A1b-3** | Log seviyesi asimetrisi | Silme düşerse hasta DB `warning`+"önerilir" → `error`+"ELLE SİLİN" (tedavi DB ile eşitlendi) |
+| **A1 (1/2)** | Yedek politikası kuyruğu tek fonksiyona | `goc_sonrasi_yedek_politikasi()`. 5 mutasyon |
+| **A1 (2/2)** | Göç **gövdesi** tek uygulamaya | `treatment_history_db` artık delege ediyor. İki fonksiyon **357 → 161 satır**. 7 mutasyon |
+| **C1** | `firmware_cikti/` yoksayıldı | `git check-ignore` + dosya-düzeyi istisnaların hâlâ sonda olduğu doğrulandı |
+| **(yan)** | gitleaks Türkçe "API" yanlış alarmı | K-**API**-LANIYOR; muafiyet değer biçimine, 3 mutasyon |
+| **(yan)** | jest 5 sn zaman aşımı soğuk CI'da yetmiyordu | `testTimeout: 20000` + üst sınır kapısı, 5 mutasyon |
+
+**Ders:** denetim "göç kodu beş yerde" diyordu; ölçünce **tek gerçek kopya** çıktı ama o kopya
+**üç ayrı yerden ayrışmıştı** ve üçü de denetimde görünmüyordu. Kopyalamanın maliyeti
+"okuması zor" değil — **sessizce ayrışan davranış**.
+
+**Bu oturumda kırılan 10 kapının hiçbiri silinmedi:** hepsinin niyeti korunup çıpası taşındı ve
+taşınan çıpaların körleşmediği mutasyonla kanıtlandı.

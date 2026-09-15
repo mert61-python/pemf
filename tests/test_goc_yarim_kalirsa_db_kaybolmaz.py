@@ -249,29 +249,57 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # Üçüncüsü açılışta EN ÖNCE koşar ve `db` yok görünce ŞABLONU koyar. Ölçüldü (2026-09-13):
     # ilk iki düzeltme ürünü KURTARMADI çünkü şablon kopyalayıcı önce davranıyordu — hasta
     # geçmişi yine boş görünüyordu. Kısmi düzeltme = düzeltme değil.
+    # ⚠️ ÇIPA GENİŞLETİLDİ (2026-09-15, A1·2/2): `treatment_history_db` artık göç gövdesinin
+    # KENDİ kopyasını taşımıyor — `sqlcipher_util.migrate_to_encrypted_if_needed`e DELEGE
+    # ediyor (157 satırlık kopya, %91 aynıydı; kalan farkların tamamı mekanikti). Korunan şey
+    # değişmedi: o yol da toparlamayı ALMALI. Kabul edilen iki biçim:
+    #   · toparlamayı DOĞRUDAN çağırmak, ya da
+    #   · toparlamayı çağıran ORTAK göçe delege etmek.
+    # İkinci biçimin gerçekten koruduğu, hemen aşağıda ayrıca ölçülüyor — yoksa "delege
+    # ediyorum" demek kapıyı bedavaya geçirirdi.
     for yol in (
         "database/sqlcipher_util.py",
         "database/treatment_history_db.py",
         "utils/path_utils.py",
     ):
         src = _kaynak(yol)
-        assert "_yarim_goc_toparla(" in src, (
-            f"{yol}: yarim-goc TOPARLAMA CAGRILMIYOR -> o yolda `db` yok kalir ve BOS DB/SABLON yaratilir"
+        dogrudan = "_yarim_goc_toparla(" in src
+        delege = "migrate_to_encrypted_if_needed(" in src
+        assert dogrudan or delege, (
+            f"{yol}: yarim-goc TOPARLAMA ne CAGRILIYOR ne de toparlamayi cagiran ortak goce "
+            "DELEGE ediliyor -> o yolda `db` yok kalir ve BOS DB/SABLON yaratilir"
         )
 
-    for yol in ("database/sqlcipher_util.py", "database/treatment_history_db.py"):
-        src = _kaynak(yol)
-        assert "_tasi_yeniden_dene(" in src, (
-            f"{yol}: yeniden-denemeli tasima CAGRILMIYOR -> gecici Windows kilidi gocu kalici "
-            "olarak iptal ettirir ya da yarim birakir"
-        )
+    # Delegasyonun DEĞERİ, delege edilen şeyin gerçekten toparlamasıdır.
+    import ast
 
-    # Geri alma dalı: ikinci taşıma düşerse orijinal geri konmalı — HER İKİ yolda.
-    for yol in ("database/sqlcipher_util.py", "database/treatment_history_db.py"):
-        src = _kaynak(yol)
-        assert "GOC GERI ALINAMADI" in src or "_tasi_yeniden_dene(backup, db" in src, (
-            f"{yol}: ikinci tasima duserse GERI ALMA dali yok -> veritabani YOK kalir"
-        )
+    agac = ast.parse(_kaynak("database/sqlcipher_util.py"))
+    ortak = next(
+        (n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == "migrate_to_encrypted_if_needed"),
+        None,
+    )
+    assert ortak is not None, "ortak goc fonksiyonu bulunamadi -> kapi KOR kaldi"
+    ic_cagrilar = {
+        getattr(c.func, "id", getattr(c.func, "attr", None)) for c in ast.walk(ortak) if isinstance(c, ast.Call)
+    }
+    assert "_yarim_goc_toparla" in ic_cagrilar, (
+        "ORTAK goc toparlamayi CAGIRMIYOR -> ona delege eden TUM yollar korumasiz kalir "
+        "(tek uygulamanin riski budur: bir satir, her yolu birden dusurur)"
+    )
+    assert "_tasi_yeniden_dene" in ic_cagrilar, (
+        "ORTAK gocte yeniden-denemeli tasima CAGRILMIYOR -> gecici Windows kilidi gocu kalici "
+        "olarak iptal ettirir ya da yarim birakir"
+    )
+
+    # Geri alma dalı: ikinci taşıma düşerse orijinal geri konmalı.
+    # ⚠️ ÇIPA TAŞINDI (2026-09-15, A1·2/2): eskiden İKİ dosyada da aranıyordu; tedavi yolu
+    # artık göç gövdesini taşımıyor, ortak uygulamaya delege ediyor. Geri-alma dalı TEK
+    # uygulamada ölçülür — delegasyonun kendisi yukarıda kilitli.
+    ortak_src = ast.unparse(ortak)
+    assert "GOC GERI ALINAMADI" in ortak_src or "_tasi_yeniden_dene(backup, db" in ortak_src, (
+        "ORTAK gocte ikinci tasima duserse GERI ALMA dali yok -> veritabani YOK kalir "
+        "(ve artik TEK uygulama oldugu icin bu, iki veritabanini birden vurur)"
+    )
 
 
 def test_ikinci_kopya_PAYLASILAN_yardimcilari_kullaniyor():
@@ -355,10 +383,10 @@ def test_KRITIK_duz_metin_yedek_ASLA_SILINMEZ():
     #     (tests/test_escrow_acl_dusunce_fail_closed.py).
     import ast
 
-    hedefler = (
-        ("database/sqlcipher_util.py", "migrate_to_encrypted_if_needed"),
-        ("database/treatment_history_db.py", "_migrate_to_encrypted_if_needed"),
-    )
+    #  4) A1·2/2 (2026-09-15): tedavi yolu artık göç gövdesini TAŞIMIYOR, ortak göçe DELEGE
+    #     ediyor. Sıra sözleşmesi tek uygulamada ölçülür; delegasyonun kendisi
+    #     `test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder` ile ayrıca kilitli.
+    hedefler = (("database/sqlcipher_util.py", "migrate_to_encrypted_if_needed"),)
     for yol, fon_adi in hedefler:
         agac = ast.parse((KOK / yol).read_text(encoding="utf-8"))
         fon = next(

@@ -241,7 +241,16 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
 
     from database import treatment_history_db as thdb
 
+    # ⚠️ ÇIPA TAŞINDI (A1·2/2): tedavi yolu artık göç gövdesini taşımıyor, ortak
+    # uygulamaya delege ediyor. Sözleşme aynı; ölçülen kaynak ortak fonksiyon.
     src = inspect.getsource(thdb.TreatmentHistoryDB._migrate_to_encrypted_if_needed)
+    assert "migrate_to_encrypted_if_needed(" in src, (
+        "tedavi yolu ortak göçe DELEGE etmiyor → kopya geri gelmiş olabilir"
+    )
+
+    from database.sqlcipher_util import migrate_to_encrypted_if_needed as _ortak_goc
+
+    src = inspect.getsource(_ortak_goc)
 
     # ⚠️ `"PEMF_KEEP_PLAIN_BAK" in src` YETMEZ: `PEMF_KEEP_PLAIN_BAK_MUT` gibi bir yeniden
     # adlandırma o iddiayı SUBSTRING olarak karşılar (mutasyon testi bunu yakaladı — aynı

@@ -143,19 +143,15 @@ class TreatmentHistoryDB:
         return conn
 
     def _import_sqlcipher(self):
-        """Pre-built sqlcipher3 (Windows wheel) veya pysqlcipher3 binding'ini dener; yoksa None."""
-        try:
-            from sqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+        """sqlcipher3 / pysqlcipher3 binding'i — ORTAK (2026-09-15).
 
-            return sqlcipher
-        except Exception:
-            pass
-        try:
-            from pysqlcipher3 import dbapi2 as sqlcipher  # type: ignore
+        ⚠️ Bu metot `sqlcipher_util.import_sqlcipher`in BIREBIR kopyasiydi (14 satir). Uc
+        cagirani var, bu yuzden metot KALDI ama govdesi delege ediyor: yeni bir binding
+        eklendiginde iki yerde guncellenmesi gereken bir sey kalmasin.
+        """
+        from database.sqlcipher_util import import_sqlcipher
 
-            return sqlcipher
-        except Exception:
-            return None
+        return import_sqlcipher()
 
     def _get_sqlcipher_key(self) -> str:
         """SQLCipher BİRİNCİL anahtarı — D-3 fix: patient_database ile TEK paylaşımlı yol
@@ -274,162 +270,27 @@ class TreatmentHistoryDB:
         return None
 
     def _migrate_to_encrypted_if_needed(self):
-        """Bir SQLCipher anahtarı varsa ve mevcut DB DÜZ-METİN ise içeriği şifreli kopyaya aktarır
-        (sqlcipher_export) ve dosyayı değiştirir; eski düz-metin .plain.bak olarak kalır. Anahtar yok /
-        binding yok / zaten şifreli ise no-op (geriye uyumlu, veri kaybı yok)."""
+        """Duz-metin tedavi DB'sini SQLCipher'a gocurur — GOVDE ORTAK (A1 · 2/2, 2026-09-15).
 
-        def _close(cn):
-            try:
-                cn.close()
-            except Exception:
-                pass
+        ⚠️ BURADA 157 SATIRLIK BIR KOPYA VARDI. `sqlcipher_util.migrate_to_encrypted_if_needed`
+        ile %91 ayniydi ve kalan farklarin TAMAMI mekanikti (metot/fonksiyon imzasi, yerel
+        import'lar, `if logger:` korumalari, etiket metni). Olculdu:
+          · `self._get_sqlcipher_key()` ZATEN `sqlcipher_util.get_sqlcipher_key`e delege ediyor,
+          · `self._import_sqlcipher()` BIREBIR kopyaydi (o da delege edildi),
+          · tek davranissal fark sanilan `_yarim_goc_toparla` try/except'i OLU: o fonksiyon
+            kendi hatalarini yutup `False` doner, HIC firlatmaz.
+        Yani enjeksiyon gerekmedi; parametre yetti.
 
-        try:
-            key = self._get_sqlcipher_key()
-            if not key:
-                return
-            sqlcipher = self._import_sqlcipher()
-            db = str(self.db_path)
-            # ⚠️ ONCE yarim kalmis goc var mi (db YOK + .plain.bak VAR) — VARSA orijinali geri koy.
-            # Bu, asagidaki `os.path.exists(db)` erken-donusunden ONCE olmak ZORUNDA: aksi halde
-            # `db` yok sayilir, goc atlanir ve `_init_database()` BOS bir veritabani yaratir →
-            # klinik hasta gecmisini BOS gorur. (Ortak yardimci: sqlcipher_util.)
-            try:
-                from database.sqlcipher_util import _yarim_goc_toparla
+        ⚠️ NEDEN BIRLESTIRILDI: bu kopya, TEK bir oturumda UC ayri yerden ayristigi olculen
+        kuyrugun sahibiydi (bayrak adi · ACL fail-open · log seviyesi) ve ayrismalarin hicbiri
+        denetimde gorunmuyordu. Dorduncusu kacinilmazdi. Kendi kopyanizi YAZMAYIN.
+        Kapilar: tests/test_goc_yarim_kalirsa_db_kaybolmaz.py ·
+                 tests/test_at_rest_encryption_rollout.py ·
+                 tests/test_escrow_acl_dusunce_fail_closed.py
+        """
+        from database.sqlcipher_util import migrate_to_encrypted_if_needed
 
-                _yarim_goc_toparla(db, self.logger)
-            except Exception:
-                self.logger.warning("yarim-goc toparlama denenemedi", exc_info=True)
-            if sqlcipher is None or not os.path.exists(db):
-                return
-            keyq = "'" + key.replace("'", "''") + "'"
-            # Zaten şifreli mi? — bağlantıyı HER durumda kapat (yoksa sonraki move PermissionError).
-            c = None
-            try:
-                c = sqlcipher.connect(db)
-                c.execute(f"PRAGMA key={keyq}")
-                c.execute("SELECT count(*) FROM sqlite_master")
-                return  # açıldı → zaten şifreli
-            except Exception:
-                pass
-            finally:
-                if c is not None:
-                    _close(c)
-            # Düz-metin mi? (plain sqlite3 açıyor) + WAL'i ana dosyaya checkpoint et.
-            t = None
-            try:
-                t = sqlite3.connect(db)
-                t.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                t.execute("SELECT count(*) FROM sqlite_master")
-            except Exception:
-                return  # bilinmeyen format → DOKUNMA
-            finally:
-                if t is not None:
-                    _close(t)
-            # MIGRATE: plaintext → encrypted
-            enc_tmp = db + ".enc.tmp"
-            if os.path.exists(enc_tmp):
-                os.remove(enc_tmp)
-            enc_sql = enc_tmp.replace("'", "''")
-            conn = None
-            try:
-                conn = sqlcipher.connect(db)  # anahtar yok → düz-metin modunda açılır
-                conn.execute(f"ATTACH DATABASE '{enc_sql}' AS enc KEY {keyq}")
-                conn.execute("SELECT sqlcipher_export('enc')")
-                conn.execute("DETACH DATABASE enc")
-            finally:
-                if conn is not None:
-                    _close(conn)
-            # Doğrula
-            v = None
-            n = 0
-            try:
-                v = sqlcipher.connect(enc_tmp)
-                v.execute(f"PRAGMA key={keyq}")
-                n = v.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
-            finally:
-                if v is not None:
-                    _close(v)
-            if not n or n <= 0:
-                if os.path.exists(enc_tmp):
-                    os.remove(enc_tmp)
-                self.logger.error("SQLCipher migrate: sifreli kopya bos → iptal (duz-metin korunur).")
-                return
-            # Move'dan ÖNCE eski WAL/SHM'i temizle (açık handle/çakışma olmasın → bozulma önle).
-            for suffix in ("-wal", "-shm"):
-                f = db + suffix
-                if os.path.exists(f):
-                    try:
-                        os.remove(f)
-                    except Exception:
-                        pass
-            backup = db + ".plain.bak"
-            # ⚠️ SILME — KENARA AL. Eskiden `os.remove(backup)` idi; yarim kalmis bir gocun
-            # tek veri kopyasini (klinik gecmisi) yok ediyordu. Paylasilan yardimciyi kullan
-            # ki iki goc kopyasi ayrismasin.
-            from database.sqlcipher_util import _yedegi_kenara_al
-
-            _yedegi_kenara_al(backup, self.logger)
-            # ⚠️ YER-DEGISTIRME PENCERESI — burada `db` BIR AN YOKTUR. Ikinci tasima duserse
-            # `db` YOK kalir, veri `.plain.bak`ta, sifreli kopya `.enc.tmp`te; ustelik disaridaki
-            # `except Exception` hatayi YUTAR → sonraki acilista BOS DB yaratilir ve klinik
-            # gecmisi BOS gorur. Bu yuzden: yeniden-denemeli tasima + duserse GERI ALMA.
-            # (Ortak yardimci — `sqlcipher_util` ile AYNI davranis; iki kopya AYRISMASIN.)
-            from database.sqlcipher_util import _tasi_yeniden_dene
-
-            _tasi_yeniden_dene(db, backup, logger=self.logger)
-            try:
-                _tasi_yeniden_dene(enc_tmp, db, logger=self.logger)
-            except Exception:
-                try:
-                    if not os.path.exists(db):
-                        _tasi_yeniden_dene(backup, db, logger=self.logger)
-                except Exception:
-                    self.logger.error("GOC GERI ALINAMADI — veri %s dosyasinda duruyor, ELLE geri koyun.", backup)
-                    return
-                try:
-                    if os.path.exists(enc_tmp):
-                        os.remove(enc_tmp)
-                except Exception:
-                    pass
-                self.logger.warning(
-                    "SQLCipher goc IPTAL (dosya kilidi): duz-metin veri yerinde KORUNDU; "
-                    "sonraki aciliste yeniden denenecek."
-                )
-                return
-            # op-doğrulama #8: .plain.bak = tüm eski düz-metin PII → SQLCipher'ı baypas eder. Escrow
-            # için tutulur ama SIKI ACL (SYSTEM+Admin) ile kilitlenir (B-1.2 escrow deseniyle tutarlı).
-            # DENETIM P2: ACL BASARISIZ olursa eskiden yalnizca UYARI loglaniyor ve TUM hasta
-            # PII'sinin duz-metin tam kopyasi korumasiz diskte KALIYORDU — SQLCipher'i tamamen
-            # baypas eden bir dosya. Escrow degerlidir ama korumasiz escrow, sifrelemenin kendisini
-            # anlamsiz kilar. FAIL-CLOSED: kilitlenemiyorsa SIL (sifreli DB zaten yerinde).
-            # PEMF_KEEP_PLAIN_BAK=0 ile escrow tamamen kapatilabilir (kilit basarili olsa bile silinir).
-            # ⚠️ DENETİM 2026-08-08 — VARSAYILAN TERSİNE ÇEVRİLDİ (escrow-sakla → güvenli-sil).
-            # `sqlcipher_util.py` (HASTA DB'si) bu kararı Audit P3'te zaten almıştı: ".plain.bak
-            # TÜM düz-metin PII'yi (SQLCipher-bypass) taşır → disk çalınırsa / yedek / bulut-sync
-            # okursa at-rest garantisi ÇÖKER" → orada varsayılan GÜVENLİ-SİL. Aynı düzeltme
-            # BURAYA, tedavi + AI geçmişi DB'sine hiç uygulanmamıştı: aynı hassasiyetteki veri,
-            # ZIT varsayılan. Launcher artık at-rest şifrelemeyi açtığı için bu tutarsızlık
-            # sahadaki HER klinikte tüm geçmişin düz-metin tam kopyasını diskte bırakırdı —
-            # üstelik sitede "cihazda şifreli" beyanı varken. ACL yalnız yerel kullanıcıya karşı
-            # korur; disk çalınmasına/imajlanmasına karşı HİÇBİR şey yapmaz ve at-rest
-            # şifrelemenin asıl tehdit modeli tam olarak odur.
-            # ESCROW İSTEYEN: PEMF_KEEP_PLAIN_BAK=1 (eski davranış; ACL kilitlenebilirse saklar).
-            # ⚠️ Anahtar kaybı = geçmiş kaybı. Yedek yolu artık Ayarlar → "Veri Taşıma"
-            # (parola korumalı şifreli dışa aktarma) ve SecretsManager kurtarma kodudur.
-            # ⚠️ POLITIKA TEK YERDEN GELIR (2026-09-15): `goc_sonrasi_yedek_politikasi`.
-            # Bu kuyruk `sqlcipher_util.py` icindeki kopyasiyla UC yerden ayrismisti:
-            #   bayrak adi (PEMF_KEEP_PLAIN_BAK vs _BACKUP) · ACL basarisizlik politikasi
-            #   (burasi fail-closed, oradasi FAIL-OPEN'di) · log seviyesi (error vs warning).
-            # Ucu de olculerek bulundu; hicbiri denetimde gorunmuyordu. Kendi kopyanizi
-            # YAZMAYIN — ayrisacak yer birakmamak icin ortak fonksiyon var.
-            # Kapilar: tests/test_escrow_acl_dusunce_fail_closed.py ·
-            #          tests/test_duz_metin_yedek_bayragi_tek_ad.py
-            from database.sqlcipher_util import goc_sonrasi_yedek_politikasi
-
-            goc_sonrasi_yedek_politikasi(backup, self.logger, etiket="Tedavi DB")
-        except Exception:
-            self.logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
+        migrate_to_encrypted_if_needed(self.db_path, self.app_data_dir, self.logger, etiket="Tedavi DB")
 
     def _create_connection(self):
         """Yeni SQLite bağlantısı oluştur ve bağlantı ayarlarını uygula."""
