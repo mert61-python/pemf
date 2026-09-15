@@ -27,7 +27,13 @@ export const ROUTE_ACCESS: Record<Exclude<UserMode, null>, RouteKey[]> = {
   // ZORUNLU (PatientGate) ve sonuçlar hasta geçmişine yazılıyor → ev sahibinin de kendi
   // hayvanlarını yönetebileceği bir ekrana ihtiyacı var. Cihaz/tedavi rotaları (control,
   // sensors, kpi, simulator) BİLİNÇLİ OLARAK KAPALI kalıyor — izolasyonun asıl amacı oydu.
-  pet_owner:    ["dashboard", "patients", "ai", "ai_history", "settings"],
+  // ⚠️ SAHİP KARARI 2026-09-12: pet_owner'dan "dashboard" KALDIRILDI.
+  // "evcil hayvan modunda ana ekran tabına gerek yok."
+  // GEREKÇE (ölçüldü): Ana Ekran bir CİHAZ panosudur — bağlantı rozetleri, aktif seans kartı,
+  // bobin durumları, ACİL DURDUR. Ev sahibi profilinde cihaz rotalarının hepsi zaten kapalı
+  // (control/sensors/kpi/simulator), yani o panonun gösterdiği hiçbir şey bu profilde YOK.
+  // Ev sahibi için ilk ekran artık "Akıllı Teşhis" — uygulamayı açma sebebinin kendisi.
+  pet_owner:    ["ai", "patients", "ai_history", "settings"],
   veterinarian: ["dashboard", "control", "patients", "sensors", "history", "kpi", "simulator", "ai", "ai_history", "settings"],
   // 2026-08-06: vet ile AYNI sıra ve AYNI küme (bkz. yukarıdaki sahip kararı). pet_owner'ın
   // izolasyonu DEĞİŞMEDİ — karar yalnız araştırma profilini kapsıyor.
@@ -37,4 +43,17 @@ export const ROUTE_ACCESS: Record<Exclude<UserMode, null>, RouteKey[]> = {
 /** `mode` profili `route`'a erişebilir mi (null profil → hayır). */
 export function canAccess(mode: UserMode, route: RouteKey): boolean {
   return mode != null && ROUTE_ACCESS[mode].includes(route);
+}
+
+/**
+ * Profilin AÇILIŞ rotası — erişebildiği İLK rota.
+ *
+ * ⚠️ NEDEN TÜRETİLİYOR, NEDEN SABİT "dashboard" DEĞİL: `dashboard` artık her profilde YOK
+ * (pet_owner'dan kaldırıldı). Sabit bir açılış rotası, erişemediği bir rotaya düşen ve
+ * `canAccess` yedeğiyle yine oraya geri gönderilen bir profil üretirdi — yani BOŞ EKRAN.
+ * Liste sırası bilinçlidir: her profilin ilk rotası, o profilin uygulamayı açma sebebidir.
+ */
+export function varsayilanRota(mode: UserMode): RouteKey {
+  if (mode == null) return "settings";
+  return ROUTE_ACCESS[mode][0] ?? "settings";
 }

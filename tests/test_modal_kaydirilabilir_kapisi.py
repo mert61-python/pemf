@@ -48,13 +48,37 @@ def _modal_dosyalari():
             yield bagil, src
 
 
+#: (c) TAM-EKRAN GÖRÜNTÜLEYİCİLER — kaydırma yerine PAN/ZOOM kullanan, denetimleri SABİT
+#: başlıkta duran modallar. Kapının gerekçesi "eylem satırı katlamanın altında kalır"dır;
+#: burada eylem satırı ÜSTTE ve sabittir, altında kalacak bir şey yoktur.
+#:
+#: ⚠️ BU BİR MUAFİYET DEĞİL, FARKLI BİR SÖZLEŞMEDİR ve bedeli ödenir:
+#:   1) `_kapat_sabit_mi()` kapat düğmesinin kaydırılabilir/büyüyebilir gövdeden ÖNCE
+#:      çizildiğini KAYNAKTAN doğrular (aşağıda),
+#:   2) davranışı jest ölçer: `GorselSahne.test.tsx` → "kisa ekranda KAPAT erisilebilir".
+#: Liste BİLEREK kısa: yeni bir dosya eklemek, iki kapıyı da geçmeyi gerektirir.
+_TAM_EKRAN_GORUNTULEYICILER = {"components/ui/GorselSahne.tsx"}
+
+
+def _kapat_sabit_mi(src: str) -> bool:
+    """Kapat denetimi, içerik alanından ÖNCE mi çiziliyor (yani sabit başlıkta mı)?
+
+    ⚠️ Sıra ÖNEMLİ: kapat düğmesi içerik alanının ARDINDAN çizilirse, içerik büyüdüğünde
+    ekranın dışına itilir — kapının önlemek istediği durumun ta kendisi.
+    """
+    i_kapat = src.find('label="Kapat"')
+    i_icerik = src.find("panHandlers")
+    return 0 <= i_kapat < i_icerik
+
+
 def test_KRITIK_her_modal_kisa_ekranda_kaydirilabilir():
     """Kaydırılamayan modalın eylem satırına yatay telefonda ULAŞILAMAZ."""
     ihlal = []
     for bagil, src in _modal_dosyalari():
         ortak = "ScrollableModalCard" in src
         kendi = "<ScrollView" in src and "maxHeight" in src
-        if not (ortak or kendi):
+        goruntuleyici = bagil in _TAM_EKRAN_GORUNTULEYICILER and _kapat_sabit_mi(src)
+        if not (ortak or kendi or goruntuleyici):
             ihlal.append(bagil)
     assert not ihlal, (
         "Modal ne ScrollableModalCard kullanıyor ne de kendi ScrollView+maxHeight'ini taşıyor; "
@@ -87,3 +111,19 @@ def test_onay_ve_yukseltme_modallari_ortak_ilkeli_kullanir():
     for bagil in ("components/domain/AiSpecApprovalModal.tsx", "components/UpgradeModal.tsx"):
         src = (_PF / bagil).read_text(encoding="utf-8")
         assert "ScrollableModalCard" in src, f"{bagil} ortak modal ilkelini bırakmış"
+
+
+def test_KRITIK_tam_ekran_goruntuleyicide_KAPAT_SABIT():
+    """⚠️ MUAFİYETİN BEDELİ: (c) dalına giren her dosya, kapat denetimini içerik alanından
+    ÖNCE çizmek ZORUNDA.
+
+    MUTASYON: `GorselSahne.tsx`te `<IconButton label="Kapat">`u pan alanının ALTINA taşı →
+    KIRMIZI (ve o hâlde modal gerçekten kısa ekranda kapatılamaz hâle gelirdi).
+    """
+    for bagil in sorted(_TAM_EKRAN_GORUNTULEYICILER):
+        src = (_PF / bagil).read_text(encoding="utf-8")
+        assert 'label="Kapat"' in src, f"{bagil}: kapat denetimi YOK -> modal kapatilamaz"
+        assert _kapat_sabit_mi(src), (
+            f"{bagil}: kapat denetimi icerik alanindan SONRA ciziliyor -> icerik buyudugunde "
+            "ekran disina itilir (kapinin onlemek istedigi durum)"
+        )

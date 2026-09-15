@@ -30,10 +30,23 @@ import { emitToast } from "@/services/toastBridge";
 export function GlobalEmergencyStop({
   bottomOffset = 0,
   compact = false,
+  gizle = false,
 }: {
   bottomOffset?: number;
   /** Kısa ekranda (yatay telefon) dar ve sağa hizalı çizilir — ASLA gizlenmez/küçülmez. */
   compact?: boolean;
+  /**
+   * Bu ROTA KENDİ durdurma düğmesini çiziyor mu? (sahip bildirimi 2026-09-12:
+   * "seans başlatınca şu sol altta çıkan acil durdurma kutusunu kaldır zaten bir sürü var")
+   *
+   * ⚠️ KAPSAM BİLEREK DAR: sahibin gerekçesi FAZLALIKTIR, durdurmaya karşı olmak değil.
+   * Uygulamanın 10 rotasının 8'inde (Akıllı Teşhis, Ayarlar, Geçmiş, Hastalar, Raporlar,
+   * Sensörler, AI Geçmişi, Simülasyon) bu düğme TEK durdurma kontrolüdür ve otonom sürüş
+   * tam da Akıllı Teşhis'ten başlatılabiliyor. Oralarda gizlemek, fazlalığı değil ERİŞİMİ
+   * kaldırmak olurdu. Bu yüzden bayrak YALNIZ kendi düğmesi olan rotalarda true olur.
+   * Kapı: `globalAcilDurdurKapsami.test.tsx`.
+   */
+  gizle?: boolean;
 }) {
   const { snapshot } = useLiveData();
   const insets = useSafeAreaInsets();
@@ -57,6 +70,7 @@ export function GlobalEmergencyStop({
   }, [running, active, stmBelirsiz]);
   const belirsiz = stmBelirsiz && belirsizKilit && running === 0 && !active;
 
+  if (gizle) return null;
   if (!running && !active && !belirsiz) return null;
 
   const onPress = async () => {

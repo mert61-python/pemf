@@ -3,7 +3,7 @@
  * ControlScreen — Tam Tedavi Kontrol Ekranı
  *
  * Python unified_control_window.py'nin React karşılığı.
- * 3 sekme: Otomatik Mod | Manuel Mod | AI Modu
+ * Sekmeler: Otomatik Mod | Manuel Mod | AI Pro
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useOperator } from "@/context/OperatorContext";
@@ -35,12 +35,29 @@ import { SurusKipiSecici } from "@/components/domain/SurusKipiSecici";
 import { gorunurBobinler, espSlotuGorunur } from "@/services/bobinGorunurlugu";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
-type TabKey = "automatic" | "manual" | "ai" | "aipro";
+type TabKey = "automatic" | "manual" | "aipro";
 
+/**
+ * ⚠️ "AI MODU" SEKMESİ KALDIRILDI (sahip kararı 2026-09-12):
+ * "ai modu ve otomatik mod temelde aynı prensiple çalışıyor. otomatik mod kalsın bence
+ *  diğerini silelim. literatürden öneriyi atsın. kullanıcı isterse parametre güncelleyebilsin."
+ *
+ * ÖLÇÜLDÜ — SAHİP HAKLIYDI: iki sekme de AYNI uca gidiyordu (`/hardware/auto_preset`,
+ * gövde `{target_condition}`) ve aynı kaynağı raporluyordu (`literature_exact`). Tek fark,
+ * AI Modu'nun sonucu SALT-OKUNUR bir kartta gösterip fazladan bir "Analiz Başlat" tıklaması
+ * istemesiydi; Otomatik ise aynı öneriyi DÜZENLENEBİLİR alanlara yazıyor.
+ *
+ * Yani sahibin istediği üç şeyin üçü de Otomatik'te ZATEN vardı:
+ *   · literatürden öneri  → hedefe tıklayınca `applyAutoPreset()` çeker
+ *   · kullanıcı parametreyi güncelleyebilsin → alanlar `ParamField` (düzenlenebilir)
+ *   · doz kaynağı görünür → "📖 Literatür protokolü uygulandı" / wellness uyarısı
+ *
+ * ⚠️ AI PRO AYRI KALIR: o, kameradan organ lokalizasyonu yapan ve bobin başına doz üreten
+ * KAPALI-DÖNGÜ sistemdir — `auto_preset` ile hiçbir ortak yolu yoktur.
+ */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "automatic", label: "Otomatik", icon: "🤖" },
   { key: "manual",    label: "Manuel",   icon: "🎛" },
-  { key: "ai",        label: "AI Modu",  icon: "🧠" },
   { key: "aipro",     label: "AI Pro",   icon: "🎯" },
 ];
 
@@ -96,9 +113,6 @@ export function ControlScreen() {
   );
 
   // ── AI Mod state ───────────────────────────────────────────────────────
-  const [aiTarget, setAiTarget] = useState(AUTO_TARGETS[0]);
-  const [aiAnalyzing, setAiAnalyzing] = useState(false);
-  const [aiResult, setAiResult] = useState<any>(null);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
   const toggleCoil = useCallback((id: number) => {
@@ -440,69 +454,6 @@ export function ControlScreen() {
     }
   };
 
-  const handleAiAnalyze = async () => {
-    setAiAnalyzing(true);
-    setAiResult(null);
-    try {
-      // apiPost ASLA throw etmez: hata/timeout'ta fallback döner. Bu yüzden fallback olarak
-      // bir sentinel hata nesnesi veriyoruz (null değil) → başarısızlıkta da kart görünür.
-      // silent:true → apiClient'ın jenerik pop-up'ı yerine aiResult.error kartını gösteriyoruz.
-      // (AI Pro biofeedback CPU'yu doyurup isteği yavaşlatsa/başarısız etse bile net geri bildirim.)
-      const rec = await apiPost<any>(
-        "/hardware/auto_preset",
-        { target_condition: aiTarget },
-        { error: "AI analizi başarısız — sunucuya ulaşılamadı veya zaman aşımı (AI Pro çalışıyorsa tekrar deneyin)." },
-        { silent: true },
-      );
-      if (rec?.parameters) {
-        // AI sekmesindeki analiz, GÖRÜNMEYEN "Otomatik" sekmesinin frekans/duty/süre alanlarını
-        // SESSİZCE üzerine yazıyordu: kullanıcı Otomatik sekmesine elle girdiği değerleri kaybediyor,
-        // sonra oradan "Seans Başlat"a bastığında beklemediği parametrelerle tedavi başlıyordu.
-        // AI sonucu artık YALNIZ kendi kartında durur; Otomatik alanlarına dokunulmaz.
-        setAiResult(rec);
-      } else {
-        // Boş/parametresiz yanıt da sessiz kalmasın → net uyarı göster.
-        setAiResult(rec?.error ? rec : { error: "AI analizi sonuç döndürmedi. Lütfen tekrar deneyin." });
-      }
-    } catch {
-      setAiResult({ error: "AI analizi başarısız" });
-    } finally {
-      setAiAnalyzing(false);
-    }
-  };
-
-  const handleStartAi = async () => {
-    if (!aiResult?.parameters) {
-      platformAlert("Uyarı", "Önce AI analizi yapın.");
-      return;
-    }
-    if (!(await requirePatient())) return;
-    const effective = resolveEffectiveCoils();
-    if (!effective) return;
-    const src = aiResult.parameters;
-    const p = clampWithAlert({
-      freq: src.freq ?? 50,
-      duty: src.duty ?? 25,
-      // ORTA fix: AI-önerilen intensity'yi kullan; GÖRÜNMEYEN Otomatik-sekme autoIntensity'sini DEĞİL
-      // (AI sekmesinde yoğunluk alanı yok → kullanıcı görmeden başka sekmenin değeriyle başlıyordu).
-      intensity: src.intensity ?? 1.0,
-      duration: Math.round(src.duration ?? 20),
-    });
-    const ok = await startSession({
-      patientId: selectedPatient?.id,
-      patientName,
-      mode: "AI",
-      targetCondition: aiTarget,
-      frequency: p.freq,
-      duty: p.duty,
-      intensity: p.intensity,
-      durationMinutes: p.duration,
-      coilIds: effective,
-      operatorEmail: operatorEmail,
-    });
-    if (!ok) platformAlert("Hata", lastError() ?? "Seans başlatılamadı.");
-  };
-
   // ── Seans-sonrası gözlem notu prompt'u (PyQt observation-notes) ──
   type ObsSess = { patientName?: string; mode?: string; frequency?: number; intensity?: number; durationMinutes?: number; obsKey?: number };
   const [obsSession, setObsSession] = useState<ObsSess | null>(null);
@@ -782,69 +733,6 @@ export function ControlScreen() {
       )}
 
       {/* ── TAB: AI ───────────────────────────────────────────── */}
-      {activeTab === "ai" && (
-        <View style={styles.section}>
-          <SectionTitle text="AI Modu — Yapay Zeka Destekli Seans" />
-          <Text style={styles.hint}>
-            AI, hasta durumuna göre optimal frekans, duty ve süre parametrelerini önerir.
-          </Text>
-
-          <FormLabel text="Hedef Durum" />
-          <View style={styles.targetGrid}>
-            {AUTO_TARGETS.map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[styles.targetChip, aiTarget === t && styles.targetChipActive]}
-                onPress={() => setAiTarget(t)}
-              >
-                <Text style={[styles.targetChipText, aiTarget === t && styles.targetChipTextActive]}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.btnAnalyze, aiAnalyzing && { opacity: 0.5 }]}
-            onPress={handleAiAnalyze}
-            disabled={aiAnalyzing}
-          >
-            <Text style={styles.btnAnalyzeText}>
-              {aiAnalyzing ? "🧠 Analiz Ediliyor..." : "🧠 AI Analizi Başlat"}
-            </Text>
-          </TouchableOpacity>
-
-          {aiResult && (
-            <View style={styles.aiResultCard}>
-              {aiResult.error ? (
-                <Text style={styles.aiError}>{aiResult.error}</Text>
-              ) : (
-                <>
-                  <Text style={styles.aiResultTitle}>✅ AI Önerisi</Text>
-                  <View style={styles.paramRow}>
-                    <StatChip label="Frekans" value={`${aiResult.parameters?.freq ?? "—"} Hz`} />
-                    <StatChip label="Duty" value={`${aiResult.parameters?.duty ?? "—"}%`} />
-                    <StatChip label="Süre" value={`${Math.round(aiResult.parameters?.duration ?? 0)} dk`} />
-                  </View>
-                  <Text style={styles.aiSource}>
-                    Kaynak: {aiResult.parameters?.source ?? "Literatür"}
-                  </Text>
-                </>
-              )}
-            </View>
-          )}
-
-          <CoilSelector coils={coils} selected={selectedCoils} onToggle={toggleCoil} stmConnected={isStmConnected} gorunur={gorunurBobinler} />
-
-          <StartButton
-            label="🧠 AI Seansını Başlat"
-            onPress={handleStartAi}
-            disabled={isActive || loading || !aiResult?.parameters}
-            color="#7c3aed"
-          />
-        </View>
-      )}
-
       {/* ── TAB: AI Pro ───────────────────────────────────────── */}
       {activeTab === "aipro" && (
         <View style={styles.section}>
@@ -1123,25 +1011,7 @@ const styles = StyleSheet.create({
   manualBtnRow: { flexDirection: "row", gap: spacing.sm },
   startBtnText: { color: "#fff", fontWeight: "800", fontSize: typography.body, textAlign: "center", alignSelf: "stretch" },
 
-  btnAnalyze: {
-    backgroundColor: "#6d28d9",
-    borderRadius: 12,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  btnAnalyzeText: { color: "#fff", fontWeight: "700", fontSize: typography.body, textAlign: "center", alignSelf: "stretch" },
 
-  aiResultCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: "#7c3aed44",
-    gap: spacing.sm,
-  },
-  aiResultTitle: { color: "#a78bfa", fontWeight: "700", fontSize: typography.body },
-  aiError: { color: "#ef4444", fontSize: typography.small },
-  aiSource: { color: colors.textMuted, fontSize: typography.small },
 
   statChip: {
     flex: 1,

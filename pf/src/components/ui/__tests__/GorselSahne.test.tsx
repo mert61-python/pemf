@@ -509,3 +509,23 @@ test("KRITIK: oklar ve tam ekran EKRAN OKUYUCU etiketi tasir", () => {
   expect(api.getByTestId("gorsel-sahne-sonraki").props.accessibilityLabel).toBe("Sonraki panel");
   expect(api.getByTestId("gorsel-sahne-tam-ekran").props.accessibilityLabel).toBe("Tam ekran");
 });
+
+test("KRITIK: KISA EKRANDA tam ekran KAPATILABILIR (kaydirma yok, kapat SABIT)", () => {
+  // ⚠️ MODAL KAYDIRILABİLİRLİK KAPISININ BEDELİ (tests/test_modal_kaydirilabilir_kapisi.py):
+  // Bu modal bilerek KAYDIRILMAZ — kaydırma yerine pan/zoom vardır. O muafiyet ancak kapat
+  // denetimi SABİT başlıkta durduğu ve kısa ekranda da erişilebilir olduğu sürece meşrudur.
+  // Yapısal kapı sırayı ölçer; bu test DAVRANIŞI ölçer.
+  //
+  // MUTASYON: `<IconButton label="Kapat">`u pan alanının ALTINA taşı → yapısal kapı KIRMIZI.
+  const api = render(<GorselSahne sayfalar={YEDI} tavanY={400} />);
+  olc(api);
+  tamEkranAc(api, { width: 640, height: 360 }); // yatay telefon: kısa ekran
+
+  const kapat = api.getByTestId("gorsel-sahne-tam-ekran-kapat");
+  expect(kapat).toBeTruthy();
+  fireEvent.press(kapat);
+
+  // Kapandı: satır içi sahne yeniden görünür durumda.
+  expect(api.queryByTestId("gorsel-sahne-gorsel-tam")).toBeNull();
+  expect(api.getByTestId("gorsel-sahne-gorsel-sahne")).toBeTruthy();
+});

@@ -335,10 +335,15 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
       // Gateway / MQTT connection state
       case "gateway_status": {
-        const d = msg.data as { gateway?: ConnectionState; mqtt?: ConnectionState };
+        const d = msg.data as { gateway?: ConnectionState; mqtt?: ConnectionState; internet?: ConnectionState };
         const next: Partial<DashboardSnapshot> = {};
         if (d.gateway) next.gateway = d.gateway;
         if (d.mqtt) next.mqtt = d.mqtt;
+        // ⚠️ `internet` OKUNMUYORDU (sahip bildirimi 2026-09-12): değer yalnız ilk snapshot'tan
+        // geliyordu ve bir daha ASLA güncellenmiyordu → backend "online" derken ekranda kalıcı
+        // "İnternet yok — uzaktan erişim kapalı" rozeti. Fallback poll de WS ayaktayken koşmadığı
+        // için kendiliğinden düzelmiyordu.
+        if (d.internet) next.internet = d.internet;
         if (Object.keys(next).length) updateSnapshot(next);
         break;
       }

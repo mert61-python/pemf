@@ -7,11 +7,17 @@ import { Chip as OrtakChip } from "@/components/ui/Chip";
 import { apiGet, apiPost, platformConfirm } from "@/services/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { detailRows, INPUT_LABELS } from "@/utils/aiDetail";
-import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2 } from "lucide-react-native";
+import { Brain, ChevronDown, ChevronRight, RefreshCcw, Trash2, Share2 } from "lucide-react-native";
 import { AiReviewControls, ReviewBadge, type ReviewStatus } from "@/components/domain/AiReviewControls";
 import { useUserMode } from "@/context/UserModeContext";
 import { useOperatorOptional } from "@/context/OperatorContext";
-import { canChooseScope, deleteScope, effectiveScope } from "@/utils/patientScope";
+import { canChooseScope, deleteScope, effectiveScope, inScope } from "@/utils/patientScope";
+import { downloadFileWithAuth } from "@/services/dosyaIndir";
+import { emitToast } from "@/services/toastBridge";
+import { TakipGrafigi } from "@/components/domain/TakipGrafigi";
+import { takipSerisiKur } from "@/utils/takipSerisi";
+import { kapsamda } from "@/utils/sonAnaliz";
+import { serviceConfig } from "@/services/config";
 
 /** Şifreli ai_analyses tablosundan bir kayıt (backend get_ai_log). result_detail = tam ham sonuç. */
 interface AiAnalysis {
@@ -226,16 +232,26 @@ export function AiHistoryScreen() {
 
   const shown = useMemo(
     () => items.filter((it) => {
-      // "Benim" = operator_email eşleşen VEYA sahipsiz (eski) → hiçbir analiz kaybolmaz.
-      if (etkinScope === "mine" && myEmail) {
-        const op = (it.operator_email || "").toLowerCase();
-        if (op && op !== myEmail) return false;
-      }
+      // ⚠️ DENETİM 2026-09-12: burada `inScope`un ÜÇÜNCÜ kopyası vardı (diğer ikisi
+      // PatientScreen ve TreatmentHistoryScreen'deydi). Üç kopya sessizce ayrışır ve
+      // "Benim / Tüm Klinik" ayrımı ekranlar arasında FARKLI davranır — sahibin
+      // "düzgün çalışıyor mu?" diye sorduğu şeyin ta kendisi. Tek kaynak: patientScope.
+      // ("Benim" = operator_email eşleşen VEYA sahipsiz → hiçbir analiz kaybolmaz.)
+      if (!kapsamda(it, etkinScope, myEmail)) return false;
       if (hastaFiltre !== "__all__" && (it.patient_name || "") !== hastaFiltre) return false;
       return filter === "__all__" || (it.module_label || it.module_id) === filter;
     }),
     [items, filter, hastaFiltre, etkinScope, myEmail]
   );
+
+  // ⚠️ SERİ SÜZÜLMÜŞ LİSTEDEN KURULUR (`shown`): ekranda hangi kayıtlar varsa grafik de
+  // onları gösterir. Ham `items`ten kurmak, kapsam/modül filtresi aktifken grafiğin
+  // listeyle ÇELİŞMESİNE yol açardı.
+  const takipSeri = useMemo(
+    () => (hastaFiltre === "__all__" ? null : takipSerisiKur(shown)),
+    [shown, hastaFiltre],
+  );
+
 
   return (
     <View style={styles.container}>
@@ -288,6 +304,15 @@ export function AiHistoryScreen() {
           ))}
         </ScrollView>
       )}
+
+      {/* ⚠️ TAKİP GRAFİĞİ (sahip isteği 2026-09-12, ev sahibi önerisi #4) — YALNIZ BİR HASTA
+          SEÇİLİYKEN. "Tüm hastalar"da farklı hayvanların ölçümlerini tek eksene dizmek
+          bilgi değil GÜRÜLTÜ üretirdi (bkz. utils/takipSerisi.ts başlığı).
+          ⚠️ `takipSerisiKur` null dönerse hiçbir şey çizilmez: tek ölçüm "eğilim" değildir
+          ve boş bir eksen "veri mi yok, bozuk mu?" sorusunu doğurur. */}
+      {!loading && hastaFiltre !== "__all__" && takipSeri ? (
+        <TakipGrafigi seri={takipSeri} hasta={hastaFiltre} />
+      ) : null}
 
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.xxl }} />
@@ -374,6 +399,33 @@ export function AiHistoryScreen() {
                         onSubmit={(st, nt) => submitReview(it.id, st, nt)}
                       />
 
+                      {/* ⚠️ ANALİZİ PAYLAŞ (sahip isteği 2026-09-12, ev sahibi önerisi #3):
+                          ev sahibi sonucu veterinerine gönderemiyordu — PDF üretimi yalnız
+                          SEANS kayıtları içindi. Ekran görüntüsü eksik (sayısal detay kaybolur)
+                          ve kayıtsızdı. Artık kaydın kendi PDF'i üretilir.
+                          ⚠️ Masaüstünde dosya MASAÜSTÜNE yazılır, telefonda paylaşım sayfası
+                          açılır — `downloadFileWithAuth` bu farkı zaten yönetiyor. */}
+                      <TouchableOpacity
+                        style={styles.paylasBtn}
+                        onPress={() =>
+                          downloadFileWithAuth(
+                            `${serviceConfig.apiBaseUrl}/ai/log/${it.id}/pdf`,
+                            `PEMF_AI_${it.patient_name || "analiz"}_${it.id}.pdf`,
+                            // ⚠️ `emitToast` (köprü) kullanılır, `useToast` DEĞİL: bu ekran
+                            // sağlayıcısız da render ediliyor (mevcut akordeon testleri
+                            // öyle kuruyor) ve `useToast` sağlayıcı yokken FIRLATIYOR —
+                            // yani bir paylaşım düğmesi eklemek, ilgisiz dört testi
+                            // kırıyordu. Köprü kayıtlı değilse sessizce false döner.
+                            // `GlobalEmergencyStop` da aynı sebeple köprüyü kullanıyor.
+                            (m, t) => { emitToast(m, t); },
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`${it.module_label || it.module_id} sonucunu paylaş`}
+                        testID={`ai-paylas-${it.id}`}>
+                        <Share2 color={colors.primary} size={rs(14)} />
+                        <Text style={styles.paylasText}>Sonucu paylaş (PDF)</Text>
+                      </TouchableOpacity>
                       {/* KVKK: tek kaydı silme. Kart AÇIKKEN görünür → listede kazara dokunma riski yok. */}
                       <TouchableOpacity
                         style={styles.silBtn}
@@ -445,6 +497,12 @@ const styles = StyleSheet.create({
             marginTop: spacing.sm, paddingVertical: rs(10), borderRadius: radius.md,
             borderWidth: 1, borderColor: colors.danger, minHeight: touch.min },
   silText: { color: colors.danger, fontWeight: "700", fontSize: rf(12) },
+  // Paylaş düğmesi silme ile AYNI ölçüde (dokunma tabanı `touch.min`), rengi birincil:
+  // yıkıcı olmayan eylem kırmızıyla aynı görünmemeli.
+  paylasBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: rs(6),
+               marginTop: spacing.sm, paddingVertical: rs(10), borderRadius: radius.md,
+               borderWidth: 1, borderColor: colors.primary, minHeight: touch.min },
+  paylasText: { color: colors.primary, fontWeight: "700", fontSize: rf(12) },
   refreshText: { color: colors.primary, fontSize: typography.small, fontWeight: "700" },
   segment: { flexDirection: "row", backgroundColor: colors.bgAlt, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: rs(4), gap: rs(4), marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   segmentBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },

@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View, TouchableOpacity, ActivityIndicator } from "react-native";
-import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity } from "lucide-react-native";
+import { PlusCircle, Search, User, CheckCircle, Edit, Trash2, Activity, Check } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -17,6 +17,10 @@ import { useAuth } from "@/context/AuthContext";
 import { canAccess } from "@/config/access";
 import { canChooseScope, effectiveScope, inScope } from "@/utils/patientScope";
 import { aramaEslesir } from "@/utils/aramaNormalize";
+import { useCokluSecim } from "@/hooks/useCokluSecim";
+import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
+import { SecimCubugu } from "@/components/ui/SecimCubugu";
+import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 
 export function PatientScreen() {
   const { showToast } = useToast();
@@ -170,11 +174,12 @@ export function PatientScreen() {
   // ileride başka bir yerden setScope("all") çağrılırsa diye). Mantık utils/patientScope.ts'te.
   const etkinScope = effectiveScope(scope, { isExpert, isResearcher });
   const scopedPatients = patients.filter(p => inScope(p, etkinScope, myEmail));
-  const mineCount = patients.filter(p => {
-    if (!myEmail) return false;
-    const op = (p.operator_email || "").toLowerCase();
-    return !op || op === myEmail;
-  }).length;
+  // ⚠️ DENETİM 2026-09-12 (sahip: "klinik ve benim ayrımı düzgün çalışıyor mu incele"):
+  // burada `inScope`un KOPYASI vardı. İki kopya sessizce ayrışır — sekmedeki SAYI bir kuralı,
+  // LİSTE başka bir kuralı uygularsa operatör "(3)" görüp 5 kayıt bulur (ya da tersi) ve
+  // hangisinin doğru olduğunu bilemez. Tek kaynak: utils/patientScope.
+  // ⚠️ Oturum yokken 0: sahiplik kıyaslanamıyorken "hepsi benim" demek yanlış olurdu.
+  const mineCount = myEmail ? patients.filter((p) => inScope(p, "mine", myEmail)).length : 0;
   // ⚠️ DENETİM 2026-08-17: ham `toLowerCase()` Türkçe'de İ→'i'+U+0307 ürettiği için "İpek" kaydı
   // "ipek" ile ARANDIĞINDA bulunamıyordu (I→i de 'ı' vermiyordu). Tek kaynak: aramaEslesir.
   const matchedPatients = scopedPatients.filter(
@@ -191,6 +196,70 @@ export function PatientScreen() {
   const filteredPatients = matchedPatients.slice(0, visibleCount);
   const hiddenCount = matchedPatients.length - filteredPatients.length;
 
+  // ── SON ANALİZ ÖZETİ (sahip isteği 2026-09-12: "pet owner için ne ekleyebiliriz") ──
+  // "Mia'ya en son ne zaman baktırdım?" sorusunun tek bakışta cevabı.
+  // ⚠️ YENİ BACKEND YOK: `/api/ai/log` zaten hasta adı + tarih + özet döndürüyor.
+  // ⚠️ HATA SESSİZ: analiz geçmişi okunamazsa hasta listesi YİNE ÇALIŞIR (özet gizlenir).
+  // Yardımcı bir bilgi yüzünden asıl ekranı düşürmek orantısız olurdu.
+  const [sonAnalizler, setSonAnalizler] = useState<Map<string, AnalizKaydi>>(new Map());
+  useEffect(() => {
+    let iptal = false;
+    (async () => {
+      const y = await apiGet<{ data?: AnalizKaydi[] } | null>("/ai/log?limit=200", null);
+      if (iptal || !y || !Array.isArray(y.data)) return;
+      // ⚠️ KAPSAM SÜZGECİ ŞART (denetim 2026-09-12, KENDİ EKLEMEMDE bulundu):
+      // `/api/ai/log` operatör süzgeci DESTEKLEMİYOR — TÜM kliniğin analizlerini döndürür.
+      // Süzmeden kullanınca "Benim Hastalarım"daki bir kartın altında BAŞKA bir hekimin
+      // analiz özeti görünüyordu. Bu, sahibin İş 7'de sorduğu "klinik/benim ayrımı düzgün
+      // çalışıyor mu?" sorusunun tam konusu ve orada üç kopyayı tek kaynağa aldığım kuralın
+      // ta kendisi — yeni kod onu atlamıştı. TEK KAYNAK: patientScope.inScope.
+      setSonAnalizler(hastayaGoreSonAnaliz(y.data.filter((k) => kapsamda(k, etkinScope, myEmail))));
+    })();
+    return () => { iptal = true; };
+    // ⚠️ `patients` BAĞIMLILIKTA: yeni bir analiz yapılıp bu ekrana dönüldüğünde liste
+    // yeniden yüklenir (`loadPatients`) → özet de tazelenir. Boş bağımlılıkla yazılmış ilk
+    // sürüm, analizden sonra ESKİ özeti göstermeye devam ediyordu (sessiz bayatlama).
+  }, [patients, etkinScope, myEmail]);
+
+  // ── TOPLU SİLME (sahip bildirimi 2026-09-12: "hasta veri tabanında da toplu sil butonu lazım") ──
+  // ⚠️ "Tümünü Sil" İLE AYNI ŞEY DEĞİL: bu, operatörün SEÇTİKLERİNİ siler ve o yüzden
+  // veteriner-kısıtına (isExpert) tabi değildir — kendi kayıtlarını seçip silmek olağan iştir.
+  // ⚠️ Seçim yalnız EKRANDA GÖRÜNEN kayıtlara kapanır (bkz. useCokluSecim "hayalet seçim"):
+  // kapsam/arama değişince operatörün artık göremediği kayıtlar silinmez.
+  const secim = useCokluSecim<string>(filteredPatients.map((p) => p.id || p.name || ""));
+  const [siliniyor, setSiliniyor] = useState(false);
+
+  const secilenleriSil = async () => {
+    const kimlikler = secim.seciliKimlikler.filter(Boolean);
+    if (kimlikler.length === 0 || siliniyor) return;
+    const ok = await platformConfirm(
+      "Seçili Hastaları Sil",
+      `${kimlikler.length} hasta kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.`,
+      "Sil",
+    );
+    if (!ok) return;
+    setSiliniyor(true);
+    // TEK İSTEK, TEK TRANSACTION (bkz. servers/patient_router.remove_patients_bulk):
+    // N ayrı silme yarı yolda koparsa operatör hangi kayıtların gittiğini bilemezdi.
+    const res = await apiPost<{ status: string; silinen?: number }>(
+      "/patients/delete_bulk",
+      { patient_ids: kimlikler, confirm: TOPLU_SILME_ONAYI },
+      { status: "error" },
+    );
+    setSiliniyor(false);
+    if (res.status === "success") {
+      const n = res.silinen ?? kimlikler.length;
+      showToast(
+        n === kimlikler.length ? `${n} hasta silindi.` : `${n}/${kimlikler.length} hasta silindi.`,
+        "success",
+      );
+      secim.temizle();
+      loadPatients();
+    } else {
+      showToast("Toplu silme başarısız.", "error");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -206,6 +275,12 @@ export function PatientScreen() {
               onPress={handleDeleteAll}
             />
           )}
+          <Button
+            label={secim.secimModu ? "Seçimi Kapat" : "Seç"}
+            icon={!secim.secimModu ? <CheckCircle color={colors.primary} size={16} /> : undefined}
+            variant="secondary"
+            onPress={secim.secimModunuDegistir}
+          />
           <Button
             label={isAdding ? "İptal" : "Yeni Hasta Kayıt"}
             icon={!isAdding ? <PlusCircle color={colors.white} size={16} /> : undefined}
@@ -298,13 +373,41 @@ export function PatientScreen() {
         ) : filteredPatients.length === 0 ? (
           <Text style={styles.emptyText}>{search ? "Aramayla eşleşen kayıt yok." : "Henüz hasta kaydı yok."}</Text>
         ) : (
+          <>
+          {secim.secimModu ? (
+            <SecimCubugu
+              seciliSayi={secim.seciliSayi}
+              hepsiSecili={secim.hepsiSecili}
+              onTumunuSec={secim.tumunuSec}
+              onTemizle={secim.temizle}
+              onSil={secilenleriSil}
+              onVazgec={secim.secimModunuDegistir}
+              siliniyor={siliniyor}
+              gizliSayi={hiddenCount}
+              silEtiketi="Seçili Hastaları Sil"
+              testID="hasta-secim-cubugu"
+            />
+          ) : null}
           <ResponsiveGrid minItemWidth={340}>
             {filteredPatients.map((p) => (
               // key olarak p.id (idx değil) — silme/eklemede doğru DOM diff.
               <Card key={p.id || p.name} style={styles.patientCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.headerLeft}>
-                    <User color={colors.primary} size={24} />
+                    {secim.secimModu ? (
+                      <TouchableOpacity
+                        style={[styles.onayKutusu, secim.secilimi(p.id || p.name || "") && styles.onayKutusuSecili]}
+                        onPress={() => secim.degistir(p.id || p.name || "")}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: secim.secilimi(p.id || p.name || "") }}
+                        accessibilityLabel={`${p.name} seçimi`}
+                        testID={`hasta-secim-${p.id || p.name}`}
+                      >
+                        {secim.secilimi(p.id || p.name || "") ? <Check color={colors.white} size={16} /> : null}
+                      </TouchableOpacity>
+                    ) : (
+                      <User color={colors.primary} size={24} />
+                    )}
                     <View style={styles.headerText}>
                       <Text style={styles.patientName} numberOfLines={1}>{p.name}</Text>
                       <Text style={styles.patientSub} numberOfLines={1}>{p.species} · {p.breed}</Text>
@@ -340,10 +443,19 @@ export function PatientScreen() {
                   {etkinScope === "all" && p.operator_email ? (
                     <Text style={styles.detailText} numberOfLines={1}>Kaydeden: {p.operator_email}</Text>
                   ) : null}
+                  {/* ⚠️ Son analiz özeti — önce hasta KİMLİĞİ, bulunamazsa ADI ile eşlenir
+                      (2026-09-12 taşıması). Kimlik aynı adlı iki hayvanı AYIRIR; ad yedeği,
+                      taşımanın bilerek kimliksiz bıraktığı ESKİ kayıtlar için gereklidir. */}
+                  {sonAnalizOzeti(hastaninSonAnalizi(sonAnalizler, p)) ? (
+                    <Text style={styles.sonAnaliz} numberOfLines={2} testID={`hasta-son-analiz-${p.id || p.name}`}>
+                      🔬 Son analiz: {sonAnalizOzeti(hastaninSonAnalizi(sonAnalizler, p))}
+                    </Text>
+                  ) : null}
                 </View>
               </Card>
             ))}
           </ResponsiveGrid>
+          </>
         )}
 
         {hiddenCount > 0 && (
@@ -362,6 +474,19 @@ export function PatientScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Seçim onay kutusu — `User` ikonunun YERİNE geçer (satır kaymasın). Dokunma hedefi
+  // `touch.min`den küçük olamaz: kaza SEÇİMİ yanlış kaydı silmeye götürür.
+  onayKutusu: {
+    width: touch.min,
+    height: touch.min,
+    borderRadius: rs(6),
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  onayKutusuSecili: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sonAnaliz: { color: colors.primary, fontSize: typography.small, fontWeight: "600", width: "100%" },
   container: { flex: 1, gap: spacing.lg, width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" },
   loadMoreBtn: {
     marginTop: spacing.md, paddingVertical: spacing.md, alignItems: "center",

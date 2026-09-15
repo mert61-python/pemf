@@ -8,7 +8,7 @@
  * control/sensors/kpi/simulator eklendi. Bu testler kararı kilitler ve pet_owner izolasyonunun
  * bu değişiklikten ETKİLENMEDİĞİNİ kanıtlar.
  */
-import { ROUTE_ACCESS, canAccess } from "@/config/access";
+import { ROUTE_ACCESS, canAccess, varsayilanRota } from "@/config/access";
 import type { RouteKey } from "@/types/domain";
 
 const YENI_ROTALAR: RouteKey[] = ["control", "sensors", "kpi", "simulator"];
@@ -42,8 +42,33 @@ describe("diğer profiller ETKİLENMEDİ", () => {
     expect(canAccess("pet_owner", "history" as RouteKey)).toBe(false);  // tedavi geçmişi = klinik
   });
 
-  it("pet_owner kendi rotalarını görür (hasta yönetimi DAHİL, cihaz HARİÇ)", () => {
-    expect(ROUTE_ACCESS.pet_owner).toEqual(["dashboard", "patients", "ai", "ai_history", "settings"]);
+  it("pet_owner kendi rotalarını görür (hasta yönetimi DAHİL, cihaz ve ANA EKRAN HARİÇ)", () => {
+    // ⚠️ SAHİP KARARI 2026-09-12: "evcil hayvan modunda ana ekran tabına gerek yok."
+    // Ana Ekran bir CİHAZ panosudur (bağlantı rozetleri · aktif seans · bobinler · ACİL DURDUR);
+    // bu profilde cihaz rotalarının hepsi zaten kapalı olduğundan panonun göstereceği hiçbir
+    // şey YOK. SIRA ÖNEMLİ: ilk eleman AÇILIŞ rotasıdır (bkz. varsayilanRota).
+    expect(ROUTE_ACCESS.pet_owner).toEqual(["ai", "patients", "ai_history", "settings"]);
+  });
+
+  it("KRİTİK: pet_owner ANA EKRANI göremez", () => {
+    // MUTASYON: listeye "dashboard"u geri ekle → KIRMIZI.
+    expect(canAccess("pet_owner", "dashboard")).toBe(false);
+  });
+
+  it("KRİTİK: her profilin AÇILIŞ rotası KENDİ erişebildiği bir rotadır", () => {
+    // ⚠️ BU KAPININ SEBEBİ: açılış rotası sabit "dashboard" idi ve pet_owner'dan kaldırılınca
+    // o profil erişemediği bir rotaya düşüp `canAccess` yedeğiyle yine oraya dönecekti —
+    // yani BOŞ EKRAN. Türetilmiş açılış bunu yapısal olarak imkânsız kılar.
+    //
+    // MUTASYON: `varsayilanRota`yı `() => "dashboard"` yap → KIRMIZI.
+    for (const m of ["pet_owner", "veterinarian", "researcher"] as const) {
+      expect(canAccess(m, varsayilanRota(m))).toBe(true);
+    }
+    expect(varsayilanRota("pet_owner")).toBe("ai");
+  });
+
+  it("profil YOKKEN açılış rotası ÇÖKMEZ", () => {
+    expect(varsayilanRota(null)).toBe("settings");
   });
 
   it("pet_owner HASTALAR ekranına erişir — AI kapısı oraya yönlendiriyor", () => {

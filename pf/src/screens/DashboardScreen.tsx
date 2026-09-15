@@ -12,6 +12,7 @@ import { GatewayStatusPanel } from "@/components/domain/GatewayStatusPanel";
 import { colors, spacing, typography, rf, rs, layoutMax, radius } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useSessionControl } from "@/hooks/useSessionControl";
+import { gorunurBobinler } from "@/services/bobinGorunurlugu";
 
 export function DashboardScreen() {
   const { snapshot, wsConnected } = useLiveData();
@@ -23,8 +24,14 @@ export function DashboardScreen() {
   // donanım çalışırken durdurma kontrolü EKRANDAN KAYBOLUYORDU. Aynı dosyanın `coils` erişimi zaten
   // `?? []` kullanıyordu; asimetri kapatıldı.
   const at = snapshot.activeTreatment ?? { isActive: false, mode: "", frequencyHz: 0, intensityMt: 0, remainingMin: 0, elapsedSec: 0, durationSec: 0 };
-  const coils = snapshot.coils ?? [];
+  // ⚠️ İŞ 5 BURADA DA KAÇMIŞTI (sahip: "7 bobinli sistem"). Ana Ekran hem slot 8 kartını
+  // ÇİZİYOR hem de "/8" yazıyordu: ESP sökülü olduğu için var olmayan bir bobin varmış gibi
+  // sunuluyor, üstelik payda hiçbir zaman dolmadığı için sistem daima eksik görünüyordu.
+  // Kural TEK KAYNAKTA: `gorunurBobinler` (STM 1-7 daima + ESP slotu YALNIZ ortaya çıkınca).
+  const coils = gorunurBobinler(snapshot.coils ?? []);
   const connectedCount = coils.filter((c) => c.connected).length;
+  // Payda SABİT DEĞİL: ESP geri takılırsa slot 8 görünür olur ve payda kendiliğinden 8 olur.
+  const coilTotal = coils.length;
   const runningCount = coils.filter((c) => c.running).length;
   // GÜVENLİK: E-stop + "çalışıyor" göstergesi seans-bayrağından BAĞIMSIZ olmalı. AI Pro
   // (/ai/pro/start, kimliksiz uzaktan başlatılabilir) / fiziksel / başka-istemci bobinleri
@@ -72,7 +79,7 @@ export function DashboardScreen() {
         <MetricCard label="Aktif Frekans" value={`${at.frequencyHz || 0} Hz`} tone={colors.primary} />
         <MetricCard label="Yoğunluk" value={`${at.intensityMt || 0} mT`} tone={colors.warning} />
         <MetricCard label="Kalan Süre" value={`${at.remainingMin || 0} dk`} tone={colors.success} />
-        <MetricCard label="Bağlı Bobin" value={`${connectedCount} / 8`} tone={colors.magenta} />
+        <MetricCard label="Bağlı Bobin" value={`${connectedCount} / ${coilTotal}`} tone={colors.magenta} />
       </ResponsiveGrid>
 
       {/* Hero row */}
@@ -142,7 +149,7 @@ export function DashboardScreen() {
       <View style={styles.sectionHeader}>
         <RadioTower color={colors.primary} size={20} />
         <Text style={styles.sectionTitle}>Bobin Durumları</Text>
-        <Text style={styles.sectionBadge}>{connectedCount}/8 Bağlı</Text>
+        <Text style={styles.sectionBadge}>{connectedCount}/{coilTotal} Bağlı</Text>
       </View>
       {coils.length === 0 ? (
         <Text style={styles.coilEmptyText}>Bobin verisi bekleniyor… (bağlantı kurulunca görünecek)</Text>

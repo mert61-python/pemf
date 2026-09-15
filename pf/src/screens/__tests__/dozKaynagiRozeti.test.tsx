@@ -115,3 +115,51 @@ it("düşüş yolu KORUNUR: karşılıksız hedefte parametreler yine dolar (sea
   expect(screen.getByDisplayValue("87")).toBeTruthy();
   expect(screen.getByDisplayValue("27")).toBeTruthy();
 });
+
+// ============================================================================
+// ⚠️ "AI MODU" SEKMESİ KALDIRILDI — sahip kararı 2026-09-12
+// ============================================================================
+// "ai modu ve otomatik mod temelde aynı prensiple çalışıyor. otomatik mod kalsın bence
+//  diğerini silelim. literatürden öneriyi atsın. kullanıcı isterse parametre güncelleyebilsin."
+//
+// ÖLÇÜLDÜ — SAHİP HAKLIYDI: iki sekme de AYNI uca (`/hardware/auto_preset`) gidiyor ve aynı
+// kaynağı (`literature_exact`) raporluyordu. Tek fark, AI Modu'nun sonucu SALT-OKUNUR bir
+// kartta gösterip fazladan bir tıklama istemesiydi.
+//
+// Bu testler, kaldırmanın SAHİBİN İSTEDİĞİ ÜÇ ŞEYİ KAYBETTİRMEDİĞİNİ kilitler.
+
+it("KRİTİK: 'AI Modu' sekmesi KALDIRILDI (Otomatik ile aynı işi yapıyordu)", async () => {
+  render(<ControlScreen />);
+  await act(async () => {});
+  expect(screen.queryByText("AI Modu")).toBeNull();
+  // ⚠️ KARŞIT KANIT: AI PRO AYRI BİR ŞEYDİR ve kalmalı — kameradan organ lokalizasyonu yapan
+  // kapalı-döngü sistem; `auto_preset` ile hiçbir ortak yolu yok. Onu da silmek, sahibin
+  // istemediği bir yeteneği götürürdü.
+  expect(screen.getByText("AI Pro")).toBeTruthy();
+  expect(screen.getByText("Otomatik")).toBeTruthy();
+  expect(screen.getByText("Manuel")).toBeTruthy();
+});
+
+it("KRİTİK: Otomatik LİTERATÜRDEN öneri çeker (AI Modu'nun tek işleviydi)", async () => {
+  mockKaynak = "literature_exact";
+  await hedefSec("Doku İyileşmesi");
+
+  // Aynı uç, aynı gövde — AI Modu'nun "Analiz Başlat"ı bundan başka bir şey yapmıyordu.
+  expect(mockApiPost).toHaveBeenCalledWith(
+    "/hardware/auto_preset",
+    expect.objectContaining({ target_condition: "Doku İyileşmesi" }),
+    null,
+  );
+  expect(screen.getByText(/Literatür protokolü uygulandı/i)).toBeTruthy();
+});
+
+it("KRİTİK: kullanıcı literatür önerisini DÜZENLEYEBİLİR (sahibin açık isteği)", async () => {
+  // ⚠️ AI Modu'nda parametreler SALT-OKUNUR bir karttaydı; sahip "kullanıcı isterse parametre
+  // güncelleyebilsin" dedi. Otomatik'te alanlar düzenlenebilir — kaldırma bunu kaybettirmemeli.
+  mockKaynak = "literature_exact";
+  await hedefSec("Doku İyileşmesi");
+
+  const frekans = screen.getByDisplayValue("87");
+  fireEvent.changeText(frekans, "120");
+  expect(screen.getByDisplayValue("120")).toBeTruthy();
+});

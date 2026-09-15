@@ -12,6 +12,7 @@ import { colors, spacing, typography, rf, rs, layoutMax } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
+import { barBolumSayisi } from "@/utils/kpiGrafik";
 
 interface KpiSummary {
   totalSessions: number;
@@ -105,13 +106,37 @@ export function KpiDashboardScreen() {
   // bobin tablosu canlı-veri ister) BarChart/PieChart yalnız kpi/genişlik değişince yeniden hesaplanıp
   // render olur (chart-kit render'ı pahalı). Aynı girdi → aynı element referansı = davranış-nötr.
   const chartsSection = useMemo(() => {
+    /**
+     * ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "bu grafiği daha belirgin ve tasarım olarak daha
+     * güzel hale getir."
+     *
+     * ÖLÇÜLEN KUSURLAR (ekran görüntüsünden):
+     *  1) Y EKSENİ ONDALIKLI: "11.00 · 8.25 · 5.50 · 2.75". Seans sayısı TAM SAYIDIR;
+     *     "8,25 seans" diye bir birim yok. (Asıl kusur bu — tasarım değil ANLAM hatası.)
+     *     → `decimalPlaces: 0` + bölüt sayısı `barBolumSayisi()` ile tepe değeri TAM BÖLER.
+     *  2) ÇUBUKLAR ÇOK İNCE (`barPercentage: 0.5`) ve koyu mor zemine yakın renkte →
+     *     11 seanslık gün bile zar zor seçiliyor. → daha kalın + DOLGU GRADYANI + parlak renk.
+     *  3) DEĞER OKUNAMIYOR: sayıyı görmek için göz eksene gidip geliyordu.
+     *     → `showValuesOnTopOfBars` ile sayı çubuğun üstünde.
+     *  4) SIFIR GÜNLER "yok" gibi duruyordu → `fromZero` ile taban ortak, kılcal çizgi kalır.
+     */
     const chartConfig = {
       backgroundGradientFrom: "#1e293b",
       backgroundGradientTo: "#0f172a",
-      color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+      color: (opacity = 1) => `rgba(167, 139, 250, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(203, 213, 225, ${opacity})`,
       strokeWidth: 2,
-      barPercentage: 0.5,
+      barPercentage: 0.78,
+      barRadius: 5,
+      // Dolgu gradyanı: çubuk üstte parlak, altta koyu → koyu zeminde net ayrışır.
+      fillShadowGradient: "#a78bfa",
+      fillShadowGradientTo: "#6d28d9",
+      fillShadowGradientOpacity: 1,
+      fillShadowGradientToOpacity: 1,
+      // ⚠️ TAM SAYI EKSENİ: "8.25 seans" anlamsızdı.
+      decimalPlaces: 0,
+      propsForBackgroundLines: { strokeDasharray: "4 6", stroke: "#334155", strokeWidth: 1 },
+      propsForLabels: { fontSize: rf(11), fontWeight: "600" },
       useShadowColorFromDataset: false
     };
     // Son 7 gün bar chart verisi
@@ -147,17 +172,29 @@ export function KpiDashboardScreen() {
     return (
       <ResponsiveGrid minItemWidth={300}>
         <Card style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Son 7 Gün — Seans Sayısı</Text>
+            {/* ⚠️ TOPLAM ROZETİ: hepsi sıfır olan bir grafik "veri mi yok, grafik mi bozuk?"
+                sorusunu doğuruyordu. Rozet cevabı peşinen verir. */}
+            <Text style={styles.chartToplam}>
+              Toplam {barData.datasets[0].data.reduce((a, b) => a + b, 0)}
+            </Text>
+          </View>
           <View style={styles.chartInner} onLayout={(e) => setChartW(e.nativeEvent.layout.width)}>
             {chartW > 0 && (
               <BarChart
                 data={barData}
                 width={chartW}
-                height={rs(220)}
+                height={rs(260)}
                 chartConfig={chartConfig}
                 style={styles.chart}
                 yAxisLabel=""
                 yAxisSuffix=""
+                // ⚠️ Bölüt sayısı tepe değeri TAM BÖLER → her etiket tam sayı (bkz. utils/kpiGrafik).
+                segments={barBolumSayisi(barData.datasets[0].data)}
+                fromZero
+                showValuesOnTopOfBars
+                withInnerLines
               />
             )}
           </View>
@@ -319,7 +356,10 @@ const styles = StyleSheet.create({
   pieLejantNokta: { width: rs(10), height: rs(10), borderRadius: rs(5) },
   pieLejantMetin: { color: colors.textMuted, fontSize: typography.small, flexShrink: 1 },
   chart: { marginVertical: spacing.sm, borderRadius: 8 },
-  chartTitle: { color: colors.text, fontSize: typography.body, fontWeight: "700", marginBottom: spacing.sm, alignSelf: 'flex-start', paddingLeft: spacing.sm },
+  chartTitle: { color: colors.text, fontSize: typography.body, fontWeight: "800" },
+  chartHeader: { width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    justifyContent: "space-between", gap: spacing.xs, marginBottom: spacing.sm, paddingHorizontal: spacing.sm },
+  chartToplam: { color: colors.primary, fontSize: typography.small, fontWeight: "800" },
   tableCard: { padding: 0, overflow: "hidden" },
   tableHeader: {
     flexDirection: "row",

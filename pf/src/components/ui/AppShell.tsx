@@ -28,6 +28,7 @@ import { RecoveryCodeBanner } from "@/components/domain/RecoveryCodeBanner";
 import { SurumFarkiBanner } from "@/components/domain/SurumFarkiBanner";
 import { GlobalEmergencyStop } from "@/components/ui/GlobalEmergencyStop";
 import { OperatorSwitcher } from "@/components/domain/OperatorSwitcher";
+import { JetonRozeti } from "@/components/ui/JetonRozeti";
 
 /** Uygulama ikonu — AuthScreen ile AYNI kaynak (assets/icon.png) → tek görsel kimlik. */
 const APP_ICON = require("../../../assets/icon.png");
@@ -43,6 +44,26 @@ interface NavItem {
  *  swipe-gezinme zincirini besliyor. Çıkışı rota yapmak (a) var olmayan bir ekran için sahte
  *  başlık/render dalı eklemeyi gerektirir, (b) alt barda kaydırarak KAZARA oturum kapatmayı
  *  mümkün kılar. Aksiyon-ögesi ikisini de kapatır (swipe yalnız rota ögelerini gezer). */
+/**
+ * KENDİ ACİL DURDURMA DÜĞMESİNİ ÇİZEN ROTALAR — kayan düğme burada GİZLENİR.
+ *
+ * ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "seans başlatınca şu sol altta çıkan acil durdurma
+ * kutusunu kaldır zaten bir sürü var uygulama içinde."
+ * Haklı: Kontrol ekranında aynı anda ÜÇ durdurma görünüyordu (seans kartı · "TÜM BOBİNLERİ
+ * ACİL DURDUR" · kayan kutu). Ana Ekran'da da kart-içi bir düğme var.
+ *
+ * ⚠️ KÜME BİLEREK KISA: geri kalan 8 rotada (Akıllı Teşhis, Ayarlar, Tedavi Geçmişi,
+ * Hastalar, Raporlar, Sensörler, AI Geçmişi, Simülasyon) bu düğme TEK durdurma kontrolüdür
+ * — üstelik otonom sürüş Akıllı Teşhis'ten başlatılabiliyor. Buraya rota eklemek, fazlalığı
+ * değil ERİŞİMİ kaldırmak olur.
+ *
+ * ⚠️ BİLİNEN ÖDÜNÇ: Kontrol ekranındaki düğmeler sayfa içindedir, yani uzun listede aşağı
+ * kaydırınca ekrandan çıkabilir. Kayan düğme tam da bunu çözmek için eklenmişti. Sahibin
+ * isteği fazlalığı gidermek olduğu için ödünç BİLEREK alındı; kaydırınca da erişim istenirse
+ * çözüm, Kontrol ekranındaki düğmeyi sabitlemektir (bu dosyayı değiştirmeden).
+ */
+const KENDI_DURDURMASI_OLAN_ROTALAR: ReadonlySet<RouteKey> = new Set<RouteKey>(["control", "dashboard"]);
+
 type NavEntry = { kind: "route"; item: NavItem } | { kind: "action"; id: "logout"; label: string; icon: LucideIcon };
 
 /** Ayarlar'dan SONRA gelen tek aksiyon ögesi (2026-08-06 sahip isteği: üç profilde de "Çıkış Yap"). */
@@ -293,6 +314,10 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
                 yazıldığı ÜST BARDA sürekli görünür olmalı — yanlış kimlikle çalışmak, kaydı
                 yanlış hekime atfeder (KVKK + klinik sorumluluk). Dokununca PIN ile hızlı geçiş. */}
             <OperatorSwitcher />
+            {/* KALAN JETON (sahip isteği 2026-09-13): kullanıcı hakkının bittiğini, analiz
+                reddedilene kadar göremiyordu. ⚠️ Ücretlendirme KAPALIYKEN hiçbir şey çizmez
+                (karar backend'den gelir — arayüz "0" tahmin ETMEZ). Dar telefonda yalnız sayı. */}
+            <JetonRozeti kompakt={responsive.isCompact} />
             {userMode && (
               <Pressable style={styles.profileChip} onPress={() => setProfileMenuOpen(true)} accessibilityRole="button" accessibilityLabel="Profil değiştir">
                 <ProfileIcon size={16} color={colors.primary} />
@@ -442,6 +467,7 @@ export function AppShell({ activeRoute, title, subtitle, onRouteChange, children
           desktop ? 0 : klavye.acik ? klavye.yukseklik : responsive.isShort ? rs(60) : rs(76)
         }
         compact={responsive.isShort}
+        gizle={KENDI_DURDURMASI_OLAN_ROTALAR.has(activeRoute)}
       />
 
       {/* [S4] Klavye açıkken alt bar UNMOUNT edilir: edge-to-edge'de zaten klavyenin altında

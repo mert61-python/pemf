@@ -25,6 +25,7 @@ import {
 import Svg, { Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { colors, spacing, typography, rs, layoutMax } from "@/theme/tokens";
 import { apiGet } from "@/services/apiClient";
+import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 // Grafik/tablo renkleriyle BİREBİR aynı kategorik palet (RealtimeChart COIL_COLORS).
 const COIL_COLORS = [
@@ -139,11 +140,28 @@ function fmtNum(v?: number, digits = 1): string {
   return v.toFixed(digits);
 }
 
+/**
+ * ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "seans detayında donanım eps kalmış ve bobin 8 de görünüyor
+ * ama aslında çalışmıyor, 7 bobinli sistem."
+ *
+ * Kaynak düzeltildi: ESP alt sistemi kapalıyken artık bobin 8 için koşu kaydı YAZILMIYOR
+ * (bkz. api_server `/session/start` "HAYALET BOBİN KAYDI" notu). Ama ESKİ KAYITLAR DURUYOR ve
+ * DURMALI: tedavi geçmişi tıbbi bir kayıttır, geriye dönük silinmez/gizlenmez.
+ *
+ * ⚠️ GİZLEMEK YERİNE ETİKETLEMEK: o satırları saklasaydık geçmiş sessizce değişirdi ("dün 8
+ * satır vardı, bugün 7") ve hangi seansların şüpheli olduğu bir daha bilinemezdi. "ESP (sökülü)"
+ * etiketi hem kaydı korur hem operatöre o bobinin artık sistemde olmadığını söyler.
+ */
 function hwLabel(hw?: string): string {
   const t = (hw || "").toLowerCase();
   if (t === "stm") return "STM";
-  if (t === "esp") return "ESP";
+  if (t === "esp") return "ESP (sökülü)";
   return hw ? hw.toUpperCase() : "—";
+}
+
+/** Bu satır, sistemden çıkarılmış ESP donanımına mı ait? */
+function sokuluDonanim(hw?: string): boolean {
+  return (hw || "").toLowerCase() === "esp";
 }
 
 /**
@@ -271,9 +289,13 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.summaryItem}>
       <Text style={styles.itemLabel}>{label}</Text>
-      <Text style={styles.itemValue} numberOfLines={2}>
+      {/* ⚠️ Sahip 2026-09-12: "ai analiz detaylarında yine üç nokta sorunu ve devamını
+          göremeyiş ... başka yerde de dolduğunda üç noktayla kesilebilir."
+          Seans özet değerleri (hedef durum, operatör adı, mod) iki satıra sığmayabilir ve
+          kesilen kısım tam da ayırt edici olan kısımdır. Dokunuşla açılır. */}
+      <GenisletilebilirMetin style={styles.itemValue} satir={2} testID="seans-ozet-deger">
         {value}
-      </Text>
+      </GenisletilebilirMetin>
     </View>
   );
 }
@@ -307,7 +329,12 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
               return (
                 <View
                   key={`${coilId}-${run.started_epoch ?? idx}`}
-                  style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}
+                  style={[
+                    styles.tableRow,
+                    idx % 2 === 1 && styles.tableRowAlt,
+                    sokuluDonanim(run.hw_type) && styles.tableRowSokulu,
+                  ]}
+                  testID={`seans-bobin-satiri-${coilId}`}
                 >
                   <View style={[styles.colCoil, styles.coilCell]}>
                     <View style={[styles.coilDot, { backgroundColor: color }]} />
@@ -343,6 +370,16 @@ function CoilRunsSection({ coilRuns }: { coilRuns: CoilRun[] }) {
         Not: STM bobinleri (1-5) gerçek donanımda sıcaklık/akım/alan sensörü içermez; bu
         değerler boş (—) görünebilir.
       </Text>
+      {/* ⚠️ Uyarı YALNIZ gerçekten sökülü-donanım satırı olan eski seanslarda çıkar — her
+          seansın altına kalıcı bir uyarı koymak, operatörün uyarıları okumayı bırakmasına
+          yol açardı (alarm yorgunluğu). */}
+      {coilRuns.some((r) => sokuluDonanim(r.hw_type)) ? (
+        <Text style={[styles.hwNote, styles.hwNoteUyari]} testID="seans-sokulu-uyarisi">
+          ⚠️ Bu seans, sistemden çıkarılmış ESP donanımına ait satırlar içeriyor (bobin 8 dahil).
+          Sistem 7 bobinlidir; o satırlar GEÇMİŞ kayıttır ve gerçekten uygulandıkları
+          doğrulanmamıştır. Yeni seanslarda bu satırlar oluşmaz.
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -647,6 +684,8 @@ const styles = StyleSheet.create({
   },
   coilCell: { flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm },
   coilDot: { width: rs(8), height: rs(8), borderRadius: 4 },
+  tableRowSokulu: { opacity: 0.55 },
+  hwNoteUyari: { color: colors.warning },
   colCoil: { width: rs(96) },
   colTime: { width: rs(92) },
   colDur: { width: rs(90) },

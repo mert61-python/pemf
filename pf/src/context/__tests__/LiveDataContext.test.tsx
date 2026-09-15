@@ -51,6 +51,7 @@ function Probe() {
       <Text testID="unread">{String(unreadCount)}</Text>
       <Text testID="running">{String((snapshot.coils ?? []).filter((c: any) => c.running).length)}</Text>
       <Text testID="ack1">{JSON.stringify((snapshot.coils ?? []).find((c: any) => c.id === 1)?.deviceAck ?? null)}</Text>
+      <Text testID="internet">{String(snapshot.internet ?? "yok")}</Text>
     </>
   );
 }
@@ -190,4 +191,39 @@ it("coil_ack (ESP cihaz onayı) bobine yazılır ve sonraki coil_status onu SİL
   // yeni bir NACK onayı eskisini değiştirir
   await send({ type: "coil_ack", coilId: 1, data: { ok: false, reason: "nack", commandId: "react_1_8", ts: 1700000001000 } });
   expect(JSON.parse(getByTestId("ack1").props.children)).toMatchObject({ ok: false, reason: "nack", commandId: "react_1_8" });
+});
+
+// ── İNTERNET ROZETİ DONUYORDU (sahip bildirimi 2026-09-12) ───────────────────
+// Ölçülen gerçek: backend `/api/dashboard-snapshot` → `"internet":"online"` derken ekranda
+// kalıcı "İnternet yok — uzaktan erişim kapalı" rozeti duruyordu. Sebep: `gateway_status`
+// işleyicisi YALNIZ `gateway` ve `mqtt` alanlarını okuyordu; `internet` ilk snapshot'ta ne
+// geldiyse orada donuyordu (başlangıç değeri "offline") ve WS ayaktayken HTTP fallback de
+// koşmadığı için kendiliğinden düzelmiyordu.
+it("KRİTİK: gateway_status ile gelen `internet` snapshot'a İŞLENİR (donmuş rozet)", async () => {
+  const { getByTestId } = await setup();
+  await setConnected(true);
+  // İlk snapshot: internet YOK (backend henüz ilk ağ yoklamasını bitirmemiş).
+  await send({ type: "snapshot", data: { gateway: "online", mqtt: "online", stm: "online", internet: "offline", coils: [], notifications: [] } });
+  expect(getByTestId("internet").props.children).toBe("offline");
+
+  // Ağ yoklaması bitti, internet GELDİ → yayın geldi.
+  await send({ type: "gateway_status", data: { gateway: "online", mqtt: "online", internet: "online" } });
+  expect(getByTestId("internet").props.children).toBe("online"); // <-- rozet artık DÜZELİR
+});
+
+it("KARŞIT KANIT: internet GİDERSE rozet geri döner (hep-online yazılmıyor)", async () => {
+  const { getByTestId } = await setup();
+  await setConnected(true);
+  await send({ type: "snapshot", data: { gateway: "online", mqtt: "online", stm: "online", internet: "online", coils: [], notifications: [] } });
+  await send({ type: "gateway_status", data: { gateway: "online", mqtt: "online", internet: "offline" } });
+  expect(getByTestId("internet").props.children).toBe("offline");
+});
+
+it("internet alanı OLMAYAN gateway_status mevcut değeri EZMEZ", async () => {
+  const { getByTestId } = await setup();
+  await setConnected(true);
+  await send({ type: "snapshot", data: { gateway: "online", mqtt: "online", stm: "online", internet: "online", coils: [], notifications: [] } });
+  // Eski/kısmi yayın (yalnız mqtt değişti) → internet bilgisi KAYBOLMAMALI.
+  await send({ type: "gateway_status", data: { gateway: "online", mqtt: "warning" } });
+  expect(getByTestId("internet").props.children).toBe("online");
 });

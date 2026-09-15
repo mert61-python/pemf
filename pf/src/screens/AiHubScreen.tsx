@@ -18,7 +18,7 @@ import { kameraKutusu, kareOrani } from "@/utils/kameraKutusu";
 import { colors, radius, spacing, typography, rf, rs, layoutMax, touch } from "@/theme/tokens";
 import { useToast } from "@/components/ui/ToastProvider";
 import { webIcinKucult } from "@/services/gorselKucult";
-import { apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
+import { apiGet, apiPost, authHeaders, platformAlert, platformConfirm, AI_TIMEOUT_MS, aiHataMesaji } from "@/services/apiClient";
 import { aiDetayCumlesi } from "@/utils/aiHataDetayi";
 import { ckdOnKontrol } from "@/utils/ckdOnKontrol"; // B5: CKD gönderim-öncesi eyleme dönük ön-kontrol (klinik_asgari paritesi)
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,11 +29,13 @@ import { sesFormDataHazirla } from "@/utils/sesYukleme";
 import { useLiveData } from "@/context/LiveDataContext";
 import { useAppNav } from "@/context/AppNavContext";
 import { useAuth } from "@/context/AuthContext";
-import { useOperator } from "@/context/OperatorContext";
+import { useOperator, useOperatorOptional } from "@/context/OperatorContext";
 import { useEntitlement } from "@/context/EntitlementContext";
 import { UpgradeModal, type UpgradeFeature } from "@/components/UpgradeModal";
 import { useResponsive } from "@/hooks/useResponsive";
 import { PatientGate } from "@/components/domain/PatientGate";
+import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
+import { hastaninSonAnalizi, hastayaGoreSonAnaliz, kapsamda, sonAnalizOzeti, type AnalizKaydi } from "@/utils/sonAnaliz";
 
 type AiModule = "disease" | "landmark" | "segmentation" | "thermal" | "reticulocytes" | "em_fantom" | "em_petri" | "kidney_rna" | "kidney_disease" | "cat_sound" | "kidney_ct" | "histopath" | "cat_organ" | "cell_scratch";
 
@@ -68,6 +70,16 @@ async function shrinkForUpload(uri: string): Promise<{ uri: string; base64: stri
 /** AI teşhis sonucunu kalıcı audit loguna gönderir (hasta + modül + özet). */
 // AiHubScreen mount'ta set eder → logAiResult (modül-seviyesi, hook DEĞİL) aktif profili bilir.
 let currentAiMode: UserMode = null;
+/**
+ * Seçili hastanın OPAK KİMLİĞİ — analiz kaydına yazılır (2026-09-12 taşıması).
+ *
+ * ⚠️ NEDEN AD YETMİYOR: aynı adlı iki hayvanda analizler karışıyor, hasta kaydında ad
+ * düzeltilince eski analizler kopuyor ve `PEMF_MASK_HISTORY_PII=1` açıkken TÜM adlar
+ * `[SIFRELENMEMIS-DB]` yazıldığı için eşleme bütünüyle çöküyordu.
+ * ⚠️ `currentAiMode`/`currentOperatorEmail` ile AYNI desen: `logAiResult` bir React
+ * bileşeni değil, bu yüzden bağlamı modül değişkeninden okur.
+ */
+let currentPatientId: string = "";
 // Aynı desen: giriş yapan hekim e-postası (klinik-içi "Benim/Tüm Klinik" AI-analiz filtresi).
 let currentOperatorEmail: string = "";
 
@@ -91,6 +103,9 @@ async function logAiResult(
       result_detail: cleanDetail(extra?.detail),
       confidence: extra?.confidence ?? null,
       operator_email: currentOperatorEmail || "",
+      // ⚠️ Hasta KİMLİĞİ (opak) — ad bazlı eşlemenin üç kırılganlığını kapatır (bkz. currentPatientId).
+      // Boş geçerse backend eskisi gibi ada bağlı çalışır (geriye uyumlu).
+      patient_id: currentPatientId || "",
     }, null);
   } catch {
     /* audit başarısız — kullanıcı akışını bozma */
@@ -208,6 +223,7 @@ export function AiHubScreen() {
 
   // logAiResult (hook değil) aktif profili bilsin diye modül-değişkenine yaz (analiz kaydına mode gitsin).
   useEffect(() => { currentAiMode = userMode; }, [userMode]);
+  useEffect(() => { currentPatientId = selectedPatient?.id || ""; }, [selectedPatient?.id]);
   // Aynı desen: giriş yapan hekim e-postasını modül-değişkenine yaz (AI analiz sahipliği).
   const { operatorEmail } = useOperator();
   useEffect(() => { currentOperatorEmail = operatorEmail; }, [operatorEmail]);
@@ -322,7 +338,7 @@ export function AiHubScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.moduleLabel, active && styles.moduleLabelActive]} numberOfLines={1}>{m.label}</Text>
-                    <Text style={styles.moduleDesc} numberOfLines={2}>{m.desc}</Text>
+                    <Text style={styles.moduleDesc} numberOfLines={2}>{m.desc}</Text>{/* kısa etiket — cümle değil, genişletme gerekmez */}
                   </View>
                   {gated && (
                     <TouchableOpacity
@@ -369,6 +385,45 @@ function PetOwnerAiScreen() {
   }, [loading]);
   // Cache'i güncel tut → unmount'ta (tab değişimi) sonuç/görüntü korunur. resetAiCachesForOwner (profil/hasta değişimi) temizler.
   useEffect(() => { moduleCache.pet_owner = { result, imageUri, imageBase64, imageFile }; }, [result, imageUri, imageBase64, imageFile]);
+
+  // ── "KALDIĞIN YERDEN" (sahip isteği 2026-09-12, ev sahibi önerisi #2) ────────────
+  // Ev sahibi uygulamayı "Mia'ya tekrar bakayım" diye açıyor. Seçili hastanın SON analizini
+  // şeritte göstermek, "en son ne çıkmıştı?" sorusunu ekran değiştirmeden cevaplar.
+  // ⚠️ YENİ BACKEND YOK: `/api/ai/log` hasta filtresini zaten destekliyor.
+  // ⚠️ HATA SESSİZ: geçmiş okunamazsa şerit çizilmez; analiz ekranı ETKİLENMEZ.
+  const { selectedPatient: secili } = useAppNav();
+  // ⚠️ KİMLİK: `useOperatorOptional` — sağlayıcı yoksa giriş e-postasına düşer
+  // (TreatmentHistoryScreen ile AYNI desen; `useOperator` sağlayıcısız FIRLATIR).
+  const _op = useOperatorOptional();
+  const benimEpostam = (_op ? _op.operatorEmail : (session?.email || "")).toLowerCase();
+  const [sonKayit, setSonKayit] = useState<AnalizKaydi | null>(null);
+  useEffect(() => {
+    const ad = secili?.name || "";
+    if (!ad) { setSonKayit(null); return; }
+    let iptal = false;
+    (async () => {
+      // ⚠️ KİMLİK + AD BİRLİKTE: backend bunları VEYA ile bağlar → kimliği yazılmış YENİ
+      // kayıtlar ile aynı hastanın ESKİ (kimliksiz) kayıtları TEK listede gelir. Yalnız
+      // kimlikle sorsaydık taşıma öncesi geçmiş kaybolur, yalnız adla sorsaydık aynı adlı
+      // ikinci hayvanın kayıtları karışırdı.
+      const _kimlik = secili?.id ? `&patient_id=${encodeURIComponent(secili.id)}` : "";
+      const y = await apiGet<{ data?: AnalizKaydi[] } | null>(
+        `/ai/log?limit=20&patient_name=${encodeURIComponent(ad)}${_kimlik}`, null);
+      if (iptal) return;
+      // ⚠️ KAPSAM SÜZGECİ ŞART (denetim 2026-09-12, KENDİ EKLEMEMDE bulundu):
+      // `/api/ai/log` operatör süzgeci DESTEKLEMİYOR — TÜM kliniğin analizlerini döndürür.
+      // Ev sahibi profili kapsam olarak HER ZAMAN "mine"dır (KVKK kapısı,
+      // utils/patientScope.effectiveScope); süzmeden göstermek, ev sahibine bir hekimin
+      // analiz özetini sızdırırdı. TEK KAYNAK: patientScope.inScope.
+      const kayitlar = (Array.isArray(y?.data) ? y!.data! : []).filter((k) =>
+        kapsamda(k, "mine", benimEpostam));
+      const harita = hastayaGoreSonAnaliz(kayitlar);
+      setSonKayit(hastaninSonAnalizi(harita, { id: secili?.id, name: ad }) ?? null);
+    })();
+    return () => { iptal = true; };
+    // ⚠️ `result` bağımlılıkta: yeni analiz bitince şerit KENDİNİ tazeler, yoksa bir
+    // önceki sonucu göstermeye devam ederdi (kullanıcı "güncellenmedi" sanır).
+  }, [secili?.name, secili?.id, result, benimEpostam]);
 
   const takePhoto = async () => {
     if (Platform.OS === 'web') {
@@ -519,6 +574,19 @@ function PetOwnerAiScreen() {
           <Text style={[styles.title, { fontSize: rf(24) }]}>Akıllı Teşhis Asistanı</Text>
         </View>
         <Text style={styles.subtitle}>Dostunuzun fotoğrafını çekin, yapay zeka anında ağrı ve stres durumunu analiz etsin. Gerekirse veteriner hekiminize danışın.</Text>
+
+        {/* ⚠️ YALNIZ SONUÇ EKRANDA YOKKEN: analiz sonucu dururken "son analiz" şeridi
+            göstermek, kullanıcının HANGİSİNE baktığını karıştırır. */}
+        {!result && sonAnalizOzeti(sonKayit) ? (
+          <View style={styles.kaldiginYerden} testID="pet-son-analiz">
+            <Text style={styles.kaldiginYerdenBaslik} numberOfLines={1}>
+              🔬 {secili?.name} · son analiz
+            </Text>
+            <Text style={styles.kaldiginYerdenOzet} numberOfLines={3}>
+              {sonAnalizOzeti(sonKayit)}
+            </Text>
+          </View>
+        ) : null}
 
         {!imageUri ? (
           <>
@@ -1762,7 +1830,16 @@ function VisionModule({ endpoint, title, subtitle, patientName, galleryOnly, exp
           sürülmediğini HİÇ göremiyordu. Ayrıca yalnız "updated" gösteriliyordu; backend'in
           "skipped_*" yanıtları (aktif farklı-mod seansı, kimliksiz uzak istek, döngü zaten açık)
           sessizce yutuluyordu → kullanıcı seansın başladığını sanabiliyordu. */}
-      {result?.hw_status ? (
+      {/* ⚠️ "idle" GÖSTERİLMEZ (sahip bildirimi 2026-09-13: "cihaz sürülemedi kısmını kaldır,
+          burası ai modu"). `hw_status` varsayılanı `"idle"`dır (ai_router.py:500) ve otonom mod
+          KAPALIYKEN — yani düz analizde — hep o kalır. Orada "⚠️ Cihaz SÜRÜLMEDİ" yazmak, hiç
+          istenmemiş bir şeyin olmadığını duyurmaktır: gerçek uyarıların yanında gürültü yapar ve
+          uyarı körlüğü üretir.
+          ⚠️ BLOK KALDIRILMADI, yalnız `idle` elendi: `skipped_session_active` /
+          `skipped_unauthenticated` / `skipped_no_detection` durumlarında kullanıcı otonom sürüş
+          İSTEMİŞTİR ve olmadığını GÖRMEK ZORUNDADIR — aksi halde seansın başladığını sanar
+          (bu blok tam olarak o boşluk için eklenmişti, üstteki nota bakın). */}
+      {result?.hw_status && result.hw_status !== "idle" ? (
         result.hw_status === "updated" ? (
           <View style={{ marginTop: spacing.sm, padding: spacing.sm, backgroundColor: colors.success + "22", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.success }}>
             <Text style={[styles.resultText, { fontWeight: "bold", color: colors.success }]}>⚡ Cihaz otonom olarak sürülüyor</Text>
@@ -2615,9 +2692,12 @@ function RnaModule({ patientName }: { patientName: string }) {
                   const h = Array.isArray(xl) ? xl.find((x) => x.patient_id === p.patient_id) : undefined;
                   if (!h || !h.top_genes?.length) return null;
                   return (
-                    <Text style={styles.xaiSatiri} numberOfLines={2}>
-                      🔍 Sürükleyen genler: {h.top_genes.slice(0, 5).map((g) => `${g.gene} ${g.attribution >= 0 ? "↑" : "↓"}`).join("  ·  ")}
-                    </Text>
+                    // ⚠️ Sahip 2026-09-12: "ai analiz detaylarında yine üç nokta sorunu ve
+                    // devamını göremeyiş". Beş genlik gerekçe iki satıra sığmıyordu ve son
+                    // genler (çoğu zaman ters yönlü olanlar) üç noktanın arkasında kalıyordu.
+                    <GenisletilebilirMetin style={styles.xaiSatiri} satir={2} testID="xai-genler">
+                      {`🔍 Sürükleyen genler: ${h.top_genes.slice(0, 5).map((g) => `${g.gene} ${g.attribution >= 0 ? "↑" : "↓"}`).join("  ·  ")}`}
+                    </GenisletilebilirMetin>
                   );
                 })()}
               </View>
@@ -4055,6 +4135,12 @@ const styles = StyleSheet.create({
   symptomLabel: { color: colors.textMuted, fontSize: typography.small },
   symptomLabelActive: { color: colors.primary, fontWeight: "bold" },
   imagePreviewContainer: { width: "100%", height: rs(300), backgroundColor: colors.bg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden", justifyContent: "center", alignItems: "center", position: "relative" },
+  // "Kaldığın yerden" şeridi — dikkat çeksin ama analiz düğmesiyle YARIŞMASIN:
+  // yumuşak zemin + ince kenar, birincil renkte BAŞLIK, gövde nötr.
+  kaldiginYerden: { backgroundColor: colors.bgAlt, borderRadius: radius.md, padding: spacing.md,
+                    borderWidth: 1, borderColor: colors.border, gap: 2 },
+  kaldiginYerdenBaslik: { color: colors.primary, fontWeight: "800", fontSize: typography.small },
+  kaldiginYerdenOzet: { color: colors.text, fontSize: typography.small },
   photoGuide: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.md, gap: 3, borderWidth: 1, borderColor: colors.primarySoft },
   photoGuideTitle: { color: colors.text, fontSize: typography.small, fontWeight: "800", marginBottom: 2 },
   photoGuideItem: { color: colors.textMuted, fontSize: typography.small, lineHeight: rf(18) },

@@ -9,6 +9,7 @@ import { colors, spacing, typography, rf, rs, touch } from "@/theme/tokens";
 import { useLiveData } from "@/context/LiveDataContext";
 import { platformConfirm } from "@/services/apiClient";
 import type { AppNotification, NotificationLevel } from "@/types/domain";
+import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 const LEVEL_CONFIG: Record<NotificationLevel, { color: string; bg: string; icon: string }> = {
   success: { color: "#22c55e", bg: "#052e16", icon: "✅" },
@@ -107,9 +108,19 @@ function NotificationItem({ notification: n, compact }: { notification: AppNotif
     <Animated.View style={[styles.item, { backgroundColor: cfg.bg, borderLeftColor: cfg.color, opacity: fadeAnim }]}>
       <Text style={styles.itemIcon}>{cfg.icon}</Text>
       <View style={styles.itemBody}>
-        <Text style={[styles.itemMsg, compact && styles.itemMsgCompact]} numberOfLines={compact ? 1 : 3}>
+        {/* ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "bildirim sığmayınca üç noktadan sonrasını
+            kullanıcı hiçbir şekilde okuyamıyor, bildirimin üzerine tıklayınca tamamının
+            açılması lazım aslında."
+            Bildirim metinleri EYLEM söyler (ör. "…Kartı güncel firmware ile yeniden
+            programlayın (CubeIDE: Project → Clean → Build → Run)"). Tam da o eylem cümlesi
+            üç noktanın ARKASINDA kalıyordu — yani uyarı, ne yapılacağını söyleyemiyordu. */}
+        <GenisletilebilirMetin
+          satir={compact ? 1 : 3}
+          style={StyleSheet.flatten([styles.itemMsg, compact && styles.itemMsgCompact])}
+          testID="bildirim-metni"
+        >
           {n.message}
-        </Text>
+        </GenisletilebilirMetin>
         {!compact && (
           <Text style={styles.itemTime}>{formatTime(n.timestamp)}</Text>
         )}

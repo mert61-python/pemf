@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, TextInput, Platform } from "react-native";
-import { Edit3, Trash2, Share2 } from "lucide-react-native";
+import { Edit3, Trash2, Check } from "lucide-react-native";
 import { Card } from "@/components/ui/Card";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { colors, spacing, typography, rs, radius, layoutMax, touch } from "@/theme/tokens";
@@ -15,6 +15,9 @@ import { useOperatorOptional } from "@/context/OperatorContext";
 import { SessionDetailModal } from "@/components/domain/SessionDetailModal";
 import { aramaEslesir } from "@/utils/aramaNormalize";
 import { downloadFileWithAuth } from "@/services/dosyaIndir";
+import { useCokluSecim } from "@/hooks/useCokluSecim";
+import { SecimCubugu } from "@/components/ui/SecimCubugu";
+import { TOPLU_SILME_ONAYI } from "@/services/topluSilme";
 
 // Backend ham seans durumlarını (İngilizce) görüntüleme için Türkçeye çevirir.
 // NOT: Yalnızca gösterim amaçlıdır; backend ham değerleri (renk/durum mantığı) değiştirilmez.
@@ -31,7 +34,15 @@ const STATUS_LABELS_TR: Record<string, string> = {
   canceled: "İptal Edildi",
   error: "Hata",
   failed: "Başarısız",
-  success: "Başarılı"
+  success: "Başarılı",
+  // ⚠️ ÜRETİMDE KULLANILAN AMA HARİTADA OLMAYAN İKİ DURUM (2026-09-12'de bulundu):
+  // backend bunları gerçekten yazıyor (acil durdurma / güç kesintisi mutabakatı) ama
+  // harita çeviremediği için ekranda ham "Emergency_stopped" görünüyordu.
+  emergency_stopped: "Acil Durduruldu",
+  aborted_due_to_power: "Elektrik Kesintisi",
+  // ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı. "Tamamlandı" yazmak,
+  // uygulanmamış bir tedaviyi uygulanmış olarak belgelemek olurdu.
+  hardware_rejected: "Donanım Reddetti"
 };
 
 function statusLabelTr(status?: string): string {
@@ -152,8 +163,27 @@ export function TreatmentHistoryScreen() {
   // kliniğin PII'sini döküyordu). "Benim Seanslarım" veya arama aktifse yalnız GÖRÜNEN kayıtları
   // gönder; "Tüm Klinik" + aramasız ise operatör bilinçli tam-export istemiştir (parametresiz).
   const CSV_MAX = 1000; // URL 414 olmasın; aşımda uyar + kırp (PDF deseniyle tutarlı).
+
+  /**
+   * ⚠️ DÜĞME ETİKETİ GERÇEĞİ SÖYLEMELİ (denetim 2026-09-12).
+   *
+   * Sahip "Excel/CSV İndir"in başına "tamamını" eklenmesini istedi. Ama varsayılan kapsam
+   * "Benim Seanslarım" olduğu için düğme aslında EKRANDA GÖRÜNEN alt kümeyi indiriyor —
+   * sabit "Tümünü" yazısı o hâlde YALAN olurdu. (Aynı yanlış "Tümünü PDF İndir"de zaten
+   * vardı: kod yorumu bile "EKRANDA GÖRÜNEN kayıtları verir" diyor.)
+   *
+   * Operatör 200 seansı olan bir klinikte "Tümünü" yazan düğmeye basıp 12 kayıtlık dosya
+   * alıyor ve bunu FARK ETMİYORDU. Etiket artık kapsamı izler; "Tümünü" yalnız gerçekten
+   * tümü indirildiğinde yazar.
+   *
+   * ⚠️ KURAL `downloadCsv` İÇİNDEKİYLE BİREBİR AYNI KAYNAKTAN: ayrışırsa etiket bir şey der,
+   * indirme başka şey yapar.
+   */
+  const kapsamDaraltilmis = scope === "mine" || searchQuery.trim().length > 0;
+  const disaAktarimOneki = kapsamDaraltilmis ? "Görünenleri" : "Tümünü";
+
   const downloadCsv = async () => {
-    const filtered = scope === "mine" || searchQuery.trim().length > 0;
+    const filtered = kapsamDaraltilmis;
     let url = `${serviceConfig.apiBaseUrl}/history/export_csv`;
     if (filtered) {
       const list = filteredSessions;
@@ -179,6 +209,46 @@ export function TreatmentHistoryScreen() {
 
 
 
+  // ── TOPLU SİLME (sahip bildirimi 2026-09-12) ──────────────────────────────────
+  // ⚠️ Seçim YALNIZ EKRANDA GÖRÜNEN kayıtlara kapanır (bkz. useCokluSecim "hayalet seçim"):
+  // operatör seçtikten sonra aramayı/kapsamı değiştirirse, artık göremediği kayıtlar silinmez.
+  const secim = useCokluSecim<number>(filteredSessions.map((s) => s.id));
+  const [siliniyor, setSiliniyor] = useState(false);
+
+  const secilenleriSil = async () => {
+    const kimlikler = secim.seciliKimlikler;
+    if (kimlikler.length === 0 || siliniyor) return;
+    const ok = await platformConfirm(
+      "Seçili Kayıtları Sil",
+      `${kimlikler.length} seans kaydı KALICI olarak silinecek. Bu işlem geri alınamaz.`,
+      "Sil",
+    );
+    if (!ok) return;
+    setSiliniyor(true);
+    // ⚠️ TEK İSTEK: N ayrı silme isteği yarı yolda koparsa operatör hangi kayıtların gittiğini
+    // bilemezdi. Sunucu hepsini tek transaction'da siler (bkz. servers/history_router.delete_bulk).
+    const res = await apiPost<{ status: string; silinen?: number; istenen?: number }>(
+      "/history/delete_bulk",
+      { session_ids: kimlikler, confirm: TOPLU_SILME_ONAYI },
+      { status: "error" },
+    );
+    setSiliniyor(false);
+    if (res.status === "success") {
+      // ⚠️ İSTENEN ile SİLİNEN AYRI raporlanır: başka bir operatör aynı kaydı bu arada silmiş
+      // olabilir. "5 silindi" demek yerine sunucunun söylediği gerçeği göster.
+      const n = res.silinen ?? kimlikler.length;
+      showToast(
+        n === kimlikler.length ? `${n} seans silindi.` : `${n}/${kimlikler.length} seans silindi.`,
+        "success",
+      );
+      secim.temizle();
+      fetchHistory();
+    } else {
+      showToast("Toplu silme başarısız.", "error");
+    }
+  };
+
+
   return (
     <View style={{ width: "100%", maxWidth: layoutMax.icerik, alignSelf: "center" }}>
   {/* [S4 adım 3] İç dikey ScrollView KALDIRILDI: kabuk (AppShell) zaten tek kaydırıcı ve
@@ -188,11 +258,20 @@ export function TreatmentHistoryScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.intro}>Hastalarınıza ait geçmiş seans kayıtları ve raporlamalar.</Text>
         <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm}}>
+          <TouchableOpacity
+            style={[styles.btnOutline, secim.secimModu && styles.btnOutlineAktif]}
+            onPress={secim.secimModunuDegistir}
+            accessibilityRole="button"
+            accessibilityLabel="Toplu seçim kipini aç veya kapat"
+            testID="gecmis-secim-kipi"
+          >
+            <Text style={styles.btnOutlineText}>{secim.secimModu ? "Seçimi Kapat" : "Seç"}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.btnOutline} onPress={downloadCsv}>
-            <Text style={styles.btnOutlineText}>Excel/CSV İndir</Text>
+            <Text style={styles.btnOutlineText}>{disaAktarimOneki} Excel/CSV İndir</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnPrimary} onPress={downloadAllPdf}>
-            <Text style={styles.btnPrimaryText}>Tümünü PDF İndir</Text>
+            <Text style={styles.btnPrimaryText}>{disaAktarimOneki} PDF İndir</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -236,16 +315,38 @@ export function TreatmentHistoryScreen() {
             : "Geçmiş seans kaydı bulunamadı."}
         </Text>
       ) : (
-        <ResponsiveGrid minItemWidth={360}>
-          {filteredSessions.map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              onRefresh={fetchHistory}
-              onOpenDetails={() => setSelectedSessionId(session.id)}
+        <>
+          {/* ⚠️ `gizliSayi`: geçmiş sayfalanarak gelir; yüklenmemiş kayıt varsa "Tümünü Seç"
+              onları KAPSAMAZ. Sunucu toplam sayıyı vermiyor → gerçek sayı bilinmiyor; 1
+              vererek "daha var" bilgisini veriyoruz. Uydurma bir sayı yazmak daha kötü olurdu
+              (şerit "137 kayıt ekranda değil" der, oysa 3 olabilir). */}
+          {secim.secimModu ? (
+            <SecimCubugu
+              seciliSayi={secim.seciliSayi}
+              hepsiSecili={secim.hepsiSecili}
+              onTumunuSec={secim.tumunuSec}
+              onTemizle={secim.temizle}
+              onSil={secilenleriSil}
+              onVazgec={secim.secimModunuDegistir}
+              siliniyor={siliniyor}
+              gizliSayi={hasMore ? 1 : 0}
+              testID="gecmis-secim-cubugu"
             />
-          ))}
-        </ResponsiveGrid>
+          ) : null}
+          <ResponsiveGrid minItemWidth={360}>
+            {filteredSessions.map((session) => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                onRefresh={fetchHistory}
+                onOpenDetails={() => setSelectedSessionId(session.id)}
+                secimModu={secim.secimModu}
+                secili={secim.secilimi(session.id)}
+                onSecimDegistir={() => secim.degistir(session.id)}
+              />
+            ))}
+          </ResponsiveGrid>
+        </>
       )}
 
       {hasMore && (
@@ -271,7 +372,21 @@ export function TreatmentHistoryScreen() {
   );
 }
 
-function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRefresh: () => void, onOpenDetails: () => void }) {
+function SessionCard({
+  session,
+  onRefresh,
+  onOpenDetails,
+  secimModu = false,
+  secili = false,
+  onSecimDegistir,
+}: {
+  session: any;
+  onRefresh: () => void;
+  onOpenDetails: () => void;
+  secimModu?: boolean;
+  secili?: boolean;
+  onSecimDegistir?: () => void;
+}) {
   const { showToast } = useToast();
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notes, setNotes] = useState(session.patient_notes || "");
@@ -317,40 +432,43 @@ function SessionCard({ session, onRefresh, onOpenDetails }: { session: any, onRe
     }
   };
 
-  // Raporu PAYLAŞ: backend'den PDF indir → telefonun native paylaş menüsü (WhatsApp/
-  // e-posta/herhangi biri). App Password/SMTP GEREKTİRMEZ — vet kime gönderdiğini paylaş
-  // hedefinde seçer.
-  // ⚠️ BAYAT YORUM DÜZELTMESİ 2026-09-11: burada "web'de PDF'i yeni sekmede açar" yazıyordu —
-  // kod bunu HİÇ yapmadı (`<a download>` kullanıyordu) ve o yol WebView2'de sessizce ölüydü.
-  // Masaüstünde artık rapor MASAÜSTÜNE KAYDEDİLİR ve yolu bildirilir (bkz. services/dosyaIndir).
-  const handleShareReport = async () => {
-    showToast("Rapor hazırlanıyor...", "info");
-    // Ortak header-tabanlı indirici (token URL'de SIZMAZ); web fetch+blob, native downloadAsync+paylaşım.
-    await downloadFileWithAuth(
-      `${serviceConfig.apiBaseUrl}/history/export_pdf?session_ids=${session.id}`,
-      `PEMF_Rapor_${session.patient_name || "hasta"}_${session.id}.pdf`,
-      showToast,
-    );
-  };
-
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
+        {/* ⚠️ SEÇİM KİPİNDE KART DOKUNUŞU SEÇER, DETAY AÇMAZ: iki eylemi aynı dokunuşa
+            bindirmek, operatörün silmek için seçtiğini sanıp modal açmasına yol açardı. */}
+        {secimModu ? (
+          <TouchableOpacity
+            style={[styles.onayKutusu, secili && styles.onayKutusuSecili]}
+            onPress={onSecimDegistir}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: secili }}
+            accessibilityLabel={`${session.patient_name || "Kayıt"} seçimi`}
+            testID={`gecmis-secim-${session.id}`}
+          >
+            {secili ? <Check color={colors.white} size={16} /> : null}
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.titleArea}
-          onPress={onOpenDetails}
-          accessibilityLabel="Seans detayını aç"
+          onPress={secimModu ? onSecimDegistir : onOpenDetails}
+          accessibilityLabel={secimModu ? "Kaydı seç" : "Seans detayını aç"}
         >
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{session.patient_name || "Bilinmeyen Hasta"}</Text>
           <Text style={styles.muted} numberOfLines={1} ellipsizeMode="tail">{session.session_date} {session.start_time}</Text>
-          <Text style={styles.detailsHint} numberOfLines={1}>Bobin detayını gör ›</Text>
+          {secimModu ? null : <Text style={styles.detailsHint} numberOfLines={1}>Bobin detayını gör ›</Text>}
         </TouchableOpacity>
         <View style={{flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm}}>
           <StatusPill label={statusLabelTr(session.session_status)} state={state} />
-          <TouchableOpacity style={styles.iconBtn} onPress={handleShareReport} accessibilityLabel="Raporu Paylaş">
-            <Share2 color={colors.primary} size={18} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf}>
+          {/* ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "paylaşım seçeneği ve pdf butonu aynı işi
+              yapıyor seans başına. birini tutalım birini kaldır."
+              ÖLÇÜLDÜ — DOĞRUYDU: `handleShareReport` ile `downloadPdf` AYNI uca, AYNI dosya
+              adıyla gidiyordu; tek fark bir "hazırlanıyor" bildirimiydi. Paylaş ikonu,
+              yapmadığı bir şeyi (ayrı bir paylaşım akışı) vaat ediyordu.
+              ⚠️ MOBİLDE İŞLEV KAYBI YOK: `downloadFileWithAuth` native tarafta zaten
+              `Sharing.shareAsync` ile paylaşım sayfasını açar — yani bu TEK düğme
+              masaüstünde kaydeder, telefonda paylaşır. */}
+          <TouchableOpacity style={styles.btnOutline} onPress={downloadPdf} accessibilityLabel="Seans raporunu PDF olarak al">
             <Text style={styles.btnOutlineText}>PDF</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
@@ -561,5 +679,19 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: spacing.xs
-  }
+  },
+  btnOutlineAktif: { backgroundColor: colors.bgAlt },
+  // Seçim onay kutusu — dokunma hedefi `touch.min`den küçük OLAMAZ (kaza silmesi değil,
+  // kaza SEÇİMİ riski; küçük hedef yanlış kaydı seçtirir).
+  onayKutusu: {
+    width: touch.min,
+    height: touch.min,
+    borderRadius: rs(6),
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm
+  },
+  onayKutusuSecili: { backgroundColor: colors.primary, borderColor: colors.primary }
 });

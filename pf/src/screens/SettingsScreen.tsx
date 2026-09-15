@@ -20,6 +20,7 @@ import { FIRMA } from "@/config/firma";
 // Denetim 2026-08-28 #02: bulut kayit durumunun operatore gorunen karsiligi.
 // Saf fonksiyonlar AYRI modulde: testleri tum ekran bagimlilik grafigini yuklemeden kosar.
 import { bulutKayitRozeti, eslestirmeKoduUzaktanGecerliMi } from "@/services/bulutKayit";
+import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 
 export function SettingsScreen() {
@@ -878,7 +879,12 @@ function Info({ label, value }: { label: string; value?: string }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} selectable numberOfLines={2}>{value || "—"}</Text>
+      {/* ⚠️ Burada DOSYA YOLU, sürüm ve cihaz kimliği gibi UZUN değerler duruyor ve iki
+          satırda kesiliyordu — üstelik kesilen kısım (yolun sonu, kimliğin kuyruğu) tam da
+          işe yarayan kısım. Dokununca tamamı açılır; `selectable` korunur (kopyalanabilir). */}
+      <GenisletilebilirMetin style={styles.infoValue} satir={2} testID="ayar-bilgi-deger">
+        {value || "—"}
+      </GenisletilebilirMetin>
     </View>
   );
 }

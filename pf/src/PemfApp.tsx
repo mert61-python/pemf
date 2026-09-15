@@ -7,7 +7,7 @@ import { WelcomeScreen } from "@/screens/WelcomeScreen";
 import { colors } from "@/theme/tokens";
 import { RouteKey } from "@/types/domain";
 import { UserModeProvider, useUserMode } from "@/context/UserModeContext";
-import { canAccess } from "@/config/access";
+import { canAccess, varsayilanRota } from "@/config/access";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { LiveDataProvider, useLiveData } from "@/context/LiveDataContext";
 import { AppNavProvider } from "@/context/AppNavContext";
@@ -43,16 +43,22 @@ const routeMeta: Record<RouteKey, { title: string; subtitle: string }> = {
 
 function MainRouter() {
   const { userMode } = useUserMode();
-  const [activeRoute, setActiveRoute] = useState<RouteKey>("dashboard");
+  // ⚠️ `null` = rota henüz seçilmedi → profilin AÇILIŞ rotası kullanılır (aşağıda).
+  // Sabit "dashboard" ile başlamak, o rotanın kapalı olduğu pet_owner profilinde
+  // yedeğe düşüp yine "dashboard"a dönmek demekti (2026-09-12'de kaldırıldı).
+  const [activeRoute, setActiveRoute] = useState<RouteKey | null>(null);
 
   if (!userMode) {
     return <WelcomeScreen />;
   }
 
-  // Profil bu rotaya erişemiyorsa dashboard'a düş. TEK KAYNAK: config/access (PemfApp + AppShell tutarlı) →
-  // yanlış profile cihaz/tedavi ekranı sızmaz (ör. pet_owner control/sensors/kpi göremez).
-  // (2026-08-06: örnek "researcher" idi; sahip kararıyla araştırma profiline cihaz rotaları açıldı.)
-  const effectiveRoute = canAccess(userMode, activeRoute) ? activeRoute : "dashboard";
+  // Profil bu rotaya erişemiyorsa AÇILIŞ rotasına düş. TEK KAYNAK: config/access
+  // (PemfApp + AppShell tutarlı) → yanlış profile cihaz/tedavi ekranı sızmaz.
+  // ⚠️ YEDEK ROTA ARTIK SABİT DEĞİL: "dashboard" her profilde yok (bkz. varsayilanRota).
+  // Sabit bıraksaydık pet_owner erişemediği bir rotaya düşer ve BOŞ EKRAN görürdü.
+  const acilis = varsayilanRota(userMode);
+  const effectiveRoute =
+    activeRoute && canAccess(userMode, activeRoute) ? activeRoute : acilis;
 
   return (
     <AppNavProvider navigateTo={setActiveRoute}>

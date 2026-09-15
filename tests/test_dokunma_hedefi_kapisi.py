@@ -35,8 +35,13 @@ _KOK = pathlib.Path(__file__).resolve().parents[1]
 _PF = _KOK / "pf" / "src"
 
 # 2026-09-05 ölçümü (S3: 139 → 119; S7 adım 10 flipBtn ile 118).
+# 2026-09-12: 118 → 117. Seans kartındaki "Raporu Paylaş" ikon düğmesi KALDIRILDI (sahip:
+# "paylaşım seçeneği ve pdf butonu aynı işi yapıyor") ve o düğme dokunma-hedefi tabanı
+# taşımıyordu → ihlal kendiliğinden düştü.
+# ⚠️ Aynı turda EKLENEN dokunulabilir öğeler (SecimCubugu düğmeleri, seçim onay kutuları,
+# GenisletilebilirMetin) sayıyı ARTIRMADI: hepsi `touch.min` tabanıyla yazıldı.
 # Faz D hedefi: 0. Düşürdükçe bu sayıyı da düşürün.
-KALAN_IHLAL = 118
+KALAN_IHLAL = 117
 # Gerekçeli muafiyetler (perde/kart gibi dokunuş yutucular).
 MUAF_SAYISI = 2
 

@@ -33,6 +33,7 @@ import { apiGet, apiPost, platformAlert, platformConfirm } from "@/services/apiC
 import { getClientInstanceId, serviceConfig } from "@/services/config";
 import { useAuth } from "@/context/AuthContext";
 import { AiSpecApprovalModal, type AiProposalMeta, type AiProposalSpecs } from "@/components/domain/AiSpecApprovalModal";
+import { GenisletilebilirMetin } from "@/components/ui/GenisletilebilirMetin";
 
 const ORGANS = [
   { id: 0, name: "Tüm Vücut" }, { id: 1, name: "Mide" }, { id: 2, name: "Böbrek" },
@@ -1121,8 +1122,11 @@ export function AiProPanel({
 
       {/* Sunum-katmanı XAI (2026-08-26): "Güven %X"in NEDENİ — operatör düşük güvenin poz mu,
           maske-dışı mı, kalibrasyonsuzluk mu olduğunu görür. Eski backend alanı göndermez → gizli. */}
+      {/* ⚠️ Sahip 2026-09-12: "üç nokta sorunu ve devamını göremeyiş" — güven dökümü bir
+          CÜMLEDİR ve iki satırda kesildiğinde gerekçenin yarısı (kalibrasyon uyarısı dahil)
+          okunamıyordu. Artık dokunuşla açılıyor. */}
       {guvenDokumu && typeof guvenDokumu.pose_confidence === "number" ? (
-        <Text style={styles.guvenDokumu} numberOfLines={2}>
+        <GenisletilebilirMetin style={styles.guvenDokumu} satir={2} testID="aipro-guven-dokumu">
           {`Güven dökümü: poz %${Math.round((guvenDokumu.pose_confidence ?? 0) * 100)}` +
             ` × derinlik ${(guvenDokumu.depth_factor ?? 1).toFixed(2).replace(".", ",")}` +
             ((guvenDokumu.mask_factor ?? 1) < 1 ? " × maske-dışı ×0,6" : "") +
@@ -1130,7 +1134,7 @@ export function AiProPanel({
             (guvenDokumu.calibration_cap != null
               ? ` · ⚠️ kalibrasyonsuz — tavan %${Math.round(guvenDokumu.calibration_cap * 100)}`
               : "")}
-        </Text>
+        </GenisletilebilirMetin>
       ) : null}
 
       {/* 3B KONUM ROZETİ + HEDEF LİSTESİ (yalnız araştırma). Rozet, işaret görünmediğinde önerinin
@@ -1155,7 +1159,9 @@ export function AiProPanel({
       {/* HAZIRLIK ŞERİDİ — aşamayı ve çıkış yolunu gösterir (2026-08-24). */}
       {hazirlik ? (
         <View style={[styles.hazirlikKutu, dusukGuven && styles.hazirlikKutuUyari]}>
-          <Text style={styles.hazirlikMetin} numberOfLines={3}>{oneriHatasi || seritMetni}</Text>
+          <GenisletilebilirMetin style={styles.hazirlikMetin} satir={3} testID="aipro-hazirlik-metni">
+            {oneriHatasi || seritMetni}
+          </GenisletilebilirMetin>
           <TouchableOpacity
             style={styles.hazirlikIptal}
             onPress={vazgec}
