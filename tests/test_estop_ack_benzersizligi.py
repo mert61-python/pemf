@@ -111,7 +111,18 @@ def test_KARSIT_KANIT_timeout_metni_DEGISMEDI(monkeypatch):
     api._register_ack("estop_8_timeouttest")  # kimse resolve etmeyecek
     api._estop_ack_watch(8, "estop_8_timeouttest")
 
-    assert uyarilar and "GELMEDİ" in uyarilar[0][0], f"timeout uyarısı bozuldu: {uyarilar!r}"
+    # ⚠️ KONUM ÇIPASI BİLEREK KORUNDU — ama teşhisi netleştirildi (2026-09-15, CI 35005619586).
+    # Bu satır bir kez kırmızı döndü ve mesajı YANILTICIYDI: "timeout uyarısı bozuldu" derken
+    # metin gayet yerindeydi; listeye BAŞKA bir testin `start-ack-8` daemon bekçisi yazmıştı
+    # (2 sn sonra ateşleyip o an takılı olan monkeypatch'e düşüyor). Kök neden
+    # `tests/conftest.py::_ack_bekcilerini_bosalt` ile kapatıldı; bu satır kanarya olarak
+    # kalıyor — yine kırmızı olursa boşaltmada bir delik var demektir, metin bozulmuş değil.
+    assert uyarilar, "timeout uyarısı HİÇ üretilmedi"
+    assert "GELMEDİ" in uyarilar[0][0], (
+        f"timeout uyarısı bozuldu VEYA listeye yabancı bildirim sızdı: {uyarilar!r}\n"
+        "Sızıntıysa: başka bir testin `start-ack-*`/`estop-ack-*` daemon bekçisi bu testin "
+        "monkeypatch'ine yazmıştır → tests/test_ack_bekcisi_sonraki_teste_sizmaz.py'ye bakın."
+    )
 
 
 def test_KARSIT_KANIT_onaylanan_estop_yine_sessiz(monkeypatch):

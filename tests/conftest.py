@@ -4,6 +4,7 @@
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -238,3 +239,66 @@ def _masaustunu_koru(tmp_path):
 # tek yerde olması, yeni bir test dosyasının import'u unutup ImportError almasını önler.
 if str(_TESTS_DIR := Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
+
+
+@pytest.fixture(autouse=True)
+def _ack_bekcilerini_bosalt():
+    """⚠️ ACK BEKÇİSİ SONRAKİ TESTE SIZAR — 2026-09-15'te CI'da ölçüldü (koşu 35005619586).
+
+    ===========================================================================
+    ARIZA
+    ===========================================================================
+    `windows-latest` matrisinde `test_KARSIT_KANIT_timeout_metni_DEGISMEDI` düştü.
+    Kendi `uyarilar` listesinde BEŞ kayıt vardı ve kendi uyarısı ÜÇÜNCÜ sıradaydı:
+
+        [('⚠️ Bobin 8: start onayı gelmedi …', 'warning'),      <- YABANCI
+         ('⚠️ Bobin 8: start onayı gelmedi …', 'warning'),      <- YABANCI
+         ('⚠️ Bobin 8: acil durdurma ESP onayı GELMEDİ …', 'error'),   <- kendi
+         …]
+
+    KÖK NEDEN: `_start_ack_izle_arka_planda` **daemon thread** açıyor
+    (`start-ack-{coil}`) ve o thread `_START_ACK_TIMEOUT = 2.0` sn bekleyip
+    `_push_notification` çağırıyor. Testler 2 sn'den KISA sürüyor → thread SONRAKİ
+    testin içinde ateşliyor ve o an `_push_notification`'a takılı olan BAŞKA testin
+    monkeypatch'ine yazıyor. E-stop bekçisi (`estop-ack-{coil}`) aynı desende.
+
+    ⚠️ NEDEN YERELDE GEÇİYOR, CI'DA DÜŞÜYOR: tamamen ZAMANLAMA. Tam süit bu makinede
+    iki kez yeşil geçti; CI runner'ının farklı hızında sıra kaydı. "Kararsız test"
+    denip geçilecek sınıf DEĞİL — bu bir test-izolasyon arızası ve hangi testi
+    vuracağı rastgele.
+
+    ===========================================================================
+    ⚠️ NEDEN TEARDOWN'DA (setup'ta değil)
+    ===========================================================================
+    Sızıntıyı ÜRETEN test kendi teardown'ında temizlemeli; sonraki testin setup'ına
+    bırakmak, araya giren her fixture sırasında pencereyi açık bırakır. Ayrıca
+    autouse conftest fixture'ı testin kendi `monkeypatch`inden ÖNCE kurulur, yani
+    SONRA yıkılır → burada `_push_notification` artık GERÇEK fonksiyondur ve
+    boşaltma kimsenin listesine yazmaz.
+
+    ⚠️ THREAD ÖLDÜRÜLEMEZ (Python). Bu yüzden bekleyen `Event`'ler SET edilir →
+    `_wait_ack` hemen döner → thread kendi akışını tamamlayıp biter; sonra `join`.
+    Kayıt sözlüğü de temizlenir.
+    """
+    yield
+    try:
+        from servers import api_server as _api
+    except Exception:
+        return
+    try:
+        with _api._pending_acks_lock:
+            for _giris in list(_api._pending_acks.values()):
+                try:
+                    _giris["event"].set()
+                except Exception:
+                    pass
+            _api._pending_acks.clear()
+    except Exception:
+        pass
+    for _t in list(threading.enumerate()):
+        _ad = getattr(_t, "name", "") or ""
+        if _ad.startswith(("start-ack-", "estop-ack-")) and _t.is_alive():
+            try:
+                _t.join(timeout=2.5)
+            except Exception:
+                pass
