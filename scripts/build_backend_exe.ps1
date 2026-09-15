@@ -203,12 +203,40 @@ if ($SkipWeb) {
 # Yerel ESP Secrets.h'tan uretir; kaynak placeholder ise UYARIR ama build'i DURDURMAZ
 # (CI/temiz-klon ortaminda paket sirsiz cikar, ayna sessizce devre disi kalir — guvenli).
 & $PY "build_tools\make_cloud_provision.py"
-if ($LASTEXITCODE -ne 0) { Warn "cloud_mqtt_provision uretilemedi -> paket BULUT-AYNASIZ cikacak (yerel E-stop etkilenmez)." }
+if ($LASTEXITCODE -ne 0) {
+    # ⚠️ BAYAT-DOSYA KAPISI (denetim kalemi C7, 2026-09-13).
+    # Uretim basarisizken ESKI dosya diskte kalirsa PyInstaller onu PAKETE GOMER ve
+    # asagidaki "BULUT-AYNASIZ cikacak" uyarisi YALAN olur: paket, artik uretilemeyen
+    # (muhtemelen rotasyona ugramis / placeholder'a donmus) BAYAT bir kimlikle sevk edilir.
+    # Sessiz-bayat sir, yoklugundan daha tehlikelidir. Mesaji DOGRU yapmanin tek yolu
+    # dosyayi gercekten kaldirmaktir.
+    $provizyon = Join-Path $GuiRoot "data\cloud_mqtt_provision.json"
+    if (Test-Path $provizyon) {
+        Remove-Item $provizyon -Force -ErrorAction SilentlyContinue
+        Warn "cloud_mqtt_provision uretilemedi -> BAYAT dosya SILINDI (sessizce sevk edilmesin)."
+    }
+    Warn "cloud_mqtt_provision uretilemedi -> paket BULUT-AYNASIZ cikacak (yerel E-stop etkilenmez)."
+}
 
 # --- 5. Build — KISA yola (260-karakter sınırı) ---
 $dist = Join-Path $BuildRoot "dist"
 $work = Join-Path $BuildRoot "build"
 if (-not (Test-Path $BuildRoot)) { New-Item -ItemType Directory -Path $BuildRoot | Out-Null }
+
+# ⚠️ YAPI AĞACINDAN ÇALIŞAN YETİM SÜREÇLERİ TEMİZLE — YOKSA BU BUILD DÜŞER.
+# Ölçüldü 2026-09-13: aşağıdaki AI-hazırlık kapısı EXE'yi ayağa kaldırıyor, EXE de
+# `_internal\bin\mosquitto\mosquitto.exe`i başlatıyor. Kapının `finally`si yalnız backend'i
+# öldürüyordu; broker YETİM kalıyor ve `libcrypto-3-x64.dll` üzerinde kilit tutuyordu. Bir
+# SONRAKİ build eski `dist`i silemiyor → PyInstaller PermissionError → build başarısız, üstelik
+# çıkış kodu 0 dönüyor ve `dist` SİLİNMİŞ kalıyor. Yani her başarılı build bir sonrakini
+# zehirliyordu. Yalnız YAPI AĞACINDAN çalışanlar öldürülür; kurulu runtime'a DOKUNULMAZ.
+$yetim = @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($BuildRoot, [StringComparison]::OrdinalIgnoreCase) })
+foreach ($y in $yetim) {
+    Warn "Yapı ağacından çalışan yetim süreç durduruluyor: $($y.ProcessName) (PID $($y.Id))"
+    try { Stop-Process -Id $y.Id -Force -EA Stop } catch { Warn "  durdurulamadı: $($_.Exception.Message)" }
+}
+if ($yetim.Count -gt 0) { Start-Sleep -Seconds 2 }
+
 Info "PyInstaller build → $dist"
 $t0 = Get-Date
 & $PY -m PyInstaller "build_tools\PEMF_Backend_onedir.spec" --noconfirm --distpath $dist --workpath $work
@@ -286,7 +314,10 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
     $gatePort = 8177
     $gateLog = Join-Path $BuildRoot "ai_hazirlik_kapisi.log"
     $env:PEMF_SIMULATE = "1"
-    $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort" `
+    # ⚠️ --no-mosquitto-ensure: kapı yalnız HTTP uçlarını kullanıyor. Broker'ı başlatırsa,
+    # aşağıdaki `finally` yalnız backend'i öldürdüğü için YETİM kalır ve SONRAKİ build'i
+    # DLL kilidiyle düşürür (bkz. build başındaki yetim temizliği).
+    $proc = Start-Process -FilePath $exe -ArgumentList "--port", "$gatePort", "--no-mosquitto-ensure" `
         -RedirectStandardOutput $gateLog -RedirectStandardError "$gateLog.err" -PassThru -WindowStyle Hidden
     try {
         $hazir = $false
@@ -356,6 +387,12 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
         }
     } finally {
         try { Stop-Process -Id $proc.Id -Force -EA 0 } catch { }
+        # ⚠️ ÇOCUKLARI DA TOPLA: backend'i öldürmek onun başlattığı yardımcıları öldürmez.
+        # Yetim broker DLL kilidi tutup SONRAKİ build'i düşürüyordu.
+        foreach ($c in @(Get-Process -EA 0 | Where-Object { $_.Path -and $_.Path.StartsWith($dist, [StringComparison]::OrdinalIgnoreCase) })) {
+            Warn "Kapı sonrası yetim süreç durduruluyor: $($c.ProcessName) (PID $($c.Id))"
+            try { Stop-Process -Id $c.Id -Force -EA 0 } catch { }
+        }
         Remove-Item Env:PEMF_SIMULATE -EA 0
     }
 }

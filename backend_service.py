@@ -313,19 +313,26 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
         candidates.append(app_data_dir / name)
     # op-doğrulama #8: mevcut *.plain.bak (migration düz-metin PII yedeği) dosyalarını da kilitle —
     # halihazırda dağıtılmış cihazlarda oluşturmada ACL yoktu → startup'ta geriye-dönük SYSTEM+Admin kilit.
+    # ⚠️ `.plain.bak` AYRI LISTEDE: bunlar `keep_current_user=True` ile kilitlenir.
+    # Varsayilan (False) Administrators SID'ini suzulen YUKSELTILMEMIS backend'i KENDI yedeginden
+    # disari atiyordu; yarim-goc toparlamasi `[Errno 13]` ile dusup klinik gecmisini BOS
+    # gosteriyordu (urunde OLCULDU 2026-09-13). `file_acl.lock_down_file` docstring'i bu sinifi
+    # "DENETIM P3 — sahada yasandi" diye zaten kaydetmisti; ayni kor nokta burada tekrar etti.
+    # Korunan sey KAYBOLMUYOR: Users / Authenticated Users her iki kipte de ERISEMEZ.
+    plain_yedekler = []
     try:
-        candidates.extend(app_data_dir.glob("*.plain.bak"))
+        plain_yedekler = list(app_data_dir.glob("*.plain.bak"))
     except Exception:
         pass
     seen: set[str] = set()
     locked = 0
-    for c in candidates:
+    for c in candidates + plain_yedekler:
         try:
             key = str(c).lower()
             if key in seen:
                 continue
             seen.add(key)
-            if lock_down_file(c):
+            if lock_down_file(c, keep_current_user=c in plain_yedekler):
                 locked += 1
         except Exception:
             pass
@@ -852,9 +859,15 @@ def main(argv: list[str] | None = None) -> int:
         init_telemetry()
     except Exception:
         logger.debug("Telemetri init atlandı", exc_info=True)
+    # ⚠️ SIRA ONEMLI — TOPARLAMA ONCE. Eskiden `_harden_secret_file_acls` once kosuyordu ve
+    # `*.plain.bak` dosyalarini SYSTEM+Administrators'a kilitliyordu; hemen ardindan gelen
+    # yarim-goc toparlamasi kendi kilitledigimiz dosyayi acamayip `[Errno 13]` ile dusuyor,
+    # yerine SABLON konuyor ve klinik gecmisi BOS gorunuyordu (urunde OLCULDU 2026-09-13).
+    # Toparlama, kilitlemeden ONCE kosar; kilitleme sonrasinda zaten yerinde duran dosyalara
+    # uygulanir.
+    _initialize_database_safe(logger)
     _harden_secret_file_acls(app_data_dir, logger)
     _log_pairing_info(logger)
-    _initialize_database_safe(logger)
 
     event_bus = get_event_bus()
     core = HeadlessCore(

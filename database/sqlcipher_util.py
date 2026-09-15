@@ -13,9 +13,11 @@ yeni cagiranlar (patient_database) icindir. Anahtar ADI ayni oldugundan ayni ana
 """
 
 import contextlib
+import gc
 import os
 import shutil
 import sqlite3
+import time
 
 try:
     import keyring
@@ -286,6 +288,143 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     return tasinan
 
 
+def _tasi_yeniden_dene(kaynak, hedef, denemeler=5, bekleme=0.2, logger=None):
+    """`shutil.move`, Windows'ta GECICI kilitlere karsi sinirli yeniden-deneme ile.
+
+    ⚠️ NEDEN: dosya tasima Windows'ta baska bir surec (virus tarayici, yedekleyici, indeksleyici
+    ya da ayni anda kosan ikinci bir backend) dosyayi acik tuttugu anda `PermissionError`
+    (WinError 32/5) ile duser. Bu ANLIK bir durumdur; 100-200 ms sonra genelde gecer.
+    Bu depoda ayni sinif daha once yasandi (bkz. bellek `pemf-build-dll-kilidi-ve-sahte-cikis-kodu`:
+    yetim mosquitto bir DLL'i kilitleyip derlemeyi dusurmustu).
+
+    ⚠️ SINIRLI: sonsuz denemez. Kilit kalicysa cagiran GERI ALMA yapabilsin diye istisna yukselir.
+    """
+    son = None
+    for i in range(max(1, denemeler)):
+        try:
+            shutil.move(kaynak, hedef)
+            return
+        except Exception as e:  # PermissionError ve akrabalari
+            son = e
+            if i + 1 < denemeler:
+                # ⚠️ gc.collect(): OLCULEN kok neden. WinError 32'yi tutan sey cogu zaman
+                # DIS bir surec degil, AYNI surecteki ARTIK BASVURULMAYAN ama henuz
+                # toplanmamis bir sqlite/sqlcipher baglantisidir (ornegin onceki bir
+                # TreatmentHistoryDB ornegi acikca close() edilmeden birakilmis).
+                # CPython'da refcount sifirlanınca tutamak kapanir; `gc.collect()` dongusel
+                # basvurulari da kirip kapanmayi TETIKLER. Beklemek tek basina yetmez —
+                # kimse tutamagi birakmaz. (Olculdu 2026-09-13: tam suitte
+                # `test_ikinci_acilis_yeniden_GOCMEZ` bu yuzden araliklarla dusuyordu.)
+                gc.collect()
+                time.sleep(bekleme * (i + 1))  # artan bekleme
+    if logger:
+        logger.warning("Dosya tasima %d denemede basarisiz: %s -> %s (%s)", denemeler, kaynak, hedef, son)
+    raise son if son is not None else RuntimeError("tasima basarisiz")
+
+
+def _kilidi_gevset(yol, logger=None):
+    """ACL kilidini, SURECI CALISTIRAN HESABA da erisim verecek sekilde yeniden uygula.
+
+    ⚠️ OLCULDU 2026-09-13 (urun, frozen EXE): `backend_service._harden_secret_file_acls`
+    acilista `*.plain.bak` dosyalarini `keep_current_user=False` ile kilitliyor. Backend
+    YUKSELTILMEMIS calisiyorsa (launcher ile baslatma) Administrators SID'i suzulur ve surec
+    KENDI yazdigi yedegi acamaz; yarim-goc toparlamasi `[Errno 13] Permission denied` ile duser.
+    `file_acl.lock_down_file`in docstring'i bu sinifi zaten "DENETIM P3 — sahada yasandi" diye
+    kaydetmis; ayni kor nokta `.plain.bak`ta tekrar etti.
+
+    Dosyanin SAHIBI her zaman ortulu WRITE_DAC tasir; yedegi yazan bizdik, bu yuzden kilidi
+    gevsetebiliriz. Koruma KAYBOLMAZ: Users/Authenticated Users yine disarida kalir.
+    """
+    try:
+        from utils.file_acl import lock_down_file
+
+        return bool(lock_down_file(yol, keep_current_user=True))
+    except Exception:
+        if logger:
+            logger.debug("ACL gevsetme denenemedi: %s", yol, exc_info=True)
+        return False
+
+
+def _yedegi_kenara_al(backup, logger=None):
+    """Var olan duz-metin yedegi SILME — zaman damgali bir ada TASI.
+
+    ⚠️ BU SATIR VERI YOK EDIYORDU (olculdu 2026-09-13, urun): goc kodu yer-degistirme
+    penceresine girmeden once `if os.path.exists(backup): os.remove(backup)` yapiyordu.
+    Normalde `.plain.bak` goc kodunun KENDI biraz once yazdigi dosyadir, silmek zararsizdir.
+    Ama YARIM GOC kalmissa `.plain.bak` kliniğin TEK veri kopyasidir ve toparlama (ACL kilidi
+    yuzunden) dusmusse hala oradadir. O durumda bu `remove`, sablondan yeni bir DB yaratmadan
+    hemen once hasta gecmisini GERI DONULMEZ sekilde siliyordu — sonra da yeni yedek "guvenli
+    silindi" diye loglaniyordu; disaridan "veri kayboldu" bile denmiyordu.
+
+    Artik hicbir sey silinmez: eski yedek `.plain.bak.<zaman>` olur ve diskte DURUR.
+    """
+    if not os.path.exists(backup):
+        return
+    damga = time.strftime("%Y%m%d_%H%M%S")
+    kenar = f"{backup}.{damga}"
+    i = 0
+    while os.path.exists(kenar):
+        i += 1
+        kenar = f"{backup}.{damga}.{i}"
+    try:
+        _tasi_yeniden_dene(backup, kenar, logger=logger)
+        if logger:
+            logger.warning(
+                "ONCEKI duz-metin yedek SILINMEDI, kenara alindi: %s -> %s. Yarim kalmis bir "
+                "goc kaldiysa KLINIK VERISI BU DOSYADADIR.",
+                backup,
+                kenar,
+            )
+    except Exception:
+        # Tasinamadiysa da SILME. Goc bu turda iptal olsun; veri yerinde kalsin.
+        if logger:
+            logger.error(
+                "ONCEKI duz-metin yedek ne tasinabildi ne de silindi (%s) — goc IPTAL, veri yerinde BIRAKILDI.",
+                backup,
+            )
+        raise
+
+
+def _yarim_goc_toparla(db, logger=None):
+    """ONCEKI yarim goc kaldiysa orijinali GERI KOY.
+
+    ⚠️ Diskteki tehlikeli durum: `db` YOK + `db.plain.bak` VAR. Surec tam yer-degistirme
+    penceresinde olduyse (elektrik, kill, kilit) boyle kalir. Toparlanmazsa bir sonraki acilis
+    `os.path.exists(db)` False gorur, goc erken doner ve uygulama **YENI BOS** bir veritabani
+    yaratir → klinik hasta gecmisini BOS gorur. Veri diskte durur ama kimse bakmaz.
+    """
+    yedek = db + ".plain.bak"
+    if os.path.exists(db) or not os.path.exists(yedek):
+        return False
+    try:
+        _tasi_yeniden_dene(yedek, db, logger=logger)
+        if logger:
+            logger.warning("Yarim kalmis goc toparlandi: duz-metin yedek geri konuldu (%s).", db)
+        return True
+    except Exception:
+        # ⚠️ IKINCI SANS — ACL. Ilk yazimda burada pes ediyordum ve urunde HEP buraya
+        # dusuyordu: acilis sirasi `_harden_secret_file_acls` -> toparlama oldugu icin yedek
+        # zaten kilitlenmis oluyordu (Errno 13, kaynak dosyada). Sira duzeltildi, ama ESKI
+        # surumlerin kilitledigi yedekler sahada duruyor — onlari da acabilmeliyiz.
+        if not _kilidi_gevset(yedek, logger):
+            if logger:
+                logger.error("Yarim kalmis goc TOPARLANAMADI — veri %s dosyasinda duruyor.", yedek)
+            return False
+        try:
+            _tasi_yeniden_dene(yedek, db, logger=logger)
+        except Exception:
+            if logger:
+                logger.error(
+                    "Yarim kalmis goc TOPARLANAMADI (ACL gevsetildi ama tasima yine dustu) — "
+                    "veri %s dosyasinda duruyor.",
+                    yedek,
+                )
+            return False
+        if logger:
+            logger.warning("Yarim kalmis goc toparlandi (ACL kilidi gevsetildikten sonra): %s.", db)
+        return True
+
+
 def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
     """Anahtar varsa ve mevcut DB DUZ-METIN ise sifreli kopyaya aktar (sqlcipher_export); eski
     duz-metin .plain.bak olur. Anahtar/binding yok veya zaten sifreli ise no-op (veri kaybi yok)."""
@@ -302,6 +441,10 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
             return
         sqlcipher = import_sqlcipher()
         db = str(db_path)
+        # ⚠️ ONCE yarim kalmis bir goc var mi — VARSA orijinali geri koy. Bu, asagidaki
+        # `os.path.exists(db)` erken-donusunden ONCE olmak ZORUNDA: aksi halde `db` yok
+        # sayilir, goc atlanir ve uygulama BOS bir veritabani yaratir.
+        _yarim_goc_toparla(db, logger)
         if sqlcipher is None or not os.path.exists(db):
             return
         keyq = "'" + key.replace("'", "''") + "'"
@@ -367,10 +510,43 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
                 except Exception:
                     pass
         backup = db + ".plain.bak"
-        if os.path.exists(backup):
-            os.remove(backup)
-        shutil.move(db, backup)
-        shutil.move(enc_tmp, db)
+        # ⚠️ SILME — KENARA AL. Eskiden `os.remove(backup)` idi ve yarim kalmis bir gocun
+        # tek veri kopyasini yok ediyordu (bkz. `_yedegi_kenara_al`).
+        _yedegi_kenara_al(backup, logger)
+        # ══════════════════════════════════════════════════════════════════════════════
+        # ⚠️ YER-DEGISTIRME PENCERESI — BURADA `db` BIR AN YOKTUR.
+        # ══════════════════════════════════════════════════════════════════════════════
+        # Iki ayri tasima var; ikincisi duserse `db` YOK, veri `.plain.bak`ta, sifreli kopya
+        # `.enc.tmp`te kalir. Ustelik bu fonksiyonun tamami `except Exception` ile sarili ve
+        # hatayi YUTAR → bir sonraki acilista uygulama BOS bir DB yaratir ve klinik hasta
+        # gecmisini BOS gorur. Sessiz bir veri-erisilemezligi.
+        #
+        # Bu yuzden: ikinci tasima yeniden-denemeli, DUSERSE orijinal GERI KONUR ve goc
+        # temiz sekilde iptal edilir (veri duz-metin olarak SAGLAM kalir; sonraki acilis
+        # yeniden dener).
+        _tasi_yeniden_dene(db, backup, logger=logger)
+        try:
+            _tasi_yeniden_dene(enc_tmp, db, logger=logger)
+        except Exception:
+            # GERI ALMA: orijinali yerine koy — `db`yi asla yok birakma.
+            try:
+                if not os.path.exists(db):
+                    _tasi_yeniden_dene(backup, db, logger=logger)
+            except Exception:
+                if logger:
+                    logger.error("GOC GERI ALINAMADI — veri %s dosyasinda duruyor, ELLE geri koyun.", backup)
+                return
+            try:
+                if os.path.exists(enc_tmp):
+                    os.remove(enc_tmp)
+            except Exception:
+                pass
+            if logger:
+                logger.warning(
+                    "SQLCipher goc IPTAL (dosya kilidi): duz-metin veri yerinde KORUNDU; "
+                    "sonraki aciliste yeniden denenecek."
+                )
+            return
         # op-doğrulama #8: .plain.bak TÜM eski düz-metin DB'yi içerir → SQLCipher'ı baypas eden PII
         # kopyası. Escrow (migration-kurtarma) için TUTULUR ama SIKI ACL (SYSTEM+Admin) ile kilitlenir
         # → yerel kullanıcı düz-metin PII okuyamaz (B-1.2 .sqlcipher_key escrow deseniyle tutarlı).

@@ -10,6 +10,46 @@ kapalı). Site ise üç yerde "cihazda şifreli (SQLCipher)" diye beyan ediyor.
 GERÇEK ARTEFAKTLA ÖLÇÜLDÜ (frozen EXE, izole veri dizini):
     bayraksız → atRestEncrypted=False   |   PEMF_ENCRYPT_AT_REST=1 → atRestEncrypted=True
     düz-metin klinik + bayrak açılışı   → göç etti, kayıt KORUNDU, hard-fail YOK
+
+⚠️ KARARSIZLIĞIN GERÇEK KÖKÜ — TAM TRACEBACK'TEN (2026-09-13)
+
+`test_ikinci_acilis_yeniden_GOCMEZ`in aralıklı düşüşü sonunda tam çıktıyla yakalandı:
+
+    PermissionError: [WinError 32] Dosya başka bir işlem tarafından kullanıldığından
+        pemf_treatment_history.db -> pemf_treatment_history.db.plain.bak
+
+Göçün **BİRİNCİ** taşıması kilide takılıyordu. Kilidi tutan DIŞ bir süreç değil, **aynı
+süreçteki artık başvurulmayan ama henüz toplanmamış bir SQLCipher bağlantısı** (önceki
+`TreatmentHistoryDB` örneği açıkça `close()` edilmeden bırakılmış).
+
+⚠️ Beklemek tek başına ÇÖZMEZ — kimse tutamağı bırakmaz. Çözüm `_tasi_yeniden_dene` içinde
+her denemeden önce **`gc.collect()`**: CPython'da refcount sıfırlanınca tutamak kapanır,
+`gc.collect()` döngüsel başvuruları da kırıp kapanmayı TETİKLER.
+
+⚠️ Sonucu masum DEĞİLDİ: taşıma düşünce göç iptal oluyor, DB düz-metin kalıyor ve
+`PEMF_ENCRYPT_AT_REST=1` fail-closed kuralı devreye girip **veritabanını hiç açmıyordu**
+("Tedavi gecmisi veritabani acilamadi ve karantinaya ALINAMADI").
+
+---
+
+⚠️ KARARSIZLIK → GERÇEK ARIZA (2026-09-13). BULUNDU ve DÜZELTİLDİ.
+`test_ikinci_acilis_yeniden_GOCMEZ` tam süitte **bir kez** düştü (o an makinede eşzamanlı
+backend + Docker + Vault koşuyordu) ve tekrarlanmadı: izole 10/10, tam süit 2×2969 yeşil.
+"Kararsız test" deyip geçmek yerine göç yolundaki dosya işlemleri okundu — ve altından
+kararsızlıktan **çok daha ciddi** bir şey çıktı:
+
+`migrate_to_encrypted_if_needed` şifreliyi yerine koyarken İKİ ayrı taşıma yapıyordu
+(`db → .plain.bak`, sonra `.enc.tmp → db`). İkincisi düşerse `db` **YOK** kalıyor, hata da
+dıştaki `except Exception` tarafından **yutuluyordu** → sonraki açılışta uygulama BOŞ bir
+veritabanı yaratır ve klinik hasta geçmişini **BOŞ** görür (veri `.plain.bak`ta durur).
+
+Düzeltme (`database/sqlcipher_util.py`): sınırlı yeniden-deneme (`_tasi_yeniden_dene`) +
+ikinci taşıma kalıcı olarak düşerse **orijinali geri koyma** + açılışta **yarım-göç
+toparlama** (`_yarim_goc_toparla`).
+Kapı: `tests/test_goc_yarim_kalirsa_db_kaybolmaz.py` (4 test, 3/3 mutasyon KIRMIZI).
+
+⚠️ KENDİ HATAM, KAYDA GEÇSİN: ilk koşuda çıktıyı `tail -5` ile kestiğim için traceback
+kayboldu ve teşhis gecikti. Süit çıktısını kesmeyin (`--tb=long`, tam çıktı saklayın).
 Bayrağın kendisi `install.rs`'te sözleşme testiyle kilitli (backend_env_at_rest_sifrelemeyi_*).
 
 BU DOSYA göç KOD YOLUNU kilitler: bayrak açılınca sahadaki düz-metin DB'nin veri kaybetmeden

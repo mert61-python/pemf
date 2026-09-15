@@ -24,6 +24,23 @@ from fastapi.testclient import TestClient
 from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
+@pytest.fixture(autouse=True)
+def _esp_acik(monkeypatch):
+    """⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12).
+
+    Bu dosya ESP bobinleriyle (6-8) seans açıyor — STM donanımı gerektirmesin diye. ESP
+    kapalıyken `/session/start` artık o bobinleri kapsamdan ÇIKARIYOR ve "hiçbir bobin
+    sürülmedi" diye reddediyor (hayalet bobin-8 kaydını önleyen düzeltme; sahip bildirimi:
+    "bobin 8 görünüyor ama aslında çalışmıyor").
+
+    Kural: ESP kodu SİLİNMEZ, testler `PEMF_ESP_ENABLED=1` ile KOŞMAYA DEVAM EDER
+    (bkz. test_internetsiz_ve_esp_kapali.py::test_KRITIK_bayrakla_ESP_GERI_GELIR).
+    ⚠️ `monkeypatch` ile: modül seviyesinde `os.environ` yazmak sonraki test modüllerine
+    SIZAR ve "ESP kapalı" kapılarını sessizce yeşile boyardı.
+    """
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
+
+
 @pytest.fixture(scope="module")
 def api():
     from servers import api_server

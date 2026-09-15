@@ -404,6 +404,31 @@ def initialize_database():
     for real_name, template_name in db_files.items():
         target_db_path = app_data_dir / real_name
 
+        # ⚠️ ÖNCE YARIM GÖÇ TOPARLAMASI — ŞABLON KOPYALAMADAN ÖNCE OLMAK ZORUNDA.
+        # At-rest göçü `db → .plain.bak` ve `.enc.tmp → db` diye İKİ taşıma yapar. İkincisi
+        # düşerse (Windows dosya kilidi / elektrik) diskte `db` YOK, veri `.plain.bak`ta kalır.
+        # Bu fonksiyon açılışta EN ÖNCE koşar ve `db` yok görünce ŞABLONU kopyalar → klinik
+        # BOŞ bir veritabanıyla açılır ve hasta geçmişi kaybolmuş görünür (veri diskte durur
+        # ama kimse bakmaz). ÖLÇÜLDÜ (2026-09-13): düzeltme yalnız `treatment_history_db` ve
+        # `sqlcipher_util`e konunca ürün HÂLÂ kaybediyordu, çünkü şablon kopyalayıcı ÖNCE
+        # davranıyordu. Toparlama üç yolda da çağrılmalı.
+        # ⚠️ SESSİZ `pass` YASAK: ilk yazımda `except Exception: pass` vardı ve import frozen
+        # EXE'de düşerse hiçbir iz bırakmıyordu — teşhis SAATLER aldı. Başarısızlık da,
+        # başarı da LOGLANIR.
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        try:
+            from database.sqlcipher_util import _yarim_goc_toparla
+
+            if _yarim_goc_toparla(str(target_db_path), _log):
+                _log.warning("Yarim kalmis goc toparlandi (sablon kopyalanmadan once): %s", target_db_path)
+        except Exception:
+            _log.exception(
+                "Yarim-goc toparlamasi DENENEMEDI (%s) — sablon kopyalanabilir ve klinik gecmisi BOS gorunebilir.",
+                target_db_path,
+            )
+
         # Müşteride zaten varsa dokunma (Veri kaybını önler)
         if target_db_path.exists():
             # print(f"Mevcut DB bulundu: {real_name}")
