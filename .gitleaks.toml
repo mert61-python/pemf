@@ -46,6 +46,23 @@ regexes = [
   # kirmizi e-posta uretiyordu. Muafiyet BILEREK yalniz `sb_publishable_` onekine dar:
   # `sb_secret_*` (service-role sinifi) YAKALANMAYA DEVAM EDER.
   '''sb_publishable_[A-Za-z0-9_-]+''',
+  # ── PEMF OZELLIK BAYRAKLARI — TURKCE "API" CARPISMASI (2026-09-15) ──────────────────
+  # ⚠️ KOK NEDEN OLCULDU, TAHMIN EDILMEDI. Varsayilan `generic-api-key` kurali
+  # `<anahtar-kelime>: <deger>` biciminde bir atama arar ve anahtar-kelime listesinde
+  # `API` var. TURKCE BUYUK HARFLI METINDE bu kelimelerin ICINDE gecer:
+  #   K-API-LANIYOR · K-API-SI · YAP-I... -> takipli .py dosyalarinda 15+ kelime.
+  # Yalitildi (glt/a1..a5): `PEMF_ESP_ENABLED=1` TEK BASINA, backtickli hali ve ciplak
+  # atama hali SIFIR bulgu veriyor; bulgu YALNIZ "KAPILANIYOR: `...`" biciminde cikiyor.
+  # Yani tetikleyen sey degerin kendisi degil, ONUNDEKI TURKCE KELIME.
+  #
+  # Muafiyet KELIMEYE ya da DOSYAYA degil, DEGERIN BICIMINE verildi: `PEMF_` onekli,
+  # yalniz buyuk harf/rakam/alt-cizgi iceren ve TEK HANELI bir sayiya esitlenen bayraklar.
+  # Bunlar belgelenmis calisma-zamani bayraklaridir (PEMF_ESP_ENABLED, PEMF_JETON_ENFORCED,
+  # PEMF_SIMULATE...), depoda ZATEN 10+ takipli dosyada acikca geciyorlar ve sir DEGILLER.
+  # ⚠️ NEDEN GUVENLI: hicbir gercek kimlik bilgisi `PEMF_AD=<tek rakam>` biciminde olamaz —
+  # 1 haneli deger entropi tasiyamaz. `PEMF_MQTT_PASS="..."` gibi bir sey YAKALANMAYA DEVAM
+  # EDER (deger rakam degil). Kilit: test_KARSIT_KANIT_bayrak_muafiyeti_GERCEK_SIRRI_gecirmez
+  '''\bPEMF_[A-Z0-9_]{3,48}=[0-9]\b''',
 ]
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════

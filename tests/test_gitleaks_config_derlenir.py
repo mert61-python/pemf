@@ -137,3 +137,107 @@ def test_KARSIT_KANIT_gitleaksignore_COMMIT_PINLI():
             f".gitleaksignore:{i} commit-pinli değil: {s!r} — "
             "yalnız <40-hex>:<dosya>:<kural>:<satır> biçimi kabul (genel muafiyet YASAK)"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# TURKCE "API" CARPISMASI — bayrak muafiyeti (2026-09-15)
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+# OLCULEN ARIZA: `git commit` sirasinda gitleaks `servers/api_server.py` icinde
+# `generic-api-key` bulgusu verdi. "Sir" sandigi sey `PEMF_ESP_ENABLED=1` — belgelenmis bir
+# calisma-zamani bayragi, depoda 10+ takipli dosyada zaten acikca duruyor.
+#
+# KOK NEDEN YALITILDI (tahmin edilmedi): varsayilan kural `<anahtar-kelime>: <deger>` arar ve
+# anahtar-kelime listesinde `API` vardir. TURKCE BUYUK HARFLI METINDE bu kelimelerin ICINDE
+# gecer — K-API-LANIYOR, K-API-SI, K-API-LI... Bayragin kendisi (ciplak, backtickli, tek
+# basina) SIFIR bulgu verdi; bulgu YALNIZ onune Turkce bir kelime konunca cikti.
+#
+# Bu yuzden muafiyet DEGERIN BICIMINE verildi, kelimeye ya da dosyaya DEGIL. Asagidaki iki
+# test o daralmayi kilitler: birincisi bayragin gectigini, ikincisi ayni Turkce baglamda
+# GERCEK gorunumlu bir sirrin HALA yakalandigini olcer.
+
+
+def _gitleaks_ikilisi() -> str | None:
+    ikili = shutil.which("gitleaks")
+    if ikili:
+        return ikili
+    onbellek = Path.home() / ".cache" / "pre-commit"
+    adaylar = list(onbellek.glob("**/gitleaks.exe")) + list(onbellek.glob("**/gitleaks"))
+    return str(adaylar[0]) if adaylar else None
+
+
+def _bulgu_sayisi(tmp_path: Path, icerik: str) -> int:
+    """Verilen metni gecici bir .py dosyasina yazip depo config'iyle tarar."""
+    ikili = _gitleaks_ikilisi()
+    if not ikili:
+        pytest.skip("gitleaks ikilisi bulunamadi (CI'da pre-commit indirir)")
+    kaynak = tmp_path / "ornek.py"
+    kaynak.write_text(icerik, encoding="utf-8")
+    rapor = tmp_path / "rapor.json"
+    subprocess.run(
+        [
+            ikili,
+            "detect",
+            "--config",
+            str(_CONFIG),
+            "--no-git",
+            "--no-banner",
+            "-s",
+            str(kaynak),
+            "--report-format",
+            "json",
+            "--report-path",
+            str(rapor),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if not rapor.exists():
+        return 0
+    import json as _json
+
+    return len(_json.loads(rapor.read_text(encoding="utf-8") or "[]"))
+
+
+# Turkce "API" tasiyan gercek bir yorum baglami — arizanin ta kendisi.
+_TR_BAGLAM = "# ESP KODU SILINMIYOR, YALNIZ KAPILANIYOR: `{deger}` ile eski davranis\n"
+
+
+def test_KRITIK_PEMF_bayragi_TURKCE_baglamda_YANLIS_ALARM_uretmez(tmp_path):
+    """`PEMF_*=<tek rakam>` bir bayraktir, sir degildir. Muafiyet kalkarsa bu KIRMIZI olur.
+
+    Olculdu: ayni icerik VARSAYILAN config'le 1 bulgu, depo config'iyle 0 bulgu veriyor —
+    yani yesillik muafiyetten geliyor, kuralin kendisinin kor olmasindan degil.
+    """
+    n = _bulgu_sayisi(tmp_path, _TR_BAGLAM.format(deger="PEMF_ESP_ENABLED=1"))
+    assert n == 0, (
+        "belgelenmis bir calisma-zamani bayragi 'sizinti' sayildi — bu sinif her Turkce "
+        "buyuk harfli 'KAPI...' kelimesinde tekrarlar ve kapiyi gurultuye bogarak "
+        "GERCEK bulgulari gorunmez kilar"
+    )
+
+
+# ⚠️ ASIRI-GENISLEME KARSIT-KANITLARI. Her ikisi de OLCULEREK secildi: varsayilan config bu
+# iki degeri de YAKALIYOR (1 bulgu). Yani testler gitleaks'in zaten gormedigi bir seyi degil,
+# GERCEKTEN gorduugu bir seyi muafiyetin gizleyip gizlemedigini sinar.
+#
+# ⚠️ ILK YAZIMDA YANLIS ORNEK SECILMISTI: `PEMF_MQTT_PASS=s3cr3t-...` — varsayilan config bunu
+# ZATEN yakalamiyor (gitleaks'in durak-kelime suzgeci "pass" iceren degerleri eler). O ornekle
+# yazilan bir karsit-kanit, muafiyet SINIRSIZ genisletilse bile yesil kalirdi.
+@pytest.mark.parametrize(
+    "deger, neden",
+    [
+        (
+            "PEMF_ESP_ENABLED=aB3xK9mQ2vL7pR4tN8w",
+            "ayni PEMF_ oneki ama deger RAKAM DEGIL — muafiyet onekle sinirli kalmali",
+        ),
+        (
+            "PEMF_ESP_ENABLED=12345678901234",
+            "ayni onek, deger rakam ama COK HANELI — muafiyet TEK haneyle sinirli kalmali; "
+            "bu sinirlama olmadan 14 haneli bir PIN/kod da 'bayrak' sayilirdi",
+        ),
+    ],
+)
+def test_KARSIT_KANIT_bayrak_muafiyeti_GERCEK_SIRRI_gecirmez(tmp_path, deger, neden):
+    n = _bulgu_sayisi(tmp_path, _TR_BAGLAM.format(deger=deger))
+    assert n >= 1, f"muafiyet COK GENIS: {neden}"
