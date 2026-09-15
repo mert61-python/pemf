@@ -37,6 +37,9 @@ KOK = Path(__file__).resolve().parents[1]
 STM_PROJE = KOK / "firmware" / "stm32_pemf"
 S3_PROJE = KOK / "firmware" / "esps3_pemf_coil"
 
+#: --cikti verildiginde yakilabilir dosyalarin yazilacagi dizin (None = yazma).
+_CIKTI_DIZINI = None
+
 #: `arm-none-eabi-gcc` aranacak yerler (CubeIDE sürüm dizini değişebilir → glob).
 STM_ARAMA = [
     Path(r"C:\ST"),
@@ -203,6 +206,36 @@ def derle_stm() -> int:
             if Path(boyut).is_file():
                 r = subprocess.run([boyut, str(elf)], capture_output=True, text=True)
                 print("[STM32] " + r.stdout.strip().replace("\n", "\n[STM32] "))
+
+            # ── YAKILABİLİR ÇIKTI (--cikti) ────────────────────────────────────
+            # ⚠️ NEDEN: sahip reflash'ı CubeIDE'de yapıyor ve CubeMX "Generate Code"
+            # `main.c`i EZİYOR ([[pemf-firmware-cubeide]]). Buradan üretilen .bin/.hex,
+            # CubeIDE'yi hiç açmadan STM32CubeProgrammer ile yakılabilir → ezme riski YOK
+            # ve yakılan şeyin DEPODAKİ kaynak olduğu SHA256 ile kanıtlanır.
+            if _CIKTI_DIZINI is not None:
+                _CIKTI_DIZINI.mkdir(parents=True, exist_ok=True)
+                objcopy = shutil.which("arm-none-eabi-objcopy") or str(Path(gcc).with_name("arm-none-eabi-objcopy.exe"))
+                if not Path(objcopy).is_file():
+                    print("[STM32] HATA: arm-none-eabi-objcopy yok -> .bin/.hex URETILEMEDI.")
+                    return 1
+                import hashlib
+                import shutil as _sh
+
+                _sh.copy2(elf, _CIKTI_DIZINI / "pemf.elf")
+                for bicim, ad in (("binary", "pemf.bin"), ("ihex", "pemf.hex")):
+                    r = subprocess.run(
+                        [objcopy, "-O", bicim, str(elf), str(_CIKTI_DIZINI / ad)],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if r.returncode != 0:
+                        print(f"[STM32] HATA: objcopy {bicim} basarisiz: {r.stderr.strip()[:200]}")
+                        return 1
+                for ad in ("pemf.elf", "pemf.bin", "pemf.hex"):
+                    p = _CIKTI_DIZINI / ad
+                    ozet = hashlib.sha256(p.read_bytes()).hexdigest()
+                    print(f"[STM32] cikti: {ad}  {p.stat().st_size} bayt  sha256={ozet[:16]}…")
+                print(f"[STM32] ✓ yakilabilir cikti hazir: {_CIKTI_DIZINI}")
         else:
             print("[STM32] NOT: startup/linker betigi yok — yalniz derleme yapildi, baglama ATLANDI.")
     print(f"[STM32] ✓ {len(kaynaklar)} kaynak temiz derlendi (-Wall -Wextra).")
@@ -249,7 +282,15 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="PEMF firmware derleme kapisi")
     ap.add_argument("--stm", action="store_true", help="yalniz STM32")
     ap.add_argument("--s3", action="store_true", help="yalniz ESP32-S3")
+    ap.add_argument(
+        "--cikti",
+        metavar="DIZIN",
+        help="STM32 icin yakilabilir .bin/.hex/.elf uret (CubeIDE acmadan CubeProgrammer ile yakilir)",
+    )
     a = ap.parse_args()
+    if a.cikti:
+        global _CIKTI_DIZINI
+        _CIKTI_DIZINI = Path(a.cikti)
     hepsi = not (a.stm or a.s3)
     kod = 0
     if hepsi or a.stm:

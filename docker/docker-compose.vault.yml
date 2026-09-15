@@ -1,0 +1,58 @@
+# =============================================================================
+# HASHICORP VAULT — SIR EMANETİ (escrow).  `docker compose -f docker/docker-compose.vault.yml up -d`
+# =============================================================================
+# ⚠️ BU VAULT, UYGULAMANIN ÇALIŞMA-ANI SIR KAYNAĞI **DEĞİLDİR**.
+#
+# Amaç TEK: hasta veritabanını açan anahtarın **makine-dışı bir kopyası** olsun. Ölçüldü
+# (2026-09-13): `auto.sqlcipher_key` yalnız `pemf_secrets.json` içinde, `DPAPI:` ile
+# **makineye bağlı** duruyor ve `~/pemf-sirlar.pemfsec` onu TAŞIMIYOR → disk/OS/profil
+# kaybında hasta verisi KALICI OKUNAMAZ hâle gelir.
+#
+# ⚠️ NEDEN ÇALIŞMA-ANI KAYNAĞI OLAMAZ (bilerek böyle):
+#   1. Vault her yeniden başlatmada **unseal** ister. Klinik makinesi yeniden başladığında
+#      biri Vault'u açmadan hasta kaydı AÇILMAZ.
+#   2. Auto-unseal bulut KMS ister → internet bağımlılığı → "bu ürün internetsiz çalışır"
+#      değişmezi biter (bkz. bellek `pemf-internetsiz-calisma-ve-esp-devre-disi`).
+#   3. Sır kaybolmaz, YER DEĞİŞTİRİR: unseal anahtarları/root token artık tek arıza noktası.
+#   4. Docker Desktop, backend'den ÖNCE ayakta olmak zorunda kalır — tıbbi cihazda yeni bir
+#      açılış bağımlılığı.
+# Bu yüzden: yerel kopya KALIR, Vault YEDEK tutar.
+#
+# ⚠️ ÜRETİM NOTU: bu compose'u KLİNİK makinesinde sürekli çalıştırmak gerekmez. Emaneti
+# yazıp/doğrulayıp kapatabilirsiniz; asıl değer, `vault-veri` biriminin (volume) YEDEKLENMESİ
+# ve tercihen BAŞKA bir makinede tutulmasıdır. Aynı diskte duran bir emanet, disk kaybına
+# karşı KORUMAZ.
+# =============================================================================
+name: pemf-vault
+
+services:
+  vault:
+    image: hashicorp/vault:1.20
+    container_name: pemf-vault
+    # ⚠️ `-dev` KULLANILMIYOR: dev kipi her şeyi BELLEKTE tutar ve konteyner durunca emanet
+    # KAYBOLUR — yani tam olarak çözmek istediğimiz sorunu yaratır.
+    command: server
+    cap_add:
+      - IPC_LOCK                     # sırların diske swap'lanmasını engeller (mlock)
+    ports:
+      - "127.0.0.1:8200:8200"        # ⚠️ YALNIZ loopback — Vault'u ağa AÇMA
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+    volumes:
+      - ./vault/config:/vault/config:ro
+      - vault-veri:/vault/file
+      - vault-log:/vault/logs
+    restart: unless-stopped
+    healthcheck:
+      # 501 = "kurulmamış" (henüz init edilmedi), 503 = "mühürlü", 200 = hazır.
+      # Üçü de "konteyner ayakta" demektir; kapı yalnız sürecin yaşadığını ölçer.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vault-veri:
+    name: pemf-vault-veri
+  vault-log:
+    name: pemf-vault-log
