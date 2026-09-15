@@ -141,6 +141,23 @@ pub const ENV_ARASTIRMA_AIPRO: &str = "PEMF_ARASTIRMA_AIPRO";
 /// (cikis kapisi: `PEMF_ALLOWED_HOSTS=*` korumayi kapatir, `auto,klinik.sirket.com` ek ad verir).
 pub const ENV_ALLOWED_HOSTS: &str = "PEMF_ALLOWED_HOSTS";
 
+/// JETON (TOKEN) KAPISI — bu sinifin **YEDINCI** ornegi (2026-09-13).
+///
+/// `servers/jeton.py` tamamen yazili ve `ai_router`a bagli, ama kapi `PEMF_JETON_ENFORCED`
+/// bayragina bakiyor ve launcher o bayragi **HIC gecirmiyordu**. Sonuc: bayrak makinede
+/// tanimlansa bile launcher'dan acilan backend onu GORMUYOR → jeton hicbir zaman dusmuyor.
+/// ENCRYPT_AT_REST / ENABLE_TUNNEL / STM_PORT / ALLOWED_HOSTS / DATA_DIR ile **birebir ayni**
+/// kacis yolu: "backend'de altyapi var, launcher gecirmiyor".
+///
+/// ⚠️ VARSAYILAN `"0"` — SATIS ACILMADI. Bunu `"1"` YAPMAYIN: acilirsa her AI analizi bakiye
+/// ister ve bakiyesi olmayan klinikte analiz DURUR. Kapali iken `jeton.izin()` tam no-op.
+///
+/// ⚠️ SEANS / ACIL DURDUR / SENSOR IZLEME HICBIR KOSULDA KAPILANMAZ — bu, jeton modulunun
+/// kendi `GUVENLIK_YOLLARI` listesiyle garanti altinda; bayragin acilmasi onu DEGISTIRMEZ.
+///
+/// CIKIS KAPISI: ortamda tanimliysa DOKUNULMAZ → `PEMF_JETON_ENFORCED=1` ile test edilebilir.
+pub const ENV_JETON_ENFORCED: &str = "PEMF_JETON_ENFORCED";
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -595,6 +612,15 @@ where
         getenv(ENV_ALLOWED_HOSTS)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "auto".to_string()),
+    );
+    // JETON KAPISI (bkz. ENV_JETON_ENFORCED): backend'de modul hazir ama launcher bayragi
+    // gecirmiyordu -> makinede tanimlansa bile gorunmuyordu. Varsayilan "0" = bugunku canli
+    // davranis (satis acilmadi, tam no-op). Ortamda tanimliysa DOKUNMA.
+    env.insert(
+        ENV_JETON_ENFORCED.to_string(),
+        getenv(ENV_JETON_ENFORCED)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "0".to_string()),
     );
     // TIBBİ VERİ KÖKÜ (bkz. ENV_DATA_DIR): makine-geneli yazılabilirse oraya. Bu satır olmadan
     // backend %APPDATA%'ya düşüyor ve ikinci Windows hesabı "boş klinik" görüyordu.
@@ -1655,6 +1681,12 @@ mod tests {
             // geçirmiyordu → operatör tezgâh sonrası "açtım" sanıp açamıyordu. KOŞULSUZ eklenir;
             // varsayılan "0" backend'in fail-safe'iyle AYNI, ortamdaki değer korunur.
             ENV_ARASTIRMA_AIPRO,
+            // JETON KAPISI (2026-09-13): `servers/jeton.py` hazırdı ve `ai_router`a bağlıydı ama
+            // launcher bayrağı geçirmiyordu → makinede `PEMF_JETON_ENFORCED=1` yazılsa bile
+            // launcher'dan açılan backend görmüyordu (jeton HİÇ düşmüyordu). KOŞULSUZ eklenir;
+            // varsayılan "0" = bugünkü canlı davranış (satış açılmadı, modül tam no-op),
+            // ortamdaki değer korunur.
+            ENV_JETON_ENFORCED,
         ];
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()

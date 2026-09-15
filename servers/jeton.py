@@ -451,3 +451,61 @@ async def jeton_gate(request: Request) -> None:
     import asyncio
 
     await asyncio.to_thread(_jeton_kapisi_karari, request)
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# KULLANICIYA GÖRÜNÜR BAKİYE (sahip isteği 2026-09-13: "kullanıcı da kalan hakkını görmeli")
+# ══════════════════════════════════════════════════════════════════════════════════
+#
+# ⚠️ TASARIM KARARI — BAYRAK KAPALIYKEN HİÇBİR ŞEY GÖSTERİLMEZ.
+# Bugün canlıda `PEMF_JETON_ENFORCED=0` (satış açılmadı) ve hiçbir kullanıcının bakiye satırı
+# yok. O durumda "0 jeton" yazmak DÜPEDÜZ YANLIŞ olurdu: kullanıcı analiz hakkının bittiğini
+# sanır, oysa sınırsız. Bu yüzden uç `etkin: false` döner ve arayüz rozeti HİÇ ÇİZMEZ.
+#
+# ⚠️ ÇEVRİMDIŞI "0" GÖSTERMEK DE YASAK. Bakiye Supabase'den okunur; klinik internetsizken
+# okuma başarısız olur. O an "0" yazmak, çalışan bir sistemi bitmiş gibi gösterir
+# (bu depoda "sahte değer göster" sınıfının tekrarı). Okuma başarısızsa `bilinmiyor: true`
+# döner ve arayüz "—" gösterir.
+def bakiye_ozeti(request) -> dict:
+    """Kullanıcının kalan jeton hakkı — arayüzde göstermek için.
+
+    Dönüş sözleşmesi:
+      · `{"etkin": False}`                      → ücretlendirme KAPALI, rozet çizilmez
+      · `{"etkin": True, "bilinmiyor": True}`   → okunamadı (çevrimdışı) → "—"
+      · `{"etkin": True, "kalan": N, ...}`      → gerçek bakiye
+    """
+    if not JETON_ENFORCED:
+        return {"etkin": False}
+
+    token = _bearer_token(request)
+    if not token:
+        # Kimliksiz istek: bakiye KİŞİYE özeldir, tahmin üretme.
+        return {"etkin": True, "bilinmiyor": True, "sebep": "kimlik_yok"}
+
+    try:
+        satir = _bakiye_satiri_oku(token)
+    except Exception:
+        # ⚠️ Sıfıra DÜŞME (yukarıdaki nota bakın). Bekleyen çevrimdışı tüketim varsa onu söyle.
+        try:
+            bekleyen = JetonYoneticisi().bekleyen_tuketim_sayisi()
+        except Exception:
+            bekleyen = 0
+        return {"etkin": True, "bilinmiyor": True, "sebep": "cevrimdisi", "bekleyen": bekleyen}
+
+    aylik = int(satir.get("aylik_hak") or 0)
+    satin = int(satir.get("satin_alinan") or 0)
+    model = str(satir.get("odeme_modeli") or "on_odemeli")
+
+    ozet = {
+        "etkin": True,
+        "bilinmiyor": False,
+        "odemeModeli": model,
+        "maliyet": dict(MALIYET),
+    }
+    if model == "kullandikca":
+        # Kullandıkça ödemede bakiye kavramı YOK — faturalanmamış borç gösterilir.
+        borc = int(satir.get("kullandikca_borc") or 0)
+        ozet.update({"borc": borc, "borcTavani": BORC_TAVANI})
+    else:
+        ozet.update({"kalan": aylik + satin, "aylikHak": aylik, "satinAlinan": satin})
+    return ozet
