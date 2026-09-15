@@ -240,6 +240,11 @@ build_tools/_static_password.py
 # `scripts/build_backend_exe.ps1`; depoda tutmanin hicbir degeri yok, klonu imkansizlastirir.
 PEMF_BUILD/
 
+# firmware_cikti/: STM32 derleme ciktisi (.bin/.elf/.hex). Kaynagi `scripts/firmware_derle.py`;
+# her derlemede yeniden uretilir. Denetim 2026-09-15'te `git status`u kirletiyordu ve ikili
+# artefaktin surum kontrolunde isi yok — yakilan firmware GitHub Release varligidir.
+firmware_cikti/
+
 # macOS base paketi (654 MB / sikistirilmis 261 MB) — GitHub Release varligi, depo degil.
 base-mac.zip
 base-mac.sha256.txt
