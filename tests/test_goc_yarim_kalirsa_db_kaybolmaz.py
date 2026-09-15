@@ -345,24 +345,49 @@ def test_KRITIK_duz_metin_yedek_ASLA_SILINMEZ():
     #  2) Konum çıpası metin üzerindeydi ve `c_soy` bu satır-içi `#` yorumlarını SOYMADI:
     #     kapı, düzeltmeyi ANLATAN kendi yorumumu ihlal sandı. Metin araması bu dosyada
     #     güvenilir değil; AST yorumları hiç görmez.
+    #  3) ÇIPA **FONKSİYON KAPSAMINA** ALINDI (2026-09-15). Önce modülün TAMAMI taranıyordu.
+    #     Göç-sonrası yedek politikası (escrow / güvenli-sil) ortak bir fonksiyona —
+    #     `goc_sonrasi_yedek_politikasi` — indirilince o fonksiyondaki MEŞRU `os.remove(backup)`
+    #     dosyada `_yedegi_kenara_al`dan ÖNCE yer aldı ve kapı, kod DOĞRUYKEN kırmızıya döndü.
+    #     Satır numarası bir SIRA vekilidir; gerçek sözleşme "göç akışında kenara-alma önce gelir"
+    #     olduğu için ölçüm göç fonksiyonlarının KENDİ gövdelerine pinlendi. Politikadaki silme
+    #     zaten tanım gereği göç BİTTİKTEN sonra çalışır ve kendi kapısı vardır
+    #     (tests/test_escrow_acl_dusunce_fail_closed.py).
     import ast
 
-    for yol in ("database/sqlcipher_util.py", "database/treatment_history_db.py"):
+    hedefler = (
+        ("database/sqlcipher_util.py", "migrate_to_encrypted_if_needed"),
+        ("database/treatment_history_db.py", "_migrate_to_encrypted_if_needed"),
+    )
+    for yol, fon_adi in hedefler:
         agac = ast.parse((KOK / yol).read_text(encoding="utf-8"))
-        kenara, siler = [], []
-        for n in ast.walk(agac):
+        fon = next(
+            (n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == fon_adi),
+            None,
+        )
+        assert fon is not None, f"{yol}: `{fon_adi}` bulunamadi -> kapi KOR kaldi"
+        kenara, siler, politika = [], [], []
+        for n in ast.walk(fon):
             if not isinstance(n, ast.Call):
                 continue
             ad = getattr(n.func, "id", getattr(n.func, "attr", None))
             if ad == "_yedegi_kenara_al":
                 kenara.append(n.lineno)
+            elif ad == "goc_sonrasi_yedek_politikasi":
+                politika.append(n.lineno)
             elif ad == "remove" and any(getattr(a, "id", None) == "backup" for a in n.args):
                 siler.append(n.lineno)
-        assert kenara, f"{yol}: yedek KENARA ALINMIYOR -> silme yoluna geri donulmus olabilir"
+        assert kenara, f"{yol}:{fon_adi}: yedek KENARA ALINMIYOR -> silme yoluna geri donulmus olabilir"
         erken = [s for s in siler if s < min(kenara)]
         assert not erken, (
             f"{yol}:{erken}: duz-metin yedek, KENARA ALINMADAN ONCE siliniyor -> yarim goc "
             "halinde klinik gecmisi YOK EDILIR (bu satir hasta verisini gercekten sildi)"
+        )
+        # Göç-sonrası işlem (silme ya da ortak politika) kenara-almadan SONRA gelmeli.
+        erken_politika = [s for s in politika if s < min(kenara)]
+        assert not erken_politika, (
+            f"{yol}:{erken_politika}: goc-sonrasi yedek politikasi, yedek KENARA ALINMADAN "
+            "ONCE cagriliyor -> yarim goc halinde tek kopya guvenli-silinebilir"
         )
 
 

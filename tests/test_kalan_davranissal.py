@@ -255,13 +255,23 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     # şey — "escrow'u kapatma yolu kayıp değil" — değişmedi, yalnız nerede okunduğu değişti.
     # Bayrak adlarının ve varsayılanın kendisi artık orada ölçülüyor:
     #   tests/test_duz_metin_yedek_bayragi_tek_ad.py
-    assert re.search(r"duz_metin_yedegi_emanete_al_mi\(", src), (
-        "escrow kararı artık ortak yardımcıdan gelmiyor → ya yol kayıp ya da bu dosya "
-        "yeniden kendi bayrağını okumaya başladı (adlar tekrar ayrışır)"
+    # ⚠️ ÇIPA İKİNCİ KEZ TAŞINDI (aynı oturum): kuyruğun TAMAMI ortak
+    # `goc_sonrasi_yedek_politikasi` fonksiyonuna indirildi. Bu göç yolu artık politikayı
+    # ÇAĞIRIR; politika da yardımcıyı. Zincirin halkaları ayrı ayrı ölçülüyor.
+    assert re.search(r"goc_sonrasi_yedek_politikasi\(", src), (
+        "escrow kararı artık ortak politikadan gelmiyor → ya yol kayıp ya da bu dosya "
+        "yeniden kendi kopyasını yazdı (üç ayrışma tam böyle doğmuştu)"
+    )
+
+    from database.sqlcipher_util import goc_sonrasi_yedek_politikasi
+
+    _politika_src = inspect.getsource(goc_sonrasi_yedek_politikasi)
+    assert re.search(r"duz_metin_yedegi_emanete_al_mi\(", _politika_src), (
+        "ortak politika bayrak yardımcısını çağırmıyor → escrow kararı hiç sorulmuyor"
     )
 
     # Fail-closed sözleşmesi: escrow İSTENSE bile ACL uygulanamıyorsa dosya SİLİNİR.
-    assert re.search(r'_locked\s*=\s*bool\(\s*lock_down_file\(', src), "ACL sonucu okunmuyor"
+    assert re.search(r"=\s*bool\(\s*lock_down_file\(", _politika_src), "ACL sonucu okunmuyor"
 
     # ⚠️ 2026-08-08: VARSAYILAN TERSİNE ÇEVRİLDİ (escrow-sakla → güvenli-sil), çünkü hasta DB'si
     # (`sqlcipher_util`) bu kararı Audit P3'te zaten almıştı ve tedavi DB'si geride kalmıştı.
@@ -280,7 +290,8 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     )
 
     # Silmenin GÜVENLİ olması: yalnız `os.remove` içeriği diskte bırakır (kurtarılabilir).
-    assert "os.urandom" in src and "fsync" in src, (
+    # ⚠️ ÇIPA TAŞINDI (aynı oturum): güvenli-silme adımı da ortak politikaya indi.
+    assert "os.urandom" in _politika_src and "fsync" in _politika_src, (
         "yedek silinmeden ÖNCE üzerine yazılmıyor → düz-metin PII disk kurtarma araçlarıyla geri gelir"
     )
 
@@ -288,24 +299,26 @@ def test_plain_bak_ACL_basarisizsa_SILINIR(temp_app_data, monkeypatch):
     import ast
     import textwrap
 
-    fn = ast.parse(textwrap.dedent(src)).body[0]
     # ⚠️ 2026-08-08 yapı değişti: silme artık BİR KOŞULUN İÇİNDE değil, VARSAYILAN YOL.
-    # Escrow yalnız `if _keep:` bloğunda ve ACL başarılıysa `return` ile korunur; diğer TÜM
-    # yollar güvenli-silmeye düşer. Kilitlenecek sözleşme: escrow bloğundan ACL BAŞARILIYKEN
-    # erken çıkılır, aksi halde silme kaçınılmazdır.
+    # Escrow yalnız bayrak bloğunda ve ACL başarılıysa `return` ile korunur; diğer TÜM yollar
+    # güvenli-silmeye düşer. Kilitlenecek sözleşme: escrow bloğundan ACL BAŞARILIYKEN erken
+    # çıkılır, aksi halde silme kaçınılmazdır.
+    # ⚠️ ÇIPA TAŞINDI (2026-09-15): bu yapı `goc_sonrasi_yedek_politikasi` içine alındı
+    # (iki kopya üç yerden ayrışmıştı). Sözleşme aynı, yeri değişti.
+    fn = ast.parse(textwrap.dedent(_politika_src)).body[0]
     escrow_erken_cikis = False
     for n in ast.walk(fn):
-        if isinstance(n, ast.If) and ast.unparse(n.test).strip() == "_keep":
-            govde = ast.unparse(n.body)
-            if "_locked" in govde and "return" in govde:
-                escrow_erken_cikis = True
+        if isinstance(n, ast.If) and "duz_metin_yedegi_emanete_al_mi" in ast.unparse(n.test):
+            for ic in ast.walk(ast.Module(body=n.body, type_ignores=[])):
+                if isinstance(ic, ast.If) and "kilitlendi" in ast.unparse(ic.test):
+                    if any(isinstance(x, ast.Return) for x in ast.walk(ic)):
+                        escrow_erken_cikis = True
     assert escrow_erken_cikis, (
         "escrow bloğu ACL başarılıyken erken çıkmıyor → ya escrow hiç saklanmıyor "
         "ya da korumasız escrow silinmeden bırakılıyor"
     )
 
-    # Silme yolu koşulsuz erişilebilir olmalı: fonksiyonun sonunda (escrow return'ü dışında)
-    # `os.remove(backup)` bulunmalı.
+    # Silme yolu koşulsuz erişilebilir olmalı: escrow return'ü dışında `os.remove(backup)`.
     assert "os.remove(backup)" in ast.unparse(fn), "düz-metin yedeği silen yol kayıp"
 
 

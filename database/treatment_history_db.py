@@ -417,54 +417,17 @@ class TreatmentHistoryDB:
             # ESCROW İSTEYEN: PEMF_KEEP_PLAIN_BAK=1 (eski davranış; ACL kilitlenebilirse saklar).
             # ⚠️ Anahtar kaybı = geçmiş kaybı. Yedek yolu artık Ayarlar → "Veri Taşıma"
             # (parola korumalı şifreli dışa aktarma) ve SecretsManager kurtarma kodudur.
-            # ⚠️ KARAR TEK YERDEN GELİR (2026-09-15). Burada `os.getenv("PEMF_KEEP_PLAIN_BAK")`
-            # okunuyordu; `sqlcipher_util.py` ise AYNI politikayı `PEMF_KEEP_PLAIN_BACKUP`tan
-            # okuyordu. Emanet isteyen operatör bayrağı set ettiğinde İKİ veritabanından YALNIZ
-            # BİRİ etkileniyor, ötekinin tüm PII'sinin düz-metin kopyası ya korumasız kalıyor ya
-            # da sessizce siliniyordu. Ortak yardımcı iki adı da okur (eski ad geriye-uyum için,
-            # uyarı loglayarak). Doğrudan `os.getenv`e DÖNMEYİN — adlar yeniden ayrışır.
-            # Kapı: tests/test_duz_metin_yedek_bayragi_tek_ad.py
-            from database.sqlcipher_util import duz_metin_yedegi_emanete_al_mi
+            # ⚠️ POLITIKA TEK YERDEN GELIR (2026-09-15): `goc_sonrasi_yedek_politikasi`.
+            # Bu kuyruk `sqlcipher_util.py` icindeki kopyasiyla UC yerden ayrismisti:
+            #   bayrak adi (PEMF_KEEP_PLAIN_BAK vs _BACKUP) · ACL basarisizlik politikasi
+            #   (burasi fail-closed, oradasi FAIL-OPEN'di) · log seviyesi (error vs warning).
+            # Ucu de olculerek bulundu; hicbiri denetimde gorunmuyordu. Kendi kopyanizi
+            # YAZMAYIN — ayrisacak yer birakmamak icin ortak fonksiyon var.
+            # Kapilar: tests/test_escrow_acl_dusunce_fail_closed.py ·
+            #          tests/test_duz_metin_yedek_bayragi_tek_ad.py
+            from database.sqlcipher_util import goc_sonrasi_yedek_politikasi
 
-            _keep = duz_metin_yedegi_emanete_al_mi(self.logger)
-            if _keep:
-                _locked = False
-                try:
-                    from utils.file_acl import lock_down_file
-
-                    _locked = bool(lock_down_file(backup))
-                except Exception:
-                    self.logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
-                if _locked:
-                    self.logger.warning(
-                        "Tedavi DB plaintext -> SQLCipher MIGRATE edildi. Duz-metin yedek ESCROW "
-                        "saklandi (ACL-kilitli): %s",
-                        backup,
-                    )
-                    return
-                # Kilitlenemedi → korumasız escrow şifrelemenin kendisini anlamsız kılar → SİL.
-                self.logger.warning("ACL uygulanamadi → escrow'dan vazgecildi, guvenli-siliniyor.")
-            # GÜVENLİ SİL: yalnız `unlink` içeriği diskte bırakır (dosya kurtarma araçlarıyla geri
-            # gelir). Üzerine rastgele veri yaz + fsync, sonra sil — hasta DB yolundaki desenin aynısı.
-            try:
-                _bsz = os.path.getsize(backup)
-                with open(backup, "r+b") as _bf:
-                    _rem = _bsz
-                    _rnd = os.urandom(1 << 20)
-                    while _rem > 0:
-                        _bf.write(_rnd if _rem >= len(_rnd) else _rnd[:_rem])
-                        _rem -= len(_rnd)
-                    _bf.flush()
-                    os.fsync(_bf.fileno())
-                os.remove(backup)
-                self.logger.warning(
-                    "Tedavi DB plaintext -> SQLCipher MIGRATE edildi; duz-metin yedek "
-                    "GUVENLI-SILINDI (at-rest PII riski kapatildi)."
-                )
-            except Exception:
-                self.logger.error(
-                    "KRITIK: korumasiz duz-metin yedek SILINEMEDI → ELLE SILIN: %s", backup, exc_info=True
-                )
+            goc_sonrasi_yedek_politikasi(backup, self.logger, etiket="Tedavi DB")
         except Exception:
             self.logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
 

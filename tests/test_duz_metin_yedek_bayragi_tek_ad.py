@@ -52,8 +52,10 @@ _TEDAVI = _DB_DIZIN / "treatment_history_db.py"
 _KANONIK = "PEMF_KEEP_PLAIN_BACKUP"
 #: Eski ad — okunmaya devam eder (geriye uyum), uyari loglanir.
 _ESKI = "PEMF_KEEP_PLAIN_BAK"
-#: Ortak yardimcinin adi. Iki goc yolu da bunu cagirir.
+#: Bayragi okuyan ortak yardimci.
 _YARDIMCI = "duz_metin_yedegi_emanete_al_mi"
+#: Goc-sonrasi yedek politikasini uygulayan ortak fonksiyon. Iki goc yolu da BUNU cagirir.
+_POLITIKA = "goc_sonrasi_yedek_politikasi"
 
 
 def _kaynak(p: Path) -> str:
@@ -116,10 +118,25 @@ def _getenv_okumalari(p: Path) -> set[str]:
     return {ad for ad, _ in _getenv_cagrilari(p)}
 
 
-def _cagrilan_adlar(p: Path) -> set[str]:
-    """Dosyada CAGRILAN fonksiyon adlari (AST; yorum/dize degil)."""
+def _cagrilan_adlar(p: Path, fonksiyon: str | None = None) -> set[str]:
+    """CAGRILAN fonksiyon adlari (AST; yorum/dize degil).
+
+    `fonksiyon` verilirse yalniz O fonksiyonun govdesine bakilir — "modulde bir yerde
+    geciyor" ile "bu akista gercekten cagriliyor" ayri seylerdir.
+    """
+    agac = ast.parse(_kaynak(p))
+    if fonksiyon is not None:
+        agac = next(
+            (
+                n
+                for n in ast.walk(agac)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == fonksiyon
+            ),
+            None,
+        )
+        assert agac is not None, f"{p.name}: `{fonksiyon}` bulunamadi — kapi KOR kaldi"
     adlar: set[str] = set()
-    for n in ast.walk(ast.parse(_kaynak(p))):
+    for n in ast.walk(agac):
         if isinstance(n, ast.Call):
             f = n.func
             if isinstance(f, ast.Name):
@@ -154,12 +171,29 @@ def test_KRITIK_yardimci_HEM_kanonik_HEM_eski_adi_okur():
     )
 
 
-def test_KRITIK_tedavi_yolu_ORTAK_yardimciyi_CAGIRIR():
-    """treatment_history_db kendi okumayi birakip yardimciya gecmeli — yoksa 'tek dosyada
-    okunur' testi, emanet dalini SILEREK de yesil yapilabilirdi."""
-    assert _YARDIMCI in _cagrilan_adlar(_TEDAVI), (
-        f"{_TEDAVI.name} ortak yardimciyi ({_YARDIMCI}) CAGIRMIYOR — emanet karari bu "
-        "yolda ya kayboldu ya da yeniden yerel bir kopyaya baglandi"
+def test_KRITIK_tedavi_yolu_ORTAK_politikayi_CAGIRIR():
+    """treatment_history_db kendi okumayi birakip ORTAK yola gecmeli — yoksa 'tek dosyada
+    okunur' testi, emanet dalini SILEREK de yesil yapilabilirdi.
+
+    ⚠️ CIPA TASINDI (ayni oturum): once `duz_metin_yedegi_emanete_al_mi` cagrisina pinliydi.
+    Kuyrugun tamami `goc_sonrasi_yedek_politikasi` icine alininca tedavi yolu artik bayrak
+    yardimcisini DOGRUDAN cagirmiyor — politikayi cagiriyor, o da yardimciyi. Olculen sey
+    ayni: "karar bu yola ORTAK kaynaktan geliyor mu?" Zincirin tamami asagida sinaniyor.
+    """
+    assert _POLITIKA in _cagrilan_adlar(_TEDAVI, "_migrate_to_encrypted_if_needed"), (
+        f"{_TEDAVI.name}: goc fonksiyonu ortak politikayi ({_POLITIKA}) CAGIRMIYOR — "
+        "emanet karari bu yolda ya kayboldu ya da yeniden yerel bir kopyaya baglandi"
+    )
+
+
+def test_KRITIK_ortak_politika_bayrak_yardimcisini_CAGIRIR():
+    """Zincirin ikinci halkasi: politika -> bayrak yardimcisi.
+
+    Bu olmadan `_POLITIKA` cagrisi bir kabuk olabilir ve emanet karari hic sorulmayabilirdi.
+    """
+    assert _YARDIMCI in _cagrilan_adlar(_SQLCIPHER, _POLITIKA), (
+        f"{_POLITIKA} artik bayrak yardimcisini ({_YARDIMCI}) cagirmiyor — emanet karari "
+        "sorulmadan uygulaniyor demektir"
     )
 
 
@@ -168,17 +202,39 @@ def test_KRITIK_tedavi_yolu_ORTAK_yardimciyi_CAGIRIR():
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.parametrize("yol", [_SQLCIPHER, _TEDAVI], ids=["sqlcipher_util", "treatment_history_db"])
-def test_KARSIT_KANIT_emanet_dali_SILINMEDI(yol: Path):
-    """⚠️ Emanet yolunu TAMAMEN kaldirmak da 'tek dosyada okunur' testini yesil yapardi.
+def test_KARSIT_KANIT_emanet_dali_SILINMEDI():
+    """⚠️ Emanet yolunu TAMAMEN kaldirmak da yukaridaki testleri yesil yapardi.
 
     Emanet, anahtar kaybinda geri donusu olan tek kopyadir; dali silmek sessiz bir
-    yetenek kaybi olurdu. Iki yolda da ACL-kilitli escrow adiminin durdugunu olcer.
+    yetenek kaybi olurdu.
+
+    ⚠️ CIPA TASINDI (ayni oturum): once IKI dosyada da `lock_down_file` cagrisi araniyordu.
+    Kuyruk ortak fonksiyona indirilince adim tek yerde kaldi — dogru capa orasi.
     """
-    assert "lock_down_file" in _cagrilan_adlar(yol), (
-        f"{yol.name}: ACL-kilitli escrow adimi (lock_down_file) KAYBOLMUS — emanet yolu "
+    assert "lock_down_file" in _cagrilan_adlar(_SQLCIPHER, _POLITIKA), (
+        f"{_POLITIKA}: ACL-kilitli escrow adimi (lock_down_file) KAYBOLMUS — emanet yolu "
         "kaldirilmis demektir. Korumasiz escrow kabul edilemez ama escrow'u tamamen "
         "silmek de anahtar kaybinda geri donusu yok eder."
+    )
+
+
+@pytest.mark.parametrize(
+    "yol, fonksiyon",
+    [
+        (_SQLCIPHER, "migrate_to_encrypted_if_needed"),
+        (_TEDAVI, "_migrate_to_encrypted_if_needed"),
+    ],
+    ids=["sqlcipher_util", "treatment_history_db"],
+)
+def test_KARSIT_KANIT_IKI_goc_yolu_da_politikayi_cagirir(yol: Path, fonksiyon: str):
+    """Politikayi tek yere almak, bir cagiranin onu CAGIRMAYI birakmasini engellemez.
+
+    O durumda goc sonrasi `.plain.bak` oylece diskte kalirdi — emanet de guvenli-silme de
+    hic kosmadan.
+    """
+    assert _POLITIKA in _cagrilan_adlar(yol, fonksiyon), (
+        f"{yol.name}:{fonksiyon} ortak politikayi ({_POLITIKA}) CAGIRMIYOR -> goc sonrasi "
+        "duz-metin yedek islenmeden diskte KALIR"
     )
 
 
@@ -214,18 +270,16 @@ def test_KRITIK_bayrak_device_env_ile_TASINIR():
     )
 
 
-def test_KARSIT_KANIT_yardimci_GERCEKTEN_goc_yolunda_cagrilir():
-    """⚠️ Yardimciyi tanimlayip HIC CAGIRMAMAK da testleri yesil yapardi.
+def test_KARSIT_KANIT_politika_GERCEKTEN_goc_yolunda_cagrilir():
+    """⚠️ Politikayi tanimlayip HIC CAGIRMAMAK da testleri yesil yapardi.
 
     `migrate_to_encrypted_if_needed` govdesinde cagrildigini AST ile dogrular — modul
     duzeyinde duran bir tanim, goc anindaki karari etkilemez.
+
+    ⚠️ CIPA TASINDI (ayni oturum): once bayrak yardimcisinin goc govdesinde cagrilmasi
+    araniyordu; kuyruk ortak fonksiyona inince yardimci bir halka derinlesti. Zincir
+    (goc -> politika -> yardimci) uc testle butun olarak sinaniyor.
     """
-    agac = ast.parse(_kaynak(_SQLCIPHER))
-    for n in ast.walk(agac):
-        if isinstance(n, ast.FunctionDef) and n.name == "migrate_to_encrypted_if_needed":
-            ic = {x.func.id for x in ast.walk(n) if isinstance(x, ast.Call) and isinstance(x.func, ast.Name)}
-            assert _YARDIMCI in ic, (
-                f"{_YARDIMCI} goc fonksiyonunun ICINDE cagrilmiyor — emanet karari goc aninda alinmiyor demektir"
-            )
-            return
-    pytest.fail("migrate_to_encrypted_if_needed bulunamadi — kapi kor kaldi")
+    assert _POLITIKA in _cagrilan_adlar(_SQLCIPHER, "migrate_to_encrypted_if_needed"), (
+        f"{_POLITIKA} goc fonksiyonunun ICINDE cagrilmiyor — yedek karari goc aninda alinmiyor demektir"
+    )

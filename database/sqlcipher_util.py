@@ -390,6 +390,85 @@ def duz_metin_yedegi_emanete_al_mi(logger=None) -> bool:
     return False
 
 
+def goc_sonrasi_yedek_politikasi(backup, logger=None, etiket="DB"):
+    """Goc BASARIYLA bittikten sonra `.plain.bak` ile ne yapilacagini uygular.
+
+    ⚠️ BU FONKSIYON UC AYRI AYRISMADAN DOGDU (olculdu 2026-09-15). Ayni politika iki
+    dosyaya kopyalanmisti ve kopyalar UC yerden ayrismisti:
+
+      1. BAYRAK ADI     : `PEMF_KEEP_PLAIN_BACKUP` (hasta DB) vs `PEMF_KEEP_PLAIN_BAK`
+                          (tedavi DB) -> operator bayragi set edince IKI veritabanindan
+                          YALNIZ BIRI etkileniyordu.
+      2. ACL BASARISIZLIGI: tedavi DB fail-closed (guvenli-sil), hasta DB FAIL-OPEN
+                          (korumasiz yedegi diskte BIRAKIYORDU) — daha hassas olan taraf
+                          daha gevsekti.
+      3. LOG SEVIYESI   : silme duserse tedavi DB `error` + "ELLE SILIN", hasta DB
+                          `warning` + "elle sil onerilir".
+
+    Ucu de tek tek bulundu; hicbiri denetimde gorunmuyordu. Bu fonksiyon, ayrisacak yer
+    birakmamak icin var. Iki cagiran da BUNU cagirir; kendi kopyalarini YAZMAYIN.
+
+    SOZLESME:
+      · Emanet istenmiyorsa (varsayilan) -> GUVENLI-SIL (uzerine-yaz + fsync + unlink).
+        Yalniz `unlink` icerigi diskte birakir, dosya kurtarma araclariyla geri gelir.
+      · Emanet isteniyorsa -> ACL ile kilitle. Kilit TUTARSA sakla.
+      · ⚠️ Kilit TUTMAZSA yine GUVENLI-SIL (FAIL-CLOSED). `lock_down_file` basarisizlikta
+        FIRLATMAZ, `False` DONER (utils/file_acl.py) — donusu YOK SAYMAYIN. Korumasiz
+        emanet, at-rest sifrelemesinin kendisini anlamsiz kilar.
+      · ⚠️ Log yalnizca GERCEKTEN olani soyler: kilit tutmadiysa "ACL-kilitli" DENMEZ.
+
+    `etiket`: log satirlarinda hangi veritabani oldugunu belirtir ("DB", "Tedavi DB").
+    Kapilar: tests/test_escrow_acl_dusunce_fail_closed.py ·
+             tests/test_duz_metin_yedek_bayragi_tek_ad.py
+    """
+    kilitlendi = False
+    if duz_metin_yedegi_emanete_al_mi(logger):
+        try:
+            from utils.file_acl import lock_down_file
+
+            kilitlendi = bool(lock_down_file(backup))
+        except Exception:
+            if logger:
+                logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
+        if kilitlendi:
+            if logger:
+                logger.warning(
+                    "%s plaintext -> SQLCipher MIGRATE edildi; düz-metin yedek ESCROW saklandı (ACL-kilitli): %s",
+                    etiket,
+                    backup,
+                )
+            return True
+        if logger:
+            logger.warning(
+                "ACL uygulanamadı → escrow'dan VAZGEÇİLDİ, güvenli-siliniyor: %s "
+                "(korumasız escrow, at-rest şifrelemesini anlamsız kılar)",
+                backup,
+            )
+    try:
+        _bsz = os.path.getsize(backup)
+        with open(backup, "r+b") as _bf:
+            _rem = _bsz
+            _rnd = os.urandom(1 << 20)
+            while _rem > 0:
+                _bf.write(_rnd if _rem >= len(_rnd) else _rnd[:_rem])
+                _rem -= len(_rnd)
+            _bf.flush()
+            os.fsync(_bf.fileno())
+        os.remove(backup)
+        if logger:
+            logger.warning(
+                "%s plaintext -> SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ "
+                "(at-rest PII riski kapatıldı).",
+                etiket,
+            )
+    except Exception:
+        # ⚠️ `error` SEVIYESI BILINCLI: diskte kalan sey TUM PII'nin korumasiz duz-metin
+        # kopyasidir; bu bir "oneri" degil ZORUNLU islemdir.
+        if logger:
+            logger.error("KRİTİK: korumasız düz-metin yedek SİLİNEMEDİ → ELLE SİLİN: %s", backup, exc_info=True)
+    return False
+
+
 def _yedegi_kenara_al(backup, logger=None):
     """Var olan duz-metin yedegi SILME — zaman damgali bir ada TASI.
 
@@ -601,63 +680,11 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         # ⚠️ KARAR TEK YERDEN GELİR (2026-09-15): `duz_metin_yedegi_emanete_al_mi`. Bayrak burada
         # doğrudan okunuyordu ve `treatment_history_db.py` BAŞKA bir ad okuyordu → operatör
         # bayrağı set ettiğinde iki DB'den yalnız biri etkileniyordu. Doğrudan okumaya DÖNMEYİN.
-        # ⚠️ FAIL-CLOSED (2026-09-15) — ÖNCEDEN FAIL-OPEN'DI, ÖLÇÜLDÜ.
-        # Eski kod `lock_down_file(backup)` çağırıp DÖNÜŞ DEĞERİNİ ATIYORDU ve ardından
-        # KOŞULSUZ "ESCROW saklandı (ACL-kilitli)" basıyordu. `lock_down_file` başarısızlıkta
-        # HATA FIRLATMAZ, `False` DÖNER (utils/file_acl.py:110 — "best-effort, çağıran DURMAZ")
-        # → `except` dalı hiç koşmuyordu. İki sonuç:
-        #   1. ACL tutmasa bile korumasız `.plain.bak` diskte KALIYORDU. O dosya TÜM hasta
-        #      PII'sinin düz-metin tam kopyasıdır ve SQLCipher'ı baypas eder; korumasız emanet
-        #      şifrelemenin kendisini anlamsız kılar.
-        #   2. Log YALAN SÖYLÜYORDU: uygulanmamış bir korumayı duyuruyordu ("düğme etiketi
-        #      gerçeği söylesin" sınıfı). Operatör log'a bakıp "korundu" sanıyordu.
-        # `treatment_history_db.py` bu kararı zaten fail-closed almıştı; üstelik oradaki yorum
-        # "hasta DB'si Audit P3'te ZATEN almıştı" diyordu — ölçüldü, ALMAMIŞ.
-        # Kapı: tests/test_escrow_acl_dusunce_fail_closed.py
-        _kilitlendi = False
-        if duz_metin_yedegi_emanete_al_mi(logger):
-            try:
-                from utils.file_acl import lock_down_file
-
-                _kilitlendi = bool(lock_down_file(backup))
-            except Exception:
-                if logger:
-                    logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
-            if _kilitlendi:
-                if logger:
-                    logger.warning(
-                        "DB SQLCipher MIGRATE edildi; düz-metin yedek ESCROW saklandı (ACL-kilitli): %s", backup
-                    )
-            elif logger:
-                logger.warning(
-                    "ACL uygulanamadı → escrow'dan VAZGEÇİLDİ, güvenli-siliniyor: %s "
-                    "(korumasız escrow, at-rest şifrelemesini anlamsız kılar)",
-                    backup,
-                )
-        if not _kilitlendi:
-            try:
-                _bsz = os.path.getsize(backup)
-                with open(backup, "r+b") as _bf:
-                    _rem = _bsz
-                    _rnd = os.urandom(1 << 20)
-                    while _rem > 0:
-                        _bf.write(_rnd if _rem >= len(_rnd) else _rnd[:_rem])
-                        _rem -= len(_rnd)
-                    _bf.flush()
-                    os.fsync(_bf.fileno())
-                os.remove(backup)
-                if logger:
-                    logger.warning(
-                        "DB SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ (at-rest PII riski kapatıldı)."
-                    )
-            except Exception:
-                # ⚠️ SEVİYE YÜKSELTİLDİ (2026-09-15): eskiden `warning` + "elle sil önerilir" idi.
-                # Burada diskte kalan şey TÜM hasta PII'sinin korumasız düz-metin kopyasıdır;
-                # "öneri" değil ZORUNLU bir işlem. `treatment_history_db.py` aynı durumda zaten
-                # `error` + "ELLE SİLİN" basıyordu — daha hassas olan tarafın daha sessiz olması
-                # ters bir asimetriydi (kopya kodun üçüncü ayrışması, aynı turda ölçüldü).
-                if logger:
-                    logger.error("KRİTİK: korumasız düz-metin yedek SİLİNEMEDİ → ELLE SİLİN: %s", backup, exc_info=True)
+        # ⚠️ POLITIKA TEK YERDEN GELIR (2026-09-15): `goc_sonrasi_yedek_politikasi`.
+        # Bu kuyruk `treatment_history_db.py` icine de KOPYALANMISTI ve iki kopya UC ayri
+        # yerden ayrismisti (bayrak adi · ACL basarisizlik politikasi · log seviyesi).
+        # Kendi kopyanizi YAZMAYIN — ayrisacak yer birakmamak icin ortak fonksiyon var.
+        goc_sonrasi_yedek_politikasi(backup, logger, etiket="DB")
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
