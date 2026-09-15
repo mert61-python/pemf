@@ -442,13 +442,18 @@ void PemfNetworkManager::_tickWiFiStateMachine() {
 
     case WIFI_SM_FAILED:
       LOG_PRINTLN("\n[WiFi] ✗ Hiçbir ağa bağlanılamadı.");
-      if (!_bleProvisioningActive && _bleProvisioning) {
-        LOG_PRINTLN("[BLE] Otomatik BLE Provisioning (Eşleşme) Modu başlatılıyor...");
-        WiFi.disconnect(true);
-        // WiFi kapatılmıyor ki arka planda ağ aramaya devam etsin!
-        _bleProvisioning->startAdvertising();
-        _bleProvisioningActive = true;
-      }
+      // ⚠️ OTOMATİK BLE PROVISIONING KALDIRILDI (denetim 2026-09-15).
+      //
+      // Eskiden burası WiFi tutmayınca BLE provizyonu KENDİLİĞİNDEN açıyordu. BLE tarafında
+      // eşleşme/PIN/şifreleme kapalı (bkz. BLEProvisioning.cpp) ve yazılabilir alanlar WiFi
+      // SSID + WiFi parolası + MQTT yapılandırması. Yani WiFi'ı bozabilen HERHANGİ biri,
+      // cihaza dokunmadan, kimlik doğrulamasız bir yapılandırma yüzeyi AÇTIRABİLİYORDU ve
+      // cihazı kendi broker'ına yönlendirebiliyordu. Saldırganın tetiklediği bir kurtarma
+      // yolu, kurtarma yolu değildir.
+      //
+      // Kurtarma yolu KAYBOLMADI: BOOT butonuna 3 sn basmak aynı provizyonu açar (bkz.
+      // `PIN_BLE_TRIGGER` bloğu). Fark şu — artık cihazın BAŞINDA olmak gerekiyor.
+      LOG_PRINTLN("[BLE] Provizyon otomatik AÇILMAZ. Gerekirse BOOT butonuna 3 sn basın.");
 
       // Tekrar deneme için geri dönüş süresi
       {
@@ -527,6 +532,44 @@ bool PemfNetworkManager::_connectToCloudBroker() {
 
   _switchMqttClient(BROKER_CLOUD);
 
+  // ==========================================================================
+  // ⚠️ WDT PANIK DUZELTMESI (saha 2026-09-13) — [FW-6] SAHADA DOGRULANDI
+  // ==========================================================================
+  // Belirti: "[Warn] statusQueue dolu!" tekrari -> "task_wdt: NetworkTask (CPU 0)
+  // did not reset the watchdog" -> Aborting -> surekli reboot.
+  //
+  // OLCULDU (arduino-esp32 3.3.11 kaynagindan, TAHMIN DEGIL):
+  //   NetworkClientSecure.cpp:41  sslclient->handshake_timeout = 120000;  // 120 sn
+  //   NetworkClientSecure.cpp:33  _timeout = 30000;                       // 30 sn
+  //   SharedDefs.h:83             WDT_TIMEOUT_SECONDS 10                  // 10 sn
+  // Yani ulasilamayan bir buluta tek bir TLS denemesi, watchdog butcesini 12 KAT asar.
+  //
+  // ⚠️ `_mqtt->setSocketTimeout(2)` BU ISI GORMEZ: o PubSubClient'in kendi OKUMA
+  // zaman asimidir; altindaki TCP connect + TLS el sikismasini SINIRLAMAZ.
+  //
+  // IKI KATMANLI COZUM:
+  //  1) Once DUZ TCP ile ulasilabilirlik yoklamasi. `NetworkClient` varsayilani
+  //     WIFI_CLIENT_DEF_CONN_TIMEOUT_MS = 3000 (NetworkClient.cpp:30) -> OLCULMUS
+  //     ve WDT butcesinin altinda. Ulasilamiyorsa TLS'e HIC girilmez.
+  //  2) Girilirse el sikisma 4 sn'ye baglanir (4 < 10, paylar korunur).
+  // Her adimdan once WDT beslenir: watchdog 10 sn boyunca reset GORMEZSE panikler;
+  // her bloklayan cagri <=4 sn ve aralarinda besleme var.
+  esp_task_wdt_reset();
+  {
+    WiFiClient ulasimYoklamasi; // duz TCP, 3 sn tavan (olculdu)
+    if (!ulasimYoklamasi.connect(_cloudMqttHost.c_str(), _cloudMqttPort)) {
+      ulasimYoklamasi.stop();
+      LOG_PRINTLN("[MQTT] Cloud broker ULASILAMIYOR (TCP yoklamasi) - TLS denenmiyor.");
+      esp_task_wdt_reset();
+      return false;
+    }
+    ulasimYoklamasi.stop();
+  }
+  esp_task_wdt_reset();
+  if (_netClientSecure) {
+    _netClientSecure->setHandshakeTimeout(4); // saniye (kutuphane *1000 yapar)
+  }
+
   // 2026-08-19: SABIT client_id yasak (sahip degismezi: ayni id iki baglantiyi
   // birbirine dusurur, kopma penceresinde E-stop STOP kaybolur). Acilis-basina ek.
   String clientId = "PEMF-Coil-" + String(_coilId) + "-" + String((uint32_t)esp_random(), HEX);
@@ -550,6 +593,7 @@ bool PemfNetworkManager::_connectToCloudBroker() {
   }
 
   LOG_PRINTF("[MQTT] Cloud broker bağlantı hatası, rc=%d\n", _mqtt->state());
+  esp_task_wdt_reset(); // basarisiz TLS denemesinden SONRA da besle
   return false;
 }
 
@@ -575,6 +619,11 @@ void PemfNetworkManager::_reconnectMQTT() {
   if (_connectToLocalBroker()) {
     return; // Başarılı!
   }
+
+  // ⚠️ WDT: yerel deneme ile bulut denemesi AYNI process() turunda kosar. Ikisi arka arkaya
+  // bloklarsa toplam sure watchdog butcesini (10 sn) asabilir. Aralarinda besle — watchdog
+  // "10 sn boyunca hic reset gormedim" derse panikler; sureyi degil, BOSLUGU olcer.
+  esp_task_wdt_reset();
 
   _localRetryCount++;
 

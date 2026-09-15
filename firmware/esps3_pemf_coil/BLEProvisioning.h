@@ -13,9 +13,18 @@
 // Standart ESP-IDF BLE yerine NimBLE kullanarak boot-loop ve WDT
 // sorunlarını önler.
 //
+// ⚠️ KİLİT ANAHTARI (denetim 2026-09-15): provizyonu tamamen derleme dışı bırakmak için
+// aşağıdaki değeri 0 yapın. Kart zaten `Secrets.h`teki kimlik bilgileriyle yakılıyorsa
+// BLE'ye hiç ihtiyaç yoktur ve saldırı yüzeyi SIFIRLANIR. 0 yaparsanız WiFi'si tutmayan
+// bir kartı yalnız yeniden yakarak kurtarabilirsiniz — bilinçli bir takas.
+#ifndef PEMF_BLE_PROVISIONING_ENABLED
+#define PEMF_BLE_PROVISIONING_ENABLED 1
+#endif
+
 // Senaryo:
-//   1. ESP açılışta WiFi bulamazsa (veya fiziksel buton basılırsa)
-//      BLE yayını başlar.
+//   1. Fiziksel BOOT butonuna 3 sn basılırsa BLE yayını başlar.
+//      (⚠️ "WiFi bulunamazsa OTOMATİK açılır" davranışı 2026-09-15'te KALDIRILDI:
+//       WiFi'ı bozan biri kimlik doğrulamasız yapılandırma yüzeyini uzaktan açtırabiliyordu.)
 //   2. LattePanda GUI (bleak ile) bağlanıp SSID/Pass gönderir.
 //   3. ESP bunu NVS'e yazar, BLE'yi kapatır, WiFi'a bağlanır.
 //   4. 120sn timeout: süre dolarsa BLE otomatik kapanır.

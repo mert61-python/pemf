@@ -108,6 +108,12 @@ void BLEProvisioning::begin() {
 }
 
 void BLEProvisioning::startAdvertising() {
+#if !PEMF_BLE_PROVISIONING_ENABLED
+    // Kilit anahtarı kapalı (bkz. BLEProvisioning.h). Tek çıkış noktası burası:
+    // hem buton hem başka bir çağıran aynı kapıdan geçer.
+    LOG_PRINTLN("[BLE] Provizyon DERLEME DIŞI (PEMF_BLE_PROVISIONING_ENABLED=0).");
+    return;
+#else
     if (_active) {
         LOG_PRINTLN("[BLE] Zaten yayın yapılıyor, atlanıyor.");
         return;
@@ -123,14 +129,24 @@ void BLEProvisioning::startAdvertising() {
     if (!_initialized) {
         NimBLEDevice::init(deviceName.c_str());
 
-        // Pelsiz/Şifresiz hızlı bağlantı için güvenlik ayarlarını devre dışı bıraktık.
-        // LattePanda (veya Windows) BLE üzerinden otomatik PIN girmeden bağlanabilmeli.
+        // ⚠️ GÜVENLİK KAPALI — VE BU SATIR BUNU DÜRÜSTÇE SÖYLER (denetim 2026-09-15).
+        // Eşleşme, PIN ve şifreleme BİLEREK devre dışı: LattePanda/Windows PIN girmeden
+        // bağlanabilsin diye. Bu bir kolaylık kararıdır ve bedeli şudur: yayın açıkken
+        // menzildeki HERKES WiFi SSID/parolasını ve MQTT yapılandırmasını yazabilir.
+        //
+        // ⚠️ ESKİDEN BURADA "PIN: 123456" BASILIYORDU — UYGULANMAYAN bir PIN'i duyuran
+        // yalan bir etiketti. Log'a bakan kişi cihazı korunuyor sanıyordu. Kaldırıldı.
+        // (`DEFAULT_BLE_CMD_HMAC_KEY` da tanımlı ama HİÇBİR YERDE tüketilmiyor: komut
+        // imzalama yazılmamış. Anahtarı doldurmak tek başına hiçbir şey değiştirmez.)
+        //
+        // ESP yeniden bobin sürmeye başlayacaksa ÖNCE burada eşleşme+şifreleme açılmalı.
 
         // MTU boyutu (JSON mesajlar için yeterli)
         NimBLEDevice::setMTU(256);
 
         _initialized = true;
-        LOG_PRINTF("[BLE] Cihaz adı: %s, PIN: %d\n", deviceName.c_str(), DEFAULT_BLE_PASSKEY);
+        LOG_PRINTF("[BLE] Cihaz adı: %s\n", deviceName.c_str());
+        LOG_PRINTLN("[BLE] ⚠️ Provizyon KİMLİK DOĞRULAMASIZ — yayın yalnız gerektiğinde açık kalsın.");
     }
 
     // --- Adım 2: GATT Sunucu oluştur ---
@@ -195,6 +211,7 @@ void BLEProvisioning::startAdvertising() {
 
     LOG_PRINTLN("[BLE] Yayın başladı. LattePanda'dan bağlantı bekleniyor...");
     LOG_PRINTF("[BLE] Timeout: SINIRSIZ (Kullanım dışı bırakıldı)\n");
+#endif  // PEMF_BLE_PROVISIONING_ENABLED
 }
 
 void BLEProvisioning::stopAdvertising() {
