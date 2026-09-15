@@ -322,3 +322,178 @@ def test_KRITIK_ESP_ACIKKEN_publish_GERCEKTEN_denenir(monkeypatch):
     monkeypatch.setattr(_socket, "create_connection", _soket_sayac)
     api_server._mqtt_publish("pemf/coil/8/control", {"command": "stop"})
     assert izler["soket"] == 1, "ESP ACIKKEN publish denenmedi -> geri donus yolu KOPUK"
+
+
+# ============================================================================
+# 4. DONMUŞ "İNTERNET YOK" ROZETİ + YALAN YEŞİL "İnternet Bağlantısı"
+#    (sahip bildirimi 2026-09-12: "makinede internet olmasına rağmen yok diyor")
+# ============================================================================
+#
+# ÖLÇÜLEN GERÇEK: çalışan backend `/api/dashboard-snapshot` → `"internet":"online"`
+# derken ekrandaki rozet "İnternet yok — uzaktan erişim kapalı" yazıyordu ve AYNI
+# ekranda "İnternet Bağlantısı: Aktif" satırı yeşildi. İkisi AYNI şeyi ölçmüyordu:
+#
+#   · Rozet   → WS `snapshot.internet`. `internet` HESAPLANIYOR ama `gateway_status`
+#               yayınının İÇİNE KONMUYORDU → ilk snapshot'tan sonra ASLA güncellenmiyor.
+#               `network.status` olayı da YALNIZ DEĞİŞİMDE yayınlandığı için değer
+#               sonsuza dek donuyordu (başlangıç değeri: "offline").
+#   · Satır   → `/gateway/status.networkOnline`, içinde `or gateway_state == "online"
+#               or mqtt_state == "online"` vardı. `gateway` hotspot/herhangi bir mod
+#               açıkken online, `mqtt` ise 127.0.0.1'deki yerel mosquitto → satır
+#               kablo çekili olsa bile YEŞİL. Yani "Kapalı" diyemiyordu.
+#
+# ⚠️ SINIF: yalan-yeşil, yalan-kırmızıdan DAHA tehlikelidir — operatörün bakacağı satır
+# odur ve "internet var" dediği için uzaktan erişim arızası hiç aranmaz.
+
+
+def test_KRITIK_gateway_status_yayini_INTERNET_TASIR(durum, monkeypatch):
+    """⚠️ ASIL KAPI — donmuş rozetin kökü.
+
+    `internet` yayının içinde gitmezse arayüz onu YALNIZ ilk snapshot'ta görür;
+    sonraki her değişim SESSİZCE kaybolur.
+
+    MUTASYON: `_ws_broadcast_sync` çağrısındaki `"internet": ...` anahtarını sil → KIRMIZI.
+    """
+    from servers import api_server
+
+    yayinlar: list[dict] = []
+    monkeypatch.setattr(api_server, "_ws_broadcast_sync", lambda m: yayinlar.append(m))
+
+    api_server._handle_backend_event(
+        _olay("network.status", {"gateway_mode": "hybrid", "hotspot_active": False, "internet_connected": True})
+    )
+
+    kapsayan = [m for m in yayinlar if m.get("type") == "gateway_status"]
+    assert kapsayan, "network.status olayi gateway_status YAYINLAMADI"
+    veri = kapsayan[-1].get("data", {})
+    assert "internet" in veri, (
+        "gateway_status yayini `internet` TASIMIYOR -> arayuzdeki rozet ilk snapshot'ta "
+        "donar; internet sonradan gelse/gitse bile ASLA guncellenmez"
+    )
+    assert veri["internet"] == "online"
+
+
+def test_KRITIK_internet_GIDERSE_de_yayinlanir(durum, monkeypatch):
+    """Karşıt kanıt: kural "hep online yaz" diye geçilemesin."""
+    from servers import api_server
+
+    yayinlar: list[dict] = []
+    monkeypatch.setattr(api_server, "_ws_broadcast_sync", lambda m: yayinlar.append(m))
+
+    api_server._handle_backend_event(
+        _olay("network.status", {"gateway_mode": "offline", "hotspot_active": True, "internet_connected": False})
+    )
+    veri = [m for m in yayinlar if m.get("type") == "gateway_status"][-1]["data"]
+    assert veri["internet"] == "offline"
+    # ...ve cihaz ağı yine de ONLINE kalmalı (uyarı körlüğü kapısı, yukarıdaki kuralla birlikte)
+    assert veri["gateway"] == "online"
+
+
+def test_KRITIK_networkOnline_INTERNETI_olcer_cihaz_agini_DEGIL(monkeypatch):
+    """⚠️ YALAN YEŞİL KAPISI.
+
+    Hotspot açık / yerel mosquitto çalışıyor ama internet YOK: "İnternet Bağlantısı"
+    satırı "Kapalı" demek ZORUNDA.
+
+    MUTASYON: `networkOnline` ifadesine `or gateway_state == "online"` (ya da
+    `or mqtt_state == "online"`) geri ekle → KIRMIZI.
+    """
+    import asyncio
+
+    from servers import api_server, system_router
+
+    class _Cekirdek:
+        def get_service_status(self):
+            return {
+                "mosquitto": {"running": True, "port_open": True},
+                "network": {"internet_connected": False, "hotspot_active": True},
+            }
+
+    monkeypatch.setattr(api_server.state, "core", _Cekirdek(), raising=False)
+    with api_server._live_state_lock:
+        eski = dict(api_server._live_state)
+        api_server._live_state["gateway"] = "online"
+        api_server._live_state["mqtt"] = "online"
+    try:
+        sonuc = asyncio.run(system_router.gateway_status())
+    finally:
+        with api_server._live_state_lock:
+            api_server._live_state.update(eski)
+
+    assert sonuc["networkOnline"] is False, (
+        "internet YOKKEN 'Internet Baglantisi' satiri YESIL gosterildi -> yalan guvence; "
+        "operator uzaktan erisim arizasini hic aramaz"
+    )
+    # Karşıt kanıt: cihaz ağı bilgisi KAYBOLMADI, ayrı alanda duruyor.
+    assert sonuc["bridgeConnected"] is True
+    assert sonuc["hotspotActive"] is True
+
+
+def test_networkOnline_internet_VARKEN_dogru(monkeypatch):
+    """Karşıt kanıt: kural "hep False dön" diye geçilemesin."""
+    import asyncio
+
+    from servers import api_server, system_router
+
+    class _Cekirdek:
+        def get_service_status(self):
+            return {
+                "mosquitto": {"running": False, "port_open": False},
+                "network": {"internet_connected": True, "hotspot_active": False},
+            }
+
+    monkeypatch.setattr(api_server.state, "core", _Cekirdek(), raising=False)
+    with api_server._live_state_lock:
+        eski = dict(api_server._live_state)
+        api_server._live_state["gateway"] = "offline"
+        api_server._live_state["mqtt"] = "offline"
+    try:
+        sonuc = asyncio.run(system_router.gateway_status())
+    finally:
+        with api_server._live_state_lock:
+            api_server._live_state.update(eski)
+
+    assert sonuc["networkOnline"] is True
+
+
+def test_KRITIK_ag_durumu_DEGISMESE_DE_yeniden_yayinlanir(monkeypatch):
+    """⚠️ KAYBOLAN TEK OLAY = KALICI YANLIŞ ARAYÜZ.
+
+    `NetworkStatusService`, `HeadlessCore.__init__` içinde — yani
+    `api_server._register_event_bus_handlers()` çağrılmadan ÖNCE — başlar. İlk
+    `network.status` olayı işleyici kaydolmadan düşerse ve ağ durumu bir daha
+    değişmezse, olay BİR DAHA ASLA yayınlanmaz: `_live_state["internet"]` başlangıç
+    değerinde ("offline") donar ve makine internete bağlıyken bile rozet "İnternet yok"
+    der. Ölçülen saha durumu tam olarak buydu.
+
+    MUTASYON: `or son is None or (simdi - son) >= self.YENIDEN_YAYIN_S` koşulunu sil
+    (yalnız `previous != status` bırak) → KIRMIZI.
+    """
+    import time as _time
+
+    from services.headless_services import NetworkStatusService
+
+    servis = NetworkStatusService(interval_seconds=0.01)
+    yayinlar: list[str] = []
+    monkeypatch.setattr(servis, "_publish", lambda tur, veri: yayinlar.append(tur))
+    # Ölçümleri SABİTLE: durum hiç değişmeyecek, tek tetikleyici zaman olmalı.
+    monkeypatch.setattr(servis, "_check_internet", lambda: True)
+    monkeypatch.setattr(servis, "_check_hotspot", lambda: {"active": False, "ssid": "", "ip": "", "clients": 0})
+    monkeypatch.setattr(servis, "_get_network_ips", lambda: {"ethernet": None, "wifi": None})
+    monkeypatch.setattr("services.headless_services._is_tcp_port_open", lambda *a, **k: False)
+
+    servis.check_once()
+    assert yayinlar == ["network.status"], "ilk olcum yayinlanmadi"
+
+    # Durum DEĞİŞMEDİ → yakın zamanda tekrar yayınlanmamalı (yayın seli olmasın).
+    servis.check_once()
+    assert len(yayinlar) == 1, "durum degismeden GEREKSIZ yayin yapildi (yayin seli)"
+
+    # ...ama tazeleme aralığı dolduğunda yeniden yayınlanmalı.
+    sahte_an = _time.monotonic() + servis.YENIDEN_YAYIN_S + 1.0
+    monkeypatch.setattr("services.headless_services.time.monotonic", lambda: sahte_an)
+    servis.check_once()
+    assert len(yayinlar) == 2, (
+        "ag durumu degismedigi icin BIR DAHA hic yayinlanmadi -> kaydolmayi kacirmis bir "
+        "isleyici icin arayuz SONSUZA DEK yanlis kalir"
+    )

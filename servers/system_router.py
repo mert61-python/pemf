@@ -10,6 +10,7 @@ NOT (gelecek cleanup): paylaşılan durum ileride servers/live_state.py'ye taş�
 davranış-koruyan ARTIMLI extraction için lazy-import deseni kullanılıyor.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -103,9 +104,14 @@ async def gateway_status():
         "bridgeConnected": gateway_state == "online",
         "gatewayState": gateway_state,
         "stmConnected": stm_state == "online",
-        "networkOnline": bool(network_status.get("internet_connected"))
-        or gateway_state == "online"
-        or mqtt_state == "online",
+        # ⚠️ `networkOnline` = İNTERNET, cihaz ağı DEĞİL (sahip bildirimi 2026-09-12).
+        # Eskiden `or gateway_state == "online" or mqtt_state == "online"` vardı. `gateway`
+        # hotspot ya da herhangi bir mod açıkken online olur; `mqtt` ise 127.0.0.1'deki YEREL
+        # mosquitto'dur — ikisi de internetin VARLIĞINI kanıtlamaz. Sonuç: "İnternet Bağlantısı"
+        # satırı kablo çekiliyken bile YEŞİL kalıyordu, yani hiçbir zaman "Kapalı" diyemiyordu.
+        # Yalan-yeşil, yalan-kırmızıdan daha tehlikelidir: operatörün bakacağı satır odur.
+        # Cihaz ağı bilgisi kaybolmadı — `bridgeConnected` / `hotspotActive` alanlarında duruyor.
+        "networkOnline": bool(network_status.get("internet_connected")),
         "hotspotActive": bool(network_status.get("hotspot_active")),
         "mosquitto": mosquitto_status,
         "network": network_status,
@@ -762,3 +768,21 @@ async def retention_ayarla(payload: _RetentionAyar, request: Request):
     except Exception:
         logger.exception("retention ayarlanamadi")
         raise HTTPException(status_code=500, detail="Ayar kaydedilemedi.")
+
+
+@router.get("/api/jeton/bakiye")
+async def jeton_bakiye(request: Request):
+    """Kullanıcının kalan jeton hakkı — arayüzdeki rozet bunu okur.
+
+    ⚠️ NEDEN `ai_router`DA DEĞİL: o router'ın bağımlılıklarında `jeton_gate` var ve
+    `_islem_turu` tanımadığı yolu "goruntu" (1 jeton) sınıfına düşürür → **bakiyeyi
+    sormak jeton yakardı**. Sistem router'ı kapısızdır.
+
+    ⚠️ Sözleşme `jeton.bakiye_ozeti` içinde: bayrak kapalıyken `etkin:false` (rozet
+    çizilmez), okunamazsa `bilinmiyor:true` (arayüz "—" gösterir). Hiçbir koşulda
+    UYDURMA bir sayı dönmez — "0 jeton" yazmak, sınırsız çalışan bir klinikte hakkı
+    bitmiş gibi görünmek demektir.
+    """
+    from servers.jeton import bakiye_ozeti
+
+    return await asyncio.to_thread(bakiye_ozeti, request)

@@ -1,97 +1,114 @@
 # -*- coding: utf-8 -*-
 # Author: mertaygn
-"""BOBİN SAYISI TEK KAYNAK — sessizce bayatlayan sabitlerin kapısı.
+"""BOBİN SAYISI TEK KAYNAK — İş 5'in ÜÇÜNCÜ kaçağı (denetim 2026-09-12).
 
 ===============================================================================
-2026-09-11'de README denetiminde BULUNDU
+NE İSTENMİŞTİ (İş 5, 2026-09-12)
 ===============================================================================
-`utils/stm32_protocol_limits.py` içinde `STM32_NUM_COILS = 5` yazıyordu — 2026-09-10'daki
-7-bobin geçişinde (bobin 6-7 ESP8266'dan STM'e taşındı) **güncellenmemişti**.
+Sahip: "seans detayında donanım eps kalmış ve bobin 8 de görünüyor ama aslında
+çalışmıyor 7 bobinli sistem bunu da düzelt."
 
-Bugün hiçbir yerde kullanılmıyordu (grep: yalnız tanımın kendisi), yani zarar vermedi. Ama:
-  · dosyanın adı `protocol_limits` — okuyan bunu PROTOKOL GERÇEĞİ sanır,
-  · `utils/README.md` de "5 STM / 8 ESP" diye yazıyordu (belge de birlikte bayatlamıştı),
-  · bir sonraki geliştirici bu sabiti kullanmaya başlasaydı 6-7 sessizce dışarıda kalırdı.
+Düzeltme `SessionDetailModal` ve kontrol ekranı için yapılmıştı. ⚠️ **Ana Ekran
+atlanmıştı** — sahibin ekran görüntüsünde hâlâ görünen yer tam olarak orasıydı:
 
-⚠️ SINIF: "sihirli sayı ikinci bir yere kopyalanmış". Bu depoda tekrar eden arıza —
-firmware ACK biçim dizesi, simülatör dilimleri ve banner kanal sayısı da aynı şekilde
-bayatlamıştı.
+  · bobin kartları `snapshot.coils` listesinin TAMAMINI çiziyordu → sökülü ESP slotu
+    kalıcı "Offline" bir kart olarak sunuluyordu (var olmayan donanım)
+  · rozet ve ölçüm kartı `"/8"` SABİTİNİ yazıyordu → payda hiçbir zaman dolmadığı için
+    7/7 bağlıyken bile sistem "7/8" yani EKSİK görünüyordu
+
+⚠️ SINIF: "aynı kural N yerde kopyalanmış" — bu depoda tekrar eden arıza sınıfı.
+Tek kaynak `services/bobinGorunurlugu.ts` ZATEN vardı ve `espSlotuGorunur` yardımcısı
+bile "başlık 1–8 mi 1–7 mi yazacak" diye yorumlanmıştı; Ana Ekran ona hiç bağlanmamıştı.
 
 ===============================================================================
-NEDEN IMPORT DEĞİL DE KAPI
+NEDEN KAYNAK ÇIPASI (davranış testi değil)
 ===============================================================================
-`utils/` katmanı `servers/`e bağımlı OLMAMALI (katman tersine döner). Bu yüzden sabit
-`live_state`ten import EDİLMİYOR; bunun yerine bu kapı ikisinin AYRIŞMASINI kırmızı yapar.
+Payda/süzgeç ekranda hesaplanıyor; bir sonraki geliştirici `coils.length` yerine yeniden
+sabit `8` yazarsa hiçbir davranış testi bunu yakalamaz — kart yine çizilir, sayı yine
+görünür, yalnız YANLIŞ olur. Bu kapı, kuralın tek kaynaktan okunduğunu ölçer.
+
+⚠️ Yorumlar `c_soy` ile SOYULUR: bu depoda "yorum kapıyı kandırdı" ALTI kez oldu.
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
+if str(KOK / "tests") not in sys.path:
+    sys.path.insert(0, str(KOK / "tests"))
 
-os.environ.setdefault("PEMF_SIMULATE", "1")
+_PF = KOK / "pf" / "src"
+
+#: Bobin ızgarası çizen / bobin sayısı yazan üretim ekranları.
+BOBIN_CIZEN_EKRANLAR = (
+    "screens/DashboardScreen.tsx",
+    "screens/ControlScreen.tsx",
+)
 
 
-def test_KRITIK_STM_bobin_sayisi_live_state_ile_AYNI():
-    """MUTASYON: `STM32_NUM_COILS`i 5'e döndür → KIRMIZI.
+def _kaynak(bagil: str) -> str:
+    from c_soyucu import c_soy
 
-    Sahadaki etki (bu sabit kullanılmaya başlarsa): bobin 6-7 sessizce kapsam dışı kalır.
+    return c_soy((_PF / bagil).read_text(encoding="utf-8"))
+
+
+def test_KRITIK_bobin_cizen_ekranlar_TEK_KAYNAGI_kullanir():
+    """⚠️ ASIL KAPI — hayalet bobin 8 kartı.
+
+    MUTASYON: `DashboardScreen`de `gorunurBobinler(snapshot.coils ?? [])` yerine
+    `snapshot.coils ?? []` yaz → KIRMIZI (sökülü ESP slotu yeniden çizilir).
     """
-    from servers.live_state import STM_COIL_IDS
-    from utils.stm32_protocol_limits import STM32_NUM_COILS
+    for ekran in BOBIN_CIZEN_EKRANLAR:
+        src = _kaynak(ekran)
+        assert "gorunurBobinler(" in src, (
+            f"{ekran} bobin gorunurlugu tek kaynagini KULLANMIYOR -> sokulu ESP slotu "
+            "hayalet 'Offline' kart olarak cizilir (sahip Is 5)"
+        )
 
-    assert STM32_NUM_COILS == len(STM_COIL_IDS), (
-        f"utils/stm32_protocol_limits.STM32_NUM_COILS={STM32_NUM_COILS} ama "
-        f"live_state.STM_COIL_IDS {len(STM_COIL_IDS)} bobin ({sorted(STM_COIL_IDS)}) -> "
-        "IKI KAYNAK AYRISTI (2026-09-10 gecisinde tam bu oldu)"
+
+def test_KRITIK_bobin_paydasi_SABIT_8_DEGIL():
+    """⚠️ "7 bobinli sistem" — sabit payda sistemi DAİMA eksik gösterir.
+
+    MUTASYON: `${coilTotal}` yerine `8` yaz → KIRMIZI.
+    """
+    for ekran in BOBIN_CIZEN_EKRANLAR:
+        src = _kaynak(ekran)
+        for yasak in ("/8 ", "/ 8`", "/8`", "} / 8", "}/8"):
+            assert yasak not in src, (
+                f"{ekran} bobin paydasini SABIT 8 yaziyor ({yasak!r}) -> 7 bobinli sistemde "
+                "7/7 bagliyken bile ekran '7/8' yani EKSIK gosterir"
+            )
+
+
+def test_KRITIK_STM_bobin_sayisi_tek_yerde_TANIMLI():
+    """Payda dinamik olsa bile fiziksel sayı ikinci bir yerde sabitlenirse ayrışır.
+
+    MUTASYON: `bobinGorunurlugu.ts`deki `STM_BOBIN_SAYISI = 7`i 8 yap → KIRMIZI.
+    """
+    kaynak = _kaynak("services/bobinGorunurlugu.ts")
+    assert "STM_BOBIN_SAYISI = 7" in kaynak, (
+        "STM bobin sayisi tek kaynagi 7 DEGIL -> sokulu ESP yeniden fiziksel bobin sayilir"
     )
 
 
-def test_KRITIK_ESP_bobin_sayisi_live_state_ile_AYNI():
-    """⚠️ `ESP_NUM_COILS` ADETTİR, en büyük kimlik DEĞİL.
+def test_KARSIT_KANIT_ESP_slotu_GERI_GELEBILIR():
+    """Karşıt kanıt: kural "slot 8'i sonsuza dek yok say"a KAYMAMALI.
 
-    Eski değeri `8` idi ve "8 ESP bobini var" diye de okunabiliyordu; gerçekte ESP olarak
-    yalnız SLOT 8 vardı. Ad ile içerik arasındaki bu belirsizlik, yanlış okumanın kendisiydi.
+    Sahip ESP kodunun SİLİNMEMESİNİ, ileride hibrit sisteme dönebilmeyi şart koştu.
+    Tek kaynak, slot 8 ortaya çıkınca (bağlı YA DA çalışıyor) onu yeniden çizer; ekranlar
+    da paydayı ondan türettiği için sayı kendiliğinden 8 olur.
     """
-    from servers.live_state import ESP_COIL_IDS
-    from utils.stm32_protocol_limits import ESP_NUM_COILS
-
-    assert ESP_NUM_COILS == len(ESP_COIL_IDS), (
-        f"ESP_NUM_COILS={ESP_NUM_COILS} ama ESP_COIL_IDS {sorted(ESP_COIL_IDS)} "
-        f"({len(ESP_COIL_IDS)} slot) -> ADET mi KIMLIK mi karisikligi geri geldi"
+    kaynak = _kaynak("services/bobinGorunurlugu.ts")
+    assert "Boolean(c.connected) || Boolean(c.running)" in kaynak, (
+        "slot 8 geri gelis yolu KAPANMIS -> ESP takilsa bile ekranda gorunmez ve "
+        "enerjili bobin DURDURULAMAZ (2026-09-11 saha arizasi)"
     )
-
-
-def test_KRITIK_bobin_kimlikleri_CAKISMAZ_ve_BOSLUK_birakmaz():
-    """STM ∪ ESP kesintisiz 1..N olmalı; kesişim boş olmalı.
-
-    Çakışma: bir bobin iki taşıma katmanından da sürülmeye çalışılır.
-    Boşluk: canlı durumdaki `range(8)` döngüleri var olmayan bir slota yazar.
-    """
-    from servers.live_state import ESP_COIL_IDS, STM_COIL_IDS
-
-    assert not (STM_COIL_IDS & ESP_COIL_IDS), f"bobin kimlikleri CAKISIYOR: {sorted(STM_COIL_IDS & ESP_COIL_IDS)}"
-    birlesim = STM_COIL_IDS | ESP_COIL_IDS
-    assert birlesim == set(range(1, max(birlesim) + 1)), f"bobin kimliklerinde BOSLUK var: {sorted(birlesim)}"
-
-
-def test_utils_README_bobin_sayisini_DOGRU_yaziyor():
-    """⚠️ BELGE DE BİRLİKTE BAYATLAMIŞTI — kapı ikisini birden tutar.
-
-    `utils/README.md` "5 STM / 8 ESP bobin" diyordu. Kod düzeltilip belge unutulursa
-    bir sonraki okuyan yine yanlış öğrenir.
-
-    MUTASYON: README'deki "7 STM" ifadesini "5 STM" yap → KIRMIZI.
-    """
-    from servers.live_state import STM_COIL_IDS
-
-    metin = (KOK / "utils" / "README.md").read_text(encoding="utf-8", errors="replace")
-    assert f"{len(STM_COIL_IDS)} STM" in metin, (
-        f"utils/README.md '{len(STM_COIL_IDS)} STM' demiyor -> belge kodla AYRISMIS"
+    # ...ve Ana Ekran paydayı görünür listeden türetmeli, sabitten değil.
+    src = _kaynak("screens/DashboardScreen.tsx")
+    assert "coilTotal" in src and "coils.length" in src, (
+        "Ana Ekran paydayi gorunur listeden turetmiyor -> ESP geri takilinca sayi yanlis kalir"
     )
-    assert "5 STM / 8 ESP" not in metin, "utils/README.md hala ESKI (5/8) sayilari tasiyor"

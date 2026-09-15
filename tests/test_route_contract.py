@@ -23,6 +23,7 @@ GOLDEN_ROUTES = {
     ("/api/ai/disease", "POST"),
     ("/api/ai/disease/kidney", "POST"),
     ("/api/ai/log", "GET"),
+    ("/api/ai/log/{analiz_id}/pdf", "GET"),  # sahip 2026-09-12: ev sahibi analiz paylasimi
     ("/api/ai/log/review", "POST"),  # 2026-08-06 hekim degerlendirmesi (onay/red/duzeltme)
     # 2026-08-08 KVKK silme hakki: AI gecmisini silmenin HICBIR yolu yoktu (kaldirma da silmiyor).
     ("/api/ai/log/delete", "POST"),
@@ -93,6 +94,11 @@ GOLDEN_ROUTES = {
     ("/api/health", "GET"),
     ("/api/history/", "GET"),
     ("/api/history/delete", "POST"),
+    ("/api/history/delete_bulk", "POST"),  # sahip 2026-09-12: toplu seans silme
+    # sahip 2026-09-13: "kullanici da kalan hakkini gormeli". ⚠️ BILEREK system_router'da:
+    # ai_router'in bagimliliklarinda jeton_gate var ve tanimadigi yolu "goruntu" (1 jeton)
+    # sinifina dusurur -> bakiyeyi SORMAK jeton yakardi.
+    ("/api/jeton/bakiye", "GET"),
     ("/api/history/export_csv", "GET"),
     ("/api/history/export_patient_pdf", "GET"),
     ("/api/history/export_pdf", "GET"),
@@ -107,6 +113,7 @@ GOLDEN_ROUTES = {
     ("/api/patients", "GET"),
     ("/api/patients", "POST"),
     ("/api/patients/delete_all", "POST"),
+    ("/api/patients/delete_bulk", "POST"),  # sahip 2026-09-12: toplu hasta silme
     ("/api/patients/{patient_id}", "DELETE"),
     ("/api/patients/{patient_id}/delete", "POST"),
     ("/api/session/active", "GET"),
@@ -209,4 +216,4 @@ def test_route_contract_unchanged():
     # → 98 (+1 AI hazırlık self-testi: ai/hazirlik GET), 2026-08-27 saha bulgusu
     # → 99 (+1 bipolar/unipolar sürüş kipi: coil/surus_kipi POST), 2026-09-11
     # → 100 (+1 seans-ortası parametre güncelleme: session/parametre_guncelle POST), 2026-09-11
-    assert len(current) == len(beklenen) == 100 - (0 if _simulator_mountlu() else 1)
+    assert len(current) == len(beklenen) == 104 - (0 if _simulator_mountlu() else 1)

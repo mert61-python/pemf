@@ -35,6 +35,12 @@ def api(monkeypatch):
     """İzole api_server: MQTT/DB/broker mock + tüm seans state'i temiz."""
     from servers import api_server
 
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu dosya ESP bobinleriyle seans açıyor
+    # (STM donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme (sahip bildirimi: "bobin 8 görünüyor ama çalışmıyor").
+    # Deponun kuralı: kod SİLİNMEZ, testler `PEMF_ESP_ENABLED=1` ile KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
     monkeypatch.setattr(api_server, "_get_treatment_db", lambda: None)  # DB best-effort → atla
     # ⚠️ 2026-08-09: `_get_treatment_db → None` artık "DB hazır değil" demek ve seans 503 ile

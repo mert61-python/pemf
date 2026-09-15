@@ -214,6 +214,11 @@ def test_KRITIK_seans_TAKLIT_edilen_kimlikle_yazilmaz(client, api, monkeypatch):
             return lambda *a, **k: None
 
     monkeypatch.setattr(api, "_get_treatment_db", lambda: _SahteDB())
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu test ESP bobinleriyle seans açıyor (STM
+    # donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme. Kural: kod SİLİNMEZ, test bayrakla KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_kayit_db_hazir", lambda: (True, ""))
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p: True)
     monkeypatch.setattr(api.state, "hardware", None)
@@ -254,6 +259,11 @@ def test_seans_JETONLA_dogru_kimlige_yazilir(client, api, monkeypatch):
             return lambda *a, **k: None
 
     monkeypatch.setattr(api, "_get_treatment_db", lambda: _SahteDB())
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu test ESP bobinleriyle seans açıyor (STM
+    # donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme. Kural: kod SİLİNMEZ, test bayrakla KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_kayit_db_hazir", lambda: (True, ""))
     monkeypatch.setattr(api, "_mqtt_publish", lambda t_, p: True)
     monkeypatch.setattr(api.state, "hardware", None)

@@ -74,6 +74,12 @@ def _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency: float):
     import servers.api_server as api
 
     yayinlar: list = []
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu dosya ESP bobinleriyle seans açıyor
+    # (STM donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme (sahip bildirimi: "bobin 8 görünüyor ama çalışmıyor").
+    # Deponun kuralı: kod SİLİNMEZ, testler `PEMF_ESP_ENABLED=1` ile KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_mqtt_publish", lambda t, p=None, *a, **k: yayinlar.append((t, dict(p or {}))) or True)
     monkeypatch.setattr(api, "_ws_broadcast_sync", lambda *a, **k: None)
     monkeypatch.setattr(api, "_push_notification", lambda *a, **k: None)

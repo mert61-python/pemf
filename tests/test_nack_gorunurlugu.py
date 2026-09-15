@@ -44,6 +44,12 @@ def api(monkeypatch):
 
     bildirimler: list = []
     ws: list = []
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu dosya ESP bobinleriyle seans açıyor
+    # (STM donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme (sahip bildirimi: "bobin 8 görünüyor ama çalışmıyor").
+    # Deponun kuralı: kod SİLİNMEZ, testler `PEMF_ESP_ENABLED=1` ile KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     monkeypatch.setattr(api, "_push_notification", lambda msg, sev="info": bildirimler.append((msg, sev)))
     monkeypatch.setattr(api, "_ws_broadcast_sync", lambda m: ws.append(m))
     monkeypatch.setattr(api, "_reconcile_esp_calisiyor", lambda *a, **k: None)

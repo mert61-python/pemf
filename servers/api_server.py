@@ -722,6 +722,89 @@ def _stm_nack_bastir(mesaj: str) -> bool:
     return False
 
 
+#: Firmware uyuşmazlığında operatöre gösterilen EYLEM METNİ — tek kaynak.
+#: ⚠️ Aynı cümle hem bildirime hem `/session/start` reddine gider; iki yerde iki farklı
+#: açıklama, operatörün "hangisi doğru?" diye durmasına yol açardı.
+STM_RED_MESAJI = (
+    "STM32 kartı komutları REDDEDİYOR (firmware sürümü bu uygulamayla uyuşmuyor). "
+    "Hiçbir bobin çalışmaz — seans başlatılmadı. Kartı güncel firmware ile yeniden "
+    "programlayın (CubeIDE: Project → Clean → Build → Run). Açılış satırı '7-ch' demeli."
+)
+
+
+def _seansi_geri_al(sebep: str) -> None:
+    """Başlatılmış ama HİÇ SÜRÜLEMEMİŞ seansı geri al (kayıt YALAN olmasın).
+
+    ⚠️ NEDEN GEREKLİ: `_active_session` ve DB satırı, bobinler sürülmeden ÖNCE oluşur
+    (sıra bilinçlidir — backend seans ortasında çökerse bile kayıt kalsın diye). Bobinlerin
+    hiçbiri komutu kabul etmezse o kayıt, hiç uygulanmamış bir tedaviyi belgeler hâle gelir.
+    Burada seans kapatılır ve `donanim-reddi` sebebiyle mühürlenir → geçmişte "Donanım
+    Reddetti" görünür, "Tamamlandı" DEĞİL.
+
+    ⚠️ BOBİNLERE DOKUNULMAZ: hiçbiri enerjilenmedi (kabul listesi boş). Buradan bir STOP
+    göndermek, aynı anda başlamış BAŞKA bir seansın bobinlerini düşürme riski taşırdı.
+    """
+    try:
+        with _session_lock:
+            db_session_id = _active_session.get("db_session_id")
+            started_epoch = _active_session.get("started_epoch") or _active_session.get("start_time")
+            start_mono = _active_session.get("start_mono")
+            coil_ids = _active_session.get("coil_ids") or []
+            _active_session["is_active"] = False
+        try:
+            update_live_session_state(is_active=False, mode="Sistem Hazır")
+        except Exception:
+            logging.getLogger(__name__).debug("geri-al: canli durum guncellenemedi", exc_info=True)
+        if db_session_id:
+            _finalize_session_db(db_session_id, started_epoch, coil_ids=coil_ids, reason=sebep, start_mono=start_mono)
+        logging.getLogger(__name__).error("Seans GERI ALINDI (%s): hicbir bobin surulmedi.", sebep)
+    except Exception:
+        logging.getLogger(__name__).exception("Seans geri alma basarisiz (%s)", sebep)
+
+
+def _stm_red_aktif_seansi_durdur(ham: str) -> None:
+    """Kart komutları sistematik reddetmeye başladı → AKTİF SEANSI durdur.
+
+    ═══════════════════════════════════════════════════════════════════════════
+    ⚠️ SAHİP BİLDİRİMİ (2026-09-12) — SAHTE "BAŞARILI" SEANS
+    ═══════════════════════════════════════════════════════════════════════════
+    "bobinler komut almicak bildirimi gelmesine ve gerçekten bobinlere komut gitmemesine
+    rağmen seans başlatınca gerçekten başlıyormuş gibi her şey sorunsuz devam ediyor."
+
+    Eskiden bu dal YALNIZCA bildirim basıp `return` ediyordu. Seans aktif kalıyor, sayaç
+    işliyor, bobin-çalışma satırları TAM SÜREYLE yazılıyor ve geçmişe "Tamamlandı" düşüyordu
+    — hiçbir bobin hiç enerjilenmemişken. Tıbbi kayıt YALAN oluyordu: "bu hastaya 20 dk
+    100 Hz uygulandı" diyen bir satır, hiç uygulanmamış bir tedaviyi belgeliyordu.
+
+    ⚠️ `watchdog_timeout` DALI BUNU ZATEN DOĞRU YAPIYORDU (seansı durduruyor). CRC reddi
+    aynı sınıftan bir olaydır — "donanım komuta uymuyor" — ve aynı tepkiyi hak eder.
+    Aradaki tek fark, watchdog'da bobinler ÇALIŞIYOR olabilir, burada HİÇ çalışmamıştır;
+    o yüzden durdurma fiziksel olarak zararsızdır ama KAYIT açısından şarttır.
+
+    ⚠️ ACİL-DURDURMA YOLU KULLANILIR ÇÜNKÜ seansı "tamamlandı" DEĞİL, kesintiye uğramış
+    olarak mühürler (`EMERGENCY_STOPPED` → geçmişte "Acil Durduruldu"). Operatör geçmişe
+    baktığında bu seansın gerçekleşmediğini GÖREBİLİR. Sessizce "completed" yazmak, arızayı
+    veritabanına kalıcılaştırmak olurdu.
+    """
+    try:
+        with _session_lock:
+            _aktif = bool(_active_session.get("is_active"))
+            _bobinler = _active_session.get("coil_ids") or list(range(1, 9))
+        if not _aktif or not any(c in STM_COIL_IDS for c in _bobinler):
+            return
+        logging.getLogger(__name__).error(
+            "STM komut REDDI sistematik (%s) → aktif seans durduruluyor (sahte 'tamamlandi' yazilmasin).",
+            str(ham)[:120],
+        )
+        _push_notification(
+            "⛔ Seans DURDURULDU: " + STM_RED_MESAJI,
+            "error",
+        )
+        _emergency_stop_async(reason="stm_komut_reddi", mode="Firmware Uyuşmazlığı")
+    except Exception:
+        logging.getLogger(__name__).exception("STM red sonrasi seans durdurma basarisiz")
+
+
 #: bobin indeksi → son bilinen MANYETIK doygunluk durumu (ayni "yalniz gecis" kurali).
 #: ⚠️ AKIMDAN AYRI SOZLUK: ikisini tek sozlukte tutmak, akim doygunlugu 1'ken gelen bir
 #: manyetik doygunlugu "degismedi" sanip operatore HIC soylememek demekti.
@@ -1208,6 +1291,9 @@ def _handle_backend_event(event) -> None:
                 logging.exception("STM disconnect STOP failed")
         return
     if event.event_type == "hardware.stm.coil_update":
+        # ⚠️ KART KOMUTU KABUL ETTİ: `STM_OK` ayrıştırıldı → "sistematik red" sayacı sıfırlanır.
+        # Sıfırlama olmadan, eski bir gürültü NACK'i seans başlatmayı sonsuza dek engellerdi.
+        live_state.stm_komut_kabulu_bildir()
         update_live_coil_from_stm(
             coil_id=int(data.get("coil_id", 0)),
             duty=float(data.get("duty", data.get("duty_cycle", 0.0))),
@@ -1371,6 +1457,12 @@ def _handle_backend_event(event) -> None:
         # ⚠️ VE MESAJ EYLEM SÖYLEMİYORDU: "CRC" ham firmware metnidir; operatör ondan ne
         # yapacağını çıkaramaz. CRC reddi pratikte TEK bir şeyi gösterir: karttaki firmware
         # ile bu sürümün paket biçimi UYUŞMUYOR (paket 5 bobinde 88, 7 bobinde 120 bayt).
+        # ⚠️ SAYAÇ BASTIRMADAN ÖNCE ARTAR. `_stm_nack_bastir` yalnız BİLDİRİM selini keser;
+        # kararı da bastırsaydı 30 sn'de bir tek olay sayılır ve "sistematik red" hiç
+        # oluşmazdı — susturma, körlüğe dönüşürdü.
+        _ilk_kez_sistematik = live_state.stm_komut_reddi_bildir(_ham)
+        if _ilk_kez_sistematik:
+            _stm_red_aktif_seansi_durdur(_ham)
         if _stm_nack_bastir(_ham):
             return
         if "CRC" in _ham.upper():
@@ -1421,10 +1513,21 @@ def _handle_backend_event(event) -> None:
             if data.get("mqtt_broker_reachable"):
                 _live_state["mqtt"] = "online"
             mqtt_state = _live_state["mqtt"]
+            internet_state = _live_state["internet"]
+        # ⚠️ `internet` YAYININ İÇİNDE GİTMEK ZORUNDA (sahip bildirimi 2026-09-12).
+        # Eskiden yalnız `_live_state`e yazılıyor, yayına KONMUYORDU → arayüz onu SADECE
+        # ilk snapshot'ta görüyordu. `network.status` olayı da yalnız DEĞİŞİMDE yayınlandığı
+        # için rozet başlangıç değerinde ("offline") sonsuza dek donuyordu: backend
+        # `"internet":"online"` derken ekranda "İnternet yok — uzaktan erişim kapalı" yazıyordu.
         _ws_broadcast_sync(
             {
                 "type": "gateway_status",
-                "data": {"gateway": gateway_state, "mqtt": mqtt_state, "network": data},
+                "data": {
+                    "gateway": gateway_state,
+                    "mqtt": mqtt_state,
+                    "internet": internet_state,
+                    "network": data,
+                },
             }
         )
         return
@@ -2760,8 +2863,46 @@ async def start_session(payload: SessionStartPayload, request: Request):
     coil_ids = _seen_coils or list(range(1, 9))
     stm_coils = [coil_id for coil_id in coil_ids if coil_id in STM_COIL_IDS]
     esp_coils = [coil_id for coil_id in coil_ids if coil_id in ESP_COIL_IDS]
+
+    # ⚠️ HAYALET BOBİN KAYDI (sahip bildirimi 2026-09-12) ──────────────────────────────
+    # "seans detayında donanım eps kalmış ve bobin 8 de görünüyor ama aslında çalışmıyor,
+    # 7 bobinli sistem."
+    #
+    # ÖLÇÜLEN KÖK NEDEN: `_mqtt_publish` ESP kapalıyken HİÇ yayınlamıyor (doğru), ama aşağıdaki
+    # ESP döngüsü `_begin_coil_run(...)`ı KOŞULSUZ çağırıyordu. Sonuç: bobin 8 için tedavi
+    # geçmişine "46 sn · 100 Hz · %50 · ESP" satırı yazılıyordu — ortada o donanım YOKKEN.
+    # Üstelik bobin kimliği verilmeyen seans `list(range(1, 9))`e düştüğü için bu, VARSAYILAN
+    # yoldu: her seans bir hayalet bobin-8 kaydı üretiyordu.
+    #
+    # ⚠️ ESP KODU SİLİNMİYOR, YALNIZ KAPILANIYOR: `PEMF_ESP_ENABLED=1` ile eski davranış
+    # bütünüyle geri gelir (sahip kararı 2026-09-11: "ilerde tekrar hibrit esp+stm'e dönebilirim").
+    if esp_coils and not live_state.esp_etkin():
+        logging.getLogger(__name__).info(
+            "ESP bobinleri %s seans kapsamindan CIKARILDI (ESP alt sistemi kapali) — hayalet kosu kaydi yazilmaz.",
+            esp_coils,
+        )
+        esp_coils = []
+        coil_ids = [c for c in coil_ids if c not in ESP_COIL_IDS]
     if stm_coils and not state.hardware:
         raise HTTPException(status_code=503, detail="STM32 donanım kontrolcüsü hazır değil.")
+
+    # ⚠️ SAHTE "BAŞARILI" SEANS KAPISI (sahip bildirimi 2026-09-12) ────────────────────
+    # "bobinler komut almicak bildirimi gelmesine ... rağmen seans başlatınca gerçekten
+    # başlıyormuş gibi her şey sorunsuz devam ediyor."
+    #
+    # ⚠️ NEDEN ÜSTTEKİ KONTROLLER YETMİYOR: `state.hardware` VAR ve `_stm_surus_hazir()`
+    # TRUE — çünkü seri port AÇIK ve yazma BAŞARILI. Paketi reddeden kartın KENDİSİDİR ve
+    # bunu asenkron `STM_NACK: CRC` ile söyler. "Yazabildim" ile "bobin çalıştı" arasındaki
+    # boşluk tam buraya düşüyordu: seans başlıyor, sayaç işliyor, geçmişe "Tamamlandı"
+    # yazılıyordu — hiçbir bobin enerjilenmemişken. Hastanın aldığı doz kayıtta VAR,
+    # gerçekte YOK.
+    #
+    # ⚠️ YALNIZ STM BOBİNİ İSTENDİĞİNDE KAPILANIR: ESP bobini (varsa) ayrı bir yoldan gider
+    # ve bu reddin konusu değildir. Ayrıca kapı SADECE BAŞLATMADADIR — durdurma/E-stop
+    # yolları bundan geçmez (kopuk/uyuşmaz kartta tedaviyi durduramamak asıl tehlike olurdu).
+    if stm_coils and live_state.stm_komutlari_reddediyor():
+        logging.getLogger(__name__).error("Seans REDDEDILDI — STM kart komutlari reddediyor (firmware uyusmazligi).")
+        raise HTTPException(status_code=409, detail=STM_RED_MESAJI)
 
     # ⚠️ DENETİM 2026-08-09 (ENGEL) — KAYITSIZ TEDAVİ ARTIK BAŞLAMAZ.
     # Aşağıdaki DB yazımları bilinçli olarak "best-effort"tur (DB hatası bobinleri durdurmasın).
@@ -3030,14 +3171,53 @@ async def start_session(payload: SessionStartPayload, request: Request):
     # event-loop-blok fix: update_coil = STM32'ye SENKRON seri-port yazımı (bobin başına ~onlarca ms) →
     # async-uçta doğrudan çalışınca event-loop'u bloklar; STM bobin döngüsünü thread'e offload et.
     def _start_stm_coils():
-        for coil_id in stm_coils:
-            state.hardware.update_coil(
-                coil_id, payload.frequency, payload.duty, payload.phase, payload.duration_minutes, start=True
-            )
-            _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "stm")
+        """Bobinleri sür ve KABUL EDİLENLERİ döndür.
 
+        ═══════════════════════════════════════════════════════════════════════
+        ⚠️ SAHTE "BAŞARILI" SEANSIN İKİNCİ (ve daha genel) KÖKÜ — 2026-09-12
+        ═══════════════════════════════════════════════════════════════════════
+        `update_coil` REDDİ False ile bildirir (kart kopuk · firmware/CRC uyuşmaz ·
+        parametre normalizasyonu patladı). Bu dönüş burada HİÇ OKUNMUYORDU: hiçbir bobin
+        sürülmese bile seans "başladı" sayılıyor, sayaç işliyor, coil-run satırları TAM
+        SÜREYLE yazılıyor ve geçmişe "Tamamlandı" düşüyordu.
+
+        ⚠️ Tekil bobin yolu (`control_single_coil`) bunu 2026-08-20'de ZATEN düzeltmişti
+        ("koşu kaydı yalnız KABUL edilen start'ta"); SEANS yolu dışarıda kalmıştı — bu
+        deponun tekrar eden "kısmi düzeltme, düzeltilmemiş demektir" sınıfı.
+        """
+        kabul = []
+        for coil_id in stm_coils:
+            if state.hardware.update_coil(
+                coil_id, payload.frequency, payload.duty, payload.phase, payload.duration_minutes, start=True
+            ):
+                kabul.append(coil_id)
+                # ⚠️ KOŞU KAYDI YALNIZ KABULDE: reddedilen bobin için satır açmak, hiç
+                # uygulanmamış bir dozu tıbbi kayda yazmak olurdu.
+                _begin_coil_run(coil_id, payload.frequency, payload.duty, payload.phase, payload.intensity, "stm")
+            else:
+                logging.getLogger(__name__).error("Seans: bobin %s komutu REDDEDILDI (surulmedi).", coil_id)
+        return kabul
+
+    _stm_kabul: list = []
     if stm_coils:
-        await asyncio.to_thread(_start_stm_coils)
+        _stm_kabul = await asyncio.to_thread(_start_stm_coils) or []
+
+    # ⚠️ HİÇBİR BOBİN SÜRÜLMEDİYSE SEANS YOKTUR — geri al ve DÜRÜSTÇE söyle.
+    # Sahip bildirimi: "bobinlere komut gitmemesine rağmen seans başlatınca gerçekten
+    # başlıyormuş gibi her şey sorunsuz devam ediyor."
+    # ⚠️ ESP bobinleri hesaba katılır: karma dizide STM reddedilse de ESP sürülmüş olabilir,
+    # o seans GERÇEKTİR ve iptal edilmemelidir.
+    # ⚠️ `stm_coils` KOŞULU YOK: ESP kapalıyken yalnız bobin 8 istenen bir seansta
+    # `stm_coils` boştur ve eski koşul HİÇ tetiklenmezdi — seans yine sahte başarılı olurdu.
+    if not _stm_kabul and not esp_coils:
+        # ⚠️ `to_thread`: `_finalize_session_db` SENKRONDUR ve kendi sözleşmesinde "yalnız
+        # thread'lerden çağrılır, event-loop'tan DEĞİL" der (SQLite yazımları event-loop'u
+        # bloklar). Bu uç `async` olduğu için geri alma thread'e taşınır.
+        await asyncio.to_thread(_seansi_geri_al, "donanim-reddi:hicbir-bobin-surulmedi")
+        raise HTTPException(
+            status_code=503,
+            detail=("Hiçbir bobin komutu kabul etmedi; seans BAŞLATILMADI. " + STM_RED_MESAJI),
+        )
 
     update_live_session_state(
         is_active=True,
@@ -3185,7 +3365,7 @@ def _bildir_teyitsiz_stop(teyitsiz, kaynak: str) -> None:
         logging.getLogger(__name__).warning("teyitsiz-stop bildirimi gonderilemedi (%s)", kaynak, exc_info=True)
 
 
-def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
+def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI", operator_email: str = ""):
     """AI biofeedback donanım sürerken seansı _active_session'a YAZAR → süre-watchdog onu da
     izler ve süresi dolunca DURDURUR; emergency_stop/STM-disconnect de AI'yı kapsar. Parametre
     CLAMP'i YOK (sadece seans takibi). Tekrarlı AI çağrılarında ilk start_time/session_id korunur."""
@@ -3309,7 +3489,17 @@ def start_ai_session(freq, duty, duration_minutes, coil_ids, mode="AI"):
         try:
             _db = _get_treatment_db()
             if _db is not None:
-                _ai_sid = _db.start_session(treatment_mode=mode, target_condition=None)
+                # ⚠️ SAHİPLİK (sahip bildirimi 2026-09-12: "klinik ve benim ayrımı düzgün
+                # çalışıyor mu incele... herkes kendi maili ile kayıt oluyor ya").
+                # ÖLÇÜLDÜ: bu satır `operator_email` YAZMIYORDU → her AI seansı SAHİPSİZ
+                # kaydediliyordu. Arayüzün kuralı "sahipsiz = benim" olduğu için otonom
+                # seanslar kliniğin HER hekimine "Benim Seanslarım"da görünüyordu; yani
+                # "Benim / Tüm Klinik" ayrımı AI tarafında fiilen YOKTU.
+                _ai_sid = _db.start_session(
+                    treatment_mode=mode,
+                    target_condition=None,
+                    operator_email=(str(operator_email or "").strip().lower() or None),
+                )
                 try:
                     _db.set_session_meta(_ai_sid, started_epoch=_started_epoch_ai)
                 except Exception:
@@ -3395,9 +3585,20 @@ def _finalize_session_db(db_session_id, started_epoch, coil_ids=None, reason: st
                 # ⚠️ SEBEP ARTIK KAYDA DA GECER (kampanya bulgusu S09). `reason` buraya zaten
                 # tasiniyordu ama YALNIZ loglaniyordu → acil durdurma ile biten seans gecmiste
                 # normal bitenden ayirt EDILEMIYORDU ("bu hastada e-stop yasandi mi?" cevapsiz).
-                from database.treatment_history_db import SEANS_DURUMU_ACIL_DURDURMA
+                from database.treatment_history_db import (
+                    SEANS_DURUMU_ACIL_DURDURMA,
+                    SEANS_DURUMU_DONANIM_REDDI,
+                )
 
-                _durum = SEANS_DURUMU_ACIL_DURDURMA if str(reason or "").startswith("acil-durdurma") else "completed"
+                _sebep = str(reason or "")
+                if _sebep.startswith("acil-durdurma"):
+                    _durum = SEANS_DURUMU_ACIL_DURDURMA
+                elif _sebep.startswith("donanim-reddi"):
+                    # ⚠️ Donanım komutu reddetti → seans HİÇ başlamadı. "completed" yazmak,
+                    # uygulanmamış bir tedaviyi uygulanmış olarak belgelemek olurdu.
+                    _durum = SEANS_DURUMU_DONANIM_REDDI
+                else:
+                    _durum = "completed"
                 db.end_session(db_session_id, duration_minutes=dur_min, session_status=_durum)
                 db.set_session_meta(db_session_id, ended_epoch=_now)
             except Exception:
@@ -4019,6 +4220,12 @@ async def stop_session():
     return JSONResponse(status_code=409, content=_yanit)
 
 
+def _dosya_adi_guvenli(ad: str) -> str:
+    """Dosya adına girecek metni güvenli hâle getirir (yol ayıracı / PII kaçağı yok)."""
+    temiz = "".join(c for c in str(ad or "") if c.isalnum() or c in ("_", "-"))
+    return temiz[:40] or "kayit"
+
+
 class AiLogPayload(BaseModel):
     # Geriye-uyumlu alanlar (eski istemci yalnız bunları gönderir):
     patient_name: str = ""
@@ -4031,9 +4238,69 @@ class AiLogPayload(BaseModel):
     result_detail: dict = {}  # tam sonuç JSON (heterojen)
     confidence: float | None = None
     operator_email: str = ""  # klinik-içi sahiplik — analizi yapan hekim ("Benim/Tüm Klinik")
+    #: Hastanın OPAK KİMLİĞİ (2026-09-12). Ada göre eşleme aynı adlı iki hayvanda karışıyor,
+    #: ad düzeltilince kopuyor ve PII maskelemesi açıkken tümüyle çöküyordu.
+    #: ⚠️ BOŞ GEÇİLEBİLİR: kimlik göndermeyen ESKİ istemcide davranış AYNI kalır (ada bağlı).
+    patient_id: str = ""
 
 
 _ai_migrate_lock = _threading.Lock()
+
+
+_ai_kimlik_tasima_lock = _threading.Lock()
+_ai_kimlik_tasindi = False
+
+
+def _ai_hasta_kimliklerini_tasi_bir_kez(db) -> dict:
+    """ESKİ AI analizlerine hasta KİMLİĞİ yaz — TEK SEFERLİK, best-effort, thread-safe.
+
+    ═══════════════════════════════════════════════════════════════════════════════
+    ⚠️ BELİRSİZ ADI TAHMİN ETMEZ
+    ═══════════════════════════════════════════════════════════════════════════════
+    Harita hasta defterinden kurulur ve YALNIZ TEK BİR hastaya çözülen adları içerir.
+    Aynı ada sahip iki hayvan varsa o ad haritaya HİÇ KONMAZ → o analizler kimliksiz kalır
+    ve eskisi gibi ada bağlı çalışır. Yanlış kimlik yazmak, taşımanın çözmeye çalıştığı
+    sorunu KALICI hâle getirirdi: bir hayvanın analizi başka bir hayvanın kaydına gömülür
+    ve ad belirsizliğinin aksine bu geri alınamazdı.
+
+    ⚠️ NEDEN BURADA (API katmanı), DB İÇİNDE DEĞİL: hasta defteri AYRI bir veritabanıdır
+    (`database/patient_database`). Tedavi-DB'nin ona uzanması iki depoyu birbirine bağlardı;
+    harita burada kurulup DB'ye VERİ olarak geçilir.
+    """
+    global _ai_kimlik_tasindi
+    if db is None or _ai_kimlik_tasindi:
+        return {}
+    with _ai_kimlik_tasima_lock:
+        if _ai_kimlik_tasindi:
+            return {}
+        try:
+            from database.patient_database import get_patient_database
+            from utils.turkce_metin import arama_katla
+
+            pdb = get_patient_database()
+            hastalar = pdb.get_all_patients() if pdb else []
+            # Ad → kimlik; ÇAKIŞAN adlar ELENİR (tekil çözülmeyen ad taşınmaz).
+            sayac: dict = {}
+            for h in hastalar or []:
+                ad = arama_katla(h.get("name") or "")
+                kimlik = str(h.get("id") or "")
+                if not ad or not kimlik:
+                    continue
+                sayac.setdefault(ad, set()).add(kimlik)
+            harita = {ad: next(iter(k)) for ad, k in sayac.items() if len(k) == 1}
+            cakisan = [ad for ad, k in sayac.items() if len(k) > 1]
+            if cakisan:
+                logging.getLogger(__name__).warning(
+                    "AI kimlik tasimasi: %d ad BIRDEN COK hastaya cozuluyor -> o analizler "
+                    "kimliksiz BIRAKILDI (tahmin edilmedi).",
+                    len(cakisan),
+                )
+            sonuc = db.ai_analiz_kimliklerini_doldur(harita)
+            _ai_kimlik_tasindi = True
+            return sonuc
+        except Exception:
+            logging.getLogger(__name__).exception("AI hasta kimligi tasimasi basarisiz (kayitlar DEGISMEDI).")
+            return {}
 
 
 def _migrate_ai_jsonl_once(db) -> None:
@@ -4072,6 +4339,9 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
         if db is None:
             return {"status": "error", "detail": "Kayıt DB yok"}
         await asyncio.to_thread(_migrate_ai_jsonl_once, db)
+        # ⚠️ Eski kayıtlara hasta kimliği yaz (tek seferlik, idempotent, best-effort).
+        # Yalnız YAZMA yolunda: GET read-only kalmalı (jsonl taşımasıyla aynı ilke).
+        await asyncio.to_thread(_ai_hasta_kimliklerini_tasi_bir_kez, db)
         from servers.auth import cozumlenmis_operator
 
         rid = await asyncio.to_thread(
@@ -4087,6 +4357,7 @@ async def log_ai_result(payload: AiLogPayload, request: Request):
             # ⚠️ 2026-08-09 (Tier 1): AI analizinin sahibi de jetondan türetilir — aksi hâlde
             # "bu teşhisi kim yaptı" sorusunun cevabı doğrulanmamış bir dizeydi.
             cozumlenmis_operator(request, payload.operator_email),
+            str(payload.patient_id or "").strip(),
         )
         return {"status": "success", "id": rid}
     except Exception:
@@ -4127,8 +4398,25 @@ async def review_ai_analysis(payload: AiReviewPayload):
 
 
 @app.get("/api/ai/log")
-async def get_ai_log(limit: int = 50, module_id: str = "", patient_name: str = "", before_id: int = 0):
-    """AI analiz geçmişini döndürür (yeni önce). Filtre: modül / hasta / keyset-pagination (before_id)."""
+async def get_ai_log(
+    limit: int = 50,
+    module_id: str = "",
+    patient_name: str = "",
+    before_id: int = 0,
+    patient_id: str = "",
+):
+    """AI analiz geçmişini döndürür (yeni önce). Filtre: modül / hasta / keyset-pagination.
+
+    ⚠️ `patient_id` TERCİH EDİLEN hasta süzgecidir (2026-09-12): ad bazlı süzme aynı adlı iki
+    hayvanda karışır, ad düzeltilince kopar, PII maskelemesi açıkken çöker.
+    ⚠️ `patient_name` ile BİRLİKTE verilirse VEYA ile bağlanır → kimliği yazılmış YENİ kayıtlar
+    ile aynı hastanın ESKİ (kimliksiz) kayıtları TEK listede görünür; aksi hâlde taşıma günü
+    geçmiş ikiye bölünmüş gibi görünürdü.
+
+    ⚠️ OPERATÖR SÜZGECİ YOKTUR (bilinçli): kapsam kararı istemcide, `patientScope` tek
+    kaynağıyla verilir. Çağıran ekranların hepsi `kapsamda()` ile süzmek ZORUNDADIR —
+    kapı: tests/test_kapsam_sahipligi.py.
+    """
     try:
         db = _get_treatment_db()
         if db is None:
@@ -4139,6 +4427,7 @@ async def get_ai_log(limit: int = 50, module_id: str = "", patient_name: str = "
             module_id or None,
             patient_name or None,
             (int(before_id) or None),
+            (patient_id or None),
         )
         return {"status": "success", "data": data}
     except Exception:
@@ -4182,6 +4471,84 @@ class AiLogDeleteAllPayload(BaseModel):
     operator_email: str = ""
     #: Klinik-geneli silme NİYETİ. Kimliksiz + bayraksız istek REDDEDİLİR (fail-closed).
     all_operators: bool = False
+
+
+@app.get("/api/ai/log/{analiz_id}/pdf")
+async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
+    """Tek bir AI analizini PDF olarak ver — EV SAHİBİ PAYLAŞIMI (sahip isteği 2026-09-12).
+
+    ⚠️ NEDEN EKLENDİ: ev sahibi profili analiz yapabiliyordu ama sonucu veterinerine
+    GÖNDEREMİYORDU — PDF üretimi yalnız SEANS kayıtları için vardı. Analizi ekran
+    görüntüsüyle paylaşmak hem eksik (sayısal detay kayboluyor) hem de kayıtsızdı.
+
+    ⚠️ AYRICALIKLI UÇ — LAN MUAFİYETİ YOK (denetim 2026-09-12, kendi eklememde bulundu):
+    Bu uç hasta ADINI ve analizin TÜM sayısal detayını tek dosyada dışarı verir; yani
+    niteliksel olarak `/api/data/export` ile aynı sınıftadır (bkz. auth.py "AYRICALIKLI
+    UÇLAR" başlığı). Kapısız bırakıldığında klinik WiFi'sindeki HERHANGİ bir cihaz,
+    kimlik göstermeden `?analiz_id=1,2,3…` diyerek tüm AI geçmişini PDF olarak toplayabilirdi.
+    Klinik hotspot parolası her makinede aynı ve pakette dağıtıldığı için "güvenli yerel ağ"
+    varsayımı bu uç için GEÇERLİ DEĞİLDİR.
+
+    ⚠️ `kaydet=1`: masaüstü uygulaması WebView2'de dosya indiremiyor → backend AYNI
+    makinede olduğunda dosyayı O yazar ve yolunu döndürür (seans raporlarıyla AYNI desen,
+    bkz. history_router._diske_kaydet).
+    """
+    _enforce_privileged(request)
+    try:
+        db = _get_treatment_db()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Kayıt veritabanı açılamadı.")
+        # ⚠️ TEKİL OKUMA UCU YOK: liste ucundan süzüyoruz. `before_id = analiz_id + 1` ile
+        # keyset o kaydın KENDİSİNDEN başlar (id DESC), yani ilk satır aranan kayıttır.
+        kayitlar = await asyncio.to_thread(db.get_ai_analyses, 1, None, None, int(analiz_id) + 1)
+        kayit = next((k for k in (kayitlar or []) if int(k.get("id", 0)) == int(analiz_id)), None)
+        if not kayit:
+            raise HTTPException(status_code=404, detail="Analiz kaydı bulunamadı.")
+
+        # ⚠️ GECİKMELİ IMPORT: `FileResponse`/`Path` bu dosyada modül seviyesinde YOK
+        # (backend açılış süresi için import grafiği dar tutuluyor). Uç nadir çağrılır.
+        from pathlib import Path
+
+        from fastapi.responses import FileResponse
+
+        from utils.ai_rapor_ogeleri import analiz_pdf_ogeleri
+
+        ogeler = analiz_pdf_ogeleri(kayit)
+        baslik = f"AI Analiz Raporu — {kayit.get('module_label') or kayit.get('module_id') or 'AI'}"
+        tmp_dir = _app_data_dir() / "temp_reports"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        cikti = str(tmp_dir / f"ai_{analiz_id}_{int(time.time() * 1000)}.pdf")
+
+        from utils.pdf_report_generator import get_pdf_generator
+
+        uretici = get_pdf_generator(_app_data_dir())
+        yol = await asyncio.to_thread(uretici.generate_xai_report, baslik, ogeler, cikti)
+
+        _ad = f"PEMF_AI_{_dosya_adi_guvenli(kayit.get('patient_name') or 'analiz')}_{analiz_id}.pdf"
+        if kaydet:
+            from servers.history_router import _diske_kaydet, _safe_unlink
+
+            try:
+                veri = Path(yol).read_bytes()
+            finally:
+                _safe_unlink(yol)  # geçici PII PDF'i her durumda sil
+            return _diske_kaydet(veri, _ad)
+
+        from starlette.background import BackgroundTask as _BGT
+
+        from servers.history_router import _safe_unlink
+
+        return FileResponse(
+            path=yol,
+            media_type="application/pdf",
+            filename=_ad,
+            background=_BGT(_safe_unlink, yol),  # gönderim sonrası PII PDF'i sil
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logging.exception("ai_analiz_pdf failed")
+        raise HTTPException(status_code=500, detail="Rapor oluşturulamadı.")
 
 
 @app.post("/api/ai/log/delete")

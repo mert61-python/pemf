@@ -56,6 +56,21 @@ _DB_VEYA_RUNTIME = (*_DB_ERROR, RuntimeError) if isinstance(_DB_ERROR, tuple) el
 # `tests/test_acil_durdurma_gecmiste_gorunur.py` bu ayrışmayı kilitler.
 SEANS_DURUMU_ACIL_DURDURMA = "EMERGENCY_STOPPED"
 
+#: Donanım komutu REDDETTİĞİ için hiç başlayamayan seansın `session_status` değeri.
+#
+# ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "bobinlere komut gitmemesine rağmen seans başlatınca
+# gerçekten başlıyormuş gibi her şey sorunsuz devam ediyor." Böyle bir seans geçmişe
+# `'completed'` yazılıyordu — yani hiç uygulanmamış bir tedavi, uygulanmış olarak
+# BELGELENİYORDU. Tıbbi kaydın söyleyebileceği en kötü yalan budur.
+#
+# ⚠️ NEDEN AYRI BİR DEĞER, NEDEN `EMERGENCY_STOPPED` DEĞİL: acil durdurmada tedavi
+# BAŞLAMIŞ ve kesilmiştir (hasta bir doz almıştır). Burada HİÇ başlamamıştır. İkisini tek
+# kutuya koymak, "bu hastaya ne uygulandı?" sorusunu yine cevapsız bırakırdı.
+#
+# ⚠️ Değiştirirsen Türkçe etiket haritalarını da güncelle (`utils/seans_durum.py` +
+# `TreatmentHistoryScreen.tsx`); `tests/test_seans_durum_etiketi.py` bu ayrışmayı kilitler.
+SEANS_DURUMU_DONANIM_REDDI = "HARDWARE_REJECTED"
+
 
 class TreatmentHistoryDB:
     """PEMF tedavi geçmişi veritabanı yönetim sınıfı (Connection Pool + WAL mode)"""
@@ -275,6 +290,16 @@ class TreatmentHistoryDB:
                 return
             sqlcipher = self._import_sqlcipher()
             db = str(self.db_path)
+            # ⚠️ ONCE yarim kalmis goc var mi (db YOK + .plain.bak VAR) — VARSA orijinali geri koy.
+            # Bu, asagidaki `os.path.exists(db)` erken-donusunden ONCE olmak ZORUNDA: aksi halde
+            # `db` yok sayilir, goc atlanir ve `_init_database()` BOS bir veritabani yaratir →
+            # klinik hasta gecmisini BOS gorur. (Ortak yardimci: sqlcipher_util.)
+            try:
+                from database.sqlcipher_util import _yarim_goc_toparla
+
+                _yarim_goc_toparla(db, self.logger)
+            except Exception:
+                self.logger.warning("yarim-goc toparlama denenemedi", exc_info=True)
             if sqlcipher is None or not os.path.exists(db):
                 return
             keyq = "'" + key.replace("'", "''") + "'"
@@ -339,10 +364,39 @@ class TreatmentHistoryDB:
                     except Exception:
                         pass
             backup = db + ".plain.bak"
-            if os.path.exists(backup):
-                os.remove(backup)
-            shutil.move(db, backup)
-            shutil.move(enc_tmp, db)
+            # ⚠️ SILME — KENARA AL. Eskiden `os.remove(backup)` idi; yarim kalmis bir gocun
+            # tek veri kopyasini (klinik gecmisi) yok ediyordu. Paylasilan yardimciyi kullan
+            # ki iki goc kopyasi ayrismasin.
+            from database.sqlcipher_util import _yedegi_kenara_al
+
+            _yedegi_kenara_al(backup, self.logger)
+            # ⚠️ YER-DEGISTIRME PENCERESI — burada `db` BIR AN YOKTUR. Ikinci tasima duserse
+            # `db` YOK kalir, veri `.plain.bak`ta, sifreli kopya `.enc.tmp`te; ustelik disaridaki
+            # `except Exception` hatayi YUTAR → sonraki acilista BOS DB yaratilir ve klinik
+            # gecmisi BOS gorur. Bu yuzden: yeniden-denemeli tasima + duserse GERI ALMA.
+            # (Ortak yardimci — `sqlcipher_util` ile AYNI davranis; iki kopya AYRISMASIN.)
+            from database.sqlcipher_util import _tasi_yeniden_dene
+
+            _tasi_yeniden_dene(db, backup, logger=self.logger)
+            try:
+                _tasi_yeniden_dene(enc_tmp, db, logger=self.logger)
+            except Exception:
+                try:
+                    if not os.path.exists(db):
+                        _tasi_yeniden_dene(backup, db, logger=self.logger)
+                except Exception:
+                    self.logger.error("GOC GERI ALINAMADI — veri %s dosyasinda duruyor, ELLE geri koyun.", backup)
+                    return
+                try:
+                    if os.path.exists(enc_tmp):
+                        os.remove(enc_tmp)
+                except Exception:
+                    pass
+                self.logger.warning(
+                    "SQLCipher goc IPTAL (dosya kilidi): duz-metin veri yerinde KORUNDU; "
+                    "sonraki aciliste yeniden denenecek."
+                )
+                return
             # op-doğrulama #8: .plain.bak = tüm eski düz-metin PII → SQLCipher'ı baypas eder. Escrow
             # için tutulur ama SIKI ACL (SYSTEM+Admin) ile kilitlenir (B-1.2 escrow deseniyle tutarlı).
             # DENETIM P2: ACL BASARISIZ olursa eskiden yalnizca UYARI loglaniyor ve TUM hasta
@@ -801,6 +855,17 @@ class TreatmentHistoryDB:
         self._safe_add_column(cursor, "ai_analyses", "review_note TEXT DEFAULT ''", "ai_analyses.review_note eklendi")
         self._safe_add_column(cursor, "ai_analyses", "reviewed_by TEXT DEFAULT ''", "ai_analyses.reviewed_by eklendi")
         self._safe_add_column(cursor, "ai_analyses", "reviewed_at TEXT DEFAULT ''", "ai_analyses.reviewed_at eklendi")
+
+        # ── HASTA KİMLİĞİ BAĞI (sahip isteği 2026-09-12) ───────────────────────────────
+        # ⚠️ ANALİZLER HASTAYA *ADLA* BAĞLIYDI ve bunun üç ayrı kırılganlığı vardı:
+        #   1) AYNI ADLI İKİ HAYVAN: "Mia" adlı iki kedinin analizleri karışıyordu.
+        #   2) AD DEĞİŞİKLİĞİ: hasta kaydında ad düzeltilince eski analizler KOPUYORDU.
+        #   3) MASKELEME: `PEMF_MASK_HISTORY_PII=1` açıkken ad `[SIFRELENMEMIS-DB]` yazılır →
+        #      TÜM analizler aynı "ada" düşer ve eşleme bütünüyle çöker.
+        # `patient_uuid` PII DEĞİLDİR (opak kimlik) → maskelenmez, şifrelemeden bağımsız çalışır.
+        # ⚠️ AD KOLONU SİLİNMEZ: eski kayıtların tek bağı o ve gösterimde hâlâ kullanılıyor.
+        self._safe_add_column(cursor, "ai_analyses", "patient_uuid TEXT DEFAULT ''", "ai_analyses.patient_uuid eklendi")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_analyses_patient_uuid ON ai_analyses(patient_uuid)")
 
         # Schema migration kayıtları
         cursor.execute('''
@@ -2430,6 +2495,58 @@ class TreatmentHistoryDB:
             self.logger.error(f"Seans silme hatası: {e}")
             raise
 
+    #: Tek istekte silinebilecek AZAMİ seans sayısı.
+    #: ⚠️ SINIR VAR ÇÜNKÜ: toplu silme geri alınamaz ve tek bir yanlış "tümünü seç" tıklaması
+    #: kliniğin bütün geçmişini götürebilir. Sınır, kazayı YAVAŞLATIR (operatör ikinci kez
+    #: seçmek zorunda kalır) ve tek SQL ifadesinin parametre sayısını da makul tutar.
+    TOPLU_SILME_AZAMI = 500
+
+    def delete_sessions_bulk(self, session_ids) -> int:
+        """Birden çok seansı TEK İŞLEMDE (atomik) siler; silinen seans sayısını döndürür.
+
+        ⚠️ NEDEN AYRI BİR METOT, NEDEN DÖNGÜYLE `delete_session` DEĞİL:
+        200 kaydı tek tek silerken 137.'de hata çıkarsa yarısı gitmiş, yarısı durur ve operatör
+        HANGİSİNİN gittiğini bilemez. Geri alınamaz bir işlemde "kısmen oldu" en kötü sonuçtur.
+        Burada hepsi tek transaction: ya hepsi gider ya hiçbiri. (Hasta tarafındaki
+        `clear_all_patients` atomikliği ile aynı gerekçe — audit P3.)
+
+        ⚠️ ÇOCUK TABLOLAR ÖNCE: FK ON DELETE CASCADE YOK. `delete_session` ile AYNI tablo
+        listesi kullanılır; ayrışırsa burada orphan satır kalır (P2 denetiminde bir kez oldu).
+        """
+        kimlikler = []
+        for x in session_ids or ():
+            try:
+                kimlikler.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        kimlikler = sorted(set(kimlikler))
+        if not kimlikler:
+            return 0
+        if len(kimlikler) > self.TOPLU_SILME_AZAMI:
+            raise ValueError(f"Tek istekte en fazla {self.TOPLU_SILME_AZAMI} seans silinebilir.")
+        try:
+            self._ensure_write_guardrail()
+            yer = ",".join("?" for _ in kimlikler)
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'DELETE FROM session_parameters WHERE session_id IN ({yer})', kimlikler)
+                cursor.execute(f'DELETE FROM sensor_samples WHERE session_id IN ({yer})', kimlikler)
+                cursor.execute(f'DELETE FROM session_events WHERE session_id IN ({yer})', kimlikler)
+                cursor.execute(
+                    'DELETE FROM sensor_run_summary WHERE coil_run_id IN '
+                    f'(SELECT id FROM session_coil_runs WHERE session_id IN ({yer}))',
+                    kimlikler,
+                )
+                cursor.execute(f'DELETE FROM session_coil_runs WHERE session_id IN ({yer})', kimlikler)
+                cursor.execute(f'DELETE FROM treatment_sessions WHERE id IN ({yer})', kimlikler)
+                silinen = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
+                conn.commit()
+                self.logger.info("TOPLU seans silme: %d istendi, %d silindi.", len(kimlikler), silinen)
+                return silinen
+        except _DB_ERROR as e:
+            self.logger.error(f"Toplu seans silme hatası: {e}")
+            raise
+
     def close(self):
         """Veritabanı bağlantısını kapat"""
         self.close_connections()
@@ -2469,9 +2586,17 @@ class TreatmentHistoryDB:
         result_detail: Optional[Dict] = None,
         confidence: Optional[float] = None,
         operator_email: str = "",
+        patient_uuid: str = "",
     ) -> Optional[int]:
         """Bir AI analiz sonucunu şifreli geçmişe ekle. Tüm profillerin tüm modelleri buraya yazar.
-        operator_email = analizi yapan hekim (klinik-içi "Benim/Tüm Klinik" filtresi; yeni param SONDA → pozisyonel çağrılar bozulmaz)."""
+        operator_email = analizi yapan hekim (klinik-içi "Benim/Tüm Klinik" filtresi).
+
+        ⚠️ `patient_uuid` = hastanın OPAK KİMLİĞİ (2026-09-12). Ada göre eşleme aynı adlı iki
+        hayvanda karışıyor, ad düzeltilince kopuyor ve PII maskelemesi açıkken tümüyle çöküyordu.
+        Kimlik PII olmadığı için maskelenmez. BOŞ GEÇİLEBİLİR: kimliği bilinmeyen çağrı (eski
+        istemci) kaydı DÜŞÜRMEZ, yalnız ada bağlı kalır.
+
+        ⚠️ Yeni parametreler SONDA → pozisyonel çağrılar bozulmaz."""
         try:
             self._ensure_write_guardrail()
             # B-1.3 deseni (start_session ile tutarlı): at-rest şifreleme KAPALIYSA gerçek isim yerine
@@ -2486,8 +2611,9 @@ class TreatmentHistoryDB:
                 cursor.execute(
                     '''
                     INSERT INTO ai_analyses
-                    (created_at, mode, module_id, module_label, patient_name, operator_email, input_type, result_summary, result_detail, confidence)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (created_at, mode, module_id, module_label, patient_name, patient_uuid,
+                     operator_email, input_type, result_summary, result_detail, confidence)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                     (
                         datetime.now().isoformat(timespec="seconds"),
@@ -2495,6 +2621,8 @@ class TreatmentHistoryDB:
                         module_id,
                         module_label,
                         patient_name,
+                        # ⚠️ MASKELENMEZ: kimlik PII değil, opak bir tanımlayıcıdır.
+                        str(patient_uuid or ""),
                         operator_email,
                         input_type,
                         result_summary,
@@ -2768,14 +2896,90 @@ class TreatmentHistoryDB:
             self.logger.exception("AI analiz geçmişi temizlenemedi.")
             return -1
 
+    def ai_analiz_kimliklerini_doldur(self, ad_kimlik: dict) -> dict:
+        """ESKİ AI analizlerine hasta KİMLİĞİ yazar (tek seferlik taşıma, idempotent).
+
+        ═══════════════════════════════════════════════════════════════════════════════
+        ⚠️ BELİRSİZ ADI TAHMİN ETMEZ — BU FONKSİYONUN ASIL KURALI
+        ═══════════════════════════════════════════════════════════════════════════════
+        `ad_kimlik`, ÇAĞIRANIN hasta defterinden kurduğu {katlanmış_ad: kimlik} haritasıdır
+        ve YALNIZ TEK BİR hastaya çözülen adları içerir. Aynı ada sahip iki hayvan varsa o ad
+        haritaya HİÇ KONMAZ; o analizler kimliksiz kalır ve eskisi gibi ada bağlı çalışır.
+
+        Yanlış bir kimlik yazmak, taşımanın çözmeye çalıştığı sorunu KALICI hâle getirirdi:
+        bir hayvanın analizi başka bir hayvanın kaydına GÖMÜLÜRDÜ ve ad bazlı belirsizliğin
+        aksine bu geri alınamazdı (ad hâlâ orada, kimlik ise artık "kesin" görünür).
+
+        ⚠️ YALNIZ BOŞ KİMLİKLİ SATIRLARA yazar → tekrar çalıştırmak güvenlidir (idempotent)
+        ve elle düzeltilmiş bir kimliği EZMEZ.
+
+        Dönen: {"guncellenen": n, "kimliksiz_kalan": m, "atlanmis_ad": k}
+        """
+        harita = {str(a): str(u) for a, u in (ad_kimlik or {}).items() if a and u}
+        sonuc = {"guncellenen": 0, "kimliksiz_kalan": 0, "atlanmis_ad": 0}
+        try:
+            from utils.turkce_metin import arama_katla
+        except Exception:
+            self.logger.warning("Turkce katlayici yok -> AI kimlik tasima ATLANDI.")
+            return sonuc
+        try:
+            self._ensure_write_guardrail()
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id, patient_name FROM ai_analyses "
+                    "WHERE COALESCE(patient_uuid,'') = '' AND COALESCE(patient_name,'') != ''"
+                )
+                satirlar = cursor.fetchall()
+                eslesmeyen_adlar = set()
+                for kayit_id, ad in satirlar:
+                    kimlik = harita.get(arama_katla(ad))
+                    if not kimlik:
+                        sonuc["kimliksiz_kalan"] += 1
+                        eslesmeyen_adlar.add(str(ad))
+                        continue
+                    # ⚠️ `AND COALESCE(patient_uuid,'') = ''` İKİNCİ KATMANDIR ve tek başına
+                    # ölçülemez: yukarıdaki SELECT zaten yalnız boş kimlikli satırları getiriyor,
+                    # dolayısıyla bu koşulu kaldıran bir mutasyon testlerde YEŞİL kalır
+                    # (2026-09-12'de ölçüldü, dürüstçe not edildi). Yine de duruyor: iki BACKEND
+                    # SÜRECİ aynı DB'yi paylaşırsa (süreç-içi kilit onları kapsamaz) SELECT ile
+                    # UPDATE arasında başka bir yazıcı kimliği koymuş olabilir; o kimliği ezmek
+                    # elle yapılmış bir düzeltmeyi geri almak olurdu.
+                    cursor.execute(
+                        "UPDATE ai_analyses SET patient_uuid = ? WHERE id = ? AND COALESCE(patient_uuid,'') = ''",
+                        (kimlik, kayit_id),
+                    )
+                    sonuc["guncellenen"] += cursor.rowcount or 0
+                conn.commit()
+                sonuc["atlanmis_ad"] = len(eslesmeyen_adlar)
+            if sonuc["guncellenen"] or sonuc["kimliksiz_kalan"]:
+                self.logger.info(
+                    "AI analiz kimlik tasimasi: %d guncellendi, %d kimliksiz kaldi (%d farkli ad).",
+                    sonuc["guncellenen"],
+                    sonuc["kimliksiz_kalan"],
+                    sonuc["atlanmis_ad"],
+                )
+            return sonuc
+        except Exception:
+            self.logger.exception("AI analiz kimlik tasimasi basarisiz (kayitlar DEGISMEDI).")
+            return sonuc
+
     def get_ai_analyses(
         self,
         limit: int = 50,
         module_id: Optional[str] = None,
         patient_name: Optional[str] = None,
         before_id: Optional[int] = None,
+        patient_uuid: Optional[str] = None,
     ) -> List[Dict]:
-        """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination."""
+        """AI analiz geçmişini getir (id DESC = yeni önce). Filtre: modül / hasta / keyset-pagination.
+
+        ⚠️ `patient_uuid` TERCİH EDİLEN hasta süzgecidir (2026-09-12): ad bazlı süzme aynı adlı
+        iki hayvanda karışır, ad düzeltilince kopar ve PII maskelemesi açıkken tümüyle çöker.
+        `patient_name` GERİYE UYUMLULUK için kalır (kimliği olmayan ESKİ kayıtlar).
+        ⚠️ İkisi birlikte verilirse VEYA ile bağlanır: kimliği yazılmış YENİ kayıtlar ile aynı
+        hastaya ait ESKİ (kimliksiz) kayıtlar TEK listede görünsün — aksi hâlde taşıma günü
+        geçmiş ikiye bölünmüş gibi görünürdü."""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -2783,16 +2987,25 @@ class TreatmentHistoryDB:
                 if module_id:
                     clauses.append("module_id = ?")
                     params.append(module_id)
+                # ⚠️ HASTA SÜZGECİ: kimlik VE/VEYA ad. İkisi de verilirse VEYA (bkz. docstring).
+                _hasta_kosul, _hasta_param = [], []
+                if patient_uuid:
+                    _hasta_kosul.append("patient_uuid = ?")
+                    _hasta_param.append(str(patient_uuid))
                 if patient_name:
-                    clauses.append("patient_name LIKE ?")
-                    params.append(f"%{patient_name}%")
+                    _hasta_kosul.append("patient_name LIKE ?")
+                    _hasta_param.append(f"%{patient_name}%")
+                if _hasta_kosul:
+                    clauses.append("(" + " OR ".join(_hasta_kosul) + ")")
+                    params.extend(_hasta_param)
                 if before_id:
                     clauses.append("id < ?")
                     params.append(int(before_id))
                 where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
                 params.append(max(1, min(int(limit), 500)))
                 cursor.execute(
-                    "SELECT id, created_at, mode, module_id, module_label, patient_name, operator_email, "
+                    "SELECT id, created_at, mode, module_id, module_label, patient_name, "
+                    "COALESCE(patient_uuid,'') AS patient_uuid, operator_email, "
                     "input_type, result_summary, result_detail, confidence, "
                     # Hekim değerlendirmesi (2026-08-06) — AI çıktısı öneri, karar hekimin.
                     "COALESCE(review_status,'') AS review_status, COALESCE(review_note,'') AS review_note, "

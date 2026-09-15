@@ -247,6 +247,86 @@ STM_COIL_IDS = set(range(1, 8))
 ESP_COIL_IDS = {8}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# STM KOMUT REDDİ — "komut gitmiyor ama seans başlamış gibi görünüyor" (sahip, 2026-09-12)
+# ══════════════════════════════════════════════════════════════════════════════
+# SAHİP BİLDİRİMİ: "firmware sürüm uyumsuzluğundan dolayı bobinler komut almayacak bildirimi
+# gelmesine ve gerçekten bobinlere komut gitmemesine rağmen seans başlatınca gerçekten
+# başlıyormuş gibi her şey sorunsuz devam ediyor."
+#
+# ⚠️ NEDEN MEVCUT KAPILAR YAKALAMIYORDU: `_stm_surus_hazir()` yalnız SERİ PORTUN AÇIK olup
+# olmadığına bakar. Firmware uyuşmazlığında port AÇIKTIR, yazma BAŞARILIDIR — paketi reddeden
+# KARTIN KENDİSİDİR ve bunu ASENKRON bir `STM_NACK: CRC` satırıyla söyler. Yani "yazabildim"
+# ile "bobin çalıştı" arasındaki fark tam buraya düşüyordu: seans başlıyor, sayaç işliyor,
+# geçmişe "Tamamlandı" yazılıyor — hiçbir bobin hiç enerjilenmemişken. Tıbbi kayıt YALAN oluyor.
+#
+# ⚠️ NEDEN "TEK NACK = RED" DEĞİL: tek bir NACK hat gürültüsü olabilir ve zaten yeniden
+# gönderilir (`retry_last_payload`). SİSTEMATİK red, kartın HİÇBİR paketi ayrıştıramadığı
+# durumdur. Ayırt edici ölçüt: ARADA KABUL (STM_OK) OLMADAN ard arda gelen NACK sayısı.
+#: Ard arda bu kadar NACK "sistematik red" sayılır. Keep-alive 2 Hz → ~1,5 sn'de karar.
+STM_RED_ESIGI = 3
+#: Karar bu kadar süre tazelenmezse bayatlar (kalıcı kilitlenme olmasın).
+#: ⚠️ Kart gerçekten reddediyorsa keep-alive her yarım saniyede yeni NACK üretir → karar taze kalır.
+STM_RED_GECERLILIK_S = 10.0
+
+_stm_red = {"ard_arda": 0, "son_an": 0.0, "son_mesaj": ""}
+_stm_red_lock = threading.Lock()
+
+
+def stm_komut_reddi_bildir(mesaj: str = "") -> bool:
+    """Karttan bir NACK geldi. Eşiğe ULAŞILDIYSA True döner (bu çağrıyla sistematik red oldu)."""
+    import time as _t
+
+    with _stm_red_lock:
+        onceki = _stm_red["ard_arda"] >= STM_RED_ESIGI
+        _stm_red["ard_arda"] += 1
+        _stm_red["son_an"] = _t.monotonic()
+        _stm_red["son_mesaj"] = str(mesaj or "")[:200]
+        simdi = _stm_red["ard_arda"] >= STM_RED_ESIGI
+    return simdi and not onceki
+
+
+def stm_komut_kabulu_bildir() -> None:
+    """Karttan KABUL (STM_OK) geldi → sayaç sıfırlanır.
+
+    ⚠️ SIFIRLAMA ŞART: aksi halde aylar önceki tek bir gürültü NACK'i sayacı sonsuza dek
+    yukarıda tutar ve sağlam bir kartta seans başlatmayı engelleriz — düzelttiğimiz arızanın
+    tam tersi, ama aynı ölçüde yanlış.
+    """
+    with _stm_red_lock:
+        _stm_red["ard_arda"] = 0
+        _stm_red["son_mesaj"] = ""
+
+
+def stm_komutlari_reddediyor() -> bool:
+    """Kart ŞU AN komutları sistematik olarak reddediyor mu (firmware/protokol uyuşmazlığı)?"""
+    import time as _t
+
+    with _stm_red_lock:
+        if _stm_red["ard_arda"] < STM_RED_ESIGI:
+            return False
+        return (_t.monotonic() - _stm_red["son_an"]) <= STM_RED_GECERLILIK_S
+
+
+def stm_red_ozeti() -> dict:
+    """Teşhis/arayüz için: reddediyor mu, kaç ard arda, son ham mesaj.
+
+    ⚠️ `stm_komutlari_reddediyor()` BURADAN ÇAĞRILMAZ: `_stm_red_lock` yeniden-girişli
+    değildir (`threading.Lock`), kilit altında çağırmak süreci kilitlerdi. Karar burada
+    aynı ölçütle yeniden hesaplanır.
+    """
+    import time as _t
+
+    with _stm_red_lock:
+        ard_arda = _stm_red["ard_arda"]
+        taze = (_t.monotonic() - _stm_red["son_an"]) <= STM_RED_GECERLILIK_S
+        return {
+            "reddediyor": ard_arda >= STM_RED_ESIGI and taze,
+            "ard_arda": ard_arda,
+            "son_mesaj": _stm_red["son_mesaj"],
+        }
+
+
 def _sync_stm_coils_locked() -> list[dict]:
     """Bobin 1-7'yi canlı STM bağlantı durumundan türetir (faz 4: 5 → 7).
 

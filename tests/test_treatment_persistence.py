@@ -198,6 +198,11 @@ def test_MANUEL_seans_db_satirini_active_sessiona_damgalar(temp_app_data, monkey
     # (test_session_lifecycle.py'deki yerleşik desen). Ölçtüğümüz şey DB damgası.
     monkeypatch.setattr(api_server, "_mqtt_publish", lambda *a, **k: True)
     monkeypatch.setattr(api_server, "_broker_reachable", lambda: True)
+    # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu test ESP bobinleriyle seans açıyor (STM
+    # donanımı gerektirmesin diye). ESP kapalıyken `/session/start` artık o bobinleri
+    # kapsamdan ÇIKARIYOR ve "hiçbir bobin sürülmedi" diye reddediyor — hayalet bobin-8
+    # kaydını önleyen düzeltme. Kural: kod SİLİNMEZ, test bayrakla KOŞMAYA DEVAM EDER.
+    monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
 
     try:
         with api_server._session_lock:

@@ -447,6 +447,8 @@ class NetworkStatusService:
 
     INTERNET_CHECK_HOSTS = [("8.8.8.8", 53), ("1.1.1.1", 53), ("208.67.222.222", 53)]
     HOTSPOT_SUBNET = "192.168.137."
+    #: Durum DEĞİŞMESE bile bu aralıkta bir kez yeniden yayınla (kaybolan olaya karşı sigorta).
+    YENIDEN_YAYIN_S = 60.0
 
     def __init__(self, *, interval_seconds: float = 5.0, mqtt_port: int = 1883, event_bus=None) -> None:
         self.interval_seconds = float(interval_seconds)
@@ -504,7 +506,17 @@ class NetworkStatusService:
             previous = dict(self._status)
             self._status.update(status)
 
-        if previous != status:
+        # ⚠️ DEĞİŞİM-YAYINI TEK BAŞINA YETMEZ (sahip bildirimi 2026-09-12).
+        # Bu servis `HeadlessCore.__init__` içinde, `api_server._register_event_bus_handlers()`
+        # çağrılmadan ÖNCE başlar. İlk `network.status` olayı işleyici kaydolmadan düşerse —
+        # ve ağ durumu bir daha değişmezse — olay BİR DAHA ASLA yayınlanmaz; `_live_state`
+        # başlangıç değerinde ("internet": "offline") sonsuza dek donar ve arayüz internet
+        # varken bile "İnternet yok" der. Dakikada bir tazeleme, kaybolan TEK olayın kalıcı
+        # yanlışa dönüşmesini engeller (ek yoklama maliyeti YOK — ölçüm zaten yapıldı).
+        simdi = time.monotonic()
+        son = getattr(self, "_son_yayin_ani", None)
+        if previous != status or son is None or (simdi - son) >= self.YENIDEN_YAYIN_S:
+            self._son_yayin_ani = simdi
             self._publish("network.status", dict(self._status))
         return self.get_status()
 
