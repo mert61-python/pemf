@@ -14,10 +14,11 @@ C = hijyen. Klasör taşıma hiçbirini çözmez, o yüzden en sonda.
 ### A1 · Göç kodu beş yerde — bu zaten hasta geçmişi kaybettirdi ⛔
 | | |
 |---|---|
-| **Kanıt** | `database/sqlcipher_util.py` · `database/treatment_history_db.py` · `utils/path_utils.py` · `servers/api_server.py` · `pemf_gui/config.py` |
-| **Neden arıza** | 2026-09-13: ilk iki kopya düzeltildi, **ürün hâlâ kaybediyordu** — üçüncü yol (şablon kopyalayıcı) önce davranıyordu. Kopyalama teorik değil, **gerçekleşmiş** bir veri kaybı sebebi |
-| **Bugünkü durum** | Arıza kapatıldı (10 mutasyon-kanıtlı test). Ama beş kopya duruyor → altıncı kopya aynı arızayı geri getirir |
-| **İş** | Tek modül `database/goc.py`; diğerleri ince sarmalayıcı. Mevcut 10 kapı birleştirmeden sonra da yeşil kalmalı |
+| **Kanıt (2026-09-15 AST ile ölçüldü)** | **935 satır göç kodu, 18 fonksiyon, 5 dosya:**<br>`sqlcipher_util.py` 285 · `treatment_history_db.py` 342 · `path_utils.py` 174 · `api_server.py` 75 · `pemf_gui/config.py` 59 |
+| ⚠️ **Denetim düzeltmesi** | Denetim §2.3 *"göç kodu beş yerde"* diyordu — **bu ifade gevşek**. Ölçüldü: ortada **tek bir gerçek kopya** var, kalan dördü *farklı* göçler (anahtar göçü, veri-kökü göçü, AI JSONL, eski config dizini) — sadece dağınıklar. Gerçek kopya:<br>`sqlcipher_util.migrate_to_encrypted_if_needed` (129 anlamlı satır) ↔ `treatment_history_db._migrate_to_encrypted_if_needed` (139) → **%73 aynı, 98 satır birebir**. Fark tamamen mekanik: modül-fonksiyonu ↔ metot (`self.logger`/`self.db_path`) |
+| **Neden arıza** | 2026-09-13: ilk iki yol düzeltildi, **ürün hâlâ kaybediyordu** — üçüncü yol (şablon kopyalayıcı) önce davranıyordu. Dağınıklık teorik değil, **gerçekleşmiş** bir veri kaybı sebebi |
+| **Bugünkü durum** | Arıza kapatıldı (10 mutasyon-kanıtlı test, CI'da). Ama 98 satırlık kopya duruyor → bir tarafta düzeltilen sonraki hata diğerinde kalır |
+| **İş** | İki aşama: **(a)** gerçek kopyayı birleştir — `treatment_history_db` metodunu `sqlcipher_util`e delege et (98 satır düşer); **(b)** kalan dört göçü tek giriş noktasından sıraya sok, böylece "hangisi önce koşuyor" bir daha kaza olmasın. Mevcut 10 kapı birleştirmeden sonra da yeşil kalmalı |
 | **Kim** | Ben |
 
 ### A2 · MD5 birebir kopya CV kodu — biri düzeltilince diğeri sürükleniyor
