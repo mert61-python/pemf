@@ -158,6 +158,31 @@ pub const ENV_ALLOWED_HOSTS: &str = "PEMF_ALLOWED_HOSTS";
 /// CIKIS KAPISI: ortamda tanimliysa DOKUNULMAZ → `PEMF_JETON_ENFORCED=1` ile test edilebilir.
 pub const ENV_JETON_ENFORCED: &str = "PEMF_JETON_ENFORCED";
 
+/// DUZ-METIN YEDEK (.plain.bak) EMANETI — bu sinifin **SEKIZINCI** ornegi (2026-09-15).
+///
+/// Goc sirasinda olusan `.plain.bak`, TUM hasta/tedavi PII'sinin duz-metin tam kopyasidir ve
+/// SQLCipher'i tamamen baypas eder. Varsayilan GUVENLI-SIL; `=1` ACL-kilitli emanet saklar
+/// (ACL uygulanamazsa yine siler — fail-closed).
+///
+/// ⚠️ NEDEN ACIKCA GECIRILIYOR — "miras alinir" GEREKCESI YETERSIZ. Olculdu:
+/// `backend.rs` haritayi `cmd.env(k, v)` ile uygular ve `env_clear()` YOKTUR, yani
+/// launcher'in DOGURDUGU backend ortami zaten miras alir. Ama:
+///   · SERVIS (NSSM) kurulumu ortami `deploy/device.env`ten yazar, miras ALMAZ;
+///   · miras, launcher SURECININ kendi ortamina baglidir — bayrak launcher ACILDIKTAN sonra
+///     tanimlanirsa gorunmez (ortam surec baslangicinda dondurulur).
+/// Bu depo ayni "gecirilmiyor" sinifina YEDI kez dustu; ortulu bir mekanizmaya guvenmek
+/// sekizincisini davet ederdi.
+///
+/// ⚠️ VARSAYILAN `"0"` = guvenli-sil. `"1"` YAPMAYIN: her klinikte TUM PII'nin duz-metin tam
+/// kopyasi diskte kalir (ACL yalniz yerel kullaniciya karsi korur; disk calinmasina/
+/// imajlanmasina karsi HICBIR sey yapmaz ve at-rest sifrelemenin tehdit modeli tam odur).
+/// Sahip karari 2026-08-08.
+///
+/// CIKIS KAPISI: ortamda tanimliysa DOKUNULMAZ.
+/// Kapi: tests/test_duz_metin_yedek_bayragi_tek_ad.py + bu dosyadaki
+/// `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`.
+pub const ENV_KEEP_PLAIN_BACKUP: &str = "PEMF_KEEP_PLAIN_BACKUP";
+
 /// TIBBİ VERİ KÖKÜ — MAKİNE GENELİ (2026-08-09 denetimi, Tier 1).
 ///
 /// ⚠️ ARIZA: launcher `PEMF_DATA_DIR` VERMİYORDU → backend `%APPDATA%\PEMF_GUI`e düşüyordu,
@@ -619,6 +644,17 @@ where
     env.insert(
         ENV_JETON_ENFORCED.to_string(),
         getenv(ENV_JETON_ENFORCED)
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| "0".to_string()),
+    );
+    // DÜZ-METİN YEDEK EMANETİ (bkz. ENV_KEEP_PLAIN_BACKUP): `.plain.bak` TÜM PII'nin düz-metin
+    // tam kopyasıdır. Varsayılan "0" = güvenli-sil (bugünkü canlı davranış). KOŞULSUZ eklenir;
+    // ortamdaki değer KORUNUR → operatör emaneti açıkça açabilir. "Nasılsa miras alınır"
+    // gerekçesine güvenilmedi: servis (NSSM) yolu mirası ALMAZ ve miras launcher sürecinin
+    // başlangıç ortamına bağlıdır.
+    env.insert(
+        ENV_KEEP_PLAIN_BACKUP.to_string(),
+        getenv(ENV_KEEP_PLAIN_BACKUP)
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "0".to_string()),
     );
@@ -1687,6 +1723,12 @@ mod tests {
             // varsayılan "0" = bugünkü canlı davranış (satış açılmadı, modül tam no-op),
             // ortamdaki değer korunur.
             ENV_JETON_ENFORCED,
+            // DÜZ-METİN YEDEK EMANETİ (2026-09-15): `deploy/device.env` bayrağı taşıyor ama
+            // launcher geçirmiyordu → `device_env_anahtarlari_launcherda_KARSILIGINI_BULUR`
+            // KIRMIZI döndü (CI koşusu 35002368710). Bu, "backend'de altyapı var, launcher
+            // geçirmiyor" sınıfının SEKİZİNCİ örneğiydi. KOŞULSUZ eklenir; varsayılan "0" =
+            // güvenli-sil (bugünkü canlı davranış), ortamdaki değer korunur.
+            ENV_KEEP_PLAIN_BACKUP,
         ];
         // `ENV_BASE_SHA` yalnız KURULU bir paket varsa eklenir (ilk açılışta kurulum yok).
         if !read_installed_packages(Path::new("/opt/pemf")).app.is_empty()

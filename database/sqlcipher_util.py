@@ -601,17 +601,40 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
         # ⚠️ KARAR TEK YERDEN GELİR (2026-09-15): `duz_metin_yedegi_emanete_al_mi`. Bayrak burada
         # doğrudan okunuyordu ve `treatment_history_db.py` BAŞKA bir ad okuyordu → operatör
         # bayrağı set ettiğinde iki DB'den yalnız biri etkileniyordu. Doğrudan okumaya DÖNMEYİN.
+        # ⚠️ FAIL-CLOSED (2026-09-15) — ÖNCEDEN FAIL-OPEN'DI, ÖLÇÜLDÜ.
+        # Eski kod `lock_down_file(backup)` çağırıp DÖNÜŞ DEĞERİNİ ATIYORDU ve ardından
+        # KOŞULSUZ "ESCROW saklandı (ACL-kilitli)" basıyordu. `lock_down_file` başarısızlıkta
+        # HATA FIRLATMAZ, `False` DÖNER (utils/file_acl.py:110 — "best-effort, çağıran DURMAZ")
+        # → `except` dalı hiç koşmuyordu. İki sonuç:
+        #   1. ACL tutmasa bile korumasız `.plain.bak` diskte KALIYORDU. O dosya TÜM hasta
+        #      PII'sinin düz-metin tam kopyasıdır ve SQLCipher'ı baypas eder; korumasız emanet
+        #      şifrelemenin kendisini anlamsız kılar.
+        #   2. Log YALAN SÖYLÜYORDU: uygulanmamış bir korumayı duyuruyordu ("düğme etiketi
+        #      gerçeği söylesin" sınıfı). Operatör log'a bakıp "korundu" sanıyordu.
+        # `treatment_history_db.py` bu kararı zaten fail-closed almıştı; üstelik oradaki yorum
+        # "hasta DB'si Audit P3'te ZATEN almıştı" diyordu — ölçüldü, ALMAMIŞ.
+        # Kapı: tests/test_escrow_acl_dusunce_fail_closed.py
+        _kilitlendi = False
         if duz_metin_yedegi_emanete_al_mi(logger):
             try:
                 from utils.file_acl import lock_down_file
 
-                lock_down_file(backup)
+                _kilitlendi = bool(lock_down_file(backup))
             except Exception:
                 if logger:
-                    logger.warning(".plain.bak ACL kilidi uygulanamadi (elle icacls onerilir): %s", backup)
-            if logger:
-                logger.warning("DB SQLCipher MIGRATE edildi; düz-metin yedek ESCROW saklandı (ACL-kilitli): %s", backup)
-        else:
+                    logger.warning(".plain.bak ACL kilidi hata verdi: %s", backup, exc_info=True)
+            if _kilitlendi:
+                if logger:
+                    logger.warning(
+                        "DB SQLCipher MIGRATE edildi; düz-metin yedek ESCROW saklandı (ACL-kilitli): %s", backup
+                    )
+            elif logger:
+                logger.warning(
+                    "ACL uygulanamadı → escrow'dan VAZGEÇİLDİ, güvenli-siliniyor: %s "
+                    "(korumasız escrow, at-rest şifrelemesini anlamsız kılar)",
+                    backup,
+                )
+        if not _kilitlendi:
             try:
                 _bsz = os.path.getsize(backup)
                 with open(backup, "r+b") as _bf:
@@ -628,8 +651,13 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None):
                         "DB SQLCipher MIGRATE edildi; düz-metin yedek GÜVENLİ-SİLİNDİ (at-rest PII riski kapatıldı)."
                     )
             except Exception:
+                # ⚠️ SEVİYE YÜKSELTİLDİ (2026-09-15): eskiden `warning` + "elle sil önerilir" idi.
+                # Burada diskte kalan şey TÜM hasta PII'sinin korumasız düz-metin kopyasıdır;
+                # "öneri" değil ZORUNLU bir işlem. `treatment_history_db.py` aynı durumda zaten
+                # `error` + "ELLE SİLİN" basıyordu — daha hassas olan tarafın daha sessiz olması
+                # ters bir asimetriydi (kopya kodun üçüncü ayrışması, aynı turda ölçüldü).
                 if logger:
-                    logger.warning(".plain.bak güvenli-silinemedi (elle sil önerilir): %s", backup)
+                    logger.error("KRİTİK: korumasız düz-metin yedek SİLİNEMEDİ → ELLE SİLİN: %s", backup, exc_info=True)
     except Exception:
         if logger:
             logger.exception("SQLCipher migrate hatasi (duz-metin korunur)")
