@@ -18,8 +18,6 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 try:
-    import platform
-
     # DENETIM P1 (SSRF + askida kalma): ReportLab'in mini-XML ayristiricisi <img src="http://...">
     # gorunce TIMEOUT'SUZ urlopen ile o adrese gider. Serbest-metin hasta notu PDF'e boyle
     # girdiginde LAN'daki bir istemci backend'i keyfi bir adrese GET atmaya zorlayabiliyor ve
@@ -127,62 +125,149 @@ class PDFReportGenerator:
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
 
+    #: ⚠️ ReportLab'in GÖMÜLÜ (base-14) Type1 yazı tipleri. HİÇBİRİ Türkçe `ı ş ğ İ Ş Ğ`
+    #: taşımaz — WinAnsi kodlamasında o kod noktaları YOKTUR; ReportLab sessizce "notdef"
+    #: (siyah kutu) basar, hata da vermez, log da yazmaz.
+    #: ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "kaydedilen pdf ler seans için karakter hatası var
+    #: siyah kutucuk koyulmuş ı harflerine mesela." ÖLÇÜLDÜ: `styles['Heading3']` ==
+    #: Helvetica-BoldOblique → "Bobin Çalışmaları" PDF'te "Bobin ÇalIImalarI" çıkıyordu.
+    #: Symbol/ZapfDingbats BİLEREK dışarıda: onlar metin değil, simge yazı tipidir.
+    TYPE1_METIN_FONTLARI = frozenset(
+        {
+            "Helvetica",
+            "Helvetica-Bold",
+            "Helvetica-Oblique",
+            "Helvetica-BoldOblique",
+            "Times-Roman",
+            "Times-Bold",
+            "Times-Italic",
+            "Times-BoldItalic",
+            "Courier",
+            "Courier-Bold",
+            "Courier-Oblique",
+            "Courier-BoldOblique",
+        }
+    )
+
+    #: Denenecek Unicode yazı tipi AİLELERİ: (aile_adı, normal, kalın, italik, kalın-italik).
+    #: ⚠️ DÖRT YÜZ BİRDEN: eskiden yalnız normal+kalın kaydediliyordu ve hazır stil sayfasının
+    #: italik isteyen stilleri (`Heading3` → *-BoldOblique) Type1'e DÜŞÜYORDU. Arızanın kökü buydu.
+    FONT_AILELERI = (
+        (
+            "Arial-Unicode",
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+            "C:/Windows/Fonts/ariali.ttf",
+            "C:/Windows/Fonts/arialbi.ttf",
+        ),
+        (
+            "DejaVu-Unicode",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",
+        ),
+        (
+            "DejaVu-Unicode",
+            "C:/Windows/Fonts/DejaVuSans.ttf",
+            "C:/Windows/Fonts/DejaVuSans-Bold.ttf",
+            "C:/Windows/Fonts/DejaVuSans-Oblique.ttf",
+            "C:/Windows/Fonts/DejaVuSans-BoldOblique.ttf",
+        ),
+        (
+            "Mac-Unicode",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Italic.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
+        ),
+    )
+
     def _register_fonts(self):
-        """Türkçe karakter desteği için fontları kaydet"""
+        """Türkçe karakter desteği: bir Unicode ailenin DÖRT YÜZÜNÜ birden kaydet.
+
+        ⚠️ NEDEN DÖRT YÜZ: ReportLab'in hazır stil sayfası kalın ve İTALİK yüz ister
+        (`Heading3` = *-BoldOblique). Kayıtlı olmayan yüz Type1 Helvetica'ya düşer ve
+        Türkçe harfler siyah kutuya döner — sahibin bildirdiği arızanın TAM kökü.
+
+        ⚠️ EKSİK YÜZ KABUL EDİLİR, EKSİK AİLE EDİLMEZ: normal yüz bulunamazsa bu aile
+        atlanır. Bulunan normalin yanında kalın/italik yoksa o rol NORMALE düşer — Type1'e
+        DEĞİL. (Kalınlığı kaybetmek okunaklıdır; harfi kaybetmek değildir.)
+        """
+        # ⚠️ DÖRT ALAN DA HER DURUMDA TANIMLI: tablo stilleri bunları `getattr` ile okur ve
+        # tanımsız kalan biri sessizce Type1'e düşerdi (arızanın ikinci kapısı).
+        self.unicode_font = 'Helvetica'
+        self.unicode_font_bold = 'Helvetica-Bold'
+        self.unicode_font_italic = 'Helvetica-Oblique'
+        self.unicode_font_bold_italic = 'Helvetica-BoldOblique'
+        for aile, normal, kalin, italik, kalin_italik in self.FONT_AILELERI:
+            try:
+                if not os.path.exists(normal):
+                    continue
+                pdfmetrics.registerFont(TTFont(aile, normal))
+                self.unicode_font = aile
+                self.unicode_font_bold = self._yuz_kaydet(f"{aile}-Bold", kalin, aile)
+                self.unicode_font_italic = self._yuz_kaydet(f"{aile}-Italic", italik, aile)
+                self.unicode_font_bold_italic = self._yuz_kaydet(f"{aile}-BoldItalic", kalin_italik, aile)
+                # ⚠️ AİLE KAYDI `<b>` / `<i>` İŞARETLEMESİ İÇİN ŞART: Paragraph içindeki
+                # `<b>Hasta Notları:</b>` aile bağı olmadan kalın yüzü BULAMAZ ve ReportLab
+                # sentetik kalınlaştırma yerine Type1'e düşebilir.
+                pdfmetrics.registerFontFamily(
+                    aile,
+                    normal=self.unicode_font,
+                    bold=self.unicode_font_bold,
+                    italic=self.unicode_font_italic,
+                    boldItalic=self.unicode_font_bold_italic,
+                )
+                self.logger.info("Unicode yazi tipi ailesi kaydedildi: %s", aile)
+                return
+            except Exception as e:
+                self.logger.warning("Yazi tipi ailesi kaydedilemedi (%s): %s", aile, e)
+        self.logger.warning("Unicode yazi tipi BULUNAMADI -> Helvetica. PDF'te Turkce harfler siyah kutu gorunebilir.")
+
+    def _yuz_kaydet(self, ad: str, yol: str, yedek: str) -> str:
+        """Tek bir yüzü kaydet; dosya yoksa/bozuksa `yedek` (normal yüz) adını döndür.
+
+        ⚠️ YEDEK NORMAL YÜZDÜR, Helvetica DEĞİL: eksik kalın yüz yüzünden Type1'e düşmek,
+        düzeltmek istediğimiz arızayı geri getirirdi.
+        """
         try:
-            # Windows sistem fontlarını kullan
-            if platform.system() == "Windows":
-                # Arial fontunu kaydet (Türkçe karakterleri destekler)
-                arial_path = "C:/Windows/Fonts/arial.ttf"
-                arial_bold_path = "C:/Windows/Fonts/arialbd.ttf"
-
-                if os.path.exists(arial_path):
-                    pdfmetrics.registerFont(TTFont('Arial-Unicode', arial_path))
-                    self.unicode_font = 'Arial-Unicode'
-                    self.logger.info("Arial-Unicode font kaydedildi")
-
-                    if os.path.exists(arial_bold_path):
-                        pdfmetrics.registerFont(TTFont('Arial-Unicode-Bold', arial_bold_path))
-                        self.unicode_font_bold = 'Arial-Unicode-Bold'
-                else:
-                    # Fallback: DejaVu fontlarını dene
-                    self._try_dejavu_fonts()
-            else:
-                # Linux/Mac için DejaVu fontlarını dene
-                self._try_dejavu_fonts()
-
+            if os.path.exists(yol):
+                pdfmetrics.registerFont(TTFont(ad, yol))
+                return ad
         except Exception as e:
-            self.logger.warning(f"Unicode font kaydedilemedi: {e}")
-            # Fallback olarak Helvetica kullan
-            self.unicode_font = 'Helvetica'
-            self.unicode_font_bold = 'Helvetica-Bold'
+            self.logger.warning("Yazi tipi yuzu kaydedilemedi (%s): %s", ad, e)
+        return yedek
 
-    def _try_dejavu_fonts(self):
-        """DejaVu fontlarını kaydetmeyi dene"""
-        try:
-            # DejaVu Sans fontları (çoğu Linux dağıtımında mevcut)
-            dejavu_paths = [
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/System/Library/Fonts/DejaVuSans.ttf",
-                "C:/Windows/Fonts/DejaVuSans.ttf",
-            ]
+    def _unicode_yuz(self, type1_adi: str) -> str:
+        """Bir base-14 Type1 adını, AYNI kalınlık/eğiklikteki Unicode yüze eşler."""
+        kalin = "Bold" in type1_adi
+        egik = ("Oblique" in type1_adi) or ("Italic" in type1_adi)
+        if kalin and egik:
+            return self.unicode_font_bold_italic
+        if kalin:
+            return self.unicode_font_bold
+        if egik:
+            return self.unicode_font_italic
+        return self.unicode_font
 
-            for path in dejavu_paths:
-                if os.path.exists(path):
-                    pdfmetrics.registerFont(TTFont('DejaVu-Unicode', path))
-                    self.unicode_font = 'DejaVu-Unicode'
-                    self.logger.info("DejaVu-Unicode font kaydedildi")
-                    break
-            else:
-                # Hiçbir font bulunamazsa Helvetica kullan
-                self.unicode_font = 'Helvetica'
-                self.unicode_font_bold = 'Helvetica-Bold'
-                self.logger.warning("Unicode font bulunamadı, Helvetica kullanılacak")
+    def _stilleri_unicode_yap(self):
+        """Stil sayfasındaki HER Type1 metin stilini Unicode yüze çevirir.
 
-        except Exception as e:
-            self.logger.warning(f"DejaVu font kaydedilemedi: {e}")
-            self.unicode_font = 'Helvetica'
-            self.unicode_font_bold = 'Helvetica-Bold'
+        ⚠️ NOKTA DÜZELTME YETMEZ: arıza `styles['Heading3']`te bulundu ama aynı sınıftaki
+        `Normal`, `Heading1/2`, `BodyText`, `Italic`, `Bullet`... hepsi Type1'di. Üç çağrıyı
+        elle düzeltmek dördüncüsünü bir sonraki geliştiriciye bırakırdı. Kapı: bu döngüden
+        SONRA hiçbir stilde base-14 metin fontu KALMAMALI (test_pdf_turkce_karakter.py).
+        """
+        if self.unicode_font in self.TYPE1_METIN_FONTLARI:
+            return  # hicbir Unicode yuz bulunamadi; cevirecek bir sey yok
+        for stil in self.styles.byName.values():
+            ad = getattr(stil, "fontName", None)
+            if ad in self.TYPE1_METIN_FONTLARI:
+                stil.fontName = self._unicode_yuz(ad)
+            alt = getattr(stil, "bulletFontName", None)
+            if alt in self.TYPE1_METIN_FONTLARI:
+                stil.bulletFontName = self._unicode_yuz(alt)
 
     def _setup_custom_styles(self):
         """Rapor için özel paragraf stillerini kaydet (Unicode font varsa onu, yoksa Helvetica)."""
@@ -231,6 +316,10 @@ class PDFReportGenerator:
         ]
         for spec in specs:
             self.styles.add(ParagraphStyle(**spec))
+        # ⚠️ EN SONDA: hazır stil sayfasından gelen HER Type1 metin stilini de Unicode yüze
+        # çevir. Rapor bunlardan bazılarını doğrudan kullanıyor (`Heading3`, `Normal`) ve
+        # orada Türkçe harfler siyah kutu oluyordu (sahip bildirimi 2026-09-12).
+        self._stilleri_unicode_yap()
 
     def generate_session_report(
         self,

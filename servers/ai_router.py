@@ -522,6 +522,15 @@ async def analyze_landmark(
             # wait_for_publish 2s, 3× ESP) event-loop'tan ÇIKAR → to_thread (ai_pro_frame ile aynı
             # desen). Aksi halde her auto_adjust isteği loop'u saniyelerce kilitler → AI Pro kapalı-
             # döngü sürüş inference'ı ve /health dahil tüm async uçlar gecikir.
+            # ⚠️ KİMLİK THREAD'DEN ÖNCE ÇÖZÜLÜR: `request` istek kapsamına aittir, arka plan
+            # thread'inde okumak kırılgandır.
+            try:
+                from servers.auth import cozumlenmis_operator as _coz_op
+
+                _landmark_operator = _coz_op(request, "") or ""
+            except Exception:
+                _landmark_operator = ""
+
             def _drive_landmark_auto():
                 try:
                     from servers.api_server import start_ai_session, state, update_live_session_state
@@ -553,8 +562,34 @@ async def analyze_landmark(
                     target_freq = min(100.0, 10.0 + (total * 5.0))
                     target_duty = min(50.0, 25.0 + (total * 3.0))
                     # Seansı _active_session'a yaz → süre-watchdog + emergency-stop AI'yı da kapsar.
-                    start_ai_session(target_freq, target_duty, 30, range(1, 9), "AI (Auto)")
-                    state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30)
+                    # ⚠️ Sahip, isteği yapan operatörün ÇÖZÜMLENMİŞ kimliğidir (istemcinin
+                    # beyanı değil; bkz. auth.cozumlenmis_operator). Kimlik çözülemezse "" kalır
+                    # ve kayıt sahipsiz olur — bu DOĞRUDUR: kanıtsız bir beyanı sahiplik diye
+                    # yazmak, "Benim Seanslarım"ı yalancı yapardı.
+                    start_ai_session(
+                        target_freq,
+                        target_duty,
+                        30,
+                        range(1, 9),
+                        "AI (Auto)",
+                        operator_email=_landmark_operator,
+                    )
+                    # ⚠️ SAHTE "BAŞARILI" OTONOM SEANS (denetim 2026-09-12, İş 11'in AI tarafı):
+                    # `start_all_coils` reddi False ile bildirir (STM kopuk / firmware uyuşmaz) ve
+                    # bu dönüş HİÇ OKUNMUYORDU. Seans `_active_session`a yazılmış, DB satırı
+                    # açılmış, "AI (Auto)" canlı durum yayınlanmış oluyordu — hiçbir bobin
+                    # enerjilenmemişken. Manuel seans yolundaki arızanın birebir aynısı.
+                    if not state.hardware.start_all_coils(target_freq, target_duty, 0.0, 30):
+                        logger.error(
+                            "AI (Auto): donanim komutu REDDETTI → seans geri aliniyor (sahte 'aktif' yazilmasin)."
+                        )
+                        try:
+                            import servers.api_server as _api_geri
+
+                            _api_geri._seansi_geri_al("donanim-reddi:ai-auto")
+                        except Exception:
+                            logger.exception("AI (Auto) seans geri alma basarisiz")
+                        return "skipped_hardware_rejected", {}
                     # ESP 6-8'i de sür (audit #13, kullanıcı onaylı 8-bobin) — tek-atış publish.
                     try:
                         import servers.api_server as _api_esp
@@ -1982,11 +2017,37 @@ def start_ai_pro(payload: AiProStartPayload = AiProStartPayload()):
     _ai_organ_cache["localized"] = False
     # Seansı baştan _active_session'a yaz → süre-watchdog + emergency-stop AI Pro'yu da kapsar.
     # 1-7: STM 1-5 + ESP 6-7 (bobin 8 KAPALI; em_kedi 7 bobinlik per-coil duty/phase üretir).
+    # ⚠️ FIRMWARE UYUŞMAZLIĞI KAPISI (denetim 2026-09-12): kart komutları sistematik
+    # reddediyorken otonom seans başlatmak, manuel yolda düzeltilen sahte-başarının aynısını
+    # AI Pro'da yaşatırdı — üstelik burada operatör ekranın başında bile durmuyor olabilir.
+    try:
+        import servers.api_server as _api_red
+        from servers import live_state as _ls_red
+
+        if _ls_red.stm_komutlari_reddediyor():
+            _ai_loop_active = False
+            raise HTTPException(status_code=409, detail=_api_red.STM_RED_MESAJI)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.debug("AI Pro STM red kontrolu yapilamadi (engellenmedi).", exc_info=True)
+
     try:
         from servers.api_server import start_ai_session
 
         # ⚠️ "AI" ÖN EKİ KORUNUR: api_server ve ai_router'da `startswith("AI")` kontrolleri var.
-        start_ai_session(0.0, 0.0, _ai_duration_min, range(1, 8), f"AI Pro · {_saglayici.title}")
+        # ⚠️ SAHİP ONAY MÜHRÜNDEN OKUNUR, İSTEMCİ GÖVDESİNDEN DEĞİL: organ/süre/model ile
+        # AYNI ilke. Seansın sahibi, otonom sürüşü ONAYLAYAN hekimdir — sorumluluğu üstlenen
+        # kişi odur. İstemciden ayrı bir alan istemek, "başkasının adına seans açma"yı mümkün
+        # kılardı. (Mühür `ai_approval.approve(pid, operator)` ile damgalanır.)
+        start_ai_session(
+            0.0,
+            0.0,
+            _ai_duration_min,
+            range(1, 8),
+            f"AI Pro · {_saglayici.title}",
+            operator_email=str(_onay.get("operator") or ""),
+        )
     except Exception:
         logger.exception("start_ai_session failed")
     import threading

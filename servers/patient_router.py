@@ -47,6 +47,13 @@ class DeleteAllPayload(BaseModel):
     confirm: str = ""  # audit B-8.2: kazara toplu-silme koruması
 
 
+class BulkDeletePayload(BaseModel):
+    """SEÇİLİ hastaları silme gövdesi — `DeleteAllPayload` ile AYNI onay deseni."""
+
+    patient_ids: list[str] = []
+    confirm: str = ""
+
+
 @router.get("/api/patients")
 def get_all_patients(request: Request, limit: int = 0, offset: int = 0):
     """Hastaları döndürür. Pagination (audit B-8.2): limit>0 ile sayfalanır (offset kaydırır);
@@ -106,6 +113,50 @@ def remove_patient(patient_id: str, request: Request):
 def remove_patient_compat(patient_id: str, request: Request):
     """Backward-compatible delete route used by the current Expo app."""
     return remove_patient(patient_id, request)
+
+
+@router.post("/api/patients/delete_bulk")
+def remove_patients_bulk(request: Request, payload: BulkDeletePayload):
+    """SEÇİLİ hastaları TEK İŞLEMDE siler (atomik).
+
+    ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "hasta veri tabanında da toplu sil butonu lazım."
+
+    ⚠️ `delete_all` İLE AYNI ŞEY DEĞİL: bu uç YALNIZ operatörün seçtiği kimlikleri siler,
+    dolayısıyla `delete_all`ın veteriner-kısıtı burada geçerli değildir — kendi kayıtlarını
+    seçip silmek olağan bir iştir. Yine de onay alanı ZORUNLU: kazara/otomatik bir POST
+    geri dönülemez biçimde onlarca hasta silmesin (audit B-8.2 deseni).
+
+    ⚠️ Denetim izi: KVKK "unutulma hakkı"nın kanıtı. Hasta ADI YAZILMAZ — iz, sildiği verinin
+    ikinci bir kopyası olamaz (tekil silmedeki kuralın aynısı).
+    """
+    _enforce_patient_auth(request)
+    if payload.confirm != "DELETE_SELECTED":
+        raise HTTPException(
+            status_code=400,
+            detail='Toplu silme için onay gerekli: gövdede {"confirm":"DELETE_SELECTED"} gönderin.',
+        )
+    istenen = sorted({str(x) for x in (payload.patient_ids or []) if str(x or "").strip()})
+    if not istenen:
+        raise HTTPException(status_code=400, detail="Silinecek hasta seçilmedi.")
+    db = get_patient_database()
+    if not db:
+        raise HTTPException(status_code=500, detail="Patient DB not initialized")
+    try:
+        silinen = db.delete_patients_bulk(istenen)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    from servers import audit_log as _iz
+
+    _iz.kimlikli_yaz(
+        request,
+        "patient.delete_bulk",
+        scope=f"{len(istenen)} hasta",
+        item_count=silinen,
+        outcome="ok" if silinen else "bulunamadi",
+    )
+    # ⚠️ `istenen` ile `silinen` AYRI raporlanır (bkz. history.delete_bulk): başka bir
+    # operatör aynı kaydı bu arada silmiş olabilir; "hepsi silindi" demek yanlış olurdu.
+    return {"status": "success", "istenen": len(istenen), "silinen": silinen}
 
 
 @router.post("/api/patients/delete_all")

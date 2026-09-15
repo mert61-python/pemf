@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -15,6 +15,7 @@ from starlette.background import BackgroundTask
 from database.treatment_history_db import get_treatment_db
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
+from utils.seans_durum import durum_etiketi
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 logger = logging.getLogger("HistoryRouter")
@@ -22,6 +23,17 @@ logger = logging.getLogger("HistoryRouter")
 
 class HistoryDeletePayload(BaseModel):
     session_id: int
+
+
+class HistoryBulkDeletePayload(BaseModel):
+    """Toplu silme gövdesi — ⚠️ ONAY ALANI ZORUNLU.
+
+    `patients/delete_all` ile AYNI desen (audit B-8.2): gövdesiz/kazara bir POST geri
+    dönülemez biçimde onlarca seansı silmesin. Arayüz operatöre sorup bunu gönderir.
+    """
+
+    session_ids: list[int] = []
+    confirm: str = ""
 
 
 # Canonical veri klasörü — api_server (gözlem-notu/KPI/AI-log) ile AYNI olmalı,
@@ -231,6 +243,11 @@ def export_csv(
         ]
         writer.writerow(headers)
 
+        # ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "bu csv de tamamlandı yazmalı ingilizce yazıyor
+        # completed onu düzelt." Operatör ekranda "Tamamlandı", Excel'de "completed"
+        # görüyordu — aynı kaydın iki farklı dili. Durum sütunu artık `durum_etiketi()`
+        # ile çevrilir (arayüzle AYNI sözlük; bkz. utils/seans_durum.py).
+        # ⚠️ DB'deki ham değer DEĞİŞMEZ — çeviri yalnız bu dışa-aktarım sınırındadır.
         for s in sessions:
             writer.writerow(
                 [
@@ -243,7 +260,7 @@ def export_csv(
                     s.get("intensity_mt", ""),
                     s.get("session_date", ""),
                     s.get("start_time", ""),
-                    _csv_safe(s.get("session_status", "")),
+                    _csv_safe(durum_etiketi(s.get("session_status", ""))),
                     _csv_safe(s.get("patient_notes", "")),
                 ]
             )
@@ -303,6 +320,52 @@ def delete_session_compat(payload: HistoryDeletePayload, db=Depends(get_db)):
 class HistoryNotesPayload(BaseModel):
     session_id: int
     notes: str = ""
+
+
+@router.post("/delete_bulk")
+def delete_sessions_bulk(request: Request, payload: HistoryBulkDeletePayload, db=Depends(get_db)):
+    """SEÇİLİ seansları TEK İŞLEMDE siler (atomik).
+
+    ⚠️ SAHİP BİLDİRİMİ (2026-09-12): "toplu sil seçeneği eksik seans geçmişi tabında
+    kullanıcı tek tek silmek zorunda kalıyor."
+
+    ⚠️ NEDEN SUNUCUDA TOPLU, NEDEN İSTEMCİDEN N KEZ /delete DEĞİL: N ayrı istek yarı yolda
+    koparsa (ağ, kapanan pencere) operatör HANGİ kayıtların gittiğini bilemez. Geri alınamaz
+    bir işlemde "kısmen oldu" en kötü sonuçtur — tek transaction ya hepsini siler ya hiçbirini.
+
+    ⚠️ Denetim izi yazılır: seans silmek geri dönüşsüzdür ve toplu silme, tek-tek silmeden
+    çok daha geniş bir eylemdir. Kayda seans ADI/PII girmez, yalnız sayı ve kimlikler.
+    """
+    if payload.confirm != "DELETE_SELECTED":
+        raise HTTPException(
+            status_code=400,
+            detail='Toplu silme için onay gerekli: gövdede {"confirm":"DELETE_SELECTED"} gönderin.',
+        )
+    istenen = sorted({int(x) for x in (payload.session_ids or [])})
+    if not istenen:
+        raise HTTPException(status_code=400, detail="Silinecek seans seçilmedi.")
+    try:
+        silinen = db.delete_sessions_bulk(istenen)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Toplu seans silme hatasi: {e}")
+        raise HTTPException(status_code=500, detail="İşlem başarısız")
+    try:
+        from servers import audit_log as _iz
+
+        _iz.kimlikli_yaz(
+            request,
+            "history.delete_bulk",
+            scope=f"{len(istenen)} seans",
+            item_count=silinen,
+            outcome="ok" if silinen else "bulunamadi",
+        )
+    except Exception:
+        logger.debug("Toplu silme denetim izi yazilamadi (non-fatal).", exc_info=True)
+    # ⚠️ `istenen` ile `silinen` AYRI raporlanır: operatör bir başkasının aynı anda sildiği
+    # kayıtları seçmiş olabilir. "5 sildim" demek yerine gerçeği söyle.
+    return {"status": "success", "istenen": len(istenen), "silinen": silinen}
 
 
 @router.post("/update_notes")

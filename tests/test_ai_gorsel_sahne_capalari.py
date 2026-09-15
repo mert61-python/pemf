@@ -94,17 +94,28 @@ def test_KRITIK_sahne_sayfalari_TEK_KAYNAKTAN_gelir():
 # ============================================================================
 
 
-def test_KRITIK_oran_kilidi_sahnede_TEK_cagri():
-    """`GorselSahne` kutuyu `kameraKutusu()` ile hesaplar — ikinci bir hesap İŞARET KAYMASIDIR.
+#: `GorselSahne` içindeki meşru `kameraKutusu()` çağrı sayısı — İKİ AYRI ÇİZİM YÜZEYİ.
+#:  1) satır içi galeri kutusu (kapsayıcı genişliğine oturur, ÜST KATMAN burada çizilir)
+#:  2) tam ekran taban ölçüsü (modal görünümüne sığdırır; üzerine İŞARET ÇİZİLMEZ)
+#: ⚠️ Sayı 1'DEN 2'YE 2026-09-12'de ÇIKARILDI (tam ekran foto-görüntüleyici yazımıyla).
+#: Kapının gerekçesi "iki kutu = işaret kayması"ydı; bu YALNIZ AYNI yüzeyde iki kutu için
+#: geçerlidir. İki yüzey ayrı olduğundan risk, sayaçla değil aşağıdaki `ustKatman?.(` == 1
+#: kapısıyla karşılanır: üst katman YALNIZ ölçülmüş satır-içi kutuda çizilebilir.
+BEKLENEN_KAMERA_KUTUSU_SAYISI = 2
 
-    ⚠️ Sayaç 1: ikinci bir çağrı, iki farklı kutu demektir ve üzerine çizilen organ/tümör
-    işaretleri taban görüntüyle kayar (tıbbi karar ekranı).
 
-    MUTASYON: kutuyu `{width: kapW, height: tavanY}` ile elle kur → KIRMIZI.
+def test_KRITIK_oran_kilidi_sahnede_SABIT_SAYIDA_cagri():
+    """`GorselSahne` kutuyu `kameraKutusu()` ile hesaplar — SAYI SABİTTİR.
+
+    ⚠️ ÜÇÜNCÜ bir çağrı, aynı yüzey için ikinci bir kutu demektir ve üzerine çizilen
+    organ/tümör işaretleri taban görüntüyle kayar (tıbbi karar ekranı).
+
+    MUTASYON: kutuyu `{width: kapW, height: tavanY}` ile elle kur → KIRMIZI (sayı düşer).
     """
     src = _kod("components/ui/GorselSahne.tsx")
-    assert src.count("kameraKutusu(") == 1, (
-        f"GorselSahne'de kameraKutusu( sayisi {src.count('kameraKutusu(')}, beklenen 1"
+    n = src.count("kameraKutusu(")
+    assert n == BEKLENEN_KAMERA_KUTUSU_SAYISI, (
+        f"GorselSahne'de kameraKutusu( sayisi {n}, beklenen {BEKLENEN_KAMERA_KUTUSU_SAYISI}"
     )
 
 
@@ -175,5 +186,5 @@ def test_KRITIK_kapi_YORUMLA_kandirilamaz():
     `test_responsive_grafik_kapisi.py`de bizzat yaşandı: 2 → 4).
     """
     ham = (_PF / "components" / "ui" / "GorselSahne.tsx").read_text(encoding="utf-8")
-    assert ham.count("kameraKutusu(") > 1, "onkosul kayboldu: baslikta artik anilmiyor"
-    assert _kod("components/ui/GorselSahne.tsx").count("kameraKutusu(") == 1
+    assert ham.count("kameraKutusu(") > BEKLENEN_KAMERA_KUTUSU_SAYISI, "onkosul kayboldu: baslikta artik anilmiyor"
+    assert _kod("components/ui/GorselSahne.tsx").count("kameraKutusu(") == BEKLENEN_KAMERA_KUTUSU_SAYISI

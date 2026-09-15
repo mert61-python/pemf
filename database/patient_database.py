@@ -767,6 +767,41 @@ class PatientDatabase:
         finally:
             self.lock.release()
 
+    #: Tek istekte silinebilecek AZAMİ hasta sayısı (seans tarafıyla AYNI gerekçe ve AYNI sayı).
+    TOPLU_SILME_AZAMI = 500
+
+    def delete_patients_bulk(self, patient_ids) -> int:
+        """Birden çok hastayı TEK İŞLEMDE (atomik) siler; silinen kayıt sayısını döndürür.
+
+        ⚠️ NEDEN DÖNGÜYLE `delete_patient` DEĞİL: 40 hastadan 23.'sünde hata çıkarsa yarısı
+        gitmiş olur ve operatör hangisinin gittiğini bilemez — geri alınamaz bir işlemde
+        "kısmen oldu" en kötü sonuçtur. `clear_all_patients` ile aynı atomiklik gerekçesi (P3).
+
+        ⚠️ ARAMA İNDEKSİ DE SİLİNİR: eskiden `patient_search_index` orphan kalırsa silinmiş bir
+        hasta aramada görünmeye devam ediyordu.
+        """
+        kimlikler = [str(x) for x in (patient_ids or ()) if str(x or "").strip()]
+        kimlikler = sorted(set(kimlikler))
+        if not kimlikler:
+            return 0
+        if len(kimlikler) > self.TOPLU_SILME_AZAMI:
+            raise ValueError(f"Tek istekte en fazla {self.TOPLU_SILME_AZAMI} hasta silinebilir.")
+        if not self.lock.acquire(timeout=10.0):
+            return 0
+        try:
+            yer = ",".join("?" for _ in kimlikler)
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"DELETE FROM patients WHERE id IN ({yer})", kimlikler)
+                silinen = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
+                cursor.execute(f"DELETE FROM patient_search_index WHERE patient_id IN ({yer})", kimlikler)
+                conn.commit()
+                return silinen
+        except _DB_ERROR:
+            return 0
+        finally:
+            self.lock.release()
+
     def clear_all_patients(self) -> bool:
         """Tum hasta kayitlarini temizler."""
         with self.lock:
