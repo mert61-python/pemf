@@ -9,6 +9,57 @@
 # Çalıştır:  ruff check .   |   ruff format .   |   mypy servers utils database
 # ============================================================================
 
+# ============================================================================
+# PROJE METADATASI (denetim 2026-09-17)
+# ----------------------------------------------------------------------------
+# Bu dosya 96 satır boyunca YALNIZ araç ayarı taşıyordu: `[project]` yok,
+# `[build-system]` yok, `setup.py` yok. Depo kurulabilir bir Python dağıtımı
+# değildi; kök dizinin kendisi import köküydü. IEC 62304 açısından "yazılım
+# öğesi" tanımlamak için kurulabilir bir birim + makine-okunur sürüm metadatası
+# gerekir.
+#
+# ⚠️ SÜRÜM BURAYA YAZILMAZ. `version = "1.9.50"` yazmak, sürümü DÖRDÜNCÜ bir yere
+# koymak olurdu: versions.json (tek kaynak) → VERSION → CHANGELOG → pyproject.
+# Bu depo tam bu tuzağa README'de ÜÇ kez düştü. Zincir tek yönlü kalır:
+#     versions.json  --sync_versions.ps1-->  VERSION  --dynamic-->  pyproject
+#
+# ⚠️ `packages` AÇIKÇA listelenir. Düz yerleşimde (kökte 40 dizin) setuptools'un
+# otomatik keşfi "Multiple top-level packages discovered" ile PATLAR — yani
+# `[build-system]` eklemek bir şeyi düzeltmez, yeni bir kırık yol açardı.
+#
+# Kapı: tests/test_paket_sinirlari.py
+# ============================================================================
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pemf-backend"
+description = "PEMF Vet — kediye özel PEMF terapi kabini için headless backend servisi"
+requires-python = ">=3.10,<3.11"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.setuptools]
+# ⚠️ ELLE liste — otomatik keşif bu ağaçta çalışmaz (yukarıdaki nota bakın).
+#
+# ⚠️ `ai_hub` BİLEREK YOK. 84 MB ve içinde 20 model ağırlığı var; dahası kod koruması
+# kararı gereği frozen EXE'de PYZ'den ÇIKARILIR ve diskteki `.pyd`/`.pyenc` olarak sevk
+# edilir (`build_tools/PEMF_Backend_onedir.spec`: `a.pure`'dan silinir). Onu kurulabilir
+# bir paket olarak ilan etmek o kararla çelişir ve yanlış sinyal verir.
+# ⚠️ `pf/`, `pemf-vet-web/`, `launcher/` de yok: bunlar Python paketi değil.
+packages = [
+    "servers",
+    "services",
+    "database",
+    "utils",
+    "controllers",
+    "scripts",
+    "build_tools",
+]
+
 [tool.ruff]
 target-version = "py310"
 line-length = 120
