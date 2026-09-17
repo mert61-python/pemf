@@ -6,6 +6,32 @@ telif hakları ilgili sahiplerine aittir.
 ⚠️ **Bu dosya atıf (NOTICE) yükümlülüğü içindir.** Kopyleft lisansların (AGPL/GPL) kaynak açma
 yükümlülüğünü KARŞILAMAZ — bkz. [`docs/AGPL-KARARI.md`](docs/AGPL-KARARI.md).
 
+## Araştırma veri kümeleri (atıf)
+
+⚠️ **Bu bölüm ÜRETECİN yazdığı bölümün ÖNÜNDE durmalıdır.**
+`scripts/lisans_envanteri_uret.py` dosyayı aşağıdaki başlıktan itibaren yeniden yazar;
+bu bölüm oraya taşınırsa bir sonraki koşuda **sessizce silinir.**
+Kapı: `tests/test_veri_kumesi_atfi.py`
+
+Depo, `training_archive/ai_data/real_clinical_data/` altında üçüncü taraf araştırma
+veri kümelerini yeniden dağıtır. Bunlar **üründe sevk edilmez** (donmuş eğitim arşivi),
+ancak PUBLIC depoda bulundukları için atıf gerektirir:
+
+| Veri kümesi | Kaynak | Not |
+|---|---|---|
+| MIT-BIH Arrhythmia Database | PhysioNet | İnsan EKG'si; transfer öğrenme için. Kaynağında kimliksizleştirilmiş |
+| PhysioZoo (köpek · tavşan · fare EKG) | PhysioNet | Veteriner EKG referansı |
+| Zenodo — "Paws in Pain" | Zenodo | Köpek ağrı değerlendirmesi (EKG'li) |
+
+⚠️ **Hasta kimliği içermez** — ölçüldü: yalnız türetilmiş metrikler (`SDNN`, `RMSSD`,
+`LF/HF`, `mag_field_*`, `temp_*`). Dizin adı (`real_clinical_data`) "sentetik olmayan
+sinyal" anlamındadır, bu kliniğin hasta verisi değildir. Ayrıntı:
+[`training_archive/ai_data/real_clinical_data/README.md`](training_archive/ai_data/real_clinical_data/README.md).
+
+⚠️ **Ticari dağıtımdan önce** her kümenin güncel lisans koşulları (ticari kullanım,
+yeniden dağıtım, atıf biçimi) hukukçuya doğrulatılmalıdır. Bu tablo bir kayıttır,
+hukuki görüş değildir.
+
 ## Dağıtılan pakette tespit edilen bileşenler
 
 Aşağıdaki liste **üretilmiştir** (`scripts/lisans_envanteri_uret.py`); elle
