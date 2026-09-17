@@ -32,22 +32,25 @@ _BILINEN_ISTISNALAR = {"ultralytics"}
 
 
 def _paket_lisanslari():
-    """Dağıtılan paketteki (paket adı → lisans metni). `dist-info/METADATA`dan OKUNUR."""
-    out = {}
-    with zipfile.ZipFile(PAKET) as z:
-        for n in z.namelist():
-            m = re.match(r"PEMF_Backend/_internal/([^/]+)-([^/]+)\.dist-info/METADATA$", n)
-            if not m:
-                continue
-            meta = z.read(n).decode("utf-8", "replace")
-            lic = ""
-            for satir in meta.splitlines()[:80]:
-                if satir.startswith("License:"):
-                    lic = satir.split(":", 1)[1].strip()
-                elif satir.startswith("Classifier: License ::") and not lic:
-                    lic = satir.split("::")[-1].strip()
-            out[m.group(1).lower()] = lic
-    return out
+    """Dağıtılan paketteki (paket adı → lisans metni). `dist-info/METADATA`dan OKUNUR.
+
+    ⚠️ ÇIPA TAŞINDI (2026-09-16) — ve bir DELİK kapandı. Bu fonksiyonun kendi ayrıştırıcısı
+    vardı ve yalnız `License:` + `Classifier: License ::` okuyordu. Modern paketler lisansı
+    **`License-Expression:`** ile bildiriyor (PEP 639); o alan okunmayınca lisans BOŞ
+    görünüyordu. Ölçüldü (sevk edilen `base-deps.zip`): 100 paketin **30'unun** lisansı
+    eski okuyucuyla boştu, yenisiyle 0.
+
+    ⚠️ BUGÜN GİZLİ BİR UYUMSUZLUK YOKTU: iki okuyucu da kopyleft kümesini AYNI buluyor
+    (`{ultralytics}`). Yani yaşanmış bir ihlal değil, GELECEK için açık bir delikti —
+    `License-Expression: AGPL-3.0` diyen yeni bir paket bu kapıya GÖRÜNMEZ olurdu.
+
+    Ayrıştırıcı artık `scripts/lisans_envanteri_uret.py`de TEK yerde; NOTICE üreteci de
+    aynı fonksiyonu kullanıyor. (Kendi kopyasını yazmak, bu deponun 2026-09-15'te üç ayrı
+    noktada ölçtüğü "aynı kural iki yerde → sessizce ayrıştı" arızasını tekrarlardı.)
+    """
+    from scripts.lisans_envanteri_uret import paket_lisanslari
+
+    return {ad: lic for ad, (_surum, lic) in paket_lisanslari(PAKET).items()}
 
 
 def _kopyleft_mu(lisans: str) -> bool:

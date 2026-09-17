@@ -79,7 +79,7 @@ yapılmalı — birleştirme zaten bu kod yolunu elden geçiriyor.
 | **İş** | Linux workflow'unu bir kez koştur, release asset'i doğrula; ya da manifestten Linux runtime'ını **açıkça kaldır** (sessiz yanlış indirme yerine dürüst "yok") |
 | **Kim** | Ben (workflow) |
 
-### A5 · Sır koruması taze klonda kurulmuyor
+### ✅ A5 · Sır koruması taze klonda kurulmuyor (2026-09-16 KAPANDI)
 | | |
 |---|---|
 | **⚠️ DENETİM DÜZELTMESİ** | Denetim §1.3 *"Bayrağı kuran bir script/hook depoda yok"* diyordu — **yanlış**. `build_tools/secrets_backup.py:96-152` restore sonrası `skip-worktree`'yi **kendisi uyguluyor**, üstelik `git exit 128` (dubious ownership) deliği de kapatılmış |
@@ -106,8 +106,8 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | # | İş | Kanıt | Kim |
 |---|---|---|---|
 | **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
-| **B2** | `THIRD_PARTY_LICENSES.md` yenile | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
-| **B3** | `README.md:188` sürüm tablosunu `versions.json`'dan **türet** | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
+| ✅ **B2** | `THIRD_PARTY_LICENSES.md` yenile — **YAPILDI** (26 → 113 bileşen) | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
+| ✅ **B3** | `README.md:188` sürüm tablosu — **YAPILDI** (türetmek yerine KALDIRILDI + kapı) | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
 | **B4** | Dev dosyaları böl | `api_server.py` **5.139** · `ai_router.py` **4.023** · `treatment_history_db.py` **3.701** (tek sınıfta 95 metot: seans + coil-run + sensör + denetim izi + outbox + şema göçü + PII) | Ben · **en son** |
 
 ---
@@ -168,3 +168,26 @@ alma · Cloudflare NAMED tünel · firmware satürasyon tezgâhı · 72 saatlik 
 
 **Bu oturumda kırılan 10 kapının hiçbiri silinmedi:** hepsinin niyeti korunup çıpası taşındı ve
 taşınan çıpaların körleşmediği mutasyonla kanıtlandı.
+
+### 2026-09-16 turu — A5 · B3 · B2
+
+| # | İş | Ölçüm | Kapı |
+|---|---|---|---|
+| **A5** | `skip-worktree` koruması yalnız *restore* akışında uygulanıyordu; taze klon korumasızdı | Denetim §1.3'ün *"bayrağı kuran script yok"* iddiası **yanlıştı** — vardı, ama yalnız restore'da | `secrets_backup.py sir-korumasi` alt komutu + `bootstrap.ps1` 5c adımı · **6 mutasyon** |
+| **B3** | README sürüm tablosu **üçüncü kez** bayatlamıştı (`1.9.5/1.9.9/2.3.3` ↔ gerçek `1.9.50/1.9.51/2.3.34`) | Aynı belgenin 47. satırı zaten *"bu belgeye sürüm yazılmaz"* diyordu. **Kural vardı, kapı yoktu** | `test_readme_surum_bayatlamaz.py` · **4 mutasyon** |
+| **B2** | Atıf envanteri 50 sevk edilen bağımlılığın **36'sını** listelemiyordu (yalnız 26 satır) | Bayat değil **yapısal olarak eksik**: liste yalnız pakete bakıyordu, PyInstaller metadata'ları ayıklıyor | `scripts/lisans_envanteri_uret.py` üreteci + `test_notice_envanteri.py` · **4 mutasyon** |
+
+**Yan bulgu (B2):** kopyleft kapısının ayrıştırıcısı `License-Expression`ı (PEP 639) okumuyordu —
+sevk edilen pakette **100 paketin 30'unun** lisansı boş görünüyordu. ⚠️ Ölçüldü: bugün **hiçbir
+kopyleft paketi gizlemiyor** (iki okuyucu da yalnız `ultralytics` buluyor), yani yaşanmış bir
+ihlal değil, gelecek için açık bir delikti. Ayrıştırıcı tek yere alındı; kapı onu **import ediyor**.
+
+**Yan bulgu (B2):** lisans kapılarının **tamamı** `base-deps.zip` yokken atlanıyor
+(`pytestmark = skipif`) — yani temiz checkout'ta ve **CI'da hiç koşmuyorlar**. Yeni envanter
+kapısı bilerek ayrı dosyada ve paketten bağımsız; kaynağı `requirements.txt`.
+
+**Kapı yazarken kendi hatalarım (hepsi mutasyonla yakalandı):** A5'te çıpa iki kez metne
+takıldı — `sir-korumasi` ve `--skip-worktree` sözcükleri *yardım metinlerinde* de geçtiği için
+gerçek çağrı silinse bile kapı yeşil kalıyordu; ikisi de AST'ye/dize-soyulmuş koda pinlendi.
+B3'te regex `127.0.0.1` IP'sini sürüm sandı ve sarılmış prozun ikinci satırı bağlamdan koptu.
+B2'de yeni kapıyı yanlışlıkla `skipif`li dosyaya koymuştum — tam da CI'da atlanacaktı.
