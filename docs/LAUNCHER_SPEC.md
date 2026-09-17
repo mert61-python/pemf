@@ -69,6 +69,31 @@ Bugünkü format (v1) ad-hoc platform anahtarları kullanıyor: `base`, `base_li
 
 > *"base-linux.zip … Eksikse Linux client sessizce Windows base.zip indirir → backend hiç çalışmaz."*
 
+> ### ✅ DURUM 2026-09-17: bu uyarı TARİHSELDİR — v2 hedefi GERÇEKLEŞTİ
+>
+> Yukarıdaki alıntı **v1 formatının** tuzağını anlatır. Aşağıdaki v2 hedefi
+> (*eksik anahtarda sessiz fallback YOK*) **2026-08-09'da uygulandı** ve kapıyla kilitli:
+>
+> ```rust
+> // launcher/core/src/manifest.rs — SAHİP KARARI 2026-08-09 (Tier 1)
+> assert!(!m.runtimes.contains_key(platform::LINUX_X64),
+>     "linux-x64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+> ```
+>
+> `mac-arm64` ve `linux-x64` manifest'ten **bilerek çıkarıldı**: o platformlarda `layers`
+> yoktu → rollout freni çalışmıyordu ve self-update Windows'a özeldi, yani kurulan cihaz
+> eski sürümde **kalıcı kilitleniyordu**. Client artık *"bu platform için paket yok"* deyip
+> **durur**. Ölçüldü (2026-09-17): yayındaki manifest `runtimes: []`, `layers` yalnız
+> `win-x64`; `pemf-update` deposunun altı release'inin hiçbirinde Linux varlığı yok.
+>
+> ⚠️ **`base-linux.zip`in yokluğu ARIZA DEĞİL, KARARDIR.** `DEPO-DENETIMI-2026-09-15.md`
+> onu "KAYIP" diye işaretlemişti — **o bulgu yanlıştı** (bu satırı güncel sanmaktan doğdu).
+>
+> **Geri almak için:** paketleri CI ile üret (`linux-backend.yml`), `layers` + `rollout`
+> ekle, `manifest.rs`teki iddiaları geri getir. ⚠️ `linux-backend.yml` bugün
+> `permissions: contents: read` ve yalnız `upload-artifact` kullanıyor — **release'e
+> yazamaz**; o adım ayrıca açılmalı.
+
 **v2 hedefi** — açık platform anahtarları, **eksik anahtarda sessiz fallback YOK, sert hata**:
 
 ```json

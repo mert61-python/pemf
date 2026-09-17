@@ -248,10 +248,33 @@ sürüm kontrolüne değil, paketleme adımına ait.
 > boşluğunun **veri** karşılığıdır. Kapatıldı: dizin README'si + NOTICE'ta veri kümesi
 > bölümü + `tests/test_veri_kumesi_atfi.py` (4 mutasyon).
 
-### 3.4 `base-linux.zip` KAYIP
+### ~~3.4 `base-linux.zip` KAYIP~~ — ⛔ BU BULGU YANLIŞTI (düzeltme 2026-09-17)
 
-2026-07-26 denetiminde "ASLA SİLME — tek kopya" diye işaretlenmişti. Tüm ağaç tarandı:
-**hiçbir yerde yok**. Linux yayını için base katmanı gitmiş durumda.
+> `base-linux.zip`in yokluğu **arıza değil, KARARDIR.**
+>
+> `launcher/core/src/manifest.rs` kayıtlı bir **sahip kararı** taşıyor (2026-08-09, Tier 1)
+> ve yokluğu **kapıyla kilitliyor**:
+>
+> ```rust
+> assert!(!m.runtimes.contains_key(platform::LINUX_X64),
+>     "linux-x64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+> ```
+>
+> Gerekçe (kararın kendi metninden): o platformlarda `layers` yoktu → rollout freni
+> çalışmıyordu, self-update Windows'a özeldi → kurulan cihaz eski sürümde **kalıcı
+> kilitleniyordu**. Client artık *"bu platform için paket yok"* deyip **durur** —
+> sessizce kilitli cihaz kurmaktansa açık hata.
+>
+> **Ölçüldü 2026-09-17:** yayındaki manifest `runtimes: []`, `layers` yalnız `win-x64`;
+> `pemf-update` deposunun altı release'inin hiçbirinde Linux varlığı yok (0/6).
+>
+> **Bulgu neden yanlış çıktı:** `docs/LAUNCHER_SPEC.md`teki *"Linux client sessizce
+> Windows base.zip indirir"* uyarısını **güncel** sandım. O satır **v1 formatının**
+> tarihsel tuzağını anlatıyor; hemen altındaki **v2 hedefi** (sessiz fallback yok, sert
+> hata) 08-09'da zaten uygulanmış. Belgeye durum notu eklendi.
+>
+> ⚠️ Yan ölçüm: `linux-backend.yml` `permissions: contents: read` + yalnız
+> `upload-artifact` — **release'e yazamaz.** Linux geri açılacaksa o adım da eklenmeli.
 
 ### 3.5 Bayat belgeler
 

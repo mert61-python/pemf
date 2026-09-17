@@ -70,14 +70,34 @@ yapılmalı — birleştirme zaten bu kod yolunu elden geçiriyor.
 | **Dikkat** | `pre-commit` kurulu (`.git/hooks/pre-commit` var), önbellek dolu → indirme gerekmez. `skip-worktree`'li 4 sır dosyası commit'e **girmemeli** |
 | **Kim** | Ben |
 
-### A4 · `base-linux.zip` yok — Linux kullanıcısı için sessiz ölüm
-| | |
-|---|---|
-| **Kanıt (ölçüldü)** | Tüm ağaçta `base-linux*` **sıfır dosya**. `scripts/make_manifest.py:45` bu adı bekliyor. `.github/workflows/linux-backend.yml` üretiyor (tag `backend-linux-v*`) |
-| **Neden arıza** | `docs/LAUNCHER_SPEC.md:66` kendi uyarısı: *"Eksikse Linux client sessizce Windows base.zip indirir → backend hiç çalışmaz."* Hata mesajı yok, çökme yok — **ürün çalışmıyor** |
-| **Acillik** | Sahada tek makine Windows → bugün kimseyi vurmuyor. Ama Linux satışı açılırsa ilk müşteride patlar |
-| **İş** | Linux workflow'unu bir kez koştur, release asset'i doğrula; ya da manifestten Linux runtime'ını **açıkça kaldır** (sessiz yanlış indirme yerine dürüst "yok") |
-| **Kim** | Ben (workflow) |
+### ⛔ A4 · ~~`base-linux.zip` yok~~ — **BU MADDE YANLIŞTI** (2026-09-17)
+
+`base-linux.zip`in yokluğu **arıza değil, KARARDIR.**
+
+`launcher/core/src/manifest.rs` kayıtlı bir **sahip kararı** taşıyor (2026-08-09, Tier 1)
+ve yokluğu **kapıyla kilitliyor**:
+
+```rust
+assert!(!m.runtimes.contains_key(platform::LINUX_X64),
+    "linux-x64 manifest'e geri girdi — o platformda rollout freni ve self-update YOK");
+```
+
+Gerekçe (kararın kendi metninden): o platformlarda `layers` yoktu → rollout freni
+çalışmıyordu, self-update Windows'a özeldi → kurulan cihaz eski sürümde **kalıcı
+kilitleniyordu**. Client artık *"bu platform için paket yok"* deyip **durur**.
+
+**Ölçüldü:** manifest `runtimes: []`, `layers` yalnız `win-x64`; `pemf-update` deposunun
+altı release'inin hiçbirinde Linux varlığı yok (0/6).
+
+⚠️ **Önerdiğim çözüm de yanlıştı.** "Workflow'u bir kez koştur" işe yaramaz:
+`linux-backend.yml` `permissions: contents: read` + yalnız `upload-artifact` — **release'e
+yazamaz**. Linux geri açılacaksa o adım ayrıca eklenmeli (ve bu bir **yayın**tır).
+
+**Bulgu neden yanlış çıktı:** `LAUNCHER_SPEC.md`teki *"Linux client sessizce Windows
+base.zip indirir"* uyarısını güncel sandım. O satır **v1 formatının** tarihsel tuzağı;
+hemen altındaki **v2 hedefi** (sessiz fallback yok, sert hata) 08-09'da zaten uygulanmış.
+
+Kapı: `tests/test_linux_runtime_YOKLUGU_karardir.py` · **Kim:** — (iş yok)
 
 ### ✅ A5 · Sır koruması taze klonda kurulmuyor (2026-09-16 KAPANDI)
 | | |
