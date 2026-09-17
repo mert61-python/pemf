@@ -195,6 +195,30 @@ def cmd_list(args) -> int:
     return 0
 
 
+def cmd_sir_korumasi(args) -> int:
+    """`skip-worktree` korumasini UYGULA — yedek/restore olmadan, tek basina.
+
+    ⚠️ NEDEN AYRI BIR KOMUT (denetim 2026-09-16). Koruma yalnizca RESTORE akisinda
+    uygulaniyordu. Yani:
+
+        sir yedegini restore eden makine              -> korunur
+        TAZE KLON + Secrets.h'i ELLE dolduran makine  -> KORUNMAZ
+
+    Ikinci senaryoda `git add -A` gercek WiFi/MQTT kimlik bilgilerini PUBLIC depoya
+    stage'ler; geriye tek guvence olarak gitleaks kalir. `bootstrap.ps1` bu komutu
+    cagirarak korumayi HER yeni makinede kurar (pre-commit hook'unu da ayni gerekceyle
+    orada kuruyor).
+
+    ⚠️ DOSYA LISTESI BURADA KALIR. Bootstrap kendi listesini YAZMAZ — bu depo
+    2026-09-15'te "ayni kural iki yerde -> sessizce ayristi" arizasini UC ayri noktada
+    yasadi. Yeni bir sir dosyasi eklendiginde guncellenecek TEK yer `_SW_DOSYALAR`dir.
+
+    Kapi: tests/test_sir_koruma_bootstrapte_kurulur.py
+    """
+    _git_sir_korumasi()
+    return 0
+
+
 def main() -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -212,6 +236,11 @@ def main() -> int:
     ls = sub.add_parser("list", help="icindekileri goster (deger YOK)")
     ls.add_argument("--in", dest="inp", required=True)
     ls.set_defaults(fn=cmd_list)
+    sw = sub.add_parser(
+        "sir-korumasi",
+        help="skip-worktree korumasini uygula (taze klon; yedek/restore GEREKMEZ)",
+    )
+    sw.set_defaults(fn=cmd_sir_korumasi)
     args = ap.parse_args()
     return args.fn(args)
 

@@ -276,6 +276,37 @@ if (Test-Path $embPy) {
     }
 }
 
+# --- 5c. SIR DOSYASI KORUMASI (skip-worktree) ---
+# ⚠️ DENETIM 2026-09-16. `firmware/*/Secrets.h` ve `data/config.json` depoda SABLON olarak
+# takipli, sahada ise GERCEK WiFi + bulut MQTT kimlik bilgileriyle doldurulur. Ayrimi
+# `git update-index --skip-worktree` saglar ve o bayrak KLON-YERELDIR — depoya girmez.
+#
+# Bayragi uygulayan TEK yer `secrets_backup.py` RESTORE akisiydi:
+#     sir yedegini restore eden makine              -> korunur
+#     TAZE KLON + dosyalari ELLE dolduran makine    -> KORUNMAZ
+# Ikincisinde `git add -A` gercek sirlari PUBLIC depoya stage'ler; geriye tek guvence
+# gitleaks kalir. Kurulum betigi zaten her yeni makinede kostugu icin koruma BURAYA baglandi
+# (5b'deki pre-commit kurulumu da tam ayni gerekceyle burada).
+#
+# ⚠️ DOSYA LISTESI BURAYA KOPYALANMAZ. Liste `secrets_backup._SW_DOSYALAR`da; bootstrap
+# yalnizca alt komutu cagirir. Bu depo 2026-09-15'te "ayni kural iki yerde -> sessizce
+# ayristi" arizasini UC ayri noktada yasadi. Kapi: tests/test_sir_koruma_bootstrapte_kurulur.py
+Info "5c) Sir dosyasi korumasi (skip-worktree)"
+if (-not (Test-Path (Join-Path $PSScriptRoot ".git"))) {
+    Warn "Bu klasor bir git deposu degil -> skip-worktree korumasi gerekmez (staging riski yok)."
+} elseif (Test-Path $embPy) {
+    Push-Location $PSScriptRoot
+    & $embPy ".\build_tools\secrets_backup.py" sir-korumasi
+    if ($LASTEXITCODE -eq 0) {
+        OK "Sir dosyalari git'in gozunden dusuruldu (git add -A onlari ARTIK stage'lemez)"
+    } else {
+        Warn "skip-worktree uygulanamadi -> elle: $embPy .\build_tools\secrets_backup.py sir-korumasi"
+    }
+    Pop-Location
+} else {
+    Warn "Gomulu Python yok -> sir korumasi kurulamadi (elle calistirin)."
+}
+
 # --- 6. DOGRULAMA TABLOSU ---
 Refresh-Path
 Write-Host ""
