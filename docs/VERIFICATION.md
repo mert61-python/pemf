@@ -18,6 +18,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
 | 16 | **STM reflash + doz yeniden kalibrasyonu** | ⏳ donanım | §16 (aşağıda) — DDS simetrik bipolara geçti, saha cihazı kalibre DEĞİL |
+| 17 | **Donmuş EXE ürün senaryoları** | ✅ **DOĞRULANDI (2026-09-17)** | `scripts/urun_senaryolari.py` — **48/48**. Sevk edilen ikiliyi çalıştırır; suit'in göremediği açılış sırasını ölçer (§17) |
 
 ---
 
@@ -488,3 +489,87 @@ Sarma tespit EDİLEMEZ — tek savunma aralığın kendisidir.
 
 > ⚠️ Bu ölçüm yapılmadan arayüzdeki "Yoğunluk (mT)" değeri **hedef** değeri gösterir, ölçülen
 > alanı değil. Klinik kararı ona dayandırmayın.
+
+---
+
+## ✅ 17 — Donmuş EXE ürün senaryoları (BU ORTAMDA DOĞRULANDI · 2026-09-17)
+
+**Betik:** `scripts/urun_senaryolari.py` · **Kapısı:** `tests/test_urun_senaryolari_kapisi.py`
+
+### Neden test suiti yetmiyor
+
+2026-09-13'te birim testler **yeşilken** ürün hasta geçmişini kaybediyordu: üçüncü bir yol
+(şablon kopyalayıcı) açılışta önce davranıyordu ve hiçbir test o **sırayı** görmüyordu.
+Suit "fonksiyon doğru mu" diye sorar; bu betik **"sevk edilen ikili, gerçek diskte, gerçek
+açılış sırasıyla doğru mu"** diye sorar. İkisi ayrı sorulardır ve biri ötekinin yerine geçmez.
+
+Aynı ders 2026-09-16/17 denetim turunda ikinci kez alındı: denetimin 13 iddiasından 10'u
+**ölçüt yerine görünüşe** dayandığı için yanlış çıktı. Bu yüzden burada hiçbir madde kaynaktan
+okunarak "doğrulanmış" sayılmaz.
+
+### Nasıl çalıştırılır
+
+```bash
+# önce paketle (EXE bayatsa betik zaten DURUR)
+pwsh -NoProfile -File scripts/build_backend_exe.ps1
+
+python scripts/urun_senaryolari.py HEPSI          # 48 senaryo
+python scripts/urun_senaryolari.py A              # yalnız veri yolu
+python scripts/urun_senaryolari.py C --exe <yol>  # başka bir paketi ölç
+```
+
+⚠️ Betik **bayat-ikili nöbetiyle** başlar: EXE izlenen kaynaklardan eskiyse ölçüm anlamsızdır
+ve çalışma **durur**. Çalışma alanı depo ağacının dışındadır (senaryolar ACL-kilitli ve bozuk
+dosyalar üretir). Makine anahtar deposu koşum öncesi/sonrası karşılaştırılır — ürün oraya
+yazsaydı sahibin gerçek anahtarını ezme sınıfı doğardı; **yazmadı**.
+
+### Gruplar ve korudukları
+
+| Grup | Senaryo | Ne koruyor |
+|---|---|---|
+| **A** veri yolu | 16 | Düz→SQLCipher göçü (iki DB), **yarım göç kurtarması**, ACL-kilitli yedekten kurtarma, emanet politikası, idempotans, uçtan uca kalıcılık, bayat `.enc.tmp` artığı |
+| **B** ürün yüzeyi | 15 | Ana React arayüzü + simülatör **gerçekten sunuluyor**, önbellek politikası, derin AI hazırlığı, kod koruması, çalışma-anı pip yasağı, araştırma AI Pro 409 kapısı, rota yüzeyinde ölü girdi yok |
+| **C** güvenlik | 13 | Jeton zorlaması **E-stop/seans durdurmayı asla kapılamaz**, auth tünelde zorunlu–yerelde serbest, sağlık ucu launcher nonce'unu/cihaz kimliğini **tünele sızdırmaz** |
+| **D** bozuk sır dosyası | 4 | `pemf_secrets.json` bozuksa **yeni anahtar ÜRETİLMEZ** (üretilse tüm şifreli tıbbi kayıt kalıcı okunamaz olurdu), karantina kanıtı kalıcıdır, operatörün çıkış yolu açıktır |
+
+### Ölçülen sonuç (2026-09-17, EXE 15:16, 1.9.50)
+
+**48/48 geçti.** Öne çıkanlar:
+
+- **Yarım göç üründe toparlanıyor:** `db` YOK + `.plain.bak` VAR halinde backend ayağa kalkıyor,
+  DB geri geliyor ve SQLCipher'a göçüyor. **Yedek ACL-KİLİTLİYKEN de** toparlanıyor — 2026-09-13
+  saha arızasının tam sınıfı.
+- **Tek bayrak artık iki DB'yi birden yönetiyor:** `PEMF_KEEP_PLAIN_BACKUP=1` hem hasta hem
+  tedavi yedeğini emanete alıyor; eski ad `PEMF_KEEP_PLAIN_BAK` hâlâ onurlandırılıyor **ve iki
+  DB için de ayrı ayrı uyarı veriyor**. (A1 öncesi bu bayrak yalnız bir tarafı etkiliyordu.)
+- **Göç veriyi taşıyor:** "SQLCipher başlığı" yetmez — göç sonrası kayıt ürünün kendi API'sinden
+  okundu.
+- **Bozuk sır dosyası fail-closed:** yeni anahtar üretilmiyor, bozuk kopya karantinaya alınıyor,
+  dosya silinse bile karantina kanıtı kararı sürdürüyor; kanıt kaldırılınca cihaz normal açılıyor.
+
+### ⚠️ Bu koşumda ÜRÜN DEĞİL ÖLÇÜM ARACI yanlış çıktı (5 kez)
+
+Kayda geçiyor çünkü aynı tuzak tekrar edecek:
+
+| Belirti | Gerçek sebep |
+|---|---|
+| "Ana arayüz varlık sunmuyor" | Desen `/assets/` (Vite) aranıyordu; ürün **Expo** paketi, varlıklar `/_expo/static/...` |
+| "XAI zinciri çözülmüyor" | `em_ref_stats_eksik: []` (boş liste = **iyi haber**) `all()` ile kırmızı yapıyordu |
+| "Emanet log'u yok" | Backend `logs/backend_service.log`a yazıyor; yalnız stdout'a bakılmıştı |
+| "buildId boş" | `get_build_id()` launcher'sız açılışta **bilerek** boş döner — uydurma değer üretmez |
+| "Şema patladı" | `.plain.bak` elde uydurulmuş oyuncak şemayla kurulmuştu; şema **ürüne üretilir** |
+
+**Kural:** bir senaryo kırmızı döndüğünde önce *"ölçüm doğru yerde mi bakıyor"* sorulur; ürün
+suçlanmadan önce ölçüm aracı kanıtlanır.
+
+### Takımın kendi kapısı
+
+`tests/test_urun_senaryolari_kapisi.py` (8 test, hepsi mutasyonla kırmızı görüldü) betiği
+**koşturmaz** — CI'da EXE yoktur. Koruduğu şey takımın güvenilirliği: senaryo sayısının sessizce
+küçülmemesi, **karşıt-kanıt** senaryolarının (A0 · B9b · C0 · C9) durması, bayat-ikili nöbetinin
+`main`'den çağrılması ve bayatlıkta gerçekten **durması**, senaryo kodlarının benzersizliği,
+sabit kullanıcı yolu bulunmaması, çalışma alanının depo ağacının dışında kalması.
+
+> ⚠️ Karşıt-kanıt senaryoları neden zorunlu: C1–C4 "jeton zorlaması açıkken E-stop kapılanmıyor"
+> der. Jeton kapısı **hiç çalışmasaydı** da aynı yeşili verirlerdi. C0 (kapı ücretli analizi
+> gerçekten 402 ile reddediyor) olmadan o dördü hiçbir şey kanıtlamaz.
