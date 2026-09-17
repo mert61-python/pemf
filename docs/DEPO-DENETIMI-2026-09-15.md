@@ -312,6 +312,48 @@ Bunlar bakıldı ve **temiz** çıktı; bir daha uğraşılmasın:
 
 ---
 
+> ## ⛔ A2 · B4 · C5 — ÖLÇÜLDÜ, ÜÇÜ DE DÜZELTİLDİ (2026-09-17)
+>
+> ### A2 — "güvenlik-ilgili hesap" iddiası **TERSİNE DÖNDÜ**
+> Kopya gerçek (MD5 aynı, doğrulandı). Ama `phantom_cv`/`petri_cv` **araştırma
+> sağlayıcıları** ve `PEMF_ARASTIRMA_AIPRO=0` ile kapalı — `_arastirma_aipro_kapisi`
+> **409** döndürüyor: *"bobin sürülmez."* Üstelik **bayrağın var olma sebebi tam da bu
+> dosya**: `ai_pro_hedef.py:202` diyor ki `coord_transform` marker→kabin rotasyonunu
+> uygulamıyor ve kedi hattıyla aynı çerçeveyi ürettiği **kanıtlanmadı**.
+>
+> Yani kopya kod **hiç bobin sürmüyor** ve zaten yeniden yazılmayı bekliyor. Şimdi
+> birleştirmek, silinecek geometriyi birleştirmek olur. **Doğru an:** rotasyon düzeltmesi
+> yapılırken — o zaman zaten tek yerde yazılır. ⚠️ Ayrıca `ai_hub` PYZ dışında sevk
+> edildiği için doğrulaması **backend build** ister.
+>
+> ### B4 — doğru, ama ÖLÇÜT yanlıştı
+> | Dosya | Satır | **Kod** | Yorum |
+> |---|---|---|---|
+> | `api_server.py` | 5.135 | 3.530 | %22 |
+> | `ai_router.py` | 4.033 | 2.905 | %17 |
+> | `treatment_history_db.py` | 3.530 | 2.888 | %9 |
+>
+> Satır sayısı bu depoda yanıltıcı ölçüt: yorumlar denetim geçmişini taşıyor, **özellik
+> onlar**. Gerçek sorun `treatment_history_db.py` — **tek sınıfta 94 metot**.
+> `api_server.py` 96 fonksiyon/15 sınıfla modül olarak kalabilir.
+>
+> ### C5 — iddia **BAYAT**; kalan tek madde de yapılamaz
+> | | Denetim dedi | 2026-09-17 |
+> |---|---|---|
+> | `PEMF_BUILD` | 5,3 GB | **yok** |
+> | `pf/android/app/build` | 2,86 GB | **yok** |
+> | `build_tools/Output` | 3,49 GB | **yok** |
+> | `launcher/target` | 11,34 GB | **6,9 GB — GERİ GELMİŞ** |
+>
+> Üçü zaten temiz. Asıl bulgu: **`launcher/target` silmekle çözülmüyor**, her `cargo`
+> koşumunda geri geliyor (`.gitignore`da ama diskte).
+>
+> ⚠️ **`CARGO_TARGET_DIR` ile ağaç dışına almak YAPILMADI — ölçüldü, kırardı:**
+> `.github/workflows/launcher.yml` satır **175** ve **190** `launcher/target/release/bundle`
+> yolunu sabit yazıyor. Üstelik o workflow yalnız `launcher-v*` etiketiyle koşuyor —
+> yani **yayın**; donmuş durumda düzeltme doğrulanamaz. Doğrulanamayan değişiklik yapılmadı.
+> Disk geri kazanımı için bugünkü yol: `cd launcher && cargo clean`.
+
 ## 5. Öncelikli plan
 
 **Hemen (senin kararın gereken):**

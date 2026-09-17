@@ -53,12 +53,14 @@ yapılmalı — birleştirme zaten bu kod yolunu elden geçiriyor.
 
 **Kim:** Ben
 
-### A2 · MD5 birebir kopya CV kodu — biri düzeltilince diğeri sürükleniyor
+### ⛔ A2 · MD5 birebir kopya CV kodu — **ERTELENDİ, iddia tersine döndü** (2026-09-17)
 | | |
 |---|---|
 | **Kanıt (ölçüldü)** | `51263a20…` → `ai_hub/inference_em_fantom/phantom_cv/coord_transform.py` **=** `ai_hub/inference_petri_dish/petri_cv/coord_transform.py` (326 satır)<br>`e3e8fb06…` → aynı ikilinin `mqtt_publish.py`'leri (144 satır)<br>`cabin_config.py`: 367 satırın **366'sı aynı**, tek fark `mqtt_client_id` varsayılanı |
 | **Neden arıza** | `coord_transform` = bobin/hedef geometrisi. Bir taraftaki düzeltme diğerinde kalmaz. Depo bunu **biliyor** ve kaldırmak yerine teste bağlamış — kapı yalnız *unutulunca* kırılıyor, yani arızayı önlemiyor, haber veriyor |
-| **İş** | `ai_hub/cv_ortak/` paketi; `client_id` çağıran tarafın parametresi olur |
+| ⛔ **ÖLÇÜLDÜ — "güvenlik-ilgili" İDDİASI YANLIŞ** | `phantom_cv`/`petri_cv` **araştırma sağlayıcıları**, `PEMF_ARASTIRMA_AIPRO=0` ile kapalı; `_arastirma_aipro_kapisi` **409** döndürüyor: *"bobin sürülmez"*. Üstelik **bayrağın sebebi tam da bu dosya** — `ai_pro_hedef.py:202`: `coord_transform` marker→kabin rotasyonunu uygulamıyor, kedi hattıyla aynı çerçeveyi ürettiği **kanıtlanmadı**. Yani kopya kod **hiç bobin sürmüyor** |
+| **Karar** | **ERTELENDİ.** Şimdi birleştirmek, yeniden yazılacak geometriyi birleştirmek olur. Doğru an: rotasyon düzeltmesi. ⚠️ Doğrulaması `ai_hub` PYZ dışında sevk edildiği için **backend build** ister |
+| **Eski iş (askıda)** | `ai_hub/cv_ortak/` paketi; `client_id` çağıran tarafın parametresi olur |
 | **Kim** | Ben |
 
 ### ✅ A3 · Bu oturumun 14 yeni testi CI'ı hiç görmedi (KAPANDI)
@@ -128,7 +130,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
 | ✅ **B2** | `THIRD_PARTY_LICENSES.md` yenile — **YAPILDI** (26 → 113 bileşen) | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
 | ✅ **B3** | `README.md:188` sürüm tablosu — **YAPILDI** (türetmek yerine KALDIRILDI + kapı) | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
-| **B4** | Dev dosyaları böl | `api_server.py` **5.139** · `ai_router.py` **4.023** · `treatment_history_db.py` **3.701** (tek sınıfta 95 metot: seans + coil-run + sensör + denetim izi + outbox + şema göçü + PII) | Ben · **en son** |
+| ⚠️ **B4** | Dev dosyaları böl — **ÖLÇÜT DÜZELTİLDİ**: satır değil, `treatment_history_db` tek sınıfta 94 metot | `api_server.py` **5.139** · `ai_router.py` **4.023** · `treatment_history_db.py` **3.701** (tek sınıfta 95 metot: seans + coil-run + sensör + denetim izi + outbox + şema göçü + PII) | Ben · **en son** |
 
 ---
 
@@ -140,7 +142,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | ⚠️ **C2** | `training_archive/` + `bin/` → **SAHİP KARARI BEKLİYOR** | `.git` **347 MB**; her klon indiriyor. `cloudflared.exe` 52 MB. ✅ `ecg_signals.npy` **ÖLÇÜLDÜ: KVKK riski YOK** — MIT-BIH (PhysioNet), PII içermiyor. Yerine **atıf** açığı çıktı ve kapatıldı |
 | ⚠️ **C3** | Ölü dizinleri kaldır — **LİSTE YANLIŞTI, SİLME YAPILMADI** | `frontend/` 0 · `lattekurulum/` 0 · `website/` 3 · `web_static/` 3 · `dema-terapi-simülatörü/` 12 · `pemf_vet_landing/` 13 takipli. `ai/config.py` (349 satır) üretimde **sıfır** import — tek tüketicisi donmuş arşiv |
 | ✅ **C4** | Bayat belgeler — **YAPILDI** (bayat olan belgeler değil, ETİKETLERİ) | `PEMF_SISTEM_RAPORU.md` (2026-03) · `RUNBOOK.md` (08-15, ESP sökülmesi sonrası güncellenmemiş) · `frontend_version.json` (2026-06-27) · `LAUNCHER_SPEC.md` (07-29, launcher o gün 1.9.9'du) |
-| **C5** | Derleme çıktılarını ağaç dışına | `PEMF_BUILD` · `launcher/target` · `pf/android/app/build` — birlikte 19,5 GB'dı |
+| ⛔ **C5** | **YAPILAMAZ** — üçü zaten temiz; `launcher/target` taşımak `launcher.yml`i kırar (yayın, donmuş). Eski iş: derleme çıktılarını ağaç dışına | `PEMF_BUILD` · `launcher/target` · `pf/android/app/build` — birlikte 19,5 GB'dı |
 
 ---
 
