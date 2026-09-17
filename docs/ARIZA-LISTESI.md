@@ -117,9 +117,9 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | # | İş | Kanıt |
 |---|---|---|
 | ✅ **C1** | `firmware_cikti/` → `.gitignore` — **YAPILDI** | `.gitignore`'da **yok**, `git status`'ta `?? firmware_cikti/` |
-| **C2** | `training_archive/` (299 MB / 434 takipli) + `bin/` (61 MB / 14 takipli ikili) → LFS ya da ayrı depo | `.git` **347 MB**; her klon indiriyor. `cloudflared.exe` 52 MB. ⚠️ `training_archive/ai_data/real_clinical_data/ecg_signals.npy` — PUBLIC depoda **"gerçek klinik veri"** adlandırması ayrıca doğrulanmalı |
-| **C3** | Ölü dizinleri kaldır | `frontend/` 0 · `lattekurulum/` 0 · `website/` 3 · `web_static/` 3 · `dema-terapi-simülatörü/` 12 · `pemf_vet_landing/` 13 takipli. `ai/config.py` (349 satır) üretimde **sıfır** import — tek tüketicisi donmuş arşiv |
-| **C4** | Bayat belgeler | `PEMF_SISTEM_RAPORU.md` (2026-03) · `RUNBOOK.md` (08-15, ESP sökülmesi sonrası güncellenmemiş) · `frontend_version.json` (2026-06-27) · `LAUNCHER_SPEC.md` (07-29, launcher o gün 1.9.9'du) |
+| ⚠️ **C2** | `training_archive/` + `bin/` → **SAHİP KARARI BEKLİYOR** | `.git` **347 MB**; her klon indiriyor. `cloudflared.exe` 52 MB. ✅ `ecg_signals.npy` **ÖLÇÜLDÜ: KVKK riski YOK** — MIT-BIH (PhysioNet), PII içermiyor. Yerine **atıf** açığı çıktı ve kapatıldı |
+| ⚠️ **C3** | Ölü dizinleri kaldır — **LİSTE YANLIŞTI, SİLME YAPILMADI** | `frontend/` 0 · `lattekurulum/` 0 · `website/` 3 · `web_static/` 3 · `dema-terapi-simülatörü/` 12 · `pemf_vet_landing/` 13 takipli. `ai/config.py` (349 satır) üretimde **sıfır** import — tek tüketicisi donmuş arşiv |
+| ✅ **C4** | Bayat belgeler — **YAPILDI** (bayat olan belgeler değil, ETİKETLERİ) | `PEMF_SISTEM_RAPORU.md` (2026-03) · `RUNBOOK.md` (08-15, ESP sökülmesi sonrası güncellenmemiş) · `frontend_version.json` (2026-06-27) · `LAUNCHER_SPEC.md` (07-29, launcher o gün 1.9.9'du) |
 | **C5** | Derleme çıktılarını ağaç dışına | `PEMF_BUILD` · `launcher/target` · `pf/android/app/build` — birlikte 19,5 GB'dı |
 
 ---
@@ -191,3 +191,23 @@ takıldı — `sir-korumasi` ve `--skip-worktree` sözcükleri *yardım metinler
 gerçek çağrı silinse bile kapı yeşil kalıyordu; ikisi de AST'ye/dize-soyulmuş koda pinlendi.
 B3'te regex `127.0.0.1` IP'sini sürüm sandı ve sarılmış prozun ikinci satırı bağlamdan koptu.
 B2'de yeni kapıyı yanlışlıkla `skipif`li dosyaya koymuştum — tam da CI'da atlanacaktı.
+
+### 2026-09-17 turu — B1 · C4 · veri atfı · **üç denetim düzeltmesi**
+
+Bu turun en önemli çıktısı yeni iş değil, **kendi denetimimdeki hataları ölçerek bulmak** oldu.
+
+| # | İş | Sonuç |
+|---|---|---|
+| **B1** | Paket sınırları | `[project]` + `[build-system]` + 3 `__init__.py`. ⚠️ Sürüm **yazılmadı**, `VERSION`'dan türetildi (dördüncü kopya olurdu). `ai_hub` listeye **alınmadı** (84 MB + kod koruması kararı). Ürün doğrulaması: gerçek wheel üretildi — `pemf_backend-1.9.50-py3-none-any.whl`, 675 KB. **8 mutasyon** |
+| **C4** | Bayat belgeler | Dört belgenin **üçünde iddia yanlıştı**: belgeler güncel, **etiketleri** bayattı. `frontend_version.json`'daki `date` alanı kaldırıldı — `sync_versions.ps1` onu hiç yazmıyordu, kalıcı yalandı. **5 mutasyon** |
+| **veri atfı** | PhysioNet veri kümeleri | Dizin README'si + NOTICE'ta veri bölümü. Bölüm **üretecin önüne** konuldu; altına konsaydı bir sonraki koşuda sessizce silinirdi (üreteç gerçekten koşturulup doğrulandı). **4 mutasyon** |
+
+**Düzeltilen üç denetim hatası (hepsi benim):**
+
+1. **`ecg_signals.npy` KVKK riski** → **yanlış**. MIT-BIH (PhysioNet), PII yok. Gerçek açık **atıftı**: veriler kaynaksız yeniden dağıtılıyordu.
+2. **"Silinecekler" listesi** → **altı dizinin beşi CANLI**. `frontend/` ürünün ana React arayüzü (`app.mount("/")`), `dema-terapi-simülatörü/` EXE'nin içinde. Tavsiyeye uyulsaydı ürün boş sayfa sunardı. **Silme yapılmadı**, kapı yazıldı, iki belge düzeltildi.
+3. **"Bayat belgeler"** → üçünde iddia yanlış (yukarıda).
+
+**Kök hata:** denetimde *"0 takipli dosya"* ve *"son commit eski"* ölçütlerini **ölü** ile eşitlemiştim. Üretilen çıktı dizinleri git'te görünmez ama ürün onları sunar; elle yazılan etiketler bayatlar ama belgenin kendisi güncel olabilir.
+
+**Kapı yazarken kendi hatalarım (hepsi mutasyonla/CI ile yakalandı):** çıpa iki kez *yardım metnine* takıldı (A5) · regex `127.0.0.1`'i sürüm sandı, sarılmış proz bağlamdan koptu, "kapı hep boş dönsün" mutasyonu kaçtı (B3) · yeni kapıyı `skipif`li dosyaya koydum (B2) · `build-backend` silinmesi görünmedi (B1) · belge düzeltmesini "canlı" kelimesiyle aradım, bedavaya geçti (C3) · **üretilen çıktının varlığını şart koşup CI'ı kırdım** — öğrendiğim dersin tersi.
