@@ -187,7 +187,7 @@ envanterinin eksik olması ticari satışta doğrudan risk.
 > | `web_static/` | ⛔ CANLI | `PEMF_Backend_onedir.spec` datas döngüsünde |
 > | `lattekurulum/` | ⛔ CANLI | `build_installer.ps1` → VC++ redist hedefi |
 > | `pemf_vet_landing/` | ⚠️ referanslı | `tests/test_kontrol_bayti_kapisi.py` üretilmiş çıktı olarak listeler |
-> | `website/` | ✅ referanssız | tek gerçek aday (3 takipli dosya) |
+> | `website/` | ⛔ **SİLİNMEYECEK** | referanssız **ama** kendi `README.md`si *"silme, bırak — tarihsel referans"* diyor. v1.2 installer indirme sayfası. **Denetimi yazarken içindeki README'yi okumamışım** — karar kaydı da bir referanstır |
 >
 > ⚠️ **`frontend/` silinseydi** backend `/` adresinde *"Frontend derlemesi bulunamadı!"*
 > uyarısı basıp **boş sayfa** sunardı — klinikte arayüz açılmazdı ve sebebi "silinen ölü

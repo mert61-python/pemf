@@ -18,7 +18,9 @@ REFERANS taramasiyla olculdu; ALTIDAN BESI CANLI cikti:
     lattekurulum/              ⛔ CANLI    build_installer.ps1: VC++ redist hedef dizini
     pemf_vet_landing/          ⚠️ REFERANSLI tests/test_kontrol_bayti_kapisi.py URETILMIS
                                           ciktisi olarak listeliyor
-    website/                   ✅ referanssiz (tek gercek aday, 3 takipli dosya)
+    website/                   ⛔ KENDI README'si "silme, birak" DIYOR (2026-09-17)
+                                          — referanssiz ama KARARA BAGLANMIS: v1.2
+                                          installer indirme sayfasi, tarihsel referans
 
 Yani "0 takipli dosya" ya da "son commit eski" olmak OLU demek DEGILDIR: uretilen cikti
 dizinleri git'te gorunmez ama URUN onlari sunar. Denetimde bu ayrimi yapmamistim.
@@ -153,3 +155,34 @@ def test_KARSIT_KANIT_denetim_belgesi_DUZELTILDI():
         )
         for d in ("frontend", "dema-terapi"):
             assert d in metin, f"{yol} duzeltmesi {d} dizininden soz etmiyor"
+
+
+def test_KRITIK_website_KENDI_KARARINI_tasiyor():
+    """⚠️ ONUNCU DENETIM HATASI — ve en utanc vericisi.
+
+    `website/`i denetimde "donmus, silinecek" diye listelemistim. Dizinde UC dosya var ve
+    BIRI tam da bu karari tasiyor:
+
+        website/README.md -> "Bugun nereye deploy ediliyor: hicbir yere. Tarihsel referans
+                              olarak duruyor — **silme, birak** (runtime ile ilgisi yok)."
+
+    Yani dizin ZATEN incelenmis, ZATEN karara baglanmis. Ben denetimi yazarken icindeki
+    README'yi OKUMAMISIM. "Referanssiz" olmasi onu silinebilir yapmiyor: karar kaydi da
+    bir referanstir.
+
+    Bu test o karari kilitler. Gercekten silinecekse ONCE README'deki karar degistirilmeli.
+    """
+    p = KOK / "website" / "README.md"
+    if not p.exists():
+        # ⚠️ SESSIZ `return` DEGIL: "dosya yoksa gecerim" diyen bir kapi, dizin bir gun
+        # sessizce silindiginde KIRMIZI donmez ve kaybi kimse gormez — tam da bu dosyanin
+        # anlattigi hatanin ta kendisi. Atlama GORUNUR olmali.
+        pytest.skip(
+            "website/README.md YOK -> dizin kaldirilmis olabilir. Icinde bir KARAR kaydi "
+            "vardi; kaldirma bilincliyse denetim belgesindeki satiri da guncelleyin."
+        )
+    metin = p.read_text(encoding="utf-8").lower()
+    assert "silme" in metin, (
+        "website/README.md artik 'silme, birak' kararini tasimiyor -> ya karar degisti "
+        "(o zaman bu kapi guncellenmeli) ya da karar kaydi kayboldu"
+    )
