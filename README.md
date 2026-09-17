@@ -185,5 +185,10 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 | **Android imzalama** | **Release keystore üretildi** (4096-bit RSA, 2053'e kadar geçerli). APK artık release-imzalı. ⚠️ Anahtar yedeği ve uyarılar: [keys/README.md](keys/README.md) — kaybolursa uygulama bir daha güncellenemez. |
 | **Site** | İndirme öncesi kayıt/giriş kapısı. Windows client `launcher-v1.9.9`; Android **kendi etiketine** taşındı — eskiden mac/linux ile ortak etiket kullandığından site APK güncellense bile hep eski sürümü veriyordu. |
 
-**Yayındaki sürümler:** Backend/App `1.9.5` · Launcher `1.9.9` · Mobil `2.3.3 (versionCode 10)`
-Sürüm tek kaynağı: `versions.json` → `build_tools/sync_versions.ps1`
+Yayındaki sürümler için **[`versions.json`](versions.json)**'a bakın — bu belgeye sürüm yazılmaz
+(bkz. yukarıdaki *Sürümler* bölümü). Senkronizasyon: `build_tools/sync_versions.ps1`.
+
+> ⚠️ Burada elle yazılmış bir sürüm tablosu vardı ve **üçüncü kez** bayatlamıştı: `1.9.5 /
+> 1.9.9 / 2.3.3` yazarken gerçek sürümler `1.9.50 / 1.9.51 / 2.3.34`tü. Aynı belgenin 47.
+> satırı zaten "bu belgeye sürüm yazılmaz" diyordu — kural vardı, **onu zorlayan kapı yoktu**.
+> Artık var: `tests/test_readme_surum_bayatlamaz.py`.
