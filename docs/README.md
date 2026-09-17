@@ -9,7 +9,7 @@ PEMF Vet projesinin teknik dokümanları. (Kod alt-sistemleri için ilgili klas�
 | [`LAUNCHER_SPEC.md`](LAUNCHER_SPEC.md) | Launcher (PEMF Vet Client) sözleşmesi — Windows/macOS/Linux, tek kaynak, geriye-uyum | Launcher üzerinde çalışan |
 | [`RUNBOOK.md`](RUNBOOK.md) | Saha **operasyon / olay-müdahale** rehberi (klinik PC, `PemfBackend` NSSM servisi, hızlı komutlar) | Saha/destek |
 | [`VERIFICATION.md`](VERIFICATION.md) | Üretim **doğrulama checklist'i** (çalıştırılabilir adımlar; cihaz/panel gerektirenler işaretli) | Sürüm-öncesi doğrulama |
-| [`PEMF_SISTEM_RAPORU.md`](PEMF_SISTEM_RAPORU.md) | Kapsamlı **tam sistem raporu** (2026-03) — üst-düzey genel bakış | Yönetici/genel |
+| [`PEMF_SISTEM_RAPORU.md`](PEMF_SISTEM_RAPORU.md) | Kapsamlı **tam sistem raporu** — üst-düzey genel bakış | Yönetici/genel |
 | [`TEMIZ-MAKINE.md`](TEMIZ-MAKINE.md) | **Temiz makinede sıfırdan** — kur-kullan (Yol A) ve build/yayın (Yol B, sır geri-yükleme) akışlarını ayrık anlatır | Yeni makine / build |
 | [`JETON-SISTEMI.md`](JETON-SISTEMI.md) | **Jeton (token) ücretlendirme** sistemi — sahip kararı; ⚠️ `PEMF_TIER_ENFORCED` varsayılan **KAPALI** (bugün üretimde koşmuyor) | Ürün/ücretlendirme |
 | [`AGPL-KARARI.md`](AGPL-KARARI.md) | Ultralytics **AGPL-3.0** durum tespiti + karar notu (**AÇIK**; `tests/test_license_surface.py` yüzey kapısı) | Sahip/hukuk |

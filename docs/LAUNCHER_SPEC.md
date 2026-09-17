@@ -1,6 +1,10 @@
 # PEMF Vet Client — Launcher Sözleşmesi (yeniden yazım)
 
-**Durum:** taslak · **Karar tarihi:** 2026-07-21
+**Durum:** karar verildi · **İlk karar:** 2026-07-21
+
+> ⚠️ Başlık uzun süre "taslak / 2026-07-21" kaldı ama gövde güncellendi: 125. ve 136.
+> satırlarda **2026-09-13 ölçümleri** var. Elle yazılan durum etiketleri gövdeyle birlikte
+> güncellenmez — tarih için git geçmişine bakın. Kapı: `tests/test_belge_etiketleri_bayatlamaz.py`
 **Kapsam:** Windows + macOS + Linux, **tek kaynak** · **Geriye dönük uyumlu**
 
 ## Neden yeniden yazılıyor

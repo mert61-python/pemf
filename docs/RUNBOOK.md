@@ -62,7 +62,7 @@ curl "http://127.0.0.1:8000/api/audit/events?event_type=ai_log.delete_all"
 | **Mobil bağlanmıyor (LAN)** | Firewall TCP 8000 + UDP mDNS; aynı subnet? `/api/health` yerelden 200 mü? |
 | **Mobil bağlanmıyor (uzak)** | `/api/health` → `tunnelUrl` dolu mu? cloudflared çalışıyor mu? `PEMF_ENABLE_TUNNEL=1`? Token istemcide var mı (401)? |
 | **"Eksik API anahtarı" (401)** | LAN'da olmamalı (muaf). Uzakta: mobil bir kez LAN'a girip token çeksin (`/api/auth/token`) veya 6-haneli pairing kodu. |
-| **MQTT/ESP bobinleri ölü** | `Get-Service mosquitto` Running? `curl /api/gateway/status`. Hotspot aktif mi (device modunda logon-task)? |
+| **MQTT/ESP bobinleri ölü** | ⚠️ **ÖNCE BUNU KONTROL ET:** ESP **2026-09-11'de devre dışı bırakıldı** — `PEMF_ESP_ENABLED=0` ise bobinlerin sessiz olması **arıza değil, beklenen durumdur**; kovalamayın. Bayrak `1` ise: `Get-Service mosquitto` Running? `curl /api/gateway/status`. Hotspot aktif mi (device modunda logon-task)? |
 | **STM bobinleri ölü** | `PEMF_STM_PORT=auto` ST-Link'i buldu mu? Sürücü? `/api/health` → `stmConnected`. |
 | **atRestEncrypted=false (beklenmedik)** | `PEMF_ENCRYPT_AT_REST=1` set mi? sqlcipher3 wheel EXE'de mi? Anahtar (`.sqlcipher_key`/keyring) okunuyor mu? PatientDB fail-closed → başlatma reddeder. |
 | **Kötü güncelleme sonrası sorun** | Aşağıdaki **"Kötü güncelleme"** bölümüne bakın. ⚠️ `/api/update/rollback` **KULLANMAYIN** — o uç eski (kapatılmış) EXE kanalına aittir ve hiçbir şey yapmaz. |
