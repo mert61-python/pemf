@@ -102,18 +102,29 @@ def test_KRITIK_lattekurulum_KURULUM_yolunda():
 
 
 @pytest.mark.parametrize("dizin", ["frontend", "dema-terapi-simülatörü"])
-def test_KARSIT_KANIT_sunum_dizinleri_AGACTA_duruyor(dizin: str):
-    """Kod onlari sunuyor; dizinin kendisi de yerinde olmali.
+def test_KARSIT_KANIT_sunum_dizini_VARSA_saglam(dizin: str):
+    """Derleme ciktisi MEVCUTSA eksiksiz olmali (bos `dist` = sessiz 404).
 
-    ⚠️ `dist` YOKSA urun sessizce bos sayfa/404 verir — bu tam olarak denetim tavsiyesine
-    uyulmus olmasinin belirtisidir.
+    ⚠️ BU TESTIN ILK HALI CI'I KIRDI — ve hatasi ogrendigim dersin TERSIYDI.
+    `dist/`in VARLIGINI sart kosuyordum; oysa bu dosyanin kendi konusu "uretilen cikti
+    dizinleri git'te GORUNMEZ". Temiz checkout'ta (CI) `frontend/dist` YOKTUR, cunku
+    `.gitignore`dadir. Kosu 35209803805 tam bu yuzden kirmizi dondu:
+
+        AssertionError: frontend/dist AGACTA YOK
+
+    ⚠️ CI'DA DOGRULANABILIR DEGISMEZ, DIZININ VARLIGI DEGIL KODUN REFERANSIDIR — onlari
+    yukaridaki dort test kosulsuz olcuyor ve HER YERDE kosuyor. Burasi yalnizca yerel
+    agacta ek bir emniyet: cikti varsa `index.html`i de olmali (yarim derleme = `/`
+    adresinde bos sayfa).
     """
     p = KOK / dizin / "dist"
-    assert p.is_dir(), (
-        f"{dizin}/dist AGACTA YOK -> urun o yolu sunamaz. Bilerek kaldirildiysa once "
-        "`api_server.py`deki mount kaldirilmali ve bu kapi guncellenmeli."
+    if not p.is_dir():
+        pytest.skip(
+            f"{dizin}/dist yok — temiz checkout/CI (uretilen cikti, .gitignore'da). Asil koruma: kod referansi testleri."
+        )
+    assert (p / "index.html").exists(), (
+        f"{dizin}/dist VAR ama index.html YOK -> mount bos doner; yarim derleme olabilir"
     )
-    assert (p / "index.html").exists(), f"{dizin}/dist/index.html yok -> mount bos doner"
 
 
 def test_KARSIT_KANIT_kapi_YORUMLA_kandirilmaz():
