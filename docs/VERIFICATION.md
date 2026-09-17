@@ -7,8 +7,8 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | # | Konu | Durum | Nasıl |
 |---|------|-------|-------|
 | 1 | Firmware güvenlik satürasyonu | ⏳ donanım | Bench testi (aşağıda) |
-| 2 | SQLCipher sahada aktif | ✅ **DOĞRULANDI (2026-09-13)** | `C:\ProgramData\PEMF_System\PEMF_GUI` → `patients.db` + `pemf_treatment_history.db` **ŞİFRELİ**. ⚠️ Ama anahtarın makine-dışı kopyası YOK — §2a |
-| 2a | ⚠️ **Anahtar emaneti** | ❌ **AÇIK (P0 sınıfı)** | Anahtar yalnız `pemf_secrets.json → auto.sqlcipher_key` (DPAPI, **makineye bağlı**). `~/pemf-sirlar.pemfsec` onu TAŞIMIYOR → makine kaybında veri **kalıcı okunamaz**. Araç: `scripts/hasta_anahtari_emanet.py` |
+| 2 | SQLCipher sahada aktif | ✅ **DOĞRULANDI (2026-09-13)** | `C:\ProgramData\PEMF_System\PEMF_GUI` → `patients.db` + `pemf_treatment_history.db` **ŞİFRELİ**. ⚠️ Eskiden burada "anahtarın makine-dışı kopyası YOK" yazıyordu — **BAYAT**: Vault emaneti kurulu ve 2026-09-17'de tatbikatla doğrulandı (§2a) |
+| 2a | ⚠️ **Anahtar emaneti** | ✅ **EMANET GÜNCEL + TATBİKAT GEÇTİ (2026-09-17)** · ⏳ makine-dışı kopya **sahipte** | ⚠️ Bu satır **"❌ AÇIK (P0)"** yazıyordu — **BAYATTI**: emanet 2026-09-13'te kuruldu. 2026-09-17'de ölçüldü: Vault kopyası güncel **ve** `--tatbikat` gerçek şifreli DB'yi AÇTI. Kalan gerçek açık: kurtarma setinin 3 parçasından 2'si hâlâ **bu makinede** (§2a) |
 | 3 | Supabase RLS canlı | ✅ **DOĞRULANDI (yeniden: 2026-09-13)** | 6 tablonun altısı da anon'a **401/42501**; RPC kapısı çalışıyor |
 | 4 | Cloudflare NAMED tünel | ⏳ **HÂLÂ ÖLÇÜLMEDİ** | ⚠️ 2026-09-13'te elle başlatılan backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL**. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl`. NAMED için Cloudflare token'ı gerekir (sahipte) |
 | 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
@@ -573,3 +573,96 @@ sabit kullanıcı yolu bulunmaması, çalışma alanının depo ağacının dı�
 > ⚠️ Karşıt-kanıt senaryoları neden zorunlu: C1–C4 "jeton zorlaması açıkken E-stop kapılanmıyor"
 > der. Jeton kapısı **hiç çalışmasaydı** da aynı yeşili verirlerdi. C0 (kapı ücretli analizi
 > gerçekten 402 ile reddediyor) olmadan o dördü hiçbir şey kanıtlamaz.
+
+---
+
+## ✅ 2a — Hasta anahtarı emaneti: ÖLÇÜLDÜ (2026-09-17) — etiket BAYATTI
+
+**Bu satır uzun süre "❌ AÇIK (P0 sınıfı)" diye duruyordu. Yanlıştı.** Emanet 2026-09-13'te
+kuruldu (`docs/VAULT-ANAHTAR-EMANETI.md`); tablo satırı güncellenmemişti. Denetim/doğrulama
+belgelerinde **durum satırı kanıt değildir** — bu, aynı sınıfın bu depodaki 11. vakası.
+
+Yanlış etiketin bedeli soyut değil: "❌ AÇIK" okuyan biri **zaten kurulu ve geçerli** bir
+emaneti yeniden kurmaya girişir; `--yaz` ile yeni sürüm yazmak zararsızdır ama `--kur`/init
+yolunda yanlış bir adım **mevcut emaneti kullanılamaz** hâle getirebilirdi. Bayat etiket,
+gerçek açık maddeyi (makine-dışı kopya) de gizliyordu.
+
+### Bugün ölçülen (komutlar ve çıktıları)
+
+```bash
+docker compose -f docker/docker-compose.vault.yml up -d
+python scripts/vault_emanet.py --ac        # Vault her restart'ta MÜHÜRLÜ başlar
+python scripts/vault_emanet.py --durum
+#   MUHURLU : False
+#   KV mount: VAR
+#   EMANET  : VAR (surum 1) alanlar=['_not','_veri_koku',
+#             'auto.patient_fernet_key','auto.sqlcipher_key']
+
+python scripts/vault_emanet.py --dogrula
+#   ✓ auto.sqlcipher_key      : guncel
+#   ✓ auto.patient_fernet_key : guncel
+#   SONUC: EMANET GUNCEL.
+
+python scripts/vault_emanet.py --tatbikat   # YENİ — aşağıya bakın
+#   patients.db                ACILDI (2 tablo)   patients=1
+#   pemf_treatment_history.db  ACILDI (15 tablo)  treatment_sessions=12
+#   KARSIT KANIT: yanlis anahtar ✓ reddedildi (DatabaseError)
+#   SONUC: TATBIKAT BASARILI — emanet gercekten kurtariyor.
+```
+
+### ⚠️ Neden `--dogrula` YETMİYOR — `--tatbikat` eklendi
+
+`--dogrula` yalnız **iki değerin aynı olduğunu** söyler. Felaket anında iş görecek olan şey
+**zincirin tamamıdır**: kurtarma token'ı → Vault → anahtar → SQLCipher → okunabilir tablo.
+Aradaki halkalar (`sqlcipher3` binding sürümü, `PRAGMA key` tırnaklaması, dosya biçimi)
+sessizce bozulabilir ve parmak izi karşılaştırması bunu **göremez**.
+
+`--tatbikat` o zinciri koşturur. Sözleşmesi:
+
+- Anahtar **hiçbir biçimde yazdırılmaz** (ne tam ne kısmi).
+- Gerçek DB'ye **dokunulmaz** — geçici bir kopya açılır, sonunda silinir.
+- PII basılmaz; yalnız **satır sayısı**.
+- ⚠️ **Karşıt kanıt zorunlu:** yanlış anahtarın reddedildiği de ölçülür. O olmadan "açıldı"
+  hiçbir şey kanıtlamaz — binding anahtarı yok sayıyor olabilirdi.
+
+Mutasyonla doğrulandı: emanetteki anahtara tek karakter eklendiğinde tatbikat **her iki
+veritabanında da `ACILAMADI`** diyor ve **çıkış kodu 1** veriyor.
+
+### ⏳ KALAN GERÇEK AÇIK — makine-dışı kopya (SAHİP)
+
+Kurtarma **üç parçanın birlikte** olmasını gerektirir. Bugünkü ölçüm:
+
+| # | Parça | Nerede | Durum |
+|---|---|---|---|
+| 1 | Kurtarma token'ı (10 yıl, yalnız-okuma) | parola yöneticisi | ⏳ **sahipte — ölçülemez** |
+| 2 | `~/pemf-vault-kurtarma.json` (unseal + kök token) | **bu makinede** | ⚠️ tek kopya |
+| 3 | `pemf-vault-veri` Docker birimi (emanetin kendisi) | **bu makinede** | ⚠️ tek kopya |
+
+> ⚠️ **Üçü de aynı diskteyse emanet disk kaybına karşı KORUMAZ.** Bugün 2 ve 3 bu makinede.
+> Bu, emanetin kurulu olmadığı anlamına gelmez — ama **korumanın henüz tamamlanmadığı**
+> anlamına gelir. Yapılacak (sahip): 2 ve 3'ü başka bir fiziksel ortama kopyalayın.
+
+### ⚠️ Emaneti SESSİZCE yok eden komutlar
+
+Emanet bir Docker **adlandırılmış birimindedir** (`pemf-vault-veri`). Şunlar onu siler ve
+hiçbir uyarı vermez — sildikten sonra `--durum` yalnızca "EMANET: YOK" der:
+
+```bash
+docker compose -f docker/docker-compose.vault.yml down -v   # ⚠️ -v BİRİMİ SİLER
+docker volume rm pemf-vault-veri
+docker volume prune -a          # konteyner kaldırılmışsa birimi "kullanılmıyor" sayar
+# Docker Desktop → Troubleshoot → "Clean / Purge data"
+```
+
+Konteyneri durdurmak için **`down` değil `stop`** kullanın:
+`docker compose -f docker/docker-compose.vault.yml stop`
+
+> ⚠️ Vault'un **denetim kaydı fail-closed**tır: `vault-log` birimi silinirse Vault yazamaz
+> ve **istekleri reddeder** — emanet yerinde olsa bile okunamaz hâle gelir.
+
+### Ne sıklıkla
+
+`--dogrula` ucuzdur (Vault + parmak izi). `--tatbikat` da ucuzdur ama gerçek DB kopyalar.
+**İkisini de** sürüm öncesi ve anahtar/paket değişikliklerinden sonra koşturun. Backend
+Vault'tan okumadığı için (sahip kararı) emanet **sessizce** eskiyebilir; onu yakalayacak
+başka hiçbir mekanizma yoktur.

@@ -81,13 +81,57 @@ açın.
 ```powershell
 python scripts/vault_emanet.py --durum      # muhurlu mu, emanet var mi
 python scripts/vault_emanet.py --ac         # yeniden baslatma sonrasi ac
-python scripts/vault_emanet.py --dogrula    # Vault kopyasi yerelle AYNI mi
+python scripts/vault_emanet.py --dogrula    # Vault kopyasi yerelle AYNI mi (parmak izi)
+python scripts/vault_emanet.py --tatbikat   # KURTARMA TATBIKATI: emanet GERCEKTEN aciyor mu
 python scripts/vault_emanet.py --yaz        # anahtar degistiyse emaneti TAZELE
 ```
 
 ⚠️ **`--dogrula`yı ara ara koşturun.** Anahtar bir gün yenilenirse (makine değişimi, sır
 dosyası sıfırlanması) Vault'taki kopya **sessizce eskir** ve kurtarma işe yaramaz. Komut
 parmak izlerini kıyaslar; anahtarı ekrana yazmaz.
+
+### ⚠️ `--dogrula` YETMEZ — `--tatbikat` da koşturun (2026-09-17'de eklendi)
+
+`--dogrula` yalnız **iki değerin aynı olduğunu** söyler. Felaket anında iş görecek olan şey
+**zincirin tamamıdır**: token → Vault → anahtar → SQLCipher → okunabilir tablo. Aradaki
+halkalar (`sqlcipher3` binding sürümü, `PRAGMA key` tırnaklaması, dosya biçimi) sessizce
+bozulabilir ve parmak izi karşılaştırması bunu **göremez**.
+
+`--tatbikat` o zinciri gerçekten koşturur:
+
+```
+[1] Vault'tan anahtar alindi (uzunluk 43; DEGER BASILMAZ)
+[2] veri koku: C:\ProgramData\PEMF_System\PEMF_GUI
+[3] emanet anahtariyla acma:
+    patients.db                ACILDI (2 tablo)   patients=1
+    pemf_treatment_history.db  ACILDI (15 tablo)  treatment_sessions=12
+[4] KARSIT KANIT — yanlis anahtar reddedilmeli:
+    ✓ reddedildi (DatabaseError)
+SONUC: TATBIKAT BASARILI — emanet gercekten kurtariyor.
+```
+
+Sözleşmesi: anahtar **hiç yazdırılmaz**, gerçek DB'ye **dokunulmaz** (geçici kopya açılır,
+sonra silinir), PII basılmaz (yalnız satır sayısı). ⚠️ **Karşıt kanıt zorunludur**: yanlış
+anahtarın reddedildiği de ölçülür — o olmadan "açıldı" hiçbir şey kanıtlamaz.
+
+Mutasyonla doğrulandı (2026-09-17): emanetteki anahtara tek karakter eklendiğinde tatbikat
+her iki veritabanında da `ACILAMADI` diyor ve **çıkış kodu 1** veriyor.
+
+### ⚠️ Emaneti SESSİZCE yok eden komutlar
+
+Emanet bir Docker **adlandırılmış birimindedir** (`pemf-vault-veri`). Şunlar onu uyarısız siler:
+
+```powershell
+docker compose -f docker/docker-compose.vault.yml down -v   # ⚠️ -v BIRIMI SILER
+docker volume rm pemf-vault-veri
+docker volume prune -a          # konteyner kaldirilmissa birimi "kullanilmiyor" sayar
+# Docker Desktop -> Troubleshoot -> "Clean / Purge data"
+```
+
+Durdurmak için **`down` değil `stop`**: `docker compose -f docker/docker-compose.vault.yml stop`
+
+⚠️ Vault'un **denetim kaydı fail-closed**tır: `vault-log` birimi silinirse Vault yazamaz ve
+**istekleri reddeder** — emanet yerinde olsa bile okunamaz hâle gelir.
 
 ### Emanetin kopyasını makine dışına alma
 

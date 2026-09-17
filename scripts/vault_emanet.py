@@ -19,8 +19,15 @@ KULLANIM
     python scripts/vault_emanet.py --kur            # KV + denetim + kurtarma politikasi
     python scripts/vault_emanet.py --yaz            # yerel anahtarlari Vault'a YEDEKLE
     python scripts/vault_emanet.py --token-uret     # 10 yillik KURTARMA token'i uret
-    python scripts/vault_emanet.py --dogrula        # Vault'taki kopya yerelle AYNI mi
+    python scripts/vault_emanet.py --dogrula        # Vault'taki kopya yerelle AYNI mi (parmak izi)
+    python scripts/vault_emanet.py --tatbikat       # KURTARMA TATBIKATI: emanet GERCEKTEN aciyor mu
     python scripts/vault_emanet.py --geri-al        # Vault'taki anahtari EKRANA yaz (kurtarma)
+
+⚠️ `--dogrula` ile `--tatbikat` AYNI SEY DEGILDIR. İlki iki degerin ayni oldugunu soyler;
+ikincisi zincirin tamamini (Vault -> anahtar -> SQLCipher -> okunabilir tablo) gercek DB'nin
+bir KOPYASI uzerinde kosturur. Aradaki halkalar (binding surumu, PRAGMA tirnaklamasi, dosya
+bicimi) sessizce bozulabilir ve `--dogrula` bunu GOREMEZ. Felaket aninda is gorecek olan
+ikincisidir; ikisini de ara ara kosturun.
 
 ⚠️ Kök token ve unseal anahtarlari `~/pemf-vault-kurtarma.json` dosyasindadir. O dosya
 KAYBOLURSA Vault bir daha ACILAMAZ — emanet de kurtarilamaz. Baska bir makineye kopyalayin.
@@ -224,6 +231,115 @@ def dogrula() -> int:
     return 0
 
 
+def tatbikat() -> int:
+    """⚠️ KURTARMA TATBİKATI — emanetteki anahtar GERÇEKTEN hasta verisini açıyor mu?
+
+    `--dogrula` yalnız iki değerin AYNI olduğunu söyler. Disk öldüğünde iş görecek olan şey
+    ZİNCİRİN TAMAMI: Vault → anahtar → SQLCipher → okunabilir tablo. Aradaki her halka
+    (binding sürümü, `PRAGMA key` tırnaklaması, dosya biçimi) sessizce bozulabilir ve
+    `--dogrula` bunu GÖREMEZ. Bu yüzden ayrı bir adım.
+
+    GÜVENLİK SÖZLEŞMESİ:
+      · Anahtar hiçbir biçimde YAZDIRILMAZ (ne tam ne kısmi).
+      · Gerçek DB'ye DOKUNULMAZ — geçici bir KOPYA açılır, sonunda silinir.
+      · PII basılmaz; yalnız SATIR SAYISI.
+      · ⚠️ KARŞIT KANIT zorunlu: YANLIŞ anahtarın reddedildiği de ölçülür. O olmadan
+        "açıldı" sonucu hiçbir şey kanıtlamaz (binding anahtarı yok sayıyor olabilirdi).
+    """
+    import shutil
+    import tempfile
+
+    t = _kok_token()
+    kod, d = _istek(f"/v1/{MOUNT}/data/{EMANET_YOLU}", token=t)
+    if kod != 200:
+        print(f"  HATA {kod}: emanet okunamadi ({(d or {}).get('errors')})")
+        # ⚠️ Mesaj EYLEM soylemeli: en sik iki sebep konteynerin kapali ve Vault'un muhurlu
+        # olmasidir; ikisi de tek satirlik komutla cozulur. Ham URLError'la birakmak,
+        # operatoru "emanet bozuldu mu?" diye yanlis yone surukler.
+        if kod == 0:
+            print("  -> Vault konteyneri kapali olabilir:")
+            print("     docker compose -f docker/docker-compose.vault.yml up -d")
+        print("  -> Vault her yeniden baslatmada MUHURLU gelir:")
+        print("     python scripts/vault_emanet.py --ac")
+        return 1
+    anahtar = ((d.get("data") or {}).get("data") or {}).get("auto.sqlcipher_key") or ""
+    if not anahtar:
+        print("  HATA: emanette `auto.sqlcipher_key` YOK -> --yaz ile yedekleyin")
+        return 1
+    print(f"  [1] Vault'tan anahtar alindi (uzunluk {len(anahtar)}; DEGER BASILMAZ)")
+
+    try:
+        import sqlcipher3 as sqlmod
+    except Exception:
+        try:
+            from pysqlcipher3 import dbapi2 as sqlmod  # type: ignore
+        except Exception as e:
+            print(f"  HATA: SQLCipher binding yok ({e}) -> tatbikat YAPILAMADI")
+            return 1
+    from database.sqlcipher_util import open_encrypted_conn
+
+    kok = _veri_koku()
+    print(f"  [2] veri koku: {kok}")
+    gecici = Path(tempfile.mkdtemp(prefix="pemf_tatbikat_"))
+    try:
+        sonuc = []
+        for ad, tablo in (("patients.db", "patients"), ("pemf_treatment_history.db", "treatment_sessions")):
+            kaynak = kok / ad
+            if not kaynak.is_file():
+                sonuc.append((ad, "DOSYA YOK", None))
+                continue
+            if kaynak.read_bytes()[:16].startswith(b"SQLite format 3"):
+                sonuc.append((ad, "DUZ METIN (sifreli DEGIL)", None))
+                continue
+            kopya = gecici / ad
+            shutil.copy2(kaynak, kopya)
+            try:
+                c = open_encrypted_conn(kopya, anahtar, sqlmod)
+            except Exception as e:
+                sonuc.append((ad, f"ACILAMADI: {type(e).__name__}", None))
+                continue
+            try:
+                n_tablo = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
+                try:
+                    n_satir = c.execute(f"SELECT COUNT(*) FROM {tablo}").fetchone()[0]
+                except Exception as e:
+                    n_satir = f"HATA {type(e).__name__}"
+                sonuc.append((ad, f"ACILDI ({n_tablo} tablo)", f"{tablo}={n_satir}"))
+            finally:
+                c.close()
+
+        print("  [3] emanet anahtariyla acma:")
+        for ad, durum, satir in sonuc:
+            print(f"      {ad:32s} {durum}" + (f"  {satir}" if satir else ""))
+
+        print("  [4] KARSIT KANIT — yanlis anahtar reddedilmeli:")
+        red = False
+        kaynak = kok / "patients.db"
+        if kaynak.is_file():
+            kopya2 = gecici / "_yanlis_anahtar_testi.db"
+            shutil.copy2(kaynak, kopya2)
+            try:
+                c2 = open_encrypted_conn(kopya2, "bu-KESINLIKLE-yanlis-bir-anahtar-0000", sqlmod)
+                c2.close()
+                print("      ⛔ YANLIS ANAHTARLA ACILDI -> sifreleme anlamsiz, tatbikat GECERSIZ")
+            except Exception as e:
+                red = True
+                print(f"      ✓ reddedildi ({type(e).__name__})")
+        else:
+            print("      OLCULEMEDI (patients.db yok)")
+
+        olculen = [s for s in sonuc if s[1] not in ("DOSYA YOK",)]
+        acilan = [s for s in olculen if s[1].startswith("ACILDI")]
+        tamam = bool(olculen) and len(acilan) == len(olculen) and red
+        print(
+            "\nSONUC: "
+            + ("TATBIKAT BASARILI — emanet gercekten kurtariyor." if tamam else "TATBIKAT BASARISIZ — yukariya bakin.")
+        )
+        return 0 if tamam else 1
+    finally:
+        shutil.rmtree(gecici, ignore_errors=True)
+
+
 def token_uret() -> int:
     """Sahibin saklayacağı 10 yıllık KURTARMA token'ı (yalnız okuma)."""
     t = _kok_token()
@@ -282,7 +398,12 @@ def main() -> int:
     g.add_argument("--ac", action="store_true", help="yeniden baslatma sonrasi muhuru ac")
     g.add_argument("--kur", action="store_true")
     g.add_argument("--yaz", action="store_true")
-    g.add_argument("--dogrula", action="store_true")
+    g.add_argument("--dogrula", action="store_true", help="Vault kopyasi yerelle AYNI mi (parmak izi)")
+    g.add_argument(
+        "--tatbikat",
+        action="store_true",
+        help="KURTARMA TATBIKATI: emanet anahtari gercek DB'yi ACIYOR mu (deger basmaz)",
+    )
     g.add_argument("--token-uret", action="store_true")
     g.add_argument("--geri-al", action="store_true", help="KURTARMA: anahtari ekrana yaz")
     ap.add_argument("--token", help="--geri-al icin kurtarma token'i (yoksa kok token kullanilir)")
@@ -298,6 +419,8 @@ def main() -> int:
         return yaz()
     if a.dogrula:
         return dogrula()
+    if a.tatbikat:
+        return tatbikat()
     if a.token_uret:
         return token_uret()
     return geri_al(a.token)
