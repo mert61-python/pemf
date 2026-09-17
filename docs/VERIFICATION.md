@@ -47,7 +47,16 @@ Kontrol (cihazda): `icacls "%APPDATA%\PEMF_GUI\*.plain.bak"` → yalnız `NT AUT
 
 ---
 
-## ⏳ 2 — SQLCipher sahada gerçekten aktif mi (CİHAZDA)
+## ✅ 2 — SQLCipher sahada gerçekten aktif (DOĞRULANDI) — aşağısı CİHAZDA yeniden ölçüm yordamı
+
+> **✅ 2026-09-17'de yeniden ölçüldü.** `C:\ProgramData\PEMF_System\PEMF_GUI` altındaki
+> `patients.db` ve `pemf_treatment_history.db` düz-metin SQLite **değil**; emanetteki anahtarla
+> açıldılar (`vault_emanet.py --tatbikat`), **yanlış anahtar `DatabaseError` ile reddedildi**.
+> Yani şifreleme hem etkin hem de doğru anahtarla çözülüyor.
+>
+> Bu başlık `⏳` diyordu ama özet tablosu `✅ DOĞRULANDI (2026-09-13)` diyordu — belge kendi
+> kendisiyle çelişiyordu. Aşağıdaki adımlar **iptal değil**: başka bir cihazda ya da şüphe
+> hâlinde koşulacak yordam.
 
 Çalışan cihazda health uç noktasını sorgula (auth açıksa `-H "X-API-Key: <token>"` ekle):
 
@@ -88,7 +97,14 @@ pip install -U cryptography python-multipart zeroconf
 py -3.10 -m pytest guii/tests   # yeşil olmalı (bu ortamda doğrulandı)
 ```
 
-## ⏳ 6 — AI model bütünlüğü/lisansı (MAINTAINER)
+## ✅ 6 — AI model **bütünlüğü** (DOĞRULANDI) · ⏳ 6b **lisans** envanteri (MAINTAINER)
+
+> **Bütünlük ✅ — yeniden ölçüldü 2026-09-17:** `scripts/model_butunluk.py --dogrula` hem
+> kaynakta (`release_assets/ai_models`) hem **sevk edilen kopyada**
+> (`PEMF_BUILD/dist/PEMF_Backend/_internal/ai_models`) **56/56 bayt-birebir**, çıkış kodu 0.
+>
+> ⚠️ **Lisans yarısı hâlâ açık (6b).** Bu başlık eskiden yalnız `⏳` taşıyordu ve bitmiş olan
+> bütünlük doğrulamasını da yapılmamış gösteriyordu; şimdi iki yarı ayrı işaretli.
 
 ```powershell
 # Bütünlük: dağıtılan model SHA256'ları beklenenle eşleşiyor mu (bozulma/değişim yok):
@@ -127,7 +143,31 @@ Backend'de freq/duty/sıcaklık **clamp'i bilinçli yok** (B-1.5); güvenlik fir
 - **Tıbbi cihaz için:** bu, yazılı **güvenlik-dosyası (safety case)** ile kanıtlanmalı — kod okuması
   bu iddiayı test etmez. Bu, B-1.5 "yazılı risk-kabulü"nün donanım tarafı.
 
-## ✅ 9 — firmware `[FIX-1c]` duty geçişi (DONANIM BENCH) — SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz
+## ⏳ 9 — firmware `[FIX-1c]` duty geçişi (DONANIM BENCH) · **YAYIN ÖNCESİ ZORUNLU**
+
+> ### ⚠️ DÜZELTME 2026-09-17 — buradaki "✅ SAHİP TEYİDİ 2026-08-20" YANLIŞTI
+>
+> Bu başlık **"✅ … SAHİP TEYİDİ 2026-08-20: reflash + tezgâh sorunsuz"** diyordu. Ölçüldü:
+> o teyit **bu maddeyi kapsamıyor**. Kanıt zinciri:
+>
+> | Kanıt | Bulgu |
+> |---|---|
+> | ✅'i ekleyen commit | `bfbcf78` — §9 · §11 · §12 · §13 başlıklarına **aynı commit'te aynı cümle** |
+> | O commit'in mesajı | *"FIRMWARE (**S3 + 8266** REFLASH gerekir)"* — saydığı üç madde de ESP; STM32 `[FIX-1c]` **listede yok** |
+> | Aynı commit'in eklediği §14 | *"S3+8266 REFLASH — **STM DEĞİŞMEDİ**"* — yani o turda STM'e hiç dokunulmadı |
+> | Bu bölümün gövdesi | *"⚠️ BU DÜZELTME TEZGÂHTA ÖLÇÜLMEDİ"* uyarısı `bfbcf78`'de **hiç düzenlenmedi** — çünkü gerçekten ölçülmemişti |
+>
+> **Neden bu yön daha tehlikeli:** bayat bir "yapılacak" etiketi işi gereksiz yere açık tutar;
+> bayat bir **"yapıldı"** etiketi ise doz güvenliğiyle ilgili bir tezgâh doğrulamasını
+> *yapılmış sayar*. Bu madde, frekans **artırıldığında** duty tick'inin bayat kalıp istenen
+> dozun **4,78 katına** kadar on-time üretebilmesiyle ilgili.
+>
+> ⚠️ **Üstelik artık iki kat gerekli:** §16'da STM sürüş dalgası `356d576` ile **asimetrik
+> DC-bias'lıdan simetrik bipolara** çevrildi. Eski bir STM tezgâhı yapılmış olsaydı bile o
+> ölçüm **geçersiz** olurdu — `[FIX-1c]` doğrulaması **yeni firmware üzerinde** yapılmalı.
+> Pratikte: §16 reflash'ı ile **aynı tezgâh oturumunda** ölçün.
+>
+> Özet tablosundaki `⏳ … YAYIN ÖNCESİ ZORUNLU` satırı **doğruydu**; yanlış olan bu başlıktı.
 
 **Neyi doğrulayacağız.** Denetim (2026-08-17) enerjili bir bobinin frekansı **ARTIRILDIĞINDA**
 duty tick'inin bayat kaldığını buldu: `g_tpp` yeni (küçük) periyoda göre yazılıyor ama

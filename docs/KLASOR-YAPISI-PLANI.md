@@ -100,7 +100,7 @@ guii/
 > | `web_static/` | ⛔ CANLI | `PEMF_Backend_onedir.spec` datas döngüsünde |
 > | `lattekurulum/` | ⛔ CANLI | `build_installer.ps1` → VC++ redist hedefi |
 > | `pemf_vet_landing/` | ⚠️ referanslı | `tests/test_kontrol_bayti_kapisi.py` üretilmiş çıktı olarak listeler |
-> | `website/` | ✅ referanssız | tek gerçek aday (3 takipli dosya) |
+> | `website/` | ⛔ **SİLİNMEYECEK** | referanssız **ama** kendi `README.md`si *"silme, bırak — tarihsel referans"* diyor (v1.2 installer indirme sayfası). **Karar kaydı da bir referanstır** — ölçüldü 2026-09-17 |
 >
 > ⚠️ **`frontend/` silinseydi** backend `/` adresinde *"Frontend derlemesi bulunamadı!"*
 > uyarısı basıp **boş sayfa** sunardı — klinikte arayüz açılmazdı ve sebebi "silinen ölü

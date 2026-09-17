@@ -127,7 +127,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 
 | # | İş | Kanıt | Kim |
 |---|---|---|---|
-| **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
+| ✅ **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
 | ✅ **B2** | `THIRD_PARTY_LICENSES.md` yenile — **YAPILDI** (26 → 113 bileşen) | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
 | ✅ **B3** | `README.md:188` sürüm tablosu — **YAPILDI** (türetmek yerine KALDIRILDI + kapı) | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
 | ⚠️ **B4** | Dev dosyaları böl — **ÖLÇÜT DÜZELTİLDİ**: satır değil, `treatment_history_db` tek sınıfta 94 metot | `api_server.py` **5.139** · `ai_router.py` **4.023** · `treatment_history_db.py` **3.701** (tek sınıfta 95 metot: seans + coil-run + sensör + denetim izi + outbox + şema göçü + PII) | Ben · **en son** |
