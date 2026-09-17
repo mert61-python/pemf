@@ -87,7 +87,28 @@ guii/
 | `training_archive/` | **ayrı depo** ya da Git LFS | 297 MB, 434 takipli dosya; her klon indiriyor |
 | `bin/` | `tools/build/bin/` + LFS | 60 MB üçüncü-parti ikili (cloudflared 52 MB) |
 
-### Silinecekler (ölçülmüş: donmuş ya da ölü)
+> ## ⛔ SILINECEKLER LISTESI YANLISTI — düzeltme 2026-09-17
+>
+> Yukarıdaki tablo altı dizini silinmeye aday gösteriyordu. Her biri referans taramasıyla
+> ölçüldü: **altıdan beşi CANLI.** "0 takipli dosya" ya da "son commit eski" olmak ölü
+> demek **değildir** — üretilen çıktı dizinleri git'te görünmez ama **ürün onları sunar.**
+>
+> | Dizin | Gerçek durum | Kanıt |
+> |---|---|---|
+> | `frontend/` | ⛔ **CANLI — ürünün ANA React arayüzü** | `api_server.py` → `app.mount("/")`; `dist` 11 MB |
+> | `dema-terapi-simülatörü/` | ⛔ **CANLI** | `api_server.py` → `app.mount("/simulator")` + spec onu **EXE'ye koyuyor** |
+> | `web_static/` | ⛔ CANLI | `PEMF_Backend_onedir.spec` datas döngüsünde |
+> | `lattekurulum/` | ⛔ CANLI | `build_installer.ps1` → VC++ redist hedefi |
+> | `pemf_vet_landing/` | ⚠️ referanslı | `tests/test_kontrol_bayti_kapisi.py` üretilmiş çıktı olarak listeler |
+> | `website/` | ✅ referanssız | tek gerçek aday (3 takipli dosya) |
+>
+> ⚠️ **`frontend/` silinseydi** backend `/` adresinde *"Frontend derlemesi bulunamadı!"*
+> uyarısı basıp **boş sayfa** sunardı — klinikte arayüz açılmazdı ve sebebi "silinen ölü
+> dizin" olarak akla gelmezdi.
+>
+> Kapı: `tests/test_silinecek_sanilan_dizinler_CANLI.py`
+
+### ~~Silinecekler~~ (⚠️ bu liste YANLIŞTI — yukarıdaki düzeltmeye bakın)
 
 | Dizin | Kanıt |
 |---|---|

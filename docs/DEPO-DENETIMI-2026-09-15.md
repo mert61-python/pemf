@@ -174,6 +174,27 @@ envanterinin eksik olması ticari satışta doğrudan risk.
 
 ## 3. 🟡 P2 — Düzen ve hijyen
 
+> ## ⛔ SILINECEKLER LISTESI YANLISTI — düzeltme 2026-09-17
+>
+> Yukarıdaki tablo altı dizini silinmeye aday gösteriyordu. Her biri referans taramasıyla
+> ölçüldü: **altıdan beşi CANLI.** "0 takipli dosya" ya da "son commit eski" olmak ölü
+> demek **değildir** — üretilen çıktı dizinleri git'te görünmez ama **ürün onları sunar.**
+>
+> | Dizin | Gerçek durum | Kanıt |
+> |---|---|---|
+> | `frontend/` | ⛔ **CANLI — ürünün ANA React arayüzü** | `api_server.py` → `app.mount("/")`; `dist` 11 MB |
+> | `dema-terapi-simülatörü/` | ⛔ **CANLI** | `api_server.py` → `app.mount("/simulator")` + spec onu **EXE'ye koyuyor** |
+> | `web_static/` | ⛔ CANLI | `PEMF_Backend_onedir.spec` datas döngüsünde |
+> | `lattekurulum/` | ⛔ CANLI | `build_installer.ps1` → VC++ redist hedefi |
+> | `pemf_vet_landing/` | ⚠️ referanslı | `tests/test_kontrol_bayti_kapisi.py` üretilmiş çıktı olarak listeler |
+> | `website/` | ✅ referanssız | tek gerçek aday (3 takipli dosya) |
+>
+> ⚠️ **`frontend/` silinseydi** backend `/` adresinde *"Frontend derlemesi bulunamadı!"*
+> uyarısı basıp **boş sayfa** sunardı — klinikte arayüz açılmazdı ve sebebi "silinen ölü
+> dizin" olarak akla gelmezdi.
+>
+> Kapı: `tests/test_silinecek_sanilan_dizinler_CANLI.py`
+
 ### 3.1 Kökte 40 dizin, yedisi web/arayüz
 
 `frontend/` · `pemf-vet-web/` · `pemf_gui/` · `pemf_vet_landing/` · `web_static/` ·
@@ -211,8 +232,21 @@ Ayrıca `bin/` **60 MB Windows ikilisi** (14 takipli dosya: `cloudflared.exe` 52
 DLL'leri, `nssm.exe`) doğrudan git'te duruyor ve yoksayılmıyor. Üçüncü-parti çalıştırılabilirler
 sürüm kontrolüne değil, paketleme adımına ait.
 
-⚠️ `training_archive/ai_data/real_clinical_data/ecg_signals.npy` — PUBLIC bir depoda
-**"gerçek klinik veri"** adlandırması ayrıca doğrulanmalı.
+⚠️ ~~`training_archive/ai_data/real_clinical_data/ecg_signals.npy` — PUBLIC bir depoda
+**"gerçek klinik veri"** adlandırması ayrıca doğrulanmalı.~~
+
+> **DÜZELTİLDİ — 2026-09-17: bu bulgu YANLIŞTI.** Ölçüldü: dizin **MIT-BIH Arrhythmia
+> Database** (PhysioNet) kayıtlarını ve onlardan türetilmiş metrikleri içeriyor.
+> `100.hea` başlığı standart MIT-BIH biçiminde (360 Hz, MLII + V5); CSV sütunları yalnız
+> `SDNN`, `RMSSD`, `pNN50`, `LF/HF`, `mag_field_*`, `temp_*` gibi **türetilmiş** değerler —
+> isim, kimlik ya da tarih sütunu **yok**. Yani hasta PII'si yok; **KVKK riski yok.**
+> Dizin adı yanıltıcı: "gerçek" burada *sentetik olmayan sinyal* demek.
+>
+> ⚠️ **Ama yerine GERÇEK bir açık çıktı: ATIF.** Veriler PhysioNet/Zenodo'dan alınmış,
+> PUBLIC depoda yeniden dağıtılıyor ve **hiçbir yerde lisans/atıf notu yoktu** — ne
+> dizinde (0 dosya), ne `THIRD_PARTY_LICENSES.md`'de. Bu, B2'de kapatılan paket-atıfı
+> boşluğunun **veri** karşılığıdır. Kapatıldı: dizin README'si + NOTICE'ta veri kümesi
+> bölümü + `tests/test_veri_kumesi_atfi.py` (4 mutasyon).
 
 ### 3.4 `base-linux.zip` KAYIP
 
