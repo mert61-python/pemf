@@ -219,7 +219,7 @@ def anahtar_uyusmazligi_mi(exc: BaseException) -> bool:
     return "file is not a database" in str(exc).lower()
 
 
-def _kilit_direncli_tasi(src, dst, logger=None, deneme=4, bekleme_s=0.25) -> bool:
+def _kilit_direncli_tasi(src, dst, logger=None, deneme=24, bekleme_s=0.25) -> bool:
     """Dosyayi kenara al; Windows'ta ORPHAN tutamac yuzunden kilitliyse GC ile serbest birakip yeniden dene.
 
     ⚠️ NEDEN (saha, 2026-08-14 — CIHAZ HIC ACILMIYORDU): at-rest anahtari DB'ye uymadiginda
@@ -232,6 +232,23 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=4, bekleme_s=0.25) -> boo
     aday-anahtar dongusu `close()` cagiriyor, fakat acilamayan bir SQLCipher baglantisinda alttaki
     dosya tutamaci nesne TOPLANANA kadar serbest kalmiyor. Bu yuzden yeniden denemeden once
     `gc.collect()` cagirmak gerekiyor — bekleme tek basina yetmez.
+
+    ⚠️⚠️ BUTCE 0,75 sn -> 6 sn (2026-09-19, OLCULDU). Yukaridaki gerekce YALNIZ BU SURECIN
+    kendi yetim SQLCipher tutamacini anlatiyor ve `gc.collect()` onu cozuyor. BASKA bir
+    okuyucu varsa cozmuyor:
+
+        deney: dosyada `open(db, "rb")` acikken karantinaya_al -> None
+               -> cagiran RuntimeError firlatir -> BACKEND ACILMAZ
+
+    SADECE OKUMA tutamaci bile yetiyor. Uründe tam bunu yapan bir daemon var:
+    `api_server._daily_maintenance_loop` gunluk yedegi `shutil.copy2` ile aliyor, yani
+    `pemf_treatment_history.db`yi ACIYOR. Anahtar uyusmazligi tam o ana denk gelirse
+    tuglalasmayi ONLEMEK icin yazilan zarf tuglalastiriyordu — ilk 4 deneme (0,75 sn)
+    kisa bir kopyalamayi bile beklemeye yetmiyor.
+
+    24 x 0,25 sn = 6 sn: kucuk bir DB kopyasi buraya rahat sigar. Acilista en kotu
+    durumda 6 sn gecikme, ACILMAMAKTAN kiyaslanamayacak kadar iyidir. Kalici bir
+    okuyucu varsa yine duser ve hata mesaji operatore ne yapacagini soyler.
 
     Doner: tasindiysa True.
     """
