@@ -241,39 +241,39 @@ if (Test-Path $BuildDir) {
 # --- Adim 4.5: React Web Export ---
 Write-Step "React Frontend Web Export"
 
-# ⚠️ TEK KAYNAK = `pf/` (2026-08-15). Eskiden burada "frontend" yaziyordu ve `guii/` altinda
-# AYNI deponun (pemf-frontend.git) IKI ayri klonu duruyordu: `pf/` (gelistirilen) ve
+# ⚠️ TEK KAYNAK = `apps/ui/` (2026-08-15). Eskiden burada "frontend" yaziyordu ve `guii/` altinda
+# AYNI deponun (pemf-frontend.git) IKI ayri klonu duruyordu: `apps/ui/` (gelistirilen) ve
 # `frontend/` (build'in okudugu). Ikisi de .gitignore'da oldugu icin ayrisma GORUNMUYORDU.
 # Olculdu: `frontend/` 15 commit GERIDE idi -> arayuz degisiklikleri masaustu paketine HIC
-# ULASMIYORDU (dogrulanan ornek: web'de canli ses kaydi coken hata `pf/`de duzeltildi ama
+# ULASMIYORDU (dogrulanan ornek: web'de canli ses kaydi coken hata `apps/ui/`de duzeltildi ama
 # paket eski agactan uretiliyordu). Ikinci klon kaldirildi; tekrar olusmasi
 # tests/test_frontend_tek_kaynak.py ile kilitlendi.
-$FrontendDir = Join-Path $ProjectRoot "pf"
+$FrontendDir = Join-Path $ProjectRoot "apps/ui"
 
 if ($env:PEMF_SKIP_FRONTEND -eq '1') {
-    # Web UI (pf/) DEGISMEDIGINDE re-export'u ATLA: onceden saglanan frontend\dist KULLANILIR.
+    # Web UI (apps/ui/) DEGISMEDIGINDE re-export'u ATLA: onceden saglanan frontend\dist KULLANILIR.
     # (Expo deps kurulumu gerekmez; frozen backend'e mevcut web UI baked kalir. Asagidaki
     # dogrulama HER IKI yolda da calisir -> gecersiz/eksik dist yine yakalanir.)
     Write-OK "Frontend export ATLANDI (PEMF_SKIP_FRONTEND=1) - mevcut frontend\dist kullaniliyor."
 } else {
-    # GERCEK web-UI kaynagi = pf\ (Expo app; export:web + typecheck scriptleri var). Eski BOS guii\frontend\
-    # (git'te hic yoktu = leftover build-yolu) yerine pf\'den export edilir; cikti (pf\dist) kanonik
+    # GERCEK web-UI kaynagi = apps/ui\ (Expo app; export:web + typecheck scriptleri var). Eski BOS guii\frontend\
+    # (git'te hic yoktu = leftover build-yolu) yerine apps/ui\'den export edilir; cikti (apps/ui\dist) kanonik
     # frontend\dist'e kopyalanir (PyInstaller spec frontend\dist'i bundle'lar).
-    $PfDir = Join-Path $ProjectRoot "pf"
-    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Write-Fail "pf\ (web-UI kaynagi) bulunamadi!" }
+    $PfDir = Join-Path $ProjectRoot "apps/ui"
+    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Write-Fail "apps/ui\ (web-UI kaynagi) bulunamadi!" }
     Push-Location $PfDir
     try {
         $PfDist = Join-Path $PfDir "dist"
         if (Test-Path $PfDist) {
-            Write-Host "  Eski pf\dist temizleniyor..." -ForegroundColor DarkGray
+            Write-Host "  Eski apps/ui\dist temizleniyor..." -ForegroundColor DarkGray
             Remove-Item $PfDist -Recurse -Force
         }
 
-        Invoke-NpmCleanInstall -Label "Frontend (pf)"
+        Invoke-NpmCleanInstall -Label "Frontend (apps/ui)"
 
         Write-Host "  Typecheck calistiriliyor (npm run typecheck)..." -ForegroundColor DarkGray
         & npm run typecheck
-        if ($LASTEXITCODE -ne 0) { Write-Fail "npm run typecheck basarisiz! (pf TypeScript hatalarini duzeltin)" }
+        if ($LASTEXITCODE -ne 0) { Write-Fail "npm run typecheck basarisiz! (apps/ui TypeScript hatalarini duzeltin)" }
 
         Write-Host "  Expo Web Export aliniyor (export:web = expo export + postexport-web patcher)..." -ForegroundColor DarkGray
         $env:EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = "1"
@@ -284,16 +284,16 @@ if ($env:PEMF_SKIP_FRONTEND -eq '1') {
     }
 
     # === PEMF-AYNALAMA-BASI === (test cipasi: tests/test_installer_frontend_aynalama.py)
-    # pf\dist -> frontend\dist (PyInstaller'in bekledigi kanonik konum)
+    # apps/ui\dist -> frontend\dist (PyInstaller'in bekledigi kanonik konum)
     #
     # DENETIM 2026-08-17: 2026-08-15 "tek kaynak" degisikliginden beri $FrontendDir ve $PfDir
-    # AYNI dizini (pf) gosteriyor. Asagidaki Remove-Item TAZE export edilen pf\dist'i SILIYOR,
-    # ardindan Copy-Item kaynagi bulamiyor ("Cannot find path ...\pf\dist") ve
+    # AYNI dizini (apps/ui) gosteriyor. Asagidaki Remove-Item TAZE export edilen apps/ui\dist'i SILIYOR,
+    # ardindan Copy-Item kaynagi bulamiyor ("Cannot find path ...\apps/ui\dist") ve
     # $ErrorActionPreference='Stop' yuzunden Inno installer build'i VARSAYILAN yolda COKUYORDU
-    # (yalniz PEMF_SKIP_FRONTEND=1 ile derlenebiliyordu). Ustelik pf\dist silinmis kaldigi icin
+    # (yalniz PEMF_SKIP_FRONTEND=1 ile derlenebiliyordu). Ustelik apps/ui\dist silinmis kaldigi icin
     # sonraki backend build'i de etkileniyordu.
     #
-    # Aynalama bu haliyle GEREKSIZDIR: PEMF_Backend_onedir.spec web arayuzunu DOGRUDAN pf/dist'ten
+    # Aynalama bu haliyle GEREKSIZDIR: PEMF_Backend_onedir.spec web arayuzunu DOGRUDAN apps/ui/dist'ten
     # paketliyor (yayinlanan base-app.zip ile dogrulandi: frontend\dist\version.json diskte VAR ama
     # zip'te YOK). Yine de kod KALDIRILMIYOR — $FrontendDir bir gun yeniden ayri bir dizine donerse
     # (baska bir paketleyici kanonik frontend\dist beklerse) yol calismaya devam etsin.
@@ -308,7 +308,7 @@ if ($env:PEMF_SKIP_FRONTEND -eq '1') {
         if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
         if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
         Copy-Item $PfDistDir $FrontendDistDir -Recurse -Force
-        Write-OK "pf web export -> $FrontendDistDir kopyalandi."
+        Write-OK "apps/ui web export -> $FrontendDistDir kopyalandi."
     }
     # === PEMF-AYNALAMA-SONU ===
 }
@@ -334,15 +334,15 @@ Set-Content -Path (Join-Path $FrontendDir "dist\version.json") -Value $FrontendV
 Write-OK "React web export basariyla tamamlandi ve dogrulandi."
 
 # ⚠️ DELEGE ONKOSULU (DENETIM 2026-08-17): build_backend_exe.ps1 -SkipWeb kanonik
-# frontend\dist\index.html'e bakiyor. Kanonik kaynak `pf` oldugu icin aynalama "kaynak == hedef"
+# frontend\dist\index.html'e bakiyor. Kanonik kaynak `apps/ui` oldugu icin aynalama "kaynak == hedef"
 # ise ATLANIR (bulgu 14 duzeltmesi) -> o dosya olmayabilir. Delegeden ONCE garanti et.
 # Bu, build_backend_exe.ps1'in her web export'ta zaten yaptigi aynalamanin AYNISI; `frontend\`
 # yalniz dist AYNASI kalir, IKINCI BIR KAYNAK (package.json vb.) YARATILMAZ.
 $KanonikDist = Join-Path $ProjectRoot "frontend\dist"
 if (-not (Test-Path (Join-Path $KanonikDist "index.html"))) {
-    Write-Host "  frontend\dist yok -> pf\dist'ten aynalaniyor (delege onkosulu)" -ForegroundColor DarkGray
+    Write-Host "  frontend\dist yok -> apps/ui\dist'ten aynalaniyor (delege onkosulu)" -ForegroundColor DarkGray
     New-Item -ItemType Directory -Path (Split-Path $KanonikDist -Parent) -Force | Out-Null
-    Copy-Item (Join-Path $ProjectRoot "pf\dist") $KanonikDist -Recurse -Force
+    Copy-Item (Join-Path $ProjectRoot "apps/ui\dist") $KanonikDist -Recurse -Force
 }
 
 # --- Adim 4.6: DEMA Terapi Simulatoru Build ---

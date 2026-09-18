@@ -36,7 +36,7 @@ if str(KOK) not in sys.path:
 
 os.environ.setdefault("PEMF_SIMULATE", "1")
 
-_TS = KOK / "pf" / "src" / "screens" / "TreatmentHistoryScreen.tsx"
+_TS = KOK / "apps" / "ui" / "src" / "screens" / "TreatmentHistoryScreen.tsx"
 
 
 @pytest.fixture

@@ -91,7 +91,7 @@ oturur. Yedek dosyasını (USB'den) getirip:
 Betik bittiğinde ekrana **iki hatırlatma** basar — ikisini de yapın:
 1. **skip-worktree** (dört tracked sır dosyasının `git add -A` ile yanlışlıkla commit'lenmesini
    önler — betiğin bastığı komutu aynen çalıştırın).
-2. `pf/android/keystore.properties` içindeki `storeFile` yolunun bu makinede doğru olduğunu
+2. `apps/ui/android/keystore.properties` içindeki `storeFile` yolunun bu makinede doğru olduğunu
    kontrol edin (release `.jks` geri yüklendiyse `~/.pemf-keys/` altına koyun ya da yolu güncelleyin).
 
 > ⚠️ `.pemfsec` **şifresiz** (parola sahip kararıyla kaldırıldı) — sadece base64 ile toplanmış.

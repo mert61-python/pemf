@@ -13,7 +13,7 @@ Sistem **2 image + 1 compose** ile ayağa kalkar (donanım bağımsız — STM/E
 - `requirements-docker.txt` — **backend'in Docker bağımlılıkları** (ana `requirements.txt`'e DOKUNULMAZ; farklar: sqlcipher3→sqlcipher3-binary, pyinstaller/pytest çıkarıldı; ⚠️ 2026-08-26 scratch/XAI ekleri — `celldetection==0.4.9`, grad-cam, captum, shap, timm vb. — henüz buraya taşınmadı → monolit imajda `/api/ai/vision/scratch` in-process ÇALIŞMAZ, senkron gerekir).
 - `docker-compose.yml` — ikisini birden ayağa kaldırır (proje adı `pemf` → `pemf-backend-1` / `pemf-frontend-1`).
 - `docker.env.example` — **opsiyonel** ayar override'ları (`cp docker.env.example .env`). Compose zaten varsayılanlıdır.
-- `.dockerignore` (backend) + `pf/.dockerignore` (frontend).
+- `.dockerignore` (backend) + `apps/ui/.dockerignore` (frontend).
 - **Mikroservis (GPU) profili — opsiyonel** (bkz. aşağı):
   - `Dockerfile.ai` — bağımsız **GPU AI inference servisi** (`ai_service`, :8100).
   - `Dockerfile.ai-full` — model ağırlıkları GÖMÜLÜ AI image'ı (`/models` mount GEREKMEZ); `FROM pemf-ai`.

@@ -5,7 +5,7 @@
 `update_patient` YALNIZ `patient_info`'da gelen alanları yazar; gönderilmeyen alanı KORUR. Bu,
 backend'in lost-update'e karşı tek yapısal savunmasıdır (saha 4.3: "diğer alanlar kaybolmaz").
 
-⚠️ NEDEN KRİTİK: frontend hasta düzenlemede TÜM formu gönderiyor (`pf/src/screens/PatientScreen`
+⚠️ NEDEN KRİTİK: frontend hasta düzenlemede TÜM formu gönderiyor (`apps/ui/src/screens/PatientScreen`
 → `payload = {...normalized, id}`). İki cihaz aynı hastayı açıp farklı alan değiştirirse, birinin
 formundaki BAYAT değer diğerinin yeni değerini ezebilir. Backend field-merge, EN AZINDAN
 gönderilmeyen alanı korur; eğer biri bunu "her alanı her zaman yaz" (full-row replace) yaparsa

@@ -30,7 +30,7 @@ from pathlib import Path
 _KOK = Path(__file__).resolve().parent.parent
 
 # Taranan kaynak agaclari (uretim kodu; testler ve dokumanlar haric).
-_AGACLAR = ("apps/web/api", "apps/web/src", "pf/src", "servers", "services")
+_AGACLAR = ("apps/web/api", "apps/web/src", "apps/ui/src", "servers", "services")
 _UZANTI = (".ts", ".tsx", ".py")
 
 # ⚠️ SERVICE_ROLE ISTISNALARI — dosya bazinda. Bu dosyalardaki dogrudan tablo cagrilari

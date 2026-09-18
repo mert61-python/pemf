@@ -21,7 +21,7 @@ tasir — OZELLIK onlar, sisme degil. Gercek sorun `treatment_history_db.py`: TE
 94 metot.
 
 ─── C5: iddia BAYAT; kalan tek madde de YAPILAMAZ ──────────────────────────────
-PEMF_BUILD / pf/android/app/build / build_tools/Output -> UCU DE ZATEN YOK.
+PEMF_BUILD / apps/ui/android/app/build / build_tools/Output -> UCU DE ZATEN YOK.
 Kalan: `launcher/target` 6,9 GB — ve SILMEKLE COZULMUYOR, her `cargo` kosumunda geri
 geliyor. `CARGO_TARGET_DIR` ile agac disina almak OLCULDU, KIRARDI:
 `.github/workflows/launcher.yml` satir 175 ve 190 `launcher/target/release/bundle`

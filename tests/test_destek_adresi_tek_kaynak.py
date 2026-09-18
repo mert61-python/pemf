@@ -39,7 +39,7 @@ _STATIK_IZINLI = (
     "apps/web/src/pages/Download.tsx",
 )
 
-_ARANAN_AGACLAR = ("apps/web/src", "pf/src", "servers", "launcher/app/ui")
+_ARANAN_AGACLAR = ("apps/web/src", "apps/ui/src", "servers", "launcher/app/ui")
 _UZANTI = (".ts", ".tsx", ".py", ".html")
 _EPOSTA = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
@@ -96,9 +96,9 @@ def test_KRITIK_statik_izinli_dosyalar_tek_kaynakla_AYNI_adresi_tasiyor():
 
 
 def test_KRITIK_mobil_kunye_web_ile_AYNI():
-    """`pf/src/config/firma.ts` ayri bir tek-kaynaktir (mobil kunyesi); web ile ayrisamaz."""
+    """`apps/ui/src/config/firma.ts` ayri bir tek-kaynaktir (mobil kunyesi); web ile ayrisamaz."""
     beklenen = _tek_kaynak()
-    firma = (_KOK / "pf" / "src" / "config" / "firma.ts").read_text(encoding="utf-8", errors="replace")
+    firma = (_KOK / "apps" / "ui" / "src" / "config" / "firma.ts").read_text(encoding="utf-8", errors="replace")
     m = re.search(r'eposta:\s*"([^"]+)"', firma)
     assert m, "firma.ts icinde eposta alani bulunamadi"
     assert m.group(1) == beklenen, (

@@ -29,7 +29,7 @@ _KOK = Path(__file__).resolve().parents[1]
 _AGACLAR = {
     "apps/web/src": (".ts", ".tsx", ".css"),
     "apps/web/api": (".ts",),
-    "pf/src": (".ts", ".tsx"),
+    "apps/ui/src": (".ts", ".tsx"),
     "servers": (".py",),
     "controllers": (".py",),
     "services": (".py",),

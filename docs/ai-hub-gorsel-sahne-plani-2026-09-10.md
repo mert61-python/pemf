@@ -28,7 +28,7 @@ gömülü Python 3.10 + cv2 4.11 ile gerçek test girdileri üzerinde koşturuld
 Kök neden tek satır ve **5 yerde birebir kopyalanmış**:
 
 ```
-pf/src/screens/AiHubScreen.tsx  satır 1535, 1922, 2219, 3074, 3828
+apps/ui/src/screens/AiHubScreen.tsx  satır 1535, 1922, 2219, 3074, 3828
 <Image source={{ uri: result?.image_base64 ? `data:image/jpeg;base64,${result.image_base64}` : imageUri }} ... />
 ```
 
@@ -153,7 +153,7 @@ RN/Hermes her biri için ayrı decode kopyası tutar (10,6 MP panel ≈ 40 MB ha
 
 ## 2. Tasarım — tek ortak sahne bileşeni
 
-**`pf/src/components/ui/GorselSahne.tsx` (yeni)** — ScratchModule'ün çalışan çip galerisi
+**`apps/ui/src/components/ui/GorselSahne.tsx` (yeni)** — ScratchModule'ün çalışan çip galerisi
 deseninin (`SCRATCH_GALERI` :3338-3348 + `scChipRow`/`scStage` :3568-3582) genelleştirilmesi.
 Sıfırdan tasarım değil, **kanıtlanmış deseni taşımak**.
 
@@ -381,9 +381,9 @@ const paneller = result?.paneller ?? (result?.image_base64
 Bu yoksa yeni istemci eski backend'de **boş galeri** gösterir (yeni↔eski senaryo B).
 
 **DURUM: TAMAMLANDI (2026-09-12).**
-`pf/src/components/ui/GorselSahne.tsx` (gezilebilir, oran-kilitli galeri) +
-`pf/src/utils/gorselSahneSayfalari.ts` (sayfa normalizasyonu) +
-`pf/src/utils/zoomMerdiveni.ts` (kaynak-piksele kilitli zoom).
+`apps/ui/src/components/ui/GorselSahne.tsx` (gezilebilir, oran-kilitli galeri) +
+`apps/ui/src/utils/gorselSahneSayfalari.ts` (sayfa normalizasyonu) +
+`apps/ui/src/utils/zoomMerdiveni.ts` (kaynak-piksele kilitli zoom).
 **5 ternary'nin tamamı kaldırıldı** (kaynak sayacı 0) ve altıncı bir yer olarak PetOwner da bağlandı.
 Kapılar: `GorselSahne.test.tsx` (18) · `gorselSahneSayfalari.test.ts` (12) · `zoomMerdiveni.test.ts` (10) ·
 `gorselSahneAkisi.test.tsx` (7, gerçek ekran akışı) · `tests/test_ai_gorsel_sahne_capalari.py` (8, kaynak çıpaları).
@@ -502,7 +502,7 @@ gözlendi: sahneye tam `useStageHeight()` verilince 700×540'ta içerik taştı 
 `test_responsive_grafik_kapisi.py`'deki `kameraKutusu(onizlemeW` == 2 sayacı, hesap ortak
 bileşene taşınınca **0'a düşer**. Doğru yeniden pinleme dört parçalı:
 
-1. `pf/src/components/ui/GorselSahne.tsx` içinde `kameraKutusu(` == **1** (tek kaynak),
+1. `apps/ui/src/components/ui/GorselSahne.tsx` içinde `kameraKutusu(` == **1** (tek kaynak),
 2. `AiHubScreen.tsx`'te `<GorselSahne` == **TAM N** (katman 1+2 modül sayısı),
 3. `PetOwnerAiScreen.tsx`'te `<GorselSahne` == **1**,
 4. `AiProPanel.tsx`'in `kameraKutusu(kutuW` çıpası **DOKUNULMADAN** kalır.

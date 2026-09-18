@@ -12,7 +12,7 @@ KÖK NEDEN: `_on_mqtt_message_api` içindeki `("wifi_disconnected", "offline")` 
 **WS yayını YAPMIYORDU**. İstemci `connected` alanını YALNIZCA WS anlık görüntüsünden
 ya da `coil_status` olayından öğrenir; "Hazır" etiketi doğrudan o alandan geliyor:
 
-    pf/src/components/domain/CoilParameterPanel.tsx  ve  CoilCard.tsx
+    apps/ui/src/components/domain/CoilParameterPanel.tsx  ve  CoilCard.tsx
         running ? "Aktif" : connected ? "Hazır" : "Offline"
 
 ⚠️ NEDEN BEKÇİ KURTARMIYOR: `_esp_telemetry_watchdog` demote koşulu

@@ -32,7 +32,7 @@ import re
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 
 # 2026-09-05 ölçümü (S3: 139 → 119; S7 adım 10 flipBtn ile 118).
 # 2026-09-12: 118 → 117. Seans kartındaki "Raporu Paylaş" ikon düğmesi KALDIRILDI (sahip:
@@ -47,7 +47,7 @@ MUAF_SAYISI = 2
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "components" / "ui" / "IconButton.tsx").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 _DOKUNULABILIR = re.compile(r"<(Pressable|TouchableOpacity)\b(.*?)(?<!=)>", re.DOTALL)

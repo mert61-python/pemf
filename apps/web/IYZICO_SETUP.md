@@ -14,7 +14,7 @@ Web /pricing → /odeme (fatura bilgisi) → /api/checkout → iyzico ödeme for
 ```
 
 ## 1) Supabase
-`pf/supabase/subscriptions.sql` çalıştırılmış olmalı (tablo + RLS). Not: `stripe_subscription_id`
+`apps/ui/supabase/subscriptions.sql` çalıştırılmış olmalı (tablo + RLS). Not: `stripe_subscription_id`
 sütunu iyzico **subscriptionReferenceCode**'unu, `stripe_customer_id` **customerReferenceCode**'u
 tutar (sütun adları eski, işlev iyzico).
 

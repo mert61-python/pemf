@@ -22,7 +22,7 @@ import re
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 
 # Ortak ilkelin KENDİSİ: sözleşmeyi o tanımlar, kendi kendini doğrulamaz.
 _ILKEL = "components/ui/ScrollableModalCard.tsx"
@@ -32,7 +32,7 @@ _ILKEL = "components/ui/ScrollableModalCard.tsx"
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "components" / "ui" / "ScrollableModalCard.tsx").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 

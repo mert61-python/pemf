@@ -33,10 +33,10 @@ from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanlı toplama)
-import capraz  # noqa: E402  — `pf/` bu depoda izlenmez; yoksa atla (zorunlu kipte düşür)
+import capraz  # noqa: E402  — `apps/ui/` bu depoda izlenmez; yoksa atla (zorunlu kipte düşür)
 
-EKRAN = "pf/src/screens/AiHubScreen.tsx"
-YARDIMCI = "pf/src/services/apiClient.ts"  # aiHataMesaji + AI_ZAMAN_ASIMI_MESAJI tek kaynağı (2026-09-08)
+EKRAN = "apps/ui/src/screens/AiHubScreen.tsx"
+YARDIMCI = "apps/ui/src/services/apiClient.ts"  # aiHataMesaji + AI_ZAMAN_ASIMI_MESAJI tek kaynağı (2026-09-08)
 
 #: `setTimeout(() => ctrl.abort(), <X>)` — X sayı ise elle yazılmış sınır demektir.
 _IPTAL_DESENI = re.compile(r"ctrl\.abort\(\),\s*([A-Za-z_][A-Za-z0-9_]*|\d+)\s*\)")

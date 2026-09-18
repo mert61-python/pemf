@@ -32,7 +32,7 @@ import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
 _ROUTER = _KOK / "servers" / "ai_router.py"
-_PANEL = _KOK / "pf" / "src" / "components" / "domain" / "AiProPanel.tsx"
+_PANEL = _KOK / "apps" / "ui" / "src" / "components" / "domain" / "AiProPanel.tsx"
 
 
 @pytest.fixture(scope="module")

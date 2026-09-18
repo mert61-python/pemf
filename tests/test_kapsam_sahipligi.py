@@ -45,7 +45,7 @@ if str(KOK) not in sys.path:
 
 os.environ.setdefault("PEMF_SIMULATE", "1")
 
-_PF = KOK / "pf" / "src"
+_PF = KOK / "apps" / "ui" / "src"
 
 #: `db.start_session(...)` çağıran üretim dosyaları — seans satırı AÇAN her yol.
 #: ⚠️ Yeni bir yol eklenirse bu liste değil, aşağıdaki AST taraması onu kendiliğinden bulur.
@@ -188,7 +188,7 @@ def test_KRITIK_AI_PRO_sahibi_ONAY_MUHRUNDEN_gelir():
 # ============================================================================
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_kapsam_filtresi_kucuk_harf_KIYASI_yapiyor():
     """⚠️ DB'de sahip küçük harfe normalize ediliyor; arayüz de öyle kıyaslamalı. Biri
     değişirse hekim kendi kayıtlarını GÖREMEZ (sessiz kayıp, hata mesajı yok).
@@ -234,7 +234,7 @@ AI_LOG_CAGIRAN_EKRANLAR = (
 )
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
     """⚠️ `/api/ai/log` OPERATÖR SÜZGECİ DESTEKLEMEZ — tüm kliniğin analizlerini döndürür.
     Süzmeyen her çağrı, kapsam ayrımını O EKRANDA delen bir sızıntıdır.
@@ -261,7 +261,7 @@ def test_KRITIK_ai_log_cagiran_HER_ekran_KAPSAM_suzuyor():
     assert not eksik, "AI analiz gecmisi kapsam sizintisi: " + " | ".join(eksik)
 
 
-@pytest.mark.skipif(not (_PF / "utils").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_EV_SAHIBI_tum_klinige_CIKAMAZ():
     """⚠️ KVKK kapısı (2026-08-08): ev sahibi profili "Tüm Klinik" kapsamına asla çıkamaz —
     sekme gizli olsa bile mantık `patientScope.effectiveScope`te kilitli.

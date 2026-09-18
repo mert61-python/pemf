@@ -41,7 +41,7 @@ if str(KOK) not in sys.path:
 if str(KOK / "tests") not in sys.path:
     sys.path.insert(0, str(KOK / "tests"))
 
-_PF = KOK / "pf" / "src"
+_PF = KOK / "apps" / "ui" / "src"
 
 #: Bobin ızgarası çizen / bobin sayısı yazan üretim ekranları.
 BOBIN_CIZEN_EKRANLAR = (

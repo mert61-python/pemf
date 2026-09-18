@@ -30,7 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 PAROLA = "sayac-kapisi-2026"
-_AYAR_TSX = Path(__file__).resolve().parents[1] / "pf" / "src" / "screens" / "SettingsScreen.tsx"
+_AYAR_TSX = Path(__file__).resolve().parents[1] / "apps" / "ui" / "src" / "screens" / "SettingsScreen.tsx"
 
 
 @pytest.fixture(scope="module")

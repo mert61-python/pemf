@@ -9,7 +9,7 @@ bakarak dozu onaylıyor).
 
 SÖZLEŞME: kare döndüren her yanıt kodlanan dizinin GERÇEK boyutunu da verir
 (`image_w`/`image_h`; WebSocket'te `imageW`/`imageH`). Alan YALNIZ-EK: eski istemci yok sayar,
-yeni istemci alan yoksa cihaz yönü varsayılanına düşer (pf/src/utils/kameraKutusu.ts).
+yeni istemci alan yoksa cihaz yönü varsayılanına düşer (apps/ui/src/utils/kameraKutusu.ts).
 
 ⚠️ Bu dosya model çalıştırmaz; yardımcının doğruluğunu ve yanıt/yayın noktalarının alanı
 TAŞIDIĞINI kaynak düzeyinde kilitler (modeller CI'da yüklü değil).

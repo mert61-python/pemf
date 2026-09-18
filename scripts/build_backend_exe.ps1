@@ -110,16 +110,16 @@ if ($SkipWeb) {
 } else {
     Info "React (Expo) web export üretiliyor (backend bunu localhost:8000'de sunacak)..."
 
-    # ⚠️ DENETİM 2026-08-04 (P1): burada export KAYNAĞI `guii\frontend\` idi. O dizin `pf\`'in
+    # ⚠️ DENETİM 2026-08-04 (P1): burada export KAYNAĞI `guii\frontend\` idi. O dizin `apps/ui\`'in
     # 27 Temmuz'da DONMUŞ bir KOPYASIDIR (45 dosya fark) ve içinde
     # `src/components/ui/GlobalEmergencyStop.tsx` (AppShell'de HER ekrana basılan kayan ACİL DURDUR)
     # ile `hooks/useTeardownGuard.ts` HİÇ YOKTUR. Yani bu script'le üretilen base.zip, aynı sürüm
     # numarasıyla, ACİL DURDUR'u ekranların çoğunda OLMAYAN bir web UI sevk ediyordu —
     # build_installer.ps1 ile üretilen Inno kurulumunda ise buton VARDI (iki farklı UI, tek sürüm).
-    # TEK KAYNAK = `pf\` (README: "Web/mobil UI'yi pf/'te düzenle — frontend/src bayat kopyadır").
+    # TEK KAYNAK = `apps/ui\` (README: "Web/mobil UI'yi apps/ui/'te düzenle — frontend/src bayat kopyadır").
     # build_tools/build_installer.ps1:237-269 ile AYNI desen: pf'te export al → frontend\dist'e kopyala.
-    $PfDir = Join-Path $GuiRoot "pf"
-    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Die "pf\ (web-UI kaynağı) bulunamadı: $PfDir" }
+    $PfDir = Join-Path $GuiRoot "apps/ui"
+    if (-not (Test-Path (Join-Path $PfDir "package.json"))) { Die "apps/ui\ (web-UI kaynağı) bulunamadı: $PfDir" }
 
     # İKİNCİ-KAYNAK NÖBETİ: `frontend\` yalnızca ÜRETİLEN `dist\` aynası olmalı. İçinde bir Expo
     # projesi (package.json) duruyorsa bu bug bir daha oluşabilir → gürültülü uyar.
@@ -135,10 +135,10 @@ if ($SkipWeb) {
 
     Push-Location $PfDir
     try {
-        # Idempotent: eski pf\dist'i temizle ki bayat dosya kalmasın
+        # Idempotent: eski apps/ui\dist'i temizle ki bayat dosya kalmasın
         $PfDist = Join-Path $PfDir "dist"
         if (Test-Path $PfDist) {
-            Info "Eski pf\dist temizleniyor..."
+            Info "Eski apps/ui\dist temizleniyor..."
             Remove-Item $PfDist -Recurse -Force
         }
 
@@ -166,12 +166,12 @@ if ($SkipWeb) {
         Pop-Location
     }
 
-    # pf\dist -> frontend\dist (PyInstaller spec'inin bundle'ladığı kanonik konum)
+    # apps/ui\dist -> frontend\dist (PyInstaller spec'inin bundle'ladığı kanonik konum)
     $FrontendDistDir = Join-Path $FrontendDir "dist"
     if (Test-Path $FrontendDistDir) { Remove-Item $FrontendDistDir -Recurse -Force }
     if (-not (Test-Path $FrontendDir)) { New-Item -ItemType Directory -Path $FrontendDir -Force | Out-Null }
     Copy-Item (Join-Path $PfDir "dist") $FrontendDistDir -Recurse -Force
-    Info "pf web export -> frontend\dist kopyalandı."
+    Info "apps/ui web export -> frontend\dist kopyalandı."
 
     # DOĞRULAMA: spec'in topladığı tam yol (frontend\dist) üretilmiş mi?
     $FrontendIndex = Join-Path $FrontendDir "dist\index.html"

@@ -92,7 +92,7 @@ Aynı şeyi her sayfada aynı sözcükle anlat:
 bakın; kod ile metin çelişirse kazanan koddur.
 
 - **Sınır iddia etmeden önce ölçün.** "Telefon cihazı süremez" diye yazılmıştı; oysa mobil
-  uygulama seans başlatıyor ve bobin ayarlıyor (`pf/src/screens/ControlScreen.tsx`,
+  uygulama seans başlatıyor ve bobin ayarlıyor (`apps/ui/src/screens/ControlScreen.tsx`,
   `components/domain/CoilParameterPanel.tsx`, `hooks/useSessionControl.ts`).
 - **Tutulamayacak vaat verilmez.** "İptalden sonra dönem sonuna kadar erişim" vaadi
   `api/cancel.ts` ölçümüyle çürük (`current_period_end` hiç yazılmıyor).

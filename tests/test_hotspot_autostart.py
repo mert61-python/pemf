@@ -196,10 +196,10 @@ def test_betik_SSID_i_hala_tasiyor():
 def test_KRITIK_arayuzde_KABLOSUZ_BAGLANTI_satiri_VAR():
     """Hotspot kapalıyken 6-8 bobinleri sessizce bağlanamıyordu; `hotspotActive` çekiliyor ama
     HİÇ GÖSTERİLMİYORDU. Arıza görünür olmalı."""
-    # ⚠️ `pf/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
+    # ⚠️ `apps/ui/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
     # `FileNotFoundError` ile düşerdi (2026-08-12). Atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
     # ile atlama yasaklanabilir. Bu dosyanın hotspot davranış testleri depo içidir, koşar.
-    s = capraz.oku("pf/src/components/domain/GatewayStatusPanel.tsx")
+    s = capraz.oku("apps/ui/src/components/domain/GatewayStatusPanel.tsx")
     assert "Kablosuz Bağlantı" in s, "durum panelinde 'Kablosuz Bağlantı' satiri YOK"
     assert "gwInfo.hotspotActive" in s, "satir hotspotActive'e BAGLI degil (olu gosterge)"
     # Bağlantı yokken bayat "Aktif" göstermemeli (panelin genel kuralı).

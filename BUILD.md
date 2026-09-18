@@ -8,10 +8,10 @@ scratch — aşağıda "MAX_PATH" bölümü.)
 > (Buraya elle yazılan anlık görüntü 2026-08-06'da donmuştu: `1.9.5 / 2.3.3 / 1.9.9` yazarken gerçek
 > sürümler `1.9.16 / 2.3.17 / 1.9.31`ti. Belge okuyanı yanılttığı için kaldırıldı.)
 > Sürüm değiştirmek için `versions.json`u düzenleyip `.\build_tools\sync_versions.ps1` çalıştırın;
-> hedef dosyaları (`VERSION`, `pf/app.json`, `launcher/app/tauri.conf.json`) o yazar — build
+> hedef dosyaları (`VERSION`, `apps/ui/app.json`, `launcher/app/tauri.conf.json`) o yazar — build
 > scriptleri de başlarken otomatik çağırır.
 
-**Depo yerleşimi (2026-08-18, tek depo):** mobil/web istemci `pf/`, ödeme sitesi `apps/web/`
+**Depo yerleşimi (2026-08-18, tek depo):** mobil/web istemci `apps/ui/`, ödeme sitesi `apps/web/`
 artık **bu deponun içinde**; ayrı `pemf-frontend` / `apps/web` depoları arşivlendi.
 CI yapılandırması **yalnız kök `.github/`** altında durur — GitHub alt dizindeki workflow'ları
 okumaz, orada bırakılan bir dosya sessizce hiç koşmaz (`tests/test_ci_workflow_gate.py` bunu kilitler).
@@ -27,7 +27,7 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 | 2 | **base.zip** (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` (+ sha/size) |
 | 3 | **Installer** (launcher/Tauri) | `cd launcher\app; npx @tauri-apps/cli build` | `launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.9_x64-setup.exe` |
 | 3b | **Installer** (Inno offline) | `.\build_tools\build_installer.ps1 [-Mode device\|server]` | Inno Setup .exe (her şeyi bundle) |
-| 4 | **Web frontend** | `cd pf; npm run export:web` + mirror | `pf\dist` → `frontend\dist` + runtime |
+| 4 | **Web frontend** | `cd apps/ui; npm run export:web` + mirror | `apps/ui\dist` → `frontend\dist` + runtime |
 | 5 | **Android APK** | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
 
 > Tüm PowerShell komutları **guii kök dizininden** çalıştırılır. Scriptler kendi konumlarından
@@ -319,10 +319,10 @@ Client v1.9.3'ten itibaren **açılışta kendini otomatik günceller** (kullan�
 ## 4. Web frontend (backend'in localhost:8000'de sunduğu React UI)
 
 ```powershell
-cd pf
-npm run export:web                 # expo export --platform web + postexport → pf\dist
+cd apps/ui
+npm run export:web                 # expo export --platform web + postexport → apps/ui\dist
 ```
-Sonra `pf\dist`'i iki yere **mirror**'la (robocopy /MIR):
+Sonra `apps/ui\dist`'i iki yere **mirror**'la (robocopy /MIR):
 - `guii\frontend\dist` (kaynak/spec bundle),
 - kurulu `runtime\PEMF_Backend\_internal\frontend\dist` (backend buradan StaticFiles ile sunar → EXE rebuild GEREKMEZ, sadece hard-refresh).
 
@@ -386,7 +386,7 @@ gh release upload launcher-v1.9.13 -R mert61-python/pemf-update release_assets\P
 #    ⚠️ make_manifest `mobile` blogunu URETMEZ, onceki manifest'ten TASIR (CARRY_ONLY) — yani
 #    elle guncellenmezse OTA sessizce ONCEKI versionCode'da DONAR. Manifest'in kendi notu da
 #    sirayi sart kosuyor: "APK'yi yukledikten SONRA burayi guncelleyin; ters sirada 404".
-#    Alanlar: mobile.android.version / versionCode / url / sha256 / size  (versionCode pf/app.json
+#    Alanlar: mobile.android.version / versionCode / url / sha256 / size  (versionCode apps/ui/app.json
 #    ile AYNI olmali; kucuk/esit birakmak guncellemeyi sessizce kapatir).
 gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-app-packages\manifest.json
 # 4) web sitesi (indirme sayfasi)
@@ -471,7 +471,7 @@ guii\
 │  ├─ build_apk.ps1            # (5) APK (kısa-dizin otomasyonu)
 │  └─ PEMF_Backend_onedir.spec # PyInstaller spec
 ├─ launcher\app\               # (3) Tauri client (installer) kaynağı
-├─ pf\                         # mobil + web React (Expo) kaynağı
+├─ apps/ui\                         # mobil + web React (Expo) kaynağı
 ├─ frontend\dist\              # (4) web export hedefi
 ├─ PEMF_BUILD\dist\PEMF_Backend# (1) frozen backend çıktısı (base.zip kaynağı)
 ├─ pemf-app-packages\          # base.zip + manifest.json

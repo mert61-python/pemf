@@ -293,7 +293,7 @@ data/cloud_mqtt_provision.json
 *.pemfsec
 
 # ── Tek-depoya birleştirmeden kalan ARŞİV .git dizinleri (2026-08-18) ────────────────────────
-# `pemf-vet-web/` ve `pf/` daha önce ayrı depolardı; birleştirmede eski `.git` dizinleri
+# `apps/web/` ve `apps/ui/` (o zamanki adlarıyla `pemf-vet-web/` ve `pf/`) daha önce ayrı depolardı; birleştirmede eski `.git` dizinleri
 # `.git.arsiv-<tarih>` adıyla saklandı (geçmişe erişim gerekirse diye).
 # ⚠️ NEDEN YOKSAYILIYOR: `git add -A` bunları süpürüyor ve tek commit'te ~850 dosya / 8 MB
 # iç git nesnesi ekliyordu (2026-08-22 yayınında yakalandı). Bunlar KAYNAK DEĞİL, arşivdir;
@@ -302,9 +302,14 @@ data/cloud_mqtt_provision.json
 .git.arsiv-*/
 
 # ── Gradle build önbelleği (yerel modüller) ─────────────────────────────────────────────────
-# `pf/modules/*/android/.gradle/` altındaki kilit/gc dosyaları build ÇIKTISIDIR; makineye
-# özeldir ve her build'de değişir. 2026-08-22 yayınında `git add -A` ile commit'e sızdılar.
-pf/modules/*/android/.gradle/
+# `apps/ui/modules/*/android/.gradle/` altındaki kilit/gc dosyaları build ÇIKTISIDIR;
+# makineye özeldir ve her build'de değişir. 2026-08-22 yayınında `git add -A` ile commit'e
+# sızdılar.
+# ⚠️ YOL ÇIPASI 2026-09-18'DE KAYDI: `pf/` → `apps/ui/` taşınınca bu desen ESKİ yola bakmaya
+# devam etti ve `.gradle/` bir anda TAKİPSİZ göründü — yani bir sonraki `git add -A` onu
+# yeniden commit'e sızdıracaktı (2026-08-22'de yaşanan arızanın aynısı). Taşımada .gitignore
+# desenleri de taşınır.
+apps/ui/modules/*/android/.gradle/
 
 # Unipolar (tek-bacak) ayna projesi — ayni kurallar (build ciktisi kaynak degil)
 firmware/stm32_pemf_unipolar/Debug/

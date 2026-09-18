@@ -282,7 +282,7 @@ def test_KRITIK_arama_indeksi_FK_KAPALIYKEN_da_temizlenir(hastalar):
 # İkisi ayrı sorulardır ve bu depoda ikincisi ihmal edildiğinde kapı sessizce anlamını
 # yitirdi (bkz. test_ai_gorsel_sahne_capalari.py dosya başlığı).
 
-_PF = KOK / "pf" / "src"
+_PF = KOK / "apps" / "ui" / "src"
 
 #: Toplu silmeyi taşıyan ekranlar — sahibin iki ayrı isteği (seans + hasta).
 TOPLU_SILME_EKRANLARI = ("screens/TreatmentHistoryScreen.tsx", "screens/PatientScreen.tsx")
@@ -299,7 +299,7 @@ def _tsx(bagil: str) -> str:
     return c_soy((_PF / bagil).read_text(encoding="utf-8"))
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_her_iki_ekran_da_ORTAK_kancayi_kullaniyor():
     """MUTASYON: bir ekrandan `useCokluSecim(` çağrısını kaldır → KIRMIZI.
 
@@ -314,7 +314,7 @@ def test_KRITIK_her_iki_ekran_da_ORTAK_kancayi_kullaniyor():
         assert "<SecimCubugu" in src, f"{ekran} secim seridini gostermiyor -> dugme erisilemez"
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_arayuz_TOPLU_uca_gidiyor_N_istek_DEGIL():
     """⚠️ İstemci N ayrı silme isteği atarsa atomiklik KAYBOLUR: dizi yarısında koparsa
     operatör hangi kayıtların gittiğini bilemez. Kapı, toplu ucun çağrıldığını kanıtlar.
@@ -328,7 +328,7 @@ def test_KRITIK_arayuz_TOPLU_uca_gidiyor_N_istek_DEGIL():
     assert '"/patients/delete_bulk"' in hasta, "hasta ekrani TOPLU uca gitmiyor"
 
 
-@pytest.mark.skipif(not (_PF / "services").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "services").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_onay_dizgisi_backend_ile_AYNI():
     """⚠️ Arayüz ile backend farklı dizgi taşırsa "Sil" düğmesi SESSİZCE 400 alır: kullanıcıya
     "başarısız" der, sebebini söylemez ve hata bir sürüm boyunca fark edilmez.

@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 
 _KOK = Path(__file__).resolve().parents[1]
-_YERLI = _KOK / "pf" / "modules" / "apk-installer" / "android" / "src" / "main"
+_YERLI = _KOK / "apps" / "ui" / "modules" / "apk-installer" / "android" / "src" / "main"
 _SERVIS = _YERLI / "java" / "expo" / "modules" / "apkinstaller" / "IndirmeServisi.kt"
 _MODUL = _YERLI / "java" / "expo" / "modules" / "apkinstaller" / "ApkInstallerModule.kt"
 _MANIFEST = _YERLI / "AndroidManifest.xml"

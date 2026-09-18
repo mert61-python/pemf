@@ -31,7 +31,7 @@ import pytest
 _KOK = Path(__file__).resolve().parent.parent
 _KURULUM_SQL = _KOK / "database" / "supabase_devices.sql"
 _CANLI_SQL = _KOK / "supabase" / "resolve_device_bayat_gorunur.sql"
-_ISTEMCI_TS = _KOK / "pf" / "src" / "services" / "deviceRegistry.ts"
+_ISTEMCI_TS = _KOK / "apps" / "ui" / "src" / "services" / "deviceRegistry.ts"
 
 _BIRIM_SN = {
     "second": 1,
@@ -89,9 +89,9 @@ def _pencere_sn(govde: str) -> int:
 def _istemci_pencere_sn() -> int:
     """`deviceRegistry.ts` içindeki `STALE_MS` çarpımını hesapla.
 
-    ⚠️ ESKİ GEREKÇE GEÇERSİZ (tek depo, 2026-08-18): burada "`pf/` AYRI bir depodur
+    ⚠️ ESKİ GEREKÇE GEÇERSİZ (tek depo, 2026-08-18): burada "`apps/ui/` AYRI bir depodur
     (`pemf-frontend`) ve bu deponun CI checkout'unda BULUNMAZ" yazıyordu. `pemf-frontend`
-    tek depoya taşındı; `pf/` artık checkout'ta VAR ve bu kapı CI'da GERÇEKTEN ÖLÇÜYOR
+    tek depoya taşındı; `apps/ui/` artık checkout'ta VAR ve bu kapı CI'da GERÇEKTEN ÖLÇÜYOR
     (doğrulandı: atlanmıyor, PASSED). Atlama yolu yalnızca parçalı bir çalışma kopyası
     için duruyor — sessizce ölü kalmasın diye durumu böyle bıraktım, çünkü bu kapı
     hasta-görünür bir değişmezi kilitler: sunucu tazelik penceresi istemcinin `STALE_MS`inden

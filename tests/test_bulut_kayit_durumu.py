@@ -137,14 +137,14 @@ def test_arayuz_bu_alani_GERCEKTEN_okuyor():
     Sözleşmenin iki ucu da tutulmalı; yalnız backend'i kilitlemek bu arızayı tekrar üretir."""
     from pathlib import Path
 
-    kok = Path(__file__).resolve().parents[1] / "pf" / "src"
+    kok = Path(__file__).resolve().parents[1] / "apps" / "ui" / "src"
     okuyanlar = [
         p
         for p in kok.rglob("*.ts*")
         if "__tests__" not in p.parts and "cloudRegistry" in p.read_text(encoding="utf-8", errors="ignore")
     ]
     assert okuyanlar, (
-        "pf/ altında `cloudRegistry` okuyan ÜRETİM dosyası yok — backend durumu yayınlıyor ama "
+        "apps/ui/ altında `cloudRegistry` okuyan ÜRETİM dosyası yok — backend durumu yayınlıyor ama "
         "hiçbir ekran göstermiyor (bulgunun ta kendisi)"
     )
 
@@ -159,7 +159,7 @@ def test_arayuz_her_bozuk_durumu_TANIYOR(durum):
     # ve `secret_mismatch`i DOSYA BAŞINDAKİ YORUMDA buluyordu → `case` dalını silen mutasyon
     # kapıyı YEŞİL bırakıyordu (ölçüldü). Bu projede aynı zayıf-çıpa hatası daha önce iki kez
     # ısırdı; kural: çıpayı gerçek koda pinle, açıklama metnine değil.
-    kaynak = (Path(__file__).resolve().parents[1] / "pf" / "src" / "services" / "bulutKayit.ts").read_text(
+    kaynak = (Path(__file__).resolve().parents[1] / "apps" / "ui" / "src" / "services" / "bulutKayit.ts").read_text(
         encoding="utf-8"
     )
     assert f'case "{durum}":' in kaynak, (

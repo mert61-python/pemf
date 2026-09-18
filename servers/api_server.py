@@ -1122,7 +1122,7 @@ def _on_mqtt_message_api(client, userdata, msg):
                     # sunucu durumunu guncelliyor ve bildirim atiyor ama `coil_status` WS
                     # YAYINI YAPMIYORDU. Istemci `connected` alanini yalnizca WS anlik
                     # goruntusunden ya da `coil_status` olayindan ogrenir; "Hazır" etiketi
-                    # dogrudan o alandan gelir (pf/src/components/domain/CoilParameterPanel.tsx
+                    # dogrudan o alandan gelir (apps/ui/src/components/domain/CoilParameterPanel.tsx
                     # ve CoilCard.tsx: running ? "Aktif" : connected ? "Hazır" : "Offline").
                     # ⚠️ `_esp_telemetry_watchdog` bunu KURTARAMAZ: onun kosulu
                     # `coil.get("connected")` ve bu dal onu ZATEN False yapmis oluyor →
@@ -4200,7 +4200,7 @@ async def stop_session():
     # düzeltmeyi en çok gereken istemciye HİÇ ulaşmıyordu.
     #
     # ÇÖZÜM: uyarıyı yeni bir alana DEĞİL, eski istemcinin de anladığı KANALA koy → 2xx DIŞI
-    # yanıt. Ölçülen davranış (pf/src/services/apiClient.ts):
+    # yanıt. Ölçülen davranış (apps/ui/src/services/apiClient.ts):
     #   · `!response.ok` → gövde `detail` alanı okunur ve `showError("Sunucu Hatası", detail)`
     #     ile EKRANA BASILIR → eski istemci uyarının METNİNİ görür,
     #   · çağrıya `null` döner → `useSessionControl` "Durdurma onaylanamadı … ACİL DURDUR'a

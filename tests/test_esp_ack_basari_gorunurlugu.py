@@ -91,10 +91,12 @@ def test_yayin_hatasi_bekciyi_DUSURMEZ(api, monkeypatch):
 
 def test_KRITIK_frontend_coil_ack_sozlesmesi():
     """Backend'in yayınladığı tip arayüzde TANIMLI ve İŞLENİYOR olmalı (aksi halde olay sessizce düşer)."""
-    ws_ts = (KOK / "pf" / "src" / "services" / "wsClient.ts").read_text(encoding="utf-8")
-    ctx = (KOK / "pf" / "src" / "context" / "LiveDataContext.tsx").read_text(encoding="utf-8")
+    ws_ts = (KOK / "apps" / "ui" / "src" / "services" / "wsClient.ts").read_text(encoding="utf-8")
+    ctx = (KOK / "apps" / "ui" / "src" / "context" / "LiveDataContext.tsx").read_text(encoding="utf-8")
     assert re.search(r'\|\s*"coil_ack"', ws_ts), "wsClient.ts WsMessageType 'coil_ack' içermiyor"
     assert re.search(r'case\s+"coil_ack"\s*:', ctx), "LiveDataContext 'coil_ack' olayını işlemiyor"
     assert "deviceAck" in ctx, "LiveDataContext coil_ack'i bobin 'deviceAck' alanına yazmıyor"
-    panel = (KOK / "pf" / "src" / "components" / "domain" / "CoilParameterPanel.tsx").read_text(encoding="utf-8")
+    panel = (KOK / "apps" / "ui" / "src" / "components" / "domain" / "CoilParameterPanel.tsx").read_text(
+        encoding="utf-8"
+    )
     assert "deviceAck" in panel and "onayladı" in panel, "panel cihaz onayını göstermiyor"

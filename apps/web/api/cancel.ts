@@ -28,9 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ⚠️ DÜZELTİLMİŞ İDDİA (denetim 2026-08-18): bu yorumun eski hâli "erişim
     // `current_period_end`e kadar sürer" diyordu. ÖLÇÜLDÜ — SÜRMÜYOR, ve `current_period_end`
     // sütununa BU DEPODA HİÇBİR YOL değer YAZMIYOR (callback/webhook/cancel: hiçbiri;
-    // `pf/supabase/subscriptions.sql`teki sütun NULL kalıyor). Hakkı okuyan iki katman da yalnız
+    // `apps/ui/supabase/subscriptions.sql`teki sütun NULL kalıyor). Hakkı okuyan iki katman da yalnız
     // `status`e bakıyor ve `canceled`ı pasif sayıyor: `guii/servers/entitlement.py`
-    // (_INACTIVE_STATUS → tier 'baslangic', eklentiler boş) ve `pf/src/config/entitlement.ts`
+    // (_INACTIVE_STATUS → tier 'baslangic', eklentiler boş) ve `apps/ui/src/config/entitlement.ts`
     // (`isActive` yalnız active/trialing). Yani tier'ı satırda korumak GÖZLENEBİLİR davranışı
     // DEĞİŞTİRMİYOR; ödenmiş dönemin ortasında erişim yine kesilir.
     // Bugün canlıda zarar YOK: `FREE_MODE=true` (satış kapalı) ve iki tarafta da enforcement

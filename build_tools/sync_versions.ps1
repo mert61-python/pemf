@@ -107,23 +107,23 @@ Set-Value -Path "launcher\Cargo.toml" -Label "launcher (Cargo.toml)" -New $v.lau
 Set-Value -Path "launcher\app\tauri.conf.json" -Label "launcher (tauri.conf.json)" -New $v.launcher `
           -Pattern '("version"\s*:\s*")(\d+\.\d+\.\d+)(")' -FirstOnly
 
-# --- mobile: pf/app.json ---
-Set-Value -Path "pf\app.json" -Label "mobile adi (app.json)" -New $v.mobile.name `
+# --- mobile: apps/ui/app.json ---
+Set-Value -Path "apps/ui\app.json" -Label "mobile adi (app.json)" -New $v.mobile.name `
           -Pattern '("version"\s*:\s*")(\d+\.\d+\.\d+)(")' -FirstOnly
-Set-Value -Path "pf\app.json" -Label "mobile versionCode" -New ([string]$v.mobile.androidVersionCode) `
+Set-Value -Path "apps/ui\app.json" -Label "mobile versionCode" -New ([string]$v.mobile.androidVersionCode) `
           -Pattern '("versionCode"\s*:\s*)(\d+)()'
-Set-Value -Path "pf\app.json" -Label "mobile iOS buildNumber" -New $v.mobile.iosBuildNumber `
+Set-Value -Path "apps/ui\app.json" -Label "mobile iOS buildNumber" -New $v.mobile.iosBuildNumber `
           -Pattern '("buildNumber"\s*:\s*")([^"]+)(")'
 
-# --- mobile (Android GERCEK kaynagi): pf/android/app/build.gradle ---
-# ONEMLI: pf/android/ COMMIT'LI tam native proje ve build_apk.ps1 gradle'i DOGRUDAN calistiriyor
+# --- mobile (Android GERCEK kaynagi): apps/ui/android/app/build.gradle ---
+# ONEMLI: apps/ui/android/ COMMIT'LI tam native proje ve build_apk.ps1 gradle'i DOGRUDAN calistiriyor
 # (expo prebuild YOK). Bu yuzden app.json'daki version/versionCode APK'ya UYGULANMIYOR; gradle
 # defaultConfig KAZANIYOR. Denetimde build.gradle 2.3.2/vc9'da DONMUS bulundu (versions.json
 # 2.3.3/vc10 derken) -> yayinlanan APK yanlis surumdeydi ve Play Store'a ayni versionCode ile
 # ikinci kez yuklenemezdi. Tek-kaynak artik build.gradle'i da yaziyor.
-Set-Value -Path "pf\android\app\build.gradle" -Label "mobile versionName (build.gradle)" -New $v.mobile.name `
+Set-Value -Path "apps/ui\android\app\build.gradle" -Label "mobile versionName (build.gradle)" -New $v.mobile.name `
           -Pattern '(versionName\s+")(\d+\.\d+\.\d+)(")' -FirstOnly
-Set-Value -Path "pf\android\app\build.gradle" -Label "mobile versionCode (build.gradle)" -New ([string]$v.mobile.androidVersionCode) `
+Set-Value -Path "apps/ui\android\app\build.gradle" -Label "mobile versionCode (build.gradle)" -New ([string]$v.mobile.androidVersionCode) `
           -Pattern '(versionCode\s+)(\d+)()' -FirstOnly
 
 # --- frontend OTA ---

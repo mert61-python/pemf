@@ -18,7 +18,7 @@ Bağımlılık: YALNIZ stdlib (gömülü python + CI setup-python'da pip yok). W
 
 Kullanım:
     python scripts/responsive_kapisi.py --hedef launcher
-    python scripts/responsive_kapisi.py --hedef pf --pf-dist pf/dist
+    python scripts/responsive_kapisi.py --hedef pf --pf-dist apps/ui/dist
     python scripts/responsive_kapisi.py --hedef site --site-dist apps/web/dist
     python scripts/responsive_kapisi.py --hedef launcher --mutasyon "#btn-install{display:none}"  # → 1 bekle
 Çıkış: 0 temiz (yalnız baseline'daki bilinenler) · 1 YENİ bulgu · 2 kullanım/altyapı hatası
@@ -617,7 +617,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")  # gömülü python stdout cp1254 tuzağı
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--hedef", choices=list(HEDEFLER), required=True)
-    ap.add_argument("--pf-dist", default=str(_KOK / "pf" / "dist"))
+    ap.add_argument("--pf-dist", default=str(_KOK / "apps" / "ui" / "dist"))
     ap.add_argument("--site-dist", default=str(_KOK / "apps/web" / "dist"))
     ap.add_argument("--cikti", default=str(_KOK.parent / "PEMF_BUILD" / "responsive_kapisi"))
     ap.add_argument("--baseline", default=str(BASELINE))

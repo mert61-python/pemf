@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_JEST_CONFIG = _KOK / "pf" / "jest.config.js"
+_JEST_CONFIG = _KOK / "apps" / "ui" / "jest.config.js"
 
 #: Alt sinir — soguk transform penceresini kapatacak kadar. 5000 (jest varsayilani) CI'da
 #: OLCULEREK yetersiz bulundu.
@@ -70,7 +70,7 @@ def test_KRITIK_jest_testTimeout_TANIMLI():
     assert _JEST_CONFIG.exists(), f"jest yapilandirmasi yok: {_JEST_CONFIG}"
     deger = _testtimeout_degeri()
     assert deger is not None, (
-        "pf/jest.config.js icinde `testTimeout` YOK -> jest varsayilan 5000 ms kullanir. "
+        "apps/ui/jest.config.js icinde `testTimeout` YOK -> jest varsayilan 5000 ms kullanir. "
         "2026-09-15'te (kosu 34998091761) tam bu deger yuzunden frontend-ci kirmizi dondu: "
         "sure test mantiginda degil, SOGUK CI'daki ilk babel transform'unda harcaniyor."
     )
@@ -110,6 +110,6 @@ def test_KARSIT_KANIT_yapilandirma_BOSALTILMADI(anahtar):
     ⚠️ Capa YORUMSUZ koda pinli (`_kod()`), ham metne DEGIL — bkz. oradaki aciklama.
     """
     assert re.search(rf"^\s*{anahtar}\s*:", _kod(), re.M), (
-        f"pf/jest.config.js icinden `{anahtar}` anahtari KAYBOLMUS — o olmadan jest-expo "
+        f"apps/ui/jest.config.js icinden `{anahtar}` anahtari KAYBOLMUS — o olmadan jest-expo "
         f"transform zinciri kurulmaz ve `testTimeout` tek basina hicbir sey ifade etmez"
     )

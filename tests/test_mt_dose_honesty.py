@@ -127,12 +127,12 @@ def test_KRITIK_UI_alani_YALNIZ_KAYIT_oldugunu_soyler():
     """Etiket bunu söylemezse operatör yoğunluğu ayarladığını sanır ve gerçek doz
     beklediğinden farklı olur.
 
-    ⚠️ `pf/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
+    ⚠️ `apps/ui/` (Expo mobil) AYRI projedir ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
     `FileNotFoundError` ile düşerdi (2026-08-12). Atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
     ile atlama yasaklanabilir. Bu dosyadaki DİĞER testler (STM paketi / ESP komutu / PDF /
     history_router) depo içi kaynakları okur ve CI'da tam koşmaya devam eder.
     """
-    cs = capraz.oku("pf/src/screens/ControlScreen.tsx")
+    cs = capraz.oku("apps/ui/src/screens/ControlScreen.tsx")
     assert 'label="Yoğunluk (mT, yalnız kayıt)"' in cs, "UI etiketi hala cihaza gidiyormus gibi gosteriyor"
 
 

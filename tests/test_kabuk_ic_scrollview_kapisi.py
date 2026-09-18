@@ -24,7 +24,7 @@ import re
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 
 # Kabuk İÇİNDE çizilen ekranlar (AppShell children). Yeni ekran eklenirse BURAYA da eklenir.
 _KABUK_EKRANLARI = (
@@ -47,7 +47,7 @@ _KLAVYELI_MODALLAR = (
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "components" / "ui" / "AppShell.tsx").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 # `<ScrollView` açılışı ve kapanış `>` arasındaki tüm prop metni (çok satırlı JSX dahil).

@@ -5,7 +5,7 @@
 # + ilgili branch'in latest.json manifest'ini gunceller. Kurulu eski surumler bunu
 # gorup guncellemeyi onerir (EXE: bildirim+tek-tik; mobil: indir).
 #
-# Token: git credential'dan otomatik alinir (pf/backend push'unda kullandigin).
+# Token: git credential'dan otomatik alinir (apps/ui/backend push'unda kullandigin).
 #
 # KULLANIM:
 #   # EXE (device installer) yeni surum:

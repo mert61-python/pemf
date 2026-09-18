@@ -12,7 +12,7 @@ SÖZLEŞME:
   1. ControlScreen'de acil durdurma düğmesi SEKME ÇUBUĞUNDAN ÖNCE gelir (kaydırmasız erişim).
   2. GlobalEmergencyStop, STM durumu belirsizken (bir kez çalışır görülmüşse) kendini GİZLEMEZ.
 
-Davranışsal kanıt: pf/src/components/ui/__tests__/GlobalEmergencyStop.belirsizlik.test.tsx
+Davranışsal kanıt: apps/ui/src/components/ui/__tests__/GlobalEmergencyStop.belirsizlik.test.tsx
 """
 
 import pathlib
@@ -20,12 +20,12 @@ import pathlib
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_CONTROL = _KOK / "pf" / "src" / "screens" / "ControlScreen.tsx"
-_GES = _KOK / "pf" / "src" / "components" / "ui" / "GlobalEmergencyStop.tsx"
+_CONTROL = _KOK / "apps" / "ui" / "src" / "screens" / "ControlScreen.tsx"
+_GES = _KOK / "apps" / "ui" / "src" / "components" / "ui" / "GlobalEmergencyStop.tsx"
 
 pytestmark = pytest.mark.skipif(
     not _CONTROL.exists() or not _GES.exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 

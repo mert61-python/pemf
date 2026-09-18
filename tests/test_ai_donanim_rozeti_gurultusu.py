@@ -41,7 +41,7 @@ for _p in (str(KOK), str(KOK / "tests")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-_EKRAN = KOK / "pf" / "src" / "screens" / "AiHubScreen.tsx"
+_EKRAN = KOK / "apps" / "ui" / "src" / "screens" / "AiHubScreen.tsx"
 _ROUTER = KOK / "servers" / "ai_router.py"
 
 

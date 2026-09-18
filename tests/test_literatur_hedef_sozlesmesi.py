@@ -28,7 +28,7 @@ from ai.hybrid_recommender import (
     get_literature_recommendation,
 )
 
-_KAYNAK_TSX = Path(__file__).resolve().parents[1] / "pf" / "src" / "screens" / "ControlScreen.tsx"
+_KAYNAK_TSX = Path(__file__).resolve().parents[1] / "apps" / "ui" / "src" / "screens" / "ControlScreen.tsx"
 
 # Arayüzdeki her hedefin ALMASI GEREKEN doz (freq Hz / duty % / süre dk). Bu üçlüler klinik
 # protokol tablosundan gelir; sözlükteki bir değer değişirse burada da bilinçli güncellenmeli.

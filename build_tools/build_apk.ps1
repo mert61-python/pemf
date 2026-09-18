@@ -25,10 +25,10 @@ function Die($m){ Write-Host "[apk] HATA: $m" -ForegroundColor Red; exit 1 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $GuiRoot   = Split-Path -Parent $ScriptDir
-$Pf        = Join-Path $GuiRoot "pf"
-if (-not (Test-Path (Join-Path $Pf "android\gradlew.bat"))) { Die "pf\android\gradlew.bat yok: $Pf" }
+$Pf        = Join-Path $GuiRoot "apps/ui"
+if (-not (Test-Path (Join-Path $Pf "android\gradlew.bat"))) { Die "apps/ui\android\gradlew.bat yok: $Pf" }
 
-# TEK KAYNAK: versions.json -> pf\app.json (version, versionCode, buildNumber).
+# TEK KAYNAK: versions.json -> apps/ui\app.json (version, versionCode, buildNumber).
 # Aynalamadan ÖNCE çalışmalı, yoksa C:\pb'ye eski sürüm kopyalanır.
 $SyncScript = Join-Path $ScriptDir "sync_versions.ps1"
 if (Test-Path $SyncScript) {
@@ -57,7 +57,7 @@ Info "Aynalama tamam (robocopy exit $($rc.ExitCode))."
 
 # --- 1b. AYNA BÜTÜNLÜK DENETİMİ ---------------------------------------------
 # robocopy "basarili" der ama KAYNAK kopyalama sirasinda degisiyorsa sonuc EKSIK kalir ve bunu
-# rapor ETMEZ. Somut vaka: build_installer.ps1 / build_backend_exe.ps1 de pf'te
+# rapor ETMEZ. Somut vaka: build_installer.ps1 / build_backend_exe.ps1 de apps/ui'de
 # `npm ci --legacy-peer-deps` calistirir -> node_modules SILINIP yeniden kurulur. O sirada baslayan
 # APK aynalamasi yarim bir agac kopyalar; gradle ise 10 satirlik anlamsiz bir hatayla duser:
 #   "settings.gradle line 3: Process 'command 'node'' finished with non-zero exit value 1"
@@ -72,7 +72,7 @@ $mustExist = @(
 foreach ($rel in $mustExist) {
     if (-not (Test-Path (Join-Path $ShortDir $rel))) {
         Die ("Ayna EKSİK: $rel yok.`n" +
-             "       En olası sebep: aynalama sırasında pf\node_modules başka bir build tarafından`n" +
+             "       En olası sebep: aynalama sırasında apps/ui\node_modules başka bir build tarafından`n" +
              "       değiştiriliyordu (build_installer.ps1 / build_backend_exe.ps1 `npm ci` çalıştırır).`n" +
              "       O build BİTTİKTEN SONRA bu scripti tekrar çalıştırın (paralel ÇALIŞTIRMAYIN).")
     }
@@ -144,7 +144,7 @@ if ($apksigner) {
         Write-Host "#  Bu anahtar repoda commit'li ve parolasi herkeste ayni.  #" -ForegroundColor Red
         Write-Host "#  YAYINA CIKARMAYIN / SIDELOAD DAGITMAYIN.                #" -ForegroundColor Red
         Write-Host "#                                                          #" -ForegroundColor Red
-        Write-Host "#  Cozum: pf\android\keystore.properties olusturun:        #" -ForegroundColor Yellow
+        Write-Host "#  Cozum: apps/ui\android\keystore.properties olusturun:        #" -ForegroundColor Yellow
         Write-Host "#    storeFile=C:\\yol\\pemf-release.p12                     #" -ForegroundColor Yellow
         Write-Host "#    storePassword=...  keyAlias=pemf  keyPassword=...     #" -ForegroundColor Yellow
         Write-Host "############################################################" -ForegroundColor Red

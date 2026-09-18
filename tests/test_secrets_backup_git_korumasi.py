@@ -57,7 +57,7 @@ def sahte_git_repo(tmp_path, monkeypatch):
     for rel in SIR_DOSYALARI:
         (gui / rel).parent.mkdir(parents=True, exist_ok=True)
         (gui / rel).write_text("// placeholder\n", encoding="utf-8")
-    (gui / "pf/android").mkdir(parents=True)
+    (gui / "apps/ui/android").mkdir(parents=True)
     (gui / "data").mkdir(parents=True)
     (home / ".pemf-keys").mkdir(parents=True)
 
@@ -77,7 +77,7 @@ def sahte_git_repo(tmp_path, monkeypatch):
                 "firmware/esp8266_pemf_coil/data/config.json",
                 "firmware/esps3_pemf_coil/data/config.json",
                 "data/cloud_mqtt_provision.json",
-                "pf/android/keystore.properties",
+                "apps/ui/android/keystore.properties",
                 "~/.pemf-keys/pemf-release.jks",
             ],
         )

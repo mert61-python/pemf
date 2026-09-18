@@ -23,7 +23,7 @@ tersi). `tests/test_seans_durum_etiketi.py` iki haritayı ANAHTAR ANAHTAR karş�
 from __future__ import annotations
 
 #: Ham backend durumu (küçük harf) -> Türkçe gösterim etiketi.
-#: ⚠️ `pf/src/screens/TreatmentHistoryScreen.tsx::STATUS_LABELS_TR` ile BİREBİR AYNI olmalı.
+#: ⚠️ `apps/ui/src/screens/TreatmentHistoryScreen.tsx::STATUS_LABELS_TR` ile BİREBİR AYNI olmalı.
 DURUM_ETIKETLERI: dict[str, str] = {
     "completed": "Tamamlandı",
     "active": "Aktif",

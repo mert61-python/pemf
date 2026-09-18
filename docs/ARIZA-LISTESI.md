@@ -158,15 +158,15 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | **6** | **B2** + **B3** | Ticari risk; ucuz |
 | **7** | **A4** base-linux | Workflow koşturma gerektiriyor |
 | **8** | **C2–C5** hijyen | Toplu |
-| **9** | **Klasör düzeni** F1→F6 | ⛔ **7 alt fazın 4'ü BLOKE** (2026-09-18 ölçüldü) — aşağı bak |
+| **9** | **Klasör düzeni** F1→F6 | 🟡 **F1a+F1b BİTTİ 2026-09-18**; kalan 5 alt faz bloke — aşağı bak |
 | **10** | ~~**B4** dev dosya bölme~~ | ✅ **KAPANDI 2026-09-18** (sıradan önce yapıldı; ön şartı B1'di, o da bitmişti) |
 
-> ### ⛔ Klasör düzeni — ölçülen engeller (2026-09-18)
+> ### 🟡 Klasör düzeni — F1 BİTTİ, kalanların engelleri (2026-09-18)
 >
 > | Faz | Engel |
 > |---|---|
-> | F1a `pemf-vet-web/`→`apps/web` | `.vercel/project.json` → `"rootDirectory": "pemf-vet-web"`. Asıl ayar **Vercel panosunda** ve bu dal **canlı satış sitesini** deploy ediyor → sahip panoyu güncellemeden push, deploy'u kırar |
-> | F1b `pf/`→`apps/ui` | `git mv` **Permission denied** — VS Code `redhat.java` dil sunucusu `pf/android`'i tutuyor. Editör kapatılmadan yapılamaz |
+> | ~~F1a `pemf-vet-web/`→`apps/web`~~ | ✅ **BİTTİ 2026-09-18** — sahip Vercel panosundaki `rootDirectory`yi güncelledi, taşıma yapıldı, `site-ci` + deploy yeşil |
+> | ~~F1b `pf/`→`apps/ui`~~ | ✅ **BİTTİ 2026-09-18** — engel VS Code değil **Java** idi: `redhat.java` dil sunucusu + Gradle daemon'ları öldürülünce `git mv` geçti (editör kapatılmadı). ⚠️ Dizin adı **beş** ayrı biçimde geçiyordu; beşincisini (`build_mac.sh`teki yalın `cd pf`) hiçbir kapı görmedi → `tests/test_tasinmis_dizin_calisan_kodda_YOK.py` yazıldı |
 > | F2 `launcher/` · F6 çıktılar | `launcher.yml` yolları sabit + yalnız `launcher-v*` etiketiyle koşar (**donmuş yayın**) → doğrulanamaz |
 > | F3 `ai/hub` | **import kökü**: `ai_hub.` → `ai.hub.` 84 dosya + kod koruması (.pyd/PYZ) zinciri |
 > | F3 `ai/service` | import kökü + `Dockerfile.ai` → doğrulaması **Docker imaj build'i** ister (metered kota) |

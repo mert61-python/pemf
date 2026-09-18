@@ -11,7 +11,7 @@ hasta erişimini bozar:
 adının `.lower()` ile karşılaştırıldığı HER yerde (arama indeksi, PDF rapor filtresi) tekrarlar.
 Bu modül o mantığı TEK yerde toplar → bir yüzeyde düzeltilip başka yüzeyde unutulması imkânsız.
 
-⚠️ KURAL YALNIZ İ/I'DİR — AKSAN DÜZLEŞTİRİLMEZ (mobil `pf/src/utils/aramaNormalize.ts` ile
+⚠️ KURAL YALNIZ İ/I'DİR — AKSAN DÜZLEŞTİRİLMEZ (mobil `apps/ui/src/utils/aramaNormalize.ts` ile
 BİREBİR AYNI, bilinçli hizalama 2026-08-30). İlk düzeltme aksanları da katlıyordu (ş→s, ç→c,
 ö→o…); bu YANLIŞTI: "Şirin" ile "Sirin"i, "Gökçe" ile "Gokce"yi birleştirmek bir HASTA-KİMLİĞİ
 ekranında yanlış kayda bakma riski demektir (mobil ekip bunu daha önce ölçüp reddetmişti). Üstelik

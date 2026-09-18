@@ -17,7 +17,7 @@ BU KAPI NE ÖLÇER (jest'in ölçmediklerini):
   4. Backend hedef adaylarının kare-oranlı `pxn` ürettiği — halkaların ham piksele dönmesi
      işaretleri hedeften kaydırırdı (WS önizlemesi kareyi 960 px'e küçültür).
 
-⚠️ `pf/` bu depoda izlenmez (.gitignore) → kaynak yoksa ATLA (capraz kuralı).
+⚠️ `apps/ui/` bu depoda izlenmez (.gitignore) → kaynak yoksa ATLA (capraz kuralı).
 """
 
 import ast
@@ -27,11 +27,11 @@ import re
 import capraz
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PROFIL = "pf/src/components/domain/aiProProfilleri.ts"
-_PANEL = "pf/src/components/domain/AiProPanel.tsx"
-_KARTLAR = "pf/src/components/domain/aipro/ModelSecimKartlari.tsx"
-_HEDEF = "pf/src/components/domain/aipro/HedefSecici.tsx"
-_ROZET = "pf/src/components/domain/aipro/KalibrasyonRozeti.tsx"
+_PROFIL = "apps/ui/src/components/domain/aiProProfilleri.ts"
+_PANEL = "apps/ui/src/components/domain/AiProPanel.tsx"
+_KARTLAR = "apps/ui/src/components/domain/aipro/ModelSecimKartlari.tsx"
+_HEDEF = "apps/ui/src/components/domain/aipro/HedefSecici.tsx"
+_ROZET = "apps/ui/src/components/domain/aipro/KalibrasyonRozeti.tsx"
 
 
 def _oku(gorece: str) -> str:
@@ -80,7 +80,7 @@ def test_KRITIK_pet_owner_AI_PRO_GORMEZ():
 def test_KRITIK_TEK_KAYNAK_profil_model_eslemesi_baska_yerde_TEKRARLANMAZ():
     """İkinci bir eşleme tablosu, birinin sessizce ayrışmasına açık kapı bırakır."""
     capraz.atla_yoksa(_PANEL)
-    kok = capraz.kaynak_yolu("pf/src")
+    kok = capraz.kaynak_yolu("apps/ui/src")
     kaynaklar = [p for p in kok.rglob("*.ts*") if "__tests__" not in p.parts]
     tanim = [
         p.relative_to(kok).as_posix()
@@ -193,7 +193,7 @@ def test_KRITIK_BACKEND_hedef_adaylarina_pxn_YAZAR():
     assert re.search(r'"targets":\s*\[_hedef_tel\(', src), "targets listesi _hedef_tel ile kurulmuyor"
 
 
-_AIHUB = "pf/src/screens/AiHubScreen.tsx"
+_AIHUB = "apps/ui/src/screens/AiHubScreen.tsx"
 
 
 def _kopru_bileseni(src: str) -> str:

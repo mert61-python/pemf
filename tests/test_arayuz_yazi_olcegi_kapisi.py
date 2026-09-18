@@ -1,7 +1,7 @@
 # Author: mertaygn, cglrgrkn
 """SİSTEM YAZI ÖLÇEĞİ KAPISI  [S6 adım 9, 2026-09-04 responsive denetimi].
 
-ÖLÇÜLEN DURUM: `grep allowFontScaling|maxFontSizeMultiplier pf/src` = 0 eşleşme. React Native
+ÖLÇÜLEN DURUM: `grep allowFontScaling|maxFontSizeMultiplier apps/ui/src` = 0 eşleşme. React Native
 varsayılanı sistem yazı ölçeğini SINIRSIZ uygular; Android "Yazı boyutu" en büyükte (≈1,3) alt bar
 etiketleri, seans süresi, bildirim rozeti ve seans detay tablosu taşıyor/kırpılıyordu.
 
@@ -14,8 +14,8 @@ SÖZLEŞME:
      kendi daha sıkı tavanını koyabilir.)
   4. Kritik sayısal alanlar (seans süresi, canlı bobin okuması) tek satır + sığdırma taşır.
 
-⚠️ Davranış jest ile ölçülür: pf/src/theme/__tests__/fontOlcegiTavani.test.ts ve
-   pf/src/components/domain/__tests__/SessionProgressCard.yaziOlcegi.test.tsx.
+⚠️ Davranış jest ile ölçülür: apps/ui/src/theme/__tests__/fontOlcegiTavani.test.ts ve
+   apps/ui/src/components/domain/__tests__/SessionProgressCard.yaziOlcegi.test.tsx.
 """
 
 import pathlib
@@ -24,11 +24,11 @@ import re
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "theme" / "fonts.ts").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 
@@ -54,7 +54,7 @@ def test_KRITIK_tavan_tek_kaynaktan_ve_erken_donusten_ONCE():
     ⚠️ Konum karşılaştırması YORUMSUZ kaynak üzerinde yapılır: ilk sürüm ham metinde arıyordu ve
     dosyanın 53. satırındaki AÇIKLAMA yorumu ("...maxFontSizeMultiplier YOKTU") her zaman erken
     dönüşten önce geldiği için, tavan bloğu gerçekten aşağı taşındığında bile kapı YEŞİL kalıyordu
-    (ölçüldü). Davranışsal kanıt: pf/src/theme/__tests__/fontOlcegiTavani.test.ts 5. vaka.
+    (ölçüldü). Davranışsal kanıt: apps/ui/src/theme/__tests__/fontOlcegiTavani.test.ts 5. vaka.
     """
     src = _oku("theme/fonts.ts")
     assert "MAX_FONT_SCALE" in src, "fonts.ts tavanı tokens'tan almıyor"

@@ -39,7 +39,7 @@ if str(KOK) not in sys.path:
 
 os.environ.setdefault("PEMF_SIMULATE", "1")
 
-_PF = KOK / "pf" / "src"
+_PF = KOK / "apps" / "ui" / "src"
 
 
 @pytest.fixture
@@ -236,7 +236,7 @@ def test_KRITIK_patient_id_GONDERMEYEN_eski_istemci_BOZULMAZ(tmp_path, monkeypat
 # ============================================================================
 
 
-@pytest.mark.skipif(not (_PF / "screens").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "screens").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     """Saf hesap doğru olsa bile arayüz kimliği göndermiyorsa taşıma ileriye dönük çalışmaz.
 
@@ -249,7 +249,7 @@ def test_KRITIK_arayuz_patient_id_GONDERIYOR():
     assert "currentPatientId = selectedPatient?.id" in src, "secili hasta kimligi HIC yazilmiyor"
 
 
-@pytest.mark.skipif(not (_PF / "utils").exists(), reason="pf/ kaynak agaci yok")
+@pytest.mark.skipif(not (_PF / "utils").exists(), reason="apps/ui/ kaynak agaci yok")
 def test_KRITIK_AD_YEDEGI_kaldirilmadi():
     """⚠️ Ad yedeği KALDIRILAMAZ: taşıma, adı birden çok hastaya çözülen kayıtları BİLEREK
     kimliksiz bıraktı. Yedek kaldırılırsa o kayıtlar ekrandan SESSİZCE kaybolur.

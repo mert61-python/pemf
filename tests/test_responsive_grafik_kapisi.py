@@ -9,9 +9,9 @@
   · Sensör ekranı grafiği 1200 px ile kapaklanıyordu.
 
 BU KAPI kaynak-düzeyi ÇIPALARI kilitler; DAVRANIŞ jest ile ölçülür:
-  · pf/src/components/visual/__tests__/chartLayout.test.ts (saf hesaplar)
-  · pf/src/components/domain/__tests__/SessionDetailModal.tempChart.test.tsx (ölçülen genişlik)
-  · pf/src/utils/__tests__/kameraKutusu.test.ts (oran kilidi)
+  · apps/ui/src/components/visual/__tests__/chartLayout.test.ts (saf hesaplar)
+  · apps/ui/src/components/domain/__tests__/SessionDetailModal.tempChart.test.tsx (ölçülen genişlik)
+  · apps/ui/src/utils/__tests__/kameraKutusu.test.ts (oran kilidi)
 
 ⚠️ NEDEN KAYNAK ÇIPASI DA GEREKLİ (ölçüldü): saf hesap testleri, bileşenin o hesabı KULLANMAYI
 bırakmasını yakalayamıyor. `RealtimeChart`teki `hesaplaPad(...)` çağrısı elle sabit PAD'e geri
@@ -23,11 +23,11 @@ import pathlib
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "components" / "visual" / "chartLayout.ts").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 

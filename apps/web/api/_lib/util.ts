@@ -151,7 +151,7 @@ export function mapIyzicoStatus(s: string): 'trialing' | 'active' | 'past_due' |
   // ⚠️ DÜZELTİLMİŞ İDDİA (denetim 2026-08-18): buradaki eski yorum "erişim korunur" diyordu —
   // ÖLÇÜLDÜ, DOĞRU DEĞİL. Hakkı okuyan iki katman da `past_due`yu tıpkı `canceled` gibi PASİF
   // sayıyor: `guii/servers/entitlement.py` `_INACTIVE_STATUS` kümesinde `past_due` VAR (tier
-  // 'baslangic'e düşer, eklentiler boşalır) ve `pf/src/config/entitlement.ts` `isActive` yalnız
+  // 'baslangic'e düşer, eklentiler boşalır) ve `apps/ui/src/config/entitlement.ts` `isActive` yalnız
   // `active`/`trialing` kabul ediyor. Yani bu eşleme YALNIZCA kaydedilen dizeyi değiştiriyor,
   // kullanıcının hakkını `canceled`dan farklı kılmıyor. Kazanç gerçek ama daha küçük: `past_due`
   // satırı `getSubscriptionRefByUser`ta CANLI sayıldığı için abonelik iptal edilebilir ve

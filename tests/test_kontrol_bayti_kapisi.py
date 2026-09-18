@@ -131,7 +131,7 @@ def test_KARSIT_KANIT_muafiyet_kapiyi_BOSALTMIYOR():
     # toplamak `apps` görünce yeşil verirdi — alt dizinlerden yalnız biri taransa bile.
     # Katman kaç segmentliyse yol da o derinlikte kesilir.
     yollar = [p.relative_to(KOK).as_posix() for p in _izlenen_metin_dosyalari()]
-    katmanlar = ("servers", "scripts", "build_tools", "launcher", "pf", "apps/web", "tests", "docs")
+    katmanlar = ("servers", "scripts", "build_tools", "launcher", "apps/ui", "apps/web", "tests", "docs")
     # ⚠️ SABIT SAYAC (mutasyonla olculdu 2026-09-18): listeden bir katman SILMEK kapiyi
     # sessizce zayiflatiyordu ve hicbir test kirmizi donmuyordu — "muafiyet sismesin" kontrolu
     # yalnizca URETILMIS listesine bakiyor. Katman sayisi da kilitlendi; bilincli olarak

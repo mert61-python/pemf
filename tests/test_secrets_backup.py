@@ -31,7 +31,7 @@ def sahte_repo(tmp_path, monkeypatch):
     (gui / "firmware/esp8266_pemf_coil/data").mkdir(parents=True)
     (gui / "firmware/esps3_pemf_coil/data").mkdir(parents=True)
     (gui / "data").mkdir(parents=True)
-    (gui / "pf/android").mkdir(parents=True)
+    (gui / "apps/ui/android").mkdir(parents=True)
     (home / ".pemf-keys").mkdir(parents=True)
     icerik = {
         "firmware/esp8266_pemf_coil/Secrets.h": b'#define WIFI_PASS "sahte-8266-parola-123"\n',
@@ -39,7 +39,7 @@ def sahte_repo(tmp_path, monkeypatch):
         "firmware/esp8266_pemf_coil/data/config.json": b'{"mqtt_pass":"sahte-cfg-8266"}',
         "firmware/esps3_pemf_coil/data/config.json": b'{"mqtt_pass":"sahte-cfg-s3"}',
         "data/cloud_mqtt_provision.json": b'{"mqtt_cloud_pass":"sahte-bulut"}',
-        "pf/android/keystore.properties": b"storePassword=sahte-keystore-pw\n",
+        "apps/ui/android/keystore.properties": b"storePassword=sahte-keystore-pw\n",
     }
     for rel, veri in icerik.items():
         (gui / rel).write_bytes(veri)
@@ -52,7 +52,7 @@ def sahte_repo(tmp_path, monkeypatch):
         ("esp8266/data/config.json", gui / "firmware/esp8266_pemf_coil/data/config.json", True),
         ("esps3/data/config.json", gui / "firmware/esps3_pemf_coil/data/config.json", True),
         ("data/cloud_mqtt_provision.json", gui / "data/cloud_mqtt_provision.json", False),
-        ("pf/android/keystore.properties", gui / "pf/android/keystore.properties", False),
+        ("apps/ui/android/keystore.properties", gui / "apps/ui/android/keystore.properties", False),
         ("release-keystore/pemf-release.jks", home / ".pemf-keys/pemf-release.jks", False),
     ]
     return mod, gui, home, tmp_path, icerik

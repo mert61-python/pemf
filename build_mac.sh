@@ -119,17 +119,17 @@ print("  [OK] DB şifreli (SQLite başlığı yok, PII düz metin değil)")
 PY
 
 # --- 4) Frontend (Expo web export) -------------------------------------------
-# Spec 'frontend/dist' arar; bu depoda Expo kaynağı 'pf/' altında ve export
-# 'pf/dist' üretir (bkz. Dockerfile.frontend). Export'u spec'in beklediği yere
+# Spec 'frontend/dist' arar; bu depoda Expo kaynağı 'apps/ui/' altında ve export
+# 'apps/ui/dist' üretir (bkz. Dockerfile.frontend). Export'u spec'in beklediği yere
 # sahneliyoruz. frontend/dist YOKSA spec sessizce atlar → backend web arayüzsüz
 # çıkar; bu yüzden adım sonunda varlığı DOĞRULANIR.
 if [[ "$SKIP_FRONTEND" == "0" ]]; then
-  say "4/7  Frontend web export (pf → frontend/dist)"
-  [[ -d pf ]] || die "pf/ (Expo frontend) yok."
-  ( cd pf && npm ci --legacy-peer-deps && npm run export:web )
+  say "4/7  Frontend web export (apps/ui → frontend/dist)"
+  [[ -d apps/ui ]] || die "apps/ui/ (Expo frontend) yok."
+  ( cd apps/ui && npm ci --legacy-peer-deps && npm run export:web )
   rm -rf frontend/dist
   mkdir -p frontend
-  cp -R pf/dist frontend/dist
+  cp -R apps/ui/dist frontend/dist
 else
   say "4/7  Frontend ATLANDI (--skip-frontend)"
 fi
@@ -183,6 +183,6 @@ cat <<EOF
 Sıradaki adımlar (yayın):
   1. base-mac.zip → GitHub release 'client-app-v$(cat VERSION 2>/dev/null || echo X.Y.Z)' varlıklarına yükle
   2. pemf-app-packages/manifest.json → 'base_mac' bloğu ekle (url + yukarıdaki sha256 + size)
-  3. pemf-vet-web/src/config.ts → macosReady: true
+  3. apps/web/src/config.ts → macosReady: true
   4. Vercel deploy → mac istemcisi sitede canlı
 EOF

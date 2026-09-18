@@ -34,8 +34,8 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_AUTHCTX = _KOK / "pf" / "src" / "context" / "AuthContext.tsx"
-_DESKTOP = _KOK / "pf" / "src" / "services" / "desktopSession.ts"
+_AUTHCTX = _KOK / "apps" / "ui" / "src" / "context" / "AuthContext.tsx"
+_DESKTOP = _KOK / "apps" / "ui" / "src" / "services" / "desktopSession.ts"
 _MAIN = _KOK / "launcher" / "app" / "src" / "main.rs"
 _BACKEND = _KOK / "launcher" / "core" / "src" / "backend.rs"
 _STORE = _KOK / "launcher" / "core" / "src" / "secret_store.rs"
@@ -161,7 +161,7 @@ def test_KRITIK_duzeltme_YAYINLANAN_pakete_giriyor():
     """⚠️ Kaynakta olması YETMEZ: düzeltme uygulama penceresinin SERVİS EDİLEN paketinde olmalı.
 
     Pencere frontend'i `PEMF_Backend/_internal/frontend/dist` altından servis edilir ve o dizin
-    web export'undan gelir. `pf/` kaynağını düzeltip paketi yeniden üretmemek, arızayı KAYNAKTA
+    web export'undan gelir. `apps/ui/` kaynağını düzeltip paketi yeniden üretmemek, arızayı KAYNAKTA
     kapatıp SAHADA açık bırakırdı — bu deponun tekrar eden hata deseni ("düzeltildi ama
     dağıtılmadı") tam olarak budur.
 

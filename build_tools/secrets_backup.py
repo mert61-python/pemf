@@ -41,7 +41,7 @@ _KALEMLER: list[tuple[str, Path, bool]] = [
     ("esp8266/data/config.json", GUII / "firmware/esp8266_pemf_coil/data/config.json", True),
     ("esps3/data/config.json", GUII / "firmware/esps3_pemf_coil/data/config.json", True),
     ("data/cloud_mqtt_provision.json", GUII / "data/cloud_mqtt_provision.json", False),
-    ("pf/android/keystore.properties", GUII / "pf/android/keystore.properties", False),
+    ("apps/ui/android/keystore.properties", GUII / "apps/ui/android/keystore.properties", False),
     # Repo DIŞI: Android release imza anahtarı (keystore.properties bunun YOLUNU işaret eder).
     ("release-keystore/pemf-release.jks", HOME / ".pemf-keys/pemf-release.jks", False),
 ]

@@ -342,14 +342,14 @@ def test_KRITIK_HER_IKI_UC_SINIRLARI_KOPYALAMAMIS(yol, ad):
 
 
 # == 5) ARAYÜZ TEL SÖZLEŞMESİ (TS Python'u import edemez → kopya KİLİTLENİR) ================
-_TSX = KOK / "pf" / "src" / "screens" / "AiHubScreen.tsx"
+_TSX = KOK / "apps" / "ui" / "src" / "screens" / "AiHubScreen.tsx"
 _TSX_ALAN = re.compile(
     r"ad:\s*\"(?P<ad>\w+)\"[^}]*?vars:\s*\"(?P<vars>[^\"]+)\"[^}]*?"
     r"alt:\s*(?P<alt>-?[\d.]+),\s*ust:\s*(?P<ust>-?[\d.]+)",
     re.DOTALL,
 )
 
-tsx_yok = pytest.mark.skipif(not _TSX.exists(), reason="pf/ kaynak agaci yok (yalniz backend paketi)")
+tsx_yok = pytest.mark.skipif(not _TSX.exists(), reason="apps/ui/ kaynak agaci yok (yalniz backend paketi)")
 
 
 def _tsx_tablosu() -> dict:

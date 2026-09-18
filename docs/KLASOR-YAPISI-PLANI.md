@@ -44,7 +44,7 @@ guii/
 │  │  ├─ pyproject.toml
 │  │  └─ README.md
 │  ├─ launcher/                 Rust/Tauri istemci  ← bugünkü launcher/
-│  ├─ ui/                       React Native/Expo   ← bugünkü pf/
+│  ├─ ui/                       React Native/Expo   ✅ TAŞINDI 2026-09-18
 │  │                            (masaüstü arayüzü de buradan üretilip EXE'ye gömülüyor)
 │  └─ web/                      Pazarlama sitesi    ✅ TAŞINDI 2026-09-18
 │
@@ -77,7 +77,7 @@ guii/
 |---|---|---|
 | `backend_service.py` · `headless_core.py` · `event_bus.py` | `apps/backend/pemf_backend/` | Spec'teki elle `hiddenimports` satırı gereksizleşir |
 | `servers/` `services/` `database/` `utils/` `controllers/` | `apps/backend/pemf_backend/` | |
-| `pf/` | `apps/ui/` | |
+| ~~`pf/`~~ | ✅ **`apps/ui/` — TAŞINDI 2026-09-18** | ⚠️ `apps/web`den GENİŞ: donmuş EXE build'i, installer, APK build'i ve **sır yedeği listesi** de bu yolu kullanıyordu |
 | ~~`pemf-vet-web/`~~ | ✅ **`apps/web/` — TAŞINDI 2026-09-18** | ⚠️ Sıra önemliydi: **önce Vercel panosunda `rootDirectory`**, sonra push — çünkü push'un kendisi deploy'u tetikler; ters sırada canlı satış sitesinin deploy'u kırılırdı |
 | `launcher/` | `apps/launcher/` | |
 | `ai_hub/` `ai_service/` | `ai/hub/` `ai/service/` | |
@@ -86,6 +86,28 @@ guii/
 | `pemf-app-packages/` `release_assets/*.exe` | **ağaç dışı** → `../pemf-dist/` | Dağıtım artefaktı; GitHub Releases zaten arşiv |
 | `training_archive/` | **ayrı depo** ya da Git LFS | 297 MB, 434 takipli dosya; her klon indiriyor |
 | `bin/` | `tools/build/bin/` + LFS | 60 MB üçüncü-parti ikili (cloudflared 52 MB) |
+
+> ## ⚠️ TAŞIMA DERSİ — dizin adı BEŞ biçime girer (2026-09-18 ölçüldü)
+>
+> `pf/` → `apps/ui/` taşımasında ad **beş ayrı biçimde** geçti ve her biri AYRI bir ağ istedi:
+>
+> | # | Biçim | Örnek | Neyle yakalandı |
+> |---|---|---|---|
+> | 1 | ayraçlı dize | `pf/dist`, ters-bölülü `pf\app.json` | ilk regex |
+> | 2 | yalın çift-tırnak | `Join-Path $GuiRoot "pf"` | elle liste |
+> | 3 | `Path` **parçası** | `parents[1] / "pf" / "src"` | süit **toplama hatası** |
+> | 4 | yalın/tek-tırnak | `working-directory: pf`, `context: ../pf` | kapılar |
+> | 5 | **`.sh` içinde yalın** | `[[ -d pf ]]`, `cd pf`, `cp -R pf/dist` | **HİÇBİRİ** — elle tarama |
+>
+> 5. biçim `build_mac.sh` içindeydi ve **3112 test yeşil döndükten sonra bile** duruyordu; Windows'ta
+> hiç koşmadığı için sessizdi (Mac paketi 4/7. adımda ölürdü). Kalıcı ağ artık
+> `tests/test_tasinmis_dizin_calisan_kodda_YOK.py`: **F3/F4/F5'te yeni taşıma yapan, `TASINMIS`
+> tablosuna ekleyip `TASINMIS_SAYISI`yı da güncellemeli.** Kapı KODA pinlidir — `#` yorumları ve
+> Python docstring'leri (`ast` ile) kapsam dışı; ilk hâli 10'dan fazla yanlış-kırmızı vermişti.
+>
+> ⚠️ Toplu değiştirme **kendi kayıt satırlarını da yer**: bu turda `.gitignore` yorumu
+> "`apps/ui/` → `apps/ui/` taşınınca" hâline geldi ve KAYNAK ad kayboldu. Taşımadan sonra
+> `X → X` biçimindeki cümleleri ayrıca tara.
 
 > ## ⛔ SILINECEKLER LISTESI YANLISTI — düzeltme 2026-09-17
 >
@@ -125,7 +147,7 @@ guii/
 | Bugün | Yarın | Neden |
 |---|---|---|
 | `pemf_gui/` | `apps/backend/pemf_backend/config/` | **Adı yalan**: projede Qt sıfır, ama içindeki `config.py` canlı backend yolunda |
-| `pf/` | `apps/ui/` | "pf" dışarıdan hiçbir şey anlatmıyor |
+| ~~`pf/`~~ | ✅ `apps/ui/` (TAŞINDI 2026-09-18) | "pf" dışarıdan hiçbir şey anlatmıyordu. ⚠️ CLI hedef adı (`responsive_kapisi --hedef pf`) BİLEREK `pf` kaldı — o bir kimlik, dizin adı değil; değiştirmek workflow'ları ve baseline anahtarlarını kırardı |
 
 ---
 
@@ -151,7 +173,7 @@ Her faz tek başına doğrulanır ve **yeşil bitmeden sonrakine geçilmez.**
 `build_tools/PEMF_Backend_onedir.spec` (pathex + hiddenimports) · `.github/workflows/*.yml`
 (`paths:` süzgeçleri) · `.gitignore` · `pyproject.toml` (`[tool.coverage] source`) ·
 `tests/conftest.py` (`sys.path.insert`) · `launcher/core/src/install.rs` (paket yolları) ·
-`pf/android/keystore.properties`
+`apps/ui/android/keystore.properties`
 
 ---
 

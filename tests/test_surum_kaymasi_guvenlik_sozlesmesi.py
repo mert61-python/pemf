@@ -60,7 +60,7 @@ def test_KRITIK_teyitsiz_durdurma_2xx_DISI_doner():
 
 
 def test_KRITIK_uyari_detail_alaninda_TASINIR():
-    """Olculdu (pf/src/services/apiClient.ts): 2xx-disi yanitta eski istemci YALNIZ `detail`
+    """Olculdu (apps/ui/src/services/apiClient.ts): 2xx-disi yanitta eski istemci YALNIZ `detail`
     alanini okuyup ekrana basar. Uyari orada olmazsa eski kullanici hicbir metin gormez."""
     g = _stop_govdesi()
     assert '_yanit["detail"]' in g, (
@@ -96,7 +96,9 @@ def test_KRITIK_yeni_istemci_409_u_AYIRT_EDER():
     # kaliyordu. Kapinin gormesi gereken sey KODDUR (17. partide C tarafinda ogrenilen ders).
     from c_soyucu import c_soy
 
-    hook = c_soy((_KOK / "pf" / "src" / "hooks" / "useSessionControl.ts").read_text(encoding="utf-8", errors="replace"))
+    hook = c_soy(
+        (_KOK / "apps" / "ui" / "src" / "hooks" / "useSessionControl.ts").read_text(encoding="utf-8", errors="replace")
+    )
     assert "409" in hook, "istemci 409'u ayirt etmiyor → seans UI'da acik kalir"
     assert "onHttpError" in hook, "istemci hata govdesini okumuyor → bobin listesi gosterilemez"
     assert "hardware_stop_unconfirmed" in hook, "teyitsiz bobin listesi istemcide okunmuyor"
@@ -105,7 +107,7 @@ def test_KRITIK_yeni_istemci_409_u_AYIRT_EDER():
 def test_KRITIK_hata_govdesi_cagirana_TASINIR():
     """`onHttpError` yalniz `detail` dizesini gecirseydi, cagiran yapisal bobin listesini
     METINDEN ayristirmak zorunda kalirdi (kirilgan)."""
-    api = (_KOK / "pf" / "src" / "services" / "apiClient.ts").read_text(encoding="utf-8", errors="replace")
+    api = (_KOK / "apps" / "ui" / "src" / "services" / "apiClient.ts").read_text(encoding="utf-8", errors="replace")
     assert re.search(r"onHttpError\?:\s*\(status: number, detail\?: string, govde\?: unknown\)", api), (
         "onHttpError hata GOVDESINI tasimiyor"
     )
@@ -114,7 +116,7 @@ def test_KRITIK_hata_govdesi_cagirana_TASINIR():
 
 def test_KRITIK_surum_farki_bandi_BLOKLAMAZ():
     """1. madde: fark GORUNUR olsun ama giris/acil-durdurma yolu ASLA tikanmasin."""
-    yol = _KOK / "pf" / "src" / "components" / "domain" / "SurumFarkiBanner.tsx"
+    yol = _KOK / "apps" / "ui" / "src" / "components" / "domain" / "SurumFarkiBanner.tsx"
     assert yol.exists(), "sürüm farkı bandı yok"
     src = yol.read_text(encoding="utf-8", errors="replace")
     # Kapatilabilir olmali (kalici bir engel degil).
@@ -139,21 +141,25 @@ def test_KRITIK_surum_farki_bandi_BLOKLAMAZ():
         "bant kendi dar olcusunu yeniden kurmus — tek kaynak useDonanimCalisiyor olmali"
     )
     # Kancanin kendisi gercekten GENIS olcuyu uygulamali (kanca bosaltilirsa bant da bosalir):
-    kanca = (_KOK / "pf" / "src" / "hooks" / "useDonanimCalisiyor.ts").read_text(encoding="utf-8", errors="replace")
+    kanca = (_KOK / "apps" / "ui" / "src" / "hooks" / "useDonanimCalisiyor.ts").read_text(
+        encoding="utf-8", errors="replace"
+    )
     assert "activeTreatment" in kanca and "running" in kanca, (
         "useDonanimCalisiyor iki sinyalden birini kaybetmis (seans VEYA calisan bobin)"
     )
     # Bir yerlere yerlestirilmis olmali, yoksa hic gorunmez.
-    shell = (_KOK / "pf" / "src" / "components" / "ui" / "AppShell.tsx").read_text(encoding="utf-8", errors="replace")
+    shell = (_KOK / "apps" / "ui" / "src" / "components" / "ui" / "AppShell.tsx").read_text(
+        encoding="utf-8", errors="replace"
+    )
     assert "<SurumFarkiBanner />" in shell, "bant hicbir ekrana baglanmamis"
 
 
 def test_KARSIT_KANIT_baglanti_SURUME_gore_REDDEDILMEZ():
     """⚠️ Pazarlik edilemez: hicbir yerde 'surum uyusmazligi → baglanma' kapisi olmamali."""
     hedefler = [
-        _KOK / "pf" / "src" / "services" / "apiClient.ts",
-        _KOK / "pf" / "src" / "services" / "discovery.ts",
-        _KOK / "pf" / "src" / "components" / "domain" / "SurumFarkiBanner.tsx",
+        _KOK / "apps" / "ui" / "src" / "services" / "apiClient.ts",
+        _KOK / "apps" / "ui" / "src" / "services" / "discovery.ts",
+        _KOK / "apps" / "ui" / "src" / "components" / "domain" / "SurumFarkiBanner.tsx",
     ]
     yasak = re.compile(r"(surum|version).{0,40}(uyusmaz|mismatch|incompatible|reddet|block)", re.I)
     for p in hedefler:

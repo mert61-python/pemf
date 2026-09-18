@@ -55,7 +55,7 @@ def test_pull_request_de_tetikler(dosya):
 
 
 #: `tests.yml`in kapsaması BEKLENEN işler — TAM küme (alt-küme değil).
-#: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu; `pf/` ve
+#: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu; `apps/ui/` ve
 #: `apps/web/` o tarihte AYRI depolardaydi ve buradaki isler var olmayan dizinlerde `npm ci`
 #: kosturdugu icin asla gecemezdi -> kaldirildilar.
 #: ⚠️ 2026-08-18 MONOREPO: ikisi de artik depoda, ama isler `tests.yml`ye GERI EKLENMEDI —
@@ -114,14 +114,14 @@ def test_KRITIK_launcher_ENTEGRASYON_testlerini_de_kosar():
 #: backend degisikligi Expo/Vite hatlarini bosuna tetiklemesin. `tests.yml`in kendisi bilerek
 #: filtresizdir (capraz-katman kapilari her degisiklikte kosmali).
 CI_KAPSAMI = {
-    "pf": ("frontend.yml", ("tsc --noEmit", "npm test")),
+    "apps/ui": ("frontend.yml", ("tsc --noEmit", "npm test")),
     "apps/web": ("site.yml", ("tsc -b", "npm test", "check:legal")),
 }
 
 
 @pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
 def test_KRITIK_arayuz_ve_site_CI_KAPSAMINDA(dizin):
-    """Arayuz (`pf`) ve site (`apps/web`) monorepo'ya alindi -> CI kapisi ZORUNLU.
+    """Arayuz (`apps/ui`) ve site (`apps/web`) monorepo'ya alindi -> CI kapisi ZORUNLU.
 
     ⚠️ SITE 2026-08-18'e kadar HIC test edilmiyordu: kendi deposunda tek bir workflow yoktu ve
     iyzico odeme uclari (checkout/callback/webhook/cancel) tip kontrolu bile gormeden deploy
@@ -156,11 +156,11 @@ def test_arayuz_ve_site_is_akislari_YOL_FILTRELI(dizin):
 
 @pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
 def test_KRITIK_alt_dizinde_KOK_DISI_github_yapilandirmasi_KALMAZ(dizin):
-    """`pf/.github/` ya da `apps/web/.github/` altinda workflow/dependabot KALMAMALI.
+    """`apps/ui/.github/` ya da `apps/web/.github/` altinda workflow/dependabot KALMAMALI.
 
     ⚠️ SESSIZ KIRILMA (2026-08-18'de ikisi de yakalandi): GitHub bu dosyalari YALNIZCA kok
-    `.github/` altindan okur. subtree sonrasi `pf/.github/workflows/frontend.yml` ve
-    `pf/.github/dependabot.yml` alt dizinde kaldi -> ikisi de SESSIZCE etkisizdi (hata yok,
+    `.github/` altindan okur. subtree sonrasi `apps/ui/.github/workflows/frontend.yml` ve
+    `apps/ui/.github/dependabot.yml` alt dizinde kaldi -> ikisi de SESSIZCE etkisizdi (hata yok,
     sadece yokluk). Koke tasindilar; bu kapi geri kaymayi engeller."""
     alt = W.parent.parent / dizin / ".github"
     if not alt.exists():

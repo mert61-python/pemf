@@ -44,7 +44,7 @@ if str(KOK) not in sys.path:
 
 os.environ.setdefault("PEMF_SIMULATE", "1")
 
-_PF = KOK / "pf" / "src"
+_PF = KOK / "apps" / "ui" / "src"
 
 
 @pytest.fixture

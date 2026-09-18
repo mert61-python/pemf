@@ -41,12 +41,12 @@ jobs:
           python -m pip install --upgrade pip wheel
           pip install -r requirements.txt
 
-      # ⚠️ KAYNAK DİZİN = `pf` (2026-08-15): `guii/` altında aynı deponun iki klonu vardı
-      # (`pf/` geliştirilen, `frontend/` build'in okuduğu) ve ayrışma görünmüyordu.
-      - name: Frontend web export (Expo → pf/dist)
+      # ⚠️ KAYNAK DİZİN = `apps/ui` (2026-08-15; 2026-09-18'de `pf/`den taşındı): `guii/` altında aynı deponun iki klonu vardı
+      # (`apps/ui/` geliştirilen, `frontend/` build'in okuduğu) ve ayrışma görünmüyordu.
+      - name: Frontend web export (Expo → apps/ui/dist)
         run: |
           . .venv/bin/activate
-          cd pf
+          cd apps/ui
           npm ci --legacy-peer-deps
           npx expo export --platform web
 

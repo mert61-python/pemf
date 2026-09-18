@@ -23,13 +23,13 @@ import sys
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_PF = _KOK / "pf" / "src"
+_PF = _KOK / "apps" / "ui" / "src"
 if str(pathlib.Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 pytestmark = pytest.mark.skipif(
     not (_PF / "components" / "ui" / "GorselSahne.tsx").exists(),
-    reason="pf/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
+    reason="apps/ui/ kaynak ağacı yok (yalnız backend paketi) — kapı atlanır",
 )
 
 #: `<GorselSahne` beklenen sayısı — 5 AI Hub modülü + PetOwner ekranı (aynı dosyada).

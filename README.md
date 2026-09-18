@@ -53,7 +53,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 |---|---|
 | Backend / installer (`VERSION`) | `PEMF_Backend_Setup.iss`, `docs/version_info.txt` |
 | Launcher (client) | `launcher/Cargo.toml`, `launcher/app/tauri.conf.json` |
-| Mobil (APK/IPA) | `pf/app.json` |
+| Mobil (APK/IPA) | `apps/ui/app.json` |
 | Frontend OTA (kanal **KULLANIM DIŞI**) | `frontend_version.json` |
 
 > Sürümü **elle `versions.json`'da** değiştir → `build_tools/sync_versions.ps1` hedef dosyalara yazar
@@ -62,7 +62,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 
 ## Depo düzeni (2026-08-18'den beri: TEK depo · TEK dal)
 
-- **`mert61-python/pemf`** = bu depo. Eskiden ayrı depolarda duran **`pf/`** (mobil/web istemci)
+- **`mert61-python/pemf`** = bu depo. Eskiden ayrı depolarda duran **`apps/ui/`** (mobil/web istemci)
   ve **`apps/web/`** (ödeme/indirme sitesi) artık **burada izleniyor**; eski `pemf-frontend`
   ve `apps/web` depoları **silindi** (tam aynaları `../*-arsiv-2026-08-18.bundle` paketlerinde).
 - Tek dal: **`production-hardening`** (varsayılan). Eski `main`/`vet-client`/`upload-testflight`
@@ -103,7 +103,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ### Frontend / Web
 | Klasör | Ne işe yarar |
 |---|---|
-| [`pf/`](pf/README.md) | **ANA KAYNAK** — mobil (APK/IPA) + web bundle üreten React Native/Expo kaynağı |
+| [`apps/ui/`](apps/ui/README.md) | **ANA KAYNAK** — mobil (APK/IPA) + web bundle üreten React Native/Expo kaynağı |
 | [`frontend/`](frontend/README.md) | **ÜRETİLEN** — `dist/` = backend'in `/` kökünden sunduğu web bundle (pf'ten aynalanır); `src/` ölü |
 | [`apps/web/`](apps/web/README.md) | **Canlı pazarlama/indirme sitesi** (Vite+React, Vercel, iyzico ödeme) |
 | [`pemf_vet_landing/`](pemf_vet_landing/NOTES.md) | Çıkarılmış Lovable landing statik kopyası (tasarım referansı) |
@@ -153,7 +153,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 | Backend (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\` |
 | base.zip (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` |
 | Launcher (installer) | `cd launcher\app; npx @tauri-apps/cli build` | `...\nsis\...setup.exe` |
-| Web frontend | `cd pf; npm run export:web` + mirror | `frontend\dist` |
+| Web frontend | `cd apps/ui; npm run export:web` + mirror | `frontend\dist` |
 | Android APK | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
 
 - **Runtime taşınabilir:** frozen EXE / offline installer Python KURULU OLMADAN her makinede çalışır.
@@ -167,7 +167,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 - 🔒 **Backend Python-tarafı freq/duty/sıcaklık clamp'i YOK** (bilinçli) — firmware sınırda doyurur. Sınır sabitleri `utils/stm32_protocol_limits.py`.
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
 - 🌐 **AI offline** — `utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
-- ✏️ Web/mobil UI'yi **`pf/`'te düzenle** — `frontend/src` bayat kopyadır.
+- ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.
 - 🚀 **Launcher AYRI yayınlanır** (base.zip/APK republish onu güncellemez).
 
 ---

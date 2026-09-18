@@ -59,14 +59,14 @@ updates:
   # ── MONOREPO (2026-08-18): yukarıdaki blokta yazılı ÖN KOŞUL SAĞLANDI ─────────────────
   # O not şöyle diyordu: "npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER …
   # ÇÖZÜM kod değil SÜREÇ: bu iki projeyi (node_modules hariç, lock DAHİL) depoya alın; sonra
-  # buraya `npm` ekosistemi olarak `/pf` ve `/apps/web` girdilerini ekleyin."
-  # `pf/` ve `apps/web/` artık subtree ile depoda ve lock dosyaları izleniyor → talimat
+  # buraya `npm` ekosistemi olarak `/apps/ui` ve `/apps/web` girdilerini ekleyin."
+  # `apps/ui/` ve `apps/web/` artık subtree ile depoda ve lock dosyaları izleniyor → talimat
   # uygulanıyor. Denetimde bulunan somut açıklar bu iki ağaçtaydı: apps/web lock'unda
   # undici 5.28.4 (CVE-2025-22150) ve path-to-regexp 6.1.0 (CVE-2024-45296).
 
   # Mobil/web arayüz (Expo SDK 56 / React 19 / RN 0.85 — bleeding-edge).
   - package-ecosystem: "npm"
-    directory: "/pf"
+    directory: "/apps/ui"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
@@ -76,7 +76,7 @@ updates:
         patterns: ["*"]
     ignore:
       # ⚠️ Major bump'lar KOORDINELI olmalı: Expo SDK / RN / React üçlüsü birlikte yükselir,
-      # tek başına bump APK build'ini kırar (pf/.github/dependabot.yml'den taşındı).
+      # tek başına bump APK build'ini kırar (apps/ui/.github/dependabot.yml'den taşındı).
       - dependency-name: "expo"
         update-types: ["version-update:semver-major"]
       - dependency-name: "react"

@@ -11,7 +11,7 @@ sözleşmesi eklendi:
 
 ⚠️ **NEDEN BU KAPI GÜVENLİK KAPISI:** sahip kararıyla bobin 6-7'de **cihaz-taraflı termal
 kesme YOK**. Kalan tek otomatik katman arayüzdeki 48 °C istemci interlock'u
-(`pf/src/components/domain/CoilParameterPanel.tsx:21,143`) ve o interlock `objectTemp`in
+(`apps/ui/src/components/domain/CoilParameterPanel.tsx:21,143`) ve o interlock `objectTemp`in
 arayüze **ULAŞMASINA** bağlı. Bu zincir kopunca hiçbir hata görünmez: kart sıcaklığı okur,
 kimse duymaz, bobin ısınmaya devam eder. Zincirin her halkası burada ölçülüyor.
 

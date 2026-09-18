@@ -234,7 +234,7 @@ Sonuç: cihaz 5 dakikadan uzun süredir kapalıysa kullanıcı `{durum:"yok"}` a
 aynısı: kullanıcı defalarca kodu kontrol ediyor.)
 
 **Depoda yapılanlar.** `database/supabase_devices.sql` penceresi 30 güne çıkarıldı (yalnız YENİ
-kurulumları etkiler) ve `pf/src/services/pairing.ts`in `default` mesajı iki sebebi birlikte
+kurulumları etkiler) ve `apps/ui/src/services/pairing.ts`in `default` mesajı iki sebebi birlikte
 söyleyecek şekilde dürüstleştirildi. Kapı: `tests/test_bayat_cihaz_gorunur.py` (10 mutasyonla
 doğrulandı) — değişmez "**sunucu penceresi istemci `STALE_MS`inden GENİŞ olmalı**".
 

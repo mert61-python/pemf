@@ -1,9 +1,9 @@
 name: frontend-ci
 
 # PEMF mobil/web frontend — tip-denetimi (tsc) + testler (jest-expo).
-# ⚠️ MONOREPO (2026-08-18): kaynak `pf/` alt dizinine tasindi. Bu dosya KOK
+# ⚠️ MONOREPO (2026-08-18): kaynak `apps/ui/` alt dizinine tasindi. Bu dosya KOK
 # `.github/workflows/` altinda DURMAK ZORUNDA — GitHub yalnizca kokteki workflow'lari
-# calistirir; `pf/.github/workflows/` altinda kalsaydi CI SESSIZCE hic kosmazdi.
+# calistirir; `apps/ui/.github/workflows/` altinda kalsaydi CI SESSIZCE hic kosmazdi.
 # NOT: React 19 / RN 0.85 bleeding-edge → bazı test araçları peer-dep çakışması verir;
 # kurulum --legacy-peer-deps ile yapılır (yerelde de böyle kuruldu).
 
@@ -14,9 +14,9 @@ on:
     branches: [ main, master, production-hardening, "feature/**", "fix/**" ]
     # ⚠️ YOL FILTRESI (monorepo): backend/launcher/firmware degisikligi Expo+jest hattini
     # tetiklemesin. Filtre YOKKEN tek satirlik bir Python degisikligi bu isi de kosturuyordu.
-    paths: [ "pf/**", ".github/workflows/frontend.yml" ]
+    paths: [ "apps/ui/**", ".github/workflows/frontend.yml" ]
   pull_request:
-    paths: [ "pf/**", ".github/workflows/frontend.yml" ]
+    paths: [ "apps/ui/**", ".github/workflows/frontend.yml" ]
   workflow_dispatch:
 
 # Ayni dal icin eski kosuyu iptal et (tests.yml'de zaten vardi, burada YOKTU).
@@ -26,7 +26,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: pf
+    working-directory: apps/ui
 
 jobs:
   test:
@@ -42,7 +42,7 @@ jobs:
           # ⚠️ `defaults.working-directory` YALNIZ `run:` adimlarini etkiler, `uses:` action'larini
           # DEGIL. Bu yol verilmezse setup-node kokteki (bos, artik) package-lock.json'a gore
           # onbellekler — yanlis anahtar, ise yaramaz onbellek.
-          cache-dependency-path: pf/package-lock.json
+          cache-dependency-path: apps/ui/package-lock.json
 
       - name: Install deps
         run: npm install --legacy-peer-deps

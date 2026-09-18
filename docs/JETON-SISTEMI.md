@@ -279,7 +279,7 @@ taşıyor; ama emin ol:
 - Kırmızı-önce test: "jeton 0 iken `/api/session/stop` ve acil durdurma **200 döner**".
 
 **4.4** Mobil/masaüstü arayüzünde 402 yanıtını yakala ve kullanıcıya jeton mesajını göster
-(`pf/src/services/apiClient.ts` — 402'yi ayrı ele al, genel hataya karıştırma).
+(`apps/ui/src/services/apiClient.ts` — 402'yi ayrı ele al, genel hataya karıştırma).
 
 **Doğrulama:** `PEMF_JETON_ENFORCED=1` + bakiyeyi 0'a çek (`update token_balances set aylik_hak=0,
 satin_alinan=0 where user_id='<UID>'`) → bir AI analizi iste: **402 + Türkçe mesaj**. Aynı anda

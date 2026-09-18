@@ -8,7 +8,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 | `dependabot.yml` | Haftalık pip + actions güncellemesi (AI bağımlılıkları pinli) |
 | `workflows/tests.yml` | **Kritik-yol pytest** (push/PR; `PEMF_SIMULATE:""`, coverage) → [`../tests/`](../tests/README.md) |
 | `workflows/lint.yml` | Ruff `F+E9+I` kontrolü + bloklamayan format kontrolü |
-| `workflows/frontend.yml` | **pf/** (mobil+web istemci): tsc + jest-expo — yol filtreli (`pf/**`) |
+| `workflows/frontend.yml` | **apps/ui/** (mobil+web istemci): tsc + jest-expo — yol filtreli (`apps/ui/**`) |
 | `workflows/site.yml` | **apps/web/** (ödeme sitesi): check:legal + oxlint + tsc + vitest + build — yol filtreli; **Node 22 şart** |
 | `workflows/security.yml` | `pip-audit` (çekirdek + dağıtılan AI ağacı), haftalık cron, bloklamaz |
 | `workflows/linux-backend.yml` | PyInstaller onedir → `base-linux.zip` (tag `backend-linux-v*`) |
@@ -19,7 +19,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 
 ## Not
 - ⚠️ **Workflow'lar YALNIZ kök `.github/` altından okunur** (tek-depo, 2026-08-18): alt dizine
-  (`pf/.github/` gibi) konan yapılandırmayı GitHub sessizce YOK SAYAR.
+  (`apps/ui/.github/` gibi) konan yapılandırmayı GitHub sessizce YOK SAYAR.
   `tests/test_ci_workflow_gate.py` bunu kilitler.
 - macOS/imzalama sırları GitHub **Secrets**'tadır — repo ağacındaki [`../apple-mac-cert/`](../apple-mac-cert/README.md) yerel kopyaları CI kullanmaz.
 - Windows launcher **yerel** derlenip elle yayınlanır (self-update); CI Win launcher'ı `launcher.yml`'de opsiyoneldir.

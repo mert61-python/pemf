@@ -6,7 +6,7 @@
  * Bu dosya, ölçülebilir OLGU iddialarını kilitler — "güzel cümle" değil, DOĞRU cümle.
  *
  * Kilitlenen olgular:
- *  1. Telefon uygulamasının rolü: uygulama bobin sürebiliyor (pf/src/screens/ControlScreen.tsx,
+ *  1. Telefon uygulamasının rolü: uygulama bobin sürebiliyor (apps/ui/src/screens/ControlScreen.tsx,
  *     components/domain/CoilParameterPanel.tsx, hooks/useSessionControl.ts) → 5. partide yazdığım
  *     "telefon tek başına terapi uygulamaz / cihazı sürmek için masaüstü gerekir" ifadesi YANLIŞTI.
  *  2. Abonelik iptalinde "ödediğiniz dönemin sonuna kadar erişim" vaadi: `api/cancel.ts` bunu
