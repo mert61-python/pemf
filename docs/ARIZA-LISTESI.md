@@ -130,7 +130,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | ✅ **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
 | ✅ **B2** | `THIRD_PARTY_LICENSES.md` yenile — **YAPILDI** (26 → 113 bileşen) | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
 | ✅ **B3** | `README.md:188` sürüm tablosu — **YAPILDI** (türetmek yerine KALDIRILDI + kapı) | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
-| ⚠️ **B4** | Dev dosyaları böl — **ÖLÇÜT DÜZELTİLDİ**: satır değil, `treatment_history_db` tek sınıfta 94 metot | `api_server.py` **5.139** · `ai_router.py` **4.023** · `treatment_history_db.py` **3.701** (tek sınıfta 95 metot: seans + coil-run + sensör + denetim izi + outbox + şema göçü + PII) | Ben · **en son** |
+| ✅ **B4** | **KAPANDI (2026-09-18)** — `TreatmentHistoryDB` **93 → 17 metot**, dosya **3530 → 710 satır**, 8 karışım modülü | Ölçüt satır değil, tek nesnedeki **yedi sorumluluktu**. `database/thdb_{outbox,denetim,ai_gecmisi,telemetri,pii,sema,seans,bakim}.py` — kümeler metot **adından değil dokundukları tablodan** çıkarıldı. **Karışım (mixin)** seçildi, işbirlikçi nesne değil: `get_treatment_db(...)` her yerden alınıp metotları doğrudan çağrılıyor, işbirlikçiye çevirmek tüm çağrı yerlerini değiştirirdi. Gövdelere dokunulmadı (AST ile bayt bayt). **Yan çıktı:** taşıma, `_DB_ERROR` demetlerinin iki DB modülünde **zaten ayrışmış** olduğunu ortaya çıkardı → `database/db_hatalari.py` tek kaynak. Kapı: `tests/test_tedavi_db_bolunmus_KALIR.py` (tavan 22, 4 mutasyon). Doğrulama: süit 3109 · EXE 6/6 iç kapı · **48/48 ürün senaryosu** | Ben |
 
 ---
 
@@ -158,8 +158,20 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | **6** | **B2** + **B3** | Ticari risk; ucuz |
 | **7** | **A4** base-linux | Workflow koşturma gerektiriyor |
 | **8** | **C2–C5** hijyen | Toplu |
-| **9** | **Klasör düzeni** F1→F6 | Artık taşınacak şey sade |
-| **10** | **B4** dev dosya bölme | Yeni sınırlar içinde doğal yerine düşer |
+| **9** | **Klasör düzeni** F1→F6 | ⛔ **7 alt fazın 4'ü BLOKE** (2026-09-18 ölçüldü) — aşağı bak |
+| **10** | ~~**B4** dev dosya bölme~~ | ✅ **KAPANDI 2026-09-18** (sıradan önce yapıldı; ön şartı B1'di, o da bitmişti) |
+
+> ### ⛔ Klasör düzeni — ölçülen engeller (2026-09-18)
+>
+> | Faz | Engel |
+> |---|---|
+> | F1a `pemf-vet-web/`→`apps/web` | `.vercel/project.json` → `"rootDirectory": "pemf-vet-web"`. Asıl ayar **Vercel panosunda** ve bu dal **canlı satış sitesini** deploy ediyor → sahip panoyu güncellemeden push, deploy'u kırar |
+> | F1b `pf/`→`apps/ui` | `git mv` **Permission denied** — VS Code `redhat.java` dil sunucusu `pf/android`'i tutuyor. Editör kapatılmadan yapılamaz |
+> | F2 `launcher/` · F6 çıktılar | `launcher.yml` yolları sabit + yalnız `launcher-v*` etiketiyle koşar (**donmuş yayın**) → doğrulanamaz |
+> | F3 `ai/hub` | **import kökü**: `ai_hub.` → `ai.hub.` 84 dosya + kod koruması (.pyd/PYZ) zinciri |
+> | F3 `ai/service` | import kökü + `Dockerfile.ai` → doğrulaması **Docker imaj build'i** ister (metered kota) |
+> | F4 `apps/backend` | en büyük import kökü değişimi |
+> | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
 **Sahip tarafı (bende yapılamaz):** A6 BLE eşleşme · S3 reflash · STM reflash + doz kalibrasyonu
 (⚠️ tepe-tepe `pp_x = XP−XN`) · 164 senaryoluk saha listesi · Vault kurtarma setini makine dışına
