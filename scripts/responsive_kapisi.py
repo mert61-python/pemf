@@ -356,9 +356,17 @@ class CdpWs:
 
 # ── tarayıcı keşfi (ortam YETENEĞİ: ad değil dosya; `CI` bayrağı KULLANILMAZ) ─────────────
 def tarayici_bul(istenen: str | None) -> str | None:
+    # ⚠️ ACIKCA BILDIRILEN TARAYICI, TAHMIN EDILENE USTUN GELIR (2026-09-18, olculdu).
+    # Site CI'i `browser-actions/setup-chrome` ile BILEREK Chrome kuruyor; ama asagidaki
+    # sabit liste `/usr/bin/microsoft-edge`i ONCE deniyordu ve runner imaji artik Edge de
+    # tasidigi icin betik, CI'in kurdugu Chrome'u YOK SAYIP Edge'i seciyordu. O Edge ise
+    # runner'da CDP portunu acamiyor (D-Bus hatasi) -> kapi kirmizi. Bu, "tahmin listesi
+    # ortamin ACIK beyanini ezdi" sinifi. `CHROME_PATH` (setup-chrome'un yazdigi) ve
+    # `PEMF_TARAYICI` artik sabit yollardan ONCE gelir.
     adaylar = [
         istenen,
         os.environ.get("PEMF_TARAYICI"),
+        os.environ.get("CHROME_PATH"),
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",

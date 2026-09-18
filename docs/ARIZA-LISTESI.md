@@ -173,6 +173,28 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | F4 `apps/backend` | en büyük import kökü değişimi |
 > | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
+> ### 📌 LattePanda (saha makinesi) — UZAKTAN yapılabilir ölçümler · SONRAYA
+>
+> **Durum (sahip, 2026-09-18):** *"yayın öncesi firmware + main.c kodu var o cihazda,
+> çalışır durumda"* → acil değil, sıraya alındı.
+>
+> ⚠️ **Ölçüldü (LattePanda'da koşturuldu):** CubeIDE 1.17.0 ile gelen **iki araç da yerinde** —
+> `arm-none-eabi-gcc.exe` (gnu-tools-for-stm32 **12.3.rel1**) ve `STM32_Programmer_CLI.exe`
+> (cubeprogrammer **win32_2.2.0**). Planın §2.1'i sahada doğrulandı.
+> Klasör adları sürüm eki taşıyor → yol **sabit yazılamaz, glob ile aranır** (plan bunu söylüyordu).
+>
+> Sıra geldiğinde koşturulacaklar (hepsi tek komut, uzaktan analiz edilebilir):
+>
+> | # | Ne ölçer | Komut |
+> |---|---|---|
+> | 1 | **Sahadaki STM hangi firmware'i koşuyor** (kaç kanal) | `python scripts/stm_firmware_kimligi.py` |
+> | 2 | Saha cihazının sağlık tablosu — sürüm · `stmUyumlu` · `atRestEncrypted` · `dbReady` · `tunnelUrl` | `curl http://127.0.0.1:8000/api/health` |
+> | 3 | §4 Cloudflare NAMED tünel (hâlâ ⏳) | yukarıdaki `tunnelUrl` — ⚠️ backend **launcher'dan** açılmış olmalı, aksi hâlde ölçüm yanıltır |
+> | 4 | ST-Link gerçekten görünüyor mu (yakma ön şartı) | `& $prog -l` (`$prog` = glob ile bulunan `STM32_Programmer_CLI.exe`) |
+>
+> ⚠️ **Uzaktan YAPILAMAZ:** §9 firmware `[FIX-1c]` duty geçişi tezgâh doğrulaması (osiloskop +
+> akım probu) ve doz kalibrasyonu (manyetik alan ölçümü). Bunlar fiziksel.
+
 **Sahip tarafı (bende yapılamaz):** A6 BLE eşleşme · S3 reflash · STM reflash + doz kalibrasyonu
 (⚠️ tepe-tepe `pp_x = XP−XN`) · 164 senaryoluk saha listesi · Vault kurtarma setini makine dışına
 alma · Cloudflare NAMED tünel · firmware satürasyon tezgâhı · 72 saatlik soak · iOS/EAS →

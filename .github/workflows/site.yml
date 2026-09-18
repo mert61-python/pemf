@@ -86,11 +86,19 @@ jobs:
       # actions/setup-chrome ile kurulur. Kurulum basarisiz olursa kapi ATLANIR (exit 3) ve
       # is akisi kirmizi olmaz; kapinin kendisi bunu raporlar.
       - name: Tarayici (headless olcum icin)
+        id: tarayici
         uses: browser-actions/setup-chrome@v1
         continue-on-error: true
 
+      # ⚠️ KURULAN TARAYICI ACIKCA BILDIRILIR (2026-09-18, olculen ariza): betik sabit bir
+      # aday listesi tariyor ve o listede `/usr/bin/microsoft-edge` Chrome'dan ONCE geliyor.
+      # Runner imaji artik Edge de tasidigi icin betik, BU ADIMDA KURULAN Chrome'u yok sayip
+      # Edge'i seciyordu; o Edge de CDP portunu acamiyor (D-Bus) -> kapi kirmizi.
+      # Adimin CIKTISI dogrudan betige verilir; tahmin listesi devreye HIC girmez.
       - name: Gorunum alani + dokunma hedefi kapisi
         working-directory: .
+        env:
+          PEMF_TARAYICI: ${{ steps.tarayici.outputs.chrome-path }}
         run: |
           python3 scripts/responsive_kapisi.py --hedef site --zorunlu --png-yok             --site-dist apps/web/dist --cikti /tmp/responsive-site || KOD=$?
           if [ "${KOD:-0}" = "3" ]; then
