@@ -10,7 +10,7 @@ yukler. Acik `__init__.py` paketi TEK bir dizine sabitler.
 
 ⚠️ SILMEYIN. Kapi: tests/test_paket_sinirlari.py
 
-Not: Bu paket FROZEN EXE'ye BUNDLE EDILMEZ (bu yuzden `utils/source_crypto` yeniden
+Not: Bu paket FROZEN EXE'ye BUNDLE EDILMEZ (bu yuzden `apps/backend/utils/source_crypto` yeniden
 disa aktarimi vardir). `__init__.py` yalnizca kaynak agacindaki import cozumunu
 kesinlestirir; sevk edilen ikiliyi ETKILEMEZ.
 """

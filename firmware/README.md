@@ -120,7 +120,7 @@ bobini kapatır. Sorun ondan *sonra* başlar: auto-stop `g_start_ms`'i 0'lar, ho
 watchdog'u (1500 ms) yüzünden aynı paketi (duty>0) 2 Hz göndermeye **devam etmek zorundadır** →
 bir sonraki paket "kapalıyken açıldı" sayılıp süreyi baştan başlatır. Net sonuç: sınır tedaviyi
 **sonlandırmaz**, süre-dolar/yeniden-başlar döngüsüne sokar. Enerjilemeyi gerçekten sınırlayan tek mekanizma host tarafındaki
-`controllers/hardware_controller.py` → `_coil_deadline`'dır; **silinirse bobin süresiz enerjili
+`apps/backend/controllers/hardware_controller.py` → `_coil_deadline`'dır; **silinirse bobin süresiz enerjili
 kalır.** Regresyon kapısı: `tests/test_stm32_source_parity.py::test_host_tarafi_sure_deadlineI_hala_uygulaniyor`.
 
 Firmware'de düzeltilmedi çünkü keep-alive'ı "yeni tedavi"den ayırmak **sabit boylu** pakete
@@ -183,4 +183,4 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
 - Güvenlik-clamp'leri **hasta güvenliğidir** — zayıflatma. Python tarafı bilinçli olarak duty satüre etmez (firmware doyurur). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py`.
 
 ---
-İlgili: [controllers/](../controllers/README.md) · [utils/stm32_*](../utils/README.md) · [tests/](../tests/README.md) · [mimari](../docs/ARCHITECTURE.md)
+İlgili: [apps/backend/controllers/](../controllers/README.md) · [apps/backend/utils/stm32_*](../utils/README.md) · [tests/](../tests/README.md) · [mimari](../docs/ARCHITECTURE.md)

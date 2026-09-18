@@ -5,7 +5,7 @@
 > Sahip ESP kartlarını sistemden **söktü**. Bobin 6-7 zaten 2026-09-10'da STM32'ye taşınmıştı;
 > geriye ESP olarak yalnız **slot 8** kalmıştı ve o da artık takılı değil.
 >
-> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `servers/live_state.esp_etkin()`
+> **Tek kaldıraç:** `PEMF_ESP_ENABLED` (varsayılan `0`) → `apps/backend/servers/live_state.esp_etkin()`
 > * `0` — MQTT dinleyicisi hiç başlamaz, `_mqtt_publish` yayın yapmadan `False` döner,
 >   arayüzde "ESP / MQTT" rozeti çizilmez (durum `devre_disi`, arıza değil).
 > * `1` — aşağıda anlatılan her şey **aynen** geri gelir.
@@ -36,7 +36,7 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 | `_internal\frontend\dist\` | React web UI (FastAPI `/` kökünden serve) | **BOTH** |
 | `_internal\deploy\device.env` / `server.env` | Profil knob'ları (EXE'ye bundle edilir) | her biri |
 | `_internal\bin\cloudflared\cloudflared.exe` | Uzaktan erişim tüneli — **elle eklenir** (bkz. §4) | DEVICE |
-| `_internal\database\*_template.db` | Boş DB şablonları | **BOTH** |
+| `_internal\apps/backend/database\*_template.db` | Boş DB şablonları | **BOTH** |
 | `nssm.exe` | Windows servis sarmalayıcı (çökme→5sn restart) | **BOTH** |
 | `setup_services.ps1` | Üretim kurulum (`-Mode device|server`) | **BOTH** |
 | `install_mosquitto_service.ps1` | Mosquitto'yu ayrı servis yapar | DEVICE |

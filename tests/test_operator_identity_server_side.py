@@ -10,7 +10,7 @@ tek bir istek) başka bir hekimin adıyla seans başlatabilir, AI analizi ve has
 yazabilirdi. PBKDF2 + üstel kilitlenme + PIN'in tamamı, kimsenin doğrulamadığı bir dize
 yüzünden anlamsız kalıyordu — üstelik özelliğin AMACI kaydın doğru hekime atfedilmesiydi.
 
-YENİ KURAL (bkz. servers/auth.cozumlenmis_operator):
+YENİ KURAL (bkz. apps/backend/servers/auth.cozumlenmis_operator):
   1) Jeton varsa → e-posta JETONDAN (beyan yok sayılır)
   2) Jeton yok + cihazda kayıtlı operatör yok → beyan kabul (tek veterinerli klinik bozulmaz)
   3) Jeton yok + beyan KAYITLI bir operatöre ait → REDDEDİLİR (kayıt sahipsiz yazılır)

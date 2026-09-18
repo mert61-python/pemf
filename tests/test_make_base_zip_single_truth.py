@@ -247,14 +247,14 @@ def test_KRITIK_SURUM_ZINCIRINDEKI_HER_dosya_APP_kokunde():
     """GENEL KURAL: kurulu sürümü BELİRLEYEN her paket dosyası APP katmanındadır.
 
     Tek tek dosya saymak bu arızayı dört kez kaçırdı; kural kaynağa bağlanıyor:
-    `utils/path_utils.get_app_version()` sürümü hangi paket dosyalarından okuyorsa, `make_base_zip`
+    `apps/backend/utils/path_utils.get_app_version()` sürümü hangi paket dosyalarından okuyorsa, `make_base_zip`
     onların HEPSİNİ app kökü saymalıdır. Biri deps'e düşerse ya sürüm aylarca tazelenmez (geri
     çağırma yanlış sürüme bakar) ya da her yayın 1,49 GB'lık katmanı bayatlatır.
 
     ⚠️ Çıpa AST'ye pinli: ham metinde `packaged_resource_path("...")` aramak yorumları ve
     başka fonksiyonlardaki çağrıları da yakalardı.
     """
-    agac = ast.parse((GUII / "utils" / "path_utils.py").read_text(encoding="utf-8"))
+    agac = ast.parse((GUII / "apps" / "backend" / "utils" / "path_utils.py").read_text(encoding="utf-8"))
     govde = next(
         (d for d in ast.walk(agac) if isinstance(d, ast.FunctionDef) and d.name == "get_app_version"),
         None,

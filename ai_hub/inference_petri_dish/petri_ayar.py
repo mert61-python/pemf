@@ -6,12 +6,12 @@ SAHİP TALEBİ (2026-09-09): "3 parametre arayüzden ayarlanabilir olsun. Görü
 fazla, yoloya göre resize ekle." → netleştirme: "Altısı da ayarlanabilir olsun."
 
 NEDEN AYRI MODÜL (ne router'da ne arayüzde): parametreyi kabul eden İKİ uç var —
-`servers/ai_router.py::analyze_em_petri` (gömülü yol) ve `ai_service/app.py::infer_em_petri`
+`apps/backend/servers/ai_router.py::analyze_em_petri` (gömülü yol) ve `ai_service/app.py::infer_em_petri`
 (GPU mikroservisi, `PEMF_AI_SERVICE_URL` tanımlıyken gömülü yol HİÇ çalışmaz). Sınırı yalnız
 birine koymak diğerini korumasız bırakırdı; iki yere kopyalamak ise sürüklenirdi (bugün ölçülen
 `scratch_yonu` hatası tam bu sınıftı: parametre zincirin bir halkasında sessizce düşüyordu).
 `plausibility.py` ile aynı gerekçe: `docker/Dockerfile.ai` imaja YALNIZ `ai_hub/` + `ai_service/`
-kopyalar, bu yüzden paylaşılan kural `utils/`e değil buraya ait.
+kopyalar, bu yüzden paylaşılan kural `apps/backend/utils/`e değil buraya ait.
 
 ⚠️ SINIRLAR SÜSLEME DEĞİL: arayüz doğrulaması atlanabilir (uç auth-muaf, `curl` ile doğrudan
 çağrılabilir). `resize_max=1` bütün görüntüyü tek piksele indirir, `yolo_conf=0` on binlerce

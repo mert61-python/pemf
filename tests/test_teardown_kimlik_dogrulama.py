@@ -9,7 +9,7 @@
 KOŞULSUZ. cmdkey hedef yoksa exit 1 döner ("Eleman bulunamadı" — bu makinede ölçüldü),
 `$LASTEXITCODE` hiç okunmuyor, `$script:PemfFailed`e dokunulmuyordu → KVKK "tam temizlik"
 raporu, hiçbir şey silinmemişken "kimlik silindi" diyordu. Ağırlaştırıcı: footprint listesi
-'fernet_key@PEMF_GUI' derken runtime 'patient_fernet_key' yazar (utils/secrets_manager.py
+'fernet_key@PEMF_GUI' derken runtime 'patient_fernet_key' yazar (apps/backend/utils/secrets_manager.py
 `_keyring_get("patient_fernet_key")`) — yani o kayıt HİÇBİR koşuda silinemezdi ve her koşu
 sahte "silindi" üretiyordu.
 
@@ -38,8 +38,8 @@ import pytest
 _KOK = Path(__file__).resolve().parents[1]
 _TEARDOWN = _KOK / "scripts" / "pemf_teardown.ps1"
 _FOOTPRINT = _KOK / "scripts" / "pemf_footprint.ps1"
-_SECRETS = _KOK / "utils" / "secrets_manager.py"
-_SQLCIPHER = _KOK / "database" / "sqlcipher_util.py"
+_SECRETS = _KOK / "apps" / "backend" / "utils" / "secrets_manager.py"
+_SQLCIPHER = _KOK / "apps" / "backend" / "database" / "sqlcipher_util.py"
 _GUI_CONFIG = _KOK / "pemf_gui" / "config.py"
 
 _PWSH = shutil.which("pwsh")

@@ -28,24 +28,35 @@ from __future__ import annotations
 import ast
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-
 from utils.path_utils import KOK_ISARETLERI, kaynak_kokunu_bul, packaged_resource_path
 
 KOK = Path(__file__).resolve().parents[1]
 
-#: Kapının taradığı ürün paketleri (F4'te `apps/backend/` altına taşınacak olanlar).
-PAKETLER = ("servers", "services", "database", "utils", "controllers")
+#: Kapının taradığı ürün paketleri. ⚠️ F4 TAMAMLANDI 2026-09-18: bunlar artık
+#: `apps/backend/` altında. `git ls-files` DİSK yolu ister; import adları (`utils` vb.)
+#: değişmedi ama burada işe yaramaz — ikisi bu taşımadan sonra AYRIŞTI.
+PAKETLER = (
+    "apps/backend/servers",
+    "apps/backend/services",
+    "apps/backend/database",
+    "apps/backend/utils",
+    "apps/backend/controllers",
+)
 
 #: Modülün KENDİ dizinine bakan meşru kullanımlar — taşımada modülle birlikte giderler,
 #: dolayısıyla derinlik varsayımı İÇERMEZLER.
 MUAF = {
-    "utils/pdf_report_generator.py",  # Path(__file__).parent / "assets" → modülün yanı
-    "utils/path_utils.py",  # `kaynak_kokunu_bul` TANIMI burada
+    "apps/backend/utils/pdf_report_generator.py",  # Path(__file__).parent / "assets" → modülün yanı
+    "apps/backend/utils/path_utils.py",  # `kaynak_kokunu_bul` TANIMI burada
 }
 MUAF_SAYISI = 2
+
+#: `__file__`den türetilip "bir üst dizin" için kullanılan değişken adları (üründe ölçüldü).
+_DIZIN_DEGISKENLERI = {"current_dir", "_DIR", "HERE", "base_dir", "BASE_DIR"}
 
 
 def _izlenen_moduller() -> list[str]:
@@ -73,8 +84,30 @@ def kok_capasi_satirlari(kaynak: str) -> list[int]:
                 return True
         return False
 
+    def _dirname_zinciri(d: ast.AST) -> bool:
+        """`os.path.dirname(os.path.dirname(x))` ya da `os.path.dirname(<baska_dizin_degiskeni>)`.
+
+        ⚠️ BU KAPININ KOR NOKTASIYDI (2026-09-18'de ölçüldü). Kapı yalnız `pathlib` biçimini
+        (`parents[N]`, `.parent.parent`) arıyordu. `servers/ai_router.py` kökü
+        `os.path.dirname(current_dir)` ile buluyordu ve F4 taşımasında SESSİZCE `apps/backend`i
+        gösterdi: `ai_hub/` depo kökünde olduğu için FGS bantları yüklenemedi, fonksiyon hata
+        ATMADAN boş dict döndü ve panel kayboldu. Aynı hata iki dosyada daha vardı.
+        """
+        if not (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "dirname"):
+            return False
+        if not d.args:
+            return False
+        ic = d.args[0]
+        # dirname(dirname(...)) -> iki kat yukari = kok varsayimi
+        if isinstance(ic, ast.Call) and isinstance(ic.func, ast.Attribute) and ic.func.attr == "dirname":
+            return True
+        # dirname(current_dir) gibi: argüman `__file__`den türetilmiş bir DİZİN değişkeni
+        return isinstance(ic, ast.Name) and ic.id in _DIZIN_DEGISKENLERI
+
     bulgu: list[int] = []
     for d in ast.walk(agac):
+        if _dirname_zinciri(d):
+            bulgu.append(d.lineno)
         # parents[N]  (N >= 1)
         if isinstance(d, ast.Subscript) and isinstance(d.value, ast.Attribute) and d.value.attr == "parents":
             if _file_temelli(d.value):
@@ -162,8 +195,43 @@ def test_KRITIK_DERINLIKTEN_BAGIMSIZ():
         assert kaynak_kokunu_bul(sahte) == KOK, f"{derinlik} seviye derinde kök kaydı"
 
     # F4'ün gerçek hedef yolu — `utils/` iki seviye derine iner:
-    f4_yolu = KOK / "apps" / "backend" / "pemf_backend" / "utils" / "path_utils.py"
+    # F4'ün GERÇEKLEŞEN hedef yolu (2026-09-18'de taşındı). Çıpa GERÇEK yola pinli:
+    # hayalî bir yol kullanılsaydı taşıma geri alınsa bile test yeşil kalırdı.
+    f4_yolu = KOK / "apps" / "backend" / "utils" / "path_utils.py"
+    assert f4_yolu.is_file(), "F4 taşıması geri alınmış — çıpa artık ürünü ölçmüyor"
     assert kaynak_kokunu_bul(f4_yolu) == KOK, "F4 taşımasından sonra kök KAYIYOR"
+
+
+def test_KRITIK_DONMUS_EXEDE_YUKARI_YURUMEZ(monkeypatch, tmp_path):
+    """🔴 KOD KORUMASINI KIRAN HATA (2026-09-18'de ölçüldü, build kapısı yakaladı).
+
+    NE OLDU: `kaynak_kokunu_bul` donmuş EXE'de de işaret arıyordu. Paketin içinde `VERSION`
+    VAR ama `pyproject.toml`/`versions.json` YOK → yürüyüş paketi geçip **depo köküne** çıktı.
+    Çağıran (`servers/ai_router.py`) o kökü `sys.path`e ekliyor ve depo kökünde `ai_hub/`
+    **düz kaynak** olarak durduğu için paketlenmiş `.pyd`/`.pyenc` GÖLGELENDİ.
+
+    Sonuç: kod koruması SESSİZCE etkisiz. Beş build kapısı YEŞİL kaldı (PYZ temiz, sevk
+    ağacı temiz, 67/67 modül derlendi) — yalnız **çalışma-anı** kapısı gördü:
+    "16/16 modül .pyd/.pyenc DIŞINDAN yükleniyor".
+
+    Donmuş çalışırken tek doğru kök `_MEIPASS`tır; arama YAPILMAZ.
+    """
+    sahte_paket = tmp_path / "_internal"
+    sahte_paket.mkdir()
+    # Paketin ÜSTÜNDE tam bir "depo kökü" kur — yürüyüş olsaydı BURAYI bulurdu.
+    for ad in KOK_ISARETLERI:
+        (tmp_path / ad).write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(sahte_paket), raising=False)
+
+    bulunan = kaynak_kokunu_bul(str(sahte_paket / "servers" / "ai_router.py"))
+    assert bulunan == sahte_paket, (
+        f"donmuş EXE'de kök {bulunan} bulundu — paketin DIŞINA çıkıldı. Bu, depo kökündeki "
+        "düz `ai_hub/` kaynağının paketlenmiş .pyd'yi gölgelemesine ve kod korumasının "
+        "SESSİZCE etkisiz kalmasına yol açar."
+    )
+    assert bulunan != tmp_path, "yürüyüş sahte depo köküne ulaştı — donmuş dal devre dışı"
 
 
 def test_KARSIT_KANIT_isaretler_kokU_TEK_BASINA_belirliyor():
@@ -215,6 +283,9 @@ def test_KARSIT_KANIT_kapi_gercekten_yakaliyor():
         "bases = [Path(__file__).resolve().parent.parent]",
         "dev_path = Path(__file__).parent.parent / relative_path",
         'for base in (x, Path(__file__).resolve().parents[1] / "VERSION"): pass',
+        # ⚠️ `os.path` biçimi — kapının 2026-09-18'deki KÖR NOKTASI, üç dosyada vardı:
+        "project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
+        "project_root = os.path.dirname(current_dir)",
     ):
         assert kok_capasi_satirlari(bozuk), f"kapı KAÇIRIYOR: {bozuk}"
 
@@ -227,6 +298,9 @@ def test_KARSIT_KANIT_mesru_kullanim_YANLIS_KIRMIZI_vermez():
         '"""Kökü Path(__file__).parent.parent ile bulan 13 yer vardı."""',  # docstring
         'kok = kaynak_kokunu_bul()',
         'base = Path(sys._MEIPASS)',
+        # Modülün KENDİ dizini — taşımada birlikte gider, derinlik varsayımı YOK:
+        '_DIR = os.path.dirname(os.path.abspath(__file__))',
+        'HERE = os.path.dirname(os.path.abspath(__file__))',
     ):
         assert not kok_capasi_satirlari(temiz), f"YANLIŞ KIRMIZI: {temiz}"
 
@@ -234,7 +308,10 @@ def test_KARSIT_KANIT_mesru_kullanim_YANLIS_KIRMIZI_vermez():
 def test_KARSIT_KANIT_muafiyet_kapiyi_BOSALTMIYOR():
     """ "Kırmızıyı sustur" diye muafiyet listesini şişiren yamayı yakalar."""
     assert len(MUAF) == MUAF_SAYISI, f"muafiyet listesi değişmiş: {MUAF}"
-    assert set(PAKETLER) >= {"servers", "database", "utils"}, "taranan paket kümesi daraltılmış"
+    assert len(PAKETLER) == 5, f"taranan paket kümesi değişmiş: {PAKETLER}"
+    assert all(a.startswith("apps/backend/") for a in PAKETLER), (
+        f"paketler `apps/backend/` altında olmalı (F4 taşındı): {PAKETLER}"
+    )
 
 
 def test_packaged_resource_path_URUNDE_dogru_cozuyor():
@@ -243,7 +320,7 @@ def test_packaged_resource_path_URUNDE_dogru_cozuyor():
     assert yol.exists(), f"packaged_resource_path VERSION'ı bulamıyor: {yol}"
     assert yol.parent == KOK, f"kök yanlış: {yol.parent}"
     # Kaynak dalı sabit derinlik KULLANMAMALI (F4'te kayar) — kaynağı da ölç.
-    kaynak = (KOK / "utils" / "path_utils.py").read_text(encoding="utf-8")
+    kaynak = (KOK / "apps" / "backend" / "utils" / "path_utils.py").read_text(encoding="utf-8")
     govde = kaynak[kaynak.index("def packaged_resource_path") :]
     govde = govde[: govde.index("\ndef ", 1)]
     assert not re.search(r"__file__[^\n]*parents\[", govde), (

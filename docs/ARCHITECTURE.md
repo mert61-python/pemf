@@ -12,11 +12,11 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
  │ (Expo    │◄──────tünel───────►│   │  PEMF_Backend.exe (frozen, NSSM servis)│   │
  │  RN/web) │   https/wss        │   │  FastAPI + uvicorn  :8000              │   │
  └────┬─────┘                    │   │  backend_service.py (tek giriş)        │   │
-      │ LAN (aynı WiFi)          │   │   ├─ servers/api_server.py (REST+WS)   │   │
+      │ LAN (aynı WiFi)          │   │   ├─ apps/backend/servers/api_server.py (REST+WS)   │   │
       │ http/ws :8000            │   │   │   ├─ ai_router / history / settings │   │
       ├─────────────────────────►│   │   │   ├─ update_router / patient_router │   │
       │                          │   │   │   └─ /metrics /ws /api/*            │   │
-      │ mDNS keşif               │   │   ├─ controllers/hardware_controller   │   │
+      │ mDNS keşif               │   │   ├─ apps/backend/controllers/hardware_controller   │   │
       │                          │   │   ├─ headless_core (STM seri sürücü)   │   │
  ┌────▼─────┐                    │   │   └─ event_bus (pub/sub)               │   │
  │ Supabase │◄──anon RPC────────►│   └──────┬──────────────┬─────────────────┘   │

@@ -3,7 +3,7 @@
 
 `_begin_coil_run` / `_finish_coil_run` + `_active_coil_runs` / `_coil_run_stats` — seans sırasında
 her bobinin treatment-DB'deki "coil run" yaşam-döngüsünü + dakika-ortalama akümülatörünü yönetir.
-B-2.2'de `servers/coil_run_tracker.py`'ye taşınacak (treatment-DB'ye bağlı ama MQTT/hardware'e
+B-2.2'de `apps/backend/servers/coil_run_tracker.py`'ye taşınacak (treatment-DB'ye bağlı ama MQTT/hardware'e
 geri-bağımlılığı YOK; db_session_id injection ile). Bu testler MEVCUT davranışı kilitler → taşıma
 sonrası AYNI testler yeşil kalmalı. Testler `api_server` yüzeyinden gider (alias'lar korunur) →
 extraction'dan önce ve sonra AYNI çalışır.

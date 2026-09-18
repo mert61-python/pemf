@@ -32,7 +32,7 @@ from build_tools.source_crypto import (  # noqa: E402
 )
 
 # Şifrelenecek klasörler (build çıktısı içindeki GÖRELİ yollar).
-# ÖLÇÜLDÜ 2026-08-06: yalnız `ai_hub` düz .py olarak diske kopyalanıyor; servers/database/utils
+# ÖLÇÜLDÜ 2026-08-06: yalnız `ai_hub` düz .py olarak diske kopyalanıyor; apps/backend/servers/database/utils
 # zaten EXE'ye gömülü .pyc. Bu yüzden varsayılan kapsam ai_hub'tır (gerçek açık orası).
 DEFAULT_TARGETS = ["_internal/ai_hub"]
 

@@ -16,7 +16,6 @@ import threading
 from datetime import datetime
 
 from fastapi import WebSocket
-
 from utils.path_utils import HARDWARE_VERSION, get_app_version
 
 _APP_VERSION = get_app_version()

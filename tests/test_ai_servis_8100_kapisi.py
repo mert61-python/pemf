@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """:8100'e DOĞRUDAN yapılan çağrılar MODALİTE/SESSİZLİK KAPISIZDI.
 
-DENETİM BULGUSU (2026-08-17, fix-12'den sarkan kalem). Görüntü uçlarındaki kapı `servers/ai_router.py`
+DENETİM BULGUSU (2026-08-17, fix-12'den sarkan kalem). Görüntü uçlarındaki kapı `apps/backend/servers/ai_router.py`
 içinde `_kapili_devret` ile devretmenin önüne alındı — ama bu yalnız **backend üzerinden** geçen
 istekleri korur. `ai_service/app.py` (`:8100`) kendi başına kapısızdı ve uçları **auth-muaf**:
 
@@ -14,11 +14,11 @@ transportta birebir duruyordu. Aynısı ses ucunda: sessiz kayıt için model yi
 
 ⚠️ Deponun KENDİ kuralı bunu yazıyor (`ai_hub/inference_petri_dish/plausibility.py`):
 *"denetim ROUTER'da DEĞİL burada durmalı, çünkü `PEMF_AI_SERVICE_URL` tanımlıyken
-`servers/ai_router.py` HİÇ çalışmaz."* Petri kapısı boru hattının İÇİNDE olduğu için iki yolda da
+`apps/backend/servers/ai_router.py` HİÇ çalışmaz."* Petri kapısı boru hattının İÇİNDE olduğu için iki yolda da
 çalışıyordu; kurala uyan tek kapı oydu.
 
-DÜZELTME = kapıyı KOPYALAMAK DEĞİL, aynı modülü iki transporttan çağırmak. `utils/image_domain` ve
-`utils/ses_kalitesi` yaprak modüller (depo-içi bağımlılığı SIFIR, yalnız cv2/numpy/stdlib) ve
+DÜZELTME = kapıyı KOPYALAMAK DEĞİL, aynı modülü iki transporttan çağırmak. `apps/backend/utils/image_domain` ve
+`apps/backend/utils/ses_kalitesi` yaprak modüller (depo-içi bağımlılığı SIFIR, yalnız cv2/numpy/stdlib) ve
 `docker/Dockerfile.ai` imaja bir `COPY` satırıyla alınıyor. Kapıları `ai_hub/`e TAŞIMAK bilerek
 REDDEDİLDİ: `pyproject.toml` coverage `omit */ai_hub/*` + mypy `exclude (ai_hub|...)` yüzünden iki
 güvenlik kapısı kalıcı kör noktaya girerdi (2026-08-09 ratchet kararının tersi).
@@ -60,7 +60,7 @@ def client(app_modulu, monkeypatch):
     """`:8100` uygulamasının gerçek TestClient'ı; predictor'lar SAHTE (GPU/model gerekmez).
 
     ⚠️ `PEMF_AI_DOMAIN_GUARD` ortamdan SİLİNİR: sızmış bir `0` değeri kapıyı kapatır ve test
-    sessizce yanlış-yeşile döner (`utils/image_domain.py` bu env'i ÇAĞRI ANINDA okuyor)."""
+    sessizce yanlış-yeşile döner (`apps/backend/utils/image_domain.py` bu env'i ÇAĞRI ANINDA okuyor)."""
     from fastapi.testclient import TestClient
 
     monkeypatch.delenv("PEMF_AI_DOMAIN_GUARD", raising=False)
@@ -141,7 +141,7 @@ def _ffmpeg_yolu() -> str:
     ⚠️ `ai_service/app.py` `shutil.which("ffmpeg")` kullanıyor (konteynerde apt ile kurulu) ama bu
     geliştirme makinesinde PATH'te ffmpeg YOK. Testleri atlamak, sessizlik kapısının HİÇ
     ölçülmemesi demekti — kapı için kabul edilemez. Bunun yerine `app.shutil.which` yamalanır ve
-    deponun `servers/ai_router.py`de zaten kullandığı `imageio_ffmpeg` ikilisine yönlendirilir;
+    deponun `apps/backend/servers/ai_router.py`de zaten kullandığı `imageio_ffmpeg` ikilisine yönlendirilir;
     böylece kapı GERÇEK bir transcode üzerinden ölçülür."""
     import shutil
 
@@ -235,14 +235,15 @@ def test_KAPI_TEK_KAYNAK_nesne_kimligi():
     tam olarak iki transportun ayrışmasıydı; ikinci bir kopya aynı hatayı yeniden üretir."""
     # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
     pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
-    import ai_service.app as A
     import servers.ai_router as R
+
+    import ai_service.app as A
 
     assert A._DomainMismatch is R._ImgDomainMismatch, (
         "iki transport AYNI DomainMismatch sinifini kullanmiyor → kapi KOPYALANMIS"
     )
     assert A._domain_check.__module__ == "utils.image_domain", (
-        f"kapi utils/image_domain'den GELMIYOR (modul: {A._domain_check.__module__})"
+        f"kapi apps/backend/utils/image_domain'den GELMIYOR (modul: {A._domain_check.__module__})"
     )
     assert A._ses_sessiz_mi.__module__ == "utils.ses_kalitesi"
 
@@ -259,14 +260,14 @@ def test_DOCKERFILE_kapi_modullerini_KOPYALIYOR():
     """Yapısal kapı: `app.py`nin üst-düzey depo-içi import'larının HEPSİ imaja kopyalanmalı.
 
     ⚠️ AST TABANLI — yorum/docstring içindeki örnek bir `from utils...` satırı GÖRÜLMEZ ve
-    `utils/`ü yalnız YORUMDA anan bir Dockerfile bu kapıdan GEÇEMEZ. (Bu depoda "yorum kapıyı
+    `apps/backend/utils/`ü yalnız YORUMDA anan bir Dockerfile bu kapıdan GEÇEMEZ. (Bu depoda "yorum kapıyı
     kandırdı" hatası dört kez oldu; bu yüzden metin araması değil AST + yorum-soyma kullanılıyor.)
     Gerçek arıza sınıfı: `.dockerignore`/COPY kaynaklı sessiz dosya kaybı — bu depo onunla iki kez
     yandı.
 
     ⚠️ KAPSAM GENİŞLETİLDİ (2026-09-12) — İKİ yönde, ikisi de ÖLÇÜLMÜŞ arızadan:
-    1. Kapı YALNIZ `utils.*` tarıyordu. ADIM 3'te `panel_yayin` modülü **`servers/` altına**
-       konmuştu; `servers/` bu imaja HİÇ kopyalanmadığı için panel yayını GPU profilinde
+    1. Kapı YALNIZ `utils.*` tarıyordu. ADIM 3'te `panel_yayin` modülü **`apps/backend/servers/` altına**
+       konmuştu; `apps/backend/servers/` bu imaja HİÇ kopyalanmadığı için panel yayını GPU profilinde
        SESSİZCE boş dönüyordu ve kapı bunu göremiyordu. Artık depo-içi TÜM paketler taranıyor.
     2. Kapı YALNIZ `agac.body` üstündeki çıplak import'lara bakıyordu; `try/except` içine alınmış
        bir depo-içi import görünmezdi. Oysa asıl tehlikeli biçim TAM DA BUDUR: dosya imajda yoksa
@@ -536,14 +537,15 @@ def test_ASGARI_GIRDI_TEK_KAYNAK_nesne_kimligi():
     Bu bulgunun kök nedeni tam olarak iki transportun ayrışmasıydı."""
     # ⚠️ Fixture'siz DOGRUDAN import: CI agir AI paketlerini kurmuyor (bkz. app_modulu).
     pytest.importorskip("onnxruntime", reason="ai_service :8100 calisma zamani paketi yok (CI)")
-    import ai_service.app as A
     import servers.ai_router as R
+
+    import ai_service.app as A
 
     assert A._AsgariGirdiYok is R._AsgariGirdiYok, "iki transport AYRI istisna sinifi kullaniyor"
     assert A._ckd_kapisi is R._ckd_kapisi, "CKD kapisi KOPYALANMIS"
     assert A._vital_kapisi is R._vital_kapisi, "vital kapisi KOPYALANMIS"
     assert A._ckd_kapisi.__module__ == "utils.klinik_asgari", (
-        f"kapi utils/klinik_asgari'den GELMIYOR (modul: {A._ckd_kapisi.__module__})"
+        f"kapi apps/backend/utils/klinik_asgari'den GELMIYOR (modul: {A._ckd_kapisi.__module__})"
     )
 
 

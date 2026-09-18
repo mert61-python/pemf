@@ -33,7 +33,7 @@ KULLANIM
   python scripts/supabase_sql.py --sql "select count(*) from public.devices"
 
   # GOC UYGULA (yazma) — acikca istenmeli
-  python scripts/supabase_sql.py --dosya database/supabase_jetonlar.sql --yaz
+  python scripts/supabase_sql.py --dosya apps/backend/database/supabase_jetonlar.sql --yaz
 
 ⚠️ YAZMA KAPISI: `--yaz` verilmeden SQL icinde DDL/DML gorulurse arac CALISTIRMAZ. Amac,
 "okuyacagim" diye acilan bir oturumun yanlislikla semayi degistirmesini onlemektir.
@@ -252,7 +252,7 @@ _BEKLENEN_ANON_RPC = {
 #     ("subscriptions" | "token_balances" | "token_ledger", "authenticated", "SELECT")
 # Cunku okuma "RLS ile kendi satirini oku" desenine dayaniyordu ve Postgres'te RLS politikasi
 # TEK BASINA yetmez — rolun tablo SELECT yetkisi de gerekir. Okumalar
-# `database/supabase_okuma_rpc.sql` ile SECURITY DEFINER fonksiyonlara tasindi; artik HICBIR
+# `apps/backend/database/supabase_okuma_rpc.sql` ile SECURITY DEFINER fonksiyonlara tasindi; artik HICBIR
 # tabloda rol yetkisi yok ve `alter default privileges` sayesinde yenisi de olusmuyor.
 # ⚠️ BURAYA ISTISNA EKLEMEK, denetimin kendi kendine arka kapi acmasi demektir. Yeni bir tabloya
 # dogrudan erisim gerekiyorsa once "neden RPC olmasin?" sorusu cevaplanmalidir.
@@ -277,7 +277,9 @@ def denetim(ref: str) -> int:
         yazdir(satirlar)
     print(f"\n{'TEMIZ' if not bulgu else str(bulgu) + ' BULGU'}")
     if bulgu:
-        print("Sertlestirme: python scripts/supabase_sql.py --dosya database/supabase_sertlestirme.sql --yaz")
+        print(
+            "Sertlestirme: python scripts/supabase_sql.py --dosya apps/backend/database/supabase_sertlestirme.sql --yaz"
+        )
     return 0
 
 

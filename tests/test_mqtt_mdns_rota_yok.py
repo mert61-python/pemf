@@ -2,14 +2,14 @@
 # Author: mertaygn, cglrgrkn
 """`_mqtt` mDNS SERVİSİ, DEFAULT ROUTE YOKKEN HİÇ YAYINLANMIYORDU (denetim 2026-08-17, cid. 2).
 
-`services/mdns_service._get_local_ip` tek aşamalıydı: UDP `connect(("8.8.8.8", 80))` DEFAULT ROUTE
+`apps/backend/services/mdns_service._get_local_ip` tek aşamalıydı: UDP `connect(("8.8.8.8", 80))` DEFAULT ROUTE
 ister. Offline klinikte ya da hotspot-only kurulumda (`scripts/start_hotspot.ps1` kendi yorumunda
 *"özellikle offline klinikte GetInternetConnectionProfile null"* diyor) route YOKTUR → fonksiyon
 kalıcı `127.0.0.1` dönüyor, çağıranların 127.* guard'ı (ilk kayıt **ve** re-register) kaydı atlıyor
 ve `pemf-gateway.local` SÜREÇ ÖMRÜ BOYUNCA yayınlanmıyordu.
 
 Log *"arayüz gelince kaydolacak"* diyordu ama o söz TUTULAMIYORDU: tek kurtarma yolu
-`utils/zeroconf_singleton.ensure_interfaces_current` ve o da arayüz KÜMESİ değişmediği için
+`apps/backend/utils/zeroconf_singleton.ensure_interfaces_current` ve o da arayüz KÜMESİ değişmediği için
 (`set(ips) == set(_bound_ips)` → erken `return False`) callback'leri hiç çağırmıyor — hotspot IP'si
 zaten baştan var. Bu, `_pemfvet` için b30d7bd'de ölçülüp kabul edilen S2 senaryosunun BİREBİR aynısı.
 

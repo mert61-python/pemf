@@ -92,7 +92,7 @@ def test_KRITIK_KPI_acil_durdurmayi_SAYAR(tmp_path):
 def test_KRITIK_KPI_SORGUSU_durum_sabitini_ICERIR():
     """Yazan ile okuyanın ayrışmasını doğrudan kilitler: KPI sorgusu, `end_session`ın yazdığı
     durumu tanımıyorsa sayaç sessizce 0 kalır (bulgunun ta kendisi)."""
-    kaynak = (Path(__file__).resolve().parent.parent / "servers" / "system_router.py").read_text(
+    kaynak = (Path(__file__).resolve().parent.parent / "apps" / "backend" / "servers" / "system_router.py").read_text(
         encoding="utf-8", errors="replace"
     )
     # ⚠️ Aranan şey, durumun ELLE YAZILMIŞ hâli DEĞİL, SABİTİN KENDİSİdir. Elle yazılmış bir

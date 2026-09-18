@@ -113,7 +113,7 @@ def test_d1_sync_worker_uses_non_destructive_upsert():
     veri-yok-eden `INSERT OR REPLACE INTO patients`'a GERİ DÖNMEMELİ."""
     import pathlib
 
-    src = pathlib.Path(__file__).resolve().parent.parent / "servers" / "sync_worker.py"
+    src = pathlib.Path(__file__).resolve().parent.parent / "apps" / "backend" / "servers" / "sync_worker.py"
     text = src.read_text(encoding="utf-8", errors="ignore")
     assert "ON CONFLICT(id) DO UPDATE" in text
     assert "INSERT OR REPLACE INTO patients" not in text.replace(" ", " ")
@@ -273,7 +273,6 @@ def _health(monkeypatch, nonce: str, headers: dict | None = None):
     Launcher daima loopback'ten sorar → `client=("127.0.0.1", ...)` ile gercek yolu simule et.
     (Bu fark testi ilk yazdigimda yakalandi: kod dogru, kurulum yanlisti.)"""
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     monkeypatch.setenv("PEMF_HEALTH_NONCE", nonce)
@@ -299,7 +298,6 @@ def test_health_nonce_yokken_alan_None(monkeypatch):
     """Env verilmemişse (servis modu / eski akış) alan None — 200 davranışı değişmez."""
     monkeypatch.delenv("PEMF_HEALTH_NONCE", raising=False)
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
@@ -325,7 +323,6 @@ def _health_with_session(active: bool, headers: dict | None = None, *, snapshot=
     `snapshot` verilirse `_build_ws_snapshot` onunla değiştirilir → gerçek kod yolu (seans +
     koşan bobin taraması) uçtan uca koşar."""
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     if snapshot is not None:
@@ -411,7 +408,6 @@ def test_health_nonce_LAN_istemcisine_de_SIZDIRILMAZ():
     aktif-tedavi bilgisi tüm LAN'a açılır ve TESTLER YEŞİL KALIRDI.
     """
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     for lan_ip in ("192.168.1.50", "10.0.0.7", "172.16.5.9"):

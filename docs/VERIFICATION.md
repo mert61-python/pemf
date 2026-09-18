@@ -233,13 +233,13 @@ Sonuç: cihaz 5 dakikadan uzun süredir kapalıysa kullanıcı `{durum:"yok"}` a
 **"Kodu kontrol edin"** yazıyordu — oysa kod DOĞRU, cihaz KAPALI. (2026-08-12 saha bildiriminin
 aynısı: kullanıcı defalarca kodu kontrol ediyor.)
 
-**Depoda yapılanlar.** `database/supabase_devices.sql` penceresi 30 güne çıkarıldı (yalnız YENİ
+**Depoda yapılanlar.** `apps/backend/database/supabase_devices.sql` penceresi 30 güne çıkarıldı (yalnız YENİ
 kurulumları etkiler) ve `apps/ui/src/services/pairing.ts`in `default` mesajı iki sebebi birlikte
 söyleyecek şekilde dürüstleştirildi. Kapı: `tests/test_bayat_cihaz_gorunur.py` (10 mutasyonla
 doğrulandı) — değişmez "**sunucu penceresi istemci `STALE_MS`inden GENİŞ olmalı**".
 
 **⚠️ ELLE YAPILACAK.** Yayında olan projede kurulum betiği **tekrar çalıştırılamaz**
-(`database/README.md`: sırsız v1 aşırı-yükleri geri gelir). Bu yüzden dar kapsamlı bir dosya var:
+(`apps/backend/database/README.md`: sırsız v1 aşırı-yükleri geri gelir). Bu yüzden dar kapsamlı bir dosya var:
 
 1. Supabase Dashboard → **SQL Editor** → `supabase/resolve_device_bayat_gorunur.sql` içeriğini
    yapıştır → **Run**. (Tek transaction; yalnız `resolve_device`i değiştirir, `upsert_device`e

@@ -3,9 +3,9 @@
 """KEŞİF KANALLARI PORTU `8000` SABİT YAYINLIYORDU, GERÇEK PORT DİNAMİK (denetim 2026-08-17).
 
 Üç yayıncı da portu sabit `8000` olarak duyuruyordu:
-  · mDNS `_pemfvet` kaydı (`servers/api_server` lifespan)
-  · `/api/discovery` yanıtı (`servers/system_router`)
-  · Bulut cihaz-kaydı satırı (`servers/sync_worker` → Supabase `devices`)
+  · mDNS `_pemfvet` kaydı (`apps/backend/servers/api_server` lifespan)
+  · `/api/discovery` yanıtı (`apps/backend/servers/system_router`)
+  · Bulut cihaz-kaydı satırı (`apps/backend/servers/sync_worker` → Supabase `devices`)
 
 Oysa gerçek port dinamik: launcher boş port arıyor (`find_free_port`) ve `deploy/staging.env`
 `8010` veriyor. 8000 MEŞGULKEN telefon YANLIŞ porta bağlanır; `checkHealth` onu eler ve keşif
@@ -22,7 +22,6 @@ import pathlib
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
-
 from servers.auto_discovery import get_api_port
 
 # ── 1) Tek gerçek kaynak: PEMF_API_PORT ──────────────────────────────────────

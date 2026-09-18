@@ -20,7 +20,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-
 from utils.path_utils import HARDWARE_VERSION  # TEK donanim-surumu kaynagi (M6); leaf util, circular yok
 
 router = APIRouter(tags=["system"])
@@ -522,8 +521,9 @@ def _kurtarma_durumu():
     """(at_rest, kod_dosyasi_var, onay_zamani|None, kod_dosyasi_yolu)."""
     from pathlib import Path
 
-    from servers import api_server as _api
     from utils.backup_recovery import CODE_FILE_NAME
+
+    from servers import api_server as _api
 
     app_data = Path(_api._app_data_dir())
     kod_dosyasi = app_data / CODE_FILE_NAME
@@ -577,8 +577,9 @@ async def recovery_code(request: Request):
         raise HTTPException(status_code=403, detail="Kurtarma kodu yalnızca cihazın kendi ekranından görüntülenebilir.")
     from pathlib import Path
 
-    from servers import api_server as _api
     from utils.backup_recovery import CODE_FILE_NAME
+
+    from servers import api_server as _api
 
     yol = Path(_api._app_data_dir()) / CODE_FILE_NAME
     if not yol.exists():
@@ -634,6 +635,7 @@ def _pii_ayar_db():
     from pathlib import Path
 
     from database.treatment_history_db import get_treatment_db
+
     from servers import api_server as _api
 
     return get_treatment_db(Path(_api._app_data_dir()))
@@ -710,8 +712,9 @@ async def destek_paketi(request: Request):
 
     enforce_privileged(request)
     try:
-        from servers import api_server as _api
         from utils.support_bundle import dosya_adi, olustur
+
+        from servers import api_server as _api
 
         veri, ozet = await _a.to_thread(olustur, _Path(_api._app_data_dir()))
     except Exception:

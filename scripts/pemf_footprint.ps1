@@ -35,7 +35,7 @@ function Get-PemfFootprint {
         # ⚠️ DENETİM 2026-08-04 (P1): 'C:\ProgramData\PEMF_System' KÖKÜ Kvkk=$false olarak
         # listeleniyordu ve koşulsuz `Remove-Item -Recurse` ile siliniyordu. Oysa üretim profili
         # (deploy/device.env:58) `PEMF_DATA_DIR=C:\ProgramData\PEMF_System` veriyor ve
-        # utils/path_utils.py bunu `<PEMF_DATA_DIR>\PEMF_GUI` yapıyor → hasta DB'si (patients.db),
+        # apps/backend/utils/path_utils.py bunu `<PEMF_DATA_DIR>\PEMF_GUI` yapıyor → hasta DB'si (patients.db),
         # tedavi geçmişi, `.sqlcipher_key` ve `pemf_secrets.json` TAM OLARAK o ağacın içindeydi.
         # Sonuç: "HASTA VERİSİ KORUNACAK" diyen varsayılan kaldırma, hasta verisini SİLİYORDU.
         # ÇÖZÜM: kökü ARTIK LİSTELEME; yalnız hasta-verisi OLMAYAN alt dizinleri say. Veri kökü
@@ -97,8 +97,8 @@ function Get-PemfFootprint {
         )
         # KVKK — Windows Credential Manager hedef adları. python-keyring'in Windows arka ucu hedefi
         # "<ad>@<servis>" biçiminde yazar (servis = 'PEMF_GUI'); ad listesi runtime'dan türetilir:
-        #   utils/secrets_manager.py  _keyring_get("sqlcipher_key"|"patient_fernet_key"|"master_secret")
-        #   keyring.set_password ile YAZANLAR: database/sqlcipher_util.py ("sqlcipher_key") +
+        #   apps/backend/utils/secrets_manager.py  _keyring_get("sqlcipher_key"|"patient_fernet_key"|"master_secret")
+        #   keyring.set_password ile YAZANLAR: apps/backend/database/sqlcipher_util.py ("sqlcipher_key") +
         #   pemf_gui/config.py ("patient_fernet_key") — ikisi de aşağıdaki listede (denetim 2026-09-06)
         # ⚠️ DENETİM 2026-09-06: burada 'fernet_key@PEMF_GUI' yazıyordu; runtime ise 'patient_fernet_key'
         # kullanır → o kayıt HİÇ silinmiyor, teardown ise sonucu doğrulamadığından her koşuda sahte

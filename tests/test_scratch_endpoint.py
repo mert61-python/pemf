@@ -234,7 +234,7 @@ def test_YAPISAL_jeton_sinifi_AGIR_arastirma():
 
 
 def test_YAPISAL_router_kayipsiz_png_ve_503():
-    src = (KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "ai_router.py").read_text(encoding="utf-8")
     i = src.index('"/api/ai/vision/scratch"')
     govde = src[i : i + 4200]
     assert 'suffix=".png"' in govde, "gömülü yol ölçüm görüntüsünü JPEG'e yazıyor"

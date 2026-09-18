@@ -42,7 +42,7 @@
 > araştırma AI Pro kabin bilgisayarındadır (karar #15), APK yeniden üretilmiyor. CHANGELOG'da
 > app 1.9.44 girdisi: hasta-güvenliği maddeleri BAŞTA. `buildId`/sha satırı bilinçli olarak BOŞ —
 > yapı alındıktan sonra manifestten yazılır (uydurma değer buildId kapısını kırmızı yapardı).
-> Dokümanlar: `servers/README`, `ai_hub/README`, kabin kılavuzu §0.5 yerleşim kontrol listesi,
+> Dokümanlar: `apps/backend/servers/README`, `ai_hub/README`, kabin kılavuzu §0.5 yerleşim kontrol listesi,
 > test-girdileri README'sinin AI Pro bölümü, `docs/VERIFICATION.md` **§15** (kabin tezgâhı).
 >
 > **Faz 4'te ORTAYA ÇIKAN iki bulgu kapatıldı:**
@@ -85,7 +85,7 @@
 > - **Mobil araştırma kapalı** (karar #15 pariteti): telefon kamerası kabin çerçevesinin dışında →
 >   konum ölçülemez. Panel telefonda görüntülenir, başlatma sebebiyle engellenir.
 > - `ResultInterpretation` taşınması YAPILMADI: AI Pro paneli yorum banner'ı göstermiyor, taşımak
->   gerekçesiz bir refaktör olurdu. `PatientGate.sozluk()` ise TAŞINDI (`utils/profilSozlugu.ts`) —
+>   gerekçesiz bir refaktör olurdu. `PatientGate.sozluk()` ise TAŞINDI (`apps/backend/utils/profilSozlugu.ts`) —
 >   panel de aynı terimleri kullanıyor, kopya iki metnin ayrışmasına açık kapı bırakırdı.
 > - AI Hub → Kontrol köprüsü model ön-seçimini **AppNav üzerinden tek kullanımlık** taşıyor;
 >   ön-seçim yalnız `/status` okunduktan SONRA uygulanıyor (mount'ta `running` false olduğu için
@@ -129,7 +129,7 @@
 > yerleşimi ve koordinat çerçevesi) beklemede; bu yüzden sürüş bayrak arkasında. GPU mikroservis
 > paritesi Faz 5'e ertelendi (üretimde mikroservis kapalı).
 >
-> **Faz 1 çekirdeği (3b82185 sağlayıcı + delegasyon · 3ddd20f model mührü):** `servers/ai_pro_hedef.py`
+> **Faz 1 çekirdeği (3b82185 sağlayıcı + delegasyon · 3ddd20f model mührü):** `apps/backend/servers/ai_pro_hedef.py`
 > geldi (Protocol + KediSaglayici; kedi kodu TAŞINMADI, geç bağlı delegasyon). `_localize_organ` ve
 > `_predict_and_drive` ince delegatör oldu; duty kırpması tek yere (zarfa) alındı; `model` alanı
 > payload → onay mührü → `/start` zinciri kuruldu; `(0..6)` literali dört yerden sıfıra indi;
@@ -181,15 +181,15 @@
 > `27c0743` (dal `production-hardening`) içindir; uygulama öncesi çıpalar fonksiyon adına pinlenir.
 >
 > **Planın ortaya çıkardığı ÜÇ MEVCUT KUSUR (kaynakta doğrulandı, bu iş başlamadan ayrı commit'lerle kapatılır):**
-> 1. `servers/ai_router.py:1187` — sunucu-kameralı **seans** döngüsü `_localize_organ` sonucunu 7 isme açıyor,
+> 1. `apps/backend/servers/ai_router.py:1187` — sunucu-kameralı **seans** döngüsü `_localize_organ` sonucunu 7 isme açıyor,
 >    fonksiyon 2026-08-26'dan beri 8'li tuple döndürüyor → her lokalizasyon `ValueError` ile yutuluyor,
 >    bobin **hiç sürülmüyor**, 3. turda "hedef kaybı" STOP'u yayınlanıyor. Hazırlık (1016) ve mobil (1796)
 >    yolları `*l_ek` ile doğru. Mevcut testler 6'lı/7'li sahte tuple kullandığı için kusuru maskeliyor.
-> 2. `servers/ai_router.py:1696-1705` — `/api/ai/pro/hazirlik/baslat` **aktif seans sürerken** `_ai_organ_id`,
+> 2. `apps/backend/servers/ai_router.py:1696-1705` — `/api/ai/pro/hazirlik/baslat` **aktif seans sürerken** `_ai_organ_id`,
 >    `_ai_relocalize` ve cache `localized=False` yazımlarını kilit ve aktiflik kontrolünden ÖNCE, sahiplik
 >    (`_ai_kare_yabanci`) kontrolü OLMADAN yapıyor; sonra "Seans zaten aktif" ile sessiz başarı dönüyor.
 >    Onaylı organ yerine başka organa enerji yönlendirilebilir (`/organ` ucunda 403 kapısı var, burada yok).
-> 3. `servers/jeton.py:294` — serbest listede `/api/ai/pro/frame` var, gerçek rota `/api/ai/ai_pro/frame`
+> 3. `apps/backend/servers/jeton.py:294` — serbest listede `/api/ai/pro/frame` var, gerçek rota `/api/ai/ai_pro/frame`
 >    (`test_route_contract.py:22`) → ölü girdi; `tests/test_jeton_gate.py:93` ölü yolu doğruluyor.
 >    FREE_MODE=true gizliyor; ücretlendirme açılırsa kare başına 1 jeton.
 
@@ -199,11 +199,11 @@
 
 - **Güvenlik iskeleti model-bağımsız, kediye bağlılık beş noktada toplu.** Hazırlık → öneri → onay → seans
   durum makinesi, kare sahipliği, hedef-kaybı STOP, E-stop teardown ve 7 bobin per-coil sürüş
-  (`_drive_coils_ai_pro`) hiç değişmez. Kediye bağlı kod `servers/ai_router.py`'de: yükleyici çifti
+  (`_drive_coils_ai_pro`) hiç değişmez. Kediye bağlı kod `apps/backend/servers/ai_router.py`'de: yükleyici çifti
   (690-714), lokalizer (717-828), EM tahmin (831-885), organ beyaz listesi `(0..6)` dört yerde
   (1397, 1577, 1666, 1699) ve `_ORGAN_NAMES` metinleri; frontend'de `AiProPanel.tsx` ORGANS + hayvan metinleri.
 - **Mimari karar: "Hedef Sağlayıcı" arayüzü.** Kedi sağlayıcısı mevcut fonksiyonları aynen sarar (13+ testin
-  monkeypatch/regex çıpaları korunur); fantom ve petri sağlayıcıları yeni `servers/ai_pro_hedef.py`'de
+  monkeypatch/regex çıpaları korunur); fantom ve petri sağlayıcıları yeni `apps/backend/servers/ai_pro_hedef.py`'de
   yaşar ve `PhantomCvPipeline`/`PetriCvPipeline` + `PhantomPredictor`/`PetriPredictor`'ı yalnız ÇAĞIRIR
   (ai_hub'a kopya yok; ai_hub import'ları fonksiyon içinde — PYZ koruma kapısı).
 - **Yeni rota YOK.** Model seçimi mevcut payload'lara `model: 'kedi'|'fantom'|'petri'` alanı olarak gelir,
@@ -241,7 +241,7 @@ em_kedi ile seans başlatabilir. Araştırma-yalnız kurulumda em_kedi yalnız `
 
 ### 1.2 Kediye bağlı noktalar (backend)
 
-| Yer (`servers/ai_router.py`) | Ne | Fantom/petri için gereken |
+| Yer (`apps/backend/servers/ai_router.py`) | Ne | Fantom/petri için gereken |
 |---|---|---|
 | 690-714 `_get_or_load_kedi` / `_get_or_load_catorgan` | yükleyici çifti; hazırlık 977-978 ve seans 1121-1122 koşulsuz çağırır | sağlayıcı `load()`; analiz uçlarındaki `_load_em_fantom` (2192-2205) / `_load_em_petri` (2309-2337) kapanışları modül fonksiyonuna TAŞINIR ve paylaşılır |
 | 717-748 `_extract_organ_target`, 763-828 `_localize_organ*` | cat_organ dict → 8'li tuple; `_mm` ×10 cm→mm ±300 klemp; `kedi_var` | sağlayıcı `localize(frame, hedef_id)` aynı 8'li tuple; fantom/petri mm'dir, ×10 YOK |
@@ -338,7 +338,7 @@ istemci payload {model}  ──►  /hazirlik/baslat | /calibrate | /organ | /pr
         /start   → model = _spec['model']  (gövdedeki model YOK SAYILIR)  → start_ai_session(..., f"AI Pro · {title}")
 ```
 
-`servers/ai_pro_hedef.py` (yeni):
+`apps/backend/servers/ai_pro_hedef.py` (yeni):
 
 ```python
 class HedefSaglayici(Protocol):
@@ -375,7 +375,7 @@ class HedefSaglayici(Protocol):
   Kedi eşiği 0.3 DEĞİŞMEZ. Petri `reliability=conf×solidity` mevcut, aynı tavan uygulanır.
 - **E eşlemesi**: `e_field` = hedef sınıfının E'si (sınıf 1 → `result_E_cancer`, sınıf 0 → `result_E_healthy`);
   `e_cancer`/`e_healthy` specs'e yalnız-ek. `ood` = fantom eğitim aralığı dışı ∨ petri sınıf 1.
-- **Duty clip**: mevcut 0..0.50 kırpma (`AI_PRO_DUTY_MAX_RATIO`, `utils/stm32_protocol_limits.py:15`) kedi
+- **Duty clip**: mevcut 0..0.50 kırpma (`AI_PRO_DUTY_MAX_RATIO`, `apps/backend/utils/stm32_protocol_limits.py:15`) kedi
   cpu/gpu fonksiyonlarından `_predict_and_drive` ZARFINA taşınır → tüm sağlayıcılar geçer, kedi davranışı
   bit-bit aynı, onay modalında **gösterilen = sürülen**. Bu YENİ sınır değildir; backend freq/duty/48 °C
   güvenlik sınırı değişmezine dokunulmaz.
@@ -387,7 +387,7 @@ class HedefSaglayici(Protocol):
   router önbelleğinden (ikinci yükleme yok); `start_ai_pro`, `stop_ai_pro` ve teardown'da `set_context([])`.
 - **Yükleme sırası**: iki döngüde `provider.load()` `VideoCapture(0)`'dan ÖNCE (kamera tutma süresi yükten
   bağımsız); kamera açılamayınca `_active_session.is_active=False` + `update_live_session_state(False)`.
-- **Import disiplini**: `servers/ai_pro_hedef.py` ai_hub'ı YALNIZ fonksiyon gövdesinde import eder
+- **Import disiplini**: `apps/backend/servers/ai_pro_hedef.py` ai_hub'ı YALNIZ fonksiyon gövdesinde import eder
   (`scripts/build_backend_exe.ps1:248-260` PYZ koruma kapısı; tip için `TYPE_CHECKING`).
 
 ### 3.2 Veri modeli (yalnız-ek alanlar; mevcut anahtarlar aynen)
@@ -417,7 +417,7 @@ class HedefSaglayici(Protocol):
 | `GET /api/ai/hazirlik` | envantere `petri_yolo` + CV paketleri; `arastirmaAiPro` bloğu |
 | `ai_service` (Faz 5, opsiyonel) | `POST /infer/em_fantom/predict`, `/infer/em_petri/predict` (guii route-contract kapsamı dışı) |
 
-`tests/test_route_contract.py` GOLDEN_ROUTES ve sabit sayaç **98 DEĞİŞMEZ**; `servers/auth.py:43-44`
+`tests/test_route_contract.py` GOLDEN_ROUTES ve sabit sayaç **98 DEĞİŞMEZ**; `apps/backend/servers/auth.py:43-44`
 `_EXEMPT_PREFIXES` (`/api/ai/pro`, `/api/ai/ai_pro`) DEĞİŞMEZ (yeni pozitif kilit testi eklenir).
 
 ### 3.4 Frontend
@@ -457,10 +457,10 @@ Kedi koduna dokunulmadığının kanıtı davranışsal golden'dır (aynı sahte
 | İş | Dosya | Kapı (mutasyonla kırmızı) |
 |---|---|---|
 | §5 tablosundaki 21 kararı al, bu dokümana "✅ KESİN" olarak işle | bu dosya | — |
-| **Kusur #1**: `ai_router.py:1187` → `lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)` + cache'e `guven_dokumu` (1016/1796 paritesi); ayrı commit | `servers/ai_router.py`, `tests/test_ai_pro_seans_dongusu_lokalizasyon.py` (yeni) | `test_kalan_regression_gaps.py:629-711` `_SahteCv2`/sahte time harness'ı ile `_ai_pro_loop` GERÇEK 8'li tuple altında koşar → `_drive_coils_ai_pro` ≥1 kez çağrılır, `cache.localized` True. Mutasyon: 7'li açılıma geri al → kırmızı. Ek yapısal kapı: hazırlık ve seans döngüsü `_localize_organ` sonucunu AYNI biçimde açar (1187 tam da bu paritenin kopmasından çıktı). |
-| **Kusur #2**: `/hazirlik/baslat` organ/model/cache mutasyonu `_ai_loop_lock` içine, aktiflik kontrolünden sonra; seans aktif → 409; `_ai_kare_yabanci(client_id)` → 403; ayrı commit | `servers/ai_router.py`, `tests/test_ai_pro_hazirlik_mutasyon_kilidi.py` (yeni) | aktif seans (organ 2 mühürlü) + `/hazirlik/baslat {organ_id:5}` → 409 ve `_ai_organ_id` 2 kalır, cache `localized` değişmez; yabancı client → 403. Mutasyon: mutasyonu kilit öncesine taşı → kırmızı. `test_ai_pro_web_hazirlik.py:131-139` (hazırlık NO-OP) yeşil kalır. |
-| **Kusur #3** ✅: ölü yol düzeltildi + `hazirlik/baslat\|durdur` ve `GET /api/ai/hazirlik` serbest listeye alındı | `servers/jeton.py`, `tests/test_jeton_gate.py` | YENİ yapısal kapı: serbest listedeki HER yol `app.routes`'ta gerçekten kayıtlı olmalı (ölü yol → KIRMIZI). FREE_MODE değişmezine dokunulmadı. |
-| Hazırlık envanterine `('petri_yolo', 'ai_hub.inference_petri_dish.petri_cv.petri_detector', 'ai_hub/inference_petri_dish/yolo11m-seg.onnx')`; derin=1'de `phantom_cv`/`petri_cv` import + yaml/npz varlığı ayrı "kabin" bloğu | `servers/ai_router.py:3141-3208`, `tests/test_ai_hazirlik_envanteri.py` | yolo yolu monkeypatch ile 'yok' → `/api/ai/hazirlik` eksik listesinde `petri_yolo`. Mutasyon: satırı sil → kırmızı. Mevcut kurallar (None yasak, PROFILLER'de var, ≥15) yeşil. |
+| **Kusur #1**: `ai_router.py:1187` → `lz, lx, ly, lzz, lrel, lov, lkedi, *l_ek = _localize_organ(frame, _oid)` + cache'e `guven_dokumu` (1016/1796 paritesi); ayrı commit | `apps/backend/servers/ai_router.py`, `tests/test_ai_pro_seans_dongusu_lokalizasyon.py` (yeni) | `test_kalan_regression_gaps.py:629-711` `_SahteCv2`/sahte time harness'ı ile `_ai_pro_loop` GERÇEK 8'li tuple altında koşar → `_drive_coils_ai_pro` ≥1 kez çağrılır, `cache.localized` True. Mutasyon: 7'li açılıma geri al → kırmızı. Ek yapısal kapı: hazırlık ve seans döngüsü `_localize_organ` sonucunu AYNI biçimde açar (1187 tam da bu paritenin kopmasından çıktı). |
+| **Kusur #2**: `/hazirlik/baslat` organ/model/cache mutasyonu `_ai_loop_lock` içine, aktiflik kontrolünden sonra; seans aktif → 409; `_ai_kare_yabanci(client_id)` → 403; ayrı commit | `apps/backend/servers/ai_router.py`, `tests/test_ai_pro_hazirlik_mutasyon_kilidi.py` (yeni) | aktif seans (organ 2 mühürlü) + `/hazirlik/baslat {organ_id:5}` → 409 ve `_ai_organ_id` 2 kalır, cache `localized` değişmez; yabancı client → 403. Mutasyon: mutasyonu kilit öncesine taşı → kırmızı. `test_ai_pro_web_hazirlik.py:131-139` (hazırlık NO-OP) yeşil kalır. |
+| **Kusur #3** ✅: ölü yol düzeltildi + `hazirlik/baslat\|durdur` ve `GET /api/ai/hazirlik` serbest listeye alındı | `apps/backend/servers/jeton.py`, `tests/test_jeton_gate.py` | YENİ yapısal kapı: serbest listedeki HER yol `app.routes`'ta gerçekten kayıtlı olmalı (ölü yol → KIRMIZI). FREE_MODE değişmezine dokunulmadı. |
+| Hazırlık envanterine `('petri_yolo', 'ai_hub.inference_petri_dish.petri_cv.petri_detector', 'ai_hub/inference_petri_dish/yolo11m-seg.onnx')`; derin=1'de `phantom_cv`/`petri_cv` import + yaml/npz varlığı ayrı "kabin" bloğu | `apps/backend/servers/ai_router.py:3141-3208`, `tests/test_ai_hazirlik_envanteri.py` | yolo yolu monkeypatch ile 'yok' → `/api/ai/hazirlik` eksik listesinde `petri_yolo`. Mutasyon: satırı sil → kırmızı. Mevcut kurallar (None yasak, PROFILLER'de var, ≥15) yeşil. |
 | Karakterizasyon golden'ı: mevcut `pixel_to_cabin_mm`'in 05_FantomTumor.jpeg / 06b_PetriKuyu_aruco.jpg için ürettiği x,y,z sabitlenir (yama YAPILMAZ) | `tests/test_koordinat_donusumu_karakterizasyon.py` (yeni, `capraz.atla_yoksa`) | golden değişirse kırmızı → coord_transform'a dokunan her iş görünür olur |
 
 **✅ BİTTİ (2026-09-08).** Yapılanlar ve kanıtları:
@@ -481,16 +481,16 @@ hemen önce alınacak; #6 (koordinat çerçevesi) hoca görüşmesine bağlı ve
 
 | İş | Dosya |
 |---|---|
-| `servers/ai_pro_hedef.py`: `HedefSaglayici` Protocol, `KediSaglayici` (geç-bağlı delegasyon), `SAGLAYICILAR`, `saglayici_al(model)`; ai_hub import'ları yalnız fonksiyon içinde | yeni |
-| `_ai_hedef_modeli` globali (`_ai_loop_lock`); `_localize_organ` (817) ve `_predict_and_drive` (869) ince delegatör; clip 0..0.50 zarfa taşınır (kedi cpu/gpu'dan kaldırılır — bit-bit aynı sonuç) | `servers/ai_router.py` |
-| Payload'lara `model`; hazirlik/baslat, calibrate, organ, propose model set (aktif seans/hazırlık + farklı model → 409); start mühürden; stop/teardown sıfırlama; `varsayilan_hedef`e çekme (kedi organ 5 fantoma sızmasın) | `servers/ai_router.py` |
-| Dört organ kapısı → `provider.target_ids`; `(0, 1, 2, 3, 4, 5, 6)` literal'i SIFIR kez | `servers/ai_router.py` |
-| status/WS/frame yalnız-ek alanlar (3.2) + `hazirlikAsama` + `arastirmaAiProAcik`; cache `model` + tazelik koşulu | `servers/ai_router.py` |
-| Bayrak `PEMF_ARASTIRMA_AIPRO` propose/start'ta; `deploy/device.env` satırı + NSSM env yolu (karar #17) | `servers/ai_router.py`, `deploy/device.env`, `scripts/setup_services.ps1` |
-| `_ai_hazirlik_hata` → `{kod, mesaj}`; yükleme kameradan ÖNCE; sağlayıcı bazlı join timeout; kamera açılamayınca `_active_session` pasif | `servers/ai_router.py` |
-| `efield_live.set_context(..., model=None)`; start/stop/teardown `set_context([])`; `_predictor(model)` router önbelleğinden | `servers/efield_live.py` |
-| Kedi XAI baz-noktası fiilen kullanılan achieved_B/duty_sum ile (karar #9) | `servers/ai_router.py` |
-| Meta'ya `client_mode` (istemcinin bildirdiği userMode; denetim izi) | `servers/ai_router.py` |
+| `apps/backend/servers/ai_pro_hedef.py`: `HedefSaglayici` Protocol, `KediSaglayici` (geç-bağlı delegasyon), `SAGLAYICILAR`, `saglayici_al(model)`; ai_hub import'ları yalnız fonksiyon içinde | yeni |
+| `_ai_hedef_modeli` globali (`_ai_loop_lock`); `_localize_organ` (817) ve `_predict_and_drive` (869) ince delegatör; clip 0..0.50 zarfa taşınır (kedi cpu/gpu'dan kaldırılır — bit-bit aynı sonuç) | `apps/backend/servers/ai_router.py` |
+| Payload'lara `model`; hazirlik/baslat, calibrate, organ, propose model set (aktif seans/hazırlık + farklı model → 409); start mühürden; stop/teardown sıfırlama; `varsayilan_hedef`e çekme (kedi organ 5 fantoma sızmasın) | `apps/backend/servers/ai_router.py` |
+| Dört organ kapısı → `provider.target_ids`; `(0, 1, 2, 3, 4, 5, 6)` literal'i SIFIR kez | `apps/backend/servers/ai_router.py` |
+| status/WS/frame yalnız-ek alanlar (3.2) + `hazirlikAsama` + `arastirmaAiProAcik`; cache `model` + tazelik koşulu | `apps/backend/servers/ai_router.py` |
+| Bayrak `PEMF_ARASTIRMA_AIPRO` propose/start'ta; `deploy/device.env` satırı + NSSM env yolu (karar #17) | `apps/backend/servers/ai_router.py`, `deploy/device.env`, `scripts/setup_services.ps1` |
+| `_ai_hazirlik_hata` → `{kod, mesaj}`; yükleme kameradan ÖNCE; sağlayıcı bazlı join timeout; kamera açılamayınca `_active_session` pasif | `apps/backend/servers/ai_router.py` |
+| `efield_live.set_context(..., model=None)`; start/stop/teardown `set_context([])`; `_predictor(model)` router önbelleğinden | `apps/backend/servers/efield_live.py` |
+| Kedi XAI baz-noktası fiilen kullanılan achieved_B/duty_sum ile (karar #9) | `apps/backend/servers/ai_router.py` |
+| Meta'ya `client_mode` (istemcinin bildirdiği userMode; denetim izi) | `apps/backend/servers/ai_router.py` |
 
 **Kapılar:** mevcut 9 `test_ai_pro_*.py` + `test_kalan_regression_gaps` + `test_em_xai_entegrasyon` +
 `test_xai_kalan_a_grubu` + `test_route_contract` HİÇ DEĞİŞTİRİLMEDEN yeşil (davranış-sıfır kanıtı).
@@ -515,15 +515,15 @@ auth-muafiyet pozitif kilitli; sağlayıcı kaydında fantom/petri henüz yok; `
 
 | İş | Dosya |
 |---|---|
-| `FantomSaglayici`: `load()` 'em_fantom_cv' (kapanış `ai_router.py:2192-2205`'ten modül fonksiyonuna TAŞINIR, analiz ucu da onu çağırır; `test_xai_kalan_a_grubu` `cache["predictor"]` çıpası korunur); `localize()` enjeksiyonlu pipeline, `manual_fallback=False`; `phantom_not_detected` → `ozne_var=False`; adaylar `centroid_px`; güven vekili; ood | `servers/ai_pro_hedef.py`, `servers/ai_router.py` |
-| `PetriSaglayici`: `load()` 'em_petri_cv' (yolo_device='cpu', sıfır-kare ısıtma; 2309-2337 taşınır); `yolo_no_well_detected` / `not_a_petri_plate` → `ozne_var=False` + canlı-kamera ipucu (istisna DEĞİL, hazırlığı bitirmez); kalıcı kuyu kimliği; mesafe + sınıf kapısı; hedef 0 = en yüksek güvenli kanserli kuyu; YOLO çağrısı kilitle serileştirilir (analiz ucuyla eş zamanlı) | `servers/ai_pro_hedef.py` |
-| `petri_detector.py:69` `SystemExit` → `RuntimeError`; iki döngüde model yükleme bloğu kamerayı bırakan try/finally İÇİNDE | `ai_hub/inference_petri_dish/petri_cv/petri_detector.py`, `servers/ai_router.py` |
+| `FantomSaglayici`: `load()` 'em_fantom_cv' (kapanış `ai_router.py:2192-2205`'ten modül fonksiyonuna TAŞINIR, analiz ucu da onu çağırır; `test_xai_kalan_a_grubu` `cache["predictor"]` çıpası korunur); `localize()` enjeksiyonlu pipeline, `manual_fallback=False`; `phantom_not_detected` → `ozne_var=False`; adaylar `centroid_px`; güven vekili; ood | `apps/backend/servers/ai_pro_hedef.py`, `apps/backend/servers/ai_router.py` |
+| `PetriSaglayici`: `load()` 'em_petri_cv' (yolo_device='cpu', sıfır-kare ısıtma; 2309-2337 taşınır); `yolo_no_well_detected` / `not_a_petri_plate` → `ozne_var=False` + canlı-kamera ipucu (istisna DEĞİL, hazırlığı bitirmez); kalıcı kuyu kimliği; mesafe + sınıf kapısı; hedef 0 = en yüksek güvenli kanserli kuyu; YOLO çağrısı kilitle serileştirilir (analiz ucuyla eş zamanlı) | `apps/backend/servers/ai_pro_hedef.py` |
+| `petri_detector.py:69` `SystemExit` → `RuntimeError`; iki döngüde model yükleme bloğu kamerayı bırakan try/finally İÇİNDE | `ai_hub/inference_petri_dish/petri_cv/petri_detector.py`, `apps/backend/servers/ai_router.py` |
 | Fantom/petri scaler yollarına em_kedi'deki `yan_dosya_coz` deseni (Docker imajında .pkl elenir) | `ai_hub/inference_em_fantom/inference_em_fantom.py:38-40`, `inference_em_petri.py:43-45` |
-| E eşlemesi, `e_cancer/e_healthy`, `ood`, `method`, `mm_per_px` specs/meta'ya; XAI fantom/petri modülünden fiilen kullanılan B/duty ile | `servers/ai_router.py` |
-| GPU dalı: `ai_service_enabled()` iken fantom/petri lokalizasyonu `delegate_infer_sync('em_fantom'|'em_petri')`; 422 `domain_mismatch`/`not_a_petri_plate` yanıtı 'kapı reddi' sayılır (CPU fallback döngüsüne DÜŞMEZ, N ardışık redde GPU devri seans boyunca kapanır, log 1 kez); `delegate_json_sync('em_kedi')` ASLA çağrılmaz; tahmin CPU-yerel | `servers/ai_pro_hedef.py` |
+| E eşlemesi, `e_cancer/e_healthy`, `ood`, `method`, `mm_per_px` specs/meta'ya; XAI fantom/petri modülünden fiilen kullanılan B/duty ile | `apps/backend/servers/ai_router.py` |
+| GPU dalı: `ai_service_enabled()` iken fantom/petri lokalizasyonu `delegate_infer_sync('em_fantom'|'em_petri')`; 422 `domain_mismatch`/`not_a_petri_plate` yanıtı 'kapı reddi' sayılır (CPU fallback döngüsüne DÜŞMEZ, N ardışık redde GPU devri seans boyunca kapanır, log 1 kez); `delegate_json_sync('em_kedi')` ASLA çağrılmaz; tahmin CPU-yerel | `apps/backend/servers/ai_pro_hedef.py` |
 | Petri YOLO CPU süresi ve 239 MB ilk yükleme süresi ÖLÇÜLÜR, test log'una yazılır; `join_timeout_s` ölçüme göre | test çıktısı, bu doküman |
 | coord_transform: **YAMA YOK** hoca kararı #6 gelmeden. Karar gelirse: iki kopyaya aynı yama (marker→kabin rotasyonu + yapılandırılabilir hedef düzlemi), `cabin_config.py` ×2 parser'a `hedef_duzlem` alanı, yaml ×2, `test_kabin_config_65x50x50` kilidi, golden güncellenir, CHANGELOG'da "AI Hub fantom/petri ArUco koordinatları değişti" AYRI madde, ai_service paritesi | `ai_hub/inference_em_fantom/phantom_cv/{coord_transform,cabin_config}.py`, `ai_hub/inference_petri_dish/petri_cv/{coord_transform,cabin_config}.py`, yaml ×2 |
-| Mobil intrinsics: `pl._approx_intrinsics` True (telefon) iken `aruco_pnp` güven vermez → `localized=False` + "Telefon kamerası kalibre değil — kabin kamerasını kullanın" (karar #15) | `servers/ai_pro_hedef.py` |
+| Mobil intrinsics: `pl._approx_intrinsics` True (telefon) iken `aruco_pnp` güven vermez → `localized=False` + "Telefon kamerası kalibre değil — kabin kamerasını kullanın" (karar #15) | `apps/backend/servers/ai_pro_hedef.py` |
 
 **Kapılar (CI'da koşan STUB + yerelde gerçek):**
 - `tests/test_ai_pro_saglayici_stub.py` (CI, ağırlıksız): sahte `PipelineResult` üreten sahte pipeline'larla
@@ -546,7 +546,7 @@ gelmeden araştırmacı Onayla'yı göremez).
 
 **BİTTİ (2026-09-09, 1c00aa6 + 6986178).** Yeni dosyalar: `aiProProfilleri.ts` (tek kaynak),
 `aipro/AdimGostergesi.tsx`, `aipro/ModelSecimKartlari.tsx`, `aipro/HedefSecici.tsx`
-(halka + erişilebilir liste), `aipro/KalibrasyonRozeti.tsx`, `utils/profilSozlugu.ts`.
+(halka + erişilebilir liste), `aipro/KalibrasyonRozeti.tsx`, `apps/backend/utils/profilSozlugu.ts`.
 Kapılar: `AiProPanelArastirma.test.tsx` (16 test), `AiSpecApprovalModal.test.tsx` (+6),
 `tests/test_ai_pro_arayuz_profil_tablosu.py` (13 kapı) — hepsi mutasyonla kırmızı görüldü.
 Dokunma-hedefi cırcırı 118'de KALDI (yeni dokunulabilirlerin tabanı `touch.min`).
@@ -591,7 +591,7 @@ Tam akış `BUILD.md` §6'dadır; burada YALNIZ bu yayına özgü sıra ve tuzak
    (`deploy/device.env`) — tezgâh ölçümü (`docs/VERIFICATION.md` §15) bitmeden 1 yapılmaz.
 2. **Backend frozen EXE** (`scripts\build_backend_exe.ps1`). ⚠️ Backend build ile APK build
    **PARALEL KOŞMAZ**; bu yayında APK zaten üretilmiyor.
-3. **Katmanlı paketler** (`build_tools/make_base_zip.py`). BEKLENEN: yeni kod yalnız `servers/`
+3. **Katmanlı paketler** (`build_tools/make_base_zip.py`). BEKLENEN: yeni kod yalnız `apps/backend/servers/`
    (EXE'ye gömülü), `ai_hub/` ve `pf/` (frontend) → **deps sha DEĞİŞMEZ** (`99ac8a491f37`) ve
    `research.zip` DOKUNULMAZ. Deps sha değiştiyse DUR ve nedenini bul (paket-belirlenimciliği
    kaydına bak: sürüm dosyaları app katmanında olmalı) — yoksa her klinik 1,49 GB indirir.
@@ -610,10 +610,10 @@ Tam akış `BUILD.md` §6'dadır; burada YALNIZ bu yayına özgü sıra ve tuzak
 
 | İş | Dosya |
 |---|---|
-| Mobil: `/calibrate {model, client_id}`; `/frame` opsiyonel Form `model`; `mobileResult.targets` → `HedefSecici` (dokun → `/organ`); intrinsics kapısı; kadraj rehberi ("kabin işareti (arka duvar) ve plaka AYNI karede olmalı — telefonu kabin önünden, hafif yukarıdan tutun") **ya da** karar #15 = hayır ise mobilde kartlar "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın" | `AiProPanel.tsx`, `servers/ai_router.py` |
-| Dokümanlar: `servers/README.md`, `ai_hub/README.md` (:26, :34), `ai_hub/PEMF_AI_Test_Girdileri/00_README_OKU.txt` AI PRO bölümü ('Araştırma Modu: Fantom (05) / Petri (06b ArUco)'), `docs/VERIFICATION.md` AI Pro tezgâh maddesi, **`ai_hub/KABIN_KURULUM_KILAVUZU.md` "Fantom/Petri yerleşimi"** (tepsi konumu, kalınlık, marker görünürlüğü, telefon açısı kısıtı), bu dokümanın DURUM bloğu; README sapmaları (petri/phantom README 5X5_100/5 cm → 5X5_50/10 cm) | docs |
+| Mobil: `/calibrate {model, client_id}`; `/frame` opsiyonel Form `model`; `mobileResult.targets` → `HedefSecici` (dokun → `/organ`); intrinsics kapısı; kadraj rehberi ("kabin işareti (arka duvar) ve plaka AYNI karede olmalı — telefonu kabin önünden, hafif yukarıdan tutun") **ya da** karar #15 = hayır ise mobilde kartlar "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın" | `AiProPanel.tsx`, `apps/backend/servers/ai_router.py` |
+| Dokümanlar: `apps/backend/servers/README.md`, `ai_hub/README.md` (:26, :34), `ai_hub/PEMF_AI_Test_Girdileri/00_README_OKU.txt` AI PRO bölümü ('Araştırma Modu: Fantom (05) / Petri (06b ArUco)'), `docs/VERIFICATION.md` AI Pro tezgâh maddesi, **`ai_hub/KABIN_KURULUM_KILAVUZU.md` "Fantom/Petri yerleşimi"** (tepsi konumu, kalınlık, marker görünürlüğü, telefon açısı kısıtı), bu dokümanın DURUM bloğu; README sapmaları (petri/phantom README 5X5_100/5 cm → 5X5_50/10 cm) | docs |
 | CHANGELOG (mevcut ASCII üslubuyla): `## app 1.9.44 — … (hasta-güvenliği: sunucu-kameralı AI Pro seansında lokalizasyon her karede patlıyor, bobin sürülmüyordu — düzeltildi; hazırlık ucu seans sürerken hedef değiştirebiliyordu — kapatıldı)`; `## app 1.9.45 (+ mobile 2.3.34) — Araştırma AI Pro: Fantom + Petri`; `versions.json`; `sync_versions.ps1`; `scripts/check_changelog_surum.py` + `test_version_visibility` | CHANGELOG.md, versions.json |
-| Paket: `research.zip`'e DOKUNULMAZ; yeni kod yalnız `servers/` (exe PYZ) + `ai_hub/` (Cython .pyd) + `pf/` → deps sha değişmez (`make_base_zip.py` APP_ROOTS); sevk-ağacı ai_hub kapısı + PYZ temizliği kapısı; frozen EXE'de `/api/ai/hazirlik?derin=1` çıktısında `arastirmaAiPro` doğrulanır | build |
+| Paket: `research.zip`'e DOKUNULMAZ; yeni kod yalnız `apps/backend/servers/` (exe PYZ) + `ai_hub/` (Cython .pyd) + `pf/` → deps sha değişmez (`make_base_zip.py` APP_ROOTS); sevk-ağacı ai_hub kapısı + PYZ temizliği kapısı; frozen EXE'de `/api/ai/hazirlik?derin=1` çıktısında `arastirmaAiPro` doğrulanır | build |
 | Yayın runbook: backend build + APK build PARALEL KOŞMAZ; iki isim (sürümsüz+sürümlü); manifest en son; "sahip masaüstünü devralınca dur"; yayın yalnız açık "yayınla" ile | runbook |
 
 **Kapılar:** `test_ai_pro_frame_arastirma.py` (yeni): aktif fantom seansında `/frame` (sahip) `model:'fantom'`, `targets`
@@ -700,7 +700,7 @@ kapalı (`PEMF_AI_SERVICE_URL` yalnız docker-compose.micro.yml) → ertelenebil
 | Çift kamera / takılı seans | yükleme sırası + kamera-açılamadı yolunda `_active_session` pasif |
 | Araştırma-yalnız kurulumda em_kedi yok | sağlayıcı bazlı ısıtma; envanter satırları; `model_paketi` hata sınıfı |
 | Backend profil-bilgisiz | mühür/onay korunur (güvenlik değil); `client_mode` denetim izi |
-| Test çıpaları / PYZ kapısı / deps sha | §6 korunan çıpalar; import disiplini; yeni dosyalar yalnız servers/ai_hub/pf |
+| Test çıpaları / PYZ kapısı / deps sha | §6 korunan çıpalar; import disiplini; yeni dosyalar yalnız apps/backend/servers/ai_hub/pf |
 | Mobil marker görünmezliği / telefon intrinsics | karar #15 (v1 web) veya kadraj rehberi + intrinsics kapısı |
 | CI ağırlıksız → sahte yeşil | stub testleri CI'da; yerel entegrasyon zorunlu (runbook) |
 | Doküman sapmaları | Faz 4 listesi (README, kılavuz, VERIFICATION, CHANGELOG üslubu) |

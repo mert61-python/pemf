@@ -2,13 +2,13 @@
 """GÖZETİMSİZ ENERJİLENDİRME SINIRI — ESP TARAFI (ESP bobini-8).
 
 DENETİM BULGUSU (2026-08-17). 1.9.14'te eklenen klinik kapak (`GOZETIMSIZ_VARSAYILAN_DAKIKA = 120`)
-yalnız `controllers/hardware_controller.py` içinde, yani **8 bobinin 5'inde** yaşıyordu. ESP dalı
+yalnız `apps/backend/controllers/hardware_controller.py` içinde, yani **8 bobinin 5'inde** yaşıyordu. ESP dalı
 (`/api/coil/{id}/control` ve `/api/coil/batch`) `payload.duration`'ı HAM iletiyordu.
 
 Neden bu bir kusur:
   * `duration = 0` bu projenin KENDİ protokol sözleşmesinde **"süresiz"** demektir —
     `firmware/main.c:195` (`uint32_t dur_min; /**< Süre (dakika): 0 = süresiz */`) ve
-    `controllers/hardware_controller.py` ("duration=0 → sinirsiz").
+    `apps/backend/controllers/hardware_controller.py` ("duration=0 → sinirsiz").
   * STM yolu bu nöbetçiyi bilerek 120 dakikaya çevirir; ESP yolu onu olduğu gibi iletiyordu.
   * ESP bobinlerinde sunucu tarafında hiçbir son-tarih/watchdog yok: `_coil_deadline` yalnız
     `range(1, 6)`, seans açılmadığı için `_session_duration_watchdog` kapsam dışı,
@@ -38,9 +38,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
-
 from controllers.hardware_controller import GOZETIMSIZ_VARSAYILAN_DAKIKA  # noqa: E402
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 BEKLENEN_KAPAK_SN = GOZETIMSIZ_VARSAYILAN_DAKIKA * 60
 
@@ -146,9 +145,11 @@ def test_kapak_STM_ile_AYNI_KAYNAKTAN_gelir():
     """Yapısal kapı: ESP kapağı kendi sabitini TAŞIMAMALI.
 
     İki transport ayrı sabit kullanırsa klinik sınır bir gün yalnız birinde güncellenir — bu
-    bulgunun kök nedeni tam olarak buydu. `servers/api_server.py` kapağı
+    bulgunun kök nedeni tam olarak buydu. `apps/backend/servers/api_server.py` kapağı
     `controllers.hardware_controller.GOZETIMSIZ_VARSAYILAN_DAKIKA`'dan türetmelidir."""
-    kaynak = (Path(__file__).resolve().parent.parent / "servers" / "api_server.py").read_text(encoding="utf-8")
+    kaynak = (Path(__file__).resolve().parent.parent / "apps" / "backend" / "servers" / "api_server.py").read_text(
+        encoding="utf-8"
+    )
     assert "GOZETIMSIZ_VARSAYILAN_DAKIKA" in kaynak, (
         "ESP kapagi klinik sabiti TEK KAYNAKTAN okumuyor — ayri bir sayi yazilmis olabilir."
     )

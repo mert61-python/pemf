@@ -1,6 +1,6 @@
 # Author: mertaygn, cglrgrkn
 """Denetim 2026-08-04 (P3): STM32 protokol sabitleri ÜÇ ayrı kaynakta ELLE kopyalanmış durumda —
-firmware/main.c (otorite), utils/stm32_protocol_limits.py (backend) ve tools/stm32_simulator.py
+firmware/main.c (otorite), apps/backend/utils/stm32_protocol_limits.py (backend) ve tools/stm32_simulator.py
 (E2E test cihazı) — ve hiçbir derleme-zamanı ya da test-zamanı kontrolü bunları karşılaştırmıyordu.
 
 Sürüklenme GERÇEKTEN OLDU: simülatörün FREQ_MAX'ı 10 kHz'de kalmıştı, firmware ve backend ise
@@ -14,7 +14,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from utils import stm32_protocol_limits as lim
 
 _FW = Path(__file__).resolve().parent.parent / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
@@ -40,7 +39,7 @@ def _define_int(src: str, name: str) -> int:
     return int(m.group(1))
 
 
-# ── firmware ↔ backend (utils/stm32_protocol_limits.py) ──────────────────────
+# ── firmware ↔ backend (apps/backend/utils/stm32_protocol_limits.py) ──────────────────────
 
 
 def test_freq_max_firmware_ile_backend_ayni(fw_src):
@@ -251,7 +250,7 @@ def test_keep_alive_deadman_esiginden_yeterince_hizli():
 # klinik bir cihazda kötü bir başarısızlık biçimi. Karar sahibe bırakıldı.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_HWC = Path(__file__).resolve().parent.parent / "controllers" / "hardware_controller.py"
+_HWC = Path(__file__).resolve().parent.parent / "apps" / "backend" / "controllers" / "hardware_controller.py"
 
 
 def test_host_tarafi_sure_deadlineI_hala_uygulaniyor():

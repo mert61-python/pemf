@@ -8,10 +8,10 @@ Plan: `docs/ai-hub-gorsel-sahne-plani-2026-09-10.md` §4 ADIM 2.
 ⚠️ BU DEPONUN BEŞ KEZ ÖLÇÜLEN ARIZA SINIFI
 ===============================================================================
 Aynı AI ucu İKİ yerde uygulanıyor:
-  · gömülü  → `servers/ai_router.py`      (CPU, backend'in içinde)
+  · gömülü  → `apps/backend/servers/ai_router.py`      (CPU, backend'in içinde)
   · GPU     → `ai_service/app.py`         (ayrı servis, :8100)
 
-`servers/ai_client.py` mikroservis JSON'unu **AYNEN** geçirir. Yani `app.py`'ye
+`apps/backend/servers/ai_client.py` mikroservis JSON'unu **AYNEN** geçirir. Yani `app.py`'ye
 eklenmeyen her alan **GPU dağıtımında sessizce kaybolur** — hata çıkmaz, alan yoktur.
 
 ÖLÇÜLEN SOMUT ZARAR (2026-09-11, ADIM 2 öncesi):
@@ -40,7 +40,7 @@ KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-ROUTER = KOK / "servers" / "ai_router.py"
+ROUTER = KOK / "apps" / "backend" / "servers" / "ai_router.py"
 SERVIS = KOK / "ai_service" / "app.py"
 
 #: gömülü uç adı → GPU uç adı. ⚠️ Yeni bir görsel uç eklenirse BURAYA da eklenir;

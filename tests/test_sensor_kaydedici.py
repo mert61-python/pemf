@@ -228,7 +228,7 @@ def test_HASTA_VERITABANINA_yazmiyor(mod, tmp_path):
     ⚠️ `headless_db_maintenance` o DB'ye retention + PII-maskeleme + YEDEKLEME uyguluyor;
     16 MB/gün telemetri her yedeği şişirir ve tıbbi kaydın geri-yükleme süresini bozar.
     """
-    kaynak = (KOK / "servers" / "sensor_kaydedici.py").read_text(encoding="utf-8")
+    kaynak = (KOK / "apps" / "backend" / "servers" / "sensor_kaydedici.py").read_text(encoding="utf-8")
     for yasak in ("treatment_history", "patients.db", "sqlite3", "session_manager"):
         assert yasak not in kaynak, f"kaydedici hasta DB yoluna dokunuyor: {yasak}"
 
@@ -240,7 +240,7 @@ def test_KRITIK_MQTT_isleyicisi_kaydediciyi_CAGIRIYOR():
     Kapı çağrının VARLIĞINI ve `is_retained` kapısının İÇİNDE olmasını ölçer: retained
     mesajlar her reconnect'te yeniden teslim edilir ve geçmişe SAHTE tekrar satırları yazardı.
     """
-    kaynak = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    kaynak = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     assert "sensor_kaydedici" in kaynak, "kaydedici api_server'a import EDILMEMIS"
     assert "_sensor_kaydedici.kaydet(" in kaynak, "kaydedici CAGRILMIYOR -> sessiz olu modul"
     i = kaynak.index("_sensor_kaydedici.kaydet(")

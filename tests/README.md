@@ -37,4 +37,4 @@ pytest tests -v --cov            # guii kökünden (embedded python ile)
 - STM sanal test: `../tools/stm32_simulator.py` (socket 5100).
 
 ---
-İlgili: [firmware/](../firmware/README.md) · [controllers/](../controllers/README.md) · [tools/ (simülatörler)](../tools/README.md) · [.github/ (CI)](../.github/README.md)
+İlgili: [firmware/](../firmware/README.md) · [apps/backend/controllers/](../controllers/README.md) · [tools/ (simülatörler)](../tools/README.md) · [.github/ (CI)](../.github/README.md)

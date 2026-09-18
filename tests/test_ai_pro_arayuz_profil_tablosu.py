@@ -183,7 +183,7 @@ def test_KRITIK_halkalar_KARE_ORANLI_koordinat_kullanir():
 
 def test_KRITIK_BACKEND_hedef_adaylarina_pxn_YAZAR():
     """Arayüz sözleşmesinin karşı yakası: sağlayıcı `pxn`i kare BOYUTUNA bölerek üretmeli."""
-    src = (_KOK / "servers" / "ai_pro_hedef.py").read_text(encoding="utf-8")
+    src = (_KOK / "apps" / "backend" / "servers" / "ai_pro_hedef.py").read_text(encoding="utf-8")
     agac = ast.parse(src)
     fn = next((n for n in agac.body if isinstance(n, ast.FunctionDef) and n.name == "_hedef_tel"), None)
     assert fn is not None, "_hedef_tel yardımcısı yok — targets `pxn` taşımıyor demektir"

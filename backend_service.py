@@ -8,6 +8,20 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+# ── IMPORT KOKU (2026-09-18, klasor duzeni F4) ────────────────────────────────
+# Urun paketleri (`apps/backend/servers/ apps/backend/services/ apps/backend/database/ apps/backend/utils/ apps/backend/controllers/`) artik
+# `apps/backend/` altinda duruyor. Import ADLARI DEGISMEDI — asagida hala
+# `from utils.x import y` yaziyor; degisen tek sey, o dizinin import yoluna
+# eklenmesi.
+# ⚠️ BU BLOK HER SEYDEN ONCE gelmeli: hemen asagidaki `utils.encrypted_import`
+#    (sifreli kaynak yukleyicisi) buna bagli. Blok asagi kayarsa ImportError.
+# ⚠️ Donmus EXE'de gereksiz ama zararsiz: PyInstaller modulleri ADIYLA paketler
+#    (spec `pathex`), o dizin pakette YOKTUR ve insert sessizce ise yaramaz.
+_BACKEND_KOKU = str(Path(__file__).resolve().parent / "apps" / "backend")
+if _BACKEND_KOKU not in sys.path:
+    sys.path.insert(0, _BACKEND_KOKU)
+
+
 # ŞİFRELİ KAYNAK YÜKLEYİCİ (2026-08-06) — ai_hub gibi `.pyenc`'e çevrilmiş modüller
 # import edilebilsin diye HER ŞEYDEN ÖNCE kurulur (ilk AI importundan önce olmalı).
 # Şifresiz build'de sessizce devre dışı kalır → geliştirme/test akışı ETKİLENMEZ.
@@ -29,11 +43,11 @@ except Exception:  # kapı kurulamazsa uygulama açılmaya devam eder (davranı�
     pass
 
 import uvicorn
-
 from controllers.hardware_controller import HardwareController
+from utils.path_utils import get_app_data_directory, initialize_database
+
 from event_bus import get_event_bus
 from headless_core import HeadlessCore
-from utils.path_utils import get_app_data_directory, initialize_database
 
 # anon publishable anahtar, FE deviceRegistry.ts'dekiyle AYNI; backend registry'ye
 # yazabilsin diye. service_role DEĞİL (sadece publishable/anon yetkisi).
@@ -141,7 +155,7 @@ def _configure_logging(app_data_dir: Path, level: str) -> None:
 def publish_bind_host(host: str) -> str:
     """GERÇEKTEN bağlanılan host'u PEMF_API_HOST'a yaz (tek gerçek kaynak).
 
-    DENETIM P0 (proxy-auth): `servers/auth._loopback_only_bind()` yerel/uzak kararını
+    DENETIM P0 (proxy-auth): `apps/backend/servers/auth._loopback_only_bind()` yerel/uzak kararını
     bağlanılan host'a göre verir ama bunu env'den okur. `--host` CLI'da verilebildiğinden
     (ör. `scripts/install_backend_service.ps1` "--host 0.0.0.0" sabitler) env ile GERÇEK
     ayrışabiliyordu → güvenlik kararı yanlış girdiyle alınırdı. Ayrı fonksiyon: `main()`
@@ -814,7 +828,7 @@ def _kurtarma_mi(argv: list[str] | None) -> list[str] | None:
     """`--kurtarma` verilmişse KALAN argümanları döndür, yoksa None.
 
     ⚠️ DENETİM 2026-08-09 (ENGEL) — KURTARMA YOLU SAHADA ULAŞILAMAZDI.
-    Felaket kurtarma mekanizmasının tamamı vardı (`utils/backup_recovery.py` zarfı +
+    Felaket kurtarma mekanizmasının tamamı vardı (`apps/backend/utils/backup_recovery.py` zarfı +
     `tools/kurtarma.py` aracı) ama aracın çalıştırılma yolu `python tools/kurtarma.py` idi.
     Sahadaki üründe PYTHON YOK (frozen EXE) ve `tools/` pakete girmiyordu. Yani senaryonun
     tam olarak hedeflediği kişi — anakartı ölmüş, elinde yalnız yedek dizini, kurtarma kodu ve

@@ -134,9 +134,17 @@ def _petri_reject_message(plausibility) -> str:
     return _PETRI_REJECT_FALLBACK
 
 
+from utils.path_utils import kaynak_kokunu_bul
+
 # Proje ana dizinini bul
+# ⚠️ SABIT DERINLIK KULLANMA (2026-09-18, klasor duzeni F4): burada eskiden
+# `os.path.dirname(current_dir)` vardi ve depo kokunu "bir ust dizin" sayiyordu.
+# `servers/` -> `apps/backend/servers/` tasinmasinda bu SESSIZCE `apps/backend`i
+# gosterdi; `ai_hub/` depo KOKUNDE oldugu icin FGS bantlari (ve diger model yollari)
+# bulunamaz oldu. Fonksiyon hata ATMIYOR, bos dict donuyordu -> panel sessizce
+# kayboluyordu. Kapi: tests/test_xai_kalan_a_grubu.py yakaladi.
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
+project_root = str(kaynak_kokunu_bul(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -428,7 +436,6 @@ async def analyze_landmark(
 
         def _load_landmark():
             from ultralytics import YOLO
-
             from utils.model_downloader import download_model_sync
 
             path = download_model_sync("ai_hub/cat_landmark/yolo26m-pose.onnx")
@@ -2479,7 +2486,6 @@ async def analyze_segmentation(file: UploadFile = File(None), image_base64: str 
 
         def _load_seg():
             from ultralytics import YOLO
-
             from utils.model_downloader import download_model_sync
 
             path = download_model_sync("ai_hub/cat_segmentation/yolov8m-seg.onnx")
@@ -2633,7 +2639,6 @@ async def analyze_reticulocytes(
 
         def _load_retic():
             from ultralytics import YOLO
-
             from utils.model_downloader import download_model_sync
 
             path = download_model_sync("ai_hub/feline_reticulocytes/yolov8s.onnx")

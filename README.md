@@ -35,10 +35,10 @@ Arayüz **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'
 ```
 Mobil/Web (pf → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
                                                                                   (FastAPI+uvicorn, NSSM servis)
-   Supabase (yalnız cihaz-registry + şifreli PII)                                   ├─ servers/  (REST+WS+router'lar)
-   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ controllers/ → STM32 (bobin 1-7, seri)
-                                                                                    ├─ services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
-                                                                                    ├─ database/ (SQLCipher yerel)
+   Supabase (yalnız cihaz-registry + şifreli PII)                                   ├─ apps/backend/servers/  (REST+WS+router'lar)
+   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ apps/backend/controllers/ → STM32 (bobin 1-7, seri)
+                                                                                    ├─ apps/backend/services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
+                                                                                    ├─ apps/backend/database/ (SQLCipher yerel)
                                                                                     └─ ai_hub/ (gömülü ONNX teşhis)
 ```
 Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -82,11 +82,11 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör | Ne işe yarar |
 |---|---|
 | `backend_service.py` · `headless_core.py` · `event_bus.py` | **Giriş noktası** (main), Qt-siz çekirdek (STM seri + kuyruk), pub/sub olay veri yolu |
-| [`servers/`](servers/README.md) | FastAPI uygulaması: REST + WebSocket + tüm router'lar + canlı durum + ağ (tünel/mDNS/sync) |
-| [`controllers/`](controllers/README.md) | STM32 bobin kontrol choke-point'i (keep-alive + süre-watchdog + garantili STOP) |
-| [`services/`](services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı. ⚠️ Mosquitto yolu `PEMF_ESP_ENABLED=0` iken KULLANILMAZ (ESP söküldü) |
-| [`database/`](database/README.md) | Yerel SQLite/**SQLCipher** kalıcılık (hasta/seans/sensör/auth) + MQTT outbox |
-| [`utils/`](utils/README.md) | STM32 seri/protokol-limit, sırlar, yollar, config, PDF, telemetri, model-çözüm (offline) |
+| [`apps/backend/servers/`](apps/backend/servers/README.md) | FastAPI uygulaması: REST + WebSocket + tüm router'lar + canlı durum + ağ (tünel/mDNS/sync) |
+| [`apps/backend/controllers/`](apps/backend/controllers/README.md) | STM32 bobin kontrol choke-point'i (keep-alive + süre-watchdog + garantili STOP) |
+| [`apps/backend/services/`](apps/backend/services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı. ⚠️ Mosquitto yolu `PEMF_ESP_ENABLED=0` iken KULLANILMAZ (ESP söküldü) |
+| [`apps/backend/database/`](apps/backend/database/README.md) | Yerel SQLite/**SQLCipher** kalıcılık (hasta/seans/sensör/auth) + MQTT outbox |
+| [`apps/backend/utils/`](apps/backend/utils/README.md) | STM32 seri/protokol-limit, sırlar, yollar, config, PDF, telemetri, model-çözüm (offline) |
 | [`ai/`](ai/README.md) | Kural-tabanlı **tedavi-parametre önerisi** + global AI config (teşhis DEĞİL) |
 | [`pemf_gui/`](pemf_gui/README.md) | Eski PyQt GUI kalıntısı — GUI ölü, ama `config.py`+ikon shim'i **canlı** (backend import eder) |
 | [`config/`](config/README.md) | Uygulama config'i (MQTT/timer/performans) + `credentials/` (sır) |
@@ -164,9 +164,9 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 ## Önemli Kurallar (yeni geliştirici — bunları bozma)
 
 - 🔒 **Cihaz güvenliği:** bobinler her kill/kaldırmadan **önce** E-stop'lanır (launcher + teardown). Süre-watchdog + keep-alive + firmware "Ölü Adam Devresi" katmanlı korumadır.
-- 🔒 **Backend Python-tarafı freq/duty/sıcaklık clamp'i YOK** (bilinçli) — firmware sınırda doyurur. Sınır sabitleri `utils/stm32_protocol_limits.py`.
+- 🔒 **Backend Python-tarafı freq/duty/sıcaklık clamp'i YOK** (bilinçli) — firmware sınırda doyurur. Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
-- 🌐 **AI offline** — `utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
+- 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.
 - 🚀 **Launcher AYRI yayınlanır** (base.zip/APK republish onu güncellemez).
 
@@ -177,7 +177,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 
 | Alan | Değişiklik |
 |---|---|
-| **AI güvenliği** | Görüntü **modalite denetimi** (`utils/image_domain.py`) — yanlış türde görüntüye güvenle teşhis üretilmesi engellendi (CT → Patoloji "Grade 4 · %100" vakası). Petri için ayrıca **geometri makullik** katmanı (`ai_hub/inference_petri_dish/plausibility.py`). Kapatma: `PEMF_AI_DOMAIN_GUARD=0`. |
+| **AI güvenliği** | Görüntü **modalite denetimi** (`apps/backend/utils/image_domain.py`) — yanlış türde görüntüye güvenle teşhis üretilmesi engellendi (CT → Patoloji "Grade 4 · %100" vakası). Petri için ayrıca **geometri makullik** katmanı (`ai_hub/inference_petri_dish/plausibility.py`). Kapatma: `PEMF_AI_DOMAIN_GUARD=0`. |
 | **Client girişi** | Client açılışta Supabase girişi + **Beni hatırla** (DPAPI). Oturum backend'e devredilir (`/api/auth/desktop-session` — yalnız 127.0.0.1, yalnız bellekte) → **uygulamada çift login yok**. Mobilde client olmadığı için mevcut akış aynı kalır. |
 | **Çevrimdışı açılış** | Manifest ve kimlik kapısı artık boot'u BLOKLAMIYOR — internetsiz klinikte client açılır, kurulu cihazda "Başlat" çalışır. Eskiden "Ortam algılanıyor…" ekranında kilitleniyordu. |
 | **Profiller** | Araştırma Modu'na Kontrol · Hastalar · Sensörler · Raporlar · Simülasyon eklendi; **üç profilde de** Ayarlar'dan sonra "Çıkış Yap" (bobin çalışırken teardown-guard'a bağlı). |

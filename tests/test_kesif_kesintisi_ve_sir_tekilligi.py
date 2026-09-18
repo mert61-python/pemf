@@ -39,9 +39,9 @@ import re
 from pathlib import Path
 
 _KOK = Path(__file__).resolve().parents[1]
-_ZC = _KOK / "utils" / "zeroconf_singleton.py"
-_MDNS = _KOK / "services" / "mdns_service.py"
-_SEC = _KOK / "utils" / "secrets_manager.py"
+_ZC = _KOK / "apps" / "backend" / "utils" / "zeroconf_singleton.py"
+_MDNS = _KOK / "apps" / "backend" / "services" / "mdns_service.py"
+_SEC = _KOK / "apps" / "backend" / "utils" / "secrets_manager.py"
 
 
 def _govde(dosya: Path, fn_adi: str) -> str:

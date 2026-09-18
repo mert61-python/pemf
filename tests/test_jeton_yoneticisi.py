@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """JETON YÖNETİCİSİ — cihaz tarafı (7. parti, sahip talimatı 2026-08-20).
 
-Ücretlendirme jeton tüketimine bağlandı (bkz. database/supabase_jetonlar.sql,
+Ücretlendirme jeton tüketimine bağlandı (bkz. apps/backend/database/supabase_jetonlar.sql,
 apps/web/src/config.ts::JETON). Bu modül KLİNİK CİHAZINDA koşar ve üç zor koşulu birden
 karşılamak zorundadır:
 

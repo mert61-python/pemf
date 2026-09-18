@@ -7,7 +7,7 @@
 temizliği **sensör** saklama süresine (varsayılan 90 gün) bağlıydı ve iki sonucu vardı:
 
   · `treatment_sessions` HİÇ silinmiyor → 90. günden sonra seans başlığı duruyor ama "hangi bobin,
-    hangi duty" cevabı yok oluyor. `utils/pdf_report_generator` "Bobin Çalışmaları" tablosunu
+    hangi duty" cevabı yok oluyor. `apps/backend/utils/pdf_report_generator` "Bobin Çalışmaları" tablosunu
     `if not runs: return` ile SESSİZCE atlıyor: yan etki soruşturmasında 4 ay önceki seansın
     raporu doz tablosuz çıkıyor, hiçbir uyarı yok.
   · KVKK açısından TERS TAKAS: kimliği taşıyan taraf (`patients` / `treatment_sessions`) kalıyor,
@@ -17,8 +17,8 @@ temizliği **sensör** saklama süresine (varsayılan 90 gün) bağlıydı ve ik
 yazılmıyordu — bu asimetri de kapandı.
 
 ⚠️ ANALİZ RAPORDAN DAHA BÜYÜK BİR ŞEY BULDU: doz kaydını silen **İKİ** bağımsız üretim yolu vardı,
-**farklı iki ortam değişkeniyle** — `services/headless_db_maintenance` (`PEMF_RETAIN_SENSOR_DAYS`)
-ve `servers/api_server._daily_maintenance_loop` (`PEMF_SENSOR_RETAIN_DAYS`, hiçbir yerde
+**farklı iki ortam değişkeniyle** — `apps/backend/services/headless_db_maintenance` (`PEMF_RETAIN_SENSOR_DAYS`)
+ve `apps/backend/servers/api_server._daily_maintenance_loop` (`PEMF_SENSOR_RETAIN_DAYS`, hiçbir yerde
 belgelenmemiş). Operatör birincisini `0` yapıp "silme kapalı" sansa bile ikincisi silmeye devam
 ediyordu; dahası o yolda `0` = kapalı DEĞİLDİ (`max(1, ...)` yüzünden 1 GÜNLÜK saklama).
 İkinci yol kaldırıldı (T4 kilitliyor).

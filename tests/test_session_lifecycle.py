@@ -2,7 +2,7 @@
 """Faz-1 (B-2.2 session-state ayrımı — refactor-ÖNCESİ DAVRANIŞ KİLİDİ).
 
 `_active_session` + `start_session` / `stop_session` / `start_ai_session` — seansın in-memory
-yaşam-döngüsü. B-2.2 son kademesinde `_active_session` `servers/session_state.py`'ye taşınacak;
+yaşam-döngüsü. B-2.2 son kademesinde `_active_session` `apps/backend/servers/session_state.py`'ye taşınacak;
 bunun ÖN KOŞULU `start_session`/`start_ai_session`'daki REBIND'i (`_active_session = {...}`) in-place
 mutasyona (`.clear()+.update()`) normalize etmek (aksi halde alias kopar). Bu testler MEVCUT gözlenen
 davranışı kilitler → normalizasyon + taşıma sonrası AYNI testler yeşil kalmalı = davranış birebir.
@@ -136,7 +136,7 @@ def test_active_session_identity_stable_across_ai_start(api):
 
 
 def test_active_session_shared_with_session_state_module(api):
-    """State gerçekten `servers/session_state.py`'ye taşındı + api_server aynı nesneye alias'lı."""
+    """State gerçekten `apps/backend/servers/session_state.py`'ye taşındı + api_server aynı nesneye alias'lı."""
     from servers import session_state
 
     assert api._active_session is session_state._active_session

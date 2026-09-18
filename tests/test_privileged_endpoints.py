@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """AYRICALIKLI UÇLAR — LAN MUAFİYETİ YOK (2026-08-09 üretim-hazırlık denetimi, ENGEL).
 
-ARIZA: `servers/auth.is_local_request` LAN'ı (10/8, 172.16/12, 192.168/16) auth-MUAF sayar ve
+ARIZA: `apps/backend/servers/auth.is_local_request` LAN'ı (10/8, 172.16/12, 192.168/16) auth-MUAF sayar ve
 middleware bunu TÜM uçlara uygular. 2026-08-08'de eklenen uçlar niteliksel olarak farklıydı:
   • /api/data/export      → TÜM hasta+seans+AI geçmişini ÇAĞIRANIN parolasıyla tek dosyada verir
   • /api/ai/log/delete_all → VACUUM'lu, geri dönülemez siler

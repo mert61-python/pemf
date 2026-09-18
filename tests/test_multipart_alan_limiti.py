@@ -14,7 +14,6 @@ Starlette non-file alanlara 1MB varsayılan uyguluyor.
 from __future__ import annotations
 
 import pytest
-
 from utils.multipart_limit import MAX_FIELD_BYTES, buyuk_form_alani_limitini_uygula
 
 
@@ -76,7 +75,9 @@ def test_KRITIK_api_server_PATCHI_UYGULUYOR():
     """⚠️ ZAYIF-ÇIPA: util doğru olsa da api_server onu çağırmazsa sahada etki YOK."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "apps" / "backend" / "servers" / "api_server.py").read_text(
+        encoding="utf-8"
+    )
     assert "buyuk_form_alani_limitini_uygula" in src or "_buyuk_form_limiti" in src, (
         "api_server multipart limit patch'ini çağırmıyor → scratch hatası geri gelir"
     )

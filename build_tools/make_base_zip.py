@@ -88,7 +88,7 @@ ADD_SCRIPTS = [
 
 # ── APP KATMANI SINIRI ────────────────────────────────────────────────────────────────────────
 # Bizim urettigimiz, HER surumde degisen seyler. Geri kalan her sey deps'tir.
-# NOT: servers/ database/ utils/ ayri dizin olarak GORUNMEZ — PyInstaller onlari .pyc olarak
+# NOT: apps/backend/servers/ apps/backend/database/ apps/backend/utils/ ayri dizin olarak GORUNMEZ — PyInstaller onlari .pyc olarak
 # PEMF_Backend.exe'nin icine gomer; bu yuzden exe app katmanindadir.
 APP_ROOTS_FILE = 'PEMF_Backend/_app_roots.json'
 APP_ROOTS = [
@@ -117,7 +117,7 @@ APP_ROOTS = [
     # Frontend OTA surum dosyasi (2026-09-05, AYNI yontemle olculdu: Range-merkezi-dizin kiyasi
     # 7021 dosyadan YALNIZ BUNUN farkli oldugunu gosterdi — 7020 girdi bayt-bayt ayniydi).
     # `sync_versions.ps1` bunu versions.json->frontendOta'dan HER yayinda yazar; VERSION'in
-    # ikizidir (utils/path_utils.py surumu once VERSION'dan, sonra BURADAN okur). DEPS'te
+    # ikizidir (apps/backend/utils/path_utils.py surumu once VERSION'dan, sonra BURADAN okur). DEPS'te
     # kaldigi surece frontendOta her degistiginde 1,49 GB'lik deps katmani "bayat" gorunur ve
     # HER KLINIK HER YAYINDA 1,49 GB indirir — katmanli paketin varlik sebebi tam olarak budur.
     'PEMF_Backend/_internal/frontend_version.json',

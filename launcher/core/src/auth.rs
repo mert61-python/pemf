@@ -6,7 +6,7 @@
 //! İMKÂNSIZ. Ayrıca capability listesi boş olduğundan olay dinleme de yok; UI yalnız `invoke`
 //! kullanabiliyor. Bu yüzden giriş bir `#[tauri::command]` üzerinden buradan yapılır.
 //!
-//! ⚠️ NEDEN AYRI AJAN + AYRI PİN: `net::ALLOWED_HOSTS` listesi `servers/update_manager.py::
+//! ⚠️ NEDEN AYRI AJAN + AYRI PİN: `net::ALLOWED_HOSTS` listesi `apps/backend/servers/update_manager.py::
 //! _ALLOWED_UPDATE_HOSTS` ile BİREBİR eş tutuluyor ve o liste "imzasız setup.exe indirilebilecek
 //! yerler" anlamına geliyor. Supabase'i oraya eklemek, zehirli bir manifest'in Supabase Storage'dan
 //! paket indirtmesine kapı açardı. Auth kendi host pinini kendi uygular ve indirme yoluna DOKUNMAZ.

@@ -36,14 +36,9 @@ import onnxruntime as ort
 from fastapi import Body, FastAPI, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse
 
-from ai_service import predictors
-from ai_service.gpu import gpu_ok as _gpu_ok
-from ai_service.gpu import onnx_providers as _providers
-from ai_service.gpu import yolo_device as _yolo_device
-
-# ⚠️ MODALİTE + SESSİZLİK KAPILARI — TEK KAYNAK `utils/`, KOPYA DEĞİL.
+# ⚠️ MODALİTE + SESSİZLİK KAPILARI — TEK KAYNAK `apps/backend/utils/`, KOPYA DEĞİL.
 # Deponun kendi kuralı (`ai_hub/inference_petri_dish/plausibility.py`): "denetim ROUTER'da DEĞİL
-# burada durmalı, çünkü PEMF_AI_SERVICE_URL tanımlıyken servers/ai_router.py HİÇ çalışmaz."
+# burada durmalı, çünkü PEMF_AI_SERVICE_URL tanımlıyken apps/backend/servers/ai_router.py HİÇ çalışmaz."
 # Bu uçlar auth-muaftır ve backend'i atlayan bir istemci doğrudan çağırabilir; kapı yalnız
 # router'da kalırsa o yolda hiç çalışmaz — ölçüldü: CT kesiti → /infer/histopath → 200
 # {"top_1_class":"Grade 4","top_1_prob":1.0} (kapının var olma sebebi olan 2026-08-06 saha vakası).
@@ -73,6 +68,11 @@ from utils.ses_kalitesi import guvenilir_mi as _ses_guvenilir_mi
 from utils.ses_kalitesi import normalize_entropi as _ses_entropi
 from utils.ses_kalitesi import sessiz_mi as _ses_sessiz_mi
 from utils.ses_kalitesi import wav_rms_dbfs as _ses_wav_rms
+
+from ai_service import predictors
+from ai_service.gpu import gpu_ok as _gpu_ok
+from ai_service.gpu import onnx_providers as _providers
+from ai_service.gpu import yolo_device as _yolo_device
 
 MODELS_DIR = os.environ.get("PEMF_AI_MODELS_DIR", "/models")
 app = FastAPI(title="PEMF AI Service (GPU)", version="0.3.0")
@@ -174,7 +174,7 @@ def _jpg_b64(bgr) -> str:
 
 
 #: Çok panelli mozaiklerin en uzun kenar kapağı (px).
-#: ⚠️ `servers/ai_router.MOZAIK_AZAMI_KENAR` ile AYNI olmalı — ayrışırsa aynı analiz
+#: ⚠️ `apps/backend/servers/ai_router.MOZAIK_AZAMI_KENAR` ile AYNI olmalı — ayrışırsa aynı analiz
 #: dağıtıma göre farklı çözünürlükte döner. Kapı: `test_ai_panel_yayini.py`.
 MOZAIK_AZAMI_KENAR = 1600
 
@@ -201,7 +201,7 @@ def _kare_olcusu(bgr) -> dict:
     """KODLANAN karenin gerçek boyutu — istemcinin oran kilidi için.
 
     ⚠️ PARİTE AÇIĞI (ADIM 2, 2026-09-11): bu dosyada `image_w` HİÇ YOKTU (grep 0 eşleşme).
-    `servers/ai_router.py` her görsel uçta `**_kare_boyutu(...)` gönderiyor ve
+    `apps/backend/servers/ai_router.py` her görsel uçta `**_kare_boyutu(...)` gönderiyor ve
     `ai_client.py` mikroservis JSON'unu AYNEN geçirdiği için, buraya eklenmeyen her alan
     GPU dağıtımında SESSİZCE KAYBOLUYORDU.
 
@@ -762,7 +762,7 @@ def infer_thermal(file: UploadFile = File(...), explain: str = Form(None), xai_m
         t0 = time.time()
         result = clf.predict(tmp, threshold=0.5)
         dev = clf.session.get_providers()[0].replace("ExecutionProvider", "").lower()
-        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `servers/ai_router.py:1969`
+        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `apps/backend/servers/ai_router.py:1969`
         # `{"prediction": result, "image_base64": ...}` döndürüyor ve arayüzün TÜM termal
         # paneli (`AiHubScreen.tsx:1517` geçmiş kaydı + `:1603` sonuç satırı) `result.prediction`
         # kapısının ARDINDA. Burada `**result` düz açıldığı için GPU/mikroservis profilinde
@@ -1038,7 +1038,7 @@ def infer_reticulocytes(file: UploadFile = File(...), explain: str = Form(None))
         results = model.predict(source=tmp, conf=0.25, iou=0.7, imgsz=640, device=_yolo_device(), verbose=False)
         r = results[0]
         n = len(r.boxes) if r.boxes is not None else 0
-        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `servers/ai_router.py:2057`
+        # ⚠️ ZARF PARİTESİ (denetim 2026-08-28 #09): gömülü yol `apps/backend/servers/ai_router.py:2057`
         # sınıf bazlı `counts` döndürüyor; arayüzde retikülosit ORANI (`AiHubScreen.tsx:1535`)
         # ve üç sayım satırı (`:1608-1612`) TAM O ALANIN kapısında. Burada yalnız toplam
         # `n_detections` dönüyordu → mikroservis profilinde oran ve sayımlar sessizce kayboluyordu.
@@ -1177,7 +1177,7 @@ def infer_em_petri(
     achieved_B: float = Form(None),
     duty_sum: float = Form(None),
     # ── ROUTER PARİTESİ (2026-09-09): arayüzden ayarlanabilir 6 parametre + denetim anahtarı.
-    # ⚠️ Bu alanlar OLMADAN GPU dağıtımında ayarlar SESSİZCE ölü kalırdı: `servers/ai_client.py`
+    # ⚠️ Bu alanlar OLMADAN GPU dağıtımında ayarlar SESSİZCE ölü kalırdı: `apps/backend/servers/ai_client.py`
     # onları multipart form'da gönderiyor, FastAPI tanımadığı form alanını sessizce ATAR —
     # kullanıcı arayüzde eşiği değiştirir, sonuç hiç değişmez ve hiçbir yerde hata görünmez.
     yolo_conf: float = Form(None),
@@ -1191,7 +1191,7 @@ def infer_em_petri(
     """Petri kuyu: YOLO-seg + klasik CV + BaggingRegressor. petri_diameter_cm ile gerçek-mm.
 
     Ayarlanabilir parametreler ve sınırları TEK KAYNAK:
-    `ai_hub/inference_petri_dish/petri_ayar.py` (gömülü uç `servers/ai_router.py` da onu
+    `ai_hub/inference_petri_dish/petri_ayar.py` (gömülü uç `apps/backend/servers/ai_router.py` da onu
     kullanır → iki uç ayrışamaz).
     """
     from dataclasses import asdict

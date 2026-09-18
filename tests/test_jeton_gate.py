@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """JETON KAPISI AI UÇLARINA BAĞLANIR — JETON-SISTEMI Adım 4 ("EN KRİTİK ADIM"), 2026-08-22.
 
-ÖLÇÜLEN DURUM: `servers/jeton.py` 16 testle kilitliydi ama HİÇBİR üretim kodundan çağrılmıyordu
+ÖLÇÜLEN DURUM: `apps/backend/servers/jeton.py` 16 testle kilitliydi ama HİÇBİR üretim kodundan çağrılmıyordu
 (`JetonYoneticisi` yalnız modülün kendisinde + testlerde). `PEMF_JETON_ENFORCED` bayrağı bugün
 açılsa bile davranış DEĞİŞMEZDİ — sessiz no-op tuzağı. Bu dosya bağlantıyı kilitler.
 

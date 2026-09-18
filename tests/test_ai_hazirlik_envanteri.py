@@ -30,7 +30,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from servers.ai_router import _AI_MODUL_ENVANTERI, _model_hazir_mi, _xai_zinciri_durumu
 
 _KOK = Path(__file__).resolve().parents[1]
@@ -98,7 +97,6 @@ def test_KRITIK_gomulu_durumu_HAZIR_saymaz(monkeypatch):
     ZORLA "gomulu" yapılır ve ucun onu HAZIR saymadığı ölçülür.
     """
     from fastapi.testclient import TestClient
-
     from servers import ai_router, api_server
 
     monkeypatch.setattr(ai_router, "_model_hazir_mi", lambda _yol: ("gomulu", ""))
@@ -293,7 +291,7 @@ def test_KRITIK_URETIMDE_cozulen_her_agirlik_envanterde_OLCULUYOR():
     """
     import re
 
-    src = (_KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
+    src = (_KOK / "apps" / "backend" / "servers" / "ai_router.py").read_text(encoding="utf-8")
     cozulen = set(re.findall(r'download_model_sync\(\s*"([^"]+)"', src))
     assert len(cozulen) >= 8, (
         f"`download_model_sync(\"...\")` çağrıları bulunamadı ({len(cozulen)}) — çözüm biçimi "

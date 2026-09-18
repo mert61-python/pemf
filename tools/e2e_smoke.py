@@ -100,7 +100,7 @@ def main():
             # ⚠️ MASAUSTU DA IZOLE EDILMELI (2026-09-11, IKINCI KEZ yasandi)
             # ══════════════════════════════════════════════════════════════════════
             # `/api/session/start` her seansta masaustune `PEMF_alan_*.csv` yazar
-            # (servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
+            # (apps/backend/servers/seans_alan_kaydi). Bu betik GERCEK bir backend alt sureci baslatir
             # ve pytest `conftest` izolasyonu BURADA GECERLI DEGILDIR → her kosu sahibin
             # masaustune bir tomar test dosyasi birakiyordu (olculdu: 3 kosu = 18 dosya,
             # hasta adlari SyncTest/ParamTest/Minnos/Duman...).
@@ -116,7 +116,7 @@ def main():
             "HOME": str(sahte_ev),
             # ⚠️ APPDATA DA İZOLE EDİLMELİ (2026-08-14). `PEMF_DATA_DIR` tek başına YETMİYOR:
             # backend açılışta `%APPDATA%\PEMF_GUI`den "eski kullanıcı klasörü → makine geneli"
-            # göçünü çalıştırıyor (utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
+            # göçünü çalıştırıyor (apps/backend/utils/path_utils._kullanicidan_makineye_gocur) ve geliştirici
             # makinesindeki BAYAT, BAŞKA ANAHTARLA şifreli tedavi DB'sini test dizinine
             # kopyalıyordu → `hmac check failed for pgno=1` → backend HİÇ açılmıyordu.
             # (Testin gördüğü hata da yanıltıcıydı; bkz. aşağıdaki log yazdırma notu.)

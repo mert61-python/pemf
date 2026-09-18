@@ -6,7 +6,7 @@ Sahip sorusu: "çoklu klinik kullanımında düşün, Supabase düzgün çalış
 
 ÖLÇÜLEN ARIZA (canlıda doğrulandı):
 `public.treatment_sessions` birincil anahtarı YALNIZ `id` idi. Ama `id`, kliniğin YEREL
-SQLite tablosundan gelir ve orada AUTOINCREMENT'tir (`database/treatment_history_db.py`),
+SQLite tablosundan gelir ve orada AUTOINCREMENT'tir (`apps/backend/database/treatment_history_db.py`),
 yani her klinikte 1, 2, 3… diye başlar. Canlıdaki tek kaydın id'si düpedüz `2` idi.
 
     Klinik A → id=1 yazar, GLOBAL anahtarı kaplar
@@ -22,7 +22,7 @@ DÜZELTME: anahtar `(device_id, id)`. Canlıda uygulandı ve DAVRANIŞSAL doğru
 klinik aynı `id=1` ile yazdı, ikisi de bulutta göründü, sonra temizlendi.
 
 ⚠️ `public.patients` AYNI DESENDE AMA GÜVENLİ: oradaki `id` UUID
-(`database/patient_database.py` → TEXT PRIMARY KEY; canlı örnek `5819280a-2734-...`).
+(`apps/backend/database/patient_database.py` → TEXT PRIMARY KEY; canlı örnek `5819280a-2734-...`).
 UUID çakışması pratikte imkânsız → o tabloya KASITLI dokunulmadı (gereksiz şema riski).
 Bu dosya o kararı da kilitler: biri `patients.id`i sıralı bir değere çevirirse kapı düşer.
 """
@@ -34,13 +34,13 @@ from pathlib import Path
 
 _KOK = Path(__file__).resolve().parents[1]
 _GOC = _KOK / "supabase" / "seans_kimligi_bilesik_anahtar.sql"
-_KANONIK = _KOK / "database" / "supabase_secure_v2.sql"
+_KANONIK = _KOK / "apps" / "backend" / "database" / "supabase_secure_v2.sql"
 #: ⚠️ TEK DOSYAYA PINLENMEZ (2026-09-18): `treatment_sessions` tablosunun CREATE'i B4
 #: bolmesiyle `thdb_sema.py`ye tasindi ve bu kapi "seans id uretimi degismis" diye KIRMIZI
 #: dondu — oysa sema aynen duruyordu, yalniz DOSYA degismisti. Kapinin isi semayi korumak;
-#: bu yuzden `database/` ailesi taranir.
-_YEREL_SEANS_KAYNAKLARI = sorted((_KOK / "database").glob("*.py"))
-_YEREL_HASTA = _KOK / "database" / "patient_database.py"
+#: bu yuzden `apps/backend/database/` ailesi taranir.
+_YEREL_SEANS_KAYNAKLARI = sorted((_KOK / "apps" / "backend" / "database").glob("*.py"))
+_YEREL_HASTA = _KOK / "apps" / "backend" / "database" / "patient_database.py"
 
 
 def _oku(p: Path) -> str:

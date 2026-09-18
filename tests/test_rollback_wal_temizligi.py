@@ -1,7 +1,7 @@
 # Author: mertaygn, cglrgrkn
 """Migration rollback'i bayat `-wal`/`-shm` yan-dosyalarını GERÇEKTEN siliyor mu?
 
-DENETİM BULGUSU (2026-08-17). `database/treatment_history_db.py` rollback dalında:
+DENETİM BULGUSU (2026-08-17). `apps/backend/database/treatment_history_db.py` rollback dalında:
 
     _side = self.db_path + _sfx        # self.db_path bir Path → TypeError!
 
@@ -16,7 +16,7 @@ for pgno=1` → `file is not a database` → karantina → cihaz **BOŞ tedavi g
 (Düz-metin profilde sonuç bozulma değil, SESSİZ NO-OP: bayat WAL replay edilir, `integrity_check`
 "ok" der ve yarım-migration hâli geri gelir — yani rollback hiç olmamış gibi davranır.)
 
-⚠️ Doğru kardeş desen aynı depoda: `database/auth_db.py` → `Path(str(self.db_path) + _sfx)`.
+⚠️ Doğru kardeş desen aynı depoda: `apps/backend/database/auth_db.py` → `Path(str(self.db_path) + _sfx)`.
 
 ⚠️ MEVCUT "KORUMA" KÂĞITTAN KAPLANDI: `tests/test_treatment_persistence.py:339` →
 `assert '"-wal"' in src and '"-shm"' in src` — bir **kaynak-metin grep'i**; `TypeError`'lı kodu
@@ -96,7 +96,7 @@ def test_yan_dosya_yolu_Path_ile_birlestirilmez_yapisal_capa():
 
     Bu, yukarıdaki davranışsal testin YERİNE değil YANINA konur: aynı hata bir gün başka bir yan-dosya
     (`-journal`) için tekrarlanırsa davranışsal test onu kapsamayabilir, ama bu desen görünür kalır.
-    Doğru biçim `str(self.db_path) + _sfx` (bkz. `database/auth_db.py`)."""
+    Doğru biçim `str(self.db_path) + _sfx` (bkz. `apps/backend/database/auth_db.py`)."""
     import inspect
 
     ham = inspect.getsource(TreatmentHistoryDB._run_startup_migrations_with_rollback)

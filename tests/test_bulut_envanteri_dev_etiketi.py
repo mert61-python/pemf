@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_SYNC = _KOK / "servers" / "sync_worker.py"
+_SYNC = _KOK / "apps" / "backend" / "servers" / "sync_worker.py"
 
 
 @pytest.fixture(autouse=True)

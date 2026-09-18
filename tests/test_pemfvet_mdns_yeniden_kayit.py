@@ -2,11 +2,11 @@
 # Author: mertaygn, cglrgrkn
 """`_pemfvet` mDNS KAYDI, AÇILIŞTA LAN IP YOKSA BİR DAHA YAPILMIYORDU (denetim bulgusu 8, cid. 2).
 
-`servers/auto_discovery.start_mdns` LAN IP yoksa ilk kaydı bilerek ATLIYOR (loopback yayınlamak
+`apps/backend/servers/auto_discovery.start_mdns` LAN IP yoksa ilk kaydı bilerek ATLIYOR (loopback yayınlamak
 telefonu kendi 127.0.0.1'ine gönderir) ve log *"arayüz gelince kaydolacak"* diyor. Ama `_reregister`
 `_mdns_service_info is None` ise ERKEN DÖNÜYORDU — yani tam da kaydın atlandığı durumda re-register
 hiç çalışmıyordu. Ölçüldü: `get_shared_zeroconf` HİÇ çağrılmıyor. Kardeş yayıncı doğru yapıyor
-(`services/mdns_service.py:219-236` ServiceInfo'yu SIFIRDAN kuruyor) → `_mqtt` toparlanıyor,
+(`apps/backend/services/mdns_service.py:219-236` ServiceInfo'yu SIFIRDAN kuruyor) → `_mqtt` toparlanıyor,
 `_pemfvet` toparlanmıyordu.
 
 ⚠️ RAPORUN ÖNERDİĞİ TEK SATIRLIK DÜZELTME YETERSİZDİ (analizle ortaya çıktı). İki ayrı senaryo var:

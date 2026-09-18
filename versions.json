@@ -4,7 +4,7 @@
     "backend": "PEMF Backend + Inno installer. Hedef: VERSION -> PEMF_Backend_Setup.iss (MyAppVersion) + docs/version_info.txt",
     "launcher": "PEMF Vet Client (Tauri). Hedef: launcher/Cargo.toml, launcher/app/tauri.conf.json. Kendi kendini gunceller, git etiketi: launcher-vX.Y.Z",
     "mobile": "Android/iOS uygulamasi. Hedef: apps/ui/app.json. androidVersionCode HER YAYINDA ARTMALI (Play Store sarti), geri alinamaz.",
-    "frontendOta": "Frontend OTA paketi (frontend_dist.zip). Hedef: frontend_version.json. servers/update_manager.py bunu karsilastirir."
+    "frontendOta": "Frontend OTA paketi (frontend_dist.zip). Hedef: frontend_version.json. apps/backend/servers/update_manager.py bunu karsilastirir."
   },
   "backend": "1.9.50",
   "launcher": "1.9.51",

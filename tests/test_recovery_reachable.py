@@ -3,7 +3,7 @@
 """FELAKET KURTARMA SAHADA ULAŞILABİLİR Mİ (2026-08-09 denetimi, ENGEL).
 
 ARIZA: kurtarma mekanizmasının TAMAMI vardı —
-    utils/backup_recovery.py  → anahtarları 150-bit koda bağlayan şifreli zarf
+    apps/backend/utils/backup_recovery.py  → anahtarları 150-bit koda bağlayan şifreli zarf
     tools/kurtarma.py         → zarfı açan/anahtarları yazan araç
     headless_db_maintenance   → zarfı yedeklerin yanına tazeleyen görev
 ...ama aracın çalıştırılma yolu `python tools/kurtarma.py` idi. Sahadaki üründe PYTHON YOK

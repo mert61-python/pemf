@@ -43,7 +43,7 @@ kararsızlıktan **çok daha ciddi** bir şey çıktı:
 dıştaki `except Exception` tarafından **yutuluyordu** → sonraki açılışta uygulama BOŞ bir
 veritabanı yaratır ve klinik hasta geçmişini **BOŞ** görür (veri `.plain.bak`ta durur).
 
-Düzeltme (`database/sqlcipher_util.py`): sınırlı yeniden-deneme (`_tasi_yeniden_dene`) +
+Düzeltme (`apps/backend/database/sqlcipher_util.py`): sınırlı yeniden-deneme (`_tasi_yeniden_dene`) +
 ikinci taşıma kalıcı olarak düşerse **orijinali geri koyma** + açılışta **yarım-göç
 toparlama** (`_yarim_goc_toparla`).
 Kapı: `tests/test_goc_yarim_kalirsa_db_kaybolmaz.py` (4 test, 3/3 mutasyon KIRMIZI).

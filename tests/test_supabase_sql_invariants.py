@@ -24,11 +24,11 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
-# ⚠️ İKİ DİZİN. Kapı başlangıçta yalnız `database/`e bakıyordu; 2026-08-09 denetiminde eklenen
+# ⚠️ İKİ DİZİN. Kapı başlangıçta yalnız `apps/backend/database/`e bakıyordu; 2026-08-09 denetiminde eklenen
 # `supabase/upsert_device_envanter.sql` bu yüzden HİÇ denetlenmedi ve içinde üretimi kıracak bir
 # imza çakışması vardı (dağıtımdan önce elle yakalandı). Yeni SQL'in nereye konacağı sabit
 # değilse, kapı da tek bir dizine bakmamalı.
-_SQL_DIRS = [_KOK / "database", _KOK / "supabase"]
+_SQL_DIRS = [_KOK / "apps" / "backend" / "database", _KOK / "supabase"]
 
 
 def _sql_files() -> list[Path]:
@@ -236,7 +236,7 @@ def test_envanter_SQL_i_bcrypt_modelini_KORUR(sql_bodies):
 
 
 def test_KRITIK_jeton_defterindeki_tur_kisiti_CIHAZIN_gonderdiklerini_KAPSAR(sql_bodies):
-    """8. parti: kullandikca-ode eklendiginde `servers/jeton.py` tuketimi `tur="kullandikca"`
+    """8. parti: kullandikca-ode eklendiginde `apps/backend/servers/jeton.py` tuketimi `tur="kullandikca"`
     ile gonderiyordu ama `token_ledger.tur` CHECK kisiti bu degeri TANIMIYORDU. Sonuc: RPC
     check-ihlaliyle patlar ve TUKETIM KAYBOLUR (kullanici bedava analiz yapar; ya da daha
     kotusu, cevrimdisi uzlastirma sonsuza dek basarisiz doner).
@@ -253,9 +253,9 @@ def test_KRITIK_jeton_defterindeki_tur_kisiti_CIHAZIN_gonderdiklerini_KAPSAR(sql
     izinli = set(re.findall(r"'([^']+)'", m.group(1)))
 
     # Cihaz tarafinin GERCEKTEN gonderdigi turler — kaynaktan okunur, elle yazilmaz.
-    jeton_py = (_KOK / "servers" / "jeton.py").read_text(encoding="utf-8", errors="replace")
+    jeton_py = (_KOK / "apps" / "backend" / "servers" / "jeton.py").read_text(encoding="utf-8", errors="replace")
     gonderilen = set(re.findall(r'tur\s*=\s*"([a-z_]+)"', jeton_py))
-    assert gonderilen, "servers/jeton.py icinde tur= gonderimi bulunamadi (test kor kalmis)"
+    assert gonderilen, "apps/backend/servers/jeton.py icinde tur= gonderimi bulunamadi (test kor kalmis)"
 
     eksik = gonderilen - izinli
     assert not eksik, (

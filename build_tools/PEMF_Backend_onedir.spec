@@ -241,7 +241,7 @@ if os.path.exists(frontend_dir):
 # DENETİM 2026-08-04 (P2): `VERSION` (backend/installer KANALI) bundle EDİLMİYORDU → frozen EXE
 # kendi sürümünü okuyamıyor, update_manager `frontend_version.json`'a (frontendOta kanalı, 1.4.x)
 # düşüyordu ve bu değer exe kanalının latest.json'ıyla (1.9.x) KARŞILAŞTIRILIYORDU. İki dosya da
-# bundle edilir; okuma sırası servers/update_manager.py::_version_paths()'te VERSION önceliklidir.
+# bundle edilir; okuma sırası apps/backend/servers/update_manager.py::_version_paths()'te VERSION önceliklidir.
 ver_txt = os.path.join(project_path, 'VERSION')
 if os.path.exists(ver_txt):
     datas.append((ver_txt, '.'))
@@ -263,7 +263,7 @@ for dir_name in ('web_static', 'templates'):
 
 # AI HUB (inference KODU + küçük .pkl/.json). Büyük ONNX'ler aşağıda ai_models ağacıyla gömülür.
 # KAYNAK ŞİFRELEME PAROLASI (2026-08-06) — `build_tools/_static_password.py` varsa EXE'ye
-# `pemf_source_key` adıyla gömülür; `utils/source_crypto.read_password()` onu arar.
+# `pemf_source_key` adıyla gömülür; `apps/backend/utils/source_crypto.read_password()` onu arar.
 # YOKSA sessizce atlanır → şifresiz build normal çalışır (geliştirme akışı bozulmaz).
 # ⚠️ Parola üründe gider: kopyalamayı zorlaştırır, tersine mühendisliği ENGELLEMEZ.
 _pw_src = os.path.join(project_path, 'build_tools', '_static_password.py')
@@ -447,7 +447,10 @@ hidden = list(dict.fromkeys(hidden))  # dedup
 
 a = Analysis(
     [os.path.join(project_path, 'backend_service.py')],
-    pathex=[project_path],
+    # ⚠️ `apps/backend` (2026-09-18, F4): urun paketleri oraya tasindi. Modul ADLARI
+    # DEGISMEDI (`servers.api_server` vb.) — PyInstaller onlari bu yoldan bulur, yani
+    # PYZ girdileri, hiddenimports ve kod-koruma zinciri AYNEN kalir.
+    pathex=[project_path, os.path.join(project_path, 'apps', 'backend')],
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,

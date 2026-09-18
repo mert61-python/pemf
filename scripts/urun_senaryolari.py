@@ -83,19 +83,21 @@ def bayat_ikili_nobeti() -> None:
             f"[DUR] EXE yok: {EXE}\n      Once paketleyin (scripts/build_backend_exe.ps1) ya da --exe ile yol verin."
         )
     e = EXE.stat().st_mtime
-    # ⚠️ SABIT LISTE BAYATLAR — 2026-09-18'de tam bu oldu: B4 bolmesi `database/` altina bes
+    # ⚠️ SABIT LISTE BAYATLAR — 2026-09-18'de tam bu oldu: B4 bolmesi `apps/backend/database/` altina bes
     # YENI modul ekledi (`thdb_outbox` · `thdb_denetim` · `thdb_ai_gecmisi` · `thdb_telemetri`
     # · `thdb_pii`) ve elle yazilmis liste onlari GORMUYORDU. O hâlde `thdb_pii.py` degistirilip
     # senaryolar ESKI EXE'ye karsi kosturulsa nobet SESSIZCE gecerdi — yani olcum, olctugunu
-    # sandigi kodu hic calistirmamis olurdu. Liste artik TURETILIYOR: `database/` altindaki her
+    # sandigi kodu hic calistirmamis olurdu. Liste artik TURETILIYOR: `apps/backend/database/` altindaki her
     # `.py` otomatik izlenir; asagisi yalnizca o dizin DISINDAKI kritik dosyalar.
-    izlenen = sorted(f"database/{p.name}" for p in (GUII / "database").glob("*.py")) + [
-        "utils/path_utils.py",
-        "utils/file_acl.py",
-        "utils/runtime_guards.py",
-        "servers/api_server.py",
-        "servers/ai_router.py",
-        "servers/jeton.py",
+    izlenen = sorted(
+        f"apps/backend/database/{p.name}" for p in (GUII / "apps" / "backend" / "database").glob("*.py")
+    ) + [
+        "apps/backend/utils/path_utils.py",
+        "apps/backend/utils/file_acl.py",
+        "apps/backend/utils/runtime_guards.py",
+        "apps/backend/servers/api_server.py",
+        "apps/backend/servers/ai_router.py",
+        "apps/backend/servers/jeton.py",
         "backend_service.py",
     ]
     bayat = [k for k in izlenen if (GUII / k).exists() and (GUII / k).stat().st_mtime > e]
@@ -761,7 +763,7 @@ def grup_b() -> None:
 
         blok = _re2.search(
             r"_SERBEST_AI_UCLARI:\s*frozenset\s*=\s*frozenset\(\s*\{(.*?)\}\s*\)",
-            (GUII / "servers" / "jeton.py").read_text(encoding="utf-8"),
+            (GUII / "apps" / "backend" / "servers" / "jeton.py").read_text(encoding="utf-8"),
             _re2.S,
         )
         serbest = _re2.findall(r'"([^"]+)"', blok.group(1)) if blok else []

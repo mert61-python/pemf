@@ -370,47 +370,47 @@
         "LastWriteTime":  "\/Date(1761273641468)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\patient_database.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\patient_database.py",
         "Length":  7938,
         "LastWriteTime":  "\/Date(1761612987800)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\pemf_treatment_history.db",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\pemf_treatment_history.db",
         "Length":  36864,
         "LastWriteTime":  "\/Date(1761612546873)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\session_manager.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\session_manager.py",
         "Length":  18009,
         "LastWriteTime":  "\/Date(1761612987809)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\treatment_history_db.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\treatment_history_db.py",
         "Length":  20138,
         "LastWriteTime":  "\/Date(1761612987818)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\__init__.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\__init__.py",
         "Length":  63,
         "LastWriteTime":  "\/Date(1761612987821)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\__pycache__\\patient_database.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\__pycache__\\patient_database.cpython-39.pyc",
         "Length":  7404,
         "LastWriteTime":  "\/Date(1761613313637)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\__pycache__\\session_manager.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\__pycache__\\session_manager.cpython-39.pyc",
         "Length":  12647,
         "LastWriteTime":  "\/Date(1761613313650)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\__pycache__\\treatment_history_db.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\__pycache__\\treatment_history_db.cpython-39.pyc",
         "Length":  15974,
         "LastWriteTime":  "\/Date(1761613313640)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\database\\__pycache__\\__init__.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/database\\__pycache__\\__init__.cpython-39.pyc",
         "Length":  150,
         "LastWriteTime":  "\/Date(1761613313635)\/"
     },
@@ -815,47 +815,47 @@
         "LastWriteTime":  "\/Date(1760750898392)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\broker.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\broker.py",
         "Length":  8903,
         "LastWriteTime":  "\/Date(1761613214855)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\mqtt_test_client.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\mqtt_test_client.py",
         "Length":  1278,
         "LastWriteTime":  "\/Date(1761612998430)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\websocket_server.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\websocket_server.py",
         "Length":  23605,
         "LastWriteTime":  "\/Date(1761612958281)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\web_server.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\web_server.py",
         "Length":  100780,
         "LastWriteTime":  "\/Date(1761612998460)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\__init__.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\__init__.py",
         "Length":  52,
         "LastWriteTime":  "\/Date(1761612998463)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\__pycache__\\broker.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\__pycache__\\broker.cpython-39.pyc",
         "Length":  6685,
         "LastWriteTime":  "\/Date(1761613285498)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\__pycache__\\websocket_server.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\__pycache__\\websocket_server.cpython-39.pyc",
         "Length":  15296,
         "LastWriteTime":  "\/Date(1761613285501)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\__pycache__\\web_server.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\__pycache__\\web_server.cpython-39.pyc",
         "Length":  86160,
         "LastWriteTime":  "\/Date(1761613313628)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\servers\\__pycache__\\__init__.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/servers\\__pycache__\\__init__.cpython-39.pyc",
         "Length":  149,
         "LastWriteTime":  "\/Date(1761613146889)\/"
     },
@@ -940,87 +940,87 @@
         "LastWriteTime":  "\/Date(1749401256000)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\email_sender.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\email_sender.py",
         "Length":  8383,
         "LastWriteTime":  "\/Date(1761612967530)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\email_settings_dialog.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\email_settings_dialog.py",
         "Length":  16983,
         "LastWriteTime":  "\/Date(1761612967541)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\error_handler.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\error_handler.py",
         "Length":  10225,
         "LastWriteTime":  "\/Date(1761612967547)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\logger_config.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\logger_config.py",
         "Length":  8273,
         "LastWriteTime":  "\/Date(1761612967553)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\notification_panel.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\notification_panel.py",
         "Length":  7197,
         "LastWriteTime":  "\/Date(1761612967558)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\organize_resources.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\organize_resources.py",
         "Length":  1730,
         "LastWriteTime":  "\/Date(1761612967562)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\pdf_report_generator.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\pdf_report_generator.py",
         "Length":  26426,
         "LastWriteTime":  "\/Date(1761612967572)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\responsive_utils.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\responsive_utils.py",
         "Length":  2245,
         "LastWriteTime":  "\/Date(1761612967576)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\value_utils.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\value_utils.py",
         "Length":  2956,
         "LastWriteTime":  "\/Date(1761612967580)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__init__.py",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__init__.py",
         "Length":  52,
         "LastWriteTime":  "\/Date(1761612967583)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\error_handler.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\error_handler.cpython-39.pyc",
         "Length":  8396,
         "LastWriteTime":  "\/Date(1761613313631)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\logger_config.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\logger_config.cpython-39.pyc",
         "Length":  7139,
         "LastWriteTime":  "\/Date(1761613285502)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\notification_panel.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\notification_panel.cpython-39.pyc",
         "Length":  6267,
         "LastWriteTime":  "\/Date(1761613313622)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\pdf_report_generator.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\pdf_report_generator.cpython-39.pyc",
         "Length":  18330,
         "LastWriteTime":  "\/Date(1761274264898)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\security_middleware.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\security_middleware.cpython-39.pyc",
         "Length":  8890,
         "LastWriteTime":  "\/Date(1761275001657)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\value_utils.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\value_utils.cpython-39.pyc",
         "Length":  2329,
         "LastWriteTime":  "\/Date(1761613313633)\/"
     },
     {
-        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\utils\\__pycache__\\__init__.cpython-39.pyc",
+        "FullName":  "C:\\Users\\merta\\.conda\\envs\\gui\\gui\\gui\\apps/backend/utils\\__pycache__\\__init__.cpython-39.pyc",
         "Length":  147,
         "LastWriteTime":  "\/Date(1761613313621)\/"
     },

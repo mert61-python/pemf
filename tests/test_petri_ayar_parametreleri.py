@@ -297,7 +297,7 @@ def _fonksiyon(yol: Path, ad: str):
 
 
 UCLAR = [
-    (KOK / "servers" / "ai_router.py", "analyze_em_petri"),
+    (KOK / "apps" / "backend" / "servers" / "ai_router.py", "analyze_em_petri"),
     (KOK / "ai_service" / "app.py", "infer_em_petri"),
 ]
 

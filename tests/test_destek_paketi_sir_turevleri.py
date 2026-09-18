@@ -11,7 +11,7 @@ GERÇEKTEN ürettiği türev adlar değildi:
 Ayrıca `p.suffix` yalnız SON uzantıyı verdiği için `patients.db.plain.bak` gibi DÜZ-METİN yedekleri
 de pakete giriyordu; NTFS büyük/küçük harf duyarsız olduğu hâlde `PEMF_SECRETS.JSON` de geçiyordu.
 Üç gerçek sır dosyası (`api_token.txt`, `.pemf_key_v2`, `.pemf_key`) listede hiç yoktu — üçü de
-`utils/file_acl` ve `backend_service` tarafından ZATEN sır kabul edilip ACL ile kilitleniyor.
+`apps/backend/utils/file_acl` ve `backend_service` tarafından ZATEN sır kabul edilip ACL ile kilitleniyor.
 
 **(2) Maske kalıpları kripto anahtarlarını hiç yakalamıyordu** ve — asıl kilit — anahtar adından
 sonra KAPANIŞ TIRNAĞINA izin vermiyordu. Sızan dosya JSON'dur (`"sqlcipher_key": "..."`), yani
@@ -31,7 +31,6 @@ from pathlib import Path
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
-
 from utils.support_bundle import Maskeleyici, _guvenli_mi
 
 _maskele = Maskeleyici()  # cihaza-ozgu PII listesi YOK; yalniz jenerik kaliplar sinaniyor

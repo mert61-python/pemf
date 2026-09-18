@@ -38,6 +38,10 @@ _KOK = Path(__file__).resolve().parents[1]
 _TUR_BETIGI = """
 import sys, os, hashlib
 sys.path.insert(0, r"{kok}")
+# ⚠️ ALT-SUREC YOLU (2026-09-18, klasor duzeni F4): urun paketleri `apps/backend/` altinda.
+# Konftest'in sys.path eklemesi ALT-SURECE MIRAS KALMAZ; bu satir olmadan `import utils`
+# ModuleNotFoundError verir (5 test boyle kirmizi dondu, olculdu).
+sys.path.insert(0, os.path.join(r"{kok}", "apps", "backend"))
 os.environ["PEMF_DATA_DIR"] = sys.argv[1]
 os.environ["PEMF_DEVICE_IDENTITY_DIR"] = sys.argv[2]
 if len(sys.argv) > 3 and sys.argv[3]:

@@ -42,7 +42,6 @@ _TS = KOK / "apps" / "ui" / "src" / "screens" / "TreatmentHistoryScreen.tsx"
 @pytest.fixture
 def istemci():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app) as c:
@@ -155,7 +154,7 @@ def test_KRITIK_URETIMDE_yazilan_her_durum_cevrilebiliyor():
     """
     from utils.seans_durum import DURUM_ETIKETLERI
 
-    src = (KOK / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
     # `session_status = 'X'` / `session_status TEXT DEFAULT 'X'` / sabit atamalari.
     yazilanlar = set(re.findall(r"session_status\s*(?:TEXT DEFAULT|=)\s*'([A-Za-z_]+)'", src))
     yazilanlar |= set(re.findall(r'SEANS_DURUMU_[A-Z_]+\s*=\s*"([A-Za-z_]+)"', src))

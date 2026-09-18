@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_ROUTER = _KOK / "servers" / "update_router.py"
+_ROUTER = _KOK / "apps" / "backend" / "servers" / "update_router.py"
 
 # Kurulum/geri-alma tetikleyen YIKICI uclar. (`/api/update/status` salt-okunur → kapisiz mesru.)
 _YIKICI_UCLAR = ["/api/update/apply", "/api/update/rollback"]

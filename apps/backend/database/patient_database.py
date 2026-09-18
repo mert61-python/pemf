@@ -25,8 +25,12 @@ try:
     from pemf_gui.config import get_config
 except ModuleNotFoundError:
     # Support direct script execution (e.g. Spyder %runfile)
+    # ⚠️ `pemf_gui` depo KOKUNDE (2026-09-18, F4): bu modul `apps/backend/database/`
+    # altina indi, "bir ust dizin" artik kok DEGIL.
+    from utils.path_utils import kaynak_kokunu_bul
+
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
+    project_root = str(kaynak_kokunu_bul(__file__))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
     from pemf_gui.config import get_config

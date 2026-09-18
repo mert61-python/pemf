@@ -1,7 +1,7 @@
 // Author: mertaygn, cglrgrkn
 //! Kurulum düzeni + backend'e verilecek ortam değişkenleri.
 //!
-//! GERİYE UYUM: buradaki yollar `utils/path_utils.py::get_app_data_directory()`
+//! GERİYE UYUM: buradaki yollar `apps/backend/utils/path_utils.py::get_app_data_directory()`
 //! ile BİREBİR aynı olmak zorunda. Backend hasta DB'sini, SQLCipher anahtarını ve
 //! sırlarını oraya yazar; launcher farklı bir dizin uydurursa yükseltilen kurulum
 //! kendi verisini bulamaz.
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 /// Backend'in modelleri aradığı köklerden #1 (`PEMF_AI_MODELS_DIR`).
 ///
-/// Neden env ile veriyoruz: `utils/model_downloader.py::_candidate_model_roots()`
+/// Neden env ile veriyoruz: `apps/backend/utils/model_downloader.py::_candidate_model_roots()`
 /// sıralaması → 1) `$PEMF_AI_MODELS_DIR`  2) `%PROGRAMDATA%\PEMF_GUI\ai_models`
 /// 3) app_data/.ai_models  4) proje-yanı  5) bundle. Kök #2 YALNIZ Windows'ta var
 /// (`PROGRAMDATA` yoksa atlanır) → macOS/Linux'ta hiç devreye girmez. Kök #1 üç
@@ -30,7 +30,7 @@ pub const ENV_API_PORT: &str = "PEMF_API_PORT";
 /// DENETİM P0: launcher backend'i yalnız model-kökü + port ile başlatıyordu. Backend `.env`
 /// dosyalarını OTOMATİK YÜKLEMEZ (`load_dotenv` yok) — `deploy/device.env`'deki sıkılaştırma
 /// yalnız NSSM servis kaydında uygulanır. Launcher exe'yi doğrudan spawn ettiği için
-/// `PEMF_REQUIRE_AUTH` tanımsız kalıyor ve `servers/auth.py` varsayılanı "0" → uzak/tünel
+/// `PEMF_REQUIRE_AUTH` tanımsız kalıyor ve `apps/backend/servers/auth.py` varsayılanı "0" → uzak/tünel
 /// erişiminde bile kimlik doğrulaması KAPALI oluyordu. LAN/localhost istekleri
 /// `is_local_request` ile zaten muaf olduğundan bunu açmak yerel arayüzü ETKİLEMEZ.
 pub const ENV_REQUIRE_AUTH: &str = "PEMF_REQUIRE_AUTH";
@@ -92,13 +92,13 @@ pub const ENV_ENABLE_TUNNEL: &str = "PEMF_ENABLE_TUNNEL";
 /// YAPMAZ → sabit COM10'a düşer (yanlış port riski)"*. Ama LAUNCHER yolu — yani siteden indirip
 /// kuran HER klinik, BUILD.md'nin "ANA dağıtım" dediği yol — geçirmiyordu.
 ///
-/// Sonuç zinciri (`utils/stm32_transport.py`): değişken boşsa `configured = FIXED_STM32_PORT`
+/// Sonuç zinciri (`apps/backend/utils/stm32_transport.py`): değişken boşsa `configured = FIXED_STM32_PORT`
 /// (= `COM10`) ve oto-algılama YALNIZ `auto` ile açılır. ST-Link VCP'nin COM numarası Windows'un
 /// USB numaralandırmasına göre değişir (COM3/COM4/COM5…), dolayısıyla klinik PC'sinde COM10
 /// olmadığında backend sonsuza dek COM10'u dener (`_mark_bad` + 3 sn cooldown) →
 /// **bobin 1-5 hiç bağlanmaz.** ESP bobinleri 6-8 MQTT'den çalışmaya devam ettiği için cihaz
 /// "çalışıyor gibi görünür" — 1.9.28'de aynı sınıf için kaydedilen "yarısı çalışan cihaz" tablosu.
-/// Bu ayar ne arayüzde ne launcher'da açığa çıkarılmıştır (`servers/settings_router.py` yalnız
+/// Bu ayar ne arayüzde ne launcher'da açığa çıkarılmıştır (`apps/backend/servers/settings_router.py` yalnız
 /// MQTT alanlarını yönetir), yani operatörün yapabileceği bir şey yoktur.
 ///
 /// GÜVENLİ Mİ: evet. `auto`, ST-Link'e ÖZGÜ USB PID setiyle (V1/V2/V2-1/V3) eşleşir ve LattePanda
@@ -122,7 +122,7 @@ pub const ENV_STM_PORT: &str = "PEMF_STM_PORT";
 /// HİÇBİR ŞEY değişmez ve "açtım" sanır. (Yön fail-safe — sürüş kapalı kalır — ama operatörün
 /// gördüğü durum ile gerçek durum ayrışır.)
 ///
-/// Backend semantiği (`servers/ai_router.py::_arastirma_aipro_acik`): yok/boş = KAPALI; yalnız
+/// Backend semantiği (`apps/backend/servers/ai_router.py::_arastirma_aipro_acik`): yok/boş = KAPALI; yalnız
 /// `1|true|yes|on` açar. Bu yüzden varsayılanımız `"0"` — davranışı DEĞİŞTİRMEZ, sadece
 /// operatörün değerinin backend'e ULAŞMASINI sağlar.
 ///
@@ -143,7 +143,7 @@ pub const ENV_ALLOWED_HOSTS: &str = "PEMF_ALLOWED_HOSTS";
 
 /// JETON (TOKEN) KAPISI — bu sinifin **YEDINCI** ornegi (2026-09-13).
 ///
-/// `servers/jeton.py` tamamen yazili ve `ai_router`a bagli, ama kapi `PEMF_JETON_ENFORCED`
+/// `apps/backend/servers/jeton.py` tamamen yazili ve `ai_router`a bagli, ama kapi `PEMF_JETON_ENFORCED`
 /// bayragina bakiyor ve launcher o bayragi **HIC gecirmiyordu**. Sonuc: bayrak makinede
 /// tanimlansa bile launcher'dan acilan backend onu GORMUYOR → jeton hicbir zaman dusmuyor.
 /// ENCRYPT_AT_REST / ENABLE_TUNNEL / STM_PORT / ALLOWED_HOSTS / DATA_DIR ile **birebir ayni**
@@ -290,7 +290,7 @@ where
 // kaldırır ve operatöre yanlış güvence verir. Kontrol `yedek_hedefi_gecerli_mi`de.
 // ══════════════════════════════════════════════════════════════════════════════════════════
 
-/// Backend'e verilen off-site yedek hedefi (bkz. services/headless_db_maintenance._copy_offsite).
+/// Backend'e verilen off-site yedek hedefi (bkz. apps/backend/services/headless_db_maintenance._copy_offsite).
 pub const ENV_BACKUP_DIR: &str = "PEMF_BACKUP_DIR";
 
 /// Operatörün seçtiği hedefin saklandığı dosya.
@@ -345,7 +345,7 @@ pub fn yedek_hedefi_gecerli_mi(hedef: &Path, veri_dizini: &Path) -> Result<(), S
 /// ⚠️ Bir bobin-güvenliği hatası bulunduğunda "hangi klinik hangi sürümde?" sorusunun cevabı
 /// YOKTU. Cihaz kaydı 60 sn'de bir heartbeat gönderiyor ama içinde SÜRÜM BİLGİSİ hiç yok;
 /// `rollout: 0` yalnız YENİ kurulumları durdurur, sahadaki mevcut cihazlara dokunmaz.
-/// Backend bu değişkenleri bulut kaydına yazar (bkz. servers/sync_worker.py).
+/// Backend bu değişkenleri bulut kaydına yazar (bkz. apps/backend/servers/sync_worker.py).
 pub const ENV_LAUNCHER_VERSION: &str = "PEMF_LAUNCHER_VERSION";
 /// Kurulu app katmanının sha'sı — hangi build'in sahada olduğunu KESİN belirler.
 pub const ENV_BASE_SHA: &str = "PEMF_BASE_SHA";
@@ -1569,7 +1569,7 @@ mod tests {
     }
 
     /// DENETİM P0 regresyonu: launcher backend'i kimlik doğrulaması KAPALI başlatmamalı.
-    /// Backend `.env` dosyalarını okumaz; bu env verilmezse `servers/auth.py` varsayılanı "0"dır
+    /// Backend `.env` dosyalarını okumaz; bu env verilmezse `apps/backend/servers/auth.py` varsayılanı "0"dır
     /// ve uzak/tünel erişimi kimliksiz açılır. LAN/localhost `is_local_request` ile muaf olduğu
     /// için bu bayrak yerel arayüzü bozmaz.
     #[test]
@@ -1614,7 +1614,7 @@ mod tests {
     #[test]
     fn backend_env_STM_PORT_OTO_ALGILAMAYI_acar() {
         // ⚠️ DENETİM 2026-08-17: bu satır olmadan backend sabit `COM10`a düşüyordu
-        // (`utils/stm32_transport.py`: oto-algılama YALNIZ `auto` ile açılır). ST-Link'in COM
+        // (`apps/backend/utils/stm32_transport.py`: oto-algılama YALNIZ `auto` ile açılır). ST-Link'in COM
         // numarası Windows USB numaralandırmasına göre değişir → klinikte COM10 değilse
         // **bobin 1-5 hiç bağlanmıyordu**, ESP 6-8 çalıştığı için cihaz "yarı çalışıyor" görünüyordu.
         let env = backend_env_with(|_| None, Path::new("/opt/pemf"), 8123, "");
@@ -1717,7 +1717,7 @@ mod tests {
             // geçirmiyordu → operatör tezgâh sonrası "açtım" sanıp açamıyordu. KOŞULSUZ eklenir;
             // varsayılan "0" backend'in fail-safe'iyle AYNI, ortamdaki değer korunur.
             ENV_ARASTIRMA_AIPRO,
-            // JETON KAPISI (2026-09-13): `servers/jeton.py` hazırdı ve `ai_router`a bağlıydı ama
+            // JETON KAPISI (2026-09-13): `apps/backend/servers/jeton.py` hazırdı ve `ai_router`a bağlıydı ama
             // launcher bayrağı geçirmiyordu → makinede `PEMF_JETON_ENFORCED=1` yazılsa bile
             // launcher'dan açılan backend görmüyordu (jeton HİÇ düşmüyordu). KOŞULSUZ eklenir;
             // varsayılan "0" = bugünkü canlı davranış (satış açılmadı, modül tam no-op),
@@ -1761,7 +1761,7 @@ mod tests {
     ///     (ESP 6-8 MQTT'den çalıştığı için cihaz "yarı çalışıyor" görünüyordu).
     ///
     /// Ortak kök neden: `deploy/device.env` bir davranışı ayarlıyor, backend `.env` dosyalarını
-    /// OTOMATİK YÜKLEMEZ (`load_dotenv` yok → `servers/api_server.py`'nin kendi notu), launcher da
+    /// OTOMATİK YÜKLEMEZ (`load_dotenv` yok → `apps/backend/servers/api_server.py`'nin kendi notu), launcher da
     /// o değişkeni geçirmiyor. Servis yolu doğru, launcher yolu geride kalıyor.
     ///
     /// KAPI: `deploy/device.env`'deki HER etkin anahtar ya launcher tarafından GEÇİRİLMELİ ya da

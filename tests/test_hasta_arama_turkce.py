@@ -130,12 +130,12 @@ def test_KRITIK_arama_ve_PDF_AYNI_katlamayi_kullaniyor():
     from pathlib import Path
 
     kok = Path(__file__).resolve().parents[1]
-    for dosya in ("database/patient_database.py", "utils/pdf_report_generator.py"):
+    for dosya in ("apps/backend/database/patient_database.py", "apps/backend/utils/pdf_report_generator.py"):
         src = (kok / dosya).read_text(encoding="utf-8")
         assert "arama_katla" in src, f"{dosya}: ortak Türkçe katlamayı kullanmıyor"
 
     # PDF filtresi artık ham `.lower()` ile hasta adı karşılaştırmamalı.
-    pdf = (kok / "utils/pdf_report_generator.py").read_text(encoding="utf-8")
+    pdf = (kok / "apps/backend/utils/pdf_report_generator.py").read_text(encoding="utf-8")
     i = pdf.find("patient_sessions = [")
     govde = pdf[max(0, i - 400) : i + 400]
     assert "arama_katla" in govde, "PDF hasta filtresi ortak katlamayı kullanmıyor"
@@ -187,7 +187,9 @@ def test_norm_surumu_parmak_izinde():
     indeksle kalır ve Türkçe arama onlarda çalışmaz."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "database" / "patient_database.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "apps" / "backend" / "database" / "patient_database.py").read_text(
+        encoding="utf-8"
+    )
     assert "_SEARCH_NORM_VERSION" in src, "normalize sürümü tanımlı değil"
     i = src.find("_fp = hashlib.sha256(")
     assert i != -1

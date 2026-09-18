@@ -32,9 +32,9 @@ SPAWN_ADLARI = {"Popen", "run", "call", "check_call", "check_output"}
 #: Bayrak vermesi GEREKMEYEN yerler ve sebepleri.
 MUAF = {
     # Yardımcının KENDİSİ — bayrağı burada uygular.
-    "utils/gizli_surec.py",
+    "apps/backend/utils/gizli_surec.py",
     # Yalnız macOS kolunda çalışır (`ioreg`); Windows konsolu açamaz.
-    "utils/secrets_manager.py",
+    "apps/backend/utils/secrets_manager.py",
 }
 
 

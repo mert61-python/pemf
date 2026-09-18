@@ -61,7 +61,9 @@ def test_KRITIK_finalize_ve_stop_MONOTONIC_kullaniyor():
     `_kayit_suresi_dk` üzerinden gitmeli."""
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (Path(__file__).resolve().parents[1] / "apps" / "backend" / "servers" / "api_server.py").read_text(
+        encoding="utf-8"
+    )
     assert "int((_now - float(started_epoch))" not in src, "ham wall-clock süre hesabı hâlâ var → DST bug'ı geri gelir"
     # Her iki bitiş yolu da start_mono geçirmeli (finalize parametresi + stop yerel değişkeni)
     assert src.count("_kayit_suresi_dk(") >= 2, "iki bitiş yolu da helper'ı kullanmıyor"

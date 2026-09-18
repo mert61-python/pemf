@@ -50,6 +50,10 @@ version = { file = "VERSION" }
 # edilir (`build_tools/PEMF_Backend_onedir.spec`: `a.pure`'dan silinir). Onu kurulabilir
 # bir paket olarak ilan etmek o kararla çelişir ve yanlış sinyal verir.
 # ⚠️ `apps/ui/`, `apps/web/`, `launcher/` de yok: bunlar Python paketi değil.
+# ⚠️ YOL HARITASI (2026-09-18, klasor duzeni F4): bes urun paketi `apps/backend/`
+# altina tasindi ama IMPORT ADLARI DEGISMEDI (`from utils.x import y`). setuptools'a
+# bunu `package-dir` ile soyluyoruz; `scripts`/`build_tools` kokte KALDI, o yuzden
+# harita paket-basinadir, toptan degil.
 packages = [
     "servers",
     "services",
@@ -59,6 +63,13 @@ packages = [
     "scripts",
     "build_tools",
 ]
+
+[tool.setuptools.package-dir]
+servers = "apps/backend/servers"
+services = "apps/backend/services"
+database = "apps/backend/database"
+utils = "apps/backend/utils"
+controllers = "apps/backend/controllers"
 
 [tool.ruff]
 target-version = "py310"

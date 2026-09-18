@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """KURTARMA KODU GÖRÜNÜRLÜĞÜ (2026-08-09 denetimi, ENGEL'in ikinci yarısı).
 
-ARIZA: `utils/backup_recovery` kurtarma kodunu `<veri-dizini>\\KURTARMA-KODU.txt` dosyasına
+ARIZA: `apps/backend/utils/backup_recovery` kurtarma kodunu `<veri-dizini>\\KURTARMA-KODU.txt` dosyasına
 yazıp YALNIZCA log'a bir uyarı düşüyordu. Veteriner log okumaz.
 
 Sonuç: kod, şifreli veritabanıyla AYNI diskte duruyor. Disk ölürse ikisi de gider ve off-site

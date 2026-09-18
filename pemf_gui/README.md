@@ -15,4 +15,4 @@ geçildi), **ama paket ölü değil** — iki parça hâlâ aktif kullanılıyor
 - `scripts/check_headless_imports.py` bunu `EXCLUDED_GUI_PACKAGES`'te listeler (headless guard'ı kızdırmaz).
 
 ---
-İlgili: [utils/secrets_manager](../utils/README.md) · [database/](../database/README.md) · [proje geneli](../README.md)
+İlgili: [apps/backend/utils/secrets_manager](../utils/README.md) · [apps/backend/database/](../database/README.md) · [proje geneli](../README.md)

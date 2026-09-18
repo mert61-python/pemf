@@ -139,7 +139,7 @@ def test_kanca_yetim_cloudflaredi_oldurur(preuninstall_satirlari):
 def test_backend_mosquittodan_ONCE_oldurulur(preuninstall_satirlari):
     """SIRA hasta-etkili: MosquittoSupervisor broker'ı ölü görürse YENİDEN BAŞLATIR.
 
-    `services/headless_services.py::_monitor_loop` `ensure_running` iken broker'ı diriltir.
+    `apps/backend/services/headless_services.py::_monitor_loop` `ensure_running` iken broker'ı diriltir.
     Önce mosquitto öldürülürse supervisor (hâlâ yaşayan backend içinde) onu geri getirir ve
     kilit/port sorunu AYNEN kalır — kanca "başarılı" görünür. Backend ÖNCE ölmeli.
     """

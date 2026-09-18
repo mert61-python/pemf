@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.gzip import GZipMiddleware
+from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
 from servers import (
     coil_run_tracker,  # audit B-2.2: coil-run (treatment-DB) tracker ayrı modülde
@@ -28,7 +29,6 @@ from servers import sensor_kaydedici as _sensor_kaydedici  # yerel telemetri kay
 from servers.ai_router import ai_router
 from servers.history_router import router as history_router
 from servers.settings_router import router as settings_router
-from utils.path_utils import get_app_version, get_build_id  # audit B-8.1: tek versiyon kaynağı
 
 _APP_VERSION = get_app_version()
 _BUILD_ID = get_build_id()  # launcher'ın kurduğu paketin sha'sı (yoksa "")
@@ -86,6 +86,7 @@ def update_live_session_state(*args, **kwargs):
 try:
     from controllers.hardware_controller import HardwareController
     from database.patient_database import get_patient_database
+
     from headless_core import HeadlessCore
 except ImportError:
     HeadlessCore = None
@@ -4528,7 +4529,6 @@ async def ai_analiz_pdf(request: Request, analiz_id: int, kaydet: int = 0):
         from pathlib import Path
 
         from fastapi.responses import FileResponse
-
         from utils.ai_rapor_ogeleri import analiz_pdf_ogeleri
 
         ogeler = analiz_pdf_ogeleri(kayit)

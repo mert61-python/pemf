@@ -63,7 +63,7 @@ def test_KRITIK_STM_paketi_mT_TASIMIYOR():
     assert [g[1] for g in gruplar] == ["f", "f", "f", "I"], f"paket alan gruplari degismis: {gruplar}"
     assert all(int(g[0]) == n for g in gruplar), gruplar
 
-    hc = (KOK / "controllers" / "hardware_controller.py").read_text(encoding="utf-8")
+    hc = (KOK / "apps" / "backend" / "controllers" / "hardware_controller.py").read_text(encoding="utf-8")
     # `update_coil` imzasında yoğunluk parametresi YOK.
     imza = hc.split("def update_coil(")[1].split(")")[0]
     assert "intensity" not in imza and "magnetic" not in imza, (
@@ -72,7 +72,7 @@ def test_KRITIK_STM_paketi_mT_TASIMIYOR():
 
 
 def test_KRITIK_ESP_komutu_mT_TASIMIYOR():
-    api = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    api = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     # Seans başlatmada ESP'ye giden mqtt_payload gövdesi. (3. tur E1: command_id artık değişkene
     # çıkarıldı — `command_id = f"sess_{coil_id}...`; anchor o atamaya pinlenir, gövde mqtt_payload
     # dict'idir. `payload.intensity` DB-run kaydında geçer ama tırnaksızdır; kapı '"intensity"'
@@ -89,20 +89,20 @@ def test_KRITIK_ESP_komutu_mT_TASIMIYOR():
 
 def test_KRITIK_hasta_raporunda_YOGUNLUK_SATIRI_YOK():
     """Uygulanmamış bir dozu uygulanmış gibi beyan etmek, üçüncü kişiye yanlış tıbbi bilgidir."""
-    pdf = (KOK / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
+    pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
     assert '["Yoğunluk", f"{parameters.get(\'intensity\'' not in pdf, (
         "hasta raporunda 'Yogunluk: X mT' satiri geri geldi"
     )
 
 
 def test_KRITIK_ozet_tablosunda_YOGUNLUK_SUTUNU_YOK():
-    pdf = (KOK / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
+    pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
     assert '"Yoğunluk (mT)", "Hedef"' not in pdf, "ozet tablosunda mT sutunu geri geldi"
 
 
 def test_klinik_ici_tablo_AYARLANAN_der_siddet_DEMEZ():
     """Kaydı tutmak meşru; "şiddet" demek ölçülmüş gibi okutur."""
-    pdf = (KOK / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
+    pdf = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
     assert '"Ayarlanan (mT)"' in pdf, "bobin kosusu tablosu etiketi duzeltilmemis"
     # Yalnız yorum satırında geçebilir; veri başlığı olarak GEÇMEMELİ.
     #
@@ -115,7 +115,7 @@ def test_klinik_ici_tablo_AYARLANAN_der_siddet_DEMEZ():
 
 
 def test_CSV_basliklari_AYARLANAN_der():
-    hr = (KOK / "servers" / "history_router.py").read_text(encoding="utf-8")
+    hr = (KOK / "apps" / "backend" / "servers" / "history_router.py").read_text(encoding="utf-8")
     assert "Siddet(mT)" not in hr, "CSV basligi hala 'Siddet(mT)'"
     assert "Ayarlanan(mT)" in hr, "CSV basligi duzeltilmemis"
 

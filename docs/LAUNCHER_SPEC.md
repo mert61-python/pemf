@@ -31,7 +31,7 @@ manifest.json indir  →  profil seç (home/vet/research)  →  platforma uygun 
 
 ## Model yerleşimi — EN KRİTİK SÖZLEŞME
 
-`utils/model_downloader.py::_candidate_model_roots()` model arama köklerini şu öncelikle çözer:
+`apps/backend/utils/model_downloader.py::_candidate_model_roots()` model arama köklerini şu öncelikle çözer:
 
 | # | Kök | Platform |
 |---|---|---|
@@ -123,17 +123,17 @@ Launcher **iki formatı da okur** (v1 → sahadaki v1.8.0 kurulumları bozulmas�
 | `PEMF_DATA_DIR` | platform app-data (aşağıda) |
 | `PEMF_API_PORT` | `8000` (varsayılan; meşgulse artır) |
 
-Hazırlık kontrolü: `GET /api/health` (`servers/system_router.py`). 200 dönene kadar bekle,
+Hazırlık kontrolü: `GET /api/health` (`apps/backend/servers/system_router.py`). 200 dönene kadar bekle,
 sonra tarayıcıyı aç. Zaman aşımında backend log'unu göster — sessizce başarısız olma.
 
-`get_app_data_directory()` (`utils/path_utils.py`) zaten üç platformu doğru çözüyor:
+`get_app_data_directory()` (`apps/backend/utils/path_utils.py`) zaten üç platformu doğru çözüyor:
 Windows `%APPDATA%\PEMF_GUI`, macOS `~/Library/Application Support/PEMF_GUI`,
 Linux `~/.local/share/PEMF_GUI`. **Launcher bunu taklit etmeli, yeniden icat etmemeli.**
 
 ## Güvenlik gereksinimleri
 
 1. **SHA256 zorunlu.** Doğrulama başarısızsa kur**ma** ve dosyayı sil.
-2. **HTTPS + host pinleme.** `servers/update_manager.py::_ALLOWED_UPDATE_HOSTS` aynı
+2. **HTTPS + host pinleme.** `apps/backend/servers/update_manager.py::_ALLOWED_UPDATE_HOSTS` aynı
    listeyi kullanıyor; launcher da aynısını uygulamalı (manifest ele geçse bile keyfi
    sunucudan çalıştırılabilir kod indirilmesin).
 3. **Zip-slip koruması.** Açarken her girdinin hedef yolu kurulum kökünün altında kalmalı

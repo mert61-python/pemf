@@ -30,8 +30,8 @@ okunuyor:
 
 | Dosya | Okuduğu bayrak | Kapsadığı veri |
 |---|---|---|
-| `database/sqlcipher_util.py:129` | **`PEMF_KEEP_PLAIN_BACKUP`** | hasta DB'si |
-| `database/treatment_history_db.py:420` | **`PEMF_KEEP_PLAIN_BAK`** | tedavi + AI geçmişi DB'si |
+| `apps/backend/database/sqlcipher_util.py:129` | **`PEMF_KEEP_PLAIN_BACKUP`** | hasta DB'si |
+| `apps/backend/database/treatment_history_db.py:420` | **`PEMF_KEEP_PLAIN_BAK`** | tedavi + AI geçmişi DB'si |
 
 **Sonuç:** emanet isteyen bir operatör bayrağı set eder, **iki veritabanından yalnız birinde**
 işe yarar. Diğeri sessizce düz-metin yedeği güvenli-siler. Hangisi olduğunu hiçbir yerde
@@ -127,10 +127,10 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 
 | # | İş | Kanıt | Kim |
 |---|---|---|---|
-| ✅ **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
+| ✅ **B1** | `pyproject.toml`'a `[project]` + `[build-system]`; `apps/backend/controllers/` `scripts/` `build_tools/`'a `__init__.py` | 97 satır, **sıfır** `[project]`/`[build-system]`. Somut maliyeti: `headless_core.py`+`event_bus.py` spec'e **elle** sabitlenmiş (`PEMF_Backend_onedir.spec:401`). IEC 62304 "yazılım öğesi" tanımı için de gerekli | Ben |
 | ✅ **B2** | `THIRD_PARTY_LICENSES.md` yenile — **YAPILDI** (26 → 113 bileşen) | 2026-08-10'da donmuş; sonrasında `shap` `grad-cam` `timm` `captum` `celldetection` eklendi. **AGPL'li `ultralytics`** taşıyan üründe eksik envanter = ticari satışta doğrudan risk | Ben |
 | ✅ **B3** | `README.md:188` sürüm tablosu — **YAPILDI** (türetmek yerine KALDIRILDI + kapı) | Yazan: `1.9.5 / 1.9.9 / 2.3.3` — gerçek: **1.9.50 / 1.9.51 / 2.3.34**. Aynı README'nin 49. satırı "tablo donmuştu, kaldırıldı" diyor → **aynı tuzak üçüncü kez**. Elle yazıldığı sürece dördüncü kez bayatlar | Ben |
-| ✅ **B4** | **KAPANDI (2026-09-18)** — `TreatmentHistoryDB` **93 → 17 metot**, dosya **3530 → 710 satır**, 8 karışım modülü | Ölçüt satır değil, tek nesnedeki **yedi sorumluluktu**. `database/thdb_{outbox,denetim,ai_gecmisi,telemetri,pii,sema,seans,bakim}.py` — kümeler metot **adından değil dokundukları tablodan** çıkarıldı. **Karışım (mixin)** seçildi, işbirlikçi nesne değil: `get_treatment_db(...)` her yerden alınıp metotları doğrudan çağrılıyor, işbirlikçiye çevirmek tüm çağrı yerlerini değiştirirdi. Gövdelere dokunulmadı (AST ile bayt bayt). **Yan çıktı:** taşıma, `_DB_ERROR` demetlerinin iki DB modülünde **zaten ayrışmış** olduğunu ortaya çıkardı → `database/db_hatalari.py` tek kaynak. Kapı: `tests/test_tedavi_db_bolunmus_KALIR.py` (tavan 22, 4 mutasyon). Doğrulama: süit 3109 · EXE 6/6 iç kapı · **48/48 ürün senaryosu** | Ben |
+| ✅ **B4** | **KAPANDI (2026-09-18)** — `TreatmentHistoryDB` **93 → 17 metot**, dosya **3530 → 710 satır**, 8 karışım modülü | Ölçüt satır değil, tek nesnedeki **yedi sorumluluktu**. `apps/backend/database/thdb_{outbox,denetim,ai_gecmisi,telemetri,pii,sema,seans,bakim}.py` — kümeler metot **adından değil dokundukları tablodan** çıkarıldı. **Karışım (mixin)** seçildi, işbirlikçi nesne değil: `get_treatment_db(...)` her yerden alınıp metotları doğrudan çağrılıyor, işbirlikçiye çevirmek tüm çağrı yerlerini değiştirirdi. Gövdelere dokunulmadı (AST ile bayt bayt). **Yan çıktı:** taşıma, `_DB_ERROR` demetlerinin iki DB modülünde **zaten ayrışmış** olduğunu ortaya çıkardı → `apps/backend/database/db_hatalari.py` tek kaynak. Kapı: `tests/test_tedavi_db_bolunmus_KALIR.py` (tavan 22, 4 mutasyon). Doğrulama: süit 3109 · EXE 6/6 iç kapı · **48/48 ürün senaryosu** | Ben |
 
 ---
 
@@ -170,7 +170,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | F2 `launcher/` · F6 çıktılar | `launcher.yml` yolları sabit + yalnız `launcher-v*` etiketiyle koşar (**donmuş yayın**) → doğrulanamaz |
 > | F3 `ai/hub` | **import kökü**: `ai_hub.` → `ai.hub.` 84 dosya + kod koruması (.pyd/PYZ) zinciri |
 > | F3 `ai/service` | import kökü + `Dockerfile.ai` → doğrulaması **Docker imaj build'i** ister (metered kota) |
-> | F4 `apps/backend` | en büyük import kökü değişimi. ✅ **ÖN ŞART BİTTİ 2026-09-18**: 13 yerde depo kökü SABİT DERİNLİKLE (`parents[1]`) bulunuyordu; taşımada iki seviye kayar ve hepsi aday listesi olduğu için **sessizce** yanlış yola düşerdi (`bin/cloudflared`, 640 MB model, bulut sırrı, `VERSION`). Tek kaynak `kaynak_kokunu_bul(__file__)`; kapı `tests/test_kok_capasi_derinlikten_bagimsiz.py` (7 mutasyon) |
+> | ~~F4 `apps/backend`~~ | ✅ **BİTTİ 2026-09-18.** Sahip kararı: **klasör taşındı, import kökü DEĞİŞMEDİ** (`from utils.x import y` aynen duruyor). Ölçülen gerekçe: tam paketleme (`pemf_backend.*`) 271 dosyada 1140 import ifadesi yeniden yazmayı ve PYZ/`hiddenimports`/kod-koruma zincirini yeniden ölçmeyi gerektirirdi; kazancı (üst-düzey `utils` adının global olmaması) ise **638 site-package arasında bugün HİÇBİR çarpışma olmadığı ölçüldüğü için** teorikti. Tesisat 4 yerde: `backend_service.py`, `tests/conftest.py`, iki spec `pathex`, + `pyproject` `package-dir`. ÖN ŞART (kök çıpası) da bitti 2026-09-18: 13 yerde depo kökü SABİT DERİNLİKLE (`parents[1]`) bulunuyordu; taşımada iki seviye kayar ve hepsi aday listesi olduğu için **sessizce** yanlış yola düşerdi (`bin/cloudflared`, 640 MB model, bulut sırrı, `VERSION`). Tek kaynak `kaynak_kokunu_bul(__file__)`; kapı `tests/test_kok_capasi_derinlikten_bagimsiz.py` (7 mutasyon) |
 > | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
 > ### 📌 LattePanda (saha makinesi) — UZAKTAN yapılabilir ölçümler · SONRAYA

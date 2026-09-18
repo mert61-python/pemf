@@ -21,7 +21,7 @@ kısıt uygulanmaz — düşman-doğrulama 2026-08-27: eski hâli docstring'in k
 (symlink/junction dahil) atlar.
 
 Sessizlik kapısı (ses): duygu ısı-haritası ancak kapıdan GEÇEN kayıt için üretilir
-(utils/ses_kalitesi — kapı-XAI sırası değişmezi); sessiz kayıt hata satırı olur.
+(apps/backend/utils/ses_kalitesi — kapı-XAI sırası değişmezi); sessiz kayıt hata satırı olur.
 
 Zarif düşüş: tek dosyanın hatası akışı DÜŞÜRMEZ; summary.csv'ye hata satırı
 yazılır ve devam edilir (plan ilkesi: XAI hatası analizi düşürmez).
@@ -195,9 +195,9 @@ def _ses_kapili_explain(p: Path, xai_method: str) -> dict:
     import tempfile
 
     import imageio_ffmpeg
+    from utils.ses_kalitesi import sessiz_mi, wav_rms_dbfs
 
     from ai_hub.inference_cat_sound.inference_cat_sound import xai_ses_isi_haritasi
-    from utils.ses_kalitesi import sessiz_mi, wav_rms_dbfs
 
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     with tempfile.TemporaryDirectory() as td:

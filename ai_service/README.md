@@ -28,8 +28,8 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 
 ## ⚠️ Dikkat
 - **GPU = RTX 5090 (Blackwell)** → CUDA **12.8 + PyTorch cu128 ŞART**; eski sürüm Docker AI'yı çökertir.
-- ⚠️ **GÖMÜLÜ İLE ALAN PARİTESİ ŞART.** `servers/ai_client.py` bu servisin JSON'unu **AYNEN**
-  geçirir: `servers/ai_router.py`'ye eklenip buraya eklenmeyen her alan GPU dağıtımında
+- ⚠️ **GÖMÜLÜ İLE ALAN PARİTESİ ŞART.** `apps/backend/servers/ai_client.py` bu servisin JSON'unu **AYNEN**
+  geçirir: `apps/backend/servers/ai_router.py`'ye eklenip buraya eklenmeyen her alan GPU dağıtımında
   **sessizce kaybolur** (hata çıkmaz, alan yoktur). Bu sınıf 2026-08/09'da yedi kez ölçüldü —
   `image_w`/`image_h` (oran kilidi), `pnp_residual_px` ("PnP undefinedpx"), `paneller`
   (çok-panelli galeri) ve fantom/petri kök görselinin **kapağı** (burada `_jpg_b64` ile HAM
@@ -39,4 +39,4 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 - Bu servis opsiyoneldir: tek-EXE backend AI'yı gömülü çalıştırabilir; mikroservis GPU ölçekleme içindir (bkz. [`../docker/DOCKER_README.md`](../docker/DOCKER_README.md)).
 
 ---
-İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/README.md) · [docker/](../docker/DOCKER_README.md) · [servers/ai_client](../servers/README.md)
+İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/README.md) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../servers/README.md)

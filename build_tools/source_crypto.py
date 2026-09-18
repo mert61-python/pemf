@@ -2,12 +2,12 @@
 # Author: mertaygn, cglrgrkn
 """KAYNAK ŞİFRELEME — build tarafı giriş noktası (2026-08-06).
 
-İlkeler `utils/source_crypto.py`'de durur ÇÜNKÜ frozen EXE `utils`'i bundle'lar, `build_tools`'u
+İlkeler `apps/backend/utils/source_crypto.py`'de durur ÇÜNKÜ frozen EXE `utils`'i bundle'lar, `build_tools`'u
 ETMEZ — çözücünün sahada çalışabilmesi için kod orada olmalı. Bu modül yalnız yeniden dışa
 aktarır, böylece şifreleyen (build) ile çözen (saha) AYNI algoritmayı kullanır ve ikisi
 birbirinden sürüklenemez.
 
-⚠️ Bu katmanın NE koruyup NE korumadığı: bkz. utils/source_crypto.py başlığı.
+⚠️ Bu katmanın NE koruyup NE korumadığı: bkz. apps/backend/utils/source_crypto.py başlığı.
 """
 
 from utils.source_crypto import (  # noqa: F401

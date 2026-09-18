@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """HASTA UUID ZİNCİRİ — içe aktarma `patients.db` ↔ tedavi-DB bağını KORUMALI.
 
-DENETİM BULGUSU (2026-08-17). `database/patient_database.add_patient` gelen `id`'yi **yok sayıp**
+DENETİM BULGUSU (2026-08-17). `apps/backend/database/patient_database.add_patient` gelen `id`'yi **yok sayıp**
 her çağrıda `uuid.uuid4()` üretiyordu. `/api/data/import` hasta satırlarını doğrudan bu fonksiyona
 verdiği için zincir **HER içe aktarımda** kopuyordu — `REPLACE_ALL` şartı YOK, boş bir hedefe
 normal cihaz taşımasında da oluyordu:
@@ -12,7 +12,7 @@ normal cihaz taşımasında da oluyordu:
     HEDEF  treatment patient_uuid: 1295eb8f-...   ← eski uuid (paketle birlikte DOĞRU taşındı)
     ZINCIR SAGLAM MI             : False
 
-Somut sonuç (sessiz): `servers/api_server.py` günlük bakımında
+Somut sonuç (sessiz): `apps/backend/servers/api_server.py` günlük bakımında
 `_pdb.anonymize_inactive_patients(1825)` → `db.anonymize_patients_by_uuid(...)` zinciri, taşınmış
 hastaların **tedavi geçmişindeki ad kopyalarına ulaşamaz**. 5 yıl inaktif hastada `patients.db`
 anonimleşir ama tedavi geçmişindeki hasta adı `[REDACTED]` OLMAZ → **KVKK boşluğu**, hiçbir yerde

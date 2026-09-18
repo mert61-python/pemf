@@ -42,7 +42,7 @@ from pathlib import Path
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-_API = KOK / "servers" / "api_server.py"
+_API = KOK / "apps" / "backend" / "servers" / "api_server.py"
 _SPEC = KOK / "build_tools" / "PEMF_Backend_onedir.spec"
 _INSTALLER = KOK / "build_tools" / "build_installer.ps1"
 

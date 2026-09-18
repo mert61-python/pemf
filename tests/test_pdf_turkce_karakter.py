@@ -187,7 +187,7 @@ def test_KRITIK_kaynakta_Type1_yedegi_ARTMADI():
     tabloda Türkçe harfler yine siyah kutu olur — arıza tek bir tabloda yaşamaya devam eder
     (bu deponun tekrar eden sınıfı).
     """
-    src = (KOK / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "utils" / "pdf_report_generator.py").read_text(encoding="utf-8")
     n = src.count("'Helvetica')") + src.count("'Helvetica-Bold')")
     assert n == TYPE1_YEDEK_SAYISI, (
         f"Type1 yedekli getattr sayisi {n}, beklenen {TYPE1_YEDEK_SAYISI}. Arttiysa yeni bir "

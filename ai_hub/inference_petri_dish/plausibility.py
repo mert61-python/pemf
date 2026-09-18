@@ -5,19 +5,19 @@
 SAHİP BİLDİRİMİ (2026-08-06) — ÖLÇÜLDÜ ve DOĞRULANDI: `05_FantomTumor.jpeg` (fantom fotoğrafı)
 Petri Kuyu ucuna verildiğinde boru hattı hiç itiraz etmeden `success=True, n_wells=2, n_cancer=1`
 döndürüyordu; iki SAHTE "kuyucuk" için PetriPredictor çalışıp E_cancer/D/P üretiyordu. Kullanıcı
-için bu, `utils/image_domain.py` docstring'indeki CT→patoloji vakasının aynısı: sessiz ve ikna
+için bu, `apps/backend/utils/image_domain.py` docstring'indeki CT→patoloji vakasının aynısı: sessiz ve ikna
 edici bir YANLIŞ sonuç. Ters yön zaten güvenli (fantom boru hattı petri/kedi fotoğrafını
 `phantom_not_detected` ile reddediyor) → karışıklık TEK YÖNLÜ, yalnız bu yön açıktı.
 
 NEDEN MODALİTE DENETİMİ YETMİYOR: ölçüldü — petri achromatic=0.391, fantom achromatic=0.179 →
-İKİSİ DE `color`. `utils/image_domain.py` aynı modalitedeki iki modülü ayıramaz (kendi
+İKİSİ DE `color`. `apps/backend/utils/image_domain.py` aynı modalitedeki iki modülü ayıramaz (kendi
 docstring'i bunu zaten itiraf ediyor). Ayırmak için MODÜL-ÖZEL geometri gerekir; bu dosya odur.
 İKİ KATMAN BİRBİRİNİN YERİNE GEÇMEZ: bir CT kesiti bu denetimden geçebilir (07a_BobrekCT_tas.jpg
 dairesellik medyanı 0.782 ölçüldü!) ama modalite denetimi onu tutar.
 
-NEDEN `utils/` DEĞİL DE BURADA: `docker/Dockerfile.ai` imaja YALNIZ `ai_hub/` + `ai_service/`
-kopyalar. `PEMF_AI_SERVICE_URL` tanımlıyken em_petri isteği `servers/ai_client.py::delegate_infer`
-ile GPU mikroservisine gider ve `servers/ai_router.py` HİÇ çalışmaz. Denetim `utils/`e ya da
+NEDEN `apps/backend/utils/` DEĞİL DE BURADA: `docker/Dockerfile.ai` imaja YALNIZ `ai_hub/` + `ai_service/`
+kopyalar. `PEMF_AI_SERVICE_URL` tanımlıyken em_petri isteği `apps/backend/servers/ai_client.py::delegate_infer`
+ile GPU mikroservisine gider ve `apps/backend/servers/ai_router.py` HİÇ çalışmaz. Denetim `apps/backend/utils/`e ya da
 router'a konsaydı mikroservis dağıtımında KORUMA OLMAZDI (bypass). Boru hattının yanında duruyor:
 her iki yol da aynı `PetriCvPipeline.process_image`'i çağırır.
 
@@ -36,7 +36,7 @@ geçer (yalnız sentetik 30° döndürme düşer — orada YOLO'nun KENDİSİ de
 10'u reddedilir.
 
 TEK İSTİSNA — ALAN ORANI VETO'DUR (DENETİM 2026-08-06, ÖLÇÜLEN REGRESYON):
-`utils/image_domain.py` aynı gün `em_petri`e GRAYSCALE'i de açtı (gerçek kabin fotoğrafı
+`apps/backend/utils/image_domain.py` aynı gün `em_petri`e GRAYSCALE'i de açtı (gerçek kabin fotoğrafı
 `06b_PetriKuyu_aruco.jpg` achromatic=0.9937 ile gri algılanıp reddediliyordu — canlı yanlış-pozitif).
 O gevşetme, CT kesitlerini tutan TEK katmanı bu uçtan kaldırdı ve saf 2-of-3 oy onları TUTAMADI:
     07b_BobrekCT_kist.jpg   circ 0.7923 · conf 0.9015 · alan 0.3505 → 2 oy → HTTP 200 "n_wells=1"
@@ -72,7 +72,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# `PipelineResult.error` değeri. servers/ai_router.py bunu 422'ye çevirir; mikroservis yolunda
+# `PipelineResult.error` değeri. apps/backend/servers/ai_router.py bunu 422'ye çevirir; mikroservis yolunda
 # JSON `error` alanıyla telden geçer → SÖZLEŞME DİZESİDİR, değiştirilirse ai_router da değişmeli
 # (tests/test_petri_plausibility.py bu eşleşmeyi kilitler).
 PETRI_REJECT = "not_a_petri_plate"
@@ -86,7 +86,7 @@ _MIN_VOTES = 2              # dairesellik + güven + alan: en az 2'si → KABUL 
 
 
 def guard_enabled() -> bool:
-    """Araştırma kaçış kapağı — `utils/image_domain.py::guard_enabled` ile aynı desen."""
+    """Araştırma kaçış kapağı — `apps/backend/utils/image_domain.py::guard_enabled` ile aynı desen."""
     return os.getenv("PEMF_AI_PLAUSIBILITY_GUARD", "1") != "0"
 
 
@@ -219,7 +219,7 @@ def is_plausible(metrics: dict) -> bool:
 def user_message(metrics: dict | None = None) -> str:
     """Kullanıcıya NE ölçüldüğünü, NE beklendiğini ve NE yapması gerektiğini söyleyen Türkçe metin.
 
-    `utils/image_domain.py::DomainMismatch.user_message` tonuyla aynı: suçlayıcı değil, YÖNLENDİRİCİ.
+    `apps/backend/utils/image_domain.py::DomainMismatch.user_message` tonuyla aynı: suçlayıcı değil, YÖNLENDİRİCİ.
     """
     m = metrics or {}
     olcum = ""

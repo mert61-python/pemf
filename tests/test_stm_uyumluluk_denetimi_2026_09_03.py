@@ -89,7 +89,7 @@ def test_M6_donanim_surumu_TEK_KAYNAK_elle_literal_yok():
     Eskiden system_router 'HW-2025.1', live_state 'HW-2026.1' derdi -> ayni /status
     uclari celisen deger donuyordu. Ikisi de utils.path_utils.HARDWARE_VERSION okumali.
     Yeniden bir literal eklenirse bu test kirilir."""
-    for rel in ("servers/system_router.py", "servers/live_state.py"):
+    for rel in ("apps/backend/servers/system_router.py", "apps/backend/servers/live_state.py"):
         src = (_KOK / rel).read_text(encoding="utf-8")
         literaller = re.findall(r'"HW-\d[^"]*"', src)
         assert not literaller, (

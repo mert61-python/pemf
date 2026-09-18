@@ -47,6 +47,20 @@ _SURUMLER = KOK / "versions.json"
 #: `__init__.py` tasimasi gereken, uretimde/araclarda paket gibi import edilen dizinler.
 _PAKET_DIZINLERI = ("controllers", "scripts", "build_tools")
 
+
+def paket_yolu(ad: str) -> Path:
+    """Paketin DISKTEKI yeri.
+
+    ⚠️ SABIT `KOK / ad` VARSAYIMI KIRILDI (2026-09-18, klasor duzeni F4): bes urun paketi
+    `apps/backend/` altina tasindi. Import ADLARI degismedi ama disk yolu degisti; bu kapi
+    paketleri KOKTE aradigi icin "dizin YOK" diye kirmizi dondu. Dogru kaynak, setuptools'a
+    da verdigimiz `[tool.setuptools.package-dir]` haritasidir -- bir sonraki tasimada da
+    kendiliginden dogru kalir.
+    """
+    harita = _tomi().get("tool", {}).get("setuptools", {}).get("package-dir", {})
+    return KOK / harita.get(ad, ad)
+
+
 #: ⚠️ tests/ BILEREK YOK — pytest toplama davranisini bozar.
 _ISTISNA = ("tests",)
 
@@ -63,7 +77,7 @@ def _tomi() -> dict:
 @pytest.mark.parametrize("dizin", _PAKET_DIZINLERI)
 def test_KRITIK_paket_dizininde_init_VAR(dizin: str):
     """⚠️ BU TEST DUZELTMEDEN ONCE KIRMIZIYDI (uc dizinde de `__init__.py` yoktu)."""
-    p = KOK / dizin
+    p = paket_yolu(dizin)
     assert p.is_dir(), f"{dizin}/ agacta yok — kapi bayatlamis olabilir"
     assert (p / "__init__.py").exists(), (
         f"{dizin}/__init__.py YOK -> paket PEP 420 ortam-paketi olarak cozuluyor. "
@@ -131,7 +145,7 @@ def test_KARSIT_KANIT_tests_dizinine_init_EKLENMEZ(dizin: str):
     `tests/__init__.py` pytest'in kok-dizin tabanli toplama davranisini degistirir ve
     335 test dosyasinin import yolunu bozabilir. Denetim de bunu istemiyordu.
     """
-    assert not (KOK / dizin / "__init__.py").exists(), (
+    assert not (paket_yolu(dizin) / "__init__.py").exists(), (
         f"{dizin}/__init__.py EKLENMIS -> pytest toplama davranisi degisir. "
         "Kural yalnizca URETIM/ARAC paketleri icindir."
     )
@@ -144,7 +158,7 @@ def test_KARSIT_KANIT_init_dosyalari_BOS_KABUK_degil():
     kapi kirmizi doner ama sebebi anlasilmaz.
     """
     for dizin in _PAKET_DIZINLERI:
-        metin = (KOK / dizin / "__init__.py").read_text(encoding="utf-8").strip()
+        metin = (paket_yolu(dizin) / "__init__.py").read_text(encoding="utf-8").strip()
         assert len(metin) >= 40, (
             f"{dizin}/__init__.py bos/kisa -> neden var oldugu yazili degil. "
             "Paket sinirini ACIKLAYAN bir docstring yazin."
@@ -200,7 +214,7 @@ def test_KARSIT_KANIT_listelenen_her_paket_GERCEKTEN_var():
     """Liste bayatlarsa `pip install .` "package not found" ile duser."""
     t = _tomi()
     for ad in t["tool"]["setuptools"]["packages"]:
-        p = KOK / ad
+        p = paket_yolu(ad)
         assert p.is_dir(), f"paket listesinde `{ad}` var ama dizin YOK -> kurulum duser"
         assert (p / "__init__.py").exists(), (
             f"`{ad}` paket olarak listelenmis ama `__init__.py`si yok -> setuptools onu "

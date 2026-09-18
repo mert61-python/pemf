@@ -24,7 +24,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | `feline_reticulocytes/` | YOLOv8s hücre sayımı |
 | `inference_cat_sound/` | librosa mel + EfficientNet_Lite0 ONNX (10 sınıf) |
 | `inference_cat_organ/` | **10-organ 3B lokalizasyon** (3 ONNX `/models`'ten) + `lib/` (pipeline/render/geometry/pose/qr/camera); **veteriner modu AI-Pro** bunu kullanır (`KediSaglayici`) |
-| `inference_em_fantom/` | Fantom-tümör klasik-CV + BiLSTM (`PhantomPredictor`); **araştırma modu AI-Pro** bunu kullanır (`servers/ai_pro_hedef.FantomSaglayici`) |
+| `inference_em_fantom/` | Fantom-tümör klasik-CV + BiLSTM (`PhantomPredictor`); **araştırma modu AI-Pro** bunu kullanır (`apps/backend/servers/ai_pro_hedef.FantomSaglayici`) |
 | `inference_em_petri/` + `inference_petri_dish/` | Petri-kuyu YOLO11m-seg + BaggingRegressor; **araştırma modu AI-Pro** bunu kullanır (`PetriSaglayici`). ⚠️ İKİ ağırlık şart: doz modeli (`BaggingRegressor.onnx`) **ve** kuyucuk tespiti (`inference_petri_dish/yolo11m-seg.onnx`) |
 | `inference_human_kidney_ct/` | YOLOv8s ONNX (taş/kist/normal) |
 | `inference_human_kidney_disease/` | **Gömülü ONNX zoo** (CatBoost/ExtraTrees/LogReg/RandomForest) + preprocessor — CKD |

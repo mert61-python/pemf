@@ -69,7 +69,16 @@ def _modul_duzeyi_importlar(dosya: Path) -> set[str]:
         if isinstance(alt, (ast.Import, ast.ImportFrom))
     }
     stdlib = set(sys.stdlib_module_names)
+    # ⚠️ YEREL PAKETLER ARTIK IKI YERDE (2026-09-18, klasor duzeni F4): urun paketleri
+    # (`servers/ services/ database/ utils/ controllers/`) `apps/backend/` altina tasindi.
+    # Import ADLARI degismedi, ama bu kapi "yerel mi" sorusunu KOKTE DIZIN VAR MI diye
+    # olcuyordu -> tasima sonrasi `utils`/`controllers` DIS BAGIMLILIK sanildi ve kapi
+    # yanlis kirmizi verdi. Iki kok de taranir.
     yerel = {p.stem for p in KOK.glob("*.py")} | {p.name for p in KOK.iterdir() if p.is_dir()}
+    _BACKEND = KOK / "apps" / "backend"
+    if _BACKEND.is_dir():
+        yerel |= {p.name for p in _BACKEND.iterdir() if p.is_dir()}
+        yerel |= {p.stem for p in _BACKEND.glob("*.py")}
     kokler = set()
     for dugum in agac.body:
         if id(dugum) in korumali:

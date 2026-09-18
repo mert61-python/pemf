@@ -15,7 +15,7 @@ useDefault = true
 description = "Tek tek doğrulanmış SAHTE test sabitleri (2026-08-10)"
 
 # ── Kurtarma zarfı testleri ────────────────────────────────────────────────────────────────
-# `utils/backup_recovery` zarfı, SQLCipher ve Fernet anahtarlarını 150-bit kurtarma kodundan
+# `apps/backend/utils/backup_recovery` zarfı, SQLCipher ve Fernet anahtarlarını 150-bit kurtarma kodundan
 # türetilen bir anahtarla şifreler. Testin bu anahtarlara İHTİYACI var — ama makinenin GERÇEK
 # sırlarına dokunmamak için sabit, apaçık sahte değerler kullanılır:
 #   test-sqlcipher-anahtari-0123456789abcdef

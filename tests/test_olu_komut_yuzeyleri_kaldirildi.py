@@ -1,7 +1,7 @@
 # Author: mertaygn, cglrgrkn
 """ÖLÜ KOMUT YÜZEYLERİ KALDIRILDI — SET_PARAMS / start_at / SYNC_ALL (sahip kararı 2026-08-20).
 
-Envanter (5-ajanlı tarama, 2026-08-20): depoda HİÇBİR üretici yok — servers/ ve apps/ui/ grep'leri boş;
+Envanter (5-ajanlı tarama, 2026-08-20): depoda HİÇBİR üretici yok — apps/backend/servers/ ve apps/ui/ grep'leri boş;
 backend ESP'lere yalnız "start"/"stop" yayınlar. Üç yüzey silinmiş PyQt GUI'nin kalıntısıydı ve
 [4.6]'nın latent kusurlarını taşıyordu (8266 checkSyncWait başlangıç dalları `_suresizGecenMs`i
 sıfırlamıyor; CMD_SYNC_ALL aktif seansta stop+start ile süresiz-tavanı sıfırlayıp resume sonrası

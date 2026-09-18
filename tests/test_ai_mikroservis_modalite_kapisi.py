@@ -3,14 +3,14 @@
 """AI MİKROSERVİS MODUNDA MODALİTE KAPISI ATLANIYORDU (yanlış modaliteye "%100 güven").
 
 DENETİM BULGUSU (2026-08-17). Her görüntü ucunda `delegate_infer` çağrısı modalite kapısından
-(`_decode_image` → `utils/image_domain.check`) **ÖNCE** dönüyordu:
+(`_decode_image` → `apps/backend/utils/image_domain.check`) **ÖNCE** dönüyordu:
 
     if ai_service_enabled():
         return await delegate_infer("histopath", file=file, image_base64=image_base64)
     img = await _decode_image(file, image_base64, label="histopath")   # ← KAPI, ARTIK ULAŞILMAZ
 
 `ai_service/app.py` (730 satır) ne modalite denetimi ne sessizlik kapısı içeriyor ve
-`docker/Dockerfile.ai` imaja yalnız `ai_hub/` + `ai_service/` kopyaladığı için `utils/` orada YOK.
+`docker/Dockerfile.ai` imaja yalnız `ai_hub/` + `ai_service/` kopyaladığı için `apps/backend/utils/` orada YOK.
 Deneysel olarak ölçüldü (gerçek CT fixture'ı → Böbrek Patoloji ucu):
 
     GÖMÜLÜ mod      (PEMF_AI_SERVICE_URL yok)  →  HTTP 422 "boyalı patoloji preparatı bekliyor"
@@ -22,7 +22,7 @@ reticulocytes, em_fantom, kidney_ct, histopath, cat_organ.
 
 ⚠️ Deponun KENDİ kuralı bunu yazıyor (`ai_hub/inference_petri_dish/plausibility.py`):
 *"denetim ROUTER'da DEĞİL burada durmalı, çünkü `PEMF_AI_SERVICE_URL` tanımlıyken
-`servers/ai_router.py` HİÇ çalışmaz."* Petri kapısı bu kurala uyuyor; diğerleri `utils/`te kaldı.
+`apps/backend/servers/ai_router.py` HİÇ çalışmaz."* Petri kapısı bu kurala uyuyor; diğerleri `apps/backend/utils/`te kaldı.
 
 ⚠️ SEVK EDİLEN KLİNİKTE ETKİN DEĞİL: `PEMF_AI_SERVICE_URL` tüm depoda yalnız
 `docker/docker-compose.micro.yml`de set ediliyor; `deploy/*.env`de yok, launcher geçirmiyor,
@@ -36,7 +36,7 @@ reticulocytes, em_fantom, kidney_ct, histopath, cat_organ.
     ve ffmpeg bu makinede VAR (`imageio_ffmpeg.get_ffmpeg_exe()`, PATH'te değil). Ölçüldü:
     ffmpeg 27-31 ms + RMS 2-9 ms.
 (b) `:8100`e **doğrudan** çağrılar → `tests/test_ai_servis_8100_kapisi.py`. Kapılar `ai_hub/`e
-    TAŞINMADI (coverage/mypy kör noktası olurdu); `utils/` imaja alındı ve `ai_service/app.py`
+    TAŞINMADI (coverage/mypy kör noktası olurdu); `apps/backend/utils/` imaja alındı ve `ai_service/app.py`
     AYNI modülü çağırıyor — nesne kimliği testiyle kopyalama YASAKLANDI.
 """
 
@@ -227,7 +227,7 @@ def test_HICBIR_uc_kapidan_ONCE_devretmez_yapisal():
     Kapı artık uç→kapı-dizesi haritası kullanıyor; tek bir dizeye bakan hâli sesi görmezdi.
     ⚠️ RNA ucu hâlâ kapsam dışı — CSV girdisinin modalite kapısı yok, olması da beklenmiyor.
     """
-    src = (KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "ai_router.py").read_text(encoding="utf-8")
 
     # ⚠️ `#` YORUMLARI ATMAK YETMEZ: DOCSTRING'ler de atılmalı. Bu kapı ilk yazımda kendi
     # açıklama docstring'imdeki `delegate_infer(...)` örneğini kusur sandı. Kapı yalnız GERÇEKTEN
@@ -295,7 +295,7 @@ def test_yapisal_kapi_SES_ucunu_GERCEKTEN_denetliyor_karsit_kanit():
     """
     import ast
 
-    agac = ast.parse((KOK / "servers" / "ai_router.py").read_text(encoding="utf-8"))
+    agac = ast.parse((KOK / "apps" / "backend" / "servers" / "ai_router.py").read_text(encoding="utf-8"))
 
     ses = [
         d.lineno

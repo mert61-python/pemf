@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """AI PRO HEDEF SAĞLAYICI DELEGASYONU — Faz 1 kapıları (2026-09-08).
 
-Kapalı döngünün kediye bağlı beş noktası `servers/ai_pro_hedef.py` arayüzünün arkasına alındı
+Kapalı döngünün kediye bağlı beş noktası `apps/backend/servers/ai_pro_hedef.py` arayüzünün arkasına alındı
 (plan: docs/arastirma-ai-pro-fantom-petri-plani.md). Bu dosya refaktörün ÜÇ vaadini ölçer:
 
   1. `_localize_organ` / `_predict_and_drive` gerçekten AKTİF SAĞLAYICIYA gider (isim ve tuple

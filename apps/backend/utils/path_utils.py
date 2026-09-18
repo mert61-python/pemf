@@ -26,6 +26,17 @@ def kaynak_kokunu_bul(baslangic=None):
     ⚠️ Bu yol YALNIZ kaynak ağacı içindir. Donmuş EXE'de `_MEIPASS` kullanılır; işaret dosyaları
     pakete girmediği için burada arama YAPILMAZ (bkz. `packaged_resource_path`).
     """
+    # ⚠️⚠️ DONMUS EXE'DE ASLA YUKARI YURUME (2026-09-18'de OLCULDU, kod korumasini KIRDI).
+    # Paket icinde `VERSION` VAR ama `pyproject.toml`/`versions.json` YOK; yuruyus paketi
+    # gecip DEPO KOKUNE cikiyor ve cagiran orayi `sys.path`e ekliyor. Depo kokunde `ai_hub/`
+    # DUZ KAYNAK olarak duruyor -> paketlenmis `.pyd`/`.pyenc` GOLGELENIYOR ve kod korumasi
+    # SESSIZCE ETKISIZ kaliyor. Build kapisi olctu: "16/16 modul .pyd/.pyenc DISINDAN
+    # yukleniyor" (sevk edilen surumde oran 64/65 idi).
+    # Donmus calisirken tek dogru kok `_MEIPASS`tir; arama YAPILMAZ.
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        return Path(meipass) if meipass else (Path(sys.executable).resolve().parent / "_internal")
+
     p = Path(baslangic or __file__).resolve()
     for aday in p.parents:
         if all((aday / ad).exists() for ad in KOK_ISARETLERI):

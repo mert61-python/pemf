@@ -12,10 +12,11 @@ from typing import Any, Callable
 
 from database.patient_database import get_patient_database
 from database.session_manager import get_session_manager
-from event_bus import EventPriority, get_event_bus
 from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
 from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
+
+from event_bus import EventPriority, get_event_bus
 
 # STM_NACK sonrasi ham-paket tekrar oynatma icin AZAMI YAS (sn). Keep-alive turundan
 # (0.5 sn) biraz genis tutuldu; daha eskisi 'guncel niyet' sayilmaz.
@@ -225,7 +226,7 @@ class HeadlessCore:
     def _stm_kimligini_isle(self, banner: str) -> None:
         """`STM_READY` banner'indan kart kimligini cikar ve UYUM kararini sakla.
 
-        ⚠️ KARAR UC DURUMLUDUR (`utils/stm32_kimlik.uyum_denetle`):
+        ⚠️ KARAR UC DURUMLUDUR (`apps/backend/utils/stm32_kimlik.uyum_denetle`):
             True  = kanal sayisi paket genisligimizle esitti
             False = KESIN uyumsuz  -> seans baslatma reddedilir
             None  = banner taninmadi ("bilinmiyor") -> seans ENGELLENMEZ, ama GORUNUR

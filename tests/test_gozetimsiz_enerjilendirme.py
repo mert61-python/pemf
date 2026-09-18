@@ -7,7 +7,7 @@ seans açmadan 200 döndü ve bobin kendiliğinden durmadı; ölçülen yazılı
 aynı davrandı — yani bir yazım hatası bobini günlerce enerjili bırakabiliyordu.
 
 ⚠️ AYRIM (bu testlerin varlık sebebi): 9999 dakika bir KLİNİK sınır DEĞİL, **STM32 firmware
-protokol sınırıdır** — `utils/stm32_protocol_limits.DURATION_MAX_MINUTES` ve
+protokol sınırıdır** — `apps/backend/utils/stm32_protocol_limits.DURATION_MAX_MINUTES` ve
 `test_stm32_source_parity.py` onu firmware kaynağıyla eşleştirir. Kusur, süre verilmediğinde
 yazılım deadline'ının PROTOKOL TAVANINA düşmesiydi: "protokol maksimumu" ile "güvenli
 gözetimsiz varsayılan" birbirine karışmıştı. Protokol sabiti DEĞİŞMEZ (firmware pariteyi
@@ -56,7 +56,6 @@ def test_KRITIK_NEGATIF_sure_REDDEDILIR():
     """Negatif süre anlamsız bir girdidir; sessizce kabul edilip `0` gibi davranması, bir yazım
     hatasını "günlerce enerjilendirme" komutuna çeviriyordu."""
     from pydantic import ValidationError
-
     from servers.api_server import CoilControlPayload
 
     with pytest.raises(ValidationError):

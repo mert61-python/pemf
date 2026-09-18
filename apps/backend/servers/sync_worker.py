@@ -82,6 +82,7 @@ def _surum_alanlari() -> dict:
         from pathlib import Path as _P
 
         from database.treatment_history_db import get_treatment_db
+
         from servers import api_server as _api
 
         out["at_rest_encrypted"] = bool(getattr(get_treatment_db(_P(_api._app_data_dir())), "at_rest_encrypted", False))
@@ -482,9 +483,10 @@ class CloudSyncWorker:
         try:
             from datetime import datetime, timezone
 
+            from utils.path_utils import get_pairing_code, get_unique_device_id
+
             from servers.auto_discovery import _get_local_ip, get_api_port
             from servers.tunnel_manager import get_tunnel_url
-            from utils.path_utils import get_pairing_code, get_unique_device_id
 
             # Tünel anlık düşse de (URL boş) registry'yi NULL ile EZME → son bilinen URL korunur,
             # böylece app'in resolve'u boşa düşmez (watchdog tüneli toparlayınca yeni URL güncellenir).

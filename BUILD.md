@@ -486,7 +486,7 @@ guii\
 kopyalayıp kaynağı doğrudan okumayı engeller; **tersine mühendisliği ENGELLEMEZ.** Asıl koruma
 `.py → .pyd` native derlemedir (Cython/Nuitka). "Kod şifreli" demek "kaynak çıkarılamaz" demek değildir.
 
-**Neden `ai_hub` (ölçüldü):** frozen build'de `servers/`, `database/`, `utils/` EXE'ye gömülü
+**Neden `ai_hub` (ölçüldü):** frozen build'de `apps/backend/servers/`, `apps/backend/database/`, `apps/backend/utils/` EXE'ye gömülü
 `.pyc` olarak gider — diskte kaynak YOKTUR. Ama `ai_hub/` **~79 dosya / ~630 KB düz `.py`** (ölçüm 2026-08-26; XAI + scratch modülleri dahil) olarak
 `_internal/ai_hub/` altına kopyalanır; yani tüm AI çıkarım pipeline'ları okunabilir durumdadır.
 Şifreleme tam olarak bu açığı hedefler.

@@ -31,7 +31,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_ROUTER = _KOK / "servers" / "ai_router.py"
+_ROUTER = _KOK / "apps" / "backend" / "servers" / "ai_router.py"
 _PANEL = _KOK / "apps" / "ui" / "src" / "components" / "domain" / "AiProPanel.tsx"
 
 

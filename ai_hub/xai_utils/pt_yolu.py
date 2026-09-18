@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """pt_yolu — gradient-XAI PT ikizlerinin TEK yol çözücüsü (2026-08-26, cu128 smoke dersi).
 
-ÖLÇÜLDÜ: ai_service imajı minimaldir — utils/model_downloader imaja KOPYALANMAZ
+ÖLÇÜLDÜ: ai_service imajı minimaldir — apps/backend/utils/model_downloader imaja KOPYALANMAZ
 (Dockerfile.ai yalnız 3 kapı modülünü alır). XAI fonksiyonları PT'yi doğrudan
 download_model_sync ile çözünce imajda 'No module named utils.model_downloader' ile
 zarif düşüşe takılıyordu. Çözüm sırası:

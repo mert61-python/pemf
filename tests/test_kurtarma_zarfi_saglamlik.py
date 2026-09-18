@@ -1,7 +1,7 @@
 # Author: mertaygn, cglrgrkn
 """KURTARMA ZARFI — sağlamlık `.exists()` ile ölçülemez; BOZUK zarf onarılmalı.
 
-DENETİM BULGUSU (2026-08-17). `utils/backup_recovery.refresh_recovery_material` şu kapıyı
+DENETİM BULGUSU (2026-08-17). `apps/backend/utils/backup_recovery.refresh_recovery_material` şu kapıyı
 kullanıyordu:
 
     missing = [d for d in dests if not (d / ENVELOPE_NAME).exists()]
@@ -16,9 +16,9 @@ döndü.
 
 Sonuç: anakart/disk arızasından sonra `open_envelope` → "Zarf okunamadi (bozuk dosya?)" →
 şifreli yedeklerin **tek off-machine anahtar escrow'u** okunamaz (`docs/RUNBOOK.md`:
-`pemf_secrets.json` DPAPI ile makineye bağlı, `utils/support_bundle.py` zarfı bilerek dışlıyor).
+`pemf_secrets.json` DPAPI ile makineye bağlı, `apps/backend/utils/support_bundle.py` zarfı bilerek dışlıyor).
 Asıl sivri uç kaybın kendisi değil **sessizliği**: hiçbir log/health "zarfım bozuk" demiyor, tersine
-`services/headless_db_maintenance._copy_offsite` kararını yalnız `.exists()`'ten verip
+`apps/backend/services/headless_db_maintenance._copy_offsite` kararını yalnız `.exists()`'ten verip
 *"Kurtarma zarfi yerinde → KURTARMA KODU ile baska makinede geri yuklenebilir"* diye YANLIŞ GÜVENCE
 logluyor.
 
@@ -26,7 +26,7 @@ logluyor.
 *"Operatörün doğruladığı zarf her gün değişip şüphe uyandırmasın."*) — bu davranış KORUNUR.
 Değişen tek şey: "var mı?" yerine "GERÇEKTEN AÇILIYOR MU?" sorulması.
 
-⚠️ `write_bytes` atomik değildi; aynı yazar `utils/secrets_manager._save`'de tmp+fsync+replace
+⚠️ `write_bytes` atomik değildi; aynı yazar `apps/backend/utils/secrets_manager._save`'de tmp+fsync+replace
 kullanıp yorumda NTFS yarım-dosya tehlikesini açıkça anlatıyor. Bu da düzeltiliyor.
 """
 
@@ -111,7 +111,7 @@ def test_EKSIK_zarf_hala_tamamlanir_karsit_kanit(br, tmp_path):
 def test_zarf_yazimi_ATOMIK_yarim_dosya_birakmaz(br, tmp_path):
     """Yazım ortasında çökme yarım bir zarf BIRAKMAMALI (tmp + replace deseni).
 
-    Aynı depoda `utils/secrets_manager._save` bu deseni kullanıp yorumda NTFS yarım-dosya
+    Aynı depoda `apps/backend/utils/secrets_manager._save` bu deseni kullanıp yorumda NTFS yarım-dosya
     tehlikesini açıkça anlatıyor; felaket kurtarmanın tek dayanağı olan dosya o korumadan yoksundu."""
     veri = tmp_path / "veri"
     hedef = tmp_path / "yedek"

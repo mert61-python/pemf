@@ -3,7 +3,7 @@
 **Sahip kararı 2026-08-20.** Planlar önce "işlem önceliği / kuyruk / gerçek zamanlı" ile
 ayrılıyordu; yapay zekâ analizleri **klinik bilgisayarında** çalıştığı için "sunucuda sıra beklersiniz" çerçevesi ölçülebilir değildi. ⚠️ OLGU DÜZELTMESİ
 (8. parti): "karşılığı hiç yoktu" demiştim — ölçünce YANLIŞ çıktı. Karşılığı VAR:
-`servers/entitlement.py::ai_queue_gate` + `_ai_semaphore` gerçek bir eş-zamanlılık
+`apps/backend/servers/entitlement.py::ai_queue_gate` + `_ai_semaphore` gerçek bir eş-zamanlılık
 sınırlayıcısıdır ve `ai_router`a bağlıdır. Ama (a) `PEMF_TIER_ENFORCED` varsayılan KAPALI
 olduğu için bugün hiç çalışmıyor, (b) kliniğin KENDİ makinesindeki bir sınır — "sunucuda sıra"
 değil. Yani vaat bugün doğru DEĞİL ve o çerçeveyle hiç doğru olmadı; kaldırılması yerinde.
@@ -23,7 +23,7 @@ Kilit: `tests/test_tier_kullandikca_tanimi.py`.
 | **Maliyetler** | görüntü/ses/sensör 1 · ağır araştırma (patoloji, RNA, tomografi, yara-kapanma/scratch) 3 · AI Pro otomatik seans 5 |
 | **Ek paketler** | 100 → ₺249 · 500 → ₺990 · 2.000 → ₺3.490 (birim fiyat adet arttıkça düşer) |
 
-Tek kaynak: `apps/web/src/config.ts::JETON` (web) ↔ `servers/jeton.py::MALIYET` (cihaz).
+Tek kaynak: `apps/web/src/config.ts::JETON` (web) ↔ `apps/backend/servers/jeton.py::MALIYET` (cihaz).
 İkisinin **ayrışması test edilir** — kullanıcı sitede "1 jeton" okuyup cihazda 3 harcayamaz.
 
 ### 1.1 Kullandıkça Öde (ön ödemesiz üyelik)
@@ -42,7 +42,7 @@ Sahip isteği (2026-08-20): *"hiç önden satın almadan kullandıkça öde gibi
 
 Akış farkı, iki yerde birden uygulanır ve **ikisi de mutasyonla doğrulandı**:
 
-* **Cihaz** — `servers/jeton.py`: `odeme_modeli="kullandikca"` ise bakiye kapısı atlanır; önce
+* **Cihaz** — `apps/backend/servers/jeton.py`: `odeme_modeli="kullandikca"` ise bakiye kapısı atlanır; önce
   `BORC_TAVANI` bakılır, sonra tüketim `tur="kullandikca"` ile gönderilir (M13/M14).
 * **Veritabanı** — `jeton_tuket` RPC: `odeme_modeli='kullandikca'` dalı **yetersiz-bakiye
   kapısından ÖNCE** gelir; borcu artırır ve deftere yazar. Dalın silinmesi ya da sıraya
@@ -52,7 +52,7 @@ Akış farkı, iki yerde birden uygulanır ve **ikisi de mutasyonla doğrulandı
 sensör okuma ve cihaz kontrolü serbesttir (M15 ile kanıtlandı). Tavan yalnız yeni **yapay zekâ
 analizini** durdurur.
 
-⚠️ **Defter `tur` sözlüğü iki yerdedir.** `token_ledger.tur` CHECK kısıtı, `servers/jeton.py`'ın
+⚠️ **Defter `tur` sözlüğü iki yerdedir.** `token_ledger.tur` CHECK kısıtı, `apps/backend/servers/jeton.py`'ın
 gönderebileceği **her** türü kapsamalıdır; kapsamazsa RPC check-ihlaliyle patlar ve tüketim
 kaybolur. `tests/test_supabase_sql_invariants.py` bunu kaynaktan okuyup karşılaştırır.
 
@@ -83,15 +83,15 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 
 | Katman | Dosya | İş |
 |---|---|---|
-| Şema | `database/supabase_jetonlar.sql` | `token_balances` + `token_ledger`, RLS, atomik `jeton_tuket` RPC, `jeton_donem_yenile` |
+| Şema | `apps/backend/database/supabase_jetonlar.sql` | `token_balances` + `token_ledger`, RLS, atomik `jeton_tuket` RPC, `jeton_donem_yenile` |
 | Uç | `apps/web/api/tokens.ts` | GET bakiye · POST tüketim (idempotans zorunlu) |
-| Cihaz | `servers/jeton.py` | Kapı + çevrimdışı defter + uzlaştırma; bayraklı, fail-open |
+| Cihaz | `apps/backend/servers/jeton.py` | Kapı + çevrimdışı defter + uzlaştırma; bayraklı, fail-open |
 | Web modeli | `apps/web/src/config.ts::JETON` | Plan hakları, maliyetler, paketler (kullanıcı metninin kaynağı) |
 | Arayüz | `src/components/AccountButton.tsx`, `src/lib/jeton.ts` | Hesap menüsünde kalan jeton |
 | Fiyat metni | `apps/web/src/lib/planFiyat.ts` | Plan fiyat gösterimi — **tek kaynak**; aylık ücreti olmayan planı "₺0/ay" diye basmayı önler |
 | Canlı DB | `scripts/supabase_sql.py` | SQL uygulama + çalışan sorgu/kilit izleme + `--denetim` (canlı güvenlik değişmezleri). Yazma `--yaz` kapısının arkasında |
-| Sertleştirme | `database/supabase_sertlestirme.sql` | Canlıda bulunan rol-yetkisi sapmalarının geri alınması (2026-08-21) |
-| Okuma RPC | `database/supabase_okuma_rpc.sql` | `abonelik_getir` · `jeton_bakiyem` · `jeton_defterim` — kullanıcı okumaları RPC'de; tablolarda **hiç** rol yetkisi yok |
+| Sertleştirme | `apps/backend/database/supabase_sertlestirme.sql` | Canlıda bulunan rol-yetkisi sapmalarının geri alınması (2026-08-21) |
+| Okuma RPC | `apps/backend/database/supabase_okuma_rpc.sql` | `abonelik_getir` · `jeton_bakiyem` · `jeton_defterim` — kullanıcı okumaları RPC'de; tablolarda **hiç** rol yetkisi yok |
 
 ## 5. Devreye alma — adım adım
 
@@ -100,7 +100,7 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 "ücretsiz sistem şu an aktifte devam etmeli, henüz aktif etme; jeton kalsın, altyapı hazır
 şekilde." `FREE_MODE=true` ve `PEMF_JETON_ENFORCED` kapalı; ikisi de **testle kilitli**
 (`kullandikca-ode.test.ts` §6). Devreye alınacağı gün eksik olanlar (2026-08-22 güncellemesi): ~~(a) SQL Supabase'de
-çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); ~~(b) ödeme geri-çağrısı jeton yüklemiyor~~ ✅ Adım 3 yapıldı (2026-08-22); ~~(c) `servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
+çalıştırılmadı~~ ✅ Adım 1 yapıldı (2026-08-21); ~~(b) ödeme geri-çağrısı jeton yüklemiyor~~ ✅ Adım 3 yapıldı (2026-08-22); ~~(c) `apps/backend/servers/jeton.py`'yi çağıran kimse yok~~ ✅ Adım 4 yapıldı
 (2026-08-22, `jeton_gate` → `ai_router`).
 
 > Sıra önemlidir: her adım kendinden öncekine dayanır ve her adımın sonunda **doğrulama** vardır.
@@ -115,7 +115,7 @@ Canlı projede (`wmsxonunkphjeregpvuj`) `token_balances` + `token_ledger` + `jet
 `jeton_donem_yenile` kuruldu ve doğrulandı. Panele yapıştırmak yerine artık araç kullanılıyor:
 
 ```
-python scripts/supabase_sql.py --dosya database/supabase_jetonlar.sql --yaz
+python scripts/supabase_sql.py --dosya apps/backend/database/supabase_jetonlar.sql --yaz
 python scripts/supabase_sql.py --denetim        # canlı güvenlik değişmezleri
 ```
 
@@ -238,7 +238,7 @@ test yaz (yenileme çağrısı yapılıyor mu, hata yutuluyor mu, tier→hak eş
 
 `jeton_gate` yazıldı ve `ai_router`a bağlandı; mobil 402'yi ayrı ele alıyor (`apiClient.ts`).
 Taşıma katmanı belgedekinden bilinçli saptı: site ucu yerine **Supabase RPC**
-(`jeton_bakiyem`/`jeton_tuket`, entitlement deseni — gerekçe `servers/jeton.py` kapı bloğu
+(`jeton_bakiyem`/`jeton_tuket`, entitlement deseni — gerekçe `apps/backend/servers/jeton.py` kapı bloğu
 yorumunda: cihaz Supabase'le zaten konuşuyor, siteye sıçrama tek yeni arıza noktası eklerdi;
 kimlik `auth.uid()`ten, idempotans RPC içinde). Uç eşlemesi: `pro/stop|status|approve|reject|
 frame|organ|calibrate` KAPILANMAZ (stop güvenlik sınıfı; frame seans-içi akış — ücret
@@ -249,12 +249,12 @@ kapılanır" mutasyonları dâhil) + `apiClient.jeton402.test.ts`.
 
 Orijinal talimat (tarihçe):
 
-`servers/jeton.py` yazıldı ve 10 testle kilitli, **ama hiçbir yerden çağrılmıyor**
+`apps/backend/servers/jeton.py` yazıldı ve 10 testle kilitli, **ama hiçbir yerden çağrılmıyor**
 (`grep -rn "JetonYoneticisi" --include=*.py` yalnız modülün kendisini ve testlerini buluyor).
 Bağlantı, `entitlement.py`'nin deseniyle birebir aynı olmalı: **router-seviyesi FastAPI
 bağımlılığı**.
 
-**4.1** `servers/jeton.py` içine bir `jeton_gate` bağımlılığı ekle:
+**4.1** `apps/backend/servers/jeton.py` içine bir `jeton_gate` bağımlılığı ekle:
 
 - İstek yolundan işlem türünü çıkar (`/ai/goruntu…` → `goruntu`, ağır araştırma uçları →
   `agir_arastirma`, AI Pro seans başlatma → `ai_pro_seans`).
@@ -265,7 +265,7 @@ bağımlılığı**.
 - **Bloklayan ağ çağrısını `asyncio.to_thread` ile threadpool'a at** — `ai_queue_gate` bunu
   yapıyor; yapmazsan event loop bloklanır.
 
-**4.2** `servers/ai_router.py:54` satırına ekle:
+**4.2** `apps/backend/servers/ai_router.py:54` satırına ekle:
 
 ```python
 ai_router = APIRouter(dependencies=[Depends(_allow_large_upload), Depends(ai_queue_gate), Depends(jeton_gate)])

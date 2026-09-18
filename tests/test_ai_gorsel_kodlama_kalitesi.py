@@ -37,7 +37,7 @@ KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-ROUTER = KOK / "servers" / "ai_router.py"
+ROUTER = KOK / "apps" / "backend" / "servers" / "ai_router.py"
 
 #: Bu uçlar sonucu operatöre GÖSTERİR → kodlama kalitesi AÇIKÇA verilmeli.
 GOSTERIM_UCLARI = {
@@ -163,7 +163,6 @@ def test_KRITIK_mozaik_kodlayicisi_KAPAK_uyguluyor():
     """
     import cv2
     import numpy as np
-
     from servers.ai_router import MOZAIK_AZAMI_KENAR, _kapakli_kodla
 
     genis = np.zeros((400, 5000, 3), dtype=np.uint8)
@@ -189,7 +188,6 @@ def test_KRITIK_kapak_kucuk_goruntuyu_BUYUTMEZ():
     """
     import cv2
     import numpy as np
-
     from servers.ai_router import _kapakli_kodla
 
     kucuk = np.zeros((120, 200, 3), dtype=np.uint8)
@@ -212,7 +210,6 @@ def test_KRITIK_q85_gercekten_dosyayi_KUCULTUYOR():
     """
     import cv2
     import numpy as np
-
     from servers.ai_router import GOSTERIM_JPEG_KALITESI
 
     rng = np.random.default_rng(42)

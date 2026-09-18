@@ -230,7 +230,6 @@ def test_lifespan_wires_event_loop_into_live_state():
     WS broadcast'ler sessizce no-op olur (istemci güncelleme almaz). Bu, refactor'un TEK gerçek
     davranış-değişim noktasını uçtan-uca kilitler."""
     from fastapi.testclient import TestClient
-
     from servers import api_server, live_state
 
     live_state.set_event_loop(None)  # sıfırla → lifespan'in GERÇEKTEN set ettiğini kanıtla
@@ -255,7 +254,7 @@ def test_get_active_session_is_readonly_on_expiry(api):
                 "start_time": time.time() - 120,  # 1dk seans, 2dk önce → dolmuş
             }
         )
-    # B-2.2: get_active_session servers/session_router.py'ye taşındı (davranış birebir; global _active_session'ı
+    # B-2.2: get_active_session apps/backend/servers/session_router.py'ye taşındı (davranış birebir; global _active_session'ı
     # lazy-import ile okur → aynı salt-okunur invariant). Test yeni konumu çağırır.
     from servers import session_router
 

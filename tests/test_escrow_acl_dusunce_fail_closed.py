@@ -4,12 +4,12 @@
 
 OLCULEN ARIZA. Goc kodunun iki kopyasi, ACL BASARISIZ oldugunda ZIT davraniyordu:
 
-    database/treatment_history_db.py  (tedavi + AI gecmisi)
+    apps/backend/database/treatment_history_db.py  (tedavi + AI gecmisi)
         _locked = bool(lock_down_file(backup))
         if _locked: ... return            <- kilitlendiyse emanet SAKLA
         # kilitlenemedi -> AKISI DUSUR   <- FAIL-CLOSED: guvenli-sil
 
-    database/sqlcipher_util.py  (HASTA DB'si)
+    apps/backend/database/sqlcipher_util.py  (HASTA DB'si)
         lock_down_file(backup)            <- DONUS DEGERI ATILIYOR
         logger.warning("... ESCROW saklandi (ACL-kilitli): %s")   <- KOSULSUZ
 
@@ -20,7 +20,7 @@ OLCULEN ARIZA. Goc kodunun iki kopyasi, ACL BASARISIZ oldugunda ZIT davraniyordu
      sifrelemenin kendisini anlamsiz kilar — tedavi DB'si tam bu gerekceyle fail-closed.
 
   2. LOG YALAN SOYLUYOR: `lock_down_file` BASARISIZLIKTA HATA FIRLATMAZ, `False` DONER
-     (utils/file_acl.py:110 — "best-effort, cagiran DURMAZ"). Yani `except` dali hic
+     (apps/backend/utils/file_acl.py:110 — "best-effort, cagiran DURMAZ"). Yani `except` dali hic
      kosmaz; kod dogrudan "ESCROW saklandi (ACL-kilitli)" satirini basar. Uygulanmamis
      bir korumayi duyuran etiket — deponun kayitli hata sinifi: DUGME ETIKETI GERCEGI
      SOYLESIN.
@@ -143,7 +143,7 @@ def test_KRITIK_ACL_UYGULANAMAZSA_duz_metin_yedek_DISKTE_KALMAZ(ortam, monkeypat
 def test_KRITIK_ACL_uygulanamayinca_log_ACL_KILITLI_DEMEZ(ortam, monkeypatch, caplog):
     """⚠️ DUGME ETIKETI GERCEGI SOYLESIN.
 
-    `lock_down_file` basarisizlikta FIRLATMAZ, False doner (utils/file_acl.py:110).
+    `lock_down_file` basarisizlikta FIRLATMAZ, False doner (apps/backend/utils/file_acl.py:110).
     Eski kod donusu atiyor ve kosulsuz "ESCROW saklandi (ACL-kilitli)" basiyordu — yani
     uygulanmamis bir korumayi duyuruyordu. Operator log'a bakip "korundu" saniyordu.
     """

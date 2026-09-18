@@ -7,7 +7,7 @@ Sahip: *"cihaz sürülemedi kısmını kaldır burası ai modu."*
 ===============================================================================
 ÖLÇÜLEN DURUM
 ===============================================================================
-`servers/ai_router.py:500` → `hw_status = "idle"` **varsayılandır**. Otonom mod KAPALIYKEN
+`apps/backend/servers/ai_router.py:500` → `hw_status = "idle"` **varsayılandır**. Otonom mod KAPALIYKEN
 (düz analiz) hiçbir dal onu değiştirmez, yani her sıradan analizin altında
 
     ⚠️ Cihaz SÜRÜLMEDİ
@@ -42,7 +42,7 @@ for _p in (str(KOK), str(KOK / "tests")):
         sys.path.insert(0, _p)
 
 _EKRAN = KOK / "apps" / "ui" / "src" / "screens" / "AiHubScreen.tsx"
-_ROUTER = KOK / "servers" / "ai_router.py"
+_ROUTER = KOK / "apps" / "backend" / "servers" / "ai_router.py"
 
 
 def _kaynak() -> str:

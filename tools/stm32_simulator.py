@@ -10,13 +10,13 @@ anlayan ve yanıt veren bir Python STM32 emülatörüdür.
 
 KULLANıM:
   1. Bu scripti çalıştırın:
-       python utils/stm32_simulator.py
+       python apps/backend/utils/stm32_simulator.py
 
   2. Not: GUI STM32 bağlantısı şimdilik COM10 @ 115200 baud'a kilitli.
      socket:// simülatör bağlantısı, bu sabit port modu aktifken kullanılmaz.
 
   Örnek:
-       python utils/stm32_simulator.py
+       python apps/backend/utils/stm32_simulator.py
 
 PAKET FORMATI (88 byte, main.c ile identik):
   0xAA 0x55
@@ -84,7 +84,7 @@ PHASE_MAX = 360.0
 FREQ_MIN = 1.0
 # ⚠️ DENETİM 2026-08-04: burada 10000.0 yazıyordu. Firmware'in GERÇEK sınırı
 # FREQ_MAX = DDS_ISR_HZ / DDS_MIN_TICKS_PER_PERIOD = 50000/2 = 25000 Hz (main.c:158-160) ve
-# utils/stm32_protocol_limits.FREQ_MAX_HZ de 25000. Simülatör 10 kHz üstünü NACK'lediği için
+# apps/backend/utils/stm32_protocol_limits.FREQ_MAX_HZ de 25000. Simülatör 10 kHz üstünü NACK'lediği için
 # E2E güvenlik testleri SEVKEDİLENDEN FARKLI bir cihazı doğruluyordu (10–25 kHz aralığı hiç
 # test edilmiyordu). Değer artık firmware ile AYNI formülden türetiliyor.
 DDS_ISR_HZ = 50000.0

@@ -7,7 +7,6 @@ import threading
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-
 from utils.path_utils import get_app_data_directory
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])

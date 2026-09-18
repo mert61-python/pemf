@@ -10,7 +10,7 @@ bağlı değilken kullanıcı geri bildirimi çok eksik, her yerden kırmızı u
 Latte Panda'da düşün: internete bağlı olmasa bile hotspot açabiliyor ve bütün donanım
 kusursuz çalışıyor ama kırmızı dolu bir ekran var."
 
-KÖK NEDEN: `services/headless_services._determine_gateway_mode` hotspot AÇIK + internet
+KÖK NEDEN: `apps/backend/services/headless_services._determine_gateway_mode` hotspot AÇIK + internet
 YOK durumunu `"offline"` döndürüyor; `api_server` bunu
 `gateway = "online" if mode in ("online","hybrid") else "offline"` ile okuyordu →
 Dashboard'daki "Bağlantı" rozeti KIRMIZI. Oysa o an hotspot çalışıyor, STM kablolu,
@@ -232,7 +232,7 @@ def test_KRITIK_ESP_firmware_kaynagi_DURUYOR(yol):
 
 def test_KRITIK_ESP_calisma_zamani_kodu_da_DURUYOR():
     """MQTT/ESP sürüş yolları yorum satırına alınmadı, YERİNDE duruyor."""
-    kaynak = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
+    kaynak = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
     for isaret in ("_start_mqtt_for_api", "_on_mqtt_message_api", "_mqtt_publish"):
         assert f"def {isaret}" in kaynak, (
             f"`{isaret}` kaldirilmis -> ESP'ye geri donus tek satirlik ayar olmaktan CIKTI"
@@ -256,7 +256,7 @@ def test_KRITIK_simulasyon_BAGLANTIDAN_turetilmez():
     """
     import ast
 
-    kaynak = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
+    kaynak = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
     agac = ast.parse(kaynak)
     for dugum in ast.walk(agac):
         if not isinstance(dugum, ast.Compare):

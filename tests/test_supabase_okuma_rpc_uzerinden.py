@@ -106,7 +106,9 @@ def test_KARSIT_KANIT_service_role_istisnasi_GERCEKTEN_service_role_kullaniyor()
 def test_KRITIK_okuma_RPC_leri_semada_TANIMLI_ve_sertlestirilmis():
     """Istemciler yeni RPC'leri cagiriyorsa, sema onlari SECURITY DEFINER + sabit search_path ile
     tanimlamali ve YALNIZ `authenticated`a acmali (anon'un kullanici satirinda isi yok)."""
-    sema = (_KOK / "database" / "supabase_okuma_rpc.sql").read_text(encoding="utf-8", errors="replace")
+    sema = (_KOK / "apps" / "backend" / "database" / "supabase_okuma_rpc.sql").read_text(
+        encoding="utf-8", errors="replace"
+    )
     for fn in ("abonelik_getir", "jeton_bakiyem", "jeton_defterim"):
         assert f"function public.{fn}" in sema, f"{fn} semada tanimli degil"
 

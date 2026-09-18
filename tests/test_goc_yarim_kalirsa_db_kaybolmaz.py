@@ -258,9 +258,9 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # İkinci biçimin gerçekten koruduğu, hemen aşağıda ayrıca ölçülüyor — yoksa "delege
     # ediyorum" demek kapıyı bedavaya geçirirdi.
     for yol in (
-        "database/sqlcipher_util.py",
-        "database/treatment_history_db.py",
-        "utils/path_utils.py",
+        "apps/backend/database/sqlcipher_util.py",
+        "apps/backend/database/treatment_history_db.py",
+        "apps/backend/utils/path_utils.py",
     ):
         src = _kaynak(yol)
         dogrudan = "_yarim_goc_toparla(" in src
@@ -273,7 +273,7 @@ def test_KRITIK_HER_IKI_goc_yolu_da_KORUNUYOR():
     # Delegasyonun DEĞERİ, delege edilen şeyin gerçekten toparlamasıdır.
     import ast
 
-    agac = ast.parse(_kaynak("database/sqlcipher_util.py"))
+    agac = ast.parse(_kaynak("apps/backend/database/sqlcipher_util.py"))
     ortak = next(
         (n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef) and n.name == "migrate_to_encrypted_if_needed"),
         None,
@@ -308,7 +308,7 @@ def test_ikinci_kopya_PAYLASILAN_yardimcilari_kullaniyor():
     ⚠️ Bu yüzden `treatment_history_db` korumaları KENDİ yazmaz, `sqlcipher_util`den
     IMPORT eder. Böylece davranış tek yerde tanımlı kalır.
     """
-    src = _kaynak("database/treatment_history_db.py")
+    src = _kaynak("apps/backend/database/treatment_history_db.py")
     assert "from database.sqlcipher_util import" in src, (
         "treatment_history_db paylasilan yardimcilari IMPORT etmiyor -> iki kopya zamanla ayrisir"
     )
@@ -327,7 +327,7 @@ def test_KRITIK_toparlama_HATASI_sessizce_YUTULMAZ():
     """
     import ast
 
-    agac = ast.parse((KOK / "utils/path_utils.py").read_text(encoding="utf-8"))
+    agac = ast.parse((KOK / "apps/backend/utils/path_utils.py").read_text(encoding="utf-8"))
     fn = next(d for d in ast.walk(agac) if isinstance(d, ast.FunctionDef) and d.name == "initialize_database")
 
     def _cagiriyor(dugum):
@@ -386,7 +386,7 @@ def test_KRITIK_duz_metin_yedek_ASLA_SILINMEZ():
     #  4) A1·2/2 (2026-09-15): tedavi yolu artık göç gövdesini TAŞIMIYOR, ortak göçe DELEGE
     #     ediyor. Sıra sözleşmesi tek uygulamada ölçülür; delegasyonun kendisi
     #     `test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder` ile ayrıca kilitli.
-    hedefler = (("database/sqlcipher_util.py", "migrate_to_encrypted_if_needed"),)
+    hedefler = (("apps/backend/database/sqlcipher_util.py", "migrate_to_encrypted_if_needed"),)
     for yol, fon_adi in hedefler:
         agac = ast.parse((KOK / yol).read_text(encoding="utf-8"))
         fon = next(

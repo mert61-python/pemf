@@ -44,7 +44,7 @@ import time
 
 BAUD = 115200
 
-# ⚠️ DESEN BURADA DEGIL — TEK KAYNAK `utils/stm32_kimlik.py` (2026-09-18).
+# ⚠️ DESEN BURADA DEGIL — TEK KAYNAK `apps/backend/utils/stm32_kimlik.py` (2026-09-18).
 # Eskiden bu satirda kendi regex'i vardi. Ayni banner'i iki yerde ayristirmak, bu depoda
 # bedeli OLCULMUS bir sinif: `_DB_ERROR` demetleri iki DB modulunde sessizce AYRISMISTI.
 # Backend'in UYUM KAPISI da ayni ayristiriciyi kullanir; bu betikle aynı seyi gormeleri SART.
@@ -59,7 +59,7 @@ def _portlari_bul(istenen: str | None) -> list[str]:
     if istenen:
         return [istenen]
     hepsi = list(list_ports.comports())
-    # ST-Link VCP'yi öne al (backend de böyle yapıyor: utils/stm32_transport.py)
+    # ST-Link VCP'yi öne al (backend de böyle yapıyor: apps/backend/utils/stm32_transport.py)
     oncelikli = [
         p.device
         for p in hepsi

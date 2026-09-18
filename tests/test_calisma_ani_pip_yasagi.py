@@ -56,7 +56,7 @@ def test_KRITIK_yasak_ultralytics_AUTOINSTALLi_kapatir():
 def test_yasak_gercekten_ultralytics_davranisini_degistirir():
     """SÖZDE değil GERÇEK etki: ultralytics kendi AUTOINSTALL sabitini False okumalı.
 
-    Env'i okuyan bizim kodumuz değil, ultralytics'in `utils/__init__.py`'si — bayrak IMPORT
+    Env'i okuyan bizim kodumuz değil, ultralytics'in `apps/backend/utils/__init__.py`'si — bayrak IMPORT
     ANINDA okunduğu için yasak, ultralytics'ten önce kurulmuş olmalı. Bu testin değeri:
     'env yazdım' demek yetmez, tüketen kütüphanenin davranışını ölçer.
     """

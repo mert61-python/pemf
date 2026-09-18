@@ -114,7 +114,7 @@ def test_KARSIT_KANIT_uretim_ciktisi_HALA_yoksayiliyor():
     ornekler = [
         "apps/web/node_modules/x.js",
         "apps/web/dist/index.html",
-        "servers/__pycache__/x.pyc",
+        "apps/backend/servers/__pycache__/x.pyc",
     ]
     yoksayilan = _check_ignore(ornekler)
     if yoksayilan is None:

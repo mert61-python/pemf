@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """MİKROSERVİS ↔ GÖMÜLÜ YOL ZARF PARİTESİ — denetim 2026-08-28 #09.
 
-Aynı arayüz iki taşımayı da tüketiyor: gömülü yol (`servers/ai_router.py`, klinik EXE) ve GPU
+Aynı arayüz iki taşımayı da tüketiyor: gömülü yol (`apps/backend/servers/ai_router.py`, klinik EXE) ve GPU
 mikroservisi (`ai_service/app.py`, Docker). Yanıt zarfları AYRIŞINCA arayüz veriyi göremiyor ve
 panel SESSİZCE boş kalıyor — hata yok, uyarı yok, 200 OK.
 
@@ -32,7 +32,7 @@ import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
 _SERVIS = _KOK / "ai_service" / "app.py"
-_ROUTER = _KOK / "servers" / "ai_router.py"
+_ROUTER = _KOK / "apps" / "backend" / "servers" / "ai_router.py"
 
 
 def _yanit_anahtarlari(predictor_adi: str) -> set[str]:

@@ -5,7 +5,7 @@
 //! sunucusuna çevirip launcher'a keyfi kod indirtebilir. Bu yüzden şema HTTPS'e,
 //! host da bilinen GitHub release sunucularına PİNLENİR.
 //!
-//! Liste `servers/update_manager.py::_ALLOWED_UPDATE_HOSTS` ile AYNI olmalı — backend
+//! Liste `apps/backend/servers/update_manager.py::_ALLOWED_UPDATE_HOSTS` ile AYNI olmalı — backend
 //! kendi OTA indirmesinde aynı korumayı uyguluyor; iki taraf ayrışırsa biri zayıf kalır.
 
 use std::fs;

@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
-_KURULUM_SQL = _KOK / "database" / "supabase_devices.sql"
+_KURULUM_SQL = _KOK / "apps" / "backend" / "database" / "supabase_devices.sql"
 _CANLI_SQL = _KOK / "supabase" / "resolve_device_bayat_gorunur.sql"
 _ISTEMCI_TS = _KOK / "apps" / "ui" / "src" / "services" / "deviceRegistry.ts"
 
@@ -134,8 +134,8 @@ def test_KARSIT_KANIT_pencere_SINIRSIZ_degil():
 def test_KRITIK_canliya_uygulanacak_SQL_dosyasi_VAR_ve_IMZASI_AYNI():
     """Kurulum betiği yalnız YENİ kurulumları düzeltir; sahadaki proje elle güncellenmeli.
 
-    ⚠️ `database/supabase_devices.sql` v2 kuruluyken TEKRAR ÇALIŞTIRILAMAZ (sırsız aşırı-yükler
-    geri gelir; bkz. `database/README.md` uyarısı). Bu yüzden ayrı, YALNIZ `resolve_device`e
+    ⚠️ `apps/backend/database/supabase_devices.sql` v2 kuruluyken TEKRAR ÇALIŞTIRILAMAZ (sırsız aşırı-yükler
+    geri gelir; bkz. `apps/backend/database/README.md` uyarısı). Bu yüzden ayrı, YALNIZ `resolve_device`e
     dokunan bir dosya gerekiyor."""
     assert _CANLI_SQL.is_file(), (
         "supabase/resolve_device_bayat_gorunur.sql YOK -> sahadaki canli projede pencere 5 dk "
@@ -160,7 +160,7 @@ def test_KRITIK_canliya_uygulanacak_SQL_dosyasi_VAR_ve_IMZASI_AYNI():
 
     # ⚠️ GERİLEME KAPISI: bu dosya `upsert_device`e DOKUNMAMALI. Ona dokunursa v2'nin bcrypt'li
     # imzasının yanına sırsız v1 aşırı-yüklemesi geri gelir ve anon'a yeniden grant edilir —
-    # `database/README.md`de yazılı olan tam o tuzak.
+    # `apps/backend/database/README.md`de yazılı olan tam o tuzak.
     assert "upsert_device" not in low, (
         "dosya `upsert_device`e dokunuyor -> v2 bcrypt modeli bozulur (sirsiz asiri-yuk geri gelir)"
     )
@@ -171,9 +171,9 @@ def test_canli_SQL_adimi_BELGELENMIS():
 
     (2026-08-04 denetiminin dersi: `supabase/` dosyaları README'de listelenmediği için hiç
     denetlenmemişti.)"""
-    readme = (_KOK / "database" / "README.md").read_text(encoding="utf-8")
+    readme = (_KOK / "apps" / "backend" / "database" / "README.md").read_text(encoding="utf-8")
     assert "resolve_device_bayat_gorunur.sql" in readme, (
-        "elle uygulanacak SQL adimi database/README.md'de YOK -> sahibi calistirmayi bilemez"
+        "elle uygulanacak SQL adimi apps/backend/database/README.md'de YOK -> sahibi calistirmayi bilemez"
     )
 
 

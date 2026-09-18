@@ -9,7 +9,7 @@ bağımlı" hatasının kaynağı buydu. İçerik artık KODDA tek-kaynak.
 ÇEKİRDEK MODEL KURALI. `inference_cat_organ` (AI Pro organ lokalizasyonu) ÇEKİRDEĞE alındı
 (`make_base_zip.py::CORE_MODELS` → deps katmanı → frozen bundle). Bu yüzden profil
 paketlerinde YER ALMAZ — aksi hâlde ev sahibi kullanıcı aynı ~209 MB'ı İKİ KEZ indirir.
-Çözüm sırası dosya-başınadır (`utils/model_downloader.find_installed_model`), yani paketten
+Çözüm sırası dosya-başınadır (`apps/backend/utils/model_downloader.find_installed_model`), yani paketten
 çıkarmak hiçbir profilde özelliği bozmaz; bkz. `tests/test_cekirdek_model_cozumu.py`.
 
 Kullanım:  python build_tools/make_model_zip.py [home|vet|research] ...

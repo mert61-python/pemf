@@ -5,9 +5,9 @@
 `MDNSService._ip_monitor_loop`un kurulum bloğu bir istisna atarsa `self._running = False; return`
 yapıyordu → `while self._running` döngüsüne HİÇ girilmiyordu. Sonuç İKİ yayıncıyı birden bitiriyor:
 
-  · `utils/zeroconf_singleton.ensure_interfaces_current`ın **TEK** çağrıcısı o döngüdür (depo
+  · `apps/backend/utils/zeroconf_singleton.ensure_interfaces_current`ın **TEK** çağrıcısı o döngüdür (depo
     geneli ölçüldü) → arayüz/IP değişimi izleme tamamen durur;
-  · `servers/auto_discovery._reregister` **YALNIZCA** o callback listesinden çağrılıyor, yani
+  · `apps/backend/servers/auto_discovery._reregister` **YALNIZCA** o callback listesinden çağrılıyor, yani
     `_pemfvet`in toparlanma yolu da SESSİZCE ölüyordu. Üstelik o yol bu denetimin kendi eklediği
     düzeltmeydi → iki yayıncı arasında **belgelenmemiş bağımlılık**.
 

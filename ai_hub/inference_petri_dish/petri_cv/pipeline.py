@@ -40,7 +40,7 @@ from .color_segment import segment_cancer_in_petri, Region, TUMOR, HEALTHY
 from . import render as rd
 # MAKULLIK DENETIMI (2026-08-06, sahip bildirimi): fantom fotografi bu boru hattinda sessizce
 # "2 kuyucuk, 1 kanser" uretiyordu. Denetim ROUTER'da DEGIL burada durmali; cunku
-# PEMF_AI_SERVICE_URL tanimliyken istek GPU mikroservisine gider ve servers/ai_router.py hic
+# PEMF_AI_SERVICE_URL tanimliyken istek GPU mikroservisine gider ve apps/backend/servers/ai_router.py hic
 # calismaz (bkz. ..plausibility docstring).
 from .. import plausibility as _plaus
 

@@ -60,7 +60,7 @@ def test_m9_dayanagi_ANILIR(metin):
 def test_KRITIK_hasta_bulut_syncı_GERCEKTEN_kapali():
     """Metin "hasta ve seans kayıtları yurt dışına aktarılmaz … varsayılan kapalı" diyor.
     Varsayılan bir gün açılırsa metin YANLIŞ BEYAN hâline gelir."""
-    src = (KOK / "servers" / "sync_worker.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "sync_worker.py").read_text(encoding="utf-8")
     m = re.search(
         r'patient_sync_enabled\s*=\s*os\.environ\.get\(\s*"PEMF_CLOUD_PATIENT_SYNC"\s*,\s*"([^"]*)"\s*\)\s*==\s*"1"',
         src,
@@ -120,7 +120,7 @@ def test_bayrak_ACILINCA_hasta_yolu_calisir(monkeypatch):
 def test_metindeki_cihaz_alanlari_GERCEKTE_gonderilenlerle_ortusur(metin):
     """Kayıt defterine yeni bir alan eklenip aydınlatma metnine yazılmazsa beyan eksik kalır.
     Alan → metinde geçmesi beklenen Türkçe karşılık."""
-    src = (KOK / "servers" / "sync_worker.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "sync_worker.py").read_text(encoding="utf-8")
     gonderilen = set(re.findall(r'^\s{16}"([a-z_]+)":', src, re.M))
     bolum = metin.split("Yurt Dışına Aktarım", 1)[1].split("<H2>6.", 1)[0]
 
@@ -147,8 +147,8 @@ def test_saklama_suresi_metni_KODDAKI_varsayilanla_ayni(metin):
     if "365" not in metin:
         pytest.skip("metinde somut sure yok")
     # ⚠️ TEK DOSYAYA PINLEME (2026-09-18): burasi
-    # `database/treatment_history_db.py` diyordu; B4 bolmesi saklama politikasini
+    # `apps/backend/database/treatment_history_db.py` diyordu; B4 bolmesi saklama politikasini
     # `thdb_bakim.py`ye tasiyinca kapi KIRMIZI dondu. Kapinin isi "hukuki metindeki sure
-    # kodda da var mi" — hangi DOSYADA oldugu onemsiz. Artik `database/` ailesi taranir.
-    src = "\n".join(p.read_text(encoding="utf-8") for p in sorted((KOK / "database").glob("*.py")))
-    assert "365" in src, "hukuki metin 365 gun diyor ama database/ altinda o varsayilan yok"
+    # kodda da var mi" — hangi DOSYADA oldugu onemsiz. Artik `apps/backend/database/` ailesi taranir.
+    src = "\n".join(p.read_text(encoding="utf-8") for p in sorted((KOK / "apps" / "backend" / "database").glob("*.py")))
+    assert "365" in src, "hukuki metin 365 gun diyor ama apps/backend/database/ altinda o varsayilan yok"

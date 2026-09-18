@@ -39,8 +39,8 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 _DENETIM = KOK / "docs" / "DEPO-DENETIMI-2026-09-15.md"
 _TAKIPCI = KOK / "docs" / "ARIZA-LISTESI.md"
-_AI_PRO = KOK / "servers" / "ai_pro_hedef.py"
-_AI_ROUTER = KOK / "servers" / "ai_router.py"
+_AI_PRO = KOK / "apps" / "backend" / "servers" / "ai_pro_hedef.py"
+_AI_ROUTER = KOK / "apps" / "backend" / "servers" / "ai_router.py"
 _DEVICE_ENV = KOK / "deploy" / "device.env"
 _LAUNCHER_YML = KOK / ".github" / "workflows" / "launcher.yml"
 
@@ -168,17 +168,17 @@ def test_KARSIT_KANIT_B4_OLCUTU_satir_degil():
     tasirlar). Sorun tek nesnedeki YEDI ayri sorumluluktu. Birini satir sayisina bakip
     "bu dosya da buyuk, bolelim" derken bulursaniz, once NE olctugunu sorun.
     """
-    src = (KOK / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
     t = ast.parse(src)
     siniflar = [n for n in ast.walk(t) if isinstance(n, ast.ClassDef)]
     assert siniflar, "treatment_history_db'de sinif yok — kapi bayatlamis"
     en_buyuk = max(sum(1 for x in c.body if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef))) for c in siniflar)
     assert en_buyuk <= 22, (
         f"en buyuk sinif {en_buyuk} metoda cikmis -> B4 bolmesi geri aliniyor olabilir. "
-        "Yeni islev ILGILI KARISIMA eklenir (database/thdb_*.py); ana sinif yalniz BAGLANTI "
+        "Yeni islev ILGILI KARISIMA eklenir (apps/backend/database/thdb_*.py); ana sinif yalniz BAGLANTI "
         "havuzu ve yasam dongusu tasir."
     )
     # ⚠️ Karsit kanit: bolme GERCEKTEN yapilmis mi — yoksa sinif bos birakilip is baska bir
     # dev sinifa mi tasinmis? Karisim modulleri var olmali.
-    karisimlar = sorted((KOK / "database").glob("thdb_*.py"))
+    karisimlar = sorted((KOK / "apps" / "backend" / "database").glob("thdb_*.py"))
     assert len(karisimlar) >= 8, f"yalniz {len(karisimlar)} karisim modulu var — B4 bolmesi eksik ya da geri alinmis"

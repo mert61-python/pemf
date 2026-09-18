@@ -49,7 +49,7 @@ _PF = KOK / "apps" / "ui" / "src"
 
 #: `db.start_session(...)` çağıran üretim dosyaları — seans satırı AÇAN her yol.
 #: ⚠️ Yeni bir yol eklenirse bu liste değil, aşağıdaki AST taraması onu kendiliğinden bulur.
-SEANS_ACAN_DOSYALAR = ("servers/api_server.py", "servers/session_router.py")
+SEANS_ACAN_DOSYALAR = ("apps/backend/servers/api_server.py", "apps/backend/servers/session_router.py")
 
 
 @pytest.fixture
@@ -164,7 +164,7 @@ def test_KRITIK_sahip_SUNUCUDA_cozulur_istemci_beyani_DEGIL():
     MUTASYON: `cozumlenmis_operator(request, payload.operator_email)` yerine doğrudan
     `payload.operator_email` yaz → KIRMIZI.
     """
-    src = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     assert "_operator_kimligi = cozumlenmis_operator(request, payload.operator_email)" in src, (
         "seans sahibi artik SUNUCUDA cozulmuyor -> istemci baskasinin adina seans acabilir"
     )
@@ -179,7 +179,7 @@ def test_KRITIK_AI_PRO_sahibi_ONAY_MUHRUNDEN_gelir():
     MUTASYON: `operator_email=str(_onay.get("operator") or "")`i `payload.operator_email`e
     çevir → KIRMIZI (payload'da öyle bir alan bile yok).
     """
-    src = (KOK / "servers" / "ai_router.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "ai_router.py").read_text(encoding="utf-8")
     assert 'operator_email=str(_onay.get("operator") or "")' in src, "AI Pro seans sahibi onay muhrunden OKUNMUYOR"
 
 

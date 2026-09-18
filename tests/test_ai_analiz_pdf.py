@@ -47,7 +47,6 @@ def istemci():
     `test_operator_identity_server_side.py`de de kullanılıyor.
     """
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app, client=("127.0.0.1", 51234)) as c:
@@ -239,7 +238,7 @@ def test_KRITIK_gecici_PII_pdf_SILINIR(istemci, analiz, tmp_path):
 #
 # ⚠️ BU KAPI DENETİMDE DOĞDU (2026-09-12): uç ilk yazımda KORUMASIZDI. Oysa hasta ADINI ve
 # analizin TÜM sayısal detayını tek dosyada dışarı verir — niteliksel olarak
-# `/api/data/export` ile aynı sınıf (bkz. servers/auth.py "AYRICALIKLI UÇLAR" başlığı).
+# `/api/data/export` ile aynı sınıf (bkz. apps/backend/servers/auth.py "AYRICALIKLI UÇLAR" başlığı).
 # Kapısız hâlde klinik WiFi'sindeki HERHANGİ bir cihaz, kimlik göstermeden id'leri gezip
 # tüm AI geçmişini PDF olarak toplayabilirdi. Klinik hotspot parolası her makinede aynı ve
 # pakette dağıtıldığı için "güvenli yerel ağ" varsayımı bu uç için GEÇERLİ DEĞİLDİR.
@@ -253,7 +252,7 @@ def test_KRITIK_PDF_ucu_AYRICALIKLI_kapidan_geciyor():
     """
     import ast
 
-    agac = ast.parse((KOK / "servers" / "api_server.py").read_text(encoding="utf-8"))
+    agac = ast.parse((KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8"))
     hedef = None
     for d in ast.walk(agac):
         if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.name == "ai_analiz_pdf":
@@ -293,7 +292,6 @@ def test_KRITIK_LAN_istemcisi_kimliksiz_PDF_ALAMAZ(analiz):
     MUTASYON: `_enforce_privileged(request)` satırını sil → KIRMIZI (200 + PDF döner).
     """
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     _, sid = analiz

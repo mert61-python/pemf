@@ -362,7 +362,7 @@ fn oturum_rotasyon_senkronu_baslat(aktif: Arc<AtomicBool>, port: u16, bellek: Ar
 /// SIRA KRİTİK: pencere önce açılırsa uygulama kendi giriş ekranını çoktan çizmiş olur ve
 /// kullanıcı İKİNCİ kez giriş yapar (sözleşme: "Çift giriş YOK").
 /// `PEMF_REQUIRE_AUTH=1` verilmiş olsa da loopback istekleri backend'de muaftır
-/// (`servers/auth.py::is_local_request`) → ek jeton gerekmez.
+/// (`apps/backend/servers/auth.py::is_local_request`) → ek jeton gerekmez.
 /// Best-effort: backend ucu yoksa (eski base.zip → 404/405) SESSİZCE geçilir; uygulama o
 /// durumda kendi giriş ekranını gösterir, hiçbir şey kilitlenmez.
 async fn hand_off_session(state: &tauri::State<'_, AppState>, port: u16) {

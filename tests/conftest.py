@@ -13,6 +13,14 @@ _GUII_ROOT = Path(__file__).resolve().parent.parent
 if str(_GUII_ROOT) not in sys.path:
     sys.path.insert(0, str(_GUII_ROOT))
 
+# ⚠️ URUN PAKETLERI `apps/backend/` ALTINDA (2026-09-18, klasor duzeni F4).
+# Import adlari degismedi (`from utils.x import y`) ama o dizin yola EKLENMELI.
+# Buraya konmasi 202 test dosyasinin hepsini kapsar: onlarin kendi
+# `sys.path.insert(kok)` satirlari ARTIK YETMEZ, kok paketleri tasimiyor.
+_BACKEND_KOKU = _GUII_ROOT / "apps" / "backend"
+if str(_BACKEND_KOKU) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_KOKU))
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TOPLAMA-ZAMANI KORUMASI (fixture'lardan ÖNCE — MODÜL SEVİYESİNDE ÇALIŞIR)
@@ -21,7 +29,7 @@ if str(_GUII_ROOT) not in sys.path:
 # test modüllerini TOPLAMA sırasında import eder ve bu, hiçbir fixture çalışmadan ÖNCE olur.
 # Bazı test modülleri modül seviyesinde üretim modülü import ediyor; zincir şuraya varıyor:
 #     tests/test_patient_encryption.py (import)
-#       → database/patient_database.py  (modül seviyesi)
+#       → apps/backend/database/patient_database.py  (modül seviyesi)
 #         → pemf_gui/config.py:346      (modül seviyesi SINGLETON)
 #           → Config.__init__ → _get_or_create_key → secrets_manager.get_secret
 # Yani PUAN: sadece `import` etmek bile GERÇEK `%APPDATA%\PEMF_GUI` içinde bir şifreleme
@@ -39,7 +47,7 @@ _OTURUM_IZOLE = Path(tempfile.mkdtemp(prefix="pemf_test_veri_"))
 os.environ["PEMF_DATA_DIR"] = str(_OTURUM_IZOLE)
 os.environ["APPDATA"] = str(_OTURUM_IZOLE)
 # ⚠️ DENETİM 2026-08-28 #02: `device_registry_secret` artık VERİ KÖKÜNÜN DIŞINDA, makine
-# kapsamlı bir dosyada tutuluyor (`utils/secrets_manager._cihaz_kimlik_deposu`). O yol
+# kapsamlı bir dosyada tutuluyor (`apps/backend/utils/secrets_manager._cihaz_kimlik_deposu`). O yol
 # `PEMF_DATA_DIR`e BAKMAZ → yukarıdaki izolasyon onu KAPSAMAZ. ÖLÇÜLDÜ: süit, gerçek
 # `C:\ProgramData\PEMF_System\device_identity.json` dosyasına TEST SIRRI yazdı ve
 # oradaki değer klinik cihazınkinden FARKLIYDI. Sonucu sinsi: veri kökü bir gün
@@ -57,7 +65,7 @@ def _gercek_kurulumu_koru(tmp_path):
     """⚠️ HİÇBİR TEST GERÇEK KURULUMA DOKUNAMAZ — 2026-08-08 denetiminde bulundu.
 
     ARIZA: `TestClient(api_server.app)` kullanan test dosyaları (test_auth, test_api_design,
-    test_ai_review…) izole bir veri dizini AYARLAMIYORDU. `utils/secrets_manager` yolunu global
+    test_ai_review…) izole bir veri dizini AYARLAMIYORDU. `apps/backend/utils/secrets_manager` yolunu global
     `get_app_data_directory()`'den aldığı için bu testler GERÇEK `%APPDATA%\\PEMF_GUI` dizinine
     yazıyordu: orada SQLCipher anahtarı üretildi → gerçek (düz-metin) klinik veritabanı bir
     sonraki açılışta GÖÇE girdi, `.plain.bak` / `.enc.tmp` artıkları bıraktı ve testler
@@ -106,7 +114,7 @@ def temp_app_data(tmp_path):
     """Her test için izole app_data dizini (gerçek %APPDATA%/PEMF_GUI'ye dokunma).
 
     ⚠️ DENETİM 2026-08-08 — GERÇEK KURULUMU BOZAN SIZINTI KAPATILDI.
-    Eskiden yalnız `APPDATA` ayarlanıyordu. Ama `utils/secrets_manager` yolunu kendisine geçilen
+    Eskiden yalnız `APPDATA` ayarlanıyordu. Ama `apps/backend/utils/secrets_manager` yolunu kendisine geçilen
     `app_data_dir` argümanından DEĞİL, global `utils.path_utils.get_app_data_directory()`'den
     alır ve o da önce `PEMF_DATA_DIR`'e bakar. Sonuç: temp dizinle kurulan bir test DB'si,
     SQLCipher anahtarını GERÇEK `%APPDATA%\\PEMF_GUI\\pemf_secrets.json` dosyasına yazıyordu.
@@ -212,7 +220,7 @@ def _masaustunu_koru(tmp_path):
     except Exception:
         pass
 
-    # PDF raporları da masaüstüne yazar (`utils/pdf_report_generator._default_output_path`).
+    # PDF raporları da masaüstüne yazar (`apps/backend/utils/pdf_report_generator._default_output_path`).
     # ⚠️ Bugün süitte sızıntı ÜRETMİYOR (masaüstünde test PDF'i yok) ama AYNI SINIF:
     # yolu burada da kapatmak, yarın bir testin rapor üretmesiyle sızıntının geri
     # gelmesini engeller. Sınıfı kapatmak, örneği kapatmaktan daha ucuzdur.

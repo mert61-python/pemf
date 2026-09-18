@@ -9,11 +9,11 @@ fark yorumlar ve bu depoda yorumlar OZELLIKTIR (denetim gecmisini tasirlar). Ger
 
 Bes kume KARISIM (mixin) modullerine ayrildi (93 -> 54 metot, 3530 -> 2446 satir):
 
-    database/thdb_outbox.py       OutboxKarisimi       outbox_messages
-    database/thdb_denetim.py      DenetimKarisimi      audit_events
-    database/thdb_ai_gecmisi.py   AiGecmisiKarisimi    ai_analyses
-    database/thdb_telemetri.py    TelemetriKarisimi    session_coil_runs · sensor_*
-    database/thdb_pii.py          PiiKarisimi          PII redaksiyonu / KVKK
+    apps/backend/database/thdb_outbox.py       OutboxKarisimi       outbox_messages
+    apps/backend/database/thdb_denetim.py      DenetimKarisimi      audit_events
+    apps/backend/database/thdb_ai_gecmisi.py   AiGecmisiKarisimi    ai_analyses
+    apps/backend/database/thdb_telemetri.py    TelemetriKarisimi    session_coil_runs · sensor_*
+    apps/backend/database/thdb_pii.py          PiiKarisimi          PII redaksiyonu / KVKK
 
 ⚠️ NEDEN KARISIM, ISBIRLIKCI NESNE DEGIL: `get_treatment_db(...)` urunun her yerinden
 aliniyor ve metotlar DOGRUDAN cagriliyor. Isbirlikciye cevirmek (`db.outbox.enqueue(...)`)
@@ -35,7 +35,7 @@ import ast
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
-ANA = KOK / "database" / "treatment_history_db.py"
+ANA = KOK / "apps" / "backend" / "database" / "treatment_history_db.py"
 
 #: Ayrilan kumeler — modul dosyasi -> karisim sinifi.
 KARISIMLAR = {
@@ -71,7 +71,7 @@ def test_KRITIK_karisim_modulleri_DURUYOR():
     """Modul dosyasi + icindeki karisim sinifi yerinde mi."""
     eksik = []
     for dosya, sinif in KARISIMLAR.items():
-        p = KOK / "database" / dosya
+        p = KOK / "apps" / "backend" / "database" / dosya
         if not p.is_file():
             eksik.append(f"{dosya} (DOSYA YOK)")
             continue
@@ -118,7 +118,7 @@ def test_KARSIT_KANIT_karisimlar_GERCEKTEN_metot_tasiyor():
     """
     bos = []
     for dosya, sinif in KARISIMLAR.items():
-        p = KOK / "database" / dosya
+        p = KOK / "apps" / "backend" / "database" / dosya
         if not p.is_file():
             continue
         agac = ast.parse(p.read_text(encoding="utf-8"))

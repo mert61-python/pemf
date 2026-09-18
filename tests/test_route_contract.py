@@ -68,7 +68,7 @@ GOLDEN_ROUTES = {
     ("/api/auth/admin-code", "GET"),  # yönetici şifre-sıfırlama kodu (Ayarlar'da gösterilir; X-API-Key korumalı)
     # 2026-08-06 — masaüstü oturum devri (E-özelliği): Tauri client Supabase oturumunu backend'e
     # devreder, uygulama alıp kendi giriş ekranını atlar (çift giriş yok). Yalnız bellekte + yalnız
-    # 127.0.0.1/::1 (bkz. servers/auth_router.py, tests/test_desktop_session.py).
+    # 127.0.0.1/::1 (bkz. apps/backend/servers/auth_router.py, tests/test_desktop_session.py).
     ("/api/auth/desktop-session", "DELETE"),
     ("/api/auth/desktop-session", "GET"),
     ("/api/auth/desktop-session", "POST"),

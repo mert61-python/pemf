@@ -89,7 +89,7 @@ def dogrula(hedef: Path, tam: bool = False) -> int:
     """Hedefteki ağırlıkları manifeste göre doğrula.
 
     ⚠️ VARSAYILAN: EKSİK dosya HATA DEĞİLDİR. Ölçüldü (2026-09-13) — model çözümü
-    `utils/model_downloader._resolve` içinde **dosya başına** yapılır: bir ağırlık kök #1'de
+    `apps/backend/utils/model_downloader._resolve` içinde **dosya başına** yapılır: bir ağırlık kök #1'de
     (`PEMF_AI_MODELS_DIR` = profil katmanı) yoksa kök #5'e (EXE'ye gömülü paket) düşer.
     Profil katmanı bilerek EKSİKTİR (vet profili araştırma modellerini taşımaz).
 

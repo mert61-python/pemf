@@ -89,7 +89,7 @@ def test_KRITIK_uretim_kodu_ESP_kimliklerini_ELLE_SAYMAZ():
 
     ⚠️ FAZ 4'TE ÜÇ YERDE BULUNDU ve hiçbiri hata vermiyordu:
       * `backend_service.py`  → kapanış STOP döngüsü `range(6, 9)`
-      * `servers/ai_router.py` × 2 → AI start/stop yolları `for _cid in (6, 7, 8)`
+      * `apps/backend/servers/ai_router.py` × 2 → AI start/stop yolları `for _cid in (6, 7, 8)`
 
     Bobin 6-7 STM'e taşındıktan sonra bu üç yer hâlâ MQTT'ye STOP/START basıyordu
     (dinleyen yok → boşa yayın) ve `ESP_COIL_IDS` ile AYRIŞMIŞ ikinci bir topoloji
@@ -100,7 +100,7 @@ def test_KRITIK_uretim_kodu_ESP_kimliklerini_ELLE_SAYMAZ():
     """
     import re as _re
 
-    HEDEFLER = ("backend_service.py", "servers/ai_router.py", "servers/api_server.py")
+    HEDEFLER = ("backend_service.py", "apps/backend/servers/ai_router.py", "apps/backend/servers/api_server.py")
     # `(6, 7, 8)` · `[6, 7, 8]` · `range(6, 9)` — ESP kapsamını elle sayan kalıplar
     DESEN = _re.compile(r"range\(\s*6\s*,\s*9\s*\)|[(\[]\s*6\s*,\s*7\s*,\s*8\s*[)\]]")
     ihlal: list[str] = []

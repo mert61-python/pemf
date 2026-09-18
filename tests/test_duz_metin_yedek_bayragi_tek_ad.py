@@ -5,8 +5,8 @@
 OLCULEN ARIZA. Goc kodu iki dosyaya kopyalanmis ve kopyalar AYNI politikayi IKI FARKLI
 ortam degiskeninden okuyordu:
 
-    database/sqlcipher_util.py       -> PEMF_KEEP_PLAIN_BACKUP   (hasta DB'si)
-    database/treatment_history_db.py -> PEMF_KEEP_PLAIN_BAK      (tedavi + AI gecmisi)
+    apps/backend/database/sqlcipher_util.py       -> PEMF_KEEP_PLAIN_BACKUP   (hasta DB'si)
+    apps/backend/database/treatment_history_db.py -> PEMF_KEEP_PLAIN_BAK      (tedavi + AI gecmisi)
 
 SONUC: emanet isteyen operator bayragi set eder, IKI veritabanindan YALNIZ BIRINDE ise
 yarar. Digeri sessizce duz-metin yedegi guvenli-siler. Hangisinin hangisi oldugu ne
@@ -27,7 +27,7 @@ cozumun kendisini yasaklayan bir kapiydi. Sozlesme "TEK YERDE okunur, digerleri 
 olarak degistirildi.
 
 SOZLESME:
-  · Bayrak `database/` altinda TEK dosyada okunur: sqlcipher_util.py (ortak yardimci).
+  · Bayrak `apps/backend/database/` altinda TEK dosyada okunur: sqlcipher_util.py (ortak yardimci).
   · Yardimci HEM kanonik HEM eski adi okur (eski ad geriye-uyum; sahada set edilmis
     olabilir, sessizce yok saymak emanet bekleyen birinin verisini siler).
   · treatment_history_db bayragi KENDI okumaz — yardimciyi CAGIRIR.
@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 
 _KOK = Path(__file__).resolve().parents[1]
-_DB_DIZIN = _KOK / "database"
+_DB_DIZIN = _KOK / "apps" / "backend" / "database"
 _SQLCIPHER = _DB_DIZIN / "sqlcipher_util.py"
 
 
@@ -54,7 +54,7 @@ def _tedavi_yolu_kaynagi() -> tuple[Path, str]:
     ⚠️ 2026-09-18'de bu satir `_TEDAVI = _DB_DIZIN / "treatment_history_db.py"` idi ve B4
     bolmesi metodu `thdb_sema.py`ye tasiyinca kapi "fonksiyon bulunamadi — kapi KOR kaldi"
     diye KIRMIZI dondu. Kapinin isi dosya adini degil DAVRANISI korumak; dolayisiyla capa
-    dosyaya degil, FONKSIYONUN KENDISINE pinlenir ve `database/` altinda aranir.
+    dosyaya degil, FONKSIYONUN KENDISINE pinlenir ve `apps/backend/database/` altinda aranir.
     (Ayni ders: elle yazilan liste bayatlar — `urun_senaryolari` bayat-ikili nobeti.)
     """
     for yol in sorted(_DB_DIZIN.glob("*.py")):
@@ -62,7 +62,7 @@ def _tedavi_yolu_kaynagi() -> tuple[Path, str]:
         if "def _migrate_to_encrypted_if_needed" in metin:
             return yol, metin
     raise AssertionError(
-        "`_migrate_to_encrypted_if_needed` database/ altinda HICBIR dosyada yok — "
+        "`_migrate_to_encrypted_if_needed` apps/backend/database/ altinda HICBIR dosyada yok — "
         "tedavi DB'sinin goc yolu kaldirilmis olabilir"
     )
 
@@ -203,7 +203,7 @@ def test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder():
     halkalari (goc -> politika -> yardimci) ayri ayri sinaniyor.
     """
     # ⚠️ CIPA 4. KEZ TASINDI (2026-09-18, B4 bolmesi): metot artik `thdb_sema.py`de.
-    # Dosya adi SABIT YAZILMIYOR — `database/` altinda aranıyor, ki sonraki bolme kapiyi
+    # Dosya adi SABIT YAZILMIYOR — `apps/backend/database/` altinda aranıyor, ki sonraki bolme kapiyi
     # yine kirmasin. Olculen sey degismedi.
     _tedavi, _ = _tedavi_yolu_kaynagi()
     assert _ORTAK_GOC in _cagrilan_adlar(_tedavi, "_migrate_to_encrypted_if_needed"), (

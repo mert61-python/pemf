@@ -3,7 +3,7 @@
 """SYSTEM (LocalSystem) KİMLİK KASASI TEARDOWN'DA TEMİZLENİR — denetim 2026-09-06.
 
 Ölçülen durum: backend servisi (PemfBackend, NSSM) LocalSystem olarak koşar;
-database/sqlcipher_util.py `keyring.set_password("PEMF_GUI", "sqlcipher_key", ...)` yazar ve
+apps/backend/database/sqlcipher_util.py `keyring.set_password("PEMF_GUI", "sqlcipher_key", ...)` yazar ve
 python-keyring'in Windows arka ucu bunu SYSTEM hesabının Credential Manager kasasına
 "<ad>@PEMF_GUI" hedefiyle koyar. `pemf_teardown.ps1::Remove-PemfCredentials` yükseltilmiş
 YÖNETİCİ olarak cmdkey çalıştırır → yalnız yöneticinin kasasını görür → DB/fernet anahtarları

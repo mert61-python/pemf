@@ -3,7 +3,7 @@
 """Sitede satilan HER plan, backend'in TANIDIGI bir tier olmali (8. parti).
 
 BULUNAN KUSUR: `apps/web/src/config.ts::PLANS` icine "Kullandikca Ode" plani eklendi
-(tier='kullandikca'), ama `servers/entitlement.py::VALID_TIERS` yalnizca
+(tier='kullandikca'), ama `apps/backend/servers/entitlement.py::VALID_TIERS` yalnizca
 {baslangic, pro, pro_plus} taniyordu. `_supabase_entitlement` satiri okurken:
 
     if tier not in VALID_TIERS or inactive:
@@ -35,7 +35,7 @@ def _web_tierlari() -> set[str]:
 
 
 def _backend_tierlari() -> set[str]:
-    src = (_KOK / "servers" / "entitlement.py").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps" / "backend" / "servers" / "entitlement.py").read_text(encoding="utf-8", errors="replace")
     m = re.search(r"VALID_TIERS\s*=\s*\{([^}]*)\}", src)
     assert m, "entitlement.py icinde VALID_TIERS bulunamadi"
     return set(re.findall(r'"([a-z_]+)"', m.group(1)))
@@ -74,7 +74,7 @@ def test_KRITIK_kuyruk_ayricaligi_SITEDE_VAAT_EDILMEDIGI_icin_kapali_kalir():
           site artik boyle bir sey vaat etmiyor, yani ACIKLANMAMIS bir kisitlama olurdu),
       (b) mekanizmanin kendisi SILINMEZ (ileride tekrar aciklanip acilabilir).
     """
-    src = (_KOK / "servers" / "entitlement.py").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps" / "backend" / "servers" / "entitlement.py").read_text(encoding="utf-8", errors="replace")
     assert 'TIER_ENFORCED: bool = _flag("PEMF_TIER_ENFORCED", False)' in src, (
         "tier enforcement varsayilani ACIK olmus → site vaat etmediği hâlde Pro kullanicilar "
         "paylasimli kuyruga girer (aciklanmamis kisitlama)"

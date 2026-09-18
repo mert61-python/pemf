@@ -208,9 +208,9 @@ function Remove-PemfCredentials([string[]]$TargetNames, [switch]$DryRun) {
 
 # ⚠️ DENETİM 2026-09-06 — SYSTEM (LocalSystem) KİMLİK KASASI TEMİZLENMİYORDU (KVKK EKSİK TEMİZLİK).
 # Backend servisi (PemfBackend, NSSM) LocalSystem olarak koşar; keyring.set_password ile YAZANLAR:
-# database/sqlcipher_util.py ("PEMF_GUI","sqlcipher_key") + pemf_gui/config.py ("PEMF_GUI","patient_fernet_key")
+# apps/backend/database/sqlcipher_util.py ("PEMF_GUI","sqlcipher_key") + pemf_gui/config.py ("PEMF_GUI","patient_fernet_key")
 # — python-keyring'in Windows arka ucu bunları SYSTEM HESABININ Credential Manager kasasına
-# "<ad>@PEMF_GUI" hedefiyle koyar (okuyan: utils/secrets_manager.py; footprint listesi ikisini de kapsar).
+# "<ad>@PEMF_GUI" hedefiyle koyar (okuyan: apps/backend/utils/secrets_manager.py; footprint listesi ikisini de kapsar).
 # Remove-PemfCredentials yükseltilmiş YÖNETİCİ olarak cmdkey çalıştırır → yalnız yöneticinin kasasını
 # görür; SYSTEM kasasındaki DB/fernet anahtarları "tam temizlik"ten SAĞ ÇIKIYORDU ve depoda bunu
 # temizleyen başka adım yoktu (Sarı NOT ile operatöre bırakılıyordu).

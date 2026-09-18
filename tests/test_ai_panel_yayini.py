@@ -213,7 +213,7 @@ def test_KRITIK_kok_image_base64_KALDI_ve_paneller_EK_alan():
     import ast
     import io as _io
 
-    kaynak = _io.open(KOK / "servers" / "ai_router.py", encoding="utf-8").read()
+    kaynak = _io.open(KOK / "apps" / "backend" / "servers" / "ai_router.py", encoding="utf-8").read()
     agac = ast.parse(kaynak)
     for ad in ("analyze_em_fantom", "analyze_em_petri"):
         fn = next(d for d in ast.walk(agac) if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef)) and d.name == ad)
@@ -363,7 +363,6 @@ class _SahteFantomSonuc:
 @pytest.fixture(scope="module")
 def client():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     return TestClient(api_server.app, client=("127.0.0.1", 51239))

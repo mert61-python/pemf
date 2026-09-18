@@ -4,7 +4,7 @@
 
 SAHİP BİLDİRİMİ (2026-08-06): `05_FantomTumor.jpeg` Petri Kuyu ucuna verilince boru hattı
 itirazsız `success=True, n_wells=2, n_cancer=1` döndürüyor, iki SAHTE kuyucuk için
-PetriPredictor'ı çalıştırıp E_cancer/D/P üretiyordu. `utils/image_domain.py` bunu yakalayamaz
+PetriPredictor'ı çalıştırıp E_cancer/D/P üretiyordu. `apps/backend/utils/image_domain.py` bunu yakalayamaz
 (ölçüldü: petri achromatic=0.391, fantom 0.179 → İKİSİ DE `color`).
 
 İki katman test edilir:
@@ -208,7 +208,7 @@ def test_capraz_yukleme_REDDEDILIR(boru_hatti, yol):
 @entegrasyon
 @pytest.mark.parametrize("yol", [CT_KIST, CT_NORMAL, CT_TAS])
 def test_bobrek_CT_kesiti_REDDEDILIR(boru_hatti, yol):
-    """DENETİM 2026-08-06 (ASIL REGRESYON): `utils/image_domain.py` em_petri'ye GRAYSCALE'i
+    """DENETİM 2026-08-06 (ASIL REGRESYON): `apps/backend/utils/image_domain.py` em_petri'ye GRAYSCALE'i
     açtığı gün CT kesitlerini bu uçta tutan modalite katmanı kalktı ve o anki geometri katmanı
     07b/07c'yi GEÇİRİYORDU (HTTP 200, success=True, n_wells=1, PetriPredictor çalıştı).
     Böbrek CT'sinden "petri kuyucuğu" raporlamak, düzeltilmeye çalışılan sessiz-yanlış-sonucun
@@ -235,7 +235,6 @@ def test_kacis_kapagi_boru_hattinda_da_calisir(boru_hatti, monkeypatch):
 @entegrasyon
 def test_uc_fantom_fotografina_422_doner():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     c = TestClient(api_server.app)
@@ -252,7 +251,6 @@ def test_uc_fantom_fotografina_422_doner():
 def test_uc_bobrek_CT_sine_422_doner():
     """UÇ SEVİYESİ regresyon kilidi: ölçülen hâli HTTP 200 + status='success' + n_wells=1 idi."""
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     if not CT_KIST.exists():
@@ -267,7 +265,6 @@ def test_uc_bobrek_CT_sine_422_doner():
 @entegrasyon
 def test_uc_gercek_petriyi_KABUL_eder():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     c = TestClient(api_server.app)

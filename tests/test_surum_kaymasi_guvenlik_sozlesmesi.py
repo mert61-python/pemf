@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 
 _KOK = Path(__file__).resolve().parents[1]
-_API = (_KOK / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
+_API = (_KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8", errors="replace")
 
 
 def _stop_govdesi() -> str:

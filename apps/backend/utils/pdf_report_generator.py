@@ -12,8 +12,12 @@ from pathlib import Path
 from typing import List
 
 # Add parent directory to path for imports
+# ⚠️ Depo koku SABIT DERINLIKLE bulunmaz (2026-09-18, F4): modul `apps/backend/utils/`
+# altina indi, "bir ust dizin" artik kok DEGIL.
+from utils.path_utils import kaynak_kokunu_bul
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
+parent_dir = str(kaynak_kokunu_bul(__file__))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 

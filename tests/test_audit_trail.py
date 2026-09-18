@@ -8,7 +8,7 @@ kayıtlarım kayboldu" denildiğinde kimin, ne zaman, nereden ve kaç kaydı sil
 hiçbir şey yoktu; log dönünce o satır da yok oluyordu.
 
 ÇÖZÜM: şifreli DB içinde **ekleme-only** `audit_events` tablosu (SQLite tetikleyicileriyle
-mühürlü) + `servers/audit_log.py` üzerinden istek bağlamı (IP + KANITLANMIŞ operatör).
+mühürlü) + `apps/backend/servers/audit_log.py` üzerinden istek bağlamı (IP + KANITLANMIŞ operatör).
 
 Kilitlenen değişmezler:
   1) İz DEĞİŞTİRİLEMEZ ve SİLİNEMEZ — "hepsini sil" bile silme kaydını silemez.

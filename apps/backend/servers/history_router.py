@@ -7,12 +7,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from database.treatment_history_db import get_treatment_db
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
-
-from database.treatment_history_db import get_treatment_db
 from utils.path_utils import get_app_data_directory
 from utils.pdf_report_generator import get_pdf_generator
 from utils.seans_durum import durum_etiketi

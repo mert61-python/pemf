@@ -57,7 +57,7 @@ def test_KARSIT_KANIT_dosya_yokken_bos_dict_ZARIF(monkeypatch):
 def test_YAPISAL_landmark_yaniti_bantlari_tasir():
     """Çıpa GERÇEK çağrıya pinli (yapısal-çıpa kırılganlığı dersi): landmark JSONResponse
     gövdesi `fgs_bantlari` alanını _fgs_bantlari() ÇAĞRISIYLA doldurur."""
-    src = (KOK / "servers/ai_router.py").read_text(encoding="utf-8")
+    src = (KOK / "apps/backend/servers/ai_router.py").read_text(encoding="utf-8")
     assert '"fgs_bantlari": _fgs_bantlari(),' in src, "landmark yanıtı bant alanını kaybetti (A4 regresyonu)"
     i = src.index('"fgs_bantlari": _fgs_bantlari(),')
     pencere = src[max(0, i - 600) : i]
@@ -159,7 +159,7 @@ def test_YAPISAL_router_fantom_ve_petri_meta_bagli():
     hata analizi DÜŞÜRMEZ (except + warning)."""
     # ⚠️ çıpa TEK satıra pinli DEĞİL: ruff-format çağrıyı çok-satıra kırabiliyor (ölçüldü)
     # — yapısal-çıpa kırılganlığı dersi. Fonksiyon-adı çıpası + pencere-içi parça kontrolü.
-    src = (KOK / "servers/ai_router.py").read_text(encoding="utf-8")
+    src = (KOK / "apps/backend/servers/ai_router.py").read_text(encoding="utf-8")
     for modul, cagri in [
         ("em_fantom", "_ief.xai_hizli_sensitivity,"),
         ("em_petri", "_iep.xai_hizli_sensitivity,"),
@@ -221,6 +221,7 @@ def test_KRITIK_fgs_bantlari_TEK_KAYNAK_paritesi():
     """Kanonik modül fonksiyonu (ai_service bunu kullanır) router'ın döndürdüğüyle BİREBİR
     aynı olmalı — ayrışırsa GPU ve gömülü profil farklı bant gösterir."""
     import servers.ai_router as air
+
     from ai_hub.cat_landmark.inference_cat_landmark import fgs_bantlari
 
     air._FGS_BANTLARI_CACHE = None

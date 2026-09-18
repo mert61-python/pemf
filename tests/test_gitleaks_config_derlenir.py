@@ -142,7 +142,7 @@ def test_KARSIT_KANIT_gitleaksignore_COMMIT_PINLI():
 # ═══════════════════════════════════════════════════════════════════════════════════════════
 # TURKCE "API" CARPISMASI — bayrak muafiyeti (2026-09-15)
 # ═══════════════════════════════════════════════════════════════════════════════════════════
-# OLCULEN ARIZA: `git commit` sirasinda gitleaks `servers/api_server.py` icinde
+# OLCULEN ARIZA: `git commit` sirasinda gitleaks `apps/backend/servers/api_server.py` icinde
 # `generic-api-key` bulgusu verdi. "Sir" sandigi sey `PEMF_ESP_ENABLED=1` — belgelenmis bir
 # calisma-zamani bayragi, depoda 10+ takipli dosyada zaten acikca duruyor.
 #

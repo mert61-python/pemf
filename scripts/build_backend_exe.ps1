@@ -362,7 +362,7 @@ if ((Test-Path $exe) -and -not $SkipAiGate) {
             if ($null -eq $rapor.pip_yasagi -or -not $rapor.pip_yasagi.etkin) {
                 Die ("ÇALIŞMA-ANI PİP YASAĞI ETKİN DEĞİL: üretilen EXE çalışırken kendine paket " +
                      "kurmaya kalkabilir (denetim #10 — ürün kendi EXE'sini `-m pip install` ile " +
-                     "alt-süreç olarak başlatıyordu). utils/runtime_guards.py giriş noktasında çağrılmalı.")
+                     "alt-süreç olarak başlatıyordu). apps/backend/utils/runtime_guards.py giriş noktasında çağrılmalı.")
             }
             Info "Çalışma-anı pip yasağı: etkin."
 

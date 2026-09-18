@@ -218,5 +218,7 @@ def test_STM_protokolunde_sicaklik_alani_YOK():
     """İddianın dayanağı: STM paketi duty/phase/freq/duration taşır, sıcaklık TAŞIMAZ."""
     from pathlib import Path
 
-    hc = (Path(__file__).resolve().parent.parent / "controllers" / "hardware_controller.py").read_text(encoding="utf-8")
+    hc = (
+        Path(__file__).resolve().parent.parent / "apps" / "backend" / "controllers" / "hardware_controller.py"
+    ).read_text(encoding="utf-8")
     assert "temperature" not in hc.lower(), "STM kontrolcusune sicaklik eklendi — README/UI sinir notlari GUNCELLENMELI"

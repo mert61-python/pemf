@@ -9,7 +9,7 @@ S3 ve STM32 48 °C'de KALDI (bilinçli asimetri; STM eşiği
 ⚠️ NEDEN BU KAPI VAR — İKİ AYRI SEBEP:
 
 1. **Eşik TEK koruma katmanı.** Backend hiçbir sıcaklık limiti dayatmıyor (ölçüldü:
-   `servers/` içinde sıcaklık eşiği yok; safety-limit bilinçli kaldırılmıştı). Bobini
+   `apps/backend/servers/` içinde sıcaklık eşiği yok; safety-limit bilinçli kaldırılmıştı). Bobini
    durduracak tek şey firmware'deki bu sabit. Kazara 48'e geri dönmek sahibin kararını
    sessizce iptal eder; kazara 200'e çıkmak da koruma bırakmaz.
 

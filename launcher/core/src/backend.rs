@@ -608,7 +608,7 @@ fn read_log_tail(path: &Path, n: usize) -> String {
 /// async seri-kuyruğa konduğu için porta yazılsın diye kısa bekler. Best-effort: backend cevap
 /// vermese/erişilemese bile çağıran süreci YİNE öldürür (bu adım güvenliği artırır, engellemez).
 /// E-stop HTTP bütçesi. DENETİM 2026-08-04: eskiden 3 sn idi; backend AYNI ucu kendi kaynağında
-/// "senkron MQTT publish yapar (~7sn worst-case)" diye belgeliyor (`servers/api_server.py`
+/// "senkron MQTT publish yapar (~7sn worst-case)" diye belgeliyor (`apps/backend/servers/api_server.py`
 /// `emergency_stop` yorumu) ve `_estop_one` bobin-başına iki senkron publish yapıyor. 3 sn dolunca
 /// ureq isteği bırakıyordu, çağıran hemen `child.kill()` (TerminateProcess) çağırıyordu ve E-stop'u
 /// yürüten `asyncio.to_thread` thread'i ORTASINDA ölüyordu. STM bobinleri 1-5 firmware'in 1500 ms
@@ -1259,7 +1259,7 @@ mod tests {
                 if n == 0 {
                     continue;
                 }
-                // GERÇEK yanıt şekli (servers/api_server.py `emergency_stop`): `confirmed` alanı
+                // GERÇEK yanıt şekli (apps/backend/servers/api_server.py `emergency_stop`): `confirmed` alanı
                 // "her iki transport da doğrulandı" demektir. safe_stop_coils bunu OKUR ve
                 // doğrulanmadıysa bir kez daha dener → burada true dönerek tek denemede biter.
                 let body = br#"{"status":"success","confirmed":true,"stmStopped":true}"#;

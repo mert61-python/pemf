@@ -21,9 +21,9 @@ import pathlib
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_ROUTER = _KOK / "servers" / "ai_router.py"
+_ROUTER = _KOK / "apps" / "backend" / "servers" / "ai_router.py"
 
-pytestmark = pytest.mark.skipif(not _ROUTER.exists(), reason="servers/ai_router.py yok")
+pytestmark = pytest.mark.skipif(not _ROUTER.exists(), reason="apps/backend/servers/ai_router.py yok")
 
 
 def _kaynak() -> str:
@@ -38,7 +38,7 @@ def test_KRITIK_yardimci_kodlanan_dizinin_boyutunu_verir():
         (d for d in agac.body if isinstance(d, ast.FunctionDef) and d.name == "_kare_boyutu"),
         None,
     )
-    assert fn is not None, "servers/ai_router.py içinde _kare_boyutu yardımcısı yok"
+    assert fn is not None, "apps/backend/servers/ai_router.py içinde _kare_boyutu yardımcısı yok"
 
     # Yardımcıyı numpy'siz, sahte bir dizi ile çalıştır (shape yeterli).
     # ⚠️ İmzada `np.ndarray` tip notu var; numpy CI'da yüklü olmayabilir → sahte modülle bağla.

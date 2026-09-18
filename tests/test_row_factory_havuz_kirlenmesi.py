@@ -18,7 +18,7 @@ Sebep: `row_factory` dict döndürünce `row[0]` / `row["id"]` gibi POZİSYONEL 
 
 ⚠️ SORUN ZATEN BİLİNİYORDU — kaynakta değil TESTTE geçici çözülmüş:
 `tests/test_prod_readiness_fixes.py:95` → `c.row_factory = None  # sync_worker paylaşılan
-bağlantıda dict-factory bıraktı → sıfırla`. Aynı sınıf `servers/sync_worker.py`'de de var.
+bağlantıda dict-factory bıraktı → sıfırla`. Aynı sınıf `apps/backend/servers/sync_worker.py`'de de var.
 Havuz commit `3f97c8c` (2026-08-03) ile geldi, `row_factory` satırı `0e2b1ed` — "havuz eklendi,
 yan etki gözden kaçtı" regresyonu. `tests/test_db_connection_pool.py` havuzun 5 değişmezini
 kilitliyor ama `row_factory` restore'unu kilitlemiyordu.

@@ -214,7 +214,7 @@ def test_YAPISAL_gzip_KAYITLI_ve_asgari_boyut_SABITE_BAGLI():
     ⚠️ Elle yazılmış bir sayı sabitle sessizce ayrışır ve yukarıdaki eşik kapısı anlamını
     yitirir (bu depoda "kopyalanan sabit" sınıfı defalarca ölçüldü).
     """
-    agac = ast.parse(io.open(KOK / "servers" / "api_server.py", encoding="utf-8").read())
+    agac = ast.parse(io.open(KOK / "apps" / "backend" / "servers" / "api_server.py", encoding="utf-8").read())
     bulundu = False
     for d in ast.walk(agac):
         if not isinstance(d, ast.Call):

@@ -50,7 +50,6 @@ _PF = KOK / "apps" / "ui" / "src"
 @pytest.fixture
 def istemci():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app) as c:
@@ -314,7 +313,7 @@ def test_KRITIK_reddedilen_seans_gecmise_TAMAMLANDI_yazilmaz():
     from servers import api_server
 
     assert SEANS_DURUMU_DONANIM_REDDI != "completed"
-    src = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     assert 'elif _sebep.startswith("donanim-reddi"):' in src, "donanim-reddi dali kayboldu"
     assert hasattr(api_server, "_seansi_geri_al"), "geri alma yardimcisi kayboldu"
 
@@ -334,7 +333,7 @@ def test_KRITIK_NACK_dali_aktif_seansi_DURDURUR():
 
     MUTASYON: `_stm_red_aktif_seansi_durdur(_ham)` çağrısını sil → KIRMIZI.
     """
-    src = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     i_nack = src.index('if event.event_type in {"hardware.stm.error", "hardware.stm.nack"}:')
     govde = src[i_nack : i_nack + 2000]
     assert "_stm_red_aktif_seansi_durdur(" in govde, (
@@ -406,7 +405,7 @@ def test_KRITIK_ESP_ACIKKEN_eski_davranis_KORUNUR(monkeypatch):
 
     monkeypatch.setenv("PEMF_ESP_ENABLED", "1")
     assert live_state.esp_etkin(), "bayrak acikken ESP etkin olmali"
-    src = (KOK / "servers" / "api_server.py").read_text(encoding="utf-8")
+    src = (KOK / "apps" / "backend" / "servers" / "api_server.py").read_text(encoding="utf-8")
     assert "if esp_coils and not live_state.esp_etkin():" in src, (
         "ESP kapisi bayraktan BAGIMSIZ hale gelmis -> geri donus tek satirlik olmaktan cikar"
     )

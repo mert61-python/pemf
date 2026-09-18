@@ -348,7 +348,8 @@ hidden = list(dict.fromkeys(hidden))  # dedup
 
 a = Analysis(
     [os.path.join(project_path, 'backend_service.py')],
-    pathex=[project_path],
+    # ⚠️ `apps/backend` (2026-09-18, F4) — bkz. onedir spec'indeki not.
+    pathex=[project_path, os.path.join(project_path, 'apps', 'backend')],
     binaries=binaries,
     datas=datas,
     hiddenimports=hidden,

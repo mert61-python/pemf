@@ -15,4 +15,4 @@ app-data'dadır (`~/.pemf_gui` / `PEMF_DATA_DIR`, tipik `C:\ProgramData\PEMF_Sys
 - Runtime'ı etkilemez; gerçek veri app-data'da. `file_inventory.json` güvenle yok sayılır.
 
 ---
-İlgili: [database/ (gerçek DB)](../database/README.md) · [proje geneli](../README.md)
+İlgili: [apps/backend/database/ (gerçek DB)](../database/README.md) · [proje geneli](../README.md)
