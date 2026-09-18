@@ -27,6 +27,13 @@ Bütçe 24 × 0,25 sn = 6 sn'ye çıkarıldı. Açılışta en kötü durumda 6 
 AÇILMAMAKTAN kıyaslanamayacak kadar iyidir. Kalıcı bir okuyucu varsa yine düşer ve hata
 mesajı operatöre ne yapacağını söyler — o davranış BİLEREK korunuyor.
 
+⚠️ BU RİSK WINDOWS'A ÖZGÜ (CI'da ölçüldü, 2026-09-19). POSIX'te açık bir tutamaç
+`rename`'i ENGELLEMEZ; Linux runner'da kalıcı okuyucuyla bile karantina BAŞARILI oldu ve
+bu dosyanın ilk hâli orada kırmızı verdi. Windows'ta ise açık tutamaç `shutil.move`'u
+`PermissionError`a düşürür. Saha makinesi Windows olduğu için risk GERÇEK; ama kilit
+davranışını ölçen testler artık `win32`e pinli. Bütçeyi KAYNAKTAN ölçen test her
+platformda koşar — asıl değişmez odur.
+
 ⚠️ BU KAPININ KAPSAMADIĞI ŞEY — `gc.collect()`. Mutasyonla ölçüldü (2026-09-19): o satır
 KALDIRILINCA bu dosyanın dördü de YEŞİL kalıyor. Yani buradaki yeşil, `gc.collect()`in
 gereksiz olduğu anlamına GELMEZ; o satır 2026-08-14 saha arızası için eklendi (bu süreç
@@ -64,6 +71,10 @@ def _sifreli_db_yaz(yol: Path) -> None:
     c.close()
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="POSIX'te acik tutamac rename'i engellemez — kilit davranisi YALNIZ Windows'ta olculebilir",
+)
 def test_KRITIK_kisa_omurlu_OKUYUCU_karantinayi_dusurmez(tmp_path):
     """🔴 ASIL REGRESYON: günlük yedek kopyası karantinayı kilitlerse cihaz AÇILMAZ."""
     db = tmp_path / "pemf_treatment_history.db"
@@ -105,6 +116,10 @@ def test_KARSIT_KANIT_tutamac_YOKKEN_zaten_calisiyor(tmp_path):
     assert time.monotonic() - basla < 1.0, "kilit yokken beklememeli"
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="POSIX'te acik tutamac rename'i engellemez — bu sinir YALNIZ Windows'ta var",
+)
 def test_KARSIT_KANIT_KALICI_okuyucuda_HALA_duser(tmp_path):
     """⚠️ Bütçe DAVRANIŞI DEĞİŞTİRMİYOR: kalıcı kilitte hâlâ `None` döner.
 
