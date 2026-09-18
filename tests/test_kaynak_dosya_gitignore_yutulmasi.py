@@ -4,7 +4,7 @@
 
 OLCULEN ARIZA. Kok `.gitignore` Python paketleme ciktilari icin `lib/` satiri tasiyordu.
 Gitignore'da EGIK CIZGI ICERMEYEN bir desen HER DIZIN DERINLIGINDE eslesir — yani kural
-`pemf-vet-web/src/lib/` klasorunu de kapsiyordu. O klasordeki ESKI dosyalar kural eklenmeden
+`apps/web/src/lib/` klasorunu de kapsiyordu. O klasordeki ESKI dosyalar kural eklenmeden
 once izlendigi icin sorun GORUNMUYORDU; ama sonradan eklenen her YENI kaynak dosya
 (`authHatalari.ts`, `jeton.ts`, `planFiyat.ts`) commit'e SESSIZCE girmiyordu.
 
@@ -27,8 +27,8 @@ _KOK = Path(__file__).resolve().parents[1]
 
 # Kaynak agaclari + o agacta kaynak sayilan uzantilar.
 _AGACLAR = {
-    "pemf-vet-web/src": (".ts", ".tsx", ".css"),
-    "pemf-vet-web/api": (".ts",),
+    "apps/web/src": (".ts", ".tsx", ".css"),
+    "apps/web/api": (".ts",),
     "pf/src": (".ts", ".tsx"),
     "servers": (".py",),
     "controllers": (".py",),
@@ -112,8 +112,8 @@ def test_KARSIT_KANIT_uretim_ciktisi_HALA_yoksayiliyor():
     """Asiri-genisleme korumasi: kapiyi gecmenin ucuz yolu `.gitignore`u bosaltmaktir; o zaman
     node_modules/dist/__pycache__ depoya girer. Bunlarin yoksayildigini ayrica dogrula."""
     ornekler = [
-        "pemf-vet-web/node_modules/x.js",
-        "pemf-vet-web/dist/index.html",
+        "apps/web/node_modules/x.js",
+        "apps/web/dist/index.html",
         "servers/__pycache__/x.pyc",
     ]
     yoksayilan = _check_ignore(ornekler)

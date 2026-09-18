@@ -25,13 +25,13 @@ from pathlib import Path
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-LEGAL = KOK / "pemf-vet-web" / "src" / "pages" / "Legal.tsx"
+LEGAL = KOK / "apps/web" / "src" / "pages" / "Legal.tsx"
 
 
 @pytest.fixture(scope="module")
 def metin():
     if not LEGAL.exists():
-        pytest.skip("pemf-vet-web kaynagi yok")
+        pytest.skip("apps/web kaynagi yok")
     return LEGAL.read_text(encoding="utf-8")
 
 

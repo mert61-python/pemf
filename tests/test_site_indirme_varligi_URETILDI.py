@@ -37,7 +37,7 @@ def _surumler() -> dict:
 
 def _site_apk_adi() -> str:
     """Sitenin URETTIGI dosya adi — sablon config.ts'ten okunur, elle yazilmaz."""
-    src = (_KOK / "pemf-vet-web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps/web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
     m = re.search(r"get androidAsset\(\):\s*string\s*\{\s*return\s*`([^`]+)`", src)
     assert m, "config.ts icinde androidAsset sablonu bulunamadi — bicim degismis olabilir"
     sablon = m.group(1)  # ornek: PEMF_Vet_Mobil-${this.androidVersion}.apk
@@ -137,7 +137,7 @@ def test_KARSIT_KANIT_APK_icindeki_surum_versions_json_ile_AYNI():
 
 def _site_exe_adi() -> str:
     """Sitenin URETTIGI Windows kurulum adi — sablon + etiket config.ts'ten okunur."""
-    src = (_KOK / "pemf-vet-web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps/web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
     m = re.search(r"get windowsAsset\(\):\s*string\s*\{\s*return\s*`([^`]+)`", src)
     assert m, "config.ts icinde windowsAsset sablonu bulunamadi — bicim degismis olabilir"
     t = re.search(r"windowsTag:\s*'([^']+)'", src)

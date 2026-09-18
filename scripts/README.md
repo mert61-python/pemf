@@ -19,7 +19,7 @@ Build, yayın, servis-kurulum, gateway/hotspot ve kaldırma scriptleri.
 | `make_manifest.py` | `../pemf-app-packages/manifest.json` üretir (sha256/size hesaplı) — elle düzenlemeyi bitirir |
 | `publish_release.ps1` | GitHub release oluştur + asset yükle + `latest.json` güncelle (`-Branch exe\|mobil`) |
 | `restore_assets.ps1` | Boş/yeni makinede depoyu çalışır kılar — yayınlardaki AI model ağırlıklarını (`home/vet/research.zip` + deps katmanından çekirdek `cat_organ`) indirip `../release_assets/ai_models`'a açar |
-| `site_indirme_dogrula.py` | Yayın **SON adımı** — sitedeki (`pemf-vet-web/src/config.ts`) indirme bağlantıları GERÇEKTEN yayında mı (HTTP 200) doğrular; "yerelde üretildi ama sürümsüz adla yüklendi → 404" tuzağını yakalar |
+| `site_indirme_dogrula.py` | Yayın **SON adımı** — sitedeki (`apps/web/src/config.ts`) indirme bağlantıları GERÇEKTEN yayında mı (HTTP 200) doğrular; "yerelde üretildi ama sürümsüz adla yüklendi → 404" tuzağını yakalar |
 | `check_changelog_surum.py` | Pre-commit kancası — `../versions.json` sürümleri `../CHANGELOG.md`'de geçmeden commit'i durdurur (CI testiyle birebir mantık) |
 
 ## Servis kurulumu (klinik/sunucu)

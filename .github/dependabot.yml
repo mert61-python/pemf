@@ -59,9 +59,9 @@ updates:
   # ── MONOREPO (2026-08-18): yukarıdaki blokta yazılı ÖN KOŞUL SAĞLANDI ─────────────────
   # O not şöyle diyordu: "npm ağaçları EKLENEMEDİ — çünkü sürüm kontrolünde DEĞİLLER …
   # ÇÖZÜM kod değil SÜREÇ: bu iki projeyi (node_modules hariç, lock DAHİL) depoya alın; sonra
-  # buraya `npm` ekosistemi olarak `/pf` ve `/pemf-vet-web` girdilerini ekleyin."
-  # `pf/` ve `pemf-vet-web/` artık subtree ile depoda ve lock dosyaları izleniyor → talimat
-  # uygulanıyor. Denetimde bulunan somut açıklar bu iki ağaçtaydı: pemf-vet-web lock'unda
+  # buraya `npm` ekosistemi olarak `/pf` ve `/apps/web` girdilerini ekleyin."
+  # `pf/` ve `apps/web/` artık subtree ile depoda ve lock dosyaları izleniyor → talimat
+  # uygulanıyor. Denetimde bulunan somut açıklar bu iki ağaçtaydı: apps/web lock'unda
   # undici 5.28.4 (CVE-2025-22150) ve path-to-regexp 6.1.0 (CVE-2024-45296).
 
   # Mobil/web arayüz (Expo SDK 56 / React 19 / RN 0.85 — bleeding-edge).
@@ -87,7 +87,7 @@ updates:
   # ÖDEME sitesi (iyzico + Supabase + Vercel serverless `api/`). Bugüne kadar HİÇBİR otomatik
   # CVE taramasında değildi ve deponun CI'ı da yoktu — para yolu taşıyan tek yüzey.
   - package-ecosystem: "npm"
-    directory: "/pemf-vet-web"
+    directory: "/apps/web"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10

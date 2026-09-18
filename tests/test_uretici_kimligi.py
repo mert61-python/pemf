@@ -24,7 +24,7 @@ sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanl�
 import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımcısı
 
 #: Tescilli ünvanın telif satırında kullanılan kısa hâli. TEK KAYNAK:
-#: `pemf-vet-web/src/config.ts` → `LEGAL.company`.
+#: `apps/web/src/config.ts` → `LEGAL.company`.
 UNVAN = "İBİA Teknoloji Ltd. Şti."
 
 #: Artık HİÇBİR kullanıcıya-görünen kimlik alanında bulunmamalı.
@@ -39,14 +39,14 @@ def test_KRITIK_site_unvani_TEK_KAYNAK():
     """Ünvanın kanonik yazımı sitede tanımlı; bu test onu çıpa alır.
     Site değişirse burada da bilinçli güncelleme gerekir.
 
-    ⚠️ `pemf-vet-web/` KENDİ git deposudur ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
+    ⚠️ `apps/web/` KENDİ git deposudur ve bu depoda izlenmez → CI'da dosya YOKTUR ve test
     `FileNotFoundError` ile düşerdi (2026-08-12). Artık atlanır; `PEMF_CAPRAZ_KAYNAK_ZORUNLU=1`
     ile atlama yasaklanabilir. Atlama kapsam KAYBI değildir: asıl koruma — kullanıcıya görünen
     kimlik alanlarında (installer/UAC/tauri.conf) doğru ünvanın bulunması — aşağıdaki
     parametrik testlerdedir ve onlar DEPO İÇİ dosyaları okuduğu için CI'da tam koşar. Burada
     atlanan tek şey `UNVAN` sabitinin sitenin yazımıyla çapraz doğrulanmasıdır.
     """
-    src = capraz.oku("pemf-vet-web/src/config.ts")
+    src = capraz.oku("apps/web/src/config.ts")
     assert f"company: '{UNVAN}'" in src, (
         "site telif ünvanı beklenenden farklı — kanonik yazım değiştiyse UNVAN sabitini güncelle"
     )

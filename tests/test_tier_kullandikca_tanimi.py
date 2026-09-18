@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """Sitede satilan HER plan, backend'in TANIDIGI bir tier olmali (8. parti).
 
-BULUNAN KUSUR: `pemf-vet-web/src/config.ts::PLANS` icine "Kullandikca Ode" plani eklendi
+BULUNAN KUSUR: `apps/web/src/config.ts::PLANS` icine "Kullandikca Ode" plani eklendi
 (tier='kullandikca'), ama `servers/entitlement.py::VALID_TIERS` yalnizca
 {baslangic, pro, pro_plus} taniyordu. `_supabase_entitlement` satiri okurken:
 
@@ -29,7 +29,7 @@ _KOK = Path(__file__).resolve().parent.parent
 
 
 def _web_tierlari() -> set[str]:
-    src = (_KOK / "pemf-vet-web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps/web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
     # PLANS girdilerindeki `tier: '...'` degerleri (tip birlesimini degil, GERCEK planlari oku).
     return set(re.findall(r"^\s*tier:\s*'([a-z_]+)',", src, re.M))
 

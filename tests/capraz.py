@@ -2,7 +2,7 @@
 """KARDEŞ KAYNAK OKUMA — bu deponun DIŞINDAKİ dosyalara çapa atan testler için (2026-08-12).
 
 Bazı testler kasten depo sınırını aşar: mobil uygulama (`pf/`), pazarlama sitesi
-(`pemf-vet-web/` — KENDİ git deposu, kendi Vercel projesi) ve derleme çıktıları
+(`apps/web/` — KENDİ git deposu, kendi Vercel projesi) ve derleme çıktıları
 (`release_assets/ai_models`, `*/dist`). Bu yollar `.gitignore` ile BİLEREK dışlanmıştır;
 `git ls-files` hepsinde **0 dosya** döner.
 

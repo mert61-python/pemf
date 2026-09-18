@@ -9,7 +9,7 @@ GitHub Actions iş akışları + bağımlılık güncelleme. Her workflow kendi 
 | `workflows/tests.yml` | **Kritik-yol pytest** (push/PR; `PEMF_SIMULATE:""`, coverage) → [`../tests/`](../tests/README.md) |
 | `workflows/lint.yml` | Ruff `F+E9+I` kontrolü + bloklamayan format kontrolü |
 | `workflows/frontend.yml` | **pf/** (mobil+web istemci): tsc + jest-expo — yol filtreli (`pf/**`) |
-| `workflows/site.yml` | **pemf-vet-web/** (ödeme sitesi): check:legal + oxlint + tsc + vitest + build — yol filtreli; **Node 22 şart** |
+| `workflows/site.yml` | **apps/web/** (ödeme sitesi): check:legal + oxlint + tsc + vitest + build — yol filtreli; **Node 22 şart** |
 | `workflows/security.yml` | `pip-audit` (çekirdek + dağıtılan AI ağacı), haftalık cron, bloklamaz |
 | `workflows/linux-backend.yml` | PyInstaller onedir → `base-linux.zip` (tag `backend-linux-v*`) |
 | `workflows/mac-backend.yml` | `build_mac.sh` (`macos-14`, arm64) → `base-mac.zip` + Rust E2E artifact testi |

@@ -3,7 +3,7 @@
 """JETON YÖNETİCİSİ — cihaz tarafı (7. parti, sahip talimatı 2026-08-20).
 
 Ücretlendirme jeton tüketimine bağlandı (bkz. database/supabase_jetonlar.sql,
-pemf-vet-web/src/config.ts::JETON). Bu modül KLİNİK CİHAZINDA koşar ve üç zor koşulu birden
+apps/web/src/config.ts::JETON). Bu modül KLİNİK CİHAZINDA koşar ve üç zor koşulu birden
 karşılamak zorundadır:
 
   1. ⚠️ TIBBİ GÜVENLİK (pazarlık edilemez): jeton TİCARİ bir kapıdır. Süren seansı, seans
@@ -182,7 +182,7 @@ def test_KARSIT_KANIT_maliyet_tablosu_WEB_ile_AYNI(tmp_path):
     from pathlib import Path
 
     j = _yeni(tmp_path)
-    web = (Path(__file__).resolve().parent.parent / "pemf-vet-web" / "src" / "config.ts").read_text(
+    web = (Path(__file__).resolve().parent.parent / "apps/web" / "src" / "config.ts").read_text(
         encoding="utf-8", errors="replace"
     )
     m = re.search(r"maliyet:\s*\{([^}]*)\}", web)

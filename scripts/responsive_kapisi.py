@@ -19,7 +19,7 @@ Bağımlılık: YALNIZ stdlib (gömülü python + CI setup-python'da pip yok). W
 Kullanım:
     python scripts/responsive_kapisi.py --hedef launcher
     python scripts/responsive_kapisi.py --hedef pf --pf-dist pf/dist
-    python scripts/responsive_kapisi.py --hedef site --site-dist pemf-vet-web/dist
+    python scripts/responsive_kapisi.py --hedef site --site-dist apps/web/dist
     python scripts/responsive_kapisi.py --hedef launcher --mutasyon "#btn-install{display:none}"  # → 1 bekle
 Çıkış: 0 temiz (yalnız baseline'daki bilinenler) · 1 YENİ bulgu · 2 kullanım/altyapı hatası
        · 3 ortam yok (tarayıcı ya da derleme çıktısı yok; --zorunlu ile 2'ye döner — CI'da ŞART)
@@ -610,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--hedef", choices=list(HEDEFLER), required=True)
     ap.add_argument("--pf-dist", default=str(_KOK / "pf" / "dist"))
-    ap.add_argument("--site-dist", default=str(_KOK / "pemf-vet-web" / "dist"))
+    ap.add_argument("--site-dist", default=str(_KOK / "apps/web" / "dist"))
     ap.add_argument("--cikti", default=str(_KOK.parent / "PEMF_BUILD" / "responsive_kapisi"))
     ap.add_argument("--baseline", default=str(BASELINE))
     ap.add_argument("--tarayici", default=None)

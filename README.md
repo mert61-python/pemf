@@ -63,15 +63,15 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ## Depo düzeni (2026-08-18'den beri: TEK depo · TEK dal)
 
 - **`mert61-python/pemf`** = bu depo. Eskiden ayrı depolarda duran **`pf/`** (mobil/web istemci)
-  ve **`pemf-vet-web/`** (ödeme/indirme sitesi) artık **burada izleniyor**; eski `pemf-frontend`
-  ve `pemf-vet-web` depoları **silindi** (tam aynaları `../*-arsiv-2026-08-18.bundle` paketlerinde).
+  ve **`apps/web/`** (ödeme/indirme sitesi) artık **burada izleniyor**; eski `pemf-frontend`
+  ve `apps/web` depoları **silindi** (tam aynaları `../*-arsiv-2026-08-18.bundle` paketlerinde).
 - Tek dal: **`production-hardening`** (varsayılan). Eski `main`/`vet-client`/`upload-testflight`
   uçları `arsiv/*-2026-08-18` etiketlerinde; `esp` dalı silindi — içindeki eğitim arşivi önce
   [`training_archive/`](training_archive/)'e kurtarıldı.
 - **Yayın varlıkları hâlâ [`pemf-update`](https://github.com/mert61-python/pemf-update)**
   deposuna yüklenir: istemcilere **derlenmiş** sabitler orayı gösterir (`launcher/core/src/net.rs`),
   değiştirilemez. O depoya dokunma.
-- Site (Vercel) bu deponun `pemf-vet-web/` alt dizininden, `production-hardening` push'uyla
+- Site (Vercel) bu deponun `apps/web/` alt dizininden, `production-hardening` push'uyla
   otomatik deploy edilir (Root Directory ayarlı).
 
 ---
@@ -105,7 +105,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 |---|---|
 | [`pf/`](pf/README.md) | **ANA KAYNAK** — mobil (APK/IPA) + web bundle üreten React Native/Expo kaynağı |
 | [`frontend/`](frontend/README.md) | **ÜRETİLEN** — `dist/` = backend'in `/` kökünden sunduğu web bundle (pf'ten aynalanır); `src/` ölü |
-| [`pemf-vet-web/`](pemf-vet-web/README.md) | **Canlı pazarlama/indirme sitesi** (Vite+React, Vercel, iyzico ödeme) |
+| [`apps/web/`](apps/web/README.md) | **Canlı pazarlama/indirme sitesi** (Vite+React, Vercel, iyzico ödeme) |
 | [`pemf_vet_landing/`](pemf_vet_landing/NOTES.md) | Çıkarılmış Lovable landing statik kopyası (tasarım referansı) |
 | [`web_static/`](web_static/README.md) · [`website/`](website/README.md) · [`templates/`](templates/README.md) | **LEGACY** — eski vanilla UI · eski indirme sayfası · eski sunucu-render şablonu (hiçbiri kullanılmıyor) |
 

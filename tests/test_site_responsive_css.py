@@ -1,7 +1,7 @@
 # Author: mertaygn, cglrgrkn
 """SİTE RESPONSIVE CSS SÖZLEŞMESİ  [W, 2026-09-04 denetimi · 2026-09-05 taşındı].
 
-NEDEN BURADA, VITEST'TE DEĞİL: `pemf-vet-web/src/index.css` vitest kurulumunda HİÇBİR sorgu
+NEDEN BURADA, VITEST'TE DEĞİL: `apps/web/src/index.css` vitest kurulumunda HİÇBİR sorgu
 ekiyle okunamıyor — `?raw`, `?inline` ve `import.meta.glob` üçü de BOŞ dize döndürüyor (Vite'ın
 CSS eklentisi araya giriyor; ölçüldü). `node:fs` de kullanılamaz: `tsconfig.app.json`
 `types: ["vite/client"]` + `include: ["src"]` ile testleri de tip denetiminden geçiriyor, node
@@ -22,9 +22,9 @@ import re
 import pytest
 
 _KOK = pathlib.Path(__file__).resolve().parents[1]
-_CSS = _KOK / "pemf-vet-web" / "src" / "index.css"
+_CSS = _KOK / "apps/web" / "src" / "index.css"
 
-pytestmark = pytest.mark.skipif(not _CSS.exists(), reason="pemf-vet-web/ yok — kapı atlanır")
+pytestmark = pytest.mark.skipif(not _CSS.exists(), reason="apps/web/ yok — kapı atlanır")
 
 
 def _css() -> str:

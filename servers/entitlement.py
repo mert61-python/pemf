@@ -43,7 +43,7 @@ def _flag(name: str, default: bool = False) -> bool:
 # Enforcement ana anahtarı — Supabase + Stripe hazır olana kadar KAPALI.
 TIER_ENFORCED: bool = _flag("PEMF_TIER_ENFORCED", False)
 
-# ⚠️ SİTEDEKİ PLANLARLA AYNI KÜME OLMALI (`pemf-vet-web/src/config.ts::PLANS`). Ayrışırsa
+# ⚠️ SİTEDEKİ PLANLARLA AYNI KÜME OLMALI (`apps/web/src/config.ts::PLANS`). Ayrışırsa
 # `_supabase_entitlement` tanımadığı tier'ı SESSİZCE "baslangic"e düşürür → ödeme yapan
 # kullanıcı en düşük katman muamelesi görür ve hiçbir yerde hata görünmez.
 # `kullandikca` (8. parti, ön ödemesiz üyelik) bu yüzden buraya eklendi.

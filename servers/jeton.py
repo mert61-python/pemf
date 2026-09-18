@@ -7,8 +7,8 @@ analizi. Sebep: yapay zekâ analizleri klinik bilgisayarında ÇALIŞIYOR; "sunu
 beklersiniz" vaadinin karşılığı yoktu. Jeton ölçülebilir ve dürüstçe anlatılabilir bir birimdir.
 
   · Şema/uzlaştırma : database/supabase_jetonlar.sql (atomik `jeton_tuket` RPC + defter)
-  · Uç              : pemf-vet-web/api/tokens.ts (bakiye + tüketim, idempotans zorunlu)
-  · Kullanıcı metni : pemf-vet-web/src/config.ts::JETON (maliyet tablosu TEK KAYNAK)
+  · Uç              : apps/web/api/tokens.ts (bakiye + tüketim, idempotans zorunlu)
+  · Kullanıcı metni : apps/web/src/config.ts::JETON (maliyet tablosu TEK KAYNAK)
 
 ╔══════════════════════════════════════════════════════════════════════════════════════════╗
 ║ ⚠️ TIBBİ CİHAZ GÜVENLİĞİ — PAZARLIK EDİLEMEZ                                             ║
@@ -60,7 +60,7 @@ OFFLINE_TAVAN: int = max(0, int(os.getenv("PEMF_JETON_OFFLINE_TAVAN", "50") or 5
 # Tavan TİCARİ bir sınırdır — aşılsa bile tedavi yolu serbest kalır (aşağıdaki GUVENLIK_YOLLARI).
 BORC_TAVANI: int = max(0, int(os.getenv("PEMF_JETON_BORC_TAVANI", "300") or 300))
 
-# ⚠️ TEK KAYNAK EŞLEŞMESİ: bu tablo `pemf-vet-web/src/config.ts::JETON.maliyet` ile BİREBİR
+# ⚠️ TEK KAYNAK EŞLEŞMESİ: bu tablo `apps/web/src/config.ts::JETON.maliyet` ile BİREBİR
 # aynı olmalıdır — kullanıcı sitede "1 jeton" okuyup cihazda 3 harcarsa güven biter.
 # `tests/test_jeton_yoneticisi.py::test_KARSIT_KANIT_maliyet_tablosu_WEB_ile_AYNI` kilitler.
 MALIYET: dict[str, int] = {

@@ -46,7 +46,7 @@ guii/
 │  ├─ launcher/                 Rust/Tauri istemci  ← bugünkü launcher/
 │  ├─ ui/                       React Native/Expo   ← bugünkü pf/
 │  │                            (masaüstü arayüzü de buradan üretilip EXE'ye gömülüyor)
-│  └─ web/                      Pazarlama sitesi    ← bugünkü pemf-vet-web/
+│  └─ web/                      Pazarlama sitesi    ✅ TAŞINDI 2026-09-18
 │
 ├─ firmware/                    stm32_pemf · esps3_pemf_coil · esp8266_pemf_coil  (değişmiyor)
 │
@@ -78,7 +78,7 @@ guii/
 | `backend_service.py` · `headless_core.py` · `event_bus.py` | `apps/backend/pemf_backend/` | Spec'teki elle `hiddenimports` satırı gereksizleşir |
 | `servers/` `services/` `database/` `utils/` `controllers/` | `apps/backend/pemf_backend/` | |
 | `pf/` | `apps/ui/` | |
-| `pemf-vet-web/` | `apps/web/` | |
+| ~~`pemf-vet-web/`~~ | ✅ **`apps/web/` — TAŞINDI 2026-09-18** | ⚠️ Sıra önemliydi: **önce Vercel panosunda `rootDirectory`**, sonra push — çünkü push'un kendisi deploy'u tetikler; ters sırada canlı satış sitesinin deploy'u kırılırdı |
 | `launcher/` | `apps/launcher/` | |
 | `ai_hub/` `ai_service/` | `ai/hub/` `ai/service/` | |
 | `build_tools/` `scripts/` `tools/` | `tools/build` `tools/gates` `tools/ops` | Bugün üçü karışık: derleme kapıları `scripts/`te, operasyon aracı `build_tools/`ta |

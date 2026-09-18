@@ -26,7 +26,7 @@ dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hi�
 
 > **4. dosya listede YOKTU (denetim 2026-08-18).** Sıra-güvenliği açısından zararsız (kendi
 > başına idempotent, v2'ye dokunmaz) ama uygulanmazsa `usage_counts` RPC'si bulunmaz →
-> `pemf-vet-web` indirme sayfasındaki kullanım bölümü **sessizce hiç görünmez**
+> `apps/web` indirme sayfasındaki kullanım bölümü **sessizce hiç görünmez**
 > (`src/lib/usageStats.ts` bilerek `null` döner: "uydurma sayı göstermektense hiç gösterme").
 > Yani belirti "hata" değil, **eksik bölüm**tür — bu yüzden fark edilmeden kalabilir.
 

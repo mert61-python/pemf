@@ -119,7 +119,7 @@ def test_KARSIT_KANIT_web_ile_ayni_PAYG_parametreleri(tmp_path):
     from pathlib import Path
 
     j = _yeni(tmp_path)
-    web = (Path(__file__).resolve().parent.parent / "pemf-vet-web" / "src" / "config.ts").read_text(
+    web = (Path(__file__).resolve().parent.parent / "apps/web" / "src" / "config.ts").read_text(
         encoding="utf-8", errors="replace"
     )
     m = re.search(r"kullandikcaOde:\s*\{([^}]*)\}", web)

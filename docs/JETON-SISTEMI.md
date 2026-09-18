@@ -23,7 +23,7 @@ Kilit: `tests/test_tier_kullandikca_tanimi.py`.
 | **Maliyetler** | görüntü/ses/sensör 1 · ağır araştırma (patoloji, RNA, tomografi, yara-kapanma/scratch) 3 · AI Pro otomatik seans 5 |
 | **Ek paketler** | 100 → ₺249 · 500 → ₺990 · 2.000 → ₺3.490 (birim fiyat adet arttıkça düşer) |
 
-Tek kaynak: `pemf-vet-web/src/config.ts::JETON` (web) ↔ `servers/jeton.py::MALIYET` (cihaz).
+Tek kaynak: `apps/web/src/config.ts::JETON` (web) ↔ `servers/jeton.py::MALIYET` (cihaz).
 İkisinin **ayrışması test edilir** — kullanıcı sitede "1 jeton" okuyup cihazda 3 harcayamaz.
 
 ### 1.1 Kullandıkça Öde (ön ödemesiz üyelik)
@@ -84,11 +84,11 @@ tekrar gönderim güvenlidir (sunucu ikinciyi yok sayar).
 | Katman | Dosya | İş |
 |---|---|---|
 | Şema | `database/supabase_jetonlar.sql` | `token_balances` + `token_ledger`, RLS, atomik `jeton_tuket` RPC, `jeton_donem_yenile` |
-| Uç | `pemf-vet-web/api/tokens.ts` | GET bakiye · POST tüketim (idempotans zorunlu) |
+| Uç | `apps/web/api/tokens.ts` | GET bakiye · POST tüketim (idempotans zorunlu) |
 | Cihaz | `servers/jeton.py` | Kapı + çevrimdışı defter + uzlaştırma; bayraklı, fail-open |
-| Web modeli | `pemf-vet-web/src/config.ts::JETON` | Plan hakları, maliyetler, paketler (kullanıcı metninin kaynağı) |
+| Web modeli | `apps/web/src/config.ts::JETON` | Plan hakları, maliyetler, paketler (kullanıcı metninin kaynağı) |
 | Arayüz | `src/components/AccountButton.tsx`, `src/lib/jeton.ts` | Hesap menüsünde kalan jeton |
-| Fiyat metni | `pemf-vet-web/src/lib/planFiyat.ts` | Plan fiyat gösterimi — **tek kaynak**; aylık ücreti olmayan planı "₺0/ay" diye basmayı önler |
+| Fiyat metni | `apps/web/src/lib/planFiyat.ts` | Plan fiyat gösterimi — **tek kaynak**; aylık ücreti olmayan planı "₺0/ay" diye basmayı önler |
 | Canlı DB | `scripts/supabase_sql.py` | SQL uygulama + çalışan sorgu/kilit izleme + `--denetim` (canlı güvenlik değişmezleri). Yazma `--yaz` kapısının arkasında |
 | Sertleştirme | `database/supabase_sertlestirme.sql` | Canlıda bulunan rol-yetkisi sapmalarının geri alınması (2026-08-21) |
 | Okuma RPC | `database/supabase_okuma_rpc.sql` | `abonelik_getir` · `jeton_bakiyem` · `jeton_defterim` — kullanıcı okumaları RPC'de; tablolarda **hiç** rol yetkisi yok |
@@ -225,7 +225,7 @@ try {
 **3.3** Aynı çağrıyı `api/webhook.ts` içindeki **yenileme** olayına da ekle — aksi hâlde ilk ay
 jeton gelir, ikinci ay gelmez.
 
-**3.4** ⚠️ Bu adım para yolunu değiştirir: `pemf-vet-web/api/_lib/__tests__/` altına kırmızı-önce
+**3.4** ⚠️ Bu adım para yolunu değiştirir: `apps/web/api/_lib/__tests__/` altına kırmızı-önce
 test yaz (yenileme çağrısı yapılıyor mu, hata yutuluyor mu, tier→hak eşlemesi doğru mu).
 
 **Doğrulama:** iyzico **sandbox**'ta bir abonelik başlat → callback dönüşünde

@@ -49,7 +49,7 @@ version = { file = "VERSION" }
 # kararı gereği frozen EXE'de PYZ'den ÇIKARILIR ve diskteki `.pyd`/`.pyenc` olarak sevk
 # edilir (`build_tools/PEMF_Backend_onedir.spec`: `a.pure`'dan silinir). Onu kurulabilir
 # bir paket olarak ilan etmek o kararla çelişir ve yanlış sinyal verir.
-# ⚠️ `pf/`, `pemf-vet-web/`, `launcher/` de yok: bunlar Python paketi değil.
+# ⚠️ `pf/`, `apps/web/`, `launcher/` de yok: bunlar Python paketi değil.
 packages = [
     "servers",
     "services",

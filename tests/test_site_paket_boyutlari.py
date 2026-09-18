@@ -2,7 +2,7 @@
 # Author: mertaygn, cglrgrkn
 """SİTE "TAHMİNİ İNDİRME" SAYISI GERÇEK PAKETLERLE UYUŞMUYORDU (denetim 2026-08-18).
 
-`pemf-vet-web` indirme sayfasındaki paket seçici (`PackageBuilder`) kullanıcıya
+`apps/web` indirme sayfasındaki paket seçici (`PackageBuilder`) kullanıcıya
 "Tahmini indirme ≈ X GB" gösteriyor ve X'i `CLIENT_BASE_MB / 1024 + Σ profil.sizeGB` ile
 hesaplıyor. İki sayı da gerçeği yansıtmıyordu:
 
@@ -30,7 +30,7 @@ import pytest
 
 _KOK = Path(__file__).resolve().parent.parent
 _MANIFEST = _KOK / "pemf-app-packages" / "manifest.json"
-_SITE_CONFIG = _KOK / "pemf-vet-web" / "src" / "config.ts"
+_SITE_CONFIG = _KOK / "apps/web" / "src" / "config.ts"
 
 #: Site sayıyı `toFixed(1)` ile gösterir → 0,05 GB yuvarlama payı + küçük paket dalgalanması.
 _GB_TOLERANS = 0.06

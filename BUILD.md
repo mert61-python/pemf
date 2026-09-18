@@ -11,8 +11,8 @@ scratch — aşağıda "MAX_PATH" bölümü.)
 > hedef dosyaları (`VERSION`, `pf/app.json`, `launcher/app/tauri.conf.json`) o yazar — build
 > scriptleri de başlarken otomatik çağırır.
 
-**Depo yerleşimi (2026-08-18, tek depo):** mobil/web istemci `pf/`, ödeme sitesi `pemf-vet-web/`
-artık **bu deponun içinde**; ayrı `pemf-frontend` / `pemf-vet-web` depoları arşivlendi.
+**Depo yerleşimi (2026-08-18, tek depo):** mobil/web istemci `pf/`, ödeme sitesi `apps/web/`
+artık **bu deponun içinde**; ayrı `pemf-frontend` / `apps/web` depoları arşivlendi.
 CI yapılandırması **yalnız kök `.github/`** altında durur — GitHub alt dizindeki workflow'ları
 okumaz, orada bırakılan bir dosya sessizce hiç koşmaz (`tests/test_ci_workflow_gate.py` bunu kilitler).
 Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derlenmiş sabitler orayı gösterir).
@@ -301,7 +301,7 @@ Client v1.9.3'ten itibaren **açılışta kendini otomatik günceller** (kullan�
    ```
    sha256/size = yayınlanan setup exe'nin değerleri (`Get-FileHash`, `(Get-Item).Length`).
 5. Manifest'i yayınla (`gh release upload client-app-v1.8.0 --clobber ... manifest.json`).
-6. **Web sitesi (yeni kullanıcılar da alsın):** `pemf-vet-web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra **push yeter** — Vercel projesi GitHub deposuna BAĞLI, `master`'a push üretim deploy'unu kendisi tetikliyor (2026-08-18'de ölçüldü: push → 17 sn'de Ready). CLI yalnız bağlantı kopmuşsa gerekir: `cd pemf-vet-web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
+6. **Web sitesi (yeni kullanıcılar da alsın):** `apps/web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra **push yeter** — Vercel projesi GitHub deposuna BAĞLI, `master`'a push üretim deploy'unu kendisi tetikliyor (2026-08-18'de ölçüldü: push → 17 sn'de Ready). CLI yalnız bağlantı kopmuşsa gerekir: `cd apps/web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
 > ⚠️ **Bootstrapping:** oto-güncelleme kodu OLMAYAN eski client'lar (≤1.9.2) kendini güncelleyemez → bir kez ELLE 1.9.3+'a geçmeli (site indirmesi). 1.9.3'ten sonra tüm güncellemeler otomatik.
 > ⚠️ `installer_url` YOKSA (yalnız version/url) client sadece "yeni sürüm var" bildirir (otomatik kurmaz) — geriye uyumlu.
 
@@ -392,7 +392,7 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 # 4) web sitesi (indirme sayfasi)
 #    ⚠️ SIRA: site EN SON. config.ts surumleri (windowsTag/androidVersion) yayindaki dosya
 #    adlarini belirler; varliklar yuklenmeden deploy edilirse butonlar 404 verir.
-cd pemf-vet-web; git push                        # Vercel GitHub'a BAGLI -> push = uretim deploy
+cd apps/web; git push                        # Vercel GitHub'a BAGLI -> push = uretim deploy
 #   (dogrulama: npx vercel ls  ->  en ustteki Production kaydi 'Ready' olmali)
 #   ⚠️ ESKI NOT DUZELTILDI (2026-08-18): burada 'git-remote YOK -> CLI sart' yaziyordu.
 #      Remote eklendi ve Vercel'e baglandi; CLI ile ikinci bir deploy acmak gereksiz.

@@ -17,7 +17,7 @@ KULLANIM (yayin akisinin SON adimi):
 
 Cikis 0 = sitedeki her indirme baglantisi HTTP 200. Cikis 1 = en az biri kirik (ad ve URL yazilir).
 
-TEK KAYNAK: adlar/etiketler `pemf-vet-web/src/config.ts`ten okunur — yani SITENIN GERCEKTEN
+TEK KAYNAK: adlar/etiketler `apps/web/src/config.ts`ten okunur — yani SITENIN GERCEKTEN
 KULLANDIGI degerlerden. Burada elle yazilan bir ad olsaydi, bu betik sitenin kirilmasini
 gormeden yesil kalabilirdi.
 """
@@ -33,7 +33,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 
 KOK = Path(__file__).resolve().parents[1]
-CONFIG = KOK / "pemf-vet-web" / "src" / "config.ts"
+CONFIG = KOK / "apps/web" / "src" / "config.ts"
 
 # GitHub, User-Agent'siz istekleri reddedebiliyor (Cloudflare 1010) — bkz. scripts/supabase_sql.py.
 _UA = {"User-Agent": "pemf-site-indirme-dogrula/1.0"}
@@ -82,7 +82,7 @@ def kontrol(url: str) -> tuple[int, str]:
 
 
 def main() -> int:
-    print("=== Site indirme baglantilari (kaynak: pemf-vet-web/src/config.ts) ===")
+    print("=== Site indirme baglantilari (kaynak: apps/web/src/config.ts) ===")
     kirik = []
     for ad, url in hedefler():
         kod, bilgi = kontrol(url)

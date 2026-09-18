@@ -222,7 +222,7 @@ def test_KRITIK_site_APK_surumu_versions_json_ile_AYNI():
 
     (Bu boşluk mutasyon testiyle bulundu: `androidVersion`ı uydurma bir sürüme çevirmek site
     testlerinin HİÇBİRİNİ kırmıyordu.)"""
-    cfg = KOK / "pemf-vet-web" / "src" / "config.ts"
+    cfg = KOK / "apps/web" / "src" / "config.ts"
     if not cfg.exists():
         pytest.skip("site kaynağı yok")
     beklenen = json.loads((KOK / "versions.json").read_text(encoding="utf-8"))["mobile"]["name"]

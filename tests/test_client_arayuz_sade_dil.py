@@ -11,7 +11,7 @@ Web sitesinde dört parti boyunca temizlenen jargon, hekimin ASIL kullandığı 
   · "Client güncelleniyor…"                 → aynı adlandırma karmaşası
   · "Uygulama çekirdeği"                    → iç terim (paket adı)
 
-Site ile aynı sözlük burada da geçerli (bkz. pemf-vet-web/METIN-KILAVUZU.md):
+Site ile aynı sözlük burada da geçerli (bkz. apps/web/METIN-KILAVUZU.md):
 ürün adı **PEMF Vet**, süreci anlatan yerde tek ad **başlatıcı**.
 
 ⚠️ Kapı YORUM-SOYULMUŞ metinde çalışır: bu dosyaların yorumları düzeltmenin gerekçesini

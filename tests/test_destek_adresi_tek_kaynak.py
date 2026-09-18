@@ -35,17 +35,17 @@ _OLU_ALAN = "v-pemf.com"
 
 # Adresi elle tasimasina IZIN VERILEN dosyalar (yukaridaki gerekce).
 _STATIK_IZINLI = (
-    "pemf-vet-web/src/components/DownloadButtons.tsx",
-    "pemf-vet-web/src/pages/Download.tsx",
+    "apps/web/src/components/DownloadButtons.tsx",
+    "apps/web/src/pages/Download.tsx",
 )
 
-_ARANAN_AGACLAR = ("pemf-vet-web/src", "pf/src", "servers", "launcher/app/ui")
+_ARANAN_AGACLAR = ("apps/web/src", "pf/src", "servers", "launcher/app/ui")
 _UZANTI = (".ts", ".tsx", ".py", ".html")
 _EPOSTA = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
 def _tek_kaynak() -> str:
-    src = (_KOK / "pemf-vet-web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
+    src = (_KOK / "apps/web" / "src" / "config.ts").read_text(encoding="utf-8", errors="replace")
     m = re.search(r"^\s*email:\s*'([^']+)'", src, re.M)
     assert m, "config.ts icinde COMPANY.email bulunamadi"
     return m.group(1)

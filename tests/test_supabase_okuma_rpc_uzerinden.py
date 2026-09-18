@@ -30,7 +30,7 @@ from pathlib import Path
 _KOK = Path(__file__).resolve().parent.parent
 
 # Taranan kaynak agaclari (uretim kodu; testler ve dokumanlar haric).
-_AGACLAR = ("pemf-vet-web/api", "pemf-vet-web/src", "pf/src", "servers", "services")
+_AGACLAR = ("apps/web/api", "apps/web/src", "pf/src", "servers", "services")
 _UZANTI = (".ts", ".tsx", ".py")
 
 # ⚠️ SERVICE_ROLE ISTISNALARI — dosya bazinda. Bu dosyalardaki dogrudan tablo cagrilari
@@ -39,7 +39,7 @@ _UZANTI = (".ts", ".tsx", ".py")
 # ⚠️ LISTEYE EKLEME YAPMADAN ONCE SOR: dosya GERCEKTEN service_role mu kullaniyor? Kullanici
 # JWT'si ya da anon anahtariyla yapilan bir okuma buraya YAZILAMAZ — o okuma RPC'ye tasinmalidir.
 _SERVICE_ROLE_DOSYALARI = {
-    "pemf-vet-web/api/_lib/util.ts",
+    "apps/web/api/_lib/util.ts",
 }
 
 _REST = re.compile(r"rest/v1/(?!rpc\b)([A-Za-z_][A-Za-z_0-9]*)")

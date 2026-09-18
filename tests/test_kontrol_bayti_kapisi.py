@@ -126,8 +126,20 @@ def test_KARSIT_KANIT_muafiyet_kapiyi_BOSALTMIYOR():
     """
     assert len(URETILMIS) <= 2, f"muafiyet listesi şişmiş: {URETILMIS}"
 
-    tarandi = {p.relative_to(KOK).as_posix().split("/")[0] for p in _izlenen_metin_dosyalari()}
-    for katman in ("servers", "scripts", "build_tools", "launcher", "pf", "pemf-vet-web", "tests", "docs"):
+    # ⚠️ DERINLIK-FARKINDA (2026-09-18): eskiden yalnız İLK yol parçası toplanıyordu. Monorepo
+    # taşımasıyla katmanlar `apps/web`, `apps/ui` gibi İKİ segmentli oldu; tek segment
+    # toplamak `apps` görünce yeşil verirdi — alt dizinlerden yalnız biri taransa bile.
+    # Katman kaç segmentliyse yol da o derinlikte kesilir.
+    yollar = [p.relative_to(KOK).as_posix() for p in _izlenen_metin_dosyalari()]
+    katmanlar = ("servers", "scripts", "build_tools", "launcher", "pf", "apps/web", "tests", "docs")
+    # ⚠️ SABIT SAYAC (mutasyonla olculdu 2026-09-18): listeden bir katman SILMEK kapiyi
+    # sessizce zayiflatiyordu ve hicbir test kirmizi donmuyordu — "muafiyet sismesin" kontrolu
+    # yalnizca URETILMIS listesine bakiyor. Katman sayisi da kilitlendi; bilincli olarak
+    # katman eklenecekse bu sayi da guncellenir (depo deseni: allowlist + SABIT SAYAC).
+    assert len(katmanlar) >= 8, f"taranan katman listesi KISALMIS ({len(katmanlar)}) — kapi zayiflatilmis"
+    for katman in katmanlar:
+        derinlik = katman.count("/") + 1
+        tarandi = {"/".join(y.split("/")[:derinlik]) for y in yollar}
         assert katman in tarandi, f"{katman}/ tarama dışında kalmış — kapı bu katmanı KORUMUYOR"
 
 

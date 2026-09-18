@@ -56,7 +56,7 @@ def test_pull_request_de_tetikler(dosya):
 
 #: `tests.yml`in kapsaması BEKLENEN işler — TAM küme (alt-küme değil).
 #: ⚠️ 2026-08-12: eskiden `{"backend","launcher","frontend","site"}` bekleniyordu; `pf/` ve
-#: `pemf-vet-web/` o tarihte AYRI depolardaydi ve buradaki isler var olmayan dizinlerde `npm ci`
+#: `apps/web/` o tarihte AYRI depolardaydi ve buradaki isler var olmayan dizinlerde `npm ci`
 #: kosturdugu icin asla gecemezdi -> kaldirildilar.
 #: ⚠️ 2026-08-18 MONOREPO: ikisi de artik depoda, ama isler `tests.yml`ye GERI EKLENMEDI —
 #: KENDI yol-filtreli is akislarina konuldular (`frontend.yml`, `site.yml`). Sebep: `tests.yml`
@@ -115,13 +115,13 @@ def test_KRITIK_launcher_ENTEGRASYON_testlerini_de_kosar():
 #: filtresizdir (capraz-katman kapilari her degisiklikte kosmali).
 CI_KAPSAMI = {
     "pf": ("frontend.yml", ("tsc --noEmit", "npm test")),
-    "pemf-vet-web": ("site.yml", ("tsc -b", "npm test", "check:legal")),
+    "apps/web": ("site.yml", ("tsc -b", "npm test", "check:legal")),
 }
 
 
 @pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
 def test_KRITIK_arayuz_ve_site_CI_KAPSAMINDA(dizin):
-    """Arayuz (`pf`) ve site (`pemf-vet-web`) monorepo'ya alindi -> CI kapisi ZORUNLU.
+    """Arayuz (`pf`) ve site (`apps/web`) monorepo'ya alindi -> CI kapisi ZORUNLU.
 
     ⚠️ SITE 2026-08-18'e kadar HIC test edilmiyordu: kendi deposunda tek bir workflow yoktu ve
     iyzico odeme uclari (checkout/callback/webhook/cancel) tip kontrolu bile gormeden deploy
@@ -156,7 +156,7 @@ def test_arayuz_ve_site_is_akislari_YOL_FILTRELI(dizin):
 
 @pytest.mark.parametrize("dizin", sorted(CI_KAPSAMI))
 def test_KRITIK_alt_dizinde_KOK_DISI_github_yapilandirmasi_KALMAZ(dizin):
-    """`pf/.github/` ya da `pemf-vet-web/.github/` altinda workflow/dependabot KALMAMALI.
+    """`pf/.github/` ya da `apps/web/.github/` altinda workflow/dependabot KALMAMALI.
 
     ⚠️ SESSIZ KIRILMA (2026-08-18'de ikisi de yakalandi): GitHub bu dosyalari YALNIZCA kok
     `.github/` altindan okur. subtree sonrasi `pf/.github/workflows/frontend.yml` ve
