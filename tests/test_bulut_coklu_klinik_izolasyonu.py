@@ -35,7 +35,11 @@ from pathlib import Path
 _KOK = Path(__file__).resolve().parents[1]
 _GOC = _KOK / "supabase" / "seans_kimligi_bilesik_anahtar.sql"
 _KANONIK = _KOK / "database" / "supabase_secure_v2.sql"
-_YEREL_SEANS = _KOK / "database" / "treatment_history_db.py"
+#: ⚠️ TEK DOSYAYA PINLENMEZ (2026-09-18): `treatment_sessions` tablosunun CREATE'i B4
+#: bolmesiyle `thdb_sema.py`ye tasindi ve bu kapi "seans id uretimi degismis" diye KIRMIZI
+#: dondu — oysa sema aynen duruyordu, yalniz DOSYA degismisti. Kapinin isi semayi korumak;
+#: bu yuzden `database/` ailesi taranir.
+_YEREL_SEANS_KAYNAKLARI = sorted((_KOK / "database").glob("*.py"))
 _YEREL_HASTA = _KOK / "database" / "patient_database.py"
 
 
@@ -102,7 +106,7 @@ def test_KRITIK_yerel_seans_id_SIRALI_oldugu_icin_bilesik_anahtar_SART():
 
     Biri bunu UUID'ye çevirirse bileşik anahtar gereksizleşir (ama zararsız kalır); tersi
     daha tehlikeli — bu test, gerekçenin hâlâ geçerli olduğunu görünür tutar."""
-    s = _oku(_YEREL_SEANS).lower()
+    s = "\n".join(_oku(p) for p in _YEREL_SEANS_KAYNAKLARI).lower()
     assert "id integer primary key autoincrement" in s, (
         "seans id üretimi değişmiş — bulut anahtar kararı yeniden değerlendirilmeli "
         "(bu test bilgilendirme amaçlı düşer, düzeltme gerekmeyebilir)"

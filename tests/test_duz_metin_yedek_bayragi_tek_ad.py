@@ -46,7 +46,26 @@ import pytest
 _KOK = Path(__file__).resolve().parents[1]
 _DB_DIZIN = _KOK / "database"
 _SQLCIPHER = _DB_DIZIN / "sqlcipher_util.py"
-_TEDAVI = _DB_DIZIN / "treatment_history_db.py"
+
+
+def _tedavi_yolu_kaynagi() -> tuple[Path, str]:
+    """Tedavi DB'sinin goc kodunu TASIYAN dosyayi BUL — adini SABIT YAZMA.
+
+    ⚠️ 2026-09-18'de bu satir `_TEDAVI = _DB_DIZIN / "treatment_history_db.py"` idi ve B4
+    bolmesi metodu `thdb_sema.py`ye tasiyinca kapi "fonksiyon bulunamadi — kapi KOR kaldi"
+    diye KIRMIZI dondu. Kapinin isi dosya adini degil DAVRANISI korumak; dolayisiyla capa
+    dosyaya degil, FONKSIYONUN KENDISINE pinlenir ve `database/` altinda aranir.
+    (Ayni ders: elle yazilan liste bayatlar — `urun_senaryolari` bayat-ikili nobeti.)
+    """
+    for yol in sorted(_DB_DIZIN.glob("*.py")):
+        metin = yol.read_text(encoding="utf-8")
+        if "def _migrate_to_encrypted_if_needed" in metin:
+            return yol, metin
+    raise AssertionError(
+        "`_migrate_to_encrypted_if_needed` database/ altinda HICBIR dosyada yok — "
+        "tedavi DB'sinin goc yolu kaldirilmis olabilir"
+    )
+
 
 #: Kanonik ad.
 _KANONIK = "PEMF_KEEP_PLAIN_BACKUP"
@@ -183,8 +202,12 @@ def test_KRITIK_tedavi_yolu_ORTAK_goce_DELEGE_eder():
     Olculen sey hep ayni kaldi: "bu yol karari ORTAK kaynaktan mi aliyor?" Zincirin
     halkalari (goc -> politika -> yardimci) ayri ayri sinaniyor.
     """
-    assert _ORTAK_GOC in _cagrilan_adlar(_TEDAVI, "_migrate_to_encrypted_if_needed"), (
-        f"{_TEDAVI.name}: ortak goce ({_ORTAK_GOC}) DELEGE etmiyor — kopya geri gelmis "
+    # ⚠️ CIPA 4. KEZ TASINDI (2026-09-18, B4 bolmesi): metot artik `thdb_sema.py`de.
+    # Dosya adi SABIT YAZILMIYOR — `database/` altinda aranıyor, ki sonraki bolme kapiyi
+    # yine kirmasin. Olculen sey degismedi.
+    _tedavi, _ = _tedavi_yolu_kaynagi()
+    assert _ORTAK_GOC in _cagrilan_adlar(_tedavi, "_migrate_to_encrypted_if_needed"), (
+        f"{_tedavi.name}: ortak goce ({_ORTAK_GOC}) DELEGE etmiyor — kopya geri gelmis "
         "olabilir. Bu kopya tek oturumda UC yerden ayrismisti; dorduncusu kacinilmazdi."
     )
 

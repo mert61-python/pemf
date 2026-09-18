@@ -44,11 +44,17 @@ KARISIMLAR = {
     "thdb_ai_gecmisi.py": "AiGecmisiKarisimi",
     "thdb_telemetri.py": "TelemetriKarisimi",
     "thdb_pii.py": "PiiKarisimi",
+    "thdb_sema.py": "SemaKarisimi",
+    "thdb_seans.py": "SeansKarisimi",
+    "thdb_bakim.py": "BakimKarisimi",
 }
 
-#: Bolme sonrasi ana sinifta 54 metot kaldi. Ust sinir bilincli olarak biraz ustunde:
-#: normal bakim nefes alsin ama "her yeni is ana sinifa" egilimi KIRMIZI donsun.
-UST_SINIR = 60
+#: IKINCI TUR (2026-09-18): kalan uc kume de ayrildi -> ana sinifta 17 metot kaldi ve dosya
+#: 3530 -> 710 satira indi. Sinif artik TEK sorumluluk tasiyor: BAGLANTI HAVUZU + yasam
+#: dongusu (ac/kapat/kusak/gevset). Ust sinir buna gore SIKILDI.
+#: ⚠️ Siniri yukseltmek son caredir: "her yeni is ana sinifa" egilimi tam olarak B4'u
+#: dogurmustu (93 metot). Yeni islev ILGILI KARISIMA gider ya da yeni bir karisim acilir.
+UST_SINIR = 22
 
 
 def _ana_sinif() -> ast.ClassDef:

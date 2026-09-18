@@ -146,5 +146,9 @@ def test_saklama_suresi_metni_KODDAKI_varsayilanla_ayni(metin):
     """Metin "365 gün" diyor; kod başka bir varsayılan uygularsa klinik yanlış bilgilendirilir."""
     if "365" not in metin:
         pytest.skip("metinde somut sure yok")
-    src = (KOK / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
-    assert "365" in src, "hukuki metin 365 gun diyor ama kodda o varsayilan yok"
+    # ⚠️ TEK DOSYAYA PINLEME (2026-09-18): burasi
+    # `database/treatment_history_db.py` diyordu; B4 bolmesi saklama politikasini
+    # `thdb_bakim.py`ye tasiyinca kapi KIRMIZI dondu. Kapinin isi "hukuki metindeki sure
+    # kodda da var mi" — hangi DOSYADA oldugu onemsiz. Artik `database/` ailesi taranir.
+    src = "\n".join(p.read_text(encoding="utf-8") for p in sorted((KOK / "database").glob("*.py")))
+    assert "365" in src, "hukuki metin 365 gun diyor ama database/ altinda o varsayilan yok"

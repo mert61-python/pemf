@@ -154,17 +154,31 @@ def test_KARSIT_KANIT_takipci_A2yi_ERTELENDI_isaretliyor():
 
 
 def test_KARSIT_KANIT_B4_OLCUTU_satir_degil():
-    """⚠️ Ters yonlu hata: B4'u tamamen iptal etmek de yanlis olurdu.
+    """B4 ÇOZULDU (2026-09-18) — kapinin yonu CEVRILDI.
 
-    `treatment_history_db` gercekten tek sinifta 94 metot tasiyor; bu SORUN. Duzeltme
-    "B4 yok" demiyor, "olcut satir sayisi degil" diyor.
+    ⚠️ BU TEST DAHA ONCE `en_buyuk >= 40` DIYORDU ve icine su not yazilmisti:
+        "en buyuk sinif artik N metot -> B4 gercekten cozulmus olabilir;
+         duzeltme notunu guncelleyin (bu KOTU haber degil)"
+    Tam o oldu: `TreatmentHistoryDB` 93 -> 17 metoda indi (8 karisim modulu), dosya
+    3530 -> 710 satir. Kapi simdi COZULMUS hali kilitliyor; geri sisme `UST_SINIR` ile
+    `tests/test_tedavi_db_bolunmus_KALIR.py`de olculuyor.
+
+    ⚠️ KORUNAN DERS DEGISMEDI: B4'un olcutu SATIR SAYISI DEGILDI. `api_server.py` 5.135
+    satir ama kodu 3.530 — fark yorumlar ve bu depoda yorumlar OZELLIKTIR (denetim gecmisini
+    tasirlar). Sorun tek nesnedeki YEDI ayri sorumluluktu. Birini satir sayisina bakip
+    "bu dosya da buyuk, bolelim" derken bulursaniz, once NE olctugunu sorun.
     """
     src = (KOK / "database" / "treatment_history_db.py").read_text(encoding="utf-8")
     t = ast.parse(src)
     siniflar = [n for n in ast.walk(t) if isinstance(n, ast.ClassDef)]
     assert siniflar, "treatment_history_db'de sinif yok — kapi bayatlamis"
     en_buyuk = max(sum(1 for x in c.body if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef))) for c in siniflar)
-    assert en_buyuk >= 40, (
-        f"en buyuk sinif artik {en_buyuk} metot -> B4 gercekten cozulmus olabilir; "
-        "duzeltme notunu guncelleyin (bu KOTU haber degil)"
+    assert en_buyuk <= 22, (
+        f"en buyuk sinif {en_buyuk} metoda cikmis -> B4 bolmesi geri aliniyor olabilir. "
+        "Yeni islev ILGILI KARISIMA eklenir (database/thdb_*.py); ana sinif yalniz BAGLANTI "
+        "havuzu ve yasam dongusu tasir."
     )
+    # ⚠️ Karsit kanit: bolme GERCEKTEN yapilmis mi — yoksa sinif bos birakilip is baska bir
+    # dev sinifa mi tasinmis? Karisim modulleri var olmali.
+    karisimlar = sorted((KOK / "database").glob("thdb_*.py"))
+    assert len(karisimlar) >= 8, f"yalniz {len(karisimlar)} karisim modulu var — B4 bolmesi eksik ya da geri alinmis"
