@@ -32,6 +32,15 @@ except ModuleNotFoundError:
     from pemf_gui.config import get_config
 
 # P0 audit 2026-06-28: hasta PII whole-DB SQLCipher sifrelemesi (paylasilan yardimci modul).
+# P0 audit 2026-06-28: SQLCipher baglantilarinda exception'lar sqlcipher3.dbapi2.* tipinde gelir;
+# duz sqlite3.* except'leri bunlari YAKALAMAZ (ornek: ALTER 'duplicate column' patlar).
+#
+# ⚠️ 2026-09-18: bu blok BURADA ve `treatment_history_db.py` icinde AYRI AYRI duruyordu ve
+# ikisi ZATEN AYRISMISTI — oradaki yalniz `sqlcipher3` deniyordu, burasi `import_sqlcipher()`
+# ile `pysqlcipher3`u de. Yani yalniz pysqlcipher3 bulunan bir ortamda tedavi DB'si
+# sqlite3-only demete dusuyor ve sifreli yolda firlayan hatayi YAKALAMADAN geciyordu.
+# TEK KAYNAK: database/db_hatalari.py (guclu olan, yani buradaki davranis korundu).
+from database.db_hatalari import _DB_ERROR, _DB_INTEGRITY, _DB_OPERATIONAL  # noqa: E402,F401
 from database.sqlcipher_util import (
     anahtar_uyusmazligi_mi,
     get_sqlcipher_key,
@@ -40,20 +49,6 @@ from database.sqlcipher_util import (
     migrate_to_encrypted_if_needed,
     open_encrypted_conn,
 )
-
-# P0 audit 2026-06-28: SQLCipher baglantilarinda exception'lar sqlcipher3.dbapi2.* tipinde gelir;
-# duz sqlite3.* except'leri bunlari YAKALAMAZ (ornek: ALTER 'duplicate column' patlar). Hem
-# sqlite3 hem sqlcipher3 variantini yakala (treatment_history_db deseni).
-_sqlcipher_mod_exc = import_sqlcipher()
-if _sqlcipher_mod_exc is not None:
-    _DB_OPERATIONAL = (sqlite3.OperationalError, _sqlcipher_mod_exc.OperationalError)
-    _DB_ERROR = (sqlite3.Error, _sqlcipher_mod_exc.Error)
-    _DB_INTEGRITY = (sqlite3.IntegrityError, _sqlcipher_mod_exc.IntegrityError)
-else:
-    _DB_OPERATIONAL = sqlite3.OperationalError
-    _DB_ERROR = sqlite3.Error
-    _DB_INTEGRITY = sqlite3.IntegrityError
-
 
 # DENETIM P3: cozulemeyen (farkli anahtar / eski surum / template) sifreli alan icin UI'ya
 # gonderilen yer-tutucu. Bu metin GERI YAZILIRSA orijinal ciphertext KALICI kaybolur →

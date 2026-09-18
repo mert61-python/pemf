@@ -83,10 +83,13 @@ def bayat_ikili_nobeti() -> None:
             f"[DUR] EXE yok: {EXE}\n      Once paketleyin (scripts/build_backend_exe.ps1) ya da --exe ile yol verin."
         )
     e = EXE.stat().st_mtime
-    izlenen = [
-        "database/sqlcipher_util.py",
-        "database/treatment_history_db.py",
-        "database/patient_database.py",
+    # ⚠️ SABIT LISTE BAYATLAR — 2026-09-18'de tam bu oldu: B4 bolmesi `database/` altina bes
+    # YENI modul ekledi (`thdb_outbox` · `thdb_denetim` · `thdb_ai_gecmisi` · `thdb_telemetri`
+    # · `thdb_pii`) ve elle yazilmis liste onlari GORMUYORDU. O hâlde `thdb_pii.py` degistirilip
+    # senaryolar ESKI EXE'ye karsi kosturulsa nobet SESSIZCE gecerdi — yani olcum, olctugunu
+    # sandigi kodu hic calistirmamis olurdu. Liste artik TURETILIYOR: `database/` altindaki her
+    # `.py` otomatik izlenir; asagisi yalnizca o dizin DISINDAKI kritik dosyalar.
+    izlenen = sorted(f"database/{p.name}" for p in (GUII / "database").glob("*.py")) + [
         "utils/path_utils.py",
         "utils/file_acl.py",
         "utils/runtime_guards.py",
