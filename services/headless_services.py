@@ -306,7 +306,9 @@ class MosquittoSupervisor:
             if meipass:
                 dirs.append(Path(meipass) / "bin" / "mosquitto")
         else:
-            dirs.append(Path(__file__).resolve().parents[1] / "bin" / "mosquitto")
+            from utils.path_utils import kaynak_kokunu_bul
+
+            dirs.append(kaynak_kokunu_bul(__file__) / "bin" / "mosquitto")
         return dirs
 
     def _ensure_linux_broker_config(self) -> Optional[Path]:

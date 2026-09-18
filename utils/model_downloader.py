@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from utils.path_utils import get_app_data_directory, resource_path
+from utils.path_utils import get_app_data_directory, kaynak_kokunu_bul, resource_path
 
 
 def get_persistent_model_dir() -> Path:
@@ -55,7 +55,7 @@ def _candidate_model_roots():
     roots.append(get_persistent_model_dir())
 
     try:
-        roots.append(Path(__file__).resolve().parent.parent / "release_assets" / "ai_models")
+        roots.append(kaynak_kokunu_bul(__file__) / "release_assets" / "ai_models")
     except Exception:
         pass
 

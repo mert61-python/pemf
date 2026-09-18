@@ -154,7 +154,7 @@ Kapı: `tests/test_stm_sensor_firmware.py`.
 ## 7. İlgili dosyalar
 
 - Firmware: `firmware/stm32_pemf/Core/{Inc,Src}/pemf_sensor.{h,c}`, `pemf_akim.{h,c}`
-- Ayna: `firmware/stm32_pemf_unipolar/` — **elle düzenlenmez**, `scripts/stm_unipolar_senkronla.py`
+- ~~Ayna: `firmware/stm32_pemf_unipolar/`~~ — ⛔ **KALDIRILDI**; ayna projesi ve `scripts/stm_unipolar_senkronla.py` silindi (bkz. yukarıdaki not)
 - Derleme kapısı: `scripts/firmware_derle.py`
 - Pin haritası: `docs/stm32-pin-haritasi.md`
 - Backend: `headless_core.py` (ayrıştırıcı) · `servers/api_server.py` (işleyici) ·

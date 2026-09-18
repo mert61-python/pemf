@@ -57,9 +57,11 @@ class SessionManager:
     def _apply_performance_config(self):
         """SQLite batch/flush ayarlarını config dosyasından yükle."""
         try:
+            from utils.path_utils import kaynak_kokunu_bul
+
             candidate_paths = [
                 self.app_data_dir / "config.json",
-                Path(__file__).resolve().parent.parent / "config" / "config.json",
+                kaynak_kokunu_bul(__file__) / "config" / "config.json",
             ]
 
             try:

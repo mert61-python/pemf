@@ -6,13 +6,40 @@ import sys
 import uuid
 from pathlib import Path
 
+#: Depo kökünü BENZERSİZ biçimde işaretleyen dosyalar. Üçü BİRDEN aranır — tek dosya yetmez,
+#: çünkü alt dizinlerde de `VERSION` bulunabilir ve kök yanlış yere düşerdi.
+KOK_ISARETLERI = ("VERSION", "pyproject.toml", "versions.json")
+
+
+def kaynak_kokunu_bul(baslangic=None):
+    """Kaynak ağacında depo kökünü **derinlikten bağımsız** bulur.
+
+    ⚠️ NEDEN VAR (2026-09-18): kökü `Path(__file__).resolve().parents[1]` ile bulan 13 ayrı yer
+    vardı. Hepsi SABİT DERİNLİK varsayıyordu; monorepo taşımasında (`utils/` →
+    `apps/backend/pemf_backend/utils/`) bu varsayım iki seviye kayar ve kök SESSİZCE yanlış
+    dizine düşerdi. Sessiz, çünkü çağıran yerlerin hepsi aday listesi kuruyor
+    (`roots.append(...)`) — yanlış aday bulunamaz, sıradakine geçilir ve hata VERİLMEZ.
+    Etkisi ölçülebilir olurdu: `bin/cloudflared` (uzaktan erişim), `release_assets/ai_models`
+    (640 MB'lık model — bulunamazsa YENİDEN İNDİRME), `data/cloud_mqtt_provision.json` (sır),
+    `VERSION`/`frontend_version.json` bulunamazdı.
+
+    ⚠️ Bu yol YALNIZ kaynak ağacı içindir. Donmuş EXE'de `_MEIPASS` kullanılır; işaret dosyaları
+    pakete girmediği için burada arama YAPILMAZ (bkz. `packaged_resource_path`).
+    """
+    p = Path(baslangic or __file__).resolve()
+    for aday in p.parents:
+        if all((aday / ad).exists() for ad in KOK_ISARETLERI):
+            return aday
+    # İşaretler bulunamadıysa eski davranışa düş — hiçbir durumda bugünkünden kötü olmasın.
+    return p.parents[1] if len(p.parents) > 1 else p.parent
+
 
 def resource_path(relative_path):
     """EXE içindeki gömülü dosyaları bulur (Okuma amaçlı)"""
     try:
         base_path = Path(sys._MEIPASS)
     except Exception:
-        base_path = Path(__file__).resolve().parent.parent
+        base_path = kaynak_kokunu_bul(__file__)
 
     path = base_path / relative_path
     if not path.exists():
@@ -466,8 +493,9 @@ def packaged_resource_path(*parts):
         meipass = getattr(sys, "_MEIPASS", None)
         base = Path(meipass) if meipass else (Path(sys.executable).parent / "_internal")
     else:
-        # We are running from standard Python source
-        base = Path(__file__).resolve().parents[1]
+        # Kaynaktan koşuyoruz. ⚠️ SABİT DERİNLİK KULLANMA: modül taşınırsa kök sessizce kayar
+        # (bkz. `kaynak_kokunu_bul` gerekçesi). Kök, işaret dosyalarıyla aranır.
+        base = kaynak_kokunu_bul(__file__)
 
     return base.joinpath(*parts)
 
@@ -498,7 +526,7 @@ def get_app_version() -> str:
         return _APP_VERSION
     import json as _json
 
-    for base in (packaged_resource_path("VERSION"), Path(__file__).resolve().parents[1] / "VERSION"):
+    for base in (packaged_resource_path("VERSION"), kaynak_kokunu_bul(__file__) / "VERSION"):
         try:
             v = Path(base).read_text(encoding="utf-8").strip()
             if v:
@@ -508,7 +536,7 @@ def get_app_version() -> str:
             pass
     for base in (
         packaged_resource_path("frontend_version.json"),
-        Path(__file__).resolve().parents[1] / "frontend_version.json",
+        kaynak_kokunu_bul(__file__) / "frontend_version.json",
     ):
         try:
             v = str(_json.loads(Path(base).read_text(encoding="utf-8")).get("version", "")).strip()

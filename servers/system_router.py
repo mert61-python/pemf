@@ -301,7 +301,9 @@ async def favicon():
     import sys
     from pathlib import Path
 
-    bases = [Path(__file__).resolve().parent.parent]
+    from utils.path_utils import kaynak_kokunu_bul
+
+    bases = [kaynak_kokunu_bul(__file__)]
     if getattr(sys, "frozen", False):
         bases += [Path(getattr(sys, "_MEIPASS", ".")), Path(sys.executable).resolve().parent]
     for base in bases:

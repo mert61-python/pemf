@@ -138,7 +138,7 @@ windows/gui_pyqt_v11.py (Ana pencere)
       └── Cihaz kontrol paneli
 ```
 
-### 3.3 Python MQTT Bridge (`services/mqtt_bridge.py`)
+### 3.3 ~~Python MQTT Bridge~~ (`services/mqtt_bridge.py` — ⛔ **DOSYA ARTIK YOK**, headless geçişinde kaldırıldı)
 
 ```
 MQTTBridge Sınıfı:
@@ -719,6 +719,15 @@ Select-String -Path "$env:LOCALAPPDATA\PEMF_System\logs\mqtt_bridge_service.log"
 ---
 
 ## ÖZET TABLO
+
+> ⚠️ **DURUM NOTU (2026-09-18, ölçüldü) — BU TABLONUN ALTI SATIRININ ALTISI DA ÖLÜ.**
+> Aşağıdaki dosyaların **hiçbiri artık yok** (`git ls-files` ile ölçüldü): `services/mqtt_bridge.py`,
+> `scripts/install_bridge_service.ps1`, `services/mosquitto_manager.py`, `windows/gui_pyqt_v11.py`,
+> `windows/gateway_status_widget.py`, `config/mosquitto/bridge_hivemq.conf.disabled`.
+> Tablo, PyQt GUI'li ve ayrı MQTT-köprüsü mimarisinden kalmadır; headless geçişinde o katman
+> tümüyle kaldırıldı. Bugünkü karşılıkları: köprü yerine `servers/` + `headless_core.py`,
+> mosquitto yönetimi `services/headless_services.py` içinde. **"✅ Tamamlandı" işaretleri
+> KANIT DEĞİLDİR** — tablo TARİHÇEDİR, talimat olarak okumayın.
 
 | Bileşen | Dosya | Durum |
 |---------|-------|-------|

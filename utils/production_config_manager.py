@@ -29,8 +29,10 @@ from cryptography.fernet import Fernet
 
 try:
     from .path_utils import get_app_data_directory as get_shared_app_data_directory
+    from .path_utils import kaynak_kokunu_bul
 except ImportError:
     from path_utils import get_app_data_directory as get_shared_app_data_directory
+    from path_utils import kaynak_kokunu_bul
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +157,7 @@ class ProductionConfigManager:
                 return bundled_path
 
         # Try development environment (relative to this file)
-        dev_path = Path(__file__).parent.parent / relative_path
+        dev_path = kaynak_kokunu_bul(__file__) / relative_path
         if dev_path.exists():
             logger.debug(f"Found dev resource: {dev_path}")
             return dev_path

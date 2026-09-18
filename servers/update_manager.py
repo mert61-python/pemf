@@ -270,7 +270,9 @@ def _version_paths():
             exe_dir = Path(sys.executable).resolve().parent
             roots.append(exe_dir / name)
             roots.append(exe_dir / "_internal" / name)
-        roots.append(Path(__file__).resolve().parent.parent / name)
+        from utils.path_utils import kaynak_kokunu_bul
+
+        roots.append(kaynak_kokunu_bul(__file__) / name)
 
     _add("VERSION")  # exe/installer kanali (latest.json ile AYNI kanal)
     _add("frontend_version.json")  # geriye uyum: VERSION'i bundle etmeyen eski build'ler

@@ -430,7 +430,9 @@ def _bundled_cloud(key: str) -> str:
             kok = getattr(_sys, "_MEIPASS", None) or str(Path(_sys.executable).parent / "_internal")
             aday = Path(kok) / "data" / "cloud_mqtt_provision.json"
         else:
-            aday = Path(__file__).resolve().parent.parent / "data" / "cloud_mqtt_provision.json"
+            from utils.path_utils import kaynak_kokunu_bul
+
+            aday = kaynak_kokunu_bul(__file__) / "data" / "cloud_mqtt_provision.json"
         if not aday.exists():
             return ""
         return str(_json.loads(aday.read_text(encoding="utf-8")).get(key) or "").strip()

@@ -200,7 +200,7 @@ yazılmış bobin GPIO kurulumu ve DDS kodu **silinir**, PA8/PA9 USB'ye döner. 
 | Bobin pin tablosu | `firmware/stm32_pemf/Core/Src/main.c` → `coil_gpio[]` |
 | GPIO kurulumu | aynı dosya → `Coil_GpioInit()` |
 | Sürüş kipi + maske | `firmware/stm32_pemf/Core/Inc/pemf_surus.h` |
-| Unipolar ayna | `firmware/stm32_pemf_unipolar/` — **elle düzenlenmez**, `python scripts/stm_unipolar_senkronla.py` |
+| ~~Unipolar ayna~~ | ⛔ **KALDIRILDI** — ayna projesi de `scripts/stm_unipolar_senkronla.py` de silindi (bkz. yukarıdaki not). Kip artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile bobin başına seçilir |
 | Kapılar | `tests/test_stm_unipolar_ayna.py` · `test_stm_bobin_sayisi_tek_kaynak.py` · `test_stm32_source_parity.py` |
 | Geçiş planı | `docs/stm32-7-bobin-gecisi-plani-2026-09-10.md` |
 

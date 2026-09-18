@@ -64,7 +64,9 @@ def _bundled_cloudflared() -> Path | None:
         if meipass:
             roots.append(Path(meipass) / "bin" / "cloudflared")
         roots.append(Path(sys.executable).resolve().parent / "bin" / "cloudflared")
-    roots.append(Path(__file__).resolve().parent.parent / "bin" / "cloudflared")
+    from utils.path_utils import kaynak_kokunu_bul
+
+    roots.append(kaynak_kokunu_bul(__file__) / "bin" / "cloudflared")
     for r in roots:
         try:
             cand = r / fname

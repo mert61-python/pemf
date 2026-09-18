@@ -170,7 +170,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | F2 `launcher/` · F6 çıktılar | `launcher.yml` yolları sabit + yalnız `launcher-v*` etiketiyle koşar (**donmuş yayın**) → doğrulanamaz |
 > | F3 `ai/hub` | **import kökü**: `ai_hub.` → `ai.hub.` 84 dosya + kod koruması (.pyd/PYZ) zinciri |
 > | F3 `ai/service` | import kökü + `Dockerfile.ai` → doğrulaması **Docker imaj build'i** ister (metered kota) |
-> | F4 `apps/backend` | en büyük import kökü değişimi |
+> | F4 `apps/backend` | en büyük import kökü değişimi. ✅ **ÖN ŞART BİTTİ 2026-09-18**: 13 yerde depo kökü SABİT DERİNLİKLE (`parents[1]`) bulunuyordu; taşımada iki seviye kayar ve hepsi aday listesi olduğu için **sessizce** yanlış yola düşerdi (`bin/cloudflared`, 640 MB model, bulut sırrı, `VERSION`). Tek kaynak `kaynak_kokunu_bul(__file__)`; kapı `tests/test_kok_capasi_derinlikten_bagimsiz.py` (7 mutasyon) |
 > | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
 > ### 📌 LattePanda (saha makinesi) — UZAKTAN yapılabilir ölçümler · SONRAYA

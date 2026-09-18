@@ -387,7 +387,7 @@ Bu tasarım bilinçli: istemci ve DB, verinin ESP'den mi STM'den mi geldiğini *
 | Dosya | Değişiklik |
 |---|---|
 | `firmware/stm32_pemf/Core/Src/main.c` | `NUM_COILS 5→7`; `coil_gpio[]` +2 satır; başlık pin haritası; `Coil_GpioInit` GPIOE pinleri; ACK format dizesi (aş. uyarı); `STM_READY` metni "5-ch"→"7-ch"; `g_*[NUM_COILS]` initializer'ları (`{0,0,0,0,0}` → 7 eleman — **derleyici bunu sessizce kabul eder**, elle sayılmalı) |
-| `firmware/stm32_pemf_unipolar/` | **elle düzenlenmez** → `python scripts/stm_unipolar_senkronla.py` |
+| ~~`firmware/stm32_pemf_unipolar/`~~ | ⛔ **KALDIRILDI** — ayna projesi ve `scripts/stm_unipolar_senkronla.py` artık YOK (bkz. yukarıdaki not) |
 | `Core/Inc/pemf_surus.h` | pin durumu bloğu (bobin 6-7 satırları). `PEMF_BOBIN_TERS_MASKESI` **0x00 KALIR** — §2.4 |
 | `controllers/hardware_controller.py` | `fmt` → `'<BB 7f 7f 7f 7I H'`; `range(1, 6)` → `range(1, 8)` (**8 yer**: 48, 63, 103, 116, 261, 275, 299, 328) ve `coil_id > 5` → `> 7` (140) |
 | `utils/stm32_transport.py:58-72` | ping/stop paketi `7f`; docstring |
