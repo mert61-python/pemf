@@ -191,6 +191,28 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > aralıklılık **sıradan değil, zamanlama/kaynak** kaynaklı (bu deponun bilinen daemon-bekçi
 > sızıntısı sınıfı: `test_estop_bekci`, `test_ack_bekcisi` kayıtlarına bakın).
 >
+> ### 🔬 2026-09-19 AVI — ELENENLER (yarına devir; baştan kovalamayın)
+>
+> | Deney | Sonuç | Ne eledi |
+> |---|---|---|
+> | Tek başına | 16/16 ✅ | Testin kendisi bozuk değil |
+> | 44 dosyalık **tam önek** (koşma sırası) | 395 ✅ | Önceki testlerin koşması TEK BAŞINA sebep değil |
+> | **Tam toplama** + yalnız bu test (`-k`) | ✅ | Modül import yan etkileri TEK BAŞINA sebep değil |
+> | `gc.collect` devre dışı + karantina | ✅ | ⚠️ "Tutamaç GC'ye kadar tutuluyor" hipotezi **YANLIŞ** |
+>
+> ⚠️ Kırılma için **hem tüm modüllerin import edilmesi hem önceki testlerin koşması** gerekiyor;
+> `pytest-randomly` KURULU DEĞİL (sıra belirlenimci) → aralıklılık **zamanlama/kaynak** kaynaklı.
+>
+> ✅ **AV SIRASINDA BULUNAN GERÇEK ÜRÜN ARIZASI (kapandı, `d732b0f`)**: açık bir OKUYUCU
+> karantinayı düşürüp cihazı tuğlalaştırıyordu (Windows). Bütçe 0,75 sn → 6 sn.
+> Bu, aralıklı testi de sağlamlaştırmış **olabilir** ama KANITLANMADI — düzeltmeden sonra
+> yalnız 2 yeşil tam koşum var, tarihsel oran 2/5 idi. **"Çözüldü" demek için kırmızının
+> yeniden üretilip düzeldiğinin GÖRÜLMESİ gerekir.**
+>
+> 📌 SIRADAKİ ADIM: temiz ağaçla 6 tura kadar tam süit (koşum sırasında depoya DOKUNMA —
+> `inspect.getsource` satır kayması yanlış kırmızı/yeşil üretir, bugün bir kez oldu).
+> Yakalanınca `--tb=long -rf` çıktısının TAMAMI saklanmalı.
+
 > ⚠️ **TEŞHİS EKSİK: yığın izi YOK.** İki düşüşte de çıktı `tail` ile kesilmişti. Bir sonraki
 > tam süitte bu test düşerse **çıktının tamamı saklanmalı** (`--tb=long -rf > dosya`), yoksa
 > aynı boşluğa yine düşülür. "Kararsız test" deyip geçmek bu depoda bir kez gerçek veri
