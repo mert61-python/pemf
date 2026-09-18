@@ -14,7 +14,6 @@ import os
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
-
 from servers import efield_live as ef
 
 

@@ -30,7 +30,6 @@ onu kullanan testler ATLANIR — sessizce yeşile dönmezler; `esp_yolu_gerekir(
 from __future__ import annotations
 
 import pytest
-
 from servers.live_state import ESP_COIL_IDS, STM_COIL_IDS
 
 #: MQTT/ESP yolundan sürülen bir bobin kimliği (faz 4 sonrası: 8 — cihazı yok, yol canlı).

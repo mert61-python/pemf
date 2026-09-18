@@ -20,7 +20,6 @@ denemek yanıltıcı ikinci bir hata üretir.
 from __future__ import annotations
 
 import pytest
-
 from servers.sync_worker import CloudSyncWorker
 
 
@@ -123,7 +122,6 @@ def test_KARSIT_KANIT_secret_mismatchte_fallback_DENENMEZ():
 def test_saglik_ucu_durumu_YAYINLIYOR():
     """Sözleşmenin ucu: /api/health alanı taşımalı (arayüz rozeti buna bağlı)."""
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     c = TestClient(api_server.app, client=("127.0.0.1", 51242))

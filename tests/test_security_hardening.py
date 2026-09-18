@@ -118,7 +118,6 @@ def test_corrupt_secrets_file_is_not_silently_regenerated(tmp_path, monkeypatch)
     "saklanmış ama çözülemiyor" halini kapsıyor, "dosya parse edilemiyor" hali korumayı atlıyordu.
     """
     import pytest
-
     from utils import secrets_manager as sm
 
     secrets_file = tmp_path / "pemf_secrets.json"
@@ -185,9 +184,8 @@ def test_sqlcipher_key_does_not_swallow_brick_guard(tmp_path, monkeypatch):
     yazıyordu → patients.db, tedavi geçmişi ve TÜM yedekler kalıcı olarak çözülemez hale
     geliyordu. Tam da korumanın önlemek için var olduğu sonuç.
     """
-    import pytest
-
     import database.sqlcipher_util as scu
+    import pytest
 
     monkeypatch.setenv("PEMF_ENCRYPT_AT_REST", "1")
     monkeypatch.setattr(scu, "keyring", None)  # gerçek keyring'e yazma

@@ -22,9 +22,8 @@ import threading
 import time
 
 import pytest
-from topoloji import TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
-
 import servers.api_server as api
+from topoloji import TUM_ESP  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
 
 
 @pytest.fixture(autouse=True)

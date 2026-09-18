@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 
 import pytest
-
 from servers import auto_discovery as ad
 
 # ── 1) Ad benzersiz ve kararlı ───────────────────────────────────────────────

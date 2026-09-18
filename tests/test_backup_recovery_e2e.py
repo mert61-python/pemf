@@ -15,7 +15,6 @@ dizini + kurtarma kodu) ile geri oku.
 import shutil
 
 import pytest
-
 from utils import backup_recovery as br
 
 sqlcipher = pytest.importorskip("sqlcipher3.dbapi2", reason="SQLCipher yoksa senaryo anlamsız")

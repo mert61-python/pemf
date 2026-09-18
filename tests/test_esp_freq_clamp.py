@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 from topoloji import ESP_BOBIN  # faz 4: literal bobin numarasi YASAK
-
 from utils.stm32_protocol_limits import (
     ESP_FREQ_MAX_HZ,
     FREQ_MAX_HZ,
@@ -69,9 +68,8 @@ def test_KRITIK_esp_ve_stm_normalize_AYRISIR():
 def _seans_baslat_ve_esp_payloadini_yakala(monkeypatch, frequency: float):
     import time as _t
 
-    from fastapi.testclient import TestClient
-
     import servers.api_server as api
+    from fastapi.testclient import TestClient
 
     yayinlar: list = []
     # ⚠️ ESP ALT SİSTEMİ AÇIK (2026-09-12): bu dosya ESP bobinleriyle seans açıyor

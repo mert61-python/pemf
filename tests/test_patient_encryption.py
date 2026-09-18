@@ -4,7 +4,6 @@
 import base64
 
 from cryptography.fernet import Fernet
-
 from database.patient_database import PatientDatabase
 
 

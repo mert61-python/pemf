@@ -619,7 +619,6 @@ def test_ai_pro_sure_olcumu_MONOTONIC(monkeypatch):
     kaynakta aranıyordu. Artık gerçek uç noktalar sürülüyor ve DUVAR SAATİ oynatılıyor: hem
     damganın hem kalan-süre hesabının monotonic olduğu tek testte ölçülür."""
     from fastapi.testclient import TestClient
-
     from servers import ai_approval as ap
     from servers import ai_router, api_server
 

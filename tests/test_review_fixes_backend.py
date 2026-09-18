@@ -45,7 +45,6 @@ def test_safe_ver_sanitizes_path_traversal():
 # ── Seans süresi ge=1: 0/negatif süre auto-end mantığını (total>0) hiç tetiklemez ──
 def test_session_duration_must_be_positive():
     from pydantic import ValidationError
-
     from servers.api_server import SessionStartPayload
 
     SessionStartPayload(duration_minutes=1)  # geçerli

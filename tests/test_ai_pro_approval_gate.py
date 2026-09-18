@@ -13,7 +13,6 @@ os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
 from fastapi.testclient import TestClient
-
 from servers import ai_approval as ap
 
 

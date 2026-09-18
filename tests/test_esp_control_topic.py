@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import inspect
 
-from topoloji import TUM_ESP, TUM_STM  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
-
 import servers.api_server as api
+from topoloji import TUM_ESP, TUM_STM  # faz 4: ESP kapsami TUM_ESP'ten turer (literal bobin numarasi YASAK)
 
 
 def _yakala(monkeypatch):

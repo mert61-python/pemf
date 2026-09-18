@@ -44,7 +44,6 @@ from __future__ import annotations
 import queue
 
 import pytest
-
 from controllers.hardware_controller import HardwareController
 from servers import live_state
 

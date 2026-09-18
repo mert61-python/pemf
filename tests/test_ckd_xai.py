@@ -273,9 +273,10 @@ _XAI_SENTINEL = {
 def istemci(monkeypatch):
     """Model ağırlıkları gitignore'lu (CI'da yok) → predict_one mock'lanır; ölçülen şey
     UÇ KABLOLAMASI: explain pop'u, total_fields=24, xai alanı, zarif düşüş."""
-    import ai_hub.inference_human_kidney_disease as ihd
     import servers.ai_router as air
     import servers.api_server as apis
+
+    import ai_hub.inference_human_kidney_disease as ihd
 
     monkeypatch.setattr(air, "ai_service_enabled", lambda: False)
     monkeypatch.setattr(

@@ -8,7 +8,6 @@ kilitler — yanlış çalışırsa klinik geçmişi sessizce kaybolur ya da aç
 """
 
 import pytest
-
 from utils.data_export import (
     BUNDLE_VERSION,
     MAGIC,
@@ -170,7 +169,6 @@ def test_bilinmeyen_kolon_ICE_AKTARMAYI_KIRMAZ(temp_app_data, tmp_path):
 
 def test_KRITIK_kisa_parola_REDDEDILIR():
     import pytest as _p
-
     from utils.data_export import MIN_PAROLA, ExportError, encrypt_bundle
 
     for kotu in ("a", "1234", "kisa", ("abcdefgh" * 3)[: MIN_PAROLA - 1]):
@@ -181,7 +179,6 @@ def test_KRITIK_kisa_parola_REDDEDILIR():
 def test_KRITIK_tekrarli_parola_REDDEDILIR():
     """'aaaaaaaaaaaa' uzunluk kuralını geçer ama entropisi yoktur."""
     import pytest as _p
-
     from utils.data_export import ExportError, encrypt_bundle
 
     with _p.raises(ExportError):

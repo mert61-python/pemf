@@ -184,7 +184,6 @@ def test_bos_goruntu_cokertmez():
 # ── UÇ SEVİYESİ: 422 + anlaşılır mesaj (500 "Analiz hatası" DEĞİL) ──────────
 def test_uc_422_ve_anlasilir_mesaj_dondurur():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     c = TestClient(api_server.app)
@@ -198,7 +197,6 @@ def test_uc_422_ve_anlasilir_mesaj_dondurur():
 
 def test_uc_dogru_goruntuyu_KABUL_eder():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     c = TestClient(api_server.app)

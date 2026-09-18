@@ -12,7 +12,6 @@ import time
 os.environ.pop("PEMF_SIMULATE", None)
 
 import pytest
-
 from servers import ai_approval as ap
 
 SPEC = {"D": [0.1] * 7, "P": [0.0] * 7, "organ_id": 2, "duration_minutes": 20}

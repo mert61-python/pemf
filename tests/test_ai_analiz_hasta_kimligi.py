@@ -182,9 +182,8 @@ def test_KRITIK_log_ucu_patient_id_YAZIYOR(tmp_path, monkeypatch):
 
     Sahadaki etki: yeni analizler de kimliksiz kalır, taşıma ileriye dönük ÇALIŞMAZ.
     """
-    from fastapi.testclient import TestClient
-
     from database.treatment_history_db import TreatmentHistoryDB
+    from fastapi.testclient import TestClient
     from servers import api_server
 
     kok = tmp_path / "uc_kimlik"
@@ -212,9 +211,8 @@ def test_KRITIK_log_ucu_patient_id_YAZIYOR(tmp_path, monkeypatch):
 def test_KRITIK_patient_id_GONDERMEYEN_eski_istemci_BOZULMAZ(tmp_path, monkeypatch):
     """⚠️ GERİYE UYUMLULUK: kimlik göndermeyen bir istemcide kayıt DÜŞMEMELİ; eskisi gibi
     ada bağlı çalışmalı."""
-    from fastapi.testclient import TestClient
-
     from database.treatment_history_db import TreatmentHistoryDB
+    from fastapi.testclient import TestClient
     from servers import api_server
 
     kok = tmp_path / "eski_istemci"

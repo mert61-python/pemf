@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from utils import backup_recovery as br
 
 # ── Kod üretimi ve normalleştirme ────────────────────────────────────────────

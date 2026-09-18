@@ -325,10 +325,9 @@ def test_KRITIK_pipeline_patlarsa_SIFIR_doner_ve_ozne_yok(sag, monkeypatch):
 def test_KRITIK_saglayici_metasi_STATUS_ucuna_akar(monkeypatch):
     """Kare üstünde hedef seçimi, kalibrasyon rozeti ve onay uyarıları BU alanlardan beslenir.
     MUTASYON: cache.update'ten `**_saglayici_cache_alanlari()` satırını silin → KIRMIZI."""
-    from fastapi.testclient import TestClient
-
     import servers.ai_router as air
     import servers.api_server as apis
+    from fastapi.testclient import TestClient
 
     snap = dict(air._ai_organ_cache)
     try:

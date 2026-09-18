@@ -172,8 +172,9 @@ def test_baglanilan_host_env_e_YAYINLANIR(monkeypatch):
     `_loopback_only_bind()` yanlış girdiyle karar verirdi. Mutasyon testi bu sözleşmenin
     hiç korunmadığını gösterdi; burada kilitleniyor.
     """
-    import backend_service
     from servers import auth
+
+    import backend_service
 
     # CLI env'den FARKLI bir host dayatıyor → env gerçeğe uymalı
     monkeypatch.setenv("PEMF_API_HOST", "0.0.0.0")
@@ -349,7 +350,6 @@ def test_non_ascii_code_does_not_500_and_counts_against_throttle():
     yazılmıyordu → saldırgan ASCII-dışı bayt ekleyerek kaba-kuvvet sayacını tamamen atlıyordu.
     """
     from fastapi.testclient import TestClient
-
     from servers import api_server, auth_router
 
     # Yardımcının kendisi: ASCII-dışı girdide çökmemeli, False dönmeli

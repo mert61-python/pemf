@@ -58,8 +58,9 @@ def test_KARSIT_KANIT_zincirsiz_hata_da_okunur_kalir():
 # ── 2) 503 yolu artık LOGLUYOR ───────────────────────────────────────────────
 def test_KRITIK_scratch_kurulum_eksigi_503_ama_LOGLANIR(client, monkeypatch, caplog):
     """Kullanıcı mesajı sade kalır; kök neden sunucu kaydına DÜŞER (eskiden hiç düşmüyordu)."""
-    import ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca as ipd
     import servers.ai_router as air
+
+    import ai_hub.inference_paper_dilek_hoca.inference_paper_dilek_hoca as ipd
 
     def _patla(*a, **k):
         try:

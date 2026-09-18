@@ -188,7 +188,6 @@ def test_KARSIT_KANIT_paket_genisligi_KAYNAKTAN_IMPORT_ediliyor():
 @pytest.fixture
 def istemci():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app) as c:

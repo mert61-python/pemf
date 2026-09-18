@@ -26,7 +26,6 @@ import struct
 import wave
 
 import pytest
-
 from utils.ses_kalitesi import (
     BELIRSIZLIK_ESIGI,
     SESSIZLIK_ESIGI_DBFS,

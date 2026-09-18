@@ -44,7 +44,6 @@ os.environ.setdefault("PEMF_SIMULATE", "1")
 @pytest.fixture
 def istemci():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app) as c:

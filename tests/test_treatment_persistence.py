@@ -97,9 +97,8 @@ def test_notes_do_not_overwrite_real_duration_after_stop(temp_app_data, monkeypa
     maruziyeti olarak görünüyordu. `db_finalized` bayrağı tam bunun için yazılıyordu ama hiç
     okunmuyordu.
     """
-    from fastapi.testclient import TestClient
-
     import database.treatment_history_db as thdb
+    from fastapi.testclient import TestClient
     from servers import api_server
 
     db = thdb.TreatmentHistoryDB(temp_app_data)

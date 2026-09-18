@@ -49,7 +49,6 @@ ONAY = "DELETE_SELECTED"
 @pytest.fixture
 def istemci():
     from fastapi.testclient import TestClient
-
     from servers import api_server
 
     with TestClient(api_server.app) as c:

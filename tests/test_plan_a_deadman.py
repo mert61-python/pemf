@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 import servers.api_server as api
 
 KOK = Path(__file__).resolve().parents[1]

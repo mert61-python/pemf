@@ -17,7 +17,6 @@ import io
 from pathlib import Path
 
 import pytest
-
 from servers.seans_alan_kaydi import SeansAlanKaydi, masaustu_dizini
 
 

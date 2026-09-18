@@ -13,7 +13,6 @@ import struct
 import zlib
 
 import pytest
-
 from controllers import hardware_controller
 from controllers.hardware_controller import (
     GOZETIMSIZ_VARSAYILAN_DAKIKA,

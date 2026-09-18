@@ -173,6 +173,29 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | ~~F4 `apps/backend`~~ | ✅ **BİTTİ 2026-09-18.** Sahip kararı: **klasör taşındı, import kökü DEĞİŞMEDİ** (`from utils.x import y` aynen duruyor). Ölçülen gerekçe: tam paketleme (`pemf_backend.*`) 271 dosyada 1140 import ifadesi yeniden yazmayı ve PYZ/`hiddenimports`/kod-koruma zincirini yeniden ölçmeyi gerektirirdi; kazancı (üst-düzey `utils` adının global olmaması) ise **638 site-package arasında bugün HİÇBİR çarpışma olmadığı ölçüldüğü için** teorikti. Tesisat 4 yerde: `backend_service.py`, `tests/conftest.py`, iki spec `pathex`, + `pyproject` `package-dir`. ÖN ŞART (kök çıpası) da bitti 2026-09-18: 13 yerde depo kökü SABİT DERİNLİKLE (`parents[1]`) bulunuyordu; taşımada iki seviye kayar ve hepsi aday listesi olduğu için **sessizce** yanlış yola düşerdi (`bin/cloudflared`, 640 MB model, bulut sırrı, `VERSION`). Tek kaynak `kaynak_kokunu_bul(__file__)`; kapı `tests/test_kok_capasi_derinlikten_bagimsiz.py` (7 mutasyon) |
 > | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
+> ### ⚠️ AÇIK — ARALIKLI KIRMIZI: `test_anahtar_uyusmazligi_karantina` (2026-09-18)
+>
+> `test_KRITIK_TEDAVI_GECMISI_eski_anahtarda_backendi_OLDURMEZ` **tam süitte iki kez düştü**,
+> ama tekrarlanmıyor. Ölçülenler:
+>
+> | Koşum | Sonuç |
+> |---|---|
+> | Tek başına (dosya) | ✅ 16/16 |
+> | Alfabetik komşuluk (`test_ac*` + `test_ai_*` + `test_al*` + kendisi) | ✅ 386 passed |
+> | Tam süit — 1. kez (F4 ÖNCESİ) | ❌ düştü |
+> | Tam süit — 2. kez (F4 sonrası, ruff düzeltmesiyle) | ❌ düştü |
+> | Tam süit — 3. kez (aynı ağaç, hemen ardından) | ✅ 3129 passed |
+>
+> ⚠️ **F4 taşımasının getirdiği bir şey DEĞİL** — ilk düşüş taşımadan önceydi ve bu turda
+> dosyaya hiç dokunulmadı. `pytest-randomly` KURULU DEĞİL, yani sıra belirlenimci; dolayısıyla
+> aralıklılık **sıradan değil, zamanlama/kaynak** kaynaklı (bu deponun bilinen daemon-bekçi
+> sızıntısı sınıfı: `test_estop_bekci`, `test_ack_bekcisi` kayıtlarına bakın).
+>
+> ⚠️ **TEŞHİS EKSİK: yığın izi YOK.** İki düşüşte de çıktı `tail` ile kesilmişti. Bir sonraki
+> tam süitte bu test düşerse **çıktının tamamı saklanmalı** (`--tb=long -rf > dosya`), yoksa
+> aynı boşluğa yine düşülür. "Kararsız test" deyip geçmek bu depoda bir kez gerçek veri
+> kaybına yol açtı (bkz. yarım göç kaydı).
+
 > ### 📌 LattePanda (saha makinesi) — UZAKTAN yapılabilir ölçümler · SONRAYA
 >
 > **Durum (sahip, 2026-09-18):** *"yayın öncesi firmware + main.c kodu var o cihazda,

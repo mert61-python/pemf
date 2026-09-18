@@ -19,9 +19,8 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from c_soyucu import c_soy
-
 import servers.api_server as api
+from c_soyucu import c_soy
 
 KOK = Path(__file__).resolve().parents[1]
 

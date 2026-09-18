@@ -17,9 +17,8 @@ import threading
 import time
 
 import pytest
-from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
-
 import servers.api_server as api
+from topoloji import ESP_BOBIN, TUM_ESP  # faz 4: literal bobin numarasi YASAK
 
 
 @pytest.fixture(autouse=True)

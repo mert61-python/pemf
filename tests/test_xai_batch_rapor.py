@@ -118,8 +118,9 @@ def test_KRITIK_ayni_stem_farkli_klasor_AYRI_ciktiya(cli, tmp_path, monkeypatch)
 def test_KRITIK_ses_sessizlik_kapisi_XAIden_ONCE(cli, tmp_path, monkeypatch):
     import subprocess
 
-    import ai_hub.inference_cat_sound.inference_cat_sound as ses_mod
     import utils.ses_kalitesi as sk
+
+    import ai_hub.inference_cat_sound.inference_cat_sound as ses_mod
 
     monkeypatch.setattr("imageio_ffmpeg.get_ffmpeg_exe", lambda: "ffmpeg")
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stderr=b""))

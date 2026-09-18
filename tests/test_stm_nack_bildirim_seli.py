@@ -31,7 +31,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from servers import api_server as _api
 
 
