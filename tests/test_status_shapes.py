@@ -27,6 +27,16 @@ GOLDEN_SHAPES = {
         "services",
         "status",
         "stmConnected",
+        # ⚠️ BILINCLI SEKIL DEGISIKLIGI 2026-09-18 — "BAGLI" ile "UYUMLU" AYRI SORULARDIR.
+        # `stmConnected` yalnizca "kart konusuyor mu" der. Eski firmware (5 bobin) backend'in
+        # 120 baytlik paketini anlamaz, her pakete NACK doner ve PWM'e hic dokunmaz — ama
+        # `STM_READY` bastigi icin `stmConnected` YINE TRUE olur. Belirti: gosterge yesil,
+        # hata yok, HICBIR bobin calismiyor. Bu iki alan o ayrimi gorunur kilar:
+        #   stmUyumlu: true=uyumlu · false=KESIN uyumsuz (seans 409 ile reddedilir) ·
+        #              null=banner taninmadi/henuz gorulmedi (seans ENGELLENMEZ)
+        # Kapi: tests/test_stm_firmware_uyum_kapisi.py
+        "stmUyumlu",
+        "stmUyumsuzlukSebebi",
         "tunnelUrl",
         # DENETIM P2 (BILINCLI sekil degisikligi): bulut cihaz-registry durumu. 'secret_mismatch'
         # KALICI bir hatadir (TOFU muhru — yeniden kurulum sonrasi device_secret degisti) ve

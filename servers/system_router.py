@@ -277,6 +277,13 @@ async def health_check(request: Request):
         "tunnelUrl": ((tunnel_url or None) if _local else None),
         "core_initialized": _api.state.core is not None,
         "stmConnected": bool(getattr(_api.state.core, "stm_is_connected", False)) if _api.state.core else False,
+        # ⚠️ "BAĞLI" ile "UYUMLU" AYRI SORULARDIR (2026-09-18). Kart konuşuyor olabilir ama
+        # backend'in gönderdiği paket genişliğini anlamayan bir firmware koşuyor olabilir;
+        # o hâlde gösterge YEŞİL, hata yok, HİÇBİR bobin çalışmıyor. `stmConnected` bu ayrımı
+        # yapamaz, o yüzden AYRI alan. Üç durum: true=uyumlu · false=KESİN uyumsuz (seans
+        # reddedilir) · null=banner okunamadı/henüz görülmedi (seans ENGELLENMEZ).
+        "stmUyumlu": getattr(_api.state.core, "stm_uyumlu", None) if _api.state.core else None,
+        "stmUyumsuzlukSebebi": (getattr(_api.state.core, "stm_uyumsuzluk_sebebi", "") if _api.state.core else ""),
         "atRestEncrypted": at_rest_encrypted,
         # Tıbbi kayıt yazılabilir mi. false → yeni seans REDDEDİLİR (bkz. /api/session/start).
         "dbReady": db_ready,

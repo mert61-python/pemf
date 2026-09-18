@@ -1,6 +1,33 @@
 # STM32 Uzaktan Güncelleme + Firmware/Client Uyumsuzluğu — Plan
 
-**Tarih:** 2026-09-14 · **Durum:** plan (kod yazılmadı) · Ölçümler bu makinede yapıldı.
+**Tarih:** 2026-09-14 · **Durum:** **§1 UYGULANDI (2026-09-18)** · §2 uzaktan güncelleme
+hâlâ plan (yayın donmuş) · Ölçümler bu makinede yapıldı.
+
+> ## ✅ §1 UYUM KAPISI YAZILDI — 2026-09-18
+>
+> | Parça | Nerede |
+> |---|---|
+> | Banner ayrıştırıcı (**tek kaynak**) | `utils/stm32_kimlik.py` — `banner_ayristir` · `uyum_denetle` |
+> | Saha betiği artık oradan import eder | `scripts/stm_firmware_kimligi.py` (kendi regex'i **kaldırıldı**) |
+> | Banner okuma | `headless_core._stm_kimligini_isle`, `STM_READY` dalından çağrılır |
+> | Durum alanları | `core.stm_uyumlu` · `core.stm_uyumsuzluk_sebebi` |
+> | Sağlık ucu | `/api/health` → `stmUyumlu` · `stmUyumsuzlukSebebi` |
+> | Seans reddi | `/api/session/start` → **409** + eylem söyleyen mesaj |
+> | Kapı | `tests/test_stm_firmware_uyum_kapisi.py` — 13 test, **5 mutasyon kırmızı** |
+>
+> **Karar üç durumlu:** `true` uyumlu · `false` **kesin** uyumsuz (seans reddedilir) ·
+> `null` banner tanınmadı → **seans engellenmez**, ama sağlık ucunda görünür. Gerekçe:
+> banner biçimi ileride değişip *uyumlu* bir firmware de tanınmayabilir; çalışan bir kliniği
+> durdurmak çözdüğümüz sorundan büyük zarar olurdu. Yalnızca **bildiğimizde** reddediyoruz.
+>
+> ⚠️ **Acil durdurma kapılanmadı** — kendi testi var: uyumsuz firmware'de
+> `POST /api/hardware/emergency_stop` → **200**.
+>
+> ⚠️ Mutasyonda ilk yazımda **iki kapı ısırmadı** ve düzeltildi: (a) testler uyum durumunu
+> doğrudan enjekte ettiği için `headless_core`daki **bağlantıyı** ölçmüyordu — çağrıyı silmek
+> hepsini yeşil bırakıyordu; (b) paket genişliği çıpası `STM_PAKET_BOBIN_SAYISI` *dizesini*
+> arıyordu, sabiti elle yazan mutasyon o dizeyi yine içeriyordu. İkisi de AST ile gerçek
+> çağrıya/import'a pinlendi.
 
 ---
 

@@ -124,6 +124,13 @@ class HeadlessCore:
         self.event_bus = event_bus or get_event_bus()
         self.stm_connected_signal = SimpleSignal()
         self.stm_is_connected = False
+        # ⚠️ "BAGLI" ile "UYUMLU" AYRI: kart konusuyor olabilir ama backend'in paketledigi
+        # genisligi anlamayan bir firmware kosuyor olabilir (bkz. `_stm_kimligini_isle`).
+        # Baslangic `None` = HENUZ BANNER GORULMEDI (bilinmiyor); `False` DEGIL — aksi halde
+        # kart hic konusmadan once "uyumsuz" deyip seansi bosuna reddederdik.
+        self.stm_kimlik = None
+        self.stm_uyumlu: bool | None = None
+        self.stm_uyumsuzluk_sebebi: str = ""
         self._stm_state_lock = threading.RLock()
         self.stm_connected_signal.connect(self._on_stm_connected_slot)
 
@@ -214,6 +221,51 @@ class HeadlessCore:
                 return
             self.stm_is_connected = bool(connected)  # gecisi kilit ALTINDA muhurle
             self.stm_connected_signal.emit(connected)
+
+    def _stm_kimligini_isle(self, banner: str) -> None:
+        """`STM_READY` banner'indan kart kimligini cikar ve UYUM kararini sakla.
+
+        ⚠️ KARAR UC DURUMLUDUR (`utils/stm32_kimlik.uyum_denetle`):
+            True  = kanal sayisi paket genisligimizle esitti
+            False = KESIN uyumsuz  -> seans baslatma reddedilir
+            None  = banner taninmadi ("bilinmiyor") -> seans ENGELLENMEZ, ama GORUNUR
+
+        "Bilinmiyor"un seansi engellememesi bilincli: banner bicimi ileride degisip UYUMLU
+        bir firmware de taninmayabilir; o durumda calisan bir klinigi durdurmak, cozdugumuz
+        sorundan buyuk bir zarar olurdu. Yalnizca KESIN uyumsuzlukta reddediyoruz.
+
+        ⚠️ BU KAPI ACIL DURDURMAYI ENGELLEMEZ. Uyumsuz firmware'de bile STOP yolu acik
+        kalir (depo degismezi: bobinler her seyden once durur).
+        """
+        from utils.stm32_kimlik import banner_ayristir, uyum_denetle
+        from utils.stm32_transport import STM_PAKET_BOBIN_SAYISI
+
+        kimlik = banner_ayristir(banner)
+        uyumlu, sebep = uyum_denetle(kimlik, STM_PAKET_BOBIN_SAYISI)
+        with self._stm_state_lock:
+            onceki = self.stm_uyumlu
+            self.stm_kimlik = kimlik
+            self.stm_uyumlu = uyumlu
+            self.stm_uyumsuzluk_sebebi = sebep
+        if uyumlu is False:
+            # ⚠️ `error`: bu, operatorun SEANS BASLATAMAYACAGI anlamina gelir; `warning`
+            # destek log'unda kaybolurdu.
+            self.logger.error("STM32 FIRMWARE UYUMSUZ — %s", sebep)
+        elif uyumlu is None:
+            self.logger.warning("STM32 firmware kimligi okunamadi — %s", sebep)
+        elif onceki is not True:
+            self.logger.info(
+                "STM32 firmware uyumlu: %s, %d kanal, %s",
+                kimlik.surum,
+                kimlik.kanal,
+                kimlik.kip,
+            )
+        if uyumlu is not True:
+            self._publish_event(
+                "hardware.stm.uyumsuz",
+                {"uyumlu": uyumlu, "sebep": sebep, "banner": (kimlik.ham if kimlik else banner.strip())},
+                priority=EventPriority.HIGH,
+            )
 
     def _on_stm_connected_slot(self, is_connected: bool) -> None:
         with self._stm_state_lock:
@@ -395,6 +447,15 @@ class HeadlessCore:
 
         if "STM_READY" in decoded or "STM_OK:" in decoded:
             self._set_stm_connected(True)
+
+        # ⚠️ UYUM KAPISI (2026-09-18) — "BAGLI" ile "UYUMLU" AYRI SEYLERDIR.
+        # Eskiden yalnizca yukaridaki satir vardi: `STM_READY` gorulunce baglanti YESIL
+        # oluyor, satirin ICERIGINE HIC BAKILMIYORDU. Eski firmware (5 bobin) 88 baytlik
+        # paket bekler; backend 120 bayt gonderir → kart CRC'yi yanlis ofsetten okur, her
+        # pakete NACK doner ve PWM durumuna HIC dokunmaz. Belirti: gosterge YESIL, hata
+        # penceresi YOK, hicbir bobin baslamiyor. Tek teshis yolu UART'i elle dinlemekti.
+        if "STM_READY" in decoded:
+            self._stm_kimligini_isle(decoded)
 
         if "STM_OK:" in decoded:
             try:

@@ -44,8 +44,11 @@ import time
 
 BAUD = 115200
 
-# `-> STM_READY: DDS v2.3 (7-ch UNIPOLAR tek-bacak + HW_SYNC@PB1) ...`
-READY_DESENI = re.compile(r"STM_READY:.*?\((?P<kanal>\d+)-ch\s+(?P<kip>[^)+]*)")
+# ⚠️ DESEN BURADA DEGIL — TEK KAYNAK `utils/stm32_kimlik.py` (2026-09-18).
+# Eskiden bu satirda kendi regex'i vardi. Ayni banner'i iki yerde ayristirmak, bu depoda
+# bedeli OLCULMUS bir sinif: `_DB_ERROR` demetleri iki DB modulunde sessizce AYRISMISTI.
+# Backend'in UYUM KAPISI da ayni ayristiriciyi kullanir; bu betikle aynı seyi gormeleri SART.
+from utils.stm32_kimlik import banner_ayristir  # noqa: E402
 
 
 def _portlari_bul(istenen: str | None) -> list[str]:
@@ -88,10 +91,9 @@ def _dinle(port: str, sure: float) -> tuple[int | None, list[str]]:
                     continue
                 if any(k in satir for k in ("STM_READY", "STM_NACK", "STM_SENS", "STM_ERR", "STM_TELE")):
                     satirlar.append(satir)
-                m = READY_DESENI.search(satir)
-                if m:
-                    kanal = int(m.group("kanal"))
-                    return kanal, satirlar
+                kimlik = banner_ayristir(satir)
+                if kimlik:
+                    return kimlik.kanal, satirlar
     return kanal, satirlar
 
 

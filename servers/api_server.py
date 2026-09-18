@@ -2904,6 +2904,24 @@ async def start_session(payload: SessionStartPayload, request: Request):
         logging.getLogger(__name__).error("Seans REDDEDILDI — STM kart komutlari reddediyor (firmware uyusmazligi).")
         raise HTTPException(status_code=409, detail=STM_RED_MESAJI)
 
+    # ⚠️ FIRMWARE UYUM KAPISI (2026-09-18) — YUKARIDAKININ ONLEYICI IKIZI ────────────────
+    # Ustteki kapi TEPKISELDIR: kart komutlari reddetmeye BASLADIKTAN sonra (NACK gorulunce)
+    # devreye girer. Bu kapi ONLEYICIDIR: kart acilista KIM OLDUGUNU zaten soyluyor
+    # (`-> STM_READY: DDS v2.3 (7-ch ...)`) ve o satir bugune kadar OKUNMUYORDU. Kanal sayisi
+    # bizim paket genisligimizle tutmuyorsa bobinlerin calismayacagi ONCEDEN bellidir —
+    # operatoru seansi baslatip NACK beklemeye zorlamanin anlami yok.
+    #
+    # ⚠️ YALNIZ KESIN UYUMSUZLUKTA (`is False`) reddedilir. Banner taninmadiysa deger `None`
+    # kalir ve seans ENGELLENMEZ: ileride banner bicimi degisen UYUMLU bir firmware de
+    # taninmayabilir ve calisan bir kligini durdurmak cozdugumuz sorundan buyuk zarar olurdu.
+    #
+    # ⚠️ SADECE BASLATMADA: durdurma ve acil-durdurma yollari buradan GECMEZ (uyumsuz kartta
+    # tedaviyi durduramamak asil tehlike olurdu).
+    if stm_coils and getattr(state.core, "stm_uyumlu", None) is False:
+        _sebep = getattr(state.core, "stm_uyumsuzluk_sebebi", "") or "Firmware kanal sayisi uyusmuyor."
+        logging.getLogger(__name__).error("Seans REDDEDILDI — firmware kimligi uyumsuz: %s", _sebep)
+        raise HTTPException(status_code=409, detail=_sebep)
+
     # ⚠️ DENETİM 2026-08-09 (ENGEL) — KAYITSIZ TEDAVİ ARTIK BAŞLAMAZ.
     # Aşağıdaki DB yazımları bilinçli olarak "best-effort"tur (DB hatası bobinleri durdurmasın).
     # Ama BAŞLANGIÇTA bunun sonucu şuydu: DB hiç açılamıyorken bile seans başlıyor, bobinler
