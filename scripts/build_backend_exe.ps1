@@ -256,7 +256,7 @@ if (-not $SkipProtect -and (Test-Path $exe)) {
            Select-Object -First 1
     if (-not $vcv) {
         Warn "MSVC (vcvarsall.bat) bulunamadı → .pyd derlenemedi. Paket KORUMASIZ kalır;"
-        Warn "make_base_zip bunu reddedecektir. Çözüm: bootstrap.ps1 ile MSVC Build Tools kurun."
+        Warn "make_base_zip bunu reddedecektir. Çözüm: .\scripts\bootstrap.ps1 ile MSVC Build Tools kurun."
     } else {
         $protLog = Join-Path $BuildRoot "compile_pyd.log"
         $c = "call `"$($vcv.FullName)`" x64 >nul 2>&1 && set DISTUTILS_USE_SDK=1&& set MSSdk=1&& " +

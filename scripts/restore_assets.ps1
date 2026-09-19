@@ -10,7 +10,7 @@
 #
 # Bu betik ikinci yarisini geri getirir. Yeni/bos bir makinede sira:
 #     1) bu klasoru (ya da `git clone`) getir
-#     2) .\bootstrap.ps1            # toolchain (Node/Rust/MSVC/JDK/Android/Inno)
+#     2) .\scripts\bootstrap.ps1            # toolchain (Node/Rust/MSVC/JDK/Android/Inno)
 #     3) .\scripts\restore_assets.ps1   # <-- BU: AI model agirliklari
 #     4) .\scripts\build_backend_exe.ps1
 #

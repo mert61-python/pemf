@@ -59,14 +59,14 @@ GitHub'a yayınlayabilmek. Beş adım, **sırası önemli.**
   ```
   (Bu durumda AI modelleri git'te yok — Adım 2 onları indirir.)
 
-### Adım 1 — Toolchain: `bootstrap.ps1`
+### Adım 1 — Toolchain: `scripts/bootstrap.ps1`
 Boş makineye tüm derleme araçlarını tek komutla kurar (Node, Git, gh, JDK 17, Inno Setup, Rust +
 cargo-tauri, MSVC C++ Build Tools, Android NDK 27 + CMake 3.22.1). **İdempotent** — tekrar
 çalıştırılabilir.
 ```powershell
-.\bootstrap.ps1                 # her şeyi kur
-.\bootstrap.ps1 -SkipAndroid    # APK'ya ihtiyaç yoksa NDK'yı (~1 GB) atla
-.\bootstrap.ps1 -VerifyOnly     # sadece durum tablosu (ne var / ne eksik)
+.\scripts\bootstrap.ps1                 # her şeyi kur
+.\scripts\bootstrap.ps1 -SkipAndroid    # APK'ya ihtiyaç yoksa NDK'yı (~1 GB) atla
+.\scripts\bootstrap.ps1 -VerifyOnly     # sadece durum tablosu (ne var / ne eksik)
 ```
 Sonra **bir kez** oturum aç (bunlar makineye özeldir, taşınmaz):
 ```powershell

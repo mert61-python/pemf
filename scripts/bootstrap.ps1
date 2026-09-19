@@ -13,10 +13,10 @@
 # TASIMAZ: gh/Vercel oturumu makineye ozeldir -> her makinede `gh auth login`.
 #
 # KULLANIM (yonetici PowerShell onerilir; MSVC + winget icin):
-#   .\bootstrap.ps1                 # her seyi kur (idempotent)
-#   .\bootstrap.ps1 -SkipAndroid    # APK toolchain'i (NDK ~1GB) atla
-#   .\bootstrap.ps1 -SkipMsvc       # MSVC zaten kuruluysa atla
-#   .\bootstrap.ps1 -VerifyOnly     # hicbir sey kurma, sadece durum raporu ver
+#   .\scripts\bootstrap.ps1                 # her seyi kur (idempotent)
+#   .\scripts\bootstrap.ps1 -SkipAndroid    # APK toolchain'i (NDK ~1GB) atla
+#   .\scripts\bootstrap.ps1 -SkipMsvc       # MSVC zaten kuruluysa atla
+#   .\scripts\bootstrap.ps1 -VerifyOnly     # hicbir sey kurma, sadece durum raporu ver
 #
 # NOT: winget kurulumlari makine/kullanici PATH'ini gunceller ama ACIK olan
 #      terminal bunu gormez. Script PATH'i tazeler; yine de en sonda "yeni
@@ -35,9 +35,19 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference     = "SilentlyContinue"   # Invoke-WebRequest yavaslamasin
 
-# --- konum: bu script guii\ icinde; embeddable kok = guii'nin ustu (myenv orada) ---
+# --- konum: bu script guii\scripts\ icinde ---
+#   $ScriptDir = ...\guii\scripts      (betigin durdugu yer)
+#   $GuiRoot   = ...\guii              (depo koku — .git, build_tools, requirements burada)
+#   $EmbRoot   = ...\python-3.10.2-embed-amd64  (gomulu python.exe burada)
+#
+# ⚠️ 2026-09-19'da `guii\bootstrap.ps1` -> `guii\scripts\bootstrap.ps1` TASINDI.
+#    $ScriptDir artik BIR SEVIYE DERINDE; ustune cikmak ZORUNLU. Eskiden
+#    `$GuiRoot = $ScriptDir` idi — o satir geri gelirse $EmbRoot depo kokunu
+#    gosterir, `python.exe` bulunamaz ve 5/5b/5c adimlari SESSIZCE atlanir
+#    (Warn basar, exit 0 doner — yani kurulum 'basarili' gorunur).
+#    Kapi: tests/test_bootstrap_konumu.py
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$GuiRoot   = $ScriptDir
+$GuiRoot   = Split-Path -Parent $ScriptDir
 $EmbRoot   = Split-Path -Parent $GuiRoot
 
 # --- yardimcilar ---
@@ -105,6 +115,7 @@ function Winget-Ensure {
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host "   PEMF Vet — Build Toolchain Bootstrap" -ForegroundColor Magenta
+Write-Host "   depo koku     : $GuiRoot" -ForegroundColor DarkGray
 Write-Host "   embeddable kok: $EmbRoot" -ForegroundColor DarkGray
 Write-Host "============================================================" -ForegroundColor Magenta
 
@@ -243,7 +254,7 @@ if (Test-Path $embPy) {
     if ($LASTEXITCODE -eq 0) { OK "Build deps mevcut (PyInstaller $hasPyi + numpy/torch pinli)" }
     else { Warn "Embedded deps eksik -> $embPy -m pip install --no-deps -r build_tools\myenv-requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu" }
 } else {
-    Warn "Embedded python bulunamadi ($embPy). Script embeddable kokun icinden calismali."
+    Warn "Embedded python bulunamadi ($embPy). Betik `guii\scripts\` icinde durmali; embeddable kok = guii'nin ustu."
 }
 
 # --- 5b. SIR TARAMASI KAPISI (pre-commit + gitleaks) ---
@@ -264,12 +275,12 @@ if (Test-Path $embPy) {
     }
     if (-not $pcOk) {
         Warn "pre-commit kurulamadi -> elle: $embPy -m pip install -r requirements-dev.txt"
-    } elseif (-not (Test-Path (Join-Path $PSScriptRoot ".git"))) {
+    } elseif (-not (Test-Path (Join-Path $GuiRoot ".git"))) {
         Warn "Bu klasor bir git deposu degil -> pre-commit hook'u kurulamadi."
     } else {
-        Push-Location $PSScriptRoot
+        Push-Location $GuiRoot
         & $embPy -m pre_commit install *> $null
-        $hook = Join-Path $PSScriptRoot ".git\hooks\pre-commit"
+        $hook = Join-Path $GuiRoot ".git\hooks\pre-commit"
         if (Test-Path $hook) { OK "pre-commit hook kurulu (gitleaks + ruff + buyuk-dosya kapisi)" }
         else { Warn "pre-commit install basarisiz -> elle: $embPy -m pre_commit install" }
         Pop-Location
@@ -292,10 +303,10 @@ if (Test-Path $embPy) {
 # yalnizca alt komutu cagirir. Bu depo 2026-09-15'te "ayni kural iki yerde -> sessizce
 # ayristi" arizasini UC ayri noktada yasadi. Kapi: tests/test_sir_koruma_bootstrapte_kurulur.py
 Info "5c) Sir dosyasi korumasi (skip-worktree)"
-if (-not (Test-Path (Join-Path $PSScriptRoot ".git"))) {
+if (-not (Test-Path (Join-Path $GuiRoot ".git"))) {
     Warn "Bu klasor bir git deposu degil -> skip-worktree korumasi gerekmez (staging riski yok)."
 } elseif (Test-Path $embPy) {
-    Push-Location $PSScriptRoot
+    Push-Location $GuiRoot
     & $embPy ".\build_tools\secrets_backup.py" sir-korumasi
     if ($LASTEXITCODE -eq 0) {
         OK "Sir dosyalari git'in gozunden dusuruldu (git add -A onlari ARTIK stage'lemez)"

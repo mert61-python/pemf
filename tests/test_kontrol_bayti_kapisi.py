@@ -114,7 +114,11 @@ def test_KARSIT_KANIT_kapi_gercekten_yakaliyor():
     assert bozuk != saglam, "mutasyon uygulanamadı — test bayat"
     assert 0x0D in _kusurlu(bozuk), "kapı yenmiş CR'i KAÇIRIYOR"
 
-    bozuk2 = saglam.replace(rb".\bootstrap", b"." + bytes([8]) + b"ootstrap")
+    # ⚠️ ÇIPA 2026-09-19'da GÜNCELLENDİ: `bootstrap.ps1` kökten `scripts/`e taşındı ve bu
+    # `.\bootstrap` deseni BUILD.md'de kalmadı. Test bunu kendi kendine bildirdi
+    # ("mutasyon uygulanamadı — test bayat") — çıpanın kırılgan olduğunun kanıtı, sessiz
+    # yeşile düşmediğinin de.
+    bozuk2 = saglam.replace(rb".\scripts\bootstrap", rb".\scripts" + bytes([8]) + b"ootstrap")
     assert bozuk2 != saglam, "mutasyon uygulanamadı — test bayat"
     assert 0x08 in _kusurlu(bozuk2), "kapı yenmiş BS'i KAÇIRIYOR"
 

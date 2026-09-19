@@ -113,7 +113,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör/Dosya | Ne işe yarar |
 |---|---|
 | [`BUILD.md`](BUILD.md) | **Ana build rehberi** (backend/base.zip/launcher/APK/installer + yayın) |
-| `bootstrap.ps1` | Sıfır-makinede tüm toolchain'i tek komutla kurar (Node/Rust/MSVC/JDK/Android/Inno/gh) |
+| `scripts/bootstrap.ps1` | Sıfır-makinede tüm toolchain'i tek komutla kurar (Node/Rust/MSVC/JDK/Android/Inno/gh) |
 | [`build_tools/`](build_tools/README.md) | Derleme reçeteleri (PyInstaller spec, Inno .iss, `make_base_zip.py`, `build_apk.ps1`, sürüm-lock) |
 | [`scripts/`](scripts/README.md) | Ops: build/yayın/servis-kurulum/gateway-hotspot/teardown-uninstall |
 | [`PEMF_BUILD/`](PEMF_BUILD/README.md) | **ÜRETİLEN** — kanonik frozen-backend çıktısı (`dist/PEMF_Backend`, base.zip girdisi) |
@@ -157,7 +157,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 | Android APK | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
 
 - **Runtime taşınabilir:** frozen EXE / offline installer Python KURULU OLMADAN her makinede çalışır.
-- **Build taşınabilir değil ama otomatik:** `bootstrap.ps1` boş bir Windows'ta tüm araç zincirini kurar.
+- **Build taşınabilir değil ama otomatik:** `scripts/bootstrap.ps1` boş bir Windows'ta tüm araç zincirini kurar.
 - **Build Python'ı = gömülü** (klasör kökündeki `python.exe`; myenv + sistem Python **kaldırıldı**, gerekmez).
 - Dağıtım (device/server): [`deploy/README.md`](deploy/README.md).
 

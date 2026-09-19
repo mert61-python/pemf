@@ -39,16 +39,16 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 > temiz makinede klinik-kurulum (Yol A) ve build/yayın (Yol B) adımlarını sıralı verir.
 > Bu dosya (BUILD.md) başvurudur: her adımın nedeni + tuzakları.
 
-## 0. Sıfır Makine Kurulumu — `bootstrap.ps1`
+## 0. Sıfır Makine Kurulumu — `scripts/bootstrap.ps1`
 
 **Boş bir Windows laptopta** (hiçbir toolchain yokken) tüm build+publish araç zincirini tek komutla kurar.
 Bu embeddable-python klasörünü kopyala, sonra **guii kökünden**:
 
 ```powershell
-.\bootstrap.ps1                 # her şeyi kur (idempotent — tekrar çalıştırılabilir)
-.\bootstrap.ps1 -SkipAndroid    # APK toolchain'i (NDK ~1GB) atla → backend+launcher+installer yeter
-.\bootstrap.ps1 -SkipMsvc       # MSVC zaten kuruluysa atla
-.\bootstrap.ps1 -VerifyOnly     # hiçbir şey kurma, sadece durum tablosu ver
+.\scripts\bootstrap.ps1                 # her şeyi kur (idempotent — tekrar çalıştırılabilir)
+.\scripts\bootstrap.ps1 -SkipAndroid    # APK toolchain'i (NDK ~1GB) atla → backend+launcher+installer yeter
+.\scripts\bootstrap.ps1 -SkipMsvc       # MSVC zaten kuruluysa atla
+.\scripts\bootstrap.ps1 -VerifyOnly     # hiçbir şey kurma, sadece durum tablosu ver
 ```
 
 - **Kurar:** Node.js (LTS), Git, GitHub CLI, JDK 17, Inno Setup 6, Rust (+`cargo-tauri`), MSVC C++ Build Tools, Android `cmdline-tools` + **NDK `27.1.12297006`** + **CMake `3.22.1`**.
@@ -83,7 +83,7 @@ ya da 100 MiB üstü bir dosya git'e girerse test kırılır.
 ```powershell
 git clone https://github.com/mert61-python/pemf.git guii
 cd guii
-.\bootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
+.\scripts\bootstrap.ps1                  # toolchain (Node/Rust/MSVC/JDK/Android/Inno/gh)
 .\scripts\restore_assets.ps1     # AI model ağırlıkları (Releases'ten, SHA256 doğrulamalı)
 .\scripts\build_backend_exe.ps1  # artık derlenebilir
 ```

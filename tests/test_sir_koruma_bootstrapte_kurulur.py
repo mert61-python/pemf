@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 
 KOK = Path(__file__).resolve().parents[1]
-_BOOTSTRAP = KOK / "bootstrap.ps1"
+_BOOTSTRAP = KOK / "scripts" / "bootstrap.ps1"
 _YEDEK = KOK / "build_tools" / "secrets_backup.py"
 
 #: Bootstrap'in cagirdigi alt komut. Tek kaynak: secrets_backup._SW_DOSYALAR.

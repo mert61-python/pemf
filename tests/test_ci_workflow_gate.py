@@ -228,7 +228,7 @@ def test_pre_commit_YAPILANDIRMASI_gitleaks_iceriyor():
 def test_bootstrap_pre_commit_KURAR():
     """Yapılandırma kurulmadıkça hiçbir şey yapmaz; bootstrap kurulumu üstlenmeli."""
     kok = Path(__file__).resolve().parent.parent
-    b = (kok / "bootstrap.ps1").read_text(encoding="utf-8", errors="replace")
+    b = (kok / "scripts" / "bootstrap.ps1").read_text(encoding="utf-8", errors="replace")
     assert "pre_commit install" in b or "pre-commit install" in b, (
         "bootstrap.ps1 pre-commit hook'unu KURMUYOR — yeni makinede kapi kapali kalir"
     )
