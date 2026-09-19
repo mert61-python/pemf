@@ -239,6 +239,25 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > aynı boşluğa yine düşülür. "Kararsız test" deyip geçmek bu depoda bir kez gerçek veri
 > kaybına yol açtı (bkz. yarım göç kaydı).
 
+> ### ✅ SINIF TARAMASI — "kurtarma yolunun KENDİSİ tuğlalaştırıyor" (2026-09-19, BİTTİ)
+>
+> Dünkü bulgu tek bir hata değil, bir SINIF işaret ediyordu. `apps/backend` altındaki
+> kurtarma/yedek/göç adlı fonksiyonlarda **17 `raise` noktası** AST ile tarandı ve her biri
+> çağrı yerinden ölçülerek sınıflandırıldı:
+>
+> | Desen | Yer | Karar |
+> |---|---|---|
+> | `karantinaya_al(...) is None` → `RuntimeError` | `treatment_history_db:538` · `patient_database:240` | 🔴 **TUĞLALAŞMA** — tek gerçek örnek, `d732b0f` ile kapandı (bütçe 0,75→6 sn) |
+> | `_tasi_yeniden_dene` → `raise` | `sqlcipher_util:339` | ✅ **BİLEREK**: çağıran GERİ ALMA yapıyor (`:668-680` ölçüldü); düşerse orijinal yerine konur, o da düşerse operatöre "elle geri koyun" denir |
+> | `get_sqlcipher_key` / `secrets_manager` fail-closed | 5 yer | ✅ **SAHİP KARARI** — sır çözülemeyince AÇILMAMAK kasıtlı (veri sağlam kalsın). DOKUNMA |
+> | `ai_router._decode_image` vb. | 3 yer | ✅ İstek düzeyi hata, cihaz düzeyi değil |
+>
+> ⚠️ Bu sınıf depoda ÖNCE de görülmüş: `_tasi_yeniden_dene` docstring'i 2026-09-13'te
+> `test_ikinci_acilis_yeniden_GOCMEZ`in aynı kilit/GC zamanlaması yüzünden aralıklarla
+> düştüğünü kaydediyor. Yani "aralıklı test ← dosya kilidi" bu depoda tekrar eden bir desen.
+>
+> 📌 SONUÇ: başka tuğlalaşan kurtarma yolu YOK. Tarama tekrar edilmesin.
+
 > ### 📌 LattePanda (saha makinesi) — UZAKTAN yapılabilir ölçümler · SONRAYA
 >
 > **Durum (sahip, 2026-09-18):** *"yayın öncesi firmware + main.c kodu var o cihazda,
