@@ -128,9 +128,14 @@ def test_KRITIK_marker_KABIN_rotasyonu_UYGULANIR(donusum):
         "(eski `ray_cabin = ray_marker` davranışı geri gelmiş olabilir)"
     )
 
+    # ⚠️ ÖZEL AD, ORTAK MODÜLDEN (A2, 2026-09-19): `from ... import *` alt çizgiyle
+    # başlayan adları TAŞIMAZ, bu yüzden profil kabuğunda `_marker_to_cabin_R` yoktur.
+    # Özel bir ada erişen test, yeniden-dışa-aktarıma değil UYGULAMAYA bakmalıdır.
+    from ai_hub.cv_ortak.coord_transform import _marker_to_cabin_R
+
     beklenen_R = np.diag([-1.0, 1.0, -1.0])
-    assert np.allclose(ct._marker_to_cabin_R(cfg), beklenen_R, atol=1e-9), (
-        f"marker→kabin dönüşümü beklenen diag(-1,1,-1) değil: {ct._marker_to_cabin_R(cfg).tolist()} "
+    assert np.allclose(_marker_to_cabin_R(cfg), beklenen_R, atol=1e-9), (
+        f"marker→kabin dönüşümü beklenen diag(-1,1,-1) değil: {_marker_to_cabin_R(cfg).tolist()} "
         "— marker arka duvarda (normal -Z) ve üst oku tavana bakıyor varsayımı bozulduysa "
         "KABIN_KURULUM_KILAVUZU ile birlikte gözden geçirin"
     )
@@ -140,20 +145,29 @@ def test_KRITIK_marker_KABIN_rotasyonu_UYGULANIR(donusum):
     )
 
 
-def test_KRITIK_iki_kopya_BIREBIR_ayni(donusum):
-    """`phantom_cv/coord_transform.py` ile `petri_cv/coord_transform.py` birebir aynı dosyadır.
-    Ayrışırlarsa fantom ve petri AYNI kabinde FARKLI koordinat üretir ve bunu kimse fark etmez;
-    plan da "iki kopyaya AYNI yama" diyor. MUTASYON: bir kopyaya satır ekleyin → KIRMIZI."""
-    import filecmp
-    from pathlib import Path
+def test_KRITIK_iki_profil_AYNI_uygulamayi_kullanir(donusum):
+    """Fantom ve petri AYNI koordinat dönüşümünü kullanmalı — ayrışırlarsa aynı kabinde
+    FARKLI 3B koordinat üretirler ve bunu kimse fark etmez.
 
-    kok = Path(__file__).resolve().parents[1]
-    a = kok / "ai_hub" / "inference_em_fantom" / "phantom_cv" / "coord_transform.py"
-    b = kok / "ai_hub" / "inference_petri_dish" / "petri_cv" / "coord_transform.py"
-    assert a.exists() and b.exists(), f"koordinat dönüşümü kopyaları bulunamadı: {a}, {b}"
-    assert filecmp.cmp(a, b, shallow=False), (
-        "fantom ve petri koordinat dönüşümleri AYRIŞTI — aynı kabinde farklı 3B koordinat "
-        "üretirler. Yamayı iki kopyaya da uygulayın (tek kaynak yapılana kadar)."
+    ⚠️ ÖLÇÜT DEĞİŞTİ (A2, 2026-09-19). Bu test eskiden iki DOSYAYI `filecmp` ile
+    karşılaştırıyordu ve kendi docstring'i *"tek kaynak yapılana kadar"* diyordu. Tek kaynak
+    yapıldı: gövde `ai_hub/cv_ortak/coord_transform.py`de, profillerde ince kabuk var.
+    Dosya karşılaştırması artık YANLIŞ ÖLÇÜT olurdu — iki kabuk de aynı ama bu, gövdenin
+    aynı olduğunu KANITLAMAZ.
+
+    Yeni ölçüt daha güçlü: iki profilin gördüğü fonksiyon NESNESİ aynı mı. Aynı nesne
+    ayrışamaz — dosya kopyası ayrışabilirdi.
+    """
+    from ai_hub.inference_em_fantom.phantom_cv import coord_transform as f_ct
+    from ai_hub.inference_petri_dish.petri_cv import coord_transform as p_ct
+
+    ortak = [ad for ad in dir(f_ct) if not ad.startswith("_") and callable(getattr(f_ct, ad, None))]
+    assert len(ortak) >= 3, f"kabuk çok az sembol sunuyor ({ortak}) — yeniden-dışa-aktarım kırılmış"
+
+    ayrisan = [ad for ad in ortak if getattr(f_ct, ad, None) is not getattr(p_ct, ad, None)]
+    assert not ayrisan, (
+        f"fantom ve petri AYNI nesneyi görmüyor: {ayrisan} — koordinat dönüşümü yeniden "
+        "kopyalanmış olabilir; aynı kabinde farklı 3B koordinat üretirler"
     )
 
 
@@ -182,21 +196,32 @@ def test_KRITIK_hedef_duzlemi_YAPILANDIRILABILIR(donusum):
 
 
 def test_KRITIK_yaml_ve_parser_hedef_duzlemini_TASIYOR():
-    """Yaml'a alan eklemek yetmez: `cabin_config.py` ayrıştırıcısı onu OKUMALI (bilinmeyen anahtar
-    sessizce yok sayılır). İki kopya da taşımalı. MUTASYON: parser satırını silin → KIRMIZI."""
+    """Yaml'a alan eklemek yetmez: ayrıştırıcı onu OKUMALI (bilinmeyen anahtar sessizce yok
+    sayılır). MUTASYON: parser satırını silin → KIRMIZI.
+
+    ⚠️ ÇIPA TEK KAYNAĞA TAŞINDI (A2, 2026-09-19). Eskiden "İki kopya da taşımalı" diyordu ve
+    iki `cabin_config.py`yi ayrı ayrı okuyordu. Ayrıştırıcı artık TEK yerde
+    (`ai_hub/cv_ortak/cabin_config.py`); profil dosyaları ince kabuk. YAML'lar ise
+    profil-başına AYRI kalmaya devam ediyor, o yüzden onlar hâlâ ayrı ayrı ölçülür.
+    """
     from pathlib import Path
 
     kok = Path(__file__).resolve().parents[1]
+
+    cfg_src = (kok / "ai_hub" / "cv_ortak" / "cabin_config.py").read_text(encoding="utf-8")
+    assert 'plate_r.get("hedef_duzlem_eksen"' in cfg_src, (
+        "ortak ayrıştırıcı yaml'daki hedef düzlemini OKUMUYOR — alan sessizce yok sayılır"
+    )
+    assert "hedef_duzlem_mm" in cfg_src and "hedef_duzlem_indeksi" in cfg_src, (
+        "ortak yapılandırma sınıfı düzlem yardımcılarını sunmuyor"
+    )
+
     for kok_dizin in ("inference_em_fantom/phantom_cv", "inference_petri_dish/petri_cv"):
-        cfg_src = (kok / "ai_hub" / kok_dizin / "cabin_config.py").read_text(encoding="utf-8")
         yaml_src = (kok / "ai_hub" / kok_dizin / "cabin_config_example.yaml").read_text(encoding="utf-8")
         assert "hedef_duzlem_eksen" in yaml_src, f"{kok_dizin}: yaml hedef düzlemi taşımıyor"
-        assert 'plate_r.get("hedef_duzlem_eksen"' in cfg_src, (
-            f"{kok_dizin}: ayrıştırıcı yaml'daki hedef düzlemini OKUMUYOR — alan sessizce yok sayılır"
-        )
-        assert "hedef_duzlem_mm" in cfg_src and "hedef_duzlem_indeksi" in cfg_src, (
-            f"{kok_dizin}: yapılandırma sınıfı düzlem yardımcılarını sunmuyor"
-        )
+        # ⚠️ Kabuk gerçekten ORTAK ayrıştırıcıya bağlı mı — yoksa yukarıdaki iddia boşa düşer.
+        kabuk = (kok / "ai_hub" / kok_dizin / "cabin_config.py").read_text(encoding="utf-8")
+        assert "cv_ortak" in kabuk, f"{kok_dizin}: kabuk ortak ayrıştırıcıya bağlı değil"
 
 
 def test_KARAKTERIZASYON_SAHADAKI_yatay_duzlem_KOTU_KOSULLANMIS(donusum):
