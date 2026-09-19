@@ -121,6 +121,18 @@ Kapı: `tests/test_linux_runtime_YOKLUGU_karardir.py` · **Kim:** — (iş yok)
 ### A7 · Bulut MQTT kimlik bilgileri — **bilinçli atlandı**
 Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayıtlı, iş kapalı.
 
+### ✅ A8 · Daemon döngüsü KENDİ hata bildirimiyle ölebiliyordu (2026-09-19 KAPANDI)
+| | |
+|---|---|
+| **Kanıt (AST ile ölçüldü)** | Backend'in sonsuz döngülerinin **altısı da** şu şekildeydi:<br>`while True:` → `try: …` → `except Exception:` → `logging.exception("…")` → `time.sleep(N)`<br>Bildirim fırlatırsa `while`dan **çıkılır** ve thread ölür. Yerler: `api_server.py` 875 (`esp-telemetry-watchdog`) · **3684 (`session-watchdog`)** · 3758 (`hardware-sim`) · 3941 (`sensor-persist`) · 4040 (`daily-maintenance`) · `efield_live.py` 198 |
+| **Neden arıza** | `logging` fırlatabilir ve bu varsayımsal değil: Windows'ta dönen log dosyası kilitliyse `PermissionError`, disk doluysa `OSError`, handler kapanmışsa `ValueError: I/O operation on closed file`. **Windows dosya-kilidi sınıfı bu depoda aynı oturumda bir kez zaten yaşandı** (karantina taşıma arızası, A-önceki). Ölüm iki hata ister (gövde + bildirim) ama hiçbir yere yazılmaz — yazmaya çalışan şey zaten patlamıştır |
+| **En ağır sonucu** | `session-watchdog` seans süresi dolunca **donanım düzeyinde STOP** üretir; kendi belgesi *"firmware keep-alive süreyi her sn tazelediğinden tek başına auto-stop OLMAZ"* diyor. Thread ölürse seans planlanan süreyi **aşar**, hasta o sırada PEMF maruziyetinde kalır ve **hiçbir uyarı çıkmaz** |
+| **Nasıl bulundu — ve iddianın SINIRI** | Conftest daemon sızıntısını ölçerken tam süit koşumlarından **birinde** `esp-telemetry-watchdog` süit sonunda yoktu; ikinci koşumda vardı, izole ölçümde 72 sn canlı kaldı. **Tekrar üretilemedi** — yani "bu oldu" denmiyor. AST taraması yolun kodda **altı yerde** var olduğunu gösterdi; kapatılan şey yoldur, gözlem değil |
+| **Düzeltme** | `apps/backend/utils/dongu_guvenligi.py` → `dongu_hatasini_bildir()`: önce `logger`, o düşerse ham `sys.__stderr__` (yorumlayıcının orijinal akışı — capture katmanları onu değiştirmez), ikisi de düşerse sessiz. Hangi kanalın çalıştığını **döndürür** (`"logger"`/`"stderr"`/`"sessiz"`) → dallar test edilebilir. `sys.exc_info()` **en başta** kopyalanır, yoksa son çare dalında logging'in hatası orijinalin yerine geçer. 6 nokta bağlandı |
+| **Kapı** | `tests/test_dongu_hata_bildirimi_OLDURMEZ.py` (11 test) — davranış: üç gerçek `logging` hatası (Windows kilidi / kapalı handler / disk dolu) + stderr de düşerse + `sys.__stderr__` **None** (donmuş EXE / pythonw). Yapı: AST ile `apps/backend` taranır, çıplak logging **yasak** + **vakum kapısı** (≥5 döngü bulunmalı). ⚠️ Her iki düşme dalı da KOŞTURULUR — bu depoda "except dalına hiç uğranmıyor, süit yine yeşil" arızası yaşandı. **6 mutasyon**, her biri farklı testi vurdu |
+| **Kapsam dışı** | `tools/stm32_simulator.py` ×2 aynı şekilde — geliştirme simülatörü, sevk edilmiyor; orada bir döngü ölürse geliştirici anında görür |
+| **Kim** | Ben |
+
 ---
 
 ## B — Ticari olgunluk
@@ -229,10 +241,26 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > `sensor-persist`) conftest tarafından TEMİZLENMİYOR (yalnız `start-ack-*`/`estop-ack-*`
 > temizleniyor) → bütçe genişletilince 8/8 yeşil.
 >
-> 📌 KALAN İŞ (düşük öncelik): conftest teardown'ı `_start_background_threads`'in açtığı
-> daemon'ları da durdurmalı. Bu, nedensel zincirin SON halkasıdır; kapatmak için gerekli
-> değil ama sınıfı tümden kaldırır. Kırmızı bir daha görülürse `--tb=long -rf` çıktısının
-> TAMAMI saklanmalı (koşum sırasında depoya DOKUNMA — `inspect.getsource` satır kayması).
+> 📌 ~~KALAN İŞ: conftest teardown'ı `_start_background_threads` daemon'larını durdursun~~
+> → **ÖLÇÜLDÜ 2026-09-19, YAPILMAYACAK.** Tam süit, daemon thread'lerinden yapılan HER
+> yan-etkili çağrıyı (`_stop_session_coils` · `_push_notification` · `_bildir_teyitsiz_stop`
+> · `_mqtt_publish`) o an koşan teste atfeden bir pytest eklentisiyle iki kez koşuldu:
+> **7 çağrının 7'si de `session-watchdog`tan ve 7'si de o bekçiyi BİLEREK sınayan üç teste**
+> düştü (`test_session_watchdog` + `test_session_stop_dogrulama` ×2). `sensor-persist`,
+> `daily-maintenance`, `esp-telemetry-watchdog`: **sıfır** çağrı. Yani daemon'lar süit sonuna
+> kadar CANLI kalıyor (sızıntı gerçek) ama **yabancı hiçbir testi kirletmiyor** — maddenin
+> dayandığı zarar GÖSTERİLEMEDİ. ⚠️ Buna karşılık `_session_duration_watchdog` bir **hasta
+> güvenliği** döngüsüdür; ona "dur" bayrağı eklemek, yanlış kurulursa seansın süresini
+> aşmasına yol açar. Kanıtsız bir iyileştirme için o riske girilmedi. Kırmızı bir daha
+> görülürse `--tb=long -rf` çıktısının TAMAMI saklanmalı (koşum sırasında depoya DOKUNMA —
+> `inspect.getsource` satır kayması).
+>
+> ⚠️ **ÖLÇÜM ARACININ KENDİSİ BİR KAPIYI KIRDI** — ve sınıfı tanıdık. Eklentinin ilk hâli
+> `_mqtt_publish`'i çıplak sarmalıyordu; `tests/test_plan_a_deadman.py:345` o fonksiyona
+> `inspect.getsource` uyguluyor ve SARMALIN kaynağını okuyup kırmızı döndü. Test tek başına
+> yeşildi → kırmızı üründe değil, ölçüm aracındaydı. `functools.wraps` (`getsource` →
+> `unwrap` zincirini takip eder) ile düzeltildi ve düzeltme o test tekrar koşturularak
+> kanıtlandı. **Bu ölçüm turu, aşağıdaki A8'i ortaya çıkardı.**
 
 > ⚠️ **TEŞHİS EKSİK: yığın izi YOK.** İki düşüşte de çıktı `tail` ile kesilmişti. Bir sonraki
 > tam süitte bu test düşerse **çıktının tamamı saklanmalı** (`--tb=long -rf > dosya`), yoksa

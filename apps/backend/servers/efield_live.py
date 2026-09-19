@@ -33,6 +33,8 @@ import logging
 import threading
 import time
 
+from utils.dongu_guvenligi import dongu_hatasini_bildir
+
 logger = logging.getLogger(__name__)
 
 # Analizden gelen SABİT bağlam (konum + organ). em_fantom/em_petri analizi çalışınca set edilir.
@@ -196,7 +198,7 @@ def start_loop(read_coils, is_session_active) -> threading.Thread:
                 else:
                     _set_live(None)
             except Exception:
-                logger.debug("E-alanı döngü hatası", exc_info=True)
+                dongu_hatasini_bildir("E-alanı döngü hatası", logger=logger, seviye=logging.DEBUG)
             time.sleep(TICK_S)
 
     t = threading.Thread(target=_loop, daemon=True, name="efield-live")

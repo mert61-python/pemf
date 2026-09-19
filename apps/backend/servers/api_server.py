@@ -189,6 +189,7 @@ async def lifespan(app: FastAPI):
 # ⚠️ Multipart form-alanı limitini FastAPI app'i oluşturmadan ÖNCE yükselt (saha bulgusu
 # 2026-08-30: scratch/base64 uçlarında "Part exceeded maximum size of 1024KB"). Bkz.
 # utils/multipart_limit — Starlette varsayılanı 1MB, base64 görüntüler bunu aşıyordu.
+from utils.dongu_guvenligi import dongu_hatasini_bildir as _dongu_hatasini_bildir  # noqa: E402
 from utils.multipart_limit import buyuk_form_alani_limitini_uygula as _buyuk_form_limiti
 
 _buyuk_form_limiti()
@@ -873,7 +874,7 @@ def _esp_telemetry_watchdog():
                         "error",
                     )
         except Exception:
-            logging.exception("esp telemetry watchdog error")
+            _dongu_hatasini_bildir("esp telemetry watchdog error")
         time.sleep(ESP_WATCHDOG_INTERVAL_SEC)
 
 
@@ -3682,7 +3683,7 @@ def _session_duration_watchdog():
                         pass
                     logging.info("Süre doldu → seans otomatik durduruldu (watchdog): %s", sess.get("session_id"))
         except Exception:
-            logging.exception("session_duration_watchdog hata")
+            _dongu_hatasini_bildir("session_duration_watchdog hata")
         _t.sleep(1)
 
 
@@ -3756,7 +3757,7 @@ def _hardware_simulation_loop():
                     }
                 )
         except Exception:
-            logging.exception("hardware sim loop error")
+            _dongu_hatasini_bildir("hardware sim loop error")
         _t.sleep(0.5)
 
 
@@ -3939,7 +3940,7 @@ def _sensor_persistence_loop():
             else:
                 minute_start = _t.time()
         except Exception:
-            logging.exception("sensor persistence loop error")
+            _dongu_hatasini_bildir("sensor persistence loop error")
         _t.sleep(2.0)
 
 
@@ -4038,7 +4039,7 @@ def _daily_maintenance_loop():
                 # (pemf_treatment_history_*.db, son-14) yaziliyordu → iki zamanlayici birbirinin
                 # yedegini SILIYORDU ve PII duz-metin yedekleniyordu. Yedek tek noktada toplandi.
         except Exception:
-            log.warning("daily maintenance loop genel hatasi", exc_info=True)
+            _dongu_hatasini_bildir("daily maintenance loop genel hatasi", logger=log, seviye=logging.WARNING)
         run_count += 1
         _t.sleep(86400)  # gunde bir kez
 
