@@ -173,7 +173,7 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | ~~F4 `apps/backend`~~ | ✅ **BİTTİ 2026-09-18.** Sahip kararı: **klasör taşındı, import kökü DEĞİŞMEDİ** (`from utils.x import y` aynen duruyor). Ölçülen gerekçe: tam paketleme (`pemf_backend.*`) 271 dosyada 1140 import ifadesi yeniden yazmayı ve PYZ/`hiddenimports`/kod-koruma zincirini yeniden ölçmeyi gerektirirdi; kazancı (üst-düzey `utils` adının global olmaması) ise **638 site-package arasında bugün HİÇBİR çarpışma olmadığı ölçüldüğü için** teorikti. Tesisat 4 yerde: `backend_service.py`, `tests/conftest.py`, iki spec `pathex`, + `pyproject` `package-dir`. ÖN ŞART (kök çıpası) da bitti 2026-09-18: 13 yerde depo kökü SABİT DERİNLİKLE (`parents[1]`) bulunuyordu; taşımada iki seviye kayar ve hepsi aday listesi olduğu için **sessizce** yanlış yola düşerdi (`bin/cloudflared`, 640 MB model, bulut sırrı, `VERSION`). Tek kaynak `kaynak_kokunu_bul(__file__)`; kapı `tests/test_kok_capasi_derinlikten_bagimsiz.py` (7 mutasyon) |
 > | F5 `tools/` | 77 betiği amaca göre sınıflandırma; CI + bootstrap + pyproject |
 
-> ### ⚠️ AÇIK — ARALIKLI KIRMIZI: `test_anahtar_uyusmazligi_karantina` (2026-09-18)
+> ### 🟡 BÜYÜK ÖLÇÜDE KAPANDI — ARALIKLI KIRMIZI: `test_anahtar_uyusmazligi_karantina`
 >
 > `test_KRITIK_TEDAVI_GECMISI_eski_anahtarda_backendi_OLDURMEZ` **tam süitte iki kez düştü**,
 > ama tekrarlanmıyor. Ölçülenler:
@@ -209,9 +209,30 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > yalnız 2 yeşil tam koşum var, tarihsel oran 2/5 idi. **"Çözüldü" demek için kırmızının
 > yeniden üretilip düzeldiğinin GÖRÜLMESİ gerekir.**
 >
-> 📌 SIRADAKİ ADIM: temiz ağaçla 6 tura kadar tam süit (koşum sırasında depoya DOKUNMA —
-> `inspect.getsource` satır kayması yanlış kırmızı/yeşil üretir, bugün bir kez oldu).
-> Yakalanınca `--tb=long -rf` çıktısının TAMAMI saklanmalı.
+> ### 📊 2026-09-19 SONUÇ — 8 ARDIŞIK YEŞİL (kapatılmadı, ORAN daraltıldı)
+>
+> Düzeltmeden (`d732b0f`) sonra temiz ağaçla **6 tur** tam süit koşuldu; hepsi
+> **3133 passed / 0 kırmızı** (12:06→12:44). Önceki 2 yeşille birlikte **8 ardışık**.
+>
+> | Dönem | Koşum | Kırmızı | Oran |
+> |---|---|---|---|
+> | Düzeltme ÖNCESİ | 5 | 2 | %40 |
+> | Düzeltme SONRASI | 8 | 0 | 0 |
+>
+> ⚠️ **İSTATİSTİK DÜRÜST OKUNMALI.** Oran hâlâ %40 olsaydı 8 ardışık yeşilin olasılığı
+> `0,6⁸ ≈ %1,7` — yani eski oran pratikte DIŞLANDI. Ama bu SIFIR demek DEĞİL: oran %10
+> olsaydı 8 yeşil görme olasılığı %43'tür, veri bununla da tamamen uyumludur.
+>
+> ✅ **NEDENSEL ZİNCİR (yalnız korelasyon değil):** test tam da karantinanın OLUP
+> OLMADIĞINA bakıyor → açık bir OKUYUCU'nun karantinayı düşürdüğü deterministik
+> kanıtlandı → o dosyaya dokunan sızmış daemon'lar (`daily-maintenance` `shutil.copy2`,
+> `sensor-persist`) conftest tarafından TEMİZLENMİYOR (yalnız `start-ack-*`/`estop-ack-*`
+> temizleniyor) → bütçe genişletilince 8/8 yeşil.
+>
+> 📌 KALAN İŞ (düşük öncelik): conftest teardown'ı `_start_background_threads`'in açtığı
+> daemon'ları da durdurmalı. Bu, nedensel zincirin SON halkasıdır; kapatmak için gerekli
+> değil ama sınıfı tümden kaldırır. Kırmızı bir daha görülürse `--tb=long -rf` çıktısının
+> TAMAMI saklanmalı (koşum sırasında depoya DOKUNMA — `inspect.getsource` satır kayması).
 
 > ⚠️ **TEŞHİS EKSİK: yığın izi YOK.** İki düşüşte de çıktı `tail` ile kesilmişti. Bir sonraki
 > tam süitte bu test düşerse **çıktının tamamı saklanmalı** (`--tb=long -rf > dosya`), yoksa
