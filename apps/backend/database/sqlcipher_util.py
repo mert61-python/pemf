@@ -219,7 +219,45 @@ def anahtar_uyusmazligi_mi(exc: BaseException) -> bool:
     return "file is not a database" in str(exc).lower()
 
 
-def _kilit_direncli_tasi(src, dst, logger=None, deneme=24, bekleme_s=0.25) -> bool:
+#: ⚠️ TEK KAYNAK — Windows gecici dosya kilidi butcesi.
+#: 2026-09-19'da `_kilit_direncli_tasi` 6 sn'ye cikarildi ama `_tasi_yeniden_dene`
+#: 2 sn'de KALDI ve goc yolu KIRILMAYA DEVAM ETTI (tam suit kosum 4'te olculdu:
+#: `os.remove(enc_tmp)` WinError 32 -> tasima 5 denemede dustu -> goc iptal ->
+#: cagiran duz-metin DB'yi karantinaya aldi -> "goc sirasinda SEANS kayboldu").
+#: Ikisi de ARTIK BURAYI okur. Kapi: tests/test_kilit_butcesi_TEK_KAYNAK.py
+_KILIT_BEKLEME_SN = 0.25
+_KILIT_BUTCESI_SN = 6.0
+_KILIT_DENEME = int(_KILIT_BUTCESI_SN / _KILIT_BEKLEME_SN)  # 24
+
+
+def _kilit_direncli_sil(yol, logger=None) -> bool:
+    """`os.remove`, gecici Windows kilidine karsi AYNI butceyle yeniden-denemeli.
+
+    ⚠️ NEDEN VAR: goc yolundaki `os.remove(enc_tmp)` HIC korumasizdi ve olculen
+    arizanin BASLATICISI oydu. Tasima yardimcilari 6 sn bekliyordu; hemen oncesindeki
+    silme ise ilk `PermissionError`da dusuyordu — zincirin en zayif halkasi.
+
+    Donus: silindi mi (dosya zaten yoksa True).
+    """
+    yol = str(yol)
+    for i in range(_KILIT_DENEME):
+        if not os.path.exists(yol):
+            return True
+        try:
+            os.remove(yol)
+            return True
+        except Exception as e:  # PermissionError ve akrabalari
+            if i + 1 >= _KILIT_DENEME:
+                if logger:
+                    logger.warning("Dosya silinemedi (%.1f sn denendi): %s (%s)", _KILIT_BUTCESI_SN, yol, e)
+                return False
+            # gc.collect(): AYNI surecteki toplanmamis sqlite tutamagi olabilir.
+            gc.collect()
+            time.sleep(_KILIT_BEKLEME_SN)
+    return False
+
+
+def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=_KILIT_BEKLEME_SN) -> bool:
     """Dosyayi kenara al; Windows'ta ORPHAN tutamac yuzunden kilitliyse GC ile serbest birakip yeniden dene.
 
     ⚠️ NEDEN (saha, 2026-08-14 — CIHAZ HIC ACILMIYORDU): at-rest anahtari DB'ye uymadiginda
@@ -305,7 +343,7 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     return tasinan
 
 
-def _tasi_yeniden_dene(kaynak, hedef, denemeler=5, bekleme=0.2, logger=None):
+def _tasi_yeniden_dene(kaynak, hedef, denemeler=_KILIT_DENEME, bekleme=_KILIT_BEKLEME_SN, logger=None):
     """`shutil.move`, Windows'ta GECICI kilitlere karsi sinirli yeniden-deneme ile.
 
     ⚠️ NEDEN: dosya tasima Windows'ta baska bir surec (virus tarayici, yedekleyici, indeksleyici
@@ -333,7 +371,9 @@ def _tasi_yeniden_dene(kaynak, hedef, denemeler=5, bekleme=0.2, logger=None):
                 # kimse tutamagi birakmaz. (Olculdu 2026-09-13: tam suitte
                 # `test_ikinci_acilis_yeniden_GOCMEZ` bu yuzden araliklarla dusuyordu.)
                 gc.collect()
-                time.sleep(bekleme * (i + 1))  # artan bekleme
+                # ⚠️ SABIT bekleme: artan olsaydi 24 deneme ~75 sn surerdi ve acilisi
+                #    kilitlerdi. Butce `_KILIT_BUTCESI_SN` ile TEK yerde tanimli.
+                time.sleep(bekleme)
     if logger:
         logger.warning("Dosya tasima %d denemede basarisiz: %s -> %s (%s)", denemeler, kaynak, hedef, son)
     raise son if son is not None else RuntimeError("tasima basarisiz")
@@ -614,8 +654,12 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
                 _close(t)
         # MIGRATE: plaintext -> encrypted
         enc_tmp = db + ".enc.tmp"
-        if os.path.exists(enc_tmp):
-            os.remove(enc_tmp)
+        # ⚠️ OLCULEN BASLATICI (2026-09-19): burasi ciplak `os.remove` idi ve
+        #    WinError 32 ile dusunce TUM goc iptal oluyordu.
+        if not _kilit_direncli_sil(enc_tmp, logger):
+            if logger:
+                logger.warning("SQLCipher goc: onceki .enc.tmp silinemedi -> goc ERTELENDI.")
+            return
         enc_sql = enc_tmp.replace("'", "''")
         conn = None
         try:

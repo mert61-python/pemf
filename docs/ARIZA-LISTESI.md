@@ -242,6 +242,42 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > `sensor-persist`) conftest tarafından TEMİZLENMİYOR (yalnız `start-ack-*`/`estop-ack-*`
 > temizleniyor) → bütçe genişletilince 8/8 yeşil.
 >
+> ### 🔴 2026-09-20 — **14. KOŞUMDA KIRMIZI GELDİ ve YIĞIN İZİ ALINDI**
+>
+> 13 ardışık tam süit yeşilden sonra 14.'de kırmızı — ama **başka bir testte**:
+> `test_at_rest_encryption_rollout.py::test_KRITIK_mevcut_duz_metin_klinik_GOCER_ve_veri_KORUNUR`
+> → `AssertionError: goc sirasinda SEANS kayboldu` (`assert [] == ['GocenHasta']`).
+> Kaydın istediği **tam `--tb=long` çıktısı ilk kez saklandı** (önceki iki düşüşte `tail` ile
+> kesilmişti). Zincir artık görünür:
+>
+> | # | Yer | Olay |
+> |---|---|---|
+> | 1 | `sqlcipher_util.py:618` | `os.remove(enc_tmp)` → **PermissionError [WinError 32]** ← **BAŞLATICI**, hiç tekrar yok |
+> | 2 | `sqlcipher_util.py:668` | `_tasi_yeniden_dene` → *"5 denemede basarisiz"* |
+> | 3 | göç | **İPTAL** — düz metin korundu (**doğru davranış**) |
+> | 4 | çağıran | Düz-metin DB'yi *"yanlış anahtar"* sayıp **KARANTİNAYA** aldı → geçmiş BOŞ göründü |
+>
+> **KÖK: aynı kural İKİ yerde, ayrı bütçelerle** — bu deponun tekrar eden sınıfı.
+> `_kilit_direncli_tasi` 24 × 0,25 = **6,0 sn** (2026-09-19'da genişletildi) · `_tasi_yeniden_dene`
+> 5 × artan = **2,0 sn** (dokunulmamıştı) · `os.remove(enc_tmp)` **korumasız**. Dün biri
+> genişletildi, diğeri unutuldu; 13 yeşil o yüzden yanıltıcıydı.
+>
+> ✅ **YAPILDI:** bütçe `_KILIT_BUTCESI_SN` ile **tek kaynağa** bağlandı (ikisi de 6,0 sn) ·
+> yeni `_kilit_direncli_sil()` ölçülen başlatıcıyı kapatıyor · `_tasi_yeniden_dene`'nin artan
+> beklemesi **sabite** çevrildi (24 × artan olsaydı ~75 sn sürüp açılışı kilitlerdi).
+> Kapı: `tests/test_karantina_okuyucu_tuglalastirmaz.py` · **5 mutasyon**.
+> ⚠️ Mutasyon kapının bir kusurunu buldu: `deneme=8, bekleme_s=0,75` de tam 6,0 eder ve
+> değer-eşitliği iddiaları geçer — ama değer artık sabitten gelmez. Varsayılanların
+> **sabitin adı** olduğu ayrıca **yapısal** olarak pinlendi.
+>
+> ⛔ **AÇIK — SAHİP KARARI GEREKİYOR (adım 4):** göç iptal olunca çağıran, **düz-metin** DB'yi
+> karantinaya alıyor (`.acilamadi-TARIH` olarak yeniden adlandırıp boş DB yaratıyor). Oysa bu
+> bir anahtar uyuşmazlığı **değil**, *"göç henüz olmadı"* durumudur; göçün kendi mesajı da
+> *"sonraki açılışta yeniden denenecek"* diyor. Doğru davranış muhtemelen **karantinaya
+> almamak**. Ama bu, hasta verisi yolunda bir **cihaz davranışı değişikliğidir** ve bu depo
+> "yarım göç → DB kaybolması" sınıfını bir kez gerçekten yaşadı → ölçüm sunuldu, karar sahipte.
+> Bütçe düzeltmesi olayın **sıklığını** düşürür, **sınıfını kaldırmaz**.
+>
 > 📌 ~~KALAN İŞ: conftest teardown'ı `_start_background_threads` daemon'larını durdursun~~
 > → **ÖLÇÜLDÜ 2026-09-19, YAPILMAYACAK.** Tam süit, daemon thread'lerinden yapılan HER
 > yan-etkili çağrıyı (`_stop_session_coils` · `_push_notification` · `_bildir_teyitsiz_stop`

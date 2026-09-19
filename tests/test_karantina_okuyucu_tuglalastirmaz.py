@@ -153,3 +153,109 @@ def test_KARSIT_KANIT_butce_gercekten_genis(tmp_path):
         f"karantina bütçesi {toplam} sn — kısa bir yedek kopyası bile sığmaz. "
         "Eski değer 4 × 0,25 = 0,75 sn idi ve sahada tuğlalaşma riski taşıyordu."
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# İKİNCİ BÜTÇE — 2026-09-19'da AYRIŞMIŞ olduğu ÖLÇÜLDÜ
+# ═════════════════════════════════════════════════════════════════════════════════════════
+#
+# Yukarıdaki düzeltme `_kilit_direncli_tasi`yi 0,75 sn → 6 sn yaptı ve 13 ardışık tam süit
+# yeşil geçti. 14.'de KIRMIZI geldi — ama başka bir testte:
+#
+#     test_at_rest_encryption_rollout.py::test_KRITIK_mevcut_duz_metin_klinik_GOCER_ve_veri_KORUNUR
+#     AssertionError: goc sirasinda SEANS kayboldu   (assert [] == ['GocenHasta'])
+#
+# TAM YIĞIN İZİ (kayıt bunu özellikle istiyordu; önceki iki düşüşte `tail` ile kesilmişti):
+#     sqlcipher_util.py:618  os.remove(enc_tmp)  → PermissionError [WinError 32]  ← BAŞLATICI
+#     sqlcipher_util.py:668  _tasi_yeniden_dene  → "5 denemede basarisiz"
+#     → göç İPTAL (düz metin korundu — DOĞRU davranış)
+#     → ama çağıran düz-metin DB'yi "yanlış anahtar" sayıp KARANTİNAYA aldı → geçmiş BOŞ göründü
+#
+# KÖK: aynı kural İKİ yerde, ayrı bütçelerle.
+#     `_kilit_direncli_tasi`  24 × 0,25 = 6,0 sn   ← dün genişletildi
+#     `_tasi_yeniden_dene`     5 × artan = 2,0 sn   ← DOKUNULMAMIŞTI
+#     `os.remove(enc_tmp)`     korumasız            ← zincirin en zayıf halkası
+# Bu deponun tekrar eden sınıfı: "aynı kural iki yerde → sessizce ayrışır".
+
+
+def test_KRITIK_IKI_yardimci_AYNI_butceyi_okur():
+    """🔴 ASIL REGRESYON: biri genişletilip diğeri unutulursa göç yolu kırılmaya devam eder."""
+    import inspect
+
+    t = inspect.signature(su._kilit_direncli_tasi).parameters
+    y = inspect.signature(su._tasi_yeniden_dene).parameters
+    tasi = t["deneme"].default * t["bekleme_s"].default
+    dene = y["denemeler"].default * y["bekleme"].default
+
+    assert tasi == dene, (
+        f"iki taşıma yardımcısının bütçesi AYRIŞTI: _kilit_direncli_tasi={tasi} sn · "
+        f"_tasi_yeniden_dene={dene} sn. 2026-09-19'da tam bu ayrışma göç yolunu kırdı."
+    )
+    assert tasi >= 4.0, f"ortak bütçe {tasi} sn — kısa bir kilit bile sığmaz"
+    assert tasi == su._KILIT_BUTCESI_SN, (
+        f"bütçe TEK KAYNAKTAN gelmiyor ({tasi} ≠ {su._KILIT_BUTCESI_SN}) — elle yazılmış değer var"
+    )
+
+    # ⚠️ DEĞER EŞİTLİĞİ YETMEZ — bir mutasyonla ölçüldü (K2, 2026-09-20): `deneme=8,
+    # bekleme_s=0,75` de tam 6,0 eder ve yukarıdaki üç iddianın ÜÇÜ DE geçer. Ama değer
+    # artık SABİTTEN gelmiyordur; sabit bir gün değişince sessizce AYRIŞIR — bu arızanın
+    # ta kendisi. Bu yüzden varsayılanların SABİTİN ADI olduğu YAPISAL olarak pinlenir.
+    for fn in (su._kilit_direncli_tasi, su._tasi_yeniden_dene):
+        imza_satiri = inspect.getsource(fn).splitlines()[0]
+        for sabit in ("_KILIT_DENEME", "_KILIT_BEKLEME_SN"):
+            assert sabit in imza_satiri, (
+                f"{fn.__name__} varsayılanı `{sabit}`den TÜRETİLMİYOR — elle yazılmış değer "
+                f"bugün doğru olsa bile sabit değişince ayrışır:\n    {imza_satiri.strip()}"
+            )
+
+
+def test_KRITIK_silme_de_KILIT_DIRENCLI(tmp_path, monkeypatch):
+    """`os.remove(enc_tmp)` ölçülen BAŞLATICIYDI ve hiç koruması yoktu."""
+    import os as _os
+
+    p = tmp_path / "x.enc.tmp"
+    p.write_bytes(b"veri")
+
+    cagri = {"n": 0}
+    gercek = _os.remove
+
+    def _once_kilitli(yol, *a, **k):
+        cagri["n"] += 1
+        if cagri["n"] <= 3:  # ilk üç deneme "kilitli"
+            raise PermissionError(32, "kilitli")
+        return gercek(yol, *a, **k)
+
+    monkeypatch.setattr(su.os, "remove", _once_kilitli)
+    assert su._kilit_direncli_sil(p) is True, "geçici kilit aşılamadı — tek deneme yapıyor olabilir"
+    assert cagri["n"] == 4, f"beklenen 4 deneme, yapılan {cagri['n']}"
+    assert not p.exists(), "dosya silinmedi"
+
+
+def test_KRITIK_silme_KALICI_kilitte_FIRLATMAZ(tmp_path, monkeypatch):
+    """Bütçe dolunca False döner — istisna fırlatıp göçü çökertmez.
+
+    ⚠️ Bu dalın KOŞULDUĞU ölçülür: bu depoda "except dalına hiç uğranmıyor" arızası yaşandı.
+    """
+    p = tmp_path / "kalici.tmp"
+    p.write_bytes(b"veri")
+
+    def _hep_kilitli(yol, *a, **k):
+        raise PermissionError(32, "kalici kilit")
+
+    monkeypatch.setattr(su.os, "remove", _hep_kilitli)
+    # Bütçeyi kısalt — gerçek 6 sn'yi süitte beklemeyelim; ÖLÇÜLEN şey DAVRANIŞ.
+    monkeypatch.setattr(su, "_KILIT_DENEME", 2)
+    monkeypatch.setattr(su, "_KILIT_BEKLEME_SN", 0.01)
+    assert su._kilit_direncli_sil(p) is False, "kalıcı kilitte True döndü — çağıran yanlış ilerler"
+    assert p.exists(), "dosya silinmiş görünüyor ama silinmemeliydi"
+
+
+def test_KRITIK_goc_ENC_TMPyi_korumali_siliyor():
+    """Yardımcı var ama çağrılmıyorsa hiçbir şey değişmemiştir — çağrıyı kaynağa pinle."""
+    import inspect
+
+    kaynak = inspect.getsource(su.migrate_to_encrypted_if_needed)
+    kod = "\n".join(s.split("#")[0] for s in kaynak.splitlines())
+    assert "_kilit_direncli_sil(enc_tmp" in kod, (
+        "göç hâlâ çıplak `os.remove(enc_tmp)` kullanıyor — ölçülen başlatıcı açık"
+    )
