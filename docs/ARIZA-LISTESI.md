@@ -270,6 +270,13 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > değer-eşitliği iddiaları geçer — ama değer artık sabitten gelmez. Varsayılanların
 > **sabitin adı** olduğu ayrıca **yapısal** olarak pinlendi.
 >
+> **DÜZELTME SONRASI ÖLÇÜM (2026-09-20):** 5 ardışık tam süit, **5/5 yeşil** (her koşumda
+> 3180 geçti, 0 düşen; her koşumun TAM `--tb=long` çıktısı saklandı).
+> ⚠️ **Bu sayıyı öncekilerle TOPLAMA** — kod değişti, sayaç sıfırlandı. 5 yeşil tek başına
+> yalnızca %40'lık bir oranı ~%92 güvenle dışlar, zayıftır. **Asıl kanıt sayı değil,
+> MEKANİZMA:** düşüşün kök nedeni yığın iziyle görüldü, kapatıldı ve 5 mutasyonla kilitlendi.
+> Önceki 13 yeşil tam da bu yüzden yanıltıcıydı — mekanizma bilinmeden sayılmıştı.
+>
 > ⛔ **AÇIK — SAHİP KARARI GEREKİYOR (adım 4):** göç iptal olunca çağıran, **düz-metin** DB'yi
 > karantinaya alıyor (`.acilamadi-TARIH` olarak yeniden adlandırıp boş DB yaratıyor). Oysa bu
 > bir anahtar uyuşmazlığı **değil**, *"göç henüz olmadı"* durumudur; göçün kendi mesajı da
