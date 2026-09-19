@@ -186,3 +186,73 @@ def test_KRITIK_website_KENDI_KARARINI_tasiyor():
         "website/README.md artik 'silme, birak' kararini tasimiyor -> ya karar degisti "
         "(o zaman bu kapi guncellenmeli) ya da karar kaydi kayboldu"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# YEDINCI ADAY — `ai/` (2026-09-19'da eklendi)
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+
+def test_KRITIK_ai_paketi_URETIM_yolunda():
+    """⚠️ ONBIRINCI DENETIM HATASI — ve sinifi tanidik: OLCMEDEN yazilmis iddia.
+
+    `docs/ARIZA-LISTESI.md` C3 satiri `ai/config.py` icin soyle diyordu:
+
+        "ai/config.py (349 satir) uretimde SIFIR import — tek tuketicisi donmus arsiv"
+
+    2026-09-19'da olculdu, UC yeri de yanlis:
+
+      1. Dosya 349 degil **376** satir (iddia yazildiginda bile bayatti).
+      2. `ai/hybrid_recommender.py` URETIM kodundan cagriliyor:
+             apps/backend/servers/api_server.py:2451
+             `from ai.hybrid_recommender import get_literature_recommendation`
+      3. `config.py` de YUKLENIYOR: `ai/__init__.py:23` -> `from . import config`.
+         Yani "sifir import" degil; dogru ifade "sembolleri uretimde KULLANILMIYOR".
+
+    ⚠️ NEDEN GOZDEN KACTI — ve bu kapinin asil degeri burada:
+    uretimdeki import **FONKSIYON ICINDE** (8 bosluk girintili). Modul basindaki import
+    satirlarini tarayan bir "olu kod" araci onu GORMEZ. C3'un bu satiri tam da oyle bir
+    taramadan cikmis olmali.
+
+    Bugunku koruma TESADUFI: `tests/test_literatur_hedef_sozlesmesi.py` paketi modul
+    duzeyinde import ettigi icin silme denemesi toplama hatasiyla kirmizi doner. O test
+    bir gun kosullu hale gelirse koruma SESSIZCE kaybolur. Bu kapi korumayi BILINCLI yapar.
+    """
+    kod = _kod(_API)
+    assert "from ai.hybrid_recommender import get_literature_recommendation" in kod, (
+        "api_server artik `ai.hybrid_recommender`i cagirmiyor -> `ai/` paketi uretim "
+        "yolundan cikmis olabilir; bu kapi bilincli olarak guncellenmeli"
+    )
+    assert (KOK / "ai" / "hybrid_recommender.py").exists(), "ai/hybrid_recommender.py YOK"
+    init = (KOK / "ai" / "__init__.py").read_text(encoding="utf-8")
+    assert "from . import config" in init, (
+        "ai/__init__.py artik config'i yuklemiyor -> `ai/config.py` gercekten kopmus olabilir; "
+        "silinecekse ONCE bu satir kaldirilir, sonra kapi guncellenir"
+    )
+
+
+def test_KRITIK_ai_paketi_SPECTE_paketleniyor():
+    """Donmus EXE'de de bulunmali — yoksa `/auto_preset` yalniz sevk edilen surumde coker."""
+    spec = _kod(_SPEC)
+    assert "'ai'" in spec or '"ai"' in spec, (
+        "spec artik `ai` paketini toplamiyor -> sevk edilen EXE'de auto_preset ucu "
+        "ImportError verir; gelistirme makinesinde SORUNSUZ gorunur"
+    )
+
+
+def test_KARSIT_KANIT_modul_basi_taramasi_bu_importu_KACIRIR():
+    """Kapinin varlik sebebini OLCER: import modul basinda DEGIL.
+
+    Bu bir SART degil, bir TESHIS. Import bir gun modul basina tasinirsa bu test not
+    dusup gecer — o zaman siradan bir tarama da gorur ve kapinin aciliyeti duser.
+    """
+    ham = _API.read_text(encoding="utf-8")
+    satirlar = [s for s in ham.splitlines() if "from ai.hybrid_recommender import" in s]
+    assert satirlar, "import hic bulunamadi -> yukaridaki kapi zaten kirmizi olmali"
+    girintili = [s for s in satirlar if s[:1] in (" ", "\t")]
+    if not girintili:
+        pytest.skip(
+            "import artik modul basinda — siradan olu-kod taramasi da goruyor, "
+            "bu kapinin aciliyeti dustu (ama korumasi durmali)"
+        )
+    assert girintili, "beklenmeyen dal"
