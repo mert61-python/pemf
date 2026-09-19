@@ -139,10 +139,10 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 | # | İş | Kanıt |
 |---|---|---|
 | ✅ **C1** | `firmware_cikti/` → `.gitignore` — **YAPILDI** | `.gitignore`'da **yok**, `git status`'ta `?? firmware_cikti/` |
-| ⚠️ **C2** | `training_archive/` + `bin/` → **SAHİP KARARI BEKLİYOR** | `.git` **347 MB**; her klon indiriyor. `cloudflared.exe` 52 MB. ✅ `ecg_signals.npy` **ÖLÇÜLDÜ: KVKK riski YOK** — MIT-BIH (PhysioNet), PII içermiyor. Yerine **atıf** açığı çıktı ve kapatıldı |
+| ✅ **C2** | **KARAR VERİLDİ 2026-09-19 — OLDUĞU GİBİ KALIYOR (sahip).** Ölçüm: `.git` 356 MB, `training_archive/` blob'ları **296 MB (%83)** — dört büyük eğitim CSV'si (70+45+40+32 MB) + `dr_calisma/` (334 dosya). ⚠️ `bin/` KARAR GEREKTİRMİYOR: izlenen kısmı yalnız **8,6 MB** (offline mosquitto + nssm, installer'ın ihtiyacı); diskteki 52 MB'lık `cloudflared` zaten gitignore'lu. ⛔ **Geçmiş yeniden yazma REDDEDİLDİ**: depoyu ~60 MB'a düşürürdü ama tüm commit SHA'ları değişir → force-push → **10 etiket** (`client-app-v1.8.0` "DOKUNULAMAZ" kaydı dahil) ve onlara bağlı Release varlıkları kırılır. Sahada TEK makine kurulu; klon maliyetini fiilen kimse ödemiyor. ⚠️ "Ayrı depoya taşı" da ÇÖZÜM DEĞİL: blob'lar geçmişte kalır, `.git` KÜÇÜLMEZ |
 | ⚠️ **C3** | Ölü dizinleri kaldır — **LİSTE YANLIŞTI, SİLME YAPILMADI** | `frontend/` 0 · `lattekurulum/` 0 · `website/` 3 · `web_static/` 3 · `dema-terapi-simülatörü/` 12 · `pemf_vet_landing/` 13 takipli. `ai/config.py` (349 satır) üretimde **sıfır** import — tek tüketicisi donmuş arşiv |
 | ✅ **C4** | Bayat belgeler — **YAPILDI** (bayat olan belgeler değil, ETİKETLERİ) | `PEMF_SISTEM_RAPORU.md` (2026-03) · `RUNBOOK.md` (08-15, ESP sökülmesi sonrası güncellenmemiş) · `frontend_version.json` (2026-06-27) · `LAUNCHER_SPEC.md` (07-29, launcher o gün 1.9.9'du) |
-| ⛔ **C5** | **YAPILAMAZ** — üçü zaten temiz; `launcher/target` taşımak `launcher.yml`i kırar (yayın, donmuş). Eski iş: derleme çıktılarını ağaç dışına | `PEMF_BUILD` · `launcher/target` · `pf/android/app/build` — birlikte 19,5 GB'dı |
+| ⛔ **C5** | **YAPILAMAZ** + **DİSK KARARI 2026-09-19: OLDUĞU GİBİ KALIYOR (sahip).** Ölçüm: `release_assets` 7,6 GB · `launcher/target` 6,9 GB · `PEMF_BUILD` 5,4 GB ≈ **20 GB** — ama **hepsi gitignore'lu**, yani klonu ve CI'yı HİÇ etkilemiyor, yalnız bu makinenin diskinde. `launcher/target` taşımak donmuş `launcher.yml`i kırar (yalnız `launcher-v*` etiketiyle koşar → doğrulanamaz). ⚠️ `release_assets` zaten SİLİNEMEZ: AI model ağırlıklarının TEK kaynağı |
 
 ---
 
