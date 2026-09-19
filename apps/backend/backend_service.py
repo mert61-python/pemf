@@ -8,18 +8,20 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# ── IMPORT KOKU (2026-09-18, klasor duzeni F4) ────────────────────────────────
-# Urun paketleri (`apps/backend/servers/ apps/backend/services/ apps/backend/database/ apps/backend/utils/ apps/backend/controllers/`) artik
-# `apps/backend/` altinda duruyor. Import ADLARI DEGISMEDI — asagida hala
-# `from utils.x import y` yaziyor; degisen tek sey, o dizinin import yoluna
-# eklenmesi.
-# ⚠️ BU BLOK HER SEYDEN ONCE gelmeli: hemen asagidaki `utils.encrypted_import`
-#    (sifreli kaynak yukleyicisi) buna bagli. Blok asagi kayarsa ImportError.
-# ⚠️ Donmus EXE'de gereksiz ama zararsiz: PyInstaller modulleri ADIYLA paketler
-#    (spec `pathex`), o dizin pakette YOKTUR ve insert sessizce ise yaramaz.
-_BACKEND_KOKU = str(Path(__file__).resolve().parent / "apps" / "backend")
-if _BACKEND_KOKU not in sys.path:
-    sys.path.insert(0, _BACKEND_KOKU)
+# ── IMPORT KOKU (2026-09-19, klasor duzeni F-E) ───────────────────────────────
+# Bu dosya `apps/backend/` altina tasindi. Kendi dizini zaten `sys.path[0]` oldugu
+# icin `servers/ services/ database/ utils/ controllers/` DOGRUDAN import edilir.
+# Eksik olan DEPO KOKU: `pemf_gui.config` (satir ~440) ve `ai_hub.*` (satir ~646)
+# orada duruyor.
+# ⚠️ SABIT DERINLIK KULLANILMADI (parents[2] gibi): bu depoda tam o varsayim
+#    2026-09-18'de kod korumasini SESSIZCE kirdi. Kok, isaret dosyalariyla aranir;
+#    donmus EXE'de `_MEIPASS` doner (bkz. utils.path_utils.kaynak_kokunu_bul).
+# ⚠️ HER SEYDEN ONCE: asagidaki `utils.encrypted_import` ve `ai_hub` buna bagli.
+from utils.path_utils import kaynak_kokunu_bul  # noqa: E402
+
+_DEPO_KOKU = str(kaynak_kokunu_bul(__file__))
+if _DEPO_KOKU not in sys.path:
+    sys.path.insert(0, _DEPO_KOKU)
 
 
 # ŞİFRELİ KAYNAK YÜKLEYİCİ (2026-08-06) — ai_hub gibi `.pyenc`'e çevrilmiş modüller
@@ -44,10 +46,9 @@ except Exception:  # kapı kurulamazsa uygulama açılmaya devam eder (davranı�
 
 import uvicorn
 from controllers.hardware_controller import HardwareController
-from utils.path_utils import get_app_data_directory, initialize_database
-
 from event_bus import get_event_bus
 from headless_core import HeadlessCore
+from utils.path_utils import get_app_data_directory, initialize_database
 
 # anon publishable anahtar, FE deviceRegistry.ts'dekiyle AYNI; backend registry'ye
 # yazabilsin diye. service_role DEĞİL (sadece publishable/anon yetkisi).

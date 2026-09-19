@@ -98,7 +98,7 @@ def bayat_ikili_nobeti() -> None:
         "apps/backend/servers/api_server.py",
         "apps/backend/servers/ai_router.py",
         "apps/backend/servers/jeton.py",
-        "backend_service.py",
+        "apps/backend/backend_service.py",
     ]
     bayat = [k for k in izlenen if (GUII / k).exists() and (GUII / k).stat().st_mtime > e]
     if bayat:

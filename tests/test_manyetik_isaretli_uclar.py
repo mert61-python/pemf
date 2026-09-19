@@ -40,9 +40,8 @@ MAIN = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "main.c"
 SENSOR_H = KOK / "firmware" / "stm32_pemf" / "Core" / "Inc" / "pemf_sensor.h"
 SENSOR_C = KOK / "firmware" / "stm32_pemf" / "Core" / "Src" / "pemf_sensor.c"
 
-from servers.seans_alan_kaydi import CSV_BASLIKLARI, SeansAlanKaydi  # noqa: E402
-
 from headless_core import HeadlessCore  # noqa: E402
+from servers.seans_alan_kaydi import CSV_BASLIKLARI, SeansAlanKaydi  # noqa: E402
 
 UCLAR = ("mag_x_min", "mag_x_max", "mag_y_min", "mag_y_max", "mag_z_min", "mag_z_max")
 

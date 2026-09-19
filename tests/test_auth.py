@@ -172,9 +172,8 @@ def test_baglanilan_host_env_e_YAYINLANIR(monkeypatch):
     `_loopback_only_bind()` yanlış girdiyle karar verirdi. Mutasyon testi bu sözleşmenin
     hiç korunmadığını gösterdi; burada kilitleniyor.
     """
-    from servers import auth
-
     import backend_service
+    from servers import auth
 
     # CLI env'den FARKLI bir host dayatıyor → env gerçeğe uymalı
     monkeypatch.setenv("PEMF_API_HOST", "0.0.0.0")

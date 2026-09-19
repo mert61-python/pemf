@@ -18,7 +18,9 @@
 # =============================================================================
 set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ⚠️ 2026-09-19: betik `build_tools/` altina tasindi (klasor duzeni F-F).
+# Proje koku artik BIR UST dizin; eskiden betigin KENDI diziniydi.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
 VENV=".venv-mac"

@@ -446,7 +446,7 @@ hidden += _sc_hidden if '_sc_hidden' in dir() else []  # sqlcipher3 submodulleri
 hidden = list(dict.fromkeys(hidden))  # dedup
 
 a = Analysis(
-    [os.path.join(project_path, 'backend_service.py')],
+    [os.path.join(project_path, 'apps', 'backend', 'backend_service.py')],
     # ⚠️ `apps/backend` (2026-09-18, F4): urun paketleri oraya tasindi. Modul ADLARI
     # DEGISMEDI (`servers.api_server` vb.) — PyInstaller onlari bu yoldan bulur, yani
     # PYZ girdileri, hiddenimports ve kod-koruma zinciri AYNEN kalir.

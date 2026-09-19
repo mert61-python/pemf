@@ -55,14 +55,21 @@ ROOT = Path(__file__).resolve().parents[1]  # guii/
 DEFAULT_ROOTS = ["backend_service", "servers.api_server"]
 
 
+#: Import KOKLERI. `apps/backend` 2026-09-18'de (F4) eklendi; giris noktalari da
+#: 2026-09-19'da (F-E) oraya tasindi. Import ADLARI degismedi (`servers.api_server`),
+#: degisen yalniz DISK yolu — bu yuzden iki kok de aranir.
+IMPORT_KOKLERI = [ROOT, ROOT / "apps" / "backend"]
+
+
 def module_to_path(modname: str):
-    """Map 'a.b.c' -> guii/a/b/c.py or guii/a/b/c/__init__.py (None if not first-party)."""
+    """Map 'a.b.c' -> <kok>/a/b/c.py or <kok>/a/b/c/__init__.py (None if not first-party)."""
     parts = modname.split(".")
-    base = ROOT.joinpath(*parts)
-    if base.with_suffix(".py").is_file():
-        return base.with_suffix(".py")
-    if (base / "__init__.py").is_file():
-        return base / "__init__.py"
+    for kok in IMPORT_KOKLERI:
+        base = kok.joinpath(*parts)
+        if base.with_suffix(".py").is_file():
+            return base.with_suffix(".py")
+        if (base / "__init__.py").is_file():
+            return base / "__init__.py"
     return None
 
 
@@ -197,7 +204,18 @@ def analyze(path: Path):
 
 def main(argv):
     roots = argv[1:] or DEFAULT_ROOTS
-    roots = [r for r in roots if module_to_path(r) is not None]
+    # ⚠️ SESSIZ KAPSAM KAYBI (2026-09-19'da olculdu): burada eskiden
+    #     roots = [r for r in roots if module_to_path(r) is not None]
+    # vardi. F4'te `servers/` -> `apps/backend/servers/` tasininca o kok
+    # COZULEMEDI ve SESSIZCE listeden dustu; guard iki kokten BIRIYLE yesil
+    # kalmaya devam etti. Kapsam yarilandi ve hicbir yerde uyari cikmadi.
+    # Artik cozulemeyen kok HATADIR: yarim kapsamli yesil, kirmizidan tehlikelidir.
+    cozulemeyen = [r for r in roots if module_to_path(r) is None]
+    if cozulemeyen:
+        print(f"HATA: giris modulu COZULEMEDI: {cozulemeyen}")
+        print(f"      aranan kokler: {[str(k) for k in IMPORT_KOKLERI]}")
+        print("      (tasindiysa IMPORT_KOKLERI ya da DEFAULT_ROOTS guncellenmeli)")
+        return 2
     if not roots:
         print("HATA: gecerli giris modulu yok.")
         return 2

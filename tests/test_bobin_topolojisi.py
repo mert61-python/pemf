@@ -88,7 +88,7 @@ def test_KRITIK_uretim_kodu_ESP_kimliklerini_ELLE_SAYMAZ():
     """`(6, 7, 8)` / `range(6, 9)` gibi ELLE yazılmış ESP kapsamı YASAK.
 
     ⚠️ FAZ 4'TE ÜÇ YERDE BULUNDU ve hiçbiri hata vermiyordu:
-      * `backend_service.py`  → kapanış STOP döngüsü `range(6, 9)`
+      * `apps/backend/backend_service.py`  → kapanış STOP döngüsü `range(6, 9)`
       * `apps/backend/servers/ai_router.py` × 2 → AI start/stop yolları `for _cid in (6, 7, 8)`
 
     Bobin 6-7 STM'e taşındıktan sonra bu üç yer hâlâ MQTT'ye STOP/START basıyordu
@@ -96,7 +96,7 @@ def test_KRITIK_uretim_kodu_ESP_kimliklerini_ELLE_SAYMAZ():
     kaynağı oluşturuyordu. Ayrışmanın tersi daha tehlikeli: kapsam elle yazılı kalırsa
     yeni bir ESP bobini eklendiğinde kapanış/AI yolları onu ATLAR → bobin enerjili kalır.
 
-    MUTASYON: `backend_service.py`de `sorted(_ESP_COIL_IDS)` → `range(6, 9)` yaz → KIRMIZI.
+    MUTASYON: `apps/backend/backend_service.py`de `sorted(_ESP_COIL_IDS)` → `range(6, 9)` yaz → KIRMIZI.
     """
     import re as _re
 

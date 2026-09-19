@@ -37,7 +37,8 @@ Write-Host ""
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $GuiRoot     = Split-Path -Parent $ScriptDir
-$BackendFile = "$GuiRoot\backend_service.py"
+# ⚠️ 2026-09-19: giris noktasi apps\backend altina tasindi (klasor duzeni F-E).
+$BackendFile = "$GuiRoot\apps\backend\backend_service.py"
 $ExePath     = @("$GuiRoot\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe", "C:\PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe", "$GuiRoot\dist\PEMF_Backend\PEMF_Backend.exe") |
                Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $ExePath) { $ExePath = "$GuiRoot\dist\PEMF_Backend\PEMF_Backend.exe" }
@@ -106,7 +107,7 @@ if (Test-Path $ExePath) {
         pause; exit 1
     }
     if (-not (Test-Path $BackendFile)) {
-        Write-Status "HATA: backend_service.py bulunamadı: $BackendFile" "Red"
+        Write-Status "HATA: apps/backend/backend_service.py bulunamadı: $BackendFile" "Red"
         pause; exit 1
     }
     $SvcBinary       = $foundPython.Source

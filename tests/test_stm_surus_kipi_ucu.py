@@ -285,9 +285,8 @@ def test_KRITIK_ACK_satirindan_CANLI_DURUMA_uctan_uca(maske, beklenen):
 
     MUTASYON: `_parse_stm_ok`taki `K=` desenini `KIP=` yap → KIRMIZI.
     """
-    from servers import api_server
-
     import headless_core
+    from servers import api_server
 
     with live_state._live_state_lock:
         eski = [live_state._live_state["coils"][i].get("unipolar") for i in range(7)]

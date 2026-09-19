@@ -144,7 +144,7 @@ def main():
     boot = (
         "import sys, runpy; "
         f"sys.path.insert(0, r'{GUII}'); "
-        f"runpy.run_path(r'{GUII / 'backend_service.py'}', run_name='__main__')"
+        f"runpy.run_path(r'{GUII / 'apps' / 'backend' / 'apps/backend/backend_service.py'}', run_name='__main__')"
     )
     proc = subprocess.Popen(
         [str(PY), "-c", boot, "--host", "127.0.0.1", "--port", str(PORT)],

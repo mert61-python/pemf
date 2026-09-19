@@ -75,7 +75,7 @@ guii/
 
 | Bugün | Nereye | Not |
 |---|---|---|
-| `backend_service.py` · `headless_core.py` · `event_bus.py` | **kökte KALDI** | Giriş noktaları; `backend_service.py` `apps/backend`i import yoluna ekler |
+| `apps/backend/backend_service.py` · `apps/backend/headless_core.py` · `apps/backend/event_bus.py` | **kökte KALDI** | Giriş noktaları; `apps/backend/backend_service.py` `apps/backend`i import yoluna ekler |
 | ~~`servers/` `services/` `database/` `utils/` `controllers/`~~ | ✅ **`apps/backend/` — TAŞINDI 2026-09-18** | ⚠️ **`pemf_backend/` ARA KATMANI YAPILMADI** (sahip kararı): import adları değişmedi → 1140 import ifadesi ve PYZ/`hiddenimports`/kod-koruma zinciri hiç ellenmedi. Kazanç teorikti: 638 site-package'ta ad çarpışması ÖLÇÜLDÜ, yok |
 | ~~`pf/`~~ | ✅ **`apps/ui/` — TAŞINDI 2026-09-18** | ⚠️ `apps/web`den GENİŞ: donmuş EXE build'i, installer, APK build'i ve **sır yedeği listesi** de bu yolu kullanıyordu |
 | ~~`pemf-vet-web/`~~ | ✅ **`apps/web/` — TAŞINDI 2026-09-18** | ⚠️ Sıra önemliydi: **önce Vercel panosunda `rootDirectory`**, sonra push — çünkü push'un kendisi deploy'u tetikler; ters sırada canlı satış sitesinin deploy'u kırılırdı |

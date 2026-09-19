@@ -41,7 +41,7 @@ jobs:
       - name: base-mac.zip üret
         env:
           PEMF_CODESIGN_ID: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: ./build_mac.sh
+        run: ./build_tools/build_mac.sh
 
       # Paketin gerçekten AÇILIP ÇALIŞTIĞINI doğrula — zip üretmek yetmez.
       # (Bu test, sembolik linkleri düz dosya olarak açan bir hatayı yakalamıştı:

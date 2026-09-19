@@ -65,6 +65,7 @@ def test_KRITIK_kurtarma_SUNUCUYU_BASLATMAZ(monkeypatch):
 def test_KRITIK_bayrak_YOKSA_normal_acilis_BOZULMAZ(monkeypatch):
     """Regresyon kapısı: `--kurtarma` yoksa hiçbir şey değişmemeli."""
     import backend_service as bs
+
     import tools.kurtarma as tk
 
     monkeypatch.setattr(tk, "main", lambda argv: pytest.fail("kurtarma yanlislikla calisti"))
@@ -144,7 +145,7 @@ def test_zarf_ANAHTARLARI_DUZ_METIN_tasimaz(tmp_path):
 
 
 def test_alt_surecte_kurtarma_yardimi_calisir():
-    """`python backend_service.py --kurtarma --help` gerçekten kurtarma yardımını basmalı —
+    """`python apps/backend/backend_service.py --kurtarma --help` gerçekten kurtarma yardımını basmalı —
     frozen EXE'de kullanıcının göreceği yol budur."""
     import os
 
@@ -153,9 +154,15 @@ def test_alt_surecte_kurtarma_yardimi_calisir():
     # import'ların kurtarma yolunu kırmaması), yorumlayıcı yol kurulumu değil → yolu enjekte et.
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PEMF_HEADLESS": "1"}
     kod = (
+        # ⚠️ IKI yol da sart (2026-09-19, klasor duzeni F-E): giris noktasi
+        #   `apps/backend/` altina tasindi. GERCEK cagriada (`python apps/backend/
+        #   backend_service.py`) Python betigin KENDI dizinini sys.path[0] yapar;
+        #   `runpy.run_path` bunu YAPMAZ. O yuzden burada elle enjekte edilir —
+        #   yoksa `from utils.path_utils import ...` ModuleNotFoundError verir.
         f"import sys, runpy; sys.path.insert(0, r'{GUII}'); "
+        f"sys.path.insert(0, r'{GUII / 'apps' / 'backend'}'); "
         "sys.argv = ['PEMF_Backend.exe', '--kurtarma', '--help']; "
-        "runpy.run_path(r'backend_service.py', run_name='__main__')"
+        "runpy.run_path(r'apps/backend/backend_service.py', run_name='__main__')"
     )
     r = subprocess.run(
         [sys.executable, "-c", kod],

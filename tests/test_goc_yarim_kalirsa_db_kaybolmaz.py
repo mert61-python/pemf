@@ -431,7 +431,7 @@ def test_KRITIK_toparlama_ACL_kilidinden_ONCE_kosar():
     """
     import ast
 
-    agac = ast.parse((KOK / "backend_service.py").read_text(encoding="utf-8"))
+    agac = ast.parse((KOK / "apps" / "backend" / "backend_service.py").read_text(encoding="utf-8"))
 
     def _sira(govde, ad):
         for i, d in enumerate(govde):
@@ -465,7 +465,7 @@ def test_KRITIK_plain_bak_kilidi_kullaniciyi_DISARI_ATMAZ():
 
     MUTASYON: `keep_current_user=c in plain_yedekler` → `lock_down_file(c)` → KIRMIZI.
     """
-    src = _kaynak("backend_service.py")
+    src = _kaynak("apps/backend/backend_service.py")
     assert "plain_yedekler" in src and "keep_current_user=c in plain_yedekler" in src, (
         "`.plain.bak` dosyalari kullaniciyi DISARI ATAN varsayilan ACL ile kilitleniyor -> "
         "yarim-goc toparlamasi kalici olarak imkansizlasir"

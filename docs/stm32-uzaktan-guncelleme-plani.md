@@ -55,7 +55,7 @@ güncelleme eklersek "yanlış sürümü sessizce yaydık" riskini otomatikleşt
                 sürüm   kanal sayısı            kip + maske
 ```
 
-Yani kart **kim olduğunu zaten söylüyor**. Backend ise `headless_core.py:396`de şunu yapıyor:
+Yani kart **kim olduğunu zaten söylüyor**. Backend ise `apps/backend/headless_core.py:396`de şunu yapıyor:
 
 ```python
 if "STM_READY" in decoded or "STM_OK:" in decoded:

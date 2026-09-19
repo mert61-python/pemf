@@ -7,7 +7,7 @@ DENETİM BULGUSU (2026-08-17). `build_tools/PEMF_Backend_Setup.iss` içindeki `s
     Exec('taskkill.exe', '/F /IM PEMF_Backend.exe', ...);   // ← FORCE KILL ÖNCE
     Exec('sc.exe', 'stop PemfBackend', ...);                // ← graceful SONRA
 
-`taskkill /F` = `TerminateProcess`, **sinyalsizdir** → `backend_service.py`'nin sinyal işleyicisi
+`taskkill /F` = `TerminateProcess`, **sinyalsizdir** → `apps/backend/backend_service.py`'nin sinyal işleyicisi
 HİÇ koşmaz → `_safe_stop_outputs` çalışmaz → STM kuyruk-flush ve ESP bobinlerine MQTT STOP
 yayınlanmaz. Bobin 1-5 firmware'in ölü-adam devresiyle ≤1500 ms'de düşer; **bobin 6-8'in link
 watchdog'u YOKTUR** (`scripts/pemf_teardown.ps1`) → kalan seans süresince (varsayılan 20 dk, AI Pro

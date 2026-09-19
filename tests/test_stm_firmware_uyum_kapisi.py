@@ -117,7 +117,7 @@ def test_KRITIK_uyumsuzluk_mesaji_EYLEM_soyluyor():
 def _headless_agac():
     import ast
 
-    return ast.parse((KOK / "headless_core.py").read_text(encoding="utf-8"))
+    return ast.parse((KOK / "apps" / "backend" / "headless_core.py").read_text(encoding="utf-8"))
 
 
 def _fonksiyon(agac, ad):

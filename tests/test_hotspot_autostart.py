@@ -36,7 +36,7 @@ sys.path.insert(0, str(KOK / "tests"))  # `tests` paket değil (conftest tabanl�
 import capraz  # noqa: E402  — kardeş-depo kaynakları için atlama yardımcısı
 
 # ⚠️ HOTSPOT WINDOWS'A ÖZGÜDÜR (2026-08-12). `_start_hotspot_safe` daha ikinci koşulda
-# `if os.name != "nt": return` ile ERKEN DÖNER (backend_service.py:545) — Mobile Hotspot API
+# `if os.name != "nt": return` ile ERKEN DÖNER (apps/backend/backend_service.py:545) — Mobile Hotspot API
 # ve `powershell.exe` yalnız orada vardır. Linux'ta o satırdan SONRAKİ hiçbir davranış oluşmaz.
 #
 # Bu, CI'da iki ayrı biçimde sorun çıkarıyordu:

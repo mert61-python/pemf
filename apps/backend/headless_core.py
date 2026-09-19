@@ -12,11 +12,10 @@ from typing import Any, Callable
 
 from database.patient_database import get_patient_database
 from database.session_manager import get_session_manager
+from event_bus import EventPriority, get_event_bus
 from services.headless_services import MosquittoSupervisor, NetworkStatusService, UdpDiscoveryService
 from utils.simple_signal import SimpleSignal
 from utils.stm32_transport import Stm32SerialTransport
-
-from event_bus import EventPriority, get_event_bus
 
 # STM_NACK sonrasi ham-paket tekrar oynatma icin AZAMI YAS (sn). Keep-alive turundan
 # (0.5 sn) biraz genis tutuldu; daha eskisi 'guncel niyet' sayilmaz.

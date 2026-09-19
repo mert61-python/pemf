@@ -86,7 +86,6 @@ def update_live_session_state(*args, **kwargs):
 try:
     from controllers.hardware_controller import HardwareController
     from database.patient_database import get_patient_database
-
     from headless_core import HeadlessCore
 except ImportError:
     HeadlessCore = None

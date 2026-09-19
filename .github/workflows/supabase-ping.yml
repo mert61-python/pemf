@@ -13,7 +13,7 @@ name: supabase-ping
 #
 # ⚠️ ANAHTAR SIR DEĞİL: `sb_publishable_*` Supabase'in TASARIMI GEREĞİ herkese açık anahtar
 # sınıfıdır (istemcilere gömülü dağıtılır; sınırı RLS çizer). Aynı değer zaten public
-# depoda `backend_service.py:31`de duruyor. Gizli sınıf (`sb_secret_*`) BURADA KULLANILMAZ.
+# depoda `apps/backend/backend_service.py:31`de duruyor. Gizli sınıf (`sb_secret_*`) BURADA KULLANILMAZ.
 #
 # BAŞARISIZLIK = GERÇEK ALARM: 3 deneme sonrası hâlâ 5xx/540 ise iş KIRMIZI olur ve
 # e-posta düşer — bu gürültü değil, "girişler çökmek üzere" erken uyarısıdır.

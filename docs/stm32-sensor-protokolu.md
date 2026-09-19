@@ -157,5 +157,5 @@ Kapı: `tests/test_stm_sensor_firmware.py`.
 - ~~Ayna: `firmware/stm32_pemf_unipolar/`~~ — ⛔ **KALDIRILDI**; ayna projesi ve `scripts/stm_unipolar_senkronla.py` silindi (bkz. yukarıdaki not)
 - Derleme kapısı: `scripts/firmware_derle.py`
 - Pin haritası: `docs/stm32-pin-haritasi.md`
-- Backend: `headless_core.py` (ayrıştırıcı) · `servers/api_server.py` (işleyici) ·
+- Backend: `apps/backend/headless_core.py` (ayrıştırıcı) · `servers/api_server.py` (işleyici) ·
   `servers/seans_alan_kaydi.py` (seans CSV)

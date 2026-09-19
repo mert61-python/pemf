@@ -61,6 +61,6 @@ Bileşen etkileşimi, veri akışı ve güven sınırları. Kod referansları `g
 
 ## Tek giriş noktası
 
-`backend_service.py:main()` → logging + crash-handler + telemetri + ACL + DB init + HeadlessCore +
+`apps/backend/backend_service.py:main()` → logging + crash-handler + telemetri + ACL + DB init + HeadlessCore +
 router wire + (reconcile/cloud-sync/db-maintenance/tunnel/update-checker) + uvicorn. `api_server.py`
 modül-import'u yan-etkisizdir; arka-plan thread'ler **lifespan startup'ta** başlar.

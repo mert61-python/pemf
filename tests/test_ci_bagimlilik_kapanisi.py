@@ -3,7 +3,7 @@
 
 NEDEN VAR: Aynı mekanizma 8 günde ÜÇ kez kırmızı e-posta seli üretti (27 başarısız koşunun
 loglarından tek tek doğrulandı, 2026-08-18):
-  • `backend_service.py:21` modül düzeyinde `import uvicorn` → paket `requirements-test.txt`te
+  • `apps/backend/backend_service.py:21` modül düzeyinde `import uvicorn` → paket `requirements-test.txt`te
     yokken onu import eden ~20 test CI'da `ModuleNotFoundError` ile düştü (2026-08-10/12 arası
     15 koşu kırmızı; hattın İLK yeşili bu yüzden gecikti).
   • `ai_service/app.py:23` modül düzeyinde `import onnxruntime` → aynı sınıf, 2026-08-18'de
@@ -30,7 +30,7 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 
 #: Üretim kodu: testlerin import ettiği, CI'da modül düzeyinde yüklenen ağaçlar.
-_URETIM = ("backend_service.py", "servers", "ai_service", "utils")
+_URETIM = ("apps/backend/backend_service.py", "servers", "ai_service", "utils")
 
 #: requirements-test.txt baş yorumundaki BİLİNÇLİ "ağır AI" muafiyeti (lazy yüklenirler).
 #: Buraya ekleme yapmak = "bu paket CI'da ASLA kurulmayacak" demek; o zaman ikinci test
@@ -176,7 +176,7 @@ def test_KARSIT_KANIT_kapi_bos_gecmiyor():
         "imageio-ffmpeg düşmüş — hasta-görünür sessizlik kapısı (3 test) CI'da yine atlanır"
     )
     # backend_service.py'nin uvicorn'u gerçekten görülüyor (AST yolu çalışıyor).
-    assert "uvicorn" in _modul_duzeyi_importlar(KOK / "backend_service.py")
+    assert "uvicorn" in _modul_duzeyi_importlar(KOK / "apps" / "backend" / "backend_service.py")
     # ai_service ağır paket çekiyor ve yakalanıyor.
     assert "onnxruntime" in _modul_duzeyi_importlar(KOK / "ai_service" / "app.py")
     # Sahte bir bildirilen kümesiyle sorun ÜRETİLİYOR (mutasyon simülasyonu).

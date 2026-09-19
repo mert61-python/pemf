@@ -84,7 +84,7 @@ def test_giris_noktalari_yasagi_ULTRALYTICSTEN_ONCE_cagiriyor():
     # ⚠️ Çıpa GERÇEK import satırına pinlenir, düz kelimeye DEĞİL: 'onnxruntime' aynı dosyanın
     # docstring'inde de geçiyor ve düz `find()` orayı bulup yanlış alarm veriyordu (ölçüldü).
     for dosya, ultra_deseni in (
-        (_KOK / "backend_service.py", r"^from headless_core import"),
+        (_KOK / "apps" / "backend" / "backend_service.py", r"^from headless_core import"),
         (_KOK / "ai_service" / "app.py", r"^import onnxruntime\b"),
     ):
         metin = dosya.read_text(encoding="utf-8")

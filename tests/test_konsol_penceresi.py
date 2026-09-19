@@ -25,7 +25,7 @@ KOK = Path(__file__).resolve().parent.parent
 #: Operatörün makinesinde çalışan (yani pencere gösterebilecek) kaynak ağaçları.
 CALISMA_ZAMANI = ("servers", "services", "utils", "database", "ai_hub", "hardware")
 #: Kök dizindeki tek dosya giriş noktaları.
-KOK_DOSYALAR = ("backend_service.py", "headless_core.py")
+KOK_DOSYALAR = ("apps/backend/backend_service.py", "apps/backend/headless_core.py")
 
 SPAWN_ADLARI = {"Popen", "run", "call", "check_call", "check_output"}
 

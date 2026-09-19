@@ -81,7 +81,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 ### Backend (Python, headless)
 | Klasör | Ne işe yarar |
 |---|---|
-| `backend_service.py` · `headless_core.py` · `event_bus.py` | **Giriş noktası** (main), Qt-siz çekirdek (STM seri + kuyruk), pub/sub olay veri yolu |
+| `apps/backend/backend_service.py` · `apps/backend/headless_core.py` · `apps/backend/event_bus.py` | **Giriş noktası** (main), Qt-siz çekirdek (STM seri + kuyruk), pub/sub olay veri yolu |
 | [`apps/backend/servers/`](apps/backend/servers/README.md) | FastAPI uygulaması: REST + WebSocket + tüm router'lar + canlı durum + ağ (tünel/mDNS/sync) |
 | [`apps/backend/controllers/`](apps/backend/controllers/README.md) | STM32 bobin kontrol choke-point'i (keep-alive + süre-watchdog + garantili STOP) |
 | [`apps/backend/services/`](apps/backend/services/README.md) | Mosquitto/ağ-durumu/UDP-keşif süpervizörleri + cihaz kimlik-bilgileri + DB bakımı. ⚠️ Mosquitto yolu `PEMF_ESP_ENABLED=0` iken KULLANILMAZ (ESP söküldü) |
