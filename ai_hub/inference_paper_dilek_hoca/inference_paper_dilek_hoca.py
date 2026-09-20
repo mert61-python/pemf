@@ -142,11 +142,31 @@ class ScratchMesgul(RuntimeError):
 _KILIT_BEKLEME_SN = 5.0
 
 
-def _cell_import():
-    """cell paketini paket-nitelikli yoldan getir; yoksa ACIK hata (sessiz degil)."""
+def _agir_kilit():
+    """A9 — backend'in surec-geneli import kilidi; YOKSA hicbir sey yapmayan baglam.
+
+    ⚠️ ai_hub BAGIMSIZ kalmali (GPU mikroservisinde backend olmadan kosuyor), bu yuzden
+    kilit ZORUNLU degil, VARSA kullanilir. Backend altinda kosarken `scratch-warmup`
+    thread'i ile istek yolundaki import ayni kilitten gecer.
+    """
     try:
-        from ai_hub.inference_paper_dilek_hoca.cell.cpn import CpnInterface
-        from ai_hub.inference_paper_dilek_hoca.cell.prep import multi_norm
+        from utils.agir_import import _KILIT
+        return _KILIT
+    except Exception:
+        # modul top-level'i zaten contextlib import ediyor (satir 39)
+        return contextlib.nullcontext()
+
+
+def _cell_import():
+    """cell paketini paket-nitelikli yoldan getir; yoksa ACIK hata (sessiz degil).
+
+    ⚠️ A9: import SUREC-GENELI kilit altinda. Olculen yigin izinin tepesi tam buydu —
+    `scratch-warmup` daemon'i ile ilk AI istegi ayni yari-kurulu torch'u paylasiyordu.
+    """
+    try:
+        with _agir_kilit():
+            from ai_hub.inference_paper_dilek_hoca.cell.cpn import CpnInterface
+            from ai_hub.inference_paper_dilek_hoca.cell.prep import multi_norm
         return CpnInterface, multi_norm
     except ImportError as e:
         raise ModelKurulumEksik(

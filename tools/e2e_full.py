@@ -394,6 +394,47 @@ AI_SES_VAKALARI = [
 ]
 
 
+def _blobsuz(b, esik: int = 512):
+    """Uzun dizeleri (base64 gorsel) AT — alt-dize aramasi orada RASTGELE eslesir."""
+    if isinstance(b, dict):
+        return {k: _blobsuz(v, esik) for k, v in b.items()}
+    if isinstance(b, list):
+        return [_blobsuz(v, esik) for v in b]
+    if isinstance(b, str) and len(b) > esik:
+        return "<blob>"
+    return b
+
+
+def _olcut_govdesi(b) -> str:
+    """Etiket aramasi icin govde metni — blob'suz, kucuk harf."""
+    return json.dumps(_blobsuz(b), ensure_ascii=False).lower()
+
+
+def _sinif_sayaclari(b) -> dict:
+    """Yanitta `class_counts` varsa dondur (kucuk harf anahtarlarla), yoksa {}.
+
+    ⚠️ BU FONKSIYON SAHTE YESIL'I KAPATIR. kidney_ct yaniti her zaman
+    {"Kidney Stone": 0, "Kidney": 2, "Kidney Cyst": 0} tasiyor: anahtarlar SABIT,
+    ayirt edici olan DEGERLER. Alt-dize aramasi bu yuzden her goruntude gecerdi.
+    """
+    if not isinstance(b, dict):
+        return {}
+    ham = b.get("class_counts")
+    if isinstance(ham, dict):
+        return {str(k).lower(): v for k, v in ham.items()}
+    return {}
+
+
+def _etiket_var(etiket: str, govde: str, sayac: dict) -> bool:
+    """Etiket GERCEKTEN uretildi mi? Sayac varsa SAYIYA, yoksa metne bakar."""
+    e = etiket.lower()
+    if sayac:
+        eslesen = [v for k, v in sayac.items() if e in k]
+        if eslesen:
+            return any(isinstance(v, (int, float)) and v > 0 for v in eslesen)
+    return e in govde
+
+
 def _multipart(path, alanlar):
     """multipart/form-data POST.
 
@@ -481,23 +522,22 @@ def m_ai_uclari_gercek_girdiyle():
             if not check(f"M: {modul} <- {dosya}", s == 200, f"HTTP {s} {str(b)[:90]}"):
                 continue
             if beklenen:
-                # ⚠️ Etiket araniyor — yanit sekli modulden module degisiyor, bu yuzden
-                #    TUM govdede aranir (label/prediction/findings/class ...).
-                govde = json.dumps(b, ensure_ascii=False).lower()
+                govde = _olcut_govdesi(b)
+                sayac = _sinif_sayaclari(b)
                 if beklenen.startswith("!"):
                     # OLMAMALI: normal girdide bulgu halusine edilmemeli (karsit-kanit)
                     yasak = [k.strip() for k in beklenen[1:].split(",") if k.strip()]
-                    gecen = [k for k in yasak if k in govde]
+                    gecen = [k for k in yasak if _etiket_var(k, govde, sayac)]
                     check(
                         f"M: {modul} normal girdide BULGU URETMIYOR ({'/'.join(yasak)}) <- {dosya}",
                         not gecen,
-                        f"halusine edilen: {gecen}",
+                        f"halusine edilen: {gecen}  sayac={sayac}",
                     )
                 else:
                     check(
                         f"M: {modul} BEKLENEN sonucu verdi ('{beklenen}') <- {dosya}",
-                        beklenen.lower() in govde,
-                        f"govdede '{beklenen}' yok: {govde[:150]}",
+                        _etiket_var(beklenen, govde, sayac),
+                        f"sayac={sayac} govde={govde[:130]}",
                     )
         else:
             # Model yok: cokmeden, anlasilir bicimde reddetmeli.
@@ -535,7 +575,7 @@ def m_ai_uclari_gercek_girdiyle():
             check(
                 "M: rna/kidney README beklentisi (KIRC gecen sonuc var)",
                 "kirc" in govde,
-                f"govdede 'kirc' yok: {govde[:150]}",
+                f"govde={govde[:150]}",
             )
     else:
         check("M: RNA CSV mevcut", False, f"{rna.name} yok")

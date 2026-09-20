@@ -166,6 +166,11 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=_start_mdns_service, daemon=True, name="PEMFmDNSService").start()
     # Arka-plan daemon'ları (süre-watchdog + sensör-persist + günlük-bakım + opsiyonel sim).
     _start_background_threads()
+    # ⚠️ A9 — SIRA ÖNEMLİ: torch, ısıtma thread'i başlamadan ve `yield` ile istek kabulü
+    # açılmadan ÖNCE, SENKRON kurulur (ölçüm 1,92 sn). Aksi halde `scratch-warmup` thread'i
+    # ile ilk AI isteği aynı yarı-kurulu torch'u paylaşıyordu → 38 kez `NameError: _C`.
+    # Bu satırı `_scratch_isit_baslat()`ın ALTINA almak arızayı geri getirir.
+    _torch_isit()
     _scratch_isit_baslat()
     try:
         yield
@@ -189,6 +194,7 @@ async def lifespan(app: FastAPI):
 # ⚠️ Multipart form-alanı limitini FastAPI app'i oluşturmadan ÖNCE yükselt (saha bulgusu
 # 2026-08-30: scratch/base64 uçlarında "Part exceeded maximum size of 1024KB"). Bkz.
 # utils/multipart_limit — Starlette varsayılanı 1MB, base64 görüntüler bunu aşıyordu.
+from utils.agir_import import torch_isit as _torch_isit  # noqa: E402  (A9)
 from utils.dongu_guvenligi import dongu_hatasini_bildir as _dongu_hatasini_bildir  # noqa: E402
 from utils.multipart_limit import buyuk_form_alani_limitini_uygula as _buyuk_form_limiti
 

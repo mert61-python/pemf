@@ -24,7 +24,7 @@ from servers.entitlement import ai_queue_gate, require_research  # tier-enforcem
 
 logger = logging.getLogger("ai_router")
 
-import threading
+# (A9) modul-duzeyi `import threading` KALDIRILDI: _model_lock artik utils.agir_import._KILIT.
 import time
 
 from utils.model_downloader import download_model_sync
@@ -150,7 +150,12 @@ if project_root not in sys.path:
 
 # Thread-safe lazy loading için model önbelleği
 _models: dict = {}
-_model_lock = threading.Lock()
+# ⚠️ A9: model yükleyici ile derin-hazırlık probu AYNI süreç-geneli kilidi paylaşır.
+# Ayrı `threading.Lock()` tutmak, `hazirlik?derin=1`in modelleri yüklerken aynı ağır
+# modülleri paralel import etmesine izin veriyordu (yarı-kurulu torch → NameError: _C).
+# Ayrıca RLock: ağır modüller birbirini import eder, düz Lock kendini kilitlerdi.
+from utils.agir_import import _KILIT as _model_lock  # noqa: E402  (A9 — tek boğum)
+from utils.agir_import import agir_import as _agir_import  # noqa: E402
 
 
 def _get_or_load_model(key: str, loader_fn):
@@ -3855,7 +3860,10 @@ def _modul_hazir_mi(import_yolu: str, derin: bool) -> tuple[str, str]:
 
     try:
         if derin:
-            importlib.import_module(import_yolu)
+            # ⚠️ A9: GERÇEK import süreç-geneli kilit altında. Bu prob envanterdeki HER
+            # modülü import eder; istek yolundaki tembel import'larla ve `scratch-warmup`
+            # thread'iyle aynı anda koşabilir. Kilitsiz hâli yarışın ikinci tarafıydı.
+            _agir_import(import_yolu)
             return "ok", ""
         spec = importlib.util.find_spec(import_yolu)
         return ("ok", "") if spec is not None else ("kod_yok", "modül bulunamadı")

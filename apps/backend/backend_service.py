@@ -656,9 +656,12 @@ def _start_ai_warmup_safe(logger: logging.Logger) -> None:
                 w.writeframes(b"\x00\x00" * 11025)
 
             # Modelin KENDİ ön-işlemesi — ısıtma ile çıkarım yolu ayrışmasın diye.
-            from ai_hub.inference_cat_sound.inference_cat_sound import audio_to_mel_image
+            # ⚠️ A9: bu thread ağır modül import eder; süreç-geneli kilitten GEÇMELİ.
+            from utils.agir_import import agir_import
 
-            audio_to_mel_image(yol)
+            _ses = agir_import("ai_hub.inference_cat_sound.inference_cat_sound")
+
+            _ses.audio_to_mel_image(yol)
             logger.info("AI ısıtma tamam (ses ön-işleme): %.1f sn", time.perf_counter() - t0)
         except Exception as e:  # noqa: BLE001 — ısıtma ASLA servisi düşürmez
             logger.info("AI ısıtma atlandı (%s: %s)", type(e).__name__, str(e)[:120])
@@ -914,6 +917,18 @@ def main(argv: list[str] | None = None) -> int:
     _start_update_checker_safe(logger)
     # ESP bobinleri (6-8) PEMF-Gateway WiFi'sine bağlanır → backend ile BİRLİKTE açılmalı.
     _start_hotspot_safe(logger)
+    # ⚠️ A9 — SIRA ÖNEMLİ, ÖLÇÜLEREK KONDU. torch, ISITMA THREAD'LERİNDEN ÖNCE ve SENKRON
+    # kurulur (ölçüm 1,92 sn). `_start_ai_warmup_safe` `ai-warmup` daemon'ını başlatır; o
+    # thread `ai_hub.inference_cat_sound` → `import torch` yapar. İzci ölçümü (2026-09-20):
+    #     1.500 sn  ai-warmup    ai_hub.inference_cat_sound
+    #     1.547 sn  MainThread   torch
+    # İki taraf aynı anda torch kurarken biri `sys.modules`'tan yarım modülü siliyor →
+    # `KeyError: 'sympy.assumptions.cnf'` (modül adı koşumdan koşuma DEĞİŞİYOR) → torch
+    # yarım kalıyor → süreç boyunca HER AI ucu `NameError: _C` ile 500.
+    # ⚠️ Bu satırı `_start_ai_warmup_safe`in ALTINA almak arızayı aynen geri getirir.
+    from utils.agir_import import torch_isit as _torch_isit
+
+    _torch_isit()
     # Ses hattının JIT maliyetini kullanıcı profil seçerken öde (bkz. fonksiyon notu).
     _start_ai_warmup_safe(logger)
 
