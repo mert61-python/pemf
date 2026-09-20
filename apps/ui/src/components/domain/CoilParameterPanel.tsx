@@ -246,10 +246,13 @@ export function CoilParameterPanel({
           ) : (
             /* ⚠️ DENETİM 2026-08-09 (Tier 2) — "ÖLÇÜLMÜYOR" İLE "SERİN" AYIRT EDİLEBİLMELİ.
                Eskiden sıcaklık yoksa rozet HİÇ çizilmiyordu; operatör bunu "sorun yok" diye
-               okuyabiliyordu. Oysa 1-5 numaralı bobinler STM üzerinden sürülür ve STM protokolünde
-               SICAKLIK ALANI YOKTUR — o bobinlerden hiçbir zaman ölçüm gelmez. Aşağıdaki termal
-               interlock (`objectTemp > SAFE_TEMP_CUTOFF`) bu yüzden 8 bobinin 5'i için HİÇBİR
-               ZAMAN tetiklenemez. Koruma donanım tarafında yapılana kadar bu sınır GÖRÜNÜR olmalı;
+               okuyabiliyordu. Oysa STM üzerinden sürülen bobiller (`live_state.STM_COIL_IDS`)
+               için STM protokolünde SICAKLIK ALANI YOKTUR — o bobinlerden hiçbir zaman ölçüm
+               gelmez. Aşağıdaki termal interlock (`objectTemp > SAFE_TEMP_CUTOFF`) bu yüzden
+               onlar için HİÇBİR ZAMAN tetiklenemez.
+               ⚠️ BURAYA SAYI YAZMAYIN. 2026-09-10'a kadar bu yorumda sabit bir bobin sayısı
+               duruyordu; bobin 6-7 ESP'den STM'e taşınınca yorum sessizce BAYATLADI. Kapsam tek
+               kaynak `live_state.STM_COIL_IDS`'tedir. Kapı: tests/test_sim_GERCEGI_ASMAZ.py Koruma donanım tarafında yapılana kadar bu sınır GÖRÜNÜR olmalı;
                sessiz bir boşluk, operatörün var olmayan bir korumaya güvenmesine yol açar.
                (Gerçek çözüm: 1-5 için sıcaklık sensörü + STM telemetrisi + firmware kesmesi.) */
             /* Sahip isteği 2026-09-10: ölçüm olmayan yerde KISA ÇİZGİ dursun.

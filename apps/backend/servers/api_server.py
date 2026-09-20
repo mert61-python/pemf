@@ -3697,12 +3697,35 @@ def _session_duration_watchdog():
 
 
 def _hardware_simulation_loop():
-    """PEMF_SIMULATE=1: gerçek donanım yokken sanal STM+ESP bobin + sensör verisi üretip
-    WS ile yayınlar (Dashboard/Sensör/Kontrol/KPI testleri için). Seans aktifken bobinler
-    seansın freq/duty'siyle 'çalışıyor' görünür; aksi halde boşta + ortam sıcaklığı."""
+    """PEMF_SIMULATE=1: gerçek donanım yokken sanal bobin + sensör verisi üretip WS ile
+    yayınlar (Dashboard/Sensör/Kontrol/KPI testleri için). Seans aktifken bobinler seansın
+    freq/duty'siyle 'çalışıyor' görünür; aksi halde boşta.
+
+    ⚠️ BAYATLIK DÜZELTİLDİ (2026-09-20, sahip bildirimi). Bu döngü üç yerde GERÇEĞİ
+    AŞIYORDU ve üçü de simülasyonu ürüne göre FAZLA İYİMSER yapıyordu:
+
+      1. `for idx in range(8)` ELLE yazılmıştı. Topoloji tek kaynak `live_state`'te
+         (`STM_COIL_IDS` / `ESP_COIL_IDS`); 2026-09-10'da bobin 6-7 ESP'den STM'e taşındı
+         ve bu döngü onu hiç görmedi. Aynı kural iki yerde = sessiz ayrışma.
+      2. **HER bobine `objectTemp` uyduruyordu.** STM protokolünde SICAKLIK ALANI YOK
+         (`tools/stm32_simulator.py`: 121 baytlık pakette sıcaklık yok); backend'de
+         `objectTemp` YALNIZ MQTT yükünden gelir (`payload.get("object_temp")`). Yani
+         STM'deki bobinler gerçekte HİÇ sıcaklık bildirmez. Sim onları bildiriyor gibi
+         gösterince arayüzdeki "bu bobinde sıcaklık ölçümü yok — otomatik termal durdurma
+         uygulanmaz" uyarısı SİMÜLASYONDA KAYBOLUYOR ve termal kesme testi var olmayan bir
+         korumayı doğrulamış gibi yeşil veriyordu. Artık sıcaklık YALNIZ ölçebilen bobine
+         (ESP/MQTT yolu) verilir; ötekiler `None` kalır ve arayüz doğruyu söyler.
+      3. `mqtt`/`gateway` KOŞULSUZ "online" yazıyordu. ESP kapalıyken (`PEMF_ESP_ENABLED=0`)
+         MQTT yok; durum `live_state.esp_etkin()`e bağlandı.
+    """
     import math
     import random
     import time as _t
+
+    # Topoloji TEK KAYNAKTAN. Elle sayı yazmak bu döngünün bayatlama sebebiydi.
+    _stm = set(live_state.STM_COIL_IDS)
+    _esp = set(live_state.ESP_COIL_IDS)
+    _bobin_idleri = sorted(_stm | _esp)
 
     t0 = _t.time()
     while True:
@@ -3716,14 +3739,19 @@ def _hardware_simulation_loop():
             sduty = float(sess.get("duty") or 0)
             scoils = set(sess.get("coil_ids") or [])
             snaps = []
+            esp_acik = live_state.esp_etkin()
             with _live_state_lock:
-                _live_state["gateway"] = "online"
-                _live_state["mqtt"] = "online"
+                # ESP kapalıyken MQTT/gateway "online" DEĞİLDİR — sim gerçeği aşmasın.
+                _live_state["gateway"] = "online" if esp_acik else "devre_disi"
+                _live_state["mqtt"] = "online" if esp_acik else "devre_disi"
                 _live_state["stm"] = "online"
-                for idx in range(8):
+                for cid in _bobin_idleri:
+                    idx = cid - 1
                     coil = _live_state["coils"][idx]
-                    cid = idx + 1
-                    coil["connected"] = True
+                    # ESP bobini ancak ESP açıkken bağlıdır; STM bobinleri simde hep bağlı.
+                    coil["connected"] = True if cid in _stm else esp_acik
+                    # Sıcaklığı YALNIZ ölçebilen bobin bildirir (MQTT/ESP yolu).
+                    sicaklik_olculur = (cid in _esp) and esp_acik
                     running = active and ((cid in scoils) if scoils else True)
                     coil["running"] = running
                     if running:
@@ -3734,18 +3762,32 @@ def _hardware_simulation_loop():
                             d / 25.0 * 2.0 + 0.25 * math.sin(el * 2 + idx) + random.uniform(-0.04, 0.04), 3
                         )
                         coil["currentA"] = round(0.35 + d / 100.0 * 0.6 + random.uniform(-0.02, 0.02), 3)
-                        coil["objectTemp"] = round(
-                            26.0 + min(el / 25.0, 14.0) + 0.4 * math.sin(el * 0.5 + idx) + random.uniform(-0.2, 0.2), 1
+                        coil["objectTemp"] = (
+                            round(
+                                26.0
+                                + min(el / 25.0, 14.0)
+                                + 0.4 * math.sin(el * 0.5 + idx)
+                                + random.uniform(-0.2, 0.2),
+                                1,
+                            )
+                            if sicaklik_olculur
+                            else None
                         )
                     else:
                         coil["frequencyHz"] = 0
                         coil["dutyCycle"] = 0
                         coil["magneticMt"] = round(abs(random.uniform(0, 0.05)), 3)
                         coil["currentA"] = round(abs(random.uniform(0, 0.02)), 3)
-                        coil["objectTemp"] = round(24.0 + 0.3 * math.sin(el * 0.3 + idx) + random.uniform(-0.2, 0.2), 1)
-                    coil["ambientTemp"] = round(23.0 + random.uniform(-0.3, 0.3), 1)
+                        coil["objectTemp"] = (
+                            round(24.0 + 0.3 * math.sin(el * 0.3 + idx) + random.uniform(-0.2, 0.2), 1)
+                            if sicaklik_olculur
+                            else None
+                        )
+                    # Ortam sıcaklığı da aynı telemetriden gelir → ölçüm yoksa YOK.
+                    coil["ambientTemp"] = round(23.0 + random.uniform(-0.3, 0.3), 1) if sicaklik_olculur else None
                     snaps.append(dict(coil))
-            _ws_broadcast_sync({"type": "gateway_status", "data": {"gateway": "online", "mqtt": "online"}})
+            _kapi_durum = "online" if esp_acik else "devre_disi"
+            _ws_broadcast_sync({"type": "gateway_status", "data": {"gateway": _kapi_durum, "mqtt": _kapi_durum}})
             _ws_broadcast_sync({"type": "stm_status", "data": {"stm": "online"}})
             for coil in snaps:
                 _ws_broadcast_sync({"type": "coil_status", "coilId": coil["id"], "data": coil})
