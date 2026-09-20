@@ -118,6 +118,19 @@ Kapı: `tests/test_linux_runtime_YOKLUGU_karardir.py` · **Kim:** — (iş yok)
 | **Şartı** | ESP geri bobin sürmeye başlamadan **önce** açılmalı |
 | **Kim** | Sahip (kart elimde yok, test edilmemiş kripto yakılmamalı) |
 
+### 🔴 A9 · AI modülleri ARALIKLI 500 veriyor — eşzamanlı `torch` import yarışı (2026-09-20 BULUNDU)
+| | |
+|---|---|
+| **Nasıl bulundu** | E2E'ye AI uçları ilk kez gerçek girdiyle bağlandı (masaüstü `PEMF_AI_Test_Girdileri`). **Aynı kod, aynı girdi, iki koşum:** 1. koşumda 8 uç 200 döndü, 2. koşumda **hepsi 500**. Hiçbir ürün senaryosu bunu göremezdi — onlar AI *hazırlığını* ölçüyor, ardışık *çıkarımı* değil |
+| **Kök neden (log'dan, tam yığın izi)** | `torch/__init__.py:465` → `for name in dir(_C):` → **`NameError: name '_C' is not defined`**. Modül `sys.modules`'a **yarı-başlatılmış** girmişken ikinci bir thread onu alıyor. Yükleme `asyncio.to_thread` içinde olduğu için eşzamanlı `import torch` mümkün. Tek koşumda **38 kez** |
+| **Etkilenen** | `kidney_ct` · `landmark` · `segmentation` · `reticulocytes` · `cat_organ` · `em_petri` · `scratch` — **klinik modüller dahil**, yalnız araştırma değil |
+| **Saha etkisi** | Analiz *"... model hatası"* ile düşer, operatör sebebi göremez. Tekrar denemek çoğu zaman çalışır (modül sonunda yüklenir) → "bazen oluyor" diye geçiştirilmeye açık. ⚠️ Bobin sürmez, hasta güvenliği riski YOK; kayıp **tanı erişilebilirliği** |
+| **Neden şimdiye kadar görünmedi** | Hiçbir kapı **ardışık** AI çıkarımı yapmıyordu. 48 ürün senaryosu `/api/ai/hazirlik` ile *hazır mı* diye soruyor; bu yarış ancak **iki yükleme çakışınca** çıkıyor |
+| ⚠️ **ÖLÇÜLMEMİŞ** | Donmuş EXE'de tekrarlanıp tekrarlanmadığı. Gözlem **kaynaktan koşan** backend'de. Frozen pakette modüller `.pyd` ve yükleme sırası farklı — ayrıca ölçülmeli |
+| **Olası çözüm (uygulanmadı)** | Model yükleyiciye **tek-iş kilidi** (ilk `import torch` serileştirilsin) ya da açılışta bir kez **ısıtma**. ⚠️ Karar sahibin: AI yolu değişikliği |
+| **Kapı** | `tools/e2e_full.py` M bölümü — 15 görsel + 3 ses + RNA + 2 yapılandırılmış uç, README'nin BEKLENEN sonucuyla |
+| **Kim** | Sahip kararı bekliyor |
+
 ### A7 · Bulut MQTT kimlik bilgileri — **bilinçli atlandı**
 Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayıtlı, iş kapalı.
 

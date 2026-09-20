@@ -21,6 +21,7 @@ uclari, gecmis/KPI/metrics.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,24 @@ def _konsola_guvenli(metin: str) -> str:
     """
     kodlama = getattr(sys.stdout, "encoding", None) or "ascii"
     return metin.encode(kodlama, "replace").decode(kodlama, "replace")
+
+
+def _esp_bobinleri() -> set:
+    """ESP'ye ait bobin kimlikleri — URUNUN KENDI SABITINDEN okunur.
+
+    ⚠️ ELLE LISTE BAYATLAR VE BU OLCULDU: burada `{6, 7, 8}` yaziyordu. Bobin 6-7
+    2026-09-10'da ESP8266'dan STM'e tasindi (`ESP_COIL_IDS = {8}`) ama test onu hic
+    gormedi; F4 tasimasi e2e'yi zaten oldurmustu, bu yuzden 10 gun kimse fark etmedi.
+    Kapsam sayisi degil, ESAS: ayni bilgi iki yerde durursa sessizce ayrisir.
+
+    Kaynak dosyadan REGEX ile okunur; import edilmez (backend bagimliliklarini
+    e2e surecine tasimamak icin).
+    """
+    p = GUII / "apps" / "backend" / "servers" / "live_state.py"
+    m = re.search(r"ESP_COIL_IDS\s*=\s*\{([^}]*)\}", p.read_text(encoding="utf-8", errors="replace"))
+    if not m:
+        raise SystemExit(f"HATA: ESP_COIL_IDS {p} icinde bulunamadi — topoloji cipasi koptu")
+    return {int(x) for x in re.findall(r"\d+", m.group(1))}
 
 
 def check(name, cond, detail=""):
@@ -144,7 +163,11 @@ def main():
     boot = (
         "import sys, runpy; "
         f"sys.path.insert(0, r'{GUII}'); "
-        f"runpy.run_path(r'{GUII / 'apps' / 'backend' / 'apps/backend/backend_service.py'}', run_name='__main__')"
+        # ⚠️ F4 tasimasi: runpy.run_path betigin dizinini sys.path'e EKLEMEZ.
+        #    backend_service.py ilk satirlarinda `from utils.path_utils import` yapiyor
+        #    ve `utils` artik apps/backend altinda -> bu kok OLMADAN ModuleNotFoundError.
+        f"sys.path.insert(0, r'{GUII / 'apps' / 'backend'}'); "
+        f"runpy.run_path(r'{GUII / 'apps' / 'backend' / 'backend_service.py'}', run_name='__main__')"
     )
     proc = subprocess.Popen(
         [str(PY), "-c", boot, "--host", "127.0.0.1", "--port", str(PORT)],
@@ -257,14 +280,15 @@ def run_scenarios():
     check("sim: bobinler calisiyor gorunuyor", len(running) >= 1, f"{len(running)} bobin")
     check("sim: sicaklik telemetrisi akiyor", any(float(c.get("objectTemp") or 0) > 0 for c in running))
 
-    # ── 6) ACIL DURDURMA: ESP 6-8'in HEPSI + sessionCoilIds (P0 #2) ───────────
+    # ── 6) ACIL DURDURMA: ESP bobinlerinin HEPSI + sessionCoilIds (P0 #2) ─────
     s, es, _ = req("POST", "/api/hardware/emergency_stop")
     check("emergency_stop 200", s == 200, f"HTTP {s}")
     estopped = {r.get("coilId") for r in es.get("mqttResults", [])}
+    beklenen = _esp_bobinleri()
     check(
-        "E-STOP: ESP 6,7,8'in HEPSI durduruldu (P0 — dar seans kapsami YOK SAYILDI)",
-        estopped == {6, 7, 8},
-        str(sorted(estopped)),
+        f"E-STOP: ESP bobinlerinin HEPSI durduruldu {sorted(beklenen)} (P0 — dar seans kapsami YOK SAYILDI)",
+        estopped == beklenen,
+        f"gelen {sorted(estopped)} / beklenen {sorted(beklenen)}",
     )
     check(
         "E-STOP: sessionCoilIds denetim izi var (P0)",

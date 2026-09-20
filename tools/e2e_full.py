@@ -20,6 +20,7 @@ IZOLASYON (bozmayin):
 Kullanim:  python tools/e2e_full.py     (cikis kodu 0 = hepsi gecti)
 """
 
+import base64
 import json
 import os
 import subprocess
@@ -150,6 +151,458 @@ def _gercek_masaustu_dosyalari() -> set:
     return bulunan
 
 
+def k_son_degisiklikler_2026_09_20():
+    """2026-09-20 turunun URUN-GOZLEMLENEBILIR sonuclari.
+
+    ⚠️ NEDEN E2E: bu turdaki duzeltmelerin cogu birim/mutasyon kapilariyla kilitli, AMA
+    ikisi ancak CALISAN URUNDE gorulur:
+
+      K1. SURE-WATCHDOG — `_session_duration_watchdog` seans suresi dolunca bobinleri
+          DONANIM duzeyinde durdurur. Kendi belgesi: "firmware keep-alive sureyi her sn
+          tazeledigi icin tek basina auto-stop OLMAZ". A8'de olctuk ki o dongu KENDI hata
+          bildirimiyle olebiliyordu. Thread olurse seans planlanan sureyi ASAR ve hicbir
+          uyari cikmaz — yani KIRMIZI vermeden zarar verir. E2E'de HIC kapsanmiyordu.
+          ⚠️ `duration_minutes` tamsayi ve `ge=1` (sifir olursa auto-end HIC tetiklenmez;
+          bu sinir bilincli). Bu yuzden kapi ~60 sn bekler. Pahali ama alternatifi yok:
+          istemci STOP cagirmadan durmayi yalniz gercek zaman gosterir.
+
+      K2. DAEMON DONGULERI KOSUMUN SONUNDA HALA CANLI. A8'in konusu tam buydu.
+          Telemetrinin BASTA akmasi yetmez — dongu ortada olmus olabilir.
+
+      K3. KENDILIGINDEN KARANTINA YOK. Bugun karar verildi: duz-metin DB karantinaya
+          ALINMAZ. Normal bir kosumda hicbir `.acilamadi-*` dosyasi olusmamali; olusursa
+          ya goc yolu kiriliyordur ya da koruma fazla dar.
+    """
+    section("K. 2026-09-20 turu (sure-watchdog + dongu canliligi + karantina)")
+
+    # ── K1: sure dolunca ISTEMCI STOP CAGIRMADAN durmali ─────────────────────
+    s, b, _ = req(
+        "POST",
+        "/api/session/start",
+        {"patient_name": "WatchdogTest", "duration_minutes": 1, "coil_ids": [1], "frequency": 10, "duty": 25},
+    )
+    if not check("K1: 1 dakikalik seans basladi", s == 200, f"HTTP {s} {str(b)[:90]}"):
+        return
+
+    aktif = wait_until(lambda: bool(req("GET", "/api/health")[1].get("sessionActive")), timeout=10)
+    check("K1: seans AKTIF isaretlendi", aktif)
+
+    # ⚠️ ISTEMCI HICBIR STOP CAGIRMAZ. Duracaksa yalniz watchdog durdurur.
+    import time as _t
+
+    t0 = _t.monotonic()
+    bitti = wait_until(
+        lambda: not bool(req("GET", "/api/health")[1].get("sessionActive")),
+        timeout=100,
+        step=2.0,
+    )
+    gecen = _t.monotonic() - t0
+    check(
+        "K1: SURE-WATCHDOG seansi KENDILIGINDEN durdurdu (istemci STOP cagirmadi)",
+        bitti,
+        f"{gecen:.0f} sn sonra kapandi" if bitti else "100 sn icinde DURMADI -> watchdog olmus olabilir",
+    )
+    if bitti:
+        check(
+            "K1: durma SURE dolduktan SONRA oldu (erken kesme yok)",
+            gecen >= 55,
+            f"{gecen:.0f} sn (beklenen >=55)",
+        )
+        sn = snap()
+        check(
+            "K1: bobinler de DURDU (yalniz bayrak degil)",
+            not running_ids(sn),
+            f"hala kosan: {running_ids(sn)}",
+        )
+
+    # ── K2: dongu KOSUM SONUNDA hala canli mi ────────────────────────────────
+    a = snap()
+    _t.sleep(4)
+    b2 = snap()
+    degisen = sum(
+        1
+        for i in range(min(len(a.get("coils", [])), len(b2.get("coils", []))))
+        if a["coils"][i].get("objectTemp") != b2["coils"][i].get("objectTemp")
+        or a["coils"][i].get("magneticMt") != b2["coils"][i].get("magneticMt")
+    )
+    check(
+        "K2: arka-plan donguleri kosum SONUNDA hala calisiyor",
+        degisen > 0,
+        f"4 sn'de {degisen} bobin degisti (0 ise dongu olmus olabilir)",
+    )
+
+    # ── K3: kendiliginden karantina olmamali ─────────────────────────────────
+    dd = globals().get("_DATA_DIR")
+    if dd is None:
+        check("K3: veri koku gorunur", False, "_DATA_DIR yok -> kapi olcum yapamaz")
+    else:
+        karantina = sorted(p.name for p in Path(dd).rglob("*.acilamadi-*"))
+        check(
+            "K3: KENDILIGINDEN karantina YOK (duz-metin DB kenara itilmedi)",
+            not karantina,
+            f"{len(karantina)} dosya: {karantina[:4]}",
+        )
+
+
+def l_kapsam_bosluklari_2026_09_20():
+    """OLCULEREK secilen kapsam bosluklari (2026-09-20).
+
+    ⚠️ NEDEN BU UCLAR: urunun rota yuzeyi (95) ile e2e'nin dokundugu yollar AST +
+    kaynak taramasiyla karsilastirildi -> e2e **28/95 (%29)** kapsıyordu. 67 rota
+    hic gorulmuyordu. Hepsini eklemek DOGRU DEGIL:
+      · AI goru uclari (25) model + gercek goruntu ister — urun senaryolari kapsiyor
+      · `/api/update/apply` · `/api/update/rollback` · `/api/data/import` KURULUMU DEGISTIRIR
+      · auth login/register/reset BULUTA cikar; e2e cevrimdisi ve izole
+    Burada **guvenlik/veri degismezleri** secildi: operator kimligi, denetim izi,
+    hasta-verisi SILME, destek paketi sir sizdirmasi, kurtarma yuzeyi.
+    """
+    section("L. Kapsam bosluklari (operator/denetim/silme/destek)")
+
+    eposta = "e2e.operator@example.invalid"
+
+    # ── L1: OPERATOR KIMLIGI ZINCIRI ─────────────────────────────────────────
+    # ⚠️ `operator_email` her ucta ISTEMCI BEYANIYDI; PIN dogrulamasi onu kanita baglar.
+    s, b, _ = req("POST", "/api/operators/enroll", {"email": eposta, "display_name": "E2E Operator", "pin": "483102"})
+    kayit_ok = check("L1: operator kaydi olusturuldu", s in (200, 201), f"HTTP {s} {str(b)[:80]}")
+
+    if kayit_ok:
+        s, b, _ = req("GET", "/api/operators")
+        # ⚠️ Yanit anahtari `data` (auth_router._operators_list). Ilk yazimda `operators`/`items`
+        #    ariyordum ve kapi BOS liste gorup KIRMIZI verdi — urun degil TEST hatasiydi.
+        liste = b if isinstance(b, list) else (b.get("data") or b.get("operators") or b.get("items") or [])
+        bulundu = any(eposta in str(o).lower() for o in liste)
+        check("L1: kayitli operator LISTEDE gorunuyor", bulundu, f"{len(liste)} kayit")
+
+        s, b, _ = req("POST", "/api/operators/verify", {"email": eposta, "pin": "483102"})
+        check("L1: DOGRU PIN dogrulaniyor", s == 200 and bool(b.get("ok", True)), f"HTTP {s} {str(b)[:70]}")
+
+        # ⚠️ KARSIT-KANIT: yanlis PIN GECMEMELI. Gecerse kimlik zinciri kagit uzerinde kalir.
+        s, b, _ = req("POST", "/api/operators/verify", {"email": eposta, "pin": "000000"})
+        check(
+            "L1: YANLIS PIN REDDEDILIYOR (karsit-kanit)",
+            s != 200 or not b.get("ok", False),
+            f"HTTP {s} {str(b)[:70]}",
+        )
+
+    # ── L2: DENETIM IZI gercekten yaziliyor mu ───────────────────────────────
+    s, b, _ = req("GET", "/api/audit/events?limit=50")
+    olaylar = b if isinstance(b, list) else (b.get("events") or b.get("items") or [])
+    check("L2: denetim olaylari okunabiliyor", s == 200, f"HTTP {s} / {len(olaylar)} olay")
+    if kayit_ok and s == 200:
+        check(
+            "L2: operator kaydi DENETIM IZINE dustu",
+            any("operator" in str(o).lower() for o in olaylar),
+            f"{len(olaylar)} olayda 'operator' izi yok" if olaylar else "olay listesi bos",
+        )
+
+    # ── L3: KURTARMA YUZEYI (bugunku karantina kararinin komsusu) ────────────
+    s, b, _ = req("GET", "/api/system/recovery-status")
+    check("L3: kurtarma durumu raporlaniyor", s == 200, f"HTTP {s} {str(b)[:80]}")
+    if s == 200:
+        # Normal kosumda kurtarma BEKLENMEZ — beklenirse ya goc kirildi ya koruma dar.
+        bekliyor = bool(b.get("pending") or b.get("bekliyor") or b.get("recovery_required"))
+        check("L3: NORMAL kosumda kurtarma BEKLEMIYOR", not bekliyor, f"{str(b)[:110]}")
+
+    # ── L4: HASTA VERISI SILME — onay dizesi ZORUNLU ─────────────────────────
+    # ⚠️ KARSIT-KANIT ONCE: yanlis onayla toplu silme GECMEMELI.
+    s, b, _ = req("POST", "/api/ai/log/delete_all", {"confirm": "yanlis"})
+    check(
+        "L4: YANLIS onayla toplu silme REDDEDILIYOR (karsit-kanit)",
+        s != 200,
+        f"HTTP {s} {str(b)[:70]}",
+    )
+    # ⚠️ KARSIT-KANIT 2: onay DOGRU ama KAPSAM yoksa yine REDDEDILMELI.
+    #    2026-08-09 Tier-1 denetimi: bos `operator_email` eskiden "HEPSINI SIL" demekti ve
+    #    kimligin kayboldugu HER durum sessizce KLINIK-GENELI silmeye donuyordu.
+    s, b, _ = req("POST", "/api/ai/log/delete_all", {"confirm": "DELETE_ALL"})
+    check(
+        "L4: onay dogru ama KAPSAM belirsizse REDDEDILIYOR (karsit-kanit)",
+        s == 400,
+        f"HTTP {s} {str(b)[:80]}",
+    )
+    s, b, _ = req("POST", "/api/ai/log/delete_all", {"confirm": "DELETE_ALL", "operator_email": eposta})
+    check("L4: onay + KAPSAM verilince toplu silme kabul ediliyor", s == 200, f"HTTP {s} {str(b)[:70]}")
+
+    # ── L5: DESTEK PAKETI SIR DEGERI SIZDIRMIYOR ─────────────────────────────
+    # ⚠️ DEGER BASILMAZ — yalniz SINIFLANDIRILIR (bu depoda kural).
+    s, b, _ = req("POST", "/api/support/bundle", {})
+    if s == 200:
+        govde = json.dumps(b, ensure_ascii=False).lower()
+        sizinti = [
+            k
+            for k in ("sqlcipher_key", "mqtt_pass", "wifi_pass", "fernet", "service_role", "password")
+            if f'"{k}"' in govde and f'"{k}": ""' not in govde and f'"{k}": null' not in govde
+        ]
+        check(
+            "L5: destek paketi SIR DEGERI tasimiyor",
+            not sizinti,
+            f"supheli alanlar: {sizinti}" if sizinti else "temiz",
+        )
+    else:
+        check("L5: destek paketi ucu yanit verdi", s in (200, 202, 501, 503), f"HTTP {s}")
+
+    # ── L6: BILDIRIM TEMIZLEME ───────────────────────────────────────────────
+    s, _b, _ = req("POST", "/api/notifications/clear", {})
+    check("L6: bildirimler temizlenebiliyor", s == 200, f"HTTP {s}")
+
+    # ── L7: GOZLEMLENEBILIRLIK — yan etkisiz uclar ───────────────────────────
+    for ad, yol in (("guncelleme durumu", "/api/update/status"), ("kesif", "/api/discovery")):
+        s, _b, _ = req("GET", yol)
+        check(f"L7: {ad} yanit veriyor ({yol})", s == 200, f"HTTP {s}")
+    for ad, yol in (("metrics", "/metrics"), ("statistics", "/statistics")):
+        kod, _g = raw_get(yol)[0], None
+        check(f"L7: {ad} yanit veriyor ({yol})", kod in (200, 404), f"HTTP {kod}")
+
+    # ── L8: ISTEMCI HATA BILDIRIMI ───────────────────────────────────────────
+    s, _b, _ = req("POST", "/api/client/error", {"message": "e2e sentetik hata", "stack": "-", "url": "e2e"})
+    check("L8: istemci hata bildirimi kabul ediliyor", s in (200, 202, 204), f"HTTP {s}")
+
+
+#: Masaustundeki GERCEK test girdileri (sahibin hazirladigi set).
+#: ⚠️ Zorunlu DEGIL: yoksa bolum GORUNUR sekilde atlanir (sessiz gecmez).
+AI_GIRDI_DIZINI = Path(os.path.expanduser("~")) / "Desktop" / "PEMF_AI_Test_Girdileri"
+
+#: (dosya, uc, ek_alanlar, beklenen_anahtar_kelime)
+#: `beklenen` = README'nin yazdigi SONUC. None ise yalniz sekil dogrulanir.
+#: ⚠️ "200 dondu" bir olcut DEGIL — bu depoda kayitli: varlik degil UYGULAMA olc.
+AI_VAKALARI = [
+    ("03a_Termal_saglikli.jpg", "thermal", {}, "healthy"),
+    ("03b_Termal_hasta.jpg", "thermal", {}, "sick"),
+    ("07a_BobrekCT_tas.jpg", "kidney_ct", {}, "stone"),
+    ("07b_BobrekCT_kist.jpg", "kidney_ct", {}, "cyst"),
+    # ⚠️ README: "sadece böbrek" — urun "normal" ETIKETI URETMEZ, BULGU URETMEZ.
+    #    Ilk yazimda "normal" ariyordum ve kapi KIRMIZI verdi: TEST beklentisi yanlisti.
+    #    Dogru iddia daha GUCLU: normal taramada tas/kist HALUSINE EDILMEMELI.
+    ("07c_BobrekCT_normal.jpg", "kidney_ct", {}, "!stone,cyst"),
+    ("08a_BobrekPatoloji_grade0.jpg", "histopath", {}, "0"),
+    ("08b_BobrekPatoloji_grade2.jpg", "histopath", {}, "2"),
+    ("08c_BobrekPatoloji_grade4.jpg", "histopath", {}, "4"),
+    ("01_YuzAgrisi_FGS_kedi.jpeg", "landmark", {}, None),
+    ("02_Segmentasyon_kedi.jpeg", "segmentation", {}, None),
+    ("04a_Retikulosit.jpg", "reticulocytes", {}, None),
+    ("09_KediOrgan.jpg", "cat_organ", {}, None),
+    ("05_FantomTumor.jpeg", "em_fantom", {"phantom_length_cm": "10"}, None),
+    ("petri.jpeg", "em_petri", {"petri_diameter_cm": "8.5"}, None),
+    ("12a_YaraKapanma_0H.tif", "scratch", {"scratch_yonu": "dikey", "pixel_mm": "0.0025"}, None),
+]
+
+#: Ses ve CSV uclari — govde alani ADI farkli.
+AI_SES_VAKALARI = [
+    ("10a_KediSesi_mutlu.mp3", "mutlu"),
+    ("10b_KediSesi_kizgin.mp3", "kizgin"),
+    ("10c_KediSesi_agri.mp3", "agri"),
+]
+
+
+def _multipart(path, alanlar):
+    """multipart/form-data POST.
+
+    ⚠️ AI uclari `Form(...)`/`File(...)` kullaniyor; JSON govde KABUL ETMIYOR.
+    Ilk olcum JSON gonderip 500 aldi — ARAC hatasiydi, urun degil.
+    """
+    crlf = chr(13) + chr(10)
+    sinir = "----pemfe2e" + os.urandom(8).hex()
+    parcalar = []
+    for k, v in alanlar.items():
+        bas = "--" + sinir + crlf
+        bas += 'Content-Disposition: form-data; name="' + k + '"' + crlf + crlf
+        parcalar.append((bas + str(v) + crlf).encode())
+    parcalar.append(("--" + sinir + "--" + crlf).encode())
+    r = urllib.request.Request(
+        BASE + path,
+        data=b"".join(parcalar),
+        method="POST",
+        headers={"Content-Type": "multipart/form-data; boundary=" + sinir},
+    )
+    try:
+        with urllib.request.urlopen(r, timeout=600) as resp:
+            ham = resp.read().decode("utf-8", "replace")
+            return resp.status, (json.loads(ham) if ham else {})
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode("utf-8", "replace"))
+        except Exception:
+            return e.code, {}
+    except Exception as e:
+        return -1, {"_hata": str(e)[:160]}
+
+
+def _hazir_moduller():
+    """Urunun KENDI hazirlik raporundan modul -> hazir mi."""
+    s, b, _ = req("GET", "/api/ai/hazirlik?derin=1", timeout=600)
+    if s != 200:
+        return {}, b
+    return {m.get("modul"): bool(m.get("hazir")) for m in (b.get("moduller") or [])}, b
+
+
+def m_ai_uclari_gercek_girdiyle():
+    """AI uclari — SAHIBIN GERCEK test girdileriyle.
+
+    ⚠️ NEDEN BU BOLUM: e2e urunun 95 rotasinin yalnız %29'una dokunuyordu ve 25'i AI
+    ucuydu. "Gercek girdi yok" diye atlanmislardi. Masaustunde her model icin ornek
+    girdi VAR (`PEMF_AI_Test_Girdileri`) ve README BEKLENEN SONUCU da yaziyor —
+    yani "200 dondu" yerine ETIKET dogrulanabilir.
+
+    ⚠️ SOZLESME: her vaka URUNUN KENDI hazirlik raporuyla karsilastirilir.
+      · modul HAZIR ise  -> 200 ve (varsa) beklenen etiket
+      · modul EKSIK ise  -> ZARIF hata (500 DEGIL); model yokken cokmemeli
+    Bu, kapiyi "model kurulu mu" sorusundan bagimsiz kilar ama YINE DE olcum yapar.
+
+    ⚠️ Girdi klasoru yoksa bolum GORUNUR sekilde atlanir — sessiz gecmez.
+    """
+    section("M. AI uclari (gercek test girdileriyle)")
+
+    if not AI_GIRDI_DIZINI.is_dir():
+        check(
+            "M: test girdisi klasoru VAR",
+            False,
+            f"{AI_GIRDI_DIZINI} yok -> AI uclari OLCULMEDI (bu bolum atlandi)",
+        )
+        return
+
+    hazir, rapor = _hazir_moduller()
+    check(
+        "M0: hazirlik raporu okunabiliyor",
+        bool(hazir),
+        f"hazir={rapor.get('hazir')}/{rapor.get('toplam')} eksik={rapor.get('eksik')}",
+    )
+
+    for dosya, modul, ek, beklenen in AI_VAKALARI:
+        p = AI_GIRDI_DIZINI / dosya
+        if not p.exists():
+            check(f"M: {dosya} mevcut", False, "girdi dosyasi yok -> {modul} OLCULMEDI")
+            continue
+        alanlar = {"image_base64": base64.b64encode(p.read_bytes()).decode(), "explain": "false"}
+        alanlar.update(ek)
+        s, b = _multipart(f"/api/ai/vision/{modul}", alanlar)
+        modul_hazir = hazir.get(modul, True)
+
+        if modul_hazir:
+            if not check(f"M: {modul} <- {dosya}", s == 200, f"HTTP {s} {str(b)[:90]}"):
+                continue
+            if beklenen:
+                # ⚠️ Etiket araniyor — yanit sekli modulden module degisiyor, bu yuzden
+                #    TUM govdede aranir (label/prediction/findings/class ...).
+                govde = json.dumps(b, ensure_ascii=False).lower()
+                if beklenen.startswith("!"):
+                    # OLMAMALI: normal girdide bulgu halusine edilmemeli (karsit-kanit)
+                    yasak = [k.strip() for k in beklenen[1:].split(",") if k.strip()]
+                    gecen = [k for k in yasak if k in govde]
+                    check(
+                        f"M: {modul} normal girdide BULGU URETMIYOR ({'/'.join(yasak)}) <- {dosya}",
+                        not gecen,
+                        f"halusine edilen: {gecen}",
+                    )
+                else:
+                    check(
+                        f"M: {modul} BEKLENEN sonucu verdi ('{beklenen}') <- {dosya}",
+                        beklenen.lower() in govde,
+                        f"govdede '{beklenen}' yok: {govde[:150]}",
+                    )
+        else:
+            # Model yok: cokmeden, anlasilir bicimde reddetmeli.
+            check(
+                f"M: {modul} EKSIK ama ZARIF dusuyor (500 degil) <- {dosya}",
+                s != 500,
+                f"HTTP {s} {str(b)[:90]}",
+            )
+
+    # ── SES ──────────────────────────────────────────────────────────────────
+    for dosya, beklenen in AI_SES_VAKALARI:
+        p = AI_GIRDI_DIZINI / dosya
+        if not p.exists():
+            check(f"M: {dosya} mevcut", False, "ses girdisi yok")
+            continue
+        s, b = _multipart(
+            "/api/ai/sound/cat",
+            {"audio_base64": base64.b64encode(p.read_bytes()).decode(), "explain": "false"},
+        )
+        if hazir.get("sound", hazir.get("cat_sound", True)):
+            check(f"M: sound/cat <- {dosya}", s == 200, f"HTTP {s} {str(b)[:90]}")
+        else:
+            check(f"M: sound/cat EKSIK ama ZARIF <- {dosya}", s != 500, f"HTTP {s}")
+
+    # ── RNA (CSV) ────────────────────────────────────────────────────────────
+    rna = AI_GIRDI_DIZINI / "11b_BobrekRNA_gercekformat.csv"
+    if rna.exists():
+        s, b = _multipart(
+            "/api/ai/rna/kidney",
+            {"csv_base64": base64.b64encode(rna.read_bytes()).decode(), "explain": "false"},
+        )
+        if check("M: rna/kidney (gercek-format CSV)", s == 200, f"HTTP {s} {str(b)[:90]}"):
+            # README: sample_6 ve sample_11 -> KIRC; diger 8 hasta KIRC-degil.
+            govde = json.dumps(b, ensure_ascii=False).lower()
+            check(
+                "M: rna/kidney README beklentisi (KIRC gecen sonuc var)",
+                "kirc" in govde,
+                f"govdede 'kirc' yok: {govde[:150]}",
+            )
+    else:
+        check("M: RNA CSV mevcut", False, f"{rna.name} yok")
+
+    # ── YAPILANDIRILMIS GIRDI (goruntu istemeyenler) ─────────────────────────
+    # ⚠️ Sabit fixture: ayni girdi -> ayni yol. Deger uydurulmadi, alan adlari
+    #    `KidneyDiseaseInput` / `DiseaseInput` modellerinden alindi.
+    s, b, _ = req(
+        "POST",
+        "/api/ai/disease/kidney",
+        {
+            "age": 55,
+            "bp": 80,
+            "sg": 1.02,
+            "al": 1,
+            "su": 0,
+            "bgr": 121,
+            "bu": 36,
+            "sc": 1.2,
+            "sod": 137,
+            "pot": 4.4,
+            "hemo": 15.4,
+            "pcv": 44,
+        },
+        timeout=300,
+    )
+    if check("M: disease/kidney (lab degerleriyle)", s == 200, f"HTTP {s} {str(b)[:90]}"):
+        check(
+            "M: disease/kidney SINIF + OLASILIK donuyor",
+            b.get("label") in ("ckd", "notckd") and isinstance(b.get("prob_ckd"), (int, float)),
+            f"label={b.get('label')} prob={b.get('prob_ckd')}",
+        )
+        # ⚠️ Eksik alan sayisi RAPORLANMALI: sessizce doldurulup "kesin" sunulmamali.
+        check(
+            "M: disease/kidney EKSIK ALANI raporluyor (sessiz doldurma yok)",
+            isinstance(b.get("imputed_fields"), int),
+            f"imputed_fields={b.get('imputed_fields')} / total={b.get('total_fields')}",
+        )
+
+    s, b, _ = req(
+        "POST",
+        "/api/ai/disease",
+        {
+            "age": 3,
+            "weight": 4.2,
+            "hr": 180,
+            "temp": 38.6,
+            "duration": 2,
+            "symptom_indices": [0, 3],
+            "explain": False,
+        },
+        timeout=300,
+    )
+    if check("M: disease (kedi, semptomlarla)", s == 200, f"HTTP {s} {str(b)[:90]}"):
+        sonuclar = b.get("results") or []
+        check(
+            "M: disease SIRALI oneri listesi donuyor",
+            len(sonuclar) >= 2 and sonuclar[0].get("probability", 0) >= sonuclar[-1].get("probability", 0),
+            f"{len(sonuclar)} sonuc: {[r.get('disease') for r in sonuclar[:3]]}",
+        )
+        check(
+            "M: disease DUSUK GUVEN bayragi tasiyor (yanlis kesinlik onlemi)",
+            "low_confidence" in b,
+            f"low_confidence={b.get('low_confidence')}",
+        )
+
+
 def z_masaustu_temiz_kaldi():
     """⚠️ SON KAPI — e2e sahibin masaustune COP BIRAKMADI mi?
 
@@ -178,6 +631,8 @@ def main():
     # ⚠️ GERCEK MASAUSTUNUN "ONCE" FOTOGRAFI — e2e cop birakmadigini KENDI kanitlar.
     # (2026-09-11'de iki kez sizdi: once pytest suiti, sonra bu betik.)
     globals()["_MASAUSTU_ONCE"] = _gercek_masaustu_dosyalari()
+    # ⚠️ K bolumu (2026-09-20) izole veri kokunde `.acilamadi-*` ariyor — o yuzden gorunur olmali.
+    globals()["_DATA_DIR"] = data_dir
 
     # Alt surecin SAHTE EV DIZINI — masaustu sizintisini keser (bkz. asagidaki not).
     sahte_ev = data_dir / "sahte_ev"
@@ -236,7 +691,11 @@ def main():
     boot = (
         "import sys, runpy; "
         f"sys.path.insert(0, r'{GUII}'); "
-        f"runpy.run_path(r'{GUII / 'apps' / 'backend' / 'apps/backend/backend_service.py'}', run_name='__main__')"
+        # ⚠️ F4 tasimasi: runpy.run_path betigin dizinini sys.path'e EKLEMEZ.
+        #    backend_service.py ilk satirlarinda `from utils.path_utils import` yapiyor
+        #    ve `utils` artik apps/backend altinda -> bu kok OLMADAN ModuleNotFoundError.
+        f"sys.path.insert(0, r'{GUII / 'apps' / 'backend'}'); "
+        f"runpy.run_path(r'{GUII / 'apps' / 'backend' / 'backend_service.py'}', run_name='__main__')"
     )
     proc = subprocess.Popen(
         [str(PY), "-c", boot, "--host", "127.0.0.1", "--port", str(PORT)],
@@ -297,6 +756,9 @@ def run_all():
     h_profile_researcher()
     i_profile_vet_kpi()
     j_yeni_ozellikler_2026_09_11()
+    k_son_degisiklikler_2026_09_20()
+    l_kapsam_bosluklari_2026_09_20()
+    m_ai_uclari_gercek_girdiyle()
     z_masaustu_temiz_kaldi()
 
 
