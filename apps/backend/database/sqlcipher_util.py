@@ -147,15 +147,35 @@ def get_sqlcipher_key(app_data_dir, logger=None) -> str:
         # NTFS ACL kilidi: yalnız SYSTEM + Administrators okuyabilsin (audit B-1.2 — os.chmod
         # Windows'ta no-op'tu; anahtar dosyası Users'a açık kalıyordu). Escrow amacıyla dosya
         # KALIR ama artık kilitli. Best-effort.
+        acl_kilitli = False
         try:
             from utils.file_acl import lock_down_file
 
-            lock_down_file(keyfile)
+            acl_kilitli = bool(lock_down_file(keyfile))
         except Exception:
-            pass
+            # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Yutulan sey SIFRELEME ANAHTARI
+            # dosyasinin ACL kilidi — tutmazsa dosya Users'a ACIK kalir ve hicbir yer
+            # soylemez. Ayni sinif bu depoda A1b-2'de `.plain.bak` uzerinde yasandi.
+            # AKIS DEGISMEZ (anahtar yine yazildi); yalniz gorunur oldu.
+            if logger:
+                logger.exception("Anahtar dosyasi ACL kilidi UYGULANAMADI: %s", keyfile)
+        if not acl_kilitli and logger:
+            logger.error(
+                "SQLCipher anahtar dosyasi ACL ile KILITLENEMEDI: %s . Dosya bu makinedeki "
+                "diger kullanicilara OKUNABILIR olabilir. YAPILACAK: dosyayi elle kisitlayin "
+                "(icacls ... /inheritance:r /grant SYSTEM:R Administrators:R) ya da backend'i "
+                "yonetici olarak bir kez calistirin.",
+                keyfile,
+            )
         keyfile_written = True
     except Exception:
-        pass
+        # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Basarisizlik ozet log'da
+        # `dosya-yedek=False` olarak GORUNUYOR (yani kor degil) ama SEBEBI kayboluyordu.
+        # Bu dal onemli: keyring LocalSystem kasasina yazar ve servis hesabi degisirse /
+        # makine tasinirsa KAYBOLUR — dosya yedegi tek makine-disi cikarilabilir kopyadir.
+        # Kaybolursa sifreli hasta verisi KALICI OKUNAMAZ. Akis degismez.
+        if logger:
+            logger.exception("SQLCipher anahtar dosyasi YAZILAMADI: %s", keyfile)
     if logger:
         logger.warning(
             "Yeni SQLCipher anahtari uretildi (keyring=%s, dosya-yedek=%s @ %s). "
@@ -768,7 +788,17 @@ def migrate_to_encrypted_if_needed(db_path, app_data_dir, logger=None, etiket="D
                 try:
                     os.remove(f)
                 except Exception:
-                    pass
+                    # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Ustteki yorum bu temizligin
+                    # "acik handle/cakisma -> BOZULMA onle" icin oldugunu soyluyor; yani
+                    # basarisizligi masum DEGIL. Akis degismez (goc devam eder) ama artik
+                    # bir sonraki bozulma teshis edilebilir.
+                    if logger:
+                        logger.warning(
+                            "Goc oncesi %s temizlenemedi — geride kalan dosya YENI DB'ye "
+                            "uygulanmaya calisilabilir (bozulma riski).",
+                            f,
+                            exc_info=True,
+                        )
         backup = db + ".plain.bak"
         # ⚠️ SILME — KENARA AL. Eskiden `os.remove(backup)` idi ve yarim kalmis bir gocun
         # tek veri kopyasini yok ediyordu (bkz. `_yedegi_kenara_al`).

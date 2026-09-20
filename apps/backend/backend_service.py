@@ -341,6 +341,7 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
         pass
     seen: set[str] = set()
     locked = 0
+    basarisiz = 0
     for c in candidates + plain_yedekler:
         try:
             key = str(c).lower()
@@ -350,7 +351,18 @@ def _harden_secret_file_acls(app_data_dir: Path, logger: logging.Logger) -> None
             if lock_down_file(c, keep_current_user=c in plain_yedekler):
                 locked += 1
         except Exception:
-            pass
+            # ⚠️ 2026-09-20 triyaji: burasi `pass` idi. Sayac dusuyordu ama ISTISNA ile
+            # "zaten kilitli/atlandi" AYIRT EDILEMIYORDU — sir dosyasi korumasiz kalsa
+            # bile ozet log yalnizca daha kucuk bir sayi basiyordu. Akis degismez.
+            basarisiz += 1
+            logger.warning("Sir dosyasi ACL kilidi uygulanamadi: %s", c, exc_info=True)
+    if basarisiz:
+        logger.error(
+            "%d sir dosyasinin ACL kilidi UYGULANAMADI — bu dosyalar makinedeki diger "
+            "kullanicilara okunabilir olabilir. YAPILACAK: backend'i bir kez yonetici "
+            "olarak calistirin ya da dosyalari elle kisitlayin.",
+            basarisiz,
+        )
     if locked:
         logger.info("Sır dosyası ACL kilidi uygulandı: %d dosya (yalnız SYSTEM + Administrators).", locked)
 
