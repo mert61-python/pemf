@@ -18,7 +18,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
 | 16 | **STM reflash + doz yeniden kalibrasyonu** | ⏳ donanım | §16 (aşağıda) — DDS simetrik bipolara geçti, saha cihazı kalibre DEĞİL |
-| 17 | **Donmuş EXE ürün senaryoları** | ✅ **DOĞRULANDI (2026-09-17)** | `scripts/urun_senaryolari.py` — **48/48**. Sevk edilen ikiliyi çalıştırır; suit'in göremediği açılış sırasını ölçer (§17) |
+| 17 | **Donmuş EXE ürün senaryoları** | ✅ **DOĞRULANDI (son: 2026-09-20)** | `scripts/urun_senaryolari.py` — **48/48**. Sevk edilen ikiliyi çalıştırır; suit'in göremediği açılış sırasını ölçer (§17) |
 
 ---
 
