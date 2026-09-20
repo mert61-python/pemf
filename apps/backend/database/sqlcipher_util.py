@@ -309,6 +309,66 @@ def _kilit_direncli_tasi(src, dst, logger=None, deneme=_KILIT_DENEME, bekleme_s=
     return False
 
 
+class GocBekliyorHatasi(RuntimeError):
+    """Dosya DUZ-METIN ve at-rest gocu henuz tamamlanmadi — anahtar uyusmazligi DEGIL.
+
+    ⚠️ SAHIP KARARI 2026-09-20. Eskiden bu durum da karantinaya gidiyordu: dosya
+    `.acilamadi-TARIH` olarak yeniden adlandirilip YERINE BOS SEMA kuruluyordu
+    (`_semayi_kur`). Yani yeni seanslar BOS DB'ye yazilmaya baslar ve kurtarma
+    "geri adlandir" degil BIRLESTIRME isine donerdi.
+
+    Oysa bu bir anahtar uyusmazligi degil, "goc henuz olmadi" durumudur ve gocun
+    kendi mesaji da "sonraki aciliste yeniden denenecek" der. Dogru davranis:
+    DOSYAYA DOKUNMA, ACMA, cagirana haber ver. Sonraki acilis gocu yeniden dener
+    ve basarili olunca TUM gecmis kendiliginden geri gelir.
+
+    ⚠️ Bu istisna `RuntimeError` turevidir: mevcut `except Exception` sarmallari
+    (ornegin `api_server._get_treatment_db`, `backend_service._initialize_database_safe`)
+    onu zaten yakalar → CIHAZ ACILMAYA DEVAM EDER, yalniz tedavi DB'si o oturumda yok.
+    """
+
+
+#: SQLite dosya basligi. SQLCipher ile sifrelenmis dosyada BU BULUNMAZ (ilk sayfa da sifrelidir).
+_SQLITE_BASLIK = b"SQLite format 3\x00"
+
+
+def duz_metin_sqlite_mi(db_path) -> bool:
+    """Dosya SIFRESIZ, okunabilir bir SQLite veritabani mi?
+
+    IKI kosul da aranir:
+      1. Dosya basligi `SQLite format 3\0` — sifreli dosyada yoktur.
+      2. `sqlite3` ile acilip `sqlite_master` okunabiliyor.
+
+    ⚠️ BASLIK KONTROLU TEK BASINA YETMEZ ama SART: bos (0 bayt) bir dosyayi
+    `sqlite3.connect` SORUNSUZ acar ve `sqlite_master` BOS doner — istisna ATMAZ.
+    O yuzden basliksiz dosya (bos/bozuk/sifreli) buradan False doner ve normal
+    karantina yolu isler.
+    """
+    db = str(db_path)
+    try:
+        with open(db, "rb") as fh:
+            if fh.read(len(_SQLITE_BASLIK)) != _SQLITE_BASLIK:
+                return False
+    except OSError:
+        return False
+    c = None
+    try:
+        c = sqlite3.connect(db)
+        c.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        return True
+    except Exception:
+        return False
+    finally:
+        # ⚠️ `_close` modul duzeyinde DEGIL (migrate_to_encrypted_if_needed icinde ic-fonksiyon).
+        # Tutamak MUTLAKA kapanmali: acik kalirsa Windows'ta bir sonraki tasima/silme
+        # WinError 32 ile duser — bu dosyanin konusu olan arizanin ta kendisi.
+        if c is not None:
+            try:
+                c.close()
+            except Exception:
+                pass
+
+
 def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     """Acilamayan DB'yi (ve -wal/-shm yoldaslarini) KENARA AL. Silme YOK.
 
@@ -319,6 +379,21 @@ def karantinaya_al(db_path, logger=None, zaman_damgasi=None):
     db = str(db_path)
     if not os.path.exists(db):
         return None
+    # ⚠️ SAHIP KARARI 2026-09-20 — DUZ-METIN DOSYA KARANTINAYA ALINMAZ.
+    # Goc gecici bir dosya kilidi yuzunden iptal olduysa dosya SIFRESIZ kalir ve
+    # at-rest anahtariyla acilamaz. Bu bir anahtar UYUSMAZLIGI degildir; karantina
+    # burada veriyi `.acilamadi-*` altina itip YERINE BOS SEMA kurar ve yeni seanslar
+    # oraya yazilir (kurtarma = birlestirme). Bkz. GocBekliyorHatasi.
+    if duz_metin_sqlite_mi(db):
+        if logger:
+            logger.error(
+                "Tedavi/hasta DB'si DUZ-METIN: at-rest gocu henuz tamamlanmadi (gecici dosya "
+                "kilidi olabilir). Dosya KARANTINAYA ALINMADI ve DOKUNULMADI: %s . "
+                "YAPILACAK: cihazi yeniden baslatin — goc yeniden denenecek ve gecmis geri gelecek. "
+                "Tekrarlarsa dosyayi kilitleyen sureci (virus tarayici/yedekleyici/ikinci backend) arayin.",
+                db,
+            )
+        raise GocBekliyorHatasi(f"DB duz-metin, at-rest gocu bekliyor (karantina YAPILMADI): {db}")
     ts = zaman_damgasi or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     tasinan = None
     # WAL/SHM de tasinmali: geride kalan -wal, YENI ve bos DB'ye uygulanmaya calisilir → bozulma.

@@ -277,13 +277,35 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > MEKANİZMA:** düşüşün kök nedeni yığın iziyle görüldü, kapatıldı ve 5 mutasyonla kilitlendi.
 > Önceki 13 yeşil tam da bu yüzden yanıltıcıydı — mekanizma bilinmeden sayılmıştı.
 >
-> ⛔ **AÇIK — SAHİP KARARI GEREKİYOR (adım 4):** göç iptal olunca çağıran, **düz-metin** DB'yi
-> karantinaya alıyor (`.acilamadi-TARIH` olarak yeniden adlandırıp boş DB yaratıyor). Oysa bu
-> bir anahtar uyuşmazlığı **değil**, *"göç henüz olmadı"* durumudur; göçün kendi mesajı da
-> *"sonraki açılışta yeniden denenecek"* diyor. Doğru davranış muhtemelen **karantinaya
-> almamak**. Ama bu, hasta verisi yolunda bir **cihaz davranışı değişikliğidir** ve bu depo
-> "yarım göç → DB kaybolması" sınıfını bir kez gerçekten yaşadı → ölçüm sunuldu, karar sahipte.
-> Bütçe düzeltmesi olayın **sıklığını** düşürür, **sınıfını kaldırmaz**.
+> ✅ **SAHİP KARARI VERİLDİ 2026-09-20 — "karantinaya ALMA, açma da" (adım 4 YAPILDI):** göç iptal olunca çağıran, **düz-metin** DB'yi
+> karantinaya alıyordu: dosya `.acilamadi-TARIH` olarak yeniden adlandırılıp **yerine boş şema**
+> kuruluyordu (`_semayi_kur`). Yani klinik geçmişi boş görür **ve yeni seanslar boş DB'ye
+> yazılmaya başlar** — kurtarma artık "geri adlandır" değil **BİRLEŞTİRME** işidir. Oysa bu bir
+> anahtar uyuşmazlığı **değil**, *"göç henüz olmadı"* durumudur; göçün kendi mesajı da
+> *"sonraki açılışta yeniden denenecek"* diyor.
+>
+> **YENİ DAVRANIŞ:** dosyaya **dokunulmaz**, açılmaz, çağırana `GocBekliyorHatasi` verilir.
+> Sonraki açılış göçü yeniden dener; başarılı olunca **tüm geçmiş kendiliğinden** geri gelir.
+> ⚠️ **Cihaz açılmaya devam eder** — istisna `RuntimeError` türevi ve üstteki sarmallar
+> (`api_server._get_treatment_db`: *"DB hatasi seansi/donanimi DURDURMAZ"* ·
+> `backend_service._initialize_database_safe`) onu zaten yakalıyor.
+>
+> ⚠️ **KORUMA `karantinaya_al`IN İÇİNE KONDU** — çağıran başına değil. İki çağıran var
+> (`patient_database.py:239` · `treatment_history_db.py:537`) ve bu depo "aynı kural iki yerde →
+> sessizce ayrıştı" arızasını **dört kez** yaşadı; üçüncü kopya açılmasın diye karar tek yerde.
+>
+> **Prob İKİ koşul arar:** SQLite başlığı (`SQLite format 3\0` — şifreli dosyada YOK) **ve**
+> `sqlite3` ile `sqlite_master` okunabilmesi. ⚠️ Başlık şart: **0 baytlık** dosyayı
+> `sqlite3.connect` sorunsuz açar ve istisna atmaz; yalnız prob kullanılsaydı boş dosya
+> "düz-metin" sayılır, karantina hiç çalışmaz ve cihaz toparlanamazdı.
+>
+> Kapı: `tests/test_duz_metin_db_KARANTINAYA_ALINMAZ.py` (10 test) · **6 mutasyon**.
+> ⚠️ Mutasyon (G4) bir testin **vakum** olduğunu gösterdi: prob'un bağlantıyı kapattığını
+> ölçtüğünü sanıyordum, ama **CPython refcount'u** fonksiyon çıkışında zaten kapatıyor —
+> `close()`'u silen mutasyon yeşil geçti. Test, bağlantıya **dışarıdan referans tutacak**
+> şekilde yeniden yazıldı; artık gerçekten gözlemliyor.
+> Karşıt-kanıtlar: şifreli/bozuk dosya **hâlâ** karantinaya alınır · boş dosya alınır ·
+> olmayan dosya `None` döner (davranış değişmedi).
 >
 > 📌 ~~KALAN İŞ: conftest teardown'ı `_start_background_threads` daemon'larını durdursun~~
 > → **ÖLÇÜLDÜ 2026-09-19, YAPILMAYACAK.** Tam süit, daemon thread'lerinden yapılan HER
