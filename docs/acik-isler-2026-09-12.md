@@ -24,7 +24,7 @@
 |---|---|---|---|
 | B1 | **STM bobin 1-5 termal kesme YOK** — `PEMF_NTC_TERMAL_ENABLED 0` (derleme-kapılı) | ⚠️ **AÇIK P0.** Kodda bugün de `0` olduğunu ölçtüm (`main.c:852`) | koddan |
 | B2 | **Bobin 6-7 termal kesme YAPILMAYACAK** (sahip kararı) — cihaz-taraflı koruma yok, yalnız istemci interlock | Bilinçli karar; kapanmayacak | `stm32-7-bobin-gecisi-plani` |
-| B3 | **STM REFLASH + doz yeniden kalibrasyonu** — DDS simetrik bipolara çevrildi, eski doz eğrisi geçersiz | Bekliyor | `DONANIM-UYUM-ANALIZI`, `VERIFICATION` §9 |
+| ~~B3~~ | ~~STM REFLASH + doz kalibrasyonu~~ | ⛔ **KAPANDI** — doz kalibrasyonu KALDIRILDI (sahip 2026-09-21); reflash otomatik firmware güncellemesine devredildi | `stm32-uzaktan-guncelleme-plani.md` |
 | B4 | `VERIFICATION.md` ⏳ kalemleri: §2 SQLCipher cihazda · §4 Cloudflare **NAMED** tünel · §5 CVE yükseltme · §6 model SHA bütünlüğü · §7 yük/soak · §1 firmware satürasyon | Hiçbiri kapanmadı | belge |
 | B5 | §14 ikinci reflash deltası (S3 + 8266) | ⚠️ **ESP sökülü olduğu için şu an ANLAMSIZ** — ESP geri gelirse borç geri gelir | memory + plan |
 | B6 | **Kabin tezgâhı** — fantom/petri 3B çerçevesi ölçüldü ama **yetmedi** (kuyu kabin dışı çıkıyor); kamera lensi taban hizasında olduğu sürece ışın düzlemi sığ kesiyor | Araştırma AI Pro bayrağı **0 kalıyor** | `arastirma-ai-pro-...` |
@@ -84,7 +84,7 @@ Bu satırlar bugün koddan doğrulandı; belgeler **yanlış** durum bildiriyor:
 ## 7. Önerilen sıra (bana kalsa)
 
 1. **B1** (STM 1-5 termal) — tek sürekli, koşulsuz hasta riski. NTC bağlanır bağlanmaz bayrağı 1 yap + tezgâhta doğrula.
-2. **B3** (STM reflash + doz kalibrasyonu) — sahadaki doz bugün kalibre DEĞİL.
+2. ~~**B3**~~ — ⛔ doz kalibrasyonu KALDIRILDI (sahip 2026-09-21); reflash otomatikleşiyor.
 3. **D1** (mobil saha testi) — en az bakılan katman, en ucuz kapatma. Liste hazır.
 4. **A1a** (avukata ağırlık lisansı sorusu) — cevabı gelmeden A1'e mühendislik harcamak boşa gidebilir.
 5. **C3** (`esp` dalı canlı sırlar) — depo public olduğu sürece açık.
@@ -137,7 +137,7 @@ Depo içine yazmayı **reddeder** (depo public, dosya düz metin).
 
 | # | İş | Sonuç |
 |---|---|---|
-| **B3** | STM reflash + doz kalibrasyonu | Firmware temiz derlendi (28 kaynak, `_printf_float` BAĞLI). `--cikti` eklendi → `pemf.bin/.hex/.elf` + SHA256. Runbook: `VERIFICATION.md §16`. ⚠️ Tezgâh ölçümü sahipte |
+| ~~**B3**~~ | ⛔ doz kalibrasyonu KALDIRILDI (sahip 2026-09-21) | Firmware temiz derleniyor (28 kaynak, `_printf_float` BAĞLI); `--cikti` → `pemf.bin/.hex/.elf` + SHA256. Reflash artık OTOMATİK firmware güncellemesi → `stm32-uzaktan-guncelleme-plani.md` |
 | **D1** | Mobil saha testi | Liste hazır (Kademe 6, 42 senaryo). Koşmak sahipte |
 | **C1** | `resolve_device` SQL | ✅ zaten uygulanmış (yukarıdaki düzeltme) |
 | **A2** | `.iss` sürüm etiketi | `1.9.33` → `1.9.50` (17 sürüm bayattı) + çıplak-ISCC uyarısı + kapı `tests/test_iss_surum_senkron.py` (4 test, mutasyon KIRMIZI) |
@@ -234,7 +234,7 @@ ve pakette gerçekten ne olduğu `scratchpad/pyz_modul_oku.py` ile PYZ'den okunu
 | # | İş | Neden sende |
 |---|---|---|
 | **B-1** | **S3 reflash** (Arduino IDE) | [FW-6] WDT/TLS düzeltmesi kaynakta hazır; karta yazmak fiziksel |
-| **B-2** | **STM reflash + doz kalibrasyonu** | `VERIFICATION.md §16`. ⚠️ Tepe-tepe (`pp_x = XP−XN`) kullan, `measuredPeakMt` **değil** — o \|B\| tabanlı ve ölçülen 0,589 mT DC ofsetiyle sapıyor |
+| ~~**B-2**~~ | ⛔ **KALDIRILDI** (sahip 2026-09-21) | Doz kalibrasyonu silindi; reflash otomatik firmware güncellemesine devredildi → `stm32-uzaktan-guncelleme-plani.md` |
 | **B-3** | **164 senaryoluk saha listesi** | `docs/SAHA-TEST-LISTESI.md` · 8 kademe. En az bakılan katman **Kademe 6 — MOBİL** |
 | **B-4** | **Vault kurtarma setini makine dışına al** | Token + unseal anahtarları şu an aynı makinede; disk kaybında ikisi birden gider. Emanetin tek anlamı bu |
 | **B-5** | **Cloudflare NAMED tünel** | Token sende. Ölçüm: uygulamayı **launcher'dan** aç → `GET /api/health` → `tunnelUrl` |

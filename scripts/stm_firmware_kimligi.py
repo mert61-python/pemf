@@ -48,6 +48,28 @@ BAUD = 115200
 # Eskiden bu satirda kendi regex'i vardi. Ayni banner'i iki yerde ayristirmak, bu depoda
 # bedeli OLCULMUS bir sinif: `_DB_ERROR` demetleri iki DB modulunde sessizce AYRISMISTI.
 # Backend'in UYUM KAPISI da ayni ayristiriciyi kullanir; bu betikle aynı seyi gormeleri SART.
+
+from pathlib import Path
+
+
+# ── DEPO KÖKÜ + BACKEND YOLU ─────────────────────────────────────────────────
+# ⚠️ Bu dosya 2026-09-18 klasör taşımasından (F4: `apps/backend/`) beri ÖLÜYDÜ —
+#    `utils` artık depo kökünde değil, `apps/backend/` altında. Açılışta
+#    `ModuleNotFoundError: No module named 'utils'` atıyordu. Ölçüldü 2026-09-21.
+# ⚠️ SABİT DERİNLİK (`parents[1]`) YAZILMAZ: taşımada sessizce kayar ve bu depoda tam
+#    o sınıf kod korumasını kırdı. Kök, İŞARET DOSYASIYLA yukarı aranır.
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend). Betik depo dışına mı taşındı?")
+
+
+_KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (_KOK, _KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
+
 from utils.stm32_kimlik import banner_ayristir  # noqa: E402
 
 

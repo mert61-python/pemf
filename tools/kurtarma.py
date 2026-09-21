@@ -41,6 +41,24 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+
+# ── DEPO KÖKÜ + BACKEND YOLU ─────────────────────────────────────────────────
+# ⚠️ Bu betik 2026-09-18 klasör taşımasından (F4: `apps/backend/`) beri ÖLÜYDÜ: `utils`
+#    artık depo kökünde değil. Açılışta `ModuleNotFoundError: No module named 'utils'`.
+#    Ölçüldü 2026-09-21; kapı: tests/test_betikler_ACILIYOR.py
+# ⚠️ SABİT DERİNLİK YAZILMAZ — kök İŞARET DOSYASIYLA yukarı aranır.
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (işaret: pyproject.toml + apps/backend)")
+
+
+_KOK = _depo_koku(Path(__file__).resolve())
+for _yol in (_KOK, _KOK / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
+
 from utils.backup_recovery import (  # noqa: E402
     CODE_FILE_NAME,
     ENVELOPE_NAME,

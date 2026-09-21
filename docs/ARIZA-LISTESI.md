@@ -391,9 +391,9 @@ Sahip 2026-09-15'te "boşver" dedi. Adres PUBLIC geçmişte duruyor. Karar kayı
 > | 4 | ST-Link gerçekten görünüyor mu (yakma ön şartı) | `& $prog -l` (`$prog` = glob ile bulunan `STM32_Programmer_CLI.exe`) |
 >
 > ⚠️ **Uzaktan YAPILAMAZ:** §9 firmware `[FIX-1c]` duty geçişi tezgâh doğrulaması (osiloskop +
-> akım probu) ve doz kalibrasyonu (manyetik alan ölçümü). Bunlar fiziksel.
+> akım probu). Bu fizikseldir. (Doz kalibrasyonu 2026-09-21'de sahip kararıyla KALDIRILDI.)
 
-**Sahip tarafı (bende yapılamaz):** A6 BLE eşleşme · S3 reflash · STM reflash + doz kalibrasyonu
+**Sahip tarafı (bende yapılamaz):** A6 BLE eşleşme · S3 reflash. ⚠️ STM reflash artık OTOMATİK (firmware güncellemesi); doz kalibrasyonu KALDIRILDI (sahip kararı 2026-09-21)
 (⚠️ tepe-tepe `pp_x = XP−XN`) · 164 senaryoluk saha listesi · Vault kurtarma setini makine dışına
 alma · Cloudflare NAMED tünel · firmware satürasyon tezgâhı · 72 saatlik soak · iOS/EAS →
 [`SAHA-ISLERI-REHBERI.md`](SAHA-ISLERI-REHBERI.md)

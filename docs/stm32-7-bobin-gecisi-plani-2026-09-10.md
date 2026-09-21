@@ -479,7 +479,7 @@ dead-time'ı çevrim-sayılı gerçek bir gecikmeyle değiştir.
 | R4 | ISR taşması | Skopla ISR süresi ölçümü; 7 bobin aynı fazda, en yüksek frekansta |
 | R5 | CubeMX Generate-Code her şeyi ezer (§B3) | I2C **elle** eklenecek; `.ioc`'ye dokunulmayacak; ayna senkron betiği koşacak |
 | R6 | Sürücü kartı uyumu — 8266 3,3 V GPIO ile sürüyordu, STM de 3,3 V | Seviye uyumlu ama **kablo uzunluğu** kenar bozar: sürücü girişine giden PWM hattı için seri direnç/tampon değerlendir; darbe kenarını skopla gör |
-| R7 | Doz yeniden kalibrasyonu | Bobin 6-7'nin dalga sözleşmesi 8266'daki ile aynı 50 kHz DDS matematiği (`CoilController.cpp:341` ≡ `main.c` tpp) — ama sürücü ve pin farkı ölçülmeden aynı doz varsayılmaz. Alan probu + skop. |
+| ~~R7~~ | ⛔ Doz kalibrasyonu KALDIRILDI (sahip 2026-09-21) | Bobin 6-7'nin dalga sözleşmesi 8266'daki ile aynı 50 kHz DDS matematiği (`CoilController.cpp:341` ≡ `main.c` tpp) — ama sürücü ve pin farkı ölçülmeden aynı doz varsayılmaz. Alan probu + skop. |
 
 ---
 

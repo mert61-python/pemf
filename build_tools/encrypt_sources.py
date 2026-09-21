@@ -21,8 +21,21 @@ import argparse
 import sys
 from pathlib import Path
 
-GUII = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(GUII))
+
+# ⚠️ SABİT DERİNLİK KALDIRILDI (2026-09-21): `parent.parent` taşımada sessizce
+#    kayar. Ayrıca `apps/backend` de eklenmeli — `build_tools/source_crypto.py`
+#    oradaki `utils.source_crypto`yu yeniden dışa aktarıyor ve F4'ten beri ÖLÜYDÜ.
+def _depo_koku(bas: Path) -> Path:
+    for aday in (bas, *bas.parents):
+        if (aday / "pyproject.toml").is_file() and (aday / "apps" / "backend").is_dir():
+            return aday
+    raise RuntimeError("depo kökü bulunamadı (pyproject.toml + apps/backend işareti yok)")
+
+
+GUII = _depo_koku(Path(__file__).resolve())
+for _yol in (GUII, GUII / "apps" / "backend"):
+    if str(_yol) not in sys.path:
+        sys.path.insert(0, str(_yol))
 
 from build_tools.source_crypto import (  # noqa: E402
     ENC_SUFFIX,

@@ -62,53 +62,15 @@ hiç girilmez; girilirse el sıkışma **4 sn**'ye bağlı, her adımdan önce W
 
 ---
 
-## B-2 · STM32 reflash + doz kalibrasyonu  ⏱️ ~2-3 saat (asıl iş kalibrasyon)
+## ⛔ B-2 · Doz kalibrasyonu — KALDIRILDI (sahip kararı 2026-09-21)
 
-**Tam prosedür: [`docs/VERIFICATION.md` §16](VERIFICATION.md).** Burada yalnız özet + tuzaklar.
-
-**Neden zorunlu:** sürüş dalgası asimetrik DC-bias'lıdan **simetrik bipolara** çevrildi. Aynı
-`duty` artık **farklı alan** üretiyor → sahadaki doz eğrisi **kalibre değil**. Reflash
-yapmazsan eski firmware koşar; reflash yapıp kalibre etmezsen ekrandaki mT ile gerçek alan ayrışır.
-
-**1) Yakılabilir çıktı — CubeIDE'yi AÇMA**
-
-```powershell
-python scripts\firmware_derle.py --stm --cikti firmware_cikti
-```
-
-⚠️ CubeIDE'de **"Generate Code" `main.c`i EZER**. Bu yüzden IDE'yi hiç açma, depodan üretilen
-ikiliyi yak. Betik `_printf_float` bağını da doğrular — bağlı değilse **tüm telemetri sessizce
-ölür** (sıcaklık + alan + akım hepsi boş gelir, ama ACK tamsayı olduğu için cihaz sağlam görünür).
-
-**2) Yakma (STM32CubeProgrammer):** ST-LINK → Connect → Erase & Program → `pemf.bin`,
-adres **`0x08000000`**, **"Verify programming" işaretli** → Start → Disconnect → **güç döngüsü**.
-Betiğin bastığı **SHA256**'yı `VERIFICATION.md`e yaz — "sahadaki cihazda depodaki kaynak mı
-koşuyor" sorusunun tek kanıtı budur.
-
-**3) Kalibrasyondan ÖNCE telemetri kapısı**
-- Backend'i **simülatörsüz** çalıştır (`PEMF_SIMULATE` tanımlı olmasın).
-- `GET /api/coil/7` → `transport` = **`stm32`** olmalı.
-- Bobin 1'i 5 sn sür, gelen `STM_TELE` satırında `B=`, `T=`, `I=` **sayılı** olmalı.
-- ⚠️ Boşsa (`B=,T=,A=,I=`) **kalibrasyona başlama** — ölçeceğin her şey sıfır olur.
-
-**4) Doz eğrisi — ⚠️ TEPEDEN-TEPEYE, `measuredPeakMt` DEĞİL**
-
-`measuredPeakMt` seans boyu en büyük **|B|**'dir: işaretsiz olduğu için unipolar (0→+B) ile
-bipoları (−B→+B) **aynı gösterir**, üstelik yukarıdaki 0,589 mT'lik DC ofset onu doğrudan saptırır.
-
-Doğrusu işaretli uçlardan türer ve ofset farkta sadeleşir:
-
-```
-pp_x = XP − XN      pp_y = YP − YN      pp_z = ZP − ZN
-```
-
-Her bobin (1-7) için `freq = 10 Hz`, prob bobin merkezinde ve **sabit mesafede**,
-duty = 10 / 25 / 50 / 75 / 90 → tabloyu `VERIFICATION.md` §16.3'e doldur.
-
-⚠️ Aralık ±24,6 mT'ye açıldı; eski ayar 4,92 mT'de **sessizce sarıyordu** (tespit edilemezdi).
-Ham eksen uçlarının sarmadığını da kontrol et.
+⛔ **DOZ KALİBRASYONU KALDIRILDI — sahip kararı 2026-09-21.** Prosedür silindi; üründe bu eğriyi tüketen kod yoktu.
+STM reflash'ı artık otomatik firmware güncellemesi yapıyor →
+[`docs/stm32-uzaktan-guncelleme-plani.md`](stm32-uzaktan-guncelleme-plani.md).
+⚠️ Saha iş listesine GERİ EKLEMEYİN.
 
 ---
+
 
 ## B-3 · 164 senaryoluk saha listesi  ⏱️ dağıtılabilir
 

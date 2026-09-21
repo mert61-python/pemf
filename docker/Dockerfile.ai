@@ -72,7 +72,10 @@ COPY --chown=pemfai:pemfai ai_service/ ./ai_service/
 # alıyor ama dosya imaja HİÇ girmiyordu → konteynerde `except` dalındaki ZAYIF yedeğe
 # düşüyordu (`setdefault`, yani YOLO_AUTOINSTALL zaten "true" ise EZMİYOR). Pip yasağı artık
 # gerçekten çalışıyor.
-COPY --chown=pemfai:pemfai utils/__init__.py utils/image_domain.py utils/ses_kalitesi.py utils/klinik_asgari.py utils/panel_yayin.py utils/runtime_guards.py ./utils/
+# ${UTILS} 2026-09-18 F4 tasimasinda `apps/backend/` altina gitti; bu satir
+# kokteki eski yoldan kopyaliyordu ve IMAJ HIC DERLENMIYORDU (olculdu 2026-09-21).
+# Build context `..` (bkz. docker-compose.ai.yml) -> yol depo kokune goredir.
+COPY --chown=pemfai:pemfai apps/backend/utils/__init__.py apps/backend/utils/image_domain.py apps/backend/utils/ses_kalitesi.py apps/backend/utils/klinik_asgari.py apps/backend/utils/panel_yayin.py apps/backend/utils/runtime_guards.py ./utils/
 
 # ⚠️ DENETİM 2026-08-04: bu imaj ROOT olarak koşuyordu — kardeşi Dockerfile.backend'de
 # `USER pemf` varken burada hiç USER yoktu. Servis `/infer/...` uçlarında AUTH'suz olarak

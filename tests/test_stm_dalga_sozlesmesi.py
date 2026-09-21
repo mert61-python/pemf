@@ -9,7 +9,8 @@ net DC = 0; duty = yarım-periyot doluluk oranı; klemp = yarım − DDS_BIPOLAR
 
 Firmware C ISR'ı doğrudan koşulamaz; bu test ISR'ın Python modelini kurup dalga fiziğini
 kanıtlar + C kaynağının yeni sözleşmeyi gerçekten içerdiğini yapısal olarak kilitler.
-⚠️ TEZGÂH ZORUNLU: aynı duty'de teslim edilen enerji eski dalgadan farklı — doz kalibrasyonu.
+⚠️ TEZGÂH: aynı duty'de teslim edilen enerji eski dalgadan farklı. (Doz kalibrasyonu kaydı
+sahip kararıyla 2026-09-21'de KALDIRILDI; bu test dalga SÖZLEŞMESİNİ ölçer, dozu değil.)
 """
 
 from __future__ import annotations
