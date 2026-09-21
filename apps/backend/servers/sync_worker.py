@@ -99,6 +99,9 @@ class CloudSyncWorker:
         self.stop_event = threading.Event()
         self.client = None
         self.thread: Optional[threading.Thread] = None
+        # `_ensure_client` HER TURDA çağrılır (self-heal). İlk başarısızlık tam zincirle
+        # UYARI basar, sonrakiler debug — yoksa 7/24 cihazda log şişerdi.
+        self._istemci_hatasi_bildirildi = False
 
         # GİZLİLİK (tıbbi cihaz): Hasta/seans PII'sinin buluta sync'i VARSAYILAN KAPALI.
         # Açmak için ortam değişkeni PEMF_CLOUD_PATIENT_SYNC=1. Açıkken bile tüm push/pull
@@ -136,7 +139,19 @@ class CloudSyncWorker:
             logger.error("Supabase paketi kurulu degil (pip install supabase).")
             return False
         except Exception as e:
-            logger.debug(f"Supabase client kurulamadi (sonraki turda tekrar denenecek): {e}")
+            # ⚠️ Eskiden `debug` idi: normal log seviyesinde HİÇ görünmüyordu, yani bulut
+            # senkronu sessizce kapalı kalabiliyordu. İLK başarısızlık uyarı + tam zincir;
+            # sonrakiler debug (bu metot her turda çağrılır, log şişmesin).
+            if not self._istemci_hatasi_bildirildi:
+                self._istemci_hatasi_bildirildi = True
+                logger.warning(
+                    "Supabase istemcisi kurulamadı (%s) — BULUT SENKRONU KAPALI, kayıtlar "
+                    "yerelde birikir; sonraki turda tekrar denenecek. Tam zincir aşağıda",
+                    type(e).__name__,
+                    exc_info=True,
+                )
+            else:
+                logger.debug("Supabase client kurulamadi (tekrar): %s", e)
             return False
 
     def _registry_secret(self) -> str:

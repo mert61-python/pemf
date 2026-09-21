@@ -664,7 +664,17 @@ def _start_ai_warmup_safe(logger: logging.Logger) -> None:
             _ses.audio_to_mel_image(yol)
             logger.info("AI ısıtma tamam (ses ön-işleme): %.1f sn", time.perf_counter() - t0)
         except Exception as e:  # noqa: BLE001 — ısıtma ASLA servisi düşürmez
-            logger.info("AI ısıtma atlandı (%s: %s)", type(e).__name__, str(e)[:120])
+            # 🔴 ÖLÇÜLEN ZARAR (A9, 2026-09-20): burası `logger.info(... %s, e)` idi ve
+            # torch'un YARIM kalmasının kök nedenini GİZLEDİ. Logda "AI ısıtma atlandı"
+            # yazıyordu; gerçekte o süreçteki TÜM AI uçları 500 veriyordu. Kök neden ancak
+            # `exc_info` açılınca (KeyError: 'sympy.assumptions.cnf' zinciri) göründü.
+            # Isıtma düşerse ÖLÇÜLEBİLİR sonuç: ilk analiz ~33 sn + torch zehirlenme riski.
+            logger.warning(
+                "AI ısıtma BAŞARISIZ (%s) — ilk ses analizi yavaş kalır ve ağır import "
+                "yarısında kalmış olabilir; tam zincir aşağıda",
+                type(e).__name__,
+                exc_info=True,
+            )
         finally:
             if yol:
                 try:

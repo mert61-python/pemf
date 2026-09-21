@@ -277,7 +277,14 @@ class TreatmentHistoryDB(
                     except Exception:
                         pass
                 continue
-        self.logger.warning(f"SQLCipher hicbir aday anahtarla acilamadi (yanlis anahtar/migrate?): {last_err}")
+        # ⚠️ Anahtar uyuşmazlığı bu depoda TUĞLALAŞMAYA yol açtı; toplu sonuç tam zincirle
+        # bildirilir (döngü içindeki tek tek denemeler beklenen başarısızlıklardır, orada zincir
+        # gürültü olurdu — ayrım BİLEREK burada).
+        self.logger.warning(
+            "SQLCipher hicbir aday anahtarla acilamadi (yanlis anahtar/migrate?): %s",
+            last_err,
+            exc_info=last_err,
+        )
         # TUGLALASMA KORUMASI (2026-08-11): "anahtar VARDI ama dosyayi ACMADI"yi, "anahtar/binding
         # HIC YOKTU"dan ayirt edilebilir kil. Karantina YALNIZ birincisinde yapilir — ikincisinde
         # sorun gecici olabilir ve dosyayi kenara almak KURTARILABILIR hasta verisini yetim birakir.

@@ -61,7 +61,15 @@ def _real_lan_ipv4s() -> list:
                     ):
                         ips.append(addr)
     except Exception as e:
-        logger.debug("ifaddr ile arayüz IP'leri sayılamadı (%s) → InterfaceChoice.All'a düşülecek", e)
+        # ⚠️ Bu geri-düşüş MASUM DEĞİL: `InterfaceChoice.All`, bu depoda kayıtlı çok-homed
+        # mDNS arızasının bilinen sebebi (hotspot + Ethernet aynı anda). Açılışta bir kez
+        # olur, log şişmez → `warning` + tam zincir.
+        logger.warning(
+            "Arayüz IP'leri sayılamadı (%s) → mDNS InterfaceChoice.All'a düşüyor; çok-homed "
+            "makinede yanlış arayüzden ilan riski var. Tam zincir aşağıda",
+            type(e).__name__,
+            exc_info=True,
+        )
     return ips
 
 

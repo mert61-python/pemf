@@ -148,7 +148,14 @@ def _scratch_isit_baslat() -> None:
         threading.Thread(target=_ipd.isit, daemon=True, name="scratch-warmup").start()
         logging.info("Yara-kapanma modeli arka planda ısıtılıyor (ilk analiz beklemesin).")
     except Exception as e:  # ısıtma bir KOLAYLIK — hiçbir hatası servisi düşürmez
-        logging.info("scratch ısıtma atlandı: %s", e)
+        # 🔴 A9 dersi: bu satır `info` + zincirsizdi ve 2026-09-20'de YANILTICI teşhis
+        # üretti ("model/cell hazır değil" derken gerçek sebep zehirlenmiş torch'tu).
+        # Kolaylık düşebilir; ama NEDEN düştüğü okunabilir olmalı.
+        logging.warning(
+            "Yara-kapanma ısıtması BAŞARISIZ (%s) — ilk analiz ~33 sn sürebilir; tam zincir aşağıda",
+            type(e).__name__,
+            exc_info=True,
+        )
 
 
 async def lifespan(app: FastAPI):
