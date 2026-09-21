@@ -4,7 +4,7 @@ Backend'in **HTTP/WebSocket katmanı**. `api_server.app` = ana FastAPI uygulamas
 (kök) bunu ayağa kaldırır ve `HeadlessCore` + `HardwareController`'ı içine enjekte eder. Modül-import'u
 yan-etkisizdir; arka-plan thread'ler **lifespan startup**'ta başlar.
 
-> Mimarinin tamamı: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Giriş noktası: [`../README.md`](../README.md).
+> Mimarinin tamamı: [`../docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md). Giriş noktası: [`../README.md`](../../../README.md).
 
 ## İstek akışı
 ```
@@ -49,7 +49,7 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `settings_router.py` | Uygulama ayarları — yükle/kaydet/güncelle |
 | `system_router.py` | Sistem bilgisi, gateway durumu, dashboard, health, keşif, KPI özeti, istemci-hata log |
 | `ai_router.py` | AI-inference REST + **AI-Pro kapalı-döngü bobin sürme** (`_ai_pro_loop`); `analyze_*` model uçları, lazy model cache. **Sert onay kapısı** (öner → hekim onaylar → ancak sonra `/api/ai/pro/start`) ve **kare sahipliği** (`_ai_owner_client`: AKTİF sahipli seansta YABANCI istemci kareyi lokalize edip organ/bobin süremez). **HAZIRLIK önizlemesi** (`/api/ai/pro/hazirlik/baslat`\|`/durdur`, `_ai_hazirlik_loop`): web/sunucu-kamerasını ÖNİZLEMEDE ısıtıp seçili organı lokalize eder — **bobin SÜRMEZ, seans BAŞLATMAZ**; organ konumlanınca panel öneriyi otomatik ister, `/start` önizlemeyi devralır (tek kamera). Telefon hazırlık akışının sunucu-kamera karşılığı (1.9.24 — web'in "önce /propose → 409 organ konumlandırılmadı" kapalı döngüsünü kırar). Router `jeton_gate` + `ai_queue_gate` bağımlılıklarını taşır. **HEDEF MODELİ** (2026-09-09): `model` alanı `hazirlik/baslat` ve `propose` gövdelerinden gelir, öneri MÜHRÜNE yazılır ve `/start` onu **mühürden** okur (organ/süre ile aynı ilke — gövdeden model değiştirilemez); `/frame` de aktif modeli kullanır, gövdeden okumaz. Yeni rota AÇILMADI (route-contract sabit sayacı ve auth-muafiyet önekleri değişmedi) |
-| `ai_client.py` | Inference'ı harici AI mikroservisine devreden ince istemci ([`../ai_service/`](../ai_service/README.md)); `ai_service_enabled()` ise |
+| `ai_client.py` | Inference'ı harici AI mikroservisine devreden ince istemci ([`../ai_service/`](../../../ai_service/README.md)); `ai_service_enabled()` ise |
 | `update_router.py` | OTA — `/api/update/status\|apply\|rollback` (→ `update_manager`) |
 
 ### Arka-plan işçileri
@@ -67,4 +67,4 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 - `entitlement.py` ve `jeton.py` **fail-open / ticari kapı**, güvenlik-limitlerinden **bağımsız** (bilinçli) — süren seansı / acil-durdurmayı / kontrolü ASLA kapılamaz.
 
 ---
-İlgili: [proje geneli](../README.md) · [mimari](../docs/ARCHITECTURE.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md)
+İlgili: [proje geneli](../../../README.md) · [mimari](../../../docs/ARCHITECTURE.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md)

@@ -27,4 +27,4 @@ Tüm build tarifleri. **Tam adım-adım rehber kökte: [`../BUILD.md`](../BUILD.
 - Sürüm elle değil `../versions.json`'dan; önce onu değiştir, sonra build al (`sync_versions.ps1` propagasyon yapar).
 
 ---
-İlgili: [BUILD.md (ana rehber)](../BUILD.md) · [scripts/](../scripts/README.md) · [PEMF_BUILD/](../PEMF_BUILD/README.md) · [pemf-app-packages/](../pemf-app-packages/README.md)
+İlgili: [BUILD.md (ana rehber)](../BUILD.md) · [scripts/](../scripts/README.md) · PEMF_BUILD/ · [pemf-app-packages/](../pemf-app-packages/README.md)

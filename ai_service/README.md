@@ -2,7 +2,7 @@
 
 `ai_hub` inference kodunu **GPU'da** servis eden ayrı bir FastAPI uygulaması. `onnxruntime-CUDA` +
 otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→GPU çağrıları auth-muaf;
-ör. AI-Pro kapalı-döngü sürücüsü `/infer/em_kedi`'yi çağırır). İstemci tarafı: [`../servers/ai_client.py`](../servers/README.md).
+ör. AI-Pro kapalı-döngü sürücüsü `/infer/em_kedi`'yi çağırır). İstemci tarafı: [`../servers/ai_client.py`](../apps/backend/servers/README.md).
 
 ## Dosyalar
 | Dosya | Görev |
@@ -39,4 +39,4 @@ otomatik **CPU fallback**. Çekirdek backend bunu içeriden çağırır (core→
 - Bu servis opsiyoneldir: tek-EXE backend AI'yı gömülü çalıştırabilir; mikroservis GPU ölçekleme içindir (bkz. [`../docker/DOCKER_README.md`](../docker/DOCKER_README.md)).
 
 ---
-İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/README.md) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../servers/README.md)
+İlgili: [ai_hub/ (model kodu)](../ai_hub/README.md) · [release_assets/ (ağırlıklar)](../release_assets/README.md) · [docker/](../docker/DOCKER_README.md) · [apps/backend/servers/ai_client](../apps/backend/servers/README.md)

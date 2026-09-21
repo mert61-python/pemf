@@ -28,8 +28,8 @@ Hepsi **Qt-bağımsızdır** (headless EXE'ye uygun).
 
 ## Sistemdeki yeri
 - `MosquittoSupervisor` yerel broker'ı (`bin/mosquitto`) yönetir → ESP bobinler ve API buna bağlanır.
-- `credential_manager` [`config/credentials/`](../config/README.md) altındaki Mosquitto parola/ACL dosyalarını üretir.
-- Bu servisler `headless_core.py` tarafından oluşturulur; API katmanından [`event_bus`](../README.md) ile gevşek bağlıdır.
+- `credential_manager` [`config/credentials/`](../../../config/README.md) altındaki Mosquitto parola/ACL dosyalarını üretir.
+- Bu servisler `headless_core.py` tarafından oluşturulur; API katmanından [`event_bus`](../event_bus.py) ile gevşek bağlıdır.
 
 ---
-İlgili: [proje geneli](../README.md) · [servers/](../servers/README.md) · [config/](../config/README.md) · [mimari](../docs/ARCHITECTURE.md)
+İlgili: [proje geneli](../../../README.md) · [servers/](../servers/README.md) · [config/](../../../config/README.md) · [mimari](../../../docs/ARCHITECTURE.md)

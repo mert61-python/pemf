@@ -38,4 +38,4 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 - `secrets_manager.py` tek sır-noktasıdır; yeni sırları buradan ekle (dağınık keyring/env değil).
 
 ---
-İlgili: [proje geneli](../README.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md) · [firmware/](../firmware/README.md)
+İlgili: [proje geneli](../../../README.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md) · [firmware/](../../../firmware/README.md)

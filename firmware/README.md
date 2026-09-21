@@ -38,7 +38,7 @@ Bu dosyanın altı **STM32 firmware'ini** anlatır; kanonik kaynak
   (`0xAA 0x55` + duty/phase/freq/duration[7] + `ref_ms` + `unipolar_maskesi` + CRC32), yanıt
   `STM_OK`/`STM_NACK`/`STM_READY`. ⚠️ **ATOMİK SEVK:** 88 → 120 (2026-09-10, 7 bobin) → **121**
   (2026-09-11, kip alanı). Eski firmware yeni paketi CRC'den düşürür → `STM_NACK: CRC` seli ve
-  HİÇBİR bobin çalışmaz. Backend güncellenince kart MUTLAKA yeniden flaşlanır. Backend tarafı: [`../utils/stm32_transport.py`](../utils/README.md) + [`../controllers/hardware_controller.py`](../controllers/README.md).
+  HİÇBİR bobin çalışmaz. Backend güncellenince kart MUTLAKA yeniden flaşlanır. Backend tarafı: [`../utils/stm32_transport.py`](../apps/backend/utils/README.md) + [`../controllers/hardware_controller.py`](../apps/backend/controllers/README.md).
 - **ESP bobinler (6-8):** ESP32-S3 / ESP8266 **slave**, PB1'deki master sync-pulse ile senkron.
   Firmware artık BURADA: [`esps3_pemf_coil/`](esps3_pemf_coil/README.md) (6-7, tam-köprü, faz
   senkron GPIO7'de) + [`esp8266_pemf_coil/`](esp8266_pemf_coil/README.md) (8, tek faz — 8266'da
@@ -183,4 +183,4 @@ düzeltmeden daha risklidir. Bu madde donanım erişimi olan bir oturuma bırak�
 - Güvenlik-clamp'leri **hasta güvenliğidir** — zayıflatma. Python tarafı bilinçli olarak duty satüre etmez (firmware doyurur). Testler: [`../tests/`](../tests/README.md) `test_stm32_protocol_limits.py`.
 
 ---
-İlgili: [apps/backend/controllers/](../controllers/README.md) · [apps/backend/utils/stm32_*](../utils/README.md) · [tests/](../tests/README.md) · [mimari](../docs/ARCHITECTURE.md)
+İlgili: [apps/backend/controllers/](../apps/backend/controllers/README.md) · [apps/backend/utils/stm32_*](../apps/backend/utils/README.md) · [tests/](../tests/README.md) · [mimari](../docs/ARCHITECTURE.md)

@@ -69,7 +69,7 @@ Bu `.sql` dosyaları da bu dizindedir ama yukarıdaki v1→v2 sırasından **ba�
 - Gerçek DB dosyaları burada değil, app-data'dadır (`~/.pemf_gui` / `PEMF_DATA_DIR`, tipik `C:\ProgramData\PEMF_System\PEMF_GUI`).
 
 ---
-İlgili: [proje geneli](../README.md) · [servers/](../servers/README.md) · [utils/secrets_manager](../utils/README.md) · [mimari](../docs/ARCHITECTURE.md)
+İlgili: [proje geneli](../../../README.md) · [servers/](../servers/README.md) · [utils/secrets_manager](../utils/README.md) · [mimari](../../../docs/ARCHITECTURE.md)
 
 ## ⚠️ Uygulama sırası GÜVENLİĞİ — `ON_ERROR_STOP` ŞART
 

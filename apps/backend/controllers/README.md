@@ -15,11 +15,11 @@ servers/api_server.py  →  HardwareController  →  HeadlessCore HW kuyruğu  �
                           (ESP bobinler 6-8 AYRI yoldan: api_server → MQTT publish)
 ```
 - Canlı bobin durumu ayrıca [`../servers/live_state.py`](../servers/README.md)'de aynalanır.
-- STM32 seri portu [`../headless_core.py`](../README.md)'un sahip olduğu `Stm32SerialTransport`'tur.
+- STM32 seri portu [`../headless_core.py`](../headless_core.py)'un sahip olduğu `Stm32SerialTransport`'tur.
 
 ## ⚠️ Dikkat
 - **Süre-deadline ve keep-alive hasta güvenliğidir** — bu davranışları zayıflatma. `emergency_stop` / süre-watchdog ile birlikte katmanlı korumadır.
 - Duty/freq/faz **Python-tarafı satürasyon yok** (bilinçli, B-1.5); firmware sınırda doyurur. Sınır sabitleri `utils/stm32_protocol_limits.py`'de.
 
 ---
-İlgili: [servers/](../servers/README.md) · [utils/](../utils/README.md) · [firmware/](../firmware/README.md) · [mimari](../docs/ARCHITECTURE.md)
+İlgili: [servers/](../servers/README.md) · [utils/](../utils/README.md) · [firmware/](../../../firmware/README.md) · [mimari](../../../docs/ARCHITECTURE.md)

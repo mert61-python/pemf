@@ -5,7 +5,7 @@ Donanımsız geliştirme, firmware hata-ayıklama ve test-verisi üretimi için 
 ## İçerik
 | Dosya | Görev |
 |---|---|
-| `stm32_simulator.py` | Python STM32 emülatörü — TCP **socket 127.0.0.1:5100**, birebir 88-byte ikili + CRC32; watchdog/süre/NACK davranışını yansıtır. Donanımsız STM testi (`PEMF_STM_PORT=socket://127.0.0.1:5100`) |
+| `stm32_simulator.py` | Python STM32 emülatörü — TCP **socket 127.0.0.1:5100**, birebir **121 bayt** ikili + CRC32 (7 bobin; sayı kaynakta `PKT_SIZE`, kapı: tests/test_readme_baglanti_ve_sayi_BAYATLAMAZ.py); watchdog/süre/NACK davranışını yansıtır. Donanımsız STM testi (`PEMF_STM_PORT=socket://127.0.0.1:5100`) |
 | `com_sniffer.py` | Ham COM10 @115200 seri döküm (firmware debug) |
 | `generate_test_data.py` | Sentetik AI eğitim/test verisi (ECG/HRV/predictor/monitor `.npy`/`.csv`) |
 | `organize_resources.py` | Dağınık asset dosyalarını `pemf_gui/resources/{icons,images,...}`'e kopyalar |
@@ -14,10 +14,10 @@ Donanımsız geliştirme, firmware hata-ayıklama ve test-verisi üretimi için 
 | `kurtarma.py` | **Felaket kurtarma** — donanım arızasından sonra yedekleri yeni makinede açar. `--kodu-goster` / `--zarf … --kod … --yaz`. Bkz. [RUNBOOK](../docs/RUNBOOK.md) |
 | `destek_paketi.py` | **Destek paketi üretici** (CLI) — backend çökmüşken de çalışır; PII-maskeli `.zip` üretir (`apps/backend/utils/support_bundle`). Arayüzdeki `POST /api/support/bundle` düğmesinin backend-ayakta-değilken alternatifi. `--cikti` / `--veri-dizini` / `--log-tavani` |
 
-> ESP simülatörü burada değil — ESP sim [`../servers/api_server.py`](../servers/README.md) içindeki `PEMF_SIMULATE` yoludur.
+> ESP simülatörü burada değil — ESP sim [`../servers/api_server.py`](../apps/backend/servers/README.md) içindeki `PEMF_SIMULATE` yoludur.
 
 ## ⚠️ Not
 - GUI şu an COM10'a kilitli → `stm32_simulator`'ın socket yolu bir **test yardımıdır** (`set_gui_port` no-op). Reconnect/self-heal testi: memory [[pemf-reconnect-selfheal]].
 
 ---
-İlgili: [tests/](../tests/README.md) · [firmware/](../firmware/README.md) · [apps/backend/utils/stm32_transport](../utils/README.md)
+İlgili: [tests/](../tests/README.md) · [firmware/](../firmware/README.md) · [apps/backend/utils/stm32_transport](../apps/backend/utils/README.md)

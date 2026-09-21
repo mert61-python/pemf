@@ -29,8 +29,8 @@ kök `.env.example`'daki `PEMF_*` değişkenlerindedir.)
 
 ## Notlar
 - **Bobin GPIO haritası yalnız firmware'dedir** (`../firmware/stm32_pemf/Core/Src/main.c`), config'te değil.
-- `credentials/` dosyaları [`../services/credential_manager.py`](../services/README.md) tarafından üretilir/tüketilir.
-- ⚠️ `credentials/` sır içerir → repoya girmemeli / ACL-kilitli olmalı (bkz. [`../utils/file_acl.py`](../utils/README.md)).
+- `credentials/` dosyaları [`../services/credential_manager.py`](../apps/backend/services/README.md) tarafından üretilir/tüketilir.
+- ⚠️ `credentials/` sır içerir → repoya girmemeli / ACL-kilitli olmalı (bkz. [`../utils/file_acl.py`](../apps/backend/utils/README.md)).
 
 ---
-İlgili: [apps/backend/services/ (credential_manager)](../services/README.md) · [apps/backend/utils/secrets_manager](../utils/README.md) · [deploy/ (env profilleri)](../deploy/README.md)
+İlgili: [apps/backend/services/ (credential_manager)](../apps/backend/services/README.md) · [apps/backend/utils/secrets_manager](../apps/backend/utils/README.md) · [deploy/ (env profilleri)](../deploy/README.md)

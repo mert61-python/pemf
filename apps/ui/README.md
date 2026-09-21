@@ -7,11 +7,11 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 > `package.json` adı: **`pemf-responsive-frontend`**. Expo `~56`, React Native `^0.85.3`, React `19`, expo-router.
 > Tek kod tabanı → **Web + Android + iOS**. Üç profil (Evcil Hayvan Sahibi · Veteriner · Araştırma) UI'yi role göre uyarlar.
 
-> ⚠️ **Burayı düzenle — `../frontend/` değil.** `guii/frontend/`, `pf/`'in **bayat 2. kopyasıdır**; yalnız onun `dist/`'i canlıdır (buradan aynalanır). Detay: [`../frontend/README.md`](../frontend/README.md).
+> ⚠️ **Burayı düzenle — `../frontend/` değil.** `guii/frontend/`, `pf/`'in **bayat 2. kopyasıdır**; yalnız onun `dist/`'i canlıdır (buradan aynalanır). Detay: `../frontend/README.md`.
 >
 > **Tek depo (2026-08-18):** `pf/` artık `mert61-python/pemf` içinde izleniyor (eski ayrı
 > `pemf-frontend` deposu silindi; tam aynası `../../pemf-frontend-arsiv-2026-08-18.bundle`).
-> CI: kök [`.github/workflows/frontend.yml`](../.github/workflows/frontend.yml) (yol filtreli).
+> CI: kök [`.github/workflows/frontend.yml`](../../.github/workflows/frontend.yml) (yol filtreli).
 
 ---
 
@@ -39,7 +39,7 @@ npm run android / ios       # cihaz/emülatör
 npm test / lint / typecheck # jest · eslint · tsc
 ```
 
-## Build & yayın (özet — tam reçete [`../BUILD.md`](../BUILD.md))
+## Build & yayın (özet — tam reçete [`../BUILD.md`](../../BUILD.md))
 
 | Çıktı | Nasıl | Sonuç |
 |---|---|---|
@@ -49,10 +49,10 @@ npm test / lint / typecheck # jest · eslint · tsc
 
 ## ⚠️ Dikkat
 
-- **Sürüm:** `pf/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../versions.json`](../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
+- **Sürüm:** `pf/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../versions.json`](../../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
 - **`gradlew clean` YAPMA** → `react-native-async-storage` codegen bozulur. `build_apk.ps1` zaten clean yapmaz.
 - **APK MAX_PATH:** guii derin bir yolda → ninja/CMake ANSI-260 sınırını aşar. `build_apk.ps1` kaynağı kısa köke (`C:\pb`) aynalayıp orada derleyerek çözer (`LongPathsEnabled` tek başına yetmez).
 - **Web değişikliği** yalnız burada export edilir; `frontend/dist`'e aynalanmadıkça backend eski UI'yi sunar.
 
 ---
-İlgili: [proje geneli](../README.md) · [mimari](../docs/ARCHITECTURE.md) · [build rehberi](../BUILD.md) · [frontend/ (canlı mirror)](../frontend/README.md)
+İlgili: [proje geneli](../../README.md) · [mimari](../../docs/ARCHITECTURE.md) · [build rehberi](../../BUILD.md) · frontend/ (canlı mirror)

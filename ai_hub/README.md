@@ -3,7 +3,7 @@
 Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/ONNX/scaler) buraya gömülüdür;
 **büyük** görüntü/YOLO/histopatoloji ağırlıkları burada YOKtur → `/models` mount'undan
 ([`../release_assets/ai_models`](../release_assets/README.md)) çözülür. Runtime çözümü
-[`../utils/model_downloader.py`](../utils/README.md) ile **yalnız yerel** (Hugging Face indirme yok).
+[`../utils/model_downloader.py`](../apps/backend/utils/README.md) ile **yalnız yerel** (Hugging Face indirme yok).
 
 ## Bu klasördeki mevcut kılavuzlar
 | Dosya | İçerik |
@@ -38,7 +38,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 - **Mount'tan** (`/models`): büyük görüntü/YOLO/histopatoloji/ses ağırlıkları.
 
 ## Sistemdeki yeri
-- Backend içi: [`../servers/ai_router.py`](../servers/README.md) bu sınıfları lazy yükler (tek-EXE, offline).
+- Backend içi: [`../servers/ai_router.py`](../apps/backend/servers/README.md) bu sınıfları lazy yükler (tek-EXE, offline).
 - Ayrı GPU: [`../ai_service/`](../ai_service/README.md) aynı `ai_hub.*` kodunu import edip CUDA'da servis eder.
 
 ---

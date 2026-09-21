@@ -2,7 +2,7 @@
 
 **Her petri kuyucuğunun** kabin frame **(x, y, z) mm koordinatını** çıkarır (kedi'deki 10 organ koord gibi), HSV ile kuyucuk içinde mavi kanser olup olmadığını sınıflar (kanser/sağlıklı), ve [`../../inference_em_petri/inference_em_petri.py`](../../inference_em_petri/inference_em_petri.py) (BaggingRegressor, R²=0.9849) modeline besleyerek **her kuyucuk için ayrı** PEMF sürücü parametreleri üretir.
 
-**Kuyucuk tespiti** = eğitilmiş **YOLO11m-seg** modeli (mAP50=0.984, mAP50-95=0.961, 22.3M param) — model yolu: [`../yolo11m-seg.pt`](../yolo11m-seg.pt) (aynı klasör).
+**Kuyucuk tespiti** = eğitilmiş **YOLO11m-seg** modeli (mAP50=0.984, mAP50-95=0.961, 22.3M param) — model yolu: `../yolo11m-seg.pt` (aynı klasör).
 
 Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir aynı** pattern (ArUco **DICT_5X5_50**, kenar **15,0 cm** + solvePnP — basılı sayfa: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`).
 
@@ -13,7 +13,7 @@ Kabin sistemi [`inference_cat_organ`](../../inference_cat_organ/) ile **birebir 
 | Bileşen | Kedi (`inference_cat_organ`) | Petri (`petri_cv`) |
 |---|---|---|
 | **Detection AI** | YOLOv8m-seg + RTMPose 39-landmark | **YOLO11m-seg** |
-| Model yolu | `models/cat_*.pt` | [`../yolo11m-seg.pt`](../yolo11m-seg.pt) |
+| Model yolu | `models/cat_*.pt` | `../yolo11m-seg.pt` |
 | Performans | mAP@50=0.866, OKS=0.94 | **mAP50=0.984, mAP50-95=0.961** |
 | **Hedef nokta** | **10 organ (kalp, böbrek...)** | **N kuyucuk (W1, W2, ...)** |
 | Çıktı x,y,z | 10 organ cabin frame mm | **N kuyucuk cabin frame mm** |
@@ -349,7 +349,7 @@ pip install "fastapi[all]" uvicorn paho-mqtt>=2.0
 
 | Kaynak | Amaç |
 |---|---|
-| [`yolo11m-seg.pt`](../yolo11m-seg.pt) | Petri detection (aynı klasör) |
+| `yolo11m-seg.pt` | Petri detection (aynı klasör) |
 | [`inference_petri_dish.py`](../inference_petri_dish.py) | YOLO standalone wrapper |
 | [`calibrate_camera.py`](../../inference_cat_organ/calibrate_camera.py) | OpenCV checkerboard → K + D |
 | [`lib/cabin_config.py`](../../inference_cat_organ/lib/cabin_config.py) | Cabin YAML pattern |

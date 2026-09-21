@@ -33,8 +33,8 @@ pytest tests -v --cov            # guii kökünden (embedded python ile)
 | API sözleşme/tasarım/güvenlik, gözlemlenebilirlik, OTA rollback | ilgili `test_*` dosyaları |
 
 ## Simülasyon modu
-- `PEMF_SIMULATE=1` (sanal STM+ESP+8-bobin sensör) [`../servers/api_server.py`](../servers/README.md) + `deploy/*.env` + `docker/*`'te kablolu — **ama pytest varsayılanı değil** (CI `PEMF_SIMULATE:""` set eder; bazı testler gerçek-yolu zorlamak için env'i temizler).
+- `PEMF_SIMULATE=1` (sanal STM+ESP+8-bobin sensör) [`../servers/api_server.py`](../apps/backend/servers/README.md) + `deploy/*.env` + `docker/*`'te kablolu — **ama pytest varsayılanı değil** (CI `PEMF_SIMULATE:""` set eder; bazı testler gerçek-yolu zorlamak için env'i temizler).
 - STM sanal test: `../tools/stm32_simulator.py` (socket 5100).
 
 ---
-İlgili: [firmware/](../firmware/README.md) · [apps/backend/controllers/](../controllers/README.md) · [tools/ (simülatörler)](../tools/README.md) · [.github/ (CI)](../.github/README.md)
+İlgili: [firmware/](../firmware/README.md) · [apps/backend/controllers/](../apps/backend/controllers/README.md) · [tools/ (simülatörler)](../tools/README.md) · [.github/ (CI)](../.github/README.md)
