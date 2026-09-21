@@ -144,7 +144,7 @@ Depo içine yazmayı **reddeder** (depo public, dosya düz metin).
 | **B4 §2** | SQLCipher | ✅ sahada AÇIK ve çalışıyor — ama yukarıdaki anahtar-emaneti bulgusu |
 | **B4 §3** | Supabase RLS | ✅ **canlıda yeniden doğrulandı**: 6 tablonun altısı da anon'a `401/42501`; `resolve_device` RPC çalışıyor ve geçersiz kodda `[]` dönüyor (sızıntı yok) |
 | **B4 §4** | Cloudflare NAMED tünel | ⏳ **ÖLÇÜLEMEDİ.** Elle başlattığım backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL** — §2 ile birebir aynı tuzak, bu kez fark ettim ve iddia etmiyorum. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl` |
-| **B4 §5** | CVE | ✅ düşük-riskli üçü **YAPILMIŞ** (cryptography 50.0.0 · python-multipart 0.0.31 · zeroconf 0.149.0). Kalan `onnx 1.15` + `torch 2.1.2` — model yeniden-doğrulaması ister, risk profili DÜŞÜK |
+| **B4 §5** | CVE | ✅ düşük-riskli üçü **YAPILMIŞ** (cryptography 50.0.0 · python-multipart 0.0.31 · zeroconf 0.149.0). Kalan `onnx 1.15` + `torch 2.1.2`: ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Risk profili DÜŞÜK ölçülmüştü; **açık iş değil** |
 | **B4 §6** | Model bütünlüğü | ✅ `scripts/model_butunluk.py` + `ai_models_sha256.json` (56 ağırlık). **Gömülü paket 56/56 bayt-birebir.** ⚠️ Kapının ilk hâli yanlış alarm verdi (profil katmanına bakıp "14 model eksik" dedi); çözüm dosya-başına olduğu için düzeltildi |
 | **B4 §7** | Soak | ⚠️ Eski betik **MQTT** üzerinden → ESP kapalıyken **hiçbir canlı yolu zorlamıyor**. Yerine `scripts/soak_http_ws.py` (HTTP+WS; bobin SÜRMEZ) |
 | **C4** | Launcher açık soruları | 2/3 **ölçülerek kapandı**: kurulum dizini `%LOCALAPPDATA%\PEMF Vet Client` (per-user) · backend **SERVİS DEĞİL, SÜREÇ**. 3.'sü (`.dmg` karantina) C5'e bağlı |
@@ -160,7 +160,7 @@ Depo içine yazmayı **reddeder** (depo public, dosya düz metin).
 | B4 §1 | Firmware güvenlik satürasyonu | Tezgâh |
 | B4 §4 | NAMED tünel | Cloudflare token'ı sahipte |
 | B4 §5 | `onnx` + `torch` yükseltmesi | 14 modülün çıktısı yeniden doğrulanmalı + EXE rebuild |
-| B4 §6b | Model **lisans** envanteri | AGPL kalemi hariç tutuldu (A1) |
+| B4 §6b | Model **lisans** envanteri | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** AGPL kalemi `docs/AGPL-KARARI.md`'de; envanter işi **açık iş değil** |
 | B4 §7 | Uzun soak | 25 dk koşuldu; 72 saatlik klinik koşusu sahipte |
 | D2 | iOS / EAS | Apple hesabı/EAS koşusu gerekir (C5 ile aynı blok) |
 | ~~D5~~ | ~~FW-6 (S3 WDT)~~ | ✅ **KAPANDI 2026-09-13** — sahada reboot döngüsü olarak ortaya çıktı; kütüphane kaynakları MAKİNEDE kurulu çıktı ve ölçüldü (TLS el sıkışma 120 sn > WDT 10 sn). Düzeltildi + 5 kapı |
@@ -226,7 +226,7 @@ ve pakette gerçekten ne olduğu `scratchpad/pyz_modul_oku.py` ile PYZ'den okunu
 
 | # | İş | Durum / ne gerekiyor |
 |---|---|---|
-| **A-1** | **`onnx 1.15` + `torch 2.1.2` CVE yükseltmesi** | Tek gerçek kod işi. 16 AI modülünün çıktısı yükseltme sonrası yeniden doğrulanmalı (`urun_dogrula.py` + XAI zinciri) ve EXE yeniden derlenmeli. Risk profili DÜŞÜK (model klasörü yerel, ağdan girdi almıyor) — bu yüzden bugüne ertelendi |
+| ~~**A-1**~~ | ~~**`onnx 1.15` + `torch 2.1.2` CVE yükseltmesi**~~ | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Gerekçe: risk profili DÜŞÜK ölçüldü (model klasörü yerel, ağdan girdi almıyor); yükseltme 16 AI modülünün çıktısını yeniden doğrulamayı + EXE yeniden derlemeyi isterdi. **Açık iş listelerine KONMAZ** |
 | **A-2** | **Model *lisans* envanteri** | Ağırlıkların lisansları listelenmemiş. AGPL kalemi senin hariç tuttuğun A1'e bağlı; geri kalanı çıkarılabilir |
 
 ## B · SENDE — bende yapılacak bir şey yok

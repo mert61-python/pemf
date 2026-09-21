@@ -13,7 +13,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 | 4 | Cloudflare NAMED tünel | ⏳ **HÂLÂ ÖLÇÜLMEDİ** | ⚠️ 2026-09-13'te elle başlatılan backend'de `tunnelUrl` boştu ama o **launcher koşulu DEĞİL**. Doğru ölçüm: uygulamayı launcher'dan aç → `GET /api/health` → `tunnelUrl`. NAMED için Cloudflare token'ı gerekir (sahipte) |
 | 5 | Bağımlılık CVE | ✅ **düşük-riskli 3'ü YAPILDI** / ⏳ onnx+torch | ölçüldü: cryptography 50.0.0 · multipart 0.0.31 · zeroconf 0.149.0 |
 | 6 | AI model bütünlüğü | ✅ **DOĞRULANDI (2026-09-13)** | `scripts/model_butunluk.py` — gömülü paket **56/56 bayt-birebir** |
-| 6b | AI model **lisansı** | ⏳ maintainer | envanter — AGPL kalemi `docs/AGPL-KARARI.md` |
+| 6b | AI model **lisansı** | ⛔ YAPILMAYACAK | ⛔ **SAHİP KARARI 2026-09-21: YAPILMAYACAK.** Envanter işi kapatıldı; AGPL kalemi `docs/AGPL-KARARI.md`'de duruyor |
 | 7 | Yük/soak | ⚠️ **kısa koşu TEMİZ** / ⏳ uzun koşu | 25 dk: RSS +%0,9 (sızıntı YOK), DB sabit. ⚠️ eski betik **MQTT** üzerinden → ESP kapalıyken hiçbir canlı yolu zorlamıyor; yerine `scripts/soak_http_ws.py`. 72 saatlik klinik koşusu sahipte |
 | 8 | KVKK anonimleştirme | ✅ **DOĞRULANDI** | `tests/test_kvkk_anonymization.py` — 3/3 + `.plain.bak` ACL fix |
 | 9 | firmware `[FIX-1c]` duty geçişi | ⏳ donanım | Bench testi (aşağıda) — **YAYIN ÖNCESİ ZORUNLU** |
@@ -92,19 +92,22 @@ Get-Content "$env:APPDATA\PEMF_GUI\logs\*.log" | Select-String "tunnel|trycloudf
 ```powershell
 # Düşük-risk (test-doğrulandı): cryptography>=43.0.1, python-multipart>=0.0.31, zeroconf>=0.149.0
 # starlette: FastAPI'ye bağlı → FastAPI ile birlikte yükselt.
-# onnx 1.15→1.16+, torch 2.1.2→2.6+: AI-model çıktısını yeniden-doğrula (14 modül; torch-tabanlı scratch CPN dahil) + frozen EXE rebuild.
+# ⛔ onnx 1.15→1.16+ / torch 2.1.2→2.6+ YAPILMAYACAK (SAHİP KARARI 2026-09-21). Risk profili
+#    zaten DÜŞÜK ölçülmüştü (model klasörü yerel, ağdan girdi almıyor). Bu satır tarihsel kayıttır,
+#    iş listesi DEĞİLDİR — yeniden önermeyin.
 pip install -U cryptography python-multipart zeroconf
 py -3.10 -m pytest guii/tests   # yeşil olmalı (bu ortamda doğrulandı)
 ```
 
-## ✅ 6 — AI model **bütünlüğü** (DOĞRULANDI) · ⏳ 6b **lisans** envanteri (MAINTAINER)
+## ✅ 6 — AI model **bütünlüğü** (DOĞRULANDI) · ⛔ 6b **lisans** envanteri (YAPILMAYACAK)
 
 > **Bütünlük ✅ — yeniden ölçüldü 2026-09-17:** `scripts/model_butunluk.py --dogrula` hem
 > kaynakta (`release_assets/ai_models`) hem **sevk edilen kopyada**
 > (`PEMF_BUILD/dist/PEMF_Backend/_internal/ai_models`) **56/56 bayt-birebir**, çıkış kodu 0.
 >
-> ⚠️ **Lisans yarısı hâlâ açık (6b).** Bu başlık eskiden yalnız `⏳` taşıyordu ve bitmiş olan
-> bütünlük doğrulamasını da yapılmamış gösteriyordu; şimdi iki yarı ayrı işaretli.
+> ⛔ **Lisans yarısı (6b) KAPATILDI — **SAHİP KARARI 2026-09-21: YAPILMAYACAK.**** Başlık eskiden yalnız `⏳`
+> taşıyordu ve bitmiş olan bütünlük doğrulamasını da yapılmamış gösteriyordu; iki yarı ayrı
+> işaretli kaldı, ama lisans yarısı artık **açık iş değildir**.
 
 ```powershell
 # Bütünlük: dağıtılan model SHA256'ları beklenenle eşleşiyor mu (bozulma/değişim yok):
