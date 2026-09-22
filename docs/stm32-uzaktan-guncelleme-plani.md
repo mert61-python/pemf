@@ -197,12 +197,14 @@ güncelleme "kimse yokken" yapılacaksa cihazın hastasız olduğundan emin olun
 
 | Faz | İş | Çıktı | Süre |
 |---|---|---|---|
-| **1** | **Uyum kapısı** (§1) — banner ayrıştır, `stmUyumlu` alanı, seans reddi, 3 test + mutasyon | Sessiz uyumsuzluk **biter** | ~yarım gün |
-| ~~**2**~~ | ✅ **BİTTİ 2026-09-22** — `scripts/stm_yak.py`. Kapı: `tests/test_stm_yak_GUVENLIK.py` (14 test, **7 mutasyon 7'si kırmızı**). Ön kontroller DAVRANIŞSAL sınandı (sahte backend'e gerçek HTTP) | Tek komutla güvenli reflash | bitti |
-| ~~**3**~~ | ✅ **BİTTİ 2026-09-22** — sahip (b)'yi seçti: **admin ucu YERİNE AÇILIŞ DENETİMİ**. `servers/firmware_manager` (manifest → `surum_uyumu.plan_yap` → indir → `stm_yakma.yakma_akisi`), `backend_service.main`de client kontrolünden SONRA. Kill-switch `PEMF_FW_AUTO_UPDATE=0`. Kapı: `tests/test_firmware_manager.py` (14 test, **8 mutasyon 8'i kırmızı**) | Cihaz firmware'i KENDİ alır | bitti |
+| ~~**1**~~ | ✅ **BİTTİ** — ÖLÇEREK doğrulandı 2026-09-22: `headless_core.stm_uyumlu` (3 durumlu), `system_router` → `stmUyumlu`, uyumsuzda seans **409** (`api_server` + `ai_router`). Kapı: `tests/test_stm_firmware_uyum_kapisi.py` (13) + `tests/test_stm_uyumluluk_denetimi_2026_09_03.py` (5) — 18 yeşil. ⚠️ Bu satır **BEKLEYEN iş olarak duruyordu**; kod çoktan canlıydı — belge durum satırı kanıt değildir | Sessiz uyumsuzluk **bitti** | bitti |
+| ~~**2**~~ | ✅ **BİTTİ 2026-09-22** — `scripts/stm_yak.py`. Kapı: `tests/test_stm_yak_GUVENLIK.py` (15 test, **7 mutasyon 7'si kırmızı**). Ön kontroller DAVRANIŞSAL sınandı (sahte backend'e gerçek HTTP) | Tek komutla güvenli reflash | bitti |
+| ~~**3**~~ | ✅ **BİTTİ 2026-09-22** — sahip (b)'yi seçti: **admin ucu YERİNE AÇILIŞ DENETİMİ**. `servers/firmware_manager` (manifest → `surum_uyumu.plan_yap` → indir → `stm_yakma.yakma_akisi`), `backend_service.main`de client kontrolünden SONRA. Kill-switch `PEMF_FW_AUTO_UPDATE=0`. Kapı: `tests/test_surum_uyumu.py` (20 test, **6 mutasyon 6'sı kırmızı**) + `tests/test_firmware_manager.py` (14 test, **8 mutasyon 8'i kırmızı**) | Cihaz firmware'i KENDİ alır | bitti |
 | **4** | **Manifest entegrasyonu** — kod tarafı HAZIR (`firmware.stm32` + `uyumluluk` okunuyor). Kalan iş: yayın açılınca `latest.json`a girdiyi YAZMAK ve `publish_release.ps1`i buna göre güncellemek. ⚠️ Girdi yokken plan doğal olarak EYLEM_YOK/BEKLE döner — kod güvenle sevk edilebilir | Sürüm takipli dağıtım | yayına bağlı |
 
-**Faz 1 tek başına sevk edilebilir** ve asıl acını dindiren o.
+**Faz 1–3 sevk edilebilir durumda.** Kalan tek iş Faz 4 ve o **yayına bağlı** — manifeste girdi yokken akış EYLEM_YOK/BEKLE döndüğü için kod bu haliyle zararsız.
+
+⚠️ **Gerçek kartta henüz yakılmadı** — bu makinede ST-Link yok. Yakma yolunun tümü donanımsız sınandı; sahada ilk yakma **gözetim altında** yapılmalı.
 
 ---
 
