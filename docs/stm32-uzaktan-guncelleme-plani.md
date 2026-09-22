@@ -199,8 +199,8 @@ güncelleme "kimse yokken" yapılacaksa cihazın hastasız olduğundan emin olun
 |---|---|---|---|
 | **1** | **Uyum kapısı** (§1) — banner ayrıştır, `stmUyumlu` alanı, seans reddi, 3 test + mutasyon | Sessiz uyumsuzluk **biter** | ~yarım gün |
 | ~~**2**~~ | ✅ **BİTTİ 2026-09-22** — `scripts/stm_yak.py`. Kapı: `tests/test_stm_yak_GUVENLIK.py` (14 test, **7 mutasyon 7'si kırmızı**). Ön kontroller DAVRANIŞSAL sınandı (sahte backend'e gerçek HTTP) | Tek komutla güvenli reflash | bitti |
-| **3** | **Uzaktan tetik** — kimlik doğrulamalı admin ucu (`POST /api/firmware/stm/guncelle`), aynı ön kontroller, ilerleme + sonuç | Uzaktan güncelleme **çalışır** | ~yarım gün |
-| **4** | **Manifest entegrasyonu** (yayın açılınca) — `firmware.stm32` girdisi, otomatik indirme, sürüm karşılaştırma | Sürüm takipli dağıtım | yayına bağlı |
+| ~~**3**~~ | ✅ **BİTTİ 2026-09-22** — sahip (b)'yi seçti: **admin ucu YERİNE AÇILIŞ DENETİMİ**. `servers/firmware_manager` (manifest → `surum_uyumu.plan_yap` → indir → `stm_yakma.yakma_akisi`), `backend_service.main`de client kontrolünden SONRA. Kill-switch `PEMF_FW_AUTO_UPDATE=0`. Kapı: `tests/test_firmware_manager.py` (14 test, **8 mutasyon 8'i kırmızı**) | Cihaz firmware'i KENDİ alır | bitti |
+| **4** | **Manifest entegrasyonu** — kod tarafı HAZIR (`firmware.stm32` + `uyumluluk` okunuyor). Kalan iş: yayın açılınca `latest.json`a girdiyi YAZMAK ve `publish_release.ps1`i buna göre güncellemek. ⚠️ Girdi yokken plan doğal olarak EYLEM_YOK/BEKLE döner — kod güvenle sevk edilebilir | Sürüm takipli dağıtım | yayına bağlı |
 
 **Faz 1 tek başına sevk edilebilir** ve asıl acını dindiren o.
 
