@@ -10,11 +10,11 @@ olabilir mi"*. Evet — ve bu **tam olarak** eski firmware'in belirtisi:
 
 | | eski (5 bobin) | yeni (7 bobin) |
 |---|---|---|
-| Beklediği paket | **88 bayt** | **120 bayt** |
+| Beklediği paket | **88 bayt** | **121 bayt** |
 
-Backend 120 bayt gönderir. Eski firmware akışın **ilk 88 baytını** paket sanıp çerçeveler,
-CRC'yi ilk 84 bayt üzerinden hesaplar — gerçek CRC alanı ise 120 baytlık düzende 116.
-ofsettedir. Eşleşmez → `Coil_SendNack("CRC")` → `pkt_ok = 0` → **PWM durumuna HİÇ
+Backend 121 bayt gönderir. Eski firmware akışın **ilk 88 baytını** paket sanıp çerçeveler,
+CRC'yi ilk 84 bayt üzerinden hesaplar — gerçek CRC alanı ise 121 baytlık düzende 117.
+ofsettedir. (120 → 121: 2026-09-11'de `unipolar_maskesi` baytı eklendi.) Eşleşmez → `Coil_SendNack("CRC")` → `pkt_ok = 0` → **PWM durumuna HİÇ
 dokunulmaz**. Ama `STM_READY` yine basıldığı için uygulama STM'i **BAĞLI GÖRÜR**.
 Sonuç: "bağlı ama hiçbir bobin başlamıyor" — bobin 1-5 dahil.
 
@@ -72,6 +72,11 @@ for _yol in (_KOK, _KOK / "apps" / "backend"):
 
 from utils.stm32_kimlik import banner_ayristir  # noqa: E402
 
+# ⚠️ Paket boyu ELLE YAZILMAZ: 2026-09-11 protokol degisiminde (120 -> 121) betik
+#    120'de kaldi ve operatore YANLIS sayi gosterdi. Tek kaynak stm32_transport.
+#    Kapi: tests/test_stm_kimlik_betigi_PAKET_BOYU_BAYATLAMAZ.py
+from utils.stm32_transport import STM_PAKET_BOYU  # noqa: E402
+
 # ⚠️ UART OKUMA ARTIK TEK KAYNAKTAN: `apps/backend/utils/stm32_uart.py`.
 #    Sebep (olculdu 2026-09-22): sevk edilen pakete `scripts/*.py` HIC girmiyor; firmware
 #    guncellemesi kurulu cihazda banner okumak zorunda. Mantik `utils/` altinda, bu dosya
@@ -125,11 +130,11 @@ def main() -> int:
         print()
         print("=" * 72)
         if kanal >= 7:
-            print(f"  ✅ YENI FIRMWARE YUKLU  ({kanal}-kanal, 120 baytlik paket)")
+            print(f"  ✅ YENI FIRMWARE YUKLU  ({kanal}-kanal, {STM_PAKET_BOYU} baytlik paket)")
             print("     Bobinler baslamiyorsa sebep firmware DEGIL — baska yere bakilmali.")
         else:
             print(f"  ❌ ESKI FIRMWARE YUKLU  ({kanal}-kanal, 88 baytlik paket bekliyor)")
-            print("     Yeni client 120 bayt gonderiyor -> CRC uyusmuyor -> STM_NACK ->")
+            print(f"     Yeni client {STM_PAKET_BOYU} bayt gonderiyor -> CRC uyusmuyor -> STM_NACK ->")
             print("     HICBIR BOBIN BASLAMAZ (1-5 dahil), ama uygulama STM'i BAGLI GORUR.")
             print("     COZUM: masaustundeki PEMF_STM32_workspace_2026-09-11 projesini")
             print("            CubeIDE ile karta yukle (reflash).")

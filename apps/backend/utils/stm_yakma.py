@@ -130,15 +130,40 @@ def seans_ve_bobin_kontrolu(backend: str) -> tuple[bool, str]:
     return True, "seans yok, bobin sürülmüyor"
 
 
+#: `_kos` istisnayı buraya çevirir. Yakıcının kendi kodlarıyla çakışmayacak kadar yüksek.
+KOSUM_ISTISNASI = 90
+
+
 def _kos(cli: Path, argumanlar: list[str], timeout: float = 300.0) -> tuple[int, str]:
-    r = subprocess.run(
-        [str(cli), *argumanlar],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-    )
+    """Yakıcıyı çalıştır; **hiçbir istisna dışarı sızmaz** — hata KODA çevrilir.
+
+    ⚠️ BU BİR AÇILIŞ YOLUDUR. `backend_service.main()` → `_donanim_guncellemesi_safe`
+    → `firmware_manager.acilis_denetimi` → `yakma_akisi` → buraya iner. `subprocess.run`
+    zaman aşımında `TimeoutExpired`, yakıcı keşiften sonra silinirse `OSError` fırlatır.
+    Bu istisnalar eskiden `yedek_al`/`yak`/`yakma_akisi` boyunca YAKALANMADAN yükseliyordu;
+    en üstte `_donanim_guncellemesi_safe` onları yutuyordu — ama ancak yakıcı asılmayı
+    BİTİRDİKTEN sonra. O ana kadar açılış BLOKE (yedekte 300 sn, yakmada 600 sn) ve
+    günlükte "zaman aşımı" diye bir şey YAZMIYORDU.
+
+    İstisnayı koda çevirmek çağıranları DEĞİŞTİRMEDEN doğru dala düşürür (hepsi `rc != 0`
+    denetliyor): `yedek_al` → YEDEK_ALINAMADI, `yak` → YAKMA_HATASI.
+    ⚠️ Bu, "yedek alınamazsa YAKMA" değişmezini KORUR — asılan bir yedek alınmış sayılmaz.
+
+    Kapı: `tests/test_stm_yakma_ZAMAN_ASIMI_YUTULUR.py` (çıpa davranışta, kaynakta değil).
+    """
+    try:
+        r = subprocess.run(
+            [str(cli), *argumanlar],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return KOSUM_ISTISNASI, f"ZAMAN AŞIMI: yakıcı {timeout:.0f} sn içinde bitmedi ({cli.name})"
+    except OSError as e:
+        return KOSUM_ISTISNASI, f"YAKICI ÇALIŞTIRILAMADI: {cli} — {e}"
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
