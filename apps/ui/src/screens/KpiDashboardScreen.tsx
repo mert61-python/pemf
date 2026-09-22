@@ -13,6 +13,23 @@ import { useLiveData } from "@/context/LiveDataContext";
 import { apiGet } from "@/services/apiClient";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { barBolumSayisi } from "@/utils/kpiGrafik";
+import { gorunurBobinler, STM_BOBIN_SAYISI, type GorunurlukGirdisi } from "@/services/bobinGorunurlugu";
+
+/**
+ * KPI paydası (“x / N”) — ekranın geri kalanıyla AYNI görünürlük kuralından türer.
+ *
+ * ⚠️ 2026-09-22 saha bulgusu: bu ekran tek başına `gorunurBobinler`i KULLANMIYORDU
+ * (Dashboard/Control/SensorMonitor kullanıyor). Backend takılı olmayan ESP slotunu da
+ * listelediği için Ana Ekran "7 / 7" derken burası "7 / 8" yazıyordu; liste boşken de
+ * sabit `8`e düşülüyordu, oysa ESP söküldükten sonra fiziksel sayı 7.
+ *
+ * ⚠️ Payda SABİT 7 DEĞİLDİR: ESP slotu ortaya çıkarsa (bağlı **ya da** çalışıyor) yine
+ * sayılır — sahip “ileride tekrar hibrit ESP+STM sistemine dönebilirim” dedi.
+ * Kapı: `kpiBobinSayisi.test.tsx` (karşı-kanıt testleri 7'yi sabitlemeyi KIRAR).
+ */
+export function hesaplaBobinSayisi(ham: readonly GorunurlukGirdisi[]): number {
+  return gorunurBobinler(ham).length || STM_BOBIN_SAYISI;
+}
 
 interface KpiSummary {
   totalSessions: number;
@@ -74,13 +91,14 @@ export function KpiDashboardScreen() {
     return () => { mounted = false; };
   }, []);
 
-  const coils = snapshot.coils ?? [];
+  // Kural TEK KAYNAKTA: `gorunurBobinler` (STM 1-7 daima + ESP slotu YALNIZ ortaya çıkınca).
+  // Dashboard/Control/SensorMonitor ile aynı süzgeç — aksi hâlde aynı cihaz iki ekranda
+  // farklı bobin sayısı gösterir (2026-09-22 bulgusu: "7 / 7" vs "7 / 8").
+  const coils = gorunurBobinler(snapshot.coils ?? []);
   const connectedCoils = coils.filter((c) => c.connected);
   const runningCoils = coils.filter((c) => c.running);
   // Bkz. `hesaplaOrtSicaklik` (dosya sonunda) — ortalama, ÖLÇÜM YAPAN bobinler üzerinden alınır.
-  // #85: bobin-sayısı denominator'ını literal 8 yerine gerçek yapılandırmadan türet (8-olmayan
-  // cihazlarda oran yanlış raporlanmasın). Veri yokken güvenli varsayılan 8.
-  const coilCount = coils.length || 8;
+  const coilCount = hesaplaBobinSayisi(snapshot.coils ?? []);
 
   const COIL_R = 0.5;
   const instantPowerW = runningCoils.reduce((sum, c) => sum + c.currentA * c.currentA * COIL_R, 0);
