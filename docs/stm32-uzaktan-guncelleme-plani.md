@@ -1,6 +1,6 @@
 # STM32 Uzaktan Güncelleme + Firmware/Client Uyumsuzluğu — Plan
 
-**Tarih:** 2026-09-14 · **Durum:** **§1 UYGULANDI (2026-09-18)** · §2 uzaktan güncelleme
+**Tarih:** 2026-09-14 · **Durum:** **§1 UYGULANDI (2026-09-18)** · **Faz 2 UYGULANDI (2026-09-22)** · Faz 3-4
 hâlâ plan (yayın donmuş) · Ölçümler bu makinede yapıldı.
 
 > ## ✅ §1 UYUM KAPISI YAZILDI — 2026-09-18
@@ -198,7 +198,7 @@ güncelleme "kimse yokken" yapılacaksa cihazın hastasız olduğundan emin olun
 | Faz | İş | Çıktı | Süre |
 |---|---|---|---|
 | **1** | **Uyum kapısı** (§1) — banner ayrıştır, `stmUyumlu` alanı, seans reddi, 3 test + mutasyon | Sessiz uyumsuzluk **biter** | ~yarım gün |
-| **2** | **Yerel yakma aracı** — `scripts/stm_yak.py`: CLI'yi glob ile bul, ön kontroller, yak, banner doğrula, geri dön | Tek komutla güvenli reflash | ~yarım gün |
+| ~~**2**~~ | ✅ **BİTTİ 2026-09-22** — `scripts/stm_yak.py`. Kapı: `tests/test_stm_yak_GUVENLIK.py` (14 test, **7 mutasyon 7'si kırmızı**). Ön kontroller DAVRANIŞSAL sınandı (sahte backend'e gerçek HTTP) | Tek komutla güvenli reflash | bitti |
 | **3** | **Uzaktan tetik** — kimlik doğrulamalı admin ucu (`POST /api/firmware/stm/guncelle`), aynı ön kontroller, ilerleme + sonuç | Uzaktan güncelleme **çalışır** | ~yarım gün |
 | **4** | **Manifest entegrasyonu** (yayın açılınca) — `firmware.stm32` girdisi, otomatik indirme, sürüm karşılaştırma | Sürüm takipli dağıtım | yayına bağlı |
 
@@ -209,11 +209,25 @@ güncelleme "kimse yokken" yapılacaksa cihazın hastasız olduğundan emin olun
 ## 4 · Senden gerekenler
 
 1. **Faz sırası onayı** — özellikle "önce uyum kapısı" kararı.
-2. **Yakma iznine dair kural:** uzaktan güncelleme
-   (a) yalnız sen tetikleyince mi koşsun, yoksa
-   (b) yeni firmware yayınlanınca cihaz kendi mi alsın (hastasızken)?
-   ⚠️ Önerim **(a)** — tıbbi cihazda sessiz otomatik firmware güncellemesi istemezsin.
-3. **LattePanda'da doğrulama:** aşağıdaki iki yol **var mı** (sürüm numaraları farklı olabilir):
+2. ✅ **CEVAPLANDI 2026-09-22 — sahip kararı: (b) CİHAZ KENDİ ALACAK.**
+   > *"cihaz kendi alcak latte panda zaten stm32cubeide yüklü içinde. pemf uygulaması ilk
+   > açılışta client güncelleme kontrol ediyor zaten, ardından stm için de güncelleme
+   > kontrol etcek donanım güncellemesi ismi altında, varsa güncelleyecek sonra açılacak.
+   > bu sırada stm bağlı ya da bağlı değil, internet var yok ayrımları temiz yapılmalı kod
+   > tarafında. client güncelleme mekanizması gibi olmalı yani. sürüm koruması da gerekiyor
+   > donanım ve client arasında; ikisinin aynı anda uyumlu çalıştığı sürümleri kullanmalı.
+   > client güncellenip stm güncellenmezse uyumsuzluğu korumak için client geri eski
+   > sürümüne otomatik dönebilmeli, aynısı tam tersi için de geçerli. bu işlemler tamamen
+   > otomatik olmalı, kullanıcı müdahalesi minimumda tutulmalı."*
+
+   ⚠️ Önerim (a) idi; sahip (b)'yi seçti. Karar kayıtlıdır ve **uygulanacaktır**. Sessiz
+   otomatik firmware güncellemesinin bedeli, Faz 3 tasarımında şu üç kapıyla karşılanır:
+   yakma yalnız **seans yokken + bobin sürülmüyorken** (Faz 2 kapıları zaten zorunlu kılıyor),
+   **banner doğrulaması** ve **çift yönlü otomatik geri dönüş**.
+3. ✅ **CEVAPLANDI** — iki araç da CubeIDE ile geliyor ve bu makinede ölçüldü
+   (2026-09-22). Yollar **koda SABİT YAZILMADI**: `stm_yak.py` `rglob` ile arar, sürüm
+   dizini değişince de bulur (kapı: `test_yakici_yolu_SABIT_YAZILMAMIS`).
+   Doğrulama komutları (kayıt için):
    ```powershell
    Get-ChildItem "C:\ST" -Recurse -Filter "STM32_Programmer_CLI.exe" | Select-Object -First 1 FullName
    Get-ChildItem "C:\ST" -Recurse -Filter "arm-none-eabi-gcc.exe"    | Select-Object -First 1 FullName

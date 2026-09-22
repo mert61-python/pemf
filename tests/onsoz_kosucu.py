@@ -28,29 +28,30 @@ from pathlib import Path
 
 
 def onsoz_dugumleri(agac: ast.Module) -> list[ast.stmt]:
-    """Üst-düzey gövde — YALNIZ `if __name__ == "__main__"` bloğu atılır.
+    """SON ÜST-DÜZEY IMPORT'a kadarki gövde — ondan sonrası ASLA koşturulmaz.
 
-    ⚠️ İLK YAZIMDA "ilk def/class'a kadar" alıyordum ve KAPI KÖR KALDI: eklediğim
-    `sys.path` kurulum bloğu bir `def _depo_koku` tanımlıyor, önsöz orada kesiliyor ve
-    ASIL IMPORT satırına hiç ulaşılmıyordu. Mutasyon (yol kurulumunu boşaltmak) bu yüzden
-    yeşil kalmıştı — betik gerçekte ölüyken.
+    🔴 BU KURAL BİR YAN ETKİDEN DOĞDU (ölçüldü 2026-09-22): `build_tools/make_base_zip.py`
+    `main()` KULLANMIYOR — tüm işini üst düzeyde yapıyor ve `_yaz(OUT_APP, …)` bir *Assign*
+    olduğu için önceki sürüm onu ÇALIŞTIRIYORDU: her süit koşumunda `base-app.zip`
+    yeniden üretiliyor, koşum 61,5 sn sürüyordu. Kapı, ölçtüğü şeyi BOZUYORDU.
 
-    `def`/`class` çalıştırmak zararsızdır (yalnız ad bağlar, gövde koşmaz). Riskli olan
-    üst-düzey ÇAĞRILARDIR; onlar da `except Exception: pass` ile yutulur — bu kapının
-    konusu YALNIZ import çözümüdür.
+    Bu kapının tek iddiası "import'lar çözülüyor mu". O hâlde son import'tan sonrasına
+    hiç ihtiyaç yok: prefix alınır. Yol kurulumu (`sys.path`) zaten import'lardan ÖNCE
+    olmak zorundadır, dolayısıyla prefix'in içindedir.
+
+    ⚠️ `if __name__ == "__main__"` blokları ayrıca atılır (prefix'e düşerse bile).
     """
+    son_import = -1
+    for i, d in enumerate(agac.body):
+        if isinstance(d, (ast.Import, ast.ImportFrom)):
+            son_import = i
+    if son_import < 0:
+        return []
     out: list[ast.stmt] = []
-    for d in agac.body:
+    for d in agac.body[: son_import + 1]:
         if isinstance(d, ast.If):
             kosul = ast.dump(d.test)
             if "__name__" in kosul and "__main__" in kosul:
-                continue  # giris noktasi — KOSTURULMAZ
-        # ⚠️ ÇIPLAK ÇAĞRI ATILIR (bare `Expr`). Tam gövdeyi koşturmak SÜİTİ ASTI: bir
-        #    betiğin üst-düzey çağrısı bloke etti. Tek istisna `sys.path` kurulumudur —
-        #    ölçmek istediğimiz şey tam olarak odur.
-        if isinstance(d, ast.Expr):
-            kaynak = ast.dump(d)
-            if "sys" not in kaynak or "path" not in kaynak:
                 continue
         out.append(d)
     return out
