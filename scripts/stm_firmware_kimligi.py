@@ -72,51 +72,24 @@ for _yol in (_KOK, _KOK / "apps" / "backend"):
 
 from utils.stm32_kimlik import banner_ayristir  # noqa: E402
 
+# ⚠️ UART OKUMA ARTIK TEK KAYNAKTAN: `apps/backend/utils/stm32_uart.py`.
+#    Sebep (olculdu 2026-09-22): sevk edilen pakete `scripts/*.py` HIC girmiyor; firmware
+#    guncellemesi kurulu cihazda banner okumak zorunda. Mantik `utils/` altinda, bu dosya
+#    yalniz CLI yuzu. Ikinci bir kopya yazmak bu depoda bedeli olculmus bir siniftir.
+from utils.stm32_uart import banner_dinle as _dinle  # noqa: E402
+from utils.stm32_uart import port_adaylari  # noqa: E402
+
 
 def _portlari_bul(istenen: str | None) -> list[str]:
-    try:
-        from serial.tools import list_ports
-    except Exception:
-        return [istenen] if istenen else []
-    if istenen:
-        return [istenen]
-    hepsi = list(list_ports.comports())
-    # ST-Link VCP'yi öne al (backend de böyle yapıyor: apps/backend/utils/stm32_transport.py)
-    oncelikli = [
-        p.device
-        for p in hepsi
-        if any(k in ((p.description or "") + (p.manufacturer or "")).upper() for k in ("ST-LINK", "STLINK", "STM"))
-    ]
-    digerleri = [p.device for p in hepsi if p.device not in oncelikli]
-    if hepsi:
+    """CLI yuzu: portlari LISTELER (yazdirma burada, kutuphanede degil)."""
+    from utils.stm32_uart import portlari_listele
+
+    hepsi = portlari_listele()
+    if hepsi and not istenen:
         print("Bulunan portlar:")
         for p in hepsi:
-            print(f"  {p.device}  {p.description}")
-    return oncelikli + digerleri
-
-
-def _dinle(port: str, sure: float) -> tuple[int | None, list[str]]:
-    """@return (kanal_sayisi | None, toplanan ilgili satirlar)"""
-    import serial
-
-    satirlar: list[str] = []
-    kanal: int | None = None
-    with serial.Serial(port, BAUD, timeout=0.3) as s:
-        bitis = time.monotonic() + sure
-        tampon = b""
-        while time.monotonic() < bitis:
-            tampon += s.read(4096)
-            while b"\n" in tampon:
-                ham, tampon = tampon.split(b"\n", 1)
-                satir = ham.decode("utf-8", "replace").strip()
-                if not satir:
-                    continue
-                if any(k in satir for k in ("STM_READY", "STM_NACK", "STM_SENS", "STM_ERR", "STM_TELE")):
-                    satirlar.append(satir)
-                kimlik = banner_ayristir(satir)
-                if kimlik:
-                    return kimlik.kanal, satirlar
-    return kanal, satirlar
+            print(f"  {p.aygit}  {p.aciklama}")
+    return port_adaylari(istenen)
 
 
 def main() -> int:

@@ -34,14 +34,20 @@ from utils.path_utils import kaynak_kokunu_bul
 
 KOK = kaynak_kokunu_bul(__file__)
 BETIK_DIZINI = KOK / "scripts"
+CEKIRDEK = KOK / "apps" / "backend" / "utils" / "stm_yakma.py"
 
 
 @pytest.fixture(scope="module")
 def yak_modulu():
-    """`scripts/stm_yak.py`yi modül olarak getir (betik kendi yolunu kurar)."""
-    if str(BETIK_DIZINI) not in sys.path:
-        sys.path.insert(0, str(BETIK_DIZINI))
-    return importlib.import_module("stm_yak")
+    """Çekirdek: `utils.stm_yakma`.
+
+    ⚠️ ÖNCEDEN `scripts/stm_yak.py`yi sınıyordu. Ölçüldü (2026-09-22): sevk edilen pakete
+    `scripts/*.py` HİÇ girmiyor (`make_base_zip.ADD_SCRIPTS` yalnız altı `.ps1`). Sahip
+    kararıyla firmware güncellemesi OTOMATİK olacak, yani akış KURULU CİHAZDA koşacak —
+    mantık `scripts/` altında kalsaydı sahada hiç bulunmazdı ve kapı SEVK EDİLMEYEN kodu
+    sınıyor olurdu. Çekirdek `apps/backend/utils/` altına taşındı; betik ince CLI yüzü.
+    """
+    return importlib.import_module("utils.stm_yakma")
 
 
 class _SahteBackend:
@@ -152,7 +158,7 @@ def yeni_bin(tmp_path):
 
 def test_KRITIK_YEDEK_yakmadan_ONCE_alinir(monkeypatch, yak_modulu, yeni_bin, tmp_path):
     sira = _sahte_kur(monkeypatch, yak_modulu, (True, "uyumlu", "-> STM_READY: DDS v2.3 (7-ch ...)"))
-    rc = yak_modulu.main(["--bin", str(yeni_bin), "--yedek-dizin", str(tmp_path / "y")])
+    rc = yak_modulu.yakma_akisi(yeni_bin, yedek_dizin=tmp_path / "y").kod
     assert rc == 0, "temiz akışta 0 dönmeliydi"
     assert sira[0] == "yedek", f"YEDEK ÖNCE alınmalı, sıra: {sira}"
     assert sira[1] == "yak:yeni", f"sıra: {sira}"
@@ -161,7 +167,7 @@ def test_KRITIK_YEDEK_yakmadan_ONCE_alinir(monkeypatch, yak_modulu, yeni_bin, tm
 def test_KRITIK_yedek_ALINAMAZSA_hic_yakmaz(monkeypatch, yak_modulu, yeni_bin, tmp_path):
     """Geri dönüşü olmayan işlem YAPILMAZ."""
     sira = _sahte_kur(monkeypatch, yak_modulu, (True, "", ""), yedek_olsun=False)
-    rc = yak_modulu.main(["--bin", str(yeni_bin), "--yedek-dizin", str(tmp_path / "y")])
+    rc = yak_modulu.yakma_akisi(yeni_bin, yedek_dizin=tmp_path / "y").kod
     assert rc == 6, f"yedek alınamadı → 6 beklenirdi, {rc} döndü"
     assert not any(s.startswith("yak:") for s in sira), f"YAKMAMALIYDI, sıra: {sira}"
 
@@ -172,7 +178,7 @@ def test_KRITIK_banner_UYUMSUZSA_geri_doner(monkeypatch, yak_modulu, yeni_bin, t
         yak_modulu,
         (False, "kart 5 kanalli, uygulama 7 gonderiyor", "-> STM_READY: DDS v1.0 (5-ch ...)"),
     )
-    rc = yak_modulu.main(["--bin", str(yeni_bin), "--yedek-dizin", str(tmp_path / "y")])
+    rc = yak_modulu.yakma_akisi(yeni_bin, yedek_dizin=tmp_path / "y").kod
     assert rc == 8, f"uyumsuz banner → 8 beklenirdi, {rc} döndü"
     assert sira == ["yedek", "yak:yeni", "yak:yedek"], f"OTOMATİK GERİ DÖNÜŞ olmalıydı, sıra: {sira}"
 
@@ -185,7 +191,7 @@ def test_KRITIK_banner_TANINMAZSA_geri_DONMEZ(monkeypatch, yak_modulu, yeni_bin,
     (`utils/stm32_kimlik.uyum_denetle`: None → seans ENGELLENMEZ).
     """
     sira = _sahte_kur(monkeypatch, yak_modulu, (None, "banner tanınmadı", ""))
-    rc = yak_modulu.main(["--bin", str(yeni_bin), "--yedek-dizin", str(tmp_path / "y")])
+    rc = yak_modulu.yakma_akisi(yeni_bin, yedek_dizin=tmp_path / "y").kod
     assert rc == 9, f"tanınmayan banner → 9 beklenirdi, {rc} döndü"
     assert sira == ["yedek", "yak:yeni"], f"GERİ DÖNMEMELİYDİ, sıra: {sira}"
 
@@ -196,8 +202,8 @@ def test_KRITIK_banner_TANINMAZSA_geri_DONMEZ(monkeypatch, yak_modulu, yeni_bin,
 
 
 def test_KRITIK_sha256_TUTMAZSA_yakmaz(yak_modulu, yeni_bin):
-    rc = yak_modulu.main(["--bin", str(yeni_bin), "--sha256", "deadbeef", "--kuru"])
-    assert rc == 3, f"bütünlük kapısı → 3 beklenirdi, {rc} döndü"
+    s = yak_modulu.yakma_akisi(yeni_bin, beklenen_sha256="deadbeef", kuru=True)
+    assert s.kod == yak_modulu.BUTUNLUK, f"bütünlük kapısı → BUTUNLUK beklenirdi, {s.kod}"
 
 
 def test_banner_ayristirma_TEK_KAYNAKTAN(yak_modulu):
@@ -209,7 +215,7 @@ def test_banner_ayristirma_TEK_KAYNAKTAN(yak_modulu):
 
     assert yak_modulu.banner_ayristir is stm32_kimlik.banner_ayristir
     assert yak_modulu.uyum_denetle is stm32_kimlik.uyum_denetle
-    kaynak = (BETIK_DIZINI / "stm_yak.py").read_text(encoding="utf-8")
+    kaynak = CEKIRDEK.read_text(encoding="utf-8")
     assert "STM_READY: DDS" not in kaynak.replace("STM_READY: DDS v2.3 (7-ch ...)", ""), (
         "betikte kendi banner deseni var — tek kaynak bozuldu"
     )
@@ -217,7 +223,7 @@ def test_banner_ayristirma_TEK_KAYNAKTAN(yak_modulu):
 
 def test_yakici_yolu_SABIT_YAZILMAMIS(yak_modulu):
     """CubeIDE sürüm dizini değişir → glob ile aranmalı."""
-    kaynak = (BETIK_DIZINI / "stm_yak.py").read_text(encoding="utf-8")
+    kaynak = CEKIRDEK.read_text(encoding="utf-8")
     assert "rglob" in kaynak, "yakıcı glob ile aranmıyor — sürüm dizini değişince bulunamaz"
     assert "STM32CubeIDE_1.17" not in kaynak, "sürüm dizini SABİT yazılmış"
 
@@ -225,3 +231,40 @@ def test_yakici_yolu_SABIT_YAZILMAMIS(yak_modulu):
 def test_bootloader_alanina_DOKUNULMAZ(yak_modulu):
     """Yalnız uygulama alanı yazılır → yarıda kesilen yakma ST-Link ile kurtarılabilir."""
     assert yak_modulu.YAKMA_ADRESI == "0x08000000"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 4) SEVK EDİLEBİLİRLİK — mantık pakete GİREN yerde mi
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def test_KRITIK_yakma_mantigi_SEVK_EDILEN_yerde():
+    """🔴 `scripts/*.py` PAKETE GİRMİYOR — mantık orada kalırsa sahada HİÇ BULUNMAZ.
+
+    Ölçüldü 2026-09-22: `build_tools/make_base_zip.ADD_SCRIPTS` yalnız ALTI `.ps1` taşıyor.
+    Sahip kararıyla firmware güncellemesi otomatik; akış kurulu cihazda koşacak.
+    Bu kapı, mantığın `utils/` altında (bundle'lanan yer) kalmasını sabitler.
+    """
+    import ast
+
+    assert CEKIRDEK.is_file(), "çekirdek `utils/stm_yakma.py` YOK"
+
+    # ADD_SCRIPTS gerçekten yalnız .ps1 mı — varsayım değil, ÖLÇÜM
+    mbz = (KOK / "build_tools" / "make_base_zip.py").read_text(encoding="utf-8")
+    agac = ast.parse(mbz)
+    listeler = [
+        d.value
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Assign) and any(getattr(h, "id", "") == "ADD_SCRIPTS" for h in d.targets)
+    ]
+    assert listeler, "ADD_SCRIPTS bulunamadı — çıpa bayat"
+    adlar = [e.value for e in listeler[0].elts if isinstance(e, ast.Constant)]
+    assert adlar and all(a.endswith(".ps1") for a in adlar), (
+        f"ADD_SCRIPTS artık .py de taşıyor: {adlar} — bu kapının gerekçesi değişti, gözden geçirin"
+    )
+
+    # CLI İNCE olmalı: yakma/yedek/banner mantığı betikte DEĞİL
+    cli = (BETIK_DIZINI / "stm_yak.py").read_text(encoding="utf-8")
+    for yasak in ("STM32_Programmer_CLI.exe", "port=SWD", "rglob("):
+        assert yasak not in cli, f"CLI betiğinde çekirdek mantık var ({yasak!r}) — sevk edilmeyen yere kod kaçmış"
+    assert "from utils.stm_yakma import" in cli, "CLI çekirdeği import etmiyor"
