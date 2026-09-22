@@ -47,8 +47,10 @@
 >
 > **Faz 4'te ORTAYA ÇIKAN iki bulgu kapatıldı:**
 > 1. **Marker doküman sapması:** `phantom_cv`/`petri_cv` README'leri kullanıcıya `DICT_5X5_100`
->    ve **5 cm** işaret bas diyordu; gerçek işaret `DICT_5X5_50` / **10 cm** (basılı A4, üç yaml da
->    onu okuyor). Yanlış sözlük → işaret HİÇ bulunmaz (ekran "işaret görünmüyor" der, oysa
+>    ve **5 cm** işaret bas diyordu; gerçek işaret `DICT_5X5_50` / **15 cm** (basılı A4, üç yaml da
+>    onu okuyor: `real_cm: 15.0`). ⚠️ İlk düzeltme 10 cm idi; aynı gün sahip ölçümüyle 15 cm'e
+>    çıkıldı ve 10 cm sayfası SİLİNDİ — yan yana duran iki farklı boy sessiz 1,5× ölçek hatası
+>    üretir. Yanlış sözlük → işaret HİÇ bulunmaz (ekran "işaret görünmüyor" der, oysa
 >    asılmıştır); doğru sözlük + yanlış kenar → tespit ÇALIŞIR ama ölçek 2 kat yanlış olur ve 3B
 >    koordinat **sessizce** iki katına çıkar. Kapı: `tests/test_marker_dokuman_tutarliligi.py`.
 > 2. **Yayın kaydı (d8e1890):** CHANGELOG'un 1.9.43 girdisi `buildId 631ae4f10a99` / base
@@ -85,7 +87,7 @@
 > - **Mobil araştırma kapalı** (karar #15 pariteti): telefon kamerası kabin çerçevesinin dışında →
 >   konum ölçülemez. Panel telefonda görüntülenir, başlatma sebebiyle engellenir.
 > - `ResultInterpretation` taşınması YAPILMADI: AI Pro paneli yorum banner'ı göstermiyor, taşımak
->   gerekçesiz bir refaktör olurdu. `PatientGate.sozluk()` ise TAŞINDI (`apps/backend/utils/profilSozlugu.ts`) —
+>   gerekçesiz bir refaktör olurdu. `PatientGate.sozluk()` ise TAŞINDI (`apps/ui/src/utils/profilSozlugu.ts`) —
 >   panel de aynı terimleri kullanıyor, kopya iki metnin ayrışmasına açık kapı bırakırdı.
 > - AI Hub → Kontrol köprüsü model ön-seçimini **AppNav üzerinden tek kullanımlık** taşıyor;
 >   ön-seçim yalnız `/status` okunduktan SONRA uygulanıyor (mount'ta `running` false olduğu için
@@ -234,7 +236,7 @@
 ## 1. Bugünkü Durum (kod-kanıtlı)
 
 ### 1.1 Araştırmacı bugün ne görüyor
-`pf/src/config/access.ts:34` researcher'a `control` rotasını verir (2026-08-06 sahip kararı); `ControlScreen.tsx:739-743`
+`apps/ui/src/config/access.ts:34` researcher'a `control` rotasını verir (2026-08-06 sahip kararı); `ControlScreen.tsx:739-743`
 "AI Pro" sekmesinde `AiProPanel`'i profil okumadan monte eder → araştırmacı **kedi** AI Pro'sunu görür ve
 em_kedi ile seans başlatabilir. Araştırma-yalnız kurulumda em_kedi yalnız `vet.zip`'te olduğu için hazırlık
 "AI modeli yüklenemedi" ile biter: araştırmacı AI Pro'yu fiilen hiç kullanamaz.
@@ -263,7 +265,7 @@ em_kedi ile seans başlatabilir. Araştırma-yalnız kurulumda em_kedi yalnız `
 | EM model | `KediPredictor` ORGAN_IDS 0-6, `result_E` | `PhantomPredictor` ORGAN_IDS [0,1], `result_E_healthy/cancer/avg` | `PetriPredictor` ORGAN_IDS [0,1], aynı; **eğitimde organ_id sabit 0** → kanser=1 ekstrapolasyon |
 | Ağırlık | `vet.zip` em_kedi 60 MB | `research.zip` 60 MB | `research.zip` 239 MB + YOLO 90 MB |
 
-### 1.4 Frontend kediye bağlı noktalar (`pf/src/components/domain/AiProPanel.tsx`)
+### 1.4 Frontend kediye bağlı noktalar (`apps/ui/src/components/domain/AiProPanel.tsx`)
 ORGANS sabiti (30-33), organId state (153), payload gövdeleri (336, 384, 425, 550, 576), `asamaMetni` 4 dallı
 hayvan metni (704-720, **kaynak-regex kapısı** `tests/test_ai_pro_asamali_akis.py:203-209, 353-383` bu bloğu
 ve 'Hayvan aranıyor'/'catDetected' literal'lerini ister), not metni "KEDİYE doğrultun" (736-740), 120 sn tavan
@@ -430,15 +432,15 @@ class HedefSaglayici(Protocol):
   korunur; `clientIdRef` deseni); kedi `asamaMetni` bloğu ve 'Hayvan aranıyor' literal'i DOKUNULMAZ;
   `asamaMetniArastirma` AYRI yardımcı fonksiyon, kedi bloğundan boş satırla ayrılmış (kapı regex'i önce
   KIRMIZI görülür); tüm apiPost gövdelerine `model`.
-- Yeni bileşenler `pf/src/components/domain/aipro/`: `ModelSecimKartlari.tsx`, `HedefSecici.tsx`, `DozOzeti.tsx`,
-  `KalibrasyonRozeti.tsx`, `AdimGostergesi.tsx`; `pf/src/components/domain/aiProProfilleri.ts` tablosu
+- Yeni bileşenler `apps/ui/src/components/domain/aipro/`: `ModelSecimKartlari.tsx`, `HedefSecici.tsx`, `DozOzeti.tsx`,
+  `KalibrasyonRozeti.tsx`, `AdimGostergesi.tsx`; `apps/ui/src/components/domain/aiProProfilleri.ts` tablosu
   (ikon, metinler, `MODELLER_PROFILE_GORE = {veterinarian:['kedi'], researcher:['fantom','petri'], pet_owner:[]}`)
   + pytest kaynak-regex "researcher listesinde kedi YOK" (mutasyon: kedi ekle → kırmızı).
 - `AiSpecApprovalModal.tsx`: `specs.model?`, meta ekleri; 'Organ' → 'Hedef' (model ≠ kedi); x/y/z çizilir;
   XAI etiketi 'doku tipi'; E göreli/birimsiz Türkçe ondalık virgülü 2 hane; OOD satırı; `ScrollableModalCard`
   + testID `ai-onay` korunur. Karar #4 tek dal: ArUco zorunluysa piksel-modu şeridi YOK (409 zaten engeller).
-- Taşımalar (kopya değil): `AiHubScreen` → `pf/src/components/domain/ResultInterpretation.tsx`
-  (+MedicalDisclaimer, dutyYuzde); `PatientGate.sozluk()` → `pf/src/utils/profilSozlugu.ts` (export; AiProPanel
+- Taşımalar (kopya değil): `AiHubScreen` → `apps/ui/src/components/domain/ResultInterpretation.tsx`
+  (+MedicalDisclaimer, dutyYuzde); `PatientGate.sozluk()` → `apps/ui/src/utils/profilSozlugu.ts` (export; AiProPanel
   'Örnek seçilmedi — seans kaydı örneksiz kalır. Örneksiz başlat?').
 - `AiHubScreen.tsx:1139` toast `isResearcher ? 'onay gerektirir' : 'hekim onayı gerektirir'`; Fantom/Petri
   modülleri sonuç altına "Bu hedefe AI Pro seansı → Kontrol" (yalnız `navigateTo('control')` + ön-seçim;
@@ -546,7 +548,7 @@ gelmeden araştırmacı Onayla'yı göremez).
 
 **BİTTİ (2026-09-09, 1c00aa6 + 6986178).** Yeni dosyalar: `aiProProfilleri.ts` (tek kaynak),
 `aipro/AdimGostergesi.tsx`, `aipro/ModelSecimKartlari.tsx`, `aipro/HedefSecici.tsx`
-(halka + erişilebilir liste), `aipro/KalibrasyonRozeti.tsx`, `apps/backend/utils/profilSozlugu.ts`.
+(halka + erişilebilir liste), `aipro/KalibrasyonRozeti.tsx`, `apps/ui/src/utils/profilSozlugu.ts`.
 Kapılar: `AiProPanelArastirma.test.tsx` (16 test), `AiSpecApprovalModal.test.tsx` (+6),
 `tests/test_ai_pro_arayuz_profil_tablosu.py` (13 kapı) — hepsi mutasyonla kırmızı görüldü.
 Dokunma-hedefi cırcırı 118'de KALDI (yeni dokunulabilirlerin tabanı `touch.min`).
@@ -592,7 +594,7 @@ Tam akış `BUILD.md` §6'dadır; burada YALNIZ bu yayına özgü sıra ve tuzak
 2. **Backend frozen EXE** (`scripts\build_backend_exe.ps1`). ⚠️ Backend build ile APK build
    **PARALEL KOŞMAZ**; bu yayında APK zaten üretilmiyor.
 3. **Katmanlı paketler** (`build_tools/make_base_zip.py`). BEKLENEN: yeni kod yalnız `apps/backend/servers/`
-   (EXE'ye gömülü), `ai_hub/` ve `pf/` (frontend) → **deps sha DEĞİŞMEZ** (`99ac8a491f37`) ve
+   (EXE'ye gömülü), `ai_hub/` ve `apps/ui/` (frontend) → **deps sha DEĞİŞMEZ** (`99ac8a491f37`) ve
    `research.zip` DOKUNULMAZ. Deps sha değiştiyse DUR ve nedenini bul (paket-belirlenimciliği
    kaydına bak: sürüm dosyaları app katmanında olmalı) — yoksa her klinik 1,49 GB indirir.
 4. **Frozen EXE doğrulaması** (paket yüklemeden ÖNCE): `GET /api/ai/hazirlik?derin=1` →
@@ -611,9 +613,9 @@ Tam akış `BUILD.md` §6'dadır; burada YALNIZ bu yayına özgü sıra ve tuzak
 | İş | Dosya |
 |---|---|
 | Mobil: `/calibrate {model, client_id}`; `/frame` opsiyonel Form `model`; `mobileResult.targets` → `HedefSecici` (dokun → `/organ`); intrinsics kapısı; kadraj rehberi ("kabin işareti (arka duvar) ve plaka AYNI karede olmalı — telefonu kabin önünden, hafif yukarıdan tutun") **ya da** karar #15 = hayır ise mobilde kartlar "Bu model masaüstü kabin kamerası ister — bilgisayardaki Kontrol → AI Pro ekranını kullanın" | `AiProPanel.tsx`, `apps/backend/servers/ai_router.py` |
-| Dokümanlar: `apps/backend/servers/README.md`, `ai_hub/README.md` (:26, :34), `ai_hub/PEMF_AI_Test_Girdileri/00_README_OKU.txt` AI PRO bölümü ('Araştırma Modu: Fantom (05) / Petri (06b ArUco)'), `docs/VERIFICATION.md` AI Pro tezgâh maddesi, **`ai_hub/KABIN_KURULUM_KILAVUZU.md` "Fantom/Petri yerleşimi"** (tepsi konumu, kalınlık, marker görünürlüğü, telefon açısı kısıtı), bu dokümanın DURUM bloğu; README sapmaları (petri/phantom README 5X5_100/5 cm → 5X5_50/10 cm) | docs |
+| Dokümanlar: `apps/backend/servers/README.md`, `ai_hub/README.md` (:26, :34), `ai_hub/PEMF_AI_Test_Girdileri/00_README_OKU.txt` AI PRO bölümü ('Araştırma Modu: Fantom (05) / Petri (06b ArUco)'), `docs/VERIFICATION.md` AI Pro tezgâh maddesi, **`ai_hub/KABIN_KURULUM_KILAVUZU.md` "Fantom/Petri yerleşimi"** (tepsi konumu, kalınlık, marker görünürlüğü, telefon açısı kısıtı), bu dokümanın DURUM bloğu; README sapmaları (petri/phantom README 5X5_100/5 cm → 5X5_50/**15 cm**; ilk düzeltme 10 cm yazmıştı, 2026-09-09 sahip ölçümüyle 15 cm'e çıkıldı — READMEler bugün 15,0 cm diyor) | docs |
 | CHANGELOG (mevcut ASCII üslubuyla): `## app 1.9.44 — … (hasta-güvenliği: sunucu-kameralı AI Pro seansında lokalizasyon her karede patlıyor, bobin sürülmüyordu — düzeltildi; hazırlık ucu seans sürerken hedef değiştirebiliyordu — kapatıldı)`; `## app 1.9.45 (+ mobile 2.3.34) — Araştırma AI Pro: Fantom + Petri`; `versions.json`; `sync_versions.ps1`; `scripts/check_changelog_surum.py` + `test_version_visibility` | CHANGELOG.md, versions.json |
-| Paket: `research.zip`'e DOKUNULMAZ; yeni kod yalnız `apps/backend/servers/` (exe PYZ) + `ai_hub/` (Cython .pyd) + `pf/` → deps sha değişmez (`make_base_zip.py` APP_ROOTS); sevk-ağacı ai_hub kapısı + PYZ temizliği kapısı; frozen EXE'de `/api/ai/hazirlik?derin=1` çıktısında `arastirmaAiPro` doğrulanır | build |
+| Paket: `research.zip`'e DOKUNULMAZ; yeni kod yalnız `apps/backend/servers/` (exe PYZ) + `ai_hub/` (Cython .pyd) + `apps/ui/` → deps sha değişmez (`make_base_zip.py` APP_ROOTS); sevk-ağacı ai_hub kapısı + PYZ temizliği kapısı; frozen EXE'de `/api/ai/hazirlik?derin=1` çıktısında `arastirmaAiPro` doğrulanır | build |
 | Yayın runbook: backend build + APK build PARALEL KOŞMAZ; iki isim (sürümsüz+sürümlü); manifest en son; "sahip masaüstünü devralınca dur"; yayın yalnız açık "yayınla" ile | runbook |
 
 **Kapılar:** `test_ai_pro_frame_arastirma.py` (yeni): aktif fantom seansında `/frame` (sahip) `model:'fantom'`, `targets`

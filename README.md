@@ -33,13 +33,13 @@ Arayüz **React Native / Expo** ile tek kod tabanından **Web + Android + iOS**'
 ## Büyük Resim
 
 ```
-Mobil/Web (pf → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
-                                                                                  (FastAPI+uvicorn, NSSM servis)
-   Supabase (yalnız cihaz-registry + şifreli PII)                                   ├─ apps/backend/servers/  (REST+WS+router'lar)
-   GitHub Releases (OTA: base.zip/APK/launcher)                                     ├─ apps/backend/controllers/ → STM32 (bobin 1-7, seri)
-                                                                                    ├─ apps/backend/services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
-                                                                                    ├─ apps/backend/database/ (SQLCipher yerel)
-                                                                                    └─ ai_hub/ (gömülü ONNX teşhis)
+Mobil/Web (apps/ui → frontend/dist)  ──LAN http/ws :8000 · uzak: Cloudflare tünel──▶  PEMF_Backend.exe
+                                                                                       (FastAPI+uvicorn, NSSM servis)
+   Supabase (yalnız cihaz-registry + şifreli PII)                                        ├─ apps/backend/servers/  (REST+WS+router'lar)
+   GitHub Releases (OTA: base.zip/APK/launcher)                                          ├─ apps/backend/controllers/ → STM32 (bobin 1-7, seri)
+                                                                                         ├─ apps/backend/services/ + bin/mosquitto → ESP (slot 8, MQTT) ⚠️ 2026-09-11: ESP SÖKÜLÜ, PEMF_ESP_ENABLED=0
+                                                                                         ├─ apps/backend/database/ (SQLCipher yerel)
+                                                                                         └─ ai_hub/ (gömülü ONNX teşhis)
 ```
 Detaylı bileşen diyagramı, veri akışı ve güven sınırları: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -104,7 +104,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör | Ne işe yarar |
 |---|---|
 | [`apps/ui/`](apps/ui/README.md) | **ANA KAYNAK** — mobil (APK/IPA) + web bundle üreten React Native/Expo kaynağı |
-| `frontend/` | **ÜRETİLEN** — `dist/` = backend'in `/` kökünden sunduğu web bundle (pf'ten aynalanır); `src/` ölü |
+| `frontend/` | **ÜRETİLEN** — `dist/` = backend'in `/` kökünden sunduğu web bundle (apps/ui'den aynalanır); `src/` ölü |
 | [`apps/web/`](apps/web/README.md) | **Canlı pazarlama/indirme sitesi** (Vite+React, Vercel, iyzico ödeme) |
 | [`pemf_vet_landing/`](pemf_vet_landing/NOTES.md) | Çıkarılmış Lovable landing statik kopyası (tasarım referansı) |
 | [`web_static/`](web_static/README.md) · [`website/`](website/README.md) · [`templates/`](templates/README.md) | **LEGACY** — eski vanilla UI · eski indirme sayfası · eski sunucu-render şablonu (hiçbiri kullanılmıyor) |
@@ -130,7 +130,7 @@ BUILD.md'deki aynı tuzakla birlikte 2026-08-18'de kaldırıldı.)
 | Klasör | Ne işe yarar |
 |---|---|
 | [`firmware/`](firmware/README.md) | STM32F429 bobin-sürücü firmware'i (`main.c`, yazılım DDS PWM + güvenlik watchdog) |
-| [`tests/`](tests/README.md) | pytest paketi (208 dosya / ~1650 test; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
+| [`tests/`](tests/README.md) | pytest paketi (358 dosya / 3303 test — ölçüm 2026-09-22, güncel sayı için `pytest --collect-only -q`; protokol-güvenlik, auth, KVKK, seans, OTA, CI-kapıları) |
 | [`tools/`](tools/README.md) | Geliştirici araçları (STM32 simülatör :5100, COM sniffer, test-verisi) |
 | [`.github/`](.github/README.md) | CI (tests/lint/security/**frontend/site**/linux-mac backend/launcher/testflight) + dependabot — **yalnız KÖK `.github/` geçerli** |
 | [`docs/`](docs/README.md) | Dokümanlar (mimari, launcher-sözleşmesi, runbook, doğrulama, sistem-raporu) + ekran görüntüleri |
@@ -163,7 +163,7 @@ Tam adım-adım: **[`BUILD.md`](BUILD.md)**. En kısa hâli (guii kökünden):
 ## Önemli Kurallar (yeni geliştirici — bunları bozma)
 
 - 🔒 **Cihaz güvenliği:** bobinler her kill/kaldırmadan **önce** E-stop'lanır (launcher + teardown). Süre-watchdog + keep-alive + firmware "Ölü Adam Devresi" katmanlı korumadır.
-- 🔒 **Backend Python-tarafı freq/duty/sıcaklık clamp'i YOK** (bilinçli) — firmware sınırda doyurur. Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
+- 🔒 **Backend Python-tarafı MAKS DUTY clamp'i YOK** (bilinçli, `STM32_DUTY_MAX_RATIO = None`) — firmware sınırda doyurur. **Frekans ise Python'da kırpılır:** STM 1-25000 Hz (`normalize_frequency_hz`), ESP 1-1000 Hz (`normalize_esp_frequency_hz`, 8266 firmware sınırı), AI Pro duty tavanı %50 (`AI_PRO_DUTY_MAX_RATIO`). Sınır sabitleri `apps/backend/utils/stm32_protocol_limits.py`.
 - 🔒 **PII maskeleme varsayılan KAPALI** (bilinçli sahip kararı) — `PEMF_MASK_HISTORY_PII=1` ile açılır.
 - 🌐 **AI offline** — `apps/backend/utils/model_downloader.py` yalnız yerel kökleri arar; internetten model çekmez.
 - ✏️ Web/mobil UI'yi **`apps/ui/`'te düzenle** — `frontend/src` bayat kopyadır.

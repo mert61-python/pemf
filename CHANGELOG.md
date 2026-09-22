@@ -6,7 +6,12 @@
 > başına değil, *birlikte* kötüdür: bir davranış değiştiğinde veteriner bunu arıza sanar, destek de
 > hangi sürümün ne yaptığını bilemez. (2026-08-09 denetimi, Tier 3.)
 
-## app 1.9.51 — 2026-09-11 (🔀 sürüş biçimi artık ekrandan seçiliyor)
+## app 1.9.51 — YAYINLANMADI (hazırlanan sürüm; sahada 1.9.50 var — 🔀 sürüş biçimi artık ekrandan seçiliyor)
+
+> ⚠️ **BU SÜRÜM HENÜZ YAYINLANMADI.** Aşağıdaki kontrolcü-yazılımı yeniden yükleme talimatını
+> **UYGULAMAYIN** — sahadaki uygulama **1.9.50**'dir; 121 baytlık yeni kontrolcü yazılımına
+> geçilirse 1.9.50 ile **hiçbir bobin çalışmaz**. Yayınlandığında başlığa tarih ve `buildId`
+> satırı eklenecektir.
 
 > ⚠️⚠️ **KONTROLCÜ YAZILIMI MUTLAKA YENİDEN YÜKLENMELİ — YALNIZ UYGULAMAYI GÜNCELLEMEK
 > CİHAZI ÇALIŞMAZ HÂLE GETİRİR.** Komut paketine bir alan eklendi (120 → 121 bayt).

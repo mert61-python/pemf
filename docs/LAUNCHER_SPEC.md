@@ -2,25 +2,32 @@
 
 **Durum:** karar verildi · **İlk karar:** 2026-07-21
 
-> ⚠️ Başlık uzun süre "taslak / 2026-07-21" kaldı ama gövde güncellendi: 125. ve 136.
-> satırlarda **2026-09-13 ölçümleri** var. Elle yazılan durum etiketleri gövdeyle birlikte
+> ⚠️ Başlık uzun süre "taslak / 2026-07-21" kaldı ama gövde güncellendi: "Açık sorular"
+> bölümünde **2026-09-13 ölçümleri** var. Elle yazılan durum etiketleri gövdeyle birlikte
 > güncellenmez — tarih için git geçmişine bakın. Kapı: `tests/test_belge_etiketleri_bayatlamaz.py`
 **Kapsam:** Windows + macOS + Linux, **tek kaynak** · **Geriye dönük uyumlu**
 
-## Neden yeniden yazılıyor
+## Neden yeniden yazıldı (tarihçe — v1.8.0)
 
-Mevcut launcher (`PEMFVetClient-Setup.exe`, `.deb`, `.AppImage`, `.rpm` —
-`pemf-update/releases/tag/launcher-v1.8.0`) **kaynağı elimizde olmayan** bir bileşen.
-`mert61-python/pemf` deposunun hiçbir commit'inde, hiçbir branch'inde izi yok
+> ✅ **UYGULANDI — yeniden yazım BİTTİ ve sahada.** `launcher/` bir Tauri/Rust workspace:
+> `launcher/Cargo.toml` → `members = ["core", "app"]`, `version = "1.9.51"`;
+> `launcher/core/src/` (auth.rs · backend.rs · install.rs · manifest.rs · verify.rs · …);
+> `launcher/app/tauri.conf.json`; `versions.json` → `"launcher": "1.9.51"`. CI
+> `.github/workflows/launcher.yml` `.exe` / `.dmg` / `.deb` / `.AppImage` / `.rpm` üretiyor.
+> Aşağısı kararın GEREKÇESİDİR — yapılacak iş değil.
+
+Eski launcher (`PEMFVetClient-Setup.exe`, `.deb`, `.AppImage`, `.rpm` —
+`pemf-update/releases/tag/launcher-v1.8.0`) **kaynağı elimizde olmayan** bir bileşendi.
+`mert61-python/pemf` deposunun hiçbir commit'inde, hiçbir branch'inde izi yoktu
 (`git log --all --diff-filter=AD` → sıfır sonuç; `Cargo.toml` / `.rs` / `tauri.conf.json` /
 `.nsi` / Electron bağımlılığı yok). Kaynağı olmayan bir bileşen düzeltilemez, imzalanamaz,
-yeni platforma taşınamaz — macOS'in tıkanma sebebi tam olarak budur.
+yeni platforma taşınamaz — macOS'in tıkanma sebebi tam olarak buydu.
 
 ## Teknoloji
 
-**Tauri (Rust).** Gerekçe: mevcut launcher ~2.9 MB (NSIS) ve release notunda "zip crate"
-geçiyor → zaten Rust. Tauri bundler tek koddan `.exe` / `.dmg` / `.deb` / `.AppImage` /
-`.rpm` üretir — bugün yayında olan varlık kümesinin **tamamı**.
+**Tauri (Rust)** — ✅ seçildi ve uygulandı. Gerekçe: eski launcher ~2.9 MB (NSIS) ve release
+notunda "zip crate" geçiyordu → zaten Rust. Tauri bundler tek koddan `.exe` / `.dmg` /
+`.deb` / `.AppImage` / `.rpm` üretir — bugün yayında olan varlık kümesinin **tamamı**.
 
 ## Akış
 
@@ -55,17 +62,27 @@ kullanır, profil paketini **yeniden indirmez** (2 GB'a kadar gereksiz indirme o
 
 ## Base paketi — modeller GÖMÜLMEZ
 
-Yayındaki `base.zip` 1.29 GB / 6191 dosya ve **sıfır** `ai_models` girdisi içeriyor
-(doğrulandı). Modeller yalnızca profil paketlerinden gelir. `PEMF_Backend_onedir.spec`
-içindeki `PEMF_EMBED_MODELS` bayrağı bu hizayı korur (`0` = gömme).
+> ✅ **DURUM (ölçüldü, `pemf-app-packages/manifest.json`): tek-parça `base.zip` ARTIK YOK.**
+> Paket **katmanlı** (monolit 1.9.48'de kaldırıldı). Canlı manifest `"runtimes": {}` ve
+> `layers["win-x64"]` altında **`base-app.zip` 81.363.203 B (~81 MB)** +
+> **`base-deps.zip` 1.487.710.488 B (~1,49 GB)** + `"rollout": 100` taşıyor.
+> Aşağıdaki "1.29 GB / 6191 dosya" ölçümü TARİHSELDİR.
+
+Yayındaki base katmanları **sıfır** `ai_models` girdisi içerir (doğrulandı; tarihsel ölçüm:
+tek-parça `base.zip` 1.29 GB / 6191 dosya). Modeller yalnızca profil paketlerinden gelir.
+`PEMF_Backend_onedir.spec` içindeki `PEMF_EMBED_MODELS` bayrağı bu hizayı korur (`0` = gömme).
 
 Gömülseydi: kullanıcı aynı 2.1 GB'ı iki kez indirirdi ve profil ayrımı anlamsızlaşırdı
 (vet kullanıcısında research modelleri de bulunurdu).
 
 ## manifest sözleşmesi
 
-Bugünkü format (v1) ad-hoc platform anahtarları kullanıyor: `base`, `base_linux`.
-`pemf-app-packages/publish.ps1` bu tasarımın bir kez ısırdığını kayda geçmiş:
+**v1 formatı** ad-hoc platform anahtarları kullanıyordu: `base`, `base_linux`.
+⚠️ **Bugünkü format bu DEĞİL** — canlı manifest v2'dir (aşağıdaki "canlı şema"ya bakın).
+O tasarımın bir kez ısırdığı kayda geçmişti (kaynak betik `pemf-app-packages/publish.ps1`
+**artık YOK**; depodaki tek yayın betiği `scripts/publish_release.ps1`, manifest üretimi
+`scripts/make_manifest.py` — aynı sınıf uyarı bugün o betiğin "Eksikleri mevcut manifest'ten
+TAŞI" bloğunda duruyor):
 
 > *"base-linux.zip … Eksikse Linux client sessizce Windows base.zip indirir → backend hiç çalışmaz."*
 
@@ -94,24 +111,30 @@ Bugünkü format (v1) ad-hoc platform anahtarları kullanıyor: `base`, `base_li
 > `permissions: contents: read` ve yalnız `upload-artifact` kullanıyor — **release'e
 > yazamaz**; o adım ayrıca açılmalı.
 
-**v2 hedefi** — açık platform anahtarları, **eksik anahtarda sessiz fallback YOK, sert hata**:
+**v2 — CANLI ŞEMA** (hedef DEĞİL; `pemf-app-packages/manifest.json`'dan alındı): açık
+platform anahtarları, **eksik anahtarda sessiz fallback YOK, sert hata**. Tek-parça
+`runtimes` yerine **`layers`** (app + deps) ve **`rollout`** freni var:
 
 ```json
 {
   "schema": 2,
-  "version": "1.8.0",
-  "runtimes": {
-    "win-x64":   { "url": "…", "sha256": "…", "size": 0 },
-    "linux-x64": { "url": "…", "sha256": "…", "size": 0 },
-    "mac-arm64": { "url": "…", "sha256": "…", "size": 0 }
+  "version": "1.9.50",
+  "tag": "client-app-v1.9.50",
+  "runtimes": {},
+  "layers": {
+    "win-x64": {
+      "app":  { "url": "…/base-app.zip",  "sha256": "…", "size": 81363203,   "kind": "zip" },
+      "deps": { "url": "…/base-deps.zip", "sha256": "…", "size": 1487710488, "kind": "zip" },
+      "rollout": 100
+    }
   },
-  "models": {
-    "home": { "url": "…", "sha256": "…", "size": 0 },
-    "vet":  { "url": "…", "sha256": "…", "size": 0 },
-    "research": { "url": "…", "sha256": "…", "size": 0 }
-  }
+  "models":   { "home": {…}, "vet": {…}, "research": {…} },
+  "profiles": { "home": {…}, "vet": {…}, "research": {…} }
 }
 ```
+
+⚠️ `linux-x64` ve `mac-arm64` **bilerek yok** (yukarıdaki ✅ DURUM bloğu). `models` ve
+`profiles` bölümleri canlı manifest'te AYNI varlıkları taşır.
 
 Launcher **iki formatı da okur** (v1 → sahadaki v1.8.0 kurulumları bozulmasın).
 

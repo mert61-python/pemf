@@ -1,7 +1,7 @@
 # PEMF Backend — Operasyon Runbook (audit B-11.2)
 
 Saha olay-müdahale rehberi. Klinik PC = Windows, servis `PemfBackend` (NSSM), LocalSystem.
-Veri kökü genelde `C:\ProgramData\PEMF_System\PEMF_GUI` (`PEMF_DATA_DIR`).
+Veri kökü `C:\ProgramData\PEMF_System\PEMF_GUI` (= `PEMF_DATA_DIR` + `\PEMF_GUI`; `PEMF_DATA_DIR` klinikte `C:\ProgramData\PEMF_System`'dir). Aşağıda `<data>` = **veri kökü**.
 
 ## Hızlı komutlar (Yönetici PowerShell)
 
@@ -97,8 +97,8 @@ Eski pakete geri döndürmek için manifest'i eski paketin sha'sına yazmak gere
 monotonluğu olmadığı için bu **bilinçli** bir işlemdir ve yayın kaydına yazılmalıdır.
 
 ## Anahtar / veri kurtarma (KRİTİK)
-- **SQLCipher anahtarı** `<data>\PEMF_GUI\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
-- Sırlar tek dosyada: `<data>\PEMF_GUI\pemf_secrets.json` (kripto anahtarları DPAPI'li).
+- **SQLCipher anahtarı** `<data>\.sqlcipher_key` (+ keyring). **KAYBI = şifreli hasta verisi KALICI OKUNAMAZ.** ACL: yalnız SYSTEM+Administrators.
+- Sırlar tek dosyada: `<data>\pemf_secrets.json` (kripto anahtarları DPAPI'li).
 - **Aynı makinede yedekten dönüş**: servisi durdur → `<data>\backups\pemf_*_YYYYMMDD.db` dosyasını aktif DB üzerine kopyala (aynı anahtarla şifreli) → servisi başlat.
 
 ### Kurtarma kodu — donanım arızası / makine değişimi
@@ -108,7 +108,7 @@ dahil — tek başına **açılamaz**. Bunun için kurulum bir kez **150-bit kur
 
 | | |
 |---|---|
-| **Kod nerede** | `<data>\PEMF_GUI\KURTARMA-KODU.txt` (ilk yedekte oluşur). **Operatör bunu makine dışına almalı** — kasa / parola yöneticisi. Aldıktan sonra dosya silinebilir. |
+| **Kod nerede** | `<data>\KURTARMA-KODU.txt` (ilk yedekte oluşur). **Operatör bunu makine dışına almalı** — kasa / parola yöneticisi. Aldıktan sonra dosya silinebilir. |
 | **Zarf nerede** | `<data>\backups\kurtarma-zarfi.enc` ve `PEMF_BACKUP_DIR` set ise off-site kopyada. İçinde `sqlcipher_key` + `patient_fernet_key`, koddan scrypt ile türetilen anahtarla şifreli. |
 | **Kodu görüntüle** | `python tools\kurtarma.py --kodu-goster` (cihaz hâlâ çalışırken) |
 

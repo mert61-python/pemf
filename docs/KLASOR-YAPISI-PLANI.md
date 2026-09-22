@@ -1,7 +1,12 @@
 # Klasör Yapısı Planı — monorepo düzeni
 
 > Denetim: [`DEPO-DENETIMI-2026-09-15.md`](DEPO-DENETIMI-2026-09-15.md)
-> Bu belge **planlama**dır; hiçbir taşıma henüz yapılmadı.
+> Bu belge **kısmen UYGULANDI**: F1 (`apps/web` + `apps/ui`) ve F4 (`apps/backend`)
+> 2026-09-18'de, `bootstrap.ps1` taşıması 2026-09-19'da yapıldı.
+> **KALAN:** F2 (`apps/launcher/`) · F3 (`ai/hub` + `ai/service`) · F5 (`tools/` üçe
+> bölünmesi) · `libs/` (paylaşılan göç + cv_ortak) · derleme çıktılarının ağaç dışına
+> alınması. (Ölçüldü 2026-09-22: `launcher/`, `ai_hub/`, `ai_service/`, `build_tools/`
+> hâlâ kökte; `libs/` yok.)
 
 ---
 

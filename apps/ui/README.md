@@ -1,15 +1,15 @@
-# pf/ — Mobil + Web Uygulama Kaynağı (React Native / Expo) · **ANA KAYNAK**
+# apps/ui/ — Mobil + Web Uygulama Kaynağı (React Native / Expo) · **ANA KAYNAK**
 
 Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 1. **Android APK / iOS IPA** (mobil uygulama),
-2. **Web bundle** (`expo export --platform web` → `pf/dist`) — backend'in `localhost:8000/` kökünden servis ettiği React arayüz.
+2. **Web bundle** (`expo export --platform web` → `apps/ui/dist`) — backend'in `localhost:8000/` kökünden servis ettiği React arayüz.
 
 > `package.json` adı: **`pemf-responsive-frontend`**. Expo `~56`, React Native `^0.85.3`, React `19`, expo-router.
 > Tek kod tabanı → **Web + Android + iOS**. Üç profil (Evcil Hayvan Sahibi · Veteriner · Araştırma) UI'yi role göre uyarlar.
 
-> ⚠️ **Burayı düzenle — `../frontend/` değil.** `guii/frontend/`, `pf/`'in **bayat 2. kopyasıdır**; yalnız onun `dist/`'i canlıdır (buradan aynalanır). Detay: `../frontend/README.md`.
+> ⚠️ **Burayı düzenle.** Depo kökündeki `../../frontend/` artık kaynak KOPYASI DEĞİL, yalnız `dist/` (yayınlanan web bundle) tutar; `npm run export:web` çıktısı oraya aynalanır ve backend `/` kökünden onu servis eder.
 >
-> **Tek depo (2026-08-18):** `pf/` artık `mert61-python/pemf` içinde izleniyor (eski ayrı
+> **Tek depo (2026-08-18):** `apps/ui/` artık `mert61-python/pemf` içinde izleniyor (eski ayrı
 > `pemf-frontend` deposu silindi; tam aynası `../../pemf-frontend-arsiv-2026-08-18.bundle`).
 > CI: kök [`.github/workflows/frontend.yml`](../../.github/workflows/frontend.yml) (yol filtreli).
 
@@ -34,7 +34,7 @@ Uygulamanın **tek yetkili kaynağıdır**. Buradan **iki** çıktı üretilir:
 ```bash
 npm install                 # bağımlılıklar (myenv/embedded ile ilgisi yok — bu Node tarafı)
 npm run web                 # Expo web dev server (:3001)
-npm run export:web          # web bundle üret → pf/dist  (postexport-web.js dahil)
+npm run export:web          # web bundle üret → apps/ui/dist  (postexport-web.js dahil)
 npm run android / ios       # cihaz/emülatör
 npm test / lint / typecheck # jest · eslint · tsc
 ```
@@ -45,11 +45,11 @@ npm test / lint / typecheck # jest · eslint · tsc
 |---|---|---|
 | **APK** | `..\build_tools\build_apk.ps1` (guii kökünden) | `release_assets\PEMF_Vet_Mobil.apk` |
 | **iOS IPA** | `npx eas build -p ios --profile production` (EAS bulut) | expo.dev → `.ipa` |
-| **Web UI** | `npm run export:web` → `pf\dist` → `robocopy /MIR` ile `..\frontend\dist` + kurulu `_internal\frontend\dist` | Backend `/` kökünden servis eder |
+| **Web UI** | `npm run export:web` → `apps\ui\dist` → `robocopy /MIR` ile `..\..\frontend\dist` + kurulu `_internal\frontend\dist` | Backend `/` kökünden servis eder |
 
 ## ⚠️ Dikkat
 
-- **Sürüm:** `pf/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../versions.json`](../../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
+- **Sürüm:** `apps/ui/app.json`'daki sürüm/`androidVersionCode` **elle değil** — kök [`../versions.json`](../../versions.json) tek-kaynağından `build_tools/sync_versions.ps1` yazar. `androidVersionCode` her yayında artmalı (Play Store şartı, geri alınamaz).
 - **`gradlew clean` YAPMA** → `react-native-async-storage` codegen bozulur. `build_apk.ps1` zaten clean yapmaz.
 - **APK MAX_PATH:** guii derin bir yolda → ninja/CMake ANSI-260 sınırını aşar. `build_apk.ps1` kaynağı kısa köke (`C:\pb`) aynalayıp orada derleyerek çözer (`LongPathsEnabled` tek başına yetmez).
 - **Web değişikliği** yalnız burada export edilir; `frontend/dist`'e aynalanmadıkça backend eski UI'yi sunar.

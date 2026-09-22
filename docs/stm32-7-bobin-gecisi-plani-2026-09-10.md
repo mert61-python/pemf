@@ -104,9 +104,9 @@ tablo şöyle olur ve **bilinçli olarak** böyle kalır:
 var ve ölçüm gelen her bobinde çalışıyor:
 
 ```
-pf/src/components/domain/CoilParameterPanel.tsx:21   const SAFE_TEMP_CUTOFF = 48;
-pf/src/components/domain/CoilParameterPanel.tsx:143  const overheating = running && objectTemp > SAFE_TEMP_CUTOFF;
-                                                     → sendCommand(false) + "otomatik durduruldu"
+apps/ui/src/components/domain/CoilParameterPanel.tsx:21   const SAFE_TEMP_CUTOFF = 48;
+apps/ui/src/components/domain/CoilParameterPanel.tsx:179  const overheating = running && objectTemp > SAFE_TEMP_CUTOFF;
+                                                          → sendCommand(false) + "otomatik durduruldu"
 ```
 
 Yani bobin 6-7 sıcaklığı STM telemetrisiyle bildirmeye başladığı anda bu interlock onlara
@@ -125,7 +125,7 @@ kararına hizalanmalı mı, karar senin.
 `NTC_KESME_C 48.0f` (`main.c:629`) ile 8266'nın 100 °C'si arasındaki eşik seçimi ise **konusuz
 kaldı** — STM'de kesme derlenmediği için orada hiçbir eşik uygulanmıyor.
 
-⚠️ Arayüz metni de kontrol edilmeli: `CoilParameterPanel:204-215`'teki "ölçüm yok → otomatik
+⚠️ Arayüz metni de kontrol edilmeli: `apps/ui/src/components/domain/CoilParameterPanel.tsx:246-265`'teki "ölçüm yok → otomatik
 termal durdurma uygulanmaz" rozeti bobin 6-7'de artık **yanlış** olacak (ölçüm gelecek), ama
 "bobin otomatik durduruldu" mesajı da cihazın kendini durdurduğu izlenimini vermemeli — durduran
 **arayüz**. Bu ayrım operatöre görünür kalmalı.
@@ -298,9 +298,10 @@ bobin 2 → PE10/IN_B. Gerekçe o günün tezgâh ölçümüydü (z işaretleri 
 görünür, `running` true olur, arayüz "Aktif" der, **alan sıfırdır**.
 
 **Yapılan:** maske `0x00`; `pemf_surus.h` + `main.c` pin blokları + `firmware/stm32_pemf/README.md`
-düzeltildi; ayna `scripts/stm_unipolar_senkronla.py` ile senkronlandı; kapı
-`tests/test_stm_unipolar_ayna.py` artık **0x00'ı** pinliyor ve mekanizmanın ISR'de durduğunu ayrıca
-doğruluyor (IN_B'ler bir gün bağlanırsa yeniden kullanılabilir). Mutasyon (0x00→0x03) ile
+düzeltildi; kapı `tests/test_stm_surus_dalgasi.py` artık **0x00'ı** pinliyor (maske
+`firmware/stm32_pemf/Core/Inc/pemf_surus.h:149`'dan okunur). ⚠️ Ayna projesi,
+`scripts/stm_unipolar_senkronla.py` ve `tests/test_stm_unipolar_ayna.py` 2026-09-11'de
+KALDIRILDI (bkz. başlık notu). Mutasyon (0x00→0x03) ile
 **KIRMIZI olduğu kanıtlandı** (2 test). Yeni karşıt-kanıt testi, modelin maske bitini gerçekten
 okuduğunu gösteriyor. 55 test yeşil.
 
@@ -380,9 +381,9 @@ Bu tasarım bilinçli: istemci ve DB, verinin ESP'den mi STM'den mi geldiğini *
 
 ## 4. Değişecek dosyalar — atomik gruplar
 
-### Grup A — Firmware protokolü (88 → 120 bayt), tek commit'te
+### Grup A — Firmware protokolü (88 → 121 bayt), tek commit'te
 
-`2 + 7·4·3 + 7·4 + 2 + 4 = **120 bayt**`
+`2 + 7·4·3 + 7·4 + 2 + 1 + 4 = **121 bayt**` (son 1 bayt = `unipolar_maskesi`, 2026-09-11'de eklendi)
 
 | Dosya | Değişiklik |
 |---|---|
@@ -391,7 +392,7 @@ Bu tasarım bilinçli: istemci ve DB, verinin ESP'den mi STM'den mi geldiğini *
 | `Core/Inc/pemf_surus.h` | pin durumu bloğu (bobin 6-7 satırları). `PEMF_BOBIN_TERS_MASKESI` **0x00 KALIR** — §2.4 |
 | `controllers/hardware_controller.py` | `fmt` → `'<BB 7f 7f 7f 7I H'`; `range(1, 6)` → `range(1, 8)` (**8 yer**: 48, 63, 103, 116, 261, 275, 299, 328) ve `coil_id > 5` → `> 7` (140) |
 | `utils/stm32_transport.py:58-72` | ping/stop paketi `7f`; docstring |
-| `tools/stm32_simulator.py:66-76` | `PKT_FMT`, `assert PKT_SIZE == 120`, `NUM_COILS = 7` |
+| `tools/stm32_simulator.py:75-79` | `PKT_FMT`, `assert PKT_SIZE == 121`, `NUM_COILS = 7` |
 | `headless_core.py:28` | `STM_COIL_COUNT = 5 → 7` (ayrıştırıcı zaten uzunluktan bağımsız) |
 
 ⚠️ **ACK format dizesi sürüklenme tuzağı.** `main.c:867` beş `%d` elle yazılı. Yediye çıkarken
@@ -429,14 +430,13 @@ hepsini kapılar.
 
 | Kapı | Ne pinleyecek |
 |---|---|
-| `test_stm32_source_parity.py` | 88 → **120**; `NUM_COILS` üç kaynakta 7 |
+| `test_stm32_source_parity.py` | 88 → **121** (`BEKLENEN_PAKET_BOYU`); `NUM_COILS` üç kaynakta 7 |
 | YENİ `test_stm_bobin_sayisi_tek_kaynak.py` | firmware initializer'larındaki eleman sayısı == `NUM_COILS` (eksik initializer sessizce sıfırlanır — **derleyici uyarmaz**) |
 | YENİ `test_stm_ack_formati_turetilmis.py` | ACK format dizesinde **sabit sayıda `%d` grubu OLMASIN** (termal mesaj kapısının aynı sınıfı) |
 | YENİ `test_stm_termal_kesme_EKLENMEDI.py` | Sahip kararı 2'yi **iki yönlü** pinler: (a) STM'e sessizce bir sıcaklık limiti eklenmemiş, (b) `SAFE_TEMP_CUTOFF = 48` istemci interlock'u **duruyor** — tek kalan otomatik katman kazara silinmesin |
 | YENİ `test_stm_telemetri_akim_alani_YOK.py` | `STM_TELE` çerçevesi akım alanı **taşımıyor** ve backend akım ortalamasını biriktirmiyor (karar 3; sahte-0.0 sınıfı) |
 | YENİ `test_bobin_topolojisi.py` | `STM_COIL_IDS ∪ ESP_COIL_IDS` çakışmasız; hiçbir bobin iki yoldan sürülmüyor; 8. slot `connected=False` |
 | `test_esp8266_termal_esik.py` | ESP kodu uykuda kalıyor (karar 5) → kapı **koşmaya devam eder** ve 100 °C'yi pinlemeyi sürdürür. ⚠️ Ama artık **ölü kodu** pinliyor: bobin sürülmediği için eşiğin saha etkisi yok. Kapının başlığına bu not düşülmeli, yoksa bir sonraki okuyan "termal koruma var" sanır. |
-| `test_stm_unipolar_ayna.py` | ayna senkronu (elle düzenleme yasağı) |
 
 Ayrıca: 284 test dosyasından **50'si** ESP/MQTT'ye, **19'u** STM sabitlerine dokunuyor. Geçişten
 sonra **tam süit** koşmalı (bugün 2606 geçiyor) — hedefli koşu bu ölçekte yeterli değil.
@@ -462,7 +462,7 @@ tick'te geçiş yapar. Yine de %28 yük 20 µs bütçesine sığıyor ve ana dö
 GPIO'yu toggle'layıp **skopla ölç**. %50'yi geçerse iki hazır kaçış var: fazları kaydır ya da
 dead-time'ı çevrim-sayılı gerçek bir gecikmeyle değiştir.
 
-**UART:** 120 bayt @115200 8N1 = **10,4 ms** (88 bayt = 7,6 ms). Keep-alive 500 ms
+**UART:** 121 bayt @115200 8N1 = **10,5 ms** (88 bayt = 7,6 ms). Keep-alive 500 ms
 (`hardware_controller.py:82`), ölü-adam eşiği 1500 ms (`main.c:940`) → hat doluluğu %1,5'ten
 %2,1'e çıkar, ölü-adam payı (3 paket) **değişmez**. Çerçeve senkronu 50 ms sessizliğe dayanıyor,
 10,4 ms onun çok altında. Sorun yok.
@@ -477,7 +477,7 @@ dead-time'ı çevrim-sayılı gerçek bir gecikmeyle değiştir.
 | R2 | **Sargı yönü bilinmiyor** → bobin 6-7 diğerlerini söndürebilir | Kabin merkezinde z ölçümü; yanlışsa **bobin uçları fiziksel çevrilir** (maske DEĞİL — §2.1). Ölçüm hâlâ eksik (sol + sağ duvar). Pankek işaret-dönmesi tuzağı: `sqrt(x²+y²)/|z| < 0,15` şartı. |
 | R3 | Uzun kablo I2C'yi düşürür | Gerçek uzunlukta kablo + **bobinler sürülürken** 10 dk kesintisiz okuma, NACK/kurtarma sayacı 0 |
 | R4 | ISR taşması | Skopla ISR süresi ölçümü; 7 bobin aynı fazda, en yüksek frekansta |
-| R5 | CubeMX Generate-Code her şeyi ezer (§B3) | I2C **elle** eklenecek; `.ioc`'ye dokunulmayacak; ayna senkron betiği koşacak |
+| R5 | CubeMX Generate-Code her şeyi ezer (§B3) | I2C **elle** eklenecek; `.ioc`'ye dokunulmayacak |
 | R6 | Sürücü kartı uyumu — 8266 3,3 V GPIO ile sürüyordu, STM de 3,3 V | Seviye uyumlu ama **kablo uzunluğu** kenar bozar: sürücü girişine giden PWM hattı için seri direnç/tampon değerlendir; darbe kenarını skopla gör |
 | ~~R7~~ | ⛔ Doz kalibrasyonu KALDIRILDI (sahip 2026-09-21) | Bobin 6-7'nin dalga sözleşmesi 8266'daki ile aynı 50 kHz DDS matematiği (`CoilController.cpp:341` ≡ `main.c` tpp) — ama sürücü ve pin farkı ölçülmeden aynı doz varsayılmaz. Alan probu + skop. |
 
@@ -507,10 +507,10 @@ Bu geçiş sadece pin taşımıyor; **sahada tekrar eden bir arıza ailesini kö
 | Faz | İş | Çıktı |
 |---|---|---|
 | **0** | ✅ Sahip kararları alındı (bkz. başlık) · ⏳ bobin 6-7 sargı yönü ölçümü **BEKLİYOR** | maske bitleri |
-| **1** | ✅ **BİTTİ** (`07c2d4c`) — protokol 88→120, pin tablosu, sürüklenme kaynakları, 5 mutasyon kanıtı. Tam süit **2615 geçti**. ⚠️ REFLASH + YAYIN bekliyor | STM 7 bobin sürebiliyor; backend topolojisi hâlâ 1-5, bobin 6-7 alanları SIFIR gidiyor |
+| **1** | ✅ **BİTTİ** (`07c2d4c`) — protokol 88→121, pin tablosu, sürüklenme kaynakları, 5 mutasyon kanıtı. Tam süit **2615 geçti**. ⚠️ REFLASH + YAYIN bekliyor | STM 7 bobin sürebiliyor |
 | **2** | Bobin 6-7 kablolaması + tezgâh: ISR ölçümü, darbe kenarı, alan yönü, doz | 7 bobin STM'den sürülüyor; ESP'ler hâlâ takılı ama **kullanılmıyor** |
 | **3** | ✅ **KOD BİTTİ** (`34a5e6c`) — `pemf_sensor.c/h` (registre I2C, bloklamayan), `STM_TELE` sözleşmesi, backend olay yolu, 25 test, 8/8 mutasyon kırmızı. ⏳ **TEZGÂH BEKLİYOR**: kablo + ESP karşılaştırması | gerçek sıcaklık/alan yolu hazır; termal kesme **eklenmedi** (karar 2), ACS712 **taşınmadı** (karar 3) |
-| **4** | Topoloji anahtarı (Grup B) + arayüz (Grup C) | `ESP_COIL_IDS = set()`; ESP kodu uykuda, silinmiş değil |
+| ~~**4**~~ | ✅ **BİTTİ** — topoloji anahtarı (Grup B) + arayüz (Grup C) | `STM_COIL_IDS = set(range(1, 8))`, `ESP_COIL_IDS = {8}` (`live_state.py:245-246`), `stm32Driven: i < 7` (:176); arayüzde iki grup birleşti (`CoilCard.tsx:17`). ESP kodu uykuda, silinmiş değil. Kapı: `tests/test_bobin_topolojisi.py` |
 | **5** | Yayın + saha | — |
 
 ⚠️ **Faz 3, faz 4'ten ÖNCE bitmeli.** Cihaz-taraflı kesme bilinçli olarak yok (karar 2);
@@ -520,7 +520,7 @@ tamamen korumasız kalır. Sıra bu yüzden pazarlık konusu değil.
 
 ⚠️ Firmware pakete **hiç girmez** → her fazda STM'e **elle reflash** (ST-Link/USB).
 
-⚠️⚠️ **FAZ 1 ATOMİK SEVK GEREKTİRİR.** Paket 88 → 120 bayt oldu. Firmware ve backend
+⚠️⚠️ **FAZ 1 ATOMİK SEVK GEREKTİRİR.** Paket 88 → 121 bayt oldu. Firmware ve backend
 **birlikte** gitmezse boyut ve CRC tutmaz → firmware **her paketi NACK'ler** → **hiçbir bobin
 çalışmaz** (5'i dahil). Yani:
 

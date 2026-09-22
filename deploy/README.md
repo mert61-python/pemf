@@ -36,7 +36,7 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
 | `_internal\frontend\dist\` | React web UI (FastAPI `/` kökünden serve) | **BOTH** |
 | `_internal\deploy\device.env` / `server.env` | Profil knob'ları (EXE'ye bundle edilir) | her biri |
 | `_internal\bin\cloudflared\cloudflared.exe` | Uzaktan erişim tüneli — **elle eklenir** (bkz. §4) | DEVICE |
-| `_internal\apps/backend/database\*_template.db` | Boş DB şablonları | **BOTH** |
+| `_internal\database\*_template.db` | Boş DB şablonları | **BOTH** |
 | `nssm.exe` | Windows servis sarmalayıcı (çökme→5sn restart) | **BOTH** |
 | `setup_services.ps1` | Üretim kurulum (`-Mode device|server`) | **BOTH** |
 | `install_mosquitto_service.ps1` | Mosquitto'yu ayrı servis yapar | DEVICE |
@@ -57,7 +57,7 @@ değişkenleri** ile → `deploy/device.env` (klinik), `deploy/server.env` (sunu
    - Firewall: TCP 8000, TCP 1883, UDP 5051.
 4. **STM portu OTOMATİK** bulunur (ST-Link USB VID). Tutmazsa `device.env`'e `PEMF_STM_PORT=COMx` yaz.
 5. **Uzaktan erişim** `device.env`'de açık (`PEMF_ENABLE_TUNNEL=1` + `PEMF_REQUIRE_AUTH=1`). cloudflared gerekir (§4).
-6. Doğrula: `http://localhost:8000/api/health` → STM connected, 8 bobin. Mobil aynı WiFi → mDNS ile bağlanır.
+6. Doğrula: `http://localhost:8000/api/health` → STM connected, **7 bobin** (slot 8 ESP'ydi, sökülü). Mobil aynı WiFi → mDNS ile bağlanır.
 
 ---
 

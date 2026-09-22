@@ -13,7 +13,8 @@
 > device=cuda 17.5ms`) · pt_coz tek yol çözücüsü. Süitler: backend **1873**, frontend **583/583**.
 > ✅ **paper_dilek_hoca artık ATLANMADI** → aynı gün AYRI planla ENTEGRE EDİLDİ:
 > **`docs/scratch-entegrasyon-plani.md`** (8 sahip kararı KESİN; `/api/ai/vision/scratch` + `/infer/scratch`
-> + "Yara Kapanma (Scratch)" UI + 27 backend + 5 jest testi; cell/ paketi sahibinden bekleniyor).
+> + "Yara Kapanma (Scratch)" UI + 27 backend + 5 jest testi; cell/ paketi ✅ teslim alındı
+> (2026-08-26) — `ai_hub/inference_paper_dilek_hoca/cell/`).
 > 🔴 **HÂLÂ AÇIK — LAUNCHER ÇOKLU-MODEL-ZIP (1.9.39):** launcher 1.9.38'de iş yok (ölçüldü);
 > artık İKİ PT'nin (renal 859MB + scratch 872MB) saha ön-koşulu — scratch planında **Faz 4.5**.
 >
@@ -32,7 +33,7 @@
 
 **Kaynak:** `C:\Users\merta\Downloads\inference (1)\inference\` (XAI Faz 0-10 sprint çıktısı: 10 modüle Grad-CAM/EigenCAM/SHAP/IG/sensitivity + `xai_utils` + `xai_tabular` + `XAI_INTEGRATION.md`).
 **Hedef:** Bu XAI yeteneğini PEMF ekosistemine (guii backend + ai_service :8100 + pf frontend + AI geçmişi) regresyonsuz entegre etmek.
-**Keşif yöntemi:** 7 paralel derin-okuma ajanı — tüm XAI kodu satır-satır + guii yüzeyi (ai_router/ai_hub/ai_service/pf/paketleme) + 15 ortak modülün dosya-dosya diff'i. Bulguların tamamı koddan doğrulandı; ölçülemeyenler "tahmin" olarak işaretlidir.
+**Keşif yöntemi:** 7 paralel derin-okuma ajanı — tüm XAI kodu satır-satır + guii yüzeyi (ai_router/ai_hub/ai_service/apps/ui/paketleme) + 15 ortak modülün dosya-dosya diff'i. Bulguların tamamı koddan doğrulandı; ölçülemeyenler "tahmin" olarak işaretlidir.
 
 ---
 
@@ -183,7 +184,7 @@ ai_hub/
 - renal_histopath ensemble HiRes-CAM + disagreement haritası (859MB PT — yalnız ai_service; disagreement klinik "model kararsızlığı" göstergesi olarak değerli).
 - human_kidney_ct EigenCAM — **ONAYLI** (Faz 0 karar #4).
 - renal histopat PT — **klinik makinelerde de** (karar #2/#5 mekanizması: downloader ile ilk kullanımda iner).
-- paper_dilek_hoca: ~~ATLANDI~~ → **ENTEGRE (2026-08-26 gece, ayrı plan: `docs/scratch-entegrasyon-plani.md`)** — closure metrikli yeni teslim sahip kararını tazeledi; 872MB PT release_assets'te, cell/ paketi sahibinden bekleniyor (Faz 4).
+- paper_dilek_hoca: ~~ATLANDI~~ → **ENTEGRE (2026-08-26 gece, ayrı plan: `docs/scratch-entegrasyon-plani.md`)** — closure metrikli yeni teslim sahip kararını tazeledi; 872MB PT release_assets'te, cell/ paketi ✅ teslim alındı (2026-08-26) — `ai_hub/inference_paper_dilek_hoca/cell/`.
 - cat_llm: kapsam dışı (Ollama daemon dağıtım modeline yabancı).
 
 ---
@@ -240,7 +241,7 @@ Efor tahminleri kod-okuma temellidir; her kalem proje test disipliniyle (RED→G
 
 > **KAPANIŞ 2026-08-27 (gece emri "cat_llm dışında hepsi bitsin"):** A1-A7 ✅ + B ✅ + C ✅
 > tamamlandı. Kilitler: `tests/test_xai_kalan_a_grubu.py` (19) + `tests/test_xai_batch_rapor.py`
-> (5) + `pf/src/screens/__tests__/xaiKalanA.test.tsx` (7). B kararı: kullanıcı "hepsi bitsin"
+> (5) + `apps/ui/src/screens/__tests__/xaiKalanA.test.tsx` (7). B kararı: kullanıcı "hepsi bitsin"
 > dediği için Faz-5 beklemeden `scripts/xai_batch_rapor.py` TEK-CLI olarak yapıldı (görüntü/ses
 > CAM · RNA IG işaretli-CSV · EM sensitivity+SHAP; summary.csv + index.html + `--pdf`
 > → `PDFReportGenerator.generate_xai_report`; çıktı-dizini-girdi-dışında bekçisi bulgu-19'a karşı).

@@ -44,8 +44,10 @@ esp_random.h, soc/gpio_struct.h). 2.x çekirdekte DERLENMEZ — sürüm düşür
 
 ## Flash öncesi
 
-1. `Secrets.h`'taki `<<GERCEK-DEGERI-FLASH-ONCESI-GIR>>` alanlarını doldur (kaynak:
-   `C:\Users\merta\Desktop\guii` kopyası) — **COMMIT ETME**, gitleaks zaten durdurur.
+1. `Secrets.h`'taki `<<GERCEK-DEGERI-FLASH-ONCESI-GIR>>` alanlarını doldur — **COMMIT ETME**,
+   gitleaks zaten durdurur. Kaynak: `config/credentials/` altındaki üretilmiş dosyalar
+   (`secrets_coil_6.h`; yazan `apps/backend/services/credential_manager.py`); bulut MQTT için
+   `pemf_secrets.json` → `operator.mqtt_cloud_*` (`apps/backend/utils/secrets_manager.py`).
 2. Bölümleme şeması değiştiği için ilk flash NVS'i taşıyabilir → WiFi/MQTT ayarları
    silinir, BLE ile yeniden provizyon gerekir (tek seferlik).
 3. Seri monitör: bu ayarlarla loglar **UART/COM köprü portundan** akar (USB CDC On Boot:

@@ -73,9 +73,11 @@ ArduinoJson · Adafruit MLX90614 · Adafruit MLX90393 (+bağımlılıkları).
 
 ## Flash öncesi
 
-`Secrets.h`'taki `<<GERCEK-DEGERI-FLASH-ONCESI-GIR>>` alanlarını doldur (kaynak:
-`C:\Users\merta\Desktop\guii`) — **COMMIT ETME**. `WIFI_SSID_CONST` boşsa WiFiManager
-portalı devreye girer (normal akış).
+`Secrets.h`'taki `<<GERCEK-DEGERI-FLASH-ONCESI-GIR>>` alanlarını doldur — **COMMIT ETME**.
+Kaynak: `config/credentials/` altındaki üretilmiş dosyalar (`secrets_coil_6.h`; yazan
+`apps/backend/services/credential_manager.py`); bulut MQTT için `pemf_secrets.json`
+→ `operator.mqtt_cloud_*` (`apps/backend/utils/secrets_manager.py`).
+`WIFI_SSID_CONST` boşsa WiFiManager portalı devreye girer (normal akış).
 
 ## Bobin yönü (polarite) ölçümü — `[MAG]` seri raporu (2026-09-09)
 

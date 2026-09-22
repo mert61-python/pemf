@@ -16,11 +16,25 @@
 > | D-3 (ESP freq tavanı, 8266'ya göre) | ✅ düzeltildi | `ffd4406` |
 > | D-4 (8266 LWT + backend retained-events) | ✅ düzeltildi — ⚠️ 8266 REFLASH gerekir | `ffd4406` |
 > | HG-2 (STM DC-bias dalga) | ✅ düzeltildi — STM DDS simetrik bipolar (S3 sözleşmesi, net DC=0) — ⚠️ STM REFLASH zorunlu (artık OTOMATİK firmware güncellemesi); doz kalibrasyonu KALDIRILDI — sahip 2026-09-21 | `356d576` |
-> | HG-1 (STM termal) | ✅ kod hazır, DERLEME-KAPILI (`PEMF_NTC_TERMAL_ENABLED=0`) — NTC bağlanınca 1 yapılıp tezgahta doğrulanacak; HG-2 ile en kötü ısınma sürücüsü (DC-bias) zaten kalktı | `356d576` |
+> | HG-1 (STM termal) | ⛔ **NTC YOLU KAPANDI** — ADC1 kanalları (PA0 PA3 PA4 PC0 PC3) sahip kararıyla 2026-09-10'da ACS712 akım sensörlerine devredildi (`docs/stm32-pin-haritasi.md` §4); `PEMF_NTC_TERMAL_ENABLED=1` artık DERLEMEYİ KIRAR (`Core/Src/pemf_akim.c` → `#error`). **STM termal kesme YAPILMAYACAK (sahip kararı)** — yeni çözüm istenirse AYRI ADC kanalı/pin gerekir. HG-2 ile en kötü ısınma sürücüsü (DC-bias) kalktı | `356d576` |
 > | HG-3 (faz kilidi DC-yapışma) | ✅ kod yarısı düzeltildi — ⚠️ S3 REFLASH + tezgah skop zorunlu | `09bf8eb` |
 > | HG-5/HG-6 (failover E-stop + reboot) | ✅ Plan A (sahip kararı): süresiz-mod 7200 sn cihaz tavanı + E-stop bulut aynası (`mqtt_cloud_*` sırları tanımlanınca aktif) + hedefli reconcile — "PWM ağ-bağımsız" değişmezi KORUNDU; ⚠️ S3+8266 REFLASH + ertelenen 2 iş: S3 millis-wrap + KÜMÜLATİF tavan (`b7b842c`) | `63493ea` |
 
 # PEMF HİBRİT BOBİN KOMUT UYUM RAPORU
+
+> ⚠️ **BU RAPOR 2026-08-19 TOPOLOJİSİNE GÖREDİR (8 bobin / 3 işlemci ailesi).**
+> 2026-09-10 faz-4 kararıyla **bobin 6-7 ESP32-S3'ten STM32'ye taşındı** → STM **1-7**
+> (`firmware/stm32_pemf/Core/Inc/pemf_sensor.h`, `pemf_surus.h`;
+> `apps/backend/servers/live_state.py` → `STM_COIL_IDS = set(range(1, 8))`), ESP tarafında
+> yalnız **slot 8** kaldı (cihazı YOK) ve ESP alt sistemi `PEMF_ESP_ENABLED=0` ile
+> **KAPATILDI**. Aşağıdaki HG-* / D-* maddelerinin ESP'ye ilişkin kısımları ve
+> **REFLASH borçları TARİHSELDİR** — yapılacak iş listesi olarak okumayın.
+>
+> ⚠️ **`file:line` atıfları commit `7e87cf9` anındaki hâldir; bugünkü satır numaraları
+> FARKLIDIR** (ölçüldü: `hardware_controller.py:262` → `:360`, `:30` → `:39`;
+> `api_server.py:2324-2334` → `:3929`; `main.c:138-152` → `:263`, `:176-179` → `:292`).
+> Kod ararken satır numarasıyla değil **sembol adıyla** arayın.
+
 **Kapsam:** 8 bobin / 3 işlemci ailesi (STM32 1-5, ESP32-S3 6-7, ESP8266 8) + Python backend · Kaynak: çalışma kopyası (guii)
 **Doğrulama:** 12 gerçek uyumsuzluk adversaryal geçti · 2 iddia çürütüldü (rapora alınmadı)
 
@@ -28,16 +42,20 @@
 
 ## 1. TEK CÜMLE HÜKÜM
 
-**Hayır — sistem şu an bobin komutlarında TUTARLI DEĞİL:** aynı operatör dozu (duty/freq) üç bobin ailesinde fiziksel olarak farklı alana/dalgaya dönüşüyor ve **en tehlikeli tek şey**, STM bobinlerinin (1-5) hiçbir katmanda (firmware, backend) termal kesmeye sahip olmaması ile bu bobinlerin duty≠%50'de asimetrik DC-bias'lı dalga üretip sınırsız ısınabilmesinin BİRLEŞMESİDİR — canlı hayvan üzerinde 48°C'yi aşan ısınmayı hiçbir yazılım/donanım katmanı durduramaz.
+**2026-08-19 İTİBARIYLA — Hayır, sistem o tarihte bobin komutlarında TUTARLI DEĞİLDİ:** aynı operatör dozu (duty/freq) üç bobin ailesinde fiziksel olarak farklı alana/dalgaya dönüşüyordu ve **en tehlikeli tek şey**, STM bobinlerinin (1-5) hiçbir katmanda (firmware, backend) termal kesmeye sahip olmaması ile bu bobinlerin duty≠%50'de asimetrik DC-bias'lı dalga üretip sınırsız ısınabilmesinin BİRLEŞMESİYDİ — canlı hayvan üzerinde 48°C'yi aşan ısınmayı hiçbir yazılım/donanım katmanı durduramıyordu.
+
+**Bu hükmün BUGÜNKÜ hâli (hükmün kendisi artık güncel değil, iki parçaya ayrıldı):**
+- ✅ **DC-bias KAPANDI** — STM DDS simetrik bipolar (S3 sözleşmesi, net DC=0), commit `356d576`. Yukarıdaki ÇÖZÜM DURUMU tablosu HG-2'yi çözülmüş işaretliyor; §1'in eski hâli o tabloyla çelişiyordu.
+- ⛔ **AÇIK KALAN:** STM bobinlerinde **termal kesme yok** ve **NTC yolu kapandı** (bkz. HG-1). Sıcaklık yalnız **bobin 6**'da OKUNUYOR (MLX90614; `STM_TELE ... T=/A=`) ve hiçbir kesmeye bağlı değil.
 
 ---
 
 ## 2. HASTA GÜVENLİĞİ UYUMSUZLUKLARI (öncelikli, ayrı)
 
 ### HG-1 · STM bobin 1-5 HİÇBİR katmanda termal korumasız  `tezgah_gerekli`
-- **Uçlar:** STM firmware'de sıcaklık okuması/kesmesi TAMAMEN YOK — `stm32f4xx_hal_conf.h:41` `HAL_ADC_MODULE_ENABLED` yorum içinde (ADC fiziksel kapalı). Seri protokol sıcaklık taşımıyor → `api_server.py:2324-2334` bunu birebir belgeliyor ("STM bobinlerinde sicaklik/akim/alan telemetrisi YOKTUR"). Backend 48°C limiti sahip kararıyla kaldırılmış (`hardware_controller.py:30`). Buna karşılık ESP kendini korur: S3 `CoilController.cpp:239-254` (enforceThermalLimit 48/45, ağdan bağımsız), 8266 `esp8266_pemf_coil.ino:348-369`.
+- **Uçlar:** ⚠️ **DÜZELTME (2026-09-22 ölçümü):** sıcaklık **bobin 6'da OKUNUYOR** — MLX90614, `Core/Src/pemf_sensor.c`, telemetride `T=` / `A=` alanları (sözleşme: `docs/stm32-sensor-protokolu.md` §1). Eksik olan okuma değil **KESME**'dir. **Bobin 1-5'te okuma da yok** (o beş ADC1 kanalı artık ACS712 AKIM ölçümünde, `I=` alanı). Aşağısı 2026-08-19 ölçümüdür: STM firmware'de sıcaklık okuması/kesmesi TAMAMEN YOK — `stm32f4xx_hal_conf.h:41` `HAL_ADC_MODULE_ENABLED` yorum içinde (ADC fiziksel kapalı). Seri protokol sıcaklık taşımıyor → `api_server.py:2324-2334` bunu birebir belgeliyor ("STM bobinlerinde sicaklik/akim/alan telemetrisi YOKTUR"). Backend 48°C limiti sahip kararıyla kaldırılmış (`hardware_controller.py:30`). Buna karşılık ESP kendini korur: S3 `CoilController.cpp:239-254` (enforceThermalLimit 48/45, ağdan bağımsız), 8266 `esp8266_pemf_coil.ino:348-369`.
 - **Senaryo:** STM bobin 1-5'i süren her yol (`/api/coil/{id}/control`, `/api/coil/batch`, seans) → doku 48°C'yi aşsa yalnız süre-deadline (120 dk) veya operatör keser; termal kesme YOK. Aşağıdaki HG-2 DC-bias ısınmasıyla birleşince risk büyür.
-- **Fix:** Cihaz-yerel çözüm — STM'ye NTC + ADC (HAL_ADC_MODULE_ENABLED) + firmware histerezisli kesme (48/45). **⚠️ Kaldırılan backend 48°C limitini GERİ EKLEME** (sahip kararı/regresyon listesi); çözüm katmanı farklı (cihaz-firmware).
+- **Fix:** ⛔ **BU FİX ARTIK UYGULANAMAZ — NTC yolu KAPANDI.** Önerilen "STM'ye NTC + ADC + firmware histerezisli kesme (48/45)" çözümünün kullanacağı beş ADC1 kanalı (PA0 PA3 PA4 PC0 PC3) sahip kararıyla 2026-09-10'da ACS712 akım sensörlerine devredildi (`docs/stm32-pin-haritasi.md` §4) ve `Core/Src/pemf_akim.c` `PEMF_NTC_TERMAL_ENABLED != 0` için `#error` üretir → bayrağı 1 yapmak **DERLEMEYİ KIRAR**. **STM termal kesme YAPILMAYACAK (sahip kararı);** yeni bir çözüm istenirse AYRI ADC kanalı/pin gerekir. **⚠️ Kaldırılan backend 48°C limitini GERİ EKLEME** (sahip kararı/regresyon listesi).
 
 ### HG-2 · DUTY anlamı STM↔ESP ayrışık — aynı değer, farklı dalga + farklı net DC  `tezgah_gerekli`
 - **Uçlar:** STM `main.c:1108-1128` (v2.0 DDS): sürekli tümleyen sürüş, `state=(adj<duty)?A:B`, bir bacak hep HIGH → net ortalama = V·(2·duty−1) → **duty=%25'te −%50·V DC bias**, yalnız %50'de DC=0. ESP S3 `CoilController.cpp:105-122`: her yarı-periyotta ayna ± darbe, aralarda ikisi de LOW → **her duty'de net DC≈0**. 8266 `CoilController.cpp:87-105`: tek pin unipolar, net DC=duty. Backend'de firmware-ailesi arası duty dönüşümü YOK (`stm32_protocol_limits.py` STM32_DUTY_MAX_RATIO=None).
@@ -72,7 +90,7 @@
 
 | # | Konu | Uçlar (file:line) | Klinik sonuç | Fix |
 |---|------|-------------------|--------------|-----|
-| D-1 | **Ölü topik: SELFTEST + reset_pwm hiçbir ESP'ye ulaşmıyor** (cihaz-calismaz) | Backend selftest `api_server.py:1347` & reset_pwm `:1380` SADECE `pemf/esp32_{i}/command`'a yayınlar; S3 `NetworkManager.cpp:509-510` ve 8266 `:725-726` bu topiğe ABONE DEĞİL. `stop_all_coils` `hardware_controller.py:262` range(1,6) yalnız STM. | selftest ESP 6-8'de HİÇ çalışmaz (arızalı ESP sessizce geçer=yanlış tanısal güvence); reset_pwm sonrası seans-dışı ESP bobini enerjili kalır. **E-stop güvende** (coil/control'e de yayınlıyor, `:3139`). | Selftest/reset döngülerini `pemf/coil/{i}/control`'e (emergency_stop çift-yayın kalıbı gibi) yayınla; reset'te ESP 6-8'e stop publish et. |
+| D-1 | **Ölü topik: SELFTEST + reset_pwm hiçbir ESP'ye ulaşmıyor** (cihaz-calismaz) | Backend selftest `api_server.py:1347` & reset_pwm `:1380` SADECE `pemf/esp32_{i}/command`'a yayınlar; S3 `NetworkManager.cpp:509-510` ve 8266 `:725-726` bu topiğe ABONE DEĞİL. `stop_all_coils` (bugün `hardware_controller.py:360`) `range(1, STM_BOBIN_SAYISI + 1)` = **1..7**, yalnız STM. | selftest ESP 6-8'de HİÇ çalışmaz (arızalı ESP sessizce geçer=yanlış tanısal güvence); reset_pwm sonrası seans-dışı ESP bobini enerjili kalır. **E-stop güvende** (coil/control'e de yayınlıyor, `:3139`). | Selftest/reset döngülerini `pemf/coil/{i}/control`'e (emergency_stop çift-yayın kalıbı gibi) yayınla; reset'te ESP 6-8'e stop publish et. |
 | D-2 | **duty ÜST-SINIR sapması** (yanlis-cikti) | S3 `CoilController.cpp:280` MAX_DUTY_CYCLE=50; 8266 gerçek dalga `CoilController.cpp:358-359` `duty_t>=tpp/2` ile ~%50'ye SERT kirpar; STM tavansız (~%99.8 fiziksel, `main.c:1057-1060`). Backend ESP yoluna clamp YOK (`api_server.py:1453`), STM'ye ham ratio (`hardware_controller.py:157`). | duty>50 girilirse: STM 1-5 ~%70 asimetrik sürer, ESP 6-8 ~%50'ye kirpar → **dizi genelinde tutarsız doz; yön STM'de YUKARI** (ESP akranlarını aşar). AI Pro yolu %50'de klipliyor (etkilenmez); boşluk manuel/ham yolda. | STM manuel yoluna ESP ile aynı üst duty tavanını uygula (protocol_limits'i tek kaynak yap). **Ayrı 8266 bug (✅ DÜZELTİLDİ 7e87cf9):** `_effectiveDutyPct` hiç hesaplanmıyor (`CoilController.cpp:117`=0) → aktifken duty_cycle=0 raporluyor; `_applyPWM`'de gerçek duty_t/tpp'den hesapla. |
 | D-3 | **freq aralığı: STM/backend 1-25000 / ESP 1-1000** (yanlis-cikti) | STM `main.c:176-179` FREQ_MAX=25000; backend STM yolu `normalize_frequency_hz` uygular (`hardware_controller.py:155`, tutarlı). ESP `constrain(freq,1,1000)` (S3 `CoilController.cpp:279`, 8266 `:215`). Backend ESP yolu ham (`api_server.py:1452,1524,1792`), pydantic üst sınır YOK. | freq 1001-25000 tek komutta: STM 1-5 komut değeri, ESP 6-8 sessizce 1000'e kirpar → **ESP bobinlerine yanlış tedavi frekansı.** Tipik PEMF <100 Hz, AI Pro=1 Hz güvenli; boşluk operatörün >1000 Hz komutlaması. getState telemetri kırpmayı ifşa eder. ("Faz kilidi kopar" iddiası geçersiz — üç ESP aynı kirpar.) | ESP MQTT yoluna publish'ten önce [1,1000] normalize VEYA freq>1000'i reddet (422); tercihen transport-farkındalıklı tek freq-normalize fonksiyonu. |
 | D-4 | **LWT simetrisi — 8266'da last-will YOK** (yanlis-cikti) | S3 yerel+bulutta LWT ayarlar (`NetworkManager.cpp:489-503,529-537`, offline event, retain=true). 8266 `connect(clientId)` `:665` ve `:681` will PARAMETRESİZ → LWT YOK. Backend fallback: 30sn staleness watchdog (`api_server.py:481-525`); 8266 her 1sn sensör yayınlar. | Bobin 8 ANİ koparsa: S3 ~keepalive'da "koptu" der, 8266 YALNIZ ~30sn staleness ile geç fark edilir → UI'da ~30sn "canlı" + bayat sıcaklık. **Güvenlik değil** (PWM ağdan bağımsız + yerel termal). Ek: S3 retained "offline" reconnect'te temizlenmiyor → geçici churn. | 8266 connect'i S3 ile birebir yap (willTopic=pemf/coil/8/events); backend `:602` 'mqtt_connected'i de connected=True yapan dala ekle VEYA firmware reconnect'te retained "online" yayınlasın. |

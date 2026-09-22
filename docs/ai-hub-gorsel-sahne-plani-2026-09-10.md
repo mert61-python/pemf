@@ -457,11 +457,11 @@ Sahne refaktörü **en az 8** mevcut kapıya dokunuyor. Bunlar **aynı commit'te
 | `tests/test_responsive_grafik_kapisi.py:90` | `kameraKutusu(onizlemeW` **== 2** | **Planın en net kırılma noktası.** 5-6'ya çıkar; ortak bileşene taşınırsa **0'a düşer**. İki durumda da KIRMIZI. Çıpa ortak bileşene **ve onu KULLANAN modüllere** yeniden pinlenecek (kapının gerekçesi: "saf hesap testleri bileşenin o hesabı KULLANMAYI bırakmasını yakalayamaz"). |
 | `tests/test_dokunma_hedefi_kapisi.py:39` | `KALAN_IHLAL = 118` | Yeni ok/çip ham `TouchableOpacity` ile yazılırsa **artar**; Scratch çipleri `Chip`e göçerse **düşer**. → oklar `IconButton` (touch.min), çipler `Chip` (touch.sm). `hitSlop` muafiyet **DEĞİL**. |
 | `tests/test_arayuz_yazi_olcegi_kapisi.py:136` | `rf(9\|10)` **== 7** | Sayfa sayacı/panel açıklaması `rf(9)` ile yazılırsa aşar → `typography.small` (11). Zaten hedef "okunmaz yazı" olmasın; küçük punto **çözüm olamaz**. |
-| `pf/.../xaiIsiHaritasiBoyut.test.tsx` | XAI64'lü `<Image>` **== 1**; `height !== '100%'` | XAI hem bağımsız blokta hem galeride çizilirse 2 olur. Görselin **kendisi** açık yükseklik/aspectRatio taşımaya devam etmeli (`{%100/%100}` deseni YASAK). |
-| `pf/.../xaiKalanA.test.tsx` A1 | Isı haritası etiketi **varsayılanda** ekranda | Isı haritası galeri sayfasına taşınırsa KIRMIZI. → **XAI bağımsız blokta KALIR**, galeri yalnız fantom/petri panellerini taşır (bu, `toBe(1)` kilidiyle de uyumlu). |
-| `pf/.../catOrganCanliKalinti.test.tsx` | Canlıya geçişte eski sonucun **hiçbir izi** yok | Galeri sayfaları gizli-ama-**mount** kalırsa eski overlay `<Image>` sayısı > 0. → canlıya geçişte **sayfa indeksi + panel listesi de sıfırlanır**. |
-| `pf/.../scratchModule.test.tsx` (9 test) | `testID 'sc-stage'` + 7 çip metni birebir | `source.uri` **doğrudan** o düğümde kalmalı (sarmalanmış alt bileşende değil); "Kapanma" metnini üreten yeni bir düğüm (ör. sayaç "Kapanma 1/7") eklenirse `getAllByText` indeksi kayar. |
-| `pf/.../petriGelismisAyarlar.test.tsx` (9 test) | `getByText('Galeriden Seç')` **tekil** | İkinci bir "Galeriden Seç" CTA'sı konursa çoklu-eşleşmeden **atar** → yeni düğmelere farklı metin ("Yeni görüntü seç") ya da yalnız `accessibilityLabel`. |
+| `apps/ui/src/screens/__tests__/xaiIsiHaritasiBoyut.test.tsx` | XAI64'lü `<Image>` **== 1**; `height !== '100%'` | XAI hem bağımsız blokta hem galeride çizilirse 2 olur. Görselin **kendisi** açık yükseklik/aspectRatio taşımaya devam etmeli (`{%100/%100}` deseni YASAK). |
+| `apps/ui/src/screens/__tests__/xaiKalanA.test.tsx` A1 | Isı haritası etiketi **varsayılanda** ekranda | Isı haritası galeri sayfasına taşınırsa KIRMIZI. → **XAI bağımsız blokta KALIR**, galeri yalnız fantom/petri panellerini taşır (bu, `toBe(1)` kilidiyle de uyumlu). |
+| `apps/ui/src/screens/__tests__/catOrganCanliKalinti.test.tsx` | Canlıya geçişte eski sonucun **hiçbir izi** yok | Galeri sayfaları gizli-ama-**mount** kalırsa eski overlay `<Image>` sayısı > 0. → canlıya geçişte **sayfa indeksi + panel listesi de sıfırlanır**. |
+| `apps/ui/src/screens/__tests__/scratchModule.test.tsx` (9 test) | `testID 'sc-stage'` + 7 çip metni birebir | `source.uri` **doğrudan** o düğümde kalmalı (sarmalanmış alt bileşende değil); "Kapanma" metnini üreten yeni bir düğüm (ör. sayaç "Kapanma 1/7") eklenirse `getAllByText` indeksi kayar. |
+| `apps/ui/src/screens/__tests__/petriGelismisAyarlar.test.tsx` (9 test) | `getByText('Galeriden Seç')` **tekil** | İkinci bir "Galeriden Seç" CTA'sı konursa çoklu-eşleşmeden **atar** → yeni düğmelere farklı metin ("Yeni görüntü seç") ya da yalnız `accessibilityLabel`. |
 
 **Kasten kırılmayanlar:** `useStageHeight.test.tsx` (tavan korunuyor — hook silinirse/imzası
 değişirse 5 vaka + aihub-10 sözleşmesi regresyon), `kameraKutusu.test.ts` (matematik yeniden
@@ -534,7 +534,7 @@ Sıra zorunlu: kapıyı yaz → YEŞİL gör → **üretim satırını** mutasyo
 - Çıpa **yoruma/dokümana değil üretim koduna**, tercihen **AST**'ye pinlenir — bu depoda düz-metin
   araması kendi açıklama yorumunu bulup mutasyonu yeşil bıraktı (bu hata bu depoda **3 kez** tekrarlandı).
 - **Gevşek eşik yasak**: `>= N` bir modülün sessizce kopmasına izin verir. Yeni sayaçlar **TAM**.
-- **TAM SÜİT**: `pf/` içinde `npm test` VE `guii/` içinde `../python.exe -m pytest tests -q`.
+- **TAM SÜİT**: `apps/ui/` içinde `npm test` VE depo kökünde (`guii/`) `../python.exe -m pytest tests -q`.
 
 ---
 

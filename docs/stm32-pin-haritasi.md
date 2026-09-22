@@ -9,9 +9,9 @@
 
 **Kaynak:** `firmware/stm32_pemf/Core/Src/main.c` (`coil_gpio[]`, `Coil_GpioInit`) +
 `PEMF_UNIPOLAR.ioc`. Elle yazılmadı, kaynaktan üretildi — 2026-09-10, faz 1 sonrası
-(`NUM_COILS = 7`, paket 120 bayt).
+(`NUM_COILS = 7`, paket 121 bayt).
 
-**Toplam:** LQFP144'te 114 GPIO (PA-PG tam 16, PH yalnız 0/1). **53'ü kullanımda, 61'i boş.**
+**Toplam:** LQFP144'te 114 GPIO (PA-PG tam 16, PH yalnız 0/1). **50'si kullanımda, 64'ü boş.**
 
 ---
 
@@ -20,7 +20,7 @@
 ⚠️ **Donanım PWM kanalı YOK.** TIM1 yalnız 50 kHz kesme üretir; çıkışlar o kesmenin içinde
 bit-bang edilir. Bu yüzden bobin eklemek timer kanalı değil, **boş GPIO** ister.
 
-| Bobin | IN_A — **darbe buradan, KABLO VAR** | IN_B — kablo YOK, kalıcı LOW | Kabindeki yeri |
+| Bobin | IN_A — **darbe buradan** | IN_B — bobin 1-5'te **BAĞLI** (tam köprü); bobin 6-7'de kablo YOK | Kabindeki yeri |
 |---|---|---|---|
 | 1 | **PC8** | PD12 | alt sağ |
 | 2 | **PC9** | PE10 | alt sol |
@@ -42,9 +42,14 @@ bitini set etmek darbeyi **kablosuz** IN_B pinine taşır → o bobin **sessizce
 duty görünür, arayüz "Aktif" der, alan sıfırdır). 2026-09-08'de maske 0x03'tü ve bobin 1-2 tam
 bu şekilde ölüydü. Yön yanlışsa çözüm **bobin uçlarını fiziksel çevirmek**.
 
-IN_B pinleri boş bırakılabilir ama **ayrılmış değildir**: firmware onları push-pull çıkış olarak
-kurar ve kalıcı LOW tutar (yarım-köprü girişi için güvenli durum). Başka işe almak için
-`coil_gpio[]` **ve** `Coil_GpioInit` birlikte değişmeli.
+⚠️ **IN_B pinleri BOŞ DEĞİL — AYRILMIŞTIR.** Sahip bildirimi (2026-09-11): bobin 1-5'te
+(PD12 PE10 PD11 PC7 PA9) **iki PWM de bağlıdır** → tam köprü, bipolar sürülebilir; bobin 6-7'de
+(PE12 PD13) sürücüde ikinci yarım köprü yoktur → yalnız unipolar. Firmware hepsini push-pull
+çıkış olarak kurar; **unipolar** sürülen bobinde IN_B kalıcı LOW tutulur, **bipolar** sürülende
+**darbelenir** (taban maske `PEMF_BOBIN_UNIPOLAR_MASKESI` = 0x60 → yalnız 6-7 unipolar).
+Bu pinleri **başka işe alma** — bağlı bir yarım-köprü girişini başka işlev sürerse
+shoot-through / donanım hasarı riski var. Zorunlu hâlde `coil_gpio[]` **ve** `Coil_GpioInit`
+birlikte değişmeli.
 
 ---
 
@@ -63,7 +68,7 @@ kalkınca PB1 serbest bırakılabilir — ihtiyaç olursa **8. yedek pin** olara
 
 ---
 
-## 3. PLANLI — I2C sensör hattı (faz 3, henüz kod YOK)
+## 3. I2C SENSÖR HATTI — UYGULANDI (kaynak: `firmware/stm32_pemf/Core/Src/pemf_sensor.c`; sözleşme: `docs/stm32-sensor-protokolu.md`)
 
 | Pin | İşlev | Konum / not |
 |---|---|---|
@@ -170,7 +175,7 @@ yazılmış bobin GPIO kurulumu ve DDS kodu **silinir**, PA8/PA9 USB'ye döner. 
 
 ---
 
-## 7. BOŞ PİNLER — 61 adet
+## 7. BOŞ PİNLER — 64 adet
 
 | Port | Boş pinler |
 |---|---|
@@ -201,9 +206,11 @@ yazılmış bobin GPIO kurulumu ve DDS kodu **silinir**, PA8/PA9 USB'ye döner. 
 | GPIO kurulumu | aynı dosya → `Coil_GpioInit()` |
 | Sürüş kipi + maske | `firmware/stm32_pemf/Core/Inc/pemf_surus.h` |
 | ~~Unipolar ayna~~ | ⛔ **KALDIRILDI** — ayna projesi de `scripts/stm_unipolar_senkronla.py` de silindi (bkz. yukarıdaki not). Kip artık `PEMF_BOBIN_UNIPOLAR_MASKESI` ile bobin başına seçilir |
-| Kapılar | `tests/test_stm_unipolar_ayna.py` · `test_stm_bobin_sayisi_tek_kaynak.py` · `test_stm32_source_parity.py` |
+| Kapılar | `tests/test_stm_bobin_basina_kip.py` · `test_stm_surus_dalgasi.py` · `test_stm_bobin_sayisi_tek_kaynak.py` · `test_stm32_source_parity.py` |
 | Geçiş planı | `docs/stm32-7-bobin-gecisi-plani-2026-09-10.md` |
 
-⚠️ Firmware pakete **hiç girmez** → her değişiklikte STM'e **elle reflash** (ST-Link/USB).
-Bekleyen reflash borcu: maske 0x00 + `NUM_COILS = 7` (paket 88→120, **atomik sevk** —
-uygulama yayınıyla aynı turda gitmeli, yoksa hiçbir bobin çalışmaz).
+⚠️ Firmware artık **CİHAZ TARAFINDAN otomatik güncelleniyor** (`apps/backend/servers/firmware_manager.py`
++ `apps/backend/utils/stm_yakma.py`, açılışta client kontrolünden sonra — sahip kararı 2026-09-22).
+Elle ST-Link reflash yalnız **geliştirme/kurtarma** yoludur. Bkz. `docs/stm32-uzaktan-guncelleme-plani.md`.
+Bekleyen reflash borcu: maske 0x00 + `NUM_COILS = 7` (paket 88→121 — kip baytı 2026-09-11'de eklendi;
+**atomik sevk** — uygulama yayınıyla aynı turda gitmeli, yoksa hiçbir bobin çalışmaz).

@@ -586,6 +586,25 @@ C:\nssm\nssm.exe status PemfMqttBridge
 
 ## 8. SERVİS YÖNETİMİ KOMUTLARI
 
+> ⚠️ **DURUM NOTU (2026-09-22, ölçüldü) — BU BÖLÜMDEKİ KOMUTLAR ÖLÜ.**
+> `PemfMqttBridge` diye bir servis YOK; komutların işaret ettiği `services/mqtt_bridge.py`
+> **diskte yok** (headless geçişinde kaldırıldı — belgenin kendi ÖZET TABLO notu bunu
+> 2026-09-18'de ölçmüştü). Dolayısıyla `C:\nssm\nssm.exe status|stop|start|restart
+> PemfMqttBridge` satırlarının hiçbiri bir şeye karşılık gelmez ve
+> `LOCALAPPDATA\PEMF_System\logs\mqtt_bridge_service*.log` dosyaları hiç üretilmez.
+> Mosquitto da ayrı bir Windows servisi değil, backend'in kendi başlattığı bir **alt süreç**
+> (`apps/backend/services/headless_services.py`).
+>
+> **Güncel karşılıkları:** `Get-Service PemfBackend` · `nssm restart PemfBackend` ·
+> `nssm stop PemfBackend`; loglar `<PEMF_LOG_DIR>\backend_service.log` ve `crash.log`
+> (bkz. `docs/RUNBOOK.md` "Hızlı komutlar" / "Log yerleri").
+> ⚠️ `PemfBackend` servisi **yalnız Inno installer yolunda** kurulur
+> (`build_tools/PEMF_Backend_Setup.iss` → `scripts/setup_services.ps1`); **launcher yoluyla
+> kurulan sahadaki makinede servis kaydı YOKTUR** — `Get-Service *PEMF*` boş döner
+> (ölçüldü 2026-09-13, `docs/LAUNCHER_SPEC.md` "Açık sorular").
+>
+> Bölüm **silinmiyor** (tarihsel kayıt), ama **talimat olarak okunmamalı**.
+
 ### Günlük Kullanım
 
 ```powershell
@@ -631,6 +650,18 @@ C:\nssm\nssm.exe restart PemfMqttBridge
 ---
 
 ## 9. SORUN GİDERME
+
+> ⚠️ **DURUM NOTU (2026-09-22, ölçüldü) — BU BÖLÜMDEKİ TANILAR ÖLÜ YOLLARA BAKIYOR.**
+> Aşağıdaki adımların kullandığı `services\mqtt_bridge.py`, conda yorumlayıcısı
+> `C:\Users\merta\.conda\envs\gui\python.exe` ve
+> `LOCALAPPDATA\PEMF_System\logs\mqtt_bridge_service*.log` **bu makinede yok**: köprü
+> dosyası kaldırıldı, backend artık donmuş tek EXE (`PEMF_Backend.exe`, PyInstaller onedir)
+> ve makinede Python kurulu olmasını gerektirmiyor. ESP kartları da söküldü
+> (`PEMF_ESP_ENABLED=0`) → hotspot / HiveMQ / "ESP'ler bağlanamıyor" adımları çalışmaz.
+>
+> **Güncel karşılığı:** `docs/RUNBOOK.md` (hızlı komutlar, log yerleri, olay senaryoları,
+> destek paketi) · `docs/LAUNCHER_SPEC.md` (kurulum dizini ve servis/süreç sorusu ÖLÇÜLMÜŞ
+> hâliyle). Bölüm tarihsel kayıt olarak duruyor, **talimat olarak okunmamalı**.
 
 ### Sorun: Servis "STOPPED" görünüyor
 

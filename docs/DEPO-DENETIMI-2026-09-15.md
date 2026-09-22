@@ -3,6 +3,24 @@
 > Kapsam: `guii/` ağacının tamamı. Disk ölçümü + kod organizasyonu + yapılandırma/sır hijyeni.
 > Her satır ölçüldü; "belgede öyle yazıyor" hiçbir yerde kanıt sayılmadı.
 
+> ## ⚠️ DURUM — bu denetim 2026-09-15 tarihlidir (güncelleme 2026-09-22)
+>
+> **Sonradan KAPANANLAR:** §1.3 (skip-worktree bootstrap'ta kuruluyor) · §1.4 (imzalama
+> anahtarları depo dışına) · §2.2 (`pyproject.toml` `[project]`/`[build-system]`) ·
+> §2.4 + A2 (`ai_hub/cv_ortak` birleştirmesi, 09-19) · §2.5 + B4 (`treatment_history_db`
+> bölündü) · §2.6 (lisans envanteri üreticili **ve kapıya bağlı**) · §3.3-`bin/` + §3.6
+> (`.gitignore`) ·
+> §3.5'in üç satırı (kök `README` sürüm tablosu, `frontend_version.json`, `LAUNCHER_SPEC`).
+>
+> **AYAKTA:** §1.1 BLE komut imzalama (HMAC anahtarı hâlâ tüketilmiyor) · §1.2 MQTT kimlik
+> rotasyonu · §2.1 CI (ölçüldü: `origin/production-hardening`'in **14 commit önünde**) ·
+> §2.3 göç kodu beş yerde · §3.1 · §3.2 · §3.3-LFS (`.gitattributes` yok).
+>
+> ⚠️ **Belgedeki TÜM backend/ön-yüz yolları taşıma öncesi adlarla yazılı.** `servers/`,
+> `services/`, `database/`, `utils/`, `controllers/` bugün `apps/backend/` altında;
+> `pf/` → `apps/ui/`, `pemf-vet-web/` → `apps/web/`. **`apps/` önekini ekleyerek okuyun**
+> (bkz. [`KLASOR-YAPISI-PLANI.md`](KLASOR-YAPISI-PLANI.md)).
+
 ---
 
 ## 0. Yapılan iş — disk: **46,7 GB → 20,2 GB**
@@ -50,13 +68,14 @@ Silme kararı sende.
 ```cpp
 // Pelsiz/Şifresiz hızlı bağlantı için güvenlik ayarlarını devre dışı bıraktık.
 NimBLEDevice::setMTU(256);
-LOG_PRINTF("[BLE] Cihaz adı: %s, PIN: %d\n", deviceName.c_str(), DEFAULT_BLE_PASSKEY);
 ```
 
 - Eşleşme, PIN ve şifreleme **bilerek kapatılmış**. Kod bunu yorumda söylüyor.
-- Buna rağmen log **"PIN: 123456" yazıyor** — uygulanmayan bir PIN'i duyuran bir etiket.
-  Bu, deponun kendi kayıtlı hata sınıfı: *düğme etiketi gerçeği söylemeli*.
-- `DEFAULT_BLE_CMD_HMAC_KEY` **hiçbir yerde tüketilmiyor** (tüm `firmware/` tarandı; tek
+- ✅ **Yanıltıcı PIN logu KALDIRILDI** (`BLEProvisioning.cpp:137`, 2026-09-17). Eskiden log
+  **"PIN: 123456" yazıyordu** — uygulanmayan bir PIN'i duyuran bir etiket; deponun kendi
+  kayıtlı hata sınıfı: *düğme etiketi gerçeği söylemeli*. Yerinde artık nedenini anlatan
+  bir yorum duruyor.
+- ⚠️ **AYAKTA:** `DEFAULT_BLE_CMD_HMAC_KEY` **hiçbir yerde tüketilmiyor** (tüm `firmware/` tarandı; tek
   eşleşme tanımın kendisi). Yani sorun "anahtar varsayılan kalmış" değil —
   **komut imzalama hiç uygulanmamış.**
 
@@ -76,18 +95,28 @@ kontrolüne çıkar. Karar: ya BLE güvenliği açılır, ya da ESP geri gelmede
 Tek başına parola değil ama PUBLIC depoda **hedef adresi** ifşa ediyor ve aynı adres eşleşen
 kullanıcı adı/parolayla kullanılıyor. Kimlik bilgileri döndürülmeli.
 
-### 1.3 Gerçek sırların tek koruması `skip-worktree`
+### ~~1.3 Gerçek sırların tek koruması `skip-worktree`~~ — ✅ KAPANDI 2026-09-16
+
+> ⚠️ **Orijinal iddia — *"bayrağı kuran bir script/hook depoda yok"* — YANLIŞTI.**
+>
+> Ölçüldü: bayrağı `build_tools/secrets_backup.py:97` (`_git_sir_korumasi`) uyguluyor
+> (`git update-index --skip-worktree`, satır 133), ve `scripts/bootstrap.ps1:290-314`
+> *"5c. SIR DOSYASI KORUMASI (skip-worktree)"* adımı her yeni makinede
+> `secrets_backup.py sir-korumasi` koşuyor — yani **taze klonda da kuruluyor**.
+> Kapı: `tests/test_sir_koruma_bootstrapte_kurulur.py`.
 
 `firmware/*/Secrets.h` commit'te **şablon**, bu makinede **dolu** (gerçek WiFi + bulut MQTT
-kimlik bilgileri). Ayrımı `skip-worktree` bayrağı sağlıyor — **klon-yerel**. Yeni bir klonda,
-yeniden kurulumda ya da bayrak kalkarsa `git add -A` bunları PUBLIC depoya taşır. Bayrağı
-kuran bir script/hook depoda yok.
+kimlik bilgileri). Ayrımı `skip-worktree` bayrağı sağlıyor — **klon-yerel**.
 
 Yedek kapı doğru kurulmuş: `.gitleaks.toml` içindeki `pemf-firmware-secrets-h-gercek-deger`
-kuralı yer-tutucu olmayan değerleri yakalıyor, hem pre-commit hem CI'da koşuyor. **Tek
-güvence o.**
+kuralı yer-tutucu olmayan değerleri yakalıyor, hem pre-commit hem CI'da koşuyor. ~~**Tek
+güvence o.**~~ — artık tek güvence değil.
 
-### 1.4 Apple/Android imzalama anahtarları depo kökünde
+### ~~1.4 Apple/Android imzalama anahtarları depo kökünde~~ — ✅ KAPANDI
+
+> **Ölçüldü 2026-09-22:** kökte `*.p8`, `*.cer`, `*.p12`, `*.jks` **YOK**. `keys/` ve
+> `apple-mac-cert/` dizinleri artık **yalnız `README.md` taşıyor**; gerçek çalışan kopya
+> `%USERPROFILE%\.pemf-keys\` altında (`keys/README.md:9`). Aşağısı 09-15 durumudur.
 
 `AuthKey_CWBVQNM6H7.p8`, `AuthKey_SJ75ZM76TQ.p8`, `developerID_application.cer`,
 `apple-mac-cert/` (`.p12` + parolası düz metin), `keys/pemf-release.jks`.
@@ -112,20 +141,25 @@ CI hattı sağlam kurulmuş (ubuntu+windows matrisi, kapsam ratchet'i `fail_unde
 gitleaks tam geçmiş taraması, `cargo test --locked`) — ama son 3-4 günlük çalışma o
 kapılardan geçmedi.
 
-### 2.2 Paket metadatası yok
+### ~~2.2 Paket metadatası yok~~ — ✅ KAPANDI
 
-`pyproject.toml` 97 satır ve **yalnız araç ayarı**: `[project]` yok, `[build-system]` yok,
+> **Ölçüldü 2026-09-22:** `pyproject.toml` bugün **158 satır**; `[build-system]` satır
+> **32**'de, `[project]` satır **36**'da. `apps/backend/controllers/__init__.py`,
+> `scripts/__init__.py`, `build_tools/__init__.py` **üçü de VAR**. Kökte
+> `pemf_backend.egg-info/` üretiliyor — depo kurulabilir hale gelmiş.
+
+~~`pyproject.toml` 97 satır ve **yalnız araç ayarı**: `[project]` yok, `[build-system]` yok,
 `setup.py` yok, `src/` yok. Depo kurulabilir bir Python dağıtımı değil; kök dizinin kendisi
-import kökü.
+import kökü.~~
 
 Somut maliyeti: `headless_core.py` ve `event_bus.py` kökte durduğu için PyInstaller onları
-keşfedemiyor ve spec'e **elle** sabitlenmişler (`PEMF_Backend_onedir.spec:401`). Ayrıca
+keşfedemiyor ve spec'e **elle** sabitlenmişler (`PEMF_Backend_onedir.spec:401`). ~~Ayrıca
 `controllers/`, `scripts/`, `build_tools/` paket gibi import ediliyor ama `__init__.py`'leri
-yok — PEP 420'ye bel bağlanmış.
+yok — PEP 420'ye bel bağlanmış.~~ → üçüne de `__init__.py` eklendi.
 
 ⚠️ IEC 62304 açısından: yazılım öğesi tanımlama için kurulabilir bir birim ve makine-okunur
-sürüm metadatası yok. Kısmi telafi var (`VERSION` + `versions.json` + CHANGELOG pre-commit
-kapısı).
+sürüm metadatası ~~yok~~ **ARTIK VAR** (`[project]` + `pemf_backend.egg-info`). Yanında
+`VERSION` + `versions.json` + CHANGELOG pre-commit kapısı duruyor.
 
 ### 2.3 Göç kodu **beş yerde** — ve bu zaten hasta geçmişi kaybettirdi
 
@@ -140,7 +174,13 @@ kapısı).
 2026-09-13'te ölçülen sonuç: ilk iki kopya düzeltildi, **ürün hâlâ kaybediyordu** çünkü
 üçüncü yol (şablon kopyalayıcı) önce davranıyordu. Bu kopyalama gerçek bir arızaya dönüştü.
 
-### 2.4 Kopya kod — 470 satır bayt-bayt, 366/367 satır sürüklenmiş
+### ~~2.4 Kopya kod — 470 satır bayt-bayt, 366/367 satır sürüklenmiş~~ — ✅ KAPANDI 2026-09-19
+
+> **Birleştirme YAPILDI.** Tek uygulama `ai_hub/cv_ortak/` (`coord_transform.py` 326 satır,
+> `mqtt_publish.py`, `cabin_config.py`); iki profildeki dosyalar **17 satırlık kabuk**
+> (`from ...cv_ortak.coord_transform import *`) — import yolu sözleşme olduğu için
+> silinmediler. Kapı: `tests/test_cv_ortak_tek_uygulama.py`.
+> Aşağıdaki tablo ve A2 bloğundaki *erteleme* gerekçesi **ARTIK GEÇERSİZDİR**.
 
 | Kanıt | Dosyalar |
 |---|---|
@@ -159,16 +199,25 @@ eklenmek zorunda; kapı yalnızca unutulursa kırılıyor.
 |---:|---|---|
 | 5.139 | `servers/api_server.py` | 96 fonksiyon, 15 sınıf, 21 route |
 | 4.023 | `servers/ai_router.py` | 83 fonksiyon |
-| 3.701 | `database/treatment_history_db.py` | **tek sınıfta 95 metot** — seans kaydı + coil-run + sensör batch + denetim izi + MQTT outbox + şema göçü + PII saklama |
+| ~~3.701~~ → **680** | `database/treatment_history_db.py` | ✅ **BÖLÜNDÜ 2026-09-19** — ~~tek sınıfta 95 metot~~ → **17 metot**. Seans kaydı + coil-run + sensör batch + denetim izi + MQTT outbox + şema göçü + PII saklama sorumlulukları `apps/backend/database/thdb_*.py` **sekiz karışımına** ayrıldı |
 | 1.319 | `ai_service/app.py` | |
 
 Üretim kodunda 1000+ satırlık yalnız 4 dosya var; kalan 6'sı donmuş eğitim arşivi (lint muaf).
 
-### 2.6 Lisans envanteri bayat
+### 2.6 Lisans envanteri ~~bayat~~ — ✅ artık ÜRETİLİYOR
 
-`THIRD_PARTY_LICENSES.md` 2026-08-10'da donmuş. O tarihten sonra `shap`, `grad-cam`, `timm`,
-`captum`, `celldetection` eklendi. **AGPL'li `ultralytics` taşıyan bir üründe** lisans
-envanterinin eksik olması ticari satışta doğrudan risk.
+~~`THIRD_PARTY_LICENSES.md` 2026-08-10'da donmuş.~~ Envanter **elle değil, üretiliyor**:
+dosyanın başlığı *"`scripts/lisans_envanteri_uret.py` dosyayı aşağıdaki başlıktan itibaren
+yeniden yazar"* diyor ve üretici betik diskte var. Ayrıca §3.3 düzeltmesinde açılan atıf
+açığı için **"Araştırma veri kümeleri (atıf)"** bölümü eklenmiş. *"Donmuş"* nitelemesi
+mekanizma açısından artık geçerli değil.
+
+✅ **Üretici KAPIYA bağlı** (ölçüldü 2026-09-22): `tests/test_notice_envanteri.py`,
+`tests/test_license_surface.py` ve `tests/test_veri_kumesi_atfi.py` üreticiyi import edip
+envanteri requirements'a karşı doğruluyor — envanter bayatlarsa **test kırılır**. Yani
+"elle yenile" işi değil, kapı işi.
+**AGPL'li `ultralytics` taşıyan bir üründe** envanterin eksik kalması ticari satışta
+doğrudan risk — bkz. [`AGPL-KARARI.md`](AGPL-KARARI.md).
 
 ---
 
@@ -314,7 +363,14 @@ Bunlar bakıldı ve **temiz** çıktı; bir daha uğraşılmasın:
 
 > ## ⛔ A2 · B4 · C5 — ÖLÇÜLDÜ, ÜÇÜ DE DÜZELTİLDİ (2026-09-17)
 >
-> ### A2 — "güvenlik-ilgili hesap" iddiası **TERSİNE DÖNDÜ**
+> ### ⛔ A2 KAPANDI 2026-09-19 — birleştirme YAPILDI
+>
+> `ai_hub/cv_ortak/` tek uygulama; profil dosyaları 17 satırlık kabuk.
+> Kapı: `tests/test_cv_ortak_tek_uygulama.py`.
+> ⚠️ **Aşağıdaki *erteleme* gerekçesi ARTIK GEÇERSİZ** — bugün okuyan biri yapılmış
+> birleştirmeyi GERİ ALMASIN. 09-17 kaydı olarak duruyor.
+>
+> ### A2 (09-17 kaydı) — "güvenlik-ilgili hesap" iddiası **TERSİNE DÖNDÜ**
 > Kopya gerçek (MD5 aynı, doğrulandı). Ama `phantom_cv`/`petri_cv` **araştırma
 > sağlayıcıları** ve `PEMF_ARASTIRMA_AIPRO=0` ile kapalı — `_arastirma_aipro_kapisi`
 > **409** döndürüyor: *"bobin sürülmez."* Üstelik **bayrağın var olma sebebi tam da bu
@@ -326,7 +382,11 @@ Bunlar bakıldı ve **temiz** çıktı; bir daha uğraşılmasın:
 > yapılırken — o zaman zaten tek yerde yazılır. ⚠️ Ayrıca `ai_hub` PYZ dışında sevk
 > edildiği için doğrulaması **backend build** ister.
 >
-> ### B4 — doğru, ama ÖLÇÜT yanlıştı
+> ### B4 — doğru, ama ÖLÇÜT yanlıştı · ✅ **`treatment_history_db.py` BÖLÜNDÜ 2026-09-19**
+>
+> Bugün **680 satır / 17 metot**; sorumluluklar `apps/backend/database/thdb_*.py` sekiz
+> karışımına ayrıldı. Aşağıdaki tablo 09-17 ölçümüdür.
+>
 > | Dosya | Satır | **Kod** | Yorum |
 > |---|---|---|---|
 > | `api_server.py` | 5.135 | 3.530 | %22 |
@@ -358,27 +418,35 @@ Bunlar bakıldı ve **temiz** çıktı; bir daha uğraşılmasın:
 
 **Hemen (senin kararın gereken):**
 1. Bulut MQTT kimlik bilgilerini **döndür** (rotate) — adres PUBLIC geçmişte.
-2. BLE kararı: güvenliği aç, ya da ESP geri gelmeden provizyon yolunu kapat. Bu arada
-   log'daki yanıltıcı "PIN: 123456" satırını kaldır.
-3. İmzalama anahtarlarını (`*.p8`, `*.cer`, `*.p12`, `*.jks`) depo kökünden çıkar.
+2. BLE kararı: güvenliği aç, ya da ESP geri gelmeden provizyon yolunu kapat.
+   ~~Bu arada log'daki yanıltıcı "PIN: 123456" satırını kaldır.~~ ✅ **log satırı kaldırıldı**
+   — yalnız BLE-kararı yarısı açık.
+3. ~~İmzalama anahtarlarını (`*.p8`, `*.cer`, `*.p12`, `*.jks`) depo kökünden çıkar.~~
+   ✅ **KAPANDI** — kökte yok; `%USERPROFILE%\.pemf-keys\` altında.
 
 **Bu hafta (bende yapılabilir):**
 4. 18 commit + 14 yeni testi commit'le ve push et → CI kapılarından geçsin.
-5. `THIRD_PARTY_LICENSES.md` yenile (AGPL yüzeyi dahil).
+5. ~~`THIRD_PARTY_LICENSES.md` yenile (AGPL yüzeyi dahil).~~ ✅ **KAPANDI** — envanter
+   `scripts/lisans_envanteri_uret.py` ile üretiliyor ve `tests/test_notice_envanteri.py` +
+   `test_license_surface.py` + `test_veri_kumesi_atfi.py` kapılarına bağlı.
 6. `README.md` sürüm tablosunu `versions.json`'dan **türet** — elle yazma, üçüncü kez
    bayatlamasın.
 7. `firmware_cikti/` ve kalan üretilmiş dizinleri `.gitignore`'a ekle.
 
 **Yapısal (planlanmalı, tek seferde değil):**
-8. `pyproject.toml`'a `[project]` + `[build-system]` ekle; `controllers/`, `scripts/`,
-   `build_tools/`'a `__init__.py`.
+8. ~~`pyproject.toml`'a `[project]` + `[build-system]` ekle; `controllers/`, `scripts/`,
+   `build_tools/`'a `__init__.py`.~~ ✅ **KAPANDI** (158 satır; üç `__init__.py` de var).
 9. Göç kodunu **tek modüle** indir (`database/goc.py`) — beş kopya bir kez veri kaybettirdi.
-10. `coord_transform.py` + `mqtt_publish.py` + `cabin_config.py` kopyalarını ortak bir
-    `ai_hub/cv_ortak/` paketine al.
+10. ~~`coord_transform.py` + `mqtt_publish.py` + `cabin_config.py` kopyalarını ortak bir
+    `ai_hub/cv_ortak/` paketine al.~~ ✅ **KAPANDI 2026-09-19** — kapı:
+    `tests/test_cv_ortak_tek_uygulama.py`.
 11. Ölü dizinleri kaldır: `ai/config.py` (arşive taşı), `website/`, `web_static/`,
     `pemf_vet_landing/` (donmuş), `pemf_gui/` → `config/` olarak yeniden adlandır.
 12. `training_archive/` için Git LFS ya da ayrı depo.
-13. `api_server.py` (5.139) ve `treatment_history_db.py` (95 metot) bölünmeli.
+13. `api_server.py` bölünmeli — **açık** (ölçüldü 2026-09-22:
+    `apps/backend/servers/api_server.py` **5.208** satır).
+    ~~ve `treatment_history_db.py` (95 metot)~~ ✅ **BÖLÜNDÜ 2026-09-19**
+    (680 satır / 17 metot → `thdb_*.py` sekiz karışımı).
 
 **Disk:**
 14. Derleme çıktılarını kaynak ağacının dışına al (`PEMF_BUILD`, `launcher/target`).

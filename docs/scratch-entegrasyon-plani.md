@@ -4,7 +4,11 @@
 
 > **KAPANIŞ ÖZETİ:** Faz 1-3 (modül+uçlar+UI; 40 backend + 5 jest kilidi) → cell/ teslimi
 > (26.08 23:12, cell.zip) → **GERÇEK-MODEL doğrulaması** (CPU ~18 sn/görüntü; 0H:
-> 1495/%4.29/1053.5µm, 24H: 2083/%29.36/428.0µm — sahip referanslarıyla neredeyse birebir)
+> 1495/%4.29/**539,6 µm**, 24H: 2083/%29.36/**240,8 µm** — sahip referanslarıyla neredeyse
+> birebir. ⚠️ µm gap 2026-09-09'da YENİDEN TEMELLENDİ: eski 1053,5 / 428,0 değerleri HATALI
+> eksenle üretilmişti; kapanma yüzdesi ve hücre sayısı DEĞİŞMEDİ. Kaynak:
+> `tests/test_scratch_gercek_model.py:60-62`, `CHANGELOG.md:380`. Bu tarihten önce kaydedilmiş
+> analizlerin µm gap'leri yenileriyle KIYASLANAMAZ.)
 > → **GPU smoke** `SCRATCH-SMOKE-OK cuda:0 9.8sn 2086 %29.32 eigencam` → **Faz 4.5
 > launcher 1.9.39 çoklu-model-zip** (`model_parts`; cargo 223 `--locked`; research-2.zip
 > **1.81 GB, sha 10e177b8…** üretildi; make_manifest + BUILD.md runbook AYNI commit'te).
@@ -24,7 +28,7 @@
 | **Lisans** | celldetection **Apache-2.0** (doğrulandı — AGPL sorunu YOK) |
 | **Referans** | CONTROL-0H → 1494 hücre, closure %4.3 · CONTROL-24H → 2085 hücre, %29.3 (24 saatte +25 puan) |
 
-**Tek girdiden üretilen çıktılar:** segmentasyon · overlay · analiz (yatay/dikey ROI) · kapanma · XAI overlay · XAI 3-panel · metrik seti (n_cells, coverage, closure_pct, mean/max gap µm, gap_area mm²). **Vertical/Horizontal:** analiz ROI'si yaraya **dik** seçilir; ⚠️ closure metrikleri HER ZAMAN dikey-yara varsayımlı (kolon-bazlı gap).
+**Tek girdiden üretilen çıktılar:** segmentasyon · overlay · analiz (yatay/dikey ROI) · kapanma · XAI overlay · XAI 3-panel · metrik seti (n_cells, coverage, closure_pct, mean/max gap µm, gap_area mm²). **Vertical/Horizontal:** analiz ROI'si yaraya **dik** seçilir; ⚠️ **2026-09-09 DÜZELTMESİ:** gap artık yara yönüne GÖRE ölçülür — "dikey" yarada satır başına yatay run, "yatay" yarada kolon başına dikey run. Eski "her zaman dikey varsayımı" notu ÖLÇÜLDÜ ve YANLIŞ çıktı; `closure_uyari` alanı kaldırıldı (kaynak: `inference_paper_dilek_hoca.py:371-380`, `:847`; kapı: `tests/test_scratch_postproc.py:219`).
 
 ---
 
@@ -163,7 +167,6 @@ boş ──dosya seç──> hazır ──▶ Analiz Et──> yükleniyor ─�
 | `xai_image_base64` | Galeri **[XAI]** | explain + başarı |
 | `xai_side_by_side_base64` | Galeri **[3'lü panel]** | explain + başarı |
 | `xai_error` | Galeri altında tek satır uyarı (sekme YOK) | explain + hata |
-| `closure_uyari` | Sarı uyarı bandı | yatay yara |
 | `uyari` (n_cells==0) | Boş-durum kartı: "Hücre tespit edilemedi — görüntüyü/objektifi kontrol edin" | n_cells==0 |
 
 ### 5.c Görünüm
@@ -195,7 +198,6 @@ boş ──dosya seç──> hazır ──▶ Analiz Et──> yükleniyor ─�
 │  └──────────────────────────────────────────┘              │
 │  ℹ Görsel içi sayımlar ROI bandına aittir; toplam hücre    │
 │    sayısı üstteki karttadır.                               │
-│  ⚠ Yatay yara: closure dikey varsayımla — yaklaşık.        │
 │                                                            │
 │  [ ⇄ Karşılaştır ] → iki analiz yan yana + Δ kartı:        │
 │     0H %4.3 → 24H %29.3  ·  Δ = +25.0 puan                 │
@@ -235,7 +237,7 @@ boş ──dosya seç──> hazır ──▶ Analiz Et──> yükleniyor ─�
 
 ## 7) Açık sorular / sahipten istenenler
 
-1. **`cell/` paketi** — `training/paper_dilek_hoca/cell/` (cpn.py, prep.py; birkaç KB). Faz 1-3'ü bloklamıyor.
+1. ~~**`cell/` paketi**~~ ✅ **TESLİM ALINDI 2026-08-26** — depoda: `ai_hub/inference_paper_dilek_hoca/cell/` (cpn.py, prep.py, util.py). `training/paper_dilek_hoca/cell/` yolu ARTIK YOK.
 2. **Faz-0 kararları** (§4 — 8 madde, hepsi önerili; itiraz yoksa öneriyle gidilir). Özellikle YENİ üçü: jeton sınıfı (0.6), veri sınıfı (0.7), Karşılaştır kapsamı (0.8).
 3. celldetection pin: Çağlar Hoca'nın ortamındaki `pip show celldetection` çıktısı idealdir; yoksa 0.4.9 pinlenir, toleranslı smoke doğrular.
 

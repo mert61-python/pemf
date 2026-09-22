@@ -28,6 +28,8 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `coil_run_tracker.py` | Her bobinin "coil run" yaşam döngüsü + dakika-ortalaması → run özeti (treatment DB'ye) |
 | `efield_live.py` | Canlı E-alanı türetici — konum+organ seans boyunca SABİT, değişen `achieved_B`/`duty_sum` ile em_fantom ONNX **vekilini** AYRI düşük-frekanslı döngüde çağırıp önbelleğe yazar (istek yolunda çalışmaz → snapshot/WS gecikmesini artırmaz); AI paneli ile bar aynı kaynaktan okur |
 | `ai_pro_hedef.py` | **AI Pro hedef sağlayıcıları** — kapalı döngünün model-bağımsız katmanı: `kedi` (veteriner, `cat_organ`+`em_kedi`), `fantom` (`phantom_cv`+`PhantomPredictor`), `petri` (`petri_cv`+`PetriPredictor`). Her sağlayıcı AYNI 8'li tuple sözleşmesini döndürür (`localized,x,y,z,güven,overlay,özne_var,güven_dökümü`) ve kare üstü hedef adaylarını (`targets`, kare-oranlı `pxn`), kalibrasyon yöntemini ve eğitim-aralığı işaretini üretir. ⚠️ **Kedi kodu TAŞINMADI** (geç bağlı delegasyon) → veteriner davranışı bit-bit aynı. ⚠️ Kalibrasyonsuz yöntemde güven tavanı 0,25 < eşik 0,3 → **işaretsiz hedef YAPISAL olarak reddedilir** (karar #4). ⚠️ Kedi DIŞI modelle SÜRÜŞ `PEMF_ARASTIRMA_AIPRO` bayrağına bağlı (tezgâh doğrulaması bekliyor) |
+| `sensor_kaydedici.py` | **Sensör telemetrisi yerel CSV kaydedici** (sahip kararı 2026-09-09) — kayıt HER ZAMAN açık; mevcut `pemf/coil/+/sensors` aboneliğine takılır (yeni abonelik/ağ yükü YOK). ⚠️ Hasta DB'sine YAZMAZ: ~16 MB/gün telemetri her açılış yedeğini şişirir ve tıbbi kaydın geri-yükleme süresini bozar |
+| `seans_alan_kaydi.py` | **Seans boyunca ÖLÇÜLEN manyetik alanı biriktirir** ve masaüstüne seans-özel CSV yazar (sahip kararı 2026-09-11). ⚠️ İki ayrı "yoğunluk" vardır — reçete (`intensity_mt`, cihaza GÖNDERİLMEZ, yalnız kayıt) ile sensörden ölçülen değeri karıştırmayın |
 | `ai_approval.py` | **Hekim onay kapısı** — AI Pro'nun önerdiği per-bobin duty/faz/organ hekim onaylamadan UYGULANMAZ; onay tek-kullanımlık (`consume()`), süreli (`TTL_S`), parametre-mühürlü ve YALNIZ bellekte (süreç yeniden başlarsa yeniden onay istenir — bilinçli) |
 
 ### Kimlik & yetki
@@ -59,6 +61,7 @@ Sensör telemetri: MQTT (_on_mqtt_message_api) → live_state → tampon → tre
 | `sync_worker.py` | `CloudSyncWorker` — yerel SQLite (hasta/seans) → Supabase; cihaz-registry yayını |
 | `auto_discovery.py` | mDNS/Zeroconf servis ilanı (`start_mdns`/`stop_mdns`) + IP re-register |
 | `tunnel_manager.py` | Cloudflare-tünel — `cloudflared` bul/indir, tünel başlat, public URL, reconnect watchdog |
+| `firmware_manager.py` | **STM32 firmware OTOMATİK güncellemesi** (sahip kararı 2026-09-22) — manifest → plan → indir → yak → doğrula; cihaz firmware'ini KENDİ alır (açılışta client kontrolünden SONRA). İş bölümü: KARAR [`../utils/surum_uyumu.py`](../utils/README.md), YAKMA [`../utils/stm_yakma.py`](../utils/README.md), orkestrasyon burada. ⚠️ Kural yoksa karar `None`, manifest okunamazsa BEKLE; geri alış çift yönlüdür |
 
 ## ⚠️ Güvenlik mekanizmaları (bu klasörde)
 - `api_server._session_duration_watchdog` — süre dolunca **donanım-STOP** (firmware keep-alive tek başına durdurmaz).

@@ -4,7 +4,7 @@
 > burada **sıra**, **komut**, **kabul ölçütü** ve **tuzak** var. Bir çelişki görürsen bağlantı
 > verilen belge doğrudur. (Depo dersi: belgeler sessizce bayatlıyor.)
 
-**Önerilen sıra:** B-1 → B-2 → B-3 → B-4. Sebep: saha listesindeki (B-3) donanım senaryoları
+**Önerilen sıra:** B-1 → B-3 → B-4. Sebep: saha listesindeki (B-3) donanım senaryoları
 reflash'lı cihaz ister, yoksa eski firmware'i test edersin. B-4 fiziksel, ne zaman olsa olur.
 
 ---
@@ -219,8 +219,8 @@ diye yanlış rapor verdim — elle açılan backend launcher'ın ortamını alm
 
 ## B-6 · Firmware güvenlik satürasyonu (tezgâh)  ⏱️ tezgâh
 
-Bobin sürücüsünün doyum/ısınma davranışının ölçümü. B-2'deki doz eğrisiyle **aynı oturumda**
-yapılabilir: aynı prob, aynı düzenek, yalnız süre uzun ve duty yüksek.
+Bobin sürücüsünün doyum/ısınma davranışının ölçümü. Tezgâh düzeneği B-1 reflash'ı ile **aynı
+oturumda** kurulabilir: aynı prob, aynı düzenek, yalnız süre uzun ve duty yüksek.
 
 ⚠️ **Termal kesme firmware'de YOK — senin kararındı.** Yani bu testte cihazı kendi kendine
 korumasını bekleme; süreyi sen sınırla ve sıcaklığı `STM_TELE`'deki `T=` alanından izle.

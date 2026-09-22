@@ -24,7 +24,7 @@ cihaz/dış-kaynak gerektirir — aşağıdaki komutları **cihazda/panelde** ç
 
 ## ✅ 3 — Supabase RLS (bu ortamda DOĞRULANDI)
 
-`scratchpad/verify_supabase_rls.py` gömülü anon (publishable, tasarımı gereği public) anahtarla
+`scratchpad/verify_supabase_rls.py` (⚠️ betik depoda YOK, aşağıdaki nota bakın) gömülü anon (publishable, tasarımı gereği public) anahtarla
 kullanıcının kendi projesini **salt-okunur** probladı. Sonuç **5/5 geçti**:
 
 - `devices` doğrudan SELECT → `200 []` (RLS satır sızdırmıyor)
@@ -33,7 +33,7 @@ kullanıcının kendi projesini **salt-okunur** probladı. Sonuç **5/5 geçti**
 - `devices` doğrudan INSERT → `401 "new row violates row-level security policy"` (anon yazamıyor)
 
 **Sonuç:** eski anon-write policy'leri kaldırılmış, cross-tenant sızıntı kapalı, RPC tek erişim yolu.
-Tekrar çalıştırmak için: `python scratchpad/verify_supabase_rls.py` (internet gerekir).
+⚠️ **Bu ölçümün betiği depoda YOK** — yeniden koşturmak için Supabase Dashboard → SQL Editor'den elle proba gerekir.
 
 ## ✅ 8 — KVKK anonimleştirme (bu ortamda DOĞRULANDI + gap kapatıldı)
 
@@ -43,7 +43,7 @@ Tekrar çalıştırmak için: `python scratchpad/verify_supabase_rls.py` (intern
 **YENİ BULGU + FIX:** migration `.plain.bak` (tüm eski düz-metin DB) diskte **ACL'siz** kalıyordu →
 SQLCipher'ı baypas eden PII kopyası. **Kapatıldı:** oluşturmada + startup'ta `lock_down_file` (SYSTEM+Admin)
 ile kilitlenir (`sqlcipher_util.py` + `treatment_history_db.py` + `backend_service._harden_secret_file_acls`).
-Kontrol (cihazda): `icacls "%APPDATA%\PEMF_GUI\*.plain.bak"` → yalnız `NT AUTHORITY\SYSTEM` + `BUILTIN\Administrators` görünmeli.
+Kontrol (cihazda): `icacls "C:\ProgramData\PEMF_System\PEMF_GUI\*.plain.bak"` → yalnız `NT AUTHORITY\SYSTEM` + `BUILTIN\Administrators` görünmeli.
 
 ---
 
@@ -67,17 +67,17 @@ curl http://127.0.0.1:8000/api/health | ConvertFrom-Json | Select-Object atRestE
 
 - `True` → whole-DB SQLCipher aktif (PII at-rest şifreli). ✅
 - `False` → `sqlcipher3` wheel eksik VEYA `PEMF_ENCRYPT_AT_REST` set değil. **Üretimde OLMAMALI.**
-  - Kontrol: `%APPDATA%\PEMF_GUI\device.env` → `PEMF_ENCRYPT_AT_REST=1` var mı?
-  - Kontrol: `myenv\Scripts\python -c "import sqlcipher3; print(sqlcipher3.version)"` (wheel var mı?)
+  - Kontrol: `<AppDir>\_internal\deploy\device.env` → `PEMF_ENCRYPT_AT_REST=1` var mı? (Dosya veri dizininde **DEĞİL**, kurulum ağacındadır; değeri NSSM servis ortamına yazılır — `nssm get PemfBackend AppEnvironmentExtra` ile servis tarafını da doğrulayın.)
+  - Kontrol (cihazda): `/api/health` → `atRestEncrypted`. Wheel'in **pakete girip girmediği** build makinesinde `myenv\Scripts\python -c "import sqlcipher3"` ile ya da sevk ağacında `_internal` altında `sqlcipher3` aranarak bakılır — klinik cihazda Python KURULU DEĞİLDİR (donmuş EXE).
   - Not: PatientDB + TreatmentDB **fail-closed** (bayrak=1 + wheel-yok → RuntimeError, düz-metin YAZMAZ).
 
 ## ⏳ 4 — Cloudflare NAMED tünel (CİHAZDA)
 
 ```powershell
 # Aktif tünel türü:
-Get-Content "$env:APPDATA\PEMF_GUI\device.env" | Select-String "PEMF_TUNNEL|CLOUDFLARE|TUNNEL_TOKEN"
+Get-Content "<AppDir>\_internal\deploy\device.env" | Select-String "PEMF_TUNNEL|CLOUDFLARE|TUNNEL_TOKEN"
 # Servis logunda tünel URL'i sabit mi (NAMED) yoksa her restart trycloudflare.com değişiyor mu (QUICK):
-Get-Content "$env:APPDATA\PEMF_GUI\logs\*.log" | Select-String "tunnel|trycloudflare|cloudflared" | Select-Object -Last 10
+Get-Content "C:\ProgramData\PEMF_System\logs\backend_service.log" | Select-String "tunnel|trycloudflare|cloudflared" | Select-Object -Last 10
 ```
 
 - **QUICK** (`*.trycloudflare.com`, her restart değişir, SLA yok) = P1, üretime uygun değil.
@@ -121,14 +121,15 @@ Get-ChildItem "C:\ProgramData\PEMF_GUI\ai_models\*" -Recurse -Include *.onnx,*.p
 ## ⏳ 7 — Yük/soak davranışı (CİHAZDA / STAGING)
 
 ```powershell
-# 8-bobin 5Hz soak (mevcut script) — uzun süre çalıştır:
-py -3.10 guii/scripts/soak_publish_5hz_8coil.py
+# HTTP + WebSocket soak (canlı yolları zorlar) — uzun süre çalıştır:
+python scripts\soak_http_ws.py --port 8000 --dakika 4320 --aralik 60
+# ⛔ soak_publish_5hz_8coil.py ESP kapalıyken (varsayılan) hiçbir şey ölçmez — kullanmayın.
 # Paralel izleme (her 30sn): süreç belleği + DB büyümesi
 while ($true) {
   $p = Get-Process -Name "PEMF*" -EA SilentlyContinue
   "{0}  RAM={1}MB  DB={2}KB" -f (Get-Date -Format HH:mm:ss),
     [int]($p.WorkingSet64/1MB),
-    [int]((Get-Item "$env:APPDATA\PEMF_GUI\*.db").Length/1KB)
+    [int]((Get-Item "C:\ProgramData\PEMF_System\PEMF_GUI\*.db").Length/1KB)
   Start-Sleep 30
 }
 ```

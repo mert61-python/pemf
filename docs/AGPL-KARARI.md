@@ -40,8 +40,8 @@ Ayrıca asgari **atıf (NOTICE)** dosyası da yoktu — o eksik bu notla birlikt
 |---|---|---|---|
 | `inference_petri_dish/petri_cv/petri_detector.py` | `yolo11m-seg.pt` | **EVET** | `ai_router` çağırıyor |
 | `inference_human_kidney_ct` | ultralytics + cv2 | **EVET** | `ai_router` çağırıyor |
-| `cat_segmentation` | `yolov8m-seg.pt` | hayır | yalnız CLI/demo bloğu |
-| `feline_reticulocytes` | `yolov8s.pt` | hayır | yalnız CLI/demo bloğu |
+| `cat_segmentation` | `yolov8m-seg.pt` | **EVET** | `ai_router` çağırıyor (`ai_router.py:2496`, `/api/ai/vision/segmentation`) |
+| `feline_reticulocytes` | `yolov8s.pt` | **EVET** | `ai_router` çağırıyor (`ai_router.py:2649`, `:2702`) |
 | `cat_landmark` | `yolo26m-pose.onnx` | evet | **zaten ONNX** |
 | `inference_cat_organ` | `.onnx` | evet | **zaten onnxruntime** |
 
@@ -68,9 +68,11 @@ pose çözümleme) elle yazılması. Bunlar bugün Ultralytics'in yaptığı iş
 **(c) Ürünü AGPL altında yayınla** — mevcut ticari modelle ve `.pyd` kod korumasıyla çelişir
 (bkz. `docs/` kod koruması notları). Pratikte seçenek değil.
 
-**(d) Yüzeyi küçült (kısmi)** — üretimde kullanılmayan iki modülü (`cat_segmentation`,
-`feline_reticulocytes`) ve onların `.pt` dosyalarını paketten çıkarmak, dağıtılan AGPL yüzeyini
-azaltır ama **kaldırmaz** (petri + kidney_ct kalır). Tek başına uyum sağlamaz.
+**(d) Yüzeyi küçült (kısmi)** — ⛔ **UYGULANAMAZ (ölçüldü):** bu seçenek `cat_segmentation` ve
+`feline_reticulocytes` modüllerinin "üretimde kullanılmadığı" varsayımına dayanıyordu; ikisi de
+CANLI teşhis ucudur (`ai_router.py:2496` ve `:2649`/`:2702`). Paketten çıkarmak `/api/ai/hazirlik`
+kapsamını düşürür (`_AI_MODUL_ENVANTERI`, `ai_router.py:3790`, `:3807`; kapı
+`tests/test_ai_hazirlik_envanteri.py`) ve iki ucu kırar. AGPL yüzeyi bu yolla küçültülemez.
 
 ## 5. Yazılım tarafında şu an yapılanlar
 

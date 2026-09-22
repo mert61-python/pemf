@@ -7,6 +7,14 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 |---|---|
 | `stm32_transport.py` | **`Stm32SerialTransport`** — STM32 port seçimi (`PEMF_STM_PORT` env / sabit `COM10` / ST-Link VCP oto-algılama USB VID/PID ile), 115200 baud açılış + handshake, güvenli sıfır-duty probe paketi |
 | `stm32_protocol_limits.py` | **Güvenlik-limit sabitleri + normalizer'lar** — 7 STM (1-7) / 1 ESP (slot 8) bobin ⚠️ 2026-09-11'de düzeltildi (5/8 yazıyordu, 7-bobin geçişinde atlanmıştı), freq 1 Hz–25 kHz (`DDS_ISR_HZ/2`), faz 0–360°, süre 0–9999 dk (0=sınırsız), AI-Pro duty tavanı 0.50. Python-tarafı STM duty-max **yok** (firmware doyurur) |
+| `stm32_uart.py` | **STM32 UART okuma TEK KAYNAK** — port seçimi + açılış banner'ını dinleme. ⚠️ `scripts/` DEĞİL `utils/`: sevk edilen pakete `scripts/` altından yalnız altı `.ps1` girer (`build_tools/make_base_zip.py::ADD_SCRIPTS`), `scripts/*.py` **hiç gitmez** — orada kalsaydı sahada hiç bulunmazdı. Yazdırmaz, kütüphanedir |
+| `stm32_kimlik.py` | **STM32 firmware kimliği** — açılış banner'ını ayrıştırır (`STM_READY: DDS v2.3 …`) ve **uyum denetimi** yapar. Öncesinde `headless_core.py` yalnız `"STM_READY" in decoded` bakıyordu — "bağlı" ile "uyumlu" aynı sanılıyordu |
+| `surum_uyumu.py` | **CLIENT ↔ FIRMWARE sürüm uyum kapısı** (sahip kararı 2026-09-22) — hangi ikililer birlikte çalışır, uyumsuzda ne yapılır. ⚠️ Yalnız **KARAR** verir (donanımsız/ağsız sınanabilsin diye); indirme/yakma yan etkileri `servers/firmware_manager.py` + `scripts/stm_yak.py` tarafında |
+| `stm_yakma.py` | **STM32 yakma çekirdeği** — ön kontrol → yedek → yak → banner doğrula → gerekirse GERİ DÖN. ⚠️ `utils/` altında olma gerekçesi `stm32_uart.py` ile aynı (paket `scripts/*.py` taşımaz); `scripts/stm_yak.py` yalnız CLI yüzüdür. Yazdırmaz — `Adim` kayıtları DÖNDÜRÜR |
+| `dongu_guvenligi.py` | **Sonsuz-döngü hata-bildirimi güvenliği** — `except: logging.exception(...)` fırlatırsa `while`dan ÇIKILIR; backend'in altı daemon döngüsünün **altısı da** bu şekildeydi (2026-09-19'da ölçüldü). Döngü ölürse ör. session-watchdog susar ve seans süreyi AŞAR |
+| `seans_durum.py` | Seans durumu → **Türkçe gösterim etiketleri** TEK KAYNAK (backend dışa aktarımları). Arayüz "Tamamlandı" derken CSV ham `completed` yazıyordu (sahip bildirimi 2026-09-12) |
+| `agir_import.py` | **Ağır (torch tabanlı) import'ları TEK boğumdan geçirir** (A9) — eşzamanlı yarış `torch/__init__.py`'de `NameError: name '_C' is not defined` ile 8 AI ucunu birden 500'e düşürüyordu. ⚠️ İlk teşhis yanlıştı; `sys.meta_path` izcisiyle ölçüldü |
+| `ai_rapor_ogeleri.py` | **AI analiz kaydı → PDF öğeleri** (2026-09-12) — PDF üretimi yalnız SEANS kayıtları için vardı; ev sahibi profili analizini veterinerine GÖNDEREMİYORDU |
 | `simple_signal.py` | **`SimpleSignal`** — minimal Qt-siz signal/slot (STM-bağlandı bildirimleri için) |
 | `path_utils.py` | App-data dizini, benzersiz cihaz-id, pairing-code, PyInstaller resource-path çözümü, `initialize_database()`, `get_app_version()` |
 | `secrets_manager.py` | Şifreli sır deposu — Windows DPAPI + makine-bağlı Fernet + keyring; token/pairing/admin-code/device-id üreteçleri. **TÜM sırlar tek dosyada** (`pemf_secrets.json`). 2026-08-19: `mqtt_cloud_host/port/user/pass` eklendi (operator bölümü; E-stop **bulut aynası** — tanımsızsa ayna sessiz devre dışı; env fallback `PEMF_MQTT_CLOUD_*`) |
@@ -36,6 +44,8 @@ Backend'in her yerinden kullanılan bağımsız yardımcılar: STM32 seri/protok
 - `stm32_protocol_limits.py` = **güvenlik-limitlerinin kaynağı**. Değerleri zayıflatma; testleri `tests/test_stm32_protocol_limits.py`.
 - `model_downloader.py` **offline-only** — internetten model çekmez (gömülü/kopyalı olmalı).
 - `secrets_manager.py` tek sır-noktasıdır; yeni sırları buradan ekle (dağınık keyring/env değil).
+- `surum_uyumu.py` = **firmware-uyum kapısı**; "bağlı" ≠ "uyumlu", uyumsuzda seans 409 döner. Kapıyı zayıflatma/atlama.
+- `dongu_guvenligi.py` = **döngü-ölümü koruması**; daemon döngülerinin hata dallarını buradan geçir, çıplak `logging.exception` ile değiştirme.
 
 ---
 İlgili: [proje geneli](../../../README.md) · [controllers/](../controllers/README.md) · [database/](../database/README.md) · [firmware/](../../../firmware/README.md)

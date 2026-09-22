@@ -5,8 +5,8 @@ geçildi), **ama paket ölü değil** — iki parça hâlâ aktif kullanılıyor
 
 | Yol | Durum |
 |---|---|
-| `config.py` | ✅ **CANLI** — `ConfigManager` (Fernet-şifreli sırlar, keyring/DPAPI, eski-anahtar migrasyonu). Import edenler: `../backend_service.py`, `../database/patient_database.py` |
-| `__init__.py` | ✅ **CANLI** — `get_icon_path()`; `resources/` ikonları `../utils/path_utils.py` + `../servers/system_router.py` (tray ikon `pemf_heart_emf_icon.ico`) tarafından kullanılır |
+| `config.py` | ✅ **CANLI** — `ConfigManager` (Fernet-şifreli sırlar, keyring/DPAPI, eski-anahtar migrasyonu). Import edenler: `../apps/backend/backend_service.py`, `../apps/backend/database/patient_database.py` |
+| `__init__.py` | ✅ **CANLI** — `get_icon_path()`; `resources/` ikonları `../apps/backend/utils/path_utils.py` + `../apps/backend/servers/system_router.py` (tray ikon `pemf_heart_emf_icon.ico`) tarafından kullanılır |
 | `resources/` | ikonlar, resimler, `docs/Kullanim_Klavuzu.pdf` |
 | (GUI pencere/entrypoint kodu) | ❌ **YOK** — silindi |
 

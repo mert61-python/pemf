@@ -9,7 +9,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | Dosya | İçerik |
 |---|---|
 | `KABIN_KURULUM_KILAVUZU.md` | Kabin / ArUco koordinat-kalibrasyon kurulumu (AI-Pro 3B lokalizasyon) |
-| `PEMF_ArUco_Marker_5X5_50_ID0_10cm.png` | Yazdırılabilir ArUco fiducial (kabin kalibrasyonu) |
+| `PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf` / `.png` | Yazdırılabilir ArUco fiducial (kabin kalibrasyonu) — kenar **15,0 cm**, `aruco.real_cm` ile AYNI olmak ZORUNDA (yanlış kenar = sessiz ölçek hatası); üretim: `python scripts/kabin_marker_a4.py` |
 | `PEMF_AI_Test_Girdileri/00_README_OKU.txt` | Her model için **gerçek test girdisi** + beklenen çıktı haritası (E2E test) |
 | `inference_human_kidney_disease/README.md` | CKD (24 klinik özellik) modeli notu |
 | `inference_em_fantom/phantom_cv/README.md`, `inference_petri_dish/petri_cv/README.md` | Klasik-CV pipeline paketleri |
@@ -30,7 +30,7 @@ Her teşhis modelinin **inference kodunun** evi. **Küçük** modeller (tabular/
 | `inference_human_kidney_disease/` | **Gömülü ONNX zoo** (CatBoost/ExtraTrees/LogReg/RandomForest) + preprocessor — CKD |
 | `inference_human_kidney_rna/` | RNA-seq KIRC MLP (`mlp_medium_kirc.onnx` gömülü) + scaler |
 | `inference_renal_histopath_kmc/` | Grade 0–4 histopatoloji (ağırlık `/models`'ten) |
-| `inference_paper_dilek_hoca/` | **Yara Kapanma (Scratch)**: CPN hücre segmentasyonu + TScratch closure metrikleri (872MB PT `/models`'ten; ⚠️ `cell/` paketi sahibinden bekleniyor — modül README'sine bakın) |
+| `inference_paper_dilek_hoca/` | **Yara Kapanma (Scratch)**: CPN hücre segmentasyonu + TScratch closure metrikleri (872MB PT `/models`'ten; `cell/` paketi ✅ teslim alındı 2026-08-26 — `inference_paper_dilek_hoca/cell/`, modül README'sine bakın) |
 | `em_kedi/` | AI-Pro bobin-sürme BiLSTM (x/y/z/organ → duty/phase); scaler'lar gömülü |
 
 ## Gömme deseni

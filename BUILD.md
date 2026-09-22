@@ -25,7 +25,7 @@ Yayın varlıkları hâlâ **`pemf-update`** deposuna yüklenir (istemciye derle
 |---|-------|------------------------|-------|
 | 1 | **Backend** (frozen EXE) | `.\scripts\build_backend_exe.ps1` | `PEMF_BUILD\dist\PEMF_Backend\PEMF_Backend.exe` |
 | 2 | **base.zip** (client runtime) | `python build_tools\make_base_zip.py` | `pemf-app-packages\base.zip` (+ sha/size) |
-| 3 | **Installer** (launcher/Tauri) | `cd launcher\app; npx @tauri-apps/cli build` | `launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.9_x64-setup.exe` |
+| 3 | **Installer** (launcher/Tauri) | `cd launcher\app; npx @tauri-apps/cli build` | `launcher\target\release\bundle\nsis\PEMF Vet Client_<sürüm>_x64-setup.exe` |
 | 3b | **Installer** (Inno offline) | `.\build_tools\build_installer.ps1 [-Mode device\|server]` | Inno Setup .exe (her şeyi bundle) |
 | 4 | **Web frontend** | `cd apps/ui; npm run export:web` + mirror | `apps/ui\dist` → `frontend\dist` + runtime |
 | 5 | **Android APK** | `.\build_tools\build_apk.ps1` | `release_assets\PEMF_Vet_Mobil.apk` |
@@ -157,7 +157,6 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 |---|---|---|
 | `base-app.zip` | ~71 MB | **her sürümde** — exe + `ai_hub` .pyd + web arayüzü + scriptler |
 | `base-deps.zip` | ~1,19 GB | yalnız `requirements` değişince |
-| `base.zip` | ~1,32 GB | **her sürümde** — yukarıdaki ikisinin BİRLEŞİMİ, ≤1.9.12 eski client'lar için |
 
 > ⚠️ **TEK SÜRÜM, TEK YAZILIM (2026-08-09 denetimi).** `base.zip` eskiden yalnız `--monolith`
 > ile üretiliyordu ve "normalde GEREKMEZ" deniyordu. Sonuç ölçüldü: yayındaki `base.zip` ile
@@ -179,16 +178,17 @@ mosquitto/cloudflared 60…), yalnız ~71 MB'ı bizim kodumuz. Paket ikiye ayrı
 
 **manifest.json güncelle:**
 - `layers.<platform>.deps` ve `layers.<platform>.app` → yeni `sha256` + `size`.
-- ⚠️ **`runtimes` ve `base` girdileri KALMALI.** Onlar **≤1.9.12 eski client'lar** içindir.
-  Silinirse eski client'lar kurulum yapamaz. Eski client açılışta zaten kendini günceller, sonra
-  katmanlı yola geçer. **AMA BAYAT BIRAKILAMAZ:** katmanlar yenilendiğinde `base.zip` de
-  yenilenmeli ve yüklenmelidir (yukarıdaki "tek sürüm, tek yazılım" notu).
+- ⚠️ **TEK-PARÇA `base.zip` 1.9.48'DEN BERİ YAYINLANMIYOR** (sahip kararı; yayın 1,55 GB → 210 MB).
+  manifest `runtimes` **BOŞ** bırakılır, yalnız `layers` taşınır. Sonuç: client ≤1.9.12 kurulum
+  yapamaz — **BİLİNEN ve KABUL EDİLEN** durum (launcher ≥1.9.51 katmanları da sayar). Yerel
+  üretimde `--no-monolith` kullan; diskteki bayat `base.zip`i ASLA yükleme.
 - ⚠️ Manifest'i **elle düzenlemeyin** — `python scripts/make_manifest.py` üretir. Betik artık
   `layers` + `mobile` bloklarını da taşır/üretir, `rollout` geri-çekmesini korur ve şu iki
   durumda **manifest yazmadan HATA verir**: (a) önceki manifest'te olan bir bölüm kaybolacaksa,
   (b) katmanlar yeni ama tek-parça `base` eskiden taşınıyorsa.
 - Doğrulama: `cargo test -p pemf-launcher-core --lib uretim_manifesti` — üretim manifestini
-  gerçekten ayrıştırır, katman/url/boyut değişmezlerini ve `runtimes`'ın kaybolmadığını kontrol eder.
+  gerçekten ayrıştırır; katman/url/boyut değişmezlerini ve platformda **katman YA DA tek-parça**
+  ile kurulabilir bir şey olduğunu kontrol eder (`runtimes` BOŞ olabilir — monolit 1.9.48'de kaldırıldı).
 
 > Eski **çift-base gotcha'sı** (aynı sha'yı `runtimes.win-x64` 6-boşluk **ve** `base` 4-boşluk
 > girintiye yazma) `make_manifest.py` kullanıldığında kendiliğinden doğru yazılır.
@@ -264,7 +264,7 @@ npx @tauri-apps/cli build          # cargo + NSIS, ~60sn (incremental)
 > ```
 > (Bu makinede 2026-07-31'deki ağ kesintisinde oluşmuştu; 2026-08-05'te temizlendi.)
 
-- **Çıktı:** `launcher\target\release\bundle\nsis\PEMF Vet Client_1.9.9_x64-setup.exe`.
+- **Çıktı:** `launcher\target\release\bundle\nsis\PEMF Vet Client_<sürüm>_x64-setup.exe` (`<sürüm>` = `versions.json` → `launcher`).
 - **Yayın için İKİ ada kopyala:** `PEMFVetClient-Setup.exe` (**self-update** bu adı okur —
   `manifest.launcher.installer_url`) **ve** `PEMFVetClient-Setup-<sürüm>.exe` (**site** bu adı
   bekler — `config.ts::windowsAsset` adı `windowsTag`ten türetir). İkisi de aynı ikili olmalı.
@@ -301,7 +301,7 @@ Client v1.9.3'ten itibaren **açılışta kendini otomatik günceller** (kullan�
    ```
    sha256/size = yayınlanan setup exe'nin değerleri (`Get-FileHash`, `(Get-Item).Length`).
 5. Manifest'i yayınla (`gh release upload client-app-v1.8.0 --clobber ... manifest.json`).
-6. **Web sitesi (yeni kullanıcılar da alsın):** `apps/web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra **push yeter** — Vercel projesi GitHub deposuna BAĞLI, `master`'a push üretim deploy'unu kendisi tetikliyor (2026-08-18'de ölçüldü: push → 17 sn'de Ready). CLI yalnız bağlantı kopmuşsa gerekir: `cd apps/web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
+6. **Web sitesi (yeni kullanıcılar da alsın):** `apps/web/src/config.ts` → `DOWNLOAD_HOST.windowsTag` yeni tag'e + `CLIENT.version` + `releaseDate`; sonra **push yeter** — Vercel projesi GitHub deposuna BAĞLI, `production-hardening`'e push üretim deploy'unu kendisi tetikliyor (2026-08-18'de ölçüldü: push → 17 sn'de Ready). CLI yalnız bağlantı kopmuşsa gerekir: `cd apps/web; npx vercel --prod --yes`. ⚠️ **`windowsTag` AYRI** (self-update Windows-only) → `launcherTag`'i (mac/linux/android ortak) DEĞİŞTİRME, yoksa onlar 404.
 > ⚠️ **Bootstrapping:** oto-güncelleme kodu OLMAYAN eski client'lar (≤1.9.2) kendini güncelleyemez → bir kez ELLE 1.9.3+'a geçmeli (site indirmesi). 1.9.3'ten sonra tüm güncellemeler otomatik.
 > ⚠️ `installer_url` YOKSA (yalnız version/url) client sadece "yeni sürüm var" bildirir (otomatik kurmaz) — geriye uyumlu.
 
@@ -362,7 +362,6 @@ python scripts\make_manifest.py --dir pemf-app-packages --tag client-app-v<sür�
 gh release create client-app-v<sürüm> -R mert61-python/pemf-update --title "PEMF app <sürüm>" --notes "..."
 gh release upload client-app-v<sürüm> -R mert61-python/pemf-update pemf-app-packages\base-app.zip
 #    (bagimliliklar degistiyse ayrica:)  ... pemf-app-packages\base-deps.zip
-#    (eski ≤1.9.12 istemciler icin:)     ... pemf-app-packages\base.zip
 #    make_manifest ciktisiyla KARSILASTIR: hangi paketin URL'si hangi etiketi gosteriyorsa dosya
 #    ORADA olmali; "URL KORUNDU" denenler zaten eski etiketinde duruyor, dokunma.
 #    dogrulama: gh release view client-app-v<sürüm> -R mert61-python/pemf-update --json assets
@@ -456,7 +455,7 @@ gh release upload client-app-v1.8.0 -R mert61-python/pemf-update --clobber pemf-
 
 ```
 guii\
-├─ VERSION                     # app/backend sürümü (1.9.5) — versions.json tarafından yazılır
+├─ VERSION                     # app/backend sürümü — versions.json tarafından yazılır (değer için oraya bak)
 ├─ versions.json               # ⭐ TÜM sürümlerin TEK KAYNAĞI
 ├─ keys/                      # 🔑 Android imzalama anahtarı YEDEĞİ (gitignore'lu — bkz. keys/README.md)
 ├─ BUILD.md                    # bu dosya
@@ -488,7 +487,8 @@ kopyalayıp kaynağı doğrudan okumayı engeller; **tersine mühendisliği ENGE
 
 **Neden `ai_hub` (ölçüldü):** frozen build'de `apps/backend/servers/`, `apps/backend/database/`, `apps/backend/utils/` EXE'ye gömülü
 `.pyc` olarak gider — diskte kaynak YOKTUR. Ama `ai_hub/` **~79 dosya / ~630 KB düz `.py`** (ölçüm 2026-08-26; XAI + scratch modülleri dahil) olarak
-`_internal/ai_hub/` altına kopyalanır; yani tüm AI çıkarım pipeline'ları okunabilir durumdadır.
+`_internal/ai_hub/` altına kopyalanıyordu; yani tüm AI çıkarım pipeline'ları okunabilir durumdaydı
+(bu açık 1.9.32'de `.pyd` derlemesiyle kapatıldı — aşağıya bak).
 Şifreleme tam olarak bu açığı hedefler.
 
 ### Kurulum (bir kez)
@@ -514,5 +514,8 @@ python build_tools\make_base_zip.py                  # 4) paketle
 görünmüyor. EXE çalıştırıldı ve **em_fantom · disease · kidney_ct · histopath · em_petri**
 uçlarının hepsi `success` döndü → runtime çözücü frozen ortamda çalışıyor.
 
-### Kalan: `.pyd` derleme
-Asıl koruma. `ai_hub` modülleri Cython ile `.pyd`'ye derlenmeli; şifreleme onun tamamlayıcısıdır.
+### ✅ `.pyd` derleme — YAPILDI (1.9.32)
+Asıl koruma `build_tools/compile_pyd.py`; `scripts/build_backend_exe.ps1` build sırasında onu
+otomatik çalıştırır. Korumasız düz `.py` kalırsa `build_tools/make_base_zip.py` /
+`build_tools/build_installer.ps1` / `scripts/pyz_koruma_kapisi.py` paketi ÜRETMEZ.
+Şifreleme (`.pyenc`) bunun tamamlayıcısıdır.

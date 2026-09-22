@@ -6,7 +6,16 @@ bulut (Supabase) yalnız cihaz-registry + opsiyonel şifreli PII içindir (bkz. 
 ## Dosyalar
 | Dosya | Görev |
 |---|---|
-| `treatment_history_db.py` | **`TreatmentHistoryDB`** (ana tedavi DB'si) — seanslar, coil-run'lar, sensör örnekleri (batch insert), seans olayları, AI analizleri, **denetim izi** (`audit_events` — salt-ekle; UPDATE/DELETE trigger'la engelli; `denetim_yaz`), dayanıklı **MQTT outbox** (enqueue/inflight/retry-backoff), şema migrasyonları (rollback'li), bütünlük kontrolü, veri-saklama/PII-redaksiyon temizliği. SQLCipher-veya-düz-metin farkında |
+| `treatment_history_db.py` | **`TreatmentHistoryDB`** — `thdb_*` karışımlarını birleştiren ana sınıf (**karışım/mixin**, işbirlikçi nesne DEĞİL: `get_treatment_db(...)` ürünün her yerinden alınıp metotlar DOĞRUDAN çağrıldığı için genel API birebir korunur). Bağlantı/kilit yönetimi, `recover_stale_active_sessions` ve SQLCipher-veya-düz-metin farkındalığı burada kalır |
+| `thdb_seans.py` | **`SeansKarisimi`** — seans yaşam döngüsü: `treatment_sessions` · `session_parameters` · `session_events` + `upsert_patient` tedavi aynası. ⚠️ Tıbbi kaydın mühürlendiği yer (`end_session` → PDF/KPI/geçmişte GERÇEK DOZ) |
+| `thdb_telemetri.py` | **`TelemetriKarisimi`** — bobin koşusu + sensör telemetrisi: `session_coil_runs` · `sensor_samples` · `sensor_run_summary`. ⚠️ Sensör örnekleri **dakika-ortalamasıdır** (`sample_count`), ham akış değil |
+| `thdb_outbox.py` | **`OutboxKarisimi`** — dayanıklı MQTT outbox (`outbox_messages`): enqueue / inflight / retry-backoff |
+| `thdb_denetim.py` | **`DenetimKarisimi`** — denetim izi (`audit_events` — salt-ekle; UPDATE/DELETE trigger'la engelli; `denetim_yaz`). ⚠️ KVKK talepleri dahil "kim ne zaman dokundu"nun TEK kanıtı; hasta ADI yazılmaz |
+| `thdb_sema.py` | **`SemaKarisimi`** — tablo/indeks kurulumu, şema sürümü, rollback'li açılış göçleri, düz-metin→SQLCipher göçünün tetiklenmesi (gövde `sqlcipher_util`e delege). ⚠️ EN HASSAS küme — yarım göç hasta geçmişini kaybettirir |
+| `thdb_pii.py` | **`PiiKarisimi`** — PII redaksiyonu / KVKK: `anonymize_patients_by_uuid` (GERİ DÖNÜŞSÜZ), saklama süresi. ⚠️ Maskeleme varsayılan KAPALI |
+| `thdb_bakim.py` | **`BakimKarisimi`** — tabloya değil VERİTABANINA dokunan işler: yedek, bütünlük denetimi, disk durumu, dışa/içe aktarma, `apply_data_retention_policy` (GERİ DÖNÜŞSÜZ silme), `system_settings` |
+| `thdb_ai_gecmisi.py` | **`AiGecmisiKarisimi`** — AI analiz geçmişi (`ai_analyses`) + `set_ai_review` (`review_status`/`review_note`/`reviewed_by`/`reviewed_at`). ⚠️ AI çıktısı ÖNERİDİR, karar hekimindir — bu alanları kaldırmayın |
+| `db_hatalari.py` | Paylaşılan `_DB_ERROR` istisna demetleri (SQLCipher + sqlite3) — **TEK KAYNAK**. `sqlite3` except'leri `sqlcipher3` istisnalarını YAKALAMAZ; kendi kopyanızı yazmayın, buradan import edin |
 | `patient_database.py` | **`PatientDatabase`** — hasta CRUD; **alan-başı Fernet şifreleme**, HMAC tokenize arama indeksi, pasif hastaların anonimleştirilmesi, yedek |
 | `session_manager.py` | **`SessionManager`** — canlı seans kaydedici: seans başlat/bitir, batch parametre + sensör yazımı, notlar, bayatlamış-seansı zorla-bitir |
 | `auth_db.py` | **`AuthDB`** — yerel kullanıcı kimlik deposu (kayıt/doğrula/sıfırla), tuzlanmış parola hash'i |
@@ -37,16 +46,18 @@ dizinde ama README'de hiç listelenmiyordu (denetim 2026-08-04, P2 — sıra hi�
 > çalışmayı `raise exception` ile **durduran** bir kapı eklendi (`_pemf_verify_device` varlığına bakar).
 > Kapıyı kaldırmayın.
 
-### Kurulumdan SONRA elle uygulanan yamalar (`../supabase/`)
+### Kurulumdan SONRA elle uygulanan yamalar (depo kökü `supabase/`)
 
 Yukarıdaki üç dosya v2'den sonra tekrar çalıştırılamadığı için, yayına çıkmış bir projede tek bir
-RPC'yi güncellemek gerektiğinde **ayrı, dar kapsamlı** bir dosya yazılır. Bunlar `supabase/`
-dizinindedir ve **sahibi tarafından elle** (SQL Editor → yapıştır → Run) uygulanır:
+RPC'yi güncellemek gerektiğinde **ayrı, dar kapsamlı** bir dosya yazılır. Bunlar bu dizinde
+DEĞİL, **depo kökündeki** `supabase/` dizinindedir (buradan `../../../supabase/`) ve
+**sahibi tarafından elle** (SQL Editor → yapıştır → Run) uygulanır:
 
 | Dosya | Ne yapar | Zorunlu mu |
 |---|---|---|
-| `resolve_device_bayat_gorunur.sql` | `resolve_device` tazelik penceresini 5 dk → **30 gün** yapar. Pencere istemcinin `STALE_MS`i ile eşit olduğu için bayat satır istemciye hiç ulaşmıyor, "cihaz kapalı" teşhisi ölü kod kalıyordu; kullanıcı doğru kodda bile **"Kodu kontrol edin"** görüyordu (denetim 2026-08-17) | **Evet** — uygulanmazsa saha teşhisi yanlış yöne bakmaya devam eder. APK/web yayını gerekmez. |
-| `upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
+| `../../../supabase/resolve_device_bayat_gorunur.sql` | `resolve_device` tazelik penceresini 5 dk → **30 gün** yapar. Pencere istemcinin `STALE_MS`i ile eşit olduğu için bayat satır istemciye hiç ulaşmıyor, "cihaz kapalı" teşhisi ölü kod kalıyordu; kullanıcı doğru kodda bile **"Kodu kontrol edin"** görüyordu (denetim 2026-08-17) | **Evet** — uygulanmazsa saha teşhisi yanlış yöne bakmaya devam eder. APK/web yayını gerekmez. |
+| `../../../supabase/upsert_device_envanter.sql` | `upsert_device`e envanter alanları ekler (bcrypt modeli korunur) | Envanter alanları kullanılacaksa |
+| `../../../supabase/seans_kimligi_bilesik_anahtar.sql` | `treatment_sessions` birincil anahtarını `(id)` → **`(device_id, id)`** bileşiğine çevirir. `id` kliniğin YEREL SQLite `AUTOINCREMENT`'inden geldiği için her klinik 1, 2, 3… diye başlıyordu → çoklu klinikte sessiz veri kaybı (denetim 2026-08-30) | Çoklu klinik kullanılacaksa **Evet** |
 
 ### Jeton ücretlendirme + canlı-şema sertleştirme
 

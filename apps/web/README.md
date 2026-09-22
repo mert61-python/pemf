@@ -72,9 +72,9 @@ npm run preview    # dist/ önizleme
 ## Site güncelleme / Deploy
 
 **Git bağlı — TEK DEPO (2026-08-18'den beri):** bu klasör `mert61-python/pemf` deposunun
-**`pemf-vet-web/` alt dizinidir** (eski ayrı `pemf-vet-web` deposu silindi; tam aynası
+**`apps/web/` alt dizinidir** (eski ayrı `pemf-vet-web` deposu silindi; tam aynası
 `../../pemf-vet-web-arsiv-2026-08-18.bundle`). Vercel projesi tek depoya bağlı:
-**Root Directory = `pemf-vet-web`**, üretim dalı **`production-hardening`** → her push'ta
+**Root Directory = `apps/web`**, üretim dalı **`production-hardening`** → her push'ta
 otomatik production deploy (canlı: https://pemf-vet-web.vercel.app). Vercel Vite'ı otomatik
 algılar (Build: `npm run build`, Output: `dist`); `vercel.json` SPA yönlendirmesini halleder.
 **Ignored Build Step** ayarlı: siteye dokunmayan commit'ler build tetiklemez (ölçüldü: son 40
@@ -91,8 +91,8 @@ Node 20'de supabase-js "yerleşik WebSocket yok" ile düşer).
 
 ### İş akışı — siteyi güncellemek
 ```bash
-# guii kökünden — içerik genellikle pemf-vet-web/src/config.ts (sürüm, fiyat, link…)
-git add -A pemf-vet-web
+# guii kökünden — içerik genellikle apps/web/src/config.ts (sürüm, fiyat, link…)
+git add -A apps/web
 git commit -m "açıklama"
 git push                 # → site-ci koşar + Vercel otomatik deploy eder (~1-2 dk)
 ```

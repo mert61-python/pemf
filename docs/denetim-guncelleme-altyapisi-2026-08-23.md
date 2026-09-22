@@ -442,9 +442,10 @@ ayrıca koşuldu.
 # ÖNERİLEN SIRA
 
 1. ✅ 🔴 **P0 — `.iss` E-stop — KAPATILDI** (ayrıntı aşağıda).
-2. **C5 (sağlık kapısı `dbReady`)** — açık kalan tek madde. Karşı görüş ciddi:
-   `wait_for_health`e kapı olarak eklemek E-stop yolunu düşürür; doğrusu `guncellemeyi_onayla`dan
-   önce tek seferlik gövde okumasıdır. Sahip kararı.
+2. ✅ **C5 (sağlık kapısı `dbReady`) — KAPATILDI** (önerilen yolla: `wait_for_health`e kapı
+   EKLENMEDİ, onaylamadan önce tek seferlik gövde okuması yapıldı —
+   `launcher/core/src/backend.rs:159-175`, tüketici `launcher/app/src/main.rs:1148`,
+   kapı `launcher/core/tests/saglik_db_kapisi.rs`).
 
 ## Şüpheli 7 maddenin tamamı karara bağlandı (üçüncü geçiş)
 
@@ -515,13 +516,16 @@ tam paket 3,7 GB ve derlemesi dakikalar sürüyor).
 ✅ **Kapananlar (22):** 🔴 P0 + C1, C2, C3, C4, C6, C7, C8, C9, C10, C11, C12, C14, M1, M2, M4, M5, M7,
 M8, M11, M12, Y1, Y2, Y5 + canlı 404 onarımı.
 ❌ **Çürütülenlere dokunulmadı (7):** C13, M6, M9, M10, Y3, Y4, O1.
-⚠️ **Açık kalan (1):** C5 (sağlık kapısı `dbReady`) — kod değil **karar** meselesi ve karşı görüş
-ciddi: `wait_for_health`e kapı olarak eklemek E-stop yolunu düşürür; doğrusu onaylamadan önce
-tek seferlik gövde okumasıdır.
+✅ **C5 de KAPANDI** (sağlık kapısı `dbReady`) — uygulanan çözüm tam da burada önerilendir:
+onaylamadan önce **tek seferlik gövde okuması**. `launcher/core/src/backend.rs:159-175`
+(`db_hazir_govdeden` / `db_hazir_mi`; docstring bu bulguya "⚠️ DENETİM 2026-08-23 (C5)" diye atıf
+verir ve alanın `wait_for_health`e kapı olarak EKLENMEDİĞİNİ yazar — E-stop yolu düşmez),
+tüketici `launcher/app/src/main.rs:1148`, kapı `launcher/core/tests/saglik_db_kapisi.rs`.
+**Böylece bu belgede açık kalem YOK.**
 
 ## Toplam
 
-53 bulgu → **22 düzeltildi (P0 dâhil) · 7 çürütüldü · 1 sahip kararında · kalanlar P3/kapsam-dışı.**
+53 bulgu → **22 düzeltildi (P0 dâhil) · 7 çürütüldü · 1 (C5) sonradan KAPANDI (yukarı bak) · kalanlar P3/kapsam-dışı.**
 Her düzeltme kırmızı-önce test → düzeltme → **iki yönlü mutasyon** ile yapıldı; üç kez mutasyon
 kaçtı ve üçünde de eksik olan test yazıldı (biri kendi eklediğim durum dosyasını yakalayan kapıydı).
 Son durum: backend **1676**, mobil **571**, Rust **13 süit** yeşil.

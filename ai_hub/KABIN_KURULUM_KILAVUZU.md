@@ -78,9 +78,16 @@ ve yatay hedef düzlemi onun yalnız **1 cm** üstünde. Işın bu düzlemi çok
 birkaç piksellik hata metrelere dönüşür. Kamera bu konumda kediyi (dikey hacim) görmek için
 seçilmişti — tabanda yatay duran bir plakayı 3B ölçmek için uygun değil.
 
-**Bu yüzden yaml şu an ESKİ davranışta** (`hedef_duzlem_eksen: "Z"`, 0 cm): AI Hub tek-foto
-analizi bozulmasın. Karar gelene kadar araştırma AI Pro sürüşü `PEMF_ARASTIRMA_AIPRO` bayrağıyla
-kapalı kalır.
+⚠️ **YAML'DA SAHİP ÖLÇÜSÜ YAZILI — eski davranışa DÖNÜLMEDİ (ölçüldü 2026-09-22):**
+`ai_hub/inference_em_fantom/phantom_cv/cabin_config_example.yaml:112-113` ve
+`ai_hub/inference_petri_dish/petri_cv/cabin_config_example.yaml:123-124` →
+`hedef_duzlem_eksen: "Y"` + `hedef_duzlem_cm: -20.0`. Yukarıdaki tablo bu değerin kuyuyu kabinin
+~4,45 m dışına koyduğunu gösteriyor: **fantom/petri tek-foto 3B koordinatları bu yapılandırmayla
+GÜVENİLİR DEĞİLDİR** (araştırma AI Pro sürüşü `PEMF_ARASTIRMA_AIPRO=0` ile kapalı, ama AI Hub
+tek-foto analizi kapalı DEĞİL). Kedi akışı etkilenmez: `inference_cat_organ` yaml'ında bu anahtar
+YOK → kod varsayılanı `Z` / 0 cm (`ai_hub/cv_ortak/cabin_config.py:117`). Eski davranışa dönmek
+için iki yaml'da eksen `"Z"` / `0.0` yapın. **Hangisinin doğru olduğu SAHİP KARARIDIR — önce o
+netleşmeli.**
 
 **KARAR BEKLİYOR — iki uygulanabilir seçenek:**
 
@@ -193,5 +200,8 @@ Yoksa: `intrinsics_npz: null` bırak → `to_marker_cm`'den yaklaşık türetili
 - **Ben:** gerekiyorsa `fixed_position_cm`/mesafeleri günceller, yayınlarım.
   Böylece analiz **kalibrasyonsuz kanonik (açık-döngü)** yerine **gerçek ArUco 6-DOF (doğru hedefleme)** çalışır.
 
-> **QR ZATEN HAZIR + STANDARDİZE:** 3 pipeline'ın hepsi `DICT_5X5_50 / ID 0 / 10cm` kullanıyor →
-> **tek basılı marker yeter**. Kalan tek iş: fiziksel montaj + ölçü doğrulaması (§3).
+> **QR ZATEN HAZIR + STANDARDİZE:** 3 pipeline'ın hepsi `DICT_5X5_50 / ID 0 / 15 cm` kullanıyor
+> (`real_cm: 15.0`; basılı sayfa: `ai_hub/PEMF_ArUco_Marker_5X5_50_ID0_15cm_A4.pdf`) →
+> **tek basılı marker yeter**. ⚠️ Masaüstünde duran eski **10 cm** sayfasını KULLANMAYIN — yanlış
+> kenar sessiz ölçek hatasıdır (10/15 → 3B konumda 1,5× sapma; ekranda hiçbir hata görünmez).
+> Kalan tek iş: fiziksel montaj + ölçü doğrulaması (§3).
