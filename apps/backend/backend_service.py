@@ -686,6 +686,40 @@ def _start_ai_warmup_safe(logger: logging.Logger) -> None:
     threading.Thread(target=_calistir, name="ai-warmup", daemon=True).start()
 
 
+def _donanim_guncellemesi_safe(core, logger: logging.Logger) -> None:
+    """DONANIM GÜNCELLEMESİ — client kontrolünden SONRA, servis açılmadan ÖNCE.
+
+    Sahip kararı 2026-09-22: *"ilk açılışta client güncelleme kontrol ediyor zaten,
+    ardından stm için de güncelleme kontrol etcek donanım güncellemesi ismi altında,
+    varsa güncelleyecek sonra açılacak."*
+
+    ⚠️ SIRA: `_start_update_checker_safe`ten SONRA çağrılır — client sürümü belli olmadan
+    uyum kararı verilemez.
+    ⚠️ ASLA SERVİSİ DÜŞÜRMEZ: her hata yutulur ama TAM ZİNCİRLE loglanır (A9 dersi).
+    ⚠️ Kill-switch: `PEMF_FW_AUTO_UPDATE=0` → yalnız ÖLÇER, uygulamaz. Sahada bir kez
+       kapatmak gerekirse yeniden derleme beklenmesin.
+    ⚠️ STM bağlı değilse / internet yoksa hiçbir şey yakılmaz; durum `/api/health`te görünür
+       (fail-quiet ≠ fail-silent).
+    """
+    try:
+        from servers import firmware_manager as fm
+
+        kimlik = getattr(core, "stm_kimlik", None)
+        durum = fm.acilis_denetimi(
+            firmware_surum=getattr(kimlik, "surum", "") or "",
+            stm_bagli=bool(getattr(core, "stm_is_connected", False)),
+            uygula=os.environ.get("PEMF_FW_AUTO_UPDATE", "1").strip() not in ("0", "false", "False"),
+        )
+        logger.info("Donanım güncellemesi: %s — %s", durum.get("eylem"), durum.get("gerekce"))
+    except Exception as e:  # noqa: BLE001 — güncelleme bir KOLAYLIK, servisi ASLA düşürmez
+        logger.warning(
+            "Donanım güncellemesi kontrolü BAŞARISIZ (%s) — servis normal açılıyor; "
+            "firmware uyumsuzsa seans 409 ile reddedilecek. Tam zincir aşağıda",
+            type(e).__name__,
+            exc_info=True,
+        )
+
+
 def _start_hotspot_safe(logger: logging.Logger) -> None:
     """PEMF-Gateway hotspot'unu ARKA PLANDA başlat. Açılışı ASLA bloklamaz, ASLA düşürmez."""
     if os.environ.get("PEMF_HOTSPOT", "1").strip() in ("0", "false", "False"):
@@ -925,6 +959,9 @@ def main(argv: list[str] | None = None) -> int:
     _start_db_maintenance(core, logger)
     _maybe_start_tunnel(args.port, logger)
     _start_update_checker_safe(logger)
+    # ⚠️ SIRA: client kontrolünden SONRA (sahip kararı 2026-09-22). Firmware uyumu
+    #    client sürümüne bağlı; o belli olmadan karar verilemez.
+    _donanim_guncellemesi_safe(core, logger)
     # ESP bobinleri (6-8) PEMF-Gateway WiFi'sine bağlanır → backend ile BİRLİKTE açılmalı.
     _start_hotspot_safe(logger)
     # ⚠️ A9 — SIRA ÖNEMLİ, ÖLÇÜLEREK KONDU. torch, ISITMA THREAD'LERİNDEN ÖNCE ve SENKRON
